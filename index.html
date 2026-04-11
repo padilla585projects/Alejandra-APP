@@ -460,7 +460,7 @@ async function captureAI(mode) {
   try {
     const res = await fetch('https://gestibobina-proxy.padilla585.workers.dev', {
       method: 'POST',
-      headers: { 'Content-Type':'application/json', 'x-api-key': config.claudeKey || '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', 'anthropic-version':'2023-06-01' },
+      headers: { 'Content-Type':'application/json', 'x-api-key': 'via-proxy', 'anthropic-version':'2023-06-01' },
       body: JSON.stringify({
         model: 'claude-haiku-4-5-20251001',
         max_tokens: 80,
