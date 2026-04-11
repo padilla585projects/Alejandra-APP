@@ -190,7 +190,7 @@
       <button class="scan-btn" id="sbtn-qr-entrada"   onclick="startScan('entrada')">
         <span class="icon">⬛</span>QR / Barras
       </button>
-      <button class="scan-btn" id="sbtn-ai-entrada"   onclick="captureAI('entrada')" disabled>
+      <button class="scan-btn" id="sbtn-ai-entrada"   onclick="captureAI('entrada')">
         <span class="icon">🤖</span>Leer IA
       </button>
       <button class="scan-btn" id="sbtn-stop-entrada" onclick="stopScan('entrada')" disabled>
@@ -244,7 +244,7 @@
       <button class="scan-btn" id="sbtn-qr-salida"   onclick="startScan('salida')">
         <span class="icon">⬛</span>QR / Barras
       </button>
-      <button class="scan-btn" id="sbtn-ai-salida"   onclick="captureAI('salida')" disabled>
+      <button class="scan-btn" id="sbtn-ai-salida"   onclick="captureAI('salida')">
         <span class="icon">🤖</span>Leer IA
       </button>
       <button class="scan-btn" id="sbtn-stop-salida" onclick="stopScan('salida')" disabled>
@@ -446,8 +446,13 @@ function stopScan(mode) {
 
 // ── AI VISION ─────────────────────────────────────────────
 async function captureAI(mode) {
+  // Auto-start camera if not already running
+  if (!streams[mode]) {
+    await startScan(mode);
+    await new Promise(r => setTimeout(r, 1500));
+  }
   const vid = document.getElementById('vid-'+mode);
-  if (!streams[mode] || vid.readyState < 2) { showToast('Activa la cámara primero', 'error'); return; }
+  if (!streams[mode] || vid.readyState < 2) { showToast('Espera a que cargue la cámara', 'error'); return; }
   
 
   canvas.width = vid.videoWidth; canvas.height = vid.videoHeight;
