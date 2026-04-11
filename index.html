@@ -458,7 +458,7 @@ async function captureAI(mode) {
   proc.classList.add('show');
 
   try {
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
+    const res = await fetch('https://gestibobina-proxy.padilla585.workers.dev', {
       method: 'POST',
       headers: { 'Content-Type':'application/json', 'x-api-key': config.claudeKey, 'anthropic-version':'2023-06-01' },
       body: JSON.stringify({
