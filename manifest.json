@@ -1,0 +1,24 @@
+{
+  "name": "GestiBobina",
+  "short_name": "GestiBobina",
+  "description": "Gestión de bobinas de cable",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#0d0f14",
+  "theme_color": "#f5a623",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

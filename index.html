@@ -1,0 +1,1113 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>GestiBobina</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#f5a623">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="GestiBobina">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;900&family=Barlow:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/4.1.1/tesseract.min.js"></script>
+<style>
+  :root {
+    --bg: #0d0f14;
+    --surface: #161a22;
+    --surface2: #1e2330;
+    --accent: #f5a623;
+    --accent2: #e8360c;
+    --green: #22c55e;
+    --red: #ef4444;
+    --text: #e8eaf0;
+    --muted: #6b7280;
+    --border: #2a3040;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Barlow', sans-serif;
+    font-size: 15px;
+    min-height: 100vh;
+  }
+
+  header {
+    background: var(--surface);
+    border-bottom: 2px solid var(--accent);
+    padding: 14px 20px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+
+  header .logo {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-weight: 900;
+    font-size: 22px;
+    letter-spacing: 1px;
+    color: var(--accent);
+  }
+
+  header .logo span { color: var(--text); }
+
+  .badge {
+    background: var(--accent2);
+    color: white;
+    font-family: 'Barlow Condensed', sans-serif;
+    font-weight: 700;
+    font-size: 11px;
+    letter-spacing: 2px;
+    padding: 3px 8px;
+    border-radius: 3px;
+  }
+
+  nav {
+    display: flex;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    overflow-x: auto;
+  }
+
+  nav button {
+    flex: 1;
+    padding: 13px 10px;
+    background: none;
+    border: none;
+    color: var(--muted);
+    font-family: 'Barlow Condensed', sans-serif;
+    font-weight: 700;
+    font-size: 13px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    cursor: pointer;
+    border-bottom: 3px solid transparent;
+    transition: all 0.2s;
+    white-space: nowrap;
+  }
+
+  nav button.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+  }
+
+  .tab { display: none; padding: 20px 16px; }
+  .tab.active { display: block; }
+
+  /* Scan section */
+  .scan-box {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    margin-bottom: 16px;
+  }
+
+  .scan-header {
+    background: var(--surface2);
+    padding: 12px 16px;
+    font-family: 'Barlow Condensed', sans-serif;
+    font-weight: 700;
+    font-size: 13px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--muted);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .scan-header .dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--accent);
+  }
+
+  #video-container {
+    position: relative;
+    background: #000;
+    min-height: 220px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  #video {
+    width: 100%;
+    max-height: 280px;
+    object-fit: cover;
+    display: block;
+  }
+
+  .scan-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+  }
+
+  .scan-frame {
+    width: 220px;
+    height: 80px;
+    border: 2px solid var(--accent);
+    border-radius: 6px;
+    box-shadow: 0 0 0 2000px rgba(0,0,0,0.35);
+    position: relative;
+  }
+
+  .scan-line {
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: var(--accent);
+    animation: scanMove 2s ease-in-out infinite;
+    box-shadow: 0 0 8px var(--accent);
+  }
+
+  @keyframes scanMove {
+    0%, 100% { top: 0; }
+    50% { top: calc(100% - 2px); }
+  }
+
+  .cam-idle {
+    color: var(--muted);
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 14px;
+    letter-spacing: 1px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .cam-idle svg { opacity: 0.3; }
+
+  .scan-actions {
+    padding: 14px 16px;
+    display: flex;
+    gap: 10px;
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 11px 18px;
+    border: none;
+    border-radius: 7px;
+    font-family: 'Barlow Condensed', sans-serif;
+    font-weight: 700;
+    font-size: 14px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .btn-primary { background: var(--accent); color: #000; flex: 1; justify-content: center; }
+  .btn-primary:hover { background: #ffb84d; }
+  .btn-secondary { background: var(--surface2); color: var(--text); border: 1px solid var(--border); flex: 1; justify-content: center; }
+  .btn-secondary:hover { border-color: var(--accent); color: var(--accent); }
+  .btn-danger { background: var(--red); color: white; flex: 1; justify-content: center; }
+  .btn-danger:hover { background: #dc2626; }
+  .btn-success { background: var(--green); color: #000; flex: 1; justify-content: center; }
+  .btn-success:hover { background: #16a34a; }
+  .btn-sm { padding: 7px 12px; font-size: 12px; }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* Form fields */
+  .form-group { margin-bottom: 14px; }
+  label {
+    display: block;
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 6px;
+  }
+
+  input, select {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    color: var(--text);
+    font-family: 'Barlow', sans-serif;
+    font-size: 15px;
+    padding: 11px 13px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+
+  input:focus, select:focus { border-color: var(--accent); }
+  input.highlight { border-color: var(--accent); background: #1e1a0d; }
+
+  .result-display {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    padding: 12px 14px;
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--accent);
+    letter-spacing: 2px;
+    min-height: 48px;
+    display: flex;
+    align-items: center;
+  }
+
+  .result-display.empty { color: var(--muted); font-size: 13px; font-weight: 400; letter-spacing: 1px; }
+
+  /* Toast */
+  #toast {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%) translateY(80px);
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 13px 22px;
+    font-family: 'Barlow Condensed', sans-serif;
+    font-weight: 700;
+    font-size: 15px;
+    letter-spacing: 1px;
+    z-index: 9999;
+    transition: transform 0.3s ease;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    max-width: 90vw;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.5);
+  }
+
+  #toast.show { transform: translateX(-50%) translateY(0); }
+  #toast.success { border-color: var(--green); color: var(--green); }
+  #toast.error { border-color: var(--red); color: var(--red); }
+  #toast.info { border-color: var(--accent); color: var(--accent); }
+
+  /* Table */
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-weight: 700;
+    font-size: 11px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--muted);
+    padding: 10px 12px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface2);
+    white-space: nowrap;
+  }
+
+  td {
+    padding: 11px 12px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: middle;
+  }
+
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: rgba(255,255,255,0.02); }
+
+  .status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-family: 'Barlow Condensed', sans-serif;
+    font-weight: 700;
+    font-size: 11px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+
+  .status-badge.activa { background: rgba(34,197,94,0.15); color: var(--green); }
+  .status-badge.devuelta { background: rgba(107,114,128,0.15); color: var(--muted); }
+
+  .code-cell {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-weight: 700;
+    font-size: 15px;
+    color: var(--accent);
+    letter-spacing: 1px;
+  }
+
+  /* Config */
+  .config-box {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px 16px;
+    margin-bottom: 16px;
+  }
+
+  .config-box h3 {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-weight: 700;
+    font-size: 13px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 16px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .help-text {
+    font-size: 12px;
+    color: var(--muted);
+    margin-top: 5px;
+    line-height: 1.5;
+  }
+
+  .section-title {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-weight: 900;
+    font-size: 22px;
+    letter-spacing: 1px;
+    margin-bottom: 4px;
+  }
+
+  .section-sub {
+    color: var(--muted);
+    font-size: 13px;
+    margin-bottom: 18px;
+  }
+
+  .stats-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    margin-bottom: 20px;
+  }
+
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 12px;
+    text-align: center;
+  }
+
+  .stat-num {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-weight: 900;
+    font-size: 32px;
+    line-height: 1;
+  }
+
+  .stat-label {
+    font-size: 11px;
+    color: var(--muted);
+    font-family: 'Barlow Condensed', sans-serif;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    margin-top: 4px;
+  }
+
+  .filter-row {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 14px;
+  }
+
+  .filter-row input, .filter-row select {
+    flex: 1;
+    font-size: 13px;
+    padding: 9px 12px;
+  }
+
+  .empty-state {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--muted);
+  }
+
+  .empty-state svg { opacity: 0.2; margin-bottom: 12px; }
+
+  .processing-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(0,0,0,0.75);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    z-index: 10;
+  }
+
+  .spinner {
+    width: 36px; height: 36px;
+    border: 3px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .mode-switch {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+
+  .mode-btn {
+    flex: 1;
+    padding: 10px;
+    border: 2px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface2);
+    color: var(--muted);
+    font-family: 'Barlow Condensed', sans-serif;
+    font-weight: 700;
+    font-size: 13px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-align: center;
+  }
+
+  .mode-btn.active {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: rgba(245,166,35,0.08);
+  }
+
+  .divider { height: 1px; background: var(--border); margin: 16px 0; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">GESTI<span>BOBINA</span></div>
+  <div class="badge">v1.0</div>
+</header>
+
+<nav>
+  <button class="active" onclick="showTab('entrada')">📥 Entrada</button>
+  <button onclick="showTab('salida')">📤 Devolución</button>
+  <button onclick="showTab('inventario')">📋 Inventario</button>
+  <button onclick="showTab('config')">⚙️ Config</button>
+</nav>
+
+<!-- TAB: ENTRADA -->
+<div id="tab-entrada" class="tab active">
+  <div class="section-title">Recepción</div>
+  <div class="section-sub">Escanea o introduce el código de la bobina</div>
+
+  <div class="scan-box">
+    <div class="scan-header"><div class="dot"></div>CÁMARA</div>
+    <div id="video-container">
+      <div class="cam-idle" id="cam-idle-entrada">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+        Cámara inactiva
+      </div>
+      <video id="video-entrada" style="display:none;" playsinline autoplay muted></video>
+      <div class="scan-overlay" id="overlay-entrada" style="display:none;">
+        <div class="scan-frame"><div class="scan-line"></div></div>
+      </div>
+      <div class="processing-overlay" id="proc-entrada" style="display:none;">
+        <div class="spinner"></div>
+        <div style="font-family:'Barlow Condensed';font-size:13px;letter-spacing:1px;color:var(--accent)">PROCESANDO OCR…</div>
+      </div>
+    </div>
+    <div class="scan-actions">
+      <button class="btn btn-primary" id="btn-cam-entrada" onclick="toggleCamera('entrada')">📷 Activar cámara</button>
+      <button class="btn btn-secondary" id="btn-capture-entrada" onclick="captureFrame('entrada')" disabled>⚡ Capturar</button>
+    </div>
+  </div>
+
+  <div class="form-group">
+    <label>Código / Matrícula</label>
+    <input type="text" id="codigo-entrada" placeholder="Ej: BOB-2024-001" class="highlight" oninput="this.value=this.value.toUpperCase()">
+  </div>
+  <div class="form-group">
+    <label>Proveedor</label>
+    <input type="text" id="proveedor-entrada" placeholder="Nombre del proveedor" list="proveedores-list">
+    <datalist id="proveedores-list"></datalist>
+  </div>
+  <div class="form-group">
+    <label>Tipo de cable</label>
+    <input type="text" id="tipo-entrada" placeholder="Ej: RG-6, UTP Cat6, NYY..." list="tipos-list">
+    <datalist id="tipos-list"></datalist>
+  </div>
+
+  <button class="btn btn-success" style="width:100%; justify-content:center; padding:14px;" onclick="registrarEntrada()">
+    ✅ Registrar entrada
+  </button>
+</div>
+
+<!-- TAB: SALIDA / DEVOLUCIÓN -->
+<div id="tab-salida" class="tab">
+  <div class="section-title">Devolución</div>
+  <div class="section-sub">Escanea la bobina para marcarla como devuelta</div>
+
+  <div class="scan-box">
+    <div class="scan-header"><div class="dot" style="background:var(--red)"></div>CÁMARA</div>
+    <div id="video-container-salida" style="position:relative;background:#000;min-height:220px;display:flex;align-items:center;justify-content:center;">
+      <div class="cam-idle" id="cam-idle-salida">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+        Cámara inactiva
+      </div>
+      <video id="video-salida" style="display:none;" playsinline autoplay muted></video>
+      <div class="scan-overlay" id="overlay-salida" style="display:none;">
+        <div class="scan-frame"><div class="scan-line"></div></div>
+      </div>
+      <div class="processing-overlay" id="proc-salida" style="display:none;">
+        <div class="spinner"></div>
+        <div style="font-family:'Barlow Condensed';font-size:13px;letter-spacing:1px;color:var(--accent)">PROCESANDO OCR…</div>
+      </div>
+    </div>
+    <div class="scan-actions">
+      <button class="btn btn-primary" id="btn-cam-salida" onclick="toggleCamera('salida')">📷 Activar cámara</button>
+      <button class="btn btn-secondary" id="btn-capture-salida" onclick="captureFrame('salida')" disabled>⚡ Capturar</button>
+    </div>
+  </div>
+
+  <div class="form-group">
+    <label>Código / Matrícula</label>
+    <input type="text" id="codigo-salida" placeholder="Introduce o escanea el código" oninput="buscarBobina(this.value.toUpperCase()); this.value=this.value.toUpperCase()">
+  </div>
+
+  <div id="bobina-encontrada" style="display:none;" class="scan-box" style="margin-bottom:16px;">
+    <div class="scan-header" style="background:rgba(34,197,94,0.1);"><div class="dot" style="background:var(--green)"></div>BOBINA ENCONTRADA</div>
+    <div style="padding:14px 16px;">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div><div style="font-size:11px;color:var(--muted);font-family:'Barlow Condensed';letter-spacing:1px;text-transform:uppercase;margin-bottom:3px;">Proveedor</div><div id="info-proveedor" style="font-weight:500;"></div></div>
+        <div><div style="font-size:11px;color:var(--muted);font-family:'Barlow Condensed';letter-spacing:1px;text-transform:uppercase;margin-bottom:3px;">Tipo cable</div><div id="info-tipo" style="font-weight:500;"></div></div>
+        <div><div style="font-size:11px;color:var(--muted);font-family:'Barlow Condensed';letter-spacing:1px;text-transform:uppercase;margin-bottom:3px;">Entrada</div><div id="info-fecha" style="font-weight:500;"></div></div>
+        <div><div style="font-size:11px;color:var(--muted);font-family:'Barlow Condensed';letter-spacing:1px;text-transform:uppercase;margin-bottom:3px;">Estado</div><div id="info-estado"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="bobina-no-encontrada" style="display:none; padding:12px 14px; background:rgba(239,68,68,0.1); border:1px solid var(--red); border-radius:8px; margin-bottom:14px; font-size:13px; color:var(--red); font-family:'Barlow Condensed'; letter-spacing:1px;">
+    ⚠️ Código no encontrado en el sistema
+  </div>
+
+  <button class="btn btn-danger" id="btn-devolver" style="width:100%; justify-content:center; padding:14px;" onclick="registrarDevolucion()" disabled>
+    🔄 Confirmar devolución
+  </button>
+</div>
+
+<!-- TAB: INVENTARIO -->
+<div id="tab-inventario" class="tab">
+  <div class="section-title">Inventario</div>
+
+  <div class="stats-row">
+    <div class="stat-card">
+      <div class="stat-num" id="stat-total" style="color:var(--accent)">0</div>
+      <div class="stat-label">Total</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-num" id="stat-activas" style="color:var(--green)">0</div>
+      <div class="stat-label">En stock</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-num" id="stat-devueltas" style="color:var(--muted)">0</div>
+      <div class="stat-label">Devueltas</div>
+    </div>
+  </div>
+
+  <div class="filter-row">
+    <input type="text" id="filtro-buscar" placeholder="🔍 Buscar código..." oninput="renderTabla()">
+    <select id="filtro-estado" onchange="renderTabla()">
+      <option value="">Todos</option>
+      <option value="Activa">En stock</option>
+      <option value="Devuelta">Devueltas</option>
+    </select>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Código</th>
+          <th>Proveedor</th>
+          <th>Tipo</th>
+          <th>Entrada</th>
+          <th>Estado</th>
+        </tr>
+      </thead>
+      <tbody id="tabla-body">
+        <tr><td colspan="5"><div class="empty-state">No hay bobinas registradas</div></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div style="margin-top:16px; display:flex; gap:8px;">
+    <button class="btn btn-secondary" style="flex:1; justify-content:center;" onclick="exportarCSV()">⬇️ Exportar CSV</button>
+    <button class="btn btn-secondary" style="flex:1; justify-content:center;" onclick="sincronizarSheets()">🔄 Sync Sheets</button>
+  </div>
+</div>
+
+<!-- TAB: CONFIG -->
+<div id="tab-config" class="tab">
+  <div class="section-title">Configuración</div>
+  <div class="section-sub">Conecta con Google Sheets para sincronizar datos</div>
+
+  <div class="config-box">
+    <h3>🔗 Google Sheets</h3>
+    <div class="form-group">
+      <label>ID de la hoja de cálculo</label>
+      <input type="text" id="sheets-id" placeholder="1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgVE2upms">
+      <div class="help-text">El ID está en la URL de tu Google Sheet: docs.google.com/spreadsheets/d/<strong>[ID]</strong>/edit</div>
+    </div>
+    <div class="form-group">
+      <label>API Key de Google</label>
+      <input type="password" id="google-api-key" placeholder="AIza...">
+      <div class="help-text">Necesitas una API Key con permisos de Google Sheets. <a href="https://console.cloud.google.com/" target="_blank" style="color:var(--accent)">Consola de Google Cloud →</a></div>
+    </div>
+    <div class="form-group">
+      <label>Nombre de la pestaña</label>
+      <input type="text" id="sheets-tab" placeholder="Bobinas" value="Bobinas">
+    </div>
+    <button class="btn btn-primary" style="width:100%; justify-content:center;" onclick="guardarConfig()">💾 Guardar configuración</button>
+  </div>
+
+  <div class="config-box">
+    <h3>🏭 Proveedores frecuentes</h3>
+    <div class="form-group">
+      <label>Añadir proveedor</label>
+      <div style="display:flex;gap:8px;">
+        <input type="text" id="nuevo-proveedor" placeholder="Nombre del proveedor">
+        <button class="btn btn-secondary btn-sm" onclick="addProveedor()" style="white-space:nowrap">+ Añadir</button>
+      </div>
+    </div>
+    <div id="lista-proveedores" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;"></div>
+  </div>
+
+  <div class="config-box">
+    <h3>🔌 Tipos de cable frecuentes</h3>
+    <div class="form-group">
+      <label>Añadir tipo</label>
+      <div style="display:flex;gap:8px;">
+        <input type="text" id="nuevo-tipo" placeholder="Ej: RG-6, UTP Cat6...">
+        <button class="btn btn-secondary btn-sm" onclick="addTipo()" style="white-space:nowrap">+ Añadir</button>
+      </div>
+    </div>
+    <div id="lista-tipos" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;"></div>
+  </div>
+
+  <div class="config-box" style="border-color:var(--red)20;">
+    <h3>🗑️ Datos</h3>
+    <button class="btn btn-secondary" style="width:100%; justify-content:center;" onclick="limpiarDatos()">Borrar todos los registros locales</button>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ─── STATE ────────────────────────────────────────────────
+let bobinas = JSON.parse(localStorage.getItem('bobinas') || '[]');
+let config = JSON.parse(localStorage.getItem('gesti-config') || '{}');
+let proveedores = JSON.parse(localStorage.getItem('proveedores') || '[]');
+let tipos = JSON.parse(localStorage.getItem('tipos') || '[]');
+let streams = { entrada: null, salida: null };
+let canvas = document.createElement('canvas');
+
+// ─── INIT ─────────────────────────────────────────────────
+function init() {
+  if (config.sheetsId) document.getElementById('sheets-id').value = config.sheetsId;
+  if (config.apiKey) document.getElementById('google-api-key').value = config.apiKey;
+  if (config.sheetsTab) document.getElementById('sheets-tab').value = config.sheetsTab;
+  renderProveedores();
+  renderTipos();
+  updateStats();
+  renderTabla();
+}
+
+// ─── TABS ─────────────────────────────────────────────────
+function showTab(name) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  const idx = ['entrada','salida','inventario','config'].indexOf(name);
+  document.querySelectorAll('nav button')[idx].classList.add('active');
+  if (name === 'inventario') { updateStats(); renderTabla(); }
+}
+
+// ─── CAMERA ───────────────────────────────────────────────
+async function toggleCamera(mode) {
+  const btn = document.getElementById('btn-cam-' + mode);
+  const video = document.getElementById('video-' + mode);
+  const idle = document.getElementById('cam-idle-' + mode);
+  const overlay = document.getElementById('overlay-' + mode);
+  const captureBtn = document.getElementById('btn-capture-' + mode);
+
+  if (streams[mode]) {
+    streams[mode].getTracks().forEach(t => t.stop());
+    streams[mode] = null;
+    video.style.display = 'none';
+    idle.style.display = 'flex';
+    overlay.style.display = 'none';
+    btn.textContent = '📷 Activar cámara';
+    captureBtn.disabled = true;
+    return;
+  }
+
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } }
+    });
+    streams[mode] = stream;
+    video.srcObject = stream;
+    video.style.display = 'block';
+    idle.style.display = 'none';
+    overlay.style.display = 'flex';
+    btn.textContent = '🛑 Detener';
+    captureBtn.disabled = false;
+  } catch (e) {
+    showToast('No se pudo acceder a la cámara', 'error');
+  }
+}
+
+async function captureFrame(mode) {
+  const video = document.getElementById('video-' + mode);
+  const proc = document.getElementById('proc-' + mode);
+
+  if (!streams[mode] || video.readyState < 2) {
+    showToast('Cámara no lista', 'error'); return;
+  }
+
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+  canvas.getContext('2d').drawImage(video, 0, 0);
+
+  proc.style.display = 'flex';
+
+  try {
+    const { data: { text } } = await Tesseract.recognize(canvas, 'eng+spa', {
+      logger: () => {}
+    });
+
+    const clean = text.replace(/\s+/g, ' ').trim();
+    // Extract code-like patterns
+    const match = clean.match(/[A-Z0-9][A-Z0-9\-]{2,20}/g);
+    const code = match ? match[0] : clean.substring(0, 20).toUpperCase().replace(/[^A-Z0-9\-]/g, '');
+
+    if (code && code.length > 2) {
+      document.getElementById('codigo-' + mode).value = code;
+      if (mode === 'salida') buscarBobina(code);
+      showToast('Código detectado: ' + code, 'success');
+    } else {
+      showToast('No se detectó código. Inténtalo de nuevo.', 'error');
+    }
+  } catch (e) {
+    showToast('Error en OCR. Intenta introducir manualmente.', 'error');
+  } finally {
+    proc.style.display = 'none';
+  }
+}
+
+// ─── ENTRADA ──────────────────────────────────────────────
+function registrarEntrada() {
+  const codigo = document.getElementById('codigo-entrada').value.trim().toUpperCase();
+  const proveedor = document.getElementById('proveedor-entrada').value.trim();
+  const tipo = document.getElementById('tipo-entrada').value.trim();
+
+  if (!codigo) { showToast('Introduce o escanea el código de la bobina', 'error'); return; }
+
+  const existe = bobinas.find(b => b.codigo === codigo);
+  if (existe && existe.estado === 'Activa') {
+    showToast('⚠️ Esa bobina ya está en stock', 'error'); return;
+  }
+
+  const now = new Date();
+  const entrada = {
+    codigo,
+    proveedor: proveedor || '-',
+    tipo: tipo || '-',
+    fechaEntrada: formatDate(now),
+    fechaDevolucion: '',
+    estado: 'Activa',
+    id: Date.now()
+  };
+
+  bobinas.unshift(entrada);
+  save();
+
+  // Autoguardar proveedores/tipos
+  if (proveedor && !proveedores.includes(proveedor)) {
+    proveedores.push(proveedor);
+    localStorage.setItem('proveedores', JSON.stringify(proveedores));
+    renderProveedores();
+  }
+  if (tipo && !tipos.includes(tipo)) {
+    tipos.push(tipo);
+    localStorage.setItem('tipos', JSON.stringify(tipos));
+    renderTipos();
+  }
+
+  document.getElementById('codigo-entrada').value = '';
+  document.getElementById('proveedor-entrada').value = '';
+  document.getElementById('tipo-entrada').value = '';
+
+  showToast('✅ Bobina ' + codigo + ' registrada', 'success');
+  sincronizarSheets(true);
+}
+
+// ─── SALIDA ───────────────────────────────────────────────
+function buscarBobina(codigo) {
+  const found = document.getElementById('bobina-encontrada');
+  const notFound = document.getElementById('bobina-no-encontrada');
+  const btnDev = document.getElementById('btn-devolver');
+
+  if (!codigo) {
+    found.style.display = 'none';
+    notFound.style.display = 'none';
+    btnDev.disabled = true;
+    return;
+  }
+
+  const bobina = bobinas.find(b => b.codigo === codigo);
+
+  if (!bobina) {
+    found.style.display = 'none';
+    notFound.style.display = 'block';
+    btnDev.disabled = true;
+    return;
+  }
+
+  notFound.style.display = 'none';
+  found.style.display = 'block';
+  document.getElementById('info-proveedor').textContent = bobina.proveedor;
+  document.getElementById('info-tipo').textContent = bobina.tipo;
+  document.getElementById('info-fecha').textContent = bobina.fechaEntrada;
+
+  const estadoEl = document.getElementById('info-estado');
+  if (bobina.estado === 'Activa') {
+    estadoEl.innerHTML = '<span class="status-badge activa">● En stock</span>';
+    btnDev.disabled = false;
+  } else {
+    estadoEl.innerHTML = '<span class="status-badge devuelta">● Devuelta ' + bobina.fechaDevolucion + '</span>';
+    btnDev.disabled = true;
+  }
+}
+
+function registrarDevolucion() {
+  const codigo = document.getElementById('codigo-salida').value.trim().toUpperCase();
+  const bobina = bobinas.find(b => b.codigo === codigo);
+
+  if (!bobina || bobina.estado !== 'Activa') {
+    showToast('Bobina no válida para devolución', 'error'); return;
+  }
+
+  bobina.estado = 'Devuelta';
+  bobina.fechaDevolucion = formatDate(new Date());
+  save();
+
+  document.getElementById('codigo-salida').value = '';
+  document.getElementById('bobina-encontrada').style.display = 'none';
+  document.getElementById('btn-devolver').disabled = true;
+
+  showToast('🔄 Bobina ' + codigo + ' marcada como devuelta', 'success');
+  sincronizarSheets(true);
+}
+
+// ─── TABLA ────────────────────────────────────────────────
+function renderTabla() {
+  const buscar = document.getElementById('filtro-buscar').value.toLowerCase();
+  const estado = document.getElementById('filtro-estado').value;
+
+  let filtradas = bobinas.filter(b => {
+    const match = b.codigo.toLowerCase().includes(buscar) ||
+                  b.proveedor.toLowerCase().includes(buscar) ||
+                  b.tipo.toLowerCase().includes(buscar);
+    const matchEstado = !estado || b.estado === estado;
+    return match && matchEstado;
+  });
+
+  const tbody = document.getElementById('tabla-body');
+
+  if (!filtradas.length) {
+    tbody.innerHTML = '<tr><td colspan="5"><div class="empty-state"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg><div>Sin resultados</div></div></td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = filtradas.map(b => `
+    <tr>
+      <td class="code-cell">${b.codigo}</td>
+      <td>${b.proveedor}</td>
+      <td style="color:var(--muted);font-size:12px;">${b.tipo}</td>
+      <td style="color:var(--muted);font-size:12px;white-space:nowrap;">${b.fechaEntrada}</td>
+      <td>
+        ${b.estado === 'Activa'
+          ? '<span class="status-badge activa">● Stock</span>'
+          : '<span class="status-badge devuelta">↩ ' + (b.fechaDevolucion || '') + '</span>'}
+      </td>
+    </tr>
+  `).join('');
+}
+
+function updateStats() {
+  const activas = bobinas.filter(b => b.estado === 'Activa').length;
+  document.getElementById('stat-total').textContent = bobinas.length;
+  document.getElementById('stat-activas').textContent = activas;
+  document.getElementById('stat-devueltas').textContent = bobinas.length - activas;
+}
+
+// ─── GOOGLE SHEETS ────────────────────────────────────────
+async function sincronizarSheets(silent = false) {
+  const apiKey = config.apiKey;
+  const sheetId = config.sheetsId;
+  const tabName = config.sheetsTab || 'Bobinas';
+
+  if (!apiKey || !sheetId) {
+    if (!silent) showToast('Configura Google Sheets primero en ⚙️', 'info');
+    return;
+  }
+
+  const headers = [['Código', 'Proveedor', 'Tipo Cable', 'Fecha Entrada', 'Estado', 'Fecha Devolución']];
+  const rows = bobinas.map(b => [b.codigo, b.proveedor, b.tipo, b.fechaEntrada, b.estado, b.fechaDevolucion || '']);
+  const values = [...headers, ...rows];
+
+  try {
+    const url = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(tabName + '!A1')}?valueInputOption=RAW&key=${apiKey}`;
+    const res = await fetch(url, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ values })
+    });
+
+    if (res.ok) {
+      if (!silent) showToast('✅ Sincronizado con Google Sheets', 'success');
+    } else {
+      const err = await res.json();
+      if (!silent) showToast('Error Sheets: ' + (err.error?.message || res.status), 'error');
+    }
+  } catch (e) {
+    if (!silent) showToast('Error de conexión con Google Sheets', 'error');
+  }
+}
+
+// ─── EXPORT CSV ───────────────────────────────────────────
+function exportarCSV() {
+  const headers = ['Código', 'Proveedor', 'Tipo Cable', 'Fecha Entrada', 'Estado', 'Fecha Devolución'];
+  const rows = bobinas.map(b => [b.codigo, b.proveedor, b.tipo, b.fechaEntrada, b.estado, b.fechaDevolucion || '']);
+  const csv = [headers, ...rows].map(r => r.map(c => `"${c}"`).join(',')).join('\n');
+  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'bobinas_' + formatDateFile(new Date()) + '.csv';
+  a.click();
+  showToast('CSV descargado', 'success');
+}
+
+// ─── CONFIG ───────────────────────────────────────────────
+function guardarConfig() {
+  config = {
+    sheetsId: document.getElementById('sheets-id').value.trim(),
+    apiKey: document.getElementById('google-api-key').value.trim(),
+    sheetsTab: document.getElementById('sheets-tab').value.trim() || 'Bobinas'
+  };
+  localStorage.setItem('gesti-config', JSON.stringify(config));
+  showToast('Configuración guardada', 'success');
+}
+
+function addProveedor() {
+  const val = document.getElementById('nuevo-proveedor').value.trim();
+  if (!val || proveedores.includes(val)) return;
+  proveedores.push(val);
+  localStorage.setItem('proveedores', JSON.stringify(proveedores));
+  document.getElementById('nuevo-proveedor').value = '';
+  renderProveedores();
+}
+
+function addTipo() {
+  const val = document.getElementById('nuevo-tipo').value.trim();
+  if (!val || tipos.includes(val)) return;
+  tipos.push(val);
+  localStorage.setItem('tipos', JSON.stringify(tipos));
+  document.getElementById('nuevo-tipo').value = '';
+  renderTipos();
+}
+
+function renderProveedores() {
+  const el = document.getElementById('lista-proveedores');
+  el.innerHTML = proveedores.map((p, i) => `
+    <span style="display:inline-flex;align-items:center;gap:6px;background:var(--surface2);border:1px solid var(--border);border-radius:20px;padding:4px 10px;font-size:12px;">
+      ${p}
+      <span onclick="removeProveedor(${i})" style="cursor:pointer;color:var(--muted);font-size:14px;line-height:1;">×</span>
+    </span>
+  `).join('');
+  // Update datalist
+  const dl = document.getElementById('proveedores-list');
+  if (dl) dl.innerHTML = proveedores.map(p => `<option value="${p}">`).join('');
+}
+
+function renderTipos() {
+  const el = document.getElementById('lista-tipos');
+  el.innerHTML = tipos.map((t, i) => `
+    <span style="display:inline-flex;align-items:center;gap:6px;background:var(--surface2);border:1px solid var(--border);border-radius:20px;padding:4px 10px;font-size:12px;">
+      ${t}
+      <span onclick="removeTipo(${i})" style="cursor:pointer;color:var(--muted);font-size:14px;line-height:1;">×</span>
+    </span>
+  `).join('');
+  const dl = document.getElementById('tipos-list');
+  if (dl) dl.innerHTML = tipos.map(t => `<option value="${t}">`).join('');
+}
+
+function removeProveedor(i) { proveedores.splice(i, 1); localStorage.setItem('proveedores', JSON.stringify(proveedores)); renderProveedores(); }
+function removeTipo(i) { tipos.splice(i, 1); localStorage.setItem('tipos', JSON.stringify(tipos)); renderTipos(); }
+
+function limpiarDatos() {
+  if (!confirm('¿Seguro que quieres borrar todos los registros? Esta acción no se puede deshacer.')) return;
+  bobinas = [];
+  save();
+  showToast('Datos borrados', 'info');
+}
+
+// ─── UTILS ────────────────────────────────────────────────
+function save() {
+  localStorage.setItem('bobinas', JSON.stringify(bobinas));
+  updateStats();
+  renderTabla();
+}
+
+function formatDate(d) {
+  return d.toLocaleDateString('es-ES', { day:'2-digit', month:'2-digit', year:'numeric' }) + ' ' +
+         d.toLocaleTimeString('es-ES', { hour:'2-digit', minute:'2-digit' });
+}
+
+function formatDateFile(d) {
+  return d.toISOString().slice(0,10);
+}
+
+let toastTimeout;
+function showToast(msg, type = 'info') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'show ' + type;
+  clearTimeout(toastTimeout);
+  toastTimeout = setTimeout(() => { t.classList.remove('show'); }, 2800);
+}
+
+init();
+
+// ─── SERVICE WORKER (PWA) ─────────────────────────────────
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+</script>
+</body>
+</html>
