@@ -133,15 +133,16 @@
   #video-container {
     position: relative;
     background: #000;
-    min-height: 220px;
+    height: 190px;
     display: flex;
     align-items: center;
     justify-content: center;
+    overflow: hidden;
   }
 
   #video {
     width: 100%;
-    max-height: 280px;
+    height: 190px;
     object-fit: cover;
     display: block;
   }
@@ -156,11 +157,11 @@
   }
 
   .scan-frame {
-    width: 220px;
-    height: 80px;
+    width: 82%;
+    height: 100px;
     border: 2px solid var(--accent);
     border-radius: 6px;
-    box-shadow: 0 0 0 2000px rgba(0,0,0,0.35);
+    box-shadow: 0 0 0 2000px rgba(0,0,0,0.45);
     position: relative;
   }
 
@@ -192,7 +193,7 @@
   .cam-idle svg { opacity: 0.3; }
 
   .scan-actions {
-    padding: 14px 16px;
+    padding: 10px 14px;
     display: flex;
     gap: 10px;
   }
@@ -563,12 +564,12 @@
 
   <div class="scan-box">
     <div class="scan-header"><div class="dot" style="background:var(--red)"></div>CÁMARA</div>
-    <div id="video-container-salida" style="position:relative;background:#000;min-height:220px;display:flex;align-items:center;justify-content:center;">
+    <div id="video-container-salida" style="position:relative;background:#000;height:190px;display:flex;align-items:center;justify-content:center;overflow:hidden;">
       <div class="cam-idle" id="cam-idle-salida">
         <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
         Cámara inactiva
       </div>
-      <video id="video-salida" style="display:none;" playsinline autoplay muted></video>
+      <video id="video-salida" style="display:none;width:100%;height:190px;object-fit:cover;" playsinline autoplay muted></video>
       <div class="scan-overlay" id="overlay-salida" style="display:none;">
         <div class="scan-frame"><div class="scan-line"></div></div>
       </div>
