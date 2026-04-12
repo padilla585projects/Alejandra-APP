@@ -181,13 +181,44 @@ tr:hover td { background: var(--surface2); }
 .user-chip { display: flex; align-items: center; gap: 5px; background: var(--surface2); border: 1px solid var(--border); border-radius: 20px; padding: 4px 10px; cursor: pointer; font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 12px; letter-spacing: 0.5px; color: var(--text); transition: border-color 0.2s; white-space: nowrap; max-width: 120px; overflow: hidden; }
 .user-chip:hover { border-color: var(--accent); color: var(--accent); }
 .user-chip span { overflow: hidden; text-overflow: ellipsis; }
+
+/* PANTALLA DE ACCESO */
+.overlay-acceso { position: fixed; inset: 0; background: var(--bg); z-index: 999; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px; }
+.acceso-box { width: 100%; max-width: 340px; display: flex; flex-direction: column; gap: 16px; }
+.acceso-logo { font-family: 'Barlow Condensed', sans-serif; font-weight: 900; font-size: 36px; letter-spacing: 2px; color: var(--accent); text-align: center; }
+.acceso-logo span { color: var(--text); }
+.acceso-sub { text-align: center; color: var(--muted); font-size: 13px; margin-top: -8px; }
+.acceso-input { padding: 14px 16px; background: var(--surface); border: 2px solid var(--border); border-radius: 10px; color: var(--text); font-family: 'Barlow Condensed', sans-serif; font-size: 20px; letter-spacing: 3px; text-align: center; text-transform: uppercase; outline: none; width: 100%; }
+.acceso-input:focus { border-color: var(--accent); }
+.acceso-btn { padding: 14px; background: var(--accent); border: none; border-radius: 10px; color: #000; font-family: 'Barlow Condensed', sans-serif; font-weight: 900; font-size: 16px; letter-spacing: 2px; cursor: pointer; }
+.acceso-btn:active { transform: scale(0.98); }
+.acceso-err { color: var(--red); text-align: center; font-size: 13px; min-height: 18px; }
+
+/* OBRA SELECTOR EN HEADER (admin) */
+.obra-select { background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 12px; padding: 4px 8px; cursor: pointer; max-width: 130px; }
+.obra-label { font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 12px; color: var(--accent); letter-spacing: 0.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 130px; }
+
+/* ADMIN BADGE */
+.admin-badge { background: var(--accent); color: #000; font-family: 'Barlow Condensed', sans-serif; font-weight: 900; font-size: 10px; letter-spacing: 1px; padding: 2px 7px; border-radius: 3px; }
 </style>
 </head>
 <body>
 
+<!-- PANTALLA DE ACCESO -->
+<div class="overlay-acceso" id="overlayAcceso">
+  <div class="acceso-box">
+    <div class="acceso-logo">GESTI<span>BOBINA</span></div>
+    <div class="acceso-sub">Introduce el código de acceso</div>
+    <input class="acceso-input" id="inputCodigoAcceso" type="text" placeholder="CÓDIGO" autocomplete="off"
+      onkeydown="if(event.key==='Enter') verificarAcceso()">
+    <button class="acceso-btn" onclick="verificarAcceso()">ACCEDER</button>
+    <div class="acceso-err" id="accesoErr"></div>
+  </div>
+</div>
+
 <header>
   <div class="logo">GESTI<span>BOBINA</span></div>
-  <div class="badge">v3.11</div>
+  <div id="headerObraWrap" style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;min-width:0"></div>
   <div class="user-chip" id="userChip" onclick="showTab('config')" title="Cambiar usuario">
     👤 <span id="headerUsuario">Sin usuario</span>
   </div>
@@ -420,6 +451,28 @@ tr:hover td { background: var(--surface2); }
 <div class="tab" id="tab-config">
   <div class="section-title">CONFIGURACIÓN</div>
 
+  <!-- Panel admin — solo visible si es admin -->
+  <div class="config-section" id="panel-admin" style="display:none">
+    <div class="config-title">🔐 ADMINISTRADOR <span class="admin-badge">ADMIN</span></div>
+    <div class="form-group" style="margin-bottom:8px">
+      <label>Obra activa</label>
+      <select id="admin-obra-select" onchange="adminCambiarObra(this.value)" style="width:100%">
+        <option value="">— Todas las obras —</option>
+      </select>
+    </div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:12px">El inventario y stats cambian según la obra seleccionada</div>
+    <div class="config-title" style="font-size:12px;margin-bottom:8px">Obras registradas</div>
+    <div id="lista-obras"></div>
+    <div class="tag-add" style="margin-top:10px">
+      <input type="text" id="nueva-obra-nombre" placeholder="Nombre de la obra">
+      <input type="text" id="nueva-obra-codigo" placeholder="CÓDIGO" style="width:120px;text-transform:uppercase">
+      <button onclick="crearObra()">+</button>
+    </div>
+    <div style="margin-top:12px">
+      <button class="btn-primary btn-secondary" style="font-size:12px" onclick="cerrarSesion()">🚪 Cerrar sesión</button>
+    </div>
+  </div>
+
   <div class="config-section">
     <div class="config-title">👤 Usuario</div>
     <div class="form-group">
@@ -480,9 +533,158 @@ function getAPI() {
 
 function api(path, opts = {}) {
   return fetch(getAPI() + path, {
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
     ...opts,
   });
+}
+
+// ═══════════════════════════════════════════════════════
+// ACCESO / OBRAS / ADMIN
+// ═══════════════════════════════════════════════════════
+
+function getSesion() {
+  try { return JSON.parse(localStorage.getItem('gb_sesion') || 'null'); } catch { return null; }
+}
+function setSesion(data) {
+  localStorage.setItem('gb_sesion', JSON.stringify(data));
+}
+function cerrarSesion() {
+  localStorage.removeItem('gb_sesion');
+  location.reload();
+}
+
+// Headers que añade api() automáticamente
+function getAuthHeaders() {
+  const s = getSesion();
+  if (!s) return {};
+  if (s.tipo === 'admin') return { 'X-Admin-Code': s.adminCode, 'X-Obra-Id': s.obraSeleccionada || '' };
+  return { 'X-Obra-Id': String(s.obra.id) };
+}
+
+async function verificarAcceso() {
+  const codigo = document.getElementById('inputCodigoAcceso').value.trim();
+  const errEl  = document.getElementById('accesoErr');
+  errEl.textContent = '';
+  if (!codigo) { errEl.textContent = 'Introduce un código'; return; }
+
+  try {
+    const res = await fetch(getAPI() + '/acceso', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ codigo }),
+    });
+    const data = await res.json();
+    if (!res.ok) { errEl.textContent = data.error || 'Código inválido'; return; }
+
+    if (data.tipo === 'admin') {
+      setSesion({ tipo: 'admin', adminCode: codigo, obraSeleccionada: null });
+    } else {
+      setSesion({ tipo: 'obra', obra: data.obra });
+    }
+    iniciarApp();
+  } catch {
+    errEl.textContent = 'Error de conexión';
+  }
+}
+
+function iniciarApp() {
+  const s = getSesion();
+  if (!s) { document.getElementById('overlayAcceso').style.display = 'flex'; return; }
+  document.getElementById('overlayAcceso').style.display = 'none';
+  renderHeaderObra();
+  if (s.tipo === 'admin') {
+    document.getElementById('panel-admin').style.display = 'block';
+    cargarObrasAdmin();
+  }
+  actualizarStats();
+  cargarCatalogos();
+}
+
+function renderHeaderObra() {
+  const s = getSesion();
+  const wrap = document.getElementById('headerObraWrap');
+  if (!s) { wrap.innerHTML = ''; return; }
+  if (s.tipo === 'admin') {
+    wrap.innerHTML = `<span class="admin-badge">ADMIN</span><select class="obra-select" id="headerObraSelect" onchange="adminCambiarObra(this.value)"><option value="">Todas</option></select>`;
+    // poblar después de cargar obras
+  } else {
+    wrap.innerHTML = `<span class="obra-label">🏗 ${s.obra.nombre}</span>`;
+  }
+}
+
+async function cargarObrasAdmin() {
+  try {
+    const res = await api('/obras');
+    const obras = await res.json();
+    renderListaObras(obras);
+    // Poblar selects
+    const opts = obras.map(o => `<option value="${o.id}">${o.nombre}</option>`).join('');
+    const s = getSesion();
+    const selAdmin = document.getElementById('admin-obra-select');
+    const selHeader = document.getElementById('headerObraSelect');
+    if (selAdmin) selAdmin.innerHTML = '<option value="">— Todas las obras —</option>' + opts;
+    if (selHeader) selHeader.innerHTML = '<option value="">Todas</option>' + opts;
+    // Restaurar selección
+    if (s?.obraSeleccionada) {
+      if (selAdmin) selAdmin.value = s.obraSeleccionada;
+      if (selHeader) selHeader.value = s.obraSeleccionada;
+    }
+  } catch {}
+}
+
+function renderListaObras(obras) {
+  const c = document.getElementById('lista-obras');
+  if (!obras.length) { c.innerHTML = '<div style="color:var(--muted);font-size:12px">Sin obras creadas</div>'; return; }
+  c.innerHTML = obras.map(o => `
+    <div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border)">
+      <div style="flex:1">
+        <div style="font-weight:700;font-size:14px">${o.nombre}</div>
+        <div style="font-size:11px;color:var(--muted);letter-spacing:1px">${o.codigo}</div>
+      </div>
+      <button class="tag-del" onclick="eliminarObra(${o.id})" style="padding:4px 8px">×</button>
+    </div>
+  `).join('');
+}
+
+function adminCambiarObra(obraId) {
+  const s = getSesion();
+  if (!s || s.tipo !== 'admin') return;
+  s.obraSeleccionada = obraId ? parseInt(obraId) : null;
+  setSesion(s);
+  // Sincronizar ambos selects
+  const selAdmin  = document.getElementById('admin-obra-select');
+  const selHeader = document.getElementById('headerObraSelect');
+  if (selAdmin)  selAdmin.value  = obraId || '';
+  if (selHeader) selHeader.value = obraId || '';
+  actualizarStats();
+  cargarStock();
+}
+
+async function crearObra() {
+  const nombre = document.getElementById('nueva-obra-nombre').value.trim();
+  const codigo = document.getElementById('nueva-obra-codigo').value.trim().toUpperCase();
+  if (!nombre || !codigo) return toast('⚠️ Rellena nombre y código', 'err');
+  try {
+    const res = await api('/obras', { method: 'POST', body: JSON.stringify({ nombre, codigo }) });
+    const data = await res.json();
+    if (res.ok) {
+      toast(`✅ Obra "${nombre}" creada (${codigo})`, 'ok');
+      document.getElementById('nueva-obra-nombre').value = '';
+      document.getElementById('nueva-obra-codigo').value = '';
+      cargarObrasAdmin();
+    } else {
+      toast(`❌ ${data.error}`, 'err');
+    }
+  } catch { toast('❌ Error de conexión', 'err'); }
+}
+
+async function eliminarObra(id) {
+  if (!confirm('¿Desactivar esta obra?')) return;
+  try {
+    await api(`/obras/${id}`, { method: 'DELETE' });
+    toast('✅ Obra desactivada', 'ok');
+    cargarObrasAdmin();
+  } catch { toast('❌ Error', 'err'); }
 }
 
 // ═══════════════════════════════════════════════════════
@@ -1149,15 +1351,14 @@ function limpiarDatosLocales() {
 // ═══════════════════════════════════════════════════════
 (async () => {
   // Inicializar usuario en cabecera
-  const u = getUsuario();
-  document.getElementById('headerUsuario').textContent = u || 'Sin usuario';
+  document.getElementById('headerUsuario').textContent = getUsuario() || 'Sin usuario';
 
-  actualizarStats();
-  cargarCatalogos();
+  // Iniciar app (muestra overlay si no hay sesión)
+  iniciarApp();
 
-  // Comprobar conexión al iniciar
+  // Comprobar conexión
   try {
-    const res = await api('/stats');
+    const res = await fetch(getAPI() + '/stats');
     if (res.ok) {
       document.getElementById('statusDot').className = 'status-dot ok';
       document.getElementById('statusText').textContent = 'Online';

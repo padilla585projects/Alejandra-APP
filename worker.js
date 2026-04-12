@@ -1,12 +1,13 @@
-// GestiBobina Worker v3.3
+// GestiBobina Worker v3.12
 // Base de datos: Cloudflare D1
-// IA: Gemini 1.5 Flash
+// IA: Gemini 2.0 Flash
 // Sync: Google Sheets automático en cada cambio
+// Multi-obra + Admin
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type',
+  'Access-Control-Allow-Headers': 'Content-Type, X-Admin-Code, X-Obra-Id',
 };
 
 function json(data, status = 200) {
@@ -20,6 +21,14 @@ function err(msg, status = 400) {
   return json({ error: msg }, status);
 }
 
+// ── Auth helper ──────────────────────────────────────────────────────────────
+function getAuth(request, env) {
+  const adminCode = request.headers.get('X-Admin-Code');
+  const obraId   = request.headers.get('X-Obra-Id');
+  const isAdmin  = env.ADMIN_CODE && adminCode === env.ADMIN_CODE;
+  return { isAdmin, obraId: obraId ? parseInt(obraId) : null };
+}
+
 export default {
   async fetch(request, env, ctx) {
     if (request.method === 'OPTIONS') {
@@ -31,24 +40,31 @@ export default {
     const method = request.method;
 
     try {
-      if (path === '/scan' && method === 'POST')         return await handleScan(request, env);
-      if (path === '/ocr'  && method === 'POST')         return await handleOCR(request, env);
-      if (path === '/log'  && method === 'POST')         return await guardarLog(request, env);
-      if (path === '/logs' && method === 'GET')          return await getLogs(request, env);
-      if (path === '/bobinas' && method === 'GET')       return await getBobinas(request, env);
-      if (path === '/bobinas' && method === 'POST')      return await crearBobina(request, env, ctx);
+      // Rutas públicas (sin auth)
+      if (path === '/scan'       && method === 'POST') return await handleScan(request, env);
+      if (path === '/ocr'        && method === 'POST') return await handleOCR(request, env);
+      if (path === '/log'        && method === 'POST') return await guardarLog(request, env);
+      if (path === '/acceso'     && method === 'POST') return await verificarAcceso(request, env);
+
+      // Rutas con auth
+      if (path === '/logs'       && method === 'GET')    return await getLogs(request, env);
+      if (path === '/obras'      && method === 'GET')    return await getObras(request, env);
+      if (path === '/obras'      && method === 'POST')   return await crearObra(request, env);
+      if (path.startsWith('/obras/') && method === 'DELETE') return await eliminarObra(path.split('/obras/')[1], request, env);
+      if (path === '/bobinas'    && method === 'GET')    return await getBobinas(request, env);
+      if (path === '/bobinas'    && method === 'POST')   return await crearBobina(request, env, ctx);
       if (path.startsWith('/bobinas/') && method === 'PUT')    return await devolverBobina(decodeURIComponent(path.split('/bobinas/')[1]), request, env, ctx);
-      if (path.startsWith('/bobinas/') && method === 'DELETE') return await eliminarBobina(decodeURIComponent(path.split('/bobinas/')[1]), env, ctx);
+      if (path.startsWith('/bobinas/') && method === 'DELETE') return await eliminarBobina(decodeURIComponent(path.split('/bobinas/')[1]), request, env, ctx);
       if (path === '/proveedores' && method === 'GET')   return await getCatalogo('proveedores', env);
       if (path === '/proveedores' && method === 'POST')  return await addCatalogo('proveedores', request, env);
       if (path.startsWith('/proveedores/') && method === 'DELETE') return await deleteCatalogo('proveedores', path.split('/proveedores/')[1], env);
-      if (path === '/tipos' && method === 'GET')         return await getCatalogo('tipos_cable', env);
-      if (path === '/tipos' && method === 'POST')        return await addCatalogo('tipos_cable', request, env);
+      if (path === '/tipos'      && method === 'GET')    return await getCatalogo('tipos_cable', env);
+      if (path === '/tipos'      && method === 'POST')   return await addCatalogo('tipos_cable', request, env);
       if (path.startsWith('/tipos/') && method === 'DELETE') return await deleteCatalogo('tipos_cable', path.split('/tipos/')[1], env);
-      if (path === '/export' && method === 'GET')        return await exportCSV(env);
-      if (path === '/stats' && method === 'GET')         return await getStats(env);
-      if (path === '/sync' && method === 'POST')         { await syncSheets(env); return json({ ok: true, mensaje: 'Sync completado' }); }
-      if (path === '/sync-debug' && method === 'POST')  { return await syncSheetsDebug(env); }
+      if (path === '/export'     && method === 'GET')    return await exportCSV(request, env);
+      if (path === '/stats'      && method === 'GET')    return await getStats(request, env);
+      if (path === '/sync'       && method === 'POST')   { await syncSheets(env); return json({ ok: true, mensaje: 'Sync completado' }); }
+      if (path === '/sync-debug' && method === 'POST')   return await syncSheetsDebug(env);
 
       return err('Ruta no encontrada', 404);
     } catch (e) {
@@ -57,6 +73,53 @@ export default {
     }
   },
 };
+
+// ── Verificar acceso (obra o admin) ─────────────────────────────────────────
+async function verificarAcceso(request, env) {
+  const { codigo } = await request.json();
+  if (!codigo) return err('Falta el código');
+
+  // ¿Es admin?
+  if (env.ADMIN_CODE && codigo.trim() === env.ADMIN_CODE) {
+    return json({ tipo: 'admin' });
+  }
+
+  // ¿Es código de obra?
+  const obra = await env.DB.prepare('SELECT * FROM obras WHERE codigo = ? AND activa = 1').bind(codigo.trim().toUpperCase()).first();
+  if (obra) return json({ tipo: 'obra', obra });
+
+  return err('Código inválido', 401);
+}
+
+// ── CRUD Obras (solo admin) ──────────────────────────────────────────────────
+async function getObras(request, env) {
+  const { isAdmin } = getAuth(request, env);
+  if (!isAdmin) return err('No autorizado', 403);
+  const { results } = await env.DB.prepare('SELECT * FROM obras ORDER BY nombre').all();
+  return json(results);
+}
+
+async function crearObra(request, env) {
+  const { isAdmin } = getAuth(request, env);
+  if (!isAdmin) return err('No autorizado', 403);
+  const { nombre, codigo } = await request.json();
+  if (!nombre?.trim() || !codigo?.trim()) return err('Faltan nombre y código');
+  try {
+    const r = await env.DB.prepare('INSERT INTO obras (nombre, codigo) VALUES (?, ?)')
+      .bind(nombre.trim(), codigo.trim().toUpperCase()).run();
+    return json({ ok: true, id: r.meta.last_row_id, nombre: nombre.trim(), codigo: codigo.trim().toUpperCase() }, 201);
+  } catch (e) {
+    if (e.message.includes('UNIQUE')) return err(`El código "${codigo}" ya existe`, 409);
+    throw e;
+  }
+}
+
+async function eliminarObra(id, request, env) {
+  const { isAdmin } = getAuth(request, env);
+  if (!isAdmin) return err('No autorizado', 403);
+  await env.DB.prepare('UPDATE obras SET activa = 0 WHERE id = ?').bind(id).run();
+  return json({ ok: true });
+}
 
 // ── Google Sheets Auth (JWT / Service Account) ───────────────────────────────
 
@@ -353,12 +416,16 @@ Si no puedes leer ningún código, responde: NO_LEIDO`;
 // ── CRUD Bobinas ─────────────────────────────────────────────────────────────
 
 async function getBobinas(request, env) {
+  const { isAdmin, obraId } = getAuth(request, env);
   const url = new URL(request.url);
   const estado = url.searchParams.get('estado');
   const buscar = url.searchParams.get('q');
+  // Admin sin obra seleccionada ve todo; con obra seleccionada filtra
+  const obraFilter = obraId || null;
 
   let sql = 'SELECT * FROM bobinas WHERE 1=1';
   const params = [];
+  if (obraFilter) { sql += ' AND obra_id = ?'; params.push(obraFilter); }
   if (estado) { sql += ' AND estado = ?'; params.push(estado); }
   if (buscar) {
     sql += ' AND (codigo LIKE ? OR proveedor LIKE ? OR tipo_cable LIKE ?)';
@@ -371,15 +438,17 @@ async function getBobinas(request, env) {
 }
 
 async function crearBobina(request, env, ctx) {
+  const { isAdmin, obraId } = getAuth(request, env);
   const { codigo, proveedor, tipo_cable, notas, registrado_por } = await request.json();
   if (!codigo || !proveedor || !tipo_cable) return err('Faltan campos: codigo, proveedor, tipo_cable');
+  const obraFinal = isAdmin ? obraId : obraId;
 
   const fecha = new Date().toLocaleString('es-ES', { timeZone: 'Europe/Madrid' });
 
   try {
     await env.DB.prepare(
-      'INSERT INTO bobinas (codigo, proveedor, tipo_cable, fecha_entrada, estado, notas, registrado_por) VALUES (?, ?, ?, ?, ?, ?, ?)'
-    ).bind(codigo.trim().toUpperCase(), proveedor, tipo_cable, fecha, 'activa', notas || '', registrado_por || '').run();
+      'INSERT INTO bobinas (codigo, proveedor, tipo_cable, fecha_entrada, estado, notas, registrado_por, obra_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+    ).bind(codigo.trim().toUpperCase(), proveedor, tipo_cable, fecha, 'activa', notas || '', registrado_por || '', obraFinal || null).run();
 
     // Sync asíncrono — no bloquea la respuesta
     ctx.waitUntil(syncSheets(env));
@@ -408,9 +477,11 @@ async function devolverBobina(codigo, request, env, ctx) {
   return json({ ok: true, mensaje: `Bobina ${codigo} devuelta correctamente`, fecha_devolucion: fecha });
 }
 
-async function eliminarBobina(codigo, env, ctx) {
-  const bobina = await env.DB.prepare('SELECT id FROM bobinas WHERE codigo = ?').bind(codigo).first();
+async function eliminarBobina(codigo, request, env, ctx) {
+  const { isAdmin, obraId } = getAuth(request, env);
+  const bobina = await env.DB.prepare('SELECT * FROM bobinas WHERE codigo = ?').bind(codigo).first();
   if (!bobina) return err(`Bobina ${codigo} no encontrada`, 404);
+  if (!isAdmin && bobina.obra_id !== obraId) return err('No autorizado', 403);
 
   await env.DB.prepare('DELETE FROM bobinas WHERE codigo = ?').bind(codigo).run();
 
@@ -445,17 +516,25 @@ async function deleteCatalogo(tabla, id, env) {
 
 // ── Stats ─────────────────────────────────────────────────────────────────────
 
-async function getStats(env) {
-  const total     = await env.DB.prepare('SELECT COUNT(*) as n FROM bobinas').first();
-  const activas   = await env.DB.prepare('SELECT COUNT(*) as n FROM bobinas WHERE estado = ?').bind('activa').first();
-  const devueltas = await env.DB.prepare('SELECT COUNT(*) as n FROM bobinas WHERE estado = ?').bind('devuelta').first();
+async function getStats(request, env) {
+  const { obraId } = getAuth(request, env);
+  const f = obraId || null;
+  const w = f ? ' AND obra_id = ?' : '';
+  const p = f ? [f] : [];
+
+  const total     = await env.DB.prepare(`SELECT COUNT(*) as n FROM bobinas WHERE 1=1${w}`).bind(...p).first();
+  const activas   = await env.DB.prepare(`SELECT COUNT(*) as n FROM bobinas WHERE estado = 'activa'${w}`).bind(...p).first();
+  const devueltas = await env.DB.prepare(`SELECT COUNT(*) as n FROM bobinas WHERE estado = 'devuelta'${w}`).bind(...p).first();
   return json({ total: total.n, activas: activas.n, devueltas: devueltas.n });
 }
 
 // ── Exportar CSV ──────────────────────────────────────────────────────────────
 
-async function exportCSV(env) {
-  const { results } = await env.DB.prepare('SELECT * FROM bobinas ORDER BY created_at DESC').all();
+async function exportCSV(request, env) {
+  const { obraId } = getAuth(request, env);
+  const f = obraId || null;
+  const sql = f ? 'SELECT * FROM bobinas WHERE obra_id = ? ORDER BY created_at DESC' : 'SELECT * FROM bobinas ORDER BY created_at DESC';
+  const { results } = await env.DB.prepare(sql).bind(...(f ? [f] : [])).all();
   const cab  = 'Código,Proveedor,Tipo Cable,Fecha Entrada,Fecha Devolución,Estado,Notas';
   const filas = results.map(b =>
     [b.codigo, b.proveedor, b.tipo_cable, b.fecha_entrada, b.fecha_devolucion || '', b.estado, b.notas || '']
