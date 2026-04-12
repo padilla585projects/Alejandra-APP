@@ -45,6 +45,7 @@ export default {
       if (path === '/export' && method === 'GET')        return await exportCSV(env);
       if (path === '/stats' && method === 'GET')         return await getStats(env);
       if (path === '/sync' && method === 'POST')         { await syncSheets(env); return json({ ok: true, mensaje: 'Sync completado' }); }
+      if (path === '/sync-debug' && method === 'POST')  { return await syncSheetsDebug(env); }
 
       return err('Ruta no encontrada', 404);
     } catch (e) {
@@ -143,6 +144,55 @@ async function syncSheets(env) {
   } catch (e) {
     // No bloqueamos la respuesta si falla el sync
     console.error('Error sync Sheets:', e.message);
+  }
+}
+
+// ── Sync Debug ───────────────────────────────────────────────────────────────
+
+async function syncSheetsDebug(env) {
+  const log = [];
+  try {
+    log.push('Verificando variables...');
+    log.push(`GOOGLE_CLIENT_EMAIL: ${env.GOOGLE_CLIENT_EMAIL ? '✅' : '❌ NO DEFINIDA'}`);
+    log.push(`GOOGLE_PRIVATE_KEY: ${env.GOOGLE_PRIVATE_KEY ? '✅ (' + env.GOOGLE_PRIVATE_KEY.length + ' chars)' : '❌ NO DEFINIDA'}`);
+    log.push(`GOOGLE_SHEET_ID: ${env.GOOGLE_SHEET_ID ? '✅ ' + env.GOOGLE_SHEET_ID : '❌ NO DEFINIDA'}`);
+
+    log.push('Obteniendo token Google...');
+    const token = await getGoogleToken(env);
+    log.push(`Token: ✅ (${token.slice(0,20)}...)`);
+
+    const { results } = await env.DB.prepare('SELECT * FROM bobinas ORDER BY created_at DESC').all();
+    log.push(`Bobinas en DB: ${results.length}`);
+
+    const values = [
+      ['Código', 'Proveedor', 'Tipo Cable', 'Fecha Entrada', 'Fecha Devolución', 'Estado', 'Notas'],
+      ...results.map(b => [b.codigo, b.proveedor, b.tipo_cable, b.fecha_entrada, b.fecha_devolucion || '', b.estado, b.notas || '']),
+    ];
+
+    log.push('Limpiando hoja...');
+    const clearRes = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${env.GOOGLE_SHEET_ID}/values/A:Z:clear`,
+      { method: 'POST', headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' } }
+    );
+    const clearData = await clearRes.json();
+    log.push(`Clear: ${clearRes.status} ${JSON.stringify(clearData).slice(0, 100)}`);
+
+    log.push('Escribiendo datos...');
+    const writeRes = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${env.GOOGLE_SHEET_ID}/values/A1?valueInputOption=RAW`,
+      {
+        method: 'PUT',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ values }),
+      }
+    );
+    const writeData = await writeRes.json();
+    log.push(`Write: ${writeRes.status} ${JSON.stringify(writeData).slice(0, 200)}`);
+
+    return json({ ok: writeRes.ok, log });
+  } catch (e) {
+    log.push(`❌ ERROR: ${e.message}`);
+    return json({ ok: false, log, error: e.message });
   }
 }
 
