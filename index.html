@@ -182,7 +182,7 @@ tr:hover td { background: var(--surface2); }
 
 <header>
   <div class="logo">GESTI<span>BOBINA</span></div>
-  <div class="badge">v3.6</div>
+  <div class="badge">v3.7</div>
   <div class="status-indicator" id="apiStatus">
     <div class="status-dot" id="statusDot"></div>
     <span id="statusText">...</span>
@@ -466,6 +466,23 @@ function api(path, opts = {}) {
 }
 
 // ═══════════════════════════════════════════════════════
+// LOGS
+// ═══════════════════════════════════════════════════════
+function log(nivel, origen, mensaje, detalle = null) {
+  console[nivel === 'error' ? 'error' : 'log'](`[${origen}] ${mensaje}`, detalle || '');
+  // Enviar al servidor en background (no bloquea la UI)
+  fetch(getAPI() + '/log', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ nivel, origen, mensaje, detalle }),
+  }).catch(() => {});
+}
+
+// Capturar errores globales automáticamente
+window.onerror = (msg, src, line) => log('error', 'global', msg, { src, line });
+window.onunhandledrejection = e => log('error', 'promise', e.reason?.message || String(e.reason));
+
+// ═══════════════════════════════════════════════════════
 // TOAST
 // ═══════════════════════════════════════════════════════
 let toastTimer;
@@ -648,11 +665,13 @@ async function capturarIA(inst, usarIA = false) {
   const video = document.getElementById('video-' + inst);
 
   try {
+    const canvas = capturarFrame(video);
+    log('info', 'camara', `Frame capturado ${canvas.width}x${canvas.height}`);
+
     if (usarIA) {
       // ── Modo IA: Gemini via Worker ──────────────────────────────
-      // Imagen redimensionada y comprimida para no superar límites
-      const canvas = capturarFrame(video);
       const imageData = canvas.toDataURL('image/jpeg', 0.75).split(',')[1];
+      log('info', 'gemini', `Enviando imagen (${Math.round(imageData.length/1024)}KB)`);
 
       const res = await api('/scan', {
         method: 'POST',
@@ -661,16 +680,19 @@ async function capturarIA(inst, usarIA = false) {
       const data = await res.json();
 
       if (!res.ok) {
+        log('error', 'gemini', data.error || 'Error Gemini', data);
         toast('❌ ' + (data.error || 'Error Gemini'), 'err');
       } else if (data.codigo === 'NO_LEIDO') {
+        log('warn', 'gemini', 'NO_LEIDO');
         toast('⚠️ La IA no pudo leer. Acércate más y repite.', 'err');
       } else {
+        log('info', 'gemini', `Leído: ${data.codigo}`, { modelo: data.modelo });
         codigoLeido(inst, data.codigo, '🤖 IA');
       }
     } else {
       // ── Modo OCR: Google Cloud Vision API ──────────────────────
-      const canvas = capturarFrame(video);
       const imageData = canvas.toDataURL('image/jpeg', 0.85).split(',')[1];
+      log('info', 'ocr', `Enviando imagen (${Math.round(imageData.length/1024)}KB)`);
 
       const res = await api('/ocr', {
         method: 'POST',
@@ -679,14 +701,18 @@ async function capturarIA(inst, usarIA = false) {
       const data = await res.json();
 
       if (!res.ok) {
+        log('error', 'ocr', data.error || 'Error OCR', data);
         toast('❌ ' + (data.error || 'Error OCR'), 'err');
       } else if (data.codigo === 'NO_LEIDO') {
+        log('warn', 'ocr', 'NO_LEIDO', { textoCompleto: data.textoCompleto });
         toast('⚠️ No se pudo leer. Mejora la iluminación y repite.', 'err');
       } else {
+        log('info', 'ocr', `Leído: ${data.codigo}`, { textoCompleto: data.textoCompleto });
         codigoLeido(inst, data.codigo, '📷 OCR');
       }
     }
   } catch (e) {
+    log('error', 'scanner', e.message, { stack: e.stack });
     toast('❌ Error: ' + e.message, 'err');
   }
 

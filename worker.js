@@ -33,6 +33,8 @@ export default {
     try {
       if (path === '/scan' && method === 'POST')         return await handleScan(request, env);
       if (path === '/ocr'  && method === 'POST')         return await handleOCR(request, env);
+      if (path === '/log'  && method === 'POST')         return await guardarLog(request, env);
+      if (path === '/logs' && method === 'GET')          return await getLogs(request, env);
       if (path === '/bobinas' && method === 'GET')       return await getBobinas(request, env);
       if (path === '/bobinas' && method === 'POST')      return await crearBobina(request, env, ctx);
       if (path.startsWith('/bobinas/') && method === 'PUT')    return await devolverBobina(decodeURIComponent(path.split('/bobinas/')[1]), request, env, ctx);
@@ -198,6 +200,33 @@ async function syncSheetsDebug(env) {
     log.push(`❌ ERROR: ${e.message}`);
     return json({ ok: false, log, error: e.message });
   }
+}
+
+// ── Sistema de Logs ───────────────────────────────────────────────────────────
+
+async function guardarLog(request, env) {
+  try {
+    const { nivel = 'info', origen, mensaje, detalle } = await request.json();
+    await env.DB.prepare(
+      'INSERT INTO logs (nivel, origen, mensaje, detalle) VALUES (?, ?, ?, ?)'
+    ).bind(nivel, origen || 'app', mensaje, detalle ? JSON.stringify(detalle) : null).run();
+    return json({ ok: true });
+  } catch (e) {
+    return json({ ok: false });
+  }
+}
+
+async function getLogs(request, env) {
+  const url = new URL(request.url);
+  const limit = parseInt(url.searchParams.get('limit') || '50');
+  const nivel = url.searchParams.get('nivel');
+  let sql = 'SELECT * FROM logs';
+  const params = [];
+  if (nivel) { sql += ' WHERE nivel = ?'; params.push(nivel); }
+  sql += ' ORDER BY created_at DESC LIMIT ?';
+  params.push(limit);
+  const { results } = await env.DB.prepare(sql).bind(...params).all();
+  return json(results);
 }
 
 // ── OCR con Google Cloud Vision API ─────────────────────────────────────────
