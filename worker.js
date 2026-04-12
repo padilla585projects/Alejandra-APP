@@ -265,13 +265,26 @@ async function handleOCR(request, env) {
     if (!textoCompleto) return json({ codigo: 'NO_LEIDO' });
 
     // Extraer el código más probable — líneas alfanuméricas de 3+ chars
+    const UI_WORDS = new Set([
+      'PINCELES','CALIBRI','FORMAS','COLORES','COPILOT','CAPAS','RELLENO','FONDO',
+      'COPIAR','PEGAR','ARCHIVO','EDITAR','VER','INSERTAR','INICIO','AYUDA',
+      'FORMATO','HERRAMIENTAS','VENTANA','IMAGEN','TEXTO','DIBUJAR','SELECCIONAR',
+      'SHAPES','COLORS','BRUSHES','LAYERS','FILL','TOOLS','EDIT','FILE','VIEW',
+      'CANVAS','ZOOM','UNDO','REDO','COPY','PASTE','CUT','SELECT','CROP',
+    ]);
+
     const lineas = textoCompleto
       .split('\n')
       .map(l => l.trim().toUpperCase().replace(/[^A-Z0-9\-\/]/g, ''))
-      .filter(l => l.length >= 3);
+      .filter(l => l.length >= 3 && !UI_WORDS.has(l));
 
-    // Priorizar líneas que parezcan matrículas (mezcla letras+números)
-    const matricula = lineas.find(l => /[A-Z]/.test(l) && /[0-9]/.test(l))
+    // Prioridad 1: patrón clásico de matrícula de bobina (ej: R-2174569T, A-35487, C-2891-X)
+    const patronBobina = /^[A-Z]{1,4}[-\/]?[0-9]{3,}[A-Z]{0,2}$/;
+    const matricula = lineas.find(l => patronBobina.test(l))
+      // Prioridad 2: mezcla letras+números priorizando las que tienen más dígitos (menos probable que sea una palabra)
+      || lineas
+          .filter(l => /[A-Z]/.test(l) && /[0-9]/.test(l))
+          .sort((a, b) => (b.match(/[0-9]/g)||[]).length - (a.match(/[0-9]/g)||[]).length)[0]
       || lineas.sort((a, b) => b.length - a.length)[0]
       || 'NO_LEIDO';
 
@@ -307,7 +320,7 @@ Si no puedes leer ningún código, responde: NO_LEIDO`;
     generationConfig: { temperature: 0, maxOutputTokens: 50 },
   };
 
-  for (const model of ['gemini-1.5-flash', 'gemini-1.5-flash-8b']) {
+  for (const model of ['gemini-2.0-flash-lite', 'gemini-2.0-flash', 'gemini-1.5-flash-latest']) {
     const res = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
       { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(geminiBody) }

@@ -592,7 +592,9 @@ function iniciarQRLoop(inst) {
         canvas.height = video.videoHeight;
         ctx.drawImage(video, 0, 0);
         const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        const qr = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: 'dontInvert' });
+        const qr = typeof jsQR !== 'undefined'
+          ? jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: 'dontInvert' })
+          : null;
 
         if (qr && qr.data) {
           codigoLeido(inst, qr.data.trim().toUpperCase(), 'QR/Barcode');
