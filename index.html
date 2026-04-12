@@ -62,7 +62,7 @@ nav button.active { color: var(--accent); border-bottom-color: var(--accent); }
 .cam-viewport canvas { display: none; }
 
 /* Marco guía */
-.scan-frame { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); width: 180px; height: 80px; z-index: 5; pointer-events: none; }
+.scan-frame { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); width: 88%; height: 90px; z-index: 5; pointer-events: none; }
 .scan-frame::before, .scan-frame::after { content: ''; position: absolute; width: 22px; height: 22px; border-color: var(--accent); border-style: solid; }
 .scan-frame::before { top: 0; left: 0; border-width: 3px 0 0 3px; }
 .scan-frame::after { top: 0; right: 0; border-width: 3px 3px 0 0; }
@@ -70,7 +70,7 @@ nav button.active { color: var(--accent); border-bottom-color: var(--accent); }
 .scan-frame .corner-bl { left: 0; border-width: 0 0 3px 3px; }
 .scan-frame .corner-br { right: 0; border-width: 0 3px 3px 0; }
 .scan-line { position: absolute; left: 3px; right: 3px; height: 2px; background: var(--accent); opacity: 0.8; animation: scanline 1.8s ease-in-out infinite; }
-@keyframes scanline { 0%{top:8px} 100%{top:68px} }
+@keyframes scanline { 0%{top:8px} 100%{top:78px} }
 
 .cam-idle { color: var(--muted); font-family: 'Barlow Condensed', sans-serif; font-size: 13px; letter-spacing: 1px; display: flex; flex-direction: column; align-items: center; gap: 8px; z-index: 2; padding: 20px; text-align: center; }
 .cam-idle svg { opacity: 0.15; }
@@ -183,7 +183,7 @@ tr:hover td { background: var(--surface2); }
 
 <header>
   <div class="logo">GESTI<span>BOBINA</span></div>
-  <div class="badge">v3.4</div>
+  <div class="badge">v3.5</div>
   <div class="status-indicator" id="apiStatus">
     <div class="status-dot" id="statusDot"></div>
     <span id="statusText">...</span>
