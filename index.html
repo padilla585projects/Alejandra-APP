@@ -225,7 +225,7 @@ tr:hover td { background: var(--surface2); }
 <header>
   <div class="logo">GESTI<span>BOBINA</span></div>
   <div id="headerObraWrap" style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;min-width:0"></div>
-  <div class="user-chip" id="userChip" onclick="showTab('config')" title="Cambiar usuario">
+  <div class="user-chip" id="userChip" onclick="abrirModalUsuario()" title="Cambiar usuario">
     👤 <span id="headerUsuario">Sin usuario</span>
   </div>
   <div class="status-indicator" id="apiStatus">
@@ -520,6 +520,19 @@ tr:hover td { background: var(--surface2); }
   </div>
 </div>
 
+<!-- MODAL CAMBIAR USUARIO -->
+<div id="modalUsuario" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:200;align-items:flex-end;justify-content:center" onclick="if(event.target===this)cerrarModalUsuario()">
+  <div style="background:var(--surface);width:100%;max-width:480px;border-radius:16px 16px 0 0;padding:20px;display:flex;flex-direction:column;gap:12px">
+    <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:18px;letter-spacing:1px">👤 CAMBIAR USUARIO</div>
+    <select id="modal-sel-usuario" style="width:100%;padding:11px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:15px" onchange="onModalCambioUsuario(this)"></select>
+    <div id="modal-nuevo-form" style="display:none;flex-direction:row;gap:8px">
+      <input type="text" id="modal-nuevo-input" placeholder="Tu nombre..." style="flex:1;padding:11px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:15px" onkeydown="if(event.key==='Enter')guardarUsuarioModal()">
+      <button onclick="guardarUsuarioModal()" style="padding:11px 16px;background:var(--accent);border:none;border-radius:8px;color:#000;font-weight:900;cursor:pointer">+</button>
+    </div>
+    <button onclick="cerrarModalUsuario()" style="padding:11px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--muted);font-family:'Barlow Condensed',sans-serif;font-weight:700;cursor:pointer">CANCELAR</button>
+  </div>
+</div>
+
 <!-- TOAST -->
 <div class="toast" id="toast"></div>
 
@@ -720,6 +733,54 @@ function addUsuario(nombre) {
     localStorage.setItem('gb_usuarios', JSON.stringify(lista));
   }
   setUsuario(nombre);
+}
+
+function abrirModalUsuario() {
+  const modal = document.getElementById('modalUsuario');
+  const sel = document.getElementById('modal-sel-usuario');
+  const lista = getUsuarios();
+  const actual = getUsuario();
+  sel.innerHTML = '';
+  if (!actual) {
+    const op = document.createElement('option');
+    op.value = ''; op.textContent = '— Elige usuario —';
+    sel.appendChild(op);
+  }
+  lista.forEach(u => {
+    const op = document.createElement('option');
+    op.value = u; op.textContent = u;
+    if (u === actual) op.selected = true;
+    sel.appendChild(op);
+  });
+  const opNuevo = document.createElement('option');
+  opNuevo.value = '__nuevo__'; opNuevo.textContent = '+ Nuevo usuario...';
+  sel.appendChild(opNuevo);
+  document.getElementById('modal-nuevo-form').style.display = 'none';
+  modal.style.display = 'flex';
+}
+
+function cerrarModalUsuario() {
+  document.getElementById('modalUsuario').style.display = 'none';
+}
+
+function onModalCambioUsuario(sel) {
+  if (sel.value === '__nuevo__') {
+    document.getElementById('modal-nuevo-form').style.display = 'flex';
+    document.getElementById('modal-nuevo-input').focus();
+  } else if (sel.value) {
+    setUsuario(sel.value);
+    toast(`✅ Usuario: ${sel.value}`, 'ok');
+    cerrarModalUsuario();
+  }
+}
+
+function guardarUsuarioModal() {
+  const nombre = document.getElementById('modal-nuevo-input').value.trim();
+  if (!nombre) return;
+  addUsuario(nombre);
+  document.getElementById('modal-nuevo-input').value = '';
+  toast(`✅ Usuario: ${nombre}`, 'ok');
+  cerrarModalUsuario();
 }
 
 function renderSelectorUsuarios() {
