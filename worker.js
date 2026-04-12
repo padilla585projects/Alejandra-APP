@@ -320,7 +320,7 @@ Si no puedes leer ningún código, responde: NO_LEIDO`;
     generationConfig: { temperature: 0, maxOutputTokens: 50 },
   };
 
-  for (const model of ['gemini-2.0-flash-lite', 'gemini-2.0-flash', 'gemini-1.5-flash-latest']) {
+  for (const model of ['gemini-2.0-flash', 'gemini-1.5-flash-002', 'gemini-1.5-flash']) {
     const res = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
       { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(geminiBody) }
@@ -329,7 +329,8 @@ Si no puedes leer ningún código, responde: NO_LEIDO`;
     if (res.ok) {
       return json({ codigo: data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || 'NO_LEIDO', modelo: model });
     }
-    if (res.status !== 429) return json({ error: 'Error Gemini', details: data }, res.status);
+    // Reintentar con siguiente modelo si no está disponible (404) o cuota agotada (429)
+    if (res.status !== 429 && res.status !== 404) return json({ error: 'Error Gemini', details: data }, res.status);
   }
 
   return err('Cuota de Gemini agotada. Usa el modo OCR.', 429);
