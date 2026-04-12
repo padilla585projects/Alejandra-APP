@@ -664,6 +664,9 @@ async function capturarIA(inst, usarIA = false) {
   btnActivo.classList.add('cargando');
   btnActivo.innerHTML = '<div class="spinner"></div> LEYENDO...';
 
+  // Vibración al capturar
+  if (navigator.vibrate) navigator.vibrate(80);
+
   const video = document.getElementById('video-' + inst);
 
   try {
