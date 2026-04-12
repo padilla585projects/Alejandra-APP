@@ -176,13 +176,21 @@ tr:hover td { background: var(--surface2); }
 /* DEVOLUCION SEARCH */
 .dev-result { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px; margin: 12px 0; display: none; }
 .dev-result.visible { display: block; }
+
+/* USUARIO CHIP */
+.user-chip { display: flex; align-items: center; gap: 5px; background: var(--surface2); border: 1px solid var(--border); border-radius: 20px; padding: 4px 10px; cursor: pointer; font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 12px; letter-spacing: 0.5px; color: var(--text); transition: border-color 0.2s; white-space: nowrap; max-width: 120px; overflow: hidden; }
+.user-chip:hover { border-color: var(--accent); color: var(--accent); }
+.user-chip span { overflow: hidden; text-overflow: ellipsis; }
 </style>
 </head>
 <body>
 
 <header>
   <div class="logo">GESTI<span>BOBINA</span></div>
-  <div class="badge">v3.7</div>
+  <div class="badge">v3.11</div>
+  <div class="user-chip" id="userChip" onclick="showTab('config')" title="Cambiar usuario">
+    👤 <span id="headerUsuario">Sin usuario</span>
+  </div>
   <div class="status-indicator" id="apiStatus">
     <div class="status-dot" id="statusDot"></div>
     <span id="statusText">...</span>
@@ -413,6 +421,18 @@ tr:hover td { background: var(--surface2); }
   <div class="section-title">CONFIGURACIÓN</div>
 
   <div class="config-section">
+    <div class="config-title">👤 Usuario</div>
+    <div class="form-group">
+      <label>Usuario activo</label>
+      <select id="sel-usuario" onchange="onCambioUsuario(this)"></select>
+    </div>
+    <div class="tag-add" id="form-nuevo-usuario" style="display:none">
+      <input type="text" id="input-nuevo-usuario" placeholder="Tu nombre..." maxlength="30">
+      <button onclick="guardarNuevoUsuario()">+</button>
+    </div>
+  </div>
+
+  <div class="config-section">
     <div class="config-title">🌐 Servidor API</div>
     <div class="form-group">
       <label>URL del Worker</label>
@@ -463,6 +483,76 @@ function api(path, opts = {}) {
     headers: { 'Content-Type': 'application/json' },
     ...opts,
   });
+}
+
+// ═══════════════════════════════════════════════════════
+// USUARIOS
+// ═══════════════════════════════════════════════════════
+function getUsuario() {
+  return localStorage.getItem('gb_usuario') || '';
+}
+
+function getUsuarios() {
+  try { return JSON.parse(localStorage.getItem('gb_usuarios') || '[]'); } catch { return []; }
+}
+
+function setUsuario(nombre) {
+  localStorage.setItem('gb_usuario', nombre);
+  document.getElementById('headerUsuario').textContent = nombre || 'Sin usuario';
+  renderSelectorUsuarios();
+}
+
+function addUsuario(nombre) {
+  nombre = nombre.trim();
+  if (!nombre) return;
+  const lista = getUsuarios();
+  if (!lista.includes(nombre)) {
+    lista.push(nombre);
+    localStorage.setItem('gb_usuarios', JSON.stringify(lista));
+  }
+  setUsuario(nombre);
+}
+
+function renderSelectorUsuarios() {
+  const sel = document.getElementById('sel-usuario');
+  if (!sel) return;
+  const lista = getUsuarios();
+  const actual = getUsuario();
+  sel.innerHTML = '';
+  if (!actual) {
+    const op = document.createElement('option');
+    op.value = ''; op.textContent = '— Elige o añade usuario —';
+    sel.appendChild(op);
+  }
+  lista.forEach(u => {
+    const op = document.createElement('option');
+    op.value = u; op.textContent = u;
+    if (u === actual) op.selected = true;
+    sel.appendChild(op);
+  });
+  const opNuevo = document.createElement('option');
+  opNuevo.value = '__nuevo__'; opNuevo.textContent = '+ Nuevo usuario...';
+  sel.appendChild(opNuevo);
+}
+
+function onCambioUsuario(sel) {
+  if (sel.value === '__nuevo__') {
+    document.getElementById('form-nuevo-usuario').style.display = 'flex';
+    document.getElementById('input-nuevo-usuario').focus();
+  } else if (sel.value) {
+    document.getElementById('form-nuevo-usuario').style.display = 'none';
+    setUsuario(sel.value);
+    toast(`✅ Usuario: ${sel.value}`, 'ok');
+  }
+}
+
+function guardarNuevoUsuario() {
+  const nombre = document.getElementById('input-nuevo-usuario').value.trim();
+  if (!nombre) return toast('⚠️ Introduce un nombre', 'err');
+  addUsuario(nombre);
+  document.getElementById('input-nuevo-usuario').value = '';
+  document.getElementById('form-nuevo-usuario').style.display = 'none';
+  toast(`✅ Usuario: ${nombre}`, 'ok');
 }
 
 // ═══════════════════════════════════════════════════════
@@ -769,7 +859,7 @@ async function registrarEntrada() {
   try {
     const res = await api('/bobinas', {
       method: 'POST',
-      body: JSON.stringify({ codigo, proveedor, tipo_cable, notas }),
+      body: JSON.stringify({ codigo, proveedor, tipo_cable, notas, registrado_por: getUsuario() }),
     });
     const data = await res.json();
 
@@ -835,7 +925,7 @@ async function confirmarDevolucion() {
   try {
     const res = await api(`/bobinas/${encodeURIComponent(bobinaDevolucion.codigo)}`, {
       method: 'PUT',
-      body: JSON.stringify({ notas }),
+      body: JSON.stringify({ notas, devuelto_por: getUsuario() }),
     });
     const data = await res.json();
 
@@ -965,6 +1055,7 @@ async function actualizarStats() {
 // ═══════════════════════════════════════════════════════
 function cargarConfig() {
   document.getElementById('cfg-api').value = getAPI();
+  renderSelectorUsuarios();
   cargarCatalogos();
 }
 
@@ -1057,6 +1148,10 @@ function limpiarDatosLocales() {
 // INICIO
 // ═══════════════════════════════════════════════════════
 (async () => {
+  // Inicializar usuario en cabecera
+  const u = getUsuario();
+  document.getElementById('headerUsuario').textContent = u || 'Sin usuario';
+
   actualizarStats();
   cargarCatalogos();
 

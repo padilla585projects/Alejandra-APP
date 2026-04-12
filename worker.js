@@ -371,15 +371,15 @@ async function getBobinas(request, env) {
 }
 
 async function crearBobina(request, env, ctx) {
-  const { codigo, proveedor, tipo_cable, notas } = await request.json();
+  const { codigo, proveedor, tipo_cable, notas, registrado_por } = await request.json();
   if (!codigo || !proveedor || !tipo_cable) return err('Faltan campos: codigo, proveedor, tipo_cable');
 
   const fecha = new Date().toLocaleString('es-ES', { timeZone: 'Europe/Madrid' });
 
   try {
     await env.DB.prepare(
-      'INSERT INTO bobinas (codigo, proveedor, tipo_cable, fecha_entrada, estado, notas) VALUES (?, ?, ?, ?, ?, ?)'
-    ).bind(codigo.trim().toUpperCase(), proveedor, tipo_cable, fecha, 'activa', notas || '').run();
+      'INSERT INTO bobinas (codigo, proveedor, tipo_cable, fecha_entrada, estado, notas, registrado_por) VALUES (?, ?, ?, ?, ?, ?, ?)'
+    ).bind(codigo.trim().toUpperCase(), proveedor, tipo_cable, fecha, 'activa', notas || '', registrado_por || '').run();
 
     // Sync asíncrono — no bloquea la respuesta
     ctx.waitUntil(syncSheets(env));
@@ -397,11 +397,11 @@ async function devolverBobina(codigo, request, env, ctx) {
   if (bobina.estado === 'devuelta') return err(`Bobina ${codigo} ya fue devuelta el ${bobina.fecha_devolucion}`, 409);
 
   const fecha = new Date().toLocaleString('es-ES', { timeZone: 'Europe/Madrid' });
-  const { notas } = await request.json().catch(() => ({}));
+  const { notas, devuelto_por } = await request.json().catch(() => ({}));
 
   await env.DB.prepare(
-    'UPDATE bobinas SET estado = ?, fecha_devolucion = ?, notas = ? WHERE codigo = ?'
-  ).bind('devuelta', fecha, notas || bobina.notas || '', codigo).run();
+    'UPDATE bobinas SET estado = ?, fecha_devolucion = ?, notas = ?, devuelto_por = ? WHERE codigo = ?'
+  ).bind('devuelta', fecha, notas || bobina.notas || '', devuelto_por || '', codigo).run();
 
   ctx.waitUntil(syncSheets(env));
 
