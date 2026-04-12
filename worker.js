@@ -74,18 +74,13 @@ async function getGoogleToken(env) {
   const payload = b64(claim);
   const input   = `${header}.${payload}`;
 
-  // Limpiar la clave PEM — manejo robusto de distintos formatos
-  const pem = env.GOOGLE_PRIVATE_KEY
-    .replace(/^["']|["']$/g, '')   // Quitar comillas si las tiene
-    .replace(/\\n/g, '\n')         // \n escapado → salto de línea real
-    .replace(/\\r/g, '');          // \r escapado
-
-  // Extraer solo las líneas base64 (ignorar cabecera/pie)
-  const pemBody = pem
-    .split('\n')
-    .map(l => l.trim())
-    .filter(l => l.length > 0 && !l.startsWith('-----'))
-    .join('');
+  // La clave se almacena como base64 puro (sin cabeceras PEM)
+  const pemBody = env.GOOGLE_PRIVATE_KEY
+    .replace(/^["']|["']$/g, '')  // Quitar comillas si las tiene
+    .replace(/-----BEGIN PRIVATE KEY-----|-----END PRIVATE KEY-----/g, '')
+    .replace(/\\n/g, '')
+    .replace(/\s/g, '')           // Eliminar cualquier espacio o salto de línea
+    .trim();
 
   const keyBytes = Uint8Array.from(atob(pemBody), c => c.charCodeAt(0));
 
