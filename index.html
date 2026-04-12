@@ -475,15 +475,18 @@ async function captureAI(mode) {
         ]}]
       })
     });
-    const data = await res.json();
+    const rawText = await res.text();
+    let data;
+    try { data = JSON.parse(rawText); } catch(e) { showToast('Respuesta no válida: ' + rawText.substring(0,80), 'error'); return; }
+    if (!res.ok) { showToast('Error ' + res.status + ': ' + (data.error || data.details || rawText).toString().substring(0,80), 'error'); return; }
     if (data.content?.[0]?.text) {
       const code = data.content[0].text.trim().toUpperCase().replace(/[^A-Z0-9\-\/\.]/g,'');
       if (code.length > 1) { setCode(mode, code); stopScan(mode); showToast('🤖 IA leyó: ' + code, 'success'); }
       else showToast('No se detectó código. Intenta de nuevo o escríbelo.', 'error');
     } else {
-      showToast('Error IA: ' + (data.error?.message || 'sin respuesta'), 'error');
+      showToast('Error IA: ' + JSON.stringify(data).substring(0,100), 'error');
     }
-  } catch(e) { showToast('Error de conexión con IA', 'error'); }
+  } catch(e) { showToast('Error conexión: ' + e.message, 'error'); }
   finally    { proc.classList.remove('show'); }
 }
 
