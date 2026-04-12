@@ -21,7 +21,7 @@ function err(msg, status = 400) {
 }
 
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     if (request.method === 'OPTIONS') {
       return new Response(null, { status: 204, headers: CORS });
     }
@@ -33,9 +33,9 @@ export default {
     try {
       if (path === '/scan' && method === 'POST')         return await handleScan(request, env);
       if (path === '/bobinas' && method === 'GET')       return await getBobinas(request, env);
-      if (path === '/bobinas' && method === 'POST')      return await crearBobina(request, env);
-      if (path.startsWith('/bobinas/') && method === 'PUT')    return await devolverBobina(decodeURIComponent(path.split('/bobinas/')[1]), request, env);
-      if (path.startsWith('/bobinas/') && method === 'DELETE') return await eliminarBobina(decodeURIComponent(path.split('/bobinas/')[1]), env);
+      if (path === '/bobinas' && method === 'POST')      return await crearBobina(request, env, ctx);
+      if (path.startsWith('/bobinas/') && method === 'PUT')    return await devolverBobina(decodeURIComponent(path.split('/bobinas/')[1]), request, env, ctx);
+      if (path.startsWith('/bobinas/') && method === 'DELETE') return await eliminarBobina(decodeURIComponent(path.split('/bobinas/')[1]), env, ctx);
       if (path === '/proveedores' && method === 'GET')   return await getCatalogo('proveedores', env);
       if (path === '/proveedores' && method === 'POST')  return await addCatalogo('proveedores', request, env);
       if (path.startsWith('/proveedores/') && method === 'DELETE') return await deleteCatalogo('proveedores', path.split('/proveedores/')[1], env);
@@ -44,6 +44,7 @@ export default {
       if (path.startsWith('/tipos/') && method === 'DELETE') return await deleteCatalogo('tipos_cable', path.split('/tipos/')[1], env);
       if (path === '/export' && method === 'GET')        return await exportCSV(env);
       if (path === '/stats' && method === 'GET')         return await getStats(env);
+      if (path === '/sync' && method === 'POST')         { await syncSheets(env); return json({ ok: true, mensaje: 'Sync completado' }); }
 
       return err('Ruta no encontrada', 404);
     } catch (e) {
@@ -205,7 +206,7 @@ async function getBobinas(request, env) {
   return json(results);
 }
 
-async function crearBobina(request, env) {
+async function crearBobina(request, env, ctx) {
   const { codigo, proveedor, tipo_cable, notas } = await request.json();
   if (!codigo || !proveedor || !tipo_cable) return err('Faltan campos: codigo, proveedor, tipo_cable');
 
@@ -217,7 +218,7 @@ async function crearBobina(request, env) {
     ).bind(codigo.trim().toUpperCase(), proveedor, tipo_cable, fecha, 'activa', notas || '').run();
 
     // Sync asíncrono — no bloquea la respuesta
-    env.ctx?.waitUntil(syncSheets(env));
+    ctx.waitUntil(syncSheets(env));
 
     return json({ ok: true, mensaje: `Bobina ${codigo} registrada` }, 201);
   } catch (e) {
@@ -226,7 +227,7 @@ async function crearBobina(request, env) {
   }
 }
 
-async function devolverBobina(codigo, request, env) {
+async function devolverBobina(codigo, request, env, ctx) {
   const bobina = await env.DB.prepare('SELECT * FROM bobinas WHERE codigo = ?').bind(codigo).first();
   if (!bobina) return err(`Bobina ${codigo} no encontrada`, 404);
   if (bobina.estado === 'devuelta') return err(`Bobina ${codigo} ya fue devuelta el ${bobina.fecha_devolucion}`, 409);
@@ -238,18 +239,18 @@ async function devolverBobina(codigo, request, env) {
     'UPDATE bobinas SET estado = ?, fecha_devolucion = ?, notas = ? WHERE codigo = ?'
   ).bind('devuelta', fecha, notas || bobina.notas || '', codigo).run();
 
-  env.ctx?.waitUntil(syncSheets(env));
+  ctx.waitUntil(syncSheets(env));
 
   return json({ ok: true, mensaje: `Bobina ${codigo} devuelta correctamente`, fecha_devolucion: fecha });
 }
 
-async function eliminarBobina(codigo, env) {
+async function eliminarBobina(codigo, env, ctx) {
   const bobina = await env.DB.prepare('SELECT id FROM bobinas WHERE codigo = ?').bind(codigo).first();
   if (!bobina) return err(`Bobina ${codigo} no encontrada`, 404);
 
   await env.DB.prepare('DELETE FROM bobinas WHERE codigo = ?').bind(codigo).run();
 
-  env.ctx?.waitUntil(syncSheets(env));
+  ctx.waitUntil(syncSheets(env));
 
   return json({ ok: true, mensaje: `Bobina ${codigo} eliminada` });
 }
