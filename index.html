@@ -210,8 +210,11 @@ tr:hover td { background: var(--surface2); }
 <div class="overlay-acceso" id="overlayAcceso">
   <div class="acceso-box">
     <div class="acceso-logo">GESTI<span>BOBINA</span></div>
-    <div class="acceso-sub">Introduce el código de acceso</div>
-    <input class="acceso-input" id="inputCodigoAcceso" type="text" placeholder="CÓDIGO" autocomplete="off"
+    <div class="acceso-sub">Introduce tus datos para acceder</div>
+    <input class="acceso-input" id="inputNombreAcceso" type="text" placeholder="TU NOMBRE"
+      style="font-size:16px;letter-spacing:1px;text-transform:none"
+      autocomplete="off" onkeydown="if(event.key==='Enter') document.getElementById('inputCodigoAcceso').focus()">
+    <input class="acceso-input" id="inputCodigoAcceso" type="text" placeholder="CÓDIGO DE OBRA" autocomplete="off"
       onkeydown="if(event.key==='Enter') verificarAcceso()">
     <button class="acceso-btn" onclick="verificarAcceso()">ACCEDER</button>
     <div class="acceso-err" id="accesoErr"></div>
@@ -560,10 +563,12 @@ function getAuthHeaders() {
 }
 
 async function verificarAcceso() {
+  const nombre = document.getElementById('inputNombreAcceso').value.trim();
   const codigo = document.getElementById('inputCodigoAcceso').value.trim();
   const errEl  = document.getElementById('accesoErr');
   errEl.textContent = '';
-  if (!codigo) { errEl.textContent = 'Introduce un código'; return; }
+  if (!nombre) { errEl.textContent = 'Introduce tu nombre'; document.getElementById('inputNombreAcceso').focus(); return; }
+  if (!codigo) { errEl.textContent = 'Introduce el código de obra'; return; }
 
   try {
     const res = await fetch(getAPI() + '/acceso', {
@@ -573,6 +578,9 @@ async function verificarAcceso() {
     });
     const data = await res.json();
     if (!res.ok) { errEl.textContent = data.error || 'Código inválido'; return; }
+
+    // Guardar nombre de usuario
+    addUsuario(nombre);
 
     if (data.tipo === 'admin') {
       setSesion({ tipo: 'admin', adminCode: codigo, obraSeleccionada: null });
