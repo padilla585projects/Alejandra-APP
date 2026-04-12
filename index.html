@@ -289,11 +289,8 @@ tr:hover td { background: var(--surface2); }
       </button>
     </div>
     <div class="scan-actions" id="actions-scanning-entrada" style="display:none">
-      <button class="btn-capturar" id="btn-capturar-entrada" onclick="capturarIA('entrada', false)">
-        📸 OCR
-      </button>
-      <button class="btn-capturar" id="btn-ia-entrada" onclick="capturarIA('entrada', true)" style="background:#3b82f6; flex:1.2">
-        🤖 IA
+      <button class="btn-capturar" id="btn-capturar-entrada" onclick="capturarIA('entrada')">
+        LEER
       </button>
       <button class="btn-cerrar" onclick="cerrarCamara('entrada')">✕</button>
     </div>
@@ -364,11 +361,8 @@ tr:hover td { background: var(--surface2); }
       </button>
     </div>
     <div class="scan-actions" id="actions-scanning-devolucion" style="display:none">
-      <button class="btn-capturar" id="btn-capturar-devolucion" onclick="capturarIA('devolucion', false)">
-        📸 OCR
-      </button>
-      <button class="btn-capturar" id="btn-ia-devolucion" onclick="capturarIA('devolucion', true)" style="background:#3b82f6; flex:1.2">
-        🤖 IA
+      <button class="btn-capturar" id="btn-capturar-devolucion" onclick="capturarIA('devolucion')">
+        LEER
       </button>
       <button class="btn-cerrar" onclick="cerrarCamara('devolucion')">✕</button>
     </div>
@@ -947,16 +941,12 @@ function preprocesarOCR(canvas) {
   return canvas;
 }
 
-// Capturar foto y leer — modo OCR local (Tesseract) o IA (Gemini)
-async function capturarIA(inst, usarIA = false) {
-  const btnOCR = document.getElementById('btn-capturar-' + inst);
-  const btnIA  = document.getElementById('btn-ia-' + inst);
-  const btnActivo = usarIA ? btnIA : btnOCR;
+// Capturar foto y leer — un solo botón, automático
+async function capturarIA(inst) {
+  const btn = document.getElementById('btn-capturar-' + inst);
+  btn.classList.add('cargando');
+  btn.innerHTML = '<div class="spinner"></div> LEYENDO...';
 
-  btnActivo.classList.add('cargando');
-  btnActivo.innerHTML = '<div class="spinner"></div> LEYENDO...';
-
-  // Vibración al capturar
   if (navigator.vibrate) navigator.vibrate(80);
 
   const video = document.getElementById('video-' + inst);
@@ -965,57 +955,32 @@ async function capturarIA(inst, usarIA = false) {
     const canvas = capturarFrame(video);
     log('info', 'camara', `Frame capturado ${canvas.width}x${canvas.height}`);
 
-    if (usarIA) {
-      // ── Modo IA: Gemini via Worker ──────────────────────────────
-      const imageData = canvas.toDataURL('image/jpeg', 0.75).split(',')[1];
-      log('info', 'gemini', `Enviando imagen (${Math.round(imageData.length/1024)}KB)`);
+    const imageData = canvas.toDataURL('image/jpeg', 0.75).split(',')[1];
+    log('info', 'lector', `Enviando imagen (${Math.round(imageData.length/1024)}KB)`);
 
-      const res = await api('/scan', {
-        method: 'POST',
-        body: JSON.stringify({ image: imageData, mimeType: 'image/jpeg' }),
-      });
-      const data = await res.json();
+    const res = await api('/scan', {
+      method: 'POST',
+      body: JSON.stringify({ image: imageData, mimeType: 'image/jpeg' }),
+    });
+    const data = await res.json();
 
-      if (!res.ok) {
-        log('error', 'gemini', data.error || 'Error Gemini', data);
-        toast('❌ ' + (data.error || 'Error Gemini'), 'err');
-      } else if (data.codigo === 'NO_LEIDO') {
-        log('warn', 'gemini', 'NO_LEIDO');
-        toast('⚠️ La IA no pudo leer. Acércate más y repite.', 'err');
-      } else {
-        log('info', 'gemini', `Leído: ${data.codigo}`, { modelo: data.modelo });
-        codigoLeido(inst, data.codigo, '🤖 IA');
-      }
+    if (!res.ok) {
+      log('error', 'lector', data.error || 'Error', data);
+      toast('⚠️ No se pudo leer. Repite con mejor luz.', 'err');
+    } else if (data.codigo === 'NO_LEIDO') {
+      log('warn', 'lector', 'NO_LEIDO');
+      toast('⚠️ No se pudo leer. Acércate más y repite.', 'err');
     } else {
-      // ── Modo OCR: Google Cloud Vision API ──────────────────────
-      const imageData = canvas.toDataURL('image/jpeg', 0.85).split(',')[1];
-      log('info', 'ocr', `Enviando imagen (${Math.round(imageData.length/1024)}KB)`);
-
-      const res = await api('/ocr', {
-        method: 'POST',
-        body: JSON.stringify({ image: imageData, mimeType: 'image/jpeg' }),
-      });
-      const data = await res.json();
-
-      if (!res.ok) {
-        log('error', 'ocr', data.error || 'Error OCR', data);
-        toast('❌ ' + (data.error || 'Error OCR'), 'err');
-      } else if (data.codigo === 'NO_LEIDO') {
-        log('warn', 'ocr', 'NO_LEIDO', { textoCompleto: data.textoCompleto });
-        toast('⚠️ No se pudo leer. Mejora la iluminación y repite.', 'err');
-      } else {
-        log('info', 'ocr', `Leído: ${data.codigo}`, { textoCompleto: data.textoCompleto });
-        codigoLeido(inst, data.codigo, '📷 OCR');
-      }
+      log('info', 'lector', `Leído: ${data.codigo}`, { modelo: data.modelo });
+      codigoLeido(inst, data.codigo, 'lector');
     }
   } catch (e) {
-    log('error', 'scanner', e.message, { stack: e.stack });
-    toast('❌ Error: ' + e.message, 'err');
+    log('error', 'lector', e.message);
+    toast('❌ Error de conexión', 'err');
   }
 
-  btnActivo.classList.remove('cargando');
-  btnOCR.innerHTML = '📸 OCR';
-  btnIA.innerHTML  = '🤖 IA';
+  btn.classList.remove('cargando');
+  btn.innerHTML = 'LEER';
 }
 
 // Código leído (por QR o IA) → rellenar campo y feedback
