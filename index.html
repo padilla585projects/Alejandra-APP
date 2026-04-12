@@ -183,7 +183,7 @@ tr:hover td { background: var(--surface2); }
 
 <header>
   <div class="logo">GESTI<span>BOBINA</span></div>
-  <div class="badge">v3.2</div>
+  <div class="badge">v3.4</div>
   <div class="status-indicator" id="apiStatus">
     <div class="status-dot" id="statusDot"></div>
     <span id="statusText">...</span>
@@ -589,6 +589,54 @@ function iniciarQRLoop(inst) {
   st.qrLoop = requestAnimationFrame(tick);
 }
 
+// Capturar y redimensionar imagen a máximo 800px para no sobrecargar
+function capturarFrame(video) {
+  const MAX = 800;
+  let w = video.videoWidth  || 1280;
+  let h = video.videoHeight || 720;
+  if (w > MAX) { h = Math.round(h * MAX / w); w = MAX; }
+  if (h > MAX) { w = Math.round(w * MAX / h); h = MAX; }
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  c.getContext('2d').drawImage(video, 0, 0, w, h);
+  return c;
+}
+
+// Preprocesar imagen para OCR: umbral adaptativo para texto grabado en madera
+function preprocesarOCR(canvas) {
+  const ctx = canvas.getContext('2d');
+  const w = canvas.width, h = canvas.height;
+  const src = ctx.getImageData(0, 0, w, h);
+  const d = src.data;
+
+  // Paso 1: escala de grises
+  const gray = new Uint8Array(w * h);
+  for (let i = 0; i < d.length; i += 4) {
+    gray[i/4] = Math.round(0.299*d[i] + 0.587*d[i+1] + 0.114*d[i+2]);
+  }
+
+  // Paso 2: calcular media local (ventana 20x20) y umbralizar
+  const out = new Uint8ClampedArray(d.length);
+  const R = 20;
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      let sum = 0, cnt = 0;
+      for (let dy = -R; dy <= R; dy++) {
+        for (let dx = -R; dx <= R; dx++) {
+          const nx = x+dx, ny = y+dy;
+          if (nx>=0 && nx<w && ny>=0 && ny<h) { sum += gray[ny*w+nx]; cnt++; }
+        }
+      }
+      const media = sum / cnt;
+      const v = gray[y*w+x] < media - 10 ? 0 : 255;
+      const idx = (y*w+x)*4;
+      out[idx] = out[idx+1] = out[idx+2] = v; out[idx+3] = 255;
+    }
+  }
+  ctx.putImageData(new ImageData(out, w, h), 0, 0);
+  return canvas;
+}
+
 // Capturar foto y leer — modo OCR local (Tesseract) o IA (Gemini)
 async function capturarIA(inst, usarIA = false) {
   const btnOCR = document.getElementById('btn-capturar-' + inst);
@@ -599,18 +647,14 @@ async function capturarIA(inst, usarIA = false) {
   btnActivo.innerHTML = '<div class="spinner"></div> LEYENDO...';
 
   const video = document.getElementById('video-' + inst);
-  const canvas = document.getElementById('canvas-' + inst);
-  const ctx = canvas.getContext('2d');
-
-  // Capturar frame
-  canvas.width = video.videoWidth || 1280;
-  canvas.height = video.videoHeight || 720;
-  ctx.drawImage(video, 0, 0);
 
   try {
     if (usarIA) {
       // ── Modo IA: Gemini via Worker ──────────────────────────────
-      const imageData = canvas.toDataURL('image/jpeg', 0.9).split(',')[1];
+      // Imagen redimensionada y comprimida para no superar límites
+      const canvas = capturarFrame(video);
+      const imageData = canvas.toDataURL('image/jpeg', 0.75).split(',')[1];
+
       const res = await api('/scan', {
         method: 'POST',
         body: JSON.stringify({ image: imageData, mimeType: 'image/jpeg' }),
@@ -620,39 +664,35 @@ async function capturarIA(inst, usarIA = false) {
       if (!res.ok) {
         toast('❌ ' + (data.error || 'Error Gemini'), 'err');
       } else if (data.codigo === 'NO_LEIDO') {
-        toast('⚠️ La IA no pudo leer la matrícula. Prueba OCR o acércate más.', 'err');
+        toast('⚠️ La IA no pudo leer. Acércate más y repite.', 'err');
       } else {
         codigoLeido(inst, data.codigo, '🤖 IA');
       }
     } else {
-      // ── Modo OCR: Tesseract local ───────────────────────────────
-      // Preprocesar: escala de grises + contraste
-      const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      const d = imgData.data;
-      for (let i = 0; i < d.length; i += 4) {
-        const gray = 0.299 * d[i] + 0.587 * d[i+1] + 0.114 * d[i+2];
-        const c = gray > 128 ? Math.min(255, gray * 1.3) : Math.max(0, gray * 0.7);
-        d[i] = d[i+1] = d[i+2] = c;
-      }
-      ctx.putImageData(imgData, 0, 0);
+      // ── Modo OCR: Tesseract con umbral adaptativo ───────────────
+      toast('⏳ Procesando OCR...', '');
+      const canvas = capturarFrame(video);
+      preprocesarOCR(canvas);
 
-      const resultado = await Tesseract.recognize(canvas.toDataURL('image/png'), 'eng', {
+      const resultado = await Tesseract.recognize(canvas, 'eng', {
         tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-/',
-        tessedit_pageseg_mode: '6',
+        tessedit_pageseg_mode: '11', // Texto disperso — mejor para matrículas
       });
 
-      const texto = resultado.data.text
+      const tokens = resultado.data.text
         .toUpperCase()
         .replace(/[^A-Z0-9\-\/]/g, ' ')
         .trim()
         .split(/\s+/)
-        .filter(t => t.length >= 3)
-        .join('-');
+        .filter(t => t.length >= 2);
 
-      if (texto && texto.length >= 3) {
+      // Elegir el token más probable (el más largo)
+      const texto = tokens.sort((a,b) => b.length - a.length)[0] || '';
+
+      if (texto && texto.length >= 2) {
         codigoLeido(inst, texto, '📷 OCR');
       } else {
-        toast('⚠️ No se pudo leer. Prueba con 🤖 IA o acércate más.', 'err');
+        toast('⚠️ OCR no pudo leer. Prueba 🤖 IA con buena luz.', 'err');
       }
     }
   } catch (e) {
