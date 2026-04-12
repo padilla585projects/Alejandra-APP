@@ -12,7 +12,6 @@
 <link rel="apple-touch-icon" href="icon-192.png">
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;900&family=Barlow:wght@300;400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 <style>
 :root {
   --bg: #0d0f14; --surface: #161a22; --surface2: #1e2330;
@@ -183,7 +182,7 @@ tr:hover td { background: var(--surface2); }
 
 <header>
   <div class="logo">GESTI<span>BOBINA</span></div>
-  <div class="badge">v3.5</div>
+  <div class="badge">v3.6</div>
   <div class="status-indicator" id="apiStatus">
     <div class="status-dot" id="statusDot"></div>
     <span id="statusText">...</span>
@@ -669,30 +668,22 @@ async function capturarIA(inst, usarIA = false) {
         codigoLeido(inst, data.codigo, '🤖 IA');
       }
     } else {
-      // ── Modo OCR: Tesseract con umbral adaptativo ───────────────
-      toast('⏳ Procesando OCR...', '');
+      // ── Modo OCR: Google Cloud Vision API ──────────────────────
       const canvas = capturarFrame(video);
-      preprocesarOCR(canvas);
+      const imageData = canvas.toDataURL('image/jpeg', 0.85).split(',')[1];
 
-      const resultado = await Tesseract.recognize(canvas, 'eng', {
-        tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-/',
-        tessedit_pageseg_mode: '11', // Texto disperso — mejor para matrículas
+      const res = await api('/ocr', {
+        method: 'POST',
+        body: JSON.stringify({ image: imageData, mimeType: 'image/jpeg' }),
       });
+      const data = await res.json();
 
-      const tokens = resultado.data.text
-        .toUpperCase()
-        .replace(/[^A-Z0-9\-\/]/g, ' ')
-        .trim()
-        .split(/\s+/)
-        .filter(t => t.length >= 2);
-
-      // Elegir el token más probable (el más largo)
-      const texto = tokens.sort((a,b) => b.length - a.length)[0] || '';
-
-      if (texto && texto.length >= 2) {
-        codigoLeido(inst, texto, '📷 OCR');
+      if (!res.ok) {
+        toast('❌ ' + (data.error || 'Error OCR'), 'err');
+      } else if (data.codigo === 'NO_LEIDO') {
+        toast('⚠️ No se pudo leer. Mejora la iluminación y repite.', 'err');
       } else {
-        toast('⚠️ OCR no pudo leer. Prueba 🤖 IA con buena luz.', 'err');
+        codigoLeido(inst, data.codigo, '📷 OCR');
       }
     }
   } catch (e) {

@@ -32,6 +32,7 @@ export default {
 
     try {
       if (path === '/scan' && method === 'POST')         return await handleScan(request, env);
+      if (path === '/ocr'  && method === 'POST')         return await handleOCR(request, env);
       if (path === '/bobinas' && method === 'GET')       return await getBobinas(request, env);
       if (path === '/bobinas' && method === 'POST')      return await crearBobina(request, env, ctx);
       if (path.startsWith('/bobinas/') && method === 'PUT')    return await devolverBobina(decodeURIComponent(path.split('/bobinas/')[1]), request, env, ctx);
@@ -57,11 +58,11 @@ export default {
 
 // ── Google Sheets Auth (JWT / Service Account) ───────────────────────────────
 
-async function getGoogleToken(env) {
+async function getGoogleToken(env, scope = 'https://www.googleapis.com/auth/spreadsheets') {
   const now = Math.floor(Date.now() / 1000);
   const claim = {
     iss: env.GOOGLE_CLIENT_EMAIL,
-    scope: 'https://www.googleapis.com/auth/spreadsheets',
+    scope,
     aud: 'https://oauth2.googleapis.com/token',
     exp: now + 3600,
     iat: now,
@@ -196,6 +197,59 @@ async function syncSheetsDebug(env) {
   } catch (e) {
     log.push(`❌ ERROR: ${e.message}`);
     return json({ ok: false, log, error: e.message });
+  }
+}
+
+// ── OCR con Google Cloud Vision API ─────────────────────────────────────────
+
+async function handleOCR(request, env) {
+  if (!env.GOOGLE_CLIENT_EMAIL || !env.GOOGLE_PRIVATE_KEY) {
+    return err('Credenciales Google no configuradas', 500);
+  }
+
+  const { image, mimeType = 'image/jpeg' } = await request.json();
+  if (!image) return err('Se requiere imagen en base64');
+
+  try {
+    const token = await getGoogleToken(env, 'https://www.googleapis.com/auth/cloud-vision');
+
+    const res = await fetch('https://vision.googleapis.com/v1/images:annotate', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        requests: [{
+          image: { content: image },
+          features: [{ type: 'TEXT_DETECTION', maxResults: 1 }],
+          imageContext: {
+            languageHints: ['es', 'en'],
+          }
+        }]
+      }),
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) return json({ error: 'Error Cloud Vision', details: data }, res.status);
+
+    const textoCompleto = data.responses?.[0]?.textAnnotations?.[0]?.description || '';
+
+    if (!textoCompleto) return json({ codigo: 'NO_LEIDO' });
+
+    // Extraer el código más probable — líneas alfanuméricas de 3+ chars
+    const lineas = textoCompleto
+      .split('\n')
+      .map(l => l.trim().toUpperCase().replace(/[^A-Z0-9\-\/]/g, ''))
+      .filter(l => l.length >= 3);
+
+    // Priorizar líneas que parezcan matrículas (mezcla letras+números)
+    const matricula = lineas.find(l => /[A-Z]/.test(l) && /[0-9]/.test(l))
+      || lineas.sort((a, b) => b.length - a.length)[0]
+      || 'NO_LEIDO';
+
+    return json({ codigo: matricula, textoCompleto, metodo: 'Cloud Vision' });
+
+  } catch (e) {
+    return err(`Error OCR: ${e.message}`, 500);
   }
 }
 
