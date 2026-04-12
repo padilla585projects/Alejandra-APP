@@ -333,6 +333,20 @@ Si no puedes leer ningún código, responde: NO_LEIDO`;
     if (res.status !== 429 && res.status !== 404) return json({ error: 'Error Gemini', details: data }, res.status);
   }
 
+  // Gemini agotado — fallback automático a Cloud Vision si está disponible
+  if (env.GOOGLE_CLIENT_EMAIL && env.GOOGLE_PRIVATE_KEY) {
+    const ocrRequest = new Request('https://dummy/ocr', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ image: imageData, mimeType }),
+    });
+    const ocrResult = await handleOCR(ocrRequest, env);
+    const ocrData = await ocrResult.json();
+    if (ocrData.codigo && ocrData.codigo !== 'NO_LEIDO') {
+      return json({ ...ocrData, modelo: 'Cloud Vision (fallback)' });
+    }
+  }
+
   return err('Cuota de Gemini agotada. Usa el modo OCR.', 429);
 }
 
