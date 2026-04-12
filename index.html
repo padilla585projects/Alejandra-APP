@@ -12,6 +12,7 @@
 <link rel="apple-touch-icon" href="icon-192.png">
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;900&family=Barlow:wght@300;400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 <style>
 :root {
   --bg: #0d0f14; --surface: #161a22; --surface2: #1e2330;
@@ -251,7 +252,7 @@ tr:hover td { background: var(--surface2); }
     </div>
     <div class="scan-actions" id="actions-scanning-entrada" style="display:none">
       <button class="btn-capturar" id="btn-capturar-entrada" onclick="capturarIA('entrada')">
-        📸 CAPTURAR Y LEER IA
+        📸 CAPTURAR Y LEER OCR
       </button>
       <button class="btn-cerrar" onclick="cerrarCamara('entrada')">✕</button>
     </div>
@@ -323,7 +324,7 @@ tr:hover td { background: var(--surface2); }
     </div>
     <div class="scan-actions" id="actions-scanning-devolucion" style="display:none">
       <button class="btn-capturar" id="btn-capturar-devolucion" onclick="capturarIA('devolucion')">
-        📸 CAPTURAR Y LEER IA
+        📸 CAPTURAR Y LEER OCR
       </button>
       <button class="btn-cerrar" onclick="cerrarCamara('devolucion')">✕</button>
     </div>
@@ -582,42 +583,61 @@ function iniciarQRLoop(inst) {
   st.qrLoop = requestAnimationFrame(tick);
 }
 
-// Capturar foto y enviar a IA
+// Capturar foto y leer con Tesseract OCR (local, sin internet, sin cuota)
 async function capturarIA(inst) {
   const btn = document.getElementById('btn-capturar-' + inst);
   btn.classList.add('cargando');
-  btn.innerHTML = '<div class="spinner"></div> LEYENDO...';
+  btn.innerHTML = '<div class="spinner"></div> LEYENDO OCR...';
 
   const video = document.getElementById('video-' + inst);
   const canvas = document.getElementById('canvas-' + inst);
   const ctx = canvas.getContext('2d');
 
+  // Capturar frame del vídeo
   canvas.width = video.videoWidth || 1280;
   canvas.height = video.videoHeight || 720;
   ctx.drawImage(video, 0, 0);
 
-  const imageData = canvas.toDataURL('image/jpeg', 0.9).split(',')[1];
+  // Preprocesar imagen para mejorar OCR:
+  // Escala de grises + aumento de contraste
+  const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const d = imgData.data;
+  for (let i = 0; i < d.length; i += 4) {
+    const gray = 0.299 * d[i] + 0.587 * d[i+1] + 0.114 * d[i+2];
+    // Contraste: empujar hacia blanco o negro
+    const c = gray > 128 ? Math.min(255, gray * 1.3) : Math.max(0, gray * 0.7);
+    d[i] = d[i+1] = d[i+2] = c;
+  }
+  ctx.putImageData(imgData, 0, 0);
+
+  const imageDataUrl = canvas.toDataURL('image/png');
 
   try {
-    const res = await api('/scan', {
-      method: 'POST',
-      body: JSON.stringify({ image: imageData, mimeType: 'image/jpeg' }),
+    const resultado = await Tesseract.recognize(imageDataUrl, 'eng', {
+      tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-/',
+      tessedit_pageseg_mode: '6',   // Bloque de texto uniforme
     });
-    const data = await res.json();
 
-    if (!res.ok) {
-      toast(data.error || 'Error al leer con IA', 'err');
-    } else if (data.codigo === 'NO_LEIDO') {
-      toast('⚠️ No se pudo leer la matrícula. Intenta de nuevo.', 'err');
+    // Limpiar resultado: solo alfanuméricos y guiones
+    const texto = resultado.data.text
+      .toUpperCase()
+      .replace(/[^A-Z0-9\-\/]/g, ' ')
+      .trim()
+      .split(/\s+/)
+      .filter(t => t.length >= 3)  // Ignorar tokens muy cortos
+      .join('-');
+
+    if (texto && texto.length >= 3) {
+      codigoLeido(inst, texto, 'OCR');
     } else {
-      codigoLeido(inst, data.codigo, 'IA');
+      toast('⚠️ No se pudo leer. Acerca más la cámara y vuelve a intentar.', 'err');
     }
   } catch (e) {
-    toast('❌ Error de conexión con el servidor', 'err');
+    toast('❌ Error OCR: ' + e.message, 'err');
   }
 
   btn.classList.remove('cargando');
-  btn.innerHTML = '📸 CAPTURAR Y LEER IA';
+  btn.innerHTML = '📸 CAPTURAR Y LEER OCR';
 }
 
 // Código leído (por QR o IA) → rellenar campo y feedback
