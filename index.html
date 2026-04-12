@@ -77,6 +77,8 @@ nav button.active { color: var(--accent); border-bottom-color: var(--accent); }
 /* Resultado OK sobre la cámara */
 .cam-ok { position: absolute; inset: 0; background: rgba(34,197,94,0.9); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 10; gap: 6px; font-family: 'Barlow Condensed', sans-serif; font-weight: 900; font-size: 28px; letter-spacing: 1px; color: #fff; }
 .cam-ok .codigo-leido { font-size: 36px; }
+.scan-hint { font-size: 12px; color: var(--accent); text-align: center; padding: 6px 12px 2px; min-height: 22px; font-family: 'Barlow Condensed', sans-serif; letter-spacing: 0.5px; animation: fadeIn 0.3s ease; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
 
 /* BOTONES DE CÁMARA */
 .scan-actions { padding: 10px 12px; display: flex; gap: 8px; }
@@ -294,6 +296,7 @@ tr:hover td { background: var(--surface2); }
       </button>
       <button class="btn-cerrar" onclick="cerrarCamara('entrada')">✕</button>
     </div>
+    <div class="scan-hint" id="hint-entrada"></div>
   </div>
 
   <!-- FORMULARIO -->
@@ -366,6 +369,7 @@ tr:hover td { background: var(--surface2); }
       </button>
       <button class="btn-cerrar" onclick="cerrarCamara('devolucion')">✕</button>
     </div>
+    <div class="scan-hint" id="hint-devolucion"></div>
   </div>
 
   <!-- BÚSQUEDA MANUAL -->
@@ -964,14 +968,12 @@ async function capturarIA(inst) {
     });
     const data = await res.json();
 
-    if (!res.ok) {
-      log('error', 'lector', data.error || 'Error', data);
-      toast('⚠️ No se pudo leer. Repite con mejor luz.', 'err');
-    } else if (data.codigo === 'NO_LEIDO') {
-      log('warn', 'lector', 'NO_LEIDO');
-      toast('⚠️ No se pudo leer. Acércate más y repite.', 'err');
+    if (!res.ok || data.codigo === 'NO_LEIDO') {
+      log('warn', 'lector', data.codigo === 'NO_LEIDO' ? 'NO_LEIDO' : data.error, data);
+      mostrarHint(inst);
     } else {
       log('info', 'lector', `Leído: ${data.codigo}`, { modelo: data.modelo });
+      limpiarHint(inst);
       codigoLeido(inst, data.codigo, 'lector');
     }
   } catch (e) {
@@ -981,6 +983,32 @@ async function capturarIA(inst) {
 
   btn.classList.remove('cargando');
   btn.innerHTML = 'LEER';
+}
+
+const HINTS = [
+  '📐 Encuadra la etiqueta dentro del marco',
+  '💡 Busca mejor iluminación',
+  '📏 Acércate un poco más',
+  '🔄 Prueba desde otro ángulo',
+  '🧹 Limpia la etiqueta si está sucia',
+];
+let hintIndex = {};
+
+function mostrarHint(inst) {
+  const el = document.getElementById('hint-' + inst);
+  if (!el) return;
+  if (hintIndex[inst] === undefined) hintIndex[inst] = 0;
+  el.textContent = HINTS[hintIndex[inst] % HINTS.length];
+  hintIndex[inst]++;
+  // Auto-limpiar tras 4s
+  clearTimeout(el._timer);
+  el._timer = setTimeout(() => { el.textContent = ''; }, 4000);
+}
+
+function limpiarHint(inst) {
+  const el = document.getElementById('hint-' + inst);
+  if (el) { el.textContent = ''; clearTimeout(el._timer); }
+  hintIndex[inst] = 0;
 }
 
 // Código leído (por QR o IA) → rellenar campo y feedback
