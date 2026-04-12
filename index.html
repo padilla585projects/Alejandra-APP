@@ -1001,8 +1001,19 @@ function mostrarHint(inst) {
   const el = document.getElementById('hint-' + inst);
   if (!el) return;
   if (hintIndex[inst] === undefined) hintIndex[inst] = 0;
-  el.textContent = HINTS[hintIndex[inst] % HINTS.length];
+  const hint = HINTS[hintIndex[inst] % HINTS.length];
+  // Quitar emoji para la voz
+  const texto = hint.replace(/[\u{1F000}-\u{1FFFF}]|[\u{2600}-\u{27FF}]/gu, '').trim();
+  el.textContent = hint;
   hintIndex[inst]++;
+  // Decirlo en voz alta
+  if ('speechSynthesis' in window) {
+    window.speechSynthesis.cancel();
+    const msg = new SpeechSynthesisUtterance(texto);
+    msg.lang = 'es-ES';
+    msg.rate = 1.0;
+    window.speechSynthesis.speak(msg);
+  }
   // Auto-limpiar tras 4s
   clearTimeout(el._timer);
   el._timer = setTimeout(() => { el.textContent = ''; }, 4000);
