@@ -470,8 +470,9 @@ tr:hover td { background: var(--surface2); }
       <input type="text" id="nueva-obra-codigo" placeholder="CÓDIGO" style="width:120px;text-transform:uppercase">
       <button onclick="crearObra()">+</button>
     </div>
-    <div style="margin-top:12px">
+    <div style="margin-top:12px;display:flex;gap:8px">
       <button class="btn-primary btn-secondary" style="font-size:12px" onclick="cerrarSesion()">🚪 Cerrar sesión</button>
+      <button class="btn-primary btn-danger" style="font-size:12px" onclick="limpiarDatosLocales()">🗑️ Reset config</button>
     </div>
   </div>
 
@@ -515,9 +516,7 @@ tr:hover td { background: var(--surface2); }
   </div>
 
   <div class="config-section">
-    <div class="config-title">⚠️ Datos</div>
-    <button class="btn-primary btn-secondary" style="margin-bottom:8px" onclick="cerrarSesion()">🚪 Cambiar obra / usuario</button>
-    <button class="btn-primary btn-danger" onclick="limpiarDatosLocales()">🗑️ LIMPIAR CONFIGURACIÓN LOCAL</button>
+    <button class="btn-primary btn-secondary" onclick="cerrarSesion()">🚪 Cambiar obra / usuario</button>
   </div>
 </div>
 
