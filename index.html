@@ -214,8 +214,9 @@ tr:hover td { background: var(--surface2); }
     <input class="acceso-input" id="inputNombreAcceso" type="text" placeholder="TU NOMBRE"
       style="font-size:16px;letter-spacing:1px;text-transform:none"
       autocomplete="off" onkeydown="if(event.key==='Enter') document.getElementById('inputCodigoAcceso').focus()">
-    <input class="acceso-input" id="inputCodigoAcceso" type="text" placeholder="CÓDIGO DE OBRA" autocomplete="off"
-      onkeydown="if(event.key==='Enter') verificarAcceso()">
+    <input class="acceso-input" id="inputCodigoAcceso" type="text" placeholder="CÓDIGO O NOMBRE DE OBRA"
+      style="font-size:15px;letter-spacing:1px;text-transform:none"
+      autocomplete="off" onkeydown="if(event.key==='Enter') verificarAcceso()">
     <button class="acceso-btn" onclick="verificarAcceso()">ACCEDER</button>
     <div class="acceso-err" id="accesoErr"></div>
   </div>

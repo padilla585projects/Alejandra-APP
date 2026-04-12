@@ -84,8 +84,10 @@ async function verificarAcceso(request, env) {
     return json({ tipo: 'admin' });
   }
 
-  // ¿Es código de obra?
-  const obra = await env.DB.prepare('SELECT * FROM obras WHERE codigo = ? AND activa = 1').bind(codigo.trim().toUpperCase()).first();
+  // ¿Es código o nombre de obra?
+  const obra = await env.DB.prepare(
+    'SELECT * FROM obras WHERE (codigo = ? OR LOWER(nombre) = LOWER(?)) AND activa = 1'
+  ).bind(codigo.trim().toUpperCase(), codigo.trim()).first();
   if (obra) return json({ tipo: 'obra', obra });
 
   return err('Código inválido', 401);
