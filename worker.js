@@ -145,6 +145,8 @@ export default {
       // ── Otros (legacy/extras) ─────────────────────────────────────────────
       if (path === '/logs'         && method === 'GET')   return await getLogs(request, env);
       if (path === '/historial'    && method === 'GET')   return await getHistorial(request, env);
+      if (path === '/pemp/historial'         && method === 'GET') return await getHistorialTabla('historial_pemp', request, env);
+      if (path === '/carretillas/historial'  && method === 'GET') return await getHistorialTabla('historial_carretillas', request, env);
       if (path === '/stats'        && method === 'GET')   return await getStats(request, env);
       if (path === '/sheet-id'     && method === 'GET')   return json({ id: env.GOOGLE_SHEET_ID || null });
       if (path === '/sync'         && method === 'POST')  { await syncSheets(env); return json({ ok: true, mensaje: 'Sync completado' }); }
@@ -897,6 +899,24 @@ async function getHistorial(request, env) {
   const f      = obraId || null;
 
   let sql = 'SELECT * FROM historial WHERE 1=1';
+  const params = [];
+  if (f)      { sql += ' AND obra_id = ?'; params.push(f); }
+  if (accion) { sql += ' AND accion = ?';  params.push(accion); }
+  sql += ' ORDER BY created_at DESC LIMIT ?';
+  params.push(limit);
+
+  const { results } = await env.DB.prepare(sql).bind(...params).all();
+  return json(results);
+}
+
+async function getHistorialTabla(tabla, request, env) {
+  const { obraId } = getAuth(request, env);
+  const url = new URL(request.url);
+  const limit  = parseInt(url.searchParams.get('limit') || '100');
+  const accion = url.searchParams.get('accion');
+  const f      = obraId || null;
+
+  let sql = `SELECT * FROM ${tabla} WHERE 1=1`;
   const params = [];
   if (f)      { sql += ' AND obra_id = ?'; params.push(f); }
   if (accion) { sql += ' AND accion = ?';  params.push(accion); }
