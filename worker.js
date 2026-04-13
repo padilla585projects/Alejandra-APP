@@ -62,7 +62,9 @@ export default {
       if (path === '/tipos'      && method === 'POST')   return await addCatalogo('tipos_cable', request, env);
       if (path.startsWith('/tipos/') && method === 'DELETE') return await deleteCatalogo('tipos_cable', path.split('/tipos/')[1], env);
       if (path === '/export'     && method === 'GET')    return await exportCSV(request, env);
+      if (path === '/historial'  && method === 'GET')    return await getHistorial(request, env);
       if (path === '/stats'      && method === 'GET')    return await getStats(request, env);
+      if (path === '/sheet-id'   && method === 'GET')    return json({ id: env.GOOGLE_SHEET_ID || null });
       if (path === '/sync'       && method === 'POST')   { await syncSheets(env); return json({ ok: true, mensaje: 'Sync completado' }); }
       if (path === '/sync-debug' && method === 'POST')   return await syncSheetsDebug(env);
 
@@ -179,41 +181,68 @@ async function getGoogleToken(env, scope = 'https://www.googleapis.com/auth/spre
   return data.access_token;
 }
 
-// ── Sync completo a Google Sheets ────────────────────────────────────────────
+// ── Sync completo a Google Sheets (una pestaña por obra) ─────────────────────
 
 async function syncSheets(env) {
   if (!env.GOOGLE_PRIVATE_KEY || !env.GOOGLE_CLIENT_EMAIL || !env.GOOGLE_SHEET_ID) return;
 
   try {
     const token = await getGoogleToken(env);
-    const { results } = await env.DB.prepare('SELECT * FROM bobinas ORDER BY created_at DESC').all();
-
-    const cabecera = [['Código', 'Proveedor', 'Tipo Cable', 'Fecha Entrada', 'Fecha Devolución', 'Estado', 'Notas']];
-    const filas = results.map(b => [
-      b.codigo, b.proveedor, b.tipo_cable,
-      b.fecha_entrada, b.fecha_devolucion || '',
-      b.estado, b.notas || '',
-    ]);
-
-    const values = [...cabecera, ...filas];
     const sheetId = env.GOOGLE_SHEET_ID;
+    const authH = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
 
-    // 1. Limpiar hoja
-    await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/A:Z:clear`, {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+    // Obtener obras activas
+    const { results: obras } = await env.DB.prepare('SELECT * FROM obras WHERE activa = 1 ORDER BY nombre').all();
+
+    // Obtener estructura actual del spreadsheet
+    const metaRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}`, { headers: authH });
+    const meta = await metaRes.json();
+    const sheetNames = (meta.sheets || []).map(s => s.properties.title);
+
+    const requests = [];
+
+    // Crear pestañas que falten
+    for (const obra of obras) {
+      if (!sheetNames.includes(obra.nombre)) {
+        requests.push({ addSheet: { properties: { title: obra.nombre } } });
+      }
+    }
+    // Crear pestaña "Todas" si no existe
+    if (!sheetNames.includes('Todas')) {
+      requests.push({ addSheet: { properties: { title: 'Todas' } } });
+    }
+
+    if (requests.length > 0) {
+      await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}:batchUpdate`, {
+        method: 'POST', headers: authH, body: JSON.stringify({ requests }),
+      });
+    }
+
+    const cabecera = [['Código', 'Proveedor', 'Tipo Cable', 'Registrado por', 'Fecha Entrada', 'Devuelto por', 'Fecha Devolución', 'Estado', 'Notas']];
+
+    // Escribir datos por obra
+    for (const obra of obras) {
+      const { results } = await env.DB.prepare('SELECT * FROM bobinas WHERE obra_id = ? ORDER BY created_at DESC').bind(obra.id).all();
+      const filas = results.map(b => [b.codigo, b.proveedor, b.tipo_cable, b.registrado_por || '', b.fecha_entrada, b.devuelto_por || '', b.fecha_devolucion || '', b.estado, b.notas || '']);
+      const values = [...cabecera, ...filas];
+      const range = `'${obra.nombre}'!A1`;
+      await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(range)}:clear`, { method: 'POST', headers: authH });
+      await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(range)}?valueInputOption=RAW`, {
+        method: 'PUT', headers: authH, body: JSON.stringify({ values }),
+      });
+    }
+
+    // Pestaña "Todas"
+    const { results: todas } = await env.DB.prepare('SELECT b.*, o.nombre as obra_nombre FROM bobinas b LEFT JOIN obras o ON b.obra_id = o.id ORDER BY b.created_at DESC').all();
+    const filasAll = todas.map(b => [b.obra_nombre || '', b.codigo, b.proveedor, b.tipo_cable, b.registrado_por || '', b.fecha_entrada, b.devuelto_por || '', b.fecha_devolucion || '', b.estado, b.notas || '']);
+    const cabAll = [['Obra', 'Código', 'Proveedor', 'Tipo Cable', 'Registrado por', 'Fecha Entrada', 'Devuelto por', 'Fecha Devolución', 'Estado', 'Notas']];
+    await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent("'Todas'!A1")}:clear`, { method: 'POST', headers: authH });
+    await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent("'Todas'!A1")}?valueInputOption=RAW`, {
+      method: 'PUT', headers: authH, body: JSON.stringify({ values: [...cabAll, ...filasAll] }),
     });
 
-    // 2. Escribir datos
-    await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/A1?valueInputOption=RAW`, {
-      method: 'PUT',
-      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ values }),
-    });
-
-    console.log(`Sheets sincronizado: ${filas.length} bobinas`);
+    console.log(`Sheets sincronizado: ${obras.length} obras`);
   } catch (e) {
-    // No bloqueamos la respuesta si falla el sync
     console.error('Error sync Sheets:', e.message);
   }
 }
@@ -415,6 +444,37 @@ Si no puedes leer ningún código, responde: NO_LEIDO`;
   return err('Cuota de Gemini agotada. Usa el modo OCR.', 429);
 }
 
+// ── Historial ────────────────────────────────────────────────────────────────
+
+async function registrarHistorial(env, { obra_id, bobina_codigo, accion, usuario, notas }) {
+  const fecha = new Date().toLocaleString('es-ES', { timeZone: 'Europe/Madrid' });
+  try {
+    await env.DB.prepare(
+      'INSERT INTO historial (obra_id, bobina_codigo, accion, usuario, notas, fecha) VALUES (?, ?, ?, ?, ?, ?)'
+    ).bind(obra_id || null, bobina_codigo, accion, usuario || '', notas || '', fecha).run();
+  } catch (e) {
+    console.error('Error historial:', e.message);
+  }
+}
+
+async function getHistorial(request, env) {
+  const { obraId } = getAuth(request, env);
+  const url = new URL(request.url);
+  const limit = parseInt(url.searchParams.get('limit') || '100');
+  const accion = url.searchParams.get('accion');
+  const f = obraId || null;
+
+  let sql = 'SELECT * FROM historial WHERE 1=1';
+  const params = [];
+  if (f) { sql += ' AND obra_id = ?'; params.push(f); }
+  if (accion) { sql += ' AND accion = ?'; params.push(accion); }
+  sql += ' ORDER BY created_at DESC LIMIT ?';
+  params.push(limit);
+
+  const { results } = await env.DB.prepare(sql).bind(...params).all();
+  return json(results);
+}
+
 // ── CRUD Bobinas ─────────────────────────────────────────────────────────────
 
 async function getBobinas(request, env) {
@@ -452,8 +512,10 @@ async function crearBobina(request, env, ctx) {
       'INSERT INTO bobinas (codigo, proveedor, tipo_cable, fecha_entrada, estado, notas, registrado_por, obra_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
     ).bind(codigo.trim().toUpperCase(), proveedor, tipo_cable, fecha, 'activa', notas || '', registrado_por || '', obraFinal || null).run();
 
-    // Sync asíncrono — no bloquea la respuesta
-    ctx.waitUntil(syncSheets(env));
+    ctx.waitUntil(Promise.all([
+      syncSheets(env),
+      registrarHistorial(env, { obra_id: obraFinal, bobina_codigo: codigo.trim().toUpperCase(), accion: 'entrada', usuario: registrado_por, notas: notas || '' }),
+    ]));
 
     return json({ ok: true, mensaje: `Bobina ${codigo} registrada` }, 201);
   } catch (e) {
@@ -474,7 +536,10 @@ async function devolverBobina(codigo, request, env, ctx) {
     'UPDATE bobinas SET estado = ?, fecha_devolucion = ?, notas = ?, devuelto_por = ? WHERE codigo = ?'
   ).bind('devuelta', fecha, notas || bobina.notas || '', devuelto_por || '', codigo).run();
 
-  ctx.waitUntil(syncSheets(env));
+  ctx.waitUntil(Promise.all([
+    syncSheets(env),
+    registrarHistorial(env, { obra_id: bobina.obra_id, bobina_codigo: codigo, accion: 'devolucion', usuario: devuelto_por, notas: notas || '' }),
+  ]));
 
   return json({ ok: true, mensaje: `Bobina ${codigo} devuelta correctamente`, fecha_devolucion: fecha });
 }
@@ -487,7 +552,10 @@ async function eliminarBobina(codigo, request, env, ctx) {
 
   await env.DB.prepare('DELETE FROM bobinas WHERE codigo = ?').bind(codigo).run();
 
-  ctx.waitUntil(syncSheets(env));
+  ctx.waitUntil(Promise.all([
+    syncSheets(env),
+    registrarHistorial(env, { obra_id: bobina.obra_id, bobina_codigo: codigo, accion: 'eliminacion', usuario: '' }),
+  ]));
 
   return json({ ok: true, mensaje: `Bobina ${codigo} eliminada` });
 }

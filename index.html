@@ -80,6 +80,27 @@ nav button.active { color: var(--accent); border-bottom-color: var(--accent); }
 .scan-hint { font-size: 12px; color: var(--accent); text-align: center; padding: 6px 12px 2px; min-height: 22px; font-family: 'Barlow Condensed', sans-serif; letter-spacing: 0.5px; animation: fadeIn 0.3s ease; }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
 
+/* DASHBOARD */
+.dash-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
+.dash-card { background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; padding: 14px; text-align: center; }
+.dash-card .n { font-family: 'Barlow Condensed', sans-serif; font-weight: 900; font-size: 32px; line-height: 1; }
+.dash-card .lbl { font-size: 11px; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; margin-top: 4px; }
+.dash-obra-row { display: flex; align-items: center; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+.dash-obra-row:last-child { border-bottom: none; }
+.dash-bar-wrap { flex: 1; margin: 0 10px; height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; }
+.dash-bar { height: 100%; background: var(--accent); border-radius: 3px; transition: width 0.4s; }
+
+/* HISTORIAL */
+.hist-item { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; margin-bottom: 8px; display: flex; align-items: center; gap: 12px; }
+.hist-icon { font-size: 22px; flex-shrink: 0; }
+.hist-body { flex: 1; min-width: 0; }
+.hist-codigo { font-family: 'Barlow Condensed', sans-serif; font-weight: 900; font-size: 17px; letter-spacing: 1px; }
+.hist-meta { font-size: 11px; color: var(--muted); margin-top: 2px; }
+.hist-badge { font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 10px; letter-spacing: 1px; padding: 2px 7px; border-radius: 3px; flex-shrink: 0; }
+.hist-badge.entrada { background: rgba(34,197,94,0.15); color: var(--green); }
+.hist-badge.devolucion { background: rgba(59,130,246,0.15); color: var(--blue); }
+.hist-badge.eliminacion { background: rgba(239,68,68,0.15); color: var(--red); }
+
 /* BOTONES DE CÁMARA */
 .scan-actions { padding: 10px 12px; display: flex; gap: 8px; }
 .btn-abrir { flex: 1; padding: 11px; background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 14px; letter-spacing: 1px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; transition: all 0.2s; }
@@ -252,9 +273,10 @@ tr:hover td { background: var(--surface2); }
 
 <nav>
   <button class="active" onclick="showTab('entrada')">📥 Entrada</button>
-  <button onclick="showTab('devolucion')">📤 Devolución</button>
+  <button onclick="showTab('devolucion')">📤 Dev.</button>
   <button onclick="showTab('stock')">📋 Stock</button>
-  <button onclick="showTab('config')">⚙️ Config</button>
+  <button onclick="showTab('historial')">🕒 Historial</button>
+  <button onclick="showTab('config')">⚙️</button>
 </nav>
 
 <!-- ═══════════════════════════════════════════════════════
@@ -442,8 +464,31 @@ tr:hover td { background: var(--surface2); }
   </div>
 
   <div class="stock-actions">
-    <button class="btn-export" onclick="exportarCSV()">📊 Exportar CSV</button>
-    <button class="btn-export" onclick="cargarStock()" style="flex:0.4">↻</button>
+    <button class="btn-export" onclick="exportarCSV()">📊 CSV</button>
+    <button class="btn-export" onclick="exportarExcel()">📗 Excel</button>
+    <button class="btn-export" onclick="cargarStock()" style="flex:0.3">↻</button>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════
+     TAB: HISTORIAL
+═══════════════════════════════════════════════════════ -->
+<div class="tab" id="tab-historial">
+  <div class="section-title">HISTORIAL</div>
+  <div class="section-sub">Todos los movimientos registrados</div>
+
+  <div style="display:flex;gap:8px;margin-bottom:12px">
+    <select id="hist-filtro" onchange="cargarHistorial()" style="flex:1;padding:9px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px">
+      <option value="">Todos</option>
+      <option value="entrada">Entradas</option>
+      <option value="devolucion">Devoluciones</option>
+      <option value="eliminacion">Eliminaciones</option>
+    </select>
+    <button class="btn-export" onclick="cargarHistorial()" style="flex:0.3">↻</button>
+  </div>
+
+  <div id="historial-list">
+    <div class="empty-state" style="padding:40px 0;text-align:center;color:var(--muted)">Cargando...</div>
   </div>
 </div>
 
@@ -473,6 +518,14 @@ tr:hover td { background: var(--surface2); }
     <div style="margin-top:12px;display:flex;gap:8px">
       <button class="btn-primary btn-secondary" style="font-size:12px" onclick="cerrarSesion()">🚪 Cerrar sesión</button>
       <button class="btn-primary btn-danger" style="font-size:12px" onclick="limpiarDatosLocales()">🔧 Actualizar URL servidor</button>
+    </div>
+  </div>
+
+  <!-- DASHBOARD ADMIN -->
+  <div class="config-section" id="panel-dashboard" style="display:none">
+    <div class="config-title">📊 DASHBOARD</div>
+    <div id="dashboard-content">
+      <div style="color:var(--muted);font-size:12px">Cargando...</div>
     </div>
   </div>
 
@@ -625,7 +678,9 @@ function iniciarApp() {
   renderHeaderObra();
   if (s.tipo === 'admin') {
     document.getElementById('panel-admin').style.display = 'block';
+    document.getElementById('panel-dashboard').style.display = 'block';
     cargarObrasAdmin();
+    cargarDashboard();
   }
   actualizarStats();
   cargarCatalogos();
@@ -906,6 +961,7 @@ function showTab(id) {
   cerrarCamara('devolucion');
 
   if (id === 'stock') cargarStock();
+  if (id === 'historial') cargarHistorial();
   if (id === 'config') cargarConfig();
 }
 
@@ -1342,6 +1398,59 @@ async function eliminarBobinaUI(codigo) {
   } catch { toast('❌ Error de conexión', 'err'); }
 }
 
+// ═══════════════════════════════════════════════════════
+// HISTORIAL
+// ═══════════════════════════════════════════════════════
+async function cargarHistorial() {
+  const container = document.getElementById('historial-list');
+  const filtro = document.getElementById('hist-filtro')?.value || '';
+  container.innerHTML = '<div class="empty-state" style="padding:40px 0;text-align:center;color:var(--muted)">Cargando...</div>';
+
+  try {
+    const url = '/historial?limit=100' + (filtro ? `&accion=${filtro}` : '');
+    const res = await api(url);
+    const data = await res.json();
+
+    if (!data.length) {
+      container.innerHTML = '<div class="empty-state" style="padding:40px 0;text-align:center;color:var(--muted)">Sin movimientos registrados</div>';
+      return;
+    }
+
+    const iconos = { entrada: '📥', devolucion: '📤', eliminacion: '🗑️' };
+    const labels = { entrada: 'ENTRADA', devolucion: 'DEVOLUCIÓN', eliminacion: 'ELIMINADO' };
+
+    container.innerHTML = data.map(h => `
+      <div class="hist-item">
+        <div class="hist-icon">${iconos[h.accion] || '📋'}</div>
+        <div class="hist-body">
+          <div class="hist-codigo">${h.bobina_codigo}</div>
+          <div class="hist-meta">
+            ${h.usuario ? `👤 ${h.usuario} · ` : ''}${h.fecha}
+            ${h.notas ? `<br><span style="color:var(--text);font-size:11px">${h.notas}</span>` : ''}
+          </div>
+        </div>
+        <div class="hist-badge ${h.accion}">${labels[h.accion] || h.accion}</div>
+      </div>
+    `).join('');
+  } catch (e) {
+    container.innerHTML = '<div class="empty-state" style="padding:40px 0;text-align:center;color:var(--red)">Error al cargar historial</div>';
+  }
+}
+
+async function exportarExcel() {
+  try {
+    const s = getSesion();
+    if (!s?.tipo === 'admin' && !s?.obra) return toast('⚠️ Sin sesión activa', 'err');
+    // Forzar sync y luego descargar el xlsx desde Google Sheets
+    toast('⏳ Sincronizando...', 'ok');
+    await api('/sync', { method: 'POST' });
+    const sheetId = await api('/sheet-id').then(r => r.json()).catch(() => null);
+    if (!sheetId?.id) return toast('⚠️ Google Sheets no configurado', 'err');
+    const url = `https://docs.google.com/spreadsheets/d/${sheetId.id}/export?format=xlsx`;
+    window.open(url, '_blank');
+  } catch { toast('❌ Error al exportar', 'err'); }
+}
+
 async function exportarCSV() {
   try {
     const res = await api('/export');
@@ -1460,6 +1569,66 @@ function limpiarDatosLocales() {
   localStorage.removeItem('gestibobina_api');
   toast('✅ Configuración local limpiada', 'ok');
   cargarConfig();
+}
+
+// ═══════════════════════════════════════════════════════
+// DASHBOARD
+// ═══════════════════════════════════════════════════════
+async function cargarDashboard() {
+  const c = document.getElementById('dashboard-content');
+  if (!c) return;
+
+  try {
+    // Stats globales
+    const [statsRes, obrasRes] = await Promise.all([
+      api('/stats'),
+      api('/obras'),
+    ]);
+    const stats = await statsRes.json();
+    const obras = await obrasRes.json();
+
+    // Stats por obra
+    const obraStats = await Promise.all(obras.map(async o => {
+      const r = await fetch(getAPI() + `/stats`, {
+        headers: { 'Content-Type': 'application/json', 'X-Admin-Code': getSesion()?.adminCode || '', 'X-Obra-Id': String(o.id) }
+      });
+      const s = await r.json();
+      return { ...o, ...s };
+    }));
+
+    const maxActivas = Math.max(...obraStats.map(o => o.activas), 1);
+
+    c.innerHTML = `
+      <div class="dash-grid">
+        <div class="dash-card">
+          <div class="n" style="color:var(--accent)">${stats.total}</div>
+          <div class="lbl">Total bobinas</div>
+        </div>
+        <div class="dash-card">
+          <div class="n" style="color:var(--green)">${stats.activas}</div>
+          <div class="lbl">En stock</div>
+        </div>
+        <div class="dash-card">
+          <div class="n" style="color:var(--red)">${stats.devueltas}</div>
+          <div class="lbl">Devueltas</div>
+        </div>
+        <div class="dash-card">
+          <div class="n" style="color:var(--blue)">${obras.length}</div>
+          <div class="lbl">Obras activas</div>
+        </div>
+      </div>
+      <div class="config-title" style="font-size:12px;margin-bottom:8px">STOCK POR OBRA</div>
+      ${obraStats.map(o => `
+        <div class="dash-obra-row">
+          <div style="font-family:'Barlow Condensed',sans-serif;font-weight:700;min-width:90px;font-size:13px">${o.nombre}</div>
+          <div class="dash-bar-wrap"><div class="dash-bar" style="width:${Math.round((o.activas/maxActivas)*100)}%"></div></div>
+          <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:15px;color:var(--accent);min-width:24px;text-align:right">${o.activas}</div>
+        </div>
+      `).join('')}
+    `;
+  } catch (e) {
+    c.innerHTML = '<div style="color:var(--red);font-size:12px">Error al cargar dashboard</div>';
+  }
 }
 
 // ═══════════════════════════════════════════════════════
