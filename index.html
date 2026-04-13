@@ -323,7 +323,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:1
   <div id="screenHome" class="screen flex-screen active" style="padding:0;height:100%">
     <div class="module-grid" style="flex:1">
       <div class="module-card" id="cardBobinas" onclick="selectModule('bobinas')">
-        <div class="module-emoji">🔌</div>
+        <div class="module-emoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="52" height="52"><rect x="28" y="38" width="44" height="32" rx="3" fill="#8B6914"/><rect x="28" y="38" width="8" height="32" rx="1" fill="#A07820" opacity="0.6"/><rect x="37" y="38" width="8" height="32" rx="1" fill="#7a5c10" opacity="0.4"/><rect x="46" y="38" width="8" height="32" rx="1" fill="#A07820" opacity="0.5"/><rect x="55" y="38" width="8" height="32" rx="1" fill="#7a5c10" opacity="0.4"/><rect x="64" y="38" width="8" height="32" rx="1" fill="#A07820" opacity="0.3"/><ellipse cx="50" cy="70" rx="30" ry="8" fill="#9B7420"/><ellipse cx="50" cy="70" rx="30" ry="8" fill="none" stroke="#7a5c10" stroke-width="1"/><line x1="22" y1="68" x2="78" y2="68" stroke="#7a5c10" stroke-width="0.8" opacity="0.5"/><line x1="24" y1="72" x2="76" y2="72" stroke="#c49530" stroke-width="0.6" opacity="0.4"/><circle cx="32" cy="70" r="1.5" fill="#f97316"/><circle cx="50" cy="70" r="1.5" fill="#f97316"/><circle cx="68" cy="70" r="1.5" fill="#f97316"/><ellipse cx="50" cy="36" rx="32" ry="10" fill="#C4A030"/><line x1="20" y1="34" x2="80" y2="34" stroke="#9B7820" stroke-width="1" opacity="0.7"/><line x1="20" y1="36" x2="80" y2="36" stroke="#e8c060" stroke-width="0.8" opacity="0.4"/><line x1="20" y1="38" x2="80" y2="38" stroke="#9B7820" stroke-width="1" opacity="0.5"/><ellipse cx="50" cy="35" rx="32" ry="10" fill="none" stroke="#e8c870" stroke-width="0.8" opacity="0.5"/><circle cx="30" cy="35" r="2" fill="#f97316" stroke="#c97316" stroke-width="0.5"/><circle cx="50" cy="32" r="2" fill="#f97316" stroke="#c97316" stroke-width="0.5"/><circle cx="70" cy="35" r="2" fill="#f97316" stroke="#c97316" stroke-width="0.5"/><circle cx="50" cy="39" r="2" fill="#f97316" stroke="#c97316" stroke-width="0.5"/><ellipse cx="50" cy="36" rx="5" ry="3" fill="#3a2a08"/><ellipse cx="50" cy="35.5" rx="4" ry="2" fill="#1a1208"/></svg></div>
         <div class="module-info">
           <div class="module-name">Bobinas</div>
           <div class="module-desc">Gestión de bobinas de cable</div>
@@ -998,7 +998,7 @@ function selectModule(mod) {
   document.querySelectorAll('.module-card').forEach(c => c.classList.remove('active'));
   document.getElementById('card' + mod.charAt(0).toUpperCase() + mod.slice(1)).classList.add('active');
   updateModuleUI();
-  navTo('stock');
+  navTo('scan');
 }
 
 function modLabel(mod) {
@@ -1354,12 +1354,15 @@ async function cargarStock() {
   }
 }
 
+let _stockItems = [];
+
 function renderStock(items, mod) {
+  _stockItems = items;
   const c = document.getElementById('stockList');
   if (!items.length) { c.innerHTML = '<div class="empty-state">No hay elementos</div>'; return; }
 
   if (mod === 'bobinas') {
-    c.innerHTML = items.map(b => {
+    c.innerHTML = items.map((b, i) => {
       const activa = b.estado === 'activa';
       return `
       <div class="stock-card ${b.estado}">
@@ -1373,17 +1376,16 @@ function renderStock(items, mod) {
           ${b.registrado_por ? `<span class="stock-meta-pill">👤 ${b.registrado_por}</span>` : ''}
         </div>
         <div class="stock-actions-row">
-          <button class="btn-sm" onclick="abrirEdit(${JSON.stringify(JSON.stringify(b))}, 'bobinas')">✏️ Editar</button>
-          ${activa ? `<button class="btn-sm" onclick="abrirDevolucion(${JSON.stringify(JSON.stringify(b))}, 'bobinas')">📤 Devolver</button>` : ''}
+          <button class="btn-sm" onclick="abrirEdit(${i}, 'bobinas')">✏️ Editar</button>
+          <button class="btn-sm danger" onclick="borrarItem(${i}, 'bobinas')">🗑️ Borrar</button>
         </div>
       </div>`;
     }).join('');
 
   } else if (mod === 'pemp' || mod === 'carretillas') {
-    c.innerHTML = items.map(item => {
+    c.innerHTML = items.map((item, i) => {
       const disponible = item.estado === 'Disponible' || item.estado === 'disponible';
       const averiada   = item.estado === 'Averiada'   || item.estado === 'averiada';
-      const devuelta   = item.estado === 'devuelta'   || item.estado === 'Devuelta';
       const statClass  = disponible ? 'activa' : averiada ? 'averiada' : 'devuelta';
       const pillClass  = disponible ? 'pill-green' : averiada ? 'pill-red' : 'pill-gray';
       const warn       = revisionWarn(item.fecha_proxima_revision);
@@ -1401,8 +1403,8 @@ function renderStock(items, mod) {
           ${warn ? `<span class="revision-warn">⚠️ Rev. prox.</span>` : ''}
         </div>
         <div class="stock-actions-row">
-          <button class="btn-sm" onclick="abrirEdit(${JSON.stringify(JSON.stringify(item))}, '${mod}')">✏️ Editar</button>
-          <button class="btn-sm" onclick="abrirDevolucion(${JSON.stringify(JSON.stringify(item))}, '${mod}')">📤 Devolver</button>
+          <button class="btn-sm" onclick="abrirEdit(${i}, '${mod}')">✏️ Editar</button>
+          <button class="btn-sm danger" onclick="borrarItem(${i}, '${mod}')">🗑️ Borrar</button>
         </div>
       </div>`;
     }).join('');
@@ -1479,8 +1481,9 @@ async function cargarHistorial() {
 let editingItem = null;
 let editingMod  = null;
 
-function abrirEdit(jsonStr, mod) {
-  const item = JSON.parse(jsonStr);
+function abrirEdit(idx, mod) {
+  const item = _stockItems[idx];
+  if (!item) return;
   editingItem = item;
   editingMod  = mod;
 
@@ -1591,6 +1594,24 @@ function abrirDevolucion(jsonStr, mod) {
 function closeModalDev() {
   document.getElementById('modalDev').classList.remove('show');
   devItem = null; devMod = null;
+}
+
+async function borrarItem(idx, mod) {
+  const item = _stockItems[idx];
+  if (!item) return;
+  const id = item.codigo || item.matricula || item.id;
+  if (!confirm(`¿Borrar "${id}"? Esta acción no se puede deshacer.`)) return;
+  const path = mod === 'bobinas' ? `/bobinas/${encodeURIComponent(id)}` : `/${mod}/${encodeURIComponent(id)}`;
+  try {
+    const res = await apiCall(path, { method: 'DELETE' });
+    if (res.ok) {
+      toast('✅ Borrado correctamente', 'ok');
+      cargarStock();
+    } else {
+      const data = await res.json().catch(() => ({}));
+      toast(`❌ ${data.error || 'Error al borrar'}`, 'err');
+    }
+  } catch { toast('❌ Error de conexión', 'err'); }
 }
 
 async function confirmarDevolucion() {
