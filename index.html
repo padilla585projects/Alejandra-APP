@@ -509,6 +509,12 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:1
           </div>
         </div>
 
+        <!-- Obra selector (solo superadmin sin obra fija) -->
+        <div class="form-group" id="scanObraGroup" style="display:none">
+          <label class="form-label">⚠️ Obra destino</label>
+          <select class="form-select" id="scanObraSelect"><option value="">— Selecciona obra —</option></select>
+        </div>
+
         <div class="form-group">
           <label class="form-label">Notas (opcional)</label>
           <input class="form-input" id="scanNotas" type="text" placeholder="Observaciones...">
@@ -589,7 +595,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:1
     <div class="settings-section" style="margin-top:8px">
       <div class="settings-title">ℹ️ Acerca de</div>
       <div class="settings-row"><span>Aplicación</span><strong>Alejandra</strong></div>
-      <div class="settings-row"><span>Versión</span><strong id="appVersionDisplay">v2.5</strong></div>
+      <div class="settings-row"><span>Versión</span><strong id="appVersionDisplay">v2.6</strong></div>
       <div class="settings-row"><span>Autor</span><strong>Adrian Padilla</strong></div>
       <div class="settings-row"><span>Desarrollado con</span><strong>Claude AI</strong></div>
       <div class="settings-row"><span>Backend</span><strong>Cloudflare Workers + D1</strong></div>
@@ -1030,6 +1036,24 @@ function updateModuleUI() {
   document.getElementById('fieldsBobi').style.display  = mod === 'bobinas'    ? 'block' : 'none';
   document.getElementById('fieldsPemp').style.display  = mod === 'pemp'       ? 'block' : 'none';
   document.getElementById('fieldsCarr').style.display  = mod === 'carretillas'? 'block' : 'none';
+
+  // Mostrar selector de obra solo para superadmin sin obra fija
+  const s = getSession();
+  const needsObra = s?.rol === 'superadmin' && !s?.obra_id;
+  const obraGroup = document.getElementById('scanObraGroup');
+  if (obraGroup) obraGroup.style.display = needsObra ? 'block' : 'none';
+  if (needsObra) cargarObrasSelectScan();
+}
+
+async function cargarObrasSelectScan() {
+  const sel = document.getElementById('scanObraSelect');
+  if (!sel || sel.options.length > 1) return;
+  try {
+    const res = await apiCall('/obras');
+    const obras = await res.json();
+    sel.innerHTML = '<option value="">— Selecciona obra —</option>' +
+      obras.map(o => `<option value="${o.id}">${o.nombre}</option>`).join('');
+  } catch {}
 }
 
 function showModTab(name) {
@@ -1258,6 +1282,16 @@ async function registrarItem() {
   if (!codigo) return toast('⚠️ Introduce el código', 'err');
 
   const s = getSession();
+
+  // SuperAdmin sin obra fija debe seleccionar obra
+  const needsObra = s?.rol === 'superadmin' && !s?.obra_id;
+  let obraIdSelec = null;
+  if (needsObra) {
+    const obraSelec = document.getElementById('scanObraSelect')?.value;
+    if (!obraSelec) return toast('⚠️ Selecciona la obra destino', 'err');
+    obraIdSelec = parseInt(obraSelec);
+  }
+
   const btn = document.getElementById('btnRegistrar');
   btn.disabled = true;
   btn.innerHTML = '<div class="spinner"></div> Registrando...';
@@ -1271,7 +1305,8 @@ async function registrarItem() {
       const notas      = document.getElementById('scanNotas').value;
       if (!proveedor)  { toast('⚠️ Selecciona el proveedor', 'err');    btn.disabled=false; btn.innerHTML='✅ REGISTRAR ENTRADA'; return; }
       if (!tipo_cable) { toast('⚠️ Selecciona el tipo de cable', 'err'); btn.disabled=false; btn.innerHTML='✅ REGISTRAR ENTRADA'; return; }
-      body = { codigo, proveedor, tipo_cable, notas, registrado_por: s?.nombre || '' };
+      body = { codigo, proveedor, tipo_cable, notas, registrado_por: s?.nombre || '',
+               ...(obraIdSelec ? { obra_id: obraIdSelec } : {}) };
       path = '/bobinas';
 
     } else if (currentModule === 'pemp') {
@@ -1284,7 +1319,8 @@ async function registrarItem() {
       const prox   = document.getElementById('fieldPempProxRev').value;
       body = { matricula: codigo, tipo, marca, proveedor: prov, estado, notas,
                fecha_ultima_revision: ult, fecha_proxima_revision: prox,
-               registrado_por: s?.nombre || '' };
+               registrado_por: s?.nombre || '',
+               ...(obraIdSelec ? { obra_id: obraIdSelec } : {}) };
       path = '/pemp';
 
     } else {
@@ -1298,7 +1334,8 @@ async function registrarItem() {
       const prox    = document.getElementById('fieldCarrProxRev').value;
       body = { matricula: codigo, tipo, marca, proveedor: prov, energia, estado, notas,
                fecha_ultima_revision: ult, fecha_proxima_revision: prox,
-               registrado_por: s?.nombre || '' };
+               registrado_por: s?.nombre || '',
+               ...(obraIdSelec ? { obra_id: obraIdSelec } : {}) };
       path = '/carretillas';
     }
 
@@ -1508,6 +1545,15 @@ function abrirEdit(idx, mod) {
   let html = '';
   if (mod === 'bobinas') {
     html = `
+      <div class="form-group"><label class="form-label">Código</label>
+        <input class="form-input" disabled value="${item.codigo||''}" style="opacity:.5">
+      </div>
+      <div class="form-group"><label class="form-label">Proveedor</label>
+        <input class="form-input" id="editProv" type="text" value="${item.proveedor||''}">
+      </div>
+      <div class="form-group"><label class="form-label">Tipo de Cable</label>
+        <input class="form-input" id="editTipoCable" type="text" value="${item.tipo_cable||''}">
+      </div>
       <div class="form-group"><label class="form-label">Estado</label>
         <select class="form-select" id="editEstado">
           <option value="activa" ${item.estado==='activa'?'selected':''}>Activa</option>
@@ -1517,11 +1563,57 @@ function abrirEdit(idx, mod) {
       <div class="form-group"><label class="form-label">Notas</label>
         <input class="form-input" id="editNotas" type="text" value="${item.notas||''}">
       </div>`;
-  } else {
-    const estadoOpts = mod === 'pemp' || mod === 'carretillas'
-      ? ['Disponible','Averiada'].map(e => `<option value="${e}" ${item.estado===e?'selected':''}>${e}</option>`).join('')
-      : '';
+  } else if (mod === 'pemp') {
+    const estadoOpts = ['Disponible','Averiada'].map(e => `<option value="${e}" ${item.estado===e?'selected':''}>${e}</option>`).join('');
     html = `
+      <div class="form-group"><label class="form-label">Matrícula</label>
+        <input class="form-input" disabled value="${item.matricula||''}" style="opacity:.5">
+      </div>
+      <div class="form-group"><label class="form-label">Tipo</label>
+        <select class="form-select" id="editTipo">
+          <option value="Tijera" ${item.tipo==='Tijera'?'selected':''}>Tijera</option>
+          <option value="Brazo"  ${item.tipo==='Brazo'?'selected':''}>Brazo</option>
+        </select>
+      </div>
+      <div class="form-group"><label class="form-label">Estado</label>
+        <select class="form-select" id="editEstado">${estadoOpts}</select>
+      </div>
+      <div class="form-group"><label class="form-label">Marca</label>
+        <input class="form-input" id="editMarca" type="text" value="${item.marca||''}">
+      </div>
+      <div class="form-group"><label class="form-label">Proveedor</label>
+        <input class="form-input" id="editProv" type="text" value="${item.proveedor||''}">
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div class="form-group"><label class="form-label">Últ. revisión</label>
+          <input class="form-input" id="editUltRev" type="date" value="${item.fecha_ultima_revision||''}">
+        </div>
+        <div class="form-group"><label class="form-label">Próx. revisión</label>
+          <input class="form-input" id="editProxRev" type="date" value="${item.fecha_proxima_revision||''}">
+        </div>
+      </div>
+      <div class="form-group"><label class="form-label">Notas</label>
+        <input class="form-input" id="editNotas" type="text" value="${item.notas||''}">
+      </div>`;
+  } else {
+    // carretillas
+    const estadoOpts = ['Disponible','Averiada'].map(e => `<option value="${e}" ${item.estado===e?'selected':''}>${e}</option>`).join('');
+    const energiaOpts = ['Eléctrica','Gas','Diésel'].map(e => `<option value="${e}" ${item.energia===e?'selected':''}>${e}</option>`).join('');
+    html = `
+      <div class="form-group"><label class="form-label">Matrícula</label>
+        <input class="form-input" disabled value="${item.matricula||''}" style="opacity:.5">
+      </div>
+      <div class="form-group"><label class="form-label">Tipo</label>
+        <select class="form-select" id="editTipo">
+          <option value="Contrapesada" ${item.tipo==='Contrapesada'?'selected':''}>Contrapesada</option>
+          <option value="Retráctil"    ${item.tipo==='Retráctil'?'selected':''}>Retráctil</option>
+          <option value="Transpaleta"  ${item.tipo==='Transpaleta'?'selected':''}>Transpaleta</option>
+          <option value="Apiladora"    ${item.tipo==='Apiladora'?'selected':''}>Apiladora</option>
+        </select>
+      </div>
+      <div class="form-group"><label class="form-label">Energía</label>
+        <select class="form-select" id="editEnergia">${energiaOpts}</select>
+      </div>
       <div class="form-group"><label class="form-label">Estado</label>
         <select class="form-select" id="editEstado">${estadoOpts}</select>
       </div>
@@ -1563,15 +1655,27 @@ async function guardarEdicion() {
   const id = editingItem.codigo || editingItem.matricula || editingItem.id;
 
   if (editingMod === 'bobinas') {
-    body = { estado, notas };
+    const proveedor  = document.getElementById('editProv')?.value;
+    const tipo_cable = document.getElementById('editTipoCable')?.value;
+    body = { estado, notas, proveedor, tipo_cable };
     path = `/bobinas/${encodeURIComponent(id)}`;
-  } else {
+  } else if (editingMod === 'pemp') {
+    const tipo    = document.getElementById('editTipo')?.value;
     const marca   = document.getElementById('editMarca')?.value;
     const prov    = document.getElementById('editProv')?.value;
     const ultRev  = document.getElementById('editUltRev')?.value;
     const proxRev = document.getElementById('editProxRev')?.value;
-    body = { estado, marca, proveedor: prov, fecha_ultima_revision: ultRev, fecha_proxima_revision: proxRev, notas };
-    path = `/${editingMod}/${encodeURIComponent(id)}`;
+    body = { estado, tipo, marca, proveedor: prov, fecha_ultima_revision: ultRev, fecha_proxima_revision: proxRev, notas };
+    path = `/pemp/${encodeURIComponent(id)}`;
+  } else {
+    const tipo    = document.getElementById('editTipo')?.value;
+    const energia = document.getElementById('editEnergia')?.value;
+    const marca   = document.getElementById('editMarca')?.value;
+    const prov    = document.getElementById('editProv')?.value;
+    const ultRev  = document.getElementById('editUltRev')?.value;
+    const proxRev = document.getElementById('editProxRev')?.value;
+    body = { estado, tipo, energia, marca, proveedor: prov, fecha_ultima_revision: ultRev, fecha_proxima_revision: proxRev, notas };
+    path = `/carretillas/${encodeURIComponent(id)}`;
   }
 
   try {
@@ -1890,6 +1994,35 @@ async function cargarDashboard() {
     c.innerHTML = '<div style="color:var(--red);font-size:12px">Error al cargar dashboard</div>';
   }
 }
+
+// ══════════════════════════════════════════════════════
+// LOGGING DE ERRORES
+// ══════════════════════════════════════════════════════
+function enviarLog(nivel, mensaje, detalle) {
+  try {
+    const s = getSession();
+    const payload = {
+      nivel,
+      mensaje: String(mensaje).slice(0, 500),
+      detalle: String(detalle || '').slice(0, 1000),
+      usuario: s?.nombre || '—',
+      rol:     s?.rol    || '—',
+      obra:    s?.obra_nombre || String(s?.obra_id || '—'),
+      url:     location.href,
+      ts:      new Date().toISOString(),
+    };
+    navigator.sendBeacon
+      ? navigator.sendBeacon(getAPI() + '/log', JSON.stringify(payload))
+      : fetch(getAPI() + '/log', { method: 'POST', body: JSON.stringify(payload), keepalive: true }).catch(() => {});
+  } catch (_) {}
+}
+
+window.onerror = function(msg, src, line, col, err) {
+  enviarLog('error', msg, `${src}:${line}:${col}\n${err?.stack || ''}`);
+};
+window.addEventListener('unhandledrejection', e => {
+  enviarLog('promise', e.reason?.message || String(e.reason), e.reason?.stack || '');
+});
 
 // ══════════════════════════════════════════════════════
 // INIT

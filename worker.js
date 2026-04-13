@@ -966,10 +966,12 @@ async function getStats(request, env) {
 
 async function guardarLog(request, env) {
   try {
-    const { nivel = 'info', origen, mensaje, detalle } = await request.json();
+    const body = await request.json();
+    const { nivel = 'info', origen, mensaje, detalle, usuario, rol, obra, url, ts } = body;
+    const contexto = { detalle, usuario, rol, obra, url, ts };
     await env.DB.prepare(
       'INSERT INTO logs (nivel, origen, mensaje, detalle) VALUES (?, ?, ?, ?)'
-    ).bind(nivel, origen || 'app', mensaje, detalle ? JSON.stringify(detalle) : null).run();
+    ).bind(nivel, origen || 'cliente', String(mensaje || '').slice(0, 500), JSON.stringify(contexto)).run();
     return json({ ok: true });
   } catch (e) {
     return json({ ok: false });
