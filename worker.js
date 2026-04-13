@@ -412,12 +412,13 @@ async function crearPemp(request, env, ctx) {
 
     const id = r.meta.last_row_id;
 
-    ctx.waitUntil(
+    ctx.waitUntil(Promise.all([
+      syncSheets(env),
       registrarHistorialPemp(env, {
         obra_id: obraFinal, matricula: matricula.trim().toUpperCase(),
         accion: 'entrada', usuario: reg, notas: notas || '',
-      })
-    );
+      }),
+    ]));
 
     return json({ ok: true, id, mensaje: `PEMP ${matricula} registrada` }, 201);
   } catch (e) {
@@ -459,12 +460,13 @@ async function devolverPemp(id, request, env, ctx) {
     'UPDATE pemp SET estado = ?, fecha_devolucion = ?, devuelto_por = ?, notas = ? WHERE id = ?'
   ).bind('devuelta', fecha, devuelto_por || '', notas || pemp.notas || '', id).run();
 
-  ctx.waitUntil(
+  ctx.waitUntil(Promise.all([
+    syncSheets(env),
     registrarHistorialPemp(env, {
       obra_id: pemp.obra_id, matricula: pemp.matricula,
       accion: 'devolucion', usuario: devuelto_por, notas: notas || '',
-    })
-  );
+    }),
+  ]));
 
   return json({ ok: true, mensaje: `PEMP ${id} devuelta correctamente`, fecha_devolucion: fecha });
 }
@@ -533,12 +535,13 @@ async function crearCarretilla(request, env, ctx) {
 
     const id = r.meta.last_row_id;
 
-    ctx.waitUntil(
+    ctx.waitUntil(Promise.all([
+      syncSheets(env),
       registrarHistorialCarretillas(env, {
         obra_id: obraFinal, matricula: matricula.trim().toUpperCase(),
         accion: 'entrada', usuario: reg, notas: notas || '',
-      })
-    );
+      }),
+    ]));
 
     return json({ ok: true, id, mensaje: `Carretilla ${matricula} registrada` }, 201);
   } catch (e) {
@@ -580,12 +583,13 @@ async function devolverCarretilla(id, request, env, ctx) {
     'UPDATE carretillas SET estado = ?, fecha_devolucion = ?, devuelto_por = ?, notas = ? WHERE id = ?'
   ).bind('devuelta', fecha, devuelto_por || '', notas || carretilla.notas || '', id).run();
 
-  ctx.waitUntil(
+  ctx.waitUntil(Promise.all([
+    syncSheets(env),
     registrarHistorialCarretillas(env, {
       obra_id: carretilla.obra_id, matricula: carretilla.matricula,
       accion: 'devolucion', usuario: devuelto_por, notas: notas || '',
-    })
-  );
+    }),
+  ]));
 
   return json({ ok: true, mensaje: `Carretilla ${id} devuelta correctamente`, fecha_devolucion: fecha });
 }
