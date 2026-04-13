@@ -294,7 +294,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:1
 ══════════════════════════════════════════ -->
 <header id="mainHeader" style="display:none">
   <div class="header-logo">
-    <svg class="logo-svg" width="28" height="28" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <svg class="logo-svg" width="32" height="32" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
       <rect width="512" height="512" rx="90" fill="#0f172a"/>
       <path d="M60 148V60h88" stroke="#2563eb" stroke-width="26" stroke-linecap="round" stroke-linejoin="round"/>
       <path d="M452 148V60h-88" stroke="#2563eb" stroke-width="26" stroke-linecap="round" stroke-linejoin="round"/>
@@ -303,7 +303,6 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:1
       <path d="M256 88L148 424h44l30-88h68l30 88h44L256 88ZM256 168l50 128h-100Z" fill="#f97316"/>
       <path d="M256 88l108 336h-44l-30-88h-34l-34-128 34-120Z" fill="#fb923c" opacity="0.4"/>
     </svg>
-    Alejandra
   </div>
   <div class="header-center" id="headerCenter">
     <span class="obra-label" id="headerObraLabel"></span>
@@ -584,7 +583,18 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:1
       <button class="btn-primary btn-secondary" style="margin-top:0;font-size:14px" onclick="showScreen('admin')">Abrir Panel Admin</button>
     </div>
 
-    <div style="text-align:center;color:var(--muted);font-size:11px;letter-spacing:1px;margin-top:8px">Alejandra v2.0 · 2026</div>
+    <div class="settings-section" style="margin-top:8px">
+      <div class="settings-title">ℹ️ Acerca de</div>
+      <div class="settings-row"><span>Aplicación</span><strong>Alejandra</strong></div>
+      <div class="settings-row"><span>Versión</span><strong id="appVersionDisplay">v2.1</strong></div>
+      <div class="settings-row"><span>Autor</span><strong>Adrian Padilla</strong></div>
+      <div class="settings-row"><span>Desarrollado con</span><strong>Claude AI</strong></div>
+      <div class="settings-row"><span>Backend</span><strong>Cloudflare Workers + D1</strong></div>
+      <div class="settings-row"><span>Año</span><strong>2026</strong></div>
+      <div style="margin-top:10px;text-align:center;font-size:11px;color:var(--muted);letter-spacing:1px">
+        INVENTARIO · MAQUINARIA · CONTROL
+      </div>
+    </div>
   </div>
 
   <!-- ADMIN PANEL SCREEN -->
