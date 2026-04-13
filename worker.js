@@ -142,6 +142,14 @@ export default {
       // ── Export ────────────────────────────────────────────────────────────
       if (path === '/export'       && method === 'GET')   return await exportCSV(request, env);
 
+      // ── Sugerencias ───────────────────────────────────────────────────────
+      if (path === '/sugerencias'  && method === 'POST') return await guardarSugerencia(request, env);
+      if (path === '/sugerencias'  && method === 'GET')  return await getSugerencias(request, env);
+      if (path.startsWith('/sugerencias/') && method === 'PUT') {
+        const sid = parseInt(path.split('/sugerencias/')[1]);
+        return await marcarSugerenciaLeida(sid, env);
+      }
+
       // ── Otros (legacy/extras) ─────────────────────────────────────────────
       if (path === '/logs'         && method === 'GET')   return await getLogs(request, env);
       if (path === '/historial'    && method === 'GET')   return await getHistorial(request, env);
@@ -303,20 +311,21 @@ async function crearBobina(request, env, ctx) {
 }
 
 async function editarBobina(codigo, request, env) {
-  const { obraId } = getAuth(request, env);
+  const { obraId, isSuperadmin } = getAuth(request, env);
   const bobina = await env.DB.prepare('SELECT * FROM bobinas WHERE codigo = ?').bind(codigo).first();
   if (!bobina) return err(`Bobina ${codigo} no encontrada`, 404);
-  if (obraId && bobina.obra_id !== obraId) return err('No autorizado', 403);
+  if (obraId && !isSuperadmin && bobina.obra_id !== obraId) return err('No autorizado', 403);
 
   const body = await request.json().catch(() => ({}));
   const proveedor  = body.proveedor  !== undefined ? body.proveedor  : bobina.proveedor;
   const tipo_cable = body.tipo_cable !== undefined ? body.tipo_cable : bobina.tipo_cable;
   const notas      = body.notas      !== undefined ? body.notas      : bobina.notas;
   const estado     = body.estado     !== undefined ? body.estado     : bobina.estado;
+  const obra_id    = body.obra_id    !== undefined ? (body.obra_id ? parseInt(body.obra_id) : null) : bobina.obra_id;
 
   await env.DB.prepare(
-    'UPDATE bobinas SET proveedor = ?, tipo_cable = ?, notas = ?, estado = ? WHERE codigo = ?'
-  ).bind(proveedor, tipo_cable, notas, estado, codigo).run();
+    'UPDATE bobinas SET proveedor = ?, tipo_cable = ?, notas = ?, estado = ?, obra_id = ? WHERE codigo = ?'
+  ).bind(proveedor, tipo_cable, notas, estado, obra_id, codigo).run();
 
   return json({ ok: true, mensaje: `Bobina ${codigo} actualizada` });
 }
@@ -427,24 +436,24 @@ async function crearPemp(request, env, ctx) {
   }
 }
 
-async function editarPemp(id, request, env) {
-  const { obraId } = getAuth(request, env);
-  const pemp = await env.DB.prepare('SELECT * FROM pemp WHERE id = ?').bind(id).first();
-  if (!pemp) return err(`PEMP ${id} no encontrada`, 404);
-  if (obraId && pemp.obra_id !== obraId) return err('No autorizado', 403);
+async function editarPemp(matricula, request, env) {
+  const { obraId, isSuperadmin } = getAuth(request, env);
+  const pemp = await env.DB.prepare('SELECT * FROM pemp WHERE matricula = ?').bind(matricula).first();
+  if (!pemp) return err(`PEMP ${matricula} no encontrada`, 404);
+  if (obraId && !isSuperadmin && pemp.obra_id !== obraId) return err('No autorizado', 403);
 
   const body = await request.json().catch(() => ({}));
-  const campos = ['matricula', 'tipo', 'marca', 'proveedor', 'estado', 'notas', 'fecha_ultima_revision', 'fecha_proxima_revision'];
+  const campos = ['tipo', 'marca', 'proveedor', 'estado', 'notas', 'fecha_ultima_revision', 'fecha_proxima_revision', 'obra_id'];
   const sets = [];
   const vals = [];
   for (const c of campos) {
     if (body[c] !== undefined) { sets.push(`${c} = ?`); vals.push(body[c]); }
   }
   if (sets.length === 0) return err('No hay campos para actualizar');
-  vals.push(id);
+  vals.push(matricula);
 
-  await env.DB.prepare(`UPDATE pemp SET ${sets.join(', ')} WHERE id = ?`).bind(...vals).run();
-  return json({ ok: true, mensaje: `PEMP ${id} actualizada` });
+  await env.DB.prepare(`UPDATE pemp SET ${sets.join(', ')} WHERE matricula = ?`).bind(...vals).run();
+  return json({ ok: true, mensaje: `PEMP ${matricula} actualizada` });
 }
 
 async function devolverPemp(id, request, env, ctx) {
@@ -550,24 +559,24 @@ async function crearCarretilla(request, env, ctx) {
   }
 }
 
-async function editarCarretilla(id, request, env) {
-  const { obraId } = getAuth(request, env);
-  const carretilla = await env.DB.prepare('SELECT * FROM carretillas WHERE id = ?').bind(id).first();
-  if (!carretilla) return err(`Carretilla ${id} no encontrada`, 404);
-  if (obraId && carretilla.obra_id !== obraId) return err('No autorizado', 403);
+async function editarCarretilla(matricula, request, env) {
+  const { obraId, isSuperadmin } = getAuth(request, env);
+  const carretilla = await env.DB.prepare('SELECT * FROM carretillas WHERE matricula = ?').bind(matricula).first();
+  if (!carretilla) return err(`Carretilla ${matricula} no encontrada`, 404);
+  if (obraId && !isSuperadmin && carretilla.obra_id !== obraId) return err('No autorizado', 403);
 
   const body = await request.json().catch(() => ({}));
-  const campos = ['matricula', 'tipo', 'marca', 'proveedor', 'energia', 'estado', 'notas', 'fecha_ultima_revision', 'fecha_proxima_revision'];
+  const campos = ['tipo', 'marca', 'proveedor', 'energia', 'estado', 'notas', 'fecha_ultima_revision', 'fecha_proxima_revision', 'obra_id'];
   const sets = [];
   const vals = [];
   for (const c of campos) {
     if (body[c] !== undefined) { sets.push(`${c} = ?`); vals.push(body[c]); }
   }
   if (sets.length === 0) return err('No hay campos para actualizar');
-  vals.push(id);
+  vals.push(matricula);
 
-  await env.DB.prepare(`UPDATE carretillas SET ${sets.join(', ')} WHERE id = ?`).bind(...vals).run();
-  return json({ ok: true, mensaje: `Carretilla ${id} actualizada` });
+  await env.DB.prepare(`UPDATE carretillas SET ${sets.join(', ')} WHERE matricula = ?`).bind(...vals).run();
+  return json({ ok: true, mensaje: `Carretilla ${matricula} actualizada` });
 }
 
 async function devolverCarretilla(id, request, env, ctx) {
@@ -963,6 +972,51 @@ async function getStats(request, env) {
 // ════════════════════════════════════════════════════════════════════════════
 // LOGS
 // ════════════════════════════════════════════════════════════════════════════
+
+// ════════════════════════════════════════════════════════════════════════════
+// SUGERENCIAS
+// Tabla D1 necesaria:
+// CREATE TABLE IF NOT EXISTS sugerencias (
+//   id INTEGER PRIMARY KEY AUTOINCREMENT,
+//   texto TEXT NOT NULL,
+//   categoria TEXT,
+//   usuario TEXT,
+//   obra TEXT,
+//   leida INTEGER DEFAULT 0,
+//   created_at TEXT DEFAULT (datetime('now'))
+// );
+// ════════════════════════════════════════════════════════════════════════════
+
+async function guardarSugerencia(request, env) {
+  try {
+    const body = await request.json().catch(() => ({}));
+    const { texto, categoria, usuario, obra } = body;
+    if (!texto || !texto.trim()) return err('El texto de la sugerencia es obligatorio');
+    await env.DB.prepare(
+      'INSERT INTO sugerencias (texto, categoria, usuario, obra) VALUES (?, ?, ?, ?)'
+    ).bind(texto.trim().slice(0, 1000), categoria || null, usuario || null, obra || null).run();
+    return json({ ok: true, mensaje: 'Sugerencia enviada. ¡Gracias!' });
+  } catch (e) {
+    return err('No se pudo guardar la sugerencia: ' + e.message);
+  }
+}
+
+async function getSugerencias(request, env) {
+  const { isSuperadmin } = getAuth(request, env);
+  if (!isSuperadmin) return err('No autorizado', 403);
+  const url = new URL(request.url);
+  const soloNoLeidas = url.searchParams.get('noLeidas') === '1';
+  let sql = 'SELECT * FROM sugerencias';
+  if (soloNoLeidas) sql += ' WHERE leida = 0';
+  sql += ' ORDER BY created_at DESC LIMIT 100';
+  const { results } = await env.DB.prepare(sql).all();
+  return json(results);
+}
+
+async function marcarSugerenciaLeida(id, env) {
+  await env.DB.prepare('UPDATE sugerencias SET leida = 1 WHERE id = ?').bind(id).run();
+  return json({ ok: true });
+}
 
 async function guardarLog(request, env) {
   try {

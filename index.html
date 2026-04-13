@@ -12,6 +12,7 @@
 <link rel="apple-touch-icon" href="icon-192.png">
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;900&family=Poppins:wght@300;400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.min.js"></script>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 <style>
 :root {
   --bg:#0f172a; --surface:#162032; --surface2:#1e2d40;
@@ -535,7 +536,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:1
         </div>
         <div id="stockList"><div class="empty-state">Cargando...</div></div>
         <div class="export-row">
-          <button class="btn-export" onclick="exportCSV()">📊 CSV</button>
+          <button class="btn-export" onclick="exportarExcel()">📊 Excel</button>
           <button class="btn-export" onclick="recargarStock()" style="flex:0 0 48px">↻</button>
         </div>
       </div>
@@ -595,7 +596,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:1
     <div class="settings-section" style="margin-top:8px">
       <div class="settings-title">ℹ️ Acerca de</div>
       <div class="settings-row"><span>Aplicación</span><strong>Alejandra</strong></div>
-      <div class="settings-row"><span>Versión</span><strong id="appVersionDisplay">v2.6</strong></div>
+      <div class="settings-row"><span>Versión</span><strong id="appVersionDisplay">v2.7</strong></div>
       <div class="settings-row"><span>Autor</span><strong>Adrian Padilla</strong></div>
       <div class="settings-row"><span>Desarrollado con</span><strong>Claude AI</strong></div>
       <div class="settings-row"><span>Backend</span><strong>Cloudflare Workers + D1</strong></div>
@@ -662,11 +663,40 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:1
       </div>
     </div>
 
+    <!-- Sugerencias (superadmin) -->
+    <div class="admin-section" id="adminSugerencias" style="display:none">
+      <div class="admin-section-title">💡 Sugerencias de usuarios</div>
+      <div id="adminSugerenciasList"><div style="color:var(--muted);font-size:12px">Cargando...</div></div>
+    </div>
+
     <!-- Dashboard (superadmin) -->
     <div class="admin-section" id="adminDashboard" style="display:none">
       <div class="admin-section-title">📊 Dashboard Global</div>
       <div id="dashboardContent"><div style="color:var(--muted);font-size:12px">Cargando...</div></div>
     </div>
+  </div>
+
+  <!-- ── SUGERENCIAS ── -->
+  <div id="screenSugerencias" class="screen">
+    <div style="padding:4px 0 16px">
+      <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:20px;color:var(--text)">💡 Sugerencias</div>
+      <div style="font-size:12px;color:var(--muted);margin-top:4px">Envía ideas o mejoras al equipo</div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Categoría</label>
+      <select class="form-select" id="sugCategoria">
+        <option value="mejora">Mejora de funcionalidad</option>
+        <option value="error">Reporte de error</option>
+        <option value="nuevo">Nueva función</option>
+        <option value="otro">Otro</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Tu sugerencia</label>
+      <textarea id="sugTexto" rows="5" placeholder="Describe tu idea o problema con el mayor detalle posible..."
+        style="width:100%;padding:12px;background:var(--surface);border:1px solid var(--border);border-radius:10px;color:var(--text);font-family:'Poppins',sans-serif;font-size:14px;resize:vertical;outline:none"></textarea>
+    </div>
+    <button class="btn-primary" onclick="enviarSugerencia()" id="btnSugerencia">💬 Enviar sugerencia</button>
   </div>
 
 </div><!-- end appContent -->
@@ -693,9 +723,9 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:1
       </svg>
     </button>
   </div>
-  <button class="nav-btn" id="navHistorial" onclick="navTo('historial')">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-    Historial
+  <button class="nav-btn" id="navSugerencias" onclick="navTo('sugerencias')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+    Ideas
   </button>
   <button class="nav-btn" id="navAjustes" onclick="navTo('ajustes')">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
@@ -753,15 +783,15 @@ function getAPI() {
 }
 
 function getSession() {
-  try { return JSON.parse(sessionStorage.getItem('alejandra_session') || 'null'); } catch { return null; }
+  try { return JSON.parse(localStorage.getItem('alejandra_session') || 'null'); } catch { return null; }
 }
 
 function setSession(data) {
-  sessionStorage.setItem('alejandra_session', JSON.stringify(data));
+  localStorage.setItem('alejandra_session', JSON.stringify(data));
 }
 
 function cerrarSesion() {
-  sessionStorage.removeItem('alejandra_session');
+  localStorage.removeItem('alejandra_session');
   closeCamera();
   location.reload();
 }
@@ -879,6 +909,7 @@ async function iniciarApp() {
   if (esSuperAdmin) {
     document.getElementById('adminObrasSection').style.display = 'block';
     document.getElementById('adminDashboard').style.display = 'block';
+    document.getElementById('adminSugerencias').style.display = 'block';
   }
 
   checkConnection();
@@ -971,15 +1002,11 @@ function showScreen(name) {
 
   // nav highlight
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
-  const navMap = { home: 'navInicio', ajustes: 'navAjustes' };
+  const navMap = { home: 'navInicio', ajustes: 'navAjustes', sugerencias: 'navSugerencias' };
   if (navMap[name]) document.getElementById(navMap[name]).classList.add('active');
 
-  if (name === 'admin') {
-    cargarAdminData();
-  }
-  if (name === 'ajustes') {
-    renderAjustesInfo();
-  }
+  if (name === 'admin') cargarAdminData();
+  if (name === 'ajustes') renderAjustesInfo();
 }
 
 function navTo(target) {
@@ -990,6 +1017,10 @@ function navTo(target) {
   }
   if (target === 'ajustes') {
     showScreen('ajustes');
+    return;
+  }
+  if (target === 'sugerencias') {
+    showScreen('sugerencias');
     return;
   }
   // For scan/stock/historial → show module screen
@@ -1474,19 +1505,59 @@ function revisionWarn(fecha) {
   return diff >= 0 && diff <= 30;
 }
 
-async function exportCSV() {
+function exportarExcel() {
   try {
+    if (!_stockItems || !_stockItems.length) return toast('⚠️ No hay datos que exportar', 'err');
     const mod = currentModule;
-    const path = mod === 'bobinas' ? '/export' : `/${mod}/export`;
-    const res = await apiCall(path);
-    const blob = await res.blob();
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `alejandra-${mod}-${new Date().toISOString().slice(0,10)}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  } catch { toast('❌ Error al exportar', 'err'); }
+    let filas;
+    if (mod === 'bobinas') {
+      filas = _stockItems.map(i => ({
+        'Código':       i.codigo      || '',
+        'Proveedor':    i.proveedor   || '',
+        'Tipo Cable':   i.tipo_cable  || '',
+        'Estado':       i.estado      || '',
+        'Obra':         i.obra_nombre || i.obra_id || '',
+        'Fecha Entrada':i.fecha_entrada    || '',
+        'Fecha Dev.':   i.fecha_devolucion || '',
+        'Notas':        i.notas       || '',
+      }));
+    } else if (mod === 'pemp') {
+      filas = _stockItems.map(i => ({
+        'Matrícula':    i.matricula   || '',
+        'Tipo':         i.tipo        || '',
+        'Marca':        i.marca       || '',
+        'Proveedor':    i.proveedor   || '',
+        'Estado':       i.estado      || '',
+        'Obra':         i.obra_nombre || i.obra_id || '',
+        'Últ. Revisión':  i.fecha_ultima_revision  || '',
+        'Próx. Revisión': i.fecha_proxima_revision || '',
+        'Notas':        i.notas       || '',
+      }));
+    } else {
+      filas = _stockItems.map(i => ({
+        'Matrícula':    i.matricula   || '',
+        'Tipo':         i.tipo        || '',
+        'Energía':      i.energia     || '',
+        'Marca':        i.marca       || '',
+        'Proveedor':    i.proveedor   || '',
+        'Estado':       i.estado      || '',
+        'Obra':         i.obra_nombre || i.obra_id || '',
+        'Últ. Revisión':  i.fecha_ultima_revision  || '',
+        'Próx. Revisión': i.fecha_proxima_revision || '',
+        'Notas':        i.notas       || '',
+      }));
+    }
+
+    const ws = XLSX.utils.json_to_sheet(filas);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, mod.charAt(0).toUpperCase() + mod.slice(1));
+    const fecha = new Date().toISOString().slice(0, 10);
+    XLSX.writeFile(wb, `alejandra-${mod}-${fecha}.xlsx`);
+    toast('✅ Excel generado', 'ok');
+  } catch (e) {
+    toast('❌ Error al exportar', 'err');
+    enviarLog('error', 'exportarExcel: ' + e.message, e.stack || '');
+  }
 }
 
 // ══════════════════════════════════════════════════════
@@ -1636,8 +1707,30 @@ function abrirEdit(idx, mod) {
       </div>`;
   }
 
+  // Campo obra solo para superadmin
+  const s = getSession();
+  if (s?.rol === 'superadmin') {
+    html += `
+      <div class="form-group" id="editObraGroup">
+        <label class="form-label">Obra</label>
+        <select class="form-select" id="editObra"><option value="">Cargando...</option></select>
+      </div>`;
+  }
+
   document.getElementById('modalEditBody').innerHTML = html;
   document.getElementById('modalEdit').classList.add('show');
+
+  if (s?.rol === 'superadmin') {
+    apiCall('/obras').then(r => r.json()).then(obras => {
+      const sel = document.getElementById('editObra');
+      if (!sel) return;
+      sel.innerHTML = '<option value="">— Sin obra —</option>' +
+        obras.map(o => `<option value="${o.id}" ${o.id === item.obra_id ? 'selected' : ''}>${o.nombre}</option>`).join('');
+    }).catch(() => {
+      const sel = document.getElementById('editObra');
+      if (sel) sel.innerHTML = '<option value="">Error al cargar</option>';
+    });
+  }
 }
 
 function closeModalEdit() {
@@ -1651,13 +1744,18 @@ async function guardarEdicion() {
   const notas  = document.getElementById('editNotas')?.value;
   const s = getSession();
 
+  // obra_id: solo si superadmin y el select existe
+  const obraSelEl = document.getElementById('editObra');
+  const obraIdEdit = obraSelEl ? (obraSelEl.value ? parseInt(obraSelEl.value) : null) : undefined;
+
   let body, path;
   const id = editingItem.codigo || editingItem.matricula || editingItem.id;
 
   if (editingMod === 'bobinas') {
     const proveedor  = document.getElementById('editProv')?.value;
     const tipo_cable = document.getElementById('editTipoCable')?.value;
-    body = { estado, notas, proveedor, tipo_cable };
+    body = { estado, notas, proveedor, tipo_cable,
+             ...(obraIdEdit !== undefined ? { obra_id: obraIdEdit } : {}) };
     path = `/bobinas/${encodeURIComponent(id)}`;
   } else if (editingMod === 'pemp') {
     const tipo    = document.getElementById('editTipo')?.value;
@@ -1665,7 +1763,8 @@ async function guardarEdicion() {
     const prov    = document.getElementById('editProv')?.value;
     const ultRev  = document.getElementById('editUltRev')?.value;
     const proxRev = document.getElementById('editProxRev')?.value;
-    body = { estado, tipo, marca, proveedor: prov, fecha_ultima_revision: ultRev, fecha_proxima_revision: proxRev, notas };
+    body = { estado, tipo, marca, proveedor: prov, fecha_ultima_revision: ultRev, fecha_proxima_revision: proxRev, notas,
+             ...(obraIdEdit !== undefined ? { obra_id: obraIdEdit } : {}) };
     path = `/pemp/${encodeURIComponent(id)}`;
   } else {
     const tipo    = document.getElementById('editTipo')?.value;
@@ -1674,12 +1773,13 @@ async function guardarEdicion() {
     const prov    = document.getElementById('editProv')?.value;
     const ultRev  = document.getElementById('editUltRev')?.value;
     const proxRev = document.getElementById('editProxRev')?.value;
-    body = { estado, tipo, energia, marca, proveedor: prov, fecha_ultima_revision: ultRev, fecha_proxima_revision: proxRev, notas };
+    body = { estado, tipo, energia, marca, proveedor: prov, fecha_ultima_revision: ultRev, fecha_proxima_revision: proxRev, notas,
+             ...(obraIdEdit !== undefined ? { obra_id: obraIdEdit } : {}) };
     path = `/carretillas/${encodeURIComponent(id)}`;
   }
 
   try {
-    const res = await apiCall(path, { method: 'PATCH', body: JSON.stringify(body) });
+    const res = await apiCall(path, { method: 'PUT', body: JSON.stringify(body) });
     const data = await res.json();
     if (res.ok) {
       toast(`✅ ${data.mensaje || 'Guardado'}`, 'ok');
@@ -1854,6 +1954,7 @@ async function cargarAdminData() {
   if (s?.rol === 'superadmin') {
     await cargarObrasAdmin();
     await cargarDashboard();
+    cargarSugerencias();
   }
 }
 
@@ -1993,6 +2094,71 @@ async function cargarDashboard() {
   } catch {
     c.innerHTML = '<div style="color:var(--red);font-size:12px">Error al cargar dashboard</div>';
   }
+}
+
+// ══════════════════════════════════════════════════════
+// SUGERENCIAS
+// ══════════════════════════════════════════════════════
+async function enviarSugerencia() {
+  const texto     = document.getElementById('sugTexto')?.value.trim();
+  const categoria = document.getElementById('sugCategoria')?.value;
+  if (!texto) return toast('⚠️ Escribe tu sugerencia antes de enviar', 'err');
+
+  const s   = getSession();
+  const btn = document.getElementById('btnSugerencia');
+  btn.disabled = true;
+  btn.textContent = 'Enviando...';
+
+  try {
+    const res  = await apiCall('/sugerencias', {
+      method: 'POST',
+      body: JSON.stringify({
+        texto, categoria,
+        usuario: s?.nombre || '—',
+        obra:    s?.obra_nombre || String(s?.obra_id || '—'),
+      }),
+    });
+    const data = await res.json();
+    if (res.ok) {
+      toast('✅ ' + (data.mensaje || 'Sugerencia enviada'), 'ok');
+      document.getElementById('sugTexto').value = '';
+    } else {
+      toast('❌ ' + (data.error || 'Error al enviar'), 'err');
+    }
+  } catch { toast('❌ Error de conexión', 'err'); }
+
+  btn.disabled = false;
+  btn.textContent = '💬 Enviar sugerencia';
+}
+
+async function cargarSugerencias() {
+  const c = document.getElementById('adminSugerenciasList');
+  if (!c) return;
+  c.innerHTML = '<div style="color:var(--muted);font-size:12px">Cargando...</div>';
+  try {
+    const res  = await apiCall('/sugerencias');
+    const data = await res.json();
+    if (!res.ok) { c.innerHTML = '<div style="color:var(--red);font-size:12px">Error al cargar</div>'; return; }
+    if (!data.length) { c.innerHTML = '<div style="color:var(--muted);font-size:12px">Sin sugerencias aún</div>'; return; }
+
+    const catIcon = { mejora:'🔧', error:'🐛', nuevo:'✨', otro:'💬' };
+    c.innerHTML = data.map(s => `
+      <div style="background:var(--surface2);border:1px solid ${s.leida?'var(--border)':'var(--accent)'};border-radius:10px;padding:12px;margin-bottom:8px;position:relative">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+          <span style="font-size:18px">${catIcon[s.categoria]||'💬'}</span>
+          <span style="font-family:'Montserrat',sans-serif;font-weight:700;font-size:12px;color:var(--accent);text-transform:uppercase">${s.categoria||'otro'}</span>
+          ${!s.leida ? '<span style="background:var(--accent);color:#000;font-size:9px;font-weight:900;padding:2px 6px;border-radius:4px;margin-left:auto">NUEVA</span>' : ''}
+        </div>
+        <div style="font-size:14px;color:var(--text);margin-bottom:6px">${s.texto}</div>
+        <div style="font-size:11px;color:var(--muted)">👤 ${s.usuario||'—'} · 🏗️ ${s.obra||'—'} · 🕐 ${s.created_at||''}</div>
+        ${!s.leida ? `<button onclick="marcarLeida(${s.id})" style="margin-top:8px;padding:4px 10px;background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:11px;cursor:pointer">✓ Marcar leída</button>` : ''}
+      </div>`).join('');
+  } catch { c.innerHTML = '<div style="color:var(--red);font-size:12px">Error de conexión</div>'; }
+}
+
+async function marcarLeida(id) {
+  await apiCall(`/sugerencias/${id}`, { method: 'PUT' });
+  cargarSugerencias();
 }
 
 // ══════════════════════════════════════════════════════
