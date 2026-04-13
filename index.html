@@ -3,599 +3,723 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>GestiBobina</title>
+<title>Alejandra — Inventario · Maquinaria · Control</title>
 <link rel="manifest" href="manifest.json">
-<meta name="theme-color" content="#f5a623">
+<meta name="theme-color" content="#f97316">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="GestiBobina">
+<meta name="apple-mobile-web-app-title" content="Alejandra">
 <link rel="apple-touch-icon" href="icon-192.png">
-<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;900&family=Barlow:wght@300;400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;900&family=Poppins:wght@300;400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.min.js"></script>
 <style>
 :root {
-  --bg: #0d0f14; --surface: #161a22; --surface2: #1e2330;
-  --accent: #f5a623; --accent2: #e8360c;
-  --green: #22c55e; --red: #ef4444; --blue: #3b82f6;
-  --text: #e8eaf0; --muted: #6b7280; --border: #2a3040;
+  --bg:#0f172a; --surface:#162032; --surface2:#1e2d40;
+  --accent:#f97316; --accent2:#fb923c;
+  --blue:#2563eb; --green:#22c55e; --red:#ef4444;
+  --text:#e5e7eb; --muted:#64748b; --border:#334155;
 }
-* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
-body { background: var(--bg); color: var(--text); font-family: 'Barlow', sans-serif; font-size: 15px; min-height: 100dvh; overflow-x: hidden; }
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;overflow:hidden}
+body{background:var(--bg);color:var(--text);font-family:'Poppins',sans-serif;font-size:15px;display:flex;flex-direction:column}
 
-/* HEADER */
-header { background: var(--surface); border-bottom: 2px solid var(--accent); padding: 11px 16px; display: flex; align-items: center; gap: 10px; position: sticky; top: 0; z-index: 100; }
-.logo { font-family: 'Barlow Condensed', sans-serif; font-weight: 900; font-size: 22px; letter-spacing: 1px; color: var(--accent); }
-.logo span { color: var(--text); }
-.badge { background: var(--accent2); color: #fff; font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 10px; letter-spacing: 2px; padding: 2px 7px; border-radius: 3px; margin-left: auto; }
+/* ── LOGO SVG ── */
+.logo-svg{flex-shrink:0}
 
-/* STATS BAR */
-.stats-bar { display: flex; gap: 0; background: var(--surface); border-bottom: 1px solid var(--border); }
-.stat-item { flex: 1; padding: 10px 8px; text-align: center; border-right: 1px solid var(--border); }
-.stat-item:last-child { border-right: none; }
-.stat-n { font-family: 'Barlow Condensed', sans-serif; font-weight: 900; font-size: 22px; color: var(--accent); line-height: 1; }
-.stat-n.green { color: var(--green); }
-.stat-n.red { color: var(--red); }
-.stat-label { font-size: 10px; letter-spacing: 1px; text-transform: uppercase; color: var(--muted); margin-top: 2px; }
+/* ── LOGIN OVERLAY ── */
+#loginOverlay{position:fixed;inset:0;background:var(--bg);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;gap:0}
+.login-box{width:100%;max-width:340px;display:flex;flex-direction:column;gap:14px}
+.login-logo-wrap{display:flex;flex-direction:column;align-items:center;gap:10px;margin-bottom:8px}
+.login-appname{font-family:'Montserrat',sans-serif;font-weight:700;font-size:34px;color:var(--text)}
+.login-tagline{font-family:'Montserrat',sans-serif;font-weight:600;font-size:10px;letter-spacing:3px;color:var(--muted);text-align:center;text-transform:uppercase}
+.login-sub{text-align:center;color:var(--muted);font-size:13px}
+.login-input{padding:14px 16px;background:var(--surface);border:2px solid var(--border);border-radius:10px;color:var(--text);font-family:'Poppins',sans-serif;font-size:15px;outline:none;width:100%;transition:border-color .2s}
+.login-input:focus{border-color:var(--accent)}
+.login-pw-wrap{position:relative}
+.login-pw-wrap .login-input{padding-right:44px}
+.login-pw-toggle{position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--muted);cursor:pointer;font-size:18px;line-height:1;padding:4px}
+.login-btn{padding:14px;background:var(--accent);border:none;border-radius:10px;color:#000;font-family:'Montserrat',sans-serif;font-weight:900;font-size:16px;letter-spacing:2px;cursor:pointer;transition:all .2s}
+.login-btn:active{transform:scale(.98)}
+.login-err{color:var(--red);text-align:center;font-size:13px;min-height:18px;font-family:'Montserrat',sans-serif}
 
-/* NAV */
-nav { display: flex; background: var(--surface); border-bottom: 1px solid var(--border); position: sticky; top: 49px; z-index: 99; }
-nav button { flex: 1; padding: 11px 2px 10px; background: none; border: none; color: var(--muted); font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 11px; letter-spacing: 0.5px; text-transform: uppercase; cursor: pointer; border-bottom: 3px solid transparent; transition: all 0.2s; }
-nav button.active { color: var(--accent); border-bottom-color: var(--accent); }
-.nav-txt { display: none; }
-@media (min-width: 400px) { .nav-txt { display: inline; } }
+/* ── HEADER ── */
+header{background:var(--surface);border-bottom:2px solid var(--accent);padding:10px 14px;display:flex;align-items:center;gap:10px;flex-shrink:0;z-index:100}
+.header-logo{display:flex;align-items:center;gap:8px;font-family:'Montserrat',sans-serif;font-weight:700;font-size:18px;color:var(--text);flex-shrink:0}
+.header-center{flex:1;display:flex;align-items:center;justify-content:center;min-width:0;gap:6px}
+.obra-label{font-family:'Montserrat',sans-serif;font-weight:700;font-size:12px;color:var(--accent);letter-spacing:.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:140px}
+.obra-select{background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:'Montserrat',sans-serif;font-weight:700;font-size:12px;padding:4px 8px;cursor:pointer;max-width:130px}
+.user-chip{display:flex;align-items:center;gap:5px;background:var(--surface2);border:1px solid var(--border);border-radius:20px;padding:4px 10px;font-family:'Montserrat',sans-serif;font-weight:700;font-size:11px;color:var(--text);white-space:nowrap;max-width:110px;overflow:hidden;flex-shrink:0}
+.conn-dot{width:8px;height:8px;border-radius:50%;background:var(--muted);flex-shrink:0;transition:background .3s}
+.conn-dot.ok{background:var(--green)}
+.conn-dot.err{background:var(--red)}
 
-/* TABS */
-.tab { display: none; padding: 14px 14px 90px; }
-.tab.active { display: block; }
-.section-title { font-family: 'Barlow Condensed', sans-serif; font-weight: 900; font-size: 22px; letter-spacing: 1px; margin-bottom: 2px; }
-.section-sub { color: var(--muted); font-size: 12px; margin-bottom: 14px; }
+/* ── CONTENT AREA ── */
+#appContent{flex:1;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch}
 
-/* SCAN BOX */
-.scan-box { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; margin-bottom: 14px; }
-.scan-header { background: var(--surface2); padding: 9px 14px; font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 11px; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); display: flex; align-items: center; gap: 7px; }
-.dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); flex-shrink: 0; transition: background 0.3s; }
-.dot.active { background: var(--green); animation: blink 1s infinite; }
-@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+/* ── BOTTOM NAV ── */
+#bottomNav{background:var(--surface);border-top:1px solid var(--border);display:flex;align-items:stretch;flex-shrink:0;position:relative;z-index:100}
+.nav-btn{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;padding:8px 4px;background:none;border:none;color:var(--muted);font-family:'Montserrat',sans-serif;font-weight:700;font-size:9px;letter-spacing:.5px;text-transform:uppercase;cursor:pointer;transition:color .2s;border-top:2px solid transparent}
+.nav-btn.active{color:var(--accent);border-top-color:var(--accent)}
+.nav-btn svg{width:20px;height:20px}
+.nav-center-wrap{display:flex;align-items:center;justify-content:center;padding:6px 4px;flex:1}
+.nav-qr-btn{width:54px;height:54px;border-radius:50%;background:var(--accent);border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 -4px 16px rgba(249,115,22,.5);transition:all .2s;flex-shrink:0;position:relative;top:-10px}
+.nav-qr-btn:active{transform:scale(.94)}
+.nav-qr-btn svg{width:26px;height:26px;color:#000}
 
-/* CÁMARA */
-.cam-viewport { position: relative; background: #000; height: 200px; overflow: hidden; display: flex; align-items: center; justify-content: center; }
-.cam-viewport video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
-.cam-viewport canvas { display: none; }
+/* ── SCREENS ── */
+.screen{display:none;padding:14px 14px 20px}
+.screen.active{display:block}
 
-/* Marco guía */
-.scan-frame { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); width: 88%; height: 90px; z-index: 5; pointer-events: none; }
-.scan-frame::before, .scan-frame::after { content: ''; position: absolute; width: 22px; height: 22px; border-color: var(--accent); border-style: solid; }
-.scan-frame::before { top: 0; left: 0; border-width: 3px 0 0 3px; }
-.scan-frame::after { top: 0; right: 0; border-width: 3px 3px 0 0; }
-.scan-frame .corner-bl, .scan-frame .corner-br { position: absolute; bottom: 0; width: 22px; height: 22px; border-color: var(--accent); border-style: solid; }
-.scan-frame .corner-bl { left: 0; border-width: 0 0 3px 3px; }
-.scan-frame .corner-br { right: 0; border-width: 0 3px 3px 0; }
-.scan-line { position: absolute; left: 3px; right: 3px; height: 2px; background: var(--accent); opacity: 0.8; animation: scanline 1.8s ease-in-out infinite; }
-@keyframes scanline { 0%{top:8px} 100%{top:78px} }
+/* ── HOME SCREEN ── */
+.home-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px}
+.home-stat{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:12px 8px;text-align:center}
+.home-stat-n{font-family:'Montserrat',sans-serif;font-weight:900;font-size:26px;line-height:1}
+.home-stat-lbl{font-size:9px;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin-top:3px}
+.module-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px}
+.module-card{background:var(--surface);border:2px solid var(--border);border-radius:16px;padding:18px 14px;display:flex;flex-direction:column;align-items:center;gap:8px;cursor:pointer;transition:all .25s;position:relative}
+.module-card.full-width{grid-column:1/-1}
+.module-card.active{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent),0 4px 20px rgba(249,115,22,.25)}
+.module-emoji{font-size:36px;line-height:1}
+.module-name{font-family:'Montserrat',sans-serif;font-weight:900;font-size:13px;letter-spacing:1px;text-transform:uppercase}
+.module-count{position:absolute;top:10px;right:10px;background:var(--accent);color:#000;font-family:'Montserrat',sans-serif;font-weight:900;font-size:11px;padding:2px 7px;border-radius:10px;min-width:24px;text-align:center}
+.home-section-title{font-family:'Montserrat',sans-serif;font-weight:900;font-size:13px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:10px}
+.activity-item{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:8px;display:flex;align-items:center;gap:10px}
+.activity-icon{font-size:20px;flex-shrink:0}
+.activity-body{flex:1;min-width:0}
+.activity-code{font-family:'Montserrat',sans-serif;font-weight:900;font-size:15px;letter-spacing:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.activity-meta{font-size:11px;color:var(--muted);margin-top:2px}
+.activity-badge{font-family:'Montserrat',sans-serif;font-weight:700;font-size:10px;padding:2px 7px;border-radius:4px;flex-shrink:0}
+.badge-entrada{background:rgba(34,197,94,.15);color:var(--green)}
+.badge-devolucion{background:rgba(37,99,235,.15);color:var(--blue)}
+.badge-eliminacion{background:rgba(239,68,68,.15);color:var(--red)}
+.admin-home-btn{display:flex;align-items:center;gap:10px;background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:14px;cursor:pointer;font-family:'Montserrat',sans-serif;font-weight:700;font-size:14px;color:var(--accent);width:100%;margin-top:8px;transition:border-color .2s}
+.admin-home-btn:hover{border-color:var(--accent)}
 
-.cam-idle { color: var(--muted); font-family: 'Barlow Condensed', sans-serif; font-size: 13px; letter-spacing: 1px; display: flex; flex-direction: column; align-items: center; gap: 8px; z-index: 2; padding: 20px; text-align: center; }
-.cam-idle svg { opacity: 0.15; }
+/* ── MODULE SCREEN (scan/stock/historial tabs) ── */
+.mod-tabs{display:flex;gap:0;background:var(--surface2);border-bottom:1px solid var(--border);flex-shrink:0;position:sticky;top:0;z-index:50}
+.mod-tab-btn{flex:1;padding:10px 6px;background:none;border:none;border-bottom:2px solid transparent;color:var(--muted);font-family:'Montserrat',sans-serif;font-weight:700;font-size:11px;letter-spacing:1px;text-transform:uppercase;cursor:pointer;transition:all .2s}
+.mod-tab-btn.active{color:var(--accent);border-bottom-color:var(--accent)}
+.mod-panel{display:none;padding:14px}
+.mod-panel.active{display:block}
 
-/* Resultado OK sobre la cámara */
-.cam-ok { position: absolute; inset: 0; background: rgba(34,197,94,0.9); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 10; gap: 6px; font-family: 'Barlow Condensed', sans-serif; font-weight: 900; font-size: 28px; letter-spacing: 1px; color: #fff; }
-.cam-ok .codigo-leido { font-size: 36px; }
-.scan-hint { font-size: 12px; color: var(--accent); text-align: center; padding: 6px 12px 2px; min-height: 22px; font-family: 'Barlow Condensed', sans-serif; letter-spacing: 0.5px; animation: fadeIn 0.3s ease; }
-@keyframes fadeIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
+/* ── SCAN PANEL ── */
+.scan-box{background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:14px}
+.scan-header{background:var(--surface2);padding:9px 14px;font-family:'Montserrat',sans-serif;font-weight:700;font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);display:flex;align-items:center;gap:7px}
+.scan-dot{width:7px;height:7px;border-radius:50%;background:var(--muted);flex-shrink:0;transition:background .3s}
+.scan-dot.active{background:var(--green);animation:blink 1s infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+.cam-viewport{position:relative;background:#000;height:200px;overflow:hidden;display:flex;align-items:center;justify-content:center}
+.cam-viewport video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.cam-viewport canvas{display:none}
+.cam-idle{color:var(--muted);font-family:'Montserrat',sans-serif;font-size:13px;letter-spacing:1px;display:flex;flex-direction:column;align-items:center;gap:8px;z-index:2;padding:20px;text-align:center}
+.cam-idle svg{opacity:.15}
+.scan-frame{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:88%;height:90px;z-index:5;pointer-events:none}
+.scan-frame::before,.scan-frame::after{content:'';position:absolute;width:22px;height:22px;border-color:var(--accent);border-style:solid}
+.scan-frame::before{top:0;left:0;border-width:3px 0 0 3px}
+.scan-frame::after{top:0;right:0;border-width:3px 3px 0 0}
+.scan-frame .corner-bl,.scan-frame .corner-br{position:absolute;bottom:0;width:22px;height:22px;border-color:var(--accent);border-style:solid}
+.scan-frame .corner-bl{left:0;border-width:0 0 3px 3px}
+.scan-frame .corner-br{right:0;border-width:0 3px 3px 0}
+.scan-line{position:absolute;left:3px;right:3px;height:2px;background:var(--accent);opacity:.8;animation:scanline 1.8s ease-in-out infinite}
+@keyframes scanline{0%{top:8px}100%{top:78px}}
+.cam-ok{position:absolute;inset:0;background:rgba(34,197,94,.9);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:10;gap:6px;font-family:'Montserrat',sans-serif;font-weight:900;font-size:22px;letter-spacing:1px;color:#fff}
+.cam-ok-code{font-size:30px}
+.scan-actions{padding:10px 12px;display:flex;gap:8px}
+.btn-open-cam{flex:1;padding:11px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:'Montserrat',sans-serif;font-weight:700;font-size:13px;letter-spacing:.5px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;transition:all .2s}
+.btn-open-cam:hover{border-color:var(--accent);color:var(--accent)}
+.btn-capture{flex:2;padding:11px;background:var(--accent);border:none;border-radius:8px;color:#000;font-family:'Montserrat',sans-serif;font-weight:900;font-size:15px;letter-spacing:1px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;transition:all .2s}
+.btn-capture:active{transform:scale(.97)}
+.btn-capture.loading{background:var(--muted);cursor:not-allowed}
+.btn-close-cam{padding:11px 14px;background:transparent;border:1px solid var(--border);border-radius:8px;color:var(--muted);font-family:'Montserrat',sans-serif;font-weight:700;font-size:13px;cursor:pointer}
+.scan-hint{font-size:12px;color:var(--accent);text-align:center;padding:4px 12px 6px;min-height:20px;font-family:'Montserrat',sans-serif;letter-spacing:.5px}
 
-/* DASHBOARD */
-.dash-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
-.dash-card { background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; padding: 14px; text-align: center; }
-.dash-card .n { font-family: 'Barlow Condensed', sans-serif; font-weight: 900; font-size: 32px; line-height: 1; }
-.dash-card .lbl { font-size: 11px; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; margin-top: 4px; }
-.dash-obra-row { display: flex; align-items: center; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
-.dash-obra-row:last-child { border-bottom: none; }
-.dash-bar-wrap { flex: 1; margin: 0 10px; height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; }
-.dash-bar { height: 100%; background: var(--accent); border-radius: 3px; transition: width 0.4s; }
+/* ── FORM ── */
+.form-group{margin-bottom:12px}
+.form-label{display:block;font-family:'Montserrat',sans-serif;font-weight:700;font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:5px}
+.form-input,.form-select,.form-textarea{width:100%;padding:11px 13px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:'Poppins',sans-serif;font-size:15px;outline:none;transition:border-color .2s}
+.form-input:focus,.form-select:focus,.form-textarea:focus{border-color:var(--accent)}
+.form-select option{background:var(--surface2)}
+.form-textarea{resize:vertical;min-height:72px}
+.input-row{display:flex;gap:8px}
+.input-row .form-input{flex:1}
+.btn-clear{padding:0 12px;background:transparent;border:1px solid var(--border);border-radius:8px;color:var(--muted);cursor:pointer;font-size:16px}
+.btn-primary{width:100%;padding:14px;background:var(--accent);border:none;border-radius:10px;color:#000;font-family:'Montserrat',sans-serif;font-weight:900;font-size:16px;letter-spacing:1px;cursor:pointer;transition:all .2s;margin-top:4px;display:flex;align-items:center;justify-content:center;gap:8px}
+.btn-primary:active{transform:scale(.98)}
+.btn-primary:disabled{opacity:.4;cursor:not-allowed}
+.btn-secondary{background:transparent;border:1px solid var(--accent);color:var(--accent)}
+.btn-danger{background:var(--red);color:#fff;border:none}
+.btn-danger:active{background:#dc2626}
+.section-title{font-family:'Montserrat',sans-serif;font-weight:900;font-size:20px;letter-spacing:1px;margin-bottom:2px}
+.section-sub{color:var(--muted);font-size:12px;margin-bottom:14px}
 
-/* HISTORIAL */
-.hist-item { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; margin-bottom: 8px; display: flex; align-items: center; gap: 12px; }
-.hist-icon { font-size: 22px; flex-shrink: 0; }
-.hist-body { flex: 1; min-width: 0; }
-.hist-codigo { font-family: 'Barlow Condensed', sans-serif; font-weight: 900; font-size: 17px; letter-spacing: 1px; }
-.hist-meta { font-size: 11px; color: var(--muted); margin-top: 2px; }
-.hist-badge { font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 10px; letter-spacing: 1px; padding: 2px 7px; border-radius: 3px; flex-shrink: 0; }
-.hist-badge.entrada { background: rgba(34,197,94,0.15); color: var(--green); }
-.hist-badge.devolucion { background: rgba(59,130,246,0.15); color: var(--blue); }
-.hist-badge.eliminacion { background: rgba(239,68,68,0.15); color: var(--red); }
+/* ── STOCK LIST ── */
+.stock-controls{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap}
+.search-input{flex:1;min-width:120px;padding:9px 12px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:14px;outline:none}
+.search-input:focus{border-color:var(--accent)}
+.filter-row{display:flex;gap:4px;flex-wrap:wrap}
+.filter-btn{padding:8px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--muted);font-family:'Montserrat',sans-serif;font-weight:700;font-size:11px;letter-spacing:.5px;cursor:pointer;transition:all .2s;white-space:nowrap}
+.filter-btn.active{background:var(--accent);border-color:var(--accent);color:#000}
+.stock-card{background:var(--surface);border:1px solid var(--border);border-left:3px solid var(--muted);border-radius:10px;padding:13px;margin-bottom:9px;transition:border-color .2s}
+.stock-card.activa,.stock-card.disponible{border-left-color:var(--green)}
+.stock-card.averiada{border-left-color:var(--red)}
+.stock-card.devuelta{border-left-color:var(--muted);opacity:.75}
+.stock-card-top{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.stock-code{font-family:'Montserrat',sans-serif;font-weight:900;font-size:18px;letter-spacing:1px;color:var(--accent);flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pill{display:inline-block;padding:2px 8px;border-radius:10px;font-family:'Montserrat',sans-serif;font-weight:700;font-size:10px;letter-spacing:.5px}
+.pill-green{background:rgba(34,197,94,.15);color:var(--green)}
+.pill-red{background:rgba(239,68,68,.15);color:var(--red)}
+.pill-gray{background:rgba(107,114,128,.15);color:var(--muted)}
+.pill-blue{background:rgba(37,99,235,.15);color:var(--blue)}
+.pill-orange{background:rgba(249,115,22,.15);color:var(--accent)}
+.stock-meta{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
+.stock-meta-pill{background:var(--surface2);border:1px solid var(--border);border-radius:20px;padding:2px 10px;font-size:12px;color:var(--muted)}
+.stock-actions-row{display:flex;gap:6px}
+.btn-sm{padding:6px 12px;background:transparent;border:1px solid var(--border);border-radius:6px;color:var(--muted);font-family:'Montserrat',sans-serif;font-weight:700;font-size:11px;cursor:pointer;transition:all .2s}
+.btn-sm:hover{border-color:var(--accent);color:var(--accent)}
+.btn-sm.danger:hover{border-color:var(--red);color:var(--red)}
+.revision-warn{display:inline-flex;align-items:center;gap:4px;background:rgba(249,115,22,.15);color:var(--accent);font-family:'Montserrat',sans-serif;font-weight:700;font-size:10px;padding:2px 8px;border-radius:10px}
+.export-row{display:flex;gap:8px;margin-top:12px}
+.btn-export{flex:1;padding:11px;background:transparent;border:1px solid var(--accent);border-radius:8px;color:var(--accent);font-family:'Montserrat',sans-serif;font-weight:700;font-size:13px;cursor:pointer;transition:all .2s}
+.btn-export:hover{background:var(--accent);color:#000}
+.empty-state{text-align:center;padding:40px 20px;color:var(--muted);font-family:'Montserrat',sans-serif;font-size:14px;letter-spacing:1px}
 
-/* BOTONES DE CÁMARA */
-.scan-actions { padding: 10px 12px; display: flex; gap: 8px; }
-.btn-abrir { flex: 1; padding: 11px; background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 14px; letter-spacing: 1px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; transition: all 0.2s; }
-.btn-abrir:hover { border-color: var(--accent); color: var(--accent); }
-.btn-capturar { flex: 2; padding: 11px; background: var(--accent); border: none; border-radius: 8px; color: #000; font-family: 'Barlow Condensed', sans-serif; font-weight: 900; font-size: 16px; letter-spacing: 1px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; transition: all 0.2s; }
-.btn-capturar:active { transform: scale(0.97); }
-.btn-capturar.cargando { background: var(--muted); cursor: not-allowed; }
-.btn-cerrar { padding: 11px 14px; background: transparent; border: 1px solid var(--border); border-radius: 8px; color: var(--muted); font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 13px; cursor: pointer; }
+/* ── HISTORIAL ── */
+.hist-item{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px 13px;margin-bottom:8px;display:flex;align-items:center;gap:10px}
+.hist-icon{font-size:20px;flex-shrink:0}
+.hist-body{flex:1;min-width:0}
+.hist-code{font-family:'Montserrat',sans-serif;font-weight:900;font-size:15px;letter-spacing:1px}
+.hist-meta{font-size:11px;color:var(--muted);margin-top:2px}
+.hist-badge{font-family:'Montserrat',sans-serif;font-weight:700;font-size:10px;letter-spacing:.5px;padding:2px 7px;border-radius:4px;flex-shrink:0}
 
-/* FORMULARIO */
-.form-group { margin-bottom: 12px; }
-label { display: block; font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 11px; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); margin-bottom: 5px; }
-input, select, textarea { width: 100%; padding: 11px 13px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-family: 'Barlow', sans-serif; font-size: 15px; outline: none; transition: border-color 0.2s; }
-input:focus, select:focus { border-color: var(--accent); }
-select option { background: var(--surface2); }
-.input-with-btn { display: flex; gap: 8px; }
-.input-with-btn input { flex: 1; }
-.btn-clear { padding: 0 12px; background: transparent; border: 1px solid var(--border); border-radius: 8px; color: var(--muted); cursor: pointer; font-size: 18px; }
+/* ── AJUSTES ── */
+.settings-section{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:14px}
+.settings-title{font-family:'Montserrat',sans-serif;font-weight:900;font-size:14px;letter-spacing:1px;color:var(--accent);margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.settings-row{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border);font-size:14px}
+.settings-row:last-child{border-bottom:none}
 
-/* BOTONES PRINCIPALES */
-.btn-primary { width: 100%; padding: 14px; background: var(--accent); border: none; border-radius: 10px; color: #000; font-family: 'Barlow Condensed', sans-serif; font-weight: 900; font-size: 18px; letter-spacing: 1px; cursor: pointer; transition: all 0.2s; margin-top: 4px; }
-.btn-primary:active { transform: scale(0.98); }
-.btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
-.btn-danger { background: var(--red); color: #fff; }
-.btn-secondary { background: transparent; border: 1px solid var(--accent); color: var(--accent); }
+/* ── ADMIN PANEL ── */
+.admin-section{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:14px}
+.admin-section-title{font-family:'Montserrat',sans-serif;font-weight:900;font-size:14px;letter-spacing:1px;color:var(--accent);margin-bottom:12px}
+.admin-list-item{display:flex;align-items:center;gap:8px;padding:10px 0;border-bottom:1px solid var(--border)}
+.admin-list-item:last-child{border-bottom:none}
+.admin-item-info{flex:1;min-width:0}
+.admin-item-name{font-family:'Montserrat',sans-serif;font-weight:700;font-size:14px}
+.admin-item-sub{font-size:11px;color:var(--muted);letter-spacing:1px;margin-top:2px}
+.tag-row{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.tag{display:flex;align-items:center;gap:4px;background:var(--surface2);border:1px solid var(--border);border-radius:20px;padding:4px 10px 4px 12px;font-size:13px}
+.tag-del{background:none;border:none;color:var(--red);cursor:pointer;font-size:16px;line-height:1;padding:0 2px}
+.tag-add-row{display:flex;gap:6px;margin-top:8px}
+.tag-add-row input{flex:1;padding:8px 11px;font-size:14px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);outline:none}
+.tag-add-row input:focus{border-color:var(--accent)}
+.tag-add-row button{padding:8px 14px;background:var(--accent);border:none;border-radius:8px;color:#000;font-family:'Montserrat',sans-serif;font-weight:900;font-size:14px;cursor:pointer}
 
-/* CARD BOBINA */
-.bobina-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px; margin-bottom: 10px; }
-.bobina-card.activa { border-left: 3px solid var(--green); }
-.bobina-card.devuelta { border-left: 3px solid var(--muted); opacity: 0.7; }
-.bobina-codigo { font-family: 'Barlow Condensed', sans-serif; font-weight: 900; font-size: 22px; letter-spacing: 2px; color: var(--accent); }
-.bobina-info { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
-.bobina-pill { background: var(--surface2); border: 1px solid var(--border); border-radius: 20px; padding: 3px 10px; font-size: 12px; color: var(--muted); }
-.bobina-pill.estado-activa { background: rgba(34,197,94,0.1); border-color: var(--green); color: var(--green); }
-.bobina-pill.estado-devuelta { background: rgba(107,114,128,0.1); color: var(--muted); }
-.bobina-fechas { margin-top: 8px; font-size: 12px; color: var(--muted); display: flex; gap: 12px; flex-wrap: wrap; }
+/* ── MODAL ── */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:500;align-items:flex-end;justify-content:center}
+.modal-overlay.show{display:flex}
+.modal{background:var(--surface);border-radius:16px 16px 0 0;padding:20px;width:100%;max-width:500px;border-top:2px solid var(--accent);max-height:90vh;overflow-y:auto}
+.modal-title{font-family:'Montserrat',sans-serif;font-weight:900;font-size:20px;letter-spacing:1px;margin-bottom:14px}
+.modal-card{background:var(--surface2);border-radius:10px;padding:14px;margin-bottom:14px}
+.modal-actions{display:flex;gap:8px}
 
-/* TABLA STOCK */
-.stock-header { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
-.search-input { flex: 1; min-width: 140px; padding: 9px 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-size: 14px; outline: none; }
-.search-input:focus { border-color: var(--accent); }
-.filter-btns { display: flex; gap: 4px; }
-.filter-btn { padding: 9px 12px; background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; color: var(--muted); font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 12px; letter-spacing: 1px; cursor: pointer; transition: all 0.2s; white-space: nowrap; }
-.filter-btn.active { background: var(--accent); border-color: var(--accent); color: #000; }
+/* ── TOAST ── */
+.toast{position:fixed;bottom:82px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:11px 20px;border-radius:10px;font-family:'Montserrat',sans-serif;font-weight:700;font-size:14px;letter-spacing:.5px;z-index:9000;opacity:0;transition:all .3s;max-width:88vw;text-align:center;box-shadow:0 4px 20px rgba(0,0,0,.5);pointer-events:none}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.toast.ok{border-color:var(--green);color:var(--green)}
+.toast.err{border-color:var(--red);color:var(--red)}
 
-.table-wrap { overflow-x: auto; border-radius: 10px; border: 1px solid var(--border); }
-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-th { background: var(--surface2); padding: 10px 10px; text-align: left; font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 11px; letter-spacing: 1px; text-transform: uppercase; color: var(--muted); border-bottom: 1px solid var(--border); white-space: nowrap; }
-td { padding: 10px 10px; border-bottom: 1px solid var(--border); vertical-align: middle; }
-tr:last-child td { border-bottom: none; }
-tr:hover td { background: var(--surface2); }
-.pill { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 700; font-family: 'Barlow Condensed', sans-serif; letter-spacing: 0.5px; }
-.pill-verde { background: rgba(34,197,94,0.15); color: var(--green); }
-.pill-gris { background: rgba(107,114,128,0.15); color: var(--muted); }
-.btn-accion { padding: 5px 10px; background: transparent; border: 1px solid var(--border); border-radius: 6px; color: var(--muted); cursor: pointer; font-size: 14px; transition: all 0.2s; }
-.btn-accion:hover { border-color: var(--red); color: var(--red); }
-.empty-state { text-align: center; padding: 40px 20px; color: var(--muted); font-family: 'Barlow Condensed', sans-serif; font-size: 16px; letter-spacing: 1px; }
+/* ── SPINNER ── */
+.spinner{width:18px;height:18px;border:2px solid rgba(255,255,255,.25);border-top-color:currentColor;border-radius:50%;animation:spin .6s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
 
-/* ACCIONES STOCK */
-.stock-actions { display: flex; gap: 8px; margin-top: 12px; }
-.btn-export { flex: 1; padding: 12px; background: transparent; border: 1px solid var(--accent); border-radius: 8px; color: var(--accent); font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 14px; letter-spacing: 1px; cursor: pointer; transition: all 0.2s; }
-.btn-export:hover { background: var(--accent); color: #000; }
+/* ── DASHBOARD BARS ── */
+.dash-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
+.dash-card{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:13px;text-align:center}
+.dash-n{font-family:'Montserrat',sans-serif;font-weight:900;font-size:28px;line-height:1}
+.dash-lbl{font-size:10px;color:var(--muted);letter-spacing:1px;text-transform:uppercase;margin-top:4px}
+.obra-bar-row{display:flex;align-items:center;padding:7px 0;border-bottom:1px solid var(--border);font-size:13px}
+.obra-bar-row:last-child{border-bottom:none}
+.obra-bar-name{flex:0 0 90px;font-family:'Montserrat',sans-serif;font-weight:700;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.obra-bar-wrap{flex:1;margin:0 10px;height:6px;background:var(--border);border-radius:3px;overflow:hidden}
+.obra-bar{height:100%;background:var(--accent);border-radius:3px;transition:width .4s}
+.obra-bar-n{font-family:'Montserrat',sans-serif;font-weight:900;font-size:14px;color:var(--accent);min-width:24px;text-align:right}
 
-/* CONFIG */
-.config-section { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px; margin-bottom: 14px; }
-.config-title { font-family: 'Barlow Condensed', sans-serif; font-weight: 900; font-size: 15px; letter-spacing: 1px; color: var(--accent); margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
-.tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
-.tag { display: flex; align-items: center; gap: 4px; background: var(--surface2); border: 1px solid var(--border); border-radius: 20px; padding: 4px 10px 4px 12px; font-size: 13px; }
-.tag-del { background: none; border: none; color: var(--red); cursor: pointer; font-size: 16px; line-height: 1; padding: 0 2px; }
-.tag-add { display: flex; gap: 6px; margin-top: 8px; }
-.tag-add input { flex: 1; padding: 8px 11px; font-size: 14px; }
-.tag-add button { padding: 8px 14px; background: var(--accent); border: none; border-radius: 8px; color: #000; font-family: 'Barlow Condensed', sans-serif; font-weight: 900; font-size: 14px; cursor: pointer; }
-.status-indicator { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--muted); }
-.status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
-.status-dot.ok { background: var(--green); }
-.status-dot.error { background: var(--red); }
+/* ── SCROLLBAR ── */
+#appContent::-webkit-scrollbar{width:3px}
+#appContent::-webkit-scrollbar-track{background:transparent}
+#appContent::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
 
-/* TOAST */
-.toast { position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%) translateY(20px); background: var(--surface2); border: 1px solid var(--border); color: var(--text); padding: 12px 20px; border-radius: 10px; font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 15px; letter-spacing: 0.5px; z-index: 1000; opacity: 0; transition: all 0.3s; max-width: 85vw; text-align: center; box-shadow: 0 4px 20px rgba(0,0,0,0.5); }
-.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
-.toast.ok { border-color: var(--green); color: var(--green); }
-.toast.err { border-color: var(--red); color: var(--red); }
-
-/* MODAL DEVOLUCION */
-.modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 200; align-items: flex-end; justify-content: center; }
-.modal-overlay.show { display: flex; }
-.modal { background: var(--surface); border-radius: 16px 16px 0 0; padding: 20px; width: 100%; max-width: 500px; border-top: 2px solid var(--accent); }
-.modal-title { font-family: 'Barlow Condensed', sans-serif; font-weight: 900; font-size: 20px; letter-spacing: 1px; margin-bottom: 14px; }
-.modal-bobina { background: var(--surface2); border-radius: 10px; padding: 14px; margin-bottom: 16px; }
-.modal-actions { display: flex; gap: 8px; }
-
-/* LOADING */
-.spinner { width: 20px; height: 20px; border: 2px solid rgba(255,255,255,0.2); border-top-color: currentColor; border-radius: 50%; animation: spin 0.6s linear infinite; }
-@keyframes spin { to { transform: rotate(360deg); } }
-
-/* DEVOLUCION SEARCH */
-.dev-result { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px; margin: 12px 0; display: none; }
-.dev-result.visible { display: block; }
-
-/* USUARIO CHIP */
-.user-chip { display: flex; align-items: center; gap: 5px; background: var(--surface2); border: 1px solid var(--border); border-radius: 20px; padding: 4px 10px; cursor: pointer; font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 12px; letter-spacing: 0.5px; color: var(--text); transition: border-color 0.2s; white-space: nowrap; max-width: 120px; overflow: hidden; }
-.user-chip:hover { border-color: var(--accent); color: var(--accent); }
-.user-chip span { overflow: hidden; text-overflow: ellipsis; }
-
-/* PANTALLA DE ACCESO */
-.overlay-acceso { position: fixed; inset: 0; background: var(--bg); z-index: 999; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px; }
-.acceso-box { width: 100%; max-width: 340px; display: flex; flex-direction: column; gap: 16px; }
-.acceso-logo { font-family: 'Barlow Condensed', sans-serif; font-weight: 900; font-size: 36px; letter-spacing: 2px; color: var(--accent); text-align: center; }
-.acceso-logo span { color: var(--text); }
-.acceso-sub { text-align: center; color: var(--muted); font-size: 13px; margin-top: -8px; }
-.acceso-input { padding: 14px 16px; background: var(--surface); border: 2px solid var(--border); border-radius: 10px; color: var(--text); font-family: 'Barlow Condensed', sans-serif; font-size: 20px; letter-spacing: 3px; text-align: center; text-transform: uppercase; outline: none; width: 100%; }
-.acceso-input:focus { border-color: var(--accent); }
-.acceso-btn { padding: 14px; background: var(--accent); border: none; border-radius: 10px; color: #000; font-family: 'Barlow Condensed', sans-serif; font-weight: 900; font-size: 16px; letter-spacing: 2px; cursor: pointer; }
-.acceso-btn:active { transform: scale(0.98); }
-.acceso-err { color: var(--red); text-align: center; font-size: 13px; min-height: 18px; }
-
-/* OBRA SELECTOR EN HEADER (admin) */
-.obra-select { background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 12px; padding: 4px 8px; cursor: pointer; max-width: 130px; }
-.obra-label { font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 12px; color: var(--accent); letter-spacing: 0.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 130px; }
-
-/* ADMIN BADGE */
-.admin-badge { background: var(--accent); color: #000; font-family: 'Barlow Condensed', sans-serif; font-weight: 900; font-size: 10px; letter-spacing: 1px; padding: 2px 7px; border-radius: 3px; }
+/* ── MODULE SCREEN WRAPPER ── */
+#moduleScreen{display:none;flex-direction:column;height:100%}
+#moduleScreen.active{display:flex}
+#moduleScreen .mod-content{flex:1;overflow-y:auto}
 </style>
 </head>
 <body>
 
-<!-- PANTALLA DE ACCESO -->
-<div class="overlay-acceso" id="overlayAcceso">
-  <div class="acceso-box">
-    <div class="acceso-logo">GESTI<span>BOBINA</span></div>
-    <div class="acceso-sub">Introduce tus datos para acceder</div>
-    <input class="acceso-input" id="inputNombreAcceso" type="text" placeholder="TU NOMBRE"
-      style="font-size:16px;letter-spacing:1px;text-transform:none"
-      autocomplete="off" onkeydown="if(event.key==='Enter') document.getElementById('inputCodigoAcceso').focus()">
-    <input class="acceso-input" id="inputCodigoAcceso" type="password" placeholder="CÓDIGO O NOMBRE DE OBRA"
-      style="font-size:15px;letter-spacing:1px;text-transform:none"
-      autocomplete="off" onkeydown="if(event.key==='Enter') verificarAcceso()">
-    <button class="acceso-btn" onclick="verificarAcceso()">ACCEDER</button>
-    <div class="acceso-err" id="accesoErr"></div>
+<!-- ══════════════════════════════════════════
+     LOGIN OVERLAY
+══════════════════════════════════════════ -->
+<div id="loginOverlay">
+  <div class="login-box">
+    <div class="login-logo-wrap">
+      <svg width="80" height="80" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect width="512" height="512" rx="90" fill="#162032"/>
+        <path d="M60 148V60h88" stroke="#2563eb" stroke-width="26" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M452 148V60h-88" stroke="#2563eb" stroke-width="26" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M60 364v88h88" stroke="#2563eb" stroke-width="26" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M452 364v88h-88" stroke="#2563eb" stroke-width="26" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M256 88L148 424h44l30-88h68l30 88h44L256 88ZM256 168l50 128h-100Z" fill="#f97316"/>
+        <path d="M256 88l108 336h-44l-30-88h-34l-34-128 34-120Z" fill="#fb923c" opacity="0.4"/>
+      </svg>
+      <div class="login-appname">Alejandra</div>
+      <div class="login-tagline">Inventario · Maquinaria · Control</div>
+    </div>
+    <div class="login-sub">Introduce tus datos para acceder</div>
+    <input class="login-input" id="loginNombre" type="text" placeholder="Tu nombre" autocomplete="off"
+      onkeydown="if(event.key==='Enter')document.getElementById('loginCodigo').focus()">
+    <div class="login-pw-wrap">
+      <input class="login-input" id="loginCodigo" type="password" placeholder="Código o nombre de obra" autocomplete="off"
+        onkeydown="if(event.key==='Enter')doLogin()">
+      <button class="login-pw-toggle" onclick="toggleLoginPw()" id="loginPwToggle">👁</button>
+    </div>
+    <button class="login-btn" id="loginBtn" onclick="doLogin()">ACCEDER</button>
+    <div class="login-err" id="loginErr"></div>
   </div>
 </div>
 
-<header>
-  <div class="logo">GESTI<span>BOBINA</span></div>
-  <div id="headerObraWrap" style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;min-width:0"></div>
-  <div class="user-chip" id="userChip" onclick="abrirModalUsuario()" title="Cambiar usuario">
-    👤 <span id="headerUsuario">Sin usuario</span>
+<!-- ══════════════════════════════════════════
+     HEADER
+══════════════════════════════════════════ -->
+<header id="mainHeader" style="display:none">
+  <div class="header-logo">
+    <svg class="logo-svg" width="28" height="28" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect width="512" height="512" rx="90" fill="#0f172a"/>
+      <path d="M60 148V60h88" stroke="#2563eb" stroke-width="26" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M452 148V60h-88" stroke="#2563eb" stroke-width="26" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M60 364v88h88" stroke="#2563eb" stroke-width="26" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M452 364v88h-88" stroke="#2563eb" stroke-width="26" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M256 88L148 424h44l30-88h68l30 88h44L256 88ZM256 168l50 128h-100Z" fill="#f97316"/>
+      <path d="M256 88l108 336h-44l-30-88h-34l-34-128 34-120Z" fill="#fb923c" opacity="0.4"/>
+    </svg>
+    Alejandra
   </div>
-  <div class="status-indicator" id="apiStatus">
-    <div class="status-dot" id="statusDot"></div>
-    <span id="statusText">...</span>
+  <div class="header-center" id="headerCenter">
+    <span class="obra-label" id="headerObraLabel"></span>
+    <select class="obra-select" id="headerObraSelect" style="display:none" onchange="onObraSelectChange(this.value)"></select>
   </div>
+  <div class="user-chip" id="headerUserChip">
+    <span>👤</span><span id="headerUserName">—</span>
+  </div>
+  <div class="conn-dot" id="connDot" title="Estado conexión"></div>
 </header>
 
-<!-- Stats siempre visibles -->
-<div class="stats-bar">
-  <div class="stat-item">
-    <div class="stat-n" id="statTotal">–</div>
-    <div class="stat-label">Total</div>
-  </div>
-  <div class="stat-item">
-    <div class="stat-n green" id="statActivas">–</div>
-    <div class="stat-label">En stock</div>
-  </div>
-  <div class="stat-item">
-    <div class="stat-n red" id="statDevueltas">–</div>
-    <div class="stat-label">Devueltas</div>
-  </div>
-</div>
+<!-- ══════════════════════════════════════════
+     MAIN APP CONTENT
+══════════════════════════════════════════ -->
+<div id="appContent" style="display:none">
 
-<nav>
-  <button class="active" onclick="showTab('entrada')">📥<span class="nav-txt"> Entrada</span></button>
-  <button onclick="showTab('devolucion')">📤<span class="nav-txt"> Dev.</span></button>
-  <button onclick="showTab('stock')">📋<span class="nav-txt"> Stock</span></button>
-  <button onclick="showTab('historial')">🕒<span class="nav-txt"> Historial</span></button>
-  <button onclick="showTab('config')">⚙️<span class="nav-txt"> Config</span></button>
+  <!-- HOME SCREEN -->
+  <div id="screenHome" class="screen active">
+    <div class="home-stats">
+      <div class="home-stat">
+        <div class="home-stat-n" id="statBobinas" style="color:var(--accent)">–</div>
+        <div class="home-stat-lbl">Bobinas</div>
+      </div>
+      <div class="home-stat">
+        <div class="home-stat-n" id="statPemp" style="color:var(--blue)">–</div>
+        <div class="home-stat-lbl">PEMP</div>
+      </div>
+      <div class="home-stat">
+        <div class="home-stat-n" id="statCarretillas" style="color:var(--green)">–</div>
+        <div class="home-stat-lbl">Carretillas</div>
+      </div>
+    </div>
+
+    <div class="module-grid">
+      <div class="module-card full-width" id="cardBobinas" onclick="selectModule('bobinas')">
+        <div class="module-count" id="cntBobinas">–</div>
+        <div class="module-emoji">🔌</div>
+        <div class="module-name">Bobinas</div>
+      </div>
+      <div class="module-card" id="cardPemp" onclick="selectModule('pemp')">
+        <div class="module-count" id="cntPemp">–</div>
+        <div class="module-emoji">🏗</div>
+        <div class="module-name">PEMP</div>
+      </div>
+      <div class="module-card" id="cardCarretillas" onclick="selectModule('carretillas')">
+        <div class="module-count" id="cntCarretillas">–</div>
+        <div class="module-emoji">🚜</div>
+        <div class="module-name">Carretillas</div>
+      </div>
+    </div>
+
+    <div class="home-section-title">Actividad reciente</div>
+    <div id="recentActivity"><div class="empty-state">Cargando...</div></div>
+
+    <button class="admin-home-btn" id="adminHomeBtn" style="display:none" onclick="showScreen('admin')">
+      🔐 Panel de Administración
+      <svg style="margin-left:auto" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
+    </button>
+  </div>
+
+  <!-- MODULE SCREEN (shared for bobinas/pemp/carretillas) -->
+  <div id="screenModule" class="screen" style="padding:0;display:none;flex-direction:column">
+    <div class="mod-tabs">
+      <button class="mod-tab-btn active" onclick="showModTab('scan')">📷 Escanear</button>
+      <button class="mod-tab-btn" onclick="showModTab('stock')">📋 Inventario</button>
+      <button class="mod-tab-btn" onclick="showModTab('historial')">🕒 Historial</button>
+    </div>
+    <div id="modContent" style="padding:14px;overflow-y:auto;flex:1">
+      <!-- scan panel -->
+      <div id="modPanelScan" class="mod-panel active">
+        <div class="section-title" id="modScanTitle">ESCANEAR</div>
+        <div class="section-sub" id="modScanSub"></div>
+        <div class="scan-box">
+          <div class="scan-header">
+            <div class="scan-dot" id="scanDot"></div>
+            LECTOR DE CÓDIGO
+          </div>
+          <div class="cam-viewport" id="camViewport">
+            <div class="cam-idle" id="camIdle">
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+                <circle cx="12" cy="13" r="4"/>
+              </svg>
+              Pulsa ABRIR CÁMARA
+            </div>
+            <video id="scanVideo" playsinline autoplay muted style="display:none"></video>
+            <canvas id="scanCanvas" style="display:none"></canvas>
+            <div class="scan-frame" id="scanFrame" style="display:none">
+              <div class="corner-bl"></div><div class="corner-br"></div>
+              <div class="scan-line"></div>
+            </div>
+            <div class="cam-ok" id="camOk" style="display:none">
+              ✅ LEÍDO
+              <div class="cam-ok-code" id="camOkCode"></div>
+            </div>
+          </div>
+          <div id="scanActionsIdle" class="scan-actions">
+            <button class="btn-open-cam" onclick="openCamera()">📷 ABRIR CÁMARA</button>
+          </div>
+          <div id="scanActionsActive" class="scan-actions" style="display:none">
+            <button class="btn-capture" id="btnCapture" onclick="captureOCR()">OCR</button>
+            <button class="btn-close-cam" onclick="closeCamera()">✕</button>
+          </div>
+          <div class="scan-hint" id="scanHint"></div>
+        </div>
+
+        <!-- Manual input -->
+        <div class="form-group">
+          <label class="form-label" id="modScanFieldLabel">Matrícula / Código</label>
+          <div class="input-row">
+            <input class="form-input" id="scanCodeInput" type="text" placeholder="Introduce o escanea..." style="text-transform:uppercase">
+            <button class="btn-clear" onclick="document.getElementById('scanCodeInput').value=''">✕</button>
+          </div>
+        </div>
+
+        <!-- Bobinas extra fields -->
+        <div id="fieldsBobi">
+          <div class="form-group">
+            <label class="form-label">Proveedor</label>
+            <select class="form-select" id="fieldProv"><option value="">Seleccionar...</option></select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Tipo de Cable</label>
+            <select class="form-select" id="fieldTipoCable"><option value="">Seleccionar...</option></select>
+          </div>
+        </div>
+
+        <!-- PEMP extra fields -->
+        <div id="fieldsPemp" style="display:none">
+          <div class="form-group">
+            <label class="form-label">Tipo</label>
+            <select class="form-select" id="fieldPempTipo">
+              <option value="">Seleccionar...</option>
+              <option value="Tijera">Tijera</option>
+              <option value="Brazo">Brazo</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Marca</label>
+            <input class="form-input" id="fieldPempMarca" type="text" placeholder="Marca...">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Proveedor</label>
+            <input class="form-input" id="fieldPempProv" type="text" placeholder="Proveedor...">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Estado</label>
+            <select class="form-select" id="fieldPempEstado">
+              <option value="Disponible">Disponible</option>
+              <option value="Averiada">Averiada</option>
+            </select>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+            <div class="form-group">
+              <label class="form-label">Últ. revisión</label>
+              <input class="form-input" id="fieldPempUltRev" type="date">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Próx. revisión</label>
+              <input class="form-input" id="fieldPempProxRev" type="date">
+            </div>
+          </div>
+        </div>
+
+        <!-- Carretillas extra fields -->
+        <div id="fieldsCarr" style="display:none">
+          <div class="form-group">
+            <label class="form-label">Tipo</label>
+            <select class="form-select" id="fieldCarrTipo">
+              <option value="">Seleccionar...</option>
+              <option value="Contrapesada">Contrapesada</option>
+              <option value="Retráctil">Retráctil</option>
+              <option value="Transpaleta">Transpaleta</option>
+              <option value="Apiladora">Apiladora</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Marca</label>
+            <input class="form-input" id="fieldCarrMarca" type="text" placeholder="Marca...">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Proveedor</label>
+            <input class="form-input" id="fieldCarrProv" type="text" placeholder="Proveedor...">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Energía</label>
+            <select class="form-select" id="fieldCarrEnergia">
+              <option value="Eléctrica">Eléctrica</option>
+              <option value="Gas">Gas</option>
+              <option value="Diésel">Diésel</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Estado</label>
+            <select class="form-select" id="fieldCarrEstado">
+              <option value="Disponible">Disponible</option>
+              <option value="Averiada">Averiada</option>
+            </select>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+            <div class="form-group">
+              <label class="form-label">Últ. revisión</label>
+              <input class="form-input" id="fieldCarrUltRev" type="date">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Próx. revisión</label>
+              <input class="form-input" id="fieldCarrProxRev" type="date">
+            </div>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Notas (opcional)</label>
+          <input class="form-input" id="scanNotas" type="text" placeholder="Observaciones...">
+        </div>
+
+        <button class="btn-primary" id="btnRegistrar" onclick="registrarItem()">✅ REGISTRAR ENTRADA</button>
+      </div>
+
+      <!-- stock panel -->
+      <div id="modPanelStock" class="mod-panel">
+        <div class="stock-controls">
+          <input class="search-input" id="stockSearch" placeholder="🔍 Buscar..." oninput="filtrarStock()">
+          <div class="filter-row">
+            <button class="filter-btn active" id="fTodos" onclick="setStockFiltro('')">Todos</button>
+            <button class="filter-btn" id="fActiva" onclick="setStockFiltro('activa')">Activas</button>
+            <button class="filter-btn" id="fDevuelta" onclick="setStockFiltro('devuelta')">Dev.</button>
+          </div>
+        </div>
+        <div id="stockList"><div class="empty-state">Cargando...</div></div>
+        <div class="export-row">
+          <button class="btn-export" onclick="exportCSV()">📊 CSV</button>
+          <button class="btn-export" onclick="recargarStock()" style="flex:0 0 48px">↻</button>
+        </div>
+      </div>
+
+      <!-- historial panel -->
+      <div id="modPanelHistorial" class="mod-panel">
+        <div style="display:flex;gap:8px;margin-bottom:12px">
+          <select id="histFiltro" onchange="cargarHistorial()" style="flex:1;padding:9px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px">
+            <option value="">Todos los movimientos</option>
+            <option value="entrada">Entradas</option>
+            <option value="devolucion">Devoluciones</option>
+            <option value="eliminacion">Eliminaciones</option>
+          </select>
+          <button class="btn-export" onclick="cargarHistorial()" style="flex:0 0 48px">↻</button>
+        </div>
+        <div id="historialList"><div class="empty-state">Cargando...</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- AJUSTES SCREEN -->
+  <div id="screenAjustes" class="screen">
+    <div class="section-title">AJUSTES</div>
+    <div class="section-sub" style="margin-bottom:16px">Configuración de la aplicación</div>
+
+    <div class="settings-section">
+      <div class="settings-title">🌐 Servidor API</div>
+      <div class="form-group" style="margin-bottom:8px">
+        <label class="form-label">URL del Worker</label>
+        <input class="form-input" id="cfgApiUrl" type="url" placeholder="https://gestibobina-proxy.padilla585.workers.dev">
+      </div>
+      <button class="btn-primary btn-secondary" style="margin-top:0;font-size:13px" onclick="guardarApiUrl()">Guardar URL</button>
+    </div>
+
+    <div class="settings-section">
+      <div class="settings-title">👤 Sesión activa</div>
+      <div class="settings-row">
+        <span>Usuario</span><strong id="ajustesNombre">—</strong>
+      </div>
+      <div class="settings-row">
+        <span>Rol</span><strong id="ajustesRol">—</strong>
+      </div>
+      <div class="settings-row">
+        <span>Obra</span><strong id="ajustesObra">—</strong>
+      </div>
+      <button class="btn-primary btn-danger" style="margin-top:12px;font-size:14px" onclick="cerrarSesion()">🚪 Cerrar sesión</button>
+    </div>
+
+    <div class="settings-section" id="ajustesAdminLink" style="display:none">
+      <div class="settings-title">🔐 Administración</div>
+      <button class="btn-primary btn-secondary" style="margin-top:0;font-size:14px" onclick="showScreen('admin')">Abrir Panel Admin</button>
+    </div>
+
+    <div style="text-align:center;color:var(--muted);font-size:11px;letter-spacing:1px;margin-top:8px">Alejandra v2.0 · 2026</div>
+  </div>
+
+  <!-- ADMIN PANEL SCREEN -->
+  <div id="screenAdmin" class="screen">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
+      <button onclick="showScreen('home')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:22px;line-height:1">←</button>
+      <div class="section-title" style="margin-bottom:0">PANEL ADMIN</div>
+    </div>
+
+    <!-- Obras (superadmin only) -->
+    <div class="admin-section" id="adminObrasSection" style="display:none">
+      <div class="admin-section-title">🏗 Obras</div>
+      <div id="adminObrasList"><div style="color:var(--muted);font-size:12px">Cargando...</div></div>
+      <div class="tag-add-row" style="margin-top:12px;flex-wrap:wrap;gap:6px">
+        <input type="text" id="newObraNombre" placeholder="Nombre de la obra" style="flex:1;min-width:120px">
+        <input type="text" id="newObraCodigo" placeholder="CÓDIGO" style="width:100px;text-transform:uppercase">
+        <button onclick="crearObra()">+</button>
+      </div>
+    </div>
+
+    <!-- Usuarios -->
+    <div class="admin-section">
+      <div class="admin-section-title">👥 Usuarios</div>
+      <div id="adminUsuariosList"><div style="color:var(--muted);font-size:12px">Cargando...</div></div>
+      <div class="tag-add-row" style="flex-wrap:wrap;gap:6px;margin-top:12px">
+        <input type="text" id="newUsuarioNombre" placeholder="Nombre" style="flex:1;min-width:100px">
+        <input type="password" id="newUsuarioCodigo" placeholder="Código" style="width:100px">
+        <select id="newUsuarioRol" style="padding:8px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px">
+          <option value="operario">Operario</option>
+          <option value="encargado">Encargado</option>
+          <option value="superadmin">Superadmin</option>
+        </select>
+        <select id="newUsuarioObra" style="padding:8px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px">
+          <option value="">— Obra —</option>
+        </select>
+        <button onclick="crearUsuario()">+</button>
+      </div>
+    </div>
+
+    <!-- Proveedores y Tipos Cable (solo bobinas) -->
+    <div class="admin-section">
+      <div class="admin-section-title">🏭 Proveedores de Cable</div>
+      <div class="tag-row" id="tagsProveedores"></div>
+      <div class="tag-add-row">
+        <input type="text" id="newProveedor" placeholder="Nuevo proveedor...">
+        <button onclick="addProveedor()">+</button>
+      </div>
+    </div>
+
+    <div class="admin-section">
+      <div class="admin-section-title">🔌 Tipos de Cable</div>
+      <div class="tag-row" id="tagsTipos"></div>
+      <div class="tag-add-row">
+        <input type="text" id="newTipo" placeholder="Nuevo tipo...">
+        <button onclick="addTipo()">+</button>
+      </div>
+    </div>
+
+    <!-- Dashboard (superadmin) -->
+    <div class="admin-section" id="adminDashboard" style="display:none">
+      <div class="admin-section-title">📊 Dashboard Global</div>
+      <div id="dashboardContent"><div style="color:var(--muted);font-size:12px">Cargando...</div></div>
+    </div>
+  </div>
+
+</div><!-- end appContent -->
+
+<!-- ══════════════════════════════════════════
+     BOTTOM NAV
+══════════════════════════════════════════ -->
+<nav id="bottomNav" style="display:none">
+  <button class="nav-btn active" id="navInicio" onclick="navTo('home')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+    Inicio
+  </button>
+  <button class="nav-btn" id="navInventario" onclick="navTo('stock')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+    Inventario
+  </button>
+  <div class="nav-center-wrap">
+    <button class="nav-qr-btn" onclick="navTo('scan')" title="Escanear">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:#000">
+        <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
+        <line x1="14" y1="14" x2="14" y2="14"/><line x1="17" y1="14" x2="17" y2="14"/><line x1="20" y1="14" x2="20" y2="14"/>
+        <line x1="14" y1="17" x2="14" y2="17"/><line x1="17" y1="17" x2="20" y2="17"/>
+        <line x1="20" y1="20" x2="20" y2="20"/><line x1="14" y1="20" x2="17" y2="20"/>
+      </svg>
+    </button>
+  </div>
+  <button class="nav-btn" id="navHistorial" onclick="navTo('historial')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+    Historial
+  </button>
+  <button class="nav-btn" id="navAjustes" onclick="navTo('ajustes')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+    Ajustes
+  </button>
 </nav>
 
-<!-- ═══════════════════════════════════════════════════════
-     TAB: ENTRADA
-═══════════════════════════════════════════════════════ -->
-<div class="tab active" id="tab-entrada">
-  <div class="section-title">ENTRADA</div>
-  <div class="section-sub">Registrar nueva bobina</div>
-
-  <!-- ESCÁNER -->
-  <div class="scan-box">
-    <div class="scan-header">
-      <div class="dot" id="dot-entrada"></div>
-      LECTOR DE MATRÍCULA
+<!-- ══════════════════════════════════════════
+     MODAL: Editar item
+══════════════════════════════════════════ -->
+<div class="modal-overlay" id="modalEdit" onclick="if(event.target===this)closeModalEdit()">
+  <div class="modal">
+    <div class="modal-title">✏️ Editar</div>
+    <div id="modalEditBody"></div>
+    <div class="modal-actions">
+      <button class="btn-primary" style="flex:1" onclick="guardarEdicion()">Guardar</button>
+      <button class="btn-primary btn-secondary" style="flex:0 0 100px;margin-top:0" onclick="closeModalEdit()">Cancelar</button>
     </div>
-    <div class="cam-viewport" id="vp-entrada">
-      <div class="cam-idle" id="idle-entrada">
-        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-          <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
-          <circle cx="12" cy="13" r="4"/>
-        </svg>
-        Pulsa ABRIR CÁMARA
-      </div>
-      <video id="video-entrada" playsinline autoplay muted style="display:none"></video>
-      <canvas id="canvas-entrada"></canvas>
-      <div class="scan-frame" id="frame-entrada" style="display:none">
-        <div class="corner-bl"></div><div class="corner-br"></div>
-        <div class="scan-line"></div>
-      </div>
-      <div class="cam-ok" id="ok-entrada" style="display:none">
-        ✅ LEÍDO
-        <div class="codigo-leido" id="ok-codigo-entrada"></div>
-      </div>
-    </div>
-    <div class="scan-actions" id="actions-entrada">
-      <button class="btn-abrir" onclick="abrirCamara('entrada')">
-        📷 ABRIR CÁMARA
-      </button>
-    </div>
-    <div class="scan-actions" id="actions-scanning-entrada" style="display:none">
-      <button class="btn-capturar" id="btn-capturar-entrada" onclick="capturarIA('entrada')">
-        LEER
-      </button>
-      <button class="btn-cerrar" onclick="cerrarCamara('entrada')">✕</button>
-    </div>
-    <div class="scan-hint" id="hint-entrada"></div>
-  </div>
-
-  <!-- FORMULARIO -->
-  <div class="form-group">
-    <label>Matrícula / Código</label>
-    <div class="input-with-btn">
-      <input type="text" id="cod-entrada" placeholder="Ej: AB-1234-X" style="text-transform:uppercase">
-      <button class="btn-clear" onclick="document.getElementById('cod-entrada').value=''" title="Limpiar">✕</button>
-    </div>
-  </div>
-  <div class="form-group">
-    <label>Proveedor / Fabricante</label>
-    <select id="prov-entrada">
-      <option value="">Seleccionar...</option>
-    </select>
-  </div>
-  <div class="form-group">
-    <label>Tipo de Cable</label>
-    <select id="tipo-entrada">
-      <option value="">Seleccionar...</option>
-    </select>
-  </div>
-  <div class="form-group">
-    <label>Notas (opcional)</label>
-    <input type="text" id="notas-entrada" placeholder="Observaciones...">
-  </div>
-  <button class="btn-primary" onclick="registrarEntrada()">✅ REGISTRAR ENTRADA</button>
-</div>
-
-<!-- ═══════════════════════════════════════════════════════
-     TAB: DEVOLUCIÓN
-═══════════════════════════════════════════════════════ -->
-<div class="tab" id="tab-devolucion">
-  <div class="section-title">DEVOLUCIÓN</div>
-  <div class="section-sub">Escanea o introduce la matrícula</div>
-
-  <!-- ESCÁNER -->
-  <div class="scan-box">
-    <div class="scan-header">
-      <div class="dot" id="dot-devolucion"></div>
-      LECTOR DE MATRÍCULA
-    </div>
-    <div class="cam-viewport" id="vp-devolucion">
-      <div class="cam-idle" id="idle-devolucion">
-        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-          <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
-          <circle cx="12" cy="13" r="4"/>
-        </svg>
-        Pulsa ABRIR CÁMARA
-      </div>
-      <video id="video-devolucion" playsinline autoplay muted style="display:none"></video>
-      <canvas id="canvas-devolucion"></canvas>
-      <div class="scan-frame" id="frame-devolucion" style="display:none">
-        <div class="corner-bl"></div><div class="corner-br"></div>
-        <div class="scan-line"></div>
-      </div>
-      <div class="cam-ok" id="ok-devolucion" style="display:none">
-        ✅ LEÍDO
-        <div class="codigo-leido" id="ok-codigo-devolucion"></div>
-      </div>
-    </div>
-    <div class="scan-actions" id="actions-devolucion">
-      <button class="btn-abrir" onclick="abrirCamara('devolucion')">
-        📷 ABRIR CÁMARA
-      </button>
-    </div>
-    <div class="scan-actions" id="actions-scanning-devolucion" style="display:none">
-      <button class="btn-capturar" id="btn-capturar-devolucion" onclick="capturarIA('devolucion')">
-        LEER
-      </button>
-      <button class="btn-cerrar" onclick="cerrarCamara('devolucion')">✕</button>
-    </div>
-    <div class="scan-hint" id="hint-devolucion"></div>
-  </div>
-
-  <!-- BÚSQUEDA MANUAL -->
-  <div class="form-group">
-    <label>Matrícula / Código</label>
-    <div class="input-with-btn">
-      <input type="text" id="cod-devolucion" placeholder="Ej: AB-1234-X" style="text-transform:uppercase" oninput="buscarBobina(this.value)">
-      <button class="btn-clear" onclick="limpiarDevolucion()" title="Limpiar">✕</button>
-    </div>
-  </div>
-
-  <!-- Resultado de búsqueda -->
-  <div class="dev-result" id="dev-result">
-    <div class="bobina-codigo" id="dev-codigo"></div>
-    <div class="bobina-info">
-      <span class="bobina-pill" id="dev-prov"></span>
-      <span class="bobina-pill" id="dev-tipo"></span>
-      <span class="bobina-pill estado-activa" id="dev-estado"></span>
-    </div>
-    <div class="bobina-fechas">
-      <span>📥 <span id="dev-fecha-in"></span></span>
-    </div>
-    <div class="form-group" style="margin-top:12px">
-      <label>Notas devolución (opcional)</label>
-      <input type="text" id="dev-notas" placeholder="Observaciones...">
-    </div>
-    <button class="btn-primary btn-danger" style="margin-top:8px" onclick="confirmarDevolucion()">📤 CONFIRMAR DEVOLUCIÓN</button>
-  </div>
-
-  <div id="dev-notfound" style="display:none; text-align:center; padding:20px; color:var(--red); font-family:'Barlow Condensed',sans-serif; font-size:16px;">
-    ⚠️ Bobina no encontrada
   </div>
 </div>
 
-<!-- ═══════════════════════════════════════════════════════
-     TAB: STOCK
-═══════════════════════════════════════════════════════ -->
-<div class="tab" id="tab-stock">
-  <div class="section-title">INVENTARIO</div>
-
-  <div class="stock-header">
-    <input class="search-input" id="stock-search" placeholder="🔍 Buscar..." oninput="filtrarStock()">
-    <div class="filter-btns">
-      <button class="filter-btn active" onclick="setFiltro('')" id="f-todos">Todos</button>
-      <button class="filter-btn" onclick="setFiltro('activa')" id="f-activa">Stock</button>
-      <button class="filter-btn" onclick="setFiltro('devuelta')" id="f-devuelta">Dev.</button>
-    </div>
-  </div>
-
-  <div class="table-wrap">
-    <table>
-      <thead>
-        <tr>
-          <th>Código</th>
-          <th>Proveedor</th>
-          <th>Cable</th>
-          <th>Usuario</th>
-          <th>Estado</th>
-          <th></th>
-        </tr>
-      </thead>
-      <tbody id="stock-tbody">
-        <tr><td colspan="6" class="empty-state">Cargando...</td></tr>
-      </tbody>
-    </table>
-  </div>
-
-  <div class="stock-actions">
-    <button class="btn-export" onclick="exportarCSV()">📊 CSV</button>
-    <button class="btn-export" onclick="exportarExcel()">📗 Excel</button>
-    <button class="btn-export" onclick="cargarStock()" style="flex:0.3">↻</button>
-  </div>
-</div>
-
-<!-- ═══════════════════════════════════════════════════════
-     TAB: HISTORIAL
-═══════════════════════════════════════════════════════ -->
-<div class="tab" id="tab-historial">
-  <div class="section-title">HISTORIAL</div>
-  <div class="section-sub">Todos los movimientos registrados</div>
-
-  <div style="display:flex;gap:8px;margin-bottom:12px">
-    <select id="hist-filtro" onchange="cargarHistorial()" style="flex:1;padding:9px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px">
-      <option value="">Todos</option>
-      <option value="entrada">Entradas</option>
-      <option value="devolucion">Devoluciones</option>
-      <option value="eliminacion">Eliminaciones</option>
-    </select>
-    <button class="btn-export" onclick="cargarHistorial()" style="flex:0.3">↻</button>
-  </div>
-
-  <div id="historial-list">
-    <div class="empty-state" style="padding:40px 0;text-align:center;color:var(--muted)">Cargando...</div>
-  </div>
-</div>
-
-<!-- ═══════════════════════════════════════════════════════
-     TAB: CONFIG
-═══════════════════════════════════════════════════════ -->
-<div class="tab" id="tab-config">
-  <div class="section-title">CONFIGURACIÓN</div>
-
-  <!-- Panel admin — solo visible si es admin -->
-  <div class="config-section" id="panel-admin" style="display:none">
-    <div class="config-title">🔐 ADMINISTRADOR <span class="admin-badge">ADMIN</span></div>
-    <div class="form-group" style="margin-bottom:8px">
-      <label>Obra activa</label>
-      <select id="admin-obra-select" onchange="adminCambiarObra(this.value)" style="width:100%">
-        <option value="">— Todas las obras —</option>
-      </select>
-    </div>
-    <div style="font-size:11px;color:var(--muted);margin-bottom:12px">El inventario y stats cambian según la obra seleccionada</div>
-    <div class="config-title" style="font-size:12px;margin-bottom:8px">Obras registradas</div>
-    <div id="lista-obras"></div>
-    <div class="tag-add" style="margin-top:10px">
-      <input type="text" id="nueva-obra-nombre" placeholder="Nombre de la obra">
-      <input type="text" id="nueva-obra-codigo" placeholder="CÓDIGO" style="width:120px;text-transform:uppercase">
-      <button onclick="crearObra()">+</button>
-    </div>
-    <div style="margin-top:12px;display:flex;gap:8px">
-      <button class="btn-primary btn-secondary" style="font-size:12px" onclick="cerrarSesion()">🚪 Cerrar sesión</button>
-      <button class="btn-primary btn-danger" style="font-size:12px" onclick="limpiarDatosLocales()">🔧 Actualizar URL servidor</button>
-    </div>
-  </div>
-
-  <!-- DASHBOARD ADMIN -->
-  <div class="config-section" id="panel-dashboard" style="display:none">
-    <div class="config-title">📊 DASHBOARD</div>
-    <div id="dashboard-content">
-      <div style="color:var(--muted);font-size:12px">Cargando...</div>
-    </div>
-  </div>
-
-  <div class="config-section">
-    <div class="config-title">👤 Usuario</div>
+<!-- ══════════════════════════════════════════
+     MODAL: Devolución
+══════════════════════════════════════════ -->
+<div class="modal-overlay" id="modalDev" onclick="if(event.target===this)closeModalDev()">
+  <div class="modal">
+    <div class="modal-title">📤 Devolución</div>
+    <div class="modal-card" id="modalDevInfo"></div>
     <div class="form-group">
-      <label>Usuario activo</label>
-      <select id="sel-usuario" onchange="onCambioUsuario(this)"></select>
+      <label class="form-label">Devuelto por</label>
+      <input class="form-input" id="modalDevPor" type="text" placeholder="Nombre...">
     </div>
-    <div class="tag-add" id="form-nuevo-usuario" style="display:none">
-      <input type="text" id="input-nuevo-usuario" placeholder="Tu nombre..." maxlength="30">
-      <button onclick="guardarNuevoUsuario()">+</button>
-    </div>
-  </div>
-
-  <div class="config-section">
-    <div class="config-title">🌐 Servidor API</div>
     <div class="form-group">
-      <label>URL del Worker</label>
-      <input type="url" id="cfg-api" placeholder="https://gestibobina-proxy.padilla585.workers.dev">
+      <label class="form-label">Notas (opcional)</label>
+      <input class="form-input" id="modalDevNotas" type="text" placeholder="Observaciones...">
     </div>
-    <button class="btn-primary btn-secondary" onclick="probarConexion()">🔌 Probar conexión</button>
-  </div>
-
-  <div class="config-section">
-    <div class="config-title">🏭 Proveedores</div>
-    <div class="tags" id="tags-proveedores"></div>
-    <div class="tag-add">
-      <input type="text" id="nuevo-proveedor" placeholder="Nuevo proveedor...">
-      <button onclick="addProveedor()">+</button>
+    <div class="modal-actions">
+      <button class="btn-primary btn-danger" style="flex:1" onclick="confirmarDevolucion()">Confirmar devolución</button>
+      <button class="btn-primary btn-secondary" style="flex:0 0 100px;margin-top:0" onclick="closeModalDev()">Cancelar</button>
     </div>
-  </div>
-
-  <div class="config-section">
-    <div class="config-title">🔌 Tipos de Cable</div>
-    <div class="tags" id="tags-tipos"></div>
-    <div class="tag-add">
-      <input type="text" id="nuevo-tipo" placeholder="Nuevo tipo...">
-      <button onclick="addTipo()">+</button>
-    </div>
-  </div>
-
-  <div class="config-section">
-    <button class="btn-primary btn-secondary" onclick="cerrarSesion()">🚪 Cambiar obra / usuario</button>
-  </div>
-</div>
-
-<!-- MODAL CAMBIAR USUARIO -->
-<div id="modalUsuario" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:200;align-items:flex-end;justify-content:center" onclick="if(event.target===this)cerrarModalUsuario()">
-  <div style="background:var(--surface);width:100%;max-width:480px;border-radius:16px 16px 0 0;padding:20px;display:flex;flex-direction:column;gap:12px">
-    <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:18px;letter-spacing:1px">👤 CAMBIAR USUARIO</div>
-    <select id="modal-sel-usuario" style="width:100%;padding:11px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:15px" onchange="onModalCambioUsuario(this)"></select>
-    <div id="modal-nuevo-form" style="display:none;flex-direction:row;gap:8px">
-      <input type="text" id="modal-nuevo-input" placeholder="Tu nombre..." style="flex:1;padding:11px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:15px" onkeydown="if(event.key==='Enter')guardarUsuarioModal()">
-      <button onclick="guardarUsuarioModal()" style="padding:11px 16px;background:var(--accent);border:none;border-radius:8px;color:#000;font-weight:900;cursor:pointer">+</button>
-    </div>
-    <button onclick="cerrarSesion()" style="padding:11px;background:transparent;border:1px solid var(--border);border-radius:8px;color:var(--muted);font-family:'Barlow Condensed',sans-serif;font-weight:700;cursor:pointer">🚪 Cerrar sesión</button>
-    <button onclick="cerrarModalUsuario()" style="padding:11px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--muted);font-family:'Barlow Condensed',sans-serif;font-weight:700;cursor:pointer">CANCELAR</button>
-  </div>
-</div>
-
-<!-- MODAL OBRA -->
-<div id="modalObra" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:200;align-items:flex-end;justify-content:center" onclick="if(event.target===this)cerrarModalObra()">
-  <div style="background:var(--surface);width:100%;max-width:480px;border-radius:16px 16px 0 0;padding:20px;display:flex;flex-direction:column;gap:12px">
-    <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:18px;letter-spacing:1px">🏗 OBRA ACTUAL</div>
-    <div id="modalObraNombre" style="font-size:22px;font-family:'Barlow Condensed',sans-serif;font-weight:700;color:var(--accent)"></div>
-    <div id="modalObraAcciones"></div>
-    <button onclick="cerrarModalObra()" style="padding:11px;background:transparent;border:1px solid var(--border);border-radius:8px;color:var(--muted);font-family:'Barlow Condensed',sans-serif;font-weight:700;cursor:pointer">CANCELAR</button>
   </div>
 </div>
 
@@ -603,446 +727,406 @@ tr:hover td { background: var(--surface2); }
 <div class="toast" id="toast"></div>
 
 <script>
-// ═══════════════════════════════════════════════════════
-// CONFIGURACIÓN
-// ═══════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════
+// CONFIG & SESSION
+// ══════════════════════════════════════════════════════
 const API_DEFAULT = 'https://gestibobina-proxy.padilla585.workers.dev';
 
 function getAPI() {
-  return localStorage.getItem('gestibobina_api') || API_DEFAULT;
+  return localStorage.getItem('alejandra_api') || API_DEFAULT;
 }
 
-function api(path, opts = {}) {
-  return fetch(getAPI() + path, {
-    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
-    ...opts,
-  });
+function getSession() {
+  try { return JSON.parse(sessionStorage.getItem('alejandra_session') || 'null'); } catch { return null; }
 }
 
-// ═══════════════════════════════════════════════════════
-// ACCESO / OBRAS / ADMIN
-// ═══════════════════════════════════════════════════════
+function setSession(data) {
+  sessionStorage.setItem('alejandra_session', JSON.stringify(data));
+}
 
-function getSesion() {
-  try { return JSON.parse(localStorage.getItem('gb_sesion') || 'null'); } catch { return null; }
-}
-function setSesion(data) {
-  localStorage.setItem('gb_sesion', JSON.stringify(data));
-}
 function cerrarSesion() {
-  localStorage.removeItem('gb_sesion');
+  sessionStorage.removeItem('alejandra_session');
+  closeCamera();
   location.reload();
 }
 
-// Headers que añade api() automáticamente
-function getAuthHeaders() {
-  const s = getSesion();
-  if (!s) return {};
-  if (s.tipo === 'admin') return { 'X-Admin-Code': s.adminCode, 'X-Obra-Id': s.obraSeleccionada || '' };
-  return { 'X-Obra-Id': String(s.obra.id) };
+async function apiCall(path, options = {}) {
+  const base = getAPI();
+  const s = getSession();
+  const headers = {
+    'Content-Type': 'application/json',
+    ...(s && s.adminCode ? { 'X-Admin-Code': s.adminCode } : {}),
+    ...(s && s.obra_id   ? { 'X-Obra-Id': String(s.obra_id) } : {}),
+    ...(s && s.nombre    ? { 'X-Usuario': s.nombre } : {}),
+    ...(s && s.rol       ? { 'X-Rol': s.rol } : {}),
+    ...options.headers
+  };
+  const res = await fetch(base + path, { ...options, headers });
+  return res;
 }
 
-async function verificarAcceso() {
-  const nombre = document.getElementById('inputNombreAcceso').value.trim();
-  const codigo = document.getElementById('inputCodigoAcceso').value.trim();
-  const errEl  = document.getElementById('accesoErr');
-  errEl.textContent = '';
-  if (!nombre) { errEl.textContent = 'Introduce tu nombre'; document.getElementById('inputNombreAcceso').focus(); return; }
-  if (!codigo) { errEl.textContent = 'Introduce el código de obra'; return; }
-
-  try {
-    const res = await fetch(getAPI() + '/acceso', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ codigo }),
-    });
-    const data = await res.json();
-    if (!res.ok) { errEl.textContent = data.error || 'Código inválido'; return; }
-
-    // Guardar nombre de usuario
-    addUsuario(nombre);
-
-    if (data.tipo === 'admin') {
-      setSesion({ tipo: 'admin', adminCode: codigo, obraSeleccionada: null });
-    } else {
-      setSesion({ tipo: 'obra', obra: data.obra });
-    }
-    iniciarApp();
-  } catch {
-    errEl.textContent = 'Error de conexión';
-  }
-}
-
-function iniciarApp() {
-  const s = getSesion();
-  if (!s) { document.getElementById('overlayAcceso').style.display = 'flex'; return; }
-  document.getElementById('overlayAcceso').style.display = 'none';
-  renderHeaderObra();
-  if (s.tipo === 'admin') {
-    document.getElementById('panel-admin').style.display = 'block';
-    document.getElementById('panel-dashboard').style.display = 'block';
-    cargarObrasAdmin();
-    cargarDashboard();
-  }
-  actualizarStats();
-  cargarCatalogos();
-}
-
-function renderHeaderObra() {
-  const s = getSesion();
-  const wrap = document.getElementById('headerObraWrap');
-  if (!s) { wrap.innerHTML = ''; return; }
-  if (s.tipo === 'admin') {
-    wrap.innerHTML = `<span class="admin-badge">ADMIN</span><select class="obra-select" id="headerObraSelect" onchange="adminCambiarObra(this.value)"><option value="">Todas</option></select>`;
-    // poblar después de cargar obras
-  } else {
-    wrap.innerHTML = `<span class="obra-label" onclick="abrirModalObra()" style="cursor:pointer">🏗 ${s.obra.nombre}</span>`;
-  }
-}
-
-async function cargarObrasAdmin() {
-  try {
-    const res = await api('/obras');
-    const obras = await res.json();
-    renderListaObras(obras);
-    // Poblar selects
-    const opts = obras.map(o => `<option value="${o.id}">${o.nombre}</option>`).join('');
-    const s = getSesion();
-    const selAdmin = document.getElementById('admin-obra-select');
-    const selHeader = document.getElementById('headerObraSelect');
-    if (selAdmin) selAdmin.innerHTML = '<option value="">— Todas las obras —</option>' + opts;
-    if (selHeader) selHeader.innerHTML = '<option value="">Todas</option>' + opts;
-    // Restaurar selección
-    if (s?.obraSeleccionada) {
-      if (selAdmin) selAdmin.value = s.obraSeleccionada;
-      if (selHeader) selHeader.value = s.obraSeleccionada;
-    }
-  } catch {}
-}
-
-function renderListaObras(obras) {
-  const c = document.getElementById('lista-obras');
-  if (!obras.length) { c.innerHTML = '<div style="color:var(--muted);font-size:12px">Sin obras creadas</div>'; return; }
-  c.innerHTML = obras.map(o => `
-    <div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border)">
-      <div style="flex:1">
-        <div style="font-weight:700;font-size:14px">${o.nombre}</div>
-        <div style="font-size:11px;color:var(--muted);letter-spacing:1px">${o.codigo}</div>
-      </div>
-      <button class="tag-del" onclick="eliminarObra(${o.id})" style="padding:4px 8px">×</button>
-    </div>
-  `).join('');
-}
-
-function adminCambiarObra(obraId) {
-  const s = getSesion();
-  if (!s || s.tipo !== 'admin') return;
-  s.obraSeleccionada = obraId ? parseInt(obraId) : null;
-  setSesion(s);
-  // Sincronizar ambos selects
-  const selAdmin  = document.getElementById('admin-obra-select');
-  const selHeader = document.getElementById('headerObraSelect');
-  if (selAdmin)  selAdmin.value  = obraId || '';
-  if (selHeader) selHeader.value = obraId || '';
-  actualizarStats();
-  cargarStock();
-}
-
-async function crearObra() {
-  const nombre = document.getElementById('nueva-obra-nombre').value.trim();
-  const codigo = document.getElementById('nueva-obra-codigo').value.trim().toUpperCase();
-  if (!nombre || !codigo) return toast('⚠️ Rellena nombre y código', 'err');
-  try {
-    const res = await api('/obras', { method: 'POST', body: JSON.stringify({ nombre, codigo }) });
-    const data = await res.json();
-    if (res.ok) {
-      toast(`✅ Obra "${nombre}" creada (${codigo})`, 'ok');
-      document.getElementById('nueva-obra-nombre').value = '';
-      document.getElementById('nueva-obra-codigo').value = '';
-      cargarObrasAdmin();
-    } else {
-      toast(`❌ ${data.error}`, 'err');
-    }
-  } catch { toast('❌ Error de conexión', 'err'); }
-}
-
-async function eliminarObra(id) {
-  if (!confirm('¿Desactivar esta obra?')) return;
-  try {
-    await api(`/obras/${id}`, { method: 'DELETE' });
-    toast('✅ Obra desactivada', 'ok');
-    cargarObrasAdmin();
-  } catch { toast('❌ Error', 'err'); }
-}
-
-// ═══════════════════════════════════════════════════════
-// USUARIOS
-// ═══════════════════════════════════════════════════════
-function getUsuario() {
-  return localStorage.getItem('gb_usuario') || '';
-}
-
-function getUsuarios() {
-  try { return JSON.parse(localStorage.getItem('gb_usuarios') || '[]'); } catch { return []; }
-}
-
-function setUsuario(nombre) {
-  localStorage.setItem('gb_usuario', nombre);
-  document.getElementById('headerUsuario').textContent = nombre || 'Sin usuario';
-  renderSelectorUsuarios();
-}
-
-function addUsuario(nombre) {
-  nombre = nombre.trim();
-  if (!nombre) return;
-  const lista = getUsuarios();
-  if (!lista.includes(nombre)) {
-    lista.push(nombre);
-    localStorage.setItem('gb_usuarios', JSON.stringify(lista));
-  }
-  setUsuario(nombre);
-}
-
-function abrirModalUsuario() {
-  const modal = document.getElementById('modalUsuario');
-  const sel = document.getElementById('modal-sel-usuario');
-  const lista = getUsuarios();
-  const actual = getUsuario();
-  sel.innerHTML = '';
-  if (!actual) {
-    const op = document.createElement('option');
-    op.value = ''; op.textContent = '— Elige usuario —';
-    sel.appendChild(op);
-  }
-  lista.forEach(u => {
-    const op = document.createElement('option');
-    op.value = u; op.textContent = u;
-    if (u === actual) op.selected = true;
-    sel.appendChild(op);
-  });
-  const opNuevo = document.createElement('option');
-  opNuevo.value = '__nuevo__'; opNuevo.textContent = '+ Nuevo usuario...';
-  sel.appendChild(opNuevo);
-  document.getElementById('modal-nuevo-form').style.display = 'none';
-  modal.style.display = 'flex';
-}
-
-function cerrarModalUsuario() {
-  document.getElementById('modalUsuario').style.display = 'none';
-}
-
-function abrirModalObra() {
-  const s = getSesion();
-  if (!s) return;
-  const nombre = s.tipo === 'admin' ? 'ADMIN' : s.obra.nombre;
-  document.getElementById('modalObraNombre').textContent = nombre;
-
-  // Acciones según rol
-  const acciones = document.getElementById('modalObraAcciones');
-  if (s.tipo === 'admin') {
-    // Admin: puede cambiar de obra sin cerrar sesión
-    acciones.innerHTML = `
-      <button onclick="cerrarSesion()" style="padding:13px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:15px;cursor:pointer;width:100%">🚪 Cerrar sesión</button>
-    `;
-  } else {
-    // Trabajador: solo puede cerrar sesión para cambiar de obra
-    acciones.innerHTML = `
-      <div style="font-size:12px;color:var(--muted);text-align:center">Para cambiar de obra cierra sesión</div>
-      <button onclick="cerrarSesion()" style="padding:13px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:15px;cursor:pointer;width:100%">🚪 Cerrar sesión</button>
-    `;
-  }
-
-  document.getElementById('modalObra').style.display = 'flex';
-}
-
-function cerrarModalObra() {
-  document.getElementById('modalObra').style.display = 'none';
-}
-
-function onModalCambioUsuario(sel) {
-  if (sel.value === '__nuevo__') {
-    document.getElementById('modal-nuevo-form').style.display = 'flex';
-    document.getElementById('modal-nuevo-input').focus();
-  } else if (sel.value) {
-    setUsuario(sel.value);
-    toast(`✅ Usuario: ${sel.value}`, 'ok');
-    cerrarModalUsuario();
-  }
-}
-
-function guardarUsuarioModal() {
-  const nombre = document.getElementById('modal-nuevo-input').value.trim();
-  if (!nombre) return;
-  addUsuario(nombre);
-  document.getElementById('modal-nuevo-input').value = '';
-  toast(`✅ Usuario: ${nombre}`, 'ok');
-  cerrarModalUsuario();
-}
-
-function renderSelectorUsuarios() {
-  const sel = document.getElementById('sel-usuario');
-  if (!sel) return;
-  const lista = getUsuarios();
-  const actual = getUsuario();
-  sel.innerHTML = '';
-  if (!actual) {
-    const op = document.createElement('option');
-    op.value = ''; op.textContent = '— Elige o añade usuario —';
-    sel.appendChild(op);
-  }
-  lista.forEach(u => {
-    const op = document.createElement('option');
-    op.value = u; op.textContent = u;
-    if (u === actual) op.selected = true;
-    sel.appendChild(op);
-  });
-  const opNuevo = document.createElement('option');
-  opNuevo.value = '__nuevo__'; opNuevo.textContent = '+ Nuevo usuario...';
-  sel.appendChild(opNuevo);
-}
-
-function onCambioUsuario(sel) {
-  if (sel.value === '__nuevo__') {
-    document.getElementById('form-nuevo-usuario').style.display = 'flex';
-    document.getElementById('input-nuevo-usuario').focus();
-  } else if (sel.value) {
-    document.getElementById('form-nuevo-usuario').style.display = 'none';
-    setUsuario(sel.value);
-    toast(`✅ Usuario: ${sel.value}`, 'ok');
-  }
-}
-
-function guardarNuevoUsuario() {
-  const nombre = document.getElementById('input-nuevo-usuario').value.trim();
-  if (!nombre) return toast('⚠️ Introduce un nombre', 'err');
-  addUsuario(nombre);
-  document.getElementById('input-nuevo-usuario').value = '';
-  document.getElementById('form-nuevo-usuario').style.display = 'none';
-  toast(`✅ Usuario: ${nombre}`, 'ok');
-}
-
-// ═══════════════════════════════════════════════════════
-// LOGS
-// ═══════════════════════════════════════════════════════
-function log(nivel, origen, mensaje, detalle = null) {
-  console[nivel === 'error' ? 'error' : 'log'](`[${origen}] ${mensaje}`, detalle || '');
-  // Enviar al servidor en background (no bloquea la UI)
-  fetch(getAPI() + '/log', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ nivel, origen, mensaje, detalle }),
-  }).catch(() => {});
-}
-
-// Capturar errores globales automáticamente
-window.onerror = (msg, src, line) => log('error', 'global', msg, { src, line });
-window.onunhandledrejection = e => log('error', 'promise', e.reason?.message || String(e.reason));
-
-// ═══════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════
 // TOAST
-// ═══════════════════════════════════════════════════════
-let toastTimer;
+// ══════════════════════════════════════════════════════
+let toastT;
 function toast(msg, tipo = '') {
   const el = document.getElementById('toast');
   el.textContent = msg;
   el.className = `toast show ${tipo}`;
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => el.className = 'toast', 3000);
+  clearTimeout(toastT);
+  toastT = setTimeout(() => el.className = 'toast', 3200);
 }
 
-// ═══════════════════════════════════════════════════════
-// NAVEGACIÓN
-// ═══════════════════════════════════════════════════════
-function showTab(id) {
-  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-  document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
-  document.getElementById('tab-' + id).classList.add('active');
-  event.currentTarget.classList.add('active');
-
-  cerrarCamara('entrada');
-  cerrarCamara('devolucion');
-
-  if (id === 'stock') cargarStock();
-  if (id === 'historial') cargarHistorial();
-  if (id === 'config') cargarConfig();
+// ══════════════════════════════════════════════════════
+// LOGIN
+// ══════════════════════════════════════════════════════
+function toggleLoginPw() {
+  const inp = document.getElementById('loginCodigo');
+  const btn = document.getElementById('loginPwToggle');
+  if (inp.type === 'password') { inp.type = 'text'; btn.textContent = '🙈'; }
+  else { inp.type = 'password'; btn.textContent = '👁'; }
 }
 
-// ═══════════════════════════════════════════════════════
-// ESCÁNER — Estado por instancia
-// ═══════════════════════════════════════════════════════
-const scanState = {
-  entrada: { stream: null, qrLoop: null, scanning: false },
-  devolucion: { stream: null, qrLoop: null, scanning: false },
-};
+async function doLogin() {
+  const nombre = document.getElementById('loginNombre').value.trim();
+  const codigo = document.getElementById('loginCodigo').value.trim();
+  const errEl  = document.getElementById('loginErr');
+  const btn    = document.getElementById('loginBtn');
+  errEl.textContent = '';
 
-async function abrirCamara(inst) {
-  const st = scanState[inst];
+  if (!nombre) { errEl.textContent = 'Introduce tu nombre'; return; }
+  if (!codigo) { errEl.textContent = 'Introduce el código o nombre de obra'; return; }
+
+  btn.textContent = 'Verificando...';
+  btn.disabled = true;
+
   try {
-    // Preferir cámara trasera en móvil
+    const res = await fetch(getAPI() + '/verificar', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nombre, codigo })
+    });
+    const data = await res.json();
+
+    if (!res.ok || !data.ok) {
+      errEl.textContent = data.error || 'Credenciales incorrectas';
+      btn.textContent = 'ACCEDER'; btn.disabled = false; return;
+    }
+
+    const session = {
+      nombre: data.nombre || nombre,
+      rol: data.rol,
+      obra_id: data.obra_id || null,
+      obra_nombre: data.obra_nombre || null,
+      adminCode: (data.rol === 'superadmin') ? codigo : null
+    };
+    setSession(session);
+    iniciarApp();
+  } catch {
+    errEl.textContent = 'Error de conexión';
+    btn.textContent = 'ACCEDER'; btn.disabled = false;
+  }
+}
+
+// ══════════════════════════════════════════════════════
+// APP INIT
+// ══════════════════════════════════════════════════════
+let currentModule = 'bobinas';
+
+async function iniciarApp() {
+  const s = getSession();
+  if (!s) {
+    document.getElementById('loginOverlay').style.display = 'flex';
+    document.getElementById('mainHeader').style.display = 'none';
+    document.getElementById('appContent').style.display = 'none';
+    document.getElementById('bottomNav').style.display = 'none';
+    return;
+  }
+
+  document.getElementById('loginOverlay').style.display = 'none';
+  document.getElementById('mainHeader').style.display = 'flex';
+  document.getElementById('appContent').style.display = 'block';
+  document.getElementById('bottomNav').style.display = 'flex';
+
+  renderHeader();
+  renderAjustesInfo();
+
+  if (s.rol === 'superadmin' || s.rol === 'encargado') {
+    document.getElementById('adminHomeBtn').style.display = 'flex';
+    document.getElementById('ajustesAdminLink').style.display = 'block';
+  }
+  if (s.rol === 'superadmin') {
+    document.getElementById('adminObrasSection').style.display = 'block';
+    document.getElementById('adminDashboard').style.display = 'block';
+  }
+
+  checkConnection();
+  await cargarStatsHome();
+  await cargarRecentActivity();
+  await cargarCatalogos();
+
+  if (s.rol === 'superadmin') {
+    await cargarObrasAdmin();
+  }
+}
+
+function renderHeader() {
+  const s = getSession();
+  if (!s) return;
+
+  const nameEl = document.getElementById('headerUserName');
+  nameEl.textContent = s.rol === 'superadmin' ? 'Admin' : s.nombre;
+
+  if (s.rol === 'superadmin') {
+    document.getElementById('headerObraLabel').style.display = 'none';
+    document.getElementById('headerObraSelect').style.display = 'block';
+    cargarObrasHeader();
+  } else {
+    document.getElementById('headerObraLabel').textContent = '🏗 ' + (s.obra_nombre || '—');
+    document.getElementById('headerObraLabel').style.display = 'block';
+    document.getElementById('headerObraSelect').style.display = 'none';
+  }
+}
+
+function renderAjustesInfo() {
+  const s = getSession();
+  if (!s) return;
+  document.getElementById('ajustesNombre').textContent = s.nombre;
+  document.getElementById('ajustesRol').textContent = s.rol;
+  document.getElementById('ajustesObra').textContent = s.obra_nombre || (s.rol === 'superadmin' ? 'Todas' : '—');
+  document.getElementById('cfgApiUrl').value = getAPI();
+}
+
+async function cargarObrasHeader() {
+  try {
+    const res = await apiCall('/obras');
+    const obras = await res.json();
+    const sel = document.getElementById('headerObraSelect');
+    const s = getSession();
+    sel.innerHTML = '<option value="">— Todas las obras —</option>' +
+      obras.map(o => `<option value="${o.id}" ${s.obra_id == o.id ? 'selected' : ''}>${o.nombre}</option>`).join('');
+  } catch {}
+}
+
+function onObraSelectChange(obraId) {
+  const s = getSession();
+  if (!s) return;
+  const sel = document.getElementById('headerObraSelect');
+  const obraName = sel.options[sel.selectedIndex]?.text || '';
+  s.obra_id = obraId ? parseInt(obraId) : null;
+  s.obra_nombre = obraId ? obraName : null;
+  setSession(s);
+  cargarStatsHome();
+  cargarRecentActivity();
+  if (document.getElementById('modPanelStock').classList.contains('active')) cargarStock();
+}
+
+async function checkConnection() {
+  const dot = document.getElementById('connDot');
+  try {
+    const r = await fetch(getAPI() + '/stats', { signal: AbortSignal.timeout(5000) });
+    if (r.ok) { dot.className = 'conn-dot ok'; return; }
+  } catch {}
+  dot.className = 'conn-dot err';
+}
+
+// ══════════════════════════════════════════════════════
+// NAVIGATION
+// ══════════════════════════════════════════════════════
+function showScreen(name) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  const el = document.getElementById('screen' + name.charAt(0).toUpperCase() + name.slice(1));
+  if (el) el.classList.add('active');
+
+  // nav highlight
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  const navMap = { home: 'navInicio', ajustes: 'navAjustes' };
+  if (navMap[name]) document.getElementById(navMap[name]).classList.add('active');
+
+  if (name === 'admin') {
+    cargarAdminData();
+  }
+  if (name === 'ajustes') {
+    renderAjustesInfo();
+  }
+}
+
+function navTo(target) {
+  closeCamera();
+  if (target === 'home') {
+    showScreen('home');
+    return;
+  }
+  if (target === 'ajustes') {
+    showScreen('ajustes');
+    return;
+  }
+  // For scan/stock/historial → show module screen
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  const ms = document.getElementById('screenModule');
+  ms.classList.add('active');
+  ms.style.display = 'flex';
+  ms.style.flexDirection = 'column';
+
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  if (target === 'stock') {
+    document.getElementById('navInventario').classList.add('active');
+    showModTab('stock');
+    cargarStock();
+  } else if (target === 'historial') {
+    document.getElementById('navHistorial').classList.add('active');
+    showModTab('historial');
+    cargarHistorial();
+  } else if (target === 'scan') {
+    showModTab('scan');
+  }
+
+  updateModuleUI();
+}
+
+function selectModule(mod) {
+  currentModule = mod;
+  document.querySelectorAll('.module-card').forEach(c => c.classList.remove('active'));
+  document.getElementById('card' + mod.charAt(0).toUpperCase() + mod.slice(1)).classList.add('active');
+  toast(`Módulo: ${modLabel(mod)}`, '');
+  updateModuleUI();
+}
+
+function modLabel(mod) {
+  return { bobinas: 'Bobinas', pemp: 'PEMP', carretillas: 'Carretillas' }[mod] || mod;
+}
+
+function updateModuleUI() {
+  const mod = currentModule;
+  document.getElementById('modScanTitle').textContent = modLabel(mod).toUpperCase();
+  document.getElementById('modScanSub').textContent = `Registrar ${modLabel(mod).toLowerCase()}`;
+  document.getElementById('modScanFieldLabel').textContent = mod === 'bobinas' ? 'Matrícula / Código' : 'Matrícula';
+
+  document.getElementById('fieldsBobi').style.display  = mod === 'bobinas'    ? 'block' : 'none';
+  document.getElementById('fieldsPemp').style.display  = mod === 'pemp'       ? 'block' : 'none';
+  document.getElementById('fieldsCarr').style.display  = mod === 'carretillas'? 'block' : 'none';
+}
+
+function showModTab(name) {
+  document.querySelectorAll('.mod-tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.mod-panel').forEach(p => p.classList.remove('active'));
+  const tabMap = { scan: 0, stock: 1, historial: 2 };
+  const tabs = document.querySelectorAll('.mod-tab-btn');
+  if (tabs[tabMap[name]]) tabs[tabMap[name]].classList.add('active');
+  document.getElementById('modPanel' + name.charAt(0).toUpperCase() + name.slice(1)).classList.add('active');
+}
+
+// ══════════════════════════════════════════════════════
+// HOME STATS
+// ══════════════════════════════════════════════════════
+async function cargarStatsHome() {
+  try {
+    const res = await apiCall('/stats');
+    if (!res.ok) return;
+    const d = await res.json();
+    document.getElementById('statBobinas').textContent = d.activas ?? d.total ?? '–';
+    document.getElementById('cntBobinas').textContent  = d.activas ?? '–';
+    // PEMP and Carretillas: try dedicated endpoints
+    const [rp, rc] = await Promise.all([
+      apiCall('/pemp/stats').catch(() => null),
+      apiCall('/carretillas/stats').catch(() => null)
+    ]);
+    if (rp && rp.ok) {
+      const dp = await rp.json();
+      document.getElementById('statPemp').textContent = dp.disponibles ?? dp.total ?? '–';
+      document.getElementById('cntPemp').textContent  = dp.disponibles ?? '–';
+    }
+    if (rc && rc.ok) {
+      const dc = await rc.json();
+      document.getElementById('statCarretillas').textContent = dc.disponibles ?? dc.total ?? '–';
+      document.getElementById('cntCarretillas').textContent  = dc.disponibles ?? '–';
+    }
+  } catch {}
+}
+
+async function cargarRecentActivity() {
+  const c = document.getElementById('recentActivity');
+  try {
+    const res = await apiCall('/historial?limit=5');
+    if (!res.ok) throw new Error();
+    const data = await res.json();
+    if (!data.length) { c.innerHTML = '<div class="empty-state">Sin actividad reciente</div>'; return; }
+    const icons = { entrada: '📥', devolucion: '📤', eliminacion: '🗑️' };
+    const labels = { entrada: 'ENTRADA', devolucion: 'DEVOLUCIÓN', eliminacion: 'ELIMINADO' };
+    c.innerHTML = data.map(h => `
+      <div class="activity-item">
+        <div class="activity-icon">${icons[h.accion] || '📋'}</div>
+        <div class="activity-body">
+          <div class="activity-code">${h.bobina_codigo || h.codigo || '—'}</div>
+          <div class="activity-meta">${h.usuario ? '👤 ' + h.usuario + ' · ' : ''}${h.fecha || ''}</div>
+        </div>
+        <div class="activity-badge badge-${h.accion}">${labels[h.accion] || h.accion}</div>
+      </div>`).join('');
+  } catch {
+    c.innerHTML = '<div class="empty-state" style="color:var(--muted)">Sin datos disponibles</div>';
+  }
+}
+
+// ══════════════════════════════════════════════════════
+// CAMERA / QR SCANNER
+// ══════════════════════════════════════════════════════
+let scanStream = null;
+let scanQRLoop = null;
+let scanActive = false;
+let lastQRTime = 0;
+
+async function openCamera() {
+  try {
     const stream = await navigator.mediaDevices.getUserMedia({
       video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } }
     });
-    st.stream = stream;
-
-    const video = document.getElementById('video-' + inst);
+    scanStream = stream;
+    const video = document.getElementById('scanVideo');
     video.srcObject = stream;
     video.style.display = 'block';
-    document.getElementById('idle-' + inst).style.display = 'none';
-    document.getElementById('frame-' + inst).style.display = 'block';
-    document.getElementById('ok-' + inst).style.display = 'none';
-    document.getElementById('actions-' + inst).style.display = 'none';
-    document.getElementById('actions-scanning-' + inst).style.display = 'flex';
-    document.getElementById('dot-' + inst).classList.add('active');
-    st.scanning = true;
-
-    iniciarQRLoop(inst);
-  } catch (e) {
+    document.getElementById('camIdle').style.display = 'none';
+    document.getElementById('scanFrame').style.display = 'block';
+    document.getElementById('camOk').style.display = 'none';
+    document.getElementById('scanActionsIdle').style.display = 'none';
+    document.getElementById('scanActionsActive').style.display = 'flex';
+    document.getElementById('scanDot').classList.add('active');
+    scanActive = true;
+    startQRLoop();
+  } catch {
     toast('❌ No se pudo acceder a la cámara', 'err');
   }
 }
 
-function cerrarCamara(inst) {
-  const st = scanState[inst];
-  if (st.stream) {
-    st.stream.getTracks().forEach(t => t.stop());
-    st.stream = null;
-  }
-  if (st.qrLoop) {
-    cancelAnimationFrame(st.qrLoop);
-    st.qrLoop = null;
-  }
-  st.scanning = false;
+function closeCamera() {
+  if (scanStream) { scanStream.getTracks().forEach(t => t.stop()); scanStream = null; }
+  if (scanQRLoop) { cancelAnimationFrame(scanQRLoop); scanQRLoop = null; }
+  scanActive = false;
 
-  const video = document.getElementById('video-' + inst);
+  const video = document.getElementById('scanVideo');
   if (video) { video.style.display = 'none'; video.srcObject = null; }
-  const idle = document.getElementById('idle-' + inst);
+  const idle = document.getElementById('camIdle');
   if (idle) idle.style.display = 'flex';
-  const frame = document.getElementById('frame-' + inst);
+  const frame = document.getElementById('scanFrame');
   if (frame) frame.style.display = 'none';
-  const actionsMain = document.getElementById('actions-' + inst);
-  if (actionsMain) actionsMain.style.display = 'flex';
-  const actionsScanning = document.getElementById('actions-scanning-' + inst);
-  if (actionsScanning) actionsScanning.style.display = 'none';
-  const dot = document.getElementById('dot-' + inst);
+  const actI = document.getElementById('scanActionsIdle');
+  if (actI) actI.style.display = 'flex';
+  const actA = document.getElementById('scanActionsActive');
+  if (actA) actA.style.display = 'none';
+  const dot = document.getElementById('scanDot');
   if (dot) dot.classList.remove('active');
-  const okDiv = document.getElementById('ok-' + inst);
-  if (okDiv) okDiv.style.display = 'none';
+  const ok = document.getElementById('camOk');
+  if (ok) ok.style.display = 'none';
 }
 
-// QR loop — auto-detección sin botón
-let lastQRTime = 0;
-function iniciarQRLoop(inst) {
-  const st = scanState[inst];
-  const video = document.getElementById('video-' + inst);
-  const canvas = document.getElementById('canvas-' + inst);
+function startQRLoop() {
+  const video = document.getElementById('scanVideo');
+  const canvas = document.getElementById('scanCanvas');
   const ctx = canvas.getContext('2d');
 
   function tick() {
-    if (!st.scanning) return;
-
+    if (!scanActive) return;
     if (video.readyState === video.HAVE_ENOUGH_DATA) {
       const now = Date.now();
-      // Sólo procesar cada 300ms para no saturar CPU
       if (now - lastQRTime > 300) {
         lastQRTime = now;
         canvas.width = video.videoWidth;
@@ -1052,20 +1136,19 @@ function iniciarQRLoop(inst) {
         const qr = typeof jsQR !== 'undefined'
           ? jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: 'dontInvert' })
           : null;
-
         if (qr && qr.data) {
-          codigoLeido(inst, qr.data.trim().toUpperCase(), 'QR/Barcode');
-          return; // Para el loop
+          onCodeRead(qr.data.trim().toUpperCase(), 'QR');
+          return;
         }
       }
     }
-    st.qrLoop = requestAnimationFrame(tick);
+    scanQRLoop = requestAnimationFrame(tick);
   }
-  st.qrLoop = requestAnimationFrame(tick);
+  scanQRLoop = requestAnimationFrame(tick);
 }
 
-// Capturar y redimensionar imagen a máximo 800px para no sobrecargar
-function capturarFrame(video) {
+function capturarFrame() {
+  const video = document.getElementById('scanVideo');
   const MAX = 800;
   let w = video.videoWidth  || 1280;
   let h = video.videoHeight || 720;
@@ -1077,592 +1160,685 @@ function capturarFrame(video) {
   return c;
 }
 
-// Preprocesar imagen para OCR: umbral adaptativo para texto grabado en madera
-function preprocesarOCR(canvas) {
-  const ctx = canvas.getContext('2d');
-  const w = canvas.width, h = canvas.height;
-  const src = ctx.getImageData(0, 0, w, h);
-  const d = src.data;
-
-  // Paso 1: escala de grises
-  const gray = new Uint8Array(w * h);
-  for (let i = 0; i < d.length; i += 4) {
-    gray[i/4] = Math.round(0.299*d[i] + 0.587*d[i+1] + 0.114*d[i+2]);
-  }
-
-  // Paso 2: calcular media local (ventana 20x20) y umbralizar
-  const out = new Uint8ClampedArray(d.length);
-  const R = 20;
-  for (let y = 0; y < h; y++) {
-    for (let x = 0; x < w; x++) {
-      let sum = 0, cnt = 0;
-      for (let dy = -R; dy <= R; dy++) {
-        for (let dx = -R; dx <= R; dx++) {
-          const nx = x+dx, ny = y+dy;
-          if (nx>=0 && nx<w && ny>=0 && ny<h) { sum += gray[ny*w+nx]; cnt++; }
-        }
-      }
-      const media = sum / cnt;
-      const v = gray[y*w+x] < media - 10 ? 0 : 255;
-      const idx = (y*w+x)*4;
-      out[idx] = out[idx+1] = out[idx+2] = v; out[idx+3] = 255;
-    }
-  }
-  ctx.putImageData(new ImageData(out, w, h), 0, 0);
-  return canvas;
-}
-
-// Capturar foto y leer — un solo botón, automático
-async function capturarIA(inst) {
-  const btn = document.getElementById('btn-capturar-' + inst);
-  btn.classList.add('cargando');
-  btn.innerHTML = '<div class="spinner"></div> LEYENDO...';
-
+async function captureOCR() {
+  const btn = document.getElementById('btnCapture');
+  btn.classList.add('loading');
+  btn.innerHTML = '<div class="spinner"></div>';
   if (navigator.vibrate) navigator.vibrate(80);
 
-  const video = document.getElementById('video-' + inst);
-
   try {
-    const canvas = capturarFrame(video);
-    log('info', 'camara', `Frame capturado ${canvas.width}x${canvas.height}`);
-
+    const canvas = capturarFrame();
     const imageData = canvas.toDataURL('image/jpeg', 0.75).split(',')[1];
-    log('info', 'lector', `Enviando imagen (${Math.round(imageData.length/1024)}KB)`);
-
-    const res = await api('/scan', {
+    const res = await apiCall('/ocr', {
       method: 'POST',
-      body: JSON.stringify({ image: imageData, mimeType: 'image/jpeg' }),
+      body: JSON.stringify({ image: imageData, mimeType: 'image/jpeg' })
     });
     const data = await res.json();
-
     if (!res.ok || data.codigo === 'NO_LEIDO') {
-      log('warn', 'lector', data.codigo === 'NO_LEIDO' ? 'NO_LEIDO' : data.error, data);
-      mostrarHint(inst);
+      mostrarHint();
     } else {
-      log('info', 'lector', `Leído: ${data.codigo}`, { modelo: data.modelo });
-      limpiarHint(inst);
-      codigoLeido(inst, data.codigo, 'lector');
+      clearHint();
+      onCodeRead(data.codigo, 'OCR');
     }
-  } catch (e) {
-    log('error', 'lector', e.message);
+  } catch {
     toast('❌ Error de conexión', 'err');
   }
 
-  btn.classList.remove('cargando');
-  btn.innerHTML = 'LEER';
+  btn.classList.remove('loading');
+  btn.textContent = 'OCR';
 }
 
 const HINTS = [
-  '😤 Enfoca bien inútil',
-  '🚪 A la puta calle vas',
-  '🤦 Mejor déjale a uno que sepa',
   '📐 Encuadra la etiqueta dentro del marco',
   '💡 Busca mejor iluminación',
   '📏 Acércate un poco más',
   '🔄 Prueba desde otro ángulo',
   '🧹 Limpia la etiqueta si está sucia',
+  '😤 Enfoca bien antes de capturar',
 ];
-let hintIndex = {};
+let hintIdx = 0;
 
-function mostrarHint(inst) {
-  const el = document.getElementById('hint-' + inst);
+function mostrarHint() {
+  const el = document.getElementById('scanHint');
   if (!el) return;
-  if (hintIndex[inst] === undefined) hintIndex[inst] = 0;
-  const hint = HINTS[hintIndex[inst] % HINTS.length];
-  // Quitar emoji para la voz
-  const texto = hint.replace(/[\u{1F000}-\u{1FFFF}]|[\u{2600}-\u{27FF}]/gu, '').trim();
-  el.textContent = hint;
-  hintIndex[inst]++;
-  // Decirlo en voz alta
-  if ('speechSynthesis' in window) {
-    window.speechSynthesis.cancel();
-    const msg = new SpeechSynthesisUtterance(texto);
-    msg.lang = 'es-ES';
-    msg.rate = 1.0;
-    window.speechSynthesis.speak(msg);
-  }
-  // Auto-limpiar tras 4s
-  clearTimeout(el._timer);
-  el._timer = setTimeout(() => { el.textContent = ''; }, 4000);
+  el.textContent = HINTS[hintIdx % HINTS.length];
+  hintIdx++;
+  clearTimeout(el._t);
+  el._t = setTimeout(() => { el.textContent = ''; }, 4000);
 }
 
-function limpiarHint(inst) {
-  const el = document.getElementById('hint-' + inst);
-  if (el) { el.textContent = ''; clearTimeout(el._timer); }
-  hintIndex[inst] = 0;
+function clearHint() {
+  const el = document.getElementById('scanHint');
+  if (el) { el.textContent = ''; clearTimeout(el._t); }
+  hintIdx = 0;
 }
 
-// Código leído (por QR o IA) → rellenar campo y feedback
-function codigoLeido(inst, codigo, metodo) {
-  // Parar el loop QR
-  const st = scanState[inst];
-  if (st.qrLoop) { cancelAnimationFrame(st.qrLoop); st.qrLoop = null; }
-
-  // Mostrar overlay verde
-  document.getElementById('ok-' + inst).style.display = 'flex';
-  document.getElementById('ok-codigo-' + inst).textContent = codigo;
-
-  // Vibrar si disponible
+function onCodeRead(codigo, method) {
+  if (scanQRLoop) { cancelAnimationFrame(scanQRLoop); scanQRLoop = null; }
+  document.getElementById('camOk').style.display = 'flex';
+  document.getElementById('camOkCode').textContent = codigo;
   if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
-
-  // Rellenar campo
-  if (inst === 'entrada') {
-    document.getElementById('cod-entrada').value = codigo;
-  } else if (inst === 'devolucion') {
-    document.getElementById('cod-devolucion').value = codigo;
-    buscarBobina(codigo);
-  }
-
-  toast(`✅ ${metodo}: ${codigo}`, 'ok');
-
-  // Cerrar cámara tras 1.5s
-  setTimeout(() => cerrarCamara(inst), 1500);
+  document.getElementById('scanCodeInput').value = codigo;
+  toast(`✅ ${method}: ${codigo}`, 'ok');
+  setTimeout(() => closeCamera(), 1500);
 }
 
-// ═══════════════════════════════════════════════════════
-// ENTRADA
-// ═══════════════════════════════════════════════════════
-async function registrarEntrada() {
-  const codigo = document.getElementById('cod-entrada').value.trim().toUpperCase();
-  const proveedor = document.getElementById('prov-entrada').value;
-  const tipo_cable = document.getElementById('tipo-entrada').value;
-  const notas = document.getElementById('notas-entrada').value;
+// ══════════════════════════════════════════════════════
+// REGISTRAR ITEM
+// ══════════════════════════════════════════════════════
+async function registrarItem() {
+  const codigo = document.getElementById('scanCodeInput').value.trim().toUpperCase();
+  if (!codigo) return toast('⚠️ Introduce el código', 'err');
 
-  if (!codigo) return toast('⚠️ Introduce la matrícula', 'err');
-  if (!proveedor) return toast('⚠️ Selecciona el proveedor', 'err');
-  if (!tipo_cable) return toast('⚠️ Selecciona el tipo de cable', 'err');
+  const s = getSession();
+  const btn = document.getElementById('btnRegistrar');
+  btn.disabled = true;
+  btn.innerHTML = '<div class="spinner"></div> Registrando...';
 
   try {
-    const res = await api('/bobinas', {
-      method: 'POST',
-      body: JSON.stringify({ codigo, proveedor, tipo_cable, notas, registrado_por: getUsuario() }),
-    });
+    let body, path;
+
+    if (currentModule === 'bobinas') {
+      const proveedor  = document.getElementById('fieldProv').value;
+      const tipo_cable = document.getElementById('fieldTipoCable').value;
+      const notas      = document.getElementById('scanNotas').value;
+      if (!proveedor)  { toast('⚠️ Selecciona el proveedor', 'err');    btn.disabled=false; btn.innerHTML='✅ REGISTRAR ENTRADA'; return; }
+      if (!tipo_cable) { toast('⚠️ Selecciona el tipo de cable', 'err'); btn.disabled=false; btn.innerHTML='✅ REGISTRAR ENTRADA'; return; }
+      body = { codigo, proveedor, tipo_cable, notas, registrado_por: s?.nombre || '' };
+      path = '/bobinas';
+
+    } else if (currentModule === 'pemp') {
+      const tipo   = document.getElementById('fieldPempTipo').value;
+      const marca  = document.getElementById('fieldPempMarca').value.trim();
+      const prov   = document.getElementById('fieldPempProv').value.trim();
+      const estado = document.getElementById('fieldPempEstado').value;
+      const notas  = document.getElementById('scanNotas').value;
+      const ult    = document.getElementById('fieldPempUltRev').value;
+      const prox   = document.getElementById('fieldPempProxRev').value;
+      body = { matricula: codigo, tipo, marca, proveedor: prov, estado, notas,
+               fecha_ultima_revision: ult, fecha_proxima_revision: prox,
+               registrado_por: s?.nombre || '' };
+      path = '/pemp';
+
+    } else {
+      const tipo    = document.getElementById('fieldCarrTipo').value;
+      const marca   = document.getElementById('fieldCarrMarca').value.trim();
+      const prov    = document.getElementById('fieldCarrProv').value.trim();
+      const energia = document.getElementById('fieldCarrEnergia').value;
+      const estado  = document.getElementById('fieldCarrEstado').value;
+      const notas   = document.getElementById('scanNotas').value;
+      const ult     = document.getElementById('fieldCarrUltRev').value;
+      const prox    = document.getElementById('fieldCarrProxRev').value;
+      body = { matricula: codigo, tipo, marca, proveedor: prov, energia, estado, notas,
+               fecha_ultima_revision: ult, fecha_proxima_revision: prox,
+               registrado_por: s?.nombre || '' };
+      path = '/carretillas';
+    }
+
+    const res = await apiCall(path, { method: 'POST', body: JSON.stringify(body) });
     const data = await res.json();
 
     if (res.ok) {
-      toast(`✅ ${data.mensaje}`, 'ok');
-      document.getElementById('cod-entrada').value = '';
-      document.getElementById('notas-entrada').value = '';
-      actualizarStats();
+      toast(`✅ ${data.mensaje || 'Registrado correctamente'}`, 'ok');
+      document.getElementById('scanCodeInput').value = '';
+      document.getElementById('scanNotas').value = '';
       if (navigator.vibrate) navigator.vibrate(200);
+      cargarStatsHome();
     } else {
-      toast(`❌ ${data.error}`, 'err');
+      toast(`❌ ${data.error || 'Error al registrar'}`, 'err');
     }
-  } catch (e) {
+  } catch {
     toast('❌ Error de conexión', 'err');
   }
+
+  btn.disabled = false;
+  btn.innerHTML = '✅ REGISTRAR ENTRADA';
 }
 
-// ═══════════════════════════════════════════════════════
-// DEVOLUCIÓN
-// ═══════════════════════════════════════════════════════
-let bobinaDevolucion = null;
-let searchTimer;
-
-function buscarBobina(codigo) {
-  clearTimeout(searchTimer);
-  const res = document.getElementById('dev-result');
-  const nf = document.getElementById('dev-notfound');
-  res.classList.remove('visible');
-  nf.style.display = 'none';
-  bobinaDevolucion = null;
-
-  if (!codigo || codigo.length < 2) return;
-
-  searchTimer = setTimeout(async () => {
-    try {
-      const r = await api(`/bobinas?q=${encodeURIComponent(codigo)}`);
-      const data = await r.json();
-      const bobina = data.find(b => b.codigo === codigo.toUpperCase());
-
-      if (bobina) {
-        if (bobina.estado === 'devuelta') {
-          toast(`ℹ️ Bobina ${bobina.codigo} ya fue devuelta`, 'err');
-          return;
-        }
-        bobinaDevolucion = bobina;
-        document.getElementById('dev-codigo').textContent = bobina.codigo;
-        document.getElementById('dev-prov').textContent = bobina.proveedor;
-        document.getElementById('dev-tipo').textContent = bobina.tipo_cable;
-        document.getElementById('dev-estado').textContent = bobina.estado.toUpperCase();
-        document.getElementById('dev-fecha-in').textContent = bobina.fecha_entrada;
-        res.classList.add('visible');
-      } else if (codigo.length >= 4) {
-        nf.style.display = 'block';
-      }
-    } catch {}
-  }, 400);
-}
-
-async function confirmarDevolucion() {
-  if (!bobinaDevolucion) return;
-  const notas = document.getElementById('dev-notas').value;
-
-  try {
-    const res = await api(`/bobinas/${encodeURIComponent(bobinaDevolucion.codigo)}`, {
-      method: 'PUT',
-      body: JSON.stringify({ notas, devuelto_por: getUsuario() }),
-    });
-    const data = await res.json();
-
-    if (res.ok) {
-      toast(`✅ ${data.mensaje}`, 'ok');
-      if (navigator.vibrate) navigator.vibrate(200);
-      limpiarDevolucion();
-      actualizarStats();
-    } else {
-      toast(`❌ ${data.error}`, 'err');
-    }
-  } catch (e) {
-    toast('❌ Error de conexión', 'err');
-  }
-}
-
-function limpiarDevolucion() {
-  document.getElementById('cod-devolucion').value = '';
-  document.getElementById('dev-notas').value = '';
-  document.getElementById('dev-result').classList.remove('visible');
-  document.getElementById('dev-notfound').style.display = 'none';
-  bobinaDevolucion = null;
-}
-
-// ═══════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════
 // STOCK
-// ═══════════════════════════════════════════════════════
-let filtroEstado = '';
+// ══════════════════════════════════════════════════════
+let stockFiltro = '';
 
-function setFiltro(estado) {
-  filtroEstado = estado;
+function setStockFiltro(f) {
+  stockFiltro = f;
   document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
-  const map = { '': 'f-todos', 'activa': 'f-activa', 'devuelta': 'f-devuelta' };
-  document.getElementById(map[estado]).classList.add('active');
+  const map = { '': 'fTodos', 'activa': 'fActiva', 'devuelta': 'fDevuelta' };
+  const btn = document.getElementById(map[f] || 'fTodos');
+  if (btn) btn.classList.add('active');
   cargarStock();
 }
 
 function filtrarStock() {
-  clearTimeout(window.stockTimer);
-  window.stockTimer = setTimeout(cargarStock, 300);
+  clearTimeout(window._stockT);
+  window._stockT = setTimeout(cargarStock, 300);
 }
+
+function recargarStock() { cargarStock(); }
 
 async function cargarStock() {
-  const q = document.getElementById('stock-search')?.value || '';
-  let url = '/bobinas?';
-  if (filtroEstado) url += `estado=${filtroEstado}&`;
-  if (q) url += `q=${encodeURIComponent(q)}`;
+  const q = document.getElementById('stockSearch')?.value || '';
+  const mod = currentModule;
+  let path;
+
+  if (mod === 'bobinas') {
+    path = '/bobinas?';
+    if (stockFiltro) path += `estado=${stockFiltro}&`;
+    if (q) path += `q=${encodeURIComponent(q)}`;
+  } else if (mod === 'pemp') {
+    path = '/pemp?' + (q ? `q=${encodeURIComponent(q)}` : '');
+    if (stockFiltro) path += (q ? '&' : '') + `estado=${stockFiltro}`;
+  } else {
+    path = '/carretillas?' + (q ? `q=${encodeURIComponent(q)}` : '');
+    if (stockFiltro) path += (q ? '&' : '') + `estado=${stockFiltro}`;
+  }
+
+  const c = document.getElementById('stockList');
+  c.innerHTML = '<div class="empty-state">Cargando...</div>';
 
   try {
-    const res = await api(url);
+    const res = await apiCall(path);
     const data = await res.json();
-    renderTabla(data);
-  } catch (e) {
-    document.getElementById('stock-tbody').innerHTML =
-      '<tr><td colspan="6" class="empty-state">❌ Error al cargar datos</td></tr>';
+    renderStock(data, mod);
+  } catch {
+    c.innerHTML = '<div class="empty-state" style="color:var(--red)">Error al cargar datos</div>';
   }
 }
 
-function renderTabla(bobinas) {
-  const tbody = document.getElementById('stock-tbody');
-  if (!bobinas.length) {
-    tbody.innerHTML = '<tr><td colspan="6" class="empty-state">No hay bobinas</td></tr>';
-    return;
-  }
+function renderStock(items, mod) {
+  const c = document.getElementById('stockList');
+  if (!items.length) { c.innerHTML = '<div class="empty-state">No hay elementos</div>'; return; }
 
-  tbody.innerHTML = bobinas.map(b => `
-    <tr>
-      <td><strong style="font-family:'Barlow Condensed',sans-serif;letter-spacing:1px;font-size:15px">${b.codigo}</strong></td>
-      <td style="color:var(--muted);font-size:12px">${b.proveedor}</td>
-      <td style="color:var(--muted);font-size:12px">${b.tipo_cable}</td>
-      <td style="color:var(--muted);font-size:12px">${b.registrado_por || '—'}</td>
-      <td>
-        <span class="pill ${b.estado === 'activa' ? 'pill-verde' : 'pill-gris'}">
-          ${b.estado === 'activa' ? '✓ STOCK' : '↩ DEV'}
-        </span>
-      </td>
-      <td>
-        <button class="btn-accion" onclick="eliminarBobinaUI('${b.codigo}')" title="Eliminar">🗑</button>
-      </td>
-    </tr>
-  `).join('');
-}
-
-async function eliminarBobinaUI(codigo) {
-  if (!confirm(`¿Eliminar la bobina ${codigo}? Esta acción no se puede deshacer.`)) return;
-  try {
-    const res = await api(`/bobinas/${encodeURIComponent(codigo)}`, { method: 'DELETE' });
-    const data = await res.json();
-    if (res.ok) {
-      toast(`🗑️ ${data.mensaje}`, 'ok');
-      cargarStock();
-      actualizarStats();
-    } else {
-      toast(data.error, 'err');
-    }
-  } catch { toast('❌ Error de conexión', 'err'); }
-}
-
-// ═══════════════════════════════════════════════════════
-// HISTORIAL
-// ═══════════════════════════════════════════════════════
-async function cargarHistorial() {
-  const container = document.getElementById('historial-list');
-  const filtro = document.getElementById('hist-filtro')?.value || '';
-  container.innerHTML = '<div class="empty-state" style="padding:40px 0;text-align:center;color:var(--muted)">Cargando...</div>';
-
-  try {
-    const url = '/historial?limit=100' + (filtro ? `&accion=${filtro}` : '');
-    const res = await api(url);
-    const data = await res.json();
-
-    if (!data.length) {
-      container.innerHTML = '<div class="empty-state" style="padding:40px 0;text-align:center;color:var(--muted)">Sin movimientos registrados</div>';
-      return;
-    }
-
-    const iconos = { entrada: '📥', devolucion: '📤', eliminacion: '🗑️' };
-    const labels = { entrada: 'ENTRADA', devolucion: 'DEVOLUCIÓN', eliminacion: 'ELIMINADO' };
-
-    container.innerHTML = data.map(h => `
-      <div class="hist-item">
-        <div class="hist-icon">${iconos[h.accion] || '📋'}</div>
-        <div class="hist-body">
-          <div class="hist-codigo">${h.bobina_codigo}</div>
-          <div class="hist-meta">
-            ${h.usuario ? `👤 ${h.usuario} · ` : ''}${h.fecha}
-            ${h.notas ? `<br><span style="color:var(--text);font-size:11px">${h.notas}</span>` : ''}
-          </div>
+  if (mod === 'bobinas') {
+    c.innerHTML = items.map(b => {
+      const activa = b.estado === 'activa';
+      return `
+      <div class="stock-card ${b.estado}">
+        <div class="stock-card-top">
+          <div class="stock-code">${b.codigo}</div>
+          <span class="pill ${activa ? 'pill-green' : 'pill-gray'}">${activa ? '✓ STOCK' : '↩ DEV'}</span>
         </div>
-        <div class="hist-badge ${h.accion}">${labels[h.accion] || h.accion}</div>
-      </div>
-    `).join('');
-  } catch (e) {
-    container.innerHTML = '<div class="empty-state" style="padding:40px 0;text-align:center;color:var(--red)">Error al cargar historial</div>';
+        <div class="stock-meta">
+          ${b.proveedor ? `<span class="stock-meta-pill">📦 ${b.proveedor}</span>` : ''}
+          ${b.tipo_cable ? `<span class="stock-meta-pill">🔌 ${b.tipo_cable}</span>` : ''}
+          ${b.registrado_por ? `<span class="stock-meta-pill">👤 ${b.registrado_por}</span>` : ''}
+        </div>
+        <div class="stock-actions-row">
+          <button class="btn-sm" onclick="abrirEdit(${JSON.stringify(JSON.stringify(b))}, 'bobinas')">✏️ Editar</button>
+          ${activa ? `<button class="btn-sm" onclick="abrirDevolucion(${JSON.stringify(JSON.stringify(b))}, 'bobinas')">📤 Devolver</button>` : ''}
+        </div>
+      </div>`;
+    }).join('');
+
+  } else if (mod === 'pemp' || mod === 'carretillas') {
+    c.innerHTML = items.map(item => {
+      const disponible = item.estado === 'Disponible' || item.estado === 'disponible';
+      const averiada   = item.estado === 'Averiada'   || item.estado === 'averiada';
+      const devuelta   = item.estado === 'devuelta'   || item.estado === 'Devuelta';
+      const statClass  = disponible ? 'activa' : averiada ? 'averiada' : 'devuelta';
+      const pillClass  = disponible ? 'pill-green' : averiada ? 'pill-red' : 'pill-gray';
+      const warn       = revisionWarn(item.fecha_proxima_revision);
+      return `
+      <div class="stock-card ${statClass}">
+        <div class="stock-card-top">
+          <div class="stock-code">${item.matricula || item.codigo}</div>
+          <span class="pill ${pillClass}">${item.estado}</span>
+        </div>
+        <div class="stock-meta">
+          ${item.tipo   ? `<span class="stock-meta-pill">${item.tipo}</span>`   : ''}
+          ${item.marca  ? `<span class="stock-meta-pill">${item.marca}</span>`  : ''}
+          ${item.energia? `<span class="stock-meta-pill">⚡ ${item.energia}</span>` : ''}
+          ${item.proveedor? `<span class="stock-meta-pill">📦 ${item.proveedor}</span>` : ''}
+          ${warn ? `<span class="revision-warn">⚠️ Rev. prox.</span>` : ''}
+        </div>
+        <div class="stock-actions-row">
+          <button class="btn-sm" onclick="abrirEdit(${JSON.stringify(JSON.stringify(item))}, '${mod}')">✏️ Editar</button>
+          <button class="btn-sm" onclick="abrirDevolucion(${JSON.stringify(JSON.stringify(item))}, '${mod}')">📤 Devolver</button>
+        </div>
+      </div>`;
+    }).join('');
   }
 }
 
-async function exportarExcel() {
-  try {
-    const s = getSesion();
-    if (!s?.tipo === 'admin' && !s?.obra) return toast('⚠️ Sin sesión activa', 'err');
-    // Forzar sync y luego descargar el xlsx desde Google Sheets
-    toast('⏳ Sincronizando...', 'ok');
-    await api('/sync', { method: 'POST' });
-    const sheetId = await api('/sheet-id').then(r => r.json()).catch(() => null);
-    if (!sheetId?.id) return toast('⚠️ Google Sheets no configurado', 'err');
-    const url = `https://docs.google.com/spreadsheets/d/${sheetId.id}/export?format=xlsx`;
-    window.open(url, '_blank');
-  } catch { toast('❌ Error al exportar', 'err'); }
+function revisionWarn(fecha) {
+  if (!fecha) return false;
+  const d = new Date(fecha);
+  const now = new Date();
+  const diff = (d - now) / 86400000;
+  return diff >= 0 && diff <= 30;
 }
 
-async function exportarCSV() {
+async function exportCSV() {
   try {
-    const res = await api('/export');
+    const mod = currentModule;
+    const path = mod === 'bobinas' ? '/export' : `/${mod}/export`;
+    const res = await apiCall(path);
     const blob = await res.blob();
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = res.headers.get('Content-Disposition')?.split('filename=')[1]?.replace(/"/g, '') || 'gestibobina.csv';
+    a.download = `alejandra-${mod}-${new Date().toISOString().slice(0,10)}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   } catch { toast('❌ Error al exportar', 'err'); }
 }
 
-// ═══════════════════════════════════════════════════════
-// STATS
-// ═══════════════════════════════════════════════════════
-async function actualizarStats() {
+// ══════════════════════════════════════════════════════
+// HISTORIAL
+// ══════════════════════════════════════════════════════
+async function cargarHistorial() {
+  const c = document.getElementById('historialList');
+  const filtro = document.getElementById('histFiltro')?.value || '';
+  const mod = currentModule;
+  c.innerHTML = '<div class="empty-state">Cargando...</div>';
+
   try {
-    const res = await api('/stats');
-    const d = await res.json();
-    document.getElementById('statTotal').textContent = d.total;
-    document.getElementById('statActivas').textContent = d.activas;
-    document.getElementById('statDevueltas').textContent = d.devueltas;
-  } catch {}
-}
-
-// ═══════════════════════════════════════════════════════
-// CONFIG
-// ═══════════════════════════════════════════════════════
-function cargarConfig() {
-  document.getElementById('cfg-api').value = getAPI();
-  renderSelectorUsuarios();
-  cargarCatalogos();
-}
-
-document.getElementById('cfg-api').addEventListener('change', function () {
-  localStorage.setItem('gestibobina_api', this.value.trim());
-  toast('✅ API guardada', 'ok');
-});
-
-async function probarConexion() {
-  try {
-    const res = await api('/stats');
-    if (res.ok) {
-      toast('✅ Conexión correcta', 'ok');
-      document.getElementById('statusDot').className = 'status-dot ok';
-      document.getElementById('statusText').textContent = 'Online';
+    let url;
+    if (mod === 'bobinas') {
+      url = '/historial?limit=80' + (filtro ? `&accion=${filtro}` : '');
     } else {
-      throw new Error();
+      url = `/${mod}/historial?limit=80` + (filtro ? `&accion=${filtro}` : '');
     }
+    const res = await apiCall(url);
+    if (!res.ok) throw new Error();
+    const data = await res.json();
+
+    if (!data.length) { c.innerHTML = '<div class="empty-state">Sin movimientos</div>'; return; }
+
+    const icons  = { entrada: '📥', devolucion: '📤', eliminacion: '🗑️' };
+    const labels = { entrada: 'ENTRADA', devolucion: 'DEVOLUCIÓN', eliminacion: 'ELIMINADO' };
+
+    c.innerHTML = data.map(h => `
+      <div class="hist-item">
+        <div class="hist-icon">${icons[h.accion] || '📋'}</div>
+        <div class="hist-body">
+          <div class="hist-code">${h.bobina_codigo || h.matricula || h.codigo || '—'}</div>
+          <div class="hist-meta">${h.usuario ? '👤 ' + h.usuario + ' · ' : ''}${h.fecha || ''}
+            ${h.notas ? '<br><span style="color:var(--text);font-size:11px">' + h.notas + '</span>' : ''}
+          </div>
+        </div>
+        <div class="hist-badge badge-${h.accion}">${labels[h.accion] || h.accion}</div>
+      </div>`).join('');
   } catch {
-    toast('❌ Sin conexión con el servidor', 'err');
-    document.getElementById('statusDot').className = 'status-dot error';
-    document.getElementById('statusText').textContent = 'Error';
+    c.innerHTML = '<div class="empty-state" style="color:var(--red)">Error al cargar historial</div>';
   }
 }
 
+// ══════════════════════════════════════════════════════
+// EDIT MODAL
+// ══════════════════════════════════════════════════════
+let editingItem = null;
+let editingMod  = null;
+
+function abrirEdit(jsonStr, mod) {
+  const item = JSON.parse(jsonStr);
+  editingItem = item;
+  editingMod  = mod;
+
+  let html = '';
+  if (mod === 'bobinas') {
+    html = `
+      <div class="form-group"><label class="form-label">Estado</label>
+        <select class="form-select" id="editEstado">
+          <option value="activa" ${item.estado==='activa'?'selected':''}>Activa</option>
+          <option value="devuelta" ${item.estado==='devuelta'?'selected':''}>Devuelta</option>
+        </select>
+      </div>
+      <div class="form-group"><label class="form-label">Notas</label>
+        <input class="form-input" id="editNotas" type="text" value="${item.notas||''}">
+      </div>`;
+  } else {
+    const estadoOpts = mod === 'pemp' || mod === 'carretillas'
+      ? ['Disponible','Averiada'].map(e => `<option value="${e}" ${item.estado===e?'selected':''}>${e}</option>`).join('')
+      : '';
+    html = `
+      <div class="form-group"><label class="form-label">Estado</label>
+        <select class="form-select" id="editEstado">${estadoOpts}</select>
+      </div>
+      <div class="form-group"><label class="form-label">Marca</label>
+        <input class="form-input" id="editMarca" type="text" value="${item.marca||''}">
+      </div>
+      <div class="form-group"><label class="form-label">Proveedor</label>
+        <input class="form-input" id="editProv" type="text" value="${item.proveedor||''}">
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div class="form-group"><label class="form-label">Últ. revisión</label>
+          <input class="form-input" id="editUltRev" type="date" value="${item.fecha_ultima_revision||''}">
+        </div>
+        <div class="form-group"><label class="form-label">Próx. revisión</label>
+          <input class="form-input" id="editProxRev" type="date" value="${item.fecha_proxima_revision||''}">
+        </div>
+      </div>
+      <div class="form-group"><label class="form-label">Notas</label>
+        <input class="form-input" id="editNotas" type="text" value="${item.notas||''}">
+      </div>`;
+  }
+
+  document.getElementById('modalEditBody').innerHTML = html;
+  document.getElementById('modalEdit').classList.add('show');
+}
+
+function closeModalEdit() {
+  document.getElementById('modalEdit').classList.remove('show');
+  editingItem = null; editingMod = null;
+}
+
+async function guardarEdicion() {
+  if (!editingItem || !editingMod) return;
+  const estado = document.getElementById('editEstado')?.value;
+  const notas  = document.getElementById('editNotas')?.value;
+  const s = getSession();
+
+  let body, path;
+  const id = editingItem.codigo || editingItem.matricula || editingItem.id;
+
+  if (editingMod === 'bobinas') {
+    body = { estado, notas };
+    path = `/bobinas/${encodeURIComponent(id)}`;
+  } else {
+    const marca   = document.getElementById('editMarca')?.value;
+    const prov    = document.getElementById('editProv')?.value;
+    const ultRev  = document.getElementById('editUltRev')?.value;
+    const proxRev = document.getElementById('editProxRev')?.value;
+    body = { estado, marca, proveedor: prov, fecha_ultima_revision: ultRev, fecha_proxima_revision: proxRev, notas };
+    path = `/${editingMod}/${encodeURIComponent(id)}`;
+  }
+
+  try {
+    const res = await apiCall(path, { method: 'PATCH', body: JSON.stringify(body) });
+    const data = await res.json();
+    if (res.ok) {
+      toast(`✅ ${data.mensaje || 'Guardado'}`, 'ok');
+      closeModalEdit();
+      cargarStock();
+    } else {
+      toast(`❌ ${data.error || 'Error'}`, 'err');
+    }
+  } catch { toast('❌ Error de conexión', 'err'); }
+}
+
+// ══════════════════════════════════════════════════════
+// DEVOLUTION MODAL
+// ══════════════════════════════════════════════════════
+let devItem = null;
+let devMod  = null;
+
+function abrirDevolucion(jsonStr, mod) {
+  const item = JSON.parse(jsonStr);
+  devItem = item;
+  devMod  = mod;
+
+  const id = item.codigo || item.matricula;
+  document.getElementById('modalDevInfo').innerHTML = `
+    <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:20px;color:var(--accent)">${id}</div>
+    <div style="font-size:13px;color:var(--muted);margin-top:4px">${item.proveedor || ''} ${item.tipo_cable || item.tipo || ''}</div>`;
+
+  const s = getSession();
+  document.getElementById('modalDevPor').value   = s?.nombre || '';
+  document.getElementById('modalDevNotas').value = '';
+  document.getElementById('modalDev').classList.add('show');
+}
+
+function closeModalDev() {
+  document.getElementById('modalDev').classList.remove('show');
+  devItem = null; devMod = null;
+}
+
+async function confirmarDevolucion() {
+  if (!devItem) return;
+  const devuelto_por = document.getElementById('modalDevPor').value.trim();
+  const notas        = document.getElementById('modalDevNotas').value;
+  const id = devItem.codigo || devItem.matricula || devItem.id;
+
+  const path = devMod === 'bobinas'
+    ? `/bobinas/${encodeURIComponent(id)}`
+    : `/${devMod}/${encodeURIComponent(id)}`;
+
+  try {
+    const res = await apiCall(path, {
+      method: 'PUT',
+      body: JSON.stringify({ devuelto_por, notas })
+    });
+    const data = await res.json();
+    if (res.ok) {
+      toast(`✅ ${data.mensaje || 'Devuelto correctamente'}`, 'ok');
+      if (navigator.vibrate) navigator.vibrate(200);
+      closeModalDev();
+      cargarStock();
+      cargarStatsHome();
+    } else {
+      toast(`❌ ${data.error || 'Error'}`, 'err');
+    }
+  } catch { toast('❌ Error de conexión', 'err'); }
+}
+
+// ══════════════════════════════════════════════════════
+// AJUSTES
+// ══════════════════════════════════════════════════════
+function guardarApiUrl() {
+  const url = document.getElementById('cfgApiUrl').value.trim();
+  localStorage.setItem('alejandra_api', url);
+  toast('✅ URL guardada', 'ok');
+  checkConnection();
+}
+
+// ══════════════════════════════════════════════════════
+// CATÁLOGOS (proveedores/tipos cable)
+// ══════════════════════════════════════════════════════
 async function cargarCatalogos() {
   try {
-    const [rp, rt] = await Promise.all([api('/proveedores'), api('/tipos')]);
-    const proveedores = await rp.json();
-    const tipos = await rt.json();
-
-    renderTags('tags-proveedores', proveedores, 'proveedor');
-    renderTags('tags-tipos', tipos, 'tipo');
-    poblarSelects(proveedores, tipos);
+    const [rp, rt] = await Promise.all([apiCall('/proveedores'), apiCall('/tipos-cable')]);
+    const provs  = rp.ok ? await rp.json() : [];
+    const tipos  = rt.ok ? await rt.json() : [];
+    poblarSelect('fieldProv',      provs);
+    poblarSelect('fieldTipoCable', tipos);
+    renderTags('tagsProveedores', provs, 'proveedor');
+    renderTags('tagsTipos',       tipos, 'tipo');
   } catch {}
+}
+
+function poblarSelect(id, items) {
+  const sel = document.getElementById(id);
+  if (!sel) return;
+  const prev = sel.value;
+  sel.innerHTML = '<option value="">Seleccionar...</option>' +
+    items.map(i => `<option value="${i.nombre}" ${i.nombre===prev?'selected':''}>${i.nombre}</option>`).join('');
 }
 
 function renderTags(containerId, items, tipo) {
   const c = document.getElementById(containerId);
-  c.innerHTML = items.map(it => `
-    <span class="tag">
-      ${it.nombre}
-      <button class="tag-del" onclick="delCatalogo('${tipo}', ${it.id})">×</button>
-    </span>
+  if (!c) return;
+  c.innerHTML = items.map(i => `
+    <span class="tag">${i.nombre}<button class="tag-del" onclick="delCatalogo('${tipo}',${i.id})">×</button></span>
   `).join('') || '<span style="color:var(--muted);font-size:12px">Sin elementos</span>';
 }
 
-function poblarSelects(proveedores, tipos) {
-  const selProv = document.getElementById('prov-entrada');
-  const selTipo = document.getElementById('tipo-entrada');
-  const selProvVal = selProv.value;
-  const selTipoVal = selTipo.value;
-
-  selProv.innerHTML = '<option value="">Seleccionar proveedor...</option>' +
-    proveedores.map(p => `<option value="${p.nombre}" ${p.nombre === selProvVal ? 'selected' : ''}>${p.nombre}</option>`).join('');
-  selTipo.innerHTML = '<option value="">Seleccionar tipo de cable...</option>' +
-    tipos.map(t => `<option value="${t.nombre}" ${t.nombre === selTipoVal ? 'selected' : ''}>${t.nombre}</option>`).join('');
-}
-
 async function addProveedor() {
-  const v = document.getElementById('nuevo-proveedor').value.trim();
+  const v = document.getElementById('newProveedor').value.trim();
   if (!v) return;
-  await api('/proveedores', { method: 'POST', body: JSON.stringify({ nombre: v }) });
-  document.getElementById('nuevo-proveedor').value = '';
+  await apiCall('/proveedores', { method: 'POST', body: JSON.stringify({ nombre: v }) });
+  document.getElementById('newProveedor').value = '';
   cargarCatalogos();
 }
 
 async function addTipo() {
-  const v = document.getElementById('nuevo-tipo').value.trim();
+  const v = document.getElementById('newTipo').value.trim();
   if (!v) return;
-  await api('/tipos', { method: 'POST', body: JSON.stringify({ nombre: v }) });
-  document.getElementById('nuevo-tipo').value = '';
+  await apiCall('/tipos-cable', { method: 'POST', body: JSON.stringify({ nombre: v }) });
+  document.getElementById('newTipo').value = '';
   cargarCatalogos();
 }
 
 async function delCatalogo(tipo, id) {
-  const path = tipo === 'proveedor' ? `/proveedores/${id}` : `/tipos/${id}`;
-  await api(path, { method: 'DELETE' });
+  const path = tipo === 'proveedor' ? `/proveedores/${id}` : `/tipos-cable/${id}`;
+  await apiCall(path, { method: 'DELETE' });
   cargarCatalogos();
 }
 
-function limpiarDatosLocales() {
-  if (!confirm('¿Limpiar la configuración local? Los datos del servidor NO se borrarán.')) return;
-  localStorage.removeItem('gestibobina_api');
-  toast('✅ Configuración local limpiada', 'ok');
-  cargarConfig();
+// ══════════════════════════════════════════════════════
+// ADMIN
+// ══════════════════════════════════════════════════════
+async function cargarAdminData() {
+  const s = getSession();
+  await cargarCatalogos();
+  await cargarUsuariosAdmin();
+  if (s?.rol === 'superadmin') {
+    await cargarObrasAdmin();
+    await cargarDashboard();
+  }
 }
 
-// ═══════════════════════════════════════════════════════
-// DASHBOARD
-// ═══════════════════════════════════════════════════════
-async function cargarDashboard() {
-  const c = document.getElementById('dashboard-content');
-  if (!c) return;
-
+async function cargarObrasAdmin() {
   try {
-    // Stats globales
-    const [statsRes, obrasRes] = await Promise.all([
-      api('/stats'),
-      api('/obras'),
-    ]);
-    const stats = await statsRes.json();
-    const obras = await obrasRes.json();
+    const res = await apiCall('/obras');
+    const obras = await res.json();
+    renderObrasAdmin(obras);
+    // populate obra select for new user form
+    const sel = document.getElementById('newUsuarioObra');
+    if (sel) {
+      sel.innerHTML = '<option value="">— Obra —</option>' +
+        obras.map(o => `<option value="${o.id}">${o.nombre}</option>`).join('');
+    }
+  } catch {}
+}
 
-    // Stats por obra
+function renderObrasAdmin(obras) {
+  const c = document.getElementById('adminObrasList');
+  if (!c) return;
+  if (!obras.length) { c.innerHTML = '<div style="color:var(--muted);font-size:12px">Sin obras</div>'; return; }
+  c.innerHTML = obras.map(o => `
+    <div class="admin-list-item">
+      <div class="admin-item-info">
+        <div class="admin-item-name">${o.nombre}</div>
+        <div class="admin-item-sub">${o.codigo || ''}</div>
+      </div>
+      <button class="btn-sm danger" onclick="eliminarObra(${o.id})">🗑</button>
+    </div>`).join('');
+}
+
+async function crearObra() {
+  const nombre = document.getElementById('newObraNombre').value.trim();
+  const codigo = document.getElementById('newObraCodigo').value.trim().toUpperCase();
+  if (!nombre || !codigo) return toast('⚠️ Rellena nombre y código', 'err');
+  try {
+    const res = await apiCall('/obras', { method: 'POST', body: JSON.stringify({ nombre, codigo }) });
+    const data = await res.json();
+    if (res.ok) {
+      toast(`✅ Obra "${nombre}" creada`, 'ok');
+      document.getElementById('newObraNombre').value = '';
+      document.getElementById('newObraCodigo').value = '';
+      cargarObrasAdmin();
+    } else { toast(`❌ ${data.error}`, 'err'); }
+  } catch { toast('❌ Error', 'err'); }
+}
+
+async function eliminarObra(id) {
+  if (!confirm('¿Eliminar esta obra?')) return;
+  try {
+    await apiCall(`/obras/${id}`, { method: 'DELETE' });
+    toast('✅ Obra eliminada', 'ok');
+    cargarObrasAdmin();
+  } catch { toast('❌ Error', 'err'); }
+}
+
+async function cargarUsuariosAdmin() {
+  try {
+    const res = await apiCall('/usuarios');
+    if (!res.ok) { document.getElementById('adminUsuariosList').innerHTML = '<div style="color:var(--muted);font-size:12px">Sin permisos</div>'; return; }
+    const usuarios = await res.json();
+    const c = document.getElementById('adminUsuariosList');
+    if (!usuarios.length) { c.innerHTML = '<div style="color:var(--muted);font-size:12px">Sin usuarios</div>'; return; }
+    c.innerHTML = usuarios.map(u => `
+      <div class="admin-list-item">
+        <div class="admin-item-info">
+          <div class="admin-item-name">${u.nombre}</div>
+          <div class="admin-item-sub">${u.rol} ${u.obra_nombre ? '· ' + u.obra_nombre : ''}</div>
+        </div>
+        <button class="btn-sm danger" onclick="eliminarUsuario(${u.id})">🗑</button>
+      </div>`).join('');
+  } catch {}
+}
+
+async function crearUsuario() {
+  const nombre  = document.getElementById('newUsuarioNombre').value.trim();
+  const codigo  = document.getElementById('newUsuarioCodigo').value.trim();
+  const rol     = document.getElementById('newUsuarioRol').value;
+  const obra_id = document.getElementById('newUsuarioObra').value;
+  if (!nombre || !codigo) return toast('⚠️ Nombre y código obligatorios', 'err');
+  try {
+    const res = await apiCall('/usuarios', {
+      method: 'POST',
+      body: JSON.stringify({ nombre, codigo, rol, obra_id: obra_id || null })
+    });
+    const data = await res.json();
+    if (res.ok) {
+      toast(`✅ Usuario "${nombre}" creado`, 'ok');
+      document.getElementById('newUsuarioNombre').value = '';
+      document.getElementById('newUsuarioCodigo').value = '';
+      cargarUsuariosAdmin();
+    } else { toast(`❌ ${data.error}`, 'err'); }
+  } catch { toast('❌ Error', 'err'); }
+}
+
+async function eliminarUsuario(id) {
+  if (!confirm('¿Eliminar este usuario?')) return;
+  try {
+    await apiCall(`/usuarios/${id}`, { method: 'DELETE' });
+    toast('✅ Usuario eliminado', 'ok');
+    cargarUsuariosAdmin();
+  } catch { toast('❌ Error', 'err'); }
+}
+
+async function cargarDashboard() {
+  const c = document.getElementById('dashboardContent');
+  if (!c) return;
+  try {
+    const [sr, or] = await Promise.all([apiCall('/stats'), apiCall('/obras')]);
+    const stats = await sr.json();
+    const obras = await or.json();
+
     const obraStats = await Promise.all(obras.map(async o => {
-      const r = await fetch(getAPI() + `/stats`, {
-        headers: { 'Content-Type': 'application/json', 'X-Admin-Code': getSesion()?.adminCode || '', 'X-Obra-Id': String(o.id) }
+      const s = getSession();
+      const r = await fetch(getAPI() + '/stats', {
+        headers: { 'Content-Type':'application/json', 'X-Admin-Code': s?.adminCode || '', 'X-Obra-Id': String(o.id) }
       });
-      const s = await r.json();
-      return { ...o, ...s };
+      const d = await r.json();
+      return { ...o, ...d };
     }));
 
-    const maxActivas = Math.max(...obraStats.map(o => o.activas), 1);
+    const max = Math.max(...obraStats.map(o => o.activas || 0), 1);
 
     c.innerHTML = `
       <div class="dash-grid">
-        <div class="dash-card">
-          <div class="n" style="color:var(--accent)">${stats.total}</div>
-          <div class="lbl">Total bobinas</div>
-        </div>
-        <div class="dash-card">
-          <div class="n" style="color:var(--green)">${stats.activas}</div>
-          <div class="lbl">En stock</div>
-        </div>
-        <div class="dash-card">
-          <div class="n" style="color:var(--red)">${stats.devueltas}</div>
-          <div class="lbl">Devueltas</div>
-        </div>
-        <div class="dash-card">
-          <div class="n" style="color:var(--blue)">${obras.length}</div>
-          <div class="lbl">Obras activas</div>
-        </div>
+        <div class="dash-card"><div class="dash-n" style="color:var(--accent)">${stats.total||0}</div><div class="dash-lbl">Total</div></div>
+        <div class="dash-card"><div class="dash-n" style="color:var(--green)">${stats.activas||0}</div><div class="dash-lbl">Activas</div></div>
+        <div class="dash-card"><div class="dash-n" style="color:var(--red)">${stats.devueltas||0}</div><div class="dash-lbl">Devueltas</div></div>
+        <div class="dash-card"><div class="dash-n" style="color:var(--blue)">${obras.length}</div><div class="dash-lbl">Obras</div></div>
       </div>
-      <div class="config-title" style="font-size:12px;margin-bottom:8px">STOCK POR OBRA</div>
       ${obraStats.map(o => `
-        <div class="dash-obra-row">
-          <div style="font-family:'Barlow Condensed',sans-serif;font-weight:700;min-width:90px;font-size:13px">${o.nombre}</div>
-          <div class="dash-bar-wrap"><div class="dash-bar" style="width:${Math.round((o.activas/maxActivas)*100)}%"></div></div>
-          <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:15px;color:var(--accent);min-width:24px;text-align:right">${o.activas}</div>
-        </div>
-      `).join('')}
-    `;
-  } catch (e) {
+        <div class="obra-bar-row">
+          <div class="obra-bar-name">${o.nombre}</div>
+          <div class="obra-bar-wrap"><div class="obra-bar" style="width:${Math.round(((o.activas||0)/max)*100)}%"></div></div>
+          <div class="obra-bar-n">${o.activas||0}</div>
+        </div>`).join('')}`;
+  } catch {
     c.innerHTML = '<div style="color:var(--red);font-size:12px">Error al cargar dashboard</div>';
   }
 }
 
-// ═══════════════════════════════════════════════════════
-// INICIO
-// ═══════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════
+// INIT
+// ══════════════════════════════════════════════════════
 (async () => {
-  // Inicializar usuario en cabecera
-  document.getElementById('headerUsuario').textContent = getUsuario() || 'Sin usuario';
-
-  // Iniciar app (muestra overlay si no hay sesión)
+  selectModule('bobinas'); // default module
   iniciarApp();
-
-  // Comprobar conexión
-  try {
-    const res = await fetch(getAPI() + '/stats');
-    if (res.ok) {
-      document.getElementById('statusDot').className = 'status-dot ok';
-      document.getElementById('statusText').textContent = 'Online';
-    }
-  } catch {
-    document.getElementById('statusDot').className = 'status-dot error';
-    document.getElementById('statusText').textContent = 'Offline';
-  }
 })();
 </script>
 
-<!-- Service Worker -->
 <script>
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('./sw.js').catch(() => {});
+  navigator.serviceWorker.register('sw.js').catch(() => {});
 }
 </script>
-
 </body>
 </html>

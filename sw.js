@@ -1,5 +1,5 @@
 // Cambia este número cada vez que actualices la app
-const CACHE = 'gestibobina-v3.7';
+const CACHE = 'alejandra-v1.0';
 
 self.addEventListener('install', e => {
   self.skipWaiting();

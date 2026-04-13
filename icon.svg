@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Fondo oscuro con esquinas redondeadas -->
+  <rect width="512" height="512" rx="90" fill="#0f172a"/>
+  <!-- Esquinas tipo escáner (azul) -->
+  <path d="M60 148V60h88" stroke="#2563eb" stroke-width="26" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <path d="M452 148V60h-88" stroke="#2563eb" stroke-width="26" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <path d="M60 364v88h88" stroke="#2563eb" stroke-width="26" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <path d="M452 364v88h-88" stroke="#2563eb" stroke-width="26" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <!-- Letra A (naranja) -->
+  <path d="M256 88 L148 424 L192 424 L222 336 L290 336 L320 424 L364 424 L256 88 Z M256 168 L306 296 L206 296 Z" fill="#f97316"/>
+  <!-- Detalle 3D: cara derecha más clara -->
+  <path d="M256 88 L364 424 L320 424 L290 336 L256 296 L256 168 Z" fill="#fb923c" opacity="0.45"/>
+</svg>
