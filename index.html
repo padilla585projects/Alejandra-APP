@@ -276,11 +276,11 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:1
       <div class="login-appname">Alejandra</div>
       <div class="login-tagline">Inventario · Maquinaria · Control</div>
     </div>
-    <div class="login-sub">Introduce tus datos para acceder</div>
-    <input class="login-input" id="loginNombre" type="text" placeholder="Tu nombre" autocomplete="off"
+    <div class="login-sub">Introduce tu código de acceso</div>
+    <input class="login-input" id="loginNombre" type="text" placeholder="Tu nombre (opcional para Admin)" autocomplete="off"
       onkeydown="if(event.key==='Enter')document.getElementById('loginCodigo').focus()">
     <div class="login-pw-wrap">
-      <input class="login-input" id="loginCodigo" type="password" placeholder="Código o nombre de obra" autocomplete="off"
+      <input class="login-input" id="loginCodigo" type="password" placeholder="Código de acceso" autocomplete="off"
         onkeydown="if(event.key==='Enter')doLogin()">
       <button class="login-pw-toggle" onclick="toggleLoginPw()" id="loginPwToggle">👁</button>
     </div>
@@ -561,7 +561,10 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:1
         <label class="form-label">URL del Worker</label>
         <input class="form-input" id="cfgApiUrl" type="url" placeholder="https://gestibobina-proxy.padilla585.workers.dev">
       </div>
-      <button class="btn-primary btn-secondary" style="margin-top:0;font-size:13px" onclick="guardarApiUrl()">Guardar URL</button>
+      <div style="display:flex;gap:8px;margin-top:0">
+        <button class="btn-primary btn-secondary" style="flex:1;font-size:13px" onclick="guardarApiUrl()">💾 Guardar</button>
+        <button class="btn-primary btn-secondary" style="flex:1;font-size:13px" onclick="comprobarConexion()">📡 Comprobar conexión</button>
+      </div>
     </div>
 
     <div class="settings-section">
@@ -586,7 +589,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:1
     <div class="settings-section" style="margin-top:8px">
       <div class="settings-title">ℹ️ Acerca de</div>
       <div class="settings-row"><span>Aplicación</span><strong>Alejandra</strong></div>
-      <div class="settings-row"><span>Versión</span><strong id="appVersionDisplay">v2.1</strong></div>
+      <div class="settings-row"><span>Versión</span><strong id="appVersionDisplay">v2.5</strong></div>
       <div class="settings-row"><span>Autor</span><strong>Adrian Padilla</strong></div>
       <div class="settings-row"><span>Desarrollado con</span><strong>Claude AI</strong></div>
       <div class="settings-row"><span>Backend</span><strong>Cloudflare Workers + D1</strong></div>
@@ -801,8 +804,7 @@ async function doLogin() {
   const btn    = document.getElementById('loginBtn');
   errEl.textContent = '';
 
-  if (!nombre) { errEl.textContent = 'Introduce tu nombre'; return; }
-  if (!codigo) { errEl.textContent = 'Introduce el código o nombre de obra'; return; }
+  if (!codigo) { errEl.textContent = 'Introduce el código de acceso'; return; }
 
   btn.textContent = 'Verificando...';
   btn.disabled = true;
@@ -1037,6 +1039,8 @@ function showModTab(name) {
   const tabs = document.querySelectorAll('.mod-tab-btn');
   if (tabs[tabMap[name]]) tabs[tabMap[name]].classList.add('active');
   document.getElementById('modPanel' + name.charAt(0).toUpperCase() + name.slice(1)).classList.add('active');
+  if (name === 'stock') cargarStock();
+  if (name === 'historial') cargarHistorial();
 }
 
 // ══════════════════════════════════════════════════════
@@ -1663,7 +1667,24 @@ function guardarApiUrl() {
   const url = document.getElementById('cfgApiUrl').value.trim();
   localStorage.setItem('alejandra_api', url);
   toast('✅ URL guardada', 'ok');
-  checkConnection();
+}
+
+async function comprobarConexion() {
+  const dot = document.getElementById('connDot');
+  toast('⏳ Comprobando...', '');
+  try {
+    const r = await fetch(getAPI() + '/stats', { signal: AbortSignal.timeout(6000) });
+    if (r.ok) {
+      dot.className = 'conn-dot ok';
+      toast('✅ Conexión correcta', 'ok');
+    } else {
+      dot.className = 'conn-dot err';
+      toast('❌ El worker respondió con error', 'err');
+    }
+  } catch {
+    dot.className = 'conn-dot err';
+    toast('❌ Sin conexión con el worker', 'err');
+  }
 }
 
 // ══════════════════════════════════════════════════════
