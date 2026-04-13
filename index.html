@@ -214,7 +214,7 @@ tr:hover td { background: var(--surface2); }
     <input class="acceso-input" id="inputNombreAcceso" type="text" placeholder="TU NOMBRE"
       style="font-size:16px;letter-spacing:1px;text-transform:none"
       autocomplete="off" onkeydown="if(event.key==='Enter') document.getElementById('inputCodigoAcceso').focus()">
-    <input class="acceso-input" id="inputCodigoAcceso" type="text" placeholder="CÓDIGO O NOMBRE DE OBRA"
+    <input class="acceso-input" id="inputCodigoAcceso" type="password" placeholder="CÓDIGO O NOMBRE DE OBRA"
       style="font-size:15px;letter-spacing:1px;text-transform:none"
       autocomplete="off" onkeydown="if(event.key==='Enter') verificarAcceso()">
     <button class="acceso-btn" onclick="verificarAcceso()">ACCEDER</button>
@@ -539,7 +539,7 @@ tr:hover td { background: var(--surface2); }
   <div style="background:var(--surface);width:100%;max-width:480px;border-radius:16px 16px 0 0;padding:20px;display:flex;flex-direction:column;gap:12px">
     <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:18px;letter-spacing:1px">🏗 OBRA ACTUAL</div>
     <div id="modalObraNombre" style="font-size:22px;font-family:'Barlow Condensed',sans-serif;font-weight:700;color:var(--accent)"></div>
-    <button onclick="cerrarSesion()" style="padding:13px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:15px;cursor:pointer">🚪 Cambiar obra</button>
+    <div id="modalObraAcciones"></div>
     <button onclick="cerrarModalObra()" style="padding:11px;background:transparent;border:1px solid var(--border);border-radius:8px;color:var(--muted);font-family:'Barlow Condensed',sans-serif;font-weight:700;cursor:pointer">CANCELAR</button>
   </div>
 </div>
@@ -777,8 +777,24 @@ function cerrarModalUsuario() {
 function abrirModalObra() {
   const s = getSesion();
   if (!s) return;
-  const nombre = s.tipo === 'admin' ? 'Administrador' : s.obra.nombre;
+  const nombre = s.tipo === 'admin' ? 'ADMIN' : s.obra.nombre;
   document.getElementById('modalObraNombre').textContent = nombre;
+
+  // Acciones según rol
+  const acciones = document.getElementById('modalObraAcciones');
+  if (s.tipo === 'admin') {
+    // Admin: puede cambiar de obra sin cerrar sesión
+    acciones.innerHTML = `
+      <button onclick="cerrarSesion()" style="padding:13px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:15px;cursor:pointer;width:100%">🚪 Cerrar sesión</button>
+    `;
+  } else {
+    // Trabajador: solo puede cerrar sesión para cambiar de obra
+    acciones.innerHTML = `
+      <div style="font-size:12px;color:var(--muted);text-align:center">Para cambiar de obra cierra sesión</div>
+      <button onclick="cerrarSesion()" style="padding:13px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:15px;cursor:pointer;width:100%">🚪 Cerrar sesión</button>
+    `;
+  }
+
   document.getElementById('modalObra').style.display = 'flex';
 }
 
