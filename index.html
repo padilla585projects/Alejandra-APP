@@ -855,16 +855,20 @@ async function iniciarApp() {
   document.getElementById('appContent').style.display = 'block';
   document.getElementById('bottomNav').style.display = 'flex';
 
+  // Siempre arrancar en la pantalla de inicio
+  showScreen('home');
+
   renderHeader();
   renderAjustesInfo();
-  const greet = document.getElementById('homeGreetingName');
-  if (greet) greet.textContent = 'Hola, ' + (s.rol === 'superadmin' ? 'Admin' : s.nombre);
 
-  if (s.rol === 'superadmin' || s.rol === 'encargado') {
+  const esSuperAdmin = s.rol === 'superadmin';
+  const esEncargado  = s.rol === 'encargado';
+
+  if (esSuperAdmin || esEncargado) {
     document.getElementById('adminHomeBtn').style.display = 'flex';
     document.getElementById('ajustesAdminLink').style.display = 'block';
   }
-  if (s.rol === 'superadmin') {
+  if (esSuperAdmin) {
     document.getElementById('adminObrasSection').style.display = 'block';
     document.getElementById('adminDashboard').style.display = 'block';
   }
@@ -874,9 +878,16 @@ async function iniciarApp() {
   await cargarRecentActivity();
   await cargarCatalogos();
 
-  if (s.rol === 'superadmin') {
+  if (esSuperAdmin) {
     await cargarObrasAdmin();
   }
+}
+
+function rolLabel(rol) {
+  if (rol === 'superadmin') return 'SuperAdmin';
+  if (rol === 'encargado')  return 'Encargado';
+  if (rol === 'operario')   return 'Operario';
+  return rol || '—';
 }
 
 function renderHeader() {
@@ -884,7 +895,10 @@ function renderHeader() {
   if (!s) return;
 
   const nameEl = document.getElementById('headerUserName');
-  nameEl.textContent = s.rol === 'superadmin' ? 'Admin' : s.nombre;
+  // SuperAdmin y Encargado muestran su rol; Operario muestra su nombre
+  nameEl.textContent = (s.rol === 'superadmin' || s.rol === 'encargado')
+    ? rolLabel(s.rol)
+    : (s.nombre || '—');
 
   if (s.rol === 'superadmin') {
     document.getElementById('headerObraLabel').style.display = 'none';
@@ -900,8 +914,8 @@ function renderHeader() {
 function renderAjustesInfo() {
   const s = getSession();
   if (!s) return;
-  document.getElementById('ajustesNombre').textContent = s.nombre;
-  document.getElementById('ajustesRol').textContent = s.rol;
+  document.getElementById('ajustesNombre').textContent = s.nombre || '—';
+  document.getElementById('ajustesRol').textContent = rolLabel(s.rol);
   document.getElementById('ajustesObra').textContent = s.obra_nombre || (s.rol === 'superadmin' ? 'Todas' : '—');
   document.getElementById('cfgApiUrl').value = getAPI();
 }
