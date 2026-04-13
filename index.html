@@ -39,8 +39,10 @@ header { background: var(--surface); border-bottom: 2px solid var(--accent); pad
 
 /* NAV */
 nav { display: flex; background: var(--surface); border-bottom: 1px solid var(--border); position: sticky; top: 49px; z-index: 99; }
-nav button { flex: 1; padding: 11px 4px 10px; background: none; border: none; color: var(--muted); font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 11px; letter-spacing: 1px; text-transform: uppercase; cursor: pointer; border-bottom: 3px solid transparent; transition: all 0.2s; }
+nav button { flex: 1; padding: 11px 2px 10px; background: none; border: none; color: var(--muted); font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 11px; letter-spacing: 0.5px; text-transform: uppercase; cursor: pointer; border-bottom: 3px solid transparent; transition: all 0.2s; }
 nav button.active { color: var(--accent); border-bottom-color: var(--accent); }
+.nav-txt { display: none; }
+@media (min-width: 400px) { .nav-txt { display: inline; } }
 
 /* TABS */
 .tab { display: none; padding: 14px 14px 90px; }
@@ -272,11 +274,11 @@ tr:hover td { background: var(--surface2); }
 </div>
 
 <nav>
-  <button class="active" onclick="showTab('entrada')">📥 Entrada</button>
-  <button onclick="showTab('devolucion')">📤 Dev.</button>
-  <button onclick="showTab('stock')">📋 Stock</button>
-  <button onclick="showTab('historial')">🕒 Historial</button>
-  <button onclick="showTab('config')">⚙️</button>
+  <button class="active" onclick="showTab('entrada')">📥<span class="nav-txt"> Entrada</span></button>
+  <button onclick="showTab('devolucion')">📤<span class="nav-txt"> Dev.</span></button>
+  <button onclick="showTab('stock')">📋<span class="nav-txt"> Stock</span></button>
+  <button onclick="showTab('historial')">🕒<span class="nav-txt"> Historial</span></button>
+  <button onclick="showTab('config')">⚙️<span class="nav-txt"> Config</span></button>
 </nav>
 
 <!-- ═══════════════════════════════════════════════════════
@@ -452,7 +454,7 @@ tr:hover td { background: var(--surface2); }
           <th>Código</th>
           <th>Proveedor</th>
           <th>Cable</th>
-          <th>F. Entrada</th>
+          <th>Usuario</th>
           <th>Estado</th>
           <th></th>
         </tr>
@@ -1370,7 +1372,7 @@ function renderTabla(bobinas) {
       <td><strong style="font-family:'Barlow Condensed',sans-serif;letter-spacing:1px;font-size:15px">${b.codigo}</strong></td>
       <td style="color:var(--muted);font-size:12px">${b.proveedor}</td>
       <td style="color:var(--muted);font-size:12px">${b.tipo_cable}</td>
-      <td style="color:var(--muted);font-size:11px">${b.fecha_entrada}</td>
+      <td style="color:var(--muted);font-size:12px">${b.registrado_por || '—'}</td>
       <td>
         <span class="pill ${b.estado === 'activa' ? 'pill-verde' : 'pill-gris'}">
           ${b.estado === 'activa' ? '✓ STOCK' : '↩ DEV'}
