@@ -67,21 +67,23 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:1
 .nav-qr-btn svg{width:26px;height:26px;color:#000}
 
 /* ── SCREENS ── */
-.screen{display:none;padding:14px 14px 20px}
-.screen.active{display:block}
+.screen{display:none !important;padding:14px 14px 20px}
+.screen.active{display:block !important}
+.screen.active.flex-screen{display:flex !important;flex-direction:column}
 
 /* ── HOME SCREEN ── */
-.home-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px}
-.home-stat{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:12px 8px;text-align:center}
-.home-stat-n{font-family:'Montserrat',sans-serif;font-weight:900;font-size:26px;line-height:1}
-.home-stat-lbl{font-size:9px;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin-top:3px}
-.module-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px}
-.module-card{background:var(--surface);border:2px solid var(--border);border-radius:16px;padding:18px 14px;display:flex;flex-direction:column;align-items:center;gap:8px;cursor:pointer;transition:all .25s;position:relative}
-.module-card.full-width{grid-column:1/-1}
-.module-card.active{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent),0 4px 20px rgba(249,115,22,.25)}
-.module-emoji{font-size:36px;line-height:1}
-.module-name{font-family:'Montserrat',sans-serif;font-weight:900;font-size:13px;letter-spacing:1px;text-transform:uppercase}
-.module-count{position:absolute;top:10px;right:10px;background:var(--accent);color:#000;font-family:'Montserrat',sans-serif;font-weight:900;font-size:11px;padding:2px 7px;border-radius:10px;min-width:24px;text-align:center}
+.home-stats{display:none}
+.home-greeting{display:none}
+.module-grid{display:flex;flex-direction:column;gap:14px;padding:16px;height:100%}
+.module-card{background:var(--surface);border:2px solid var(--border);border-radius:20px;padding:0 24px;display:flex;align-items:center;gap:22px;cursor:pointer;transition:all .2s;flex:1;min-height:100px}
+.module-card.full-width{width:100%}
+.module-card:active{transform:scale(0.97);opacity:.9}
+.module-emoji{font-size:52px;line-height:1;flex-shrink:0}
+.module-info{flex:1}
+.module-name{font-family:'Montserrat',sans-serif;font-weight:900;font-size:20px;color:var(--text)}
+.module-desc{font-size:12px;color:var(--muted);margin-top:4px}
+.module-count{background:var(--accent);color:#000;font-family:'Montserrat',sans-serif;font-weight:900;font-size:14px;padding:5px 12px;border-radius:20px;min-width:32px;text-align:center;flex-shrink:0}
+.module-arrow{color:var(--muted);flex-shrink:0}
 .home-section-title{font-family:'Montserrat',sans-serif;font-weight:900;font-size:13px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:10px}
 .activity-item{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:8px;display:flex;align-items:center;gap:10px}
 .activity-icon{font-size:20px;flex-shrink:0}
@@ -319,47 +321,42 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:1
 <div id="appContent" style="display:none">
 
   <!-- HOME SCREEN -->
-  <div id="screenHome" class="screen active">
-    <div class="home-stats">
-      <div class="home-stat">
-        <div class="home-stat-n" id="statBobinas" style="color:var(--accent)">–</div>
-        <div class="home-stat-lbl">Bobinas</div>
-      </div>
-      <div class="home-stat">
-        <div class="home-stat-n" id="statPemp" style="color:var(--blue)">–</div>
-        <div class="home-stat-lbl">PEMP</div>
-      </div>
-      <div class="home-stat">
-        <div class="home-stat-n" id="statCarretillas" style="color:var(--green)">–</div>
-        <div class="home-stat-lbl">Carretillas</div>
-      </div>
-    </div>
-
-    <div class="module-grid">
-      <div class="module-card full-width" id="cardBobinas" onclick="selectModule('bobinas')">
-        <div class="module-count" id="cntBobinas">–</div>
+  <div id="screenHome" class="screen flex-screen active" style="padding:0;height:100%">
+    <div class="module-grid" style="flex:1">
+      <div class="module-card" id="cardBobinas" onclick="selectModule('bobinas')">
         <div class="module-emoji">🔌</div>
-        <div class="module-name">Bobinas</div>
+        <div class="module-info">
+          <div class="module-name">Bobinas</div>
+          <div class="module-desc">Gestión de bobinas de cable</div>
+        </div>
+        <div class="module-count" id="cntBobinas">–</div>
+        <svg class="module-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
       </div>
       <div class="module-card" id="cardPemp" onclick="selectModule('pemp')">
-        <div class="module-count" id="cntPemp">–</div>
-        <div class="module-emoji">🏗</div>
-        <div class="module-name">PEMP</div>
+        <div class="module-emoji">🏗️</div>
+        <div class="module-info">
+          <div class="module-name">PEMP</div>
+          <div class="module-desc">Plataformas elevadoras</div>
+        </div>
+        <div class="module-count" id="cntPemp" style="background:var(--blue)">–</div>
+        <svg class="module-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
       </div>
       <div class="module-card" id="cardCarretillas" onclick="selectModule('carretillas')">
-        <div class="module-count" id="cntCarretillas">–</div>
         <div class="module-emoji">🚜</div>
-        <div class="module-name">Carretillas</div>
+        <div class="module-info">
+          <div class="module-name">Carretillas</div>
+          <div class="module-desc">Carretillas elevadoras</div>
+        </div>
+        <div class="module-count" id="cntCarretillas" style="background:var(--green)">–</div>
+        <svg class="module-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
       </div>
     </div>
-
-    <div class="home-section-title">Actividad reciente</div>
-    <div id="recentActivity"><div class="empty-state">Cargando...</div></div>
-
-    <button class="admin-home-btn" id="adminHomeBtn" style="display:none" onclick="showScreen('admin')">
-      🔐 Panel de Administración
-      <svg style="margin-left:auto" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
-    </button>
+    <div id="adminHomeBtn" style="display:none;padding:0 16px 12px">
+      <button class="admin-home-btn" onclick="showScreen('admin')">
+        🔐 Panel de Administración
+        <svg style="margin-left:auto" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
+      </button>
+    </div>
   </div>
 
   <!-- MODULE SCREEN (shared for bobinas/pemp/carretillas) -->
@@ -850,6 +847,8 @@ async function iniciarApp() {
 
   renderHeader();
   renderAjustesInfo();
+  const greet = document.getElementById('homeGreetingName');
+  if (greet) greet.textContent = 'Hola, ' + (s.rol === 'superadmin' ? 'Admin' : s.nombre);
 
   if (s.rol === 'superadmin' || s.rol === 'encargado') {
     document.getElementById('adminHomeBtn').style.display = 'flex';
@@ -988,8 +987,8 @@ function selectModule(mod) {
   currentModule = mod;
   document.querySelectorAll('.module-card').forEach(c => c.classList.remove('active'));
   document.getElementById('card' + mod.charAt(0).toUpperCase() + mod.slice(1)).classList.add('active');
-  toast(`Módulo: ${modLabel(mod)}`, '');
   updateModuleUI();
+  navTo('stock');
 }
 
 function modLabel(mod) {
@@ -1021,25 +1020,25 @@ function showModTab(name) {
 // ══════════════════════════════════════════════════════
 async function cargarStatsHome() {
   try {
-    const res = await apiCall('/stats');
-    if (!res.ok) return;
-    const d = await res.json();
-    document.getElementById('statBobinas').textContent = d.activas ?? d.total ?? '–';
-    document.getElementById('cntBobinas').textContent  = d.activas ?? '–';
-    // PEMP and Carretillas: try dedicated endpoints
-    const [rp, rc] = await Promise.all([
-      apiCall('/pemp/stats').catch(() => null),
-      apiCall('/carretillas/stats').catch(() => null)
+    const [rb, rp, rc] = await Promise.all([
+      apiCall('/bobinas').catch(() => null),
+      apiCall('/pemp').catch(() => null),
+      apiCall('/carretillas').catch(() => null)
     ]);
+    if (rb && rb.ok) {
+      const bobinas = await rb.json();
+      const activas = Array.isArray(bobinas) ? bobinas.filter(b => b.estado === 'activa').length : '–';
+      document.getElementById('cntBobinas').textContent = activas;
+    }
     if (rp && rp.ok) {
-      const dp = await rp.json();
-      document.getElementById('statPemp').textContent = dp.disponibles ?? dp.total ?? '–';
-      document.getElementById('cntPemp').textContent  = dp.disponibles ?? '–';
+      const pemp = await rp.json();
+      const disp = Array.isArray(pemp) ? pemp.filter(p => p.estado === 'Disponible').length : '–';
+      document.getElementById('cntPemp').textContent = disp;
     }
     if (rc && rc.ok) {
-      const dc = await rc.json();
-      document.getElementById('statCarretillas').textContent = dc.disponibles ?? dc.total ?? '–';
-      document.getElementById('cntCarretillas').textContent  = dc.disponibles ?? '–';
+      const carr = await rc.json();
+      const disp = Array.isArray(carr) ? carr.filter(c => c.estado === 'Disponible').length : '–';
+      document.getElementById('cntCarretillas').textContent = disp;
     }
   } catch {}
 }
