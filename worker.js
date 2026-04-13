@@ -1030,51 +1030,58 @@ async function syncSheets(env) {
     const sheetId = env.GOOGLE_SHEET_ID;
     const authH   = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
 
-    const { results: obras } = await env.DB.prepare('SELECT * FROM obras WHERE activa = 1 ORDER BY nombre').all();
-
+    // Asegurar que existen las 3 pestañas fijas
     const metaRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}`, { headers: authH });
     const meta = await metaRes.json();
     const sheetNames = (meta.sheets || []).map(s => s.properties.title);
 
-    const requests = [];
-    for (const obra of obras) {
-      if (!sheetNames.includes(obra.nombre)) {
-        requests.push({ addSheet: { properties: { title: obra.nombre } } });
-      }
-    }
-    if (!sheetNames.includes('Todas')) {
-      requests.push({ addSheet: { properties: { title: 'Todas' } } });
-    }
+    const tabsNecesarias = ['Bobinas', 'PEMP', 'Carretillas'];
+    const requests = tabsNecesarias
+      .filter(t => !sheetNames.includes(t))
+      .map(t => ({ addSheet: { properties: { title: t } } }));
+
     if (requests.length > 0) {
       await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}:batchUpdate`, {
         method: 'POST', headers: authH, body: JSON.stringify({ requests }),
       });
     }
 
-    const cabecera = [['Código', 'Proveedor', 'Tipo Cable', 'Registrado por', 'Fecha Entrada', 'Devuelto por', 'Fecha Devolución', 'Estado', 'Notas']];
+    const writeTab = async (tab, values) => {
+      const range = `'${tab}'!A1`;
+      await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(range)}:clear`,
+        { method: 'POST', headers: authH });
+      await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(range)}?valueInputOption=RAW`,
+        { method: 'PUT', headers: authH, body: JSON.stringify({ values }) });
+    };
 
-    for (const obra of obras) {
-      const { results } = await env.DB.prepare('SELECT * FROM bobinas WHERE obra_id = ? ORDER BY created_at DESC').bind(obra.id).all();
-      const filas  = results.map(b => [b.codigo, b.proveedor, b.tipo_cable, b.registrado_por || '', b.fecha_entrada, b.devuelto_por || '', b.fecha_devolucion || '', b.estado, b.notas || '']);
-      const values = [...cabecera, ...filas];
-      const range  = `'${obra.nombre}'!A1`;
-      await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(range)}:clear`, { method: 'POST', headers: authH });
-      await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(range)}?valueInputOption=RAW`, {
-        method: 'PUT', headers: authH, body: JSON.stringify({ values }),
-      });
-    }
-
-    const { results: todas } = await env.DB.prepare(
+    // ── BOBINAS ──────────────────────────────────────────────────────────────
+    const { results: bobinas } = await env.DB.prepare(
       'SELECT b.*, o.nombre as obra_nombre FROM bobinas b LEFT JOIN obras o ON b.obra_id = o.id ORDER BY b.created_at DESC'
     ).all();
-    const filasAll = todas.map(b => [b.obra_nombre || '', b.codigo, b.proveedor, b.tipo_cable, b.registrado_por || '', b.fecha_entrada, b.devuelto_por || '', b.fecha_devolucion || '', b.estado, b.notas || '']);
-    const cabAll   = [['Obra', 'Código', 'Proveedor', 'Tipo Cable', 'Registrado por', 'Fecha Entrada', 'Devuelto por', 'Fecha Devolución', 'Estado', 'Notas']];
-    await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent("'Todas'!A1")}:clear`, { method: 'POST', headers: authH });
-    await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent("'Todas'!A1")}?valueInputOption=RAW`, {
-      method: 'PUT', headers: authH, body: JSON.stringify({ values: [...cabAll, ...filasAll] }),
-    });
+    await writeTab('Bobinas', [
+      ['Obra', 'Código', 'Proveedor', 'Tipo Cable', 'Registrado por', 'Fecha Entrada', 'Devuelto por', 'Fecha Devolución', 'Estado', 'Notas'],
+      ...bobinas.map(b => [b.obra_nombre || '', b.codigo, b.proveedor, b.tipo_cable, b.registrado_por || '', b.fecha_entrada, b.devuelto_por || '', b.fecha_devolucion || '', b.estado, b.notas || '']),
+    ]);
 
-    console.log(`Sheets sincronizado: ${obras.length} obras`);
+    // ── PEMP ─────────────────────────────────────────────────────────────────
+    const { results: pemp } = await env.DB.prepare(
+      'SELECT p.*, o.nombre as obra_nombre FROM pemp p LEFT JOIN obras o ON p.obra_id = o.id ORDER BY p.created_at DESC'
+    ).all();
+    await writeTab('PEMP', [
+      ['Obra', 'Matrícula', 'Tipo', 'Marca', 'Proveedor', 'Estado', 'Fecha Entrada', 'Devuelto por', 'Fecha Devolución', 'Últ. Revisión', 'Próx. Revisión', 'Registrado por', 'Notas'],
+      ...pemp.map(p => [p.obra_nombre || '', p.matricula, p.tipo || '', p.marca || '', p.proveedor || '', p.estado, p.fecha_entrada, p.devuelto_por || '', p.fecha_devolucion || '', p.fecha_ultima_revision || '', p.fecha_proxima_revision || '', p.registrado_por || '', p.notas || '']),
+    ]);
+
+    // ── CARRETILLAS ───────────────────────────────────────────────────────────
+    const { results: carretillas } = await env.DB.prepare(
+      'SELECT c.*, o.nombre as obra_nombre FROM carretillas c LEFT JOIN obras o ON c.obra_id = o.id ORDER BY c.created_at DESC'
+    ).all();
+    await writeTab('Carretillas', [
+      ['Obra', 'Matrícula', 'Tipo', 'Marca', 'Proveedor', 'Energía', 'Estado', 'Fecha Entrada', 'Devuelto por', 'Fecha Devolución', 'Últ. Revisión', 'Próx. Revisión', 'Registrado por', 'Notas'],
+      ...carretillas.map(c => [c.obra_nombre || '', c.matricula, c.tipo || '', c.marca || '', c.proveedor || '', c.energia || '', c.estado, c.fecha_entrada, c.devuelto_por || '', c.fecha_devolucion || '', c.fecha_ultima_revision || '', c.fecha_proxima_revision || '', c.registrado_por || '', c.notas || '']),
+    ]);
+
+    console.log(`Sheets sincronizado: ${bobinas.length} bobinas, ${pemp.length} PEMP, ${carretillas.length} carretillas`);
   } catch (e) {
     console.error('Error sync Sheets:', e.message);
   }
