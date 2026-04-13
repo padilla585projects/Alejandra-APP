@@ -529,8 +529,18 @@ tr:hover td { background: var(--surface2); }
       <input type="text" id="modal-nuevo-input" placeholder="Tu nombre..." style="flex:1;padding:11px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:15px" onkeydown="if(event.key==='Enter')guardarUsuarioModal()">
       <button onclick="guardarUsuarioModal()" style="padding:11px 16px;background:var(--accent);border:none;border-radius:8px;color:#000;font-weight:900;cursor:pointer">+</button>
     </div>
-    <button onclick="cerrarSesion()" style="padding:11px;background:transparent;border:1px solid var(--border);border-radius:8px;color:var(--muted);font-family:'Barlow Condensed',sans-serif;font-weight:700;cursor:pointer">🚪 Cambiar obra</button>
+    <button onclick="cerrarSesion()" style="padding:11px;background:transparent;border:1px solid var(--border);border-radius:8px;color:var(--muted);font-family:'Barlow Condensed',sans-serif;font-weight:700;cursor:pointer">🚪 Cerrar sesión</button>
     <button onclick="cerrarModalUsuario()" style="padding:11px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--muted);font-family:'Barlow Condensed',sans-serif;font-weight:700;cursor:pointer">CANCELAR</button>
+  </div>
+</div>
+
+<!-- MODAL OBRA -->
+<div id="modalObra" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:200;align-items:flex-end;justify-content:center" onclick="if(event.target===this)cerrarModalObra()">
+  <div style="background:var(--surface);width:100%;max-width:480px;border-radius:16px 16px 0 0;padding:20px;display:flex;flex-direction:column;gap:12px">
+    <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:18px;letter-spacing:1px">🏗 OBRA ACTUAL</div>
+    <div id="modalObraNombre" style="font-size:22px;font-family:'Barlow Condensed',sans-serif;font-weight:700;color:var(--accent)"></div>
+    <button onclick="cerrarSesion()" style="padding:13px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:15px;cursor:pointer">🚪 Cambiar obra</button>
+    <button onclick="cerrarModalObra()" style="padding:11px;background:transparent;border:1px solid var(--border);border-radius:8px;color:var(--muted);font-family:'Barlow Condensed',sans-serif;font-weight:700;cursor:pointer">CANCELAR</button>
   </div>
 </div>
 
@@ -629,7 +639,7 @@ function renderHeaderObra() {
     wrap.innerHTML = `<span class="admin-badge">ADMIN</span><select class="obra-select" id="headerObraSelect" onchange="adminCambiarObra(this.value)"><option value="">Todas</option></select>`;
     // poblar después de cargar obras
   } else {
-    wrap.innerHTML = `<span class="obra-label">🏗 ${s.obra.nombre}</span>`;
+    wrap.innerHTML = `<span class="obra-label" onclick="abrirModalObra()" style="cursor:pointer">🏗 ${s.obra.nombre}</span>`;
   }
 }
 
@@ -762,6 +772,18 @@ function abrirModalUsuario() {
 
 function cerrarModalUsuario() {
   document.getElementById('modalUsuario').style.display = 'none';
+}
+
+function abrirModalObra() {
+  const s = getSesion();
+  if (!s) return;
+  const nombre = s.tipo === 'admin' ? 'Administrador' : s.obra.nombre;
+  document.getElementById('modalObraNombre').textContent = nombre;
+  document.getElementById('modalObra').style.display = 'flex';
+}
+
+function cerrarModalObra() {
+  document.getElementById('modalObra').style.display = 'none';
 }
 
 function onModalCambioUsuario(sel) {
