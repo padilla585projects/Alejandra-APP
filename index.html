@@ -1154,7 +1154,6 @@ function renderAjustesInfo() {
 function setupHomeModules() {
   const s = getSession();
   const dept = s?.departamento;
-  const esSA = s?.rol === 'superadmin';
   const cardB = document.getElementById('cardBobinas');
   const cardP = document.getElementById('cardPemp');
   const cardC = document.getElementById('cardCarretillas');
@@ -1165,8 +1164,8 @@ function setupHomeModules() {
     if (cardC) cardC.style.display = 'none';
     return;
   }
-  // Eléctrico/superadmin: todo visible
-  const mostrarBobinas = dept === 'electrico' || esSA;
+  // El departamento elegido manda — electrico ve bobinas, mecánicas no
+  const mostrarBobinas = dept === 'electrico';
   if (cardB) cardB.style.display = mostrarBobinas ? 'flex' : 'none';
   if (cardP) cardP.style.display = 'flex';
   if (cardC) cardC.style.display = 'flex';

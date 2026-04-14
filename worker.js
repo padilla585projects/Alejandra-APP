@@ -1269,30 +1269,41 @@ async function syncSheets(env) {
     const sheetsActuales = meta.sheets || [];
     const sheetNames = sheetsActuales.map(s => s.properties.title);
 
-    const tabsNecesarias = ['⚡ Bobinas', '⚡ PEMP', '⚡ Carretillas', '🔧 PEMP', '🔧 Carretillas'];
-    const tabsAntiguas   = ['Bobinas', 'PEMP', 'Carretillas'];
+    // Nombres de pestañas sin emojis en URL (seguros para la API de Sheets)
+    const tabsNecesarias = ['Elec-Bobinas', 'Elec-PEMP', 'Elec-Carretillas', 'Mec-PEMP', 'Mec-Carretillas'];
+    const tabsAntiguas   = ['Bobinas', 'PEMP', 'Carretillas', '⚡ Bobinas', '⚡ PEMP', '⚡ Carretillas', '🔧 PEMP', '🔧 Carretillas'];
 
-    // Primero añadir las que faltan, luego borrar las genéricas viejas
+    // Añadir pestañas que faltan
     const addReqs = tabsNecesarias
       .filter(t => !sheetNames.includes(t))
       .map(t => ({ addSheet: { properties: { title: t } } }));
-    const delReqs = sheetsActuales
-      .filter(s => tabsAntiguas.includes(s.properties.title))
-      .map(s => ({ deleteSheet: { sheetId: s.properties.sheetId } }));
-
-    const batchReqs = [...addReqs, ...delReqs];
-    if (batchReqs.length > 0) {
+    if (addReqs.length > 0) {
       await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}:batchUpdate`, {
-        method: 'POST', headers: authH, body: JSON.stringify({ requests: batchReqs }),
+        method: 'POST', headers: authH, body: JSON.stringify({ requests: addReqs }),
       });
     }
 
+    // Borrar pestañas genéricas antiguas (separado para no mezclar con adds)
+    const delReqs = sheetsActuales
+      .filter(s => tabsAntiguas.includes(s.properties.title))
+      .map(s => ({ deleteSheet: { sheetId: s.properties.sheetId } }));
+    if (delReqs.length > 0) {
+      await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}:batchUpdate`, {
+        method: 'POST', headers: authH, body: JSON.stringify({ requests: delReqs }),
+      });
+    }
+
+    // writeTab usa el nombre sin caracteres especiales → URL limpia
     const writeTab = async (tab, values) => {
-      const range = `'${tab}'!A1`;
+      const range = `${tab}!A1`;
       await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(range)}:clear`,
         { method: 'POST', headers: authH });
-      await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(range)}?valueInputOption=RAW`,
+      const putRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(range)}?valueInputOption=RAW`,
         { method: 'PUT', headers: authH, body: JSON.stringify({ values }) });
+      if (!putRes.ok) {
+        const errBody = await putRes.text();
+        throw new Error(`writeTab(${tab}) HTTP ${putRes.status}: ${errBody.slice(0, 200)}`);
+      }
     };
 
     const cabBobinas    = ['Obra', 'Código', 'Nº Albarán', 'Proveedor', 'Tipo Cable', 'Registrado por', 'Fecha Entrada', 'Devuelto por', 'Fecha Devolución', 'Estado', 'Notas'];
@@ -1303,36 +1314,42 @@ async function syncSheets(env) {
     const fmtP = p => [p.obra_nombre||'', p.matricula, p.tipo||'', p.marca||'', p.proveedor||'', p.estado, p.fecha_entrada, p.fecha_averia||'', p.fecha_reparacion||'', p.devuelto_por||'', p.fecha_devolucion||'', p.fecha_ultima_revision||'', p.fecha_proxima_revision||'', p.registrado_por||'', p.notas||''];
     const fmtC = c => [c.obra_nombre||'', c.matricula, c.tipo||'', c.marca||'', c.proveedor||'', c.energia||'', c.estado, c.fecha_entrada, c.fecha_averia||'', c.fecha_reparacion||'', c.devuelto_por||'', c.fecha_devolucion||'', c.fecha_ultima_revision||'', c.fecha_proxima_revision||'', c.registrado_por||'', c.notas||''];
 
-    // ── ⚡ ELÉCTRICO ──────────────────────────────────────────────────────────
+    // ── ELÉCTRICO ─────────────────────────────────────────────────────────────
     const { results: bobinasElec } = await env.DB.prepare(
       'SELECT b.*, o.nombre as obra_nombre FROM bobinas b LEFT JOIN obras o ON b.obra_id = o.id WHERE b.departamento = ? OR b.departamento IS NULL ORDER BY b.created_at DESC'
     ).bind('electrico').all();
-    await writeTab('⚡ Bobinas', [cabBobinas, ...bobinasElec.map(fmtB)]);
+    await writeTab('Elec-Bobinas', [cabBobinas, ...bobinasElec.map(fmtB)]);
 
     const { results: pempElec } = await env.DB.prepare(
       'SELECT p.*, o.nombre as obra_nombre FROM pemp p LEFT JOIN obras o ON p.obra_id = o.id WHERE p.departamento = ? OR p.departamento IS NULL ORDER BY p.created_at DESC'
     ).bind('electrico').all();
-    await writeTab('⚡ PEMP', [cabPemp, ...pempElec.map(fmtP)]);
+    await writeTab('Elec-PEMP', [cabPemp, ...pempElec.map(fmtP)]);
 
     const { results: carretillasElec } = await env.DB.prepare(
       'SELECT c.*, o.nombre as obra_nombre FROM carretillas c LEFT JOIN obras o ON c.obra_id = o.id WHERE c.departamento = ? OR c.departamento IS NULL ORDER BY c.created_at DESC'
     ).bind('electrico').all();
-    await writeTab('⚡ Carretillas', [cabCarretillas, ...carretillasElec.map(fmtC)]);
+    await writeTab('Elec-Carretillas', [cabCarretillas, ...carretillasElec.map(fmtC)]);
 
-    // ── 🔧 MECÁNICAS ─────────────────────────────────────────────────────────
+    // ── MECÁNICAS ─────────────────────────────────────────────────────────────
     const { results: pempMec } = await env.DB.prepare(
       'SELECT p.*, o.nombre as obra_nombre FROM pemp p LEFT JOIN obras o ON p.obra_id = o.id WHERE p.departamento = ? ORDER BY p.created_at DESC'
     ).bind('mecanicas').all();
-    await writeTab('🔧 PEMP', [cabPemp, ...pempMec.map(fmtP)]);
+    await writeTab('Mec-PEMP', [cabPemp, ...pempMec.map(fmtP)]);
 
     const { results: carretillasMec } = await env.DB.prepare(
       'SELECT c.*, o.nombre as obra_nombre FROM carretillas c LEFT JOIN obras o ON c.obra_id = o.id WHERE c.departamento = ? ORDER BY c.created_at DESC'
     ).bind('mecanicas').all();
-    await writeTab('🔧 Carretillas', [cabCarretillas, ...carretillasMec.map(fmtC)]);
+    await writeTab('Mec-Carretillas', [cabCarretillas, ...carretillasMec.map(fmtC)]);
 
-    console.log(`Sheets sincronizado por depts: ${bobinasElec.length}⚡bob, ${pempElec.length}⚡pemp, ${carretillasElec.length}⚡carr, ${pempMec.length}🔧pemp, ${carretillasMec.length}🔧carr`);
+    console.log(`Sheets OK: ${bobinasElec.length} Elec-Bob, ${pempElec.length} Elec-PEMP, ${carretillasElec.length} Elec-Carr, ${pempMec.length} Mec-PEMP, ${carretillasMec.length} Mec-Carr`);
   } catch (e) {
     console.error('Error sync Sheets:', e.message);
+    // Guardar error en D1 para verlo en Ajustes → Logs
+    try {
+      await env.DB.prepare(
+        'INSERT INTO logs (nivel, origen, mensaje, detalle) VALUES (?, ?, ?, ?)'
+      ).bind('error', 'sync-sheets', 'Error sincronización Google Sheets', e.message).run();
+    } catch (_) {}
   }
 }
 
