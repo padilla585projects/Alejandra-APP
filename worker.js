@@ -343,6 +343,7 @@ async function crearBobina(request, env, ctx) {
     ctx.waitUntil(Promise.all([
       syncSheets(env),
       registrarHistorial(env, { obra_id: obraFinal, bobina_codigo: codigo.trim().toUpperCase(), accion: 'entrada', usuario: reg, notas: notas || '' }),
+      sendTelegram(env, `📦 <b>Nueva bobina registrada</b>\n🔖 ${codigo.trim().toUpperCase()}\n🔌 ${tipo_cable}  📦 ${proveedor}\n👤 ${reg}`),
     ]));
 
     return json({ ok: true, mensaje: `Bobina ${codigo} registrada` }, 201);
@@ -487,6 +488,7 @@ async function crearPemp(request, env, ctx) {
         obra_id: obraFinal, matricula: matricula.trim().toUpperCase(),
         accion: 'entrada', usuario: reg, notas: notas || '',
       }),
+      sendTelegram(env, `🏗 <b>Nueva PEMP registrada</b>\n🔖 ${matricula.trim().toUpperCase()}\n🔧 ${tipo || '—'}  🏭 ${marca || '—'}\n👤 ${reg}`),
     ]));
 
     return json({ ok: true, id, mensaje: `PEMP ${matricula} registrada` }, 201);
@@ -634,6 +636,7 @@ async function crearCarretilla(request, env, ctx) {
         obra_id: obraFinal, matricula: matricula.trim().toUpperCase(),
         accion: 'entrada', usuario: reg, notas: notas || '',
       }),
+      sendTelegram(env, `🚜 <b>Nueva carretilla registrada</b>\n🔖 ${matricula.trim().toUpperCase()}\n🔧 ${tipo || '—'}  ⚡ ${energia || '—'}\n👤 ${reg}`),
     ]));
 
     return json({ ok: true, id, mensaje: `Carretilla ${matricula} registrada` }, 201);
