@@ -9,6 +9,7 @@ PWA mobile-first para gestionar bobinas de cable, plataformas elevadoras (PEMP) 
 - Gestiona **revisiones e ITV** de maquinaria con alertas de vencimiento
 - Sincroniza automáticamente con **Google Sheets**
 - Funciona **offline** gracias al Service Worker
+- En Desarrollo
 
 ## Roles
 
