@@ -197,7 +197,7 @@ export default {
       if (path === '/carretillas/historial'  && method === 'GET') return await getHistorialTabla('historial_carretillas', request, env);
       if (path === '/stats'        && method === 'GET')   return await getStats(request, env);
       if (path === '/sheet-id'     && method === 'GET')   return json({ id: env.GOOGLE_SHEET_ID || null });
-      if (path === '/sync'         && method === 'POST')  { await syncSheets(env); return json({ ok: true, mensaje: 'Sync completado' }); }
+      if ((path === '/sync' || path === '/sync-sheets') && method === 'POST') { await syncSheets(env); return json({ ok: true, mensaje: 'Sync completado' }); }
       if (path === '/sync-debug'   && method === 'POST')  return await syncSheetsDebug(env);
 
       return err('Ruta no encontrada', 404);
