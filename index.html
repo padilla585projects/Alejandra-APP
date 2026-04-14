@@ -2543,9 +2543,19 @@ function enviarLog(nivel, mensaje, detalle) {
       url:     location.href,
       ts:      new Date().toISOString(),
     };
-    navigator.sendBeacon
-      ? navigator.sendBeacon(getAPI() + '/log', JSON.stringify(payload))
-      : fetch(getAPI() + '/log', { method: 'POST', body: JSON.stringify(payload), keepalive: true }).catch(() => {});
+    // sendBeacon con Blob para forzar Content-Type: application/json
+    // (sin esto el worker no puede parsear el JSON y descarta el log)
+    const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
+    if (navigator.sendBeacon) {
+      navigator.sendBeacon(getAPI() + '/log', blob);
+    } else {
+      fetch(getAPI() + '/log', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+        keepalive: true,
+      }).catch(() => {});
+    }
   } catch (_) {}
 }
 
@@ -2842,23 +2852,27 @@ async function cargarObrasSelectUsuario() {
 
 <script>
 if ('serviceWorker' in navigator) {
+  let recargando = false;
+
   navigator.serviceWorker.register('sw.js').then(reg => {
-    // Cuando detecta un SW nuevo instalado, recarga la app automáticamente
-    reg.addEventListener('updatefound', () => {
-      const nuevoSW = reg.installing;
-      nuevoSW.addEventListener('statechange', () => {
-        if (nuevoSW.state === 'activated') {
-          window.location.reload();
-        }
-      });
-    });
     // Comprueba si hay actualización cada vez que se abre la app
     reg.update();
   }).catch(() => {});
 
-  // Si el SW toma control (skipWaiting activado), recarga la página
+  // El SW nuevo manda un mensaje cuando ya limpió la caché → recargamos
+  navigator.serviceWorker.addEventListener('message', e => {
+    if (e.data?.tipo === 'SW_ACTUALIZADO' && !recargando) {
+      recargando = true;
+      window.location.reload();
+    }
+  });
+
+  // Fallback: si el SW toma control por otra vía, recargamos igualmente
   navigator.serviceWorker.addEventListener('controllerchange', () => {
-    window.location.reload();
+    if (!recargando) {
+      recargando = true;
+      window.location.reload();
+    }
   });
 }
 </script>
