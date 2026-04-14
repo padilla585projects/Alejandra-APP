@@ -1263,19 +1263,27 @@ async function syncSheets(env) {
     const sheetId = env.GOOGLE_SHEET_ID;
     const authH   = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
 
-    // Asegurar que existen las pestañas por departamento
+    // Gestionar pestañas: crear nuevas, borrar genéricas antiguas
     const metaRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}`, { headers: authH });
     const meta = await metaRes.json();
-    const sheetNames = (meta.sheets || []).map(s => s.properties.title);
+    const sheetsActuales = meta.sheets || [];
+    const sheetNames = sheetsActuales.map(s => s.properties.title);
 
     const tabsNecesarias = ['⚡ Bobinas', '⚡ PEMP', '⚡ Carretillas', '🔧 PEMP', '🔧 Carretillas'];
-    const requests = tabsNecesarias
+    const tabsAntiguas   = ['Bobinas', 'PEMP', 'Carretillas'];
+
+    // Primero añadir las que faltan, luego borrar las genéricas viejas
+    const addReqs = tabsNecesarias
       .filter(t => !sheetNames.includes(t))
       .map(t => ({ addSheet: { properties: { title: t } } }));
+    const delReqs = sheetsActuales
+      .filter(s => tabsAntiguas.includes(s.properties.title))
+      .map(s => ({ deleteSheet: { sheetId: s.properties.sheetId } }));
 
-    if (requests.length > 0) {
+    const batchReqs = [...addReqs, ...delReqs];
+    if (batchReqs.length > 0) {
       await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}:batchUpdate`, {
-        method: 'POST', headers: authH, body: JSON.stringify({ requests }),
+        method: 'POST', headers: authH, body: JSON.stringify({ requests: batchReqs }),
       });
     }
 
