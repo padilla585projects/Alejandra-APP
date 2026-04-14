@@ -1078,8 +1078,15 @@ async function iniciarApp() {
   renderHeader();
   renderAjustesInfo();
   setupHomeModules();
-  showScreen('home');
 
+  // Seguridad: va directo al escáner
+  if (s.departamento === 'seguridad') {
+    await cargarCatalogos();
+    selectModule('pemp');
+    return;
+  }
+
+  showScreen('home');
   checkConnection();
   await cargarStatsHome();
   await cargarCatalogos();
@@ -1147,9 +1154,22 @@ function renderAjustesInfo() {
 function setupHomeModules() {
   const s = getSession();
   const dept = s?.departamento;
-  const mostrarBobinas = dept === 'electrico' || s?.rol === 'superadmin';
+  const esSA = s?.rol === 'superadmin';
   const cardB = document.getElementById('cardBobinas');
+  const cardP = document.getElementById('cardPemp');
+  const cardC = document.getElementById('cardCarretillas');
+  // Seguridad: sin tarjetas (solo escáner)
+  if (dept === 'seguridad') {
+    if (cardB) cardB.style.display = 'none';
+    if (cardP) cardP.style.display = 'none';
+    if (cardC) cardC.style.display = 'none';
+    return;
+  }
+  // Eléctrico/superadmin: todo visible
+  const mostrarBobinas = dept === 'electrico' || esSA;
   if (cardB) cardB.style.display = mostrarBobinas ? 'flex' : 'none';
+  if (cardP) cardP.style.display = 'flex';
+  if (cardC) cardC.style.display = 'flex';
 }
 
 function seleccionarDepto(dept) {
@@ -1160,6 +1180,11 @@ function seleccionarDepto(dept) {
   renderHeader();
   renderAjustesInfo();
   setupHomeModules();
+  if (dept === 'seguridad') {
+    await cargarCatalogos();
+    selectModule('pemp');
+    return;
+  }
   showScreen('home');
   cargarStatsHome();
   cargarCatalogos();
@@ -1228,6 +1253,7 @@ function navTo(target) {
   if (target === 'home') {
     const s2 = getSession();
     if (s2?.rol === 'superadmin' && !s2?.departamento) { showScreen('dept'); return; }
+    if (s2?.departamento === 'seguridad') { selectModule('pemp'); return; }
     showScreen('home');
     return;
   }

@@ -1263,12 +1263,12 @@ async function syncSheets(env) {
     const sheetId = env.GOOGLE_SHEET_ID;
     const authH   = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
 
-    // Asegurar que existen las 3 pestañas fijas
+    // Asegurar que existen las pestañas por departamento
     const metaRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}`, { headers: authH });
     const meta = await metaRes.json();
     const sheetNames = (meta.sheets || []).map(s => s.properties.title);
 
-    const tabsNecesarias = ['Bobinas', 'PEMP', 'Carretillas'];
+    const tabsNecesarias = ['⚡ Bobinas', '⚡ PEMP', '⚡ Carretillas', '🔧 PEMP', '🔧 Carretillas'];
     const requests = tabsNecesarias
       .filter(t => !sheetNames.includes(t))
       .map(t => ({ addSheet: { properties: { title: t } } }));
@@ -1287,34 +1287,42 @@ async function syncSheets(env) {
         { method: 'PUT', headers: authH, body: JSON.stringify({ values }) });
     };
 
-    // ── BOBINAS ──────────────────────────────────────────────────────────────
-    const { results: bobinas } = await env.DB.prepare(
-      'SELECT b.*, o.nombre as obra_nombre FROM bobinas b LEFT JOIN obras o ON b.obra_id = o.id ORDER BY b.created_at DESC'
-    ).all();
-    await writeTab('Bobinas', [
-      ['Obra', 'Código', 'Nº Albarán', 'Proveedor', 'Tipo Cable', 'Registrado por', 'Fecha Entrada', 'Devuelto por', 'Fecha Devolución', 'Estado', 'Notas'],
-      ...bobinas.map(b => [b.obra_nombre || '', b.codigo, b.num_albaran || '', b.proveedor, b.tipo_cable, b.registrado_por || '', b.fecha_entrada, b.devuelto_por || '', b.fecha_devolucion || '', b.estado, b.notas || '']),
-    ]);
+    const cabBobinas    = ['Obra', 'Código', 'Nº Albarán', 'Proveedor', 'Tipo Cable', 'Registrado por', 'Fecha Entrada', 'Devuelto por', 'Fecha Devolución', 'Estado', 'Notas'];
+    const cabPemp       = ['Obra', 'Matrícula', 'Tipo', 'Marca', 'Proveedor', 'Estado', 'Fecha Entrada', 'Fecha Avería', 'Fecha Reparación', 'Devuelto por', 'Fecha Devolución', 'Últ. Revisión', 'Próx. Revisión', 'Registrado por', 'Notas'];
+    const cabCarretillas= ['Obra', 'Matrícula', 'Tipo', 'Marca', 'Proveedor', 'Energía', 'Estado', 'Fecha Entrada', 'Fecha Avería', 'Fecha Reparación', 'Devuelto por', 'Fecha Devolución', 'Últ. Revisión', 'Próx. Revisión', 'Registrado por', 'Notas'];
 
-    // ── PEMP ─────────────────────────────────────────────────────────────────
-    const { results: pemp } = await env.DB.prepare(
-      'SELECT p.*, o.nombre as obra_nombre FROM pemp p LEFT JOIN obras o ON p.obra_id = o.id ORDER BY p.created_at DESC'
-    ).all();
-    await writeTab('PEMP', [
-      ['Obra', 'Matrícula', 'Tipo', 'Marca', 'Proveedor', 'Estado', 'Fecha Entrada', 'Fecha Avería', 'Fecha Reparación', 'Devuelto por', 'Fecha Devolución', 'Últ. Revisión', 'Próx. Revisión', 'Registrado por', 'Notas'],
-      ...pemp.map(p => [p.obra_nombre || '', p.matricula, p.tipo || '', p.marca || '', p.proveedor || '', p.estado, p.fecha_entrada, p.fecha_averia || '', p.fecha_reparacion || '', p.devuelto_por || '', p.fecha_devolucion || '', p.fecha_ultima_revision || '', p.fecha_proxima_revision || '', p.registrado_por || '', p.notas || '']),
-    ]);
+    const fmtB = b => [b.obra_nombre||'', b.codigo, b.num_albaran||'', b.proveedor, b.tipo_cable, b.registrado_por||'', b.fecha_entrada, b.devuelto_por||'', b.fecha_devolucion||'', b.estado, b.notas||''];
+    const fmtP = p => [p.obra_nombre||'', p.matricula, p.tipo||'', p.marca||'', p.proveedor||'', p.estado, p.fecha_entrada, p.fecha_averia||'', p.fecha_reparacion||'', p.devuelto_por||'', p.fecha_devolucion||'', p.fecha_ultima_revision||'', p.fecha_proxima_revision||'', p.registrado_por||'', p.notas||''];
+    const fmtC = c => [c.obra_nombre||'', c.matricula, c.tipo||'', c.marca||'', c.proveedor||'', c.energia||'', c.estado, c.fecha_entrada, c.fecha_averia||'', c.fecha_reparacion||'', c.devuelto_por||'', c.fecha_devolucion||'', c.fecha_ultima_revision||'', c.fecha_proxima_revision||'', c.registrado_por||'', c.notas||''];
 
-    // ── CARRETILLAS ───────────────────────────────────────────────────────────
-    const { results: carretillas } = await env.DB.prepare(
-      'SELECT c.*, o.nombre as obra_nombre FROM carretillas c LEFT JOIN obras o ON c.obra_id = o.id ORDER BY c.created_at DESC'
-    ).all();
-    await writeTab('Carretillas', [
-      ['Obra', 'Matrícula', 'Tipo', 'Marca', 'Proveedor', 'Energía', 'Estado', 'Fecha Entrada', 'Fecha Avería', 'Fecha Reparación', 'Devuelto por', 'Fecha Devolución', 'Últ. Revisión', 'Próx. Revisión', 'Registrado por', 'Notas'],
-      ...carretillas.map(c => [c.obra_nombre || '', c.matricula, c.tipo || '', c.marca || '', c.proveedor || '', c.energia || '', c.estado, c.fecha_entrada, c.fecha_averia || '', c.fecha_reparacion || '', c.devuelto_por || '', c.fecha_devolucion || '', c.fecha_ultima_revision || '', c.fecha_proxima_revision || '', c.registrado_por || '', c.notas || '']),
-    ]);
+    // ── ⚡ ELÉCTRICO ──────────────────────────────────────────────────────────
+    const { results: bobinasElec } = await env.DB.prepare(
+      'SELECT b.*, o.nombre as obra_nombre FROM bobinas b LEFT JOIN obras o ON b.obra_id = o.id WHERE b.departamento = ? OR b.departamento IS NULL ORDER BY b.created_at DESC'
+    ).bind('electrico').all();
+    await writeTab('⚡ Bobinas', [cabBobinas, ...bobinasElec.map(fmtB)]);
 
-    console.log(`Sheets sincronizado: ${bobinas.length} bobinas, ${pemp.length} PEMP, ${carretillas.length} carretillas`);
+    const { results: pempElec } = await env.DB.prepare(
+      'SELECT p.*, o.nombre as obra_nombre FROM pemp p LEFT JOIN obras o ON p.obra_id = o.id WHERE p.departamento = ? OR p.departamento IS NULL ORDER BY p.created_at DESC'
+    ).bind('electrico').all();
+    await writeTab('⚡ PEMP', [cabPemp, ...pempElec.map(fmtP)]);
+
+    const { results: carretillasElec } = await env.DB.prepare(
+      'SELECT c.*, o.nombre as obra_nombre FROM carretillas c LEFT JOIN obras o ON c.obra_id = o.id WHERE c.departamento = ? OR c.departamento IS NULL ORDER BY c.created_at DESC'
+    ).bind('electrico').all();
+    await writeTab('⚡ Carretillas', [cabCarretillas, ...carretillasElec.map(fmtC)]);
+
+    // ── 🔧 MECÁNICAS ─────────────────────────────────────────────────────────
+    const { results: pempMec } = await env.DB.prepare(
+      'SELECT p.*, o.nombre as obra_nombre FROM pemp p LEFT JOIN obras o ON p.obra_id = o.id WHERE p.departamento = ? ORDER BY p.created_at DESC'
+    ).bind('mecanicas').all();
+    await writeTab('🔧 PEMP', [cabPemp, ...pempMec.map(fmtP)]);
+
+    const { results: carretillasMec } = await env.DB.prepare(
+      'SELECT c.*, o.nombre as obra_nombre FROM carretillas c LEFT JOIN obras o ON c.obra_id = o.id WHERE c.departamento = ? ORDER BY c.created_at DESC'
+    ).bind('mecanicas').all();
+    await writeTab('🔧 Carretillas', [cabCarretillas, ...carretillasMec.map(fmtC)]);
+
+    console.log(`Sheets sincronizado por depts: ${bobinasElec.length}⚡bob, ${pempElec.length}⚡pemp, ${carretillasElec.length}⚡carr, ${pempMec.length}🔧pemp, ${carretillasMec.length}🔧carr`);
   } catch (e) {
     console.error('Error sync Sheets:', e.message);
   }
