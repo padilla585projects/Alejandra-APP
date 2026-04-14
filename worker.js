@@ -46,6 +46,20 @@ function getAuth(request, env) {
   };
 }
 
+// ── Telegram ─────────────────────────────────────────────────────────────────
+async function sendTelegram(env, mensaje) {
+  try {
+    const token  = env.TELEGRAM_BOT_TOKEN;
+    const chatId = env.TELEGRAM_CHAT_ID;
+    if (!token || !chatId) return;
+    await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: chatId, text: mensaje, parse_mode: 'HTML' }),
+    });
+  } catch (_) {}
+}
+
 function fechaEspana() {
   return new Date().toLocaleString('es-ES', { timeZone: 'Europe/Madrid' });
 }
@@ -1089,6 +1103,13 @@ async function guardarSugerencia(request, env) {
     await env.DB.prepare(
       'INSERT INTO sugerencias (texto, categoria, usuario, obra) VALUES (?, ?, ?, ?)'
     ).bind(texto.trim().slice(0, 1000), categoria || null, usuario || null, obra || null).run();
+    const catIcon = { mejora: '🔧', error: '🐛', nuevo: '✨', otro: '💬' };
+    const icon = catIcon[categoria] || '💬';
+    sendTelegram(env,
+      `${icon} <b>Nueva sugerencia [${categoria || 'otro'}]</b>\n` +
+      `👤 ${usuario || '—'}  🏗 ${obra || '—'}\n\n` +
+      `${texto.trim().slice(0, 500)}`
+    );
     return json({ ok: true, mensaje: 'Sugerencia enviada. ¡Gracias!' });
   } catch (e) {
     return err('No se pudo guardar la sugerencia: ' + e.message);
@@ -1148,6 +1169,13 @@ async function guardarLog(request, env) {
     await env.DB.prepare(
       'INSERT INTO logs (nivel, origen, mensaje, detalle) VALUES (?, ?, ?, ?)'
     ).bind(nivel, origen || 'cliente', String(mensaje || '').slice(0, 500), JSON.stringify(contexto)).run();
+    if (nivel === 'error') {
+      sendTelegram(env,
+        `🚨 <b>Error en Alejandra</b>\n` +
+        `👤 ${usuario || '—'}  🏗 ${obra || '—'}\n` +
+        `📋 ${String(mensaje || '').slice(0, 300)}`
+      );
+    }
     return json({ ok: true });
   } catch (e) {
     return json({ ok: false });
