@@ -59,7 +59,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:1
 
 /* ── BOTTOM NAV ── */
 #bottomNav{background:var(--surface);border-top:1px solid var(--border);display:flex;align-items:stretch;flex-shrink:0;position:relative;z-index:100}
-.nav-btn{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;padding:8px 4px;background:none;border:none;color:var(--muted);font-family:'Montserrat',sans-serif;font-weight:700;font-size:9px;letter-spacing:.5px;text-transform:uppercase;cursor:pointer;transition:color .2s;border-top:2px solid transparent}
+.nav-btn{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;padding:8px 4px;background:none;border:none;color:var(--muted);font-family:'Montserrat',sans-serif;font-weight:700;font-size:9px;letter-spacing:.5px;text-transform:uppercase;cursor:pointer;transition:color .2s;border-top:2px solid transparent;position:relative}
 .nav-btn.active{color:var(--accent);border-top-color:var(--accent)}
 .nav-btn svg{width:20px;height:20px}
 .nav-center-wrap{display:flex;align-items:center;justify-content:center;padding:6px 4px;flex:1}
@@ -246,6 +246,29 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:1
 .obra-bar{height:100%;background:var(--accent);border-radius:3px;transition:width .4s}
 .obra-bar-n{font-family:'Montserrat',sans-serif;font-weight:900;font-size:14px;color:var(--accent);min-width:24px;text-align:right}
 
+/* ── DEPT SELECTOR ── */
+.dept-grid{display:flex;flex-direction:column;gap:14px;padding:16px;height:100%}
+.dept-card{background:var(--surface);border:2px solid var(--border);border-radius:20px;padding:0 24px;display:flex;align-items:center;gap:22px;cursor:pointer;transition:all .2s;flex:1;min-height:90px}
+.dept-card:active{transform:scale(0.97);opacity:.9}
+.dept-card:hover{border-color:var(--accent)}
+.dept-icon-wrap{width:56px;height:56px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.dept-name{font-family:'Montserrat',sans-serif;font-weight:900;font-size:20px;color:var(--text)}
+.dept-desc{font-size:12px;color:var(--muted);margin-top:4px}
+/* Dept pill superadmin */
+.dept-pill{display:flex;align-items:center;gap:5px;background:var(--surface2);border:1px solid var(--accent);border-radius:20px;padding:4px 10px;font-family:'Montserrat',sans-serif;font-weight:700;font-size:11px;color:var(--accent);cursor:pointer;transition:all .2s;white-space:nowrap;flex-shrink:0}
+.dept-pill:active{opacity:.7}
+/* Badge contador ideas */
+.badge-counter{position:absolute;top:3px;right:6px;background:var(--red);color:#fff;font-family:'Montserrat',sans-serif;font-weight:900;font-size:9px;min-width:15px;height:15px;border-radius:8px;display:flex;align-items:center;justify-content:center;padding:0 3px;line-height:1}
+/* Ajustes 5 tabs */
+.ajustes-tabs{display:flex;overflow-x:auto;background:var(--surface2);border-bottom:1px solid var(--border);flex-shrink:0;scrollbar-width:none}
+.ajustes-tabs::-webkit-scrollbar{display:none}
+.ajustes-tab{padding:11px 14px;background:none;border:none;border-bottom:2px solid transparent;color:var(--muted);font-family:'Montserrat',sans-serif;font-weight:700;font-size:11px;letter-spacing:1px;text-transform:uppercase;cursor:pointer;transition:all .2s;white-space:nowrap;flex-shrink:0}
+.ajustes-tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+.ajustes-panel{display:none;padding:14px}
+.ajustes-panel.active{display:block}
+/* Código creado */
+.codigo-big{font-family:'Montserrat',sans-serif;font-weight:900;font-size:36px;letter-spacing:4px;color:var(--accent);text-align:center;padding:16px;background:var(--surface2);border-radius:10px;border:2px solid var(--accent);margin:10px 0}
+
 /* ── SCROLLBAR ── */
 #appContent::-webkit-scrollbar{width:3px}
 #appContent::-webkit-scrollbar-track{background:transparent}
@@ -306,6 +329,9 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:1
     </svg>
   </div>
   <div class="header-center" id="headerCenter">
+    <div class="dept-pill" id="deptPill" style="display:none" onclick="volverSelectorDepto()">
+      <span id="deptPillIcon"></span>&nbsp;<span id="deptPillName"></span>
+    </div>
     <span class="obra-label" id="headerObraLabel"></span>
     <select class="obra-select" id="headerObraSelect" style="display:none" onchange="onObraSelectChange(this.value)"></select>
   </div>
@@ -320,6 +346,61 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:1
 ══════════════════════════════════════════ -->
 <div id="appContent" style="display:none">
 
+  <!-- DEPT SELECTOR -->
+  <div id="screenDept" class="screen flex-screen" style="padding:0;height:100%">
+    <div style="padding:20px 16px 8px;text-align:center">
+      <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:22px;color:var(--text)">Selecciona departamento</div>
+      <div style="font-size:13px;color:var(--muted);margin-top:4px">¿Con qué departamento trabajas hoy?</div>
+    </div>
+    <div class="dept-grid">
+      <div class="dept-card" onclick="seleccionarDepto('electrico')">
+        <div class="dept-icon-wrap">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="52" height="52">
+            <polygon points="58,8 25,52 46,52 40,92 75,48 54,48" fill="#f97316"/>
+          </svg>
+        </div>
+        <div style="flex:1">
+          <div class="dept-name">Eléctrico</div>
+          <div class="dept-desc">Bobinas · PEMP · Carretillas</div>
+        </div>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="color:var(--muted)"><path d="m9 18 6-6-6-6"/></svg>
+      </div>
+      <div class="dept-card" onclick="seleccionarDepto('mecanicas')">
+        <div class="dept-icon-wrap">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="52" height="52">
+            <circle cx="65" cy="35" r="18" fill="none" stroke="#f97316" stroke-width="6"/>
+            <circle cx="65" cy="35" r="7" fill="#f97316"/>
+            <line x1="65" y1="17" x2="65" y2="10" stroke="#f97316" stroke-width="5" stroke-linecap="round"/>
+            <line x1="65" y1="53" x2="65" y2="60" stroke="#f97316" stroke-width="5" stroke-linecap="round"/>
+            <line x1="47" y1="35" x2="40" y2="35" stroke="#f97316" stroke-width="5" stroke-linecap="round"/>
+            <line x1="83" y1="35" x2="90" y2="35" stroke="#f97316" stroke-width="5" stroke-linecap="round"/>
+            <path d="M20 90 L20 60 Q20 52 28 52 L38 52 Q44 44 46 36 L54 40 Q52 52 44 58 L40 60 L40 90 Z" fill="#f97316"/>
+          </svg>
+        </div>
+        <div style="flex:1">
+          <div class="dept-name">Mecánicas</div>
+          <div class="dept-desc">PEMP · Carretillas</div>
+        </div>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="color:var(--muted)"><path d="m9 18 6-6-6-6"/></svg>
+      </div>
+      <div class="dept-card" onclick="seleccionarDepto('seguridad')">
+        <div class="dept-icon-wrap">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="52" height="52">
+            <polygon points="50,8 18,78 82,78" fill="#f97316"/>
+            <rect x="20" y="64" width="60" height="9" fill="#e5e7eb" opacity="0.85"/>
+            <rect x="28" y="48" width="44" height="7" fill="#e5e7eb" opacity="0.85"/>
+            <rect x="12" y="82" width="76" height="10" rx="5" fill="#334155"/>
+          </svg>
+        </div>
+        <div style="flex:1">
+          <div class="dept-name">Seguridad</div>
+          <div class="dept-desc">PEMP · Carretillas · Todas las obras</div>
+        </div>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="color:var(--muted)"><path d="m9 18 6-6-6-6"/></svg>
+      </div>
+    </div>
+  </div>
+
   <!-- HOME SCREEN -->
   <div id="screenHome" class="screen flex-screen active" style="padding:0;height:100%">
     <div class="module-grid" style="flex:1">
@@ -333,7 +414,21 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:1
         <svg class="module-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
       </div>
       <div class="module-card" id="cardPemp" onclick="selectModule('pemp')">
-        <div class="module-emoji">🏗️</div>
+        <div class="module-emoji">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="52" height="52">
+            <rect x="12" y="12" width="76" height="11" rx="3" fill="#e5e7eb"/>
+            <rect x="14" y="23" width="3" height="14" fill="#94a3b8"/>
+            <rect x="83" y="23" width="3" height="14" fill="#94a3b8"/>
+            <line x1="28" y1="74" x2="52" y2="37" stroke="#f97316" stroke-width="5" stroke-linecap="round"/>
+            <line x1="72" y1="74" x2="48" y2="37" stroke="#f97316" stroke-width="5" stroke-linecap="round"/>
+            <line x1="38" y1="74" x2="58" y2="37" stroke="#fb923c" stroke-width="3.5" stroke-linecap="round" opacity="0.6"/>
+            <line x1="62" y1="74" x2="42" y2="37" stroke="#fb923c" stroke-width="3.5" stroke-linecap="round" opacity="0.6"/>
+            <circle cx="50" cy="56" r="4" fill="#fb923c"/>
+            <rect x="8" y="76" width="84" height="8" rx="4" fill="#334155"/>
+            <circle cx="22" cy="87" r="5.5" fill="#1e2d40" stroke="#334155" stroke-width="1.5"/>
+            <circle cx="78" cy="87" r="5.5" fill="#1e2d40" stroke="#334155" stroke-width="1.5"/>
+          </svg>
+        </div>
         <div class="module-info">
           <div class="module-name">PEMP</div>
           <div class="module-desc">Plataformas elevadoras</div>
@@ -512,6 +607,18 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:1
           <select class="form-select" id="scanObraSelect"><option value="">— Selecciona obra —</option></select>
         </div>
 
+        <!-- Buscar matrícula en todos los deptos (Seguridad) -->
+        <div id="buscarMaquinaBox" style="display:none;margin-bottom:14px">
+          <div class="settings-section" style="margin-bottom:0;padding:12px 14px">
+            <div style="font-family:'Montserrat',sans-serif;font-weight:700;font-size:12px;color:var(--accent);margin-bottom:8px;text-transform:uppercase;letter-spacing:1px">🔍 Buscar en todos los departamentos</div>
+            <div class="input-row" style="margin-bottom:8px">
+              <input class="form-input" id="buscarMatInput" type="text" placeholder="Matrícula..." style="text-transform:uppercase" onkeydown="if(event.key==='Enter')buscarMaquina()">
+              <button onclick="buscarMaquina()" style="padding:0 16px;background:var(--blue);border:none;border-radius:8px;color:#fff;font-size:18px;cursor:pointer">🔍</button>
+            </div>
+            <div id="buscarMatResult"></div>
+          </div>
+        </div>
+
         <div class="form-group">
           <label class="form-label">Notas (opcional)</label>
           <input class="form-input" id="scanNotas" type="text" placeholder="Observaciones...">
@@ -553,155 +660,170 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:1
     </div>
   </div>
 
-  <!-- AJUSTES SCREEN -->
-  <div id="screenAjustes" class="screen">
-    <div class="section-title">AJUSTES</div>
-    <div class="section-sub" style="margin-bottom:16px">Configuración de la aplicación</div>
-
-    <div class="settings-section">
-      <div class="settings-title">🌐 Servidor API</div>
-      <div class="form-group" style="margin-bottom:8px">
-        <label class="form-label">URL del Worker</label>
-        <input class="form-input" id="cfgApiUrl" type="url" placeholder="https://gestibobina-proxy.padilla585.workers.dev">
-      </div>
-      <div style="display:flex;gap:8px;margin-top:0">
-        <button class="btn-primary btn-secondary" style="flex:1;font-size:13px" onclick="guardarApiUrl()">💾 Guardar</button>
-        <button class="btn-primary btn-secondary" style="flex:1;font-size:13px" onclick="comprobarConexion()">📡 Comprobar conexión</button>
-      </div>
+  <!-- AJUSTES (5 tabs) -->
+  <div id="screenAjustes" class="screen" style="padding:0;display:flex;flex-direction:column;height:100%">
+    <div class="ajustes-tabs">
+      <button class="ajustes-tab active" id="ajTabSesion"    onclick="selAjTab('sesion')">👤 Sesión</button>
+      <button class="ajustes-tab"        id="ajTabCatalogos" onclick="selAjTab('catalogos')">📚 Catálogos</button>
+      <button class="ajustes-tab"        id="ajTabUsuarios"  onclick="selAjTab('usuarios')" style="display:none">👥 Usuarios</button>
+      <button class="ajustes-tab"        id="ajTabObras"     onclick="selAjTab('obras')" style="display:none">🏗 Obras</button>
+      <button class="ajustes-tab"        id="ajTabIdeas"     onclick="selAjTab('ideas')" style="display:none">💡 Ideas</button>
+      <button class="ajustes-tab"        id="ajTabSistema"   onclick="selAjTab('sistema')">⚙️ Sistema</button>
     </div>
+    <div style="flex:1;overflow-y:auto">
 
-    <div class="settings-section">
-      <div class="settings-title">👤 Sesión activa</div>
-      <div class="settings-row">
-        <span>Usuario</span><strong id="ajustesNombre">—</strong>
-      </div>
-      <div class="settings-row">
-        <span>Rol</span><strong id="ajustesRol">—</strong>
-      </div>
-      <div class="settings-row">
-        <span>Obra</span><strong id="ajustesObra">—</strong>
-      </div>
-      <button class="btn-primary btn-danger" style="margin-top:12px;font-size:14px" onclick="cerrarSesion()">🚪 Cerrar sesión</button>
-    </div>
-
-    <div class="settings-section" id="ajustesAdminLink" style="display:none">
-      <div class="settings-title">🔐 Administración</div>
-      <button class="btn-primary btn-secondary" style="margin-top:0;font-size:14px" onclick="showScreen('admin')">Abrir Panel Admin</button>
-    </div>
-
-    <div class="settings-section" style="margin-top:8px">
-      <div class="settings-title">ℹ️ Acerca de</div>
-      <div class="settings-row"><span>Aplicación</span><strong>Alejandra</strong></div>
-      <div class="settings-row"><span>Versión</span><strong id="appVersionDisplay">v2.9</strong></div>
-      <div class="settings-row"><span>Autor</span><strong>Adrian Padilla</strong></div>
-      <div class="settings-row"><span>Desarrollado con</span><strong>Claude AI</strong></div>
-      <div class="settings-row"><span>Backend</span><strong>Cloudflare Workers + D1</strong></div>
-      <div class="settings-row"><span>Año</span><strong>2026</strong></div>
-      <div style="margin-top:10px;text-align:center;font-size:11px;color:var(--muted);letter-spacing:1px">
-        INVENTARIO · MAQUINARIA · CONTROL
-      </div>
-    </div>
-  </div>
-
-  <!-- ADMIN PANEL SCREEN -->
-  <div id="screenAdmin" class="screen">
-    <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
-      <button onclick="showScreen('home')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:22px;line-height:1">←</button>
-      <div class="section-title" style="margin-bottom:0">PANEL ADMIN</div>
-    </div>
-
-    <!-- Obras (superadmin only) -->
-    <div class="admin-section" id="adminObrasSection" style="display:none">
-      <div class="admin-section-title">🏗 Obras</div>
-      <div id="adminObrasList"><div style="color:var(--muted);font-size:12px">Cargando...</div></div>
-      <div class="tag-add-row" style="margin-top:12px;flex-wrap:wrap;gap:6px">
-        <input type="text" id="newObraNombre" placeholder="Nombre de la obra" style="flex:1;min-width:120px">
-        <input type="text" id="newObraCodigo" placeholder="CÓDIGO" style="width:100px;text-transform:uppercase">
-        <button onclick="crearObra()">+</button>
-      </div>
-    </div>
-
-    <!-- Usuarios -->
-    <div class="admin-section">
-      <div class="admin-section-title">👥 Usuarios</div>
-      <div id="adminUsuariosList"><div style="color:var(--muted);font-size:12px">Cargando...</div></div>
-      <div class="tag-add-row" style="flex-wrap:wrap;gap:6px;margin-top:12px">
-        <input type="text" id="newUsuarioNombre" placeholder="Nombre" style="flex:1;min-width:100px">
-        <input type="password" id="newUsuarioCodigo" placeholder="Código" style="width:100px">
-        <select id="newUsuarioRol" style="padding:8px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px">
-          <option value="operario">Operario</option>
-          <option value="encargado">Encargado</option>
-          <option value="superadmin">Superadmin</option>
-        </select>
-        <select id="newUsuarioObra" style="padding:8px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px">
-          <option value="">— Obra —</option>
-        </select>
-        <button onclick="crearUsuario()">+</button>
-      </div>
-    </div>
-
-    <!-- Configuración por módulo -->
-    <div class="admin-section">
-      <div class="admin-section-title">⚙️ Configuración por módulo</div>
-      <div style="display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap">
-        <button class="filter-btn active" id="cfgTabBobinas"    onclick="selCfgTab('bobinas')">📦 Bobinas</button>
-        <button class="filter-btn"        id="cfgTabPemp"       onclick="selCfgTab('pemp')">🏗️ PEMP</button>
-        <button class="filter-btn"        id="cfgTabCarretillas" onclick="selCfgTab('carretillas')">🚜 Carretillas</button>
-      </div>
-
-      <!-- Bobinas -->
-      <div id="cfgBobinas">
-        <div style="font-family:'Montserrat',sans-serif;font-weight:700;font-size:12px;color:var(--muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:1px">🏭 Proveedores</div>
-        <div class="tag-row" id="tagsProveedores"></div>
-        <div class="tag-add-row" style="margin-bottom:14px">
-          <input type="text" id="newProveedor" placeholder="Nuevo proveedor...">
-          <button onclick="addProveedor()">+</button>
-        </div>
-        <div style="font-family:'Montserrat',sans-serif;font-weight:700;font-size:12px;color:var(--muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:1px">🔌 Tipos de Cable</div>
-        <div class="tag-row" id="tagsTipos"></div>
-        <div class="tag-add-row">
-          <input type="text" id="newTipo" placeholder="Nuevo tipo...">
-          <button onclick="addTipo()">+</button>
+      <!-- SESIÓN -->
+      <div class="ajustes-panel active" id="ajPanelSesion">
+        <div class="settings-section">
+          <div class="settings-title">👤 Sesión activa</div>
+          <div class="settings-row"><span>Usuario</span><strong id="ajustesNombre">—</strong></div>
+          <div class="settings-row"><span>Rol</span><strong id="ajustesRol">—</strong></div>
+          <div class="settings-row"><span>Obra</span><strong id="ajustesObra">—</strong></div>
+          <div class="settings-row" id="ajDeptRow"><span>Departamento</span><strong id="ajustesDept">—</strong></div>
+          <button class="btn-primary btn-danger" style="margin-top:12px;font-size:14px" onclick="cerrarSesion()">🚪 Cerrar sesión</button>
         </div>
       </div>
 
-      <!-- PEMP -->
-      <div id="cfgPemp" style="display:none">
-        <div style="font-family:'Montserrat',sans-serif;font-weight:700;font-size:12px;color:var(--muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:1px">🔧 Tipos de PEMP</div>
-        <div class="tag-row" id="tagsTiposPemp"></div>
-        <div class="tag-add-row">
-          <input type="text" id="newTipoPemp" placeholder="Nuevo tipo...">
-          <button onclick="addTipoPemp()">+</button>
+      <!-- CATÁLOGOS -->
+      <div class="ajustes-panel" id="ajPanelCatalogos">
+        <div class="admin-section" id="cfgBobinasSection">
+          <div class="admin-section-title">📦 Bobinas</div>
+          <div style="font-family:'Montserrat',sans-serif;font-weight:700;font-size:12px;color:var(--muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:1px">🏭 Proveedores</div>
+          <div class="tag-row" id="tagsProveedores"></div>
+          <div class="tag-add-row" style="margin-bottom:14px">
+            <input type="text" id="newProveedor" placeholder="Nuevo proveedor...">
+            <button onclick="addProveedor()">+</button>
+          </div>
+          <div style="font-family:'Montserrat',sans-serif;font-weight:700;font-size:12px;color:var(--muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:1px">🔌 Tipos de Cable</div>
+          <div class="tag-row" id="tagsTipos"></div>
+          <div class="tag-add-row">
+            <input type="text" id="newTipo" placeholder="Nuevo tipo...">
+            <button onclick="addTipo()">+</button>
+          </div>
+        </div>
+        <div class="admin-section">
+          <div class="admin-section-title">🔧 Tipos de PEMP</div>
+          <div class="tag-row" id="tagsTiposPemp"></div>
+          <div class="tag-add-row">
+            <input type="text" id="newTipoPemp" placeholder="Nuevo tipo...">
+            <button onclick="addTipoPemp()">+</button>
+          </div>
+        </div>
+        <div class="admin-section">
+          <div class="admin-section-title">🚜 Carretillas</div>
+          <div style="font-family:'Montserrat',sans-serif;font-weight:700;font-size:12px;color:var(--muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:1px">🔧 Tipos</div>
+          <div class="tag-row" id="tagsTiposCarr"></div>
+          <div class="tag-add-row" style="margin-bottom:14px">
+            <input type="text" id="newTipoCarr" placeholder="Nuevo tipo...">
+            <button onclick="addTipoCarr()">+</button>
+          </div>
+          <div style="font-family:'Montserrat',sans-serif;font-weight:700;font-size:12px;color:var(--muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:1px">⚡ Energía</div>
+          <div class="tag-row" id="tagsEnergiasCarr"></div>
+          <div class="tag-add-row">
+            <input type="text" id="newEnergiaCarr" placeholder="Nueva energía...">
+            <button onclick="addEnergiaCarr()">+</button>
+          </div>
         </div>
       </div>
 
-      <!-- Carretillas -->
-      <div id="cfgCarretillas" style="display:none">
-        <div style="font-family:'Montserrat',sans-serif;font-weight:700;font-size:12px;color:var(--muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:1px">🔧 Tipos de Carretilla</div>
-        <div class="tag-row" id="tagsTiposCarr"></div>
-        <div class="tag-add-row" style="margin-bottom:14px">
-          <input type="text" id="newTipoCarr" placeholder="Nuevo tipo...">
-          <button onclick="addTipoCarr()">+</button>
+      <!-- USUARIOS -->
+      <div class="ajustes-panel" id="ajPanelUsuarios">
+        <div class="admin-section">
+          <div class="admin-section-title">👥 Usuarios registrados</div>
+          <div id="adminUsuariosList"><div style="color:var(--muted);font-size:12px">Cargando...</div></div>
         </div>
-        <div style="font-family:'Montserrat',sans-serif;font-weight:700;font-size:12px;color:var(--muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:1px">⚡ Energía</div>
-        <div class="tag-row" id="tagsEnergiasCarr"></div>
-        <div class="tag-add-row">
-          <input type="text" id="newEnergiaCarr" placeholder="Nueva energía...">
-          <button onclick="addEnergiaCarr()">+</button>
+        <div class="admin-section">
+          <div class="admin-section-title">➕ Nuevo usuario</div>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <input type="text" id="newUsuarioNombre" placeholder="Nombre" style="flex:1;min-width:120px;padding:9px 11px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:14px;outline:none">
+              <input type="password" id="newUsuarioCodigo" placeholder="Código" style="width:100px;padding:9px 11px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:14px;outline:none">
+            </div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <select id="newUsuarioRol" style="flex:1;padding:9px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px">
+                <option value="operario">Operario</option>
+                <option value="encargado">Encargado</option>
+                <option value="superadmin">Superadmin</option>
+              </select>
+              <select id="newUsuarioObra" style="flex:1;padding:9px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px">
+                <option value="">— Obra —</option>
+              </select>
+            </div>
+            <select id="newUsuarioDept" style="width:100%;padding:9px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px">
+              <option value="electrico">⚡ Eléctrico</option>
+              <option value="mecanicas">🔧 Mecánicas</option>
+              <option value="seguridad">🔺 Seguridad</option>
+            </select>
+            <button class="btn-primary" onclick="crearUsuario()" style="margin-top:4px">➕ Crear usuario</button>
+          </div>
         </div>
       </div>
-    </div>
 
-    <!-- Sugerencias (superadmin) -->
-    <div class="admin-section" id="adminSugerencias" style="display:none">
-      <div class="admin-section-title">💡 Sugerencias de usuarios</div>
-      <div id="adminSugerenciasList"><div style="color:var(--muted);font-size:12px">Cargando...</div></div>
-    </div>
+      <!-- OBRAS -->
+      <div class="ajustes-panel" id="ajPanelObras">
+        <div class="admin-section">
+          <div class="admin-section-title">🏗 Obras activas</div>
+          <div id="adminObrasList"><div style="color:var(--muted);font-size:12px">Cargando...</div></div>
+          <div class="tag-add-row" style="margin-top:14px;flex-wrap:wrap;gap:6px">
+            <input type="text" id="newObraNombre" placeholder="Nombre de la obra" style="flex:1;min-width:120px">
+            <input type="text" id="newObraCodigo" placeholder="CÓDIGO" style="width:100px;text-transform:uppercase">
+            <button onclick="crearObra()">+</button>
+          </div>
+        </div>
+      </div>
 
-    <!-- Dashboard (superadmin) -->
-    <div class="admin-section" id="adminDashboard" style="display:none">
-      <div class="admin-section-title">📊 Dashboard Global</div>
-      <div id="dashboardContent"><div style="color:var(--muted);font-size:12px">Cargando...</div></div>
+      <!-- IDEAS (superadmin) -->
+      <div class="ajustes-panel" id="ajPanelIdeas">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+          <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:16px">💡 Sugerencias recibidas</div>
+          <button class="btn-sm" onclick="cargarSugerenciasAdmin()">↻</button>
+        </div>
+        <div id="adminSugerenciasList"><div class="empty-state">Cargando...</div></div>
+      </div>
+
+      <!-- SISTEMA -->
+      <div class="ajustes-panel" id="ajPanelSistema">
+        <div class="settings-section">
+          <div class="settings-title">🌐 Servidor API</div>
+          <div class="form-group" style="margin-bottom:8px">
+            <label class="form-label">URL del Worker</label>
+            <input class="form-input" id="cfgApiUrl" type="url" placeholder="https://gestibobina-proxy.padilla585.workers.dev">
+          </div>
+          <div style="display:flex;gap:8px">
+            <button class="btn-primary btn-secondary" style="flex:1;font-size:13px;margin-top:0" onclick="guardarApiUrl()">💾 Guardar</button>
+            <button class="btn-primary btn-secondary" style="flex:1;font-size:13px;margin-top:0" onclick="comprobarConexion()">📡 Comprobar</button>
+          </div>
+        </div>
+        <div class="settings-section" id="sistemaSheetSection" style="display:none">
+          <div class="settings-title">📊 Google Sheets</div>
+          <div class="settings-row"><span>Sync</span><strong>Automático en cada cambio</strong></div>
+          <button class="btn-primary btn-secondary" style="font-size:13px" onclick="forzarSync()">🔄 Forzar sincronización</button>
+        </div>
+        <div class="settings-section">
+          <div class="settings-title">💾 Datos y caché</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn-export" onclick="backupCompleto()" style="font-size:13px">📦 Backup JSON</button>
+            <button class="btn-export" onclick="exportarExcelCompleto()" style="font-size:13px">📊 Excel completo</button>
+          </div>
+          <button class="btn-primary btn-secondary" style="font-size:13px;margin-top:8px" onclick="limpiarCache()">🗑 Limpiar caché SW</button>
+        </div>
+        <div class="settings-section" id="sistemaLogsSection" style="display:none">
+          <div class="settings-title" style="display:flex;justify-content:space-between;align-items:center">
+            <span>📋 Logs de errores</span>
+            <button class="btn-sm" onclick="cargarLogs()">↻</button>
+          </div>
+          <div id="sistemaLogsList"><div style="color:var(--muted);font-size:12px">Pulsa ↻ para cargar</div></div>
+        </div>
+        <div class="settings-section">
+          <div class="settings-title">ℹ️ Acerca de</div>
+          <div class="settings-row"><span>Aplicación</span><strong>Alejandra</strong></div>
+          <div class="settings-row"><span>Versión</span><strong>v3.0</strong></div>
+          <div class="settings-row"><span>Backend</span><strong>Cloudflare Workers + D1</strong></div>
+          <div class="settings-row"><span>Año</span><strong>2026</strong></div>
+          <div style="margin-top:10px;text-align:center;font-size:11px;color:var(--muted);letter-spacing:1px">INVENTARIO · MAQUINARIA · CONTROL</div>
+        </div>
+      </div>
+
     </div>
   </div>
 
@@ -755,6 +877,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:1
   <button class="nav-btn" id="navSugerencias" onclick="navTo('sugerencias')">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
     Ideas
+    <div class="badge-counter" id="badgeIdeas" style="display:none">0</div>
   </button>
   <button class="nav-btn" id="navAjustes" onclick="navTo('ajustes')">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
@@ -798,6 +921,23 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:1
   </div>
 </div>
 
+<!-- MODAL: Código creado -->
+<div class="modal-overlay" id="modalCodigo" onclick="if(event.target===this)this.classList.remove('show')">
+  <div class="modal">
+    <div class="modal-title">✅ Usuario creado</div>
+    <div style="text-align:center;margin-bottom:4px">
+      <div style="font-size:13px;color:var(--muted)">Comparte este código con</div>
+      <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:18px;margin-top:4px" id="codigoNombreCreado">—</div>
+    </div>
+    <div class="codigo-big" id="codigoValorCreado">—</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px">
+      <button class="btn-primary" style="flex:1;min-width:120px" onclick="copiarCodigo()">📋 Copiar</button>
+      <button class="btn-primary btn-secondary" style="flex:1;min-width:120px;margin-top:0" onclick="compartirCodigo()">📤 Compartir</button>
+    </div>
+    <button class="btn-primary btn-secondary" style="font-size:13px;margin-top:8px" onclick="document.getElementById('modalCodigo').classList.remove('show')">Cerrar</button>
+  </div>
+</div>
+
 <!-- TOAST -->
 <div class="toast" id="toast"></div>
 
@@ -830,10 +970,11 @@ async function apiCall(path, options = {}) {
   const s = getSession();
   const headers = {
     'Content-Type': 'application/json',
-    ...(s && s.adminCode ? { 'X-Admin-Code': s.adminCode } : {}),
-    ...(s && s.obra_id   ? { 'X-Obra-Id': String(s.obra_id) } : {}),
-    ...(s && s.nombre    ? { 'X-Usuario': s.nombre } : {}),
-    ...(s && s.rol       ? { 'X-Rol': s.rol } : {}),
+    ...(s && s.adminCode    ? { 'X-Admin-Code': s.adminCode } : {}),
+    ...(s && s.obra_id      ? { 'X-Obra-Id': String(s.obra_id) } : {}),
+    ...(s && s.nombre       ? { 'X-Usuario': s.nombre } : {}),
+    ...(s && s.rol          ? { 'X-Rol': s.rol } : {}),
+    ...(s && s.departamento ? { 'X-Departamento': s.departamento } : {}),
     ...options.headers
   };
   const res = await fetch(base + path, { ...options, headers });
@@ -892,7 +1033,9 @@ async function doLogin() {
       rol: data.rol,
       obra_id: data.obra_id || null,
       obra_nombre: data.obra_nombre || null,
-      adminCode: (data.rol === 'superadmin') ? codigo : null
+      adminCode: (data.rol === 'superadmin') ? codigo : null,
+      // SuperAdmin elige depto en pantalla selectora; resto lo tiene fijo
+      departamento: data.rol !== 'superadmin' ? (data.departamento || 'electrico') : null
     };
     setSession(session);
     iniciarApp();
@@ -922,32 +1065,27 @@ async function iniciarApp() {
   document.getElementById('appContent').style.display = 'block';
   document.getElementById('bottomNav').style.display = 'flex';
 
-  // Siempre arrancar en la pantalla de inicio
-  showScreen('home');
+  const esSuperAdmin = s.rol === 'superadmin';
 
+  // SuperAdmin sin depto elegido → pantalla de selección
+  if (esSuperAdmin && !s.departamento) {
+    showScreen('dept');
+    renderHeader();
+    return;
+  }
+
+  // Usuario normal o superadmin que ya eligió depto → home
   renderHeader();
   renderAjustesInfo();
-
-  const esSuperAdmin = s.rol === 'superadmin';
-  const esEncargado  = s.rol === 'encargado';
-
-  if (esSuperAdmin || esEncargado) {
-    document.getElementById('adminHomeBtn').style.display = 'flex';
-    document.getElementById('ajustesAdminLink').style.display = 'block';
-  }
-  if (esSuperAdmin) {
-    document.getElementById('adminObrasSection').style.display = 'block';
-    document.getElementById('adminDashboard').style.display = 'block';
-    document.getElementById('adminSugerencias').style.display = 'block';
-  }
+  setupHomeModules();
+  showScreen('home');
 
   checkConnection();
   await cargarStatsHome();
-  await cargarRecentActivity();
   await cargarCatalogos();
-
   if (esSuperAdmin) {
-    await cargarObrasAdmin();
+    cargarBadgeIdeas();
+    cargarObrasSelectUsuario();
   }
 }
 
@@ -958,34 +1096,83 @@ function rolLabel(rol) {
   return rol || '—';
 }
 
+const DEPT_INFO = {
+  electrico:  { icon: '⚡', name: 'Eléctrico' },
+  mecanicas:  { icon: '🔧', name: 'Mecánicas' },
+  seguridad:  { icon: '🔺', name: 'Seguridad' },
+};
+
 function renderHeader() {
   const s = getSession();
   if (!s) return;
 
   const nameEl = document.getElementById('headerUserName');
-  // SuperAdmin y Encargado muestran su rol; Operario muestra su nombre
   nameEl.textContent = (s.rol === 'superadmin' || s.rol === 'encargado')
     ? rolLabel(s.rol)
     : (s.nombre || '—');
 
-  if (s.rol === 'superadmin') {
+  const deptPill = document.getElementById('deptPill');
+  if (s.rol === 'superadmin' && s.departamento) {
+    const di = DEPT_INFO[s.departamento] || { icon: '?', name: s.departamento };
+    document.getElementById('deptPillIcon').textContent = di.icon;
+    document.getElementById('deptPillName').textContent = di.name;
+    deptPill.style.display = 'flex';
     document.getElementById('headerObraLabel').style.display = 'none';
     document.getElementById('headerObraSelect').style.display = 'block';
     cargarObrasHeader();
   } else {
-    document.getElementById('headerObraLabel').textContent = '🏗 ' + (s.obra_nombre || '—');
-    document.getElementById('headerObraLabel').style.display = 'block';
-    document.getElementById('headerObraSelect').style.display = 'none';
+    deptPill.style.display = 'none';
+    if (s.rol === 'superadmin') {
+      document.getElementById('headerObraLabel').style.display = 'none';
+      document.getElementById('headerObraSelect').style.display = 'none';
+    } else {
+      document.getElementById('headerObraLabel').textContent = '🏗 ' + (s.obra_nombre || '—');
+      document.getElementById('headerObraLabel').style.display = 'block';
+      document.getElementById('headerObraSelect').style.display = 'none';
+    }
   }
 }
 
 function renderAjustesInfo() {
   const s = getSession();
   if (!s) return;
-  document.getElementById('ajustesNombre').textContent = s.nombre || '—';
-  document.getElementById('ajustesRol').textContent = rolLabel(s.rol);
-  document.getElementById('ajustesObra').textContent = s.obra_nombre || (s.rol === 'superadmin' ? 'Todas' : '—');
-  document.getElementById('cfgApiUrl').value = getAPI();
+  const n = document.getElementById('ajustesNombre'); if(n) n.textContent = s.nombre || '—';
+  const r = document.getElementById('ajustesRol');    if(r) r.textContent = rolLabel(s.rol);
+  const o = document.getElementById('ajustesObra');   if(o) o.textContent = s.obra_nombre || (s.rol==='superadmin'?'Todas':'—');
+  const d = document.getElementById('ajustesDept');
+  if (d) d.textContent = s.departamento ? (DEPT_INFO[s.departamento]?.name || s.departamento) : '—';
+  const cu = document.getElementById('cfgApiUrl'); if(cu) cu.value = getAPI();
+}
+
+function setupHomeModules() {
+  const s = getSession();
+  const dept = s?.departamento;
+  const mostrarBobinas = dept === 'electrico' || s?.rol === 'superadmin';
+  const cardB = document.getElementById('cardBobinas');
+  if (cardB) cardB.style.display = mostrarBobinas ? 'flex' : 'none';
+}
+
+function seleccionarDepto(dept) {
+  const s = getSession();
+  if (!s) return;
+  s.departamento = dept;
+  setSession(s);
+  renderHeader();
+  renderAjustesInfo();
+  setupHomeModules();
+  showScreen('home');
+  cargarStatsHome();
+  cargarCatalogos();
+  cargarBadgeIdeas();
+}
+
+function volverSelectorDepto() {
+  const s = getSession();
+  if (!s) return;
+  s.departamento = null;
+  setSession(s);
+  document.getElementById('deptPill').style.display = 'none';
+  showScreen('dept');
 }
 
 async function cargarObrasHeader() {
@@ -1029,18 +1216,18 @@ function showScreen(name) {
   const el = document.getElementById('screen' + name.charAt(0).toUpperCase() + name.slice(1));
   if (el) el.classList.add('active');
 
-  // nav highlight
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
   const navMap = { home: 'navInicio', ajustes: 'navAjustes', sugerencias: 'navSugerencias' };
   if (navMap[name]) document.getElementById(navMap[name]).classList.add('active');
 
-  if (name === 'admin') cargarAdminData();
-  if (name === 'ajustes') renderAjustesInfo();
+  if (name === 'ajustes') { renderAjustesInfo(); initAjustesTabs(); }
 }
 
 function navTo(target) {
   closeCamera();
   if (target === 'home') {
+    const s2 = getSession();
+    if (s2?.rol === 'superadmin' && !s2?.departamento) { showScreen('dept'); return; }
     showScreen('home');
     return;
   }
@@ -1097,12 +1284,16 @@ function updateModuleUI() {
   document.getElementById('fieldsPemp').style.display  = mod === 'pemp'       ? 'block' : 'none';
   document.getElementById('fieldsCarr').style.display  = mod === 'carretillas'? 'block' : 'none';
 
-  // Mostrar selector de obra solo para superadmin sin obra fija
   const s = getSession();
   const needsObra = s?.rol === 'superadmin' && !s?.obra_id;
   const obraGroup = document.getElementById('scanObraGroup');
   if (obraGroup) obraGroup.style.display = needsObra ? 'block' : 'none';
   if (needsObra) cargarObrasSelectScan();
+
+  // Buscar máquina cross-dept solo para Seguridad (y superadmin)
+  const esSeguridad = s?.departamento === 'seguridad' || s?.rol === 'superadmin';
+  const buscarBox = document.getElementById('buscarMaquinaBox');
+  if (buscarBox) buscarBox.style.display = (esSeguridad && mod !== 'bobinas') ? 'block' : 'none';
 }
 
 async function cargarObrasSelectScan() {
@@ -1261,15 +1452,40 @@ function startQRLoop() {
 }
 
 function capturarFrame() {
-  const video = document.getElementById('scanVideo');
-  const MAX = 800;
-  let w = video.videoWidth  || 1280;
-  let h = video.videoHeight || 720;
-  if (w > MAX) { h = Math.round(h * MAX / w); w = MAX; }
-  if (h > MAX) { w = Math.round(w * MAX / h); h = MAX; }
+  const video    = document.getElementById('scanVideo');
+  const viewport = document.getElementById('camViewport');
+
+  const vW  = video.videoWidth  || 1280;
+  const vH  = video.videoHeight || 720;
+  const vpW = viewport.clientWidth  || 320;
+  const vpH = viewport.clientHeight || 200;
+
+  // Escala del object-fit: cover
+  const scale   = Math.max(vpW / vW, vpH / vH);
+  // Desplazamiento del vídeo dentro del viewport (píxeles de vídeo)
+  const offsetX = (vW - vpW / scale) / 2;
+  const offsetY = (vH - vpH / scale) / 2;
+
+  // El scan frame ocupa 88% del ancho y 90px de alto, centrado
+  const frameVpW = vpW * 0.88;
+  const frameVpH = 90;
+  const frameVpX = (vpW - frameVpW) / 2;
+  const frameVpY = (vpH - frameVpH) / 2;
+
+  // Convertir coordenadas del viewport a coordenadas del vídeo
+  const srcX = frameVpX / scale + offsetX;
+  const srcY = frameVpY / scale + offsetY;
+  const srcW = frameVpW / scale;
+  const srcH = frameVpH / scale;
+
+  // Limitar tamaño de salida
+  const maxW = 800;
+  const outW = Math.min(Math.round(srcW), maxW);
+  const outH = Math.round(srcH * outW / srcW);
+
   const c = document.createElement('canvas');
-  c.width = w; c.height = h;
-  c.getContext('2d').drawImage(video, 0, 0, w, h);
+  c.width = outW; c.height = outH;
+  c.getContext('2d').drawImage(video, srcX, srcY, srcW, srcH, 0, 0, outW, outH);
   return c;
 }
 
@@ -2096,15 +2312,8 @@ function initCfgTabs() {
 }
 
 async function cargarAdminData() {
-  const s = getSession();
+  // Legacy: ya no se usa screenAdmin, todo está en Ajustes tabs
   await cargarCatalogos();
-  initCfgTabs();
-  await cargarUsuariosAdmin();
-  if (s?.rol === 'superadmin') {
-    await cargarObrasAdmin();
-    await cargarDashboard();
-    cargarSugerencias();
-  }
 }
 
 async function cargarObrasAdmin() {
@@ -2179,24 +2388,7 @@ async function cargarUsuariosAdmin() {
 }
 
 async function crearUsuario() {
-  const nombre  = document.getElementById('newUsuarioNombre').value.trim();
-  const codigo  = document.getElementById('newUsuarioCodigo').value.trim();
-  const rol     = document.getElementById('newUsuarioRol').value;
-  const obra_id = document.getElementById('newUsuarioObra').value;
-  if (!nombre || !codigo) return toast('⚠️ Nombre y código obligatorios', 'err');
-  try {
-    const res = await apiCall('/usuarios', {
-      method: 'POST',
-      body: JSON.stringify({ nombre, codigo, rol, obra_id: obra_id || null })
-    });
-    const data = await res.json();
-    if (res.ok) {
-      toast(`✅ Usuario "${nombre}" creado`, 'ok');
-      document.getElementById('newUsuarioNombre').value = '';
-      document.getElementById('newUsuarioCodigo').value = '';
-      cargarUsuariosAdmin();
-    } else { toast(`❌ ${data.error}`, 'err'); }
-  } catch { toast('❌ Error', 'err'); }
+  return crearUsuarioNuevo();
 }
 
 async function eliminarUsuario(id) {
@@ -2338,6 +2530,281 @@ window.onerror = function(msg, src, line, col, err) {
 window.addEventListener('unhandledrejection', e => {
   enviarLog('promise', e.reason?.message || String(e.reason), e.reason?.stack || '');
 });
+
+// ══════════════════════════════════════════════════════
+// AJUSTES TABS
+// ══════════════════════════════════════════════════════
+function selAjTab(tab) {
+  document.querySelectorAll('.ajustes-tab').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.ajustes-panel').forEach(p => p.classList.remove('active'));
+  const btn   = document.getElementById('ajTab'   + tab.charAt(0).toUpperCase() + tab.slice(1));
+  const panel = document.getElementById('ajPanel' + tab.charAt(0).toUpperCase() + tab.slice(1));
+  if (btn)   btn.classList.add('active');
+  if (panel) panel.classList.add('active');
+
+  if (tab === 'catalogos') cargarCatalogos();
+  if (tab === 'usuarios')  { cargarUsuariosAdmin(); cargarObrasSelectUsuario(); }
+  if (tab === 'obras')     cargarObrasAdmin();
+  if (tab === 'ideas')     cargarSugerenciasAdmin();
+  if (tab === 'sistema')   { renderAjustesInfo(); checkConnection(); }
+}
+
+function initAjustesTabs() {
+  const s = getSession();
+  if (!s) return;
+  const esSA = s.rol === 'superadmin';
+  const esEnc = s.rol === 'encargado';
+  document.getElementById('ajTabUsuarios').style.display = (esSA || esEnc) ? '' : 'none';
+  document.getElementById('ajTabObras').style.display    = esSA ? '' : 'none';
+  document.getElementById('ajTabIdeas').style.display    = esSA ? '' : 'none';
+  document.getElementById('sistemaSheetSection').style.display  = esSA ? 'block' : 'none';
+  document.getElementById('sistemaLogsSection').style.display   = esSA ? 'block' : 'none';
+  const cfgB = document.getElementById('cfgBobinasSection');
+  if (cfgB) cfgB.style.display = (esSA || s.departamento === 'electrico') ? 'block' : 'none';
+}
+
+// ══════════════════════════════════════════════════════
+// BADGE IDEAS
+// ══════════════════════════════════════════════════════
+async function cargarBadgeIdeas() {
+  const s = getSession();
+  if (s?.rol !== 'superadmin') return;
+  try {
+    const res = await apiCall('/sugerencias');
+    if (!res.ok) return;
+    const data = await res.json();
+    const nuevas = data.filter(sg => !sg.leida).length;
+    const badge = document.getElementById('badgeIdeas');
+    if (badge) {
+      badge.textContent = nuevas;
+      badge.style.display = nuevas > 0 ? 'flex' : 'none';
+    }
+  } catch {}
+}
+
+// ══════════════════════════════════════════════════════
+// BUSCAR MÁQUINA CROSS-DEPT (Seguridad)
+// ══════════════════════════════════════════════════════
+async function buscarMaquina() {
+  const mat = (document.getElementById('buscarMatInput')?.value || '').trim().toUpperCase();
+  if (!mat) return toast('⚠️ Introduce la matrícula', 'err');
+  const c = document.getElementById('buscarMatResult');
+  c.innerHTML = '<div style="color:var(--muted);font-size:13px">Buscando...</div>';
+  try {
+    const res  = await apiCall(`/buscar-maquina/${encodeURIComponent(mat)}`);
+    const data = await res.json();
+    if (!res.ok || !data.ok) {
+      c.innerHTML = `<div style="color:var(--red);font-size:13px">❌ ${data.error || 'No encontrada'}</div>`;
+      return;
+    }
+    const item = data.data;
+    const tipo = data.tipo === 'pemp' ? 'PEMP' : 'Carretilla';
+    const estadoColor = item.estado === 'Disponible' ? 'var(--green)' : item.estado === 'Averiada' ? 'var(--red)' : 'var(--muted)';
+    c.innerHTML = `
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px">
+        <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:18px;color:var(--accent)">${item.matricula}</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:2px">${tipo}${item.tipo ? ' · ' + item.tipo : ''}</div>
+        <div style="font-size:13px;margin-top:8px">🏗 Obra: <strong>${item.obra_nombre || '—'}</strong></div>
+        <div style="font-size:13px;margin-top:4px;color:${estadoColor}">● ${item.estado || '—'}</div>
+        ${item.marca ? `<div style="font-size:12px;color:var(--muted);margin-top:4px">🔧 ${item.marca}</div>` : ''}
+      </div>`;
+  } catch { c.innerHTML = '<div style="color:var(--red);font-size:12px">❌ Error de conexión</div>'; }
+}
+
+// ══════════════════════════════════════════════════════
+// SUGERENCIAS ADMIN (Ideas tab)
+// ══════════════════════════════════════════════════════
+async function cargarSugerenciasAdmin() {
+  const c = document.getElementById('adminSugerenciasList');
+  if (!c) return;
+  c.innerHTML = '<div class="empty-state">Cargando...</div>';
+  try {
+    const res  = await apiCall('/sugerencias');
+    const data = await res.json();
+    if (!res.ok) { c.innerHTML = '<div style="color:var(--red);font-size:12px">Error al cargar</div>'; return; }
+    if (!data.length) { c.innerHTML = '<div class="empty-state">Sin sugerencias aún</div>'; return; }
+    const catIcon = { mejora:'🔧', error:'🐛', nuevo:'✨', otro:'💬' };
+    c.innerHTML = data.map(sg => `
+      <div style="background:var(--surface2);border:1px solid ${sg.leida?'var(--border)':'var(--accent)'};border-radius:10px;padding:12px;margin-bottom:8px">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+          <span style="font-size:16px">${catIcon[sg.categoria]||'💬'}</span>
+          <span style="font-family:'Montserrat',sans-serif;font-weight:700;font-size:11px;color:var(--accent);text-transform:uppercase">${sg.categoria||'otro'}</span>
+          ${!sg.leida?'<span style="background:var(--accent);color:#000;font-size:9px;font-weight:900;padding:2px 6px;border-radius:4px;margin-left:auto">NUEVA</span>':''}
+        </div>
+        <div style="font-size:14px;color:var(--text);margin-bottom:6px">${sg.texto}</div>
+        <div style="font-size:11px;color:var(--muted)">👤 ${sg.usuario||'—'} · 🏗 ${sg.obra||'—'} · ${sg.created_at||''}</div>
+        <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">
+          ${!sg.leida?`<button class="btn-sm" onclick="marcarLeida(${sg.id})">✓ Leída</button>`:''}
+          <button class="btn-sm danger" onclick="eliminarSugerencia(${sg.id})">🗑 Borrar</button>
+          <button class="btn-sm" onclick="compartirSugerencia('${(sg.texto||'').replace(/'/g,"&#39;")}','${sg.categoria||''}')">📤 Compartir</button>
+        </div>
+      </div>`).join('');
+  } catch { c.innerHTML = '<div style="color:var(--red);font-size:12px">Error de conexión</div>'; }
+  cargarBadgeIdeas();
+}
+
+async function eliminarSugerencia(id) {
+  if (!confirm('¿Eliminar esta sugerencia?')) return;
+  await apiCall(`/sugerencias/${id}`, { method: 'DELETE' });
+  cargarSugerenciasAdmin();
+}
+
+function compartirSugerencia(texto, categoria) {
+  const catLabel = { mejora:'Mejora', error:'Error', nuevo:'Nueva función', otro:'Otro' };
+  const txt = `💡 Sugerencia [${catLabel[categoria]||categoria}]: ${texto}`;
+  if (navigator.share) {
+    navigator.share({ text: txt }).catch(() => {});
+  } else {
+    navigator.clipboard?.writeText(txt).then(() => toast('✅ Copiado al portapapeles', 'ok')).catch(() => {});
+  }
+}
+
+// ══════════════════════════════════════════════════════
+// CREAR USUARIO (actualizado con dept + modal código)
+// ══════════════════════════════════════════════════════
+async function crearUsuarioNuevo() {
+  const nombre  = document.getElementById('newUsuarioNombre')?.value.trim();
+  const codigo  = document.getElementById('newUsuarioCodigo')?.value.trim();
+  const rol     = document.getElementById('newUsuarioRol')?.value;
+  const obra_id = document.getElementById('newUsuarioObra')?.value;
+  const dept    = document.getElementById('newUsuarioDept')?.value || 'electrico';
+  if (!nombre || !codigo) return toast('⚠️ Nombre y código obligatorios', 'err');
+  try {
+    const res  = await apiCall('/usuarios', {
+      method: 'POST',
+      body: JSON.stringify({ nombre, codigo, rol, obra_id: obra_id || null, departamento: dept })
+    });
+    const data = await res.json();
+    if (res.ok) {
+      document.getElementById('newUsuarioNombre').value = '';
+      document.getElementById('newUsuarioCodigo').value = '';
+      mostrarCodigoCreado(data.nombre || nombre, data.codigo || codigo);
+      cargarUsuariosAdmin();
+    } else { toast(`❌ ${data.error}`, 'err'); }
+  } catch { toast('❌ Error de conexión', 'err'); }
+}
+
+function mostrarCodigoCreado(nombre, codigo) {
+  document.getElementById('codigoNombreCreado').textContent = nombre;
+  document.getElementById('codigoValorCreado').textContent  = codigo;
+  document.getElementById('modalCodigo').classList.add('show');
+}
+
+let _codigoCreado = '';
+function copiarCodigo() {
+  const c = document.getElementById('codigoValorCreado')?.textContent || '';
+  navigator.clipboard?.writeText(c).then(() => toast('✅ Código copiado', 'ok')).catch(() => toast('Código: ' + c, ''));
+}
+function compartirCodigo() {
+  const nombre = document.getElementById('codigoNombreCreado')?.textContent || '';
+  const codigo = document.getElementById('codigoValorCreado')?.textContent || '';
+  const txt = `Hola ${nombre}, tu código de acceso a Alejandra es: ${codigo}`;
+  if (navigator.share) {
+    navigator.share({ text: txt }).catch(() => {});
+  } else {
+    navigator.clipboard?.writeText(txt).then(() => toast('✅ Copiado', 'ok')).catch(() => {});
+  }
+}
+
+// ══════════════════════════════════════════════════════
+// BACKUP y SISTEMA
+// ══════════════════════════════════════════════════════
+async function backupCompleto() {
+  try {
+    toast('⏳ Generando backup...', '');
+    const [rb, rp, rc, rh, ro] = await Promise.all([
+      apiCall('/bobinas').then(r => r.json()).catch(() => []),
+      apiCall('/pemp').then(r => r.json()).catch(() => []),
+      apiCall('/carretillas').then(r => r.json()).catch(() => []),
+      apiCall('/historial?limit=9999').then(r => r.json()).catch(() => []),
+      apiCall('/obras').then(r => r.json()).catch(() => []),
+    ]);
+    const backup = {
+      version: '3.0',
+      fecha: new Date().toISOString(),
+      bobinas: rb, pemp: rp, carretillas: rc, historial: rh, obras: ro
+    };
+    const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href = url;
+    a.download = `alejandra-backup-${new Date().toISOString().slice(0,10)}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast('✅ Backup descargado', 'ok');
+  } catch (e) { toast('❌ Error al generar backup', 'err'); }
+}
+
+async function forzarSync() {
+  toast('⏳ Sincronizando con Sheets...', '');
+  try {
+    const res = await apiCall('/sync-sheets', { method: 'POST' });
+    if (res.ok) toast('✅ Sincronización completada', 'ok');
+    else toast('⚠️ El worker no tiene endpoint de sync manual', 'err');
+  } catch { toast('❌ Error de conexión', 'err'); }
+}
+
+async function limpiarCache() {
+  try {
+    const keys = await caches.keys();
+    await Promise.all(keys.map(k => caches.delete(k)));
+    toast('✅ Caché limpiada. Recargando...', 'ok');
+    setTimeout(() => location.reload(), 1500);
+  } catch { toast('❌ Error al limpiar caché', 'err'); }
+}
+
+async function exportarExcelCompleto() {
+  try {
+    toast('⏳ Generando Excel completo...', '');
+    const [rb, rp, rc] = await Promise.all([
+      apiCall('/bobinas').then(r => r.json()).catch(() => []),
+      apiCall('/pemp').then(r => r.json()).catch(() => []),
+      apiCall('/carretillas').then(r => r.json()).catch(() => []),
+    ]);
+    const wb = XLSX.utils.book_new();
+    if (rb.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rb), 'Bobinas');
+    if (rp.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rp), 'PEMP');
+    if (rc.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rc), 'Carretillas');
+    const s = getSession();
+    if (s?.rol === 'superadmin') {
+      const sugs = await apiCall('/sugerencias').then(r => r.json()).catch(() => []);
+      if (sugs.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(sugs), 'Sugerencias');
+    }
+    XLSX.writeFile(wb, `alejandra-completo-${new Date().toISOString().slice(0,10)}.xlsx`);
+    toast('✅ Excel generado', 'ok');
+  } catch { toast('❌ Error al exportar', 'err'); }
+}
+
+async function cargarLogs() {
+  const c = document.getElementById('sistemaLogsList');
+  if (!c) return;
+  c.innerHTML = '<div style="color:var(--muted);font-size:12px">Cargando...</div>';
+  try {
+    const res  = await apiCall('/logs');
+    if (!res.ok) { c.innerHTML = '<div style="color:var(--red);font-size:12px">Sin permisos o error</div>'; return; }
+    const data = await res.json();
+    if (!data.length) { c.innerHTML = '<div style="color:var(--muted);font-size:12px">Sin logs recientes</div>'; return; }
+    c.innerHTML = data.slice(0,30).map(l => `
+      <div style="font-size:11px;padding:6px 0;border-bottom:1px solid var(--border)">
+        <span style="color:${l.nivel==='error'?'var(--red)':'var(--accent)'}">[${l.nivel||'?'}]</span>
+        ${l.mensaje||''}
+        <div style="color:var(--muted)">${l.usuario||'—'} · ${l.ts||l.created_at||''}</div>
+      </div>`).join('');
+  } catch { c.innerHTML = '<div style="color:var(--red);font-size:12px">Error de conexión</div>'; }
+}
+
+async function cargarObrasSelectUsuario() {
+  try {
+    const res   = await apiCall('/obras');
+    const obras = await res.json();
+    const sel   = document.getElementById('newUsuarioObra');
+    if (!sel) return;
+    sel.innerHTML = '<option value="">— Obra —</option>' +
+      obras.map(o => `<option value="${o.id}">${o.nombre}</option>`).join('');
+  } catch {}
+}
 
 // ══════════════════════════════════════════════════════
 // INIT
