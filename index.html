@@ -432,8 +432,6 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:1
             <label class="form-label">Tipo</label>
             <select class="form-select" id="fieldPempTipo">
               <option value="">Seleccionar...</option>
-              <option value="Tijera">Tijera</option>
-              <option value="Brazo">Brazo</option>
             </select>
           </div>
           <div class="form-group">
@@ -469,10 +467,6 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:1
             <label class="form-label">Tipo</label>
             <select class="form-select" id="fieldCarrTipo">
               <option value="">Seleccionar...</option>
-              <option value="Contrapesada">Contrapesada</option>
-              <option value="Retráctil">Retráctil</option>
-              <option value="Transpaleta">Transpaleta</option>
-              <option value="Apiladora">Apiladora</option>
             </select>
           </div>
           <div class="form-group">
@@ -486,9 +480,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:1
           <div class="form-group">
             <label class="form-label">Energía</label>
             <select class="form-select" id="fieldCarrEnergia">
-              <option value="Eléctrica">Eléctrica</option>
-              <option value="Gas">Gas</option>
-              <option value="Diésel">Diésel</option>
+              <option value="">Seleccionar...</option>
             </select>
           </div>
           <div class="form-group">
@@ -596,7 +588,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:1
     <div class="settings-section" style="margin-top:8px">
       <div class="settings-title">ℹ️ Acerca de</div>
       <div class="settings-row"><span>Aplicación</span><strong>Alejandra</strong></div>
-      <div class="settings-row"><span>Versión</span><strong id="appVersionDisplay">v2.7</strong></div>
+      <div class="settings-row"><span>Versión</span><strong id="appVersionDisplay">v2.8</strong></div>
       <div class="settings-row"><span>Autor</span><strong>Adrian Padilla</strong></div>
       <div class="settings-row"><span>Desarrollado con</span><strong>Claude AI</strong></div>
       <div class="settings-row"><span>Backend</span><strong>Cloudflare Workers + D1</strong></div>
@@ -644,22 +636,55 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:1
       </div>
     </div>
 
-    <!-- Proveedores y Tipos Cable (solo bobinas) -->
+    <!-- Configuración por módulo -->
     <div class="admin-section">
-      <div class="admin-section-title">🏭 Proveedores de Cable</div>
-      <div class="tag-row" id="tagsProveedores"></div>
-      <div class="tag-add-row">
-        <input type="text" id="newProveedor" placeholder="Nuevo proveedor...">
-        <button onclick="addProveedor()">+</button>
+      <div class="admin-section-title">⚙️ Configuración por módulo</div>
+      <div style="display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap">
+        <button class="filter-btn active" id="cfgTabBobinas"    onclick="selCfgTab('bobinas')">📦 Bobinas</button>
+        <button class="filter-btn"        id="cfgTabPemp"       onclick="selCfgTab('pemp')">🏗️ PEMP</button>
+        <button class="filter-btn"        id="cfgTabCarretillas" onclick="selCfgTab('carretillas')">🚜 Carretillas</button>
       </div>
-    </div>
 
-    <div class="admin-section">
-      <div class="admin-section-title">🔌 Tipos de Cable</div>
-      <div class="tag-row" id="tagsTipos"></div>
-      <div class="tag-add-row">
-        <input type="text" id="newTipo" placeholder="Nuevo tipo...">
-        <button onclick="addTipo()">+</button>
+      <!-- Bobinas -->
+      <div id="cfgBobinas">
+        <div style="font-family:'Montserrat',sans-serif;font-weight:700;font-size:12px;color:var(--muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:1px">🏭 Proveedores</div>
+        <div class="tag-row" id="tagsProveedores"></div>
+        <div class="tag-add-row" style="margin-bottom:14px">
+          <input type="text" id="newProveedor" placeholder="Nuevo proveedor...">
+          <button onclick="addProveedor()">+</button>
+        </div>
+        <div style="font-family:'Montserrat',sans-serif;font-weight:700;font-size:12px;color:var(--muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:1px">🔌 Tipos de Cable</div>
+        <div class="tag-row" id="tagsTipos"></div>
+        <div class="tag-add-row">
+          <input type="text" id="newTipo" placeholder="Nuevo tipo...">
+          <button onclick="addTipo()">+</button>
+        </div>
+      </div>
+
+      <!-- PEMP -->
+      <div id="cfgPemp" style="display:none">
+        <div style="font-family:'Montserrat',sans-serif;font-weight:700;font-size:12px;color:var(--muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:1px">🔧 Tipos de PEMP</div>
+        <div class="tag-row" id="tagsTiposPemp"></div>
+        <div class="tag-add-row">
+          <input type="text" id="newTipoPemp" placeholder="Nuevo tipo...">
+          <button onclick="addTipoPemp()">+</button>
+        </div>
+      </div>
+
+      <!-- Carretillas -->
+      <div id="cfgCarretillas" style="display:none">
+        <div style="font-family:'Montserrat',sans-serif;font-weight:700;font-size:12px;color:var(--muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:1px">🔧 Tipos de Carretilla</div>
+        <div class="tag-row" id="tagsTiposCarr"></div>
+        <div class="tag-add-row" style="margin-bottom:14px">
+          <input type="text" id="newTipoCarr" placeholder="Nuevo tipo...">
+          <button onclick="addTipoCarr()">+</button>
+        </div>
+        <div style="font-family:'Montserrat',sans-serif;font-weight:700;font-size:12px;color:var(--muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:1px">⚡ Energía</div>
+        <div class="tag-row" id="tagsEnergiasCarr"></div>
+        <div class="tag-add-row">
+          <input type="text" id="newEnergiaCarr" placeholder="Nueva energía...">
+          <button onclick="addEnergiaCarr()">+</button>
+        </div>
       </div>
     </div>
 
@@ -1094,7 +1119,8 @@ function showModTab(name) {
   const tabs = document.querySelectorAll('.mod-tab-btn');
   if (tabs[tabMap[name]]) tabs[tabMap[name]].classList.add('active');
   document.getElementById('modPanel' + name.charAt(0).toUpperCase() + name.slice(1)).classList.add('active');
-  if (name === 'stock') cargarStock();
+  if (name === 'scan')     cargarCatalogos();
+  if (name === 'stock')    cargarStock();
   if (name === 'historial') cargarHistorial();
 }
 
@@ -1128,6 +1154,7 @@ async function cargarStatsHome() {
 
 async function cargarRecentActivity() {
   const c = document.getElementById('recentActivity');
+  if (!c) return;
   try {
     const res = await apiCall('/historial?limit=5');
     if (!res.ok) throw new Error();
@@ -1440,6 +1467,7 @@ async function cargarStock() {
   }
 }
 
+let _catalogos = { proveedores: [], tipos: [], tiposPemp: [], tiposCarr: [], energiasCarr: [] };
 let _stockItems = [];
 
 function renderStock(items, mod) {
@@ -1896,13 +1924,30 @@ async function comprobarConexion() {
 // ══════════════════════════════════════════════════════
 async function cargarCatalogos() {
   try {
-    const [rp, rt] = await Promise.all([apiCall('/proveedores'), apiCall('/tipos-cable')]);
-    const provs  = rp.ok ? await rp.json() : [];
-    const tipos  = rt.ok ? await rt.json() : [];
-    poblarSelect('fieldProv',      provs);
-    poblarSelect('fieldTipoCable', tipos);
-    renderTags('tagsProveedores', provs, 'proveedor');
-    renderTags('tagsTipos',       tipos, 'tipo');
+    const [rp, rt, rtp, rtc, rec] = await Promise.all([
+      apiCall('/proveedores'),
+      apiCall('/tipos-cable'),
+      apiCall('/tipos-pemp'),
+      apiCall('/tipos-carretilla'),
+      apiCall('/energias-carretilla'),
+    ]);
+    _catalogos.proveedores = rp.ok  ? await rp.json()  : [];
+    _catalogos.tipos       = rt.ok  ? await rt.json()  : [];
+    _catalogos.tiposPemp   = rtp.ok ? await rtp.json() : [];
+    _catalogos.tiposCarr   = rtc.ok ? await rtc.json() : [];
+    _catalogos.energiasCarr= rec.ok ? await rec.json() : [];
+
+    poblarSelect('fieldProv',        _catalogos.proveedores);
+    poblarSelect('fieldTipoCable',   _catalogos.tipos);
+    poblarSelect('fieldPempTipo',    _catalogos.tiposPemp);
+    poblarSelect('fieldCarrTipo',    _catalogos.tiposCarr);
+    poblarSelect('fieldCarrEnergia', _catalogos.energiasCarr);
+
+    renderTags('tagsProveedores',  _catalogos.proveedores,  'proveedor');
+    renderTags('tagsTipos',        _catalogos.tipos,        'tipo');
+    renderTags('tagsTiposPemp',    _catalogos.tiposPemp,    'tipo-pemp');
+    renderTags('tagsTiposCarr',    _catalogos.tiposCarr,    'tipo-carretilla');
+    renderTags('tagsEnergiasCarr', _catalogos.energiasCarr, 'energia-carretilla');
   } catch {}
 }
 
@@ -1938,15 +1983,52 @@ async function addTipo() {
   cargarCatalogos();
 }
 
+async function addTipoPemp() {
+  const v = document.getElementById('newTipoPemp').value.trim();
+  if (!v) return;
+  await apiCall('/tipos-pemp', { method: 'POST', body: JSON.stringify({ nombre: v }) });
+  document.getElementById('newTipoPemp').value = '';
+  cargarCatalogos();
+}
+
+async function addTipoCarr() {
+  const v = document.getElementById('newTipoCarr').value.trim();
+  if (!v) return;
+  await apiCall('/tipos-carretilla', { method: 'POST', body: JSON.stringify({ nombre: v }) });
+  document.getElementById('newTipoCarr').value = '';
+  cargarCatalogos();
+}
+
+async function addEnergiaCarr() {
+  const v = document.getElementById('newEnergiaCarr').value.trim();
+  if (!v) return;
+  await apiCall('/energias-carretilla', { method: 'POST', body: JSON.stringify({ nombre: v }) });
+  document.getElementById('newEnergiaCarr').value = '';
+  cargarCatalogos();
+}
+
 async function delCatalogo(tipo, id) {
-  const path = tipo === 'proveedor' ? `/proveedores/${id}` : `/tipos-cable/${id}`;
-  await apiCall(path, { method: 'DELETE' });
+  const rutas = {
+    'proveedor':           `/proveedores/${id}`,
+    'tipo':                `/tipos-cable/${id}`,
+    'tipo-pemp':           `/tipos-pemp/${id}`,
+    'tipo-carretilla':     `/tipos-carretilla/${id}`,
+    'energia-carretilla':  `/energias-carretilla/${id}`,
+  };
+  await apiCall(rutas[tipo], { method: 'DELETE' });
   cargarCatalogos();
 }
 
 // ══════════════════════════════════════════════════════
 // ADMIN
 // ══════════════════════════════════════════════════════
+function selCfgTab(tab) {
+  ['bobinas','pemp','carretillas'].forEach(t => {
+    document.getElementById('cfgTab' + t.charAt(0).toUpperCase() + t.slice(1)).classList.toggle('active', t === tab);
+    document.getElementById('cfg' + t.charAt(0).toUpperCase() + t.slice(1)).style.display = t === tab ? 'block' : 'none';
+  });
+}
+
 async function cargarAdminData() {
   const s = getSession();
   await cargarCatalogos();

@@ -135,6 +135,18 @@ export default {
       if (path === '/tipos'        && method === 'POST')  return await addCatalogo('tipos_cable', request, env);
       if (path.startsWith('/tipos/') && method === 'DELETE') return await deleteCatalogo('tipos_cable', path.split('/tipos/')[1], env);
 
+      if (path === '/tipos-pemp'           && method === 'GET')   return await getCatalogo('tipos_pemp', env);
+      if (path === '/tipos-pemp'           && method === 'POST')  return await addCatalogo('tipos_pemp', request, env);
+      if (path.startsWith('/tipos-pemp/')  && method === 'DELETE') return await deleteCatalogo('tipos_pemp', path.split('/tipos-pemp/')[1], env);
+
+      if (path === '/tipos-carretilla'          && method === 'GET')   return await getCatalogo('tipos_carretilla', env);
+      if (path === '/tipos-carretilla'          && method === 'POST')  return await addCatalogo('tipos_carretilla', request, env);
+      if (path.startsWith('/tipos-carretilla/') && method === 'DELETE') return await deleteCatalogo('tipos_carretilla', path.split('/tipos-carretilla/')[1], env);
+
+      if (path === '/energias-carretilla'          && method === 'GET')   return await getCatalogo('energias_carretilla', env);
+      if (path === '/energias-carretilla'          && method === 'POST')  return await addCatalogo('energias_carretilla', request, env);
+      if (path.startsWith('/energias-carretilla/') && method === 'DELETE') return await deleteCatalogo('energias_carretilla', path.split('/energias-carretilla/')[1], env);
+
       // ── Config ────────────────────────────────────────────────────────────
       if (path === '/config'       && method === 'GET')   return await getConfig(request, env);
       if (path === '/config'       && method === 'POST')  return await setConfig(request, env);
