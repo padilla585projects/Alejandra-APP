@@ -298,7 +298,7 @@ async function getBobinas(request, env) {
 async function crearBobina(request, env, ctx) {
   const { obraId, usuario } = getAuth(request, env);
   const body = await request.json();
-  const { codigo, proveedor, tipo_cable, notas, registrado_por } = body;
+  const { codigo, proveedor, tipo_cable, notas, registrado_por, num_albaran } = body;
   if (!codigo || !proveedor || !tipo_cable) return err('Faltan campos: codigo, proveedor, tipo_cable');
 
   const obraFinal = body.obra_id ? parseInt(body.obra_id) : obraId;
@@ -307,8 +307,8 @@ async function crearBobina(request, env, ctx) {
 
   try {
     await env.DB.prepare(
-      'INSERT INTO bobinas (codigo, proveedor, tipo_cable, fecha_entrada, estado, notas, registrado_por, obra_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
-    ).bind(codigo.trim().toUpperCase(), proveedor, tipo_cable, fecha, 'activa', notas || '', reg, obraFinal || null).run();
+      'INSERT INTO bobinas (codigo, proveedor, tipo_cable, fecha_entrada, estado, notas, registrado_por, obra_id, num_albaran) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    ).bind(codigo.trim().toUpperCase(), proveedor, tipo_cable, fecha, 'activa', notas || '', reg, obraFinal || null, num_albaran || null).run();
 
     ctx.waitUntil(Promise.all([
       syncSheets(env),
@@ -334,22 +334,38 @@ async function editarBobina(codigo, request, env) {
   const notas      = body.notas      !== undefined ? body.notas      : bobina.notas;
   const estado     = body.estado     !== undefined ? body.estado     : bobina.estado;
   const obra_id    = body.obra_id    !== undefined ? (body.obra_id ? parseInt(body.obra_id) : null) : bobina.obra_id;
+  const num_albaran = body.num_albaran !== undefined ? body.num_albaran : bobina.num_albaran;
 
   await env.DB.prepare(
-    'UPDATE bobinas SET proveedor = ?, tipo_cable = ?, notas = ?, estado = ?, obra_id = ? WHERE codigo = ?'
-  ).bind(proveedor, tipo_cable, notas, estado, obra_id, codigo).run();
+    'UPDATE bobinas SET proveedor = ?, tipo_cable = ?, notas = ?, estado = ?, obra_id = ?, num_albaran = ? WHERE codigo = ?'
+  ).bind(proveedor, tipo_cable, notas, estado, obra_id, num_albaran || null, codigo).run();
 
   return json({ ok: true, mensaje: `Bobina ${codigo} actualizada` });
 }
 
 async function devolverBobina(codigo, request, env, ctx) {
-  const bobina = await env.DB.prepare('SELECT * FROM bobinas WHERE codigo = ?').bind(codigo).first();
-  if (!bobina) return err(`Bobina ${codigo} no encontrada`, 404);
-  if (bobina.estado === 'devuelta') return err(`Bobina ${codigo} ya fue devuelta el ${bobina.fecha_devolucion}`, 409);
-
-  const fecha = fechaEspana();
   const body = await request.json().catch(() => ({}));
   const { notas, devuelto_por } = body;
+  const fecha = fechaEspana();
+
+  let bobina = await env.DB.prepare('SELECT * FROM bobinas WHERE codigo = ?').bind(codigo).first();
+
+  if (!bobina) {
+    // Auto-crear como devuelta si no existe
+    const { obraId } = getAuth(request, env);
+    await env.DB.prepare(
+      `INSERT INTO bobinas (codigo, estado, fecha_entrada, fecha_devolucion, devuelto_por, notas, obra_id)
+       VALUES (?, 'devuelta', ?, ?, ?, ?, ?)`
+    ).bind(codigo.trim().toUpperCase(), fecha, fecha, devuelto_por || '', 'Creado automáticamente en devolución', obraId || null).run();
+    bobina = await env.DB.prepare('SELECT * FROM bobinas WHERE codigo = ?').bind(codigo).first();
+    ctx.waitUntil(Promise.all([
+      syncSheets(env),
+      registrarHistorial(env, { obra_id: bobina?.obra_id, bobina_codigo: codigo, accion: 'devolucion', usuario: devuelto_por, notas: 'Auto-creado en devolución' }),
+    ]));
+    return json({ ok: true, mensaje: `Bobina ${codigo} no estaba registrada. Se ha creado y marcado como devuelta automáticamente`, fecha_devolucion: fecha });
+  }
+
+  if (bobina.estado === 'devuelta') return err(`Bobina ${codigo} ya fue devuelta el ${bobina.fecha_devolucion}`, 409);
 
   await env.DB.prepare(
     'UPDATE bobinas SET estado = ?, fecha_devolucion = ?, notas = ?, devuelto_por = ? WHERE codigo = ?'
@@ -456,6 +472,16 @@ async function editarPemp(matricula, request, env) {
 
   const body = await request.json().catch(() => ({}));
   const campos = ['tipo', 'marca', 'proveedor', 'estado', 'notas', 'fecha_ultima_revision', 'fecha_proxima_revision', 'obra_id'];
+  // Fechas automáticas según cambio de estado
+  if (body.estado !== undefined) {
+    if (body.estado === 'Averiada' && pemp.estado !== 'Averiada') {
+      body.fecha_averia = fechaEspana();
+      campos.push('fecha_averia');
+    } else if (body.estado === 'Disponible' && pemp.estado === 'Averiada') {
+      body.fecha_reparacion = fechaEspana();
+      campos.push('fecha_reparacion');
+    }
+  }
   const sets = [];
   const vals = [];
   for (const c of campos) {
@@ -468,38 +494,51 @@ async function editarPemp(matricula, request, env) {
   return json({ ok: true, mensaje: `PEMP ${matricula} actualizada` });
 }
 
-async function devolverPemp(id, request, env, ctx) {
-  const pemp = await env.DB.prepare('SELECT * FROM pemp WHERE id = ?').bind(id).first();
-  if (!pemp) return err(`PEMP ${id} no encontrada`, 404);
-  if (pemp.estado === 'devuelta') return err(`PEMP ${id} ya fue devuelta el ${pemp.fecha_devolucion}`, 409);
-
-  const fecha = fechaEspana();
+async function devolverPemp(matricula, request, env, ctx) {
   const body = await request.json().catch(() => ({}));
   const { notas, devuelto_por } = body;
+  const fecha = fechaEspana();
+
+  let pemp = await env.DB.prepare('SELECT * FROM pemp WHERE matricula = ?').bind(matricula).first();
+
+  if (!pemp) {
+    // Auto-crear como devuelta si no existe
+    const { obraId } = getAuth(request, env);
+    await env.DB.prepare(
+      `INSERT INTO pemp (matricula, estado, fecha_entrada, fecha_devolucion, devuelto_por, notas, obra_id)
+       VALUES (?, 'devuelta', ?, ?, ?, ?, ?)`
+    ).bind(matricula.trim().toUpperCase(), fecha, fecha, devuelto_por || '', 'Creado automáticamente en devolución', obraId || null).run();
+    pemp = await env.DB.prepare('SELECT * FROM pemp WHERE matricula = ?').bind(matricula).first();
+    ctx.waitUntil(Promise.all([
+      syncSheets(env),
+      registrarHistorialPemp(env, { obra_id: pemp?.obra_id, matricula, accion: 'devolucion', usuario: devuelto_por, notas: 'Auto-creado en devolución' }),
+    ]));
+    return json({ ok: true, mensaje: `PEMP ${matricula} no estaba registrada. Se ha creado y marcado como devuelta automáticamente`, fecha_devolucion: fecha });
+  }
+
+  if (pemp.estado === 'devuelta') return err(`PEMP ${matricula} ya fue devuelta el ${pemp.fecha_devolucion}`, 409);
 
   await env.DB.prepare(
-    'UPDATE pemp SET estado = ?, fecha_devolucion = ?, devuelto_por = ?, notas = ? WHERE id = ?'
-  ).bind('devuelta', fecha, devuelto_por || '', notas || pemp.notas || '', id).run();
+    'UPDATE pemp SET estado = ?, fecha_devolucion = ?, devuelto_por = ?, notas = ? WHERE matricula = ?'
+  ).bind('devuelta', fecha, devuelto_por || '', notas || pemp.notas || '', matricula).run();
 
   ctx.waitUntil(Promise.all([
     syncSheets(env),
-    registrarHistorialPemp(env, {
-      obra_id: pemp.obra_id, matricula: pemp.matricula,
-      accion: 'devolucion', usuario: devuelto_por, notas: notas || '',
-    }),
+    registrarHistorialPemp(env, { obra_id: pemp.obra_id, matricula, accion: 'devolucion', usuario: devuelto_por, notas: notas || '' }),
   ]));
 
-  return json({ ok: true, mensaje: `PEMP ${id} devuelta correctamente`, fecha_devolucion: fecha });
+  return json({ ok: true, mensaje: `PEMP ${matricula} devuelta correctamente`, fecha_devolucion: fecha });
 }
 
-async function eliminarPemp(id, request, env, ctx) {
+async function eliminarPemp(matricula, request, env, ctx) {
   const { isSuperadmin, isAdmin, obraId } = getAuth(request, env);
-  const pemp = await env.DB.prepare('SELECT * FROM pemp WHERE id = ?').bind(id).first();
-  if (!pemp) return err(`PEMP ${id} no encontrada`, 404);
+  const pemp = await env.DB.prepare('SELECT * FROM pemp WHERE matricula = ?').bind(matricula).first();
+  if (!pemp) return err(`PEMP ${matricula} no encontrada`, 404);
   if (!isSuperadmin && !isAdmin && pemp.obra_id !== obraId) return err('No autorizado', 403);
 
-  await env.DB.prepare('DELETE FROM pemp WHERE id = ?').bind(id).run();
-  return json({ ok: true, mensaje: `PEMP ${id} eliminada` });
+  await env.DB.prepare('DELETE FROM pemp WHERE matricula = ?').bind(matricula).run();
+  ctx.waitUntil(syncSheets(env));
+  return json({ ok: true, mensaje: `PEMP ${matricula} eliminada` });
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -579,6 +618,16 @@ async function editarCarretilla(matricula, request, env) {
 
   const body = await request.json().catch(() => ({}));
   const campos = ['tipo', 'marca', 'proveedor', 'energia', 'estado', 'notas', 'fecha_ultima_revision', 'fecha_proxima_revision', 'obra_id'];
+  // Fechas automáticas según cambio de estado
+  if (body.estado !== undefined) {
+    if (body.estado === 'Averiada' && carretilla.estado !== 'Averiada') {
+      body.fecha_averia = fechaEspana();
+      campos.push('fecha_averia');
+    } else if (body.estado === 'Disponible' && carretilla.estado === 'Averiada') {
+      body.fecha_reparacion = fechaEspana();
+      campos.push('fecha_reparacion');
+    }
+  }
   const sets = [];
   const vals = [];
   for (const c of campos) {
@@ -591,38 +640,51 @@ async function editarCarretilla(matricula, request, env) {
   return json({ ok: true, mensaje: `Carretilla ${matricula} actualizada` });
 }
 
-async function devolverCarretilla(id, request, env, ctx) {
-  const carretilla = await env.DB.prepare('SELECT * FROM carretillas WHERE id = ?').bind(id).first();
-  if (!carretilla) return err(`Carretilla ${id} no encontrada`, 404);
-  if (carretilla.estado === 'devuelta') return err(`Carretilla ${id} ya fue devuelta el ${carretilla.fecha_devolucion}`, 409);
-
-  const fecha = fechaEspana();
+async function devolverCarretilla(matricula, request, env, ctx) {
   const body = await request.json().catch(() => ({}));
   const { notas, devuelto_por } = body;
+  const fecha = fechaEspana();
+
+  let carretilla = await env.DB.prepare('SELECT * FROM carretillas WHERE matricula = ?').bind(matricula).first();
+
+  if (!carretilla) {
+    // Auto-crear como devuelta si no existe
+    const { obraId } = getAuth(request, env);
+    await env.DB.prepare(
+      `INSERT INTO carretillas (matricula, estado, fecha_entrada, fecha_devolucion, devuelto_por, notas, obra_id)
+       VALUES (?, 'devuelta', ?, ?, ?, ?, ?)`
+    ).bind(matricula.trim().toUpperCase(), fecha, fecha, devuelto_por || '', 'Creado automáticamente en devolución', obraId || null).run();
+    carretilla = await env.DB.prepare('SELECT * FROM carretillas WHERE matricula = ?').bind(matricula).first();
+    ctx.waitUntil(Promise.all([
+      syncSheets(env),
+      registrarHistorialCarretillas(env, { obra_id: carretilla?.obra_id, matricula, accion: 'devolucion', usuario: devuelto_por, notas: 'Auto-creado en devolución' }),
+    ]));
+    return json({ ok: true, mensaje: `Carretilla ${matricula} no estaba registrada. Se ha creado y marcado como devuelta automáticamente`, fecha_devolucion: fecha });
+  }
+
+  if (carretilla.estado === 'devuelta') return err(`Carretilla ${matricula} ya fue devuelta el ${carretilla.fecha_devolucion}`, 409);
 
   await env.DB.prepare(
-    'UPDATE carretillas SET estado = ?, fecha_devolucion = ?, devuelto_por = ?, notas = ? WHERE id = ?'
-  ).bind('devuelta', fecha, devuelto_por || '', notas || carretilla.notas || '', id).run();
+    'UPDATE carretillas SET estado = ?, fecha_devolucion = ?, devuelto_por = ?, notas = ? WHERE matricula = ?'
+  ).bind('devuelta', fecha, devuelto_por || '', notas || carretilla.notas || '', matricula).run();
 
   ctx.waitUntil(Promise.all([
     syncSheets(env),
-    registrarHistorialCarretillas(env, {
-      obra_id: carretilla.obra_id, matricula: carretilla.matricula,
-      accion: 'devolucion', usuario: devuelto_por, notas: notas || '',
-    }),
+    registrarHistorialCarretillas(env, { obra_id: carretilla.obra_id, matricula, accion: 'devolucion', usuario: devuelto_por, notas: notas || '' }),
   ]));
 
-  return json({ ok: true, mensaje: `Carretilla ${id} devuelta correctamente`, fecha_devolucion: fecha });
+  return json({ ok: true, mensaje: `Carretilla ${matricula} devuelta correctamente`, fecha_devolucion: fecha });
 }
 
-async function eliminarCarretilla(id, request, env, ctx) {
+async function eliminarCarretilla(matricula, request, env, ctx) {
   const { isSuperadmin, isAdmin, obraId } = getAuth(request, env);
-  const carretilla = await env.DB.prepare('SELECT * FROM carretillas WHERE id = ?').bind(id).first();
-  if (!carretilla) return err(`Carretilla ${id} no encontrada`, 404);
+  const carretilla = await env.DB.prepare('SELECT * FROM carretillas WHERE matricula = ?').bind(matricula).first();
+  if (!carretilla) return err(`Carretilla ${matricula} no encontrada`, 404);
   if (!isSuperadmin && !isAdmin && carretilla.obra_id !== obraId) return err('No autorizado', 403);
 
-  await env.DB.prepare('DELETE FROM carretillas WHERE id = ?').bind(id).run();
-  return json({ ok: true, mensaje: `Carretilla ${id} eliminada` });
+  await env.DB.prepare('DELETE FROM carretillas WHERE matricula = ?').bind(matricula).run();
+  ctx.waitUntil(syncSheets(env));
+  return json({ ok: true, mensaje: `Carretilla ${matricula} eliminada` });
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -1151,8 +1213,8 @@ async function syncSheets(env) {
       'SELECT b.*, o.nombre as obra_nombre FROM bobinas b LEFT JOIN obras o ON b.obra_id = o.id ORDER BY b.created_at DESC'
     ).all();
     await writeTab('Bobinas', [
-      ['Obra', 'Código', 'Proveedor', 'Tipo Cable', 'Registrado por', 'Fecha Entrada', 'Devuelto por', 'Fecha Devolución', 'Estado', 'Notas'],
-      ...bobinas.map(b => [b.obra_nombre || '', b.codigo, b.proveedor, b.tipo_cable, b.registrado_por || '', b.fecha_entrada, b.devuelto_por || '', b.fecha_devolucion || '', b.estado, b.notas || '']),
+      ['Obra', 'Código', 'Nº Albarán', 'Proveedor', 'Tipo Cable', 'Registrado por', 'Fecha Entrada', 'Devuelto por', 'Fecha Devolución', 'Estado', 'Notas'],
+      ...bobinas.map(b => [b.obra_nombre || '', b.codigo, b.num_albaran || '', b.proveedor, b.tipo_cable, b.registrado_por || '', b.fecha_entrada, b.devuelto_por || '', b.fecha_devolucion || '', b.estado, b.notas || '']),
     ]);
 
     // ── PEMP ─────────────────────────────────────────────────────────────────
@@ -1160,8 +1222,8 @@ async function syncSheets(env) {
       'SELECT p.*, o.nombre as obra_nombre FROM pemp p LEFT JOIN obras o ON p.obra_id = o.id ORDER BY p.created_at DESC'
     ).all();
     await writeTab('PEMP', [
-      ['Obra', 'Matrícula', 'Tipo', 'Marca', 'Proveedor', 'Estado', 'Fecha Entrada', 'Devuelto por', 'Fecha Devolución', 'Últ. Revisión', 'Próx. Revisión', 'Registrado por', 'Notas'],
-      ...pemp.map(p => [p.obra_nombre || '', p.matricula, p.tipo || '', p.marca || '', p.proveedor || '', p.estado, p.fecha_entrada, p.devuelto_por || '', p.fecha_devolucion || '', p.fecha_ultima_revision || '', p.fecha_proxima_revision || '', p.registrado_por || '', p.notas || '']),
+      ['Obra', 'Matrícula', 'Tipo', 'Marca', 'Proveedor', 'Estado', 'Fecha Entrada', 'Fecha Avería', 'Fecha Reparación', 'Devuelto por', 'Fecha Devolución', 'Últ. Revisión', 'Próx. Revisión', 'Registrado por', 'Notas'],
+      ...pemp.map(p => [p.obra_nombre || '', p.matricula, p.tipo || '', p.marca || '', p.proveedor || '', p.estado, p.fecha_entrada, p.fecha_averia || '', p.fecha_reparacion || '', p.devuelto_por || '', p.fecha_devolucion || '', p.fecha_ultima_revision || '', p.fecha_proxima_revision || '', p.registrado_por || '', p.notas || '']),
     ]);
 
     // ── CARRETILLAS ───────────────────────────────────────────────────────────
@@ -1169,8 +1231,8 @@ async function syncSheets(env) {
       'SELECT c.*, o.nombre as obra_nombre FROM carretillas c LEFT JOIN obras o ON c.obra_id = o.id ORDER BY c.created_at DESC'
     ).all();
     await writeTab('Carretillas', [
-      ['Obra', 'Matrícula', 'Tipo', 'Marca', 'Proveedor', 'Energía', 'Estado', 'Fecha Entrada', 'Devuelto por', 'Fecha Devolución', 'Últ. Revisión', 'Próx. Revisión', 'Registrado por', 'Notas'],
-      ...carretillas.map(c => [c.obra_nombre || '', c.matricula, c.tipo || '', c.marca || '', c.proveedor || '', c.energia || '', c.estado, c.fecha_entrada, c.devuelto_por || '', c.fecha_devolucion || '', c.fecha_ultima_revision || '', c.fecha_proxima_revision || '', c.registrado_por || '', c.notas || '']),
+      ['Obra', 'Matrícula', 'Tipo', 'Marca', 'Proveedor', 'Energía', 'Estado', 'Fecha Entrada', 'Fecha Avería', 'Fecha Reparación', 'Devuelto por', 'Fecha Devolución', 'Últ. Revisión', 'Próx. Revisión', 'Registrado por', 'Notas'],
+      ...carretillas.map(c => [c.obra_nombre || '', c.matricula, c.tipo || '', c.marca || '', c.proveedor || '', c.energia || '', c.estado, c.fecha_entrada, c.fecha_averia || '', c.fecha_reparacion || '', c.devuelto_por || '', c.fecha_devolucion || '', c.fecha_ultima_revision || '', c.fecha_proxima_revision || '', c.registrado_por || '', c.notas || '']),
     ]);
 
     console.log(`Sheets sincronizado: ${bobinas.length} bobinas, ${pemp.length} PEMP, ${carretillas.length} carretillas`);

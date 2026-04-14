@@ -424,6 +424,10 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:1
             <label class="form-label">Tipo de Cable</label>
             <select class="form-select" id="fieldTipoCable"><option value="">Seleccionar...</option></select>
           </div>
+          <div class="form-group" id="fieldAlbaranGroup">
+            <label class="form-label">Nº Albarán</label>
+            <input class="form-input" id="fieldAlbaran" type="text" placeholder="Número de albarán...">
+          </div>
         </div>
 
         <!-- PEMP extra fields -->
@@ -588,7 +592,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:1
     <div class="settings-section" style="margin-top:8px">
       <div class="settings-title">ℹ️ Acerca de</div>
       <div class="settings-row"><span>Aplicación</span><strong>Alejandra</strong></div>
-      <div class="settings-row"><span>Versión</span><strong id="appVersionDisplay">v2.8</strong></div>
+      <div class="settings-row"><span>Versión</span><strong id="appVersionDisplay">v2.9</strong></div>
       <div class="settings-row"><span>Autor</span><strong>Adrian Padilla</strong></div>
       <div class="settings-row"><span>Desarrollado con</span><strong>Claude AI</strong></div>
       <div class="settings-row"><span>Backend</span><strong>Cloudflare Workers + D1</strong></div>
@@ -1363,7 +1367,8 @@ async function registrarItem() {
       const notas      = document.getElementById('scanNotas').value;
       if (!proveedor)  { toast('⚠️ Selecciona el proveedor', 'err');    btn.disabled=false; btn.innerHTML='✅ REGISTRAR ENTRADA'; return; }
       if (!tipo_cable) { toast('⚠️ Selecciona el tipo de cable', 'err'); btn.disabled=false; btn.innerHTML='✅ REGISTRAR ENTRADA'; return; }
-      body = { codigo, proveedor, tipo_cable, notas, registrado_por: s?.nombre || '',
+      const num_albaran = document.getElementById('fieldAlbaran')?.value.trim() || '';
+      body = { codigo, proveedor, tipo_cable, notas, num_albaran, registrado_por: s?.nombre || '',
                ...(obraIdSelec ? { obra_id: obraIdSelec } : {}) };
       path = '/bobinas';
 
@@ -1490,6 +1495,7 @@ function renderStock(items, mod) {
           ${b.registrado_por ? `<span class="stock-meta-pill">👤 ${b.registrado_por}</span>` : ''}
         </div>
         <div class="stock-actions-row">
+          ${b.estado === 'activa' ? `<button class="btn-sm" onclick="abrirDevolucion(${i}, 'bobinas')">↩ Dev.</button>` : ''}
           <button class="btn-sm" onclick="abrirEdit(${i}, 'bobinas')">✏️ Editar</button>
           <button class="btn-sm danger" onclick="borrarItem(${i}, 'bobinas')">🗑️ Borrar</button>
         </div>
@@ -1517,6 +1523,7 @@ function renderStock(items, mod) {
           ${warn ? `<span class="revision-warn">⚠️ Rev. prox.</span>` : ''}
         </div>
         <div class="stock-actions-row">
+          ${!['devuelta','Devuelta'].includes(item.estado) ? `<button class="btn-sm" onclick="abrirDevolucion(${i}, '${mod}')">↩ Dev.</button>` : ''}
           <button class="btn-sm" onclick="abrirEdit(${i}, '${mod}')">✏️ Editar</button>
           <button class="btn-sm danger" onclick="borrarItem(${i}, '${mod}')">🗑️ Borrar</button>
         </div>
@@ -1533,46 +1540,55 @@ function revisionWarn(fecha) {
   return diff >= 0 && diff <= 30;
 }
 
-function exportarExcel() {
+async function exportarExcel() {
   try {
     if (!_stockItems || !_stockItems.length) return toast('⚠️ No hay datos que exportar', 'err');
     const mod = currentModule;
     let filas;
     if (mod === 'bobinas') {
       filas = _stockItems.map(i => ({
-        'Código':       i.codigo      || '',
-        'Proveedor':    i.proveedor   || '',
-        'Tipo Cable':   i.tipo_cable  || '',
-        'Estado':       i.estado      || '',
-        'Obra':         i.obra_nombre || i.obra_id || '',
-        'Fecha Entrada':i.fecha_entrada    || '',
-        'Fecha Dev.':   i.fecha_devolucion || '',
-        'Notas':        i.notas       || '',
+        'Código':        i.codigo      || '',
+        'Nº Albarán':    i.num_albaran || '',
+        'Proveedor':     i.proveedor   || '',
+        'Tipo Cable':    i.tipo_cable  || '',
+        'Estado':        i.estado      || '',
+        'Obra':          i.obra_nombre || i.obra_id || '',
+        'Fecha Entrada': i.fecha_entrada    || '',
+        'Fecha Dev.':    i.fecha_devolucion || '',
+        'Notas':         i.notas       || '',
       }));
     } else if (mod === 'pemp') {
       filas = _stockItems.map(i => ({
-        'Matrícula':    i.matricula   || '',
-        'Tipo':         i.tipo        || '',
-        'Marca':        i.marca       || '',
-        'Proveedor':    i.proveedor   || '',
-        'Estado':       i.estado      || '',
-        'Obra':         i.obra_nombre || i.obra_id || '',
+        'Matrícula':      i.matricula   || '',
+        'Tipo':           i.tipo        || '',
+        'Marca':          i.marca       || '',
+        'Proveedor':      i.proveedor   || '',
+        'Estado':         i.estado      || '',
+        'Obra':           i.obra_nombre || i.obra_id || '',
+        'Fecha Entrada':  i.fecha_entrada    || '',
+        'Fecha Avería':   i.fecha_averia     || '',
+        'Fecha Reparac.': i.fecha_reparacion || '',
+        'Fecha Dev.':     i.fecha_devolucion || '',
         'Últ. Revisión':  i.fecha_ultima_revision  || '',
         'Próx. Revisión': i.fecha_proxima_revision || '',
-        'Notas':        i.notas       || '',
+        'Notas':          i.notas       || '',
       }));
     } else {
       filas = _stockItems.map(i => ({
-        'Matrícula':    i.matricula   || '',
-        'Tipo':         i.tipo        || '',
-        'Energía':      i.energia     || '',
-        'Marca':        i.marca       || '',
-        'Proveedor':    i.proveedor   || '',
-        'Estado':       i.estado      || '',
-        'Obra':         i.obra_nombre || i.obra_id || '',
+        'Matrícula':      i.matricula   || '',
+        'Tipo':           i.tipo        || '',
+        'Energía':        i.energia     || '',
+        'Marca':          i.marca       || '',
+        'Proveedor':      i.proveedor   || '',
+        'Estado':         i.estado      || '',
+        'Obra':           i.obra_nombre || i.obra_id || '',
+        'Fecha Entrada':  i.fecha_entrada    || '',
+        'Fecha Avería':   i.fecha_averia     || '',
+        'Fecha Reparac.': i.fecha_reparacion || '',
+        'Fecha Dev.':     i.fecha_devolucion || '',
         'Últ. Revisión':  i.fecha_ultima_revision  || '',
         'Próx. Revisión': i.fecha_proxima_revision || '',
-        'Notas':        i.notas       || '',
+        'Notas':          i.notas       || '',
       }));
     }
 
@@ -1580,6 +1596,31 @@ function exportarExcel() {
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, mod.charAt(0).toUpperCase() + mod.slice(1));
     const fecha = new Date().toISOString().slice(0, 10);
+
+    // Pestaña Sugerencias solo para superadmin
+    const s2 = getSession();
+    if (s2?.rol === 'superadmin') {
+      try {
+        const resSug = await apiCall('/sugerencias');
+        if (resSug.ok) {
+          const sugs = await resSug.json();
+          const catLabel = { mejora: 'Mejora', error: 'Error', nuevo: 'Nueva función', otro: 'Otro' };
+          const filaSugs = sugs.map(sg => ({
+            'Categoría':  catLabel[sg.categoria] || sg.categoria || '',
+            'Sugerencia': sg.texto  || '',
+            'Usuario':    sg.usuario|| '',
+            'Obra':       sg.obra   || '',
+            'Estado':     sg.leida ? 'Leída' : 'Nueva',
+            'Fecha':      sg.created_at || '',
+          }));
+          if (filaSugs.length) {
+            const wsSug = XLSX.utils.json_to_sheet(filaSugs);
+            XLSX.utils.book_append_sheet(wb, wsSug, 'Sugerencias');
+          }
+        }
+      } catch {}
+    }
+
     XLSX.writeFile(wb, `alejandra-${mod}-${fecha}.xlsx`);
     toast('✅ Excel generado', 'ok');
   } catch (e) {
@@ -1661,6 +1702,9 @@ function abrirEdit(idx, mod) {
       </div>
       <div class="form-group"><label class="form-label">Notas</label>
         <input class="form-input" id="editNotas" type="text" value="${item.notas||''}">
+      </div>
+      <div class="form-group"><label class="form-label">Nº Albarán</label>
+        <input class="form-input" id="editAlbaran" type="text" value="${item.num_albaran||''}">
       </div>`;
   } else if (mod === 'pemp') {
     const estadoOpts = ['Disponible','Averiada'].map(e => `<option value="${e}" ${item.estado===e?'selected':''}>${e}</option>`).join('');
@@ -1780,9 +1824,10 @@ async function guardarEdicion() {
   const id = editingItem.codigo || editingItem.matricula || editingItem.id;
 
   if (editingMod === 'bobinas') {
-    const proveedor  = document.getElementById('editProv')?.value;
-    const tipo_cable = document.getElementById('editTipoCable')?.value;
-    body = { estado, notas, proveedor, tipo_cable,
+    const proveedor   = document.getElementById('editProv')?.value;
+    const tipo_cable  = document.getElementById('editTipoCable')?.value;
+    const num_albaran = document.getElementById('editAlbaran')?.value;
+    body = { estado, notas, proveedor, tipo_cable, num_albaran,
              ...(obraIdEdit !== undefined ? { obra_id: obraIdEdit } : {}) };
     path = `/bobinas/${encodeURIComponent(id)}`;
   } else if (editingMod === 'pemp') {
@@ -1825,8 +1870,9 @@ async function guardarEdicion() {
 let devItem = null;
 let devMod  = null;
 
-function abrirDevolucion(jsonStr, mod) {
-  const item = JSON.parse(jsonStr);
+function abrirDevolucion(idx, mod) {
+  const item = _stockItems[idx];
+  if (!item) return;
   devItem = item;
   devMod  = mod;
 
@@ -1871,8 +1917,8 @@ async function confirmarDevolucion() {
   const id = devItem.codigo || devItem.matricula || devItem.id;
 
   const path = devMod === 'bobinas'
-    ? `/bobinas/${encodeURIComponent(id)}`
-    : `/${devMod}/${encodeURIComponent(id)}`;
+    ? `/bobinas/${encodeURIComponent(id)}/devolver`
+    : `/${devMod}/${encodeURIComponent(id)}/devolver`;
 
   try {
     const res = await apiCall(path, {
@@ -2024,14 +2070,35 @@ async function delCatalogo(tipo, id) {
 // ══════════════════════════════════════════════════════
 function selCfgTab(tab) {
   ['bobinas','pemp','carretillas'].forEach(t => {
-    document.getElementById('cfgTab' + t.charAt(0).toUpperCase() + t.slice(1)).classList.toggle('active', t === tab);
-    document.getElementById('cfg' + t.charAt(0).toUpperCase() + t.slice(1)).style.display = t === tab ? 'block' : 'none';
+    const btn = document.getElementById('cfgTab' + t.charAt(0).toUpperCase() + t.slice(1));
+    const panel = document.getElementById('cfg' + t.charAt(0).toUpperCase() + t.slice(1));
+    if (btn) btn.classList.toggle('active', t === tab);
+    if (panel) panel.style.display = t === tab ? 'block' : 'none';
   });
+}
+
+function initCfgTabs() {
+  const s = getSession();
+  const esSuperAdmin = s?.rol === 'superadmin';
+  // Mostrar/ocultar tabs según rol
+  ['bobinas','pemp','carretillas'].forEach(t => {
+    const btn = document.getElementById('cfgTab' + t.charAt(0).toUpperCase() + t.slice(1));
+    if (btn) btn.style.display = esSuperAdmin ? '' : 'none';
+  });
+  // Seleccionar tab: superadmin → bobinas por defecto, resto → su módulo actual
+  const tabInicial = esSuperAdmin ? 'bobinas' : currentModule;
+  selCfgTab(tabInicial);
+  // Si no es superadmin, mostrar solo el tab de su módulo
+  if (!esSuperAdmin) {
+    const btn = document.getElementById('cfgTab' + currentModule.charAt(0).toUpperCase() + currentModule.slice(1));
+    if (btn) btn.style.display = '';
+  }
 }
 
 async function cargarAdminData() {
   const s = getSession();
   await cargarCatalogos();
+  initCfgTabs();
   await cargarUsuariosAdmin();
   if (s?.rol === 'superadmin') {
     await cargarObrasAdmin();
