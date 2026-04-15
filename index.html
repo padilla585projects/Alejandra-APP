@@ -1008,7 +1008,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
         <div class="settings-section">
           <div class="settings-title">ℹ️ Acerca de</div>
           <div class="settings-row"><span>Aplicación</span><strong>Alejandra</strong></div>
-          <div class="settings-row"><span>Versión</span><strong>v3.13</strong></div>
+          <div class="settings-row"><span>Versión</span><strong>v3.14</strong></div>
           <div class="settings-row"><span>Backend</span><strong>Cloudflare Workers + D1</strong></div>
           <div class="settings-row"><span>Año</span><strong>2026</strong></div>
           <div style="margin-top:10px;text-align:center;font-size:11px;color:var(--muted);letter-spacing:1px">INVENTARIO · MAQUINARIA · CONTROL</div>
@@ -3782,9 +3782,12 @@ if ('serviceWorker' in navigator) {
     });
   }).catch(() => {});
 
-  // El SW avisa cuando ya limpió la caché → recargamos
+  // El SW avisa cuando ya limpió la caché → limpiamos URL guardada y recargamos
   navigator.serviceWorker.addEventListener('message', e => {
-    if (e.data?.tipo === 'SW_ACTUALIZADO') recargarApp();
+    if (e.data?.tipo === 'SW_ACTUALIZADO') {
+      localStorage.removeItem('alejandra_api'); // fuerza usar API_DEFAULT actualizada
+      recargarApp();
+    }
   });
 
   // Fallback: controllerchange también provoca recarga
