@@ -829,7 +829,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
         <div class="settings-section">
           <div class="settings-title">ℹ️ Acerca de</div>
           <div class="settings-row"><span>Aplicación</span><strong>Alejandra</strong></div>
-          <div class="settings-row"><span>Versión</span><strong>v3.3</strong></div>
+          <div class="settings-row"><span>Versión</span><strong>v3.4</strong></div>
           <div class="settings-row"><span>Backend</span><strong>Cloudflare Workers + D1</strong></div>
           <div class="settings-row"><span>Año</span><strong>2026</strong></div>
           <div style="margin-top:10px;text-align:center;font-size:11px;color:var(--muted);letter-spacing:1px">INVENTARIO · MAQUINARIA · CONTROL</div>
@@ -2872,24 +2872,46 @@ async function cargarObrasSelectUsuario() {
 if ('serviceWorker' in navigator) {
   let recargando = false;
 
+  function recargarApp() {
+    if (recargando) return;
+    recargando = true;
+    // timestamp en la URL para que el navegador no sirva HTTP cache
+    const url = location.pathname + '?r=' + Date.now();
+    location.replace(url);
+  }
+
   navigator.serviceWorker.register('sw.js').then(reg => {
-    // Comprueba si hay actualización cada vez que se abre la app
     reg.update();
+
+    // Si ya hay un SW esperando (se quedó en waiting), activarlo
+    if (reg.waiting) {
+      reg.waiting.postMessage({ tipo: 'SKIP_WAITING' });
+    }
+
+    // Cuando instala uno nuevo: si pasa a waiting, pedirle que active
+    reg.addEventListener('updatefound', () => {
+      const nuevo = reg.installing;
+      if (!nuevo) return;
+      nuevo.addEventListener('statechange', () => {
+        if (nuevo.state === 'installed' && navigator.serviceWorker.controller) {
+          nuevo.postMessage({ tipo: 'SKIP_WAITING' });
+        }
+      });
+    });
   }).catch(() => {});
 
-  // El SW nuevo manda un mensaje cuando ya limpió la caché → recargamos
+  // El SW avisa cuando ya limpió la caché → recargamos
   navigator.serviceWorker.addEventListener('message', e => {
-    if (e.data?.tipo === 'SW_ACTUALIZADO' && !recargando) {
-      recargando = true;
-      window.location.reload();
-    }
+    if (e.data?.tipo === 'SW_ACTUALIZADO') recargarApp();
   });
 
-  // Fallback: si el SW toma control por otra vía, recargamos igualmente
-  navigator.serviceWorker.addEventListener('controllerchange', () => {
-    if (!recargando) {
-      recargando = true;
-      window.location.reload();
+  // Fallback: controllerchange también provoca recarga
+  navigator.serviceWorker.addEventListener('controllerchange', recargarApp);
+
+  // Si la pestaña vuelve al foco, comprueba si hay actualización pendiente
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+      navigator.serviceWorker.getRegistration().then(reg => reg?.update());
     }
   });
 }

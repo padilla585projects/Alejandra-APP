@@ -1,20 +1,21 @@
 // Cambia este número cada vez que actualices la app
-const CACHE = 'alejandra-v3.3';
+const CACHE = 'alejandra-v3.4';
 
 self.addEventListener('install', e => {
-  // Activa el nuevo SW inmediatamente sin esperar a que cierren las tabs
   self.skipWaiting();
+});
+
+// La página puede pedirle al SW que se active si está en espera
+self.addEventListener('message', e => {
+  if (e.data?.tipo === 'SKIP_WAITING') self.skipWaiting();
 });
 
 self.addEventListener('activate', e => {
   e.waitUntil(
-    // 1. Borra TODAS las cachés antiguas
     caches.keys()
       .then(keys => Promise.all(keys.map(k => caches.delete(k))))
-      // 2. Toma control de todas las tabs abiertas → dispara controllerchange
       .then(() => self.clients.claim())
-      // 3. Notifica a todas las tabs para que recarguen
-      .then(() => self.clients.matchAll({ type: 'window' }))
+      .then(() => self.clients.matchAll({ type: 'window', includeUncontrolled: true }))
       .then(clients => clients.forEach(c => c.postMessage({ tipo: 'SW_ACTUALIZADO', cache: CACHE })))
   );
 });
