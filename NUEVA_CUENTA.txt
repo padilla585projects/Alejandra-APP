@@ -1,0 +1,43 @@
+================================================================================
+  ALEJANDRA APP — NUEVA CUENTA CLOUDFLARE
+  Creada: 15/04/2026
+================================================================================
+
+CUENTA:
+  Email:       padilla585.projects@gmail.com
+  Account ID:  d65ead2b2967bf68ff3848a36cd7b1b4
+
+WORKER:
+  Nombre:      alejandra-app-api
+  URL:         https://alejandra-worker.alejandra-app.workers.dev
+  Version ID:  56c752d0-a711-4b72-9691-37957bbae91c
+
+BASE DE DATOS D1:
+  Nombre:      alejandra-db
+  ID:          0c9eccde-78f1-476d-ac68-bf452bec0c62
+
+SUBDOMAIN workers.dev:
+  alejandra-app.workers.dev
+
+SECRETOS A CONFIGURAR EN WRANGLER:
+  - ADMIN_CODE          → (solo tú lo sabes)
+  - TELEGRAM_BOT_TOKEN  → 8624187768:AAG0qS2YDb-C6SFN1ArrD7wUmb3QVyIZ8RA
+  - TELEGRAM_CHAT_ID    → 6965043
+  - GOOGLE_SHEET_ID     → 1HiBUR_S0toOkUJtxjt4ua5JibgO4atbCRCrPbcrcPsU
+  Bot Telegram: @AlejandraAPP_bot
+
+ESTADO MIGRACIÓN:
+  [✅] Cuenta creada
+  [✅] D1 creada (alejandra-db)
+  [✅] Schema aplicado (todas las tablas)
+  [✅] Worker desplegado
+  [  ] Secretos configurados
+  [  ] URL del worker actualizada en index.html
+  [  ] Datos migrados desde cuenta antigua
+  [  ] GitHub repo conectado a nueva cuenta
+
+CUENTA ANTIGUA (referencia):
+  Email:       padilla585@gmail.com
+  Worker:      https://gestibobina-proxy.padilla585.workers.dev
+  D1 ID:       eac9f2d2-0845-409c-9032-109c563d7eec
+================================================================================

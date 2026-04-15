@@ -1,12 +1,13 @@
-name = "gestibobina-proxy"
+name = "alejandra-app-api"
 main = "worker.js"
 compatibility_date = "2024-01-01"
 preview_urls = false
+account_id = "d65ead2b2967bf68ff3848a36cd7b1b4"
 
 [[d1_databases]]
 binding = "DB"
-database_name = "gestibobina-db"
-database_id = "eac9f2d2-0845-409c-9032-109c563d7eec"
+database_name = "alejandra-db"
+database_id = "0c9eccde-78f1-476d-ac68-bf452bec0c62"
 
 [triggers]
 crons = ["0 7 * * *"]

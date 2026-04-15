@@ -977,7 +977,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
           <div class="settings-title">🌐 Servidor API</div>
           <div class="form-group" style="margin-bottom:8px">
             <label class="form-label">URL del Worker</label>
-            <input class="form-input" id="cfgApiUrl" type="url" placeholder="https://gestibobina-proxy.padilla585.workers.dev">
+            <input class="form-input" id="cfgApiUrl" type="url" placeholder="https://alejandra-worker.alejandra-app.workers.dev">
           </div>
           <div style="display:flex;gap:8px">
             <button class="btn-primary btn-secondary" style="flex:1;font-size:13px;margin-top:0" onclick="guardarApiUrl()">💾 Guardar</button>
@@ -1007,7 +1007,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
         <div class="settings-section">
           <div class="settings-title">ℹ️ Acerca de</div>
           <div class="settings-row"><span>Aplicación</span><strong>Alejandra</strong></div>
-          <div class="settings-row"><span>Versión</span><strong>v3.11</strong></div>
+          <div class="settings-row"><span>Versión</span><strong>v3.12</strong></div>
           <div class="settings-row"><span>Backend</span><strong>Cloudflare Workers + D1</strong></div>
           <div class="settings-row"><span>Año</span><strong>2026</strong></div>
           <div style="margin-top:10px;text-align:center;font-size:11px;color:var(--muted);letter-spacing:1px">INVENTARIO · MAQUINARIA · CONTROL</div>
@@ -1135,7 +1135,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
 // ══════════════════════════════════════════════════════
 // CONFIG & SESSION
 // ══════════════════════════════════════════════════════
-const API_DEFAULT = 'https://gestibobina-proxy.padilla585.workers.dev';
+const API_DEFAULT = 'https://alejandra-worker.alejandra-app.workers.dev';
 
 function getAPI() {
   return localStorage.getItem('alejandra_api') || API_DEFAULT;
