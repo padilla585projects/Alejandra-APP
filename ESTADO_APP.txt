@@ -5,7 +5,7 @@
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 15/04/2026
-VERSIÓN ACTUAL: v3.6 — DESPLEGADA ✅
+VERSIÓN ACTUAL: v3.7 — DESPLEGADA ✅
 
 REPO:    https://github.com/padilla585/Bobinaap.git  (branch: main)
 WORKER:  https://gestibobina-proxy.padilla585.workers.dev
@@ -48,7 +48,8 @@ Departamentos:
 
 Tablas originales:  bobinas, obras, historial, proveedores, tipos_cable
 Tablas añadidas:    usuarios, pemp, carretillas, historial_pemp,
-                    historial_carretillas, logs, sugerencias
+                    historial_carretillas, logs, sugerencias,
+                    inventario_seg, movimientos_seg, tipos_material_seg
 Catálogos:          tipos_pemp, tipos_carretilla, energias_carretilla
 Columnas extra:
   bobinas:      num_albaran, departamento
@@ -120,6 +121,23 @@ v3.3  |  15/04/2026
     · Efecto glow verde/rojo para mejor visibilidad
     · Se limpia el intervalo al cerrar sesión
 
+v3.7  |  15/04/2026
+  - Inventario de Seguridad (implementado):
+    · Dos modos: individual (arnés, retráctil, eslinga — por número de serie)
+                 cantidad (valla, cono, señal, baliza — stock)
+    · CRUD completo: registrar, sacar, devolver, dar de baja
+    · Pantalla Seguridad con 2 pestañas: 📷 Escáner / 📦 Inventario
+    · El escáner busca primero en inventario_seg, luego en máquinas
+    · Fix: segOnCode llamaba segBuscarMaquina → ahora llama segBuscarCodigo
+    · Tipos de material gestionados en tipos_material_seg (7 por defecto)
+    · Modal de registro: código/serie para individual, cantidad para bulk
+    · Fecha de caducidad opcional con alerta visual (<30 días)
+  - Google Sheets: nueva pestaña Seg-Inventario sincronizada
+    · syncSheets añade/escribe Seg-Inventario junto a las 5 pestañas existentes
+    · Se actualiza automáticamente en cada alta/movimiento/baja de material
+  - DB: migración migrate_seg.sql ejecutada en D1 remota (3 tablas nuevas)
+  - SW: versión bumpeada a v3.7 (caché alejandra-v3.7)
+
 v3.6  |  15/04/2026
   - Fix bug usuario: cerrarSesion() e iniciarApp() resetean todo el estado
     global (currentModule, stockFiltro, scanActive, loops de QR)
@@ -168,6 +186,7 @@ Backend (worker.js):
   ✅ Google Sheets sync por pestañas departamentales
   ✅ Notificaciones Telegram
   ✅ Buscar matrícula cross-dept (/buscar-maquina)
+  ✅ Inventario Seguridad (/inventario-seg, /buscar-item-seg, /tipos-material-seg)
   ✅ Backup JSON
   ✅ Estadísticas (/stats)
 
@@ -184,6 +203,8 @@ Frontend (index.html + sw.js):
   ✅ Ajustes en 5 pestañas
   ✅ Badge ideas sin leer (superadmin)
   ✅ Auto-actualización de caché al nuevo SW
+  ✅ Inventario Seguridad: escáner + buscador + gestión de stock
+  ✅ Seguridad: pantalla con 2 pestañas (Escáner / Inventario)
 
 ================================================================================
   PENDIENTE / FUTURAS ACTUALIZACIONES
@@ -191,10 +212,7 @@ Frontend (index.html + sw.js):
 
 [ PRIORIDAD ALTA — acordado, pendiente de implementar ]
 
-  1. Inventario de Seguridad
-     - Arneses, vallas, EPIs, etc.
-     - El usuario tiene ideas concretas (pendiente de detallar)
-     - Requiere nueva tabla en D1: inventario_seguridad
+  1. Inventario de Seguridad ✅ IMPLEMENTADO en v3.7
 
   2. Historial completo por activo
      - Vista de toda la vida de una bobina/máquina
