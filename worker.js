@@ -81,6 +81,7 @@ export default {
       if (path === '/log'         && method === 'POST') return await guardarLog(request, env);
       if (path === '/verificar'   && method === 'POST') return await verificarAcceso(request, env);
       if (path === '/acceso'      && method === 'POST') return await verificarAcceso(request, env); // alias legacy
+      if (path === '/logout'      && method === 'POST') return await cerrarSesionServidor(request, env);
 
       // ── Obras ──────────────────────────────────────────────────────────────
       if (path === '/obras'       && method === 'GET')    return await getObras(request, env);
@@ -236,6 +237,22 @@ export default {
 // VERIFICAR ACCESO
 // ════════════════════════════════════════════════════════════════════════════
 
+// Genera un token aleatorio seguro (64 hex chars)
+function generarToken() {
+  const arr = new Uint8Array(32);
+  crypto.getRandomValues(arr);
+  return Array.from(arr).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+// Crea una sesión en D1 y devuelve el token
+async function crearSesion(env, { nombre, rol, obra_id, obra_nombre, departamento, es_admin, usuario_id }) {
+  const token = generarToken();
+  await env.DB.prepare(
+    'INSERT INTO sesiones (token, usuario_id, nombre, rol, obra_id, obra_nombre, departamento, es_admin) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+  ).bind(token, usuario_id || null, nombre, rol, obra_id || null, obra_nombre || null, departamento || 'electrico', es_admin ? 1 : 0).run();
+  return token;
+}
+
 async function verificarAcceso(request, env) {
   const body = await request.json().catch(() => ({}));
   const codigo = body.codigo || body.code || '';
@@ -245,7 +262,8 @@ async function verificarAcceso(request, env) {
 
   // 1. ¿Es superadmin?
   if (env.ADMIN_CODE && codigo.trim() === env.ADMIN_CODE) {
-    return json({ ok: true, rol: 'superadmin', nombre: 'Admin', obra_id: null, obra_nombre: null });
+    const token = await crearSesion(env, { nombre: 'Admin', rol: 'superadmin', obra_id: null, obra_nombre: null, departamento: null, es_admin: true });
+    return json({ ok: true, rol: 'superadmin', nombre: 'Admin', obra_id: null, obra_nombre: null, token });
   }
 
   // 2. Buscar en tabla usuarios
@@ -267,6 +285,12 @@ async function verificarAcceso(request, env) {
         }
       }
       sendTelegram(env, `👤 <b>Login</b>: ${usuario.nombre} (${usuario.rol})\n🏗 ${usuario.obra_nombre || '—'}  🔷 ${usuario.departamento || '—'}`);
+      const token = await crearSesion(env, {
+        nombre: usuario.nombre, rol: usuario.rol,
+        obra_id: usuario.obra_id, obra_nombre: usuario.obra_nombre,
+        departamento: usuario.departamento || 'electrico',
+        es_admin: false, usuario_id: usuario.id
+      });
       return json({
         ok: true,
         nombre: usuario.nombre,
@@ -274,6 +298,7 @@ async function verificarAcceso(request, env) {
         obra_id: usuario.obra_id,
         obra_nombre: usuario.obra_nombre,
         departamento: usuario.departamento || 'electrico',
+        token,
       });
     }
   } catch (e) {
@@ -285,10 +310,23 @@ async function verificarAcceso(request, env) {
     const obra = await env.DB.prepare(
       'SELECT * FROM obras WHERE (codigo = ? OR LOWER(nombre) = LOWER(?)) AND activa = 1'
     ).bind(codigo.trim().toUpperCase(), codigo.trim()).first();
-    if (obra) return json({ ok: true, tipo: 'obra', rol: 'operario', obra_id: obra.id, obra_nombre: obra.nombre, obra });
+    if (obra) {
+      const token = await crearSesion(env, { nombre: obra.nombre, rol: 'operario', obra_id: obra.id, obra_nombre: obra.nombre, departamento: 'electrico', es_admin: false });
+      return json({ ok: true, tipo: 'obra', rol: 'operario', obra_id: obra.id, obra_nombre: obra.nombre, obra, token });
+    }
   } catch (_) {}
 
   return err('Código inválido', 401);
+}
+
+async function cerrarSesionServidor(request, env) {
+  const token = request.headers.get('X-Token');
+  if (token) {
+    try {
+      await env.DB.prepare('DELETE FROM sesiones WHERE token = ?').bind(token).run();
+    } catch (_) {}
+  }
+  return json({ ok: true });
 }
 
 // ════════════════════════════════════════════════════════════════════════════

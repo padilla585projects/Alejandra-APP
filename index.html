@@ -1104,6 +1104,14 @@ function setSession(data) {
 }
 
 function cerrarSesion() {
+  const s = getSession();
+  if (s && s.token) {
+    // Invalida el token en el servidor (fire & forget)
+    fetch(getAPI() + '/logout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Token': s.token }
+    }).catch(() => {});
+  }
   localStorage.removeItem('alejandra_session');
   if (window._connInterval) { clearInterval(window._connInterval); window._connInterval = null; }
   closeCamera();
@@ -1122,11 +1130,13 @@ async function apiCall(path, options = {}) {
   const s = getSession();
   const headers = {
     'Content-Type': 'application/json',
-    ...(s && s.adminCode    ? { 'X-Admin-Code': s.adminCode } : {}),
-    ...(s && s.obra_id      ? { 'X-Obra-Id': String(s.obra_id) } : {}),
-    ...(s && s.nombre       ? { 'X-Usuario': s.nombre } : {}),
-    ...(s && s.rol          ? { 'X-Rol': s.rol } : {}),
-    ...(s && s.departamento ? { 'X-Departamento': s.departamento } : {}),
+    ...(s && s.token        ? { 'X-Token': s.token } : {}),
+    // Fallback legacy para sesiones antiguas sin token
+    ...(s && !s.token && s.adminCode    ? { 'X-Admin-Code': s.adminCode } : {}),
+    ...(s && !s.token && s.obra_id      ? { 'X-Obra-Id': String(s.obra_id) } : {}),
+    ...(s && !s.token && s.nombre       ? { 'X-Usuario': s.nombre } : {}),
+    ...(s && !s.token && s.rol          ? { 'X-Rol': s.rol } : {}),
+    ...(s && !s.token && s.departamento ? { 'X-Departamento': s.departamento } : {}),
     ...options.headers
   };
   const res = await fetch(base + path, { ...options, headers });
@@ -1185,7 +1195,7 @@ async function doLogin() {
       rol: data.rol,
       obra_id: data.obra_id || null,
       obra_nombre: data.obra_nombre || null,
-      adminCode: (data.rol === 'superadmin') ? codigo : null,
+      token: data.token || null,
       // SuperAdmin elige depto en pantalla selectora; resto lo tiene fijo
       departamento: data.rol !== 'superadmin' ? (data.departamento || 'electrico') : null
     };
@@ -3525,16 +3535,4 @@ if ('serviceWorker' in navigator) {
     if (e.data?.tipo === 'SW_ACTUALIZADO') recargarApp();
   });
 
-  // Fallback: controllerchange también provoca recarga
-  navigator.serviceWorker.addEventListener('controllerchange', recargarApp);
-
-  // Si la pestaña vuelve al foco, comprueba si hay actualización pendiente
-  document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') {
-      navigator.serviceWorker.getRegistration().then(reg => reg?.update());
-    }
-  });
-}
-</script>
-</body>
-</html>
+  // Fallback: controllerchan
