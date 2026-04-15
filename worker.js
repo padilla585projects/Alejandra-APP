@@ -1,4 +1,4 @@
-// Alejandra Worker v2.0
+// Alejandra Worker v4.0 — Multi-tenant (empresa_id)
 // Base de datos: Cloudflare D1
 // IA: Gemini 2.0 Flash
 // Sync: Google Sheets automático en cada cambio
@@ -41,6 +41,7 @@ async function getAuth(request, env) {
           usuario: sesion.nombre || '',
           codigo: '',
           departamento: sesion.departamento || 'electrico',
+          empresa_id: sesion.empresa_id || 1,
         };
       }
     } catch (e) { console.error('getAuth token:', e.message); }
@@ -64,6 +65,7 @@ async function getAuth(request, env) {
     usuario: usuario || '',
     codigo: codigo || '',
     departamento,
+    empresa_id: 1,
   };
 }
 
@@ -162,28 +164,28 @@ export default {
       }
 
       // ── Catálogos ─────────────────────────────────────────────────────────
-      if (path === '/proveedores'  && method === 'GET')   return await getCatalogo('proveedores', env);
+      if (path === '/proveedores'  && method === 'GET')   return await getCatalogo('proveedores', env, request);
       if (path === '/proveedores'  && method === 'POST')  return await addCatalogo('proveedores', request, env);
       if (path.startsWith('/proveedores/') && method === 'DELETE') return await deleteCatalogo('proveedores', path.split('/proveedores/')[1], env);
 
-      if (path === '/tipos-cable'  && method === 'GET')   return await getCatalogo('tipos_cable', env);
+      if (path === '/tipos-cable'  && method === 'GET')   return await getCatalogo('tipos_cable', env, request);
       if (path === '/tipos-cable'  && method === 'POST')  return await addCatalogo('tipos_cable', request, env);
       if (path.startsWith('/tipos-cable/') && method === 'DELETE') return await deleteCatalogo('tipos_cable', path.split('/tipos-cable/')[1], env);
 
       // Legacy aliases for tipos-cable
-      if (path === '/tipos'        && method === 'GET')   return await getCatalogo('tipos_cable', env);
+      if (path === '/tipos'        && method === 'GET')   return await getCatalogo('tipos_cable', env, request);
       if (path === '/tipos'        && method === 'POST')  return await addCatalogo('tipos_cable', request, env);
       if (path.startsWith('/tipos/') && method === 'DELETE') return await deleteCatalogo('tipos_cable', path.split('/tipos/')[1], env);
 
-      if (path === '/tipos-pemp'           && method === 'GET')   return await getCatalogo('tipos_pemp', env);
+      if (path === '/tipos-pemp'           && method === 'GET')   return await getCatalogo('tipos_pemp', env, request);
       if (path === '/tipos-pemp'           && method === 'POST')  return await addCatalogo('tipos_pemp', request, env);
       if (path.startsWith('/tipos-pemp/')  && method === 'DELETE') return await deleteCatalogo('tipos_pemp', path.split('/tipos-pemp/')[1], env);
 
-      if (path === '/tipos-carretilla'          && method === 'GET')   return await getCatalogo('tipos_carretilla', env);
+      if (path === '/tipos-carretilla'          && method === 'GET')   return await getCatalogo('tipos_carretilla', env, request);
       if (path === '/tipos-carretilla'          && method === 'POST')  return await addCatalogo('tipos_carretilla', request, env);
       if (path.startsWith('/tipos-carretilla/') && method === 'DELETE') return await deleteCatalogo('tipos_carretilla', path.split('/tipos-carretilla/')[1], env);
 
-      if (path === '/energias-carretilla'          && method === 'GET')   return await getCatalogo('energias_carretilla', env);
+      if (path === '/energias-carretilla'          && method === 'GET')   return await getCatalogo('energias_carretilla', env, request);
       if (path === '/energias-carretilla'          && method === 'POST')  return await addCatalogo('energias_carretilla', request, env);
       if (path.startsWith('/energias-carretilla/') && method === 'DELETE') return await deleteCatalogo('energias_carretilla', path.split('/energias-carretilla/')[1], env);
 
@@ -224,7 +226,7 @@ export default {
         const cod = decodeURIComponent(path.split('/buscar-item-seg/')[1]);
         return await buscarItemSeg(cod, env);
       }
-      if (path === '/tipos-material-seg'       && method === 'GET')    return await getCatalogo('tipos_material_seg', env);
+      if (path === '/tipos-material-seg'       && method === 'GET')    return await getCatalogo('tipos_material_seg', env, request);
       if (path === '/tipos-material-seg'       && method === 'POST')   return await addTipoMaterialSeg(request, env);
       if (path.startsWith('/tipos-material-seg/') && method === 'DELETE') {
         const tid = parseInt(path.split('/tipos-material-seg/')[1]);
@@ -266,11 +268,11 @@ function generarToken() {
 }
 
 // Crea una sesión en D1 y devuelve el token
-async function crearSesion(env, { nombre, rol, obra_id, obra_nombre, departamento, es_admin, usuario_id }) {
+async function crearSesion(env, { nombre, rol, obra_id, obra_nombre, departamento, es_admin, usuario_id, empresa_id }) {
   const token = generarToken();
   await env.DB.prepare(
-    'INSERT INTO sesiones (token, usuario_id, nombre, rol, obra_id, obra_nombre, departamento, es_admin) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
-  ).bind(token, usuario_id || null, nombre, rol, obra_id || null, obra_nombre || null, departamento || 'electrico', es_admin ? 1 : 0).run();
+    'INSERT INTO sesiones (token, usuario_id, nombre, rol, obra_id, obra_nombre, departamento, es_admin, empresa_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+  ).bind(token, usuario_id || null, nombre, rol, obra_id || null, obra_nombre || null, departamento || 'electrico', es_admin ? 1 : 0, empresa_id || 1).run();
   return token;
 }
 
@@ -283,7 +285,7 @@ async function verificarAcceso(request, env) {
 
   // 1. ¿Es superadmin?
   if (env.ADMIN_CODE && codigo.trim() === env.ADMIN_CODE) {
-    const token = await crearSesion(env, { nombre: 'Admin', rol: 'superadmin', obra_id: null, obra_nombre: null, departamento: null, es_admin: true });
+    const token = await crearSesion(env, { nombre: 'Admin', rol: 'superadmin', obra_id: null, obra_nombre: null, departamento: null, es_admin: true, empresa_id: 1 });
     return json({ ok: true, rol: 'superadmin', nombre: 'Admin', obra_id: null, obra_nombre: null, token });
   }
 
@@ -310,7 +312,8 @@ async function verificarAcceso(request, env) {
         nombre: usuario.nombre, rol: usuario.rol,
         obra_id: usuario.obra_id, obra_nombre: usuario.obra_nombre,
         departamento: usuario.departamento || 'electrico',
-        es_admin: false, usuario_id: usuario.id
+        es_admin: false, usuario_id: usuario.id,
+        empresa_id: usuario.empresa_id || 1,
       });
       return json({
         ok: true,
@@ -332,7 +335,7 @@ async function verificarAcceso(request, env) {
       'SELECT * FROM obras WHERE (codigo = ? OR LOWER(nombre) = LOWER(?)) AND activa = 1'
     ).bind(codigo.trim().toUpperCase(), codigo.trim()).first();
     if (obra) {
-      const token = await crearSesion(env, { nombre: obra.nombre, rol: 'operario', obra_id: obra.id, obra_nombre: obra.nombre, departamento: 'electrico', es_admin: false });
+      const token = await crearSesion(env, { nombre: obra.nombre, rol: 'operario', obra_id: obra.id, obra_nombre: obra.nombre, departamento: 'electrico', es_admin: false, empresa_id: 1 });
       return json({ ok: true, tipo: 'obra', rol: 'operario', obra_id: obra.id, obra_nombre: obra.nombre, obra, token });
     }
   } catch (_) {}
@@ -355,20 +358,20 @@ async function cerrarSesionServidor(request, env) {
 // ════════════════════════════════════════════════════════════════════════════
 
 async function getObras(request, env) {
-  const { isSuperadmin, isAdmin } = await getAuth(request, env);
+  const { isSuperadmin, isAdmin, empresa_id } = await getAuth(request, env);
   if (!isSuperadmin && !isAdmin) return err('No autorizado', 403);
-  const { results } = await env.DB.prepare('SELECT * FROM obras ORDER BY nombre').all();
+  const { results } = await env.DB.prepare('SELECT * FROM obras WHERE empresa_id = ? ORDER BY nombre').bind(empresa_id).all();
   return json(results);
 }
 
 async function crearObra(request, env) {
-  const { isSuperadmin, isAdmin } = await getAuth(request, env);
+  const { isSuperadmin, isAdmin, empresa_id } = await getAuth(request, env);
   if (!isSuperadmin && !isAdmin) return err('No autorizado', 403);
   const { nombre, codigo } = await request.json();
   if (!nombre?.trim() || !codigo?.trim()) return err('Faltan nombre y código');
   try {
-    const r = await env.DB.prepare('INSERT INTO obras (nombre, codigo) VALUES (?, ?)')
-      .bind(nombre.trim(), codigo.trim().toUpperCase()).run();
+    const r = await env.DB.prepare('INSERT INTO obras (nombre, codigo, empresa_id) VALUES (?, ?, ?)')
+      .bind(nombre.trim(), codigo.trim().toUpperCase(), empresa_id).run();
     return json({ ok: true, id: r.meta.last_row_id, nombre: nombre.trim(), codigo: codigo.trim().toUpperCase() }, 201);
   } catch (e) {
     if (e.message.includes('UNIQUE')) return err(`El código "${codigo}" ya existe`, 409);
@@ -388,14 +391,14 @@ async function eliminarObra(id, request, env) {
 // ════════════════════════════════════════════════════════════════════════════
 
 async function getBobinas(request, env) {
-  const { obraId, isSuperadmin, departamento } = await getAuth(request, env);
+  const { obraId, isSuperadmin, departamento, empresa_id } = await getAuth(request, env);
   const url = new URL(request.url);
   const estado = url.searchParams.get('estado');
   const buscar = url.searchParams.get('q');
   const obraFilter = obraId || null;
 
-  let sql = 'SELECT * FROM bobinas WHERE 1=1';
-  const params = [];
+  let sql = 'SELECT * FROM bobinas WHERE empresa_id = ?';
+  const params = [empresa_id];
   if (!isSuperadmin) { sql += ' AND departamento = ?'; params.push(departamento); }
   if (obraFilter) { sql += ' AND obra_id = ?'; params.push(obraFilter); }
   if (estado)     { sql += ' AND estado = ?';  params.push(estado); }
@@ -410,7 +413,7 @@ async function getBobinas(request, env) {
 }
 
 async function crearBobina(request, env, ctx) {
-  const { obraId, usuario, departamento } = await getAuth(request, env);
+  const { obraId, usuario, departamento, empresa_id } = await getAuth(request, env);
   const body = await request.json();
   const { codigo, proveedor, tipo_cable, notas, registrado_por, num_albaran } = body;
   if (!codigo || !proveedor || !tipo_cable) return err('Faltan campos: codigo, proveedor, tipo_cable');
@@ -421,8 +424,8 @@ async function crearBobina(request, env, ctx) {
 
   try {
     await env.DB.prepare(
-      'INSERT INTO bobinas (codigo, proveedor, tipo_cable, fecha_entrada, estado, notas, registrado_por, obra_id, num_albaran, departamento) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-    ).bind(codigo.trim().toUpperCase(), proveedor, tipo_cable, fecha, 'activa', notas || '', reg, obraFinal || null, num_albaran || null, departamento).run();
+      'INSERT INTO bobinas (codigo, proveedor, tipo_cable, fecha_entrada, estado, notas, registrado_por, obra_id, num_albaran, departamento, empresa_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    ).bind(codigo.trim().toUpperCase(), proveedor, tipo_cable, fecha, 'activa', notas || '', reg, obraFinal || null, num_albaran || null, departamento, empresa_id).run();
 
     ctx.waitUntil(Promise.all([
       syncSheets(env),
@@ -517,13 +520,13 @@ async function eliminarBobina(codigo, request, env, ctx) {
 // ════════════════════════════════════════════════════════════════════════════
 
 async function getPemp(request, env) {
-  const { obraId, isSuperadmin, isSeguridad, departamento } = await getAuth(request, env);
+  const { obraId, isSuperadmin, isSeguridad, departamento, empresa_id } = await getAuth(request, env);
   const url = new URL(request.url);
   const estado = url.searchParams.get('estado');
   const buscar = url.searchParams.get('q');
 
-  let sql = 'SELECT * FROM pemp WHERE 1=1';
-  const params = [];
+  let sql = 'SELECT * FROM pemp WHERE empresa_id = ?';
+  const params = [empresa_id];
   // Seguridad y superadmin ven todas; el resto solo su departamento
   if (!isSuperadmin && !isSeguridad) { sql += ' AND departamento = ?'; params.push(departamento); }
   if (obraId)  { sql += ' AND obra_id = ?'; params.push(obraId); }
@@ -539,7 +542,7 @@ async function getPemp(request, env) {
 }
 
 async function crearPemp(request, env, ctx) {
-  const { obraId, usuario, departamento } = await getAuth(request, env);
+  const { obraId, usuario, departamento, empresa_id } = await getAuth(request, env);
   const body = await request.json();
   const {
     matricula, tipo, marca, proveedor, energia, estado = 'activa',
@@ -557,13 +560,13 @@ async function crearPemp(request, env, ctx) {
     const r = await env.DB.prepare(
       `INSERT INTO pemp
         (matricula, tipo, marca, proveedor, energia, estado, fecha_entrada, registrado_por, notas,
-         fecha_ultima_revision, fecha_proxima_revision, obra_id, departamento)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+         fecha_ultima_revision, fecha_proxima_revision, obra_id, departamento, empresa_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).bind(
       matricula.trim().toUpperCase(), tipo || '', marca || '', proveedor || '', energia || '',
       estado, fecha, reg, notas || '',
       fecha_ultima_revision || null, fecha_proxima_revision || null,
-      obraFinal || null, departamento
+      obraFinal || null, departamento, empresa_id
     ).run();
 
     const id = r.meta.last_row_id;
@@ -675,13 +678,13 @@ async function eliminarPemp(matricula, request, env, ctx) {
 // ════════════════════════════════════════════════════════════════════════════
 
 async function getCarretillas(request, env) {
-  const { obraId, isSuperadmin, isSeguridad, departamento } = await getAuth(request, env);
+  const { obraId, isSuperadmin, isSeguridad, departamento, empresa_id } = await getAuth(request, env);
   const url = new URL(request.url);
   const estado = url.searchParams.get('estado');
   const buscar = url.searchParams.get('q');
 
-  let sql = 'SELECT * FROM carretillas WHERE 1=1';
-  const params = [];
+  let sql = 'SELECT * FROM carretillas WHERE empresa_id = ?';
+  const params = [empresa_id];
   if (!isSuperadmin && !isSeguridad) { sql += ' AND departamento = ?'; params.push(departamento); }
   if (obraId)  { sql += ' AND obra_id = ?'; params.push(obraId); }
   if (estado)  { sql += ' AND estado = ?';  params.push(estado); }
@@ -696,7 +699,7 @@ async function getCarretillas(request, env) {
 }
 
 async function crearCarretilla(request, env, ctx) {
-  const { obraId, usuario, departamento } = await getAuth(request, env);
+  const { obraId, usuario, departamento, empresa_id } = await getAuth(request, env);
   const body = await request.json();
   const {
     matricula, tipo, marca, proveedor, energia, estado = 'activa',
@@ -714,13 +717,13 @@ async function crearCarretilla(request, env, ctx) {
     const r = await env.DB.prepare(
       `INSERT INTO carretillas
         (matricula, tipo, marca, proveedor, energia, estado, fecha_entrada, registrado_por, notas,
-         fecha_ultima_revision, fecha_proxima_revision, obra_id, departamento)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+         fecha_ultima_revision, fecha_proxima_revision, obra_id, departamento, empresa_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).bind(
       matricula.trim().toUpperCase(), tipo || '', marca || '', proveedor || '', energia || '',
       estado, fecha, reg, notas || '',
       fecha_ultima_revision || null, fecha_proxima_revision || null,
-      obraFinal || null, departamento
+      obraFinal || null, departamento, empresa_id
     ).run();
 
     const id = r.meta.last_row_id;
@@ -862,16 +865,17 @@ async function transferirRecurso(tabla, id, request, env) {
 // ════════════════════════════════════════════════════════════════════════════
 
 async function getUsuarios(request, env) {
-  const { isSuperadmin, isAdmin, isEncargado, obraId } = await getAuth(request, env);
+  const { isSuperadmin, isAdmin, isEncargado, obraId, empresa_id } = await getAuth(request, env);
 
   let sql;
   const params = [];
 
   if (isSuperadmin || isAdmin) {
-    sql = 'SELECT u.*, o.nombre as obra_nombre FROM usuarios u LEFT JOIN obras o ON u.obra_id = o.id WHERE u.activo = 1 ORDER BY u.nombre';
+    sql = 'SELECT u.*, o.nombre as obra_nombre FROM usuarios u LEFT JOIN obras o ON u.obra_id = o.id WHERE u.activo = 1 AND u.empresa_id = ? ORDER BY u.nombre';
+    params.push(empresa_id);
   } else if (isEncargado && obraId) {
-    sql = 'SELECT u.*, o.nombre as obra_nombre FROM usuarios u LEFT JOIN obras o ON u.obra_id = o.id WHERE u.obra_id = ? AND u.activo = 1 ORDER BY u.nombre';
-    params.push(obraId);
+    sql = 'SELECT u.*, o.nombre as obra_nombre FROM usuarios u LEFT JOIN obras o ON u.obra_id = o.id WHERE u.obra_id = ? AND u.activo = 1 AND u.empresa_id = ? ORDER BY u.nombre';
+    params.push(obraId, empresa_id);
   } else {
     return err('No autorizado', 403);
   }
@@ -881,7 +885,7 @@ async function getUsuarios(request, env) {
 }
 
 async function crearUsuario(request, env) {
-  const { isSuperadmin, isAdmin, isEncargado, obraId } = await getAuth(request, env);
+  const { isSuperadmin, isAdmin, isEncargado, obraId, empresa_id } = await getAuth(request, env);
   if (!isSuperadmin && !isAdmin && !isEncargado) return err('No autorizado', 403);
 
   const body = await request.json();
@@ -898,8 +902,8 @@ async function crearUsuario(request, env) {
 
   try {
     const r = await env.DB.prepare(
-      'INSERT INTO usuarios (nombre, codigo, rol, obra_id, departamento, activo) VALUES (?, ?, ?, ?, ?, 1)'
-    ).bind(nombre.trim(), codigo.trim(), rol || 'operario', obraFinal || null, deptFinal).run();
+      'INSERT INTO usuarios (nombre, codigo, rol, obra_id, departamento, activo, empresa_id) VALUES (?, ?, ?, ?, ?, 1, ?)'
+    ).bind(nombre.trim(), codigo.trim(), rol || 'operario', obraFinal || null, deptFinal, empresa_id).run();
     return json({ ok: true, id: r.meta.last_row_id, nombre: nombre.trim(), rol: rol || 'operario', departamento: deptFinal, codigo: codigo.trim() }, 201);
   } catch (e) {
     if (e.message.includes('UNIQUE')) return err(`El código "${codigo}" ya existe`, 409);
@@ -992,16 +996,25 @@ async function setConfig(request, env) {
 // CATÁLOGOS (proveedores, tipos_cable)
 // ════════════════════════════════════════════════════════════════════════════
 
-async function getCatalogo(tabla, env) {
-  const { results } = await env.DB.prepare(`SELECT * FROM ${tabla} ORDER BY nombre`).all();
+async function getCatalogo(tabla, env, requestOrEmpresaId = null) {
+  let empresa_id = 1;
+  if (requestOrEmpresaId && typeof requestOrEmpresaId === 'object') {
+    // Es un Request — hacer auth
+    const auth = await getAuth(requestOrEmpresaId, env);
+    empresa_id = auth.empresa_id || 1;
+  } else if (typeof requestOrEmpresaId === 'number') {
+    empresa_id = requestOrEmpresaId;
+  }
+  const { results } = await env.DB.prepare(`SELECT * FROM ${tabla} WHERE empresa_id = ? ORDER BY nombre`).bind(empresa_id).all();
   return json(results);
 }
 
 async function addCatalogo(tabla, request, env) {
+  const auth = await getAuth(request, env);
   const { nombre } = await request.json();
   if (!nombre?.trim()) return err('Falta el nombre');
   try {
-    const r = await env.DB.prepare(`INSERT INTO ${tabla} (nombre) VALUES (?)`).bind(nombre.trim()).run();
+    const r = await env.DB.prepare(`INSERT INTO ${tabla} (nombre, empresa_id) VALUES (?, ?)`).bind(nombre.trim(), auth.empresa_id).run();
     return json({ ok: true, id: r.meta.last_row_id, nombre: nombre.trim() }, 201);
   } catch (e) {
     if (e.message.includes('UNIQUE')) return err(`"${nombre}" ya existe`, 409);
@@ -1159,21 +1172,23 @@ async function getHistorialTabla(tabla, request, env) {
 // ════════════════════════════════════════════════════════════════════════════
 
 async function getStats(request, env) {
-  const { obraId } = await getAuth(request, env);
+  const { obraId, empresa_id } = await getAuth(request, env);
   const f = obraId || null;
   const w = f ? ' AND obra_id = ?' : '';
-  const p = f ? [f] : [];
+  // empresa_id siempre primero, obra_id opcional después
+  const p = f ? [empresa_id, f] : [empresa_id];
+  const baseW = ' AND empresa_id = ?' + w;
 
   const [totalB, activasB, devueltasB, totalP, activasP, devueltasP, totalC, activasC, devueltasC] = await Promise.all([
-    env.DB.prepare(`SELECT COUNT(*) as n FROM bobinas WHERE 1=1${w}`).bind(...p).first(),
-    env.DB.prepare(`SELECT COUNT(*) as n FROM bobinas WHERE estado = 'activa'${w}`).bind(...p).first(),
-    env.DB.prepare(`SELECT COUNT(*) as n FROM bobinas WHERE estado = 'devuelta'${w}`).bind(...p).first(),
-    env.DB.prepare(`SELECT COUNT(*) as n FROM pemp WHERE 1=1${w}`).bind(...p).first(),
-    env.DB.prepare(`SELECT COUNT(*) as n FROM pemp WHERE estado = 'activa'${w}`).bind(...p).first(),
-    env.DB.prepare(`SELECT COUNT(*) as n FROM pemp WHERE estado = 'devuelta'${w}`).bind(...p).first(),
-    env.DB.prepare(`SELECT COUNT(*) as n FROM carretillas WHERE 1=1${w}`).bind(...p).first(),
-    env.DB.prepare(`SELECT COUNT(*) as n FROM carretillas WHERE estado = 'activa'${w}`).bind(...p).first(),
-    env.DB.prepare(`SELECT COUNT(*) as n FROM carretillas WHERE estado = 'devuelta'${w}`).bind(...p).first(),
+    env.DB.prepare(`SELECT COUNT(*) as n FROM bobinas WHERE 1=1${baseW}`).bind(...p).first(),
+    env.DB.prepare(`SELECT COUNT(*) as n FROM bobinas WHERE estado = 'activa'${baseW}`).bind(...p).first(),
+    env.DB.prepare(`SELECT COUNT(*) as n FROM bobinas WHERE estado = 'devuelta'${baseW}`).bind(...p).first(),
+    env.DB.prepare(`SELECT COUNT(*) as n FROM pemp WHERE 1=1${baseW}`).bind(...p).first(),
+    env.DB.prepare(`SELECT COUNT(*) as n FROM pemp WHERE estado = 'activa'${baseW}`).bind(...p).first(),
+    env.DB.prepare(`SELECT COUNT(*) as n FROM pemp WHERE estado = 'devuelta'${baseW}`).bind(...p).first(),
+    env.DB.prepare(`SELECT COUNT(*) as n FROM carretillas WHERE 1=1${baseW}`).bind(...p).first(),
+    env.DB.prepare(`SELECT COUNT(*) as n FROM carretillas WHERE estado = 'activa'${baseW}`).bind(...p).first(),
+    env.DB.prepare(`SELECT COUNT(*) as n FROM carretillas WHERE estado = 'devuelta'${baseW}`).bind(...p).first(),
   ]);
 
   return json({
@@ -1428,36 +1443,37 @@ async function syncSheets(env) {
     const fmtC = c => [c.obra_nombre||'', c.matricula, c.tipo||'', c.marca||'', c.proveedor||'', c.energia||'', c.estado, c.fecha_entrada, c.fecha_averia||'', c.fecha_reparacion||'', c.devuelto_por||'', c.fecha_devolucion||'', c.fecha_ultima_revision||'', c.fecha_proxima_revision||'', c.registrado_por||'', c.notas||''];
 
     // ── ELÉCTRICO ─────────────────────────────────────────────────────────────
+    // Nota: empresa_id=1 es la empresa por defecto (single-tenant actual)
     const { results: bobinasElec } = await env.DB.prepare(
-      'SELECT b.*, o.nombre as obra_nombre FROM bobinas b LEFT JOIN obras o ON b.obra_id = o.id WHERE b.departamento = ? OR b.departamento IS NULL ORDER BY b.created_at DESC'
+      'SELECT b.*, o.nombre as obra_nombre FROM bobinas b LEFT JOIN obras o ON b.obra_id = o.id WHERE b.empresa_id = 1 AND b.departamento = ? ORDER BY b.created_at DESC'
     ).bind('electrico').all();
     await writeTab('Elec-Bobinas', [cabBobinas, ...bobinasElec.map(fmtB)]);
 
     const { results: pempElec } = await env.DB.prepare(
-      'SELECT p.*, o.nombre as obra_nombre FROM pemp p LEFT JOIN obras o ON p.obra_id = o.id WHERE p.departamento = ? OR p.departamento IS NULL ORDER BY p.created_at DESC'
+      'SELECT p.*, o.nombre as obra_nombre FROM pemp p LEFT JOIN obras o ON p.obra_id = o.id WHERE p.empresa_id = 1 AND p.departamento = ? ORDER BY p.created_at DESC'
     ).bind('electrico').all();
     await writeTab('Elec-PEMP', [cabPemp, ...pempElec.map(fmtP)]);
 
     const { results: carretillasElec } = await env.DB.prepare(
-      'SELECT c.*, o.nombre as obra_nombre FROM carretillas c LEFT JOIN obras o ON c.obra_id = o.id WHERE c.departamento = ? OR c.departamento IS NULL ORDER BY c.created_at DESC'
+      'SELECT c.*, o.nombre as obra_nombre FROM carretillas c LEFT JOIN obras o ON c.obra_id = o.id WHERE c.empresa_id = 1 AND c.departamento = ? ORDER BY c.created_at DESC'
     ).bind('electrico').all();
     await writeTab('Elec-Carretillas', [cabCarretillas, ...carretillasElec.map(fmtC)]);
 
     // ── MECÁNICAS ─────────────────────────────────────────────────────────────
     const { results: pempMec } = await env.DB.prepare(
-      'SELECT p.*, o.nombre as obra_nombre FROM pemp p LEFT JOIN obras o ON p.obra_id = o.id WHERE p.departamento = ? ORDER BY p.created_at DESC'
+      'SELECT p.*, o.nombre as obra_nombre FROM pemp p LEFT JOIN obras o ON p.obra_id = o.id WHERE p.empresa_id = 1 AND p.departamento = ? ORDER BY p.created_at DESC'
     ).bind('mecanicas').all();
     await writeTab('Mec-PEMP', [cabPemp, ...pempMec.map(fmtP)]);
 
     const { results: carretillasMec } = await env.DB.prepare(
-      'SELECT c.*, o.nombre as obra_nombre FROM carretillas c LEFT JOIN obras o ON c.obra_id = o.id WHERE c.departamento = ? ORDER BY c.created_at DESC'
+      'SELECT c.*, o.nombre as obra_nombre FROM carretillas c LEFT JOIN obras o ON c.obra_id = o.id WHERE c.empresa_id = 1 AND c.departamento = ? ORDER BY c.created_at DESC'
     ).bind('mecanicas').all();
     await writeTab('Mec-Carretillas', [cabCarretillas, ...carretillasMec.map(fmtC)]);
 
     // ── SEGURIDAD ─────────────────────────────────────────────────────────────
     const cabSegInv = ['Tipo', 'Modo', 'Código/Serie', 'Nombre', 'Cantidad Total', 'Disponible', 'Estado', 'Fecha Entrada', 'Fecha Caducidad', 'Destino Actual', 'Registrado por', 'Notas'];
     const { results: segItems } = await env.DB.prepare(
-      'SELECT * FROM inventario_seg ORDER BY tipo_material, created_at DESC'
+      'SELECT * FROM inventario_seg WHERE empresa_id = 1 ORDER BY tipo_material, created_at DESC'
     ).all();
     const fmtSeg = s => [s.tipo_material, s.modo, s.codigo||'', s.nombre||'', s.cantidad_total||1, s.cantidad_disponible||1, s.estado||'disponible', s.fecha_entrada||'', s.fecha_caducidad||'', s.destino_actual||'', s.registrado_por||'', s.notas||''];
     await writeTab('Seg-Inventario', [cabSegInv, ...segItems.map(fmtSeg)]);
@@ -1638,12 +1654,12 @@ Si no puedes leer ningún código, responde: NO_LEIDO`;
 // ════════════════════════════════════════════════════════════════════════════
 
 async function getInventarioSeg(request, env) {
-  const { isSuperadmin, isSeguridad } = await getAuth(request, env);
+  const { isSuperadmin, isSeguridad, empresa_id } = await getAuth(request, env);
   if (!isSuperadmin && !isSeguridad) return err('No autorizado', 403);
   const url = new URL(request.url);
   const q = url.searchParams.get('q');
-  let sql = 'SELECT * FROM inventario_seg WHERE 1=1';
-  const params = [];
+  let sql = 'SELECT * FROM inventario_seg WHERE empresa_id = ?';
+  const params = [empresa_id];
   if (q) { sql += ' AND (tipo_material LIKE ? OR codigo LIKE ? OR nombre LIKE ?)'; params.push(`%${q}%`,`%${q}%`,`%${q}%`); }
   sql += ' ORDER BY created_at DESC';
   const { results } = await env.DB.prepare(sql).bind(...params).all();
@@ -1658,7 +1674,7 @@ async function buscarItemSeg(codigo, env) {
 }
 
 async function crearItemSeg(request, env) {
-  const { isSuperadmin, isSeguridad, usuario } = await getAuth(request, env);
+  const { isSuperadmin, isSeguridad, usuario, empresa_id } = await getAuth(request, env);
   if (!isSuperadmin && !isSeguridad) return err('No autorizado', 403);
   const body = await request.json().catch(() => ({}));
   const { tipo_material, modo = 'individual', codigo, nombre, cantidad_total = 1, fecha_entrada, fecha_caducidad, notas } = body;
@@ -1669,9 +1685,9 @@ async function crearItemSeg(request, env) {
   const reg = usuario || '';
   try {
     const r = await env.DB.prepare(
-      `INSERT INTO inventario_seg (tipo_material, modo, codigo, nombre, cantidad_total, cantidad_disponible, estado, fecha_entrada, fecha_caducidad, notas, registrado_por)
-       VALUES (?, ?, ?, ?, ?, ?, 'disponible', ?, ?, ?, ?)`
-    ).bind(tipo_material, modo, cod, nombre || tipo_material, cantidad_total, cantidad_total, fecha, fecha_caducidad || null, notas || '', reg).run();
+      `INSERT INTO inventario_seg (tipo_material, modo, codigo, nombre, cantidad_total, cantidad_disponible, estado, fecha_entrada, fecha_caducidad, notas, registrado_por, empresa_id)
+       VALUES (?, ?, ?, ?, ?, ?, 'disponible', ?, ?, ?, ?, ?)`
+    ).bind(tipo_material, modo, cod, nombre || tipo_material, cantidad_total, cantidad_total, fecha, fecha_caducidad || null, notas || '', reg, empresa_id).run();
     const id = r.meta.last_row_id;
     await env.DB.prepare('INSERT INTO movimientos_seg (item_id, accion, cantidad, usuario, fecha) VALUES (?, ?, ?, ?, ?)').bind(id, 'entrada', cantidad_total, reg, fecha).run();
     if (fecha_caducidad) {
@@ -1742,13 +1758,13 @@ async function eliminarItemSeg(id, request, env) {
 }
 
 async function addTipoMaterialSeg(request, env) {
-  const { isSuperadmin, isSeguridad } = await getAuth(request, env);
+  const { isSuperadmin, isSeguridad, empresa_id } = await getAuth(request, env);
   if (!isSuperadmin && !isSeguridad) return err('No autorizado', 403);
   const body = await request.json().catch(() => ({}));
   const { nombre, tipo = 'individual', descripcion } = body;
   if (!nombre) return err('Falta el nombre');
   try {
-    await env.DB.prepare('INSERT INTO tipos_material_seg (nombre, tipo, descripcion) VALUES (?, ?, ?)').bind(nombre.trim(), tipo, descripcion || '').run();
+    await env.DB.prepare('INSERT INTO tipos_material_seg (nombre, tipo, descripcion, empresa_id) VALUES (?, ?, ?, ?)').bind(nombre.trim(), tipo, descripcion || '', empresa_id).run();
     return json({ ok: true, mensaje: `Tipo "${nombre}" añadido` }, 201);
   } catch(e) {
     if (e.message?.includes('UNIQUE')) return err(`El tipo "${nombre}" ya existe`, 409);
