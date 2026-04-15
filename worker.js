@@ -1159,8 +1159,18 @@ async function buscarMaquina(matricula, request, env) {
     ).bind(mat).first(),
   ]);
 
-  if (pemp) return json({ ok: true, tipo: 'pemp', data: pemp });
-  if (carretilla) return json({ ok: true, tipo: 'carretilla', data: carretilla });
+  if (pemp) {
+    const hist = await env.DB.prepare(
+      'SELECT accion, usuario, notas, fecha FROM historial_pemp WHERE matricula = ? ORDER BY fecha DESC LIMIT 15'
+    ).bind(mat).all();
+    return json({ ok: true, tipo: 'pemp', data: pemp, historial: hist.results });
+  }
+  if (carretilla) {
+    const hist = await env.DB.prepare(
+      'SELECT accion, usuario, notas, fecha FROM historial_carretillas WHERE matricula = ? ORDER BY fecha DESC LIMIT 15'
+    ).bind(mat).all();
+    return json({ ok: true, tipo: 'carretilla', data: carretilla, historial: hist.results });
+  }
   return json({ ok: false, error: `Matrícula ${mat} no encontrada` }, 404);
 }
 
