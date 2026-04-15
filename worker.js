@@ -22,7 +22,30 @@ function err(msg, status = 400) {
 }
 
 // ── Auth helper ──────────────────────────────────────────────────────────────
-function getAuth(request, env) {
+async function getAuth(request, env) {
+  // 1. Token D1 (sistema nuevo)
+  const xToken = request.headers.get('X-Token');
+  if (xToken) {
+    try {
+      const sesion = await env.DB.prepare('SELECT * FROM sesiones WHERE token = ?').bind(xToken).first();
+      if (sesion) {
+        env.DB.prepare('UPDATE sesiones SET last_used = CURRENT_TIMESTAMP WHERE token = ?').bind(xToken).run();
+        const isSuperadmin = sesion.es_admin === 1 || sesion.rol === 'superadmin';
+        return {
+          isAdmin: sesion.es_admin === 1,
+          isSuperadmin,
+          isEncargado: sesion.rol === 'encargado',
+          isSeguridad: sesion.departamento === 'seguridad',
+          rol: sesion.rol,
+          obraId: sesion.obra_id || null,
+          usuario: sesion.nombre || '',
+          codigo: '',
+          departamento: sesion.departamento || 'electrico',
+        };
+      }
+    } catch (e) { console.error('getAuth token:', e.message); }
+  }
+  // 2. Fallback legacy headers (compatibilidad)
   const adminCode    = request.headers.get('X-Admin-Code');
   const obraId       = request.headers.get('X-Obra-Id');
   const usuario      = request.headers.get('X-Usuario');
@@ -31,13 +54,11 @@ function getAuth(request, env) {
   const departamento = request.headers.get('X-Departamento') || 'electrico';
   const isAdmin      = env.ADMIN_CODE && adminCode === env.ADMIN_CODE;
   const isSuperadmin = rol === 'superadmin' || isAdmin;
-  const isEncargado  = rol === 'encargado';
-  const isSeguridad  = departamento === 'seguridad';
   return {
     isAdmin,
     isSuperadmin,
-    isEncargado,
-    isSeguridad,
+    isEncargado: rol === 'encargado',
+    isSeguridad: departamento === 'seguridad',
     rol: rol || (isAdmin ? 'superadmin' : null),
     obraId: obraId ? parseInt(obraId) : null,
     usuario: usuario || '',
@@ -284,7 +305,7 @@ async function verificarAcceso(request, env) {
           return err('El usuario no pertenece a esa obra', 403);
         }
       }
-      sendTelegram(env, `👤 <b>Login</b>: ${usuario.nombre} (${usuario.rol})\n🏗 ${usuario.obra_nombre || '—'}  🔷 ${usuario.departamento || '—'}`);
+      await sendTelegram(env, `👤 <b>Login</b>: ${usuario.nombre} (${usuario.rol})\n🏗 ${usuario.obra_nombre || '—'}  🔷 ${usuario.departamento || '—'}`);
       const token = await crearSesion(env, {
         nombre: usuario.nombre, rol: usuario.rol,
         obra_id: usuario.obra_id, obra_nombre: usuario.obra_nombre,
@@ -334,14 +355,14 @@ async function cerrarSesionServidor(request, env) {
 // ════════════════════════════════════════════════════════════════════════════
 
 async function getObras(request, env) {
-  const { isSuperadmin, isAdmin } = getAuth(request, env);
+  const { isSuperadmin, isAdmin } = await getAuth(request, env);
   if (!isSuperadmin && !isAdmin) return err('No autorizado', 403);
   const { results } = await env.DB.prepare('SELECT * FROM obras ORDER BY nombre').all();
   return json(results);
 }
 
 async function crearObra(request, env) {
-  const { isSuperadmin, isAdmin } = getAuth(request, env);
+  const { isSuperadmin, isAdmin } = await getAuth(request, env);
   if (!isSuperadmin && !isAdmin) return err('No autorizado', 403);
   const { nombre, codigo } = await request.json();
   if (!nombre?.trim() || !codigo?.trim()) return err('Faltan nombre y código');
@@ -356,7 +377,7 @@ async function crearObra(request, env) {
 }
 
 async function eliminarObra(id, request, env) {
-  const { isSuperadmin, isAdmin } = getAuth(request, env);
+  const { isSuperadmin, isAdmin } = await getAuth(request, env);
   if (!isSuperadmin && !isAdmin) return err('No autorizado', 403);
   await env.DB.prepare('UPDATE obras SET activa = 0 WHERE id = ?').bind(id).run();
   return json({ ok: true });
@@ -367,7 +388,7 @@ async function eliminarObra(id, request, env) {
 // ════════════════════════════════════════════════════════════════════════════
 
 async function getBobinas(request, env) {
-  const { obraId, isSuperadmin, departamento } = getAuth(request, env);
+  const { obraId, isSuperadmin, departamento } = await getAuth(request, env);
   const url = new URL(request.url);
   const estado = url.searchParams.get('estado');
   const buscar = url.searchParams.get('q');
@@ -389,7 +410,7 @@ async function getBobinas(request, env) {
 }
 
 async function crearBobina(request, env, ctx) {
-  const { obraId, usuario, departamento } = getAuth(request, env);
+  const { obraId, usuario, departamento } = await getAuth(request, env);
   const body = await request.json();
   const { codigo, proveedor, tipo_cable, notas, registrado_por, num_albaran } = body;
   if (!codigo || !proveedor || !tipo_cable) return err('Faltan campos: codigo, proveedor, tipo_cable');
@@ -417,7 +438,7 @@ async function crearBobina(request, env, ctx) {
 }
 
 async function editarBobina(codigo, request, env) {
-  const { obraId, isSuperadmin } = getAuth(request, env);
+  const { obraId, isSuperadmin } = await getAuth(request, env);
   const bobina = await env.DB.prepare('SELECT * FROM bobinas WHERE codigo = ?').bind(codigo).first();
   if (!bobina) return err(`Bobina ${codigo} no encontrada`, 404);
   if (obraId && !isSuperadmin && bobina.obra_id !== obraId) return err('No autorizado', 403);
@@ -446,7 +467,7 @@ async function devolverBobina(codigo, request, env, ctx) {
 
   if (!bobina) {
     // Auto-crear como devuelta si no existe
-    const { obraId } = getAuth(request, env);
+    const { obraId } = await getAuth(request, env);
     await env.DB.prepare(
       `INSERT INTO bobinas (codigo, estado, fecha_entrada, fecha_devolucion, devuelto_por, notas, obra_id)
        VALUES (?, 'devuelta', ?, ?, ?, ?, ?)`
@@ -475,7 +496,7 @@ async function devolverBobina(codigo, request, env, ctx) {
 }
 
 async function eliminarBobina(codigo, request, env, ctx) {
-  const { isSuperadmin, isAdmin, obraId } = getAuth(request, env);
+  const { isSuperadmin, isAdmin, obraId } = await getAuth(request, env);
   const bobina = await env.DB.prepare('SELECT * FROM bobinas WHERE codigo = ?').bind(codigo).first();
   if (!bobina) return err(`Bobina ${codigo} no encontrada`, 404);
   if (!isSuperadmin && !isAdmin && bobina.obra_id !== obraId) return err('No autorizado', 403);
@@ -496,7 +517,7 @@ async function eliminarBobina(codigo, request, env, ctx) {
 // ════════════════════════════════════════════════════════════════════════════
 
 async function getPemp(request, env) {
-  const { obraId, isSuperadmin, isSeguridad, departamento } = getAuth(request, env);
+  const { obraId, isSuperadmin, isSeguridad, departamento } = await getAuth(request, env);
   const url = new URL(request.url);
   const estado = url.searchParams.get('estado');
   const buscar = url.searchParams.get('q');
@@ -518,7 +539,7 @@ async function getPemp(request, env) {
 }
 
 async function crearPemp(request, env, ctx) {
-  const { obraId, usuario, departamento } = getAuth(request, env);
+  const { obraId, usuario, departamento } = await getAuth(request, env);
   const body = await request.json();
   const {
     matricula, tipo, marca, proveedor, energia, estado = 'activa',
@@ -564,7 +585,7 @@ async function crearPemp(request, env, ctx) {
 }
 
 async function editarPemp(matricula, request, env) {
-  const { obraId, isSuperadmin } = getAuth(request, env);
+  const { obraId, isSuperadmin } = await getAuth(request, env);
   const pemp = await env.DB.prepare('SELECT * FROM pemp WHERE matricula = ?').bind(matricula).first();
   if (!pemp) return err(`PEMP ${matricula} no encontrada`, 404);
   if (obraId && !isSuperadmin && pemp.obra_id !== obraId) return err('No autorizado', 403);
@@ -593,8 +614,8 @@ async function editarPemp(matricula, request, env) {
   vals.push(matricula);
 
   await env.DB.prepare(`UPDATE pemp SET ${sets.join(', ')} WHERE matricula = ?`).bind(...vals).run();
-  if (notifAveria)   sendTelegram(env, `🔴 <b>PEMP AVERIADA</b>\n🔖 ${matricula}\n🏗 Obra: ${pemp.obra_id || '—'}`);
-  if (notifReparado) sendTelegram(env, `🟢 <b>PEMP Reparada</b>\n🔖 ${matricula}`);
+  if (notifAveria)   await sendTelegram(env, `🔴 <b>PEMP AVERIADA</b>\n🔖 ${matricula}\n🏗 Obra: ${pemp.obra_id || '—'}`);
+  if (notifReparado) await sendTelegram(env, `🟢 <b>PEMP Reparada</b>\n🔖 ${matricula}`);
   return json({ ok: true, mensaje: `PEMP ${matricula} actualizada` });
 }
 
@@ -607,7 +628,7 @@ async function devolverPemp(matricula, request, env, ctx) {
 
   if (!pemp) {
     // Auto-crear como devuelta si no existe
-    const { obraId } = getAuth(request, env);
+    const { obraId } = await getAuth(request, env);
     await env.DB.prepare(
       `INSERT INTO pemp (matricula, estado, fecha_entrada, fecha_devolucion, devuelto_por, notas, obra_id)
        VALUES (?, 'devuelta', ?, ?, ?, ?, ?)`
@@ -636,7 +657,7 @@ async function devolverPemp(matricula, request, env, ctx) {
 }
 
 async function eliminarPemp(matricula, request, env, ctx) {
-  const { isSuperadmin, isAdmin, obraId } = getAuth(request, env);
+  const { isSuperadmin, isAdmin, obraId } = await getAuth(request, env);
   const pemp = await env.DB.prepare('SELECT * FROM pemp WHERE matricula = ?').bind(matricula).first();
   if (!pemp) return err(`PEMP ${matricula} no encontrada`, 404);
   if (!isSuperadmin && !isAdmin && pemp.obra_id !== obraId) return err('No autorizado', 403);
@@ -654,7 +675,7 @@ async function eliminarPemp(matricula, request, env, ctx) {
 // ════════════════════════════════════════════════════════════════════════════
 
 async function getCarretillas(request, env) {
-  const { obraId, isSuperadmin, isSeguridad, departamento } = getAuth(request, env);
+  const { obraId, isSuperadmin, isSeguridad, departamento } = await getAuth(request, env);
   const url = new URL(request.url);
   const estado = url.searchParams.get('estado');
   const buscar = url.searchParams.get('q');
@@ -675,7 +696,7 @@ async function getCarretillas(request, env) {
 }
 
 async function crearCarretilla(request, env, ctx) {
-  const { obraId, usuario, departamento } = getAuth(request, env);
+  const { obraId, usuario, departamento } = await getAuth(request, env);
   const body = await request.json();
   const {
     matricula, tipo, marca, proveedor, energia, estado = 'activa',
@@ -721,7 +742,7 @@ async function crearCarretilla(request, env, ctx) {
 }
 
 async function editarCarretilla(matricula, request, env) {
-  const { obraId, isSuperadmin } = getAuth(request, env);
+  const { obraId, isSuperadmin } = await getAuth(request, env);
   const carretilla = await env.DB.prepare('SELECT * FROM carretillas WHERE matricula = ?').bind(matricula).first();
   if (!carretilla) return err(`Carretilla ${matricula} no encontrada`, 404);
   if (obraId && !isSuperadmin && carretilla.obra_id !== obraId) return err('No autorizado', 403);
@@ -749,8 +770,8 @@ async function editarCarretilla(matricula, request, env) {
   vals.push(matricula);
 
   await env.DB.prepare(`UPDATE carretillas SET ${sets.join(', ')} WHERE matricula = ?`).bind(...vals).run();
-  if (notifAveria)   sendTelegram(env, `🔴 <b>Carretilla AVERIADA</b>\n🔖 ${matricula}`);
-  if (notifReparado) sendTelegram(env, `🟢 <b>Carretilla Reparada</b>\n🔖 ${matricula}`);
+  if (notifAveria)   await sendTelegram(env, `🔴 <b>Carretilla AVERIADA</b>\n🔖 ${matricula}`);
+  if (notifReparado) await sendTelegram(env, `🟢 <b>Carretilla Reparada</b>\n🔖 ${matricula}`);
   return json({ ok: true, mensaje: `Carretilla ${matricula} actualizada` });
 }
 
@@ -763,7 +784,7 @@ async function devolverCarretilla(matricula, request, env, ctx) {
 
   if (!carretilla) {
     // Auto-crear como devuelta si no existe
-    const { obraId } = getAuth(request, env);
+    const { obraId } = await getAuth(request, env);
     await env.DB.prepare(
       `INSERT INTO carretillas (matricula, estado, fecha_entrada, fecha_devolucion, devuelto_por, notas, obra_id)
        VALUES (?, 'devuelta', ?, ?, ?, ?, ?)`
@@ -792,7 +813,7 @@ async function devolverCarretilla(matricula, request, env, ctx) {
 }
 
 async function eliminarCarretilla(matricula, request, env, ctx) {
-  const { isSuperadmin, isAdmin, obraId } = getAuth(request, env);
+  const { isSuperadmin, isAdmin, obraId } = await getAuth(request, env);
   const carretilla = await env.DB.prepare('SELECT * FROM carretillas WHERE matricula = ?').bind(matricula).first();
   if (!carretilla) return err(`Carretilla ${matricula} no encontrada`, 404);
   if (!isSuperadmin && !isAdmin && carretilla.obra_id !== obraId) return err('No autorizado', 403);
@@ -810,7 +831,7 @@ async function eliminarCarretilla(matricula, request, env, ctx) {
 // ════════════════════════════════════════════════════════════════════════════
 
 async function transferirRecurso(tabla, id, request, env) {
-  const { isSuperadmin, isAdmin, isEncargado } = getAuth(request, env);
+  const { isSuperadmin, isAdmin, isEncargado } = await getAuth(request, env);
   if (!isSuperadmin && !isAdmin && !isEncargado) return err('No autorizado', 403);
 
   const body = await request.json().catch(() => ({}));
@@ -841,7 +862,7 @@ async function transferirRecurso(tabla, id, request, env) {
 // ════════════════════════════════════════════════════════════════════════════
 
 async function getUsuarios(request, env) {
-  const { isSuperadmin, isAdmin, isEncargado, obraId } = getAuth(request, env);
+  const { isSuperadmin, isAdmin, isEncargado, obraId } = await getAuth(request, env);
 
   let sql;
   const params = [];
@@ -860,7 +881,7 @@ async function getUsuarios(request, env) {
 }
 
 async function crearUsuario(request, env) {
-  const { isSuperadmin, isAdmin, isEncargado, obraId } = getAuth(request, env);
+  const { isSuperadmin, isAdmin, isEncargado, obraId } = await getAuth(request, env);
   if (!isSuperadmin && !isAdmin && !isEncargado) return err('No autorizado', 403);
 
   const body = await request.json();
@@ -887,7 +908,7 @@ async function crearUsuario(request, env) {
 }
 
 async function eliminarUsuario(id, request, env) {
-  const { isSuperadmin, isAdmin, isEncargado, obraId } = getAuth(request, env);
+  const { isSuperadmin, isAdmin, isEncargado, obraId } = await getAuth(request, env);
 
   const usuario = await env.DB.prepare('SELECT * FROM usuarios WHERE id = ?').bind(id).first();
   if (!usuario) return err('Usuario no encontrado', 404);
@@ -902,7 +923,7 @@ async function eliminarUsuario(id, request, env) {
 }
 
 async function editarUsuario(id, request, env) {
-  const { isSuperadmin, isAdmin, isEncargado, obraId } = getAuth(request, env);
+  const { isSuperadmin, isAdmin, isEncargado, obraId } = await getAuth(request, env);
 
   const usuario = await env.DB.prepare('SELECT * FROM usuarios WHERE id = ?').bind(id).first();
   if (!usuario) return err('Usuario no encontrado', 404);
@@ -947,7 +968,7 @@ async function getConfig(request, env) {
 }
 
 async function setConfig(request, env) {
-  const { isSuperadmin, isAdmin } = getAuth(request, env);
+  const { isSuperadmin, isAdmin } = await getAuth(request, env);
   if (!isSuperadmin && !isAdmin) return err('No autorizado', 403);
 
   const body = await request.json().catch(() => ({}));
@@ -998,7 +1019,7 @@ async function deleteCatalogo(tabla, id, env) {
 // ════════════════════════════════════════════════════════════════════════════
 
 async function exportCSV(request, env) {
-  const { obraId } = getAuth(request, env);
+  const { obraId } = await getAuth(request, env);
   const url  = new URL(request.url);
   const tipo = url.searchParams.get('tipo'); // bobinas | pemp | carretillas | (vacío = todo)
   const f    = obraId || null;
@@ -1098,7 +1119,7 @@ async function registrarHistorialCarretillas(env, { obra_id, matricula, accion, 
 }
 
 async function getHistorial(request, env) {
-  const { obraId } = getAuth(request, env);
+  const { obraId } = await getAuth(request, env);
   const url = new URL(request.url);
   const limit  = parseInt(url.searchParams.get('limit') || '100');
   const accion = url.searchParams.get('accion');
@@ -1116,7 +1137,7 @@ async function getHistorial(request, env) {
 }
 
 async function getHistorialTabla(tabla, request, env) {
-  const { obraId } = getAuth(request, env);
+  const { obraId } = await getAuth(request, env);
   const url = new URL(request.url);
   const limit  = parseInt(url.searchParams.get('limit') || '100');
   const accion = url.searchParams.get('accion');
@@ -1138,7 +1159,7 @@ async function getHistorialTabla(tabla, request, env) {
 // ════════════════════════════════════════════════════════════════════════════
 
 async function getStats(request, env) {
-  const { obraId } = getAuth(request, env);
+  const { obraId } = await getAuth(request, env);
   const f = obraId || null;
   const w = f ? ' AND obra_id = ?' : '';
   const p = f ? [f] : [];
@@ -1190,7 +1211,7 @@ async function guardarSugerencia(request, env) {
     ).bind(texto.trim().slice(0, 1000), categoria || null, usuario || null, obra || null).run();
     const catIcon = { mejora: '🔧', error: '🐛', nuevo: '✨', otro: '💬' };
     const icon = catIcon[categoria] || '💬';
-    sendTelegram(env,
+    await sendTelegram(env,
       `${icon} <b>Nueva sugerencia [${categoria || 'otro'}]</b>\n` +
       `👤 ${usuario || '—'}  🏗 ${obra || '—'}\n\n` +
       `${texto.trim().slice(0, 500)}`
@@ -1202,7 +1223,7 @@ async function guardarSugerencia(request, env) {
 }
 
 async function getSugerencias(request, env) {
-  const { isSuperadmin } = getAuth(request, env);
+  const { isSuperadmin } = await getAuth(request, env);
   if (!isSuperadmin) return err('No autorizado', 403);
   const url = new URL(request.url);
   const soloNoLeidas = url.searchParams.get('noLeidas') === '1';
@@ -1219,7 +1240,7 @@ async function marcarSugerenciaLeida(id, env) {
 }
 
 async function eliminarSugerencia(id, request, env) {
-  const { isSuperadmin } = getAuth(request, env);
+  const { isSuperadmin } = await getAuth(request, env);
   if (!isSuperadmin) return err('No autorizado', 403);
   await env.DB.prepare('DELETE FROM sugerencias WHERE id = ?').bind(id).run();
   return json({ ok: true });
@@ -1265,7 +1286,7 @@ async function guardarLog(request, env) {
       'INSERT INTO logs (nivel, origen, mensaje, detalle) VALUES (?, ?, ?, ?)'
     ).bind(nivel, origen || 'cliente', String(mensaje || '').slice(0, 500), JSON.stringify(contexto)).run();
     if (nivel === 'error') {
-      sendTelegram(env,
+      await sendTelegram(env,
         `🚨 <b>Error en Alejandra</b>\n` +
         `👤 ${usuario || '—'}  🏗 ${obra || '—'}\n` +
         `📋 ${String(mensaje || '').slice(0, 300)}`
@@ -1617,7 +1638,7 @@ Si no puedes leer ningún código, responde: NO_LEIDO`;
 // ════════════════════════════════════════════════════════════════════════════
 
 async function getInventarioSeg(request, env) {
-  const { isSuperadmin, isSeguridad } = getAuth(request, env);
+  const { isSuperadmin, isSeguridad } = await getAuth(request, env);
   if (!isSuperadmin && !isSeguridad) return err('No autorizado', 403);
   const url = new URL(request.url);
   const q = url.searchParams.get('q');
@@ -1637,7 +1658,7 @@ async function buscarItemSeg(codigo, env) {
 }
 
 async function crearItemSeg(request, env) {
-  const { isSuperadmin, isSeguridad, usuario } = getAuth(request, env);
+  const { isSuperadmin, isSeguridad, usuario } = await getAuth(request, env);
   if (!isSuperadmin && !isSeguridad) return err('No autorizado', 403);
   const body = await request.json().catch(() => ({}));
   const { tipo_material, modo = 'individual', codigo, nombre, cantidad_total = 1, fecha_entrada, fecha_caducidad, notas } = body;
@@ -1654,7 +1675,7 @@ async function crearItemSeg(request, env) {
     const id = r.meta.last_row_id;
     await env.DB.prepare('INSERT INTO movimientos_seg (item_id, accion, cantidad, usuario, fecha) VALUES (?, ?, ?, ?, ?)').bind(id, 'entrada', cantidad_total, reg, fecha).run();
     if (fecha_caducidad) {
-      sendTelegram(env, `📦 <b>Nuevo material Seguridad</b>\n🔖 ${cod || tipo_material}  📋 ${tipo_material}\n📅 Caduca: ${fecha_caducidad}\n👤 ${reg}`);
+      await sendTelegram(env, `📦 <b>Nuevo material Seguridad</b>\n🔖 ${cod || tipo_material}  📋 ${tipo_material}\n📅 Caduca: ${fecha_caducidad}\n👤 ${reg}`);
     }
     syncSheets(env); // fire & forget
     return json({ ok: true, id, mensaje: `${tipo_material} registrado` }, 201);
@@ -1665,7 +1686,7 @@ async function crearItemSeg(request, env) {
 }
 
 async function moverItemSeg(id, request, env) {
-  const { isSuperadmin, isSeguridad, usuario } = getAuth(request, env);
+  const { isSuperadmin, isSeguridad, usuario } = await getAuth(request, env);
   if (!isSuperadmin && !isSeguridad) return err('No autorizado', 403);
   const item = await env.DB.prepare('SELECT * FROM inventario_seg WHERE id = ?').bind(id).first();
   if (!item) return err('Item no encontrado', 404);
@@ -1683,7 +1704,7 @@ async function moverItemSeg(id, request, env) {
       await env.DB.prepare('UPDATE inventario_seg SET cantidad_disponible = ?, estado = ?, destino_actual = ? WHERE id = ?').bind(nueva, nueva === 0 ? 'en_uso' : 'disponible', destino || '', id).run();
     }
     await env.DB.prepare('INSERT INTO movimientos_seg (item_id, accion, cantidad, destino, usuario, notas, fecha) VALUES (?, ?, ?, ?, ?, ?, ?)').bind(id, 'salida', cantidad, destino || '', usuario || '', notas || '', fecha).run();
-    if (destino) sendTelegram(env, `📤 <b>Material Seguridad — Salida</b>\n🔖 ${item.codigo || item.nombre}  📋 ${item.tipo_material}\n🏗 Destino: ${destino}\n👤 ${usuario || '—'}`);
+    if (destino) await sendTelegram(env, `📤 <b>Material Seguridad — Salida</b>\n🔖 ${item.codigo || item.nombre}  📋 ${item.tipo_material}\n🏗 Destino: ${destino}\n👤 ${usuario || '—'}`);
     syncSheets(env);
     return json({ ok: true, mensaje: 'Salida registrada' });
   }
@@ -1703,7 +1724,7 @@ async function moverItemSeg(id, request, env) {
   if (accion === 'baja') {
     await env.DB.prepare('UPDATE inventario_seg SET estado = ? WHERE id = ?').bind('baja', id).run();
     await env.DB.prepare('INSERT INTO movimientos_seg (item_id, accion, cantidad, usuario, notas, fecha) VALUES (?, ?, ?, ?, ?, ?)').bind(id, 'baja', cantidad, usuario || '', notas || '', fecha).run();
-    sendTelegram(env, `🗑️ <b>Material Seguridad — Baja</b>\n🔖 ${item.codigo || item.nombre}  📋 ${item.tipo_material}\n👤 ${usuario || '—'}`);
+    await sendTelegram(env, `🗑️ <b>Material Seguridad — Baja</b>\n🔖 ${item.codigo || item.nombre}  📋 ${item.tipo_material}\n👤 ${usuario || '—'}`);
     syncSheets(env);
     return json({ ok: true, mensaje: 'Dado de baja' });
   }
@@ -1712,7 +1733,7 @@ async function moverItemSeg(id, request, env) {
 }
 
 async function eliminarItemSeg(id, request, env) {
-  const { isSuperadmin } = getAuth(request, env);
+  const { isSuperadmin } = await getAuth(request, env);
   if (!isSuperadmin) return err('Solo el superadmin puede eliminar', 403);
   await env.DB.prepare('DELETE FROM inventario_seg WHERE id = ?').bind(id).run();
   await env.DB.prepare('DELETE FROM movimientos_seg WHERE item_id = ?').bind(id).run();
@@ -1721,7 +1742,7 @@ async function eliminarItemSeg(id, request, env) {
 }
 
 async function addTipoMaterialSeg(request, env) {
-  const { isSuperadmin, isSeguridad } = getAuth(request, env);
+  const { isSuperadmin, isSeguridad } = await getAuth(request, env);
   if (!isSuperadmin && !isSeguridad) return err('No autorizado', 403);
   const body = await request.json().catch(() => ({}));
   const { nombre, tipo = 'individual', descripcion } = body;

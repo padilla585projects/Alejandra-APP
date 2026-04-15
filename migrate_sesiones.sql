@@ -1,0 +1,13 @@
+CREATE TABLE IF NOT EXISTS sesiones (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  token TEXT NOT NULL UNIQUE,
+  usuario_id INTEGER,
+  nombre TEXT NOT NULL DEFAULT 'Usuario',
+  rol TEXT NOT NULL DEFAULT 'operario',
+  obra_id INTEGER,
+  obra_nombre TEXT,
+  departamento TEXT DEFAULT 'electrico',
+  es_admin INTEGER DEFAULT 0,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  last_used TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
