@@ -5,7 +5,7 @@
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 15/04/2026
-VERSIÓN ACTUAL: v3.7 — DESPLEGADA ✅
+VERSIÓN ACTUAL: v3.8 — DESPLEGADA ✅
 
 REPO:    https://github.com/padilla585/Bobinaap.git  (branch: main)
 WORKER:  https://gestibobina-proxy.padilla585.workers.dev
@@ -121,6 +121,15 @@ v3.3  |  15/04/2026
     · Efecto glow verde/rojo para mejor visibilidad
     · Se limpia el intervalo al cerrar sesión
 
+v3.8  |  15/04/2026
+  - Ajustes → Catálogos: nueva sección "🔺 Material Seguridad"
+    · Lista de tipos con badge SERIE (individual) o STOCK (cantidad)
+    · Añadir nuevo tipo: nombre + modo (individual/cantidad)
+    · Eliminar tipo con botón ×
+  - segMostrarFormNuevo usa _catalogos.tiposMatSeg en lugar de array local
+    (siempre refleja los tipos actualizados sin necesidad de recargar)
+  - SW bumpeado a v3.8
+
 v3.7  |  15/04/2026
   - Inventario de Seguridad (implementado):
     · Dos modos: individual (arnés, retráctil, eslinga — por número de serie)
@@ -213,6 +222,11 @@ Frontend (index.html + sw.js):
 [ PRIORIDAD ALTA — acordado, pendiente de implementar ]
 
   1. Inventario de Seguridad ✅ IMPLEMENTADO en v3.7
+
+  0. Reorganizar departamento Seguridad
+     - Pendiente de definir con el usuario qué cambios se quieren
+     - Posibles áreas: permisos, pantallas visibles, flujo de trabajo,
+       integración escáner + inventario, roles dentro del dpto, etc.
 
   2. Historial completo por activo
      - Vista de toda la vida de una bobina/máquina
