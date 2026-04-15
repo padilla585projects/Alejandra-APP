@@ -996,6 +996,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
             <button class="btn-export" onclick="exportarExcelCompleto()" style="font-size:13px">📊 Excel completo</button>
           </div>
           <button class="btn-primary btn-secondary" style="font-size:13px;margin-top:8px" onclick="limpiarCache()">🗑 Limpiar caché SW</button>
+          <button class="btn-primary btn-secondary" style="font-size:13px;margin-top:8px;background:var(--red)" onclick="resetSesionCompleto()">⚠️ Resetear sesión y caché</button>
         </div>
         <div class="settings-section" id="sistemaLogsSection" style="display:none">
           <div class="settings-title" style="display:flex;justify-content:space-between;align-items:center">
@@ -1007,7 +1008,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
         <div class="settings-section">
           <div class="settings-title">ℹ️ Acerca de</div>
           <div class="settings-row"><span>Aplicación</span><strong>Alejandra</strong></div>
-          <div class="settings-row"><span>Versión</span><strong>v3.12</strong></div>
+          <div class="settings-row"><span>Versión</span><strong>v3.13</strong></div>
           <div class="settings-row"><span>Backend</span><strong>Cloudflare Workers + D1</strong></div>
           <div class="settings-row"><span>Año</span><strong>2026</strong></div>
           <div style="margin-top:10px;text-align:center;font-size:11px;color:var(--muted);letter-spacing:1px">INVENTARIO · MAQUINARIA · CONTROL</div>
@@ -3678,6 +3679,15 @@ async function limpiarCache() {
     toast('✅ Caché limpiada. Recargando...', 'ok');
     setTimeout(() => location.reload(), 1500);
   } catch { toast('❌ Error al limpiar caché', 'err'); }
+}
+
+async function resetSesionCompleto() {
+  if (!confirm('¿Borrar sesión y caché completa? Tendrás que volver a iniciar sesión.')) return;
+  try { const keys = await caches.keys(); await Promise.all(keys.map(k => caches.delete(k))); } catch {}
+  localStorage.clear();
+  sessionStorage.clear();
+  toast('✅ Reset completo. Recargando...', 'ok');
+  setTimeout(() => location.replace(location.href.split('?')[0] + '?r=' + Date.now()), 1000);
 }
 
 async function exportarExcelCompleto() {
