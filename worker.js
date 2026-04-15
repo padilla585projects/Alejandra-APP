@@ -452,11 +452,12 @@ async function editarBobina(codigo, request, env) {
   const notas      = body.notas      !== undefined ? body.notas      : bobina.notas;
   const estado     = body.estado     !== undefined ? body.estado     : bobina.estado;
   const obra_id    = body.obra_id    !== undefined ? (body.obra_id ? parseInt(body.obra_id) : null) : bobina.obra_id;
-  const num_albaran = body.num_albaran !== undefined ? body.num_albaran : bobina.num_albaran;
+  const num_albaran  = body.num_albaran  !== undefined ? body.num_albaran  : bobina.num_albaran;
+  const departamento = body.departamento !== undefined ? body.departamento : bobina.departamento;
 
   await env.DB.prepare(
-    'UPDATE bobinas SET proveedor = ?, tipo_cable = ?, notas = ?, estado = ?, obra_id = ?, num_albaran = ? WHERE codigo = ?'
-  ).bind(proveedor, tipo_cable, notas, estado, obra_id, num_albaran || null, codigo).run();
+    'UPDATE bobinas SET proveedor = ?, tipo_cable = ?, notas = ?, estado = ?, obra_id = ?, num_albaran = ?, departamento = ? WHERE codigo = ?'
+  ).bind(proveedor, tipo_cable, notas, estado, obra_id, num_albaran || null, departamento, codigo).run();
 
   return json({ ok: true, mensaje: `Bobina ${codigo} actualizada` });
 }
@@ -527,8 +528,8 @@ async function getPemp(request, env) {
 
   let sql = 'SELECT * FROM pemp WHERE empresa_id = ?';
   const params = [empresa_id];
-  // Seguridad y superadmin ven todas; el resto solo su departamento
-  if (!isSuperadmin && !isSeguridad) { sql += ' AND departamento = ?'; params.push(departamento); }
+  // Superadmin ve todo; el resto solo su departamento
+  if (!isSuperadmin) { sql += ' AND departamento = ?'; params.push(departamento); }
   if (obraId)  { sql += ' AND obra_id = ?'; params.push(obraId); }
   if (estado)  { sql += ' AND estado = ?';  params.push(estado); }
   if (buscar) {
@@ -594,7 +595,7 @@ async function editarPemp(matricula, request, env) {
   if (obraId && !isSuperadmin && pemp.obra_id !== obraId) return err('No autorizado', 403);
 
   const body = await request.json().catch(() => ({}));
-  const campos = ['tipo', 'marca', 'proveedor', 'energia', 'estado', 'notas', 'fecha_ultima_revision', 'fecha_proxima_revision', 'obra_id'];
+  const campos = ['tipo', 'marca', 'proveedor', 'energia', 'estado', 'notas', 'fecha_ultima_revision', 'fecha_proxima_revision', 'obra_id', 'departamento'];
   let notifAveria = false, notifReparado = false;
   // Fechas automáticas según cambio de estado
   if (body.estado !== undefined) {
@@ -685,7 +686,8 @@ async function getCarretillas(request, env) {
 
   let sql = 'SELECT * FROM carretillas WHERE empresa_id = ?';
   const params = [empresa_id];
-  if (!isSuperadmin && !isSeguridad) { sql += ' AND departamento = ?'; params.push(departamento); }
+  // Superadmin ve todo; el resto solo su departamento
+  if (!isSuperadmin) { sql += ' AND departamento = ?'; params.push(departamento); }
   if (obraId)  { sql += ' AND obra_id = ?'; params.push(obraId); }
   if (estado)  { sql += ' AND estado = ?';  params.push(estado); }
   if (buscar) {
@@ -751,7 +753,7 @@ async function editarCarretilla(matricula, request, env) {
   if (obraId && !isSuperadmin && carretilla.obra_id !== obraId) return err('No autorizado', 403);
 
   const body = await request.json().catch(() => ({}));
-  const campos = ['tipo', 'marca', 'proveedor', 'energia', 'estado', 'notas', 'fecha_ultima_revision', 'fecha_proxima_revision', 'obra_id'];
+  const campos = ['tipo', 'marca', 'proveedor', 'energia', 'estado', 'notas', 'fecha_ultima_revision', 'fecha_proxima_revision', 'obra_id', 'departamento'];
   let notifAveria = false, notifReparado = false;
   if (body.estado !== undefined) {
     if (body.estado === 'Averiada' && carretilla.estado !== 'Averiada') {
