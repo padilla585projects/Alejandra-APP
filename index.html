@@ -2593,6 +2593,18 @@ function abrirEdit(idx, mod) {
   if (!item) return;
   editingItem = item;
   editingMod  = mod;
+  const s = getSession();
+  const esSuperadmin = s?.rol === 'superadmin';
+
+  // Selector departamento (solo superadmin)
+  const deptSel = esSuperadmin ? `
+    <div class="form-group"><label class="form-label">🏢 Departamento</label>
+      <select class="form-select" id="editDept">
+        <option value="electrico"  ${(item.departamento||'electrico')==='electrico' ?'selected':''}>⚡ Eléctrico</option>
+        <option value="mecanicas"  ${item.departamento==='mecanicas' ?'selected':''}>🔧 Mecánicas</option>
+        <option value="seguridad"  ${item.departamento==='seguridad' ?'selected':''}>🔺 Seguridad</option>
+      </select>
+    </div>` : '';
 
   let html = '';
   if (mod === 'bobinas') {
@@ -2617,7 +2629,8 @@ function abrirEdit(idx, mod) {
       </div>
       <div class="form-group"><label class="form-label">Nº Albarán</label>
         <input class="form-input" id="editAlbaran" type="text" value="${item.num_albaran||''}">
-      </div>`;
+      </div>
+      ${deptSel}`;
   } else if (mod === 'pemp') {
     const estadoOpts = ['Disponible','Averiada'].map(e => `<option value="${e}" ${item.estado===e?'selected':''}>${e}</option>`).join('');
     html = `
@@ -2649,7 +2662,8 @@ function abrirEdit(idx, mod) {
       </div>
       <div class="form-group"><label class="form-label">Notas</label>
         <input class="form-input" id="editNotas" type="text" value="${item.notas||''}">
-      </div>`;
+      </div>
+      ${deptSel}`;
   } else {
     // carretillas
     const estadoOpts = ['Disponible','Averiada'].map(e => `<option value="${e}" ${item.estado===e?'selected':''}>${e}</option>`).join('');
@@ -2688,12 +2702,12 @@ function abrirEdit(idx, mod) {
       </div>
       <div class="form-group"><label class="form-label">Notas</label>
         <input class="form-input" id="editNotas" type="text" value="${item.notas||''}">
-      </div>`;
+      </div>
+      ${deptSel}`;
   }
 
   // Campo obra solo para superadmin
-  const s = getSession();
-  if (s?.rol === 'superadmin') {
+  if (esSuperadmin) {
     html += `
       <div class="form-group" id="editObraGroup">
         <label class="form-label">Obra</label>
@@ -2704,7 +2718,7 @@ function abrirEdit(idx, mod) {
   document.getElementById('modalEditBody').innerHTML = html;
   document.getElementById('modalEdit').classList.add('show');
 
-  if (s?.rol === 'superadmin') {
+  if (esSuperadmin) {
     apiCall('/obras').then(r => r.json()).then(obras => {
       const sel = document.getElementById('editObra');
       if (!sel) return;
@@ -2732,6 +2746,10 @@ async function guardarEdicion() {
   const obraSelEl = document.getElementById('editObra');
   const obraIdEdit = obraSelEl ? (obraSelEl.value ? parseInt(obraSelEl.value) : null) : undefined;
 
+  // departamento: solo si superadmin y el select existe
+  const deptEl = document.getElementById('editDept');
+  const deptEdit = deptEl ? deptEl.value : undefined;
+
   let body, path;
   const id = editingItem.codigo || editingItem.matricula || editingItem.id;
 
@@ -2740,7 +2758,8 @@ async function guardarEdicion() {
     const tipo_cable  = document.getElementById('editTipoCable')?.value;
     const num_albaran = document.getElementById('editAlbaran')?.value;
     body = { estado, notas, proveedor, tipo_cable, num_albaran,
-             ...(obraIdEdit !== undefined ? { obra_id: obraIdEdit } : {}) };
+             ...(obraIdEdit !== undefined ? { obra_id: obraIdEdit } : {}),
+             ...(deptEdit   !== undefined ? { departamento: deptEdit } : {}) };
     path = `/bobinas/${encodeURIComponent(id)}`;
   } else if (editingMod === 'pemp') {
     const tipo    = document.getElementById('editTipo')?.value;
@@ -2749,7 +2768,8 @@ async function guardarEdicion() {
     const ultRev  = document.getElementById('editUltRev')?.value;
     const proxRev = document.getElementById('editProxRev')?.value;
     body = { estado, tipo, marca, proveedor: prov, fecha_ultima_revision: ultRev, fecha_proxima_revision: proxRev, notas,
-             ...(obraIdEdit !== undefined ? { obra_id: obraIdEdit } : {}) };
+             ...(obraIdEdit !== undefined ? { obra_id: obraIdEdit } : {}),
+             ...(deptEdit   !== undefined ? { departamento: deptEdit } : {}) };
     path = `/pemp/${encodeURIComponent(id)}`;
   } else {
     const tipo    = document.getElementById('editTipo')?.value;
@@ -2759,7 +2779,8 @@ async function guardarEdicion() {
     const ultRev  = document.getElementById('editUltRev')?.value;
     const proxRev = document.getElementById('editProxRev')?.value;
     body = { estado, tipo, energia, marca, proveedor: prov, fecha_ultima_revision: ultRev, fecha_proxima_revision: proxRev, notas,
-             ...(obraIdEdit !== undefined ? { obra_id: obraIdEdit } : {}) };
+             ...(obraIdEdit !== undefined ? { obra_id: obraIdEdit } : {}),
+             ...(deptEdit   !== undefined ? { departamento: deptEdit } : {}) };
     path = `/carretillas/${encodeURIComponent(id)}`;
   }
 
