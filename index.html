@@ -855,6 +855,19 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
             <button onclick="addEnergiaCarr()">+</button>
           </div>
         </div>
+        <div class="admin-section">
+          <div class="admin-section-title">🔺 Material Seguridad</div>
+          <div style="font-family:'Montserrat',sans-serif;font-size:12px;color:var(--muted);margin-bottom:10px">Cada tipo tiene un modo: <strong>Individual</strong> (por número de serie) o <strong>Cantidad</strong> (stock).</div>
+          <div class="tag-row" id="tagsTiposMatSeg"></div>
+          <div class="tag-add-row" style="margin-top:10px;flex-wrap:wrap;gap:6px">
+            <input type="text" id="newMatSeg" placeholder="Nuevo material..." style="flex:1;min-width:120px">
+            <select id="newMatSegModo" style="padding:8px;border-radius:8px;border:1.5px solid var(--border);background:var(--card);color:var(--text);font-family:'Montserrat',sans-serif;font-size:13px">
+              <option value="individual">Individual (serie)</option>
+              <option value="cantidad">Cantidad (stock)</option>
+            </select>
+            <button onclick="addTipoMatSeg()">+</button>
+          </div>
+        </div>
       </div>
 
       <!-- USUARIOS -->
@@ -948,7 +961,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
         <div class="settings-section">
           <div class="settings-title">ℹ️ Acerca de</div>
           <div class="settings-row"><span>Aplicación</span><strong>Alejandra</strong></div>
-          <div class="settings-row"><span>Versión</span><strong>v3.7</strong></div>
+          <div class="settings-row"><span>Versión</span><strong>v3.8</strong></div>
           <div class="settings-row"><span>Backend</span><strong>Cloudflare Workers + D1</strong></div>
           <div class="settings-row"><span>Año</span><strong>2026</strong></div>
           <div style="margin-top:10px;text-align:center;font-size:11px;color:var(--muted);letter-spacing:1px">INVENTARIO · MAQUINARIA · CONTROL</div>
@@ -2115,14 +2128,15 @@ async function segVerItem(id) {
 }
 
 // Nuevo item
-let segTiposMat = [];
 async function segMostrarFormNuevo() {
-  if (!segTiposMat.length) {
+  // Usa _catalogos.tiposMatSeg si ya está cargado, si no lo pide
+  if (!_catalogos.tiposMatSeg?.length) {
     const r = await apiCall('/tipos-material-seg').then(res=>res.json()).catch(()=>[]);
-    segTiposMat = r;
-    const sel = document.getElementById('segNuevoTipo');
-    sel.innerHTML = '<option value="">Seleccionar...</option>' + r.map(t=>`<option value="${t.nombre}" data-modo="${t.tipo}">${t.nombre}</option>`).join('');
+    _catalogos.tiposMatSeg = r;
   }
+  const sel = document.getElementById('segNuevoTipo');
+  sel.innerHTML = '<option value="">Seleccionar...</option>' +
+    _catalogos.tiposMatSeg.map(t=>`<option value="${t.nombre}" data-modo="${t.tipo}">${t.nombre}</option>`).join('');
   document.getElementById('segModalNuevo').style.display = 'block';
 }
 function segCerrarFormNuevo() { document.getElementById('segModalNuevo').style.display = 'none'; }
@@ -2302,7 +2316,7 @@ async function cargarStock() {
   }
 }
 
-let _catalogos = { proveedores: [], tipos: [], tiposPemp: [], tiposCarr: [], energiasCarr: [] };
+let _catalogos = { proveedores: [], tipos: [], tiposPemp: [], tiposCarr: [], energiasCarr: [], tiposMatSeg: [] };
 let _stockItems = [];
 
 function renderStock(items, mod) {
@@ -2800,18 +2814,20 @@ async function comprobarConexion() {
 // ══════════════════════════════════════════════════════
 async function cargarCatalogos() {
   try {
-    const [rp, rt, rtp, rtc, rec] = await Promise.all([
+    const [rp, rt, rtp, rtc, rec, rms] = await Promise.all([
       apiCall('/proveedores'),
       apiCall('/tipos-cable'),
       apiCall('/tipos-pemp'),
       apiCall('/tipos-carretilla'),
       apiCall('/energias-carretilla'),
+      apiCall('/tipos-material-seg'),
     ]);
-    _catalogos.proveedores = rp.ok  ? await rp.json()  : [];
-    _catalogos.tipos       = rt.ok  ? await rt.json()  : [];
-    _catalogos.tiposPemp   = rtp.ok ? await rtp.json() : [];
-    _catalogos.tiposCarr   = rtc.ok ? await rtc.json() : [];
-    _catalogos.energiasCarr= rec.ok ? await rec.json() : [];
+    _catalogos.proveedores  = rp.ok  ? await rp.json()  : [];
+    _catalogos.tipos        = rt.ok  ? await rt.json()  : [];
+    _catalogos.tiposPemp    = rtp.ok ? await rtp.json() : [];
+    _catalogos.tiposCarr    = rtc.ok ? await rtc.json() : [];
+    _catalogos.energiasCarr = rec.ok ? await rec.json() : [];
+    _catalogos.tiposMatSeg  = rms.ok ? await rms.json() : [];
 
     poblarSelect('fieldProv',        _catalogos.proveedores);
     poblarSelect('fieldTipoCable',   _catalogos.tipos);
@@ -2824,6 +2840,7 @@ async function cargarCatalogos() {
     renderTags('tagsTiposPemp',    _catalogos.tiposPemp,    'tipo-pemp');
     renderTags('tagsTiposCarr',    _catalogos.tiposCarr,    'tipo-carretilla');
     renderTags('tagsEnergiasCarr', _catalogos.energiasCarr, 'energia-carretilla');
+    renderTagsMatSeg('tagsTiposMatSeg', _catalogos.tiposMatSeg);
   } catch {}
 }
 
@@ -2880,6 +2897,38 @@ async function addEnergiaCarr() {
   if (!v) return;
   await apiCall('/energias-carretilla', { method: 'POST', body: JSON.stringify({ nombre: v }) });
   document.getElementById('newEnergiaCarr').value = '';
+  cargarCatalogos();
+}
+
+function renderTagsMatSeg(containerId, items) {
+  const c = document.getElementById(containerId);
+  if (!c) return;
+  c.innerHTML = items.map(i => `
+    <span class="tag" style="display:inline-flex;align-items:center;gap:4px">
+      ${i.nombre}
+      <span style="font-size:10px;background:${i.tipo==='individual'?'#2563eb':'#059669'};color:#fff;padding:1px 5px;border-radius:4px;font-weight:700">${i.tipo==='individual'?'SERIE':'STOCK'}</span>
+      <button class="tag-del" onclick="delTipoMatSeg(${i.id})">×</button>
+    </span>
+  `).join('') || '<span style="color:var(--muted);font-size:12px">Sin materiales</span>';
+}
+
+async function addTipoMatSeg() {
+  const nombre = document.getElementById('newMatSeg').value.trim();
+  const tipo   = document.getElementById('newMatSegModo').value;
+  if (!nombre) return;
+  const r = await apiCall('/tipos-material-seg', { method: 'POST', body: JSON.stringify({ nombre, tipo }) });
+  if (r.ok) {
+    document.getElementById('newMatSeg').value = '';
+    toast('✅ Material añadido', 'ok');
+    cargarCatalogos();
+  } else {
+    const d = await r.json().catch(() => ({}));
+    toast(`❌ ${d.error || 'Error'}`, 'err');
+  }
+}
+
+async function delTipoMatSeg(id) {
+  await apiCall(`/tipos-material-seg/${id}`, { method: 'DELETE' });
   cargarCatalogos();
 }
 
