@@ -121,17 +121,6 @@ v3.3  |  15/04/2026
     · Efecto glow verde/rojo para mejor visibilidad
     · Se limpia el intervalo al cerrar sesión
 
-v3.9  |  15/04/2026
-  - Sistema de login multi-dispositivo con tokens D1:
-    · Login genera un token único (64 hex) y lo guarda en tabla sesiones (D1)
-    · El token se almacena en localStorage (en lugar del código de acceso)
-    · Todas las peticiones API usan header X-Token en lugar de X-Admin-Code
-    · /logout elimina el token de D1 (sesión invalidada en el servidor)
-    · Fallback legacy: si no hay token, sigue usando headers antiguos
-    · Tabla sesiones creada en D1 (migrate_sesiones.sql aplicado)
-    · Compatible 100% con todos los roles: superadmin, encargado, operario
-    · SW bumpeado a v3.9
-
 v3.8  |  15/04/2026
   - Ajustes → Catálogos: nueva sección "🔺 Material Seguridad"
     · Lista de tipos con badge SERIE (individual) o STOCK (cantidad)
@@ -190,6 +179,19 @@ v3.4  |  15/04/2026
   - Página: updatefound → statechange → SKIP_WAITING (flujo completo)
   - Página: visibilitychange → reg.update() al volver a la pestaña
   - Página: reload con location.replace + timestamp para evitar HTTP cache
+
+v3.9  |  15/04/2026
+  - Sistema de login multi-dispositivo con tokens D1:
+    · Login genera un token único (64 hex) y lo guarda en tabla sesiones (D1)
+    · El token se almacena en localStorage (en lugar del código de acceso)
+    · Todas las peticiones API usan header X-Token en lugar de X-Admin-Code
+    · Worker: getAuth() valida token contra D1 → devuelve rol/obra/depto
+    · /logout elimina el token de D1 (sesión completamente invalidada)
+    · Fallback legacy: si no hay token, sigue usando headers antiguos
+    · Tabla sesiones creada en D1 (estructura en migrate_sesiones.sql)
+    · Compatible 100% con todos los roles: superadmin, encargado, operario
+    · SW bumpeado a v3.9
+  - Deploy: worker.js + index.html + sw.js actualizados en GitHub y Cloudflare
 
 ================================================================================
   ESTADO ACTUAL — QUÉ FUNCIONA
@@ -274,12 +276,12 @@ Frontend (index.html + sw.js):
      - De momento funciona con pestañas en un solo Sheet
      - Pendiente si se quiere separar en el futuro
 
-[ SEGURIDAD — acordado, pendiente ]
+[ SEGURIDAD — ✅ IMPLEMENTADO ]
 
-  6. Tokens de sesión en D1
-     - Actualmente auth por headers (vulnerable)
-     - Plan completo en: memory/project_security_plan.md
-     - Reemplazar headers X-Admin-Code / X-Obra-Id por token único en D1
+  6. Tokens de sesión en D1 ✅ HECHO en v3.9
+     - Login genera token único en tabla sesiones (D1)
+     - Headers X-Admin-Code / X-Obra-Id reemplazados por X-Token
+     - /logout invalida el token en servidor
 
 ================================================================================
   BUGS CONOCIDOS / A VERIFICAR
@@ -310,6 +312,9 @@ Frontend (index.html + sw.js):
     · Reload con timestamp para evitar HTTP cache
   - Seguridad: nunca guardar ADMIN_CODE en el código, siempre en
     Cloudflare Secrets
+  - Auth v3.9: sistema de tokens en D1. getAuth() prueba X-Token primero,
+    luego fallback a headers legacy. crearSesion() inserta en tabla sesiones.
+    cerrarSesionServidor() borra el token. Frontend guarda token (no código).
 
 ================================================================================
   NOTAS DE CONVERSACIÓN
@@ -318,5 +323,11 @@ Frontend (index.html + sw.js):
   [15/04/2026] — Se propone crear este archivo de control para llevar
   seguimiento de cambios, estado y próximas features. Así Claude puede
   leerlo al inicio de cada sesión y ponerse al día sin perder contexto.
+
+  [15/04/2026] — Sesión de trabajo: se implementó el sistema de login
+  multi-dispositivo (v3.9). El problema era que localStorage es local al
+  navegador, por lo que los usuarios no podían entrar desde otros dispositivos.
+  Solución: tokens únicos en D1. Deploy completo en Cloudflare + GitHub.
+  Próximo trabajo sugerido: historial completo por activo, o chat interno.
 
 ================================================================================
