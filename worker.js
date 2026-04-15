@@ -7,7 +7,7 @@
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, X-Admin-Code, X-Obra-Id, X-Usuario, X-Rol, X-Codigo, X-Departamento',
+  'Access-Control-Allow-Headers': 'Content-Type, X-Admin-Code, X-Obra-Id, X-Usuario, X-Rol, X-Codigo, X-Departamento, X-Token',
 };
 
 function json(data, status = 200) {
@@ -396,7 +396,7 @@ async function getBobinas(request, env) {
 
   let sql = 'SELECT * FROM bobinas WHERE 1=1';
   const params = [];
-  if (!isSuperadmin) { sql += ' AND (departamento = ? OR departamento IS NULL)'; params.push(departamento); }
+  if (!isSuperadmin) { sql += ' AND departamento = ?'; params.push(departamento); }
   if (obraFilter) { sql += ' AND obra_id = ?'; params.push(obraFilter); }
   if (estado)     { sql += ' AND estado = ?';  params.push(estado); }
   if (buscar) {
@@ -525,7 +525,7 @@ async function getPemp(request, env) {
   let sql = 'SELECT * FROM pemp WHERE 1=1';
   const params = [];
   // Seguridad y superadmin ven todas; el resto solo su departamento
-  if (!isSuperadmin && !isSeguridad) { sql += ' AND (departamento = ? OR departamento IS NULL)'; params.push(departamento); }
+  if (!isSuperadmin && !isSeguridad) { sql += ' AND departamento = ?'; params.push(departamento); }
   if (obraId)  { sql += ' AND obra_id = ?'; params.push(obraId); }
   if (estado)  { sql += ' AND estado = ?';  params.push(estado); }
   if (buscar) {
@@ -682,7 +682,7 @@ async function getCarretillas(request, env) {
 
   let sql = 'SELECT * FROM carretillas WHERE 1=1';
   const params = [];
-  if (!isSuperadmin && !isSeguridad) { sql += ' AND (departamento = ? OR departamento IS NULL)'; params.push(departamento); }
+  if (!isSuperadmin && !isSeguridad) { sql += ' AND departamento = ?'; params.push(departamento); }
   if (obraId)  { sql += ' AND obra_id = ?'; params.push(obraId); }
   if (estado)  { sql += ' AND estado = ?';  params.push(estado); }
   if (buscar) {
