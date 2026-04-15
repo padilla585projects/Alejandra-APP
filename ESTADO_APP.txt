@@ -5,7 +5,7 @@
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 15/04/2026
-VERSIÓN ACTUAL: v3.9 — DESPLEGADA ✅
+VERSIÓN ACTUAL: v3.10 — DESPLEGADA ✅
 
 REPO:    https://github.com/padilla585/Bobinaap.git  (branch: main)
 WORKER:  https://gestibobina-proxy.padilla585.workers.dev
@@ -179,6 +179,21 @@ v3.4  |  15/04/2026
   - Página: updatefound → statechange → SKIP_WAITING (flujo completo)
   - Página: visibilitychange → reg.update() al volver a la pestaña
   - Página: reload con location.replace + timestamp para evitar HTTP cache
+
+v3.10  |  15/04/2026
+  - Bug #1: Icono en pantalla de departamentos invisible → fix color fondo SVG
+  - Bug #2: Seguridad siempre abre en pestaña Escáner por defecto
+  - Bug #3: Notificaciones Telegram → await en todos los sendTelegram sueltos
+  - Bug #4: cargarCatalogos() llamado también en ruta Seguridad
+             (desplegables inventario seg ahora cargan correctamente)
+  - Bug #5/6: Pestaña '↩ Dev.' recuperada con escáner QR+OCR integrado
+               → busca en _stockItems, muestra ficha, confirma devolución
+  - Bug #7: Botón 🗑️ Borrar en lista de sugerencias (superadmin)
+  - Bug #8: getAuth ahora async y valida X-Token contra tabla sesiones D1
+             → tokens generados en login ahora realmente autentican cada petición
+             → fallback legacy headers mantenido para compatibilidad
+  - DB: tabla sesiones creada (migrate_sesiones.sql ejecutado)
+  - SW: v3.10
 
 v3.9  |  15/04/2026
   - Sistema de login multi-dispositivo con tokens D1:
