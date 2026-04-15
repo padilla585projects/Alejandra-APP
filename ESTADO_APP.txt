@@ -5,7 +5,7 @@
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 15/04/2026
-VERSIÓN ACTUAL: v3.8 — DESPLEGADA ✅
+VERSIÓN ACTUAL: v3.9 — DESPLEGADA ✅
 
 REPO:    https://github.com/padilla585/Bobinaap.git  (branch: main)
 WORKER:  https://gestibobina-proxy.padilla585.workers.dev
@@ -121,6 +121,17 @@ v3.3  |  15/04/2026
     · Efecto glow verde/rojo para mejor visibilidad
     · Se limpia el intervalo al cerrar sesión
 
+v3.9  |  15/04/2026
+  - Sistema de login multi-dispositivo con tokens D1:
+    · Login genera un token único (64 hex) y lo guarda en tabla sesiones (D1)
+    · El token se almacena en localStorage (en lugar del código de acceso)
+    · Todas las peticiones API usan header X-Token en lugar de X-Admin-Code
+    · /logout elimina el token de D1 (sesión invalidada en el servidor)
+    · Fallback legacy: si no hay token, sigue usando headers antiguos
+    · Tabla sesiones creada en D1 (migrate_sesiones.sql aplicado)
+    · Compatible 100% con todos los roles: superadmin, encargado, operario
+    · SW bumpeado a v3.9
+
 v3.8  |  15/04/2026
   - Ajustes → Catálogos: nueva sección "🔺 Material Seguridad"
     · Lista de tipos con badge SERIE (individual) o STOCK (cantidad)
@@ -187,6 +198,7 @@ v3.4  |  15/04/2026
 Backend (worker.js):
   ✅ CRUD bobinas, PEMP, carretillas (crear, editar, borrar, devolver, transferir)
   ✅ Auth por roles y multi-obra
+  ✅ Sesiones con tokens en D1 (/verificar genera token, /logout lo elimina)
   ✅ Filtrado por departamento en todas las consultas
   ✅ Fechas automáticas (entrada, devolución, avería, reparación)
   ✅ Catálogos: proveedores, tipos cable, tipos PEMP, tipos carretilla, energías
@@ -200,7 +212,8 @@ Backend (worker.js):
   ✅ Estadísticas (/stats)
 
 Frontend (index.html + sw.js):
-  ✅ Login persistente con localStorage
+  ✅ Login multi-dispositivo con token (funciona desde cualquier navegador/móvil)
+  ✅ Login persistente con localStorage (guarda token, no el código de acceso)
   ✅ PWA instalable (manifest, sw, icons)
   ✅ Selector de departamento para superadmin
   ✅ Header compacto sin solapamientos
