@@ -9,8 +9,8 @@ CUENTA:
 
 WORKER:
   Nombre:      alejandra-app-api
-  URL:         https://alejandra-worker.alejandra-app.workers.dev
-  Version ID:  56c752d0-a711-4b72-9691-37957bbae91c
+  URL:         https://alejandra-app-api.alejandra-app.workers.dev
+  Version ID:  504ea155-9e78-4cfb-b5ff-bb5bc89a4344
 
 BASE DE DATOS D1:
   Nombre:      alejandra-db
