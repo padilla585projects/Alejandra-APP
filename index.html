@@ -1007,7 +1007,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
         <div class="settings-section">
           <div class="settings-title">ℹ️ Acerca de</div>
           <div class="settings-row"><span>Aplicación</span><strong>Alejandra</strong></div>
-          <div class="settings-row"><span>Versión</span><strong>v3.10</strong></div>
+          <div class="settings-row"><span>Versión</span><strong>v3.11</strong></div>
           <div class="settings-row"><span>Backend</span><strong>Cloudflare Workers + D1</strong></div>
           <div class="settings-row"><span>Año</span><strong>2026</strong></div>
           <div style="margin-top:10px;text-align:center;font-size:11px;color:var(--muted);letter-spacing:1px">INVENTARIO · MAQUINARIA · CONTROL</div>
@@ -3246,15 +3246,51 @@ async function cargarUsuariosAdmin() {
     const usuarios = await res.json();
     const c = document.getElementById('adminUsuariosList');
     if (!usuarios.length) { c.innerHTML = '<div style="color:var(--muted);font-size:12px">Sin usuarios</div>'; return; }
-    c.innerHTML = usuarios.map(u => `
-      <div class="admin-list-item">
-        <div class="admin-item-info">
+    const deptLabel = { electrico: '⚡ Eléctrico', mecanica: '🔧 Mecánicas', seguridad: '🔺 Seguridad' };
+    c.innerHTML = usuarios.map(u => {
+      const dept = u.departamento || 'electrico';
+      return `
+      <div class="admin-list-item" id="urow-${u.id}">
+        <div class="admin-item-info" style="flex:1;min-width:0">
           <div class="admin-item-name">${u.nombre}</div>
-          <div class="admin-item-sub">${u.rol} ${u.obra_nombre ? '· ' + u.obra_nombre : ''}</div>
+          <div class="admin-item-sub">${u.rol}${u.obra_nombre ? ' · ' + u.obra_nombre : ''} · ${deptLabel[dept] || dept}</div>
         </div>
-        <button class="btn-sm danger" onclick="eliminarUsuario(${u.id})">🗑</button>
-      </div>`).join('');
+        <div style="display:flex;gap:6px;align-items:center;flex-shrink:0" id="uact-${u.id}">
+          <button class="btn-sm" onclick="editarDeptUsuario(${u.id},'${dept}')" title="Cambiar departamento" style="font-size:13px">🏢</button>
+          <button class="btn-sm danger" onclick="eliminarUsuario(${u.id})">🗑</button>
+        </div>
+      </div>`;
+    }).join('');
   } catch {}
+}
+
+async function editarDeptUsuario(id, deptActual) {
+  const actDiv = document.getElementById(`uact-${id}`);
+  if (!actDiv) return;
+  const opts = [
+    { val: 'electrico', label: '⚡ Eléctrico' },
+    { val: 'mecanica',  label: '🔧 Mecánicas' },
+    { val: 'seguridad', label: '🔺 Seguridad' },
+  ];
+  actDiv.innerHTML = `
+    <select id="deptSel-${id}" style="padding:5px 8px;background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px">
+      ${opts.map(o => `<option value="${o.val}"${o.val === deptActual ? ' selected' : ''}>${o.label}</option>`).join('')}
+    </select>
+    <button class="btn-sm ok" onclick="guardarDeptUsuario(${id})">✓</button>
+    <button class="btn-sm" onclick="cargarUsuariosAdmin()">✕</button>`;
+}
+
+async function guardarDeptUsuario(id) {
+  const sel = document.getElementById(`deptSel-${id}`);
+  if (!sel) return;
+  try {
+    const res = await apiCall(`/usuarios/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify({ departamento: sel.value })
+    });
+    if (res.ok) { toast('✅ Departamento actualizado', 'ok'); cargarUsuariosAdmin(); }
+    else { const d = await res.json(); toast(`❌ ${d.error || 'Error'}`, 'err'); }
+  } catch { toast('❌ Error de conexión', 'err'); }
 }
 
 async function crearUsuario() {
