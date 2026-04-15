@@ -44,15 +44,15 @@ body{background:var(--bg);color:var(--text);font-family:'Poppins',sans-serif;fon
 .login-err{color:var(--red);text-align:center;font-size:13px;min-height:18px;font-family:'Montserrat',sans-serif}
 
 /* ── HEADER ── */
-header{background:var(--surface);border-bottom:2px solid var(--accent);padding:10px 14px;display:flex;align-items:center;gap:10px;flex-shrink:0;z-index:100}
-.header-logo{display:flex;align-items:center;gap:8px;font-family:'Montserrat',sans-serif;font-weight:700;font-size:18px;color:var(--text);flex-shrink:0}
-.header-center{flex:1;display:flex;align-items:center;justify-content:center;min-width:0;gap:6px}
-.obra-label{font-family:'Montserrat',sans-serif;font-weight:700;font-size:12px;color:var(--accent);letter-spacing:.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:140px}
-.obra-select{background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:'Montserrat',sans-serif;font-weight:700;font-size:12px;padding:4px 8px;cursor:pointer;max-width:130px}
-.user-chip{display:flex;align-items:center;gap:5px;background:var(--surface2);border:1px solid var(--border);border-radius:20px;padding:4px 10px;font-family:'Montserrat',sans-serif;font-weight:700;font-size:11px;color:var(--text);white-space:nowrap;max-width:110px;overflow:hidden;flex-shrink:0}
-.conn-dot{width:8px;height:8px;border-radius:50%;background:var(--muted);flex-shrink:0;transition:background .3s}
-.conn-dot.ok{background:var(--green)}
-.conn-dot.err{background:var(--red)}
+header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6px 10px;display:flex;align-items:center;gap:6px;flex-shrink:0;z-index:100;min-height:44px}
+.header-logo{display:none}
+.header-center{flex:1;display:flex;align-items:center;justify-content:center;min-width:0;gap:4px;overflow:hidden}
+.obra-label{font-family:'Montserrat',sans-serif;font-weight:700;font-size:11px;color:var(--accent);letter-spacing:.3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:120px}
+.obra-select{background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:'Montserrat',sans-serif;font-weight:700;font-size:11px;padding:3px 6px;cursor:pointer;max-width:110px;min-width:0}
+.user-chip{display:flex;align-items:center;gap:4px;background:var(--surface2);border:1px solid var(--border);border-radius:20px;padding:3px 8px;font-family:'Montserrat',sans-serif;font-weight:700;font-size:10px;color:var(--text);white-space:nowrap;max-width:100px;overflow:hidden;text-overflow:ellipsis;flex-shrink:0}
+.conn-dot{width:10px;height:10px;border-radius:50%;background:var(--muted);flex-shrink:0;transition:background .4s,box-shadow .4s}
+.conn-dot.ok{background:var(--green);box-shadow:0 0 6px rgba(34,197,94,.7)}
+.conn-dot.err{background:var(--red);box-shadow:0 0 6px rgba(239,68,68,.7)}
 
 /* ── CONTENT AREA ── */
 #appContent{flex:1;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch}
@@ -349,8 +349,20 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:1
   <!-- DEPT SELECTOR -->
   <div id="screenDept" class="screen flex-screen" style="padding:0;height:100%">
     <div style="padding:20px 16px 8px;text-align:center">
-      <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:22px;color:var(--text)">Selecciona departamento</div>
-      <div style="font-size:13px;color:var(--muted);margin-top:4px">¿Con qué departamento trabajas hoy?</div>
+      <div style="display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:8px">
+        <svg class="logo-svg" width="36" height="36" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect width="512" height="512" rx="90" fill="#0f172a"/>
+          <path d="M60 148V60h88" stroke="#2563eb" stroke-width="26" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M452 148V60h-88" stroke="#2563eb" stroke-width="26" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M60 364v88h88" stroke="#2563eb" stroke-width="26" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M452 364v88h-88" stroke="#2563eb" stroke-width="26" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M256 88L148 424h44l30-88h68l30 88h44L256 88ZM256 168l50 128h-100Z" fill="#f97316"/>
+          <path d="M256 88l108 336h-44l-30-88h-34l-34-128 34-120Z" fill="#fb923c" opacity="0.4"/>
+        </svg>
+        <span style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:24px;color:var(--text)">Alejandra</span>
+      </div>
+      <div style="font-family:'Montserrat',sans-serif;font-weight:700;font-size:13px;color:var(--muted);letter-spacing:1px;text-transform:uppercase">Selecciona departamento</div>
+      <div style="font-size:12px;color:var(--muted);margin-top:4px;opacity:.7">¿Con qué departamento trabajas hoy?</div>
     </div>
     <div class="dept-grid">
       <div class="dept-card" onclick="seleccionarDepto('electrico')">
@@ -817,7 +829,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:1
         <div class="settings-section">
           <div class="settings-title">ℹ️ Acerca de</div>
           <div class="settings-row"><span>Aplicación</span><strong>Alejandra</strong></div>
-          <div class="settings-row"><span>Versión</span><strong>v3.0</strong></div>
+          <div class="settings-row"><span>Versión</span><strong>v3.3</strong></div>
           <div class="settings-row"><span>Backend</span><strong>Cloudflare Workers + D1</strong></div>
           <div class="settings-row"><span>Año</span><strong>2026</strong></div>
           <div style="margin-top:10px;text-align:center;font-size:11px;color:var(--muted);letter-spacing:1px">INVENTARIO · MAQUINARIA · CONTROL</div>
@@ -961,6 +973,7 @@ function setSession(data) {
 
 function cerrarSesion() {
   localStorage.removeItem('alejandra_session');
+  if (window._connInterval) { clearInterval(window._connInterval); window._connInterval = null; }
   closeCamera();
   location.reload();
 }
@@ -1065,6 +1078,12 @@ async function iniciarApp() {
   document.getElementById('appContent').style.display = 'block';
   document.getElementById('bottomNav').style.display = 'flex';
 
+  // LED siempre activo desde que hay sesión
+  checkConnection();
+  if (!window._connInterval) {
+    window._connInterval = setInterval(checkConnection, 30000);
+  }
+
   const esSuperAdmin = s.rol === 'superadmin';
 
   // SuperAdmin sin depto elegido → pantalla de selección
@@ -1087,7 +1106,6 @@ async function iniciarApp() {
   }
 
   showScreen('home');
-  checkConnection();
   await cargarStatsHome();
   await cargarCatalogos();
   if (esSuperAdmin) {

@@ -1,5 +1,5 @@
 // Cambia este número cada vez que actualices la app
-const CACHE = 'alejandra-v3.2';
+const CACHE = 'alejandra-v3.3';
 
 self.addEventListener('install', e => {
   // Activa el nuevo SW inmediatamente sin esperar a que cierren las tabs
