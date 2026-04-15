@@ -7,3 +7,6 @@ preview_urls = false
 binding = "DB"
 database_name = "gestibobina-db"
 database_id = "eac9f2d2-0845-409c-9032-109c563d7eec"
+
+[triggers]
+crons = ["0 7 * * *"]

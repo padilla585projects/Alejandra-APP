@@ -206,6 +206,11 @@ export default {
       return err(`Error interno: ${e.message}`, 500);
     }
   },
+
+  // ── Cron diario: alertas automáticas ─────────────────────────────────────
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil(alertasDiarias(env));
+  },
 };
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -242,6 +247,7 @@ async function verificarAcceso(request, env) {
           return err('El usuario no pertenece a esa obra', 403);
         }
       }
+      sendTelegram(env, `👤 <b>Login</b>: ${usuario.nombre} (${usuario.rol})\n🏗 ${usuario.obra_nombre || '—'}  🔷 ${usuario.departamento || '—'}`);
       return json({
         ok: true,
         nombre: usuario.nombre,
@@ -405,6 +411,7 @@ async function devolverBobina(codigo, request, env, ctx) {
   ctx.waitUntil(Promise.all([
     syncSheets(env),
     registrarHistorial(env, { obra_id: bobina.obra_id, bobina_codigo: codigo, accion: 'devolucion', usuario: devuelto_por, notas: notas || '' }),
+    sendTelegram(env, `📤 <b>Bobina devuelta</b>\n🔖 ${codigo}\n👤 ${devuelto_por || '—'}`),
   ]));
 
   return json({ ok: true, mensaje: `Bobina ${codigo} devuelta correctamente`, fecha_devolucion: fecha });
@@ -421,6 +428,7 @@ async function eliminarBobina(codigo, request, env, ctx) {
   ctx.waitUntil(Promise.all([
     syncSheets(env),
     registrarHistorial(env, { obra_id: bobina.obra_id, bobina_codigo: codigo, accion: 'eliminacion', usuario: '' }),
+    sendTelegram(env, `🗑️ <b>Bobina eliminada</b>\n🔖 ${codigo}`),
   ]));
 
   return json({ ok: true, mensaje: `Bobina ${codigo} eliminada` });
@@ -456,7 +464,7 @@ async function crearPemp(request, env, ctx) {
   const { obraId, usuario, departamento } = getAuth(request, env);
   const body = await request.json();
   const {
-    matricula, tipo, marca, proveedor, estado = 'activa',
+    matricula, tipo, marca, proveedor, energia, estado = 'activa',
     fecha_entrada, registrado_por, notas,
     fecha_ultima_revision, fecha_proxima_revision,
   } = body;
@@ -470,11 +478,11 @@ async function crearPemp(request, env, ctx) {
   try {
     const r = await env.DB.prepare(
       `INSERT INTO pemp
-        (matricula, tipo, marca, proveedor, estado, fecha_entrada, registrado_por, notas,
+        (matricula, tipo, marca, proveedor, energia, estado, fecha_entrada, registrado_por, notas,
          fecha_ultima_revision, fecha_proxima_revision, obra_id, departamento)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).bind(
-      matricula.trim().toUpperCase(), tipo || '', marca || '', proveedor || '',
+      matricula.trim().toUpperCase(), tipo || '', marca || '', proveedor || '', energia || '',
       estado, fecha, reg, notas || '',
       fecha_ultima_revision || null, fecha_proxima_revision || null,
       obraFinal || null, departamento
@@ -488,7 +496,7 @@ async function crearPemp(request, env, ctx) {
         obra_id: obraFinal, matricula: matricula.trim().toUpperCase(),
         accion: 'entrada', usuario: reg, notas: notas || '',
       }),
-      sendTelegram(env, `🏗 <b>Nueva PEMP registrada</b>\n🔖 ${matricula.trim().toUpperCase()}\n🔧 ${tipo || '—'}  🏭 ${marca || '—'}\n👤 ${reg}`),
+      sendTelegram(env, `🏗 <b>Nueva PEMP registrada</b>\n🔖 ${matricula.trim().toUpperCase()}\n🔧 ${tipo || '—'}  🏭 ${marca || '—'}  ⚡ ${energia || '—'}\n👤 ${reg}`),
     ]));
 
     return json({ ok: true, id, mensaje: `PEMP ${matricula} registrada` }, 201);
@@ -505,15 +513,18 @@ async function editarPemp(matricula, request, env) {
   if (obraId && !isSuperadmin && pemp.obra_id !== obraId) return err('No autorizado', 403);
 
   const body = await request.json().catch(() => ({}));
-  const campos = ['tipo', 'marca', 'proveedor', 'estado', 'notas', 'fecha_ultima_revision', 'fecha_proxima_revision', 'obra_id'];
+  const campos = ['tipo', 'marca', 'proveedor', 'energia', 'estado', 'notas', 'fecha_ultima_revision', 'fecha_proxima_revision', 'obra_id'];
+  let notifAveria = false, notifReparado = false;
   // Fechas automáticas según cambio de estado
   if (body.estado !== undefined) {
     if (body.estado === 'Averiada' && pemp.estado !== 'Averiada') {
       body.fecha_averia = fechaEspana();
       campos.push('fecha_averia');
+      notifAveria = true;
     } else if (body.estado === 'Disponible' && pemp.estado === 'Averiada') {
       body.fecha_reparacion = fechaEspana();
       campos.push('fecha_reparacion');
+      notifReparado = true;
     }
   }
   const sets = [];
@@ -525,6 +536,8 @@ async function editarPemp(matricula, request, env) {
   vals.push(matricula);
 
   await env.DB.prepare(`UPDATE pemp SET ${sets.join(', ')} WHERE matricula = ?`).bind(...vals).run();
+  if (notifAveria)   sendTelegram(env, `🔴 <b>PEMP AVERIADA</b>\n🔖 ${matricula}\n🏗 Obra: ${pemp.obra_id || '—'}`);
+  if (notifReparado) sendTelegram(env, `🟢 <b>PEMP Reparada</b>\n🔖 ${matricula}`);
   return json({ ok: true, mensaje: `PEMP ${matricula} actualizada` });
 }
 
@@ -559,6 +572,7 @@ async function devolverPemp(matricula, request, env, ctx) {
   ctx.waitUntil(Promise.all([
     syncSheets(env),
     registrarHistorialPemp(env, { obra_id: pemp.obra_id, matricula, accion: 'devolucion', usuario: devuelto_por, notas: notas || '' }),
+    sendTelegram(env, `📤 <b>PEMP devuelta</b>\n🔖 ${matricula}\n👤 ${devuelto_por || '—'}`),
   ]));
 
   return json({ ok: true, mensaje: `PEMP ${matricula} devuelta correctamente`, fecha_devolucion: fecha });
@@ -571,7 +585,10 @@ async function eliminarPemp(matricula, request, env, ctx) {
   if (!isSuperadmin && !isAdmin && pemp.obra_id !== obraId) return err('No autorizado', 403);
 
   await env.DB.prepare('DELETE FROM pemp WHERE matricula = ?').bind(matricula).run();
-  ctx.waitUntil(syncSheets(env));
+  ctx.waitUntil(Promise.all([
+    syncSheets(env),
+    sendTelegram(env, `🗑️ <b>PEMP eliminada</b>\n🔖 ${matricula}`),
+  ]));
   return json({ ok: true, mensaje: `PEMP ${matricula} eliminada` });
 }
 
@@ -654,14 +671,16 @@ async function editarCarretilla(matricula, request, env) {
 
   const body = await request.json().catch(() => ({}));
   const campos = ['tipo', 'marca', 'proveedor', 'energia', 'estado', 'notas', 'fecha_ultima_revision', 'fecha_proxima_revision', 'obra_id'];
-  // Fechas automáticas según cambio de estado
+  let notifAveria = false, notifReparado = false;
   if (body.estado !== undefined) {
     if (body.estado === 'Averiada' && carretilla.estado !== 'Averiada') {
       body.fecha_averia = fechaEspana();
       campos.push('fecha_averia');
+      notifAveria = true;
     } else if (body.estado === 'Disponible' && carretilla.estado === 'Averiada') {
       body.fecha_reparacion = fechaEspana();
       campos.push('fecha_reparacion');
+      notifReparado = true;
     }
   }
   const sets = [];
@@ -673,6 +692,8 @@ async function editarCarretilla(matricula, request, env) {
   vals.push(matricula);
 
   await env.DB.prepare(`UPDATE carretillas SET ${sets.join(', ')} WHERE matricula = ?`).bind(...vals).run();
+  if (notifAveria)   sendTelegram(env, `🔴 <b>Carretilla AVERIADA</b>\n🔖 ${matricula}`);
+  if (notifReparado) sendTelegram(env, `🟢 <b>Carretilla Reparada</b>\n🔖 ${matricula}`);
   return json({ ok: true, mensaje: `Carretilla ${matricula} actualizada` });
 }
 
@@ -707,6 +728,7 @@ async function devolverCarretilla(matricula, request, env, ctx) {
   ctx.waitUntil(Promise.all([
     syncSheets(env),
     registrarHistorialCarretillas(env, { obra_id: carretilla.obra_id, matricula, accion: 'devolucion', usuario: devuelto_por, notas: notas || '' }),
+    sendTelegram(env, `📤 <b>Carretilla devuelta</b>\n🔖 ${matricula}\n👤 ${devuelto_por || '—'}`),
   ]));
 
   return json({ ok: true, mensaje: `Carretilla ${matricula} devuelta correctamente`, fecha_devolucion: fecha });
@@ -719,7 +741,10 @@ async function eliminarCarretilla(matricula, request, env, ctx) {
   if (!isSuperadmin && !isAdmin && carretilla.obra_id !== obraId) return err('No autorizado', 403);
 
   await env.DB.prepare('DELETE FROM carretillas WHERE matricula = ?').bind(matricula).run();
-  ctx.waitUntil(syncSheets(env));
+  ctx.waitUntil(Promise.all([
+    syncSheets(env),
+    sendTelegram(env, `🗑️ <b>Carretilla eliminada</b>\n🔖 ${matricula}`),
+  ]));
   return json({ ok: true, mensaje: `Carretilla ${matricula} eliminada` });
 }
 
@@ -1520,4 +1545,57 @@ Si no puedes leer ningún código, responde: NO_LEIDO`;
   }
 
   return err('Cuota de Gemini agotada. Usa el modo OCR.', 429);
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// ALERTAS DIARIAS (Cron)
+// ════════════════════════════════════════════════════════════════════════════
+
+async function alertasDiarias(env) {
+  try {
+    const hoy = new Date();
+
+    // 1. Máquinas averiadas hace más de 3 días sin reparar
+    const [avPemp, avCarr] = await Promise.all([
+      env.DB.prepare(`SELECT matricula, fecha_averia, obra_id FROM pemp WHERE estado = 'Averiada' AND fecha_averia IS NOT NULL`).all(),
+      env.DB.prepare(`SELECT matricula, fecha_averia, obra_id FROM carretillas WHERE estado = 'Averiada' AND fecha_averia IS NOT NULL`).all(),
+    ]);
+
+    const DIAS_AVERIA = 3;
+    const averiadas = [];
+    for (const m of [...(avPemp.results||[]), ...(avCarr.results||[])]) {
+      const dias = Math.floor((hoy - new Date(m.fecha_averia)) / 86400000);
+      if (dias >= DIAS_AVERIA) averiadas.push(`🔖 ${m.matricula} — ${dias} días averiada`);
+    }
+    if (averiadas.length) {
+      await sendTelegram(env,
+        `⚠️ <b>Máquinas averiadas sin reparar (≥${DIAS_AVERIA} días)</b>\n\n` + averiadas.join('\n')
+      );
+    }
+
+    // 2. Revisiones próximas (dentro de 15 días o ya vencidas)
+    const DIAS_AVISO = 15;
+    const limite = new Date(hoy); limite.setDate(limite.getDate() + DIAS_AVISO);
+    const limiteStr = limite.toISOString().slice(0, 10);
+
+    const [revPemp, revCarr] = await Promise.all([
+      env.DB.prepare(`SELECT matricula, fecha_proxima_revision FROM pemp WHERE fecha_proxima_revision IS NOT NULL AND fecha_proxima_revision != '' AND fecha_proxima_revision <= ?`).bind(limiteStr).all(),
+      env.DB.prepare(`SELECT matricula, fecha_proxima_revision FROM carretillas WHERE fecha_proxima_revision IS NOT NULL AND fecha_proxima_revision != '' AND fecha_proxima_revision <= ?`).bind(limiteStr).all(),
+    ]);
+
+    const revisiones = [];
+    for (const m of [...(revPemp.results||[]), ...(revCarr.results||[])]) {
+      const dias = Math.floor((new Date(m.fecha_proxima_revision) - hoy) / 86400000);
+      if (dias < 0) revisiones.push(`🔖 ${m.matricula} — VENCIDA hace ${Math.abs(dias)} días`);
+      else revisiones.push(`🔖 ${m.matricula} — vence en ${dias} días (${m.fecha_proxima_revision})`);
+    }
+    if (revisiones.length) {
+      await sendTelegram(env,
+        `📅 <b>Revisiones próximas o vencidas</b>\n\n` + revisiones.join('\n')
+      );
+    }
+
+  } catch(e) {
+    console.error('alertasDiarias error:', e.message);
+  }
 }

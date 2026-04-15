@@ -554,6 +554,16 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
             <input class="form-input" id="fieldPempProv" type="text" placeholder="Proveedor...">
           </div>
           <div class="form-group">
+            <label class="form-label">Energía</label>
+            <select class="form-select" id="fieldPempEnergia">
+              <option value="">Seleccionar...</option>
+              <option value="Eléctrica">⚡ Eléctrica</option>
+              <option value="Gasoil">🛢️ Gasoil</option>
+              <option value="Híbrida">🔋 Híbrida</option>
+              <option value="Manual">💪 Manual</option>
+            </select>
+          </div>
+          <div class="form-group">
             <label class="form-label">Estado</label>
             <select class="form-select" id="fieldPempEstado">
               <option value="Disponible">Disponible</option>
@@ -883,7 +893,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
         <div class="settings-section">
           <div class="settings-title">ℹ️ Acerca de</div>
           <div class="settings-row"><span>Aplicación</span><strong>Alejandra</strong></div>
-          <div class="settings-row"><span>Versión</span><strong>v3.5</strong></div>
+          <div class="settings-row"><span>Versión</span><strong>v3.6</strong></div>
           <div class="settings-row"><span>Backend</span><strong>Cloudflare Workers + D1</strong></div>
           <div class="settings-row"><span>Año</span><strong>2026</strong></div>
           <div style="margin-top:10px;text-align:center;font-size:11px;color:var(--muted);letter-spacing:1px">INVENTARIO · MAQUINARIA · CONTROL</div>
@@ -1029,6 +1039,13 @@ function cerrarSesion() {
   localStorage.removeItem('alejandra_session');
   if (window._connInterval) { clearInterval(window._connInterval); window._connInterval = null; }
   closeCamera();
+  segCloseCamera();
+  currentModule = 'bobinas';
+  stockFiltro   = '';
+  scanActive    = false;
+  segScanActive = false;
+  if (window.scanQRLoop) { cancelAnimationFrame(window.scanQRLoop); window.scanQRLoop = null; }
+  if (window.segQRLoop)  { cancelAnimationFrame(window.segQRLoop);  window.segQRLoop  = null; }
   location.reload();
 }
 
@@ -1126,6 +1143,12 @@ async function iniciarApp() {
     document.getElementById('bottomNav').style.display = 'none';
     return;
   }
+
+  // Resetear estado global antes de iniciar con el nuevo usuario
+  currentModule = 'bobinas';
+  stockFiltro   = '';
+  scanActive    = false;
+  segScanActive = false;
 
   document.getElementById('loginOverlay').style.display = 'none';
   document.getElementById('mainHeader').style.display = 'flex';
@@ -1878,14 +1901,15 @@ async function registrarItem() {
       path = '/bobinas';
 
     } else if (currentModule === 'pemp') {
-      const tipo   = document.getElementById('fieldPempTipo').value;
-      const marca  = document.getElementById('fieldPempMarca').value.trim();
-      const prov   = document.getElementById('fieldPempProv').value.trim();
-      const estado = document.getElementById('fieldPempEstado').value;
-      const notas  = document.getElementById('scanNotas').value;
-      const ult    = document.getElementById('fieldPempUltRev').value;
-      const prox   = document.getElementById('fieldPempProxRev').value;
-      body = { matricula: codigo, tipo, marca, proveedor: prov, estado, notas,
+      const tipo    = document.getElementById('fieldPempTipo').value;
+      const marca   = document.getElementById('fieldPempMarca').value.trim();
+      const prov    = document.getElementById('fieldPempProv').value.trim();
+      const energia = document.getElementById('fieldPempEnergia').value;
+      const estado  = document.getElementById('fieldPempEstado').value;
+      const notas   = document.getElementById('scanNotas').value;
+      const ult     = document.getElementById('fieldPempUltRev').value;
+      const prox    = document.getElementById('fieldPempProxRev').value;
+      body = { matricula: codigo, tipo, marca, proveedor: prov, energia, estado, notas,
                fecha_ultima_revision: ult, fecha_proxima_revision: prox,
                registrado_por: s?.nombre || '',
                ...(obraIdSelec ? { obra_id: obraIdSelec } : {}) };
