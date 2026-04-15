@@ -1,0 +1,277 @@
+================================================================================
+  ALEJANDRA APP — CONTROL DE ESTADO Y CHANGELOG
+  Proyecto: GestiBobina / Bobinaap
+  Ruta local: C:\Users\Adrian\Downloads\Proyecto GestiBobina\Bobinaap
+================================================================================
+
+ÚLTIMA ACTUALIZACIÓN: 15/04/2026
+VERSIÓN ACTUAL: v3.6 — DESPLEGADA ✅
+
+REPO:    https://github.com/padilla585/Bobinaap.git  (branch: main)
+WORKER:  https://gestibobina-proxy.padilla585.workers.dev
+DB:      Cloudflare D1 — gestibobina-db (eac9f2d2-0845-409c-9032-109c563d7eec)
+SHEETS:  https://docs.google.com/spreadsheets/d/1HiBUR_S0toOkUJtxjt4ua5JibgO4atbCRCrPbcrcPsU
+PAGES:   https://padilla585.github.io/Bobinaap/
+
+================================================================================
+  INFRAESTRUCTURA / HERRAMIENTAS
+================================================================================
+
+- Git: instalado, conectado a GitHub (padilla585), credenciales guardadas
+- Node.js: v24.14.1
+- Wrangler: instalado y autenticado con OAuth (padilla585@gmail.com)
+- Deploy frontend: git push → GitHub Pages automático
+- Deploy backend:  npx wrangler deploy  (desde carpeta Bobinaap)
+- ADMIN_CODE: configurado como secreto en Cloudflare (no está en el código)
+- GOOGLE_SHEET_ID: secreto en Cloudflare
+- TELEGRAM_BOT_TOKEN: secreto en Cloudflare
+- TELEGRAM_CHAT_ID: 6965043
+- Obra activa: CPD Getafe (código: 001, id: 1)
+- Bobinas antiguas: 42 registros intactos en D1
+
+================================================================================
+  ROLES Y ACCESO
+================================================================================
+
+- superadmin  → Código ADMIN_CODE. Ve todo, elige departamento al entrar.
+- encargado   → Código de obra. Gestiona su departamento asignado.
+- operario    → Código de obra. Solo lectura/scan en su departamento.
+
+Departamentos:
+  ⚡ Eléctrico  → Bobinas + PEMP + Carretillas
+  🔧 Mecánicas  → Solo PEMP + Carretillas (sin Bobinas)
+  🔺 Seguridad  → Solo escáner/scan (busca matrícula cross-dept)
+
+================================================================================
+  BASE DE DATOS — TABLAS
+================================================================================
+
+Tablas originales:  bobinas, obras, historial, proveedores, tipos_cable
+Tablas añadidas:    usuarios, pemp, carretillas, historial_pemp,
+                    historial_carretillas, logs, sugerencias
+Catálogos:          tipos_pemp, tipos_carretilla, energias_carretilla
+Columnas extra:
+  bobinas:      num_albaran, departamento
+  pemp:         fecha_averia, fecha_reparacion, departamento
+  carretillas:  fecha_averia, fecha_reparacion, departamento
+  usuarios:     departamento
+
+Backup local: C:\Users\Adrian\Downloads\Proyecto GestiBobina\backup_db_20260413.sql
+
+================================================================================
+  HISTORIAL DE VERSIONES
+================================================================================
+
+v2.9  |  13/04/2026
+  - CRUD completo: bobinas, PEMP, carretillas
+  - Auth: superadmin, encargado, operario, multi-obra
+  - Sugerencias, logs, exportar Excel
+  - Sync Google Sheets (una sola hoja)
+  - Catálogos: proveedores, tipos cable, tipos PEMP, tipos carretilla, energías
+  - Campo num_albaran en bobinas
+
+v3.0  |  14/04/2026
+  - Sistema de 3 departamentos (Eléctrico / Mecánicas / Seguridad)
+  - Pantalla selector de departamento (screenDept) para superadmin
+  - Header con dept-pill (toca → vuelve al selector)
+  - Home: Bobinas oculta para Mecánicas/Seguridad
+  - Icono PEMP: plataforma tijera SVG
+  - Scan: buscar matrícula cross-dept para Seguridad (/buscar-maquina)
+  - OCR crop: recorta al área del frame antes de enviar a Gemini
+  - Ajustes: 5 pestañas (Sesión, Catálogos, Usuarios, Obras, Sistema)
+  - Badge rojo en nav Ideas con contador sugerencias sin leer
+  - Crear usuario con código copiable/compartible por WhatsApp
+  - Backup JSON desde Ajustes
+  - SW: auto-recarga al detectar nuevo SW (skipWaiting + clients.claim)
+
+v3.1  |  14/04/2026
+  - Notificaciones Telegram:
+    · Nueva bobina 📦
+    · Nueva PEMP 🏗
+    · Nueva carretilla 🚜
+    · Nueva sugerencia 💡
+    · Error crítico 🚨
+  - Helper sendTelegram() en worker usando secretos Cloudflare
+
+v3.2  |  15/04/2026
+  - Departamentos correctos aplicados en frontend y backend:
+    · Seguridad → solo pantalla de escáner/scan
+    · Mecánicas → PEMP + Carretillas (sin Bobinas)
+    · Eléctrico → todo
+  - Google Sheets por pestañas departamentales:
+    · Elec-Bobinas, Elec-PEMP, Elec-Carretillas, Mec-PEMP, Mec-Carretillas
+    · (Elimina pestañas antiguas con emojis)
+  - Fix: logs guardados correctamente (sendBeacon con Blob JSON)
+  - Fix: ruta /sync-sheets añadida al worker (solo existía /sync)
+  - Fix: await en función no-async (seleccionarDepto) causaba crash total
+  - Fix: superadmin siempre veía Bobinas aunque fuera dept Mecánicas
+  - SW: borra caché antigua automáticamente al actualizar
+  - Wrangler OAuth configurado, deploy automático desde terminal
+
+v3.3  |  15/04/2026
+  - Header rediseñado: logo eliminado del header, padding reducido,
+    sin solapamiento en móvil
+  - Logo + nombre "Alejandra" ahora aparece SOLO en pantalla de
+    selección de departamento (screenDept)
+  - LED de conexión (conn-dot):
+    · Bug arreglado: nunca se comprobaba para usuarios de Seguridad
+    · Ahora se activa para TODOS los usuarios al entrar
+    · Chequeo automático cada 30 segundos
+    · Efecto glow verde/rojo para mejor visibilidad
+    · Se limpia el intervalo al cerrar sesión
+
+v3.6  |  15/04/2026
+  - Fix bug usuario: cerrarSesion() e iniciarApp() resetean todo el estado
+    global (currentModule, stockFiltro, scanActive, loops de QR)
+  - PEMP: nuevo campo Energía (Eléctrica/Gasoil/Híbrida/Manual)
+    · Migración D1: ALTER TABLE pemp ADD COLUMN energia
+  - Telegram: notificaciones ampliadas
+    · 📤 Devolución de bobina, PEMP, carretilla
+    · 🗑️ Eliminación de bobina, PEMP, carretilla
+    · 👤 Login de usuario (no superadmin)
+    · 🔴 Avería marcada en PEMP o carretilla
+    · 🟢 Reparación completada
+  - Cron diario 7:00 UTC con alertas automáticas:
+    · ⚠️ Máquinas averiadas ≥3 días sin reparar
+    · 📅 Revisiones próximas (≤15 días) o vencidas
+  - wrangler.toml: triggers cron añadido
+
+v3.5  |  15/04/2026
+  - Pantalla escáner dedicada para Seguridad (screenSeguridad)
+  - Seguridad ya NO ve lista de PEMP — solo cámara + buscador + ficha
+  - Escáner con QR y OCR: al leer una matrícula busca automáticamente
+  - Ficha completa: tipo, marca, proveedor, obra, dept, estado (con color),
+    fechas entrada/revisión/avería/reparación, notas, historial 15 entradas
+  - Worker: /buscar-maquina ahora devuelve historial junto a la máquina
+
+v3.4  |  15/04/2026
+  - Fix: borrado de caché automático al actualizar no funcionaba
+  - SW: includeUncontrolled:true en clients.matchAll (llegaba a todas las tabs)
+  - SW: escucha mensaje SKIP_WAITING desde la página
+  - Página: si hay SW en estado "waiting" al cargar, se fuerza su activación
+  - Página: updatefound → statechange → SKIP_WAITING (flujo completo)
+  - Página: visibilitychange → reg.update() al volver a la pestaña
+  - Página: reload con location.replace + timestamp para evitar HTTP cache
+
+================================================================================
+  ESTADO ACTUAL — QUÉ FUNCIONA
+================================================================================
+
+Backend (worker.js):
+  ✅ CRUD bobinas, PEMP, carretillas (crear, editar, borrar, devolver, transferir)
+  ✅ Auth por roles y multi-obra
+  ✅ Filtrado por departamento en todas las consultas
+  ✅ Fechas automáticas (entrada, devolución, avería, reparación)
+  ✅ Catálogos: proveedores, tipos cable, tipos PEMP, tipos carretilla, energías
+  ✅ Sugerencias (CRUD completo)
+  ✅ Logs guardados en D1
+  ✅ Google Sheets sync por pestañas departamentales
+  ✅ Notificaciones Telegram
+  ✅ Buscar matrícula cross-dept (/buscar-maquina)
+  ✅ Backup JSON
+  ✅ Estadísticas (/stats)
+
+Frontend (index.html + sw.js):
+  ✅ Login persistente con localStorage
+  ✅ PWA instalable (manifest, sw, icons)
+  ✅ Selector de departamento para superadmin
+  ✅ Header compacto sin solapamientos
+  ✅ LED de conexión siempre activo (chequeo cada 30s)
+  ✅ Navegación por módulos según departamento
+  ✅ OCR con Gemini + recorte de frame
+  ✅ Escaneo QR con jsQR
+  ✅ Exportar Excel completo
+  ✅ Ajustes en 5 pestañas
+  ✅ Badge ideas sin leer (superadmin)
+  ✅ Auto-actualización de caché al nuevo SW
+
+================================================================================
+  PENDIENTE / FUTURAS ACTUALIZACIONES
+================================================================================
+
+[ PRIORIDAD ALTA — acordado, pendiente de implementar ]
+
+  1. Inventario de Seguridad
+     - Arneses, vallas, EPIs, etc.
+     - El usuario tiene ideas concretas (pendiente de detallar)
+     - Requiere nueva tabla en D1: inventario_seguridad
+
+  2. Historial completo por activo
+     - Vista de toda la vida de una bobina/máquina
+     - Quién la tuvo, cuándo, en qué obra, averías, reparaciones
+
+  3. Alertas / avisos automáticos
+     - Máquina averiada X días sin reparar → aviso
+     - Revisión/ITV próxima → aviso con antelación
+     - Posiblemente por Telegram o notificación push
+
+[ PRIORIDAD MEDIA ]
+
+  7. Chat interno entre usuarios
+     - Pestaña accesible para todos los usuarios de la app
+     - Pendiente de definir: ¿global o por obra?
+     - Tecnología: D1 + polling cada 15s (sin necesidad de Durable Objects)
+     - Pendiente de definir: historial completo o solo últimos N mensajes
+     - Pendiente de definir: solo texto o también adjuntos
+
+  8. Entorno de pruebas (staging)
+     - Worker separado: gestibobina-proxy-dev + D1 separada
+     - dev.html en mismo repo → github.io/Bobinaap/dev.html
+     - Prod y dev en paralelo sin afectarse
+     - Pendiente de implementar
+
+  4. Fotos / firma digital / albarán PDF
+     - Depende de migración a Cloudflare R2 (nueva cuenta)
+     - Pendiente de abrir cuenta R2
+
+  5. Google Sheets — hojas separadas por departamento
+     - El usuario preferiría un spreadsheet distinto por dept
+     - De momento funciona con pestañas en un solo Sheet
+     - Pendiente si se quiere separar en el futuro
+
+[ SEGURIDAD — acordado, pendiente ]
+
+  6. Tokens de sesión en D1
+     - Actualmente auth por headers (vulnerable)
+     - Plan completo en: memory/project_security_plan.md
+     - Reemplazar headers X-Admin-Code / X-Obra-Id por token único en D1
+
+================================================================================
+  BUGS CONOCIDOS / A VERIFICAR
+================================================================================
+
+  - Dropdowns del scan: verificar que los catálogos cargan bien en producción
+  - Primera instalación v3.0+: confirmar filtrado de departamentos en D1
+  - Google Sheets: si la pestaña ya existe y el nombre tiene caracteres
+    especiales puede fallar el rename → revisar en producción
+
+================================================================================
+  DECISIONES TÉCNICAS IMPORTANTES
+================================================================================
+
+  - ESTADO_APP.txt se actualiza automáticamente después de cada cambio,
+    sin necesidad de que el usuario lo pida
+  - Método de trabajo: EDITS QUIRÚRGICOS sobre archivos existentes,
+    NUNCA reescritura completa
+  - sendBeacon debe usar Blob({type:'application/json'}) — si se pasa
+    string plano, el Content-Type es text/plain y el worker no lo parsea
+  - batchUpdate de Sheets: separar add y delete en dos peticiones distintas
+  - Nombres de pestañas Sheets: solo ASCII (sin emojis) para evitar
+    problemas de encoding en la URL
+  - SW: mecanismo completo de auto-actualización (v3.4):
+    · skipWaiting + clients.claim + postMessage SW_ACTUALIZADO
+    · La página escucha message + controllerchange + visibilitychange
+    · Si hay SW en waiting al cargar → SKIP_WAITING inmediato
+    · Reload con timestamp para evitar HTTP cache
+  - Seguridad: nunca guardar ADMIN_CODE en el código, siempre en
+    Cloudflare Secrets
+
+================================================================================
+  NOTAS DE CONVERSACIÓN
+================================================================================
+
+  [15/04/2026] — Se propone crear este archivo de control para llevar
+  seguimiento de cambios, estado y próximas features. Así Claude puede
+  leerlo al inicio de cada sesión y ponerse al día sin perder contexto.
+
+================================================================================

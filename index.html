@@ -687,53 +687,108 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
   ══════════════════════════════════════════ -->
   <div id="screenSeguridad" class="screen flex-screen" style="padding:0;height:100%;display:none;flex-direction:column">
 
-    <!-- Buscador manual -->
-    <div style="padding:10px 14px 8px;border-bottom:1px solid var(--border);flex-shrink:0">
-      <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:11px;letter-spacing:2px;color:var(--accent);text-transform:uppercase;margin-bottom:6px">🔍 Buscar matrícula</div>
-      <div class="input-row">
-        <input class="form-input" id="segMatInput" type="text" placeholder="Introduce matrícula..."
-               style="text-transform:uppercase;font-weight:700;font-size:15px"
-               onkeydown="if(event.key==='Enter')segBuscarMaquina()">
-        <button onclick="segBuscarMaquina()"
-                style="padding:0 18px;background:var(--accent);border:none;border-radius:8px;color:#000;font-family:'Montserrat',sans-serif;font-weight:900;font-size:13px;cursor:pointer;flex-shrink:0">
-          BUSCAR
-        </button>
+    <!-- Tabs -->
+    <div class="mod-tabs" style="flex-shrink:0">
+      <button class="mod-tab-btn active" id="segTabEscaner" onclick="segSelTab('escaner')">📷 Escáner</button>
+      <button class="mod-tab-btn"        id="segTabInv"     onclick="segSelTab('inventario')">📦 Inventario</button>
+    </div>
+
+    <!-- ── TAB ESCÁNER ── -->
+    <div id="segPanelEscaner" style="display:flex;flex-direction:column;flex:1;overflow:hidden">
+      <!-- Buscador -->
+      <div style="padding:10px 14px 8px;border-bottom:1px solid var(--border);flex-shrink:0">
+        <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:11px;letter-spacing:2px;color:var(--accent);text-transform:uppercase;margin-bottom:6px">🔍 Buscar matrícula / código</div>
+        <div class="input-row">
+          <input class="form-input" id="segMatInput" type="text" placeholder="Matrícula o código..."
+                 style="text-transform:uppercase;font-weight:700;font-size:15px"
+                 onkeydown="if(event.key==='Enter')segBuscarCodigo()">
+          <button onclick="segBuscarCodigo()"
+                  style="padding:0 18px;background:var(--accent);border:none;border-radius:8px;color:#000;font-family:'Montserrat',sans-serif;font-weight:900;font-size:13px;cursor:pointer;flex-shrink:0">
+            BUSCAR
+          </button>
+        </div>
+      </div>
+      <!-- Cámara -->
+      <div style="padding:10px 14px 6px;flex-shrink:0">
+        <div class="cam-viewport" id="segCamViewport">
+          <div class="cam-idle" id="segCamIdle">
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+              <circle cx="12" cy="13" r="4"/>
+            </svg>
+            Pulsa ABRIR CÁMARA
+          </div>
+          <video id="segVideo" playsinline autoplay muted style="display:none"></video>
+          <canvas id="segCanvas" style="display:none"></canvas>
+          <div class="scan-frame" id="segScanFrame" style="display:none">
+            <div class="corner-bl"></div><div class="corner-br"></div>
+            <div class="scan-line"></div>
+          </div>
+          <div class="cam-ok" id="segCamOk" style="display:none">
+            ✅ LEÍDO
+            <div class="cam-ok-code" id="segCamOkCode"></div>
+          </div>
+        </div>
+        <div id="segActionsIdle" class="scan-actions">
+          <button class="btn-open-cam" onclick="segOpenCamera()">📷 ABRIR CÁMARA</button>
+        </div>
+        <div id="segActionsActive" class="scan-actions" style="display:none">
+          <button class="btn-capture" id="segBtnCapture" onclick="segCaptureOCR()">OCR</button>
+          <button class="btn-close-cam" onclick="segCloseCamera()">✕</button>
+        </div>
+        <div class="scan-hint" id="segScanHint"></div>
+      </div>
+      <!-- Resultado -->
+      <div style="flex:1;overflow-y:auto;padding:0 14px 80px" id="segResult"></div>
+    </div>
+
+    <!-- ── TAB INVENTARIO ── -->
+    <div id="segPanelInv" style="display:none;flex-direction:column;flex:1;overflow:hidden">
+      <!-- Barra superior -->
+      <div style="padding:10px 14px 8px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;gap:8px;align-items:center">
+        <input class="form-input" id="segInvSearch" type="text" placeholder="🔍 Buscar material..."
+               style="flex:1" oninput="segFiltrarInv()">
+        <button onclick="segMostrarFormNuevo()"
+                style="padding:0 14px;height:40px;background:var(--accent);border:none;border-radius:8px;color:#000;font-family:'Montserrat',sans-serif;font-weight:900;font-size:20px;cursor:pointer;flex-shrink:0">+</button>
+      </div>
+      <!-- Lista -->
+      <div style="flex:1;overflow-y:auto;padding:10px 14px 80px" id="segInvList">
+        <div class="empty-state">Cargando...</div>
+      </div>
+      <!-- Modal nuevo item -->
+      <div id="segModalNuevo" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:500;overflow-y:auto;padding:20px 14px">
+        <div style="background:var(--surface);border-radius:16px;padding:18px;max-width:400px;margin:auto">
+          <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:16px;margin-bottom:14px">📦 Nuevo material</div>
+          <div class="form-group">
+            <label class="form-label">Tipo de material</label>
+            <select class="form-select" id="segNuevoTipo" onchange="segActualizarModo()">
+              <option value="">Seleccionar...</option>
+            </select>
+          </div>
+          <div class="form-group" id="segNuevoCodigoGrp">
+            <label class="form-label">Código / Nº Serie</label>
+            <input class="form-input" id="segNuevoCodigo" type="text" placeholder="Ej: AR-00123" style="text-transform:uppercase">
+          </div>
+          <div class="form-group" id="segNuevoCantGrp" style="display:none">
+            <label class="form-label">Cantidad</label>
+            <input class="form-input" id="segNuevoCant" type="number" value="1" min="1">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Fecha caducidad (si aplica)</label>
+            <input class="form-input" id="segNuevoCad" type="date">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Notas</label>
+            <input class="form-input" id="segNuevoNotas" type="text" placeholder="Opcional...">
+          </div>
+          <div style="display:flex;gap:8px;margin-top:14px">
+            <button class="btn-primary" onclick="segGuardarNuevo()" style="flex:1">✅ GUARDAR</button>
+            <button onclick="segCerrarFormNuevo()" style="padding:12px 16px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);cursor:pointer">Cancelar</button>
+          </div>
+        </div>
       </div>
     </div>
 
-    <!-- Cámara -->
-    <div style="padding:10px 14px 6px;flex-shrink:0">
-      <div class="cam-viewport" id="segCamViewport">
-        <div class="cam-idle" id="segCamIdle">
-          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-            <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
-            <circle cx="12" cy="13" r="4"/>
-          </svg>
-          Pulsa ABRIR CÁMARA
-        </div>
-        <video id="segVideo" playsinline autoplay muted style="display:none"></video>
-        <canvas id="segCanvas" style="display:none"></canvas>
-        <div class="scan-frame" id="segScanFrame" style="display:none">
-          <div class="corner-bl"></div><div class="corner-br"></div>
-          <div class="scan-line"></div>
-        </div>
-        <div class="cam-ok" id="segCamOk" style="display:none">
-          ✅ LEÍDO
-          <div class="cam-ok-code" id="segCamOkCode"></div>
-        </div>
-      </div>
-      <div id="segActionsIdle" class="scan-actions">
-        <button class="btn-open-cam" onclick="segOpenCamera()">📷 ABRIR CÁMARA</button>
-      </div>
-      <div id="segActionsActive" class="scan-actions" style="display:none">
-        <button class="btn-capture" id="segBtnCapture" onclick="segCaptureOCR()">OCR</button>
-        <button class="btn-close-cam" onclick="segCloseCamera()">✕</button>
-      </div>
-      <div class="scan-hint" id="segScanHint"></div>
-    </div>
-
-    <!-- Resultado -->
-    <div style="flex:1;overflow-y:auto;padding:0 14px 80px" id="segResult"></div>
   </div>
 
   <!-- AJUSTES (5 tabs) -->
@@ -893,7 +948,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
         <div class="settings-section">
           <div class="settings-title">ℹ️ Acerca de</div>
           <div class="settings-row"><span>Aplicación</span><strong>Alejandra</strong></div>
-          <div class="settings-row"><span>Versión</span><strong>v3.6</strong></div>
+          <div class="settings-row"><span>Versión</span><strong>v3.7</strong></div>
           <div class="settings-row"><span>Backend</span><strong>Cloudflare Workers + D1</strong></div>
           <div class="settings-row"><span>Año</span><strong>2026</strong></div>
           <div style="margin-top:10px;text-align:center;font-size:11px;color:var(--muted);letter-spacing:1px">INVENTARIO · MAQUINARIA · CONTROL</div>
@@ -1786,7 +1841,7 @@ function segOnCode(codigo) {
   if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
   document.getElementById('segMatInput').value = codigo;
   setTimeout(() => segCloseCamera(), 1200);
-  segBuscarMaquina(codigo);
+  segBuscarCodigo(codigo);
 }
 
 async function segBuscarMaquina(mat) {
@@ -1862,6 +1917,252 @@ async function segBuscarMaquina(mat) {
   } catch {
     c.innerHTML = '<div style="padding:20px;text-align:center;color:var(--red);font-size:13px">❌ Error de conexión</div>';
   }
+}
+
+// ══════════════════════════════════════════════════════
+// SEGURIDAD — TABS + INVENTARIO
+// ══════════════════════════════════════════════════════
+
+function segSelTab(tab) {
+  document.getElementById('segTabEscaner').classList.toggle('active', tab === 'escaner');
+  document.getElementById('segTabInv').classList.toggle('active', tab === 'inventario');
+  document.getElementById('segPanelEscaner').style.display = tab === 'escaner' ? 'flex' : 'none';
+  document.getElementById('segPanelInv').style.display     = tab === 'inventario' ? 'flex' : 'none';
+  if (tab === 'inventario') segCargarInv();
+}
+
+// Buscar por código: primero en inventario seg, luego en máquinas
+async function segBuscarCodigo(cod) {
+  const mat = (cod || document.getElementById('segMatInput')?.value || '').trim().toUpperCase();
+  if (!mat) return;
+  segCloseCamera();
+
+  // 1. ¿Es un item del inventario seg?
+  try {
+    const r = await apiCall(`/buscar-item-seg/${encodeURIComponent(mat)}`);
+    const d = await r.json();
+    if (r.ok && d.ok) { segMostrarItemResult(d.data, d.historial || []); return; }
+  } catch {}
+
+  // 2. ¿Es una máquina (PEMP/Carretilla)?
+  segBuscarMaquina(mat);
+}
+
+// Mantener compatibilidad con llamada anterior
+function segBuscarMaquina(mat) {
+  mat = (mat || document.getElementById('segMatInput')?.value || '').trim().toUpperCase();
+  if (!mat) return toast('⚠️ Introduce la matrícula', 'err');
+  _segBuscarMaquinaInternal(mat);
+}
+
+async function _segBuscarMaquinaInternal(mat) {
+  const c = document.getElementById('segResult');
+  c.innerHTML = '<div style="padding:20px;text-align:center;color:var(--muted);font-size:13px">🔍 Buscando...</div>';
+  try {
+    const res  = await apiCall(`/buscar-maquina/${encodeURIComponent(mat)}`);
+    const data = await res.json();
+    if (!res.ok || !data.ok) {
+      // No encontrado en máquinas → ofrecer registrar en inventario
+      c.innerHTML = `<div style="padding:20px;text-align:center">
+        <div style="font-size:36px;margin-bottom:8px">🔍</div>
+        <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:15px;color:var(--muted)">No encontrado en máquinas</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:4px;margin-bottom:14px">${mat}</div>
+        <button onclick="segPreRegistrarInv('${mat}')"
+                style="padding:12px 20px;background:var(--accent);border:none;border-radius:8px;color:#000;font-family:'Montserrat',sans-serif;font-weight:900;font-size:13px;cursor:pointer">
+          📦 Registrar en inventario
+        </button>
+      </div>`;
+      return;
+    }
+    const item = data.data;
+    const tipo = data.tipo === 'pemp' ? 'PEMP' : 'Carretilla';
+    const hist = data.historial || [];
+    const estadoColor = item.estado === 'Disponible' ? 'var(--green)' : item.estado === 'Averiada' ? 'var(--red)' : 'var(--muted)';
+    const deptLabel = { electrico: '⚡ Eléctrico', mecanicas: '🔧 Mecánicas', seguridad: '🔺 Seguridad' };
+    const fila = (label, valor, color) => valor
+      ? `<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--border)">
+           <span style="font-size:12px;color:var(--muted)">${label}</span>
+           <span style="font-family:'Montserrat',sans-serif;font-weight:700;font-size:13px;color:${color||'var(--text)'}">${valor}</span>
+         </div>` : '';
+    const accionLabel = { entrada:'📥 Entrada', devolucion:'📤 Devolución', averia:'🔴 Avería', reparacion:'🟢 Reparado', transferencia:'↔️ Transferencia' };
+    const histHtml = hist.length
+      ? hist.map(h => `<div style="display:flex;gap:8px;align-items:flex-start;padding:7px 0;border-bottom:1px solid var(--border)">
+          <span style="font-size:11px;min-width:80px;color:var(--muted)">${h.fecha||''}</span>
+          <div style="flex:1"><div style="font-size:12px;font-weight:700;color:var(--text)">${accionLabel[h.accion]||h.accion}</div>
+          ${h.usuario?`<div style="font-size:11px;color:var(--muted)">👤 ${h.usuario}</div>`:''}
+          ${h.notas?`<div style="font-size:11px;color:var(--muted)">${h.notas}</div>`:''}</div></div>`).join('')
+      : '<div style="font-size:12px;color:var(--muted);padding:8px 0">Sin registros</div>';
+    c.innerHTML = `<div style="padding:14px 0">
+      <div style="background:var(--surface);border:2px solid var(--accent);border-radius:14px;padding:14px;margin-bottom:12px">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+          <div style="background:var(--accent);color:#000;font-family:'Montserrat',sans-serif;font-weight:900;font-size:11px;padding:3px 8px;border-radius:6px">${tipo}</div>
+          <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:20px;color:var(--text);letter-spacing:1px">${item.matricula}</div>
+          <div style="margin-left:auto;font-weight:900;font-size:13px;color:${estadoColor}">● ${item.estado||'—'}</div>
+        </div>
+        ${fila('Tipo', item.tipo)}${fila('Marca', item.marca)}${fila('Proveedor', item.proveedor)}
+        ${fila('Energía', item.energia)}${fila('Obra', item.obra_nombre)}
+        ${fila('Departamento', deptLabel[item.departamento]||item.departamento)}
+        ${fila('Fecha entrada', item.fecha_entrada)}${fila('Última revisión', item.fecha_ultima_revision)}
+        ${fila('Próxima revisión', item.fecha_proxima_revision, 'var(--blue)')}
+        ${item.fecha_averia?fila('⚠️ Avería', item.fecha_averia, 'var(--red)'):''}
+        ${item.fecha_reparacion?fila('✅ Reparación', item.fecha_reparacion, 'var(--green)'):''}
+        ${item.notas?`<div style="margin-top:8px;padding:8px;background:var(--surface2);border-radius:8px;font-size:12px;color:var(--muted)">${item.notas}</div>`:''}
+      </div>
+      <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:11px;letter-spacing:2px;color:var(--muted);text-transform:uppercase;margin-bottom:6px">Historial</div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:0 12px">${histHtml}</div>
+    </div>`;
+  } catch {
+    c.innerHTML = '<div style="padding:20px;text-align:center;color:var(--red);font-size:13px">❌ Error de conexión</div>';
+  }
+}
+
+function segMostrarItemResult(item, hist) {
+  const c = document.getElementById('segResult');
+  const estadoColor = item.estado === 'disponible' ? 'var(--green)' : item.estado === 'en_uso' ? 'var(--blue)' : item.estado === 'baja' ? 'var(--muted)' : 'var(--red)';
+  const histHtml = hist.length
+    ? hist.map(h => `<div style="display:flex;gap:8px;padding:7px 0;border-bottom:1px solid var(--border)">
+        <span style="font-size:11px;min-width:80px;color:var(--muted)">${h.fecha||''}</span>
+        <div style="flex:1"><div style="font-size:12px;font-weight:700">${h.accion}</div>
+        ${h.destino?`<div style="font-size:11px;color:var(--blue)">→ ${h.destino}</div>`:''}
+        ${h.usuario?`<div style="font-size:11px;color:var(--muted)">👤 ${h.usuario}</div>`:''}</div></div>`).join('')
+    : '<div style="font-size:12px;color:var(--muted);padding:8px 0">Sin movimientos</div>';
+  c.innerHTML = `<div style="padding:14px 0">
+    <div style="background:var(--surface);border:2px solid var(--accent);border-radius:14px;padding:14px;margin-bottom:12px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+        <div style="background:var(--accent);color:#000;font-family:'Montserrat',sans-serif;font-weight:900;font-size:11px;padding:3px 8px;border-radius:6px">📦 ${item.tipo_material}</div>
+        <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:18px">${item.codigo||item.nombre}</div>
+        <div style="margin-left:auto;font-weight:900;font-size:12px;color:${estadoColor}">● ${item.estado}</div>
+      </div>
+      ${item.destino_actual?`<div style="font-size:13px;margin-bottom:6px">🏗 Destino: <strong>${item.destino_actual}</strong></div>`:''}
+      ${item.fecha_caducidad?`<div style="font-size:13px;margin-bottom:6px;color:var(--red)">📅 Caduca: ${item.fecha_caducidad}</div>`:''}
+      ${item.fecha_entrada?`<div style="font-size:12px;color:var(--muted)">Entrada: ${item.fecha_entrada}</div>`:''}
+      <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
+        ${item.estado!=='baja'?`
+        <button onclick="segAccionItem(${item.id},'salida')" style="flex:1;padding:10px;background:var(--blue);border:none;border-radius:8px;color:#fff;font-family:'Montserrat',sans-serif;font-weight:900;font-size:12px;cursor:pointer">📤 SALIDA</button>
+        ${item.estado==='en_uso'?`<button onclick="segAccionItem(${item.id},'devolucion')" style="flex:1;padding:10px;background:var(--green);border:none;border-radius:8px;color:#000;font-family:'Montserrat',sans-serif;font-weight:900;font-size:12px;cursor:pointer">📥 DEVOLUCIÓN</button>`:''}
+        <button onclick="segAccionItem(${item.id},'baja')" style="padding:10px 14px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--red);font-family:'Montserrat',sans-serif;font-weight:900;font-size:12px;cursor:pointer">🗑️ BAJA</button>`:''}
+      </div>
+    </div>
+    <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:11px;letter-spacing:2px;color:var(--muted);text-transform:uppercase;margin-bottom:6px">Historial</div>
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:0 12px">${histHtml}</div>
+  </div>`;
+}
+
+async function segAccionItem(id, accion) {
+  let destino = '', cantidad = 1, notas = '';
+  if (accion === 'salida') {
+    destino = prompt('¿A qué obra o lugar va?') || '';
+    if (destino === null) return;
+  }
+  if (accion === 'baja' && !confirm('¿Dar de baja este material?')) return;
+  try {
+    const s = getSession();
+    const res = await apiCall(`/inventario-seg/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify({ accion, cantidad, destino, notas, usuario: s?.nombre || '' })
+    });
+    const d = await res.json();
+    if (res.ok) { toast(`✅ ${d.mensaje}`, 'ok'); segBuscarCodigo(document.getElementById('segMatInput').value); }
+    else toast(`❌ ${d.error}`, 'err');
+  } catch { toast('❌ Error de conexión', 'err'); }
+}
+
+// Inventario — lista completa
+let segInvTodos = [];
+async function segCargarInv() {
+  const c = document.getElementById('segInvList');
+  c.innerHTML = '<div class="empty-state">Cargando...</div>';
+  try {
+    const res = await apiCall('/inventario-seg');
+    segInvTodos = await res.json();
+    segRenderInv(segInvTodos);
+  } catch { c.innerHTML = '<div style="color:var(--red);font-size:13px;padding:14px">❌ Error</div>'; }
+}
+
+function segFiltrarInv() {
+  const q = document.getElementById('segInvSearch').value.toLowerCase();
+  segRenderInv(q ? segInvTodos.filter(i => (i.tipo_material+i.codigo+i.nombre).toLowerCase().includes(q)) : segInvTodos);
+}
+
+function segRenderInv(items) {
+  const c = document.getElementById('segInvList');
+  if (!items.length) { c.innerHTML = '<div class="empty-state">Sin material registrado</div>'; return; }
+  const estadoColor = { disponible: 'var(--green)', en_uso: 'var(--blue)', caducado: 'var(--red)', baja: 'var(--muted)' };
+  c.innerHTML = items.map(i => `
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:8px;cursor:pointer"
+         onclick="segVerItem(${i.id})">
+      <div style="display:flex;align-items:center;gap:8px">
+        <div style="flex:1">
+          <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:14px">${i.codigo||i.nombre}</div>
+          <div style="font-size:12px;color:var(--muted)">${i.tipo_material}
+            ${i.modo==='cantidad'?` · Stock: ${i.cantidad_disponible}/${i.cantidad_total}`:''}
+            ${i.fecha_caducidad?` · Cad: ${i.fecha_caducidad}`:''}
+          </div>
+        </div>
+        <div style="font-size:11px;font-weight:700;color:${estadoColor[i.estado]||'var(--muted)'}">● ${i.estado}</div>
+      </div>
+      ${i.destino_actual?`<div style="font-size:11px;color:var(--blue);margin-top:4px">🏗 ${i.destino_actual}</div>`:''}
+    </div>`).join('');
+}
+
+async function segVerItem(id) {
+  const item = segInvTodos.find(i => i.id === id);
+  if (!item) return;
+  const hist = await apiCall(`/buscar-item-seg/${encodeURIComponent(item.codigo||String(id))}`).then(r=>r.json()).catch(()=>({historial:[]}));
+  segSelTab('escaner');
+  document.getElementById('segMatInput').value = item.codigo || '';
+  segMostrarItemResult(item, hist.historial || []);
+}
+
+// Nuevo item
+let segTiposMat = [];
+async function segMostrarFormNuevo() {
+  if (!segTiposMat.length) {
+    const r = await apiCall('/tipos-material-seg').then(res=>res.json()).catch(()=>[]);
+    segTiposMat = r;
+    const sel = document.getElementById('segNuevoTipo');
+    sel.innerHTML = '<option value="">Seleccionar...</option>' + r.map(t=>`<option value="${t.nombre}" data-modo="${t.tipo}">${t.nombre}</option>`).join('');
+  }
+  document.getElementById('segModalNuevo').style.display = 'block';
+}
+function segCerrarFormNuevo() { document.getElementById('segModalNuevo').style.display = 'none'; }
+function segActualizarModo() {
+  const sel = document.getElementById('segNuevoTipo');
+  const opt = sel.options[sel.selectedIndex];
+  const modo = opt?.dataset?.modo || 'individual';
+  document.getElementById('segNuevoCodigoGrp').style.display = modo === 'individual' ? '' : 'none';
+  document.getElementById('segNuevoCantGrp').style.display   = modo === 'cantidad'   ? '' : 'none';
+}
+
+function segPreRegistrarInv(codigo) {
+  segSelTab('inventario');
+  segMostrarFormNuevo();
+  setTimeout(() => { document.getElementById('segNuevoCodigo').value = codigo; }, 100);
+}
+
+async function segGuardarNuevo() {
+  const tipo  = document.getElementById('segNuevoTipo').value;
+  const cod   = document.getElementById('segNuevoCodigo').value.trim();
+  const cant  = parseInt(document.getElementById('segNuevoCant').value) || 1;
+  const cad   = document.getElementById('segNuevoCad').value;
+  const notas = document.getElementById('segNuevoNotas').value.trim();
+  const sel   = document.getElementById('segNuevoTipo');
+  const modo  = sel.options[sel.selectedIndex]?.dataset?.modo || 'individual';
+  if (!tipo) return toast('⚠️ Selecciona el tipo', 'err');
+  if (modo === 'individual' && !cod) return toast('⚠️ Introduce el código', 'err');
+  const s = getSession();
+  try {
+    const res = await apiCall('/inventario-seg', {
+      method: 'POST',
+      body: JSON.stringify({ tipo_material: tipo, modo, codigo: cod || null, cantidad_total: cant, fecha_caducidad: cad || null, notas, registrado_por: s?.nombre || '' })
+    });
+    const d = await res.json();
+    if (res.ok) {
+      toast(`✅ ${d.mensaje}`, 'ok');
+      segCerrarFormNuevo();
+      segCargarInv();
+    } else toast(`❌ ${d.error}`, 'err');
+  } catch { toast('❌ Error de conexión', 'err'); }
 }
 
 // ══════════════════════════════════════════════════════

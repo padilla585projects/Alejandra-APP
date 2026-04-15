@@ -190,6 +190,25 @@ export default {
         return await buscarMaquina(mat, request, env);
       }
 
+      // ── Inventario Seguridad ───────────────────────────────────────────────
+      if (path === '/inventario-seg'           && method === 'GET')    return await getInventarioSeg(request, env);
+      if (path === '/inventario-seg'           && method === 'POST')   return await crearItemSeg(request, env);
+      if (path.startsWith('/inventario-seg/')) {
+        const segId = parseInt(path.split('/inventario-seg/')[1]);
+        if (method === 'DELETE') return await eliminarItemSeg(segId, request, env);
+        if (method === 'PUT')    return await moverItemSeg(segId, request, env);
+      }
+      if (path.startsWith('/buscar-item-seg/') && method === 'GET') {
+        const cod = decodeURIComponent(path.split('/buscar-item-seg/')[1]);
+        return await buscarItemSeg(cod, env);
+      }
+      if (path === '/tipos-material-seg'       && method === 'GET')    return await getCatalogo('tipos_material_seg', env);
+      if (path === '/tipos-material-seg'       && method === 'POST')   return await addTipoMaterialSeg(request, env);
+      if (path.startsWith('/tipos-material-seg/') && method === 'DELETE') {
+        const tid = parseInt(path.split('/tipos-material-seg/')[1]);
+        return await delCatalogo('tipos_material_seg', tid, env);
+      }
+
       // ── Otros (legacy/extras) ─────────────────────────────────────────────
       if (path === '/logs'         && method === 'GET')   return await getLogs(request, env);
       if (path === '/historial'    && method === 'GET')   return await getHistorial(request, env);
@@ -1305,7 +1324,7 @@ async function syncSheets(env) {
     const sheetNames = sheetsActuales.map(s => s.properties.title);
 
     // Nombres de pestañas sin emojis en URL (seguros para la API de Sheets)
-    const tabsNecesarias = ['Elec-Bobinas', 'Elec-PEMP', 'Elec-Carretillas', 'Mec-PEMP', 'Mec-Carretillas'];
+    const tabsNecesarias = ['Elec-Bobinas', 'Elec-PEMP', 'Elec-Carretillas', 'Mec-PEMP', 'Mec-Carretillas', 'Seg-Inventario'];
     const tabsAntiguas   = ['Bobinas', 'PEMP', 'Carretillas', '⚡ Bobinas', '⚡ PEMP', '⚡ Carretillas', '🔧 PEMP', '🔧 Carretillas'];
 
     // Añadir pestañas que faltan
@@ -1376,7 +1395,15 @@ async function syncSheets(env) {
     ).bind('mecanicas').all();
     await writeTab('Mec-Carretillas', [cabCarretillas, ...carretillasMec.map(fmtC)]);
 
-    console.log(`Sheets OK: ${bobinasElec.length} Elec-Bob, ${pempElec.length} Elec-PEMP, ${carretillasElec.length} Elec-Carr, ${pempMec.length} Mec-PEMP, ${carretillasMec.length} Mec-Carr`);
+    // ── SEGURIDAD ─────────────────────────────────────────────────────────────
+    const cabSegInv = ['Tipo', 'Modo', 'Código/Serie', 'Nombre', 'Cantidad Total', 'Disponible', 'Estado', 'Fecha Entrada', 'Fecha Caducidad', 'Destino Actual', 'Registrado por', 'Notas'];
+    const { results: segItems } = await env.DB.prepare(
+      'SELECT * FROM inventario_seg ORDER BY tipo_material, created_at DESC'
+    ).all();
+    const fmtSeg = s => [s.tipo_material, s.modo, s.codigo||'', s.nombre||'', s.cantidad_total||1, s.cantidad_disponible||1, s.estado||'disponible', s.fecha_entrada||'', s.fecha_caducidad||'', s.destino_actual||'', s.registrado_por||'', s.notas||''];
+    await writeTab('Seg-Inventario', [cabSegInv, ...segItems.map(fmtSeg)]);
+
+    console.log(`Sheets OK: ${bobinasElec.length} Elec-Bob, ${pempElec.length} Elec-PEMP, ${carretillasElec.length} Elec-Carr, ${pempMec.length} Mec-PEMP, ${carretillasMec.length} Mec-Carr, ${segItems.length} Seg-Inv`);
   } catch (e) {
     console.error('Error sync Sheets:', e.message);
     // Guardar error en D1 para verlo en Ajustes → Logs
@@ -1548,6 +1575,129 @@ Si no puedes leer ningún código, responde: NO_LEIDO`;
 }
 
 // ════════════════════════════════════════════════════════════════════════════
+// INVENTARIO SEGURIDAD
+// ════════════════════════════════════════════════════════════════════════════
+
+async function getInventarioSeg(request, env) {
+  const { isSuperadmin, isSeguridad } = getAuth(request, env);
+  if (!isSuperadmin && !isSeguridad) return err('No autorizado', 403);
+  const url = new URL(request.url);
+  const q = url.searchParams.get('q');
+  let sql = 'SELECT * FROM inventario_seg WHERE 1=1';
+  const params = [];
+  if (q) { sql += ' AND (tipo_material LIKE ? OR codigo LIKE ? OR nombre LIKE ?)'; params.push(`%${q}%`,`%${q}%`,`%${q}%`); }
+  sql += ' ORDER BY created_at DESC';
+  const { results } = await env.DB.prepare(sql).bind(...params).all();
+  return json(results);
+}
+
+async function buscarItemSeg(codigo, env) {
+  const item = await env.DB.prepare('SELECT * FROM inventario_seg WHERE codigo = ?').bind(codigo.trim().toUpperCase()).first();
+  if (!item) return json({ ok: false, error: 'No encontrado' }, 404);
+  const hist = await env.DB.prepare('SELECT * FROM movimientos_seg WHERE item_id = ? ORDER BY fecha DESC LIMIT 10').bind(item.id).all();
+  return json({ ok: true, data: item, historial: hist.results });
+}
+
+async function crearItemSeg(request, env) {
+  const { isSuperadmin, isSeguridad, usuario } = getAuth(request, env);
+  if (!isSuperadmin && !isSeguridad) return err('No autorizado', 403);
+  const body = await request.json().catch(() => ({}));
+  const { tipo_material, modo = 'individual', codigo, nombre, cantidad_total = 1, fecha_entrada, fecha_caducidad, notas } = body;
+  if (!tipo_material) return err('Falta tipo_material');
+  if (modo === 'individual' && !codigo) return err('Falta el código identificador');
+  const cod = codigo ? codigo.trim().toUpperCase() : null;
+  const fecha = fecha_entrada || fechaEspana();
+  const reg = usuario || '';
+  try {
+    const r = await env.DB.prepare(
+      `INSERT INTO inventario_seg (tipo_material, modo, codigo, nombre, cantidad_total, cantidad_disponible, estado, fecha_entrada, fecha_caducidad, notas, registrado_por)
+       VALUES (?, ?, ?, ?, ?, ?, 'disponible', ?, ?, ?, ?)`
+    ).bind(tipo_material, modo, cod, nombre || tipo_material, cantidad_total, cantidad_total, fecha, fecha_caducidad || null, notas || '', reg).run();
+    const id = r.meta.last_row_id;
+    await env.DB.prepare('INSERT INTO movimientos_seg (item_id, accion, cantidad, usuario, fecha) VALUES (?, ?, ?, ?, ?)').bind(id, 'entrada', cantidad_total, reg, fecha).run();
+    if (fecha_caducidad) {
+      sendTelegram(env, `📦 <b>Nuevo material Seguridad</b>\n🔖 ${cod || tipo_material}  📋 ${tipo_material}\n📅 Caduca: ${fecha_caducidad}\n👤 ${reg}`);
+    }
+    syncSheets(env); // fire & forget
+    return json({ ok: true, id, mensaje: `${tipo_material} registrado` }, 201);
+  } catch(e) {
+    if (e.message?.includes('UNIQUE')) return err(`El código ${cod} ya está registrado`, 409);
+    throw e;
+  }
+}
+
+async function moverItemSeg(id, request, env) {
+  const { isSuperadmin, isSeguridad, usuario } = getAuth(request, env);
+  if (!isSuperadmin && !isSeguridad) return err('No autorizado', 403);
+  const item = await env.DB.prepare('SELECT * FROM inventario_seg WHERE id = ?').bind(id).first();
+  if (!item) return err('Item no encontrado', 404);
+  const body = await request.json().catch(() => ({}));
+  const { accion, cantidad = 1, destino, notas } = body;
+  const fecha = fechaEspana();
+
+  if (accion === 'salida') {
+    if (item.modo === 'individual') {
+      if (item.estado !== 'disponible') return err('El item no está disponible', 409);
+      await env.DB.prepare('UPDATE inventario_seg SET estado = ?, destino_actual = ? WHERE id = ?').bind('en_uso', destino || '', id).run();
+    } else {
+      const nueva = item.cantidad_disponible - cantidad;
+      if (nueva < 0) return err(`No hay suficiente stock (disponible: ${item.cantidad_disponible})`, 409);
+      await env.DB.prepare('UPDATE inventario_seg SET cantidad_disponible = ?, estado = ?, destino_actual = ? WHERE id = ?').bind(nueva, nueva === 0 ? 'en_uso' : 'disponible', destino || '', id).run();
+    }
+    await env.DB.prepare('INSERT INTO movimientos_seg (item_id, accion, cantidad, destino, usuario, notas, fecha) VALUES (?, ?, ?, ?, ?, ?, ?)').bind(id, 'salida', cantidad, destino || '', usuario || '', notas || '', fecha).run();
+    if (destino) sendTelegram(env, `📤 <b>Material Seguridad — Salida</b>\n🔖 ${item.codigo || item.nombre}  📋 ${item.tipo_material}\n🏗 Destino: ${destino}\n👤 ${usuario || '—'}`);
+    syncSheets(env);
+    return json({ ok: true, mensaje: 'Salida registrada' });
+  }
+
+  if (accion === 'devolucion') {
+    if (item.modo === 'individual') {
+      await env.DB.prepare('UPDATE inventario_seg SET estado = ?, destino_actual = NULL WHERE id = ?').bind('disponible', id).run();
+    } else {
+      const nueva = Math.min(item.cantidad_disponible + cantidad, item.cantidad_total);
+      await env.DB.prepare('UPDATE inventario_seg SET cantidad_disponible = ?, estado = ?, destino_actual = NULL WHERE id = ?').bind(nueva, 'disponible', id).run();
+    }
+    await env.DB.prepare('INSERT INTO movimientos_seg (item_id, accion, cantidad, usuario, notas, fecha) VALUES (?, ?, ?, ?, ?, ?)').bind(id, 'devolucion', cantidad, usuario || '', notas || '', fecha).run();
+    syncSheets(env);
+    return json({ ok: true, mensaje: 'Devolución registrada' });
+  }
+
+  if (accion === 'baja') {
+    await env.DB.prepare('UPDATE inventario_seg SET estado = ? WHERE id = ?').bind('baja', id).run();
+    await env.DB.prepare('INSERT INTO movimientos_seg (item_id, accion, cantidad, usuario, notas, fecha) VALUES (?, ?, ?, ?, ?, ?)').bind(id, 'baja', cantidad, usuario || '', notas || '', fecha).run();
+    sendTelegram(env, `🗑️ <b>Material Seguridad — Baja</b>\n🔖 ${item.codigo || item.nombre}  📋 ${item.tipo_material}\n👤 ${usuario || '—'}`);
+    syncSheets(env);
+    return json({ ok: true, mensaje: 'Dado de baja' });
+  }
+
+  return err('Acción no reconocida', 400);
+}
+
+async function eliminarItemSeg(id, request, env) {
+  const { isSuperadmin } = getAuth(request, env);
+  if (!isSuperadmin) return err('Solo el superadmin puede eliminar', 403);
+  await env.DB.prepare('DELETE FROM inventario_seg WHERE id = ?').bind(id).run();
+  await env.DB.prepare('DELETE FROM movimientos_seg WHERE item_id = ?').bind(id).run();
+  syncSheets(env);
+  return json({ ok: true, mensaje: 'Eliminado' });
+}
+
+async function addTipoMaterialSeg(request, env) {
+  const { isSuperadmin, isSeguridad } = getAuth(request, env);
+  if (!isSuperadmin && !isSeguridad) return err('No autorizado', 403);
+  const body = await request.json().catch(() => ({}));
+  const { nombre, tipo = 'individual', descripcion } = body;
+  if (!nombre) return err('Falta el nombre');
+  try {
+    await env.DB.prepare('INSERT INTO tipos_material_seg (nombre, tipo, descripcion) VALUES (?, ?, ?)').bind(nombre.trim(), tipo, descripcion || '').run();
+    return json({ ok: true, mensaje: `Tipo "${nombre}" añadido` }, 201);
+  } catch(e) {
+    if (e.message?.includes('UNIQUE')) return err(`El tipo "${nombre}" ya existe`, 409);
+    throw e;
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
 // ALERTAS DIARIAS (Cron)
 // ════════════════════════════════════════════════════════════════════════════
 
@@ -1593,6 +1743,24 @@ async function alertasDiarias(env) {
       await sendTelegram(env,
         `📅 <b>Revisiones próximas o vencidas</b>\n\n` + revisiones.join('\n')
       );
+    }
+
+    // 3. Material Seguridad con caducidad próxima o vencida
+    const DIAS_CAD = 30;
+    const limiteCad = new Date(hoy); limiteCad.setDate(limiteCad.getDate() + DIAS_CAD);
+    const limiteCadStr = limiteCad.toISOString().slice(0, 10);
+    const matCad = await env.DB.prepare(
+      `SELECT tipo_material, codigo, nombre, fecha_caducidad FROM inventario_seg
+       WHERE fecha_caducidad IS NOT NULL AND fecha_caducidad != '' AND fecha_caducidad <= ? AND estado != 'baja'`
+    ).bind(limiteCadStr).all();
+    if (matCad.results?.length) {
+      const lineas = matCad.results.map(m => {
+        const dias = Math.floor((new Date(m.fecha_caducidad) - hoy) / 86400000);
+        return dias < 0
+          ? `⛔ ${m.codigo||m.nombre} (${m.tipo_material}) — CADUCADO hace ${Math.abs(dias)} días`
+          : `⚠️ ${m.codigo||m.nombre} (${m.tipo_material}) — caduca en ${dias} días (${m.fecha_caducidad})`;
+      });
+      await sendTelegram(env, `🏷️ <b>Material Seguridad — Caducidad próxima</b>\n\n` + lineas.join('\n'));
     }
 
   } catch(e) {
