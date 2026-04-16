@@ -5,7 +5,7 @@
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 16/04/2026
-VERSIÓN ACTUAL: v4.2 (nueva app) / v4.1 (app vieja)
+VERSIÓN ACTUAL: v4.3 (nueva app) / v4.1 (app vieja)
 
 REPO:    https://github.com/padilla585/Bobinaap.git  (branch: main)
 WORKER:  https://gestibobina-proxy.padilla585.workers.dev
@@ -227,6 +227,16 @@ v4.0  |  15/04/2026  [SOLO NUEVA APP]
   - Todos los datos existentes migrados con empresa_id=1 automáticamente
   - Índices creados: idx_*_empresa en tablas principales
   - SW bumpeado a alejandra-v4.0
+
+v4.3  |  16/04/2026  [SOLO NUEVA APP]
+  - Modal de detalle para ítems del inventario de Seguridad
+    · Al pulsar un ítem ya NO cambia a la pestaña escáner
+    · Se abre un modal (bottom sheet) con toda la info: tipo, estado, stock, destino, caducidad, notas
+    · Botones de acción (SALIDA / DEVOLUCIÓN / BAJA) dentro del modal
+    · Historial de movimientos incluido
+    · Se cierra tocando fuera o con ×
+  - SW bumpeado a alejandra-v4.3
+  - Sugerencia #25 resuelta
 
 v4.2  |  16/04/2026  [SOLO NUEVA APP]
   - Ideas & Feedback rediseñado con sistema de estados (pendiente/en_progreso/resuelto)
