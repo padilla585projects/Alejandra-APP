@@ -1,5 +1,5 @@
 // Cambia este número cada vez que actualices la app
-const CACHE = 'alejandra-v4.6';
+const CACHE = 'alejandra-v4.7';
 
 self.addEventListener('install', e => {
   self.skipWaiting();
@@ -13,7 +13,7 @@ self.addEventListener('message', e => {
 self.addEventListener('activate', e => {
   e.waitUntil(
     caches.keys()
-      .then(keys => Promise.all(keys.map(k => caches.delete(k))))
+      .then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k))))
       .then(() => self.clients.claim())
       .then(() => self.clients.matchAll({ type: 'window', includeUncontrolled: true }))
       .then(clients => clients.forEach(c => c.postMessage({ tipo: 'SW_ACTUALIZADO', cache: CACHE })))
