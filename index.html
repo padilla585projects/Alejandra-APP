@@ -45,10 +45,10 @@ body{background:var(--bg);color:var(--text);font-family:'Poppins',sans-serif;fon
 
 /* ── HEADER ── */
 header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6px 10px;display:flex;align-items:center;gap:6px;flex-shrink:0;z-index:100;min-height:44px}
-.header-logo{display:none}
+.header-logo{display:flex;align-items:center;flex-shrink:0}
 .header-center{flex:1;display:flex;align-items:center;justify-content:center;min-width:0;gap:4px;overflow:hidden}
 .obra-label{font-family:'Montserrat',sans-serif;font-weight:700;font-size:11px;color:var(--accent);letter-spacing:.3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:120px}
-.obra-select{background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:'Montserrat',sans-serif;font-weight:700;font-size:11px;padding:3px 6px;cursor:pointer;max-width:110px;min-width:0}
+.obra-select{background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:'Montserrat',sans-serif;font-weight:700;font-size:11px;padding:3px 6px;cursor:pointer;max-width:160px;min-width:0;flex:1}
 .user-chip{display:flex;align-items:center;gap:4px;background:var(--surface2);border:1px solid var(--border);border-radius:20px;padding:3px 8px;font-family:'Montserrat',sans-serif;font-weight:700;font-size:10px;color:var(--text);white-space:nowrap;max-width:100px;overflow:hidden;text-overflow:ellipsis;flex-shrink:0}
 .conn-dot{width:10px;height:10px;border-radius:50%;background:var(--muted);flex-shrink:0;transition:background .4s,box-shadow .4s}
 .conn-dot.ok{background:var(--green);box-shadow:0 0 6px rgba(34,197,94,.7)}
@@ -423,7 +423,8 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
   </div>
 
   <!-- HOME SCREEN -->
-  <div id="screenHome" class="screen flex-screen active" style="padding:0;height:100%">
+  <div id="screenHome" class="screen flex-screen active" style="padding:0;height:100%;position:relative">
+    <div style="position:absolute;bottom:8px;right:12px;font-family:'Montserrat',sans-serif;font-size:9px;color:var(--muted);opacity:.5;z-index:10;pointer-events:none">v4.5</div>
     <div class="module-grid" style="flex:1">
       <div class="module-card" id="cardBobinas" onclick="selectModule('bobinas')">
         <div class="module-emoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="52" height="52"><rect x="28" y="38" width="44" height="32" rx="3" fill="#8B6914"/><rect x="28" y="38" width="8" height="32" rx="1" fill="#A07820" opacity="0.6"/><rect x="37" y="38" width="8" height="32" rx="1" fill="#7a5c10" opacity="0.4"/><rect x="46" y="38" width="8" height="32" rx="1" fill="#A07820" opacity="0.5"/><rect x="55" y="38" width="8" height="32" rx="1" fill="#7a5c10" opacity="0.4"/><rect x="64" y="38" width="8" height="32" rx="1" fill="#A07820" opacity="0.3"/><ellipse cx="50" cy="70" rx="30" ry="8" fill="#9B7420"/><ellipse cx="50" cy="70" rx="30" ry="8" fill="none" stroke="#7a5c10" stroke-width="1"/><line x1="22" y1="68" x2="78" y2="68" stroke="#7a5c10" stroke-width="0.8" opacity="0.5"/><line x1="24" y1="72" x2="76" y2="72" stroke="#c49530" stroke-width="0.6" opacity="0.4"/><circle cx="32" cy="70" r="1.5" fill="#f97316"/><circle cx="50" cy="70" r="1.5" fill="#f97316"/><circle cx="68" cy="70" r="1.5" fill="#f97316"/><ellipse cx="50" cy="36" rx="32" ry="10" fill="#C4A030"/><line x1="20" y1="34" x2="80" y2="34" stroke="#9B7820" stroke-width="1" opacity="0.7"/><line x1="20" y1="36" x2="80" y2="36" stroke="#e8c060" stroke-width="0.8" opacity="0.4"/><line x1="20" y1="38" x2="80" y2="38" stroke="#9B7820" stroke-width="1" opacity="0.5"/><ellipse cx="50" cy="35" rx="32" ry="10" fill="none" stroke="#e8c870" stroke-width="0.8" opacity="0.5"/><circle cx="30" cy="35" r="2" fill="#f97316" stroke="#c97316" stroke-width="0.5"/><circle cx="50" cy="32" r="2" fill="#f97316" stroke="#c97316" stroke-width="0.5"/><circle cx="70" cy="35" r="2" fill="#f97316" stroke="#c97316" stroke-width="0.5"/><circle cx="50" cy="39" r="2" fill="#f97316" stroke="#c97316" stroke-width="0.5"/><ellipse cx="50" cy="36" rx="5" ry="3" fill="#3a2a08"/><ellipse cx="50" cy="35.5" rx="4" ry="2" fill="#1a1208"/></svg></div>
@@ -1027,7 +1028,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
         <div class="settings-section">
           <div class="settings-title">ℹ️ Acerca de</div>
           <div class="settings-row"><span>Aplicación</span><strong>Alejandra</strong></div>
-          <div class="settings-row"><span>Versión</span><strong>v4.4</strong></div>
+          <div class="settings-row"><span>Versión</span><strong>v4.5</strong></div>
           <div class="settings-row"><span>Backend</span><strong>Cloudflare Workers + D1</strong></div>
           <div class="settings-row"><span>Año</span><strong>2026</strong></div>
           <div style="margin-top:10px;text-align:center;font-size:11px;color:var(--muted);letter-spacing:1px">INVENTARIO · MAQUINARIA · CONTROL</div>
@@ -1468,7 +1469,7 @@ async function cargarObrasHeader() {
     const obras = await res.json();
     const sel = document.getElementById('headerObraSelect');
     const s = getSession();
-    sel.innerHTML = '<option value="">— Todas las obras —</option>' +
+    sel.innerHTML = '<option value="">Todas las obras</option>' +
       obras.map(o => `<option value="${o.id}" ${s.obra_id == o.id ? 'selected' : ''}>${o.nombre}</option>`).join('');
   } catch {}
 }
