@@ -257,6 +257,15 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
 /* Dept pill superadmin */
 .dept-pill{display:flex;align-items:center;gap:5px;background:var(--surface2);border:1px solid var(--accent);border-radius:20px;padding:4px 10px;font-family:'Montserrat',sans-serif;font-weight:700;font-size:11px;color:var(--accent);cursor:pointer;transition:all .2s;white-space:nowrap;flex-shrink:0}
 .dept-pill:active{opacity:.7}
+/* Filtros sugerencias */
+.sug-filter{padding:4px 10px;border-radius:20px;border:1px solid var(--border);background:var(--surface);color:var(--muted);font-size:11px;font-weight:600;cursor:pointer;transition:all .2s;white-space:nowrap}
+.sug-filter:hover{border-color:var(--accent);color:var(--accent)}
+.sug-active{background:var(--accent);color:#000;border-color:var(--accent)}
+/* Badges estado sugerencia */
+.sug-estado{display:inline-block;padding:2px 8px;border-radius:12px;font-size:10px;font-weight:700;text-transform:uppercase}
+.sug-pendiente{background:#f97316;color:#fff}
+.sug-progreso{background:#3b82f6;color:#fff}
+.sug-resuelto{background:#22c55e;color:#fff}
 /* Badge contador ideas */
 .badge-counter{position:absolute;top:3px;right:6px;background:var(--red);color:#fff;font-family:'Montserrat',sans-serif;font-weight:900;font-size:9px;min-width:15px;height:15px;border-radius:8px;display:flex;align-items:center;justify-content:center;padding:0 3px;line-height:1}
 /* Ajustes 5 tabs */
@@ -964,9 +973,19 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
 
       <!-- IDEAS (superadmin) -->
       <div class="ajustes-panel" id="ajPanelIdeas">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-          <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:16px">💡 Sugerencias recibidas</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+          <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:16px">💡 Ideas & Feedback</div>
           <button class="btn-sm" onclick="cargarSugerenciasAdmin()">↻</button>
+        </div>
+        <!-- Filtros -->
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px" id="sugFiltros">
+          <button onclick="filtrarSug('','')"                   id="sfAll"       class="sug-filter sug-active">Todas</button>
+          <button onclick="filtrarSug('estado','pendiente')"    id="sfPend"      class="sug-filter">🟠 Pendiente</button>
+          <button onclick="filtrarSug('estado','en_progreso')"  id="sfProg"      class="sug-filter">🔵 En progreso</button>
+          <button onclick="filtrarSug('estado','resuelto')"     id="sfRes"       class="sug-filter">🟢 Resuelto</button>
+          <button onclick="filtrarSug('categoria','error')"     id="sfErr"       class="sug-filter">🐛 Errores</button>
+          <button onclick="filtrarSug('categoria','mejora')"    id="sfMej"       class="sug-filter">🔧 Mejoras</button>
+          <button onclick="filtrarSug('categoria','nuevo')"     id="sfNue"       class="sug-filter">✨ Nuevas</button>
         </div>
         <div id="adminSugerenciasList"><div class="empty-state">Cargando...</div></div>
       </div>
@@ -1008,7 +1027,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
         <div class="settings-section">
           <div class="settings-title">ℹ️ Acerca de</div>
           <div class="settings-row"><span>Aplicación</span><strong>Alejandra</strong></div>
-          <div class="settings-row"><span>Versión</span><strong>v4.1</strong></div>
+          <div class="settings-row"><span>Versión</span><strong>v4.2</strong></div>
           <div class="settings-row"><span>Backend</span><strong>Cloudflare Workers + D1</strong></div>
           <div class="settings-row"><span>Año</span><strong>2026</strong></div>
           <div style="margin-top:10px;text-align:center;font-size:11px;color:var(--muted);letter-spacing:1px">INVENTARIO · MAQUINARIA · CONTROL</div>
@@ -1021,24 +1040,33 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
   <!-- ── SUGERENCIAS ── -->
   <div id="screenSugerencias" class="screen">
     <div style="padding:4px 0 16px">
-      <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:20px;color:var(--text)">💡 Sugerencias</div>
-      <div style="font-size:12px;color:var(--muted);margin-top:4px">Envía ideas o mejoras al equipo</div>
+      <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:20px;color:var(--text)">💡 Ideas & Feedback</div>
+      <div style="font-size:12px;color:var(--muted);margin-top:4px">Reporta errores, propón mejoras o nuevas funciones</div>
     </div>
+
+    <!-- Selector de categoría con botones grandes -->
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:16px">
+      <button id="sugBtn_error"  onclick="selSugCategoria('error')"
+        style="padding:12px 4px;border-radius:10px;border:2px solid var(--border);background:var(--surface);color:var(--text);font-size:12px;font-weight:700;cursor:pointer;transition:all .2s;display:flex;flex-direction:column;align-items:center;gap:4px">
+        <span style="font-size:22px">🐛</span>Error
+      </button>
+      <button id="sugBtn_mejora" onclick="selSugCategoria('mejora')"
+        style="padding:12px 4px;border-radius:10px;border:2px solid var(--border);background:var(--surface);color:var(--text);font-size:12px;font-weight:700;cursor:pointer;transition:all .2s;display:flex;flex-direction:column;align-items:center;gap:4px">
+        <span style="font-size:22px">🔧</span>Mejora
+      </button>
+      <button id="sugBtn_nuevo"  onclick="selSugCategoria('nuevo')"
+        style="padding:12px 4px;border-radius:10px;border:2px solid var(--border);background:var(--surface);color:var(--text);font-size:12px;font-weight:700;cursor:pointer;transition:all .2s;display:flex;flex-direction:column;align-items:center;gap:4px">
+        <span style="font-size:22px">✨</span>Nueva función
+      </button>
+    </div>
+    <input type="hidden" id="sugCategoria" value="error">
+
     <div class="form-group">
-      <label class="form-label">Categoría</label>
-      <select class="form-select" id="sugCategoria">
-        <option value="mejora">Mejora de funcionalidad</option>
-        <option value="error">Reporte de error</option>
-        <option value="nuevo">Nueva función</option>
-        <option value="otro">Otro</option>
-      </select>
+      <label class="form-label">Descripción</label>
+      <textarea id="sugTexto" rows="5" placeholder="Describe el error o idea con el mayor detalle posible..."
+        style="width:100%;padding:12px;background:var(--surface);border:1px solid var(--border);border-radius:10px;color:var(--text);font-family:'Poppins',sans-serif;font-size:14px;resize:vertical;outline:none;box-sizing:border-box"></textarea>
     </div>
-    <div class="form-group">
-      <label class="form-label">Tu sugerencia</label>
-      <textarea id="sugTexto" rows="5" placeholder="Describe tu idea o problema con el mayor detalle posible..."
-        style="width:100%;padding:12px;background:var(--surface);border:1px solid var(--border);border-radius:10px;color:var(--text);font-family:'Poppins',sans-serif;font-size:14px;resize:vertical;outline:none"></textarea>
-    </div>
-    <button class="btn-primary" onclick="enviarSugerencia()" id="btnSugerencia">💬 Enviar sugerencia</button>
+    <button class="btn-primary" onclick="enviarSugerencia()" id="btnSugerencia">💬 Enviar</button>
   </div>
 
 </div><!-- end appContent -->
@@ -3368,9 +3396,17 @@ async function cargarDashboard() {
 // ══════════════════════════════════════════════════════
 // SUGERENCIAS
 // ══════════════════════════════════════════════════════
+function selSugCategoria(cat) {
+  document.getElementById('sugCategoria').value = cat;
+  ['error','mejora','nuevo'].forEach(c => {
+    const btn = document.getElementById('sugBtn_' + c);
+    if (btn) btn.style.opacity = c === cat ? '1' : '0.45';
+  });
+}
+
 async function enviarSugerencia() {
   const texto     = document.getElementById('sugTexto')?.value.trim();
-  const categoria = document.getElementById('sugCategoria')?.value;
+  const categoria = document.getElementById('sugCategoria')?.value || 'error';
   if (!texto) return toast('⚠️ Escribe tu sugerencia antes de enviar', 'err');
 
   const s   = getSession();
@@ -3389,7 +3425,7 @@ async function enviarSugerencia() {
     });
     const data = await res.json();
     if (res.ok) {
-      toast('✅ ' + (data.mensaje || 'Sugerencia enviada'), 'ok');
+      toast('✅ ' + (data.mensaje || 'Enviado, gracias!'), 'ok');
       document.getElementById('sugTexto').value = '';
     } else {
       toast('❌ ' + (data.error || 'Error al enviar'), 'err');
@@ -3397,46 +3433,38 @@ async function enviarSugerencia() {
   } catch { toast('❌ Error de conexión', 'err'); }
 
   btn.disabled = false;
-  btn.textContent = '💬 Enviar sugerencia';
+  btn.textContent = '💬 Enviar';
 }
 
-async function cargarSugerencias() {
-  const c = document.getElementById('adminSugerenciasList');
-  if (!c) return;
-  c.innerHTML = '<div style="color:var(--muted);font-size:12px">Cargando...</div>';
-  try {
-    const res  = await apiCall('/sugerencias');
-    const data = await res.json();
-    if (!res.ok) { c.innerHTML = '<div style="color:var(--red);font-size:12px">Error al cargar</div>'; return; }
-    if (!data.length) { c.innerHTML = '<div style="color:var(--muted);font-size:12px">Sin sugerencias aún</div>'; return; }
-
-    const catIcon = { mejora:'🔧', error:'🐛', nuevo:'✨', otro:'💬' };
-    c.innerHTML = data.map(s => `
-      <div style="background:var(--surface2);border:1px solid ${s.leida?'var(--border)':'var(--accent)'};border-radius:10px;padding:12px;margin-bottom:8px;position:relative">
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
-          <span style="font-size:18px">${catIcon[s.categoria]||'💬'}</span>
-          <span style="font-family:'Montserrat',sans-serif;font-weight:700;font-size:12px;color:var(--accent);text-transform:uppercase">${s.categoria||'otro'}</span>
-          ${!s.leida ? '<span style="background:var(--accent);color:#000;font-size:9px;font-weight:900;padding:2px 6px;border-radius:4px;margin-left:auto">NUEVA</span>' : ''}
-        </div>
-        <div style="font-size:14px;color:var(--text);margin-bottom:6px">${s.texto}</div>
-        <div style="font-size:11px;color:var(--muted)">👤 ${s.usuario||'—'} · 🏗️ ${s.obra||'—'} · 🕐 ${s.created_at||''}</div>
-        <div style="display:flex;gap:6px;margin-top:8px">
-          ${!s.leida ? `<button onclick="marcarLeida(${s.id})" style="padding:4px 10px;background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:11px;cursor:pointer">✓ Leída</button>` : ''}
-          <button onclick="borrarSugerencia(${s.id})" style="padding:4px 10px;background:var(--surface);border:1px solid var(--red,#ef4444);border-radius:6px;color:var(--red,#ef4444);font-size:11px;cursor:pointer">🗑️ Borrar</button>
-        </div>
-      </div>`).join('');
-  } catch { c.innerHTML = '<div style="color:var(--red);font-size:12px">Error de conexión</div>'; }
+let _sugFiltroKey = '', _sugFiltroVal = '';
+function filtrarSug(key, val) {
+  _sugFiltroKey = key; _sugFiltroVal = val;
+  document.querySelectorAll('.sug-filter').forEach(b => b.classList.remove('sug-active'));
+  const idMap = {
+    '':                   'sfAll',
+    'estado_pendiente':   'sfPend',
+    'estado_en_progreso': 'sfProg',
+    'estado_resuelto':    'sfRes',
+    'categoria_error':    'sfErr',
+    'categoria_mejora':   'sfMej',
+    'categoria_nuevo':    'sfNue',
+  };
+  const k = key ? key + '_' + val : '';
+  const activeId = idMap[k] || 'sfAll';
+  document.getElementById(activeId)?.classList.add('sug-active');
+  cargarSugerenciasAdmin();
 }
 
 async function marcarLeida(id) {
   await apiCall(`/sugerencias/${id}`, { method: 'PUT' });
-  cargarSugerencias();
+  cargarSugerenciasAdmin();
 }
 
 async function borrarSugerencia(id) {
   if (!confirm('¿Borrar esta sugerencia?')) return;
   await apiCall(`/sugerencias/${id}`, { method: 'DELETE' });
-  cargarSugerencias();
+  cargarSugerenciasAdmin();
+  cargarBadgeIdeas();
 }
 
 // ══════════════════════════════════════════════════════
@@ -3517,14 +3545,13 @@ async function cargarBadgeIdeas() {
   const s = getSession();
   if (s?.rol !== 'superadmin') return;
   try {
-    const res = await apiCall('/sugerencias');
+    const res = await apiCall('/sugerencias?estado=pendiente');
     if (!res.ok) return;
     const data = await res.json();
-    const nuevas = data.filter(sg => !sg.leida).length;
     const badge = document.getElementById('badgeIdeas');
     if (badge) {
-      badge.textContent = nuevas;
-      badge.style.display = nuevas > 0 ? 'flex' : 'none';
+      badge.textContent = data.length;
+      badge.style.display = data.length > 0 ? 'flex' : 'none';
     }
   } catch {}
 }
@@ -3566,45 +3593,60 @@ async function cargarSugerenciasAdmin() {
   if (!c) return;
   c.innerHTML = '<div class="empty-state">Cargando...</div>';
   try {
-    const res  = await apiCall('/sugerencias');
+    let url = '/sugerencias';
+    const qp = [];
+    if (_sugFiltroKey === 'estado')    qp.push('estado='    + _sugFiltroVal);
+    if (_sugFiltroKey === 'categoria') qp.push('categoria=' + _sugFiltroVal);
+    if (qp.length) url += '?' + qp.join('&');
+
+    const res  = await apiCall(url);
     const data = await res.json();
     if (!res.ok) { c.innerHTML = '<div style="color:var(--red);font-size:12px">Error al cargar</div>'; return; }
-    if (!data.length) { c.innerHTML = '<div class="empty-state">Sin sugerencias aún</div>'; return; }
-    const catIcon = { mejora:'🔧', error:'🐛', nuevo:'✨', otro:'💬' };
+    if (!data.length) { c.innerHTML = '<div class="empty-state">Sin sugerencias</div>'; return; }
+
+    const catIcon  = { mejora:'🔧', error:'🐛', nuevo:'✨', otro:'💬' };
+    const estBadge = (e) => {
+      if (!e || e === 'pendiente') return '<span class="sug-estado sug-pendiente">pendiente</span>';
+      if (e === 'en_progreso')     return '<span class="sug-estado sug-progreso">en progreso</span>';
+      if (e === 'resuelto')        return '<span class="sug-estado sug-resuelto">resuelto</span>';
+      return '';
+    };
+
     c.innerHTML = data.map(sg => `
       <div style="background:var(--surface2);border:1px solid ${sg.leida?'var(--border)':'var(--accent)'};border-radius:10px;padding:12px;margin-bottom:8px">
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap">
           <span style="font-size:16px">${catIcon[sg.categoria]||'💬'}</span>
           <span style="font-family:'Montserrat',sans-serif;font-weight:700;font-size:11px;color:var(--accent);text-transform:uppercase">${sg.categoria||'otro'}</span>
+          ${estBadge(sg.estado)}
           ${!sg.leida?'<span style="background:var(--accent);color:#000;font-size:9px;font-weight:900;padding:2px 6px;border-radius:4px;margin-left:auto">NUEVA</span>':''}
         </div>
         <div style="font-size:14px;color:var(--text);margin-bottom:6px">${sg.texto}</div>
         <div style="font-size:11px;color:var(--muted)">👤 ${sg.usuario||'—'} · 🏗 ${sg.obra||'—'} · ${sg.created_at||''}</div>
+        ${sg.respuesta ? `<div style="margin-top:8px;padding:8px;background:var(--surface);border-left:3px solid var(--accent);border-radius:4px;font-size:12px;color:var(--text)">💬 ${sg.respuesta}</div>` : ''}
         <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">
-          ${!sg.leida?`<button class="btn-sm" onclick="marcarLeida(${sg.id})">✓ Leída</button>`:''}
-          <button class="btn-sm danger" onclick="eliminarSugerencia(${sg.id})">🗑 Borrar</button>
-          <button class="btn-sm" onclick="compartirSugerencia('${(sg.texto||'').replace(/'/g,"&#39;")}','${sg.categoria||''}')">📤 Compartir</button>
+          <button class="btn-sm" onclick="cambiarEstadoSug(${sg.id},'en_progreso')">🔵 En progreso</button>
+          <button class="btn-sm" onclick="abrirRespuestaSug(${sg.id})">✅ Resolver</button>
+          <button class="btn-sm danger" onclick="borrarSugerencia(${sg.id})">🗑 Borrar</button>
         </div>
       </div>`).join('');
   } catch { c.innerHTML = '<div style="color:var(--red);font-size:12px">Error de conexión</div>'; }
   cargarBadgeIdeas();
 }
 
-async function eliminarSugerencia(id) {
-  if (!confirm('¿Eliminar esta sugerencia?')) return;
-  await apiCall(`/sugerencias/${id}`, { method: 'DELETE' });
+async function cambiarEstadoSug(id, estado, respuesta = null) {
+  const body = { estado };
+  if (respuesta !== null) body.respuesta = respuesta;
+  await apiCall(`/sugerencias/${id}`, { method: 'PUT', body: JSON.stringify(body) });
   cargarSugerenciasAdmin();
 }
 
-function compartirSugerencia(texto, categoria) {
-  const catLabel = { mejora:'Mejora', error:'Error', nuevo:'Nueva función', otro:'Otro' };
-  const txt = `💡 Sugerencia [${catLabel[categoria]||categoria}]: ${texto}`;
-  if (navigator.share) {
-    navigator.share({ text: txt }).catch(() => {});
-  } else {
-    navigator.clipboard?.writeText(txt).then(() => toast('✅ Copiado al portapapeles', 'ok')).catch(() => {});
-  }
+function abrirRespuestaSug(id) {
+  const resp = prompt('Escribe la respuesta (opcional):');
+  if (resp === null) return;
+  cambiarEstadoSug(id, 'resuelto', resp || '');
 }
+
+async function cargarSugerencias() { return cargarSugerenciasAdmin(); }
 
 // ══════════════════════════════════════════════════════
 // CREAR USUARIO (actualizado con dept + modal código)
