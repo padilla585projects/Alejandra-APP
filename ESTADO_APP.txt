@@ -4,8 +4,8 @@
   Ruta local: C:\Users\Adrian\Downloads\Proyecto GestiBobina\Bobinaap
 ================================================================================
 
-ÚLTIMA ACTUALIZACIÓN: 15/04/2026
-VERSIÓN ACTUAL: v4.0 (nueva app) / v3.16 (app vieja) — DESPLEGADAS ✅
+ÚLTIMA ACTUALIZACIÓN: 16/04/2026
+VERSIÓN ACTUAL: v4.1 (nueva app) / v4.1 (app vieja) — DESPLEGADAS ✅
 
 REPO:    https://github.com/padilla585/Bobinaap.git  (branch: main)
 WORKER:  https://gestibobina-proxy.padilla585.workers.dev
@@ -22,7 +22,10 @@ PAGES:   https://padilla585.github.io/Bobinaap/
 - Tokens y credenciales: guardados en NUEVA_CUENTA.txt (solo local, en .gitignore)
 - Obra activa: CPD Getafe (código: 001, id: 1)
 
-⚠️  REGLA DE DEPLOY: al hacer cualquier cambio, actualizar SIEMPRE las DOS apps:
+⚠️  REGLA DE DEPLOY:
+  - Por defecto: actualizar SOLO la app nueva (padilla585projects/Alejandra-APP)
+  - Antes de cada deploy, PREGUNTAR al usuario si quiere actualizar también la vieja
+  - Solo actualizar las dos si el usuario lo confirma explícitamente
 
   APP VIEJA (padilla585):
     GitHub:  git push → padilla585/Bobinaap (automático con git)
@@ -72,7 +75,7 @@ Columnas extra:
   obras:        empresa_id*
   sesiones:     empresa_id*
   [todas las demás tablas tienen empresa_id* también]
-  (*) solo en nueva app (alejandra-db)
+  (*) en AMBAS apps desde v4.1
 
 Backup local: C:\Users\Adrian\Downloads\Proyecto GestiBobina\backup_db_20260413.sql
 
@@ -220,6 +223,20 @@ v4.0  |  15/04/2026  [SOLO NUEVA APP]
   - Todos los datos existentes migrados con empresa_id=1 automáticamente
   - Índices creados: idx_*_empresa en tablas principales
   - SW bumpeado a alejandra-v4.0
+
+v4.1  |  16/04/2026  [NUEVA APP — también aplicado en vieja para compatibilidad]
+  - Fix crítico: quitada excepción isSeguridad en getPemp y getCarretillas
+    → Seguridad ya NO ve máquinas de otros departamentos (solo las suyas)
+  - Fix: DB vieja (gestibobina-db) sin columna empresa_id en sesiones → error al login
+    → Migración empresa_id aplicada también en DB vieja (misma estructura que nueva)
+  - Nuevo: selector 🏢 Departamento en modal de edición de PEMP, carretillas y bobinas
+    → Solo visible para superadmin; permite reasignar cualquier máquina a otro departamento
+    → Útil para corregir máquinas migradas con departamento='electrico' que deberían ser 'mecanicas'
+  - editarPemp y editarCarretilla: campo 'departamento' añadido a los campos editables
+  - editarBobina: campo 'departamento' añadido a los campos editables
+  - Regla de deploy actualizada: por defecto solo actualizar la app nueva;
+    preguntar al usuario antes de tocar la vieja
+  - SW bumpeado a alejandra-v4.1
 
 v3.16  |  15/04/2026
   - Fix filtrado departamentos: quitado 'OR departamento IS NULL' en getBobinas/getPemp/getCarretillas
