@@ -522,7 +522,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
 
   <!-- HOME SCREEN -->
   <div id="screenHome" class="screen flex-screen active" style="padding:0;height:100%;position:relative">
-    <div style="position:absolute;bottom:8px;right:12px;font-family:'Montserrat',sans-serif;font-size:9px;color:var(--muted);opacity:.5;z-index:10;pointer-events:none">v4.6</div>
+    <div style="position:absolute;bottom:8px;right:12px;font-family:'Montserrat',sans-serif;font-size:9px;color:var(--muted);opacity:.5;z-index:10;pointer-events:none">v4.7</div>
     <div class="module-grid" style="flex:1">
       <div class="module-card" id="cardBobinas" onclick="selectModule('bobinas')">
         <div class="module-emoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="52" height="52"><rect x="28" y="38" width="44" height="32" rx="3" fill="#8B6914"/><rect x="28" y="38" width="8" height="32" rx="1" fill="#A07820" opacity="0.6"/><rect x="37" y="38" width="8" height="32" rx="1" fill="#7a5c10" opacity="0.4"/><rect x="46" y="38" width="8" height="32" rx="1" fill="#A07820" opacity="0.5"/><rect x="55" y="38" width="8" height="32" rx="1" fill="#7a5c10" opacity="0.4"/><rect x="64" y="38" width="8" height="32" rx="1" fill="#A07820" opacity="0.3"/><ellipse cx="50" cy="70" rx="30" ry="8" fill="#9B7420"/><ellipse cx="50" cy="70" rx="30" ry="8" fill="none" stroke="#7a5c10" stroke-width="1"/><line x1="22" y1="68" x2="78" y2="68" stroke="#7a5c10" stroke-width="0.8" opacity="0.5"/><line x1="24" y1="72" x2="76" y2="72" stroke="#c49530" stroke-width="0.6" opacity="0.4"/><circle cx="32" cy="70" r="1.5" fill="#f97316"/><circle cx="50" cy="70" r="1.5" fill="#f97316"/><circle cx="68" cy="70" r="1.5" fill="#f97316"/><ellipse cx="50" cy="36" rx="32" ry="10" fill="#C4A030"/><line x1="20" y1="34" x2="80" y2="34" stroke="#9B7820" stroke-width="1" opacity="0.7"/><line x1="20" y1="36" x2="80" y2="36" stroke="#e8c060" stroke-width="0.8" opacity="0.4"/><line x1="20" y1="38" x2="80" y2="38" stroke="#9B7820" stroke-width="1" opacity="0.5"/><ellipse cx="50" cy="35" rx="32" ry="10" fill="none" stroke="#e8c870" stroke-width="0.8" opacity="0.5"/><circle cx="30" cy="35" r="2" fill="#f97316" stroke="#c97316" stroke-width="0.5"/><circle cx="50" cy="32" r="2" fill="#f97316" stroke="#c97316" stroke-width="0.5"/><circle cx="70" cy="35" r="2" fill="#f97316" stroke="#c97316" stroke-width="0.5"/><circle cx="50" cy="39" r="2" fill="#f97316" stroke="#c97316" stroke-width="0.5"/><ellipse cx="50" cy="36" rx="5" ry="3" fill="#3a2a08"/><ellipse cx="50" cy="35.5" rx="4" ry="2" fill="#1a1208"/></svg></div>
@@ -580,7 +580,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
       <button class="mod-tab-btn active" onclick="showModTab('scan')">📷 Escanear</button>
       <button class="mod-tab-btn" onclick="showModTab('stock')">📋 Inventario</button>
       <button class="mod-tab-btn" onclick="showModTab('historial')">🕒 Historial</button>
-      <button class="mod-tab-btn" onclick="showModTab('devolucion')">↩ Dev.</button>
+      <button class="mod-tab-btn" onclick="showModTab('devolucion')"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="vertical-align:middle;margin-right:2px"><path d="M9 11l-4 4 4 4M5 15h11a4 4 0 0 0 0-8h-1"/></svg>Dev.</button>
     </div>
     <div id="modContent" style="padding:14px;overflow-y:auto;flex:1">
       <!-- scan panel -->
@@ -798,19 +798,26 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
         <div class="scan-box" style="margin-bottom:14px">
           <div class="scan-header">
             <div class="scan-dot" id="devDot"></div>
+            LECTOR DE CÓDIGO
           </div>
-          <div class="scan-preview" id="devCamIdle" style="display:flex;align-items:center;justify-content:center;flex-direction:column;gap:8px;color:var(--muted);font-size:13px">
-            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="13" r="4"/><path d="M5 7h14M9 3h6M3 7h2M19 7h2"/></svg>
-            Pulsa ABRIR CÁMARA
-          </div>
-          <div id="devCamViewport" style="position:relative;display:none">
-            <video id="devVideo" playsinline autoplay muted style="width:100%;border-radius:8px;display:block"></video>
+          <div class="cam-viewport" id="devCamViewport">
+            <div class="cam-idle" id="devCamIdle">
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+                <circle cx="12" cy="13" r="4"/>
+              </svg>
+              Pulsa ABRIR CÁMARA
+            </div>
+            <video id="devVideo" playsinline autoplay muted style="display:none"></video>
             <canvas id="devCanvas" style="display:none"></canvas>
-            <div class="scan-frame" id="devFrame">
+            <div class="scan-frame" id="devFrame" style="display:none">
               <div class="corner-bl"></div><div class="corner-br"></div>
               <div class="scan-line"></div>
             </div>
-            <div class="cam-ok" id="devCamOk" style="display:none">✅ LEÍDO<div class="cam-ok-code" id="devCamOkCode"></div></div>
+            <div class="cam-ok" id="devCamOk" style="display:none">
+              ✅ LEÍDO
+              <div class="cam-ok-code" id="devCamOkCode"></div>
+            </div>
           </div>
           <div id="devActionsIdle" class="scan-actions">
             <button class="btn-open-cam" onclick="devOpenCamera()">📷 ABRIR CÁMARA</button>
@@ -1127,7 +1134,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
         <div class="settings-section">
           <div class="settings-title">ℹ️ Acerca de</div>
           <div class="settings-row"><span>Aplicación</span><strong>Alejandra</strong></div>
-          <div class="settings-row"><span>Versión</span><strong>v4.6</strong></div>
+          <div class="settings-row"><span>Versión</span><strong>v4.7</strong></div>
           <div class="settings-row"><span>Backend</span><strong>Cloudflare Workers + D1</strong></div>
           <div class="settings-row"><span>Año</span><strong>2026</strong></div>
           <div style="margin-top:10px;text-align:center;font-size:11px;color:var(--muted);letter-spacing:1px">INVENTARIO · MAQUINARIA · CONTROL</div>
@@ -1322,7 +1329,7 @@ function cerrarSesion() {
   if (window._connInterval) { clearInterval(window._connInterval); window._connInterval = null; }
   closeCamera();
   segCloseCamera();
-  currentModule = 'bobinas';
+  currentModule = getSession()?.departamento === 'mecanicas' ? 'pemp' : 'bobinas';
   stockFiltro   = '';
   scanActive    = false;
   segScanActive = false;
@@ -1469,23 +1476,30 @@ function cerrarRegistro() {
 function regGoStep(n) {
   document.querySelectorAll('.reg-step').forEach((s,i) => s.classList.toggle('active', i+1 === n));
   document.querySelectorAll('.reg-dot').forEach((d,i) => d.classList.toggle('done', i < n));
+  const overlay = document.getElementById('registroOverlay');
+  if (overlay) overlay.scrollTop = 0;
 }
 function regAnterior(step) { regGoStep(step - 1); }
 function regSiguiente(step) {
-  if (step === 1) {
-    if (!document.getElementById('regEmpresaNombre').value.trim()) {
-      toast('Introduce el nombre de la empresa', 'err'); return;
+  try {
+    if (step === 1) {
+      const val = document.getElementById('regEmpresaNombre')?.value?.trim();
+      if (!val) { toast('Introduce el nombre de la empresa', 'err'); return; }
+      regGoStep(2);
+    } else if (step === 2) {
+      const nombre = document.getElementById('regAdminNombre')?.value?.trim() || '';
+      const email  = document.getElementById('regEmail')?.value?.trim() || '';
+      const pass   = document.getElementById('regPassword')?.value || '';
+      const pass2  = document.getElementById('regPassword2')?.value || '';
+      if (!nombre || !email || !pass) { toast('Rellena todos los campos obligatorios', 'err'); return; }
+      if (pass.length < 8) { toast('La contraseña debe tener al menos 8 caracteres', 'err'); return; }
+      if (pass !== pass2) { toast('Las contraseñas no coinciden', 'err'); return; }
+      regGoStep(3);
     }
-    regGoStep(2);
-  } else if (step === 2) {
-    const nombre = document.getElementById('regAdminNombre').value.trim();
-    const email  = document.getElementById('regEmail').value.trim();
-    const pass   = document.getElementById('regPassword').value;
-    const pass2  = document.getElementById('regPassword2').value;
-    if (!nombre || !email || !pass) { toast('Rellena todos los campos obligatorios', 'err'); return; }
-    if (pass.length < 8) { toast('La contraseña debe tener al menos 8 caracteres', 'err'); return; }
-    if (pass !== pass2) { toast('Las contraseñas no coinciden', 'err'); return; }
-    regGoStep(3);
+  } catch(e) {
+    const errEl = document.getElementById('regErr');
+    if (errEl) errEl.textContent = 'Error: ' + e.message;
+    console.error('regSiguiente error:', e);
   }
 }
 async function regFinalizar() {
@@ -1526,7 +1540,7 @@ async function regFinalizar() {
 // ══════════════════════════════════════════════════════
 // APP INIT
 // ══════════════════════════════════════════════════════
-let currentModule = 'bobinas';
+let currentModule = (()=>{ try { return JSON.parse(localStorage.getItem('alejandra_session')||'{}').departamento === 'mecanicas' ? 'pemp' : 'bobinas'; } catch { return 'bobinas'; } })();
 
 async function iniciarApp() {
   const s = getSession();
@@ -1539,7 +1553,7 @@ async function iniciarApp() {
   }
 
   // Resetear estado global antes de iniciar con el nuevo usuario
-  currentModule = 'bobinas';
+  currentModule = (s.departamento === 'mecanicas') ? 'pemp' : 'bobinas';
   stockFiltro   = '';
   scanActive    = false;
   segScanActive = false;
@@ -1666,6 +1680,7 @@ function setupHomeModules() {
 function seleccionarDepto(dept) {
   const s = getSession();
   if (!s) return;
+  if (dept === 'mecanicas') currentModule = 'pemp';
   s.departamento = dept;
   setSession(s);
   renderHeader();
@@ -1720,9 +1735,13 @@ async function checkConnection() {
   const dot = document.getElementById('connDot');
   try {
     const r = await fetch(getAPI() + '/stats', { signal: AbortSignal.timeout(5000) });
-    if (r.ok) { dot.className = 'conn-dot ok'; return; }
-  } catch {}
-  dot.className = 'conn-dot err';
+    if (r.ok) { dot.className = 'conn-dot ok'; }
+    else { dot.className = 'conn-dot err'; }
+  } catch { dot.className = 'conn-dot err'; }
+  // SW update check
+  if (navigator.serviceWorker.controller) {
+    navigator.serviceWorker.ready.then(reg => reg.update());
+  }
 }
 
 // ══════════════════════════════════════════════════════
@@ -2496,8 +2515,11 @@ async function segVerItem(id) {
       ${item.fecha_caducidad?`<div style="font-size:13px;margin-bottom:6px;color:var(--red)">📅 Caduca: ${item.fecha_caducidad}</div>`:''}
       ${item.fecha_entrada?`<div style="font-size:12px;color:var(--muted);margin-bottom:10px">Entrada: ${item.fecha_entrada}</div>`:''}
       ${item.notas?`<div style="font-size:12px;color:var(--muted);margin-bottom:10px">📝 ${item.notas}</div>`:''}
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+        <button onclick="segEditarItem(${item.id})" style="flex:1;padding:10px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:'Montserrat',sans-serif;font-weight:900;font-size:12px;cursor:pointer">✏️ Editar</button>
+      </div>
       ${item.estado!=='baja'?`
-      <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
         <button onclick="segAccionItemModal(${item.id},'salida')" style="flex:1;padding:10px;background:var(--blue);border:none;border-radius:8px;color:#fff;font-family:'Montserrat',sans-serif;font-weight:900;font-size:12px;cursor:pointer">📤 SALIDA</button>
         ${item.estado==='en_uso'?`<button onclick="segAccionItemModal(${item.id},'devolucion')" style="flex:1;padding:10px;background:var(--green);border:none;border-radius:8px;color:#000;font-family:'Montserrat',sans-serif;font-weight:900;font-size:12px;cursor:pointer">📥 DEVOLUCIÓN</button>`:''}
         <button onclick="segAccionItemModal(${item.id},'baja')" style="padding:10px 14px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--red);font-family:'Montserrat',sans-serif;font-weight:900;font-size:12px;cursor:pointer">🗑️ BAJA</button>
@@ -2509,6 +2531,55 @@ async function segVerItem(id) {
 
 function closeModalSegItem() {
   document.getElementById('modalSegItem').classList.remove('show');
+}
+
+function segEditarItem(id) {
+  const item = segInvTodos.find(i => i.id === id);
+  if (!item) return;
+  const body = document.getElementById('modalSegItemBody');
+  const estados = ['disponible','en_uso','caducado','baja'];
+  body.insertAdjacentHTML('afterbegin', `
+    <div id="segEditForm" style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:14px">
+      <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:11px;letter-spacing:2px;color:var(--accent);text-transform:uppercase;margin-bottom:10px">✏️ EDITAR ITEM</div>
+      <div class="form-group" style="margin-bottom:10px">
+        <label class="form-label">Estado</label>
+        <select class="form-select" id="segEditEstado">
+          ${estados.map(e=>`<option value="${e}" ${item.estado===e?'selected':''}>${e}</option>`).join('')}
+        </select>
+      </div>
+      <div class="form-group" style="margin-bottom:10px">
+        <label class="form-label">Destino</label>
+        <input class="form-input" id="segEditDestino" type="text" value="${item.destino_actual||''}" placeholder="Destino actual...">
+      </div>
+      <div class="form-group" style="margin-bottom:10px">
+        <label class="form-label">Notas</label>
+        <input class="form-input" id="segEditNotas" type="text" value="${item.notas||''}" placeholder="Notas...">
+      </div>
+      <div style="display:flex;gap:8px">
+        <button onclick="segGuardarEdicion(${id})" style="flex:1;padding:10px;background:var(--accent);border:none;border-radius:8px;color:#000;font-family:'Montserrat',sans-serif;font-weight:900;font-size:12px;cursor:pointer">💾 GUARDAR</button>
+        <button onclick="document.getElementById('segEditForm').remove()" style="padding:10px 14px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--muted);font-family:'Montserrat',sans-serif;font-weight:900;font-size:12px;cursor:pointer">✕</button>
+      </div>
+    </div>`);
+  document.getElementById('segEditForm').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+async function segGuardarEdicion(id) {
+  const estado  = document.getElementById('segEditEstado')?.value;
+  const destino = document.getElementById('segEditDestino')?.value?.trim();
+  const notas   = document.getElementById('segEditNotas')?.value?.trim();
+  try {
+    const res = await apiCall('/inventario-seg/' + id, {
+      method: 'PUT',
+      body: JSON.stringify({ estado, destino_actual: destino, notas })
+    });
+    if (!res.ok) { toast('Error al guardar', 'err'); return; }
+    toast('Guardado', 'ok');
+    closeModalSegItem();
+    await cargarInventarioSeg();
+  } catch(e) {
+    toast('Error al guardar', 'err');
+    console.error('segGuardarEdicion error:', e);
+  }
 }
 
 async function segAccionItemModal(id, accion) {
@@ -2717,7 +2788,7 @@ function renderStock(items, mod) {
     c.innerHTML = items.map((b, i) => {
       const activa = b.estado === 'activa';
       return `
-      <div class="stock-card ${b.estado}">
+      <div class="stock-card ${b.estado}" onclick="abrirEdit(${i}, 'bobinas')" style="cursor:pointer">
         <div class="stock-card-top">
           <div class="stock-code">${b.codigo}</div>
           <span class="pill ${activa ? 'pill-green' : 'pill-gray'}">${activa ? '✓ STOCK' : '↩ DEV'}</span>
@@ -2727,7 +2798,7 @@ function renderStock(items, mod) {
           ${b.tipo_cable ? `<span class="stock-meta-pill">🔌 ${b.tipo_cable}</span>` : ''}
           ${b.registrado_por ? `<span class="stock-meta-pill">👤 ${b.registrado_por}</span>` : ''}
         </div>
-        <div class="stock-actions-row">
+        <div class="stock-actions-row" onclick="event.stopPropagation()">
           ${b.estado === 'activa' ? `<button class="btn-sm" onclick="abrirDevolucion(${i}, 'bobinas')">↩ Dev.</button>` : ''}
           <button class="btn-sm" onclick="abrirEdit(${i}, 'bobinas')">✏️ Editar</button>
           <button class="btn-sm danger" onclick="borrarItem(${i}, 'bobinas')">🗑️ Borrar</button>
@@ -2743,7 +2814,7 @@ function renderStock(items, mod) {
       const pillClass  = disponible ? 'pill-green' : averiada ? 'pill-red' : 'pill-gray';
       const warn       = revisionWarn(item.fecha_proxima_revision);
       return `
-      <div class="stock-card ${statClass}">
+      <div class="stock-card ${statClass}" onclick="abrirEdit(${i}, '${mod}')" style="cursor:pointer">
         <div class="stock-card-top">
           <div class="stock-code">${item.matricula || item.codigo}</div>
           <span class="pill ${pillClass}">${item.estado}</span>
@@ -2755,7 +2826,7 @@ function renderStock(items, mod) {
           ${item.proveedor? `<span class="stock-meta-pill">📦 ${item.proveedor}</span>` : ''}
           ${warn ? `<span class="revision-warn">⚠️ Rev. prox.</span>` : ''}
         </div>
-        <div class="stock-actions-row">
+        <div class="stock-actions-row" onclick="event.stopPropagation()">
           ${!['devuelta','Devuelta'].includes(item.estado) ? `<button class="btn-sm" onclick="abrirDevolucion(${i}, '${mod}')">↩ Dev.</button>` : ''}
           <button class="btn-sm" onclick="abrirEdit(${i}, '${mod}')">✏️ Editar</button>
           <button class="btn-sm danger" onclick="borrarItem(${i}, '${mod}')">🗑️ Borrar</button>
@@ -3130,7 +3201,7 @@ async function devOpenCamera() {
     video.srcObject = devStream;
     await video.play();
     document.getElementById('devCamIdle').style.display = 'none';
-    document.getElementById('devCamViewport').style.display = 'block';
+    video.style.display = 'block';
     document.getElementById('devFrame').style.display = 'block';
     document.getElementById('devCamOk').style.display = 'none';
     document.getElementById('devActionsIdle').style.display = 'none';
@@ -3147,7 +3218,6 @@ function devCloseCamera() {
   const video = document.getElementById('devVideo');
   if (video) { video.style.display = 'none'; video.srcObject = null; }
   document.getElementById('devCamIdle').style.display = 'flex';
-  document.getElementById('devCamViewport').style.display = 'none';
   document.getElementById('devFrame').style.display = 'none';
   document.getElementById('devActionsIdle').style.display = 'flex';
   document.getElementById('devActionsActive').style.display = 'none';
@@ -4159,6 +4229,9 @@ if ('serviceWorker' in navigator) {
         }
       });
     });
+
+    // Check for SW updates every 10 minutes
+    setInterval(() => { reg.update(); }, 10 * 60 * 1000);
   }).catch(() => {});
 
   // El SW avisa cuando ya limpió la caché → limpiamos URL guardada y recargamos
