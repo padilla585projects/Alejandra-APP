@@ -1027,7 +1027,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
         <div class="settings-section">
           <div class="settings-title">ℹ️ Acerca de</div>
           <div class="settings-row"><span>Aplicación</span><strong>Alejandra</strong></div>
-          <div class="settings-row"><span>Versión</span><strong>v4.2</strong></div>
+          <div class="settings-row"><span>Versión</span><strong>v4.3</strong></div>
           <div class="settings-row"><span>Backend</span><strong>Cloudflare Workers + D1</strong></div>
           <div class="settings-row"><span>Año</span><strong>2026</strong></div>
           <div style="margin-top:10px;text-align:center;font-size:11px;color:var(--muted);letter-spacing:1px">INVENTARIO · MAQUINARIA · CONTROL</div>
@@ -1103,6 +1103,19 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
     Ajustes
   </button>
 </nav>
+
+<!-- ══════════════════════════════════════════
+     MODAL: Detalle item seguridad
+══════════════════════════════════════════ -->
+<div class="modal-overlay" id="modalSegItem" onclick="if(event.target===this)closeModalSegItem()">
+  <div class="modal" style="padding-bottom:24px">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px">
+      <div class="modal-title" style="margin-bottom:0;flex:1" id="modalSegItemTitulo">—</div>
+      <button onclick="closeModalSegItem()" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--muted);line-height:1">×</button>
+    </div>
+    <div id="modalSegItemBody"></div>
+  </div>
+</div>
 
 <!-- ══════════════════════════════════════════
      MODAL: Editar item
@@ -2217,10 +2230,54 @@ function segRenderInv(items) {
 async function segVerItem(id) {
   const item = segInvTodos.find(i => i.id === id);
   if (!item) return;
+  const modal = document.getElementById('modalSegItem');
+  const body  = document.getElementById('modalSegItemBody');
+  const titulo = document.getElementById('modalSegItemTitulo');
+  titulo.textContent = item.codigo || item.nombre || '—';
+  body.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:12px 0;text-align:center">Cargando...</div>';
+  modal.classList.add('show');
   const hist = await apiCall(`/buscar-item-seg/${encodeURIComponent(item.codigo||String(id))}`).then(r=>r.json()).catch(()=>({historial:[]}));
-  segSelTab('escaner');
-  document.getElementById('segMatInput').value = item.codigo || '';
-  segMostrarItemResult(item, hist.historial || []);
+  const estadoColor = { disponible:'var(--green)', en_uso:'var(--blue)', caducado:'var(--red)', baja:'var(--muted)' };
+  const histHtml = (hist.historial||[]).length
+    ? (hist.historial||[]).map(h => `
+        <div style="display:flex;gap:8px;padding:7px 0;border-bottom:1px solid var(--border)">
+          <span style="font-size:11px;min-width:80px;color:var(--muted)">${h.fecha||''}</span>
+          <div style="flex:1">
+            <div style="font-size:12px;font-weight:700">${h.accion}</div>
+            ${h.destino?`<div style="font-size:11px;color:var(--blue)">→ ${h.destino}</div>`:''}
+            ${h.usuario?`<div style="font-size:11px;color:var(--muted)">👤 ${h.usuario}</div>`:''}
+          </div>
+        </div>`).join('')
+    : '<div style="font-size:12px;color:var(--muted);padding:8px 0">Sin movimientos</div>';
+  body.innerHTML = `
+    <div style="background:var(--surface2);border-radius:12px;padding:14px;margin-bottom:14px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap">
+        <span style="background:var(--accent);color:#000;font-family:'Montserrat',sans-serif;font-weight:900;font-size:11px;padding:3px 8px;border-radius:6px">📦 ${item.tipo_material}</span>
+        <span style="font-weight:900;font-size:13px;color:${estadoColor[item.estado]||'var(--muted)'}">● ${item.estado}</span>
+      </div>
+      ${item.modo==='cantidad'?`<div style="font-size:14px;margin-bottom:6px">📦 Stock: <strong>${item.cantidad_disponible} / ${item.cantidad_total}</strong></div>`:''}
+      ${item.destino_actual?`<div style="font-size:13px;margin-bottom:6px">🏗 Destino: <strong>${item.destino_actual}</strong></div>`:''}
+      ${item.fecha_caducidad?`<div style="font-size:13px;margin-bottom:6px;color:var(--red)">📅 Caduca: ${item.fecha_caducidad}</div>`:''}
+      ${item.fecha_entrada?`<div style="font-size:12px;color:var(--muted);margin-bottom:10px">Entrada: ${item.fecha_entrada}</div>`:''}
+      ${item.notas?`<div style="font-size:12px;color:var(--muted);margin-bottom:10px">📝 ${item.notas}</div>`:''}
+      ${item.estado!=='baja'?`
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button onclick="segAccionItemModal(${item.id},'salida')" style="flex:1;padding:10px;background:var(--blue);border:none;border-radius:8px;color:#fff;font-family:'Montserrat',sans-serif;font-weight:900;font-size:12px;cursor:pointer">📤 SALIDA</button>
+        ${item.estado==='en_uso'?`<button onclick="segAccionItemModal(${item.id},'devolucion')" style="flex:1;padding:10px;background:var(--green);border:none;border-radius:8px;color:#000;font-family:'Montserrat',sans-serif;font-weight:900;font-size:12px;cursor:pointer">📥 DEVOLUCIÓN</button>`:''}
+        <button onclick="segAccionItemModal(${item.id},'baja')" style="padding:10px 14px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--red);font-family:'Montserrat',sans-serif;font-weight:900;font-size:12px;cursor:pointer">🗑️ BAJA</button>
+      </div>`:'<div style="font-size:12px;color:var(--muted);text-align:center">Material dado de baja</div>'}
+    </div>
+    <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:11px;letter-spacing:2px;color:var(--muted);text-transform:uppercase;margin-bottom:6px">Historial</div>
+    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:0 12px">${histHtml}</div>`;
+}
+
+function closeModalSegItem() {
+  document.getElementById('modalSegItem').classList.remove('show');
+}
+
+async function segAccionItemModal(id, accion) {
+  closeModalSegItem();
+  await segAccionItem(id, accion);
 }
 
 // Nuevo item
