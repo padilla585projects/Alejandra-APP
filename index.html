@@ -275,6 +275,21 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
 .ajustes-tab.active{color:var(--accent);border-bottom-color:var(--accent)}
 .ajustes-panel{display:none;padding:14px}
 .ajustes-panel.active{display:block}
+/* ── REGISTRO ── */
+#registroOverlay{position:fixed;inset:0;background:var(--bg);z-index:9998;display:none;flex-direction:column;align-items:center;justify-content:center;padding:24px;gap:0;overflow-y:auto}
+.reg-box{width:100%;max-width:380px;display:flex;flex-direction:column;gap:14px}
+.reg-step{display:none;flex-direction:column;gap:12px}
+.reg-step.active{display:flex}
+.reg-title{font-family:'Montserrat',sans-serif;font-weight:900;font-size:22px;color:var(--text)}
+.reg-sub{font-size:13px;color:var(--muted)}
+.reg-progress{display:flex;gap:6px;margin-bottom:4px}
+.reg-dot{flex:1;height:4px;border-radius:2px;background:var(--border);transition:background .3s}
+.reg-dot.done{background:var(--accent)}
+.reg-actions{display:flex;gap:10px;margin-top:4px}
+/* Login mode toggle */
+.login-mode-tabs{display:flex;gap:0;background:var(--surface2);border-radius:10px;padding:3px;margin-bottom:2px}
+.login-mode-btn{flex:1;padding:8px;background:none;border:none;border-radius:8px;color:var(--muted);font-family:'Montserrat',sans-serif;font-weight:700;font-size:11px;letter-spacing:1px;cursor:pointer;transition:all .2s}
+.login-mode-btn.active{background:var(--accent);color:#000}
 /* Código creado */
 .codigo-big{font-family:'Montserrat',sans-serif;font-weight:900;font-size:36px;letter-spacing:4px;color:var(--accent);text-align:center;padding:16px;background:var(--surface2);border-radius:10px;border:2px solid var(--accent);margin:10px 0}
 
@@ -309,16 +324,99 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
       <div class="login-appname">Alejandra</div>
       <div class="login-tagline">Inventario · Maquinaria · Control</div>
     </div>
-    <div class="login-sub">Introduce tu código de acceso</div>
-    <input class="login-input" id="loginNombre" type="text" placeholder="Tu nombre (opcional para Admin)" autocomplete="off"
-      onkeydown="if(event.key==='Enter')document.getElementById('loginCodigo').focus()">
-    <div class="login-pw-wrap">
-      <input class="login-input" id="loginCodigo" type="password" placeholder="Código de acceso" autocomplete="off"
-        onkeydown="if(event.key==='Enter')doLogin()">
-      <button class="login-pw-toggle" onclick="toggleLoginPw()" id="loginPwToggle">👁</button>
+    <!-- Mode tabs -->
+    <div class="login-mode-tabs">
+      <button class="login-mode-btn active" id="loginModeCode" onclick="setLoginMode('code')">🔑 Código</button>
+      <button class="login-mode-btn" id="loginModeEmail" onclick="setLoginMode('email')">📧 Email</button>
     </div>
-    <button class="login-btn" id="loginBtn" onclick="doLogin()">ACCEDER</button>
+    <!-- Code mode -->
+    <div id="loginCodeFields">
+      <div class="login-sub" style="margin-bottom:8px">Introduce tu código de acceso</div>
+      <input class="login-input" id="loginNombre" type="text" placeholder="Tu nombre (opcional)" autocomplete="off"
+        onkeydown="if(event.key==='Enter')document.getElementById('loginCodigo').focus()">
+      <div class="login-pw-wrap" style="margin-top:10px">
+        <input class="login-input" id="loginCodigo" type="password" placeholder="Código de acceso" autocomplete="off"
+          onkeydown="if(event.key==='Enter')doLogin()">
+        <button class="login-pw-toggle" onclick="toggleLoginPw()" id="loginPwToggle">👁</button>
+      </div>
+    </div>
+    <!-- Email mode -->
+    <div id="loginEmailFields" style="display:none;flex-direction:column;gap:10px">
+      <div class="login-sub" style="margin-bottom:4px">Accede con tu email y contraseña</div>
+      <input class="login-input" id="loginEmail" type="email" placeholder="Email" autocomplete="email"
+        onkeydown="if(event.key==='Enter')document.getElementById('loginPassword').focus()">
+      <div class="login-pw-wrap">
+        <input class="login-input" id="loginPassword" type="password" placeholder="Contraseña" autocomplete="current-password"
+          onkeydown="if(event.key==='Enter')doLogin()">
+        <button class="login-pw-toggle" onclick="toggleLoginPw2()" id="loginPwToggle2">👁</button>
+      </div>
+    </div>
+    <button class="login-btn" id="loginBtn" onclick="doLogin()" style="margin-top:4px">ACCEDER</button>
     <div class="login-err" id="loginErr"></div>
+    <div style="text-align:center;margin-top:8px">
+      <button onclick="abrirRegistro()" style="background:none;border:none;color:var(--muted);font-size:12px;cursor:pointer;font-family:'Poppins',sans-serif;text-decoration:underline">¿Primera vez? Registra tu empresa →</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════
+     REGISTRO DE EMPRESA
+══════════════════════════════════════════ -->
+<div id="registroOverlay">
+  <div class="reg-box">
+    <div class="reg-progress">
+      <div class="reg-dot done" id="regDot1"></div>
+      <div class="reg-dot" id="regDot2"></div>
+      <div class="reg-dot" id="regDot3"></div>
+    </div>
+
+    <!-- Paso 1: Empresa -->
+    <div class="reg-step active" id="regStep1">
+      <div class="reg-title">🏢 Tu empresa</div>
+      <div class="reg-sub">Cuéntanos sobre tu empresa</div>
+      <input class="login-input" id="regEmpresaNombre" type="text" placeholder="Nombre de la empresa *" autocomplete="organization">
+      <select class="login-input" id="regSector" style="cursor:pointer">
+        <option value="">Sector (opcional)</option>
+        <option value="construccion">Construcción</option>
+        <option value="instalaciones">Instalaciones</option>
+        <option value="mantenimiento">Mantenimiento</option>
+        <option value="logistica">Logística</option>
+        <option value="otro">Otro</option>
+      </select>
+      <div class="reg-actions">
+        <button class="login-btn" style="background:var(--surface2);color:var(--text);flex:0 0 90px" onclick="cerrarRegistro()">Cancelar</button>
+        <button class="login-btn" style="flex:1" onclick="regSiguiente(1)">Siguiente →</button>
+      </div>
+    </div>
+
+    <!-- Paso 2: Admin -->
+    <div class="reg-step" id="regStep2">
+      <div class="reg-title">👤 Tu cuenta</div>
+      <div class="reg-sub">Crea la cuenta de administrador</div>
+      <input class="login-input" id="regAdminNombre" type="text" placeholder="Tu nombre *" autocomplete="name">
+      <input class="login-input" id="regEmail" type="email" placeholder="Email *" autocomplete="email">
+      <div class="login-pw-wrap">
+        <input class="login-input" id="regPassword" type="password" placeholder="Contraseña (mín. 8 caracteres) *" autocomplete="new-password">
+        <button class="login-pw-toggle" onclick="toggleRegPw()" id="regPwToggle">👁</button>
+      </div>
+      <input class="login-input" id="regPassword2" type="password" placeholder="Confirmar contraseña *" autocomplete="new-password">
+      <div class="reg-actions">
+        <button class="login-btn" style="background:var(--surface2);color:var(--text);flex:0 0 90px" onclick="regAnterior(2)">← Atrás</button>
+        <button class="login-btn" style="flex:1" onclick="regSiguiente(2)">Siguiente →</button>
+      </div>
+    </div>
+
+    <!-- Paso 3: Primera obra -->
+    <div class="reg-step" id="regStep3">
+      <div class="reg-title">🏗 Primera obra</div>
+      <div class="reg-sub">¿Cuál es tu primera obra o proyecto? (opcional)</div>
+      <input class="login-input" id="regObraNombre" type="text" placeholder="Nombre de la obra (ej: CPD Madrid)">
+      <div class="login-err" id="regErr"></div>
+      <div class="reg-actions">
+        <button class="login-btn" style="background:var(--surface2);color:var(--text);flex:0 0 90px" onclick="regAnterior(3)">← Atrás</button>
+        <button class="login-btn" style="flex:1" id="regFinBtn" onclick="regFinalizar()">✅ Crear empresa</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -424,7 +522,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
 
   <!-- HOME SCREEN -->
   <div id="screenHome" class="screen flex-screen active" style="padding:0;height:100%;position:relative">
-    <div style="position:absolute;bottom:8px;right:12px;font-family:'Montserrat',sans-serif;font-size:9px;color:var(--muted);opacity:.5;z-index:10;pointer-events:none">v4.5</div>
+    <div style="position:absolute;bottom:8px;right:12px;font-family:'Montserrat',sans-serif;font-size:9px;color:var(--muted);opacity:.5;z-index:10;pointer-events:none">v4.6</div>
     <div class="module-grid" style="flex:1">
       <div class="module-card" id="cardBobinas" onclick="selectModule('bobinas')">
         <div class="module-emoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="52" height="52"><rect x="28" y="38" width="44" height="32" rx="3" fill="#8B6914"/><rect x="28" y="38" width="8" height="32" rx="1" fill="#A07820" opacity="0.6"/><rect x="37" y="38" width="8" height="32" rx="1" fill="#7a5c10" opacity="0.4"/><rect x="46" y="38" width="8" height="32" rx="1" fill="#A07820" opacity="0.5"/><rect x="55" y="38" width="8" height="32" rx="1" fill="#7a5c10" opacity="0.4"/><rect x="64" y="38" width="8" height="32" rx="1" fill="#A07820" opacity="0.3"/><ellipse cx="50" cy="70" rx="30" ry="8" fill="#9B7420"/><ellipse cx="50" cy="70" rx="30" ry="8" fill="none" stroke="#7a5c10" stroke-width="1"/><line x1="22" y1="68" x2="78" y2="68" stroke="#7a5c10" stroke-width="0.8" opacity="0.5"/><line x1="24" y1="72" x2="76" y2="72" stroke="#c49530" stroke-width="0.6" opacity="0.4"/><circle cx="32" cy="70" r="1.5" fill="#f97316"/><circle cx="50" cy="70" r="1.5" fill="#f97316"/><circle cx="68" cy="70" r="1.5" fill="#f97316"/><ellipse cx="50" cy="36" rx="32" ry="10" fill="#C4A030"/><line x1="20" y1="34" x2="80" y2="34" stroke="#9B7820" stroke-width="1" opacity="0.7"/><line x1="20" y1="36" x2="80" y2="36" stroke="#e8c060" stroke-width="0.8" opacity="0.4"/><line x1="20" y1="38" x2="80" y2="38" stroke="#9B7820" stroke-width="1" opacity="0.5"/><ellipse cx="50" cy="35" rx="32" ry="10" fill="none" stroke="#e8c870" stroke-width="0.8" opacity="0.5"/><circle cx="30" cy="35" r="2" fill="#f97316" stroke="#c97316" stroke-width="0.5"/><circle cx="50" cy="32" r="2" fill="#f97316" stroke="#c97316" stroke-width="0.5"/><circle cx="70" cy="35" r="2" fill="#f97316" stroke="#c97316" stroke-width="0.5"/><circle cx="50" cy="39" r="2" fill="#f97316" stroke="#c97316" stroke-width="0.5"/><ellipse cx="50" cy="36" rx="5" ry="3" fill="#3a2a08"/><ellipse cx="50" cy="35.5" rx="4" ry="2" fill="#1a1208"/></svg></div>
@@ -855,6 +953,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
       <button class="ajustes-tab"        id="ajTabUsuarios"  onclick="selAjTab('usuarios')" style="display:none">👥 Usuarios</button>
       <button class="ajustes-tab"        id="ajTabObras"     onclick="selAjTab('obras')" style="display:none">🏗 Obras</button>
       <button class="ajustes-tab"        id="ajTabIdeas"     onclick="selAjTab('ideas')" style="display:none">💡 Ideas</button>
+      <button class="ajustes-tab"        id="ajTabEmpresa"   onclick="selAjTab('empresa')" style="display:none">🏢 Empresa</button>
       <button class="ajustes-tab"        id="ajTabSistema"   onclick="selAjTab('sistema')">⚙️ Sistema</button>
     </div>
     <div style="flex:1;overflow-y:auto">
@@ -1028,10 +1127,28 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
         <div class="settings-section">
           <div class="settings-title">ℹ️ Acerca de</div>
           <div class="settings-row"><span>Aplicación</span><strong>Alejandra</strong></div>
-          <div class="settings-row"><span>Versión</span><strong>v4.5</strong></div>
+          <div class="settings-row"><span>Versión</span><strong>v4.6</strong></div>
           <div class="settings-row"><span>Backend</span><strong>Cloudflare Workers + D1</strong></div>
           <div class="settings-row"><span>Año</span><strong>2026</strong></div>
           <div style="margin-top:10px;text-align:center;font-size:11px;color:var(--muted);letter-spacing:1px">INVENTARIO · MAQUINARIA · CONTROL</div>
+        </div>
+      </div>
+
+      <!-- ── EMPRESA ── -->
+      <div class="ajustes-panel" id="ajPanelEmpresa">
+        <div class="settings-section">
+          <div class="settings-title">🏢 Mi Empresa</div>
+          <div id="empresaInfo">
+            <div style="color:var(--muted);font-size:13px">Cargando...</div>
+          </div>
+        </div>
+        <div class="settings-section" style="margin-top:16px">
+          <div class="settings-title">🏗 Obras</div>
+          <div id="empresaObras"></div>
+        </div>
+        <div class="settings-section" style="margin-top:16px">
+          <div class="settings-title">👥 Usuarios de la empresa</div>
+          <div id="empresaUsuarios"></div>
         </div>
       </div>
 
@@ -1257,6 +1374,30 @@ function toggleLoginPw() {
 async function doLogin() {
   const nombre = document.getElementById('loginNombre').value.trim();
   const codigo = document.getElementById('loginCodigo').value.trim();
+  // Email mode
+  if (_loginMode === 'email') {
+    const email    = document.getElementById('loginEmail').value.trim();
+    const password = document.getElementById('loginPassword').value;
+    const errEl    = document.getElementById('loginErr');
+    const btn      = document.getElementById('loginBtn');
+    if (!email || !password) { errEl.textContent = 'Introduce email y contraseña'; return; }
+    errEl.textContent = ''; btn.textContent = 'Verificando...'; btn.disabled = true;
+    try {
+      const res = await fetch(getAPI() + '/verificar', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) { errEl.textContent = data.error || 'Credenciales incorrectas'; btn.textContent = 'ACCEDER'; btn.disabled = false; return; }
+      const session = {
+        nombre: data.nombre, rol: data.rol, obra_id: data.obra_id || null,
+        obra_nombre: data.obra_nombre || null, token: data.token,
+        departamento: (data.rol === 'empresa_admin') ? null : (data.departamento || 'electrico')
+      };
+      setSession(session); iniciarApp();
+    } catch { errEl.textContent = 'Error de conexión'; btn.textContent = 'ACCEDER'; btn.disabled = false; }
+    return;
+  }
   const errEl  = document.getElementById('loginErr');
   const btn    = document.getElementById('loginBtn');
   errEl.textContent = '';
@@ -1296,6 +1437,92 @@ async function doLogin() {
   }
 }
 
+// ── Login mode ──────────────────────────────────────────────────────────────
+let _loginMode = 'code';
+function setLoginMode(mode) {
+  _loginMode = mode;
+  document.getElementById('loginModeCode').classList.toggle('active', mode === 'code');
+  document.getElementById('loginModeEmail').classList.toggle('active', mode === 'email');
+  document.getElementById('loginCodeFields').style.display = mode === 'code' ? 'block' : 'none';
+  document.getElementById('loginEmailFields').style.display = mode === 'email' ? 'flex' : 'none';
+  document.getElementById('loginErr').textContent = '';
+}
+function toggleLoginPw2() {
+  const inp = document.getElementById('loginPassword');
+  inp.type = inp.type === 'password' ? 'text' : 'password';
+}
+function toggleRegPw() {
+  const inp = document.getElementById('regPassword');
+  inp.type = inp.type === 'password' ? 'text' : 'password';
+}
+
+// ── Registro de empresa ────────────────────────────────────────────────────
+function abrirRegistro() {
+  document.getElementById('registroOverlay').style.display = 'flex';
+  document.getElementById('loginOverlay').style.display = 'none';
+  regGoStep(1);
+}
+function cerrarRegistro() {
+  document.getElementById('registroOverlay').style.display = 'none';
+  document.getElementById('loginOverlay').style.display = 'flex';
+}
+function regGoStep(n) {
+  document.querySelectorAll('.reg-step').forEach((s,i) => s.classList.toggle('active', i+1 === n));
+  document.querySelectorAll('.reg-dot').forEach((d,i) => d.classList.toggle('done', i < n));
+}
+function regAnterior(step) { regGoStep(step - 1); }
+function regSiguiente(step) {
+  if (step === 1) {
+    if (!document.getElementById('regEmpresaNombre').value.trim()) {
+      toast('Introduce el nombre de la empresa', 'err'); return;
+    }
+    regGoStep(2);
+  } else if (step === 2) {
+    const nombre = document.getElementById('regAdminNombre').value.trim();
+    const email  = document.getElementById('regEmail').value.trim();
+    const pass   = document.getElementById('regPassword').value;
+    const pass2  = document.getElementById('regPassword2').value;
+    if (!nombre || !email || !pass) { toast('Rellena todos los campos obligatorios', 'err'); return; }
+    if (pass.length < 8) { toast('La contraseña debe tener al menos 8 caracteres', 'err'); return; }
+    if (pass !== pass2) { toast('Las contraseñas no coinciden', 'err'); return; }
+    regGoStep(3);
+  }
+}
+async function regFinalizar() {
+  const btn = document.getElementById('regFinBtn');
+  const errEl = document.getElementById('regErr');
+  errEl.textContent = '';
+  btn.textContent = 'Creando...'; btn.disabled = true;
+  try {
+    const res = await fetch(getAPI() + '/empresas/registro', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        empresa_nombre: document.getElementById('regEmpresaNombre').value.trim(),
+        sector:         document.getElementById('regSector').value,
+        admin_nombre:   document.getElementById('regAdminNombre').value.trim(),
+        email:          document.getElementById('regEmail').value.trim(),
+        password:       document.getElementById('regPassword').value,
+        obra_nombre:    document.getElementById('regObraNombre').value.trim() || null,
+      })
+    });
+    const data = await res.json();
+    if (!res.ok || !data.ok) {
+      errEl.textContent = data.error || 'Error al registrar'; btn.textContent = '✅ Crear empresa'; btn.disabled = false; return;
+    }
+    const session = {
+      nombre: data.nombre, rol: data.rol, obra_id: data.obra_id || null,
+      obra_nombre: data.obra_nombre || null, token: data.token, departamento: null
+    };
+    setSession(session);
+    document.getElementById('registroOverlay').style.display = 'none';
+    toast('🎉 Empresa creada correctamente');
+    iniciarApp();
+  } catch {
+    errEl.textContent = 'Error de conexión'; btn.textContent = '✅ Crear empresa'; btn.disabled = false;
+  }
+}
+
 // ══════════════════════════════════════════════════════
 // APP INIT
 // ══════════════════════════════════════════════════════
@@ -1328,10 +1555,11 @@ async function iniciarApp() {
     window._connInterval = setInterval(checkConnection, 30000);
   }
 
-  const esSuperAdmin = s.rol === 'superadmin';
+  const esSuperAdmin   = s.rol === 'superadmin';
+  const esEmpresaAdmin = s.rol === 'empresa_admin';
 
-  // SuperAdmin sin depto elegido → pantalla de selección
-  if (esSuperAdmin && !s.departamento) {
+  // SuperAdmin / EmpresaAdmin sin depto elegido → pantalla de selección
+  if ((esSuperAdmin || esEmpresaAdmin) && !s.departamento) {
     showScreen('dept');
     renderHeader();
     return;
@@ -1353,16 +1581,17 @@ async function iniciarApp() {
   showScreen('home');
   await cargarStatsHome();
   await cargarCatalogos();
-  if (esSuperAdmin) {
+  if (esSuperAdmin || esEmpresaAdmin) {
     cargarBadgeIdeas();
     cargarObrasSelectUsuario();
   }
 }
 
 function rolLabel(rol) {
-  if (rol === 'superadmin') return 'SuperAdmin';
-  if (rol === 'encargado')  return 'Encargado';
-  if (rol === 'operario')   return 'Operario';
+  if (rol === 'superadmin')   return 'SuperAdmin';
+  if (rol === 'encargado')    return 'Encargado';
+  if (rol === 'operario')     return 'Operario';
+  if (rol === 'empresa_admin') return 'Admin';
   return rol || '—';
 }
 
@@ -1377,7 +1606,7 @@ function renderHeader() {
   if (!s) return;
 
   const nameEl = document.getElementById('headerUserName');
-  nameEl.textContent = (s.rol === 'superadmin' || s.rol === 'encargado')
+  nameEl.textContent = (s.rol === 'superadmin' || s.rol === 'encargado' || s.rol === 'empresa_admin')
     ? rolLabel(s.rol)
     : (s.nombre || '—');
 
@@ -3586,6 +3815,27 @@ function selAjTab(tab) {
   if (tab === 'obras')     cargarObrasAdmin();
   if (tab === 'ideas')     cargarSugerenciasAdmin();
   if (tab === 'sistema')   { renderAjustesInfo(); checkConnection(); }
+  if (tab === 'empresa')   cargarPanelEmpresa();
+}
+
+async function cargarPanelEmpresa() {
+  try {
+    const data = await apiCall('/mi-empresa');
+    const e = data.empresa;
+    document.getElementById('empresaInfo').innerHTML = `
+      <div class="settings-row"><span>Nombre</span><strong>${e.nombre}</strong></div>
+      <div class="settings-row"><span>Plan</span><span style="background:var(--accent);color:#000;padding:2px 8px;border-radius:4px;font-weight:700;font-size:11px">${(e.plan||'basic').toUpperCase()}</span></div>
+      <div class="settings-row"><span>Email</span><strong>${e.email||'—'}</strong></div>
+      <div class="settings-row"><span>Desde</span><strong>${(e.created_at||'').slice(0,10)}</strong></div>`;
+    document.getElementById('empresaObras').innerHTML = data.obras.length
+      ? data.obras.map(o => `<div class="settings-row"><span>🏗 ${o.nombre}</span><span style="font-size:11px;color:var(--muted)">Código: ${o.codigo}</span></div>`).join('')
+      : '<div style="color:var(--muted);font-size:13px">Sin obras registradas</div>';
+    document.getElementById('empresaUsuarios').innerHTML = data.usuarios.length
+      ? data.usuarios.map(u => `<div class="settings-row"><span>👤 ${u.nombre}</span><span style="font-size:11px;color:var(--muted)">${u.rol}</span></div>`).join('')
+      : '<div style="color:var(--muted);font-size:13px">Sin usuarios</div>';
+  } catch(e) {
+    document.getElementById('empresaInfo').innerHTML = '<div style="color:var(--red)">Error al cargar</div>';
+  }
 }
 
 function initAjustesTabs() {
@@ -3593,9 +3843,11 @@ function initAjustesTabs() {
   if (!s) return;
   const esSA = s.rol === 'superadmin';
   const esEnc = s.rol === 'encargado';
+  const esEA = s.rol === 'empresa_admin';
   document.getElementById('ajTabUsuarios').style.display = (esSA || esEnc) ? '' : 'none';
   document.getElementById('ajTabObras').style.display    = esSA ? '' : 'none';
   document.getElementById('ajTabIdeas').style.display    = esSA ? '' : 'none';
+  document.getElementById('ajTabEmpresa').style.display  = (esSA || esEA) ? '' : 'none';
   document.getElementById('sistemaSheetSection').style.display  = esSA ? 'block' : 'none';
   document.getElementById('sistemaLogsSection').style.display   = esSA ? 'block' : 'none';
   const cfgB = document.getElementById('cfgBobinasSection');
