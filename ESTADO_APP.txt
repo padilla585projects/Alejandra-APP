@@ -5,7 +5,7 @@
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 16/04/2026
-VERSIÓN ACTUAL: v4.1 (nueva app) / v4.1 (app vieja) — DESPLEGADAS ✅
+VERSIÓN ACTUAL: v4.2 (nueva app) / v4.1 (app vieja)
 
 REPO:    https://github.com/padilla585/Bobinaap.git  (branch: main)
 WORKER:  https://gestibobina-proxy.padilla585.workers.dev
@@ -227,6 +227,18 @@ v4.0  |  15/04/2026  [SOLO NUEVA APP]
   - Todos los datos existentes migrados con empresa_id=1 automáticamente
   - Índices creados: idx_*_empresa en tablas principales
   - SW bumpeado a alejandra-v4.0
+
+v4.2  |  16/04/2026  [SOLO NUEVA APP]
+  - Ideas & Feedback rediseñado con sistema de estados (pendiente/en_progreso/resuelto)
+  - Admin: filtros por estado y categoría, badges de estado coloreados, campo respuesta
+  - Badge en nav muestra sugerencias pendientes (antes mostraba no leídas)
+  - guardarSugerencia: ahora incluye empresa_id y estado='pendiente' en INSERT
+  - Nuevas funciones JS: selSugCategoria, filtrarSug, cambiarEstadoSug, abrirRespuestaSug
+  - cargarSugerenciasAdmin: usa filtros _sugFiltroKey/_sugFiltroVal para la query
+  - SW bumpeado a alejandra-v4.2
+  - Versión display en Ajustes: v4.2
+  - Worker desplegado: alejandra-app-api (Version ID: 3283ee97-437d-4b23-b0b6-c9c735d9dba5)
+  - index.html + sw.js en GitHub: padilla585projects/Alejandra-APP ✅
 
 v4.1  |  16/04/2026  [NUEVA APP — también aplicado en vieja para compatibilidad]
   - Fix crítico: quitada excepción isSeguridad en getPemp y getCarretillas
