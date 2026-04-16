@@ -5,7 +5,7 @@
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 16/04/2026
-VERSIÓN ACTUAL: v4.3 (nueva app) / v4.1 (app vieja)
+VERSIÓN ACTUAL: v4.4 (nueva app) / v4.1 (app vieja)
 
 REPO:    https://github.com/padilla585/Bobinaap.git  (branch: main)
 WORKER:  https://gestibobina-proxy.padilla585.workers.dev
@@ -227,6 +227,13 @@ v4.0  |  15/04/2026  [SOLO NUEVA APP]
   - Todos los datos existentes migrados con empresa_id=1 automáticamente
   - Índices creados: idx_*_empresa en tablas principales
   - SW bumpeado a alejandra-v4.0
+
+v4.4  |  16/04/2026  [SOLO NUEVA APP]
+  - Botón Inventario (nav inferior) ahora enruta según departamento:
+    · Seguridad → va a screenSeguridad, pestaña Inventario
+    · Eléctrico / Mecánicas → comportamiento anterior (screenModule → stock)
+  - Preparado para añadir más departamentos con su propio inventario
+  - SW bumpeado a alejandra-v4.4
 
 v4.3  |  16/04/2026  [SOLO NUEVA APP]
   - Modal de detalle para ítems del inventario de Seguridad
