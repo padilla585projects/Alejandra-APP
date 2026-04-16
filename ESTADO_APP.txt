@@ -5,7 +5,7 @@
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 15/04/2026
-VERSIÓN ACTUAL: v3.10 — DESPLEGADA ✅
+VERSIÓN ACTUAL: v4.0 (nueva app) / v3.16 (app vieja) — DESPLEGADAS ✅
 
 REPO:    https://github.com/padilla585/Bobinaap.git  (branch: main)
 WORKER:  https://gestibobina-proxy.padilla585.workers.dev
@@ -19,15 +19,25 @@ PAGES:   https://padilla585.github.io/Bobinaap/
 
 - Git: instalado, conectado a GitHub (padilla585), credenciales guardadas
 - Node.js: v24.14.1
-- Wrangler: instalado y autenticado con OAuth (padilla585@gmail.com)
-- Deploy frontend: git push → GitHub Pages automático
-- Deploy backend:  npx wrangler deploy  (desde carpeta Bobinaap)
-- ADMIN_CODE: configurado como secreto en Cloudflare (no está en el código)
-- GOOGLE_SHEET_ID: secreto en Cloudflare
-- TELEGRAM_BOT_TOKEN: secreto en Cloudflare
-- TELEGRAM_CHAT_ID: 6965043
+- Tokens y credenciales: guardados en NUEVA_CUENTA.txt (solo local, en .gitignore)
 - Obra activa: CPD Getafe (código: 001, id: 1)
-- Bobinas antiguas: 42 registros intactos en D1
+
+⚠️  REGLA DE DEPLOY: al hacer cualquier cambio, actualizar SIEMPRE las DOS apps:
+
+  APP VIEJA (padilla585):
+    GitHub:  git push → padilla585/Bobinaap (automático con git)
+    Worker:  deploy via API con token Workers-old (ver NUEVA_CUENTA.txt)
+             Account: c100d5a0ea37ee03989fe769c7259b83
+             Worker:  gestibobina-proxy
+             D1:      eac9f2d2-0845-409c-9032-109c563d7eec
+
+  APP NUEVA (padilla585projects):
+    GitHub:  GitHub API con token ghp_ (ver NUEVA_CUENTA.txt)
+             Repo: padilla585projects/Alejandra-APP
+    Worker:  deploy via API con token Workers-new (ver NUEVA_CUENTA.txt)
+             Account: d65ead2b2967bf68ff3848a36cd7b1b4
+             Worker:  alejandra-app-api
+             D1:      0c9eccde-78f1-476d-ac68-bf452bec0c62
 
 ================================================================================
   ROLES Y ACCESO
@@ -49,13 +59,20 @@ Departamentos:
 Tablas originales:  bobinas, obras, historial, proveedores, tipos_cable
 Tablas añadidas:    usuarios, pemp, carretillas, historial_pemp,
                     historial_carretillas, logs, sugerencias,
-                    inventario_seg, movimientos_seg, tipos_material_seg
+                    inventario_seg, movimientos_seg, tipos_material_seg,
+                    sesiones
+Tablas multi-tenant [solo nueva app]:
+                    empresas (id, nombre, slug, email, plan, activa, created_at)
 Catálogos:          tipos_pemp, tipos_carretilla, energias_carretilla
 Columnas extra:
-  bobinas:      num_albaran, departamento
-  pemp:         fecha_averia, fecha_reparacion, departamento
-  carretillas:  fecha_averia, fecha_reparacion, departamento
-  usuarios:     departamento
+  bobinas:      num_albaran, departamento, empresa_id*
+  pemp:         fecha_averia, fecha_reparacion, departamento, empresa_id*
+  carretillas:  fecha_averia, fecha_reparacion, departamento, empresa_id*
+  usuarios:     departamento, empresa_id*
+  obras:        empresa_id*
+  sesiones:     empresa_id*
+  [todas las demás tablas tienen empresa_id* también]
+  (*) solo en nueva app (alejandra-db)
 
 Backup local: C:\Users\Adrian\Downloads\Proyecto GestiBobina\backup_db_20260413.sql
 
@@ -180,6 +197,61 @@ v3.4  |  15/04/2026
   - Página: visibilitychange → reg.update() al volver a la pestaña
   - Página: reload con location.replace + timestamp para evitar HTTP cache
 
+v3.11  |  15/04/2026
+  - Fix CORS: X-Token añadido a Access-Control-Allow-Headers (las peticiones con
+    token fallaban en preflight OPTIONS en algunos navegadores/dispositivos)
+  - Ajustes → Usuarios: ahora muestra el departamento asignado de cada usuario
+  - Ajustes → Usuarios: botón 🏢 para cambiar el departamento de cualquier usuario
+    sin necesidad de borrar y recrear la cuenta
+  - Soluciona el problema de usuarios de Seguridad que no podían acceder a su dpto:
+    el encargado/superadmin asigna el departamento correcto desde Ajustes → Usuarios
+
+v4.0  |  15/04/2026  [SOLO NUEVA APP]
+  - Arquitectura multi-tenant: tabla `empresas` creada en D1
+  - empresa_id añadido a TODAS las tablas (bobinas, pemp, carretillas, obras,
+    usuarios, historial*, inventario_seg, movimientos_seg, sesiones, logs,
+    sugerencias, proveedores, tipos_*, energias_carretilla, tipos_material_seg)
+  - Todas las queries filtran por empresa_id (aislamiento de datos)
+  - Todos los INSERTs incluyen empresa_id del usuario autenticado
+  - getAuth() devuelve empresa_id desde sesiones D1
+  - crearSesion() almacena empresa_id (del usuario que inicia sesión)
+  - getCatalogo() acepta request para resolver empresa_id vía auth
+  - Empresa por defecto: id=1, nombre="Empresa Principal", slug="principal"
+  - Todos los datos existentes migrados con empresa_id=1 automáticamente
+  - Índices creados: idx_*_empresa en tablas principales
+  - SW bumpeado a alejandra-v4.0
+
+v3.16  |  15/04/2026
+  - Fix filtrado departamentos: quitado 'OR departamento IS NULL' en getBobinas/getPemp/getCarretillas
+  - Usuarios con departamento NULL en DB actualizados a 'electrico'
+  - Aplicado en AMBAS apps (worker viejo y nuevo)
+
+v3.15  |  15/04/2026
+  - Migración completa a nueva cuenta Cloudflare (padilla585.projects)
+  - Nueva app: https://padilla585projects.github.io/Alejandra-APP/
+  - Nuevo worker: alejandra-app-api.alejandra-app.workers.dev
+  - Nueva DB: alejandra-db (415 filas migradas)
+  - App vieja restaurada apuntando a worker viejo (gestibobina-proxy)
+  - Botón ⚠️ Resetear sesión y caché en Ajustes → Sistema
+  - SW: al actualizar borra URL guardada en localStorage automáticamente
+
+v3.14  |  15/04/2026
+  - Al actualizar SW limpia URL del worker guardada en localStorage
+  - Fuerza usar siempre API_DEFAULT del código actualizado
+
+v3.13  |  15/04/2026
+  - Botón ⚠️ Resetear sesión y caché en Ajustes → Sistema
+  - Limpia localStorage + caché SW + recarga forzada
+
+v3.12  |  15/04/2026
+  - Migración a nueva cuenta Cloudflare (primera versión)
+  - URL worker actualizada a alejandra-app-api
+
+v3.11  |  15/04/2026
+  - Fix CORS: X-Token añadido a Access-Control-Allow-Headers
+  - Ajustes → Usuarios: muestra departamento de cada usuario
+  - Botón 🏢 para cambiar departamento sin borrar la cuenta
+
 v3.10  |  15/04/2026
   - Bug #1: Icono en pantalla de departamentos invisible → fix color fondo SVG
   - Bug #2: Seguridad siempre abre en pestaña Escáner por defecto
@@ -248,6 +320,33 @@ Frontend (index.html + sw.js):
 ================================================================================
   PENDIENTE / FUTURAS ACTUALIZACIONES
 ================================================================================
+
+[ MULTI-TENANT — EN PROGRESO (solo nueva app) ]
+
+  Fase 1 ✅ COMPLETADA (v4.0):
+    - Tabla empresas creada
+    - empresa_id en todas las tablas
+    - Queries filtran por empresa_id
+    - Empresa por defecto id=1
+
+  Fase 2 — PENDIENTE: Auth con email + password_hash
+    - Añadir email + password_hash a tabla usuarios
+    - Nuevo endpoint POST /login (email+password, sin código)
+    - Mantener compatibilidad con códigos actuales (legacy)
+
+  Fase 3 — PENDIENTE: Registro de empresa (self-service)
+    - POST /empresas/registro (crea empresa + primer usuario admin)
+    - Pantalla de registro en frontend
+    - Email de bienvenida (opcional)
+
+  Fase 4 — PENDIENTE: Almacenamiento R2
+    - Fotos de máquinas, firma digital, PDFs de albarán
+    - Bucket R2 en nueva cuenta
+    - Rutas /upload, /files/:id en worker
+
+  Fase 5 — PENDIENTE: Facturación (Stripe)
+    - Planes: basic / pro / enterprise
+    - Se deja para el futuro
 
 [ PRIORIDAD ALTA — acordado, pendiente de implementar ]
 
