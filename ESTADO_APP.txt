@@ -26,6 +26,10 @@ PAGES:   https://padilla585.github.io/Bobinaap/
   - Por defecto: actualizar SOLO la app nueva (padilla585projects/Alejandra-APP)
   - Antes de cada deploy, PREGUNTAR al usuario si quiere actualizar también la vieja
   - Solo actualizar las dos si el usuario lo confirma explícitamente
+  - ESTADO_APP.txt: subir SOLO al repositorio donde se hayan hecho cambios
+    · Si solo se cambia la nueva → solo GitHub nuevo
+    · Si se cambian las dos → ambos GitHub
+    · Nunca subir ESTADO_APP.txt a un repo que no ha recibido cambios en esa sesión
 
   APP VIEJA (padilla585):
     GitHub:  git push → padilla585/Bobinaap (automático con git)
