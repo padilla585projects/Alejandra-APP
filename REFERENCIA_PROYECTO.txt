@@ -27,7 +27,7 @@ HAY DOS APPS EN PARALELO:
   └─ Login por código O por email + contraseña
   └─ Wizard de registro de nuevas empresas
   └─ Aquí van todas las mejoras y nuevas features
-  └─ Versión: v4.20
+  └─ Versión: v4.22
 
 REGLA DE DEPLOY:
   - BUGS      → ambas apps siempre
@@ -136,9 +136,11 @@ git -c credential.helper= push https://padilla585:<TOKEN_GITHUB_VIEJO>@github.co
 ================================================================================
 
 APP VIEJA:  v4.14  (sw.js: alejandra-v4.14 | version.json: {"v":"4.14"})
-APP NUEVA:  v4.21  (sw.js: alejandra-v4.21 | version.json: {"v":"4.21"})
+APP NUEVA:  v4.22  (sw.js: alejandra-v4.22 | version.json: {"v":"4.22"})
 
 Historial reciente (app nueva):
+  v4.22 [nueva] — Fix UX: botón + herramienta visible en Escanear y Inventario;
+                   FAB fichajes se oculta al salir de screenPersonal
   v4.21 [nueva] — Rediseño devoluciones: elimina tab "Dev.", añade botones modo
                    ✅ ENTRADA / ↩ DEVOLUCIÓN en pestaña Escanear; escáner trabaja
                    en el modo seleccionado; elimina cámara duplicada (-130 líneas)
@@ -333,8 +335,8 @@ C:\Users\Adrian\Downloads\Proyecto GestiBobina\
   └── NuevaApp\
       ├── index.html              ← Frontend app nueva (~6120 líneas)
       ├── worker.js               ← Worker Cloudflare app nueva
-      ├── sw.js                   ← Service Worker (alejandra-v4.21)
-      ├── version.json            ← {"v":"4.21"}
+      ├── sw.js                   ← Service Worker (alejandra-v4.22)
+      ├── version.json            ← {"v":"4.22"}
       ├── wrangler.toml           ← Config deploy (binding D1 incluido)
       ├── ESTADO_APP.txt          ← Changelog detallado app nueva ← LEER
       └── NUEVA_CUENTA.txt        ← Tokens y credenciales (NO subir a git)

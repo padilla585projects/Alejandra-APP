@@ -5,7 +5,7 @@
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 18/04/2026
-VERSIÓN ACTUAL: v4.14 app vieja | v4.21 app nueva
+VERSIÓN ACTUAL: v4.14 app vieja | v4.22 app nueva
 
 REPO:    https://github.com/padilla585/Bobinaap.git  (branch: main)
 WORKER:  https://gestibobina-proxy.padilla585.workers.dev
@@ -256,6 +256,12 @@ v4.21  |  18/04/2026  [SOLO NUEVA APP]
       POST /restaurar/inventario, POST /restaurar/empresa
     · Solo accesible para encargado / empresa_admin / superadmin
   - Worker y GitHub actualizados ✅
+
+v4.22  |  18/04/2026  [SOLO NUEVA APP]
+  - Fix UX herramientas y fichajes
+    · Botón + (Nueva Herramienta) visible en Escanear Y en Inventario (antes solo Inventario)
+    · FAB fichajes se oculta correctamente al salir de screenPersonal (navTo + irAtras)
+  - GitHub actualizado ✅
 
 v4.20  |  17/04/2026  [SOLO NUEVA APP]
   - #40: Módulo Personal — control de fichajes y asistencia
