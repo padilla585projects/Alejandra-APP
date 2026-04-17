@@ -525,7 +525,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
 
   <!-- HOME SCREEN -->
   <div id="screenHome" class="screen flex-screen active" style="padding:0;height:100%;position:relative">
-    <div style="position:absolute;bottom:8px;right:12px;font-family:'Montserrat',sans-serif;font-size:9px;color:var(--muted);opacity:.5;z-index:10;pointer-events:none">v4.11</div>
+    <div style="position:absolute;bottom:8px;right:12px;font-family:'Montserrat',sans-serif;font-size:9px;color:var(--muted);opacity:.5;z-index:10;pointer-events:none">v4.12</div>
     <div class="module-grid" style="flex:1">
       <div class="module-card" id="cardBobinas" onclick="selectModule('bobinas')">
         <div class="module-emoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="52" height="52"><rect x="28" y="38" width="44" height="32" rx="3" fill="#8B6914"/><rect x="28" y="38" width="8" height="32" rx="1" fill="#A07820" opacity="0.6"/><rect x="37" y="38" width="8" height="32" rx="1" fill="#7a5c10" opacity="0.4"/><rect x="46" y="38" width="8" height="32" rx="1" fill="#A07820" opacity="0.5"/><rect x="55" y="38" width="8" height="32" rx="1" fill="#7a5c10" opacity="0.4"/><rect x="64" y="38" width="8" height="32" rx="1" fill="#A07820" opacity="0.3"/><ellipse cx="50" cy="70" rx="30" ry="8" fill="#9B7420"/><ellipse cx="50" cy="70" rx="30" ry="8" fill="none" stroke="#7a5c10" stroke-width="1"/><line x1="22" y1="68" x2="78" y2="68" stroke="#7a5c10" stroke-width="0.8" opacity="0.5"/><line x1="24" y1="72" x2="76" y2="72" stroke="#c49530" stroke-width="0.6" opacity="0.4"/><circle cx="32" cy="70" r="1.5" fill="#f97316"/><circle cx="50" cy="70" r="1.5" fill="#f97316"/><circle cx="68" cy="70" r="1.5" fill="#f97316"/><ellipse cx="50" cy="36" rx="32" ry="10" fill="#C4A030"/><line x1="20" y1="34" x2="80" y2="34" stroke="#9B7820" stroke-width="1" opacity="0.7"/><line x1="20" y1="36" x2="80" y2="36" stroke="#e8c060" stroke-width="0.8" opacity="0.4"/><line x1="20" y1="38" x2="80" y2="38" stroke="#9B7820" stroke-width="1" opacity="0.5"/><ellipse cx="50" cy="35" rx="32" ry="10" fill="none" stroke="#e8c870" stroke-width="0.8" opacity="0.5"/><circle cx="30" cy="35" r="2" fill="#f97316" stroke="#c97316" stroke-width="0.5"/><circle cx="50" cy="32" r="2" fill="#f97316" stroke="#c97316" stroke-width="0.5"/><circle cx="70" cy="35" r="2" fill="#f97316" stroke="#c97316" stroke-width="0.5"/><circle cx="50" cy="39" r="2" fill="#f97316" stroke="#c97316" stroke-width="0.5"/><ellipse cx="50" cy="36" rx="5" ry="3" fill="#3a2a08"/><ellipse cx="50" cy="35.5" rx="4" ry="2" fill="#1a1208"/></svg></div>
@@ -982,6 +982,16 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
           <div class="settings-row" id="ajDeptRow"><span>Departamento</span><strong id="ajustesDept">—</strong></div>
           <button class="btn-primary btn-danger" style="margin-top:12px;font-size:14px" onclick="cerrarSesion()">🚪 Cerrar sesión</button>
         </div>
+        <div class="settings-section" id="seccionSesionesActivas" style="margin-top:16px;display:none">
+          <div class="settings-title">👥 Sesiones activas</div>
+          <div id="listaSesionesActivas" style="font-size:13px;color:var(--muted)">—</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
+            <button class="btn-primary btn-secondary" style="flex:1;font-size:12px" onclick="cerrarSesionesRol('encargado')">Cerrar encargados</button>
+            <button class="btn-primary btn-secondary" style="flex:1;font-size:12px" onclick="cerrarSesionesRol('operario')">Cerrar operarios</button>
+            <button class="btn-primary btn-danger" style="width:100%;font-size:12px;margin-top:4px" onclick="cerrarSesionesRol('todas')">🚪 Cerrar TODAS (excepto yo)</button>
+          </div>
+        </div>
+        <button class="btn-primary btn-secondary" style="margin-top:12px;font-size:13px;width:100%" onclick="cargarSesionesActivas()">👀 Ver quién está conectado</button>
       </div>
 
       <!-- CATÁLOGOS -->
@@ -1141,7 +1151,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
         <div class="settings-section">
           <div class="settings-title">ℹ️ Acerca de</div>
           <div class="settings-row"><span>Aplicación</span><strong>Alejandra</strong></div>
-          <div class="settings-row"><span>Versión</span><strong>v4.11</strong></div>
+          <div class="settings-row"><span>Versión</span><strong>v4.12</strong></div>
           <div class="settings-row"><span>Backend</span><strong>Cloudflare Workers + D1</strong></div>
           <div class="settings-row"><span>Año</span><strong>2026</strong></div>
           <div style="margin-top:10px;text-align:center;font-size:11px;color:var(--muted);letter-spacing:1px">INVENTARIO · MAQUINARIA · CONTROL</div>
@@ -1299,6 +1309,17 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
       <button class="btn-primary btn-secondary" style="flex:1;min-width:120px;margin-top:0" onclick="compartirCodigo()">📤 Compartir</button>
     </div>
     <button class="btn-primary btn-secondary" style="font-size:13px;margin-top:8px" onclick="document.getElementById('modalCodigo').classList.remove('show')">Cerrar</button>
+  </div>
+</div>
+
+<!-- MODAL FICHA MÁQUINA — pantalla completa (#44) -->
+<div class="modal-overlay" id="modalFichaMaquina" onclick="if(event.target===this)closeFichaMaquina()" style="align-items:center">
+  <div class="modal" style="border-radius:16px;max-height:92vh;max-width:480px;width:calc(100% - 32px)">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+      <div class="modal-title" style="margin-bottom:0" id="fichaMatricula">—</div>
+      <button onclick="closeFichaMaquina()" style="background:var(--surface2);border:none;border-radius:50%;width:32px;height:32px;font-size:18px;cursor:pointer;color:var(--text)">×</button>
+    </div>
+    <div id="fichaContenido"></div>
   </div>
 </div>
 
@@ -1666,6 +1687,12 @@ function renderAjustesInfo() {
   const d = document.getElementById('ajustesDept');
   if (d) d.textContent = s.departamento ? (DEPT_INFO[s.departamento]?.name || s.departamento) : '—';
   const cu = document.getElementById('cfgApiUrl'); if(cu) cu.value = getAPI();
+  // Mostrar botón "Ver quién está conectado" solo a superadmin/encargado/empresa_admin
+  const btnVerSesiones = document.querySelector('button[onclick="cargarSesionesActivas()"]');
+  if (btnVerSesiones) {
+    const puedeVerSesiones = s.rol === 'superadmin' || s.rol === 'encargado' || s.rol === 'empresa_admin';
+    btnVerSesiones.style.display = puedeVerSesiones ? 'block' : 'none';
+  }
 }
 
 function setupHomeModules() {
@@ -3968,6 +3995,47 @@ function irAInventario(matricula, modulo) {
   navTo('stock');
 }
 
+function closeFichaMaquina() {
+  document.getElementById('modalFichaMaquina').classList.remove('show');
+}
+
+async function cargarSesionesActivas() {
+  const s = getSession();
+  if (!s || (s.rol !== 'superadmin' && s.rol !== 'encargado' && s.rol !== 'empresa_admin')) return;
+  const seccion = document.getElementById('seccionSesionesActivas');
+  const lista   = document.getElementById('listaSesionesActivas');
+  seccion.style.display = 'block';
+  lista.innerHTML = '<span style="color:var(--muted)">Cargando...</span>';
+  try {
+    const res  = await apiCall('/sesiones');
+    const data = await res.json();
+    if (!res.ok || !Array.isArray(data)) { lista.innerHTML = '<span style="color:var(--red)">Error al cargar</span>'; return; }
+    if (!data.length) { lista.innerHTML = '<span style="color:var(--muted)">No hay sesiones activas</span>'; return; }
+    const rolIcon = { superadmin: '🔐', encargado: '👷', operario: '👤', empresa_admin: '🏢' };
+    lista.innerHTML = data.map(s => `
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)">
+        <div>
+          <div style="font-size:13px;font-weight:700">${rolIcon[s.rol]||'👤'} ${s.nombre || '—'}</div>
+          <div style="font-size:11px;color:var(--muted)">${s.rol} · ${s.departamento || '—'} · ${s.obra_nombre || '—'}</div>
+        </div>
+        <div style="font-size:10px;color:var(--muted);text-align:right">${(s.last_used||'').slice(11,16) || '—'}</div>
+      </div>`).join('');
+  } catch { lista.innerHTML = '<span style="color:var(--red)">Error de conexión</span>'; }
+}
+
+async function cerrarSesionesRol(rol) {
+  const msg = rol === 'todas' ? '¿Cerrar TODAS las sesiones excepto la tuya?' :
+              `¿Cerrar todas las sesiones de ${rol}?`;
+  if (!confirm(msg)) return;
+  try {
+    const body = rol === 'todas' ? {} : { rol };
+    const res  = await apiCall('/sesiones/cerrar-todas', 'POST', body);
+    const data = await res.json();
+    if (data.ok) { toast('✅ Sesiones cerradas'); cargarSesionesActivas(); }
+    else toast('❌ Error al cerrar sesiones', 'err');
+  } catch { toast('❌ Error de conexión', 'err'); }
+}
+
 async function buscarMaquina() {
   const mat = (document.getElementById('buscarMatInput')?.value || '').trim().toUpperCase();
   if (!mat) return toast('⚠️ Introduce la matrícula', 'err');
@@ -3984,15 +4052,32 @@ async function buscarMaquina() {
     const modulo = data.tipo === 'pemp' ? 'pemp' : 'carretillas';
     const tipo = data.tipo === 'pemp' ? 'PEMP' : 'Carretilla';
     const estadoColor = item.estado === 'Disponible' ? 'var(--green)' : item.estado === 'Averiada' ? 'var(--red)' : 'var(--muted)';
-    c.innerHTML = `
-      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px">
-        <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:18px;color:var(--accent)">${item.matricula}</div>
-        <div style="font-size:12px;color:var(--muted);margin-top:2px">${tipo}${item.tipo ? ' · ' + item.tipo : ''}</div>
-        <div style="font-size:13px;margin-top:8px">🏗 Obra: <strong>${item.obra_nombre || '—'}</strong></div>
-        <div style="font-size:13px;margin-top:4px;color:${estadoColor}">● ${item.estado || '—'}</div>
-        ${item.marca ? `<div style="font-size:12px;color:var(--muted);margin-top:4px">🔧 ${item.marca}</div>` : ''}
-        <button onclick="irAInventario('${item.matricula}','${modulo}')" style="margin-top:10px;width:100%;padding:9px;background:var(--accent);border:none;border-radius:8px;color:#000;font-family:'Montserrat',sans-serif;font-weight:900;font-size:12px;cursor:pointer">📦 Ver en inventario</button>
-      </div>`;
+    const histHTML = (data.historial || []).slice(0, 8).map(h => `
+      <div style="display:flex;justify-content:space-between;font-size:12px;padding:6px 0;border-bottom:1px solid var(--border)">
+        <span>${h.accion === 'entrada' ? '📥' : h.accion === 'devolucion' ? '📤' : '🗑️'} ${h.usuario || '—'}</span>
+        <span style="color:var(--muted)">${(h.fecha || h.created_at || '').slice(0,16)}</span>
+      </div>`).join('') || '<div style="color:var(--muted);font-size:12px">Sin historial</div>';
+    // Mostrar en modal a pantalla completa (#44)
+    document.getElementById('fichaMatricula').textContent = item.matricula;
+    document.getElementById('fichaContenido').innerHTML = `
+      <div style="font-size:12px;color:var(--muted);margin-bottom:12px">${tipo}${item.tipo ? ' · ' + item.tipo : ''}</div>
+      <div class="modal-card">
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">Estado</span><strong style="color:${estadoColor}">● ${item.estado || '—'}</strong></div>
+          <div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">Obra</span><strong>${item.obra_nombre || '—'}</strong></div>
+          <div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">Departamento</span><strong>${item.departamento || '—'}</strong></div>
+          ${item.marca ? `<div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">Marca</span><strong>${item.marca}</strong></div>` : ''}
+          ${item.proveedor ? `<div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">Proveedor</span><strong>${item.proveedor}</strong></div>` : ''}
+          ${item.fecha_entrada ? `<div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">Entrada</span><strong>${item.fecha_entrada.slice(0,10)}</strong></div>` : ''}
+          ${item.fecha_revision ? `<div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">Revisión</span><strong>${item.fecha_revision.slice(0,10)}</strong></div>` : ''}
+          ${item.notas ? `<div style="margin-top:4px;font-size:12px;color:var(--muted)">📝 ${item.notas}</div>` : ''}
+        </div>
+      </div>
+      <div style="font-family:'Montserrat',sans-serif;font-weight:700;font-size:12px;color:var(--muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:1px">Historial reciente</div>
+      <div>${histHTML}</div>
+      <button onclick="irAInventario('${item.matricula}','${modulo}');closeFichaMaquina()" style="margin-top:14px;width:100%;padding:12px;background:var(--accent);border:none;border-radius:10px;color:#000;font-family:'Montserrat',sans-serif;font-weight:900;font-size:13px;cursor:pointer">📦 Ver en inventario</button>`;
+    document.getElementById('modalFichaMaquina').classList.add('show');
+    c.innerHTML = `<div style="font-size:12px;color:var(--muted);text-align:center;padding:8px">✅ ${item.matricula} encontrada — abriendo ficha...</div>`;
   } catch { c.innerHTML = '<div style="color:var(--red);font-size:12px">❌ Error de conexión</div>'; }
 }
 
