@@ -5,7 +5,7 @@
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 17/04/2026
-VERSIÓN ACTUAL: v4.14 app vieja | v4.16 app nueva
+VERSIÓN ACTUAL: v4.14 app vieja | v4.17 app nueva
 
 REPO:    https://github.com/padilla585/Bobinaap.git  (branch: main)
 WORKER:  https://gestibobina-proxy.padilla585.workers.dev
@@ -228,6 +228,20 @@ v4.0  |  15/04/2026  [SOLO NUEVA APP]
   - Todos los datos existentes migrados con empresa_id=1 automáticamente
   - Índices creados: idx_*_empresa en tablas principales
   - SW bumpeado a alejandra-v4.0
+
+v4.17  |  17/04/2026  [SOLO NUEVA APP]
+  - #52: Botón "← Atrás" en el header
+    · Aparece automáticamente al entrar en Inventario, Ajustes o Ideas
+    · Para superadmin/empresa_admin: vuelve al selector de departamento
+    · Para el resto: vuelve al home
+    · Botón físico de Android también funciona (popstate + history.pushState)
+  - #53: Filtro de sugerencias por departamento en Ideas (Ajustes)
+    · Nuevos botones: ⚡ Eléctrico / 🔧 Mecánicas / 🔺 Seguridad
+    · El departamento se guarda automáticamente al enviar una sugerencia
+    · Se muestra en cada tarjeta de sugerencia
+    · DB: columna `departamento` añadida a tabla sugerencias (nueva app)
+    · Worker: guardarSugerencia ahora obtiene departamento y empresa_id de getAuth
+  - Worker y GitHub actualizados ✅
 
 v4.16  |  17/04/2026  [SOLO NUEVA APP]
   - BUG: empresa_admin no tenía permisos para hacer nada en la app
@@ -556,12 +570,14 @@ Frontend (index.html + sw.js):
 
 [ SUGERENCIAS PENDIENTES — APP VIEJA (gestibobina-db) ]
 
-  ERRORES (ninguno pendiente — todos resueltos hasta v4.16)
+  ERRORES (ninguno pendiente — todos resueltos hasta v4.17)
 
   MEJORAS:
   #44 ✅ - Ficha de máquina a pantalla completa (v4.12)
   #38 ✅ - Ajustes → cerrar sesión a todos / ver quién está conectado (v4.12)
   #54 ✅ - Editar datos en inventario de seguridad (v4.12 — fix #51)
+  #52 ✅ - Botón "← Atrás" en header + botón físico Android (v4.17 — solo nueva)
+  #53 ✅ - Filtrar sugerencias por departamento (v4.17 — solo nueva)
   #15 - Pedidos en parte eléctrica + sync Sheets
 
   NUEVAS FUNCIONALIDADES:
