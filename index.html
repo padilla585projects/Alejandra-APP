@@ -4901,7 +4901,7 @@ async function cargarObrasSelectUsuario() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '4.22';
+const APP_VERSION = '4.23';
 let _actualizando = false;
 
 async function checkVersionAndUpdate() {
@@ -5107,7 +5107,7 @@ if ('serviceWorker' in navigator) {
   async function verDetalleHerr(id) {
     document.getElementById('modalHerrDetalleTitulo').textContent = 'Herramienta';
     document.getElementById('modalHerrDetalleBody').innerHTML = '<div class="empty-state">Cargando...</div>';
-    document.getElementById('modalHerrDetalle').classList.add('active');
+    document.getElementById('modalHerrDetalle').classList.add('show');
     try {
       const res = await apiCall('/herramientas/' + id);
       if (!res.ok) throw new Error();
@@ -5117,7 +5117,7 @@ if ('serviceWorker' in navigator) {
     } catch { document.getElementById('modalHerrDetalleBody').innerHTML = '<div style="color:var(--red)">Error al cargar</div>'; }
   }
 
-  function cerrarDetalleHerr() { document.getElementById('modalHerrDetalle').classList.remove('active'); }
+  function cerrarDetalleHerr() { document.getElementById('modalHerrDetalle').classList.remove('show'); }
 
   async function herrCambiarEstado(id, nuevoEstado) {
     try {
@@ -5177,7 +5177,7 @@ if ('serviceWorker' in navigator) {
   async function verDetalleKit(id) {
     document.getElementById('modalKitDetalleTitulo').textContent = 'Kit';
     document.getElementById('modalKitDetalleBody').innerHTML = '<div class="empty-state">Cargando...</div>';
-    document.getElementById('modalKitDetalle').classList.add('active');
+    document.getElementById('modalKitDetalle').classList.add('show');
     try {
       const res = await apiCall('/kits-herramientas/' + id);
       if (!res.ok) throw new Error();
@@ -5230,7 +5230,7 @@ if ('serviceWorker' in navigator) {
     } catch { document.getElementById('modalKitDetalleBody').innerHTML = '<div style="color:var(--red)">Error al cargar</div>'; }
   }
 
-  function cerrarDetalleKit() { document.getElementById('modalKitDetalle').classList.remove('active'); }
+  function cerrarDetalleKit() { document.getElementById('modalKitDetalle').classList.remove('show'); }
 
   async function kitCambiarEstado(id, nuevoEstado) {
     const asignado = nuevoEstado === 'disponible' ? '' : null;
@@ -5315,10 +5315,10 @@ if ('serviceWorker' in navigator) {
         document.getElementById('modalHerrTitulo').textContent = '🔧 Nueva herramienta';
       }
     });
-    document.getElementById('modalHerramienta').classList.add('active');
+    document.getElementById('modalHerramienta').classList.add('show');
   }
 
-  function cerrarFormHerramienta() { document.getElementById('modalHerramienta').classList.remove('active'); }
+  function cerrarFormHerramienta() { document.getElementById('modalHerramienta').classList.remove('show'); }
 
   async function guardarHerramienta() {
     const serie = document.getElementById('herrSerie').value.trim();
@@ -5380,10 +5380,10 @@ if ('serviceWorker' in navigator) {
         document.getElementById('modalKitTitulo').textContent = '📋 Nuevo Kit';
       }
     });
-    document.getElementById('modalKit').classList.add('active');
+    document.getElementById('modalKit').classList.add('show');
   }
 
-  function cerrarFormKit() { document.getElementById('modalKit').classList.remove('active'); }
+  function cerrarFormKit() { document.getElementById('modalKit').classList.remove('show'); }
 
   async function guardarKit() {
     const numero = document.getElementById('kitNumero').value.trim();
@@ -5508,11 +5508,11 @@ if ('serviceWorker' in navigator) {
     cargarObrasSelectPedido().then(() => {
       if (pedido?.obra_id) document.getElementById('pedObra').value = pedido.obra_id;
     });
-    document.getElementById('modalPedido').classList.add('active');
+    document.getElementById('modalPedido').classList.add('show');
   }
 
   function cerrarFormPedido() {
-    document.getElementById('modalPedido').classList.remove('active');
+    document.getElementById('modalPedido').classList.remove('show');
   }
 
   async function guardarPedido() {
@@ -5885,11 +5885,11 @@ if ('serviceWorker' in navigator) {
       obrasSel.innerHTML = '<option value="">— Sin obra —</option>' +
         window._obras.map(o => `<option value="${o.id}">${o.nombre}</option>`).join('');
     }
-    document.getElementById('modalFichaje').classList.add('active');
+    document.getElementById('modalFichaje').classList.add('show');
   }
 
   function cerrarFormFichaje() {
-    document.getElementById('modalFichaje').classList.remove('active');
+    document.getElementById('modalFichaje').classList.remove('show');
   }
 
   async function editarFichaje(id) {
