@@ -5,7 +5,7 @@
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 18/04/2026
-VERSIÓN ACTUAL: v4.14 app vieja | v4.22 app nueva
+VERSIÓN ACTUAL: v4.14 app vieja | v4.23 app nueva
 
 REPO:    https://github.com/padilla585/Bobinaap.git  (branch: main)
 WORKER:  https://gestibobina-proxy.padilla585.workers.dev
@@ -68,9 +68,7 @@ Tablas originales:  bobinas, obras, historial, proveedores, tipos_cable
 Tablas añadidas:    usuarios, pemp, carretillas, historial_pemp,
                     historial_carretillas, logs, sugerencias,
                     inventario_seg, movimientos_seg, tipos_material_seg,
-                    sesiones, pedidos, tipos_herramienta, kits_herramientas,
-                    herramientas, historial_herramientas,
-                    fichajes, horarios_obra, personal_externo
+                    sesiones
 Tablas multi-tenant [solo nueva app]:
                     empresas (id, nombre, slug, email, plan, activa, created_at)
 Catálogos:          tipos_pemp, tipos_carretilla, energias_carretilla
@@ -231,108 +229,29 @@ v4.0  |  15/04/2026  [SOLO NUEVA APP]
   - Índices creados: idx_*_empresa en tablas principales
   - SW bumpeado a alejandra-v4.0
 
-v4.21  |  17/04/2026  [SOLO NUEVA APP]
-  - Rediseño devoluciones — integrado en pestaña Escanear
-    · Eliminada pestaña "Dev." del screenModule (era #70 del log de sugerencias)
-    · Dos botones de modo en la parte superior de Escanear:
-      ✅ ENTRADA  /  ↩ DEVOLUCIÓN  (estilo activo naranja acorde al resto de la app)
-    · Modo ENTRADA: comportamiento idéntico al anterior
-    · Modo DEVOLUCIÓN: oculta campos de entrada, al escanear/introducir código busca
-      automáticamente el equipo y muestra ficha + botón CONFIRMAR DEVOLUCIÓN
-    · Enter en el input enruta según el modo activo
-    · Eliminada cámara duplicada: devOpenCamera, devCloseCamera, devCaptureOCR, devStartQRLoop
-    · -130 líneas de código, 0 funcionalidad perdida
-  - GitHub actualizado ✅
-
-v4.21  |  18/04/2026  [SOLO NUEVA APP]
-  - Backup y restauración por separado en Ajustes → Sistema:
-    · 📦 Backup inventario: descarga/restaura bobinas, PEMP, carretillas,
-      inventario seg, movimientos seg, pedidos, herramientas, kits herramientas
-    · 🏢 Backup empresa: descarga/restaura obras, catálogos (proveedores,
-      tipos cable/pemp/carretilla/energía/material seg/herramienta)
-      y lista de usuarios (sin contraseñas)
-    · Restauración con confirmación explícita + reemplaza datos actuales
-    · Worker: 4 endpoints nuevos GET /backup/inventario, GET /backup/empresa,
-      POST /restaurar/inventario, POST /restaurar/empresa
-    · Solo accesible para encargado / empresa_admin / superadmin
-  - Worker y GitHub actualizados ✅
-
-v4.22  |  18/04/2026  [SOLO NUEVA APP]
-  - Fix UX herramientas y fichajes
-    · Botón + (Nueva Herramienta) visible en Escanear Y en Inventario (antes solo Inventario)
-    · FAB fichajes se oculta correctamente al salir de screenPersonal (navTo + irAtras)
-  - GitHub actualizado ✅
-
-v4.20  |  17/04/2026  [SOLO NUEVA APP]
-  - #40: Módulo Personal — control de fichajes y asistencia
-    · Departamento "👷 Personal" en screenDept
-    · screenPersonal con 3 pestañas:
-      - 📋 Hoy: fichajes del día con estado codificado por color y horas trabajadas
-      - 📅 Semana: grilla 7×días por trabajador con total de horas, nav prev/siguiente
-      - 📊 Resumen mensual: presencias/ausencias/bajas + barra de asistencia %, nav prev/sig
-    · Modal crear/editar fichaje: trabajador, fecha, hora entrada/salida, estado, obra, notas
-    · Exportación a Excel (XLSX) en todos los tabs
-    · FAB (+) visible solo para encargado/admin
-    · Operario solo ve sus propios fichajes (worker filtra por usuario_id)
-    · 3 tablas D1: fichajes, horarios_obra, personal_externo (ya existían)
-    · worker: getTrabajadores, getFichajes, crearFichaje, actualizarFichaje,
-              eliminarFichaje, getResumenSemana, getResumenMes + externo CRUD
-    · Anotación técnica: 'estado' en DB (no 'tipo'), getFichajes retorna array plano
-    · navTo('personal') + actualizarBtnAtras actualizado
-  - Worker redesplegado ✅, GitHub actualizado ✅
-  - [A continuación, sección de Sheets de v4.20 anterior]
-  - Google Sheets: sheets completamente separados de la app vieja (Opción B)
-    · Sheet equipos nuevo: 1SVtsS8nAJWlbFKDt8HxH0MZOJW762U7wRhkyTjIs_Sg
-    · Sheet pedidos: 1fIrkm6oQRmsVcqHTJstVfLNZJjSumotSQKpuQ6f6lD8
-    · Secretos configurados en worker: GOOGLE_CLIENT_EMAIL, GOOGLE_PRIVATE_KEY,
-      GOOGLE_SHEET_ID (nuevo), GOOGLE_PEDIDOS_SHEET_ID
-    · Fix deadlock: todas las llamadas fetch() a Sheets API ahora consumen el
-      body de respuesta con .then(r => r.body?.cancel()) — evita cancelaciones
-      por "stalled HTTP response" en Cloudflare Workers
-  - Worker redesplegado ✅
-
-v4.19  |  17/04/2026  [SOLO NUEVA APP]
-  - #39: Módulo Herramientas — kits y herramientas en obra
-    · 4 tablas nuevas en D1: tipos_herramienta, kits_herramientas, herramientas, historial_herramientas
-    · 15 tipos por defecto: Taladro, Impactador, Radial, Batería, Cargador, etc.
-    · Card 🔧 en home (visible todos los depts excepto seguridad)
-    · screenHerramientas con 4 pestañas:
-      - 📷 Escanear: busca por número de serie → ficha + acciones + historial
-      - 🔧 Inventario: lista filtrable por estado, modal con ficha completa
-      - 📋 Kits: lista con badge componentes reales/total, modal detalle con piezas
-      - 🕒 Historial: últimos 50 movimientos
-    · Fechas automáticas: alta, asignacion, devolucion, averia, reparacion
-    · Departamento auto desde sesión, editable después
-    · Estados: disponible / en_uso / averiado / en_reparacion / perdido / baja
-    · Alimentación: batería / eléctrica / neumática / manual
-    · Kits: número + nombre + obra + asignado_a + nº componentes + estado
-    · Permisos: encargado+ crea/edita; operario solo cambia estado de herramientas
-    · Ajustes → Catálogos → 🔧 Tipos herramienta (añadir/eliminar)
-    · Botón atrás Android funciona
-    · Worker: 14 nuevos endpoints CRUD + historial automático
+v4.23  |  18/04/2026  [SOLO NUEVA APP]
+  - BUG CRÍTICO: modales de Herramientas, Pedidos y Personal/Fichajes no aparecían
+    · Causa: classList.add('active') pero CSS solo reconoce .modal-overlay.show
+    · Fix: cambiado a classList.add/remove('show') en los 6 modales afectados:
+      modalHerramienta, modalKit, modalHerrDetalle, modalKitDetalle,
+      modalFichaje, modalPedido
+    · Afectaba: crear/editar herramientas, crear kits, ver detalles,
+      crear/editar pedidos, crear/editar fichajes
   - Worker y GitHub actualizados ✅
 
 v4.18  |  17/04/2026  [SOLO NUEVA APP]
-  - #15: Módulo Pedidos — solicitudes de material
-    · screenPedidos: pantalla propia con header, filtros de estado y lista
-    · Card "📦 Pedidos" en home (visible todos los depts excepto seguridad)
-    · Stats home: muestra pedidos pendientes + solicitados en el badge morado
-    · Modal crear/editar: descripción*, referencia, proveedor, cantidad, unidad,
-      obra, notas
-    · Flujo de estados: pendiente → solicitado → recibido (o cancelado)
-    · Filtros rápidos por estado: Todos / ⏳Pendiente / 📤Solicitado / ✅Recibido / ❌Cancelado
-    · Permisos: TODOS los roles crean y actualizan (incl. operarios)
-               Solo encargado / empresa_admin / superadmin pueden eliminar
-    · DB: tabla pedidos creada (migrate_pedidos.sql — ya ejecutado en D1)
-    · Columnas Sheets 'Elec-Pedidos': Estado, Descripción, Referencia, Cantidad,
-      Unidad, Proveedor, Obra, Solicitado por, Fecha Solicitud, Fecha Recepción, Notas
-    · Botón físico Android (← atrás) vuelve al home desde screenPedidos
-  - Google Sheets optimizado:
-    · Sync selectivo: cada operación solo actualiza la pestaña afectada
-    · tabForDept(): helper tipo+departamento → nombre de pestaña
-    · Formato visual al crear pestañas: cabecera negrita+color, fila congelada,
-      auto-resize, colores condicionales en columna Estado
-  - Worker y GitHub actualizados ✅
+  - #15: Módulo de Pedidos en parte eléctrica
+    · Tab 📦 Pedidos visible solo para Eléctrico y superadmin/empresa_admin
+    · Todos los roles (incluido operario) pueden crear y cambiar estado
+    · Solo encargado/admin pueden borrar pedidos
+    · Estados: pendiente → solicitado → recibido (o cancelado)
+    · Al marcar recibido se guarda fecha automáticamente
+    · Sync automático con Google Sheets → pestaña Elec-Pedidos
+    · Columnas Sheets: Estado | Descripción | Referencia | Cantidad | Unidad |
+      Proveedor | Obra | Solicitado por | Fecha Solicitud | Fecha Recepción | Notas
+    · Notificación Telegram al crear nuevo pedido
+    · DB: tabla pedidos creada en alejandra-db ✅
+    · Worker y GitHub actualizados ✅
 
 v4.17  |  17/04/2026  [SOLO NUEVA APP]
   - #52: Botón "← Atrás" en el header
@@ -683,7 +602,7 @@ Frontend (index.html + sw.js):
   #54 ✅ - Editar datos en inventario de seguridad (v4.12 — fix #51)
   #52 ✅ - Botón "← Atrás" en header + botón físico Android (v4.17 — solo nueva)
   #53 ✅ - Filtrar sugerencias por departamento (v4.17 — solo nueva)
-  #15 - Pedidos en parte eléctrica + sync Sheets
+  #15 ✅ - Pedidos en parte eléctrica + sync Sheets Elec-Pedidos (v4.18 — solo nueva)
 
   NUEVAS FUNCIONALIDADES:
   #39 - Gestión de herramientas por departamento (escáner código + catálogo)
