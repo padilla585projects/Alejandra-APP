@@ -5,7 +5,7 @@
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 17/04/2026
-VERSIÓN ACTUAL: v4.10 app vieja | v4.12 app nueva
+VERSIÓN ACTUAL: v4.11 app vieja | v4.12 app nueva
 
 REPO:    https://github.com/padilla585/Bobinaap.git  (branch: main)
 WORKER:  https://gestibobina-proxy.padilla585.workers.dev
@@ -229,7 +229,7 @@ v4.0  |  15/04/2026  [SOLO NUEVA APP]
   - Índices creados: idx_*_empresa en tablas principales
   - SW bumpeado a alejandra-v4.0
 
-v4.12  |  17/04/2026  [SOLO NUEVA APP]
+v4.12  |  17/04/2026  [AMBAS APPS — nueva en v4.12, vieja en v4.11]
   - #44: Ficha de máquina a pantalla completa (modal overlay con historial reciente)
     · buscarMaquina() abre modal en lugar de resultado inline
     · Muestra: estado, obra, departamento, marca, proveedor, fechas, notas, historial
