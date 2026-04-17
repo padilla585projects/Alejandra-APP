@@ -308,6 +308,7 @@ async function verificarAcceso(request, env) {
         }
       }
       await sendTelegram(env, `👤 <b>Login</b>: ${usuario.nombre} (${usuario.rol})\n🏗 ${usuario.obra_nombre || '—'}  🔷 ${usuario.departamento || '—'}`);
+      await logActividad(env, { nivel: 'info', origen: 'login', mensaje: `Login: ${usuario.nombre} (${usuario.rol})`, detalle: `obra: ${usuario.obra_nombre || '—'} | dept: ${usuario.departamento || '—'}`, empresa_id: usuario.empresa_id || 1 });
       const token = await crearSesion(env, {
         nombre: usuario.nombre, rol: usuario.rol,
         obra_id: usuario.obra_id, obra_nombre: usuario.obra_nombre,
@@ -1294,14 +1295,23 @@ async function buscarMaquina(matricula, request, env) {
   return json({ ok: false, error: `Matrícula ${mat} no encontrada` }, 404);
 }
 
+// Helper interno para registrar actividad desde el worker
+async function logActividad(env, { nivel = 'info', origen = 'server', mensaje, detalle = '', empresa_id = 1 } = {}) {
+  try {
+    await env.DB.prepare(
+      'INSERT INTO logs (nivel, origen, mensaje, detalle, empresa_id) VALUES (?, ?, ?, ?, ?)'
+    ).bind(nivel, origen, String(mensaje || '').slice(0, 500), String(detalle || '').slice(0, 1000), empresa_id || 1).run();
+  } catch (_) {}
+}
+
 async function guardarLog(request, env) {
   try {
     const body = await request.json();
     const { nivel = 'info', origen, mensaje, detalle, usuario, rol, obra, url, ts } = body;
-    const contexto = { detalle, usuario, rol, obra, url, ts };
+    const contexto = JSON.stringify({ detalle, usuario, rol, obra, url, ts });
     await env.DB.prepare(
-      'INSERT INTO logs (nivel, origen, mensaje, detalle) VALUES (?, ?, ?, ?)'
-    ).bind(nivel, origen || 'cliente', String(mensaje || '').slice(0, 500), JSON.stringify(contexto)).run();
+      'INSERT INTO logs (nivel, origen, mensaje, detalle, empresa_id) VALUES (?, ?, ?, ?, ?)'
+    ).bind(nivel, origen || 'cliente', String(mensaje || '').slice(0, 500), contexto, 1).run();
     if (nivel === 'error') {
       await sendTelegram(env,
         `🚨 <b>Error en Alejandra</b>\n` +
