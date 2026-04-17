@@ -274,7 +274,7 @@ export default {
       if (path === '/carretillas/historial'  && method === 'GET') return await getHistorialTabla('historial_carretillas', request, env);
       if (path === '/stats'        && method === 'GET')   return await getStats(request, env);
       if (path === '/sheet-id'     && method === 'GET')   return json({ id: env.GOOGLE_SHEET_ID || null });
-      if ((path === '/sync' || path === '/sync-sheets') && method === 'POST') { await syncSheets(env); return json({ ok: true, mensaje: 'Sync completado' }); }
+      if ((path === '/sync' || path === '/sync-sheets') && method === 'POST') { await Promise.all([syncSheets(env), syncPedidos(env)]); return json({ ok: true, mensaje: 'Sync completado' }); }
       if (path === '/sync-debug'   && method === 'POST')  return await syncSheetsDebug(env);
 
       return err('Ruta no encontrada', 404);
@@ -1558,7 +1558,7 @@ async function crearPedido(request, env) {
   const r = await env.DB.prepare(
     'INSERT INTO pedidos (empresa_id, obra_id, departamento, referencia, descripcion, cantidad, unidad, proveedor, solicitado_por, notas) VALUES (?,?,?,?,?,?,?,?,?,?)'
   ).bind(empresa_id, obra_id||null, dept, referencia||null, descripcion.trim(), cantidad||1, unidad||'ud', proveedor||null, solicitado_por||null, notas||null).run();
-  syncSheets(env, 'Elec-Pedidos');
+  syncPedidos(env, tabForDept('pedido', dept));
   await sendTelegram(env, `📦 <b>Nuevo pedido</b> [${dept}]\n👤 ${solicitado_por||'—'}\n📝 ${descripcion.trim().slice(0,200)}`);
   return json({ ok: true, id: r.meta.last_row_id });
 }
@@ -1580,7 +1580,7 @@ async function actualizarPedido(id, request, env) {
   if (!campos.length) return err('Sin campos para actualizar');
   vals.push(id);
   await env.DB.prepare(`UPDATE pedidos SET ${campos.join(', ')} WHERE id = ? AND empresa_id = ${empresa_id}`).bind(...vals).run();
-  syncSheets(env, 'Elec-Pedidos');
+  syncPedidos(env);
   return json({ ok: true });
 }
 
@@ -1588,8 +1588,9 @@ async function eliminarPedido(id, request, env) {
   const { empresa_id, isSuperadmin, isEmpresaAdmin, isEncargado } = await getAuth(request, env);
   if (!empresa_id) return err('No autorizado', 403);
   if (!isSuperadmin && !isEmpresaAdmin && !isEncargado) return err('Sin permiso', 403);
+  const pedido = await env.DB.prepare('SELECT departamento FROM pedidos WHERE id = ? AND empresa_id = ?').bind(id, empresa_id).first();
   await env.DB.prepare('DELETE FROM pedidos WHERE id = ? AND empresa_id = ?').bind(id, empresa_id).run();
-  syncSheets(env, 'Elec-Pedidos');
+  syncPedidos(env, tabForDept('pedido', pedido?.departamento));
   return json({ ok: true });
 }
 
@@ -1600,7 +1601,7 @@ function tabForDept(tipo, dept) {
   if (tipo === 'bobina')     return 'Elec-Bobinas';
   if (tipo === 'pemp')       return d === 'mecanicas' ? 'Mec-PEMP' : 'Elec-PEMP';
   if (tipo === 'carretilla') return d === 'mecanicas' ? 'Mec-Carretillas' : 'Elec-Carretillas';
-  if (tipo === 'pedido')     return 'Elec-Pedidos';
+  if (tipo === 'pedido')     return d === 'mecanicas' ? 'Mec-Pedidos' : 'Elec-Pedidos';
   return 'Seg-Inventario';
 }
 
@@ -1665,7 +1666,7 @@ async function syncSheets(env, tabs = null) {
     const sheetId = env.GOOGLE_SHEET_ID;
     const authH   = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
 
-    const tabsNecesarias = ['Elec-Bobinas', 'Elec-PEMP', 'Elec-Carretillas', 'Mec-PEMP', 'Mec-Carretillas', 'Seg-Inventario', 'Elec-Pedidos'];
+    const tabsNecesarias = ['Elec-Bobinas', 'Elec-PEMP', 'Elec-Carretillas', 'Mec-PEMP', 'Mec-Carretillas', 'Seg-Inventario'];
     const tabsAntiguas   = ['Bobinas', 'PEMP', 'Carretillas', '⚡ Bobinas', '⚡ PEMP', '⚡ Carretillas', '🔧 PEMP', '🔧 Carretillas'];
     const tabsToSync     = tabs ? (Array.isArray(tabs) ? tabs : [tabs]) : tabsNecesarias;
 
@@ -1721,13 +1722,11 @@ async function syncSheets(env, tabs = null) {
     const cabPemp        = ['Obra', 'Matrícula', 'Tipo', 'Marca', 'Proveedor', 'Estado', 'Fecha Entrada', 'Fecha Avería', 'Fecha Reparación', 'Devuelto por', 'Fecha Devolución', 'Últ. Revisión', 'Próx. Revisión', 'Registrado por', 'Notas'];
     const cabCarretillas = ['Obra', 'Matrícula', 'Tipo', 'Marca', 'Proveedor', 'Energía', 'Estado', 'Fecha Entrada', 'Fecha Avería', 'Fecha Reparación', 'Devuelto por', 'Fecha Devolución', 'Últ. Revisión', 'Próx. Revisión', 'Registrado por', 'Notas'];
     const cabSegInv      = ['Tipo', 'Modo', 'Código/Serie', 'Nombre', 'Cantidad Total', 'Disponible', 'Estado', 'Fecha Entrada', 'Fecha Caducidad', 'Destino Actual', 'Registrado por', 'Notas'];
-    const cabPedidos     = ['Obra', 'Referencia', 'Descripción', 'Cantidad', 'Unidad', 'Proveedor', 'Estado', 'Solicitado por', 'Fecha Solicitud', 'Fecha Recepción', 'Notas'];
 
     const fmtB   = b => [b.obra_nombre||'', b.codigo, b.num_albaran||'', b.proveedor, b.tipo_cable, b.registrado_por||'', b.fecha_entrada, b.devuelto_por||'', b.fecha_devolucion||'', b.estado, b.notas||''];
     const fmtP   = p => [p.obra_nombre||'', p.matricula, p.tipo||'', p.marca||'', p.proveedor||'', p.estado, p.fecha_entrada, p.fecha_averia||'', p.fecha_reparacion||'', p.devuelto_por||'', p.fecha_devolucion||'', p.fecha_ultima_revision||'', p.fecha_proxima_revision||'', p.registrado_por||'', p.notas||''];
     const fmtC   = c => [c.obra_nombre||'', c.matricula, c.tipo||'', c.marca||'', c.proveedor||'', c.energia||'', c.estado, c.fecha_entrada, c.fecha_averia||'', c.fecha_reparacion||'', c.devuelto_por||'', c.fecha_devolucion||'', c.fecha_ultima_revision||'', c.fecha_proxima_revision||'', c.registrado_por||'', c.notas||''];
     const fmtSeg = s => [s.tipo_material, s.modo, s.codigo||'', s.nombre||'', s.cantidad_total||1, s.cantidad_disponible||1, s.estado||'disponible', s.fecha_entrada||'', s.fecha_caducidad||'', s.destino_actual||'', s.registrado_por||'', s.notas||''];
-    const fmtPed = p => [p.obra_nombre||'', p.referencia||'', p.descripcion||'', p.cantidad||1, p.unidad||'ud', p.proveedor||'', p.estado||'pendiente', p.solicitado_por||'', p.fecha_solicitud||'', p.fecha_recepcion||'', p.notas||''];
 
     // Solo ejecutar queries para las pestañas que toca sincronizar, en paralelo
     await Promise.all([
@@ -1767,12 +1766,6 @@ async function syncSheets(env, tabs = null) {
         ).all();
         await writeTab('Seg-Inventario', [cabSegInv, ...results.map(fmtSeg)]);
       })(),
-      tabsToSync.includes('Elec-Pedidos') && (async () => {
-        const { results } = await env.DB.prepare(
-          'SELECT p.*, o.nombre as obra_nombre FROM pedidos p LEFT JOIN obras o ON p.obra_id = o.id WHERE p.empresa_id = 1 AND p.departamento = ? ORDER BY p.created_at DESC'
-        ).bind('electrico').all();
-        await writeTab('Elec-Pedidos', [cabPedidos, ...results.map(fmtPed)]);
-      })(),
     ].filter(Boolean));
 
     console.log(`Sheets sync OK [${tabsToSync.join(', ')}]`);
@@ -1782,6 +1775,86 @@ async function syncSheets(env, tabs = null) {
       await env.DB.prepare(
         'INSERT INTO logs (nivel, origen, mensaje, detalle) VALUES (?, ?, ?, ?)'
       ).bind('error', 'sync-sheets', 'Error sincronización Google Sheets', e.message).run();
+    } catch (_) {}
+  }
+}
+
+async function syncPedidos(env, tabs = null) {
+  if (!env.GOOGLE_PRIVATE_KEY || !env.GOOGLE_CLIENT_EMAIL || !env.GOOGLE_PEDIDOS_SHEET_ID) return;
+
+  try {
+    const token   = await getGoogleToken(env);
+    const sheetId = env.GOOGLE_PEDIDOS_SHEET_ID;
+    const authH   = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
+
+    const tabsNecesarias = ['Elec-Pedidos', 'Mec-Pedidos'];
+    const tabsToSync     = tabs ? (Array.isArray(tabs) ? tabs : [tabs]) : tabsNecesarias;
+
+    // Metadata
+    const metaRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}`, { headers: authH });
+    const meta = await metaRes.json();
+    let sheetsActuales = meta.sheets || [];
+
+    const tabsNeedFormat = new Set(
+      tabsNecesarias.filter(t => {
+        const s = sheetsActuales.find(sh => sh.properties.title === t);
+        return !s || (s.properties.gridProperties?.frozenRowCount ?? 0) === 0;
+      })
+    );
+
+    // Crear pestañas que faltan
+    const addReqs = tabsNecesarias
+      .filter(t => !sheetsActuales.map(s => s.properties.title).includes(t))
+      .map(t => ({ addSheet: { properties: { title: t } } }));
+
+    if (addReqs.length > 0) {
+      await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}:batchUpdate`, {
+        method: 'POST', headers: authH, body: JSON.stringify({ requests: addReqs }),
+      });
+      const m2 = await (await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}`, { headers: authH })).json();
+      sheetsActuales = m2.sheets || [];
+    }
+
+    const numIdMap = {};
+    sheetsActuales.forEach(s => { numIdMap[s.properties.title] = s.properties.sheetId; });
+
+    const cab = ['Obra', 'Referencia', 'Descripción', 'Cantidad', 'Unidad', 'Proveedor', 'Estado', 'Solicitado por', 'Fecha Solicitud', 'Fecha Recepción', 'Notas'];
+    const fmt = p => [p.obra_nombre||'', p.referencia||'', p.descripcion||'', p.cantidad||1, p.unidad||'ud', p.proveedor||'', p.estado||'pendiente', p.solicitado_por||'', p.fecha_solicitud||p.created_at||'', p.fecha_recepcion||'', p.notas||''];
+
+    const writeTab = async (tab, values) => {
+      if (!tabsToSync.includes(tab)) return;
+      const range = `${tab}!A1`;
+      await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(range)}:clear`,
+        { method: 'POST', headers: authH });
+      const putRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(range)}?valueInputOption=RAW`,
+        { method: 'PUT', headers: authH, body: JSON.stringify({ values }) });
+      if (!putRes.ok) throw new Error(`writeTab(${tab}) HTTP ${putRes.status}: ${(await putRes.text()).slice(0, 200)}`);
+      if (tabsNeedFormat.has(tab) && numIdMap[tab] !== undefined) {
+        await applyTabFormatting(sheetId, authH, tab, numIdMap[tab], values[0]?.length || 1);
+      }
+    };
+
+    await Promise.all([
+      tabsToSync.includes('Elec-Pedidos') && (async () => {
+        const { results } = await env.DB.prepare(
+          'SELECT p.*, o.nombre as obra_nombre FROM pedidos p LEFT JOIN obras o ON p.obra_id = o.id WHERE p.empresa_id = 1 AND p.departamento = ? ORDER BY p.created_at DESC'
+        ).bind('electrico').all();
+        await writeTab('Elec-Pedidos', [cab, ...results.map(fmt)]);
+      })(),
+      tabsToSync.includes('Mec-Pedidos') && (async () => {
+        const { results } = await env.DB.prepare(
+          'SELECT p.*, o.nombre as obra_nombre FROM pedidos p LEFT JOIN obras o ON p.obra_id = o.id WHERE p.empresa_id = 1 AND p.departamento = ? ORDER BY p.created_at DESC'
+        ).bind('mecanicas').all();
+        await writeTab('Mec-Pedidos', [cab, ...results.map(fmt)]);
+      })(),
+    ].filter(Boolean));
+
+    console.log(`Pedidos sync OK [${tabsToSync.join(', ')}]`);
+  } catch (e) {
+    console.error('Error sync Pedidos:', e.message);
+    try {
+      await env.DB.prepare('INSERT INTO logs (nivel, origen, mensaje, detalle) VALUES (?, ?, ?, ?)')
+        .bind('error', 'sync-pedidos', 'Error sincronización Pedidos Sheets', e.message).run();
     } catch (_) {}
   }
 }
@@ -1797,7 +1870,7 @@ async function applyTabFormatting(spreadsheetId, authH, tabName, numSheetId, num
   const estadoColMap = {
     'Elec-Bobinas': 9, 'Elec-PEMP': 5, 'Elec-Carretillas': 6,
     'Mec-PEMP': 5,     'Mec-Carretillas': 6,
-    'Seg-Inventario': 6, 'Elec-Pedidos': 6,
+    'Seg-Inventario': 6, 'Elec-Pedidos': 6, 'Mec-Pedidos': 6,
   };
   const estadoCol = estadoColMap[tabName] ?? -1;
 
@@ -1846,6 +1919,7 @@ async function applyTabFormatting(spreadsheetId, authH, tabName, numSheetId, num
       { valor: 'devuelta',   bg: { red: 0.839, green: 0.839, blue: 0.839, alpha: 1 } },  // gris
       { valor: 'cancelado',  bg: { red: 0.839, green: 0.839, blue: 0.839, alpha: 1 } },  // gris
       { valor: 'pendiente',  bg: { red: 1.0,   green: 0.949, blue: 0.800, alpha: 1 } },  // amarillo
+      { valor: 'solicitado', bg: { red: 0.675, green: 0.843, blue: 0.902, alpha: 1 } },  // azul
       { valor: 'en_uso',     bg: { red: 0.675, green: 0.843, blue: 0.902, alpha: 1 } },  // azul
     ];
     for (const r of reglas) {
