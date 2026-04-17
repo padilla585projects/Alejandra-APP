@@ -1541,9 +1541,9 @@ async function getPedidos(request, env) {
 }
 
 async function crearPedido(request, env) {
-  const { empresa_id, departamento, isEncargado, isSuperadmin, isEmpresaAdmin } = await getAuth(request, env);
+  const { empresa_id, departamento } = await getAuth(request, env);
   if (!empresa_id) return err('No autorizado', 403);
-  if (!isSuperadmin && !isEmpresaAdmin && !isEncargado) return err('Sin permiso para crear pedidos', 403);
+  // Todos los roles (incluido operario) pueden crear pedidos
   const body = await request.json().catch(() => ({}));
   const { descripcion, referencia, cantidad, unidad, proveedor, obra_id, solicitado_por, notas } = body;
   if (!descripcion?.trim()) return err('La descripción es obligatoria');
@@ -1557,9 +1557,9 @@ async function crearPedido(request, env) {
 }
 
 async function actualizarPedido(id, request, env) {
-  const { empresa_id, isSuperadmin, isEmpresaAdmin, isEncargado } = await getAuth(request, env);
+  const { empresa_id } = await getAuth(request, env);
   if (!empresa_id) return err('No autorizado', 403);
-  if (!isSuperadmin && !isEmpresaAdmin && !isEncargado) return err('Sin permiso', 403);
+  // Todos los roles pueden actualizar estado (marcar recibido, etc.)
   const body = await request.json().catch(() => ({}));
   const campos = [], vals = [];
   if (body.estado       !== undefined) { campos.push('estado = ?');          vals.push(body.estado); }

@@ -528,7 +528,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
 
   <!-- HOME SCREEN -->
   <div id="screenHome" class="screen flex-screen active" style="padding:0;height:100%;position:relative">
-    <div style="position:absolute;bottom:8px;right:12px;font-family:'Montserrat',sans-serif;font-size:9px;color:var(--muted);opacity:.5;z-index:10;pointer-events:none">v4.16</div>
+    <div style="position:absolute;bottom:8px;right:12px;font-family:'Montserrat',sans-serif;font-size:9px;color:var(--muted);opacity:.5;z-index:10;pointer-events:none">v4.18</div>
     <div class="module-grid" style="flex:1">
       <div class="module-card" id="cardBobinas" onclick="selectModule('bobinas')">
         <div class="module-emoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="52" height="52"><rect x="28" y="38" width="44" height="32" rx="3" fill="#8B6914"/><rect x="28" y="38" width="8" height="32" rx="1" fill="#A07820" opacity="0.6"/><rect x="37" y="38" width="8" height="32" rx="1" fill="#7a5c10" opacity="0.4"/><rect x="46" y="38" width="8" height="32" rx="1" fill="#A07820" opacity="0.5"/><rect x="55" y="38" width="8" height="32" rx="1" fill="#7a5c10" opacity="0.4"/><rect x="64" y="38" width="8" height="32" rx="1" fill="#A07820" opacity="0.3"/><ellipse cx="50" cy="70" rx="30" ry="8" fill="#9B7420"/><ellipse cx="50" cy="70" rx="30" ry="8" fill="none" stroke="#7a5c10" stroke-width="1"/><line x1="22" y1="68" x2="78" y2="68" stroke="#7a5c10" stroke-width="0.8" opacity="0.5"/><line x1="24" y1="72" x2="76" y2="72" stroke="#c49530" stroke-width="0.6" opacity="0.4"/><circle cx="32" cy="70" r="1.5" fill="#f97316"/><circle cx="50" cy="70" r="1.5" fill="#f97316"/><circle cx="68" cy="70" r="1.5" fill="#f97316"/><ellipse cx="50" cy="36" rx="32" ry="10" fill="#C4A030"/><line x1="20" y1="34" x2="80" y2="34" stroke="#9B7820" stroke-width="1" opacity="0.7"/><line x1="20" y1="36" x2="80" y2="36" stroke="#e8c060" stroke-width="0.8" opacity="0.4"/><line x1="20" y1="38" x2="80" y2="38" stroke="#9B7820" stroke-width="1" opacity="0.5"/><ellipse cx="50" cy="35" rx="32" ry="10" fill="none" stroke="#e8c870" stroke-width="0.8" opacity="0.5"/><circle cx="30" cy="35" r="2" fill="#f97316" stroke="#c97316" stroke-width="0.5"/><circle cx="50" cy="32" r="2" fill="#f97316" stroke="#c97316" stroke-width="0.5"/><circle cx="70" cy="35" r="2" fill="#f97316" stroke="#c97316" stroke-width="0.5"/><circle cx="50" cy="39" r="2" fill="#f97316" stroke="#c97316" stroke-width="0.5"/><ellipse cx="50" cy="36" rx="5" ry="3" fill="#3a2a08"/><ellipse cx="50" cy="35.5" rx="4" ry="2" fill="#1a1208"/></svg></div>
@@ -569,6 +569,15 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
           <div class="module-desc">Carretillas elevadoras</div>
         </div>
         <div class="module-count" id="cntCarretillas" style="background:var(--green)">–</div>
+        <svg class="module-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
+      </div>
+      <div class="module-card" id="cardPedidos" onclick="navTo('pedidos')" style="display:none">
+        <div class="module-emoji">📦</div>
+        <div class="module-info">
+          <div class="module-name">Pedidos</div>
+          <div class="module-desc">Solicitudes de material</div>
+        </div>
+        <div class="module-count" id="cntPedidos" style="background:#8b5cf6">–</div>
         <svg class="module-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
       </div>
     </div>
@@ -1217,6 +1226,97 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
     <button class="btn-primary" onclick="enviarSugerencia()" id="btnSugerencia">💬 Enviar</button>
   </div>
 
+  <!-- ══════════════════════════════════════════
+       PEDIDOS SCREEN
+  ══════════════════════════════════════════ -->
+  <div id="screenPedidos" class="screen" style="padding:0;display:none;flex-direction:column">
+    <div style="padding:14px 14px 0">
+      <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:18px;color:var(--text);margin-bottom:4px">📦 Pedidos</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Solicitudes de material y equipos</div>
+
+      <!-- Filtros de estado -->
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px" id="pedFiltros">
+        <button onclick="filtrarPedidos('todos')"     id="pfTodos"     class="sug-filter active">Todos</button>
+        <button onclick="filtrarPedidos('pendiente')" id="pfPendiente" class="sug-filter">⏳ Pendiente</button>
+        <button onclick="filtrarPedidos('solicitado')"id="pfSolicitado"class="sug-filter">📤 Solicitado</button>
+        <button onclick="filtrarPedidos('recibido')"  id="pfRecibido"  class="sug-filter">✅ Recibido</button>
+        <button onclick="filtrarPedidos('cancelado')" id="pfCancelado" class="sug-filter">❌ Cancelado</button>
+      </div>
+    </div>
+
+    <!-- Lista de pedidos -->
+    <div id="pedidosList" style="padding:0 14px 80px;overflow-y:auto;flex:1">
+      <div class="empty-state">Cargando...</div>
+    </div>
+
+    <!-- Botón nuevo pedido (flotante) -->
+    <button id="btnNuevoPedido" onclick="abrirFormPedido()"
+      style="position:fixed;bottom:72px;right:16px;width:52px;height:52px;border-radius:50%;background:var(--accent);border:none;font-size:26px;cursor:pointer;box-shadow:0 4px 14px rgba(249,115,22,.5);z-index:200;display:none;align-items:center;justify-content:center">
+      +
+    </button>
+  </div>
+
+  <!-- Modal: Nuevo/Editar Pedido -->
+  <div class="modal-overlay" id="modalPedido" onclick="if(event.target===this)cerrarFormPedido()">
+    <div class="modal" style="max-height:90vh;overflow-y:auto">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px">
+        <div class="modal-title" style="margin-bottom:0;flex:1" id="modalPedidoTitulo">Nuevo Pedido</div>
+        <button onclick="cerrarFormPedido()" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--muted);line-height:1">×</button>
+      </div>
+
+      <input type="hidden" id="pedidoEditId" value="">
+
+      <div class="form-group">
+        <label class="form-label">Descripción *</label>
+        <textarea id="pedDescripcion" rows="3" placeholder="¿Qué se necesita?"
+          style="width:100%;padding:10px;background:var(--surface);border:1px solid var(--border);border-radius:10px;color:var(--text);font-family:'Poppins',sans-serif;font-size:14px;resize:vertical;outline:none;box-sizing:border-box"></textarea>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div class="form-group">
+          <label class="form-label">Referencia</label>
+          <input class="form-input" id="pedReferencia" type="text" placeholder="Ref. fabricante...">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Proveedor</label>
+          <input class="form-input" id="pedProveedor" type="text" placeholder="Empresa...">
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div class="form-group">
+          <label class="form-label">Cantidad</label>
+          <input class="form-input" id="pedCantidad" type="number" value="1" min="0.01" step="any">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Unidad</label>
+          <select class="form-input" id="pedUnidad">
+            <option value="ud">ud</option>
+            <option value="m">m</option>
+            <option value="kg">kg</option>
+            <option value="caja">caja</option>
+            <option value="rollo">rollo</option>
+            <option value="otro">otro</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Obra</label>
+        <select class="form-input" id="pedObra">
+          <option value="">— Sin obra —</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Notas</label>
+        <textarea id="pedNotas" rows="2" placeholder="Observaciones adicionales..."
+          style="width:100%;padding:10px;background:var(--surface);border:1px solid var(--border);border-radius:10px;color:var(--text);font-family:'Poppins',sans-serif;font-size:14px;resize:vertical;outline:none;box-sizing:border-box"></textarea>
+      </div>
+
+      <div class="modal-actions">
+        <button class="btn-primary" style="flex:1" onclick="guardarPedido()">💾 Guardar</button>
+        <button class="btn-primary btn-secondary" style="flex:0 0 100px;margin-top:0" onclick="cerrarFormPedido()">Cancelar</button>
+      </div>
+    </div>
+  </div>
+
 </div><!-- end appContent -->
 
 <!-- ══════════════════════════════════════════
@@ -1709,11 +1809,14 @@ function setupHomeModules() {
   const cardB = document.getElementById('cardBobinas');
   const cardP = document.getElementById('cardPemp');
   const cardC = document.getElementById('cardCarretillas');
+  const cardPed = document.getElementById('cardPedidos');
+  const btnNuevo = document.getElementById('btnNuevoPedido');
   // Seguridad: sin tarjetas (solo escáner)
   if (dept === 'seguridad') {
     if (cardB) cardB.style.display = 'none';
     if (cardP) cardP.style.display = 'none';
     if (cardC) cardC.style.display = 'none';
+    if (cardPed) cardPed.style.display = 'none';
     return;
   }
   // El departamento elegido manda — electrico ve bobinas, mecánicas no
@@ -1721,6 +1824,10 @@ function setupHomeModules() {
   if (cardB) cardB.style.display = mostrarBobinas ? 'flex' : 'none';
   if (cardP) cardP.style.display = 'flex';
   if (cardC) cardC.style.display = 'flex';
+  // Pedidos: visible para todos excepto seguridad
+  if (cardPed) cardPed.style.display = 'flex';
+  // Botón nuevo pedido: visible para todos (excepto seguridad → ya retornó arriba)
+  if (btnNuevo) btnNuevo.style.display = 'flex';
 }
 
 function seleccionarDepto(dept) {
@@ -1810,7 +1917,7 @@ function actualizarBtnAtras() {
   if (!btn) return;
   const s = getSession();
   if (!s) { btn.style.display = 'none'; return; }
-  const subPantallas = ['screenModule','screenAjustes','screenSugerencias'];
+  const subPantallas = ['screenModule','screenAjustes','screenSugerencias','screenPedidos'];
   const enSub = subPantallas.some(id => document.getElementById(id)?.classList.contains('active'));
   // Seguridad para superadmin/empresa_admin: pueden volver al selector de dpto
   const enSegAdmin = document.getElementById('screenSeguridad')?.classList.contains('active')
@@ -1847,6 +1954,12 @@ function navTo(target) {
   }
   if (target === 'sugerencias') {
     showScreen('sugerencias');
+    return;
+  }
+  if (target === 'pedidos') {
+    showScreen('pedidos');
+    cargarPedidos();
+    actualizarBtnAtras();
     return;
   }
   // For scan/stock/historial → show module screen
@@ -1948,10 +2061,11 @@ function showModTab(name) {
 // ══════════════════════════════════════════════════════
 async function cargarStatsHome() {
   try {
-    const [rb, rp, rc] = await Promise.all([
+    const [rb, rp, rc, rpd] = await Promise.all([
       apiCall('/bobinas').catch(() => null),
       apiCall('/pemp').catch(() => null),
-      apiCall('/carretillas').catch(() => null)
+      apiCall('/carretillas').catch(() => null),
+      apiCall('/pedidos').catch(() => null)
     ]);
     if (rb && rb.ok) {
       const bobinas = await rb.json();
@@ -1967,6 +2081,11 @@ async function cargarStatsHome() {
       const carr = await rc.json();
       const disp = Array.isArray(carr) ? carr.filter(c => c.estado === 'Disponible').length : '–';
       document.getElementById('cntCarretillas').textContent = disp;
+    }
+    if (rpd && rpd.ok) {
+      const peds = await rpd.json();
+      const pendientes = Array.isArray(peds) ? peds.filter(p => p.estado === 'pendiente' || p.estado === 'solicitado').length : '–';
+      document.getElementById('cntPedidos').textContent = pendientes;
     }
   } catch {}
 }
@@ -4355,7 +4474,7 @@ async function cargarObrasSelectUsuario() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '4.17';
+const APP_VERSION = '4.18';
 let _actualizando = false;
 
 async function checkVersionAndUpdate() {
@@ -4418,6 +4537,156 @@ if ('serviceWorker' in navigator) {
 
     setInterval(() => reg.update(), 5 * 60 * 1000); // chequeo cada 5 min
   }).catch(() => {});
+
+  // ══════════════════════════════════════════════════════
+  // PEDIDOS
+  // ══════════════════════════════════════════════════════
+
+  // Estado activo del filtro
+  window._pedFiltroActivo = 'todos';
+  window._pedidosCache = [];
+
+  function filtrarPedidos(estado) {
+    window._pedFiltroActivo = estado;
+    document.querySelectorAll('#pedFiltros .sug-filter').forEach(b => b.classList.remove('active'));
+    const mapa = { todos: 'pfTodos', pendiente: 'pfPendiente', solicitado: 'pfSolicitado', recibido: 'pfRecibido', cancelado: 'pfCancelado' };
+    if (mapa[estado]) document.getElementById(mapa[estado])?.classList.add('active');
+    renderPedidos(window._pedidosCache);
+  }
+
+  function renderPedidos(lista) {
+    const c = document.getElementById('pedidosList');
+    if (!c) return;
+    const filtro = window._pedFiltroActivo || 'todos';
+    const items = filtro === 'todos' ? lista : lista.filter(p => p.estado === filtro);
+    if (!items.length) {
+      c.innerHTML = '<div class="empty-state">Sin pedidos' + (filtro !== 'todos' ? ' con ese estado' : '') + '</div>';
+      return;
+    }
+    const estadoInfo = {
+      pendiente:  { icon: '⏳', color: '#f59e0b' },
+      solicitado: { icon: '📤', color: '#3b82f6' },
+      recibido:   { icon: '✅', color: '#22c55e' },
+      cancelado:  { icon: '❌', color: '#ef4444' }
+    };
+    const s = getSession();
+    const puedeEliminar = s?.rol === 'encargado' || s?.rol === 'empresa_admin' || s?.rol === 'superadmin';
+    c.innerHTML = items.map(p => {
+      const ei = estadoInfo[p.estado] || { icon: '📦', color: 'var(--muted)' };
+      return `<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:12px;margin-bottom:10px">
+        <div style="display:flex;align-items:flex-start;gap:8px">
+          <span style="font-size:20px;line-height:1.2">${ei.icon}</span>
+          <div style="flex:1;min-width:0">
+            <div style="font-weight:700;font-size:14px;color:var(--text);margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(p.descripcion)}</div>
+            ${p.referencia ? `<div style="font-size:11px;color:var(--muted)">Ref: ${esc(p.referencia)}</div>` : ''}
+            <div style="font-size:11px;color:var(--muted);margin-top:2px">
+              ${p.cantidad} ${esc(p.unidad||'ud')}${p.proveedor ? ' · ' + esc(p.proveedor) : ''}${p.obra_nombre ? ' · ' + esc(p.obra_nombre) : ''}
+            </div>
+            ${p.notas ? `<div style="font-size:11px;color:var(--muted);margin-top:2px;font-style:italic">${esc(p.notas)}</div>` : ''}
+            <div style="font-size:10px;color:var(--muted);margin-top:4px">
+              ${p.solicitado_por ? esc(p.solicitado_por) + ' · ' : ''}${(p.fecha_solicitud||'').slice(0,10)}
+            </div>
+          </div>
+          <span style="font-size:11px;font-weight:700;color:${ei.color};white-space:nowrap;padding:3px 8px;border-radius:20px;border:1px solid ${ei.color}20;background:${ei.color}15">
+            ${(p.estado||'pendiente').toUpperCase()}
+          </span>
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px">
+          ${p.estado === 'pendiente' ? `<button onclick="cambiarEstadoPedido(${p.id},'solicitado')" style="flex:1;padding:7px;background:#3b82f620;color:#3b82f6;border:1px solid #3b82f640;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">📤 Marcar solicitado</button>` : ''}
+          ${p.estado === 'solicitado' ? `<button onclick="cambiarEstadoPedido(${p.id},'recibido')" style="flex:1;padding:7px;background:#22c55e20;color:#22c55e;border:1px solid #22c55e40;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">✅ Marcar recibido</button>` : ''}
+          ${(p.estado === 'pendiente' || p.estado === 'solicitado') ? `<button onclick="cambiarEstadoPedido(${p.id},'cancelado')" style="padding:7px 10px;background:#ef444420;color:#ef4444;border:1px solid #ef444440;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">✕</button>` : ''}
+          ${p.estado !== 'recibido' && p.estado !== 'cancelado' ? `<button onclick="abrirFormPedido(${JSON.stringify(p).replace(/"/g,'&quot;')})" style="padding:7px 10px;background:var(--surface);color:var(--muted);border:1px solid var(--border);border-radius:8px;font-size:12px;cursor:pointer">✏️</button>` : ''}
+          ${puedeEliminar ? `<button onclick="borrarPedido(${p.id})" style="padding:7px 10px;background:#ef444420;color:#ef4444;border:1px solid #ef444440;border-radius:8px;font-size:12px;cursor:pointer">🗑️</button>` : ''}
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  function esc(s) {
+    return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  async function cargarPedidos() {
+    try {
+      const res = await apiCall('/pedidos');
+      if (!res.ok) return;
+      window._pedidosCache = await res.json();
+      renderPedidos(window._pedidosCache);
+    } catch { document.getElementById('pedidosList').innerHTML = '<div class="empty-state">Error al cargar</div>'; }
+  }
+
+  async function cargarObrasSelectPedido() {
+    const sel = document.getElementById('pedObra');
+    if (!sel || sel.options.length > 1) return;
+    try {
+      const res = await apiCall('/obras');
+      const obras = await res.json();
+      sel.innerHTML = '<option value="">— Sin obra —</option>' +
+        obras.map(o => `<option value="${o.id}">${esc(o.nombre)}</option>`).join('');
+    } catch {}
+  }
+
+  function abrirFormPedido(pedido) {
+    document.getElementById('pedidoEditId').value = pedido?.id || '';
+    document.getElementById('modalPedidoTitulo').textContent = pedido ? '✏️ Editar pedido' : '📦 Nuevo pedido';
+    document.getElementById('pedDescripcion').value = pedido?.descripcion || '';
+    document.getElementById('pedReferencia').value  = pedido?.referencia  || '';
+    document.getElementById('pedProveedor').value   = pedido?.proveedor   || '';
+    document.getElementById('pedCantidad').value    = pedido?.cantidad    || 1;
+    document.getElementById('pedUnidad').value      = pedido?.unidad      || 'ud';
+    document.getElementById('pedNotas').value       = pedido?.notas       || '';
+    cargarObrasSelectPedido().then(() => {
+      if (pedido?.obra_id) document.getElementById('pedObra').value = pedido.obra_id;
+    });
+    document.getElementById('modalPedido').classList.add('active');
+  }
+
+  function cerrarFormPedido() {
+    document.getElementById('modalPedido').classList.remove('active');
+  }
+
+  async function guardarPedido() {
+    const desc = document.getElementById('pedDescripcion').value.trim();
+    if (!desc) return toast('⚠️ La descripción es obligatoria', 'err');
+    const id = document.getElementById('pedidoEditId').value;
+    const body = {
+      descripcion: desc,
+      referencia:  document.getElementById('pedReferencia').value.trim() || null,
+      proveedor:   document.getElementById('pedProveedor').value.trim()  || null,
+      cantidad:    parseFloat(document.getElementById('pedCantidad').value) || 1,
+      unidad:      document.getElementById('pedUnidad').value,
+      obra_id:     document.getElementById('pedObra').value || null,
+      notas:       document.getElementById('pedNotas').value.trim() || null,
+    };
+    try {
+      const res = id
+        ? await apiCall(`/pedidos/${id}`, { method: 'PUT',  body: JSON.stringify(body) })
+        : await apiCall('/pedidos',        { method: 'POST', body: JSON.stringify(body) });
+      if (!res.ok) { const e = await res.json().catch(()=>({error:'Error'})); return toast('❌ ' + (e.error||'Error'), 'err'); }
+      cerrarFormPedido();
+      toast(id ? '✅ Pedido actualizado' : '✅ Pedido creado');
+      cargarPedidos();
+    } catch { toast('❌ Error de red', 'err'); }
+  }
+
+  async function cambiarEstadoPedido(id, nuevoEstado) {
+    try {
+      const res = await apiCall(`/pedidos/${id}`, { method: 'PUT', body: JSON.stringify({ estado: nuevoEstado }) });
+      if (!res.ok) return toast('❌ Error al actualizar', 'err');
+      toast('✅ Estado actualizado');
+      cargarPedidos();
+    } catch { toast('❌ Error de red', 'err'); }
+  }
+
+  async function borrarPedido(id) {
+    if (!confirm('¿Eliminar este pedido?')) return;
+    try {
+      const res = await apiCall(`/pedidos/${id}`, { method: 'DELETE' });
+      if (!res.ok) return toast('❌ Sin permisos para eliminar', 'err');
+      toast('🗑️ Pedido eliminado');
+      cargarPedidos();
+    } catch { toast('❌ Error de red', 'err'); }
+  }
 
   // SW activado → recarga automática (sin banner, sin interacción)
   navigator.serviceWorker.addEventListener('message', e => {
