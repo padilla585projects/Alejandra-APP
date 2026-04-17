@@ -543,7 +543,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
 
   <!-- HOME SCREEN -->
   <div id="screenHome" class="screen flex-screen active" style="padding:0;height:100%;position:relative">
-    <div style="position:absolute;bottom:8px;right:12px;font-family:'Montserrat',sans-serif;font-size:9px;color:var(--muted);opacity:.5;z-index:10;pointer-events:none">v4.20</div>
+    <div style="position:absolute;bottom:8px;right:12px;font-family:'Montserrat',sans-serif;font-size:9px;color:var(--muted);opacity:.5;z-index:10;pointer-events:none">v4.21</div>
     <div class="module-grid" style="flex:1">
       <div class="module-card" id="cardBobinas" onclick="selectModule('bobinas')">
         <div class="module-emoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="52" height="52"><rect x="28" y="38" width="44" height="32" rx="3" fill="#8B6914"/><rect x="28" y="38" width="8" height="32" rx="1" fill="#A07820" opacity="0.6"/><rect x="37" y="38" width="8" height="32" rx="1" fill="#7a5c10" opacity="0.4"/><rect x="46" y="38" width="8" height="32" rx="1" fill="#A07820" opacity="0.5"/><rect x="55" y="38" width="8" height="32" rx="1" fill="#7a5c10" opacity="0.4"/><rect x="64" y="38" width="8" height="32" rx="1" fill="#A07820" opacity="0.3"/><ellipse cx="50" cy="70" rx="30" ry="8" fill="#9B7420"/><ellipse cx="50" cy="70" rx="30" ry="8" fill="none" stroke="#7a5c10" stroke-width="1"/><line x1="22" y1="68" x2="78" y2="68" stroke="#7a5c10" stroke-width="0.8" opacity="0.5"/><line x1="24" y1="72" x2="76" y2="72" stroke="#c49530" stroke-width="0.6" opacity="0.4"/><circle cx="32" cy="70" r="1.5" fill="#f97316"/><circle cx="50" cy="70" r="1.5" fill="#f97316"/><circle cx="68" cy="70" r="1.5" fill="#f97316"/><ellipse cx="50" cy="36" rx="32" ry="10" fill="#C4A030"/><line x1="20" y1="34" x2="80" y2="34" stroke="#9B7820" stroke-width="1" opacity="0.7"/><line x1="20" y1="36" x2="80" y2="36" stroke="#e8c060" stroke-width="0.8" opacity="0.4"/><line x1="20" y1="38" x2="80" y2="38" stroke="#9B7820" stroke-width="1" opacity="0.5"/><ellipse cx="50" cy="35" rx="32" ry="10" fill="none" stroke="#e8c870" stroke-width="0.8" opacity="0.5"/><circle cx="30" cy="35" r="2" fill="#f97316" stroke="#c97316" stroke-width="0.5"/><circle cx="50" cy="32" r="2" fill="#f97316" stroke="#c97316" stroke-width="0.5"/><circle cx="70" cy="35" r="2" fill="#f97316" stroke="#c97316" stroke-width="0.5"/><circle cx="50" cy="39" r="2" fill="#f97316" stroke="#c97316" stroke-width="0.5"/><ellipse cx="50" cy="36" rx="5" ry="3" fill="#3a2a08"/><ellipse cx="50" cy="35.5" rx="4" ry="2" fill="#1a1208"/></svg></div>
@@ -619,11 +619,21 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
       <button class="mod-tab-btn active" onclick="showModTab('scan')">📷 Escanear</button>
       <button class="mod-tab-btn" onclick="showModTab('stock')">📋 Inventario</button>
       <button class="mod-tab-btn" onclick="showModTab('historial')">🕒 Historial</button>
-      <button class="mod-tab-btn" onclick="showModTab('devolucion')"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="vertical-align:middle;margin-right:2px"><path d="M9 11l-4 4 4 4M5 15h11a4 4 0 0 0 0-8h-1"/></svg>Dev.</button>
     </div>
     <div id="modContent" style="padding:14px;overflow-y:auto;flex:1">
       <!-- scan panel -->
       <div id="modPanelScan" class="mod-panel active">
+        <!-- Selector de modo -->
+        <div style="display:flex;gap:8px;margin-bottom:14px">
+          <button id="btnModoEntrada" onclick="setScanMode('entrada')"
+            class="sug-filter active" style="flex:1;padding:10px;font-size:13px;font-family:'Montserrat',sans-serif;font-weight:900;letter-spacing:.5px">
+            ✅ ENTRADA
+          </button>
+          <button id="btnModoDevolucion" onclick="setScanMode('devolucion')"
+            class="sug-filter" style="flex:1;padding:10px;font-size:13px;font-family:'Montserrat',sans-serif;font-weight:900;letter-spacing:.5px">
+            ↩ DEVOLUCIÓN
+          </button>
+        </div>
         <div class="section-title" id="modScanTitle">ESCANEAR</div>
         <div class="section-sub" id="modScanSub"></div>
 
@@ -631,8 +641,9 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
         <div class="form-group" style="margin-bottom:10px">
           <label class="form-label" id="modScanFieldLabel">Matrícula / Código</label>
           <div class="input-row">
-            <input class="form-input" id="scanCodeInput" type="text" placeholder="Introduce o escanea..." style="text-transform:uppercase">
-            <button class="btn-clear" onclick="document.getElementById('scanCodeInput').value='';document.getElementById('btnDevolver').style.display='none'">✕</button>
+            <input class="form-input" id="scanCodeInput" type="text" placeholder="Introduce o escanea..." style="text-transform:uppercase"
+              onkeydown="if(event.key==='Enter'){ if(window._scanMode==='devolucion') buscarParaDevolver(); else registrarItem(); }">
+            <button class="btn-clear" onclick="document.getElementById('scanCodeInput').value='';document.getElementById('scanDevResult').innerHTML=''">✕</button>
           </div>
         </div>
 
@@ -798,7 +809,8 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
         </div>
 
         <button class="btn-primary" id="btnRegistrar" onclick="registrarItem()">✅ REGISTRAR ENTRADA</button>
-        <button class="btn-primary" id="btnDevolver" onclick="irADevolucionRapida()" style="display:none;margin-top:8px;background:var(--surface2);border:1.5px solid var(--accent);color:var(--accent)">↩ DEVOLVER EQUIPO</button>
+        <!-- resultado devolución (visible solo en modo devolución) -->
+        <div id="scanDevResult" style="display:none;margin-top:10px"></div>
       </div>
 
       <!-- stock panel -->
@@ -832,57 +844,6 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
         <div id="historialList"><div class="empty-state">Cargando...</div></div>
       </div>
 
-      <!-- panel devoluciones -->
-      <div id="modPanelDevolucion" class="mod-panel">
-        <div class="section-title" id="devTitle">DEVOLUCIÓN</div>
-        <div class="section-sub">Escanea o introduce el código para devolver</div>
-
-        <!-- Cámara -->
-        <div class="scan-box" style="margin-bottom:14px">
-          <div class="scan-header">
-            <div class="scan-dot" id="devDot"></div>
-            LECTOR DE CÓDIGO
-          </div>
-          <div class="cam-viewport" id="devCamViewport">
-            <div class="cam-idle" id="devCamIdle">
-              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
-                <circle cx="12" cy="13" r="4"/>
-              </svg>
-              Pulsa ABRIR CÁMARA
-            </div>
-            <video id="devVideo" playsinline autoplay muted style="display:none"></video>
-            <canvas id="devCanvas" style="display:none"></canvas>
-            <div class="scan-frame" id="devFrame" style="display:none">
-              <div class="corner-bl"></div><div class="corner-br"></div>
-              <div class="scan-line"></div>
-            </div>
-            <div class="cam-ok" id="devCamOk" style="display:none">
-              ✅ LEÍDO
-              <div class="cam-ok-code" id="devCamOkCode"></div>
-            </div>
-          </div>
-          <div id="devActionsIdle" class="scan-actions">
-            <button class="btn-open-cam" onclick="devOpenCamera()">📷 ABRIR CÁMARA</button>
-          </div>
-          <div id="devActionsActive" class="scan-actions" style="display:none">
-            <button class="btn-capture" id="devBtnCapture" onclick="devCaptureOCR()">OCR</button>
-            <button class="btn-close-cam" onclick="devCloseCamera()">✕</button>
-          </div>
-          <div class="scan-hint" id="devHint"></div>
-        </div>
-
-        <!-- Input manual -->
-        <div class="form-group">
-          <label class="form-label">Matrícula / Código</label>
-          <div class="input-row">
-            <input class="form-input" id="devCodeInput" type="text" placeholder="Introduce o escanea..." style="text-transform:uppercase" onkeydown="if(event.key==='Enter')buscarParaDevolver()">
-            <button class="btn-clear" onclick="document.getElementById('devCodeInput').value='';document.getElementById('devResult').innerHTML=''">✕</button>
-          </div>
-        </div>
-        <button class="btn-primary" onclick="buscarParaDevolver()" style="margin-bottom:14px">🔍 BUSCAR</button>
-        <div id="devResult"></div>
-      </div>
     </div>
   </div>
 
@@ -2436,20 +2397,13 @@ async function cargarObrasSelectScan() {
 function showModTab(name) {
   document.querySelectorAll('.mod-tab-btn').forEach(b => b.classList.remove('active'));
   document.querySelectorAll('.mod-panel').forEach(p => p.classList.remove('active'));
-  const tabMap = { scan: 0, stock: 1, historial: 2, devolucion: 3 };
+  const tabMap = { scan: 0, stock: 1, historial: 2 };
   const tabs = document.querySelectorAll('#screenModule .mod-tab-btn');
   if (tabs[tabMap[name]]) tabs[tabMap[name]].classList.add('active');
   document.getElementById('modPanel' + name.charAt(0).toUpperCase() + name.slice(1)).classList.add('active');
   if (name === 'scan')      cargarCatalogos();
   if (name === 'stock')     cargarStock();
   if (name === 'historial') cargarHistorial();
-  if (name === 'devolucion') {
-    const s = getSession();
-    document.getElementById('devTitle').textContent =
-      currentModule === 'bobinas' ? 'DEVOLUCIÓN DE BOBINAS'
-      : currentModule === 'pemp' ? 'DEVOLUCIÓN DE PEMP'
-      : 'DEVOLUCIÓN DE CARRETILLAS';
-  }
 }
 
 // ══════════════════════════════════════════════════════
@@ -2673,18 +2627,37 @@ function onCodeRead(codigo, method) {
   if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
   document.getElementById('scanCodeInput').value = codigo;
   toast(`✅ ${method}: ${codigo}`, 'ok');
-  setTimeout(() => closeCamera(), 1500);
-  // #14: mostrar botón devolver si el código ya existe en el inventario
-  const existe = _stockItems.find(i => (i.codigo || i.matricula || '').toUpperCase() === codigo.toUpperCase());
-  const btnDev = document.getElementById('btnDevolver');
-  if (btnDev) btnDev.style.display = existe ? 'block' : 'none';
+  setTimeout(() => {
+    closeCamera();
+    if (window._scanMode === 'devolucion') buscarParaDevolver(codigo);
+  }, 1500);
 }
 
-function irADevolucionRapida() {
-  const codigo = document.getElementById('scanCodeInput')?.value || '';
-  showModTab('devolucion');
-  const devInput = document.getElementById('devCodeInput');
-  if (devInput) { devInput.value = codigo; buscarDevolucion(); }
+// ── Modo escáner: 'entrada' | 'devolucion' ──
+window._scanMode = 'entrada';
+
+function setScanMode(mode) {
+  window._scanMode = mode;
+  // Botones
+  document.getElementById('btnModoEntrada').classList.toggle('active', mode === 'entrada');
+  document.getElementById('btnModoDevolucion').classList.toggle('active', mode === 'devolucion');
+  // Campos de entrada (proveedor, tipo cable, PEMP fields, etc.)
+  const camposEntrada = ['fieldsBobi','fieldsPemp','fieldsCarr','buscarMaquinaBox','scanNotas','btnRegistrar'];
+  camposEntrada.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = mode === 'entrada' ? '' : 'none';
+  });
+  // Título y subtítulo
+  const titulo = document.getElementById('modScanTitle');
+  const sub    = document.getElementById('modScanSub');
+  if (titulo) titulo.textContent = mode === 'entrada' ? 'ESCANEAR' : 'DEVOLUCIÓN';
+  if (sub)    sub.textContent    = mode === 'devolucion' ? 'Escanea o introduce el código del equipo a devolver' : '';
+  // Resultado devolución
+  const res = document.getElementById('scanDevResult');
+  if (res) { res.style.display = mode === 'devolucion' ? 'block' : 'none'; res.innerHTML = ''; }
+  // Limpiar input
+  const inp = document.getElementById('scanCodeInput');
+  if (inp) inp.value = '';
 }
 
 // ══════════════════════════════════════════════════════
@@ -3784,97 +3757,12 @@ async function guardarEdicion() {
 
 // ══════════════════════════════════════════════════════
 // DEVOLUCIÓN CON ESCÁNER (pestaña Dev.)
-// ══════════════════════════════════════════════════════
-let devStream = null; let devScanActive = false; let devQRLoop = null;
-
-async function devOpenCamera() {
-  try {
-    devStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
-    const video = document.getElementById('devVideo');
-    video.srcObject = devStream;
-    await video.play();
-    document.getElementById('devCamIdle').style.display = 'none';
-    video.style.display = 'block';
-    document.getElementById('devFrame').style.display = 'block';
-    document.getElementById('devCamOk').style.display = 'none';
-    document.getElementById('devActionsIdle').style.display = 'none';
-    document.getElementById('devActionsActive').style.display = 'flex';
-    devScanActive = true;
-    devStartQRLoop();
-  } catch { toast('❌ No se pudo acceder a la cámara', 'err'); }
-}
-
-function devCloseCamera() {
-  if (devStream) { devStream.getTracks().forEach(t => t.stop()); devStream = null; }
-  if (devQRLoop) { cancelAnimationFrame(devQRLoop); devQRLoop = null; }
-  devScanActive = false;
-  const video = document.getElementById('devVideo');
-  if (video) { video.style.display = 'none'; video.srcObject = null; }
-  document.getElementById('devCamIdle').style.display = 'flex';
-  document.getElementById('devFrame').style.display = 'none';
-  document.getElementById('devActionsIdle').style.display = 'flex';
-  document.getElementById('devActionsActive').style.display = 'none';
-  document.getElementById('devCamOk').style.display = 'none';
-}
-
-function devStartQRLoop() {
-  const video = document.getElementById('devVideo');
-  const canvas = document.getElementById('devCanvas');
-  const ctx = canvas.getContext('2d');
-  let last = 0;
-  function tick() {
-    if (!devScanActive) return;
-    if (video.readyState === video.HAVE_ENOUGH_DATA) {
-      const now = Date.now();
-      if (now - last > 300) {
-        last = now;
-        canvas.width = video.videoWidth; canvas.height = video.videoHeight;
-        ctx.drawImage(video, 0, 0);
-        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        const qr = typeof jsQR !== 'undefined' ? jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: 'dontInvert' }) : null;
-        if (qr?.data) { devOnCode(qr.data.trim().toUpperCase()); return; }
-      }
-    }
-    devQRLoop = requestAnimationFrame(tick);
-  }
-  devQRLoop = requestAnimationFrame(tick);
-}
-
-async function devCaptureOCR() {
-  const btn = document.getElementById('devBtnCapture');
-  btn.classList.add('loading'); btn.innerHTML = '<div class="spinner"></div>';
-  if (navigator.vibrate) navigator.vibrate(80);
-  try {
-    const video = document.getElementById('devVideo');
-    const vW = video.videoWidth || 1280, vH = video.videoHeight || 720;
-    const c = document.createElement('canvas'); c.width = Math.min(vW, 800); c.height = Math.round(vH * c.width / vW);
-    c.getContext('2d').drawImage(video, 0, 0, c.width, c.height);
-    const imageData = c.toDataURL('image/jpeg', 0.75).split(',')[1];
-    const res = await apiCall('/ocr', { method: 'POST', body: JSON.stringify({ image: imageData, mimeType: 'image/jpeg' }) });
-    const data = await res.json();
-    if (!res.ok || data.codigo === 'NO_LEIDO') {
-      toast('⚠️ No se pudo leer. Reintenta.', 'err');
-    } else {
-      devOnCode(data.codigo);
-    }
-  } catch { toast('❌ Error OCR', 'err'); }
-  btn.classList.remove('loading'); btn.textContent = 'OCR';
-}
-
-function devOnCode(codigo) {
-  if (devQRLoop) { cancelAnimationFrame(devQRLoop); devQRLoop = null; }
-  document.getElementById('devCamOk').style.display = 'flex';
-  document.getElementById('devCamOkCode').textContent = codigo;
-  if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
-  document.getElementById('devCodeInput').value = codigo;
-  setTimeout(() => devCloseCamera(), 1200);
-  buscarParaDevolver(codigo);
-}
 
 async function buscarParaDevolver(cod) {
-  const code = (cod || document.getElementById('devCodeInput').value || '').trim().toUpperCase();
+  const code = (cod || document.getElementById('scanCodeInput').value || '').trim().toUpperCase();
   if (!code) return toast('⚠️ Introduce el código', 'err');
-  const c = document.getElementById('devResult');
+  const c = document.getElementById('scanDevResult');
+  if (c) c.style.display = 'block';
   c.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:8px 0">🔍 Buscando...</div>';
   if (!_stockItems.length) await cargarStock();
   const item = _stockItems.find(i => (i.codigo || i.matricula || '').toUpperCase() === code);
@@ -3914,8 +3802,8 @@ async function ejecutarDevolucion(mod, id) {
     if (res.ok) {
       toast(`✅ ${data.mensaje || 'Devuelto correctamente'}`, 'ok');
       if (navigator.vibrate) navigator.vibrate(200);
-      document.getElementById('devResult').innerHTML = `<div style="color:var(--green,#22c55e);padding:10px 0;font-weight:700">✅ Devuelto correctamente</div>`;
-      document.getElementById('devCodeInput').value = '';
+      document.getElementById('scanDevResult').innerHTML = `<div style="color:var(--green,#22c55e);padding:10px 0;font-weight:700">✅ Devuelto correctamente</div>`;
+      document.getElementById('scanCodeInput').value = '';
       cargarStock(); cargarStatsHome();
     } else { toast(`❌ ${data.error || 'Error'}`, 'err'); }
   } catch { toast('❌ Error de conexión', 'err'); }
@@ -4966,7 +4854,7 @@ async function cargarObrasSelectUsuario() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '4.20';
+const APP_VERSION = '4.21';
 let _actualizando = false;
 
 async function checkVersionAndUpdate() {
