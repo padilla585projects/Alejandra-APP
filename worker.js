@@ -48,10 +48,12 @@ async function getAuth(request, env) {
       const sesion = await env.DB.prepare('SELECT * FROM sesiones WHERE token = ?').bind(xToken).first();
       if (sesion) {
         env.DB.prepare('UPDATE sesiones SET last_used = CURRENT_TIMESTAMP WHERE token = ?').bind(xToken).run();
-        const isSuperadmin = sesion.es_admin === 1 || sesion.rol === 'superadmin';
+        const isSuperadmin   = sesion.es_admin === 1 || sesion.rol === 'superadmin';
+        const isEmpresaAdmin = sesion.rol === 'empresa_admin';
         return {
           isAdmin: sesion.es_admin === 1,
           isSuperadmin,
+          isEmpresaAdmin,
           isEncargado: sesion.rol === 'encargado',
           isSeguridad: sesion.departamento === 'seguridad',
           rol: sesion.rol,
@@ -408,7 +410,7 @@ async function getSesionesActivas(request, env) {
 
 async function cerrarTodasSesiones(request, env) {
   const auth = await getAuth(request, env);
-  if (!auth.isSuperadmin && !auth.isAdmin) return err('No autorizado', 403);
+  if (!auth.isSuperadmin && !auth.isAdmin && !auth.isEmpresaAdmin) return err('No autorizado', 403);
   const body = await request.json().catch(() => ({}));
   const { rol, excepto_token } = body;
   const miToken = request.headers.get('X-Token');
@@ -499,15 +501,15 @@ async function updateMiEmpresa(request, env) {
 // ════════════════════════════════════════════════════════════════════════════
 
 async function getObras(request, env) {
-  const { isSuperadmin, isAdmin, empresa_id } = await getAuth(request, env);
-  if (!isSuperadmin && !isAdmin) return err('No autorizado', 403);
+  const { isSuperadmin, isAdmin, isEmpresaAdmin, empresa_id } = await getAuth(request, env);
+  if (!isSuperadmin && !isAdmin && !isEmpresaAdmin) return err('No autorizado', 403);
   const { results } = await env.DB.prepare('SELECT * FROM obras WHERE empresa_id = ? ORDER BY nombre').bind(empresa_id).all();
   return json(results);
 }
 
 async function crearObra(request, env) {
-  const { isSuperadmin, isAdmin, empresa_id } = await getAuth(request, env);
-  if (!isSuperadmin && !isAdmin) return err('No autorizado', 403);
+  const { isSuperadmin, isAdmin, isEmpresaAdmin, empresa_id } = await getAuth(request, env);
+  if (!isSuperadmin && !isAdmin && !isEmpresaAdmin) return err('No autorizado', 403);
   const { nombre, codigo } = await request.json();
   if (!nombre?.trim() || !codigo?.trim()) return err('Faltan nombre y código');
   try {
@@ -521,8 +523,8 @@ async function crearObra(request, env) {
 }
 
 async function eliminarObra(id, request, env) {
-  const { isSuperadmin, isAdmin } = await getAuth(request, env);
-  if (!isSuperadmin && !isAdmin) return err('No autorizado', 403);
+  const { isSuperadmin, isAdmin, isEmpresaAdmin } = await getAuth(request, env);
+  if (!isSuperadmin && !isAdmin && !isEmpresaAdmin) return err('No autorizado', 403);
   await env.DB.prepare('UPDATE obras SET activa = 0 WHERE id = ?').bind(id).run();
   return json({ ok: true });
 }
@@ -1008,12 +1010,12 @@ async function transferirRecurso(tabla, id, request, env) {
 // ════════════════════════════════════════════════════════════════════════════
 
 async function getUsuarios(request, env) {
-  const { isSuperadmin, isAdmin, isEncargado, obraId, empresa_id } = await getAuth(request, env);
+  const { isSuperadmin, isAdmin, isEmpresaAdmin, isEncargado, obraId, empresa_id } = await getAuth(request, env);
 
   let sql;
   const params = [];
 
-  if (isSuperadmin || isAdmin) {
+  if (isSuperadmin || isAdmin || isEmpresaAdmin) {
     sql = 'SELECT u.*, o.nombre as obra_nombre FROM usuarios u LEFT JOIN obras o ON u.obra_id = o.id WHERE u.activo = 1 AND u.empresa_id = ? ORDER BY u.nombre';
     params.push(empresa_id);
   } else if (isEncargado && obraId) {
@@ -1028,8 +1030,8 @@ async function getUsuarios(request, env) {
 }
 
 async function crearUsuario(request, env) {
-  const { isSuperadmin, isAdmin, isEncargado, obraId, empresa_id } = await getAuth(request, env);
-  if (!isSuperadmin && !isAdmin && !isEncargado) return err('No autorizado', 403);
+  const { isSuperadmin, isAdmin, isEmpresaAdmin, isEncargado, obraId, empresa_id } = await getAuth(request, env);
+  if (!isSuperadmin && !isAdmin && !isEmpresaAdmin && !isEncargado) return err('No autorizado', 403);
 
   const body = await request.json();
   const { nombre, codigo, rol, obra_id, departamento: deptBody } = body;
@@ -1038,8 +1040,8 @@ async function crearUsuario(request, env) {
   const obraFinal = obra_id ? parseInt(obra_id) : obraId;
   const deptFinal = deptBody || 'electrico';
 
-  // Encargado solo puede crear usuarios de su propia obra
-  if (isEncargado && !isSuperadmin && !isAdmin && obraFinal !== obraId) {
+  // Encargado solo puede crear usuarios de su propia obra (empresa_admin puede cualquiera)
+  if (isEncargado && !isSuperadmin && !isAdmin && !isEmpresaAdmin && obraFinal !== obraId) {
     return err('No autorizado para crear usuarios en otra obra', 403);
   }
 
@@ -1055,12 +1057,12 @@ async function crearUsuario(request, env) {
 }
 
 async function eliminarUsuario(id, request, env) {
-  const { isSuperadmin, isAdmin, isEncargado, obraId } = await getAuth(request, env);
+  const { isSuperadmin, isAdmin, isEmpresaAdmin, isEncargado, obraId } = await getAuth(request, env);
 
   const usuario = await env.DB.prepare('SELECT * FROM usuarios WHERE id = ?').bind(id).first();
   if (!usuario) return err('Usuario no encontrado', 404);
 
-  if (!isSuperadmin && !isAdmin) {
+  if (!isSuperadmin && !isAdmin && !isEmpresaAdmin) {
     if (isEncargado && usuario.obra_id !== obraId) return err('No autorizado', 403);
     if (!isEncargado) return err('No autorizado', 403);
   }
@@ -1070,12 +1072,12 @@ async function eliminarUsuario(id, request, env) {
 }
 
 async function editarUsuario(id, request, env) {
-  const { isSuperadmin, isAdmin, isEncargado, obraId } = await getAuth(request, env);
+  const { isSuperadmin, isAdmin, isEmpresaAdmin, isEncargado, obraId } = await getAuth(request, env);
 
   const usuario = await env.DB.prepare('SELECT * FROM usuarios WHERE id = ?').bind(id).first();
   if (!usuario) return err('Usuario no encontrado', 404);
 
-  if (!isSuperadmin && !isAdmin) {
+  if (!isSuperadmin && !isAdmin && !isEmpresaAdmin) {
     if (isEncargado && usuario.obra_id !== obraId) return err('No autorizado', 403);
     if (!isEncargado) return err('No autorizado', 403);
   }
@@ -1381,8 +1383,8 @@ async function guardarSugerencia(request, env) {
 }
 
 async function getSugerencias(request, env) {
-  const { isSuperadmin, empresa_id } = await getAuth(request, env);
-  if (!isSuperadmin) return err('No autorizado', 403);
+  const { isSuperadmin, isEmpresaAdmin, empresa_id } = await getAuth(request, env);
+  if (!isSuperadmin && !isEmpresaAdmin) return err('No autorizado', 403);
   const url = new URL(request.url);
   const estadoFilter    = url.searchParams.get('estado');
   const categoriaFilter = url.searchParams.get('categoria');
