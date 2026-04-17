@@ -1175,12 +1175,54 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
 
       <!-- ── EMPRESA ── -->
       <div class="ajustes-panel" id="ajPanelEmpresa">
-        <div class="settings-section">
-          <div class="settings-title">🏢 Mi Empresa</div>
+
+        <!-- Vista datos -->
+        <div class="settings-section" id="empresaVista">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+            <div class="settings-title" style="margin-bottom:0">🏢 Mi Empresa</div>
+            <button id="btnEditarEmpresa" onclick="abrirEditEmpresa()"
+              style="padding:6px 12px;background:var(--accent);color:#000;border:none;border-radius:8px;font-family:'Montserrat',sans-serif;font-weight:700;font-size:11px;cursor:pointer">
+              ✏️ Editar
+            </button>
+          </div>
           <div id="empresaInfo">
             <div style="color:var(--muted);font-size:13px">Cargando...</div>
           </div>
         </div>
+
+        <!-- Formulario edición (oculto por defecto) -->
+        <div class="settings-section" id="empresaForm" style="display:none">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+            <div class="settings-title" style="margin-bottom:0">✏️ Editar empresa</div>
+            <button onclick="cerrarEditEmpresa()"
+              style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--muted);line-height:1">×</button>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Nombre de la empresa *</label>
+            <input class="form-input" id="efNombre" type="text" placeholder="Nombre comercial...">
+          </div>
+          <div class="form-group">
+            <label class="form-label">CIF / NIF</label>
+            <input class="form-input" id="efCif" type="text" placeholder="B12345678...">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Email de contacto</label>
+            <input class="form-input" id="efEmail" type="email" placeholder="info@empresa.com...">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Teléfono</label>
+            <input class="form-input" id="efTelefono" type="tel" placeholder="600 000 000...">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Dirección</label>
+            <input class="form-input" id="efDireccion" type="text" placeholder="Calle, número, ciudad...">
+          </div>
+          <div style="display:flex;gap:8px;margin-top:4px">
+            <button class="btn-primary" style="flex:1" onclick="guardarEmpresa()">💾 Guardar cambios</button>
+            <button class="btn-primary btn-secondary" style="flex:0 0 90px;margin-top:0" onclick="cerrarEditEmpresa()">Cancelar</button>
+          </div>
+        </div>
+
         <div class="settings-section" style="margin-top:16px">
           <div class="settings-title">🏗 Obras</div>
           <div id="empresaObras"></div>
@@ -4079,26 +4121,80 @@ function selAjTab(tab) {
   if (tab === 'empresa')   cargarPanelEmpresa();
 }
 
+// Guarda los datos de empresa en memoria para rellenar el formulario sin hacer otra llamada
+window._empresaData = null;
+
 async function cargarPanelEmpresa() {
   try {
     const res  = await apiCall('/mi-empresa');
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Error');
-    const e = data.empresa;
-    document.getElementById('empresaInfo').innerHTML = `
-      <div class="settings-row"><span>Nombre</span><strong>${e.nombre}</strong></div>
-      <div class="settings-row"><span>Plan</span><span style="background:var(--accent);color:#000;padding:2px 8px;border-radius:4px;font-weight:700;font-size:11px">${(e.plan||'basic').toUpperCase()}</span></div>
-      <div class="settings-row"><span>Email</span><strong>${e.email||'—'}</strong></div>
-      <div class="settings-row"><span>Desde</span><strong>${(e.created_at||'').slice(0,10)}</strong></div>`;
+    window._empresaData = data.empresa;
+    renderEmpresaInfo(data.empresa);
     document.getElementById('empresaObras').innerHTML = data.obras.length
       ? data.obras.map(o => `<div class="settings-row"><span>🏗 ${o.nombre}</span><span style="font-size:11px;color:var(--muted)">Código: ${o.codigo}</span></div>`).join('')
       : '<div style="color:var(--muted);font-size:13px">Sin obras registradas</div>';
     document.getElementById('empresaUsuarios').innerHTML = data.usuarios.length
-      ? data.usuarios.map(u => `<div class="settings-row"><span>👤 ${u.nombre}</span><span style="font-size:11px;color:var(--muted)">${u.rol}</span></div>`).join('')
+      ? data.usuarios.map(u => `<div class="settings-row"><span>👤 ${u.nombre}</span><span style="font-size:11px;color:var(--muted)">${u.rol}${u.departamento ? ' · ' + u.departamento : ''}</span></div>`).join('')
       : '<div style="color:var(--muted);font-size:13px">Sin usuarios</div>';
+    // Mostrar botón editar solo a empresa_admin / superadmin
+    const s = getSession();
+    const puedeEditar = s?.rol === 'empresa_admin' || s?.rol === 'superadmin';
+    const btn = document.getElementById('btnEditarEmpresa');
+    if (btn) btn.style.display = puedeEditar ? '' : 'none';
   } catch(e) {
     document.getElementById('empresaInfo').innerHTML = '<div style="color:var(--red)">Error al cargar</div>';
   }
+}
+
+function renderEmpresaInfo(e) {
+  const fila = (lbl, val) => val ? `<div class="settings-row"><span>${lbl}</span><strong>${val}</strong></div>` : '';
+  document.getElementById('empresaInfo').innerHTML =
+    `<div class="settings-row"><span>Nombre</span><strong>${e.nombre || '—'}</strong></div>` +
+    fila('CIF / NIF', e.cif) +
+    fila('Email', e.email) +
+    fila('Teléfono', e.telefono) +
+    fila('Dirección', e.direccion) +
+    `<div class="settings-row"><span>Plan</span><span style="background:var(--accent);color:#000;padding:2px 8px;border-radius:4px;font-weight:700;font-size:11px">${(e.plan||'basic').toUpperCase()}</span></div>` +
+    `<div class="settings-row"><span>Desde</span><strong>${(e.created_at||'').slice(0,10)}</strong></div>`;
+}
+
+function abrirEditEmpresa() {
+  const e = window._empresaData;
+  if (!e) return;
+  document.getElementById('efNombre').value   = e.nombre    || '';
+  document.getElementById('efCif').value      = e.cif       || '';
+  document.getElementById('efEmail').value    = e.email     || '';
+  document.getElementById('efTelefono').value = e.telefono  || '';
+  document.getElementById('efDireccion').value= e.direccion || '';
+  document.getElementById('empresaVista').style.display = 'none';
+  document.getElementById('empresaForm').style.display  = 'block';
+}
+
+function cerrarEditEmpresa() {
+  document.getElementById('empresaVista').style.display = 'block';
+  document.getElementById('empresaForm').style.display  = 'none';
+}
+
+async function guardarEmpresa() {
+  const nombre = document.getElementById('efNombre').value.trim();
+  if (!nombre) return toast('⚠️ El nombre es obligatorio', 'err');
+  const body = {
+    nombre,
+    cif:       document.getElementById('efCif').value.trim()       || null,
+    email:     document.getElementById('efEmail').value.trim()     || null,
+    telefono:  document.getElementById('efTelefono').value.trim()  || null,
+    direccion: document.getElementById('efDireccion').value.trim() || null,
+  };
+  try {
+    const res = await apiCall('/mi-empresa', { method: 'PUT', body: JSON.stringify(body) });
+    if (!res.ok) { const e = await res.json().catch(()=>({error:'Error'})); return toast('❌ ' + (e.error||'Error'), 'err'); }
+    // Actualizar cache local y volver a la vista
+    window._empresaData = { ...window._empresaData, ...body };
+    renderEmpresaInfo(window._empresaData);
+    cerrarEditEmpresa();
+    toast('✅ Datos de empresa actualizados');
+  } catch { toast('❌ Error de red', 'err'); }
 }
 
 function initAjustesTabs() {

@@ -488,7 +488,7 @@ async function registrarEmpresa(request, env) {
 async function getMiEmpresa(request, env) {
   const auth = await getAuth(request, env);
   if (!auth.empresa_id) return err('Sin empresa asignada', 403);
-  const empresa = await env.DB.prepare('SELECT id, nombre, slug, email, plan, activa, created_at FROM empresas WHERE id = ?').bind(auth.empresa_id).first();
+  const empresa = await env.DB.prepare('SELECT id, nombre, slug, email, telefono, direccion, cif, plan, activa, created_at FROM empresas WHERE id = ?').bind(auth.empresa_id).first();
   if (!empresa) return err('Empresa no encontrada', 404);
   const obras    = (await env.DB.prepare('SELECT id, nombre, codigo FROM obras WHERE empresa_id = ? AND activa = 1 ORDER BY nombre').bind(auth.empresa_id).all()).results;
   const usuarios = (await env.DB.prepare('SELECT id, nombre, rol, departamento, obra_id FROM usuarios WHERE empresa_id = ? AND activo = 1 ORDER BY nombre').bind(auth.empresa_id).all()).results;
@@ -499,9 +499,16 @@ async function updateMiEmpresa(request, env) {
   const auth = await getAuth(request, env);
   if (!auth.empresa_id || (auth.rol !== 'empresa_admin' && !auth.isSuperadmin)) return err('Sin permisos', 403);
   const body = await request.json().catch(() => ({}));
-  const { nombre } = body;
+  const { nombre, email, telefono, direccion, cif } = body;
   if (!nombre?.trim()) return err('Falta el nombre de la empresa');
-  await env.DB.prepare('UPDATE empresas SET nombre = ? WHERE id = ?').bind(nombre.trim(), auth.empresa_id).run();
+  const campos = ['nombre = ?'];
+  const vals   = [nombre.trim()];
+  if (email     !== undefined) { campos.push('email = ?');     vals.push(email?.trim()     || null); }
+  if (telefono  !== undefined) { campos.push('telefono = ?');  vals.push(telefono?.trim()  || null); }
+  if (direccion !== undefined) { campos.push('direccion = ?'); vals.push(direccion?.trim() || null); }
+  if (cif       !== undefined) { campos.push('cif = ?');       vals.push(cif?.trim()       || null); }
+  vals.push(auth.empresa_id);
+  await env.DB.prepare(`UPDATE empresas SET ${campos.join(', ')} WHERE id = ?`).bind(...vals).run();
   return json({ ok: true });
 }
 
