@@ -68,7 +68,8 @@ Tablas originales:  bobinas, obras, historial, proveedores, tipos_cable
 Tablas añadidas:    usuarios, pemp, carretillas, historial_pemp,
                     historial_carretillas, logs, sugerencias,
                     inventario_seg, movimientos_seg, tipos_material_seg,
-                    sesiones, pedidos
+                    sesiones, pedidos, tipos_herramienta, kits_herramientas,
+                    herramientas, historial_herramientas
 Tablas multi-tenant [solo nueva app]:
                     empresas (id, nombre, slug, email, plan, activa, created_at)
 Catálogos:          tipos_pemp, tipos_carretilla, energias_carretilla
@@ -230,16 +231,24 @@ v4.0  |  15/04/2026  [SOLO NUEVA APP]
   - SW bumpeado a alejandra-v4.0
 
 v4.19  |  17/04/2026  [SOLO NUEVA APP]
-  - Pedidos: sheet propio (GOOGLE_PEDIDOS_SHEET_ID)
-    · Separado del sheet de equipos — limpio y aparte
-    · tabForDept('pedido', dept) → 'Elec-Pedidos' / 'Mec-Pedidos'
-    · syncPedidos(env, tabs): función dedicada para el sheet de pedidos
-    · crearPedido: sincroniza solo la pestaña del dept
-    · actualizarPedido: sincroniza ambas pestañas (el dept podría cambiar)
-    · eliminarPedido: lee dept antes de borrar, sincroniza solo esa pestaña
-    · /sync-sheets: llama syncSheets + syncPedidos en paralelo
-    · Formato visual: cabecera ámbar (Elec) / azul (Mec) + estado 'solicitado' azul
-    · Requiere añadir secreto GOOGLE_PEDIDOS_SHEET_ID al worker
+  - #39: Módulo Herramientas — kits y herramientas en obra
+    · 4 tablas nuevas en D1: tipos_herramienta, kits_herramientas, herramientas, historial_herramientas
+    · 15 tipos por defecto: Taladro, Impactador, Radial, Batería, Cargador, etc.
+    · Card 🔧 en home (visible todos los depts excepto seguridad)
+    · screenHerramientas con 4 pestañas:
+      - 📷 Escanear: busca por número de serie → ficha + acciones + historial
+      - 🔧 Inventario: lista filtrable por estado, modal con ficha completa
+      - 📋 Kits: lista con badge componentes reales/total, modal detalle con piezas
+      - 🕒 Historial: últimos 50 movimientos
+    · Fechas automáticas: alta, asignacion, devolucion, averia, reparacion
+    · Departamento auto desde sesión, editable después
+    · Estados: disponible / en_uso / averiado / en_reparacion / perdido / baja
+    · Alimentación: batería / eléctrica / neumática / manual
+    · Kits: número + nombre + obra + asignado_a + nº componentes + estado
+    · Permisos: encargado+ crea/edita; operario solo cambia estado de herramientas
+    · Ajustes → Catálogos → 🔧 Tipos herramienta (añadir/eliminar)
+    · Botón atrás Android funciona
+    · Worker: 14 nuevos endpoints CRUD + historial automático
   - Worker y GitHub actualizados ✅
 
 v4.18  |  17/04/2026  [SOLO NUEVA APP]
