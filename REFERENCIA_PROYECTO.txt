@@ -9,7 +9,8 @@
   RESUMEN EJECUTIVO
 ================================================================================
 
-Proyecto: App PWA de gestión de obra (bobinas, PEMP, carretillas, seguridad)
+Proyecto: App PWA de gestión de obra (bobinas, PEMP, carretillas, herramientas,
+          pedidos, personal)
 Stack:    Vanilla JS + Cloudflare Workers + D1 (SQLite) + GitHub Pages
 Equipo:   Adrian (desarrollador/cliente) + Claude (dev)
 
@@ -26,12 +27,12 @@ HAY DOS APPS EN PARALELO:
   └─ Login por código O por email + contraseña
   └─ Wizard de registro de nuevas empresas
   └─ Aquí van todas las mejoras y nuevas features
-  └─ Versión: v4.16
+  └─ Versión: v4.20
 
 REGLA DE DEPLOY:
   - BUGS      → ambas apps siempre
   - MEJORAS   → solo app nueva
-  - version.json, sw.js y badge de versión en index.html → actualizar los tres
+  - version.json, sw.js CACHE y badge de versión en index.html → actualizar los tres
     a la vez en cada versión nueva
 
 ================================================================================
@@ -71,7 +72,7 @@ GitHub:
   Pages:    https://padilla585projects.github.io/Alejandra-APP/
   Usuario:  padilla585projects
   Token:    → ver NUEVA_CUENTA.txt
-  Push:     git -c credential.helper= push https://padilla585projects:<TOKEN_GITHUB_NUEVO>@github.com/padilla585projects/Alejandra-APP.git main
+  Push:     git push origin main  (credenciales ya guardadas con wrangler OAuth)
 
 Cloudflare Worker:
   Nombre:   alejandra-app-api
@@ -94,32 +95,35 @@ Archivos locales:
   COMANDOS DE DEPLOY — COPIAR Y PEGAR DIRECTAMENTE
 ================================================================================
 
-── DEPLOY WORKER VIEJO ─────────────────────────────────────────────────────────
+── DEPLOY WORKER NUEVO (preferido — Wrangler OAuth) ───────────────────────────
+cd "C:\Users\Adrian\Downloads\Proyecto GestiBobina\NuevaApp"
+npx wrangler deploy
+
+── DEPLOY WORKER VIEJO (via curl — sin wrangler) ───────────────────────────────
 curl -s -X PUT "https://api.cloudflare.com/client/v4/accounts/c100d5a0ea37ee03989fe769c7259b83/workers/scripts/gestibobina-proxy" \
   -H "Authorization: Bearer <TOKEN_WORKER_VIEJO>" \
   -F "metadata={\"main_module\":\"worker.js\",\"compatibility_date\":\"2024-01-01\",\"bindings\":[{\"type\":\"d1\",\"name\":\"DB\",\"id\":\"eac9f2d2-0845-409c-9032-109c563d7eec\"}]};type=application/json" \
   -F "worker.js=@C:\Users\Adrian\Downloads\Proyecto GestiBobina\Bobinaap\worker.js;type=application/javascript+module"
 
-── DEPLOY WORKER NUEVO ─────────────────────────────────────────────────────────
-curl -s -X PUT "https://api.cloudflare.com/client/v4/accounts/d65ead2b2967bf68ff3848a36cd7b1b4/workers/scripts/alejandra-app-api" \
-  -H "Authorization: Bearer <TOKEN_WORKER_NUEVO>" \
-  -F "metadata={\"main_module\":\"worker.js\",\"compatibility_date\":\"2024-01-01\",\"bindings\":[{\"type\":\"d1\",\"name\":\"DB\",\"id\":\"0c9eccde-78f1-476d-ac68-bf452bec0c62\"}]};type=application/json" \
-  -F "worker.js=@C:\Users\Adrian\Downloads\Proyecto GestiBobina\NuevaApp\worker.js;type=application/javascript+module"
-
 ⚠️  CRÍTICO: el binding D1 SIEMPRE debe incluirse en el metadata del deploy.
     Sin él, env.DB queda undefined y TODA la app deja de funcionar.
+    Con wrangler esto es automático (lee wrangler.toml).
 
-── QUERY D1 VIEJA ──────────────────────────────────────────────────────────────
-curl -s -X POST "https://api.cloudflare.com/client/v4/accounts/c100d5a0ea37ee03989fe769c7259b83/d1/database/eac9f2d2-0845-409c-9032-109c563d7eec/query" \
-  -H "Authorization: Bearer <TOKEN_D1_VIEJO>" \
-  -H "Content-Type: application/json" \
-  -d "{\"sql\":\"SELECT ...\"}"
+── QUERY D1 NUEVA (wrangler) ───────────────────────────────────────────────────
+cd "C:\Users\Adrian\Downloads\Proyecto GestiBobina\NuevaApp"
+npx wrangler d1 execute alejandra-db --remote --command "SELECT ..."
 
-── QUERY D1 NUEVA ──────────────────────────────────────────────────────────────
+── QUERY D1 NUEVA (curl) ───────────────────────────────────────────────────────
 curl -s -X POST "https://api.cloudflare.com/client/v4/accounts/d65ead2b2967bf68ff3848a36cd7b1b4/d1/database/0c9eccde-78f1-476d-ac68-bf452bec0c62/query" \
   -H "Authorization: Bearer <TOKEN_D1_NUEVO>" \
   -H "Content-Type: application/json" \
   -d "{\"sql\":\"SELECT ...\"}"
+
+── GIT PUSH APP NUEVA ──────────────────────────────────────────────────────────
+cd "C:\Users\Adrian\Downloads\Proyecto GestiBobina\NuevaApp"
+git add index.html worker.js sw.js version.json ESTADO_APP.txt
+git commit -m "descripcion; vX.XX"
+git push origin main
 
 ── GIT PUSH APP VIEJA ──────────────────────────────────────────────────────────
 cd "C:\Users\Adrian\Downloads\Proyecto GestiBobina\Bobinaap"
@@ -127,56 +131,70 @@ git add index.html worker.js sw.js version.json ESTADO_APP.txt
 git commit -m "descripcion; vX.XX"
 git -c credential.helper= push https://padilla585:<TOKEN_GITHUB_VIEJO>@github.com/padilla585/Bobinaap.git main
 
-── GIT PUSH APP NUEVA ──────────────────────────────────────────────────────────
-cd "C:\Users\Adrian\Downloads\Proyecto GestiBobina\NuevaApp"
-git add index.html worker.js sw.js version.json ESTADO_APP.txt
-git commit -m "descripcion; vX.XX"
-git -c credential.helper= push https://padilla585projects:<TOKEN_GITHUB_NUEVO>@github.com/padilla585projects/Alejandra-APP.git main
-
 ================================================================================
   VERSIONES ACTUALES Y CHANGELOGS
 ================================================================================
 
-APP VIEJA:  v4.14  (sw.js: alejandra-v4.14 | version.json: 4.14)
-APP NUEVA:  v4.17  (sw.js: alejandra-v4.17 | version.json: 4.17)
+APP VIEJA:  v4.14  (sw.js: alejandra-v4.14 | version.json: {"v":"4.14"})
+APP NUEVA:  v4.20  (sw.js: alejandra-v4.20 | version.json: {"v":"4.20"})
 
-Historial reciente:
-  v4.17 [nueva] — #52 botón ← Atrás en header + botón físico Android (popstate)
-                   #53 filtro sugerencias por departamento; departamento guardado en INSERT
-                   DB: columna departamento añadida a tabla sugerencias
-  v4.16 [nueva] — empresa_admin con permisos completos (getAuth+worker+frontend)
-                   Fix "Error al cargar" en panel Mi Empresa (.json() faltante)
-  v4.15 [ambas] — Auto-actualización sin intervención: version.json + SW no cachea HTML
-  v4.14 [ambas] — Auto-actualización (versión vieja), cerrar sesiones fix
-  v4.13 [ambas] — Fix cerrar sesiones (#67/#68), filtros sugerencias
-  v4.12 [ambas] — Fix #51 editar salidas seguridad; #44 ficha pantalla completa; #38 sesiones
-  v4.11 [nueva] — Sync con v4.8+v4.9 de app vieja
-  v4.10 [ambas] — Fix crítico D1 binding perdido en deploy; fix login nueva app
+Historial reciente (app nueva):
+  v4.20 [nueva] — Módulo Personal: screenPersonal 3 tabs (Hoy/Semana/Resumen),
+                   modal fichaje, exportar Excel, FAB encargado+
+                   DB: fichajes, horarios_obra, personal_externo
+                   ⚠️ campo 'estado' en fichajes (no 'tipo'); getFichajes → array plano
+  v4.19 [nueva] — Módulo Herramientas: screenHerramientas 4 tabs
+                   (Escanear/Inventario/Kits/Historial), kits+herramientas individuales,
+                   fechas automáticas, catálogo tipos en Ajustes
+                   DB: tipos_herramienta, kits_herramientas, herramientas, historial_herramientas
+  v4.18 [nueva] — Módulo Pedidos: screenPedidos, flujo estados, card home morada
+                   Editar datos empresa en Ajustes→Empresa
+                   Sheets propios separados de app vieja
+                   DB: pedidos
+  v4.17 [nueva] — Botón ← Atrás en header + botón físico Android (popstate)
+                   Filtro sugerencias por dept; dept guardado en sugerencias
+  v4.16 [nueva] — Fix empresa_admin sin permisos (getAuth+worker+initAjustesTabs)
+                   Fix panel Mi Empresa (.json() faltaba)
+  v4.15 [ambas] — Auto-actualización silenciosa: version.json + SW no cachea HTML
+  v4.14 [ambas] — Fix wizard empresa, fix filtros Ideas, fix cerrar sesiones
 
 ================================================================================
   ARQUITECTURA TÉCNICA
 ================================================================================
 
 ROLES:
-  superadmin   → código ADMIN_CODE (secret Cloudflare). Ve todo, elige departamento.
-  empresa_admin → email + contraseña. Admin de su empresa (solo nueva app activo).
-  encargado    → código de usuario. Gestiona su departamento/obra.
-  operario     → código de usuario. Solo lectura/scan en su departamento.
+  superadmin    → código ADMIN_CODE (secret Cloudflare). Ve todo, elige dept.
+  empresa_admin → email + contraseña. Admin de su empresa (solo nueva app).
+  encargado     → código de usuario. Gestiona su departamento/obra.
+  operario      → código de usuario. Solo lectura/scan. Solo ve sus fichajes.
+
+getAuth() devuelve:
+  { empresa_id, rol, obra_id, usuario_id, nombre,
+    isSuperadmin, isEmpresaAdmin, isAdmin }
+  isAdmin = isSuperadmin || isEmpresaAdmin || rol === 'encargado'
 
 DEPARTAMENTOS:
-  electrico  → Bobinas + PEMP + Carretillas + Historial
-  mecanicas  → PEMP + Carretillas (sin Bobinas)
-  seguridad  → Solo escáner + Inventario de Seguridad
+  electrico  → Bobinas + PEMP + Carretillas + Pedidos + Herramientas
+  mecanicas  → PEMP + Carretillas + Pedidos + Herramientas
+  seguridad  → Solo escáner cross-dept + Inventario de Seguridad
+  personal   → Fichajes + Horarios + Asistencia (screenPersonal)
 
 TABLAS D1 (ambas apps):
   bobinas, obras, historial, proveedores, tipos_cable
   usuarios, pemp, carretillas, historial_pemp, historial_carretillas
   logs, sugerencias, inventario_seg, movimientos_seg, tipos_material_seg
-  sesiones, config
-  tipos_pemp, tipos_carretilla, energias_carretilla
+  sesiones, config, tipos_pemp, tipos_carretilla, energias_carretilla
 
 TABLAS EXTRA (solo nueva app):
-  empresas (id, nombre, slug, email, plan, activa, created_at)
+  empresas                          ← multi-tenant
+  pedidos                           ← v4.18
+  tipos_herramienta                 ← v4.19
+  kits_herramientas                 ← v4.19
+  herramientas                      ← v4.19
+  historial_herramientas            ← v4.19
+  fichajes                          ← v4.20  (campo: estado, no tipo)
+  horarios_obra                     ← v4.20
+  personal_externo                  ← v4.20
 
 MULTI-TENANT (solo nueva app):
   Todas las tablas tienen empresa_id.
@@ -196,99 +214,105 @@ AUTO-ACTUALIZACIÓN (v4.15+):
   El SW no cachea peticiones de navegación (HTML siempre fresco de red).
   → Regla: actualizar version.json, sw.js CACHE y badge de index.html a la vez.
 
-SECRETOS CONFIGURADOS EN WORKERS (ambos):
-  ADMIN_CODE, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, GOOGLE_SHEET_ID
+SECRETOS CONFIGURADOS EN WORKERS (app nueva):
+  ADMIN_CODE, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID
+  GOOGLE_CLIENT_EMAIL, GOOGLE_PRIVATE_KEY
+  GOOGLE_SHEET_ID (equipos), GOOGLE_PEDIDOS_SHEET_ID (pedidos)
 
 TELEGRAM:
-  App vieja: @AlejandraAPP_bot (chat_id: 6965043)
-  App nueva: mismo bot y chat_id
+  Bot: @AlejandraAPP_bot (chat_id: 6965043)
 
-GOOGLE SHEETS:
-  ID: 1HiBUR_S0toOkUJtxjt4ua5JibgO4atbCRCrPbcrcPsU
-  Pestañas: Elec-Bobinas, Elec-PEMP, Elec-Carretillas, Mec-PEMP, Mec-Carretillas, Seg-Inventario
+GOOGLE SHEETS (app nueva — sheets propios):
+  Equipos:  1SVtsS8nAJWlbFKDt8HxH0MZOJW762U7wRhkyTjIs_Sg
+  Pedidos:  1fIrkm6oQRmsVcqHTJstVfLNZJjSumotSQKpuQ6f6lD8
+  Pestañas equipos: Elec-Bobinas, Elec-PEMP, Elec-Carretillas,
+                    Mec-PEMP, Mec-Carretillas, Seg-Inventario
 
 ================================================================================
-  ESTADO ACTUAL — QUÉ FUNCIONA
+  ESTADO ACTUAL — QUÉ FUNCIONA (v4.20)
 ================================================================================
 
 ✅ Login multi-dispositivo con tokens D1
-✅ Selector de departamento para superadmin
+✅ Selector de departamento para superadmin/empresa_admin (incl. Personal)
 ✅ CRUD completo: bobinas, PEMP, carretillas (crear, editar, devolver, transferir, borrar)
 ✅ Inventario de Seguridad (individual/cantidad, salidas, devoluciones, bajas, editar)
 ✅ Ficha de máquina a pantalla completa con historial
 ✅ Escáner QR + OCR (Gemini 2.0 Flash)
-✅ Google Sheets sync por pestañas departamentales
+✅ Google Sheets sync por pestañas (equipos + pedidos)
 ✅ Notificaciones Telegram
-✅ Catálogos por departamento (proveedores, tipos cable/PEMP/carretilla, energías, mat. seg)
-✅ Sugerencias con estados y filtros (pendiente/en_progreso/resuelto + categoria)
-✅ Logs en D1
-✅ Sesiones activas: ver quién está conectado, cerrar por rol
-✅ Exportar Excel completo
-✅ Ajustes en pestañas (Sesión, Catálogos, Usuarios, Obras, Ideas, Sistema)
+✅ Catálogos (proveedores, tipos cable/PEMP/carretilla, energías, mat. seg, tipos herramienta)
+✅ Sugerencias con estados, filtros y dept
+✅ Pedidos: flujo estados, modal crear/editar, filtros, card home
+✅ Herramientas: kits + inventario individual, escanear por serie, historial, fechas auto
+✅ Personal: fichajes diarios/semanales/mensuales, modal, exportar Excel
+✅ Ajustes → Empresa: ver y editar datos (nombre, email, teléfono, dirección, CIF)
+✅ Botón ← Atrás en header + botón físico Android
 ✅ Auto-actualización silenciosa sin interacción del usuario
+✅ Exportar Excel (bobinas/PEMP/carretillas + Personal)
 ✅ PWA instalable (manifest, SW, icons)
-✅ Badge de ideas sin leer
-
-[SOLO NUEVA APP]:
-✅ Multi-empresa (empresa_id en todas las tablas)
-✅ Login por email + contraseña (PBKDF2 100k iteraciones)
-✅ empresa_admin con permisos completos sobre su empresa
-✅ Wizard de registro de empresa (3 pasos: empresa → admin → obra)
-✅ Panel Empresa en Ajustes (info, obras, usuarios)
-✅ /empresas/registro, /mi-empresa GET/PUT
-✅ Botón ← Atrás en header (aparece en Inventario/Ajustes/Ideas)
-✅ Botón físico Android no cierra la app — navega hacia atrás dentro de ella
-✅ Sugerencias: filtro por departamento (⚡/🔧/🔺) + departamento guardado y visible
+✅ Multi-empresa con empresa_id en todas las tablas
+✅ Login email + contraseña (PBKDF2), wizard registro empresa
 
 ================================================================================
   PENDIENTE / PRÓXIMAS FEATURES
 ================================================================================
 
 ERRORES CONOCIDOS:
-  (ninguno pendiente — todos resueltos en v4.17)
+  (ninguno pendiente — todos resueltos en v4.20)
 
-MEJORAS PENDIENTES (app nueva):
-  #15 — Pedidos en parte eléctrica + sync Sheets
+PENDIENTE DE UI (worker ya tiene los endpoints):
+  - Gestión personal externo desde frontend
+  - Configuración horarios de obra desde Ajustes→Obras
+  - Google Sheets sync para fichajes Personal (semanal/mensual)
 
-NUEVAS FUNCIONALIDADES (grandes):
-  #39 — Módulo de Herramientas (escáner código + catálogo + BD)
+NUEVAS FUNCIONALIDADES:
   #34 — Planos, fotos, documentos de obra (requiere R2)
   #33 — Departamento Especiales/Teleco
-  #29 — Control de horas para contratas y personal
   #9  — App consume batería (pendiente investigar causa)
 
 MULTI-TENANT ROADMAP (app nueva):
   Fase 4 — Almacenamiento R2 (fotos, firma digital, PDFs albarán)
-  Fase 5 — Facturación Stripe (basic/pro/enterprise)
+  Fase 5 — Alertas (ITV próxima, máquina averiada X días)
+  Fase 6 — Facturación Stripe (basic/pro/enterprise)
 
 ================================================================================
   DECISIONES TÉCNICAS IMPORTANTES
 ================================================================================
 
-1. INSERT...RETURNING no funciona bien en algunas versiones de D1.
+1. INSERT...RETURNING no funciona bien en D1.
    Siempre usar .run() + meta.last_row_id para obtener el ID insertado.
 
-2. El binding D1 se pierde en cada deploy via REST API si no se incluye en metadata.
-   SIEMPRE incluir el binding en el curl de deploy (ver comandos arriba).
+2. El binding D1 se pierde en deploy via curl si no se incluye en metadata.
+   Con `npx wrangler deploy` es automático (lee wrangler.toml). USAR WRANGLER.
 
-3. apiCall(path, options) — el segundo argumento es el objeto fetch options completo.
+3. apiCall(path, options) — SIEMPRE 2 argumentos.
    MAL: apiCall('/ruta', 'POST', body)
    BIEN: apiCall('/ruta', { method: 'POST', body: JSON.stringify(data) })
 
-4. El credential helper de Windows puede usar el token de padilla585projects
-   para el repo de padilla585. Siempre usar -c credential.helper= en git push
-   y poner el token directamente en la URL.
+4. Credenciales Git: usar `git push origin main` en app nueva (OAuth guardado).
+   App vieja: usar -c credential.helper= con token en URL.
 
 5. sendBeacon debe usar Blob({type:'application/json'}) — string plano no funciona.
 
-6. version.json debe actualizarse siempre que se cambie la versión en sw.js/index.html.
+6. version.json debe actualizarse SIEMPRE junto con sw.js CACHE y badge index.html.
 
-7. Sugerencias: la tabla tiene columna 'estado' (pendiente/en_progreso/resuelto).
-   El worker soporta filtros ?estado= y ?categoria= en GET /sugerencias.
+7. fichajes.estado (no 'tipo') — valores: presencia / presente / ausencia /
+   retraso / baja / vacaciones / festivo. Default DB: 'presente'.
 
-8. empresa_admin en nueva app: tiene acceso total a sus datos de empresa pero
-   NO tiene acceso a config global (Sheets, Logs sistema, etc.).
-   getAuth() devuelve isEmpresaAdmin: sesion.rol === 'empresa_admin'.
+8. getFichajes devuelve array plano (no {fichajes:[]}). Manejar con:
+   Array.isArray(data) ? data : (data.fichajes || [])
+
+9. getTrabajadores devuelve array plano (merge usuarios app + personal_externo).
+   Cada item tiene campo 'tipo': 'app' | 'externo'.
+
+10. registrarHistorialHerr / registrarHistorialKitHerr — nombres únicos para evitar
+    conflicto con registrarHistorial (bobinas).
+
+11. empresa_admin: tiene acceso total a datos de su empresa.
+    getAuth() devuelve isEmpresaAdmin: sesion.rol === 'empresa_admin'.
+
+12. AHORA() helper en worker: new Date().toISOString().slice(0,19).replace('T',' ')
+    Usar para todos los timestamps de fechas automáticas.
 
 ================================================================================
   ARCHIVOS CLAVE DEL PROYECTO
@@ -299,16 +323,18 @@ C:\Users\Adrian\Downloads\Proyecto GestiBobina\
   ├── Bobinaap\
   │   ├── index.html              ← Frontend app vieja
   │   ├── worker.js               ← Worker Cloudflare app vieja
-  │   ├── sw.js                   ← Service Worker app vieja
-  │   ├── version.json            ← Versión actual app vieja {"v":"4.14"}
-  │   ├── ESTADO_APP.txt          ← Changelog detallado
-  │   └── NUEVA_CUENTA.txt        ← Tokens y credenciales (NO subir a git público)
+  │   ├── sw.js                   ← Service Worker (alejandra-v4.14)
+  │   ├── version.json            ← {"v":"4.14"}
+  │   ├── ESTADO_APP.txt          ← Changelog detallado app vieja
+  │   └── NUEVA_CUENTA.txt        ← Tokens y credenciales (NO subir a git)
   └── NuevaApp\
-      ├── index.html              ← Frontend app nueva
+      ├── index.html              ← Frontend app nueva (~6120 líneas)
       ├── worker.js               ← Worker Cloudflare app nueva
-      ├── sw.js                   ← Service Worker app nueva
-      ├── version.json            ← Versión actual app nueva {"v":"4.16"}
-      └── ESTADO_APP.txt          ← Copia del changelog
+      ├── sw.js                   ← Service Worker (alejandra-v4.20)
+      ├── version.json            ← {"v":"4.20"}
+      ├── wrangler.toml           ← Config deploy (binding D1 incluido)
+      ├── ESTADO_APP.txt          ← Changelog detallado app nueva ← LEER
+      └── NUEVA_CUENTA.txt        ← Tokens y credenciales (NO subir a git)
 
 ================================================================================
   DATOS DE PRODUCCIÓN
@@ -316,7 +342,6 @@ C:\Users\Adrian\Downloads\Proyecto GestiBobina\
 
 Obra activa:       CPD Getafe (código: 001, id: 1, empresa_id: 1)
 Empresa principal: "Empresa Principal" (id: 1) — datos reales del equipo
-Empresa nueva:     "Edison Montajes" (id: 3, admin: Adrián, email: padilla585@gmail.com)
 Backup local:      C:\Users\Adrian\Downloads\Proyecto GestiBobina\backup_db_20260413.sql
 
 ================================================================================
