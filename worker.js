@@ -258,6 +258,15 @@ export default {
         return await delCatalogo('tipos_material_seg', tid, env);
       }
 
+      // ── Pedidos ──────────────────────────────────────────────────────────────
+      if (path === '/pedidos' && method === 'GET')  return await getPedidos(request, env);
+      if (path === '/pedidos' && method === 'POST') return await crearPedido(request, env);
+      if (path.startsWith('/pedidos/')) {
+        const pid = parseInt(path.split('/pedidos/')[1]);
+        if (method === 'PUT')    return await actualizarPedido(pid, request, env);
+        if (method === 'DELETE') return await eliminarPedido(pid, request, env);
+      }
+
       // ── Otros (legacy/extras) ─────────────────────────────────────────────
       if (path === '/logs'         && method === 'GET')   return await getLogs(request, env);
       if (path === '/historial'    && method === 'GET')   return await getHistorial(request, env);
@@ -571,7 +580,7 @@ async function crearBobina(request, env, ctx) {
     ).bind(codigo.trim().toUpperCase(), proveedor, tipo_cable, fecha, 'activa', notas || '', reg, obraFinal || null, num_albaran || null, departamento, empresa_id).run();
 
     ctx.waitUntil(Promise.all([
-      syncSheets(env),
+      syncSheets(env, 'Elec-Bobinas'),
       registrarHistorial(env, { obra_id: obraFinal, bobina_codigo: codigo.trim().toUpperCase(), accion: 'entrada', usuario: reg, notas: notas || '' }),
       sendTelegram(env, `📦 <b>Nueva bobina registrada</b>\n🔖 ${codigo.trim().toUpperCase()}\n🔌 ${tipo_cable}  📦 ${proveedor}\n👤 ${reg}`),
     ]));
@@ -621,7 +630,7 @@ async function devolverBobina(codigo, request, env, ctx) {
     ).bind(codigo.trim().toUpperCase(), fecha, fecha, devuelto_por || '', 'Creado automáticamente en devolución', obraId || null).run();
     bobina = await env.DB.prepare('SELECT * FROM bobinas WHERE codigo = ?').bind(codigo).first();
     ctx.waitUntil(Promise.all([
-      syncSheets(env),
+      syncSheets(env, 'Elec-Bobinas'),
       registrarHistorial(env, { obra_id: bobina?.obra_id, bobina_codigo: codigo, accion: 'devolucion', usuario: devuelto_por, notas: 'Auto-creado en devolución' }),
     ]));
     return json({ ok: true, mensaje: `Bobina ${codigo} no estaba registrada. Se ha creado y marcado como devuelta automáticamente`, fecha_devolucion: fecha });
@@ -634,7 +643,7 @@ async function devolverBobina(codigo, request, env, ctx) {
   ).bind('devuelta', fecha, notas || bobina.notas || '', devuelto_por || '', codigo).run();
 
   ctx.waitUntil(Promise.all([
-    syncSheets(env),
+    syncSheets(env, 'Elec-Bobinas'),
     registrarHistorial(env, { obra_id: bobina.obra_id, bobina_codigo: codigo, accion: 'devolucion', usuario: devuelto_por, notas: notas || '' }),
     sendTelegram(env, `📤 <b>Bobina devuelta</b>\n🔖 ${codigo}\n👤 ${devuelto_por || '—'}`),
   ]));
@@ -651,7 +660,7 @@ async function eliminarBobina(codigo, request, env, ctx) {
   await env.DB.prepare('DELETE FROM bobinas WHERE codigo = ?').bind(codigo).run();
 
   ctx.waitUntil(Promise.all([
-    syncSheets(env),
+    syncSheets(env, 'Elec-Bobinas'),
     registrarHistorial(env, { obra_id: bobina.obra_id, bobina_codigo: codigo, accion: 'eliminacion', usuario: '' }),
     sendTelegram(env, `🗑️ <b>Bobina eliminada</b>\n🔖 ${codigo}`),
   ]));
@@ -716,7 +725,7 @@ async function crearPemp(request, env, ctx) {
     const id = r.meta.last_row_id;
 
     ctx.waitUntil(Promise.all([
-      syncSheets(env),
+      syncSheets(env, tabForDept('pemp', departamento)),
       registrarHistorialPemp(env, {
         obra_id: obraFinal, matricula: matricula.trim().toUpperCase(),
         accion: 'entrada', usuario: reg, notas: notas || '',
@@ -775,14 +784,14 @@ async function devolverPemp(matricula, request, env, ctx) {
 
   if (!pemp) {
     // Auto-crear como devuelta si no existe
-    const { obraId } = await getAuth(request, env);
+    const { obraId, departamento } = await getAuth(request, env);
     await env.DB.prepare(
       `INSERT INTO pemp (matricula, estado, fecha_entrada, fecha_devolucion, devuelto_por, notas, obra_id)
        VALUES (?, 'devuelta', ?, ?, ?, ?, ?)`
     ).bind(matricula.trim().toUpperCase(), fecha, fecha, devuelto_por || '', 'Creado automáticamente en devolución', obraId || null).run();
     pemp = await env.DB.prepare('SELECT * FROM pemp WHERE matricula = ?').bind(matricula).first();
     ctx.waitUntil(Promise.all([
-      syncSheets(env),
+      syncSheets(env, tabForDept('pemp', departamento)),
       registrarHistorialPemp(env, { obra_id: pemp?.obra_id, matricula, accion: 'devolucion', usuario: devuelto_por, notas: 'Auto-creado en devolución' }),
     ]));
     return json({ ok: true, mensaje: `PEMP ${matricula} no estaba registrada. Se ha creado y marcado como devuelta automáticamente`, fecha_devolucion: fecha });
@@ -795,7 +804,7 @@ async function devolverPemp(matricula, request, env, ctx) {
   ).bind('devuelta', fecha, devuelto_por || '', notas || pemp.notas || '', matricula).run();
 
   ctx.waitUntil(Promise.all([
-    syncSheets(env),
+    syncSheets(env, tabForDept('pemp', pemp.departamento)),
     registrarHistorialPemp(env, { obra_id: pemp.obra_id, matricula, accion: 'devolucion', usuario: devuelto_por, notas: notas || '' }),
     sendTelegram(env, `📤 <b>PEMP devuelta</b>\n🔖 ${matricula}\n👤 ${devuelto_por || '—'}`),
   ]));
@@ -811,7 +820,7 @@ async function eliminarPemp(matricula, request, env, ctx) {
 
   await env.DB.prepare('DELETE FROM pemp WHERE matricula = ?').bind(matricula).run();
   ctx.waitUntil(Promise.all([
-    syncSheets(env),
+    syncSheets(env, tabForDept('pemp', pemp.departamento)),
     sendTelegram(env, `🗑️ <b>PEMP eliminada</b>\n🔖 ${matricula}`),
   ]));
   return json({ ok: true, mensaje: `PEMP ${matricula} eliminada` });
@@ -874,7 +883,7 @@ async function crearCarretilla(request, env, ctx) {
     const id = r.meta.last_row_id;
 
     ctx.waitUntil(Promise.all([
-      syncSheets(env),
+      syncSheets(env, tabForDept('carretilla', departamento)),
       registrarHistorialCarretillas(env, {
         obra_id: obraFinal, matricula: matricula.trim().toUpperCase(),
         accion: 'entrada', usuario: reg, notas: notas || '',
@@ -932,14 +941,14 @@ async function devolverCarretilla(matricula, request, env, ctx) {
 
   if (!carretilla) {
     // Auto-crear como devuelta si no existe
-    const { obraId } = await getAuth(request, env);
+    const { obraId, departamento } = await getAuth(request, env);
     await env.DB.prepare(
       `INSERT INTO carretillas (matricula, estado, fecha_entrada, fecha_devolucion, devuelto_por, notas, obra_id)
        VALUES (?, 'devuelta', ?, ?, ?, ?, ?)`
     ).bind(matricula.trim().toUpperCase(), fecha, fecha, devuelto_por || '', 'Creado automáticamente en devolución', obraId || null).run();
     carretilla = await env.DB.prepare('SELECT * FROM carretillas WHERE matricula = ?').bind(matricula).first();
     ctx.waitUntil(Promise.all([
-      syncSheets(env),
+      syncSheets(env, tabForDept('carretilla', departamento)),
       registrarHistorialCarretillas(env, { obra_id: carretilla?.obra_id, matricula, accion: 'devolucion', usuario: devuelto_por, notas: 'Auto-creado en devolución' }),
     ]));
     return json({ ok: true, mensaje: `Carretilla ${matricula} no estaba registrada. Se ha creado y marcado como devuelta automáticamente`, fecha_devolucion: fecha });
@@ -952,7 +961,7 @@ async function devolverCarretilla(matricula, request, env, ctx) {
   ).bind('devuelta', fecha, devuelto_por || '', notas || carretilla.notas || '', matricula).run();
 
   ctx.waitUntil(Promise.all([
-    syncSheets(env),
+    syncSheets(env, tabForDept('carretilla', carretilla.departamento)),
     registrarHistorialCarretillas(env, { obra_id: carretilla.obra_id, matricula, accion: 'devolucion', usuario: devuelto_por, notas: notas || '' }),
     sendTelegram(env, `📤 <b>Carretilla devuelta</b>\n🔖 ${matricula}\n👤 ${devuelto_por || '—'}`),
   ]));
@@ -968,7 +977,7 @@ async function eliminarCarretilla(matricula, request, env, ctx) {
 
   await env.DB.prepare('DELETE FROM carretillas WHERE matricula = ?').bind(matricula).run();
   ctx.waitUntil(Promise.all([
-    syncSheets(env),
+    syncSheets(env, tabForDept('carretilla', carretilla.departamento)),
     sendTelegram(env, `🗑️ <b>Carretilla eliminada</b>\n🔖 ${matricula}`),
   ]));
   return json({ ok: true, mensaje: `Carretilla ${matricula} eliminada` });
@@ -1507,6 +1516,87 @@ async function getLogs(request, env) {
 // GOOGLE SHEETS SYNC
 // ════════════════════════════════════════════════════════════════════════════
 
+// ════════════════════════════════════════════════════════════════════════════
+// PEDIDOS (#15)
+// ════════════════════════════════════════════════════════════════════════════
+
+async function getPedidos(request, env) {
+  const { empresa_id, isSuperadmin, isEmpresaAdmin, departamento } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const url = new URL(request.url);
+  const estadoFilter = url.searchParams.get('estado');
+  const obraFilter   = url.searchParams.get('obra_id');
+
+  let sql = 'SELECT p.*, o.nombre as obra_nombre FROM pedidos p LEFT JOIN obras o ON p.obra_id = o.id WHERE p.empresa_id = ?';
+  const params = [empresa_id];
+  if (!isSuperadmin && !isEmpresaAdmin) {
+    sql += ' AND p.departamento = ?';
+    params.push(departamento || 'electrico');
+  }
+  if (estadoFilter) { sql += ' AND p.estado = ?';   params.push(estadoFilter); }
+  if (obraFilter)   { sql += ' AND p.obra_id = ?';  params.push(parseInt(obraFilter)); }
+  sql += ' ORDER BY p.created_at DESC LIMIT 500';
+  const { results } = await env.DB.prepare(sql).bind(...params).all();
+  return json(results);
+}
+
+async function crearPedido(request, env) {
+  const { empresa_id, departamento, isEncargado, isSuperadmin, isEmpresaAdmin } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  if (!isSuperadmin && !isEmpresaAdmin && !isEncargado) return err('Sin permiso para crear pedidos', 403);
+  const body = await request.json().catch(() => ({}));
+  const { descripcion, referencia, cantidad, unidad, proveedor, obra_id, solicitado_por, notas } = body;
+  if (!descripcion?.trim()) return err('La descripción es obligatoria');
+  const dept = departamento || 'electrico';
+  const r = await env.DB.prepare(
+    'INSERT INTO pedidos (empresa_id, obra_id, departamento, referencia, descripcion, cantidad, unidad, proveedor, solicitado_por, notas) VALUES (?,?,?,?,?,?,?,?,?,?)'
+  ).bind(empresa_id, obra_id||null, dept, referencia||null, descripcion.trim(), cantidad||1, unidad||'ud', proveedor||null, solicitado_por||null, notas||null).run();
+  syncSheets(env, 'Elec-Pedidos');
+  await sendTelegram(env, `📦 <b>Nuevo pedido</b> [${dept}]\n👤 ${solicitado_por||'—'}\n📝 ${descripcion.trim().slice(0,200)}`);
+  return json({ ok: true, id: r.meta.last_row_id });
+}
+
+async function actualizarPedido(id, request, env) {
+  const { empresa_id, isSuperadmin, isEmpresaAdmin, isEncargado } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  if (!isSuperadmin && !isEmpresaAdmin && !isEncargado) return err('Sin permiso', 403);
+  const body = await request.json().catch(() => ({}));
+  const campos = [], vals = [];
+  if (body.estado       !== undefined) { campos.push('estado = ?');          vals.push(body.estado); }
+  if (body.notas        !== undefined) { campos.push('notas = ?');           vals.push(body.notas); }
+  if (body.fecha_recepcion !== undefined) { campos.push('fecha_recepcion = ?'); vals.push(body.fecha_recepcion); }
+  if (body.proveedor    !== undefined) { campos.push('proveedor = ?');       vals.push(body.proveedor); }
+  if (body.referencia   !== undefined) { campos.push('referencia = ?');      vals.push(body.referencia); }
+  if (body.descripcion  !== undefined) { campos.push('descripcion = ?');     vals.push(body.descripcion); }
+  if (body.cantidad     !== undefined) { campos.push('cantidad = ?');        vals.push(body.cantidad); }
+  if (body.unidad       !== undefined) { campos.push('unidad = ?');          vals.push(body.unidad); }
+  if (!campos.length) return err('Sin campos para actualizar');
+  vals.push(id);
+  await env.DB.prepare(`UPDATE pedidos SET ${campos.join(', ')} WHERE id = ? AND empresa_id = ${empresa_id}`).bind(...vals).run();
+  syncSheets(env, 'Elec-Pedidos');
+  return json({ ok: true });
+}
+
+async function eliminarPedido(id, request, env) {
+  const { empresa_id, isSuperadmin, isEmpresaAdmin, isEncargado } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  if (!isSuperadmin && !isEmpresaAdmin && !isEncargado) return err('Sin permiso', 403);
+  await env.DB.prepare('DELETE FROM pedidos WHERE id = ? AND empresa_id = ?').bind(id, empresa_id).run();
+  syncSheets(env, 'Elec-Pedidos');
+  return json({ ok: true });
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+
+function tabForDept(tipo, dept) {
+  const d = (dept || '').toLowerCase();
+  if (tipo === 'bobina')     return 'Elec-Bobinas';
+  if (tipo === 'pemp')       return d === 'mecanicas' ? 'Mec-PEMP' : 'Elec-PEMP';
+  if (tipo === 'carretilla') return d === 'mecanicas' ? 'Mec-Carretillas' : 'Elec-Carretillas';
+  if (tipo === 'pedido')     return 'Elec-Pedidos';
+  return 'Seg-Inventario';
+}
+
 async function getGoogleToken(env, scope = 'https://www.googleapis.com/auth/spreadsheets') {
   const now = Math.floor(Date.now() / 1000);
   const claim = {
@@ -1560,7 +1650,7 @@ async function getGoogleToken(env, scope = 'https://www.googleapis.com/auth/spre
   return data.access_token;
 }
 
-async function syncSheets(env) {
+async function syncSheets(env, tabs = null) {
   if (!env.GOOGLE_PRIVATE_KEY || !env.GOOGLE_CLIENT_EMAIL || !env.GOOGLE_SHEET_ID) return;
 
   try {
@@ -1568,38 +1658,44 @@ async function syncSheets(env) {
     const sheetId = env.GOOGLE_SHEET_ID;
     const authH   = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
 
-    // Gestionar pestañas: crear nuevas, borrar genéricas antiguas
+    const tabsNecesarias = ['Elec-Bobinas', 'Elec-PEMP', 'Elec-Carretillas', 'Mec-PEMP', 'Mec-Carretillas', 'Seg-Inventario', 'Elec-Pedidos'];
+    const tabsAntiguas   = ['Bobinas', 'PEMP', 'Carretillas', '⚡ Bobinas', '⚡ PEMP', '⚡ Carretillas', '🔧 PEMP', '🔧 Carretillas'];
+    const tabsToSync     = tabs ? (Array.isArray(tabs) ? tabs : [tabs]) : tabsNecesarias;
+
+    // Metadata: nombres, IDs numéricos y frozenRowCount
     const metaRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}`, { headers: authH });
     const meta = await metaRes.json();
-    const sheetsActuales = meta.sheets || [];
-    const sheetNames = sheetsActuales.map(s => s.properties.title);
+    let sheetsActuales = meta.sheets || [];
 
-    // Nombres de pestañas sin emojis en URL (seguros para la API de Sheets)
-    const tabsNecesarias = ['Elec-Bobinas', 'Elec-PEMP', 'Elec-Carretillas', 'Mec-PEMP', 'Mec-Carretillas', 'Seg-Inventario'];
-    const tabsAntiguas   = ['Bobinas', 'PEMP', 'Carretillas', '⚡ Bobinas', '⚡ PEMP', '⚡ Carretillas', '🔧 PEMP', '🔧 Carretillas'];
+    // Pestañas sin frozenRowCount → nunca tuvieron formato aplicado
+    const tabsNeedFormat = new Set(
+      tabsNecesarias.filter(t => {
+        const s = sheetsActuales.find(sh => sh.properties.title === t);
+        return !s || (s.properties.gridProperties?.frozenRowCount ?? 0) === 0;
+      })
+    );
 
-    // Añadir pestañas que faltan
+    // Crear pestañas que faltan y borrar las antiguas en un solo batchUpdate
     const addReqs = tabsNecesarias
-      .filter(t => !sheetNames.includes(t))
+      .filter(t => !sheetsActuales.map(s => s.properties.title).includes(t))
       .map(t => ({ addSheet: { properties: { title: t } } }));
-    if (addReqs.length > 0) {
-      await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}:batchUpdate`, {
-        method: 'POST', headers: authH, body: JSON.stringify({ requests: addReqs }),
-      });
-    }
-
-    // Borrar pestañas genéricas antiguas (separado para no mezclar con adds)
     const delReqs = sheetsActuales
       .filter(s => tabsAntiguas.includes(s.properties.title))
       .map(s => ({ deleteSheet: { sheetId: s.properties.sheetId } }));
-    if (delReqs.length > 0) {
+
+    if (addReqs.length > 0 || delReqs.length > 0) {
       await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}:batchUpdate`, {
-        method: 'POST', headers: authH, body: JSON.stringify({ requests: delReqs }),
+        method: 'POST', headers: authH, body: JSON.stringify({ requests: [...addReqs, ...delReqs] }),
       });
+      const m2 = await (await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}`, { headers: authH })).json();
+      sheetsActuales = m2.sheets || [];
     }
 
-    // writeTab usa el nombre sin caracteres especiales → URL limpia
+    const numIdMap = {};
+    sheetsActuales.forEach(s => { numIdMap[s.properties.title] = s.properties.sheetId; });
+
     const writeTab = async (tab, values) => {
+      if (!tabsToSync.includes(tab)) return;
       const range = `${tab}!A1`;
       await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(range)}:clear`,
         { method: 'POST', headers: authH });
@@ -1609,62 +1705,161 @@ async function syncSheets(env) {
         const errBody = await putRes.text();
         throw new Error(`writeTab(${tab}) HTTP ${putRes.status}: ${errBody.slice(0, 200)}`);
       }
+      if (tabsNeedFormat.has(tab) && numIdMap[tab] !== undefined) {
+        await applyTabFormatting(sheetId, authH, tab, numIdMap[tab], values[0]?.length || 1);
+      }
     };
 
-    const cabBobinas    = ['Obra', 'Código', 'Nº Albarán', 'Proveedor', 'Tipo Cable', 'Registrado por', 'Fecha Entrada', 'Devuelto por', 'Fecha Devolución', 'Estado', 'Notas'];
-    const cabPemp       = ['Obra', 'Matrícula', 'Tipo', 'Marca', 'Proveedor', 'Estado', 'Fecha Entrada', 'Fecha Avería', 'Fecha Reparación', 'Devuelto por', 'Fecha Devolución', 'Últ. Revisión', 'Próx. Revisión', 'Registrado por', 'Notas'];
-    const cabCarretillas= ['Obra', 'Matrícula', 'Tipo', 'Marca', 'Proveedor', 'Energía', 'Estado', 'Fecha Entrada', 'Fecha Avería', 'Fecha Reparación', 'Devuelto por', 'Fecha Devolución', 'Últ. Revisión', 'Próx. Revisión', 'Registrado por', 'Notas'];
+    const cabBobinas     = ['Obra', 'Código', 'Nº Albarán', 'Proveedor', 'Tipo Cable', 'Registrado por', 'Fecha Entrada', 'Devuelto por', 'Fecha Devolución', 'Estado', 'Notas'];
+    const cabPemp        = ['Obra', 'Matrícula', 'Tipo', 'Marca', 'Proveedor', 'Estado', 'Fecha Entrada', 'Fecha Avería', 'Fecha Reparación', 'Devuelto por', 'Fecha Devolución', 'Últ. Revisión', 'Próx. Revisión', 'Registrado por', 'Notas'];
+    const cabCarretillas = ['Obra', 'Matrícula', 'Tipo', 'Marca', 'Proveedor', 'Energía', 'Estado', 'Fecha Entrada', 'Fecha Avería', 'Fecha Reparación', 'Devuelto por', 'Fecha Devolución', 'Últ. Revisión', 'Próx. Revisión', 'Registrado por', 'Notas'];
+    const cabSegInv      = ['Tipo', 'Modo', 'Código/Serie', 'Nombre', 'Cantidad Total', 'Disponible', 'Estado', 'Fecha Entrada', 'Fecha Caducidad', 'Destino Actual', 'Registrado por', 'Notas'];
+    const cabPedidos     = ['Obra', 'Referencia', 'Descripción', 'Cantidad', 'Unidad', 'Proveedor', 'Estado', 'Solicitado por', 'Fecha Solicitud', 'Fecha Recepción', 'Notas'];
 
-    const fmtB = b => [b.obra_nombre||'', b.codigo, b.num_albaran||'', b.proveedor, b.tipo_cable, b.registrado_por||'', b.fecha_entrada, b.devuelto_por||'', b.fecha_devolucion||'', b.estado, b.notas||''];
-    const fmtP = p => [p.obra_nombre||'', p.matricula, p.tipo||'', p.marca||'', p.proveedor||'', p.estado, p.fecha_entrada, p.fecha_averia||'', p.fecha_reparacion||'', p.devuelto_por||'', p.fecha_devolucion||'', p.fecha_ultima_revision||'', p.fecha_proxima_revision||'', p.registrado_por||'', p.notas||''];
-    const fmtC = c => [c.obra_nombre||'', c.matricula, c.tipo||'', c.marca||'', c.proveedor||'', c.energia||'', c.estado, c.fecha_entrada, c.fecha_averia||'', c.fecha_reparacion||'', c.devuelto_por||'', c.fecha_devolucion||'', c.fecha_ultima_revision||'', c.fecha_proxima_revision||'', c.registrado_por||'', c.notas||''];
-
-    // ── ELÉCTRICO ─────────────────────────────────────────────────────────────
-    // Nota: empresa_id=1 es la empresa por defecto (single-tenant actual)
-    const { results: bobinasElec } = await env.DB.prepare(
-      'SELECT b.*, o.nombre as obra_nombre FROM bobinas b LEFT JOIN obras o ON b.obra_id = o.id WHERE b.empresa_id = 1 AND b.departamento = ? ORDER BY b.created_at DESC'
-    ).bind('electrico').all();
-    await writeTab('Elec-Bobinas', [cabBobinas, ...bobinasElec.map(fmtB)]);
-
-    const { results: pempElec } = await env.DB.prepare(
-      'SELECT p.*, o.nombre as obra_nombre FROM pemp p LEFT JOIN obras o ON p.obra_id = o.id WHERE p.empresa_id = 1 AND p.departamento = ? ORDER BY p.created_at DESC'
-    ).bind('electrico').all();
-    await writeTab('Elec-PEMP', [cabPemp, ...pempElec.map(fmtP)]);
-
-    const { results: carretillasElec } = await env.DB.prepare(
-      'SELECT c.*, o.nombre as obra_nombre FROM carretillas c LEFT JOIN obras o ON c.obra_id = o.id WHERE c.empresa_id = 1 AND c.departamento = ? ORDER BY c.created_at DESC'
-    ).bind('electrico').all();
-    await writeTab('Elec-Carretillas', [cabCarretillas, ...carretillasElec.map(fmtC)]);
-
-    // ── MECÁNICAS ─────────────────────────────────────────────────────────────
-    const { results: pempMec } = await env.DB.prepare(
-      'SELECT p.*, o.nombre as obra_nombre FROM pemp p LEFT JOIN obras o ON p.obra_id = o.id WHERE p.empresa_id = 1 AND p.departamento = ? ORDER BY p.created_at DESC'
-    ).bind('mecanicas').all();
-    await writeTab('Mec-PEMP', [cabPemp, ...pempMec.map(fmtP)]);
-
-    const { results: carretillasMec } = await env.DB.prepare(
-      'SELECT c.*, o.nombre as obra_nombre FROM carretillas c LEFT JOIN obras o ON c.obra_id = o.id WHERE c.empresa_id = 1 AND c.departamento = ? ORDER BY c.created_at DESC'
-    ).bind('mecanicas').all();
-    await writeTab('Mec-Carretillas', [cabCarretillas, ...carretillasMec.map(fmtC)]);
-
-    // ── SEGURIDAD ─────────────────────────────────────────────────────────────
-    const cabSegInv = ['Tipo', 'Modo', 'Código/Serie', 'Nombre', 'Cantidad Total', 'Disponible', 'Estado', 'Fecha Entrada', 'Fecha Caducidad', 'Destino Actual', 'Registrado por', 'Notas'];
-    const { results: segItems } = await env.DB.prepare(
-      'SELECT * FROM inventario_seg WHERE empresa_id = 1 ORDER BY tipo_material, created_at DESC'
-    ).all();
+    const fmtB   = b => [b.obra_nombre||'', b.codigo, b.num_albaran||'', b.proveedor, b.tipo_cable, b.registrado_por||'', b.fecha_entrada, b.devuelto_por||'', b.fecha_devolucion||'', b.estado, b.notas||''];
+    const fmtP   = p => [p.obra_nombre||'', p.matricula, p.tipo||'', p.marca||'', p.proveedor||'', p.estado, p.fecha_entrada, p.fecha_averia||'', p.fecha_reparacion||'', p.devuelto_por||'', p.fecha_devolucion||'', p.fecha_ultima_revision||'', p.fecha_proxima_revision||'', p.registrado_por||'', p.notas||''];
+    const fmtC   = c => [c.obra_nombre||'', c.matricula, c.tipo||'', c.marca||'', c.proveedor||'', c.energia||'', c.estado, c.fecha_entrada, c.fecha_averia||'', c.fecha_reparacion||'', c.devuelto_por||'', c.fecha_devolucion||'', c.fecha_ultima_revision||'', c.fecha_proxima_revision||'', c.registrado_por||'', c.notas||''];
     const fmtSeg = s => [s.tipo_material, s.modo, s.codigo||'', s.nombre||'', s.cantidad_total||1, s.cantidad_disponible||1, s.estado||'disponible', s.fecha_entrada||'', s.fecha_caducidad||'', s.destino_actual||'', s.registrado_por||'', s.notas||''];
-    await writeTab('Seg-Inventario', [cabSegInv, ...segItems.map(fmtSeg)]);
+    const fmtPed = p => [p.obra_nombre||'', p.referencia||'', p.descripcion||'', p.cantidad||1, p.unidad||'ud', p.proveedor||'', p.estado||'pendiente', p.solicitado_por||'', p.fecha_solicitud||'', p.fecha_recepcion||'', p.notas||''];
 
-    console.log(`Sheets OK: ${bobinasElec.length} Elec-Bob, ${pempElec.length} Elec-PEMP, ${carretillasElec.length} Elec-Carr, ${pempMec.length} Mec-PEMP, ${carretillasMec.length} Mec-Carr, ${segItems.length} Seg-Inv`);
+    // Solo ejecutar queries para las pestañas que toca sincronizar, en paralelo
+    await Promise.all([
+      tabsToSync.includes('Elec-Bobinas') && (async () => {
+        const { results } = await env.DB.prepare(
+          'SELECT b.*, o.nombre as obra_nombre FROM bobinas b LEFT JOIN obras o ON b.obra_id = o.id WHERE b.empresa_id = 1 AND b.departamento = ? ORDER BY b.created_at DESC'
+        ).bind('electrico').all();
+        await writeTab('Elec-Bobinas', [cabBobinas, ...results.map(fmtB)]);
+      })(),
+      tabsToSync.includes('Elec-PEMP') && (async () => {
+        const { results } = await env.DB.prepare(
+          'SELECT p.*, o.nombre as obra_nombre FROM pemp p LEFT JOIN obras o ON p.obra_id = o.id WHERE p.empresa_id = 1 AND p.departamento = ? ORDER BY p.created_at DESC'
+        ).bind('electrico').all();
+        await writeTab('Elec-PEMP', [cabPemp, ...results.map(fmtP)]);
+      })(),
+      tabsToSync.includes('Elec-Carretillas') && (async () => {
+        const { results } = await env.DB.prepare(
+          'SELECT c.*, o.nombre as obra_nombre FROM carretillas c LEFT JOIN obras o ON c.obra_id = o.id WHERE c.empresa_id = 1 AND c.departamento = ? ORDER BY c.created_at DESC'
+        ).bind('electrico').all();
+        await writeTab('Elec-Carretillas', [cabCarretillas, ...results.map(fmtC)]);
+      })(),
+      tabsToSync.includes('Mec-PEMP') && (async () => {
+        const { results } = await env.DB.prepare(
+          'SELECT p.*, o.nombre as obra_nombre FROM pemp p LEFT JOIN obras o ON p.obra_id = o.id WHERE p.empresa_id = 1 AND p.departamento = ? ORDER BY p.created_at DESC'
+        ).bind('mecanicas').all();
+        await writeTab('Mec-PEMP', [cabPemp, ...results.map(fmtP)]);
+      })(),
+      tabsToSync.includes('Mec-Carretillas') && (async () => {
+        const { results } = await env.DB.prepare(
+          'SELECT c.*, o.nombre as obra_nombre FROM carretillas c LEFT JOIN obras o ON c.obra_id = o.id WHERE c.empresa_id = 1 AND c.departamento = ? ORDER BY c.created_at DESC'
+        ).bind('mecanicas').all();
+        await writeTab('Mec-Carretillas', [cabCarretillas, ...results.map(fmtC)]);
+      })(),
+      tabsToSync.includes('Seg-Inventario') && (async () => {
+        const { results } = await env.DB.prepare(
+          'SELECT * FROM inventario_seg WHERE empresa_id = 1 ORDER BY tipo_material, created_at DESC'
+        ).all();
+        await writeTab('Seg-Inventario', [cabSegInv, ...results.map(fmtSeg)]);
+      })(),
+      tabsToSync.includes('Elec-Pedidos') && (async () => {
+        const { results } = await env.DB.prepare(
+          'SELECT p.*, o.nombre as obra_nombre FROM pedidos p LEFT JOIN obras o ON p.obra_id = o.id WHERE p.empresa_id = 1 AND p.departamento = ? ORDER BY p.created_at DESC'
+        ).bind('electrico').all();
+        await writeTab('Elec-Pedidos', [cabPedidos, ...results.map(fmtPed)]);
+      })(),
+    ].filter(Boolean));
+
+    console.log(`Sheets sync OK [${tabsToSync.join(', ')}]`);
   } catch (e) {
     console.error('Error sync Sheets:', e.message);
-    // Guardar error en D1 para verlo en Ajustes → Logs
     try {
       await env.DB.prepare(
         'INSERT INTO logs (nivel, origen, mensaje, detalle) VALUES (?, ?, ?, ?)'
       ).bind('error', 'sync-sheets', 'Error sincronización Google Sheets', e.message).run();
     } catch (_) {}
   }
+}
+
+async function applyTabFormatting(spreadsheetId, authH, tabName, numSheetId, numCols) {
+  const headerBg = tabName.startsWith('Elec')
+    ? { red: 1.0,   green: 0.851, blue: 0.4,   alpha: 1 }   // #FFD966 ámbar
+    : tabName.startsWith('Mec')
+    ? { red: 0.624, green: 0.773, blue: 0.910, alpha: 1 }   // #9FC5E8 azul
+    : { red: 0.965, green: 0.698, blue: 0.420, alpha: 1 };  // #F6B26B naranja (Seg)
+
+  // Columna "Estado" por pestaña (índice 0-based)
+  const estadoColMap = {
+    'Elec-Bobinas': 9, 'Elec-PEMP': 5, 'Elec-Carretillas': 6,
+    'Mec-PEMP': 5,     'Mec-Carretillas': 6,
+    'Seg-Inventario': 6, 'Elec-Pedidos': 6,
+  };
+  const estadoCol = estadoColMap[tabName] ?? -1;
+
+  const requests = [
+    // Cabecera: negrita + color de fondo
+    {
+      repeatCell: {
+        range: { sheetId: numSheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: numCols },
+        cell: {
+          userEnteredFormat: {
+            backgroundColor: headerBg,
+            textFormat: { bold: true, fontSize: 10 },
+            verticalAlignment: 'MIDDLE',
+            wrapStrategy: 'CLIP',
+          },
+        },
+        fields: 'userEnteredFormat(backgroundColor,textFormat,verticalAlignment,wrapStrategy)',
+      },
+    },
+    // Congelar fila de cabecera
+    {
+      updateSheetProperties: {
+        properties: { sheetId: numSheetId, gridProperties: { frozenRowCount: 1 } },
+        fields: 'gridProperties.frozenRowCount',
+      },
+    },
+    // Auto-ajustar anchos de columna
+    {
+      autoResizeDimensions: {
+        dimensions: { sheetId: numSheetId, dimension: 'COLUMNS', startIndex: 0, endIndex: numCols },
+      },
+    },
+  ];
+
+  // Colores condicionales para columna Estado
+  if (estadoCol >= 0) {
+    const estadoRange = {
+      sheetId: numSheetId, startRowIndex: 1,
+      startColumnIndex: estadoCol, endColumnIndex: estadoCol + 1,
+    };
+    const reglas = [
+      { valor: 'activa',     bg: { red: 0.714, green: 0.843, blue: 0.659, alpha: 1 } },  // verde
+      { valor: 'disponible', bg: { red: 0.714, green: 0.843, blue: 0.659, alpha: 1 } },  // verde
+      { valor: 'recibido',   bg: { red: 0.714, green: 0.843, blue: 0.659, alpha: 1 } },  // verde
+      { valor: 'Averiada',   bg: { red: 0.918, green: 0.600, blue: 0.600, alpha: 1 } },  // rojo
+      { valor: 'devuelta',   bg: { red: 0.839, green: 0.839, blue: 0.839, alpha: 1 } },  // gris
+      { valor: 'cancelado',  bg: { red: 0.839, green: 0.839, blue: 0.839, alpha: 1 } },  // gris
+      { valor: 'pendiente',  bg: { red: 1.0,   green: 0.949, blue: 0.800, alpha: 1 } },  // amarillo
+      { valor: 'en_uso',     bg: { red: 0.675, green: 0.843, blue: 0.902, alpha: 1 } },  // azul
+    ];
+    for (const r of reglas) {
+      requests.push({
+        addConditionalFormatRule: {
+          rule: {
+            ranges: [estadoRange],
+            booleanRule: {
+              condition: { type: 'TEXT_EQ', values: [{ userEnteredValue: r.valor }] },
+              format: { backgroundColor: r.bg },
+            },
+          },
+          index: 0,
+        },
+      });
+    }
+  }
+
+  await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`, {
+    method: 'POST', headers: authH, body: JSON.stringify({ requests }),
+  });
 }
 
 async function syncSheetsDebug(env) {
@@ -1870,7 +2065,7 @@ async function crearItemSeg(request, env) {
     if (fecha_caducidad) {
       await sendTelegram(env, `📦 <b>Nuevo material Seguridad</b>\n🔖 ${cod || tipo_material}  📋 ${tipo_material}\n📅 Caduca: ${fecha_caducidad}\n👤 ${reg}`);
     }
-    syncSheets(env); // fire & forget
+    syncSheets(env, 'Seg-Inventario'); // fire & forget
     return json({ ok: true, id, mensaje: `${tipo_material} registrado` }, 201);
   } catch(e) {
     if (e.message?.includes('UNIQUE')) return err(`El código ${cod} ya está registrado`, 409);
@@ -1912,7 +2107,7 @@ async function moverItemSeg(id, request, env) {
     }
     await env.DB.prepare('INSERT INTO movimientos_seg (item_id, accion, cantidad, destino, usuario, notas, fecha) VALUES (?, ?, ?, ?, ?, ?, ?)').bind(id, 'salida', cantidad, destino || '', usuario || '', notas || '', fecha).run();
     if (destino) await sendTelegram(env, `📤 <b>Material Seguridad — Salida</b>\n🔖 ${item.codigo || item.nombre}  📋 ${item.tipo_material}\n🏗 Destino: ${destino}\n👤 ${usuario || '—'}`);
-    syncSheets(env);
+    syncSheets(env, 'Seg-Inventario');
     return json({ ok: true, mensaje: 'Salida registrada' });
   }
 
@@ -1924,7 +2119,7 @@ async function moverItemSeg(id, request, env) {
       await env.DB.prepare('UPDATE inventario_seg SET cantidad_disponible = ?, estado = ?, destino_actual = NULL WHERE id = ?').bind(nueva, 'disponible', id).run();
     }
     await env.DB.prepare('INSERT INTO movimientos_seg (item_id, accion, cantidad, usuario, notas, fecha) VALUES (?, ?, ?, ?, ?, ?)').bind(id, 'devolucion', cantidad, usuario || '', notas || '', fecha).run();
-    syncSheets(env);
+    syncSheets(env, 'Seg-Inventario');
     return json({ ok: true, mensaje: 'Devolución registrada' });
   }
 
@@ -1932,7 +2127,7 @@ async function moverItemSeg(id, request, env) {
     await env.DB.prepare('UPDATE inventario_seg SET estado = ? WHERE id = ?').bind('baja', id).run();
     await env.DB.prepare('INSERT INTO movimientos_seg (item_id, accion, cantidad, usuario, notas, fecha) VALUES (?, ?, ?, ?, ?, ?)').bind(id, 'baja', cantidad, usuario || '', notas || '', fecha).run();
     await sendTelegram(env, `🗑️ <b>Material Seguridad — Baja</b>\n🔖 ${item.codigo || item.nombre}  📋 ${item.tipo_material}\n👤 ${usuario || '—'}`);
-    syncSheets(env);
+    syncSheets(env, 'Seg-Inventario');
     return json({ ok: true, mensaje: 'Dado de baja' });
   }
 
@@ -1944,7 +2139,7 @@ async function eliminarItemSeg(id, request, env) {
   if (!isSuperadmin) return err('Solo el superadmin puede eliminar', 403);
   await env.DB.prepare('DELETE FROM inventario_seg WHERE id = ?').bind(id).run();
   await env.DB.prepare('DELETE FROM movimientos_seg WHERE item_id = ?').bind(id).run();
-  syncSheets(env);
+  syncSheets(env, 'Seg-Inventario');
   return json({ ok: true, mensaje: 'Eliminado' });
 }
 
