@@ -23,7 +23,8 @@ SECRETOS A CONFIGURAR EN WRANGLER:
   - ADMIN_CODE          → (solo tú lo sabes)
   - TELEGRAM_BOT_TOKEN  → 8624187768:AAG0qS2YDb-C6SFN1ArrD7wUmb3QVyIZ8RA
   - TELEGRAM_CHAT_ID    → 6965043
-  - GOOGLE_SHEET_ID     → 1HiBUR_S0toOkUJtxjt4ua5JibgO4atbCRCrPbcrcPsU
+  - GOOGLE_SHEET_ID         → 1HiBUR_S0toOkUJtxjt4ua5JibgO4atbCRCrPbcrcPsU  (equipos)
+  - GOOGLE_PEDIDOS_SHEET_ID → 1fIrkm6oQRmsVcqHTJstVfLNZJjSumotSQKpuQ6f6lD8  (pedidos)
   Bot Telegram: @AlejandraAPP_bot
 
 ESTADO MIGRACIÓN:
