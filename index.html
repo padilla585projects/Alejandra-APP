@@ -45,6 +45,8 @@ body{background:var(--bg);color:var(--text);font-family:'Poppins',sans-serif;fon
 
 /* ── HEADER ── */
 header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6px 10px;display:flex;align-items:center;gap:6px;flex-shrink:0;z-index:100;min-height:44px}
+.btn-atras{background:none;border:none;color:var(--text);font-size:20px;padding:0 2px;cursor:pointer;flex-shrink:0;line-height:1;font-family:'Montserrat',sans-serif;font-weight:900;display:none;opacity:.8;transition:opacity .2s}
+.btn-atras:hover{opacity:1}
 .header-logo{display:flex;align-items:center;flex-shrink:0}
 .header-center{flex:1;display:flex;align-items:center;justify-content:center;min-width:0;gap:4px;overflow:hidden}
 .obra-label{font-family:'Montserrat',sans-serif;font-weight:700;font-size:11px;color:var(--accent);letter-spacing:.3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:120px}
@@ -427,6 +429,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
      HEADER
 ══════════════════════════════════════════ -->
 <header id="mainHeader" style="display:none">
+  <button class="btn-atras" id="btnAtrasHeader" onclick="irAtras()" title="Atrás">←</button>
   <div class="header-logo">
     <svg class="logo-svg" width="32" height="32" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
       <rect width="512" height="512" rx="90" fill="#0f172a"/>
@@ -1103,13 +1106,16 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
         </div>
         <!-- Filtros -->
         <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px" id="sugFiltros">
-          <button onclick="filtrarSug('','')"                   id="sfAll"       class="sug-filter sug-active">Todas</button>
-          <button onclick="filtrarSug('estado','pendiente')"    id="sfPend"      class="sug-filter">🟠 Pendiente</button>
-          <button onclick="filtrarSug('estado','en_progreso')"  id="sfProg"      class="sug-filter">🔵 En progreso</button>
-          <button onclick="filtrarSug('estado','resuelto')"     id="sfRes"       class="sug-filter">🟢 Resuelto</button>
-          <button onclick="filtrarSug('categoria','error')"     id="sfErr"       class="sug-filter">🐛 Errores</button>
-          <button onclick="filtrarSug('categoria','mejora')"    id="sfMej"       class="sug-filter">🔧 Mejoras</button>
-          <button onclick="filtrarSug('categoria','nuevo')"     id="sfNue"       class="sug-filter">✨ Nuevas</button>
+          <button onclick="filtrarSug('','')"                        id="sfAll"  class="sug-filter sug-active">Todas</button>
+          <button onclick="filtrarSug('estado','pendiente')"         id="sfPend" class="sug-filter">🟠 Pend.</button>
+          <button onclick="filtrarSug('estado','en_progreso')"       id="sfProg" class="sug-filter">🔵 Prog.</button>
+          <button onclick="filtrarSug('estado','resuelto')"          id="sfRes"  class="sug-filter">🟢 Resuelto</button>
+          <button onclick="filtrarSug('categoria','error')"          id="sfErr"  class="sug-filter">🐛 Errores</button>
+          <button onclick="filtrarSug('categoria','mejora')"         id="sfMej"  class="sug-filter">🔧 Mejoras</button>
+          <button onclick="filtrarSug('categoria','nuevo')"          id="sfNue"  class="sug-filter">✨ Nuevas</button>
+          <button onclick="filtrarSug('departamento','electrico')"   id="sfElec" class="sug-filter">⚡ Eléctrico</button>
+          <button onclick="filtrarSug('departamento','mecanicas')"   id="sfMec"  class="sug-filter">🔧 Mecánicas</button>
+          <button onclick="filtrarSug('departamento','seguridad')"   id="sfSeg"  class="sug-filter">🔺 Seguridad</button>
         </div>
         <div id="adminSugerenciasList"><div class="empty-state">Cargando...</div></div>
       </div>
@@ -1594,6 +1600,8 @@ async function iniciarApp() {
   document.getElementById('mainHeader').style.display = 'flex';
   document.getElementById('appContent').style.display = 'block';
   document.getElementById('bottomNav').style.display = 'flex';
+  // Asegura que el botón físico de atrás (Android) no cierre la app
+  if (!history.state?.alejandra) history.pushState({ alejandra: 1 }, '');
 
   // LED siempre activo desde que hay sesión
   checkConnection();
@@ -1794,6 +1802,33 @@ function showScreen(name) {
   if (navMap[name]) document.getElementById(navMap[name]).classList.add('active');
 
   if (name === 'ajustes') { renderAjustesInfo(); initAjustesTabs(); }
+  actualizarBtnAtras();
+}
+
+function actualizarBtnAtras() {
+  const btn = document.getElementById('btnAtrasHeader');
+  if (!btn) return;
+  const s = getSession();
+  if (!s) { btn.style.display = 'none'; return; }
+  const subPantallas = ['screenModule','screenAjustes','screenSugerencias'];
+  const enSub = subPantallas.some(id => document.getElementById(id)?.classList.contains('active'));
+  // Seguridad para superadmin/empresa_admin: pueden volver al selector de dpto
+  const enSegAdmin = document.getElementById('screenSeguridad')?.classList.contains('active')
+                     && (s.rol === 'superadmin' || s.rol === 'empresa_admin');
+  btn.style.display = (enSub || enSegAdmin) ? '' : 'none';
+}
+
+function irAtras() {
+  try { closeCamera(); } catch {}
+  try { segCloseCamera(); } catch {}
+  const s = getSession();
+  if (s?.rol === 'superadmin' || s?.rol === 'empresa_admin') {
+    showScreen('dept');
+  } else if (s?.departamento === 'seguridad') {
+    showScreen('seguridad');
+  } else {
+    showScreen('home');
+  }
 }
 
 function navTo(target) {
@@ -1841,6 +1876,7 @@ function navTo(target) {
   }
 
   updateModuleUI();
+  actualizarBtnAtras();
 }
 
 function selectModule(mod) {
@@ -3837,13 +3873,16 @@ function filtrarSug(key, val) {
   _sugFiltroKey = key; _sugFiltroVal = val;
   document.querySelectorAll('.sug-filter').forEach(b => b.classList.remove('sug-active'));
   const idMap = {
-    '':                   'sfAll',
-    'estado_pendiente':   'sfPend',
-    'estado_en_progreso': 'sfProg',
-    'estado_resuelto':    'sfRes',
-    'categoria_error':    'sfErr',
-    'categoria_mejora':   'sfMej',
-    'categoria_nuevo':    'sfNue',
+    '':                         'sfAll',
+    'estado_pendiente':         'sfPend',
+    'estado_en_progreso':       'sfProg',
+    'estado_resuelto':          'sfRes',
+    'categoria_error':          'sfErr',
+    'categoria_mejora':         'sfMej',
+    'categoria_nuevo':          'sfNue',
+    'departamento_electrico':   'sfElec',
+    'departamento_mecanicas':   'sfMec',
+    'departamento_seguridad':   'sfSeg',
   };
   const k = key ? key + '_' + val : '';
   const activeId = idMap[k] || 'sfAll';
@@ -4093,8 +4132,9 @@ async function cargarSugerenciasAdmin() {
   try {
     let url = '/sugerencias';
     const qp = [];
-    if (_sugFiltroKey === 'estado')    qp.push('estado='    + _sugFiltroVal);
-    if (_sugFiltroKey === 'categoria') qp.push('categoria=' + _sugFiltroVal);
+    if (_sugFiltroKey === 'estado')        qp.push('estado='        + _sugFiltroVal);
+    if (_sugFiltroKey === 'categoria')     qp.push('categoria='     + _sugFiltroVal);
+    if (_sugFiltroKey === 'departamento')  qp.push('departamento='  + _sugFiltroVal);
     if (qp.length) url += '?' + qp.join('&');
 
     const res  = await apiCall(url);
@@ -4119,7 +4159,7 @@ async function cargarSugerenciasAdmin() {
           ${!sg.leida?'<span style="background:var(--accent);color:#000;font-size:9px;font-weight:900;padding:2px 6px;border-radius:4px;margin-left:auto">NUEVA</span>':''}
         </div>
         <div style="font-size:14px;color:var(--text);margin-bottom:6px">${sg.texto}</div>
-        <div style="font-size:11px;color:var(--muted)">👤 ${sg.usuario||'—'} · 🏗 ${sg.obra||'—'} · ${sg.created_at||''}</div>
+        <div style="font-size:11px;color:var(--muted)">👤 ${sg.usuario||'—'} · 🏗 ${sg.obra||'—'} · ${sg.departamento?'<span style="color:var(--accent)">'+sg.departamento+'</span> · ':''}${sg.created_at||''}</div>
         ${sg.respuesta ? `<div style="margin-top:8px;padding:8px;background:var(--surface);border-left:3px solid var(--accent);border-radius:4px;font-size:12px;color:var(--text)">💬 ${sg.respuesta}</div>` : ''}
         <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">
           <button class="btn-sm" onclick="cambiarEstadoSug(${sg.id},'en_progreso')">🔵 En progreso</button>
@@ -4315,7 +4355,7 @@ async function cargarObrasSelectUsuario() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '4.15';
+const APP_VERSION = '4.17';
 let _actualizando = false;
 
 async function checkVersionAndUpdate() {
@@ -4340,6 +4380,15 @@ async function checkVersionAndUpdate() {
 // Lanza el chequeo al arrancar y cada 2 minutos
 checkVersionAndUpdate();
 setInterval(checkVersionAndUpdate, 2 * 60 * 1000);
+
+// Botón físico "Atrás" en Android — navega dentro de la app en vez de cerrarla
+window.addEventListener('popstate', function() {
+  const s = getSession();
+  if (!s) return; // no hay sesión activa, comportamiento normal del navegador
+  irAtras();
+  // Re-empuja estado para que el siguiente "atrás" siga funcionando
+  history.pushState({ alejandra: 1 }, '');
+});
 
 // ── Service Worker ────────────────────────────────────────────────────────────
 if ('serviceWorker' in navigator) {

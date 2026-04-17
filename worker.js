@@ -1366,9 +1366,16 @@ async function guardarSugerencia(request, env) {
     const body = await request.json().catch(() => ({}));
     const { texto, categoria, usuario, obra } = body;
     if (!texto || !texto.trim()) return err('El texto de la sugerencia es obligatorio');
+    // Intentar obtener departamento y empresa_id del token (silencioso si no hay sesión)
+    let departamento = null, empresa_id_sug = 1;
+    try {
+      const auth = await getAuth(request, env);
+      departamento = auth.departamento || null;
+      if (auth.empresa_id) empresa_id_sug = auth.empresa_id;
+    } catch {}
     await env.DB.prepare(
-      'INSERT INTO sugerencias (texto, categoria, usuario, obra) VALUES (?, ?, ?, ?)'
-    ).bind(texto.trim().slice(0, 1000), categoria || null, usuario || null, obra || null).run();
+      'INSERT INTO sugerencias (texto, categoria, usuario, obra, departamento, empresa_id) VALUES (?, ?, ?, ?, ?, ?)'
+    ).bind(texto.trim().slice(0, 1000), categoria || null, usuario || null, obra || null, departamento, empresa_id_sug).run();
     const catIcon = { mejora: '🔧', error: '🐛', nuevo: '✨', otro: '💬' };
     const icon = catIcon[categoria] || '💬';
     await sendTelegram(env,
@@ -1389,12 +1396,14 @@ async function getSugerencias(request, env) {
   const estadoFilter    = url.searchParams.get('estado');
   const categoriaFilter = url.searchParams.get('categoria');
   const soloNoLeidas    = url.searchParams.get('noLeidas') === '1';
+  const deptFilter      = url.searchParams.get('departamento');
 
   let sql = 'SELECT * FROM sugerencias WHERE empresa_id = ?';
   const params = [empresa_id];
   if (soloNoLeidas)    { sql += ' AND leida = 0'; }
-  if (estadoFilter)    { sql += ' AND estado = ?';    params.push(estadoFilter); }
-  if (categoriaFilter) { sql += ' AND categoria = ?'; params.push(categoriaFilter); }
+  if (estadoFilter)    { sql += ' AND estado = ?';        params.push(estadoFilter); }
+  if (categoriaFilter) { sql += ' AND categoria = ?';     params.push(categoriaFilter); }
+  if (deptFilter)      { sql += ' AND departamento = ?';  params.push(deptFilter); }
   sql += ' ORDER BY created_at DESC LIMIT 200';
   const { results } = await env.DB.prepare(sql).bind(...params).all();
   return json(results);
