@@ -5,7 +5,7 @@
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 17/04/2026
-VERSIÓN ACTUAL: v4.10 (ambas apps)
+VERSIÓN ACTUAL: v4.10 app vieja | v4.11 app nueva
 
 REPO:    https://github.com/padilla585/Bobinaap.git  (branch: main)
 WORKER:  https://gestibobina-proxy.padilla585.workers.dev
@@ -228,6 +228,18 @@ v4.0  |  15/04/2026  [SOLO NUEVA APP]
   - Todos los datos existentes migrados con empresa_id=1 automáticamente
   - Índices creados: idx_*_empresa en tablas principales
   - SW bumpeado a alejandra-v4.0
+
+v4.11  |  17/04/2026  [SOLO NUEVA APP]
+  - Sync completo con v4.8 + v4.9 de la app vieja:
+    · Banner de actualización de caché (updateBanner)
+    · #47: irAInventario() + botón "Ver en inventario" en buscarMaquina()
+    · #50: superadmin siempre va al selector de departamentos
+    · #42: buscarMaquinaBox solo visible para Seguridad
+    · #12: input de código encima de la cámara + clear resetea btnDevolver
+    · #43: datalist con marcas en campos PEMP y Carretillas
+    · #35+#37: catálogos filtrados por departamento en Ajustes
+    · #14: botón DEVOLVER al escanear equipo existente + irADevolucionRapida()
+  - SW bumpeado a alejandra-v4.11
 
 v4.10  |  17/04/2026  [AMBAS APPS]
   - BUG CRÍTICO: binding D1 'DB' se perdía en cada deploy via REST API → env.DB undefined
