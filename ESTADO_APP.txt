@@ -4,8 +4,8 @@
   Ruta local: C:\Users\Adrian\Downloads\Proyecto GestiBobina\Bobinaap
 ================================================================================
 
-ÚLTIMA ACTUALIZACIÓN: 17/04/2026
-VERSIÓN ACTUAL: v4.14 app vieja | v4.20 app nueva
+ÚLTIMA ACTUALIZACIÓN: 18/04/2026
+VERSIÓN ACTUAL: v4.14 app vieja | v4.21 app nueva
 
 REPO:    https://github.com/padilla585/Bobinaap.git  (branch: main)
 WORKER:  https://gestibobina-proxy.padilla585.workers.dev
@@ -243,6 +243,19 @@ v4.21  |  17/04/2026  [SOLO NUEVA APP]
     · Eliminada cámara duplicada: devOpenCamera, devCloseCamera, devCaptureOCR, devStartQRLoop
     · -130 líneas de código, 0 funcionalidad perdida
   - GitHub actualizado ✅
+
+v4.21  |  18/04/2026  [SOLO NUEVA APP]
+  - Backup y restauración por separado en Ajustes → Sistema:
+    · 📦 Backup inventario: descarga/restaura bobinas, PEMP, carretillas,
+      inventario seg, movimientos seg, pedidos, herramientas, kits herramientas
+    · 🏢 Backup empresa: descarga/restaura obras, catálogos (proveedores,
+      tipos cable/pemp/carretilla/energía/material seg/herramienta)
+      y lista de usuarios (sin contraseñas)
+    · Restauración con confirmación explícita + reemplaza datos actuales
+    · Worker: 4 endpoints nuevos GET /backup/inventario, GET /backup/empresa,
+      POST /restaurar/inventario, POST /restaurar/empresa
+    · Solo accesible para encargado / empresa_admin / superadmin
+  - Worker y GitHub actualizados ✅
 
 v4.20  |  17/04/2026  [SOLO NUEVA APP]
   - #40: Módulo Personal — control de fichajes y asistencia
