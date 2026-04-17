@@ -1,5 +1,5 @@
 // Cambia este número cada vez que actualices la app
-const CACHE = 'alejandra-v4.14';
+const CACHE = 'alejandra-v4.15';
 
 self.addEventListener('install', e => {
   self.skipWaiting();
@@ -20,8 +20,15 @@ self.addEventListener('activate', e => {
   );
 });
 
-// Siempre va a internet primero, caché solo si no hay conexión
+// Navegación (HTML): siempre red, sin cachear — así el HTML siempre es fresco
+// Resto de recursos: red primero, caché como fallback offline
 self.addEventListener('fetch', e => {
+  if (e.request.mode === 'navigate') {
+    e.respondWith(
+      fetch(e.request).catch(() => caches.match(e.request))
+    );
+    return;
+  }
   e.respondWith(
     fetch(e.request)
       .then(res => {
