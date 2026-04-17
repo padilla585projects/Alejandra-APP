@@ -5,7 +5,7 @@
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 17/04/2026
-VERSIÓN ACTUAL: v4.14 app vieja | v4.18 app nueva
+VERSIÓN ACTUAL: v4.14 app vieja | v4.19 app nueva
 
 REPO:    https://github.com/padilla585/Bobinaap.git  (branch: main)
 WORKER:  https://gestibobina-proxy.padilla585.workers.dev
@@ -228,6 +228,19 @@ v4.0  |  15/04/2026  [SOLO NUEVA APP]
   - Todos los datos existentes migrados con empresa_id=1 automáticamente
   - Índices creados: idx_*_empresa en tablas principales
   - SW bumpeado a alejandra-v4.0
+
+v4.19  |  17/04/2026  [SOLO NUEVA APP]
+  - Pedidos: sheet propio (GOOGLE_PEDIDOS_SHEET_ID)
+    · Separado del sheet de equipos — limpio y aparte
+    · tabForDept('pedido', dept) → 'Elec-Pedidos' / 'Mec-Pedidos'
+    · syncPedidos(env, tabs): función dedicada para el sheet de pedidos
+    · crearPedido: sincroniza solo la pestaña del dept
+    · actualizarPedido: sincroniza ambas pestañas (el dept podría cambiar)
+    · eliminarPedido: lee dept antes de borrar, sincroniza solo esa pestaña
+    · /sync-sheets: llama syncSheets + syncPedidos en paralelo
+    · Formato visual: cabecera ámbar (Elec) / azul (Mec) + estado 'solicitado' azul
+    · Requiere añadir secreto GOOGLE_PEDIDOS_SHEET_ID al worker
+  - Worker y GitHub actualizados ✅
 
 v4.18  |  17/04/2026  [SOLO NUEVA APP]
   - #15: Módulo Pedidos — solicitudes de material
