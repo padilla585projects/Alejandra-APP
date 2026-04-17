@@ -2029,7 +2029,7 @@ async function syncSheets(env, tabs = null) {
     if (addReqs.length > 0 || delReqs.length > 0) {
       await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}:batchUpdate`, {
         method: 'POST', headers: authH, body: JSON.stringify({ requests: [...addReqs, ...delReqs] }),
-      });
+      }).then(r => r.body?.cancel());
       const m2 = await (await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}`, { headers: authH })).json();
       sheetsActuales = m2.sheets || [];
     }
@@ -2041,13 +2041,13 @@ async function syncSheets(env, tabs = null) {
       if (!tabsToSync.includes(tab)) return;
       const range = `${tab}!A1`;
       await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(range)}:clear`,
-        { method: 'POST', headers: authH });
+        { method: 'POST', headers: authH }).then(r => r.body?.cancel());
       const putRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(range)}?valueInputOption=RAW`,
         { method: 'PUT', headers: authH, body: JSON.stringify({ values }) });
       if (!putRes.ok) {
         const errBody = await putRes.text();
         throw new Error(`writeTab(${tab}) HTTP ${putRes.status}: ${errBody.slice(0, 200)}`);
-      }
+      } else { await putRes.body?.cancel(); }
       if (tabsNeedFormat.has(tab) && numIdMap[tab] !== undefined) {
         await applyTabFormatting(sheetId, authH, tab, numIdMap[tab], values[0]?.length || 1);
       }
@@ -2145,7 +2145,7 @@ async function syncPedidos(env, tabs = null) {
     if (addReqs.length > 0) {
       await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}:batchUpdate`, {
         method: 'POST', headers: authH, body: JSON.stringify({ requests: addReqs }),
-      });
+      }).then(r => r.body?.cancel());
       const m2 = await (await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}`, { headers: authH })).json();
       sheetsActuales = m2.sheets || [];
     }
@@ -2160,10 +2160,11 @@ async function syncPedidos(env, tabs = null) {
       if (!tabsToSync.includes(tab)) return;
       const range = `${tab}!A1`;
       await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(range)}:clear`,
-        { method: 'POST', headers: authH });
+        { method: 'POST', headers: authH }).then(r => r.body?.cancel());
       const putRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(range)}?valueInputOption=RAW`,
         { method: 'PUT', headers: authH, body: JSON.stringify({ values }) });
       if (!putRes.ok) throw new Error(`writeTab(${tab}) HTTP ${putRes.status}: ${(await putRes.text()).slice(0, 200)}`);
+      else await putRes.body?.cancel();
       if (tabsNeedFormat.has(tab) && numIdMap[tab] !== undefined) {
         await applyTabFormatting(sheetId, authH, tab, numIdMap[tab], values[0]?.length || 1);
       }
@@ -2275,7 +2276,7 @@ async function applyTabFormatting(spreadsheetId, authH, tabName, numSheetId, num
 
   await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`, {
     method: 'POST', headers: authH, body: JSON.stringify({ requests }),
-  });
+  }).then(r => r.body?.cancel());
 }
 
 async function syncSheetsDebug(env) {
