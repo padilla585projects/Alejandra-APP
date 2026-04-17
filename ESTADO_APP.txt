@@ -68,7 +68,7 @@ Tablas originales:  bobinas, obras, historial, proveedores, tipos_cable
 Tablas añadidas:    usuarios, pemp, carretillas, historial_pemp,
                     historial_carretillas, logs, sugerencias,
                     inventario_seg, movimientos_seg, tipos_material_seg,
-                    sesiones
+                    sesiones, pedidos
 Tablas multi-tenant [solo nueva app]:
                     empresas (id, nombre, slug, email, plan, activa, created_at)
 Catálogos:          tipos_pemp, tipos_carretilla, energias_carretilla
@@ -230,19 +230,25 @@ v4.0  |  15/04/2026  [SOLO NUEVA APP]
   - SW bumpeado a alejandra-v4.0
 
 v4.18  |  17/04/2026  [SOLO NUEVA APP]
+  - #15: Módulo Pedidos — solicitudes de material
+    · screenPedidos: pantalla propia con header, filtros de estado y lista
+    · Card "📦 Pedidos" en home (visible todos los depts excepto seguridad)
+    · Stats home: muestra pedidos pendientes + solicitados en el badge morado
+    · Modal crear/editar: descripción*, referencia, proveedor, cantidad, unidad,
+      obra, notas
+    · Flujo de estados: pendiente → solicitado → recibido (o cancelado)
+    · Filtros rápidos por estado: Todos / ⏳Pendiente / 📤Solicitado / ✅Recibido / ❌Cancelado
+    · Permisos: TODOS los roles crean y actualizan (incl. operarios)
+               Solo encargado / empresa_admin / superadmin pueden eliminar
+    · DB: tabla pedidos creada (migrate_pedidos.sql — ya ejecutado en D1)
+    · Columnas Sheets 'Elec-Pedidos': Estado, Descripción, Referencia, Cantidad,
+      Unidad, Proveedor, Obra, Solicitado por, Fecha Solicitud, Fecha Recepción, Notas
+    · Botón físico Android (← atrás) vuelve al home desde screenPedidos
   - Google Sheets optimizado:
     · Sync selectivo: cada operación solo actualiza la pestaña afectada
-      (antes: reescribía las 7 pestañas enteras en cada alta/devolución/baja)
-    · tabForDept(): helper que mapea tipo+departamento → nombre de pestaña
-    · Queries en paralelo (Promise.all) para las pestañas a sincronizar
-    · Formato visual automático al crear pestañas nuevas:
-      - Cabecera en negrita con color por dept (ámbar/azul/naranja)
-      - Fila 1 congelada (freeze)
-      - Auto-resize de columnas
-      - Colores condicionales en columna Estado (verde/rojo/gris/amarillo/azul)
-    · El formato se aplica solo cuando frozenRowCount=0 → no se duplica
-    · Pedidos: 3 call sites actualizados a 'Elec-Pedidos'
-    · Seguridad: 5 call sites actualizados a 'Seg-Inventario'
+    · tabForDept(): helper tipo+departamento → nombre de pestaña
+    · Formato visual al crear pestañas: cabecera negrita+color, fila congelada,
+      auto-resize, colores condicionales en columna Estado
   - Worker y GitHub actualizados ✅
 
 v4.17  |  17/04/2026  [SOLO NUEVA APP]
