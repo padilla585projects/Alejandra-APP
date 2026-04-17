@@ -5,7 +5,7 @@
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 17/04/2026
-VERSIÓN ACTUAL: v4.14 app vieja | v4.19 app nueva
+VERSIÓN ACTUAL: v4.14 app vieja | v4.20 app nueva
 
 REPO:    https://github.com/padilla585/Bobinaap.git  (branch: main)
 WORKER:  https://gestibobina-proxy.padilla585.workers.dev
@@ -229,6 +229,17 @@ v4.0  |  15/04/2026  [SOLO NUEVA APP]
   - Todos los datos existentes migrados con empresa_id=1 automáticamente
   - Índices creados: idx_*_empresa en tablas principales
   - SW bumpeado a alejandra-v4.0
+
+v4.20  |  17/04/2026  [SOLO NUEVA APP]
+  - Google Sheets: sheets completamente separados de la app vieja (Opción B)
+    · Sheet equipos nuevo: 1SVtsS8nAJWlbFKDt8HxH0MZOJW762U7wRhkyTjIs_Sg
+    · Sheet pedidos: 1fIrkm6oQRmsVcqHTJstVfLNZJjSumotSQKpuQ6f6lD8
+    · Secretos configurados en worker: GOOGLE_CLIENT_EMAIL, GOOGLE_PRIVATE_KEY,
+      GOOGLE_SHEET_ID (nuevo), GOOGLE_PEDIDOS_SHEET_ID
+    · Fix deadlock: todas las llamadas fetch() a Sheets API ahora consumen el
+      body de respuesta con .then(r => r.body?.cancel()) — evita cancelaciones
+      por "stalled HTTP response" en Cloudflare Workers
+  - Worker redesplegado ✅
 
 v4.19  |  17/04/2026  [SOLO NUEVA APP]
   - #39: Módulo Herramientas — kits y herramientas en obra
