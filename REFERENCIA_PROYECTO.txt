@@ -1,0 +1,317 @@
+================================================================================
+  ALEJANDRA APP — REFERENCIA COMPLETA DEL PROYECTO
+  Leer este archivo AL INICIO de cada sesión para continuar sin problemas.
+  Última actualización: 17/04/2026
+================================================================================
+
+================================================================================
+  RESUMEN EJECUTIVO
+================================================================================
+
+Proyecto: App PWA de gestión de obra (bobinas, PEMP, carretillas, seguridad)
+Stack:    Vanilla JS + Cloudflare Workers + D1 (SQLite) + GitHub Pages
+Equipo:   Adrian (desarrollador/cliente) + Claude (dev)
+
+HAY DOS APPS EN PARALELO:
+
+  APP VIEJA (producción activa del equipo)
+  └─ Una sola empresa fija (CPD Getafe)
+  └─ Login solo por código de usuario
+  └─ Solo recibe BUGS — no recibe nuevas features
+  └─ Versión: v4.14
+
+  APP NUEVA (desarrollo activo, futura sustitución)
+  └─ Multi-empresa (cada empresa tiene sus datos aislados por empresa_id)
+  └─ Login por código O por email + contraseña
+  └─ Wizard de registro de nuevas empresas
+  └─ Aquí van todas las mejoras y nuevas features
+  └─ Versión: v4.16
+
+REGLA DE DEPLOY:
+  - BUGS      → ambas apps siempre
+  - MEJORAS   → solo app nueva
+  - version.json, sw.js y badge de versión en index.html → actualizar los tres
+    a la vez en cada versión nueva
+
+================================================================================
+  APP VIEJA — CREDENCIALES Y ACCESO
+================================================================================
+
+GitHub:
+  Repo:     https://github.com/padilla585/Bobinaap
+  Pages:    https://padilla585.github.io/Bobinaap/
+  Usuario:  padilla585
+  Token:    → ver NUEVA_CUENTA.txt
+  Push:     git -c credential.helper= push https://padilla585:<TOKEN_GITHUB_VIEJO>@github.com/padilla585/Bobinaap.git main
+
+Cloudflare Worker:
+  Nombre:   gestibobina-proxy
+  URL:      https://gestibobina-proxy.padilla585.workers.dev
+  Account:  c100d5a0ea37ee03989fe769c7259b83
+  Token:    → ver NUEVA_CUENTA.txt
+
+Cloudflare D1 (base de datos):
+  Nombre:   gestibobina-db
+  ID:       eac9f2d2-0845-409c-9032-109c563d7eec
+  Token D1: → ver NUEVA_CUENTA.txt
+
+Archivos locales:
+  Frontend: C:\Users\Adrian\Downloads\Proyecto GestiBobina\Bobinaap\index.html
+  Worker:   C:\Users\Adrian\Downloads\Proyecto GestiBobina\Bobinaap\worker.js
+  SW:       C:\Users\Adrian\Downloads\Proyecto GestiBobina\Bobinaap\sw.js
+  Versión:  C:\Users\Adrian\Downloads\Proyecto GestiBobina\Bobinaap\version.json
+
+================================================================================
+  APP NUEVA — CREDENCIALES Y ACCESO
+================================================================================
+
+GitHub:
+  Repo:     https://github.com/padilla585projects/Alejandra-APP
+  Pages:    https://padilla585projects.github.io/Alejandra-APP/
+  Usuario:  padilla585projects
+  Token:    → ver NUEVA_CUENTA.txt
+  Push:     git -c credential.helper= push https://padilla585projects:<TOKEN_GITHUB_NUEVO>@github.com/padilla585projects/Alejandra-APP.git main
+
+Cloudflare Worker:
+  Nombre:   alejandra-app-api
+  URL:      https://alejandra-app-api.alejandra-app.workers.dev
+  Account:  d65ead2b2967bf68ff3848a36cd7b1b4
+  Token:    → ver NUEVA_CUENTA.txt
+
+Cloudflare D1 (base de datos):
+  Nombre:   alejandra-db
+  ID:       0c9eccde-78f1-476d-ac68-bf452bec0c62
+  Token D1: → ver NUEVA_CUENTA.txt  (mismo token que Worker)
+
+Archivos locales:
+  Frontend: C:\Users\Adrian\Downloads\Proyecto GestiBobina\NuevaApp\index.html
+  Worker:   C:\Users\Adrian\Downloads\Proyecto GestiBobina\NuevaApp\worker.js
+  SW:       C:\Users\Adrian\Downloads\Proyecto GestiBobina\NuevaApp\sw.js
+  Versión:  C:\Users\Adrian\Downloads\Proyecto GestiBobina\NuevaApp\version.json
+
+================================================================================
+  COMANDOS DE DEPLOY — COPIAR Y PEGAR DIRECTAMENTE
+================================================================================
+
+── DEPLOY WORKER VIEJO ─────────────────────────────────────────────────────────
+curl -s -X PUT "https://api.cloudflare.com/client/v4/accounts/c100d5a0ea37ee03989fe769c7259b83/workers/scripts/gestibobina-proxy" \
+  -H "Authorization: Bearer <TOKEN_WORKER_VIEJO>" \
+  -F "metadata={\"main_module\":\"worker.js\",\"compatibility_date\":\"2024-01-01\",\"bindings\":[{\"type\":\"d1\",\"name\":\"DB\",\"id\":\"eac9f2d2-0845-409c-9032-109c563d7eec\"}]};type=application/json" \
+  -F "worker.js=@C:\Users\Adrian\Downloads\Proyecto GestiBobina\Bobinaap\worker.js;type=application/javascript+module"
+
+── DEPLOY WORKER NUEVO ─────────────────────────────────────────────────────────
+curl -s -X PUT "https://api.cloudflare.com/client/v4/accounts/d65ead2b2967bf68ff3848a36cd7b1b4/workers/scripts/alejandra-app-api" \
+  -H "Authorization: Bearer <TOKEN_WORKER_NUEVO>" \
+  -F "metadata={\"main_module\":\"worker.js\",\"compatibility_date\":\"2024-01-01\",\"bindings\":[{\"type\":\"d1\",\"name\":\"DB\",\"id\":\"0c9eccde-78f1-476d-ac68-bf452bec0c62\"}]};type=application/json" \
+  -F "worker.js=@C:\Users\Adrian\Downloads\Proyecto GestiBobina\NuevaApp\worker.js;type=application/javascript+module"
+
+⚠️  CRÍTICO: el binding D1 SIEMPRE debe incluirse en el metadata del deploy.
+    Sin él, env.DB queda undefined y TODA la app deja de funcionar.
+
+── QUERY D1 VIEJA ──────────────────────────────────────────────────────────────
+curl -s -X POST "https://api.cloudflare.com/client/v4/accounts/c100d5a0ea37ee03989fe769c7259b83/d1/database/eac9f2d2-0845-409c-9032-109c563d7eec/query" \
+  -H "Authorization: Bearer <TOKEN_D1_VIEJO>" \
+  -H "Content-Type: application/json" \
+  -d "{\"sql\":\"SELECT ...\"}"
+
+── QUERY D1 NUEVA ──────────────────────────────────────────────────────────────
+curl -s -X POST "https://api.cloudflare.com/client/v4/accounts/d65ead2b2967bf68ff3848a36cd7b1b4/d1/database/0c9eccde-78f1-476d-ac68-bf452bec0c62/query" \
+  -H "Authorization: Bearer <TOKEN_D1_NUEVO>" \
+  -H "Content-Type: application/json" \
+  -d "{\"sql\":\"SELECT ...\"}"
+
+── GIT PUSH APP VIEJA ──────────────────────────────────────────────────────────
+cd "C:\Users\Adrian\Downloads\Proyecto GestiBobina\Bobinaap"
+git add index.html worker.js sw.js version.json ESTADO_APP.txt
+git commit -m "descripcion; vX.XX"
+git -c credential.helper= push https://padilla585:<TOKEN_GITHUB_VIEJO>@github.com/padilla585/Bobinaap.git main
+
+── GIT PUSH APP NUEVA ──────────────────────────────────────────────────────────
+cd "C:\Users\Adrian\Downloads\Proyecto GestiBobina\NuevaApp"
+git add index.html worker.js sw.js version.json ESTADO_APP.txt
+git commit -m "descripcion; vX.XX"
+git -c credential.helper= push https://padilla585projects:<TOKEN_GITHUB_NUEVO>@github.com/padilla585projects/Alejandra-APP.git main
+
+================================================================================
+  VERSIONES ACTUALES Y CHANGELOGS
+================================================================================
+
+APP VIEJA:  v4.14  (sw.js: alejandra-v4.14 | version.json: 4.14)
+APP NUEVA:  v4.16  (sw.js: alejandra-v4.16 | version.json: 4.16)
+
+Historial reciente:
+  v4.16 [nueva] — empresa_admin con permisos completos (getAuth+worker+frontend)
+                   Fix "Error al cargar" en panel Mi Empresa (.json() faltante)
+  v4.15 [ambas] — Auto-actualización sin intervención: version.json + SW no cachea HTML
+  v4.14 [ambas] — Auto-actualización (versión vieja), cerrar sesiones fix
+  v4.13 [ambas] — Fix cerrar sesiones (#67/#68), filtros sugerencias
+  v4.12 [ambas] — Fix #51 editar salidas seguridad; #44 ficha pantalla completa; #38 sesiones
+  v4.11 [nueva] — Sync con v4.8+v4.9 de app vieja
+  v4.10 [ambas] — Fix crítico D1 binding perdido en deploy; fix login nueva app
+
+================================================================================
+  ARQUITECTURA TÉCNICA
+================================================================================
+
+ROLES:
+  superadmin   → código ADMIN_CODE (secret Cloudflare). Ve todo, elige departamento.
+  empresa_admin → email + contraseña. Admin de su empresa (solo nueva app activo).
+  encargado    → código de usuario. Gestiona su departamento/obra.
+  operario     → código de usuario. Solo lectura/scan en su departamento.
+
+DEPARTAMENTOS:
+  electrico  → Bobinas + PEMP + Carretillas + Historial
+  mecanicas  → PEMP + Carretillas (sin Bobinas)
+  seguridad  → Solo escáner + Inventario de Seguridad
+
+TABLAS D1 (ambas apps):
+  bobinas, obras, historial, proveedores, tipos_cable
+  usuarios, pemp, carretillas, historial_pemp, historial_carretillas
+  logs, sugerencias, inventario_seg, movimientos_seg, tipos_material_seg
+  sesiones, config
+  tipos_pemp, tipos_carretilla, energias_carretilla
+
+TABLAS EXTRA (solo nueva app):
+  empresas (id, nombre, slug, email, plan, activa, created_at)
+
+MULTI-TENANT (solo nueva app):
+  Todas las tablas tienen empresa_id.
+  Todas las queries filtran por empresa_id del usuario autenticado.
+  Empresa por defecto: id=1 ("Empresa Principal") con los datos reales del equipo.
+
+AUTH:
+  Login → POST /verificar → devuelve token de 64 hex chars
+  Token se guarda en localStorage como parte de la sesión
+  Cada petición lleva header X-Token
+  Sesiones almacenadas en tabla D1 `sesiones`
+
+AUTO-ACTUALIZACIÓN (v4.15+):
+  Cada app tiene un version.json en la raíz del repo.
+  Al arrancar y cada 2 min, la app fetch version.json (cache:no-store + timestamp).
+  Si versión != APP_VERSION hardcodeada → limpia caches SW + location.replace().
+  El SW no cachea peticiones de navegación (HTML siempre fresco de red).
+  → Regla: actualizar version.json, sw.js CACHE y badge de index.html a la vez.
+
+SECRETOS CONFIGURADOS EN WORKERS (ambos):
+  ADMIN_CODE, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, GOOGLE_SHEET_ID
+
+TELEGRAM:
+  App vieja: @AlejandraAPP_bot (chat_id: 6965043)
+  App nueva: mismo bot y chat_id
+
+GOOGLE SHEETS:
+  ID: 1HiBUR_S0toOkUJtxjt4ua5JibgO4atbCRCrPbcrcPsU
+  Pestañas: Elec-Bobinas, Elec-PEMP, Elec-Carretillas, Mec-PEMP, Mec-Carretillas, Seg-Inventario
+
+================================================================================
+  ESTADO ACTUAL — QUÉ FUNCIONA
+================================================================================
+
+✅ Login multi-dispositivo con tokens D1
+✅ Selector de departamento para superadmin
+✅ CRUD completo: bobinas, PEMP, carretillas (crear, editar, devolver, transferir, borrar)
+✅ Inventario de Seguridad (individual/cantidad, salidas, devoluciones, bajas, editar)
+✅ Ficha de máquina a pantalla completa con historial
+✅ Escáner QR + OCR (Gemini 2.0 Flash)
+✅ Google Sheets sync por pestañas departamentales
+✅ Notificaciones Telegram
+✅ Catálogos por departamento (proveedores, tipos cable/PEMP/carretilla, energías, mat. seg)
+✅ Sugerencias con estados y filtros (pendiente/en_progreso/resuelto + categoria)
+✅ Logs en D1
+✅ Sesiones activas: ver quién está conectado, cerrar por rol
+✅ Exportar Excel completo
+✅ Ajustes en pestañas (Sesión, Catálogos, Usuarios, Obras, Ideas, Sistema)
+✅ Auto-actualización silenciosa sin interacción del usuario
+✅ PWA instalable (manifest, SW, icons)
+✅ Badge de ideas sin leer
+
+[SOLO NUEVA APP]:
+✅ Multi-empresa (empresa_id en todas las tablas)
+✅ Login por email + contraseña (PBKDF2 100k iteraciones)
+✅ empresa_admin con permisos completos sobre su empresa
+✅ Wizard de registro de empresa (3 pasos: empresa → admin → obra)
+✅ Panel Empresa en Ajustes (info, obras, usuarios)
+✅ /empresas/registro, /mi-empresa GET/PUT
+
+================================================================================
+  PENDIENTE / PRÓXIMAS FEATURES
+================================================================================
+
+ERRORES CONOCIDOS:
+  (ninguno pendiente — todos resueltos en v4.16)
+
+MEJORAS PENDIENTES (app nueva):
+  #52 — Botón "atrás" en submenús
+  #53 — Filtrar sugerencias por departamento
+  #15 — Pedidos en parte eléctrica + sync Sheets
+
+NUEVAS FUNCIONALIDADES (grandes):
+  #39 — Módulo de Herramientas (escáner código + catálogo + BD)
+  #34 — Planos, fotos, documentos de obra (requiere R2)
+  #33 — Departamento Especiales/Teleco
+  #29 — Control de horas para contratas y personal
+  #9  — App consume batería (pendiente investigar causa)
+
+MULTI-TENANT ROADMAP (app nueva):
+  Fase 4 — Almacenamiento R2 (fotos, firma digital, PDFs albarán)
+  Fase 5 — Facturación Stripe (basic/pro/enterprise)
+
+================================================================================
+  DECISIONES TÉCNICAS IMPORTANTES
+================================================================================
+
+1. INSERT...RETURNING no funciona bien en algunas versiones de D1.
+   Siempre usar .run() + meta.last_row_id para obtener el ID insertado.
+
+2. El binding D1 se pierde en cada deploy via REST API si no se incluye en metadata.
+   SIEMPRE incluir el binding en el curl de deploy (ver comandos arriba).
+
+3. apiCall(path, options) — el segundo argumento es el objeto fetch options completo.
+   MAL: apiCall('/ruta', 'POST', body)
+   BIEN: apiCall('/ruta', { method: 'POST', body: JSON.stringify(data) })
+
+4. El credential helper de Windows puede usar el token de padilla585projects
+   para el repo de padilla585. Siempre usar -c credential.helper= en git push
+   y poner el token directamente en la URL.
+
+5. sendBeacon debe usar Blob({type:'application/json'}) — string plano no funciona.
+
+6. version.json debe actualizarse siempre que se cambie la versión en sw.js/index.html.
+
+7. Sugerencias: la tabla tiene columna 'estado' (pendiente/en_progreso/resuelto).
+   El worker soporta filtros ?estado= y ?categoria= en GET /sugerencias.
+
+8. empresa_admin en nueva app: tiene acceso total a sus datos de empresa pero
+   NO tiene acceso a config global (Sheets, Logs sistema, etc.).
+   getAuth() devuelve isEmpresaAdmin: sesion.rol === 'empresa_admin'.
+
+================================================================================
+  ARCHIVOS CLAVE DEL PROYECTO
+================================================================================
+
+C:\Users\Adrian\Downloads\Proyecto GestiBobina\
+  ├── REFERENCIA_PROYECTO.txt     ← ESTE ARCHIVO (leer al inicio de sesión)
+  ├── Bobinaap\
+  │   ├── index.html              ← Frontend app vieja
+  │   ├── worker.js               ← Worker Cloudflare app vieja
+  │   ├── sw.js                   ← Service Worker app vieja
+  │   ├── version.json            ← Versión actual app vieja {"v":"4.14"}
+  │   ├── ESTADO_APP.txt          ← Changelog detallado
+  │   └── NUEVA_CUENTA.txt        ← Tokens y credenciales (NO subir a git público)
+  └── NuevaApp\
+      ├── index.html              ← Frontend app nueva
+      ├── worker.js               ← Worker Cloudflare app nueva
+      ├── sw.js                   ← Service Worker app nueva
+      ├── version.json            ← Versión actual app nueva {"v":"4.16"}
+      └── ESTADO_APP.txt          ← Copia del changelog
+
+================================================================================
+  DATOS DE PRODUCCIÓN
+================================================================================
+
+Obra activa:       CPD Getafe (código: 001, id: 1, empresa_id: 1)
+Empresa principal: "Empresa Principal" (id: 1) — datos reales del equipo
+Empresa nueva:     "Edison Montajes" (id: 3, admin: Adrián, email: padilla585@gmail.com)
+Backup local:      C:\Users\Adrian\Downloads\Proyecto GestiBobina\backup_db_20260413.sql
+
+================================================================================
