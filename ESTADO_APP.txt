@@ -5,7 +5,7 @@
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 17/04/2026
-VERSIÓN ACTUAL: v4.14 app vieja | v4.17 app nueva
+VERSIÓN ACTUAL: v4.14 app vieja | v4.18 app nueva
 
 REPO:    https://github.com/padilla585/Bobinaap.git  (branch: main)
 WORKER:  https://gestibobina-proxy.padilla585.workers.dev
@@ -228,6 +228,22 @@ v4.0  |  15/04/2026  [SOLO NUEVA APP]
   - Todos los datos existentes migrados con empresa_id=1 automáticamente
   - Índices creados: idx_*_empresa en tablas principales
   - SW bumpeado a alejandra-v4.0
+
+v4.18  |  17/04/2026  [SOLO NUEVA APP]
+  - Google Sheets optimizado:
+    · Sync selectivo: cada operación solo actualiza la pestaña afectada
+      (antes: reescribía las 7 pestañas enteras en cada alta/devolución/baja)
+    · tabForDept(): helper que mapea tipo+departamento → nombre de pestaña
+    · Queries en paralelo (Promise.all) para las pestañas a sincronizar
+    · Formato visual automático al crear pestañas nuevas:
+      - Cabecera en negrita con color por dept (ámbar/azul/naranja)
+      - Fila 1 congelada (freeze)
+      - Auto-resize de columnas
+      - Colores condicionales en columna Estado (verde/rojo/gris/amarillo/azul)
+    · El formato se aplica solo cuando frozenRowCount=0 → no se duplica
+    · Pedidos: 3 call sites actualizados a 'Elec-Pedidos'
+    · Seguridad: 5 call sites actualizados a 'Seg-Inventario'
+  - Worker y GitHub actualizados ✅
 
 v4.17  |  17/04/2026  [SOLO NUEVA APP]
   - #52: Botón "← Atrás" en el header
