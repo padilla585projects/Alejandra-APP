@@ -336,6 +336,12 @@ export default {
       if ((path === '/sync' || path === '/sync-sheets') && method === 'POST') { await Promise.all([syncSheets(env), syncPedidos(env)]); return json({ ok: true, mensaje: 'Sync completado' }); }
       if (path === '/sync-debug'   && method === 'POST')  return await syncSheetsDebug(env);
 
+      // ── Backup / Restaurar ────────────────────────────────────────────────
+      if (path === '/backup/inventario'    && method === 'GET')  return await backupInventario(request, env);
+      if (path === '/backup/empresa'       && method === 'GET')  return await backupEmpresa(request, env);
+      if (path === '/restaurar/inventario' && method === 'POST') return await restaurarInventario(request, env);
+      if (path === '/restaurar/empresa'    && method === 'POST') return await restaurarEmpresa(request, env);
+
       return err('Ruta no encontrada', 404);
     } catch (e) {
       console.error(e);
@@ -2320,6 +2326,171 @@ async function getResumenMes(request, env) {
   sql += ' ORDER BY f.fecha ASC, f.hora_entrada ASC';
   const { results } = await env.DB.prepare(sql).bind(...params).all();
   return json({ anio, mes, fichajes: results });
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// BACKUP / RESTAURAR
+// ════════════════════════════════════════════════════════════════════════════
+
+async function backupInventario(request, env) {
+  const auth = await getAuth(request, env).catch(() => null);
+  if (!auth?.empresa_id) return err('No autorizado', 401);
+  const eid = auth.empresa_id;
+
+  const [bobinas, pemp, carretillas, inv_seg, mov_seg, pedidos, herramientas, kits, hist_herr] = await Promise.all([
+    env.DB.prepare('SELECT * FROM bobinas WHERE empresa_id=? ORDER BY id').bind(eid).all().then(r=>r.results),
+    env.DB.prepare('SELECT * FROM pemp WHERE empresa_id=? ORDER BY id').bind(eid).all().then(r=>r.results),
+    env.DB.prepare('SELECT * FROM carretillas WHERE empresa_id=? ORDER BY id').bind(eid).all().then(r=>r.results),
+    env.DB.prepare('SELECT * FROM inventario_seg WHERE empresa_id=? ORDER BY id').bind(eid).all().then(r=>r.results),
+    env.DB.prepare('SELECT m.* FROM movimientos_seg m JOIN inventario_seg i ON m.item_id=i.id WHERE i.empresa_id=? ORDER BY m.id').bind(eid).all().then(r=>r.results).catch(()=>[]),
+    env.DB.prepare('SELECT * FROM pedidos WHERE empresa_id=? ORDER BY id').bind(eid).all().then(r=>r.results),
+    env.DB.prepare('SELECT * FROM herramientas WHERE empresa_id=? ORDER BY id').bind(eid).all().then(r=>r.results),
+    env.DB.prepare('SELECT * FROM kits_herramientas WHERE empresa_id=? ORDER BY id').bind(eid).all().then(r=>r.results),
+    env.DB.prepare('SELECT h.* FROM historial_herramientas h JOIN herramientas t ON h.herramienta_id=t.id WHERE t.empresa_id=? ORDER BY h.id').bind(eid).all().then(r=>r.results).catch(()=>[]),
+  ]);
+
+  const payload = JSON.stringify({
+    tipo: 'inventario', version: '1.0', fecha: new Date().toISOString(),
+    bobinas, pemp, carretillas, inventario_seg: inv_seg, movimientos_seg: mov_seg,
+    pedidos, herramientas, kits_herramientas: kits, historial_herramientas: hist_herr,
+  });
+  return new Response(payload, {
+    headers: { ...CORS, 'Content-Type': 'application/json',
+      'Content-Disposition': `attachment; filename="backup-inventario-${new Date().toISOString().slice(0,10)}.json"` }
+  });
+}
+
+async function backupEmpresa(request, env) {
+  const auth = await getAuth(request, env).catch(() => null);
+  if (!auth?.empresa_id) return err('No autorizado', 401);
+  const eid = auth.empresa_id;
+
+  const [obras, usuarios, proveedores, tipos_cable, tipos_pemp, tipos_carretilla, energias, tipos_mat_seg, tipos_herr] = await Promise.all([
+    env.DB.prepare('SELECT id,nombre,codigo,activa FROM obras WHERE empresa_id=? ORDER BY id').bind(eid).all().then(r=>r.results),
+    env.DB.prepare('SELECT id,nombre,rol,codigo,departamento FROM usuarios WHERE empresa_id=? ORDER BY id').bind(eid).all().then(r=>r.results),
+    env.DB.prepare('SELECT id,nombre FROM proveedores WHERE empresa_id=? ORDER BY nombre').bind(eid).all().then(r=>r.results),
+    env.DB.prepare('SELECT id,nombre FROM tipos_cable WHERE empresa_id=? ORDER BY nombre').bind(eid).all().then(r=>r.results),
+    env.DB.prepare('SELECT id,nombre FROM tipos_pemp WHERE empresa_id=? ORDER BY nombre').bind(eid).all().then(r=>r.results),
+    env.DB.prepare('SELECT id,nombre FROM tipos_carretilla WHERE empresa_id=? ORDER BY nombre').bind(eid).all().then(r=>r.results),
+    env.DB.prepare('SELECT id,nombre FROM energias_carretilla WHERE empresa_id=? ORDER BY nombre').bind(eid).all().then(r=>r.results),
+    env.DB.prepare('SELECT id,nombre,tipo FROM tipos_material_seg WHERE empresa_id=? ORDER BY nombre').bind(eid).all().then(r=>r.results),
+    env.DB.prepare('SELECT id,nombre FROM tipos_herramienta WHERE empresa_id=? ORDER BY nombre').bind(eid).all().then(r=>r.results),
+  ]);
+
+  const payload = JSON.stringify({
+    tipo: 'empresa', version: '1.0', fecha: new Date().toISOString(),
+    obras, usuarios, proveedores, tipos_cable, tipos_pemp, tipos_carretilla,
+    energias_carretilla: energias, tipos_material_seg: tipos_mat_seg, tipos_herramienta: tipos_herr,
+  });
+  return new Response(payload, {
+    headers: { ...CORS, 'Content-Type': 'application/json',
+      'Content-Disposition': `attachment; filename="backup-empresa-${new Date().toISOString().slice(0,10)}.json"` }
+  });
+}
+
+async function restaurarInventario(request, env) {
+  const auth = await getAuth(request, env).catch(() => null);
+  if (!auth?.empresa_id) return err('No autorizado', 401);
+  if (auth.rol !== 'superadmin' && auth.rol !== 'empresa_admin' && !auth.isAdmin) return err('Sin permisos', 403);
+  const eid = auth.empresa_id;
+
+  const bk = await request.json();
+  if (bk.tipo !== 'inventario') return err('Archivo no válido: se esperaba backup de inventario', 400);
+
+  // 1. Borrar datos actuales
+  await env.DB.batch([
+    env.DB.prepare('DELETE FROM bobinas WHERE empresa_id=?').bind(eid),
+    env.DB.prepare('DELETE FROM pemp WHERE empresa_id=?').bind(eid),
+    env.DB.prepare('DELETE FROM carretillas WHERE empresa_id=?').bind(eid),
+    env.DB.prepare('DELETE FROM pedidos WHERE empresa_id=?').bind(eid),
+    env.DB.prepare('DELETE FROM herramientas WHERE empresa_id=?').bind(eid),
+    env.DB.prepare('DELETE FROM kits_herramientas WHERE empresa_id=?').bind(eid),
+  ]);
+  // inventario_seg y movimientos_seg en cascada
+  const invIds = await env.DB.prepare('SELECT id FROM inventario_seg WHERE empresa_id=?').bind(eid).all().then(r=>r.results.map(r=>r.id));
+  if (invIds.length) {
+    const chunks = [];
+    for (let i=0; i<invIds.length; i+=50) chunks.push(invIds.slice(i,i+50));
+    for (const chunk of chunks) {
+      const ph = chunk.map(()=>'?').join(',');
+      await env.DB.prepare(`DELETE FROM movimientos_seg WHERE item_id IN (${ph})`).bind(...chunk).run();
+    }
+    await env.DB.prepare('DELETE FROM inventario_seg WHERE empresa_id=?').bind(eid).run();
+  }
+
+  const batchInsert = async (rows, stmt) => {
+    if (!rows?.length) return;
+    const chunks = [];
+    for (let i=0; i<rows.length; i+=50) chunks.push(rows.slice(i,i+50));
+    for (const chunk of chunks) await env.DB.batch(chunk.map(r => stmt(r)));
+  };
+
+  // 2. Insertar desde backup (empresa_id siempre del usuario actual)
+  await batchInsert(bk.bobinas, b => env.DB.prepare(
+    'INSERT OR REPLACE INTO bobinas (id,codigo,num_albaran,proveedor,tipo_cable,obra_id,estado,registrado_por,devuelto_por,fecha_entrada,fecha_devolucion,notas,departamento,empresa_id,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)'
+  ).bind(b.id,b.codigo,b.num_albaran||null,b.proveedor,b.tipo_cable,b.obra_id,b.estado,b.registrado_por||null,b.devuelto_por||null,b.fecha_entrada,b.fecha_devolucion||null,b.notas||null,b.departamento||'electrico',eid,b.created_at||new Date().toISOString()));
+
+  await batchInsert(bk.pemp, p => env.DB.prepare(
+    'INSERT OR REPLACE INTO pemp (id,matricula,tipo,marca,proveedor,energia,estado,fecha_entrada,registrado_por,notas,fecha_averia,fecha_reparacion,fecha_ultima_revision,fecha_proxima_revision,devuelto_por,fecha_devolucion,obra_id,departamento,empresa_id,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)'
+  ).bind(p.id,p.matricula,p.tipo||'',p.marca||'',p.proveedor||'',p.energia||'',p.estado,p.fecha_entrada,p.registrado_por||null,p.notas||'',p.fecha_averia||null,p.fecha_reparacion||null,p.fecha_ultima_revision||null,p.fecha_proxima_revision||null,p.devuelto_por||null,p.fecha_devolucion||null,p.obra_id||null,p.departamento||'electrico',eid,p.created_at||new Date().toISOString()));
+
+  await batchInsert(bk.carretillas, c => env.DB.prepare(
+    'INSERT OR REPLACE INTO carretillas (id,matricula,tipo,marca,proveedor,energia,estado,fecha_entrada,registrado_por,notas,fecha_averia,fecha_reparacion,fecha_ultima_revision,fecha_proxima_revision,devuelto_por,fecha_devolucion,obra_id,departamento,empresa_id,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)'
+  ).bind(c.id,c.matricula,c.tipo||'',c.marca||'',c.proveedor||'',c.energia||'',c.estado,c.fecha_entrada,c.registrado_por||null,c.notas||'',c.fecha_averia||null,c.fecha_reparacion||null,c.fecha_ultima_revision||null,c.fecha_proxima_revision||null,c.devuelto_por||null,c.fecha_devolucion||null,c.obra_id||null,c.departamento||'electrico',eid,c.created_at||new Date().toISOString()));
+
+  await batchInsert(bk.inventario_seg, s => env.DB.prepare(
+    'INSERT OR REPLACE INTO inventario_seg (id,tipo_material,modo,codigo,nombre,cantidad_total,cantidad_disponible,estado,fecha_entrada,fecha_caducidad,destino_actual,notas,registrado_por,empresa_id,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)'
+  ).bind(s.id,s.tipo_material,s.modo,s.codigo||null,s.nombre||null,s.cantidad_total||1,s.cantidad_disponible||1,s.estado||'disponible',s.fecha_entrada||null,s.fecha_caducidad||null,s.destino_actual||null,s.notas||null,s.registrado_por||null,eid,s.created_at||new Date().toISOString()));
+
+  await batchInsert(bk.pedidos, p => env.DB.prepare(
+    'INSERT OR REPLACE INTO pedidos (id,empresa_id,obra_id,departamento,referencia,descripcion,cantidad,unidad,proveedor,solicitado_por,estado,notas,fecha_solicitud,fecha_recepcion,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)'
+  ).bind(p.id,eid,p.obra_id||null,p.departamento||'electrico',p.referencia||null,p.descripcion||'',p.cantidad||1,p.unidad||'ud',p.proveedor||null,p.solicitado_por||null,p.estado||'pendiente',p.notas||null,p.fecha_solicitud||null,p.fecha_recepcion||null,p.created_at||new Date().toISOString()));
+
+  await batchInsert(bk.kits_herramientas, k => env.DB.prepare(
+    'INSERT OR REPLACE INTO kits_herramientas (id,empresa_id,numero_kit,nombre,obra_id,departamento,asignado_a,num_componentes,notas,fecha_alta,fecha_asignacion,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)'
+  ).bind(k.id,eid,k.numero_kit||null,k.nombre||'',k.obra_id||null,k.departamento||'electrico',k.asignado_a||null,k.num_componentes||0,k.notas||null,k.fecha_alta||null,k.fecha_asignacion||null,k.created_at||new Date().toISOString()));
+
+  await batchInsert(bk.herramientas, h => env.DB.prepare(
+    'INSERT OR REPLACE INTO herramientas (id,empresa_id,kit_id,tipo_id,marca,modelo,numero_serie,departamento,obra_id,asignado_a,alimentacion,estado,notas,fecha_alta,fecha_asignacion,fecha_devolucion,fecha_averia,fecha_reparacion,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)'
+  ).bind(h.id,eid,h.kit_id||null,h.tipo_id||null,h.marca||'',h.modelo||'',h.numero_serie||'',h.departamento||'electrico',h.obra_id||null,h.asignado_a||null,h.alimentacion||'',h.estado||'disponible',h.notas||null,h.fecha_alta||null,h.fecha_asignacion||null,h.fecha_devolucion||null,h.fecha_averia||null,h.fecha_reparacion||null,h.created_at||new Date().toISOString()));
+
+  return json({ ok: true, mensaje: 'Inventario restaurado correctamente' });
+}
+
+async function restaurarEmpresa(request, env) {
+  const auth = await getAuth(request, env).catch(() => null);
+  if (!auth?.empresa_id) return err('No autorizado', 401);
+  if (auth.rol !== 'superadmin' && auth.rol !== 'empresa_admin' && !auth.isAdmin) return err('Sin permisos', 403);
+  const eid = auth.empresa_id;
+
+  const bk = await request.json();
+  if (bk.tipo !== 'empresa') return err('Archivo no válido: se esperaba backup de empresa', 400);
+
+  const batchInsert = async (rows, stmt) => {
+    if (!rows?.length) return;
+    const chunks = [];
+    for (let i=0; i<rows.length; i+=50) chunks.push(rows.slice(i,i+50));
+    for (const chunk of chunks) await env.DB.batch(chunk.map(r => stmt(r)));
+  };
+
+  // Obras: upsert por id, forzar empresa_id actual
+  await batchInsert(bk.obras, o => env.DB.prepare(
+    'INSERT OR REPLACE INTO obras (id,nombre,codigo,activa,empresa_id) VALUES (?,?,?,?,?)'
+  ).bind(o.id, o.nombre, o.codigo, o.activa??1, eid));
+
+  // Catálogos: borrar los actuales e insertar los del backup
+  const catalogos = [
+    { tabla: 'proveedores',        rows: bk.proveedores,          stmt: r => env.DB.prepare('INSERT OR REPLACE INTO proveedores (id,nombre,empresa_id) VALUES (?,?,?)').bind(r.id,r.nombre,eid) },
+    { tabla: 'tipos_cable',        rows: bk.tipos_cable,          stmt: r => env.DB.prepare('INSERT OR REPLACE INTO tipos_cable (id,nombre,empresa_id) VALUES (?,?,?)').bind(r.id,r.nombre,eid) },
+    { tabla: 'tipos_pemp',         rows: bk.tipos_pemp,           stmt: r => env.DB.prepare('INSERT OR REPLACE INTO tipos_pemp (id,nombre,empresa_id) VALUES (?,?,?)').bind(r.id,r.nombre,eid) },
+    { tabla: 'tipos_carretilla',   rows: bk.tipos_carretilla,     stmt: r => env.DB.prepare('INSERT OR REPLACE INTO tipos_carretilla (id,nombre,empresa_id) VALUES (?,?,?)').bind(r.id,r.nombre,eid) },
+    { tabla: 'energias_carretilla',rows: bk.energias_carretilla,  stmt: r => env.DB.prepare('INSERT OR REPLACE INTO energias_carretilla (id,nombre,empresa_id) VALUES (?,?,?)').bind(r.id,r.nombre,eid) },
+    { tabla: 'tipos_material_seg', rows: bk.tipos_material_seg,   stmt: r => env.DB.prepare('INSERT OR REPLACE INTO tipos_material_seg (id,nombre,tipo,descripcion,empresa_id) VALUES (?,?,?,?,?)').bind(r.id,r.nombre,r.tipo||'',r.descripcion||'',eid) },
+    { tabla: 'tipos_herramienta',  rows: bk.tipos_herramienta,    stmt: r => env.DB.prepare('INSERT OR REPLACE INTO tipos_herramienta (id,nombre,empresa_id) VALUES (?,?,?)').bind(r.id,r.nombre,eid) },
+  ];
+  for (const cat of catalogos) await batchInsert(cat.rows, cat.stmt);
+
+  return json({ ok: true, mensaje: 'Datos de empresa restaurados correctamente' });
 }
 
 // ════════════════════════════════════════════════════════════════════════════
