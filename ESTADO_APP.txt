@@ -5,7 +5,7 @@
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 17/04/2026
-VERSIÓN ACTUAL: v4.11 app vieja | v4.12 app nueva
+VERSIÓN ACTUAL: v4.14 app vieja | v4.16 app nueva
 
 REPO:    https://github.com/padilla585/Bobinaap.git  (branch: main)
 WORKER:  https://gestibobina-proxy.padilla585.workers.dev
@@ -228,6 +228,59 @@ v4.0  |  15/04/2026  [SOLO NUEVA APP]
   - Todos los datos existentes migrados con empresa_id=1 automáticamente
   - Índices creados: idx_*_empresa en tablas principales
   - SW bumpeado a alejandra-v4.0
+
+v4.16  |  17/04/2026  [SOLO NUEVA APP]
+  - BUG: empresa_admin no tenía permisos para hacer nada en la app
+    · Causa 1: getAuth() no devolvía isEmpresaAdmin → todo daba 403
+    · Fix: añadido isEmpresaAdmin: sesion.rol === 'empresa_admin' al objeto de retorno
+    · Causa 2: 10 funciones del worker solo comprobaban isSuperadmin/isAdmin
+    · Fix: getObras, crearObra, eliminarObra, getUsuarios, crearUsuario,
+           editarUsuario, eliminarUsuario, cerrarTodasSesiones, getSugerencias
+           actualizadas para aceptar isEmpresaAdmin
+    · Causa 3: initAjustesTabs() ocultaba pestañas Obras/Usuarios/Ideas a empresa_admin
+    · Fix: añadido esEA a las condiciones de visibilidad de cada pestaña
+  - BUG: "Error al cargar" en Ajustes → Empresa (panel Mi Empresa)
+    · Causa: cargarPanelEmpresa() no llamaba .json() en la respuesta de apiCall
+    · Fix: const data = await (await apiCall('/mi-empresa')).json() + check res.ok
+  - Worker redesplegado con binding D1 ✅
+
+v4.15  |  17/04/2026  [AMBAS APPS — v4.15 nueva | v4.14 vieja]
+  - Auto-actualización sin intervención del usuario (fin de "desinstalar y reinstalar")
+    · Nuevo archivo version.json en cada repo con la versión actual
+    · Al arrancar la app: fetch inmediato de version.json (cache:'no-store' + timestamp)
+    · Si la versión no coincide → limpia TODOS los caches SW + recarga automática
+    · Chequeo repetido cada 2 minutos mientras la app está abierta
+    · Al volver a la app (visibilitychange) → chequeo inmediato
+    · SW.js: peticiones de navegación (HTML) ya NO se cachean → HTML siempre fresco de red
+    · Eliminado el banner manual "Actualizar ahora" — ahora es 100% automático
+    · Intervalo de reg.update() reducido de 10 min a 5 min
+  ⚠️ REGLA NUEVA: cada vez que se bump el version en sw.js/index.html,
+     actualizar también version.json con el mismo número
+
+v4.14  |  17/04/2026  [NUEVA APP — v4.14 nueva | v4.13 vieja]
+  - BUG #69: Wizard empresa — paso de obra daba "Ruta no encontrada"
+    · Causa: nuevo worker perdió rutas /empresas/registro y /mi-empresa en deploy anterior
+    · Fix: restauradas rutas + funciones registrarEmpresa/getMiEmpresa/updateMiEmpresa
+    · Añadidas funciones hashPassword/verifyPassword (PBKDF2) que faltaban en nuevo worker
+    · Login por email+contraseña restaurado en verificarAcceso del nuevo worker
+  - BUG #71: Filtros en pestaña Ideas no funcionaban
+    · Causa: getSugerencias del nuevo worker ignoraba ?estado= y ?categoria=
+    · Fix: añadido filtrado dinámico por estado y categoría (igual que worker viejo)
+  - BUG #68/#67: Botones "Cerrar sesiones" no funcionaban en ninguna de las dos apps
+    · Causa: cerrarSesionesRol() llamaba apiCall(path, 'POST', body) con firma incorrecta
+    · Fix: corregido a apiCall(path, { method:'POST', body:JSON.stringify(body) }) en ambas apps
+  - BUG extra: marcarSugerenciaLeida en nuevo worker no leía body (estado/respuesta)
+    · Fix: función actualizada para leer y aplicar estado y respuesta del body
+  - Workers redesplegados con binding D1 ✅
+
+v4.13  |  17/04/2026  [AMBAS APPS — nueva en v4.13, vieja en v4.12]
+  - BUG #51 (Katherine): Error al editar salidas en inventario seguridad
+    · Causa: segGuardarEdicion() enviaba { estado, destino_actual, notas } sin campo 'accion'
+    · Worker: moverItemSeg() no tenía case para edición directa → devolvía 'Acción no reconocida'
+    · Fix backend: añadida rama accion==='editar' en moverItemSeg() (ambos workers)
+      · Actualiza estado, destino_actual, notas mediante UPDATE dinámico
+    · Fix frontend: segGuardarEdicion() ahora envía accion:'editar' en el body
+    · Workers redesplegados con binding D1 ✅
 
 v4.12  |  17/04/2026  [AMBAS APPS — nueva en v4.12, vieja en v4.11]
   - #44: Ficha de máquina a pantalla completa (modal overlay con historial reciente)
@@ -503,11 +556,12 @@ Frontend (index.html + sw.js):
 
 [ SUGERENCIAS PENDIENTES — APP VIEJA (gestibobina-db) ]
 
-  ERRORES (ninguno pendiente — todos resueltos en v4.7/v4.8/v4.9)
+  ERRORES (ninguno pendiente — todos resueltos hasta v4.16)
 
   MEJORAS:
-  #44 - Ficha de máquina a pantalla completa
-  #38 - Ajustes → cerrar sesión a todos / ver quién está conectado
+  #44 ✅ - Ficha de máquina a pantalla completa (v4.12)
+  #38 ✅ - Ajustes → cerrar sesión a todos / ver quién está conectado (v4.12)
+  #54 ✅ - Editar datos en inventario de seguridad (v4.12 — fix #51)
   #15 - Pedidos en parte eléctrica + sync Sheets
 
   NUEVAS FUNCIONALIDADES:
@@ -541,6 +595,11 @@ Frontend (index.html + sw.js):
 
   - ESTADO_APP.txt se actualiza automáticamente después de cada cambio,
     sin necesidad de que el usuario lo pida
+  - version.json: archivo en cada repo que se actualiza con cada versión.
+    La app lo lee al arrancar (cache:'no-store') y si la versión difiere,
+    limpia caches y recarga sola. ACTUALIZAR SIEMPRE junto con sw.js/index.html.
+  - empresa_admin: rol de admin de empresa propia. Tiene acceso total a sus
+    datos (obras, usuarios, inventario, sesiones, ideas) pero no a config global
   - Método de trabajo: EDITS QUIRÚRGICOS sobre archivos existentes,
     NUNCA reescritura completa
   - sendBeacon debe usar Blob({type:'application/json'}) — si se pasa
