@@ -2,6 +2,7 @@
   ALEJANDRA APP — REFERENCIA COMPLETA DEL PROYECTO
   Leer este archivo AL INICIO de cada sesión para continuar sin problemas.
   Última actualización: 17/04/2026
+  ⚠️  NORMA: actualizar ESTE archivo + ESTADO_APP.txt después de CADA cambio.
 ================================================================================
 
 ================================================================================
@@ -137,9 +138,12 @@ git -c credential.helper= push https://padilla585projects:<TOKEN_GITHUB_NUEVO>@g
 ================================================================================
 
 APP VIEJA:  v4.14  (sw.js: alejandra-v4.14 | version.json: 4.14)
-APP NUEVA:  v4.16  (sw.js: alejandra-v4.16 | version.json: 4.16)
+APP NUEVA:  v4.17  (sw.js: alejandra-v4.17 | version.json: 4.17)
 
 Historial reciente:
+  v4.17 [nueva] — #52 botón ← Atrás en header + botón físico Android (popstate)
+                   #53 filtro sugerencias por departamento; departamento guardado en INSERT
+                   DB: columna departamento añadida a tabla sugerencias
   v4.16 [nueva] — empresa_admin con permisos completos (getAuth+worker+frontend)
                    Fix "Error al cargar" en panel Mi Empresa (.json() faltante)
   v4.15 [ambas] — Auto-actualización sin intervención: version.json + SW no cachea HTML
@@ -232,17 +236,18 @@ GOOGLE SHEETS:
 ✅ Wizard de registro de empresa (3 pasos: empresa → admin → obra)
 ✅ Panel Empresa en Ajustes (info, obras, usuarios)
 ✅ /empresas/registro, /mi-empresa GET/PUT
+✅ Botón ← Atrás en header (aparece en Inventario/Ajustes/Ideas)
+✅ Botón físico Android no cierra la app — navega hacia atrás dentro de ella
+✅ Sugerencias: filtro por departamento (⚡/🔧/🔺) + departamento guardado y visible
 
 ================================================================================
   PENDIENTE / PRÓXIMAS FEATURES
 ================================================================================
 
 ERRORES CONOCIDOS:
-  (ninguno pendiente — todos resueltos en v4.16)
+  (ninguno pendiente — todos resueltos en v4.17)
 
 MEJORAS PENDIENTES (app nueva):
-  #52 — Botón "atrás" en submenús
-  #53 — Filtrar sugerencias por departamento
   #15 — Pedidos en parte eléctrica + sync Sheets
 
 NUEVAS FUNCIONALIDADES (grandes):
