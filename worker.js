@@ -58,7 +58,10 @@ async function getAuth(request, env) {
           isSeguridad: sesion.departamento === 'seguridad',
           rol: sesion.rol,
           obraId: sesion.obra_id || null,
+          obra_id: sesion.obra_id || null,
+          usuario_id: sesion.usuario_id || null,
           usuario: sesion.nombre || '',
+          nombre: sesion.nombre || '',
           codigo: '',
           departamento: sesion.departamento || 'electrico',
           empresa_id: sesion.empresa_id || 1,
@@ -78,11 +81,15 @@ async function getAuth(request, env) {
   return {
     isAdmin,
     isSuperadmin,
+    isEmpresaAdmin: rol === 'empresa_admin',
     isEncargado: rol === 'encargado',
     isSeguridad: departamento === 'seguridad',
     rol: rol || (isAdmin ? 'superadmin' : null),
     obraId: obraId ? parseInt(obraId) : null,
+    obra_id: obraId ? parseInt(obraId) : null,
+    usuario_id: null,
     usuario: usuario || '',
+    nombre: usuario || '',
     codigo: codigo || '',
     departamento,
     empresa_id: 1,
@@ -292,6 +299,32 @@ export default {
         if (method === 'DELETE') return await eliminarHerramienta(hid, request, env);
       }
       if (path === '/historial-herramientas' && method === 'GET') return await getHistorialHerramientas(request, env);
+
+      // ── Personal ──────────────────────────────────────────────────────────
+      if (path === '/horarios-obra' && method === 'GET')  return await getHorariosObra(request, env);
+      if (path === '/horarios-obra' && method === 'POST') return await guardarHorarioObra(request, env);
+      if (path.startsWith('/horarios-obra/')) {
+        const hoid = parseInt(path.split('/horarios-obra/')[1]);
+        if (method === 'PUT')    return await actualizarHorarioObra(hoid, request, env);
+        if (method === 'DELETE') return await eliminarHorarioObra(hoid, request, env);
+      }
+      if (path === '/fichajes' && method === 'GET')  return await getFichajes(request, env);
+      if (path === '/fichajes' && method === 'POST') return await crearFichaje(request, env);
+      if (path.startsWith('/fichajes/')) {
+        const fid = parseInt(path.split('/fichajes/')[1]);
+        if (method === 'PUT')    return await actualizarFichaje(fid, request, env);
+        if (method === 'DELETE') return await eliminarFichaje(fid, request, env);
+      }
+      if (path === '/personal/semana' && method === 'GET') return await getResumenSemana(request, env);
+      if (path === '/personal/mes'    && method === 'GET') return await getResumenMes(request, env);
+      if (path === '/personal/trabajadores' && method === 'GET') return await getTrabajadores(request, env);
+      if (path === '/personal-externo' && method === 'GET')  return await getPersonalExterno(request, env);
+      if (path === '/personal-externo' && method === 'POST') return await crearPersonalExterno(request, env);
+      if (path.startsWith('/personal-externo/')) {
+        const peid = parseInt(path.split('/personal-externo/')[1]);
+        if (method === 'PUT')    return await actualizarPersonalExterno(peid, request, env);
+        if (method === 'DELETE') return await eliminarPersonalExterno(peid, request, env);
+      }
 
       // ── Otros (legacy/extras) ─────────────────────────────────────────────
       if (path === '/logs'         && method === 'GET')   return await getLogs(request, env);
@@ -1989,6 +2022,304 @@ async function registrarHistorialKitHerr(env, empresa_id, kit_id, herramienta_id
       'INSERT INTO historial_herramientas (empresa_id, herramienta_id, kit_id, accion, estado_anterior, estado_nuevo, usuario, notas, fecha) VALUES (?,?,?,?,?,?,?,?,?)'
     ).bind(empresa_id, herramienta_id || null, kit_id, accion, estado_anterior || null, estado_nuevo || null, usuario || null, notas || null, AHORA()).run();
   } catch {}
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// PERSONAL — Horarios, Fichajes, Resúmenes
+// ════════════════════════════════════════════════════════════════════════════
+
+function calcHoras(entrada, salida) {
+  if (!entrada || !salida) return 0;
+  const [eh, em] = entrada.split(':').map(Number);
+  const [sh, sm] = salida.split(':').map(Number);
+  const mins = (sh * 60 + sm) - (eh * 60 + em);
+  return Math.max(0, Math.round(mins / 60 * 100) / 100);
+}
+
+// ── Horarios de obra ────────────────────────────────────────────────────────
+async function getHorariosObra(request, env) {
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const url = new URL(request.url);
+  const obra_id = url.searchParams.get('obra_id');
+  let sql = 'SELECT h.*, o.nombre as obra_nombre FROM horarios_obra h LEFT JOIN obras o ON h.obra_id = o.id WHERE h.empresa_id = ?';
+  const params = [empresa_id];
+  if (obra_id) { sql += ' AND h.obra_id = ?'; params.push(parseInt(obra_id)); }
+  const { results } = await env.DB.prepare(sql).bind(...params).all();
+  return json(results);
+}
+
+async function guardarHorarioObra(request, env) {
+  const { empresa_id, rol } = await getAuth(request, env);
+  if (!empresa_id || rol === 'operario') return err('Sin permisos', 403);
+  const body = await request.json().catch(() => ({}));
+  const { obra_id, hora_entrada, hora_salida, dias_semana, notas } = body;
+  if (!hora_entrada || !hora_salida) return err('Faltan horas');
+  const horas_dia = calcHoras(hora_entrada, hora_salida);
+  // Upsert: si ya existe horario para esa obra, actualizar
+  const existe = obra_id ? await env.DB.prepare('SELECT id FROM horarios_obra WHERE empresa_id = ? AND obra_id = ?').bind(empresa_id, obra_id).first() : null;
+  if (existe) {
+    await env.DB.prepare('UPDATE horarios_obra SET hora_entrada=?,hora_salida=?,horas_dia=?,dias_semana=?,notas=? WHERE id=?')
+      .bind(hora_entrada, hora_salida, horas_dia, dias_semana||'LMXJV', notas||null, existe.id).run();
+    return json({ ok: true, id: existe.id });
+  }
+  const r = await env.DB.prepare('INSERT INTO horarios_obra (empresa_id,obra_id,hora_entrada,hora_salida,horas_dia,dias_semana,notas) VALUES (?,?,?,?,?,?,?)')
+    .bind(empresa_id, obra_id||null, hora_entrada, hora_salida, horas_dia, dias_semana||'LMXJV', notas||null).run();
+  return json({ ok: true, id: r.meta.last_row_id }, 201);
+}
+
+async function actualizarHorarioObra(id, request, env) {
+  const { empresa_id, rol } = await getAuth(request, env);
+  if (!empresa_id || rol === 'operario') return err('Sin permisos', 403);
+  const body = await request.json().catch(() => ({}));
+  const { hora_entrada, hora_salida, dias_semana, notas } = body;
+  const horas_dia = calcHoras(hora_entrada, hora_salida);
+  await env.DB.prepare('UPDATE horarios_obra SET hora_entrada=?,hora_salida=?,horas_dia=?,dias_semana=?,notas=? WHERE id=? AND empresa_id=?')
+    .bind(hora_entrada, hora_salida, horas_dia, dias_semana||'LMXJV', notas||null, id, empresa_id).run();
+  return json({ ok: true });
+}
+
+async function eliminarHorarioObra(id, request, env) {
+  const { empresa_id, rol } = await getAuth(request, env);
+  if (!empresa_id || rol === 'operario') return err('Sin permisos', 403);
+  await env.DB.prepare('DELETE FROM horarios_obra WHERE id=? AND empresa_id=?').bind(id, empresa_id).run();
+  return json({ ok: true });
+}
+
+// ── Personal externo ────────────────────────────────────────────────────────
+async function getPersonalExterno(request, env) {
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const { results } = await env.DB.prepare(
+    'SELECT p.*, o.nombre as obra_nombre FROM personal_externo p LEFT JOIN obras o ON p.obra_id = o.id WHERE p.empresa_id = ? AND p.activo = 1 ORDER BY p.nombre'
+  ).bind(empresa_id).all();
+  return json(results);
+}
+
+async function crearPersonalExterno(request, env) {
+  const { empresa_id, rol } = await getAuth(request, env);
+  if (!empresa_id || rol === 'operario') return err('Sin permisos', 403);
+  const { nombre, dni, obra_id, notas } = await request.json().catch(() => ({}));
+  if (!nombre?.trim()) return err('Falta el nombre');
+  const r = await env.DB.prepare('INSERT INTO personal_externo (empresa_id,nombre,dni,obra_id,notas) VALUES (?,?,?,?,?)')
+    .bind(empresa_id, nombre.trim(), dni?.trim()||null, obra_id||null, notas?.trim()||null).run();
+  return json({ ok: true, id: r.meta.last_row_id }, 201);
+}
+
+async function actualizarPersonalExterno(id, request, env) {
+  const { empresa_id, rol } = await getAuth(request, env);
+  if (!empresa_id || rol === 'operario') return err('Sin permisos', 403);
+  const body = await request.json().catch(() => ({}));
+  const campos = []; const vals = [];
+  if (body.nombre   !== undefined) { campos.push('nombre=?');   vals.push(body.nombre.trim()); }
+  if (body.dni      !== undefined) { campos.push('dni=?');      vals.push(body.dni?.trim()||null); }
+  if (body.obra_id  !== undefined) { campos.push('obra_id=?');  vals.push(body.obra_id||null); }
+  if (body.activo   !== undefined) { campos.push('activo=?');   vals.push(body.activo); }
+  if (body.notas    !== undefined) { campos.push('notas=?');    vals.push(body.notas?.trim()||null); }
+  if (!campos.length) return json({ ok: true });
+  vals.push(id); vals.push(empresa_id);
+  await env.DB.prepare(`UPDATE personal_externo SET ${campos.join(',')} WHERE id=? AND empresa_id=?`).bind(...vals).run();
+  return json({ ok: true });
+}
+
+async function eliminarPersonalExterno(id, request, env) {
+  const { empresa_id, rol } = await getAuth(request, env);
+  if (!empresa_id || rol === 'operario') return err('Sin permisos', 403);
+  await env.DB.prepare('UPDATE personal_externo SET activo=0 WHERE id=? AND empresa_id=?').bind(id, empresa_id).run();
+  return json({ ok: true });
+}
+
+// ── Trabajadores (usuarios app + externo) ──────────────────────────────────
+async function getTrabajadores(request, env) {
+  const { empresa_id, obra_id: obraAuth, isSuperadmin, isEmpresaAdmin, isAdmin, rol } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const url = new URL(request.url);
+  const obra_id = url.searchParams.get('obra_id') || ((!isSuperadmin && !isEmpresaAdmin && !isAdmin) ? obraAuth : null);
+
+  let sqlU = 'SELECT id, nombre, rol, departamento, obra_id, NULL as dni, "app" as tipo FROM usuarios WHERE empresa_id=? AND activo=1';
+  const paramsU = [empresa_id];
+  if (obra_id) { sqlU += ' AND obra_id=?'; paramsU.push(parseInt(obra_id)); }
+  sqlU += ' ORDER BY nombre';
+
+  let sqlP = 'SELECT id, nombre, NULL as rol, departamento, obra_id, dni, "externo" as tipo FROM personal_externo WHERE empresa_id=? AND activo=1';
+  const paramsP = [empresa_id];
+  if (obra_id) { sqlP += ' AND obra_id=?'; paramsP.push(parseInt(obra_id)); }
+  sqlP += ' ORDER BY nombre';
+
+  const [ru, rp] = await Promise.all([
+    env.DB.prepare(sqlU).bind(...paramsU).all(),
+    env.DB.prepare(sqlP).bind(...paramsP).all(),
+  ]);
+  return json([...ru.results, ...rp.results]);
+}
+
+// ── Fichajes ────────────────────────────────────────────────────────────────
+async function getFichajes(request, env) {
+  const { empresa_id, isSuperadmin, isEmpresaAdmin, isAdmin, obra_id: obraAuth, rol, usuario_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const url = new URL(request.url);
+  const fecha      = url.searchParams.get('fecha');
+  const fecha_ini  = url.searchParams.get('fecha_ini');
+  const fecha_fin  = url.searchParams.get('fecha_fin');
+  const obra_id    = url.searchParams.get('obra_id');
+  const uid        = url.searchParams.get('usuario_id');
+  const peid       = url.searchParams.get('personal_externo_id');
+
+  let sql = `SELECT f.*, u.nombre as nombre_usuario, pe.nombre as nombre_externo, o.nombre as obra_nombre
+             FROM fichajes f
+             LEFT JOIN usuarios u ON f.usuario_id = u.id
+             LEFT JOIN personal_externo pe ON f.personal_externo_id = pe.id
+             LEFT JOIN obras o ON f.obra_id = o.id
+             WHERE f.empresa_id = ?`;
+  const params = [empresa_id];
+
+  // Operario: solo ve sus propios fichajes
+  if (rol === 'operario') { sql += ' AND f.usuario_id = ?'; params.push(usuario_id); }
+  else {
+    if (uid)  { sql += ' AND f.usuario_id = ?';            params.push(parseInt(uid)); }
+    if (peid) { sql += ' AND f.personal_externo_id = ?';   params.push(parseInt(peid)); }
+    // encargado sin superadmin: solo su obra
+    if (!isSuperadmin && !isEmpresaAdmin && !isAdmin && obraAuth) {
+      sql += ' AND f.obra_id = ?'; params.push(obraAuth);
+    } else if (obra_id) {
+      sql += ' AND f.obra_id = ?'; params.push(parseInt(obra_id));
+    }
+  }
+  if (fecha)     { sql += ' AND f.fecha = ?';        params.push(fecha); }
+  if (fecha_ini) { sql += ' AND f.fecha >= ?';       params.push(fecha_ini); }
+  if (fecha_fin) { sql += ' AND f.fecha <= ?';       params.push(fecha_fin); }
+  sql += ' ORDER BY f.fecha DESC, f.hora_entrada ASC LIMIT 500';
+  const { results } = await env.DB.prepare(sql).bind(...params).all();
+  return json(results);
+}
+
+async function crearFichaje(request, env) {
+  const { empresa_id, rol, nombre: encargadoNombre, obra_id: obraAuth, isSuperadmin, isEmpresaAdmin, isAdmin } = await getAuth(request, env);
+  if (!empresa_id || rol === 'operario') return err('Sin permisos', 403);
+  const body = await request.json().catch(() => ({}));
+  const { usuario_id, personal_externo_id, obra_id, fecha, hora_entrada, hora_salida, estado, motivo, notas } = body;
+  if (!fecha) return err('Falta la fecha');
+  if (!usuario_id && !personal_externo_id) return err('Falta el trabajador');
+
+  // Verificar duplicado
+  const dup = await env.DB.prepare(
+    'SELECT id FROM fichajes WHERE empresa_id=? AND fecha=? AND (usuario_id=? OR personal_externo_id=?)'
+  ).bind(empresa_id, fecha, usuario_id||null, personal_externo_id||null).first();
+  if (dup) return err('Ya existe un fichaje para este trabajador en esta fecha', 409);
+
+  const horas = calcHoras(hora_entrada, hora_salida);
+  // Calcular horas extra según horario de obra
+  let horas_extra = 0;
+  if (horas > 0 && obra_id) {
+    const horario = await env.DB.prepare('SELECT horas_dia FROM horarios_obra WHERE empresa_id=? AND obra_id=?').bind(empresa_id, obra_id||obraAuth).first();
+    if (horario) horas_extra = Math.max(0, Math.round((horas - horario.horas_dia) * 100) / 100);
+  }
+
+  const r = await env.DB.prepare(
+    'INSERT INTO fichajes (empresa_id,usuario_id,personal_externo_id,obra_id,fecha,hora_entrada,hora_salida,horas_trabajadas,horas_extra,estado,motivo,notas,registrado_por) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)'
+  ).bind(empresa_id, usuario_id||null, personal_externo_id||null, obra_id||obraAuth||null, fecha,
+    hora_entrada||null, hora_salida||null, horas, horas_extra,
+    estado||'presente', motivo?.trim()||null, notas?.trim()||null, encargadoNombre||rol
+  ).run();
+  return json({ ok: true, id: r.meta.last_row_id }, 201);
+}
+
+async function actualizarFichaje(id, request, env) {
+  const { empresa_id, rol, nombre: encargadoNombre, obra_id: obraAuth } = await getAuth(request, env);
+  if (!empresa_id || rol === 'operario') return err('Sin permisos', 403);
+  const body = await request.json().catch(() => ({}));
+  const campos = []; const vals = [];
+  if (body.hora_entrada !== undefined) { campos.push('hora_entrada=?'); vals.push(body.hora_entrada||null); }
+  if (body.hora_salida  !== undefined) { campos.push('hora_salida=?');  vals.push(body.hora_salida||null); }
+  if (body.obra_id      !== undefined) { campos.push('obra_id=?');      vals.push(body.obra_id||null); }
+  if (body.estado       !== undefined) { campos.push('estado=?');       vals.push(body.estado); }
+  if (body.motivo       !== undefined) { campos.push('motivo=?');       vals.push(body.motivo?.trim()||null); }
+  if (body.notas        !== undefined) { campos.push('notas=?');        vals.push(body.notas?.trim()||null); }
+
+  // Recalcular horas si cambian
+  if (body.hora_entrada !== undefined || body.hora_salida !== undefined) {
+    const f = await env.DB.prepare('SELECT * FROM fichajes WHERE id=? AND empresa_id=?').bind(id, empresa_id).first();
+    if (f) {
+      const ent = body.hora_entrada ?? f.hora_entrada;
+      const sal = body.hora_salida  ?? f.hora_salida;
+      const horas = calcHoras(ent, sal);
+      campos.push('horas_trabajadas=?'); vals.push(horas);
+      const horario = await env.DB.prepare('SELECT horas_dia FROM horarios_obra WHERE empresa_id=? AND obra_id=?').bind(empresa_id, f.obra_id).first();
+      const horas_extra = horario ? Math.max(0, Math.round((horas - horario.horas_dia)*100)/100) : 0;
+      campos.push('horas_extra=?'); vals.push(horas_extra);
+    }
+  }
+  if (!campos.length) return json({ ok: true });
+  vals.push(id); vals.push(empresa_id);
+  await env.DB.prepare(`UPDATE fichajes SET ${campos.join(',')} WHERE id=? AND empresa_id=?`).bind(...vals).run();
+  return json({ ok: true });
+}
+
+async function eliminarFichaje(id, request, env) {
+  const { empresa_id, rol } = await getAuth(request, env);
+  if (!empresa_id || rol === 'operario') return err('Sin permisos', 403);
+  await env.DB.prepare('DELETE FROM fichajes WHERE id=? AND empresa_id=?').bind(id, empresa_id).run();
+  return json({ ok: true });
+}
+
+// ── Resúmenes ────────────────────────────────────────────────────────────────
+async function getResumenSemana(request, env) {
+  const { empresa_id, isSuperadmin, isEmpresaAdmin, isAdmin, obra_id: obraAuth, rol, usuario_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const url = new URL(request.url);
+  // lunes de la semana pedida
+  const lunes = url.searchParams.get('lunes'); // formato YYYY-MM-DD
+  const obra_id = url.searchParams.get('obra_id');
+  if (!lunes) return err('Falta el parámetro lunes');
+
+  // Calcular domingo
+  const d = new Date(lunes + 'T00:00:00Z');
+  const domingo = new Date(d); domingo.setUTCDate(d.getUTCDate() + 6);
+  const domStr = domingo.toISOString().slice(0, 10);
+
+  let sql = `SELECT f.*, u.nombre as nombre_usuario, pe.nombre as nombre_externo
+             FROM fichajes f
+             LEFT JOIN usuarios u ON f.usuario_id = u.id
+             LEFT JOIN personal_externo pe ON f.personal_externo_id = pe.id
+             WHERE f.empresa_id=? AND f.fecha>=? AND f.fecha<=?`;
+  const params = [empresa_id, lunes, domStr];
+  if (rol === 'operario') { sql += ' AND f.usuario_id=?'; params.push(usuario_id); }
+  else if (!isSuperadmin && !isEmpresaAdmin && !isAdmin && obraAuth) {
+    sql += ' AND f.obra_id=?'; params.push(obraAuth);
+  } else if (obra_id) {
+    sql += ' AND f.obra_id=?'; params.push(parseInt(obra_id));
+  }
+  sql += ' ORDER BY f.fecha ASC';
+  const { results } = await env.DB.prepare(sql).bind(...params).all();
+  return json({ lunes, domingo: domStr, fichajes: results });
+}
+
+async function getResumenMes(request, env) {
+  const { empresa_id, isSuperadmin, isEmpresaAdmin, isAdmin, obra_id: obraAuth, rol, usuario_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const url = new URL(request.url);
+  const anio = url.searchParams.get('anio') || new Date().getFullYear();
+  const mes  = url.searchParams.get('mes')  || (new Date().getMonth() + 1);
+  const obra_id = url.searchParams.get('obra_id');
+  const mesStr = String(mes).padStart(2, '0');
+  const inicio = `${anio}-${mesStr}-01`;
+  const fin    = `${anio}-${mesStr}-31`;
+
+  let sql = `SELECT f.*, u.nombre as nombre_usuario, pe.nombre as nombre_externo
+             FROM fichajes f
+             LEFT JOIN usuarios u ON f.usuario_id = u.id
+             LEFT JOIN personal_externo pe ON f.personal_externo_id = pe.id
+             WHERE f.empresa_id=? AND f.fecha>=? AND f.fecha<=?`;
+  const params = [empresa_id, inicio, fin];
+  if (rol === 'operario') { sql += ' AND f.usuario_id=?'; params.push(usuario_id); }
+  else if (!isSuperadmin && !isEmpresaAdmin && !isAdmin && obraAuth) {
+    sql += ' AND f.obra_id=?'; params.push(obraAuth);
+  } else if (obra_id) {
+    sql += ' AND f.obra_id=?'; params.push(parseInt(obra_id));
+  }
+  sql += ' ORDER BY f.fecha ASC, f.hora_entrada ASC';
+  const { results } = await env.DB.prepare(sql).bind(...params).all();
+  return json({ anio, mes, fichajes: results });
 }
 
 // ════════════════════════════════════════════════════════════════════════════

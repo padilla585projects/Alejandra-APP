@@ -523,12 +523,27 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
         </div>
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="color:var(--muted)"><path d="m9 18 6-6-6-6"/></svg>
       </div>
+      <div class="dept-card" onclick="seleccionarDepto('personal')">
+        <div class="dept-icon-wrap">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="52" height="52">
+            <circle cx="38" cy="30" r="14" fill="#6366f1"/>
+            <circle cx="66" cy="36" r="11" fill="#818cf8" opacity=".85"/>
+            <path d="M10 80 Q10 58 38 58 Q66 58 66 80Z" fill="#6366f1"/>
+            <path d="M55 80 Q55 63 66 63 Q84 63 84 80Z" fill="#818cf8" opacity=".85"/>
+          </svg>
+        </div>
+        <div style="flex:1">
+          <div class="dept-name">Personal</div>
+          <div class="dept-desc">Fichajes · Horarios · Asistencia</div>
+        </div>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="color:var(--muted)"><path d="m9 18 6-6-6-6"/></svg>
+      </div>
     </div>
   </div>
 
   <!-- HOME SCREEN -->
   <div id="screenHome" class="screen flex-screen active" style="padding:0;height:100%;position:relative">
-    <div style="position:absolute;bottom:8px;right:12px;font-family:'Montserrat',sans-serif;font-size:9px;color:var(--muted);opacity:.5;z-index:10;pointer-events:none">v4.19</div>
+    <div style="position:absolute;bottom:8px;right:12px;font-family:'Montserrat',sans-serif;font-size:9px;color:var(--muted);opacity:.5;z-index:10;pointer-events:none">v4.20</div>
     <div class="module-grid" style="flex:1">
       <div class="module-card" id="cardBobinas" onclick="selectModule('bobinas')">
         <div class="module-emoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="52" height="52"><rect x="28" y="38" width="44" height="32" rx="3" fill="#8B6914"/><rect x="28" y="38" width="8" height="32" rx="1" fill="#A07820" opacity="0.6"/><rect x="37" y="38" width="8" height="32" rx="1" fill="#7a5c10" opacity="0.4"/><rect x="46" y="38" width="8" height="32" rx="1" fill="#A07820" opacity="0.5"/><rect x="55" y="38" width="8" height="32" rx="1" fill="#7a5c10" opacity="0.4"/><rect x="64" y="38" width="8" height="32" rx="1" fill="#A07820" opacity="0.3"/><ellipse cx="50" cy="70" rx="30" ry="8" fill="#9B7420"/><ellipse cx="50" cy="70" rx="30" ry="8" fill="none" stroke="#7a5c10" stroke-width="1"/><line x1="22" y1="68" x2="78" y2="68" stroke="#7a5c10" stroke-width="0.8" opacity="0.5"/><line x1="24" y1="72" x2="76" y2="72" stroke="#c49530" stroke-width="0.6" opacity="0.4"/><circle cx="32" cy="70" r="1.5" fill="#f97316"/><circle cx="50" cy="70" r="1.5" fill="#f97316"/><circle cx="68" cy="70" r="1.5" fill="#f97316"/><ellipse cx="50" cy="36" rx="32" ry="10" fill="#C4A030"/><line x1="20" y1="34" x2="80" y2="34" stroke="#9B7820" stroke-width="1" opacity="0.7"/><line x1="20" y1="36" x2="80" y2="36" stroke="#e8c060" stroke-width="0.8" opacity="0.4"/><line x1="20" y1="38" x2="80" y2="38" stroke="#9B7820" stroke-width="1" opacity="0.5"/><ellipse cx="50" cy="35" rx="32" ry="10" fill="none" stroke="#e8c870" stroke-width="0.8" opacity="0.5"/><circle cx="30" cy="35" r="2" fill="#f97316" stroke="#c97316" stroke-width="0.5"/><circle cx="50" cy="32" r="2" fill="#f97316" stroke="#c97316" stroke-width="0.5"/><circle cx="70" cy="35" r="2" fill="#f97316" stroke="#c97316" stroke-width="0.5"/><circle cx="50" cy="39" r="2" fill="#f97316" stroke="#c97316" stroke-width="0.5"/><ellipse cx="50" cy="36" rx="5" ry="3" fill="#3a2a08"/><ellipse cx="50" cy="35.5" rx="4" ry="2" fill="#1a1208"/></svg></div>
@@ -1506,6 +1521,112 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
     </div>
   </div>
 
+  <!-- ══════════════════════════════════════════
+       PERSONAL
+  ══════════════════════════════════════════ -->
+  <div id="screenPersonal" class="screen" style="padding:0;display:none;flex-direction:column">
+    <!-- Tabs -->
+    <div class="mod-tabs" style="flex-shrink:0">
+      <button class="mod-tab-btn active" id="perTab0" onclick="personalSelTab(0)">📋 Hoy</button>
+      <button class="mod-tab-btn"        id="perTab1" onclick="personalSelTab(1)">📅 Semana</button>
+      <button class="mod-tab-btn"        id="perTab2" onclick="personalSelTab(2)">📊 Resumen</button>
+    </div>
+
+    <!-- TAB 0: HOY -->
+    <div id="perPanelHoy" style="display:flex;flex-direction:column;flex:1;overflow:hidden">
+      <div style="padding:10px 14px 8px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;align-items:center;gap:8px">
+        <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:13px;color:var(--accent)" id="perHoyFechaLabel">—</div>
+        <div style="flex:1"></div>
+        <button id="btnExportHoy" onclick="exportarFichajesHoy()" style="padding:5px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:'Montserrat',sans-serif;font-weight:700;font-size:10px;cursor:pointer;letter-spacing:.5px">📊 EXCEL</button>
+      </div>
+      <div id="perListaHoy" style="padding:10px 14px 80px;overflow-y:auto;flex:1">
+        <div class="empty-state">Cargando...</div>
+      </div>
+    </div>
+
+    <!-- TAB 1: SEMANA -->
+    <div id="perPanelSemana" style="display:none;flex-direction:column;flex:1;overflow:hidden">
+      <div style="padding:10px 14px 8px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;align-items:center;gap:8px">
+        <button onclick="perNavSemana(-1)" style="background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer;padding:0 4px;font-family:'Montserrat',sans-serif;font-weight:900">‹</button>
+        <div style="flex:1;text-align:center;font-family:'Montserrat',sans-serif;font-weight:900;font-size:12px;color:var(--accent)" id="perSemLabel">—</div>
+        <button onclick="perNavSemana(+1)" style="background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer;padding:0 4px;font-family:'Montserrat',sans-serif;font-weight:900">›</button>
+        <button onclick="exportarSemana()" style="padding:5px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:'Montserrat',sans-serif;font-weight:700;font-size:10px;cursor:pointer;letter-spacing:.5px">📊 EXCEL</button>
+      </div>
+      <div id="perListaSemana" style="padding:10px 14px 80px;overflow-y:auto;flex:1">
+        <div class="empty-state">Cargando...</div>
+      </div>
+    </div>
+
+    <!-- TAB 2: RESUMEN MENSUAL -->
+    <div id="perPanelResumen" style="display:none;flex-direction:column;flex:1;overflow:hidden">
+      <div style="padding:10px 14px 8px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;align-items:center;gap:8px">
+        <button onclick="perNavMes(-1)" style="background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer;padding:0 4px;font-family:'Montserrat',sans-serif;font-weight:900">‹</button>
+        <div style="flex:1;text-align:center;font-family:'Montserrat',sans-serif;font-weight:900;font-size:12px;color:var(--accent)" id="perMesLabel">—</div>
+        <button onclick="perNavMes(+1)" style="background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer;padding:0 4px;font-family:'Montserrat',sans-serif;font-weight:900">›</button>
+        <button onclick="exportarMes()" style="padding:5px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:'Montserrat',sans-serif;font-weight:700;font-size:10px;cursor:pointer;letter-spacing:.5px">📊 EXCEL</button>
+      </div>
+      <div id="perListaResumen" style="padding:10px 14px 80px;overflow-y:auto;flex:1">
+        <div class="empty-state">Cargando...</div>
+      </div>
+    </div>
+
+    <!-- FAB: Nuevo fichaje (solo admin/encargado) -->
+    <button id="btnNuevoFichaje" onclick="abrirFormFichaje()"
+      style="position:fixed;bottom:72px;right:16px;width:52px;height:52px;border-radius:50%;background:var(--accent);border:none;font-size:26px;cursor:pointer;box-shadow:0 4px 14px rgba(249,115,22,.5);z-index:200;display:none;align-items:center;justify-content:center">+</button>
+  </div>
+
+  <!-- Modal: Nuevo/Editar Fichaje -->
+  <div class="modal-overlay" id="modalFichaje" onclick="if(event.target===this)cerrarFormFichaje()">
+    <div class="modal" style="max-height:90vh;overflow-y:auto">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px">
+        <div class="modal-title" style="margin-bottom:0;flex:1" id="modalFichajeTitulo">Nuevo Fichaje</div>
+        <button onclick="cerrarFormFichaje()" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--muted)">×</button>
+      </div>
+      <input type="hidden" id="fichajeEditId">
+      <div class="form-group">
+        <label class="form-label">Trabajador *</label>
+        <select class="form-input" id="fichajeTrabajador"><option value="">— Selecciona —</option></select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Fecha *</label>
+        <input class="form-input" id="fichajeFecha" type="date">
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div class="form-group">
+          <label class="form-label">Hora entrada</label>
+          <input class="form-input" id="fichajeEntrada" type="time">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Hora salida</label>
+          <input class="form-input" id="fichajeSalida" type="time">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Estado</label>
+        <select class="form-input" id="fichajeEstado">
+          <option value="presencia">✅ Presencia</option>
+          <option value="ausencia">🔴 Ausencia</option>
+          <option value="retraso">⏰ Retraso</option>
+          <option value="baja">🏥 Baja</option>
+          <option value="vacaciones">🏖️ Vacaciones</option>
+          <option value="festivo">🎉 Festivo</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Obra</label>
+        <select class="form-input" id="fichajeObra"><option value="">— Sin obra —</option></select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Notas</label>
+        <textarea id="fichajeNotas" rows="2" style="width:100%;padding:10px;background:var(--surface);border:1px solid var(--border);border-radius:10px;color:var(--text);font-family:'Poppins',sans-serif;font-size:14px;resize:vertical;outline:none;box-sizing:border-box"></textarea>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-primary" style="flex:1" onclick="guardarFichaje()">💾 Guardar</button>
+        <button class="btn-primary btn-secondary" style="flex:0 0 90px;margin-top:0" onclick="cerrarFormFichaje()">Cancelar</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Modal: Nuevo/Editar Pedido -->
   <div class="modal-overlay" id="modalPedido" onclick="if(event.target===this)cerrarFormPedido()">
     <div class="modal" style="max-height:90vh;overflow-y:auto">
@@ -1981,6 +2102,11 @@ async function iniciarApp() {
     cargarCatalogos();
     return;
   }
+  if (s.departamento === 'personal') {
+    showScreen('personal');
+    personalSelTab(0);
+    return;
+  }
 
   showScreen('home');
   await cargarStatsHome();
@@ -2003,6 +2129,7 @@ const DEPT_INFO = {
   electrico:  { icon: '⚡', name: 'Eléctrico' },
   mecanicas:  { icon: '🔧', name: 'Mecánicas' },
   seguridad:  { icon: '🔺', name: 'Seguridad' },
+  personal:   { icon: '👷', name: 'Personal' },
 };
 
 function renderHeader() {
@@ -2097,6 +2224,11 @@ function seleccionarDepto(dept) {
     cargarCatalogos();
     return;
   }
+  if (dept === 'personal') {
+    showScreen('personal');
+    personalSelTab(0);
+    return;
+  }
   showScreen('home');
   cargarStatsHome();
   cargarCatalogos();
@@ -2169,7 +2301,7 @@ function actualizarBtnAtras() {
   if (!btn) return;
   const s = getSession();
   if (!s) { btn.style.display = 'none'; return; }
-  const subPantallas = ['screenModule','screenAjustes','screenSugerencias','screenPedidos','screenHerramientas'];
+  const subPantallas = ['screenModule','screenAjustes','screenSugerencias','screenPedidos','screenHerramientas','screenPersonal'];
   const enSub = subPantallas.some(id => document.getElementById(id)?.classList.contains('active'));
   // Seguridad para superadmin/empresa_admin: pueden volver al selector de dpto
   const enSegAdmin = document.getElementById('screenSeguridad')?.classList.contains('active')
@@ -2217,6 +2349,12 @@ function navTo(target) {
   if (target === 'herramientas') {
     showScreen('herramientas');
     herrSelTab(0);
+    actualizarBtnAtras();
+    return;
+  }
+  if (target === 'personal') {
+    showScreen('personal');
+    personalSelTab(0);
     actualizarBtnAtras();
     return;
   }
@@ -4828,7 +4966,7 @@ async function cargarObrasSelectUsuario() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '4.19';
+const APP_VERSION = '4.20';
 let _actualizando = false;
 
 async function checkVersionAndUpdate() {
@@ -5483,6 +5621,484 @@ if ('serviceWorker' in navigator) {
       toast('🗑️ Pedido eliminado');
       cargarPedidos();
     } catch { toast('❌ Error de red', 'err'); }
+  }
+
+  // ══════════════════════════════════════════════════════
+  // PERSONAL
+  // ══════════════════════════════════════════════════════
+
+  // Estado: offset semana/mes, caché trabajadores
+  window._perSemOffset = 0;   // 0 = semana actual, -1 = anterior, etc.
+  window._perMesOffset = 0;
+  window._perTrabajadores = [];
+
+  // ── Utilidades de fecha ──
+  function perFechaHoy() {
+    return new Date().toISOString().slice(0,10);
+  }
+
+  function perLunes(offset) {
+    const d = new Date();
+    const day = d.getDay() || 7;
+    d.setDate(d.getDate() - day + 1 + offset * 7);
+    return d.toISOString().slice(0,10);
+  }
+
+  function perDomingo(offset) {
+    const d = new Date();
+    const day = d.getDay() || 7;
+    d.setDate(d.getDate() - day + 7 + offset * 7);
+    return d.toISOString().slice(0,10);
+  }
+
+  function perMesYM(offset) {
+    const d = new Date();
+    d.setDate(1);
+    d.setMonth(d.getMonth() + offset);
+    return { anio: d.getFullYear(), mes: d.getMonth() + 1 };
+  }
+
+  function perNombreMes(offset) {
+    const meses = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+    const d = new Date();
+    d.setMonth(d.getMonth() + offset);
+    return meses[d.getMonth()] + ' ' + d.getFullYear();
+  }
+
+  function perFmtFecha(iso) {
+    if (!iso) return '—';
+    const [y,m,dd] = iso.split('-');
+    return `${dd}/${m}/${y}`;
+  }
+
+  function perFmtHora(str) {
+    if (!str) return '—';
+    return str.slice(0,5);
+  }
+
+  // nombre display: worker returns nombre_usuario (app user) or nombre_externo (external)
+  function perNombre(f) {
+    return f.nombre_usuario || f.nombre_externo || '—';
+  }
+
+  // worker-side trabajador id key (usuario_id or personal_externo_id)
+  function perTrabId(f) {
+    return f.usuario_id ? `u${f.usuario_id}` : `e${f.personal_externo_id}`;
+  }
+
+  function perTipoLabel(tipo) {
+    return {
+      presencia:   '✅ Presencia',
+      presente:    '✅ Presente',
+      ausencia:    '🔴 Ausencia',
+      retraso:     '⏰ Retraso',
+      baja:        '🏥 Baja',
+      vacaciones:  '🏖️ Vacaciones',
+      festivo:     '🎉 Festivo',
+    }[tipo] || (tipo || '—');
+  }
+
+  function perTipoColor(tipo) {
+    return {
+      presencia:  'var(--green)',
+      presente:   'var(--green)',
+      ausencia:   'var(--red)',
+      retraso:    '#f59e0b',
+      baja:       '#8b5cf6',
+      vacaciones: '#0ea5e9',
+      festivo:    '#ec4899',
+    }[tipo] || 'var(--muted)';
+  }
+
+  // ── Tab selector ──
+  function personalSelTab(n) {
+    [0,1,2].forEach(i => {
+      const btn = document.getElementById('perTab'+i);
+      if (btn) btn.classList.toggle('active', i===n);
+    });
+    const panels = ['perPanelHoy','perPanelSemana','perPanelResumen'];
+    panels.forEach((id,i) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.style.display = (i===n) ? 'flex' : 'none';
+      el.style.flexDirection = 'column';
+    });
+    const fab = document.getElementById('btnNuevoFichaje');
+    const s = getSession();
+    if (fab) fab.style.display = (s?.rol !== 'operario') ? 'flex' : 'none';
+    if (n===0) cargarHoy();
+    if (n===1) cargarSemana();
+    if (n===2) cargarResumenMes();
+  }
+
+  // ── Cargar trabajadores (cache) ──
+  async function perCargarTrabajadores() {
+    try {
+      const res = await apiCall('/personal/trabajadores', {});
+      if (!res.ok) return [];
+      const data = await res.json();
+      // worker returns plain array
+      const lista = Array.isArray(data) ? data : (data.trabajadores || []);
+      window._perTrabajadores = lista.map(t => ({ ...t, es_externo: t.tipo === 'externo' }));
+    } catch { window._perTrabajadores = []; }
+    return window._perTrabajadores;
+  }
+
+  // ── TAB 0: HOY ──
+  async function cargarHoy() {
+    const c = document.getElementById('perListaHoy');
+    const lbl = document.getElementById('perHoyFechaLabel');
+    const hoy = perFechaHoy();
+    if (lbl) {
+      const [y,m,d] = hoy.split('-');
+      lbl.textContent = `${d}/${m}/${y} — Fichajes de hoy`;
+    }
+    if (!c) return;
+    c.innerHTML = '<div class="empty-state">Cargando...</div>';
+    try {
+      const res = await apiCall(`/fichajes?fecha_ini=${hoy}&fecha_fin=${hoy}`, {});
+      if (!res.ok) { c.innerHTML = '<div class="empty-state">Error al cargar</div>'; return; }
+      const data = await res.json();
+      // getFichajes returns plain array
+      renderFichajeDia(c, Array.isArray(data) ? data : (data.fichajes || []), hoy);
+    } catch { c.innerHTML = '<div class="empty-state">Error de red</div>'; }
+  }
+
+  function renderFichajeDia(container, fichajes, fecha) {
+    const s = getSession();
+    const esAdmin = s?.rol !== 'operario';
+    if (!fichajes.length) {
+      container.innerHTML = '<div class="empty-state">Sin fichajes registrados hoy</div>' +
+        (esAdmin ? `<div style="text-align:center;margin-top:10px"><button onclick="abrirFormFichaje('${fecha}')" style="padding:10px 20px;background:var(--accent);border:none;border-radius:8px;color:#000;font-family:'Montserrat',sans-serif;font-weight:900;font-size:12px;cursor:pointer">+ AÑADIR FICHAJE</button></div>` : '');
+      return;
+    }
+    container.innerHTML = fichajes.map(f => {
+      const nombre = perNombre(f);
+      const tc = perTipoColor(f.estado);
+      const horas = f.horas_trabajadas != null ? `<span style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:13px;color:var(--accent)">${parseFloat(f.horas_trabajadas).toFixed(1)}h</span>` : '';
+      const extra = f.horas_extra > 0 ? `<span style="font-size:10px;color:#f59e0b;margin-left:4px">+${parseFloat(f.horas_extra).toFixed(1)}h extra</span>` : '';
+      const edit = esAdmin ? `<div style="display:flex;gap:6px;margin-top:8px">
+        <button onclick="editarFichaje(${f.id})" style="padding:4px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:11px;cursor:pointer;font-family:'Montserrat',sans-serif;font-weight:700">✏️ Editar</button>
+        <button onclick="eliminarFichaje(${f.id})" style="padding:4px 10px;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:6px;color:var(--red);font-size:11px;cursor:pointer;font-family:'Montserrat',sans-serif;font-weight:700">🗑️</button>
+      </div>` : '';
+      return `<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:8px">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+          <div style="width:10px;height:10px;border-radius:50%;background:${tc};flex-shrink:0"></div>
+          <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:14px;flex:1">${nombre}</div>
+          <div style="font-size:11px;padding:2px 8px;border-radius:10px;background:rgba(0,0,0,.2);color:${tc}">${perTipoLabel(f.estado)}</div>
+        </div>
+        <div style="display:flex;gap:16px;font-size:12px;color:var(--muted)">
+          <span>🕐 ${perFmtHora(f.hora_entrada)} → ${perFmtHora(f.hora_salida)}</span>
+          ${horas}${extra}
+        </div>
+        ${f.notas ? `<div style="font-size:11px;color:var(--muted);margin-top:4px">📝 ${f.notas}</div>` : ''}
+        ${edit}
+      </div>`;
+    }).join('');
+  }
+
+  // ── TAB 1: SEMANA ──
+  async function cargarSemana() {
+    const lbl = document.getElementById('perSemLabel');
+    const ini = perLunes(window._perSemOffset);
+    const fin = perDomingo(window._perSemOffset);
+    if (lbl) lbl.textContent = `Semana ${perFmtFecha(ini)} – ${perFmtFecha(fin)}`;
+    const c = document.getElementById('perListaSemana');
+    if (!c) return;
+    c.innerHTML = '<div class="empty-state">Cargando...</div>';
+    try {
+      // worker returns { lunes, domingo, fichajes: [...raw fichajes...] }
+      const res = await apiCall(`/personal/semana?lunes=${ini}`, {});
+      if (!res.ok) { c.innerHTML = '<div class="empty-state">Error al cargar</div>'; return; }
+      const data = await res.json();
+      const fichajes = data.fichajes || [];
+      renderSemana(c, fichajes, ini);
+    } catch { c.innerHTML = '<div class="empty-state">Error de red</div>'; }
+  }
+
+  function perNavSemana(dir) {
+    window._perSemOffset += dir;
+    cargarSemana();
+  }
+
+  // Agrega fichajes brutos en vista semanal (por trabajador × día)
+  function renderSemana(container, fichajes, lunes) {
+    if (!fichajes.length) { container.innerHTML = '<div class="empty-state">Sin datos esta semana</div>'; return; }
+    const dias = ['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
+    // Agrupar por trabajador
+    const map = {};
+    fichajes.forEach(f => {
+      const key = perTrabId(f);
+      if (!map[key]) map[key] = { nombre: perNombre(f), dias: {} };
+      map[key].dias[f.fecha] = f;
+    });
+    const lunD = new Date(lunes + 'T12:00:00');
+    container.innerHTML = Object.values(map).map(trab => {
+      let total = 0;
+      const celdas = dias.map((d,i) => {
+        const fecha = new Date(lunD); fecha.setDate(lunD.getDate() + i);
+        const fStr = fecha.toISOString().slice(0,10);
+        const f = trab.dias[fStr];
+        const h = f?.horas_trabajadas ? parseFloat(f.horas_trabajadas) : null;
+        if (h) total += h;
+        const col = f?.estado === 'ausencia' ? 'var(--red)' : f?.estado === 'presencia' ? 'var(--green)' : h ? 'var(--accent)' : 'var(--muted)';
+        return `<div style="text-align:center">
+          <div style="font-size:9px;color:var(--muted);font-family:'Montserrat',sans-serif;font-weight:700">${d}</div>
+          <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:13px;color:${col}">${h ? h.toFixed(1) : '—'}</div>
+        </div>`;
+      }).join('');
+      return `<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:8px">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+          <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:14px;flex:1">${trab.nombre}</div>
+          <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:14px;color:var(--accent)">${total.toFixed(1)}h</div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px">${celdas}</div>
+      </div>`;
+    }).join('');
+  }
+
+  // ── TAB 2: RESUMEN MENSUAL ──
+  async function cargarResumenMes() {
+    const lbl = document.getElementById('perMesLabel');
+    if (lbl) lbl.textContent = perNombreMes(window._perMesOffset);
+    const c = document.getElementById('perListaResumen');
+    if (!c) return;
+    c.innerHTML = '<div class="empty-state">Cargando...</div>';
+    const { anio, mes } = perMesYM(window._perMesOffset);
+    try {
+      // worker uses ?anio=&mes= params, returns { fichajes: [...] }
+      const res = await apiCall(`/personal/mes?anio=${anio}&mes=${mes}`, {});
+      if (!res.ok) { c.innerHTML = '<div class="empty-state">Error al cargar</div>'; return; }
+      const data = await res.json();
+      const fichajes = data.fichajes || [];
+      renderResumenMes(c, fichajes);
+    } catch { c.innerHTML = '<div class="empty-state">Error de red</div>'; }
+  }
+
+  function perNavMes(dir) {
+    window._perMesOffset += dir;
+    cargarResumenMes();
+  }
+
+  // Agrega fichajes brutos en resumen mensual por trabajador
+  function renderResumenMes(container, fichajes) {
+    if (!fichajes.length) { container.innerHTML = '<div class="empty-state">Sin datos este mes</div>'; return; }
+    // Agrupar por trabajador
+    const map = {};
+    fichajes.forEach(f => {
+      const key = perTrabId(f);
+      if (!map[key]) map[key] = { nombre: perNombre(f), horas_totales:0, horas_extra:0, dias_presencia:0, dias_ausencia:0, dias_baja:0, fechas: new Set() };
+      const t = map[key];
+      if (!t.fechas.has(f.fecha)) {
+        t.fechas.add(f.fecha);
+        if (['presencia','presente','retraso'].includes(f.estado)) t.dias_presencia++;
+        else if (f.estado === 'ausencia') t.dias_ausencia++;
+        else if (f.estado === 'baja') t.dias_baja++;
+      }
+      t.horas_totales += parseFloat(f.horas_trabajadas || 0);
+      t.horas_extra   += parseFloat(f.horas_extra || 0);
+    });
+    container.innerHTML = Object.values(map).map(t => {
+      const diasTot = t.dias_presencia + t.dias_ausencia + t.dias_baja;
+      const pct = diasTot > 0 ? Math.round((t.dias_presencia / diasTot) * 100) : 0;
+      return `<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:8px">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+          <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:15px;flex:1">${t.nombre}</div>
+          <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:16px;color:var(--accent)">${t.horas_totales.toFixed(1)}h</div>
+        </div>
+        <div style="display:flex;gap:12px;font-size:12px;color:var(--muted);flex-wrap:wrap">
+          <span>✅ Presencias: <b style="color:var(--green)">${t.dias_presencia}</b></span>
+          <span>🔴 Ausencias: <b style="color:var(--red)">${t.dias_ausencia}</b></span>
+          <span>🏥 Bajas: <b style="color:#8b5cf6">${t.dias_baja}</b></span>
+          <span>⏰ Extra: <b style="color:#f59e0b">${t.horas_extra.toFixed(1)}h</b></span>
+        </div>
+        <div style="margin-top:8px;height:6px;background:var(--surface2);border-radius:4px;overflow:hidden">
+          <div style="width:${pct}%;height:100%;background:var(--green);transition:width .3s"></div>
+        </div>
+        <div style="font-size:10px;color:var(--muted);margin-top:3px;text-align:right">${pct}% asistencia</div>
+      </div>`;
+    }).join('');
+  }
+
+  // ── Modal Fichaje ──
+  async function abrirFormFichaje(fechaPre) {
+    const s = getSession();
+    // Cargar trabajadores si no están en cache
+    if (!window._perTrabajadores.length) await perCargarTrabajadores();
+    // Poblar select trabajadores
+    const sel = document.getElementById('fichajeTrabajador');
+    if (sel) {
+      sel.innerHTML = '<option value="">— Selecciona —</option>' +
+        window._perTrabajadores.map(t => `<option value="${t.id}_${t.tipo||'app'}">${t.nombre}${t.es_externo?' (Ext)':''}</option>`).join('');
+      if (s?.rol === 'operario') {
+        sel.value = `${s.usuario_id}_app`;
+        sel.disabled = true;
+      } else {
+        sel.disabled = false;
+      }
+    }
+    document.getElementById('fichajeFecha').value = fechaPre || perFechaHoy();
+    document.getElementById('fichajeEntrada').value = '';
+    document.getElementById('fichajeSalida').value = '';
+    document.getElementById('fichajeEstado').value = 'presencia';
+    document.getElementById('fichajeNotas').value = '';
+    document.getElementById('fichajeEditId').value = '';
+    document.getElementById('modalFichajeTitulo').textContent = 'Nuevo Fichaje';
+    // Poblar obras
+    const obrasSel = document.getElementById('fichajeObra');
+    if (obrasSel && window._obras) {
+      obrasSel.innerHTML = '<option value="">— Sin obra —</option>' +
+        window._obras.map(o => `<option value="${o.id}">${o.nombre}</option>`).join('');
+    }
+    document.getElementById('modalFichaje').classList.add('active');
+  }
+
+  function cerrarFormFichaje() {
+    document.getElementById('modalFichaje').classList.remove('active');
+  }
+
+  async function editarFichaje(id) {
+    try {
+      // GET fichaje by fetching a range wide enough; use id param if supported
+      const hoy = perFechaHoy();
+      const hace30 = new Date(new Date() - 30*86400000).toISOString().slice(0,10);
+      const res = await apiCall(`/fichajes?fecha_ini=${hace30}&fecha_fin=${hoy}`, {});
+      if (!res.ok) return toast('❌ Error al cargar','err');
+      const data = await res.json();
+      const lista = Array.isArray(data) ? data : (data.fichajes || []);
+      const f = lista.find(x => x.id === id);
+      if (!f) return toast('❌ Fichaje no encontrado','err');
+      await abrirFormFichaje(f.fecha);
+      document.getElementById('fichajeEditId').value = f.id;
+      document.getElementById('modalFichajeTitulo').textContent = 'Editar Fichaje';
+      // Set trabajador select
+      const tipo = f.usuario_id ? 'app' : 'externo';
+      const uid  = f.usuario_id || f.personal_externo_id;
+      document.getElementById('fichajeTrabajador').value = `${uid}_${tipo}`;
+      document.getElementById('fichajeFecha').value = f.fecha || '';
+      document.getElementById('fichajeEntrada').value = f.hora_entrada ? f.hora_entrada.slice(0,5) : '';
+      document.getElementById('fichajeSalida').value = f.hora_salida ? f.hora_salida.slice(0,5) : '';
+      document.getElementById('fichajeEstado').value = f.estado || 'presencia';
+      document.getElementById('fichajeNotas').value = f.notas || '';
+      if (f.obra_id) document.getElementById('fichajeObra').value = f.obra_id;
+    } catch { toast('❌ Error de red','err'); }
+  }
+
+  async function guardarFichaje() {
+    const trabajadorVal = document.getElementById('fichajeTrabajador').value;
+    const fecha = document.getElementById('fichajeFecha').value;
+    if (!trabajadorVal) return toast('⚠️ Selecciona un trabajador','err');
+    if (!fecha) return toast('⚠️ La fecha es obligatoria','err');
+    const id = document.getElementById('fichajeEditId').value;
+    // trabajadorVal format: "id_tipo" e.g. "3_app" or "5_externo"
+    const [tidStr, ttipo] = trabajadorVal.split('_');
+    const tid = parseInt(tidStr);
+    const body = {
+      usuario_id:           ttipo === 'app'     ? tid : null,
+      personal_externo_id:  ttipo === 'externo' ? tid : null,
+      fecha,
+      hora_entrada: document.getElementById('fichajeEntrada').value || null,
+      hora_salida:  document.getElementById('fichajeSalida').value  || null,
+      estado:       document.getElementById('fichajeEstado').value,
+      obra_id:      parseInt(document.getElementById('fichajeObra').value) || null,
+      notas:        document.getElementById('fichajeNotas').value.trim() || null,
+    };
+    try {
+      const res = id
+        ? await apiCall(`/fichajes/${id}`, { method:'PUT', body:JSON.stringify(body) })
+        : await apiCall('/fichajes',        { method:'POST',body:JSON.stringify(body) });
+      if (res.status === 409) return toast('⚠️ Ya existe un fichaje para ese trabajador en esa fecha','err');
+      if (!res.ok) { const e=await res.json().catch(()=>({error:'Error'})); return toast('❌ '+(e.error||'Error'),'err'); }
+      cerrarFormFichaje();
+      toast(id ? '✅ Fichaje actualizado' : '✅ Fichaje registrado');
+      const tab = [0,1,2].find(i => document.getElementById('perTab'+i)?.classList.contains('active')) ?? 0;
+      if (tab===0) cargarHoy();
+      else if (tab===1) cargarSemana();
+      else cargarResumenMes();
+    } catch { toast('❌ Error de red','err'); }
+  }
+
+  async function eliminarFichaje(id) {
+    if (!confirm('¿Eliminar este fichaje?')) return;
+    try {
+      const res = await apiCall(`/fichajes/${id}`, { method:'DELETE' });
+      if (!res.ok) return toast('❌ Sin permisos para eliminar','err');
+      toast('🗑️ Fichaje eliminado');
+      const tab = [0,1,2].find(i => document.getElementById('perTab'+i)?.classList.contains('active')) ?? 0;
+      if (tab===0) cargarHoy();
+      else if (tab===1) cargarSemana();
+      else cargarResumenMes();
+    } catch { toast('❌ Error de red','err'); }
+  }
+
+  // ── Exportar Excel ──
+  function exportarFichajesHoy() {
+    const hoy = perFechaHoy();
+    _exportarFichajesRango(hoy, hoy, `Fichajes_${hoy}`);
+  }
+
+  function exportarSemana() {
+    const ini = perLunes(window._perSemOffset);
+    const fin = perDomingo(window._perSemOffset);
+    const sem = perSemanaISO(ini);
+    _exportarFichajesRango(ini, fin, `Personal_S${sem}_${ini.slice(0,4)}`);
+  }
+
+  function exportarMes() {
+    const { anio, mes } = perMesYM(window._perMesOffset);
+    const label = perNombreMes(window._perMesOffset).replace(' ','_');
+    _exportarFichajesMes(anio, mes, `Personal_${label}`);
+  }
+
+  function perSemanaISO(fecha) {
+    const d = new Date(fecha + 'T12:00:00');
+    const jan4 = new Date(d.getFullYear(), 0, 4);
+    const dayOfYear = Math.floor((d - new Date(d.getFullYear(), 0, 1)) / 86400000) + 1;
+    return String(Math.ceil((dayOfYear - (jan4.getDay() || 7) + 4) / 7)).padStart(2,'0');
+  }
+
+  async function _exportarFichajesRango(ini, fin, nombre) {
+    try {
+      toast('📊 Descargando datos...');
+      const res = await apiCall(`/fichajes?fecha_ini=${ini}&fecha_fin=${fin}`, {});
+      if (!res.ok) return toast('❌ Error al obtener datos','err');
+      const data = await res.json();
+      const fichajes = Array.isArray(data) ? data : (data.fichajes || []);
+      if (!fichajes.length) return toast('⚠️ Sin datos para exportar','err');
+      _generarExcelFichajes(fichajes, nombre);
+    } catch(err) { toast('❌ Error al exportar: '+err.message,'err'); }
+  }
+
+  async function _exportarFichajesMes(anio, mes, nombre) {
+    try {
+      toast('📊 Descargando datos...');
+      const res = await apiCall(`/personal/mes?anio=${anio}&mes=${mes}`, {});
+      if (!res.ok) return toast('❌ Error al obtener datos','err');
+      const data = await res.json();
+      const fichajes = data.fichajes || [];
+      if (!fichajes.length) return toast('⚠️ Sin datos para exportar','err');
+      _generarExcelFichajes(fichajes, nombre);
+    } catch(err) { toast('❌ Error al exportar: '+err.message,'err'); }
+  }
+
+  function _generarExcelFichajes(fichajes, nombre) {
+    if (typeof XLSX === 'undefined') return toast('❌ XLSX no disponible','err');
+    const filas = fichajes.map(f => ({
+      'Trabajador': perNombre(f),
+      'Fecha':      f.fecha,
+      'Tipo':       f.estado,
+      'Entrada':    f.hora_entrada ? f.hora_entrada.slice(0,5) : '',
+      'Salida':     f.hora_salida  ? f.hora_salida.slice(0,5)  : '',
+      'Horas':      f.horas_trabajadas != null ? parseFloat(f.horas_trabajadas) : '',
+      'Extra':      f.horas_extra > 0 ? parseFloat(f.horas_extra) : '',
+      'Obra':       f.obra_nombre || '',
+      'Notas':      f.notas || '',
+    }));
+    const ws = XLSX.utils.json_to_sheet(filas);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, nombre.slice(0,31));
+    XLSX.writeFile(wb, `${nombre}.xlsx`);
+    toast('✅ Excel descargado');
   }
 
   // SW activado → recarga automática (sin banner, sin interacción)
