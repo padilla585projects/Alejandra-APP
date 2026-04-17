@@ -5,7 +5,7 @@
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 17/04/2026
-VERSIÓN ACTUAL: v4.10 app vieja | v4.11 app nueva
+VERSIÓN ACTUAL: v4.10 app vieja | v4.12 app nueva
 
 REPO:    https://github.com/padilla585/Bobinaap.git  (branch: main)
 WORKER:  https://gestibobina-proxy.padilla585.workers.dev
@@ -228,6 +228,18 @@ v4.0  |  15/04/2026  [SOLO NUEVA APP]
   - Todos los datos existentes migrados con empresa_id=1 automáticamente
   - Índices creados: idx_*_empresa en tablas principales
   - SW bumpeado a alejandra-v4.0
+
+v4.12  |  17/04/2026  [SOLO NUEVA APP]
+  - #44: Ficha de máquina a pantalla completa (modal overlay con historial reciente)
+    · buscarMaquina() abre modal en lugar de resultado inline
+    · Muestra: estado, obra, departamento, marca, proveedor, fechas, notas, historial
+    · Botón "Ver en inventario" dentro del modal
+  - #38: Sesiones activas en Ajustes → Sesión
+    · Botón "👀 Ver quién está conectado" (solo superadmin/encargado/empresa_admin)
+    · Lista de sesiones: nombre, rol, departamento, obra, última actividad
+    · Cerrar sesiones por rol (encargados / operarios / todas excepto yo)
+    · Worker: nuevos endpoints GET /sesiones y POST /sesiones/cerrar-todas
+  - SW bumpeado a alejandra-v4.12
 
 v4.11  |  17/04/2026  [SOLO NUEVA APP]
   - Sync completo con v4.8 + v4.9 de la app vieja:
