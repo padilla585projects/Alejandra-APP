@@ -528,7 +528,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
 
   <!-- HOME SCREEN -->
   <div id="screenHome" class="screen flex-screen active" style="padding:0;height:100%;position:relative">
-    <div style="position:absolute;bottom:8px;right:12px;font-family:'Montserrat',sans-serif;font-size:9px;color:var(--muted);opacity:.5;z-index:10;pointer-events:none">v4.18</div>
+    <div style="position:absolute;bottom:8px;right:12px;font-family:'Montserrat',sans-serif;font-size:9px;color:var(--muted);opacity:.5;z-index:10;pointer-events:none">v4.19</div>
     <div class="module-grid" style="flex:1">
       <div class="module-card" id="cardBobinas" onclick="selectModule('bobinas')">
         <div class="module-emoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="52" height="52"><rect x="28" y="38" width="44" height="32" rx="3" fill="#8B6914"/><rect x="28" y="38" width="8" height="32" rx="1" fill="#A07820" opacity="0.6"/><rect x="37" y="38" width="8" height="32" rx="1" fill="#7a5c10" opacity="0.4"/><rect x="46" y="38" width="8" height="32" rx="1" fill="#A07820" opacity="0.5"/><rect x="55" y="38" width="8" height="32" rx="1" fill="#7a5c10" opacity="0.4"/><rect x="64" y="38" width="8" height="32" rx="1" fill="#A07820" opacity="0.3"/><ellipse cx="50" cy="70" rx="30" ry="8" fill="#9B7420"/><ellipse cx="50" cy="70" rx="30" ry="8" fill="none" stroke="#7a5c10" stroke-width="1"/><line x1="22" y1="68" x2="78" y2="68" stroke="#7a5c10" stroke-width="0.8" opacity="0.5"/><line x1="24" y1="72" x2="76" y2="72" stroke="#c49530" stroke-width="0.6" opacity="0.4"/><circle cx="32" cy="70" r="1.5" fill="#f97316"/><circle cx="50" cy="70" r="1.5" fill="#f97316"/><circle cx="68" cy="70" r="1.5" fill="#f97316"/><ellipse cx="50" cy="36" rx="32" ry="10" fill="#C4A030"/><line x1="20" y1="34" x2="80" y2="34" stroke="#9B7820" stroke-width="1" opacity="0.7"/><line x1="20" y1="36" x2="80" y2="36" stroke="#e8c060" stroke-width="0.8" opacity="0.4"/><line x1="20" y1="38" x2="80" y2="38" stroke="#9B7820" stroke-width="1" opacity="0.5"/><ellipse cx="50" cy="35" rx="32" ry="10" fill="none" stroke="#e8c870" stroke-width="0.8" opacity="0.5"/><circle cx="30" cy="35" r="2" fill="#f97316" stroke="#c97316" stroke-width="0.5"/><circle cx="50" cy="32" r="2" fill="#f97316" stroke="#c97316" stroke-width="0.5"/><circle cx="70" cy="35" r="2" fill="#f97316" stroke="#c97316" stroke-width="0.5"/><circle cx="50" cy="39" r="2" fill="#f97316" stroke="#c97316" stroke-width="0.5"/><ellipse cx="50" cy="36" rx="5" ry="3" fill="#3a2a08"/><ellipse cx="50" cy="35.5" rx="4" ry="2" fill="#1a1208"/></svg></div>
@@ -578,6 +578,15 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
           <div class="module-desc">Solicitudes de material</div>
         </div>
         <div class="module-count" id="cntPedidos" style="background:#8b5cf6">–</div>
+        <svg class="module-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
+      </div>
+      <div class="module-card" id="cardHerramientas" onclick="navTo('herramientas')" style="display:none">
+        <div class="module-emoji">🔧</div>
+        <div class="module-info">
+          <div class="module-name">Herramientas</div>
+          <div class="module-desc">Kits y herramientas en obra</div>
+        </div>
+        <div class="module-count" id="cntHerramientas" style="background:#0ea5e9">–</div>
         <svg class="module-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
       </div>
     </div>
@@ -1046,6 +1055,14 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
             <button onclick="addEnergiaCarr()">+</button>
           </div>
         </div>
+        <div class="admin-section" id="cfgHerrSection">
+          <div class="admin-section-title">🔧 Tipos de herramienta</div>
+          <div class="tag-row" id="tagsTiposHerr"></div>
+          <div class="tag-add-row" style="margin-top:10px">
+            <input type="text" id="newTipoHerr" placeholder="Nuevo tipo...">
+            <button onclick="addTipoHerr()">+</button>
+          </div>
+        </div>
         <div class="admin-section" id="cfgSegSection">
           <div class="admin-section-title">🔺 Material Seguridad</div>
           <div style="font-family:'Montserrat',sans-serif;font-size:12px;color:var(--muted);margin-bottom:10px">Cada tipo tiene un modo: <strong>Individual</strong> (por número de serie) o <strong>Cantidad</strong> (stock).</div>
@@ -1296,6 +1313,197 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
       style="position:fixed;bottom:72px;right:16px;width:52px;height:52px;border-radius:50%;background:var(--accent);border:none;font-size:26px;cursor:pointer;box-shadow:0 4px 14px rgba(249,115,22,.5);z-index:200;display:none;align-items:center;justify-content:center">
       +
     </button>
+  </div>
+
+  <!-- ══════════════════════════════════════════
+       HERRAMIENTAS SCREEN
+  ══════════════════════════════════════════ -->
+  <div id="screenHerramientas" class="screen" style="padding:0;display:none;flex-direction:column">
+    <!-- Tabs -->
+    <div class="mod-tabs" style="flex-shrink:0">
+      <button class="mod-tab-btn active" id="herrTab0" onclick="herrSelTab(0)">📷 Escanear</button>
+      <button class="mod-tab-btn"        id="herrTab1" onclick="herrSelTab(1)">🔧 Inventario</button>
+      <button class="mod-tab-btn"        id="herrTab2" onclick="herrSelTab(2)">📋 Kits</button>
+      <button class="mod-tab-btn"        id="herrTab3" onclick="herrSelTab(3)">🕒 Historial</button>
+    </div>
+
+    <!-- TAB 0: ESCANEAR -->
+    <div id="herrPanelScan" style="padding:14px;overflow-y:auto;flex:1">
+      <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:12px;color:var(--accent);letter-spacing:2px;text-transform:uppercase;margin-bottom:10px">🔍 Número de serie</div>
+      <div class="input-row" style="margin-bottom:12px">
+        <input class="form-input" id="herrSerieInput" type="text" placeholder="Escanea o introduce el número de serie..."
+          onkeydown="if(event.key==='Enter')herrBuscarSerie()">
+        <button onclick="herrBuscarSerie()" style="padding:0 16px;background:var(--accent);border:none;border-radius:8px;color:#000;font-family:'Montserrat',sans-serif;font-weight:900;font-size:13px;cursor:pointer;flex-shrink:0">BUSCAR</button>
+      </div>
+      <div id="herrScanResult"></div>
+    </div>
+
+    <!-- TAB 1: INVENTARIO -->
+    <div id="herrPanelInv" style="display:none;flex-direction:column;flex:1;overflow:hidden">
+      <div style="padding:10px 14px 8px;border-bottom:1px solid var(--border);flex-shrink:0">
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <button onclick="herrFiltrarInv('todos')"        id="hfTodos"     class="sug-filter active">Todos</button>
+          <button onclick="herrFiltrarInv('disponible')"   id="hfDisp"      class="sug-filter">✅ Disp.</button>
+          <button onclick="herrFiltrarInv('en_uso')"       id="hfEnUso"     class="sug-filter">🔵 En uso</button>
+          <button onclick="herrFiltrarInv('averiado')"     id="hfAveriado"  class="sug-filter">🔴 Averiado</button>
+          <button onclick="herrFiltrarInv('en_reparacion')"id="hfReparacion"class="sug-filter">🔧 Reparac.</button>
+          <button onclick="herrFiltrarInv('perdido')"      id="hfPerdido"   class="sug-filter">❓ Perdido</button>
+        </div>
+      </div>
+      <div id="herrListaInv" style="padding:10px 14px 80px;overflow-y:auto;flex:1">
+        <div class="empty-state">Cargando...</div>
+      </div>
+    </div>
+
+    <!-- TAB 2: KITS -->
+    <div id="herrPanelKits" style="display:none;flex-direction:column;flex:1;overflow:hidden">
+      <div style="padding:10px 14px 8px;border-bottom:1px solid var(--border);flex-shrink:0">
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <button onclick="herrFiltrarKits('todos')"       id="kfTodos"  class="sug-filter active">Todos</button>
+          <button onclick="herrFiltrarKits('disponible')"  id="kfDisp"   class="sug-filter">✅ Disponible</button>
+          <button onclick="herrFiltrarKits('en_uso')"      id="kfEnUso"  class="sug-filter">🔵 En uso</button>
+          <button onclick="herrFiltrarKits('incompleto')"  id="kfIncomp" class="sug-filter">⚠️ Incompleto</button>
+          <button onclick="herrFiltrarKits('perdido')"     id="kfPerdido"class="sug-filter">❓ Perdido</button>
+        </div>
+      </div>
+      <div id="herrListaKits" style="padding:10px 14px 80px;overflow-y:auto;flex:1">
+        <div class="empty-state">Cargando...</div>
+      </div>
+    </div>
+
+    <!-- TAB 3: HISTORIAL -->
+    <div id="herrPanelHist" style="display:none;padding:14px;overflow-y:auto;flex:1">
+      <div id="herrListaHist"><div class="empty-state">Cargando...</div></div>
+    </div>
+
+    <!-- FAB: Nuevo (inventario/kits) -->
+    <button id="btnNuevaHerr" onclick="abrirFormHerramienta()"
+      style="position:fixed;bottom:72px;right:16px;width:52px;height:52px;border-radius:50%;background:var(--accent);border:none;font-size:26px;cursor:pointer;box-shadow:0 4px 14px rgba(249,115,22,.5);z-index:200;display:none;align-items:center;justify-content:center">+</button>
+    <button id="btnNuevoKit" onclick="abrirFormKit()"
+      style="position:fixed;bottom:132px;right:16px;width:52px;height:52px;border-radius:50%;background:#0ea5e9;border:none;font-size:22px;cursor:pointer;box-shadow:0 4px 14px rgba(14,165,233,.5);z-index:200;display:none;align-items:center;justify-content:center">📋</button>
+  </div>
+
+  <!-- Modal: Nueva/Editar Herramienta -->
+  <div class="modal-overlay" id="modalHerramienta" onclick="if(event.target===this)cerrarFormHerramienta()">
+    <div class="modal" style="max-height:90vh;overflow-y:auto">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px">
+        <div class="modal-title" style="margin-bottom:0;flex:1" id="modalHerrTitulo">Nueva Herramienta</div>
+        <button onclick="cerrarFormHerramienta()" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--muted)">×</button>
+      </div>
+      <input type="hidden" id="herrEditId">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div class="form-group">
+          <label class="form-label">Tipo *</label>
+          <select class="form-input" id="herrTipo"><option value="">— Selecciona —</option></select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Alimentación</label>
+          <select class="form-input" id="herrAlimentacion">
+            <option value="bateria">🔋 Batería</option>
+            <option value="electrica">⚡ Eléctrica</option>
+            <option value="neumatica">💨 Neumática</option>
+            <option value="manual">🤚 Manual</option>
+          </select>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div class="form-group">
+          <label class="form-label">Marca</label>
+          <input class="form-input" id="herrMarca" type="text" placeholder="Hilti, Bosch...">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Modelo</label>
+          <input class="form-input" id="herrModelo" type="text" placeholder="TE 6, SF 6H...">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Número de serie *</label>
+        <input class="form-input" id="herrSerie" type="text" placeholder="SN123456..." style="text-transform:uppercase">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Kit (opcional)</label>
+        <select class="form-input" id="herrKit"><option value="">— Sin kit —</option></select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Obra</label>
+        <select class="form-input" id="herrObra"><option value="">— Sin obra —</option></select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Asignada a</label>
+        <input class="form-input" id="herrAsignado" type="text" placeholder="Nombre del trabajador...">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Notas</label>
+        <textarea id="herrNotas" rows="2" style="width:100%;padding:10px;background:var(--surface);border:1px solid var(--border);border-radius:10px;color:var(--text);font-family:'Poppins',sans-serif;font-size:14px;resize:vertical;outline:none;box-sizing:border-box"></textarea>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-primary" style="flex:1" onclick="guardarHerramienta()">💾 Guardar</button>
+        <button class="btn-primary btn-secondary" style="flex:0 0 90px;margin-top:0" onclick="cerrarFormHerramienta()">Cancelar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Nuevo/Editar Kit -->
+  <div class="modal-overlay" id="modalKit" onclick="if(event.target===this)cerrarFormKit()">
+    <div class="modal" style="max-height:90vh;overflow-y:auto">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px">
+        <div class="modal-title" style="margin-bottom:0;flex:1" id="modalKitTitulo">Nuevo Kit</div>
+        <button onclick="cerrarFormKit()" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--muted)">×</button>
+      </div>
+      <input type="hidden" id="kitEditId">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div class="form-group">
+          <label class="form-label">Número de kit *</label>
+          <input class="form-input" id="kitNumero" type="text" placeholder="Kit-01, K7...">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Nº componentes</label>
+          <input class="form-input" id="kitComponentes" type="number" min="0" value="0">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Nombre / descripción</label>
+        <input class="form-input" id="kitNombre" type="text" placeholder="Kit Hilti Taladros...">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Obra</label>
+        <select class="form-input" id="kitObra"><option value="">— Sin obra —</option></select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Asignado a</label>
+        <input class="form-input" id="kitAsignado" type="text" placeholder="Nombre del trabajador...">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Notas</label>
+        <textarea id="kitNotas" rows="2" style="width:100%;padding:10px;background:var(--surface);border:1px solid var(--border);border-radius:10px;color:var(--text);font-family:'Poppins',sans-serif;font-size:14px;resize:vertical;outline:none;box-sizing:border-box"></textarea>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-primary" style="flex:1" onclick="guardarKit()">💾 Guardar</button>
+        <button class="btn-primary btn-secondary" style="flex:0 0 90px;margin-top:0" onclick="cerrarFormKit()">Cancelar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Detalle Herramienta -->
+  <div class="modal-overlay" id="modalHerrDetalle" onclick="if(event.target===this)cerrarDetalleHerr()">
+    <div class="modal" style="max-height:90vh;overflow-y:auto;padding-bottom:20px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px">
+        <div class="modal-title" style="margin-bottom:0;flex:1" id="modalHerrDetalleTitulo">Herramienta</div>
+        <button onclick="cerrarDetalleHerr()" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--muted)">×</button>
+      </div>
+      <div id="modalHerrDetalleBody"></div>
+    </div>
+  </div>
+
+  <!-- Modal: Detalle Kit -->
+  <div class="modal-overlay" id="modalKitDetalle" onclick="if(event.target===this)cerrarDetalleKit()">
+    <div class="modal" style="max-height:90vh;overflow-y:auto;padding-bottom:20px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px">
+        <div class="modal-title" style="margin-bottom:0;flex:1" id="modalKitDetalleTitulo">Kit</div>
+        <button onclick="cerrarDetalleKit()" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--muted)">×</button>
+      </div>
+      <div id="modalKitDetalleBody"></div>
+    </div>
   </div>
 
   <!-- Modal: Nuevo/Editar Pedido -->
@@ -1868,8 +2076,10 @@ function setupHomeModules() {
   if (cardC) cardC.style.display = 'flex';
   // Pedidos: visible para todos excepto seguridad
   if (cardPed) cardPed.style.display = 'flex';
-  // Botón nuevo pedido: visible para todos (excepto seguridad → ya retornó arriba)
   if (btnNuevo) btnNuevo.style.display = 'flex';
+  // Herramientas: visible para todos excepto seguridad
+  const cardHerr = document.getElementById('cardHerramientas');
+  if (cardHerr) cardHerr.style.display = 'flex';
 }
 
 function seleccionarDepto(dept) {
@@ -1959,7 +2169,7 @@ function actualizarBtnAtras() {
   if (!btn) return;
   const s = getSession();
   if (!s) { btn.style.display = 'none'; return; }
-  const subPantallas = ['screenModule','screenAjustes','screenSugerencias','screenPedidos'];
+  const subPantallas = ['screenModule','screenAjustes','screenSugerencias','screenPedidos','screenHerramientas'];
   const enSub = subPantallas.some(id => document.getElementById(id)?.classList.contains('active'));
   // Seguridad para superadmin/empresa_admin: pueden volver al selector de dpto
   const enSegAdmin = document.getElementById('screenSeguridad')?.classList.contains('active')
@@ -2001,6 +2211,12 @@ function navTo(target) {
   if (target === 'pedidos') {
     showScreen('pedidos');
     cargarPedidos();
+    actualizarBtnAtras();
+    return;
+  }
+  if (target === 'herramientas') {
+    showScreen('herramientas');
+    herrSelTab(0);
     actualizarBtnAtras();
     return;
   }
@@ -2128,6 +2344,15 @@ async function cargarStatsHome() {
       const peds = await rpd.json();
       const pendientes = Array.isArray(peds) ? peds.filter(p => p.estado === 'pendiente' || p.estado === 'solicitado').length : '–';
       document.getElementById('cntPedidos').textContent = pendientes;
+    }
+  } catch {}
+  try {
+    const rh = await apiCall('/herramientas').catch(() => null);
+    if (rh && rh.ok) {
+      const herrs = await rh.json();
+      const activas = Array.isArray(herrs) ? herrs.filter(h => h.estado === 'disponible' || h.estado === 'en_uso').length : '–';
+      const cnt = document.getElementById('cntHerramientas');
+      if (cnt) cnt.textContent = activas;
     }
   } catch {}
 }
@@ -2997,7 +3222,7 @@ async function cargarStock() {
   }
 }
 
-let _catalogos = { proveedores: [], tipos: [], tiposPemp: [], tiposCarr: [], energiasCarr: [], tiposMatSeg: [] };
+let _catalogos = { proveedores: [], tipos: [], tiposPemp: [], tiposCarr: [], energiasCarr: [], tiposMatSeg: [], tiposHerr: [] };
 let _stockItems = [];
 
 function renderStock(items, mod) {
@@ -3664,13 +3889,14 @@ async function comprobarConexion() {
 // ══════════════════════════════════════════════════════
 async function cargarCatalogos() {
   try {
-    const [rp, rt, rtp, rtc, rec, rms] = await Promise.all([
+    const [rp, rt, rtp, rtc, rec, rms, rth] = await Promise.all([
       apiCall('/proveedores'),
       apiCall('/tipos-cable'),
       apiCall('/tipos-pemp'),
       apiCall('/tipos-carretilla'),
       apiCall('/energias-carretilla'),
       apiCall('/tipos-material-seg'),
+      apiCall('/tipos-herramienta'),
     ]);
     _catalogos.proveedores  = rp.ok  ? await rp.json()  : [];
     _catalogos.tipos        = rt.ok  ? await rt.json()  : [];
@@ -3678,6 +3904,7 @@ async function cargarCatalogos() {
     _catalogos.tiposCarr    = rtc.ok ? await rtc.json() : [];
     _catalogos.energiasCarr = rec.ok ? await rec.json() : [];
     _catalogos.tiposMatSeg  = rms.ok ? await rms.json() : [];
+    _catalogos.tiposHerr    = rth.ok ? await rth.json() : [];
 
     poblarSelect('fieldProv',        _catalogos.proveedores);
     poblarSelect('fieldTipoCable',   _catalogos.tipos);
@@ -3691,6 +3918,7 @@ async function cargarCatalogos() {
     renderTags('tagsTiposCarr',    _catalogos.tiposCarr,    'tipo-carretilla');
     renderTags('tagsEnergiasCarr', _catalogos.energiasCarr, 'energia-carretilla');
     renderTagsMatSeg('tagsTiposMatSeg', _catalogos.tiposMatSeg);
+    renderTagsTiposHerr(_catalogos.tiposHerr);
   } catch {}
 }
 
@@ -3779,6 +4007,36 @@ async function addTipoMatSeg() {
 
 async function delTipoMatSeg(id) {
   await apiCall(`/tipos-material-seg/${id}`, { method: 'DELETE' });
+  cargarCatalogos();
+}
+
+function renderTagsTiposHerr(items) {
+  const c = document.getElementById('tagsTiposHerr');
+  if (!c) return;
+  c.innerHTML = items.map(i => `
+    <span class="tag" style="display:inline-flex;align-items:center;gap:4px">
+      ${i.nombre}
+      <button class="tag-del" onclick="delTipoHerr(${i.id})">×</button>
+    </span>
+  `).join('') || '<span style="color:var(--muted);font-size:12px">Sin tipos</span>';
+}
+
+async function addTipoHerr() {
+  const nombre = document.getElementById('newTipoHerr').value.trim();
+  if (!nombre) return;
+  const r = await apiCall('/tipos-herramienta', { method: 'POST', body: JSON.stringify({ nombre }) });
+  if (r.ok) {
+    document.getElementById('newTipoHerr').value = '';
+    toast('✅ Tipo añadido');
+    cargarCatalogos();
+  } else {
+    const d = await r.json().catch(() => ({}));
+    toast('❌ ' + (d.error || 'Error'), 'err');
+  }
+}
+
+async function delTipoHerr(id) {
+  await apiCall('/tipos-herramienta/' + id, { method: 'DELETE' });
   cargarCatalogos();
 }
 
@@ -4570,7 +4828,7 @@ async function cargarObrasSelectUsuario() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '4.18';
+const APP_VERSION = '4.19';
 let _actualizando = false;
 
 async function checkVersionAndUpdate() {
@@ -4633,6 +4891,449 @@ if ('serviceWorker' in navigator) {
 
     setInterval(() => reg.update(), 5 * 60 * 1000); // chequeo cada 5 min
   }).catch(() => {});
+
+  // ══════════════════════════════════════════════════════
+  // HERRAMIENTAS
+  // ══════════════════════════════════════════════════════
+
+  window._herrTab = 0;
+  window._herrInvCache = [];
+  window._herrKitsCache = [];
+  window._herrInvFiltro = 'todos';
+  window._herrKitsFiltro = 'todos';
+
+  const HERR_ESTADO = {
+    disponible:   { icon: '✅', color: '#22c55e', label: 'Disponible' },
+    en_uso:       { icon: '🔵', color: '#3b82f6', label: 'En uso' },
+    averiado:     { icon: '🔴', color: '#ef4444', label: 'Averiado' },
+    en_reparacion:{ icon: '🔧', color: '#f59e0b', label: 'En reparación' },
+    perdido:      { icon: '❓', color: '#6b7280', label: 'Perdido' },
+    baja:         { icon: '⛔', color: '#374151', label: 'Baja' },
+  };
+  const HERR_KIT_ESTADO = {
+    disponible: { icon: '✅', color: '#22c55e', label: 'Disponible' },
+    en_uso:     { icon: '🔵', color: '#3b82f6', label: 'En uso' },
+    incompleto: { icon: '⚠️', color: '#f59e0b', label: 'Incompleto' },
+    perdido:    { icon: '❓', color: '#6b7280', label: 'Perdido' },
+  };
+
+  function herrSelTab(n) {
+    window._herrTab = n;
+    document.querySelectorAll('#screenHerramientas .mod-tab-btn').forEach((b,i) => b.classList.toggle('active', i === n));
+    ['herrPanelScan','herrPanelInv','herrPanelKits','herrPanelHist'].forEach((id, i) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.style.display = i === n ? (i === 0 || i === 3 ? 'block' : 'flex') : 'none';
+    });
+    const btnHerr = document.getElementById('btnNuevaHerr');
+    const btnKit  = document.getElementById('btnNuevoKit');
+    const s = getSession();
+    const puedeCrear = s?.rol !== 'operario';
+    if (btnHerr) btnHerr.style.display = (n === 1 && puedeCrear) ? 'flex' : 'none';
+    if (btnKit)  btnKit.style.display  = (n === 2 && puedeCrear) ? 'flex' : 'none';
+    if (n === 1) cargarInvHerr();
+    if (n === 2) cargarKitsHerr();
+    if (n === 3) cargarHistHerr();
+  }
+
+  // ── ESCANEAR ────────────────────────────────────────────
+  async function herrBuscarSerie() {
+    const serie = document.getElementById('herrSerieInput').value.trim();
+    if (!serie) return;
+    const c = document.getElementById('herrScanResult');
+    c.innerHTML = '<div class="empty-state">Buscando...</div>';
+    try {
+      const res = await apiCall('/herramientas/buscar?serie=' + encodeURIComponent(serie));
+      if (!res.ok) { c.innerHTML = '<div class="empty-state">❌ No encontrada</div>'; return; }
+      const { herramienta: h, historial } = await res.json();
+      c.innerHTML = renderHerrFicha(h, historial, true);
+    } catch { c.innerHTML = '<div class="empty-state">Error de red</div>'; }
+  }
+
+  function renderHerrFicha(h, historial, conAcciones) {
+    const ei = HERR_ESTADO[h.estado] || HERR_ESTADO.disponible;
+    const s = getSession();
+    const puedeEditar  = s?.rol !== 'operario';
+    const puedeEliminar= s?.rol === 'encargado' || s?.rol === 'empresa_admin' || s?.rol === 'superadmin';
+    const alim = { bateria:'🔋 Batería', electrica:'⚡ Eléctrica', neumatica:'💨 Neumática', manual:'🤚 Manual' };
+    return `<div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:12px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
+        <div>
+          <div style="font-weight:900;font-size:16px;color:var(--text)">${h.tipo_nombre || '—'}</div>
+          <div style="font-size:13px;color:var(--muted)">${h.marca||''} ${h.modelo||''}</div>
+        </div>
+        <span style="font-size:11px;font-weight:700;color:${ei.color};padding:3px 10px;border-radius:20px;border:1px solid ${ei.color}30;background:${ei.color}15;white-space:nowrap">${ei.icon} ${ei.label}</span>
+      </div>
+      <div class="settings-row"><span>Serie</span><strong style="font-family:monospace">${h.numero_serie||'—'}</strong></div>
+      <div class="settings-row"><span>Alimentación</span><strong>${alim[h.alimentacion]||h.alimentacion||'—'}</strong></div>
+      ${h.kit_id ? `<div class="settings-row"><span>Kit</span><strong>${h.numero_kit||'—'} ${h.kit_nombre?'· '+h.kit_nombre:''}</strong></div>` : ''}
+      ${h.obra_nombre ? `<div class="settings-row"><span>Obra</span><strong>${h.obra_nombre}</strong></div>` : ''}
+      ${h.asignado_a ? `<div class="settings-row"><span>Asignada a</span><strong>${h.asignado_a}</strong></div>` : ''}
+      ${h.fecha_alta ? `<div class="settings-row"><span>Alta</span><strong>${h.fecha_alta.slice(0,10)}</strong></div>` : ''}
+      ${h.fecha_averia ? `<div class="settings-row"><span>Avería</span><strong style="color:#ef4444">${h.fecha_averia.slice(0,10)}</strong></div>` : ''}
+      ${h.fecha_reparacion ? `<div class="settings-row"><span>Reparada</span><strong style="color:#22c55e">${h.fecha_reparacion.slice(0,10)}</strong></div>` : ''}
+      ${h.fecha_devolucion ? `<div class="settings-row"><span>Devuelta</span><strong>${h.fecha_devolucion.slice(0,10)}</strong></div>` : ''}
+      ${h.notas ? `<div style="font-size:12px;color:var(--muted);margin-top:6px;font-style:italic">${h.notas}</div>` : ''}
+      ${conAcciones ? `
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:12px">
+        ${h.estado === 'disponible' ? `<button onclick="herrCambiarEstado(${h.id},'en_uso')" style="flex:1;padding:8px;background:#3b82f620;color:#3b82f6;border:1px solid #3b82f640;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">🔵 Poner en uso</button>` : ''}
+        ${h.estado === 'en_uso' ? `<button onclick="herrCambiarEstado(${h.id},'disponible')" style="flex:1;padding:8px;background:#22c55e20;color:#22c55e;border:1px solid #22c55e40;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">✅ Devolver</button>` : ''}
+        ${(h.estado === 'disponible'||h.estado === 'en_uso') ? `<button onclick="herrCambiarEstado(${h.id},'averiado')" style="padding:8px 10px;background:#ef444420;color:#ef4444;border:1px solid #ef444440;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">🔴 Avería</button>` : ''}
+        ${h.estado === 'averiado' ? `<button onclick="herrCambiarEstado(${h.id},'en_reparacion')" style="flex:1;padding:8px;background:#f59e0b20;color:#f59e0b;border:1px solid #f59e0b40;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">🔧 Enviar reparación</button>` : ''}
+        ${h.estado === 'en_reparacion' ? `<button onclick="herrCambiarEstado(${h.id},'disponible')" style="flex:1;padding:8px;background:#22c55e20;color:#22c55e;border:1px solid #22c55e40;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">✅ Reparada</button>` : ''}
+        ${puedeEditar ? `<button onclick="abrirFormHerramienta(${JSON.stringify(h).replace(/"/g,'&quot;')})" style="padding:8px 10px;background:var(--surface);color:var(--muted);border:1px solid var(--border);border-radius:8px;font-size:12px;cursor:pointer">✏️</button>` : ''}
+        ${puedeEliminar ? `<button onclick="eliminarHerramienta(${h.id})" style="padding:8px 10px;background:#ef444420;color:#ef4444;border:1px solid #ef444440;border-radius:8px;font-size:12px;cursor:pointer">🗑️</button>` : ''}
+      </div>` : ''}
+      ${historial?.length ? `
+      <div style="margin-top:12px;border-top:1px solid var(--border);padding-top:10px">
+        <div style="font-family:'Montserrat',sans-serif;font-weight:700;font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Historial reciente</div>
+        ${historial.slice(0,5).map(h => `<div style="font-size:11px;color:var(--muted);padding:3px 0;border-bottom:1px solid var(--border)20">${h.fecha?.slice(0,16)||''} · <b>${h.accion}</b>${h.estado_nuevo?' → '+h.estado_nuevo:''} ${h.usuario?'· '+h.usuario:''}</div>`).join('')}
+      </div>` : ''}
+    </div>`;
+  }
+
+  // ── INVENTARIO ────────────────────────────────────────────
+  function herrFiltrarInv(f) {
+    window._herrInvFiltro = f;
+    document.querySelectorAll('#herrPanelInv .sug-filter').forEach(b => b.classList.remove('active'));
+    const ids = {todos:'hfTodos',disponible:'hfDisp',en_uso:'hfEnUso',averiado:'hfAveriado',en_reparacion:'hfReparacion',perdido:'hfPerdido'};
+    if (ids[f]) document.getElementById(ids[f])?.classList.add('active');
+    renderInvHerr(window._herrInvCache);
+  }
+
+  function renderInvHerr(lista) {
+    const c = document.getElementById('herrListaInv');
+    const f = window._herrInvFiltro;
+    const items = f === 'todos' ? lista : lista.filter(h => h.estado === f);
+    if (!items.length) { c.innerHTML = '<div class="empty-state">Sin herramientas' + (f !== 'todos' ? ' con ese estado' : '') + '</div>'; return; }
+    c.innerHTML = items.map(h => {
+      const ei = HERR_ESTADO[h.estado] || HERR_ESTADO.disponible;
+      return `<div onclick="verDetalleHerr(${h.id})" style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:11px 14px;margin-bottom:8px;cursor:pointer">
+        <div style="display:flex;align-items:center;gap:10px">
+          <span style="font-size:18px">${ei.icon}</span>
+          <div style="flex:1;min-width:0">
+            <div style="font-weight:700;font-size:14px;color:var(--text)">${h.tipo_nombre||'—'} <span style="font-weight:400;color:var(--muted);font-size:12px">${h.marca||''} ${h.modelo||''}</span></div>
+            <div style="font-size:11px;color:var(--muted);font-family:monospace">${h.numero_serie||'—'}${h.numero_kit?' · Kit '+h.numero_kit:''}</div>
+            ${h.asignado_a ? `<div style="font-size:11px;color:var(--accent)">👤 ${h.asignado_a}</div>` : ''}
+          </div>
+          <span style="font-size:10px;font-weight:700;color:${ei.color};padding:2px 7px;border-radius:20px;border:1px solid ${ei.color}30;background:${ei.color}15;white-space:nowrap">${ei.label}</span>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  async function cargarInvHerr() {
+    try {
+      const res = await apiCall('/herramientas');
+      if (!res.ok) return;
+      window._herrInvCache = await res.json();
+      renderInvHerr(window._herrInvCache);
+    } catch { document.getElementById('herrListaInv').innerHTML = '<div class="empty-state">Error al cargar</div>'; }
+  }
+
+  async function verDetalleHerr(id) {
+    document.getElementById('modalHerrDetalleTitulo').textContent = 'Herramienta';
+    document.getElementById('modalHerrDetalleBody').innerHTML = '<div class="empty-state">Cargando...</div>';
+    document.getElementById('modalHerrDetalle').classList.add('active');
+    try {
+      const res = await apiCall('/herramientas/' + id);
+      if (!res.ok) throw new Error();
+      const { herramienta: h, historial } = await res.json();
+      document.getElementById('modalHerrDetalleTitulo').textContent = (h.tipo_nombre||'Herramienta') + ' · ' + (h.numero_serie||'');
+      document.getElementById('modalHerrDetalleBody').innerHTML = renderHerrFicha(h, historial, true);
+    } catch { document.getElementById('modalHerrDetalleBody').innerHTML = '<div style="color:var(--red)">Error al cargar</div>'; }
+  }
+
+  function cerrarDetalleHerr() { document.getElementById('modalHerrDetalle').classList.remove('active'); }
+
+  async function herrCambiarEstado(id, nuevoEstado) {
+    try {
+      const res = await apiCall('/herramientas/' + id, { method: 'PUT', body: JSON.stringify({ estado: nuevoEstado }) });
+      if (!res.ok) return toast('❌ Error al actualizar', 'err');
+      toast('✅ Estado actualizado');
+      cerrarDetalleHerr();
+      document.getElementById('herrScanResult').innerHTML = '';
+      if (window._herrTab === 1) cargarInvHerr();
+    } catch { toast('❌ Error de red', 'err'); }
+  }
+
+  // ── KITS ────────────────────────────────────────────────
+  function herrFiltrarKits(f) {
+    window._herrKitsFiltro = f;
+    document.querySelectorAll('#herrPanelKits .sug-filter').forEach(b => b.classList.remove('active'));
+    const ids = {todos:'kfTodos',disponible:'kfDisp',en_uso:'kfEnUso',incompleto:'kfIncomp',perdido:'kfPerdido'};
+    if (ids[f]) document.getElementById(ids[f])?.classList.add('active');
+    renderKitsHerr(window._herrKitsCache);
+  }
+
+  function renderKitsHerr(lista) {
+    const c = document.getElementById('herrListaKits');
+    const f = window._herrKitsFiltro;
+    const items = f === 'todos' ? lista : lista.filter(k => k.estado === f);
+    if (!items.length) { c.innerHTML = '<div class="empty-state">Sin kits' + (f !== 'todos' ? ' con ese estado' : '') + '</div>'; return; }
+    c.innerHTML = items.map(k => {
+      const ei = HERR_KIT_ESTADO[k.estado] || HERR_KIT_ESTADO.disponible;
+      return `<div onclick="verDetalleKit(${k.id})" style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:8px;cursor:pointer">
+        <div style="display:flex;align-items:center;gap:10px">
+          <span style="font-size:22px">📋</span>
+          <div style="flex:1;min-width:0">
+            <div style="font-weight:900;font-size:15px;color:var(--text)">Kit ${k.numero_kit}</div>
+            ${k.nombre ? `<div style="font-size:12px;color:var(--muted)">${k.nombre}</div>` : ''}
+            <div style="font-size:11px;color:var(--muted);margin-top:2px">
+              ${k.num_componentes ? `🔩 ${k.num_componentes} componentes` : ''}
+              ${k.obra_nombre ? ' · ' + k.obra_nombre : ''}
+              ${k.asignado_a ? ` · 👤 ${k.asignado_a}` : ''}
+            </div>
+            ${k.fecha_alta ? `<div style="font-size:10px;color:var(--muted)">Alta: ${k.fecha_alta.slice(0,10)}</div>` : ''}
+          </div>
+          <span style="font-size:10px;font-weight:700;color:${ei.color};padding:2px 7px;border-radius:20px;border:1px solid ${ei.color}30;background:${ei.color}15;white-space:nowrap">${ei.icon} ${ei.label}</span>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  async function cargarKitsHerr() {
+    try {
+      const res = await apiCall('/kits-herramientas');
+      if (!res.ok) return;
+      window._herrKitsCache = await res.json();
+      renderKitsHerr(window._herrKitsCache);
+    } catch { document.getElementById('herrListaKits').innerHTML = '<div class="empty-state">Error al cargar</div>'; }
+  }
+
+  async function verDetalleKit(id) {
+    document.getElementById('modalKitDetalleTitulo').textContent = 'Kit';
+    document.getElementById('modalKitDetalleBody').innerHTML = '<div class="empty-state">Cargando...</div>';
+    document.getElementById('modalKitDetalle').classList.add('active');
+    try {
+      const res = await apiCall('/kits-herramientas/' + id);
+      if (!res.ok) throw new Error();
+      const { kit: k, herramientas } = await res.json();
+      const ei = HERR_KIT_ESTADO[k.estado] || HERR_KIT_ESTADO.disponible;
+      const s = getSession();
+      const puedeEditar = s?.rol !== 'operario';
+      const real = herramientas.length;
+      const total = k.num_componentes || 0;
+      const completo = total === 0 || real >= total;
+      document.getElementById('modalKitDetalleTitulo').textContent = 'Kit ' + k.numero_kit;
+      document.getElementById('modalKitDetalleBody').innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+          <div>
+            ${k.nombre ? `<div style="font-size:13px;color:var(--muted)">${k.nombre}</div>` : ''}
+            <div style="font-size:12px;color:var(--muted);margin-top:2px">
+              ${k.obra_nombre ? '🏗 ' + k.obra_nombre : ''}
+              ${k.asignado_a ? ' · 👤 ' + k.asignado_a : ''}
+            </div>
+          </div>
+          <span style="font-size:11px;font-weight:700;color:${ei.color};padding:3px 10px;border-radius:20px;border:1px solid ${ei.color}30;background:${ei.color}15">${ei.icon} ${ei.label}</span>
+        </div>
+        <div style="background:${completo?'#22c55e':'#f59e0b'}15;border:1px solid ${completo?'#22c55e':'#f59e0b'}40;border-radius:10px;padding:10px;margin-bottom:12px;text-align:center">
+          <span style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:18px;color:${completo?'#22c55e':'#f59e0b'}">${real}${total?' / '+total:''}</span>
+          <span style="font-size:12px;color:var(--muted);margin-left:6px">componentes${completo?' ✅':' ⚠️'}</span>
+        </div>
+        ${k.fecha_alta ? `<div class="settings-row"><span>Alta</span><strong>${k.fecha_alta.slice(0,10)}</strong></div>` : ''}
+        ${k.fecha_asignacion ? `<div class="settings-row"><span>Asignado</span><strong>${k.fecha_asignacion.slice(0,10)}</strong></div>` : ''}
+        ${k.fecha_devolucion ? `<div class="settings-row"><span>Devuelto</span><strong>${k.fecha_devolucion.slice(0,10)}</strong></div>` : ''}
+        ${k.notas ? `<div style="font-size:12px;color:var(--muted);margin:6px 0;font-style:italic">${k.notas}</div>` : ''}
+        <div style="border-top:1px solid var(--border);padding-top:12px;margin-top:12px">
+          <div style="font-family:'Montserrat',sans-serif;font-weight:700;font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Herramientas del kit</div>
+          ${herramientas.length ? herramientas.map(h => {
+            const eh = HERR_ESTADO[h.estado] || HERR_ESTADO.disponible;
+            return `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)20">
+              <span>${eh.icon}</span>
+              <div style="flex:1;min-width:0">
+                <div style="font-size:13px;font-weight:600;color:var(--text)">${h.tipo_nombre||'—'} ${h.marca?'· '+h.marca:''} ${h.modelo?h.modelo:''}</div>
+                <div style="font-size:11px;color:var(--muted);font-family:monospace">${h.numero_serie||'—'}</div>
+              </div>
+              <span style="font-size:10px;color:${eh.color}">${eh.label}</span>
+            </div>`;
+          }).join('') : '<div style="color:var(--muted);font-size:13px">Sin herramientas registradas</div>'}
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:14px">
+          ${k.estado !== 'disponible' ? `<button onclick="kitCambiarEstado(${k.id},'disponible')" style="flex:1;padding:8px;background:#22c55e20;color:#22c55e;border:1px solid #22c55e40;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">✅ Devolver kit</button>` : ''}
+          ${k.estado === 'disponible' ? `<button onclick="kitCambiarEstado(${k.id},'en_uso')" style="flex:1;padding:8px;background:#3b82f620;color:#3b82f6;border:1px solid #3b82f640;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">🔵 Poner en uso</button>` : ''}
+          ${puedeEditar ? `<button onclick="cerrarDetalleKit();abrirFormKit(${JSON.stringify(k).replace(/"/g,'&quot;')})" style="padding:8px 10px;background:var(--surface);color:var(--muted);border:1px solid var(--border);border-radius:8px;font-size:12px;cursor:pointer">✏️</button>` : ''}
+        </div>`;
+    } catch { document.getElementById('modalKitDetalleBody').innerHTML = '<div style="color:var(--red)">Error al cargar</div>'; }
+  }
+
+  function cerrarDetalleKit() { document.getElementById('modalKitDetalle').classList.remove('active'); }
+
+  async function kitCambiarEstado(id, nuevoEstado) {
+    const asignado = nuevoEstado === 'disponible' ? '' : null;
+    const body = { estado: nuevoEstado };
+    if (nuevoEstado === 'disponible') body.asignado_a = '';
+    try {
+      const res = await apiCall('/kits-herramientas/' + id, { method: 'PUT', body: JSON.stringify(body) });
+      if (!res.ok) return toast('❌ Error', 'err');
+      toast('✅ Estado actualizado');
+      cerrarDetalleKit();
+      if (window._herrTab === 2) cargarKitsHerr();
+    } catch { toast('❌ Error de red', 'err'); }
+  }
+
+  // ── HISTORIAL ────────────────────────────────────────────
+  async function cargarHistHerr() {
+    const c = document.getElementById('herrListaHist');
+    try {
+      const res = await apiCall('/historial-herramientas');
+      if (!res.ok) return;
+      const lista = await res.json();
+      if (!lista.length) { c.innerHTML = '<div class="empty-state">Sin registros</div>'; return; }
+      c.innerHTML = lista.map(r => `
+        <div style="padding:8px 0;border-bottom:1px solid var(--border)">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <div style="font-size:12px;font-weight:700;color:var(--text)">${r.accion}${r.estado_nuevo?' → <b>'+r.estado_nuevo+'</b>':''}</div>
+            <div style="font-size:10px;color:var(--muted)">${(r.fecha||'').slice(0,16)}</div>
+          </div>
+          <div style="font-size:11px;color:var(--muted)">
+            ${r.numero_serie||r.marca||''} ${r.modelo||''} ${r.usuario?'· '+r.usuario:''} ${r.notas?'· '+r.notas:''}
+          </div>
+        </div>`).join('');
+    } catch { c.innerHTML = '<div class="empty-state">Error al cargar</div>'; }
+  }
+
+  // ── FORMULARIO HERRAMIENTA ────────────────────────────────
+  async function herrCargarSelects() {
+    try {
+      const [rt, rk, ro] = await Promise.all([
+        apiCall('/tipos-herramienta'), apiCall('/kits-herramientas'), apiCall('/obras')
+      ]);
+      if (rt.ok) {
+        const tipos = await rt.json();
+        document.getElementById('herrTipo').innerHTML = '<option value="">— Selecciona —</option>' +
+          tipos.map(t => `<option value="${t.id}">${t.nombre}</option>`).join('');
+      }
+      if (rk.ok) {
+        const kits = await rk.json();
+        document.getElementById('herrKit').innerHTML = '<option value="">— Sin kit —</option>' +
+          kits.map(k => `<option value="${k.id}">Kit ${k.numero_kit}${k.nombre?' · '+k.nombre:''}</option>`).join('');
+      }
+      if (ro.ok) {
+        const obras = await ro.json();
+        const opts = '<option value="">— Sin obra —</option>' + obras.map(o => `<option value="${o.id}">${o.nombre}</option>`).join('');
+        document.getElementById('herrObra').innerHTML = opts;
+        document.getElementById('kitObra').innerHTML  = opts;
+      }
+    } catch {}
+  }
+
+  function abrirFormHerramienta(h) {
+    herrCargarSelects().then(() => {
+      if (h) {
+        document.getElementById('herrEditId').value    = h.id;
+        document.getElementById('herrTipo').value      = h.tipo_id || '';
+        document.getElementById('herrAlimentacion').value = h.alimentacion || 'bateria';
+        document.getElementById('herrMarca').value     = h.marca   || '';
+        document.getElementById('herrModelo').value    = h.modelo  || '';
+        document.getElementById('herrSerie').value     = h.numero_serie || '';
+        document.getElementById('herrKit').value       = h.kit_id  || '';
+        document.getElementById('herrObra').value      = h.obra_id || '';
+        document.getElementById('herrAsignado').value  = h.asignado_a || '';
+        document.getElementById('herrNotas').value     = h.notas   || '';
+        document.getElementById('modalHerrTitulo').textContent = '✏️ Editar herramienta';
+      } else {
+        document.getElementById('herrEditId').value = '';
+        document.getElementById('herrTipo').value = '';
+        document.getElementById('herrAlimentacion').value = 'bateria';
+        ['herrMarca','herrModelo','herrSerie','herrAsignado','herrNotas'].forEach(id => document.getElementById(id).value = '');
+        document.getElementById('herrKit').value = '';
+        document.getElementById('herrObra').value = '';
+        document.getElementById('modalHerrTitulo').textContent = '🔧 Nueva herramienta';
+      }
+    });
+    document.getElementById('modalHerramienta').classList.add('active');
+  }
+
+  function cerrarFormHerramienta() { document.getElementById('modalHerramienta').classList.remove('active'); }
+
+  async function guardarHerramienta() {
+    const serie = document.getElementById('herrSerie').value.trim();
+    if (!serie) return toast('⚠️ El número de serie es obligatorio', 'err');
+    const id = document.getElementById('herrEditId').value;
+    const body = {
+      tipo_id:     parseInt(document.getElementById('herrTipo').value)      || null,
+      alimentacion:document.getElementById('herrAlimentacion').value,
+      marca:       document.getElementById('herrMarca').value.trim()        || null,
+      modelo:      document.getElementById('herrModelo').value.trim()       || null,
+      numero_serie:serie.toUpperCase(),
+      kit_id:      parseInt(document.getElementById('herrKit').value)       || null,
+      obra_id:     parseInt(document.getElementById('herrObra').value)      || null,
+      asignado_a:  document.getElementById('herrAsignado').value.trim()     || null,
+      notas:       document.getElementById('herrNotas').value.trim()        || null,
+    };
+    try {
+      const res = id
+        ? await apiCall('/herramientas/' + id,{ method:'PUT', body:JSON.stringify(body) })
+        : await apiCall('/herramientas',     { method:'POST',body:JSON.stringify(body) });
+      if (!res.ok) { const e=await res.json().catch(()=>({error:'Error'})); return toast('❌ '+(e.error||'Error'),'err'); }
+      cerrarFormHerramienta();
+      toast(id ? '✅ Herramienta actualizada' : '✅ Herramienta registrada');
+      if (window._herrTab === 1) cargarInvHerr();
+    } catch { toast('❌ Error de red','err'); }
+  }
+
+  async function eliminarHerramienta(id) {
+    if (!confirm('¿Eliminar esta herramienta?')) return;
+    try {
+      const res = await apiCall('/herramientas/'+id,{ method:'DELETE' });
+      if (!res.ok) return toast('❌ Sin permisos','err');
+      toast('🗑️ Herramienta eliminada');
+      cerrarDetalleHerr();
+      if (window._herrTab === 1) cargarInvHerr();
+    } catch { toast('❌ Error de red','err'); }
+  }
+
+  // ── FORMULARIO KIT ────────────────────────────────────────
+  function abrirFormKit(k) {
+    herrCargarSelects().then(() => {
+      if (k) {
+        document.getElementById('kitEditId').value      = k.id;
+        document.getElementById('kitNumero').value      = k.numero_kit  || '';
+        document.getElementById('kitNombre').value      = k.nombre      || '';
+        document.getElementById('kitComponentes').value = k.num_componentes || 0;
+        document.getElementById('kitObra').value        = k.obra_id     || '';
+        document.getElementById('kitAsignado').value    = k.asignado_a  || '';
+        document.getElementById('kitNotas').value       = k.notas       || '';
+        document.getElementById('modalKitTitulo').textContent = '✏️ Editar kit';
+      } else {
+        document.getElementById('kitEditId').value = '';
+        document.getElementById('kitNumero').value = '';
+        document.getElementById('kitNombre').value = '';
+        document.getElementById('kitComponentes').value = 0;
+        document.getElementById('kitObra').value = '';
+        document.getElementById('kitAsignado').value = '';
+        document.getElementById('kitNotas').value = '';
+        document.getElementById('modalKitTitulo').textContent = '📋 Nuevo Kit';
+      }
+    });
+    document.getElementById('modalKit').classList.add('active');
+  }
+
+  function cerrarFormKit() { document.getElementById('modalKit').classList.remove('active'); }
+
+  async function guardarKit() {
+    const numero = document.getElementById('kitNumero').value.trim();
+    if (!numero) return toast('⚠️ El número de kit es obligatorio','err');
+    const id = document.getElementById('kitEditId').value;
+    const body = {
+      numero_kit:      numero,
+      nombre:          document.getElementById('kitNombre').value.trim()      || null,
+      num_componentes: parseInt(document.getElementById('kitComponentes').value) || 0,
+      obra_id:         parseInt(document.getElementById('kitObra').value)     || null,
+      asignado_a:      document.getElementById('kitAsignado').value.trim()    || null,
+      notas:           document.getElementById('kitNotas').value.trim()       || null,
+    };
+    try {
+      const res = id
+        ? await apiCall('/kits-herramientas/'+id,{ method:'PUT', body:JSON.stringify(body) })
+        : await apiCall('/kits-herramientas',    { method:'POST',body:JSON.stringify(body) });
+      if (!res.ok) { const e=await res.json().catch(()=>({error:'Error'})); return toast('❌ '+(e.error||'Error'),'err'); }
+      cerrarFormKit();
+      toast(id ? '✅ Kit actualizado' : '✅ Kit creado');
+      if (window._herrTab === 2) cargarKitsHerr();
+    } catch { toast('❌ Error de red','err'); }
+  }
 
   // ══════════════════════════════════════════════════════
   // PEDIDOS

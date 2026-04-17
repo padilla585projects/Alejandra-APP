@@ -267,6 +267,32 @@ export default {
         if (method === 'DELETE') return await eliminarPedido(pid, request, env);
       }
 
+      // ── Herramientas ─────────────────────────────────────────────────────────
+      if (path === '/tipos-herramienta' && method === 'GET')  return await getTiposHerramienta(request, env);
+      if (path === '/tipos-herramienta' && method === 'POST') return await crearTipoHerramienta(request, env);
+      if (path.startsWith('/tipos-herramienta/')) {
+        const tid = parseInt(path.split('/tipos-herramienta/')[1]);
+        if (method === 'DELETE') return await eliminarTipoHerramienta(tid, request, env);
+      }
+      if (path === '/kits-herramientas' && method === 'GET')  return await getKits(request, env);
+      if (path === '/kits-herramientas' && method === 'POST') return await crearKit(request, env);
+      if (path.startsWith('/kits-herramientas/')) {
+        const kid = parseInt(path.split('/kits-herramientas/')[1]);
+        if (method === 'GET')    return await getKit(kid, request, env);
+        if (method === 'PUT')    return await actualizarKit(kid, request, env);
+        if (method === 'DELETE') return await eliminarKit(kid, request, env);
+      }
+      if (path === '/herramientas' && method === 'GET')  return await getHerramientas(request, env);
+      if (path === '/herramientas' && method === 'POST') return await crearHerramienta(request, env);
+      if (path === '/herramientas/buscar' && method === 'GET') return await buscarHerramienta(request, env);
+      if (path.startsWith('/herramientas/')) {
+        const hid = parseInt(path.split('/herramientas/')[1]);
+        if (method === 'GET')    return await getHerramienta(hid, request, env);
+        if (method === 'PUT')    return await actualizarHerramienta(hid, request, env);
+        if (method === 'DELETE') return await eliminarHerramienta(hid, request, env);
+      }
+      if (path === '/historial-herramientas' && method === 'GET') return await getHistorialHerramientas(request, env);
+
       // ── Otros (legacy/extras) ─────────────────────────────────────────────
       if (path === '/logs'         && method === 'GET')   return await getLogs(request, env);
       if (path === '/historial'    && method === 'GET')   return await getHistorial(request, env);
@@ -274,7 +300,7 @@ export default {
       if (path === '/carretillas/historial'  && method === 'GET') return await getHistorialTabla('historial_carretillas', request, env);
       if (path === '/stats'        && method === 'GET')   return await getStats(request, env);
       if (path === '/sheet-id'     && method === 'GET')   return json({ id: env.GOOGLE_SHEET_ID || null });
-      if ((path === '/sync' || path === '/sync-sheets') && method === 'POST') { await syncSheets(env); return json({ ok: true, mensaje: 'Sync completado' }); }
+      if ((path === '/sync' || path === '/sync-sheets') && method === 'POST') { await Promise.all([syncSheets(env), syncPedidos(env)]); return json({ ok: true, mensaje: 'Sync completado' }); }
       if (path === '/sync-debug'   && method === 'POST')  return await syncSheetsDebug(env);
 
       return err('Ruta no encontrada', 404);
@@ -1558,7 +1584,7 @@ async function crearPedido(request, env) {
   const r = await env.DB.prepare(
     'INSERT INTO pedidos (empresa_id, obra_id, departamento, referencia, descripcion, cantidad, unidad, proveedor, solicitado_por, notas) VALUES (?,?,?,?,?,?,?,?,?,?)'
   ).bind(empresa_id, obra_id||null, dept, referencia||null, descripcion.trim(), cantidad||1, unidad||'ud', proveedor||null, solicitado_por||null, notas||null).run();
-  syncSheets(env, 'Elec-Pedidos');
+  syncPedidos(env, tabForDept('pedido', dept));
   await sendTelegram(env, `📦 <b>Nuevo pedido</b> [${dept}]\n👤 ${solicitado_por||'—'}\n📝 ${descripcion.trim().slice(0,200)}`);
   return json({ ok: true, id: r.meta.last_row_id });
 }
@@ -1580,7 +1606,7 @@ async function actualizarPedido(id, request, env) {
   if (!campos.length) return err('Sin campos para actualizar');
   vals.push(id);
   await env.DB.prepare(`UPDATE pedidos SET ${campos.join(', ')} WHERE id = ? AND empresa_id = ${empresa_id}`).bind(...vals).run();
-  syncSheets(env, 'Elec-Pedidos');
+  syncPedidos(env);
   return json({ ok: true });
 }
 
@@ -1588,8 +1614,9 @@ async function eliminarPedido(id, request, env) {
   const { empresa_id, isSuperadmin, isEmpresaAdmin, isEncargado } = await getAuth(request, env);
   if (!empresa_id) return err('No autorizado', 403);
   if (!isSuperadmin && !isEmpresaAdmin && !isEncargado) return err('Sin permiso', 403);
+  const pedido = await env.DB.prepare('SELECT departamento FROM pedidos WHERE id = ? AND empresa_id = ?').bind(id, empresa_id).first();
   await env.DB.prepare('DELETE FROM pedidos WHERE id = ? AND empresa_id = ?').bind(id, empresa_id).run();
-  syncSheets(env, 'Elec-Pedidos');
+  syncPedidos(env, tabForDept('pedido', pedido?.departamento));
   return json({ ok: true });
 }
 
@@ -1600,7 +1627,7 @@ function tabForDept(tipo, dept) {
   if (tipo === 'bobina')     return 'Elec-Bobinas';
   if (tipo === 'pemp')       return d === 'mecanicas' ? 'Mec-PEMP' : 'Elec-PEMP';
   if (tipo === 'carretilla') return d === 'mecanicas' ? 'Mec-Carretillas' : 'Elec-Carretillas';
-  if (tipo === 'pedido')     return 'Elec-Pedidos';
+  if (tipo === 'pedido')     return d === 'mecanicas' ? 'Mec-Pedidos' : 'Elec-Pedidos';
   return 'Seg-Inventario';
 }
 
@@ -1657,6 +1684,315 @@ async function getGoogleToken(env, scope = 'https://www.googleapis.com/auth/spre
   return data.access_token;
 }
 
+// ════════════════════════════════════════════════════════════════════════════
+// HERRAMIENTAS
+// ════════════════════════════════════════════════════════════════════════════
+
+const AHORA = () => new Date().toISOString().slice(0, 19).replace('T', ' ');
+
+async function getTiposHerramienta(request, env) {
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const { results } = await env.DB.prepare(
+    'SELECT * FROM tipos_herramienta WHERE empresa_id = ? ORDER BY nombre'
+  ).bind(empresa_id).all();
+  return json(results);
+}
+
+async function crearTipoHerramienta(request, env) {
+  const { empresa_id, isAdmin, isSuperadmin, isEmpresaAdmin, rol } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  if (rol === 'operario') return err('Sin permisos', 403);
+  const { nombre } = await request.json().catch(() => ({}));
+  if (!nombre?.trim()) return err('Falta el nombre');
+  const r = await env.DB.prepare(
+    'INSERT INTO tipos_herramienta (nombre, empresa_id) VALUES (?, ?)'
+  ).bind(nombre.trim(), empresa_id).run();
+  return json({ ok: true, id: r.meta.last_row_id, nombre: nombre.trim() }, 201);
+}
+
+async function eliminarTipoHerramienta(id, request, env) {
+  const { empresa_id, rol } = await getAuth(request, env);
+  if (!empresa_id || rol === 'operario') return err('Sin permisos', 403);
+  await env.DB.prepare('DELETE FROM tipos_herramienta WHERE id = ? AND empresa_id = ?').bind(id, empresa_id).run();
+  return json({ ok: true });
+}
+
+async function getKits(request, env) {
+  const { empresa_id, departamento } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const url = new URL(request.url);
+  let sql = 'SELECT k.*, o.nombre as obra_nombre FROM kits_herramientas k LEFT JOIN obras o ON k.obra_id = o.id WHERE k.empresa_id = ?';
+  const params = [empresa_id];
+  if (departamento) { sql += ' AND k.departamento = ?'; params.push(departamento); }
+  const filtro = url.searchParams.get('estado');
+  if (filtro) { sql += ' AND k.estado = ?'; params.push(filtro); }
+  sql += ' ORDER BY k.numero_kit ASC';
+  const { results } = await env.DB.prepare(sql).bind(...params).all();
+  return json(results);
+}
+
+async function getKit(id, request, env) {
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const kit = await env.DB.prepare(
+    'SELECT k.*, o.nombre as obra_nombre FROM kits_herramientas k LEFT JOIN obras o ON k.obra_id = o.id WHERE k.id = ? AND k.empresa_id = ?'
+  ).bind(id, empresa_id).first();
+  if (!kit) return err('Kit no encontrado', 404);
+  const { results: herramientas } = await env.DB.prepare(
+    'SELECT h.*, t.nombre as tipo_nombre FROM herramientas h LEFT JOIN tipos_herramienta t ON h.tipo_id = t.id WHERE h.kit_id = ? AND h.empresa_id = ? ORDER BY t.nombre'
+  ).bind(id, empresa_id).all();
+  return json({ kit, herramientas });
+}
+
+async function crearKit(request, env) {
+  const { empresa_id, departamento, rol, nombre: userNombre } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  if (rol === 'operario') return err('Sin permisos', 403);
+  const body = await request.json().catch(() => ({}));
+  const { numero_kit, nombre, obra_id, asignado_a, num_componentes, notas } = body;
+  if (!numero_kit?.trim()) return err('Falta el número de kit');
+  const dept = departamento || 'electrico';
+  const ahora = AHORA();
+  const r = await env.DB.prepare(
+    'INSERT INTO kits_herramientas (empresa_id, numero_kit, nombre, obra_id, departamento, asignado_a, num_componentes, notas, fecha_alta, fecha_asignacion) VALUES (?,?,?,?,?,?,?,?,?,?)'
+  ).bind(empresa_id, numero_kit.trim(), nombre?.trim() || null, obra_id || null, dept,
+    asignado_a?.trim() || null, num_componentes || 0, notas?.trim() || null, ahora,
+    asignado_a?.trim() ? ahora : null
+  ).run();
+  await registrarHistorialKitHerr(env, empresa_id, r.meta.last_row_id, null, 'alta', null, 'disponible', userNombre || rol, 'Kit creado');
+  return json({ ok: true, id: r.meta.last_row_id }, 201);
+}
+
+async function actualizarKit(id, request, env) {
+  const { empresa_id, rol, nombre: userNombre } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  if (rol === 'operario') return err('Sin permisos', 403);
+  const body = await request.json().catch(() => ({}));
+  const kit = await env.DB.prepare('SELECT * FROM kits_herramientas WHERE id = ? AND empresa_id = ?').bind(id, empresa_id).first();
+  if (!kit) return err('Kit no encontrado', 404);
+
+  const campos = []; const vals = [];
+  const ahora = AHORA();
+
+  if (body.numero_kit  !== undefined) { campos.push('numero_kit = ?');   vals.push(body.numero_kit.trim()); }
+  if (body.nombre      !== undefined) { campos.push('nombre = ?');        vals.push(body.nombre?.trim() || null); }
+  if (body.obra_id     !== undefined) { campos.push('obra_id = ?');       vals.push(body.obra_id || null); }
+  if (body.departamento!== undefined) { campos.push('departamento = ?');  vals.push(body.departamento); }
+  if (body.num_componentes !== undefined) { campos.push('num_componentes = ?'); vals.push(body.num_componentes); }
+  if (body.notas       !== undefined) { campos.push('notas = ?');         vals.push(body.notas?.trim() || null); }
+
+  // Asignación
+  if (body.asignado_a !== undefined) {
+    campos.push('asignado_a = ?'); vals.push(body.asignado_a?.trim() || null);
+    if (body.asignado_a?.trim() && !kit.asignado_a) {
+      campos.push('fecha_asignacion = ?'); vals.push(ahora);
+      campos.push('fecha_devolucion = ?'); vals.push(null);
+    }
+  }
+  // Devolución
+  if (body.estado !== undefined) {
+    const estadoAnterior = kit.estado;
+    campos.push('estado = ?'); vals.push(body.estado);
+    if (body.estado === 'disponible' && kit.asignado_a) {
+      campos.push('fecha_devolucion = ?'); vals.push(ahora);
+      campos.push('asignado_a = ?'); vals.push(null);
+    }
+    if (body.estado !== estadoAnterior) {
+      await registrarHistorialKitHerr(env, empresa_id, id, null, 'cambio_estado', estadoAnterior, body.estado, userNombre || rol, body.notas_historial || null);
+    }
+  }
+
+  if (!campos.length) return json({ ok: true });
+  vals.push(id); vals.push(empresa_id);
+  await env.DB.prepare(`UPDATE kits_herramientas SET ${campos.join(', ')} WHERE id = ? AND empresa_id = ?`).bind(...vals).run();
+  return json({ ok: true });
+}
+
+async function eliminarKit(id, request, env) {
+  const { empresa_id, rol } = await getAuth(request, env);
+  if (!empresa_id || (rol !== 'encargado' && rol !== 'empresa_admin' && rol !== 'superadmin')) return err('Sin permisos', 403);
+  await env.DB.prepare('UPDATE herramientas SET kit_id = NULL WHERE kit_id = ? AND empresa_id = ?').bind(id, empresa_id).run();
+  await env.DB.prepare('DELETE FROM kits_herramientas WHERE id = ? AND empresa_id = ?').bind(id, empresa_id).run();
+  return json({ ok: true });
+}
+
+async function getHerramientas(request, env) {
+  const { empresa_id, departamento } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const url = new URL(request.url);
+  let sql = `SELECT h.*, t.nombre as tipo_nombre, o.nombre as obra_nombre, k.numero_kit
+             FROM herramientas h
+             LEFT JOIN tipos_herramienta t ON h.tipo_id = t.id
+             LEFT JOIN obras o ON h.obra_id = o.id
+             LEFT JOIN kits_herramientas k ON h.kit_id = k.id
+             WHERE h.empresa_id = ?`;
+  const params = [empresa_id];
+  if (departamento) { sql += ' AND h.departamento = ?'; params.push(departamento); }
+  const estado = url.searchParams.get('estado');
+  const kit_id = url.searchParams.get('kit_id');
+  if (estado)  { sql += ' AND h.estado = ?';   params.push(estado); }
+  if (kit_id)  { sql += ' AND h.kit_id = ?';   params.push(parseInt(kit_id)); }
+  sql += ' ORDER BY t.nombre, h.marca, h.modelo';
+  const { results } = await env.DB.prepare(sql).bind(...params).all();
+  return json(results);
+}
+
+async function getHerramienta(id, request, env) {
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const h = await env.DB.prepare(
+    `SELECT h.*, t.nombre as tipo_nombre, o.nombre as obra_nombre, k.numero_kit, k.nombre as kit_nombre
+     FROM herramientas h
+     LEFT JOIN tipos_herramienta t ON h.tipo_id = t.id
+     LEFT JOIN obras o ON h.obra_id = o.id
+     LEFT JOIN kits_herramientas k ON h.kit_id = k.id
+     WHERE h.id = ? AND h.empresa_id = ?`
+  ).bind(id, empresa_id).first();
+  if (!h) return err('Herramienta no encontrada', 404);
+  const { results: historial } = await env.DB.prepare(
+    'SELECT * FROM historial_herramientas WHERE herramienta_id = ? AND empresa_id = ? ORDER BY fecha DESC LIMIT 15'
+  ).bind(id, empresa_id).all();
+  return json({ herramienta: h, historial });
+}
+
+async function buscarHerramienta(request, env) {
+  const { empresa_id, departamento } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const url  = new URL(request.url);
+  const serie = url.searchParams.get('serie')?.trim();
+  if (!serie) return err('Falta el número de serie');
+  const h = await env.DB.prepare(
+    `SELECT h.*, t.nombre as tipo_nombre, o.nombre as obra_nombre, k.numero_kit, k.nombre as kit_nombre
+     FROM herramientas h
+     LEFT JOIN tipos_herramienta t ON h.tipo_id = t.id
+     LEFT JOIN obras o ON h.obra_id = o.id
+     LEFT JOIN kits_herramientas k ON h.kit_id = k.id
+     WHERE h.empresa_id = ? AND UPPER(h.numero_serie) = UPPER(?)`
+  ).bind(empresa_id, serie).first();
+  if (!h) return err('Herramienta no encontrada', 404);
+  const { results: historial } = await env.DB.prepare(
+    'SELECT * FROM historial_herramientas WHERE herramienta_id = ? AND empresa_id = ? ORDER BY fecha DESC LIMIT 10'
+  ).bind(h.id, empresa_id).all();
+  return json({ herramienta: h, historial });
+}
+
+async function crearHerramienta(request, env) {
+  const { empresa_id, departamento, rol, nombre: userNombre } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  if (rol === 'operario') return err('Sin permisos', 403);
+  const body = await request.json().catch(() => ({}));
+  const { kit_id, tipo_id, marca, modelo, numero_serie, obra_id, asignado_a, alimentacion, notas } = body;
+  const dept = departamento || body.departamento || 'electrico';
+  const ahora = AHORA();
+  const r = await env.DB.prepare(
+    'INSERT INTO herramientas (empresa_id, kit_id, tipo_id, marca, modelo, numero_serie, departamento, obra_id, asignado_a, alimentacion, notas, fecha_alta, fecha_asignacion) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)'
+  ).bind(empresa_id, kit_id || null, tipo_id || null, marca?.trim() || null, modelo?.trim() || null,
+    numero_serie?.trim() || null, dept, obra_id || null, asignado_a?.trim() || null,
+    alimentacion || 'bateria', notas?.trim() || null, ahora, asignado_a?.trim() ? ahora : null
+  ).run();
+  const hid = r.meta.last_row_id;
+  await registrarHistorialHerr(env, empresa_id, hid, kit_id || null, 'alta', null, 'disponible', userNombre || rol, 'Herramienta registrada');
+  return json({ ok: true, id: hid }, 201);
+}
+
+async function actualizarHerramienta(id, request, env) {
+  const { empresa_id, rol, nombre: userNombre } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const body = await request.json().catch(() => ({}));
+  const h = await env.DB.prepare('SELECT * FROM herramientas WHERE id = ? AND empresa_id = ?').bind(id, empresa_id).first();
+  if (!h) return err('Herramienta no encontrada', 404);
+
+  // Operarios solo pueden cambiar estado
+  if (rol === 'operario' && Object.keys(body).some(k => !['estado', 'notas_historial'].includes(k))) {
+    return err('Sin permisos para editar datos', 403);
+  }
+
+  const campos = []; const vals = [];
+  const ahora = AHORA();
+
+  if (body.kit_id      !== undefined) { campos.push('kit_id = ?');      vals.push(body.kit_id || null); }
+  if (body.tipo_id     !== undefined) { campos.push('tipo_id = ?');     vals.push(body.tipo_id || null); }
+  if (body.marca       !== undefined) { campos.push('marca = ?');       vals.push(body.marca?.trim() || null); }
+  if (body.modelo      !== undefined) { campos.push('modelo = ?');      vals.push(body.modelo?.trim() || null); }
+  if (body.numero_serie!== undefined) { campos.push('numero_serie = ?');vals.push(body.numero_serie?.trim() || null); }
+  if (body.departamento!== undefined) { campos.push('departamento = ?');vals.push(body.departamento); }
+  if (body.obra_id     !== undefined) { campos.push('obra_id = ?');     vals.push(body.obra_id || null); }
+  if (body.alimentacion!== undefined) { campos.push('alimentacion = ?');vals.push(body.alimentacion); }
+  if (body.notas       !== undefined) { campos.push('notas = ?');       vals.push(body.notas?.trim() || null); }
+
+  // Asignación / devolución
+  if (body.asignado_a !== undefined) {
+    campos.push('asignado_a = ?'); vals.push(body.asignado_a?.trim() || null);
+    if (body.asignado_a?.trim() && !h.asignado_a) {
+      campos.push('fecha_asignacion = ?'); vals.push(ahora);
+      campos.push('fecha_devolucion = ?'); vals.push(null);
+    } else if (!body.asignado_a?.trim() && h.asignado_a) {
+      campos.push('fecha_devolucion = ?'); vals.push(ahora);
+    }
+  }
+
+  // Cambio de estado con fechas automáticas
+  if (body.estado !== undefined && body.estado !== h.estado) {
+    campos.push('estado = ?'); vals.push(body.estado);
+    if (body.estado === 'averiado')      { campos.push('fecha_averia = ?');    vals.push(ahora); }
+    if (body.estado === 'en_reparacion') { campos.push('fecha_averia = ?');    vals.push(h.fecha_averia || ahora); }
+    if (body.estado === 'disponible' && (h.estado === 'averiado' || h.estado === 'en_reparacion')) {
+      campos.push('fecha_reparacion = ?'); vals.push(ahora);
+    }
+    if (body.estado === 'disponible' && h.asignado_a) {
+      campos.push('fecha_devolucion = ?'); vals.push(ahora);
+      campos.push('asignado_a = ?'); vals.push(null);
+    }
+    await registrarHistorialHerr(env, empresa_id, id, h.kit_id, 'cambio_estado', h.estado, body.estado, userNombre || rol, body.notas_historial || null);
+  }
+
+  if (!campos.length) return json({ ok: true });
+  vals.push(id); vals.push(empresa_id);
+  await env.DB.prepare(`UPDATE herramientas SET ${campos.join(', ')} WHERE id = ? AND empresa_id = ?`).bind(...vals).run();
+  return json({ ok: true });
+}
+
+async function eliminarHerramienta(id, request, env) {
+  const { empresa_id, rol } = await getAuth(request, env);
+  if (!empresa_id || (rol !== 'encargado' && rol !== 'empresa_admin' && rol !== 'superadmin')) return err('Sin permisos', 403);
+  await env.DB.prepare('DELETE FROM herramientas WHERE id = ? AND empresa_id = ?').bind(id, empresa_id).run();
+  return json({ ok: true });
+}
+
+async function getHistorialHerramientas(request, env) {
+  const { empresa_id, departamento } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const url = new URL(request.url);
+  const hid = url.searchParams.get('herramienta_id');
+  const kid = url.searchParams.get('kit_id');
+  let sql = 'SELECT hh.*, h.numero_serie, h.marca, h.modelo FROM historial_herramientas hh LEFT JOIN herramientas h ON hh.herramienta_id = h.id WHERE hh.empresa_id = ?';
+  const params = [empresa_id];
+  if (hid) { sql += ' AND hh.herramienta_id = ?'; params.push(parseInt(hid)); }
+  if (kid) { sql += ' AND hh.kit_id = ?'; params.push(parseInt(kid)); }
+  sql += ' ORDER BY hh.fecha DESC LIMIT 50';
+  const { results } = await env.DB.prepare(sql).bind(...params).all();
+  return json(results);
+}
+
+async function registrarHistorialHerr(env, empresa_id, herramienta_id, kit_id, accion, estado_anterior, estado_nuevo, usuario, notas) {
+  try {
+    await env.DB.prepare(
+      'INSERT INTO historial_herramientas (empresa_id, herramienta_id, kit_id, accion, estado_anterior, estado_nuevo, usuario, notas, fecha) VALUES (?,?,?,?,?,?,?,?,?)'
+    ).bind(empresa_id, herramienta_id, kit_id || null, accion, estado_anterior || null, estado_nuevo || null, usuario || null, notas || null, AHORA()).run();
+  } catch {}
+}
+
+async function registrarHistorialKitHerr(env, empresa_id, kit_id, herramienta_id, accion, estado_anterior, estado_nuevo, usuario, notas) {
+  try {
+    await env.DB.prepare(
+      'INSERT INTO historial_herramientas (empresa_id, herramienta_id, kit_id, accion, estado_anterior, estado_nuevo, usuario, notas, fecha) VALUES (?,?,?,?,?,?,?,?,?)'
+    ).bind(empresa_id, herramienta_id || null, kit_id, accion, estado_anterior || null, estado_nuevo || null, usuario || null, notas || null, AHORA()).run();
+  } catch {}
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+
 async function syncSheets(env, tabs = null) {
   if (!env.GOOGLE_PRIVATE_KEY || !env.GOOGLE_CLIENT_EMAIL || !env.GOOGLE_SHEET_ID) return;
 
@@ -1665,7 +2001,7 @@ async function syncSheets(env, tabs = null) {
     const sheetId = env.GOOGLE_SHEET_ID;
     const authH   = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
 
-    const tabsNecesarias = ['Elec-Bobinas', 'Elec-PEMP', 'Elec-Carretillas', 'Mec-PEMP', 'Mec-Carretillas', 'Seg-Inventario', 'Elec-Pedidos'];
+    const tabsNecesarias = ['Elec-Bobinas', 'Elec-PEMP', 'Elec-Carretillas', 'Mec-PEMP', 'Mec-Carretillas', 'Seg-Inventario'];
     const tabsAntiguas   = ['Bobinas', 'PEMP', 'Carretillas', '⚡ Bobinas', '⚡ PEMP', '⚡ Carretillas', '🔧 PEMP', '🔧 Carretillas'];
     const tabsToSync     = tabs ? (Array.isArray(tabs) ? tabs : [tabs]) : tabsNecesarias;
 
@@ -1721,13 +2057,11 @@ async function syncSheets(env, tabs = null) {
     const cabPemp        = ['Obra', 'Matrícula', 'Tipo', 'Marca', 'Proveedor', 'Estado', 'Fecha Entrada', 'Fecha Avería', 'Fecha Reparación', 'Devuelto por', 'Fecha Devolución', 'Últ. Revisión', 'Próx. Revisión', 'Registrado por', 'Notas'];
     const cabCarretillas = ['Obra', 'Matrícula', 'Tipo', 'Marca', 'Proveedor', 'Energía', 'Estado', 'Fecha Entrada', 'Fecha Avería', 'Fecha Reparación', 'Devuelto por', 'Fecha Devolución', 'Últ. Revisión', 'Próx. Revisión', 'Registrado por', 'Notas'];
     const cabSegInv      = ['Tipo', 'Modo', 'Código/Serie', 'Nombre', 'Cantidad Total', 'Disponible', 'Estado', 'Fecha Entrada', 'Fecha Caducidad', 'Destino Actual', 'Registrado por', 'Notas'];
-    const cabPedidos     = ['Obra', 'Referencia', 'Descripción', 'Cantidad', 'Unidad', 'Proveedor', 'Estado', 'Solicitado por', 'Fecha Solicitud', 'Fecha Recepción', 'Notas'];
 
     const fmtB   = b => [b.obra_nombre||'', b.codigo, b.num_albaran||'', b.proveedor, b.tipo_cable, b.registrado_por||'', b.fecha_entrada, b.devuelto_por||'', b.fecha_devolucion||'', b.estado, b.notas||''];
     const fmtP   = p => [p.obra_nombre||'', p.matricula, p.tipo||'', p.marca||'', p.proveedor||'', p.estado, p.fecha_entrada, p.fecha_averia||'', p.fecha_reparacion||'', p.devuelto_por||'', p.fecha_devolucion||'', p.fecha_ultima_revision||'', p.fecha_proxima_revision||'', p.registrado_por||'', p.notas||''];
     const fmtC   = c => [c.obra_nombre||'', c.matricula, c.tipo||'', c.marca||'', c.proveedor||'', c.energia||'', c.estado, c.fecha_entrada, c.fecha_averia||'', c.fecha_reparacion||'', c.devuelto_por||'', c.fecha_devolucion||'', c.fecha_ultima_revision||'', c.fecha_proxima_revision||'', c.registrado_por||'', c.notas||''];
     const fmtSeg = s => [s.tipo_material, s.modo, s.codigo||'', s.nombre||'', s.cantidad_total||1, s.cantidad_disponible||1, s.estado||'disponible', s.fecha_entrada||'', s.fecha_caducidad||'', s.destino_actual||'', s.registrado_por||'', s.notas||''];
-    const fmtPed = p => [p.obra_nombre||'', p.referencia||'', p.descripcion||'', p.cantidad||1, p.unidad||'ud', p.proveedor||'', p.estado||'pendiente', p.solicitado_por||'', p.fecha_solicitud||'', p.fecha_recepcion||'', p.notas||''];
 
     // Solo ejecutar queries para las pestañas que toca sincronizar, en paralelo
     await Promise.all([
@@ -1767,12 +2101,6 @@ async function syncSheets(env, tabs = null) {
         ).all();
         await writeTab('Seg-Inventario', [cabSegInv, ...results.map(fmtSeg)]);
       })(),
-      tabsToSync.includes('Elec-Pedidos') && (async () => {
-        const { results } = await env.DB.prepare(
-          'SELECT p.*, o.nombre as obra_nombre FROM pedidos p LEFT JOIN obras o ON p.obra_id = o.id WHERE p.empresa_id = 1 AND p.departamento = ? ORDER BY p.created_at DESC'
-        ).bind('electrico').all();
-        await writeTab('Elec-Pedidos', [cabPedidos, ...results.map(fmtPed)]);
-      })(),
     ].filter(Boolean));
 
     console.log(`Sheets sync OK [${tabsToSync.join(', ')}]`);
@@ -1782,6 +2110,86 @@ async function syncSheets(env, tabs = null) {
       await env.DB.prepare(
         'INSERT INTO logs (nivel, origen, mensaje, detalle) VALUES (?, ?, ?, ?)'
       ).bind('error', 'sync-sheets', 'Error sincronización Google Sheets', e.message).run();
+    } catch (_) {}
+  }
+}
+
+async function syncPedidos(env, tabs = null) {
+  if (!env.GOOGLE_PRIVATE_KEY || !env.GOOGLE_CLIENT_EMAIL || !env.GOOGLE_PEDIDOS_SHEET_ID) return;
+
+  try {
+    const token   = await getGoogleToken(env);
+    const sheetId = env.GOOGLE_PEDIDOS_SHEET_ID;
+    const authH   = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
+
+    const tabsNecesarias = ['Elec-Pedidos', 'Mec-Pedidos'];
+    const tabsToSync     = tabs ? (Array.isArray(tabs) ? tabs : [tabs]) : tabsNecesarias;
+
+    // Metadata
+    const metaRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}`, { headers: authH });
+    const meta = await metaRes.json();
+    let sheetsActuales = meta.sheets || [];
+
+    const tabsNeedFormat = new Set(
+      tabsNecesarias.filter(t => {
+        const s = sheetsActuales.find(sh => sh.properties.title === t);
+        return !s || (s.properties.gridProperties?.frozenRowCount ?? 0) === 0;
+      })
+    );
+
+    // Crear pestañas que faltan
+    const addReqs = tabsNecesarias
+      .filter(t => !sheetsActuales.map(s => s.properties.title).includes(t))
+      .map(t => ({ addSheet: { properties: { title: t } } }));
+
+    if (addReqs.length > 0) {
+      await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}:batchUpdate`, {
+        method: 'POST', headers: authH, body: JSON.stringify({ requests: addReqs }),
+      });
+      const m2 = await (await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}`, { headers: authH })).json();
+      sheetsActuales = m2.sheets || [];
+    }
+
+    const numIdMap = {};
+    sheetsActuales.forEach(s => { numIdMap[s.properties.title] = s.properties.sheetId; });
+
+    const cab = ['Obra', 'Referencia', 'Descripción', 'Cantidad', 'Unidad', 'Proveedor', 'Estado', 'Solicitado por', 'Fecha Solicitud', 'Fecha Recepción', 'Notas'];
+    const fmt = p => [p.obra_nombre||'', p.referencia||'', p.descripcion||'', p.cantidad||1, p.unidad||'ud', p.proveedor||'', p.estado||'pendiente', p.solicitado_por||'', p.fecha_solicitud||p.created_at||'', p.fecha_recepcion||'', p.notas||''];
+
+    const writeTab = async (tab, values) => {
+      if (!tabsToSync.includes(tab)) return;
+      const range = `${tab}!A1`;
+      await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(range)}:clear`,
+        { method: 'POST', headers: authH });
+      const putRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(range)}?valueInputOption=RAW`,
+        { method: 'PUT', headers: authH, body: JSON.stringify({ values }) });
+      if (!putRes.ok) throw new Error(`writeTab(${tab}) HTTP ${putRes.status}: ${(await putRes.text()).slice(0, 200)}`);
+      if (tabsNeedFormat.has(tab) && numIdMap[tab] !== undefined) {
+        await applyTabFormatting(sheetId, authH, tab, numIdMap[tab], values[0]?.length || 1);
+      }
+    };
+
+    await Promise.all([
+      tabsToSync.includes('Elec-Pedidos') && (async () => {
+        const { results } = await env.DB.prepare(
+          'SELECT p.*, o.nombre as obra_nombre FROM pedidos p LEFT JOIN obras o ON p.obra_id = o.id WHERE p.empresa_id = 1 AND p.departamento = ? ORDER BY p.created_at DESC'
+        ).bind('electrico').all();
+        await writeTab('Elec-Pedidos', [cab, ...results.map(fmt)]);
+      })(),
+      tabsToSync.includes('Mec-Pedidos') && (async () => {
+        const { results } = await env.DB.prepare(
+          'SELECT p.*, o.nombre as obra_nombre FROM pedidos p LEFT JOIN obras o ON p.obra_id = o.id WHERE p.empresa_id = 1 AND p.departamento = ? ORDER BY p.created_at DESC'
+        ).bind('mecanicas').all();
+        await writeTab('Mec-Pedidos', [cab, ...results.map(fmt)]);
+      })(),
+    ].filter(Boolean));
+
+    console.log(`Pedidos sync OK [${tabsToSync.join(', ')}]`);
+  } catch (e) {
+    console.error('Error sync Pedidos:', e.message);
+    try {
+      await env.DB.prepare('INSERT INTO logs (nivel, origen, mensaje, detalle) VALUES (?, ?, ?, ?)')
+        .bind('error', 'sync-pedidos', 'Error sincronización Pedidos Sheets', e.message).run();
     } catch (_) {}
   }
 }
@@ -1797,7 +2205,7 @@ async function applyTabFormatting(spreadsheetId, authH, tabName, numSheetId, num
   const estadoColMap = {
     'Elec-Bobinas': 9, 'Elec-PEMP': 5, 'Elec-Carretillas': 6,
     'Mec-PEMP': 5,     'Mec-Carretillas': 6,
-    'Seg-Inventario': 6, 'Elec-Pedidos': 6,
+    'Seg-Inventario': 6, 'Elec-Pedidos': 6, 'Mec-Pedidos': 6,
   };
   const estadoCol = estadoColMap[tabName] ?? -1;
 
@@ -1846,6 +2254,7 @@ async function applyTabFormatting(spreadsheetId, authH, tabName, numSheetId, num
       { valor: 'devuelta',   bg: { red: 0.839, green: 0.839, blue: 0.839, alpha: 1 } },  // gris
       { valor: 'cancelado',  bg: { red: 0.839, green: 0.839, blue: 0.839, alpha: 1 } },  // gris
       { valor: 'pendiente',  bg: { red: 1.0,   green: 0.949, blue: 0.800, alpha: 1 } },  // amarillo
+      { valor: 'solicitado', bg: { red: 0.675, green: 0.843, blue: 0.902, alpha: 1 } },  // azul
       { valor: 'en_uso',     bg: { red: 0.675, green: 0.843, blue: 0.902, alpha: 1 } },  // azul
     ];
     for (const r of reglas) {
