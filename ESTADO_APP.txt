@@ -4,8 +4,8 @@
   Ruta local: C:\Users\Adrian\Downloads\Proyecto GestiBobina\Bobinaap
 ================================================================================
 
-ÚLTIMA ACTUALIZACIÓN: 16/04/2026
-VERSIÓN ACTUAL: v4.4 (nueva app) / v4.4 (app vieja) — SINCRONIZADAS ✅
+ÚLTIMA ACTUALIZACIÓN: 17/04/2026
+VERSIÓN ACTUAL: v4.10 (ambas apps)
 
 REPO:    https://github.com/padilla585/Bobinaap.git  (branch: main)
 WORKER:  https://gestibobina-proxy.padilla585.workers.dev
@@ -23,12 +23,13 @@ PAGES:   https://padilla585.github.io/Bobinaap/
 - Obra activa: CPD Getafe (código: 001, id: 1)
 
 ⚠️  REGLA DE DEPLOY:
-  - Por defecto: actualizar SOLO la app nueva (padilla585projects/Alejandra-APP)
-  - Antes de cada deploy, PREGUNTAR al usuario si quiere actualizar también la vieja
-  - Solo actualizar las dos si el usuario lo confirma explícitamente
+  - BUGS (correcciones): actualizar SIEMPRE las DOS apps a la vez, sin preguntar
+  - MEJORAS / NUEVAS FEATURES: actualizar SOLO la app nueva (padilla585projects/Alejandra-APP)
+    · La app vieja (padilla585/Bobinaap) solo recibe bugs
+    · Las mejoras se desarrollan en la nueva; la vieja se mantiene estable
   - ESTADO_APP.txt: subir SOLO al repositorio donde se hayan hecho cambios
     · Si solo se cambia la nueva → solo GitHub nuevo
-    · Si se cambian las dos → ambos GitHub
+    · Si se cambian las dos (bug) → ambos GitHub
     · Nunca subir ESTADO_APP.txt a un repo que no ha recibido cambios en esa sesión
 
   APP VIEJA (padilla585):
@@ -228,6 +229,103 @@ v4.0  |  15/04/2026  [SOLO NUEVA APP]
   - Índices creados: idx_*_empresa en tablas principales
   - SW bumpeado a alejandra-v4.0
 
+v4.10  |  17/04/2026  [AMBAS APPS]
+  - BUG CRÍTICO: binding D1 'DB' se perdía en cada deploy via REST API → env.DB undefined
+    · Login, sesiones y cualquier operación de DB fallaban con "Cannot read properties of undefined"
+    · Fix: deploy siempre incluye binding D1 en el metadata (ambos workers)
+    · Verificado: login crea sesión correctamente en ambas DBs
+  - BUG CRÍTICO: nueva app apuntaba a worker viejo (API_DEFAULT incorrecto) → login fallaba
+    · Corregido: API_DEFAULT = 'https://alejandra-app-api.alejandra-app.workers.dev'
+  - BUG: logs nueva DB sin columnas 'origen' y 'detalle' → INSERT fallaba silenciosamente
+    · Migración aplicada: ALTER TABLE logs ADD COLUMN origen/detalle en DB nueva
+  - MEJORA logs: helper logActividad() en ambos workers para grabar desde el servidor
+    · guardarLog ahora incluye empresa_id en el INSERT
+    · Login exitoso de usuario queda registrado en logs (origen: 'login')
+  - BUG: eliminada función cargarRecentActivity() y su llamada en iniciarApp()
+    · El elemento recentActivity no existía en el HTML → error en logs de ambas DBs
+    · Código muerto: eliminado limpiamente
+    · SW bumpeado a alejandra-v4.10
+
+⚠️  REGLA DE DEPLOY ACTUALIZADA (CRÍTICO):
+  Al desplegar workers via REST API curl, SIEMPRE incluir el binding D1 en el metadata:
+  -F "metadata={\"main_module\":\"worker.js\",\"compatibility_date\":\"2024-01-01\",
+      \"bindings\":[{\"type\":\"d1\",\"name\":\"DB\",\"id\":\"<DATABASE_ID>\"}]};type=application/json"
+  Sin esto, env.DB queda undefined y toda la app deja de funcionar.
+
+v4.9  |  16/04/2026  [AMBAS APPS]
+  - BUG registrarEmpresa: "Cannot read properties of undefined (reading 'prepare')"
+    · Causa: INSERT...RETURNING con .first() devolvía null en D1 de la app vieja
+    · Fix: cambiado a .run() + meta.last_row_id para empresa y obra
+    · Worker viejo (gestibobina-proxy) redesplegado ✅
+  - #50: Home superadmin siempre lleva al selector de departamentos
+  - #42: "Buscar en todos los departamentos" eliminado del escáner de Eléctrico
+  - #12: Buscador matrícula/código movido encima de la cámara
+  - #43: Datalist con marcas existentes en campos Marca de PEMP y Carretillas
+  - #35: Catálogos en Ajustes filtrados por departamento:
+         Eléctrico → Bobinas + PEMP + Carretillas
+         Mecánicas → PEMP + Carretillas
+         Seguridad → solo Material Seguridad
+         Superadmin → todo
+  - #37: Pestaña Catálogos oculta para usuarios de Seguridad
+  - #14: Botón "↩ DEVOLVER EQUIPO" aparece al escanear un código que ya existe
+         en el inventario → navega directamente a la pestaña Devoluciones
+  - SW bumpeado a alejandra-v4.9
+
+v4.8  |  16/04/2026  [AMBAS APPS]
+  - BUG #47: buscarMaquina() — botón "📦 Ver en inventario" en el resultado
+    · irAInventario(matricula, modulo): navega al módulo correcto con búsqueda prefiltrada
+  - CACHE: banner de actualización visible en la parte superior de la pantalla
+    · Aparece cuando hay un SW nuevo esperando (reg.waiting) o al detectar updatefound
+    · Botón "Actualizar ahora" fuerza recarga con timestamp
+    · Soluciona el problema de usuarios que no recibían updates automáticamente
+  - SW bumpeado a alejandra-v4.8
+
+v4.7  |  16/04/2026  [AMBAS APPS]
+  - BUG #36: Mecánicas inventory — currentModule ahora inicializa a 'pemp' para usuarios de mecánicas
+    · iniciarApp(), cerrarSesion(), seleccionarDepto() y la var global usan dept para elegir módulo
+  - BUG #48/#49: Botón pestaña Dev. ahora usa ícono SVG (flecha retorno) en lugar de ↩ texto
+  - BUG #40: Formulario de registro multi-paso
+    · regGoStep() scrollea el overlay a top en móvil
+    · regSiguiente() envuelta en try-catch con mensaje de error inline
+    · Inputs con optional chaining (?.) para mayor robustez
+  - BUG #45: Inventario seguridad — botón ✏️ Editar añadido al modal segVerItem
+    · segEditarItem(id): muestra formulario inline con estado, destino, notas
+    · segGuardarEdicion(id): hace PUT /inventario-seg/:id y recarga inventario
+  - BUG #47: Stock cards ahora son clickables (onclick=abrirEdit en el div card)
+    · stopPropagation en stock-actions-row para evitar doble disparo
+  - BUG #46: Panel devolución scanner refactorizado para usar estructura cam-viewport
+    · Misma estructura HTML/CSS que el scanner principal (cam-idle, video, scan-frame)
+    · devOpenCamera/devCloseCamera ajustados para no ocultar el viewport contenedor
+  - BUG #41: SW cache más agresivo en mobile
+    · activate: filtra solo caches antiguas (k !== CACHE) en lugar de borrar todas
+    · SW update cada 10 minutos via setInterval en registro del SW
+    · checkConnection() añade reg.update() en cada check de conexión
+  - SW bumpeado a alejandra-v4.7
+
+v4.6  |  16/04/2026  [SOLO NUEVA APP]
+  - Registro multi-tenant de empresas (/empresas/registro — ruta pública)
+  - Login por email + contraseña (empresa_admin y futuros usuarios)
+    · PBKDF2 (100k iteraciones, SHA-256) con salt aleatorio para passwords
+  - Nuevo rol empresa_admin: elige departamento al entrar, accede a panel empresa
+  - Login dual en pantalla de acceso: pestaña Código | pestaña Email
+  - Wizard de registro 3 pasos: empresa → cuenta admin → primera obra (opcional)
+  - Panel "🏢 Empresa" en Ajustes → info empresa, obras, usuarios
+  - getAuth devuelve isEmpresaAdmin; rolLabel muestra "Admin" para empresa_admin
+  - DB: columnas email y password_hash añadidas a tabla usuarios
+  - Worker: nuevas rutas /mi-empresa (GET/PUT) y /empresas/registro (POST)
+  - Telegram: notificación al registrar nueva empresa
+  - SW bumpeado a alejandra-v4.6
+  - Worker desplegado: alejandra-app-api (Version ID: f78c21c4-1d62-41ae-98d0-02a3b624995a)
+  - index.html + sw.js en GitHub: padilla585projects/Alejandra-APP ✅
+
+v4.5  |  16/04/2026  [AMBAS APPS]
+  - Logo visible en el header principal (antes oculto por CSS)
+  - Badge de versión (v4.5) en esquina inferior derecha de la pantalla home
+  - Select "Todas las obras" ya no se corta: max-width aumentado a 160px + flex:1
+  - Sugerencias #23, #24, #27, #32 marcadas como resueltas
+  - Sugerencias #17,19,21,22,25,26,28,30,31 marcadas como resueltas en DB vieja
+  - SW bumpeado a alejandra-v4.5
+
 v4.4  |  16/04/2026  [AMBAS APPS]
   - Botón Inventario (nav inferior) ahora enruta según departamento:
     · Seguridad → va a screenSeguridad, pestaña Inventario
@@ -371,90 +469,47 @@ Frontend (index.html + sw.js):
   PENDIENTE / FUTURAS ACTUALIZACIONES
 ================================================================================
 
-[ MULTI-TENANT — EN PROGRESO (solo nueva app) ]
+[ MULTI-TENANT — SOLO APP NUEVA ]
 
-  Fase 1 ✅ COMPLETADA (v4.0):
-    - Tabla empresas creada
-    - empresa_id en todas las tablas
-    - Queries filtran por empresa_id
-    - Empresa por defecto id=1
+  Fase 1 ✅ v4.0:  tabla empresas, empresa_id en todas las tablas, queries filtradas
+  Fase 2 ✅ v4.6:  login por email + PBKDF2, rol empresa_admin
+  Fase 3 ✅ v4.6:  wizard registro 3 pasos, /empresas/registro, panel Empresa en Ajustes
+  Fase 4 PENDIENTE: Almacenamiento R2 (fotos, firma digital, PDFs albarán)
+  Fase 5 PENDIENTE: Facturación Stripe (basic/pro/enterprise) — para el futuro
 
-  Fase 2 — PENDIENTE: Auth con email + password_hash
-    - Añadir email + password_hash a tabla usuarios
-    - Nuevo endpoint POST /login (email+password, sin código)
-    - Mantener compatibilidad con códigos actuales (legacy)
+[ SUGERENCIAS PENDIENTES — APP VIEJA (gestibobina-db) ]
 
-  Fase 3 — PENDIENTE: Registro de empresa (self-service)
-    - POST /empresas/registro (crea empresa + primer usuario admin)
-    - Pantalla de registro en frontend
-    - Email de bienvenida (opcional)
+  ERRORES (ninguno pendiente — todos resueltos en v4.7/v4.8/v4.9)
 
-  Fase 4 — PENDIENTE: Almacenamiento R2
-    - Fotos de máquinas, firma digital, PDFs de albarán
-    - Bucket R2 en nueva cuenta
-    - Rutas /upload, /files/:id en worker
+  MEJORAS:
+  #44 - Ficha de máquina a pantalla completa
+  #38 - Ajustes → cerrar sesión a todos / ver quién está conectado
+  #15 - Pedidos en parte eléctrica + sync Sheets
 
-  Fase 5 — PENDIENTE: Facturación (Stripe)
-    - Planes: basic / pro / enterprise
-    - Se deja para el futuro
+  NUEVAS FUNCIONALIDADES:
+  #39 - Gestión de herramientas por departamento (escáner código + catálogo)
+  #34 - Apartado para planos, fotos, documentos de obra
+  #33 - Departamento Especiales/Teleco
+  #29 - Control de horas para contratas y personal
 
-[ PRIORIDAD ALTA — acordado, pendiente de implementar ]
+  OTRO:
+  #9  - App consume mucha batería (pendiente investigar causa)
 
-  1. Inventario de Seguridad ✅ IMPLEMENTADO en v3.7
+[ GRANDES FEATURES PENDIENTES ]
 
-  0. Reorganizar departamento Seguridad
-     - Pendiente de definir con el usuario qué cambios se quieren
-     - Posibles áreas: permisos, pantallas visibles, flujo de trabajo,
-       integración escáner + inventario, roles dentro del dpto, etc.
-
-  2. Historial completo por activo
-     - Vista de toda la vida de una bobina/máquina
-     - Quién la tuvo, cuándo, en qué obra, averías, reparaciones
-
-  3. Alertas / avisos automáticos
-     - Máquina averiada X días sin reparar → aviso
-     - Revisión/ITV próxima → aviso con antelación
-     - Posiblemente por Telegram o notificación push
-
-[ PRIORIDAD MEDIA ]
-
-  7. Chat interno entre usuarios
-     - Pestaña accesible para todos los usuarios de la app
-     - Pendiente de definir: ¿global o por obra?
-     - Tecnología: D1 + polling cada 15s (sin necesidad de Durable Objects)
-     - Pendiente de definir: historial completo o solo últimos N mensajes
-     - Pendiente de definir: solo texto o también adjuntos
-
-  8. Entorno de pruebas (staging)
-     - Worker separado: gestibobina-proxy-dev + D1 separada
-     - dev.html en mismo repo → github.io/Bobinaap/dev.html
-     - Prod y dev en paralelo sin afectarse
-     - Pendiente de implementar
-
-  4. Fotos / firma digital / albarán PDF
-     - Depende de migración a Cloudflare R2 (nueva cuenta)
-     - Pendiente de abrir cuenta R2
-
-  5. Google Sheets — hojas separadas por departamento
-     - El usuario preferiría un spreadsheet distinto por dept
-     - De momento funciona con pestañas en un solo Sheet
-     - Pendiente si se quiere separar en el futuro
-
-[ SEGURIDAD — ✅ IMPLEMENTADO ]
-
-  6. Tokens de sesión en D1 ✅ HECHO en v3.9
-     - Login genera token único en tabla sesiones (D1)
-     - Headers X-Admin-Code / X-Obra-Id reemplazados por X-Token
-     - /logout invalida el token en servidor
+  - Historial completo por activo (toda la vida de una bobina/máquina)
+  - Chat interno entre usuarios (D1 + polling 15s, pendiente definir alcance)
+  - Fotos / firma digital / albarán PDF (depende de R2)
+  - Reorganizar departamento Seguridad (pendiente definir con usuario)
 
 ================================================================================
   BUGS CONOCIDOS / A VERIFICAR
 ================================================================================
 
-  - Dropdowns del scan: verificar que los catálogos cargan bien en producción
-  - Primera instalación v3.0+: confirmar filtrado de departamentos en D1
-  - Google Sheets: si la pestaña ya existe y el nombre tiene caracteres
-    especiales puede fallar el rename → revisar en producción
+  - Dropdowns del scan: verificar que catálogos cargan bien en producción
+  - Google Sheets: nombre de pestaña con caracteres especiales puede fallar
+  - worker.js app vieja tiene cambios sin commitear (funciones multi-tenant
+    de la nueva app que se colaron — no afectan al funcionamiento)
 
 ================================================================================
   DECISIONES TÉCNICAS IMPORTANTES
@@ -479,6 +534,23 @@ Frontend (index.html + sw.js):
   - Auth v3.9: sistema de tokens en D1. getAuth() prueba X-Token primero,
     luego fallback a headers legacy. crearSesion() inserta en tabla sesiones.
     cerrarSesionServidor() borra el token. Frontend guarda token (no código).
+
+================================================================================
+  ACCESO A BASES DE DATOS
+================================================================================
+
+  DB VIEJA (gestibobina-db):
+    - Acceso via MCP Cloudflare (cuenta padilla585@gmail.com, ya conectada)
+    - ID: eac9f2d2-0845-409c-9032-109c563d7eec
+
+  DB NUEVA (alejandra-db):
+    - Acceso via API REST con token en NUEVA_CUENTA.txt
+    - Comando: curl -X POST "https://api.cloudflare.com/client/v4/accounts/
+      d65ead2b2967bf68ff3848a36cd7b1b4/d1/database/
+      0c9eccde-78f1-476d-ac68-bf452bec0c62/query"
+      -H "Authorization: Bearer <token de NUEVA_CUENTA.txt>"
+      -H "Content-Type: application/json"
+      -d "{\"sql\":\"...\"}"
 
 ================================================================================
   NOTAS DE CONVERSACIÓN
