@@ -229,6 +229,9 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 .toast.ok{border-color:var(--green);color:var(--green)}
 .toast.err{border-color:var(--red);color:var(--red)}
+#updateBanner{position:fixed;top:0;left:0;right:0;background:var(--accent);color:#000;padding:12px 16px;display:none;align-items:center;justify-content:space-between;gap:10px;z-index:9999;font-family:'Montserrat',sans-serif;font-weight:700;font-size:13px}
+#updateBanner.show{display:flex}
+#updateBanner button{background:#000;color:var(--accent);border:none;border-radius:6px;padding:7px 14px;font-family:'Montserrat',sans-serif;font-weight:900;font-size:12px;cursor:pointer;white-space:nowrap}
 
 /* ── SPINNER ── */
 .spinner{width:18px;height:18px;border:2px solid rgba(255,255,255,.25);border-top-color:currentColor;border-radius:50%;animation:spin .6s linear infinite}
@@ -522,7 +525,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
 
   <!-- HOME SCREEN -->
   <div id="screenHome" class="screen flex-screen active" style="padding:0;height:100%;position:relative">
-    <div style="position:absolute;bottom:8px;right:12px;font-family:'Montserrat',sans-serif;font-size:9px;color:var(--muted);opacity:.5;z-index:10;pointer-events:none">v4.10</div>
+    <div style="position:absolute;bottom:8px;right:12px;font-family:'Montserrat',sans-serif;font-size:9px;color:var(--muted);opacity:.5;z-index:10;pointer-events:none">v4.11</div>
     <div class="module-grid" style="flex:1">
       <div class="module-card" id="cardBobinas" onclick="selectModule('bobinas')">
         <div class="module-emoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="52" height="52"><rect x="28" y="38" width="44" height="32" rx="3" fill="#8B6914"/><rect x="28" y="38" width="8" height="32" rx="1" fill="#A07820" opacity="0.6"/><rect x="37" y="38" width="8" height="32" rx="1" fill="#7a5c10" opacity="0.4"/><rect x="46" y="38" width="8" height="32" rx="1" fill="#A07820" opacity="0.5"/><rect x="55" y="38" width="8" height="32" rx="1" fill="#7a5c10" opacity="0.4"/><rect x="64" y="38" width="8" height="32" rx="1" fill="#A07820" opacity="0.3"/><ellipse cx="50" cy="70" rx="30" ry="8" fill="#9B7420"/><ellipse cx="50" cy="70" rx="30" ry="8" fill="none" stroke="#7a5c10" stroke-width="1"/><line x1="22" y1="68" x2="78" y2="68" stroke="#7a5c10" stroke-width="0.8" opacity="0.5"/><line x1="24" y1="72" x2="76" y2="72" stroke="#c49530" stroke-width="0.6" opacity="0.4"/><circle cx="32" cy="70" r="1.5" fill="#f97316"/><circle cx="50" cy="70" r="1.5" fill="#f97316"/><circle cx="68" cy="70" r="1.5" fill="#f97316"/><ellipse cx="50" cy="36" rx="32" ry="10" fill="#C4A030"/><line x1="20" y1="34" x2="80" y2="34" stroke="#9B7820" stroke-width="1" opacity="0.7"/><line x1="20" y1="36" x2="80" y2="36" stroke="#e8c060" stroke-width="0.8" opacity="0.4"/><line x1="20" y1="38" x2="80" y2="38" stroke="#9B7820" stroke-width="1" opacity="0.5"/><ellipse cx="50" cy="35" rx="32" ry="10" fill="none" stroke="#e8c870" stroke-width="0.8" opacity="0.5"/><circle cx="30" cy="35" r="2" fill="#f97316" stroke="#c97316" stroke-width="0.5"/><circle cx="50" cy="32" r="2" fill="#f97316" stroke="#c97316" stroke-width="0.5"/><circle cx="70" cy="35" r="2" fill="#f97316" stroke="#c97316" stroke-width="0.5"/><circle cx="50" cy="39" r="2" fill="#f97316" stroke="#c97316" stroke-width="0.5"/><ellipse cx="50" cy="36" rx="5" ry="3" fill="#3a2a08"/><ellipse cx="50" cy="35.5" rx="4" ry="2" fill="#1a1208"/></svg></div>
@@ -587,6 +590,16 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
       <div id="modPanelScan" class="mod-panel active">
         <div class="section-title" id="modScanTitle">ESCANEAR</div>
         <div class="section-sub" id="modScanSub"></div>
+
+        <!-- Buscador encima de la cámara (#12) -->
+        <div class="form-group" style="margin-bottom:10px">
+          <label class="form-label" id="modScanFieldLabel">Matrícula / Código</label>
+          <div class="input-row">
+            <input class="form-input" id="scanCodeInput" type="text" placeholder="Introduce o escanea..." style="text-transform:uppercase">
+            <button class="btn-clear" onclick="document.getElementById('scanCodeInput').value='';document.getElementById('btnDevolver').style.display='none'">✕</button>
+          </div>
+        </div>
+
         <div class="scan-box">
           <div class="scan-header">
             <div class="scan-dot" id="scanDot"></div>
@@ -621,15 +634,6 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
           <div class="scan-hint" id="scanHint"></div>
         </div>
 
-        <!-- Manual input -->
-        <div class="form-group">
-          <label class="form-label" id="modScanFieldLabel">Matrícula / Código</label>
-          <div class="input-row">
-            <input class="form-input" id="scanCodeInput" type="text" placeholder="Introduce o escanea..." style="text-transform:uppercase">
-            <button class="btn-clear" onclick="document.getElementById('scanCodeInput').value=''">✕</button>
-          </div>
-        </div>
-
         <!-- Bobinas extra fields -->
         <div id="fieldsBobi">
           <div class="form-group">
@@ -656,7 +660,8 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
           </div>
           <div class="form-group">
             <label class="form-label">Marca</label>
-            <input class="form-input" id="fieldPempMarca" type="text" placeholder="Marca...">
+            <input class="form-input" id="fieldPempMarca" type="text" placeholder="Marca..." list="listMarcasPemp" autocomplete="off">
+            <datalist id="listMarcasPemp"></datalist>
           </div>
           <div class="form-group">
             <label class="form-label">Proveedor</label>
@@ -701,7 +706,8 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
           </div>
           <div class="form-group">
             <label class="form-label">Marca</label>
-            <input class="form-input" id="fieldCarrMarca" type="text" placeholder="Marca...">
+            <input class="form-input" id="fieldCarrMarca" type="text" placeholder="Marca..." list="listMarcasCarr" autocomplete="off">
+            <datalist id="listMarcasCarr"></datalist>
           </div>
           <div class="form-group">
             <label class="form-label">Proveedor</label>
@@ -756,6 +762,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
         </div>
 
         <button class="btn-primary" id="btnRegistrar" onclick="registrarItem()">✅ REGISTRAR ENTRADA</button>
+        <button class="btn-primary" id="btnDevolver" onclick="irADevolucionRapida()" style="display:none;margin-top:8px;background:var(--surface2);border:1.5px solid var(--accent);color:var(--accent)">↩ DEVOLVER EQUIPO</button>
       </div>
 
       <!-- stock panel -->
@@ -994,7 +1001,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
             <button onclick="addTipo()">+</button>
           </div>
         </div>
-        <div class="admin-section">
+        <div class="admin-section" id="cfgPempSection">
           <div class="admin-section-title">🔧 Tipos de PEMP</div>
           <div class="tag-row" id="tagsTiposPemp"></div>
           <div class="tag-add-row">
@@ -1002,7 +1009,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
             <button onclick="addTipoPemp()">+</button>
           </div>
         </div>
-        <div class="admin-section">
+        <div class="admin-section" id="cfgCarrSection">
           <div class="admin-section-title">🚜 Carretillas</div>
           <div style="font-family:'Montserrat',sans-serif;font-weight:700;font-size:12px;color:var(--muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:1px">🔧 Tipos</div>
           <div class="tag-row" id="tagsTiposCarr"></div>
@@ -1017,7 +1024,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
             <button onclick="addEnergiaCarr()">+</button>
           </div>
         </div>
-        <div class="admin-section">
+        <div class="admin-section" id="cfgSegSection">
           <div class="admin-section-title">🔺 Material Seguridad</div>
           <div style="font-family:'Montserrat',sans-serif;font-size:12px;color:var(--muted);margin-bottom:10px">Cada tipo tiene un modo: <strong>Individual</strong> (por número de serie) o <strong>Cantidad</strong> (stock).</div>
           <div class="tag-row" id="tagsTiposMatSeg"></div>
@@ -1134,7 +1141,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
         <div class="settings-section">
           <div class="settings-title">ℹ️ Acerca de</div>
           <div class="settings-row"><span>Aplicación</span><strong>Alejandra</strong></div>
-          <div class="settings-row"><span>Versión</span><strong>v4.10</strong></div>
+          <div class="settings-row"><span>Versión</span><strong>v4.11</strong></div>
           <div class="settings-row"><span>Backend</span><strong>Cloudflare Workers + D1</strong></div>
           <div class="settings-row"><span>Año</span><strong>2026</strong></div>
           <div style="margin-top:10px;text-align:center;font-size:11px;color:var(--muted);letter-spacing:1px">INVENTARIO · MAQUINARIA · CONTROL</div>
@@ -1297,6 +1304,10 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
 
 <!-- TOAST -->
 <div class="toast" id="toast"></div>
+<div id="updateBanner">
+  <span>🔄 Nueva versión disponible</span>
+  <button onclick="location.replace(location.pathname+'?r='+Date.now())">Actualizar ahora</button>
+</div>
 
 <script>
 // ══════════════════════════════════════════════════════
@@ -1763,7 +1774,7 @@ function navTo(target) {
   segCloseCamera();
   if (target === 'home') {
     const s2 = getSession();
-    if (s2?.rol === 'superadmin' && !s2?.departamento) { showScreen('dept'); return; }
+    if (s2?.rol === 'superadmin') { showScreen('dept'); return; }
     if (s2?.departamento === 'seguridad') { showScreen('seguridad'); return; }
     showScreen('home');
     return;
@@ -1833,8 +1844,8 @@ function updateModuleUI() {
   if (obraGroup) obraGroup.style.display = needsObra ? 'block' : 'none';
   if (needsObra) cargarObrasSelectScan();
 
-  // Buscar máquina cross-dept solo para Seguridad (y superadmin)
-  const esSeguridad = s?.departamento === 'seguridad' || s?.rol === 'superadmin';
+  // Buscar máquina cross-dept solo para Seguridad
+  const esSeguridad = s?.departamento === 'seguridad';
   const buscarBox = document.getElementById('buscarMaquinaBox');
   if (buscarBox) buscarBox.style.display = (esSeguridad && mod !== 'bobinas') ? 'block' : 'none';
 }
@@ -2076,6 +2087,17 @@ function onCodeRead(codigo, method) {
   document.getElementById('scanCodeInput').value = codigo;
   toast(`✅ ${method}: ${codigo}`, 'ok');
   setTimeout(() => closeCamera(), 1500);
+  // #14: mostrar botón devolver si el código ya existe en el inventario
+  const existe = _stockItems.find(i => (i.codigo || i.matricula || '').toUpperCase() === codigo.toUpperCase());
+  const btnDev = document.getElementById('btnDevolver');
+  if (btnDev) btnDev.style.display = existe ? 'block' : 'none';
+}
+
+function irADevolucionRapida() {
+  const codigo = document.getElementById('scanCodeInput')?.value || '';
+  showModTab('devolucion');
+  const devInput = document.getElementById('devCodeInput');
+  if (devInput) { devInput.value = codigo; buscarDevolucion(); }
 }
 
 // ══════════════════════════════════════════════════════
@@ -2756,6 +2778,15 @@ let _stockItems = [];
 
 function renderStock(items, mod) {
   _stockItems = items;
+  // Poblar datalist de marcas (#43)
+  if (mod === 'pemp' || mod === 'carretillas') {
+    const dlId = mod === 'pemp' ? 'listMarcasPemp' : 'listMarcasCarr';
+    const dl = document.getElementById(dlId);
+    if (dl) {
+      const marcas = [...new Set(items.map(i => i.marca).filter(Boolean))];
+      dl.innerHTML = marcas.map(m => `<option value="${m}">`).join('');
+    }
+  }
   const c = document.getElementById('stockList');
   if (!items.length) { c.innerHTML = '<div class="empty-state">No hay elementos</div>'; return; }
 
@@ -3886,17 +3917,27 @@ async function cargarPanelEmpresa() {
 function initAjustesTabs() {
   const s = getSession();
   if (!s) return;
-  const esSA = s.rol === 'superadmin';
+  const esSA  = s.rol === 'superadmin';
   const esEnc = s.rol === 'encargado';
-  const esEA = s.rol === 'empresa_admin';
+  const esEA  = s.rol === 'empresa_admin';
+  const dept  = s.departamento;
+
   document.getElementById('ajTabUsuarios').style.display = (esSA || esEnc) ? '' : 'none';
   document.getElementById('ajTabObras').style.display    = esSA ? '' : 'none';
   document.getElementById('ajTabIdeas').style.display    = esSA ? '' : 'none';
   document.getElementById('ajTabEmpresa').style.display  = (esSA || esEA) ? '' : 'none';
-  document.getElementById('sistemaSheetSection').style.display  = esSA ? 'block' : 'none';
-  document.getElementById('sistemaLogsSection').style.display   = esSA ? 'block' : 'none';
-  const cfgB = document.getElementById('cfgBobinasSection');
-  if (cfgB) cfgB.style.display = (esSA || s.departamento === 'electrico') ? 'block' : 'none';
+  document.getElementById('sistemaSheetSection').style.display = esSA ? 'block' : 'none';
+  document.getElementById('sistemaLogsSection').style.display  = esSA ? 'block' : 'none';
+
+  // #37: Seguridad no necesita la pestaña Catálogos
+  document.getElementById('ajTabCatalogos').style.display = (dept === 'seguridad' && !esSA) ? 'none' : '';
+
+  // #35: Catálogos filtrados por departamento
+  const show = (id, visible) => { const el = document.getElementById(id); if (el) el.style.display = visible ? '' : 'none'; };
+  show('cfgBobinasSection', esSA || dept === 'electrico');
+  show('cfgPempSection',    esSA || dept === 'electrico' || dept === 'mecanicas');
+  show('cfgCarrSection',    esSA || dept === 'electrico' || dept === 'mecanicas');
+  show('cfgSegSection',     esSA || dept === 'seguridad');
 }
 
 // ══════════════════════════════════════════════════════
@@ -3920,6 +3961,13 @@ async function cargarBadgeIdeas() {
 // ══════════════════════════════════════════════════════
 // BUSCAR MÁQUINA CROSS-DEPT (Seguridad)
 // ══════════════════════════════════════════════════════
+function irAInventario(matricula, modulo) {
+  currentModule = modulo;
+  const search = document.getElementById('stockSearch');
+  if (search) search.value = matricula;
+  navTo('stock');
+}
+
 async function buscarMaquina() {
   const mat = (document.getElementById('buscarMatInput')?.value || '').trim().toUpperCase();
   if (!mat) return toast('⚠️ Introduce la matrícula', 'err');
@@ -3933,6 +3981,7 @@ async function buscarMaquina() {
       return;
     }
     const item = data.data;
+    const modulo = data.tipo === 'pemp' ? 'pemp' : 'carretillas';
     const tipo = data.tipo === 'pemp' ? 'PEMP' : 'Carretilla';
     const estadoColor = item.estado === 'Disponible' ? 'var(--green)' : item.estado === 'Averiada' ? 'var(--red)' : 'var(--muted)';
     c.innerHTML = `
@@ -3942,6 +3991,7 @@ async function buscarMaquina() {
         <div style="font-size:13px;margin-top:8px">🏗 Obra: <strong>${item.obra_nombre || '—'}</strong></div>
         <div style="font-size:13px;margin-top:4px;color:${estadoColor}">● ${item.estado || '—'}</div>
         ${item.marca ? `<div style="font-size:12px;color:var(--muted);margin-top:4px">🔧 ${item.marca}</div>` : ''}
+        <button onclick="irAInventario('${item.matricula}','${modulo}')" style="margin-top:10px;width:100%;padding:9px;background:var(--accent);border:none;border-radius:8px;color:#000;font-family:'Montserrat',sans-serif;font-weight:900;font-size:12px;cursor:pointer">📦 Ver en inventario</button>
       </div>`;
   } catch { c.innerHTML = '<div style="color:var(--red);font-size:12px">❌ Error de conexión</div>'; }
 }
@@ -4201,6 +4251,7 @@ if ('serviceWorker' in navigator) {
       nuevo.addEventListener('statechange', () => {
         if (nuevo.state === 'installed' && navigator.serviceWorker.controller) {
           nuevo.postMessage({ tipo: 'SKIP_WAITING' });
+          mostrarBannerUpdate();
         }
       });
     });
@@ -4209,16 +4260,25 @@ if ('serviceWorker' in navigator) {
     setInterval(() => { reg.update(); }, 10 * 60 * 1000);
   }).catch(() => {});
 
-  // El SW avisa cuando ya limpió la caché → limpiamos URL guardada y recargamos
+  function mostrarBannerUpdate() {
+    document.getElementById('updateBanner')?.classList.add('show');
+  }
+
+  // El SW avisa cuando ya limpió la caché → recarga automática
   navigator.serviceWorker.addEventListener('message', e => {
     if (e.data?.tipo === 'SW_ACTUALIZADO') {
-      localStorage.removeItem('alejandra_api'); // fuerza usar API_DEFAULT actualizada
+      localStorage.removeItem('alejandra_api');
       recargarApp();
     }
   });
 
-  // Fallback: controllerchange también provoca recarga
+  // Fallback: controllerchange → recarga
   navigator.serviceWorker.addEventListener('controllerchange', recargarApp);
+
+  // Si hay SW en waiting al cargar → mostrar banner para que el usuario actualice
+  navigator.serviceWorker.ready.then(reg => {
+    if (reg.waiting) mostrarBannerUpdate();
+  });
 
   // Si la pestaña vuelve al foco, comprueba si hay actualización pendiente
   document.addEventListener('visibilitychange', () => {
