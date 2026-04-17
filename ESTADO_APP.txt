@@ -69,7 +69,8 @@ Tablas añadidas:    usuarios, pemp, carretillas, historial_pemp,
                     historial_carretillas, logs, sugerencias,
                     inventario_seg, movimientos_seg, tipos_material_seg,
                     sesiones, pedidos, tipos_herramienta, kits_herramientas,
-                    herramientas, historial_herramientas
+                    herramientas, historial_herramientas,
+                    fichajes, horarios_obra, personal_externo
 Tablas multi-tenant [solo nueva app]:
                     empresas (id, nombre, slug, email, plan, activa, created_at)
 Catálogos:          tipos_pemp, tipos_carretilla, energias_carretilla
@@ -231,6 +232,23 @@ v4.0  |  15/04/2026  [SOLO NUEVA APP]
   - SW bumpeado a alejandra-v4.0
 
 v4.20  |  17/04/2026  [SOLO NUEVA APP]
+  - #40: Módulo Personal — control de fichajes y asistencia
+    · Departamento "👷 Personal" en screenDept
+    · screenPersonal con 3 pestañas:
+      - 📋 Hoy: fichajes del día con estado codificado por color y horas trabajadas
+      - 📅 Semana: grilla 7×días por trabajador con total de horas, nav prev/siguiente
+      - 📊 Resumen mensual: presencias/ausencias/bajas + barra de asistencia %, nav prev/sig
+    · Modal crear/editar fichaje: trabajador, fecha, hora entrada/salida, estado, obra, notas
+    · Exportación a Excel (XLSX) en todos los tabs
+    · FAB (+) visible solo para encargado/admin
+    · Operario solo ve sus propios fichajes (worker filtra por usuario_id)
+    · 3 tablas D1: fichajes, horarios_obra, personal_externo (ya existían)
+    · worker: getTrabajadores, getFichajes, crearFichaje, actualizarFichaje,
+              eliminarFichaje, getResumenSemana, getResumenMes + externo CRUD
+    · Anotación técnica: 'estado' en DB (no 'tipo'), getFichajes retorna array plano
+    · navTo('personal') + actualizarBtnAtras actualizado
+  - Worker redesplegado ✅, GitHub actualizado ✅
+  - [A continuación, sección de Sheets de v4.20 anterior]
   - Google Sheets: sheets completamente separados de la app vieja (Opción B)
     · Sheet equipos nuevo: 1SVtsS8nAJWlbFKDt8HxH0MZOJW762U7wRhkyTjIs_Sg
     · Sheet pedidos: 1fIrkm6oQRmsVcqHTJstVfLNZJjSumotSQKpuQ6f6lD8
