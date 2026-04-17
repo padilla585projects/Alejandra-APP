@@ -231,6 +231,19 @@ v4.0  |  15/04/2026  [SOLO NUEVA APP]
   - Índices creados: idx_*_empresa en tablas principales
   - SW bumpeado a alejandra-v4.0
 
+v4.21  |  17/04/2026  [SOLO NUEVA APP]
+  - Rediseño devoluciones — integrado en pestaña Escanear
+    · Eliminada pestaña "Dev." del screenModule (era #70 del log de sugerencias)
+    · Dos botones de modo en la parte superior de Escanear:
+      ✅ ENTRADA  /  ↩ DEVOLUCIÓN  (estilo activo naranja acorde al resto de la app)
+    · Modo ENTRADA: comportamiento idéntico al anterior
+    · Modo DEVOLUCIÓN: oculta campos de entrada, al escanear/introducir código busca
+      automáticamente el equipo y muestra ficha + botón CONFIRMAR DEVOLUCIÓN
+    · Enter en el input enruta según el modo activo
+    · Eliminada cámara duplicada: devOpenCamera, devCloseCamera, devCaptureOCR, devStartQRLoop
+    · -130 líneas de código, 0 funcionalidad perdida
+  - GitHub actualizado ✅
+
 v4.20  |  17/04/2026  [SOLO NUEVA APP]
   - #40: Módulo Personal — control de fichajes y asistencia
     · Departamento "👷 Personal" en screenDept
