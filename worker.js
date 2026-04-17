@@ -1749,6 +1749,20 @@ async function moverItemSeg(id, request, env) {
   const { accion, cantidad = 1, destino, notas } = body;
   const fecha = fechaEspana();
 
+  // Edición directa de campos del item (sin movimiento)
+  if (accion === 'editar') {
+    const { estado: nuevoEstado, destino_actual, notas: nuevasNotas } = body;
+    const campos = [], vals = [];
+    if (nuevoEstado !== undefined)   { campos.push('estado = ?');         vals.push(nuevoEstado); }
+    if (destino_actual !== undefined) { campos.push('destino_actual = ?'); vals.push(destino_actual || null); }
+    if (nuevasNotas !== undefined)    { campos.push('notas = ?');          vals.push(nuevasNotas || ''); }
+    if (campos.length) {
+      vals.push(id);
+      await env.DB.prepare(`UPDATE inventario_seg SET ${campos.join(', ')} WHERE id = ?`).bind(...vals).run();
+    }
+    return json({ ok: true, mensaje: 'Item actualizado' });
+  }
+
   if (accion === 'salida') {
     if (item.modo === 'individual') {
       if (item.estado !== 'disponible') return err('El item no está disponible', 409);
