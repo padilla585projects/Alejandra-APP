@@ -5,7 +5,7 @@
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 18/04/2026
-VERSIÓN ACTUAL: v4.14 app vieja | v4.25 app nueva
+VERSIÓN ACTUAL: v4.14 app vieja | v4.26 app nueva
 
 REPO:    https://github.com/padilla585/Bobinaap.git  (branch: main)
 WORKER:  https://gestibobina-proxy.padilla585.workers.dev
@@ -228,6 +228,18 @@ v4.0  |  15/04/2026  [SOLO NUEVA APP]
   - Todos los datos existentes migrados con empresa_id=1 automáticamente
   - Índices creados: idx_*_empresa en tablas principales
   - SW bumpeado a alejandra-v4.0
+
+v4.26  |  18/04/2026  [SOLO NUEVA APP]
+  - Google Sheets: sincronización completa de herramientas y kits
+    · Nuevas pestañas en sheet equipos: Elec-Herramientas, Mec-Herramientas, Kits
+    · CRUD de herramientas y kits ya llaman a syncSheets en background (ctx.waitUntil)
+    · tabForDept() extendido con casos 'herramienta' y 'kit'
+    · Columna Estado en Elec/Mec-Herramientas: colores condicionales
+      disponible=verde, averiado=rojo, en_uso=azul, en_reparacion=ámbar,
+      perdido=morado, baja=gris
+    · Reglas de estado nuevas en applyTabFormatting: averiado, en_reparacion, perdido, baja
+    · estadoColMap actualizado con Elec/Mec-Herramientas (col 8)
+  - Worker y GitHub actualizados ✅
 
 v4.25  |  18/04/2026  [SOLO NUEVA APP]
   - BUG CRÍTICO RAÍZ: async function dentro de bloque if() no se hoistean a scope global en Chrome
