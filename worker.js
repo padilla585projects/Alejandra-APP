@@ -282,21 +282,21 @@ export default {
         if (method === 'DELETE') return await eliminarTipoHerramienta(tid, request, env);
       }
       if (path === '/kits-herramientas' && method === 'GET')  return await getKits(request, env);
-      if (path === '/kits-herramientas' && method === 'POST') return await crearKit(request, env);
+      if (path === '/kits-herramientas' && method === 'POST') return await crearKit(request, env, ctx);
       if (path.startsWith('/kits-herramientas/')) {
         const kid = parseInt(path.split('/kits-herramientas/')[1]);
         if (method === 'GET')    return await getKit(kid, request, env);
-        if (method === 'PUT')    return await actualizarKit(kid, request, env);
-        if (method === 'DELETE') return await eliminarKit(kid, request, env);
+        if (method === 'PUT')    return await actualizarKit(kid, request, env, ctx);
+        if (method === 'DELETE') return await eliminarKit(kid, request, env, ctx);
       }
       if (path === '/herramientas' && method === 'GET')  return await getHerramientas(request, env);
-      if (path === '/herramientas' && method === 'POST') return await crearHerramienta(request, env);
+      if (path === '/herramientas' && method === 'POST') return await crearHerramienta(request, env, ctx);
       if (path === '/herramientas/buscar' && method === 'GET') return await buscarHerramienta(request, env);
       if (path.startsWith('/herramientas/')) {
         const hid = parseInt(path.split('/herramientas/')[1]);
         if (method === 'GET')    return await getHerramienta(hid, request, env);
-        if (method === 'PUT')    return await actualizarHerramienta(hid, request, env);
-        if (method === 'DELETE') return await eliminarHerramienta(hid, request, env);
+        if (method === 'PUT')    return await actualizarHerramienta(hid, request, env, ctx);
+        if (method === 'DELETE') return await eliminarHerramienta(hid, request, env, ctx);
       }
       if (path === '/historial-herramientas' && method === 'GET') return await getHistorialHerramientas(request, env);
 
@@ -1663,10 +1663,12 @@ async function eliminarPedido(id, request, env) {
 
 function tabForDept(tipo, dept) {
   const d = (dept || '').toLowerCase();
-  if (tipo === 'bobina')     return 'Elec-Bobinas';
-  if (tipo === 'pemp')       return d === 'mecanicas' ? 'Mec-PEMP' : 'Elec-PEMP';
-  if (tipo === 'carretilla') return d === 'mecanicas' ? 'Mec-Carretillas' : 'Elec-Carretillas';
-  if (tipo === 'pedido')     return d === 'mecanicas' ? 'Mec-Pedidos' : 'Elec-Pedidos';
+  if (tipo === 'bobina')      return 'Elec-Bobinas';
+  if (tipo === 'pemp')        return d === 'mecanicas' ? 'Mec-PEMP' : 'Elec-PEMP';
+  if (tipo === 'carretilla')  return d === 'mecanicas' ? 'Mec-Carretillas' : 'Elec-Carretillas';
+  if (tipo === 'pedido')      return d === 'mecanicas' ? 'Mec-Pedidos' : 'Elec-Pedidos';
+  if (tipo === 'herramienta') return d === 'mecanicas' ? 'Mec-Herramientas' : 'Elec-Herramientas';
+  if (tipo === 'kit')         return 'Kits';
   return 'Seg-Inventario';
 }
 
@@ -1784,7 +1786,7 @@ async function getKit(id, request, env) {
   return json({ kit, herramientas });
 }
 
-async function crearKit(request, env) {
+async function crearKit(request, env, ctx) {
   const { empresa_id, departamento, rol, nombre: userNombre } = await getAuth(request, env);
   if (!empresa_id) return err('No autorizado', 403);
   if (rol === 'operario') return err('Sin permisos', 403);
@@ -1800,10 +1802,11 @@ async function crearKit(request, env) {
     asignado_a?.trim() ? ahora : null
   ).run();
   await registrarHistorialKitHerr(env, empresa_id, r.meta.last_row_id, null, 'alta', null, 'disponible', userNombre || rol, 'Kit creado');
+  ctx?.waitUntil(syncSheets(env, 'Kits'));
   return json({ ok: true, id: r.meta.last_row_id }, 201);
 }
 
-async function actualizarKit(id, request, env) {
+async function actualizarKit(id, request, env, ctx) {
   const { empresa_id, rol, nombre: userNombre } = await getAuth(request, env);
   if (!empresa_id) return err('No autorizado', 403);
   if (rol === 'operario') return err('Sin permisos', 403);
@@ -1845,14 +1848,16 @@ async function actualizarKit(id, request, env) {
   if (!campos.length) return json({ ok: true });
   vals.push(id); vals.push(empresa_id);
   await env.DB.prepare(`UPDATE kits_herramientas SET ${campos.join(', ')} WHERE id = ? AND empresa_id = ?`).bind(...vals).run();
+  ctx?.waitUntil(syncSheets(env, 'Kits'));
   return json({ ok: true });
 }
 
-async function eliminarKit(id, request, env) {
+async function eliminarKit(id, request, env, ctx) {
   const { empresa_id, rol } = await getAuth(request, env);
   if (!empresa_id || (rol !== 'encargado' && rol !== 'empresa_admin' && rol !== 'superadmin')) return err('Sin permisos', 403);
   await env.DB.prepare('UPDATE herramientas SET kit_id = NULL WHERE kit_id = ? AND empresa_id = ?').bind(id, empresa_id).run();
   await env.DB.prepare('DELETE FROM kits_herramientas WHERE id = ? AND empresa_id = ?').bind(id, empresa_id).run();
+  ctx?.waitUntil(syncSheets(env, 'Kits'));
   return json({ ok: true });
 }
 
@@ -1916,7 +1921,7 @@ async function buscarHerramienta(request, env) {
   return json({ herramienta: h, historial });
 }
 
-async function crearHerramienta(request, env) {
+async function crearHerramienta(request, env, ctx) {
   const { empresa_id, departamento, rol, nombre: userNombre } = await getAuth(request, env);
   if (!empresa_id) return err('No autorizado', 403);
   if (rol === 'operario') return err('Sin permisos', 403);
@@ -1932,10 +1937,11 @@ async function crearHerramienta(request, env) {
   ).run();
   const hid = r.meta.last_row_id;
   await registrarHistorialHerr(env, empresa_id, hid, kit_id || null, 'alta', null, 'disponible', userNombre || rol, 'Herramienta registrada');
+  ctx?.waitUntil(syncSheets(env, tabForDept('herramienta', dept)));
   return json({ ok: true, id: hid }, 201);
 }
 
-async function actualizarHerramienta(id, request, env) {
+async function actualizarHerramienta(id, request, env, ctx) {
   const { empresa_id, rol, nombre: userNombre } = await getAuth(request, env);
   if (!empresa_id) return err('No autorizado', 403);
   const body = await request.json().catch(() => ({}));
@@ -1989,13 +1995,16 @@ async function actualizarHerramienta(id, request, env) {
   if (!campos.length) return json({ ok: true });
   vals.push(id); vals.push(empresa_id);
   await env.DB.prepare(`UPDATE herramientas SET ${campos.join(', ')} WHERE id = ? AND empresa_id = ?`).bind(...vals).run();
+  ctx?.waitUntil(syncSheets(env, tabForDept('herramienta', body.departamento || h.departamento)));
   return json({ ok: true });
 }
 
-async function eliminarHerramienta(id, request, env) {
+async function eliminarHerramienta(id, request, env, ctx) {
   const { empresa_id, rol } = await getAuth(request, env);
   if (!empresa_id || (rol !== 'encargado' && rol !== 'empresa_admin' && rol !== 'superadmin')) return err('Sin permisos', 403);
+  const h = await env.DB.prepare('SELECT departamento FROM herramientas WHERE id = ? AND empresa_id = ?').bind(id, empresa_id).first();
   await env.DB.prepare('DELETE FROM herramientas WHERE id = ? AND empresa_id = ?').bind(id, empresa_id).run();
+  ctx?.waitUntil(syncSheets(env, tabForDept('herramienta', h?.departamento)));
   return json({ ok: true });
 }
 
@@ -2503,7 +2512,7 @@ async function syncSheets(env, tabs = null) {
     const sheetId = env.GOOGLE_SHEET_ID;
     const authH   = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
 
-    const tabsNecesarias = ['Elec-Bobinas', 'Elec-PEMP', 'Elec-Carretillas', 'Mec-PEMP', 'Mec-Carretillas', 'Seg-Inventario'];
+    const tabsNecesarias = ['Elec-Bobinas', 'Elec-PEMP', 'Elec-Carretillas', 'Mec-PEMP', 'Mec-Carretillas', 'Seg-Inventario', 'Elec-Herramientas', 'Mec-Herramientas', 'Kits'];
     const tabsAntiguas   = ['Bobinas', 'PEMP', 'Carretillas', '⚡ Bobinas', '⚡ PEMP', '⚡ Carretillas', '🔧 PEMP', '🔧 Carretillas'];
     const tabsToSync     = tabs ? (Array.isArray(tabs) ? tabs : [tabs]) : tabsNecesarias;
 
@@ -2559,11 +2568,15 @@ async function syncSheets(env, tabs = null) {
     const cabPemp        = ['Obra', 'Matrícula', 'Tipo', 'Marca', 'Proveedor', 'Estado', 'Fecha Entrada', 'Fecha Avería', 'Fecha Reparación', 'Devuelto por', 'Fecha Devolución', 'Últ. Revisión', 'Próx. Revisión', 'Registrado por', 'Notas'];
     const cabCarretillas = ['Obra', 'Matrícula', 'Tipo', 'Marca', 'Proveedor', 'Energía', 'Estado', 'Fecha Entrada', 'Fecha Avería', 'Fecha Reparación', 'Devuelto por', 'Fecha Devolución', 'Últ. Revisión', 'Próx. Revisión', 'Registrado por', 'Notas'];
     const cabSegInv      = ['Tipo', 'Modo', 'Código/Serie', 'Nombre', 'Cantidad Total', 'Disponible', 'Estado', 'Fecha Entrada', 'Fecha Caducidad', 'Destino Actual', 'Registrado por', 'Notas'];
+    const cabHerr        = ['Obra', 'Kit', 'Tipo', 'Marca', 'Modelo', 'Nº Serie', 'Asignado a', 'Alimentación', 'Estado', 'Fecha Alta', 'Fecha Asignación', 'Fecha Devolución', 'Fecha Avería', 'Fecha Reparación', 'Notas'];
+    const cabKits        = ['Nº Kit', 'Nombre', 'Obra', 'Departamento', 'Asignado a', 'Componentes', 'Fecha Alta', 'Fecha Asignación', 'Notas'];
 
-    const fmtB   = b => [b.obra_nombre||'', b.codigo, b.num_albaran||'', b.proveedor, b.tipo_cable, b.registrado_por||'', b.fecha_entrada, b.devuelto_por||'', b.fecha_devolucion||'', b.estado, b.notas||''];
-    const fmtP   = p => [p.obra_nombre||'', p.matricula, p.tipo||'', p.marca||'', p.proveedor||'', p.estado, p.fecha_entrada, p.fecha_averia||'', p.fecha_reparacion||'', p.devuelto_por||'', p.fecha_devolucion||'', p.fecha_ultima_revision||'', p.fecha_proxima_revision||'', p.registrado_por||'', p.notas||''];
-    const fmtC   = c => [c.obra_nombre||'', c.matricula, c.tipo||'', c.marca||'', c.proveedor||'', c.energia||'', c.estado, c.fecha_entrada, c.fecha_averia||'', c.fecha_reparacion||'', c.devuelto_por||'', c.fecha_devolucion||'', c.fecha_ultima_revision||'', c.fecha_proxima_revision||'', c.registrado_por||'', c.notas||''];
-    const fmtSeg = s => [s.tipo_material, s.modo, s.codigo||'', s.nombre||'', s.cantidad_total||1, s.cantidad_disponible||1, s.estado||'disponible', s.fecha_entrada||'', s.fecha_caducidad||'', s.destino_actual||'', s.registrado_por||'', s.notas||''];
+    const fmtB    = b => [b.obra_nombre||'', b.codigo, b.num_albaran||'', b.proveedor, b.tipo_cable, b.registrado_por||'', b.fecha_entrada, b.devuelto_por||'', b.fecha_devolucion||'', b.estado, b.notas||''];
+    const fmtP    = p => [p.obra_nombre||'', p.matricula, p.tipo||'', p.marca||'', p.proveedor||'', p.estado, p.fecha_entrada, p.fecha_averia||'', p.fecha_reparacion||'', p.devuelto_por||'', p.fecha_devolucion||'', p.fecha_ultima_revision||'', p.fecha_proxima_revision||'', p.registrado_por||'', p.notas||''];
+    const fmtC    = c => [c.obra_nombre||'', c.matricula, c.tipo||'', c.marca||'', c.proveedor||'', c.energia||'', c.estado, c.fecha_entrada, c.fecha_averia||'', c.fecha_reparacion||'', c.devuelto_por||'', c.fecha_devolucion||'', c.fecha_ultima_revision||'', c.fecha_proxima_revision||'', c.registrado_por||'', c.notas||''];
+    const fmtSeg  = s => [s.tipo_material, s.modo, s.codigo||'', s.nombre||'', s.cantidad_total||1, s.cantidad_disponible||1, s.estado||'disponible', s.fecha_entrada||'', s.fecha_caducidad||'', s.destino_actual||'', s.registrado_por||'', s.notas||''];
+    const fmtHerr = h => [h.obra_nombre||'', h.kit_nombre||'', h.tipo_nombre||'', h.marca||'', h.modelo||'', h.numero_serie||'', h.asignado_a||'', h.alimentacion||'', h.estado||'disponible', h.fecha_alta||'', h.fecha_asignacion||'', h.fecha_devolucion||'', h.fecha_averia||'', h.fecha_reparacion||'', h.notas||''];
+    const fmtKit  = k => [k.numero_kit||'', k.nombre||'', k.obra_nombre||'', k.departamento||'', k.asignado_a||'', k.num_componentes||0, k.fecha_alta||'', k.fecha_asignacion||'', k.notas||''];
 
     // Solo ejecutar queries para las pestañas que toca sincronizar, en paralelo
     await Promise.all([
@@ -2602,6 +2615,24 @@ async function syncSheets(env, tabs = null) {
           'SELECT * FROM inventario_seg WHERE empresa_id = 1 ORDER BY tipo_material, created_at DESC'
         ).all();
         await writeTab('Seg-Inventario', [cabSegInv, ...results.map(fmtSeg)]);
+      })(),
+      tabsToSync.includes('Elec-Herramientas') && (async () => {
+        const { results } = await env.DB.prepare(
+          'SELECT h.*, o.nombre as obra_nombre, t.nombre as tipo_nombre, k.nombre as kit_nombre FROM herramientas h LEFT JOIN obras o ON h.obra_id=o.id LEFT JOIN tipos_herramienta t ON h.tipo_id=t.id LEFT JOIN kits_herramientas k ON h.kit_id=k.id WHERE h.empresa_id=1 AND h.departamento=? ORDER BY h.created_at DESC'
+        ).bind('electrico').all();
+        await writeTab('Elec-Herramientas', [cabHerr, ...results.map(fmtHerr)]);
+      })(),
+      tabsToSync.includes('Mec-Herramientas') && (async () => {
+        const { results } = await env.DB.prepare(
+          'SELECT h.*, o.nombre as obra_nombre, t.nombre as tipo_nombre, k.nombre as kit_nombre FROM herramientas h LEFT JOIN obras o ON h.obra_id=o.id LEFT JOIN tipos_herramienta t ON h.tipo_id=t.id LEFT JOIN kits_herramientas k ON h.kit_id=k.id WHERE h.empresa_id=1 AND h.departamento=? ORDER BY h.created_at DESC'
+        ).bind('mecanicas').all();
+        await writeTab('Mec-Herramientas', [cabHerr, ...results.map(fmtHerr)]);
+      })(),
+      tabsToSync.includes('Kits') && (async () => {
+        const { results } = await env.DB.prepare(
+          'SELECT k.*, o.nombre as obra_nombre FROM kits_herramientas k LEFT JOIN obras o ON k.obra_id=o.id WHERE k.empresa_id=1 ORDER BY k.numero_kit'
+        ).all();
+        await writeTab('Kits', [cabKits, ...results.map(fmtKit)]);
       })(),
     ].filter(Boolean));
 
@@ -2709,6 +2740,7 @@ async function applyTabFormatting(spreadsheetId, authH, tabName, numSheetId, num
     'Elec-Bobinas': 9, 'Elec-PEMP': 5, 'Elec-Carretillas': 6,
     'Mec-PEMP': 5,     'Mec-Carretillas': 6,
     'Seg-Inventario': 6, 'Elec-Pedidos': 6, 'Mec-Pedidos': 6,
+    'Elec-Herramientas': 8, 'Mec-Herramientas': 8,
   };
   const estadoCol = estadoColMap[tabName] ?? -1;
 
@@ -2750,15 +2782,19 @@ async function applyTabFormatting(spreadsheetId, authH, tabName, numSheetId, num
       startColumnIndex: estadoCol, endColumnIndex: estadoCol + 1,
     };
     const reglas = [
-      { valor: 'activa',     bg: { red: 0.714, green: 0.843, blue: 0.659, alpha: 1 } },  // verde
-      { valor: 'disponible', bg: { red: 0.714, green: 0.843, blue: 0.659, alpha: 1 } },  // verde
-      { valor: 'recibido',   bg: { red: 0.714, green: 0.843, blue: 0.659, alpha: 1 } },  // verde
-      { valor: 'Averiada',   bg: { red: 0.918, green: 0.600, blue: 0.600, alpha: 1 } },  // rojo
-      { valor: 'devuelta',   bg: { red: 0.839, green: 0.839, blue: 0.839, alpha: 1 } },  // gris
-      { valor: 'cancelado',  bg: { red: 0.839, green: 0.839, blue: 0.839, alpha: 1 } },  // gris
-      { valor: 'pendiente',  bg: { red: 1.0,   green: 0.949, blue: 0.800, alpha: 1 } },  // amarillo
-      { valor: 'solicitado', bg: { red: 0.675, green: 0.843, blue: 0.902, alpha: 1 } },  // azul
-      { valor: 'en_uso',     bg: { red: 0.675, green: 0.843, blue: 0.902, alpha: 1 } },  // azul
+      { valor: 'activa',         bg: { red: 0.714, green: 0.843, blue: 0.659, alpha: 1 } },  // verde
+      { valor: 'disponible',     bg: { red: 0.714, green: 0.843, blue: 0.659, alpha: 1 } },  // verde
+      { valor: 'recibido',       bg: { red: 0.714, green: 0.843, blue: 0.659, alpha: 1 } },  // verde
+      { valor: 'Averiada',       bg: { red: 0.918, green: 0.600, blue: 0.600, alpha: 1 } },  // rojo
+      { valor: 'averiado',       bg: { red: 0.918, green: 0.600, blue: 0.600, alpha: 1 } },  // rojo
+      { valor: 'devuelta',       bg: { red: 0.839, green: 0.839, blue: 0.839, alpha: 1 } },  // gris
+      { valor: 'cancelado',      bg: { red: 0.839, green: 0.839, blue: 0.839, alpha: 1 } },  // gris
+      { valor: 'baja',           bg: { red: 0.839, green: 0.839, blue: 0.839, alpha: 1 } },  // gris
+      { valor: 'perdido',        bg: { red: 0.800, green: 0.651, blue: 0.851, alpha: 1 } },  // morado
+      { valor: 'pendiente',      bg: { red: 1.0,   green: 0.949, blue: 0.800, alpha: 1 } },  // amarillo
+      { valor: 'solicitado',     bg: { red: 0.675, green: 0.843, blue: 0.902, alpha: 1 } },  // azul
+      { valor: 'en_uso',         bg: { red: 0.675, green: 0.843, blue: 0.902, alpha: 1 } },  // azul
+      { valor: 'en_reparacion',  bg: { red: 1.0,   green: 0.851, blue: 0.4,   alpha: 1 } },  // ámbar
     ];
     for (const r of reglas) {
       requests.push({
