@@ -5,7 +5,7 @@
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 18/04/2026
-VERSIÓN ACTUAL: v4.14 app vieja | v4.23 app nueva
+VERSIÓN ACTUAL: v4.14 app vieja | v4.24 app nueva
 
 REPO:    https://github.com/padilla585/Bobinaap.git  (branch: main)
 WORKER:  https://gestibobina-proxy.padilla585.workers.dev
@@ -228,6 +228,15 @@ v4.0  |  15/04/2026  [SOLO NUEVA APP]
   - Todos los datos existentes migrados con empresa_id=1 automáticamente
   - Índices creados: idx_*_empresa en tablas principales
   - SW bumpeado a alejandra-v4.0
+
+v4.24  |  18/04/2026  [SOLO NUEVA APP]
+  - FIX: badge de versión en home mostraba v4.22 (hardcoded incorrecto)
+  - FIX: versión en Ajustes → Sistema mostraba v4.16 (hardcoded incorrecto)
+  - MEJORA: ambas versiones ahora se renderizan dinámicamente desde APP_VERSION
+    · Nunca más quedarán desactualizadas aunque no se toque el HTML
+  - MEJORA: intervalo de auto-actualización reducido de 2 min a 30 segundos
+  - MEJORA: reg.update() (chequeo SW) también cada 30 s (antes solo en visibilitychange)
+  - Worker y GitHub actualizados ✅
 
 v4.23  |  18/04/2026  [SOLO NUEVA APP]
   - BUG CRÍTICO: modales de Herramientas, Pedidos y Personal/Fichajes no aparecían
