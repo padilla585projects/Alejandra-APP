@@ -35,10 +35,19 @@ SI CAMBIAS DE ORDENADOR:
   git -C <ruta_NuevaApp> fetch origin && git -C <ruta_NuevaApp> reset --hard origin/main
   git -C <ruta_Bobinaap> fetch origin && git -C <ruta_Bobinaap> reset --hard origin/main
 
+⚠️  NORMA OBLIGATORIA — CADA VEZ QUE SE TOCA EL CÓDIGO:
+  1. Subir la versión de la app (vX.XX → vX.XX+1)
+     · version.json       → {"v":"X.XX"}
+     · sw.js              → const CACHE = 'alejandra-vX.XX'
+     · index.html         → const APP_VERSION = 'X.XX'
+     Los tres a la vez, siempre. Sin excepción.
+  2. Actualizar los 5 archivos .txt con los cambios realizados (ver sección anterior)
+  3. Hacer push a los repos correspondientes
+
 REGLA DE DEPLOY:
   - BUGS      → ambas apps siempre (worker + frontend + push ambos repos)
   - MEJORAS   → solo app nueva
-  - Tras cada cambio de versión: actualizar version.json + sw.js CACHE + APP_VERSION
+  - En ambos casos: subir versión + actualizar txts + push
 
 ÚLTIMO CAMBIO REALIZADO:
   v4.27 [nueva] — 18/04/2026
