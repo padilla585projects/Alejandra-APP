@@ -6,6 +6,46 @@
 ================================================================================
 
 ================================================================================
+  PROTOCOLO DE SESIÓN — LEER ESTO PRIMERO
+================================================================================
+
+AL INICIO DE CADA SESIÓN (cualquier ordenador, cualquier chat):
+  1. Leer REFERENCIA_PROYECTO.txt (raíz del proyecto) — versiones y normas
+  2. Leer NuevaApp/ESTADO_APP.txt — últimos cambios detallados
+  3. Leer Bobinaap/ESTADO_APP.txt — estado app vieja
+  → Con esos 3 archivos ya tienes el contexto completo para continuar
+
+AL TERMINAR CUALQUIER CAMBIO DE CÓDIGO (obligatorio, sin excepción):
+  Actualizar estos 5 archivos y hacer push:
+  1. NuevaApp/ESTADO_APP.txt        → añadir entrada vX.XX + actualizar cabecera
+  2. NuevaApp/REFERENCIA_PROYECTO.txt → actualizar versiones + historial reciente
+  3. Bobinaap/ESTADO_APP.txt        → actualizar línea VERSIÓN ACTUAL
+  4. Bobinaap/REFERENCIA_PROYECTO.txt → actualizar versiones + historial reciente
+  5. REFERENCIA_PROYECTO.txt (raíz) → actualizar versiones + historial reciente
+     ⚠️ Este archivo NO está en git — solo actualizar en local
+
+  Push app nueva:  git -c credential.helper= push https://padilla585projects:
+                   <TOKEN>@github.com/padilla585projects/Alejandra-APP.git main
+  Push app vieja:  git -c credential.helper= push https://padilla585:
+                   <TOKEN>@github.com/padilla585/Bobinaap.git main
+  (tokens en Bobinaap/NUEVA_CUENTA.txt)
+
+SI CAMBIAS DE ORDENADOR:
+  Antes de empezar a trabajar, sincronizar local con GitHub:
+  git -C <ruta_NuevaApp> fetch origin && git -C <ruta_NuevaApp> reset --hard origin/main
+  git -C <ruta_Bobinaap> fetch origin && git -C <ruta_Bobinaap> reset --hard origin/main
+
+REGLA DE DEPLOY:
+  - BUGS      → ambas apps siempre (worker + frontend + push ambos repos)
+  - MEJORAS   → solo app nueva
+  - Tras cada cambio de versión: actualizar version.json + sw.js CACHE + APP_VERSION
+
+ÚLTIMO CAMBIO REALIZADO:
+  v4.27 [nueva] — 18/04/2026
+  · #78: superadmin/empresa_admin siempre ve panel de departamentos al abrir
+  · #79: formulario fichaje permite escribir nombre manual → crea personal_externo
+
+================================================================================
   RESUMEN EJECUTIVO
 ================================================================================
 
