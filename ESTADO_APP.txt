@@ -5,7 +5,7 @@
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 18/04/2026
-VERSIÓN ACTUAL: v4.14 app vieja | v4.26 app nueva
+VERSIÓN ACTUAL: v4.17 app vieja | v4.27 app nueva
 
 REPO:    https://github.com/padilla585/Bobinaap.git  (branch: main)
 WORKER:  https://gestibobina-proxy.padilla585.workers.dev
@@ -228,6 +228,17 @@ v4.0  |  15/04/2026  [SOLO NUEVA APP]
   - Todos los datos existentes migrados con empresa_id=1 automáticamente
   - Índices creados: idx_*_empresa en tablas principales
   - SW bumpeado a alejandra-v4.0
+
+v4.27  |  18/04/2026  [SOLO NUEVA APP]
+  - #78: Al abrir la app siempre sale el panel de departamentos para superadmin/empresa_admin
+    · iniciarApp() ahora resetea s.departamento a null y navega a screenDept siempre
+    · Antes solo aparecía si no había departamento guardado en sesión
+  - #79: Fichar trabajadores sin cuenta de app, introduciendo el nombre a mano
+    · Opción "✏️ Escribir nombre..." en el select de trabajador del formulario de fichaje
+    · Campo de texto visible al seleccionar esa opción
+    · guardarFichaje() busca si el nombre ya existe en personal_externo (reutiliza)
+    · Si no existe, crea nuevo personal_externo vía POST /personal-externo
+  - Worker y GitHub actualizados ✅
 
 v4.26  |  18/04/2026  [SOLO NUEVA APP]
   - Google Sheets: sincronización completa de herramientas y kits

@@ -1,7 +1,7 @@
 ================================================================================
   ALEJANDRA APP — REFERENCIA COMPLETA DEL PROYECTO
   Leer este archivo AL INICIO de cada sesión para continuar sin problemas.
-  Última actualización: 17/04/2026
+  Última actualización: 18/04/2026
   ⚠️  NORMA: actualizar ESTE archivo + ESTADO_APP.txt después de CADA cambio.
 ================================================================================
 
@@ -20,14 +20,14 @@ HAY DOS APPS EN PARALELO:
   └─ Una sola empresa fija (CPD Getafe)
   └─ Login solo por código de usuario
   └─ Solo recibe BUGS — no recibe nuevas features
-  └─ Versión: v4.14
+  └─ Versión: v4.17
 
   APP NUEVA (desarrollo activo, futura sustitución)
   └─ Multi-empresa (cada empresa tiene sus datos aislados por empresa_id)
   └─ Login por código O por email + contraseña
   └─ Wizard de registro de nuevas empresas
   └─ Aquí van todas las mejoras y nuevas features
-  └─ Versión: v4.22
+  └─ Versión: v4.27
 
 REGLA DE DEPLOY:
   - BUGS      → ambas apps siempre
@@ -135,31 +135,27 @@ git -c credential.helper= push https://padilla585:<TOKEN_GITHUB_VIEJO>@github.co
   VERSIONES ACTUALES Y CHANGELOGS
 ================================================================================
 
-APP VIEJA:  v4.14  (sw.js: alejandra-v4.14 | version.json: {"v":"4.14"})
-APP NUEVA:  v4.22  (sw.js: alejandra-v4.22 | version.json: {"v":"4.22"})
+APP VIEJA:  v4.17  (sw.js: alejandra-v4.17 | version.json: {"v":"4.17"})
+APP NUEVA:  v4.27  (sw.js: alejandra-v4.27 | version.json: {"v":"4.27"})
 
 Historial reciente (app nueva):
-  v4.22 [nueva] — Fix UX: botón + herramienta visible en Escanear y Inventario;
-                   FAB fichajes se oculta al salir de screenPersonal
-  v4.21 [nueva] — Rediseño devoluciones: elimina tab "Dev.", añade botones modo
-                   ✅ ENTRADA / ↩ DEVOLUCIÓN en pestaña Escanear; escáner trabaja
-                   en el modo seleccionado; elimina cámara duplicada (-130 líneas)
-  v4.20 [nueva] — Módulo Personal: screenPersonal 3 tabs (Hoy/Semana/Resumen),
-                   modal fichaje, exportar Excel, FAB encargado+
+  v4.27 [nueva] — #78 dept siempre al abrir para superadmin/empresa_admin
+                   #79 fichar sin cuenta: nombre manual → personal_externo auto
+  v4.26 [nueva] — Google Sheets sync herramientas y kits (Elec/Mec-Herramientas, Kits)
+  v4.25 [nueva] — Fix crítico: funciones async no hoistadas a scope global en Chrome
+                   (guardarFichaje, guardarHerramienta, etc. → window.X = X)
+  v4.24 [nueva] — Fix badge versión dinámico; intervalo update 30s
+  v4.23 [nueva] — Fix modales (active→show) en Herramientas, Pedidos, Fichajes
+  v4.22 [nueva] — Fix UX botón + herramienta en Escanear/Inventario; FAB fichajes oculto al salir
+  v4.21 [nueva] — Rediseño devoluciones: modo ENTRADA/DEVOLUCIÓN en Escanear
+  v4.20 [nueva] — Módulo Personal: fichajes Hoy/Semana/Resumen, modal, Excel
                    DB: fichajes, horarios_obra, personal_externo
-                   ⚠️ campo 'estado' en fichajes (no 'tipo'); getFichajes → array plano
-  v4.19 [nueva] — Módulo Herramientas: screenHerramientas 4 tabs
-                   (Escanear/Inventario/Kits/Historial), kits+herramientas individuales,
-                   fechas automáticas, catálogo tipos en Ajustes
+  v4.19 [nueva] — Módulo Herramientas: kits + inventario, escanear por serie, historial
                    DB: tipos_herramienta, kits_herramientas, herramientas, historial_herramientas
-  v4.18 [nueva] — Módulo Pedidos: screenPedidos, flujo estados, card home morada
-                   Editar datos empresa en Ajustes→Empresa
-                   Sheets propios separados de app vieja
-                   DB: pedidos
-  v4.17 [nueva] — Botón ← Atrás en header + botón físico Android (popstate)
-                   Filtro sugerencias por dept; dept guardado en sugerencias
-  v4.16 [nueva] — Fix empresa_admin sin permisos (getAuth+worker+initAjustesTabs)
-                   Fix panel Mi Empresa (.json() faltaba)
+  v4.18 [nueva] — Módulo Pedidos: flujo estados, sync Sheets, Telegram
+                   Editar datos empresa. DB: pedidos
+  v4.17 [nueva] — Botón ← Atrás + Android; filtro sugerencias por dept
+  v4.16 [nueva] — Fix empresa_admin permisos completos; fix panel Mi Empresa
   v4.15 [ambas] — Auto-actualización silenciosa: version.json + SW no cachea HTML
   v4.14 [ambas] — Fix wizard empresa, fix filtros Ideas, fix cerrar sesiones
 
@@ -328,15 +324,15 @@ C:\Users\Adrian\Downloads\Proyecto GestiBobina\
   ├── Bobinaap\
   │   ├── index.html              ← Frontend app vieja
   │   ├── worker.js               ← Worker Cloudflare app vieja
-  │   ├── sw.js                   ← Service Worker (alejandra-v4.14)
-  │   ├── version.json            ← {"v":"4.14"}
+  │   ├── sw.js                   ← Service Worker (alejandra-v4.17)
+  │   ├── version.json            ← {"v":"4.17"}
   │   ├── ESTADO_APP.txt          ← Changelog detallado app vieja
   │   └── NUEVA_CUENTA.txt        ← Tokens y credenciales (NO subir a git)
   └── NuevaApp\
-      ├── index.html              ← Frontend app nueva (~6120 líneas)
+      ├── index.html              ← Frontend app nueva
       ├── worker.js               ← Worker Cloudflare app nueva
-      ├── sw.js                   ← Service Worker (alejandra-v4.22)
-      ├── version.json            ← {"v":"4.22"}
+      ├── sw.js                   ← Service Worker (alejandra-v4.27)
+      ├── version.json            ← {"v":"4.27"}
       ├── wrangler.toml           ← Config deploy (binding D1 incluido)
       ├── ESTADO_APP.txt          ← Changelog detallado app nueva ← LEER
       └── NUEVA_CUENTA.txt        ← Tokens y credenciales (NO subir a git)
