@@ -4901,7 +4901,7 @@ async function cargarObrasSelectUsuario() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '4.24';
+const APP_VERSION = '4.25';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -6059,6 +6059,35 @@ if ('serviceWorker' in navigator) {
       checkVersionAndUpdate(); // también chequea versión al volver a la app
     }
   });
+
+  // ── Exponer funciones async al scope global ──────────────────────────────
+  // Las async function dentro de bloques if no se hoistean al scope global en Chrome.
+  // Sin esto, los onclick de HTML no pueden llamarlas → ReferenceError silencioso.
+  window.herrBuscarSerie       = herrBuscarSerie;
+  window.cargarInvHerr         = cargarInvHerr;
+  window.verDetalleHerr        = verDetalleHerr;
+  window.herrCambiarEstado     = herrCambiarEstado;
+  window.cargarKitsHerr        = cargarKitsHerr;
+  window.verDetalleKit         = verDetalleKit;
+  window.kitCambiarEstado      = kitCambiarEstado;
+  window.cargarHistHerr        = cargarHistHerr;
+  window.herrCargarSelects     = herrCargarSelects;
+  window.guardarHerramienta    = guardarHerramienta;
+  window.eliminarHerramienta   = eliminarHerramienta;
+  window.guardarKit            = guardarKit;
+  window.cargarPedidos         = cargarPedidos;
+  window.cargarObrasSelectPedido = cargarObrasSelectPedido;
+  window.guardarPedido         = guardarPedido;
+  window.cambiarEstadoPedido   = cambiarEstadoPedido;
+  window.borrarPedido          = borrarPedido;
+  window.perCargarTrabajadores = perCargarTrabajadores;
+  window.cargarHoy             = cargarHoy;
+  window.cargarSemana          = cargarSemana;
+  window.cargarResumenMes      = cargarResumenMes;
+  window.abrirFormFichaje      = abrirFormFichaje;
+  window.editarFichaje         = editarFichaje;
+  window.guardarFichaje        = guardarFichaje;
+  window.eliminarFichaje       = eliminarFichaje;
 }
 </script>
 </body>

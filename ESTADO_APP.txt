@@ -5,7 +5,7 @@
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 18/04/2026
-VERSIÓN ACTUAL: v4.14 app vieja | v4.24 app nueva
+VERSIÓN ACTUAL: v4.14 app vieja | v4.25 app nueva
 
 REPO:    https://github.com/padilla585/Bobinaap.git  (branch: main)
 WORKER:  https://gestibobina-proxy.padilla585.workers.dev
@@ -228,6 +228,15 @@ v4.0  |  15/04/2026  [SOLO NUEVA APP]
   - Todos los datos existentes migrados con empresa_id=1 automáticamente
   - Índices creados: idx_*_empresa en tablas principales
   - SW bumpeado a alejandra-v4.0
+
+v4.25  |  18/04/2026  [SOLO NUEVA APP]
+  - BUG CRÍTICO RAÍZ: async function dentro de bloque if() no se hoistean a scope global en Chrome
+    · Los onclick de HTML (guardarFichaje, guardarHerramienta, guardarKit, guardarPedido,
+      abrirFormFichaje, editarFichaje, eliminarFichaje, verDetalleHerr, etc.) lanzaban
+      ReferenceError silencioso porque las funciones no existían en scope global
+    · Fix: window.X = X al final del bloque if('serviceWorker' in navigator) para 25 funciones
+    · Afectaba TODO: no se podía guardar ningún fichaje, herramienta ni pedido
+  - Worker y GitHub actualizados ✅
 
 v4.24  |  18/04/2026  [SOLO NUEVA APP]
   - FIX: badge de versión en home mostraba v4.22 (hardcoded incorrecto)
