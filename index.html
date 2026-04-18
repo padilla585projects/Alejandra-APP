@@ -1563,7 +1563,8 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
       <input type="hidden" id="fichajeEditId">
       <div class="form-group">
         <label class="form-label">Trabajador *</label>
-        <select class="form-input" id="fichajeTrabajador"><option value="">— Selecciona —</option></select>
+        <select class="form-input" id="fichajeTrabajador" onchange="fichajeToggleManual()"><option value="">— Selecciona —</option></select>
+        <input class="form-input" id="fichajeNombreManual" placeholder="Nombre del trabajador" style="display:none;margin-top:8px">
       </div>
       <div class="form-group">
         <label class="form-label">Fecha *</label>
@@ -2061,14 +2062,16 @@ async function iniciarApp() {
   const esSuperAdmin   = s.rol === 'superadmin';
   const esEmpresaAdmin = s.rol === 'empresa_admin';
 
-  // SuperAdmin / EmpresaAdmin sin depto elegido → pantalla de selección
-  if ((esSuperAdmin || esEmpresaAdmin) && !s.departamento) {
+  // SuperAdmin / EmpresaAdmin → siempre pantalla de selección al abrir
+  if (esSuperAdmin || esEmpresaAdmin) {
+    s.departamento = null;
+    setSession(s);
     showScreen('dept');
     renderHeader();
     return;
   }
 
-  // Usuario normal o superadmin que ya eligió depto → home
+  // Usuario normal → home
   renderHeader();
   renderAjustesInfo();
   setupHomeModules();
@@ -4901,7 +4904,7 @@ async function cargarObrasSelectUsuario() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '4.25';
+const APP_VERSION = '4.27';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -5874,6 +5877,7 @@ if ('serviceWorker' in navigator) {
     const sel = document.getElementById('fichajeTrabajador');
     if (sel) {
       sel.innerHTML = '<option value="">— Selecciona —</option>' +
+        '<option value="__manual__">✏️ Escribir nombre...</option>' +
         window._perTrabajadores.map(t => `<option value="${t.id}_${t.tipo||'app'}">${t.nombre}${t.es_externo?' (Ext)':''}</option>`).join('');
       if (s?.rol === 'operario') {
         sel.value = `${s.usuario_id}_app`;
@@ -5882,6 +5886,8 @@ if ('serviceWorker' in navigator) {
         sel.disabled = false;
       }
     }
+    const manualInput = document.getElementById('fichajeNombreManual');
+    if (manualInput) { manualInput.value = ''; manualInput.style.display = 'none'; }
     document.getElementById('fichajeFecha').value = fechaPre || perFechaHoy();
     document.getElementById('fichajeEntrada').value = '';
     document.getElementById('fichajeSalida').value = '';
@@ -5929,18 +5935,43 @@ if ('serviceWorker' in navigator) {
     } catch { toast('❌ Error de red','err'); }
   }
 
+  function fichajeToggleManual() {
+    const val = document.getElementById('fichajeTrabajador').value;
+    const inp = document.getElementById('fichajeNombreManual');
+    if (inp) inp.style.display = val === '__manual__' ? 'block' : 'none';
+  }
+
   async function guardarFichaje() {
     const trabajadorVal = document.getElementById('fichajeTrabajador').value;
     const fecha = document.getElementById('fichajeFecha').value;
     if (!trabajadorVal) return toast('⚠️ Selecciona un trabajador','err');
     if (!fecha) return toast('⚠️ La fecha es obligatoria','err');
     const id = document.getElementById('fichajeEditId').value;
-    // trabajadorVal format: "id_tipo" e.g. "3_app" or "5_externo"
-    const [tidStr, ttipo] = trabajadorVal.split('_');
-    const tid = parseInt(tidStr);
+
+    let usuario_id = null, personal_externo_id = null;
+    if (trabajadorVal === '__manual__') {
+      const nombre = document.getElementById('fichajeNombreManual').value.trim();
+      if (!nombre) return toast('⚠️ Escribe el nombre del trabajador','err');
+      // Reusar si ya existe como externo con ese nombre
+      let ext = window._perTrabajadores.find(t => t.tipo === 'externo' && t.nombre.toLowerCase() === nombre.toLowerCase());
+      if (!ext) {
+        const cr = await apiCall('/personal-externo', { method:'POST', body:JSON.stringify({ nombre }) });
+        if (!cr.ok) return toast('❌ Error al crear trabajador','err');
+        const crData = await cr.json();
+        ext = { id: crData.id };
+        window._perTrabajadores = []; // invalidar cache
+      }
+      personal_externo_id = ext.id;
+    } else {
+      const [tidStr, ttipo] = trabajadorVal.split('_');
+      const tid = parseInt(tidStr);
+      usuario_id           = ttipo === 'app'     ? tid : null;
+      personal_externo_id  = ttipo === 'externo' ? tid : null;
+    }
+
     const body = {
-      usuario_id:           ttipo === 'app'     ? tid : null,
-      personal_externo_id:  ttipo === 'externo' ? tid : null,
+      usuario_id,
+      personal_externo_id,
       fecha,
       hora_entrada: document.getElementById('fichajeEntrada').value || null,
       hora_salida:  document.getElementById('fichajeSalida').value  || null,
@@ -6088,6 +6119,7 @@ if ('serviceWorker' in navigator) {
   window.editarFichaje         = editarFichaje;
   window.guardarFichaje        = guardarFichaje;
   window.eliminarFichaje       = eliminarFichaje;
+  window.fichajeToggleManual   = fichajeToggleManual;
 }
 </script>
 </body>
