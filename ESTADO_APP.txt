@@ -5,7 +5,7 @@
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 19/04/2026
-VERSIÓN ACTUAL: v4.18 app vieja | v4.39 app nueva
+VERSIÓN ACTUAL: v4.18 app vieja | v4.40 app nueva
 
 ⚠️  ANTES DE CODIFICAR: leer NuevaApp/IDEAS_PENDIENTES.txt
     Lista completa de bugs activos, mejoras y features pendientes.
@@ -232,6 +232,13 @@ v4.0  |  15/04/2026  [SOLO NUEVA APP]
   - Todos los datos existentes migrados con empresa_id=1 automáticamente
   - Índices creados: idx_*_empresa en tablas principales
   - SW bumpeado a alejandra-v4.0
+
+v4.40  |  19/04/2026  [SOLO NUEVA APP]
+  - NEW-01: Login con Google OAuth — botón en pantalla login, redirect flow, worker endpoints
+    · GET /auth/google/url → devuelve URL de autorización Google
+    · POST /auth/google/callback → intercambia code por session token
+    · Busca usuario por email en D1; si no existe, muestra error con instrucción
+    · Requiere configurar GOOGLE_OAUTH_CLIENT_ID y GOOGLE_OAUTH_CLIENT_SECRET en Worker
 
 v4.39  |  19/04/2026  [SOLO NUEVA APP]
   - NEW-04: Herramientas en Seguridad — cfgHerrSection visible para dept=seguridad en Ajustes

@@ -65,10 +65,9 @@ REGLA DE DEPLOY:
   - En ambos casos: subir versión + actualizar txts + deploy worker + git push
 
 ÚLTIMO CAMBIO REALIZADO:
-  v4.39 [nueva] — 19/04/2026
-  · NEW-04: Herramientas en Seguridad (cfgHerrSection visible para dept=seguridad)
-  · NEW-07: PDF export (ventana imprimible) + compartir archivo xlsx real
-  · NEW-11: Confirmado botón "Invítame a un café" en Ajustes→Sistema
+  v4.40 [nueva] — 19/04/2026
+  · NEW-01: Login con Google OAuth (botón login, redirect flow, worker endpoints /auth/google/*)
+  · Requiere secrets GOOGLE_OAUTH_CLIENT_ID + GOOGLE_OAUTH_CLIENT_SECRET en Cloudflare
 
 ================================================================================
   RESUMEN EJECUTIVO
@@ -92,7 +91,7 @@ HAY DOS APPS EN PARALELO:
   └─ Login por código O por email + contraseña
   └─ Wizard de registro de nuevas empresas
   └─ Aquí van todas las mejoras y nuevas features
-  └─ Versión: v4.39
+  └─ Versión: v4.40
 
 REGLA DE DEPLOY:
   - BUGS      → ambas apps siempre

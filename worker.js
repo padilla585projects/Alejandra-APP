@@ -130,6 +130,8 @@ export default {
       if (path === '/ocr'         && method === 'POST') return await handleOCR(request, env);
       if (path === '/log'         && method === 'POST') return await guardarLog(request, env);
       if (path === '/verificar'   && method === 'POST') return await verificarAcceso(request, env);
+      if (path === '/auth/google/url'      && method === 'GET')  return googleAuthUrl(request, env);
+      if (path === '/auth/google/callback' && method === 'POST') return await googleAuthCallback(request, env);
       if (path === '/acceso'      && method === 'POST') return await verificarAcceso(request, env); // alias legacy
       if (path === '/logout'      && method === 'POST') return await cerrarSesionServidor(request, env);
       if (path === '/sesiones'    && method === 'GET')  return await getSesionesActivas(request, env);
@@ -3244,5 +3246,86 @@ async function alertasDiarias(env) {
   } catch(e) {
     console.error('alertasDiarias error:', e.message);
   }
+}
+
+// ══════════════════════════════════════════════════════
+// GOOGLE OAUTH
+// ══════════════════════════════════════════════════════
+function googleAuthUrl(request, env) {
+  const url = new URL(request.url);
+  const redirect_uri = url.searchParams.get('redirect_uri') || 'https://padilla585projects.github.io/Alejandra-APP/';
+  if (!env.GOOGLE_OAUTH_CLIENT_ID) return err('Google OAuth no configurado', 503);
+  const params = new URLSearchParams({
+    client_id:     env.GOOGLE_OAUTH_CLIENT_ID,
+    redirect_uri,
+    response_type: 'code',
+    scope:         'openid email profile',
+    access_type:   'online',
+    prompt:        'select_account',
+  });
+  const authUrl = 'https://accounts.google.com/o/oauth2/v2/auth?' + params.toString();
+  return json({ url: authUrl });
+}
+
+async function googleAuthCallback(request, env) {
+  const body = await request.json().catch(() => ({}));
+  const { code, redirect_uri } = body;
+  if (!code) return err('Falta el código de autorización', 400);
+  if (!env.GOOGLE_OAUTH_CLIENT_ID || !env.GOOGLE_OAUTH_CLIENT_SECRET) return err('Google OAuth no configurado', 503);
+
+  // Intercambiar código por tokens
+  const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      code,
+      client_id:     env.GOOGLE_OAUTH_CLIENT_ID,
+      client_secret: env.GOOGLE_OAUTH_CLIENT_SECRET,
+      redirect_uri:  redirect_uri || 'https://padilla585projects.github.io/Alejandra-APP/',
+      grant_type:    'authorization_code',
+    }).toString(),
+  });
+  const tokenData = await tokenRes.json();
+  if (!tokenData.access_token) {
+    const msg = tokenData.error_description || tokenData.error || 'token inválido';
+    return err('Error al autenticar con Google: ' + msg, 401);
+  }
+
+  // Obtener info del usuario de Google
+  const userRes = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+    headers: { Authorization: 'Bearer ' + tokenData.access_token },
+  });
+  const gUser = await userRes.json();
+  if (!gUser.email) return err('No se pudo obtener el email de Google', 401);
+
+  // Buscar usuario en D1 por email
+  const u = await env.DB.prepare(
+    'SELECT * FROM usuarios WHERE LOWER(email) = LOWER(?) AND activo = 1 LIMIT 1'
+  ).bind(gUser.email).first();
+  if (!u) return err('No hay ninguna cuenta asociada a este email (' + gUser.email + '). Accede primero con email y contraseña para vincular tu cuenta.', 404);
+
+  // Crear sesión
+  const tokenArr = new Uint8Array(32);
+  crypto.getRandomValues(tokenArr);
+  const token = Array.from(tokenArr).map(b => b.toString(16).padStart(2,'0')).join('');
+  const ahora = AHORA();
+  await env.DB.prepare(
+    'INSERT INTO sesiones (token, usuario_id, empresa_id, nombre, rol, departamento, obra_id, created_at) VALUES (?,?,?,?,?,?,?,?)'
+  ).bind(token, u.id, u.empresa_id, gUser.name || u.nombre, u.rol, u.departamento || null, u.obra_id || null, ahora).run();
+
+  const obra    = u.obra_id    ? await env.DB.prepare('SELECT nombre FROM obras WHERE id = ?').bind(u.obra_id).first()       : null;
+  const empresa = u.empresa_id ? await env.DB.prepare('SELECT nombre FROM empresas WHERE id = ?').bind(u.empresa_id).first() : null;
+
+  return json({
+    ok:             true,
+    token,
+    nombre:         gUser.name || u.nombre,
+    rol:            u.rol,
+    departamento:   u.departamento || null,
+    empresa_id:     u.empresa_id,
+    empresa_nombre: empresa ? empresa.nombre : '',
+    obra_id:        u.obra_id   || null,
+    obra_nombre:    obra        ? obra.nombre : null,
+  });
 }
 
