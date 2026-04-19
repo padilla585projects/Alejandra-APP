@@ -1751,6 +1751,19 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
   </div>
 </div>
 
+<!-- MODAL: Resolver sugerencia -->
+<div class="modal-overlay" id="modalResolver" onclick="if(event.target===this)this.classList.remove('show')">
+  <div class="modal">
+    <div class="modal-title">✅ Marcar como resuelto</div>
+    <div style="font-size:13px;color:var(--muted);margin-bottom:12px">Respuesta opcional para el usuario:</div>
+    <textarea id="modalResolverTexto" rows="3" placeholder="Ej: Arreglado en v4.28..." style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px;color:var(--text);font-size:14px;resize:none;box-sizing:border-box"></textarea>
+    <div style="display:flex;gap:8px;margin-top:12px">
+      <button class="btn-primary" style="flex:1" onclick="confirmarResolver()">✅ Resolver</button>
+      <button class="btn-sm" style="flex:1" onclick="document.getElementById('modalResolver').classList.remove('show')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL: Código creado -->
 <div class="modal-overlay" id="modalCodigo" onclick="if(event.target===this)this.classList.remove('show')">
   <div class="modal">
@@ -2307,6 +2320,7 @@ function irAtras() {
 }
 
 function navTo(target) {
+  if (target !== 'ajustes') { clearInterval(_ideasRefreshTimer); _ideasRefreshTimer = null; }
   closeCamera();
   segCloseCamera();
   // Ocultar FABs de pantallas que no son el destino
@@ -4415,6 +4429,7 @@ window.addEventListener('unhandledrejection', e => {
 // ══════════════════════════════════════════════════════
 // AJUSTES TABS
 // ══════════════════════════════════════════════════════
+let _ideasRefreshTimer = null;
 function selAjTab(tab) {
   document.querySelectorAll('.ajustes-tab').forEach(b => b.classList.remove('active'));
   document.querySelectorAll('.ajustes-panel').forEach(p => p.classList.remove('active'));
@@ -4423,10 +4438,13 @@ function selAjTab(tab) {
   if (btn)   btn.classList.add('active');
   if (panel) panel.classList.add('active');
 
+  clearInterval(_ideasRefreshTimer);
+  _ideasRefreshTimer = null;
+
   if (tab === 'catalogos') cargarCatalogos();
   if (tab === 'usuarios')  { cargarUsuariosAdmin(); cargarObrasSelectUsuario(); }
   if (tab === 'obras')     cargarObrasAdmin();
-  if (tab === 'ideas')     cargarSugerenciasAdmin();
+  if (tab === 'ideas')     { cargarSugerenciasAdmin(); _ideasRefreshTimer = setInterval(cargarSugerenciasAdmin, 30000); }
   if (tab === 'sistema')   { renderAjustesInfo(); checkConnection(); }
   if (tab === 'empresa')   cargarPanelEmpresa();
 }
@@ -4704,9 +4722,14 @@ async function cambiarEstadoSug(id, estado, respuesta = null) {
 }
 
 function abrirRespuestaSug(id) {
-  const resp = prompt('Escribe la respuesta (opcional):');
-  if (resp === null) return;
-  cambiarEstadoSug(id, 'resuelto', resp || '');
+  window._sugResolverID = id;
+  document.getElementById('modalResolverTexto').value = '';
+  document.getElementById('modalResolver').classList.add('show');
+}
+function confirmarResolver() {
+  const resp = document.getElementById('modalResolverTexto').value.trim();
+  document.getElementById('modalResolver').classList.remove('show');
+  cambiarEstadoSug(window._sugResolverID, 'resuelto', resp || '');
 }
 
 async function cargarSugerencias() { return cargarSugerenciasAdmin(); }
@@ -4904,7 +4927,7 @@ async function cargarObrasSelectUsuario() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '4.27';
+const APP_VERSION = '4.28';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes

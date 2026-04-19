@@ -1455,8 +1455,8 @@ async function guardarSugerencia(request, env) {
       if (auth.empresa_id) empresa_id_sug = auth.empresa_id;
     } catch {}
     await env.DB.prepare(
-      'INSERT INTO sugerencias (texto, categoria, usuario, obra, departamento, empresa_id) VALUES (?, ?, ?, ?, ?, ?)'
-    ).bind(texto.trim().slice(0, 1000), categoria || null, usuario || null, obra || null, departamento, empresa_id_sug).run();
+      'INSERT INTO sugerencias (texto, categoria, usuario, obra, departamento, empresa_id, estado) VALUES (?, ?, ?, ?, ?, ?, ?)'
+    ).bind(texto.trim().slice(0, 1000), categoria || null, usuario || null, obra || null, departamento, empresa_id_sug, 'pendiente').run();
     const catIcon = { mejora: '🔧', error: '🐛', nuevo: '✨', otro: '💬' };
     const icon = catIcon[categoria] || '💬';
     await sendTelegram(env,
@@ -1482,7 +1482,8 @@ async function getSugerencias(request, env) {
   let sql = 'SELECT * FROM sugerencias WHERE empresa_id = ?';
   const params = [empresa_id];
   if (soloNoLeidas)    { sql += ' AND leida = 0'; }
-  if (estadoFilter)    { sql += ' AND estado = ?';        params.push(estadoFilter); }
+  if (estadoFilter === 'pendiente') { sql += ' AND (estado = ? OR estado IS NULL)'; params.push(estadoFilter); }
+  else if (estadoFilter)            { sql += ' AND estado = ?'; params.push(estadoFilter); }
   if (categoriaFilter) { sql += ' AND categoria = ?';     params.push(categoriaFilter); }
   if (deptFilter)      { sql += ' AND departamento = ?';  params.push(deptFilter); }
   sql += ' ORDER BY created_at DESC LIMIT 200';
