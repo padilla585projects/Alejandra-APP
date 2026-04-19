@@ -5,7 +5,7 @@
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 19/04/2026
-VERSIÓN ACTUAL: v4.18 app vieja | v4.40 app nueva
+VERSIÓN ACTUAL: v4.18 app vieja | v4.41 app nueva
 
 ⚠️  ANTES DE CODIFICAR: leer NuevaApp/IDEAS_PENDIENTES.txt
     Lista completa de bugs activos, mejoras y features pendientes.
@@ -232,6 +232,20 @@ v4.0  |  15/04/2026  [SOLO NUEVA APP]
   - Todos los datos existentes migrados con empresa_id=1 automáticamente
   - Índices creados: idx_*_empresa en tablas principales
   - SW bumpeado a alejandra-v4.0
+
+v4.41  |  19/04/2026  [SOLO NUEVA APP]
+  - NEW-01: Login con Google OAuth — sistema completo con invitaciones temporales
+    · Invitaciones con duración configurable: 15min / 30min / 1h / 2h / 4h
+    · Admin configura rol (operario/encargado) y departamento al generar el enlace
+    · Enlace único (?inv=XXXXX) — un solo uso, caduca automáticamente
+    · Usuario nuevo entra directamente sin aprobación manual si tiene enlace válido
+    · Sin enlace → acceso denegado con mensaje claro
+    · Ajustes → Empresa: sección "Invitaciones" para generar, copiar y anular enlaces
+    · Notificaciones in-app (campana) muestran solicitudes pendientes para admins
+    · Telegram notifica al admin cuando alguien se registra con éxito
+    · DB: tabla invitaciones (codigo, empresa_id, rol, departamento, expira_at, usado)
+    · DB: columna google_pending en usuarios (para flujo alternativo sin invitación)
+    · Secrets configurados: GOOGLE_OAUTH_CLIENT_ID + GOOGLE_OAUTH_CLIENT_SECRET
 
 v4.40  |  19/04/2026  [SOLO NUEVA APP]
   - NEW-01: Login con Google OAuth — botón en pantalla login, redirect flow, worker endpoints

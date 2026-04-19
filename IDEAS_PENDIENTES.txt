@@ -104,11 +104,14 @@ LEYENDA DE ESTADO:
   ✨ NUEVAS FUNCIONES (solo app nueva)
 ================================================================================
 
-[✓] NEW-01 — Login con Google (OAuth)  [HECHO v4.40]
+[✓] NEW-01 — Login con Google (OAuth)  [HECHO v4.41]
     · Botón "Entrar con Google" en pantalla de login.
     · Redirect flow: app → Google → app/?code=xxx → worker → sesión.
-    · Worker busca usuario por email en D1 (debe existir primero con email+contraseña).
-    · Pendiente: configurar GOOGLE_OAUTH_CLIENT_ID + GOOGLE_OAUTH_CLIENT_SECRET en Cloudflare.
+    · Sistema de invitaciones temporales (15min/30min/1h/2h/4h) con rol y departamento.
+    · Enlace único (?inv=XXXXX) — un uso, caduca automáticamente.
+    · Admin genera/copia/anula invitaciones desde Ajustes → Empresa.
+    · Notificaciones in-app para admins cuando hay solicitudes pendientes.
+    · Secrets configurados: GOOGLE_OAUTH_CLIENT_ID + GOOGLE_OAUTH_CLIENT_SECRET.
     · Reportado: 18/04/2026 — Adrian, CPD Getafe
 
 [ ] NEW-02 — Wizard de bienvenida (onboarding primera vez)

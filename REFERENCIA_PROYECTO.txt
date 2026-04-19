@@ -65,9 +65,12 @@ REGLA DE DEPLOY:
   - En ambos casos: subir versión + actualizar txts + deploy worker + git push
 
 ÚLTIMO CAMBIO REALIZADO:
-  v4.40 [nueva] — 19/04/2026
-  · NEW-01: Login con Google OAuth (botón login, redirect flow, worker endpoints /auth/google/*)
-  · Requiere secrets GOOGLE_OAUTH_CLIENT_ID + GOOGLE_OAUTH_CLIENT_SECRET en Cloudflare
+  v4.41 [nueva] — 19/04/2026
+  · NEW-01: Login Google completo — invitaciones temporales (15min–4h), rol+dept por invitación
+  · Sistema: admin genera enlace → usuario entra con Google → alta automática
+  · DB: tabla invitaciones + columna google_pending en usuarios
+  · Ajustes → Empresa: sección Invitaciones (generar, copiar, anular)
+  · Notificaciones in-app para admins con solicitudes pendientes
 
 ================================================================================
   RESUMEN EJECUTIVO
@@ -91,7 +94,7 @@ HAY DOS APPS EN PARALELO:
   └─ Login por código O por email + contraseña
   └─ Wizard de registro de nuevas empresas
   └─ Aquí van todas las mejoras y nuevas features
-  └─ Versión: v4.40
+  └─ Versión: v4.41
 
 REGLA DE DEPLOY:
   - BUGS      → ambas apps siempre
@@ -199,13 +202,22 @@ git -c credential.helper= push https://padilla585:<TOKEN_GITHUB_VIEJO>@github.co
   VERSIONES ACTUALES Y CHANGELOGS
 ================================================================================
 
-APP VIEJA:  v4.17  (sw.js: alejandra-v4.17 | version.json: {"v":"4.17"})
-APP NUEVA:  v4.30  (sw.js: alejandra-v4.30 | version.json: {"v":"4.30"})
+APP VIEJA:  v4.18  (sw.js: alejandra-v4.18 | version.json: {"v":"4.18"})
+APP NUEVA:  v4.41  (sw.js: alejandra-v4.41 | version.json: {"v":"4.41"})
 
 Historial reciente (app nueva):
-  v4.30 [nueva] — #105 eliminarUsuario libera email+codigo+password al borrar
-  v4.29 [nueva] — #103 pedidos filtrados por dept para TODOS (elimina bypass SA/EA)
-  v4.28 [nueva] — #101/#102 botones catálogos Ajustes (auth+feedback+visibilidad)
+  v4.41 [nueva] — Login Google con invitaciones temporales (rol+dept, caduca, 1 uso)
+  v4.40 [nueva] — Login con Google OAuth (botón, redirect flow, worker endpoints)
+  v4.39 [nueva] — NEW-04 Herramientas Seguridad, NEW-07 exportar PDF+xlsx, NEW-11 café
+  v4.38 [nueva] — Fix notificaciones PEMP/carretillas averiadas, fix inventario-seg
+  v4.37 [nueva] — NEW-06 splash screen, NEW-09 notificaciones in-app, fix historial
+  v4.36 [nueva] — NEW-05 banner "App actualizada"
+  v4.35 [nueva] — Fix pantalla selección empresa superadmin
+  v4.34 [nueva] — MEJ-05 descripciones departamentos, MEJ-06 marcar/borrar todo Ideas
+  v4.33 [nueva] — MEJ-02 escáner herramientas, MEJ-03 ocultar pestañas, MEJ-04 selector empresa
+  v4.32 [ambas] — BUG-01 fichaje obra, BUG-03 nombre obra barra superior
+  v4.31 [nueva] — MEJ-01 rediseño Pedidos, BUG-02 icono dept
+  v4.30 [nueva] — BUG-06 borrar usuario libera credenciales
   v4.26 [nueva] — Google Sheets sync herramientas y kits (Elec/Mec-Herramientas, Kits)
   v4.25 [nueva] — Fix crítico: funciones async no hoistadas a scope global en Chrome
                    (guardarFichaje, guardarHerramienta, etc. → window.X = X)
@@ -261,6 +273,7 @@ TABLAS EXTRA (solo nueva app):
   fichajes                          ← v4.20  (campo: estado, no tipo)
   horarios_obra                     ← v4.20
   personal_externo                  ← v4.20
+  invitaciones                      ← v4.41 (codigo, empresa_id, rol, departamento, expira_at, usado)
 
 MULTI-TENANT (solo nueva app):
   Todas las tablas tienen empresa_id.
