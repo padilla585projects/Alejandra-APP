@@ -5,7 +5,7 @@
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 19/04/2026
-VERSIÓN ACTUAL: v4.17 app vieja | v4.28 app nueva
+VERSIÓN ACTUAL: v4.17 app vieja | v4.30 app nueva
 
 ⚠️  ANTES DE CODIFICAR: leer NuevaApp/IDEAS_PENDIENTES.txt
     Lista completa de bugs activos, mejoras y features pendientes.
@@ -232,6 +232,25 @@ v4.0  |  15/04/2026  [SOLO NUEVA APP]
   - Todos los datos existentes migrados con empresa_id=1 automáticamente
   - Índices creados: idx_*_empresa en tablas principales
   - SW bumpeado a alejandra-v4.0
+
+v4.30  |  19/04/2026  [SOLO NUEVA APP]
+  - #105: Borrar usuario ahora libera sus credenciales completamente
+    · Worker: eliminarUsuario pone activo=0, email=NULL, password_hash=NULL, codigo='_del_'+id
+    · El email y el código quedan libres para reutilizarse en otro usuario
+
+v4.29  |  19/04/2026  [SOLO NUEVA APP]
+  - #103: Pedidos cross-department — superadmin/empresa_admin ya NO ven pedidos de todos los departamentos
+    · Worker: eliminado el bypass `if (!isSuperadmin && !isEmpresaAdmin)` en getPedidos
+    · Ahora TODOS los usuarios (incluido SA/EA) ven solo pedidos de su departamento activo
+    · Los departamentos son totalmente independientes entre sí
+
+v4.28  |  19/04/2026  [SOLO NUEVA APP]
+  - #101/#102: Botones añadir en Ajustes/Catálogos ahora funcionan correctamente
+    · Worker: addCatalogo ahora valida auth (403 si no autorizado, 403 si operario)
+    · Frontend: addProveedor/addTipo/addTipoPemp/addTipoCarr/addEnergiaCarr muestran toast ✅/❌
+    · Frontend: initAjustesTabs ahora muestra secciones también a empresa_admin
+    · Frontend: cfgHerrSection añadida a la lógica de visibilidad (faltaba)
+  - Worker y GitHub pendientes de push (incluido en deploy v4.29)
 
 v4.27  |  18/04/2026  [SOLO NUEVA APP]
   - #78: Al abrir la app siempre sale el panel de departamentos para superadmin/empresa_admin

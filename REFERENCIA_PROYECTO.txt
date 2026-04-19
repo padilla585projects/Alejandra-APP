@@ -56,9 +56,8 @@ REGLA DE DEPLOY:
   - En ambos casos: subir versión + actualizar txts + push
 
 ÚLTIMO CAMBIO REALIZADO:
-  v4.27 [nueva] — 18/04/2026
-  · #78: superadmin/empresa_admin siempre ve panel de departamentos al abrir
-  · #79: formulario fichaje permite escribir nombre manual → crea personal_externo
+  v4.30 [nueva] — 19/04/2026
+  · #105: eliminarUsuario libera email+codigo+password_hash al borrar usuario
 
 ================================================================================
   RESUMEN EJECUTIVO
@@ -82,7 +81,7 @@ HAY DOS APPS EN PARALELO:
   └─ Login por código O por email + contraseña
   └─ Wizard de registro de nuevas empresas
   └─ Aquí van todas las mejoras y nuevas features
-  └─ Versión: v4.27
+  └─ Versión: v4.30
 
 REGLA DE DEPLOY:
   - BUGS      → ambas apps siempre
@@ -191,11 +190,12 @@ git -c credential.helper= push https://padilla585:<TOKEN_GITHUB_VIEJO>@github.co
 ================================================================================
 
 APP VIEJA:  v4.17  (sw.js: alejandra-v4.17 | version.json: {"v":"4.17"})
-APP NUEVA:  v4.27  (sw.js: alejandra-v4.27 | version.json: {"v":"4.27"})
+APP NUEVA:  v4.30  (sw.js: alejandra-v4.30 | version.json: {"v":"4.30"})
 
 Historial reciente (app nueva):
-  v4.27 [nueva] — #78 dept siempre al abrir para superadmin/empresa_admin
-                   #79 fichar sin cuenta: nombre manual → personal_externo auto
+  v4.30 [nueva] — #105 eliminarUsuario libera email+codigo+password al borrar
+  v4.29 [nueva] — #103 pedidos filtrados por dept para TODOS (elimina bypass SA/EA)
+  v4.28 [nueva] — #101/#102 botones catálogos Ajustes (auth+feedback+visibilidad)
   v4.26 [nueva] — Google Sheets sync herramientas y kits (Elec/Mec-Herramientas, Kits)
   v4.25 [nueva] — Fix crítico: funciones async no hoistadas a scope global en Chrome
                    (guardarFichaje, guardarHerramienta, etc. → window.X = X)
@@ -386,7 +386,7 @@ MULTI-TENANT ROADMAP (app nueva):
   └── NuevaApp\
       ├── index.html              ← Frontend app nueva
       ├── worker.js               ← Worker Cloudflare app nueva
-      ├── sw.js                   ← Service Worker (alejandra-v4.27)
+      ├── sw.js                   ← Service Worker (alejandra-v4.30)
       ├── version.json            ← {"v":"4.27"}
       ├── wrangler.toml           ← Config deploy (binding D1 incluido)
       ├── ESTADO_APP.txt          ← Changelog detallado app nueva ← LEER

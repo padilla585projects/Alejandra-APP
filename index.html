@@ -4007,40 +4007,50 @@ function renderTags(containerId, items, tipo) {
 async function addProveedor() {
   const v = document.getElementById('newProveedor').value.trim();
   if (!v) return;
-  await apiCall('/proveedores', { method: 'POST', body: JSON.stringify({ nombre: v }) });
+  const r = await apiCall('/proveedores', { method: 'POST', body: JSON.stringify({ nombre: v }) });
+  if (!r.ok) { const d = await r.json().catch(()=>({error:'Error'})); return toast('❌ ' + (d.error||'Error'), 'err'); }
   document.getElementById('newProveedor').value = '';
+  toast('✅ Proveedor añadido');
   cargarCatalogos();
 }
 
 async function addTipo() {
   const v = document.getElementById('newTipo').value.trim();
   if (!v) return;
-  await apiCall('/tipos-cable', { method: 'POST', body: JSON.stringify({ nombre: v }) });
+  const r = await apiCall('/tipos-cable', { method: 'POST', body: JSON.stringify({ nombre: v }) });
+  if (!r.ok) { const d = await r.json().catch(()=>({error:'Error'})); return toast('❌ ' + (d.error||'Error'), 'err'); }
   document.getElementById('newTipo').value = '';
+  toast('✅ Tipo de cable añadido');
   cargarCatalogos();
 }
 
 async function addTipoPemp() {
   const v = document.getElementById('newTipoPemp').value.trim();
   if (!v) return;
-  await apiCall('/tipos-pemp', { method: 'POST', body: JSON.stringify({ nombre: v }) });
+  const r = await apiCall('/tipos-pemp', { method: 'POST', body: JSON.stringify({ nombre: v }) });
+  if (!r.ok) { const d = await r.json().catch(()=>({error:'Error'})); return toast('❌ ' + (d.error||'Error'), 'err'); }
   document.getElementById('newTipoPemp').value = '';
+  toast('✅ Tipo PEMP añadido');
   cargarCatalogos();
 }
 
 async function addTipoCarr() {
   const v = document.getElementById('newTipoCarr').value.trim();
   if (!v) return;
-  await apiCall('/tipos-carretilla', { method: 'POST', body: JSON.stringify({ nombre: v }) });
+  const r = await apiCall('/tipos-carretilla', { method: 'POST', body: JSON.stringify({ nombre: v }) });
+  if (!r.ok) { const d = await r.json().catch(()=>({error:'Error'})); return toast('❌ ' + (d.error||'Error'), 'err'); }
   document.getElementById('newTipoCarr').value = '';
+  toast('✅ Tipo carretilla añadido');
   cargarCatalogos();
 }
 
 async function addEnergiaCarr() {
   const v = document.getElementById('newEnergiaCarr').value.trim();
   if (!v) return;
-  await apiCall('/energias-carretilla', { method: 'POST', body: JSON.stringify({ nombre: v }) });
+  const r = await apiCall('/energias-carretilla', { method: 'POST', body: JSON.stringify({ nombre: v }) });
+  if (!r.ok) { const d = await r.json().catch(()=>({error:'Error'})); return toast('❌ ' + (d.error||'Error'), 'err'); }
   document.getElementById('newEnergiaCarr').value = '';
+  toast('✅ Energía añadida');
   cargarCatalogos();
 }
 
@@ -4545,10 +4555,11 @@ function initAjustesTabs() {
 
   // #35: Catálogos filtrados por departamento
   const show = (id, visible) => { const el = document.getElementById(id); if (el) el.style.display = visible ? '' : 'none'; };
-  show('cfgBobinasSection', esSA || dept === 'electrico');
-  show('cfgPempSection',    esSA || dept === 'electrico' || dept === 'mecanicas');
-  show('cfgCarrSection',    esSA || dept === 'electrico' || dept === 'mecanicas');
-  show('cfgSegSection',     esSA || dept === 'seguridad');
+  show('cfgBobinasSection', esSA || esEA || dept === 'electrico');
+  show('cfgPempSection',    esSA || esEA || dept === 'electrico' || dept === 'mecanicas');
+  show('cfgCarrSection',    esSA || esEA || dept === 'electrico' || dept === 'mecanicas');
+  show('cfgHerrSection',    esSA || esEA || dept === 'electrico' || dept === 'mecanicas');
+  show('cfgSegSection',     esSA || esEA || dept === 'seguridad');
 }
 
 // ══════════════════════════════════════════════════════
@@ -4927,7 +4938,7 @@ async function cargarObrasSelectUsuario() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '4.28';
+const APP_VERSION = '4.30';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes

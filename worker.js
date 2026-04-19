@@ -1148,7 +1148,10 @@ async function eliminarUsuario(id, request, env) {
     if (!isEncargado) return err('No autorizado', 403);
   }
 
-  await env.DB.prepare('UPDATE usuarios SET activo = 0 WHERE id = ?').bind(id).run();
+  // Liberar credenciales únicas para que puedan reutilizarse en otro usuario
+  await env.DB.prepare(
+    'UPDATE usuarios SET activo = 0, email = NULL, password_hash = NULL, codigo = \'_del_\' || id WHERE id = ?'
+  ).bind(id).run();
   return json({ ok: true, mensaje: 'Usuario eliminado' });
 }
 
@@ -1237,6 +1240,8 @@ async function getCatalogo(tabla, env, requestOrEmpresaId = null) {
 
 async function addCatalogo(tabla, request, env) {
   const auth = await getAuth(request, env);
+  if (!auth.empresa_id) return err('No autorizado', 403);
+  if (auth.rol === 'operario') return err('Sin permisos', 403);
   const { nombre } = await request.json();
   if (!nombre?.trim()) return err('Falta el nombre');
   try {
@@ -1602,10 +1607,8 @@ async function getPedidos(request, env) {
 
   let sql = 'SELECT p.*, o.nombre as obra_nombre FROM pedidos p LEFT JOIN obras o ON p.obra_id = o.id WHERE p.empresa_id = ?';
   const params = [empresa_id];
-  if (!isSuperadmin && !isEmpresaAdmin) {
-    sql += ' AND p.departamento = ?';
-    params.push(departamento || 'electrico');
-  }
+  sql += ' AND p.departamento = ?';
+  params.push(departamento || 'electrico');
   if (estadoFilter) { sql += ' AND p.estado = ?';   params.push(estadoFilter); }
   if (obraFilter)   { sql += ' AND p.obra_id = ?';  params.push(parseInt(obraFilter)); }
   sql += ' ORDER BY p.created_at DESC LIMIT 500';

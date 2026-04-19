@@ -39,17 +39,14 @@ LEYENDA DE ESTADO:
     · Frontend: initAjustesTabs muestra secciones a empresa_admin + añadida cfgHerrSection.
     · Reportado: 18/04/2026 — Adrian
 
-[ ] BUG-05 — Pedidos e inventarios NO están aislados por departamento
-    · Los pedidos hechos en Eléctrico aparecen en otros departamentos.
-    · Cada departamento debe tener sus propios pedidos e inventarios, independientes,
-      aunque estén en la misma obra y empresa. MUY IMPORTANTE.
+[✓] BUG-05 — Pedidos e inventarios NO están aislados por departamento  [HECHO v4.29]
+    · Worker getPedidos: eliminado el bypass `if (!isSuperadmin && !isEmpresaAdmin)`.
+    · Ahora TODOS los roles (incluido SA/EA) ven solo pedidos de su departamento activo.
     · Reportado: 18/04/2026 — Adrian
 
-[ ] BUG-06 — Al borrar usuario, sus credenciales quedan bloqueadas
-    · Si se borra un usuario, su nombre, contraseña y correo quedan "ocupados"
-      y no se pueden asignar a otro usuario nuevo.
-    · Al borrar un usuario deben liberarse todas sus credenciales completamente.
-    · Mismo problema con el correo al registrar/borrar una empresa.
+[✓] BUG-06 — Al borrar usuario, sus credenciales quedan bloqueadas  [HECHO v4.30]
+    · eliminarUsuario ahora hace: activo=0 + email=NULL + password_hash=NULL + codigo='_del_'+id
+    · Libera email y código para que puedan reutilizarse en otro usuario.
     · Reportado: 18/04/2026 — Adrian, CPD Getafe
 
 [✓] BUG-07 — Log de Ideas no se actualiza y no marca resueltos  [HECHO v4.28]
