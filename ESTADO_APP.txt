@@ -5,7 +5,7 @@
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 19/04/2026
-VERSIÓN ACTUAL: v4.18 app vieja | v4.32 app nueva
+VERSIÓN ACTUAL: v4.18 app vieja | v4.33 app nueva
 
 ⚠️  ANTES DE CODIFICAR: leer NuevaApp/IDEAS_PENDIENTES.txt
     Lista completa de bugs activos, mejoras y features pendientes.
@@ -232,6 +232,23 @@ v4.0  |  15/04/2026  [SOLO NUEVA APP]
   - Todos los datos existentes migrados con empresa_id=1 automáticamente
   - Índices creados: idx_*_empresa en tablas principales
   - SW bumpeado a alejandra-v4.0
+
+v4.33  |  19/04/2026  [SOLO NUEVA APP]
+  - MEJ-02: Escáner de cámara en Herramientas
+    · Tab Escanear: selector modo ➕ AGREGAR / ↩ DEVOLVER + cámara QR+OCR
+    · Modo Agregar → abre formulario con nº de serie pre-relleno
+    · Modo Devolver → muestra ficha con botones de acción
+    · Tab Inventario: buscador por serie/tipo/marca añadido
+    · Cámara se cierra automáticamente al cambiar de pestaña
+  - MEJ-03: Ocultar pestañas sin acceso
+    · Bot nav "Ideas" ahora oculto para rol operario
+    · Implementado via updateNavPermisos(s) llamado en iniciarApp()
+  - MEJ-04: Selector de empresa para Superadmin
+    · Superadmin ve pantalla screenEmpresaSel al hacer login
+    · Cards con lista de empresas activas (GET /empresas — solo superadmin)
+    · Al seleccionar empresa: actualiza empresa_id en sesión D1 (POST /superadmin/empresa)
+    · Botón ← en screenDept vuelve a screenEmpresaSel (solo superadmin)
+    · empresa_admin sigue yendo directo a screenDept (sin cambios)
 
 v4.32  |  19/04/2026  [AMBAS APPS — nueva v4.32 | vieja v4.18]
   - BUG-01: Fichaje ahora pre-selecciona la obra activa de la sesión al abrir el modal

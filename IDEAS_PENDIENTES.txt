@@ -68,7 +68,7 @@ LEYENDA DE ESTADO:
     · Sync Google Sheets — ya existía (Elec/Mec). Añadida hoja Seg-Pedidos.
     · Reportado: 18/04/2026 — Adrian, CPD Getafe
 
-[ ] MEJ-02 — Departamento Herramientas: mejoras de scan
+[✓] MEJ-02 — Departamento Herramientas: mejoras de scan  [HECHO v4.33]
     · Usar cámara para escanear número de serie al agregar o devolver herramientas.
     · Botón para seleccionar el modo del escáner (agregar / devolver).
     · Quitar el buscador de la pestaña Scan.
@@ -76,13 +76,13 @@ LEYENDA DE ESTADO:
     · Al añadir manualmente, permitir introducir el número de serie.
     · Reportado: 18/04/2026 — Adrian, CPD Getafe
 
-[ ] MEJ-03 — Ocultar pestañas sin acceso
+[✓] MEJ-03 — Ocultar pestañas sin acceso  [HECHO v4.33]
     · Las pestañas a las que el usuario no tiene permiso deben ocultarse completamente
       (no solo deshabilitarse). Ej: "Ideas" solo visible para superusuario.
     · Revisar todas las pestañas/opciones con lógica similar.
     · Reportado: 18/04/2026 — Adrian, CPD Getafe
 
-[ ] MEJ-04 — Pantalla de selección de empresa para Superadmin
+[✓] MEJ-04 — Pantalla de selección de empresa para Superadmin  [HECHO v4.33]
     · Tras login como superadmin: primera pantalla = selector de empresas
       con iconos grandes, estilo visual de la app.
     · Al seleccionar empresa → acceder con datos filtrados de esa empresa.
