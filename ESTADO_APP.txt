@@ -5,7 +5,7 @@
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 19/04/2026
-VERSIÓN ACTUAL: v4.18 app vieja | v4.38 app nueva
+VERSIÓN ACTUAL: v4.18 app vieja | v4.39 app nueva
 
 ⚠️  ANTES DE CODIFICAR: leer NuevaApp/IDEAS_PENDIENTES.txt
     Lista completa de bugs activos, mejoras y features pendientes.
@@ -232,6 +232,11 @@ v4.0  |  15/04/2026  [SOLO NUEVA APP]
   - Todos los datos existentes migrados con empresa_id=1 automáticamente
   - Índices creados: idx_*_empresa en tablas principales
   - SW bumpeado a alejandra-v4.0
+
+v4.39  |  19/04/2026  [SOLO NUEVA APP]
+  - NEW-04: Herramientas en Seguridad — cfgHerrSection visible para dept=seguridad en Ajustes
+  - NEW-07: Exportar PDF (ventana imprimible) + compartir archivo xlsx real via navigator.share
+  - NEW-11: Confirmado botón "Invítame a un café" (PayPal) en Ajustes → Sistema (ya estaba v4.37)
 
 v4.38  |  19/04/2026  [SOLO NUEVA APP]
   - Fix: notificaciones PEMP/carretillas averiadas no aparecían (?estado=averia → Averiada)

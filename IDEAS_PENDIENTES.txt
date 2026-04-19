@@ -120,30 +120,35 @@ LEYENDA DE ESTADO:
     · Poder guardar documentos, fotos y archivos dentro de cada empresa.
     · Reportado: 18/04/2026 — Adrian, CPD Getafe
 
-[ ] NEW-04 — Herramientas en departamento Seguridad
-    · Añadir sección Herramientas en Seguridad como en los demás departamentos.
-    · Cada departamento ve solo sus propias herramientas e inventario.
+[✓] NEW-04 — Herramientas en departamento Seguridad  [HECHO v4.39]
+    · Tab 🔧 Herramientas en screenSeguridad ya existía y ya llama a navTo('herramientas').
+    · Worker filtra automáticamente por departamento=seguridad desde sesión.
+    · Fix: cfgHerrSection en Ajustes ahora visible para dept=seguridad.
     · Reportado: 18/04/2026 — Adrian, CPD Getafe
 
-[ ] NEW-05 — Banner "App actualizada vX.X" al abrir
+[✓] NEW-05 — Banner "App actualizada vX.X" al abrir  [HECHO v4.36]
     · Al abrir la app, mostrar banner con la versión actualizada durante 5 segundos.
     · Reportado: 18/04/2026 — Adrian, CPD Getafe
 
-[ ] NEW-06 — Splash screen / intro al abrir la app
+[✓] NEW-06 — Splash screen / intro al abrir la app  [HECHO v4.37]
     · Animación o pantalla de intro de ~2 segundos al abrir la app.
     · Reportado: 18/04/2026 — Adrian, CPD Getafe
 
-[ ] NEW-07 — Exportar datos en más formatos + compartir
-    · No solo Excel: añadir PDF, CSV u otros formatos.
-    · Opción de enviar los datos por email o WhatsApp directamente.
+[✓] NEW-07 — Exportar datos en más formatos + compartir  [HECHO v4.39]
+    · PDF: botón 🖨️ en stock y en Ajustes/Sistema → abre ventana imprimible + print dialog.
+    · CSV: ya existía, botón renombrado.
+    · Compartir: intenta compartir el archivo xlsx real (navigator.canShare+files).
+      Fallback a texto por WhatsApp si el navegador no soporta file sharing.
     · Reportado: 18/04/2026 — Adrian, CPD Getafe
 
 [ ] NEW-08 — Chat interno entre empleados de la misma empresa
     · Canal de chat dentro de la app, filtrado por empresa.
     · Reportado: 18/04/2026 — Adrian, CPD Getafe
 
-[ ] NEW-09 — Sistema de notificaciones in-app
-    · Notificaciones dentro de la app para avisar de eventos (pedidos, fichajes, etc.).
+[✓] NEW-09 — Sistema de notificaciones in-app  [HECHO v4.38]
+    · Campana 🔔 en header con badge de conteo.
+    · Panel con pedidos pendientes, PEMP/carretillas averiadas, material próximo a caducar.
+    · Polling cada 60s. Badge desaparece al abrir el panel.
     · Reportado: 18/04/2026 — Adrian, CPD Getafe
 
 [ ] NEW-10 — Planes de precios
@@ -151,8 +156,8 @@ LEYENDA DE ESTADO:
     · Pendiente de diseño y decisión estratégica.
     · Reportado: 18/04/2026 — Adrian
 
-[ ] NEW-11 — Botón "Invítame a un café" en Ajustes
-    · Enlace a PayPal del desarrollador para donaciones voluntarias.
+[✓] NEW-11 — Botón "Invítame a un café" en Ajustes  [HECHO v4.37]
+    · Enlace PayPal (https://www.paypal.me/padilla585) en Ajustes → Sistema.
     · Reportado: 18/04/2026 — Adrian, CPD Getafe
 
 ================================================================================

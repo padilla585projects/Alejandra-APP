@@ -883,6 +883,8 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
         <div id="stockList"><div class="empty-state">Cargando...</div></div>
         <div class="export-row">
           <button class="btn-export" onclick="exportarExcel()">📊 Excel</button>
+          <button class="btn-export" onclick="exportarPDF()">🖨️ PDF</button>
+          <button class="btn-export" onclick="compartirResumen()" style="flex:0 0 48px">📤</button>
           <button class="btn-export" onclick="recargarStock()" style="flex:0 0 48px">↻</button>
         </div>
       </div>
@@ -1224,7 +1226,8 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
           <div class="settings-title">💾 Caché y herramientas</div>
           <div style="display:flex;gap:8px;flex-wrap:wrap">
             <button class="btn-export" onclick="exportarExcelCompleto()" style="font-size:13px">📊 Excel completo</button>
-            <button class="btn-export" onclick="exportarCSV()" style="font-size:13px">📄 Exportar CSV</button>
+            <button class="btn-export" onclick="exportarCSV()" style="font-size:13px">📄 CSV</button>
+            <button class="btn-export" onclick="exportarPDF()" style="font-size:13px">🖨️ PDF</button>
             <button class="btn-export" onclick="compartirResumen()" style="font-size:13px">📤 Compartir</button>
           </div>
           <button class="btn-primary btn-secondary" style="font-size:13px;margin-top:8px" onclick="limpiarCache()">🗑 Limpiar caché SW</button>
@@ -4739,7 +4742,7 @@ function initAjustesTabs() {
   show('cfgBobinasSection', esSA || esEA || dept === 'electrico');
   show('cfgPempSection',    esSA || esEA || dept === 'electrico' || dept === 'mecanicas');
   show('cfgCarrSection',    esSA || esEA || dept === 'electrico' || dept === 'mecanicas');
-  show('cfgHerrSection',    esSA || esEA || dept === 'electrico' || dept === 'mecanicas');
+  show('cfgHerrSection',    esSA || esEA || dept === 'electrico' || dept === 'mecanicas' || dept === 'seguridad');
   show('cfgSegSection',     esSA || esEA || dept === 'seguridad');
 }
 
@@ -5197,22 +5200,91 @@ async function exportarCSV() {
   } catch { toast('❌ Error al exportar CSV', 'err'); }
 }
 
+async function exportarPDF() {
+  try {
+    toast('⏳ Generando PDF...', '');
+    const mod = currentModule || 'bobinas';
+    const endpointMap = { bobinas: '/bobinas', pemp: '/pemp', carretillas: '/carretillas', stock: '/bobinas' };
+    const endpoint = endpointMap[mod] || '/bobinas';
+    const data = await apiCall(endpoint).then(r => r.json()).catch(() => []);
+    if (!Array.isArray(data) || !data.length) { toast('Sin datos para exportar', 'err'); return; }
+
+    const obra = document.getElementById('headerObraLabel')?.textContent || '';
+    const fecha = new Date().toLocaleDateString('es-ES');
+    const titulo = { bobinas: 'Bobinas', pemp: 'PEMP', carretillas: 'Carretillas', stock: 'Inventario' }[mod] || 'Inventario';
+    const camposClave = {
+      bobinas:     ['codigo','tipo_cable','proveedor','estado','obra_id','notas'],
+      pemp:        ['matricula','tipo','marca','estado','obra_id','notas'],
+      carretillas: ['matricula','tipo','marca','energia','estado','obra_id','notas'],
+    };
+    const cols = camposClave[mod] || Object.keys(data[0]).slice(0, 8);
+
+    const filas = data.map(r =>
+      `<tr>${cols.map(c => `<td>${r[c] ?? '—'}</td>`).join('')}</tr>`
+    ).join('');
+    const cabecera = cols.map(c => `<th>${c.replace(/_/g,' ')}</th>`).join('');
+
+    const html = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">
+      <title>Alejandra — ${titulo}</title>
+      <style>
+        body{font-family:Arial,sans-serif;font-size:11px;margin:20px;color:#111}
+        h2{font-size:15px;margin-bottom:4px}
+        .meta{font-size:10px;color:#666;margin-bottom:12px}
+        table{border-collapse:collapse;width:100%}
+        th{background:#f97316;color:#fff;padding:6px 8px;text-align:left;text-transform:capitalize}
+        td{padding:5px 8px;border-bottom:1px solid #e5e5e5}
+        tr:nth-child(even) td{background:#fafafa}
+        @media print{body{margin:10mm}}
+      </style>
+    </head><body>
+      <h2>📋 Alejandra App — ${titulo}</h2>
+      <div class="meta">🏗 Obra: ${obra || '—'} &nbsp;|&nbsp; 📅 ${fecha} &nbsp;|&nbsp; ${data.length} registros</div>
+      <table><thead><tr>${cabecera}</tr></thead><tbody>${filas}</tbody></table>
+    </body></html>`;
+
+    const w = window.open('', '_blank', 'width=900,height=650');
+    if (!w) { toast('⚠️ Activa las ventanas emergentes para exportar PDF', 'err'); return; }
+    w.document.write(html);
+    w.document.close();
+    w.focus();
+    setTimeout(() => { w.print(); }, 300);
+  } catch { toast('❌ Error al generar PDF', 'err'); }
+}
+
 async function compartirResumen() {
   try {
-    toast('⏳ Preparando resumen...', '');
+    toast('⏳ Preparando para compartir...', '');
     const [rb, rp, rc] = await Promise.all([
       apiCall('/bobinas').then(r => r.json()).catch(() => []),
       apiCall('/pemp').then(r => r.json()).catch(() => []),
       apiCall('/carretillas').then(r => r.json()).catch(() => []),
     ]);
-    const s = getSession();
     const obra = document.getElementById('headerObraLabel')?.textContent || '';
-    const texto = `📋 Alejandra App — Resumen inventario\n🏗 Obra: ${obra}\n📦 Bobinas: ${rb.length}\n🏗 PEMP: ${rp.length}\n🚜 Carretillas: ${rc.length}\n📅 ${new Date().toLocaleDateString('es-ES')}`;
+    const fecha = new Date().toLocaleDateString('es-ES');
+    const texto = `📋 Alejandra App — Resumen inventario\n🏗 Obra: ${obra}\n📦 Bobinas: ${rb.length}\n🏗 PEMP: ${rp.length}\n🚜 Carretillas: ${rc.length}\n📅 ${fecha}`;
+
+    // Intentar compartir archivo Excel si el navegador lo soporta
+    try {
+      if (typeof XLSX !== 'undefined' && navigator.canShare) {
+        const wb = XLSX.utils.book_new();
+        if (rb.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rb), 'Bobinas');
+        if (rp.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rp), 'PEMP');
+        if (rc.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rc), 'Carretillas');
+        const xlsxBuf = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+        const file = new File([xlsxBuf], `alejandra-${new Date().toISOString().slice(0,10)}.xlsx`,
+          { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+        if (navigator.canShare({ files: [file] })) {
+          await navigator.share({ title: 'Alejandra App — Inventario', files: [file], text: texto });
+          return;
+        }
+      }
+    } catch {}
+
+    // Fallback: compartir texto por WhatsApp o navigator.share
     if (navigator.share) {
       await navigator.share({ title: 'Alejandra App — Resumen', text: texto });
     } else {
-      const wa = 'https://wa.me/?text=' + encodeURIComponent(texto);
-      window.open(wa, '_blank');
+      window.open('https://wa.me/?text=' + encodeURIComponent(texto), '_blank');
     }
   } catch(e) { if (e?.name !== 'AbortError') toast('❌ Error al compartir', 'err'); }
 }
@@ -5259,7 +5331,7 @@ async function cargarObrasSelectUsuario() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '4.38';
+const APP_VERSION = '4.39';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
