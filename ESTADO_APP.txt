@@ -5,7 +5,7 @@
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 19/04/2026
-VERSIÓN ACTUAL: v4.17 app vieja | v4.31 app nueva
+VERSIÓN ACTUAL: v4.18 app vieja | v4.32 app nueva
 
 ⚠️  ANTES DE CODIFICAR: leer NuevaApp/IDEAS_PENDIENTES.txt
     Lista completa de bugs activos, mejoras y features pendientes.
@@ -232,6 +232,14 @@ v4.0  |  15/04/2026  [SOLO NUEVA APP]
   - Todos los datos existentes migrados con empresa_id=1 automáticamente
   - Índices creados: idx_*_empresa en tablas principales
   - SW bumpeado a alejandra-v4.0
+
+v4.32  |  19/04/2026  [AMBAS APPS — nueva v4.32 | vieja v4.18]
+  - BUG-01: Fichaje ahora pre-selecciona la obra activa de la sesión al abrir el modal
+    · abrirFormFichaje() aplica s.obra_id al select de obra tras poblar la lista
+    · (solo NuevaApp — Bobinaap no tiene módulo de fichajes)
+  - BUG-03: Nombre de obra ya no se corta en la barra superior
+    · .obra-label: eliminado max-width:120px, añadido flex:1;min-width:0
+    · El texto ocupa todo el espacio disponible y se trunca con … solo si no cabe
 
 v4.31  |  19/04/2026  [SOLO NUEVA APP]
   - MEJ-01: Rediseño sección Pedidos

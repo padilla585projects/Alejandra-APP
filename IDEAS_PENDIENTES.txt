@@ -16,7 +16,7 @@ LEYENDA DE ESTADO:
   🐛 ERRORES (bugs — van a AMBAS apps cuando se arreglen)
 ================================================================================
 
-[ ] BUG-01 — Fichaje no pide/rellena la obra
+[✓] BUG-01 — Fichaje no pide/rellena la obra  [HECHO v4.32]
     · Al fichar un trabajador no hay campo para indicar en qué obra está.
     · Si hay obra seleccionada en la barra superior → se rellena automáticamente.
     · Si NO hay obra seleccionada → permitir elegirla manualmente al fichar.
@@ -27,7 +27,7 @@ LEYENDA DE ESTADO:
     · Funciona tanto con botón atrás como con cualquier navegación a la pantalla dept.
     · Reportado: 18/04/2026 — Adrian, CPD Getafe
 
-[ ] BUG-03 — Nombre de obra no cabe en la barra de iconos superior
+[✓] BUG-03 — Nombre de obra no cabe en la barra de iconos superior  [HECHO v4.32]
     · El texto de la obra activa se corta o no se ve bien.
     · Ideas: scroll automático del texto, cambio de tamaño/formato, otro layout.
     · Reportado: 18/04/2026 — Adrian, CPD Getafe
