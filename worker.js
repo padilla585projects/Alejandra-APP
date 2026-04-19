@@ -135,6 +135,10 @@ export default {
       if (path === '/usuarios/pendientes'  && method === 'GET')  return await getUsuariosPendientes(request, env);
       if (path === '/usuarios/pendientes/aprobar' && method === 'POST') return await aprobarUsuarioPendiente(request, env);
       if (path === '/usuarios/pendientes/rechazar' && method === 'POST') return await rechazarUsuarioPendiente(request, env);
+      if (path === '/invitaciones'          && method === 'POST') return await crearInvitacion(request, env);
+      if (path === '/invitaciones'          && method === 'GET')  return await listarInvitaciones(request, env);
+      if (path === '/invitaciones/anular'   && method === 'POST') return await anularInvitacion(request, env);
+      if (path === '/invitaciones/verificar'&& method === 'GET')  return await verificarInvitacion(request, env);
       if (path === '/acceso'      && method === 'POST') return await verificarAcceso(request, env); // alias legacy
       if (path === '/logout'      && method === 'POST') return await cerrarSesionServidor(request, env);
       if (path === '/sesiones'    && method === 'GET')  return await getSesionesActivas(request, env);
@@ -3272,7 +3276,7 @@ function googleAuthUrl(request, env) {
 
 async function googleAuthCallback(request, env) {
   const body = await request.json().catch(() => ({}));
-  const { code, redirect_uri } = body;
+  const { code, redirect_uri, inv_codigo } = body;
   if (!code) return err('Falta el código de autorización', 400);
   if (!env.GOOGLE_OAUTH_CLIENT_ID || !env.GOOGLE_OAUTH_CLIENT_SECRET) return err('Google OAuth no configurado', 503);
 
@@ -3307,21 +3311,32 @@ async function googleAuthCallback(request, env) {
   ).bind(gUser.email).first();
 
   if (!u) {
-    // Comprobar si ya hay una solicitud pendiente con este email
-    const pendiente = await env.DB.prepare(
-      'SELECT id FROM usuarios WHERE LOWER(email) = LOWER(?) AND google_pending = 1 LIMIT 1'
-    ).bind(gUser.email).first();
-    if (pendiente) return json({ ok: false, pendiente: true, msg: 'Tu solicitud ya está pendiente de aprobación por el administrador.' });
+    // Si viene con código de invitación, registrar directamente
+    if (inv_codigo) {
+      const ahora = AHORA();
+      const inv = await env.DB.prepare(
+        'SELECT * FROM invitaciones WHERE codigo = ? AND usado = 0 AND expira_at > ?'
+      ).bind(inv_codigo.toUpperCase(), ahora).first();
+      if (!inv) return json({ ok: false, inv_error: true, msg: 'El enlace de invitación ha caducado o ya fue utilizado.' });
 
-    // Crear usuario pendiente
-    const codigoPend = 'gp_' + Date.now();
-    await env.DB.prepare(
-      'INSERT INTO usuarios (nombre, codigo, rol, activo, google_pending, email, empresa_id) VALUES (?,?,?,0,1,?,NULL)'
-    ).bind(gUser.name || gUser.email, codigoPend, 'operario', gUser.email).run();
+      const codigoUser = 'g_' + Date.now();
+      await env.DB.prepare(
+        'INSERT INTO usuarios (nombre, codigo, rol, departamento, activo, google_pending, email, empresa_id) VALUES (?,?,?,?,1,0,?,?)'
+      ).bind(gUser.name || gUser.email, codigoUser, inv.rol, inv.departamento || null, gUser.email, inv.empresa_id).run();
+      await env.DB.prepare('UPDATE invitaciones SET usado = 1 WHERE codigo = ?').bind(inv_codigo.toUpperCase()).run();
 
-    await sendTelegram(env, `🆕 <b>Solicitud de acceso Google</b>\n👤 ${gUser.name || gUser.email}\n📧 ${gUser.email}\n\nEntra en Ajustes → Empresa para aceptar o rechazar.`);
+      const nuevoUser = await env.DB.prepare('SELECT * FROM usuarios WHERE email = ? AND activo = 1 LIMIT 1').bind(gUser.email).first();
+      const empresa = await env.DB.prepare('SELECT nombre FROM empresas WHERE id = ?').bind(inv.empresa_id).first();
+      const token = Array.from(crypto.getRandomValues(new Uint8Array(32))).map(b => b.toString(16).padStart(2,'0')).join('');
+      await env.DB.prepare(
+        'INSERT INTO sesiones (token, usuario_id, empresa_id, nombre, rol, departamento, obra_id, created_at) VALUES (?,?,?,?,?,?,?,?)'
+      ).bind(token, nuevoUser.id, inv.empresa_id, gUser.name || gUser.email, inv.rol, inv.departamento || null, null, ahora).run();
+      await sendTelegram(env, `✅ <b>Nuevo usuario registrado</b>\n👤 ${gUser.name || gUser.email}\n📧 ${gUser.email}\nRol: ${inv.rol} | Dpto: ${inv.departamento || '—'} | Empresa: ${empresa?.nombre || inv.empresa_id}`);
+      return json({ ok: true, token, nombre: gUser.name || gUser.email, rol: inv.rol, departamento: inv.departamento || null, empresa_id: inv.empresa_id, empresa_nombre: empresa?.nombre || '', obra_id: null, obra_nombre: null });
+    }
 
-    return json({ ok: false, pendiente: true, msg: 'Solicitud enviada. El administrador revisará tu acceso en breve.' });
+    // Sin invitación: acceso denegado
+    return json({ ok: false, sin_invitacion: true, msg: 'Necesitas un enlace de invitación para registrarte. Contacta con tu administrador.' });
   }
 
   // Crear sesión
@@ -3347,6 +3362,51 @@ async function googleAuthCallback(request, env) {
     obra_id:        u.obra_id   || null,
     obra_nombre:    obra        ? obra.nombre : null,
   });
+}
+
+async function crearInvitacion(request, env) {
+  const s = await getAuth(request, env);
+  if (!s || !['superadmin','empresa_admin'].includes(s.rol)) return err('Sin permiso', 403);
+  const { duracion_min, rol, departamento } = await request.json().catch(() => ({}));
+  if (!duracion_min || !rol) return err('Faltan datos', 400);
+  const codigo = Math.random().toString(36).slice(2,7).toUpperCase() + Math.random().toString(36).slice(2,5).toUpperCase();
+  const expira = new Date(Date.now() + duracion_min * 60000).toISOString().slice(0,19).replace('T',' ');
+  await env.DB.prepare(
+    'INSERT INTO invitaciones (codigo, empresa_id, rol, departamento, expira_at, creado_por) VALUES (?,?,?,?,?,?)'
+  ).bind(codigo, s.empresa_id, rol, departamento || null, expira, s.usuario_id || null).run();
+  return json({ ok: true, codigo, expira });
+}
+
+async function listarInvitaciones(request, env) {
+  const s = await getAuth(request, env);
+  if (!s || !['superadmin','empresa_admin'].includes(s.rol)) return err('Sin permiso', 403);
+  const ahora = AHORA();
+  const { results } = await env.DB.prepare(
+    'SELECT codigo, rol, departamento, expira_at, usado FROM invitaciones WHERE empresa_id = ? AND expira_at > ? ORDER BY expira_at DESC'
+  ).bind(s.empresa_id, ahora).all();
+  return json({ ok: true, invitaciones: results || [] });
+}
+
+async function anularInvitacion(request, env) {
+  const s = await getAuth(request, env);
+  if (!s || !['superadmin','empresa_admin'].includes(s.rol)) return err('Sin permiso', 403);
+  const { codigo } = await request.json().catch(() => ({}));
+  if (!codigo) return err('Falta código', 400);
+  await env.DB.prepare('DELETE FROM invitaciones WHERE codigo = ? AND empresa_id = ?').bind(codigo, s.empresa_id).run();
+  return json({ ok: true });
+}
+
+async function verificarInvitacion(request, env) {
+  const url = new URL(request.url);
+  const codigo = url.searchParams.get('codigo');
+  if (!codigo) return err('Falta código', 400);
+  const ahora = AHORA();
+  const inv = await env.DB.prepare(
+    'SELECT codigo, rol, departamento, expira_at FROM invitaciones WHERE codigo = ? AND usado = 0 AND expira_at > ?'
+  ).bind(codigo.toUpperCase(), ahora).first();
+  if (!inv) return json({ ok: false, msg: 'Enlace caducado o ya utilizado.' });
+  const empresa = await env.DB.prepare('SELECT nombre FROM empresas WHERE id = (SELECT empresa_id FROM invitaciones WHERE codigo = ?)').bind(codigo.toUpperCase()).first();
+  return json({ ok: true, rol: inv.rol, departamento: inv.departamento, expira_at: inv.expira_at, empresa_nombre: empresa?.nombre || '' });
 }
 
 async function getUsuariosPendientes(request, env) {
