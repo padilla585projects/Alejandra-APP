@@ -1,0 +1,174 @@
+================================================================================
+  ALEJANDRA APP — IDEAS, MEJORAS Y ERRORES PENDIENTES
+  Recogidos de: Canal Telegram @AlejandraAPP_bot
+  Última actualización: 19/04/2026 (v4.28)
+
+  ⚠️  LEER ESTE ARCHIVO ANTES DE CUALQUIER SESIÓN DE CODIFICACIÓN.
+  ⚠️  Marcar como [HECHO vX.XX] cuando se implemente. No borrar las líneas.
+================================================================================
+
+LEYENDA DE ESTADO:
+  [ ]  Pendiente
+  [~]  En progreso
+  [✓]  Hecho (indicar versión)
+
+================================================================================
+  🐛 ERRORES (bugs — van a AMBAS apps cuando se arreglen)
+================================================================================
+
+[ ] BUG-01 — Fichaje no pide/rellena la obra
+    · Al fichar un trabajador no hay campo para indicar en qué obra está.
+    · Si hay obra seleccionada en la barra superior → se rellena automáticamente.
+    · Si NO hay obra seleccionada → permitir elegirla manualmente al fichar.
+    · Reportado: 18/04/2026 — Adrian, CPD Getafe
+
+[ ] BUG-02 — Icono de departamento no desaparece al volver al inicio
+    · Al salir de un departamento y volver a la pantalla principal,
+      el icono del departamento activo sigue visible en la barra superior.
+    · Debe desaparecer al salir del departamento.
+    · Reportado: 18/04/2026 — Adrian, CPD Getafe
+
+[ ] BUG-03 — Nombre de obra no cabe en la barra de iconos superior
+    · El texto de la obra activa se corta o no se ve bien.
+    · Ideas: scroll automático del texto, cambio de tamaño/formato, otro layout.
+    · Reportado: 18/04/2026 — Adrian, CPD Getafe
+
+[✓] BUG-04 — Botones de añadir en Ajustes no funcionan  [HECHO: pendiente verificar]
+    · En Ajustes y en Ajustes/Catálogos ningún botón de añadir responde. IMPORTANTE.
+    · Reportado: 18/04/2026 — Adrian
+
+[ ] BUG-05 — Pedidos e inventarios NO están aislados por departamento
+    · Los pedidos hechos en Eléctrico aparecen en otros departamentos.
+    · Cada departamento debe tener sus propios pedidos e inventarios, independientes,
+      aunque estén en la misma obra y empresa. MUY IMPORTANTE.
+    · Reportado: 18/04/2026 — Adrian
+
+[ ] BUG-06 — Al borrar usuario, sus credenciales quedan bloqueadas
+    · Si se borra un usuario, su nombre, contraseña y correo quedan "ocupados"
+      y no se pueden asignar a otro usuario nuevo.
+    · Al borrar un usuario deben liberarse todas sus credenciales completamente.
+    · Mismo problema con el correo al registrar/borrar una empresa.
+    · Reportado: 18/04/2026 — Adrian, CPD Getafe
+
+[✓] BUG-07 — Log de Ideas no se actualiza y no marca resueltos  [HECHO v4.28]
+    · Las nuevas sugerencias enviadas desde Telegram no aparecían en el panel Ideas.
+    · Badge siempre en 0 (estado NULL no coincidía con filtro 'pendiente').
+    · Botón Resolver usaba prompt() (falla en móvil).
+    · Sin auto-refresh: había que navegar manualmente para ver nuevas ideas.
+    · Fix v4.28: INSERT guarda estado='pendiente', badge cuenta NULL como pendiente,
+      modal Resolver en lugar de prompt(), auto-refresh cada 30s en panel Ideas.
+
+================================================================================
+  🔧 MEJORAS (solo app nueva, salvo indicación contraria)
+================================================================================
+
+[ ] MEJ-01 — Rediseño completo de la sección Pedidos
+    · Añadir campo "referencia" al pedido.
+    · Notificaciones cuando alguien haga un pedido.
+    · Admin/encargado puede cambiar el estado del pedido.
+    · Implementar Pedidos también en Mecánicas y Seguridad.
+    · Sincronizado con Google Sheets.
+    · Reportado: 18/04/2026 — Adrian, CPD Getafe
+
+[ ] MEJ-02 — Departamento Herramientas: mejoras de scan
+    · Usar cámara para escanear número de serie al agregar o devolver herramientas.
+    · Botón para seleccionar el modo del escáner (agregar / devolver).
+    · Quitar el buscador de la pestaña Scan.
+    · Nueva pestaña "Inventario" dentro de Herramientas (con buscador).
+    · Al añadir manualmente, permitir introducir el número de serie.
+    · Reportado: 18/04/2026 — Adrian, CPD Getafe
+
+[ ] MEJ-03 — Ocultar pestañas sin acceso
+    · Las pestañas a las que el usuario no tiene permiso deben ocultarse completamente
+      (no solo deshabilitarse). Ej: "Ideas" solo visible para superusuario.
+    · Revisar todas las pestañas/opciones con lógica similar.
+    · Reportado: 18/04/2026 — Adrian, CPD Getafe
+
+[ ] MEJ-04 — Pantalla de selección de empresa para Superadmin
+    · Tras login como superadmin: primera pantalla = selector de empresas
+      con iconos grandes, estilo visual de la app.
+    · Al seleccionar empresa → acceder con datos filtrados de esa empresa.
+    · No se pueden ver datos de otras empresas desde dentro.
+    · Botón "atrás" para volver al selector de empresas.
+    · Reportado: 18/04/2026 — Adrian
+
+[ ] MEJ-05 — Cambiar descripciones de departamentos en pantalla principal
+    · Las descripciones actuales no reflejan la realidad del trabajo.
+    · Deben describir lo que hace cada departamento, no las secciones de la app.
+    · Reportado: 18/04/2026 — Adrian, CPD Getafe
+
+================================================================================
+  ✨ NUEVAS FUNCIONES (solo app nueva)
+================================================================================
+
+[ ] NEW-01 — Login con Google (OAuth)
+    · Autenticación mediante cuenta Google.
+    · Reportado: 18/04/2026 — Adrian, CPD Getafe
+
+[ ] NEW-02 — Wizard de bienvenida (onboarding primera vez)
+    · Al abrir la app por primera vez: wizard guiado.
+    · Pasos: configurar cuenta nueva o usuario existente,
+      elegir departamentos a usar (los no usados se ocultan),
+      vincular cuenta a datos de la empresa (Sheets, etc.).
+    · Cada empresa tiene sus propios datos aislados.
+    · Reportado: 18/04/2026 — Adrian, CPD Getafe
+
+[ ] NEW-03 — Almacenamiento de datos por empresa
+    · Poder guardar documentos, fotos y archivos dentro de cada empresa.
+    · Reportado: 18/04/2026 — Adrian, CPD Getafe
+
+[ ] NEW-04 — Herramientas en departamento Seguridad
+    · Añadir sección Herramientas en Seguridad como en los demás departamentos.
+    · Cada departamento ve solo sus propias herramientas e inventario.
+    · Reportado: 18/04/2026 — Adrian, CPD Getafe
+
+[ ] NEW-05 — Banner "App actualizada vX.X" al abrir
+    · Al abrir la app, mostrar banner con la versión actualizada durante 5 segundos.
+    · Reportado: 18/04/2026 — Adrian, CPD Getafe
+
+[ ] NEW-06 — Splash screen / intro al abrir la app
+    · Animación o pantalla de intro de ~2 segundos al abrir la app.
+    · Reportado: 18/04/2026 — Adrian, CPD Getafe
+
+[ ] NEW-07 — Exportar datos en más formatos + compartir
+    · No solo Excel: añadir PDF, CSV u otros formatos.
+    · Opción de enviar los datos por email o WhatsApp directamente.
+    · Reportado: 18/04/2026 — Adrian, CPD Getafe
+
+[ ] NEW-08 — Chat interno entre empleados de la misma empresa
+    · Canal de chat dentro de la app, filtrado por empresa.
+    · Reportado: 18/04/2026 — Adrian, CPD Getafe
+
+[ ] NEW-09 — Sistema de notificaciones in-app
+    · Notificaciones dentro de la app para avisar de eventos (pedidos, fichajes, etc.).
+    · Reportado: 18/04/2026 — Adrian, CPD Getafe
+
+[ ] NEW-10 — Planes de precios
+    · Definir modelo de negocio y cómo implementar planes de pago para la app.
+    · Pendiente de diseño y decisión estratégica.
+    · Reportado: 18/04/2026 — Adrian
+
+[ ] NEW-11 — Botón "Invítame a un café" en Ajustes
+    · Enlace a PayPal del desarrollador para donaciones voluntarias.
+    · Reportado: 18/04/2026 — Adrian, CPD Getafe
+
+================================================================================
+  📋 INSTRUCCIONES PARA CLAUDE
+================================================================================
+
+ANTES DE CODIFICAR, REVISAR SIEMPRE:
+  1. ¿El cambio que voy a hacer resuelve algún bug de la lista anterior?
+     → Si es así, marcarlo como [✓ HECHO vX.XX] al terminar.
+  2. ¿El cambio que voy a hacer puede afectar negativamente a algún ítem
+     de la lista (regresar un bug ya corregido o bloquear una mejora futura)?
+     → Si hay riesgo, advertir al usuario antes de proceder.
+  3. ¿Hay algún BUG activo relacionado con la funcionalidad que se va a tocar?
+     → Arreglarlo de paso si es sencillo, o avisar si requiere trabajo adicional.
+
+CÓMO ACTUALIZAR ESTE ARCHIVO:
+  - Al resolver un ítem: cambiar [ ] por [✓] y añadir "[HECHO vX.XX]" al final.
+  - Al descubrir un nuevo bug/mejora: añadirlo al final de su sección con el
+    siguiente número de ítem disponible.
+  - Hacer push de este archivo junto con el resto de cambios de la sesión.
+
+================================================================================

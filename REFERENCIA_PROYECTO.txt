@@ -13,15 +13,21 @@ AL INICIO DE CADA SESIÓN (cualquier ordenador, cualquier chat):
   1. Leer REFERENCIA_PROYECTO.txt (raíz del proyecto) — versiones y normas
   2. Leer NuevaApp/ESTADO_APP.txt — últimos cambios detallados
   3. Leer Bobinaap/ESTADO_APP.txt — estado app vieja
-  → Con esos 3 archivos ya tienes el contexto completo para continuar
+  4. ⚠️  Leer NuevaApp/IDEAS_PENDIENTES.txt — bugs y mejoras pendientes
+  → Con esos 4 archivos ya tienes el contexto completo para continuar
+
+  IDEAS_PENDIENTES.txt: lista SIEMPRE actualizada de bugs, mejoras y features
+  pendientes. Antes de codificar cualquier cosa, revisar si afecta a algún ítem
+  de esa lista. Al resolver un ítem, marcarlo como [✓ HECHO vX.XX] en ese archivo.
 
 AL TERMINAR CUALQUIER CAMBIO DE CÓDIGO (obligatorio, sin excepción):
-  Actualizar estos 5 archivos y hacer push:
+  Actualizar estos archivos y hacer push:
   1. NuevaApp/ESTADO_APP.txt        → añadir entrada vX.XX + actualizar cabecera
   2. NuevaApp/REFERENCIA_PROYECTO.txt → actualizar versiones + historial reciente
-  3. Bobinaap/ESTADO_APP.txt        → actualizar línea VERSIÓN ACTUAL
-  4. Bobinaap/REFERENCIA_PROYECTO.txt → actualizar versiones + historial reciente
-  5. REFERENCIA_PROYECTO.txt (raíz) → actualizar versiones + historial reciente
+  3. NuevaApp/IDEAS_PENDIENTES.txt  → marcar [✓ HECHO vX.XX] en los ítems resueltos
+  4. Bobinaap/ESTADO_APP.txt        → actualizar línea VERSIÓN ACTUAL
+  5. Bobinaap/REFERENCIA_PROYECTO.txt → actualizar versiones + historial reciente
+  6. REFERENCIA_PROYECTO.txt (raíz) → actualizar versiones + historial reciente
      ⚠️ Este archivo NO está en git — solo actualizar en local
 
   Push app nueva:  git -c credential.helper= push https://padilla585projects:
@@ -107,10 +113,10 @@ Cloudflare D1 (base de datos):
   Token D1: → ver NUEVA_CUENTA.txt
 
 Archivos locales:
-  Frontend: C:\Users\Adrian\Downloads\Proyecto GestiBobina\Bobinaap\index.html
-  Worker:   C:\Users\Adrian\Downloads\Proyecto GestiBobina\Bobinaap\worker.js
-  SW:       C:\Users\Adrian\Downloads\Proyecto GestiBobina\Bobinaap\sw.js
-  Versión:  C:\Users\Adrian\Downloads\Proyecto GestiBobina\Bobinaap\version.json
+  Frontend: <RUTA_BASE>\Bobinaap\index.html
+  Worker:   <RUTA_BASE>\Bobinaap\worker.js
+  SW:       <RUTA_BASE>\Bobinaap\sw.js
+  Versión:  <RUTA_BASE>\Bobinaap\version.json
 
 ================================================================================
   APP NUEVA — CREDENCIALES Y ACCESO
@@ -135,31 +141,31 @@ Cloudflare D1 (base de datos):
   Token D1: → ver NUEVA_CUENTA.txt  (mismo token que Worker)
 
 Archivos locales:
-  Frontend: C:\Users\Adrian\Downloads\Proyecto GestiBobina\NuevaApp\index.html
-  Worker:   C:\Users\Adrian\Downloads\Proyecto GestiBobina\NuevaApp\worker.js
-  SW:       C:\Users\Adrian\Downloads\Proyecto GestiBobina\NuevaApp\sw.js
-  Versión:  C:\Users\Adrian\Downloads\Proyecto GestiBobina\NuevaApp\version.json
+  Frontend: <RUTA_BASE>\NuevaApp\index.html
+  Worker:   <RUTA_BASE>\NuevaApp\worker.js
+  SW:       <RUTA_BASE>\NuevaApp\sw.js
+  Versión:  <RUTA_BASE>\NuevaApp\version.json
 
 ================================================================================
   COMANDOS DE DEPLOY — COPIAR Y PEGAR DIRECTAMENTE
 ================================================================================
 
 ── DEPLOY WORKER NUEVO (preferido — Wrangler OAuth) ───────────────────────────
-cd "C:\Users\Adrian\Downloads\Proyecto GestiBobina\NuevaApp"
+cd "<RUTA_BASE>\NuevaApp"
 npx wrangler deploy
 
 ── DEPLOY WORKER VIEJO (via curl — sin wrangler) ───────────────────────────────
 curl -s -X PUT "https://api.cloudflare.com/client/v4/accounts/c100d5a0ea37ee03989fe769c7259b83/workers/scripts/gestibobina-proxy" \
   -H "Authorization: Bearer <TOKEN_WORKER_VIEJO>" \
   -F "metadata={\"main_module\":\"worker.js\",\"compatibility_date\":\"2024-01-01\",\"bindings\":[{\"type\":\"d1\",\"name\":\"DB\",\"id\":\"eac9f2d2-0845-409c-9032-109c563d7eec\"}]};type=application/json" \
-  -F "worker.js=@C:\Users\Adrian\Downloads\Proyecto GestiBobina\Bobinaap\worker.js;type=application/javascript+module"
+  -F "worker.js=@<RUTA_BASE>\Bobinaap\worker.js;type=application/javascript+module"
 
 ⚠️  CRÍTICO: el binding D1 SIEMPRE debe incluirse en el metadata del deploy.
     Sin él, env.DB queda undefined y TODA la app deja de funcionar.
     Con wrangler esto es automático (lee wrangler.toml).
 
 ── QUERY D1 NUEVA (wrangler) ───────────────────────────────────────────────────
-cd "C:\Users\Adrian\Downloads\Proyecto GestiBobina\NuevaApp"
+cd "<RUTA_BASE>\NuevaApp"
 npx wrangler d1 execute alejandra-db --remote --command "SELECT ..."
 
 ── QUERY D1 NUEVA (curl) ───────────────────────────────────────────────────────
@@ -169,13 +175,13 @@ curl -s -X POST "https://api.cloudflare.com/client/v4/accounts/d65ead2b2967bf68f
   -d "{\"sql\":\"SELECT ...\"}"
 
 ── GIT PUSH APP NUEVA ──────────────────────────────────────────────────────────
-cd "C:\Users\Adrian\Downloads\Proyecto GestiBobina\NuevaApp"
+cd "<RUTA_BASE>\NuevaApp"
 git add index.html worker.js sw.js version.json ESTADO_APP.txt
 git commit -m "descripcion; vX.XX"
 git push origin main
 
 ── GIT PUSH APP VIEJA ──────────────────────────────────────────────────────────
-cd "C:\Users\Adrian\Downloads\Proyecto GestiBobina\Bobinaap"
+cd "<RUTA_BASE>\Bobinaap"
 git add index.html worker.js sw.js version.json ESTADO_APP.txt
 git commit -m "descripcion; vX.XX"
 git -c credential.helper= push https://padilla585:<TOKEN_GITHUB_VIEJO>@github.com/padilla585/Bobinaap.git main
@@ -368,7 +374,7 @@ MULTI-TENANT ROADMAP (app nueva):
   ARCHIVOS CLAVE DEL PROYECTO
 ================================================================================
 
-C:\Users\Adrian\Downloads\Proyecto GestiBobina\
+<RUTA_BASE>\
   ├── REFERENCIA_PROYECTO.txt     ← ESTE ARCHIVO (leer al inicio de sesión)
   ├── Bobinaap\
   │   ├── index.html              ← Frontend app vieja
@@ -392,6 +398,6 @@ C:\Users\Adrian\Downloads\Proyecto GestiBobina\
 
 Obra activa:       CPD Getafe (código: 001, id: 1, empresa_id: 1)
 Empresa principal: "Empresa Principal" (id: 1) — datos reales del equipo
-Backup local:      C:\Users\Adrian\Downloads\Proyecto GestiBobina\backup_db_20260413.sql
+Backup local:      <RUTA_BASE>\backup_db_20260413.sql
 
 ================================================================================

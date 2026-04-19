@@ -1,11 +1,15 @@
 ================================================================================
   ALEJANDRA APP — CONTROL DE ESTADO Y CHANGELOG
   Proyecto: GestiBobina / Bobinaap
-  Ruta local: C:\Users\Adrian\Downloads\Proyecto GestiBobina\Bobinaap
+  Ruta local: <RUTA_BASE>\Bobinaap
 ================================================================================
 
-ÚLTIMA ACTUALIZACIÓN: 18/04/2026
-VERSIÓN ACTUAL: v4.17 app vieja | v4.27 app nueva
+ÚLTIMA ACTUALIZACIÓN: 19/04/2026
+VERSIÓN ACTUAL: v4.17 app vieja | v4.28 app nueva
+
+⚠️  ANTES DE CODIFICAR: leer NuevaApp/IDEAS_PENDIENTES.txt
+    Lista completa de bugs activos, mejoras y features pendientes.
+    Marcar como [✓ HECHO vX.XX] los ítems que se resuelvan en cada sesión.
 
 REPO:    https://github.com/padilla585/Bobinaap.git  (branch: main)
 WORKER:  https://gestibobina-proxy.padilla585.workers.dev
@@ -82,7 +86,7 @@ Columnas extra:
   [todas las demás tablas tienen empresa_id* también]
   (*) en AMBAS apps desde v4.1
 
-Backup local: C:\Users\Adrian\Downloads\Proyecto GestiBobina\backup_db_20260413.sql
+Backup local: <RUTA_BASE>\backup_db_20260413.sql
 
 ================================================================================
   HISTORIAL DE VERSIONES
