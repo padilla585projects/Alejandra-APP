@@ -5,7 +5,7 @@
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 19/04/2026
-VERSIÓN ACTUAL: v4.18 app vieja | v4.34 app nueva
+VERSIÓN ACTUAL: v4.18 app vieja | v4.35 app nueva
 
 ⚠️  ANTES DE CODIFICAR: leer NuevaApp/IDEAS_PENDIENTES.txt
     Lista completa de bugs activos, mejoras y features pendientes.
@@ -232,6 +232,15 @@ v4.0  |  15/04/2026  [SOLO NUEVA APP]
   - Todos los datos existentes migrados con empresa_id=1 automáticamente
   - Índices creados: idx_*_empresa en tablas principales
   - SW bumpeado a alejandra-v4.0
+
+v4.35  |  19/04/2026  [SOLO NUEVA APP]
+  - Fix pantalla selección de empresa (superadmin):
+    · onclick roto: JSON.stringify producía comillas dobles dentro del atributo HTML → click nunca ejecutaba
+      Corregido usando data-eid/data-enombre + this.dataset en lugar de inline args
+    · empresa_id parseado a int en seleccionarEmpresaAdmin
+    · irAtras(): superadmin en empresaSel → no hace nada (es la raíz)
+    · irAtras(): superadmin en cualquier sub-pantalla → va directo a empresaSel
+    · actualizarBtnAtras(): botón atrás visible para superadmin en cualquier pantalla excepto empresaSel
 
 v4.34  |  19/04/2026  [SOLO NUEVA APP]
   - MEJ-05: Descripciones de departamentos actualizadas

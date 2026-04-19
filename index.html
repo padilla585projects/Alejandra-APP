@@ -2310,7 +2310,7 @@ async function cargarEmpresasAdmin() {
     const lista = await res.json();
     if (!lista.length) { grid.innerHTML = '<div class="empty-state">No hay empresas registradas</div>'; return; }
     grid.innerHTML = lista.map(e => `
-      <div class="dept-card" onclick="seleccionarEmpresaAdmin(${e.id}, ${JSON.stringify(e.nombre)})">
+      <div class="dept-card" data-eid="${e.id}" data-enombre="${(e.nombre||'').replace(/"/g,'&quot;')}" onclick="seleccionarEmpresaAdmin(this.dataset.eid, this.dataset.enombre)">
         <div class="dept-icon-wrap" style="font-size:28px">🏢</div>
         <div style="flex:1">
           <div class="dept-name">${e.nombre}</div>
@@ -2322,6 +2322,7 @@ async function cargarEmpresasAdmin() {
 }
 
 async function seleccionarEmpresaAdmin(empresa_id, empresa_nombre) {
+  empresa_id = parseInt(empresa_id);
   try {
     const res = await apiCall('/superadmin/empresa', { method: 'POST', body: JSON.stringify({ empresa_id }) });
     if (!res.ok) return toast('❌ Error al seleccionar empresa', 'err');
@@ -2398,7 +2399,10 @@ function actualizarBtnAtras() {
                      && (s.rol === 'superadmin' || s.rol === 'empresa_admin');
   const enDeptSA = document.getElementById('screenDept')?.classList.contains('active')
                    && s.rol === 'superadmin';
-  btn.style.display = (enSub || enSegAdmin || enDeptSA) ? '' : 'none';
+  // Superadmin: mostrar atrás en cualquier pantalla excepto empresaSel (que es su raíz)
+  const enEmpresaSel = document.getElementById('screenEmpresaSel')?.classList.contains('active');
+  const saFueraDeRaiz = s.rol === 'superadmin' && !enEmpresaSel;
+  btn.style.display = (enSub || enSegAdmin || enDeptSA || saFueraDeRaiz) ? '' : 'none';
 }
 
 function irAtras() {
@@ -2408,10 +2412,15 @@ function irAtras() {
   const fabFichaje = document.getElementById('btnNuevoFichaje');
   if (fabFichaje) fabFichaje.style.display = 'none';
   const s = getSession();
-  const enDept = document.getElementById('screenDept')?.classList.contains('active');
-  if (s?.rol === 'superadmin' && enDept) {
+  const enDept       = document.getElementById('screenDept')?.classList.contains('active');
+  const enEmpresaSel = document.getElementById('screenEmpresaSel')?.classList.contains('active');
+  if (s?.rol === 'superadmin' && enEmpresaSel) {
+    return; // empresaSel es la raíz del superadmin — atrás no hace nada
+  } else if (s?.rol === 'superadmin' && enDept) {
     showScreen('empresaSel');
-  } else if (s?.rol === 'superadmin' || s?.rol === 'empresa_admin') {
+  } else if (s?.rol === 'superadmin') {
+    showScreen('empresaSel'); // desde cualquier sub-pantalla, volver directo a empresaSel
+  } else if (s?.rol === 'empresa_admin') {
     showScreen('dept');
   } else if (s?.departamento === 'seguridad') {
     showScreen('seguridad');
@@ -5059,7 +5068,7 @@ async function cargarObrasSelectUsuario() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '4.34';
+const APP_VERSION = '4.35';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
