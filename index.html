@@ -486,7 +486,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
         </div>
         <div style="flex:1">
           <div class="dept-name">Eléctrico</div>
-          <div class="dept-desc">Bobinas · PEMP · Carretillas</div>
+          <div class="dept-desc">Tendido de cable · Plataformas · Carretillas</div>
         </div>
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="color:var(--muted)"><path d="m9 18 6-6-6-6"/></svg>
       </div>
@@ -504,7 +504,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
         </div>
         <div style="flex:1">
           <div class="dept-name">Mecánicas</div>
-          <div class="dept-desc">PEMP · Carretillas</div>
+          <div class="dept-desc">Mantenimiento de plataformas y carretillas</div>
         </div>
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="color:var(--muted)"><path d="m9 18 6-6-6-6"/></svg>
       </div>
@@ -519,7 +519,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
         </div>
         <div style="flex:1">
           <div class="dept-name">Seguridad</div>
-          <div class="dept-desc">PEMP · Carretillas · Todas las obras</div>
+          <div class="dept-desc">Control de EPIs y material de seguridad</div>
         </div>
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="color:var(--muted)"><path d="m9 18 6-6-6-6"/></svg>
       </div>
@@ -534,7 +534,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
         </div>
         <div style="flex:1">
           <div class="dept-name">Personal</div>
-          <div class="dept-desc">Fichajes · Horarios · Asistencia</div>
+          <div class="dept-desc">Fichajes y control de asistencia</div>
         </div>
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="color:var(--muted)"><path d="m9 18 6-6-6-6"/></svg>
       </div>
@@ -1121,7 +1121,11 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
       <div class="ajustes-panel" id="ajPanelIdeas">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
           <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:16px">💡 Ideas & Feedback</div>
-          <button class="btn-sm" onclick="cargarSugerenciasAdmin()">↻</button>
+          <div style="display:flex;gap:6px">
+            <button class="btn-sm" onclick="marcarTodasLeidas()" title="Marcar todo como resuelto">✅ Todo leído</button>
+            <button class="btn-sm" onclick="borrarTodasSugerencias()" title="Borrar todas las ideas" style="color:#ef4444">🗑️ Borrar todo</button>
+            <button class="btn-sm" onclick="cargarSugerenciasAdmin()">↻</button>
+          </div>
         </div>
         <!-- Filtros -->
         <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px" id="sugFiltros">
@@ -4848,6 +4852,20 @@ function confirmarResolver() {
 
 async function cargarSugerencias() { return cargarSugerenciasAdmin(); }
 
+async function marcarTodasLeidas() {
+  if (!confirm('¿Marcar todas las ideas como resueltas?')) return;
+  const res = await apiCall('/sugerencias/marcar-todas', { method: 'PUT', body: '{}' });
+  if (res.ok) { toast('✅ Todas marcadas como resueltas'); cargarSugerenciasAdmin(); cargarBadgeIdeas(); }
+  else toast('❌ Error', 'err');
+}
+
+async function borrarTodasSugerencias() {
+  if (!confirm('⚠️ ¿Borrar TODAS las ideas? Esta acción no se puede deshacer.')) return;
+  const res = await apiCall('/sugerencias/borrar-todas', { method: 'DELETE' });
+  if (res.ok) { toast('🗑️ Todas las ideas borradas'); cargarSugerenciasAdmin(); cargarBadgeIdeas(); }
+  else toast('❌ Error', 'err');
+}
+
 // ══════════════════════════════════════════════════════
 // CREAR USUARIO (actualizado con dept + modal código)
 // ══════════════════════════════════════════════════════
@@ -5041,7 +5059,7 @@ async function cargarObrasSelectUsuario() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '4.33';
+const APP_VERSION = '4.34';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes

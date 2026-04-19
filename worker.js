@@ -233,6 +233,8 @@ export default {
       // ── Sugerencias ───────────────────────────────────────────────────────
       if (path === '/sugerencias'  && method === 'POST') return await guardarSugerencia(request, env);
       if (path === '/sugerencias'  && method === 'GET')  return await getSugerencias(request, env);
+      if (path === '/sugerencias/marcar-todas' && method === 'PUT')    return await marcarTodasSugerencias(request, env);
+      if (path === '/sugerencias/borrar-todas' && method === 'DELETE') return await borrarTodasSugerencias(request, env);
       if (path.startsWith('/sugerencias/') && method === 'PUT') {
         const sid = parseInt(path.split('/sugerencias/')[1]);
         return await marcarSugerenciaLeida(sid, request, env);
@@ -1539,6 +1541,20 @@ async function eliminarSugerencia(id, request, env) {
   const { isSuperadmin } = await getAuth(request, env);
   if (!isSuperadmin) return err('No autorizado', 403);
   await env.DB.prepare('DELETE FROM sugerencias WHERE id = ?').bind(id).run();
+  return json({ ok: true });
+}
+
+async function marcarTodasSugerencias(request, env) {
+  const { isSuperadmin, isEmpresaAdmin, empresa_id } = await getAuth(request, env);
+  if (!isSuperadmin && !isEmpresaAdmin) return err('No autorizado', 403);
+  await env.DB.prepare("UPDATE sugerencias SET estado='resuelto' WHERE empresa_id = ? AND estado != 'resuelto'").bind(empresa_id).run();
+  return json({ ok: true });
+}
+
+async function borrarTodasSugerencias(request, env) {
+  const { isSuperadmin, isEmpresaAdmin, empresa_id } = await getAuth(request, env);
+  if (!isSuperadmin && !isEmpresaAdmin) return err('No autorizado', 403);
+  await env.DB.prepare('DELETE FROM sugerencias WHERE empresa_id = ?').bind(empresa_id).run();
   return json({ ok: true });
 }
 
