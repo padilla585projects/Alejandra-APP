@@ -95,6 +95,11 @@ LEYENDA DE ESTADO:
     · Deben describir lo que hace cada departamento, no las secciones de la app.
     · Reportado: 18/04/2026 — Adrian, CPD Getafe
 
+[ ] MEJ-06 — Botones "Marcar todo leído" y "Borrar todo" en Ajustes/Ideas
+    · En el panel de Ideas (Ajustes), añadir botones para marcar todas las sugerencias
+      como leídas de golpe, y otro para borrar todas.
+    · Reportado: 19/04/2026 — Adrian, CPD Getafe
+
 ================================================================================
   ✨ NUEVAS FUNCIONES (solo app nueva)
 ================================================================================
