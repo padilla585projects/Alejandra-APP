@@ -56,8 +56,9 @@ REGLA DE DEPLOY:
   - En ambos casos: subir versión + actualizar txts + push
 
 ÚLTIMO CAMBIO REALIZADO:
-  v4.30 [nueva] — 19/04/2026
-  · #105: eliminarUsuario libera email+codigo+password_hash al borrar usuario
+  v4.31 [nueva] — 19/04/2026
+  · MEJ-01: Pedidos en Seguridad, permisos estado, Telegram al cambiar estado, Seg-Pedidos Sheets
+  · BUG-02: Icono de departamento desaparece al volver al inicio
 
 ================================================================================
   RESUMEN EJECUTIVO

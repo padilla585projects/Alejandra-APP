@@ -5,7 +5,7 @@
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 19/04/2026
-VERSIÓN ACTUAL: v4.17 app vieja | v4.30 app nueva
+VERSIÓN ACTUAL: v4.17 app vieja | v4.31 app nueva
 
 ⚠️  ANTES DE CODIFICAR: leer NuevaApp/IDEAS_PENDIENTES.txt
     Lista completa de bugs activos, mejoras y features pendientes.
@@ -232,6 +232,14 @@ v4.0  |  15/04/2026  [SOLO NUEVA APP]
   - Todos los datos existentes migrados con empresa_id=1 automáticamente
   - Índices creados: idx_*_empresa en tablas principales
   - SW bumpeado a alejandra-v4.0
+
+v4.31  |  19/04/2026  [SOLO NUEVA APP]
+  - MEJ-01: Rediseño sección Pedidos
+    · Pedidos ahora visible en departamento Seguridad (card + hoja Seg-Pedidos en Sheets)
+    · Solo encargado/admin pueden cambiar estado del pedido (frontend + worker)
+    · Telegram notifica al cambiar estado (📤/✅/❌/⏳) además de al crear
+  - BUG-02: Icono de departamento ya desaparece al volver a pantalla principal
+    · showScreen() oculta deptPill al navegar a 'dept'
 
 v4.30  |  19/04/2026  [SOLO NUEVA APP]
   - #105: Borrar usuario ahora libera sus credenciales completamente
