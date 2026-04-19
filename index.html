@@ -541,6 +541,23 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
     </div>
   </div>
 
+  <!-- EMPRESA SELECTOR (superadmin) -->
+  <div id="screenEmpresaSel" class="screen flex-screen" style="padding:0;height:100%;display:none">
+    <div style="padding:20px 16px 8px;text-align:center">
+      <div style="display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:8px">
+        <svg class="logo-svg" width="48" height="48" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg" style="border-radius:10px;box-shadow:0 2px 12px rgba(0,0,0,.4)">
+          <rect width="512" height="512" rx="90" fill="#0f172a"/><path d="M60 148V60h88" stroke="#2563eb" stroke-width="26" stroke-linecap="round" stroke-linejoin="round"/><path d="M452 148V60h-88" stroke="#2563eb" stroke-width="26" stroke-linecap="round" stroke-linejoin="round"/><path d="M60 364v88h88" stroke="#2563eb" stroke-width="26" stroke-linecap="round" stroke-linejoin="round"/><path d="M452 364v88h-88" stroke="#2563eb" stroke-width="26" stroke-linecap="round" stroke-linejoin="round"/><path d="M256 88L148 424h44l30-88h68l30 88h44L256 88ZM256 168l50 128h-100Z" fill="#f97316"/>
+        </svg>
+        <span style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:24px;color:var(--text)">Alejandra</span>
+      </div>
+      <div style="font-family:'Montserrat',sans-serif;font-weight:700;font-size:13px;color:var(--muted);letter-spacing:1px;text-transform:uppercase">Selecciona empresa</div>
+      <div style="font-size:12px;color:var(--muted);margin-top:4px;opacity:.7">¿Con qué empresa trabajas hoy?</div>
+    </div>
+    <div id="empresaSelGrid" class="dept-grid" style="padding:0 12px 12px;overflow-y:auto;flex:1">
+      <div class="empty-state">Cargando...</div>
+    </div>
+  </div>
+
   <!-- HOME SCREEN -->
   <div id="screenHome" class="screen flex-screen active" style="padding:0;height:100%;position:relative">
     <div id="versionBadge" style="position:absolute;bottom:8px;right:12px;font-family:'Montserrat',sans-serif;font-size:9px;color:var(--muted);opacity:.5;z-index:10;pointer-events:none">v4.24</div>
@@ -1322,18 +1339,49 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
 
     <!-- TAB 0: ESCANEAR -->
     <div id="herrPanelScan" style="padding:14px;overflow-y:auto;flex:1">
-      <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:12px;color:var(--accent);letter-spacing:2px;text-transform:uppercase;margin-bottom:10px">🔍 Número de serie</div>
-      <div class="input-row" style="margin-bottom:12px">
-        <input class="form-input" id="herrSerieInput" type="text" placeholder="Escanea o introduce el número de serie..."
-          onkeydown="if(event.key==='Enter')herrBuscarSerie()">
-        <button onclick="herrBuscarSerie()" style="padding:0 16px;background:var(--accent);border:none;border-radius:8px;color:#000;font-family:'Montserrat',sans-serif;font-weight:900;font-size:13px;cursor:pointer;flex-shrink:0">BUSCAR</button>
+      <div style="display:flex;gap:8px;margin-bottom:12px">
+        <button id="herrModoAgregar" onclick="herrSetScanMode('agregar')"
+          style="flex:1;padding:8px 0;background:var(--accent);color:#000;border:none;border-radius:8px;font-family:'Montserrat',sans-serif;font-weight:900;font-size:12px;cursor:pointer">➕ AGREGAR</button>
+        <button id="herrModoDevolver" onclick="herrSetScanMode('devolver')"
+          style="flex:1;padding:8px 0;background:var(--surface2);color:var(--muted);border:1px solid var(--border);border-radius:8px;font-family:'Montserrat',sans-serif;font-weight:900;font-size:12px;cursor:pointer">↩ DEVOLVER</button>
       </div>
-      <div id="herrScanResult"></div>
+      <div class="cam-viewport" id="herrCamViewport">
+        <div class="cam-idle" id="herrCamIdle">
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+            <circle cx="12" cy="13" r="4"/>
+          </svg>
+          Pulsa ABRIR CÁMARA
+        </div>
+        <video id="herrCamVideo" playsinline autoplay muted style="display:none"></video>
+        <canvas id="herrCamCanvas" style="display:none"></canvas>
+        <div class="scan-frame" id="herrCamFrame" style="display:none">
+          <div class="corner-bl"></div><div class="corner-br"></div>
+          <div class="scan-line"></div>
+        </div>
+        <div class="cam-ok" id="herrCamOk" style="display:none">
+          ✅ LEÍDO
+          <div class="cam-ok-code" id="herrCamOkCode"></div>
+        </div>
+      </div>
+      <div id="herrCamActionsIdle" class="scan-actions">
+        <button class="btn-open-cam" onclick="herrOpenCamera()">📷 ABRIR CÁMARA</button>
+      </div>
+      <div id="herrCamActionsActive" class="scan-actions" style="display:none">
+        <button class="btn-capture" id="herrBtnCapture" onclick="herrCaptureOCR()">OCR</button>
+        <button class="btn-close-cam" onclick="herrCloseCamera()">✕</button>
+      </div>
+      <div class="scan-hint" id="herrScanHint"></div>
+      <div id="herrScanResult" style="margin-top:12px"></div>
     </div>
 
     <!-- TAB 1: INVENTARIO -->
     <div id="herrPanelInv" style="display:none;flex-direction:column;flex:1;overflow:hidden">
       <div style="padding:10px 14px 8px;border-bottom:1px solid var(--border);flex-shrink:0">
+        <div class="input-row" style="margin-bottom:8px">
+          <input class="form-input" id="herrInvBuscador" type="text" placeholder="🔍 Serie, tipo, marca..."
+            oninput="herrFiltrarInvBuscador()" style="flex:1;font-size:13px">
+        </div>
         <div style="display:flex;gap:6px;flex-wrap:wrap">
           <button onclick="herrFiltrarInv('todos')"        id="hfTodos"     class="sug-filter active">Todos</button>
           <button onclick="herrFiltrarInv('disponible')"   id="hfDisp"      class="sug-filter">✅ Disp.</button>
@@ -2063,6 +2111,7 @@ async function iniciarApp() {
   document.getElementById('mainHeader').style.display = 'flex';
   document.getElementById('appContent').style.display = 'block';
   document.getElementById('bottomNav').style.display = 'flex';
+  updateNavPermisos(s);
   // Asegura que el botón físico de atrás (Android) no cierre la app
   if (!history.state?.alejandra) history.pushState({ alejandra: 1 }, '');
 
@@ -2075,8 +2124,16 @@ async function iniciarApp() {
   const esSuperAdmin   = s.rol === 'superadmin';
   const esEmpresaAdmin = s.rol === 'empresa_admin';
 
-  // SuperAdmin / EmpresaAdmin → siempre pantalla de selección al abrir
-  if (esSuperAdmin || esEmpresaAdmin) {
+  // SuperAdmin → pantalla de selección de empresa primero
+  if (esSuperAdmin) {
+    s.departamento = null;
+    setSession(s);
+    showScreen('empresaSel');
+    renderHeader();
+    return;
+  }
+  // EmpresaAdmin → selector de departamento directamente
+  if (esEmpresaAdmin) {
     s.departamento = null;
     setSession(s);
     showScreen('dept');
@@ -2239,6 +2296,38 @@ function volverSelectorDepto() {
   showScreen('dept');
 }
 
+async function cargarEmpresasAdmin() {
+  const grid = document.getElementById('empresaSelGrid');
+  if (!grid) return;
+  grid.innerHTML = '<div class="empty-state">Cargando empresas...</div>';
+  try {
+    const res = await apiCall('/empresas');
+    if (!res.ok) { grid.innerHTML = '<div class="empty-state">❌ Error al cargar empresas</div>'; return; }
+    const lista = await res.json();
+    if (!lista.length) { grid.innerHTML = '<div class="empty-state">No hay empresas registradas</div>'; return; }
+    grid.innerHTML = lista.map(e => `
+      <div class="dept-card" onclick="seleccionarEmpresaAdmin(${e.id}, ${JSON.stringify(e.nombre)})">
+        <div class="dept-icon-wrap" style="font-size:28px">🏢</div>
+        <div style="flex:1">
+          <div class="dept-name">${e.nombre}</div>
+          <div class="dept-desc">${e.email || e.slug || '—'}</div>
+        </div>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="color:var(--muted)"><path d="m9 18 6-6-6-6"/></svg>
+      </div>`).join('');
+  } catch { grid.innerHTML = '<div class="empty-state">Error de conexión</div>'; }
+}
+
+async function seleccionarEmpresaAdmin(empresa_id, empresa_nombre) {
+  try {
+    const res = await apiCall('/superadmin/empresa', { method: 'POST', body: JSON.stringify({ empresa_id }) });
+    if (!res.ok) return toast('❌ Error al seleccionar empresa', 'err');
+  } catch { return toast('❌ Error de conexión', 'err'); }
+  const s = getSession();
+  if (s) { s.empresa_id = empresa_id; s.empresa_nombre = empresa_nombre; s.departamento = null; setSession(s); }
+  showScreen('dept');
+  renderHeader();
+}
+
 async function cargarObrasHeader() {
   try {
     const res = await apiCall('/obras');
@@ -2288,7 +2377,8 @@ function showScreen(name) {
   if (navMap[name]) document.getElementById(navMap[name]).classList.add('active');
 
   if (name === 'ajustes') { renderAjustesInfo(); initAjustesTabs(); }
-  if (name === 'dept') { const p = document.getElementById('deptPill'); if (p) p.style.display = 'none'; }
+  if (name === 'dept')        { const p = document.getElementById('deptPill'); if (p) p.style.display = 'none'; }
+  if (name === 'empresaSel')  { const p = document.getElementById('deptPill'); if (p) p.style.display = 'none'; cargarEmpresasAdmin(); }
   actualizarBtnAtras();
 }
 
@@ -2302,7 +2392,9 @@ function actualizarBtnAtras() {
   // Seguridad para superadmin/empresa_admin: pueden volver al selector de dpto
   const enSegAdmin = document.getElementById('screenSeguridad')?.classList.contains('active')
                      && (s.rol === 'superadmin' || s.rol === 'empresa_admin');
-  btn.style.display = (enSub || enSegAdmin) ? '' : 'none';
+  const enDeptSA = document.getElementById('screenDept')?.classList.contains('active')
+                   && s.rol === 'superadmin';
+  btn.style.display = (enSub || enSegAdmin || enDeptSA) ? '' : 'none';
 }
 
 function irAtras() {
@@ -2312,7 +2404,10 @@ function irAtras() {
   const fabFichaje = document.getElementById('btnNuevoFichaje');
   if (fabFichaje) fabFichaje.style.display = 'none';
   const s = getSession();
-  if (s?.rol === 'superadmin' || s?.rol === 'empresa_admin') {
+  const enDept = document.getElementById('screenDept')?.classList.contains('active');
+  if (s?.rol === 'superadmin' && enDept) {
+    showScreen('empresaSel');
+  } else if (s?.rol === 'superadmin' || s?.rol === 'empresa_admin') {
     showScreen('dept');
   } else if (s?.departamento === 'seguridad') {
     showScreen('seguridad');
@@ -4537,6 +4632,12 @@ async function guardarEmpresa() {
   } catch { toast('❌ Error de red', 'err'); }
 }
 
+function updateNavPermisos(s) {
+  const esOperario = s?.rol === 'operario';
+  const navIdeas = document.getElementById('navSugerencias');
+  if (navIdeas) navIdeas.style.display = esOperario ? 'none' : '';
+}
+
 function initAjustesTabs() {
   const s = getSession();
   if (!s) return;
@@ -4940,7 +5041,7 @@ async function cargarObrasSelectUsuario() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '4.32';
+const APP_VERSION = '4.33';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -5040,6 +5141,7 @@ if ('serviceWorker' in navigator) {
   };
 
   function herrSelTab(n) {
+    if (n !== 0 && herrScanActive) herrCloseCamera();
     window._herrTab = n;
     document.querySelectorAll('#screenHerramientas .mod-tab-btn').forEach((b,i) => b.classList.toggle('active', i === n));
     ['herrPanelScan','herrPanelInv','herrPanelKits','herrPanelHist'].forEach((id, i) => {
@@ -5058,18 +5160,120 @@ if ('serviceWorker' in navigator) {
     if (n === 3) cargarHistHerr();
   }
 
-  // ── ESCANEAR ────────────────────────────────────────────
-  async function herrBuscarSerie() {
-    const serie = document.getElementById('herrSerieInput').value.trim();
-    if (!serie) return;
-    const c = document.getElementById('herrScanResult');
-    c.innerHTML = '<div class="empty-state">Buscando...</div>';
+  // ── SCAN CÁMARA HERRAMIENTAS ─────────────────────────────
+  let herrScanStream = null;
+  let herrScanQRLoop = null;
+  let herrScanActive = false;
+  let herrScanMode   = 'agregar';
+
+  function herrSetScanMode(mode) {
+    herrScanMode = mode;
+    const btnA = document.getElementById('herrModoAgregar');
+    const btnD = document.getElementById('herrModoDevolver');
+    if (btnA) { btnA.style.background = mode==='agregar'?'var(--accent)':'var(--surface2)'; btnA.style.color=mode==='agregar'?'#000':'var(--muted)'; btnA.style.border=mode==='agregar'?'none':'1px solid var(--border)'; }
+    if (btnD) { btnD.style.background = mode==='devolver'?'var(--accent)':'var(--surface2)'; btnD.style.color=mode==='devolver'?'#000':'var(--muted)'; btnD.style.border=mode==='devolver'?'none':'1px solid var(--border)'; }
+  }
+
+  async function herrOpenCamera() {
     try {
-      const res = await apiCall('/herramientas/buscar?serie=' + encodeURIComponent(serie));
-      if (!res.ok) { c.innerHTML = '<div class="empty-state">❌ No encontrada</div>'; return; }
-      const { herramienta: h, historial } = await res.json();
-      c.innerHTML = renderHerrFicha(h, historial, true);
-    } catch { c.innerHTML = '<div class="empty-state">Error de red</div>'; }
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal:'environment' }, width:{ ideal:1280 }, height:{ ideal:720 } } });
+      herrScanStream = stream;
+      const video = document.getElementById('herrCamVideo');
+      video.srcObject = stream; video.style.display = 'block';
+      document.getElementById('herrCamIdle').style.display = 'none';
+      document.getElementById('herrCamFrame').style.display = 'block';
+      document.getElementById('herrCamOk').style.display = 'none';
+      document.getElementById('herrCamActionsIdle').style.display = 'none';
+      document.getElementById('herrCamActionsActive').style.display = 'flex';
+      herrScanActive = true;
+      herrStartQRLoop();
+    } catch { toast('❌ No se pudo acceder a la cámara','err'); }
+  }
+
+  function herrCloseCamera() {
+    if (herrScanStream) { herrScanStream.getTracks().forEach(t => t.stop()); herrScanStream = null; }
+    if (herrScanQRLoop) { cancelAnimationFrame(herrScanQRLoop); herrScanQRLoop = null; }
+    herrScanActive = false;
+    const video = document.getElementById('herrCamVideo');
+    if (video) { video.style.display = 'none'; video.srcObject = null; }
+    const idle = document.getElementById('herrCamIdle'); if (idle) idle.style.display = 'flex';
+    const frame = document.getElementById('herrCamFrame'); if (frame) frame.style.display = 'none';
+    const actI = document.getElementById('herrCamActionsIdle'); if (actI) actI.style.display = 'flex';
+    const actA = document.getElementById('herrCamActionsActive'); if (actA) actA.style.display = 'none';
+    const ok = document.getElementById('herrCamOk'); if (ok) ok.style.display = 'none';
+  }
+
+  function herrStartQRLoop() {
+    const video = document.getElementById('herrCamVideo');
+    const canvas = document.getElementById('herrCamCanvas');
+    const ctx = canvas.getContext('2d');
+    let last = 0;
+    function tick() {
+      if (!herrScanActive) return;
+      if (video.readyState === video.HAVE_ENOUGH_DATA) {
+        const now = Date.now();
+        if (now - last > 300) {
+          last = now;
+          canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+          ctx.drawImage(video, 0, 0);
+          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          const qr = typeof jsQR !== 'undefined' ? jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts:'dontInvert' }) : null;
+          if (qr?.data) { herrOnCode(qr.data.trim().toUpperCase()); return; }
+        }
+      }
+      herrScanQRLoop = requestAnimationFrame(tick);
+    }
+    herrScanQRLoop = requestAnimationFrame(tick);
+  }
+
+  async function herrCaptureOCR() {
+    const btn = document.getElementById('herrBtnCapture');
+    btn.classList.add('loading'); btn.innerHTML = '<div class="spinner"></div>';
+    if (navigator.vibrate) navigator.vibrate(80);
+    try {
+      const video = document.getElementById('herrCamVideo');
+      const viewport = document.getElementById('herrCamViewport');
+      const vW = video.videoWidth||1280, vH = video.videoHeight||720;
+      const vpW = viewport.clientWidth||320, vpH = viewport.clientHeight||200;
+      const scale = Math.max(vpW/vW, vpH/vH);
+      const offsetX = (vW-vpW/scale)/2, offsetY = (vH-vpH/scale)/2;
+      const frameW = vpW*0.88, frameH = 90;
+      const frameX = (vpW-frameW)/2, frameY = (vpH-frameH)/2;
+      const srcX = frameX/scale+offsetX, srcY = frameY/scale+offsetY;
+      const srcW = frameW/scale, srcH = frameH/scale;
+      const outW = Math.min(Math.round(srcW),800), outH = Math.round(srcH*outW/srcW);
+      const c = document.createElement('canvas'); c.width=outW; c.height=outH;
+      c.getContext('2d').drawImage(video, srcX, srcY, srcW, srcH, 0, 0, outW, outH);
+      const imageData = c.toDataURL('image/jpeg', 0.75).split(',')[1];
+      const res = await apiCall('/ocr', { method:'POST', body:JSON.stringify({ image:imageData, mimeType:'image/jpeg' }) });
+      const data = await res.json();
+      if (!res.ok || data.codigo === 'NO_LEIDO') {
+        const hint = document.getElementById('herrScanHint');
+        if (hint) { hint.textContent = 'No se pudo leer. Ajusta el enfoque e intenta de nuevo.'; clearTimeout(hint._t); hint._t = setTimeout(()=>{ hint.textContent=''; },4000); }
+      } else { herrOnCode(data.codigo); }
+    } catch { toast('❌ Error de conexión','err'); }
+    btn.classList.remove('loading'); btn.textContent = 'OCR';
+  }
+
+  async function herrOnCode(serie) {
+    if (herrScanQRLoop) { cancelAnimationFrame(herrScanQRLoop); herrScanQRLoop = null; }
+    document.getElementById('herrCamOk').style.display = 'flex';
+    document.getElementById('herrCamOkCode').textContent = serie;
+    if (navigator.vibrate) navigator.vibrate([100,50,100]);
+    setTimeout(() => herrCloseCamera(), 1200);
+    if (herrScanMode === 'agregar') {
+      await abrirFormHerramienta();
+      setTimeout(() => { const el = document.getElementById('herrSerie'); if (el) el.value = serie; }, 150);
+    } else {
+      const c = document.getElementById('herrScanResult');
+      c.innerHTML = '<div class="empty-state">Buscando...</div>';
+      try {
+        const res = await apiCall('/herramientas/buscar?serie=' + encodeURIComponent(serie));
+        if (!res.ok) { c.innerHTML = '<div class="empty-state">❌ No encontrada</div>'; return; }
+        const { herramienta: h, historial } = await res.json();
+        c.innerHTML = renderHerrFicha(h, historial, true);
+      } catch { c.innerHTML = '<div class="empty-state">Error de red</div>'; }
+    }
   }
 
   function renderHerrFicha(h, historial, conAcciones) {
@@ -5123,10 +5327,19 @@ if ('serviceWorker' in navigator) {
     renderInvHerr(window._herrInvCache);
   }
 
+  function herrFiltrarInvBuscador() { renderInvHerr(window._herrInvCache); }
+
   function renderInvHerr(lista) {
     const c = document.getElementById('herrListaInv');
     const f = window._herrInvFiltro;
-    const items = f === 'todos' ? lista : lista.filter(h => h.estado === f);
+    const q = (document.getElementById('herrInvBuscador')?.value || '').toLowerCase().trim();
+    let items = f === 'todos' ? lista : lista.filter(h => h.estado === f);
+    if (q) items = items.filter(h =>
+      (h.numero_serie||'').toLowerCase().includes(q) ||
+      (h.tipo_nombre||'').toLowerCase().includes(q) ||
+      (h.marca||'').toLowerCase().includes(q) ||
+      (h.modelo||'').toLowerCase().includes(q)
+    );
     if (!items.length) { c.innerHTML = '<div class="empty-state">Sin herramientas' + (f !== 'todos' ? ' con ese estado' : '') + '</div>'; return; }
     c.innerHTML = items.map(h => {
       const ei = HERR_ESTADO[h.estado] || HERR_ESTADO.disponible;
@@ -6132,7 +6345,12 @@ if ('serviceWorker' in navigator) {
   // ── Exponer funciones async al scope global ──────────────────────────────
   // Las async function dentro de bloques if no se hoistean al scope global en Chrome.
   // Sin esto, los onclick de HTML no pueden llamarlas → ReferenceError silencioso.
-  window.herrBuscarSerie       = herrBuscarSerie;
+  window.herrOpenCamera        = herrOpenCamera;
+  window.herrCloseCamera       = herrCloseCamera;
+  window.herrCaptureOCR        = herrCaptureOCR;
+  window.herrOnCode            = herrOnCode;
+  window.herrSetScanMode       = herrSetScanMode;
+  window.herrFiltrarInvBuscador= herrFiltrarInvBuscador;
   window.cargarInvHerr         = cargarInvHerr;
   window.verDetalleHerr        = verDetalleHerr;
   window.herrCambiarEstado     = herrCambiarEstado;
@@ -6158,6 +6376,8 @@ if ('serviceWorker' in navigator) {
   window.guardarFichaje        = guardarFichaje;
   window.eliminarFichaje       = eliminarFichaje;
   window.fichajeToggleManual   = fichajeToggleManual;
+  window.cargarEmpresasAdmin   = cargarEmpresasAdmin;
+  window.seleccionarEmpresaAdmin = seleccionarEmpresaAdmin;
 }
 </script>
 </body>

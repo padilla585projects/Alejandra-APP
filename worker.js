@@ -134,9 +134,11 @@ export default {
       if (path === '/logout'      && method === 'POST') return await cerrarSesionServidor(request, env);
       if (path === '/sesiones'    && method === 'GET')  return await getSesionesActivas(request, env);
       if (path === '/sesiones/cerrar-todas' && method === 'POST') return await cerrarTodasSesiones(request, env);
-      if (path === '/empresas/registro' && method === 'POST') return await registrarEmpresa(request, env);
-      if (path === '/mi-empresa'        && method === 'GET')  return await getMiEmpresa(request, env);
-      if (path === '/mi-empresa'        && method === 'PUT')  return await updateMiEmpresa(request, env);
+      if (path === '/empresas/registro'  && method === 'POST') return await registrarEmpresa(request, env);
+      if (path === '/empresas'           && method === 'GET')  return await getEmpresas(request, env);
+      if (path === '/superadmin/empresa' && method === 'POST') return await superadminSeleccionarEmpresa(request, env);
+      if (path === '/mi-empresa'         && method === 'GET')  return await getMiEmpresa(request, env);
+      if (path === '/mi-empresa'         && method === 'PUT')  return await updateMiEmpresa(request, env);
 
       // ── Obras ──────────────────────────────────────────────────────────────
       if (path === '/obras'       && method === 'GET')    return await getObras(request, env);
@@ -548,6 +550,30 @@ async function registrarEmpresa(request, env) {
 
   await sendTelegram(env, `🏢 <b>Nueva empresa:</b> ${empresa_nombre}\n👤 ${admin_nombre} (${emailClean})\n🏗 Obra: ${obra_nombre_final || '—'}`);
   return json({ ok: true, token, rol: 'empresa_admin', nombre: admin_nombre.trim(), empresa_nombre: empresa_nombre.trim(), empresa_id, obra_id, obra_nombre: obra_nombre_final });
+}
+
+async function getEmpresas(request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth.isSuperadmin) return err('Sin permisos', 403);
+  const rows = await env.DB.prepare(
+    'SELECT id, nombre, slug, email, plan, activa, created_at FROM empresas WHERE activa = 1 ORDER BY nombre'
+  ).all();
+  return json(rows.results || []);
+}
+
+async function superadminSeleccionarEmpresa(request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth.isSuperadmin) return err('Sin permisos', 403);
+  const body = await request.json();
+  const empresa_id = parseInt(body.empresa_id);
+  if (!empresa_id) return err('empresa_id requerido', 400);
+  const empresa = await env.DB.prepare('SELECT id, nombre FROM empresas WHERE id = ?').bind(empresa_id).first();
+  if (!empresa) return err('Empresa no encontrada', 404);
+  const xToken = request.headers.get('X-Token');
+  if (xToken) {
+    await env.DB.prepare('UPDATE sesiones SET empresa_id = ? WHERE token = ?').bind(empresa_id, xToken).run();
+  }
+  return json({ ok: true, empresa_id: empresa.id, empresa_nombre: empresa.nombre });
 }
 
 async function getMiEmpresa(request, env) {
@@ -3203,3 +3229,4 @@ async function alertasDiarias(env) {
     console.error('alertasDiarias error:', e.message);
   }
 }
+
