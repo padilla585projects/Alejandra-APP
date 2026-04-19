@@ -234,6 +234,9 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
 #updateBanner{position:fixed;top:0;left:0;right:0;background:var(--accent);color:#000;padding:12px 16px;display:none;align-items:center;justify-content:space-between;gap:10px;z-index:9999;font-family:'Montserrat',sans-serif;font-weight:700;font-size:13px}
 #updateBanner.show{display:flex}
 #updateBanner button{background:#000;color:var(--accent);border:none;border-radius:6px;padding:7px 14px;font-family:'Montserrat',sans-serif;font-weight:900;font-size:12px;cursor:pointer;white-space:nowrap}
+#updatedBanner{position:fixed;top:0;left:0;right:0;background:#16a34a;color:#fff;padding:14px 20px;display:none;align-items:center;justify-content:center;gap:10px;z-index:10000;font-family:'Montserrat',sans-serif;font-weight:700;font-size:14px;letter-spacing:.3px;transition:opacity .5s ease}
+#updatedBanner.show{display:flex}
+#updatedBanner.fade{opacity:0}
 
 /* ── SPINNER ── */
 .spinner{width:18px;height:18px;border:2px solid rgba(255,255,255,.25);border-top-color:currentColor;border-radius:50%;animation:spin .6s linear infinite}
@@ -1846,6 +1849,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
 
 <!-- TOAST -->
 <div class="toast" id="toast"></div>
+<div id="updatedBanner"></div>
 <div id="updateBanner">
   <span>🔄 Nueva versión disponible</span>
   <button onclick="location.replace(location.pathname+'?r='+Date.now())">Actualizar ahora</button>
@@ -5068,7 +5072,7 @@ async function cargarObrasSelectUsuario() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '4.35';
+const APP_VERSION = '4.36';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -5093,6 +5097,7 @@ async function checkVersionAndUpdate() {
         await Promise.all(keys.map(k => caches.delete(k)));
       }
       localStorage.removeItem('alejandra_api');
+      localStorage.setItem('alejandra_just_updated', v);
       location.replace(location.pathname + '?r=' + Date.now());
     }
   } catch {}
@@ -5101,6 +5106,22 @@ async function checkVersionAndUpdate() {
 // Lanza el chequeo al arrancar y cada 30 segundos
 checkVersionAndUpdate();
 setInterval(checkVersionAndUpdate, 30 * 1000);
+
+// Banner "App actualizada a vX.XX" — aparece tras recarga automática
+(function() {
+  const v = localStorage.getItem('alejandra_just_updated');
+  if (!v) return;
+  localStorage.removeItem('alejandra_just_updated');
+  const banner = document.getElementById('updatedBanner');
+  if (!banner) return;
+  banner.innerHTML = '✅ &nbsp;App actualizada a <strong>v' + v + '</strong>';
+  banner.classList.add('show');
+  // Desaparece con fade tras 4 s
+  setTimeout(() => {
+    banner.classList.add('fade');
+    setTimeout(() => { banner.classList.remove('show', 'fade'); }, 500);
+  }, 4000);
+})();
 
 // Botón físico "Atrás" en Android — navega dentro de la app en vez de cerrarla
 window.addEventListener('popstate', function() {

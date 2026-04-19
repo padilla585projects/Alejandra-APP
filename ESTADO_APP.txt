@@ -5,7 +5,7 @@
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 19/04/2026
-VERSIÓN ACTUAL: v4.18 app vieja | v4.35 app nueva
+VERSIÓN ACTUAL: v4.18 app vieja | v4.36 app nueva
 
 ⚠️  ANTES DE CODIFICAR: leer NuevaApp/IDEAS_PENDIENTES.txt
     Lista completa de bugs activos, mejoras y features pendientes.
@@ -232,6 +232,12 @@ v4.0  |  15/04/2026  [SOLO NUEVA APP]
   - Todos los datos existentes migrados con empresa_id=1 automáticamente
   - Índices creados: idx_*_empresa en tablas principales
   - SW bumpeado a alejandra-v4.0
+
+v4.36  |  19/04/2026  [SOLO NUEVA APP]
+  - NEW-05: Banner "App actualizada a vX.XX" tras actualización automática
+    · Antes del location.replace() se guarda la nueva versión en localStorage
+    · Al arrancar, si existe el flag → banner verde fijo en cabecera 4s con fade-out
+    · CSS: #updatedBanner con transition opacity
 
 v4.35  |  19/04/2026  [SOLO NUEVA APP]
   - Fix pantalla selección de empresa (superadmin):
