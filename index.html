@@ -4738,8 +4738,14 @@ async function cargarSolicitudesPendientes() {
     const data = await res.json();
     if (!data.ok || !data.pendientes.length) { sec.style.display = 'none'; return; }
     sec.style.display = '';
-    const empresas = await (await apiCall('/empresas')).json().catch(() => ({ empresas: [] }));
-    const optsEmpresa = (empresas.empresas || []).map(e => `<option value="${e.id}">${e.nombre}</option>`).join('');
+    const s = getSession();
+    let optsEmpresa = '';
+    if (s?.rol === 'superadmin') {
+      const empresas = await apiCall('/empresas').then(r => r.json()).catch(() => ({ empresas: [] }));
+      optsEmpresa = (empresas.empresas || []).map(e => `<option value="${e.id}">${e.nombre}</option>`).join('');
+    } else {
+      optsEmpresa = `<option value="${s.empresa_id}">${s.empresa_nombre || 'Mi empresa'}</option>`;
+    }
     const roles = ['operario','encargado','empresa_admin'].map(r => `<option value="${r}">${r}</option>`).join('');
     const depts = ['electrico','mecanico','civil','seguridad','administracion'].map(d => `<option value="${d}">${d}</option>`).join('');
     lista.innerHTML = data.pendientes.map(u => `
@@ -4766,14 +4772,14 @@ async function aprobarPendiente(id) {
   const rol = document.getElementById(`pend_rol_${id}`)?.value;
   const departamento = document.getElementById(`pend_dept_${id}`)?.value || null;
   if (!empresa_id || !rol) { alert('Selecciona empresa y rol'); return; }
-  const res = await apiCall('/usuarios/pendientes/aprobar', 'POST', { id, empresa_id, rol, departamento });
+  const res = await apiCall('/usuarios/pendientes/aprobar', { method: 'POST', body: JSON.stringify({ id, empresa_id, rol, departamento }) });
   if (res.ok) { document.getElementById(`pend_${id}`)?.remove(); cargarSolicitudesPendientes(); }
   else alert('Error al aprobar');
 }
 
 async function rechazarPendiente(id) {
   if (!confirm('¿Rechazar esta solicitud? Se eliminará el usuario.')) return;
-  const res = await apiCall('/usuarios/pendientes/rechazar', 'POST', { id });
+  const res = await apiCall('/usuarios/pendientes/rechazar', { method: 'POST', body: JSON.stringify({ id }) });
   if (res.ok) { document.getElementById(`pend_${id}`)?.remove(); cargarSolicitudesPendientes(); }
   else alert('Error al rechazar');
 }
@@ -5143,6 +5149,15 @@ async function cargarNotificaciones() {
       notifs.push({ icono: '⚠️', texto: `Material próximo a caducar: ${i.nombre || i.codigo || i.tipo_material || ''}`, fecha: i.fecha_caducidad, color: '#eab308' })
     );
   } catch {}
+  try {
+    const s = getSession();
+    if (s?.rol === 'superadmin' || s?.rol === 'empresa_admin') {
+      const pend = await apiCall('/usuarios/pendientes').then(r => r.json()).catch(() => ({ pendientes: [] }));
+      (pend.pendientes || []).forEach(u =>
+        notifs.push({ icono: '🔔', texto: `Solicitud de acceso: ${u.nombre} (${u.email})`, fecha: u.created_at, color: '#8b5cf6' })
+      );
+    }
+  } catch {}
   if (!notifs.length) {
     el.innerHTML = '<div style="color:var(--muted);font-size:13px;text-align:center;padding:32px">✅ Sin notificaciones pendientes</div>';
     return;
@@ -5175,6 +5190,13 @@ async function checkNotifBadge() {
   try {
     const carrs = await apiCall('/carretillas?estado=Averiada').then(r => r.json()).catch(() => []);
     count += (Array.isArray(carrs) ? carrs : []).length;
+  } catch {}
+  try {
+    const s = getSession();
+    if (s?.rol === 'superadmin' || s?.rol === 'empresa_admin') {
+      const pend = await apiCall('/usuarios/pendientes').then(r => r.json()).catch(() => ({ pendientes: [] }));
+      count += (pend.pendientes || []).length;
+    }
   } catch {}
   const badge = document.getElementById('notifBadge');
   if (badge) { badge.style.display = count > 0 ? 'flex' : 'none'; badge.textContent = count > 9 ? '9+' : String(count); }
