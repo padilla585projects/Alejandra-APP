@@ -132,6 +132,9 @@ export default {
       if (path === '/verificar'   && method === 'POST') return await verificarAcceso(request, env);
       if (path === '/auth/google/url'      && method === 'GET')  return googleAuthUrl(request, env);
       if (path === '/auth/google/callback' && method === 'POST') return await googleAuthCallback(request, env);
+      if (path === '/usuarios/pendientes'  && method === 'GET')  return await getUsuariosPendientes(request, env);
+      if (path === '/usuarios/pendientes/aprobar' && method === 'POST') return await aprobarUsuarioPendiente(request, env);
+      if (path === '/usuarios/pendientes/rechazar' && method === 'POST') return await rechazarUsuarioPendiente(request, env);
       if (path === '/acceso'      && method === 'POST') return await verificarAcceso(request, env); // alias legacy
       if (path === '/logout'      && method === 'POST') return await cerrarSesionServidor(request, env);
       if (path === '/sesiones'    && method === 'GET')  return await getSesionesActivas(request, env);
@@ -3298,11 +3301,28 @@ async function googleAuthCallback(request, env) {
   const gUser = await userRes.json();
   if (!gUser.email) return err('No se pudo obtener el email de Google', 401);
 
-  // Buscar usuario en D1 por email
+  // Buscar usuario activo en D1 por email
   const u = await env.DB.prepare(
     'SELECT * FROM usuarios WHERE LOWER(email) = LOWER(?) AND activo = 1 LIMIT 1'
   ).bind(gUser.email).first();
-  if (!u) return err('No hay ninguna cuenta asociada a este email (' + gUser.email + '). Accede primero con email y contraseña para vincular tu cuenta.', 404);
+
+  if (!u) {
+    // Comprobar si ya hay una solicitud pendiente con este email
+    const pendiente = await env.DB.prepare(
+      'SELECT id FROM usuarios WHERE LOWER(email) = LOWER(?) AND google_pending = 1 LIMIT 1'
+    ).bind(gUser.email).first();
+    if (pendiente) return json({ ok: false, pendiente: true, msg: 'Tu solicitud ya está pendiente de aprobación por el administrador.' });
+
+    // Crear usuario pendiente
+    const codigoPend = 'gp_' + Date.now();
+    await env.DB.prepare(
+      'INSERT INTO usuarios (nombre, codigo, rol, activo, google_pending, email, empresa_id) VALUES (?,?,?,0,1,?,NULL)'
+    ).bind(gUser.name || gUser.email, codigoPend, 'operario', gUser.email).run();
+
+    await sendTelegram(env, `🆕 <b>Solicitud de acceso Google</b>\n👤 ${gUser.name || gUser.email}\n📧 ${gUser.email}\n\nEntra en Ajustes → Empresa para aceptar o rechazar.`);
+
+    return json({ ok: false, pendiente: true, msg: 'Solicitud enviada. El administrador revisará tu acceso en breve.' });
+  }
 
   // Crear sesión
   const tokenArr = new Uint8Array(32);
@@ -3327,5 +3347,39 @@ async function googleAuthCallback(request, env) {
     obra_id:        u.obra_id   || null,
     obra_nombre:    obra        ? obra.nombre : null,
   });
+}
+
+async function getUsuariosPendientes(request, env) {
+  const s = await getAuth(request, env);
+  if (!s || !['superadmin','empresa_admin'].includes(s.rol)) return err('Sin permiso', 403);
+  const { results } = await env.DB.prepare(
+    'SELECT id, nombre, email, created_at FROM usuarios WHERE google_pending = 1 AND activo = 0 ORDER BY created_at DESC'
+  ).all();
+  return json({ ok: true, pendientes: results || [] });
+}
+
+async function aprobarUsuarioPendiente(request, env) {
+  const s = await getAuth(request, env);
+  if (!s || !['superadmin','empresa_admin'].includes(s.rol)) return err('Sin permiso', 403);
+  const { id, empresa_id, rol, departamento } = await request.json().catch(() => ({}));
+  if (!id || !empresa_id || !rol) return err('Faltan datos', 400);
+  await env.DB.prepare(
+    'UPDATE usuarios SET activo=1, google_pending=0, empresa_id=?, rol=?, departamento=? WHERE id=? AND google_pending=1'
+  ).bind(empresa_id, rol, departamento || null, id).run();
+  const u = await env.DB.prepare('SELECT nombre, email FROM usuarios WHERE id=?').bind(id).first();
+  await sendTelegram(env, `✅ <b>Acceso aprobado</b>\n👤 ${u?.nombre || '—'}\n📧 ${u?.email || '—'}\nRol: ${rol} | Empresa ID: ${empresa_id}`);
+  return json({ ok: true });
+}
+
+async function rechazarUsuarioPendiente(request, env) {
+  const s = await getAuth(request, env);
+  if (!s || !['superadmin','empresa_admin'].includes(s.rol)) return err('Sin permiso', 403);
+  const { id } = await request.json().catch(() => ({}));
+  if (!id) return err('Falta id', 400);
+  const u = await env.DB.prepare('SELECT nombre, email FROM usuarios WHERE id=? AND google_pending=1').bind(id).first();
+  if (!u) return err('Solicitud no encontrada', 404);
+  await env.DB.prepare('DELETE FROM usuarios WHERE id=? AND google_pending=1').bind(id).run();
+  await sendTelegram(env, `❌ <b>Acceso rechazado</b>\n👤 ${u.nombre || '—'}\n📧 ${u.email || '—'}`);
+  return json({ ok: true });
 }
 

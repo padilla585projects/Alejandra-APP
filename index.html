@@ -1326,6 +1326,10 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
           <div class="settings-title">👥 Usuarios de la empresa</div>
           <div id="empresaUsuarios"></div>
         </div>
+        <div class="settings-section" id="seccionPendientes" style="margin-top:16px;display:none">
+          <div class="settings-title">🔔 Solicitudes pendientes</div>
+          <div id="listaPendientes" style="font-size:13px;color:var(--muted)">—</div>
+        </div>
       </div>
 
     </div>
@@ -2101,7 +2105,11 @@ async function handleGoogleCallback(code) {
     });
     const data = await res.json();
     if (!res.ok || !data.ok) {
-      if (errEl) errEl.textContent = data.error || 'Error al verificar con Google';
+      if (data.pendiente) {
+        if (errEl) { errEl.style.color = '#f59e0b'; errEl.textContent = data.msg || 'Solicitud pendiente de aprobación.'; }
+      } else {
+        if (errEl) errEl.textContent = data.error || 'Error al verificar con Google';
+      }
       if (btn) { btn.textContent = 'ACCEDER'; btn.disabled = false; }
       return;
     }
@@ -4716,9 +4724,58 @@ async function cargarPanelEmpresa() {
     const puedeEditar = s?.rol === 'empresa_admin' || s?.rol === 'superadmin';
     const btn = document.getElementById('btnEditarEmpresa');
     if (btn) btn.style.display = puedeEditar ? '' : 'none';
+    if (puedeEditar) cargarSolicitudesPendientes();
   } catch(e) {
     document.getElementById('empresaInfo').innerHTML = '<div style="color:var(--red)">Error al cargar</div>';
   }
+}
+
+async function cargarSolicitudesPendientes() {
+  const sec = document.getElementById('seccionPendientes');
+  const lista = document.getElementById('listaPendientes');
+  try {
+    const res = await apiCall('/usuarios/pendientes');
+    const data = await res.json();
+    if (!data.ok || !data.pendientes.length) { sec.style.display = 'none'; return; }
+    sec.style.display = '';
+    const empresas = await (await apiCall('/empresas')).json().catch(() => ({ empresas: [] }));
+    const optsEmpresa = (empresas.empresas || []).map(e => `<option value="${e.id}">${e.nombre}</option>`).join('');
+    const roles = ['operario','encargado','empresa_admin'].map(r => `<option value="${r}">${r}</option>`).join('');
+    const depts = ['electrico','mecanico','civil','seguridad','administracion'].map(d => `<option value="${d}">${d}</option>`).join('');
+    lista.innerHTML = data.pendientes.map(u => `
+      <div id="pend_${u.id}" style="border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:10px">
+        <div style="font-weight:600;font-size:14px">👤 ${u.nombre}</div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:8px">📧 ${u.email}</div>
+        <select id="pend_emp_${u.id}" style="width:100%;margin-bottom:6px;padding:6px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:13px">
+          <option value="">— Empresa —</option>${optsEmpresa}
+        </select>
+        <div style="display:flex;gap:6px;margin-bottom:6px">
+          <select id="pend_rol_${u.id}" style="flex:1;padding:6px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:13px">${roles}</select>
+          <select id="pend_dept_${u.id}" style="flex:1;padding:6px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:13px"><option value="">— Dpto —</option>${depts}</select>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn-primary" style="flex:1;font-size:13px;padding:8px" onclick="aprobarPendiente(${u.id})">✅ Aceptar</button>
+          <button class="btn-primary btn-danger" style="flex:1;font-size:13px;padding:8px" onclick="rechazarPendiente(${u.id})">❌ Rechazar</button>
+        </div>
+      </div>`).join('');
+  } catch { sec.style.display = 'none'; }
+}
+
+async function aprobarPendiente(id) {
+  const empresa_id = parseInt(document.getElementById(`pend_emp_${id}`)?.value);
+  const rol = document.getElementById(`pend_rol_${id}`)?.value;
+  const departamento = document.getElementById(`pend_dept_${id}`)?.value || null;
+  if (!empresa_id || !rol) { alert('Selecciona empresa y rol'); return; }
+  const res = await apiCall('/usuarios/pendientes/aprobar', 'POST', { id, empresa_id, rol, departamento });
+  if (res.ok) { document.getElementById(`pend_${id}`)?.remove(); cargarSolicitudesPendientes(); }
+  else alert('Error al aprobar');
+}
+
+async function rechazarPendiente(id) {
+  if (!confirm('¿Rechazar esta solicitud? Se eliminará el usuario.')) return;
+  const res = await apiCall('/usuarios/pendientes/rechazar', 'POST', { id });
+  if (res.ok) { document.getElementById(`pend_${id}`)?.remove(); cargarSolicitudesPendientes(); }
+  else alert('Error al rechazar');
 }
 
 function renderEmpresaInfo(e) {
