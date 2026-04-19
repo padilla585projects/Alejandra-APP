@@ -61,12 +61,12 @@ LEYENDA DE ESTADO:
   🔧 MEJORAS (solo app nueva, salvo indicación contraria)
 ================================================================================
 
-[ ] MEJ-01 — Rediseño completo de la sección Pedidos
-    · Añadir campo "referencia" al pedido.
-    · Notificaciones cuando alguien haga un pedido.
-    · Admin/encargado puede cambiar el estado del pedido.
-    · Implementar Pedidos también en Mecánicas y Seguridad.
-    · Sincronizado con Google Sheets.
+[✓] MEJ-01 — Rediseño completo de la sección Pedidos  [HECHO v4.31]
+    · Campo "referencia" — ya existía en tabla y modal.
+    · Telegram al crear pedido — ya existía. Añadido también al cambiar estado.
+    · Solo encargado/admin pueden cambiar estado (frontend + worker).
+    · Pedidos en Mecánicas — ya existía. Añadido Seguridad: card visible + Seg-Pedidos en Sheets.
+    · Sync Google Sheets — ya existía (Elec/Mec). Añadida hoja Seg-Pedidos.
     · Reportado: 18/04/2026 — Adrian, CPD Getafe
 
 [ ] MEJ-02 — Departamento Herramientas: mejoras de scan

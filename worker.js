@@ -1633,10 +1633,13 @@ async function crearPedido(request, env) {
 }
 
 async function actualizarPedido(id, request, env) {
-  const { empresa_id } = await getAuth(request, env);
+  const { empresa_id, isSuperadmin, isEmpresaAdmin, isEncargado } = await getAuth(request, env);
   if (!empresa_id) return err('No autorizado', 403);
-  // Todos los roles pueden actualizar estado (marcar recibido, etc.)
   const body = await request.json().catch(() => ({}));
+  // Solo encargado/admin pueden cambiar el estado
+  if (body.estado !== undefined && !isSuperadmin && !isEmpresaAdmin && !isEncargado) {
+    return err('Sin permiso para cambiar el estado', 403);
+  }
   const campos = [], vals = [];
   if (body.estado       !== undefined) { campos.push('estado = ?');          vals.push(body.estado); }
   if (body.notas        !== undefined) { campos.push('notas = ?');           vals.push(body.notas); }
@@ -1649,6 +1652,13 @@ async function actualizarPedido(id, request, env) {
   if (!campos.length) return err('Sin campos para actualizar');
   vals.push(id);
   await env.DB.prepare(`UPDATE pedidos SET ${campos.join(', ')} WHERE id = ? AND empresa_id = ${empresa_id}`).bind(...vals).run();
+  if (body.estado !== undefined) {
+    const pedido = await env.DB.prepare('SELECT descripcion, departamento FROM pedidos WHERE id = ?').bind(id).first();
+    const iconos = { solicitado: '📤', recibido: '✅', cancelado: '❌', pendiente: '⏳' };
+    await sendTelegram(env,
+      `${iconos[body.estado]||'📦'} <b>Pedido ${body.estado}</b> [${pedido?.departamento||'—'}]\n📝 ${(pedido?.descripcion||'').slice(0,200)}`
+    );
+  }
   syncPedidos(env);
   return json({ ok: true });
 }
@@ -1670,7 +1680,7 @@ function tabForDept(tipo, dept) {
   if (tipo === 'bobina')      return 'Elec-Bobinas';
   if (tipo === 'pemp')        return d === 'mecanicas' ? 'Mec-PEMP' : 'Elec-PEMP';
   if (tipo === 'carretilla')  return d === 'mecanicas' ? 'Mec-Carretillas' : 'Elec-Carretillas';
-  if (tipo === 'pedido')      return d === 'mecanicas' ? 'Mec-Pedidos' : 'Elec-Pedidos';
+  if (tipo === 'pedido')      return d === 'mecanicas' ? 'Mec-Pedidos' : d === 'seguridad' ? 'Seg-Pedidos' : 'Elec-Pedidos';
   if (tipo === 'herramienta') return d === 'mecanicas' ? 'Mec-Herramientas' : 'Elec-Herramientas';
   if (tipo === 'kit')         return 'Kits';
   return 'Seg-Inventario';
@@ -2659,7 +2669,7 @@ async function syncPedidos(env, tabs = null) {
     const sheetId = env.GOOGLE_PEDIDOS_SHEET_ID;
     const authH   = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
 
-    const tabsNecesarias = ['Elec-Pedidos', 'Mec-Pedidos'];
+    const tabsNecesarias = ['Elec-Pedidos', 'Mec-Pedidos', 'Seg-Pedidos'];
     const tabsToSync     = tabs ? (Array.isArray(tabs) ? tabs : [tabs]) : tabsNecesarias;
 
     // Metadata
@@ -2720,6 +2730,12 @@ async function syncPedidos(env, tabs = null) {
         ).bind('mecanicas').all();
         await writeTab('Mec-Pedidos', [cab, ...results.map(fmt)]);
       })(),
+      tabsToSync.includes('Seg-Pedidos') && (async () => {
+        const { results } = await env.DB.prepare(
+          'SELECT p.*, o.nombre as obra_nombre FROM pedidos p LEFT JOIN obras o ON p.obra_id = o.id WHERE p.empresa_id = 1 AND p.departamento = ? ORDER BY p.created_at DESC'
+        ).bind('seguridad').all();
+        await writeTab('Seg-Pedidos', [cab, ...results.map(fmt)]);
+      })(),
     ].filter(Boolean));
 
     console.log(`Pedidos sync OK [${tabsToSync.join(', ')}]`);
@@ -2743,7 +2759,7 @@ async function applyTabFormatting(spreadsheetId, authH, tabName, numSheetId, num
   const estadoColMap = {
     'Elec-Bobinas': 9, 'Elec-PEMP': 5, 'Elec-Carretillas': 6,
     'Mec-PEMP': 5,     'Mec-Carretillas': 6,
-    'Seg-Inventario': 6, 'Elec-Pedidos': 6, 'Mec-Pedidos': 6,
+    'Seg-Inventario': 6, 'Elec-Pedidos': 6, 'Mec-Pedidos': 6, 'Seg-Pedidos': 6,
     'Elec-Herramientas': 8, 'Mec-Herramientas': 8,
   };
   const estadoCol = estadoColMap[tabName] ?? -1;

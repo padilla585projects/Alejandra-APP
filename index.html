@@ -2187,7 +2187,8 @@ function setupHomeModules() {
     if (cardB) cardB.style.display = 'none';
     if (cardP) cardP.style.display = 'none';
     if (cardC) cardC.style.display = 'none';
-    if (cardPed) cardPed.style.display = 'none';
+    if (cardPed) cardPed.style.display = 'flex';
+    if (btnNuevo) btnNuevo.style.display = 'flex';
     return;
   }
   // El departamento elegido manda — electrico ve bobinas, mecánicas no
@@ -2287,6 +2288,7 @@ function showScreen(name) {
   if (navMap[name]) document.getElementById(navMap[name]).classList.add('active');
 
   if (name === 'ajustes') { renderAjustesInfo(); initAjustesTabs(); }
+  if (name === 'dept') { const p = document.getElementById('deptPill'); if (p) p.style.display = 'none'; }
   actualizarBtnAtras();
 }
 
@@ -4938,7 +4940,7 @@ async function cargarObrasSelectUsuario() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '4.30';
+const APP_VERSION = '4.31';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -5487,7 +5489,8 @@ if ('serviceWorker' in navigator) {
       cancelado:  { icon: '❌', color: '#ef4444' }
     };
     const s = getSession();
-    const puedeEliminar = s?.rol === 'encargado' || s?.rol === 'empresa_admin' || s?.rol === 'superadmin';
+    const puedeGestionar = s?.rol === 'encargado' || s?.rol === 'empresa_admin' || s?.rol === 'superadmin';
+    const puedeEliminar = puedeGestionar;
     c.innerHTML = items.map(p => {
       const ei = estadoInfo[p.estado] || { icon: '📦', color: 'var(--muted)' };
       return `<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:12px;margin-bottom:10px">
@@ -5509,10 +5512,10 @@ if ('serviceWorker' in navigator) {
           </span>
         </div>
         <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px">
-          ${p.estado === 'pendiente' ? `<button onclick="cambiarEstadoPedido(${p.id},'solicitado')" style="flex:1;padding:7px;background:#3b82f620;color:#3b82f6;border:1px solid #3b82f640;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">📤 Marcar solicitado</button>` : ''}
-          ${p.estado === 'solicitado' ? `<button onclick="cambiarEstadoPedido(${p.id},'recibido')" style="flex:1;padding:7px;background:#22c55e20;color:#22c55e;border:1px solid #22c55e40;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">✅ Marcar recibido</button>` : ''}
-          ${(p.estado === 'pendiente' || p.estado === 'solicitado') ? `<button onclick="cambiarEstadoPedido(${p.id},'cancelado')" style="padding:7px 10px;background:#ef444420;color:#ef4444;border:1px solid #ef444440;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">✕</button>` : ''}
-          ${p.estado !== 'recibido' && p.estado !== 'cancelado' ? `<button onclick="abrirFormPedido(${JSON.stringify(p).replace(/"/g,'&quot;')})" style="padding:7px 10px;background:var(--surface);color:var(--muted);border:1px solid var(--border);border-radius:8px;font-size:12px;cursor:pointer">✏️</button>` : ''}
+          ${puedeGestionar && p.estado === 'pendiente' ? `<button onclick="cambiarEstadoPedido(${p.id},'solicitado')" style="flex:1;padding:7px;background:#3b82f620;color:#3b82f6;border:1px solid #3b82f640;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">📤 Marcar solicitado</button>` : ''}
+          ${puedeGestionar && p.estado === 'solicitado' ? `<button onclick="cambiarEstadoPedido(${p.id},'recibido')" style="flex:1;padding:7px;background:#22c55e20;color:#22c55e;border:1px solid #22c55e40;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">✅ Marcar recibido</button>` : ''}
+          ${puedeGestionar && (p.estado === 'pendiente' || p.estado === 'solicitado') ? `<button onclick="cambiarEstadoPedido(${p.id},'cancelado')" style="padding:7px 10px;background:#ef444420;color:#ef4444;border:1px solid #ef444440;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">✕</button>` : ''}
+          ${puedeGestionar && p.estado !== 'recibido' && p.estado !== 'cancelado' ? `<button onclick="abrirFormPedido(${JSON.stringify(p).replace(/"/g,'&quot;')})" style="padding:7px 10px;background:var(--surface);color:var(--muted);border:1px solid var(--border);border-radius:8px;font-size:12px;cursor:pointer">✏️</button>` : ''}
           ${puedeEliminar ? `<button onclick="borrarPedido(${p.id})" style="padding:7px 10px;background:#ef444420;color:#ef4444;border:1px solid #ef444440;border-radius:8px;font-size:12px;cursor:pointer">🗑️</button>` : ''}
         </div>
       </div>`;
