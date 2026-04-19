@@ -5007,13 +5007,13 @@ async function cargarNotificaciones() {
     );
   } catch {}
   try {
-    const pemp = await apiCall('/pemp?estado=averia').then(r => r.json()).catch(() => []);
+    const pemp = await apiCall('/pemp?estado=Averiada').then(r => r.json()).catch(() => []);
     (Array.isArray(pemp) ? pemp : []).forEach(p =>
       notifs.push({ icono: '🔴', texto: `PEMP averiada: ${[p.marca, p.matricula].filter(Boolean).join(' ')}`, fecha: p.fecha_averia, color: '#ef4444' })
     );
   } catch {}
   try {
-    const carrs = await apiCall('/carretillas?estado=averia').then(r => r.json()).catch(() => []);
+    const carrs = await apiCall('/carretillas?estado=Averiada').then(r => r.json()).catch(() => []);
     (Array.isArray(carrs) ? carrs : []).forEach(c =>
       notifs.push({ icono: '🔴', texto: `Carretilla averiada: ${[c.marca, c.matricula].filter(Boolean).join(' ')}`, fecha: c.fecha_averia, color: '#ef4444' })
     );
@@ -5022,7 +5022,7 @@ async function cargarNotificaciones() {
     const inv = await apiCall('/inventario-seg').then(r => r.json()).catch(() => []);
     const hoy = new Date(); const umbral = new Date(hoy); umbral.setDate(umbral.getDate() + 30);
     (Array.isArray(inv) ? inv : []).filter(i => i.fecha_caducidad && new Date(i.fecha_caducidad) <= umbral).forEach(i =>
-      notifs.push({ icono: '⚠️', texto: `Material próximo a caducar: ${i.codigo || i.tipo_nombre || ''}`, fecha: i.fecha_caducidad, color: '#eab308' })
+      notifs.push({ icono: '⚠️', texto: `Material próximo a caducar: ${i.nombre || i.codigo || i.tipo_material || ''}`, fecha: i.fecha_caducidad, color: '#eab308' })
     );
   } catch {}
   if (!notifs.length) {
@@ -5051,11 +5051,11 @@ async function checkNotifBadge() {
     count += (Array.isArray(peds) ? peds : []).filter(p => (p.created_at||'') >= hace48h && (p.created_at||'') > lastSeen).length;
   } catch {}
   try {
-    const pemp = await apiCall('/pemp?estado=averia').then(r => r.json()).catch(() => []);
+    const pemp = await apiCall('/pemp?estado=Averiada').then(r => r.json()).catch(() => []);
     count += (Array.isArray(pemp) ? pemp : []).length;
   } catch {}
   try {
-    const carrs = await apiCall('/carretillas?estado=averia').then(r => r.json()).catch(() => []);
+    const carrs = await apiCall('/carretillas?estado=Averiada').then(r => r.json()).catch(() => []);
     count += (Array.isArray(carrs) ? carrs : []).length;
   } catch {}
   const badge = document.getElementById('notifBadge');
@@ -5259,7 +5259,7 @@ async function cargarObrasSelectUsuario() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '4.37';
+const APP_VERSION = '4.38';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes

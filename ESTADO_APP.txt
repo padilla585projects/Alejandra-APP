@@ -5,7 +5,7 @@
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 19/04/2026
-VERSIÓN ACTUAL: v4.18 app vieja | v4.37 app nueva
+VERSIÓN ACTUAL: v4.18 app vieja | v4.38 app nueva
 
 ⚠️  ANTES DE CODIFICAR: leer NuevaApp/IDEAS_PENDIENTES.txt
     Lista completa de bugs activos, mejoras y features pendientes.
@@ -233,7 +233,11 @@ v4.0  |  15/04/2026  [SOLO NUEVA APP]
   - Índices creados: idx_*_empresa en tablas principales
   - SW bumpeado a alejandra-v4.0
 
-v4.37  |  19/04/2026  [SOLO NUEVA APP] — cambios locales sin commitear
+v4.38  |  19/04/2026  [SOLO NUEVA APP]
+  - Fix: notificaciones PEMP/carretillas averiadas no aparecían (?estado=averia → Averiada)
+  - Fix: campo tipo_nombre no existe en inventario_seg → usar nombre||codigo||tipo_material
+
+v4.37  |  19/04/2026  [SOLO NUEVA APP]
   - NEW-06: Splash screen al arrancar la app
   - NEW-09: Notificaciones in-app (campana 🔔 en header, panel, polling cada 60s)
   - Fix: historial ahora filtra por empresa_id y departamento
