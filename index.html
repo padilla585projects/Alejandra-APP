@@ -237,6 +237,14 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
 #updatedBanner{position:fixed;top:0;left:0;right:0;background:#16a34a;color:#fff;padding:14px 20px;display:none;align-items:center;justify-content:center;gap:10px;z-index:10000;font-family:'Montserrat',sans-serif;font-weight:700;font-size:14px;letter-spacing:.3px;transition:opacity .5s ease}
 #updatedBanner.show{display:flex}
 #updatedBanner.fade{opacity:0}
+/* ── SPLASH SCREEN ── */
+#splashScreen{position:fixed;inset:0;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:99999;transition:opacity .6s ease}
+#splashScreen.oculto{opacity:0;pointer-events:none}
+/* ── NOTIFICACIONES ── */
+.notif-bell{position:relative;background:none;border:none;cursor:pointer;font-size:18px;padding:4px 6px;color:var(--text);flex-shrink:0}
+.notif-badge{position:absolute;top:0;right:0;background:var(--red);color:#fff;border-radius:10px;font-size:9px;font-family:'Montserrat',sans-serif;font-weight:900;min-width:15px;height:15px;display:flex;align-items:center;justify-content:center;padding:0 3px;pointer-events:none}
+#notifPanel{position:fixed;top:56px;left:0;right:0;bottom:0;background:var(--bg);z-index:8000;display:none;flex-direction:column;overflow-y:auto}
+#notifPanel.show{display:flex}
 
 /* ── SPINNER ── */
 .spinner{width:18px;height:18px;border:2px solid rgba(255,255,255,.25);border-top-color:currentColor;border-radius:50%;animation:spin .6s linear infinite}
@@ -429,6 +437,23 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
 </div>
 
 <!-- ══════════════════════════════════════════
+     SPLASH SCREEN
+══════════════════════════════════════════ -->
+<div id="splashScreen">
+  <svg width="80" height="80" viewBox="0 0 512 512" fill="none">
+    <rect width="512" height="512" rx="90" fill="#0f172a"/>
+    <path d="M60 148V60h88" stroke="#2563eb" stroke-width="26" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M452 148V60h-88" stroke="#2563eb" stroke-width="26" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M60 364v88h88" stroke="#2563eb" stroke-width="26" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M452 364v88h-88" stroke="#2563eb" stroke-width="26" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M256 88L148 424h44l30-88h68l30 88h44L256 88ZM256 168l50 128h-100Z" fill="#f97316"/>
+    <path d="M256 88l108 336h-44l-30-88h-34l-34-128 34-120Z" fill="#fb923c" opacity="0.4"/>
+  </svg>
+  <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:28px;letter-spacing:3px;margin-top:18px;color:var(--text)">ALEJANDRA</div>
+  <div style="font-size:11px;color:var(--muted);letter-spacing:4px;margin-top:6px">GESTIÓN DE OBRA</div>
+</div>
+
+<!-- ══════════════════════════════════════════
      HEADER
 ══════════════════════════════════════════ -->
 <header id="mainHeader" style="display:none">
@@ -454,8 +479,20 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
   <div class="user-chip" id="headerUserChip">
     <span>👤</span><span id="headerUserName">—</span>
   </div>
+  <button class="notif-bell" id="btnNotif" onclick="abrirNotificaciones()" style="display:none" title="Notificaciones">
+    🔔<span class="notif-badge" id="notifBadge" style="display:none">0</span>
+  </button>
   <div class="conn-dot" id="connDot" title="Estado conexión"></div>
 </header>
+
+<!-- Panel notificaciones -->
+<div id="notifPanel">
+  <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--border);flex-shrink:0">
+    <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:15px">🔔 Notificaciones</div>
+    <button onclick="cerrarNotificaciones()" style="background:var(--surface2);border:none;border-radius:50%;width:32px;height:32px;font-size:18px;cursor:pointer;color:var(--text)">×</button>
+  </div>
+  <div id="notifList" style="flex:1;overflow-y:auto"></div>
+</div>
 
 <!-- ══════════════════════════════════════════
      MAIN APP CONTENT
@@ -876,6 +913,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
     <div class="mod-tabs" style="flex-shrink:0">
       <button class="mod-tab-btn active" id="segTabEscaner" onclick="segSelTab('escaner')">📷 Escáner</button>
       <button class="mod-tab-btn"        id="segTabInv"     onclick="segSelTab('inventario')">📦 Inventario</button>
+      <button class="mod-tab-btn"        id="segTabHerr"    onclick="segSelTab('herramientas')">🔧 Herramientas</button>
     </div>
 
     <!-- ── TAB ESCÁNER ── -->
@@ -1186,6 +1224,8 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
           <div class="settings-title">💾 Caché y herramientas</div>
           <div style="display:flex;gap:8px;flex-wrap:wrap">
             <button class="btn-export" onclick="exportarExcelCompleto()" style="font-size:13px">📊 Excel completo</button>
+            <button class="btn-export" onclick="exportarCSV()" style="font-size:13px">📄 Exportar CSV</button>
+            <button class="btn-export" onclick="compartirResumen()" style="font-size:13px">📤 Compartir</button>
           </div>
           <button class="btn-primary btn-secondary" style="font-size:13px;margin-top:8px" onclick="limpiarCache()">🗑 Limpiar caché SW</button>
           <button class="btn-primary btn-secondary" style="font-size:13px;margin-top:8px;background:var(--red)" onclick="resetSesionCompleto()">⚠️ Resetear sesión y caché</button>
@@ -1204,6 +1244,14 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
           <div class="settings-row"><span>Backend</span><strong>Cloudflare Workers + D1</strong></div>
           <div class="settings-row"><span>Año</span><strong>2026</strong></div>
           <div style="margin-top:10px;text-align:center;font-size:11px;color:var(--muted);letter-spacing:1px">INVENTARIO · MAQUINARIA · CONTROL</div>
+        </div>
+        <div class="settings-section">
+          <div class="settings-title">☕ Invítame a un café</div>
+          <div style="color:var(--muted);font-size:12px;margin-bottom:10px">Si la app te es útil, puedes apoyar el desarrollo con una donación voluntaria.</div>
+          <a href="https://www.paypal.me/padilla585" target="_blank" rel="noopener"
+             style="display:block;text-align:center;padding:13px;background:#0070ba;color:#fff;border-radius:10px;font-family:'Montserrat',sans-serif;font-weight:900;font-size:13px;text-decoration:none;letter-spacing:.5px">
+            ☕ &nbsp;Invítame a un café (PayPal)
+          </a>
         </div>
       </div>
 
@@ -1883,7 +1931,10 @@ function cerrarSesion() {
     }).catch(() => {});
   }
   localStorage.removeItem('alejandra_session');
-  if (window._connInterval) { clearInterval(window._connInterval); window._connInterval = null; }
+  if (window._connInterval)  { clearInterval(window._connInterval);  window._connInterval  = null; }
+  if (window._notifInterval) { clearInterval(window._notifInterval); window._notifInterval = null; }
+  const btnN = document.getElementById('btnNotif'); if (btnN) btnN.style.display = 'none';
+  cerrarNotificaciones();
   closeCamera();
   segCloseCamera();
   currentModule = getSession()?.departamento === 'mecanicas' ? 'pemp' : 'bobinas';
@@ -2122,6 +2173,14 @@ async function iniciarApp() {
   updateNavPermisos(s);
   // Asegura que el botón físico de atrás (Android) no cierre la app
   if (!history.state?.alejandra) history.pushState({ alejandra: 1 }, '');
+
+  // Campana de notificaciones
+  const btnNotif = document.getElementById('btnNotif');
+  if (btnNotif) btnNotif.style.display = 'flex';
+  checkNotifBadge();
+  if (!window._notifInterval) {
+    window._notifInterval = setInterval(checkNotifBadge, 60000);
+  }
 
   // LED siempre activo desde que hay sesión
   checkConnection();
@@ -3012,8 +3071,10 @@ async function segBuscarMaquina(mat) {
 // ══════════════════════════════════════════════════════
 
 function segSelTab(tab) {
+  if (tab === 'herramientas') { navTo('herramientas'); return; }
   document.getElementById('segTabEscaner').classList.toggle('active', tab === 'escaner');
   document.getElementById('segTabInv').classList.toggle('active', tab === 'inventario');
+  document.getElementById('segTabHerr')?.classList.remove('active');
   document.getElementById('segPanelEscaner').style.display = tab === 'escaner' ? 'flex' : 'none';
   document.getElementById('segPanelInv').style.display     = tab === 'inventario' ? 'flex' : 'none';
   if (tab === 'inventario') segCargarInv();
@@ -4915,6 +4976,92 @@ function copiarCodigo() {
   const c = document.getElementById('codigoValorCreado')?.textContent || '';
   navigator.clipboard?.writeText(c).then(() => toast('✅ Código copiado', 'ok')).catch(() => toast('Código: ' + c, ''));
 }
+// ══════════════════════════════════════════════════════
+// NOTIFICACIONES IN-APP (NEW-09)
+// ══════════════════════════════════════════════════════
+const NOTIF_SEEN_KEY = 'alejandra_notif_seen';
+
+function abrirNotificaciones() {
+  const panel = document.getElementById('notifPanel');
+  if (!panel) return;
+  panel.classList.add('show');
+  localStorage.setItem(NOTIF_SEEN_KEY, Date.now());
+  document.getElementById('notifBadge').style.display = 'none';
+  cargarNotificaciones();
+}
+
+function cerrarNotificaciones() {
+  document.getElementById('notifPanel')?.classList.remove('show');
+}
+
+async function cargarNotificaciones() {
+  const el = document.getElementById('notifList');
+  if (!el) return;
+  el.innerHTML = '<div style="color:var(--muted);font-size:13px;text-align:center;padding:24px">Cargando...</div>';
+  const notifs = [];
+  const hace48h = new Date(Date.now() - 48 * 3600 * 1000).toISOString().slice(0, 16);
+  try {
+    const peds = await apiCall('/pedidos?estado=pendiente').then(r => r.json()).catch(() => []);
+    (Array.isArray(peds) ? peds : []).filter(p => (p.created_at || '') >= hace48h).forEach(p =>
+      notifs.push({ icono: '📦', texto: `Pedido pendiente: ${(p.descripcion || '').slice(0, 50)}`, fecha: p.created_at, color: '#f97316' })
+    );
+  } catch {}
+  try {
+    const pemp = await apiCall('/pemp?estado=averia').then(r => r.json()).catch(() => []);
+    (Array.isArray(pemp) ? pemp : []).forEach(p =>
+      notifs.push({ icono: '🔴', texto: `PEMP averiada: ${[p.marca, p.matricula].filter(Boolean).join(' ')}`, fecha: p.fecha_averia, color: '#ef4444' })
+    );
+  } catch {}
+  try {
+    const carrs = await apiCall('/carretillas?estado=averia').then(r => r.json()).catch(() => []);
+    (Array.isArray(carrs) ? carrs : []).forEach(c =>
+      notifs.push({ icono: '🔴', texto: `Carretilla averiada: ${[c.marca, c.matricula].filter(Boolean).join(' ')}`, fecha: c.fecha_averia, color: '#ef4444' })
+    );
+  } catch {}
+  try {
+    const inv = await apiCall('/inventario-seg').then(r => r.json()).catch(() => []);
+    const hoy = new Date(); const umbral = new Date(hoy); umbral.setDate(umbral.getDate() + 30);
+    (Array.isArray(inv) ? inv : []).filter(i => i.fecha_caducidad && new Date(i.fecha_caducidad) <= umbral).forEach(i =>
+      notifs.push({ icono: '⚠️', texto: `Material próximo a caducar: ${i.codigo || i.tipo_nombre || ''}`, fecha: i.fecha_caducidad, color: '#eab308' })
+    );
+  } catch {}
+  if (!notifs.length) {
+    el.innerHTML = '<div style="color:var(--muted);font-size:13px;text-align:center;padding:32px">✅ Sin notificaciones pendientes</div>';
+    return;
+  }
+  notifs.sort((a, b) => (b.fecha || '').localeCompare(a.fecha || ''));
+  el.innerHTML = notifs.map(n => `
+    <div style="padding:13px 16px;border-bottom:1px solid var(--border);display:flex;gap:12px;align-items:flex-start">
+      <span style="font-size:22px;flex-shrink:0">${n.icono}</span>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:700;color:${n.color || 'var(--text)'}">${n.texto}</div>
+        ${n.fecha ? `<div style="font-size:11px;color:var(--muted);margin-top:3px">${String(n.fecha).slice(0,16).replace('T',' ')}</div>` : ''}
+      </div>
+    </div>`).join('');
+}
+
+async function checkNotifBadge() {
+  const s = getSession();
+  if (!s) return;
+  const lastSeen = new Date(parseInt(localStorage.getItem(NOTIF_SEEN_KEY) || '0')).toISOString().slice(0, 16);
+  const hace48h  = new Date(Date.now() - 48 * 3600 * 1000).toISOString().slice(0, 16);
+  let count = 0;
+  try {
+    const peds = await apiCall('/pedidos?estado=pendiente').then(r => r.json()).catch(() => []);
+    count += (Array.isArray(peds) ? peds : []).filter(p => (p.created_at||'') >= hace48h && (p.created_at||'') > lastSeen).length;
+  } catch {}
+  try {
+    const pemp = await apiCall('/pemp?estado=averia').then(r => r.json()).catch(() => []);
+    count += (Array.isArray(pemp) ? pemp : []).length;
+  } catch {}
+  try {
+    const carrs = await apiCall('/carretillas?estado=averia').then(r => r.json()).catch(() => []);
+    count += (Array.isArray(carrs) ? carrs : []).length;
+  } catch {}
+  const badge = document.getElementById('notifBadge');
+  if (badge) { badge.style.display = count > 0 ? 'flex' : 'none'; badge.textContent = count > 9 ? '9+' : String(count); }
+}
+
 function compartirCodigo() {
   const nombre = document.getElementById('codigoNombreCreado')?.textContent || '';
   const codigo = document.getElementById('codigoValorCreado')?.textContent || '';
@@ -5030,6 +5177,46 @@ async function exportarExcelCompleto() {
   } catch { toast('❌ Error al exportar', 'err'); }
 }
 
+async function exportarCSV() {
+  const mod = currentModule || 'bobinas';
+  const endpointMap = { bobinas: '/bobinas', pemp: '/pemp', carretillas: '/carretillas', stock: '/bobinas' };
+  const endpoint = endpointMap[mod] || '/bobinas';
+  try {
+    toast('⏳ Generando CSV...', '');
+    const data = await apiCall(endpoint).then(r => r.json());
+    if (!Array.isArray(data) || !data.length) { toast('Sin datos para exportar', 'err'); return; }
+    const keys = Object.keys(data[0]);
+    const csv = [keys.join(','), ...data.map(row => keys.map(k => JSON.stringify(row[k] ?? '')).join(','))].join('\n');
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `alejandra-${mod}-${new Date().toISOString().slice(0,10)}.csv`;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast('✅ CSV exportado', 'ok');
+  } catch { toast('❌ Error al exportar CSV', 'err'); }
+}
+
+async function compartirResumen() {
+  try {
+    toast('⏳ Preparando resumen...', '');
+    const [rb, rp, rc] = await Promise.all([
+      apiCall('/bobinas').then(r => r.json()).catch(() => []),
+      apiCall('/pemp').then(r => r.json()).catch(() => []),
+      apiCall('/carretillas').then(r => r.json()).catch(() => []),
+    ]);
+    const s = getSession();
+    const obra = document.getElementById('headerObraLabel')?.textContent || '';
+    const texto = `📋 Alejandra App — Resumen inventario\n🏗 Obra: ${obra}\n📦 Bobinas: ${rb.length}\n🏗 PEMP: ${rp.length}\n🚜 Carretillas: ${rc.length}\n📅 ${new Date().toLocaleDateString('es-ES')}`;
+    if (navigator.share) {
+      await navigator.share({ title: 'Alejandra App — Resumen', text: texto });
+    } else {
+      const wa = 'https://wa.me/?text=' + encodeURIComponent(texto);
+      window.open(wa, '_blank');
+    }
+  } catch(e) { if (e?.name !== 'AbortError') toast('❌ Error al compartir', 'err'); }
+}
+
 async function cargarLogs() {
   const c = document.getElementById('sistemaLogsList');
   if (!c) return;
@@ -5072,7 +5259,7 @@ async function cargarObrasSelectUsuario() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '4.36';
+const APP_VERSION = '4.37';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -5121,6 +5308,18 @@ setInterval(checkVersionAndUpdate, 30 * 1000);
     banner.classList.add('fade');
     setTimeout(() => { banner.classList.remove('show', 'fade'); }, 500);
   }, 4000);
+})();
+
+// Splash screen — muestra 2s solo una vez por sesión de navegador
+(function() {
+  if (sessionStorage.getItem('splashShown')) { const sp = document.getElementById('splashScreen'); if (sp) sp.remove(); return; }
+  sessionStorage.setItem('splashShown', '1');
+  const sp = document.getElementById('splashScreen');
+  if (!sp) return;
+  setTimeout(() => {
+    sp.classList.add('oculto');
+    setTimeout(() => sp.remove(), 650);
+  }, 2000);
 })();
 
 // Botón físico "Atrás" en Android — navega dentro de la app en vez de cerrarla
@@ -6424,8 +6623,12 @@ if ('serviceWorker' in navigator) {
   window.guardarFichaje        = guardarFichaje;
   window.eliminarFichaje       = eliminarFichaje;
   window.fichajeToggleManual   = fichajeToggleManual;
-  window.cargarEmpresasAdmin   = cargarEmpresasAdmin;
+  window.cargarEmpresasAdmin     = cargarEmpresasAdmin;
   window.seleccionarEmpresaAdmin = seleccionarEmpresaAdmin;
+  window.abrirNotificaciones     = abrirNotificaciones;
+  window.cerrarNotificaciones    = cerrarNotificaciones;
+  window.exportarCSV             = exportarCSV;
+  window.compartirResumen        = compartirResumen;
 }
 </script>
 </body>

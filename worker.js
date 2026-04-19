@@ -1391,17 +1391,17 @@ async function registrarHistorialCarretillas(env, { obra_id, matricula, accion, 
 }
 
 async function getHistorial(request, env) {
-  const { obraId } = await getAuth(request, env);
+  const { obraId, empresa_id, departamento, isSuperadmin } = await getAuth(request, env);
   const url = new URL(request.url);
   const limit  = parseInt(url.searchParams.get('limit') || '100');
   const accion = url.searchParams.get('accion');
-  const f      = obraId || null;
 
-  let sql = 'SELECT * FROM historial WHERE 1=1';
-  const params = [];
-  if (f)      { sql += ' AND obra_id = ?'; params.push(f); }
-  if (accion) { sql += ' AND accion = ?';  params.push(accion); }
-  sql += ' ORDER BY created_at DESC LIMIT ?';
+  let sql = `SELECT h.* FROM historial h LEFT JOIN bobinas b ON h.bobina_id = b.id WHERE h.empresa_id = ?`;
+  const params = [empresa_id || 1];
+  if (obraId)                        { sql += ' AND h.obra_id = ?';      params.push(obraId); }
+  if (accion)                        { sql += ' AND h.accion = ?';       params.push(accion); }
+  if (departamento && !isSuperadmin) { sql += ' AND b.departamento = ?'; params.push(departamento); }
+  sql += ' ORDER BY h.created_at DESC LIMIT ?';
   params.push(limit);
 
   const { results } = await env.DB.prepare(sql).bind(...params).all();

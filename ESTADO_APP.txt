@@ -5,7 +5,7 @@
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 19/04/2026
-VERSIÓN ACTUAL: v4.18 app vieja | v4.36 app nueva
+VERSIÓN ACTUAL: v4.18 app vieja | v4.37 app nueva
 
 ⚠️  ANTES DE CODIFICAR: leer NuevaApp/IDEAS_PENDIENTES.txt
     Lista completa de bugs activos, mejoras y features pendientes.
@@ -232,6 +232,11 @@ v4.0  |  15/04/2026  [SOLO NUEVA APP]
   - Todos los datos existentes migrados con empresa_id=1 automáticamente
   - Índices creados: idx_*_empresa en tablas principales
   - SW bumpeado a alejandra-v4.0
+
+v4.37  |  19/04/2026  [SOLO NUEVA APP] — cambios locales sin commitear
+  - NEW-06: Splash screen al arrancar la app
+  - NEW-09: Notificaciones in-app (campana 🔔 en header, panel, polling cada 60s)
+  - Fix: historial ahora filtra por empresa_id y departamento
 
 v4.36  |  19/04/2026  [SOLO NUEVA APP]
   - NEW-05: Banner "App actualizada a vX.XX" tras actualización automática
