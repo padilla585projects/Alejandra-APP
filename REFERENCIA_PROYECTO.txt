@@ -48,12 +48,21 @@ SI CAMBIAS DE ORDENADOR:
      · index.html         → const APP_VERSION = 'X.XX'
      Los tres a la vez, siempre. Sin excepción.
   2. Actualizar los 5 archivos .txt con los cambios realizados (ver sección anterior)
-  3. Hacer push a los repos correspondientes
+  3. Deploy y push — DOS pasos SIEMPRE obligatorios si se toca worker.js:
+     ⚠️  git push solo publica el FRONTEND (GitHub Pages).
+     ⚠️  El WORKER es independiente — hay que desplegarlo por separado con curl.
+     ⚠️  Si no se hace el deploy del worker, los endpoints nuevos NO existen en producción.
+
+     CHECKLIST DE CIERRE DE SESIÓN:
+     [ ] ¿Cambié worker.js?  → deploy curl (ver sección COMANDOS DE DEPLOY)
+     [ ] ¿Cambié index.html/sw.js/version.json?  → git push
+     [ ] ¿Cambié ambos?  → deploy curl PRIMERO, luego git push
+     Nunca cerrar una sesión sin haber hecho los dos pasos que correspondan.
 
 REGLA DE DEPLOY:
   - BUGS      → ambas apps siempre (worker + frontend + push ambos repos)
   - MEJORAS   → solo app nueva
-  - En ambos casos: subir versión + actualizar txts + push
+  - En ambos casos: subir versión + actualizar txts + deploy worker + git push
 
 ÚLTIMO CAMBIO REALIZADO:
   v4.31 [nueva] — 19/04/2026
