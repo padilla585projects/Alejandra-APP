@@ -1,7 +1,7 @@
 ================================================================================
   ALEJANDRA APP — IDEAS, MEJORAS Y ERRORES PENDIENTES
   Recogidos de: Canal Telegram @AlejandraAPP_bot
-  Última actualización: 19/04/2026 (v4.28)
+  Última actualización: 19/04/2026 (v4.29)
 
   ⚠️  LEER ESTE ARCHIVO ANTES DE CUALQUIER SESIÓN DE CODIFICACIÓN.
   ⚠️  Marcar como [HECHO vX.XX] cuando se implemente. No borrar las líneas.
@@ -33,8 +33,10 @@ LEYENDA DE ESTADO:
     · Ideas: scroll automático del texto, cambio de tamaño/formato, otro layout.
     · Reportado: 18/04/2026 — Adrian, CPD Getafe
 
-[✓] BUG-04 — Botones de añadir en Ajustes no funcionan  [HECHO: pendiente verificar]
-    · En Ajustes y en Ajustes/Catálogos ningún botón de añadir responde. IMPORTANTE.
+[✓] BUG-04 — Botones de añadir en Ajustes no funcionan  [HECHO v4.29]
+    · Worker: addCatalogo devuelve 403 si no hay sesión o si es operario.
+    · Frontend: funciones addXxx muestran toast ✅/❌ según resultado.
+    · Frontend: initAjustesTabs muestra secciones a empresa_admin + añadida cfgHerrSection.
     · Reportado: 18/04/2026 — Adrian
 
 [ ] BUG-05 — Pedidos e inventarios NO están aislados por departamento
