@@ -22,10 +22,9 @@ LEYENDA DE ESTADO:
     · Si NO hay obra seleccionada → permitir elegirla manualmente al fichar.
     · Reportado: 18/04/2026 — Adrian, CPD Getafe
 
-[ ] BUG-02 — Icono de departamento no desaparece al volver al inicio
-    · Al salir de un departamento y volver a la pantalla principal,
-      el icono del departamento activo sigue visible en la barra superior.
-    · Debe desaparecer al salir del departamento.
+[✓] BUG-02 — Icono de departamento no desaparece al volver al inicio  [HECHO v4.31]
+    · showScreen() ahora oculta el deptPill cuando navega a 'dept'.
+    · Funciona tanto con botón atrás como con cualquier navegación a la pantalla dept.
     · Reportado: 18/04/2026 — Adrian, CPD Getafe
 
 [ ] BUG-03 — Nombre de obra no cabe en la barra de iconos superior
