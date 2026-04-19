@@ -5,7 +5,7 @@
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 19/04/2026
-VERSIÓN ACTUAL: v4.18 app vieja | v4.33 app nueva
+VERSIÓN ACTUAL: v4.18 app vieja | v4.34 app nueva
 
 ⚠️  ANTES DE CODIFICAR: leer NuevaApp/IDEAS_PENDIENTES.txt
     Lista completa de bugs activos, mejoras y features pendientes.
@@ -232,6 +232,17 @@ v4.0  |  15/04/2026  [SOLO NUEVA APP]
   - Todos los datos existentes migrados con empresa_id=1 automáticamente
   - Índices creados: idx_*_empresa en tablas principales
   - SW bumpeado a alejandra-v4.0
+
+v4.34  |  19/04/2026  [SOLO NUEVA APP]
+  - MEJ-05: Descripciones de departamentos actualizadas
+    · Eléctrico: "Tendido de cable · Plataformas · Carretillas"
+    · Mecánicas: "Mantenimiento de plataformas y carretillas"
+    · Seguridad: "Control de EPIs y material de seguridad"
+    · Personal: "Fichajes y control de asistencia"
+  - MEJ-06: Botones "Marcar todo leído" y "Borrar todo" en Ajustes/Ideas
+    · Worker: PUT /sugerencias/marcar-todas → pone todas a estado='resuelto'
+    · Worker: DELETE /sugerencias/borrar-todas → borra todas las sugerencias de la empresa
+    · Ambos con confirmación previa y actualización del badge
 
 v4.33  |  19/04/2026  [SOLO NUEVA APP]
   - MEJ-02: Escáner de cámara en Herramientas
