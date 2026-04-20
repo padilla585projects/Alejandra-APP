@@ -65,9 +65,9 @@ REGLA DE DEPLOY:
   - En ambos casos: subir versión + actualizar txts + deploy worker + git push
 
 ÚLTIMO CAMBIO REALIZADO:
-  v4.57 [nueva] — 20/04/2026
-  · BUG-123: arranque más rápido — Promise.all en iniciarApp() y checkNotifBadge()
-  · BUG-116: verificado como resuelto desde v4.29
+  v4.58 [nueva] — 20/04/2026
+  · MEJ-07: notificaciones clickables con irANotif(tipo)
+  · MEJ-10: botón "Añadir como nueva" al escanear herramienta inexistente
   · BUG-122: Ideas ya no parpadea en auto-refresh
   · BUG-124: herramientas/kits filtran por obra activa (worker + frontend)
   · BUG-125: header SA más compacto ('SA' en lugar de 'SuperAdmin')

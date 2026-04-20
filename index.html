@@ -5204,58 +5204,58 @@ function borrarNotificaciones() {
   document.getElementById('notifList').innerHTML = '<div style="color:var(--muted);font-size:13px;text-align:center;padding:32px">✅ Sin notificaciones pendientes</div>';
 }
 
+function irANotif(tipo) {
+  cerrarNotificaciones();
+  if      (tipo === 'pedidos')     { navTo('pedidos'); }
+  else if (tipo === 'pemp')        { currentModule = 'pemp'; navTo('stock'); }
+  else if (tipo === 'carretillas') { currentModule = 'carretillas'; navTo('stock'); }
+  else if (tipo === 'seg')         { showScreen('seguridad'); segSelTab('inventario'); }
+  else if (tipo === 'usuarios')    { navTo('ajustes'); setTimeout(() => selAjTab('usuarios'), 300); }
+}
+
 async function cargarNotificaciones() {
   const el = document.getElementById('notifList');
   if (!el) return;
   el.innerHTML = '<div style="color:var(--muted);font-size:13px;text-align:center;padding:24px">Cargando...</div>';
   const notifs = [];
   const hace48h = new Date(Date.now() - 48 * 3600 * 1000).toISOString().slice(0, 16);
-  try {
-    const peds = await apiCall('/pedidos?estado=pendiente').then(r => r.json()).catch(() => []);
-    (Array.isArray(peds) ? peds : []).filter(p => (p.created_at || '') >= hace48h).forEach(p =>
-      notifs.push({ icono: '📦', texto: `Pedido pendiente: ${(p.descripcion || '').slice(0, 50)}`, fecha: p.created_at, color: '#f97316' })
-    );
-  } catch {}
-  try {
-    const pemp = await apiCall('/pemp?estado=Averiada').then(r => r.json()).catch(() => []);
-    (Array.isArray(pemp) ? pemp : []).forEach(p =>
-      notifs.push({ icono: '🔴', texto: `PEMP averiada: ${[p.marca, p.matricula].filter(Boolean).join(' ')}`, fecha: p.fecha_averia, color: '#ef4444' })
-    );
-  } catch {}
-  try {
-    const carrs = await apiCall('/carretillas?estado=Averiada').then(r => r.json()).catch(() => []);
-    (Array.isArray(carrs) ? carrs : []).forEach(c =>
-      notifs.push({ icono: '🔴', texto: `Carretilla averiada: ${[c.marca, c.matricula].filter(Boolean).join(' ')}`, fecha: c.fecha_averia, color: '#ef4444' })
-    );
-  } catch {}
-  try {
-    const inv = await apiCall('/inventario-seg').then(r => r.json()).catch(() => []);
-    const hoy = new Date(); const umbral = new Date(hoy); umbral.setDate(umbral.getDate() + 30);
-    (Array.isArray(inv) ? inv : []).filter(i => i.fecha_caducidad && new Date(i.fecha_caducidad) <= umbral).forEach(i =>
-      notifs.push({ icono: '⚠️', texto: `Material próximo a caducar: ${i.nombre || i.codigo || i.tipo_material || ''}`, fecha: i.fecha_caducidad, color: '#eab308' })
-    );
-  } catch {}
-  try {
-    const s = getSession();
-    if (s?.rol === 'superadmin' || s?.rol === 'empresa_admin') {
-      const pend = await apiCall('/usuarios/pendientes').then(r => r.json()).catch(() => ({ pendientes: [] }));
-      (pend.pendientes || []).forEach(u =>
-        notifs.push({ icono: '🔔', texto: `Solicitud de acceso: ${u.nombre} (${u.email})`, fecha: u.created_at, color: '#8b5cf6', accion: "cerrarNotificaciones();navTo('ajustes');setTimeout(()=>selAjTab('usuarios'),300);" })
-      );
-    }
-  } catch {}
+  const s = getSession();
+  const isAdmin = s?.rol === 'superadmin' || s?.rol === 'empresa_admin';
+  const [peds, pemp, carrs, inv, pend] = await Promise.all([
+    apiCall('/pedidos?estado=pendiente').then(r => r.json()).catch(() => []),
+    apiCall('/pemp?estado=Averiada').then(r => r.json()).catch(() => []),
+    apiCall('/carretillas?estado=Averiada').then(r => r.json()).catch(() => []),
+    apiCall('/inventario-seg').then(r => r.json()).catch(() => []),
+    isAdmin ? apiCall('/usuarios/pendientes').then(r => r.json()).catch(() => ({ pendientes: [] })) : Promise.resolve({ pendientes: [] })
+  ]);
+  (Array.isArray(peds) ? peds : []).filter(p => (p.created_at || '') >= hace48h).forEach(p =>
+    notifs.push({ icono: '📦', texto: `Pedido pendiente: ${(p.descripcion || '').slice(0, 50)}`, fecha: p.created_at, color: '#f97316', accion: "irANotif('pedidos')" })
+  );
+  (Array.isArray(pemp) ? pemp : []).forEach(p =>
+    notifs.push({ icono: '🔴', texto: `PEMP averiada: ${[p.marca, p.matricula].filter(Boolean).join(' ')}`, fecha: p.fecha_averia, color: '#ef4444', accion: "irANotif('pemp')" })
+  );
+  (Array.isArray(carrs) ? carrs : []).forEach(c =>
+    notifs.push({ icono: '🔴', texto: `Carretilla averiada: ${[c.marca, c.matricula].filter(Boolean).join(' ')}`, fecha: c.fecha_averia, color: '#ef4444', accion: "irANotif('carretillas')" })
+  );
+  const hoy = new Date(); const umbral = new Date(hoy); umbral.setDate(umbral.getDate() + 30);
+  (Array.isArray(inv) ? inv : []).filter(i => i.fecha_caducidad && new Date(i.fecha_caducidad) <= umbral).forEach(i =>
+    notifs.push({ icono: '⚠️', texto: `Material próximo a caducar: ${i.nombre || i.codigo || i.tipo_material || ''}`, fecha: i.fecha_caducidad, color: '#eab308', accion: "irANotif('seg')" })
+  );
+  (pend.pendientes || []).forEach(u =>
+    notifs.push({ icono: '🔔', texto: `Solicitud de acceso: ${u.nombre} (${u.email})`, fecha: u.created_at, color: '#8b5cf6', accion: "irANotif('usuarios')" })
+  );
   if (!notifs.length) {
     el.innerHTML = '<div style="color:var(--muted);font-size:13px;text-align:center;padding:32px">✅ Sin notificaciones pendientes</div>';
     return;
   }
   notifs.sort((a, b) => (b.fecha || '').localeCompare(a.fecha || ''));
   el.innerHTML = notifs.map(n => `
-    <div style="padding:13px 16px;border-bottom:1px solid var(--border);display:flex;gap:12px;align-items:flex-start${n.accion ? ';cursor:pointer' : ''}" ${n.accion ? `onclick="${n.accion}"` : ''}>
+    <div style="padding:13px 16px;border-bottom:1px solid var(--border);display:flex;gap:12px;align-items:flex-start;cursor:pointer" onclick="${n.accion}">
       <span style="font-size:22px;flex-shrink:0">${n.icono}</span>
       <div style="flex:1;min-width:0">
         <div style="font-size:13px;font-weight:700;color:${n.color || 'var(--text)'}">${n.texto}</div>
         ${n.fecha ? `<div style="font-size:11px;color:var(--muted);margin-top:3px">${String(n.fecha).slice(0,16).replace('T',' ')}</div>` : ''}
-        ${n.accion ? `<div style="font-size:11px;color:var(--muted);margin-top:2px">Toca para gestionar →</div>` : ''}
+        <div style="font-size:11px;color:var(--muted);margin-top:2px">Toca para ir →</div>
       </div>
     </div>`).join('');
 }
@@ -5559,7 +5559,7 @@ async function cargarObrasSelectUsuario() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '4.57';
+const APP_VERSION = '4.58';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -5818,11 +5818,23 @@ if ('serviceWorker' in navigator) {
       c.innerHTML = '<div class="empty-state">Buscando...</div>';
       try {
         const res = await apiCall('/herramientas/buscar?serie=' + encodeURIComponent(serie));
-        if (!res.ok) { c.innerHTML = '<div class="empty-state">❌ No encontrada</div>'; return; }
+        if (!res.ok) {
+          c.innerHTML = `<div class="empty-state" style="flex-direction:column;gap:12px">
+            <div>❌ No encontrada: <strong>${serie}</strong></div>
+            <button onclick="herrAgregarDesdeEscaner('${serie.replace(/'/g,"\\'")}')" class="btn-primary" style="font-size:13px;padding:8px 18px">➕ Añadir como nueva herramienta</button>
+          </div>`;
+          return;
+        }
         const { herramienta: h, historial } = await res.json();
         c.innerHTML = renderHerrFicha(h, historial, true);
       } catch { c.innerHTML = '<div class="empty-state">Error de red</div>'; }
     }
+  }
+
+  function herrAgregarDesdeEscaner(serie) {
+    document.getElementById('herrScanResult').innerHTML = '';
+    abrirFormHerramienta(null);
+    setTimeout(() => { const el = document.getElementById('herrSerie'); if (el) el.value = serie; }, 200);
   }
 
   function renderHerrFicha(h, historial, conAcciones) {
@@ -6938,6 +6950,7 @@ if ('serviceWorker' in navigator) {
   window.cargarInvHerr         = cargarInvHerr;
   window.verDetalleHerr        = verDetalleHerr;
   window.editarHerrDesdeInv    = editarHerrDesdeInv;
+  window.herrAgregarDesdeEscaner = herrAgregarDesdeEscaner;
   window.herrCambiarEstado     = herrCambiarEstado;
   window.cargarKitsHerr        = cargarKitsHerr;
   window.verDetalleKit         = verDetalleKit;

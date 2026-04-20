@@ -222,7 +222,7 @@ LEYENDA DE ESTADO:
       Fallback a texto por WhatsApp si el navegador no soporta file sharing.
     · Reportado: 18/04/2026 — Adrian, CPD Getafe
 
-[ ] MEJ-07 — Notificaciones clickables que lleven a la sección correspondiente (#107)
+[✓] MEJ-07 — Notificaciones clickables que lleven a la sección correspondiente  [HECHO v4.58]
     · Al pulsar una notificación (ej: pedido pendiente) debe navegar al pedido concreto.
     · Implementar navegación contextual desde el panel de notificaciones.
     · Reportado: 19/04/2026 — Adrian, CPD Getafe
@@ -238,7 +238,7 @@ LEYENDA DE ESTADO:
     · Desde la pantalla principal (superadmin/admin): mostrar todo con etiqueta de departamento.
     · Reportado: 18/04/2026 — Adrian, CPD Getafe
 
-[ ] MEJ-10 — "Añadir nueva" directo al escanear herramienta inexistente (#119)
+[✓] MEJ-10 — "Añadir nueva" directo al escanear herramienta inexistente  [HECHO v4.58]
     · Si al escanear/buscar una herramienta no existe en el inventario,
       ofrecer la opción "Añadir nueva herramienta" directamente en el desplegable.
     · Reportado: 20/04/2026 — Adrian, CPD Getafe

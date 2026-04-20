@@ -5,7 +5,7 @@
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 20/04/2026
-VERSIÓN ACTUAL: v4.19 app vieja | v4.57 app nueva
+VERSIÓN ACTUAL: v4.19 app vieja | v4.58 app nueva
 
 ⚠️  ANTES DE CODIFICAR: leer NuevaApp/IDEAS_PENDIENTES.txt
     Lista completa de bugs activos, mejoras y features pendientes.
@@ -240,6 +240,16 @@ hotfix  |  20/04/2026  [SOLO NUEVA APP — migración DB sin cambio de código]
     · Fix: ALTER TABLE bobinas/pemp/carretillas ADD COLUMN registrado_por TEXT aplicado en D1
     · App vieja no afectada (ya tenía la columna desde antes)
     · Sin cambio de código ni deploy — solo migración directa en D1
+
+v4.58  |  20/04/2026  [SOLO NUEVA APP]
+  - MEJ-07: Notificaciones clickables — al pulsar navegan a la sección correspondiente
+    · Nueva función irANotif(tipo): pedidos→pantalla pedidos, pemp/carretillas→stock,
+      material seg→inventario seguridad, usuarios pendientes→Ajustes/Usuarios
+    · cargarNotificaciones() paralelizado con Promise.all (5 fetches simultáneos)
+    · Todas las notificaciones muestran "Toca para ir →"
+  - MEJ-10: Botón "Añadir como nueva herramienta" al escanear una inexistente
+    · herrOnCode() en modo devolver: si la herramienta no existe muestra el botón
+    · herrAgregarDesdeEscaner(serie) abre el formulario con el número de serie pre-relleno
 
 v4.57  |  20/04/2026  [SOLO NUEVA APP]
   - BUG-123: Mejora de rendimiento en arranque — app carga significativamente más rápido
