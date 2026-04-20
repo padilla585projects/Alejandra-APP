@@ -92,7 +92,7 @@ HAY DOS APPS EN PARALELO:
   └─ Login por código O por email + contraseña
   └─ Wizard de registro de nuevas empresas
   └─ Aquí van todas las mejoras y nuevas features
-  └─ Versión: v4.45
+  └─ Versión: v4.46
 
 REGLA DE DEPLOY:
   - BUGS      → ambas apps siempre
@@ -201,7 +201,7 @@ git -c credential.helper= push https://padilla585:<TOKEN_GITHUB_VIEJO>@github.co
 ================================================================================
 
 APP VIEJA:  v4.19  (sw.js: alejandra-v4.19 | version.json: {"v":"4.19"})
-APP NUEVA:  v4.45  (sw.js: alejandra-v4.45 | version.json: {"v":"4.45"})
+APP NUEVA:  v4.46  (sw.js: alejandra-v4.45 | version.json: {"v":"4.45"})
 
 Historial reciente (app nueva):
   v4.41 [nueva] — Login Google con invitaciones temporales (rol+dept, caduca, 1 uso)
