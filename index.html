@@ -1126,6 +1126,10 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
 
       <!-- USUARIOS -->
       <div class="ajustes-panel" id="ajPanelUsuarios">
+        <div class="settings-section" id="seccionPendientes" style="display:none">
+          <div class="settings-title">🔔 Solicitudes de acceso con Google</div>
+          <div id="listaPendientes" style="font-size:13px;color:var(--muted)">—</div>
+        </div>
         <div class="admin-section">
           <div class="admin-section-title">👥 Usuarios registrados</div>
           <div id="adminUsuariosList"><div style="color:var(--muted);font-size:12px">Cargando...</div></div>
@@ -1325,10 +1329,6 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
         <div class="settings-section" style="margin-top:16px">
           <div class="settings-title">👥 Usuarios de la empresa</div>
           <div id="empresaUsuarios"></div>
-        </div>
-        <div class="settings-section" id="seccionPendientes" style="margin-top:16px;display:none">
-          <div class="settings-title">🔔 Solicitudes pendientes</div>
-          <div id="listaPendientes" style="font-size:13px;color:var(--muted)">—</div>
         </div>
         <div class="settings-section" id="seccionInvitaciones" style="margin-top:16px;display:none">
           <div class="settings-title">🔗 Invitaciones</div>
@@ -4731,7 +4731,7 @@ function selAjTab(tab) {
   _ideasRefreshTimer = null;
 
   if (tab === 'catalogos') cargarCatalogos();
-  if (tab === 'usuarios')  { cargarUsuariosAdmin(); cargarObrasSelectUsuario(); }
+  if (tab === 'usuarios')  { cargarUsuariosAdmin(); cargarObrasSelectUsuario(); cargarSolicitudesPendientes(); }
   if (tab === 'obras')     cargarObrasAdmin();
   if (tab === 'ideas')     { cargarSugerenciasAdmin(); _ideasRefreshTimer = setInterval(cargarSugerenciasAdmin, 30000); }
   if (tab === 'sistema')   { renderAjustesInfo(); checkConnection(); }
@@ -4759,7 +4759,7 @@ async function cargarPanelEmpresa() {
     const puedeEditar = s?.rol === 'empresa_admin' || s?.rol === 'superadmin';
     const btn = document.getElementById('btnEditarEmpresa');
     if (btn) btn.style.display = puedeEditar ? '' : 'none';
-    if (puedeEditar) { cargarSolicitudesPendientes(); document.getElementById('seccionInvitaciones').style.display = ''; cargarInvitaciones(); }
+    if (puedeEditar) { document.getElementById('seccionInvitaciones').style.display = ''; cargarInvitaciones(); }
   } catch(e) {
     document.getElementById('empresaInfo').innerHTML = '<div style="color:var(--red)">Error al cargar</div>';
   }
@@ -5553,7 +5553,7 @@ async function cargarObrasSelectUsuario() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '4.43';
+const APP_VERSION = '4.44';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes

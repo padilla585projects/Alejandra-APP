@@ -5,7 +5,7 @@
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 20/04/2026
-VERSIÓN ACTUAL: v4.18 app vieja | v4.43 app nueva
+VERSIÓN ACTUAL: v4.18 app vieja | v4.44 app nueva
 
 ⚠️  ANTES DE CODIFICAR: leer NuevaApp/IDEAS_PENDIENTES.txt
     Lista completa de bugs activos, mejoras y features pendientes.
@@ -232,6 +232,12 @@ v4.0  |  15/04/2026  [SOLO NUEVA APP]
   - Todos los datos existentes migrados con empresa_id=1 automáticamente
   - Índices creados: idx_*_empresa en tablas principales
   - SW bumpeado a alejandra-v4.0
+
+v4.44  |  20/04/2026  [SOLO NUEVA APP]
+  - Solicitudes de acceso Google movidas de Ajustes/Empresa a Ajustes/Usuarios
+    · seccionPendientes ahora vive en ajPanelUsuarios (arriba de la lista de usuarios)
+    · selAjTab('usuarios') llama a cargarSolicitudesPendientes() al abrir la pestaña
+    · Retirada la llamada a cargarSolicitudesPendientes() de cargarPanelEmpresa()
 
 v4.43  |  20/04/2026  [SOLO NUEVA APP]
   - Fix Login Google: solicitud pendiente al admin cuando el usuario no tiene cuenta ni invitación
