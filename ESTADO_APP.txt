@@ -5,7 +5,7 @@
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 20/04/2026
-VERSIÓN ACTUAL: v4.19 app vieja | v4.50 app nueva
+VERSIÓN ACTUAL: v4.19 app vieja | v4.51 app nueva
 
 ⚠️  ANTES DE CODIFICAR: leer NuevaApp/IDEAS_PENDIENTES.txt
     Lista completa de bugs activos, mejoras y features pendientes.
@@ -240,6 +240,17 @@ hotfix  |  20/04/2026  [SOLO NUEVA APP — migración DB sin cambio de código]
     · Fix: ALTER TABLE bobinas/pemp/carretillas ADD COLUMN registrado_por TEXT aplicado en D1
     · App vieja no afectada (ya tenía la columna desde antes)
     · Sin cambio de código ni deploy — solo migración directa en D1
+
+v4.51  |  20/04/2026  [SOLO NUEVA APP]
+  - Sección "🔗 Invitaciones" movida de Ajustes/Empresa a Ajustes/Usuarios
+    · seccionInvitaciones ahora vive en ajPanelUsuarios (debajo de "Nuevo usuario")
+    · selAjTab('usuarios') muestra la sección y llama cargarInvitaciones() si el rol es
+      empresa_admin o superadmin
+    · cargarPanelEmpresa() ya no gestiona la visibilidad de seccionInvitaciones
+  - Flujo Google nuevo usuario verificado:
+    · Worker: sin invitación → crea registro google_pending=1, avisa por Telegram ✅
+    · Frontend: respuesta {pendiente:true} → mensaje ámbar al usuario ✅
+    · campana 🔔: cargarNotificaciones() ya muestra solicitudes pendientes para admins ✅
 
 v4.50  |  20/04/2026  [SOLO NUEVA APP]
   - FIX #112: Login con Google no funcionaba — 2 bugs:

@@ -1162,6 +1162,36 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
             <button class="btn-primary" onclick="crearUsuario()" style="margin-top:4px">➕ Crear usuario</button>
           </div>
         </div>
+        <div class="settings-section" id="seccionInvitaciones" style="margin-top:16px;display:none">
+          <div class="settings-title">🔗 Invitaciones</div>
+          <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px">
+            <div style="display:flex;gap:6px">
+              <select id="invRol" style="flex:1;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:13px">
+                <option value="operario">Operario</option>
+                <option value="encargado">Encargado</option>
+              </select>
+              <select id="invDept" style="flex:1;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:13px">
+                <option value="electrico">⚡ Eléctrico</option>
+                <option value="mecanicas">🔧 Mecánicas</option>
+                <option value="seguridad">🔺 Seguridad</option>
+              </select>
+            </div>
+            <select id="invDuracion" style="width:100%;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:13px">
+              <option value="15">15 minutos</option>
+              <option value="30">30 minutos</option>
+              <option value="60" selected>1 hora</option>
+              <option value="120">2 horas</option>
+              <option value="240">4 horas</option>
+            </select>
+            <button class="btn-primary" style="font-size:13px;padding:10px" onclick="generarInvitacion()">🔗 Generar enlace de invitación</button>
+          </div>
+          <div id="invEnlaceBox" style="display:none;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:12px">
+            <div style="font-size:11px;color:var(--muted);margin-bottom:6px">Enlace generado — cópialo y envíalo:</div>
+            <div id="invEnlaceTexto" style="font-size:12px;word-break:break-all;font-family:monospace;color:var(--accent)"></div>
+            <button class="btn-primary btn-secondary" style="width:100%;margin-top:8px;font-size:13px" onclick="copiarEnlaceInv()">📋 Copiar enlace</button>
+          </div>
+          <div id="listaInvitaciones" style="font-size:13px;color:var(--muted)"></div>
+        </div>
       </div>
 
       <!-- OBRAS -->
@@ -1332,36 +1362,6 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
         <div class="settings-section" style="margin-top:16px">
           <div class="settings-title">👥 Usuarios de la empresa</div>
           <div id="empresaUsuarios"></div>
-        </div>
-        <div class="settings-section" id="seccionInvitaciones" style="margin-top:16px;display:none">
-          <div class="settings-title">🔗 Invitaciones</div>
-          <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px">
-            <div style="display:flex;gap:6px">
-              <select id="invRol" style="flex:1;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:13px">
-                <option value="operario">Operario</option>
-                <option value="encargado">Encargado</option>
-              </select>
-              <select id="invDept" style="flex:1;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:13px">
-                <option value="electrico">⚡ Eléctrico</option>
-                <option value="mecanicas">🔧 Mecánicas</option>
-                <option value="seguridad">🔺 Seguridad</option>
-              </select>
-            </div>
-            <select id="invDuracion" style="width:100%;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:13px">
-              <option value="15">15 minutos</option>
-              <option value="30">30 minutos</option>
-              <option value="60" selected>1 hora</option>
-              <option value="120">2 horas</option>
-              <option value="240">4 horas</option>
-            </select>
-            <button class="btn-primary" style="font-size:13px;padding:10px" onclick="generarInvitacion()">🔗 Generar enlace de invitación</button>
-          </div>
-          <div id="invEnlaceBox" style="display:none;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:12px">
-            <div style="font-size:11px;color:var(--muted);margin-bottom:6px">Enlace generado — cópialo y envíalo:</div>
-            <div id="invEnlaceTexto" style="font-size:12px;word-break:break-all;font-family:monospace;color:var(--accent)"></div>
-            <button class="btn-primary btn-secondary" style="width:100%;margin-top:8px;font-size:13px" onclick="copiarEnlaceInv()">📋 Copiar enlace</button>
-          </div>
-          <div id="listaInvitaciones" style="font-size:13px;color:var(--muted)"></div>
         </div>
       </div>
 
@@ -4728,7 +4728,13 @@ function selAjTab(tab) {
   _ideasRefreshTimer = null;
 
   if (tab === 'catalogos') cargarCatalogos();
-  if (tab === 'usuarios')  { cargarUsuariosAdmin(); cargarObrasSelectUsuario(); cargarSolicitudesPendientes(); }
+  if (tab === 'usuarios')  {
+    cargarUsuariosAdmin(); cargarObrasSelectUsuario(); cargarSolicitudesPendientes();
+    const _s = getSession();
+    const _puedeInv = _s?.rol === 'empresa_admin' || _s?.rol === 'superadmin';
+    const _secInv = document.getElementById('seccionInvitaciones');
+    if (_secInv) { _secInv.style.display = _puedeInv ? '' : 'none'; if (_puedeInv) cargarInvitaciones(); }
+  }
   if (tab === 'obras')     cargarObrasAdmin();
   if (tab === 'ideas')     { cargarSugerenciasAdmin(); _ideasRefreshTimer = setInterval(cargarSugerenciasAdmin, 30000); }
   if (tab === 'sistema')   { renderAjustesInfo(); checkConnection(); }
@@ -4756,7 +4762,6 @@ async function cargarPanelEmpresa() {
     const puedeEditar = s?.rol === 'empresa_admin' || s?.rol === 'superadmin';
     const btn = document.getElementById('btnEditarEmpresa');
     if (btn) btn.style.display = puedeEditar ? '' : 'none';
-    if (puedeEditar) { document.getElementById('seccionInvitaciones').style.display = ''; cargarInvitaciones(); }
   } catch(e) {
     document.getElementById('empresaInfo').innerHTML = '<div style="color:var(--red)">Error al cargar</div>';
   }
@@ -5557,7 +5562,7 @@ async function cargarObrasSelectUsuario() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '4.50';
+const APP_VERSION = '4.51';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
