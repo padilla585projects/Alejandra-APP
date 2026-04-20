@@ -5,7 +5,7 @@
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 20/04/2026
-VERSIÓN ACTUAL: v4.19 app vieja | v4.47 app nueva
+VERSIÓN ACTUAL: v4.19 app vieja | v4.48 app nueva
 
 ⚠️  ANTES DE CODIFICAR: leer NuevaApp/IDEAS_PENDIENTES.txt
     Lista completa de bugs activos, mejoras y features pendientes.
@@ -232,6 +232,13 @@ v4.0  |  15/04/2026  [SOLO NUEVA APP]
   - Todos los datos existentes migrados con empresa_id=1 automáticamente
   - Índices creados: idx_*_empresa en tablas principales
   - SW bumpeado a alejandra-v4.0
+
+v4.48  |  20/04/2026  [SOLO NUEVA APP]
+  - Fix notificaciones usuario nuevo Google (2 bugs):
+    · Badge de campana ahora muestra siempre las solicitudes pendientes sin filtrar por fecha
+      (antes desaparecía si el admin había abierto el panel antes de que llegara la solicitud)
+    · Notificación clickable: al pulsar una solicitud en el panel → navega a Ajustes → Usuarios
+    · Mensaje de Telegram corregido: decía "Ajustes → Empresa" → ahora dice "Ajustes → Usuarios"
 
 v4.47  |  20/04/2026  [SOLO NUEVA APP]
   - Fix Log de Ideas: 4 bugs
