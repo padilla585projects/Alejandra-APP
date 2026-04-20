@@ -65,10 +65,10 @@ REGLA DE DEPLOY:
   - En ambos casos: subir versión + actualizar txts + deploy worker + git push
 
 ÚLTIMO CAMBIO REALIZADO:
-  v4.45 [nueva] — 20/04/2026
-  · Fix notificaciones: botón "Borrar" + checkNotifBadge filtra por lastSeen en todos los tipos
+  v4.46 [nueva] — 20/04/2026
+  · Fix botón atrás como historial tipo Android (_navHistory stack)
+  · v4.45: fix notificaciones no se borran (botón Borrar + lastSeen en todos los tipos)
   · v4.44: solicitudes Google en Ajustes → Usuarios
-  · v4.43: fix Login Google — solicitud pendiente al admin cuando no hay invitación
 
 ================================================================================
   RESUMEN EJECUTIVO
@@ -85,14 +85,14 @@ HAY DOS APPS EN PARALELO:
   └─ Una sola empresa fija (CPD Getafe)
   └─ Login solo por código de usuario
   └─ Solo recibe BUGS — no recibe nuevas features
-  └─ Versión: v4.17
+  └─ Versión: v4.19
 
   APP NUEVA (desarrollo activo, futura sustitución)
   └─ Multi-empresa (cada empresa tiene sus datos aislados por empresa_id)
   └─ Login por código O por email + contraseña
   └─ Wizard de registro de nuevas empresas
   └─ Aquí van todas las mejoras y nuevas features
-  └─ Versión: v4.41
+  └─ Versión: v4.45
 
 REGLA DE DEPLOY:
   - BUGS      → ambas apps siempre
@@ -200,8 +200,8 @@ git -c credential.helper= push https://padilla585:<TOKEN_GITHUB_VIEJO>@github.co
   VERSIONES ACTUALES Y CHANGELOGS
 ================================================================================
 
-APP VIEJA:  v4.18  (sw.js: alejandra-v4.18 | version.json: {"v":"4.18"})
-APP NUEVA:  v4.41  (sw.js: alejandra-v4.41 | version.json: {"v":"4.41"})
+APP VIEJA:  v4.19  (sw.js: alejandra-v4.19 | version.json: {"v":"4.19"})
+APP NUEVA:  v4.45  (sw.js: alejandra-v4.45 | version.json: {"v":"4.45"})
 
 Historial reciente (app nueva):
   v4.41 [nueva] — Login Google con invitaciones temporales (rol+dept, caduca, 1 uso)
@@ -407,8 +407,8 @@ MULTI-TENANT ROADMAP (app nueva):
   └── NuevaApp\
       ├── index.html              ← Frontend app nueva
       ├── worker.js               ← Worker Cloudflare app nueva
-      ├── sw.js                   ← Service Worker (alejandra-v4.30)
-      ├── version.json            ← {"v":"4.27"}
+      ├── sw.js                   ← Service Worker (alejandra-v4.45)
+      ├── version.json            ← {"v":"4.45"}
       ├── wrangler.toml           ← Config deploy (binding D1 incluido)
       ├── ESTADO_APP.txt          ← Changelog detallado app nueva ← LEER
       └── NUEVA_CUENTA.txt        ← Tokens y credenciales (NO subir a git)

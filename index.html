@@ -2278,6 +2278,8 @@ async function iniciarApp() {
   document.getElementById('appContent').style.display = 'block';
   document.getElementById('bottomNav').style.display = 'flex';
   updateNavPermisos(s);
+  // Resetear historial de navegación al iniciar sesión
+  _navHistory = [];
   // Asegura que el botón físico de atrás (Android) no cierre la app
   if (!history.state?.alejandra) history.pushState({ alejandra: 1 }, '');
 
@@ -2542,7 +2544,10 @@ async function checkConnection() {
 // ══════════════════════════════════════════════════════
 // NAVIGATION
 // ══════════════════════════════════════════════════════
-function showScreen(name) {
+// ── Historial de navegación (stack tipo Android) ─────────────────────────────
+let _navHistory = [];
+
+function _applyScreen(name) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   const el = document.getElementById('screen' + name.charAt(0).toUpperCase() + name.slice(1));
   if (el) el.classList.add('active');
@@ -2551,51 +2556,41 @@ function showScreen(name) {
   const navMap = { home: 'navInicio', ajustes: 'navAjustes', sugerencias: 'navSugerencias' };
   if (navMap[name]) document.getElementById(navMap[name]).classList.add('active');
 
-  if (name === 'ajustes') { renderAjustesInfo(); initAjustesTabs(); }
-  if (name === 'dept')        { const p = document.getElementById('deptPill'); if (p) p.style.display = 'none'; }
-  if (name === 'empresaSel')  { const p = document.getElementById('deptPill'); if (p) p.style.display = 'none'; cargarEmpresasAdmin(); }
+  if (name === 'ajustes')      { renderAjustesInfo(); initAjustesTabs(); }
+  if (name === 'pedidos')      { cargarPedidos(); }
+  if (name === 'herramientas') { herrSelTab(0); }
+  if (name === 'personal')     { personalSelTab(0); }
+  if (name === 'dept' || name === 'empresaSel') {
+    const p = document.getElementById('deptPill'); if (p) p.style.display = 'none';
+  }
+  if (name === 'empresaSel')   { cargarEmpresasAdmin(); }
   actualizarBtnAtras();
+}
+
+function showScreen(name) {
+  // Guardar pantalla actual en el historial antes de cambiar
+  const cur = document.querySelector('.screen.active');
+  if (cur?.id) {
+    const raw = cur.id.replace(/^screen/, '');
+    const curName = raw.charAt(0).toLowerCase() + raw.slice(1);
+    if (curName !== name) _navHistory.push(curName);
+  }
+  _applyScreen(name);
 }
 
 function actualizarBtnAtras() {
   const btn = document.getElementById('btnAtrasHeader');
   if (!btn) return;
-  const s = getSession();
-  if (!s) { btn.style.display = 'none'; return; }
-  const subPantallas = ['screenModule','screenAjustes','screenSugerencias','screenPedidos','screenHerramientas','screenPersonal'];
-  const enSub = subPantallas.some(id => document.getElementById(id)?.classList.contains('active'));
-  // Seguridad para superadmin/empresa_admin: pueden volver al selector de dpto
-  const enSegAdmin = document.getElementById('screenSeguridad')?.classList.contains('active')
-                     && (s.rol === 'superadmin' || s.rol === 'empresa_admin');
-  const enDeptSA = document.getElementById('screenDept')?.classList.contains('active')
-                   && s.rol === 'superadmin';
-  // Superadmin: mostrar atrás en cualquier pantalla excepto empresaSel (que es su raíz)
-  const enEmpresaSel = document.getElementById('screenEmpresaSel')?.classList.contains('active');
-  const saFueraDeRaiz = s.rol === 'superadmin' && !enEmpresaSel;
-  btn.style.display = (enSub || enSegAdmin || enDeptSA || saFueraDeRaiz) ? '' : 'none';
+  btn.style.display = (getSession() && _navHistory.length > 0) ? '' : 'none';
 }
 
 function irAtras() {
   try { closeCamera(); } catch {}
   try { segCloseCamera(); } catch {}
-  // Ocultar FAB de fichajes al salir de screenPersonal
   const fabFichaje = document.getElementById('btnNuevoFichaje');
   if (fabFichaje) fabFichaje.style.display = 'none';
-  const s = getSession();
-  const enDept       = document.getElementById('screenDept')?.classList.contains('active');
-  const enEmpresaSel = document.getElementById('screenEmpresaSel')?.classList.contains('active');
-  if (s?.rol === 'superadmin' && enEmpresaSel) {
-    return; // empresaSel es la raíz del superadmin — atrás no hace nada
-  } else if (s?.rol === 'superadmin' && enDept) {
-    showScreen('empresaSel');
-  } else if (s?.rol === 'superadmin') {
-    showScreen('dept'); // desde sub-pantalla → volver al selector de departamento
-  } else if (s?.rol === 'empresa_admin') {
-    showScreen('dept');
-  } else if (s?.departamento === 'seguridad') {
-    showScreen('seguridad');
-  } else {
-    showScreen('home');
+  if (_navHistory.length > 0) {
+    _applyScreen(_navHistory.pop());
   }
 }
 
@@ -5561,7 +5556,7 @@ async function cargarObrasSelectUsuario() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '4.45';
+const APP_VERSION = '4.46';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes

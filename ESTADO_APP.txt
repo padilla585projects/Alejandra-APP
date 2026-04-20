@@ -5,7 +5,7 @@
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 20/04/2026
-VERSIÓN ACTUAL: v4.18 app vieja | v4.45 app nueva
+VERSIÓN ACTUAL: v4.18 app vieja | v4.46 app nueva
 
 ⚠️  ANTES DE CODIFICAR: leer NuevaApp/IDEAS_PENDIENTES.txt
     Lista completa de bugs activos, mejoras y features pendientes.
@@ -232,6 +232,15 @@ v4.0  |  15/04/2026  [SOLO NUEVA APP]
   - Todos los datos existentes migrados con empresa_id=1 automáticamente
   - Índices creados: idx_*_empresa en tablas principales
   - SW bumpeado a alejandra-v4.0
+
+v4.46  |  20/04/2026  [SOLO NUEVA APP]
+  - Fix botón atrás como historial de navegación (BUG-108)
+    · Nuevo stack _navHistory: showScreen() guarda la pantalla actual antes de cambiar
+    · irAtras() hace pop del stack → siempre vuelve al paso anterior exacto
+    · actualizarBtnAtras() simplificado: visible si hay algo en el stack
+    · _applyScreen() ejecuta inits de pantalla (cargarPedidos, herrSelTab, etc.) también al volver
+    · Stack se resetea al iniciar sesión
+    · Funciona igual para botón físico Android (popstate) que para el botón ← del header
 
 v4.45  |  20/04/2026  [SOLO NUEVA APP]
   - Fix notificaciones no se borran (BUG-109):
