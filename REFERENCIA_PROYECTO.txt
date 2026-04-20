@@ -65,10 +65,9 @@ REGLA DE DEPLOY:
   - En ambos casos: subir versión + actualizar txts + deploy worker + git push
 
 ÚLTIMO CAMBIO REALIZADO:
-  v4.43 [nueva] — 20/04/2026
-  · Fix Login Google: cuando usuario no tiene cuenta ni invitación, ahora crea solicitud
-    pendiente (google_pending=1), avisa al admin por Telegram y devuelve {pendiente:true}
-  · Antes solo devolvía error sin crear ningún registro ni notificar al admin
+  v4.44 [nueva] — 20/04/2026
+  · Solicitudes de acceso Google movidas a Ajustes → Usuarios (antes en Empresa)
+  · v4.43: fix Login Google — crea google_pending=1, avisa Telegram, devuelve {pendiente:true}
   · v4.42: fix botón atrás superadmin, navTo home→empresaSel, fix segGuardarEdicion
 
 ================================================================================
