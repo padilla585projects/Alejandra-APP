@@ -5,7 +5,7 @@
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 20/04/2026
-VERSIÓN ACTUAL: v4.19 app vieja | v4.51 app nueva
+VERSIÓN ACTUAL: v4.19 app vieja | v4.52 app nueva
 
 ⚠️  ANTES DE CODIFICAR: leer NuevaApp/IDEAS_PENDIENTES.txt
     Lista completa de bugs activos, mejoras y features pendientes.
@@ -240,6 +240,13 @@ hotfix  |  20/04/2026  [SOLO NUEVA APP — migración DB sin cambio de código]
     · Fix: ALTER TABLE bobinas/pemp/carretillas ADD COLUMN registrado_por TEXT aplicado en D1
     · App vieja no afectada (ya tenía la columna desde antes)
     · Sin cambio de código ni deploy — solo migración directa en D1
+
+v4.52  |  20/04/2026  [SOLO NUEVA APP]
+  - Botón "✅ Ya fui aprobado — Entrar con Google" en pantalla de login
+    · Aparece solo cuando el usuario intenta entrar con Google y su solicitud está pendiente
+    · Mensaje ámbar mejorado: avisa al usuario de que pulse el botón verde cuando sea aprobado
+    · Al pulsar, inicia un nuevo flujo OAuth (que ya funcionará si el admin aprobó)
+    · El botón se oculta al iniciar cualquier nuevo intento con Google
 
 v4.51  |  20/04/2026  [SOLO NUEVA APP]
   - Sección "🔗 Invitaciones" movida de Ajustes/Empresa a Ajustes/Usuarios

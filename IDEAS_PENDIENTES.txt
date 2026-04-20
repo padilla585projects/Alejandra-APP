@@ -1,7 +1,7 @@
 ================================================================================
   ALEJANDRA APP — IDEAS, MEJORAS Y ERRORES PENDIENTES
   Recogidos de: Canal Telegram @AlejandraAPP_bot
-  Última actualización: 20/04/2026 (v4.51)
+  Última actualización: 20/04/2026 (v4.52)
 
   ⚠️  LEER ESTE ARCHIVO ANTES DE CUALQUIER SESIÓN DE CODIFICACIÓN.
   ⚠️  Marcar como [HECHO vX.XX] cuando se implemente. No borrar las líneas.
@@ -130,6 +130,12 @@ LEYENDA DE ESTADO:
     · BUG-B: handleGoogleCallback referenciaba loginBtn (botón de código) en lugar de
       btnLoginGoogle → el botón de Google quedaba deshabilitado permanentemente tras error.
       Fix: usa btnLoginGoogle, restaura SVG+texto al fallar.
+    · Reportado: 20/04/2026 — Adrian
+
+[✓] MEJ-52 — Botón reintento Google para usuarios pendientes  [HECHO v4.52]
+    · Cuando el usuario intenta entrar sin cuenta (pendiente), aparece botón verde
+      "✅ Ya fui aprobado — Entrar con Google" que inicia un nuevo intento OAuth
+    · El mensaje ámbar avisa explícitamente de que pulse ese botón cuando sea aprobado
     · Reportado: 20/04/2026 — Adrian
 
 [✓] MEJ-51 — Invitaciones en Ajustes/Usuarios  [HECHO v4.51]
