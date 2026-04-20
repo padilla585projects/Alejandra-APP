@@ -2007,7 +2007,7 @@ async function apiCall(path, options = {}) {
     ...(s && !s.token && s.obra_id      ? { 'X-Obra-Id': String(s.obra_id) } : {}),
     ...(s && !s.token && s.nombre       ? { 'X-Usuario': s.nombre } : {}),
     ...(s && !s.token && s.rol          ? { 'X-Rol': s.rol } : {}),
-    ...(s && !s.token && s.departamento ? { 'X-Departamento': s.departamento } : {}),
+    ...(s && s.departamento ? { 'X-Departamento': s.departamento } : {}),
     ...options.headers
   };
   const res = await fetch(base + path, { ...options, headers });
@@ -5278,6 +5278,7 @@ async function checkNotifBadge() {
   } catch {}
   const badge = document.getElementById('notifBadge');
   if (badge) { badge.style.display = count > 0 ? 'flex' : 'none'; badge.textContent = count > 9 ? '9+' : String(count); }
+  cargarBadgeIdeas();
 }
 
 function compartirCodigo() {
@@ -5557,7 +5558,7 @@ async function cargarObrasSelectUsuario() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '4.48';
+const APP_VERSION = '4.49';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -6692,10 +6693,13 @@ if ('serviceWorker' in navigator) {
     document.getElementById('modalFichajeTitulo').textContent = 'Nuevo Fichaje';
     // Poblar obras
     const obrasSel = document.getElementById('fichajeObra');
-    if (obrasSel && window._obras) {
-      obrasSel.innerHTML = '<option value="">— Sin obra —</option>' +
-        window._obras.map(o => `<option value="${o.id}">${o.nombre}</option>`).join('');
-      if (s?.obra_id) obrasSel.value = s.obra_id;
+    if (obrasSel) {
+      try {
+        const obras = await apiCall('/obras').then(r => r.json()).catch(() => []);
+        obrasSel.innerHTML = '<option value="">— Sin obra —</option>' +
+          obras.map(o => `<option value="${o.id}">${o.nombre}</option>`).join('');
+        if (s?.obra_id) obrasSel.value = s.obra_id;
+      } catch {}
     }
     document.getElementById('modalFichaje').classList.add('show');
   }

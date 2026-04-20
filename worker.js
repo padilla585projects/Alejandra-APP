@@ -50,12 +50,17 @@ async function getAuth(request, env) {
         env.DB.prepare('UPDATE sesiones SET last_used = CURRENT_TIMESTAMP WHERE token = ?').bind(xToken).run();
         const isSuperadmin   = sesion.es_admin === 1 || sesion.rol === 'superadmin';
         const isEmpresaAdmin = sesion.rol === 'empresa_admin';
+        // SA y EA pueden cambiar de dept sin hacer logout → preferir cabecera
+        const deptHeader = request.headers.get('X-Departamento');
+        const departamento = (isSuperadmin || isEmpresaAdmin)
+          ? (deptHeader || sesion.departamento || 'electrico')
+          : (sesion.departamento || 'electrico');
         return {
           isAdmin: sesion.es_admin === 1,
           isSuperadmin,
           isEmpresaAdmin,
           isEncargado: sesion.rol === 'encargado',
-          isSeguridad: sesion.departamento === 'seguridad',
+          isSeguridad: departamento === 'seguridad',
           rol: sesion.rol,
           obraId: sesion.obra_id || null,
           obra_id: sesion.obra_id || null,
@@ -63,7 +68,7 @@ async function getAuth(request, env) {
           usuario: sesion.nombre || '',
           nombre: sesion.nombre || '',
           codigo: '',
-          departamento: sesion.departamento || 'electrico',
+          departamento,
           empresa_id: sesion.empresa_id || 1,
         };
       }
