@@ -1,7 +1,7 @@
 ================================================================================
   ALEJANDRA APP — IDEAS, MEJORAS Y ERRORES PENDIENTES
   Recogidos de: Canal Telegram @AlejandraAPP_bot
-  Última actualización: 20/04/2026 (v4.55)
+  Última actualización: 20/04/2026 (v4.55) — añadidos BUG-116/118/120/122/123/124/125, MEJ-07→12, NEW-12
 
   ⚠️  LEER ESTE ARCHIVO ANTES DE CUALQUIER SESIÓN DE CODIFICACIÓN.
   ⚠️  Marcar como [HECHO vX.XX] cuando se implemente. No borrar las líneas.
@@ -155,6 +155,39 @@ LEYENDA DE ESTADO:
     · Fix: (empresas.empresas || []) → (Array.isArray(empresas) ? empresas : [])
     · Reportado: 20/04/2026 — Adrian
 
+[ ] BUG-116 — Pedidos siguen mezclándose entre departamentos (#116)
+    · Los pedidos de distintos departamentos de la misma empresa se ven entre sí.
+    · Cada departamento debería ver únicamente sus propios pedidos.
+    · Reportado: 20/04/2026 — Adrian, CPD Getafe
+
+[ ] BUG-118 — Los kits no aparecen en el inventario de herramientas (#118)
+    · En el departamento Herramientas, los kits creados no se muestran en la pestaña Inventario.
+    · Reportado: 20/04/2026 — Adrian, CPD Getafe
+
+[ ] BUG-120 — Editar herramienta en inventario no funciona (#120)
+    · El botón de editar en el inventario de herramientas no lleva a la edición del objeto.
+    · Reportado: 20/04/2026 — Adrian, CPD Getafe
+
+[ ] BUG-122 — Pestaña "Ideas" parpadea cada X tiempo (#122)
+    · Mientras se está en la pestaña Ideas, la pantalla parpadea periódicamente.
+    · Probablemente causado por el auto-refresh de 30s que recarga el DOM entero.
+    · Reportado: 20/04/2026 — Adrian, mecánicas
+
+[ ] BUG-123 — La app tarda mucho en cargar al abrirse (#123)
+    · El tiempo de carga inicial es demasiado elevado.
+    · Investigar: splash screen demasiado largo, fetch encadenados al arranque, SW frío.
+    · Reportado: 20/04/2026 — Adrian, CPD Getafe
+
+[ ] BUG-124 — Herramientas no filtra por obras — URGENTE (#124)
+    · Cada obra debería tener su propio inventario de herramientas independiente.
+    · Actualmente todas las obras comparten el mismo inventario de herramientas.
+    · Reportado: 20/04/2026 — Adrian, CPD Getafe
+
+[ ] BUG-125 — Barra superior: nombre de obra sigue sin verse bien (#125)
+    · El icono de Superadmin ocupa demasiado espacio y no deja ver el nombre de obra.
+    · Propuesta: icono SA más pequeño o solo iniciales "SA", optimizar espacio.
+    · Reportado: 20/04/2026 — Adrian, CPD Getafe
+
 [ ] NEW-02 — Wizard de bienvenida (onboarding primera vez)
     · Al abrir la app por primera vez: wizard guiado.
     · Pasos: configurar cuenta nueva o usuario existente,
@@ -188,6 +221,37 @@ LEYENDA DE ESTADO:
       Fallback a texto por WhatsApp si el navegador no soporta file sharing.
     · Reportado: 18/04/2026 — Adrian, CPD Getafe
 
+[ ] MEJ-07 — Notificaciones clickables que lleven a la sección correspondiente (#107)
+    · Al pulsar una notificación (ej: pedido pendiente) debe navegar al pedido concreto.
+    · Implementar navegación contextual desde el panel de notificaciones.
+    · Reportado: 19/04/2026 — Adrian, CPD Getafe
+
+[ ] MEJ-08 — Wizard para configurar departamentos por empresa (#121)
+    · Cada empresa debería poder elegir qué departamentos utiliza (los no usados se ocultan).
+    · Ej: empresa Edison no usa Mecánicas → no debería verlo.
+    · Relacionado con NEW-02 (wizard onboarding).
+    · Reportado: 20/04/2026 — Adrian, CPD Getafe
+
+[ ] MEJ-09 — Historial filtrado por departamento (#80)
+    · Dentro de un departamento: mostrar solo el historial de ese departamento.
+    · Desde la pantalla principal (superadmin/admin): mostrar todo con etiqueta de departamento.
+    · Reportado: 18/04/2026 — Adrian, CPD Getafe
+
+[ ] MEJ-10 — "Añadir nueva" directo al escanear herramienta inexistente (#119)
+    · Si al escanear/buscar una herramienta no existe en el inventario,
+      ofrecer la opción "Añadir nueva herramienta" directamente en el desplegable.
+    · Reportado: 20/04/2026 — Adrian, CPD Getafe
+
+[ ] MEJ-11 — Asignar horario de trabajo a obras para fichar más rápido (#115)
+    · Cada obra tendría su horario configurado (entrada/salida habitual).
+    · Al fichar, el horario se pre-rellena automáticamente.
+    · También incluir lista de personal habitual de la obra para selección rápida.
+    · Reportado: 20/04/2026 — Adrian, CPD Getafe
+
+[ ] MEJ-12 — Adjuntar fotos en el log de Ideas para reportar bugs (#126)
+    · Al enviar una sugerencia/bug desde la app, permitir adjuntar una captura de pantalla.
+    · Reportado: 20/04/2026 — Adrian, CPD Getafe
+
 [ ] NEW-08 — Chat interno entre empleados de la misma empresa
     · Canal de chat dentro de la app, filtrado por empresa.
     · Reportado: 18/04/2026 — Adrian, CPD Getafe
@@ -197,6 +261,11 @@ LEYENDA DE ESTADO:
     · Panel con pedidos pendientes, PEMP/carretillas averiadas, material próximo a caducar.
     · Polling cada 60s. Badge desaparece al abrir el panel.
     · Reportado: 18/04/2026 — Adrian, CPD Getafe
+
+[ ] NEW-12 — Soporte NFC en pestaña Escanear (#113)
+    · Añadir opción para leer/escribir tags NFC al agregar o devolver equipos/herramientas.
+    · Complementario al QR y OCR ya existentes.
+    · Reportado: 20/04/2026 — Adrian, CPD Getafe
 
 [ ] NEW-10 — Planes de precios
     · Definir modelo de negocio y cómo implementar planes de pago para la app.
