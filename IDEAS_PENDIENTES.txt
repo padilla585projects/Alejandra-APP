@@ -1,7 +1,7 @@
 ================================================================================
   ALEJANDRA APP — IDEAS, MEJORAS Y ERRORES PENDIENTES
   Recogidos de: Canal Telegram @AlejandraAPP_bot
-  Última actualización: 20/04/2026 (v4.44)
+  Última actualización: 20/04/2026 (v4.51)
 
   ⚠️  LEER ESTE ARCHIVO ANTES DE CUALQUIER SESIÓN DE CODIFICACIÓN.
   ⚠️  Marcar como [HECHO vX.XX] cuando se implemente. No borrar las líneas.
@@ -113,6 +113,31 @@ LEYENDA DE ESTADO:
     · Notificaciones in-app para admins cuando hay solicitudes pendientes.
     · Secrets configurados: GOOGLE_OAUTH_CLIENT_ID + GOOGLE_OAUTH_CLIENT_SECRET.
     · Reportado: 18/04/2026 — Adrian, CPD Getafe
+
+[✓] BUG-114/111 — No se puede seleccionar obra en Fichajes  [HECHO v4.49]
+    · window._obras nunca se asignaba → abrirFormFichaje hace fetch /obras directamente
+
+[✓] BUG-64 — Badge de Ideas no se actualiza en background  [HECHO v4.49]
+    · cargarBadgeIdeas() añadido al polling de checkNotifBadge() (cada 60s)
+
+[✓] BUG-66/63 — Inventarios no filtran por departamento para empresa_admin/SA  [HECHO v4.49]
+    · apiCall siempre manda X-Departamento; getAuth lo usa como override para SA/EA
+
+[✓] BUG-112 — Login con Google no funcionaba  [HECHO v4.50]
+    · BUG-A: checkVersionAndUpdate() hacía location.replace() mientras el callback OAuth
+      esperaba respuesta → eliminaba el ?code de la URL antes de que se procesara.
+      Fix: si location.search contiene ?code, se omite el reload de versión.
+    · BUG-B: handleGoogleCallback referenciaba loginBtn (botón de código) en lugar de
+      btnLoginGoogle → el botón de Google quedaba deshabilitado permanentemente tras error.
+      Fix: usa btnLoginGoogle, restaura SVG+texto al fallar.
+    · Reportado: 20/04/2026 — Adrian
+
+[✓] MEJ-51 — Invitaciones en Ajustes/Usuarios  [HECHO v4.51]
+    · La sección "🔗 Invitaciones" estaba en Ajustes/Empresa → movida a Ajustes/Usuarios
+    · Lógica de visibilidad y carga (cargarInvitaciones) movida a selAjTab('usuarios')
+    · Verificado flujo Google nuevo usuario sin invitación: crea pendiente, notifica Telegram,
+      frontend muestra mensaje ámbar, campana 🔔 avisa al admin. Todo OK.
+    · Reportado: 20/04/2026 — Adrian
 
 [ ] NEW-02 — Wizard de bienvenida (onboarding primera vez)
     · Al abrir la app por primera vez: wizard guiado.

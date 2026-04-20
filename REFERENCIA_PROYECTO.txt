@@ -65,10 +65,11 @@ REGLA DE DEPLOY:
   - En ambos casos: subir versión + actualizar txts + deploy worker + git push
 
 ÚLTIMO CAMBIO REALIZADO:
-  v4.47 [nueva] — 20/04/2026
-  · Fix 4 bugs en Log de Ideas (leida=1 al resolver todo, empresa_admin puede borrar,
-    badge Ideas para empresa_admin, auth en marcarSugerenciaLeida)
-  · v4.46: fix botón atrás como historial tipo Android (_navHistory stack)
+  v4.51 [nueva] — 20/04/2026
+  · Sección Invitaciones movida de Ajustes/Empresa a Ajustes/Usuarios
+  · Flujo Google nuevo usuario (sin invitación) verificado end-to-end: OK
+  · v4.50: fix Google login — race condition version-check + botón incorrecto
+  · v4.49: fix obra fichajes, badge Ideas en polling, filtro dept SA/EA
   · v4.45: fix notificaciones no se borran (botón Borrar + lastSeen en todos los tipos)
 
 ================================================================================
