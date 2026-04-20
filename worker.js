@@ -1534,6 +1534,8 @@ async function getSugerencias(request, env) {
 }
 
 async function marcarSugerenciaLeida(id, request, env) {
+  const { isSuperadmin, isEmpresaAdmin } = await getAuth(request, env);
+  if (!isSuperadmin && !isEmpresaAdmin) return err('No autorizado', 403);
   const body    = await request.json().catch(() => ({}));
   const estado   = body.estado   || null;
   const respuesta = body.respuesta ?? null;
@@ -1547,8 +1549,8 @@ async function marcarSugerenciaLeida(id, request, env) {
 }
 
 async function eliminarSugerencia(id, request, env) {
-  const { isSuperadmin } = await getAuth(request, env);
-  if (!isSuperadmin) return err('No autorizado', 403);
+  const { isSuperadmin, isEmpresaAdmin } = await getAuth(request, env);
+  if (!isSuperadmin && !isEmpresaAdmin) return err('No autorizado', 403);
   await env.DB.prepare('DELETE FROM sugerencias WHERE id = ?').bind(id).run();
   return json({ ok: true });
 }
@@ -1556,7 +1558,7 @@ async function eliminarSugerencia(id, request, env) {
 async function marcarTodasSugerencias(request, env) {
   const { isSuperadmin, isEmpresaAdmin, empresa_id } = await getAuth(request, env);
   if (!isSuperadmin && !isEmpresaAdmin) return err('No autorizado', 403);
-  await env.DB.prepare("UPDATE sugerencias SET estado='resuelto' WHERE empresa_id = ? AND estado != 'resuelto'").bind(empresa_id).run();
+  await env.DB.prepare("UPDATE sugerencias SET estado='resuelto', leida=1 WHERE empresa_id = ? AND estado != 'resuelto'").bind(empresa_id).run();
   return json({ ok: true });
 }
 

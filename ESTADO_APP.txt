@@ -5,7 +5,7 @@
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 20/04/2026
-VERSIÓN ACTUAL: v4.19 app vieja | v4.46 app nueva
+VERSIÓN ACTUAL: v4.19 app vieja | v4.47 app nueva
 
 ⚠️  ANTES DE CODIFICAR: leer NuevaApp/IDEAS_PENDIENTES.txt
     Lista completa de bugs activos, mejoras y features pendientes.
@@ -232,6 +232,13 @@ v4.0  |  15/04/2026  [SOLO NUEVA APP]
   - Todos los datos existentes migrados con empresa_id=1 automáticamente
   - Índices creados: idx_*_empresa en tablas principales
   - SW bumpeado a alejandra-v4.0
+
+v4.47  |  20/04/2026  [SOLO NUEVA APP]
+  - Fix Log de Ideas: 4 bugs
+    · BUG-A: "Todo leído" ahora también pone leida=1 (antes las ideas seguían con badge NUEVA)
+    · BUG-B: empresa_admin ya puede borrar ideas individuales (antes recibía 403)
+    · BUG-C: badge de Ideas ahora se carga también para empresa_admin (antes solo superadmin)
+    · BUG-D: marcarSugerenciaLeida ahora requiere auth (antes cualquiera podía cambiar estado)
 
 v4.46  |  20/04/2026  [SOLO NUEVA APP]
   - Fix botón atrás como historial de navegación (BUG-108)

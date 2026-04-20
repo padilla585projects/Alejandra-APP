@@ -4944,7 +4944,7 @@ function initAjustesTabs() {
 // ══════════════════════════════════════════════════════
 async function cargarBadgeIdeas() {
   const s = getSession();
-  if (s?.rol !== 'superadmin') return;
+  if (s?.rol !== 'superadmin' && s?.rol !== 'empresa_admin') return;
   try {
     const res = await apiCall('/sugerencias?estado=pendiente');
     if (!res.ok) return;
@@ -5556,7 +5556,7 @@ async function cargarObrasSelectUsuario() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '4.46';
+const APP_VERSION = '4.47';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
