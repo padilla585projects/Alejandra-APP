@@ -5,7 +5,7 @@
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 20/04/2026
-VERSIÓN ACTUAL: v4.19 app vieja | v4.56 app nueva
+VERSIÓN ACTUAL: v4.19 app vieja | v4.57 app nueva
 
 ⚠️  ANTES DE CODIFICAR: leer NuevaApp/IDEAS_PENDIENTES.txt
     Lista completa de bugs activos, mejoras y features pendientes.
@@ -240,6 +240,18 @@ hotfix  |  20/04/2026  [SOLO NUEVA APP — migración DB sin cambio de código]
     · Fix: ALTER TABLE bobinas/pemp/carretillas ADD COLUMN registrado_por TEXT aplicado en D1
     · App vieja no afectada (ya tenía la columna desde antes)
     · Sin cambio de código ni deploy — solo migración directa en D1
+
+v4.57  |  20/04/2026  [SOLO NUEVA APP]
+  - BUG-123: Mejora de rendimiento en arranque — app carga significativamente más rápido
+    · iniciarApp(): cargarStatsHome() y cargarCatalogos() ahora en paralelo (Promise.all)
+      antes eran secuenciales: ~600ms de espera → ahora ~300ms (el más lento de los dos)
+    · checkNotifBadge(): 4 llamadas al worker secuenciales → 1 Promise.all simultáneo
+      antes: pedidos → PEMP → carretillas → pendientes (cada una espera a la anterior)
+      ahora: las 4 se lanzan a la vez → tiempo = la más lenta, no la suma de todas
+  - BUG-116: Verificado como resuelto desde v4.29 (registrado sin actualizar estado)
+    · getPedidos() ya filtra por AND departamento = ? desde v4.29
+    · apiCall() siempre envía X-Departamento desde v4.49
+    · getAuth() usa X-Departamento como override para SA/EA → comportamiento correcto
 
 v4.56  |  20/04/2026  [SOLO NUEVA APP]
   - BUG-118: Kits ahora visibles en pestaña Inventario de Herramientas

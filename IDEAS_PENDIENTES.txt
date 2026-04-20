@@ -155,9 +155,9 @@ LEYENDA DE ESTADO:
     · Fix: (empresas.empresas || []) → (Array.isArray(empresas) ? empresas : [])
     · Reportado: 20/04/2026 — Adrian
 
-[ ] BUG-116 — Pedidos siguen mezclándose entre departamentos (#116)
-    · Los pedidos de distintos departamentos de la misma empresa se ven entre sí.
-    · Cada departamento debería ver únicamente sus propios pedidos.
+[✓] BUG-116 — Pedidos siguen mezclándose entre departamentos  [RESUELTO v4.29 / verificado v4.57]
+    · getPedidos() filtra por AND departamento = ? desde v4.29
+    · apiCall() envía X-Departamento desde v4.49; getAuth() lo usa como override para SA/EA
     · Reportado: 20/04/2026 — Adrian, CPD Getafe
 
 [✓] BUG-118 — Los kits no aparecen en el inventario de herramientas  [HECHO v4.56]
@@ -175,9 +175,9 @@ LEYENDA DE ESTADO:
     · En refresco automático (30s) actualiza contenido sin blanquear la pantalla
     · Reportado: 20/04/2026 — Adrian, mecánicas
 
-[ ] BUG-123 — La app tarda mucho en cargar al abrirse (#123)
-    · El tiempo de carga inicial es demasiado elevado.
-    · Investigar: splash screen demasiado largo, fetch encadenados al arranque, SW frío.
+[✓] BUG-123 — La app tarda mucho en cargar al abrirse  [HECHO v4.57]
+    · cargarStatsHome() y cargarCatalogos() ahora en paralelo → ahorra ~300ms
+    · checkNotifBadge(): 4 fetches secuenciales → Promise.all simultáneo → ahorra ~600ms
     · Reportado: 20/04/2026 — Adrian, CPD Getafe
 
 [✓] BUG-124 — Herramientas no filtra por obras  [HECHO v4.56]

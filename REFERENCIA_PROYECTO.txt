@@ -65,9 +65,9 @@ REGLA DE DEPLOY:
   - En ambos casos: subir versión + actualizar txts + deploy worker + git push
 
 ÚLTIMO CAMBIO REALIZADO:
-  v4.56 [nueva] — 20/04/2026
-  · BUG-118: kits visibles en inventario herramientas
-  · BUG-120: botón editar directo en inventario
+  v4.57 [nueva] — 20/04/2026
+  · BUG-123: arranque más rápido — Promise.all en iniciarApp() y checkNotifBadge()
+  · BUG-116: verificado como resuelto desde v4.29
   · BUG-122: Ideas ya no parpadea en auto-refresh
   · BUG-124: herramientas/kits filtran por obra activa (worker + frontend)
   · BUG-125: header SA más compacto ('SA' en lugar de 'SuperAdmin')

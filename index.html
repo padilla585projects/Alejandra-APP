@@ -2340,8 +2340,7 @@ async function iniciarApp() {
   }
 
   showScreen('home');
-  await cargarStatsHome();
-  await cargarCatalogos();
+  await Promise.all([cargarStatsHome(), cargarCatalogos()]);
   if (esSuperAdmin || esEmpresaAdmin) {
     cargarBadgeIdeas();
     cargarObrasSelectUsuario();
@@ -5267,24 +5266,17 @@ async function checkNotifBadge() {
   const lastSeen = new Date(parseInt(localStorage.getItem(NOTIF_SEEN_KEY) || '0')).toISOString().slice(0, 16);
   const hace48h  = new Date(Date.now() - 48 * 3600 * 1000).toISOString().slice(0, 16);
   let count = 0;
-  try {
-    const peds = await apiCall('/pedidos?estado=pendiente').then(r => r.json()).catch(() => []);
-    count += (Array.isArray(peds) ? peds : []).filter(p => (p.created_at||'') >= hace48h && (p.created_at||'') > lastSeen).length;
-  } catch {}
-  try {
-    const pemp = await apiCall('/pemp?estado=Averiada').then(r => r.json()).catch(() => []);
-    count += (Array.isArray(pemp) ? pemp : []).filter(p => (p.fecha_averia||p.created_at||'') > lastSeen).length;
-  } catch {}
-  try {
-    const carrs = await apiCall('/carretillas?estado=Averiada').then(r => r.json()).catch(() => []);
-    count += (Array.isArray(carrs) ? carrs : []).filter(c => (c.fecha_averia||c.created_at||'') > lastSeen).length;
-  } catch {}
-  try {
-    if (s?.rol === 'superadmin' || s?.rol === 'empresa_admin') {
-      const pend = await apiCall('/usuarios/pendientes').then(r => r.json()).catch(() => ({ pendientes: [] }));
-      count += (pend.pendientes || []).length;
-    }
-  } catch {}
+  const isAdmin = s?.rol === 'superadmin' || s?.rol === 'empresa_admin';
+  const [peds, pemp, carrs, pend] = await Promise.all([
+    apiCall('/pedidos?estado=pendiente').then(r => r.json()).catch(() => []),
+    apiCall('/pemp?estado=Averiada').then(r => r.json()).catch(() => []),
+    apiCall('/carretillas?estado=Averiada').then(r => r.json()).catch(() => []),
+    isAdmin ? apiCall('/usuarios/pendientes').then(r => r.json()).catch(() => ({ pendientes: [] })) : Promise.resolve({ pendientes: [] })
+  ]);
+  count += (Array.isArray(peds)  ? peds  : []).filter(p => (p.created_at||'') >= hace48h && (p.created_at||'') > lastSeen).length;
+  count += (Array.isArray(pemp)  ? pemp  : []).filter(p => (p.fecha_averia||p.created_at||'') > lastSeen).length;
+  count += (Array.isArray(carrs) ? carrs : []).filter(c => (c.fecha_averia||c.created_at||'') > lastSeen).length;
+  count += (pend.pendientes || []).length;
   const badge = document.getElementById('notifBadge');
   if (badge) { badge.style.display = count > 0 ? 'flex' : 'none'; badge.textContent = count > 9 ? '9+' : String(count); }
   cargarBadgeIdeas();
@@ -5567,7 +5559,7 @@ async function cargarObrasSelectUsuario() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '4.56';
+const APP_VERSION = '4.57';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
