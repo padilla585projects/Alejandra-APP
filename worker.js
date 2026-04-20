@@ -3335,8 +3335,19 @@ async function googleAuthCallback(request, env) {
       return json({ ok: true, token, nombre: gUser.name || gUser.email, rol: inv.rol, departamento: inv.departamento || null, empresa_id: inv.empresa_id, empresa_nombre: empresa?.nombre || '', obra_id: null, obra_nombre: null });
     }
 
-    // Sin invitación: acceso denegado
-    return json({ ok: false, sin_invitacion: true, msg: 'Necesitas un enlace de invitación para registrarte. Contacta con tu administrador.' });
+    // Sin invitación: crear solicitud pendiente para que el admin la apruebe
+    const yaExiste = await env.DB.prepare(
+      'SELECT id FROM usuarios WHERE LOWER(email) = LOWER(?) AND google_pending = 1 AND activo = 0 LIMIT 1'
+    ).bind(gUser.email).first();
+    if (yaExiste) {
+      return json({ ok: false, pendiente: true, msg: 'Tu solicitud ya está pendiente de aprobación. El administrador la revisará pronto.' });
+    }
+    const codigoPend = 'g_pend_' + Date.now();
+    await env.DB.prepare(
+      'INSERT INTO usuarios (nombre, codigo, rol, departamento, activo, google_pending, email, empresa_id) VALUES (?,?,NULL,NULL,0,1,?,NULL)'
+    ).bind(gUser.name || gUser.email, codigoPend, gUser.email).run();
+    await sendTelegram(env, `🔔 <b>Solicitud de acceso con Google</b>\n👤 ${gUser.name || gUser.email}\n📧 ${gUser.email}\nRevisar en Ajustes → Empresa → Solicitudes pendientes`);
+    return json({ ok: false, pendiente: true, msg: 'Solicitud enviada correctamente. El administrador debe aprobarla para que puedas acceder.' });
   }
 
   // Crear sesión

@@ -65,12 +65,11 @@ REGLA DE DEPLOY:
   - En ambos casos: subir versión + actualizar txts + deploy worker + git push
 
 ÚLTIMO CAMBIO REALIZADO:
-  v4.41 [nueva] — 19/04/2026
-  · NEW-01: Login Google completo — invitaciones temporales (15min–4h), rol+dept por invitación
-  · Sistema: admin genera enlace → usuario entra con Google → alta automática
-  · DB: tabla invitaciones + columna google_pending en usuarios
-  · Ajustes → Empresa: sección Invitaciones (generar, copiar, anular)
-  · Notificaciones in-app para admins con solicitudes pendientes
+  v4.43 [nueva] — 20/04/2026
+  · Fix Login Google: cuando usuario no tiene cuenta ni invitación, ahora crea solicitud
+    pendiente (google_pending=1), avisa al admin por Telegram y devuelve {pendiente:true}
+  · Antes solo devolvía error sin crear ningún registro ni notificar al admin
+  · v4.42: fix botón atrás superadmin, navTo home→empresaSel, fix segGuardarEdicion
 
 ================================================================================
   RESUMEN EJECUTIVO

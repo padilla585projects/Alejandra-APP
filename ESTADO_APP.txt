@@ -4,8 +4,8 @@
   Ruta local: <RUTA_BASE>\Bobinaap
 ================================================================================
 
-ÚLTIMA ACTUALIZACIÓN: 19/04/2026
-VERSIÓN ACTUAL: v4.18 app vieja | v4.41 app nueva
+ÚLTIMA ACTUALIZACIÓN: 20/04/2026
+VERSIÓN ACTUAL: v4.18 app vieja | v4.43 app nueva
 
 ⚠️  ANTES DE CODIFICAR: leer NuevaApp/IDEAS_PENDIENTES.txt
     Lista completa de bugs activos, mejoras y features pendientes.
@@ -232,6 +232,19 @@ v4.0  |  15/04/2026  [SOLO NUEVA APP]
   - Todos los datos existentes migrados con empresa_id=1 automáticamente
   - Índices creados: idx_*_empresa en tablas principales
   - SW bumpeado a alejandra-v4.0
+
+v4.43  |  20/04/2026  [SOLO NUEVA APP]
+  - Fix Login Google: solicitud pendiente al admin cuando el usuario no tiene cuenta ni invitación
+    · Antes: devolvía error "sin_invitacion" sin crear registro ni avisar al admin
+    · Ahora: crea usuario con google_pending=1, avisa al admin por Telegram, devuelve {pendiente:true}
+    · Si ya hay una solicitud pendiente del mismo email, informa al usuario en lugar de duplicar
+    · El admin aprueba/rechaza desde Ajustes → Empresa → Solicitudes pendientes
+  - Bump versión a v4.43 (sw.js, version.json, APP_VERSION, versionBadge)
+
+v4.42  |  19/04/2026  [SOLO NUEVA APP]
+  - Fix botón atrás para superadmin: sub-pantalla → selector de departamento (dept)
+  - Fix navTo('home') para superadmin → va a empresaSel (selector de empresas)
+  - Fix segGuardarEdicion → llama a segCargarInv() en lugar de cargarInventarioSeg()
 
 v4.41  |  19/04/2026  [SOLO NUEVA APP]
   - NEW-01: Login con Google OAuth — sistema completo con invitaciones temporales
