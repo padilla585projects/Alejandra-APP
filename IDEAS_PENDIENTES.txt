@@ -132,6 +132,11 @@ LEYENDA DE ESTADO:
       Fix: usa btnLoginGoogle, restaura SVG+texto al fallar.
     · Reportado: 20/04/2026 — Adrian
 
+[✓] BUG-113 — Error 400 redirect_uri_mismatch al iniciar sesión con Google  [HECHO v4.53]
+    · redirect_uri calculada dinámicamente fallaba si la URL no era exacta
+    · Fix: hardcodeada a la URL de producción en loginConGoogle() y handleGoogleCallback()
+    · Reportado: 20/04/2026 — Katherine
+
 [✓] MEJ-52 — Botón reintento Google para usuarios pendientes  [HECHO v4.52]
     · Cuando el usuario intenta entrar sin cuenta (pendiente), aparece botón verde
       "✅ Ya fui aprobado — Entrar con Google" que inicia un nuevo intento OAuth
