@@ -1,7 +1,7 @@
 ================================================================================
   ALEJANDRA APP — REFERENCIA COMPLETA DEL PROYECTO
   Leer este archivo AL INICIO de cada sesión para continuar sin problemas.
-  Última actualización: 18/04/2026
+  Última actualización: 20/04/2026
   ⚠️  NORMA: actualizar ESTE archivo + ESTADO_APP.txt después de CADA cambio.
 ================================================================================
 
@@ -65,10 +65,10 @@ REGLA DE DEPLOY:
   - En ambos casos: subir versión + actualizar txts + deploy worker + git push
 
 ÚLTIMO CAMBIO REALIZADO:
-  v4.44 [nueva] — 20/04/2026
-  · Solicitudes de acceso Google movidas a Ajustes → Usuarios (antes en Empresa)
-  · v4.43: fix Login Google — crea google_pending=1, avisa Telegram, devuelve {pendiente:true}
-  · v4.42: fix botón atrás superadmin, navTo home→empresaSel, fix segGuardarEdicion
+  v4.45 [nueva] — 20/04/2026
+  · Fix notificaciones: botón "Borrar" + checkNotifBadge filtra por lastSeen en todos los tipos
+  · v4.44: solicitudes Google en Ajustes → Usuarios
+  · v4.43: fix Login Google — solicitud pendiente al admin cuando no hay invitación
 
 ================================================================================
   RESUMEN EJECUTIVO

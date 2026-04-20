@@ -499,7 +499,10 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
 <div id="notifPanel">
   <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--border);flex-shrink:0">
     <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:15px">🔔 Notificaciones</div>
-    <button onclick="cerrarNotificaciones()" style="background:var(--surface2);border:none;border-radius:50%;width:32px;height:32px;font-size:18px;cursor:pointer;color:var(--text)">×</button>
+    <div style="display:flex;gap:8px;align-items:center">
+      <button onclick="borrarNotificaciones()" style="background:var(--surface2);border:none;border-radius:8px;padding:5px 10px;font-size:12px;cursor:pointer;color:var(--muted)">🗑 Borrar</button>
+      <button onclick="cerrarNotificaciones()" style="background:var(--surface2);border:none;border-radius:50%;width:32px;height:32px;font-size:18px;cursor:pointer;color:var(--text)">×</button>
+    </div>
   </div>
   <div id="notifList" style="flex:1;overflow-y:auto"></div>
 </div>
@@ -5192,6 +5195,12 @@ function cerrarNotificaciones() {
   document.getElementById('notifPanel')?.classList.remove('show');
 }
 
+function borrarNotificaciones() {
+  localStorage.setItem(NOTIF_SEEN_KEY, Date.now());
+  document.getElementById('notifBadge').style.display = 'none';
+  document.getElementById('notifList').innerHTML = '<div style="color:var(--muted);font-size:13px;text-align:center;padding:32px">✅ Sin notificaciones pendientes</div>';
+}
+
 async function cargarNotificaciones() {
   const el = document.getElementById('notifList');
   if (!el) return;
@@ -5259,17 +5268,16 @@ async function checkNotifBadge() {
   } catch {}
   try {
     const pemp = await apiCall('/pemp?estado=Averiada').then(r => r.json()).catch(() => []);
-    count += (Array.isArray(pemp) ? pemp : []).length;
+    count += (Array.isArray(pemp) ? pemp : []).filter(p => (p.fecha_averia||p.created_at||'') > lastSeen).length;
   } catch {}
   try {
     const carrs = await apiCall('/carretillas?estado=Averiada').then(r => r.json()).catch(() => []);
-    count += (Array.isArray(carrs) ? carrs : []).length;
+    count += (Array.isArray(carrs) ? carrs : []).filter(c => (c.fecha_averia||c.created_at||'') > lastSeen).length;
   } catch {}
   try {
-    const s = getSession();
     if (s?.rol === 'superadmin' || s?.rol === 'empresa_admin') {
       const pend = await apiCall('/usuarios/pendientes').then(r => r.json()).catch(() => ({ pendientes: [] }));
-      count += (pend.pendientes || []).length;
+      count += (pend.pendientes || []).filter(u => (u.created_at||'') > lastSeen).length;
     }
   } catch {}
   const badge = document.getElementById('notifBadge');
@@ -5553,7 +5561,7 @@ async function cargarObrasSelectUsuario() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '4.44';
+const APP_VERSION = '4.45';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes

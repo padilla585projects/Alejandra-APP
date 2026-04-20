@@ -5,7 +5,7 @@
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 20/04/2026
-VERSIÓN ACTUAL: v4.19 app vieja | v4.44 app nueva
+VERSIÓN ACTUAL: v4.18 app vieja | v4.45 app nueva
 
 ⚠️  ANTES DE CODIFICAR: leer NuevaApp/IDEAS_PENDIENTES.txt
     Lista completa de bugs activos, mejoras y features pendientes.
@@ -232,6 +232,13 @@ v4.0  |  15/04/2026  [SOLO NUEVA APP]
   - Todos los datos existentes migrados con empresa_id=1 automáticamente
   - Índices creados: idx_*_empresa en tablas principales
   - SW bumpeado a alejandra-v4.0
+
+v4.45  |  20/04/2026  [SOLO NUEVA APP]
+  - Fix notificaciones no se borran (BUG-109):
+    · Botón "🗑 Borrar" en header del panel → actualiza lastSeen y limpia la lista
+    · checkNotifBadge() ahora filtra PEMP, carretillas y solicitudes por lastSeen
+      (antes solo filtraba pedidos — PEMP/carretillas siempre sumaban al badge)
+    · Al abrir el panel el badge desaparece y no vuelve hasta que hay algo nuevo
 
 v4.44  |  20/04/2026  [SOLO NUEVA APP]
   - Solicitudes de acceso Google movidas de Ajustes/Empresa a Ajustes/Usuarios
