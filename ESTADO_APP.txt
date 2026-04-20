@@ -5,7 +5,7 @@
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 20/04/2026
-VERSIÓN ACTUAL: v4.19 app vieja | v4.48 app nueva
+VERSIÓN ACTUAL: v4.19 app vieja | v4.50 app nueva
 
 ⚠️  ANTES DE CODIFICAR: leer NuevaApp/IDEAS_PENDIENTES.txt
     Lista completa de bugs activos, mejoras y features pendientes.
@@ -240,6 +240,29 @@ hotfix  |  20/04/2026  [SOLO NUEVA APP — migración DB sin cambio de código]
     · Fix: ALTER TABLE bobinas/pemp/carretillas ADD COLUMN registrado_por TEXT aplicado en D1
     · App vieja no afectada (ya tenía la columna desde antes)
     · Sin cambio de código ni deploy — solo migración directa en D1
+
+v4.50  |  20/04/2026  [SOLO NUEVA APP]
+  - FIX #112: Login con Google no funcionaba — 2 bugs:
+    · BUG-A (crítico): checkVersionAndUpdate() se lanzaba en paralelo al callback de Google;
+      si había mismatch de versión, location.replace() eliminaba el ?code de la URL
+      antes de que el callback terminara → login perdido silenciosamente
+      Fix: si location.search contiene ?code, se omite el reload de versión
+    · BUG-B: handleGoogleCallback referenciaba loginBtn (botón de código) en lugar de
+      btnLoginGoogle → el botón de Google quedaba deshabilitado tras cualquier error
+      Fix: usa btnLoginGoogle correctamente, restaura SVG+texto al fallar
+  - DB: sugerencia #112 marcada como resuelto
+
+v4.49  |  20/04/2026  [SOLO NUEVA APP]
+  - FIX #114/#111: obra en fichajes siempre vacía
+    · window._obras nunca se asignaba → select solo mostraba "Sin obra"
+    · Fix: abrirFormFichaje() hace fetch /obras directamente
+  - FIX #64: badge de Ideas no se actualizaba en background
+    · cargarBadgeIdeas() añadido al final de checkNotifBadge() (polling 60s)
+  - FIX #66/#63: inventarios no filtraban por departamento para SA/empresa_admin
+    · apiCall siempre manda X-Departamento (antes solo sin token)
+    · getAuth: SA y empresa_admin usan X-Departamento si presente (pueden cambiar dept)
+    · Usuarios normales siguen usando dept de su sesión D1 (sin cambio)
+  - DB: sugerencias #117,#116,#110,#109,#108,#106 marcadas como resuelto
 
 v4.48  |  20/04/2026  [SOLO NUEVA APP]
   - Fix notificaciones usuario nuevo Google (2 bugs):
