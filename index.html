@@ -5232,7 +5232,7 @@ async function cargarNotificaciones() {
     if (s?.rol === 'superadmin' || s?.rol === 'empresa_admin') {
       const pend = await apiCall('/usuarios/pendientes').then(r => r.json()).catch(() => ({ pendientes: [] }));
       (pend.pendientes || []).forEach(u =>
-        notifs.push({ icono: '🔔', texto: `Solicitud de acceso: ${u.nombre} (${u.email})`, fecha: u.created_at, color: '#8b5cf6' })
+        notifs.push({ icono: '🔔', texto: `Solicitud de acceso: ${u.nombre} (${u.email})`, fecha: u.created_at, color: '#8b5cf6', accion: "cerrarNotificaciones();navTo('ajustes');setTimeout(()=>selAjTab('usuarios'),300);" })
       );
     }
   } catch {}
@@ -5242,11 +5242,12 @@ async function cargarNotificaciones() {
   }
   notifs.sort((a, b) => (b.fecha || '').localeCompare(a.fecha || ''));
   el.innerHTML = notifs.map(n => `
-    <div style="padding:13px 16px;border-bottom:1px solid var(--border);display:flex;gap:12px;align-items:flex-start">
+    <div style="padding:13px 16px;border-bottom:1px solid var(--border);display:flex;gap:12px;align-items:flex-start${n.accion ? ';cursor:pointer' : ''}" ${n.accion ? `onclick="${n.accion}"` : ''}>
       <span style="font-size:22px;flex-shrink:0">${n.icono}</span>
       <div style="flex:1;min-width:0">
         <div style="font-size:13px;font-weight:700;color:${n.color || 'var(--text)'}">${n.texto}</div>
         ${n.fecha ? `<div style="font-size:11px;color:var(--muted);margin-top:3px">${String(n.fecha).slice(0,16).replace('T',' ')}</div>` : ''}
+        ${n.accion ? `<div style="font-size:11px;color:var(--muted);margin-top:2px">Toca para gestionar →</div>` : ''}
       </div>
     </div>`).join('');
 }
@@ -5272,7 +5273,7 @@ async function checkNotifBadge() {
   try {
     if (s?.rol === 'superadmin' || s?.rol === 'empresa_admin') {
       const pend = await apiCall('/usuarios/pendientes').then(r => r.json()).catch(() => ({ pendientes: [] }));
-      count += (pend.pendientes || []).filter(u => (u.created_at||'') > lastSeen).length;
+      count += (pend.pendientes || []).length;
     }
   } catch {}
   const badge = document.getElementById('notifBadge');
@@ -5556,7 +5557,7 @@ async function cargarObrasSelectUsuario() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '4.47';
+const APP_VERSION = '4.48';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
