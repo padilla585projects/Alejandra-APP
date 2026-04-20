@@ -233,6 +233,14 @@ v4.0  |  15/04/2026  [SOLO NUEVA APP]
   - Índices creados: idx_*_empresa en tablas principales
   - SW bumpeado a alejandra-v4.0
 
+hotfix  |  20/04/2026  [SOLO NUEVA APP — migración DB sin cambio de código]
+  - BUG-117 CRÍTICO: no se podía añadir nada a la base de datos (bobinas, PEMP, carretillas)
+    · Causa: columna `registrado_por` faltaba en las 3 tablas de la nueva app (nunca migrada)
+    · El worker intentaba INSERT con esa columna → D1 error en cualquier registro nuevo
+    · Fix: ALTER TABLE bobinas/pemp/carretillas ADD COLUMN registrado_por TEXT aplicado en D1
+    · App vieja no afectada (ya tenía la columna desde antes)
+    · Sin cambio de código ni deploy — solo migración directa en D1
+
 v4.48  |  20/04/2026  [SOLO NUEVA APP]
   - Fix notificaciones usuario nuevo Google (2 bugs):
     · Badge de campana ahora muestra siempre las solicitudes pendientes sin filtrar por fecha
