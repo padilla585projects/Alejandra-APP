@@ -1,7 +1,7 @@
 ================================================================================
   ALEJANDRA APP — IDEAS, MEJORAS Y ERRORES PENDIENTES
   Recogidos de: Canal Telegram @AlejandraAPP_bot
-  Última actualización: 20/04/2026 (v4.52)
+  Última actualización: 20/04/2026 (v4.55)
 
   ⚠️  LEER ESTE ARCHIVO ANTES DE CUALQUIER SESIÓN DE CODIFICACIÓN.
   ⚠️  Marcar como [HECHO vX.XX] cuando se implemente. No borrar las líneas.
@@ -148,6 +148,11 @@ LEYENDA DE ESTADO:
     · Lógica de visibilidad y carga (cargarInvitaciones) movida a selAjTab('usuarios')
     · Verificado flujo Google nuevo usuario sin invitación: crea pendiente, notifica Telegram,
       frontend muestra mensaje ámbar, campana 🔔 avisa al admin. Todo OK.
+    · Reportado: 20/04/2026 — Adrian
+
+[✓] BUG-115 — Selector de empresa vacío al aprobar solicitud de usuario nuevo  [HECHO v4.55]
+    · El worker /empresas devuelve un array plano pero el frontend esperaba {empresas:[]}
+    · Fix: (empresas.empresas || []) → (Array.isArray(empresas) ? empresas : [])
     · Reportado: 20/04/2026 — Adrian
 
 [ ] NEW-02 — Wizard de bienvenida (onboarding primera vez)

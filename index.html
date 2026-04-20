@@ -4783,8 +4783,8 @@ async function cargarSolicitudesPendientes() {
     const s = getSession();
     let optsEmpresa = '';
     if (s?.rol === 'superadmin') {
-      const empresas = await apiCall('/empresas').then(r => r.json()).catch(() => ({ empresas: [] }));
-      optsEmpresa = (empresas.empresas || []).map(e => `<option value="${e.id}">${e.nombre}</option>`).join('');
+      const empresas = await apiCall('/empresas').then(r => r.json()).catch(() => []);
+      optsEmpresa = (Array.isArray(empresas) ? empresas : []).map(e => `<option value="${e.id}">${e.nombre}</option>`).join('');
     } else {
       optsEmpresa = `<option value="${s.empresa_id}">${s.empresa_nombre || 'Mi empresa'}</option>`;
     }
@@ -5567,7 +5567,7 @@ async function cargarObrasSelectUsuario() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '4.54';
+const APP_VERSION = '4.55';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
