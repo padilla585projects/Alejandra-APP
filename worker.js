@@ -3351,8 +3351,8 @@ async function googleAuthCallback(request, env) {
     }
     const codigoPend = 'g_pend_' + Date.now();
     await env.DB.prepare(
-      'INSERT INTO usuarios (nombre, codigo, rol, departamento, activo, google_pending, email, empresa_id) VALUES (?,?,NULL,NULL,0,1,?,NULL)'
-    ).bind(gUser.name || gUser.email, codigoPend, gUser.email).run();
+      'INSERT INTO usuarios (nombre, codigo, rol, departamento, activo, google_pending, email, empresa_id) VALUES (?,?,?,NULL,0,1,?,NULL)'
+    ).bind(gUser.name || gUser.email, codigoPend, 'pendiente', gUser.email).run();
     await sendTelegram(env, `🔔 <b>Solicitud de acceso con Google</b>\n👤 ${gUser.name || gUser.email}\n📧 ${gUser.email}\nRevisar en Ajustes → Usuarios → Solicitudes de acceso`);
     return json({ ok: false, pendiente: true, msg: 'Solicitud enviada correctamente. El administrador debe aprobarla para que puedas acceder.' });
   }

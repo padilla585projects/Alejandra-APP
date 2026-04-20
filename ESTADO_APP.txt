@@ -5,7 +5,7 @@
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 20/04/2026
-VERSIÓN ACTUAL: v4.19 app vieja | v4.53 app nueva
+VERSIÓN ACTUAL: v4.19 app vieja | v4.54 app nueva
 
 ⚠️  ANTES DE CODIFICAR: leer NuevaApp/IDEAS_PENDIENTES.txt
     Lista completa de bugs activos, mejoras y features pendientes.
@@ -240,6 +240,12 @@ hotfix  |  20/04/2026  [SOLO NUEVA APP — migración DB sin cambio de código]
     · Fix: ALTER TABLE bobinas/pemp/carretillas ADD COLUMN registrado_por TEXT aplicado en D1
     · App vieja no afectada (ya tenía la columna desde antes)
     · Sin cambio de código ni deploy — solo migración directa en D1
+
+v4.54  |  20/04/2026  [SOLO NUEVA APP]
+  - FIX: Login Google — NOT NULL constraint failed: usuarios.rol
+    · Al crear solicitud pendiente sin invitación, el INSERT tenía rol=NULL
+    · La columna rol tiene NOT NULL constraint → error al intentar registrar al usuario
+    · Fix: rol='pendiente' como valor temporal hasta que el admin apruebe el acceso
 
 v4.53  |  20/04/2026  [SOLO NUEVA APP]
   - FIX: Login con Google — Error 400 redirect_uri_mismatch
