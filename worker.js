@@ -1838,8 +1838,10 @@ async function getKits(request, env) {
   let sql = 'SELECT k.*, o.nombre as obra_nombre FROM kits_herramientas k LEFT JOIN obras o ON k.obra_id = o.id WHERE k.empresa_id = ?';
   const params = [empresa_id];
   if (departamento) { sql += ' AND k.departamento = ?'; params.push(departamento); }
-  const filtro = url.searchParams.get('estado');
-  if (filtro) { sql += ' AND k.estado = ?'; params.push(filtro); }
+  const filtro   = url.searchParams.get('estado');
+  const k_obra   = url.searchParams.get('obra_id');
+  if (filtro)  { sql += ' AND k.estado = ?';    params.push(filtro); }
+  if (k_obra)  { sql += ' AND k.obra_id = ?';   params.push(parseInt(k_obra)); }
   sql += ' ORDER BY k.numero_kit ASC';
   const { results } = await env.DB.prepare(sql).bind(...params).all();
   return json(results);
@@ -1945,10 +1947,12 @@ async function getHerramientas(request, env) {
              WHERE h.empresa_id = ?`;
   const params = [empresa_id];
   if (departamento) { sql += ' AND h.departamento = ?'; params.push(departamento); }
-  const estado = url.searchParams.get('estado');
-  const kit_id = url.searchParams.get('kit_id');
+  const estado  = url.searchParams.get('estado');
+  const kit_id  = url.searchParams.get('kit_id');
+  const obra_id = url.searchParams.get('obra_id');
   if (estado)  { sql += ' AND h.estado = ?';   params.push(estado); }
   if (kit_id)  { sql += ' AND h.kit_id = ?';   params.push(parseInt(kit_id)); }
+  if (obra_id) { sql += ' AND h.obra_id = ?';  params.push(parseInt(obra_id)); }
   sql += ' ORDER BY t.nombre, h.marca, h.modelo';
   const { results } = await env.DB.prepare(sql).bind(...params).all();
   return json(results);

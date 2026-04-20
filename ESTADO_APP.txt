@@ -5,7 +5,7 @@
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 20/04/2026
-VERSIÓN ACTUAL: v4.19 app vieja | v4.55 app nueva
+VERSIÓN ACTUAL: v4.19 app vieja | v4.56 app nueva
 
 ⚠️  ANTES DE CODIFICAR: leer NuevaApp/IDEAS_PENDIENTES.txt
     Lista completa de bugs activos, mejoras y features pendientes.
@@ -240,6 +240,22 @@ hotfix  |  20/04/2026  [SOLO NUEVA APP — migración DB sin cambio de código]
     · Fix: ALTER TABLE bobinas/pemp/carretillas ADD COLUMN registrado_por TEXT aplicado en D1
     · App vieja no afectada (ya tenía la columna desde antes)
     · Sin cambio de código ni deploy — solo migración directa en D1
+
+v4.56  |  20/04/2026  [SOLO NUEVA APP]
+  - BUG-118: Kits ahora visibles en pestaña Inventario de Herramientas
+    · renderInvHerr() muestra sección "📋 Kits" al final del inventario
+    · cargarInvHerr() carga kits y herramientas en paralelo (Promise.all)
+  - BUG-120: Botón ✏️ directo en cada tarjeta del inventario de herramientas
+    · editarHerrDesdeInv(id, e) busca el objeto en _herrInvCache y abre el formulario
+    · stopPropagation evita que se abra el modal de detalle al pulsar editar
+  - BUG-122: Pestaña Ideas ya no parpadea durante el auto-refresh
+    · cargarSugerenciasAdmin() solo muestra "Cargando..." si el contenedor está vacío
+    · En refresco automático (30s) se reemplaza el contenido sin blanquear la pantalla
+  - BUG-124: Herramientas y kits ahora filtran por obra activa
+    · cargarInvHerr() pasa ?obra_id=X según sesión del usuario
+    · Worker getHerramientas y getKits aceptan y aplican el parámetro obra_id
+  - BUG-125: Icono "SA" en barra superior más compacto
+    · rolLabel('superadmin') devuelve 'SA' en lugar de 'SuperAdmin'
 
 v4.55  |  20/04/2026  [SOLO NUEVA APP]
   - BUG-115: Selector de empresa vacío al aprobar solicitud de usuario nuevo

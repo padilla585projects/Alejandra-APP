@@ -2349,7 +2349,7 @@ async function iniciarApp() {
 }
 
 function rolLabel(rol) {
-  if (rol === 'superadmin')   return 'SuperAdmin';
+  if (rol === 'superadmin')   return 'SA';
   if (rol === 'encargado')    return 'Encargado';
   if (rol === 'operario')     return 'Operario';
   if (rol === 'empresa_admin') return 'Admin';
@@ -5068,7 +5068,7 @@ async function buscarMaquina() {
 async function cargarSugerenciasAdmin() {
   const c = document.getElementById('adminSugerenciasList');
   if (!c) return;
-  c.innerHTML = '<div class="empty-state">Cargando...</div>';
+  if (!c.hasChildNodes()) c.innerHTML = '<div class="empty-state">Cargando...</div>';
   try {
     let url = '/sugerencias';
     const qp = [];
@@ -5567,7 +5567,7 @@ async function cargarObrasSelectUsuario() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '4.55';
+const APP_VERSION = '4.56';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -5897,7 +5897,24 @@ if ('serviceWorker' in navigator) {
       (h.marca||'').toLowerCase().includes(q) ||
       (h.modelo||'').toLowerCase().includes(q)
     );
-    if (!items.length) { c.innerHTML = '<div class="empty-state">Sin herramientas' + (f !== 'todos' ? ' con ese estado' : '') + '</div>'; return; }
+    // BUG-118: kits section
+    const kits = window._herrKitsCache || [];
+    const kitsHtml = kits.length ? `
+      <div style="margin-top:12px;margin-bottom:6px;font-size:10px;font-weight:700;color:var(--muted);letter-spacing:.8px;text-transform:uppercase">📋 Kits</div>
+      ${kits.map(k => {
+        const ek = HERR_KIT_ESTADO[k.estado] || HERR_KIT_ESTADO.disponible;
+        return `<div onclick="verDetalleKit(${k.id})" style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:11px 14px;margin-bottom:8px;cursor:pointer">
+          <div style="display:flex;align-items:center;gap:10px">
+            <span style="font-size:18px">📋</span>
+            <div style="flex:1;min-width:0">
+              <div style="font-weight:700;font-size:14px;color:var(--text)">Kit ${k.numero_kit} <span style="font-weight:400;color:var(--muted);font-size:12px">${k.nombre||''}</span></div>
+              <div style="font-size:11px;color:var(--muted)">${k.num_componentes?'🔩 '+k.num_componentes+' comp.':''} ${k.obra_nombre?' · '+k.obra_nombre:''}</div>
+            </div>
+            <span style="font-size:10px;font-weight:700;color:${ek.color};padding:2px 7px;border-radius:20px;border:1px solid ${ek.color}30;background:${ek.color}15;white-space:nowrap">${ek.icon} ${ek.label}</span>
+          </div>
+        </div>`;
+      }).join('')}` : '';
+    if (!items.length) { c.innerHTML = '<div class="empty-state">Sin herramientas' + (f !== 'todos' ? ' con ese estado' : '') + '</div>' + kitsHtml; return; }
     c.innerHTML = items.map(h => {
       const ei = HERR_ESTADO[h.estado] || HERR_ESTADO.disponible;
       return `<div onclick="verDetalleHerr(${h.id})" style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:11px 14px;margin-bottom:8px;cursor:pointer">
@@ -5908,17 +5925,32 @@ if ('serviceWorker' in navigator) {
             <div style="font-size:11px;color:var(--muted);font-family:monospace">${h.numero_serie||'—'}${h.numero_kit?' · Kit '+h.numero_kit:''}</div>
             ${h.asignado_a ? `<div style="font-size:11px;color:var(--accent)">👤 ${h.asignado_a}</div>` : ''}
           </div>
-          <span style="font-size:10px;font-weight:700;color:${ei.color};padding:2px 7px;border-radius:20px;border:1px solid ${ei.color}30;background:${ei.color}15;white-space:nowrap">${ei.label}</span>
+          <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
+            <span style="font-size:10px;font-weight:700;color:${ei.color};padding:2px 7px;border-radius:20px;border:1px solid ${ei.color}30;background:${ei.color}15;white-space:nowrap">${ei.label}</span>
+            <button onclick="editarHerrDesdeInv(${h.id},event)" style="background:none;border:none;font-size:15px;cursor:pointer;padding:2px 4px;color:var(--muted)">✏️</button>
+          </div>
         </div>
       </div>`;
-    }).join('');
+    }).join('') + kitsHtml;
+  }
+
+  function editarHerrDesdeInv(id, e) {
+    e.stopPropagation();
+    const h = (window._herrInvCache || []).find(x => x.id === id);
+    if (h) abrirFormHerramienta(h);
   }
 
   async function cargarInvHerr() {
     try {
-      const res = await apiCall('/herramientas');
-      if (!res.ok) return;
-      window._herrInvCache = await res.json();
+      const s = getSession();
+      const obraParam = s?.obra_id ? `?obra_id=${s.obra_id}` : '';
+      const [resH, resK] = await Promise.all([
+        apiCall('/herramientas' + obraParam),
+        apiCall('/kits-herramientas' + obraParam)
+      ]);
+      if (!resH.ok) return;
+      window._herrInvCache = await resH.json();
+      if (resK.ok) window._herrKitsCache = await resK.json();
       renderInvHerr(window._herrInvCache);
     } catch { document.getElementById('herrListaInv').innerHTML = '<div class="empty-state">Error al cargar</div>'; }
   }
@@ -6913,6 +6945,7 @@ if ('serviceWorker' in navigator) {
   window.herrFiltrarInvBuscador= herrFiltrarInvBuscador;
   window.cargarInvHerr         = cargarInvHerr;
   window.verDetalleHerr        = verDetalleHerr;
+  window.editarHerrDesdeInv    = editarHerrDesdeInv;
   window.herrCambiarEstado     = herrCambiarEstado;
   window.cargarKitsHerr        = cargarKitsHerr;
   window.verDetalleKit         = verDetalleKit;

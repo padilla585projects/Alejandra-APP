@@ -65,8 +65,12 @@ REGLA DE DEPLOY:
   - En ambos casos: subir versión + actualizar txts + deploy worker + git push
 
 ÚLTIMO CAMBIO REALIZADO:
-  v4.55 [nueva] — 20/04/2026
-  · BUG-115: selector de empresa vacío al aprobar solicitud de usuario nuevo (fix 1 línea frontend)
+  v4.56 [nueva] — 20/04/2026
+  · BUG-118: kits visibles en inventario herramientas
+  · BUG-120: botón editar directo en inventario
+  · BUG-122: Ideas ya no parpadea en auto-refresh
+  · BUG-124: herramientas/kits filtran por obra activa (worker + frontend)
+  · BUG-125: header SA más compacto ('SA' en lugar de 'SuperAdmin')
   · v4.51: Invitaciones movidas a Ajustes/Usuarios; flujo Google nuevo usuario verificado
   · v4.50: fix Google login — race condition + botón incorrecto
   · v4.45: fix notificaciones no se borran (botón Borrar + lastSeen en todos los tipos)

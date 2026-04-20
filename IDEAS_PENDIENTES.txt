@@ -160,17 +160,19 @@ LEYENDA DE ESTADO:
     · Cada departamento debería ver únicamente sus propios pedidos.
     · Reportado: 20/04/2026 — Adrian, CPD Getafe
 
-[ ] BUG-118 — Los kits no aparecen en el inventario de herramientas (#118)
-    · En el departamento Herramientas, los kits creados no se muestran en la pestaña Inventario.
+[✓] BUG-118 — Los kits no aparecen en el inventario de herramientas  [HECHO v4.56]
+    · renderInvHerr() ahora muestra sección "📋 Kits" al final del inventario
+    · cargarInvHerr() carga herramientas y kits en paralelo (Promise.all)
     · Reportado: 20/04/2026 — Adrian, CPD Getafe
 
-[ ] BUG-120 — Editar herramienta en inventario no funciona (#120)
-    · El botón de editar en el inventario de herramientas no lleva a la edición del objeto.
+[✓] BUG-120 — Editar herramienta en inventario no funciona  [HECHO v4.56]
+    · Botón ✏️ directo en cada tarjeta del inventario
+    · editarHerrDesdeInv(id,e) busca objeto en _herrInvCache y abre formulario de edición
     · Reportado: 20/04/2026 — Adrian, CPD Getafe
 
-[ ] BUG-122 — Pestaña "Ideas" parpadea cada X tiempo (#122)
-    · Mientras se está en la pestaña Ideas, la pantalla parpadea periódicamente.
-    · Probablemente causado por el auto-refresh de 30s que recarga el DOM entero.
+[✓] BUG-122 — Pestaña "Ideas" parpadea cada X tiempo  [HECHO v4.56]
+    · cargarSugerenciasAdmin() solo muestra "Cargando..." si el contenedor está vacío
+    · En refresco automático (30s) actualiza contenido sin blanquear la pantalla
     · Reportado: 20/04/2026 — Adrian, mecánicas
 
 [ ] BUG-123 — La app tarda mucho en cargar al abrirse (#123)
@@ -178,14 +180,13 @@ LEYENDA DE ESTADO:
     · Investigar: splash screen demasiado largo, fetch encadenados al arranque, SW frío.
     · Reportado: 20/04/2026 — Adrian, CPD Getafe
 
-[ ] BUG-124 — Herramientas no filtra por obras — URGENTE (#124)
-    · Cada obra debería tener su propio inventario de herramientas independiente.
-    · Actualmente todas las obras comparten el mismo inventario de herramientas.
+[✓] BUG-124 — Herramientas no filtra por obras  [HECHO v4.56]
+    · cargarInvHerr() pasa ?obra_id=X según obra activa de la sesión
+    · Worker getHerramientas y getKits aplican filtro obra_id si se recibe
     · Reportado: 20/04/2026 — Adrian, CPD Getafe
 
-[ ] BUG-125 — Barra superior: nombre de obra sigue sin verse bien (#125)
-    · El icono de Superadmin ocupa demasiado espacio y no deja ver el nombre de obra.
-    · Propuesta: icono SA más pequeño o solo iniciales "SA", optimizar espacio.
+[✓] BUG-125 — Barra superior: nombre de obra sigue sin verse bien  [HECHO v4.56]
+    · rolLabel('superadmin') devuelve 'SA' → libera espacio en la barra superior
     · Reportado: 20/04/2026 — Adrian, CPD Getafe
 
 [ ] NEW-02 — Wizard de bienvenida (onboarding primera vez)
