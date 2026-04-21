@@ -305,7 +305,7 @@ LEYENDA DE ESTADO:
       ofrecer la opción "Añadir nueva herramienta" directamente en el desplegable.
     · Reportado: 20/04/2026 — Adrian, CPD Getafe
 
-[ ] MEJ-11 — Asignar horario de trabajo a obras para fichar más rápido (#115)
+[✓] MEJ-11 — Asignar horario de trabajo a obras para fichar más rápido (#115)  [HECHO v4.62]
     · Cada obra tendría su horario configurado (entrada/salida habitual).
     · Al fichar, el horario se pre-rellena automáticamente.
     · También incluir lista de personal habitual de la obra para selección rápida.

@@ -5,7 +5,7 @@
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 21/04/2026
-VERSIÓN ACTUAL: v4.19 app vieja | v4.61 app nueva
+VERSIÓN ACTUAL: v4.19 app vieja | v4.62 app nueva
 
 ⚠️  ANTES DE CODIFICAR: leer NuevaApp/IDEAS_PENDIENTES.txt
     Lista completa de bugs activos, mejoras y features pendientes.
@@ -240,6 +240,26 @@ hotfix  |  20/04/2026  [SOLO NUEVA APP — migración DB sin cambio de código]
     · Fix: ALTER TABLE bobinas/pemp/carretillas ADD COLUMN registrado_por TEXT aplicado en D1
     · App vieja no afectada (ya tenía la columna desde antes)
     · Sin cambio de código ni deploy — solo migración directa en D1
+
+v4.62  |  21/04/2026  [SOLO NUEVA APP]
+  - MEJ-11: Horarios de obra configurables en Ajustes → Obras
+    · Botón "⏰ Horario" en cada obra: panel inline con entrada, salida, días semana
+    · Worker POST /horarios-obra hace upsert (crea o actualiza el horario de la obra)
+  - MEJ-11: Pre-rellenar horas en modal de fichaje según horario de obra
+    · Al abrir el modal y seleccionar obra → hora entrada/salida se pre-rellenan
+    · Solo en fichajes nuevos; no sobreescribe si ya hay valores editados
+  - QW1: Detección automática de retrasos en fichajes
+    · Worker calcula minutos_retraso al crear/editar fichaje (con horario de obra)
+    · Si llegada > 5 min tarde y estado era 'presencia' → auto-cambia a 'retraso'
+    · Frontend: badge "⚠️ Xmin tarde" visible en la vista diaria del fichaje
+    · DB: ALTER TABLE fichajes ADD COLUMN minutos_retraso INTEGER DEFAULT 0
+  - QW2: Horas esperadas en resumen mensual
+    · "Xh / Yh esperadas (+/-Zh)" con color verde/ámbar/rojo por trabajador
+    · Contador "⚠️ Retrasos: N" si el trabajador tuvo días de retraso
+  - QW3: Cierre automático de jornada (cron 20:00 hora España)
+    · Worker cierreAutomaticoJornada(): cierra fichajes abiertos usando hora_salida del horario
+    · Notificación Telegram indicando cuántos fichajes se cerraron
+    · wrangler.toml: añadido cron "0 18 * * *" (18:00 UTC = 20:00 CEST)
 
 v4.61  |  21/04/2026  [SOLO NUEVA APP]
   - MEJ-09: Historial filtrado por departamento
