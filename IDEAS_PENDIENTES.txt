@@ -1,7 +1,7 @@
 ================================================================================
   ALEJANDRA APP — IDEAS, MEJORAS Y ERRORES PENDIENTES
   Recogidos de: Canal Telegram @AlejandraAPP_bot
-  Última actualización: 21/04/2026 (v4.65) — resueltos BUG-129/124ext/120ext + MEJ-132
+  Última actualización: 22/04/2026 (v4.67) — resueltos MEJ-128 (fichaje equipo) + MEJ-134 fix
 
   ⚠️  LEER ESTE ARCHIVO ANTES DE CUALQUIER SESIÓN DE CODIFICACIÓN.
   ⚠️  Marcar como [HECHO vX.XX] cuando se implemente. No borrar las líneas.
@@ -253,12 +253,12 @@ LEYENDA DE ESTADO:
     · showScreen() evita apilar duplicados consecutivos en la pila de navegación
     · Reportado: 21/04/2026 — Adrian, CPD Getafe (empresa 3)
 
-[ ] BUG-127 — Icono de seguridad demasiado grande en barra superior
-    · El icono de seguridad ocupa demasiado espacio → el nombre de obra queda oculto/cortado.
-    · Reducir tamaño del icono o reorganizar la barra superior para que quepa todo.
+[✓] BUG-127 — Icono de seguridad demasiado grande en barra superior  [HECHO v4.66]
+    · dept-pill muestra solo el icono (🔺) en lugar de "🔺 Seguridad"
+    · Nombre completo disponible en tooltip (title). Libera espacio para el select de obra.
     · Reportado: 20/04/2026 — Adrian (empresa 1)
 
-[ ] BUG-133 — Pantalla empresas: icono de usuario demasiado pequeño
+[✓] BUG-133 — Pantalla empresas: icono de usuario demasiado pequeño  [HECHO v4.66]
     · En la pantalla de selección de empresas (superadmin), el icono/avatar de usuario
       es difícil de ver. Agrandarlo o mejorar visibilidad donde haya espacio.
     · Reportado: 21/04/2026 — Adrian (empresa 1)
@@ -346,9 +346,12 @@ LEYENDA DE ESTADO:
     · TELEGRAM_WEBHOOK_SECRET configurado en CF secrets; webhook registrado
     · Reportado: 21/04/2026 — Adrian (empresa 1)
 
-[ ] MEJ-128 — Fichaje semi-automático: listado de personal por obra
-    · La app mostraría el personal asignado a la obra activa.
-    · Selección múltiple para fichar a todos de golpe con hora entrada/salida.
+[✓] MEJ-128 — Fichaje semi-automático: listado de personal por obra  [HECHO v4.67]
+    · FAB 👥 verde junto al + de nuevo fichaje (solo admin/encargado).
+    · Modal con fecha, obra, hora entrada/salida (pre-rellenas desde horario_obra), estado.
+    · Lista de trabajadores con checkboxes (internos + externos), botones Todo/Ninguno.
+    · "⚡ Fichar seleccionados" llama POST /fichajes en bucle; muestra progreso y resultado.
+    · Duplicados (409) informados como "ya existía" sin bloquear el resto.
     · Complementa MEJ-11 (horarios de obra ya implementados).
     · Reportado: 21/04/2026 — Adrian, CPD Getafe (empresa 3)
 
@@ -358,9 +361,10 @@ LEYENDA DE ESTADO:
     · Extiende MEJ-11 (ya implementado v4.62).
     · Reportado: 21/04/2026 — Adrian, CPD Getafe (empresa 3)
 
-[ ] MEJ-134 — Enviar foto por Telegram cuando la idea la lleva
+[✓] MEJ-134 — Enviar foto por Telegram cuando la idea la lleva  [HECHO v4.66]
     · Al crear una idea con foto, enviarla también adjunta en el mensaje de Telegram.
-    · Usar sendPhoto en lugar de sendMessage cuando hay foto base64.
+    · sendTelegramFotoConBotones(): base64 → Uint8Array → Blob → FormData → sendPhoto.
+    · Los botones inline de gestión (En progreso/Resuelto/Cerrar) se incluyen en sendPhoto.
     · Complementa MEJ-132 (Telegram bidireccional) y MEJ-12 (fotos en ideas).
     · Reportado: 21/04/2026 — Adrian (empresa 1)
 

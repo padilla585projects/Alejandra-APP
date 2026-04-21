@@ -65,6 +65,11 @@ REGLA DE DEPLOY:
   - En ambos casos: subir versión + actualizar txts + deploy worker + git push
 
 ÚLTIMO CAMBIO REALIZADO:
+  v4.67 [nueva] — 22/04/2026
+  · MEJ-128: fichaje semi-automático — FAB 👥, modal con checkboxes por obra, fichar en bloque
+  · BUG-133: user-chip más legible (11px, max-width 130px)
+  · #53: filtro 👷 Personal añadido en panel Ideas de Ajustes
+
   v4.65 [nueva] — 21/04/2026
   · MEJ-132: Telegram bidireccional — botones inline en solicitudes acceso e ideas (worker)
   · BUG-129: navTo() limpia historial; back = "2x para salir"; no duplicados en stack
@@ -237,9 +242,12 @@ git -c credential.helper= push https://padilla585:<TOKEN_GITHUB_VIEJO>@github.co
 ================================================================================
 
 APP VIEJA:  v4.19  (sw.js: alejandra-v4.19 | version.json: {"v":"4.19"})
-APP NUEVA:  v4.65  (sw.js: alejandra-v4.65 | version.json: {"v":"4.65"})
+APP NUEVA:  v4.67  (sw.js: alejandra-v4.67 | version.json: {"v":"4.67"})
 
 Historial reciente (app nueva):
+  v4.67 [nueva] — MEJ-128 fichaje equipo (FAB 👥, modal checkboxes, fichar en bloque)
+  v4.66 [nueva] — MEJ-134 foto Telegram, BUG-127 dept pill, BUG-133 user-chip, #53 filtro Personal
+  v4.65 [nueva] — BUG-129 botón atrás Android, BUG-124 herramientas/kits por obra, BUG-120 editar herr async, MEJ-132 Telegram bidireccional
   v4.41 [nueva] — Login Google con invitaciones temporales (rol+dept, caduca, 1 uso)
   v4.40 [nueva] — Login con Google OAuth (botón, redirect flow, worker endpoints)
   v4.39 [nueva] — NEW-04 Herramientas Seguridad, NEW-07 exportar PDF+xlsx, NEW-11 café

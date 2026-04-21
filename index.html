@@ -1728,6 +1728,9 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
     <!-- FAB: Nuevo fichaje (solo admin/encargado) -->
     <button id="btnNuevoFichaje" onclick="abrirFormFichaje()"
       style="position:fixed;bottom:72px;right:16px;width:52px;height:52px;border-radius:50%;background:var(--accent);border:none;font-size:26px;cursor:pointer;box-shadow:0 4px 14px rgba(249,115,22,.5);z-index:200;display:none;align-items:center;justify-content:center">+</button>
+    <!-- FAB: Fichar equipo (solo admin/encargado) — MEJ-128 -->
+    <button id="btnFichajeEquipo" onclick="abrirFichajeEquipo()" title="Fichar equipo"
+      style="position:fixed;bottom:72px;right:78px;width:44px;height:44px;border-radius:50%;background:#10b981;border:none;font-size:19px;cursor:pointer;box-shadow:0 4px 12px rgba(16,185,129,.45);z-index:200;display:none;align-items:center;justify-content:center">👥</button>
   </div>
 
   <!-- Modal: Nuevo/Editar Fichaje -->
@@ -1779,6 +1782,66 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
       <div class="modal-actions">
         <button class="btn-primary" style="flex:1" onclick="guardarFichaje()">💾 Guardar</button>
         <button class="btn-primary btn-secondary" style="flex:0 0 90px;margin-top:0" onclick="cerrarFormFichaje()">Cancelar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Fichar Equipo (MEJ-128) -->
+  <div class="modal-overlay" id="modalFichajeEquipo" onclick="if(event.target===this)cerrarFichajeEquipo()">
+    <div class="modal" style="max-height:92vh;overflow-y:auto">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px">
+        <div class="modal-title" style="margin-bottom:0;flex:1">👥 Fichar Equipo</div>
+        <button onclick="cerrarFichajeEquipo()" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--muted)">×</button>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+        <div class="form-group" style="margin:0">
+          <label class="form-label">Fecha *</label>
+          <input class="form-input" id="feqFecha" type="date">
+        </div>
+        <div class="form-group" style="margin:0">
+          <label class="form-label">Obra</label>
+          <select class="form-input" id="feqObra" onchange="fichajeEquipoOnObraChange()">
+            <option value="">— Todas / Sin obra —</option>
+          </select>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:10px">
+        <div class="form-group" style="margin:0">
+          <label class="form-label">Entrada</label>
+          <input class="form-input" id="feqEntrada" type="time">
+        </div>
+        <div class="form-group" style="margin:0">
+          <label class="form-label">Salida</label>
+          <input class="form-input" id="feqSalida" type="time">
+        </div>
+        <div class="form-group" style="margin:0">
+          <label class="form-label">Estado</label>
+          <select class="form-input" id="feqEstado">
+            <option value="presencia">✅ Presencia</option>
+            <option value="ausencia">🔴 Ausencia</option>
+            <option value="baja">🏥 Baja</option>
+            <option value="vacaciones">🏖️ Vacaciones</option>
+          </select>
+        </div>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <div style="font-size:13px;font-weight:600;color:var(--text)">Trabajadores <span id="feqCount" style="color:var(--muted);font-weight:400"></span></div>
+        <div style="display:flex;gap:6px">
+          <button onclick="feqSelAll(true)"  style="font-size:11px;padding:3px 9px;background:var(--surface-2);border:1px solid var(--border);border-radius:6px;color:var(--text);cursor:pointer">Todo</button>
+          <button onclick="feqSelAll(false)" style="font-size:11px;padding:3px 9px;background:var(--surface-2);border:1px solid var(--border);border-radius:6px;color:var(--text);cursor:pointer">Ninguno</button>
+        </div>
+      </div>
+      <div id="feqLista" style="max-height:240px;overflow-y:auto;background:var(--surface-2);border-radius:10px;padding:4px 0;margin-bottom:10px">
+        <div style="padding:14px;text-align:center;color:var(--muted);font-size:13px">Cargando trabajadores…</div>
+      </div>
+      <div class="form-group" style="margin-bottom:10px">
+        <label class="form-label">Notas (opcional)</label>
+        <input class="form-input" id="feqNotas" placeholder="Ej: turno mañana, jornada completa…">
+      </div>
+      <div id="feqProgress" style="display:none;margin-bottom:10px;padding:9px 12px;background:var(--surface-2);border-radius:8px;font-size:13px;color:var(--muted);text-align:center"></div>
+      <div class="modal-actions">
+        <button class="btn-primary" style="flex:1;background:#10b981" onclick="guardarFichajeEquipo()">⚡ Fichar seleccionados</button>
+        <button class="btn-primary btn-secondary" style="flex:0 0 90px;margin-top:0" onclick="cerrarFichajeEquipo()">Cancelar</button>
       </div>
     </div>
   </div>
@@ -2617,6 +2680,8 @@ function irAtras() {
   try { segCloseCamera(); } catch {}
   const fabFichaje = document.getElementById('btnNuevoFichaje');
   if (fabFichaje) fabFichaje.style.display = 'none';
+  const fabFichajeEq = document.getElementById('btnFichajeEquipo');
+  if (fabFichajeEq) fabFichajeEq.style.display = 'none';
   if (_navHistory.length > 0) {
     _applyScreen(_navHistory.pop());
   }
@@ -2631,6 +2696,8 @@ function navTo(target) {
   // Ocultar FABs de pantallas que no son el destino
   const fabFichaje = document.getElementById('btnNuevoFichaje');
   if (fabFichaje && target !== 'personal') fabFichaje.style.display = 'none';
+  const fabFichajeEq = document.getElementById('btnFichajeEquipo');
+  if (fabFichajeEq && target !== 'personal') fabFichajeEq.style.display = 'none';
   if (target === 'home') {
     const s2 = getSession();
     if (s2?.rol === 'superadmin') { _applyScreen('empresaSel'); return; }
@@ -5769,7 +5836,7 @@ async function cargarObrasSelectUsuario() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '4.66';
+const APP_VERSION = '4.67';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -6759,9 +6826,12 @@ if ('serviceWorker' in navigator) {
       el.style.display = (i===n) ? 'flex' : 'none';
       el.style.flexDirection = 'column';
     });
-    const fab = document.getElementById('btnNuevoFichaje');
+    const fab   = document.getElementById('btnNuevoFichaje');
+    const fabEq = document.getElementById('btnFichajeEquipo');
     const s = getSession();
-    if (fab) fab.style.display = (s?.rol !== 'operario') ? 'flex' : 'none';
+    const esAdmin = s?.rol !== 'operario';
+    if (fab)   fab.style.display   = esAdmin ? 'flex' : 'none';
+    if (fabEq) fabEq.style.display = esAdmin ? 'flex' : 'none';
     if (n===0) cargarHoy();
     if (n===1) cargarSemana();
     if (n===2) cargarResumenMes();
@@ -7126,6 +7196,150 @@ if ('serviceWorker' in navigator) {
       else if (tab===1) cargarSemana();
       else cargarResumenMes();
     } catch { toast('❌ Error de red','err'); }
+  }
+
+  // ── Fichar Equipo (MEJ-128) ──────────────────────────────────────────────
+  async function abrirFichajeEquipo() {
+    // Pre-fill fecha
+    document.getElementById('feqFecha').value = perFechaHoy();
+    document.getElementById('feqNotas').value = '';
+    document.getElementById('feqProgress').style.display = 'none';
+
+    // Poblar obras
+    const obraSel = document.getElementById('feqObra');
+    try {
+      const ro = await apiCall('/obras', {});
+      if (ro.ok) {
+        const obras = await ro.json();
+        const lista = Array.isArray(obras) ? obras : (obras.obras || []);
+        window._obras = lista;
+        obraSel.innerHTML = '<option value="">— Todas / Sin obra —</option>' +
+          lista.map(o => `<option value="${o.id}">${o.nombre}</option>`).join('');
+        const s = getSession();
+        if (s?.obra_id) obraSel.value = s.obra_id;
+      }
+    } catch {}
+
+    // Cargar trabajadores (y horario si hay obra)
+    await fichajeEquipoOnObraChange();
+    document.getElementById('modalFichajeEquipo').classList.add('active');
+  }
+
+  function cerrarFichajeEquipo() {
+    document.getElementById('modalFichajeEquipo').classList.remove('active');
+  }
+
+  async function fichajeEquipoOnObraChange() {
+    const obraId = document.getElementById('feqObra')?.value || null;
+    const lista = document.getElementById('feqLista');
+    if (lista) lista.innerHTML = '<div style="padding:14px;text-align:center;color:var(--muted);font-size:13px">Cargando…</div>';
+
+    // Pre-rellenar horario desde la obra seleccionada
+    if (obraId) {
+      try {
+        const rh = await apiCall(`/horarios-obra?obra_id=${obraId}`, {});
+        if (rh.ok) {
+          const hlist = await rh.json();
+          const h = Array.isArray(hlist) ? hlist[0] : null;
+          if (h) {
+            document.getElementById('feqEntrada').value = (h.hora_entrada || '').slice(0,5);
+            document.getElementById('feqSalida').value  = (h.hora_salida  || '').slice(0,5);
+          }
+        }
+      } catch {}
+    }
+
+    // Cargar trabajadores
+    try {
+      const url = obraId ? `/personal/trabajadores?obra_id=${obraId}` : '/personal/trabajadores';
+      const r = await apiCall(url, {});
+      if (!r.ok) { if (lista) lista.innerHTML = '<div style="padding:14px;text-align:center;color:var(--muted)">Error al cargar trabajadores</div>'; return; }
+      const data = await r.json();
+      const trabajadores = Array.isArray(data) ? data : (data.trabajadores || []);
+      renderEquipoWorkers(trabajadores);
+    } catch {
+      if (lista) lista.innerHTML = '<div style="padding:14px;text-align:center;color:var(--muted)">Error de red</div>';
+    }
+  }
+
+  function renderEquipoWorkers(lista) {
+    const cont = document.getElementById('feqLista');
+    const cnt  = document.getElementById('feqCount');
+    if (!cont) return;
+    if (cnt) cnt.textContent = lista.length ? `(${lista.length})` : '';
+    if (!lista.length) {
+      cont.innerHTML = '<div style="padding:16px;text-align:center;color:var(--muted);font-size:13px">Sin trabajadores asignados a esta obra</div>';
+      return;
+    }
+    cont.innerHTML = lista.map(t => {
+      const key   = t.tipo === 'externo' ? `e_${t.id}` : `u_${t.id}`;
+      const badge = t.tipo === 'externo'
+        ? '<span style="font-size:10px;background:rgba(249,115,22,.18);color:var(--accent);border-radius:4px;padding:1px 5px;margin-left:5px">Ext</span>'
+        : '';
+      const dept  = t.departamento ? `<span style="font-size:11px;color:var(--muted);margin-left:6px">${t.departamento}</span>` : '';
+      return `<label style="display:flex;align-items:center;gap:10px;padding:10px 14px;cursor:pointer;border-radius:6px;transition:background .12s" onmouseover="this.style.background='var(--surface)'" onmouseout="this.style.background=''">
+        <input type="checkbox" data-uid="${t.tipo !== 'externo' ? t.id : ''}" data-eid="${t.tipo === 'externo' ? t.id : ''}" checked style="width:18px;height:18px;accent-color:#10b981;flex-shrink:0">
+        <span style="font-size:14px;flex:1">${t.nombre}${badge}${dept}</span>
+      </label>`;
+    }).join('');
+  }
+
+  function feqSelAll(val) {
+    document.querySelectorAll('#feqLista input[type=checkbox]').forEach(c => c.checked = val);
+  }
+
+  async function guardarFichajeEquipo() {
+    const fecha   = document.getElementById('feqFecha')?.value;
+    const entrada = document.getElementById('feqEntrada')?.value || null;
+    const salida  = document.getElementById('feqSalida')?.value  || null;
+    const estado  = document.getElementById('feqEstado')?.value  || 'presencia';
+    const obraId  = document.getElementById('feqObra')?.value    || null;
+    const notas   = document.getElementById('feqNotas')?.value?.trim() || null;
+
+    if (!fecha) return toast('⚠️ La fecha es obligatoria', 'err');
+    const checks = [...document.querySelectorAll('#feqLista input[type=checkbox]:checked')];
+    if (!checks.length) return toast('⚠️ Selecciona al menos un trabajador', 'err');
+
+    const progress = document.getElementById('feqProgress');
+    if (progress) { progress.style.display = 'block'; progress.textContent = `Fichando 0 / ${checks.length}…`; }
+
+    // Deshabilitar botón mientras procesa
+    const btnGuardar = document.querySelector('#modalFichajeEquipo .btn-primary');
+    if (btnGuardar) btnGuardar.disabled = true;
+
+    let ok = 0, skip = 0, errores = 0;
+    for (let i = 0; i < checks.length; i++) {
+      const c = checks[i];
+      const uid = c.dataset.uid ? parseInt(c.dataset.uid) : null;
+      const eid = c.dataset.eid ? parseInt(c.dataset.eid) : null;
+      const body = {
+        fecha,
+        hora_entrada:        entrada,
+        hora_salida:         salida,
+        estado,
+        notas,
+        usuario_id:          uid,
+        personal_externo_id: eid,
+        obra_id:             obraId ? parseInt(obraId) : null,
+      };
+      try {
+        const r = await apiCall('/fichajes', { method: 'POST', body: JSON.stringify(body) });
+        if      (r.ok)           ok++;
+        else if (r.status === 409) skip++;
+        else                     errores++;
+      } catch { errores++; }
+      if (progress) progress.textContent = `Fichando ${i + 1} / ${checks.length}…`;
+    }
+
+    if (btnGuardar) btnGuardar.disabled = false;
+    if (progress)   progress.style.display = 'none';
+    cerrarFichajeEquipo();
+
+    let msg = `✅ ${ok} fichado${ok !== 1 ? 's' : ''}`;
+    if (skip)    msg += ` · ⚠️ ${skip} ya exist${skip !== 1 ? 'ían' : 'ía'}`;
+    if (errores) msg += ` · ❌ ${errores} error${errores !== 1 ? 'es' : ''}`;
+    toast(msg, ok > 0 ? 'ok' : 'err');
+    cargarHoy();
   }
 
   // ── Exportar Excel ──

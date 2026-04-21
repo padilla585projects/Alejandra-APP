@@ -4,8 +4,8 @@
   Ruta local: <RUTA_BASE>\Bobinaap
 ================================================================================
 
-ÚLTIMA ACTUALIZACIÓN: 21/04/2026
-VERSIÓN ACTUAL: v4.19 app vieja | v4.65 app nueva
+ÚLTIMA ACTUALIZACIÓN: 22/04/2026
+VERSIÓN ACTUAL: v4.19 app vieja | v4.67 app nueva
 
 ⚠️  ANTES DE CODIFICAR: leer NuevaApp/IDEAS_PENDIENTES.txt
     Lista completa de bugs activos, mejoras y features pendientes.
@@ -240,6 +240,30 @@ hotfix  |  20/04/2026  [SOLO NUEVA APP — migración DB sin cambio de código]
     · Fix: ALTER TABLE bobinas/pemp/carretillas ADD COLUMN registrado_por TEXT aplicado en D1
     · App vieja no afectada (ya tenía la columna desde antes)
     · Sin cambio de código ni deploy — solo migración directa en D1
+
+v4.67  |  22/04/2026  [SOLO NUEVA APP]
+  - MEJ-128: Fichaje semi-automático por equipo
+    · FAB 👥 verde junto al + de nuevo fichaje (solo admin/encargado)
+    · Modal "Fichar Equipo": fecha, obra, hora entrada/salida (pre-rellenas desde horario_obra), estado
+    · Lista de trabajadores con checkboxes (usuarios internos + personal_externo filtrados por obra)
+    · Botones Todo/Ninguno para selección rápida
+    · "⚡ Fichar seleccionados" envía POST /fichajes en bucle con indicador de progreso
+    · Duplicados (409) informados sin bloquear el resto; toast final con resumen
+    · Sin cambios en el worker (reutiliza /fichajes, /personal/trabajadores, /horarios-obra)
+
+v4.66  |  21/04/2026  [SOLO NUEVA APP]
+  - MEJ-134: Foto en Telegram al enviar idea con imagen adjunta
+    · sendTelegramFotoConBotones(): convierte base64 → bytes → sendPhoto con botones inline
+    · Si la idea tiene foto: se envía la imagen en Telegram (con caption + botones de estado)
+    · Si no tiene foto: comportamiento anterior (sendMessage con botones)
+  - BUG-127: Dept pill compacto en barra superior
+    · Muestra solo el icono (ej: 🔺) en lugar de "🔺 Seguridad" → libera espacio para la obra
+    · Nombre completo del departamento disponible en tooltip (title)
+  - BUG-133: User-chip más legible en header
+    · font-size 10px → 11px, max-width 100px → 130px, padding ligeramente mayor
+  - #53: Filtro ideas por departamento Personal añadido
+    · Nuevo botón "👷 Personal" en los filtros del panel de Ideas (Ajustes)
+    · filtrarSug idMap actualizado con 'departamento_personal'
 
 v4.65  |  21/04/2026  [SOLO NUEVA APP]
   - MEJ-132: Telegram bidireccional — botones inline en notificaciones (solo worker)
