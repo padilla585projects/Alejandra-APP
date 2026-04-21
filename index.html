@@ -540,7 +540,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
       <div style="font-size:12px;color:var(--muted);margin-top:4px;opacity:.7">¿Con qué departamento trabajas hoy?</div>
     </div>
     <div class="dept-grid">
-      <div class="dept-card" onclick="seleccionarDepto('electrico')">
+      <div id="deptCard_electrico" class="dept-card" onclick="seleccionarDepto('electrico')">
         <div class="dept-icon-wrap">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="52" height="52">
             <polygon points="58,8 25,52 46,52 40,92 75,48 54,48" fill="#f97316"/>
@@ -552,7 +552,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
         </div>
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="color:var(--muted)"><path d="m9 18 6-6-6-6"/></svg>
       </div>
-      <div class="dept-card" onclick="seleccionarDepto('mecanicas')">
+      <div id="deptCard_mecanicas" class="dept-card" onclick="seleccionarDepto('mecanicas')">
         <div class="dept-icon-wrap">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="52" height="52">
             <circle cx="65" cy="35" r="18" fill="none" stroke="#f97316" stroke-width="6"/>
@@ -570,7 +570,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
         </div>
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="color:var(--muted)"><path d="m9 18 6-6-6-6"/></svg>
       </div>
-      <div class="dept-card" onclick="seleccionarDepto('seguridad')">
+      <div id="deptCard_seguridad" class="dept-card" onclick="seleccionarDepto('seguridad')">
         <div class="dept-icon-wrap">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="52" height="52">
             <polygon points="50,8 18,78 82,78" fill="#f97316"/>
@@ -585,7 +585,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
         </div>
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="color:var(--muted)"><path d="m9 18 6-6-6-6"/></svg>
       </div>
-      <div class="dept-card" onclick="seleccionarDepto('personal')">
+      <div id="deptCard_personal" class="dept-card" onclick="seleccionarDepto('personal')">
         <div class="dept-icon-wrap">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="52" height="52">
             <circle cx="38" cy="30" r="14" fill="#6366f1"/>
@@ -1375,6 +1375,13 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
         <div class="settings-section" style="margin-top:16px">
           <div class="settings-title">👥 Usuarios de la empresa</div>
           <div id="empresaUsuarios"></div>
+        </div>
+        <!-- MEJ-08: Departamentos activos por empresa -->
+        <div class="settings-section" style="margin-top:16px;display:none" id="empresaDeptosSection">
+          <div class="settings-title">🔧 Departamentos activos</div>
+          <div style="font-size:12px;color:var(--muted);margin-bottom:10px">Oculta los departamentos que tu empresa no utiliza. Los usuarios solo verán los activos al entrar.</div>
+          <div id="empresaDeptosTogles"></div>
+          <button class="btn-primary" style="margin-top:10px;width:100%;font-size:13px" onclick="guardarDeptosEmpresa()">💾 Guardar departamentos</button>
         </div>
       </div>
 
@@ -2551,6 +2558,69 @@ function seleccionarDepto(dept) {
   cargarBadgeIdeas();
 }
 
+// ── MEJ-131: Helper horario por día de la semana (frontend) ─────────────────
+function horarParaDia(horario, fecha) {
+  if (horario?.horarios_dia) {
+    try {
+      const dias = typeof horario.horarios_dia === 'string'
+        ? JSON.parse(horario.horarios_dia) : horario.horarios_dia;
+      const letras = ['D','L','M','X','J','V','S'];
+      const letra = letras[new Date(fecha + 'T00:00:00').getDay()];
+      if (dias[letra]?.entrada) return { hora_entrada: dias[letra].entrada, hora_salida: dias[letra].salida };
+    } catch {}
+  }
+  return { hora_entrada: horario?.hora_entrada, hora_salida: horario?.hora_salida };
+}
+
+// ── MEJ-08: Departamentos activos por empresa ────────────────────────────────
+const _ALL_DEPTS = ['electrico','mecanicas','seguridad','personal'];
+
+async function aplicarDeptosActivos() {
+  // Aplicar caché inmediatamente
+  let activos = _ALL_DEPTS;
+  try {
+    const cached = localStorage.getItem('alejandra_deptos_activos');
+    if (cached) activos = JSON.parse(cached);
+  } catch {}
+  const applyCards = (lista) => {
+    _ALL_DEPTS.forEach(d => {
+      const card = document.getElementById('deptCard_' + d);
+      if (card) card.style.display = lista.includes(d) ? '' : 'none';
+    });
+  };
+  applyCards(activos);
+  // Refrescar desde servidor en background
+  try {
+    const res = await apiCall('/mi-empresa');
+    if (res.ok) {
+      const data = await res.json();
+      const raw = data.empresa?.departamentos;
+      if (raw) {
+        const lista = typeof raw === 'string' ? JSON.parse(raw) : raw;
+        localStorage.setItem('alejandra_deptos_activos', JSON.stringify(lista));
+        applyCards(lista);
+      } else {
+        localStorage.removeItem('alejandra_deptos_activos');
+        applyCards(_ALL_DEPTS);
+      }
+    }
+  } catch {}
+}
+
+async function guardarDeptosEmpresa() {
+  const activos = _ALL_DEPTS.filter(d => document.getElementById('deptToggle_' + d)?.checked);
+  if (!activos.length) return toast('⚠️ Activa al menos un departamento', 'err');
+  try {
+    const nombre = window._empresaData?.nombre || 'Mi empresa';
+    const res = await apiCall('/mi-empresa', { method: 'PUT', body: JSON.stringify({ nombre, departamentos: activos }) });
+    if (!res.ok) return toast('❌ Error al guardar', 'err');
+    localStorage.setItem('alejandra_deptos_activos', JSON.stringify(activos));
+    window._empresaData = { ...window._empresaData, departamentos: JSON.stringify(activos) };
+    toast('✅ Departamentos actualizados');
+  } catch { toast('❌ Error de red', 'err'); }
+}
+window.guardarDeptosEmpresa = guardarDeptosEmpresa;
+
 function volverSelectorDepto() {
   const s = getSession();
   if (!s) return;
@@ -2650,6 +2720,7 @@ function _applyScreen(name) {
   if (name === 'personal')     { personalSelTab(0); }
   if (name === 'dept' || name === 'empresaSel') {
     const p = document.getElementById('deptPill'); if (p) p.style.display = 'none';
+    if (name === 'dept') aplicarDeptosActivos();
   }
   if (name === 'empresaSel')   { cargarEmpresasAdmin(); }
   actualizarBtnAtras();
@@ -4587,17 +4658,28 @@ function renderObrasAdmin(obras) {
         <div style="font-size:12px;font-weight:700;margin-bottom:8px;color:var(--text)">⏰ Horario de obra</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
           <div>
-            <label style="font-size:11px;color:var(--muted)">Entrada</label>
+            <label style="font-size:11px;color:var(--muted)">Entrada (defecto)</label>
             <input type="time" id="hEnt_${o.id}" style="width:100%;padding:6px;background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px">
           </div>
           <div>
-            <label style="font-size:11px;color:var(--muted)">Salida</label>
+            <label style="font-size:11px;color:var(--muted)">Salida (defecto)</label>
             <input type="time" id="hSal_${o.id}" style="width:100%;padding:6px;background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px">
           </div>
         </div>
-        <div style="margin-bottom:8px">
-          <label style="font-size:11px;color:var(--muted)">Días (ej: LMXJV)</label>
+        <div style="margin-bottom:10px">
+          <label style="font-size:11px;color:var(--muted)">Días activos (ej: LMXJV)</label>
           <input type="text" id="hDias_${o.id}" placeholder="LMXJV" maxlength="7" style="width:100%;padding:6px;background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;box-sizing:border-box">
+        </div>
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:8px">
+          <input type="checkbox" id="hPorDias_${o.id}" onchange="toggleHorarioPorDias(${o.id})" style="width:16px;height:16px;accent-color:var(--accent)">
+          <span style="font-size:12px;font-weight:600;color:var(--text)">📅 Horas distintas por día de la semana</span>
+        </label>
+        <div id="hDiaPanel_${o.id}" style="display:none;margin-bottom:8px;background:var(--surface);border-radius:8px;padding:8px">
+          ${['L','M','X','J','V'].map(dia => `<div style="display:grid;grid-template-columns:22px 1fr 1fr;gap:6px;align-items:center;margin-bottom:5px">
+            <div style="font-size:11px;font-weight:700;color:var(--accent);text-align:center">${dia}</div>
+            <input type="time" id="hEnt_${o.id}_${dia}" style="padding:5px;background:var(--surface-2);border:1px solid var(--border);border-radius:5px;color:var(--text);font-size:12px;width:100%">
+            <input type="time" id="hSal_${o.id}_${dia}" style="padding:5px;background:var(--surface-2);border:1px solid var(--border);border-radius:5px;color:var(--text);font-size:12px;width:100%">
+          </div>`).join('')}
         </div>
         <button onclick="guardarHorarioObra(${o.id})" style="width:100%;padding:8px;background:var(--accent);border:none;border-radius:8px;color:#000;font-family:'Montserrat',sans-serif;font-weight:900;font-size:12px;cursor:pointer">💾 Guardar horario</button>
       </div>
@@ -4619,22 +4701,58 @@ async function toggleHorarioObra(obraId) {
         const entEl = document.getElementById(`hEnt_${obraId}`);
         const salEl = document.getElementById(`hSal_${obraId}`);
         const diasEl = document.getElementById(`hDias_${obraId}`);
-        if (entEl) entEl.value = h.hora_entrada?.slice(0,5) || '';
-        if (salEl) salEl.value = h.hora_salida?.slice(0,5) || '';
+        if (entEl)  entEl.value  = h.hora_entrada?.slice(0,5) || '';
+        if (salEl)  salEl.value  = h.hora_salida?.slice(0,5)  || '';
         if (diasEl) diasEl.value = h.dias_semana || 'LMXJV';
+        // MEJ-131: cargar horarios por día
+        if (h.horarios_dia) {
+          try {
+            const dias = JSON.parse(h.horarios_dia);
+            const chk = document.getElementById(`hPorDias_${obraId}`);
+            const pnl = document.getElementById(`hDiaPanel_${obraId}`);
+            if (chk) chk.checked = true;
+            if (pnl) pnl.style.display = '';
+            ['L','M','X','J','V'].forEach(d => {
+              if (dias[d]) {
+                const eEl = document.getElementById(`hEnt_${obraId}_${d}`);
+                const sEl = document.getElementById(`hSal_${obraId}_${d}`);
+                if (eEl) eEl.value = dias[d].entrada || '';
+                if (sEl) sEl.value = dias[d].salida  || '';
+              }
+            });
+          } catch {}
+        }
       }
     }
   } catch {}
   panel.style.display = 'block';
 }
 
+function toggleHorarioPorDias(obraId) {
+  const chk = document.getElementById(`hPorDias_${obraId}`);
+  const pnl = document.getElementById(`hDiaPanel_${obraId}`);
+  if (pnl) pnl.style.display = chk?.checked ? '' : 'none';
+}
+
 async function guardarHorarioObra(obraId) {
   const hora_entrada = document.getElementById(`hEnt_${obraId}`)?.value;
   const hora_salida  = document.getElementById(`hSal_${obraId}`)?.value;
-  const dias_semana  = document.getElementById(`hDias_${obraId}`)?.value || 'LMXJV';
-  if (!hora_entrada || !hora_salida) return toast('⚠️ Rellena entrada y salida', 'err');
+  const dias_semana  = document.getElementById(`hDias_${obraId}`)?.value?.trim() || 'LMXJV';
+  if (!hora_entrada || !hora_salida) return toast('⚠️ Rellena entrada y salida (defecto)', 'err');
+  // Recoger horarios por día si el toggle está activo
+  const porDias = document.getElementById(`hPorDias_${obraId}`)?.checked;
+  let horarios_dia = null;
+  if (porDias) {
+    const diasObj = {};
+    ['L','M','X','J','V'].forEach(d => {
+      const ent = document.getElementById(`hEnt_${obraId}_${d}`)?.value;
+      const sal = document.getElementById(`hSal_${obraId}_${d}`)?.value;
+      if (ent && sal) diasObj[d] = { entrada: ent, salida: sal };
+    });
+    if (Object.keys(diasObj).length) horarios_dia = diasObj;
+  }
   try {
-    const res = await apiCall('/horarios-obra', { method: 'POST', body: JSON.stringify({ obra_id: obraId, hora_entrada, hora_salida, dias_semana }) });
+    const res = await apiCall('/horarios-obra', { method: 'POST', body: JSON.stringify({ obra_id: obraId, hora_entrada, hora_salida, dias_semana, horarios_dia }) });
     if (res.ok) {
       toast('✅ Horario guardado', 'ok');
       document.getElementById(`horarioPanel_${obraId}`).style.display = 'none';
@@ -4642,6 +4760,7 @@ async function guardarHorarioObra(obraId) {
   } catch { toast('❌ Error', 'err'); }
 }
 window.toggleHorarioObra = toggleHorarioObra;
+window.toggleHorarioPorDias = toggleHorarioPorDias;
 window.guardarHorarioObra = guardarHorarioObra;
 
 async function crearObra() {
@@ -5008,6 +5127,24 @@ async function cargarPanelEmpresa() {
     const puedeEditar = s?.rol === 'empresa_admin' || s?.rol === 'superadmin';
     const btn = document.getElementById('btnEditarEmpresa');
     if (btn) btn.style.display = puedeEditar ? '' : 'none';
+    // MEJ-08: sección departamentos activos
+    const deptsSec = document.getElementById('empresaDeptosSection');
+    if (deptsSec) {
+      deptsSec.style.display = puedeEditar ? '' : 'none';
+      if (puedeEditar) {
+        const rawDepts = data.empresa?.departamentos;
+        const activosActual = rawDepts
+          ? (typeof rawDepts === 'string' ? JSON.parse(rawDepts) : rawDepts)
+          : _ALL_DEPTS;
+        const LABELS = { electrico: '⚡ Eléctrico', mecanicas: '🔧 Mecánicas', seguridad: '🔺 Seguridad', personal: '👷 Personal' };
+        const tEl = document.getElementById('empresaDeptosTogles');
+        if (tEl) tEl.innerHTML = _ALL_DEPTS.map(d => `
+          <label style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border);cursor:pointer">
+            <input type="checkbox" id="deptToggle_${d}" ${activosActual.includes(d) ? 'checked' : ''} style="width:18px;height:18px;accent-color:var(--accent)">
+            <span style="font-size:14px">${LABELS[d]}</span>
+          </label>`).join('');
+      }
+    }
   } catch(e) {
     document.getElementById('empresaInfo').innerHTML = '<div style="color:var(--red)">Error al cargar</div>';
   }
@@ -5836,7 +5973,7 @@ async function cargarObrasSelectUsuario() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '4.67';
+const APP_VERSION = '4.68';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -7087,10 +7224,13 @@ if ('serviceWorker' in navigator) {
       const data = await res.json();
       const horario = Array.isArray(data) ? data[0] : null;
       if (!horario) return;
+      // MEJ-131: usar horas del día de la fecha seleccionada
+      const fecha = document.getElementById('fichajeFecha')?.value || perFechaHoy();
+      const { hora_entrada, hora_salida } = horarParaDia(horario, fecha);
       const entInput = document.getElementById('fichajeEntrada');
       const salInput = document.getElementById('fichajeSalida');
-      if (entInput && !entInput.value && horario.hora_entrada) entInput.value = horario.hora_entrada.slice(0,5);
-      if (salInput && !salInput.value && horario.hora_salida)  salInput.value  = horario.hora_salida.slice(0,5);
+      if (entInput && !entInput.value && hora_entrada) entInput.value = hora_entrada.slice(0,5);
+      if (salInput && !salInput.value && hora_salida)  salInput.value  = hora_salida.slice(0,5);
     } catch {}
   }
   window.fichajeObraChanged = fichajeObraChanged;
@@ -7234,7 +7374,7 @@ if ('serviceWorker' in navigator) {
     const lista = document.getElementById('feqLista');
     if (lista) lista.innerHTML = '<div style="padding:14px;text-align:center;color:var(--muted);font-size:13px">Cargando…</div>';
 
-    // Pre-rellenar horario desde la obra seleccionada
+    // Pre-rellenar horario desde la obra seleccionada (MEJ-131: por día de la semana)
     if (obraId) {
       try {
         const rh = await apiCall(`/horarios-obra?obra_id=${obraId}`, {});
@@ -7242,8 +7382,10 @@ if ('serviceWorker' in navigator) {
           const hlist = await rh.json();
           const h = Array.isArray(hlist) ? hlist[0] : null;
           if (h) {
-            document.getElementById('feqEntrada').value = (h.hora_entrada || '').slice(0,5);
-            document.getElementById('feqSalida').value  = (h.hora_salida  || '').slice(0,5);
+            const fecha = document.getElementById('feqFecha')?.value || perFechaHoy();
+            const { hora_entrada, hora_salida } = horarParaDia(h, fecha);
+            document.getElementById('feqEntrada').value = (hora_entrada || '').slice(0,5);
+            document.getElementById('feqSalida').value  = (hora_salida  || '').slice(0,5);
           }
         }
       } catch {}

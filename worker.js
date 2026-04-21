@@ -727,7 +727,7 @@ async function superadminSeleccionarEmpresa(request, env) {
 async function getMiEmpresa(request, env) {
   const auth = await getAuth(request, env);
   if (!auth.empresa_id) return err('Sin empresa asignada', 403);
-  const empresa = await env.DB.prepare('SELECT id, nombre, slug, email, telefono, direccion, cif, plan, activa, created_at FROM empresas WHERE id = ?').bind(auth.empresa_id).first();
+  const empresa = await env.DB.prepare('SELECT id, nombre, slug, email, telefono, direccion, cif, plan, activa, created_at, departamentos FROM empresas WHERE id = ?').bind(auth.empresa_id).first();
   if (!empresa) return err('Empresa no encontrada', 404);
   const obras    = (await env.DB.prepare('SELECT id, nombre, codigo FROM obras WHERE empresa_id = ? AND activa = 1 ORDER BY nombre').bind(auth.empresa_id).all()).results;
   const usuarios = (await env.DB.prepare('SELECT id, nombre, rol, departamento, obra_id FROM usuarios WHERE empresa_id = ? AND activo = 1 ORDER BY nombre').bind(auth.empresa_id).all()).results;
@@ -738,14 +738,18 @@ async function updateMiEmpresa(request, env) {
   const auth = await getAuth(request, env);
   if (!auth.empresa_id || (auth.rol !== 'empresa_admin' && !auth.isSuperadmin)) return err('Sin permisos', 403);
   const body = await request.json().catch(() => ({}));
-  const { nombre, email, telefono, direccion, cif } = body;
+  const { nombre, email, telefono, direccion, cif, departamentos } = body;
   if (!nombre?.trim()) return err('Falta el nombre de la empresa');
   const campos = ['nombre = ?'];
   const vals   = [nombre.trim()];
-  if (email     !== undefined) { campos.push('email = ?');     vals.push(email?.trim()     || null); }
-  if (telefono  !== undefined) { campos.push('telefono = ?');  vals.push(telefono?.trim()  || null); }
-  if (direccion !== undefined) { campos.push('direccion = ?'); vals.push(direccion?.trim() || null); }
-  if (cif       !== undefined) { campos.push('cif = ?');       vals.push(cif?.trim()       || null); }
+  if (email         !== undefined) { campos.push('email = ?');         vals.push(email?.trim()     || null); }
+  if (telefono      !== undefined) { campos.push('telefono = ?');      vals.push(telefono?.trim()  || null); }
+  if (direccion     !== undefined) { campos.push('direccion = ?');     vals.push(direccion?.trim() || null); }
+  if (cif           !== undefined) { campos.push('cif = ?');           vals.push(cif?.trim()       || null); }
+  if (departamentos !== undefined) {
+    const val = departamentos ? JSON.stringify(Array.isArray(departamentos) ? departamentos : departamentos) : null;
+    campos.push('departamentos = ?'); vals.push(val);
+  }
   vals.push(auth.empresa_id);
   await env.DB.prepare(`UPDATE empresas SET ${campos.join(', ')} WHERE id = ?`).bind(...vals).run();
   return json({ ok: true });
@@ -2292,6 +2296,23 @@ async function registrarHistorialKitHerr(env, empresa_id, kit_id, herramienta_id
 // PERSONAL — Horarios, Fichajes, Resúmenes
 // ════════════════════════════════════════════════════════════════════════════
 
+// Devuelve {hora_entrada, hora_salida, horas_dia} para el día específico de un fichaje (MEJ-131)
+function getHorarioParaDia(horario, fecha) {
+  if (horario.horarios_dia) {
+    try {
+      const dias = JSON.parse(horario.horarios_dia);
+      const letras = ['D','L','M','X','J','V','S'];
+      const letra = letras[new Date(fecha + 'T00:00:00').getDay()];
+      if (dias[letra]?.entrada) {
+        const ent = dias[letra].entrada;
+        const sal = dias[letra].salida;
+        return { hora_entrada: ent, hora_salida: sal, horas_dia: calcHoras(ent, sal) };
+      }
+    } catch {}
+  }
+  return { hora_entrada: horario.hora_entrada, hora_salida: horario.hora_salida, horas_dia: horario.horas_dia };
+}
+
 // Devuelve minutos de diferencia (positivo = tarde, negativo = antes de hora)
 function calcMinutosRetraso(horaEntrada, horaHorario) {
   if (!horaEntrada || !horaHorario) return 0;
@@ -2324,18 +2345,19 @@ async function guardarHorarioObra(request, env) {
   const { empresa_id, rol } = await getAuth(request, env);
   if (!empresa_id || rol === 'operario') return err('Sin permisos', 403);
   const body = await request.json().catch(() => ({}));
-  const { obra_id, hora_entrada, hora_salida, dias_semana, notas } = body;
+  const { obra_id, hora_entrada, hora_salida, dias_semana, notas, horarios_dia } = body;
   if (!hora_entrada || !hora_salida) return err('Faltan horas');
   const horas_dia = calcHoras(hora_entrada, hora_salida);
+  const hdStr = horarios_dia ? JSON.stringify(horarios_dia) : null;
   // Upsert: si ya existe horario para esa obra, actualizar
   const existe = obra_id ? await env.DB.prepare('SELECT id FROM horarios_obra WHERE empresa_id = ? AND obra_id = ?').bind(empresa_id, obra_id).first() : null;
   if (existe) {
-    await env.DB.prepare('UPDATE horarios_obra SET hora_entrada=?,hora_salida=?,horas_dia=?,dias_semana=?,notas=? WHERE id=?')
-      .bind(hora_entrada, hora_salida, horas_dia, dias_semana||'LMXJV', notas||null, existe.id).run();
+    await env.DB.prepare('UPDATE horarios_obra SET hora_entrada=?,hora_salida=?,horas_dia=?,dias_semana=?,notas=?,horarios_dia=? WHERE id=?')
+      .bind(hora_entrada, hora_salida, horas_dia, dias_semana||'LMXJV', notas||null, hdStr, existe.id).run();
     return json({ ok: true, id: existe.id });
   }
-  const r = await env.DB.prepare('INSERT INTO horarios_obra (empresa_id,obra_id,hora_entrada,hora_salida,horas_dia,dias_semana,notas) VALUES (?,?,?,?,?,?,?)')
-    .bind(empresa_id, obra_id||null, hora_entrada, hora_salida, horas_dia, dias_semana||'LMXJV', notas||null).run();
+  const r = await env.DB.prepare('INSERT INTO horarios_obra (empresa_id,obra_id,hora_entrada,hora_salida,horas_dia,dias_semana,notas,horarios_dia) VALUES (?,?,?,?,?,?,?,?)')
+    .bind(empresa_id, obra_id||null, hora_entrada, hora_salida, horas_dia, dias_semana||'LMXJV', notas||null, hdStr).run();
   return json({ ok: true, id: r.meta.last_row_id }, 201);
 }
 
@@ -2343,10 +2365,11 @@ async function actualizarHorarioObra(id, request, env) {
   const { empresa_id, rol } = await getAuth(request, env);
   if (!empresa_id || rol === 'operario') return err('Sin permisos', 403);
   const body = await request.json().catch(() => ({}));
-  const { hora_entrada, hora_salida, dias_semana, notas } = body;
+  const { hora_entrada, hora_salida, dias_semana, notas, horarios_dia } = body;
   const horas_dia = calcHoras(hora_entrada, hora_salida);
-  await env.DB.prepare('UPDATE horarios_obra SET hora_entrada=?,hora_salida=?,horas_dia=?,dias_semana=?,notas=? WHERE id=? AND empresa_id=?')
-    .bind(hora_entrada, hora_salida, horas_dia, dias_semana||'LMXJV', notas||null, id, empresa_id).run();
+  const hdStr = horarios_dia ? JSON.stringify(horarios_dia) : null;
+  await env.DB.prepare('UPDATE horarios_obra SET hora_entrada=?,hora_salida=?,horas_dia=?,dias_semana=?,notas=?,horarios_dia=? WHERE id=? AND empresa_id=?')
+    .bind(hora_entrada, hora_salida, horas_dia, dias_semana||'LMXJV', notas||null, hdStr, id, empresa_id).run();
   return json({ ok: true });
 }
 
@@ -2483,12 +2506,13 @@ async function crearFichaje(request, env) {
   let horas_extra = 0, minutos_retraso = 0;
   let estadoFinal = estado || 'presente';
   if (obra_id || obraAuth) {
-    const horario = await env.DB.prepare('SELECT horas_dia, hora_entrada as h_ent FROM horarios_obra WHERE empresa_id=? AND obra_id=?').bind(empresa_id, obra_id||obraAuth).first();
-    if (horario) {
-      if (horas > 0) horas_extra = Math.max(0, Math.round((horas - horario.horas_dia) * 100) / 100);
+    const horarioRow = await env.DB.prepare('SELECT * FROM horarios_obra WHERE empresa_id=? AND obra_id=?').bind(empresa_id, obra_id||obraAuth).first();
+    if (horarioRow) {
+      const hd = getHorarioParaDia(horarioRow, fecha);
+      if (horas > 0) horas_extra = Math.max(0, Math.round((horas - hd.horas_dia) * 100) / 100);
       // Auto-detectar retraso: >5 min tarde y estado era presencia/presente
       if (hora_entrada && ['presencia','presente'].includes(estadoFinal)) {
-        const mins = calcMinutosRetraso(hora_entrada, horario.h_ent);
+        const mins = calcMinutosRetraso(hora_entrada, hd.hora_entrada);
         if (mins > 5) { minutos_retraso = mins; estadoFinal = 'retraso'; }
       }
     }
@@ -2523,12 +2547,13 @@ async function actualizarFichaje(id, request, env) {
       const sal = body.hora_salida  ?? f.hora_salida;
       const horas = calcHoras(ent, sal);
       campos.push('horas_trabajadas=?'); vals.push(horas);
-      const horario = f.obra_id ? await env.DB.prepare('SELECT horas_dia, hora_entrada as h_ent FROM horarios_obra WHERE empresa_id=? AND obra_id=?').bind(empresa_id, f.obra_id).first() : null;
-      const horas_extra = horario ? Math.max(0, Math.round((horas - horario.horas_dia)*100)/100) : 0;
+      const horarioRow = f.obra_id ? await env.DB.prepare('SELECT * FROM horarios_obra WHERE empresa_id=? AND obra_id=?').bind(empresa_id, f.obra_id).first() : null;
+      const hd = horarioRow ? getHorarioParaDia(horarioRow, f.fecha) : null;
+      const horas_extra = hd ? Math.max(0, Math.round((horas - hd.horas_dia)*100)/100) : 0;
       campos.push('horas_extra=?'); vals.push(horas_extra);
       // Recalcular retraso si cambió hora_entrada
-      if (body.hora_entrada !== undefined && horario) {
-        const mins = calcMinutosRetraso(ent, horario.h_ent);
+      if (body.hora_entrada !== undefined && hd) {
+        const mins = calcMinutosRetraso(ent, hd.hora_entrada);
         campos.push('minutos_retraso=?'); vals.push(Math.max(0, mins));
         const estadoActual = body.estado ?? f.estado;
         if (['presencia','presente','retraso'].includes(estadoActual) && !body.estado) {
