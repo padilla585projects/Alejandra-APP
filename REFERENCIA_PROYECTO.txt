@@ -1,7 +1,7 @@
 ================================================================================
   ALEJANDRA APP — REFERENCIA COMPLETA DEL PROYECTO
   Leer este archivo AL INICIO de cada sesión para continuar sin problemas.
-  Última actualización: 20/04/2026
+  Última actualización: 21/04/2026
   ⚠️  NORMA: actualizar ESTE archivo + ESTADO_APP.txt después de CADA cambio.
 ================================================================================
 
@@ -65,15 +65,14 @@ REGLA DE DEPLOY:
   - En ambos casos: subir versión + actualizar txts + deploy worker + git push
 
 ÚLTIMO CAMBIO REALIZADO:
-  v4.58 [nueva] — 20/04/2026
-  · MEJ-07: notificaciones clickables con irANotif(tipo)
-  · MEJ-10: botón "Añadir como nueva" al escanear herramienta inexistente
-  · BUG-122: Ideas ya no parpadea en auto-refresh
-  · BUG-124: herramientas/kits filtran por obra activa (worker + frontend)
-  · BUG-125: header SA más compacto ('SA' en lugar de 'SuperAdmin')
-  · v4.51: Invitaciones movidas a Ajustes/Usuarios; flujo Google nuevo usuario verificado
-  · v4.50: fix Google login — race condition + botón incorrecto
-  · v4.45: fix notificaciones no se borran (botón Borrar + lastSeen en todos los tipos)
+  v4.59 [nueva] — 21/04/2026
+  · BUG-56: panel Sesión reestructurado — botones cerrar operarios/encargados/todas siempre visibles
+  · BUG-51/55/57: fix 403 injusto en edición/creación/movimiento de inventario Seguridad
+  · BUG-59: inventarios filtran por obra para SA/EA (obra_id via query param)
+  · BUG-71: filtros Ideas siempre actualizan DOM (hash incluye filtro activo)
+  · BUG-60: feedback toast al cambiar estado en Ideas
+  · BUG-23: obra-select más ancho (220px), texto ya no se corta
+  · Modal aprobación: departamentos corregidos + filtro dinámico por empresa
 
 ================================================================================
   RESUMEN EJECUTIVO
@@ -206,7 +205,7 @@ git -c credential.helper= push https://padilla585:<TOKEN_GITHUB_VIEJO>@github.co
 ================================================================================
 
 APP VIEJA:  v4.19  (sw.js: alejandra-v4.19 | version.json: {"v":"4.19"})
-APP NUEVA:  v4.47  (sw.js: alejandra-v4.47 | version.json: {"v":"4.47"})
+APP NUEVA:  v4.59  (sw.js: alejandra-v4.59 | version.json: {"v":"4.59"})
 
 Historial reciente (app nueva):
   v4.41 [nueva] — Login Google con invitaciones temporales (rol+dept, caduca, 1 uso)

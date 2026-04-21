@@ -1,7 +1,7 @@
 ================================================================================
   ALEJANDRA APP — IDEAS, MEJORAS Y ERRORES PENDIENTES
   Recogidos de: Canal Telegram @AlejandraAPP_bot
-  Última actualización: 20/04/2026 (v4.55) — añadidos BUG-116/118/120/122/123/124/125, MEJ-07→12, NEW-12
+  Última actualización: 21/04/2026 (v4.59) — resueltos BUG-56/51/55/57/59/71/60/23
 
   ⚠️  LEER ESTE ARCHIVO ANTES DE CUALQUIER SESIÓN DE CODIFICACIÓN.
   ⚠️  Marcar como [HECHO vX.XX] cuando se implemente. No borrar las líneas.

@@ -657,11 +657,14 @@ async function eliminarObra(id, request, env) {
 // ════════════════════════════════════════════════════════════════════════════
 
 async function getBobinas(request, env) {
-  const { obraId, isSuperadmin, departamento, empresa_id } = await getAuth(request, env);
+  const { obraId, isSuperadmin, isEmpresaAdmin, departamento, empresa_id } = await getAuth(request, env);
   const url = new URL(request.url);
   const estado = url.searchParams.get('estado');
   const buscar = url.searchParams.get('q');
-  const obraFilter = obraId || null;
+  const obraParamRaw = url.searchParams.get('obra_id');
+  const obraParam = obraParamRaw ? parseInt(obraParamRaw) : null;
+  // SA/EA can override obra via query param; regular users use their session obra
+  const obraFilter = (isSuperadmin || isEmpresaAdmin) ? obraParam : (obraId || null);
 
   let sql = 'SELECT * FROM bobinas WHERE empresa_id = ?';
   const params = [empresa_id];
@@ -787,16 +790,19 @@ async function eliminarBobina(codigo, request, env, ctx) {
 // ════════════════════════════════════════════════════════════════════════════
 
 async function getPemp(request, env) {
-  const { obraId, isSuperadmin, isSeguridad, departamento, empresa_id } = await getAuth(request, env);
+  const { obraId, isSuperadmin, isEmpresaAdmin, isSeguridad, departamento, empresa_id } = await getAuth(request, env);
   const url = new URL(request.url);
   const estado = url.searchParams.get('estado');
   const buscar = url.searchParams.get('q');
+  const obraParamRaw = url.searchParams.get('obra_id');
+  const obraParam = obraParamRaw ? parseInt(obraParamRaw) : null;
+  const obraFilter = (isSuperadmin || isEmpresaAdmin) ? obraParam : (obraId || null);
 
   let sql = 'SELECT * FROM pemp WHERE empresa_id = ?';
   const params = [empresa_id];
   // Superadmin ve todo; el resto solo su departamento
   if (!isSuperadmin) { sql += ' AND departamento = ?'; params.push(departamento); }
-  if (obraId)  { sql += ' AND obra_id = ?'; params.push(obraId); }
+  if (obraFilter)  { sql += ' AND obra_id = ?'; params.push(obraFilter); }
   if (estado)  { sql += ' AND estado = ?';  params.push(estado); }
   if (buscar) {
     sql += ' AND (matricula LIKE ? OR tipo LIKE ? OR marca LIKE ? OR proveedor LIKE ?)';
@@ -945,16 +951,19 @@ async function eliminarPemp(matricula, request, env, ctx) {
 // ════════════════════════════════════════════════════════════════════════════
 
 async function getCarretillas(request, env) {
-  const { obraId, isSuperadmin, isSeguridad, departamento, empresa_id } = await getAuth(request, env);
+  const { obraId, isSuperadmin, isEmpresaAdmin, isSeguridad, departamento, empresa_id } = await getAuth(request, env);
   const url = new URL(request.url);
   const estado = url.searchParams.get('estado');
   const buscar = url.searchParams.get('q');
+  const obraParamRaw = url.searchParams.get('obra_id');
+  const obraParam = obraParamRaw ? parseInt(obraParamRaw) : null;
+  const obraFilter = (isSuperadmin || isEmpresaAdmin) ? obraParam : (obraId || null);
 
   let sql = 'SELECT * FROM carretillas WHERE empresa_id = ?';
   const params = [empresa_id];
   // Superadmin ve todo; el resto solo su departamento
   if (!isSuperadmin) { sql += ' AND departamento = ?'; params.push(departamento); }
-  if (obraId)  { sql += ' AND obra_id = ?'; params.push(obraId); }
+  if (obraFilter)  { sql += ' AND obra_id = ?'; params.push(obraFilter); }
   if (estado)  { sql += ' AND estado = ?';  params.push(estado); }
   if (buscar) {
     sql += ' AND (matricula LIKE ? OR tipo LIKE ? OR marca LIKE ? OR proveedor LIKE ?)';
@@ -1134,13 +1143,17 @@ async function transferirRecurso(tabla, id, request, env) {
 
 async function getUsuarios(request, env) {
   const { isSuperadmin, isAdmin, isEmpresaAdmin, isEncargado, obraId, empresa_id } = await getAuth(request, env);
+  const url = new URL(request.url);
+  const empresaParamRaw = url.searchParams.get('empresa_id');
+  // Solo superadmin puede consultar usuarios de otra empresa via query param
+  const empresaFiltro = (isSuperadmin && empresaParamRaw) ? parseInt(empresaParamRaw) : empresa_id;
 
   let sql;
   const params = [];
 
   if (isSuperadmin || isAdmin || isEmpresaAdmin) {
     sql = 'SELECT u.*, o.nombre as obra_nombre FROM usuarios u LEFT JOIN obras o ON u.obra_id = o.id WHERE u.activo = 1 AND u.empresa_id = ? ORDER BY u.nombre';
-    params.push(empresa_id);
+    params.push(empresaFiltro);
   } else if (isEncargado && obraId) {
     sql = 'SELECT u.*, o.nombre as obra_nombre FROM usuarios u LEFT JOIN obras o ON u.obra_id = o.id WHERE u.obra_id = ? AND u.activo = 1 AND u.empresa_id = ? ORDER BY u.nombre';
     params.push(obraId, empresa_id);
@@ -3063,8 +3076,8 @@ Si no puedes leer ningún código, responde: NO_LEIDO`;
 // ════════════════════════════════════════════════════════════════════════════
 
 async function getInventarioSeg(request, env) {
-  const { isSuperadmin, isSeguridad, empresa_id } = await getAuth(request, env);
-  if (!isSuperadmin && !isSeguridad) return err('No autorizado', 403);
+  const { isSuperadmin, isSeguridad, isAdmin, empresa_id } = await getAuth(request, env);
+  if (!isSuperadmin && !isAdmin && !isSeguridad) return err('No autorizado', 403);
   const url = new URL(request.url);
   const q = url.searchParams.get('q');
   let sql = 'SELECT * FROM inventario_seg WHERE empresa_id = ?';
@@ -3083,8 +3096,8 @@ async function buscarItemSeg(codigo, env) {
 }
 
 async function crearItemSeg(request, env) {
-  const { isSuperadmin, isSeguridad, usuario, empresa_id } = await getAuth(request, env);
-  if (!isSuperadmin && !isSeguridad) return err('No autorizado', 403);
+  const { isSuperadmin, isSeguridad, isAdmin, usuario, empresa_id } = await getAuth(request, env);
+  if (!isSuperadmin && !isAdmin && !isSeguridad) return err('No autorizado', 403);
   const body = await request.json().catch(() => ({}));
   const { tipo_material, modo = 'individual', codigo, nombre, cantidad_total = 1, fecha_entrada, fecha_caducidad, notas } = body;
   if (!tipo_material) return err('Falta tipo_material');
@@ -3111,8 +3124,8 @@ async function crearItemSeg(request, env) {
 }
 
 async function moverItemSeg(id, request, env) {
-  const { isSuperadmin, isSeguridad, usuario } = await getAuth(request, env);
-  if (!isSuperadmin && !isSeguridad) return err('No autorizado', 403);
+  const { isSuperadmin, isSeguridad, isAdmin, usuario } = await getAuth(request, env);
+  if (!isSuperadmin && !isAdmin && !isSeguridad) return err('No autorizado', 403);
   const item = await env.DB.prepare('SELECT * FROM inventario_seg WHERE id = ?').bind(id).first();
   if (!item) return err('Item no encontrado', 404);
   const body = await request.json().catch(() => ({}));

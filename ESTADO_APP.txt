@@ -4,8 +4,8 @@
   Ruta local: <RUTA_BASE>\Bobinaap
 ================================================================================
 
-ÚLTIMA ACTUALIZACIÓN: 20/04/2026
-VERSIÓN ACTUAL: v4.19 app vieja | v4.58 app nueva
+ÚLTIMA ACTUALIZACIÓN: 21/04/2026
+VERSIÓN ACTUAL: v4.19 app vieja | v4.59 app nueva
 
 ⚠️  ANTES DE CODIFICAR: leer NuevaApp/IDEAS_PENDIENTES.txt
     Lista completa de bugs activos, mejoras y features pendientes.
@@ -240,6 +240,25 @@ hotfix  |  20/04/2026  [SOLO NUEVA APP — migración DB sin cambio de código]
     · Fix: ALTER TABLE bobinas/pemp/carretillas ADD COLUMN registrado_por TEXT aplicado en D1
     · App vieja no afectada (ya tenía la columna desde antes)
     · Sin cambio de código ni deploy — solo migración directa en D1
+
+v4.59  |  21/04/2026  [SOLO NUEVA APP]
+  - BUG-56: Panel Sesión reestructurado — botones cerrar sesiones siempre visibles para SA/enc/EA
+    · Nueva sección "Gestión de sesiones" con botones: Cerrar operarios / Cerrar encargados / Cerrar TODAS
+    · "Ver quién está conectado" dentro de la misma sección, lista expandible
+    · initAjustesTabs muestra/oculta seccionGestionSesiones según rol
+  - BUG-51/55/57: Errores al editar/crear/mover items en Seguridad — 403 injusto
+    · getInventarioSeg, crearItemSeg, moverItemSeg: añadido isAdmin a la guarda de autorización
+    · Encargado y empresa_admin ya pueden gestionar inventario de seguridad sin errores
+  - BUG-59: Inventarios filtran correctamente por obra para SA/EA
+    · cargarStock() pasa ?obra_id=X cuando hay obra seleccionada en el header
+    · getBobinas, getPemp, getCarretillas: SA/EA pueden filtrar por obra via query param
+    · getUsuarios: superadmin puede consultar usuarios de otra empresa via ?empresa_id=X
+  - BUG-71: Filtros de Ideas ahora siempre actualizan el DOM
+    · Hash de caché incluye _sugFiltroKey+_sugFiltroVal — un cambio de filtro siempre refresca la lista
+  - BUG-60: cambiarEstadoSug ahora muestra toast ✅/❌ según resultado
+  - BUG-23: obra-select max-width aumentado a 220px — texto ya no se corta
+  - Modal aprobación usuario: corrección de departamentos hardcodeados (mecanico/civil → mecanicas/personal)
+    · Selector empresa con onchange que actualiza departamentos según usuarios existentes en la empresa
 
 v4.58  |  20/04/2026  [SOLO NUEVA APP]
   - MEJ-07: Notificaciones clickables — al pulsar navegan a la sección correspondiente
