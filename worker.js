@@ -1767,7 +1767,12 @@ function tabForDept(tipo, dept) {
   return 'Seg-Inventario';
 }
 
+let _gTokenCache = {};
 async function getGoogleToken(env, scope = 'https://www.googleapis.com/auth/spreadsheets') {
+  const cacheKey = scope;
+  const cached = _gTokenCache[cacheKey];
+  if (cached && cached.exp > Date.now()) return cached.token;
+
   const now = Math.floor(Date.now() / 1000);
   const claim = {
     iss: env.GOOGLE_CLIENT_EMAIL,
@@ -1817,6 +1822,7 @@ async function getGoogleToken(env, scope = 'https://www.googleapis.com/auth/spre
 
   const data = await res.json();
   if (!data.access_token) throw new Error('No se pudo obtener token de Google: ' + JSON.stringify(data));
+  _gTokenCache[cacheKey] = { token: data.access_token, exp: Date.now() + 3500_000 };
   return data.access_token;
 }
 
@@ -2603,7 +2609,7 @@ async function restaurarEmpresa(request, env) {
 
 // ════════════════════════════════════════════════════════════════════════════
 
-async function syncSheets(env, tabs = null) {
+async function syncSheets(env, tabs = null, empresa_id = 1) {
   if (!env.GOOGLE_PRIVATE_KEY || !env.GOOGLE_CLIENT_EMAIL || !env.GOOGLE_SHEET_ID) return;
 
   try {
@@ -2658,7 +2664,7 @@ async function syncSheets(env, tabs = null) {
         const errBody = await putRes.text();
         throw new Error(`writeTab(${tab}) HTTP ${putRes.status}: ${errBody.slice(0, 200)}`);
       } else { await putRes.body?.cancel(); }
-      if (tabsNeedFormat.has(tab) && numIdMap[tab] !== undefined) {
+      if (numIdMap[tab] !== undefined) {
         await applyTabFormatting(sheetId, authH, tab, numIdMap[tab], values[0]?.length || 1);
       }
     };
@@ -2668,69 +2674,69 @@ async function syncSheets(env, tabs = null) {
     const cabCarretillas = ['Obra', 'Matrícula', 'Tipo', 'Marca', 'Proveedor', 'Energía', 'Estado', 'Fecha Entrada', 'Fecha Avería', 'Fecha Reparación', 'Devuelto por', 'Fecha Devolución', 'Últ. Revisión', 'Próx. Revisión', 'Registrado por', 'Notas'];
     const cabSegInv      = ['Tipo', 'Modo', 'Código/Serie', 'Nombre', 'Cantidad Total', 'Disponible', 'Estado', 'Fecha Entrada', 'Fecha Caducidad', 'Destino Actual', 'Registrado por', 'Notas'];
     const cabHerr        = ['Obra', 'Kit', 'Tipo', 'Marca', 'Modelo', 'Nº Serie', 'Asignado a', 'Alimentación', 'Estado', 'Fecha Alta', 'Fecha Asignación', 'Fecha Devolución', 'Fecha Avería', 'Fecha Reparación', 'Notas'];
-    const cabKits        = ['Nº Kit', 'Nombre', 'Obra', 'Departamento', 'Asignado a', 'Componentes', 'Fecha Alta', 'Fecha Asignación', 'Notas'];
+    const cabKits        = ['Nº Kit', 'Nombre', 'Obra', 'Departamento', 'Asignado a', 'Componentes', 'Fecha Alta', 'Fecha Asignación', 'Estado', 'Fecha Devolución', 'Notas'];
 
     const fmtB    = b => [b.obra_nombre||'', b.codigo, b.num_albaran||'', b.proveedor, b.tipo_cable, b.registrado_por||'', b.fecha_entrada, b.devuelto_por||'', b.fecha_devolucion||'', b.estado, b.notas||''];
     const fmtP    = p => [p.obra_nombre||'', p.matricula, p.tipo||'', p.marca||'', p.proveedor||'', p.estado, p.fecha_entrada, p.fecha_averia||'', p.fecha_reparacion||'', p.devuelto_por||'', p.fecha_devolucion||'', p.fecha_ultima_revision||'', p.fecha_proxima_revision||'', p.registrado_por||'', p.notas||''];
     const fmtC    = c => [c.obra_nombre||'', c.matricula, c.tipo||'', c.marca||'', c.proveedor||'', c.energia||'', c.estado, c.fecha_entrada, c.fecha_averia||'', c.fecha_reparacion||'', c.devuelto_por||'', c.fecha_devolucion||'', c.fecha_ultima_revision||'', c.fecha_proxima_revision||'', c.registrado_por||'', c.notas||''];
     const fmtSeg  = s => [s.tipo_material, s.modo, s.codigo||'', s.nombre||'', s.cantidad_total||1, s.cantidad_disponible||1, s.estado||'disponible', s.fecha_entrada||'', s.fecha_caducidad||'', s.destino_actual||'', s.registrado_por||'', s.notas||''];
     const fmtHerr = h => [h.obra_nombre||'', h.kit_nombre||'', h.tipo_nombre||'', h.marca||'', h.modelo||'', h.numero_serie||'', h.asignado_a||'', h.alimentacion||'', h.estado||'disponible', h.fecha_alta||'', h.fecha_asignacion||'', h.fecha_devolucion||'', h.fecha_averia||'', h.fecha_reparacion||'', h.notas||''];
-    const fmtKit  = k => [k.numero_kit||'', k.nombre||'', k.obra_nombre||'', k.departamento||'', k.asignado_a||'', k.num_componentes||0, k.fecha_alta||'', k.fecha_asignacion||'', k.notas||''];
+    const fmtKit  = k => [k.numero_kit||'', k.nombre||'', k.obra_nombre||'', k.departamento||'', k.asignado_a||'', k.num_componentes||0, k.fecha_alta||'', k.fecha_asignacion||'', k.estado||'disponible', k.fecha_devolucion||'', k.notas||''];
 
     // Solo ejecutar queries para las pestañas que toca sincronizar, en paralelo
     await Promise.all([
       tabsToSync.includes('Elec-Bobinas') && (async () => {
         const { results } = await env.DB.prepare(
-          'SELECT b.*, o.nombre as obra_nombre FROM bobinas b LEFT JOIN obras o ON b.obra_id = o.id WHERE b.empresa_id = 1 AND b.departamento = ? ORDER BY b.created_at DESC'
-        ).bind('electrico').all();
+          'SELECT b.*, o.nombre as obra_nombre FROM bobinas b LEFT JOIN obras o ON b.obra_id = o.id WHERE b.empresa_id = ? AND b.departamento = ? ORDER BY b.created_at DESC'
+        ).bind(empresa_id, 'electrico').all();
         await writeTab('Elec-Bobinas', [cabBobinas, ...results.map(fmtB)]);
       })(),
       tabsToSync.includes('Elec-PEMP') && (async () => {
         const { results } = await env.DB.prepare(
-          'SELECT p.*, o.nombre as obra_nombre FROM pemp p LEFT JOIN obras o ON p.obra_id = o.id WHERE p.empresa_id = 1 AND p.departamento = ? ORDER BY p.created_at DESC'
-        ).bind('electrico').all();
+          'SELECT p.*, o.nombre as obra_nombre FROM pemp p LEFT JOIN obras o ON p.obra_id = o.id WHERE p.empresa_id = ? AND p.departamento = ? ORDER BY p.created_at DESC'
+        ).bind(empresa_id, 'electrico').all();
         await writeTab('Elec-PEMP', [cabPemp, ...results.map(fmtP)]);
       })(),
       tabsToSync.includes('Elec-Carretillas') && (async () => {
         const { results } = await env.DB.prepare(
-          'SELECT c.*, o.nombre as obra_nombre FROM carretillas c LEFT JOIN obras o ON c.obra_id = o.id WHERE c.empresa_id = 1 AND c.departamento = ? ORDER BY c.created_at DESC'
-        ).bind('electrico').all();
+          'SELECT c.*, o.nombre as obra_nombre FROM carretillas c LEFT JOIN obras o ON c.obra_id = o.id WHERE c.empresa_id = ? AND c.departamento = ? ORDER BY c.created_at DESC'
+        ).bind(empresa_id, 'electrico').all();
         await writeTab('Elec-Carretillas', [cabCarretillas, ...results.map(fmtC)]);
       })(),
       tabsToSync.includes('Mec-PEMP') && (async () => {
         const { results } = await env.DB.prepare(
-          'SELECT p.*, o.nombre as obra_nombre FROM pemp p LEFT JOIN obras o ON p.obra_id = o.id WHERE p.empresa_id = 1 AND p.departamento = ? ORDER BY p.created_at DESC'
-        ).bind('mecanicas').all();
+          'SELECT p.*, o.nombre as obra_nombre FROM pemp p LEFT JOIN obras o ON p.obra_id = o.id WHERE p.empresa_id = ? AND p.departamento = ? ORDER BY p.created_at DESC'
+        ).bind(empresa_id, 'mecanicas').all();
         await writeTab('Mec-PEMP', [cabPemp, ...results.map(fmtP)]);
       })(),
       tabsToSync.includes('Mec-Carretillas') && (async () => {
         const { results } = await env.DB.prepare(
-          'SELECT c.*, o.nombre as obra_nombre FROM carretillas c LEFT JOIN obras o ON c.obra_id = o.id WHERE c.empresa_id = 1 AND c.departamento = ? ORDER BY c.created_at DESC'
-        ).bind('mecanicas').all();
+          'SELECT c.*, o.nombre as obra_nombre FROM carretillas c LEFT JOIN obras o ON c.obra_id = o.id WHERE c.empresa_id = ? AND c.departamento = ? ORDER BY c.created_at DESC'
+        ).bind(empresa_id, 'mecanicas').all();
         await writeTab('Mec-Carretillas', [cabCarretillas, ...results.map(fmtC)]);
       })(),
       tabsToSync.includes('Seg-Inventario') && (async () => {
         const { results } = await env.DB.prepare(
-          'SELECT * FROM inventario_seg WHERE empresa_id = 1 ORDER BY tipo_material, created_at DESC'
-        ).all();
+          'SELECT * FROM inventario_seg WHERE empresa_id = ? ORDER BY tipo_material, created_at DESC'
+        ).bind(empresa_id).all();
         await writeTab('Seg-Inventario', [cabSegInv, ...results.map(fmtSeg)]);
       })(),
       tabsToSync.includes('Elec-Herramientas') && (async () => {
         const { results } = await env.DB.prepare(
-          'SELECT h.*, o.nombre as obra_nombre, t.nombre as tipo_nombre, k.nombre as kit_nombre FROM herramientas h LEFT JOIN obras o ON h.obra_id=o.id LEFT JOIN tipos_herramienta t ON h.tipo_id=t.id LEFT JOIN kits_herramientas k ON h.kit_id=k.id WHERE h.empresa_id=1 AND h.departamento=? ORDER BY h.created_at DESC'
-        ).bind('electrico').all();
+          'SELECT h.*, o.nombre as obra_nombre, t.nombre as tipo_nombre, k.nombre as kit_nombre FROM herramientas h LEFT JOIN obras o ON h.obra_id=o.id LEFT JOIN tipos_herramienta t ON h.tipo_id=t.id LEFT JOIN kits_herramientas k ON h.kit_id=k.id WHERE h.empresa_id=? AND h.departamento=? ORDER BY h.created_at DESC'
+        ).bind(empresa_id, 'electrico').all();
         await writeTab('Elec-Herramientas', [cabHerr, ...results.map(fmtHerr)]);
       })(),
       tabsToSync.includes('Mec-Herramientas') && (async () => {
         const { results } = await env.DB.prepare(
-          'SELECT h.*, o.nombre as obra_nombre, t.nombre as tipo_nombre, k.nombre as kit_nombre FROM herramientas h LEFT JOIN obras o ON h.obra_id=o.id LEFT JOIN tipos_herramienta t ON h.tipo_id=t.id LEFT JOIN kits_herramientas k ON h.kit_id=k.id WHERE h.empresa_id=1 AND h.departamento=? ORDER BY h.created_at DESC'
-        ).bind('mecanicas').all();
+          'SELECT h.*, o.nombre as obra_nombre, t.nombre as tipo_nombre, k.nombre as kit_nombre FROM herramientas h LEFT JOIN obras o ON h.obra_id=o.id LEFT JOIN tipos_herramienta t ON h.tipo_id=t.id LEFT JOIN kits_herramientas k ON h.kit_id=k.id WHERE h.empresa_id=? AND h.departamento=? ORDER BY h.created_at DESC'
+        ).bind(empresa_id, 'mecanicas').all();
         await writeTab('Mec-Herramientas', [cabHerr, ...results.map(fmtHerr)]);
       })(),
       tabsToSync.includes('Kits') && (async () => {
         const { results } = await env.DB.prepare(
-          'SELECT k.*, o.nombre as obra_nombre FROM kits_herramientas k LEFT JOIN obras o ON k.obra_id=o.id WHERE k.empresa_id=1 ORDER BY k.numero_kit'
-        ).all();
+          'SELECT k.*, o.nombre as obra_nombre FROM kits_herramientas k LEFT JOIN obras o ON k.obra_id=o.id WHERE k.empresa_id=? ORDER BY k.numero_kit'
+        ).bind(empresa_id).all();
         await writeTab('Kits', [cabKits, ...results.map(fmtKit)]);
       })(),
     ].filter(Boolean));
@@ -2746,7 +2752,7 @@ async function syncSheets(env, tabs = null) {
   }
 }
 
-async function syncPedidos(env, tabs = null) {
+async function syncPedidos(env, tabs = null, empresa_id = 1) {
   if (!env.GOOGLE_PRIVATE_KEY || !env.GOOGLE_CLIENT_EMAIL || !env.GOOGLE_PEDIDOS_SHEET_ID) return;
 
   try {
@@ -2797,7 +2803,7 @@ async function syncPedidos(env, tabs = null) {
         { method: 'PUT', headers: authH, body: JSON.stringify({ values }) });
       if (!putRes.ok) throw new Error(`writeTab(${tab}) HTTP ${putRes.status}: ${(await putRes.text()).slice(0, 200)}`);
       else await putRes.body?.cancel();
-      if (tabsNeedFormat.has(tab) && numIdMap[tab] !== undefined) {
+      if (numIdMap[tab] !== undefined) {
         await applyTabFormatting(sheetId, authH, tab, numIdMap[tab], values[0]?.length || 1);
       }
     };
@@ -2805,20 +2811,20 @@ async function syncPedidos(env, tabs = null) {
     await Promise.all([
       tabsToSync.includes('Elec-Pedidos') && (async () => {
         const { results } = await env.DB.prepare(
-          'SELECT p.*, o.nombre as obra_nombre FROM pedidos p LEFT JOIN obras o ON p.obra_id = o.id WHERE p.empresa_id = 1 AND p.departamento = ? ORDER BY p.created_at DESC'
-        ).bind('electrico').all();
+          'SELECT p.*, o.nombre as obra_nombre FROM pedidos p LEFT JOIN obras o ON p.obra_id = o.id WHERE p.empresa_id = ? AND p.departamento = ? ORDER BY p.created_at DESC'
+        ).bind(empresa_id, 'electrico').all();
         await writeTab('Elec-Pedidos', [cab, ...results.map(fmt)]);
       })(),
       tabsToSync.includes('Mec-Pedidos') && (async () => {
         const { results } = await env.DB.prepare(
-          'SELECT p.*, o.nombre as obra_nombre FROM pedidos p LEFT JOIN obras o ON p.obra_id = o.id WHERE p.empresa_id = 1 AND p.departamento = ? ORDER BY p.created_at DESC'
-        ).bind('mecanicas').all();
+          'SELECT p.*, o.nombre as obra_nombre FROM pedidos p LEFT JOIN obras o ON p.obra_id = o.id WHERE p.empresa_id = ? AND p.departamento = ? ORDER BY p.created_at DESC'
+        ).bind(empresa_id, 'mecanicas').all();
         await writeTab('Mec-Pedidos', [cab, ...results.map(fmt)]);
       })(),
       tabsToSync.includes('Seg-Pedidos') && (async () => {
         const { results } = await env.DB.prepare(
-          'SELECT p.*, o.nombre as obra_nombre FROM pedidos p LEFT JOIN obras o ON p.obra_id = o.id WHERE p.empresa_id = 1 AND p.departamento = ? ORDER BY p.created_at DESC'
-        ).bind('seguridad').all();
+          'SELECT p.*, o.nombre as obra_nombre FROM pedidos p LEFT JOIN obras o ON p.obra_id = o.id WHERE p.empresa_id = ? AND p.departamento = ? ORDER BY p.created_at DESC'
+        ).bind(empresa_id, 'seguridad').all();
         await writeTab('Seg-Pedidos', [cab, ...results.map(fmt)]);
       })(),
     ].filter(Boolean));
@@ -2845,7 +2851,7 @@ async function applyTabFormatting(spreadsheetId, authH, tabName, numSheetId, num
     'Elec-Bobinas': 9, 'Elec-PEMP': 5, 'Elec-Carretillas': 6,
     'Mec-PEMP': 5,     'Mec-Carretillas': 6,
     'Seg-Inventario': 6, 'Elec-Pedidos': 6, 'Mec-Pedidos': 6, 'Seg-Pedidos': 6,
-    'Elec-Herramientas': 8, 'Mec-Herramientas': 8,
+    'Elec-Herramientas': 8, 'Mec-Herramientas': 8, 'Kits': 8,
   };
   const estadoCol = estadoColMap[tabName] ?? -1;
 
