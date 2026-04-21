@@ -446,6 +446,15 @@ export default {
       }
       if (path === '/historial-herramientas' && method === 'GET') return await getHistorialHerramientas(request, env);
 
+      // ── Archivos / R2 ────────────────────────────────────────────────────
+      if (path === '/archivos' && method === 'GET')  return await listarArchivos(request, env);
+      if (path === '/archivos' && method === 'POST') return await subirArchivo(request, env);
+      if (path.startsWith('/archivos/')) {
+        const aid = parseInt(path.split('/archivos/')[1]);
+        if (method === 'GET')    return await descargarArchivo(aid, request, env);
+        if (method === 'DELETE') return await borrarArchivo(aid, request, env);
+      }
+
       // ── Personal ──────────────────────────────────────────────────────────
       if (path === '/horarios-obra' && method === 'GET')  return await getHorariosObra(request, env);
       if (path === '/horarios-obra' && method === 'POST') return await guardarHorarioObra(request, env);
@@ -3743,6 +3752,78 @@ async function rechazarUsuarioPendiente(request, env) {
   if (!u) return err('Solicitud no encontrada', 404);
   await env.DB.prepare('DELETE FROM usuarios WHERE id=? AND google_pending=1').bind(id).run();
   await sendTelegram(env, `❌ <b>Acceso rechazado</b>\n👤 ${u.nombre || '—'}\n📧 ${u.email || '—'}`);
+  return json({ ok: true });
+}
+
+// ── R2 Archivos (NEW-03 + MEJ-13) ────────────────────────────────────────────
+
+async function listarArchivos(request, env) {
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const url = new URL(request.url);
+  const herramienta_id = url.searchParams.get('herramienta_id');
+  let sql, params;
+  if (herramienta_id) {
+    sql = 'SELECT * FROM archivos WHERE empresa_id = ? AND herramienta_id = ? ORDER BY created_at DESC';
+    params = [empresa_id, parseInt(herramienta_id)];
+  } else {
+    sql = 'SELECT * FROM archivos WHERE empresa_id = ? AND herramienta_id IS NULL ORDER BY created_at DESC';
+    params = [empresa_id];
+  }
+  const { results } = await env.DB.prepare(sql).bind(...params).all();
+  return json(results);
+}
+
+async function subirArchivo(request, env) {
+  const { empresa_id, nombre: userNombre, rol } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  if (rol === 'operario') return err('Sin permisos', 403);
+  const form = await request.formData().catch(() => null);
+  if (!form) return err('Falta el formulario', 400);
+  const file = form.get('file');
+  const herramienta_id = form.get('herramienta_id') || null;
+  if (!file || !file.name) return err('Falta el archivo', 400);
+  if (file.size > 52428800) return err('El archivo supera el límite de 50 MB', 413);
+  const ts = Date.now();
+  const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+  const r2Key = herramienta_id
+    ? `e${empresa_id}/herr/${herramienta_id}/${ts}_${safeName}`
+    : `e${empresa_id}/docs/${ts}_${safeName}`;
+  await env.FILES.put(r2Key, file.stream(), {
+    httpMetadata: { contentType: file.type || 'application/octet-stream' }
+  });
+  const hid = herramienta_id ? parseInt(herramienta_id) : null;
+  const r = await env.DB.prepare(
+    'INSERT INTO archivos (empresa_id, herramienta_id, r2_key, nombre, mime, tamano, subido_por) VALUES (?,?,?,?,?,?,?)'
+  ).bind(empresa_id, hid, r2Key, file.name, file.type || null, file.size || null, userNombre || rol).run();
+  return json({ ok: true, id: r.meta.last_row_id, nombre: file.name }, 201);
+}
+
+async function descargarArchivo(id, request, env) {
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const meta = await env.DB.prepare('SELECT * FROM archivos WHERE id = ? AND empresa_id = ?').bind(id, empresa_id).first();
+  if (!meta) return err('Archivo no encontrado', 404);
+  const obj = await env.FILES.get(meta.r2_key);
+  if (!obj) return err('Archivo no disponible en almacenamiento', 404);
+  return new Response(obj.body, {
+    headers: {
+      'Content-Type': meta.mime || 'application/octet-stream',
+      'Content-Disposition': `attachment; filename="${encodeURIComponent(meta.nombre)}"`,
+      'Cache-Control': 'private, max-age=3600',
+      ...CORS,
+    },
+  });
+}
+
+async function borrarArchivo(id, request, env) {
+  const { empresa_id, rol } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  if (rol === 'operario') return err('Sin permisos', 403);
+  const meta = await env.DB.prepare('SELECT * FROM archivos WHERE id = ? AND empresa_id = ?').bind(id, empresa_id).first();
+  if (!meta) return err('Archivo no encontrado', 404);
+  await env.FILES.delete(meta.r2_key);
+  await env.DB.prepare('DELETE FROM archivos WHERE id = ? AND empresa_id = ?').bind(id, empresa_id).run();
   return json({ ok: true });
 }
 

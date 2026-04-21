@@ -9,5 +9,9 @@ binding = "DB"
 database_name = "alejandra-db"
 database_id = "0c9eccde-78f1-476d-ac68-bf452bec0c62"
 
+[[r2_buckets]]
+binding = "FILES"
+bucket_name = "alejandra-app-files"
+
 [triggers]
 crons = ["0 7 * * *", "0 18 * * *"]

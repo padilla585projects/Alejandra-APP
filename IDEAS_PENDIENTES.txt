@@ -275,8 +275,12 @@ LEYENDA DE ESTADO:
     · Cada empresa tiene sus propios datos aislados.
     · Reportado: 18/04/2026 — Adrian, CPD Getafe
 
-[ ] NEW-03 — Almacenamiento de datos por empresa
-    · Poder guardar documentos, fotos y archivos dentro de cada empresa.
+[✓] NEW-03 — Almacenamiento de datos por empresa  [HECHO v4.69]
+    · Bucket R2 "alejandra-app-files" (aislado de otras apps).
+    · Tabla D1 "archivos" con metadata (nombre, mime, tamaño, subido_por, empresa_id).
+    · Endpoints worker: GET/POST /archivos, GET/DELETE /archivos/:id.
+    · UI: Ajustes → Empresa → sección 📂 Documentos (solo empresa_admin/SA).
+    · Subir cualquier fichero ≤50MB, descargar con auth, borrar con confirmación.
     · Reportado: 18/04/2026 — Adrian, CPD Getafe
 
 [✓] NEW-04 — Herramientas en departamento Seguridad  [HECHO v4.39]
@@ -375,11 +379,13 @@ LEYENDA DE ESTADO:
     · Complementa MEJ-132 (Telegram bidireccional) y MEJ-12 (fotos en ideas).
     · Reportado: 21/04/2026 — Adrian (empresa 1)
 
-[ ] MEJ-13 — Adjuntar archivos/documentación a herramientas en inventario
-    · Desde la ficha de una herramienta, poder subir y ver archivos adjuntos
-      (manuales, fichas técnicas, certificados, fotos, etc.).
-    · Requiere almacenamiento R2 (Cloudflare) o similar.
-    · Los archivos se asocian a la herramienta por id y empresa_id.
+[✓] MEJ-13 — Adjuntar archivos/documentación a herramientas en inventario  [HECHO v4.69]
+    · Sección 📎 Archivos adjuntos al final de la ficha de cada herramienta.
+    · Subir cualquier fichero ≤50MB (manuales, fotos, certificados, etc.).
+    · Lista con icono por tipo, tamaño, quién subió y fecha.
+    · Descarga con auth (fetch+blob). Borrar con confirmación.
+    · R2 key: e{empresa_id}/herr/{herramienta_id}/{ts}_{nombre}.
+    · Requiere almacenamiento R2 (Cloudflare) — mismo bucket que NEW-03.
     · Reportado: 21/04/2026 — Adrian, CPD Getafe
 
 [ ] NEW-08 — Chat interno entre empleados de la misma empresa

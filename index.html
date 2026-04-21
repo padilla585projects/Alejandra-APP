@@ -1376,6 +1376,18 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
           <div class="settings-title">👥 Usuarios de la empresa</div>
           <div id="empresaUsuarios"></div>
         </div>
+        <!-- NEW-03: Documentos de empresa -->
+        <div class="settings-section" style="margin-top:16px;display:none" id="empresaDocsSection">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+            <div class="settings-title" style="margin-bottom:0">📂 Documentos</div>
+            <label style="padding:6px 12px;background:var(--accent);color:#000;border-radius:8px;font-family:'Montserrat',sans-serif;font-weight:700;font-size:11px;cursor:pointer">
+              ➕ Subir<input type="file" style="display:none" onchange="docsEmpresaSubir(this)">
+            </label>
+          </div>
+          <div style="font-size:12px;color:var(--muted);margin-bottom:10px">Manuales, certificados, contratos y cualquier documento de la empresa.</div>
+          <div id="empresaDocsList"><div style="font-size:13px;color:var(--muted)">Cargando...</div></div>
+        </div>
+
         <!-- MEJ-08: Departamentos activos por empresa -->
         <div class="settings-section" style="margin-top:16px;display:none" id="empresaDeptosSection">
           <div class="settings-title">🔧 Departamentos activos</div>
@@ -2620,6 +2632,8 @@ async function guardarDeptosEmpresa() {
   } catch { toast('❌ Error de red', 'err'); }
 }
 window.guardarDeptosEmpresa = guardarDeptosEmpresa;
+window.docsEmpresaSubir    = docsEmpresaSubir;
+window.docsEmpresaBorrar   = docsEmpresaBorrar;
 
 function volverSelectorDepto() {
   const s = getSession();
@@ -5127,6 +5141,9 @@ async function cargarPanelEmpresa() {
     const puedeEditar = s?.rol === 'empresa_admin' || s?.rol === 'superadmin';
     const btn = document.getElementById('btnEditarEmpresa');
     if (btn) btn.style.display = puedeEditar ? '' : 'none';
+    // NEW-03: sección documentos de empresa
+    const docsSec = document.getElementById('empresaDocsSection');
+    if (docsSec) { docsSec.style.display = puedeEditar ? '' : 'none'; if (puedeEditar) docsEmpresaCargar(); }
     // MEJ-08: sección departamentos activos
     const deptsSec = document.getElementById('empresaDeptosSection');
     if (deptsSec) {
@@ -5148,6 +5165,51 @@ async function cargarPanelEmpresa() {
   } catch(e) {
     document.getElementById('empresaInfo').innerHTML = '<div style="color:var(--red)">Error al cargar</div>';
   }
+}
+
+async function docsEmpresaCargar() {
+  const c = document.getElementById('empresaDocsList');
+  if (!c) return;
+  c.innerHTML = '<div style="font-size:13px;color:var(--muted)">Cargando...</div>';
+  try {
+    const res = await apiCall('/archivos');
+    const lista = res.ok ? await res.json() : [];
+    if (!lista.length) { c.innerHTML = '<div style="font-size:13px;color:var(--muted);font-style:italic">Sin documentos guardados</div>'; return; }
+    c.innerHTML = lista.map(a => {
+      const kb = a.tamano ? (a.tamano < 1048576 ? Math.round(a.tamano/1024)+'KB' : (a.tamano/1048576).toFixed(1)+'MB') : '';
+      return `<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border)">
+        <span style="font-size:20px">${archivoIcono(a.mime)}</span>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${a.nombre}</div>
+          <div style="font-size:10px;color:var(--muted)">${kb}${a.subido_por?' · '+a.subido_por:''}${a.created_at?' · '+a.created_at.slice(0,10):''}</div>
+        </div>
+        <button onclick="descargarArchivo(${a.id},'${a.nombre.replace(/'/g,"\\'")}')" style="padding:5px 9px;background:var(--surface);border:1px solid var(--border);border-radius:6px;font-size:13px;cursor:pointer">⬇️</button>
+        <button onclick="docsEmpresaBorrar(${a.id})" style="padding:5px 9px;background:#ef444415;border:1px solid #ef444430;border-radius:6px;font-size:13px;color:#ef4444;cursor:pointer">🗑️</button>
+      </div>`;
+    }).join('');
+  } catch { c.innerHTML = '<div style="font-size:13px;color:var(--red)">Error al cargar</div>'; }
+}
+
+async function docsEmpresaSubir(input) {
+  const file = input.files[0];
+  if (!file) return;
+  input.value = '';
+  toast('⬆️ Subiendo ' + file.name + '...');
+  const fd = new FormData();
+  fd.append('file', file);
+  try {
+    const res = await subirArchivoRaw('/archivos', fd);
+    if (!res.ok) { const e = await res.json().catch(()=>{}); return toast('❌ ' + (e?.error||'Error al subir'), 'err'); }
+    toast('✅ Documento subido');
+    docsEmpresaCargar();
+  } catch { toast('❌ Error de red al subir', 'err'); }
+}
+
+async function docsEmpresaBorrar(id) {
+  if (!confirm('¿Eliminar este documento?')) return;
+  const res = await apiCall('/archivos/' + id, { method: 'DELETE' });
+  if (res.ok) { toast('🗑️ Documento eliminado'); docsEmpresaCargar(); }
+  else toast('❌ Error al eliminar', 'err');
 }
 
 async function cargarSolicitudesPendientes() {
@@ -5973,7 +6035,7 @@ async function cargarObrasSelectUsuario() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '4.68';
+const APP_VERSION = '4.69';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -6313,6 +6375,15 @@ if ('serviceWorker' in navigator) {
         <div style="font-family:'Montserrat',sans-serif;font-weight:700;font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Historial reciente</div>
         ${historial.slice(0,5).map(h => `<div style="font-size:11px;color:var(--muted);padding:3px 0;border-bottom:1px solid var(--border)20">${h.fecha?.slice(0,16)||''} · <b>${h.accion}</b>${h.estado_nuevo?' → '+h.estado_nuevo:''} ${h.usuario?'· '+h.usuario:''}</div>`).join('')}
       </div>` : ''}
+      <div style="margin-top:12px;border-top:1px solid var(--border);padding-top:10px" id="herrArchivosSection_${h.id}">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+          <div style="font-family:'Montserrat',sans-serif;font-weight:700;font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:1px">📎 Archivos adjuntos</div>
+          ${puedeEditar ? `<label style="padding:4px 10px;background:var(--accent);color:#000;border-radius:6px;font-size:10px;font-weight:700;cursor:pointer">
+            ➕ Adjuntar<input type="file" style="display:none" onchange="herrSubirArchivo(${h.id},this)">
+          </label>` : ''}
+        </div>
+        <div id="herrArchivosList_${h.id}"><div style="font-size:11px;color:var(--muted)">Cargando...</div></div>
+      </div>
     </div>`;
   }
 
@@ -6414,7 +6485,85 @@ if ('serviceWorker' in navigator) {
       const { herramienta: h, historial } = await res.json();
       document.getElementById('modalHerrDetalleTitulo').textContent = (h.tipo_nombre||'Herramienta') + ' · ' + (h.numero_serie||'');
       document.getElementById('modalHerrDetalleBody').innerHTML = renderHerrFicha(h, historial, true);
+      herrCargarArchivos(id);
     } catch { document.getElementById('modalHerrDetalleBody').innerHTML = '<div style="color:var(--red)">Error al cargar</div>'; }
+  }
+
+  async function herrCargarArchivos(herrId) {
+    const c = document.getElementById('herrArchivosList_' + herrId);
+    if (!c) return;
+    try {
+      const res = await apiCall('/archivos?herramienta_id=' + herrId);
+      const lista = res.ok ? await res.json() : [];
+      const s = getSession();
+      const puedeEditar = s?.rol !== 'operario';
+      if (!lista.length) { c.innerHTML = '<div style="font-size:11px;color:var(--muted);font-style:italic">Sin archivos adjuntos</div>'; return; }
+      c.innerHTML = lista.map(a => {
+        const kb = a.tamano ? (a.tamano < 1048576 ? Math.round(a.tamano/1024)+'KB' : (a.tamano/1048576).toFixed(1)+'MB') : '';
+        return `<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--border)20">
+          <span style="font-size:16px">${archivoIcono(a.mime)}</span>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:12px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${a.nombre}</div>
+            <div style="font-size:10px;color:var(--muted)">${kb}${a.subido_por?' · '+a.subido_por:''}${a.created_at?' · '+a.created_at.slice(0,10):''}</div>
+          </div>
+          <button onclick="descargarArchivo(${a.id},'${a.nombre.replace(/'/g,"\\'")}')" style="padding:4px 8px;background:var(--surface);border:1px solid var(--border);border-radius:6px;font-size:11px;color:var(--text);cursor:pointer">⬇️</button>
+          ${puedeEditar ? `<button onclick="herrBorrarArchivo(${a.id},${herrId})" style="padding:4px 8px;background:#ef444415;border:1px solid #ef444430;border-radius:6px;font-size:11px;color:#ef4444;cursor:pointer">🗑️</button>` : ''}
+        </div>`;
+      }).join('');
+    } catch { c.innerHTML = '<div style="font-size:11px;color:var(--red)">Error al cargar archivos</div>'; }
+  }
+
+  async function herrSubirArchivo(herrId, input) {
+    const file = input.files[0];
+    if (!file) return;
+    input.value = '';
+    toast('⬆️ Subiendo ' + file.name + '...');
+    const fd = new FormData();
+    fd.append('file', file);
+    fd.append('herramienta_id', herrId);
+    try {
+      const res = await subirArchivoRaw('/archivos', fd);
+      if (!res.ok) { const e = await res.json().catch(()=>{}); return toast('❌ ' + (e?.error||'Error al subir'), 'err'); }
+      toast('✅ Archivo adjuntado');
+      herrCargarArchivos(herrId);
+    } catch { toast('❌ Error de red al subir', 'err'); }
+  }
+
+  function subirArchivoRaw(path, formData) {
+    const s = getSession();
+    const headers = {};
+    if (s?.token)        headers['X-Token']       = s.token;
+    if (s?.departamento) headers['X-Departamento'] = s.departamento;
+    return fetch(getAPI() + path, { method: 'POST', headers, body: formData });
+  }
+
+  async function herrBorrarArchivo(archivoId, herrId) {
+    if (!confirm('¿Eliminar este archivo adjunto?')) return;
+    const res = await apiCall('/archivos/' + archivoId, { method: 'DELETE' });
+    if (res.ok) { toast('🗑️ Archivo eliminado'); herrCargarArchivos(herrId); }
+    else toast('❌ Error al eliminar', 'err');
+  }
+
+  function archivoIcono(mime) {
+    if (!mime) return '📄';
+    if (mime.startsWith('image/')) return '🖼️';
+    if (mime === 'application/pdf') return '📕';
+    if (mime.includes('word') || mime.includes('document')) return '📝';
+    if (mime.includes('sheet') || mime.includes('excel') || mime.includes('csv')) return '📊';
+    if (mime.includes('zip') || mime.includes('rar') || mime.includes('7z')) return '🗜️';
+    return '📄';
+  }
+
+  async function descargarArchivo(id, nombre) {
+    try {
+      const res = await apiCall('/archivos/' + id);
+      if (!res.ok) return toast('❌ Error al descargar', 'err');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = nombre; a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+    } catch { toast('❌ Error de red al descargar', 'err'); }
   }
 
   function cerrarDetalleHerr() { document.getElementById('modalHerrDetalle').classList.remove('show'); }
@@ -7583,6 +7732,9 @@ if ('serviceWorker' in navigator) {
   window.herrFiltrarInvBuscador= herrFiltrarInvBuscador;
   window.cargarInvHerr         = cargarInvHerr;
   window.verDetalleHerr        = verDetalleHerr;
+  window.herrSubirArchivo      = herrSubirArchivo;
+  window.herrBorrarArchivo     = herrBorrarArchivo;
+  window.descargarArchivo      = descargarArchivo;
   window.editarHerrDesdeInv    = editarHerrDesdeInv;
   window.herrAgregarDesdeEscaner = herrAgregarDesdeEscaner;
   window.herrCambiarEstado     = herrCambiarEstado;

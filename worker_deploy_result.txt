@@ -1,0 +1,27 @@
+{
+  "result": {
+    "created_on": "2026-04-15T18:04:28.201085Z",
+    "modified_on": "2026-04-21T22:55:31.882951Z",
+    "id": "alejandra-app-api",
+    "tag": "64464be239c44a68b83c0103bf854809",
+    "entry_point": "worker.js",
+    "tags": [],
+    "deployment_id": "5394d606e4cf4b52a0cdc76955806798",
+    "tail_consumers": null,
+    "logpush": false,
+    "has_assets": false,
+    "has_modules": true,
+    "etag": "9d662ba9cc5bf0743d4221a34f1dce706ad1efca99369dc9f9fe1ca2cbad7045",
+    "handlers": [
+      "fetch",
+      "scheduled"
+    ],
+    "last_deployed_from": "api",
+    "compatibility_date": "2024-01-01",
+    "usage_model": "standard",
+    "startup_time_ms": 0
+  },
+  "success": true,
+  "errors": [],
+  "messages": []
+}

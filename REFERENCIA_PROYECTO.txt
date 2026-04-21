@@ -65,6 +65,11 @@ REGLA DE DEPLOY:
   - En ambos casos: subir versión + actualizar txts + deploy worker + git push
 
 ÚLTIMO CAMBIO REALIZADO:
+  v4.69 [nueva] — 22/04/2026
+  · NEW-03: Documentos de empresa — Ajustes→Empresa sección 📂 con subir/descargar/borrar (R2)
+  · MEJ-13: Archivos adjuntos en herramientas — sección 📎 en ficha de herramienta (R2)
+  · Infraestructura: bucket R2 "alejandra-app-files" + tabla D1 "archivos" + 4 endpoints worker
+
   v4.68 [nueva] — 22/04/2026
   · MEJ-131: horarios obra por día (toggle por días, inputs L/M/X/J/V, helper getHorarioParaDia en worker)
   · MEJ-08: departamentos activos por empresa (toggles en Ajustes→Empresa, cache localStorage)
