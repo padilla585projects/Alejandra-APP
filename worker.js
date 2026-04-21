@@ -115,6 +115,27 @@ async function sendTelegram(env, mensaje) {
   } catch (_) {}
 }
 
+// Envía una foto (base64 data URI) con caption y botones inline
+async function sendTelegramFotoConBotones(env, caption, base64DataUri, botones) {
+  try {
+    const token  = env.TELEGRAM_BOT_TOKEN;
+    const chatId = env.TELEGRAM_CHAT_ID;
+    if (!token || !chatId || !base64DataUri) return;
+    const match = base64DataUri.match(/^data:(image\/\w+);base64,(.+)$/s);
+    if (!match) return;
+    const [, mime, b64] = match;
+    const bytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+    const blob  = new Blob([bytes], { type: mime });
+    const form  = new FormData();
+    form.append('chat_id',    String(chatId));
+    form.append('caption',    caption.slice(0, 1024));
+    form.append('parse_mode', 'HTML');
+    if (botones?.length) form.append('reply_markup', JSON.stringify({ inline_keyboard: botones }));
+    form.append('photo', blob, 'idea.jpg');
+    await fetch(`https://api.telegram.org/bot${token}/sendPhoto`, { method: 'POST', body: form });
+  } catch (_) {}
+}
+
 // botones = [[{text, callback_data}, ...], ...]  (filas × columnas)
 async function sendTelegramConBotones(env, mensaje, botones) {
   try {
@@ -1645,12 +1666,15 @@ async function guardarSugerencia(request, env) {
     const tgMsg = `${icon} <b>Nueva sugerencia [${categoria || 'otro'}]</b>\n` +
       `👤 ${usuario || '—'}  🏗 ${obra || '—'}\n\n` +
       `${texto.trim().slice(0, 400)}`;
-    if (ideaId) {
-      await sendTelegramConBotones(env, tgMsg, [[
-        { text: '🔄 En progreso', callback_data: `idea_prog:${ideaId}` },
-        { text: '✅ Resuelto',    callback_data: `idea_done:${ideaId}` },
-        { text: '🗑 Cerrar',     callback_data: `idea_close:${ideaId}` },
-      ]]);
+    const botonesIdea = ideaId ? [[
+      { text: '🔄 En progreso', callback_data: `idea_prog:${ideaId}` },
+      { text: '✅ Resuelto',    callback_data: `idea_done:${ideaId}` },
+      { text: '🗑 Cerrar',     callback_data: `idea_close:${ideaId}` },
+    ]] : null;
+    if (fotoVal && ideaId) {
+      await sendTelegramFotoConBotones(env, tgMsg, fotoVal, botonesIdea);
+    } else if (ideaId) {
+      await sendTelegramConBotones(env, tgMsg, botonesIdea);
     } else {
       await sendTelegram(env, tgMsg);
     }
