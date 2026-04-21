@@ -311,8 +311,11 @@ LEYENDA DE ESTADO:
     · También incluir lista de personal habitual de la obra para selección rápida.
     · Reportado: 20/04/2026 — Adrian, CPD Getafe
 
-[ ] MEJ-12 — Adjuntar fotos en el log de Ideas para reportar bugs (#126)
-    · Al enviar una sugerencia/bug desde la app, permitir adjuntar una captura de pantalla.
+[✓] MEJ-12 — Adjuntar fotos en el log de Ideas para reportar bugs (#126)  [HECHO v4.63]
+    · Botón "📎 Añadir imagen" en formulario de nueva sugerencia.
+    · Compresión automática: 1024px → 512px → 256px, calidad 0.75→0.3 hasta <300KB base64.
+    · Preview con miniatura antes de enviar. Guardado en sugerencias.foto (TEXT en D1).
+    · Panel admin muestra thumbnail clicable con zoom a pantalla completa.
     · Reportado: 20/04/2026 — Adrian, CPD Getafe
 
 [ ] MEJ-13 — Adjuntar archivos/documentación a herramientas en inventario

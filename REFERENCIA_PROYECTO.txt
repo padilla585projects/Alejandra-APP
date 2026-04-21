@@ -65,10 +65,24 @@ REGLA DE DEPLOY:
   - En ambos casos: subir versión + actualizar txts + deploy worker + git push
 
 ÚLTIMO CAMBIO REALIZADO:
+  v4.64 [nueva] — 21/04/2026
+  · Fix banner actualización: SW_ACTUALIZADO extrae versión del cache name → localStorage antes de recargar
+
+  v4.63 [nueva] — 21/04/2026
+  · MEJ-12: fotos en Ideas — botón añadir imagen, compresión auto (≤300KB), preview, thumbnail admin, zoom
+
+  v4.62 [nueva] — 21/04/2026
+  · MEJ-11: horarios de obra en Ajustes→Obras (⏰ Horario por obra, upsert)
+  · MEJ-11: pre-rellenar horas en modal fichaje según horario de la obra seleccionada
+  · QW1: detección automática retrasos — badge "Xmin tarde", estado auto 'retraso'
+  · QW2: resumen mensual con horas esperadas (N×8h) y contador retrasos por trabajador
+  · QW3: cierre automático de jornada a las 20:00 (cron 0 18 * * *) + Telegram
+  · DB: ALTER TABLE fichajes ADD COLUMN minutos_retraso INTEGER DEFAULT 0
+
   v4.61 [nueva] — 21/04/2026
   · MEJ-09: historial filtrado por departamento (worker + frontend)
   · Fix crítico: getHistorialTabla sin aislamiento empresa — corregido con INNER JOIN
-  · Fix: JOIN bobinas en getHistorial era sobre bobina_id (no existe) → corregido a bobina_codigo
+  · Fix: JOIN bobinas en getHistorial era sobre bobina_id → corregido a bobina_codigo
   · SA/EA: badge de dept visible en cada ítem del historial
 
   v4.60 [nueva] — 21/04/2026
@@ -217,7 +231,7 @@ git -c credential.helper= push https://padilla585:<TOKEN_GITHUB_VIEJO>@github.co
 ================================================================================
 
 APP VIEJA:  v4.19  (sw.js: alejandra-v4.19 | version.json: {"v":"4.19"})
-APP NUEVA:  v4.61  (sw.js: alejandra-v4.61 | version.json: {"v":"4.61"})
+APP NUEVA:  v4.64  (sw.js: alejandra-v4.64 | version.json: {"v":"4.64"})
 
 Historial reciente (app nueva):
   v4.41 [nueva] — Login Google con invitaciones temporales (rol+dept, caduca, 1 uso)
