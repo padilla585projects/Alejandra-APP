@@ -367,9 +367,13 @@ export default {
     }
   },
 
-  // ── Cron diario: alertas automáticas ─────────────────────────────────────
+  // ── Cron diario: alertas + cierre jornada ────────────────────────────────
   async scheduled(event, env, ctx) {
-    ctx.waitUntil(alertasDiarias(env));
+    if (event.cron === '0 18 * * *') {
+      ctx.waitUntil(cierreAutomaticoJornada(env));
+    } else {
+      ctx.waitUntil(alertasDiarias(env));
+    }
   },
 };
 
@@ -2148,6 +2152,13 @@ async function registrarHistorialKitHerr(env, empresa_id, kit_id, herramienta_id
 // PERSONAL — Horarios, Fichajes, Resúmenes
 // ════════════════════════════════════════════════════════════════════════════
 
+// Devuelve minutos de diferencia (positivo = tarde, negativo = antes de hora)
+function calcMinutosRetraso(horaEntrada, horaHorario) {
+  if (!horaEntrada || !horaHorario) return 0;
+  const toMin = s => { const [h, m] = s.split(':').map(Number); return h * 60 + m; };
+  return toMin(horaEntrada.slice(0,5)) - toMin(horaHorario.slice(0,5));
+}
+
 function calcHoras(entrada, salida) {
   if (!entrada || !salida) return 0;
   const [eh, em] = entrada.split(':').map(Number);
@@ -2328,18 +2339,26 @@ async function crearFichaje(request, env) {
   if (dup) return err('Ya existe un fichaje para este trabajador en esta fecha', 409);
 
   const horas = calcHoras(hora_entrada, hora_salida);
-  // Calcular horas extra según horario de obra
-  let horas_extra = 0;
-  if (horas > 0 && obra_id) {
-    const horario = await env.DB.prepare('SELECT horas_dia FROM horarios_obra WHERE empresa_id=? AND obra_id=?').bind(empresa_id, obra_id||obraAuth).first();
-    if (horario) horas_extra = Math.max(0, Math.round((horas - horario.horas_dia) * 100) / 100);
+  // Calcular horas extra y detectar retraso según horario de obra
+  let horas_extra = 0, minutos_retraso = 0;
+  let estadoFinal = estado || 'presente';
+  if (obra_id || obraAuth) {
+    const horario = await env.DB.prepare('SELECT horas_dia, hora_entrada as h_ent FROM horarios_obra WHERE empresa_id=? AND obra_id=?').bind(empresa_id, obra_id||obraAuth).first();
+    if (horario) {
+      if (horas > 0) horas_extra = Math.max(0, Math.round((horas - horario.horas_dia) * 100) / 100);
+      // Auto-detectar retraso: >5 min tarde y estado era presencia/presente
+      if (hora_entrada && ['presencia','presente'].includes(estadoFinal)) {
+        const mins = calcMinutosRetraso(hora_entrada, horario.h_ent);
+        if (mins > 5) { minutos_retraso = mins; estadoFinal = 'retraso'; }
+      }
+    }
   }
 
   const r = await env.DB.prepare(
-    'INSERT INTO fichajes (empresa_id,usuario_id,personal_externo_id,obra_id,fecha,hora_entrada,hora_salida,horas_trabajadas,horas_extra,estado,motivo,notas,registrado_por) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)'
+    'INSERT INTO fichajes (empresa_id,usuario_id,personal_externo_id,obra_id,fecha,hora_entrada,hora_salida,horas_trabajadas,horas_extra,minutos_retraso,estado,motivo,notas,registrado_por) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)'
   ).bind(empresa_id, usuario_id||null, personal_externo_id||null, obra_id||obraAuth||null, fecha,
-    hora_entrada||null, hora_salida||null, horas, horas_extra,
-    estado||'presente', motivo?.trim()||null, notas?.trim()||null, encargadoNombre||rol
+    hora_entrada||null, hora_salida||null, horas, horas_extra, minutos_retraso,
+    estadoFinal, motivo?.trim()||null, notas?.trim()||null, encargadoNombre||rol
   ).run();
   return json({ ok: true, id: r.meta.last_row_id }, 201);
 }
@@ -2356,7 +2375,7 @@ async function actualizarFichaje(id, request, env) {
   if (body.motivo       !== undefined) { campos.push('motivo=?');       vals.push(body.motivo?.trim()||null); }
   if (body.notas        !== undefined) { campos.push('notas=?');        vals.push(body.notas?.trim()||null); }
 
-  // Recalcular horas si cambian
+  // Recalcular horas, horas_extra y retraso si cambian las horas
   if (body.hora_entrada !== undefined || body.hora_salida !== undefined) {
     const f = await env.DB.prepare('SELECT * FROM fichajes WHERE id=? AND empresa_id=?').bind(id, empresa_id).first();
     if (f) {
@@ -2364,9 +2383,19 @@ async function actualizarFichaje(id, request, env) {
       const sal = body.hora_salida  ?? f.hora_salida;
       const horas = calcHoras(ent, sal);
       campos.push('horas_trabajadas=?'); vals.push(horas);
-      const horario = await env.DB.prepare('SELECT horas_dia FROM horarios_obra WHERE empresa_id=? AND obra_id=?').bind(empresa_id, f.obra_id).first();
+      const horario = f.obra_id ? await env.DB.prepare('SELECT horas_dia, hora_entrada as h_ent FROM horarios_obra WHERE empresa_id=? AND obra_id=?').bind(empresa_id, f.obra_id).first() : null;
       const horas_extra = horario ? Math.max(0, Math.round((horas - horario.horas_dia)*100)/100) : 0;
       campos.push('horas_extra=?'); vals.push(horas_extra);
+      // Recalcular retraso si cambió hora_entrada
+      if (body.hora_entrada !== undefined && horario) {
+        const mins = calcMinutosRetraso(ent, horario.h_ent);
+        campos.push('minutos_retraso=?'); vals.push(Math.max(0, mins));
+        const estadoActual = body.estado ?? f.estado;
+        if (['presencia','presente','retraso'].includes(estadoActual) && !body.estado) {
+          const nuevoEstado = mins > 5 ? 'retraso' : 'presente';
+          campos.push('estado=?'); vals.push(nuevoEstado);
+        }
+      }
     }
   }
   if (!campos.length) return json({ ok: true });
@@ -3221,6 +3250,46 @@ async function addTipoMaterialSeg(request, env) {
   } catch(e) {
     if (e.message?.includes('UNIQUE')) return err(`El tipo "${nombre}" ya existe`, 409);
     throw e;
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// CIERRE AUTOMÁTICO JORNADA (Cron 20:00 hora España)
+// ════════════════════════════════════════════════════════════════════════════
+
+async function cierreAutomaticoJornada(env) {
+  try {
+    const hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Madrid' }); // YYYY-MM-DD
+    // Fichajes con hora_entrada pero sin hora_salida
+    const { results: abiertos } = await env.DB.prepare(
+      `SELECT f.*, ho.hora_salida as horario_salida, ho.horas_dia as horario_horas_dia
+       FROM fichajes f
+       LEFT JOIN horarios_obra ho ON f.obra_id = ho.obra_id AND f.empresa_id = ho.empresa_id
+       WHERE f.fecha = ? AND f.hora_entrada IS NOT NULL AND f.hora_entrada != ''
+         AND (f.hora_salida IS NULL OR f.hora_salida = '')`
+    ).bind(hoy).all();
+
+    if (!abiertos.length) return;
+
+    let cerrados = 0;
+    for (const f of abiertos) {
+      const horaSalida = f.horario_salida || '18:00';
+      const horas = calcHoras(f.hora_entrada, horaSalida);
+      const horas_extra = f.horario_horas_dia ? Math.max(0, Math.round((horas - f.horario_horas_dia)*100)/100) : 0;
+      const notasActual = f.notas ? f.notas + ' | ' : '';
+      await env.DB.prepare(
+        `UPDATE fichajes SET hora_salida=?, horas_trabajadas=?, horas_extra=?, notas=? WHERE id=?`
+      ).bind(horaSalida, horas, horas_extra, notasActual + '⏰ Cierre automático', f.id).run();
+      cerrados++;
+    }
+
+    if (cerrados > 0) {
+      await sendTelegram(env,
+        `⏰ <b>Cierre automático de jornada</b>\n📅 ${hoy}\n✅ ${cerrados} fichaje${cerrados > 1 ? 's cerrados' : ' cerrado'} automáticamente con hora del horario de obra.`
+      );
+    }
+  } catch (e) {
+    console.error('Error cierre automático jornada:', e.message);
   }
 }
 

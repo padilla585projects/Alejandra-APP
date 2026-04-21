@@ -4489,14 +4489,75 @@ function renderObrasAdmin(obras) {
   if (!c) return;
   if (!obras.length) { c.innerHTML = '<div style="color:var(--muted);font-size:12px">Sin obras</div>'; return; }
   c.innerHTML = obras.map(o => `
-    <div class="admin-list-item">
-      <div class="admin-item-info">
+    <div class="admin-list-item" style="flex-wrap:wrap;gap:6px">
+      <div class="admin-item-info" style="flex:1;min-width:120px">
         <div class="admin-item-name">${o.nombre}</div>
         <div class="admin-item-sub">${o.codigo || ''}</div>
       </div>
-      <button class="btn-sm danger" onclick="eliminarObra(${o.id})">🗑</button>
+      <div style="display:flex;gap:6px">
+        <button class="btn-sm" onclick="toggleHorarioObra(${o.id})" title="Configurar horario">⏰ Horario</button>
+        <button class="btn-sm danger" onclick="eliminarObra(${o.id})">🗑</button>
+      </div>
+      <div id="horarioPanel_${o.id}" style="display:none;width:100%;padding:10px;background:var(--surface2);border-radius:8px;margin-top:4px">
+        <div style="font-size:12px;font-weight:700;margin-bottom:8px;color:var(--text)">⏰ Horario de obra</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+          <div>
+            <label style="font-size:11px;color:var(--muted)">Entrada</label>
+            <input type="time" id="hEnt_${o.id}" style="width:100%;padding:6px;background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px">
+          </div>
+          <div>
+            <label style="font-size:11px;color:var(--muted)">Salida</label>
+            <input type="time" id="hSal_${o.id}" style="width:100%;padding:6px;background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px">
+          </div>
+        </div>
+        <div style="margin-bottom:8px">
+          <label style="font-size:11px;color:var(--muted)">Días (ej: LMXJV)</label>
+          <input type="text" id="hDias_${o.id}" placeholder="LMXJV" maxlength="7" style="width:100%;padding:6px;background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;box-sizing:border-box">
+        </div>
+        <button onclick="guardarHorarioObra(${o.id})" style="width:100%;padding:8px;background:var(--accent);border:none;border-radius:8px;color:#000;font-family:'Montserrat',sans-serif;font-weight:900;font-size:12px;cursor:pointer">💾 Guardar horario</button>
+      </div>
     </div>`).join('');
 }
+
+async function toggleHorarioObra(obraId) {
+  const panel = document.getElementById(`horarioPanel_${obraId}`);
+  if (!panel) return;
+  const visible = panel.style.display !== 'none';
+  if (visible) { panel.style.display = 'none'; return; }
+  // Cargar horario actual si existe
+  try {
+    const res = await apiCall(`/horarios-obra?obra_id=${obraId}`);
+    if (res.ok) {
+      const data = await res.json();
+      const h = Array.isArray(data) ? data[0] : null;
+      if (h) {
+        const entEl = document.getElementById(`hEnt_${obraId}`);
+        const salEl = document.getElementById(`hSal_${obraId}`);
+        const diasEl = document.getElementById(`hDias_${obraId}`);
+        if (entEl) entEl.value = h.hora_entrada?.slice(0,5) || '';
+        if (salEl) salEl.value = h.hora_salida?.slice(0,5) || '';
+        if (diasEl) diasEl.value = h.dias_semana || 'LMXJV';
+      }
+    }
+  } catch {}
+  panel.style.display = 'block';
+}
+
+async function guardarHorarioObra(obraId) {
+  const hora_entrada = document.getElementById(`hEnt_${obraId}`)?.value;
+  const hora_salida  = document.getElementById(`hSal_${obraId}`)?.value;
+  const dias_semana  = document.getElementById(`hDias_${obraId}`)?.value || 'LMXJV';
+  if (!hora_entrada || !hora_salida) return toast('⚠️ Rellena entrada y salida', 'err');
+  try {
+    const res = await apiCall('/horarios-obra', { method: 'POST', body: JSON.stringify({ obra_id: obraId, hora_entrada, hora_salida, dias_semana }) });
+    if (res.ok) {
+      toast('✅ Horario guardado', 'ok');
+      document.getElementById(`horarioPanel_${obraId}`).style.display = 'none';
+    } else { toast('❌ Error al guardar', 'err'); }
+  } catch { toast('❌ Error', 'err'); }
+}
+window.toggleHorarioObra = toggleHorarioObra;
+window.guardarHorarioObra = guardarHorarioObra;
 
 async function crearObra() {
   const nombre = document.getElementById('newObraNombre').value.trim();
@@ -5620,7 +5681,7 @@ async function cargarObrasSelectUsuario() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '4.61';
+const APP_VERSION = '4.62';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -6634,6 +6695,7 @@ if ('serviceWorker' in navigator) {
       const tc = perTipoColor(f.estado);
       const horas = f.horas_trabajadas != null ? `<span style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:13px;color:var(--accent)">${parseFloat(f.horas_trabajadas).toFixed(1)}h</span>` : '';
       const extra = f.horas_extra > 0 ? `<span style="font-size:10px;color:#f59e0b;margin-left:4px">+${parseFloat(f.horas_extra).toFixed(1)}h extra</span>` : '';
+      const retrBadge = f.minutos_retraso > 0 ? `<span style="font-size:10px;color:#f59e0b;margin-left:4px">⚠️ ${f.minutos_retraso}min tarde</span>` : '';
       const edit = esAdmin ? `<div style="display:flex;gap:6px;margin-top:8px">
         <button onclick="editarFichaje(${f.id})" style="padding:4px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:11px;cursor:pointer;font-family:'Montserrat',sans-serif;font-weight:700">✏️ Editar</button>
         <button onclick="eliminarFichaje(${f.id})" style="padding:4px 10px;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:6px;color:var(--red);font-size:11px;cursor:pointer;font-family:'Montserrat',sans-serif;font-weight:700">🗑️</button>
@@ -6646,7 +6708,7 @@ if ('serviceWorker' in navigator) {
         </div>
         <div style="display:flex;gap:16px;font-size:12px;color:var(--muted)">
           <span>🕐 ${perFmtHora(f.hora_entrada)} → ${perFmtHora(f.hora_salida)}</span>
-          ${horas}${extra}
+          ${horas}${extra}${retrBadge}
         </div>
         ${f.notas ? `<div style="font-size:11px;color:var(--muted);margin-top:4px">📝 ${f.notas}</div>` : ''}
         ${edit}
@@ -6744,13 +6806,14 @@ if ('serviceWorker' in navigator) {
     const map = {};
     fichajes.forEach(f => {
       const key = perTrabId(f);
-      if (!map[key]) map[key] = { nombre: perNombre(f), horas_totales:0, horas_extra:0, dias_presencia:0, dias_ausencia:0, dias_baja:0, fechas: new Set() };
+      if (!map[key]) map[key] = { nombre: perNombre(f), horas_totales:0, horas_extra:0, dias_presencia:0, dias_ausencia:0, dias_baja:0, dias_retraso:0, fechas: new Set() };
       const t = map[key];
       if (!t.fechas.has(f.fecha)) {
         t.fechas.add(f.fecha);
         if (['presencia','presente','retraso'].includes(f.estado)) t.dias_presencia++;
         else if (f.estado === 'ausencia') t.dias_ausencia++;
         else if (f.estado === 'baja') t.dias_baja++;
+        if (f.estado === 'retraso') t.dias_retraso++;
       }
       t.horas_totales += parseFloat(f.horas_trabajadas || 0);
       t.horas_extra   += parseFloat(f.horas_extra || 0);
@@ -6767,7 +6830,11 @@ if ('serviceWorker' in navigator) {
           <span>✅ Presencias: <b style="color:var(--green)">${t.dias_presencia}</b></span>
           <span>🔴 Ausencias: <b style="color:var(--red)">${t.dias_ausencia}</b></span>
           <span>🏥 Bajas: <b style="color:#8b5cf6">${t.dias_baja}</b></span>
+          ${t.dias_retraso > 0 ? `<span>⚠️ Retrasos: <b style="color:#f59e0b">${t.dias_retraso}</b></span>` : ''}
           <span>⏰ Extra: <b style="color:#f59e0b">${t.horas_extra.toFixed(1)}h</b></span>
+        </div>
+        <div style="font-size:11px;color:var(--muted);margin-top:4px">
+          ${(() => { const esp = t.dias_presencia * 8; const dif = t.horas_totales - esp; const col = dif >= 0 ? 'var(--green)' : dif > -4 ? '#f59e0b' : 'var(--red)'; return `Horas: <b style="color:var(--accent)">${t.horas_totales.toFixed(1)}h</b> / <span style="opacity:.7">${esp}h esperadas</span> <b style="color:${col}">(${dif >= 0 ? '+' : ''}${dif.toFixed(1)}h)</b>`; })()}
         </div>
         <div style="margin-top:8px;height:6px;background:var(--surface2);border-radius:4px;overflow:hidden">
           <div style="width:${pct}%;height:100%;background:var(--green);transition:width .3s"></div>
@@ -6812,10 +6879,33 @@ if ('serviceWorker' in navigator) {
         obrasSel.innerHTML = '<option value="">— Sin obra —</option>' +
           obras.map(o => `<option value="${o.id}">${o.nombre}</option>`).join('');
         if (s?.obra_id) obrasSel.value = s.obra_id;
+        // Pre-rellenar horario al seleccionar obra
+        obrasSel.onchange = fichajeObraChanged;
+        // Pre-rellenar ya si hay obra activa
+        if (s?.obra_id) await fichajeObraChanged();
       } catch {}
     }
     document.getElementById('modalFichaje').classList.add('show');
   }
+
+  async function fichajeObraChanged() {
+    const obraId = document.getElementById('fichajeObra')?.value;
+    if (!obraId) return;
+    // Solo pre-rellena en fichajes nuevos (no edición)
+    if (document.getElementById('fichajeEditId')?.value) return;
+    try {
+      const res = await apiCall(`/horarios-obra?obra_id=${obraId}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      const horario = Array.isArray(data) ? data[0] : null;
+      if (!horario) return;
+      const entInput = document.getElementById('fichajeEntrada');
+      const salInput = document.getElementById('fichajeSalida');
+      if (entInput && !entInput.value && horario.hora_entrada) entInput.value = horario.hora_entrada.slice(0,5);
+      if (salInput && !salInput.value && horario.hora_salida)  salInput.value  = horario.hora_salida.slice(0,5);
+    } catch {}
+  }
+  window.fichajeObraChanged = fichajeObraChanged;
 
   function cerrarFormFichaje() {
     document.getElementById('modalFichaje').classList.remove('show');
