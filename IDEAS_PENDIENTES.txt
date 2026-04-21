@@ -56,6 +56,65 @@ LEYENDA DE ESTADO:
     · Fix v4.28: INSERT guarda estado='pendiente', badge cuenta NULL como pendiente,
       modal Resolver en lugar de prompt(), auto-refresh cada 30s en panel Ideas.
 
+[✓] BUG-23 — Botón "Todas las obras" letras cortadas en barra superior  [HECHO v4.59]
+    · El select de obra en el header tenía max-width:160px → el texto se cortaba.
+    · Fix: max-width aumentado a 220px, min-width 80px.
+    · Reportado: sesión 21/04/2026
+
+[✓] BUG-51 — Seguridad: error al editar salidas (entrega EPIs, zonas)  [HECHO v4.59]
+    · moverItemSeg devolvía 403 para encargado y empresa_admin (solo permitía SA/seguridad).
+    · Fix: añadido isAdmin a la guarda de autorización en moverItemSeg, crearItemSeg y getInventarioSeg.
+    · Reportado: sesión 21/04/2026
+
+[✓] BUG-55 — Editar objeto en seguridad: error al guardar  [HECHO v4.59]
+    · Mismo root cause que BUG-51 — 403 injusto bloqueaba la edición para encargado/EA.
+    · Fix incluido en BUG-51 (misma corrección en moverItemSeg accion='editar').
+    · Reportado: sesión 21/04/2026
+
+[✓] BUG-56 — Cerrar sesiones sigue sin funcionar  [HECHO v4.59]
+    · Los botones de cierre de otras sesiones estaban dentro de un div display:none
+      que solo aparecía al pulsar "Ver quién está conectado" → el usuario no los encontraba.
+    · Fix: nueva sección "Gestión de sesiones" siempre visible para SA/enc/EA con
+      botones "Cerrar operarios", "Cerrar encargados", "Cerrar TODAS" directamente accesibles.
+    · initAjustesTabs muestra/oculta la sección según el rol.
+    · Reportado: sesión 21/04/2026
+
+[✓] BUG-57 — Editar objeto en seguridad: lanza errores al guardar aunque sí guarda  [HECHO v4.59]
+    · Mismo root cause que BUG-51 — el worker devolvía 403 pero la operación se había ejecutado,
+      causando el mensaje de error aunque el dato quedaba guardado.
+    · Fix incluido en BUG-51.
+    · Reportado: sesión 21/04/2026
+
+[✓] BUG-59 — Inventarios NO filtran por obra/empresa — se mezclan datos  [HECHO v4.59]
+    · Para SA/EA, al cambiar obra en el header dropdown, el servidor no filtraba porque
+      obraId se leía de la sesión D1 (null para SA/EA) ignorando la selección del cliente.
+    · Fix frontend: cargarStock() pasa ?obra_id=X cuando hay obra seleccionada en sesión local.
+    · Fix worker: getBobinas, getPemp, getCarretillas aceptan obra_id via query param para SA/EA.
+    · Fix worker: getUsuarios acepta ?empresa_id para superadmin (necesario para modal aprobación).
+    · Reportado: sesión 21/04/2026
+
+[✓] BUG-60 — En ajustes/ideas no se puede cambiar el estado  [HECHO v4.59]
+    · cambiarEstadoSug() no mostraba ningún feedback — el usuario no sabía si la acción
+      había funcionado o fallado.
+    · Fix: añadido toast ✅/❌ con comprobación de res.ok.
+    · Reportado: sesión 21/04/2026
+
+[✓] BUG-71 — Filtrado en pestaña de Ideas no funciona bien  [HECHO v4.59]
+    · El hash de caché del DOM usaba solo nuevo.length → si el HTML filtrado tenía
+      la misma longitud que el anterior, el DOM no se actualizaba al cambiar filtro.
+    · Fix: el hash incluye ahora _sugFiltroKey+_sugFiltroVal+length, forzando actualización
+      siempre que cambie el filtro activo.
+    · Reportado: sesión 21/04/2026
+
+[✓] BUG-MOD — Modal aprobación usuarios: departamentos incorrectos y sin filtro por empresa  [HECHO v4.59]
+    · Lista hardcodeada tenía 'mecanico', 'civil', 'administracion' en lugar de
+      'mecanicas', 'personal' (los departamentos reales de la app).
+    · Fix: lista corregida a ['electrico','mecanicas','seguridad','personal'].
+    · Añadido onchange en el selector de empresa que actualiza dinámicamente los
+      departamentos disponibles según los usuarios existentes en esa empresa.
+    · Función nueva: actualizarDeptsPendiente(uid).
+    · Reportado: sesión 21/04/2026
+
 ================================================================================
   🔧 MEJORAS (solo app nueva, salvo indicación contraria)
 ================================================================================
