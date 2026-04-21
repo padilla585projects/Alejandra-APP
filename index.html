@@ -1409,6 +1409,17 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
       <textarea id="sugTexto" rows="5" placeholder="Describe el error o idea con el mayor detalle posible..."
         style="width:100%;padding:12px;background:var(--surface);border:1px solid var(--border);border-radius:10px;color:var(--text);font-family:'Poppins',sans-serif;font-size:14px;resize:vertical;outline:none;box-sizing:border-box"></textarea>
     </div>
+    <div style="margin-bottom:14px">
+      <input type="file" id="sugFotoInput" accept="image/*" style="display:none" onchange="previewSugFoto(this)">
+      <div style="display:flex;gap:8px;align-items:center">
+        <button type="button" class="btn-sm" onclick="document.getElementById('sugFotoInput').click()">📎 Añadir imagen</button>
+        <button type="button" class="btn-sm" id="btnBorrarFoto" style="display:none" onclick="borrarSugFoto()">✕ Quitar</button>
+        <span id="sugFotoNombre" style="font-size:11px;color:var(--muted)"></span>
+      </div>
+      <div id="sugFotoPreview" style="margin-top:8px;display:none">
+        <img id="sugFotoImg" style="max-width:100%;max-height:180px;border-radius:8px;border:1px solid var(--border);object-fit:contain">
+      </div>
+    </div>
     <button class="btn-primary" onclick="enviarSugerencia()" id="btnSugerencia">💬 Enviar</button>
   </div>
 
@@ -4699,6 +4710,72 @@ function selSugCategoria(cat) {
   });
 }
 
+let _sugFotoData = null;
+
+async function comprimirImagen(file) {
+  return new Promise(resolve => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onerror = () => { URL.revokeObjectURL(url); resolve(null); };
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const canvas = document.createElement('canvas');
+      const MAX = 300000;
+      const intentar = (maxDim, q) => {
+        let w = img.width, h = img.height;
+        if (w > maxDim || h > maxDim) {
+          if (w >= h) { h = Math.round(h * maxDim / w); w = maxDim; }
+          else        { w = Math.round(w * maxDim / h); h = maxDim; }
+        }
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        return canvas.toDataURL('image/jpeg', q);
+      };
+      for (const q of [0.75, 0.6, 0.5, 0.4, 0.3]) {
+        const r = intentar(1024, q);
+        if (r.length < MAX) { resolve(r); return; }
+      }
+      for (const q of [0.75, 0.6, 0.5, 0.4, 0.3]) {
+        const r = intentar(512, q);
+        if (r.length < MAX) { resolve(r); return; }
+      }
+      resolve(intentar(256, 0.5));
+    };
+    img.src = url;
+  });
+}
+
+async function previewSugFoto(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const data = await comprimirImagen(file);
+  if (!data) return toast('❌ No se pudo procesar la imagen', 'err');
+  _sugFotoData = data;
+  document.getElementById('sugFotoImg').src = data;
+  document.getElementById('sugFotoPreview').style.display = 'block';
+  document.getElementById('btnBorrarFoto').style.display = '';
+  document.getElementById('sugFotoNombre').textContent = file.name;
+}
+
+function borrarSugFoto() {
+  _sugFotoData = null;
+  document.getElementById('sugFotoInput').value = '';
+  document.getElementById('sugFotoPreview').style.display = 'none';
+  document.getElementById('btnBorrarFoto').style.display = 'none';
+  document.getElementById('sugFotoNombre').textContent = '';
+}
+
+function abrirFotoSug(img) {
+  if (img.dataset.zoomed === '1') {
+    img.style.cssText = img.dataset.origStyle || '';
+    img.dataset.zoomed = '0';
+  } else {
+    img.dataset.origStyle = img.style.cssText;
+    img.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;object-fit:contain;background:rgba(0,0,0,.93);z-index:9999;cursor:zoom-out;border-radius:0;margin:0;max-width:100%;max-height:100%';
+    img.dataset.zoomed = '1';
+  }
+}
+
 async function enviarSugerencia() {
   const texto     = document.getElementById('sugTexto')?.value.trim();
   const categoria = document.getElementById('sugCategoria')?.value || 'error';
@@ -4716,12 +4793,14 @@ async function enviarSugerencia() {
         texto, categoria,
         usuario: s?.nombre || '—',
         obra:    s?.obra_nombre || String(s?.obra_id || '—'),
+        foto: _sugFotoData || null,
       }),
     });
     const data = await res.json();
     if (res.ok) {
       toast('✅ ' + (data.mensaje || 'Enviado, gracias!'), 'ok');
       document.getElementById('sugTexto').value = '';
+      borrarSugFoto();
     } else {
       toast('❌ ' + (data.error || 'Error al enviar'), 'err');
     }
@@ -5209,6 +5288,7 @@ async function cargarSugerenciasAdmin() {
           ${!sg.leida?'<span style="background:var(--accent);color:#000;font-size:9px;font-weight:900;padding:2px 6px;border-radius:4px;margin-left:auto">NUEVA</span>':''}
         </div>
         <div style="font-size:14px;color:var(--text);margin-bottom:6px">${sg.texto}</div>
+        ${sg.foto ? `<img src="${sg.foto}" onclick="abrirFotoSug(this)" style="max-width:100%;max-height:120px;border-radius:6px;border:1px solid var(--border);object-fit:cover;cursor:zoom-in;margin-bottom:6px;display:block">` : ''}
         <div style="font-size:11px;color:var(--muted)">👤 ${sg.usuario||'—'} · 🏗 ${sg.obra||'—'} · ${sg.departamento?'<span style="color:var(--accent)">'+sg.departamento+'</span> · ':''}${sg.created_at||''}</div>
         ${sg.respuesta ? `<div style="margin-top:8px;padding:8px;background:var(--surface);border-left:3px solid var(--accent);border-radius:4px;font-size:12px;color:var(--text)">💬 ${sg.respuesta}</div>` : ''}
         <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">
@@ -5681,7 +5761,7 @@ async function cargarObrasSelectUsuario() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '4.62';
+const APP_VERSION = '4.63';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes

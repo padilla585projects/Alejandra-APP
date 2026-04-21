@@ -1519,7 +1519,7 @@ async function getStats(request, env) {
 async function guardarSugerencia(request, env) {
   try {
     const body = await request.json().catch(() => ({}));
-    const { texto, categoria, usuario, obra } = body;
+    const { texto, categoria, usuario, obra, foto } = body;
     if (!texto || !texto.trim()) return err('El texto de la sugerencia es obligatorio');
     // Intentar obtener departamento y empresa_id del token (silencioso si no hay sesión)
     let departamento = null, empresa_id_sug = 1;
@@ -1528,9 +1528,10 @@ async function guardarSugerencia(request, env) {
       departamento = auth.departamento || null;
       if (auth.empresa_id) empresa_id_sug = auth.empresa_id;
     } catch {}
+    const fotoVal = (foto && typeof foto === 'string' && foto.startsWith('data:image/')) ? foto : null;
     await env.DB.prepare(
-      'INSERT INTO sugerencias (texto, categoria, usuario, obra, departamento, empresa_id, estado) VALUES (?, ?, ?, ?, ?, ?, ?)'
-    ).bind(texto.trim().slice(0, 1000), categoria || null, usuario || null, obra || null, departamento, empresa_id_sug, 'pendiente').run();
+      'INSERT INTO sugerencias (texto, categoria, usuario, obra, departamento, empresa_id, estado, foto) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+    ).bind(texto.trim().slice(0, 1000), categoria || null, usuario || null, obra || null, departamento, empresa_id_sug, 'pendiente', fotoVal).run();
     const catIcon = { mejora: '🔧', error: '🐛', nuevo: '✨', otro: '💬' };
     const icon = catIcon[categoria] || '💬';
     await sendTelegram(env,
