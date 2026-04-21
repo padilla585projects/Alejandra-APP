@@ -315,6 +315,13 @@ LEYENDA DE ESTADO:
     · Al enviar una sugerencia/bug desde la app, permitir adjuntar una captura de pantalla.
     · Reportado: 20/04/2026 — Adrian, CPD Getafe
 
+[ ] MEJ-13 — Adjuntar archivos/documentación a herramientas en inventario
+    · Desde la ficha de una herramienta, poder subir y ver archivos adjuntos
+      (manuales, fichas técnicas, certificados, fotos, etc.).
+    · Requiere almacenamiento R2 (Cloudflare) o similar.
+    · Los archivos se asocian a la herramienta por id y empresa_id.
+    · Reportado: 21/04/2026 — Adrian, CPD Getafe
+
 [ ] NEW-08 — Chat interno entre empleados de la misma empresa
     · Canal de chat dentro de la app, filtrado por empresa.
     · Reportado: 18/04/2026 — Adrian, CPD Getafe
