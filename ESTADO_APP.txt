@@ -5,7 +5,7 @@
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 22/04/2026
-VERSIÓN ACTUAL: v4.19 app vieja | v4.67 app nueva
+VERSIÓN ACTUAL: v4.19 app vieja | v4.68 app nueva
 
 ⚠️  ANTES DE CODIFICAR: leer NuevaApp/IDEAS_PENDIENTES.txt
     Lista completa de bugs activos, mejoras y features pendientes.
@@ -240,6 +240,21 @@ hotfix  |  20/04/2026  [SOLO NUEVA APP — migración DB sin cambio de código]
     · Fix: ALTER TABLE bobinas/pemp/carretillas ADD COLUMN registrado_por TEXT aplicado en D1
     · App vieja no afectada (ya tenía la columna desde antes)
     · Sin cambio de código ni deploy — solo migración directa en D1
+
+v4.68  |  22/04/2026  [SOLO NUEVA APP]
+  - MEJ-131: Horarios de obra por día de la semana
+    · Toggle "📅 Horas distintas por día" en el panel de horario de cada obra (Ajustes→Obras)
+    · Si activo: inputs independientes para L/M/X/J/V (entrada+salida por día)
+    · Worker helper getHorarioParaDia(): devuelve las horas del día concreto del fichaje
+    · crearFichaje/actualizarFichaje: cálculo de horas_extra y minutos_retraso usa el día correcto
+    · fichajeObraChanged y fichajeEquipoOnObraChange pre-rellenan las horas del día seleccionado
+    · DB: ALTER TABLE horarios_obra ADD COLUMN horarios_dia TEXT DEFAULT NULL
+  - MEJ-08: Departamentos activos por empresa
+    · Ajustes → Empresa (empresa_admin/SA): sección con 4 toggles para activar/desactivar depts
+    · Al guardar: PUT /mi-empresa con campo departamentos (array JSON)
+    · Pantalla selección de dept: oculta cards de departamentos desactivados
+    · Cache en localStorage para visibilidad instantánea + refresco en background
+    · DB: ALTER TABLE empresas ADD COLUMN departamentos TEXT DEFAULT NULL
 
 v4.67  |  22/04/2026  [SOLO NUEVA APP]
   - MEJ-128: Fichaje semi-automático por equipo

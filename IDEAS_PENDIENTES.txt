@@ -1,7 +1,7 @@
 ================================================================================
   ALEJANDRA APP — IDEAS, MEJORAS Y ERRORES PENDIENTES
   Recogidos de: Canal Telegram @AlejandraAPP_bot
-  Última actualización: 22/04/2026 (v4.67) — resueltos MEJ-128 (fichaje equipo) + MEJ-134 fix
+  Última actualización: 22/04/2026 (v4.68) — MEJ-131 horarios/día + MEJ-08 depts activos
 
   ⚠️  LEER ESTE ARCHIVO ANTES DE CUALQUIER SESIÓN DE CODIFICACIÓN.
   ⚠️  Marcar como [HECHO vX.XX] cuando se implemente. No borrar las líneas.
@@ -305,10 +305,12 @@ LEYENDA DE ESTADO:
     · Implementar navegación contextual desde el panel de notificaciones.
     · Reportado: 19/04/2026 — Adrian, CPD Getafe
 
-[ ] MEJ-08 — Wizard para configurar departamentos por empresa (#121)
-    · Cada empresa debería poder elegir qué departamentos utiliza (los no usados se ocultan).
-    · Ej: empresa Edison no usa Mecánicas → no debería verlo.
-    · Relacionado con NEW-02 (wizard onboarding).
+[✓] MEJ-08 — Configurar departamentos activos por empresa  [HECHO v4.68]
+    · Ajustes → Empresa: sección "🔧 Departamentos activos" con 4 toggles (solo empresa_admin/SA).
+    · Los depts desactivados se ocultan en la pantalla de selección de departamento.
+    · Cambio persiste en localStorage para carga instantánea + fetch en background para refrescar.
+    · Worker: getMiEmpresa devuelve campo departamentos; updateMiEmpresa acepta array y lo guarda como JSON.
+    · DB: ALTER TABLE empresas ADD COLUMN departamentos TEXT DEFAULT NULL (NULL = todos activos)
     · Reportado: 20/04/2026 — Adrian, CPD Getafe
 
 [✓] MEJ-09 — Historial filtrado por departamento (#80)  [HECHO v4.61]
@@ -355,9 +357,14 @@ LEYENDA DE ESTADO:
     · Complementa MEJ-11 (horarios de obra ya implementados).
     · Reportado: 21/04/2026 — Adrian, CPD Getafe (empresa 3)
 
-[ ] MEJ-131 — Horarios de obra: diferente horario por día de la semana
-    · Actualmente hay un horario único por obra (entrada/salida).
-    · Poder configurar horario distinto por día: ej. L-J 8-18h, V 8-13h.
+[✓] MEJ-131 — Horarios de obra: diferente horario por día de la semana  [HECHO v4.68]
+    · Toggle "📅 Horas distintas por día" en el panel horario de cada obra.
+    · Si activo: inputs L/M/X/J/V con entrada+salida independientes. Se guarda en horarios_dia (JSON).
+    · Días sin override usan el horario por defecto de la obra.
+    · Worker: helper getHorarioParaDia() devuelve horas correctas según la fecha del fichaje.
+    · crearFichaje/actualizarFichaje: horas_extra y minutos_retraso calculados con el horario del día.
+    · fichajeObraChanged y fichajeEquipoOnObraChange pre-rellenan según el día seleccionado.
+    · DB: ALTER TABLE horarios_obra ADD COLUMN horarios_dia TEXT DEFAULT NULL
     · Extiende MEJ-11 (ya implementado v4.62).
     · Reportado: 21/04/2026 — Adrian, CPD Getafe (empresa 3)
 
