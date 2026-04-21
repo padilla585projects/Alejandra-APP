@@ -292,9 +292,12 @@ LEYENDA DE ESTADO:
     · Relacionado con NEW-02 (wizard onboarding).
     · Reportado: 20/04/2026 — Adrian, CPD Getafe
 
-[ ] MEJ-09 — Historial filtrado por departamento (#80)
-    · Dentro de un departamento: mostrar solo el historial de ese departamento.
-    · Desde la pantalla principal (superadmin/admin): mostrar todo con etiqueta de departamento.
+[✓] MEJ-09 — Historial filtrado por departamento (#80)  [HECHO v4.61]
+    · Worker getHistorialTabla (PEMP/carretillas): INNER JOIN con tabla base para filtrar
+      por empresa_id y departamento. Sin este JOIN no había aislamiento multi-tenant.
+    · Worker getHistorial (bobinas): JOIN corregido (bobina_id→bobina_codigo) y se añade
+      b.departamento al SELECT. Usuarios normales ven solo su dept; SA/EA ven todo.
+    · Frontend: SA/EA ven badge "⚡ electrico / 🔧 mecanicas / 🔺 seguridad" en cada item.
     · Reportado: 18/04/2026 — Adrian, CPD Getafe
 
 [✓] MEJ-10 — "Añadir nueva" directo al escanear herramienta inexistente  [HECHO v4.58]

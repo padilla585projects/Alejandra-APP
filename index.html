@@ -3845,6 +3845,8 @@ async function cargarHistorial() {
   const c = document.getElementById('historialList');
   const filtro = document.getElementById('histFiltro')?.value || '';
   const mod = currentModule;
+  const s = getSession();
+  const esSAEA = s?.rol === 'superadmin' || s?.rol === 'empresa_admin';
   c.innerHTML = '<div class="empty-state">Cargando...</div>';
 
   try {
@@ -3862,18 +3864,24 @@ async function cargarHistorial() {
 
     const icons  = { entrada: '📥', devolucion: '📤', eliminacion: '🗑️' };
     const labels = { entrada: 'ENTRADA', devolucion: 'DEVOLUCIÓN', eliminacion: 'ELIMINADO' };
+    const deptIcons = { electrico: '⚡', mecanicas: '🔧', seguridad: '🔺', personal: '👷' };
 
-    c.innerHTML = data.map(h => `
+    c.innerHTML = data.map(h => {
+      const deptTag = esSAEA && h.departamento
+        ? `<span style="font-size:10px;opacity:.65;margin-left:4px">${deptIcons[h.departamento] || ''} ${h.departamento}</span>`
+        : '';
+      return `
       <div class="hist-item">
         <div class="hist-icon">${icons[h.accion] || '📋'}</div>
         <div class="hist-body">
-          <div class="hist-code">${h.bobina_codigo || h.matricula || h.codigo || '—'}</div>
+          <div class="hist-code">${h.bobina_codigo || h.matricula || h.codigo || '—'}${deptTag}</div>
           <div class="hist-meta">${h.usuario ? '👤 ' + h.usuario + ' · ' : ''}${h.fecha || ''}
             ${h.notas ? '<br><span style="color:var(--text);font-size:11px">' + h.notas + '</span>' : ''}
           </div>
         </div>
         <div class="hist-badge badge-${h.accion}">${labels[h.accion] || h.accion}</div>
-      </div>`).join('');
+      </div>`;
+    }).join('');
   } catch {
     c.innerHTML = '<div class="empty-state" style="color:var(--red)">Error al cargar historial</div>';
   }
@@ -5612,7 +5620,7 @@ async function cargarObrasSelectUsuario() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '4.60';
+const APP_VERSION = '4.61';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes

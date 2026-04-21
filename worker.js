@@ -1418,16 +1418,21 @@ async function registrarHistorialCarretillas(env, { obra_id, matricula, accion, 
 }
 
 async function getHistorial(request, env) {
-  const { obraId, empresa_id, departamento, isSuperadmin } = await getAuth(request, env);
+  const { obraId, empresa_id, departamento, isSuperadmin, isEmpresaAdmin } = await getAuth(request, env);
   const url = new URL(request.url);
   const limit  = parseInt(url.searchParams.get('limit') || '100');
   const accion = url.searchParams.get('accion');
 
-  let sql = `SELECT h.* FROM historial h LEFT JOIN bobinas b ON h.bobina_id = b.id WHERE h.empresa_id = ?`;
-  const params = [empresa_id || 1];
-  if (obraId)                        { sql += ' AND h.obra_id = ?';      params.push(obraId); }
-  if (accion)                        { sql += ' AND h.accion = ?';       params.push(accion); }
-  if (departamento && !isSuperadmin) { sql += ' AND b.departamento = ?'; params.push(departamento); }
+  // JOIN en bobina_codigo (bobina_id nunca se inserta en historial)
+  let sql = `SELECT h.*, b.departamento FROM historial h LEFT JOIN bobinas b ON h.bobina_codigo = b.codigo AND b.empresa_id = ? WHERE h.empresa_id = ?`;
+  const params = [empresa_id || 1, empresa_id || 1];
+  if (obraId) { sql += ' AND h.obra_id = ?'; params.push(obraId); }
+  if (accion) { sql += ' AND h.accion = ?';  params.push(accion); }
+
+  // Usuarios normales ven solo su dept; SA/EA ven todo (o filtran por ?departamento=)
+  const deptFiltro = (!isSuperadmin && !isEmpresaAdmin) ? departamento : (url.searchParams.get('departamento') || null);
+  if (deptFiltro) { sql += ' AND b.departamento = ?'; params.push(deptFiltro); }
+
   sql += ' ORDER BY h.created_at DESC LIMIT ?';
   params.push(limit);
 
@@ -1436,17 +1441,22 @@ async function getHistorial(request, env) {
 }
 
 async function getHistorialTabla(tabla, request, env) {
-  const { obraId } = await getAuth(request, env);
+  const { obraId, empresa_id, departamento, isSuperadmin, isEmpresaAdmin } = await getAuth(request, env);
   const url = new URL(request.url);
   const limit  = parseInt(url.searchParams.get('limit') || '100');
   const accion = url.searchParams.get('accion');
-  const f      = obraId || null;
 
-  let sql = `SELECT * FROM ${tabla} WHERE 1=1`;
-  const params = [];
-  if (f)      { sql += ' AND obra_id = ?'; params.push(f); }
-  if (accion) { sql += ' AND accion = ?';  params.push(accion); }
-  sql += ' ORDER BY created_at DESC LIMIT ?';
+  // INNER JOIN para obtener empresa_id y departamento de la máquina
+  const mainTable = tabla === 'historial_pemp' ? 'pemp' : 'carretillas';
+  let sql = `SELECT h.*, m.departamento FROM ${tabla} h INNER JOIN ${mainTable} m ON h.matricula = m.matricula AND m.empresa_id = ? WHERE 1=1`;
+  const params = [empresa_id || 1];
+  if (obraId) { sql += ' AND h.obra_id = ?'; params.push(obraId); }
+  if (accion) { sql += ' AND h.accion = ?';  params.push(accion); }
+
+  const deptFiltro = (!isSuperadmin && !isEmpresaAdmin) ? departamento : (url.searchParams.get('departamento') || null);
+  if (deptFiltro) { sql += ' AND m.departamento = ?'; params.push(deptFiltro); }
+
+  sql += ' ORDER BY h.created_at DESC LIMIT ?';
   params.push(limit);
 
   const { results } = await env.DB.prepare(sql).bind(...params).all();

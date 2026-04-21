@@ -65,6 +65,12 @@ REGLA DE DEPLOY:
   - En ambos casos: subir versión + actualizar txts + deploy worker + git push
 
 ÚLTIMO CAMBIO REALIZADO:
+  v4.61 [nueva] — 21/04/2026
+  · MEJ-09: historial filtrado por departamento (worker + frontend)
+  · Fix crítico: getHistorialTabla sin aislamiento empresa — corregido con INNER JOIN
+  · Fix: JOIN bobinas en getHistorial era sobre bobina_id (no existe) → corregido a bobina_codigo
+  · SA/EA: badge de dept visible en cada ítem del historial
+
   v4.60 [nueva] — 21/04/2026
   · Splash screen: muestra versión actual (v4.60) en pequeño bajo el logo
   · Splash screen: firma "Desarrollado por Adrián Padilla" en pie de pantalla
@@ -211,7 +217,7 @@ git -c credential.helper= push https://padilla585:<TOKEN_GITHUB_VIEJO>@github.co
 ================================================================================
 
 APP VIEJA:  v4.19  (sw.js: alejandra-v4.19 | version.json: {"v":"4.19"})
-APP NUEVA:  v4.59  (sw.js: alejandra-v4.59 | version.json: {"v":"4.59"})
+APP NUEVA:  v4.61  (sw.js: alejandra-v4.61 | version.json: {"v":"4.61"})
 
 Historial reciente (app nueva):
   v4.41 [nueva] — Login Google con invitaciones temporales (rol+dept, caduca, 1 uso)
