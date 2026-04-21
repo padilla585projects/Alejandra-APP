@@ -698,6 +698,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
       <button class="mod-tab-btn active" onclick="showModTab('scan')">📷 Escanear</button>
       <button class="mod-tab-btn" onclick="showModTab('stock')">📋 Inventario</button>
       <button class="mod-tab-btn" onclick="showModTab('historial')">🕒 Historial</button>
+      <button class="mod-tab-btn" onclick="showModTab('docs')">📂 Docs</button>
     </div>
     <div id="modContent" style="padding:14px;overflow-y:auto;flex:1">
       <!-- scan panel -->
@@ -925,6 +926,10 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
         <div id="historialList"><div class="empty-state">Cargando...</div></div>
       </div>
 
+      <div id="modPanelDocs" class="mod-panel">
+        <div id="docsDeptPanel"></div>
+      </div>
+
     </div>
   </div>
 
@@ -938,6 +943,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
       <button class="mod-tab-btn active" id="segTabEscaner" onclick="segSelTab('escaner')">📷 Escáner</button>
       <button class="mod-tab-btn"        id="segTabInv"     onclick="segSelTab('inventario')">📦 Inventario</button>
       <button class="mod-tab-btn"        id="segTabHerr"    onclick="segSelTab('herramientas')">🔧 Herramientas</button>
+      <button class="mod-tab-btn"        id="segTabDocs"    onclick="segSelTab('docs')">📂 Docs</button>
     </div>
 
     <!-- ── TAB ESCÁNER ── -->
@@ -1034,6 +1040,10 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
           </div>
         </div>
       </div>
+    </div>
+
+    <div id="segPanelDocs" style="display:none;flex-direction:column;flex:1;overflow-y:auto;padding:14px">
+      <div id="segDocsDeptPanel"></div>
     </div>
 
   </div>
@@ -2634,6 +2644,12 @@ async function guardarDeptosEmpresa() {
 window.guardarDeptosEmpresa = guardarDeptosEmpresa;
 window.docsEmpresaSubir    = docsEmpresaSubir;
 window.docsEmpresaBorrar   = docsEmpresaBorrar;
+window.docsNuevaCarpeta    = docsNuevaCarpeta;
+window.docsBorrarCarpeta   = docsBorrarCarpeta;
+window.docsAbrirCarpeta    = docsAbrirCarpeta;
+window.docsSubirArchivo    = docsSubirArchivo;
+window.docsDescargarDoc    = docsDescargarDoc;
+window.docsBorrarArchivo   = docsBorrarArchivo;
 
 function volverSelectorDepto() {
   const s = getSession();
@@ -2892,15 +2908,16 @@ async function cargarObrasSelectScan() {
 }
 
 function showModTab(name) {
-  document.querySelectorAll('.mod-tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('#screenModule .mod-tab-btn').forEach(b => b.classList.remove('active'));
   document.querySelectorAll('.mod-panel').forEach(p => p.classList.remove('active'));
-  const tabMap = { scan: 0, stock: 1, historial: 2 };
+  const tabMap = { scan: 0, stock: 1, historial: 2, docs: 3 };
   const tabs = document.querySelectorAll('#screenModule .mod-tab-btn');
   if (tabs[tabMap[name]]) tabs[tabMap[name]].classList.add('active');
   document.getElementById('modPanel' + name.charAt(0).toUpperCase() + name.slice(1)).classList.add('active');
   if (name === 'scan')      cargarCatalogos();
   if (name === 'stock')     cargarStock();
   if (name === 'historial') cargarHistorial();
+  if (name === 'docs')      docsCargar('docsDeptPanel');
 }
 
 // ══════════════════════════════════════════════════════
@@ -3358,10 +3375,13 @@ function segSelTab(tab) {
   if (tab === 'herramientas') { navTo('herramientas'); return; }
   document.getElementById('segTabEscaner').classList.toggle('active', tab === 'escaner');
   document.getElementById('segTabInv').classList.toggle('active', tab === 'inventario');
+  document.getElementById('segTabDocs')?.classList.toggle('active', tab === 'docs');
   document.getElementById('segTabHerr')?.classList.remove('active');
-  document.getElementById('segPanelEscaner').style.display = tab === 'escaner' ? 'flex' : 'none';
-  document.getElementById('segPanelInv').style.display     = tab === 'inventario' ? 'flex' : 'none';
+  document.getElementById('segPanelEscaner').style.display = tab === 'escaner'    ? 'flex'  : 'none';
+  document.getElementById('segPanelInv').style.display     = tab === 'inventario' ? 'flex'  : 'none';
+  document.getElementById('segPanelDocs').style.display    = tab === 'docs'       ? 'flex'  : 'none';
   if (tab === 'inventario') segCargarInv();
+  if (tab === 'docs')       docsCargar('segDocsDeptPanel');
 }
 
 // Buscar por código: primero en inventario seg, luego en máquinas
@@ -4055,6 +4075,154 @@ async function cargarHistorial() {
   } catch {
     c.innerHTML = '<div class="empty-state" style="color:var(--red)">Error al cargar historial</div>';
   }
+}
+
+// ══════════════════════════════════════════════════════
+// DOCUMENTACIÓN DEPARTAMENTOS
+// ══════════════════════════════════════════════════════
+
+async function docsCargar(containerId) {
+  const c = document.getElementById(containerId);
+  if (!c) return;
+  const s = getSession();
+  const obraId = s?.obra_id;
+  const dept   = s?.departamento;
+  const puedeEditar = s?.rol !== 'operario';
+
+  if (!obraId) {
+    c.innerHTML = `<div class="empty-state">Selecciona una obra para ver documentos</div>`;
+    return;
+  }
+
+  c.innerHTML = '<div class="empty-state">Cargando...</div>';
+  try {
+    const res = await apiCall(`/carpetas?obra_id=${obraId}&departamento=${dept}`);
+    const carpetas = res.ok ? await res.json() : [];
+
+    c.innerHTML = `
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+        <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:16px;color:var(--text)">📂 Documentación</div>
+        ${puedeEditar ? `<button onclick="docsNuevaCarpeta('${containerId}')"
+          style="padding:7px 14px;background:var(--accent);color:#000;border:none;border-radius:8px;font-family:'Montserrat',sans-serif;font-weight:700;font-size:12px;cursor:pointer">
+          + Nueva carpeta
+        </button>` : ''}
+      </div>
+      ${carpetas.length ? carpetas.map(cp => `
+        <div style="display:flex;align-items:center;gap:10px;padding:12px 14px;background:var(--surface);border:1px solid var(--border);border-radius:12px;margin-bottom:8px;cursor:pointer"
+             onclick="docsAbrirCarpeta(${cp.id},'${cp.nombre.replace(/'/g,"\\'")}','${containerId}')">
+          <span style="font-size:28px">📁</span>
+          <div style="flex:1;min-width:0">
+            <div style="font-weight:700;font-size:14px;color:var(--text)">${cp.nombre}</div>
+            <div style="font-size:11px;color:var(--muted)">${cp.creado_por ? 'Por ' + cp.creado_por : ''} ${cp.created_at ? '· ' + cp.created_at.slice(0,10) : ''}</div>
+          </div>
+          ${puedeEditar ? `<button onclick="event.stopPropagation();docsBorrarCarpeta(${cp.id},'${containerId}')"
+            style="padding:6px 10px;background:#ef444415;border:1px solid #ef444430;border-radius:8px;font-size:13px;color:#ef4444;cursor:pointer">🗑️</button>` : ''}
+        </div>`).join('')
+      : '<div class="empty-state">Sin carpetas. Crea una para empezar.</div>'}`;
+  } catch {
+    c.innerHTML = '<div class="empty-state" style="color:var(--red)">Error al cargar</div>';
+  }
+}
+
+async function docsAbrirCarpeta(carpetaId, nombre, containerId) {
+  const c = document.getElementById(containerId);
+  if (!c) return;
+  const s = getSession();
+  const puedeEditar = s?.rol !== 'operario';
+
+  c.innerHTML = '<div class="empty-state">Cargando...</div>';
+  try {
+    const res = await apiCall(`/docs-dept?carpeta_id=${carpetaId}`);
+    const docs = res.ok ? await res.json() : [];
+
+    c.innerHTML = `
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+        <button onclick="docsCargar('${containerId}')"
+          style="padding:7px 12px;background:var(--surface);border:1px solid var(--border);border-radius:8px;font-size:13px;cursor:pointer">← Volver</button>
+        <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:15px;color:var(--text);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">📁 ${nombre}</div>
+        ${puedeEditar ? `<label style="padding:7px 14px;background:var(--accent);color:#000;border-radius:8px;font-family:'Montserrat',sans-serif;font-weight:700;font-size:12px;cursor:pointer;white-space:nowrap">
+          ⬆️ Subir<input type="file" style="display:none" onchange="docsSubirArchivo(${carpetaId},'${containerId}','${nombre.replace(/'/g,"\\'")}',this)">
+        </label>` : ''}
+      </div>
+      <div id="docsListaArchivos_${carpetaId}">
+        ${docs.length ? docs.map(d => docsRenderArchivo(d, puedeEditar, carpetaId, containerId, nombre)).join('')
+        : '<div class="empty-state">Carpeta vacía. Sube el primer archivo.</div>'}
+      </div>`;
+  } catch {
+    c.innerHTML = '<div class="empty-state" style="color:var(--red)">Error al cargar</div>';
+  }
+}
+
+function docsRenderArchivo(d, puedeEditar, carpetaId, containerId, carpetaNombre) {
+  const kb = d.tamano ? (d.tamano < 1048576 ? Math.round(d.tamano/1024)+'KB' : (d.tamano/1048576).toFixed(1)+'MB') : '';
+  return `<div style="display:flex;align-items:center;gap:10px;padding:11px 14px;background:var(--surface);border:1px solid var(--border);border-radius:12px;margin-bottom:8px">
+    <span style="font-size:24px;flex-shrink:0">${archivoIcono(d.mime)}</span>
+    <div style="flex:1;min-width:0">
+      <div style="font-weight:600;font-size:13px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${d.nombre}</div>
+      <div style="font-size:10px;color:var(--muted)">${kb}${d.subido_por?' · '+d.subido_por:''}${d.created_at?' · '+d.created_at.slice(0,10):''}</div>
+      ${d.descripcion ? `<div style="font-size:11px;color:var(--muted);font-style:italic;margin-top:2px">${d.descripcion}</div>` : ''}
+    </div>
+    <button onclick="docsDescargarDoc(${d.id},'${d.nombre.replace(/'/g,"\\'")}')"
+      style="padding:6px 10px;background:var(--surface);border:1px solid var(--border);border-radius:8px;font-size:13px;cursor:pointer;flex-shrink:0">⬇️</button>
+    ${puedeEditar ? `<button onclick="docsBorrarArchivo(${d.id},${carpetaId},'${containerId}','${carpetaNombre.replace(/'/g,"\\'")}')"
+      style="padding:6px 10px;background:#ef444415;border:1px solid #ef444430;border-radius:8px;font-size:13px;color:#ef4444;cursor:pointer;flex-shrink:0">🗑️</button>` : ''}
+  </div>`;
+}
+
+async function docsNuevaCarpeta(containerId) {
+  const nombre = prompt('Nombre de la nueva carpeta:')?.trim();
+  if (!nombre) return;
+  const s = getSession();
+  try {
+    const res = await apiCall('/carpetas', {
+      method: 'POST',
+      body: JSON.stringify({ obra_id: s.obra_id, departamento: s.departamento, nombre })
+    });
+    if (res.ok) { toast('📁 Carpeta creada'); docsCargar(containerId); }
+    else { const e = await res.json().catch(()=>{}); toast('❌ ' + (e?.error || 'Error'), 'err'); }
+  } catch { toast('❌ Error de red', 'err'); }
+}
+
+async function docsBorrarCarpeta(id, containerId) {
+  if (!confirm('¿Eliminar la carpeta y todos sus archivos?')) return;
+  const res = await apiCall('/carpetas/' + id, { method: 'DELETE' });
+  if (res.ok) { toast('🗑️ Carpeta eliminada'); docsCargar(containerId); }
+  else toast('❌ Error al eliminar', 'err');
+}
+
+async function docsSubirArchivo(carpetaId, containerId, carpetaNombre, input) {
+  const file = input.files[0];
+  if (!file) return;
+  input.value = '';
+  toast('⬆️ Subiendo ' + file.name + '...');
+  const fd = new FormData();
+  fd.append('file', file);
+  fd.append('carpeta_id', carpetaId);
+  try {
+    const res = await subirArchivoRaw('/docs-dept', fd);
+    if (!res.ok) { const e = await res.json().catch(()=>{}); return toast('❌ ' + (e?.error||'Error al subir'), 'err'); }
+    toast('✅ Archivo subido');
+    docsAbrirCarpeta(carpetaId, carpetaNombre, containerId);
+  } catch { toast('❌ Error de red', 'err'); }
+}
+
+async function docsDescargarDoc(id, nombre) {
+  try {
+    const res = await apiCall('/docs-dept/' + id);
+    if (!res.ok) return toast('❌ Error al descargar', 'err');
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = nombre; a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+  } catch { toast('❌ Error de red', 'err'); }
+}
+
+async function docsBorrarArchivo(id, carpetaId, containerId, carpetaNombre) {
+  if (!confirm('¿Eliminar este archivo?')) return;
+  const res = await apiCall('/docs-dept/' + id, { method: 'DELETE' });
+  if (res.ok) { toast('🗑️ Archivo eliminado'); docsAbrirCarpeta(carpetaId, carpetaNombre, containerId); }
+  else toast('❌ Error al eliminar', 'err');
 }
 
 // ══════════════════════════════════════════════════════
@@ -6035,7 +6203,7 @@ async function cargarObrasSelectUsuario() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '4.69';
+const APP_VERSION = '4.70';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes

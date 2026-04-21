@@ -388,6 +388,14 @@ LEYENDA DE ESTADO:
     · Requiere almacenamiento R2 (Cloudflare) — mismo bucket que NEW-03.
     · Reportado: 21/04/2026 — Adrian, CPD Getafe
 
+[✓] NEW-14 — Pestaña Documentación en Eléctrico, Mecánicas y Seguridad  [HECHO v4.70]
+    · Tab 📂 Docs en los tres departamentos.
+    · Carpetas por obra+departamento: crear y borrar (borra todos sus archivos en R2).
+    · Archivos dentro de carpetas: subir ≤50MB, descargar con auth, borrar.
+    · Subir/borrar: encargado + admin/EA/SA. Leer: todos los roles incluyendo operarios.
+    · Tablas D1: carpetas + docs_dept. Bucket R2: alejandra-app-files.
+    · Reportado: 22/04/2026 — Adrian, CPD Getafe
+
 [ ] NEW-08 — Chat interno entre empleados de la misma empresa
     · Canal de chat dentro de la app, filtrado por empresa.
     · Reportado: 18/04/2026 — Adrian, CPD Getafe

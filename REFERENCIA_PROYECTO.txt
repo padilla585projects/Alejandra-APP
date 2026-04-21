@@ -65,6 +65,13 @@ REGLA DE DEPLOY:
   - En ambos casos: subir versión + actualizar txts + deploy worker + git push
 
 ÚLTIMO CAMBIO REALIZADO:
+  v4.70 [nueva] — 22/04/2026
+  · Nueva pestaña 📂 Docs en Eléctrico, Mecánicas y Seguridad
+  · Carpetas por obra+departamento: crear, borrar (con todos sus archivos)
+  · Archivos dentro de carpetas: subir ≤50MB, descargar con auth, borrar
+  · Subir/borrar solo encargado+admin; leer todos los roles
+  · Tablas D1: carpetas + docs_dept; R2 key: e{id}/dept/{dept}/{obra}/{carp}/{ts}_{file}
+
   v4.69 [nueva] — 22/04/2026
   · NEW-03: Documentos de empresa — Ajustes→Empresa sección 📂 con subir/descargar/borrar (R2)
   · MEJ-13: Archivos adjuntos en herramientas — sección 📎 en ficha de herramienta (R2)

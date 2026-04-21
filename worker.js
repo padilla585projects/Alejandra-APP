@@ -455,6 +455,21 @@ export default {
         if (method === 'DELETE') return await borrarArchivo(aid, request, env);
       }
 
+      // ── Documentación departamentos ───────────────────────────────────────
+      if (path === '/carpetas' && method === 'GET')  return await listarCarpetas(request, env);
+      if (path === '/carpetas' && method === 'POST') return await crearCarpeta(request, env);
+      if (path.startsWith('/carpetas/')) {
+        const cid = parseInt(path.split('/carpetas/')[1]);
+        if (method === 'DELETE') return await borrarCarpeta(cid, request, env);
+      }
+      if (path === '/docs-dept' && method === 'GET')  return await listarDocsDept(request, env);
+      if (path === '/docs-dept' && method === 'POST') return await subirDocDept(request, env);
+      if (path.startsWith('/docs-dept/')) {
+        const did = parseInt(path.split('/docs-dept/')[1]);
+        if (method === 'GET')    return await descargarDocDept(did, request, env);
+        if (method === 'DELETE') return await borrarDocDept(did, request, env);
+      }
+
       // ── Personal ──────────────────────────────────────────────────────────
       if (path === '/horarios-obra' && method === 'GET')  return await getHorariosObra(request, env);
       if (path === '/horarios-obra' && method === 'POST') return await guardarHorarioObra(request, env);
@@ -3824,6 +3839,115 @@ async function borrarArchivo(id, request, env) {
   if (!meta) return err('Archivo no encontrado', 404);
   await env.FILES.delete(meta.r2_key);
   await env.DB.prepare('DELETE FROM archivos WHERE id = ? AND empresa_id = ?').bind(id, empresa_id).run();
+  return json({ ok: true });
+}
+
+// ── Documentación departamentos ───────────────────────────────────────────────
+
+async function listarCarpetas(request, env) {
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const url = new URL(request.url);
+  const obra_id     = url.searchParams.get('obra_id');
+  const departamento = url.searchParams.get('departamento');
+  if (!obra_id || !departamento) return err('Faltan parámetros', 400);
+  const { results } = await env.DB.prepare(
+    'SELECT * FROM carpetas WHERE empresa_id = ? AND obra_id = ? AND departamento = ? ORDER BY nombre COLLATE NOCASE'
+  ).bind(empresa_id, parseInt(obra_id), departamento).all();
+  return json(results);
+}
+
+async function crearCarpeta(request, env) {
+  const { empresa_id, rol, nombre: userNombre } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  if (rol === 'operario') return err('Sin permisos', 403);
+  const { obra_id, departamento, nombre } = await request.json().catch(() => ({}));
+  if (!obra_id || !departamento || !nombre?.trim()) return err('Faltan datos', 400);
+  const existe = await env.DB.prepare(
+    'SELECT id FROM carpetas WHERE empresa_id = ? AND obra_id = ? AND departamento = ? AND UPPER(nombre) = UPPER(?)'
+  ).bind(empresa_id, parseInt(obra_id), departamento, nombre.trim()).first();
+  if (existe) return err('Ya existe una carpeta con ese nombre', 409);
+  const r = await env.DB.prepare(
+    'INSERT INTO carpetas (empresa_id, obra_id, departamento, nombre, creado_por) VALUES (?,?,?,?,?)'
+  ).bind(empresa_id, parseInt(obra_id), departamento, nombre.trim(), userNombre || rol).run();
+  return json({ ok: true, id: r.meta.last_row_id, nombre: nombre.trim() }, 201);
+}
+
+async function borrarCarpeta(id, request, env) {
+  const { empresa_id, rol } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  if (rol === 'operario') return err('Sin permisos', 403);
+  const carpeta = await env.DB.prepare('SELECT * FROM carpetas WHERE id = ? AND empresa_id = ?').bind(id, empresa_id).first();
+  if (!carpeta) return err('Carpeta no encontrada', 404);
+  // Borrar todos los archivos R2 de la carpeta
+  const { results: docs } = await env.DB.prepare('SELECT r2_key FROM docs_dept WHERE carpeta_id = ? AND empresa_id = ?').bind(id, empresa_id).all();
+  await Promise.all(docs.map(d => env.FILES.delete(d.r2_key)));
+  await env.DB.prepare('DELETE FROM docs_dept WHERE carpeta_id = ? AND empresa_id = ?').bind(id, empresa_id).run();
+  await env.DB.prepare('DELETE FROM carpetas WHERE id = ? AND empresa_id = ?').bind(id, empresa_id).run();
+  return json({ ok: true });
+}
+
+async function listarDocsDept(request, env) {
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const url = new URL(request.url);
+  const carpeta_id = url.searchParams.get('carpeta_id');
+  if (!carpeta_id) return err('Falta carpeta_id', 400);
+  const { results } = await env.DB.prepare(
+    'SELECT * FROM docs_dept WHERE carpeta_id = ? AND empresa_id = ? ORDER BY created_at DESC'
+  ).bind(parseInt(carpeta_id), empresa_id).all();
+  return json(results);
+}
+
+async function subirDocDept(request, env) {
+  const { empresa_id, rol, nombre: userNombre } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  if (rol === 'operario') return err('Sin permisos', 403);
+  const form = await request.formData().catch(() => null);
+  if (!form) return err('Falta el formulario', 400);
+  const file        = form.get('file');
+  const carpeta_id  = form.get('carpeta_id');
+  const descripcion = form.get('descripcion') || null;
+  if (!file || !file.name || !carpeta_id) return err('Faltan datos', 400);
+  if (file.size > 52428800) return err('El archivo supera el límite de 50 MB', 413);
+  const carpeta = await env.DB.prepare('SELECT * FROM carpetas WHERE id = ? AND empresa_id = ?').bind(parseInt(carpeta_id), empresa_id).first();
+  if (!carpeta) return err('Carpeta no encontrada', 404);
+  const ts       = Date.now();
+  const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+  const r2Key    = `e${empresa_id}/dept/${carpeta.departamento}/${carpeta.obra_id}/${carpeta_id}/${ts}_${safeName}`;
+  await env.FILES.put(r2Key, file.stream(), { httpMetadata: { contentType: file.type || 'application/octet-stream' } });
+  const r = await env.DB.prepare(
+    'INSERT INTO docs_dept (empresa_id, obra_id, departamento, carpeta_id, r2_key, nombre, mime, tamano, descripcion, subido_por) VALUES (?,?,?,?,?,?,?,?,?,?)'
+  ).bind(empresa_id, carpeta.obra_id, carpeta.departamento, parseInt(carpeta_id), r2Key, file.name,
+    file.type || null, file.size || null, descripcion, userNombre || rol).run();
+  return json({ ok: true, id: r.meta.last_row_id, nombre: file.name }, 201);
+}
+
+async function descargarDocDept(id, request, env) {
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const meta = await env.DB.prepare('SELECT * FROM docs_dept WHERE id = ? AND empresa_id = ?').bind(id, empresa_id).first();
+  if (!meta) return err('Documento no encontrado', 404);
+  const obj = await env.FILES.get(meta.r2_key);
+  if (!obj) return err('Archivo no disponible en almacenamiento', 404);
+  return new Response(obj.body, {
+    headers: {
+      'Content-Type': meta.mime || 'application/octet-stream',
+      'Content-Disposition': `attachment; filename="${encodeURIComponent(meta.nombre)}"`,
+      'Cache-Control': 'private, max-age=3600',
+      ...CORS,
+    },
+  });
+}
+
+async function borrarDocDept(id, request, env) {
+  const { empresa_id, rol } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  if (rol === 'operario') return err('Sin permisos', 403);
+  const meta = await env.DB.prepare('SELECT * FROM docs_dept WHERE id = ? AND empresa_id = ?').bind(id, empresa_id).first();
+  if (!meta) return err('Documento no encontrado', 404);
+  await env.FILES.delete(meta.r2_key);
+  await env.DB.prepare('DELETE FROM docs_dept WHERE id = ? AND empresa_id = ?').bind(id, empresa_id).run();
   return json({ ok: true });
 }
 
