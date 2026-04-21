@@ -115,6 +115,109 @@ async function sendTelegram(env, mensaje) {
   } catch (_) {}
 }
 
+// botones = [[{text, callback_data}, ...], ...]  (filas × columnas)
+async function sendTelegramConBotones(env, mensaje, botones) {
+  try {
+    const token  = env.TELEGRAM_BOT_TOKEN;
+    const chatId = env.TELEGRAM_CHAT_ID;
+    if (!token || !chatId) return;
+    await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: chatId, text: mensaje, parse_mode: 'HTML',
+        reply_markup: { inline_keyboard: botones }
+      }),
+    });
+  } catch (_) {}
+}
+
+async function _tgAnswerCQ(env, cqId, text) {
+  try {
+    await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/answerCallbackQuery`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ callback_query_id: cqId, text, show_alert: false })
+    });
+  } catch (_) {}
+}
+
+async function _tgEditMsg(env, chatId, msgId, newText) {
+  try {
+    await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/editMessageText`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: chatId, message_id: msgId,
+        text: newText, parse_mode: 'HTML',
+        reply_markup: { inline_keyboard: [] }   // elimina los botones tras actuar
+      })
+    });
+  } catch (_) {}
+}
+
+// Gestiona las pulsaciones de botones inline enviadas por Telegram
+async function handleTelegramWebhook(request, env) {
+  const secret = request.headers.get('X-Telegram-Bot-Api-Secret-Token');
+  if (!secret || secret !== env.TELEGRAM_WEBHOOK_SECRET) return new Response('Unauthorized', { status: 401 });
+  const update = await request.json().catch(() => null);
+  if (!update?.callback_query) return new Response('OK');
+  const cq     = update.callback_query;
+  const data   = cq.data || '';
+  const chatId = cq.message?.chat?.id;
+  const msgId  = cq.message?.message_id;
+  const orig   = cq.message?.text || '';
+  const [accion, ...partes] = data.split(':');
+  try {
+    // ── Aprobación de solicitud de usuario ──────────────────────────────────
+    if (accion === 'apr') {
+      const [userId, empresaId, rol, dept] = partes;
+      await env.DB.prepare(
+        'UPDATE usuarios SET activo=1, google_pending=0, empresa_id=?, rol=?, departamento=? WHERE id=? AND google_pending=1'
+      ).bind(parseInt(empresaId), rol, dept === 'null' ? null : dept, parseInt(userId)).run();
+      await _tgAnswerCQ(env, cq.id, '✅ Usuario aprobado');
+      await _tgEditMsg(env, chatId, msgId, orig + `\n\n✅ <b>APROBADO</b> — ${rol} · ${dept === 'null' ? '—' : dept}`);
+    }
+    else if (accion === 'rej') {
+      const [userId] = partes;
+      await env.DB.prepare('DELETE FROM usuarios WHERE id=? AND google_pending=1').bind(parseInt(userId)).run();
+      await _tgAnswerCQ(env, cq.id, '❌ Solicitud rechazada');
+      await _tgEditMsg(env, chatId, msgId, orig + '\n\n❌ <b>RECHAZADO</b>');
+    }
+    // ── Estado de sugerencia / idea ──────────────────────────────────────────
+    else if (accion === 'idea_prog') {
+      await env.DB.prepare('UPDATE sugerencias SET estado=? WHERE id=?').bind('en_progreso', parseInt(partes[0])).run();
+      await _tgAnswerCQ(env, cq.id, '🔄 En progreso');
+      await _tgEditMsg(env, chatId, msgId, orig + '\n\n🔄 <b>EN PROGRESO</b>');
+    }
+    else if (accion === 'idea_done') {
+      await env.DB.prepare('UPDATE sugerencias SET estado=? WHERE id=?').bind('resuelto', parseInt(partes[0])).run();
+      await _tgAnswerCQ(env, cq.id, '✅ Resuelta');
+      await _tgEditMsg(env, chatId, msgId, orig + '\n\n✅ <b>RESUELTA</b>');
+    }
+    else if (accion === 'idea_close') {
+      await env.DB.prepare('UPDATE sugerencias SET estado=? WHERE id=?').bind('cerrado', parseInt(partes[0])).run();
+      await _tgAnswerCQ(env, cq.id, '🗑 Cerrada');
+      await _tgEditMsg(env, chatId, msgId, orig + '\n\n🗑 <b>CERRADA</b>');
+    }
+  } catch (e) {
+    await _tgAnswerCQ(env, cq.id, '❌ Error: ' + e.message);
+  }
+  return new Response('OK');
+}
+
+// Registra el webhook de Telegram (llamar una sola vez: GET /setup-telegram-webhook)
+async function setupTelegramWebhook(request, env) {
+  const token  = env.TELEGRAM_BOT_TOKEN;
+  const secret = env.TELEGRAM_WEBHOOK_SECRET;
+  if (!token)  return json({ error: 'TELEGRAM_BOT_TOKEN no configurado' });
+  if (!secret) return json({ error: 'TELEGRAM_WEBHOOK_SECRET no configurado' });
+  const webhookUrl = 'https://alejandra-app-api.alejandra-app.workers.dev/telegram-webhook';
+  const r = await fetch(`https://api.telegram.org/bot${token}/setWebhook`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ url: webhookUrl, secret_token: secret, allowed_updates: ['callback_query'] })
+  });
+  return json(await r.json());
+}
+
 function fechaEspana() {
   return new Date().toLocaleString('es-ES', { timeZone: 'Europe/Madrid' });
 }
@@ -130,6 +233,10 @@ export default {
     const method = request.method;
 
     try {
+      // ── Telegram webhook (sin auth — valida con secret header) ───────────────
+      if (path === '/telegram-webhook'       && method === 'POST') return await handleTelegramWebhook(request, env);
+      if (path === '/setup-telegram-webhook' && method === 'GET')  return await setupTelegramWebhook(request, env);
+
       // ── Rutas públicas (sin auth) ──────────────────────────────────────────
       if (path === '/scan'        && method === 'POST') return await handleScan(request, env);
       if (path === '/ocr'         && method === 'POST') return await handleOCR(request, env);
@@ -1529,16 +1636,24 @@ async function guardarSugerencia(request, env) {
       if (auth.empresa_id) empresa_id_sug = auth.empresa_id;
     } catch {}
     const fotoVal = (foto && typeof foto === 'string' && foto.startsWith('data:image/')) ? foto : null;
-    await env.DB.prepare(
+    const rSug = await env.DB.prepare(
       'INSERT INTO sugerencias (texto, categoria, usuario, obra, departamento, empresa_id, estado, foto) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
     ).bind(texto.trim().slice(0, 1000), categoria || null, usuario || null, obra || null, departamento, empresa_id_sug, 'pendiente', fotoVal).run();
+    const ideaId = rSug.meta?.last_row_id;
     const catIcon = { mejora: '🔧', error: '🐛', nuevo: '✨', otro: '💬' };
     const icon = catIcon[categoria] || '💬';
-    await sendTelegram(env,
-      `${icon} <b>Nueva sugerencia [${categoria || 'otro'}]</b>\n` +
+    const tgMsg = `${icon} <b>Nueva sugerencia [${categoria || 'otro'}]</b>\n` +
       `👤 ${usuario || '—'}  🏗 ${obra || '—'}\n\n` +
-      `${texto.trim().slice(0, 500)}`
-    );
+      `${texto.trim().slice(0, 400)}`;
+    if (ideaId) {
+      await sendTelegramConBotones(env, tgMsg, [[
+        { text: '🔄 En progreso', callback_data: `idea_prog:${ideaId}` },
+        { text: '✅ Resuelto',    callback_data: `idea_done:${ideaId}` },
+        { text: '🗑 Cerrar',     callback_data: `idea_close:${ideaId}` },
+      ]]);
+    } else {
+      await sendTelegram(env, tgMsg);
+    }
     return json({ ok: true, mensaje: 'Sugerencia enviada. ¡Gracias!' });
   } catch (e) {
     return err('No se pudo guardar la sugerencia: ' + e.message);
@@ -3453,10 +3568,28 @@ async function googleAuthCallback(request, env) {
       return json({ ok: false, pendiente: true, msg: 'Tu solicitud ya está pendiente de aprobación. El administrador la revisará pronto.' });
     }
     const codigoPend = 'g_pend_' + Date.now();
-    await env.DB.prepare(
+    const rIns = await env.DB.prepare(
       'INSERT INTO usuarios (nombre, codigo, rol, departamento, activo, google_pending, email, empresa_id) VALUES (?,?,?,NULL,0,1,?,NULL)'
     ).bind(gUser.name || gUser.email, codigoPend, 'pendiente', gUser.email).run();
-    await sendTelegram(env, `🔔 <b>Solicitud de acceso con Google</b>\n👤 ${gUser.name || gUser.email}\n📧 ${gUser.email}\nRevisar en Ajustes → Usuarios → Solicitudes de acceso`);
+    const pendingId = rIns.meta?.last_row_id;
+    if (pendingId) {
+      await sendTelegramConBotones(env,
+        `🔔 <b>Solicitud de acceso con Google</b>\n👤 ${gUser.name || gUser.email}\n📧 ${gUser.email}`,
+        [
+          [
+            { text: '✅ Operario Eléc (E3)', callback_data: `apr:${pendingId}:3:operario:electrico` },
+            { text: '✅ Operario Eléc (E1)', callback_data: `apr:${pendingId}:1:operario:electrico` },
+          ],
+          [
+            { text: '✅ Admin (E3)',          callback_data: `apr:${pendingId}:3:empresa_admin:null` },
+            { text: '✅ Admin (E1)',           callback_data: `apr:${pendingId}:1:empresa_admin:null` },
+          ],
+          [{ text: '❌ Rechazar',             callback_data: `rej:${pendingId}` }]
+        ]
+      );
+    } else {
+      await sendTelegram(env, `🔔 <b>Solicitud de acceso con Google</b>\n👤 ${gUser.name || gUser.email}\n📧 ${gUser.email}\nRevisar en Ajustes → Usuarios → Solicitudes de acceso`);
+    }
     return json({ ok: false, pendiente: true, msg: 'Solicitud enviada correctamente. El administrador debe aprobarla para que puedas acceder.' });
   }
 
