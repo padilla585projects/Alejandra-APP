@@ -66,6 +66,7 @@ REGLA DE DEPLOY:
 
 ÚLTIMO CAMBIO REALIZADO:
   v4.65 [nueva] — 21/04/2026
+  · MEJ-132: Telegram bidireccional — botones inline en solicitudes acceso e ideas (worker)
   · BUG-129: navTo() limpia historial; back = "2x para salir"; no duplicados en stack
   · BUG-124: kits herramientas filtran por obra; nueva herramienta pre-rellena obra
   · BUG-120: editarHerrDesdeInv async; fallback API si item no está en cache

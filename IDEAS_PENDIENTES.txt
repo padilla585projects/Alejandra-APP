@@ -1,7 +1,7 @@
 ================================================================================
   ALEJANDRA APP — IDEAS, MEJORAS Y ERRORES PENDIENTES
   Recogidos de: Canal Telegram @AlejandraAPP_bot
-  Última actualización: 21/04/2026 (v4.59) — resueltos BUG-56/51/55/57/59/71/60/23
+  Última actualización: 21/04/2026 (v4.65) — resueltos BUG-129/124ext/120ext + MEJ-132
 
   ⚠️  LEER ESTE ARCHIVO ANTES DE CUALQUIER SESIÓN DE CODIFICACIÓN.
   ⚠️  Marcar como [HECHO vX.XX] cuando se implemente. No borrar las líneas.
@@ -224,9 +224,10 @@ LEYENDA DE ESTADO:
     · cargarInvHerr() carga herramientas y kits en paralelo (Promise.all)
     · Reportado: 20/04/2026 — Adrian, CPD Getafe
 
-[✓] BUG-120 — Editar herramienta en inventario no funciona  [HECHO v4.56]
+[✓] BUG-120 — Editar herramienta en inventario no funciona  [HECHO v4.56 / mejorado v4.65]
     · Botón ✏️ directo en cada tarjeta del inventario
     · editarHerrDesdeInv(id,e) busca objeto en _herrInvCache y abre formulario de edición
+    · v4.65: ahora async — si el ítem no está en cache, hace GET /herramientas/:id (no falla en silencio)
     · Reportado: 20/04/2026 — Adrian, CPD Getafe
 
 [✓] BUG-122 — Pestaña "Ideas" parpadea cada X tiempo  [HECHO v4.56]
@@ -239,10 +240,28 @@ LEYENDA DE ESTADO:
     · checkNotifBadge(): 4 fetches secuenciales → Promise.all simultáneo → ahorra ~600ms
     · Reportado: 20/04/2026 — Adrian, CPD Getafe
 
-[✓] BUG-124 — Herramientas no filtra por obras  [HECHO v4.56]
+[✓] BUG-124 — Herramientas no filtra por obras  [HECHO v4.56 / mejorado v4.65]
     · cargarInvHerr() pasa ?obra_id=X según obra activa de la sesión
     · Worker getHerramientas y getKits aplican filtro obra_id si se recibe
+    · v4.65: cargarKitsHerr() también pasa ?obra_id= (antes no lo hacía)
+    · v4.65: nueva herramienta pre-rellena herrObra con la obra activa de la sesión
     · Reportado: 20/04/2026 — Adrian, CPD Getafe
+
+[✓] BUG-129 — Botón atrás no funciona como en Android  [HECHO v4.65]
+    · navTo() ahora limpia _navHistory → bottom nav = destino raíz (sin historial acumulado)
+    · popstate sin historial: toast "Pulsa atrás de nuevo para salir"; 2ª pulsación < 2.5s cierra la app
+    · showScreen() evita apilar duplicados consecutivos en la pila de navegación
+    · Reportado: 21/04/2026 — Adrian, CPD Getafe (empresa 3)
+
+[ ] BUG-127 — Icono de seguridad demasiado grande en barra superior
+    · El icono de seguridad ocupa demasiado espacio → el nombre de obra queda oculto/cortado.
+    · Reducir tamaño del icono o reorganizar la barra superior para que quepa todo.
+    · Reportado: 20/04/2026 — Adrian (empresa 1)
+
+[ ] BUG-133 — Pantalla empresas: icono de usuario demasiado pequeño
+    · En la pantalla de selección de empresas (superadmin), el icono/avatar de usuario
+      es difícil de ver. Agrandarlo o mejorar visibilidad donde haya espacio.
+    · Reportado: 21/04/2026 — Adrian (empresa 1)
 
 [✓] BUG-125 — Barra superior: nombre de obra sigue sin verse bien  [HECHO v4.56]
     · rolLabel('superadmin') devuelve 'SA' → libera espacio en la barra superior
@@ -317,6 +336,33 @@ LEYENDA DE ESTADO:
     · Preview con miniatura antes de enviar. Guardado en sugerencias.foto (TEXT en D1).
     · Panel admin muestra thumbnail clicable con zoom a pantalla completa.
     · Reportado: 20/04/2026 — Adrian, CPD Getafe
+
+[✓] MEJ-132 — Telegram bidireccional: botones inline en notificaciones  [HECHO v4.65]
+    · sendTelegramConBotones() con InlineKeyboardMarkup
+    · POST /telegram-webhook procesa callback_query y ejecuta acciones en D1
+    · Solicitud acceso Google → [Aprobar E1/E3 op/admin] [Rechazar] con botones
+    · Nueva idea → [🔄 En progreso] [✅ Resuelto] [🗑 Cerrar] con botones
+    · Al pulsar: acción en D1 + edita el mensaje original + elimina los botones
+    · TELEGRAM_WEBHOOK_SECRET configurado en CF secrets; webhook registrado
+    · Reportado: 21/04/2026 — Adrian (empresa 1)
+
+[ ] MEJ-128 — Fichaje semi-automático: listado de personal por obra
+    · La app mostraría el personal asignado a la obra activa.
+    · Selección múltiple para fichar a todos de golpe con hora entrada/salida.
+    · Complementa MEJ-11 (horarios de obra ya implementados).
+    · Reportado: 21/04/2026 — Adrian, CPD Getafe (empresa 3)
+
+[ ] MEJ-131 — Horarios de obra: diferente horario por día de la semana
+    · Actualmente hay un horario único por obra (entrada/salida).
+    · Poder configurar horario distinto por día: ej. L-J 8-18h, V 8-13h.
+    · Extiende MEJ-11 (ya implementado v4.62).
+    · Reportado: 21/04/2026 — Adrian, CPD Getafe (empresa 3)
+
+[ ] MEJ-134 — Enviar foto por Telegram cuando la idea la lleva
+    · Al crear una idea con foto, enviarla también adjunta en el mensaje de Telegram.
+    · Usar sendPhoto en lugar de sendMessage cuando hay foto base64.
+    · Complementa MEJ-132 (Telegram bidireccional) y MEJ-12 (fotos en ideas).
+    · Reportado: 21/04/2026 — Adrian (empresa 1)
 
 [ ] MEJ-13 — Adjuntar archivos/documentación a herramientas en inventario
     · Desde la ficha de una herramienta, poder subir y ver archivos adjuntos

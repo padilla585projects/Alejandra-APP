@@ -242,6 +242,14 @@ hotfix  |  20/04/2026  [SOLO NUEVA APP — migración DB sin cambio de código]
     · Sin cambio de código ni deploy — solo migración directa en D1
 
 v4.65  |  21/04/2026  [SOLO NUEVA APP]
+  - MEJ-132: Telegram bidireccional — botones inline en notificaciones (solo worker)
+    · Nueva función sendTelegramConBotones() con InlineKeyboardMarkup
+    · POST /telegram-webhook: maneja callback_query de botones pulsados
+    · GET /setup-telegram-webhook: registra webhook en Telegram (ya ejecutado)
+    · Secret TELEGRAM_WEBHOOK_SECRET configurado en CF Workers
+    · Solicitud de acceso Google → botones [Aprobar E1/E3 operario/admin] [Rechazar]
+    · Nueva idea/sugerencia → botones [🔄 En progreso] [✅ Resuelto] [🗑 Cerrar]
+    · Al pulsar botón: acción ejecutada en D1 + mensaje editado + botones eliminados
   - BUG-129: Navegación atrás/home rediseñada estilo Android
     · navTo() limpia el historial → bottom nav = destino raíz sin historial acumulado
     · Android back: si no hay historial → toast "Pulsa atrás de nuevo para salir"
