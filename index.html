@@ -234,7 +234,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
 #updateBanner{position:fixed;top:0;left:0;right:0;background:var(--accent);color:#000;padding:12px 16px;display:none;align-items:center;justify-content:space-between;gap:10px;z-index:9999;font-family:'Montserrat',sans-serif;font-weight:700;font-size:13px}
 #updateBanner.show{display:flex}
 #updateBanner button{background:#000;color:var(--accent);border:none;border-radius:6px;padding:7px 14px;font-family:'Montserrat',sans-serif;font-weight:900;font-size:12px;cursor:pointer;white-space:nowrap}
-#updatedBanner{position:fixed;top:0;left:0;right:0;background:#16a34a;color:#fff;padding:14px 20px;display:none;align-items:center;justify-content:center;gap:10px;z-index:10000;font-family:'Montserrat',sans-serif;font-weight:700;font-size:14px;letter-spacing:.3px;transition:opacity .5s ease}
+#updatedBanner{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#16a34a;color:#fff;padding:12px 24px;border-radius:40px;display:none;align-items:center;justify-content:center;gap:10px;z-index:100001;font-family:'Montserrat',sans-serif;font-weight:700;font-size:14px;letter-spacing:.3px;box-shadow:0 4px 24px rgba(0,0,0,.4);white-space:nowrap;transition:opacity .5s ease}
 #updatedBanner.show{display:flex}
 #updatedBanner.fade{opacity:0}
 /* ── SPLASH SCREEN ── */
@@ -453,17 +453,23 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
      SPLASH SCREEN
 ══════════════════════════════════════════ -->
 <div id="splashScreen">
-  <svg width="80" height="80" viewBox="0 0 512 512" fill="none">
-    <rect width="512" height="512" rx="90" fill="#0f172a"/>
-    <path d="M60 148V60h88" stroke="#2563eb" stroke-width="26" stroke-linecap="round" stroke-linejoin="round"/>
-    <path d="M452 148V60h-88" stroke="#2563eb" stroke-width="26" stroke-linecap="round" stroke-linejoin="round"/>
-    <path d="M60 364v88h88" stroke="#2563eb" stroke-width="26" stroke-linecap="round" stroke-linejoin="round"/>
-    <path d="M452 364v88h-88" stroke="#2563eb" stroke-width="26" stroke-linecap="round" stroke-linejoin="round"/>
-    <path d="M256 88L148 424h44l30-88h68l30 88h44L256 88ZM256 168l50 128h-100Z" fill="#f97316"/>
-    <path d="M256 88l108 336h-44l-30-88h-34l-34-128 34-120Z" fill="#fb923c" opacity="0.4"/>
-  </svg>
-  <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:28px;letter-spacing:3px;margin-top:18px;color:var(--text)">ALEJANDRA</div>
-  <div style="font-size:11px;color:var(--muted);letter-spacing:4px;margin-top:6px">GESTIÓN DE OBRA</div>
+  <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;flex:1">
+    <svg width="80" height="80" viewBox="0 0 512 512" fill="none">
+      <rect width="512" height="512" rx="90" fill="#0f172a"/>
+      <path d="M60 148V60h88" stroke="#2563eb" stroke-width="26" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M452 148V60h-88" stroke="#2563eb" stroke-width="26" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M60 364v88h88" stroke="#2563eb" stroke-width="26" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M452 364v88h-88" stroke="#2563eb" stroke-width="26" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M256 88L148 424h44l30-88h68l30 88h44L256 88ZM256 168l50 128h-100Z" fill="#f97316"/>
+      <path d="M256 88l108 336h-44l-30-88h-34l-34-128 34-120Z" fill="#fb923c" opacity="0.4"/>
+    </svg>
+    <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:28px;letter-spacing:3px;margin-top:18px;color:var(--text)">ALEJANDRA</div>
+    <div style="font-size:11px;color:var(--muted);letter-spacing:4px;margin-top:6px">GESTIÓN DE OBRA</div>
+    <div id="splashVersion" style="font-family:'Montserrat',sans-serif;font-size:11px;color:var(--muted);margin-top:10px;opacity:.6"></div>
+  </div>
+  <div style="padding-bottom:32px;text-align:center">
+    <div style="font-size:10px;color:var(--muted);opacity:.45;letter-spacing:1px;font-family:'Montserrat',sans-serif">Desarrollado por <span style="opacity:.9;font-weight:700">Adrián Padilla</span></div>
+  </div>
 </div>
 
 <!-- ══════════════════════════════════════════
@@ -5606,7 +5612,7 @@ async function cargarObrasSelectUsuario() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '4.59';
+const APP_VERSION = '4.60';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -5651,12 +5657,15 @@ setInterval(checkVersionAndUpdate, 30 * 1000);
   const banner = document.getElementById('updatedBanner');
   if (!banner) return;
   banner.innerHTML = '✅ &nbsp;App actualizada a <strong>v' + v + '</strong>';
-  banner.classList.add('show');
-  // Desaparece con fade tras 4 s
+  // Espera a que la splash desaparezca (max 2.7s) antes de mostrarlo
+  const splashDelay = sessionStorage.getItem('splashShown') ? 0 : 2800;
   setTimeout(() => {
-    banner.classList.add('fade');
-    setTimeout(() => { banner.classList.remove('show', 'fade'); }, 500);
-  }, 4000);
+    banner.classList.add('show');
+    setTimeout(() => {
+      banner.classList.add('fade');
+      setTimeout(() => { banner.classList.remove('show', 'fade'); }, 600);
+    }, 5000);
+  }, splashDelay);
 })();
 
 // Splash screen — muestra 2s solo una vez por sesión de navegador
@@ -5665,6 +5674,8 @@ setInterval(checkVersionAndUpdate, 30 * 1000);
   sessionStorage.setItem('splashShown', '1');
   const sp = document.getElementById('splashScreen');
   if (!sp) return;
+  const spv = document.getElementById('splashVersion');
+  if (spv) spv.textContent = 'v' + APP_VERSION;
   setTimeout(() => {
     sp.classList.add('oculto');
     setTimeout(() => sp.remove(), 650);

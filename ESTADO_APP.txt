@@ -5,7 +5,7 @@
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 21/04/2026
-VERSIÓN ACTUAL: v4.19 app vieja | v4.59 app nueva
+VERSIÓN ACTUAL: v4.19 app vieja | v4.60 app nueva
 
 ⚠️  ANTES DE CODIFICAR: leer NuevaApp/IDEAS_PENDIENTES.txt
     Lista completa de bugs activos, mejoras y features pendientes.
@@ -240,6 +240,14 @@ hotfix  |  20/04/2026  [SOLO NUEVA APP — migración DB sin cambio de código]
     · Fix: ALTER TABLE bobinas/pemp/carretillas ADD COLUMN registrado_por TEXT aplicado en D1
     · App vieja no afectada (ya tenía la columna desde antes)
     · Sin cambio de código ni deploy — solo migración directa en D1
+
+v4.60  |  21/04/2026  [SOLO NUEVA APP]
+  - Splash screen: versión actual (v4.60) visible bajo el logo al arrancar la app
+  - Splash screen: firma "Desarrollado por Adrián Padilla" en pie de pantalla
+  - Banner de actualización rediseñado: píldora flotante centrada en la parte inferior
+    · z-index 100001 (por encima de splash y modales)
+    · En primer arranque espera 2.8s antes de mostrarse (splash aún visible)
+    · Clase .show/.fade para animación suave de entrada y salida
 
 v4.59  |  21/04/2026  [SOLO NUEVA APP]
   - BUG-56: Panel Sesión reestructurado — botones cerrar sesiones siempre visibles para SA/enc/EA

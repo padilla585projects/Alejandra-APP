@@ -65,6 +65,12 @@ REGLA DE DEPLOY:
   - En ambos casos: subir versión + actualizar txts + deploy worker + git push
 
 ÚLTIMO CAMBIO REALIZADO:
+  v4.60 [nueva] — 21/04/2026
+  · Splash screen: muestra versión actual (v4.60) en pequeño bajo el logo
+  · Splash screen: firma "Desarrollado por Adrián Padilla" en pie de pantalla
+  · Banner de actualización: rediseñado como píldora flotante inferior (z-index 100001)
+  · Banner: espera a que desaparezca la splash antes de mostrarse (delay 2.8s primer arranque)
+
   v4.59 [nueva] — 21/04/2026
   · BUG-56: panel Sesión reestructurado — botones cerrar operarios/encargados/todas siempre visibles
   · BUG-51/55/57: fix 403 injusto en edición/creación/movimiento de inventario Seguridad
