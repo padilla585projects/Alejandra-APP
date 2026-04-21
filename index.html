@@ -2596,7 +2596,10 @@ function showScreen(name) {
   if (cur?.id) {
     const raw = cur.id.replace(/^screen/, '');
     const curName = raw.charAt(0).toLowerCase() + raw.slice(1);
-    if (curName !== name) _navHistory.push(curName);
+    // No apilar si ya estamos en esa pantalla o si ya está en el tope del historial
+    if (curName !== name && _navHistory[_navHistory.length - 1] !== curName) {
+      _navHistory.push(curName);
+    }
   }
   _applyScreen(name);
 }
@@ -2621,38 +2624,40 @@ function navTo(target) {
   if (target !== 'ajustes') { clearInterval(_ideasRefreshTimer); _ideasRefreshTimer = null; }
   closeCamera();
   segCloseCamera();
+  // Navegar a raíz: limpiar historial para que atrás = "salir de la app"
+  _navHistory = [];
   // Ocultar FABs de pantallas que no son el destino
   const fabFichaje = document.getElementById('btnNuevoFichaje');
   if (fabFichaje && target !== 'personal') fabFichaje.style.display = 'none';
   if (target === 'home') {
     const s2 = getSession();
-    if (s2?.rol === 'superadmin') { showScreen('empresaSel'); return; }
-    if (s2?.departamento === 'seguridad') { showScreen('seguridad'); return; }
-    showScreen('home');
+    if (s2?.rol === 'superadmin') { _applyScreen('empresaSel'); return; }
+    if (s2?.departamento === 'seguridad') { _applyScreen('seguridad'); return; }
+    _applyScreen('home');
     return;
   }
   if (target === 'ajustes') {
-    showScreen('ajustes');
+    _applyScreen('ajustes');
     return;
   }
   if (target === 'sugerencias') {
-    showScreen('sugerencias');
+    _applyScreen('sugerencias');
     return;
   }
   if (target === 'pedidos') {
-    showScreen('pedidos');
+    _applyScreen('pedidos');
     cargarPedidos();
     actualizarBtnAtras();
     return;
   }
   if (target === 'herramientas') {
-    showScreen('herramientas');
+    _applyScreen('herramientas');
     herrSelTab(0);
     actualizarBtnAtras();
     return;
   }
   if (target === 'personal') {
-    showScreen('personal');
+    _applyScreen('personal');
     personalSelTab(0);
     actualizarBtnAtras();
     return;
@@ -5761,7 +5766,7 @@ async function cargarObrasSelectUsuario() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '4.64';
+const APP_VERSION = '4.65';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -5832,12 +5837,30 @@ setInterval(checkVersionAndUpdate, 30 * 1000);
 })();
 
 // Botón físico "Atrás" en Android — navega dentro de la app en vez de cerrarla
+let _backPressedOnce = false;
+let _backPressTimer  = null;
+
 window.addEventListener('popstate', function() {
   const s = getSession();
   if (!s) return; // no hay sesión activa, comportamiento normal del navegador
-  irAtras();
-  // Re-empuja estado para que el siguiente "atrás" siga funcionando
-  history.pushState({ alejandra: 1 }, '');
+
+  if (_navHistory.length > 0) {
+    // Hay historial: navegar atrás dentro de la app
+    irAtras();
+    history.pushState({ alejandra: 1 }, '');
+  } else {
+    // Sin historial: estamos en una pantalla raíz
+    if (_backPressedOnce) {
+      // Segunda pulsación en <2.5s → dejar que el navegador cierre/salga
+      clearTimeout(_backPressTimer);
+      _backPressedOnce = false;
+      return; // NO re-empujamos estado → el navegador retrocede de verdad
+    }
+    toast('Pulsa atrás de nuevo para salir');
+    _backPressedOnce = true;
+    _backPressTimer = setTimeout(() => { _backPressedOnce = false; }, 2500);
+    history.pushState({ alejandra: 1 }, ''); // re-empujar para seguir capturando
+  }
 });
 
 // ── Service Worker ────────────────────────────────────────────────────────────
@@ -6145,10 +6168,18 @@ if ('serviceWorker' in navigator) {
     }).join('') + kitsHtml;
   }
 
-  function editarHerrDesdeInv(id, e) {
+  async function editarHerrDesdeInv(id, e) {
     e.stopPropagation();
-    const h = (window._herrInvCache || []).find(x => x.id === id);
+    let h = (window._herrInvCache || []).find(x => x.id === id);
+    if (!h) {
+      // Cache vacía o ítem no encontrado → buscar directamente en la API
+      try {
+        const res = await apiCall('/herramientas/' + id);
+        if (res.ok) { const d = await res.json(); h = d.herramienta || d; }
+      } catch {}
+    }
     if (h) abrirFormHerramienta(h);
+    else toast('❌ No se pudo cargar la herramienta', 'err');
   }
 
   async function cargarInvHerr() {
@@ -6229,7 +6260,9 @@ if ('serviceWorker' in navigator) {
 
   async function cargarKitsHerr() {
     try {
-      const res = await apiCall('/kits-herramientas');
+      const s = getSession();
+      const obraParam = s?.obra_id ? `?obra_id=${s.obra_id}` : '';
+      const res = await apiCall('/kits-herramientas' + obraParam);
       if (!res.ok) return;
       window._herrKitsCache = await res.json();
       renderKitsHerr(window._herrKitsCache);
@@ -6373,7 +6406,9 @@ if ('serviceWorker' in navigator) {
         document.getElementById('herrAlimentacion').value = 'bateria';
         ['herrMarca','herrModelo','herrSerie','herrAsignado','herrNotas'].forEach(id => document.getElementById(id).value = '');
         document.getElementById('herrKit').value = '';
-        document.getElementById('herrObra').value = '';
+        // Pre-rellenar obra actual de la sesión al crear herramienta nueva
+        const _sHerr = getSession();
+        document.getElementById('herrObra').value = _sHerr?.obra_id || '';
         document.getElementById('modalHerrTitulo').textContent = '🔧 Nueva herramienta';
       }
     });

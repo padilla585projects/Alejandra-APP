@@ -5,7 +5,7 @@
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 21/04/2026
-VERSIÓN ACTUAL: v4.19 app vieja | v4.64 app nueva
+VERSIÓN ACTUAL: v4.19 app vieja | v4.65 app nueva
 
 ⚠️  ANTES DE CODIFICAR: leer NuevaApp/IDEAS_PENDIENTES.txt
     Lista completa de bugs activos, mejoras y features pendientes.
@@ -240,6 +240,32 @@ hotfix  |  20/04/2026  [SOLO NUEVA APP — migración DB sin cambio de código]
     · Fix: ALTER TABLE bobinas/pemp/carretillas ADD COLUMN registrado_por TEXT aplicado en D1
     · App vieja no afectada (ya tenía la columna desde antes)
     · Sin cambio de código ni deploy — solo migración directa en D1
+
+v4.65  |  21/04/2026  [SOLO NUEVA APP]
+  - BUG-129: Navegación atrás/home rediseñada estilo Android
+    · navTo() limpia el historial → bottom nav = destino raíz sin historial acumulado
+    · Android back: si no hay historial → toast "Pulsa atrás de nuevo para salir"
+    · Segunda pulsación en < 2.5s → cierra la app (no se re-empuja state)
+    · showScreen() evita apilar duplicados consecutivos en _navHistory
+  - BUG-124: Herramientas filtradas por obra
+    · cargarKitsHerr() ahora envía ?obra_id= igual que cargarInvHerr()
+    · Nueva herramienta: herrObra pre-rellena con la obra de la sesión actual
+  - BUG-120: Editar herramienta desde inventario
+    · editarHerrDesdeInv() ahora es async: si el ítem no está en cache,
+      lo busca directamente con GET /herramientas/:id antes de abrir el form
+
+v4.64  |  21/04/2026  [SOLO NUEVA APP]
+  - Fix banner actualización: SW_ACTUALIZADO extrae versión del cache name
+    · Antes el banner mostraba "undefined" o la versión anterior
+    · Ahora lee el número de versión del nombre del cache antes de recargar
+
+v4.63  |  21/04/2026  [SOLO NUEVA APP]
+  - MEJ-12: Fotos en Ideas
+    · Botón "📷 Añadir imagen" en el formulario de nueva idea
+    · Compresión automática a ≤300 KB antes de enviar
+    · Preview de imagen en la card de la idea
+    · Thumbnail visible en el panel admin
+    · Toque en imagen → zoom a pantalla completa
 
 v4.62  |  21/04/2026  [SOLO NUEVA APP]
   - MEJ-11: Horarios de obra configurables en Ajustes → Obras

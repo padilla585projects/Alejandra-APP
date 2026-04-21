@@ -65,6 +65,11 @@ REGLA DE DEPLOY:
   - En ambos casos: subir versión + actualizar txts + deploy worker + git push
 
 ÚLTIMO CAMBIO REALIZADO:
+  v4.65 [nueva] — 21/04/2026
+  · BUG-129: navTo() limpia historial; back = "2x para salir"; no duplicados en stack
+  · BUG-124: kits herramientas filtran por obra; nueva herramienta pre-rellena obra
+  · BUG-120: editarHerrDesdeInv async; fallback API si item no está en cache
+
   v4.64 [nueva] — 21/04/2026
   · Fix banner actualización: SW_ACTUALIZADO extrae versión del cache name → localStorage antes de recargar
 
@@ -231,7 +236,7 @@ git -c credential.helper= push https://padilla585:<TOKEN_GITHUB_VIEJO>@github.co
 ================================================================================
 
 APP VIEJA:  v4.19  (sw.js: alejandra-v4.19 | version.json: {"v":"4.19"})
-APP NUEVA:  v4.64  (sw.js: alejandra-v4.64 | version.json: {"v":"4.64"})
+APP NUEVA:  v4.65  (sw.js: alejandra-v4.65 | version.json: {"v":"4.65"})
 
 Historial reciente (app nueva):
   v4.41 [nueva] — Login Google con invitaciones temporales (rol+dept, caduca, 1 uso)
