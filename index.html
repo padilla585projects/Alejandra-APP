@@ -683,12 +683,30 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
         <div class="module-count" id="cntHerramientas" style="background:#0ea5e9">–</div>
         <svg class="module-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
       </div>
+      <div class="module-card" id="cardDocs" onclick="navTo('docs')" style="display:none">
+        <div class="module-emoji">📂</div>
+        <div class="module-info">
+          <div class="module-name">Documentación</div>
+          <div class="module-desc">Documentos, fotos y planos de obra</div>
+        </div>
+        <svg class="module-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
+      </div>
     </div>
     <div id="adminHomeBtn" style="display:none;padding:0 16px 12px">
       <button class="admin-home-btn" onclick="showScreen('admin')">
         🔐 Panel de Administración
         <svg style="margin-left:auto" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
       </button>
+    </div>
+  </div>
+
+  <!-- DOCS SCREEN -->
+  <div id="screenDocs" class="screen flex-screen" style="padding:0;height:100%;display:none;flex-direction:column">
+    <div style="padding:14px 16px 12px;border-bottom:1px solid var(--border);flex-shrink:0">
+      <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:17px;color:var(--text)">📂 Documentación</div>
+    </div>
+    <div id="screenDocsPanel" style="padding:14px;overflow-y:auto;flex:1">
+      <div class="empty-state">Cargando...</div>
     </div>
   </div>
 
@@ -2532,13 +2550,15 @@ function setupHomeModules() {
   const cardC = document.getElementById('cardCarretillas');
   const cardPed = document.getElementById('cardPedidos');
   const btnNuevo = document.getElementById('btnNuevoPedido');
-  // Seguridad: sin tarjetas (solo escáner)
+  const cardDocs = document.getElementById('cardDocs');
+  // Seguridad: sin tarjetas de inventario, pero sí Pedidos y Docs
   if (dept === 'seguridad') {
     if (cardB) cardB.style.display = 'none';
     if (cardP) cardP.style.display = 'none';
     if (cardC) cardC.style.display = 'none';
     if (cardPed) cardPed.style.display = 'flex';
     if (btnNuevo) btnNuevo.style.display = 'flex';
+    if (cardDocs) cardDocs.style.display = 'flex';
     return;
   }
   // El departamento elegido manda — electrico ve bobinas, mecánicas no
@@ -2552,6 +2572,8 @@ function setupHomeModules() {
   // Herramientas: visible para todos excepto seguridad
   const cardHerr = document.getElementById('cardHerramientas');
   if (cardHerr) cardHerr.style.display = 'flex';
+  // Documentación: visible para eléctrico y mecánicas
+  if (cardDocs) cardDocs.style.display = 'flex';
 }
 
 function seleccionarDepto(dept) {
@@ -2823,6 +2845,12 @@ function navTo(target) {
   if (target === 'herramientas') {
     _applyScreen('herramientas');
     herrSelTab(0);
+    actualizarBtnAtras();
+    return;
+  }
+  if (target === 'docs') {
+    _applyScreen('docs');
+    docsCargar('screenDocsPanel');
     actualizarBtnAtras();
     return;
   }
@@ -6203,7 +6231,7 @@ async function cargarObrasSelectUsuario() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '4.71';
+const APP_VERSION = '4.72';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes

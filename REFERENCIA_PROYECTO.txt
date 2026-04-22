@@ -65,6 +65,9 @@ REGLA DE DEPLOY:
   - En ambos casos: subir versión + actualizar txts + deploy worker + git push
 
 ÚLTIMO CAMBIO REALIZADO:
+  v4.72 [nueva] — 22/04/2026
+  · NEW-15: tarjeta 📂 Documentación en home (eléctrico/mecánicas/seguridad) → screenDocs
+
   v4.71 [nueva] — 22/04/2026
   · BUG-136: botón 👥 "Fichar Equipo" no respondía (funciones MEJ-128 sin exponer al scope global)
 
