@@ -5,7 +5,7 @@
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 22/04/2026
-VERSIÓN ACTUAL: v4.19 app vieja | v4.82 app nueva
+VERSIÓN ACTUAL: v4.19 app vieja | v4.83 app nueva
 
 ⚠️  ANTES DE CODIFICAR: leer NuevaApp/IDEAS_PENDIENTES.txt
     Lista completa de bugs activos, mejoras y features pendientes.
@@ -240,6 +240,12 @@ hotfix  |  20/04/2026  [SOLO NUEVA APP — migración DB sin cambio de código]
     · Fix: ALTER TABLE bobinas/pemp/carretillas ADD COLUMN registrado_por TEXT aplicado en D1
     · App vieja no afectada (ya tenía la columna desde antes)
     · Sin cambio de código ni deploy — solo migración directa en D1
+
+v4.83  |  22/04/2026  [SOLO NUEVA APP]
+  - fix: superadmin veía inventario de eléctrico al entrar como mecánicas
+    · getBobinas, getPemp, getCarretillas saltaban el filtro de departamento para SA
+    · Fix: filtro AND departamento=? aplicado siempre — SA ya recibe el dept correcto
+      via X-Departamento desde el selector de departamentos del frontend
 
 v4.82  |  22/04/2026  [SOLO NUEVA APP]
   - MEJ-128 complemento: pestaña "👷 Plantilla" en módulo Personal

@@ -468,6 +468,7 @@ export default {
       if (path.startsWith('/docs-dept/')) {
         const did = parseInt(path.split('/docs-dept/')[1]);
         if (method === 'GET')    return await descargarDocDept(did, request, env);
+        if (method === 'PUT')    return await editarDocDept(did, request, env);
         if (method === 'DELETE') return await borrarDocDept(did, request, env);
       }
 
@@ -839,7 +840,7 @@ async function getBobinas(request, env) {
 
   let sql = 'SELECT * FROM bobinas WHERE empresa_id = ?';
   const params = [empresa_id];
-  if (!isSuperadmin) { sql += ' AND departamento = ?'; params.push(departamento); }
+  sql += ' AND departamento = ?'; params.push(departamento);
   if (obraFilter) { sql += ' AND obra_id = ?'; params.push(obraFilter); }
   if (estado)     { sql += ' AND estado = ?';  params.push(estado); }
   if (buscar) {
@@ -971,8 +972,7 @@ async function getPemp(request, env) {
 
   let sql = 'SELECT * FROM pemp WHERE empresa_id = ?';
   const params = [empresa_id];
-  // Superadmin ve todo; el resto solo su departamento
-  if (!isSuperadmin) { sql += ' AND departamento = ?'; params.push(departamento); }
+  sql += ' AND departamento = ?'; params.push(departamento);
   if (obraFilter)  { sql += ' AND obra_id = ?'; params.push(obraFilter); }
   if (estado)  { sql += ' AND estado = ?';  params.push(estado); }
   if (buscar) {
@@ -1132,8 +1132,7 @@ async function getCarretillas(request, env) {
 
   let sql = 'SELECT * FROM carretillas WHERE empresa_id = ?';
   const params = [empresa_id];
-  // Superadmin ve todo; el resto solo su departamento
-  if (!isSuperadmin) { sql += ' AND departamento = ?'; params.push(departamento); }
+  sql += ' AND departamento = ?'; params.push(departamento);
   if (obraFilter)  { sql += ' AND obra_id = ?'; params.push(obraFilter); }
   if (estado)  { sql += ' AND estado = ?';  params.push(estado); }
   if (buscar) {
@@ -3959,6 +3958,19 @@ async function borrarDocDept(id, request, env) {
   if (!meta) return err('Documento no encontrado', 404);
   await env.FILES.delete(meta.r2_key);
   await env.DB.prepare('DELETE FROM docs_dept WHERE id = ? AND empresa_id = ?').bind(id, empresa_id).run();
+  return json({ ok: true });
+}
+
+async function editarDocDept(id, request, env) {
+  const { empresa_id, rol } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  if (rol === 'operario') return err('Sin permisos', 403);
+  const { nombre, descripcion } = await request.json().catch(() => ({}));
+  if (!nombre?.trim()) return err('El nombre es obligatorio', 400);
+  const meta = await env.DB.prepare('SELECT id FROM docs_dept WHERE id = ? AND empresa_id = ?').bind(id, empresa_id).first();
+  if (!meta) return err('Documento no encontrado', 404);
+  await env.DB.prepare('UPDATE docs_dept SET nombre = ?, descripcion = ? WHERE id = ? AND empresa_id = ?')
+    .bind(nombre.trim(), descripcion?.trim() || null, id, empresa_id).run();
   return json({ ok: true });
 }
 
