@@ -2582,6 +2582,8 @@ function seleccionarDepto(dept) {
   if (dept === 'mecanicas') currentModule = 'pemp';
   s.departamento = dept;
   setSession(s);
+  // Sincronizar departamento en sesión D1 para que nuevos registros se guarden con el dept correcto
+  if (s.token) apiCall('/sesion/departamento', { method: 'PUT', body: JSON.stringify({ departamento: dept }) }).catch(() => {});
   renderHeader();
   renderAjustesInfo();
   setupHomeModules();
@@ -2734,8 +2736,12 @@ function onObraSelectChange(obraId) {
   s.obra_id = obraId ? parseInt(obraId) : null;
   s.obra_nombre = obraId ? obraName : null;
   setSession(s);
+  // Sincronizar obra en sesión D1 para que nuevos registros queden vinculados a la obra correcta
+  if (s.token) apiCall('/sesion/obra', { method: 'PUT', body: JSON.stringify({ obra_id: s.obra_id }) }).catch(() => {});
   cargarStatsHome();
   if (document.getElementById('modPanelStock').classList.contains('active')) cargarStock();
+  if (document.getElementById('screenDocs').classList.contains('active')) docsCargar('screenDocsPanel');
+  if (document.getElementById('screenHerramientas').classList.contains('active')) herrSelTab(0);
 }
 
 async function checkConnection() {
@@ -3754,7 +3760,7 @@ async function registrarItem() {
 
   // SuperAdmin sin obra fija debe seleccionar obra
   const needsObra = s?.rol === 'superadmin' && !s?.obra_id;
-  let obraIdSelec = null;
+  let obraIdSelec = s?.obra_id || null; // Usa la obra del header si está seleccionada
   if (needsObra) {
     const obraSelec = document.getElementById('scanObraSelect')?.value;
     if (!obraSelec) return toast('⚠️ Selecciona la obra destino', 'err');
@@ -4118,7 +4124,8 @@ async function docsCargar(containerId) {
   const puedeEditar = s?.rol !== 'operario';
 
   if (!obraId) {
-    c.innerHTML = `<div class="empty-state">Selecciona una obra para ver documentos</div>`;
+    const canSelect = s?.rol === 'superadmin' || s?.rol === 'empresa_admin' || s?.rol === 'encargado';
+    c.innerHTML = `<div class="empty-state">${canSelect ? 'Selecciona una obra en el menú superior para ver documentos.' : 'No tienes obra asignada. El administrador debe asignarte una.'}</div>`;
     return;
   }
 
@@ -5015,6 +5022,7 @@ async function cargarUsuariosAdmin() {
           <div class="admin-item-sub">${u.rol}${u.obra_nombre ? ' · ' + u.obra_nombre : ''} · ${deptLabel[dept] || dept}</div>
         </div>
         <div style="display:flex;gap:6px;align-items:center;flex-shrink:0" id="uact-${u.id}">
+          <button class="btn-sm" onclick="editarObraUsuario(${u.id},${u.obra_id||'null'})" title="Asignar obra" style="font-size:13px">📍</button>
           <button class="btn-sm" onclick="editarDeptUsuario(${u.id},'${dept}')" title="Cambiar departamento" style="font-size:13px">🏢</button>
           <button class="btn-sm danger" onclick="eliminarUsuario(${u.id})">🗑</button>
         </div>
@@ -5049,6 +5057,35 @@ async function guardarDeptUsuario(id) {
     });
     if (res.ok) { toast('✅ Departamento actualizado', 'ok'); cargarUsuariosAdmin(); }
     else { const d = await res.json(); toast(`❌ ${d.error || 'Error'}`, 'err'); }
+  } catch { toast('❌ Error de conexión', 'err'); }
+}
+
+async function editarObraUsuario(id, obraActual) {
+  const actDiv = document.getElementById(`uact-${id}`);
+  if (!actDiv) return;
+  try {
+    const res = await apiCall('/obras');
+    const obras = await res.json();
+    actDiv.innerHTML = `
+      <select id="obraSel-${id}" style="padding:5px 8px;background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px">
+        <option value="">— Sin obra —</option>
+        ${obras.map(o => `<option value="${o.id}"${o.id == obraActual ? ' selected' : ''}>${o.nombre}</option>`).join('')}
+      </select>
+      <button class="btn-sm ok" onclick="guardarObraUsuario(${id})">✓</button>
+      <button class="btn-sm" onclick="cargarUsuariosAdmin()">✕</button>`;
+  } catch { toast('❌ Error cargando obras', 'err'); }
+}
+
+async function guardarObraUsuario(id) {
+  const sel = document.getElementById(`obraSel-${id}`);
+  if (!sel) return;
+  try {
+    const res = await apiCall(`/usuarios/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify({ obra_id: sel.value ? parseInt(sel.value) : null })
+    });
+    if (res.ok) { toast('✅ Obra actualizada', 'ok'); cargarUsuariosAdmin(); }
+    else { const d = await res.json().catch(()=>({})); toast(`❌ ${d.error || 'Error'}`, 'err'); }
   } catch { toast('❌ Error de conexión', 'err'); }
 }
 
@@ -6231,7 +6268,7 @@ async function cargarObrasSelectUsuario() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '4.72';
+const APP_VERSION = '4.76';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -7899,12 +7936,14 @@ if ('serviceWorker' in navigator) {
     toast('✅ Excel descargado');
   }
 
-  // SW activado → extrae versión del cache name, activa banner y recarga
+  // SW activado → solo recarga si la versión del SW difiere de la app actual
   navigator.serviceWorker.addEventListener('message', e => {
     if (e.data?.tipo === 'SW_ACTUALIZADO') {
       const newV = (e.data.cache || '').replace('alejandra-v', '');
-      if (newV && newV !== APP_VERSION) localStorage.setItem('alejandra_just_updated', newV);
-      recargarApp();
+      if (newV && newV !== APP_VERSION) {
+        localStorage.setItem('alejandra_just_updated', newV);
+        recargarApp();
+      }
     }
   });
 
