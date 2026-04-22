@@ -65,8 +65,11 @@ REGLA DE DEPLOY:
   - En ambos casos: subir versión + actualizar txts + deploy worker + git push
 
 ÚLTIMO CAMBIO REALIZADO:
-  v4.72 [nueva] — 22/04/2026
-  · NEW-15: tarjeta 📂 Documentación en home (eléctrico/mecánicas/seguridad) → screenDocs
+  v4.75 [nueva] — 22/04/2026
+  · Fix bucle SW infinito: recargarApp() solo si newV !== APP_VERSION
+  · BUG-148: PUT /sesion/departamento sincroniza D1 al seleccionar dept (fix aislamiento inventario)
+  · BUG-147: botón 📍 en lista usuarios para asignar obra
+  · BUG-146: mensaje docs sin obra diferenciado por rol
 
   v4.71 [nueva] — 22/04/2026
   · BUG-136: botón 👥 "Fichar Equipo" no respondía (funciones MEJ-128 sin exponer al scope global)
@@ -261,7 +264,7 @@ git -c credential.helper= push https://padilla585:<TOKEN_GITHUB_VIEJO>@github.co
 ================================================================================
 
 APP VIEJA:  v4.19  (sw.js: alejandra-v4.19 | version.json: {"v":"4.19"})
-APP NUEVA:  v4.68  (sw.js: alejandra-v4.68 | version.json: {"v":"4.68"})
+APP NUEVA:  v4.75  (sw.js: alejandra-v4.75 | version.json: {"v":"4.75"})
 
 Historial reciente (app nueva):
   v4.68 [nueva] — MEJ-131 horarios/día + MEJ-08 depts activos por empresa
