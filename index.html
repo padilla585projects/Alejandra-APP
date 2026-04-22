@@ -6266,7 +6266,7 @@ async function cargarObrasSelectUsuario() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '4.74';
+const APP_VERSION = '4.75';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -7934,12 +7934,14 @@ if ('serviceWorker' in navigator) {
     toast('✅ Excel descargado');
   }
 
-  // SW activado → extrae versión del cache name, activa banner y recarga
+  // SW activado → solo recarga si la versión del SW difiere de la app actual
   navigator.serviceWorker.addEventListener('message', e => {
     if (e.data?.tipo === 'SW_ACTUALIZADO') {
       const newV = (e.data.cache || '').replace('alejandra-v', '');
-      if (newV && newV !== APP_VERSION) localStorage.setItem('alejandra_just_updated', newV);
-      recargarApp();
+      if (newV && newV !== APP_VERSION) {
+        localStorage.setItem('alejandra_just_updated', newV);
+        recargarApp();
+      }
     }
   });
 
