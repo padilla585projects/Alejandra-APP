@@ -4153,6 +4153,7 @@ async function docsAbrirCarpeta(carpetaId, nombre, containerId) {
   if (!c) return;
   const s = getSession();
   const puedeEditar = s?.rol !== 'operario';
+  const nomEsc = nombre.replace(/'/g,"\\'");
 
   c.innerHTML = '<div class="empty-state">Cargando...</div>';
   try {
@@ -4160,17 +4161,30 @@ async function docsAbrirCarpeta(carpetaId, nombre, containerId) {
     const docs = res.ok ? await res.json() : [];
 
     c.innerHTML = `
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+      <!-- Cabecera carpeta -->
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap">
         <button onclick="docsCargar('${containerId}')"
-          style="padding:7px 12px;background:var(--surface);border:1px solid var(--border);border-radius:8px;font-size:13px;cursor:pointer">← Volver</button>
-        <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:15px;color:var(--text);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">📁 ${nombre}</div>
-        ${puedeEditar ? `<label style="padding:7px 14px;background:var(--accent);color:#000;border-radius:8px;font-family:'Montserrat',sans-serif;font-weight:700;font-size:12px;cursor:pointer;white-space:nowrap">
-          ⬆️ Subir<input type="file" style="display:none" onchange="docsSubirArchivo(${carpetaId},'${containerId}','${nombre.replace(/'/g,"\\'")}',this)">
-        </label>` : ''}
+          style="padding:7px 12px;background:var(--surface);border:1px solid var(--border);border-radius:8px;font-size:13px;cursor:pointer;flex-shrink:0">← Volver</button>
+        <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:15px;color:var(--text);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">📁 ${nombre}</div>
+        <button onclick="docsCompartirCarpeta(${carpetaId},'${nomEsc}')"
+          title="Compartir carpeta"
+          style="padding:7px 11px;background:var(--surface);border:1px solid var(--border);border-radius:8px;font-size:16px;cursor:pointer;flex-shrink:0">📤</button>
+        ${puedeEditar ? `
+          <label title="Tomar foto" style="padding:7px 11px;background:var(--surface);border:1px solid var(--border);border-radius:8px;font-size:16px;cursor:pointer;flex-shrink:0">
+            📷<input type="file" accept="image/*" capture="environment" style="display:none"
+              onchange="docsSubirArchivo(${carpetaId},'${containerId}','${nomEsc}',this)">
+          </label>
+          <label title="Subir archivo" style="padding:7px 14px;background:var(--accent);color:#000;border-radius:8px;font-family:'Montserrat',sans-serif;font-weight:700;font-size:12px;cursor:pointer;white-space:nowrap;flex-shrink:0">
+            📎 Archivo<input type="file" accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.txt,.csv,.zip" style="display:none"
+              onchange="docsSubirArchivo(${carpetaId},'${containerId}','${nomEsc}',this)">
+          </label>` : ''}
       </div>
+
+      <!-- Lista de archivos -->
       <div id="docsListaArchivos_${carpetaId}">
-        ${docs.length ? docs.map(d => docsRenderArchivo(d, puedeEditar, carpetaId, containerId, nombre)).join('')
-        : '<div class="empty-state">Carpeta vacía. Sube el primer archivo.</div>'}
+        ${docs.length
+          ? docs.map(d => docsRenderArchivo(d, puedeEditar, carpetaId, containerId, nombre)).join('')
+          : '<div class="empty-state">Carpeta vacía. Sube el primer archivo.</div>'}
       </div>`;
   } catch {
     c.innerHTML = '<div class="empty-state" style="color:var(--red)">Error al cargar</div>';
@@ -4179,18 +4193,156 @@ async function docsAbrirCarpeta(carpetaId, nombre, containerId) {
 
 function docsRenderArchivo(d, puedeEditar, carpetaId, containerId, carpetaNombre) {
   const kb = d.tamano ? (d.tamano < 1048576 ? Math.round(d.tamano/1024)+'KB' : (d.tamano/1048576).toFixed(1)+'MB') : '';
-  return `<div style="display:flex;align-items:center;gap:10px;padding:11px 14px;background:var(--surface);border:1px solid var(--border);border-radius:12px;margin-bottom:8px">
-    <span style="font-size:24px;flex-shrink:0">${archivoIcono(d.mime)}</span>
-    <div style="flex:1;min-width:0">
+  const esImagen = d.mime?.startsWith('image/');
+  const esPdf    = d.mime === 'application/pdf';
+  const nomEsc   = d.nombre.replace(/'/g,"\\'");
+  const mime     = (d.mime||'').replace(/'/g,"\\'");
+  return `
+  <div style="display:flex;align-items:center;gap:8px;padding:11px 12px;background:var(--surface);border:1px solid var(--border);border-radius:12px;margin-bottom:8px">
+    <span style="font-size:22px;flex-shrink:0" onclick="docsVerArchivo(${d.id},'${nomEsc}','${mime}')" style="cursor:pointer">${archivoIcono(d.mime)}</span>
+    <div style="flex:1;min-width:0;cursor:pointer" onclick="docsVerArchivo(${d.id},'${nomEsc}','${mime}')">
       <div style="font-weight:600;font-size:13px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${d.nombre}</div>
       <div style="font-size:10px;color:var(--muted)">${kb}${d.subido_por?' · '+d.subido_por:''}${d.created_at?' · '+d.created_at.slice(0,10):''}</div>
-      ${d.descripcion ? `<div style="font-size:11px;color:var(--muted);font-style:italic;margin-top:2px">${d.descripcion}</div>` : ''}
     </div>
-    <button onclick="docsDescargarDoc(${d.id},'${d.nombre.replace(/'/g,"\\'")}')"
-      style="padding:6px 10px;background:var(--surface);border:1px solid var(--border);border-radius:8px;font-size:13px;cursor:pointer;flex-shrink:0">⬇️</button>
-    ${puedeEditar ? `<button onclick="docsBorrarArchivo(${d.id},${carpetaId},'${containerId}','${carpetaNombre.replace(/'/g,"\\'")}')"
-      style="padding:6px 10px;background:#ef444415;border:1px solid #ef444430;border-radius:8px;font-size:13px;color:#ef4444;cursor:pointer;flex-shrink:0">🗑️</button>` : ''}
+    <button onclick="docsCompartirArchivo(${d.id},'${nomEsc}','${mime}')" title="Compartir"
+      style="padding:6px 9px;background:var(--surface);border:1px solid var(--border);border-radius:8px;font-size:14px;cursor:pointer;flex-shrink:0">📤</button>
+    <button onclick="docsDescargarDoc(${d.id},'${nomEsc}')" title="Descargar"
+      style="padding:6px 9px;background:var(--surface);border:1px solid var(--border);border-radius:8px;font-size:14px;cursor:pointer;flex-shrink:0">⬇️</button>
+    ${puedeEditar ? `
+    <button onclick="docsEditarArchivo(${d.id},'${nomEsc}','${(d.descripcion||'').replace(/'/g,"\\'")}',${carpetaId},'${containerId}','${carpetaNombre.replace(/'/g,"\\'")}')" title="Editar"
+      style="padding:6px 9px;background:var(--surface);border:1px solid var(--border);border-radius:8px;font-size:14px;cursor:pointer;flex-shrink:0">✏️</button>
+    <button onclick="docsBorrarArchivo(${d.id},${carpetaId},'${containerId}','${carpetaNombre.replace(/'/g,"\\'")}')" title="Eliminar"
+      style="padding:6px 9px;background:#ef444415;border:1px solid #ef444430;border-radius:8px;font-size:14px;color:#ef4444;cursor:pointer;flex-shrink:0">🗑️</button>` : ''}
   </div>`;
+}
+
+async function docsVerArchivo(id, nombre, mime) {
+  try {
+    toast('⏳ Abriendo...');
+    const res = await apiCall('/docs-dept/' + id);
+    if (!res.ok) return toast('❌ Error al abrir', 'err');
+    const blob = await res.blob();
+    const url  = URL.createObjectURL(blob);
+    if (mime.startsWith('image/')) {
+      // Lightbox
+      const ov = document.createElement('div');
+      ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.92);display:flex;align-items:center;justify-content:center;z-index:9999;flex-direction:column;gap:12px';
+      ov.innerHTML = `
+        <div style="position:absolute;top:14px;right:14px;display:flex;gap:8px">
+          <a href="${url}" download="${nombre}" style="padding:8px 14px;background:var(--accent);color:#000;border-radius:8px;font-weight:700;font-size:13px;text-decoration:none">⬇️ Guardar</a>
+          <button onclick="this.closest('div[style*=fixed]').remove();URL.revokeObjectURL('${url}')"
+            style="padding:8px 14px;background:#333;color:#fff;border:none;border-radius:8px;font-size:13px;cursor:pointer">✕ Cerrar</button>
+        </div>
+        <img src="${url}" style="max-width:95vw;max-height:82vh;border-radius:8px;object-fit:contain" onclick="event.stopPropagation()">
+        <div style="color:#aaa;font-size:12px">${nombre}</div>`;
+      ov.addEventListener('click', () => { ov.remove(); URL.revokeObjectURL(url); });
+      document.body.appendChild(ov);
+    } else {
+      window.open(url, '_blank');
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+    }
+    toast('');
+  } catch { toast('❌ Error al abrir', 'err'); }
+}
+
+async function docsCompartirArchivo(id, nombre, mime) {
+  try {
+    toast('⏳ Preparando...');
+    const res = await apiCall('/docs-dept/' + id);
+    if (!res.ok) return toast('❌ Error', 'err');
+    const blob = await res.blob();
+    const file = new File([blob], nombre, { type: mime || blob.type });
+    toast('');
+    if (navigator.share && navigator.canShare?.({ files: [file] })) {
+      await navigator.share({ files: [file], title: nombre });
+    } else {
+      // Fallback: descargar
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = nombre; a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+      toast('📥 Descargando (compartir no disponible en este navegador)');
+    }
+  } catch(e) {
+    if (e?.name !== 'AbortError') toast('❌ Error al compartir', 'err');
+  }
+}
+
+async function docsCompartirCarpeta(carpetaId, carpetaNombre) {
+  try {
+    const res = await apiCall(`/docs-dept?carpeta_id=${carpetaId}`);
+    if (!res.ok) return toast('❌ Error al obtener archivos', 'err');
+    const docs = await res.json();
+    if (!docs.length) return toast('⚠️ La carpeta está vacía', 'err');
+
+    // Intentar compartir todos los archivos a la vez con Web Share API
+    if (navigator.share && navigator.canShare) {
+      toast('⏳ Descargando archivos...');
+      const files = await Promise.all(docs.map(async d => {
+        const r = await apiCall('/docs-dept/' + d.id);
+        const b = await r.blob();
+        return new File([b], d.nombre, { type: d.mime || b.type });
+      }));
+      if (navigator.canShare({ files })) {
+        toast('');
+        await navigator.share({ files, title: '📁 ' + carpetaNombre });
+        return;
+      }
+    }
+    // Fallback: descargar uno a uno
+    toast(`⏳ Descargando ${docs.length} archivo(s)...`);
+    for (const d of docs) {
+      const r   = await apiCall('/docs-dept/' + d.id);
+      const b   = await r.blob();
+      const url = URL.createObjectURL(b);
+      const a   = document.createElement('a');
+      a.href = url; a.download = d.nombre; a.click();
+      await new Promise(r => setTimeout(r, 400));
+      URL.revokeObjectURL(url);
+    }
+    toast(`✅ ${docs.length} archivo(s) descargados`);
+  } catch(e) {
+    if (e?.name !== 'AbortError') toast('❌ Error', 'err');
+  }
+}
+
+function docsEditarArchivo(id, nombre, descripcion, carpetaId, containerId, carpetaNombre) {
+  const nomEsc  = carpetaNombre.replace(/'/g,"\\'");
+  const modal = document.createElement('div');
+  modal.id = 'modalEditDoc';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;z-index:9999;padding:16px';
+  modal.innerHTML = `
+    <div style="background:var(--surface);border-radius:16px;padding:20px;width:100%;max-width:420px;box-shadow:0 8px 32px rgba(0,0,0,.4)">
+      <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:16px;color:var(--text);margin-bottom:16px">✏️ Editar documento</div>
+      <div class="form-group">
+        <label class="form-label">Nombre del archivo</label>
+        <input class="form-input" id="editDocNombre" value="${nombre}">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Descripción (opcional)</label>
+        <textarea class="form-input" id="editDocDesc" rows="3" style="resize:vertical;font-family:inherit">${descripcion||''}</textarea>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:4px">
+        <button onclick="document.getElementById('modalEditDoc').remove()"
+          style="flex:1;padding:11px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;cursor:pointer;font-weight:700;color:var(--text)">Cancelar</button>
+        <button onclick="docsGuardarEdicion(${id},${carpetaId},'${containerId}','${nomEsc}')"
+          style="flex:1;padding:11px;background:var(--accent);color:#000;border:none;border-radius:8px;cursor:pointer;font-family:'Montserrat',sans-serif;font-weight:700">💾 Guardar</button>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+  document.getElementById('editDocNombre').focus();
+}
+
+async function docsGuardarEdicion(id, carpetaId, containerId, carpetaNombre) {
+  const nombre      = document.getElementById('editDocNombre')?.value?.trim();
+  const descripcion = document.getElementById('editDocDesc')?.value?.trim();
+  if (!nombre) return toast('⚠️ El nombre no puede estar vacío', 'err');
+  document.getElementById('modalEditDoc')?.remove();
+  try {
+    const res = await apiCall('/docs-dept/' + id, { method: 'PUT', body: JSON.stringify({ nombre, descripcion }) });
+    if (res.ok) { toast('✅ Documento actualizado'); docsAbrirCarpeta(carpetaId, carpetaNombre, containerId); }
+    else { const e = await res.json().catch(()=>{}); toast('❌ ' + (e?.error||'Error'), 'err'); }
+  } catch { toast('❌ Error de red', 'err'); }
 }
 
 async function docsNuevaCarpeta(containerId) {
@@ -6257,7 +6409,7 @@ async function cargarObrasSelectUsuario() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '4.79';
+const APP_VERSION = '4.80';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
