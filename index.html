@@ -2582,6 +2582,8 @@ function seleccionarDepto(dept) {
   if (dept === 'mecanicas') currentModule = 'pemp';
   s.departamento = dept;
   setSession(s);
+  // Sincronizar departamento en sesión D1 para que nuevos registros se guarden con el dept correcto
+  if (s.token) apiCall('/sesion/departamento', { method: 'PUT', body: JSON.stringify({ departamento: dept }) }).catch(() => {});
   renderHeader();
   renderAjustesInfo();
   setupHomeModules();
@@ -6264,7 +6266,7 @@ async function cargarObrasSelectUsuario() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '4.73';
+const APP_VERSION = '4.74';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
