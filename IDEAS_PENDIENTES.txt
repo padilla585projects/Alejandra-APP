@@ -1,7 +1,7 @@
 ================================================================================
   ALEJANDRA APP — IDEAS, MEJORAS Y ERRORES PENDIENTES
   Recogidos de: Canal Telegram @AlejandraAPP_bot
-  Última actualización: 22/04/2026 (v4.73) — BUG #146/#147/#148 docs/obra/dept aislamiento
+  Última actualización: 22/04/2026 (v4.74) — BUG #148 fix raíz: sesión D1 sincroniza dept
 
   ⚠️  LEER ESTE ARCHIVO ANTES DE CUALQUIER SESIÓN DE CODIFICACIÓN.
   ⚠️  Marcar como [HECHO vX.XX] cuando se implemente. No borrar las líneas.
@@ -135,10 +135,12 @@ LEYENDA DE ESTADO:
     · editarObraUsuario() + guardarObraUsuario() → PUT /usuarios/:id con obra_id.
     · Reportado: 22/04/2026 — Adrian
 
-[✓] BUG-148 — Mecánicas ve el inventario de Electricidad  [HECHO v4.73]
+[✓] BUG-148 — Mecánicas ve el inventario de Electricidad  [HECHO v4.74]
     · seleccionarDepto() actualizaba localStorage pero NO la sesión D1.
-    · getAuth ignoraba X-Departamento para usuarios no SA/EA → usaba departamento de D1 (desactualizado).
-    · Fix: getAuth ahora usa X-Departamento para TODOS los usuarios con token (frontend siempre lo envía).
+    · Cuando se creaba un ítem, el worker leía sesion.departamento de D1 (desactualizado → siempre 'electrico').
+    · Fix: nuevo endpoint PUT /sesion/departamento que actualiza la sesión D1 en background.
+    · seleccionarDepto() lo llama tras actualizar localStorage → D1 y localStorage siempre sincronizados.
+    · Los ítems ya existentes con dept incorrecto quedan como están (datos históricos corruptos por el bug).
     · Reportado: 22/04/2026 — Adrian
 
 [ ] BUG-135 — Al cambiar de obra, el inventario del departamento aparece vacío
