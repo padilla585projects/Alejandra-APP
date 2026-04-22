@@ -5,7 +5,7 @@
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 22/04/2026
-VERSIÓN ACTUAL: v4.19 app vieja | v4.72 app nueva
+VERSIÓN ACTUAL: v4.19 app vieja | v4.75 app nueva
 
 ⚠️  ANTES DE CODIFICAR: leer NuevaApp/IDEAS_PENDIENTES.txt
     Lista completa de bugs activos, mejoras y features pendientes.
@@ -240,6 +240,21 @@ hotfix  |  20/04/2026  [SOLO NUEVA APP — migración DB sin cambio de código]
     · Fix: ALTER TABLE bobinas/pemp/carretillas ADD COLUMN registrado_por TEXT aplicado en D1
     · App vieja no afectada (ya tenía la columna desde antes)
     · Sin cambio de código ni deploy — solo migración directa en D1
+
+v4.75  |  22/04/2026  [SOLO NUEVA APP]
+  - Fix crítico: bucle infinito de recargas del SW
+    · recargarApp() se llamaba siempre en SW_ACTUALIZADO aunque versión coincidiera
+    · Fix: solo recarga si newV !== APP_VERSION
+
+v4.74  |  22/04/2026  [SOLO NUEVA APP]
+  - BUG-148 fix raíz: aislamiento de departamento en inventario
+    · seleccionarDepto() solo actualizaba localStorage, no la sesión D1
+    · Nuevo endpoint PUT /sesion/departamento sincroniza D1 al cambiar dept
+    · Botón 📍 en Ajustes→Usuarios para asignar obra a cualquier usuario
+    · docsCargar: mensaje diferenciado sin obra (admin vs operario)
+
+v4.73  |  22/04/2026  [SOLO NUEVA APP]
+  - BUG-146/147: botón 📍 para asignar obra a usuarios Google; mensaje docs sin obra
 
 v4.72  |  22/04/2026  [SOLO NUEVA APP]
   - NEW-15: tarjeta 📂 Documentación en screenHome (eléctrico, mecánicas, seguridad)

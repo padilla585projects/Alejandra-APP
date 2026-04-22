@@ -1,7 +1,7 @@
 ================================================================================
   ALEJANDRA APP — IDEAS, MEJORAS Y ERRORES PENDIENTES
   Recogidos de: Canal Telegram @AlejandraAPP_bot
-  Última actualización: 22/04/2026 (v4.72) — NEW-15 tarjeta Documentación en home
+  Última actualización: 22/04/2026 (v4.75) — fix bucle SW infinito + BUG #146/#147/#148
 
   ⚠️  LEER ESTE ARCHIVO ANTES DE CUALQUIER SESIÓN DE CODIFICACIÓN.
   ⚠️  Marcar como [HECHO vX.XX] cuando se implemente. No borrar las líneas.
@@ -121,6 +121,27 @@ LEYENDA DE ESTADO:
       el bloque window.xxx) → onclick lanzaba ReferenceError silencioso.
     · Fix: añadidas las 5 funciones al bloque window.xxx al final del script.
     · Reportado: 22/04/2026 — Adrian, empresa 3 (personal)
+
+[✓] BUG-146 — Alberto y Juanjo no pueden ver documentos  [HECHO v4.73]
+    · docsCargar mostraba "Selecciona una obra" sin diferenciar si el usuario podía o no seleccionarla.
+    · Fix: mensaje diferenciado: SA/EA/encargado → "Selecciona en menú superior"; operario → "pide al admin".
+    · Fix raíz: el admin ahora puede asignar obra a cualquier usuario (BUG-147).
+    · Fix complementario: onObraSelectChange refresca screenDocs si está visible.
+    · Reportado: 22/04/2026 — Alberto Martínez
+
+[✓] BUG-147 — Usuarios con login Google no se les puede asignar obras  [HECHO v4.73]
+    · No había UI para asignar obra_id a un usuario existente.
+    · Fix: botón 📍 en cada usuario de Ajustes → Usuarios que abre selector de obras.
+    · editarObraUsuario() + guardarObraUsuario() → PUT /usuarios/:id con obra_id.
+    · Reportado: 22/04/2026 — Adrian
+
+[✓] BUG-148 — Mecánicas ve el inventario de Electricidad  [HECHO v4.74]
+    · seleccionarDepto() actualizaba localStorage pero NO la sesión D1.
+    · Cuando se creaba un ítem, el worker leía sesion.departamento de D1 (desactualizado → siempre 'electrico').
+    · Fix: nuevo endpoint PUT /sesion/departamento que actualiza la sesión D1 en background.
+    · seleccionarDepto() lo llama tras actualizar localStorage → D1 y localStorage siempre sincronizados.
+    · Los ítems ya existentes con dept incorrecto quedan como están (datos históricos corruptos por el bug).
+    · Reportado: 22/04/2026 — Adrian
 
 [ ] BUG-135 — Al cambiar de obra, el inventario del departamento aparece vacío
     · Si cambias de obra estando dentro de un departamento, el inventario no se
