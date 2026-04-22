@@ -2736,6 +2736,8 @@ function onObraSelectChange(obraId) {
   setSession(s);
   cargarStatsHome();
   if (document.getElementById('modPanelStock').classList.contains('active')) cargarStock();
+  const docsEl = document.getElementById('screenDocs');
+  if (docsEl && docsEl.style.display !== 'none') docsCargar('screenDocsPanel');
 }
 
 async function checkConnection() {
@@ -4118,7 +4120,8 @@ async function docsCargar(containerId) {
   const puedeEditar = s?.rol !== 'operario';
 
   if (!obraId) {
-    c.innerHTML = `<div class="empty-state">Selecciona una obra para ver documentos</div>`;
+    const canSelect = s?.rol === 'superadmin' || s?.rol === 'empresa_admin' || s?.rol === 'encargado';
+    c.innerHTML = `<div class="empty-state">${canSelect ? 'Selecciona una obra en el menú superior para ver documentos.' : 'No tienes obra asignada. El administrador debe asignarte una.'}</div>`;
     return;
   }
 
@@ -5015,6 +5018,7 @@ async function cargarUsuariosAdmin() {
           <div class="admin-item-sub">${u.rol}${u.obra_nombre ? ' · ' + u.obra_nombre : ''} · ${deptLabel[dept] || dept}</div>
         </div>
         <div style="display:flex;gap:6px;align-items:center;flex-shrink:0" id="uact-${u.id}">
+          <button class="btn-sm" onclick="editarObraUsuario(${u.id},${u.obra_id||'null'})" title="Asignar obra" style="font-size:13px">📍</button>
           <button class="btn-sm" onclick="editarDeptUsuario(${u.id},'${dept}')" title="Cambiar departamento" style="font-size:13px">🏢</button>
           <button class="btn-sm danger" onclick="eliminarUsuario(${u.id})">🗑</button>
         </div>
@@ -5049,6 +5053,35 @@ async function guardarDeptUsuario(id) {
     });
     if (res.ok) { toast('✅ Departamento actualizado', 'ok'); cargarUsuariosAdmin(); }
     else { const d = await res.json(); toast(`❌ ${d.error || 'Error'}`, 'err'); }
+  } catch { toast('❌ Error de conexión', 'err'); }
+}
+
+async function editarObraUsuario(id, obraActual) {
+  const actDiv = document.getElementById(`uact-${id}`);
+  if (!actDiv) return;
+  try {
+    const res = await apiCall('/obras');
+    const obras = await res.json();
+    actDiv.innerHTML = `
+      <select id="obraSel-${id}" style="padding:5px 8px;background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px">
+        <option value="">— Sin obra —</option>
+        ${obras.map(o => `<option value="${o.id}"${o.id == obraActual ? ' selected' : ''}>${o.nombre}</option>`).join('')}
+      </select>
+      <button class="btn-sm ok" onclick="guardarObraUsuario(${id})">✓</button>
+      <button class="btn-sm" onclick="cargarUsuariosAdmin()">✕</button>`;
+  } catch { toast('❌ Error cargando obras', 'err'); }
+}
+
+async function guardarObraUsuario(id) {
+  const sel = document.getElementById(`obraSel-${id}`);
+  if (!sel) return;
+  try {
+    const res = await apiCall(`/usuarios/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify({ obra_id: sel.value ? parseInt(sel.value) : null })
+    });
+    if (res.ok) { toast('✅ Obra actualizada', 'ok'); cargarUsuariosAdmin(); }
+    else { const d = await res.json().catch(()=>({})); toast(`❌ ${d.error || 'Error'}`, 'err'); }
   } catch { toast('❌ Error de conexión', 'err'); }
 }
 
@@ -6231,7 +6264,7 @@ async function cargarObrasSelectUsuario() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '4.72';
+const APP_VERSION = '4.73';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
