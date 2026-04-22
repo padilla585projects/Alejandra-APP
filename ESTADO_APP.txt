@@ -5,7 +5,7 @@
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 22/04/2026
-VERSIÓN ACTUAL: v4.19 app vieja | v4.70 app nueva
+VERSIÓN ACTUAL: v4.19 app vieja | v4.71 app nueva
 
 ⚠️  ANTES DE CODIFICAR: leer NuevaApp/IDEAS_PENDIENTES.txt
     Lista completa de bugs activos, mejoras y features pendientes.
@@ -240,6 +240,13 @@ hotfix  |  20/04/2026  [SOLO NUEVA APP — migración DB sin cambio de código]
     · Fix: ALTER TABLE bobinas/pemp/carretillas ADD COLUMN registrado_por TEXT aplicado en D1
     · App vieja no afectada (ya tenía la columna desde antes)
     · Sin cambio de código ni deploy — solo migración directa en D1
+
+v4.71  |  22/04/2026  [SOLO NUEVA APP]
+  - BUG-136: botón 👥 "Fichar Equipo" no respondía al click
+    · Las 5 funciones de MEJ-128 (abrirFichajeEquipo, cerrarFichajeEquipo,
+      guardarFichajeEquipo, fichajeEquipoOnObraChange, feqSelAll) no estaban
+      en el bloque window.xxx → onclick lanzaba ReferenceError silencioso
+    · Fix: añadidas las 5 funciones al bloque de exposición global
 
 v4.68  |  22/04/2026  [SOLO NUEVA APP]
   - MEJ-131: Horarios de obra por día de la semana

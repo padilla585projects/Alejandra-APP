@@ -6203,7 +6203,7 @@ async function cargarObrasSelectUsuario() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '4.70';
+const APP_VERSION = '4.71';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -7928,6 +7928,11 @@ if ('serviceWorker' in navigator) {
   window.guardarFichaje        = guardarFichaje;
   window.eliminarFichaje       = eliminarFichaje;
   window.fichajeToggleManual   = fichajeToggleManual;
+  window.abrirFichajeEquipo    = abrirFichajeEquipo;
+  window.cerrarFichajeEquipo   = cerrarFichajeEquipo;
+  window.guardarFichajeEquipo  = guardarFichajeEquipo;
+  window.fichajeEquipoOnObraChange = fichajeEquipoOnObraChange;
+  window.feqSelAll             = feqSelAll;
   window.cargarEmpresasAdmin     = cargarEmpresasAdmin;
   window.seleccionarEmpresaAdmin = seleccionarEmpresaAdmin;
   window.abrirNotificaciones     = abrirNotificaciones;

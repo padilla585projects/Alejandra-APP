@@ -1,7 +1,7 @@
 ================================================================================
   ALEJANDRA APP — IDEAS, MEJORAS Y ERRORES PENDIENTES
   Recogidos de: Canal Telegram @AlejandraAPP_bot
-  Última actualización: 22/04/2026 (v4.68) — MEJ-131 horarios/día + MEJ-08 depts activos
+  Última actualización: 22/04/2026 (v4.71) — BUG-136 corregido (botón fichar equipo)
 
   ⚠️  LEER ESTE ARCHIVO ANTES DE CUALQUIER SESIÓN DE CODIFICACIÓN.
   ⚠️  Marcar como [HECHO vX.XX] cuando se implemente. No borrar las líneas.
@@ -114,6 +114,29 @@ LEYENDA DE ESTADO:
       departamentos disponibles según los usuarios existentes en esa empresa.
     · Función nueva: actualizarDeptsPendiente(uid).
     · Reportado: sesión 21/04/2026
+
+[✓] BUG-136 — Botón "Fichar nuevo" no funciona (empresa 3, personal)  [HECHO v4.71]
+    · Las funciones de MEJ-128 (abrirFichajeEquipo, cerrarFichajeEquipo, guardarFichajeEquipo,
+      fichajeEquipoOnObraChange, feqSelAll) no estaban expuestas al scope global (faltaban en
+      el bloque window.xxx) → onclick lanzaba ReferenceError silencioso.
+    · Fix: añadidas las 5 funciones al bloque window.xxx al final del script.
+    · Reportado: 22/04/2026 — Adrian, empresa 3 (personal)
+
+[ ] BUG-135 — Al cambiar de obra, el inventario del departamento aparece vacío
+    · Si cambias de obra estando dentro de un departamento, el inventario no se
+      recarga automáticamente → pantalla vacía hasta salir y volver a entrar.
+    · Importante: el cambio de obra debe refrescar la vista del departamento actual.
+    · Reportado: 21/04/2026 — Adrian, empresa 3 (eléctrico)
+
+[ ] BUG-048 — Icono de devolución en departamento eléctrico fuera de estilo
+    · El icono de devolución en eléctrico no sigue el estilo visual de la app.
+    · Hay que sustituirlo por uno coherente con el diseño actual.
+    · Reportado: 16/04/2026 — Admin, empresa 1
+
+[ ] BUG-009 — App consume mucha batería en el móvil
+    · La app causa un consumo de batería elevado durante el uso.
+    · Revisar: polling, setInterval activos, listeners duplicados y workers en background.
+    · Reportado: 15/04/2026 — Admin, empresa 1
 
 ================================================================================
   🔧 MEJORAS (solo app nueva, salvo indicación contraria)
@@ -267,6 +290,19 @@ LEYENDA DE ESTADO:
     · rolLabel('superadmin') devuelve 'SA' → libera espacio en la barra superior
     · Reportado: 20/04/2026 — Adrian, CPD Getafe
 
+[ ] MEJ-044 — Descripción de máquina/equipo a pantalla completa
+    · Al pulsar la descripción de un equipo, mostrarla en un modal a pantalla completa.
+    · Reportado: 16/04/2026 — Admin, empresa 1
+
+[ ] MEJ-053 — Filtrar sugerencias/ideas por departamento en panel admin
+    · En Ajustes → Ideas, añadir selector de filtro por departamento para organizar mejor.
+    · Reportado: 17/04/2026 — Admin, empresa 1
+
+[ ] MEJ-058 — Seguridad: buscar en inventario de todos los departamentos
+    · Al buscar desde el depto. Seguridad, poder ver equipos de todos los departamentos.
+    · Requiere decisión: ¿mantener aislamiento por dept o dar visión global a Seguridad?
+    · Reportado: 17/04/2026 — Admin, empresa 1
+
 [ ] NEW-02 — Wizard de bienvenida (onboarding primera vez)
     · Al abrir la app por primera vez: wizard guiado.
     · Pasos: configurar cuenta nueva o usuario existente,
@@ -394,6 +430,30 @@ LEYENDA DE ESTADO:
     · Archivos dentro de carpetas: subir ≤50MB, descargar con auth, borrar.
     · Subir/borrar: encargado + admin/EA/SA. Leer: todos los roles incluyendo operarios.
     · Tablas D1: carpetas + docs_dept. Bucket R2: alejandra-app-files.
+    · Reportado: 22/04/2026 — Adrian, CPD Getafe
+
+[ ] MEJ-136 — Docs: notas de texto editable dentro de carpetas
+    · Además de archivos, poder crear "notas" (bloc de notas) directamente en la app.
+    · Editor de texto simple in-app: crear, editar contenido, guardar.
+    · Se almacena como registro en D1 (no como archivo en R2).
+    · Estructura: empresa/obra/departamento igual que los archivos.
+    · Reportado: 22/04/2026 — Adrian, CPD Getafe
+
+[ ] MEJ-137 — Docs: renombrar y mover archivos y carpetas
+    · Botón ✏️ en cada carpeta y archivo para renombrar.
+    · Mover archivo de una carpeta a otra dentro del mismo obra/departamento.
+    · Reportado: 22/04/2026 — Adrian, CPD Getafe
+
+[ ] MEJ-138 — Botón "Disponible" en notificación Telegram al añadir herramienta
+    · Cuando se añade una herramienta nueva y se envía notificación a Telegram,
+      incluir botón inline [✅ Disponible] para marcar el estado directamente desde Telegram.
+    · El webhook procesa el callback y actualiza el campo estado='disponible' en D1.
+    · Complementa MEJ-132 (Telegram bidireccional con botones inline).
+    · Reportado: 22/04/2026 — Adrian, CPD Getafe
+
+[ ] MEJ-139 — Docs: compartir carpeta completa por Telegram y WhatsApp
+    · Botón "Compartir" en cada carpeta que envíe todos sus archivos (o un ZIP).
+    · Compartir por WhatsApp (share API) y enviar listado + archivos a Telegram.
     · Reportado: 22/04/2026 — Adrian, CPD Getafe
 
 [ ] NEW-08 — Chat interno entre empleados de la misma empresa

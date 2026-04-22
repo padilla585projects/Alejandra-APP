@@ -65,6 +65,9 @@ REGLA DE DEPLOY:
   - En ambos casos: subir versión + actualizar txts + deploy worker + git push
 
 ÚLTIMO CAMBIO REALIZADO:
+  v4.71 [nueva] — 22/04/2026
+  · BUG-136: botón 👥 "Fichar Equipo" no respondía (funciones MEJ-128 sin exponer al scope global)
+
   v4.70 [nueva] — 22/04/2026
   · Nueva pestaña 📂 Docs en Eléctrico, Mecánicas y Seguridad
   · Carpetas por obra+departamento: crear, borrar (con todos sus archivos)
