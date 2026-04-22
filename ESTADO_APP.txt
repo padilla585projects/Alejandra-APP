@@ -5,7 +5,7 @@
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 22/04/2026
-VERSIÓN ACTUAL: v4.19 app vieja | v4.81 app nueva
+VERSIÓN ACTUAL: v4.19 app vieja | v4.82 app nueva
 
 ⚠️  ANTES DE CODIFICAR: leer NuevaApp/IDEAS_PENDIENTES.txt
     Lista completa de bugs activos, mejoras y features pendientes.
@@ -240,6 +240,17 @@ hotfix  |  20/04/2026  [SOLO NUEVA APP — migración DB sin cambio de código]
     · Fix: ALTER TABLE bobinas/pemp/carretillas ADD COLUMN registrado_por TEXT aplicado en D1
     · App vieja no afectada (ya tenía la columna desde antes)
     · Sin cambio de código ni deploy — solo migración directa en D1
+
+v4.82  |  22/04/2026  [SOLO NUEVA APP]
+  - MEJ-128 complemento: pestaña "👷 Plantilla" en módulo Personal
+    · Nueva pestaña para gestionar personal externo (sin cuenta en la app) por obra
+    · Filtro por obra en cabecera — muestra solo trabajadores de la obra seleccionada
+    · Lista con nombre, obra asignada, DNI y notas; botones ✏️ editar y 🗑️ eliminar
+    · Modal añadir/editar: nombre (obligatorio), DNI, obra, notas
+    · Al abrir desde una obra filtrada → el modal pre-selecciona esa obra
+    · Los trabajadores creados aquí aparecen automáticamente en "Fichar Equipo"
+    · FABs (+ fichaje / 👥 equipo) se ocultan en esta pestaña
+    · Backend: reutiliza /personal-externo (GET/POST/PUT/DELETE ya existían)
 
 v4.81  |  22/04/2026  [SOLO NUEVA APP]
   - BUG-136 (2ª causa): modal "Fichar Equipo" no aparecía visualmente

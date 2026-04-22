@@ -1,7 +1,7 @@
 ================================================================================
   ALEJANDRA APP — IDEAS, MEJORAS Y ERRORES PENDIENTES
   Recogidos de: Canal Telegram @AlejandraAPP_bot
-  Última actualización: 22/04/2026 (v4.81) — fix BUG-136 2ª causa: modal Fichar Equipo no aparecía (active→show)
+  Última actualización: 22/04/2026 (v4.82) — MEJ-128 complemento: pestaña Plantilla para gestionar operarios por obra
 
   ⚠️  LEER ESTE ARCHIVO ANTES DE CUALQUIER SESIÓN DE CODIFICACIÓN.
   ⚠️  Marcar como [HECHO vX.XX] cuando se implemente. No borrar las líneas.
@@ -423,7 +423,7 @@ LEYENDA DE ESTADO:
     · TELEGRAM_WEBHOOK_SECRET configurado en CF secrets; webhook registrado
     · Reportado: 21/04/2026 — Adrian (empresa 1)
 
-[✓] MEJ-128 — Fichaje semi-automático: listado de personal por obra  [HECHO v4.67]
+[✓] MEJ-128 — Fichaje semi-automático: listado de personal por obra  [HECHO v4.67 + v4.82]
     · FAB 👥 verde junto al + de nuevo fichaje (solo admin/encargado).
     · Modal con fecha, obra, hora entrada/salida (pre-rellenas desde horario_obra), estado.
     · Lista de trabajadores con checkboxes (internos + externos), botones Todo/Ninguno.
