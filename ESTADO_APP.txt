@@ -5,7 +5,7 @@
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 22/04/2026
-VERSIÓN ACTUAL: v4.19 app vieja | v4.75 app nueva
+VERSIÓN ACTUAL: v4.19 app vieja | v4.81 app nueva
 
 ⚠️  ANTES DE CODIFICAR: leer NuevaApp/IDEAS_PENDIENTES.txt
     Lista completa de bugs activos, mejoras y features pendientes.
@@ -240,6 +240,49 @@ hotfix  |  20/04/2026  [SOLO NUEVA APP — migración DB sin cambio de código]
     · Fix: ALTER TABLE bobinas/pemp/carretillas ADD COLUMN registrado_por TEXT aplicado en D1
     · App vieja no afectada (ya tenía la columna desde antes)
     · Sin cambio de código ni deploy — solo migración directa en D1
+
+v4.81  |  22/04/2026  [SOLO NUEVA APP]
+  - BUG-136 (2ª causa): modal "Fichar Equipo" no aparecía visualmente
+    · abrirFichajeEquipo() usaba classList.add('active') pero el CSS solo define .modal-overlay.show
+    · Fix: cambiado a classList.add/remove('show') en abrirFichajeEquipo y cerrarFichajeEquipo
+    · El bug en v4.71 resolvió el ReferenceError (funciones no en window); este resuelve la visibilidad
+
+v4.80  |  22/04/2026  [SOLO NUEVA APP]
+  - feat #141: explorador de Docs completamente rediseñado
+    · Botón 📷 abre cámara trasera en modo FOTO (fix: ya no abre en vídeo)
+    · Botón 📎 Archivo para subir PDF, Word, Excel, ZIP, imágenes desde explorador
+    · Tap en icono/nombre → vista previa (imágenes en lightbox, PDF en nueva pestaña)
+    · Botón 📤 por archivo → Web Share API (WhatsApp, Telegram, email...) + fallback descarga
+    · Botón 📤 en cabecera → compartir TODA la carpeta de una vez
+    · Botón ✏️ por archivo → modal para renombrar y editar descripción (MEJ-137 parcial)
+    · Nuevo endpoint PUT /docs-dept/:id para editar nombre y descripción
+    · Bucket R2 'alejandra-files' CREADO (no existía) + binding FILES añadido al worker
+  - Regla deploy: script deploy-worker.ps1 siempre incluye D1 (DB) + R2 (FILES)
+
+v4.79  |  22/04/2026  [SOLO NUEVA APP]
+  - fix #140 completo: eliminada pestaña Docs de Seguridad (botón + panel + lógica)
+    · Cada departamento ya tiene su tarjeta Documentación en el home
+
+v4.78  |  22/04/2026  [SOLO NUEVA APP]
+  - fix #140: eliminada pestaña 📂 Docs del módulo inventario (Eléctrico/Mecánicas)
+    · Redundante con la tarjeta Documentación en screenHome
+
+v4.77  |  22/04/2026  [SOLO NUEVA APP]
+  - fix #143: botón Atrás (Android) ya funciona desde la pestaña Ideas
+    · navTo('sugerencias') usaba navTo clásico → limpiaba _navHistory → sin retorno
+    · Fix: usa showScreen() que conserva historial → Atrás lleva a la pantalla anterior
+
+v4.76  |  22/04/2026  [SOLO NUEVA APP]
+  - fix #135: inventario vacío al cambiar obra
+    · Nuevo endpoint PUT /sesion/obra: sincroniza obra_id en D1 al cambiar en header
+    · onObraSelectChange llama /sesion/obra → D1 y localStorage siempre sincronizados
+    · registrarItem: usa s.obra_id del localStorage → ítems se guardan con obra correcta
+    · Arreglado check docs al cambiar obra (classList en vez de style.display inline)
+    · Al cambiar obra: también recarga herramientas si esa pantalla está activa
+  - Incidente: binding D1 (DB) perdido → worker devolvía 403/500 para todo
+    · Causa: curl -F en Windows falla y no incluye bindings en el deploy
+    · Fix: redesplegar con PowerShell Invoke-RestMethod + script deploy-worker.ps1
+    · Regla añadida a memoria: SIEMPRE usar deploy-worker.ps1
 
 v4.75  |  22/04/2026  [SOLO NUEVA APP]
   - Fix crítico: bucle infinito de recargas del SW

@@ -1,7 +1,7 @@
 ================================================================================
   ALEJANDRA APP — IDEAS, MEJORAS Y ERRORES PENDIENTES
   Recogidos de: Canal Telegram @AlejandraAPP_bot
-  Última actualización: 22/04/2026 (v4.75) — fix bucle SW infinito + BUG #146/#147/#148
+  Última actualización: 22/04/2026 (v4.81) — fix BUG-136 2ª causa: modal Fichar Equipo no aparecía (active→show)
 
   ⚠️  LEER ESTE ARCHIVO ANTES DE CUALQUIER SESIÓN DE CODIFICACIÓN.
   ⚠️  Marcar como [HECHO vX.XX] cuando se implemente. No borrar las líneas.
@@ -115,11 +115,12 @@ LEYENDA DE ESTADO:
     · Función nueva: actualizarDeptsPendiente(uid).
     · Reportado: sesión 21/04/2026
 
-[✓] BUG-136 — Botón "Fichar nuevo" no funciona (empresa 3, personal)  [HECHO v4.71]
-    · Las funciones de MEJ-128 (abrirFichajeEquipo, cerrarFichajeEquipo, guardarFichajeEquipo,
-      fichajeEquipoOnObraChange, feqSelAll) no estaban expuestas al scope global (faltaban en
+[✓] BUG-136 — Botón "Fichar nuevo" no funciona (empresa 3, personal)  [HECHO v4.71 + v4.81]
+    · v4.71: las funciones de MEJ-128 no estaban expuestas al scope global (faltaban en
       el bloque window.xxx) → onclick lanzaba ReferenceError silencioso.
-    · Fix: añadidas las 5 funciones al bloque window.xxx al final del script.
+    · v4.81 (2ª causa): abrirFichajeEquipo usaba classList.add('active') pero CSS solo define
+      .modal-overlay.show → el modal se abría sin error pero nunca era visible.
+      Fix: cambiado a classList.add/remove('show').
     · Reportado: 22/04/2026 — Adrian, empresa 3 (personal)
 
 [✓] BUG-146 — Alberto y Juanjo no pueden ver documentos  [HECHO v4.73]
@@ -143,11 +144,24 @@ LEYENDA DE ESTADO:
     · Los ítems ya existentes con dept incorrecto quedan como están (datos históricos corruptos por el bug).
     · Reportado: 22/04/2026 — Adrian
 
-[ ] BUG-135 — Al cambiar de obra, el inventario del departamento aparece vacío
-    · Si cambias de obra estando dentro de un departamento, el inventario no se
-      recarga automáticamente → pantalla vacía hasta salir y volver a entrar.
-    · Importante: el cambio de obra debe refrescar la vista del departamento actual.
-    · Reportado: 21/04/2026 — Adrian, empresa 3 (eléctrico)
+[✓] BUG-135 — Al cambiar de obra, el inventario del departamento aparece vacío  [HECHO v4.76]
+    · PUT /sesion/obra sincroniza obra_id en D1 → ítems se crean con obra correcta
+    · onObraSelectChange recarga stock/docs/herramientas según pantalla activa
+    · registrarItem usa s.obra_id del localStorage aunque no se muestre el selector
+
+[✓] BUG-143 — Botón Atrás no funciona en pestaña Ideas  [HECHO v4.77]
+    · navTo('sugerencias') limpiaba _navHistory → Atrás no tenía a dónde ir
+    · Fix: navTo para sugerencias llama showScreen() que conserva el historial
+
+[✓] BUG-141 — Cámara abre en modo vídeo al añadir fotos en Docs  [HECHO v4.80]
+    · Input sin accept ni capture → Android abría en modo vídeo
+    · Fix: botón 📷 con accept="image/*" capture="environment" → modo foto directo
+    · Añadido botón 📎 Archivo separado para subir PDFs, Word, Excel, ZIP, etc.
+
+[✓] BUG-140 — Pestaña Docs duplicada dentro de los módulos de departamento  [HECHO v4.78-79]
+    · Existía pestaña 📂 Docs en Eléctrico/Mecánicas (screenModule) y Seguridad
+    · Redundante: ya hay tarjeta Documentación en el home de cada departamento
+    · Fix: eliminada de los tres departamentos (botón + panel + lógica)
 
 [ ] BUG-048 — Icono de devolución en departamento eléctrico fuera de estilo
     · El icono de devolución en eléctrico no sigue el estilo visual de la app.

@@ -6409,7 +6409,7 @@ async function cargarObrasSelectUsuario() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '4.80';
+const APP_VERSION = '4.81';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -7885,11 +7885,11 @@ if ('serviceWorker' in navigator) {
 
     // Cargar trabajadores (y horario si hay obra)
     await fichajeEquipoOnObraChange();
-    document.getElementById('modalFichajeEquipo').classList.add('active');
+    document.getElementById('modalFichajeEquipo').classList.add('show');
   }
 
   function cerrarFichajeEquipo() {
-    document.getElementById('modalFichajeEquipo').classList.remove('active');
+    document.getElementById('modalFichajeEquipo').classList.remove('show');
   }
 
   async function fichajeEquipoOnObraChange() {
