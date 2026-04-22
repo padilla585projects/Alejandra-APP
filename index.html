@@ -2820,13 +2820,18 @@ function navTo(target) {
   if (target !== 'ajustes') { clearInterval(_ideasRefreshTimer); _ideasRefreshTimer = null; }
   closeCamera();
   segCloseCamera();
-  // Navegar a raíz: limpiar historial para que atrás = "salir de la app"
-  _navHistory = [];
   // Ocultar FABs de pantallas que no son el destino
   const fabFichaje = document.getElementById('btnNuevoFichaje');
   if (fabFichaje && target !== 'personal') fabFichaje.style.display = 'none';
   const fabFichajeEq = document.getElementById('btnFichajeEquipo');
   if (fabFichajeEq && target !== 'personal') fabFichajeEq.style.display = 'none';
+  // Ideas: pantalla secundaria — conservar historial para que Atrás funcione
+  if (target === 'sugerencias') {
+    showScreen('sugerencias');
+    return;
+  }
+  // El resto son pantallas raíz: limpiar historial para que atrás = "salir de la app"
+  _navHistory = [];
   if (target === 'home') {
     const s2 = getSession();
     if (s2?.rol === 'superadmin') { _applyScreen('empresaSel'); return; }
@@ -2836,10 +2841,6 @@ function navTo(target) {
   }
   if (target === 'ajustes') {
     _applyScreen('ajustes');
-    return;
-  }
-  if (target === 'sugerencias') {
-    _applyScreen('sugerencias');
     return;
   }
   if (target === 'pedidos') {
@@ -6268,7 +6269,7 @@ async function cargarObrasSelectUsuario() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '4.76';
+const APP_VERSION = '4.77';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
