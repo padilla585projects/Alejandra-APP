@@ -52,8 +52,9 @@ async function getAuth(request, env) {
         const isEmpresaAdmin = sesion.rol === 'empresa_admin';
         // SA y EA pueden cambiar de dept sin hacer logout → preferir cabecera
         const deptHeader = request.headers.get('X-Departamento');
-        // Todos los usuarios con token respetan X-Departamento (actualizado por seleccionarDepto en frontend)
-        const departamento = deptHeader || sesion.departamento || 'electrico';
+        const departamento = (isSuperadmin || isEmpresaAdmin)
+          ? (deptHeader || sesion.departamento || 'electrico')
+          : (sesion.departamento || 'electrico');
         return {
           isAdmin: sesion.es_admin === 1,
           isSuperadmin,
