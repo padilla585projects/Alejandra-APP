@@ -1,7 +1,7 @@
 ================================================================================
   ALEJANDRA APP — IDEAS, MEJORAS Y ERRORES PENDIENTES
   Recogidos de: Canal Telegram @AlejandraAPP_bot
-  Última actualización: 22/04/2026 (v4.82) — MEJ-128 complemento: pestaña Plantilla para gestionar operarios por obra
+  Última actualización: 22/04/2026 (v4.83) — fix: superadmin veía inventario de eléctrico en mecánicas
 
   ⚠️  LEER ESTE ARCHIVO ANTES DE CUALQUIER SESIÓN DE CODIFICACIÓN.
   ⚠️  Marcar como [HECHO vX.XX] cuando se implemente. No borrar las líneas.
@@ -162,6 +162,13 @@ LEYENDA DE ESTADO:
     · Existía pestaña 📂 Docs en Eléctrico/Mecánicas (screenModule) y Seguridad
     · Redundante: ya hay tarjeta Documentación en el home de cada departamento
     · Fix: eliminada de los tres departamentos (botón + panel + lógica)
+
+[✓] BUG-149 — Superadmin veía inventario de eléctrico al entrar como mecánicas  [HECHO v4.83]
+    · getBobinas, getPemp y getCarretillas saltaban el filtro de departamento para SA
+    · El SA recibe el dept correcto via X-Departamento, pero el filtro AND departamento=?
+      no se aplicaba → veía todos los datos sin importar el dept seleccionado
+    · Fix: filtro aplicado siempre para todos los roles
+    · Reportado: 22/04/2026 — Adrian
 
 [ ] BUG-048 — Icono de devolución en departamento eléctrico fuera de estilo
     · El icono de devolución en eléctrico no sigue el estilo visual de la app.
