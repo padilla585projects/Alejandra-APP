@@ -957,7 +957,6 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
       <button class="mod-tab-btn active" id="segTabEscaner" onclick="segSelTab('escaner')">📷 Escáner</button>
       <button class="mod-tab-btn"        id="segTabInv"     onclick="segSelTab('inventario')">📦 Inventario</button>
       <button class="mod-tab-btn"        id="segTabHerr"    onclick="segSelTab('herramientas')">🔧 Herramientas</button>
-      <button class="mod-tab-btn"        id="segTabDocs"    onclick="segSelTab('docs')">📂 Docs</button>
     </div>
 
     <!-- ── TAB ESCÁNER ── -->
@@ -1056,9 +1055,6 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
       </div>
     </div>
 
-    <div id="segPanelDocs" style="display:none;flex-direction:column;flex:1;overflow-y:auto;padding:14px">
-      <div id="segDocsDeptPanel"></div>
-    </div>
 
   </div>
 
@@ -3405,13 +3401,10 @@ function segSelTab(tab) {
   if (tab === 'herramientas') { navTo('herramientas'); return; }
   document.getElementById('segTabEscaner').classList.toggle('active', tab === 'escaner');
   document.getElementById('segTabInv').classList.toggle('active', tab === 'inventario');
-  document.getElementById('segTabDocs')?.classList.toggle('active', tab === 'docs');
   document.getElementById('segTabHerr')?.classList.remove('active');
   document.getElementById('segPanelEscaner').style.display = tab === 'escaner'    ? 'flex'  : 'none';
   document.getElementById('segPanelInv').style.display     = tab === 'inventario' ? 'flex'  : 'none';
-  document.getElementById('segPanelDocs').style.display    = tab === 'docs'       ? 'flex'  : 'none';
   if (tab === 'inventario') segCargarInv();
-  if (tab === 'docs')       docsCargar('segDocsDeptPanel');
 }
 
 // Buscar por código: primero en inventario seg, luego en máquinas
@@ -6264,7 +6257,7 @@ async function cargarObrasSelectUsuario() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '4.78';
+const APP_VERSION = '4.79';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
