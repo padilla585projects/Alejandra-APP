@@ -276,6 +276,7 @@ export default {
       if (path === '/logout'      && method === 'POST') return await cerrarSesionServidor(request, env);
       if (path === '/sesiones'    && method === 'GET')  return await getSesionesActivas(request, env);
       if (path === '/sesiones/cerrar-todas' && method === 'POST') return await cerrarTodasSesiones(request, env);
+      if (path === '/sesion/departamento'   && method === 'PUT')  return await actualizarSesionDepartamento(request, env);
       if (path === '/empresas/registro'  && method === 'POST') return await registrarEmpresa(request, env);
       if (path === '/empresas'           && method === 'GET')  return await getEmpresas(request, env);
       if (path === '/superadmin/empresa' && method === 'POST') return await superadminSeleccionarEmpresa(request, env);
@@ -635,6 +636,16 @@ async function verificarAcceso(request, env) {
   } catch (_) {}
 
   return err('Código inválido', 401);
+}
+
+async function actualizarSesionDepartamento(request, env) {
+  const xToken = request.headers.get('X-Token');
+  if (!xToken) return err('No autorizado', 403);
+  const { departamento } = await request.json().catch(() => ({}));
+  const validos = ['electrico', 'mecanicas', 'seguridad', 'personal'];
+  if (!departamento || !validos.includes(departamento)) return err('Departamento inválido', 400);
+  await env.DB.prepare('UPDATE sesiones SET departamento = ? WHERE token = ?').bind(departamento, xToken).run();
+  return json({ ok: true });
 }
 
 async function cerrarSesionServidor(request, env) {
