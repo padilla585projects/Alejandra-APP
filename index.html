@@ -716,7 +716,6 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
       <button class="mod-tab-btn active" onclick="showModTab('scan')">📷 Escanear</button>
       <button class="mod-tab-btn" onclick="showModTab('stock')">📋 Inventario</button>
       <button class="mod-tab-btn" onclick="showModTab('historial')">🕒 Historial</button>
-      <button class="mod-tab-btn" onclick="showModTab('docs')">📂 Docs</button>
     </div>
     <div id="modContent" style="padding:14px;overflow-y:auto;flex:1">
       <!-- scan panel -->
@@ -944,9 +943,6 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
         <div id="historialList"><div class="empty-state">Cargando...</div></div>
       </div>
 
-      <div id="modPanelDocs" class="mod-panel">
-        <div id="docsDeptPanel"></div>
-      </div>
 
     </div>
   </div>
@@ -2952,7 +2948,6 @@ function showModTab(name) {
   if (name === 'scan')      cargarCatalogos();
   if (name === 'stock')     cargarStock();
   if (name === 'historial') cargarHistorial();
-  if (name === 'docs')      docsCargar('docsDeptPanel');
 }
 
 // ══════════════════════════════════════════════════════
@@ -6269,7 +6264,7 @@ async function cargarObrasSelectUsuario() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '4.77';
+const APP_VERSION = '4.78';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
