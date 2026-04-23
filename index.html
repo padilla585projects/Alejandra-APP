@@ -1086,6 +1086,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
         </div>
         <div id="segActionsIdle" class="scan-actions">
           <button class="btn-open-cam" onclick="segOpenCamera()">📷 ABRIR CÁMARA</button>
+          <button id="segBtnNfc" class="btn-open-cam" onclick="nfcLeer('seg')" style="display:none;background:var(--surface2);border:1px solid var(--border)">📡 NFC</button>
         </div>
         <div id="segActionsActive" class="scan-actions" style="display:none">
           <button class="btn-capture" id="segBtnCapture" onclick="segCaptureOCR()">OCR</button>
@@ -1623,6 +1624,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
       </div>
       <div id="herrCamActionsIdle" class="scan-actions">
         <button class="btn-open-cam" onclick="herrOpenCamera()">📷 ABRIR CÁMARA</button>
+        <button id="herrBtnNfc" class="btn-open-cam" onclick="nfcLeer('herr')" style="display:none;background:var(--surface2);border:1px solid var(--border)">📡 NFC</button>
       </div>
       <div id="herrCamActionsActive" class="scan-actions" style="display:none">
         <button class="btn-capture" id="herrBtnCapture" onclick="herrCaptureOCR()">OCR</button>
@@ -2621,6 +2623,9 @@ async function iniciarApp() {
     window._chatBadgeInterval = setInterval(checkChatBadge, 60000); // cada 1 min
   }
 
+  // NFC: muestra botones si el dispositivo lo soporta
+  nfcInit();
+
   // LED siempre activo desde que hay sesión
   checkConnection();
   if (!window._connInterval) {
@@ -2920,6 +2925,9 @@ window.mostrarWizard       = mostrarWizard;
 window.wizardNext          = wizardNext;
 window.wizardSkip          = wizardSkip;
 window.wizardFinish        = wizardFinish;
+window.nfcLeer             = nfcLeer;
+window.nfcDetener          = nfcDetener;
+window.nfcEscribir         = nfcEscribir;
 window.docsEmpresaSubir    = docsEmpresaSubir;
 window.docsEmpresaBorrar   = docsEmpresaBorrar;
 window.docsNuevaCarpeta    = docsNuevaCarpeta;
@@ -3459,6 +3467,95 @@ function setScanMode(mode) {
 let segStream = null;
 let segQRLoop = null;
 let segScanActive = false;
+
+// ── NFC (NEW-12) ─────────────────────────────────────────────────────────────
+let _nfcReader   = null;
+let _nfcScanning = false;
+
+function nfcInit() {
+  // Muestra botones NFC solo si la API está disponible (Chrome Android 89+)
+  if (!('NDEFReader' in window)) return;
+  const ids = ['segBtnNfc', 'herrBtnNfc'];
+  ids.forEach(id => { const el = document.getElementById(id); if (el) el.style.display = ''; });
+}
+
+async function nfcLeer(contexto) {
+  if (!('NDEFReader' in window)) { toast('📡 NFC no disponible en este dispositivo', 'err'); return; }
+  if (_nfcScanning) { nfcDetener(); return; }
+  try {
+    _nfcReader   = new NDEFReader();
+    _nfcScanning = true;
+    const btnId = contexto === 'seg' ? 'segBtnNfc' : 'herrBtnNfc';
+    const btn = document.getElementById(btnId);
+    if (btn) { btn.textContent = '🔴 Detener NFC'; btn.style.background = 'var(--accent)'; }
+    toast('📡 Acerca un tag NFC al teléfono...');
+
+    await _nfcReader.scan();
+    _nfcReader.addEventListener('reading', ({ message }) => {
+      let codigo = null;
+      for (const record of message.records) {
+        if (record.recordType === 'text') {
+          const decoder = new TextDecoder(record.encoding || 'utf-8');
+          codigo = decoder.decode(record.data).trim();
+          break;
+        }
+        if (record.recordType === 'url') {
+          const decoder = new TextDecoder();
+          const url = decoder.decode(record.data);
+          // Extrae el código del final de la URL si tiene formato /scan/CODIGO
+          const m = url.match(/[?#/]([A-Z0-9\-]+)$/i);
+          codigo = m ? m[1].toUpperCase() : url;
+          break;
+        }
+      }
+      if (!codigo) { toast('❌ Tag NFC sin datos de código', 'err'); return; }
+      nfcDetener(contexto);
+      toast('📡 NFC: ' + codigo);
+      if (contexto === 'seg') {
+        document.getElementById('segMatInput').value = codigo;
+        segBuscarMaquina();
+      } else if (contexto === 'herr') {
+        if (typeof herrOnCode === 'function') herrOnCode(codigo);
+        else { const el = document.getElementById('herrSerie'); if (el) el.value = codigo; }
+      }
+    });
+
+    _nfcReader.addEventListener('readingerror', () => {
+      toast('❌ Error al leer el tag NFC', 'err');
+      nfcDetener(contexto);
+    });
+  } catch (e) {
+    _nfcScanning = false;
+    if (e.name === 'NotAllowedError') toast('❌ Permiso NFC denegado', 'err');
+    else if (e.name === 'NotSupportedError') toast('❌ NFC no soportado', 'err');
+    else toast('❌ Error NFC: ' + (e.message || e.name), 'err');
+  }
+}
+
+function nfcDetener(contexto) {
+  _nfcScanning = false;
+  _nfcReader   = null;
+  const ids = contexto === 'seg' ? ['segBtnNfc'] : contexto === 'herr' ? ['herrBtnNfc'] : ['segBtnNfc', 'herrBtnNfc'];
+  ids.forEach(id => {
+    const btn = document.getElementById(id);
+    if (btn) { btn.textContent = '📡 NFC'; btn.style.background = ''; }
+  });
+}
+
+async function nfcEscribir(codigo) {
+  if (!('NDEFReader' in window)) { toast('📡 NFC no disponible en este dispositivo', 'err'); return; }
+  if (!confirm('Escribir código "' + codigo + '" en el tag NFC. ¿Continuar?')) return;
+  try {
+    const writer = new NDEFReader();
+    toast('📡 Acerca el tag NFC para escribir...');
+    await writer.write({ records: [{ recordType: 'text', data: codigo }] });
+    toast('✅ Tag NFC escrito: ' + codigo);
+  } catch (e) {
+    if (e.name === 'NotAllowedError') toast('❌ Permiso NFC denegado', 'err');
+    else toast('❌ Error al escribir NFC: ' + (e.message || e.name), 'err');
+  }
+}
+// ─────────────────────────────────────────────────────────────────────────────
 
 async function segOpenCamera() {
   try {
@@ -7030,7 +7127,7 @@ async function cargarObrasSelectUsuario() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '4.91';
+const APP_VERSION = '4.92';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
