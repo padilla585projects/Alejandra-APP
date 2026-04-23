@@ -554,6 +554,10 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
   <div class="user-chip" id="headerUserChip">
     <span>👤</span><span id="headerUserName">—</span>
   </div>
+  <button class="notif-bell" id="btnChat" onclick="chatAbrir()" style="display:none" title="Chat">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+    <span class="notif-badge" id="chatBadge" style="display:none">0</span>
+  </button>
   <button class="notif-bell" id="btnNotif" onclick="abrirNotificaciones()" style="display:none" title="Notificaciones">
     🔔<span class="notif-badge" id="notifBadge" style="display:none">0</span>
   </button>
@@ -570,6 +574,24 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
     </div>
   </div>
   <div id="notifList" style="flex:1;overflow-y:auto"></div>
+</div>
+
+<!-- Panel Chat (NEW-08) -->
+<div id="chatPanel" style="display:none;position:fixed;inset:0;z-index:1050;background:var(--bg);flex-direction:column">
+  <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--border);flex-shrink:0">
+    <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:15px">💬 Chat del equipo</div>
+    <button onclick="chatCerrar()" style="background:var(--surface2);border:none;border-radius:50%;width:32px;height:32px;font-size:18px;cursor:pointer;color:var(--text)">×</button>
+  </div>
+  <div id="chatList" style="flex:1;overflow-y:auto;padding:12px 16px;display:flex;flex-direction:column;gap:8px">
+    <div style="text-align:center;color:var(--muted);font-size:13px;padding:20px">Cargando mensajes...</div>
+  </div>
+  <div style="flex-shrink:0;padding:10px 12px;border-top:1px solid var(--border);display:flex;gap:8px;align-items:flex-end">
+    <textarea id="chatInput" placeholder="Escribe un mensaje..." rows="1"
+      style="flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:10px 14px;font-size:14px;color:var(--text);resize:none;line-height:1.4;max-height:100px;outline:none"
+      onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();chatEnviar()}"
+      oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,100)+'px'"></textarea>
+    <button onclick="chatEnviar()" class="login-btn" style="margin:0;width:44px;height:44px;padding:0;border-radius:12px;flex-shrink:0;font-size:18px">➤</button>
+  </div>
 </div>
 
 <!-- ══════════════════════════════════════════
@@ -2232,9 +2254,12 @@ function cerrarSesion() {
     }).catch(() => {});
   }
   localStorage.removeItem('alejandra_session');
-  if (window._connInterval)  { clearInterval(window._connInterval);  window._connInterval  = null; }
-  if (window._notifInterval) { clearInterval(window._notifInterval); window._notifInterval = null; }
-  const btnN = document.getElementById('btnNotif'); if (btnN) btnN.style.display = 'none';
+  if (window._connInterval)       { clearInterval(window._connInterval);       window._connInterval       = null; }
+  if (window._notifInterval)      { clearInterval(window._notifInterval);      window._notifInterval      = null; }
+  if (window._chatBadgeInterval)  { clearInterval(window._chatBadgeInterval);  window._chatBadgeInterval  = null; }
+  const btnN = document.getElementById('btnNotif');  if (btnN)  btnN.style.display  = 'none';
+  const btnCh = document.getElementById('btnChat');  if (btnCh) btnCh.style.display = 'none';
+  chatCerrar();
   cerrarNotificaciones();
   closeCamera();
   segCloseCamera();
@@ -2586,6 +2611,14 @@ async function iniciarApp() {
   checkNotifBadge();
   if (!window._notifInterval) {
     window._notifInterval = setInterval(checkNotifBadge, 180000); // cada 3 min (batería)
+  }
+
+  // Botón Chat
+  const btnChatEl = document.getElementById('btnChat');
+  if (btnChatEl) btnChatEl.style.display = 'flex';
+  checkChatBadge();
+  if (!window._chatBadgeInterval) {
+    window._chatBadgeInterval = setInterval(checkChatBadge, 60000); // cada 1 min
   }
 
   // LED siempre activo desde que hay sesión
@@ -6505,6 +6538,124 @@ function copiarCodigo() {
 // ══════════════════════════════════════════════════════
 const NOTIF_SEEN_KEY = 'alejandra_notif_seen';
 
+// ── CHAT INTERNO (NEW-08) ────────────────────────────────────────────────────
+const CHAT_SEEN_KEY   = 'alejandra_chat_seen';
+let _chatInterval     = null;
+let _chatLastTs       = null;
+let _chatOpen         = false;
+
+function chatAbrir() {
+  _chatOpen = true;
+  const panel = document.getElementById('chatPanel');
+  if (panel) panel.style.display = 'flex';
+  localStorage.setItem(CHAT_SEEN_KEY, new Date().toISOString());
+  document.getElementById('chatBadge').style.display = 'none';
+  chatCargar();
+  if (!_chatInterval) _chatInterval = setInterval(chatPoll, 15000);
+}
+
+function chatCerrar() {
+  _chatOpen = false;
+  const panel = document.getElementById('chatPanel');
+  if (panel) panel.style.display = 'none';
+  clearInterval(_chatInterval); _chatInterval = null;
+}
+
+async function chatCargar() {
+  const list = document.getElementById('chatList');
+  if (!list) return;
+  try {
+    const res  = await apiCall('/chat?limit=60');
+    const data = await res.json();
+    if (!data.ok || !data.mensajes) { list.innerHTML = '<div style="color:var(--muted);text-align:center;padding:20px;font-size:13px">❌ Error al cargar mensajes</div>'; return; }
+    _chatLastTs = data.mensajes.length ? data.mensajes[data.mensajes.length - 1].created_at : null;
+    _chatRenderMensajes(data.mensajes, false);
+  } catch { list.innerHTML = '<div style="color:var(--muted);text-align:center;padding:20px;font-size:13px">❌ Sin conexión</div>'; }
+}
+
+async function chatPoll() {
+  if (!_chatOpen || !_chatLastTs) return;
+  try {
+    const res  = await apiCall('/chat?since=' + encodeURIComponent(_chatLastTs));
+    const data = await res.json();
+    if (!data.ok || !data.mensajes?.length) return;
+    _chatLastTs = data.mensajes[data.mensajes.length - 1].created_at;
+    _chatRenderMensajes(data.mensajes, true); // append
+  } catch {}
+}
+
+function _chatRenderMensajes(msgs, append) {
+  const list = document.getElementById('chatList');
+  if (!list) return;
+  const s = getSession();
+  const esAdmin = s?.rol === 'superadmin' || s?.rol === 'empresa_admin';
+  if (!append) list.innerHTML = '';
+  if (!msgs.length && !append) {
+    list.innerHTML = '<div style="color:var(--muted);text-align:center;padding:32px;font-size:13px">Sin mensajes. ¡Sé el primero en escribir!</div>';
+    return;
+  }
+  msgs.forEach(m => {
+    const esMio = s && (m.usuario_id == s.usuario_id || m.usuario_nombre === s.nombre);
+    const puedeBorrar = esMio || esAdmin;
+    const hora = new Date(m.created_at).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+    const fecha = new Date(m.created_at).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit' });
+    const div = document.createElement('div');
+    div.style.cssText = `display:flex;flex-direction:column;align-items:${esMio ? 'flex-end' : 'flex-start'}`;
+    div.innerHTML = `
+      <div style="max-width:80%;background:${esMio ? 'var(--accent)' : 'var(--surface2)'};color:${esMio ? '#fff' : 'var(--text)'};border-radius:${esMio ? '16px 16px 4px 16px' : '16px 16px 16px 4px'};padding:8px 12px;font-size:14px;line-height:1.4">
+        ${!esMio ? `<div style="font-size:11px;font-weight:700;opacity:.7;margin-bottom:2px">${_escHtml(m.usuario_nombre)}</div>` : ''}
+        <div>${_escHtml(m.mensaje)}</div>
+      </div>
+      <div style="font-size:10px;color:var(--muted);margin-top:2px;display:flex;gap:6px;align-items:center">
+        <span>${fecha} ${hora}</span>
+        ${puedeBorrar ? `<button onclick="chatBorrar(${m.id})" style="background:none;border:none;color:var(--muted);font-size:10px;cursor:pointer;padding:0">🗑</button>` : ''}
+      </div>`;
+    list.appendChild(div);
+  });
+  // Scroll al final
+  list.scrollTop = list.scrollHeight;
+}
+
+function _escHtml(t) {
+  return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+async function chatEnviar() {
+  const input = document.getElementById('chatInput');
+  const msg   = (input?.value || '').trim();
+  if (!msg) return;
+  input.value = '';
+  input.style.height = 'auto';
+  try {
+    const res = await apiCall('/chat', { method: 'POST', body: JSON.stringify({ mensaje: msg }) });
+    if (res.ok) { chatPoll(); } // recarga inmediata
+    else { toast('❌ Error al enviar', 'err'); input.value = msg; }
+  } catch { toast('❌ Sin conexión', 'err'); input.value = msg; }
+}
+
+async function chatBorrar(id) {
+  if (!confirm('¿Eliminar este mensaje?')) return;
+  const res = await apiCall('/chat/' + id, { method: 'DELETE' });
+  if (res.ok) {
+    // Recarga
+    _chatLastTs = null;
+    chatCargar();
+  } else toast('❌ Error al borrar', 'err');
+}
+
+async function checkChatBadge() {
+  const s = getSession();
+  if (!s || _chatOpen) return;
+  const lastSeen = localStorage.getItem(CHAT_SEEN_KEY) || '1970-01-01T00:00:00';
+  try {
+    const res  = await apiCall('/chat?since=' + encodeURIComponent(lastSeen) + '&limit=1');
+    const data = await res.json();
+    const badge = document.getElementById('chatBadge');
+    if (badge) badge.style.display = (data.mensajes?.length > 0) ? 'flex' : 'none';
+  } catch {}
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
 function abrirNotificaciones() {
   const panel = document.getElementById('notifPanel');
   if (!panel) return;
@@ -6879,7 +7030,7 @@ async function cargarObrasSelectUsuario() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '4.90';
+const APP_VERSION = '4.91';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -8707,15 +8858,24 @@ if ('serviceWorker' in navigator) {
       if (getSession()) {
         checkNotifBadge();
         checkConnection();
-        if (window._notifInterval) { clearInterval(window._notifInterval); window._notifInterval = setInterval(checkNotifBadge, 180000); }
-        if (window._connInterval)  { clearInterval(window._connInterval);  window._connInterval  = setInterval(checkConnection,  120000); }
+        checkChatBadge();
+        if (window._notifInterval)     { clearInterval(window._notifInterval);     window._notifInterval     = setInterval(checkNotifBadge, 180000); }
+        if (window._connInterval)      { clearInterval(window._connInterval);      window._connInterval      = setInterval(checkConnection,  120000); }
+        if (window._chatBadgeInterval) { clearInterval(window._chatBadgeInterval); window._chatBadgeInterval = setInterval(checkChatBadge,   60000); }
       }
     } else {
       // Al ir a background: pausa todos los intervalos periódicos
-      clearInterval(window._notifInterval); window._notifInterval = null;
-      clearInterval(window._connInterval);  window._connInterval  = null;
+      clearInterval(window._notifInterval);     window._notifInterval     = null;
+      clearInterval(window._connInterval);      window._connInterval      = null;
+      clearInterval(window._chatBadgeInterval); window._chatBadgeInterval = null;
     }
   });
+
+  // ── Chat (NEW-08) ────────────────────────────────────────────────────────
+  window.chatAbrir   = chatAbrir;
+  window.chatCerrar  = chatCerrar;
+  window.chatEnviar  = chatEnviar;
+  window.chatBorrar  = chatBorrar;
 
   // ── Exponer funciones async al scope global ──────────────────────────────
   // Las async function dentro de bloques if no se hoistean al scope global en Chrome.

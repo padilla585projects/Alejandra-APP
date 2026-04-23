@@ -513,6 +513,14 @@ export default {
         if (method === 'DELETE') return await eliminarPersonalExterno(peid, request, env);
       }
 
+      // ── Chat interno (NEW-08) ─────────────────────────────────────────────
+      if (path === '/chat' && method === 'GET')    return await getChatMensajes(request, env);
+      if (path === '/chat' && method === 'POST')   return await enviarChatMensaje(request, env);
+      if (path.startsWith('/chat/') && method === 'DELETE') {
+        const cmid = parseInt(path.split('/chat/')[1]);
+        return await borrarChatMensaje(cmid, request, env);
+      }
+
       // ── Otros (legacy/extras) ─────────────────────────────────────────────
       if (path === '/logs'         && method === 'GET')   return await getLogs(request, env);
       if (path === '/historial'    && method === 'GET')   return await getHistorial(request, env);
@@ -4167,6 +4175,66 @@ async function runMigrations(request, env) {
     )`).run();
     results.push('docs_notas: creada');
   } catch(e) { results.push('docs_notas: ' + e.message); }
+  // Tabla chat_mensajes
+  try {
+    await env.DB.prepare(`CREATE TABLE IF NOT EXISTS chat_mensajes (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      empresa_id  INTEGER NOT NULL,
+      obra_id     INTEGER,
+      usuario_id  INTEGER,
+      usuario_nombre TEXT NOT NULL,
+      rol         TEXT,
+      mensaje     TEXT NOT NULL,
+      created_at  TEXT DEFAULT (datetime('now'))
+    )`).run();
+    results.push('chat_mensajes: creada');
+  } catch(e) { results.push('chat_mensajes: ' + e.message); }
   return json({ ok: true, results });
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// CHAT INTERNO (NEW-08)
+// ══════════════════════════════════════════════════════════════════════════════
+
+async function getChatMensajes(request, env) {
+  const { empresa_id } = await getAuth(request, env);
+  const url    = new URL(request.url);
+  const limit  = Math.min(parseInt(url.searchParams.get('limit') || '60'), 100);
+  const since  = url.searchParams.get('since') || null; // ISO timestamp
+  let q, params;
+  if (since) {
+    q = 'SELECT * FROM chat_mensajes WHERE empresa_id = ? AND created_at > ? ORDER BY created_at ASC LIMIT ?';
+    params = [empresa_id, since, limit];
+  } else {
+    q = 'SELECT * FROM chat_mensajes WHERE empresa_id = ? ORDER BY created_at DESC LIMIT ?';
+    params = [empresa_id, limit];
+  }
+  const rows = await env.DB.prepare(q).bind(...params).all();
+  const msgs = since ? rows.results : rows.results.reverse();
+  return json({ ok: true, mensajes: msgs });
+}
+
+async function enviarChatMensaje(request, env) {
+  const auth = await getAuth(request, env);
+  const { empresa_id, usuario_id, nombre, rol } = auth;
+  const body = await request.json().catch(() => ({}));
+  const mensaje = (body.mensaje || '').trim();
+  if (!mensaje) return err('Mensaje vacío', 400);
+  if (mensaje.length > 500) return err('Mensaje demasiado largo (máx 500 caracteres)', 400);
+  const obra_id = body.obra_id || auth.obra_id || null;
+  await env.DB.prepare(
+    'INSERT INTO chat_mensajes (empresa_id, obra_id, usuario_id, usuario_nombre, rol, mensaje) VALUES (?,?,?,?,?,?)'
+  ).bind(empresa_id, obra_id, usuario_id || null, nombre || 'Usuario', rol || '', mensaje).run();
+  return json({ ok: true });
+}
+
+async function borrarChatMensaje(id, request, env) {
+  const { empresa_id, usuario_id, isSuperadmin, rol } = await getAuth(request, env);
+  const msg = await env.DB.prepare('SELECT * FROM chat_mensajes WHERE id = ? AND empresa_id = ?').bind(id, empresa_id).first();
+  if (!msg) return err('Mensaje no encontrado', 404);
+  // Solo puede borrar el autor o superadmin/empresa_admin
+  if (!isSuperadmin && rol !== 'empresa_admin' && msg.usuario_id !== usuario_id) return err('No autorizado', 403);
+  await env.DB.prepare('DELETE FROM chat_mensajes WHERE id = ?').bind(id).run();
+  return json({ ok: true });
 }
 
