@@ -318,9 +318,65 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
 #moduleScreen{display:none;flex-direction:column;height:100%}
 #moduleScreen.active{display:flex}
 #moduleScreen .mod-content{flex:1;overflow-y:auto}
+
+/* ── WIZARD BIENVENIDA (NEW-02) ── */
+.wiz-slide{flex-direction:column;align-items:center;justify-content:center;gap:20px;padding:40px 32px;width:100%;height:100%;text-align:center;animation:wizFadeIn .3s ease}
+@keyframes wizFadeIn{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
+.wiz-icon{display:flex;align-items:center;justify-content:center;margin-bottom:8px}
+.wiz-title{font-size:26px;font-weight:700;color:var(--text);line-height:1.2}
+.wiz-sub{font-size:15px;color:var(--muted);line-height:1.6;max-width:320px}
+.wiz-dot{width:8px;height:8px;border-radius:50%;background:var(--border);transition:background .3s,width .3s}
+.wiz-dot.active{background:var(--accent);width:22px;border-radius:4px}
 </style>
 </head>
 <body>
+
+<!-- ══════════════════════════════════════════
+     WIZARD DE BIENVENIDA (NEW-02)
+══════════════════════════════════════════ -->
+<div id="wizardOverlay" style="display:none;position:fixed;inset:0;background:var(--bg);z-index:10000;flex-direction:column;align-items:center;justify-content:space-between;padding:0;overflow:hidden">
+  <!-- Slides container -->
+  <div id="wizardSlides" style="flex:1;width:100%;overflow:hidden;position:relative">
+    <!-- Slide 0 -->
+    <div class="wiz-slide" id="wizSlide0" style="display:flex">
+      <div class="wiz-icon">
+        <svg width="90" height="90" viewBox="0 0 512 512" fill="none"><rect width="512" height="512" rx="90" fill="#162032"/><path d="M60 148V60h88" stroke="#2563eb" stroke-width="26" stroke-linecap="round" stroke-linejoin="round"/><path d="M452 148V60h-88" stroke="#2563eb" stroke-width="26" stroke-linecap="round" stroke-linejoin="round"/><path d="M60 364v88h88" stroke="#2563eb" stroke-width="26" stroke-linecap="round" stroke-linejoin="round"/><path d="M452 364v88h-88" stroke="#2563eb" stroke-width="26" stroke-linecap="round" stroke-linejoin="round"/><path d="M256 88L148 424h44l30-88h68l30 88h44L256 88ZM256 168l50 128h-100Z" fill="#f97316"/></svg>
+      </div>
+      <div class="wiz-title">Bienvenido a Alejandra</div>
+      <div class="wiz-sub">Gestión completa de tu obra desde el móvil. Inventario, maquinaria y control en una sola app.</div>
+    </div>
+    <!-- Slide 1 -->
+    <div class="wiz-slide" id="wizSlide1" style="display:none">
+      <div class="wiz-icon" style="font-size:72px">📦</div>
+      <div class="wiz-title">Inventario completo</div>
+      <div class="wiz-sub">Bobinas, PEMP, carretillas, herramientas y material de seguridad. Todo en tiempo real para toda tu obra.</div>
+    </div>
+    <!-- Slide 2 -->
+    <div class="wiz-slide" id="wizSlide2" style="display:none">
+      <div class="wiz-icon" style="font-size:72px">📷</div>
+      <div class="wiz-title">Escanea y controla</div>
+      <div class="wiz-sub">Lector QR y OCR integrado. Identifica cualquier equipo al instante y consulta su historial completo.</div>
+    </div>
+    <!-- Slide 3 -->
+    <div class="wiz-slide" id="wizSlide3" style="display:none">
+      <div class="wiz-icon" style="font-size:72px">🚀</div>
+      <div class="wiz-title">¡Todo listo!</div>
+      <div class="wiz-sub">Introduce tu código de acceso o crea una cuenta nueva para empezar a gestionar tu obra.</div>
+    </div>
+  </div>
+  <!-- Dots -->
+  <div id="wizDots" style="display:flex;gap:8px;padding:16px 0">
+    <div class="wiz-dot active" id="wizDot0"></div>
+    <div class="wiz-dot" id="wizDot1"></div>
+    <div class="wiz-dot" id="wizDot2"></div>
+    <div class="wiz-dot" id="wizDot3"></div>
+  </div>
+  <!-- Actions -->
+  <div style="width:100%;max-width:400px;padding:0 24px 40px;display:flex;flex-direction:column;gap:10px">
+    <button id="wizBtnNext" onclick="wizardNext()" class="login-btn" style="margin:0">Siguiente</button>
+    <button onclick="wizardSkip()" style="background:none;border:none;color:var(--muted);font-size:13px;padding:8px;cursor:pointer">Saltar introducción</button>
+  </div>
+</div>
 
 <!-- ══════════════════════════════════════════
      LOGIN OVERLAY
@@ -2231,6 +2287,46 @@ function toggleLoginPw() {
   else { inp.type = 'password'; btn.textContent = '👁'; }
 }
 
+// ── WIZARD DE BIENVENIDA (NEW-02) ──────────────────────────────────────
+let _wizStep = 0;
+const WIZ_TOTAL = 4;
+const WIZ_KEY   = 'alejandra_onboarding_done';
+
+function mostrarWizard() {
+  _wizStep = 0;
+  _wizRenderStep();
+  document.getElementById('wizardOverlay').style.display = 'flex';
+}
+
+function _wizRenderStep() {
+  for (let i = 0; i < WIZ_TOTAL; i++) {
+    const s = document.getElementById('wizSlide' + i);
+    const d = document.getElementById('wizDot' + i);
+    if (s) s.style.display = (i === _wizStep) ? 'flex' : 'none';
+    if (d) { d.classList.toggle('active', i === _wizStep); }
+  }
+  const btn = document.getElementById('wizBtnNext');
+  if (btn) btn.textContent = (_wizStep === WIZ_TOTAL - 1) ? '¡Empezar!' : 'Siguiente';
+}
+
+function wizardNext() {
+  if (_wizStep < WIZ_TOTAL - 1) {
+    _wizStep++;
+    _wizRenderStep();
+  } else {
+    wizardFinish();
+  }
+}
+
+function wizardSkip() { wizardFinish(); }
+
+function wizardFinish() {
+  localStorage.setItem(WIZ_KEY, '1');
+  document.getElementById('wizardOverlay').style.display = 'none';
+  document.getElementById('loginOverlay').style.display = 'flex';
+}
+// ────────────────────────────────────────────────────────────────────────
+
 async function doLogin() {
   const nombre = document.getElementById('loginNombre').value.trim();
   const codigo = document.getElementById('loginCodigo').value.trim();
@@ -2456,10 +2552,15 @@ let currentModule = (()=>{ try { return JSON.parse(localStorage.getItem('alejand
 async function iniciarApp() {
   const s = getSession();
   if (!s) {
-    document.getElementById('loginOverlay').style.display = 'flex';
     document.getElementById('mainHeader').style.display = 'none';
     document.getElementById('appContent').style.display = 'none';
     document.getElementById('bottomNav').style.display = 'none';
+    // NEW-02: wizard primera vez
+    if (!localStorage.getItem(WIZ_KEY)) {
+      mostrarWizard();
+    } else {
+      document.getElementById('loginOverlay').style.display = 'flex';
+    }
     return;
   }
 
@@ -2782,6 +2883,10 @@ async function guardarDeptosEmpresa() {
   } catch { toast('❌ Error de red', 'err'); }
 }
 window.guardarDeptosEmpresa = guardarDeptosEmpresa;
+window.mostrarWizard       = mostrarWizard;
+window.wizardNext          = wizardNext;
+window.wizardSkip          = wizardSkip;
+window.wizardFinish        = wizardFinish;
 window.docsEmpresaSubir    = docsEmpresaSubir;
 window.docsEmpresaBorrar   = docsEmpresaBorrar;
 window.docsNuevaCarpeta    = docsNuevaCarpeta;
@@ -6774,7 +6879,7 @@ async function cargarObrasSelectUsuario() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '4.89';
+const APP_VERSION = '4.90';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
