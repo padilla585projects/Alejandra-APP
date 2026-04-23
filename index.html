@@ -2484,13 +2484,13 @@ async function iniciarApp() {
   if (btnNotif) btnNotif.style.display = 'flex';
   checkNotifBadge();
   if (!window._notifInterval) {
-    window._notifInterval = setInterval(checkNotifBadge, 60000);
+    window._notifInterval = setInterval(checkNotifBadge, 180000); // cada 3 min (batería)
   }
 
   // LED siempre activo desde que hay sesión
   checkConnection();
   if (!window._connInterval) {
-    window._connInterval = setInterval(checkConnection, 30000);
+    window._connInterval = setInterval(checkConnection, 120000); // cada 2 min (batería)
   }
 
   const esSuperAdmin   = s.rol === 'superadmin';
@@ -2868,10 +2868,7 @@ async function checkConnection() {
     if (r.ok) { dot.className = 'conn-dot ok'; }
     else { dot.className = 'conn-dot err'; }
   } catch { dot.className = 'conn-dot err'; }
-  // SW update check
-  if (navigator.serviceWorker.controller) {
-    navigator.serviceWorker.ready.then(reg => reg.update());
-  }
+  // SW update: gestionado por el intervalo de 5 min y visibilitychange
 }
 
 // ══════════════════════════════════════════════════════
@@ -5845,7 +5842,7 @@ function selAjTab(tab) {
     if (_secInv) { _secInv.style.display = _puedeInv ? '' : 'none'; if (_puedeInv) cargarInvitaciones(); }
   }
   if (tab === 'obras')     cargarObrasAdmin();
-  if (tab === 'ideas')     { cargarSugerenciasAdmin(); _ideasRefreshTimer = setInterval(cargarSugerenciasAdmin, 30000); }
+  if (tab === 'ideas')     { cargarSugerenciasAdmin(); _ideasRefreshTimer = setInterval(cargarSugerenciasAdmin, 60000); } // 1 min (antes 30s)
   if (tab === 'sistema')   { renderAjustesInfo(); checkConnection(); }
   if (tab === 'empresa')   cargarPanelEmpresa();
 }
@@ -6777,7 +6774,7 @@ async function cargarObrasSelectUsuario() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '4.88';
+const APP_VERSION = '4.89';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -6810,9 +6807,9 @@ async function checkVersionAndUpdate() {
   } catch {}
 }
 
-// Lanza el chequeo al arrancar y cada 30 segundos
+// Lanza el chequeo al arrancar y cada 5 minutos (antes 30s — BUG-009 batería)
 checkVersionAndUpdate();
-setInterval(checkVersionAndUpdate, 30 * 1000);
+setInterval(checkVersionAndUpdate, 5 * 60 * 1000);
 
 // Banner "App actualizada a vX.XX" — aparece tras recarga automática
 (function() {
@@ -6887,8 +6884,7 @@ if ('serviceWorker' in navigator) {
 
   navigator.serviceWorker.register('sw.js').then(reg => {
     reg.update();
-    // Comprueba SW nuevo cada 30 s (sincronizado con checkVersionAndUpdate)
-    setInterval(() => reg.update(), 30 * 1000);
+    // Un solo chequeo SW cada 5 min + visibilitychange (evita radio wake-ups — BUG-009)
 
     if (reg.waiting) reg.waiting.postMessage({ tipo: 'SKIP_WAITING' });
 
@@ -8597,10 +8593,22 @@ if ('serviceWorker' in navigator) {
 
   navigator.serviceWorker.addEventListener('controllerchange', recargarApp);
 
+  // BUG-009: pausa polling en background, reanuda al volver al frente
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') {
+      // Al volver: chequeo inmediato + reinicia intervalos
       navigator.serviceWorker.getRegistration().then(reg => reg?.update());
-      checkVersionAndUpdate(); // también chequea versión al volver a la app
+      checkVersionAndUpdate();
+      if (getSession()) {
+        checkNotifBadge();
+        checkConnection();
+        if (window._notifInterval) { clearInterval(window._notifInterval); window._notifInterval = setInterval(checkNotifBadge, 180000); }
+        if (window._connInterval)  { clearInterval(window._connInterval);  window._connInterval  = setInterval(checkConnection,  120000); }
+      }
+    } else {
+      // Al ir a background: pausa todos los intervalos periódicos
+      clearInterval(window._notifInterval); window._notifInterval = null;
+      clearInterval(window._connInterval);  window._connInterval  = null;
     }
   });
 
