@@ -5,7 +5,7 @@
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 23/04/2026
-VERSIÓN ACTUAL: v4.19 app vieja | v4.87 app nueva
+VERSIÓN ACTUAL: v4.19 app vieja | v4.92 app nueva
 
 ⚠️  ANTES DE CODIFICAR: leer NuevaApp/IDEAS_PENDIENTES.txt
     Lista completa de bugs activos, mejoras y features pendientes.
@@ -91,6 +91,48 @@ Backup local: <RUTA_BASE>\backup_db_20260413.sql
 ================================================================================
   HISTORIAL DE VERSIONES
 ================================================================================
+
+v4.92  |  23/04/2026  [SOLO NUEVA APP]
+  - NEW-12: soporte NFC en pestaña Escanear
+    · Botón 📡 NFC visible solo si el dispositivo lo soporta (Chrome Android 89+)
+    · Leer: lee tag NFC → busca matrícula/serie automáticamente
+    · Escribir: nfcEscribir(codigo) → escribe código en tag NFC
+    · Disponible en pantalla Seguridad y Herramientas
+    · Soporta records tipo "text" y "url" en tags NFC
+  - GitHub actualizado ✅
+
+v4.91  |  23/04/2026  [SOLO NUEVA APP]
+  - NEW-08: chat interno entre empleados de la misma empresa
+    · Panel 💬 deslizable (botón en header)
+    · Mensajes en burbuja tipo WhatsApp (propios derecha, ajenos izquierda)
+    · Polling 15s cuando el panel está abierto; badge 1 min en background
+    · Worker: GET/POST/DELETE /chat + tabla D1 chat_mensajes
+    · Pausa al ir a background (ya integrado con BUG-009)
+  - Worker y GitHub actualizados ✅
+
+v4.90  |  23/04/2026  [SOLO NUEVA APP]
+  - NEW-02: wizard de bienvenida (onboarding primera vez)
+    · 4 slides: Bienvenida, Inventario, Escanea, ¡Empieza!
+    · Dots de progreso + botón Saltar
+    · Solo aparece la primera vez (localStorage alejandra_onboarding_done)
+    · Al finalizar → abre loginOverlay normalmente
+  - GitHub actualizado ✅
+
+v4.89  |  23/04/2026  [SOLO NUEVA APP]
+  - BUG-009: reducción drástica de consumo de batería
+    · checkNotifBadge: 60s → 180s (3 min)
+    · checkConnection: 30s → 120s (2 min)
+    · checkVersionAndUpdate: 30s → 300s (5 min)
+    · Eliminado reg.update() cada 30s (quedó solo el de 5 min + visibilitychange)
+    · Eliminado reg.update() dentro de checkConnection
+    · ideas refresh: 30s → 60s
+    · Page Visibility API: pausa todos los intervalos en background, reanuda al volver
+  - GitHub actualizado ✅
+
+v4.88  |  23/04/2026  [SOLO NUEVA APP]
+  - MEJ-137: renombrar carpetas Docs con botón ✏️ (docsRenombrarCarpeta)
+    · Disponible en carpetas raíz y subcarpetas
+  - GitHub actualizado ✅
 
 v4.87  |  23/04/2026  [SOLO NUEVA APP]
   - BUG: selector visual de obra (MEJ-149) solo visible para superadmin y empresa_admin

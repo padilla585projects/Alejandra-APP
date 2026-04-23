@@ -1,11 +1,11 @@
 {
   "worker": "alejandra-app-api",
-  "version": "v4.86",
+  "version": "v4.91",
   "deployed": "23/04/2026",
-  "version_id": "ecfb93d5-1c62-4251-b70d-cd835d7b3dca",
+  "version_id": "c0536ba9-fb21-4035-982d-da80fc49c343",
   "url": "https://alejandra-app-api.alejandra-app.workers.dev",
   "account_id": "d65ead2b2967bf68ff3848a36cd7b1b4",
   "d1_binding": "alejandra-db (0c9eccde-78f1-476d-ac68-bf452bec0c62)",
   "r2_binding": "alejandra-app-files",
-  "changes": "BUG-048 + MEJ-044/058/136/137/144/149/155"
+  "changes": "NEW-08 chat interno (GET/POST/DELETE /chat + tabla D1 chat_mensajes)"
 }

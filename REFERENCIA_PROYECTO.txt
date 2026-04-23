@@ -65,6 +65,21 @@ REGLA DE DEPLOY:
   - En ambos casos: subir versión + actualizar txts + deploy worker + git push
 
 ÚLTIMO CAMBIO REALIZADO:
+  v4.92 [nueva] — 23/04/2026
+  · NEW-12: NFC en Escanear (leer + escribir tags, Chrome Android 89+)
+
+  v4.91 [nueva] — 23/04/2026
+  · NEW-08: chat interno entre empleados (panel 💬, polling 15s, D1 chat_mensajes)
+
+  v4.90 [nueva] — 23/04/2026
+  · NEW-02: wizard de bienvenida primera vez (4 slides + dots)
+
+  v4.89 [nueva] — 23/04/2026
+  · BUG-009: polling reducido + pausa Page Visibility API (ahorro batería)
+
+  v4.88 [nueva] — 23/04/2026
+  · MEJ-137: renombrar carpetas Docs completo (botón ✏️, raíz + subcarpetas)
+
   v4.87 [nueva] — 23/04/2026
   · BUG: selector visual obra solo para superadmin/empresa_admin (no encargados)
 

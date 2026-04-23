@@ -175,9 +175,11 @@ LEYENDA DE ESTADO:
     · Hay que sustituirlo por uno coherente con el diseño actual.
     · Reportado: 16/04/2026 — Admin, empresa 1
 
-[ ] BUG-009 — App consume mucha batería en el móvil
-    · La app causa un consumo de batería elevado durante el uso.
-    · Revisar: polling, setInterval activos, listeners duplicados y workers en background.
+[✓] BUG-009 — App consume mucha batería en el móvil  [✓ HECHO v4.89]
+    · checkNotifBadge: 60s → 180s; checkConnection: 30s → 120s; checkVersionAndUpdate: 30s → 300s
+    · Eliminado reg.update() redundante cada 30s + el de checkConnection
+    · Ideas refresh: 30s → 60s
+    · Page Visibility API: pausa todos los intervalos cuando la app va a background
     · Reportado: 15/04/2026 — Admin, empresa 1
 
 [✓] BUG-151 — Número de versión descuadrado en tarjeta Documentación (#151 BD)  [HECHO v4.85]
@@ -375,12 +377,11 @@ LEYENDA DE ESTADO:
     · Requiere decisión: ¿mantener aislamiento por dept o dar visión global a Seguridad?
     · Reportado: 17/04/2026 — Admin, empresa 1
 
-[ ] NEW-02 — Wizard de bienvenida (onboarding primera vez)
-    · Al abrir la app por primera vez: wizard guiado.
-    · Pasos: configurar cuenta nueva o usuario existente,
-      elegir departamentos a usar (los no usados se ocultan),
-      vincular cuenta a datos de la empresa (Sheets, etc.).
-    · Cada empresa tiene sus propios datos aislados.
+[✓] NEW-02 — Wizard de bienvenida (onboarding primera vez)  [✓ HECHO v4.90]
+    · 4 slides animados: Bienvenida / Inventario / Escanea / Empieza
+    · Dots de progreso, botón Siguiente / Saltar
+    · Solo aparece si no existe localStorage "alejandra_onboarding_done"
+    · Al terminar guarda el flag y muestra loginOverlay normalmente
     · Reportado: 18/04/2026 — Adrian, CPD Getafe
 
 [✓] NEW-03 — Almacenamiento de datos por empresa  [HECHO v4.69]
@@ -532,16 +533,15 @@ LEYENDA DE ESTADO:
     · Estructura: empresa/obra/departamento igual que los archivos.
     · Reportado: 22/04/2026 — Adrian, CPD Getafe
 
-[~] MEJ-137 — Docs: renombrar y mover archivos y carpetas  [PARCIAL v4.86]
+[✓] MEJ-137 — Docs: renombrar y mover archivos y carpetas  [✓ HECHO v4.88]
     · [✓] Renombrar archivo + editar descripción: botón ✏️ + modal — v4.80
     · [✓] Mover archivo de una carpeta a otra (selector en modal editar) — v4.86
-    · [ ] Renombrar carpetas — pendiente
+    · [✓] Renombrar carpetas (botón ✏️ en raíz y subcarpetas) — v4.88
     · Reportado: 22/04/2026 — Adrian, CPD Getafe
 
-[ ] MEJ-138 — Botón "Disponible" en notificación Telegram al añadir herramienta
-    · Cuando se añade una herramienta nueva y se envía notificación a Telegram,
-      incluir botón inline [✅ Disponible] para marcar el estado directamente desde Telegram.
-    · El webhook procesa el callback y actualiza el campo estado='disponible' en D1.
+[✓] MEJ-138 — Botón "Disponible" en notificación Telegram al añadir herramienta  [✓ YA IMPLEMENTADO]
+    · Botón inline [✅ Disponible] en notificación Telegram al crear herramienta (worker.js línea 2273)
+    · Webhook callback herr_disp: actualiza estado='disponible' en D1 (worker.js línea 222-227)
     · Complementa MEJ-132 (Telegram bidireccional con botones inline).
     · Reportado: 22/04/2026 — Adrian, CPD Getafe
 
@@ -550,8 +550,10 @@ LEYENDA DE ESTADO:
     · docsCompartirCarpeta() implementado en v4.80.
     · Reportado: 22/04/2026 — Adrian, CPD Getafe
 
-[ ] NEW-08 — Chat interno entre empleados de la misma empresa
-    · Canal de chat dentro de la app, filtrado por empresa.
+[✓] NEW-08 — Chat interno entre empleados de la misma empresa  [✓ HECHO v4.91]
+    · Panel 💬 en header con badge de mensajes nuevos
+    · Burbujas tipo WhatsApp + polling 15s cuando abierto
+    · Worker: GET/POST/DELETE /chat; tabla D1 chat_mensajes
     · Reportado: 18/04/2026 — Adrian, CPD Getafe
 
 [✓] NEW-09 — Sistema de notificaciones in-app  [HECHO v4.38]
@@ -560,9 +562,11 @@ LEYENDA DE ESTADO:
     · Polling cada 60s. Badge desaparece al abrir el panel.
     · Reportado: 18/04/2026 — Adrian, CPD Getafe
 
-[ ] NEW-12 — Soporte NFC en pestaña Escanear (#113)
-    · Añadir opción para leer/escribir tags NFC al agregar o devolver equipos/herramientas.
-    · Complementario al QR y OCR ya existentes.
+[✓] NEW-12 — Soporte NFC en pestaña Escanear (#113)  [✓ HECHO v4.92]
+    · Botón 📡 NFC visible solo si NDEFReader disponible (Chrome Android 89+)
+    · Leer tag NFC → busca el código en Seguridad y Herramientas
+    · Escribir tag NFC con nfcEscribir(codigo)
+    · Soporta records "text" y "url"
     · Reportado: 20/04/2026 — Adrian, CPD Getafe
 
 [ ] NEW-10 — Planes de precios
