@@ -12,9 +12,10 @@
 AL INICIO DE CADA SESIÓN (cualquier ordenador, cualquier chat):
   1. Leer REFERENCIA_PROYECTO.txt (raíz del proyecto) — versiones y normas
   2. Leer NuevaApp/ESTADO_APP.txt — últimos cambios detallados
-  3. Leer Bobinaap/ESTADO_APP.txt — estado app vieja
-  4. ⚠️  Leer NuevaApp/IDEAS_PENDIENTES.txt — bugs y mejoras pendientes
-  → Con esos 4 archivos ya tienes el contexto completo para continuar
+  3. ⚠️  Leer NuevaApp/IDEAS_PENDIENTES.txt — bugs y mejoras pendientes
+  → Con esos 3 archivos ya tienes el contexto completo para continuar
+
+  ⚠️  La app vieja (Bobinaap) está CONGELADA — no recibe más desarrollo.
 
   IDEAS_PENDIENTES.txt: lista SIEMPRE actualizada de bugs, mejoras y features
   pendientes. Antes de codificar cualquier cosa, revisar si afecta a algún ítem
@@ -22,13 +23,15 @@ AL INICIO DE CADA SESIÓN (cualquier ordenador, cualquier chat):
 
 AL TERMINAR CUALQUIER CAMBIO DE CÓDIGO (obligatorio, sin excepción):
   Actualizar estos archivos y hacer push:
-  1. NuevaApp/ESTADO_APP.txt        → añadir entrada vX.XX + actualizar cabecera
+  1. NuevaApp/ESTADO_APP.txt          → añadir entrada vX.XX + actualizar cabecera
   2. NuevaApp/REFERENCIA_PROYECTO.txt → actualizar versiones + historial reciente
-  3. NuevaApp/IDEAS_PENDIENTES.txt  → marcar [✓ HECHO vX.XX] en los ítems resueltos
-  4. Bobinaap/ESTADO_APP.txt        → actualizar línea VERSIÓN ACTUAL
-  5. Bobinaap/REFERENCIA_PROYECTO.txt → actualizar versiones + historial reciente
-  6. REFERENCIA_PROYECTO.txt (raíz) → actualizar versiones + historial reciente
+  3. NuevaApp/IDEAS_PENDIENTES.txt    → marcar [✓ HECHO vX.XX] en los ítems resueltos
+  4. NuevaApp/worker_deploy_result.txt → actualizar si se desplegó worker
+  5. REFERENCIA_PROYECTO.txt (raíz)   → actualizar versiones + historial reciente
      ⚠️ Este archivo NO está en git — solo actualizar en local
+
+  (Bobinaap/ESTADO_APP.txt y Bobinaap/REFERENCIA_PROYECTO.txt ya no son necesarios
+   — la app vieja está congelada)
 
   ┌──────────────────────────────────────────────────────────────────────┐
   │  APP NUEVA  →  cuenta padilla585.projects@gmail.com                  │
@@ -70,10 +73,12 @@ SI CAMBIAS DE ORDENADOR:
      [ ] ¿Cambié ambos?  → deploy curl PRIMERO, luego git push
      Nunca cerrar una sesión sin haber hecho los dos pasos que correspondan.
 
-REGLA DE DEPLOY:
-  - BUGS      → ambas apps siempre (worker + frontend + push ambos repos)
+REGLA DE DEPLOY (actualizada 23/04/2026):
+  ⚠️  LA APP VIEJA (Bobinaap / padilla585@gmail.com) QUEDA CONGELADA.
+      Solo se trabaja en la APP NUEVA (Alejandra APP / padilla585.projects@gmail.com).
+  - BUGS      → solo app nueva
   - MEJORAS   → solo app nueva
-  - En ambos casos: subir versión + actualizar txts + deploy worker + git push
+  - En todos los casos: subir versión + actualizar txts + deploy worker si toca + git push
 
 ÚLTIMO CAMBIO REALIZADO:
   v4.92 [nueva] — 23/04/2026
