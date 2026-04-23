@@ -1,27 +1,11 @@
 {
-  "result": {
-    "created_on": "2026-04-15T18:04:28.201085Z",
-    "modified_on": "2026-04-21T23:09:20.133133Z",
-    "id": "alejandra-app-api",
-    "tag": "64464be239c44a68b83c0103bf854809",
-    "entry_point": "worker.js",
-    "tags": [],
-    "deployment_id": "b9f88a60074e4ded97d1716f4437bdf8",
-    "tail_consumers": null,
-    "logpush": false,
-    "has_assets": false,
-    "has_modules": true,
-    "etag": "7b518f182df37bd3046db16ef121011a5401a593177868c44ed83d9db5e733c0",
-    "handlers": [
-      "fetch",
-      "scheduled"
-    ],
-    "last_deployed_from": "api",
-    "compatibility_date": "2024-01-01",
-    "usage_model": "standard",
-    "startup_time_ms": 0
-  },
-  "success": true,
-  "errors": [],
-  "messages": []
+  "worker": "alejandra-app-api",
+  "version": "v4.86",
+  "deployed": "23/04/2026",
+  "version_id": "ecfb93d5-1c62-4251-b70d-cd835d7b3dca",
+  "url": "https://alejandra-app-api.alejandra-app.workers.dev",
+  "account_id": "d65ead2b2967bf68ff3848a36cd7b1b4",
+  "d1_binding": "alejandra-db (0c9eccde-78f1-476d-ac68-bf452bec0c62)",
+  "r2_binding": "alejandra-app-files",
+  "changes": "BUG-048 + MEJ-044/058/136/137/144/149/155"
 }

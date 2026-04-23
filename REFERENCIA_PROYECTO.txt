@@ -1,7 +1,7 @@
 ================================================================================
   ALEJANDRA APP — REFERENCIA COMPLETA DEL PROYECTO
   Leer este archivo AL INICIO de cada sesión para continuar sin problemas.
-  Última actualización: 21/04/2026
+  Última actualización: 23/04/2026
   ⚠️  NORMA: actualizar ESTE archivo + ESTADO_APP.txt después de CADA cambio.
 ================================================================================
 
@@ -65,11 +65,18 @@ REGLA DE DEPLOY:
   - En ambos casos: subir versión + actualizar txts + deploy worker + git push
 
 ÚLTIMO CAMBIO REALIZADO:
-  v4.75 [nueva] — 22/04/2026
-  · Fix bucle SW infinito: recargarApp() solo si newV !== APP_VERSION
-  · BUG-148: PUT /sesion/departamento sincroniza D1 al seleccionar dept (fix aislamiento inventario)
-  · BUG-147: botón 📍 en lista usuarios para asignar obra
-  · BUG-146: mensaje docs sin obra diferenciado por rol
+  v4.86 [nueva] — 23/04/2026
+  · BUG-048: icono SVG en botón Devolución (sustituye ↩ unicode fuera de estilo)
+  · MEJ-044: modal descripción completa al pulsar notas en cards de inventario
+  · MEJ-058: buscarMaquina busca también bobinas; buscarItemSeg filtra empresa_id
+  · MEJ-136: notas de texto editables en Docs (raíz y dentro de carpetas)
+  · MEJ-137: selector "Mover a carpeta" en modal editar archivo
+  · MEJ-144: subir archivos/fotos a raíz sin crear carpeta primero
+  · MEJ-149: selector visual de obra (cards grandes) tras elegir departamento
+  · MEJ-155: subcarpetas dentro de carpetas Docs, con navegación breadcrumb
+
+  v4.83 [nueva] — 22/04/2026
+  · Fix superadmin veía inventario de eléctrico al entrar como mecánicas
 
   v4.71 [nueva] — 22/04/2026
   · BUG-136: botón 👥 "Fichar Equipo" no respondía (funciones MEJ-128 sin exponer al scope global)
