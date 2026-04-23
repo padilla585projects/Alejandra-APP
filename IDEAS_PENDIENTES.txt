@@ -180,23 +180,23 @@ LEYENDA DE ESTADO:
     · Revisar: polling, setInterval activos, listeners duplicados y workers en background.
     · Reportado: 15/04/2026 — Admin, empresa 1
 
-[ ] BUG-151 — Número de versión descuadrado en tarjeta Documentación (#151 BD)
+[✓] BUG-151 — Número de versión descuadrado en tarjeta Documentación (#151 BD)  [HECHO v4.85]
     · En la tarjeta Documentación del home aparece un número (la versión) que no debería estar ahí.
     · Limpiar el versionBadge de esa pantalla o reposicionarlo.
     · Reportado: 22/04/2026 — Adrian, empresa 1
 
-[ ] BUG-152 — Botón "Atrás" no vuelve a la página anterior desde Documentación (#152 BD)
+[✓] BUG-152 — Botón "Atrás" no vuelve a la página anterior desde Documentación (#152 BD)  [HECHO v4.85]
     · Al estar en la pantalla de Docs y pulsar atrás, no navega al home.
     · Importante arreglar.
     · Reportado: 23/04/2026 — Adrian, CPD Getafe
 
-[ ] BUG-153 — Docs no actualiza al cambiar de obra, borrar o editar (#153 BD)
+[✓] BUG-153 — Docs no actualiza al cambiar de obra, borrar o editar (#153 BD)  [HECHO v4.85]
     · El módulo de Documentación no refresca su contenido cuando: se cambia la obra en el header,
       se borra un archivo/carpeta, o se edita un nombre.
     · Hay que forzar un reload de docsCargar() en cada una de esas acciones.
     · Reportado: 23/04/2026 — Adrian, CPD Getafe
 
-[ ] BUG-154 — Badge del icono de Ideas marca mal el número de pendientes (#154 BD)
+[✓] BUG-154 — Badge del icono de Ideas marca mal el número de pendientes (#154 BD)  [HECHO v4.85]
     · El contador del icono de Ideas en la barra de navegación no actualiza bien el estado.
     · A veces muestra un número incorrecto o no se pone a cero al marcar como leídas.
     · Reportado: 23/04/2026 — Adrian, CPD Getafe

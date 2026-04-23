@@ -5,7 +5,7 @@
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 23/04/2026
-VERSIÓN ACTUAL: v4.19 app vieja | v4.84 app nueva
+VERSIÓN ACTUAL: v4.19 app vieja | v4.85 app nueva
 
 ⚠️  ANTES DE CODIFICAR: leer NuevaApp/IDEAS_PENDIENTES.txt
     Lista completa de bugs activos, mejoras y features pendientes.
@@ -240,6 +240,20 @@ hotfix  |  20/04/2026  [SOLO NUEVA APP — migración DB sin cambio de código]
     · Fix: ALTER TABLE bobinas/pemp/carretillas ADD COLUMN registrado_por TEXT aplicado en D1
     · App vieja no afectada (ya tenía la columna desde antes)
     · Sin cambio de código ni deploy — solo migración directa en D1
+
+v4.85  |  23/04/2026  [SOLO NUEVA APP]
+  - BUG-152: botón "Atrás" no volvía al home desde Documentación
+    · navTo('docs') limpiaba _navHistory antes del bloque docs → historial vacío
+      Fix: docs tratado como pantalla secundaria (como sugerencias) — showScreen antes del clear
+  - BUG-153: Docs no actualizaba al cambiar de obra o tras editar/borrar
+    · _applyScreen('docs') no llamaba a docsCargar (solo showScreen lo hacía en navTo)
+      Fix: añadido docsCargar('screenDocsPanel') en _applyScreen para el caso 'docs'
+  - BUG-154: badge de Ideas mostraba número incorrecto al gestionar sugerencias
+    · cambiarEstadoSug y marcarLeida recargaban la lista pero no el badge del nav
+      Fix: añadido cargarBadgeIdeas() al final de ambas funciones
+  - BUG-151: número de versión descuadrado en tarjeta Documentación del home
+    · div versionBadge con position:absolute solapaba la tarjeta de Docs
+      Fix: eliminado el div versionBadge de screenHome
 
 v4.84  |  23/04/2026  [SOLO NUEVA APP]
   - BUG-156 (extendido a todos los usuarios): asignar obra no funcionaba para no-admins
