@@ -2650,7 +2650,7 @@ function seleccionarDepto(dept) {
   renderAjustesInfo();
   setupHomeModules();
   // MEJ-149: mostrar selector visual de obra para roles que pueden cambiarla
-  const puedeElegirObra = s.rol === 'superadmin' || s.rol === 'empresa_admin' || s.rol === 'encargado';
+  const puedeElegirObra = s.rol === 'superadmin' || s.rol === 'empresa_admin';
   if (puedeElegirObra) {
     mostrarSelectorObra(dept);
     return;
@@ -6760,7 +6760,7 @@ async function cargarObrasSelectUsuario() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '4.86';
+const APP_VERSION = '4.87';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
