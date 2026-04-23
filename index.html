@@ -620,6 +620,17 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
     </div>
   </div>
 
+  <!-- OBRA SELECTOR (MEJ-149) -->
+  <div id="screenObraSel" class="screen flex-screen" style="padding:0;height:100%;display:none">
+    <div style="padding:20px 16px 8px;text-align:center">
+      <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:20px;color:var(--text);margin-bottom:4px">🏗️ Selecciona obra</div>
+      <div style="font-size:12px;color:var(--muted);opacity:.8">¿En qué obra trabajas hoy?</div>
+    </div>
+    <div id="obraSelGrid" style="padding:8px 12px 12px;overflow-y:auto;flex:1;display:flex;flex-direction:column;gap:10px">
+      <div class="empty-state">Cargando...</div>
+    </div>
+  </div>
+
   <!-- HOME SCREEN -->
   <div id="screenHome" class="screen flex-screen active" style="padding:0;height:100%;position:relative">
     <div class="module-grid" style="flex:1">
@@ -726,8 +737,9 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
             ✅ ENTRADA
           </button>
           <button id="btnModoDevolucion" onclick="setScanMode('devolucion')"
-            class="sug-filter" style="flex:1;padding:10px;font-size:13px;font-family:'Montserrat',sans-serif;font-weight:900;letter-spacing:.5px">
-            ↩ DEVOLUCIÓN
+            class="sug-filter" style="flex:1;padding:10px;font-size:13px;font-family:'Montserrat',sans-serif;font-weight:900;letter-spacing:.5px;display:flex;align-items:center;justify-content:center;gap:6px">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/></svg>
+            DEVOLUCIÓN
           </button>
         </div>
         <div class="section-title" id="modScanTitle">ESCANEAR</div>
@@ -2117,6 +2129,17 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
   </div>
 </div>
 
+<!-- MODAL DESCRIPCIÓN COMPLETA (MEJ-044) -->
+<div class="modal-overlay" id="modalDescFull" onclick="if(event.target===this)cerrarDescFull()" style="align-items:flex-end">
+  <div class="modal" style="border-radius:20px 20px 0 0;max-height:70vh;width:100%;display:flex;flex-direction:column">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-shrink:0">
+      <div class="modal-title" style="margin-bottom:0;font-size:14px" id="descFullTitulo">Descripción</div>
+      <button onclick="cerrarDescFull()" style="background:var(--surface2);border:none;border-radius:50%;width:32px;height:32px;font-size:18px;cursor:pointer;color:var(--text)">×</button>
+    </div>
+    <div id="descFullContenido" style="overflow-y:auto;font-size:15px;line-height:1.7;color:var(--text);white-space:pre-wrap"></div>
+  </div>
+</div>
+
 <!-- TOAST -->
 <div class="toast" id="toast"></div>
 <div id="updatedBanner"></div>
@@ -2614,17 +2637,72 @@ function setupHomeModules() {
   if (cardDocs) cardDocs.style.display = 'flex';
 }
 
+let _pendingDept = null;
+
 function seleccionarDepto(dept) {
   const s = getSession();
   if (!s) return;
   if (dept === 'mecanicas') currentModule = 'pemp';
   s.departamento = dept;
   setSession(s);
-  // Sincronizar departamento en sesión D1 para que nuevos registros se guarden con el dept correcto
   if (s.token) apiCall('/sesion/departamento', { method: 'PUT', body: JSON.stringify({ departamento: dept }) }).catch(() => {});
   renderHeader();
   renderAjustesInfo();
   setupHomeModules();
+  // MEJ-149: mostrar selector visual de obra para roles que pueden cambiarla
+  const puedeElegirObra = s.rol === 'superadmin' || s.rol === 'empresa_admin' || s.rol === 'encargado';
+  if (puedeElegirObra) {
+    mostrarSelectorObra(dept);
+    return;
+  }
+  _navegarTrasObra(dept);
+}
+
+async function mostrarSelectorObra(dept) {
+  _pendingDept = dept;
+  showScreen('obraSel');
+  const grid = document.getElementById('obraSelGrid');
+  grid.innerHTML = '<div class="empty-state">Cargando...</div>';
+  try {
+    const res = await apiCall('/obras');
+    const obras = res.ok ? await res.json() : [];
+    const s = getSession();
+    grid.innerHTML = `
+      <div onclick="seleccionarObraVisual(null, null)"
+        style="display:flex;align-items:center;gap:14px;padding:16px;background:var(--surface);border:2px solid ${!s?.obra_id ? 'var(--accent)' : 'var(--border)'};border-radius:14px;cursor:pointer">
+        <span style="font-size:28px">🔲</span>
+        <div><div style="font-weight:700;font-size:15px;color:var(--text)">Sin obra</div>
+        <div style="font-size:12px;color:var(--muted)">Ver datos de todas las obras</div></div>
+      </div>
+      ${obras.map(o => `
+        <div onclick="seleccionarObraVisual(${o.id},'${o.nombre.replace(/'/g,"\\'")}','${(o.codigo||'').replace(/'/g,"\\'")}')"
+          style="display:flex;align-items:center;gap:14px;padding:16px;background:var(--surface);border:2px solid ${s?.obra_id == o.id ? 'var(--accent)' : 'var(--border)'};border-radius:14px;cursor:pointer">
+          <span style="font-size:28px">🏗️</span>
+          <div style="flex:1;min-width:0">
+            <div style="font-weight:700;font-size:15px;color:var(--text)">${o.nombre}</div>
+            ${o.codigo ? `<div style="font-size:12px;color:var(--muted)">#${o.codigo}</div>` : ''}
+          </div>
+          ${s?.obra_id == o.id ? `<span style="font-size:18px">✓</span>` : ''}
+        </div>`).join('')}`;
+  } catch {
+    grid.innerHTML = '<div class="empty-state" style="color:var(--red)">Error al cargar obras</div>';
+  }
+}
+
+function seleccionarObraVisual(obraId, obraNombre, obraCodigo) {
+  const s = getSession();
+  if (!s) return;
+  s.obra_id    = obraId   ? parseInt(obraId) : null;
+  s.obra_nombre = obraNombre || null;
+  setSession(s);
+  if (s.token) apiCall('/sesion/obra', { method: 'PUT', body: JSON.stringify({ obra_id: s.obra_id }) }).catch(() => {});
+  renderHeader();
+  const dept = _pendingDept || s.departamento;
+  _pendingDept = null;
+  _navegarTrasObra(dept);
+}
+
+function _navegarTrasObra(dept) {
   if (dept === 'seguridad') {
     showScreen('seguridad');
     segSelTab('escaner');
@@ -3983,8 +4061,11 @@ function renderStock(items, mod) {
           ${item.proveedor? `<span class="stock-meta-pill">📦 ${item.proveedor}</span>` : ''}
           ${warn ? `<span class="revision-warn">⚠️ Rev. prox.</span>` : ''}
         </div>
+        ${item.notas ? `<div onclick="event.stopPropagation();mostrarDescFull('${item.notas.replace(/\\/g,'\\\\').replace(/'/g,"\\'")}','${(item.matricula||item.codigo||'').replace(/'/g,"\\'")}')
+          " style="margin-top:6px;padding:6px 8px;background:var(--surface2);border-radius:6px;font-size:12px;color:var(--muted);cursor:pointer">
+          📝 ${item.notas.slice(0,80)}${item.notas.length>80?'…':''}</div>` : ''}
         <div class="stock-actions-row" onclick="event.stopPropagation()">
-          ${!['devuelta','Devuelta'].includes(item.estado) ? `<button class="btn-sm" onclick="abrirDevolucion(${i}, '${mod}')">↩ Dev.</button>` : ''}
+          ${!['devuelta','Devuelta'].includes(item.estado) ? `<button class="btn-sm" onclick="abrirDevolucion(${i}, '${mod}')"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/></svg> Dev.</button>` : ''}
           <button class="btn-sm" onclick="abrirEdit(${i}, '${mod}')">✏️ Editar</button>
           <button class="btn-sm danger" onclick="borrarItem(${i}, '${mod}')">🗑️ Borrar</button>
         </div>
@@ -4143,6 +4224,7 @@ async function cargarHistorial() {
 // DOCUMENTACIÓN DEPARTAMENTOS
 // ══════════════════════════════════════════════════════
 
+// MEJ-144: también carga archivos y notas raíz (sin carpeta)
 async function docsCargar(containerId) {
   const c = document.getElementById(containerId);
   if (!c) return;
@@ -4159,20 +4241,35 @@ async function docsCargar(containerId) {
 
   c.innerHTML = '<div class="empty-state">Cargando...</div>';
   try {
-    const res = await apiCall(`/carpetas?obra_id=${obraId}&departamento=${dept}`);
-    const carpetas = res.ok ? await res.json() : [];
+    const [resCarpetas, resDocs, resNotas] = await Promise.all([
+      apiCall(`/carpetas?obra_id=${obraId}&departamento=${dept}`),
+      apiCall(`/docs-dept?obra_id=${obraId}&departamento=${dept}`),
+      apiCall(`/docs-notas?obra_id=${obraId}&departamento=${dept}`),
+    ]);
+    const carpetas  = resCarpetas.ok ? await resCarpetas.json() : [];
+    const rootDocs  = resDocs.ok    ? await resDocs.json()    : [];
+    const rootNotas = resNotas.ok   ? await resNotas.json()   : [];
 
     c.innerHTML = `
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">
         <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:16px;color:var(--text)">📂 Documentación</div>
-        ${puedeEditar ? `<button onclick="docsNuevaCarpeta('${containerId}')"
-          style="padding:7px 14px;background:var(--accent);color:#000;border:none;border-radius:8px;font-family:'Montserrat',sans-serif;font-weight:700;font-size:12px;cursor:pointer">
-          + Nueva carpeta
-        </button>` : ''}
+        ${puedeEditar ? `
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <button onclick="docsNuevaCarpeta('${containerId}')"
+            style="padding:7px 12px;background:var(--accent);color:#000;border:none;border-radius:8px;font-family:'Montserrat',sans-serif;font-weight:700;font-size:12px;cursor:pointer">📁 Carpeta</button>
+          <button onclick="docsCrearNota(null,'${containerId}',null)"
+            style="padding:7px 12px;background:var(--surface);border:1px solid var(--border);border-radius:8px;font-family:'Montserrat',sans-serif;font-weight:700;font-size:12px;cursor:pointer">📝 Nota</button>
+          <label style="padding:7px 11px;background:var(--surface);border:1px solid var(--border);border-radius:8px;font-size:16px;cursor:pointer" title="Foto">
+            📷<input type="file" accept="image/*" capture="environment" style="display:none" onchange="docsSubirRaiz('${containerId}',this)">
+          </label>
+          <label style="padding:7px 12px;background:var(--surface);border:1px solid var(--border);border-radius:8px;font-family:'Montserrat',sans-serif;font-weight:700;font-size:12px;cursor:pointer">
+            📎 Archivo<input type="file" accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.txt,.csv,.zip" style="display:none" onchange="docsSubirRaiz('${containerId}',this)">
+          </label>
+        </div>` : ''}
       </div>
-      ${carpetas.length ? carpetas.map(cp => `
+      ${carpetas.map(cp => `
         <div style="display:flex;align-items:center;gap:10px;padding:12px 14px;background:var(--surface);border:1px solid var(--border);border-radius:12px;margin-bottom:8px;cursor:pointer"
-             onclick="docsAbrirCarpeta(${cp.id},'${cp.nombre.replace(/'/g,"\\'")}','${containerId}')">
+             onclick="docsAbrirCarpeta(${cp.id},'${cp.nombre.replace(/'/g,"\\'")}','${containerId}',null,null)">
           <span style="font-size:28px">📁</span>
           <div style="flex:1;min-width:0">
             <div style="font-weight:700;font-size:14px;color:var(--text)">${cp.nombre}</div>
@@ -4180,50 +4277,73 @@ async function docsCargar(containerId) {
           </div>
           ${puedeEditar ? `<button onclick="event.stopPropagation();docsBorrarCarpeta(${cp.id},'${containerId}')"
             style="padding:6px 10px;background:#ef444415;border:1px solid #ef444430;border-radius:8px;font-size:13px;color:#ef4444;cursor:pointer">🗑️</button>` : ''}
-        </div>`).join('')
-      : '<div class="empty-state">Sin carpetas. Crea una para empezar.</div>'}`;
+        </div>`).join('')}
+      ${rootNotas.map(n => docsRenderNota(n, puedeEditar, null, containerId, null)).join('')}
+      ${rootDocs.map(d  => docsRenderArchivo(d, puedeEditar, null, containerId, '')).join('')}
+      ${!carpetas.length && !rootDocs.length && !rootNotas.length
+        ? '<div class="empty-state">Sin documentos. Crea una carpeta o sube un archivo.</div>' : ''}`;
   } catch {
     c.innerHTML = '<div class="empty-state" style="color:var(--red)">Error al cargar</div>';
   }
 }
 
-async function docsAbrirCarpeta(carpetaId, nombre, containerId) {
+// MEJ-155: subcarpetas | MEJ-136: notas | firma actualizada (parentCarpetaId, parentNombre)
+async function docsAbrirCarpeta(carpetaId, nombre, containerId, parentCarpetaId, parentNombre) {
   const c = document.getElementById(containerId);
   if (!c) return;
   const s = getSession();
   const puedeEditar = s?.rol !== 'operario';
-  const nomEsc = nombre.replace(/'/g,"\\'");
+  const nomEsc    = (nombre||'').replace(/'/g,"\\'");
+  const parentEsc = (parentNombre||'').replace(/'/g,"\\'");
+  const volverFn  = parentCarpetaId
+    ? `docsAbrirCarpeta(${parentCarpetaId},'${parentEsc}','${containerId}',null,null)`
+    : `docsCargar('${containerId}')`;
 
   c.innerHTML = '<div class="empty-state">Cargando...</div>';
   try {
-    const res = await apiCall(`/docs-dept?carpeta_id=${carpetaId}`);
-    const docs = res.ok ? await res.json() : [];
+    const [resDocs, resNotas, resSubs] = await Promise.all([
+      apiCall(`/docs-dept?carpeta_id=${carpetaId}`),
+      apiCall(`/docs-notas?carpeta_id=${carpetaId}`),
+      apiCall(`/carpetas?obra_id=${s?.obra_id}&departamento=${s?.departamento}&parent_id=${carpetaId}`),
+    ]);
+    const docs  = resDocs.ok  ? await resDocs.json()  : [];
+    const notas = resNotas.ok ? await resNotas.json() : [];
+    const subs  = resSubs.ok  ? await resSubs.json()  : [];
 
     c.innerHTML = `
-      <!-- Cabecera carpeta -->
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap">
-        <button onclick="docsCargar('${containerId}')"
+        <button onclick="${volverFn}"
           style="padding:7px 12px;background:var(--surface);border:1px solid var(--border);border-radius:8px;font-size:13px;cursor:pointer;flex-shrink:0">← Volver</button>
         <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:15px;color:var(--text);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">📁 ${nombre}</div>
-        <button onclick="docsCompartirCarpeta(${carpetaId},'${nomEsc}')"
-          title="Compartir carpeta"
+        <button onclick="docsCompartirCarpeta(${carpetaId},'${nomEsc}')" title="Compartir"
           style="padding:7px 11px;background:var(--surface);border:1px solid var(--border);border-radius:8px;font-size:16px;cursor:pointer;flex-shrink:0">📤</button>
         ${puedeEditar ? `
-          <label title="Tomar foto" style="padding:7px 11px;background:var(--surface);border:1px solid var(--border);border-radius:8px;font-size:16px;cursor:pointer;flex-shrink:0">
+          <button onclick="docsNuevaSubcarpeta(${carpetaId},'${nomEsc}','${containerId}')" title="Nueva subcarpeta"
+            style="padding:7px 10px;background:var(--surface);border:1px solid var(--border);border-radius:8px;font-size:14px;cursor:pointer;flex-shrink:0">📁+</button>
+          <button onclick="docsCrearNota(${carpetaId},'${containerId}','${nomEsc}')" title="Nueva nota"
+            style="padding:7px 10px;background:var(--surface);border:1px solid var(--border);border-radius:8px;font-size:14px;cursor:pointer;flex-shrink:0">📝</button>
+          <label title="Foto" style="padding:7px 11px;background:var(--surface);border:1px solid var(--border);border-radius:8px;font-size:16px;cursor:pointer;flex-shrink:0">
             📷<input type="file" accept="image/*" capture="environment" style="display:none"
               onchange="docsSubirArchivo(${carpetaId},'${containerId}','${nomEsc}',this)">
           </label>
-          <label title="Subir archivo" style="padding:7px 14px;background:var(--accent);color:#000;border-radius:8px;font-family:'Montserrat',sans-serif;font-weight:700;font-size:12px;cursor:pointer;white-space:nowrap;flex-shrink:0">
-            📎 Archivo<input type="file" accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.txt,.csv,.zip" style="display:none"
+          <label title="Subir archivo" style="padding:7px 12px;background:var(--accent);color:#000;border-radius:8px;font-family:'Montserrat',sans-serif;font-weight:700;font-size:12px;cursor:pointer;white-space:nowrap;flex-shrink:0">
+            📎<input type="file" accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.txt,.csv,.zip" style="display:none"
               onchange="docsSubirArchivo(${carpetaId},'${containerId}','${nomEsc}',this)">
           </label>` : ''}
       </div>
-
-      <!-- Lista de archivos -->
+      ${subs.map(sub => `
+        <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--surface);border:1px solid var(--border);border-radius:10px;margin-bottom:8px;cursor:pointer"
+             onclick="docsAbrirCarpeta(${sub.id},'${sub.nombre.replace(/'/g,"\\'")}','${containerId}',${carpetaId},'${nomEsc}')">
+          <span style="font-size:22px">📁</span>
+          <div style="flex:1;min-width:0"><div style="font-weight:700;font-size:13px;color:var(--text)">${sub.nombre}</div></div>
+          ${puedeEditar ? `<button onclick="event.stopPropagation();docsBorrarCarpeta(${sub.id},'${containerId}')"
+            style="padding:5px 8px;background:#ef444415;border:1px solid #ef444430;border-radius:8px;font-size:12px;color:#ef4444;cursor:pointer">🗑️</button>` : ''}
+        </div>`).join('')}
+      ${notas.map(n => docsRenderNota(n, puedeEditar, carpetaId, containerId, nombre)).join('')}
       <div id="docsListaArchivos_${carpetaId}">
-        ${docs.length
-          ? docs.map(d => docsRenderArchivo(d, puedeEditar, carpetaId, containerId, nombre)).join('')
-          : '<div class="empty-state">Carpeta vacía. Sube el primer archivo.</div>'}
+        ${!subs.length && !notas.length && !docs.length
+          ? '<div class="empty-state">Carpeta vacía.</div>'
+          : docs.map(d => docsRenderArchivo(d, puedeEditar, carpetaId, containerId, nombre)).join('')}
       </div>`;
   } catch {
     c.innerHTML = '<div class="empty-state" style="color:var(--red)">Error al cargar</div>';
@@ -4345,13 +4465,22 @@ async function docsCompartirCarpeta(carpetaId, carpetaNombre) {
   }
 }
 
-function docsEditarArchivo(id, nombre, descripcion, carpetaId, containerId, carpetaNombre) {
-  const nomEsc  = carpetaNombre.replace(/'/g,"\\'");
+// MEJ-137: incluye selector de carpeta destino para mover archivo
+async function docsEditarArchivo(id, nombre, descripcion, carpetaId, containerId, carpetaNombre) {
+  const nomEsc  = (carpetaNombre||'').replace(/'/g,"\\'");
+  const s = getSession();
+  // Cargar carpetas disponibles para mover
+  let carpetas = [];
+  try {
+    const res = await apiCall(`/carpetas?obra_id=${s?.obra_id}&departamento=${s?.departamento}`);
+    if (res.ok) carpetas = await res.json();
+  } catch {}
+
   const modal = document.createElement('div');
   modal.id = 'modalEditDoc';
-  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;z-index:9999;padding:16px';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.7);display:flex;align-items:flex-end;justify-content:center;z-index:9999';
   modal.innerHTML = `
-    <div style="background:var(--surface);border-radius:16px;padding:20px;width:100%;max-width:420px;box-shadow:0 8px 32px rgba(0,0,0,.4)">
+    <div style="background:var(--surface);border-radius:20px 20px 0 0;padding:20px;width:100%;max-width:520px;max-height:85vh;overflow-y:auto;box-shadow:0 -4px 32px rgba(0,0,0,.4)">
       <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:16px;color:var(--text);margin-bottom:16px">✏️ Editar documento</div>
       <div class="form-group">
         <label class="form-label">Nombre del archivo</label>
@@ -4359,13 +4488,20 @@ function docsEditarArchivo(id, nombre, descripcion, carpetaId, containerId, carp
       </div>
       <div class="form-group">
         <label class="form-label">Descripción (opcional)</label>
-        <textarea class="form-input" id="editDocDesc" rows="3" style="resize:vertical;font-family:inherit">${descripcion||''}</textarea>
+        <textarea class="form-input" id="editDocDesc" rows="2" style="resize:vertical;font-family:inherit">${descripcion||''}</textarea>
       </div>
-      <div style="display:flex;gap:8px;margin-top:4px">
+      <div class="form-group">
+        <label class="form-label">📁 Mover a carpeta</label>
+        <select class="form-input" id="editDocMoverA">
+          <option value="">— Raíz (sin carpeta) —</option>
+          ${carpetas.map(cp => `<option value="${cp.id}" ${cp.id == carpetaId ? 'selected' : ''}>${cp.nombre}</option>`).join('')}
+        </select>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:8px">
         <button onclick="document.getElementById('modalEditDoc').remove()"
           style="flex:1;padding:11px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;cursor:pointer;font-weight:700;color:var(--text)">Cancelar</button>
         <button onclick="docsGuardarEdicion(${id},${carpetaId},'${containerId}','${nomEsc}')"
-          style="flex:1;padding:11px;background:var(--accent);color:#000;border:none;border-radius:8px;cursor:pointer;font-family:'Montserrat',sans-serif;font-weight:700">💾 Guardar</button>
+          style="flex:2;padding:11px;background:var(--accent);color:#000;border:none;border-radius:8px;cursor:pointer;font-family:'Montserrat',sans-serif;font-weight:700">💾 Guardar</button>
       </div>
     </div>`;
   document.body.appendChild(modal);
@@ -4375,12 +4511,19 @@ function docsEditarArchivo(id, nombre, descripcion, carpetaId, containerId, carp
 async function docsGuardarEdicion(id, carpetaId, containerId, carpetaNombre) {
   const nombre      = document.getElementById('editDocNombre')?.value?.trim();
   const descripcion = document.getElementById('editDocDesc')?.value?.trim();
+  const moverAId    = document.getElementById('editDocMoverA')?.value;
   if (!nombre) return toast('⚠️ El nombre no puede estar vacío', 'err');
   document.getElementById('modalEditDoc')?.remove();
   try {
-    const res = await apiCall('/docs-dept/' + id, { method: 'PUT', body: JSON.stringify({ nombre, descripcion }) });
-    if (res.ok) { toast('✅ Documento actualizado'); docsAbrirCarpeta(carpetaId, carpetaNombre, containerId); }
-    else { const e = await res.json().catch(()=>{}); toast('❌ ' + (e?.error||'Error'), 'err'); }
+    const body = { nombre, descripcion };
+    if (moverAId !== undefined && moverAId !== String(carpetaId)) {
+      body.carpeta_id = moverAId === '' ? null : parseInt(moverAId);
+    }
+    const res = await apiCall('/docs-dept/' + id, { method: 'PUT', body: JSON.stringify(body) });
+    if (res.ok) {
+      toast('✅ Documento actualizado');
+      carpetaId ? docsAbrirCarpeta(carpetaId, carpetaNombre, containerId, null, null) : docsCargar(containerId);
+    } else { const e = await res.json().catch(()=>{}); toast('❌ ' + (e?.error||'Error'), 'err'); }
   } catch { toast('❌ Error de red', 'err'); }
 }
 
@@ -4410,14 +4553,20 @@ async function docsSubirArchivo(carpetaId, containerId, carpetaNombre, input) {
   if (!file) return;
   input.value = '';
   toast('⬆️ Subiendo ' + file.name + '...');
+  const s = getSession();
   const fd = new FormData();
   fd.append('file', file);
-  fd.append('carpeta_id', carpetaId);
+  if (carpetaId) {
+    fd.append('carpeta_id', carpetaId);
+  } else {
+    fd.append('obra_id', s?.obra_id);
+    fd.append('departamento', s?.departamento);
+  }
   try {
     const res = await subirArchivoRaw('/docs-dept', fd);
     if (!res.ok) { const e = await res.json().catch(()=>{}); return toast('❌ ' + (e?.error||'Error al subir'), 'err'); }
     toast('✅ Archivo subido');
-    docsAbrirCarpeta(carpetaId, carpetaNombre, containerId);
+    carpetaId ? docsAbrirCarpeta(carpetaId, carpetaNombre, containerId, null, null) : docsCargar(containerId);
   } catch { toast('❌ Error de red', 'err'); }
 }
 
@@ -4436,8 +4585,158 @@ async function docsDescargarDoc(id, nombre) {
 async function docsBorrarArchivo(id, carpetaId, containerId, carpetaNombre) {
   if (!confirm('¿Eliminar este archivo?')) return;
   const res = await apiCall('/docs-dept/' + id, { method: 'DELETE' });
-  if (res.ok) { toast('🗑️ Archivo eliminado'); docsAbrirCarpeta(carpetaId, carpetaNombre, containerId); }
-  else toast('❌ Error al eliminar', 'err');
+  if (res.ok) {
+    toast('🗑️ Archivo eliminado');
+    carpetaId ? docsAbrirCarpeta(carpetaId, carpetaNombre, containerId, null, null) : docsCargar(containerId);
+  } else toast('❌ Error al eliminar', 'err');
+}
+
+// ── MEJ-144: subir archivo a raíz (sin carpeta) ──────────────────────────────
+async function docsSubirRaiz(containerId, input) {
+  const file = input.files[0];
+  if (!file) return;
+  input.value = '';
+  toast('⬆️ Subiendo ' + file.name + '...');
+  const s = getSession();
+  const fd = new FormData();
+  fd.append('file', file);
+  fd.append('obra_id', s?.obra_id);
+  fd.append('departamento', s?.departamento);
+  try {
+    const res = await subirArchivoRaw('/docs-dept', fd);
+    if (!res.ok) { const e = await res.json().catch(()=>{}); return toast('❌ ' + (e?.error||'Error al subir'), 'err'); }
+    toast('✅ Archivo subido');
+    docsCargar(containerId);
+  } catch { toast('❌ Error de red', 'err'); }
+}
+
+// ── MEJ-155: nueva subcarpeta dentro de carpeta ──────────────────────────────
+async function docsNuevaSubcarpeta(parentCarpetaId, parentNombre, containerId) {
+  const nombre = prompt('Nombre de la subcarpeta:')?.trim();
+  if (!nombre) return;
+  const s = getSession();
+  try {
+    const res = await apiCall('/carpetas', {
+      method: 'POST',
+      body: JSON.stringify({ obra_id: s.obra_id, departamento: s.departamento, nombre, parent_id: parentCarpetaId })
+    });
+    if (res.ok) { toast('📁 Subcarpeta creada'); docsAbrirCarpeta(parentCarpetaId, parentNombre, containerId, null, null); }
+    else { const e = await res.json().catch(()=>{}); toast('❌ ' + (e?.error||'Error'), 'err'); }
+  } catch { toast('❌ Error de red', 'err'); }
+}
+
+// ── MEJ-136: notas de texto ───────────────────────────────────────────────────
+function docsRenderNota(n, puedeEditar, carpetaId, containerId, carpetaNombre) {
+  const tit = (n.titulo||'Sin título').replace(/</g,'&lt;');
+  const nomEsc = (carpetaNombre||'').replace(/'/g,"\\'");
+  const contEsc = (n.contenido||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/\n/g,'\\n');
+  const titEsc  = (n.titulo||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+  return `
+  <div style="display:flex;align-items:flex-start;gap:8px;padding:11px 12px;background:var(--surface);border:1px solid var(--accent)44;border-radius:12px;margin-bottom:8px">
+    <span style="font-size:22px;flex-shrink:0;cursor:pointer" onclick="mostrarDescFull('${contEsc}','${titEsc}')">📝</span>
+    <div style="flex:1;min-width:0;cursor:pointer" onclick="mostrarDescFull('${contEsc}','${titEsc}')">
+      <div style="font-weight:600;font-size:13px;color:var(--text)">${tit}</div>
+      <div style="font-size:11px;color:var(--muted)">${n.creado_por?'👤 '+n.creado_por+' · ':''}${n.updated_at?n.updated_at.slice(0,10):''}</div>
+      ${n.contenido ? `<div style="font-size:12px;color:var(--muted);margin-top:3px;white-space:pre-wrap;max-height:48px;overflow:hidden">${n.contenido.slice(0,120)}${n.contenido.length>120?'…':''}</div>` : ''}
+    </div>
+    ${puedeEditar ? `
+    <button onclick="docsEditarNota(${n.id},'${titEsc}','${contEsc}',${carpetaId},'${containerId}','${nomEsc}')" title="Editar"
+      style="padding:6px 9px;background:var(--surface);border:1px solid var(--border);border-radius:8px;font-size:14px;cursor:pointer;flex-shrink:0">✏️</button>
+    <button onclick="docsBorrarNota(${n.id},${carpetaId},'${containerId}','${nomEsc}')" title="Eliminar"
+      style="padding:6px 9px;background:#ef444415;border:1px solid #ef444430;border-radius:8px;font-size:14px;color:#ef4444;cursor:pointer;flex-shrink:0">🗑️</button>` : ''}
+  </div>`;
+}
+
+function docsCrearNota(carpetaId, containerId, carpetaNombre) {
+  const nomEsc = (carpetaNombre||'').replace(/'/g,"\\'");
+  const modal = document.createElement('div');
+  modal.id = 'modalNota';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.7);display:flex;align-items:flex-end;justify-content:center;z-index:9999';
+  modal.innerHTML = `
+    <div style="background:var(--surface);border-radius:20px 20px 0 0;padding:20px;width:100%;max-width:520px;max-height:85vh;overflow-y:auto">
+      <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:16px;color:var(--text);margin-bottom:14px">📝 Nueva nota</div>
+      <div class="form-group">
+        <label class="form-label">Título</label>
+        <input class="form-input" id="notaTitulo" placeholder="Título de la nota...">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Contenido</label>
+        <textarea class="form-input" id="notaContenido" rows="8" placeholder="Escribe aquí..." style="resize:vertical;font-family:inherit;line-height:1.6"></textarea>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:4px">
+        <button onclick="document.getElementById('modalNota').remove()"
+          style="flex:1;padding:11px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;cursor:pointer;font-weight:700;color:var(--text)">Cancelar</button>
+        <button onclick="docsGuardarNota(${carpetaId},'${containerId}','${nomEsc}')"
+          style="flex:2;padding:11px;background:var(--accent);color:#000;border:none;border-radius:8px;cursor:pointer;font-family:'Montserrat',sans-serif;font-weight:700">💾 Guardar</button>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+  modal.querySelector('#notaTitulo').focus();
+}
+
+async function docsGuardarNota(carpetaId, containerId, carpetaNombre) {
+  const titulo    = document.getElementById('notaTitulo')?.value?.trim();
+  const contenido = document.getElementById('notaContenido')?.value?.trim();
+  if (!titulo && !contenido) return toast('⚠️ Escribe algo en la nota', 'err');
+  document.getElementById('modalNota')?.remove();
+  const s = getSession();
+  const body = { titulo: titulo||'Sin título', contenido, obra_id: s?.obra_id, departamento: s?.departamento };
+  if (carpetaId) body.carpeta_id = carpetaId;
+  try {
+    const res = await apiCall('/docs-notas', { method: 'POST', body: JSON.stringify(body) });
+    if (res.ok) {
+      toast('✅ Nota guardada');
+      carpetaId ? docsAbrirCarpeta(carpetaId, carpetaNombre, containerId, null, null) : docsCargar(containerId);
+    } else { const e = await res.json().catch(()=>{}); toast('❌ ' + (e?.error||'Error'), 'err'); }
+  } catch { toast('❌ Error de red', 'err'); }
+}
+
+function docsEditarNota(id, titulo, contenido, carpetaId, containerId, carpetaNombre) {
+  const nomEsc = (carpetaNombre||'').replace(/'/g,"\\'");
+  const modal = document.createElement('div');
+  modal.id = 'modalNota';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.7);display:flex;align-items:flex-end;justify-content:center;z-index:9999';
+  modal.innerHTML = `
+    <div style="background:var(--surface);border-radius:20px 20px 0 0;padding:20px;width:100%;max-width:520px;max-height:85vh;overflow-y:auto">
+      <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:16px;color:var(--text);margin-bottom:14px">📝 Editar nota</div>
+      <div class="form-group">
+        <label class="form-label">Título</label>
+        <input class="form-input" id="notaTitulo" value="${titulo}">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Contenido</label>
+        <textarea class="form-input" id="notaContenido" rows="8" style="resize:vertical;font-family:inherit;line-height:1.6">${contenido.replace(/\\n/g,'\n')}</textarea>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:4px">
+        <button onclick="document.getElementById('modalNota').remove()"
+          style="flex:1;padding:11px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;cursor:pointer;font-weight:700;color:var(--text)">Cancelar</button>
+        <button onclick="docsGuardarEditNota(${id},${carpetaId},'${containerId}','${nomEsc}')"
+          style="flex:2;padding:11px;background:var(--accent);color:#000;border:none;border-radius:8px;cursor:pointer;font-family:'Montserrat',sans-serif;font-weight:700">💾 Guardar</button>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+}
+
+async function docsGuardarEditNota(id, carpetaId, containerId, carpetaNombre) {
+  const titulo    = document.getElementById('notaTitulo')?.value?.trim();
+  const contenido = document.getElementById('notaContenido')?.value?.trim();
+  document.getElementById('modalNota')?.remove();
+  try {
+    const res = await apiCall('/docs-notas/' + id, { method: 'PUT', body: JSON.stringify({ titulo: titulo||'Sin título', contenido }) });
+    if (res.ok) {
+      toast('✅ Nota actualizada');
+      carpetaId ? docsAbrirCarpeta(carpetaId, carpetaNombre, containerId, null, null) : docsCargar(containerId);
+    } else { const e = await res.json().catch(()=>{}); toast('❌ ' + (e?.error||'Error'), 'err'); }
+  } catch { toast('❌ Error de red', 'err'); }
+}
+
+async function docsBorrarNota(id, carpetaId, containerId, carpetaNombre) {
+  if (!confirm('¿Eliminar esta nota?')) return;
+  const res = await apiCall('/docs-notas/' + id, { method: 'DELETE' });
+  if (res.ok) {
+    toast('🗑️ Nota eliminada');
+    carpetaId ? docsAbrirCarpeta(carpetaId, carpetaNombre, containerId, null, null) : docsCargar(containerId);
+  } else toast('❌ Error al eliminar', 'err');
 }
 
 // ══════════════════════════════════════════════════════
@@ -5858,6 +6157,17 @@ function closeFichaMaquina() {
   document.getElementById('modalFichaMaquina').classList.remove('show');
 }
 
+// ── MEJ-044: Descripción/notas a pantalla completa ───────────────────────────
+function mostrarDescFull(texto, titulo) {
+  if (!texto?.trim()) return;
+  document.getElementById('descFullTitulo').textContent = titulo || 'Descripción';
+  document.getElementById('descFullContenido').textContent = texto;
+  document.getElementById('modalDescFull').classList.add('show');
+}
+function cerrarDescFull() {
+  document.getElementById('modalDescFull').classList.remove('show');
+}
+
 async function cargarSesionesActivas() {
   const s = getSession();
   if (!s || (s.rol !== 'superadmin' && s.rol !== 'encargado' && s.rol !== 'empresa_admin')) return;
@@ -6450,7 +6760,7 @@ async function cargarObrasSelectUsuario() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '4.85';
+const APP_VERSION = '4.86';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -8332,6 +8642,26 @@ if ('serviceWorker' in navigator) {
   window.cerrarNotificaciones    = cerrarNotificaciones;
   window.exportarCSV             = exportarCSV;
   window.compartirResumen        = compartirResumen;
+  // MEJ-149
+  window.mostrarSelectorObra     = mostrarSelectorObra;
+  window.seleccionarObraVisual   = seleccionarObraVisual;
+  // MEJ-044
+  window.mostrarDescFull         = mostrarDescFull;
+  window.cerrarDescFull          = cerrarDescFull;
+  // MEJ-144 / MEJ-155 / MEJ-136 / MEJ-137
+  window.docsSubirRaiz           = docsSubirRaiz;
+  window.docsNuevaSubcarpeta     = docsNuevaSubcarpeta;
+  window.docsRenderNota          = docsRenderNota;
+  window.docsCrearNota           = docsCrearNota;
+  window.docsGuardarNota         = docsGuardarNota;
+  window.docsEditarNota          = docsEditarNota;
+  window.docsGuardarEditNota     = docsGuardarEditNota;
+  window.docsBorrarNota          = docsBorrarNota;
+  window.docsEditarArchivo       = docsEditarArchivo;
+  window.docsGuardarEdicion      = docsGuardarEdicion;
+  window.docsCompartirArchivo    = docsCompartirArchivo;
+  window.docsCompartirCarpeta    = docsCompartirCarpeta;
+  window.docsVerArchivo          = docsVerArchivo;
 }
 </script>
 </body>

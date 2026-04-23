@@ -219,6 +219,12 @@ async function handleTelegramWebhook(request, env) {
       await _tgAnswerCQ(env, cq.id, '🗑 Cerrada');
       await _tgEditMsg(env, chatId, msgId, orig + '\n\n🗑 <b>CERRADA</b>');
     }
+    else if (accion === 'herr_disp') {
+      const hid = parseInt(partes[0]);
+      await env.DB.prepare("UPDATE herramientas SET estado='disponible' WHERE id=?").bind(hid).run();
+      await _tgAnswerCQ(env, cq.id, '✅ Marcada como disponible');
+      await _tgEditMsg(env, chatId, msgId, orig + '\n\n✅ <b>DISPONIBLE</b>');
+    }
   } catch (e) {
     await _tgAnswerCQ(env, cq.id, '❌ Error: ' + e.message);
   }
@@ -403,7 +409,7 @@ export default {
       }
       if (path.startsWith('/buscar-item-seg/') && method === 'GET') {
         const cod = decodeURIComponent(path.split('/buscar-item-seg/')[1]);
-        return await buscarItemSeg(cod, env);
+        return await buscarItemSeg(cod, request, env);
       }
       if (path === '/tipos-material-seg'       && method === 'GET')    return await getCatalogo('tipos_material_seg', env, request);
       if (path === '/tipos-material-seg'       && method === 'POST')   return await addTipoMaterialSeg(request, env);
@@ -462,6 +468,7 @@ export default {
       if (path.startsWith('/carpetas/')) {
         const cid = parseInt(path.split('/carpetas/')[1]);
         if (method === 'DELETE') return await borrarCarpeta(cid, request, env);
+        if (method === 'PUT')    return await renombrarCarpeta(cid, request, env);
       }
       if (path === '/docs-dept' && method === 'GET')  return await listarDocsDept(request, env);
       if (path === '/docs-dept' && method === 'POST') return await subirDocDept(request, env);
@@ -471,6 +478,14 @@ export default {
         if (method === 'PUT')    return await editarDocDept(did, request, env);
         if (method === 'DELETE') return await borrarDocDept(did, request, env);
       }
+      if (path === '/docs-notas' && method === 'GET')  return await listarNotas(request, env);
+      if (path === '/docs-notas' && method === 'POST') return await crearNota(request, env);
+      if (path.startsWith('/docs-notas/')) {
+        const nid = parseInt(path.split('/docs-notas/')[1]);
+        if (method === 'PUT')    return await editarNota(nid, request, env);
+        if (method === 'DELETE') return await borrarNota(nid, request, env);
+      }
+      if (path === '/admin/migrate' && method === 'POST') return await runMigrations(request, env);
 
       // ── Personal ──────────────────────────────────────────────────────────
       if (path === '/horarios-obra' && method === 'GET')  return await getHorariosObra(request, env);
@@ -1798,15 +1813,19 @@ async function borrarTodasSugerencias(request, env) {
 // ════════════════════════════════════════════════════════════════════════════
 
 async function buscarMaquina(matricula, request, env) {
+  const { empresa_id } = await getAuth(request, env);
   const mat = matricula.trim().toUpperCase();
 
-  const [pemp, carretilla] = await Promise.all([
+  const [pemp, carretilla, bobina] = await Promise.all([
     env.DB.prepare(
-      'SELECT p.*, o.nombre as obra_nombre FROM pemp p LEFT JOIN obras o ON p.obra_id = o.id WHERE p.matricula = ?'
-    ).bind(mat).first(),
+      'SELECT p.*, o.nombre as obra_nombre FROM pemp p LEFT JOIN obras o ON p.obra_id = o.id WHERE p.matricula = ? AND p.empresa_id = ?'
+    ).bind(mat, empresa_id).first(),
     env.DB.prepare(
-      'SELECT c.*, o.nombre as obra_nombre FROM carretillas c LEFT JOIN obras o ON c.obra_id = o.id WHERE c.matricula = ?'
-    ).bind(mat).first(),
+      'SELECT c.*, o.nombre as obra_nombre FROM carretillas c LEFT JOIN obras o ON c.obra_id = o.id WHERE c.matricula = ? AND c.empresa_id = ?'
+    ).bind(mat, empresa_id).first(),
+    env.DB.prepare(
+      'SELECT b.*, o.nombre as obra_nombre FROM bobinas b LEFT JOIN obras o ON b.obra_id = o.id WHERE b.codigo = ? AND b.empresa_id = ?'
+    ).bind(mat, empresa_id).first(),
   ]);
 
   if (pemp) {
@@ -1821,7 +1840,13 @@ async function buscarMaquina(matricula, request, env) {
     ).bind(mat).all();
     return json({ ok: true, tipo: 'carretilla', data: carretilla, historial: hist.results });
   }
-  return json({ ok: false, error: `Matrícula ${mat} no encontrada` }, 404);
+  if (bobina) {
+    const hist = await env.DB.prepare(
+      'SELECT accion, usuario, notas, fecha FROM historial WHERE bobina_codigo = ? ORDER BY fecha DESC LIMIT 15'
+    ).bind(mat).all();
+    return json({ ok: true, tipo: 'bobina', data: bobina, historial: hist.results });
+  }
+  return json({ ok: false, error: `${mat} no encontrado` }, 404);
 }
 
 // Helper interno para registrar actividad desde el worker
@@ -2239,6 +2264,14 @@ async function crearHerramienta(request, env, ctx) {
   const hid = r.meta.last_row_id;
   await registrarHistorialHerr(env, empresa_id, hid, kit_id || null, 'alta', null, 'disponible', userNombre || rol, 'Herramienta registrada');
   ctx?.waitUntil(syncSheets(env, tabForDept('herramienta', dept)));
+  // Notificación Telegram con botón para marcar disponible
+  const tipoRow = tipo_id ? await env.DB.prepare('SELECT nombre FROM tipos_herramienta WHERE id = ?').bind(tipo_id).first().catch(() => null) : null;
+  const tipoNom = tipoRow?.nombre || body.modelo || 'herramienta';
+  const obraRow = obra_id ? await env.DB.prepare('SELECT nombre FROM obras WHERE id = ?').bind(obra_id).first().catch(() => null) : null;
+  ctx?.waitUntil(sendTelegramConBotones(env,
+    `🔧 <b>Nueva herramienta registrada</b>\n📋 ${tipoNom}${marca ? ' · ' + marca : ''}${body.modelo ? ' · ' + body.modelo : ''}\n📍 ${obraRow?.nombre || '—'}\n👤 ${userNombre || rol}`,
+    [[{ text: '✅ Disponible', callback_data: `herr_disp:${hid}` }]]
+  ));
   return json({ ok: true, id: hid }, 201);
 }
 
@@ -3346,8 +3379,9 @@ async function getInventarioSeg(request, env) {
   return json(results);
 }
 
-async function buscarItemSeg(codigo, env) {
-  const item = await env.DB.prepare('SELECT * FROM inventario_seg WHERE codigo = ?').bind(codigo.trim().toUpperCase()).first();
+async function buscarItemSeg(codigo, request, env) {
+  const { empresa_id } = await getAuth(request, env);
+  const item = await env.DB.prepare('SELECT * FROM inventario_seg WHERE codigo = ? AND empresa_id = ?').bind(codigo.trim().toUpperCase(), empresa_id).first();
   if (!item) return json({ ok: false, error: 'No encontrado' }, 404);
   const hist = await env.DB.prepare('SELECT * FROM movimientos_seg WHERE item_id = ? ORDER BY fecha DESC LIMIT 10').bind(item.id).all();
   return json({ ok: true, data: item, historial: hist.results });
@@ -3875,9 +3909,16 @@ async function listarCarpetas(request, env) {
   const obra_id     = url.searchParams.get('obra_id');
   const departamento = url.searchParams.get('departamento');
   if (!obra_id || !departamento) return err('Faltan parámetros', 400);
-  const { results } = await env.DB.prepare(
-    'SELECT * FROM carpetas WHERE empresa_id = ? AND obra_id = ? AND departamento = ? ORDER BY nombre COLLATE NOCASE'
-  ).bind(empresa_id, parseInt(obra_id), departamento).all();
+  const parent_id = url.searchParams.get('parent_id');
+  let q, params;
+  if (parent_id !== null && parent_id !== '') {
+    q = 'SELECT * FROM carpetas WHERE empresa_id = ? AND obra_id = ? AND departamento = ? AND parent_id = ? ORDER BY nombre COLLATE NOCASE';
+    params = [empresa_id, parseInt(obra_id), departamento, parseInt(parent_id)];
+  } else {
+    q = 'SELECT * FROM carpetas WHERE empresa_id = ? AND obra_id = ? AND departamento = ? AND (parent_id IS NULL OR parent_id = 0) ORDER BY nombre COLLATE NOCASE';
+    params = [empresa_id, parseInt(obra_id), departamento];
+  }
+  const { results } = await env.DB.prepare(q).bind(...params).all();
   return json(results);
 }
 
@@ -3885,15 +3926,15 @@ async function crearCarpeta(request, env) {
   const { empresa_id, rol, nombre: userNombre } = await getAuth(request, env);
   if (!empresa_id) return err('No autorizado', 403);
   if (rol === 'operario') return err('Sin permisos', 403);
-  const { obra_id, departamento, nombre } = await request.json().catch(() => ({}));
+  const { obra_id, departamento, nombre, parent_id } = await request.json().catch(() => ({}));
   if (!obra_id || !departamento || !nombre?.trim()) return err('Faltan datos', 400);
   const existe = await env.DB.prepare(
-    'SELECT id FROM carpetas WHERE empresa_id = ? AND obra_id = ? AND departamento = ? AND UPPER(nombre) = UPPER(?)'
+    'SELECT id FROM carpetas WHERE empresa_id = ? AND obra_id = ? AND departamento = ? AND UPPER(nombre) = UPPER(?) AND (parent_id IS NULL OR parent_id = 0)'
   ).bind(empresa_id, parseInt(obra_id), departamento, nombre.trim()).first();
   if (existe) return err('Ya existe una carpeta con ese nombre', 409);
   const r = await env.DB.prepare(
-    'INSERT INTO carpetas (empresa_id, obra_id, departamento, nombre, creado_por) VALUES (?,?,?,?,?)'
-  ).bind(empresa_id, parseInt(obra_id), departamento, nombre.trim(), userNombre || rol).run();
+    'INSERT INTO carpetas (empresa_id, obra_id, departamento, nombre, creado_por, parent_id) VALUES (?,?,?,?,?,?)'
+  ).bind(empresa_id, parseInt(obra_id), departamento, nombre.trim(), userNombre || rol, parent_id ? parseInt(parent_id) : null).run();
   return json({ ok: true, id: r.meta.last_row_id, nombre: nombre.trim() }, 201);
 }
 
@@ -3903,11 +3944,7 @@ async function borrarCarpeta(id, request, env) {
   if (rol === 'operario') return err('Sin permisos', 403);
   const carpeta = await env.DB.prepare('SELECT * FROM carpetas WHERE id = ? AND empresa_id = ?').bind(id, empresa_id).first();
   if (!carpeta) return err('Carpeta no encontrada', 404);
-  // Borrar todos los archivos R2 de la carpeta
-  const { results: docs } = await env.DB.prepare('SELECT r2_key FROM docs_dept WHERE carpeta_id = ? AND empresa_id = ?').bind(id, empresa_id).all();
-  await Promise.all(docs.map(d => env.FILES.delete(d.r2_key)));
-  await env.DB.prepare('DELETE FROM docs_dept WHERE carpeta_id = ? AND empresa_id = ?').bind(id, empresa_id).run();
-  await env.DB.prepare('DELETE FROM carpetas WHERE id = ? AND empresa_id = ?').bind(id, empresa_id).run();
+  await borrarCarpetaRecursive(id, empresa_id, env);
   return json({ ok: true });
 }
 
@@ -3915,12 +3952,22 @@ async function listarDocsDept(request, env) {
   const { empresa_id } = await getAuth(request, env);
   if (!empresa_id) return err('No autorizado', 403);
   const url = new URL(request.url);
-  const carpeta_id = url.searchParams.get('carpeta_id');
-  if (!carpeta_id) return err('Falta carpeta_id', 400);
-  const { results } = await env.DB.prepare(
-    'SELECT * FROM docs_dept WHERE carpeta_id = ? AND empresa_id = ? ORDER BY created_at DESC'
-  ).bind(parseInt(carpeta_id), empresa_id).all();
-  return json(results);
+  const carpeta_id  = url.searchParams.get('carpeta_id');
+  const obra_id_p   = url.searchParams.get('obra_id');
+  const dept_p      = url.searchParams.get('departamento');
+  if (carpeta_id) {
+    const { results } = await env.DB.prepare(
+      'SELECT * FROM docs_dept WHERE carpeta_id = ? AND empresa_id = ? ORDER BY created_at DESC'
+    ).bind(parseInt(carpeta_id), empresa_id).all();
+    return json(results);
+  }
+  if (obra_id_p && dept_p) {
+    const { results } = await env.DB.prepare(
+      'SELECT * FROM docs_dept WHERE obra_id = ? AND departamento = ? AND carpeta_id IS NULL AND empresa_id = ? ORDER BY created_at DESC'
+    ).bind(parseInt(obra_id_p), dept_p, empresa_id).all();
+    return json(results);
+  }
+  return err('Falta carpeta_id o (obra_id + departamento)', 400);
 }
 
 async function subirDocDept(request, env) {
@@ -3930,19 +3977,28 @@ async function subirDocDept(request, env) {
   const form = await request.formData().catch(() => null);
   if (!form) return err('Falta el formulario', 400);
   const file        = form.get('file');
-  const carpeta_id  = form.get('carpeta_id');
+  const carpeta_id  = form.get('carpeta_id') || null;
   const descripcion = form.get('descripcion') || null;
-  if (!file || !file.name || !carpeta_id) return err('Faltan datos', 400);
+  const obra_id_f   = form.get('obra_id');
+  const dept_f      = form.get('departamento');
+  if (!file || !file.name) return err('Falta el archivo', 400);
   if (file.size > 52428800) return err('El archivo supera el límite de 50 MB', 413);
-  const carpeta = await env.DB.prepare('SELECT * FROM carpetas WHERE id = ? AND empresa_id = ?').bind(parseInt(carpeta_id), empresa_id).first();
-  if (!carpeta) return err('Carpeta no encontrada', 404);
+  let obraId, deptName;
+  if (carpeta_id) {
+    const carpeta = await env.DB.prepare('SELECT * FROM carpetas WHERE id = ? AND empresa_id = ?').bind(parseInt(carpeta_id), empresa_id).first();
+    if (!carpeta) return err('Carpeta no encontrada', 404);
+    obraId = carpeta.obra_id; deptName = carpeta.departamento;
+  } else {
+    if (!obra_id_f || !dept_f) return err('Falta carpeta_id o (obra_id + departamento)', 400);
+    obraId = parseInt(obra_id_f); deptName = dept_f;
+  }
   const ts       = Date.now();
   const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
-  const r2Key    = `e${empresa_id}/dept/${carpeta.departamento}/${carpeta.obra_id}/${carpeta_id}/${ts}_${safeName}`;
+  const r2Key    = `e${empresa_id}/dept/${deptName}/${obraId}/${carpeta_id || 'root'}/${ts}_${safeName}`;
   await env.FILES.put(r2Key, file.stream(), { httpMetadata: { contentType: file.type || 'application/octet-stream' } });
   const r = await env.DB.prepare(
     'INSERT INTO docs_dept (empresa_id, obra_id, departamento, carpeta_id, r2_key, nombre, mime, tamano, descripcion, subido_por) VALUES (?,?,?,?,?,?,?,?,?,?)'
-  ).bind(empresa_id, carpeta.obra_id, carpeta.departamento, parseInt(carpeta_id), r2Key, file.name,
+  ).bind(empresa_id, obraId, deptName, carpeta_id ? parseInt(carpeta_id) : null, r2Key, file.name,
     file.type || null, file.size || null, descripcion, userNombre || rol).run();
   return json({ ok: true, id: r.meta.last_row_id, nombre: file.name }, 201);
 }
@@ -3979,12 +4035,138 @@ async function editarDocDept(id, request, env) {
   const { empresa_id, rol } = await getAuth(request, env);
   if (!empresa_id) return err('No autorizado', 403);
   if (rol === 'operario') return err('Sin permisos', 403);
-  const { nombre, descripcion } = await request.json().catch(() => ({}));
-  if (!nombre?.trim()) return err('El nombre es obligatorio', 400);
+  const body = await request.json().catch(() => ({}));
   const meta = await env.DB.prepare('SELECT id FROM docs_dept WHERE id = ? AND empresa_id = ?').bind(id, empresa_id).first();
   if (!meta) return err('Documento no encontrado', 404);
+  // Mover a otra carpeta
+  if (body.carpeta_id !== undefined) {
+    const nuevaId = body.carpeta_id ? parseInt(body.carpeta_id) : null;
+    if (nuevaId) {
+      const dest = await env.DB.prepare('SELECT id FROM carpetas WHERE id = ? AND empresa_id = ?').bind(nuevaId, empresa_id).first();
+      if (!dest) return err('Carpeta destino no encontrada', 404);
+    }
+    await env.DB.prepare('UPDATE docs_dept SET carpeta_id = ? WHERE id = ? AND empresa_id = ?').bind(nuevaId, id, empresa_id).run();
+    return json({ ok: true });
+  }
+  // Renombrar / editar descripción
+  const { nombre, descripcion } = body;
+  if (!nombre?.trim()) return err('El nombre es obligatorio', 400);
   await env.DB.prepare('UPDATE docs_dept SET nombre = ?, descripcion = ? WHERE id = ? AND empresa_id = ?')
     .bind(nombre.trim(), descripcion?.trim() || null, id, empresa_id).run();
   return json({ ok: true });
+}
+
+// ── Renombrar carpeta ─────────────────────────────────────────────────────────
+async function renombrarCarpeta(id, request, env) {
+  const { empresa_id, rol } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  if (rol === 'operario') return err('Sin permisos', 403);
+  const { nombre } = await request.json().catch(() => ({}));
+  if (!nombre?.trim()) return err('El nombre es obligatorio', 400);
+  const carpeta = await env.DB.prepare('SELECT id FROM carpetas WHERE id = ? AND empresa_id = ?').bind(id, empresa_id).first();
+  if (!carpeta) return err('Carpeta no encontrada', 404);
+  await env.DB.prepare('UPDATE carpetas SET nombre = ? WHERE id = ? AND empresa_id = ?').bind(nombre.trim(), id, empresa_id).run();
+  return json({ ok: true });
+}
+
+// ── Borrar carpeta de forma recursiva (helper) ────────────────────────────────
+async function borrarCarpetaRecursive(id, empresa_id, env) {
+  const { results: docs } = await env.DB.prepare('SELECT r2_key FROM docs_dept WHERE carpeta_id = ? AND empresa_id = ?').bind(id, empresa_id).all();
+  await Promise.all(docs.map(d => env.FILES.delete(d.r2_key)));
+  await env.DB.prepare('DELETE FROM docs_dept  WHERE carpeta_id = ? AND empresa_id = ?').bind(id, empresa_id).run();
+  await env.DB.prepare('DELETE FROM docs_notas WHERE carpeta_id = ? AND empresa_id = ?').bind(id, empresa_id).run().catch(() => {});
+  const { results: subs } = await env.DB.prepare('SELECT id FROM carpetas WHERE parent_id = ? AND empresa_id = ?').bind(id, empresa_id).all().catch(() => ({ results: [] }));
+  for (const sub of subs) await borrarCarpetaRecursive(sub.id, empresa_id, env);
+  await env.DB.prepare('DELETE FROM carpetas WHERE id = ? AND empresa_id = ?').bind(id, empresa_id).run();
+}
+
+// ── Notas de texto (docs_notas) ───────────────────────────────────────────────
+async function listarNotas(request, env) {
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const url        = new URL(request.url);
+  const carpeta_id = url.searchParams.get('carpeta_id');
+  const obra_id_p  = url.searchParams.get('obra_id');
+  const dept_p     = url.searchParams.get('departamento');
+  if (carpeta_id) {
+    const { results } = await env.DB.prepare(
+      'SELECT * FROM docs_notas WHERE carpeta_id = ? AND empresa_id = ? ORDER BY created_at DESC'
+    ).bind(parseInt(carpeta_id), empresa_id).all();
+    return json(results);
+  }
+  if (obra_id_p && dept_p) {
+    const { results } = await env.DB.prepare(
+      'SELECT * FROM docs_notas WHERE obra_id = ? AND departamento = ? AND carpeta_id IS NULL AND empresa_id = ? ORDER BY created_at DESC'
+    ).bind(parseInt(obra_id_p), dept_p, empresa_id).all();
+    return json(results);
+  }
+  return err('Faltan parámetros', 400);
+}
+
+async function crearNota(request, env) {
+  const { empresa_id, rol, obraId, departamento, nombre: userNombre } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  if (rol === 'operario') return err('Sin permisos', 403);
+  const { titulo, contenido, carpeta_id, obra_id, departamento: dept_param } = await request.json().catch(() => ({}));
+  if (!titulo?.trim()) return err('El título es obligatorio', 400);
+  let obraIdFinal = parseInt(obra_id || obraId || 0) || null;
+  let deptFinal   = dept_param || departamento || null;
+  if (carpeta_id) {
+    const cp = await env.DB.prepare('SELECT obra_id, departamento FROM carpetas WHERE id = ? AND empresa_id = ?').bind(parseInt(carpeta_id), empresa_id).first();
+    if (cp) { obraIdFinal = cp.obra_id; deptFinal = cp.departamento; }
+  }
+  const r = await env.DB.prepare(
+    'INSERT INTO docs_notas (empresa_id, obra_id, departamento, carpeta_id, titulo, contenido, creado_por, updated_at) VALUES (?,?,?,?,?,?,?,?)'
+  ).bind(empresa_id, obraIdFinal, deptFinal, carpeta_id ? parseInt(carpeta_id) : null,
+    titulo.trim(), contenido || '', userNombre || rol, AHORA()).run();
+  return json({ ok: true, id: r.meta.last_row_id }, 201);
+}
+
+async function editarNota(id, request, env) {
+  const { empresa_id, rol } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  if (rol === 'operario') return err('Sin permisos', 403);
+  const { titulo, contenido } = await request.json().catch(() => ({}));
+  if (!titulo?.trim()) return err('El título es obligatorio', 400);
+  const nota = await env.DB.prepare('SELECT id FROM docs_notas WHERE id = ? AND empresa_id = ?').bind(id, empresa_id).first();
+  if (!nota) return err('Nota no encontrada', 404);
+  await env.DB.prepare('UPDATE docs_notas SET titulo = ?, contenido = ?, updated_at = ? WHERE id = ? AND empresa_id = ?')
+    .bind(titulo.trim(), contenido || '', AHORA(), id, empresa_id).run();
+  return json({ ok: true });
+}
+
+async function borrarNota(id, request, env) {
+  const { empresa_id, rol } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  if (rol === 'operario') return err('Sin permisos', 403);
+  await env.DB.prepare('DELETE FROM docs_notas WHERE id = ? AND empresa_id = ?').bind(id, empresa_id).run();
+  return json({ ok: true });
+}
+
+// ── Migración v4.86 ───────────────────────────────────────────────────────────
+async function runMigrations(request, env) {
+  const { isSuperadmin } = await getAuth(request, env);
+  if (!isSuperadmin) return err('No autorizado', 403);
+  const results = [];
+  try {
+    await env.DB.prepare('ALTER TABLE carpetas ADD COLUMN parent_id INTEGER').run();
+    results.push('carpetas.parent_id: añadido');
+  } catch { results.push('carpetas.parent_id: ya existe'); }
+  try {
+    await env.DB.prepare(`CREATE TABLE IF NOT EXISTS docs_notas (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      empresa_id INTEGER NOT NULL,
+      obra_id INTEGER,
+      departamento TEXT,
+      carpeta_id INTEGER,
+      titulo TEXT NOT NULL,
+      contenido TEXT,
+      creado_por TEXT,
+      updated_at TEXT,
+      created_at TEXT DEFAULT (datetime('now'))
+    )`).run();
+    results.push('docs_notas: creada');
+  } catch(e) { results.push('docs_notas: ' + e.message); }
+  return json({ ok: true, results });
 }
 
