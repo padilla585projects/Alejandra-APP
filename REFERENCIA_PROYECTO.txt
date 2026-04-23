@@ -30,10 +30,21 @@ AL TERMINAR CUALQUIER CAMBIO DE CÓDIGO (obligatorio, sin excepción):
   6. REFERENCIA_PROYECTO.txt (raíz) → actualizar versiones + historial reciente
      ⚠️ Este archivo NO está en git — solo actualizar en local
 
-  Push app nueva:  git -c credential.helper= push https://padilla585projects:
-                   <TOKEN>@github.com/padilla585projects/Alejandra-APP.git main
-  Push app vieja:  git -c credential.helper= push https://padilla585:
-                   <TOKEN>@github.com/padilla585/Bobinaap.git main
+  ┌──────────────────────────────────────────────────────────────────────┐
+  │  APP NUEVA  →  cuenta padilla585.projects@gmail.com                  │
+  │  GitHub:  github.com/padilla585projects/Alejandra-APP                │
+  │  CF:      alejandra-app-api  (account d65ead2b…)                     │
+  │  D1:      alejandra-db (0c9eccde…)                                   │
+  │                                                                      │
+  │  APP VIEJA →  cuenta padilla585@gmail.com                            │
+  │  GitHub:  github.com/padilla585/Bobinaap                             │
+  │  CF:      gestibobina-proxy  (account c100d5a0…)                     │
+  │  D1:      gestibobina-db (eac9f2d2…)                                 │
+  └──────────────────────────────────────────────────────────────────────┘
+
+  Push app nueva:  git push origin main
+                   (origin = padilla585projects/Alejandra-APP — token en NUEVA_CUENTA.txt)
+  Push espejo:     git push --force https://padilla585:<TOKEN>@github.com/padilla585/Bobinaap.git main
   (tokens en Bobinaap/NUEVA_CUENTA.txt)
 
 SI CAMBIAS DE ORDENADOR:
