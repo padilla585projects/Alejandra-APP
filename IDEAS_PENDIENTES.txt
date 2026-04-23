@@ -170,7 +170,7 @@ LEYENDA DE ESTADO:
     · Fix: filtro aplicado siempre para todos los roles
     · Reportado: 22/04/2026 — Adrian
 
-[ ] BUG-048 — Icono de devolución en departamento eléctrico fuera de estilo
+[✓] BUG-048 — Icono de devolución en departamento eléctrico fuera de estilo  [HECHO v4.86]
     · El icono de devolución en eléctrico no sigue el estilo visual de la app.
     · Hay que sustituirlo por uno coherente con el diseño actual.
     · Reportado: 16/04/2026 — Admin, empresa 1
@@ -361,7 +361,7 @@ LEYENDA DE ESTADO:
     · rolLabel('superadmin') devuelve 'SA' → libera espacio en la barra superior
     · Reportado: 20/04/2026 — Adrian, CPD Getafe
 
-[ ] MEJ-044 — Descripción de máquina/equipo a pantalla completa
+[✓] MEJ-044 — Descripción de máquina/equipo a pantalla completa  [HECHO v4.86]
     · Al pulsar la descripción de un equipo, mostrarla en un modal a pantalla completa.
     · Reportado: 16/04/2026 — Admin, empresa 1
 
@@ -370,7 +370,7 @@ LEYENDA DE ESTADO:
     · filtrarSug() actualizado con todos los departamentos.
     · Reportado: 17/04/2026 — Admin, empresa 1
 
-[ ] MEJ-058 — Seguridad: buscar en inventario de todos los departamentos
+[✓] MEJ-058 — Seguridad: buscar en inventario de todos los departamentos  [HECHO v4.86]
     · Al buscar desde el depto. Seguridad, poder ver equipos de todos los departamentos.
     · Requiere decisión: ¿mantener aislamiento por dept o dar visión global a Seguridad?
     · Reportado: 17/04/2026 — Admin, empresa 1
@@ -509,32 +509,32 @@ LEYENDA DE ESTADO:
     · docsVerArchivo() implementado en v4.80.
     · Reportado: 22/04/2026 — Adrian, CPD Getafe
 
-[ ] MEJ-144 — Docs: subir archivos directamente sin crear carpeta (#144 BD)
+[✓] MEJ-144 — Docs: subir archivos directamente sin crear carpeta  [HECHO v4.86]
     · Actualmente hay que crear una carpeta antes de poder subir archivos.
     · Permitir subir archivos a nivel raíz de obra/departamento sin carpeta obligatoria.
     · Reportado: 22/04/2026 — Adrian, CPD Getafe
 
-[ ] MEJ-149 — Panel de selección de obra tipo el selector de empresa (#149 BD)
+[✓] MEJ-149 — Panel de selección de obra tipo el selector de empresa  [HECHO v4.86]
     · Después del selector de empresa (y/o de departamento), mostrar un panel visual
       para elegir la obra activa con cards grandes, igual que la pantalla de empresa.
     · La obra elegida sería la activa por defecto hasta que se cambie.
     · Reportado: 22/04/2026 — Adrian, CPD Getafe
 
-[ ] MEJ-155 — Docs: subcarpetas dentro de carpetas (#155 BD)
+[✓] MEJ-155 — Docs: subcarpetas dentro de carpetas  [HECHO v4.86]
     · Poder crear carpetas dentro de otras carpetas para organizar mejor la documentación.
     · Estructura jerárquica: empresa/obra/departamento/carpeta/subcarpeta/archivos.
     · Reportado: 23/04/2026 — Adrian, CPD Getafe
 
-[ ] MEJ-136 — Docs: notas de texto editable dentro de carpetas
+[✓] MEJ-136 — Docs: notas de texto editable dentro de carpetas  [HECHO v4.86]
     · Además de archivos, poder crear "notas" (bloc de notas) directamente en la app.
     · Editor de texto simple in-app: crear, editar contenido, guardar.
     · Se almacena como registro en D1 (no como archivo en R2).
     · Estructura: empresa/obra/departamento igual que los archivos.
     · Reportado: 22/04/2026 — Adrian, CPD Getafe
 
-[~] MEJ-137 — Docs: renombrar y mover archivos y carpetas  [PARCIAL v4.80]
-    · [✓] Renombrar archivo + editar descripción: botón ✏️ + modal (docsEditarArchivo) — v4.80
-    · [ ] Mover archivo de una carpeta a otra dentro del mismo obra/departamento — pendiente
+[~] MEJ-137 — Docs: renombrar y mover archivos y carpetas  [PARCIAL v4.86]
+    · [✓] Renombrar archivo + editar descripción: botón ✏️ + modal — v4.80
+    · [✓] Mover archivo de una carpeta a otra (selector en modal editar) — v4.86
     · [ ] Renombrar carpetas — pendiente
     · Reportado: 22/04/2026 — Adrian, CPD Getafe
 

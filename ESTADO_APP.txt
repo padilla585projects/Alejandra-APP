@@ -5,7 +5,7 @@
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 23/04/2026
-VERSIÓN ACTUAL: v4.19 app vieja | v4.85 app nueva
+VERSIÓN ACTUAL: v4.19 app vieja | v4.86 app nueva
 
 ⚠️  ANTES DE CODIFICAR: leer NuevaApp/IDEAS_PENDIENTES.txt
     Lista completa de bugs activos, mejoras y features pendientes.
@@ -91,6 +91,17 @@ Backup local: <RUTA_BASE>\backup_db_20260413.sql
 ================================================================================
   HISTORIAL DE VERSIONES
 ================================================================================
+
+v4.86  |  23/04/2026  [SOLO NUEVA APP]
+  - BUG-048: icono SVG en botón Devolución (sustituye carácter ↩ fuera de estilo)
+  - MEJ-044: modal descripción completa al pulsar notas de equipo en cards de inventario
+  - MEJ-058: buscarMaquina ahora busca también en bobinas; buscarItemSeg filtra empresa_id
+  - MEJ-136: notas de texto editables en Docs (raíz y dentro de carpetas) — botón 📝 Nueva nota
+  - MEJ-137: selector "Mover a carpeta" en modal editar archivo (mover entre carpetas)
+  - MEJ-144: subir archivos y fotos directamente a raíz sin crear carpeta primero
+  - MEJ-149: selector visual de obra (cards grandes) tras elegir departamento
+  - MEJ-155: subcarpetas dentro de carpetas Docs (botón 📁+, navegación con Volver al padre)
+  - Worker y GitHub actualizados ✅
 
 v2.9  |  13/04/2026
   - CRUD completo: bobinas, PEMP, carretillas
