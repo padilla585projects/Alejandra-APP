@@ -5,7 +5,7 @@
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 23/04/2026
-VERSIÓN ACTUAL: v4.19 app vieja | v4.86 app nueva
+VERSIÓN ACTUAL: v4.19 app vieja | v4.87 app nueva
 
 ⚠️  ANTES DE CODIFICAR: leer NuevaApp/IDEAS_PENDIENTES.txt
     Lista completa de bugs activos, mejoras y features pendientes.
@@ -91,6 +91,11 @@ Backup local: <RUTA_BASE>\backup_db_20260413.sql
 ================================================================================
   HISTORIAL DE VERSIONES
 ================================================================================
+
+v4.87  |  23/04/2026  [SOLO NUEVA APP]
+  - BUG: selector visual de obra (MEJ-149) solo visible para superadmin y empresa_admin
+    · Los encargados tienen obra fija asignada → se saltan el selector
+  - GitHub actualizado ✅
 
 v4.86  |  23/04/2026  [SOLO NUEVA APP]
   - BUG-048: icono SVG en botón Devolución (sustituye carácter ↩ fuera de estilo)

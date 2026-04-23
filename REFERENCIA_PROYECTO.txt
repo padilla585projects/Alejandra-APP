@@ -65,6 +65,9 @@ REGLA DE DEPLOY:
   - En ambos casos: subir versión + actualizar txts + deploy worker + git push
 
 ÚLTIMO CAMBIO REALIZADO:
+  v4.87 [nueva] — 23/04/2026
+  · BUG: selector visual obra solo para superadmin/empresa_admin (no encargados)
+
   v4.86 [nueva] — 23/04/2026
   · BUG-048: icono SVG en botón Devolución (sustituye ↩ unicode fuera de estilo)
   · MEJ-044: modal descripción completa al pulsar notas en cards de inventario
