@@ -1386,12 +1386,15 @@ async function editarUsuario(id, request, env) {
   const usuario = await env.DB.prepare('SELECT * FROM usuarios WHERE id = ?').bind(id).first();
   if (!usuario) return err('Usuario no encontrado', 404);
 
-  if (!isSuperadmin && !isAdmin && !isEmpresaAdmin) {
-    if (isEncargado && usuario.obra_id !== obraId) return err('No autorizado', 403);
-    if (!isEncargado) return err('No autorizado', 403);
-  }
-
   const body = await request.json().catch(() => ({}));
+
+  if (!isSuperadmin && !isAdmin && !isEmpresaAdmin) {
+    if (!isEncargado) return err('No autorizado', 403);
+    // Encargado solo puede editar usuarios sin obra o de su propia obra
+    if (usuario.obra_id !== null && usuario.obra_id !== obraId) return err('No autorizado', 403);
+    // Encargado solo puede asignar su propia obra (no la de otro encargado)
+    if (body.obra_id !== undefined && body.obra_id !== null && parseInt(body.obra_id) !== obraId) return err('No autorizado', 403);
+  }
   const campos = ['nombre', 'codigo', 'rol', 'obra_id', 'departamento'];
   const sets = [];
   const vals = [];
@@ -1403,6 +1406,17 @@ async function editarUsuario(id, request, env) {
 
   try {
     await env.DB.prepare(`UPDATE usuarios SET ${sets.join(', ')} WHERE id = ?`).bind(...vals).run();
+
+    // Si cambió obra_id, sincronizar todas las sesiones activas del usuario
+    if (body.obra_id !== undefined) {
+      const nuevaObraId = body.obra_id ? parseInt(body.obra_id) : null;
+      const obraRow = nuevaObraId
+        ? await env.DB.prepare('SELECT nombre FROM obras WHERE id = ?').bind(nuevaObraId).first()
+        : null;
+      await env.DB.prepare('UPDATE sesiones SET obra_id = ?, obra_nombre = ? WHERE usuario_id = ?')
+        .bind(nuevaObraId, obraRow?.nombre || null, parseInt(id)).run();
+    }
+
     return json({ ok: true, mensaje: 'Usuario actualizado' });
   } catch (e) {
     if (e.message.includes('UNIQUE')) return err('El código ya existe', 409);

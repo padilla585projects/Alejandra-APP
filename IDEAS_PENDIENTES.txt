@@ -1,7 +1,7 @@
 ================================================================================
   ALEJANDRA APP — IDEAS, MEJORAS Y ERRORES PENDIENTES
   Recogidos de: Canal Telegram @AlejandraAPP_bot
-  Última actualización: 22/04/2026 (v4.83) — fix: superadmin veía inventario de eléctrico en mecánicas
+  Última actualización: 23/04/2026 — nuevos bugs/mejoras de hoy + marcados resueltos
 
   ⚠️  LEER ESTE ARCHIVO ANTES DE CUALQUIER SESIÓN DE CODIFICACIÓN.
   ⚠️  Marcar como [HECHO vX.XX] cuando se implemente. No borrar las líneas.
@@ -180,6 +180,35 @@ LEYENDA DE ESTADO:
     · Revisar: polling, setInterval activos, listeners duplicados y workers en background.
     · Reportado: 15/04/2026 — Admin, empresa 1
 
+[ ] BUG-151 — Número de versión descuadrado en tarjeta Documentación (#151 BD)
+    · En la tarjeta Documentación del home aparece un número (la versión) que no debería estar ahí.
+    · Limpiar el versionBadge de esa pantalla o reposicionarlo.
+    · Reportado: 22/04/2026 — Adrian, empresa 1
+
+[ ] BUG-152 — Botón "Atrás" no vuelve a la página anterior desde Documentación (#152 BD)
+    · Al estar en la pantalla de Docs y pulsar atrás, no navega al home.
+    · Importante arreglar.
+    · Reportado: 23/04/2026 — Adrian, CPD Getafe
+
+[ ] BUG-153 — Docs no actualiza al cambiar de obra, borrar o editar (#153 BD)
+    · El módulo de Documentación no refresca su contenido cuando: se cambia la obra en el header,
+      se borra un archivo/carpeta, o se edita un nombre.
+    · Hay que forzar un reload de docsCargar() en cada una de esas acciones.
+    · Reportado: 23/04/2026 — Adrian, CPD Getafe
+
+[ ] BUG-154 — Badge del icono de Ideas marca mal el número de pendientes (#154 BD)
+    · El contador del icono de Ideas en la barra de navegación no actualiza bien el estado.
+    · A veces muestra un número incorrecto o no se pone a cero al marcar como leídas.
+    · Reportado: 23/04/2026 — Adrian, CPD Getafe
+
+[✓] BUG-156 — Alberto sin obra asignada (extendido a todos los no-admins)  [HECHO v4.84]
+    · Dos bugs: (1) encargado no podía asignar obra a usuarios sin obra (null !== obraId)
+      Fix: permitido si usuario.obra_id es null o es la propia obra del encargado.
+    · (2) al asignar obra desde Ajustes→Usuarios, la sesión activa no se actualizaba →
+      el usuario seguía sin ver la obra hasta hacer logout+login.
+      Fix: UPDATE sesiones SET obra_id, obra_nombre WHERE usuario_id tras cada cambio.
+    · Reportado: 23/04/2026 — Alberto Martínez
+
 ================================================================================
   🔧 MEJORAS (solo app nueva, salvo indicación contraria)
 ================================================================================
@@ -336,8 +365,9 @@ LEYENDA DE ESTADO:
     · Al pulsar la descripción de un equipo, mostrarla en un modal a pantalla completa.
     · Reportado: 16/04/2026 — Admin, empresa 1
 
-[ ] MEJ-053 — Filtrar sugerencias/ideas por departamento en panel admin
-    · En Ajustes → Ideas, añadir selector de filtro por departamento para organizar mejor.
+[✓] MEJ-053 — Filtrar sugerencias/ideas por departamento en panel admin  [HECHO v4.66]
+    · Botones ⚡ Eléctrico / 🔧 Mecánicas / 🔺 Seguridad / 👷 Personal en panel Ajustes→Ideas.
+    · filtrarSug() actualizado con todos los departamentos.
     · Reportado: 17/04/2026 — Admin, empresa 1
 
 [ ] MEJ-058 — Seguridad: buscar en inventario de todos los departamentos
@@ -474,6 +504,27 @@ LEYENDA DE ESTADO:
     · Tablas D1: carpetas + docs_dept. Bucket R2: alejandra-app-files.
     · Reportado: 22/04/2026 — Adrian, CPD Getafe
 
+[✓] MEJ-142 — Visor de archivos in-app (fotos y documentos)  [HECHO v4.80]
+    · Tap en icono/nombre de archivo → vista previa: imágenes en lightbox, PDF en nueva pestaña.
+    · docsVerArchivo() implementado en v4.80.
+    · Reportado: 22/04/2026 — Adrian, CPD Getafe
+
+[ ] MEJ-144 — Docs: subir archivos directamente sin crear carpeta (#144 BD)
+    · Actualmente hay que crear una carpeta antes de poder subir archivos.
+    · Permitir subir archivos a nivel raíz de obra/departamento sin carpeta obligatoria.
+    · Reportado: 22/04/2026 — Adrian, CPD Getafe
+
+[ ] MEJ-149 — Panel de selección de obra tipo el selector de empresa (#149 BD)
+    · Después del selector de empresa (y/o de departamento), mostrar un panel visual
+      para elegir la obra activa con cards grandes, igual que la pantalla de empresa.
+    · La obra elegida sería la activa por defecto hasta que se cambie.
+    · Reportado: 22/04/2026 — Adrian, CPD Getafe
+
+[ ] MEJ-155 — Docs: subcarpetas dentro de carpetas (#155 BD)
+    · Poder crear carpetas dentro de otras carpetas para organizar mejor la documentación.
+    · Estructura jerárquica: empresa/obra/departamento/carpeta/subcarpeta/archivos.
+    · Reportado: 23/04/2026 — Adrian, CPD Getafe
+
 [ ] MEJ-136 — Docs: notas de texto editable dentro de carpetas
     · Además de archivos, poder crear "notas" (bloc de notas) directamente en la app.
     · Editor de texto simple in-app: crear, editar contenido, guardar.
@@ -481,9 +532,10 @@ LEYENDA DE ESTADO:
     · Estructura: empresa/obra/departamento igual que los archivos.
     · Reportado: 22/04/2026 — Adrian, CPD Getafe
 
-[ ] MEJ-137 — Docs: renombrar y mover archivos y carpetas
-    · Botón ✏️ en cada carpeta y archivo para renombrar.
-    · Mover archivo de una carpeta a otra dentro del mismo obra/departamento.
+[~] MEJ-137 — Docs: renombrar y mover archivos y carpetas  [PARCIAL v4.80]
+    · [✓] Renombrar archivo + editar descripción: botón ✏️ + modal (docsEditarArchivo) — v4.80
+    · [ ] Mover archivo de una carpeta a otra dentro del mismo obra/departamento — pendiente
+    · [ ] Renombrar carpetas — pendiente
     · Reportado: 22/04/2026 — Adrian, CPD Getafe
 
 [ ] MEJ-138 — Botón "Disponible" en notificación Telegram al añadir herramienta
@@ -493,9 +545,9 @@ LEYENDA DE ESTADO:
     · Complementa MEJ-132 (Telegram bidireccional con botones inline).
     · Reportado: 22/04/2026 — Adrian, CPD Getafe
 
-[ ] MEJ-139 — Docs: compartir carpeta completa por Telegram y WhatsApp
-    · Botón "Compartir" en cada carpeta que envíe todos sus archivos (o un ZIP).
-    · Compartir por WhatsApp (share API) y enviar listado + archivos a Telegram.
+[✓] MEJ-139 — Docs: compartir carpeta completa  [HECHO v4.80]
+    · Botón 📤 en cabecera de carpeta → Web Share API con todos los archivos.
+    · docsCompartirCarpeta() implementado en v4.80.
     · Reportado: 22/04/2026 — Adrian, CPD Getafe
 
 [ ] NEW-08 — Chat interno entre empleados de la misma empresa
