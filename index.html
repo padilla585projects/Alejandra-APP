@@ -2785,6 +2785,7 @@ window.guardarDeptosEmpresa = guardarDeptosEmpresa;
 window.docsEmpresaSubir    = docsEmpresaSubir;
 window.docsEmpresaBorrar   = docsEmpresaBorrar;
 window.docsNuevaCarpeta    = docsNuevaCarpeta;
+window.docsRenombrarCarpeta = docsRenombrarCarpeta;
 window.docsBorrarCarpeta   = docsBorrarCarpeta;
 window.docsAbrirCarpeta    = docsAbrirCarpeta;
 window.docsSubirArchivo    = docsSubirArchivo;
@@ -4275,8 +4276,11 @@ async function docsCargar(containerId) {
             <div style="font-weight:700;font-size:14px;color:var(--text)">${cp.nombre}</div>
             <div style="font-size:11px;color:var(--muted)">${cp.creado_por ? 'Por ' + cp.creado_por : ''} ${cp.created_at ? '· ' + cp.created_at.slice(0,10) : ''}</div>
           </div>
-          ${puedeEditar ? `<button onclick="event.stopPropagation();docsBorrarCarpeta(${cp.id},'${containerId}')"
-            style="padding:6px 10px;background:#ef444415;border:1px solid #ef444430;border-radius:8px;font-size:13px;color:#ef4444;cursor:pointer">🗑️</button>` : ''}
+          ${puedeEditar ? `
+            <button onclick="event.stopPropagation();docsRenombrarCarpeta(${cp.id},'${cp.nombre.replace(/'/g,"\\'")}','${containerId}')"
+              style="padding:6px 10px;background:var(--surface);border:1px solid var(--border);border-radius:8px;font-size:13px;cursor:pointer">✏️</button>
+            <button onclick="event.stopPropagation();docsBorrarCarpeta(${cp.id},'${containerId}')"
+              style="padding:6px 10px;background:#ef444415;border:1px solid #ef444430;border-radius:8px;font-size:13px;color:#ef4444;cursor:pointer">🗑️</button>` : ''}
         </div>`).join('')}
       ${rootNotas.map(n => docsRenderNota(n, puedeEditar, null, containerId, null)).join('')}
       ${rootDocs.map(d  => docsRenderArchivo(d, puedeEditar, null, containerId, '')).join('')}
@@ -4336,8 +4340,11 @@ async function docsAbrirCarpeta(carpetaId, nombre, containerId, parentCarpetaId,
              onclick="docsAbrirCarpeta(${sub.id},'${sub.nombre.replace(/'/g,"\\'")}','${containerId}',${carpetaId},'${nomEsc}')">
           <span style="font-size:22px">📁</span>
           <div style="flex:1;min-width:0"><div style="font-weight:700;font-size:13px;color:var(--text)">${sub.nombre}</div></div>
-          ${puedeEditar ? `<button onclick="event.stopPropagation();docsBorrarCarpeta(${sub.id},'${containerId}')"
-            style="padding:5px 8px;background:#ef444415;border:1px solid #ef444430;border-radius:8px;font-size:12px;color:#ef4444;cursor:pointer">🗑️</button>` : ''}
+          ${puedeEditar ? `
+            <button onclick="event.stopPropagation();docsRenombrarCarpeta(${sub.id},'${sub.nombre.replace(/'/g,"\\'")}','${containerId}')"
+              style="padding:5px 8px;background:var(--surface);border:1px solid var(--border);border-radius:8px;font-size:12px;cursor:pointer">✏️</button>
+            <button onclick="event.stopPropagation();docsBorrarCarpeta(${sub.id},'${containerId}')"
+              style="padding:5px 8px;background:#ef444415;border:1px solid #ef444430;border-radius:8px;font-size:12px;color:#ef4444;cursor:pointer">🗑️</button>` : ''}
         </div>`).join('')}
       ${notas.map(n => docsRenderNota(n, puedeEditar, carpetaId, containerId, nombre)).join('')}
       <div id="docsListaArchivos_${carpetaId}">
@@ -4537,6 +4544,16 @@ async function docsNuevaCarpeta(containerId) {
       body: JSON.stringify({ obra_id: s.obra_id, departamento: s.departamento, nombre })
     });
     if (res.ok) { toast('📁 Carpeta creada'); docsCargar(containerId); }
+    else { const e = await res.json().catch(()=>{}); toast('❌ ' + (e?.error || 'Error'), 'err'); }
+  } catch { toast('❌ Error de red', 'err'); }
+}
+
+async function docsRenombrarCarpeta(id, nombreActual, containerId) {
+  const nuevo = prompt('Nuevo nombre:', nombreActual)?.trim();
+  if (!nuevo || nuevo === nombreActual) return;
+  try {
+    const res = await apiCall('/carpetas/' + id, { method: 'PUT', body: JSON.stringify({ nombre: nuevo }) });
+    if (res.ok) { toast('✅ Carpeta renombrada'); docsCargar(containerId); }
     else { const e = await res.json().catch(()=>{}); toast('❌ ' + (e?.error || 'Error'), 'err'); }
   } catch { toast('❌ Error de red', 'err'); }
 }
@@ -6760,7 +6777,7 @@ async function cargarObrasSelectUsuario() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '4.87';
+const APP_VERSION = '4.88';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
