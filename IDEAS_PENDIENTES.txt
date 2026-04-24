@@ -1,7 +1,7 @@
 ================================================================================
   ALEJANDRA APP — IDEAS, MEJORAS Y ERRORES PENDIENTES
   Recogidos de: Canal Telegram @AlejandraAPP_bot
-  Última actualización: 24/04/2026 — NEW-24 hecho v5.00: alertas stock mínimo (herr + seg + bobinas)
+  Última actualización: 24/04/2026 — BUG-164 resuelto v5.01: chat no mostraba mensajes enviados
 
   ⚠️  LEER ESTE ARCHIVO ANTES DE CUALQUIER SESIÓN DE CODIFICACIÓN.
   ⚠️  Marcar como [HECHO vX.XX] cuando se implemente. No borrar las líneas.
@@ -257,6 +257,14 @@ LEYENDA DE ESTADO:
     · Reportado: 24/04/2026 — usuario (sugerencia #163 BD)
 
 [✓] BUG-163 — Notificaciones borradas vuelven a aparecer al reiniciar la app  [HECHO v4.96]
+
+[✓] BUG-164 — Chat: mensajes enviados no aparecen en la conversación  [HECHO v5.01]
+    · chatEnviar enviaba { mensaje } sin obra_id → worker guardaba con auth.obra_id (null en D1 para SA/EA).
+    · chatPoll filtraba con ?obra_id=X (de localStorage) → mensaje con obra_id=null nunca aparecía.
+    · El usuario creía que no se enviaba, pero sí estaba en D1.
+    · Fix: chatEnviar incluye obra_id de getSession() en el body del POST.
+    · Tras enviar: recarga completa (chatCargar) en lugar de chatPoll parcial.
+    · Reportado: 24/04/2026 — Adrian
     · checkNotifBadge() contaba usuarios pendientes sin filtrar por lastSeen →
       el badge siempre aparecía si había algún pendiente, ignorando el NOTIF_SEEN_KEY.
     · Fix: añadido filtro `(u.created_at||'') > lastSeen` al contador de pendientes.
