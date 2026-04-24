@@ -1,7 +1,7 @@
 ================================================================================
   ALEJANDRA APP — IDEAS, MEJORAS Y ERRORES PENDIENTES
   Recogidos de: Canal Telegram @AlejandraAPP_bot
-  Última actualización: 24/04/2026 — NEW-22 hecho v5.06: registro de incidencias con fotos
+  Última actualización: 24/04/2026 — NEW-13 hecho v5.07: calendario con festivos automáticos
 
   ⚠️  LEER ESTE ARCHIVO ANTES DE CUALQUIER SESIÓN DE CODIFICACIÓN.
   ⚠️  Marcar como [HECHO vX.XX] cuando se implemente. No borrar las líneas.
@@ -642,18 +642,15 @@ LEYENDA DE ESTADO:
     · Decisiones pendientes: precios definitivos, qué limitar en cada plan, si Stripe desde el inicio.
     · Reportado: 18/04/2026 — Adrian
 
-[ ] NEW-13 — Calendario de obra con eventos y avisos  [PENDIENTE]
-    · Vista mensual con dots de colores en días que tienen eventos.
-    · Crear evento: título, descripción, fecha, hora (opcional), tipo (entrega, inspección,
-      mantenimiento, reunión, caducidad, otro).
-    · Notificación push el día del evento + recordatorio 1 día antes (configurable).
-    · También aviso por Telegram al encargado/admin de la obra.
-    · Filtro: "Mi obra" / "Todas las obras" (para SA/EA).
-    · Accesible desde tarjeta en el home de cada departamento + botón en header o en Docs.
-    · Roles: crear/editar → encargado, EA, SA. Ver → todos.
-    · D1: nueva tabla `eventos_calendario` (id, empresa_id, obra_id, departamento, titulo,
-      descripcion, fecha TEXT, hora TEXT, tipo TEXT, creado_por, created_at).
-    · Añadido: 24/04/2026 — Adrian
+[✓] NEW-13 — Calendario de obra con eventos y avisos  [HECHO v5.07]
+    · Grid mensual navegable. Festivos automáticos (Nager.Date API, nacional + Madrid).
+    · Festivos Convenio Metal Madrid = nacionales + Comunidad de Madrid.
+    · Crear evento: título, tipo, fecha, hora, descripción, recordatorio (0/1/3/7 días).
+    · Cron 7am: Telegram para eventos del día + recordatorios anticipados.
+    · Tarjeta 📅 Calendario en home (todos los depts).
+    · Dashboard: próximo evento conectado al módulo.
+    · Pendiente: soporte multi-comunidad por obra (campo comunidad en obras).
+    · Añadido: 24/04/2026 — Adrian | Hecho: 24/04/2026
 
 [ ] NEW-15 — Control de mantenimiento preventivo de equipos  [PENDIENTE]
     · En cada PEMP y carretilla: campo "Próxima revisión" (fecha) y "Próximo mantenimiento".

@@ -5,7 +5,7 @@
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 24/04/2026
-VERSIÓN ACTUAL APP NUEVA: v5.06
+VERSIÓN ACTUAL APP NUEVA: v5.07
 VERSIÓN ACTUAL APP VIEJA: v4.19 (congelada — solo recibe bugs críticos)
 
 ⚠️  ANTES DE CODIFICAR: leer NuevaApp/IDEAS_PENDIENTES.txt
@@ -123,6 +123,21 @@ ANTES DE TOCAR CUALQUIER ARCHIVO, VERIFICAR QUE TODO ESTÁ AL DÍA:
 ================================================================================
   HISTORIAL DE VERSIONES — RECIENTES
 ================================================================================
+
+v5.07  |  24/04/2026  [SOLO NUEVA APP]
+  - NEW-13: Calendario de obra con festivos automáticos
+    · D1: tabla eventos_calendario + ALTER obras ADD comunidad (default 'MD')
+    · Worker: GET /festivos → proxy Nager.Date API (nacionales + CC.AA.)
+    · Festivos Convenio Metal Madrid = nacionales + Comunidad de Madrid, auto-anuales
+    · Cron 7am: Telegram para eventos del día + recordatorios anticipados
+    · /obra-dashboard: proximo_evento incluido en respuesta
+    · Frontend: tarjeta 📅 Calendario en screenHome (todos los depts)
+    · Grid mensual navegable, festivos en rojo con leyenda, hoy en índigo
+    · Click en día → nuevo evento con fecha pre-rellenada
+    · Lista de eventos del mes con editar/borrar
+    · Modal: tipo, recordatorio (0/1/3/7 días), fecha, hora opcional
+    · Dashboard home: 📅 Próximo evento conectado al módulo
+  - Worker y GitHub actualizados ✅
 
 v5.06  |  24/04/2026  [SOLO NUEVA APP]
   - NEW-22: Registro de incidencias con fotos (todos los departamentos)
@@ -335,7 +350,8 @@ v4.80  |  22/04/2026  [SOLO NUEVA APP]
     [✓] NEW-25 — Escáner albaranes                 → HECHO v5.03
     [✓] NEW-27 — Dashboard de obra (opción C)      → HECHO v5.04
     [✓] NEW-22 — Registro de incidencias           → HECHO v5.06
-    [ ] NEW-13 — Calendario de obra                → SIGUIENTE
+    [✓] NEW-13 — Calendario de obra                → HECHO v5.07
+    [ ] NEW-17 — Galería de fotos por obra         → SIGUIENTE
     [ ] NEW-22 — Registro de incidencias
     [ ] NEW-13 — Calendario de obra
     [ ] NEW-17 — Galería de fotos por obra
