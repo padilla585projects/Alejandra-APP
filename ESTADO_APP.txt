@@ -260,8 +260,75 @@ v4.80  |  22/04/2026  [SOLO NUEVA APP]
 
   Ver IDEAS_PENDIENTES.txt para la lista completa y actualizada.
 
-  Resumen rápido pendientes importantes:
+  ORDEN DE IMPLEMENTACIÓN ACORDADO (de más fácil a más difícil):
+    [✓] NEW-24 — Alertas stock mínimo             → HECHO v5.00
+    [ ] NEW-26 — Control combustible/carga         → SIGUIENTE
+    [ ] NEW-25 — Escáner albaranes
+    [ ] NEW-27 — Dashboard de obra (opción C)
+    [ ] NEW-22 — Registro de incidencias
+    [ ] NEW-13 — Calendario de obra
+    [ ] NEW-17 — Galería de fotos por obra
+    [ ] NEW-21 — Checklist pre-uso equipos
+    [ ] NEW-15 — Mantenimiento preventivo equipos
+    [ ] NEW-23 — Control EPIs por trabajador
+    [ ] NEW-19 — Carnets del personal
+    [ ] NEW-16 — Partes de trabajo diarios
+    [ ] NEW-20 — Gestión de turnos
+    [ ] NEW-28 — Comparativa entre obras
+    [ ] NEW-18 — Informe automático Telegram (Cron)
     [ ] NEW-10 — Planes de precios (futuro, cuando haya clientes reales)
+
+================================================================================
+  DECISIONES DE DISEÑO ACORDADAS (no cambiar sin consultar)
+================================================================================
+
+  NEW-24 — Alertas stock mínimo:
+    - stock_minimo en tipos_herramienta (no en herramienta individual)
+    - stock_minimo en inventario_seg solo para modo='cantidad'
+    - stock_minimo en tipos_cable (cuenta bobinas activas del mismo tipo)
+    - Telegram automático al bajar del mínimo en salidas seg y cambio estado herr
+
+  NEW-26 — Control combustible/carga:
+    - Pendiente de implementar. Campo en ficha de PEMP y carretilla.
+    - Historial con fecha, cantidad, quién lo hizo, coste opcional.
+
+  NEW-25 — Escáner albaranes:
+    - Foto del albarán asociada al pedido correspondiente.
+    - Almacenada en R2. Visible en ficha del pedido.
+
+  NEW-27 — Dashboard de obra:
+    ⚠️ DECISIÓN CLAVE: Opción C acordada con el usuario.
+    - NO es pantalla de inicio. Es una tarjeta "📊 Resumen de obra" en el home
+      de cada departamento. Al pulsarla → pantalla completa con KPIs.
+    - KPIs: fichajes hoy, stock bajo, equipos en mantenimiento, próximo evento
+      calendario, incidencias abiertas, herramientas sin devolver.
+    - Cada tarjeta del dashboard es clicable → navega al módulo.
+    - Visible para todos los roles.
+
+  NEW-15 — Mantenimiento preventivo:
+    - Toggle por equipo para activar/desactivar aviso (no siempre se quiere).
+    - Aviso solo si toggle activo + X días antes de la fecha de revisión.
+
+  NEW-19 — Carnets del personal:
+    - Aplica a usuarios de la app Y a personal externo (personal_externo).
+    - Quién puede añadir/editar: superadmin y encargados (NO solo admins).
+    - Ver: todos los roles.
+
+  NEW-20 — Gestión de turnos:
+    - Complementa fichajes (no los sustituye).
+    - Planificar quién trabaja cada día antes de que fichen.
+    - Al fichar, el sistema sugiere el turno asignado para esa persona.
+
+  NEW-28 — Comparativa entre obras:
+    - Solo SA y empresa_admin.
+    - KPIs a comparar: fichajes/horas, equipos activos, herramientas fuera,
+      incidencias abiertas, stock bajo.
+
+  REGLA GENERAL:
+    - Consultar siempre al usuario antes de implementar cualquier mejora.
+    - Explicar el plan técnico y esperar confirmación antes de tocar código.
+    - Subir versión en cada cambio. Actualizar ESTADO_APP.txt e IDEAS_PENDIENTES.txt.
+    - Desplegar worker + push GitHub en cada sesión que toque worker.js.
 
 ================================================================================
   NOTAS TÉCNICAS IMPORTANTES
