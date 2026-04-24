@@ -5,7 +5,7 @@
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 24/04/2026
-VERSIÓN ACTUAL APP NUEVA: v5.07
+VERSIÓN ACTUAL APP NUEVA: v5.08
 VERSIÓN ACTUAL APP VIEJA: v4.19 (congelada — solo recibe bugs críticos)
 
 ⚠️  ANTES DE CODIFICAR: leer NuevaApp/IDEAS_PENDIENTES.txt
@@ -123,6 +123,17 @@ ANTES DE TOCAR CUALQUIER ARCHIVO, VERIFICAR QUE TODO ESTÁ AL DÍA:
 ================================================================================
   HISTORIAL DE VERSIONES — RECIENTES
 ================================================================================
+
+v5.08  |  24/04/2026  [SOLO NUEVA APP]
+  - BUG CRÍTICO: app congelada en splash screen al arrancar
+    · Causa: módulo incidencias declaraba 'async function guardarIncidencia()'
+      dos veces → error "Identifier already declared" que impedía ejecutar
+      todo el segundo <script>, incluyendo el código que elimina el splash
+    · Fix: primera impl. renombrada a '_guardarIncidenciaBase()'
+    · guardarIncidencia() pública delega a _guardarIncidenciaBase() o hace
+      el cierre según window._incCerrandoId
+  - SW bumpeado a alejandra-v5.08, version.json actualizado
+  - GitHub actualizado ✅
 
 v5.07  |  24/04/2026  [SOLO NUEVA APP]
   - NEW-13: Calendario de obra con festivos automáticos
