@@ -1074,9 +1074,10 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
 
     <!-- Tabs -->
     <div class="mod-tabs" style="flex-shrink:0">
-      <button class="mod-tab-btn active" id="segTabEscaner" onclick="segSelTab('escaner')">📷 Escáner</button>
-      <button class="mod-tab-btn"        id="segTabInv"     onclick="segSelTab('inventario')">📦 Inventario</button>
-      <button class="mod-tab-btn"        id="segTabHerr"    onclick="segSelTab('herramientas')">🔧 Herramientas</button>
+      <button class="mod-tab-btn active" id="segTabEscaner"  onclick="segSelTab('escaner')">📷 Escáner</button>
+      <button class="mod-tab-btn"        id="segTabInv"      onclick="segSelTab('inventario')">📦 Inventario</button>
+      <button class="mod-tab-btn"        id="segTabHerr"     onclick="segSelTab('herramientas')">🔧 Herramientas</button>
+      <button class="mod-tab-btn"        id="segTabResumen"  onclick="segSelTab('resumen')">📊 Resumen</button>
     </div>
 
     <!-- ── TAB ESCÁNER ── -->
@@ -1838,6 +1839,16 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
     </div>
   </div>
 
+    <!-- TAB RESUMEN SEG (NEW-27) -->
+    <div id="segPanelResumen" style="display:none;flex-direction:column;flex:1;overflow:hidden">
+      <div style="padding:10px 14px 8px;border-bottom:1px solid var(--border);flex-shrink:0">
+        <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:13px;color:var(--accent)">📊 Resumen de seguridad</div>
+      </div>
+      <div id="segDashContent" style="padding:14px;overflow-y:auto;flex:1">
+        <div style="color:var(--muted);font-size:13px;text-align:center;padding:30px">Cargando…</div>
+      </div>
+    </div>
+
   <!-- ══════════════════════════════════════════
        PERSONAL
   ══════════════════════════════════════════ -->
@@ -1858,6 +1869,8 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
         <div style="flex:1"></div>
         <button id="btnExportHoy" onclick="exportarFichajesHoy()" style="padding:5px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:'Montserrat',sans-serif;font-weight:700;font-size:10px;cursor:pointer;letter-spacing:.5px">📊 EXCEL</button>
       </div>
+      <!-- Mini KPI bar (NEW-27) -->
+      <div id="perKpiHoy" style="display:none;flex-shrink:0;padding:10px 14px 8px;border-bottom:1px solid var(--border);display:flex;gap:8px;flex-wrap:wrap"></div>
       <div id="perListaHoy" style="padding:10px 14px 80px;overflow-y:auto;flex:1">
         <div class="empty-state">Cargando...</div>
       </div>
@@ -3909,12 +3922,70 @@ async function segBuscarMaquina(mat) {
 
 function segSelTab(tab) {
   if (tab === 'herramientas') { navTo('herramientas'); return; }
-  document.getElementById('segTabEscaner').classList.toggle('active', tab === 'escaner');
-  document.getElementById('segTabInv').classList.toggle('active', tab === 'inventario');
+  ['escaner','inventario','resumen'].forEach(t => {
+    document.getElementById('segTab' + t.charAt(0).toUpperCase() + t.slice(1))?.classList.toggle('active', t === tab);
+  });
   document.getElementById('segTabHerr')?.classList.remove('active');
-  document.getElementById('segPanelEscaner').style.display = tab === 'escaner'    ? 'flex'  : 'none';
-  document.getElementById('segPanelInv').style.display     = tab === 'inventario' ? 'flex'  : 'none';
+  document.getElementById('segPanelEscaner').style.display  = tab === 'escaner'    ? 'flex' : 'none';
+  document.getElementById('segPanelInv').style.display      = tab === 'inventario' ? 'flex' : 'none';
+  document.getElementById('segPanelResumen').style.display  = tab === 'resumen'    ? 'flex' : 'none';
   if (tab === 'inventario') segCargarInv();
+  if (tab === 'resumen')    segCargarResumen();
+}
+
+async function segCargarResumen() {
+  const c = document.getElementById('segDashContent');
+  if (!c) return;
+  c.innerHTML = '<div style="color:var(--muted);font-size:13px;text-align:center;padding:30px">Cargando…</div>';
+  const s = getSession();
+  try {
+    const params = s?.obra_id ? `?obra_id=${s.obra_id}` : '';
+    const res = await apiCall(`/obra-dashboard${params}`);
+    if (!res.ok) { c.innerHTML = '<div style="color:var(--muted);font-size:13px;text-align:center;padding:30px">Error al cargar</div>'; return; }
+    const d = await res.json();
+    const kpis = [
+      {
+        icon: '⚠️', label: 'Alertas stock seg', value: d.alertas_stock,
+        color: d.alertas_stock > 0 ? '#ef4444' : '#22c55e',
+        sub: d.alertas_stock > 0 ? `${d.alertas_stock} ítem${d.alertas_stock===1?'':'s'} bajo mínimo` : 'Stock correcto',
+        onclick: "irANotif()",
+      },
+      {
+        icon: '🔧', label: 'Herramientas fuera', value: d.herramientas_fuera,
+        color: d.herramientas_fuera > 0 ? '#f59e0b' : '#22c55e',
+        sub: d.herramientas_fuera > 0 ? `${d.herramientas_fuera} no disponible${d.herramientas_fuera===1?'':'s'}` : 'Todo disponible',
+        onclick: "navTo('herramientas')",
+      },
+      {
+        icon: '📦', label: 'Pedidos seg pendientes', value: d.pedidos_pendientes,
+        color: d.pedidos_pendientes > 0 ? '#8b5cf6' : '#22c55e',
+        sub: d.pedidos_pendientes > 0 ? `${d.pedidos_pendientes} sin recibir` : 'Todo recibido',
+        onclick: "navTo('pedidos')",
+      },
+      {
+        icon: '👷', label: 'Fichajes hoy', value: d.fichajes_hoy,
+        color: d.fichajes_hoy > 0 ? '#22c55e' : '#94a3b8',
+        sub: d.fichajes_hoy > 0 ? `${d.fichajes_hoy} trabajador${d.fichajes_hoy===1?'':'es'}` : 'Ninguno hoy',
+        onclick: null,
+      },
+    ];
+    c.innerHTML = `
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        ${kpis.map(k => `
+          <div onclick="${k.onclick||''}"
+               style="background:var(--surface);border:1px solid var(--border);border-left:3px solid ${k.color};border-radius:12px;padding:14px;cursor:${k.onclick?'pointer':'default'}">
+            <div style="font-size:22px;margin-bottom:4px">${k.icon}</div>
+            <div style="font-size:26px;font-weight:900;color:${k.color};font-family:'Montserrat',sans-serif;line-height:1">${k.value}</div>
+            <div style="font-size:11px;font-weight:700;color:var(--text);margin-top:4px">${k.label}</div>
+            <div style="font-size:10px;color:var(--muted);margin-top:2px">${k.sub}</div>
+          </div>
+        `).join('')}
+      </div>
+      <div style="font-size:11px;color:var(--muted);text-align:center;margin-top:14px">Actualizado ${new Date().toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'})}</div>
+    `;
+  } catch {
+    c.innerHTML = '<div style="color:var(--muted);font-size:13px;text-align:center;padding:30px">Error de conexión</div>';
+  }
 }
 
 // Buscar por código: primero en inventario seg, luego en máquinas
@@ -7543,7 +7614,7 @@ async function cargarObrasSelectUsuario() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '5.04';
+const APP_VERSION = '5.05';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -8871,8 +8942,28 @@ if ('serviceWorker' in navigator) {
       const res = await apiCall(`/fichajes?fecha_ini=${hoy}&fecha_fin=${hoy}`, {});
       if (!res.ok) { c.innerHTML = '<div class="empty-state">Error al cargar</div>'; return; }
       const data = await res.json();
-      // getFichajes returns plain array
-      renderFichajeDia(c, Array.isArray(data) ? data : (data.fichajes || []), hoy);
+      const lista = Array.isArray(data) ? data : (data.fichajes || []);
+      // ── Mini KPI bar ──
+      const kpiBar = document.getElementById('perKpiHoy');
+      if (kpiBar) {
+        const presentes  = lista.filter(f => f.entrada && !f.salida).length;
+        const conSalida  = lista.filter(f => f.salida).length;
+        const retrasos   = lista.filter(f => (f.minutos_retraso || 0) > 0).length;
+        const total      = lista.length;
+        const pill = (icon, val, label, color) =>
+          `<div style="display:flex;align-items:center;gap:5px;background:${color}15;border:1px solid ${color}30;border-radius:20px;padding:5px 10px;font-size:12px;white-space:nowrap">
+            <span>${icon}</span>
+            <span style="font-weight:900;color:${color}">${val}</span>
+            <span style="color:var(--muted);font-size:11px">${label}</span>
+          </div>`;
+        kpiBar.style.display = 'flex';
+        kpiBar.innerHTML =
+          pill('👷', total,    'fichados',  '#3b82f6') +
+          pill('✅', presentes,'presentes', '#22c55e') +
+          pill('🏁', conSalida,'salidos',   '#94a3b8') +
+          (retrasos > 0 ? pill('⏰', retrasos, 'retrasos', '#f59e0b') : '');
+      }
+      renderFichajeDia(c, lista, hoy);
     } catch { c.innerHTML = '<div class="empty-state">Error de red</div>'; }
   }
 
