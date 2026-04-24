@@ -353,7 +353,11 @@ export default {
 
       if (path === '/tipos-cable'  && method === 'GET')   return await getCatalogo('tipos_cable', env, request);
       if (path === '/tipos-cable'  && method === 'POST')  return await addCatalogo('tipos_cable', request, env);
-      if (path.startsWith('/tipos-cable/') && method === 'DELETE') return await deleteCatalogo('tipos_cable', path.split('/tipos-cable/')[1], env);
+      if (path.startsWith('/tipos-cable/')) {
+        const tcId = parseInt(path.split('/tipos-cable/')[1]);
+        if (method === 'DELETE') return await deleteCatalogo('tipos_cable', tcId, env);
+        if (method === 'PUT')    return await actualizarTipoCable(tcId, request, env);
+      }
 
       // Legacy aliases for tipos-cable
       if (path === '/tipos'        && method === 'GET')   return await getCatalogo('tipos_cable', env, request);
@@ -433,6 +437,7 @@ export default {
       if (path.startsWith('/tipos-herramienta/')) {
         const tid = parseInt(path.split('/tipos-herramienta/')[1]);
         if (method === 'DELETE') return await eliminarTipoHerramienta(tid, request, env);
+        if (method === 'PUT')    return await actualizarTipoHerramienta(tid, request, env);
       }
       if (path === '/kits-herramientas' && method === 'GET')  return await getKits(request, env);
       if (path === '/kits-herramientas' && method === 'POST') return await crearKit(request, env, ctx);
@@ -452,6 +457,7 @@ export default {
         if (method === 'DELETE') return await eliminarHerramienta(hid, request, env, ctx);
       }
       if (path === '/historial-herramientas' && method === 'GET') return await getHistorialHerramientas(request, env);
+      if (path === '/alertas-stock'          && method === 'GET') return await getAlertasStock(request, env);
 
       // ── Archivos / R2 ────────────────────────────────────────────────────
       if (path === '/archivos' && method === 'GET')  return await listarArchivos(request, env);
@@ -2089,6 +2095,62 @@ async function eliminarTipoHerramienta(id, request, env) {
   return json({ ok: true });
 }
 
+async function actualizarTipoHerramienta(id, request, env) {
+  const { empresa_id, rol } = await getAuth(request, env);
+  if (!empresa_id || rol === 'operario') return err('Sin permisos', 403);
+  const body = await request.json().catch(() => ({}));
+  const minimo = parseInt(body.stock_minimo) || 0;
+  await env.DB.prepare('UPDATE tipos_herramienta SET stock_minimo = ? WHERE id = ? AND empresa_id = ?').bind(minimo, id, empresa_id).run();
+  return json({ ok: true });
+}
+
+async function actualizarTipoCable(id, request, env) {
+  const { empresa_id, rol } = await getAuth(request, env);
+  if (!empresa_id || rol === 'operario') return err('Sin permisos', 403);
+  const body = await request.json().catch(() => ({}));
+  const minimo = parseInt(body.stock_minimo) || 0;
+  await env.DB.prepare('UPDATE tipos_cable SET stock_minimo = ? WHERE id = ? AND empresa_id = ?').bind(minimo, id, empresa_id).run();
+  return json({ ok: true });
+}
+
+async function getAlertasStock(request, env) {
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+
+  // 1. Herramientas: tipos con menos disponibles que el mínimo
+  const { results: herramientas } = await env.DB.prepare(`
+    SELECT t.id, t.nombre, t.stock_minimo,
+           COUNT(CASE WHEN h.estado = 'disponible' THEN 1 END) as disponibles
+    FROM tipos_herramienta t
+    LEFT JOIN herramientas h ON h.tipo_id = t.id AND h.empresa_id = t.empresa_id
+    WHERE t.empresa_id = ? AND t.stock_minimo > 0
+    GROUP BY t.id
+    HAVING disponibles < t.stock_minimo
+  `).bind(empresa_id).all();
+
+  // 2. Inventario seg: items modo='cantidad' con stock bajo mínimo
+  const { results: seguridad } = await env.DB.prepare(`
+    SELECT id, nombre, tipo_material, cantidad_disponible, stock_minimo
+    FROM inventario_seg
+    WHERE empresa_id = ? AND modo = 'cantidad' AND stock_minimo > 0
+      AND cantidad_disponible < stock_minimo AND estado != 'baja'
+  `).bind(empresa_id).all();
+
+  // 3. Bobinas: tipos_cable con menos bobinas activas que el mínimo
+  const { results: bobinas } = await env.DB.prepare(`
+    SELECT tc.id, tc.nombre, tc.stock_minimo,
+           COUNT(b.id) as total_bobinas
+    FROM tipos_cable tc
+    LEFT JOIN bobinas b ON b.tipo_cable = tc.nombre AND b.empresa_id = tc.empresa_id
+      AND b.estado NOT IN ('Dado de baja', 'baja')
+    WHERE tc.empresa_id = ? AND tc.stock_minimo > 0
+    GROUP BY tc.id
+    HAVING total_bobinas < tc.stock_minimo
+  `).bind(empresa_id).all();
+
+  return json({ herramientas, seguridad, bobinas });
+}
+
 async function getKits(request, env) {
   const { empresa_id, departamento } = await getAuth(request, env);
   if (!empresa_id) return err('No autorizado', 403);
@@ -2337,6 +2399,21 @@ async function actualizarHerramienta(id, request, env, ctx) {
   if (!campos.length) return json({ ok: true });
   vals.push(id); vals.push(empresa_id);
   await env.DB.prepare(`UPDATE herramientas SET ${campos.join(', ')} WHERE id = ? AND empresa_id = ?`).bind(...vals).run();
+
+  // Alerta stock mínimo: si el tipo tiene stock_minimo y el estado pasa a no-disponible
+  if (body.estado !== undefined && body.estado !== 'disponible' && h.tipo_id) {
+    const tipo = await env.DB.prepare('SELECT nombre, stock_minimo FROM tipos_herramienta WHERE id = ? AND empresa_id = ?').bind(h.tipo_id, empresa_id).first().catch(() => null);
+    if (tipo?.stock_minimo > 0) {
+      const { results: disp } = await env.DB.prepare(
+        "SELECT COUNT(*) as c FROM herramientas WHERE tipo_id = ? AND empresa_id = ? AND estado = 'disponible'"
+      ).bind(h.tipo_id, empresa_id).all();
+      const disponibles = disp[0]?.c ?? 0;
+      if (disponibles < tipo.stock_minimo) {
+        await sendTelegram(env, `⚠️ <b>Stock mínimo alcanzado — Herramientas</b>\n🔧 ${tipo.nombre}\n📉 Disponibles: <b>${disponibles}</b> (mínimo: ${tipo.stock_minimo})\n👤 ${userNombre || rol}`);
+      }
+    }
+  }
+
   ctx?.waitUntil(syncSheets(env, tabForDept('herramienta', body.departamento || h.departamento)));
   return json({ ok: true });
 }
@@ -3399,7 +3476,7 @@ async function crearItemSeg(request, env) {
   const { isSuperadmin, isSeguridad, isAdmin, usuario, empresa_id } = await getAuth(request, env);
   if (!isSuperadmin && !isAdmin && !isSeguridad) return err('No autorizado', 403);
   const body = await request.json().catch(() => ({}));
-  const { tipo_material, modo = 'individual', codigo, nombre, cantidad_total = 1, fecha_entrada, fecha_caducidad, notas } = body;
+  const { tipo_material, modo = 'individual', codigo, nombre, cantidad_total = 1, fecha_entrada, fecha_caducidad, notas, stock_minimo = 0 } = body;
   if (!tipo_material) return err('Falta tipo_material');
   if (modo === 'individual' && !codigo) return err('Falta el código identificador');
   const cod = codigo ? codigo.trim().toUpperCase() : null;
@@ -3407,9 +3484,9 @@ async function crearItemSeg(request, env) {
   const reg = usuario || '';
   try {
     const r = await env.DB.prepare(
-      `INSERT INTO inventario_seg (tipo_material, modo, codigo, nombre, cantidad_total, cantidad_disponible, estado, fecha_entrada, fecha_caducidad, notas, registrado_por, empresa_id)
-       VALUES (?, ?, ?, ?, ?, ?, 'disponible', ?, ?, ?, ?, ?)`
-    ).bind(tipo_material, modo, cod, nombre || tipo_material, cantidad_total, cantidad_total, fecha, fecha_caducidad || null, notas || '', reg, empresa_id).run();
+      `INSERT INTO inventario_seg (tipo_material, modo, codigo, nombre, cantidad_total, cantidad_disponible, estado, fecha_entrada, fecha_caducidad, notas, registrado_por, empresa_id, stock_minimo)
+       VALUES (?, ?, ?, ?, ?, ?, 'disponible', ?, ?, ?, ?, ?, ?)`
+    ).bind(tipo_material, modo, cod, nombre || tipo_material, cantidad_total, cantidad_total, fecha, fecha_caducidad || null, notas || '', reg, empresa_id, parseInt(stock_minimo) || 0).run();
     const id = r.meta.last_row_id;
     await env.DB.prepare('INSERT INTO movimientos_seg (item_id, accion, cantidad, usuario, fecha) VALUES (?, ?, ?, ?, ?)').bind(id, 'entrada', cantidad_total, reg, fecha).run();
     if (fecha_caducidad) {
@@ -3434,11 +3511,12 @@ async function moverItemSeg(id, request, env) {
 
   // Edición directa de campos del item (sin movimiento)
   if (accion === 'editar') {
-    const { estado: nuevoEstado, destino_actual, notas: nuevasNotas } = body;
+    const { estado: nuevoEstado, destino_actual, notas: nuevasNotas, stock_minimo: nuevoMin } = body;
     const campos = [], vals = [];
     if (nuevoEstado !== undefined)   { campos.push('estado = ?');         vals.push(nuevoEstado); }
     if (destino_actual !== undefined) { campos.push('destino_actual = ?'); vals.push(destino_actual || null); }
     if (nuevasNotas !== undefined)    { campos.push('notas = ?');          vals.push(nuevasNotas || ''); }
+    if (nuevoMin !== undefined)       { campos.push('stock_minimo = ?');   vals.push(parseInt(nuevoMin) || 0); }
     if (campos.length) {
       vals.push(id);
       await env.DB.prepare(`UPDATE inventario_seg SET ${campos.join(', ')} WHERE id = ?`).bind(...vals).run();
@@ -3447,16 +3525,22 @@ async function moverItemSeg(id, request, env) {
   }
 
   if (accion === 'salida') {
+    let nuevaCantidad = null;
     if (item.modo === 'individual') {
       if (item.estado !== 'disponible') return err('El item no está disponible', 409);
       await env.DB.prepare('UPDATE inventario_seg SET estado = ?, destino_actual = ? WHERE id = ?').bind('en_uso', destino || '', id).run();
     } else {
       const nueva = item.cantidad_disponible - cantidad;
       if (nueva < 0) return err(`No hay suficiente stock (disponible: ${item.cantidad_disponible})`, 409);
+      nuevaCantidad = nueva;
       await env.DB.prepare('UPDATE inventario_seg SET cantidad_disponible = ?, estado = ?, destino_actual = ? WHERE id = ?').bind(nueva, nueva === 0 ? 'en_uso' : 'disponible', destino || '', id).run();
     }
     await env.DB.prepare('INSERT INTO movimientos_seg (item_id, accion, cantidad, destino, usuario, notas, fecha) VALUES (?, ?, ?, ?, ?, ?, ?)').bind(id, 'salida', cantidad, destino || '', usuario || '', notas || '', fecha).run();
     if (destino) await sendTelegram(env, `📤 <b>Material Seguridad — Salida</b>\n🔖 ${item.codigo || item.nombre}  📋 ${item.tipo_material}\n🏗 Destino: ${destino}\n👤 ${usuario || '—'}`);
+    // Alerta stock mínimo (modo cantidad)
+    if (item.modo === 'cantidad' && item.stock_minimo > 0 && nuevaCantidad !== null && nuevaCantidad < item.stock_minimo) {
+      await sendTelegram(env, `⚠️ <b>Stock mínimo alcanzado — Seguridad</b>\n📦 ${item.nombre || item.tipo_material}\n📉 Disponible: <b>${nuevaCantidad}</b> (mínimo: ${item.stock_minimo})\n👤 ${usuario || '—'}`);
+    }
     syncSheets(env, 'Seg-Inventario');
     return json({ ok: true, mensaje: 'Salida registrada' });
   }

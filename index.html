@@ -4040,6 +4040,11 @@ function segEditarItem(id) {
         <label class="form-label">Notas</label>
         <input class="form-input" id="segEditNotas" type="text" value="${item.notas||''}" placeholder="Notas...">
       </div>
+      ${item.modo==='cantidad'?`
+      <div class="form-group" style="margin-bottom:10px">
+        <label class="form-label">📦 Stock mínimo (alerta)</label>
+        <input class="form-input" id="segEditStockMin" type="number" min="0" value="${item.stock_minimo||0}" placeholder="0 = sin alerta">
+      </div>`:''}
       <div style="display:flex;gap:8px">
         <button onclick="segGuardarEdicion(${id})" style="flex:1;padding:10px;background:var(--accent);border:none;border-radius:8px;color:#000;font-family:'Montserrat',sans-serif;font-weight:900;font-size:12px;cursor:pointer">💾 GUARDAR</button>
         <button onclick="document.getElementById('segEditForm').remove()" style="padding:10px 14px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--muted);font-family:'Montserrat',sans-serif;font-weight:900;font-size:12px;cursor:pointer">✕</button>
@@ -4049,13 +4054,16 @@ function segEditarItem(id) {
 }
 
 async function segGuardarEdicion(id) {
-  const estado  = document.getElementById('segEditEstado')?.value;
-  const destino = document.getElementById('segEditDestino')?.value?.trim();
-  const notas   = document.getElementById('segEditNotas')?.value?.trim();
+  const estado    = document.getElementById('segEditEstado')?.value;
+  const destino   = document.getElementById('segEditDestino')?.value?.trim();
+  const notas     = document.getElementById('segEditNotas')?.value?.trim();
+  const stockMin  = document.getElementById('segEditStockMin');
+  const body = { accion: 'editar', estado, destino_actual: destino, notas };
+  if (stockMin) body.stock_minimo = parseInt(stockMin.value) || 0;
   try {
     const res = await apiCall('/inventario-seg/' + id, {
       method: 'PUT',
-      body: JSON.stringify({ accion: 'editar', estado, destino_actual: destino, notas })
+      body: JSON.stringify(body)
     });
     if (!res.ok) { toast('Error al guardar', 'err'); return; }
     toast('Guardado', 'ok');
@@ -5423,7 +5431,7 @@ async function cargarCatalogos() {
     poblarSelect('fieldCarrEnergia', _catalogos.energiasCarr);
 
     renderTags('tagsProveedores',  _catalogos.proveedores,  'proveedor');
-    renderTags('tagsTipos',        _catalogos.tipos,        'tipo');
+    renderTagsTiposCable('tagsTipos', _catalogos.tipos);
     renderTags('tagsTiposPemp',    _catalogos.tiposPemp,    'tipo-pemp');
     renderTags('tagsTiposCarr',    _catalogos.tiposCarr,    'tipo-carretilla');
     renderTags('tagsEnergiasCarr', _catalogos.energiasCarr, 'energia-carretilla');
@@ -5446,6 +5454,25 @@ function renderTags(containerId, items, tipo) {
   c.innerHTML = items.map(i => `
     <span class="tag">${i.nombre}<button class="tag-del" onclick="delCatalogo('${tipo}',${i.id})">×</button></span>
   `).join('') || '<span style="color:var(--muted);font-size:12px">Sin elementos</span>';
+}
+
+function renderTagsTiposCable(containerId, items) {
+  const c = document.getElementById(containerId);
+  if (!c) return;
+  c.innerHTML = items.map(i => `
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;background:var(--surface2);border-radius:8px;padding:5px 8px">
+      <span style="flex:1;font-size:13px;font-weight:600">${i.nombre}</span>
+      <span style="font-size:11px;color:var(--muted);white-space:nowrap">min bobinas:</span>
+      <input type="number" min="0" value="${i.stock_minimo||0}"
+        style="width:48px;padding:2px 5px;background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;text-align:center"
+        onchange="setStockMinCable(${i.id},this.value)" title="Mínimo de bobinas de ${i.nombre}">
+      <button class="tag-del" onclick="delCatalogo('tipo',${i.id})" style="margin-left:2px">×</button>
+    </div>
+  `).join('') || '<span style="color:var(--muted);font-size:12px">Sin tipos</span>';
+}
+
+async function setStockMinCable(id, val) {
+  await apiCall('/tipos-cable/' + id, { method: 'PUT', body: JSON.stringify({ stock_minimo: parseInt(val) || 0 }) });
 }
 
 async function addProveedor() {
@@ -5534,11 +5561,19 @@ function renderTagsTiposHerr(items) {
   const c = document.getElementById('tagsTiposHerr');
   if (!c) return;
   c.innerHTML = items.map(i => `
-    <span class="tag" style="display:inline-flex;align-items:center;gap:4px">
-      ${i.nombre}
-      <button class="tag-del" onclick="delTipoHerr(${i.id})">×</button>
-    </span>
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;background:var(--surface2);border-radius:8px;padding:5px 8px">
+      <span style="flex:1;font-size:13px;font-weight:600">${i.nombre}</span>
+      <span style="font-size:11px;color:var(--muted);white-space:nowrap">min:</span>
+      <input type="number" min="0" value="${i.stock_minimo||0}"
+        style="width:48px;padding:2px 5px;background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;text-align:center"
+        onchange="setStockMinHerr(${i.id},this.value)" title="Mínimo de ${i.nombre} disponibles">
+      <button class="tag-del" onclick="delTipoHerr(${i.id})" style="margin-left:2px">×</button>
+    </div>
   `).join('') || '<span style="color:var(--muted);font-size:12px">Sin tipos</span>';
+}
+
+async function setStockMinHerr(id, val) {
+  await apiCall('/tipos-herramienta/' + id, { method: 'PUT', body: JSON.stringify({ stock_minimo: parseInt(val) || 0 }) });
 }
 
 async function addTipoHerr() {
@@ -6859,6 +6894,8 @@ function irANotif(tipo) {
   else if (tipo === 'carretillas') { currentModule = 'carretillas'; navTo('stock'); }
   else if (tipo === 'seg')         { showScreen('seguridad'); segSelTab('inventario'); }
   else if (tipo === 'usuarios')    { navTo('ajustes'); setTimeout(() => selAjTab('usuarios'), 300); }
+  else if (tipo === 'herramientas'){ navTo('herramientas'); }
+  else if (tipo === 'bobinas')     { currentModule = 'bobinas'; navTo('stock'); }
 }
 
 async function cargarNotificaciones() {
@@ -6869,12 +6906,13 @@ async function cargarNotificaciones() {
   const hace48h = new Date(Date.now() - 48 * 3600 * 1000).toISOString().slice(0, 16);
   const s = getSession();
   const isAdmin = s?.rol === 'superadmin' || s?.rol === 'empresa_admin';
-  const [peds, pemp, carrs, inv, pend] = await Promise.all([
+  const [peds, pemp, carrs, inv, pend, stock] = await Promise.all([
     apiCall('/pedidos?estado=pendiente').then(r => r.json()).catch(() => []),
     apiCall('/pemp?estado=Averiada').then(r => r.json()).catch(() => []),
     apiCall('/carretillas?estado=Averiada').then(r => r.json()).catch(() => []),
     apiCall('/inventario-seg').then(r => r.json()).catch(() => []),
-    isAdmin ? apiCall('/usuarios/pendientes').then(r => r.json()).catch(() => ({ pendientes: [] })) : Promise.resolve({ pendientes: [] })
+    isAdmin ? apiCall('/usuarios/pendientes').then(r => r.json()).catch(() => ({ pendientes: [] })) : Promise.resolve({ pendientes: [] }),
+    apiCall('/alertas-stock').then(r => r.json()).catch(() => ({ herramientas: [], seguridad: [], bobinas: [] }))
   ]);
   (Array.isArray(peds) ? peds : []).filter(p => (p.created_at || '') >= hace48h).forEach(p =>
     notifs.push({ icono: '📦', texto: `Pedido pendiente: ${(p.descripcion || '').slice(0, 50)}`, fecha: p.created_at, color: '#f97316', accion: "irANotif('pedidos')" })
@@ -6891,6 +6929,15 @@ async function cargarNotificaciones() {
   );
   (pend.pendientes || []).forEach(u =>
     notifs.push({ icono: '🔔', texto: `Solicitud de acceso: ${u.nombre} (${u.email})`, fecha: u.created_at, color: '#8b5cf6', accion: "irANotif('usuarios')" })
+  );
+  (stock.herramientas || []).forEach(h =>
+    notifs.push({ icono: '📉', texto: `Stock bajo — Herramientas: ${h.nombre} (${h.disponibles}/${h.stock_minimo} mín.)`, fecha: null, color: '#f97316', accion: "irANotif('herramientas')" })
+  );
+  (stock.seguridad || []).forEach(s =>
+    notifs.push({ icono: '📉', texto: `Stock bajo — Seguridad: ${s.nombre||s.tipo_material} (${s.cantidad_disponible}/${s.stock_minimo} mín.)`, fecha: null, color: '#f97316', accion: "irANotif('seg')" })
+  );
+  (stock.bobinas || []).forEach(b =>
+    notifs.push({ icono: '📉', texto: `Stock bajo — Bobinas: ${b.nombre} (${b.total_bobinas}/${b.stock_minimo} mín.)`, fecha: null, color: '#f97316', accion: "irANotif('bobinas')" })
   );
   if (!notifs.length) {
     el.innerHTML = '<div style="color:var(--muted);font-size:13px;text-align:center;padding:32px">✅ Sin notificaciones pendientes</div>';
@@ -6915,16 +6962,18 @@ async function checkNotifBadge() {
   const hace48h  = new Date(Date.now() - 48 * 3600 * 1000).toISOString().slice(0, 16);
   let count = 0;
   const isAdmin = s?.rol === 'superadmin' || s?.rol === 'empresa_admin';
-  const [peds, pemp, carrs, pend] = await Promise.all([
+  const [peds, pemp, carrs, pend, stock] = await Promise.all([
     apiCall('/pedidos?estado=pendiente').then(r => r.json()).catch(() => []),
     apiCall('/pemp?estado=Averiada').then(r => r.json()).catch(() => []),
     apiCall('/carretillas?estado=Averiada').then(r => r.json()).catch(() => []),
-    isAdmin ? apiCall('/usuarios/pendientes').then(r => r.json()).catch(() => ({ pendientes: [] })) : Promise.resolve({ pendientes: [] })
+    isAdmin ? apiCall('/usuarios/pendientes').then(r => r.json()).catch(() => ({ pendientes: [] })) : Promise.resolve({ pendientes: [] }),
+    apiCall('/alertas-stock').then(r => r.json()).catch(() => ({ herramientas: [], seguridad: [], bobinas: [] }))
   ]);
   count += (Array.isArray(peds)  ? peds  : []).filter(p => (p.created_at||'') >= hace48h && (p.created_at||'') > lastSeen).length;
   count += (Array.isArray(pemp)  ? pemp  : []).filter(p => (p.fecha_averia||p.created_at||'') > lastSeen).length;
   count += (Array.isArray(carrs) ? carrs : []).filter(c => (c.fecha_averia||c.created_at||'') > lastSeen).length;
   count += (pend.pendientes || []).filter(u => (u.created_at||'') > lastSeen).length;
+  count += (stock.herramientas||[]).length + (stock.seguridad||[]).length + (stock.bobinas||[]).length;
   const badge = document.getElementById('notifBadge');
   if (badge) { badge.style.display = count > 0 ? 'flex' : 'none'; badge.textContent = count > 9 ? '9+' : String(count); }
   cargarBadgeIdeas();
@@ -7232,7 +7281,7 @@ async function cargarObrasSelectUsuario() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '4.99';
+const APP_VERSION = '5.00';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
