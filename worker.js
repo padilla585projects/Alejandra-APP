@@ -458,6 +458,9 @@ export default {
       }
       if (path === '/historial-herramientas' && method === 'GET') return await getHistorialHerramientas(request, env);
       if (path === '/alertas-stock'          && method === 'GET') return await getAlertasStock(request, env);
+      if (path === '/repostajes'             && method === 'GET')  return await getRepostajes(request, env);
+      if (path === '/repostajes'             && method === 'POST') return await crearRepostaje(request, env);
+      if (path === '/repostajes/resumen'     && method === 'GET')  return await getResumenRepostajes(request, env);
 
       // ── Archivos / R2 ────────────────────────────────────────────────────
       if (path === '/archivos' && method === 'GET')  return await listarArchivos(request, env);
@@ -4326,3 +4329,70 @@ async function borrarChatMensaje(id, request, env) {
   return json({ ok: true });
 }
 
+
+// ════════════════════════════════════════════════════════════════════════════
+// REPOSTAJES / CARGAS (NEW-26)
+// ════════════════════════════════════════════════════════════════════════════
+
+async function getRepostajes(request, env) {
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const url        = new URL(request.url);
+  const equipoTipo = url.searchParams.get('equipo_tipo');
+  const equipoId   = url.searchParams.get('equipo_id');
+  const limit      = Math.min(parseInt(url.searchParams.get('limit') || '20'), 50);
+  let sql = 'SELECT * FROM repostajes WHERE empresa_id = ?';
+  const params = [empresa_id];
+  if (equipoTipo) { sql += ' AND equipo_tipo = ?'; params.push(equipoTipo); }
+  if (equipoId)   { sql += ' AND equipo_id = ?';   params.push(equipoId); }
+  sql += ' ORDER BY fecha DESC, id DESC LIMIT ?';
+  params.push(limit);
+  const { results } = await env.DB.prepare(sql).bind(...params).all();
+  return json(results);
+}
+
+async function crearRepostaje(request, env) {
+  const { empresa_id, obra_id, nombre, rol } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  if (rol === 'operario') return err('Sin permisos', 403);
+  const body = await request.json().catch(() => ({}));
+  const { equipo_tipo, equipo_id, tipo, cantidad, unidad, coste, notas, fecha } = body;
+  if (!equipo_tipo || !equipo_id || !tipo) return err('Faltan campos obligatorios');
+  const fechaFinal = fecha || fechaEspana();
+  const obraFinal  = body.obra_id || obra_id || null;
+  const r = await env.DB.prepare(
+    'INSERT INTO repostajes (empresa_id, obra_id, equipo_tipo, equipo_id, tipo, cantidad, unidad, coste, usuario, notas, fecha) VALUES (?,?,?,?,?,?,?,?,?,?,?)'
+  ).bind(empresa_id, obraFinal, equipo_tipo, equipo_id, tipo,
+    cantidad ? parseFloat(cantidad) : null,
+    unidad || null,
+    coste  ? parseFloat(coste)  : null,
+    nombre || rol || '',
+    notas  || null,
+    fechaFinal
+  ).run();
+  // Telegram si hay coste
+  if (coste && parseFloat(coste) > 0) {
+    const emoji = tipo === 'combustible' ? '⛽' : '🔋';
+    await sendTelegram(env, `${emoji} <b>Repostaje registrado</b>\n🚜 ${equipo_tipo.toUpperCase()} ${equipo_id}\n📦 ${cantidad ? cantidad + ' ' + (unidad||'') : ''} · 💶 ${parseFloat(coste).toFixed(2)}€\n👤 ${nombre || rol || '—'}`);
+  }
+  return json({ ok: true, id: r.meta.last_row_id });
+}
+
+async function getResumenRepostajes(request, env) {
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const url        = new URL(request.url);
+  const equipoTipo = url.searchParams.get('equipo_tipo');
+  const equipoId   = url.searchParams.get('equipo_id');
+  if (!equipoTipo || !equipoId) return err('Faltan equipo_tipo y equipo_id');
+  const mesActual = new Date().toISOString().slice(0, 7); // YYYY-MM
+  const [totalRow, mesRow] = await Promise.all([
+    env.DB.prepare(
+      'SELECT COALESCE(SUM(cantidad),0) as total_cantidad, COALESCE(SUM(coste),0) as total_coste, COUNT(*) as total_repostajes FROM repostajes WHERE empresa_id=? AND equipo_tipo=? AND equipo_id=?'
+    ).bind(empresa_id, equipoTipo, equipoId).first(),
+    env.DB.prepare(
+      "SELECT COALESCE(SUM(cantidad),0) as mes_cantidad, COALESCE(SUM(coste),0) as mes_coste FROM repostajes WHERE empresa_id=? AND equipo_tipo=? AND equipo_id=? AND strftime('%Y-%m',fecha)=?"
+    ).bind(empresa_id, equipoTipo, equipoId, mesActual).first(),
+  ]);
+  return json({ ...totalRow, ...mesRow });
+}

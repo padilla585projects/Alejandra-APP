@@ -2159,6 +2159,64 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
   </div>
 </div>
 
+<!-- Modal Repostaje/Carga (NEW-26) -->
+<div class="modal-overlay" id="modalRepostaje" onclick="if(event.target===this)cerrarRepostaje()">
+  <div class="modal" style="max-height:90vh;overflow-y:auto">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px">
+      <div class="modal-title" style="margin-bottom:0;flex:1" id="modalRepostajeTitulo">⛽ Repostaje</div>
+      <button onclick="cerrarRepostaje()" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--muted)">×</button>
+    </div>
+    <!-- Formulario nuevo repostaje -->
+    <div style="background:var(--surface2);border-radius:12px;padding:14px;margin-bottom:14px">
+      <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:11px;letter-spacing:2px;color:var(--accent);text-transform:uppercase;margin-bottom:10px">➕ Registrar</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+        <div class="form-group" style="margin-bottom:0">
+          <label class="form-label">Tipo</label>
+          <select class="form-select" id="repTipo" onchange="repActualizarUnidad()">
+            <option value="combustible">⛽ Combustible</option>
+            <option value="carga">🔋 Carga eléctrica</option>
+          </select>
+        </div>
+        <div class="form-group" style="margin-bottom:0">
+          <label class="form-label">Fecha</label>
+          <input class="form-input" id="repFecha" type="date">
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:10px">
+        <div class="form-group" style="margin-bottom:0">
+          <label class="form-label" id="repCantidadLabel">Litros</label>
+          <input class="form-input" id="repCantidad" type="number" min="0" step="0.1" placeholder="0.0">
+        </div>
+        <div class="form-group" style="margin-bottom:0">
+          <label class="form-label">Unidad</label>
+          <select class="form-select" id="repUnidad">
+            <option value="litros">litros</option>
+            <option value="%">%</option>
+            <option value="kWh">kWh</option>
+          </select>
+        </div>
+        <div class="form-group" style="margin-bottom:0">
+          <label class="form-label">Coste (€)</label>
+          <input class="form-input" id="repCoste" type="number" min="0" step="0.01" placeholder="0.00">
+        </div>
+      </div>
+      <div class="form-group" style="margin-bottom:10px">
+        <label class="form-label">Notas (opcional)</label>
+        <input class="form-input" id="repNotas" type="text" placeholder="Ej: Repostaje completo...">
+      </div>
+      <button class="btn-primary" style="width:100%" onclick="guardarRepostaje()">💾 Guardar repostaje</button>
+    </div>
+    <!-- Resumen -->
+    <div id="repResumen" style="display:none;background:var(--surface2);border-radius:12px;padding:12px;margin-bottom:14px">
+      <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:11px;letter-spacing:2px;color:var(--muted);text-transform:uppercase;margin-bottom:8px">📊 Resumen</div>
+      <div id="repResumenBody" style="font-size:13px"></div>
+    </div>
+    <!-- Historial -->
+    <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:11px;letter-spacing:2px;color:var(--muted);text-transform:uppercase;margin-bottom:8px">📋 Historial</div>
+    <div id="repHistorial" style="font-size:13px;color:var(--muted);text-align:center;padding:12px">Cargando...</div>
+  </div>
+</div>
+
 <!-- ══════════════════════════════════════════
      MODAL: Devolución
 ══════════════════════════════════════════ -->
@@ -4343,6 +4401,7 @@ function renderStock(items, mod) {
           📝 ${item.notas.slice(0,80)}${item.notas.length>80?'…':''}</div>` : ''}
         <div class="stock-actions-row" onclick="event.stopPropagation()">
           ${!['devuelta','Devuelta'].includes(item.estado) ? `<button class="btn-sm" onclick="abrirDevolucion(${i}, '${mod}')"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/></svg> Dev.</button>` : ''}
+          <button class="btn-sm" onclick="abrirRepostaje(${i}, '${mod}')" title="Registrar repostaje/carga">${item.energia === 'Eléctrica' ? '🔋' : '⛽'}</button>
           <button class="btn-sm" onclick="abrirEdit(${i}, '${mod}')">✏️ Editar</button>
           <button class="btn-sm danger" onclick="borrarItem(${i}, '${mod}')">🗑️ Borrar</button>
         </div>
@@ -5245,6 +5304,136 @@ async function guardarEdicion() {
       toast(`❌ ${data.error || 'Error'}`, 'err');
     }
   } catch { toast('❌ Error de conexión', 'err'); }
+}
+
+// ══════════════════════════════════════════════════════
+// REPOSTAJES / CARGAS (NEW-26)
+// ══════════════════════════════════════════════════════
+
+let _repEquipoTipo = null;
+let _repEquipoId   = null;
+
+function abrirRepostaje(idx, mod) {
+  const item = _stockItems[idx];
+  if (!item) return;
+  _repEquipoTipo = mod === 'pemp' ? 'pemp' : 'carretilla';
+  _repEquipoId   = item.matricula || item.codigo || String(item.id);
+  const esElectrico = (item.energia || '').toLowerCase().includes('l'); // Eléctrica
+  // Título del modal
+  document.getElementById('modalRepostajeTitulo').textContent =
+    (esElectrico ? '🔋' : '⛽') + ' ' + _repEquipoId;
+  // Tipo por defecto según energía del equipo
+  const selTipo = document.getElementById('repTipo');
+  if (selTipo) selTipo.value = esElectrico ? 'carga' : 'combustible';
+  repActualizarUnidad();
+  // Fecha por defecto: hoy
+  const hoy = new Date().toISOString().slice(0, 10);
+  document.getElementById('repFecha').value = hoy;
+  // Limpiar campos
+  ['repCantidad','repCoste','repNotas'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  // Mostrar modal
+  document.getElementById('modalRepostaje').classList.add('show');
+  // Cargar historial y resumen
+  cargarHistorialRepostajes();
+}
+
+function repActualizarUnidad() {
+  const tipo = document.getElementById('repTipo')?.value;
+  const selUnidad = document.getElementById('repUnidad');
+  const label = document.getElementById('repCantidadLabel');
+  if (!selUnidad) return;
+  if (tipo === 'carga') {
+    selUnidad.innerHTML = '<option value="%">%</option><option value="kWh">kWh</option>';
+    if (label) label.textContent = 'Cantidad';
+  } else {
+    selUnidad.innerHTML = '<option value="litros">litros</option>';
+    if (label) label.textContent = 'Litros';
+  }
+}
+
+function cerrarRepostaje() {
+  document.getElementById('modalRepostaje').classList.remove('show');
+  _repEquipoTipo = null; _repEquipoId = null;
+}
+
+async function guardarRepostaje() {
+  const tipo     = document.getElementById('repTipo')?.value;
+  const fecha    = document.getElementById('repFecha')?.value;
+  const cantidad = document.getElementById('repCantidad')?.value;
+  const unidad   = document.getElementById('repUnidad')?.value;
+  const coste    = document.getElementById('repCoste')?.value;
+  const notas    = document.getElementById('repNotas')?.value?.trim();
+  const s = getSession();
+  const body = {
+    equipo_tipo: _repEquipoTipo,
+    equipo_id:   _repEquipoId,
+    tipo, fecha,
+    cantidad:    cantidad ? parseFloat(cantidad) : null,
+    unidad:      unidad || null,
+    coste:       coste   ? parseFloat(coste)   : null,
+    notas:       notas   || null,
+    obra_id:     s?.obra_id || null,
+  };
+  try {
+    const res = await apiCall('/repostajes', { method: 'POST', body: JSON.stringify(body) });
+    if (res.ok) {
+      toast('✅ Repostaje registrado', 'ok');
+      ['repCantidad','repCoste','repNotas'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+      cargarHistorialRepostajes();
+    } else {
+      const d = await res.json().catch(() => ({}));
+      toast('❌ ' + (d.error || 'Error'), 'err');
+    }
+  } catch { toast('❌ Error de red', 'err'); }
+}
+
+async function cargarHistorialRepostajes() {
+  if (!_repEquipoTipo || !_repEquipoId) return;
+  const elHist = document.getElementById('repHistorial');
+  const elRes  = document.getElementById('repResumen');
+  const elResBody = document.getElementById('repResumenBody');
+  if (elHist) elHist.innerHTML = '<div style="text-align:center;color:var(--muted);padding:12px">Cargando...</div>';
+
+  const [hist, resumen] = await Promise.all([
+    apiCall(`/repostajes?equipo_tipo=${_repEquipoTipo}&equipo_id=${encodeURIComponent(_repEquipoId)}&limit=15`).then(r => r.json()).catch(() => []),
+    apiCall(`/repostajes/resumen?equipo_tipo=${_repEquipoTipo}&equipo_id=${encodeURIComponent(_repEquipoId)}`).then(r => r.json()).catch(() => ({})),
+  ]);
+
+  // Resumen
+  if (resumen.total_repostajes > 0 && elRes && elResBody) {
+    elRes.style.display = 'block';
+    const mesStr = new Date().toLocaleString('es-ES', { month: 'long', year: 'numeric' });
+    elResBody.innerHTML = `
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <div style="background:var(--surface);border-radius:8px;padding:10px;text-align:center">
+          <div style="font-size:11px;color:var(--muted);margin-bottom:4px">Este mes</div>
+          <div style="font-weight:700">${resumen.mes_cantidad ? resumen.mes_cantidad.toFixed(1) : '0'}</div>
+          <div style="font-size:11px;color:var(--blue)">${resumen.mes_coste ? resumen.mes_coste.toFixed(2) + '€' : '—'}</div>
+        </div>
+        <div style="background:var(--surface);border-radius:8px;padding:10px;text-align:center">
+          <div style="font-size:11px;color:var(--muted);margin-bottom:4px">Total histórico</div>
+          <div style="font-weight:700">${resumen.total_cantidad ? resumen.total_cantidad.toFixed(1) : '0'}</div>
+          <div style="font-size:11px;color:var(--blue)">${resumen.total_coste ? resumen.total_coste.toFixed(2) + '€' : '—'}</div>
+        </div>
+      </div>`;
+  } else if (elRes) { elRes.style.display = 'none'; }
+
+  // Historial
+  if (elHist) {
+    if (!Array.isArray(hist) || !hist.length) {
+      elHist.innerHTML = '<div style="text-align:center;color:var(--muted);padding:12px;font-size:12px">Sin repostajes registrados</div>';
+    } else {
+      elHist.innerHTML = hist.map(r => `
+        <div style="display:flex;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);align-items:flex-start">
+          <span style="font-size:18px">${r.tipo === 'carga' ? '🔋' : '⛽'}</span>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:13px;font-weight:700">${r.cantidad ? r.cantidad + ' ' + (r.unidad || '') : '—'}${r.coste ? ' · <span style="color:var(--blue)">' + parseFloat(r.coste).toFixed(2) + '€</span>' : ''}</div>
+            <div style="font-size:11px;color:var(--muted)">${(r.fecha||'').slice(0,10)} · ${r.usuario || '—'}</div>
+            ${r.notas ? `<div style="font-size:11px;color:var(--muted);margin-top:2px">📝 ${r.notas}</div>` : ''}
+          </div>
+        </div>`).join('');
+    }
+  }
 }
 
 // ══════════════════════════════════════════════════════
@@ -7288,7 +7477,7 @@ async function cargarObrasSelectUsuario() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '5.01';
+const APP_VERSION = '5.02';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -9156,6 +9345,11 @@ if ('serviceWorker' in navigator) {
   });
 
   // ── Chat (NEW-08) ────────────────────────────────────────────────────────
+  window.abrirRepostaje         = abrirRepostaje;
+  window.cerrarRepostaje        = cerrarRepostaje;
+  window.guardarRepostaje       = guardarRepostaje;
+  window.repActualizarUnidad    = repActualizarUnidad;
+
   window.chatAbrir     = chatAbrir;
   window.chatCerrar    = chatCerrar;
   window.chatEnviar    = chatEnviar;
