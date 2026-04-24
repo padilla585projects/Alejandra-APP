@@ -767,6 +767,15 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
         <div class="module-count" id="cntPedidos" style="background:#8b5cf6">–</div>
         <svg class="module-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
       </div>
+      <div class="module-card" id="cardCalendario" onclick="navTo('calendario')" style="display:none;border-left:3px solid #6366f1">
+        <div class="module-emoji">📅</div>
+        <div class="module-info">
+          <div class="module-name">Calendario</div>
+          <div class="module-desc">Eventos, entregas y festivos</div>
+        </div>
+        <div class="module-count" id="cntCalendario" style="background:#6366f1;display:none">0</div>
+        <svg class="module-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
+      </div>
       <div class="module-card" id="cardIncidencias" onclick="navTo('incidencias')" style="display:none;border-left:3px solid #ef4444">
         <div class="module-emoji">🚨</div>
         <div class="module-info">
@@ -816,6 +825,77 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
         🔐 Panel de Administración
         <svg style="margin-left:auto" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
       </button>
+    </div>
+  </div>
+
+  <!-- CALENDARIO (NEW-13) -->
+  <div id="screenCalendario" class="screen" style="padding:0;display:none;flex-direction:column">
+    <div style="padding:10px 14px 8px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;align-items:center;gap:8px">
+      <button onclick="calNavMes(-1)" style="background:none;border:none;color:var(--muted);font-size:22px;cursor:pointer;padding:0 4px;font-family:'Montserrat',sans-serif;font-weight:900">‹</button>
+      <div style="flex:1;text-align:center;font-family:'Montserrat',sans-serif;font-weight:900;font-size:15px;color:var(--text)" id="calMesLabel">—</div>
+      <button onclick="calNavMes(+1)" style="background:none;border:none;color:var(--muted);font-size:22px;cursor:pointer;padding:0 4px;font-family:'Montserrat',sans-serif;font-weight:900">›</button>
+      <button onclick="abrirFormEvento(null)" style="padding:6px 12px;background:#6366f120;color:#6366f1;border:1px solid #6366f140;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">+ Evento</button>
+    </div>
+    <!-- Grid del mes -->
+    <div id="calGrid" style="padding:10px 14px;flex-shrink:0"></div>
+    <!-- Lista próximos eventos del mes -->
+    <div style="flex:1;overflow-y:auto">
+      <div style="padding:0 14px 4px;font-family:'Montserrat',sans-serif;font-weight:900;font-size:11px;letter-spacing:1.5px;color:var(--muted);text-transform:uppercase">Eventos del mes</div>
+      <div id="calEventList" style="padding:0 14px 80px"></div>
+    </div>
+  </div>
+
+  <!-- Modal nuevo/editar evento -->
+  <div class="modal-overlay" id="modalEvento" onclick="if(event.target===this)cerrarFormEvento()">
+    <div class="modal" style="max-height:90vh;overflow-y:auto">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px">
+        <div class="modal-title" style="margin-bottom:0;flex:1;font-size:16px" id="modalEventoTitulo">Nuevo evento</div>
+        <button onclick="cerrarFormEvento()" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--muted)">×</button>
+      </div>
+      <input type="hidden" id="eventoEditId">
+      <div class="form-group">
+        <label class="form-label">Título *</label>
+        <input class="form-input" id="evTitulo" type="text" placeholder="Ej: Entrega de material…">
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div class="form-group">
+          <label class="form-label">Tipo</label>
+          <select class="form-input" id="evTipo">
+            <option value="entrega">📦 Entrega</option>
+            <option value="revision">🔧 Revisión</option>
+            <option value="reunion">👥 Reunión</option>
+            <option value="otro">📅 Otro</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Recordatorio</label>
+          <select class="form-input" id="evRecordatorio">
+            <option value="0">Sin recordatorio</option>
+            <option value="1" selected>1 día antes</option>
+            <option value="3">3 días antes</option>
+            <option value="7">1 semana antes</option>
+          </select>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div class="form-group">
+          <label class="form-label">Fecha *</label>
+          <input class="form-input" id="evFecha" type="date">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Hora (opcional)</label>
+          <input class="form-input" id="evHora" type="time">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Descripción</label>
+        <textarea id="evDesc" rows="2" placeholder="Detalles adicionales…"
+          style="width:100%;padding:10px;background:var(--surface);border:1px solid var(--border);border-radius:10px;color:var(--text);font-family:'Poppins',sans-serif;font-size:14px;resize:vertical;outline:none;box-sizing:border-box"></textarea>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-primary" style="flex:1" onclick="guardarEvento()">💾 Guardar</button>
+        <button class="btn-primary btn-secondary" style="flex:0 0 100px;margin-top:0" onclick="cerrarFormEvento()">Cancelar</button>
+      </div>
     </div>
   </div>
 
@@ -3002,6 +3082,7 @@ function setupHomeModules() {
   const cardChat  = document.getElementById('cardChat');
   const cardDash  = document.getElementById('cardObraDashboard');
   const cardInc   = document.getElementById('cardIncidencias');
+  const cardCal   = document.getElementById('cardCalendario');
   // Seguridad: sin tarjetas de inventario, pero sí Pedidos, Docs, Chat, Dashboard e Incidencias
   if (dept === 'seguridad') {
     if (cardB) cardB.style.display = 'none';
@@ -3013,6 +3094,7 @@ function setupHomeModules() {
     if (cardChat) cardChat.style.display = 'flex';
     if (cardDash) cardDash.style.display = 'flex';
     if (cardInc)  cardInc.style.display  = 'flex';
+    if (cardCal)  cardCal.style.display  = 'flex';
     return;
   }
   // El departamento elegido manda — electrico ve bobinas, mecánicas no
@@ -3026,11 +3108,12 @@ function setupHomeModules() {
   // Herramientas: visible para todos excepto seguridad
   const cardHerr = document.getElementById('cardHerramientas');
   if (cardHerr) cardHerr.style.display = 'flex';
-  // Documentación, Chat, Dashboard e Incidencias: visible para todos
+  // Documentación, Chat, Dashboard, Incidencias y Calendario: visible para todos
   if (cardDocs) cardDocs.style.display = 'flex';
   if (cardChat) cardChat.style.display = 'flex';
   if (cardDash) cardDash.style.display = 'flex';
   if (cardInc)  cardInc.style.display  = 'flex';
+  if (cardCal)  cardCal.style.display  = 'flex';
 }
 
 let _pendingDept = null;
@@ -3307,6 +3390,7 @@ function _applyScreen(name) {
   if (name === 'docs')         { docsCargar('screenDocsPanel'); }
   if (name === 'obraDashboard')  { cargarObraDashboard(); }
   if (name === 'incidencias')    { cargarIncidencias(); }
+  if (name === 'calendario')     { calCargar(); }
   if (name === 'dept' || name === 'empresaSel') {
     const p = document.getElementById('deptPill'); if (p) p.style.display = 'none';
     if (name === 'dept') aplicarDeptosActivos();
@@ -3386,6 +3470,10 @@ function navTo(target) {
   }
   if (target === 'incidencias') {
     showScreen('incidencias');
+    return;
+  }
+  if (target === 'calendario') {
+    showScreen('calendario');
     return;
   }
   if (target === 'herramientas') {
@@ -7727,7 +7815,7 @@ async function cargarObrasSelectUsuario() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '5.06';
+const APP_VERSION = '5.07';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -8820,6 +8908,203 @@ if ('serviceWorker' in navigator) {
   window.verAlbaran          = verAlbaran;
 
   // ══════════════════════════════════════════════════════
+  // CALENDARIO (NEW-13)
+  // ══════════════════════════════════════════════════════
+  window._calYear  = new Date().getFullYear();
+  window._calMonth = new Date().getMonth(); // 0-based
+  window._calEventos  = [];   // eventos del mes cargados
+  window._calFestivos = {};   // { 'YYYY-MM-DD': { name, global } }
+
+  const CAL_TIPO_ICON = { entrega:'📦', revision:'🔧', reunion:'👥', otro:'📅' };
+  const CAL_MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+
+  async function calCargar() {
+    const y = window._calYear, m = window._calMonth;
+    const label = document.getElementById('calMesLabel');
+    if (label) label.textContent = `${CAL_MESES[m]} ${y}`;
+
+    // Fetch festivos del año si no están cargados
+    const s = getSession();
+    if (!window._calFestivosYear || window._calFestivosYear !== y) {
+      try {
+        const r = await apiCall(`/festivos?year=${y}&comunidad=MD`);
+        if (r.ok) {
+          const lista = await r.json();
+          window._calFestivos = {};
+          lista.forEach(f => { window._calFestivos[f.date] = f; });
+          window._calFestivosYear = y;
+        }
+      } catch {}
+    }
+
+    // Fetch eventos del mes
+    const desde = `${y}-${String(m+1).padStart(2,'0')}-01`;
+    const hasta  = `${y}-${String(m+1).padStart(2,'0')}-${new Date(y, m+1, 0).getDate()}`;
+    try {
+      const r = await apiCall(`/calendario?desde=${desde}&hasta=${hasta}`);
+      window._calEventos = r.ok ? await r.json() : [];
+    } catch { window._calEventos = []; }
+
+    calRenderGrid(y, m);
+    calRenderList();
+
+    // Badge home card
+    const hoy = new Date().toISOString().slice(0,10);
+    const proximos = window._calEventos.filter(e => e.fecha >= hoy).length;
+    const badge = document.getElementById('cntCalendario');
+    if (badge) { badge.style.display = proximos > 0 ? '' : 'none'; badge.textContent = proximos; }
+  }
+
+  function calRenderGrid(y, m) {
+    const grid = document.getElementById('calGrid');
+    if (!grid) return;
+    const hoy = new Date().toISOString().slice(0,10);
+    const primerDia = new Date(y, m, 1).getDay(); // 0=dom
+    const offset = primerDia === 0 ? 6 : primerDia - 1; // lunes=0
+    const diasMes = new Date(y, m+1, 0).getDate();
+
+    // Agrupar eventos por fecha
+    const eventosPorDia = {};
+    window._calEventos.forEach(e => {
+      if (!eventosPorDia[e.fecha]) eventosPorDia[e.fecha] = [];
+      eventosPorDia[e.fecha].push(e);
+    });
+
+    const dias = ['L','M','X','J','V','S','D'];
+    let html = `<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;text-align:center">`;
+    // Cabecera
+    dias.forEach(d => { html += `<div style="font-size:10px;font-weight:700;color:var(--muted);padding:4px 0">${d}</div>`; });
+    // Celdas vacías al inicio
+    for (let i = 0; i < offset; i++) html += `<div></div>`;
+    // Días
+    for (let d = 1; d <= diasMes; d++) {
+      const fechaStr = `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+      const esFestivo = !!window._calFestivos[fechaStr];
+      const esHoy     = fechaStr === hoy;
+      const tieneEvs  = !!(eventosPorDia[fechaStr]?.length);
+      const dotColor  = tieneEvs ? '#6366f1' : 'transparent';
+      const bg = esHoy ? '#6366f1' : esFestivo ? '#ef444415' : 'transparent';
+      const textColor = esHoy ? '#fff' : esFestivo ? '#ef4444' : 'var(--text)';
+      const border = esHoy ? 'none' : esFestivo ? '1px solid #ef444430' : '1px solid transparent';
+      const festivoTitle = esFestivo ? `title="${window._calFestivos[fechaStr].name}"` : '';
+      html += `<div onclick="calDiaClick('${fechaStr}')" ${festivoTitle}
+        style="padding:5px 2px;border-radius:8px;cursor:pointer;background:${bg};border:${border};position:relative">
+        <div style="font-size:12px;font-weight:${esHoy||esFestivo?'900':'400'};color:${textColor}">${d}</div>
+        <div style="width:5px;height:5px;border-radius:50%;background:${dotColor};margin:2px auto 0"></div>
+      </div>`;
+    }
+    html += `</div>`;
+
+    // Leyenda festivos del mes
+    const festivosMes = Object.entries(window._calFestivos).filter(([f]) => f.startsWith(`${y}-${String(m+1).padStart(2,'0')}`));
+    if (festivosMes.length) {
+      html += `<div style="margin-top:8px;padding:8px;background:#ef444408;border:1px solid #ef444420;border-radius:8px">`;
+      festivosMes.forEach(([f, fv]) => {
+        const d = f.slice(8,10);
+        html += `<div style="font-size:11px;color:#ef4444;padding:1px 0">🔴 ${d} — ${fv.name}</div>`;
+      });
+      html += `</div>`;
+    }
+
+    grid.innerHTML = html;
+  }
+
+  function calRenderList() {
+    const c = document.getElementById('calEventList');
+    if (!c) return;
+    const hoy = new Date().toISOString().slice(0,10);
+    const eventos = window._calEventos;
+    if (!eventos.length) { c.innerHTML = '<div class="empty-state" style="padding:10px 0">Sin eventos este mes</div>'; return; }
+    c.innerHTML = eventos.map(ev => {
+      const isPast = ev.fecha < hoy;
+      const esFestivo = !!window._calFestivos[ev.fecha];
+      return `<div style="display:flex;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);opacity:${isPast?'0.5':'1'}">
+        <div style="font-size:22px;line-height:1.3">${CAL_TIPO_ICON[ev.tipo]||'📅'}</div>
+        <div style="flex:1">
+          <div style="font-weight:700;font-size:13px;color:var(--text)">${esc(ev.titulo)}</div>
+          <div style="font-size:11px;color:var(--muted)">${ev.fecha}${ev.hora?' · '+ev.hora:''}${ev.obra_nombre?' · '+esc(ev.obra_nombre):''}</div>
+          ${ev.descripcion ? `<div style="font-size:11px;color:var(--muted);font-style:italic">${esc(ev.descripcion)}</div>` : ''}
+        </div>
+        <div style="display:flex;gap:4px;align-items:flex-start">
+          <button onclick="abrirFormEvento(${JSON.stringify(ev).replace(/"/g,'&quot;')})" style="padding:4px 7px;background:var(--surface);border:1px solid var(--border);border-radius:6px;font-size:11px;cursor:pointer">✏️</button>
+          <button onclick="borrarEvento(${ev.id})" style="padding:4px 7px;background:#ef444415;border:1px solid #ef444430;border-radius:6px;font-size:11px;cursor:pointer;color:#ef4444">🗑️</button>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  function calDiaClick(fecha) {
+    // Abrir modal de nuevo evento con la fecha pre-rellenada
+    const evExistente = window._calEventos.find(e => e.fecha === fecha);
+    abrirFormEvento(null, fecha);
+  }
+
+  function calNavMes(delta) {
+    window._calMonth += delta;
+    if (window._calMonth < 0)  { window._calMonth = 11; window._calYear--; }
+    if (window._calMonth > 11) { window._calMonth = 0;  window._calYear++; }
+    calCargar();
+  }
+
+  function abrirFormEvento(ev, fechaPreset) {
+    document.getElementById('eventoEditId').value = ev?.id || '';
+    document.getElementById('modalEventoTitulo').textContent = ev ? '✏️ Editar evento' : '📅 Nuevo evento';
+    document.getElementById('evTitulo').value = ev?.titulo || '';
+    document.getElementById('evTipo').value   = ev?.tipo   || 'entrega';
+    document.getElementById('evFecha').value  = ev?.fecha  || fechaPreset || new Date().toISOString().slice(0,10);
+    document.getElementById('evHora').value   = ev?.hora   || '';
+    document.getElementById('evDesc').value   = ev?.descripcion || '';
+    document.getElementById('evRecordatorio').value = String(ev?.recordatorio_dias ?? 1);
+    document.getElementById('modalEvento').classList.add('show');
+  }
+
+  function cerrarFormEvento() {
+    document.getElementById('modalEvento').classList.remove('show');
+  }
+
+  async function guardarEvento() {
+    const titulo = document.getElementById('evTitulo').value.trim();
+    const fecha  = document.getElementById('evFecha').value;
+    if (!titulo) return toast('⚠️ El título es obligatorio', 'err');
+    if (!fecha)  return toast('⚠️ La fecha es obligatoria', 'err');
+    const id = document.getElementById('eventoEditId').value;
+    const body = {
+      titulo,
+      tipo:             document.getElementById('evTipo').value,
+      fecha,
+      hora:             document.getElementById('evHora').value || null,
+      descripcion:      document.getElementById('evDesc').value.trim() || null,
+      recordatorio_dias: parseInt(document.getElementById('evRecordatorio').value) || 0,
+    };
+    try {
+      const res = id
+        ? await apiCall(`/calendario/${id}`,  { method: 'PUT',  body: JSON.stringify(body) })
+        : await apiCall('/calendario',         { method: 'POST', body: JSON.stringify(body) });
+      if (!res.ok) { const e = await res.json().catch(()=>({error:'Error'})); return toast('❌ ' + (e.error||'Error'), 'err'); }
+      cerrarFormEvento();
+      toast(id ? '✅ Evento actualizado' : '✅ Evento creado');
+      calCargar();
+    } catch { toast('❌ Error de red', 'err'); }
+  }
+
+  async function borrarEvento(id) {
+    if (!confirm('¿Eliminar este evento?')) return;
+    try {
+      const res = await apiCall(`/calendario/${id}`, { method: 'DELETE' });
+      if (!res.ok) return toast('❌ Sin permisos', 'err');
+      toast('🗑️ Evento eliminado');
+      calCargar();
+    } catch { toast('❌ Error de red', 'err'); }
+  }
+
+  window.calNavMes       = calNavMes;
+  window.calDiaClick     = calDiaClick;
+  window.abrirFormEvento = abrirFormEvento;
+  window.cerrarFormEvento= cerrarFormEvento;
+  window.guardarEvento   = guardarEvento;
+  window.borrarEvento    = borrarEvento;
+
+  // ══════════════════════════════════════════════════════
   // INCIDENCIAS (NEW-22)
   // ══════════════════════════════════════════════════════
   window._incFiltro = 'todas';
@@ -9126,10 +9411,11 @@ if ('serviceWorker' in navigator) {
           onclick: "irANotif()",
         },
         {
-          icon: '📅', label: 'Próximo evento', value: '—',
-          color: '#94a3b8',
-          sub: 'Calendario próximamente',
-          onclick: null,
+          icon: '📅', label: 'Próximo evento',
+          value: d.proximo_evento ? (d.proximo_evento.fecha||'—').slice(5).replace('-','/') : '—',
+          color: d.proximo_evento ? '#6366f1' : '#94a3b8',
+          sub: d.proximo_evento ? esc(d.proximo_evento.titulo) : 'Sin eventos próximos',
+          onclick: "navTo('calendario')",
         },
         {
           icon: '🚨', label: 'Incidencias abiertas', value: d.incidencias_abiertas ?? '—',

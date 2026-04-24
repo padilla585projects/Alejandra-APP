@@ -474,6 +474,16 @@ export default {
       if (path === '/repostajes'             && method === 'POST') return await crearRepostaje(request, env);
       if (path === '/repostajes/resumen'     && method === 'GET')  return await getResumenRepostajes(request, env);
 
+      // ── Calendario (NEW-13) ──────────────────────────────────────────────
+      if (path === '/festivos'     && method === 'GET') return await getFestivos(request, env);
+      if (path === '/calendario'   && method === 'GET') return await getEventos(request, env);
+      if (path === '/calendario'   && method === 'POST') return await crearEvento(request, env);
+      if (path.startsWith('/calendario/')) {
+        const eid = parseInt(path.split('/calendario/')[1]);
+        if (method === 'PUT')    return await actualizarEvento(eid, request, env);
+        if (method === 'DELETE') return await eliminarEvento(eid, request, env);
+      }
+
       // ── Incidencias (NEW-22) ─────────────────────────────────────────────
       if (path === '/incidencias' && method === 'GET')  return await getIncidencias(request, env);
       if (path === '/incidencias' && method === 'POST') return await crearIncidencia(request, env);
@@ -2206,7 +2216,7 @@ async function getObraDashboard(request, env) {
     return [...p, ...extras];
   };
 
-  const [fichajesHoy, equiposMant, herrFuera, pedidosPend, alertasHerr, alertasSeg, alertasBob, incidenciasAbiertas] = await Promise.all([
+  const [fichajesHoy, equiposMant, herrFuera, pedidosPend, alertasHerr, alertasSeg, alertasBob, incidenciasAbiertas, proximoEvento] = await Promise.all([
     // Fichajes hoy
     env.DB.prepare(
       `SELECT COUNT(*) as n FROM fichajes WHERE empresa_id=?${queryObraId ? ' AND obra_id=?' : ''} AND DATE(entrada)=?`
@@ -2257,6 +2267,11 @@ async function getObraDashboard(request, env) {
     env.DB.prepare(
       `SELECT COUNT(*) as n FROM incidencias WHERE empresa_id=?${queryObraId?' AND obra_id=?':''} AND estado IN ('abierta','en_progreso')${departamento?' AND departamento=?':''}`
     ).bind(...buildParams(empresa_id)).first(),
+
+    // Próximo evento del calendario
+    env.DB.prepare(
+      `SELECT titulo, fecha, hora, tipo FROM eventos_calendario WHERE empresa_id=?${queryObraId?' AND (obra_id=? OR obra_id IS NULL)':''} AND fecha >= ? ORDER BY fecha ASC, hora ASC LIMIT 1`
+    ).bind(...[empresa_id, ...(queryObraId?[queryObraId]:[]), hoy]).first(),
   ]);
 
   return json({
@@ -2266,6 +2281,7 @@ async function getObraDashboard(request, env) {
     pedidos_pendientes:     pedidosPend?.n || 0,
     alertas_stock:          (alertasHerr?.n||0) + (alertasSeg?.n||0) + (alertasBob?.n||0),
     incidencias_abiertas:   incidenciasAbiertas?.n || 0,
+    proximo_evento:         proximoEvento || null,
     obra_id:                queryObraId || null,
   });
 }
@@ -3817,6 +3833,36 @@ async function alertasDiarias(env) {
       await sendTelegram(env, `🏷️ <b>Material Seguridad — Caducidad próxima</b>\n\n` + lineas.join('\n'));
     }
 
+    // 4. Eventos del calendario — hoy + recordatorios previos
+    const hoyStr = hoy.toISOString().slice(0, 10);
+    const { results: eventosHoy } = await env.DB.prepare(
+      `SELECT e.titulo, e.hora, e.tipo, o.nombre as obra_nombre
+       FROM eventos_calendario e LEFT JOIN obras o ON e.obra_id = o.id
+       WHERE e.fecha = ? ORDER BY e.hora ASC`
+    ).bind(hoyStr).all();
+    if (eventosHoy.length) {
+      const tipoIcon = { entrega:'📦', revision:'🔧', reunion:'👥', otro:'📅' };
+      const lineas = eventosHoy.map(ev =>
+        `${tipoIcon[ev.tipo]||'📅'} ${ev.titulo}${ev.hora ? ' — ' + ev.hora : ''}${ev.obra_nombre ? ' [' + ev.obra_nombre + ']' : ''}`
+      );
+      await sendTelegram(env, `📅 <b>Eventos de hoy (${hoyStr})</b>\n\n` + lineas.join('\n'));
+    }
+    // Recordatorios anticipados (recordatorio_dias > 0)
+    const { results: recordatorios } = await env.DB.prepare(`
+      SELECT e.titulo, e.fecha, e.hora, e.tipo, e.recordatorio_dias, o.nombre as obra_nombre
+      FROM eventos_calendario e LEFT JOIN obras o ON e.obra_id = o.id
+      WHERE e.recordatorio_dias > 0 AND e.fecha > ?
+    `).bind(hoyStr).all();
+    for (const ev of recordatorios) {
+      const diasFaltan = Math.floor((new Date(ev.fecha) - hoy) / 86400000);
+      if (diasFaltan === ev.recordatorio_dias) {
+        const tipoIcon = { entrega:'📦', revision:'🔧', reunion:'👥', otro:'📅' };
+        await sendTelegram(env,
+          `⏰ <b>Recordatorio — faltan ${diasFaltan} día${diasFaltan===1?'':'s'}</b>\n${tipoIcon[ev.tipo]||'📅'} ${ev.titulo} (${ev.fecha}${ev.hora ? ' ' + ev.hora : ''})${ev.obra_nombre ? '\n🏗 ' + ev.obra_nombre : ''}`
+        );
+      }
+    }
+
   } catch(e) {
     console.error('alertasDiarias error:', e.message);
   }
@@ -4108,6 +4154,87 @@ async function borrarArchivo(id, request, env) {
   if (!meta) return err('Archivo no encontrado', 404);
   await env.FILES.delete(meta.r2_key);
   await env.DB.prepare('DELETE FROM archivos WHERE id = ? AND empresa_id = ?').bind(id, empresa_id).run();
+  return json({ ok: true });
+}
+
+// ── Calendario (NEW-13) ───────────────────────────────────────────────────────
+
+async function getFestivos(request, env) {
+  const url  = new URL(request.url);
+  const year = url.searchParams.get('year') || new Date().getFullYear();
+  const com  = (url.searchParams.get('comunidad') || 'MD').toUpperCase();
+  try {
+    const res = await fetch(`https://date.nager.at/api/v3/publicholidays/${year}/ES`);
+    if (!res.ok) return json([]);
+    const all = await res.json();
+    const filtered = all.filter(h => !h.counties || h.counties.includes(`ES-${com}`));
+    return json(filtered.map(h => ({ date: h.date, name: h.localName, global: !h.counties })));
+  } catch { return json([]); }
+}
+
+async function getEventos(request, env) {
+  const { empresa_id, departamento, obra_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const url = new URL(request.url);
+  let sql = 'SELECT e.*, o.nombre as obra_nombre FROM eventos_calendario e LEFT JOIN obras o ON e.obra_id = o.id WHERE e.empresa_id = ?';
+  const params = [empresa_id];
+  const dept = url.searchParams.get('departamento') || departamento;
+  if (dept) { sql += ' AND e.departamento = ?'; params.push(dept); }
+  const qObraId = url.searchParams.get('obra_id') || obra_id;
+  if (qObraId) { sql += ' AND (e.obra_id = ? OR e.obra_id IS NULL)'; params.push(parseInt(qObraId)); }
+  const desde = url.searchParams.get('desde');
+  const hasta = url.searchParams.get('hasta');
+  if (desde) { sql += ' AND e.fecha >= ?'; params.push(desde); }
+  if (hasta) { sql += ' AND e.fecha <= ?'; params.push(hasta); }
+  sql += ' ORDER BY e.fecha ASC, e.hora ASC';
+  const { results } = await env.DB.prepare(sql).bind(...params).all();
+  return json(results);
+}
+
+async function crearEvento(request, env) {
+  const { empresa_id, obra_id, departamento, nombre } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const body = await request.json().catch(() => ({}));
+  const { titulo, descripcion, tipo = 'otro', fecha, hora, recordatorio_dias = 1 } = body;
+  if (!titulo?.trim()) return err('El título es obligatorio', 400);
+  if (!fecha) return err('La fecha es obligatoria', 400);
+  const dept     = body.departamento || departamento || 'electrico';
+  const obraFinal = body.obra_id || obra_id || null;
+  const r = await env.DB.prepare(
+    'INSERT INTO eventos_calendario (empresa_id, obra_id, departamento, titulo, descripcion, tipo, fecha, hora, recordatorio_dias, creado_por) VALUES (?,?,?,?,?,?,?,?,?,?)'
+  ).bind(empresa_id, obraFinal, dept, titulo.trim(), descripcion || null, tipo, fecha, hora || null, parseInt(recordatorio_dias) || 0, nombre || null).run();
+  return json({ ok: true, id: r.meta.last_row_id }, 201);
+}
+
+async function actualizarEvento(id, request, env) {
+  const { empresa_id, nombre, rol } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const body = await request.json().catch(() => ({}));
+  const ev = await env.DB.prepare('SELECT * FROM eventos_calendario WHERE id = ? AND empresa_id = ?').bind(id, empresa_id).first();
+  if (!ev) return err('Evento no encontrado', 404);
+  const puedeEditar = rol === 'encargado' || rol === 'empresa_admin' || rol === 'superadmin' || ev.creado_por === nombre;
+  if (!puedeEditar) return err('Sin permisos', 403);
+  const campos = [], vals = [];
+  if (body.titulo)       { campos.push('titulo=?');       vals.push(body.titulo.trim()); }
+  if (body.descripcion !== undefined) { campos.push('descripcion=?'); vals.push(body.descripcion || null); }
+  if (body.tipo)         { campos.push('tipo=?');         vals.push(body.tipo); }
+  if (body.fecha)        { campos.push('fecha=?');        vals.push(body.fecha); }
+  if (body.hora !== undefined) { campos.push('hora=?');   vals.push(body.hora || null); }
+  if (body.recordatorio_dias !== undefined) { campos.push('recordatorio_dias=?'); vals.push(parseInt(body.recordatorio_dias) || 0); }
+  if (!campos.length) return json({ ok: true });
+  vals.push(id, empresa_id);
+  await env.DB.prepare(`UPDATE eventos_calendario SET ${campos.join(',')} WHERE id=? AND empresa_id=?`).bind(...vals).run();
+  return json({ ok: true });
+}
+
+async function eliminarEvento(id, request, env) {
+  const { empresa_id, nombre, rol } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const ev = await env.DB.prepare('SELECT * FROM eventos_calendario WHERE id = ? AND empresa_id = ?').bind(id, empresa_id).first();
+  if (!ev) return err('Evento no encontrado', 404);
+  const puedeEliminar = rol === 'encargado' || rol === 'empresa_admin' || rol === 'superadmin' || ev.creado_por === nombre;
+  if (!puedeEliminar) return err('Sin permisos', 403);
+  await env.DB.prepare('DELETE FROM eventos_calendario WHERE id = ? AND empresa_id = ?').bind(id, empresa_id).run();
   return json({ ok: true });
 }
 
