@@ -182,6 +182,8 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
 .btn-sm{padding:6px 12px;background:transparent;border:1px solid var(--border);border-radius:6px;color:var(--muted);font-family:'Montserrat',sans-serif;font-weight:700;font-size:11px;cursor:pointer;transition:all .2s}
 .btn-sm:hover{border-color:var(--accent);color:var(--accent)}
 .btn-sm.danger:hover{border-color:var(--red);color:var(--red)}
+.filter-chip{padding:5px 12px;background:transparent;border:1px solid var(--border);border-radius:20px;color:var(--muted);font-family:'Montserrat',sans-serif;font-weight:700;font-size:11px;cursor:pointer;white-space:nowrap;transition:all .2s}
+.filter-chip.active{background:var(--accent);border-color:var(--accent);color:#fff}
 .revision-warn{display:inline-flex;align-items:center;gap:4px;background:rgba(249,115,22,.15);color:var(--accent);font-family:'Montserrat',sans-serif;font-weight:700;font-size:10px;padding:2px 8px;border-radius:10px}
 .export-row{display:flex;gap:8px;margin-top:12px}
 .btn-export{flex:1;padding:11px;background:transparent;border:1px solid var(--accent);border-radius:8px;color:var(--accent);font-family:'Montserrat',sans-serif;font-weight:700;font-size:13px;cursor:pointer;transition:all .2s}
@@ -765,6 +767,15 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
         <div class="module-count" id="cntPedidos" style="background:#8b5cf6">–</div>
         <svg class="module-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
       </div>
+      <div class="module-card" id="cardIncidencias" onclick="navTo('incidencias')" style="display:none;border-left:3px solid #ef4444">
+        <div class="module-emoji">🚨</div>
+        <div class="module-info">
+          <div class="module-name">Incidencias</div>
+          <div class="module-desc">Averías, accidentes y alertas</div>
+        </div>
+        <div class="module-count" id="cntIncidencias" style="background:#ef4444;display:none">0</div>
+        <svg class="module-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
+      </div>
       <div class="module-card" id="cardHerramientas" onclick="navTo('herramientas')" style="display:none">
         <div class="module-emoji">🔧</div>
         <div class="module-info">
@@ -805,6 +816,94 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
         🔐 Panel de Administración
         <svg style="margin-left:auto" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
       </button>
+    </div>
+  </div>
+
+  <!-- INCIDENCIAS (NEW-22) -->
+  <div id="screenIncidencias" class="screen" style="padding:0;display:none;flex-direction:column">
+    <div style="padding:10px 14px 8px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;align-items:center;gap:8px">
+      <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:17px;color:var(--text);flex:1">🚨 Incidencias</div>
+      <button onclick="abrirFormIncidencia(null)" style="padding:6px 12px;background:#ef444420;color:#ef4444;border:1px solid #ef444440;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">+ Nueva</button>
+    </div>
+    <!-- Filtros estado -->
+    <div style="display:flex;gap:6px;padding:8px 14px;border-bottom:1px solid var(--border);overflow-x:auto;flex-shrink:0" id="incFiltroBar">
+      <button onclick="incSetFiltro('todas')"       id="incFTodas"    class="filter-chip active">Todas</button>
+      <button onclick="incSetFiltro('abierta')"     id="incFAbierta"  class="filter-chip">🔴 Abiertas</button>
+      <button onclick="incSetFiltro('en_progreso')" id="incFProgreso" class="filter-chip">🟠 En progreso</button>
+      <button onclick="incSetFiltro('resuelta')"    id="incFResuelta" class="filter-chip">✅ Resueltas</button>
+    </div>
+    <div id="incList" style="padding:10px 14px 80px;overflow-y:auto;flex:1">
+      <div class="empty-state">Cargando…</div>
+    </div>
+  </div>
+
+  <!-- Modal nueva/editar incidencia -->
+  <div class="modal-overlay" id="modalIncidencia" onclick="if(event.target===this)cerrarFormIncidencia()">
+    <div class="modal" style="max-height:92vh;overflow-y:auto">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px">
+        <div class="modal-title" style="margin-bottom:0;flex:1;font-size:16px" id="modalIncTitulo">Nueva incidencia</div>
+        <button onclick="cerrarFormIncidencia()" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--muted)">×</button>
+      </div>
+      <input type="hidden" id="incEditId">
+
+      <div class="form-group">
+        <label class="form-label">Título *</label>
+        <input class="form-input" id="incTitulo" type="text" placeholder="Describe brevemente la incidencia…">
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div class="form-group">
+          <label class="form-label">Tipo</label>
+          <select class="form-input" id="incTipo">
+            <option value="averia">🔧 Avería</option>
+            <option value="accidente">🤕 Accidente</option>
+            <option value="seguridad">🔺 Seguridad</option>
+            <option value="material">📦 Material</option>
+            <option value="otro">📋 Otro</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Gravedad</label>
+          <select class="form-input" id="incGravedad">
+            <option value="baja">🟢 Baja</option>
+            <option value="media" selected>🟠 Media</option>
+            <option value="alta">🔴 Alta</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Descripción</label>
+        <textarea id="incDesc" rows="3" placeholder="Detalles adicionales…"
+          style="width:100%;padding:10px;background:var(--surface);border:1px solid var(--border);border-radius:10px;color:var(--text);font-family:'Poppins',sans-serif;font-size:14px;resize:vertical;outline:none;box-sizing:border-box"></textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Asignar a (opcional)</label>
+        <input class="form-input" id="incAsignado" type="text" placeholder="Nombre del responsable…">
+      </div>
+
+      <!-- Fotos -->
+      <div class="form-group">
+        <label class="form-label">Fotos</label>
+        <div id="incFotosList" style="display:flex;flex-wrap:wrap;gap:8px;min-height:40px;margin-bottom:8px"></div>
+        <div style="display:flex;gap:8px">
+          <button type="button" onclick="triggerIncFoto(false)" style="flex:1;padding:8px;background:#ef444415;color:#ef4444;border:1px solid #ef444430;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">📁 Archivo</button>
+          <button type="button" onclick="triggerIncFoto(true)"  style="flex:1;padding:8px;background:#ef444415;color:#ef4444;border:1px solid #ef444430;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">📷 Cámara</button>
+        </div>
+        <input type="file" id="incFotoFile" accept="image/*"          style="display:none" onchange="procesarFotosIncidencia(this.files)">
+        <input type="file" id="incFotoCam"  accept="image/*" capture="environment" style="display:none" onchange="procesarFotosIncidencia(this.files)">
+        <div id="incFotoSubiendo" style="display:none;font-size:12px;color:var(--muted);margin-top:6px;text-align:center">⏳ Subiendo foto…</div>
+      </div>
+
+      <!-- Resolución (solo visible al cerrar) -->
+      <div id="incResolucionGroup" style="display:none" class="form-group">
+        <label class="form-label">Notas de resolución</label>
+        <textarea id="incResolucion" rows="2" placeholder="¿Cómo se resolvió?"
+          style="width:100%;padding:10px;background:var(--surface);border:1px solid var(--border);border-radius:10px;color:var(--text);font-family:'Poppins',sans-serif;font-size:14px;resize:vertical;outline:none;box-sizing:border-box"></textarea>
+      </div>
+
+      <div class="modal-actions">
+        <button class="btn-primary" style="flex:1" onclick="guardarIncidencia()">💾 Guardar</button>
+        <button class="btn-primary btn-secondary" style="flex:0 0 100px;margin-top:0" onclick="cerrarFormIncidencia()">Cancelar</button>
+      </div>
     </div>
   </div>
 
@@ -2902,7 +3001,8 @@ function setupHomeModules() {
   const cardDocs  = document.getElementById('cardDocs');
   const cardChat  = document.getElementById('cardChat');
   const cardDash  = document.getElementById('cardObraDashboard');
-  // Seguridad: sin tarjetas de inventario, pero sí Pedidos, Docs, Chat y Dashboard
+  const cardInc   = document.getElementById('cardIncidencias');
+  // Seguridad: sin tarjetas de inventario, pero sí Pedidos, Docs, Chat, Dashboard e Incidencias
   if (dept === 'seguridad') {
     if (cardB) cardB.style.display = 'none';
     if (cardP) cardP.style.display = 'none';
@@ -2912,6 +3012,7 @@ function setupHomeModules() {
     if (cardDocs) cardDocs.style.display = 'flex';
     if (cardChat) cardChat.style.display = 'flex';
     if (cardDash) cardDash.style.display = 'flex';
+    if (cardInc)  cardInc.style.display  = 'flex';
     return;
   }
   // El departamento elegido manda — electrico ve bobinas, mecánicas no
@@ -2925,10 +3026,11 @@ function setupHomeModules() {
   // Herramientas: visible para todos excepto seguridad
   const cardHerr = document.getElementById('cardHerramientas');
   if (cardHerr) cardHerr.style.display = 'flex';
-  // Documentación, Chat y Dashboard: visible para todos
+  // Documentación, Chat, Dashboard e Incidencias: visible para todos
   if (cardDocs) cardDocs.style.display = 'flex';
   if (cardChat) cardChat.style.display = 'flex';
   if (cardDash) cardDash.style.display = 'flex';
+  if (cardInc)  cardInc.style.display  = 'flex';
 }
 
 let _pendingDept = null;
@@ -3203,7 +3305,8 @@ function _applyScreen(name) {
   if (name === 'herramientas') { herrSelTab(0); }
   if (name === 'personal')     { personalSelTab(0); }
   if (name === 'docs')         { docsCargar('screenDocsPanel'); }
-  if (name === 'obraDashboard') { cargarObraDashboard(); }
+  if (name === 'obraDashboard')  { cargarObraDashboard(); }
+  if (name === 'incidencias')    { cargarIncidencias(); }
   if (name === 'dept' || name === 'empresaSel') {
     const p = document.getElementById('deptPill'); if (p) p.style.display = 'none';
     if (name === 'dept') aplicarDeptosActivos();
@@ -3279,6 +3382,10 @@ function navTo(target) {
     _applyScreen('pedidos');
     cargarPedidos();
     actualizarBtnAtras();
+    return;
+  }
+  if (target === 'incidencias') {
+    showScreen('incidencias');
     return;
   }
   if (target === 'herramientas') {
@@ -3967,6 +4074,12 @@ async function segCargarResumen() {
         color: d.fichajes_hoy > 0 ? '#22c55e' : '#94a3b8',
         sub: d.fichajes_hoy > 0 ? `${d.fichajes_hoy} trabajador${d.fichajes_hoy===1?'':'es'}` : 'Ninguno hoy',
         onclick: null,
+      },
+      {
+        icon: '🚨', label: 'Incidencias abiertas', value: d.incidencias_abiertas || 0,
+        color: (d.incidencias_abiertas||0) > 0 ? '#ef4444' : '#22c55e',
+        sub: (d.incidencias_abiertas||0) > 0 ? `${d.incidencias_abiertas} sin resolver` : 'Sin incidencias',
+        onclick: "navTo('incidencias')",
       },
     ];
     c.innerHTML = `
@@ -7614,7 +7727,7 @@ async function cargarObrasSelectUsuario() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '5.05';
+const APP_VERSION = '5.06';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -8707,6 +8820,253 @@ if ('serviceWorker' in navigator) {
   window.verAlbaran          = verAlbaran;
 
   // ══════════════════════════════════════════════════════
+  // INCIDENCIAS (NEW-22)
+  // ══════════════════════════════════════════════════════
+  window._incFiltro = 'todas';
+  window._incCache  = [];
+  window._incEditId = null;  // id de la incidencia abierta en modal (para fotos)
+
+  function incSetFiltro(f) {
+    window._incFiltro = f;
+    ['todas','abierta','en_progreso','resuelta'].forEach(k => {
+      document.getElementById('incF' + k.charAt(0).toUpperCase() + k.replace('_','').slice(1))
+        ?.classList.toggle('active', k === f || (f==='todas' && k==='todas'));
+    });
+    renderIncidencias(window._incCache);
+  }
+
+  function renderIncidencias(lista) {
+    const c = document.getElementById('incList');
+    if (!c) return;
+    const filtro = window._incFiltro;
+    const items  = filtro === 'todas' ? lista : lista.filter(i => i.estado === filtro);
+    if (!items.length) {
+      c.innerHTML = `<div class="empty-state">Sin incidencias${filtro !== 'todas' ? ' con ese estado' : ''}</div>`;
+      return;
+    }
+    const s = getSession();
+    const puedeGestionar = s?.rol === 'encargado' || s?.rol === 'empresa_admin' || s?.rol === 'superadmin';
+    const puedeEliminar  = s?.rol === 'empresa_admin' || s?.rol === 'superadmin';
+    const gravedadColor  = { baja: '#22c55e', media: '#f59e0b', alta: '#ef4444' };
+    const estadoIcon     = { abierta: '🔴', en_progreso: '🟠', resuelta: '✅' };
+    const tipoIcon       = { averia: '🔧', accidente: '🤕', seguridad: '🔺', material: '📦', otro: '📋' };
+    c.innerHTML = items.map(inc => {
+      const gc = gravedadColor[inc.gravedad] || '#94a3b8';
+      return `<div style="background:var(--surface);border:1px solid var(--border);border-left:3px solid ${gc};border-radius:12px;padding:12px;margin-bottom:10px">
+        <div style="display:flex;align-items:flex-start;gap:8px">
+          <span style="font-size:20px;line-height:1.2">${tipoIcon[inc.tipo]||'📋'}</span>
+          <div style="flex:1;min-width:0">
+            <div style="font-weight:700;font-size:14px;color:var(--text);margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(inc.titulo)}</div>
+            ${inc.descripcion ? `<div style="font-size:11px;color:var(--muted);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(inc.descripcion)}</div>` : ''}
+            <div style="font-size:10px;color:var(--muted);margin-top:4px">
+              ${inc.reportado_por ? esc(inc.reportado_por) + ' · ' : ''}${(inc.fecha||'').slice(0,10)}${inc.obra_nombre ? ' · ' + esc(inc.obra_nombre) : ''}
+            </div>
+            ${inc.asignado_a ? `<div style="font-size:11px;color:var(--muted);margin-top:2px">👤 ${esc(inc.asignado_a)}</div>` : ''}
+          </div>
+          <span style="font-size:11px;font-weight:700;color:${gc};white-space:nowrap;padding:3px 8px;border-radius:20px;border:1px solid ${gc}20;background:${gc}15">
+            ${estadoIcon[inc.estado]||'🔴'} ${inc.gravedad?.toUpperCase()}
+          </span>
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px">
+          <button onclick="verIncidencia(${inc.id})" style="flex:1;padding:7px;background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:8px;font-size:12px;cursor:pointer">👁 Ver / Fotos</button>
+          ${puedeGestionar && inc.estado === 'abierta' ? `<button onclick="cambiarEstadoInc(${inc.id},'en_progreso')" style="padding:7px 10px;background:#f59e0b20;color:#f59e0b;border:1px solid #f59e0b40;border-radius:8px;font-size:12px;cursor:pointer">🟠 En progreso</button>` : ''}
+          ${puedeGestionar && inc.estado !== 'resuelta' ? `<button onclick="abrirCierreInc(${inc.id})" style="padding:7px 10px;background:#22c55e20;color:#22c55e;border:1px solid #22c55e40;border-radius:8px;font-size:12px;cursor:pointer">✅ Resolver</button>` : ''}
+          ${puedeGestionar && inc.estado !== 'resuelta' ? `<button onclick="abrirFormIncidencia(${JSON.stringify(inc).replace(/"/g,'&quot;')})" style="padding:7px 10px;background:var(--surface);color:var(--muted);border:1px solid var(--border);border-radius:8px;font-size:12px;cursor:pointer">✏️</button>` : ''}
+          ${puedeEliminar ? `<button onclick="borrarIncidencia(${inc.id})" style="padding:7px 10px;background:#ef444420;color:#ef4444;border:1px solid #ef444440;border-radius:8px;font-size:12px;cursor:pointer">🗑️</button>` : ''}
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  async function cargarIncidencias() {
+    const c = document.getElementById('incList');
+    if (!c) return;
+    c.innerHTML = '<div class="empty-state">Cargando…</div>';
+    try {
+      const res = await apiCall('/incidencias');
+      if (!res.ok) { c.innerHTML = '<div class="empty-state">Error al cargar</div>'; return; }
+      window._incCache = await res.json();
+      renderIncidencias(window._incCache);
+      // Badge en home card
+      const abiertas = window._incCache.filter(i => i.estado !== 'resuelta').length;
+      const badge = document.getElementById('cntIncidencias');
+      if (badge) { badge.style.display = abiertas > 0 ? '' : 'none'; badge.textContent = abiertas; }
+    } catch { c.innerHTML = '<div class="empty-state">Error de red</div>'; }
+  }
+
+  function abrirFormIncidencia(inc) {
+    window._incEditId = inc?.id || null;
+    document.getElementById('incEditId').value   = inc?.id || '';
+    document.getElementById('modalIncTitulo').textContent = inc ? '✏️ Editar incidencia' : '🚨 Nueva incidencia';
+    document.getElementById('incTitulo').value   = inc?.titulo      || '';
+    document.getElementById('incTipo').value     = inc?.tipo        || 'averia';
+    document.getElementById('incGravedad').value = inc?.gravedad    || 'media';
+    document.getElementById('incDesc').value     = inc?.descripcion || '';
+    document.getElementById('incAsignado').value = inc?.asignado_a  || '';
+    document.getElementById('incResolucionGroup').style.display = 'none';
+    document.getElementById('incResolucion').value = '';
+    // Cargar fotos existentes si estamos editando
+    const fotosList = document.getElementById('incFotosList');
+    fotosList.innerHTML = inc ? '<div style="font-size:11px;color:var(--muted)">Cargando fotos…</div>' : '';
+    if (inc?.id) cargarFotosIncModal(inc.id);
+    document.getElementById('modalIncidencia').classList.add('show');
+  }
+
+  function cerrarFormIncidencia() {
+    document.getElementById('modalIncidencia').classList.remove('show');
+    window._incEditId = null;
+  }
+
+  async function guardarIncidencia() {
+    const titulo = document.getElementById('incTitulo').value.trim();
+    if (!titulo) return toast('⚠️ El título es obligatorio', 'err');
+    const id = document.getElementById('incEditId').value;
+    const body = {
+      titulo,
+      tipo:        document.getElementById('incTipo').value,
+      gravedad:    document.getElementById('incGravedad').value,
+      descripcion: document.getElementById('incDesc').value.trim() || null,
+      asignado_a:  document.getElementById('incAsignado').value.trim() || null,
+    };
+    try {
+      const res = id
+        ? await apiCall(`/incidencias/${id}`,  { method: 'PUT',  body: JSON.stringify(body) })
+        : await apiCall('/incidencias',         { method: 'POST', body: JSON.stringify(body) });
+      if (!res.ok) { const e = await res.json().catch(()=>({error:'Error'})); return toast('❌ ' + (e.error||'Error'), 'err'); }
+      cerrarFormIncidencia();
+      toast(id ? '✅ Incidencia actualizada' : '✅ Incidencia creada');
+      cargarIncidencias();
+    } catch { toast('❌ Error de red', 'err'); }
+  }
+
+  async function cambiarEstadoInc(id, estado) {
+    try {
+      const res = await apiCall(`/incidencias/${id}`, { method: 'PUT', body: JSON.stringify({ estado }) });
+      if (!res.ok) return toast('❌ Error', 'err');
+      toast('✅ Estado actualizado');
+      cargarIncidencias();
+    } catch { toast('❌ Error de red', 'err'); }
+  }
+
+  function abrirCierreInc(id) {
+    // Abre el modal en modo resolución
+    const inc = window._incCache.find(i => i.id === id);
+    if (!inc) return;
+    abrirFormIncidencia(inc);
+    document.getElementById('incResolucionGroup').style.display = '';
+    // Override guardar para cerrar
+    window._incCerrandoId = id;
+  }
+
+  // Sobrescribir guardar cuando es cierre
+  const _origGuardarInc = guardarIncidencia;
+  async function guardarIncidencia() {
+    if (window._incCerrandoId) {
+      const resolucion = document.getElementById('incResolucion').value.trim() || null;
+      try {
+        const res = await apiCall(`/incidencias/${window._incCerrandoId}`, {
+          method: 'PUT', body: JSON.stringify({ estado: 'resuelta', resolucion })
+        });
+        if (!res.ok) return toast('❌ Error', 'err');
+        cerrarFormIncidencia();
+        window._incCerrandoId = null;
+        toast('✅ Incidencia resuelta');
+        cargarIncidencias();
+      } catch { toast('❌ Error de red', 'err'); }
+      return;
+    }
+    await _origGuardarInc();
+  }
+
+  async function verIncidencia(id) {
+    const inc = window._incCache.find(i => i.id === id);
+    if (!inc) return;
+    window._incEditId = id;
+    window._incCerrandoId = null;
+    abrirFormIncidencia(inc);
+  }
+
+  async function borrarIncidencia(id) {
+    if (!confirm('¿Eliminar esta incidencia y sus fotos?')) return;
+    try {
+      const res = await apiCall(`/incidencias/${id}`, { method: 'DELETE' });
+      if (!res.ok) return toast('❌ Sin permisos', 'err');
+      toast('🗑️ Incidencia eliminada');
+      cargarIncidencias();
+    } catch { toast('❌ Error de red', 'err'); }
+  }
+
+  // ── Fotos de incidencias ──
+  async function cargarFotosIncModal(incId) {
+    const c = document.getElementById('incFotosList');
+    if (!c) return;
+    try {
+      const res = await apiCall(`/incidencias/${incId}/fotos`);
+      if (!res.ok) { c.innerHTML = ''; return; }
+      const fotos = await res.json();
+      if (!fotos.length) { c.innerHTML = '<div style="font-size:11px;color:var(--muted)">Sin fotos todavía</div>'; return; }
+      const s = getSession();
+      const puedeEliminar = s?.rol !== 'operario';
+      c.innerHTML = fotos.map(f => `
+        <div style="position:relative;display:inline-block">
+          <img src="${getAPI()}/incidencia-fotos/${f.id}" style="width:72px;height:72px;object-fit:cover;border-radius:8px;cursor:pointer;border:2px solid var(--border)"
+               onclick="window.open('${getAPI()}/incidencia-fotos/${f.id}','_blank')">
+          ${puedeEliminar ? `<button onclick="borrarFotoInc(${f.id},${incId})" style="position:absolute;top:-5px;right:-5px;width:18px;height:18px;background:#ef4444;color:#fff;border:none;border-radius:50%;font-size:10px;cursor:pointer;line-height:1;padding:0;display:flex;align-items:center;justify-content:center">✕</button>` : ''}
+        </div>`).join('');
+    } catch { c.innerHTML = ''; }
+  }
+
+  function triggerIncFoto(camara) {
+    const input = document.getElementById(camara ? 'incFotoCam' : 'incFotoFile');
+    input.value = '';
+    input.click();
+  }
+
+  async function procesarFotosIncidencia(files) {
+    if (!files || !files.length) return;
+    const id = window._incEditId;
+    if (!id) {
+      // Guardar primero la incidencia, luego subir fotos
+      toast('⚠️ Guarda la incidencia primero para adjuntar fotos', 'err');
+      return;
+    }
+    const sub = document.getElementById('incFotoSubiendo');
+    sub.style.display = 'block';
+    for (const file of Array.from(files)) {
+      try {
+        const form = new FormData();
+        form.append('file', file);
+        const res = await apiCallRaw(`/incidencias/${id}/fotos`, { method: 'POST', body: form });
+        if (!res.ok) { const e = await res.json().catch(()=>({error:'Error'})); toast('❌ ' + (e.error||'Error'), 'err'); }
+      } catch { toast('❌ Error de red', 'err'); }
+    }
+    sub.style.display = 'none';
+    cargarFotosIncModal(id);
+  }
+
+  async function borrarFotoInc(fotoId, incId) {
+    if (!confirm('¿Eliminar esta foto?')) return;
+    try {
+      const res = await apiCall(`/incidencia-fotos/${fotoId}`, { method: 'DELETE' });
+      if (!res.ok) return toast('❌ Error', 'err');
+      cargarFotosIncModal(incId);
+    } catch { toast('❌ Error de red', 'err'); }
+  }
+
+  window.incSetFiltro          = incSetFiltro;
+  window.cargarIncidencias     = cargarIncidencias;
+  window.abrirFormIncidencia   = abrirFormIncidencia;
+  window.cerrarFormIncidencia  = cerrarFormIncidencia;
+  window.guardarIncidencia     = guardarIncidencia;
+  window.cambiarEstadoInc      = cambiarEstadoInc;
+  window.abrirCierreInc        = abrirCierreInc;
+  window.verIncidencia         = verIncidencia;
+  window.borrarIncidencia      = borrarIncidencia;
+  window.triggerIncFoto        = triggerIncFoto;
+  window.procesarFotosIncidencia = procesarFotosIncidencia;
+  window.borrarFotoInc         = borrarFotoInc;
+
+  // ══════════════════════════════════════════════════════
   // OBRA DASHBOARD (NEW-27)
   // ══════════════════════════════════════════════════════
 
@@ -8772,10 +9132,10 @@ if ('serviceWorker' in navigator) {
           onclick: null,
         },
         {
-          icon: '🚨', label: 'Incidencias abiertas', value: '—',
-          color: '#94a3b8',
-          sub: 'Módulo próximamente',
-          onclick: null,
+          icon: '🚨', label: 'Incidencias abiertas', value: d.incidencias_abiertas ?? '—',
+          color: (d.incidencias_abiertas||0) > 0 ? '#ef4444' : '#22c55e',
+          sub: (d.incidencias_abiertas||0) > 0 ? `${d.incidencias_abiertas} sin resolver` : 'Sin incidencias',
+          onclick: "navTo('incidencias')",
         },
       ];
 

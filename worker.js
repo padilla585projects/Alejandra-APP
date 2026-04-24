@@ -474,6 +474,26 @@ export default {
       if (path === '/repostajes'             && method === 'POST') return await crearRepostaje(request, env);
       if (path === '/repostajes/resumen'     && method === 'GET')  return await getResumenRepostajes(request, env);
 
+      // ── Incidencias (NEW-22) ─────────────────────────────────────────────
+      if (path === '/incidencias' && method === 'GET')  return await getIncidencias(request, env);
+      if (path === '/incidencias' && method === 'POST') return await crearIncidencia(request, env);
+      if (path.startsWith('/incidencias/')) {
+        const parts = path.split('/');
+        const iid = parseInt(parts[2]);
+        if (parts[3] === 'fotos') {
+          if (method === 'GET')  return await getIncidenciaFotos(iid, request, env);
+          if (method === 'POST') return await subirFotoIncidencia(iid, request, env);
+        } else {
+          if (method === 'PUT')    return await actualizarIncidencia(iid, request, env);
+          if (method === 'DELETE') return await eliminarIncidencia(iid, request, env);
+        }
+      }
+      if (path.startsWith('/incidencia-fotos/')) {
+        const fid = parseInt(path.split('/incidencia-fotos/')[1]);
+        if (method === 'GET')    return await getFotoIncidencia(fid, request, env);
+        if (method === 'DELETE') return await borrarFotoIncidencia(fid, request, env);
+      }
+
       // ── Archivos / R2 ────────────────────────────────────────────────────
       if (path === '/archivos' && method === 'GET')  return await listarArchivos(request, env);
       if (path === '/archivos' && method === 'POST') return await subirArchivo(request, env);
@@ -2186,7 +2206,7 @@ async function getObraDashboard(request, env) {
     return [...p, ...extras];
   };
 
-  const [fichajesHoy, equiposMant, herrFuera, pedidosPend, alertasHerr, alertasSeg, alertasBob] = await Promise.all([
+  const [fichajesHoy, equiposMant, herrFuera, pedidosPend, alertasHerr, alertasSeg, alertasBob, incidenciasAbiertas] = await Promise.all([
     // Fichajes hoy
     env.DB.prepare(
       `SELECT COUNT(*) as n FROM fichajes WHERE empresa_id=?${queryObraId ? ' AND obra_id=?' : ''} AND DATE(entrada)=?`
@@ -2232,15 +2252,21 @@ async function getObraDashboard(request, env) {
         GROUP BY tc.id HAVING COUNT(b.id) < tc.stock_minimo
       )
     `).bind(empresa_id).first(),
+
+    // Incidencias abiertas o en progreso
+    env.DB.prepare(
+      `SELECT COUNT(*) as n FROM incidencias WHERE empresa_id=?${queryObraId?' AND obra_id=?':''} AND estado IN ('abierta','en_progreso')${departamento?' AND departamento=?':''}`
+    ).bind(...buildParams(empresa_id)).first(),
   ]);
 
   return json({
-    fichajes_hoy:          fichajesHoy?.n || 0,
-    equipos_mantenimiento: equiposMant?.n || 0,
-    herramientas_fuera:    herrFuera?.n  || 0,
-    pedidos_pendientes:    pedidosPend?.n || 0,
-    alertas_stock:         (alertasHerr?.n||0) + (alertasSeg?.n||0) + (alertasBob?.n||0),
-    obra_id:               queryObraId || null,
+    fichajes_hoy:           fichajesHoy?.n || 0,
+    equipos_mantenimiento:  equiposMant?.n || 0,
+    herramientas_fuera:     herrFuera?.n  || 0,
+    pedidos_pendientes:     pedidosPend?.n || 0,
+    alertas_stock:          (alertasHerr?.n||0) + (alertasSeg?.n||0) + (alertasBob?.n||0),
+    incidencias_abiertas:   incidenciasAbiertas?.n || 0,
+    obra_id:                queryObraId || null,
   });
 }
 
@@ -4082,6 +4108,137 @@ async function borrarArchivo(id, request, env) {
   if (!meta) return err('Archivo no encontrado', 404);
   await env.FILES.delete(meta.r2_key);
   await env.DB.prepare('DELETE FROM archivos WHERE id = ? AND empresa_id = ?').bind(id, empresa_id).run();
+  return json({ ok: true });
+}
+
+// ── Incidencias (NEW-22) ──────────────────────────────────────────────────────
+
+async function getIncidencias(request, env) {
+  const { empresa_id, departamento } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const url = new URL(request.url);
+  let sql = 'SELECT i.*, o.nombre as obra_nombre FROM incidencias i LEFT JOIN obras o ON i.obra_id = o.id WHERE i.empresa_id = ?';
+  const params = [empresa_id];
+  const dept = url.searchParams.get('departamento') || departamento;
+  if (dept) { sql += ' AND i.departamento = ?'; params.push(dept); }
+  const estado = url.searchParams.get('estado');
+  if (estado) { sql += ' AND i.estado = ?'; params.push(estado); }
+  const obra_id = url.searchParams.get('obra_id');
+  if (obra_id) { sql += ' AND i.obra_id = ?'; params.push(parseInt(obra_id)); }
+  sql += ' ORDER BY i.created_at DESC';
+  const { results } = await env.DB.prepare(sql).bind(...params).all();
+  return json(results);
+}
+
+async function crearIncidencia(request, env) {
+  const auth = await getAuth(request, env);
+  const { empresa_id, obra_id, departamento, nombre } = auth;
+  if (!empresa_id) return err('No autorizado', 403);
+  const body = await request.json().catch(() => ({}));
+  const { titulo, descripcion, tipo = 'otro', gravedad = 'media', asignado_a, fecha } = body;
+  if (!titulo?.trim()) return err('El título es obligatorio', 400);
+  const dept = body.departamento || departamento || 'electrico';
+  const obraFinal = body.obra_id || obra_id || null;
+  const fechaFinal = fecha || new Date().toISOString().slice(0, 10);
+  const r = await env.DB.prepare(
+    'INSERT INTO incidencias (empresa_id, obra_id, departamento, titulo, descripcion, tipo, gravedad, estado, reportado_por, asignado_a, fecha) VALUES (?,?,?,?,?,?,?,?,?,?,?)'
+  ).bind(empresa_id, obraFinal, dept, titulo.trim(), descripcion || null, tipo, gravedad, 'abierta', nombre || null, asignado_a || null, fechaFinal).run();
+  if (gravedad === 'alta') {
+    const gravedadIcon = { baja: '🟢', media: '🟠', alta: '🔴' };
+    await sendTelegram(env, `${gravedadIcon[gravedad]} <b>Incidencia ALTA [${dept}]</b>\n📋 ${titulo.trim()}\n${descripcion ? '📝 ' + descripcion.slice(0,200) + '\n' : ''}👤 ${nombre || '—'}`);
+  }
+  return json({ ok: true, id: r.meta.last_row_id }, 201);
+}
+
+async function actualizarIncidencia(id, request, env) {
+  const { empresa_id, nombre, rol } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const puedeGestionar = rol === 'encargado' || rol === 'empresa_admin' || rol === 'superadmin';
+  const body = await request.json().catch(() => ({}));
+  const inc = await env.DB.prepare('SELECT * FROM incidencias WHERE id = ? AND empresa_id = ?').bind(id, empresa_id).first();
+  if (!inc) return err('Incidencia no encontrada', 404);
+  // Solo admins/encargados pueden cambiar estado/asignación/resolución
+  if ((body.estado || body.asignado_a !== undefined || body.resolucion !== undefined) && !puedeGestionar)
+    return err('Sin permisos', 403);
+  const campos = [], vals = [];
+  if (body.titulo)       { campos.push('titulo=?');       vals.push(body.titulo.trim()); }
+  if (body.descripcion !== undefined) { campos.push('descripcion=?'); vals.push(body.descripcion || null); }
+  if (body.tipo)         { campos.push('tipo=?');         vals.push(body.tipo); }
+  if (body.gravedad)     { campos.push('gravedad=?');     vals.push(body.gravedad); }
+  if (body.estado)       { campos.push('estado=?');       vals.push(body.estado); }
+  if (body.asignado_a !== undefined) { campos.push('asignado_a=?'); vals.push(body.asignado_a || null); }
+  if (body.resolucion !== undefined) { campos.push('resolucion=?'); vals.push(body.resolucion || null); }
+  if (!campos.length) return json({ ok: true });
+  vals.push(id, empresa_id);
+  await env.DB.prepare(`UPDATE incidencias SET ${campos.join(',')} WHERE id=? AND empresa_id=?`).bind(...vals).run();
+  // Telegram al resolver
+  if (body.estado === 'resuelta') {
+    await sendTelegram(env, `✅ <b>Incidencia resuelta [${inc.departamento}]</b>\n📋 ${inc.titulo}\n${body.resolucion ? '📝 ' + body.resolucion.slice(0,200) : ''}`);
+  }
+  return json({ ok: true });
+}
+
+async function eliminarIncidencia(id, request, env) {
+  const { empresa_id, rol } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  if (rol !== 'superadmin' && rol !== 'empresa_admin') return err('Sin permisos', 403);
+  // Borrar fotos de R2 primero
+  const { results: fotos } = await env.DB.prepare('SELECT r2_key FROM incidencia_fotos WHERE incidencia_id = ? AND empresa_id = ?').bind(id, empresa_id).all();
+  await Promise.all(fotos.map(f => env.FILES.delete(f.r2_key)));
+  await env.DB.prepare('DELETE FROM incidencia_fotos WHERE incidencia_id = ? AND empresa_id = ?').bind(id, empresa_id).run();
+  await env.DB.prepare('DELETE FROM incidencias WHERE id = ? AND empresa_id = ?').bind(id, empresa_id).run();
+  return json({ ok: true });
+}
+
+async function getIncidenciaFotos(incidencia_id, request, env) {
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const { results } = await env.DB.prepare(
+    'SELECT * FROM incidencia_fotos WHERE empresa_id = ? AND incidencia_id = ? ORDER BY created_at ASC'
+  ).bind(empresa_id, incidencia_id).all();
+  return json(results);
+}
+
+async function subirFotoIncidencia(incidencia_id, request, env) {
+  const { empresa_id, nombre: userNombre, rol } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const form = await request.formData().catch(() => null);
+  if (!form) return err('Falta el formulario', 400);
+  const file = form.get('file');
+  if (!file || !file.name) return err('Falta el archivo', 400);
+  if (file.size > 20971520) return err('El archivo supera 20 MB', 413);
+  const mime = file.type || 'image/jpeg';
+  const allowed = ['image/jpeg','image/png','image/webp','image/heic','image/heif'];
+  if (!allowed.includes(mime)) return err('Solo se permiten imágenes', 400);
+  const ts = Date.now();
+  const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+  const r2Key = `e${empresa_id}/incidencias/${incidencia_id}/${ts}_${safeName}`;
+  await env.FILES.put(r2Key, file.stream(), { httpMetadata: { contentType: mime } });
+  const r = await env.DB.prepare(
+    'INSERT INTO incidencia_fotos (empresa_id, incidencia_id, r2_key, nombre_archivo, mime_type, subido_por) VALUES (?,?,?,?,?,?)'
+  ).bind(empresa_id, incidencia_id, r2Key, file.name, mime, userNombre || rol).run();
+  return json({ ok: true, id: r.meta.last_row_id }, 201);
+}
+
+async function getFotoIncidencia(id, request, env) {
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const meta = await env.DB.prepare('SELECT * FROM incidencia_fotos WHERE id = ? AND empresa_id = ?').bind(id, empresa_id).first();
+  if (!meta) return err('Foto no encontrada', 404);
+  const obj = await env.FILES.get(meta.r2_key);
+  if (!obj) return err('Archivo no disponible', 404);
+  return new Response(obj.body, {
+    headers: { 'Content-Type': meta.mime_type || 'image/jpeg', 'Content-Disposition': 'inline', 'Cache-Control': 'private, max-age=3600', ...CORS }
+  });
+}
+
+async function borrarFotoIncidencia(id, request, env) {
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const meta = await env.DB.prepare('SELECT * FROM incidencia_fotos WHERE id = ? AND empresa_id = ?').bind(id, empresa_id).first();
+  if (!meta) return err('Foto no encontrada', 404);
+  await env.FILES.delete(meta.r2_key);
+  await env.DB.prepare('DELETE FROM incidencia_fotos WHERE id = ? AND empresa_id = ?').bind(id, empresa_id).run();
   return json({ ok: true });
 }
 
