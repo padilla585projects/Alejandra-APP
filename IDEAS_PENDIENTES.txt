@@ -1,7 +1,7 @@
 ================================================================================
   ALEJANDRA APP — IDEAS, MEJORAS Y ERRORES PENDIENTES
   Recogidos de: Canal Telegram @AlejandraAPP_bot
-  Última actualización: 24/04/2026 — BUG-161 data fix D1 (parent_id carpetas)
+  Última actualización: 24/04/2026 — BUG-160 resuelto: banner auto-update (v4.97)
 
   ⚠️  LEER ESTE ARCHIVO ANTES DE CUALQUIER SESIÓN DE CODIFICACIÓN.
   ⚠️  Marcar como [HECHO vX.XX] cuando se implemente. No borrar las líneas.
@@ -228,12 +228,15 @@ LEYENDA DE ESTADO:
       SA: flujo empresa→obra→depts. EA: igual si aún no tiene obra asignada.
     · Reportado: 24/04/2026 — usuario (sugerencia #159 BD)
 
-[~] BUG-160 — App no se actualiza sola / usuarios no ven mejoras nuevas  [PARCIAL v4.96]
+[✓] BUG-160 — App no se actualiza sola / usuarios no ven mejoras nuevas  [HECHO v4.96+v4.97]
     · Los usuarios informan de que no ven nuevas versiones (ej: chat) aunque estén desplegadas.
-    · Fix v4.96 (parcial):
-      (1) register('sw.js', { updateViaCache: 'none' }) → siempre descarga SW fresco, sin caché HTTP.
-      (2) Nuevo botón 🔄 Buscar actualización en Ajustes→Sistema → el usuario puede forzarlo manualmente.
-    · Pendiente: investigar si hay algún caso edge donde checkVersionAndUpdate falle silenciosamente.
+    · Fix v4.96: register('sw.js', { updateViaCache: 'none' }) + botón manual en Ajustes→Sistema.
+    · Fix v4.97 (root cause): checkVersionAndUpdate hacía location.replace silencioso — si el SW
+      antiguo servía index.html desde caché, el replace devolvía la versión vieja y el ciclo no terminaba.
+      Nuevo flujo: detectar versión nueva → mostrar banner amarillo "🔄 Nueva versión vX.XX disponible"
+      → auto-recarga en 4s (o el usuario pulsa "Actualizar ahora" antes).
+      forzarActualizacion(): activa SW en espera (SKIP_WAITING) + borra caches + location.replace.
+    · SW_ACTUALIZADO también muestra banner (antes recargaba silenciosamente).
     · Reportado: 24/04/2026 — varios usuarios (sugerencias #160 y #161 BD)
 
 [✓] BUG-161 — Documentos siguen sin aparcer para todos los usuarios  [HECHO — data fix D1]

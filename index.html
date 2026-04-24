@@ -2229,8 +2229,8 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
 <div class="toast" id="toast"></div>
 <div id="updatedBanner"></div>
 <div id="updateBanner">
-  <span>🔄 Nueva versión disponible</span>
-  <button onclick="location.replace(location.pathname+'?r='+Date.now())">Actualizar ahora</button>
+  <span id="updateBannerText">🔄 Nueva versión disponible</span>
+  <button onclick="forzarActualizacion()">Actualizar ahora</button>
 </div>
 
 <script>
@@ -7221,7 +7221,7 @@ async function cargarObrasSelectUsuario() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '4.96';
+const APP_VERSION = '4.97';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -7231,6 +7231,33 @@ let _actualizando = false;
   if (b) b.textContent = 'v' + APP_VERSION;
   if (a) a.textContent = 'v' + APP_VERSION;
 })();
+
+function mostrarBannerActualizacion(v) {
+  const banner = document.getElementById('updateBanner');
+  const txt    = document.getElementById('updateBannerText');
+  if (!banner) return;
+  if (txt) txt.textContent = '🔄 Nueva versión v' + v + ' disponible';
+  banner.classList.add('show');
+}
+
+async function forzarActualizacion() {
+  const banner = document.getElementById('updateBanner');
+  if (banner) banner.innerHTML = '<span>⏳ Actualizando...</span>';
+  try {
+    // 1. Forzar activación del SW en espera
+    const reg = await navigator.serviceWorker?.getRegistration();
+    if (reg?.waiting) reg.waiting.postMessage({ tipo: 'SKIP_WAITING' });
+    // 2. Limpiar todos los caches SW
+    if ('caches' in window) {
+      const keys = await caches.keys();
+      await Promise.all(keys.map(k => caches.delete(k)));
+    }
+    // 3. Limpiar session cacheada
+    localStorage.removeItem('alejandra_api');
+  } catch {}
+  // 4. Recargar forzando nueva versión
+  location.replace(location.pathname + '?r=' + Date.now());
+}
 
 async function checkVersionAndUpdate() {
   if (_actualizando) return;
@@ -7242,14 +7269,9 @@ async function checkVersionAndUpdate() {
       // No interrumpir un callback de Google OAuth en curso
       if (new URLSearchParams(location.search).has('code')) return;
       _actualizando = true;
-      // Limpia todos los caches del SW
-      if ('caches' in window) {
-        const keys = await caches.keys();
-        await Promise.all(keys.map(k => caches.delete(k)));
-      }
-      localStorage.removeItem('alejandra_api');
-      localStorage.setItem('alejandra_just_updated', v);
-      location.replace(location.pathname + '?r=' + Date.now());
+      mostrarBannerActualizacion(v);
+      // Intentar recarga automática tras 4s (por si el usuario no ve el banner)
+      setTimeout(forzarActualizacion, 4000);
     }
   } catch {}
 }
@@ -9027,18 +9049,22 @@ if ('serviceWorker' in navigator) {
     toast('✅ Excel descargado');
   }
 
-  // SW activado → solo recarga si la versión del SW difiere de la app actual
+  // SW activado → muestra banner si la versión del SW difiere de la app actual
   navigator.serviceWorker.addEventListener('message', e => {
     if (e.data?.tipo === 'SW_ACTUALIZADO') {
       const newV = (e.data.cache || '').replace('alejandra-v', '');
       if (newV && newV !== APP_VERSION) {
         localStorage.setItem('alejandra_just_updated', newV);
-        recargarApp();
+        mostrarBannerActualizacion(newV);
+        setTimeout(forzarActualizacion, 4000);
       }
     }
   });
 
-  navigator.serviceWorker.addEventListener('controllerchange', recargarApp);
+  // controllerchange = nuevo SW tomó el control → recarga para cargar el nuevo index.html
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!_actualizando) recargarApp();
+  });
 
   // BUG-009: pausa polling en background, reanuda al volver al frente
   document.addEventListener('visibilitychange', () => {
