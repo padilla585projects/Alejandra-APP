@@ -426,9 +426,20 @@ export default {
       if (path === '/pedidos' && method === 'GET')  return await getPedidos(request, env);
       if (path === '/pedidos' && method === 'POST') return await crearPedido(request, env);
       if (path.startsWith('/pedidos/')) {
-        const pid = parseInt(path.split('/pedidos/')[1]);
-        if (method === 'PUT')    return await actualizarPedido(pid, request, env);
-        if (method === 'DELETE') return await eliminarPedido(pid, request, env);
+        const parts = path.split('/');  // ['','pedidos','5'] or ['','pedidos','5','albaranes']
+        const pid = parseInt(parts[2]);
+        if (parts[3] === 'albaranes') {
+          if (method === 'GET')  return await getAlbaranesPedido(pid, request, env);
+          if (method === 'POST') return await subirAlbaranPedido(pid, request, env);
+        } else {
+          if (method === 'PUT')    return await actualizarPedido(pid, request, env);
+          if (method === 'DELETE') return await eliminarPedido(pid, request, env);
+        }
+      }
+      if (path.startsWith('/albaranes/')) {
+        const aid = parseInt(path.split('/albaranes/')[1]);
+        if (method === 'GET')    return await getAlbaranFile(aid, request, env);
+        if (method === 'DELETE') return await borrarAlbaran(aid, request, env);
       }
 
       // ── Herramientas ─────────────────────────────────────────────────────────
@@ -3992,6 +4003,73 @@ async function borrarArchivo(id, request, env) {
   if (!meta) return err('Archivo no encontrado', 404);
   await env.FILES.delete(meta.r2_key);
   await env.DB.prepare('DELETE FROM archivos WHERE id = ? AND empresa_id = ?').bind(id, empresa_id).run();
+  return json({ ok: true });
+}
+
+// ── Albaranes de pedidos (NEW-25) ─────────────────────────────────────────────
+
+async function getAlbaranesPedido(pedido_id, request, env) {
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const { results } = await env.DB.prepare(
+    'SELECT * FROM albaranes WHERE empresa_id = ? AND pedido_id = ? ORDER BY created_at ASC'
+  ).bind(empresa_id, pedido_id).all();
+  return json(results);
+}
+
+async function subirAlbaranPedido(pedido_id, request, env) {
+  const { empresa_id, nombre: userNombre, rol } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const form = await request.formData().catch(() => null);
+  if (!form) return err('Falta el formulario', 400);
+  const file = form.get('file');
+  if (!file || !file.name) return err('Falta el archivo', 400);
+  if (file.size > 20971520) return err('El archivo supera el límite de 20 MB', 413);
+  const allowedMimes = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif', 'application/pdf'];
+  const mime = file.type || 'application/octet-stream';
+  if (!allowedMimes.includes(mime)) return err('Tipo de archivo no permitido', 400);
+  const ts = Date.now();
+  const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+  const r2Key = `e${empresa_id}/albaranes/${pedido_id}/${ts}_${safeName}`;
+  await env.FILES.put(r2Key, file.stream(), {
+    httpMetadata: { contentType: mime }
+  });
+  const fecha = new Date().toISOString().slice(0, 10);
+  const r = await env.DB.prepare(
+    'INSERT INTO albaranes (empresa_id, pedido_id, r2_key, nombre_archivo, mime_type, subido_por, fecha) VALUES (?,?,?,?,?,?,?)'
+  ).bind(empresa_id, pedido_id, r2Key, file.name, mime, userNombre || rol, fecha).run();
+  return json({ ok: true, id: r.meta.last_row_id, nombre_archivo: file.name, mime_type: mime }, 201);
+}
+
+async function getAlbaranFile(id, request, env) {
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const meta = await env.DB.prepare(
+    'SELECT * FROM albaranes WHERE id = ? AND empresa_id = ?'
+  ).bind(id, empresa_id).first();
+  if (!meta) return err('Albarán no encontrado', 404);
+  const obj = await env.FILES.get(meta.r2_key);
+  if (!obj) return err('Archivo no disponible', 404);
+  const inline = meta.mime_type?.startsWith('image/') || meta.mime_type === 'application/pdf';
+  return new Response(obj.body, {
+    headers: {
+      'Content-Type': meta.mime_type || 'application/octet-stream',
+      'Content-Disposition': `${inline ? 'inline' : 'attachment'}; filename="${encodeURIComponent(meta.nombre_archivo)}"`,
+      'Cache-Control': 'private, max-age=3600',
+      ...CORS,
+    },
+  });
+}
+
+async function borrarAlbaran(id, request, env) {
+  const { empresa_id, rol } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const meta = await env.DB.prepare(
+    'SELECT * FROM albaranes WHERE id = ? AND empresa_id = ?'
+  ).bind(id, empresa_id).first();
+  if (!meta) return err('Albarán no encontrado', 404);
+  await env.FILES.delete(meta.r2_key);
+  await env.DB.prepare('DELETE FROM albaranes WHERE id = ? AND empresa_id = ?').bind(id, empresa_id).run();
   return json({ ok: true });
 }
 

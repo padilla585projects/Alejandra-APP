@@ -2097,6 +2097,32 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
     </div>
   </div>
 
+  <!-- Modal Albaranes (NEW-25) -->
+  <div class="modal-overlay" id="modalAlbaranes" onclick="if(event.target===this)cerrarAlbaranes()">
+    <div class="modal" style="max-height:90vh;overflow-y:auto">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px">
+        <div class="modal-title" style="margin-bottom:0;flex:1;font-size:16px">📎 Albaranes</div>
+        <button onclick="cerrarAlbaranes()" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--muted);line-height:1">×</button>
+      </div>
+      <div id="albPedidoDesc" style="font-size:13px;color:var(--muted);margin-bottom:14px;font-style:italic"></div>
+
+      <!-- Lista de albaranes ya subidos -->
+      <div id="albListaContainer" style="display:flex;flex-wrap:wrap;gap:10px;min-height:60px;margin-bottom:16px">
+        <div style="color:var(--muted);font-size:13px">Cargando…</div>
+      </div>
+
+      <!-- Botones subir -->
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button onclick="triggerAlbaranInput(false)" style="flex:1;padding:10px;background:#8b5cf620;color:#8b5cf6;border:1px solid #8b5cf640;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer">📁 Subir archivo</button>
+        <button onclick="triggerAlbaranInput(true)" style="flex:1;padding:10px;background:#8b5cf620;color:#8b5cf6;border:1px solid #8b5cf640;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer">📷 Cámara</button>
+      </div>
+      <input type="file" id="albFileInput" accept="image/*,application/pdf" style="display:none" onchange="procesarArchivosAlbaran(this.files)">
+      <input type="file" id="albCamInput"  accept="image/*" capture="environment" style="display:none" onchange="procesarArchivosAlbaran(this.files)">
+      <div id="albSubiendo" style="display:none;margin-top:10px;font-size:13px;color:var(--muted);text-align:center">⏳ Subiendo…</div>
+    </div>
+  </div>
+
+
 </div><!-- end appContent -->
 
 <!-- ══════════════════════════════════════════
@@ -2361,6 +2387,22 @@ async function apiCall(path, options = {}) {
   };
   const res = await fetch(base + path, { ...options, headers });
   return res;
+}
+
+// apiCallRaw: igual que apiCall pero sin Content-Type (para FormData)
+async function apiCallRaw(path, options = {}) {
+  const base = getAPI();
+  const s = getSession();
+  const headers = {
+    ...(s && s.token        ? { 'X-Token': s.token } : {}),
+    ...(s && !s.token && s.adminCode    ? { 'X-Admin-Code': s.adminCode } : {}),
+    ...(s && !s.token && s.obra_id      ? { 'X-Obra-Id': String(s.obra_id) } : {}),
+    ...(s && !s.token && s.nombre       ? { 'X-Usuario': s.nombre } : {}),
+    ...(s && !s.token && s.rol          ? { 'X-Rol': s.rol } : {}),
+    ...(s && s.departamento ? { 'X-Departamento': s.departamento } : {}),
+    ...options.headers
+  };
+  return fetch(base + path, { ...options, headers });
 }
 
 // ══════════════════════════════════════════════════════
@@ -7477,7 +7519,7 @@ async function cargarObrasSelectUsuario() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '5.02';
+const APP_VERSION = '5.03';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -8382,6 +8424,7 @@ if ('serviceWorker' in navigator) {
           ${puedeGestionar && p.estado === 'pendiente' ? `<button onclick="cambiarEstadoPedido(${p.id},'solicitado')" style="flex:1;padding:7px;background:#3b82f620;color:#3b82f6;border:1px solid #3b82f640;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">📤 Marcar solicitado</button>` : ''}
           ${puedeGestionar && p.estado === 'solicitado' ? `<button onclick="cambiarEstadoPedido(${p.id},'recibido')" style="flex:1;padding:7px;background:#22c55e20;color:#22c55e;border:1px solid #22c55e40;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">✅ Marcar recibido</button>` : ''}
           ${puedeGestionar && (p.estado === 'pendiente' || p.estado === 'solicitado') ? `<button onclick="cambiarEstadoPedido(${p.id},'cancelado')" style="padding:7px 10px;background:#ef444420;color:#ef4444;border:1px solid #ef444440;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">✕</button>` : ''}
+          <button onclick="abrirAlbaranes(${p.id},${JSON.stringify(p.descripcion).replace(/"/g,'&quot;')})" style="padding:7px 10px;background:#8b5cf620;color:#8b5cf6;border:1px solid #8b5cf640;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer" id="btnAlb_${p.id}">📎 Albarán</button>
           ${puedeGestionar && p.estado !== 'recibido' && p.estado !== 'cancelado' ? `<button onclick="abrirFormPedido(${JSON.stringify(p).replace(/"/g,'&quot;')})" style="padding:7px 10px;background:var(--surface);color:var(--muted);border:1px solid var(--border);border-radius:8px;font-size:12px;cursor:pointer">✏️</button>` : ''}
           ${puedeEliminar ? `<button onclick="borrarPedido(${p.id})" style="padding:7px 10px;background:#ef444420;color:#ef4444;border:1px solid #ef444440;border-radius:8px;font-size:12px;cursor:pointer">🗑️</button>` : ''}
         </div>
@@ -8474,6 +8517,99 @@ if ('serviceWorker' in navigator) {
       cargarPedidos();
     } catch { toast('❌ Error de red', 'err'); }
   }
+
+  // ── Albaranes de pedidos (NEW-25) ──────────────────────────────────────────
+  window._albPedidoId = null;
+
+  function abrirAlbaranes(pedidoId, pedidoDesc) {
+    window._albPedidoId = pedidoId;
+    document.getElementById('albPedidoDesc').textContent = pedidoDesc || '';
+    document.getElementById('albSubiendo').style.display = 'none';
+    document.getElementById('modalAlbaranes').classList.add('show');
+    cargarAlbaranes(pedidoId);
+  }
+
+  function cerrarAlbaranes() {
+    document.getElementById('modalAlbaranes').classList.remove('show');
+    window._albPedidoId = null;
+  }
+
+  async function cargarAlbaranes(pedidoId) {
+    const c = document.getElementById('albListaContainer');
+    c.innerHTML = '<div style="color:var(--muted);font-size:13px">Cargando…</div>';
+    try {
+      const res = await apiCall(`/pedidos/${pedidoId}/albaranes`);
+      if (!res.ok) { c.innerHTML = '<div style="color:var(--muted);font-size:13px">Error al cargar</div>'; return; }
+      const lista = await res.json();
+      if (!lista.length) {
+        c.innerHTML = '<div style="color:var(--muted);font-size:13px">Sin albaranes todavía</div>';
+        // Update button badge
+        const btn = document.getElementById(`btnAlb_${pedidoId}`);
+        if (btn) btn.textContent = '📎 Albarán';
+        return;
+      }
+      c.innerHTML = lista.map(a => {
+        const esImagen = a.mime_type?.startsWith('image/');
+        const thumb = esImagen
+          ? `<img src="${getAPI()}/albaranes/${a.id}" style="width:80px;height:80px;object-fit:cover;border-radius:8px;cursor:pointer;border:2px solid var(--border)" onclick="verAlbaran(${a.id})">`
+          : `<div onclick="verAlbaran(${a.id})" style="width:80px;height:80px;border-radius:8px;cursor:pointer;border:2px solid var(--border);background:var(--surface);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px"><span style="font-size:28px">📄</span><span style="font-size:9px;color:var(--muted);text-align:center;padding:0 4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:72px">PDF</span></div>`;
+        const puedeEliminar = (() => { const s = getSession(); return s?.rol === 'encargado' || s?.rol === 'empresa_admin' || s?.rol === 'superadmin'; })();
+        return `<div style="position:relative;display:inline-block">
+          ${thumb}
+          ${puedeEliminar ? `<button onclick="borrarAlbaranItem(${a.id},${pedidoId})" style="position:absolute;top:-6px;right:-6px;width:20px;height:20px;background:#ef4444;color:#fff;border:none;border-radius:50%;font-size:11px;cursor:pointer;line-height:1;padding:0;display:flex;align-items:center;justify-content:center">✕</button>` : ''}
+          <div style="font-size:9px;color:var(--muted);margin-top:2px;max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:center">${a.fecha||''}</div>
+        </div>`;
+      }).join('');
+      // Update button badge
+      const btn = document.getElementById(`btnAlb_${pedidoId}`);
+      if (btn) btn.textContent = `📎 Albarán (${lista.length})`;
+    } catch { c.innerHTML = '<div style="color:var(--muted);font-size:13px">Error de red</div>'; }
+  }
+
+  function triggerAlbaranInput(camara) {
+    const input = document.getElementById(camara ? 'albCamInput' : 'albFileInput');
+    input.value = '';
+    input.click();
+  }
+
+  async function procesarArchivosAlbaran(files) {
+    if (!files || !files.length || !window._albPedidoId) return;
+    const subiendo = document.getElementById('albSubiendo');
+    subiendo.style.display = 'block';
+    let errores = 0;
+    for (const file of Array.from(files)) {
+      try {
+        const form = new FormData();
+        form.append('file', file);
+        const res = await apiCallRaw(`/pedidos/${window._albPedidoId}/albaranes`, { method: 'POST', body: form });
+        if (!res.ok) { errores++; const e = await res.json().catch(()=>({error:'Error'})); toast('❌ ' + (e.error||'Error'), 'err'); }
+      } catch { errores++; toast('❌ Error de red', 'err'); }
+    }
+    subiendo.style.display = 'none';
+    if (!errores) toast('✅ Albarán subido');
+    cargarAlbaranes(window._albPedidoId);
+  }
+
+  async function borrarAlbaranItem(aid, pedidoId) {
+    if (!confirm('¿Eliminar este albarán?')) return;
+    try {
+      const res = await apiCall(`/albaranes/${aid}`, { method: 'DELETE' });
+      if (!res.ok) return toast('❌ Error al eliminar', 'err');
+      toast('🗑️ Albarán eliminado');
+      cargarAlbaranes(pedidoId);
+    } catch { toast('❌ Error de red', 'err'); }
+  }
+
+  function verAlbaran(aid) {
+    window.open(`${getAPI()}/albaranes/${aid}`, '_blank');
+  }
+
+  window.abrirAlbaranes      = abrirAlbaranes;
+  window.cerrarAlbaranes     = cerrarAlbaranes;
+  window.triggerAlbaranInput = triggerAlbaranInput;
+  window.procesarArchivosAlbaran = procesarArchivosAlbaran;
+  window.borrarAlbaranItem   = borrarAlbaranItem;
+  window.verAlbaran          = verAlbaran;
 
   // ══════════════════════════════════════════════════════
   // PERSONAL
