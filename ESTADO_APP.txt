@@ -5,7 +5,7 @@
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 24/04/2026
-VERSIÓN ACTUAL APP NUEVA: v4.99
+VERSIÓN ACTUAL APP NUEVA: v5.00
 VERSIÓN ACTUAL APP VIEJA: v4.19 (congelada — solo recibe bugs críticos)
 
 ⚠️  ANTES DE CODIFICAR: leer NuevaApp/IDEAS_PENDIENTES.txt
@@ -114,10 +114,25 @@ ANTES DE TOCAR CUALQUIER ARCHIVO, VERIFICAR QUE TODO ESTÁ AL DÍA:
     ✅ ALTER TABLE carpetas ADD COLUMN parent_id INTEGER
     ✅ CREATE TABLE docs_notas (...)
     ✅ chat_mensajes ya existía (creada en runMigrations anterior)
+    ✅ ALTER TABLE tipos_herramienta ADD COLUMN stock_minimo INTEGER DEFAULT 0
+    ✅ ALTER TABLE inventario_seg ADD COLUMN stock_minimo INTEGER DEFAULT 0
+    ✅ ALTER TABLE tipos_cable ADD COLUMN stock_minimo INTEGER DEFAULT 0
 
 ================================================================================
   HISTORIAL DE VERSIONES — RECIENTES
 ================================================================================
+
+v5.00  |  24/04/2026  [SOLO NUEVA APP]
+  - NEW-24: alertas de stock mínimo
+    · D1: columna stock_minimo en tipos_herramienta, inventario_seg y tipos_cable
+    · Ajustes → Tipos herramienta: input "min" junto a cada tipo (herramientas disponibles)
+    · Ajustes → Tipos cable: input "min bobinas" junto a cada tipo
+    · Editar item seg (modo cantidad): campo stock mínimo
+    · Worker: endpoint GET /alertas-stock + PUT /tipos-herramienta/:id + PUT /tipos-cable/:id
+    · Telegram: aviso automático al bajar del mínimo (salida seg + herramienta averiada)
+    · Notificaciones: panel muestra ítems bajo mínimo con navegación directa al módulo
+    · Badge campana cuenta los ítems bajo mínimo
+  - Worker y GitHub actualizados ✅
 
 v4.99  |  24/04/2026  [SOLO NUEVA APP]
   - Chat accesible desde departamento Personal

@@ -1,7 +1,7 @@
 ================================================================================
   ALEJANDRA APP — IDEAS, MEJORAS Y ERRORES PENDIENTES
   Recogidos de: Canal Telegram @AlejandraAPP_bot
-  Última actualización: 24/04/2026 — NEW-13..28 añadidos (calendario, mantenimiento, dashboard, etc.)
+  Última actualización: 24/04/2026 — NEW-24 hecho v5.00: alertas stock mínimo (herr + seg + bobinas)
 
   ⚠️  LEER ESTE ARCHIVO ANTES DE CUALQUIER SESIÓN DE CODIFICACIÓN.
   ⚠️  Marcar como [HECHO vX.XX] cuando se implemente. No borrar las líneas.
@@ -737,7 +737,7 @@ LEYENDA DE ESTADO:
     · D1: nueva tabla `epis_asignados`.
     · Añadido: 24/04/2026 — Adrian
 
-[ ] NEW-24 — Alertas de stock mínimo  [PENDIENTE]
+[✓] NEW-24 — Alertas de stock mínimo  [HECHO v5.00]
     · En cada bobina, herramienta o material de seguridad: campo "Stock mínimo".
     · Cuando la cantidad disponible baja de ese mínimo → aviso in-app (badge) + Telegram.
     · Toggle por ítem para activar/desactivar la alerta (igual que en mantenimiento NEW-15).
