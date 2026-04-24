@@ -5,7 +5,7 @@
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 24/04/2026
-VERSIÓN ACTUAL APP NUEVA: v5.04
+VERSIÓN ACTUAL APP NUEVA: v5.05
 VERSIÓN ACTUAL APP VIEJA: v4.19 (congelada — solo recibe bugs críticos)
 
 ⚠️  ANTES DE CODIFICAR: leer NuevaApp/IDEAS_PENDIENTES.txt
@@ -123,6 +123,15 @@ ANTES DE TOCAR CUALQUIER ARCHIVO, VERIFICAR QUE TODO ESTÁ AL DÍA:
 ================================================================================
   HISTORIAL DE VERSIONES — RECIENTES
 ================================================================================
+
+v5.05  |  24/04/2026  [SOLO NUEVA APP]
+  - Dashboard extendido a Seguridad y Personal
+    · Seguridad: tab nuevo "📊 Resumen" → KPIs alertas stock, herramientas fuera,
+      pedidos pendientes, fichajes hoy — clicables a sus módulos
+    · Personal tab "Hoy": mini barra de píldoras sobre la lista
+      👷 Fichados · ✅ Presentes · 🏁 Con salida · ⏰ Retrasos
+      (calculado desde los datos ya cargados, sin llamada extra)
+  - GitHub actualizado ✅
 
 v5.04  |  24/04/2026  [SOLO NUEVA APP]
   - NEW-27: Dashboard de obra (tarjeta Resumen en home)
@@ -351,7 +360,7 @@ v4.80  |  22/04/2026  [SOLO NUEVA APP]
     - KPIs implementados: fichajes hoy, equipos mantenimiento, herramientas fuera,
       pedidos pendientes, alertas stock. Placeholders para calendario e incidencias.
     - Cada KPI clicable navega al módulo. Badge de alertas en la tarjeta home.
-    - Pendiente: acceso desde screenPersonal y screenSeguridad (feedback del usuario).
+    - v5.05: Seguridad con tab propio, Personal con mini KPI bar en tab Hoy. ✅ COMPLETO.
 
   NEW-15 — Mantenimiento preventivo:
     - Toggle por equipo para activar/desactivar aviso (no siempre se quiere).
