@@ -1,7 +1,7 @@
 ================================================================================
   ALEJANDRA APP — IDEAS, MEJORAS Y ERRORES PENDIENTES
   Recogidos de: Canal Telegram @AlejandraAPP_bot
-  Última actualización: 24/04/2026 — BUG-162/163/160 parcial (v4.96)
+  Última actualización: 24/04/2026 — BUG-161 data fix D1 (parent_id carpetas)
 
   ⚠️  LEER ESTE ARCHIVO ANTES DE CUALQUIER SESIÓN DE CODIFICACIÓN.
   ⚠️  Marcar como [HECHO vX.XX] cuando se implemente. No borrar las líneas.
@@ -236,10 +236,16 @@ LEYENDA DE ESTADO:
     · Pendiente: investigar si hay algún caso edge donde checkVersionAndUpdate falle silenciosamente.
     · Reportado: 24/04/2026 — varios usuarios (sugerencias #160 y #161 BD)
 
-[ ] BUG-161 — Documentos siguen sin aparecer para algunos usuarios  [pendiente investigar]
-    · Tras el fix de v4.94 (BUG-158, obra_id incorrecta en carpetas), aún hay usuarios que
-      no ven documentos. Posible causa: sesión cacheada, obra no asignada, o datos adicionales
-      con obra_id incorrecta que no se corrigieron en el fix anterior.
+[✓] BUG-161 — Documentos siguen sin aparcer para todos los usuarios  [HECHO — data fix D1]
+    · Causa raíz: el worker usa columna `parent_id` en TODAS las queries de /carpetas
+      (listarCarpetas, crearCarpeta, borrarCarpetaRecursive) pero la migración que añade
+      esa columna (ALTER TABLE carpetas ADD COLUMN parent_id) nunca se ejecutó en remoto.
+      → Cada llamada a /carpetas devolvía error SQL → el frontend mostraba las carpetas vacías.
+    · Fix: ejecutado directamente via wrangler d1:
+        ALTER TABLE carpetas ADD COLUMN parent_id INTEGER  → ✅ aplicado
+        CREATE TABLE IF NOT EXISTS docs_notas (...)        → ✅ creada
+      (chat_mensajes ya existía)
+    · Todas las carpetas existentes quedan con parent_id=NULL (carpetas raíz) — correcto.
     · Reportado: 24/04/2026 — usuario (sugerencia #162 BD)
 
 [✓] BUG-162 — Selector de obras: primera opción dice "Sin obras" en vez de "Todas las obras"  [HECHO v4.96]
