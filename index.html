@@ -6827,10 +6827,17 @@ async function chatEnviar() {
   if (!msg) return;
   input.value = '';
   input.style.height = 'auto';
+  // Incluir obra_id explícitamente para que el mensaje se guarde con la obra correcta
+  const s = getSession();
+  const body = { mensaje: msg };
+  if (s?.obra_id) body.obra_id = s.obra_id;
   try {
-    const res = await apiCall('/chat', { method: 'POST', body: JSON.stringify({ mensaje: msg }) });
-    if (res.ok) { chatPoll(); } // recarga inmediata
-    else { toast('❌ Error al enviar', 'err'); input.value = msg; }
+    const res = await apiCall('/chat', { method: 'POST', body: JSON.stringify(body) });
+    if (res.ok) {
+      // Forzar recarga completa para que aparezca el mensaje recién enviado
+      _chatLastTs = null;
+      chatCargar();
+    } else { toast('❌ Error al enviar', 'err'); input.value = msg; }
   } catch { toast('❌ Sin conexión', 'err'); input.value = msg; }
 }
 
@@ -7281,7 +7288,7 @@ async function cargarObrasSelectUsuario() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '5.00';
+const APP_VERSION = '5.01';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
