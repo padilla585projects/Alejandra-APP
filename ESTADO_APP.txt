@@ -5,7 +5,7 @@
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 24/04/2026
-VERSIÓN ACTUAL APP NUEVA: v5.08
+VERSIÓN ACTUAL APP NUEVA: v5.09
 VERSIÓN ACTUAL APP VIEJA: v4.19 (congelada — solo recibe bugs críticos)
 
 ⚠️  ANTES DE CODIFICAR: leer NuevaApp/IDEAS_PENDIENTES.txt
@@ -123,6 +123,17 @@ ANTES DE TOCAR CUALQUIER ARCHIVO, VERIFICAR QUE TODO ESTÁ AL DÍA:
 ================================================================================
   HISTORIAL DE VERSIONES — RECIENTES
 ================================================================================
+
+v5.09  |  24/04/2026  [SOLO NUEVA APP]
+  - MEJ: tarjetas del home reordenables por el usuario
+    · Botón 🔀 flotante (bottom-right) visible solo en el home
+    · Al pulsar entra en modo edición: handles ⠿ visibles, flechas ocultas
+    · Arrastrar tarjeta (drag-and-drop + soporte táctil móvil) para reordenar
+    · Al pulsar ✅ guarda el orden en localStorage (clave: alejandra_home_order)
+    · Al volver al home el orden guardado se aplica automáticamente
+    · Al salir del home el modo edición se cancela automáticamente
+    · Funciona solo para tarjetas visibles del dept del usuario
+  - GitHub pendiente de push ⚠️
 
 v5.08  |  24/04/2026  [SOLO NUEVA APP]
   - BUG CRÍTICO: app congelada en splash screen al arrancar
@@ -367,6 +378,7 @@ v4.80  |  22/04/2026  [SOLO NUEVA APP]
     [✓] NEW-27 — Dashboard de obra (opción C)      → HECHO v5.04
     [✓] NEW-22 — Registro de incidencias           → HECHO v5.06
     [✓] NEW-13 — Calendario de obra                → HECHO v5.07
+    [✓] MEJ    — Reordenar tarjetas home           → HECHO v5.09
     [ ] NEW-17 — Galería de fotos por obra         → SIGUIENTE
     [ ] NEW-21 — Checklist pre-uso equipos
     [ ] NEW-15 — Mantenimiento preventivo equipos
@@ -406,8 +418,23 @@ v4.80  |  22/04/2026  [SOLO NUEVA APP]
     · Cron 7am: Telegram eventos del día + recordatorios anticipados.
     · Tarjeta 📅 en home. Dashboard 📅 Próximo evento conectado.
 
-  ESTADO ACTUAL: v5.07, worker desplegado, GitHub en sync.
-  SIGUIENTE: NEW-17 — Galería de fotos por obra.
+  v5.08 — BUG CRÍTICO: app congelada en splash screen
+    · Causa: 'async function guardarIncidencia()' declarada dos veces → error
+      "Identifier already declared" en el segundo <script>, que impedía ejecutar
+      el código que elimina el splash. Fix: renombrada a _guardarIncidenciaBase().
+    · Worker redesplegado (estaba en v4.93). Todos los endpoints activos.
+    · SW bumpeado, version.json actualizado, GitHub en sync.
+
+  v5.09 — MEJ: tarjetas home reordenables
+    · Botón 🔀 (posición fija bottom-right, solo en screenHome).
+    · Modo edición: handles ⠿, arrastre drag-and-drop + touch.
+    · Orden guardado en localStorage (alejandra_home_order).
+    · applyHomeOrder() llamado al final de setupHomeModules().
+    · Al salir del home cancela el modo edición automáticamente.
+    · GitHub PENDIENTE DE PUSH ⚠️
+
+  ESTADO ACTUAL: v5.09, worker en sync (v5.08), GitHub pendiente de push.
+  SIGUIENTE: hacer push GitHub v5.09, luego NEW-17 — Galería de fotos por obra.
 
   REGLA CLAVE (recordar al próximo chat):
     Siempre explicar el plan técnico y esperar confirmación del usuario

@@ -81,6 +81,15 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
 .module-card{background:var(--surface);border:2px solid var(--border);border-radius:20px;padding:0 24px;display:flex;align-items:center;gap:22px;cursor:pointer;transition:all .2s;flex:1;min-height:100px}
 .module-card.full-width{width:100%}
 .module-card:active{transform:scale(0.97);opacity:.9}
+.module-card.sortable-mode{cursor:grab;user-select:none}
+.module-card.sortable-mode:active{cursor:grabbing;transform:scale(1.02);box-shadow:0 4px 20px rgba(0,0,0,.2);opacity:1}
+.module-card.drag-over-top{border-top:3px solid var(--accent) !important}
+.module-card.drag-over-bottom{border-bottom:3px solid var(--accent) !important}
+.module-card.dragging{opacity:.35}
+.drag-handle{display:none;color:var(--muted);font-size:22px;cursor:grab;padding:0 4px;flex-shrink:0}
+.sortable-mode .drag-handle{display:flex;align-items:center}
+.sortable-mode .module-arrow{display:none}
+#btnOrdenarHome{display:none}
 .module-emoji{font-size:52px;line-height:1;flex-shrink:0}
 .module-info{flex:1}
 .module-name{font-family:'Montserrat',sans-serif;font-weight:900;font-size:20px;color:var(--text)}
@@ -724,7 +733,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
           <div class="module-desc">Gestión de bobinas de cable</div>
         </div>
         <div class="module-count" id="cntBobinas">–</div>
-        <svg class="module-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
+        <span class="drag-handle">⠿</span><svg class="module-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
       </div>
       <div class="module-card" id="cardPemp" onclick="selectModule('pemp')">
         <div class="module-emoji">
@@ -747,7 +756,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
           <div class="module-desc">Plataformas elevadoras</div>
         </div>
         <div class="module-count" id="cntPemp" style="background:var(--blue)">–</div>
-        <svg class="module-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
+        <span class="drag-handle">⠿</span><svg class="module-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
       </div>
       <div class="module-card" id="cardCarretillas" onclick="selectModule('carretillas')">
         <div class="module-emoji">🚜</div>
@@ -756,7 +765,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
           <div class="module-desc">Carretillas elevadoras</div>
         </div>
         <div class="module-count" id="cntCarretillas" style="background:var(--green)">–</div>
-        <svg class="module-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
+        <span class="drag-handle">⠿</span><svg class="module-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
       </div>
       <div class="module-card" id="cardPedidos" onclick="navTo('pedidos')" style="display:none">
         <div class="module-emoji">📦</div>
@@ -765,7 +774,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
           <div class="module-desc">Solicitudes de material</div>
         </div>
         <div class="module-count" id="cntPedidos" style="background:#8b5cf6">–</div>
-        <svg class="module-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
+        <span class="drag-handle">⠿</span><svg class="module-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
       </div>
       <div class="module-card" id="cardCalendario" onclick="navTo('calendario')" style="display:none;border-left:3px solid #6366f1">
         <div class="module-emoji">📅</div>
@@ -774,7 +783,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
           <div class="module-desc">Eventos, entregas y festivos</div>
         </div>
         <div class="module-count" id="cntCalendario" style="background:#6366f1;display:none">0</div>
-        <svg class="module-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
+        <span class="drag-handle">⠿</span><svg class="module-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
       </div>
       <div class="module-card" id="cardIncidencias" onclick="navTo('incidencias')" style="display:none;border-left:3px solid #ef4444">
         <div class="module-emoji">🚨</div>
@@ -783,7 +792,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
           <div class="module-desc">Averías, accidentes y alertas</div>
         </div>
         <div class="module-count" id="cntIncidencias" style="background:#ef4444;display:none">0</div>
-        <svg class="module-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
+        <span class="drag-handle">⠿</span><svg class="module-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
       </div>
       <div class="module-card" id="cardHerramientas" onclick="navTo('herramientas')" style="display:none">
         <div class="module-emoji">🔧</div>
@@ -792,7 +801,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
           <div class="module-desc">Kits y herramientas en obra</div>
         </div>
         <div class="module-count" id="cntHerramientas" style="background:#0ea5e9">–</div>
-        <svg class="module-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
+        <span class="drag-handle">⠿</span><svg class="module-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
       </div>
       <div class="module-card" id="cardDocs" onclick="navTo('docs')" style="display:none">
         <div class="module-emoji">📂</div>
@@ -800,7 +809,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
           <div class="module-name">Documentación</div>
           <div class="module-desc">Documentos, fotos y planos de obra</div>
         </div>
-        <svg class="module-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
+        <span class="drag-handle">⠿</span><svg class="module-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
       </div>
       <div class="module-card" id="cardChat" onclick="chatAbrir()" style="display:none">
         <div class="module-emoji">💬</div>
@@ -808,7 +817,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
           <div class="module-name">Chat del equipo</div>
           <div class="module-desc">Mensajes internos con tu equipo</div>
         </div>
-        <svg class="module-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
+        <span class="drag-handle">⠿</span><svg class="module-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
       </div>
       <div class="module-card" id="cardObraDashboard" onclick="showScreen('obraDashboard')" style="display:none;border-left:3px solid #6366f1">
         <div class="module-emoji">📊</div>
@@ -817,9 +826,10 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
           <div class="module-desc">KPIs y estado general</div>
         </div>
         <div class="module-count" id="cntDashAlerts" style="background:#6366f1;display:none">!</div>
-        <svg class="module-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
+        <span class="drag-handle">⠿</span><svg class="module-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
       </div>
     </div>
+    <button id="btnOrdenarHome" onclick="toggleHomeEditMode()" title="Reordenar tarjetas" style="position:absolute;bottom:72px;right:16px;background:var(--surface);border:1px solid var(--border);border-radius:50%;width:44px;height:44px;cursor:pointer;display:none;align-items:center;justify-content:center;font-size:20px;z-index:10;box-shadow:0 2px 8px rgba(0,0,0,.15)">🔀</button>
     <div id="adminHomeBtn" style="display:none;padding:0 16px 12px">
       <button class="admin-home-btn" onclick="showScreen('admin')">
         🔐 Panel de Administración
@@ -3095,6 +3105,7 @@ function setupHomeModules() {
     if (cardDash) cardDash.style.display = 'flex';
     if (cardInc)  cardInc.style.display  = 'flex';
     if (cardCal)  cardCal.style.display  = 'flex';
+    applyHomeOrder();
     return;
   }
   // El departamento elegido manda — electrico ve bobinas, mecánicas no
@@ -3114,9 +3125,118 @@ function setupHomeModules() {
   if (cardDash) cardDash.style.display = 'flex';
   if (cardInc)  cardInc.style.display  = 'flex';
   if (cardCal)  cardCal.style.display  = 'flex';
+  applyHomeOrder();
 }
 
 let _pendingDept = null;
+
+// ── Reordenar tarjetas del home ───────────────────────────────────────────────
+const HOME_ORDER_KEY = 'alejandra_home_order';
+let _homeEditMode = false;
+let _dragSrc = null;
+
+function toggleHomeEditMode() {
+  _homeEditMode = !_homeEditMode;
+  const btn = document.getElementById('btnOrdenarHome');
+  const cards = document.querySelectorAll('.module-card');
+  if (_homeEditMode) {
+    if (btn) btn.textContent = '✅';
+    cards.forEach(c => {
+      if (c.style.display !== 'none') {
+        c.draggable = true;
+        c.classList.add('sortable-mode');
+      }
+    });
+    toast('Arrastra las tarjetas para reordenarlas');
+  } else {
+    if (btn) btn.textContent = '🔀';
+    const order = [...document.querySelectorAll('.module-card')].map(c => c.id).filter(Boolean);
+    localStorage.setItem(HOME_ORDER_KEY, JSON.stringify(order));
+    cards.forEach(c => {
+      c.draggable = false;
+      c.classList.remove('sortable-mode', 'dragging', 'drag-over-top', 'drag-over-bottom');
+    });
+    toast('✅ Orden guardado');
+  }
+}
+
+function applyHomeOrder() {
+  const order = JSON.parse(localStorage.getItem(HOME_ORDER_KEY) || 'null');
+  if (!order?.length) return;
+  const grid = document.querySelector('.module-grid');
+  if (!grid) return;
+  order.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) grid.appendChild(el);
+  });
+}
+
+document.addEventListener('dragstart', e => {
+  if (!_homeEditMode) return;
+  _dragSrc = e.target.closest('.module-card');
+  if (!_dragSrc) return;
+  _dragSrc.classList.add('dragging');
+  e.dataTransfer.effectAllowed = 'move';
+});
+document.addEventListener('dragover', e => {
+  if (!_homeEditMode || !_dragSrc) return;
+  e.preventDefault();
+  const target = e.target.closest('.module-card');
+  if (!target || target === _dragSrc) return;
+  document.querySelectorAll('.module-card').forEach(c => c.classList.remove('drag-over-top','drag-over-bottom'));
+  const rect = target.getBoundingClientRect();
+  target.classList.add(e.clientY < rect.top + rect.height / 2 ? 'drag-over-top' : 'drag-over-bottom');
+});
+document.addEventListener('drop', e => {
+  if (!_homeEditMode || !_dragSrc) return;
+  e.preventDefault();
+  const target = e.target.closest('.module-card');
+  if (!target || target === _dragSrc) return;
+  const rect = target.getBoundingClientRect();
+  if (e.clientY < rect.top + rect.height / 2) target.before(_dragSrc); else target.after(_dragSrc);
+  document.querySelectorAll('.module-card').forEach(c => c.classList.remove('drag-over-top','drag-over-bottom'));
+});
+document.addEventListener('dragend', () => {
+  if (_dragSrc) { _dragSrc.classList.remove('dragging'); _dragSrc = null; }
+  document.querySelectorAll('.module-card').forEach(c => c.classList.remove('drag-over-top','drag-over-bottom'));
+});
+
+// Soporte táctil para móviles
+let _touchCard = null, _touchLastTarget = null;
+document.addEventListener('touchstart', e => {
+  if (!_homeEditMode) return;
+  _touchCard = e.target.closest('.module-card');
+  if (_touchCard) _touchCard.classList.add('dragging');
+}, { passive: true });
+document.addEventListener('touchmove', e => {
+  if (!_homeEditMode || !_touchCard) return;
+  e.preventDefault();
+  const t = e.touches[0];
+  const el = document.elementFromPoint(t.clientX, t.clientY);
+  const target = el?.closest('.module-card');
+  if (_touchLastTarget && _touchLastTarget !== target) {
+    _touchLastTarget.classList.remove('drag-over-top','drag-over-bottom');
+  }
+  if (target && target !== _touchCard) {
+    const rect = target.getBoundingClientRect();
+    target.classList.add(t.clientY < rect.top + rect.height/2 ? 'drag-over-top' : 'drag-over-bottom');
+    _touchLastTarget = target;
+  }
+}, { passive: false });
+document.addEventListener('touchend', e => {
+  if (!_homeEditMode || !_touchCard) return;
+  const t = e.changedTouches[0];
+  const el = document.elementFromPoint(t.clientX, t.clientY);
+  const target = el?.closest('.module-card');
+  if (target && target !== _touchCard) {
+    const rect = target.getBoundingClientRect();
+    if (t.clientY < rect.top + rect.height/2) target.before(_touchCard); else target.after(_touchCard);
+  }
+  _touchCard.classList.remove('dragging');
+  document.querySelectorAll('.module-card').forEach(c => c.classList.remove('drag-over-top','drag-over-bottom'));
+  _touchCard = null; _touchLastTarget = null;
+});
+// ─────────────────────────────────────────────────────────────────────────────
 
 function seleccionarDepto(dept) {
   const s = getSession();
@@ -3383,6 +3503,9 @@ function _applyScreen(name) {
   const navMap = { home: 'navInicio', ajustes: 'navAjustes', sugerencias: 'navSugerencias' };
   if (navMap[name]) document.getElementById(navMap[name]).classList.add('active');
 
+  const btnOrd = document.getElementById('btnOrdenarHome');
+  if (btnOrd) btnOrd.style.display = (name === 'home') ? 'flex' : 'none';
+  if (name !== 'home' && _homeEditMode) toggleHomeEditMode();
   if (name === 'ajustes')      { renderAjustesInfo(); initAjustesTabs(); }
   if (name === 'pedidos')      { cargarPedidos(); }
   if (name === 'herramientas') { herrSelTab(0); }
@@ -7815,7 +7938,7 @@ async function cargarObrasSelectUsuario() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '5.08';
+const APP_VERSION = '5.09';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
