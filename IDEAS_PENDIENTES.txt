@@ -585,9 +585,13 @@ LEYENDA DE ESTADO:
     · Soporta records "text" y "url"
     · Reportado: 20/04/2026 — Adrian, CPD Getafe
 
-[ ] NEW-10 — Planes de precios
-    · Definir modelo de negocio y cómo implementar planes de pago para la app.
-    · Pendiente de diseño y decisión estratégica.
+[ ] NEW-10 — Planes de precios  [FUTURO — pendiente de clientes reales]
+    · La tabla `empresas` ya tiene columna `plan` lista para usar.
+    · Estructura pensada: Free (1 obra, 3 users) / Basic 19€ / Pro 49€ / Enterprise
+    · Cobro: Stripe o manual superadmin al principio
+    · Límites a gatear: nº obras, nº usuarios, Telegram, Sheets, historial, R2
+    · Implementar cuando haya clientes reales y se sepa qué valoran.
+    · Decisiones pendientes: precios definitivos, qué limitar en cada plan, si Stripe desde el inicio.
     · Reportado: 18/04/2026 — Adrian
 
 [✓] NEW-11 — Botón "Invítame a un café" en Ajustes  [HECHO v4.37]
