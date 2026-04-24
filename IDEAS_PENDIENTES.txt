@@ -1,7 +1,7 @@
 ================================================================================
   ALEJANDRA APP — IDEAS, MEJORAS Y ERRORES PENDIENTES
   Recogidos de: Canal Telegram @AlejandraAPP_bot
-  Última actualización: 24/04/2026 — chat filtro obra + notificaciones navegador (v4.93)
+  Última actualización: 24/04/2026 — fix docs navegación/recarga + badges notif/ideas (v4.94)
 
   ⚠️  LEER ESTE ARCHIVO ANTES DE CUALQUIER SESIÓN DE CODIFICACIÓN.
   ⚠️  Marcar como [HECHO vX.XX] cuando se implemente. No borrar las líneas.
@@ -187,21 +187,32 @@ LEYENDA DE ESTADO:
     · Limpiar el versionBadge de esa pantalla o reposicionarlo.
     · Reportado: 22/04/2026 — Adrian, empresa 1
 
-[✓] BUG-152 — Botón "Atrás" no vuelve a la página anterior desde Documentación (#152 BD)  [HECHO v4.85]
-    · Al estar en la pantalla de Docs y pulsar atrás, no navega al home.
-    · Importante arreglar.
+[✓] BUG-152 — Botón "Atrás" del header sale de Docs en vez de navegar al nivel anterior  [HECHO v4.94]
+    · Al estar dentro de una carpeta en Docs y pulsar "← Atrás" del header, salía de Docs al home.
+    · Fix v4.94: irAtras() detecta si hay docsVolverBtn activo y lo pulsa antes de salir de la pantalla.
+    · (Fix anterior v4.85 era diferente — solo aplicaba el volver al home, no dentro de carpetas)
     · Reportado: 23/04/2026 — Adrian, CPD Getafe
 
-[✓] BUG-153 — Docs no actualiza al cambiar de obra, borrar o editar (#153 BD)  [HECHO v4.85]
-    · El módulo de Documentación no refresca su contenido cuando: se cambia la obra en el header,
-      se borra un archivo/carpeta, o se edita un nombre.
-    · Hay que forzar un reload de docsCargar() en cada una de esas acciones.
+[✓] BUG-153 — Docs no recarga al cambiar obra con selector visual (empresa_admin)  [HECHO v4.94]
+    · seleccionarObraVisual() no llamaba a docsCargar si screenDocs estaba activo.
+    · Fix v4.94: añadido docsCargar('screenDocsPanel') en seleccionarObraVisual cuando Docs está activo.
     · Reportado: 23/04/2026 — Adrian, CPD Getafe
 
-[✓] BUG-154 — Badge del icono de Ideas marca mal el número de pendientes (#154 BD)  [HECHO v4.85]
-    · El contador del icono de Ideas en la barra de navegación no actualiza bien el estado.
-    · A veces muestra un número incorrecto o no se pone a cero al marcar como leídas.
+[✓] BUG-154 — Badge del icono de Ideas no se actualiza al navegar entre pantallas  [HECHO v4.94]
+    · El badge de sugerencias solo se actualizaba cada 3 min (polling) o al estar en pestaña Ideas.
+    · Fix v4.94: cargarBadgeIdeas() se llama en cada cambio de pantalla (_applyScreen).
     · Reportado: 23/04/2026 — Adrian, CPD Getafe
+
+[✓] BUG-157 — Al borrar notificaciones de la campana, el badge de Ideas no cambia  [HECHO v4.94]
+    · borrarNotificaciones() limpiaba solo el badge de la campana, no el de Ideas.
+    · Fix v4.94: añadido cargarBadgeIdeas() al final de borrarNotificaciones().
+    · Reportado: 24/04/2026 — Adrian, CPD Getafe
+
+[✓] BUG-158 — Documentación de Electricidad de Levitec no aparece (data fix DB)  [HECHO v4.94]
+    · Carpetas "Sala 302.1/303.x, Conexiones FitOut" creadas con obra_id=11 (Edison) en vez de obra_id=1 (Levitec CPD Getafe).
+    · Fix v4.94: UPDATE directo en D1 — SET obra_id=1 WHERE empresa_id=1 AND obra_id=11 (5 carpetas corregidas).
+    · Los archivos (18 fotos en carpetas 7-8) estaban correctos, no había pérdida real de datos.
+    · Reportado: 24/04/2026 — Adrian, CPD Getafe
 
 [✓] BUG-156 — Alberto sin obra asignada (extendido a todos los no-admins)  [HECHO v4.84]
     · Dos bugs: (1) encargado no podía asignar obra a usuarios sin obra (null !== obraId)

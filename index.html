@@ -2845,6 +2845,7 @@ function seleccionarObraVisual(obraId, obraNombre, obraCodigo) {
   renderHeader();
   const dept = _pendingDept || s.departamento;
   _pendingDept = null;
+  if (document.getElementById('screenDocs')?.classList.contains('active')) docsCargar('screenDocsPanel');
   _navegarTrasObra(dept);
 }
 
@@ -3050,6 +3051,7 @@ function _applyScreen(name) {
   }
   if (name === 'empresaSel')   { cargarEmpresasAdmin(); }
   actualizarBtnAtras();
+  cargarBadgeIdeas();
 }
 
 function showScreen(name) {
@@ -3079,6 +3081,11 @@ function irAtras() {
   if (fabFichaje) fabFichaje.style.display = 'none';
   const fabFichajeEq = document.getElementById('btnFichajeEquipo');
   if (fabFichajeEq) fabFichajeEq.style.display = 'none';
+  // Si estamos dentro de una carpeta en Docs, navegar dentro de Docs (no salir)
+  if (document.getElementById('screenDocs')?.classList.contains('active')) {
+    const docsVolverBtn = document.getElementById('docsVolverBtn');
+    if (docsVolverBtn) { docsVolverBtn.click(); return; }
+  }
   if (_navHistory.length > 0) {
     _applyScreen(_navHistory.pop());
   }
@@ -4555,7 +4562,7 @@ async function docsAbrirCarpeta(carpetaId, nombre, containerId, parentCarpetaId,
 
     c.innerHTML = `
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap">
-        <button onclick="${volverFn}"
+        <button id="docsVolverBtn" onclick="${volverFn}"
           style="padding:7px 12px;background:var(--surface);border:1px solid var(--border);border-radius:8px;font-size:13px;cursor:pointer;flex-shrink:0">← Volver</button>
         <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:15px;color:var(--text);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">📁 ${nombre}</div>
         <button onclick="docsCompartirCarpeta(${carpetaId},'${nomEsc}')" title="Compartir"
@@ -6820,6 +6827,7 @@ function borrarNotificaciones() {
   localStorage.setItem(NOTIF_SEEN_KEY, Date.now());
   document.getElementById('notifBadge').style.display = 'none';
   document.getElementById('notifList').innerHTML = '<div style="color:var(--muted);font-size:13px;text-align:center;padding:32px">✅ Sin notificaciones pendientes</div>';
+  cargarBadgeIdeas();
 }
 
 function irANotif(tipo) {
@@ -7177,7 +7185,7 @@ async function cargarObrasSelectUsuario() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '4.92';
+const APP_VERSION = '4.94';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
