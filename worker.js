@@ -4198,6 +4198,7 @@ async function runMigrations(request, env) {
 
 async function getChatMensajes(request, env) {
   const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
   const url    = new URL(request.url);
   const limit  = Math.min(parseInt(url.searchParams.get('limit') || '60'), 100);
   const since  = url.searchParams.get('since') || null;
@@ -4219,6 +4220,7 @@ async function getChatMensajes(request, env) {
 async function enviarChatMensaje(request, env) {
   const auth = await getAuth(request, env);
   const { empresa_id, usuario_id, nombre, rol } = auth;
+  if (!empresa_id) return err('No autorizado', 403);
   const body = await request.json().catch(() => ({}));
   const mensaje = (body.mensaje || '').trim();
   if (!mensaje) return err('Mensaje vacío', 400);

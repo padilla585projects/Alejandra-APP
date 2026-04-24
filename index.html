@@ -554,9 +554,8 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
   <div class="user-chip" id="headerUserChip">
     <span>👤</span><span id="headerUserName">—</span>
   </div>
-  <button class="notif-bell" id="btnChat" onclick="chatAbrir()" style="display:none" title="Chat">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-    <span class="notif-badge" id="chatBadge" style="display:none">0</span>
+  <button class="notif-bell" id="btnChat" onclick="chatAbrir()" style="display:none" title="Chat del equipo">
+    💬<span class="notif-badge" id="chatBadge" style="display:none">0</span>
   </button>
   <button class="notif-bell" id="btnNotif" onclick="abrirNotificaciones()" style="display:none" title="Notificaciones">
     🔔<span class="notif-badge" id="notifBadge" style="display:none">0</span>
@@ -582,7 +581,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
     <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:15px">💬 Chat del equipo</div>
     <button onclick="chatCerrar()" style="background:var(--surface2);border:none;border-radius:50%;width:32px;height:32px;font-size:18px;cursor:pointer;color:var(--text)">×</button>
   </div>
-  <div id="chatFiltroBar" style="display:none;flex-shrink:0;padding:8px 12px;border-bottom:1px solid var(--border);display:flex;gap:8px">
+  <div id="chatFiltroBar" style="display:none;flex-shrink:0;padding:8px 12px;border-bottom:1px solid var(--border);gap:8px">
     <button id="chatFiltroObra"    onclick="chatSetFiltro('obra')"    style="flex:1;padding:6px 0;border-radius:8px;border:none;font-size:13px;font-weight:700;cursor:pointer;background:var(--accent);color:#fff">🏗️ Mi obra</button>
     <button id="chatFiltroGeneral" onclick="chatSetFiltro('general')" style="flex:1;padding:6px 0;border-radius:8px;border:none;font-size:13px;font-weight:400;cursor:pointer;background:var(--surface2);color:var(--text)">🌐 General</button>
   </div>
@@ -780,6 +779,14 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
         <div class="module-info">
           <div class="module-name">Documentación</div>
           <div class="module-desc">Documentos, fotos y planos de obra</div>
+        </div>
+        <svg class="module-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
+      </div>
+      <div class="module-card" id="cardChat" onclick="chatAbrir()" style="display:none">
+        <div class="module-emoji">💬</div>
+        <div class="module-info">
+          <div class="module-name">Chat del equipo</div>
+          <div class="module-desc">Mensajes internos con tu equipo</div>
         </div>
         <svg class="module-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
       </div>
@@ -2758,8 +2765,9 @@ function setupHomeModules() {
   const cardC = document.getElementById('cardCarretillas');
   const cardPed = document.getElementById('cardPedidos');
   const btnNuevo = document.getElementById('btnNuevoPedido');
-  const cardDocs = document.getElementById('cardDocs');
-  // Seguridad: sin tarjetas de inventario, pero sí Pedidos y Docs
+  const cardDocs  = document.getElementById('cardDocs');
+  const cardChat  = document.getElementById('cardChat');
+  // Seguridad: sin tarjetas de inventario, pero sí Pedidos, Docs y Chat
   if (dept === 'seguridad') {
     if (cardB) cardB.style.display = 'none';
     if (cardP) cardP.style.display = 'none';
@@ -2767,6 +2775,7 @@ function setupHomeModules() {
     if (cardPed) cardPed.style.display = 'flex';
     if (btnNuevo) btnNuevo.style.display = 'flex';
     if (cardDocs) cardDocs.style.display = 'flex';
+    if (cardChat) cardChat.style.display = 'flex';
     return;
   }
   // El departamento elegido manda — electrico ve bobinas, mecánicas no
@@ -2780,8 +2789,9 @@ function setupHomeModules() {
   // Herramientas: visible para todos excepto seguridad
   const cardHerr = document.getElementById('cardHerramientas');
   if (cardHerr) cardHerr.style.display = 'flex';
-  // Documentación: visible para eléctrico y mecánicas
+  // Documentación y Chat: visible para todos
   if (cardDocs) cardDocs.style.display = 'flex';
+  if (cardChat) cardChat.style.display = 'flex';
 }
 
 let _pendingDept = null;
@@ -7221,7 +7231,7 @@ async function cargarObrasSelectUsuario() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '4.97';
+const APP_VERSION = '4.98';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
