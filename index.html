@@ -9202,7 +9202,7 @@ if ('serviceWorker' in navigator) {
     window._incEditId = null;
   }
 
-  async function guardarIncidencia() {
+  async function _guardarIncidenciaBase() {
     const titulo = document.getElementById('incTitulo').value.trim();
     if (!titulo) return toast('⚠️ El título es obligatorio', 'err');
     const id = document.getElementById('incEditId').value;
@@ -9243,8 +9243,6 @@ if ('serviceWorker' in navigator) {
     window._incCerrandoId = id;
   }
 
-  // Sobrescribir guardar cuando es cierre
-  const _origGuardarInc = guardarIncidencia;
   async function guardarIncidencia() {
     if (window._incCerrandoId) {
       const resolucion = document.getElementById('incResolucion').value.trim() || null;
@@ -9260,7 +9258,7 @@ if ('serviceWorker' in navigator) {
       } catch { toast('❌ Error de red', 'err'); }
       return;
     }
-    await _origGuardarInc();
+    await _guardarIncidenciaBase();
   }
 
   async function verIncidencia(id) {
