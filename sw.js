@@ -10,6 +10,16 @@ self.addEventListener('message', e => {
   if (e.data?.tipo === 'SKIP_WAITING') self.skipWaiting();
 });
 
+self.addEventListener('notificationclick', e => {
+  e.notification.close();
+  e.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clients => {
+      if (clients.length) return clients[0].focus();
+      return self.clients.openWindow('/');
+    })
+  );
+});
+
 self.addEventListener('activate', e => {
   e.waitUntil(
     caches.keys()

@@ -4200,15 +4200,17 @@ async function getChatMensajes(request, env) {
   const { empresa_id } = await getAuth(request, env);
   const url    = new URL(request.url);
   const limit  = Math.min(parseInt(url.searchParams.get('limit') || '60'), 100);
-  const since  = url.searchParams.get('since') || null; // ISO timestamp
-  let q, params;
-  if (since) {
-    q = 'SELECT * FROM chat_mensajes WHERE empresa_id = ? AND created_at > ? ORDER BY created_at ASC LIMIT ?';
-    params = [empresa_id, since, limit];
-  } else {
-    q = 'SELECT * FROM chat_mensajes WHERE empresa_id = ? ORDER BY created_at DESC LIMIT ?';
-    params = [empresa_id, limit];
-  }
+  const since  = url.searchParams.get('since') || null;
+  const obraId = url.searchParams.get('obra_id') ? parseInt(url.searchParams.get('obra_id')) : null;
+
+  const conds  = ['empresa_id = ?'];
+  const params = [empresa_id];
+  if (obraId) { conds.push('obra_id = ?'); params.push(obraId); }
+  if (since)  { conds.push('created_at > ?'); params.push(since); }
+  params.push(limit);
+
+  const order = since ? 'ASC' : 'DESC';
+  const q = `SELECT * FROM chat_mensajes WHERE ${conds.join(' AND ')} ORDER BY created_at ${order} LIMIT ?`;
   const rows = await env.DB.prepare(q).bind(...params).all();
   const msgs = since ? rows.results : rows.results.reverse();
   return json({ ok: true, mensajes: msgs });

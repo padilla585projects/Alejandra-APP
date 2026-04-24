@@ -582,6 +582,10 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
     <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:15px">💬 Chat del equipo</div>
     <button onclick="chatCerrar()" style="background:var(--surface2);border:none;border-radius:50%;width:32px;height:32px;font-size:18px;cursor:pointer;color:var(--text)">×</button>
   </div>
+  <div id="chatFiltroBar" style="display:none;flex-shrink:0;padding:8px 12px;border-bottom:1px solid var(--border);display:flex;gap:8px">
+    <button id="chatFiltroObra"    onclick="chatSetFiltro('obra')"    style="flex:1;padding:6px 0;border-radius:8px;border:none;font-size:13px;font-weight:700;cursor:pointer;background:var(--accent);color:#fff">🏗️ Mi obra</button>
+    <button id="chatFiltroGeneral" onclick="chatSetFiltro('general')" style="flex:1;padding:6px 0;border-radius:8px;border:none;font-size:13px;font-weight:400;cursor:pointer;background:var(--surface2);color:var(--text)">🌐 General</button>
+  </div>
   <div id="chatList" style="flex:1;overflow-y:auto;padding:12px 16px;display:flex;flex-direction:column;gap:8px">
     <div style="text-align:center;color:var(--muted);font-size:13px;padding:20px">Cargando mensajes...</div>
   </div>
@@ -2618,6 +2622,9 @@ async function iniciarApp() {
   // Botón Chat
   const btnChatEl = document.getElementById('btnChat');
   if (btnChatEl) btnChatEl.style.display = 'flex';
+  if ('Notification' in window && Notification.permission === 'default') {
+    Notification.requestPermission();
+  }
   checkChatBadge();
   if (!window._chatBadgeInterval) {
     window._chatBadgeInterval = setInterval(checkChatBadge, 60000); // cada 1 min
@@ -6640,9 +6647,42 @@ const CHAT_SEEN_KEY   = 'alejandra_chat_seen';
 let _chatInterval     = null;
 let _chatLastTs       = null;
 let _chatOpen         = false;
+let _chatFiltro       = 'obra'; // 'obra' | 'general'
+
+function _chatObraParam() {
+  if (_chatFiltro !== 'obra') return '';
+  const s = getSession();
+  return s?.obra_id ? '&obra_id=' + s.obra_id : '';
+}
+
+function _chatActualizarFiltroUI() {
+  const s = getSession();
+  const bar = document.getElementById('chatFiltroBar');
+  if (bar) bar.style.display = s?.obra_id ? 'flex' : 'none';
+  const btnObra    = document.getElementById('chatFiltroObra');
+  const btnGeneral = document.getElementById('chatFiltroGeneral');
+  if (!btnObra || !btnGeneral) return;
+  const esObra = _chatFiltro === 'obra';
+  btnObra.style.background    = esObra  ? 'var(--accent)' : 'var(--surface2)';
+  btnObra.style.color         = esObra  ? '#fff'          : 'var(--text)';
+  btnObra.style.fontWeight    = esObra  ? '700'           : '400';
+  btnGeneral.style.background = !esObra ? 'var(--accent)' : 'var(--surface2)';
+  btnGeneral.style.color      = !esObra ? '#fff'          : 'var(--text)';
+  btnGeneral.style.fontWeight = !esObra ? '700'           : '400';
+}
+
+function chatSetFiltro(tipo) {
+  _chatFiltro = tipo;
+  _chatActualizarFiltroUI();
+  _chatLastTs = null;
+  chatCargar();
+}
 
 function chatAbrir() {
   _chatOpen = true;
+  const s = getSession();
+  _chatFiltro = s?.obra_id ? 'obra' : 'general';
+  _chatActualizarFiltroUI();
   const panel = document.getElementById('chatPanel');
   if (panel) panel.style.display = 'flex';
   localStorage.setItem(CHAT_SEEN_KEY, new Date().toISOString());
@@ -6662,7 +6702,7 @@ async function chatCargar() {
   const list = document.getElementById('chatList');
   if (!list) return;
   try {
-    const res  = await apiCall('/chat?limit=60');
+    const res  = await apiCall('/chat?limit=60' + _chatObraParam());
     const data = await res.json();
     if (!data.ok || !data.mensajes) { list.innerHTML = '<div style="color:var(--muted);text-align:center;padding:20px;font-size:13px">❌ Error al cargar mensajes</div>'; return; }
     _chatLastTs = data.mensajes.length ? data.mensajes[data.mensajes.length - 1].created_at : null;
@@ -6673,7 +6713,7 @@ async function chatCargar() {
 async function chatPoll() {
   if (!_chatOpen || !_chatLastTs) return;
   try {
-    const res  = await apiCall('/chat?since=' + encodeURIComponent(_chatLastTs));
+    const res  = await apiCall('/chat?since=' + encodeURIComponent(_chatLastTs) + _chatObraParam());
     const data = await res.json();
     if (!data.ok || !data.mensajes?.length) return;
     _chatLastTs = data.mensajes[data.mensajes.length - 1].created_at;
@@ -6745,10 +6785,20 @@ async function checkChatBadge() {
   if (!s || _chatOpen) return;
   const lastSeen = localStorage.getItem(CHAT_SEEN_KEY) || '1970-01-01T00:00:00';
   try {
-    const res  = await apiCall('/chat?since=' + encodeURIComponent(lastSeen) + '&limit=1');
+    const obraParam = s.obra_id ? '&obra_id=' + s.obra_id : '';
+    const res  = await apiCall('/chat?since=' + encodeURIComponent(lastSeen) + '&limit=1' + obraParam);
     const data = await res.json();
     const badge = document.getElementById('chatBadge');
-    if (badge) badge.style.display = (data.mensajes?.length > 0) ? 'flex' : 'none';
+    const hayNuevos = data.mensajes?.length > 0;
+    if (badge) badge.style.display = hayNuevos ? 'flex' : 'none';
+    if (hayNuevos && document.hidden && Notification.permission === 'granted') {
+      const msg = data.mensajes[0];
+      new Notification('💬 ' + (msg.usuario_nombre || 'Mensaje nuevo'), {
+        body: (msg.mensaje || '').substring(0, 100),
+        icon: '/favicon.ico',
+        tag: 'alejandra-chat'
+      });
+    }
   } catch {}
 }
 // ─────────────────────────────────────────────────────────────────────────────
@@ -8969,10 +9019,11 @@ if ('serviceWorker' in navigator) {
   });
 
   // ── Chat (NEW-08) ────────────────────────────────────────────────────────
-  window.chatAbrir   = chatAbrir;
-  window.chatCerrar  = chatCerrar;
-  window.chatEnviar  = chatEnviar;
-  window.chatBorrar  = chatBorrar;
+  window.chatAbrir     = chatAbrir;
+  window.chatCerrar    = chatCerrar;
+  window.chatEnviar    = chatEnviar;
+  window.chatBorrar    = chatBorrar;
+  window.chatSetFiltro = chatSetFiltro;
 
   // ── Exponer funciones async al scope global ──────────────────────────────
   // Las async function dentro de bloques if no se hoistean al scope global en Chrome.
