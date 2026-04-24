@@ -5,7 +5,7 @@
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 24/04/2026
-VERSIÓN ACTUAL APP NUEVA: v5.03
+VERSIÓN ACTUAL APP NUEVA: v5.04
 VERSIÓN ACTUAL APP VIEJA: v4.19 (congelada — solo recibe bugs críticos)
 
 ⚠️  ANTES DE CODIFICAR: leer NuevaApp/IDEAS_PENDIENTES.txt
@@ -123,6 +123,20 @@ ANTES DE TOCAR CUALQUIER ARCHIVO, VERIFICAR QUE TODO ESTÁ AL DÍA:
 ================================================================================
   HISTORIAL DE VERSIONES — RECIENTES
 ================================================================================
+
+v5.04  |  24/04/2026  [SOLO NUEVA APP]
+  - NEW-27: Dashboard de obra (tarjeta Resumen en home)
+    · Worker: GET /obra-dashboard — 5 KPIs en una llamada
+    · KPIs: fichajes hoy, equipos en mantenimiento, herramientas fuera,
+      pedidos pendientes, alertas de stock
+    · Tarjeta "📊 Resumen de obra" en screenHome (visible para todos los depts)
+    · screenObraDashboard: grid 2 columnas, coloreado por estado (verde OK / rojo alerta)
+    · Cada KPI clicable → navega al módulo correspondiente
+    · Badge de alertas en la tarjeta del home cuando hay cosas a revisar
+    · Calendario e Incidencias como placeholders (awaiting NEW-13 y NEW-22)
+    · Nota: Personal y Seguridad van a sus propias pantallas (no screenHome),
+      dashboard accesible desde esos depts pendiente de ajuste según feedback
+  - Worker y GitHub actualizados ✅
 
 v5.03  |  24/04/2026  [SOLO NUEVA APP]
   - NEW-25: Escáner de albaranes por pedido
@@ -297,7 +311,8 @@ v4.80  |  22/04/2026  [SOLO NUEVA APP]
     [✓] NEW-24 — Alertas stock mínimo             → HECHO v5.00
     [✓] NEW-26 — Control combustible/carga         → HECHO v5.02
     [✓] NEW-25 — Escáner albaranes                 → HECHO v5.03
-    [ ] NEW-27 — Dashboard de obra (opción C)      → SIGUIENTE
+    [✓] NEW-27 — Dashboard de obra (opción C)      → HECHO v5.04
+    [ ] NEW-22 — Registro de incidencias           → SIGUIENTE
     [ ] NEW-22 — Registro de incidencias
     [ ] NEW-13 — Calendario de obra
     [ ] NEW-17 — Galería de fotos por obra
@@ -331,14 +346,12 @@ v4.80  |  22/04/2026  [SOLO NUEVA APP]
     - Subida desde archivo o cámara. Imágenes como thumbnail, PDFs como icono.
     - Ver inline en nueva pestaña. Badge dinámico en el botón del pedido.
 
-  NEW-27 — Dashboard de obra:
-    ⚠️ DECISIÓN CLAVE: Opción C acordada con el usuario.
-    - NO es pantalla de inicio. Es una tarjeta "📊 Resumen de obra" en el home
-      de cada departamento. Al pulsarla → pantalla completa con KPIs.
-    - KPIs: fichajes hoy, stock bajo, equipos en mantenimiento, próximo evento
-      calendario, incidencias abiertas, herramientas sin devolver.
-    - Cada tarjeta del dashboard es clicable → navega al módulo.
-    - Visible para todos los roles.
+  NEW-27 — Dashboard de obra: ✅ HECHO v5.04
+    - Opción C: tarjeta en screenHome, no pantalla de inicio.
+    - KPIs implementados: fichajes hoy, equipos mantenimiento, herramientas fuera,
+      pedidos pendientes, alertas stock. Placeholders para calendario e incidencias.
+    - Cada KPI clicable navega al módulo. Badge de alertas en la tarjeta home.
+    - Pendiente: acceso desde screenPersonal y screenSeguridad (feedback del usuario).
 
   NEW-15 — Mantenimiento preventivo:
     - Toggle por equipo para activar/desactivar aviso (no siempre se quiere).

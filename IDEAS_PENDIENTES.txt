@@ -1,7 +1,7 @@
 ================================================================================
   ALEJANDRA APP — IDEAS, MEJORAS Y ERRORES PENDIENTES
   Recogidos de: Canal Telegram @AlejandraAPP_bot
-  Última actualización: 24/04/2026 — NEW-25 hecho v5.03: escáner de albaranes por pedido
+  Última actualización: 24/04/2026 — NEW-27 hecho v5.04: dashboard de obra en screenHome
 
   ⚠️  LEER ESTE ARCHIVO ANTES DE CUALQUIER SESIÓN DE CODIFICACIÓN.
   ⚠️  Marcar como [HECHO vX.XX] cuando se implemente. No borrar las líneas.
@@ -768,18 +768,14 @@ LEYENDA DE ESTADO:
     · Gasto acumulado por equipo y por obra (mes / total).
     · Añadido: 24/04/2026 — Adrian
 
-[ ] NEW-27 — Dashboard de obra (resumen visual)  [PENDIENTE]
-    · Tarjeta "📊 Resumen de obra" en el home de cada departamento (Opción C acordada).
-    · Al pulsar → pantalla completa con los KPIs clave de la obra actual:
-      - 👷 Fichajes hoy: trabajadores presentes / retrasos.
-      - ⚡ Stock bajo: ítems por debajo del mínimo.
-      - 🔧 Equipos: cuántos en mantenimiento o con revisión próxima.
-      - 📅 Próximo evento del calendario.
-      - ⚠️ Incidencias abiertas.
-      - 🏗️ Herramientas sin devolver.
-    · Cada tarjeta del dashboard es clicable y navega al módulo correspondiente.
-    · Visible para todos los roles.
-    · Añadido: 24/04/2026 — Adrian
+[✓] NEW-27 — Dashboard de obra (resumen visual)  [HECHO v5.04]
+    · Tarjeta "📊 Resumen de obra" en screenHome (Opción C acordada).
+    · KPIs implementados: fichajes hoy, equipos en mantenimiento, herramientas
+      fuera, pedidos pendientes, alertas de stock.
+    · Placeholders para calendario (NEW-13) e incidencias (NEW-22).
+    · Cada KPI clicable navega al módulo. Badge de alertas en la tarjeta home.
+    · Pendiente: acceso desde screenPersonal y screenSeguridad según feedback.
+    · Añadido: 24/04/2026 — Adrian | Hecho: 24/04/2026
 
 [ ] NEW-28 — Comparativa entre obras (SA / EA)  [PENDIENTE]
     · Solo visible para superadmin y empresa_admin.
