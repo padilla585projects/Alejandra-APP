@@ -1828,6 +1828,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
       <button class="mod-tab-btn"        id="perTab1" onclick="personalSelTab(1)">📅 Semana</button>
       <button class="mod-tab-btn"        id="perTab2" onclick="personalSelTab(2)">📊 Resumen</button>
       <button class="mod-tab-btn"        id="perTab3" onclick="personalSelTab(3)">👷 Plantilla</button>
+      <button class="mod-tab-btn"        id="perTab4" onclick="chatAbrir()">💬 Chat</button>
     </div>
 
     <!-- TAB 0: HOY -->
@@ -7231,7 +7232,7 @@ async function cargarObrasSelectUsuario() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '4.98';
+const APP_VERSION = '4.99';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
