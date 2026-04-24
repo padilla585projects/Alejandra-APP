@@ -1,102 +1,163 @@
 ================================================================================
   ALEJANDRA APP — CONTROL DE ESTADO Y CHANGELOG
-  Proyecto: GestiBobina / Bobinaap
-  Ruta local: <RUTA_BASE>\Bobinaap
+  Proyecto: GestiBobina / Alejandra
+  Ruta local: C:\Users\Adrian\Downloads\Proyecto GestiBobina\NuevaApp
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 24/04/2026
-VERSIÓN ACTUAL: v4.19 app vieja | v4.95 app nueva
+VERSIÓN ACTUAL APP NUEVA: v4.99
+VERSIÓN ACTUAL APP VIEJA: v4.19 (congelada — solo recibe bugs críticos)
 
 ⚠️  ANTES DE CODIFICAR: leer NuevaApp/IDEAS_PENDIENTES.txt
     Lista completa de bugs activos, mejoras y features pendientes.
     Marcar como [✓ HECHO vX.XX] los ítems que se resuelvan en cada sesión.
 
-REPO:    https://github.com/padilla585/Bobinaap.git  (branch: main)
-WORKER:  https://gestibobina-proxy.padilla585.workers.dev
-DB:      Cloudflare D1 — gestibobina-db (eac9f2d2-0845-409c-9032-109c563d7eec)
-SHEETS:  https://docs.google.com/spreadsheets/d/1HiBUR_S0toOkUJtxjt4ua5JibgO4atbCRCrPbcrcPsU
-PAGES:   https://padilla585.github.io/Bobinaap/
-
 ================================================================================
-  INFRAESTRUCTURA / HERRAMIENTAS
+  ⚡ REGLA OBLIGATORIA AL INICIO DE CADA SESIÓN — SINCRONIZACIÓN
 ================================================================================
 
-- Git: instalado, conectado a GitHub (padilla585), credenciales guardadas
-- Node.js: v24.14.1
-- Tokens y credenciales: guardados en NUEVA_CUENTA.txt (solo local, en .gitignore)
-- Obra activa: CPD Getafe (código: 001, id: 1)
+ANTES DE TOCAR CUALQUIER ARCHIVO, VERIFICAR QUE TODO ESTÁ AL DÍA:
 
-⚠️  REGLA DE DEPLOY:
-  - BUGS (correcciones): actualizar SIEMPRE las DOS apps a la vez, sin preguntar
-  - MEJORAS / NUEVAS FEATURES: actualizar SOLO la app nueva (padilla585projects/Alejandra-APP)
-    · La app vieja (padilla585/Bobinaap) solo recibe bugs
-    · Las mejoras se desarrollan en la nueva; la vieja se mantiene estable
-  - ESTADO_APP.txt: subir SOLO al repositorio donde se hayan hecho cambios
-    · Si solo se cambia la nueva → solo GitHub nuevo
-    · Si se cambian las dos (bug) → ambos GitHub
-    · Nunca subir ESTADO_APP.txt a un repo que no ha recibido cambios en esa sesión
+  1. REPO LOCAL vs GITHUB:
+     → git status  (debe decir "Your branch is up to date with 'origin/main'")
+     → git log --oneline -3  (comparar con último commit conocido)
+     → Si hay cambios remotos: git pull
+     → Si hay cambios locales sin commitear: git stash → git pull → git stash pop
 
-  APP VIEJA (padilla585):
-    GitHub:  git push → padilla585/Bobinaap (automático con git)
-    Worker:  deploy via API con token Workers-old (ver NUEVA_CUENTA.txt)
-             Account: c100d5a0ea37ee03989fe769c7259b83
-             Worker:  gestibobina-proxy
-             D1:      eac9f2d2-0845-409c-9032-109c563d7eec
+  2. WORKER CLOUDFLARE vs WORKER.JS LOCAL:
+     → npx wrangler deployments list  (comprueba la última versión desplegada)
+     → Si el worker está desactualizado respecto al worker.js local:
+        npx wrangler deploy worker.js --name alejandra-app-api
+     → Si worker.js local está desactualizado respecto al Cloudflare:
+        npx wrangler workers get alejandra-app-api (o revisar el código remoto)
 
-  APP NUEVA (padilla585projects):
-    GitHub:  GitHub API con token ghp_ (ver NUEVA_CUENTA.txt)
-             Repo: padilla585projects/Alejandra-APP
-    Worker:  deploy via API con token Workers-new (ver NUEVA_CUENTA.txt)
-             Account: d65ead2b2967bf68ff3848a36cd7b1b4
-             Worker:  alejandra-app-api
-             D1:      0c9eccde-78f1-476d-ac68-bf452bec0c62
+  3. BASE DE DATOS D1 vs SCHEMA EN WORKER.JS:
+     → Si hay migraciones pendientes en runMigrations(), ejecutarlas via:
+        npx wrangler d1 execute alejandra-db --remote --command "..."
+     → No asumir que las migraciones se han aplicado — verificar con:
+        npx wrangler d1 execute alejandra-db --remote --command
+          "SELECT sql FROM sqlite_master WHERE type='table'"
+
+  ✅ Solo cuando todo está sincronizado, empezar a codificar.
+  ❌ Nunca trabajar sobre archivos desactualizados.
+
+================================================================================
+  INFRAESTRUCTURA
+================================================================================
+
+  APP NUEVA (activa):
+    GitHub:  https://github.com/padilla585projects/Alejandra-APP  (branch: main)
+    Pages:   https://padilla585projects.github.io/Alejandra-APP/
+    Worker:  https://alejandra-app-api.alejandra-app.workers.dev
+    D1 ID:   0c9eccde-78f1-476d-ac68-bf452bec0c62  (alejandra-db)
+    R2:      alejandra-app-files
+    Account: d65ead2b2967bf68ff3848a36cd7b1b4  (padilla585.projects@gmail.com)
+
+  APP VIEJA (congelada):
+    GitHub:  https://github.com/padilla585/Bobinaap  (branch: main)
+    Pages:   https://padilla585.github.io/Bobinaap/
+    Worker:  https://gestibobina-proxy.padilla585.workers.dev
+    D1 ID:   eac9f2d2-0845-409c-9032-109c563d7eec
+    Account: c100d5a0ea37ee03989fe769c7259b83  (padilla585@gmail.com)
+
+  HERRAMIENTAS:
+    Git:     instalado, conectado a GitHub, credenciales guardadas
+    Node.js: v24.14.1
+    Wrangler: v4.84.1 (autenticado con cuenta nueva)
+    Credenciales: NUEVA_CUENTA.txt (solo local, en .gitignore)
+
+  REGLA DE DEPLOY:
+    - BUGS: actualizar SIEMPRE las dos apps
+    - MEJORAS/FEATURES: solo app nueva
+    - Worker: npx wrangler deploy worker.js --name alejandra-app-api
+    - Siempre verificar que el deploy incluye bindings DB y FILES
 
 ================================================================================
   ROLES Y ACCESO
 ================================================================================
 
-- superadmin  → Código ADMIN_CODE. Ve todo, elige departamento al entrar.
-- encargado   → Código de obra. Gestiona su departamento asignado.
-- operario    → Código de obra. Solo lectura/scan en su departamento.
+  superadmin     → Código ADMIN_CODE. Ve todo, elige empresa+obra+departamento al entrar.
+  empresa_admin  → Gestiona su empresa completa. Elige obra+departamento al entrar.
+  encargado      → Código de obra. Gestiona su departamento. Obra fija asignada.
+  operario       → Código de obra. Solo lectura/scan. Obra fija asignada.
 
-Departamentos:
-  ⚡ Eléctrico  → Bobinas + PEMP + Carretillas
-  🔧 Mecánicas  → Solo PEMP + Carretillas (sin Bobinas)
-  🔺 Seguridad  → Solo escáner/scan (busca matrícula cross-dept)
-
-================================================================================
-  BASE DE DATOS — TABLAS
-================================================================================
-
-Tablas originales:  bobinas, obras, historial, proveedores, tipos_cable
-Tablas añadidas:    usuarios, pemp, carretillas, historial_pemp,
-                    historial_carretillas, logs, sugerencias,
-                    inventario_seg, movimientos_seg, tipos_material_seg,
-                    sesiones
-Tablas multi-tenant [solo nueva app]:
-                    empresas (id, nombre, slug, email, plan, activa, created_at)
-Catálogos:          tipos_pemp, tipos_carretilla, energias_carretilla
-Columnas extra:
-  bobinas:      num_albaran, departamento, empresa_id*
-  pemp:         fecha_averia, fecha_reparacion, departamento, empresa_id*
-  carretillas:  fecha_averia, fecha_reparacion, departamento, empresa_id*
-  usuarios:     departamento, empresa_id*
-  obras:        empresa_id*
-  sesiones:     empresa_id*
-  [todas las demás tablas tienen empresa_id* también]
-  (*) en AMBAS apps desde v4.1
-
-Backup local: <RUTA_BASE>\backup_db_20260413.sql
+  Departamentos activos:
+    ⚡ Eléctrico  → Bobinas + PEMP + Carretillas + Herramientas + Docs + Chat
+    🔧 Mecánicas  → PEMP + Carretillas + Herramientas + Docs + Chat
+    🔺 Seguridad  → Escáner + Inventario seg + Herramientas + Docs + Chat
+    👷 Personal   → Fichajes + Plantilla + Chat
 
 ================================================================================
-  HISTORIAL DE VERSIONES
+  BASE DE DATOS — TABLAS (app nueva, alejandra-db)
 ================================================================================
+
+  Tablas principales:
+    bobinas, pemp, carretillas, obras, usuarios, sesiones, empresas
+    historial, historial_pemp, historial_carretillas
+    pedidos, herramientas, kits, herramienta_archivos
+    inventario_seg, movimientos_seg, tipos_material_seg
+    carpetas, docs_dept, docs_notas
+    chat_mensajes
+    fichajes, horarios_obra, personal_externo
+    sugerencias, logs
+    proveedores, tipos_pemp, tipos_carretilla, energias_carretilla
+    tipos_cable, archivos
+
+  Columnas destacadas añadidas en esta etapa:
+    carpetas:      parent_id INTEGER  (subcarpetas — migrado 24/04/2026)
+    docs_dept:     carpeta_id INTEGER (puede ser NULL para archivos en raíz)
+    horarios_obra: horarios_dia TEXT  (horario por día de la semana)
+    empresas:      departamentos TEXT (depts activos en JSON)
+    fichajes:      minutos_retraso INTEGER
+
+  Migraciones aplicadas en D1 (24/04/2026):
+    ✅ ALTER TABLE carpetas ADD COLUMN parent_id INTEGER
+    ✅ CREATE TABLE docs_notas (...)
+    ✅ chat_mensajes ya existía (creada en runMigrations anterior)
+
+================================================================================
+  HISTORIAL DE VERSIONES — RECIENTES
+================================================================================
+
+v4.99  |  24/04/2026  [SOLO NUEVA APP]
+  - Chat accesible desde departamento Personal
+    · Pestaña "💬 Chat" añadida en la barra de tabs de screenPersonal
+    · Antes Personal iba directo a su pantalla sin pasar por el home → no veía el chat
+  - GitHub actualizado ✅
+
+v4.98  |  24/04/2026  [SOLO NUEVA APP]
+  - Chat más visible y accesible
+    · Botón header: SVG invisible → emoji 💬 (igual que campana 🔔)
+    · Tarjeta "💬 Chat del equipo" en el home de todos los departamentos
+    · chatFiltroBar: fix doble display:flex/none en HTML
+  - Worker: getChatMensajes y enviarChatMensaje con guard !empresa_id → 403
+  - Worker y GitHub actualizados ✅
+
+v4.97  |  24/04/2026  [SOLO NUEVA APP]
+  - BUG-160: banner de actualización visible en vez de reload silencioso
+    · checkVersionAndUpdate: detecta nueva versión → muestra banner amarillo top
+      "🔄 Nueva versión vX.XX disponible [Actualizar ahora]"
+    · Auto-recarga en 4s si el usuario no pulsa el botón
+    · forzarActualizacion(): activa SW en espera + borra caches + location.replace
+    · SW_ACTUALIZADO también muestra banner (antes recargaba silenciosamente)
+    · controllerchange: solo recarga si no hay actualización ya en curso
+  - GitHub actualizado ✅
+
+v4.96  |  24/04/2026  [SOLO NUEVA APP]
+  - BUG-162: "Sin obra" → "Todas las obras" en selector visual de obra
+  - BUG-163: badge campana persistía tras borrar notificaciones
+    · checkNotifBadge(): pendientes filtrados por lastSeen (faltaba el filtro)
+  - BUG-160 parcial: SW registrado con updateViaCache:'none'
+    · botón "🔄 Buscar actualización" en Ajustes → Sistema
+  - IDEAS_PENDIENTES: BUG-159..163 añadidos desde sugerencias BD
+  - GitHub actualizado ✅
 
 v4.95  |  24/04/2026  [SOLO NUEVA APP]
   - Fix #159: selector de obra aparece tras elegir empresa, no al cambiar de dept
     · seleccionarEmpresaAdmin → limpia obra + muestra screenObraSel antes de ir a depts
     · seleccionarDepto → solo muestra selector si obra_id es null (una sola vez)
     · seleccionarObraVisual → si no hay dept pendiente va a screenDept directamente
+  - GitHub actualizado ✅
 
 v4.94  |  24/04/2026  [SOLO NUEVA APP]
   - Fix #158: carpetas Docs de Levitec tenían obra_id=11 (Edison) → corregido a obra_id=1 en D1
@@ -104,1226 +165,105 @@ v4.94  |  24/04/2026  [SOLO NUEVA APP]
   - Fix #153: seleccionarObraVisual() recarga Docs si estaba activo al cambiar obra
   - Fix #154: cargarBadgeIdeas() se llama en cada cambio de pantalla (_applyScreen)
   - Fix #157: borrarNotificaciones() ahora también actualiza el badge de Ideas
+  - GitHub actualizado ✅
 
 v4.93  |  24/04/2026  [SOLO NUEVA APP]
-  - Chat: filtro por obra
-    · Barra de dos botones "🏗️ Mi obra" / "🌐 General" en el panel de chat
-    · Si el usuario tiene obra seleccionada, el filtro por defecto es "Mi obra"
-    · Sin obra asignada → filtro forzado a "General" (barra oculta)
-    · Worker GET /chat ahora acepta ?obra_id=X para filtrar mensajes por obra
-    · chatPoll y checkChatBadge también respetan el filtro activo
-  - Chat: notificaciones del navegador
-    · Al hacer login pide permiso de notificaciones (Notification.permission)
-    · Si el tab está en background y llegan mensajes nuevos → notificación nativa
-    · Clicar la notificación enfoca la pestaña de la app (SW notificationclick)
-    · Tag "alejandra-chat" evita acumular notificaciones (la nueva reemplaza la anterior)
+  - Chat: filtro por obra (Mi obra / General) + notificaciones nativas del navegador
   - Worker y GitHub actualizados ✅
 
 v4.92  |  23/04/2026  [SOLO NUEVA APP]
-  - NEW-12: soporte NFC en pestaña Escanear
-    · Botón 📡 NFC visible solo si el dispositivo lo soporta (Chrome Android 89+)
-    · Leer: lee tag NFC → busca matrícula/serie automáticamente
-    · Escribir: nfcEscribir(codigo) → escribe código en tag NFC
-    · Disponible en pantalla Seguridad y Herramientas
-    · Soporta records tipo "text" y "url" en tags NFC
+  - NEW-12: soporte NFC en pestaña Escanear (Chrome Android 89+)
   - GitHub actualizado ✅
 
 v4.91  |  23/04/2026  [SOLO NUEVA APP]
-  - NEW-08: chat interno entre empleados de la misma empresa
-    · Panel 💬 deslizable (botón en header)
-    · Mensajes en burbuja tipo WhatsApp (propios derecha, ajenos izquierda)
-    · Polling 15s cuando el panel está abierto; badge 1 min en background
-    · Worker: GET/POST/DELETE /chat + tabla D1 chat_mensajes
-    · Pausa al ir a background (ya integrado con BUG-009)
+  - NEW-08: chat interno (💬 panel, burbujas WhatsApp, polling 15s, badge, D1 chat_mensajes)
   - Worker y GitHub actualizados ✅
 
 v4.90  |  23/04/2026  [SOLO NUEVA APP]
-  - NEW-02: wizard de bienvenida (onboarding primera vez)
-    · 4 slides: Bienvenida, Inventario, Escanea, ¡Empieza!
-    · Dots de progreso + botón Saltar
-    · Solo aparece la primera vez (localStorage alejandra_onboarding_done)
-    · Al finalizar → abre loginOverlay normalmente
+  - NEW-02: wizard de bienvenida (onboarding primera vez, 4 slides)
   - GitHub actualizado ✅
 
 v4.89  |  23/04/2026  [SOLO NUEVA APP]
-  - BUG-009: reducción drástica de consumo de batería
-    · checkNotifBadge: 60s → 180s (3 min)
-    · checkConnection: 30s → 120s (2 min)
-    · checkVersionAndUpdate: 30s → 300s (5 min)
-    · Eliminado reg.update() cada 30s (quedó solo el de 5 min + visibilitychange)
-    · Eliminado reg.update() dentro de checkConnection
-    · ideas refresh: 30s → 60s
-    · Page Visibility API: pausa todos los intervalos en background, reanuda al volver
+  - BUG-009: reducción drástica de batería (intervalos más largos, Page Visibility API)
   - GitHub actualizado ✅
 
 v4.88  |  23/04/2026  [SOLO NUEVA APP]
-  - MEJ-137: renombrar carpetas Docs con botón ✏️ (docsRenombrarCarpeta)
-    · Disponible en carpetas raíz y subcarpetas
-  - GitHub actualizado ✅
-
-v4.87  |  23/04/2026  [SOLO NUEVA APP]
-  - BUG: selector visual de obra (MEJ-149) solo visible para superadmin y empresa_admin
-    · Los encargados tienen obra fija asignada → se saltan el selector
+  - MEJ-137: renombrar carpetas Docs con botón ✏️
   - GitHub actualizado ✅
 
 v4.86  |  23/04/2026  [SOLO NUEVA APP]
-  - BUG-048: icono SVG en botón Devolución (sustituye carácter ↩ fuera de estilo)
-  - MEJ-044: modal descripción completa al pulsar notas de equipo en cards de inventario
-  - MEJ-058: buscarMaquina ahora busca también en bobinas; buscarItemSeg filtra empresa_id
-  - MEJ-136: notas de texto editables en Docs (raíz y dentro de carpetas) — botón 📝 Nueva nota
-  - MEJ-137: selector "Mover a carpeta" en modal editar archivo (mover entre carpetas)
-  - MEJ-144: subir archivos y fotos directamente a raíz sin crear carpeta primero
-  - MEJ-149: selector visual de obra (cards grandes) tras elegir departamento
-  - MEJ-155: subcarpetas dentro de carpetas Docs (botón 📁+, navegación con Volver al padre)
+  - BUG-048: icono devolución eléctrico
+  - MEJ-044: modal descripción completa de equipo
+  - MEJ-058: buscarMaquina filtra empresa_id
+  - MEJ-136: notas de texto en Docs (📝 Nueva nota)
+  - MEJ-137 parcial: mover archivos entre carpetas
+  - MEJ-144: subir archivos a raíz sin crear carpeta
+  - MEJ-149: selector visual de obra (cards grandes) tras elegir empresa
+  - MEJ-155: subcarpetas dentro de carpetas Docs
+  - MEJ-138: botón inline [✅ Disponible] en Telegram al crear herramienta
   - Worker y GitHub actualizados ✅
-
-v2.9  |  13/04/2026
-  - CRUD completo: bobinas, PEMP, carretillas
-  - Auth: superadmin, encargado, operario, multi-obra
-  - Sugerencias, logs, exportar Excel
-  - Sync Google Sheets (una sola hoja)
-  - Catálogos: proveedores, tipos cable, tipos PEMP, tipos carretilla, energías
-  - Campo num_albaran en bobinas
-
-v3.0  |  14/04/2026
-  - Sistema de 3 departamentos (Eléctrico / Mecánicas / Seguridad)
-  - Pantalla selector de departamento (screenDept) para superadmin
-  - Header con dept-pill (toca → vuelve al selector)
-  - Home: Bobinas oculta para Mecánicas/Seguridad
-  - Icono PEMP: plataforma tijera SVG
-  - Scan: buscar matrícula cross-dept para Seguridad (/buscar-maquina)
-  - OCR crop: recorta al área del frame antes de enviar a Gemini
-  - Ajustes: 5 pestañas (Sesión, Catálogos, Usuarios, Obras, Sistema)
-  - Badge rojo en nav Ideas con contador sugerencias sin leer
-  - Crear usuario con código copiable/compartible por WhatsApp
-  - Backup JSON desde Ajustes
-  - SW: auto-recarga al detectar nuevo SW (skipWaiting + clients.claim)
-
-v3.1  |  14/04/2026
-  - Notificaciones Telegram:
-    · Nueva bobina 📦
-    · Nueva PEMP 🏗
-    · Nueva carretilla 🚜
-    · Nueva sugerencia 💡
-    · Error crítico 🚨
-  - Helper sendTelegram() en worker usando secretos Cloudflare
-
-v3.2  |  15/04/2026
-  - Departamentos correctos aplicados en frontend y backend:
-    · Seguridad → solo pantalla de escáner/scan
-    · Mecánicas → PEMP + Carretillas (sin Bobinas)
-    · Eléctrico → todo
-  - Google Sheets por pestañas departamentales:
-    · Elec-Bobinas, Elec-PEMP, Elec-Carretillas, Mec-PEMP, Mec-Carretillas
-    · (Elimina pestañas antiguas con emojis)
-  - Fix: logs guardados correctamente (sendBeacon con Blob JSON)
-  - Fix: ruta /sync-sheets añadida al worker (solo existía /sync)
-  - Fix: await en función no-async (seleccionarDepto) causaba crash total
-  - Fix: superadmin siempre veía Bobinas aunque fuera dept Mecánicas
-  - SW: borra caché antigua automáticamente al actualizar
-  - Wrangler OAuth configurado, deploy automático desde terminal
-
-v3.3  |  15/04/2026
-  - Header rediseñado: logo eliminado del header, padding reducido,
-    sin solapamiento en móvil
-  - Logo + nombre "Alejandra" ahora aparece SOLO en pantalla de
-    selección de departamento (screenDept)
-  - LED de conexión (conn-dot):
-    · Bug arreglado: nunca se comprobaba para usuarios de Seguridad
-    · Ahora se activa para TODOS los usuarios al entrar
-    · Chequeo automático cada 30 segundos
-    · Efecto glow verde/rojo para mejor visibilidad
-    · Se limpia el intervalo al cerrar sesión
-
-v3.8  |  15/04/2026
-  - Ajustes → Catálogos: nueva sección "🔺 Material Seguridad"
-    · Lista de tipos con badge SERIE (individual) o STOCK (cantidad)
-    · Añadir nuevo tipo: nombre + modo (individual/cantidad)
-    · Eliminar tipo con botón ×
-  - segMostrarFormNuevo usa _catalogos.tiposMatSeg en lugar de array local
-    (siempre refleja los tipos actualizados sin necesidad de recargar)
-  - SW bumpeado a v3.8
-
-v3.7  |  15/04/2026
-  - Inventario de Seguridad (implementado):
-    · Dos modos: individual (arnés, retráctil, eslinga — por número de serie)
-                 cantidad (valla, cono, señal, baliza — stock)
-    · CRUD completo: registrar, sacar, devolver, dar de baja
-    · Pantalla Seguridad con 2 pestañas: 📷 Escáner / 📦 Inventario
-    · El escáner busca primero en inventario_seg, luego en máquinas
-    · Fix: segOnCode llamaba segBuscarMaquina → ahora llama segBuscarCodigo
-    · Tipos de material gestionados en tipos_material_seg (7 por defecto)
-    · Modal de registro: código/serie para individual, cantidad para bulk
-    · Fecha de caducidad opcional con alerta visual (<30 días)
-  - Google Sheets: nueva pestaña Seg-Inventario sincronizada
-    · syncSheets añade/escribe Seg-Inventario junto a las 5 pestañas existentes
-    · Se actualiza automáticamente en cada alta/movimiento/baja de material
-  - DB: migración migrate_seg.sql ejecutada en D1 remota (3 tablas nuevas)
-  - SW: versión bumpeada a v3.7 (caché alejandra-v3.7)
-
-v3.6  |  15/04/2026
-  - Fix bug usuario: cerrarSesion() e iniciarApp() resetean todo el estado
-    global (currentModule, stockFiltro, scanActive, loops de QR)
-  - PEMP: nuevo campo Energía (Eléctrica/Gasoil/Híbrida/Manual)
-    · Migración D1: ALTER TABLE pemp ADD COLUMN energia
-  - Telegram: notificaciones ampliadas
-    · 📤 Devolución de bobina, PEMP, carretilla
-    · 🗑️ Eliminación de bobina, PEMP, carretilla
-    · 👤 Login de usuario (no superadmin)
-    · 🔴 Avería marcada en PEMP o carretilla
-    · 🟢 Reparación completada
-  - Cron diario 7:00 UTC con alertas automáticas:
-    · ⚠️ Máquinas averiadas ≥3 días sin reparar
-    · 📅 Revisiones próximas (≤15 días) o vencidas
-  - wrangler.toml: triggers cron añadido
-
-v3.5  |  15/04/2026
-  - Pantalla escáner dedicada para Seguridad (screenSeguridad)
-  - Seguridad ya NO ve lista de PEMP — solo cámara + buscador + ficha
-  - Escáner con QR y OCR: al leer una matrícula busca automáticamente
-  - Ficha completa: tipo, marca, proveedor, obra, dept, estado (con color),
-    fechas entrada/revisión/avería/reparación, notas, historial 15 entradas
-  - Worker: /buscar-maquina ahora devuelve historial junto a la máquina
-
-v3.4  |  15/04/2026
-  - Fix: borrado de caché automático al actualizar no funcionaba
-  - SW: includeUncontrolled:true en clients.matchAll (llegaba a todas las tabs)
-  - SW: escucha mensaje SKIP_WAITING desde la página
-  - Página: si hay SW en estado "waiting" al cargar, se fuerza su activación
-  - Página: updatefound → statechange → SKIP_WAITING (flujo completo)
-  - Página: visibilitychange → reg.update() al volver a la pestaña
-  - Página: reload con location.replace + timestamp para evitar HTTP cache
-
-v3.11  |  15/04/2026
-  - Fix CORS: X-Token añadido a Access-Control-Allow-Headers (las peticiones con
-    token fallaban en preflight OPTIONS en algunos navegadores/dispositivos)
-  - Ajustes → Usuarios: ahora muestra el departamento asignado de cada usuario
-  - Ajustes → Usuarios: botón 🏢 para cambiar el departamento de cualquier usuario
-    sin necesidad de borrar y recrear la cuenta
-  - Soluciona el problema de usuarios de Seguridad que no podían acceder a su dpto:
-    el encargado/superadmin asigna el departamento correcto desde Ajustes → Usuarios
-
-v4.0  |  15/04/2026  [SOLO NUEVA APP]
-  - Arquitectura multi-tenant: tabla `empresas` creada en D1
-  - empresa_id añadido a TODAS las tablas (bobinas, pemp, carretillas, obras,
-    usuarios, historial*, inventario_seg, movimientos_seg, sesiones, logs,
-    sugerencias, proveedores, tipos_*, energias_carretilla, tipos_material_seg)
-  - Todas las queries filtran por empresa_id (aislamiento de datos)
-  - Todos los INSERTs incluyen empresa_id del usuario autenticado
-  - getAuth() devuelve empresa_id desde sesiones D1
-  - crearSesion() almacena empresa_id (del usuario que inicia sesión)
-  - getCatalogo() acepta request para resolver empresa_id vía auth
-  - Empresa por defecto: id=1, nombre="Empresa Principal", slug="principal"
-  - Todos los datos existentes migrados con empresa_id=1 automáticamente
-  - Índices creados: idx_*_empresa en tablas principales
-  - SW bumpeado a alejandra-v4.0
-
-hotfix  |  20/04/2026  [SOLO NUEVA APP — migración DB sin cambio de código]
-  - BUG-117 CRÍTICO: no se podía añadir nada a la base de datos (bobinas, PEMP, carretillas)
-    · Causa: columna `registrado_por` faltaba en las 3 tablas de la nueva app (nunca migrada)
-    · El worker intentaba INSERT con esa columna → D1 error en cualquier registro nuevo
-    · Fix: ALTER TABLE bobinas/pemp/carretillas ADD COLUMN registrado_por TEXT aplicado en D1
-    · App vieja no afectada (ya tenía la columna desde antes)
-    · Sin cambio de código ni deploy — solo migración directa en D1
 
 v4.85  |  23/04/2026  [SOLO NUEVA APP]
-  - BUG-152: botón "Atrás" no volvía al home desde Documentación
-    · navTo('docs') limpiaba _navHistory antes del bloque docs → historial vacío
-      Fix: docs tratado como pantalla secundaria (como sugerencias) — showScreen antes del clear
-  - BUG-153: Docs no actualizaba al cambiar de obra o tras editar/borrar
-    · _applyScreen('docs') no llamaba a docsCargar (solo showScreen lo hacía en navTo)
-      Fix: añadido docsCargar('screenDocsPanel') en _applyScreen para el caso 'docs'
-  - BUG-154: badge de Ideas mostraba número incorrecto al gestionar sugerencias
-    · cambiarEstadoSug y marcarLeida recargaban la lista pero no el badge del nav
-      Fix: añadido cargarBadgeIdeas() al final de ambas funciones
-  - BUG-151: número de versión descuadrado en tarjeta Documentación del home
-    · div versionBadge con position:absolute solapaba la tarjeta de Docs
-      Fix: eliminado el div versionBadge de screenHome
+  - BUG-151/152/153/154: correcciones en Docs, badges y navegación
+  - GitHub actualizado ✅
 
 v4.84  |  23/04/2026  [SOLO NUEVA APP]
-  - BUG-156 (extendido a todos los usuarios): asignar obra no funcionaba para no-admins
-    · editarUsuario: encargado bloqueado al asignar obra a usuario sin obra (null !== obraId)
-      Fix: encargado puede editar usuarios sin obra o de su propia obra
-    · Sesión activa no reflejaba la nueva obra tras asignarla desde Ajustes → Usuarios
-      Fix: UPDATE sesiones SET obra_id, obra_nombre WHERE usuario_id tras cada cambio de obra
+  - BUG-156: asignar obra a usuarios no-admins + actualizar sesión activa
+  - GitHub actualizado ✅
 
 v4.83  |  22/04/2026  [SOLO NUEVA APP]
-  - fix: superadmin veía inventario de eléctrico al entrar como mecánicas
-    · getBobinas, getPemp, getCarretillas saltaban el filtro de departamento para SA
-    · Fix: filtro AND departamento=? aplicado siempre — SA ya recibe el dept correcto
-      via X-Departamento desde el selector de departamentos del frontend
+  - BUG-149: superadmin veía inventario incorrecto al cambiar departamento
+  - GitHub actualizado ✅
 
 v4.82  |  22/04/2026  [SOLO NUEVA APP]
-  - MEJ-128 complemento: pestaña "👷 Plantilla" en módulo Personal
-    · Nueva pestaña para gestionar personal externo (sin cuenta en la app) por obra
-    · Filtro por obra en cabecera — muestra solo trabajadores de la obra seleccionada
-    · Lista con nombre, obra asignada, DNI y notas; botones ✏️ editar y 🗑️ eliminar
-    · Modal añadir/editar: nombre (obligatorio), DNI, obra, notas
-    · Al abrir desde una obra filtrada → el modal pre-selecciona esa obra
-    · Los trabajadores creados aquí aparecen automáticamente en "Fichar Equipo"
-    · FABs (+ fichaje / 👥 equipo) se ocultan en esta pestaña
-    · Backend: reutiliza /personal-externo (GET/POST/PUT/DELETE ya existían)
+  - Plantilla de personal externo en módulo Personal (pestaña 👷)
+  - GitHub actualizado ✅
 
 v4.81  |  22/04/2026  [SOLO NUEVA APP]
-  - BUG-136 (2ª causa): modal "Fichar Equipo" no aparecía visualmente
-    · abrirFichajeEquipo() usaba classList.add('active') pero el CSS solo define .modal-overlay.show
-    · Fix: cambiado a classList.add/remove('show') en abrirFichajeEquipo y cerrarFichajeEquipo
-    · El bug en v4.71 resolvió el ReferenceError (funciones no en window); este resuelve la visibilidad
+  - BUG-136 (2ª causa): modal "Fichar Equipo" no era visible (CSS .show vs .active)
+  - GitHub actualizado ✅
 
 v4.80  |  22/04/2026  [SOLO NUEVA APP]
-  - feat #141: explorador de Docs completamente rediseñado
-    · Botón 📷 abre cámara trasera en modo FOTO (fix: ya no abre en vídeo)
-    · Botón 📎 Archivo para subir PDF, Word, Excel, ZIP, imágenes desde explorador
-    · Tap en icono/nombre → vista previa (imágenes en lightbox, PDF en nueva pestaña)
-    · Botón 📤 por archivo → Web Share API (WhatsApp, Telegram, email...) + fallback descarga
-    · Botón 📤 en cabecera → compartir TODA la carpeta de una vez
-    · Botón ✏️ por archivo → modal para renombrar y editar descripción (MEJ-137 parcial)
-    · Nuevo endpoint PUT /docs-dept/:id para editar nombre y descripción
-    · Bucket R2 'alejandra-files' CREADO (no existía) + binding FILES añadido al worker
-  - Regla deploy: script deploy-worker.ps1 siempre incluye D1 (DB) + R2 (FILES)
+  - Docs rediseñado: foto modo foto, lightbox, Web Share, renombrar, bucket R2 creado
+  - GitHub actualizado ✅
 
-v4.79  |  22/04/2026  [SOLO NUEVA APP]
-  - fix #140 completo: eliminada pestaña Docs de Seguridad (botón + panel + lógica)
-    · Cada departamento ya tiene su tarjeta Documentación en el home
-
-v4.78  |  22/04/2026  [SOLO NUEVA APP]
-  - fix #140: eliminada pestaña 📂 Docs del módulo inventario (Eléctrico/Mecánicas)
-    · Redundante con la tarjeta Documentación en screenHome
-
-v4.77  |  22/04/2026  [SOLO NUEVA APP]
-  - fix #143: botón Atrás (Android) ya funciona desde la pestaña Ideas
-    · navTo('sugerencias') usaba navTo clásico → limpiaba _navHistory → sin retorno
-    · Fix: usa showScreen() que conserva historial → Atrás lleva a la pantalla anterior
-
-v4.76  |  22/04/2026  [SOLO NUEVA APP]
-  - fix #135: inventario vacío al cambiar obra
-    · Nuevo endpoint PUT /sesion/obra: sincroniza obra_id en D1 al cambiar en header
-    · onObraSelectChange llama /sesion/obra → D1 y localStorage siempre sincronizados
-    · registrarItem: usa s.obra_id del localStorage → ítems se guardan con obra correcta
-    · Arreglado check docs al cambiar obra (classList en vez de style.display inline)
-    · Al cambiar obra: también recarga herramientas si esa pantalla está activa
-  - Incidente: binding D1 (DB) perdido → worker devolvía 403/500 para todo
-    · Causa: curl -F en Windows falla y no incluye bindings en el deploy
-    · Fix: redesplegar con PowerShell Invoke-RestMethod + script deploy-worker.ps1
-    · Regla añadida a memoria: SIEMPRE usar deploy-worker.ps1
-
-v4.75  |  22/04/2026  [SOLO NUEVA APP]
-  - Fix crítico: bucle infinito de recargas del SW
-    · recargarApp() se llamaba siempre en SW_ACTUALIZADO aunque versión coincidiera
-    · Fix: solo recarga si newV !== APP_VERSION
-
-v4.74  |  22/04/2026  [SOLO NUEVA APP]
-  - BUG-148 fix raíz: aislamiento de departamento en inventario
-    · seleccionarDepto() solo actualizaba localStorage, no la sesión D1
-    · Nuevo endpoint PUT /sesion/departamento sincroniza D1 al cambiar dept
-    · Botón 📍 en Ajustes→Usuarios para asignar obra a cualquier usuario
-    · docsCargar: mensaje diferenciado sin obra (admin vs operario)
-
-v4.73  |  22/04/2026  [SOLO NUEVA APP]
-  - BUG-146/147: botón 📍 para asignar obra a usuarios Google; mensaje docs sin obra
-
-v4.72  |  22/04/2026  [SOLO NUEVA APP]
-  - NEW-15: tarjeta 📂 Documentación en screenHome (eléctrico, mecánicas, seguridad)
-    · cardDocs tras cardHerramientas en module-grid; display:flex según dept
-    · screenDocs nueva pantalla (flex-screen) con screenDocsPanel
-    · navTo('docs') → _applyScreen('docs') + docsCargar('screenDocsPanel')
-    · setupHomeModules(): cardDocs visible en electrico, mecanicas y seguridad
-
-v4.71  |  22/04/2026  [SOLO NUEVA APP]
-  - BUG-136: botón 👥 "Fichar Equipo" no respondía al click
-    · Las 5 funciones de MEJ-128 (abrirFichajeEquipo, cerrarFichajeEquipo,
-      guardarFichajeEquipo, fichajeEquipoOnObraChange, feqSelAll) no estaban
-      en el bloque window.xxx → onclick lanzaba ReferenceError silencioso
-    · Fix: añadidas las 5 funciones al bloque de exposición global
-
-v4.68  |  22/04/2026  [SOLO NUEVA APP]
-  - MEJ-131: Horarios de obra por día de la semana
-    · Toggle "📅 Horas distintas por día" en el panel de horario de cada obra (Ajustes→Obras)
-    · Si activo: inputs independientes para L/M/X/J/V (entrada+salida por día)
-    · Worker helper getHorarioParaDia(): devuelve las horas del día concreto del fichaje
-    · crearFichaje/actualizarFichaje: cálculo de horas_extra y minutos_retraso usa el día correcto
-    · fichajeObraChanged y fichajeEquipoOnObraChange pre-rellenan las horas del día seleccionado
-    · DB: ALTER TABLE horarios_obra ADD COLUMN horarios_dia TEXT DEFAULT NULL
-  - MEJ-08: Departamentos activos por empresa
-    · Ajustes → Empresa (empresa_admin/SA): sección con 4 toggles para activar/desactivar depts
-    · Al guardar: PUT /mi-empresa con campo departamentos (array JSON)
-    · Pantalla selección de dept: oculta cards de departamentos desactivados
-    · Cache en localStorage para visibilidad instantánea + refresco en background
-    · DB: ALTER TABLE empresas ADD COLUMN departamentos TEXT DEFAULT NULL
-
-v4.67  |  22/04/2026  [SOLO NUEVA APP]
-  - MEJ-128: Fichaje semi-automático por equipo
-    · FAB 👥 verde junto al + de nuevo fichaje (solo admin/encargado)
-    · Modal "Fichar Equipo": fecha, obra, hora entrada/salida (pre-rellenas desde horario_obra), estado
-    · Lista de trabajadores con checkboxes (usuarios internos + personal_externo filtrados por obra)
-    · Botones Todo/Ninguno para selección rápida
-    · "⚡ Fichar seleccionados" envía POST /fichajes en bucle con indicador de progreso
-    · Duplicados (409) informados sin bloquear el resto; toast final con resumen
-    · Sin cambios en el worker (reutiliza /fichajes, /personal/trabajadores, /horarios-obra)
-
-v4.66  |  21/04/2026  [SOLO NUEVA APP]
-  - MEJ-134: Foto en Telegram al enviar idea con imagen adjunta
-    · sendTelegramFotoConBotones(): convierte base64 → bytes → sendPhoto con botones inline
-    · Si la idea tiene foto: se envía la imagen en Telegram (con caption + botones de estado)
-    · Si no tiene foto: comportamiento anterior (sendMessage con botones)
-  - BUG-127: Dept pill compacto en barra superior
-    · Muestra solo el icono (ej: 🔺) en lugar de "🔺 Seguridad" → libera espacio para la obra
-    · Nombre completo del departamento disponible en tooltip (title)
-  - BUG-133: User-chip más legible en header
-    · font-size 10px → 11px, max-width 100px → 130px, padding ligeramente mayor
-  - #53: Filtro ideas por departamento Personal añadido
-    · Nuevo botón "👷 Personal" en los filtros del panel de Ideas (Ajustes)
-    · filtrarSug idMap actualizado con 'departamento_personal'
-
-v4.65  |  21/04/2026  [SOLO NUEVA APP]
-  - MEJ-132: Telegram bidireccional — botones inline en notificaciones (solo worker)
-    · Nueva función sendTelegramConBotones() con InlineKeyboardMarkup
-    · POST /telegram-webhook: maneja callback_query de botones pulsados
-    · GET /setup-telegram-webhook: registra webhook en Telegram (ya ejecutado)
-    · Secret TELEGRAM_WEBHOOK_SECRET configurado en CF Workers
-    · Solicitud de acceso Google → botones [Aprobar E1/E3 operario/admin] [Rechazar]
-    · Nueva idea/sugerencia → botones [🔄 En progreso] [✅ Resuelto] [🗑 Cerrar]
-    · Al pulsar botón: acción ejecutada en D1 + mensaje editado + botones eliminados
-  - BUG-129: Navegación atrás/home rediseñada estilo Android
-    · navTo() limpia el historial → bottom nav = destino raíz sin historial acumulado
-    · Android back: si no hay historial → toast "Pulsa atrás de nuevo para salir"
-    · Segunda pulsación en < 2.5s → cierra la app (no se re-empuja state)
-    · showScreen() evita apilar duplicados consecutivos en _navHistory
-  - BUG-124: Herramientas filtradas por obra
-    · cargarKitsHerr() ahora envía ?obra_id= igual que cargarInvHerr()
-    · Nueva herramienta: herrObra pre-rellena con la obra de la sesión actual
-  - BUG-120: Editar herramienta desde inventario
-    · editarHerrDesdeInv() ahora es async: si el ítem no está en cache,
-      lo busca directamente con GET /herramientas/:id antes de abrir el form
-
-v4.64  |  21/04/2026  [SOLO NUEVA APP]
-  - Fix banner actualización: SW_ACTUALIZADO extrae versión del cache name
-    · Antes el banner mostraba "undefined" o la versión anterior
-    · Ahora lee el número de versión del nombre del cache antes de recargar
-
-v4.63  |  21/04/2026  [SOLO NUEVA APP]
-  - MEJ-12: Fotos en Ideas
-    · Botón "📷 Añadir imagen" en el formulario de nueva idea
-    · Compresión automática a ≤300 KB antes de enviar
-    · Preview de imagen en la card de la idea
-    · Thumbnail visible en el panel admin
-    · Toque en imagen → zoom a pantalla completa
-
-v4.62  |  21/04/2026  [SOLO NUEVA APP]
-  - MEJ-11: Horarios de obra configurables en Ajustes → Obras
-    · Botón "⏰ Horario" en cada obra: panel inline con entrada, salida, días semana
-    · Worker POST /horarios-obra hace upsert (crea o actualiza el horario de la obra)
-  - MEJ-11: Pre-rellenar horas en modal de fichaje según horario de obra
-    · Al abrir el modal y seleccionar obra → hora entrada/salida se pre-rellenan
-    · Solo en fichajes nuevos; no sobreescribe si ya hay valores editados
-  - QW1: Detección automática de retrasos en fichajes
-    · Worker calcula minutos_retraso al crear/editar fichaje (con horario de obra)
-    · Si llegada > 5 min tarde y estado era 'presencia' → auto-cambia a 'retraso'
-    · Frontend: badge "⚠️ Xmin tarde" visible en la vista diaria del fichaje
-    · DB: ALTER TABLE fichajes ADD COLUMN minutos_retraso INTEGER DEFAULT 0
-  - QW2: Horas esperadas en resumen mensual
-    · "Xh / Yh esperadas (+/-Zh)" con color verde/ámbar/rojo por trabajador
-    · Contador "⚠️ Retrasos: N" si el trabajador tuvo días de retraso
-  - QW3: Cierre automático de jornada (cron 20:00 hora España)
-    · Worker cierreAutomaticoJornada(): cierra fichajes abiertos usando hora_salida del horario
-    · Notificación Telegram indicando cuántos fichajes se cerraron
-    · wrangler.toml: añadido cron "0 18 * * *" (18:00 UTC = 20:00 CEST)
-
-v4.61  |  21/04/2026  [SOLO NUEVA APP]
-  - MEJ-09: Historial filtrado por departamento
-    · Worker getHistorial (bobinas): JOIN corregido bobina_id→bobina_codigo; incluye
-      b.departamento en SELECT. Usuarios normales ven solo su dept; SA/EA ven todo.
-    · Worker getHistorialTabla (PEMP/carretillas): reescrito con INNER JOIN a tabla base
-      para aislar por empresa_id y filtrar por departamento. Antes no había aislamiento.
-    · Frontend: SA/EA ven badge de dept (⚡/🔧/🔺) en cada ítem del historial.
-
-v4.60  |  21/04/2026  [SOLO NUEVA APP]
-  - Splash screen: versión actual (v4.60) visible bajo el logo al arrancar la app
-  - Splash screen: firma "Desarrollado por Adrián Padilla" en pie de pantalla
-  - Banner de actualización rediseñado: píldora flotante centrada en la parte inferior
-    · z-index 100001 (por encima de splash y modales)
-    · En primer arranque espera 2.8s antes de mostrarse (splash aún visible)
-    · Clase .show/.fade para animación suave de entrada y salida
-
-v4.59  |  21/04/2026  [SOLO NUEVA APP]
-  - BUG-56: Panel Sesión reestructurado — botones cerrar sesiones siempre visibles para SA/enc/EA
-    · Nueva sección "Gestión de sesiones" con botones: Cerrar operarios / Cerrar encargados / Cerrar TODAS
-    · "Ver quién está conectado" dentro de la misma sección, lista expandible
-    · initAjustesTabs muestra/oculta seccionGestionSesiones según rol
-  - BUG-51/55/57: Errores al editar/crear/mover items en Seguridad — 403 injusto
-    · getInventarioSeg, crearItemSeg, moverItemSeg: añadido isAdmin a la guarda de autorización
-    · Encargado y empresa_admin ya pueden gestionar inventario de seguridad sin errores
-  - BUG-59: Inventarios filtran correctamente por obra para SA/EA
-    · cargarStock() pasa ?obra_id=X cuando hay obra seleccionada en el header
-    · getBobinas, getPemp, getCarretillas: SA/EA pueden filtrar por obra via query param
-    · getUsuarios: superadmin puede consultar usuarios de otra empresa via ?empresa_id=X
-  - BUG-71: Filtros de Ideas ahora siempre actualizan el DOM
-    · Hash de caché incluye _sugFiltroKey+_sugFiltroVal — un cambio de filtro siempre refresca la lista
-  - BUG-60: cambiarEstadoSug ahora muestra toast ✅/❌ según resultado
-  - BUG-23: obra-select max-width aumentado a 220px — texto ya no se corta
-  - Modal aprobación usuario: corrección de departamentos hardcodeados (mecanico/civil → mecanicas/personal)
-    · Selector empresa con onchange que actualiza departamentos según usuarios existentes en la empresa
-
-v4.58  |  20/04/2026  [SOLO NUEVA APP]
-  - MEJ-07: Notificaciones clickables — al pulsar navegan a la sección correspondiente
-    · Nueva función irANotif(tipo): pedidos→pantalla pedidos, pemp/carretillas→stock,
-      material seg→inventario seguridad, usuarios pendientes→Ajustes/Usuarios
-    · cargarNotificaciones() paralelizado con Promise.all (5 fetches simultáneos)
-    · Todas las notificaciones muestran "Toca para ir →"
-  - MEJ-10: Botón "Añadir como nueva herramienta" al escanear una inexistente
-    · herrOnCode() en modo devolver: si la herramienta no existe muestra el botón
-    · herrAgregarDesdeEscaner(serie) abre el formulario con el número de serie pre-relleno
-
-v4.57  |  20/04/2026  [SOLO NUEVA APP]
-  - BUG-123: Mejora de rendimiento en arranque — app carga significativamente más rápido
-    · iniciarApp(): cargarStatsHome() y cargarCatalogos() ahora en paralelo (Promise.all)
-      antes eran secuenciales: ~600ms de espera → ahora ~300ms (el más lento de los dos)
-    · checkNotifBadge(): 4 llamadas al worker secuenciales → 1 Promise.all simultáneo
-      antes: pedidos → PEMP → carretillas → pendientes (cada una espera a la anterior)
-      ahora: las 4 se lanzan a la vez → tiempo = la más lenta, no la suma de todas
-  - BUG-116: Verificado como resuelto desde v4.29 (registrado sin actualizar estado)
-    · getPedidos() ya filtra por AND departamento = ? desde v4.29
-    · apiCall() siempre envía X-Departamento desde v4.49
-    · getAuth() usa X-Departamento como override para SA/EA → comportamiento correcto
-
-v4.56  |  20/04/2026  [SOLO NUEVA APP]
-  - BUG-118: Kits ahora visibles en pestaña Inventario de Herramientas
-    · renderInvHerr() muestra sección "📋 Kits" al final del inventario
-    · cargarInvHerr() carga kits y herramientas en paralelo (Promise.all)
-  - BUG-120: Botón ✏️ directo en cada tarjeta del inventario de herramientas
-    · editarHerrDesdeInv(id, e) busca el objeto en _herrInvCache y abre el formulario
-    · stopPropagation evita que se abra el modal de detalle al pulsar editar
-  - BUG-122: Pestaña Ideas ya no parpadea durante el auto-refresh
-    · cargarSugerenciasAdmin() solo muestra "Cargando..." si el contenedor está vacío
-    · En refresco automático (30s) se reemplaza el contenido sin blanquear la pantalla
-  - BUG-124: Herramientas y kits ahora filtran por obra activa
-    · cargarInvHerr() pasa ?obra_id=X según sesión del usuario
-    · Worker getHerramientas y getKits aceptan y aplican el parámetro obra_id
-  - BUG-125: Icono "SA" en barra superior más compacto
-    · rolLabel('superadmin') devuelve 'SA' en lugar de 'SuperAdmin'
-
-v4.55  |  20/04/2026  [SOLO NUEVA APP]
-  - BUG-115: Selector de empresa vacío al aprobar solicitud de usuario nuevo
-    · El worker /empresas devuelve un array plano, pero el frontend esperaba {empresas:[...]}
-    · Fix: corregido (empresas.empresas || []) → (Array.isArray(empresas) ? empresas : [])
-    · El select de empresa en "Solicitudes de acceso" ya muestra todas las empresas
-
-v4.54  |  20/04/2026  [SOLO NUEVA APP]
-  - FIX: Login Google — NOT NULL constraint failed: usuarios.rol
-    · Al crear solicitud pendiente sin invitación, el INSERT tenía rol=NULL
-    · La columna rol tiene NOT NULL constraint → error al intentar registrar al usuario
-    · Fix: rol='pendiente' como valor temporal hasta que el admin apruebe el acceso
-
-v4.53  |  20/04/2026  [SOLO NUEVA APP]
-  - FIX: Login con Google — Error 400 redirect_uri_mismatch
-    · redirect_uri se calculaba dinámicamente con window.location → si el usuario
-      accedía desde una URL sin barra final u otra variante, no coincidía con Google
-    · Fix: redirect_uri hardcodeada a 'https://padilla585projects.github.io/Alejandra-APP/'
-      en loginConGoogle() y handleGoogleCallback()
-    · Eliminado localStorage 'alejandra_oauth_redirect' (ya no necesario)
-
-v4.52  |  20/04/2026  [SOLO NUEVA APP]
-  - Botón "✅ Ya fui aprobado — Entrar con Google" en pantalla de login
-    · Aparece solo cuando el usuario intenta entrar con Google y su solicitud está pendiente
-    · Mensaje ámbar mejorado: avisa al usuario de que pulse el botón verde cuando sea aprobado
-    · Al pulsar, inicia un nuevo flujo OAuth (que ya funcionará si el admin aprobó)
-    · El botón se oculta al iniciar cualquier nuevo intento con Google
-
-v4.51  |  20/04/2026  [SOLO NUEVA APP]
-  - Sección "🔗 Invitaciones" movida de Ajustes/Empresa a Ajustes/Usuarios
-    · seccionInvitaciones ahora vive en ajPanelUsuarios (debajo de "Nuevo usuario")
-    · selAjTab('usuarios') muestra la sección y llama cargarInvitaciones() si el rol es
-      empresa_admin o superadmin
-    · cargarPanelEmpresa() ya no gestiona la visibilidad de seccionInvitaciones
-  - Flujo Google nuevo usuario verificado:
-    · Worker: sin invitación → crea registro google_pending=1, avisa por Telegram ✅
-    · Frontend: respuesta {pendiente:true} → mensaje ámbar al usuario ✅
-    · campana 🔔: cargarNotificaciones() ya muestra solicitudes pendientes para admins ✅
-
-v4.50  |  20/04/2026  [SOLO NUEVA APP]
-  - FIX #112: Login con Google no funcionaba — 2 bugs:
-    · BUG-A (crítico): checkVersionAndUpdate() se lanzaba en paralelo al callback de Google;
-      si había mismatch de versión, location.replace() eliminaba el ?code de la URL
-      antes de que el callback terminara → login perdido silenciosamente
-      Fix: si location.search contiene ?code, se omite el reload de versión
-    · BUG-B: handleGoogleCallback referenciaba loginBtn (botón de código) en lugar de
-      btnLoginGoogle → el botón de Google quedaba deshabilitado tras cualquier error
-      Fix: usa btnLoginGoogle correctamente, restaura SVG+texto al fallar
-  - DB: sugerencia #112 marcada como resuelto
-
-v4.49  |  20/04/2026  [SOLO NUEVA APP]
-  - FIX #114/#111: obra en fichajes siempre vacía
-    · window._obras nunca se asignaba → select solo mostraba "Sin obra"
-    · Fix: abrirFormFichaje() hace fetch /obras directamente
-  - FIX #64: badge de Ideas no se actualizaba en background
-    · cargarBadgeIdeas() añadido al final de checkNotifBadge() (polling 60s)
-  - FIX #66/#63: inventarios no filtraban por departamento para SA/empresa_admin
-    · apiCall siempre manda X-Departamento (antes solo sin token)
-    · getAuth: SA y empresa_admin usan X-Departamento si presente (pueden cambiar dept)
-    · Usuarios normales siguen usando dept de su sesión D1 (sin cambio)
-  - DB: sugerencias #117,#116,#110,#109,#108,#106 marcadas como resuelto
-
-v4.48  |  20/04/2026  [SOLO NUEVA APP]
-  - Fix notificaciones usuario nuevo Google (2 bugs):
-    · Badge de campana ahora muestra siempre las solicitudes pendientes sin filtrar por fecha
-      (antes desaparecía si el admin había abierto el panel antes de que llegara la solicitud)
-    · Notificación clickable: al pulsar una solicitud en el panel → navega a Ajustes → Usuarios
-    · Mensaje de Telegram corregido: decía "Ajustes → Empresa" → ahora dice "Ajustes → Usuarios"
-
-v4.47  |  20/04/2026  [SOLO NUEVA APP]
-  - Fix Log de Ideas: 4 bugs
-    · BUG-A: "Todo leído" ahora también pone leida=1 (antes las ideas seguían con badge NUEVA)
-    · BUG-B: empresa_admin ya puede borrar ideas individuales (antes recibía 403)
-    · BUG-C: badge de Ideas ahora se carga también para empresa_admin (antes solo superadmin)
-    · BUG-D: marcarSugerenciaLeida ahora requiere auth (antes cualquiera podía cambiar estado)
-
-v4.46  |  20/04/2026  [SOLO NUEVA APP]
-  - Fix botón atrás como historial de navegación (BUG-108)
-    · Nuevo stack _navHistory: showScreen() guarda la pantalla actual antes de cambiar
-    · irAtras() hace pop del stack → siempre vuelve al paso anterior exacto
-    · actualizarBtnAtras() simplificado: visible si hay algo en el stack
-    · _applyScreen() ejecuta inits de pantalla (cargarPedidos, herrSelTab, etc.) también al volver
-    · Stack se resetea al iniciar sesión
-    · Funciona igual para botón físico Android (popstate) que para el botón ← del header
-
-v4.45  |  20/04/2026  [SOLO NUEVA APP]
-  - Fix notificaciones no se borran (BUG-109):
-    · Botón "🗑 Borrar" en header del panel → actualiza lastSeen y limpia la lista
-    · checkNotifBadge() ahora filtra PEMP, carretillas y solicitudes por lastSeen
-      (antes solo filtraba pedidos — PEMP/carretillas siempre sumaban al badge)
-    · Al abrir el panel el badge desaparece y no vuelve hasta que hay algo nuevo
-
-v4.44  |  20/04/2026  [SOLO NUEVA APP]
-  - Solicitudes de acceso Google movidas de Ajustes/Empresa a Ajustes/Usuarios
-    · seccionPendientes ahora vive en ajPanelUsuarios (arriba de la lista de usuarios)
-    · selAjTab('usuarios') llama a cargarSolicitudesPendientes() al abrir la pestaña
-    · Retirada la llamada a cargarSolicitudesPendientes() de cargarPanelEmpresa()
-
-v4.43  |  20/04/2026  [SOLO NUEVA APP]
-  - Fix Login Google: solicitud pendiente al admin cuando el usuario no tiene cuenta ni invitación
-    · Antes: devolvía error "sin_invitacion" sin crear registro ni avisar al admin
-    · Ahora: crea usuario con google_pending=1, avisa al admin por Telegram, devuelve {pendiente:true}
-    · Si ya hay una solicitud pendiente del mismo email, informa al usuario en lugar de duplicar
-    · El admin aprueba/rechaza desde Ajustes → Empresa → Solicitudes pendientes
-  - Bump versión a v4.43 (sw.js, version.json, APP_VERSION, versionBadge)
-
-v4.42  |  19/04/2026  [SOLO NUEVA APP]
-  - Fix botón atrás para superadmin: sub-pantalla → selector de departamento (dept)
-  - Fix navTo('home') para superadmin → va a empresaSel (selector de empresas)
-  - Fix segGuardarEdicion → llama a segCargarInv() en lugar de cargarInventarioSeg()
-
-v4.41  |  19/04/2026  [SOLO NUEVA APP]
-  - NEW-01: Login con Google OAuth — sistema completo con invitaciones temporales
-    · Invitaciones con duración configurable: 15min / 30min / 1h / 2h / 4h
-    · Admin configura rol (operario/encargado) y departamento al generar el enlace
-    · Enlace único (?inv=XXXXX) — un solo uso, caduca automáticamente
-    · Usuario nuevo entra directamente sin aprobación manual si tiene enlace válido
-    · Sin enlace → acceso denegado con mensaje claro
-    · Ajustes → Empresa: sección "Invitaciones" para generar, copiar y anular enlaces
-    · Notificaciones in-app (campana) muestran solicitudes pendientes para admins
-    · Telegram notifica al admin cuando alguien se registra con éxito
-    · DB: tabla invitaciones (codigo, empresa_id, rol, departamento, expira_at, usado)
-    · DB: columna google_pending en usuarios (para flujo alternativo sin invitación)
-    · Secrets configurados: GOOGLE_OAUTH_CLIENT_ID + GOOGLE_OAUTH_CLIENT_SECRET
-
-v4.40  |  19/04/2026  [SOLO NUEVA APP]
-  - NEW-01: Login con Google OAuth — botón en pantalla login, redirect flow, worker endpoints
-    · GET /auth/google/url → devuelve URL de autorización Google
-    · POST /auth/google/callback → intercambia code por session token
-    · Busca usuario por email en D1; si no existe, muestra error con instrucción
-    · Requiere configurar GOOGLE_OAUTH_CLIENT_ID y GOOGLE_OAUTH_CLIENT_SECRET en Worker
-
-v4.39  |  19/04/2026  [SOLO NUEVA APP]
-  - NEW-04: Herramientas en Seguridad — cfgHerrSection visible para dept=seguridad en Ajustes
-  - NEW-07: Exportar PDF (ventana imprimible) + compartir archivo xlsx real via navigator.share
-  - NEW-11: Confirmado botón "Invítame a un café" (PayPal) en Ajustes → Sistema (ya estaba v4.37)
-
-v4.38  |  19/04/2026  [SOLO NUEVA APP]
-  - Fix: notificaciones PEMP/carretillas averiadas no aparecían (?estado=averia → Averiada)
-  - Fix: campo tipo_nombre no existe en inventario_seg → usar nombre||codigo||tipo_material
-
-v4.37  |  19/04/2026  [SOLO NUEVA APP]
-  - NEW-06: Splash screen al arrancar la app
-  - NEW-09: Notificaciones in-app (campana 🔔 en header, panel, polling cada 60s)
-  - Fix: historial ahora filtra por empresa_id y departamento
-
-v4.36  |  19/04/2026  [SOLO NUEVA APP]
-  - NEW-05: Banner "App actualizada a vX.XX" tras actualización automática
-    · Antes del location.replace() se guarda la nueva versión en localStorage
-    · Al arrancar, si existe el flag → banner verde fijo en cabecera 4s con fade-out
-    · CSS: #updatedBanner con transition opacity
-
-v4.35  |  19/04/2026  [SOLO NUEVA APP]
-  - Fix pantalla selección de empresa (superadmin):
-    · onclick roto: JSON.stringify producía comillas dobles dentro del atributo HTML → click nunca ejecutaba
-      Corregido usando data-eid/data-enombre + this.dataset en lugar de inline args
-    · empresa_id parseado a int en seleccionarEmpresaAdmin
-    · irAtras(): superadmin en empresaSel → no hace nada (es la raíz)
-    · irAtras(): superadmin en cualquier sub-pantalla → va directo a empresaSel
-    · actualizarBtnAtras(): botón atrás visible para superadmin en cualquier pantalla excepto empresaSel
-
-v4.34  |  19/04/2026  [SOLO NUEVA APP]
-  - MEJ-05: Descripciones de departamentos actualizadas
-    · Eléctrico: "Tendido de cable · Plataformas · Carretillas"
-    · Mecánicas: "Mantenimiento de plataformas y carretillas"
-    · Seguridad: "Control de EPIs y material de seguridad"
-    · Personal: "Fichajes y control de asistencia"
-  - MEJ-06: Botones "Marcar todo leído" y "Borrar todo" en Ajustes/Ideas
-    · Worker: PUT /sugerencias/marcar-todas → pone todas a estado='resuelto'
-    · Worker: DELETE /sugerencias/borrar-todas → borra todas las sugerencias de la empresa
-    · Ambos con confirmación previa y actualización del badge
-
-v4.33  |  19/04/2026  [SOLO NUEVA APP]
-  - MEJ-02: Escáner de cámara en Herramientas
-    · Tab Escanear: selector modo ➕ AGREGAR / ↩ DEVOLVER + cámara QR+OCR
-    · Modo Agregar → abre formulario con nº de serie pre-relleno
-    · Modo Devolver → muestra ficha con botones de acción
-    · Tab Inventario: buscador por serie/tipo/marca añadido
-    · Cámara se cierra automáticamente al cambiar de pestaña
-  - MEJ-03: Ocultar pestañas sin acceso
-    · Bot nav "Ideas" ahora oculto para rol operario
-    · Implementado via updateNavPermisos(s) llamado en iniciarApp()
-  - MEJ-04: Selector de empresa para Superadmin
-    · Superadmin ve pantalla screenEmpresaSel al hacer login
-    · Cards con lista de empresas activas (GET /empresas — solo superadmin)
-    · Al seleccionar empresa: actualiza empresa_id en sesión D1 (POST /superadmin/empresa)
-    · Botón ← en screenDept vuelve a screenEmpresaSel (solo superadmin)
-    · empresa_admin sigue yendo directo a screenDept (sin cambios)
-
-v4.32  |  19/04/2026  [AMBAS APPS — nueva v4.32 | vieja v4.18]
-  - BUG-01: Fichaje ahora pre-selecciona la obra activa de la sesión al abrir el modal
-    · abrirFormFichaje() aplica s.obra_id al select de obra tras poblar la lista
-    · (solo NuevaApp — Bobinaap no tiene módulo de fichajes)
-  - BUG-03: Nombre de obra ya no se corta en la barra superior
-    · .obra-label: eliminado max-width:120px, añadido flex:1;min-width:0
-    · El texto ocupa todo el espacio disponible y se trunca con … solo si no cabe
-
-v4.31  |  19/04/2026  [SOLO NUEVA APP]
-  - MEJ-01: Rediseño sección Pedidos
-    · Pedidos ahora visible en departamento Seguridad (card + hoja Seg-Pedidos en Sheets)
-    · Solo encargado/admin pueden cambiar estado del pedido (frontend + worker)
-    · Telegram notifica al cambiar estado (📤/✅/❌/⏳) además de al crear
-  - BUG-02: Icono de departamento ya desaparece al volver a pantalla principal
-    · showScreen() oculta deptPill al navegar a 'dept'
-
-v4.30  |  19/04/2026  [SOLO NUEVA APP]
-  - #105: Borrar usuario ahora libera sus credenciales completamente
-    · Worker: eliminarUsuario pone activo=0, email=NULL, password_hash=NULL, codigo='_del_'+id
-    · El email y el código quedan libres para reutilizarse en otro usuario
-
-v4.29  |  19/04/2026  [SOLO NUEVA APP]
-  - #103: Pedidos cross-department — superadmin/empresa_admin ya NO ven pedidos de todos los departamentos
-    · Worker: eliminado el bypass `if (!isSuperadmin && !isEmpresaAdmin)` en getPedidos
-    · Ahora TODOS los usuarios (incluido SA/EA) ven solo pedidos de su departamento activo
-    · Los departamentos son totalmente independientes entre sí
-
-v4.28  |  19/04/2026  [SOLO NUEVA APP]
-  - #101/#102: Botones añadir en Ajustes/Catálogos ahora funcionan correctamente
-    · Worker: addCatalogo ahora valida auth (403 si no autorizado, 403 si operario)
-    · Frontend: addProveedor/addTipo/addTipoPemp/addTipoCarr/addEnergiaCarr muestran toast ✅/❌
-    · Frontend: initAjustesTabs ahora muestra secciones también a empresa_admin
-    · Frontend: cfgHerrSection añadida a la lógica de visibilidad (faltaba)
-  - Worker y GitHub pendientes de push (incluido en deploy v4.29)
-
-v4.27  |  18/04/2026  [SOLO NUEVA APP]
-  - #78: Al abrir la app siempre sale el panel de departamentos para superadmin/empresa_admin
-    · iniciarApp() ahora resetea s.departamento a null y navega a screenDept siempre
-    · Antes solo aparecía si no había departamento guardado en sesión
-  - #79: Fichar trabajadores sin cuenta de app, introduciendo el nombre a mano
-    · Opción "✏️ Escribir nombre..." en el select de trabajador del formulario de fichaje
-    · Campo de texto visible al seleccionar esa opción
-    · guardarFichaje() busca si el nombre ya existe en personal_externo (reutiliza)
-    · Si no existe, crea nuevo personal_externo vía POST /personal-externo
-  - Worker y GitHub actualizados ✅
-
-v4.26  |  18/04/2026  [SOLO NUEVA APP]
-  - Google Sheets: sincronización completa de herramientas y kits
-    · Nuevas pestañas en sheet equipos: Elec-Herramientas, Mec-Herramientas, Kits
-    · CRUD de herramientas y kits ya llaman a syncSheets en background (ctx.waitUntil)
-    · tabForDept() extendido con casos 'herramienta' y 'kit'
-    · Columna Estado en Elec/Mec-Herramientas: colores condicionales
-      disponible=verde, averiado=rojo, en_uso=azul, en_reparacion=ámbar,
-      perdido=morado, baja=gris
-    · Reglas de estado nuevas en applyTabFormatting: averiado, en_reparacion, perdido, baja
-    · estadoColMap actualizado con Elec/Mec-Herramientas (col 8)
-  - Worker y GitHub actualizados ✅
-
-v4.25  |  18/04/2026  [SOLO NUEVA APP]
-  - BUG CRÍTICO RAÍZ: async function dentro de bloque if() no se hoistean a scope global en Chrome
-    · Los onclick de HTML (guardarFichaje, guardarHerramienta, guardarKit, guardarPedido,
-      abrirFormFichaje, editarFichaje, eliminarFichaje, verDetalleHerr, etc.) lanzaban
-      ReferenceError silencioso porque las funciones no existían en scope global
-    · Fix: window.X = X al final del bloque if('serviceWorker' in navigator) para 25 funciones
-    · Afectaba TODO: no se podía guardar ningún fichaje, herramienta ni pedido
-  - Worker y GitHub actualizados ✅
-
-v4.24  |  18/04/2026  [SOLO NUEVA APP]
-  - FIX: badge de versión en home mostraba v4.22 (hardcoded incorrecto)
-  - FIX: versión en Ajustes → Sistema mostraba v4.16 (hardcoded incorrecto)
-  - MEJORA: ambas versiones ahora se renderizan dinámicamente desde APP_VERSION
-    · Nunca más quedarán desactualizadas aunque no se toque el HTML
-  - MEJORA: intervalo de auto-actualización reducido de 2 min a 30 segundos
-  - MEJORA: reg.update() (chequeo SW) también cada 30 s (antes solo en visibilitychange)
-  - Worker y GitHub actualizados ✅
-
-v4.23  |  18/04/2026  [SOLO NUEVA APP]
-  - BUG CRÍTICO: modales de Herramientas, Pedidos y Personal/Fichajes no aparecían
-    · Causa: classList.add('active') pero CSS solo reconoce .modal-overlay.show
-    · Fix: cambiado a classList.add/remove('show') en los 6 modales afectados:
-      modalHerramienta, modalKit, modalHerrDetalle, modalKitDetalle,
-      modalFichaje, modalPedido
-    · Afectaba: crear/editar herramientas, crear kits, ver detalles,
-      crear/editar pedidos, crear/editar fichajes
-  - Worker y GitHub actualizados ✅
-
-v4.18  |  17/04/2026  [SOLO NUEVA APP]
-  - #15: Módulo de Pedidos en parte eléctrica
-    · Tab 📦 Pedidos visible solo para Eléctrico y superadmin/empresa_admin
-    · Todos los roles (incluido operario) pueden crear y cambiar estado
-    · Solo encargado/admin pueden borrar pedidos
-    · Estados: pendiente → solicitado → recibido (o cancelado)
-    · Al marcar recibido se guarda fecha automáticamente
-    · Sync automático con Google Sheets → pestaña Elec-Pedidos
-    · Columnas Sheets: Estado | Descripción | Referencia | Cantidad | Unidad |
-      Proveedor | Obra | Solicitado por | Fecha Solicitud | Fecha Recepción | Notas
-    · Notificación Telegram al crear nuevo pedido
-    · DB: tabla pedidos creada en alejandra-db ✅
-    · Worker y GitHub actualizados ✅
-
-v4.17  |  17/04/2026  [SOLO NUEVA APP]
-  - #52: Botón "← Atrás" en el header
-    · Aparece automáticamente al entrar en Inventario, Ajustes o Ideas
-    · Para superadmin/empresa_admin: vuelve al selector de departamento
-    · Para el resto: vuelve al home
-    · Botón físico de Android también funciona (popstate + history.pushState)
-  - #53: Filtro de sugerencias por departamento en Ideas (Ajustes)
-    · Nuevos botones: ⚡ Eléctrico / 🔧 Mecánicas / 🔺 Seguridad
-    · El departamento se guarda automáticamente al enviar una sugerencia
-    · Se muestra en cada tarjeta de sugerencia
-    · DB: columna `departamento` añadida a tabla sugerencias (nueva app)
-    · Worker: guardarSugerencia ahora obtiene departamento y empresa_id de getAuth
-  - Worker y GitHub actualizados ✅
-
-v4.16  |  17/04/2026  [SOLO NUEVA APP]
-  - BUG: empresa_admin no tenía permisos para hacer nada en la app
-    · Causa 1: getAuth() no devolvía isEmpresaAdmin → todo daba 403
-    · Fix: añadido isEmpresaAdmin: sesion.rol === 'empresa_admin' al objeto de retorno
-    · Causa 2: 10 funciones del worker solo comprobaban isSuperadmin/isAdmin
-    · Fix: getObras, crearObra, eliminarObra, getUsuarios, crearUsuario,
-           editarUsuario, eliminarUsuario, cerrarTodasSesiones, getSugerencias
-           actualizadas para aceptar isEmpresaAdmin
-    · Causa 3: initAjustesTabs() ocultaba pestañas Obras/Usuarios/Ideas a empresa_admin
-    · Fix: añadido esEA a las condiciones de visibilidad de cada pestaña
-  - BUG: "Error al cargar" en Ajustes → Empresa (panel Mi Empresa)
-    · Causa: cargarPanelEmpresa() no llamaba .json() en la respuesta de apiCall
-    · Fix: const data = await (await apiCall('/mi-empresa')).json() + check res.ok
-  - Worker redesplegado con binding D1 ✅
-
-v4.15  |  17/04/2026  [AMBAS APPS — v4.15 nueva | v4.14 vieja]
-  - Auto-actualización sin intervención del usuario (fin de "desinstalar y reinstalar")
-    · Nuevo archivo version.json en cada repo con la versión actual
-    · Al arrancar la app: fetch inmediato de version.json (cache:'no-store' + timestamp)
-    · Si la versión no coincide → limpia TODOS los caches SW + recarga automática
-    · Chequeo repetido cada 2 minutos mientras la app está abierta
-    · Al volver a la app (visibilitychange) → chequeo inmediato
-    · SW.js: peticiones de navegación (HTML) ya NO se cachean → HTML siempre fresco de red
-    · Eliminado el banner manual "Actualizar ahora" — ahora es 100% automático
-    · Intervalo de reg.update() reducido de 10 min a 5 min
-  ⚠️ REGLA NUEVA: cada vez que se bump el version en sw.js/index.html,
-     actualizar también version.json con el mismo número
-
-v4.14  |  17/04/2026  [NUEVA APP — v4.14 nueva | v4.13 vieja]
-  - BUG #69: Wizard empresa — paso de obra daba "Ruta no encontrada"
-    · Causa: nuevo worker perdió rutas /empresas/registro y /mi-empresa en deploy anterior
-    · Fix: restauradas rutas + funciones registrarEmpresa/getMiEmpresa/updateMiEmpresa
-    · Añadidas funciones hashPassword/verifyPassword (PBKDF2) que faltaban en nuevo worker
-    · Login por email+contraseña restaurado en verificarAcceso del nuevo worker
-  - BUG #71: Filtros en pestaña Ideas no funcionaban
-    · Causa: getSugerencias del nuevo worker ignoraba ?estado= y ?categoria=
-    · Fix: añadido filtrado dinámico por estado y categoría (igual que worker viejo)
-  - BUG #68/#67: Botones "Cerrar sesiones" no funcionaban en ninguna de las dos apps
-    · Causa: cerrarSesionesRol() llamaba apiCall(path, 'POST', body) con firma incorrecta
-    · Fix: corregido a apiCall(path, { method:'POST', body:JSON.stringify(body) }) en ambas apps
-  - BUG extra: marcarSugerenciaLeida en nuevo worker no leía body (estado/respuesta)
-    · Fix: función actualizada para leer y aplicar estado y respuesta del body
-  - Workers redesplegados con binding D1 ✅
-
-v4.13  |  17/04/2026  [AMBAS APPS — nueva en v4.13, vieja en v4.12]
-  - BUG #51 (Katherine): Error al editar salidas en inventario seguridad
-    · Causa: segGuardarEdicion() enviaba { estado, destino_actual, notas } sin campo 'accion'
-    · Worker: moverItemSeg() no tenía case para edición directa → devolvía 'Acción no reconocida'
-    · Fix backend: añadida rama accion==='editar' en moverItemSeg() (ambos workers)
-      · Actualiza estado, destino_actual, notas mediante UPDATE dinámico
-    · Fix frontend: segGuardarEdicion() ahora envía accion:'editar' en el body
-    · Workers redesplegados con binding D1 ✅
-
-v4.12  |  17/04/2026  [AMBAS APPS — nueva en v4.12, vieja en v4.11]
-  - #44: Ficha de máquina a pantalla completa (modal overlay con historial reciente)
-    · buscarMaquina() abre modal en lugar de resultado inline
-    · Muestra: estado, obra, departamento, marca, proveedor, fechas, notas, historial
-    · Botón "Ver en inventario" dentro del modal
-  - #38: Sesiones activas en Ajustes → Sesión
-    · Botón "👀 Ver quién está conectado" (solo superadmin/encargado/empresa_admin)
-    · Lista de sesiones: nombre, rol, departamento, obra, última actividad
-    · Cerrar sesiones por rol (encargados / operarios / todas excepto yo)
-    · Worker: nuevos endpoints GET /sesiones y POST /sesiones/cerrar-todas
-  - SW bumpeado a alejandra-v4.12
-
-v4.11  |  17/04/2026  [SOLO NUEVA APP]
-  - Sync completo con v4.8 + v4.9 de la app vieja:
-    · Banner de actualización de caché (updateBanner)
-    · #47: irAInventario() + botón "Ver en inventario" en buscarMaquina()
-    · #50: superadmin siempre va al selector de departamentos
-    · #42: buscarMaquinaBox solo visible para Seguridad
-    · #12: input de código encima de la cámara + clear resetea btnDevolver
-    · #43: datalist con marcas en campos PEMP y Carretillas
-    · #35+#37: catálogos filtrados por departamento en Ajustes
-    · #14: botón DEVOLVER al escanear equipo existente + irADevolucionRapida()
-  - SW bumpeado a alejandra-v4.11
-
-v4.10  |  17/04/2026  [AMBAS APPS]
-  - BUG CRÍTICO: binding D1 'DB' se perdía en cada deploy via REST API → env.DB undefined
-    · Login, sesiones y cualquier operación de DB fallaban con "Cannot read properties of undefined"
-    · Fix: deploy siempre incluye binding D1 en el metadata (ambos workers)
-    · Verificado: login crea sesión correctamente en ambas DBs
-  - BUG CRÍTICO: nueva app apuntaba a worker viejo (API_DEFAULT incorrecto) → login fallaba
-    · Corregido: API_DEFAULT = 'https://alejandra-app-api.alejandra-app.workers.dev'
-  - BUG: logs nueva DB sin columnas 'origen' y 'detalle' → INSERT fallaba silenciosamente
-    · Migración aplicada: ALTER TABLE logs ADD COLUMN origen/detalle en DB nueva
-  - MEJORA logs: helper logActividad() en ambos workers para grabar desde el servidor
-    · guardarLog ahora incluye empresa_id en el INSERT
-    · Login exitoso de usuario queda registrado en logs (origen: 'login')
-  - BUG: eliminada función cargarRecentActivity() y su llamada en iniciarApp()
-    · El elemento recentActivity no existía en el HTML → error en logs de ambas DBs
-    · Código muerto: eliminado limpiamente
-    · SW bumpeado a alejandra-v4.10
-
-⚠️  REGLA DE DEPLOY ACTUALIZADA (CRÍTICO):
-  Al desplegar workers via REST API curl, SIEMPRE incluir el binding D1 en el metadata:
-  -F "metadata={\"main_module\":\"worker.js\",\"compatibility_date\":\"2024-01-01\",
-      \"bindings\":[{\"type\":\"d1\",\"name\":\"DB\",\"id\":\"<DATABASE_ID>\"}]};type=application/json"
-  Sin esto, env.DB queda undefined y toda la app deja de funcionar.
-
-v4.9  |  16/04/2026  [AMBAS APPS]
-  - BUG registrarEmpresa: "Cannot read properties of undefined (reading 'prepare')"
-    · Causa: INSERT...RETURNING con .first() devolvía null en D1 de la app vieja
-    · Fix: cambiado a .run() + meta.last_row_id para empresa y obra
-    · Worker viejo (gestibobina-proxy) redesplegado ✅
-  - #50: Home superadmin siempre lleva al selector de departamentos
-  - #42: "Buscar en todos los departamentos" eliminado del escáner de Eléctrico
-  - #12: Buscador matrícula/código movido encima de la cámara
-  - #43: Datalist con marcas existentes en campos Marca de PEMP y Carretillas
-  - #35: Catálogos en Ajustes filtrados por departamento:
-         Eléctrico → Bobinas + PEMP + Carretillas
-         Mecánicas → PEMP + Carretillas
-         Seguridad → solo Material Seguridad
-         Superadmin → todo
-  - #37: Pestaña Catálogos oculta para usuarios de Seguridad
-  - #14: Botón "↩ DEVOLVER EQUIPO" aparece al escanear un código que ya existe
-         en el inventario → navega directamente a la pestaña Devoluciones
-  - SW bumpeado a alejandra-v4.9
-
-v4.8  |  16/04/2026  [AMBAS APPS]
-  - BUG #47: buscarMaquina() — botón "📦 Ver en inventario" en el resultado
-    · irAInventario(matricula, modulo): navega al módulo correcto con búsqueda prefiltrada
-  - CACHE: banner de actualización visible en la parte superior de la pantalla
-    · Aparece cuando hay un SW nuevo esperando (reg.waiting) o al detectar updatefound
-    · Botón "Actualizar ahora" fuerza recarga con timestamp
-    · Soluciona el problema de usuarios que no recibían updates automáticamente
-  - SW bumpeado a alejandra-v4.8
-
-v4.7  |  16/04/2026  [AMBAS APPS]
-  - BUG #36: Mecánicas inventory — currentModule ahora inicializa a 'pemp' para usuarios de mecánicas
-    · iniciarApp(), cerrarSesion(), seleccionarDepto() y la var global usan dept para elegir módulo
-  - BUG #48/#49: Botón pestaña Dev. ahora usa ícono SVG (flecha retorno) en lugar de ↩ texto
-  - BUG #40: Formulario de registro multi-paso
-    · regGoStep() scrollea el overlay a top en móvil
-    · regSiguiente() envuelta en try-catch con mensaje de error inline
-    · Inputs con optional chaining (?.) para mayor robustez
-  - BUG #45: Inventario seguridad — botón ✏️ Editar añadido al modal segVerItem
-    · segEditarItem(id): muestra formulario inline con estado, destino, notas
-    · segGuardarEdicion(id): hace PUT /inventario-seg/:id y recarga inventario
-  - BUG #47: Stock cards ahora son clickables (onclick=abrirEdit en el div card)
-    · stopPropagation en stock-actions-row para evitar doble disparo
-  - BUG #46: Panel devolución scanner refactorizado para usar estructura cam-viewport
-    · Misma estructura HTML/CSS que el scanner principal (cam-idle, video, scan-frame)
-    · devOpenCamera/devCloseCamera ajustados para no ocultar el viewport contenedor
-  - BUG #41: SW cache más agresivo en mobile
-    · activate: filtra solo caches antiguas (k !== CACHE) en lugar de borrar todas
-    · SW update cada 10 minutos via setInterval en registro del SW
-    · checkConnection() añade reg.update() en cada check de conexión
-  - SW bumpeado a alejandra-v4.7
-
-v4.6  |  16/04/2026  [SOLO NUEVA APP]
-  - Registro multi-tenant de empresas (/empresas/registro — ruta pública)
-  - Login por email + contraseña (empresa_admin y futuros usuarios)
-    · PBKDF2 (100k iteraciones, SHA-256) con salt aleatorio para passwords
-  - Nuevo rol empresa_admin: elige departamento al entrar, accede a panel empresa
-  - Login dual en pantalla de acceso: pestaña Código | pestaña Email
-  - Wizard de registro 3 pasos: empresa → cuenta admin → primera obra (opcional)
-  - Panel "🏢 Empresa" en Ajustes → info empresa, obras, usuarios
-  - getAuth devuelve isEmpresaAdmin; rolLabel muestra "Admin" para empresa_admin
-  - DB: columnas email y password_hash añadidas a tabla usuarios
-  - Worker: nuevas rutas /mi-empresa (GET/PUT) y /empresas/registro (POST)
-  - Telegram: notificación al registrar nueva empresa
-  - SW bumpeado a alejandra-v4.6
-  - Worker desplegado: alejandra-app-api (Version ID: f78c21c4-1d62-41ae-98d0-02a3b624995a)
-  - index.html + sw.js en GitHub: padilla585projects/Alejandra-APP ✅
-
-v4.5  |  16/04/2026  [AMBAS APPS]
-  - Logo visible en el header principal (antes oculto por CSS)
-  - Badge de versión (v4.5) en esquina inferior derecha de la pantalla home
-  - Select "Todas las obras" ya no se corta: max-width aumentado a 160px + flex:1
-  - Sugerencias #23, #24, #27, #32 marcadas como resueltas
-  - Sugerencias #17,19,21,22,25,26,28,30,31 marcadas como resueltas en DB vieja
-  - SW bumpeado a alejandra-v4.5
-
-v4.4  |  16/04/2026  [AMBAS APPS]
-  - Botón Inventario (nav inferior) ahora enruta según departamento:
-    · Seguridad → va a screenSeguridad, pestaña Inventario
-    · Eléctrico / Mecánicas → comportamiento anterior (screenModule → stock)
-  - Preparado para añadir más departamentos con su propio inventario
-  - SW bumpeado a alejandra-v4.4
-
-v4.3  |  16/04/2026  [AMBAS APPS]
-  - Modal de detalle para ítems del inventario de Seguridad
-    · Al pulsar un ítem ya NO cambia a la pestaña escáner
-    · Se abre un modal (bottom sheet) con toda la info: tipo, estado, stock, destino, caducidad, notas
-    · Botones de acción (SALIDA / DEVOLUCIÓN / BAJA) dentro del modal
-    · Historial de movimientos incluido
-    · Se cierra tocando fuera o con ×
-  - SW bumpeado a alejandra-v4.3
-  - Sugerencia #25 resuelta
-
-v4.2  |  16/04/2026  [AMBAS APPS]
-  - Ideas & Feedback rediseñado con sistema de estados (pendiente/en_progreso/resuelto)
-  - Admin: filtros por estado y categoría, badges de estado coloreados, campo respuesta
-  - Badge en nav muestra sugerencias pendientes (antes mostraba no leídas)
-  - guardarSugerencia: ahora incluye empresa_id y estado='pendiente' en INSERT
-  - Nuevas funciones JS: selSugCategoria, filtrarSug, cambiarEstadoSug, abrirRespuestaSug
-  - cargarSugerenciasAdmin: usa filtros _sugFiltroKey/_sugFiltroVal para la query
-  - SW bumpeado a alejandra-v4.2
-  - Versión display en Ajustes: v4.2
-  - Worker desplegado: alejandra-app-api (Version ID: 3283ee97-437d-4b23-b0b6-c9c735d9dba5)
-  - index.html + sw.js en GitHub: padilla585projects/Alejandra-APP ✅
-
-v4.1  |  16/04/2026  [NUEVA APP — también aplicado en vieja para compatibilidad]
-  - Fix crítico: quitada excepción isSeguridad en getPemp y getCarretillas
-    → Seguridad ya NO ve máquinas de otros departamentos (solo las suyas)
-  - Fix: DB vieja (gestibobina-db) sin columna empresa_id en sesiones → error al login
-    → Migración empresa_id aplicada también en DB vieja (misma estructura que nueva)
-  - Nuevo: selector 🏢 Departamento en modal de edición de PEMP, carretillas y bobinas
-    → Solo visible para superadmin; permite reasignar cualquier máquina a otro departamento
-    → Útil para corregir máquinas migradas con departamento='electrico' que deberían ser 'mecanicas'
-  - editarPemp y editarCarretilla: campo 'departamento' añadido a los campos editables
-  - editarBobina: campo 'departamento' añadido a los campos editables
-  - Regla de deploy actualizada: por defecto solo actualizar la app nueva;
-    preguntar al usuario antes de tocar la vieja
-  - SW bumpeado a alejandra-v4.1
-
-v3.16  |  15/04/2026
-  - Fix filtrado departamentos: quitado 'OR departamento IS NULL' en getBobinas/getPemp/getCarretillas
-  - Usuarios con departamento NULL en DB actualizados a 'electrico'
-  - Aplicado en AMBAS apps (worker viejo y nuevo)
-
-v3.15  |  15/04/2026
-  - Migración completa a nueva cuenta Cloudflare (padilla585.projects)
-  - Nueva app: https://padilla585projects.github.io/Alejandra-APP/
-  - Nuevo worker: alejandra-app-api.alejandra-app.workers.dev
-  - Nueva DB: alejandra-db (415 filas migradas)
-  - App vieja restaurada apuntando a worker viejo (gestibobina-proxy)
-  - Botón ⚠️ Resetear sesión y caché en Ajustes → Sistema
-  - SW: al actualizar borra URL guardada en localStorage automáticamente
-
-v3.14  |  15/04/2026
-  - Al actualizar SW limpia URL del worker guardada en localStorage
-  - Fuerza usar siempre API_DEFAULT del código actualizado
-
-v3.13  |  15/04/2026
-  - Botón ⚠️ Resetear sesión y caché en Ajustes → Sistema
-  - Limpia localStorage + caché SW + recarga forzada
-
-v3.12  |  15/04/2026
-  - Migración a nueva cuenta Cloudflare (primera versión)
-  - URL worker actualizada a alejandra-app-api
-
-v3.11  |  15/04/2026
-  - Fix CORS: X-Token añadido a Access-Control-Allow-Headers
-  - Ajustes → Usuarios: muestra departamento de cada usuario
-  - Botón 🏢 para cambiar departamento sin borrar la cuenta
-
-v3.10  |  15/04/2026
-  - Bug #1: Icono en pantalla de departamentos invisible → fix color fondo SVG
-  - Bug #2: Seguridad siempre abre en pestaña Escáner por defecto
-  - Bug #3: Notificaciones Telegram → await en todos los sendTelegram sueltos
-  - Bug #4: cargarCatalogos() llamado también en ruta Seguridad
-             (desplegables inventario seg ahora cargan correctamente)
-  - Bug #5/6: Pestaña '↩ Dev.' recuperada con escáner QR+OCR integrado
-               → busca en _stockItems, muestra ficha, confirma devolución
-  - Bug #7: Botón 🗑️ Borrar en lista de sugerencias (superadmin)
-  - Bug #8: getAuth ahora async y valida X-Token contra tabla sesiones D1
-             → tokens generados en login ahora realmente autentican cada petición
-             → fallback legacy headers mantenido para compatibilidad
-  - DB: tabla sesiones creada (migrate_sesiones.sql ejecutado)
-  - SW: v3.10
-
-v3.9  |  15/04/2026
-  - Sistema de login multi-dispositivo con tokens D1:
-    · Login genera un token único (64 hex) y lo guarda en tabla sesiones (D1)
-    · El token se almacena en localStorage (en lugar del código de acceso)
-    · Todas las peticiones API usan header X-Token en lugar de X-Admin-Code
-    · Worker: getAuth() valida token contra D1 → devuelve rol/obra/depto
-    · /logout elimina el token de D1 (sesión completamente invalidada)
-    · Fallback legacy: si no hay token, sigue usando headers antiguos
-    · Tabla sesiones creada en D1 (estructura en migrate_sesiones.sql)
-    · Compatible 100% con todos los roles: superadmin, encargado, operario
-    · SW bumpeado a v3.9
-  - Deploy: worker.js + index.html + sw.js actualizados en GitHub y Cloudflare
+[versiones anteriores v4.79 y menores — ver git log para detalle]
 
 ================================================================================
-  ESTADO ACTUAL — QUÉ FUNCIONA
+  DATA FIXES EN D1 (sin cambio de versión)
 ================================================================================
 
-Backend (worker.js):
-  ✅ CRUD bobinas, PEMP, carretillas (crear, editar, borrar, devolver, transferir)
-  ✅ Auth por roles y multi-obra
-  ✅ Sesiones con tokens en D1 (/verificar genera token, /logout lo elimina)
-  ✅ Filtrado por departamento en todas las consultas
-  ✅ Fechas automáticas (entrada, devolución, avería, reparación)
-  ✅ Catálogos: proveedores, tipos cable, tipos PEMP, tipos carretilla, energías
-  ✅ Sugerencias (CRUD completo)
-  ✅ Logs guardados en D1
-  ✅ Google Sheets sync por pestañas departamentales
-  ✅ Notificaciones Telegram
-  ✅ Buscar matrícula cross-dept (/buscar-maquina)
-  ✅ Inventario Seguridad (/inventario-seg, /buscar-item-seg, /tipos-material-seg)
-  ✅ Backup JSON
-  ✅ Estadísticas (/stats)
-
-Frontend (index.html + sw.js):
-  ✅ Login multi-dispositivo con token (funciona desde cualquier navegador/móvil)
-  ✅ Login persistente con localStorage (guarda token, no el código de acceso)
-  ✅ PWA instalable (manifest, sw, icons)
-  ✅ Selector de departamento para superadmin
-  ✅ Header compacto sin solapamientos
-  ✅ LED de conexión siempre activo (chequeo cada 30s)
-  ✅ Navegación por módulos según departamento
-  ✅ OCR con Gemini + recorte de frame
-  ✅ Escaneo QR con jsQR
-  ✅ Exportar Excel completo
-  ✅ Ajustes en 5 pestañas
-  ✅ Badge ideas sin leer (superadmin)
-  ✅ Auto-actualización de caché al nuevo SW
-  ✅ Inventario Seguridad: escáner + buscador + gestión de stock
-  ✅ Seguridad: pantalla con 2 pestañas (Escáner / Inventario)
+  24/04/2026:
+    - BUG-158: UPDATE carpetas SET obra_id=1 WHERE empresa_id=1 AND obra_id=11 (5 carpetas)
+    - BUG-161: ALTER TABLE carpetas ADD COLUMN parent_id INTEGER
+    - BUG-161: CREATE TABLE docs_notas (...)
+    - Sugerencias 159-164: UPDATE sugerencias SET estado='resuelto' WHERE id IN (159..164)
 
 ================================================================================
-  PENDIENTE / FUTURAS ACTUALIZACIONES
+  PENDIENTES ACTIVOS
 ================================================================================
 
-[ MULTI-TENANT — SOLO APP NUEVA ]
+  Ver IDEAS_PENDIENTES.txt para la lista completa y actualizada.
 
-  Fase 1 ✅ v4.0:  tabla empresas, empresa_id en todas las tablas, queries filtradas
-  Fase 2 ✅ v4.6:  login por email + PBKDF2, rol empresa_admin
-  Fase 3 ✅ v4.6:  wizard registro 3 pasos, /empresas/registro, panel Empresa en Ajustes
-  Fase 4 PENDIENTE: Almacenamiento R2 (fotos, firma digital, PDFs albarán)
-  Fase 5 PENDIENTE: Facturación Stripe (basic/pro/enterprise) — para el futuro
-
-[ SUGERENCIAS PENDIENTES — APP VIEJA (gestibobina-db) ]
-
-  ERRORES (ninguno pendiente — todos resueltos hasta v4.17)
-
-  MEJORAS:
-  #44 ✅ - Ficha de máquina a pantalla completa (v4.12)
-  #38 ✅ - Ajustes → cerrar sesión a todos / ver quién está conectado (v4.12)
-  #54 ✅ - Editar datos en inventario de seguridad (v4.12 — fix #51)
-  #52 ✅ - Botón "← Atrás" en header + botón físico Android (v4.17 — solo nueva)
-  #53 ✅ - Filtrar sugerencias por departamento (v4.17 — solo nueva)
-  #15 ✅ - Pedidos en parte eléctrica + sync Sheets Elec-Pedidos (v4.18 — solo nueva)
-
-  NUEVAS FUNCIONALIDADES:
-  #39 - Gestión de herramientas por departamento (escáner código + catálogo)
-  #34 - Apartado para planos, fotos, documentos de obra
-  #33 - Departamento Especiales/Teleco
-  #29 - Control de horas para contratas y personal
-
-  OTRO:
-  #9  - App consume mucha batería (pendiente investigar causa)
-
-[ GRANDES FEATURES PENDIENTES ]
-
-  - Historial completo por activo (toda la vida de una bobina/máquina)
-  - Chat interno entre usuarios (D1 + polling 15s, pendiente definir alcance)
-  - Fotos / firma digital / albarán PDF (depende de R2)
-  - Reorganizar departamento Seguridad (pendiente definir con usuario)
+  Resumen rápido pendientes importantes:
+    [ ] NEW-10 — Planes de precios (futuro, cuando haya clientes reales)
 
 ================================================================================
-  BUGS CONOCIDOS / A VERIFICAR
+  NOTAS TÉCNICAS IMPORTANTES
 ================================================================================
 
-  - Dropdowns del scan: verificar que catálogos cargan bien en producción
-  - Google Sheets: nombre de pestaña con caracteres especiales puede fallar
-  - worker.js app vieja tiene cambios sin commitear (funciones multi-tenant
-    de la nueva app que se colaron — no afectan al funcionamiento)
+  - docs_dept.carpeta_id: en el schema original era NOT NULL, pero el worker
+    inserta NULL para archivos en raíz (MEJ-144). SQLite acepta esto por compatibilidad.
+    No intentar hacer ALTER COLUMN para cambiar la constraint.
 
-================================================================================
-  DECISIONES TÉCNICAS IMPORTANTES
-================================================================================
+  - El worker usa 'parent_id' (no 'padre_id') en todas las queries de carpetas.
 
-  - ESTADO_APP.txt se actualiza automáticamente después de cada cambio,
-    sin necesidad de que el usuario lo pida
-  - version.json: archivo en cada repo que se actualiza con cada versión.
-    La app lo lee al arrancar (cache:'no-store') y si la versión difiere,
-    limpia caches y recarga sola. ACTUALIZAR SIEMPRE junto con sw.js/index.html.
-  - empresa_admin: rol de admin de empresa propia. Tiene acceso total a sus
-    datos (obras, usuarios, inventario, sesiones, ideas) pero no a config global
-  - Método de trabajo: EDITS QUIRÚRGICOS sobre archivos existentes,
-    NUNCA reescritura completa
-  - sendBeacon debe usar Blob({type:'application/json'}) — si se pasa
-    string plano, el Content-Type es text/plain y el worker no lo parsea
-  - batchUpdate de Sheets: separar add y delete en dos peticiones distintas
-  - Nombres de pestañas Sheets: solo ASCII (sin emojis) para evitar
-    problemas de encoding en la URL
-  - SW: mecanismo completo de auto-actualización (v3.4):
-    · skipWaiting + clients.claim + postMessage SW_ACTUALIZADO
-    · La página escucha message + controllerchange + visibilitychange
-    · Si hay SW en waiting al cargar → SKIP_WAITING inmediato
-    · Reload con timestamp para evitar HTTP cache
-  - Seguridad: nunca guardar ADMIN_CODE en el código, siempre en
-    Cloudflare Secrets
-  - Auth v3.9: sistema de tokens en D1. getAuth() prueba X-Token primero,
-    luego fallback a headers legacy. crearSesion() inserta en tabla sesiones.
-    cerrarSesionServidor() borra el token. Frontend guarda token (no código).
+  - chatFiltroBar: la barra de filtros Mi obra/General solo se muestra si el
+    usuario tiene obra_id asignada. _chatActualizarFiltroUI() lo gestiona.
 
-================================================================================
-  ACCESO A BASES DE DATOS
-================================================================================
-
-  DB VIEJA (gestibobina-db):
-    - Acceso via MCP Cloudflare (cuenta padilla585@gmail.com, ya conectada)
-    - ID: eac9f2d2-0845-409c-9032-109c563d7eec
-
-  DB NUEVA (alejandra-db):
-    - Acceso via API REST con token en NUEVA_CUENTA.txt
-    - Comando: curl -X POST "https://api.cloudflare.com/client/v4/accounts/
-      d65ead2b2967bf68ff3848a36cd7b1b4/d1/database/
-      0c9eccde-78f1-476d-ac68-bf452bec0c62/query"
-      -H "Authorization: Bearer <token de NUEVA_CUENTA.txt>"
-      -H "Content-Type: application/json"
-      -d "{\"sql\":\"...\"}"
-
-================================================================================
-  NOTAS DE CONVERSACIÓN
-================================================================================
-
-  [15/04/2026] — Se propone crear este archivo de control para llevar
-  seguimiento de cambios, estado y próximas features. Así Claude puede
-  leerlo al inicio de cada sesión y ponerse al día sin perder contexto.
-
-  [15/04/2026] — Sesión de trabajo: se implementó el sistema de login
-  multi-dispositivo (v3.9). El problema era que localStorage es local al
-  navegador, por lo que los usuarios no podían entrar desde otros dispositivos.
-  Solución: tokens únicos en D1. Deploy completo en Cloudflare + GitHub.
-  Próximo trabajo sugerido: historial completo por activo, o chat interno.
+  - El chat es accesible desde:
+    · Botón 💬 en el header (todos los usuarios logados)
+    · Tarjeta en el home (eléctrico, mecánicas, seguridad)
+    · Pestaña "💬 Chat" en Personal
 
 ================================================================================
