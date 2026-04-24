@@ -1,7 +1,7 @@
 ================================================================================
   ALEJANDRA APP — IDEAS, MEJORAS Y ERRORES PENDIENTES
   Recogidos de: Canal Telegram @AlejandraAPP_bot
-  Última actualización: 23/04/2026 — nuevos bugs/mejoras de hoy + marcados resueltos
+  Última actualización: 24/04/2026 — chat filtro obra + notificaciones navegador (v4.93)
 
   ⚠️  LEER ESTE ARCHIVO ANTES DE CUALQUIER SESIÓN DE CODIFICACIÓN.
   ⚠️  Marcar como [HECHO vX.XX] cuando se implemente. No borrar las líneas.
@@ -550,10 +550,13 @@ LEYENDA DE ESTADO:
     · docsCompartirCarpeta() implementado en v4.80.
     · Reportado: 22/04/2026 — Adrian, CPD Getafe
 
-[✓] NEW-08 — Chat interno entre empleados de la misma empresa  [✓ HECHO v4.91]
+[✓] NEW-08 — Chat interno entre empleados de la misma empresa  [✓ HECHO v4.91 + ampliado v4.93]
     · Panel 💬 en header con badge de mensajes nuevos
     · Burbujas tipo WhatsApp + polling 15s cuando abierto
     · Worker: GET/POST/DELETE /chat; tabla D1 chat_mensajes
+    · v4.93: filtro por obra — botones "🏗️ Mi obra" / "🌐 General"; worker acepta ?obra_id
+    · v4.93: notificaciones del navegador cuando la app está en background
+    · v4.93: SW maneja notificationclick para enfocar la app al pulsar la notificación
     · Reportado: 18/04/2026 — Adrian, CPD Getafe
 
 [✓] NEW-09 — Sistema de notificaciones in-app  [HECHO v4.38]

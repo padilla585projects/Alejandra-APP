@@ -1,7 +1,7 @@
 ================================================================================
   ALEJANDRA APP — REFERENCIA COMPLETA DEL PROYECTO
   Leer este archivo AL INICIO de cada sesión para continuar sin problemas.
-  Última actualización: 23/04/2026
+  Última actualización: 24/04/2026
   ⚠️  NORMA: actualizar ESTE archivo + ESTADO_APP.txt después de CADA cambio.
 ================================================================================
 
@@ -81,6 +81,10 @@ REGLA DE DEPLOY (actualizada 23/04/2026):
   - En todos los casos: subir versión + actualizar txts + deploy worker si toca + git push
 
 ÚLTIMO CAMBIO REALIZADO:
+  v4.93 [nueva] — 24/04/2026
+  · Chat: filtro por obra (botones "🏗️ Mi obra" / "🌐 General", worker acepta ?obra_id)
+  · Chat: notificaciones del navegador (Notification API + SW notificationclick)
+
   v4.92 [nueva] — 23/04/2026
   · NEW-12: NFC en Escanear (leer + escribir tags, Chrome Android 89+)
 

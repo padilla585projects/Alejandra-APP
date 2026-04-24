@@ -4,8 +4,8 @@
   Ruta local: <RUTA_BASE>\Bobinaap
 ================================================================================
 
-ÚLTIMA ACTUALIZACIÓN: 23/04/2026
-VERSIÓN ACTUAL: v4.19 app vieja | v4.92 app nueva
+ÚLTIMA ACTUALIZACIÓN: 24/04/2026
+VERSIÓN ACTUAL: v4.19 app vieja | v4.93 app nueva
 
 ⚠️  ANTES DE CODIFICAR: leer NuevaApp/IDEAS_PENDIENTES.txt
     Lista completa de bugs activos, mejoras y features pendientes.
@@ -91,6 +91,20 @@ Backup local: <RUTA_BASE>\backup_db_20260413.sql
 ================================================================================
   HISTORIAL DE VERSIONES
 ================================================================================
+
+v4.93  |  24/04/2026  [SOLO NUEVA APP]
+  - Chat: filtro por obra
+    · Barra de dos botones "🏗️ Mi obra" / "🌐 General" en el panel de chat
+    · Si el usuario tiene obra seleccionada, el filtro por defecto es "Mi obra"
+    · Sin obra asignada → filtro forzado a "General" (barra oculta)
+    · Worker GET /chat ahora acepta ?obra_id=X para filtrar mensajes por obra
+    · chatPoll y checkChatBadge también respetan el filtro activo
+  - Chat: notificaciones del navegador
+    · Al hacer login pide permiso de notificaciones (Notification.permission)
+    · Si el tab está en background y llegan mensajes nuevos → notificación nativa
+    · Clicar la notificación enfoca la pestaña de la app (SW notificationclick)
+    · Tag "alejandra-chat" evita acumular notificaciones (la nueva reemplaza la anterior)
+  - Worker y GitHub actualizados ✅
 
 v4.92  |  23/04/2026  [SOLO NUEVA APP]
   - NEW-12: soporte NFC en pestaña Escanear
