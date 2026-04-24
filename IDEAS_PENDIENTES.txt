@@ -1,7 +1,7 @@
 ================================================================================
   ALEJANDRA APP — IDEAS, MEJORAS Y ERRORES PENDIENTES
   Recogidos de: Canal Telegram @AlejandraAPP_bot
-  Última actualización: 24/04/2026 — BUG-164 resuelto v5.01: chat no mostraba mensajes enviados
+  Última actualización: 24/04/2026 — NEW-26 hecho v5.02: control combustible/carga PEMP y carretillas
 
   ⚠️  LEER ESTE ARCHIVO ANTES DE CUALQUIER SESIÓN DE CODIFICACIÓN.
   ⚠️  Marcar como [HECHO vX.XX] cuando se implemente. No borrar las líneas.
@@ -759,7 +759,7 @@ LEYENDA DE ESTADO:
     · En la ficha del pedido aparece el albarán adjunto descargable.
     · Añadido: 24/04/2026 — Adrian
 
-[ ] NEW-26 — Control de combustible y carga de máquinas  [PENDIENTE]
+[✓] NEW-26 — Control de combustible y carga de máquinas  [HECHO v5.02]
     · En cada PEMP/carretilla: registrar repostajes (combustible en litros) o recargas (batería en %).
     · Historial con fecha, cantidad, quién lo hizo y coste opcional.
     · Gasto acumulado por equipo y por obra (mes / total).

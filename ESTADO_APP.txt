@@ -5,7 +5,7 @@
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 24/04/2026
-VERSIÓN ACTUAL APP NUEVA: v5.01
+VERSIÓN ACTUAL APP NUEVA: v5.02
 VERSIÓN ACTUAL APP VIEJA: v4.19 (congelada — solo recibe bugs críticos)
 
 ⚠️  ANTES DE CODIFICAR: leer NuevaApp/IDEAS_PENDIENTES.txt
@@ -121,6 +121,16 @@ ANTES DE TOCAR CUALQUIER ARCHIVO, VERIFICAR QUE TODO ESTÁ AL DÍA:
 ================================================================================
   HISTORIAL DE VERSIONES — RECIENTES
 ================================================================================
+
+v5.02  |  24/04/2026  [SOLO NUEVA APP]
+  - NEW-26: control de combustible y carga de máquinas
+    · D1: tabla repostajes (empresa_id, equipo_tipo, equipo_id, tipo, cantidad, unidad, coste...)
+    · Botón ⛽/🔋 en tarjetas PEMP y carretillas (auto según tipo de energía)
+    · Modal: registrar repostaje/carga con cantidad, unidad, coste y notas
+    · Modal: resumen mes actual vs total histórico
+    · Modal: historial de últimos 15 repostajes
+    · Worker: Telegram al registrar repostaje con coste
+  - Worker y GitHub actualizados ✅
 
 v5.01  |  24/04/2026  [SOLO NUEVA APP]
   - BUG-164: chat no mostraba mensajes enviados
@@ -269,7 +279,8 @@ v4.80  |  22/04/2026  [SOLO NUEVA APP]
 
   ORDEN DE IMPLEMENTACIÓN ACORDADO (de más fácil a más difícil):
     [✓] NEW-24 — Alertas stock mínimo             → HECHO v5.00
-    [ ] NEW-26 — Control combustible/carga         → SIGUIENTE
+    [✓] NEW-26 — Control combustible/carga         → HECHO v5.02
+    [ ] NEW-25 — Escáner albaranes                 → SIGUIENTE
     [ ] NEW-25 — Escáner albaranes
     [ ] NEW-27 — Dashboard de obra (opción C)
     [ ] NEW-22 — Registro de incidencias
