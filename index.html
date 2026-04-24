@@ -1404,6 +1404,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
             <button class="btn-export" onclick="exportarPDF()" style="font-size:13px">🖨️ PDF</button>
             <button class="btn-export" onclick="compartirResumen()" style="font-size:13px">📤 Compartir</button>
           </div>
+          <button class="btn-primary btn-secondary" style="font-size:13px;margin-top:8px" onclick="buscarActualizacion()">🔄 Buscar actualización</button>
           <button class="btn-primary btn-secondary" style="font-size:13px;margin-top:8px" onclick="limpiarCache()">🗑 Limpiar caché SW</button>
           <button class="btn-primary btn-secondary" style="font-size:13px;margin-top:8px;background:var(--red)" onclick="resetSesionCompleto()">⚠️ Resetear sesión y caché</button>
         </div>
@@ -2816,8 +2817,8 @@ async function mostrarSelectorObra(dept) {
     grid.innerHTML = `
       <div onclick="seleccionarObraVisual(null, null)"
         style="display:flex;align-items:center;gap:14px;padding:16px;background:var(--surface);border:2px solid ${!s?.obra_id ? 'var(--accent)' : 'var(--border)'};border-radius:14px;cursor:pointer">
-        <span style="font-size:28px">🔲</span>
-        <div><div style="font-weight:700;font-size:15px;color:var(--text)">Sin obra</div>
+        <span style="font-size:28px">🏗️</span>
+        <div><div style="font-weight:700;font-size:15px;color:var(--text)">Todas las obras</div>
         <div style="font-size:12px;color:var(--muted)">Ver datos de todas las obras</div></div>
       </div>
       ${obras.map(o => `
@@ -6912,7 +6913,7 @@ async function checkNotifBadge() {
   count += (Array.isArray(peds)  ? peds  : []).filter(p => (p.created_at||'') >= hace48h && (p.created_at||'') > lastSeen).length;
   count += (Array.isArray(pemp)  ? pemp  : []).filter(p => (p.fecha_averia||p.created_at||'') > lastSeen).length;
   count += (Array.isArray(carrs) ? carrs : []).filter(c => (c.fecha_averia||c.created_at||'') > lastSeen).length;
-  count += (pend.pendientes || []).length;
+  count += (pend.pendientes || []).filter(u => (u.created_at||'') > lastSeen).length;
   const badge = document.getElementById('notifBadge');
   if (badge) { badge.style.display = count > 0 ? 'flex' : 'none'; badge.textContent = count > 9 ? '9+' : String(count); }
   cargarBadgeIdeas();
@@ -6991,6 +6992,31 @@ async function forzarSync() {
     if (res.ok) toast('✅ Sincronización completada', 'ok');
     else toast('⚠️ El worker no tiene endpoint de sync manual', 'err');
   } catch { toast('❌ Error de conexión', 'err'); }
+}
+
+async function buscarActualizacion() {
+  try {
+    toast('🔄 Comprobando versión...', '');
+    // Forzar actualización del SW
+    const reg = await navigator.serviceWorker?.getRegistration();
+    if (reg) await reg.update();
+    // Comprobar version.json fresco
+    const res = await fetch('version.json?_=' + Date.now(), { cache: 'no-store' });
+    if (!res.ok) { toast('⚠️ No se pudo comprobar la versión', 'err'); return; }
+    const { v } = await res.json();
+    if (!v || v === APP_VERSION) {
+      toast('✅ Ya tienes la última versión (v' + APP_VERSION + ')', 'ok');
+    } else {
+      toast('📥 Nueva versión disponible (v' + v + '). Actualizando...', 'ok');
+      if ('caches' in window) {
+        const keys = await caches.keys();
+        await Promise.all(keys.map(k => caches.delete(k)));
+      }
+      localStorage.removeItem('alejandra_api');
+      localStorage.setItem('alejandra_just_updated', v);
+      setTimeout(() => location.replace(location.pathname + '?r=' + Date.now()), 800);
+    }
+  } catch { toast('❌ Error al buscar actualización', 'err'); }
 }
 
 async function limpiarCache() {
@@ -7195,7 +7221,7 @@ async function cargarObrasSelectUsuario() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '4.95';
+const APP_VERSION = '4.96';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -7303,7 +7329,7 @@ if ('serviceWorker' in navigator) {
     location.replace(location.pathname + '?r=' + Date.now());
   }
 
-  navigator.serviceWorker.register('sw.js').then(reg => {
+  navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(reg => {
     reg.update();
     // Un solo chequeo SW cada 5 min + visibilitychange (evita radio wake-ups — BUG-009)
 

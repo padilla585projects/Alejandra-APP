@@ -1,7 +1,7 @@
 ================================================================================
   ALEJANDRA APP — IDEAS, MEJORAS Y ERRORES PENDIENTES
   Recogidos de: Canal Telegram @AlejandraAPP_bot
-  Última actualización: 24/04/2026 — selector obra tras empresa, no tras dept (v4.95)
+  Última actualización: 24/04/2026 — BUG-162/163/160 parcial (v4.96)
 
   ⚠️  LEER ESTE ARCHIVO ANTES DE CUALQUIER SESIÓN DE CODIFICACIÓN.
   ⚠️  Marcar como [HECHO vX.XX] cuando se implemente. No borrar las líneas.
@@ -221,6 +221,37 @@ LEYENDA DE ESTADO:
       el usuario seguía sin ver la obra hasta hacer logout+login.
       Fix: UPDATE sesiones SET obra_id, obra_nombre WHERE usuario_id tras cada cambio.
     · Reportado: 23/04/2026 — Alberto Martínez
+
+[✓] BUG-159 — Selector de obra aparecía después de departamento en vez de después de empresa  [HECHO v4.95]
+    · El flujo correcto es: empresa → obra → departamentos. Antes salía tras cada dept.
+    · Fix v4.95: selector de obra solo se muestra tras seleccionar empresa y si obra_id=null.
+      SA: flujo empresa→obra→depts. EA: igual si aún no tiene obra asignada.
+    · Reportado: 24/04/2026 — usuario (sugerencia #159 BD)
+
+[~] BUG-160 — App no se actualiza sola / usuarios no ven mejoras nuevas  [PARCIAL v4.96]
+    · Los usuarios informan de que no ven nuevas versiones (ej: chat) aunque estén desplegadas.
+    · Fix v4.96 (parcial):
+      (1) register('sw.js', { updateViaCache: 'none' }) → siempre descarga SW fresco, sin caché HTTP.
+      (2) Nuevo botón 🔄 Buscar actualización en Ajustes→Sistema → el usuario puede forzarlo manualmente.
+    · Pendiente: investigar si hay algún caso edge donde checkVersionAndUpdate falle silenciosamente.
+    · Reportado: 24/04/2026 — varios usuarios (sugerencias #160 y #161 BD)
+
+[ ] BUG-161 — Documentos siguen sin aparecer para algunos usuarios  [pendiente investigar]
+    · Tras el fix de v4.94 (BUG-158, obra_id incorrecta en carpetas), aún hay usuarios que
+      no ven documentos. Posible causa: sesión cacheada, obra no asignada, o datos adicionales
+      con obra_id incorrecta que no se corrigieron en el fix anterior.
+    · Reportado: 24/04/2026 — usuario (sugerencia #162 BD)
+
+[✓] BUG-162 — Selector de obras: primera opción dice "Sin obras" en vez de "Todas las obras"  [HECHO v4.96]
+    · En mostrarSelectorObra(), la tarjeta "Sin obra" mostraba 🔲 + "Sin obra".
+    · Fix: cambiado texto a "Todas las obras" e icono a 🏗️, coherente con el selector.
+    · Reportado: 24/04/2026 — usuario (sugerencia #163 BD)
+
+[✓] BUG-163 — Notificaciones borradas vuelven a aparecer al reiniciar la app  [HECHO v4.96]
+    · checkNotifBadge() contaba usuarios pendientes sin filtrar por lastSeen →
+      el badge siempre aparecía si había algún pendiente, ignorando el NOTIF_SEEN_KEY.
+    · Fix: añadido filtro `(u.created_at||'') > lastSeen` al contador de pendientes.
+    · Reportado: 24/04/2026 — usuario (sugerencia #164 BD)
 
 ================================================================================
   🔧 MEJORAS (solo app nueva, salvo indicación contraria)
