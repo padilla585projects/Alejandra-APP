@@ -1,10 +1,11 @@
 {
   "worker": "alejandra-app-api",
-  "version": "v4.93",
+  "version": "v5.08",
   "deployed": "24/04/2026",
   "url": "https://alejandra-app-api.alejandra-app.workers.dev",
   "account_id": "d65ead2b2967bf68ff3848a36cd7b1b4",
   "d1_binding": "alejandra-db (0c9eccde-78f1-476d-ac68-bf452bec0c62)",
   "r2_binding": "alejandra-app-files",
-  "changes": "v4.93: chat filtro por obra (obra_id param en GET /chat) + notificaciones navegador"
+  "version_id": "e2c09db0-a999-4ea1-941d-38f071490fce",
+  "changes": "v5.08: worker actualizado completo — /obra-dashboard, /festivos, /calendario, /incidencias, /herramientas, /fichajes, /personal/* y todos los endpoints nuevos activos"
 }
