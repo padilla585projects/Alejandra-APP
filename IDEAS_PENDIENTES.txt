@@ -1,7 +1,7 @@
 ================================================================================
   ALEJANDRA APP — IDEAS, MEJORAS Y ERRORES PENDIENTES
   Recogidos de: Canal Telegram @AlejandraAPP_bot
-  Última actualización: 24/04/2026 — fix docs navegación/recarga + badges notif/ideas (v4.94)
+  Última actualización: 24/04/2026 — selector obra tras empresa, no tras dept (v4.95)
 
   ⚠️  LEER ESTE ARCHIVO ANTES DE CUALQUIER SESIÓN DE CODIFICACIÓN.
   ⚠️  Marcar como [HECHO vX.XX] cuando se implemente. No borrar las líneas.
@@ -526,10 +526,12 @@ LEYENDA DE ESTADO:
     · Permitir subir archivos a nivel raíz de obra/departamento sin carpeta obligatoria.
     · Reportado: 22/04/2026 — Adrian, CPD Getafe
 
-[✓] MEJ-149 — Panel de selección de obra tipo el selector de empresa  [HECHO v4.86]
+[✓] MEJ-149 — Panel de selección de obra tipo el selector de empresa  [HECHO v4.86 → mejorado v4.95]
     · Después del selector de empresa (y/o de departamento), mostrar un panel visual
       para elegir la obra activa con cards grandes, igual que la pantalla de empresa.
     · La obra elegida sería la activa por defecto hasta que se cambie.
+    · v4.95 (fix #159): El selector de obra ahora aparece TRAS seleccionar empresa (no tras cada dept).
+      Solo se muestra si no hay obra elegida. SA: flujo empresa→obra→depts. EA: solo si obra_id=null.
     · Reportado: 22/04/2026 — Adrian, CPD Getafe
 
 [✓] MEJ-155 — Docs: subcarpetas dentro de carpetas  [HECHO v4.86]

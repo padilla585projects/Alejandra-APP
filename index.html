@@ -2795,8 +2795,8 @@ function seleccionarDepto(dept) {
   renderHeader();
   renderAjustesInfo();
   setupHomeModules();
-  // MEJ-149: mostrar selector visual de obra para roles que pueden cambiarla
-  const puedeElegirObra = s.rol === 'superadmin' || s.rol === 'empresa_admin';
+  // Mostrar selector de obra solo si aún no hay obra elegida (se elige una vez tras empresa)
+  const puedeElegirObra = (s.rol === 'superadmin' || s.rol === 'empresa_admin') && !s.obra_id;
   if (puedeElegirObra) {
     mostrarSelectorObra(dept);
     return;
@@ -2846,6 +2846,8 @@ function seleccionarObraVisual(obraId, obraNombre, obraCodigo) {
   const dept = _pendingDept || s.departamento;
   _pendingDept = null;
   if (document.getElementById('screenDocs')?.classList.contains('active')) docsCargar('screenDocsPanel');
+  // Si no hay dept pendiente (venimos de selección de empresa), ir directamente a departamentos
+  if (!dept) { showScreen('dept'); return; }
   _navegarTrasObra(dept);
 }
 
@@ -2983,9 +2985,17 @@ async function seleccionarEmpresaAdmin(empresa_id, empresa_nombre) {
     if (!res.ok) return toast('❌ Error al seleccionar empresa', 'err');
   } catch { return toast('❌ Error de conexión', 'err'); }
   const s = getSession();
-  if (s) { s.empresa_id = empresa_id; s.empresa_nombre = empresa_nombre; s.departamento = null; setSession(s); }
-  showScreen('dept');
+  if (s) {
+    s.empresa_id = empresa_id;
+    s.empresa_nombre = empresa_nombre;
+    s.departamento = null;
+    s.obra_id = null;
+    s.obra_nombre = null;
+    setSession(s);
+  }
   renderHeader();
+  // Mostrar selector de obra antes de ir a departamentos
+  mostrarSelectorObra(null);
 }
 
 async function cargarObrasHeader() {
@@ -7185,7 +7195,7 @@ async function cargarObrasSelectUsuario() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '4.94';
+const APP_VERSION = '4.95';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes

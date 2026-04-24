@@ -5,7 +5,7 @@
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 24/04/2026
-VERSIÓN ACTUAL: v4.19 app vieja | v4.94 app nueva
+VERSIÓN ACTUAL: v4.19 app vieja | v4.95 app nueva
 
 ⚠️  ANTES DE CODIFICAR: leer NuevaApp/IDEAS_PENDIENTES.txt
     Lista completa de bugs activos, mejoras y features pendientes.
@@ -91,6 +91,12 @@ Backup local: <RUTA_BASE>\backup_db_20260413.sql
 ================================================================================
   HISTORIAL DE VERSIONES
 ================================================================================
+
+v4.95  |  24/04/2026  [SOLO NUEVA APP]
+  - Fix #159: selector de obra aparece tras elegir empresa, no al cambiar de dept
+    · seleccionarEmpresaAdmin → limpia obra + muestra screenObraSel antes de ir a depts
+    · seleccionarDepto → solo muestra selector si obra_id es null (una sola vez)
+    · seleccionarObraVisual → si no hay dept pendiente va a screenDept directamente
 
 v4.94  |  24/04/2026  [SOLO NUEVA APP]
   - Fix #158: carpetas Docs de Levitec tenían obra_id=11 (Edison) → corregido a obra_id=1 en D1
