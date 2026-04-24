@@ -352,9 +352,6 @@ v4.80  |  22/04/2026  [SOLO NUEVA APP]
     [✓] NEW-22 — Registro de incidencias           → HECHO v5.06
     [✓] NEW-13 — Calendario de obra                → HECHO v5.07
     [ ] NEW-17 — Galería de fotos por obra         → SIGUIENTE
-    [ ] NEW-22 — Registro de incidencias
-    [ ] NEW-13 — Calendario de obra
-    [ ] NEW-17 — Galería de fotos por obra
     [ ] NEW-21 — Checklist pre-uso equipos
     [ ] NEW-15 — Mantenimiento preventivo equipos
     [ ] NEW-23 — Control EPIs por trabajador
@@ -364,6 +361,41 @@ v4.80  |  22/04/2026  [SOLO NUEVA APP]
     [ ] NEW-28 — Comparativa entre obras
     [ ] NEW-18 — Informe automático Telegram (Cron)
     [ ] NEW-10 — Planes de precios (futuro, cuando haya clientes reales)
+
+================================================================================
+  RESUMEN SESIÓN 24/04/2026 — PARA EL PRÓXIMO CHAT
+================================================================================
+
+  Esta sesión implementó las siguientes features (de más fácil a más difícil):
+
+  v5.03 — NEW-25: Escáner de albaranes
+    · Múltiples albaranes por pedido. R2 + tabla albaranes. Todos los roles suben.
+    · Botón 📎 en tarjeta pedido. Galería thumbnails/PDF. apiCallRaw() añadida.
+
+  v5.04/5.05 — NEW-27: Dashboard de obra
+    · Tarjeta 📊 Resumen en home (electrico/mecanicas). /obra-dashboard endpoint.
+    · KPIs: fichajes hoy, equipos mantenimiento, herramientas fuera, pedidos
+      pendientes, alertas stock, incidencias abiertas, próximo evento.
+    · Seguridad: tab "📊 Resumen" propio. Personal: mini KPI bar en tab Hoy.
+
+  v5.06 — NEW-22: Registro de incidencias con fotos
+    · Tablas incidencias + incidencia_fotos. Todos los depts.
+    · Tipos/gravedad/estado. Fotos en R2. Telegram alta gravedad y al resolver.
+    · Tarjeta 🚨 en home. screenIncidencias filtrable.
+
+  v5.07 — NEW-13: Calendario de obra
+    · Tabla eventos_calendario. ALTER obras ADD comunidad (default 'MD').
+    · /festivos proxy Nager.Date API (nacionales + CC.AA., auto-anual).
+    · Grid mensual, festivos en rojo, hoy en índigo, dots en días con eventos.
+    · Cron 7am: Telegram eventos del día + recordatorios anticipados.
+    · Tarjeta 📅 en home. Dashboard 📅 Próximo evento conectado.
+
+  ESTADO ACTUAL: v5.07, worker desplegado, GitHub en sync.
+  SIGUIENTE: NEW-17 — Galería de fotos por obra.
+
+  REGLA CLAVE (recordar al próximo chat):
+    Siempre explicar el plan técnico y esperar confirmación del usuario
+    ANTES de tocar cualquier archivo de código.
 
 ================================================================================
   DECISIONES DE DISEÑO ACORDADAS (no cambiar sin consultar)
