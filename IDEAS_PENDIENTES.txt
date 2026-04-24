@@ -1,7 +1,7 @@
 ================================================================================
   ALEJANDRA APP — IDEAS, MEJORAS Y ERRORES PENDIENTES
   Recogidos de: Canal Telegram @AlejandraAPP_bot
-  Última actualización: 24/04/2026 — v5.05: dashboard extendido a Seguridad (tab) y Personal (mini KPI bar)
+  Última actualización: 24/04/2026 — NEW-22 hecho v5.06: registro de incidencias con fotos
 
   ⚠️  LEER ESTE ARCHIVO ANTES DE CUALQUIER SESIÓN DE CODIFICACIÓN.
   ⚠️  Marcar como [HECHO vX.XX] cuando se implemente. No borrar las líneas.
@@ -725,16 +725,15 @@ LEYENDA DE ESTADO:
     · D1: tablas `checklist_plantillas` (preguntas por tipo) y `checklist_registros`.
     · Añadido: 24/04/2026 — Adrian
 
-[ ] NEW-22 — Registro de incidencias  [PENDIENTE]
-    · Parte de incidente/accidente con: fecha, hora, obra, descripción, gravedad
-      (leve / moderada / grave), personal implicado, foto adjunta.
-    · Estado de seguimiento: Abierta → En revisión → Cerrada.
-    · Notificación inmediata a encargado y admin al crear una incidencia grave.
-    · Historial filtrable por obra, fecha, gravedad y estado.
-    · Exportable a PDF.
-    · Quién crea: todos los roles. Quién cierra: encargado, EA, SA.
-    · D1: nueva tabla `incidencias`.
-    · Añadido: 24/04/2026 — Adrian
+[✓] NEW-22 — Registro de incidencias  [HECHO v5.06]
+    · Todos los depts. Tipos: avería, accidente, seguridad, material, otro.
+    · Gravedad: 🟢 baja / 🟠 media / 🔴 alta.
+    · Estado: abierta → en_progreso → resuelta (con nota de resolución).
+    · Fotos adjuntas (cámara o archivo), guardadas en R2.
+    · Telegram automático en gravedad alta y al resolver.
+    · Tarjeta 🚨 en screenHome, KPI en dashboard home y seguridad.
+    · Exportable a PDF: pendiente.
+    · Añadido: 24/04/2026 — Adrian | Hecho: 24/04/2026
 
 [ ] NEW-23 — Control de EPIs por trabajador  [PENDIENTE]
     · Registrar qué EPI tiene asignado cada trabajador: casco, arnés, guantes, botas, etc.

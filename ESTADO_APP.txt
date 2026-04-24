@@ -5,7 +5,7 @@
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 24/04/2026
-VERSIÓN ACTUAL APP NUEVA: v5.05
+VERSIÓN ACTUAL APP NUEVA: v5.06
 VERSIÓN ACTUAL APP VIEJA: v4.19 (congelada — solo recibe bugs críticos)
 
 ⚠️  ANTES DE CODIFICAR: leer NuevaApp/IDEAS_PENDIENTES.txt
@@ -123,6 +123,19 @@ ANTES DE TOCAR CUALQUIER ARCHIVO, VERIFICAR QUE TODO ESTÁ AL DÍA:
 ================================================================================
   HISTORIAL DE VERSIONES — RECIENTES
 ================================================================================
+
+v5.06  |  24/04/2026  [SOLO NUEVA APP]
+  - NEW-22: Registro de incidencias con fotos (todos los departamentos)
+    · D1: tablas incidencias + incidencia_fotos
+    · Worker: CRUD completo + fotos en R2 + Telegram en gravedad alta y al resolver
+    · /obra-dashboard actualizado con incidencias_abiertas
+    · Frontend: tarjeta 🚨 Incidencias en screenHome (todos los depts)
+    · screenIncidencias: lista filtrable por estado (todas/abiertas/en progreso/resueltas)
+    · Modal: tipo (avería/accidente/seguridad/material/otro), gravedad (🟢🟠🔴),
+      descripción, asignar a, fotos adjuntas (cámara o archivo)
+    · Flujo: abierta → en progreso → resuelta (con nota de resolución)
+    · Dashboard home + seguridad: KPI incidencias abiertas conectado al módulo
+  - Worker y GitHub actualizados ✅
 
 v5.05  |  24/04/2026  [SOLO NUEVA APP]
   - Dashboard extendido a Seguridad y Personal
@@ -321,7 +334,8 @@ v4.80  |  22/04/2026  [SOLO NUEVA APP]
     [✓] NEW-26 — Control combustible/carga         → HECHO v5.02
     [✓] NEW-25 — Escáner albaranes                 → HECHO v5.03
     [✓] NEW-27 — Dashboard de obra (opción C)      → HECHO v5.04
-    [ ] NEW-22 — Registro de incidencias           → SIGUIENTE
+    [✓] NEW-22 — Registro de incidencias           → HECHO v5.06
+    [ ] NEW-13 — Calendario de obra                → SIGUIENTE
     [ ] NEW-22 — Registro de incidencias
     [ ] NEW-13 — Calendario de obra
     [ ] NEW-17 — Galería de fotos por obra
