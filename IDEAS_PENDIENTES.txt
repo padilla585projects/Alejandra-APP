@@ -1,7 +1,7 @@
 ================================================================================
   ALEJANDRA APP — IDEAS, MEJORAS Y ERRORES PENDIENTES
   Recogidos de: Canal Telegram @AlejandraAPP_bot
-  Última actualización: 24/04/2026 — NEW-26 hecho v5.02: control combustible/carga PEMP y carretillas
+  Última actualización: 24/04/2026 — NEW-25 hecho v5.03: escáner de albaranes por pedido
 
   ⚠️  LEER ESTE ARCHIVO ANTES DE CUALQUIER SESIÓN DE CODIFICACIÓN.
   ⚠️  Marcar como [HECHO vX.XX] cuando se implemente. No borrar las líneas.
@@ -752,12 +752,15 @@ LEYENDA DE ESTADO:
     · Visible en el home como tarjeta o badge sobre el módulo correspondiente.
     · Añadido: 24/04/2026 — Adrian
 
-[ ] NEW-25 — Escáner de albaranes  [PENDIENTE]
-    · Al recibir material, el encargado hace foto del albarán desde la app.
-    · La foto se asocia al pedido correspondiente (selector de pedido abierto).
-    · Almacenada en R2 con metadata (pedido_id, fecha, subido_por).
-    · En la ficha del pedido aparece el albarán adjunto descargable.
-    · Añadido: 24/04/2026 — Adrian
+[✓] NEW-25 — Escáner de albaranes  [HECHO v5.03]
+    · Múltiples albaranes por pedido (tabla D1 albaranes + R2).
+    · Todos los roles pueden subir (📁 archivo o 📷 cámara).
+    · Solo encargado/EA/SA pueden borrar albaranes.
+    · En la tarjeta del pedido: botón 📎 Albarán con badge dinámico.
+    · Galería: imágenes como thumbnail, PDFs como icono 📄.
+    · Ver albarán inline en nueva pestaña (imágenes y PDFs).
+    · Worker: GET/POST /pedidos/:id/albaranes + GET/DELETE /albaranes/:id.
+    · Añadido: 24/04/2026 — Adrian | Hecho: 24/04/2026
 
 [✓] NEW-26 — Control de combustible y carga de máquinas  [HECHO v5.02]
     · En cada PEMP/carretilla: registrar repostajes (combustible en litros) o recargas (batería en %).

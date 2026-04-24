@@ -5,7 +5,7 @@
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 24/04/2026
-VERSIÓN ACTUAL APP NUEVA: v5.02
+VERSIÓN ACTUAL APP NUEVA: v5.03
 VERSIÓN ACTUAL APP VIEJA: v4.19 (congelada — solo recibe bugs críticos)
 
 ⚠️  ANTES DE CODIFICAR: leer NuevaApp/IDEAS_PENDIENTES.txt
@@ -117,10 +117,26 @@ ANTES DE TOCAR CUALQUIER ARCHIVO, VERIFICAR QUE TODO ESTÁ AL DÍA:
     ✅ ALTER TABLE tipos_herramienta ADD COLUMN stock_minimo INTEGER DEFAULT 0
     ✅ ALTER TABLE inventario_seg ADD COLUMN stock_minimo INTEGER DEFAULT 0
     ✅ ALTER TABLE tipos_cable ADD COLUMN stock_minimo INTEGER DEFAULT 0
+    ✅ CREATE TABLE IF NOT EXISTS repostajes (...)
+    ✅ CREATE TABLE IF NOT EXISTS albaranes (id, empresa_id, pedido_id, r2_key, nombre_archivo, mime_type, subido_por, fecha, created_at)
 
 ================================================================================
   HISTORIAL DE VERSIONES — RECIENTES
 ================================================================================
+
+v5.03  |  24/04/2026  [SOLO NUEVA APP]
+  - NEW-25: Escáner de albaranes por pedido
+    · D1: tabla albaranes (empresa_id, pedido_id, r2_key, mime_type, subido_por, fecha...)
+    · Worker: GET/POST /pedidos/:id/albaranes + GET/DELETE /albaranes/:id (stream R2)
+    · Frontend: botón 📎 Albarán en cada tarjeta de pedido (visible para TODOS los roles)
+    · Múltiples albaranes por pedido
+    · Modal con galería: imágenes = thumbnail, PDFs = icono 📄
+    · Subir desde archivo (📁) o desde cámara (📷, capture=environment)
+    · Ver albarán en nueva pestaña (inline para imágenes y PDFs)
+    · Borrar albarán individual (solo encargado/EA/SA)
+    · Badge dinámico en el botón: "📎 Albarán (N)" cuando hay albaranes
+    · apiCallRaw(): nueva función para FormData (sin Content-Type fijo)
+  - Worker y GitHub actualizados ✅
 
 v5.02  |  24/04/2026  [SOLO NUEVA APP]
   - NEW-26: control de combustible y carga de máquinas
@@ -280,9 +296,8 @@ v4.80  |  22/04/2026  [SOLO NUEVA APP]
   ORDEN DE IMPLEMENTACIÓN ACORDADO (de más fácil a más difícil):
     [✓] NEW-24 — Alertas stock mínimo             → HECHO v5.00
     [✓] NEW-26 — Control combustible/carga         → HECHO v5.02
-    [ ] NEW-25 — Escáner albaranes                 → SIGUIENTE
-    [ ] NEW-25 — Escáner albaranes
-    [ ] NEW-27 — Dashboard de obra (opción C)
+    [✓] NEW-25 — Escáner albaranes                 → HECHO v5.03
+    [ ] NEW-27 — Dashboard de obra (opción C)      → SIGUIENTE
     [ ] NEW-22 — Registro de incidencias
     [ ] NEW-13 — Calendario de obra
     [ ] NEW-17 — Galería de fotos por obra
@@ -310,9 +325,11 @@ v4.80  |  22/04/2026  [SOLO NUEVA APP]
     - Pendiente de implementar. Campo en ficha de PEMP y carretilla.
     - Historial con fecha, cantidad, quién lo hizo, coste opcional.
 
-  NEW-25 — Escáner albaranes:
-    - Foto del albarán asociada al pedido correspondiente.
-    - Almacenada en R2. Visible en ficha del pedido.
+  NEW-25 — Escáner albaranes: ✅ HECHO v5.03
+    - Múltiples albaranes por pedido (tabla D1 separada).
+    - Todos los roles pueden subir. Solo encargado/EA/SA pueden borrar.
+    - Subida desde archivo o cámara. Imágenes como thumbnail, PDFs como icono.
+    - Ver inline en nueva pestaña. Badge dinámico en el botón del pedido.
 
   NEW-27 — Dashboard de obra:
     ⚠️ DECISIÓN CLAVE: Opción C acordada con el usuario.
