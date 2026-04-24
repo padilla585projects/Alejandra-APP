@@ -790,12 +790,32 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
         </div>
         <svg class="module-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
       </div>
+      <div class="module-card" id="cardObraDashboard" onclick="showScreen('obraDashboard')" style="display:none;border-left:3px solid #6366f1">
+        <div class="module-emoji">📊</div>
+        <div class="module-info">
+          <div class="module-name">Resumen de obra</div>
+          <div class="module-desc">KPIs y estado general</div>
+        </div>
+        <div class="module-count" id="cntDashAlerts" style="background:#6366f1;display:none">!</div>
+        <svg class="module-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
+      </div>
     </div>
     <div id="adminHomeBtn" style="display:none;padding:0 16px 12px">
       <button class="admin-home-btn" onclick="showScreen('admin')">
         🔐 Panel de Administración
         <svg style="margin-left:auto" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
       </button>
+    </div>
+  </div>
+
+  <!-- OBRA DASHBOARD (NEW-27) -->
+  <div id="screenObraDashboard" class="screen" style="padding:0;display:none;flex-direction:column">
+    <div style="padding:14px 16px 12px;border-bottom:1px solid var(--border);flex-shrink:0">
+      <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:17px;color:var(--text)">📊 Resumen de obra</div>
+      <div id="dashObraNombre" style="font-size:12px;color:var(--muted);margin-top:2px"></div>
+    </div>
+    <div id="dashContent" style="padding:14px;overflow-y:auto;flex:1">
+      <div style="color:var(--muted);font-size:13px;text-align:center;padding:30px">Cargando…</div>
     </div>
   </div>
 
@@ -2868,7 +2888,8 @@ function setupHomeModules() {
   const btnNuevo = document.getElementById('btnNuevoPedido');
   const cardDocs  = document.getElementById('cardDocs');
   const cardChat  = document.getElementById('cardChat');
-  // Seguridad: sin tarjetas de inventario, pero sí Pedidos, Docs y Chat
+  const cardDash  = document.getElementById('cardObraDashboard');
+  // Seguridad: sin tarjetas de inventario, pero sí Pedidos, Docs, Chat y Dashboard
   if (dept === 'seguridad') {
     if (cardB) cardB.style.display = 'none';
     if (cardP) cardP.style.display = 'none';
@@ -2877,6 +2898,7 @@ function setupHomeModules() {
     if (btnNuevo) btnNuevo.style.display = 'flex';
     if (cardDocs) cardDocs.style.display = 'flex';
     if (cardChat) cardChat.style.display = 'flex';
+    if (cardDash) cardDash.style.display = 'flex';
     return;
   }
   // El departamento elegido manda — electrico ve bobinas, mecánicas no
@@ -2890,9 +2912,10 @@ function setupHomeModules() {
   // Herramientas: visible para todos excepto seguridad
   const cardHerr = document.getElementById('cardHerramientas');
   if (cardHerr) cardHerr.style.display = 'flex';
-  // Documentación y Chat: visible para todos
+  // Documentación, Chat y Dashboard: visible para todos
   if (cardDocs) cardDocs.style.display = 'flex';
   if (cardChat) cardChat.style.display = 'flex';
+  if (cardDash) cardDash.style.display = 'flex';
 }
 
 let _pendingDept = null;
@@ -3167,6 +3190,7 @@ function _applyScreen(name) {
   if (name === 'herramientas') { herrSelTab(0); }
   if (name === 'personal')     { personalSelTab(0); }
   if (name === 'docs')         { docsCargar('screenDocsPanel'); }
+  if (name === 'obraDashboard') { cargarObraDashboard(); }
   if (name === 'dept' || name === 'empresaSel') {
     const p = document.getElementById('deptPill'); if (p) p.style.display = 'none';
     if (name === 'dept') aplicarDeptosActivos();
@@ -7519,7 +7543,7 @@ async function cargarObrasSelectUsuario() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '5.03';
+const APP_VERSION = '5.04';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -8610,6 +8634,101 @@ if ('serviceWorker' in navigator) {
   window.procesarArchivosAlbaran = procesarArchivosAlbaran;
   window.borrarAlbaranItem   = borrarAlbaranItem;
   window.verAlbaran          = verAlbaran;
+
+  // ══════════════════════════════════════════════════════
+  // OBRA DASHBOARD (NEW-27)
+  // ══════════════════════════════════════════════════════
+
+  async function cargarObraDashboard() {
+    const c = document.getElementById('dashContent');
+    if (!c) return;
+    c.innerHTML = '<div style="color:var(--muted);font-size:13px;text-align:center;padding:30px">Cargando…</div>';
+    const s = getSession();
+    const obraId = s?.obra_id;
+    try {
+      const params = obraId ? `?obra_id=${obraId}` : '';
+      const res = await apiCall(`/obra-dashboard${params}`);
+      if (!res.ok) { c.innerHTML = '<div style="color:var(--muted);font-size:13px;text-align:center;padding:30px">Error al cargar</div>'; return; }
+      const d = await res.json();
+
+      // Subtitle
+      const sub = document.getElementById('dashObraNombre');
+      if (sub) sub.textContent = s?.obra_nombre || (obraId ? `Obra #${obraId}` : 'Todas las obras');
+
+      // Update alert badge on home card
+      const totalAlertas = d.alertas_stock + d.equipos_mantenimiento + d.pedidos_pendientes;
+      const badge = document.getElementById('cntDashAlerts');
+      if (badge) {
+        badge.style.display = totalAlertas > 0 ? '' : 'none';
+        badge.textContent = totalAlertas;
+      }
+
+      const kpis = [
+        {
+          icon: '👷', label: 'Fichajes hoy', value: d.fichajes_hoy,
+          color: d.fichajes_hoy > 0 ? '#22c55e' : '#94a3b8',
+          sub: d.fichajes_hoy > 0 ? `${d.fichajes_hoy} trabajador${d.fichajes_hoy === 1 ? '' : 'es'}` : 'Ninguno hoy',
+          onclick: "navTo('personal')",
+        },
+        {
+          icon: '🏗️', label: 'Equipos en mantenimiento', value: d.equipos_mantenimiento,
+          color: d.equipos_mantenimiento > 0 ? '#f59e0b' : '#22c55e',
+          sub: d.equipos_mantenimiento > 0 ? `${d.equipos_mantenimiento} equipo${d.equipos_mantenimiento === 1 ? '' : 's'} parado${d.equipos_mantenimiento === 1 ? '' : 's'}` : 'Todos operativos',
+          onclick: "selectModule('pemp')",
+        },
+        {
+          icon: '🔧', label: 'Herramientas fuera', value: d.herramientas_fuera,
+          color: d.herramientas_fuera > 0 ? '#f59e0b' : '#22c55e',
+          sub: d.herramientas_fuera > 0 ? `${d.herramientas_fuera} no disponible${d.herramientas_fuera === 1 ? '' : 's'}` : 'Todo disponible',
+          onclick: "navTo('herramientas')",
+        },
+        {
+          icon: '📦', label: 'Pedidos pendientes', value: d.pedidos_pendientes,
+          color: d.pedidos_pendientes > 0 ? '#8b5cf6' : '#22c55e',
+          sub: d.pedidos_pendientes > 0 ? `${d.pedidos_pendientes} pedido${d.pedidos_pendientes === 1 ? '' : 's'} sin recibir` : 'Todo recibido',
+          onclick: "navTo('pedidos')",
+        },
+        {
+          icon: '⚠️', label: 'Alertas de stock', value: d.alertas_stock,
+          color: d.alertas_stock > 0 ? '#ef4444' : '#22c55e',
+          sub: d.alertas_stock > 0 ? `${d.alertas_stock} tipo${d.alertas_stock === 1 ? '' : 's'} bajo mínimo` : 'Stock correcto',
+          onclick: "irANotif()",
+        },
+        {
+          icon: '📅', label: 'Próximo evento', value: '—',
+          color: '#94a3b8',
+          sub: 'Calendario próximamente',
+          onclick: null,
+        },
+        {
+          icon: '🚨', label: 'Incidencias abiertas', value: '—',
+          color: '#94a3b8',
+          sub: 'Módulo próximamente',
+          onclick: null,
+        },
+      ];
+
+      c.innerHTML = `
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          ${kpis.map(k => `
+            <div onclick="${k.onclick ? `${k.onclick};showScreen('home')` : ''}"
+                 style="background:var(--surface);border:1px solid var(--border);border-left:3px solid ${k.color};border-radius:12px;padding:14px;cursor:${k.onclick ? 'pointer' : 'default'};position:relative">
+              <div style="font-size:24px;margin-bottom:6px">${k.icon}</div>
+              <div style="font-size:28px;font-weight:900;color:${k.color};font-family:'Montserrat',sans-serif;line-height:1">${k.value}</div>
+              <div style="font-size:11px;font-weight:700;color:var(--text);margin-top:4px">${k.label}</div>
+              <div style="font-size:10px;color:var(--muted);margin-top:2px">${k.sub}</div>
+              ${k.onclick ? '<div style="position:absolute;top:10px;right:10px;color:var(--muted);font-size:14px">›</div>' : ''}
+            </div>
+          `).join('')}
+        </div>
+        <div style="font-size:11px;color:var(--muted);text-align:center;margin-top:14px">Actualizado a las ${new Date().toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'})}</div>
+      `;
+    } catch {
+      c.innerHTML = '<div style="color:var(--muted);font-size:13px;text-align:center;padding:30px">Error de conexión</div>';
+    }
+  }
+
+  window.cargarObraDashboard = cargarObraDashboard;
 
   // ══════════════════════════════════════════════════════
   // PERSONAL

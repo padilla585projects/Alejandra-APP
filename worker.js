@@ -469,6 +469,7 @@ export default {
       }
       if (path === '/historial-herramientas' && method === 'GET') return await getHistorialHerramientas(request, env);
       if (path === '/alertas-stock'          && method === 'GET') return await getAlertasStock(request, env);
+      if (path === '/obra-dashboard'         && method === 'GET') return await getObraDashboard(request, env);
       if (path === '/repostajes'             && method === 'GET')  return await getRepostajes(request, env);
       if (path === '/repostajes'             && method === 'POST') return await crearRepostaje(request, env);
       if (path === '/repostajes/resumen'     && method === 'GET')  return await getResumenRepostajes(request, env);
@@ -2163,6 +2164,84 @@ async function getAlertasStock(request, env) {
   `).bind(empresa_id).all();
 
   return json({ herramientas, seguridad, bobinas });
+}
+
+// ── Dashboard de obra (NEW-27) ────────────────────────────────────────────────
+async function getObraDashboard(request, env) {
+  const auth = await getAuth(request, env);
+  const { empresa_id, obra_id, departamento } = auth;
+  if (!empresa_id) return err('No autorizado', 403);
+
+  const url = new URL(request.url);
+  const queryObraId = url.searchParams.get('obra_id') ? parseInt(url.searchParams.get('obra_id')) : obra_id;
+  const hoy = new Date().toISOString().slice(0, 10);
+
+  const obraFilter   = queryObraId ? ' AND obra_id = ?' : '';
+  const deptFilter   = departamento ? ' AND departamento = ?' : '';
+
+  const buildParams = (base, ...extras) => {
+    const p = [empresa_id];
+    if (queryObraId) p.push(queryObraId);
+    if (departamento) p.push(departamento);
+    return [...p, ...extras];
+  };
+
+  const [fichajesHoy, equiposMant, herrFuera, pedidosPend, alertasHerr, alertasSeg, alertasBob] = await Promise.all([
+    // Fichajes hoy
+    env.DB.prepare(
+      `SELECT COUNT(*) as n FROM fichajes WHERE empresa_id=?${queryObraId ? ' AND obra_id=?' : ''} AND DATE(entrada)=?`
+    ).bind(...[empresa_id, ...(queryObraId ? [queryObraId] : []), hoy]).first(),
+
+    // Equipos en mantenimiento (PEMP + carretillas)
+    env.DB.prepare(
+      `SELECT (SELECT COUNT(*) FROM pemp WHERE empresa_id=? AND estado='mantenimiento'${queryObraId?' AND obra_id=?':''})
+            + (SELECT COUNT(*) FROM carretillas WHERE empresa_id=? AND estado='mantenimiento'${queryObraId?' AND obra_id=?':''}) as n`
+    ).bind(...[empresa_id, ...(queryObraId?[queryObraId]:[]), empresa_id, ...(queryObraId?[queryObraId]:[])]).first(),
+
+    // Herramientas no disponibles (en uso / averiada / baja)
+    env.DB.prepare(
+      `SELECT COUNT(*) as n FROM herramientas WHERE empresa_id=? AND estado != 'disponible'`
+    ).bind(empresa_id).first(),
+
+    // Pedidos pendientes/solicitados del departamento
+    env.DB.prepare(
+      `SELECT COUNT(*) as n FROM pedidos WHERE empresa_id=?${queryObraId?' AND obra_id=?':''} AND estado IN ('pendiente','solicitado')${departamento?' AND departamento=?':''}`
+    ).bind(...buildParams(empresa_id)).first(),
+
+    // Alertas stock herramientas
+    env.DB.prepare(`
+      SELECT COUNT(*) as n FROM (
+        SELECT t.id FROM tipos_herramienta t
+        LEFT JOIN herramientas h ON h.tipo_id = t.id AND h.empresa_id = t.empresa_id
+        WHERE t.empresa_id = ? AND t.stock_minimo > 0
+        GROUP BY t.id HAVING COUNT(CASE WHEN h.estado='disponible' THEN 1 END) < t.stock_minimo
+      )
+    `).bind(empresa_id).first(),
+
+    // Alertas stock seguridad
+    env.DB.prepare(
+      `SELECT COUNT(*) as n FROM inventario_seg WHERE empresa_id=? AND modo='cantidad' AND stock_minimo>0 AND cantidad_disponible < stock_minimo AND estado!='baja'`
+    ).bind(empresa_id).first(),
+
+    // Alertas stock bobinas
+    env.DB.prepare(`
+      SELECT COUNT(*) as n FROM (
+        SELECT tc.id FROM tipos_cable tc
+        LEFT JOIN bobinas b ON b.tipo_cable=tc.nombre AND b.empresa_id=tc.empresa_id AND b.estado NOT IN ('Dado de baja','baja')
+        WHERE tc.empresa_id=? AND tc.stock_minimo>0
+        GROUP BY tc.id HAVING COUNT(b.id) < tc.stock_minimo
+      )
+    `).bind(empresa_id).first(),
+  ]);
+
+  return json({
+    fichajes_hoy:          fichajesHoy?.n || 0,
+    equipos_mantenimiento: equiposMant?.n || 0,
+    herramientas_fuera:    herrFuera?.n  || 0,
+    pedidos_pendientes:    pedidosPend?.n || 0,
+    alertas_stock:         (alertasHerr?.n||0) + (alertasSeg?.n||0) + (alertasBob?.n||0),
+    obra_id:               queryObraId || null,
+  });
 }
 
 async function getKits(request, env) {
