@@ -1,7 +1,7 @@
 ================================================================================
   ALEJANDRA APP — IDEAS, MEJORAS Y ERRORES PENDIENTES
   Recogidos de: Canal Telegram @AlejandraAPP_bot
-  Última actualización: 24/04/2026 — BUG-160 resuelto: banner auto-update (v4.97)
+  Última actualización: 24/04/2026 — NEW-13..28 añadidos (calendario, mantenimiento, dashboard, etc.)
 
   ⚠️  LEER ESTE ARCHIVO ANTES DE CUALQUIER SESIÓN DE CODIFICACIÓN.
   ⚠️  Marcar como [HECHO vX.XX] cuando se implemente. No borrar las líneas.
@@ -633,6 +633,149 @@ LEYENDA DE ESTADO:
     · Implementar cuando haya clientes reales y se sepa qué valoran.
     · Decisiones pendientes: precios definitivos, qué limitar en cada plan, si Stripe desde el inicio.
     · Reportado: 18/04/2026 — Adrian
+
+[ ] NEW-13 — Calendario de obra con eventos y avisos  [PENDIENTE]
+    · Vista mensual con dots de colores en días que tienen eventos.
+    · Crear evento: título, descripción, fecha, hora (opcional), tipo (entrega, inspección,
+      mantenimiento, reunión, caducidad, otro).
+    · Notificación push el día del evento + recordatorio 1 día antes (configurable).
+    · También aviso por Telegram al encargado/admin de la obra.
+    · Filtro: "Mi obra" / "Todas las obras" (para SA/EA).
+    · Accesible desde tarjeta en el home de cada departamento + botón en header o en Docs.
+    · Roles: crear/editar → encargado, EA, SA. Ver → todos.
+    · D1: nueva tabla `eventos_calendario` (id, empresa_id, obra_id, departamento, titulo,
+      descripcion, fecha TEXT, hora TEXT, tipo TEXT, creado_por, created_at).
+    · Añadido: 24/04/2026 — Adrian
+
+[ ] NEW-15 — Control de mantenimiento preventivo de equipos  [PENDIENTE]
+    · En cada PEMP y carretilla: campo "Próxima revisión" (fecha) y "Próximo mantenimiento".
+    · Toggle por equipo para activar/desactivar el aviso (no siempre se quiere notificación).
+    · Aviso automático en notificaciones in-app y Telegram X días antes (configurable, default 7).
+      Solo se dispara si el toggle de aviso está activado en ese equipo.
+    · Estado especial "🔧 En mantenimiento" que bloquea el registro como disponible.
+    · Historial de mantenimientos: fecha, descripción, quién lo hizo, adjunto opcional (factura/informe).
+    · Resumen en home: badge 🔧 con número de equipos con revisión próxima (<30 días).
+    · Añadido: 24/04/2026 — Adrian
+
+[ ] NEW-16 — Partes de trabajo diarios  [PENDIENTE]
+    · Formulario que rellena el encargado al cierre del día.
+    · Campos: obra, fecha, personal presente (multiselect), trabajos realizados (texto libre),
+      materiales usados, incidencias, horas extra del equipo.
+    · Exportar a PDF firmado (firma táctil con canvas, igual que en herramientas).
+    · Historial filtrable por obra/fecha/encargado.
+    · Envío automático por Telegram al admin al guardar.
+    · D1: nueva tabla `partes_trabajo`.
+    · Añadido: 24/04/2026 — Adrian
+
+[ ] NEW-17 — Galería de fotos por obra  [PENDIENTE]
+    · Sección 📷 dentro de cada obra/departamento (pestaña o tarjeta home).
+    · Subir fotos desde cámara o galería del móvil; almacenadas en R2.
+    · Vista cuadrícula con miniaturas, ordenadas por fecha.
+    · Tap en foto → lightbox con fecha, autor y comentario opcional.
+    · Compartir foto individual o galería completa (Web Share API).
+    · Borrar: encargado/admin. Ver: todos.
+    · Añadido: 24/04/2026 — Adrian
+
+[ ] NEW-18 — Informe automático semanal/mensual por Telegram  [PENDIENTE]
+    · Cada lunes (o el 1 de cada mes) se envía al chat de Telegram un resumen por obra:
+      - Fichajes: horas totales trabajadas, retrasos acumulados, horas extra.
+      - Inventario: bobinas/PEMPs/carretillas usadas vs. disponibles.
+      - Herramientas: pendientes de devolución.
+      - Eventos del calendario próximos (siguiente semana).
+    · Configurable: activar/desactivar + elegir día/hora de envío desde Ajustes → Empresa.
+    · Implementar con Cloudflare Cron Triggers (worker.js scheduled handler).
+    · Añadido: 24/04/2026 — Adrian
+
+[ ] NEW-19 — Certificaciones y carnets del personal  [PENDIENTE]
+    · Registrar carnets de cada trabajador: PEMP, carretilla, PRL, CAE, primeros auxilios, etc.
+    · Aplica tanto a usuarios de la app como a personal externo (tabla personal_externo).
+    · Campos: tipo de carnet, número, fecha de obtención, fecha de caducidad, foto/PDF adjunto.
+    · Aviso automático X días antes de que caduque (in-app + Telegram).
+    · Quién puede añadir/editar: superadmin y encargados. Ver: todos los roles.
+    · Vista en ficha de cada trabajador (Ajustes → Usuarios / Personal externo).
+    · D1: nueva tabla `carnets` (id, usuario_id, externo_id, empresa_id, tipo, numero,
+      fecha_obtencion, fecha_caducidad, archivo_r2_key, created_at).
+    · Añadido: 24/04/2026 — Adrian
+
+[ ] NEW-20 — Gestión de turnos  [PENDIENTE]
+    · Planificador semanal: asignar cada trabajador (interno o externo) a un turno por día
+      (Mañana / Tarde / Noche / Libre) en cada obra.
+    · Vista tipo horario semanal con filas=trabajadores y columnas=días.
+    · Complementa los fichajes: el turno planeado se puede comparar con lo que realmente ficharon.
+    · Al fichar, el sistema puede sugerir el turno asignado para esa persona ese día.
+    · Quién planifica: encargado, EA, SA.
+    · D1: nueva tabla `turnos` (id, empresa_id, obra_id, usuario_id o externo_id,
+      fecha TEXT, turno TEXT, created_at).
+    · Añadido: 24/04/2026 — Adrian
+
+[ ] NEW-21 — Checklist de inspección pre-uso de equipos  [PENDIENTE]
+    · Antes de usar una PEMP o carretilla, el operario/encargado rellena un check rápido.
+    · Preguntas configurables por tipo de equipo (aceite, frenos, cinturón, luces, etc.).
+    · Si algún ítem falla → equipo marcado automáticamente como "Revisión necesaria" + aviso.
+    · Queda registrado con fecha, hora, quién lo hizo y resultado (OK / Con incidencias).
+    · Historial de checklists por equipo consultable en su ficha.
+    · D1: tablas `checklist_plantillas` (preguntas por tipo) y `checklist_registros`.
+    · Añadido: 24/04/2026 — Adrian
+
+[ ] NEW-22 — Registro de incidencias  [PENDIENTE]
+    · Parte de incidente/accidente con: fecha, hora, obra, descripción, gravedad
+      (leve / moderada / grave), personal implicado, foto adjunta.
+    · Estado de seguimiento: Abierta → En revisión → Cerrada.
+    · Notificación inmediata a encargado y admin al crear una incidencia grave.
+    · Historial filtrable por obra, fecha, gravedad y estado.
+    · Exportable a PDF.
+    · Quién crea: todos los roles. Quién cierra: encargado, EA, SA.
+    · D1: nueva tabla `incidencias`.
+    · Añadido: 24/04/2026 — Adrian
+
+[ ] NEW-23 — Control de EPIs por trabajador  [PENDIENTE]
+    · Registrar qué EPI tiene asignado cada trabajador: casco, arnés, guantes, botas, etc.
+    · Campos: tipo de EPI, talla, fecha de entrega, próxima revisión/sustitución, estado.
+    · Aviso automático cuando un EPI está próximo a caducar o necesita revisión.
+    · Vista en ficha del trabajador y también vista global por obra (quién tiene qué).
+    · Quién gestiona: encargado, EA, SA.
+    · D1: nueva tabla `epis_asignados`.
+    · Añadido: 24/04/2026 — Adrian
+
+[ ] NEW-24 — Alertas de stock mínimo  [PENDIENTE]
+    · En cada bobina, herramienta o material de seguridad: campo "Stock mínimo".
+    · Cuando la cantidad disponible baja de ese mínimo → aviso in-app (badge) + Telegram.
+    · Toggle por ítem para activar/desactivar la alerta (igual que en mantenimiento NEW-15).
+    · Visible en el home como tarjeta o badge sobre el módulo correspondiente.
+    · Añadido: 24/04/2026 — Adrian
+
+[ ] NEW-25 — Escáner de albaranes  [PENDIENTE]
+    · Al recibir material, el encargado hace foto del albarán desde la app.
+    · La foto se asocia al pedido correspondiente (selector de pedido abierto).
+    · Almacenada en R2 con metadata (pedido_id, fecha, subido_por).
+    · En la ficha del pedido aparece el albarán adjunto descargable.
+    · Añadido: 24/04/2026 — Adrian
+
+[ ] NEW-26 — Control de combustible y carga de máquinas  [PENDIENTE]
+    · En cada PEMP/carretilla: registrar repostajes (combustible en litros) o recargas (batería en %).
+    · Historial con fecha, cantidad, quién lo hizo y coste opcional.
+    · Gasto acumulado por equipo y por obra (mes / total).
+    · Añadido: 24/04/2026 — Adrian
+
+[ ] NEW-27 — Dashboard de obra (resumen visual)  [PENDIENTE]
+    · Tarjeta "📊 Resumen de obra" en el home de cada departamento (Opción C acordada).
+    · Al pulsar → pantalla completa con los KPIs clave de la obra actual:
+      - 👷 Fichajes hoy: trabajadores presentes / retrasos.
+      - ⚡ Stock bajo: ítems por debajo del mínimo.
+      - 🔧 Equipos: cuántos en mantenimiento o con revisión próxima.
+      - 📅 Próximo evento del calendario.
+      - ⚠️ Incidencias abiertas.
+      - 🏗️ Herramientas sin devolver.
+    · Cada tarjeta del dashboard es clicable y navega al módulo correspondiente.
+    · Visible para todos los roles.
+    · Añadido: 24/04/2026 — Adrian
+
+[ ] NEW-28 — Comparativa entre obras (SA / EA)  [PENDIENTE]
+    · Solo visible para superadmin y empresa_admin.
+    · Tabla o cards comparando KPIs de varias obras a la vez:
+      fichajes, horas, equipos activos, herramientas fuera, incidencias abiertas, stock bajo.
+    · Accesible desde Ajustes o desde el Dashboard (NEW-27).
+    · Añadido: 24/04/2026 — Adrian
 
 [✓] NEW-11 — Botón "Invítame a un café" en Ajustes  [HECHO v4.37]
     · Enlace PayPal (https://www.paypal.me/padilla585) en Ajustes → Sistema.
