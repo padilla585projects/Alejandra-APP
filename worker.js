@@ -50,11 +50,10 @@ async function getAuth(request, env) {
         env.DB.prepare('UPDATE sesiones SET last_used = CURRENT_TIMESTAMP WHERE token = ?').bind(xToken).run();
         const isSuperadmin   = sesion.es_admin === 1 || sesion.rol === 'superadmin';
         const isEmpresaAdmin = sesion.rol === 'empresa_admin';
-        // SA y EA pueden cambiar de dept sin hacer logout → preferir cabecera
+        // Header siempre tiene prioridad (frontend envía el dept actual desde localStorage)
+        // D1 se usa como fallback si no hay header
         const deptHeader = request.headers.get('X-Departamento');
-        const departamento = (isSuperadmin || isEmpresaAdmin)
-          ? (deptHeader || sesion.departamento || 'electrico')
-          : (sesion.departamento || 'electrico');
+        const departamento = deptHeader || sesion.departamento || 'electrico';
         return {
           isAdmin: sesion.es_admin === 1,
           isSuperadmin,
@@ -2219,7 +2218,7 @@ async function getObraDashboard(request, env) {
   const [fichajesHoy, equiposMant, herrFuera, pedidosPend, alertasHerr, alertasSeg, alertasBob, incidenciasAbiertas, proximoEvento] = await Promise.all([
     // Fichajes hoy
     env.DB.prepare(
-      `SELECT COUNT(*) as n FROM fichajes WHERE empresa_id=?${queryObraId ? ' AND obra_id=?' : ''} AND DATE(entrada)=?`
+      `SELECT COUNT(*) as n FROM fichajes WHERE empresa_id=?${queryObraId ? ' AND obra_id=?' : ''} AND fecha=?`
     ).bind(...[empresa_id, ...(queryObraId ? [queryObraId] : []), hoy]).first(),
 
     // Equipos en mantenimiento (PEMP + carretillas)
