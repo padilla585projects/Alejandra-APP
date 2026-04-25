@@ -5,7 +5,7 @@
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 25/04/2026
-VERSIÓN ACTUAL APP NUEVA: v5.16
+VERSIÓN ACTUAL APP NUEVA: v5.17
 VERSIÓN ACTUAL APP VIEJA: v4.19 (⛔ CONGELADA DEFINITIVAMENTE — no recibe más cambios)
 
 ================================================================================
@@ -129,6 +129,14 @@ PASO 4 — VERIFICAR WORKER (solo si se va a tocar worker.js)
 ================================================================================
   HISTORIAL DE VERSIONES — RECIENTES
 ================================================================================
+
+v5.17  |  25/04/2026  [SOLO NUEVA APP]
+  - HOTFIX: tarjetas de departamento no navegaban al pulsar
+    · renderHeader() hacía getElementById('deptPillName').textContent='' pero el span
+      fue eliminado en v5.16 → TypeError cortaba seleccionarDepto() antes de navegar
+    · Fix: línea eliminada (el elemento ya no existe)
+    · Fix: onclick del dept-pill cambiado de clickDeptPill() (inexistente) a volverSelectorDepto()
+  - GitHub actualizado ✅
 
 v5.16  |  25/04/2026  [SOLO NUEVA APP]
   - BUG-170: emoji dept-pill aumentado a 22px, sin texto
@@ -494,7 +502,7 @@ v4.80  |  22/04/2026  [SOLO NUEVA APP]
     · Nuevo home de Seguridad con 5 tarjetas verticales (module-card)
     · Cada sub-panel tiene botón ← para volver al home de Seguridad
 
-  ESTADO ACTUAL: v5.14, worker sin cambios (último deploy: 54d348bd), GitHub en sync ✅
+  ESTADO ACTUAL: v5.17, worker sin cambios (último deploy: 077375e5), GitHub en sync ✅
   SIGUIENTE: continuar con sugerencias pendientes de la DB. Las más urgentes:
     - #170 Burbuja superior: icono de sección en vez del nombre (tiene foto adjunta)
     - #149 Panel selector de obra (como el de empresa al inicio)

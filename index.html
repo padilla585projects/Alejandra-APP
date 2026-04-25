@@ -557,7 +557,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
     </svg>
   </div>
   <div class="header-center" id="headerCenter">
-    <div class="dept-pill" id="deptPill" style="display:none" onclick="clickDeptPill()">
+    <div class="dept-pill" id="deptPill" style="display:none" onclick="volverSelectorDepto()">
       <span id="deptPillIcon"></span>
     </div>
     <span class="obra-label" id="headerObraLabel"></span>
@@ -3197,7 +3197,6 @@ function renderHeader() {
   if (s.departamento) {
     const di = DEPT_INFO[s.departamento] || { icon: '?', name: s.departamento };
     document.getElementById('deptPillIcon').textContent = di.icon;
-    document.getElementById('deptPillName').textContent = '';
     deptPill.title = di.name;
     deptPill.style.display = 'flex';
   } else {
@@ -8329,7 +8328,7 @@ async function cargarObrasSelectUsuario() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '5.16';
+const APP_VERSION = '5.17';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
