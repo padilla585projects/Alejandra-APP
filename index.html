@@ -1261,17 +1261,42 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
   ══════════════════════════════════════════ -->
   <div id="screenSeguridad" class="screen flex-screen" style="padding:0;height:100%;display:none;flex-direction:column">
 
-    <!-- Tabs -->
-    <div class="mod-tabs" style="flex-shrink:0">
-      <button class="mod-tab-btn active" id="segTabEscaner"  onclick="segSelTab('escaner')">📷 Escáner</button>
-      <button class="mod-tab-btn"        id="segTabInv"      onclick="segSelTab('inventario')">📦 Inventario</button>
-      <button class="mod-tab-btn"        id="segTabHerr"     onclick="segSelTab('herramientas')">🔧 Herramientas</button>
-      <button class="mod-tab-btn"        id="segTabResumen"  onclick="segSelTab('resumen')">📊 Resumen</button>
-      <button class="mod-tab-btn"        id="segTabChat"     onclick="chatAbrir()">💬 Chat</button>
+    <!-- Home: tarjetas de sección -->
+    <div id="segPanelHome" style="display:flex;flex-direction:column;flex:1;overflow-y:auto;padding:14px 14px 80px">
+      <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:11px;letter-spacing:2px;color:var(--muted);text-transform:uppercase;margin-bottom:12px">🔺 Seguridad</div>
+      <div class="module-card" onclick="segSelTab('escaner')">
+        <div class="module-emoji">📷</div>
+        <div class="module-info"><div class="module-name">Escáner</div><div class="module-desc">Buscar por matrícula o código</div></div>
+        <svg class="module-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
+      </div>
+      <div class="module-card" onclick="segSelTab('inventario')">
+        <div class="module-emoji">📦</div>
+        <div class="module-info"><div class="module-name">Inventario EPIs</div><div class="module-desc">Equipos de protección individual</div></div>
+        <svg class="module-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
+      </div>
+      <div class="module-card" onclick="segSelTab('herramientas')">
+        <div class="module-emoji">🔧</div>
+        <div class="module-info"><div class="module-name">Herramientas</div><div class="module-desc">Herramientas asignadas a seguridad</div></div>
+        <svg class="module-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
+      </div>
+      <div class="module-card" onclick="segSelTab('resumen')">
+        <div class="module-emoji">📊</div>
+        <div class="module-info"><div class="module-name">Resumen</div><div class="module-desc">Estadísticas y estado de seguridad</div></div>
+        <svg class="module-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
+      </div>
+      <div class="module-card" onclick="chatAbrir()">
+        <div class="module-emoji">💬</div>
+        <div class="module-info"><div class="module-name">Chat del equipo</div><div class="module-desc">Mensajes internos con el equipo</div></div>
+        <svg class="module-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
+      </div>
     </div>
 
     <!-- ── TAB ESCÁNER ── -->
-    <div id="segPanelEscaner" style="display:flex;flex-direction:column;flex:1;overflow:hidden">
+    <div id="segPanelEscaner" style="display:none;flex-direction:column;flex:1;overflow:hidden">
+      <div style="display:flex;align-items:center;gap:8px;padding:8px 14px;border-bottom:1px solid var(--border);flex-shrink:0">
+        <button onclick="segSelTab('home')" style="background:var(--surface2);border:none;border-radius:50%;width:30px;height:30px;font-size:16px;cursor:pointer;color:var(--text);flex-shrink:0">←</button>
+        <span style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:13px">📷 Escáner</span>
+      </div>
       <!-- Buscador -->
       <div style="padding:10px 14px 8px;border-bottom:1px solid var(--border);flex-shrink:0">
         <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:11px;letter-spacing:2px;color:var(--accent);text-transform:uppercase;margin-bottom:6px">🔍 Buscar matrícula / código</div>
@@ -1324,6 +1349,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
     <div id="segPanelInv" style="display:none;flex-direction:column;flex:1;overflow:hidden">
       <!-- Barra superior -->
       <div style="padding:10px 14px 8px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;gap:8px;align-items:center">
+        <button onclick="segSelTab('home')" style="background:var(--surface2);border:none;border-radius:50%;width:30px;height:30px;font-size:16px;cursor:pointer;color:var(--text);flex-shrink:0">←</button>
         <input class="form-input" id="segInvSearch" type="text" placeholder="🔍 Buscar material..."
                style="flex:1" oninput="segFiltrarInv()">
         <button onclick="segMostrarFormNuevo()"
@@ -1371,6 +1397,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
     <div id="segPanelHerr" style="display:none;flex-direction:column;flex:1;overflow:hidden">
       <!-- Header -->
       <div style="padding:10px 14px 8px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;gap:8px;align-items:center">
+        <button onclick="segSelTab('home')" style="background:var(--surface2);border:none;border-radius:50%;width:30px;height:30px;font-size:16px;cursor:pointer;color:var(--text);flex-shrink:0">←</button>
         <input class="form-input" id="segHerrSearch" type="text" placeholder="🔍 Buscar herramienta..." style="flex:1" oninput="segHerrFiltrar()">
         <button onclick="segHerrNuevo()" style="padding:0 14px;height:40px;background:var(--accent);border:none;border-radius:8px;color:#000;font-family:'Montserrat',sans-serif;font-weight:900;font-size:20px;cursor:pointer;flex-shrink:0">+</button>
       </div>
@@ -2108,7 +2135,8 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
 
     <!-- TAB RESUMEN SEG (NEW-27) -->
     <div id="segPanelResumen" style="display:none;flex-direction:column;flex:1;overflow:hidden">
-      <div style="padding:10px 14px 8px;border-bottom:1px solid var(--border);flex-shrink:0">
+      <div style="padding:10px 14px 8px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;align-items:center;gap:8px">
+        <button onclick="segSelTab('home')" style="background:var(--surface2);border:none;border-radius:50%;width:30px;height:30px;font-size:16px;cursor:pointer;color:var(--text);flex-shrink:0">←</button>
         <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:13px;color:var(--accent)">📊 Resumen de seguridad</div>
       </div>
       <div id="segDashContent" style="padding:14px;overflow-y:auto;flex:1">
@@ -3073,10 +3101,10 @@ async function iniciarApp() {
   renderAjustesInfo();
   setupHomeModules();
 
-  // Seguridad: va directo a su pantalla de escáner
+  // Seguridad: va al home de secciones
   if (s.departamento === 'seguridad') {
     showScreen('seguridad');
-    segSelTab('escaner');
+    segSelTab('home');
     cargarCatalogos();
     return;
   }
@@ -3387,7 +3415,7 @@ function seleccionarObraVisual(obraId, obraNombre, obraCodigo) {
 function _navegarTrasObra(dept) {
   if (dept === 'seguridad') {
     showScreen('seguridad');
-    segSelTab('escaner');
+    segSelTab('home');
     cargarCatalogos();
     return;
   }
@@ -4319,12 +4347,7 @@ async function segBuscarMaquina(mat) {
 // ══════════════════════════════════════════════════════
 
 function segSelTab(tab) {
-  // Botones de tab
-  const tabMap = { escaner:'Escaner', inventario:'Inv', herramientas:'Herr', resumen:'Resumen' };
-  Object.entries(tabMap).forEach(([t, key]) => {
-    document.getElementById('segTab' + key)?.classList.toggle('active', t === tab);
-  });
-  // Paneles
+  document.getElementById('segPanelHome').style.display     = tab === 'home'         ? 'flex' : 'none';
   document.getElementById('segPanelEscaner').style.display  = tab === 'escaner'      ? 'flex' : 'none';
   document.getElementById('segPanelInv').style.display      = tab === 'inventario'   ? 'flex' : 'none';
   document.getElementById('segPanelHerr').style.display     = tab === 'herramientas' ? 'flex' : 'none';
@@ -8253,7 +8276,7 @@ async function cargarObrasSelectUsuario() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '5.13';
+const APP_VERSION = '5.14';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
