@@ -794,7 +794,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
         <div class="module-count" id="cntIncidencias" style="background:#ef4444;display:none">0</div>
         <span class="drag-handle">⠿</span><svg class="module-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
       </div>
-      <div class="module-card" id="cardHerramientas" onclick="navTo('herramientas')" style="display:none">
+      <div class="module-card" id="cardHerramientas" onclick="getSession()?.departamento==='seguridad'?(showScreen('seguridad'),segSelTab('herramientas')):navTo('herramientas')" style="display:none">
         <div class="module-emoji">🔧</div>
         <div class="module-info">
           <div class="module-name">Herramientas</div>
@@ -1366,6 +1366,83 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
       </div>
     </div>
 
+    <!-- ── TAB HERRAMIENTAS SEG ── -->
+    <div id="segPanelHerr" style="display:none;flex-direction:column;flex:1;overflow:hidden">
+      <!-- Header -->
+      <div style="padding:10px 14px 8px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;gap:8px;align-items:center">
+        <input class="form-input" id="segHerrSearch" type="text" placeholder="🔍 Buscar herramienta..." style="flex:1" oninput="segHerrFiltrar()">
+        <button onclick="segHerrNuevo()" style="padding:0 14px;height:40px;background:var(--accent);border:none;border-radius:8px;color:#000;font-family:'Montserrat',sans-serif;font-weight:900;font-size:20px;cursor:pointer;flex-shrink:0">+</button>
+      </div>
+      <!-- Sub-tabs -->
+      <div style="display:flex;border-bottom:1px solid var(--border);flex-shrink:0">
+        <button id="segHerrBtnTodos" onclick="segHerrSubTab('todos')" style="flex:1;padding:10px 4px;background:none;border:none;color:var(--accent);font-family:'Montserrat',sans-serif;font-weight:900;font-size:11px;letter-spacing:1px;text-transform:uppercase;cursor:pointer;border-bottom:2px solid var(--accent)">📋 Todos</button>
+        <button id="segHerrBtnAsig" onclick="segHerrSubTab('asignados')" style="flex:1;padding:10px 4px;background:none;border:none;color:var(--muted);font-family:'Montserrat',sans-serif;font-weight:900;font-size:11px;letter-spacing:1px;text-transform:uppercase;cursor:pointer;border-bottom:2px solid transparent">👤 Asignados</button>
+      </div>
+      <!-- Lista -->
+      <div style="flex:1;overflow-y:auto;padding:10px 14px 80px" id="segHerrList">
+        <div class="empty-state">Cargando...</div>
+      </div>
+      <!-- Modal detalle -->
+      <div id="segHerrModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:500;align-items:flex-end">
+        <div style="background:var(--surface);border-radius:16px 16px 0 0;padding:20px 16px 36px;width:100%;max-height:80vh;overflow-y:auto">
+          <div id="segHerrModalContent"></div>
+        </div>
+      </div>
+      <!-- Modal nuevo item -->
+      <div id="segHerrNuevoModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:500;overflow-y:auto;padding:20px 14px">
+        <div style="background:var(--surface);border-radius:16px;padding:18px;max-width:400px;margin:auto">
+          <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:16px;margin-bottom:14px">🔧 Nueva herramienta</div>
+          <div class="form-group">
+            <label class="form-label">Tipo *</label>
+            <select class="form-select" id="segHerrNuevoTipo">
+              <option value="">Seleccionar...</option>
+              <option value="EPI">🪖 EPI (casco, arnés, gafas...)</option>
+              <option value="Extintor">🧯 Extintor</option>
+              <option value="Botiquín">🩺 Botiquín</option>
+              <option value="Detector">📡 Detector</option>
+              <option value="Señalización">⚠️ Señalización</option>
+              <option value="Herramienta">🔧 Herramienta general</option>
+              <option value="Otro">📦 Otro</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Nombre / descripción</label>
+            <input class="form-input" id="segHerrNuevoNombre" type="text" placeholder="Ej: Casco clase E, Extintor CO2 5kg...">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Modo</label>
+            <select class="form-select" id="segHerrNuevoModo" onchange="segHerrToggleModo()">
+              <option value="individual">Individual (por código / serie)</option>
+              <option value="cantidad">Cantidad (stock)</option>
+            </select>
+          </div>
+          <div class="form-group" id="segHerrCodGrp">
+            <label class="form-label">Código / Nº Serie *</label>
+            <input class="form-input" id="segHerrNuevoCodigo" type="text" placeholder="Ej: EPI-001" style="text-transform:uppercase">
+          </div>
+          <div class="form-group" id="segHerrCantGrp" style="display:none">
+            <label class="form-label">Cantidad total</label>
+            <input class="form-input" id="segHerrNuevoCant" type="number" value="1" min="1">
+          </div>
+          <div class="form-group" id="segHerrMinGrp" style="display:none">
+            <label class="form-label">Stock mínimo (alerta)</label>
+            <input class="form-input" id="segHerrNuevoMin" type="number" value="0" min="0">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Fecha caducidad / revisión</label>
+            <input class="form-input" id="segHerrNuevoCad" type="date">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Notas</label>
+            <input class="form-input" id="segHerrNuevoNotas" type="text" placeholder="Opcional...">
+          </div>
+          <div style="display:flex;gap:8px;margin-top:14px">
+            <button class="btn-primary" onclick="segHerrGuardarNuevo()" style="flex:1">✅ Guardar</button>
+            <button onclick="segHerrCerrarNuevoModal()" style="padding:12px 16px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);cursor:pointer">Cancelar</button>
+          </div>
+        </div>
+      </div>
+    </div>
 
   </div>
 
@@ -3105,6 +3182,8 @@ function setupHomeModules() {
     if (cardDash) cardDash.style.display = 'flex';
     if (cardInc)  cardInc.style.display  = 'flex';
     if (cardCal)  cardCal.style.display  = 'flex';
+    const cardHerrSeg = document.getElementById('cardHerramientas');
+    if (cardHerrSeg) cardHerrSeg.style.display = 'flex';
     applyHomeOrder();
     return;
   }
@@ -4239,17 +4318,252 @@ async function segBuscarMaquina(mat) {
 // ══════════════════════════════════════════════════════
 
 function segSelTab(tab) {
-  if (tab === 'herramientas') { navTo('herramientas'); return; }
-  ['escaner','inventario','resumen'].forEach(t => {
-    document.getElementById('segTab' + t.charAt(0).toUpperCase() + t.slice(1))?.classList.toggle('active', t === tab);
+  // Botones de tab
+  const tabMap = { escaner:'Escaner', inventario:'Inv', herramientas:'Herr', resumen:'Resumen' };
+  Object.entries(tabMap).forEach(([t, key]) => {
+    document.getElementById('segTab' + key)?.classList.toggle('active', t === tab);
   });
-  document.getElementById('segTabHerr')?.classList.remove('active');
-  document.getElementById('segPanelEscaner').style.display  = tab === 'escaner'    ? 'flex' : 'none';
-  document.getElementById('segPanelInv').style.display      = tab === 'inventario' ? 'flex' : 'none';
-  document.getElementById('segPanelResumen').style.display  = tab === 'resumen'    ? 'flex' : 'none';
-  if (tab === 'inventario') segCargarInv();
-  if (tab === 'resumen')    segCargarResumen();
+  // Paneles
+  document.getElementById('segPanelEscaner').style.display  = tab === 'escaner'      ? 'flex' : 'none';
+  document.getElementById('segPanelInv').style.display      = tab === 'inventario'   ? 'flex' : 'none';
+  document.getElementById('segPanelHerr').style.display     = tab === 'herramientas' ? 'flex' : 'none';
+  document.getElementById('segPanelResumen').style.display  = tab === 'resumen'      ? 'flex' : 'none';
+  if (tab === 'inventario')    segCargarInv();
+  if (tab === 'resumen')       segCargarResumen();
+  if (tab === 'herramientas')  segHerrCargar();
 }
+
+// ── Herramientas Seguridad ────────────────────────────────────────────────────
+let _segHerrItems = [];
+let _segHerrSubTabActivo = 'todos';
+
+async function segHerrCargar() {
+  const list = document.getElementById('segHerrList');
+  if (!list) return;
+  list.innerHTML = '<div class="empty-state">Cargando...</div>';
+  try {
+    const r = await apiCall('/inventario-seg');
+    _segHerrItems = r.ok ? await r.json() : [];
+  } catch { _segHerrItems = []; }
+  segHerrRender();
+}
+
+function segHerrSubTab(tab) {
+  _segHerrSubTabActivo = tab;
+  const btnT = document.getElementById('segHerrBtnTodos');
+  const btnA = document.getElementById('segHerrBtnAsig');
+  const ac = 'var(--accent)', mu = 'var(--muted)';
+  btnT.style.color = tab === 'todos' ? ac : mu;
+  btnT.style.borderBottom = tab === 'todos' ? `2px solid ${ac}` : '2px solid transparent';
+  btnA.style.color = tab === 'asignados' ? ac : mu;
+  btnA.style.borderBottom = tab === 'asignados' ? `2px solid ${ac}` : '2px solid transparent';
+  segHerrRender();
+}
+
+function segHerrFiltrar() { segHerrRender(); }
+
+function segHerrTipoIcon(tipo) {
+  const t = (tipo || '').toLowerCase();
+  if (t.includes('epi') || t.includes('casco') || t.includes('arnes') || t.includes('gafa')) return '🪖';
+  if (t.includes('extintor')) return '🧯';
+  if (t.includes('botiq')) return '🩺';
+  if (t.includes('detector')) return '📡';
+  if (t.includes('señal')) return '⚠️';
+  return '🔧';
+}
+
+function segHerrRender() {
+  const list = document.getElementById('segHerrList');
+  if (!list) return;
+  const q = (document.getElementById('segHerrSearch')?.value || '').toLowerCase();
+  const hoy = new Date();
+  const hoy30 = new Date(hoy.getTime() + 30 * 86400000);
+
+  let items = _segHerrItems.filter(i => i.estado !== 'baja');
+  if (_segHerrSubTabActivo === 'asignados') {
+    items = items.filter(i =>
+      i.estado === 'en_uso' ||
+      (i.modo === 'cantidad' && (i.cantidad_disponible || 0) < (i.cantidad_total || 0))
+    );
+  }
+  if (q) items = items.filter(i =>
+    (i.nombre||'').toLowerCase().includes(q) ||
+    (i.codigo||'').toLowerCase().includes(q) ||
+    (i.tipo_material||'').toLowerCase().includes(q) ||
+    (i.destino_actual||'').toLowerCase().includes(q)
+  );
+
+  if (!items.length) {
+    list.innerHTML = `<div class="empty-state">${_segHerrSubTabActivo === 'asignados' ? 'Ningún ítem asignado' : 'Sin herramientas. Pulsa + para añadir'}</div>`;
+    return;
+  }
+
+  list.innerHTML = items.map(i => {
+    let cadBadge = '';
+    if (i.fecha_caducidad) {
+      const cad = new Date(i.fecha_caducidad);
+      if (cad < hoy)      cadBadge = `<span style="background:#ef4444;color:#fff;font-size:10px;font-weight:700;padding:2px 6px;border-radius:6px;margin-left:4px">CADUCADO</span>`;
+      else if (cad <= hoy30) cadBadge = `<span style="background:#f59e0b;color:#000;font-size:10px;font-weight:700;padding:2px 6px;border-radius:6px;margin-left:4px">⚠️ ${i.fecha_caducidad}</span>`;
+    }
+    let estadoBadge = '';
+    if (i.modo === 'individual') {
+      estadoBadge = i.estado === 'en_uso'
+        ? `<span style="background:#6366f120;color:#6366f1;font-size:11px;font-weight:700;padding:3px 8px;border-radius:8px;white-space:nowrap">👤 ${i.destino_actual||'Asignado'}</span>`
+        : `<span style="background:#22c55e20;color:#22c55e;font-size:11px;font-weight:700;padding:3px 8px;border-radius:8px">✅ Libre</span>`;
+    } else {
+      const lib = i.cantidad_disponible || 0, tot = i.cantidad_total || 0;
+      const col = lib === 0 ? '#ef4444' : lib < (i.stock_minimo || 0) ? '#f59e0b' : '#22c55e';
+      estadoBadge = `<span style="background:${col}20;color:${col};font-size:11px;font-weight:700;padding:3px 8px;border-radius:8px">${lib}/${tot}</span>`;
+    }
+    return `<div onclick="segHerrDetalle(${i.id})" style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:8px;cursor:pointer;display:flex;align-items:center;gap:10px">
+      <div style="font-size:26px;flex-shrink:0">${segHerrTipoIcon(i.tipo_material)}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:14px;color:var(--text)">${i.nombre||i.tipo_material}${cadBadge}</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:2px">${i.tipo_material}${i.codigo ? ' · ' + i.codigo : ''}</div>
+      </div>
+      <div style="flex-shrink:0">${estadoBadge}</div>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
+    </div>`;
+  }).join('');
+}
+
+function segHerrDetalle(id) {
+  const i = _segHerrItems.find(x => x.id === id);
+  if (!i) return;
+  const hoy = new Date(), hoy30 = new Date(hoy.getTime() + 30*86400000);
+  const cad = i.fecha_caducidad ? new Date(i.fecha_caducidad) : null;
+  const caducado = cad && cad < hoy;
+  const cadProx  = cad && !caducado && cad <= hoy30;
+
+  let btnAccion = '';
+  if (i.modo === 'individual') {
+    btnAccion = i.estado !== 'en_uso'
+      ? `<button class="btn-primary" onclick="segHerrAsignar(${id})" style="flex:1">📤 Asignar</button>`
+      : `<button class="btn-primary" onclick="segHerrDevolver(${id})" style="flex:1;background:#22c55e">↩️ Devolver</button>`;
+  } else {
+    btnAccion = `<button class="btn-primary" onclick="segHerrSalida(${id})" style="flex:1">📤 Salida</button>
+                 <button class="btn-primary" onclick="segHerrEntrada(${id})" style="flex:1;background:#22c55e">↩️ Entrada</button>`;
+  }
+
+  document.getElementById('segHerrModalContent').innerHTML = `
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+      <div style="font-size:40px">${segHerrTipoIcon(i.tipo_material)}</div>
+      <div>
+        <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:17px">${i.nombre||i.tipo_material}</div>
+        <div style="font-size:12px;color:var(--muted)">${i.tipo_material}${i.codigo ? ' · ' + i.codigo : ''}</div>
+      </div>
+    </div>
+    ${i.destino_actual ? `<div style="background:#6366f120;border-radius:8px;padding:8px 12px;margin-bottom:10px;font-size:13px">👤 Asignado a: <b>${i.destino_actual}</b></div>` : ''}
+    ${caducado ? `<div style="background:#ef444420;border-radius:8px;padding:8px 12px;margin-bottom:10px;font-size:13px;color:#ef4444">⛔ Caducado el ${i.fecha_caducidad}</div>` : ''}
+    ${cadProx  ? `<div style="background:#f59e0b20;border-radius:8px;padding:8px 12px;margin-bottom:10px;font-size:13px;color:#f59e0b">⚠️ Caduca el ${i.fecha_caducidad}</div>` : ''}
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:13px;margin-bottom:14px">
+      <div><span style="color:var(--muted)">Estado:</span> ${i.estado}</div>
+      <div><span style="color:var(--muted)">Modo:</span> ${i.modo}</div>
+      ${i.modo==='cantidad' ? `<div><span style="color:var(--muted)">Disponible:</span> ${i.cantidad_disponible}/${i.cantidad_total}</div>` : ''}
+      ${i.notas ? `<div style="grid-column:1/-1"><span style="color:var(--muted)">Notas:</span> ${i.notas}</div>` : ''}
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      ${btnAccion}
+      <button onclick="segHerrBaja(${id})" style="padding:12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:#ef4444;cursor:pointer;font-size:16px">🗑️</button>
+      <button onclick="segHerrCerrarModal()" style="padding:12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--muted);cursor:pointer">✕</button>
+    </div>`;
+  document.getElementById('segHerrModal').style.display = 'flex';
+}
+
+function segHerrCerrarModal() { document.getElementById('segHerrModal').style.display = 'none'; }
+
+async function segHerrAsignar(id) {
+  const nombre = prompt('¿A quién se asigna?');
+  if (!nombre?.trim()) return;
+  const r = await apiCall(`/inventario-seg/${id}`, { method:'PUT', body: JSON.stringify({ accion:'salida', destino: nombre.trim(), cantidad:1 }) });
+  const d = await r.json();
+  if (!d.ok) { toast('❌ ' + (d.error||'Error'), 'err'); return; }
+  toast('✅ Asignado a ' + nombre.trim());
+  segHerrCerrarModal(); segHerrCargar();
+}
+
+async function segHerrDevolver(id) {
+  const r = await apiCall(`/inventario-seg/${id}`, { method:'PUT', body: JSON.stringify({ accion:'devolucion', cantidad:1 }) });
+  const d = await r.json();
+  if (!d.ok) { toast('❌ ' + (d.error||'Error'), 'err'); return; }
+  toast('✅ Devuelto — disponible');
+  segHerrCerrarModal(); segHerrCargar();
+}
+
+async function segHerrSalida(id) {
+  const i = _segHerrItems.find(x => x.id === id);
+  if (!i) return;
+  const cant = parseInt(prompt(`¿Cuántas unidades salen? (disponible: ${i.cantidad_disponible})`));
+  if (!cant || cant <= 0) return;
+  const destino = prompt('¿A quién / dónde van?') || '';
+  const r = await apiCall(`/inventario-seg/${id}`, { method:'PUT', body: JSON.stringify({ accion:'salida', destino, cantidad: cant }) });
+  const d = await r.json();
+  if (!d.ok) { toast('❌ ' + (d.error||'Error'), 'err'); return; }
+  toast('✅ Salida registrada');
+  segHerrCerrarModal(); segHerrCargar();
+}
+
+async function segHerrEntrada(id) {
+  const i = _segHerrItems.find(x => x.id === id);
+  if (!i) return;
+  const fuera = (i.cantidad_total||0) - (i.cantidad_disponible||0);
+  const cant = parseInt(prompt(`¿Cuántas unidades entran? (fuera: ${fuera})`)) || 1;
+  const r = await apiCall(`/inventario-seg/${id}`, { method:'PUT', body: JSON.stringify({ accion:'devolucion', cantidad: cant }) });
+  const d = await r.json();
+  if (!d.ok) { toast('❌ ' + (d.error||'Error'), 'err'); return; }
+  toast('✅ Entrada registrada');
+  segHerrCerrarModal(); segHerrCargar();
+}
+
+async function segHerrBaja(id) {
+  if (!confirm('¿Dar de baja este ítem? No se podrá deshacer.')) return;
+  const r = await apiCall(`/inventario-seg/${id}`, { method:'PUT', body: JSON.stringify({ accion:'baja', cantidad:1 }) });
+  const d = await r.json();
+  if (!d.ok) { toast('❌ ' + (d.error||'Error'), 'err'); return; }
+  toast('🗑️ Dado de baja');
+  segHerrCerrarModal(); segHerrCargar();
+}
+
+function segHerrNuevo(codigoPrefill = '') {
+  document.getElementById('segHerrNuevoCodigo').value = codigoPrefill;
+  document.getElementById('segHerrNuevoNombre').value = '';
+  document.getElementById('segHerrNuevoTipo').value = '';
+  document.getElementById('segHerrNuevoCad').value = '';
+  document.getElementById('segHerrNuevoNotas').value = '';
+  document.getElementById('segHerrNuevoModo').value = 'individual';
+  segHerrToggleModo();
+  document.getElementById('segHerrNuevoModal').style.display = 'flex';
+}
+
+function segHerrToggleModo() {
+  const modo = document.getElementById('segHerrNuevoModo').value;
+  document.getElementById('segHerrCodGrp').style.display  = modo === 'individual' ? '' : 'none';
+  document.getElementById('segHerrCantGrp').style.display = modo === 'cantidad'   ? '' : 'none';
+  document.getElementById('segHerrMinGrp').style.display  = modo === 'cantidad'   ? '' : 'none';
+}
+
+function segHerrCerrarNuevoModal() { document.getElementById('segHerrNuevoModal').style.display = 'none'; }
+
+async function segHerrGuardarNuevo() {
+  const tipo   = document.getElementById('segHerrNuevoTipo').value.trim();
+  const nombre = document.getElementById('segHerrNuevoNombre').value.trim();
+  const modo   = document.getElementById('segHerrNuevoModo').value;
+  const codigo = document.getElementById('segHerrNuevoCodigo').value.trim().toUpperCase();
+  const cant   = parseInt(document.getElementById('segHerrNuevoCant').value) || 1;
+  const min    = parseInt(document.getElementById('segHerrNuevoMin').value) || 0;
+  const cad    = document.getElementById('segHerrNuevoCad').value;
+  const notas  = document.getElementById('segHerrNuevoNotas').value.trim();
+  if (!tipo) { toast('❌ Elige un tipo', 'err'); return; }
+  if (modo === 'individual' && !codigo) { toast('❌ El código es obligatorio en modo individual', 'err'); return; }
+  const body = { tipo_material: tipo, nombre: nombre || tipo, modo, codigo: codigo || null, cantidad_total: cant, stock_minimo: min, fecha_caducidad: cad || null, notas };
+  const r = await apiCall('/inventario-seg', { method:'POST', body: JSON.stringify(body) });
+  const d = await r.json();
+  if (!d.ok) { toast('❌ ' + (d.error||'Error al guardar'), 'err'); return; }
+  toast('✅ Herramienta añadida');
+  segHerrCerrarNuevoModal();
+  segHerrCargar();
+}
+// ─────────────────────────────────────────────────────────────────────────────
 
 async function segCargarResumen() {
   const c = document.getElementById('segDashContent');
@@ -7938,7 +8252,7 @@ async function cargarObrasSelectUsuario() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '5.11';
+const APP_VERSION = '5.12';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
