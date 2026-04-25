@@ -1267,6 +1267,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
       <button class="mod-tab-btn"        id="segTabInv"      onclick="segSelTab('inventario')">📦 Inventario</button>
       <button class="mod-tab-btn"        id="segTabHerr"     onclick="segSelTab('herramientas')">🔧 Herramientas</button>
       <button class="mod-tab-btn"        id="segTabResumen"  onclick="segSelTab('resumen')">📊 Resumen</button>
+      <button class="mod-tab-btn"        id="segTabChat"     onclick="chatAbrir()">💬 Chat</button>
     </div>
 
     <!-- ── TAB ESCÁNER ── -->
@@ -8252,7 +8253,7 @@ async function cargarObrasSelectUsuario() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '5.12';
+const APP_VERSION = '5.13';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -8350,7 +8351,15 @@ let _backPressTimer  = null;
 
 window.addEventListener('popstate', function() {
   const s = getSession();
-  if (!s) return; // no hay sesión activa, comportamiento normal del navegador
+  if (!s) return;
+
+  // Si hay una foto de sugerencia zoomed, cerrarla primero
+  const zoomedImg = document.querySelector('img[data-zoomed="1"]');
+  if (zoomedImg) {
+    abrirFotoSug(zoomedImg);
+    history.pushState({ alejandra: 1 }, '');
+    return;
+  }
 
   if (_navHistory.length > 0) {
     // Hay historial: navegar atrás dentro de la app
