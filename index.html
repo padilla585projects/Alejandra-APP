@@ -282,8 +282,9 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
 .dept-name{font-family:'Montserrat',sans-serif;font-weight:900;font-size:20px;color:var(--text)}
 .dept-desc{font-size:12px;color:var(--muted);margin-top:4px}
 /* Dept pill superadmin */
-.dept-pill{display:flex;align-items:center;gap:5px;background:var(--surface2);border:1px solid var(--accent);border-radius:20px;padding:4px 10px;font-family:'Montserrat',sans-serif;font-weight:700;font-size:11px;color:var(--accent);cursor:pointer;transition:all .2s;white-space:nowrap;flex-shrink:0}
+.dept-pill{display:flex;align-items:center;background:var(--surface2);border:1px solid var(--accent);border-radius:20px;padding:3px 8px;color:var(--accent);cursor:pointer;transition:all .2s;white-space:nowrap;flex-shrink:0}
 .dept-pill:active{opacity:.7}
+#deptPillIcon{font-size:22px;line-height:1.2}
 /* Filtros sugerencias */
 .sug-filter{padding:4px 10px;border-radius:20px;border:1px solid var(--border);background:var(--surface);color:var(--muted);font-size:11px;font-weight:600;cursor:pointer;transition:all .2s;white-space:nowrap}
 .sug-filter:hover{border-color:var(--accent);color:var(--accent)}
@@ -556,8 +557,8 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
     </svg>
   </div>
   <div class="header-center" id="headerCenter">
-    <div class="dept-pill" id="deptPill" style="display:none" onclick="volverSelectorDepto()">
-      <span id="deptPillIcon"></span>&nbsp;<span id="deptPillName"></span>
+    <div class="dept-pill" id="deptPill" style="display:none" onclick="clickDeptPill()">
+      <span id="deptPillIcon"></span>
     </div>
     <span class="obra-label" id="headerObraLabel"></span>
     <select class="obra-select" id="headerObraSelect" style="display:none" onchange="onObraSelectChange(this.value)"></select>
@@ -693,6 +694,17 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="color:var(--muted)"><path d="m9 18 6-6-6-6"/></svg>
       </div>
     </div>
+    <!-- Chat del equipo — accesible desde todos los departamentos -->
+    <div style="padding:0 16px 20px">
+      <div class="module-card" onclick="chatAbrir()" style="border-left:3px solid var(--accent)">
+        <div class="module-emoji">💬</div>
+        <div class="module-info">
+          <div class="module-name">Chat del equipo</div>
+          <div class="module-desc">Mensajes internos con el equipo</div>
+        </div>
+        <svg class="module-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
+      </div>
+    </div>
   </div>
 
   <!-- EMPRESA SELECTOR (superadmin) -->
@@ -759,7 +771,23 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
         <span class="drag-handle">⠿</span><svg class="module-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
       </div>
       <div class="module-card" id="cardCarretillas" onclick="selectModule('carretillas')">
-        <div class="module-emoji">🚜</div>
+        <div class="module-emoji">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="52" height="52">
+            <rect x="4" y="40" width="50" height="32" rx="5" fill="#f97316"/>
+            <rect x="8" y="24" width="28" height="18" rx="3" fill="#fb923c" opacity="0.9"/>
+            <rect x="11" y="27" width="20" height="11" rx="2" fill="#bfdbfe" opacity="0.6"/>
+            <rect x="56" y="16" width="5" height="60" rx="2" fill="#334155"/>
+            <rect x="68" y="16" width="5" height="60" rx="2" fill="#334155"/>
+            <rect x="56" y="24" width="17" height="4" rx="1" fill="#475569"/>
+            <rect x="54" y="56" width="10" height="18" rx="1" fill="#475569"/>
+            <rect x="60" y="59" width="34" height="5" rx="2" fill="#e2e8f0"/>
+            <rect x="60" y="69" width="34" height="5" rx="2" fill="#e2e8f0"/>
+            <circle cx="18" cy="80" r="11" fill="#1e293b" stroke="#475569" stroke-width="2"/>
+            <circle cx="18" cy="80" r="4.5" fill="#64748b"/>
+            <circle cx="50" cy="80" r="9" fill="#1e293b" stroke="#475569" stroke-width="2"/>
+            <circle cx="50" cy="80" r="3.5" fill="#64748b"/>
+          </svg>
+        </div>
         <div class="module-info">
           <div class="module-name">Carretillas</div>
           <div class="module-desc">Carretillas elevadoras</div>
@@ -811,7 +839,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
         </div>
         <span class="drag-handle">⠿</span><svg class="module-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
       </div>
-      <div class="module-card" id="cardChat" onclick="chatAbrir()" style="display:none">
+      <div class="module-card" id="cardChat" onclick="chatAbrir()" style="display:none;pointer-events:none;height:0;padding:0;margin:0;overflow:hidden">
         <div class="module-emoji">💬</div>
         <div class="module-info">
           <div class="module-name">Chat del equipo</div>
@@ -1284,11 +1312,6 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
         <div class="module-info"><div class="module-name">Resumen</div><div class="module-desc">Estadísticas y estado de seguridad</div></div>
         <svg class="module-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
       </div>
-      <div class="module-card" onclick="chatAbrir()">
-        <div class="module-emoji">💬</div>
-        <div class="module-info"><div class="module-name">Chat del equipo</div><div class="module-desc">Mensajes internos con el equipo</div></div>
-        <svg class="module-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
-      </div>
     </div>
 
     <!-- ── TAB ESCÁNER ── -->
@@ -1538,7 +1561,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
           </div>
         </div>
         <div class="admin-section" id="cfgCarrSection">
-          <div class="admin-section-title">🚜 Carretillas</div>
+          <div class="admin-section-title">🏗️ Carretillas</div>
           <div style="font-family:'Montserrat',sans-serif;font-weight:700;font-size:12px;color:var(--muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:1px">🔧 Tipos</div>
           <div class="tag-row" id="tagsTiposCarr"></div>
           <div class="tag-add-row" style="margin-bottom:14px">
@@ -1700,7 +1723,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
           <div class="settings-row"><span>Sync</span><strong>Automático en cada cambio</strong></div>
           <button class="btn-primary btn-secondary" style="font-size:13px" onclick="forzarSync()">🔄 Forzar sincronización</button>
         </div>
-        <div class="settings-section">
+        <div class="settings-section" id="sistemaBackupInvSection">
           <div class="settings-title">📦 Backup inventario</div>
           <div style="color:var(--muted);font-size:12px;margin-bottom:8px">Bobinas, PEMP, carretillas, seguridad, pedidos, herramientas</div>
           <div style="display:flex;gap:8px;flex-wrap:wrap">
@@ -1709,7 +1732,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
           </div>
           <input type="file" id="inputRestInventario" accept=".json" style="display:none" onchange="restaurarBackup('inventario', this)">
         </div>
-        <div class="settings-section">
+        <div class="settings-section" id="sistemaBackupEmpSection">
           <div class="settings-title">🏢 Backup empresa</div>
           <div style="color:var(--muted);font-size:12px;margin-bottom:8px">Obras, catálogos, usuarios (sin contraseñas)</div>
           <div style="display:flex;gap:8px;flex-wrap:wrap">
@@ -2147,20 +2170,38 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
   <!-- ══════════════════════════════════════════
        PERSONAL
   ══════════════════════════════════════════ -->
-  <div id="screenPersonal" class="screen" style="padding:0;display:none;flex-direction:column">
-    <!-- Tabs -->
-    <div class="mod-tabs" style="flex-shrink:0">
-      <button class="mod-tab-btn active" id="perTab0" onclick="personalSelTab(0)">📋 Hoy</button>
-      <button class="mod-tab-btn"        id="perTab1" onclick="personalSelTab(1)">📅 Semana</button>
-      <button class="mod-tab-btn"        id="perTab2" onclick="personalSelTab(2)">📊 Resumen</button>
-      <button class="mod-tab-btn"        id="perTab3" onclick="personalSelTab(3)">👷 Plantilla</button>
-      <button class="mod-tab-btn"        id="perTab4" onclick="chatAbrir()">💬 Chat</button>
+  <div id="screenPersonal" class="screen flex-screen" style="padding:0;height:100%;display:none;flex-direction:column">
+
+    <!-- Home: tarjetas de sección -->
+    <div id="perPanelHome" style="display:flex;flex-direction:column;flex:1;overflow-y:auto;padding:14px 14px 80px">
+      <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:11px;letter-spacing:2px;color:var(--muted);text-transform:uppercase;margin-bottom:12px">👷 Personal</div>
+      <div class="module-card" onclick="personalSelTab(0)">
+        <div class="module-emoji">📋</div>
+        <div class="module-info"><div class="module-name">Fichajes de hoy</div><div class="module-desc">Registro de entrada y salida del día</div></div>
+        <svg class="module-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
+      </div>
+      <div class="module-card" onclick="personalSelTab(1)">
+        <div class="module-emoji">📅</div>
+        <div class="module-info"><div class="module-name">Semana</div><div class="module-desc">Vista semanal de fichajes</div></div>
+        <svg class="module-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
+      </div>
+      <div class="module-card" onclick="personalSelTab(2)">
+        <div class="module-emoji">📊</div>
+        <div class="module-info"><div class="module-name">Resumen mensual</div><div class="module-desc">Estadísticas y horas del mes</div></div>
+        <svg class="module-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
+      </div>
+      <div class="module-card" onclick="personalSelTab(3)">
+        <div class="module-emoji">👷</div>
+        <div class="module-info"><div class="module-name">Equipo</div><div class="module-desc">Plantilla y personal externo</div></div>
+        <svg class="module-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
+      </div>
     </div>
 
-    <!-- TAB 0: HOY -->
-    <div id="perPanelHoy" style="display:flex;flex-direction:column;flex:1;overflow:hidden">
-      <div style="padding:10px 14px 8px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;align-items:center;gap:8px">
-        <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:13px;color:var(--accent)" id="perHoyFechaLabel">—</div>
+    <!-- PANEL 0: HOY -->
+    <div id="perPanelHoy" style="display:none;flex-direction:column;flex:1;overflow:hidden">
+      <div style="display:flex;align-items:center;gap:8px;padding:8px 14px;border-bottom:1px solid var(--border);flex-shrink:0">
+        <button onclick="personalSelTab(-1)" style="background:var(--surface2);border:none;border-radius:50%;width:30px;height:30px;font-size:16px;cursor:pointer;color:var(--text);flex-shrink:0">←</button>
+        <span style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:13px;color:var(--accent)" id="perHoyFechaLabel">—</span>
         <div style="flex:1"></div>
         <button id="btnExportHoy" onclick="exportarFichajesHoy()" style="padding:5px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:'Montserrat',sans-serif;font-weight:700;font-size:10px;cursor:pointer;letter-spacing:.5px">📊 EXCEL</button>
       </div>
@@ -2171,9 +2212,10 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
       </div>
     </div>
 
-    <!-- TAB 1: SEMANA -->
+    <!-- PANEL 1: SEMANA -->
     <div id="perPanelSemana" style="display:none;flex-direction:column;flex:1;overflow:hidden">
-      <div style="padding:10px 14px 8px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;align-items:center;gap:8px">
+      <div style="display:flex;align-items:center;gap:8px;padding:8px 14px;border-bottom:1px solid var(--border);flex-shrink:0">
+        <button onclick="personalSelTab(-1)" style="background:var(--surface2);border:none;border-radius:50%;width:30px;height:30px;font-size:16px;cursor:pointer;color:var(--text);flex-shrink:0">←</button>
         <button onclick="perNavSemana(-1)" style="background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer;padding:0 4px;font-family:'Montserrat',sans-serif;font-weight:900">‹</button>
         <div style="flex:1;text-align:center;font-family:'Montserrat',sans-serif;font-weight:900;font-size:12px;color:var(--accent)" id="perSemLabel">—</div>
         <button onclick="perNavSemana(+1)" style="background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer;padding:0 4px;font-family:'Montserrat',sans-serif;font-weight:900">›</button>
@@ -2184,9 +2226,10 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
       </div>
     </div>
 
-    <!-- TAB 2: RESUMEN MENSUAL -->
+    <!-- PANEL 2: RESUMEN MENSUAL -->
     <div id="perPanelResumen" style="display:none;flex-direction:column;flex:1;overflow:hidden">
-      <div style="padding:10px 14px 8px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;align-items:center;gap:8px">
+      <div style="display:flex;align-items:center;gap:8px;padding:8px 14px;border-bottom:1px solid var(--border);flex-shrink:0">
+        <button onclick="personalSelTab(-1)" style="background:var(--surface2);border:none;border-radius:50%;width:30px;height:30px;font-size:16px;cursor:pointer;color:var(--text);flex-shrink:0">←</button>
         <button onclick="perNavMes(-1)" style="background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer;padding:0 4px;font-family:'Montserrat',sans-serif;font-weight:900">‹</button>
         <div style="flex:1;text-align:center;font-family:'Montserrat',sans-serif;font-weight:900;font-size:12px;color:var(--accent)" id="perMesLabel">—</div>
         <button onclick="perNavMes(+1)" style="background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer;padding:0 4px;font-family:'Montserrat',sans-serif;font-weight:900">›</button>
@@ -2197,13 +2240,17 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
       </div>
     </div>
 
-    <!-- TAB 3: PLANTILLA (personal externo por obra) -->
+    <!-- PANEL 3: EQUIPO/PLANTILLA -->
     <div id="perPanelPlantilla" style="display:none;flex-direction:column;flex:1;overflow:hidden">
-      <div style="padding:10px 14px 8px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;align-items:center;gap:8px">
-        <select id="plantillaFiltroObra" class="form-input" style="flex:1;font-size:13px;padding:6px 10px" onchange="cargarPlantilla()">
+      <div style="display:flex;align-items:center;gap:8px;padding:8px 14px;border-bottom:1px solid var(--border);flex-shrink:0">
+        <button onclick="personalSelTab(-1)" style="background:var(--surface2);border:none;border-radius:50%;width:30px;height:30px;font-size:16px;cursor:pointer;color:var(--text);flex-shrink:0">←</button>
+        <span style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:13px;flex:1">👷 Equipo</span>
+        <button onclick="abrirModalPersonalExt()" style="padding:6px 12px;background:var(--accent);border:none;border-radius:8px;color:#000;font-family:'Montserrat',sans-serif;font-weight:900;font-size:12px;cursor:pointer;white-space:nowrap">+ Añadir</button>
+      </div>
+      <div style="padding:6px 14px;border-bottom:1px solid var(--border);flex-shrink:0">
+        <select id="plantillaFiltroObra" class="form-input" style="width:100%;font-size:13px;padding:6px 10px" onchange="cargarPlantilla()">
           <option value="">— Todas las obras —</option>
         </select>
-        <button onclick="abrirModalPersonalExt()" style="padding:6px 12px;background:var(--accent);border:none;border-radius:8px;color:#000;font-family:'Montserrat',sans-serif;font-weight:900;font-size:12px;cursor:pointer;white-space:nowrap">+ Añadir</button>
       </div>
       <div id="perListaPlantilla" style="padding:10px 14px 80px;overflow-y:auto;flex:1">
         <div class="empty-state">Cargando…</div>
@@ -3110,7 +3157,7 @@ async function iniciarApp() {
   }
   if (s.departamento === 'personal') {
     showScreen('personal');
-    personalSelTab(0);
+    personalSelTab(-1);
     return;
   }
 
@@ -3147,25 +3194,28 @@ function renderHeader() {
     : (s.nombre || '—');
 
   const deptPill = document.getElementById('deptPill');
-  if (s.rol === 'superadmin' && s.departamento) {
+  if (s.departamento) {
     const di = DEPT_INFO[s.departamento] || { icon: '?', name: s.departamento };
     document.getElementById('deptPillIcon').textContent = di.icon;
-    document.getElementById('deptPillName').textContent = '';   // solo icono — ahorra espacio en barra
-    deptPill.title = di.name;                                   // nombre completo en tooltip
+    document.getElementById('deptPillName').textContent = '';
+    deptPill.title = di.name;
     deptPill.style.display = 'flex';
-    document.getElementById('headerObraLabel').style.display = 'none';
-    document.getElementById('headerObraSelect').style.display = 'block';
-    cargarObrasHeader();
   } else {
     deptPill.style.display = 'none';
-    if (s.rol === 'superadmin') {
+  }
+  if (s.rol === 'superadmin') {
+    if (s.departamento) {
+      document.getElementById('headerObraLabel').style.display = 'none';
+      document.getElementById('headerObraSelect').style.display = 'block';
+      cargarObrasHeader();
+    } else {
       document.getElementById('headerObraLabel').style.display = 'none';
       document.getElementById('headerObraSelect').style.display = 'none';
-    } else {
-      document.getElementById('headerObraLabel').textContent = '🏗 ' + (s.obra_nombre || '—');
-      document.getElementById('headerObraLabel').style.display = 'block';
-      document.getElementById('headerObraSelect').style.display = 'none';
     }
+  } else {
+    document.getElementById('headerObraLabel').textContent = '🏗 ' + (s.obra_nombre || '—');
+    document.getElementById('headerObraLabel').style.display = 'block';
+    document.getElementById('headerObraSelect').style.display = 'none';
   }
 }
 
@@ -3195,11 +3245,10 @@ function setupHomeModules() {
   const cardPed = document.getElementById('cardPedidos');
   const btnNuevo = document.getElementById('btnNuevoPedido');
   const cardDocs  = document.getElementById('cardDocs');
-  const cardChat  = document.getElementById('cardChat');
   const cardDash  = document.getElementById('cardObraDashboard');
   const cardInc   = document.getElementById('cardIncidencias');
   const cardCal   = document.getElementById('cardCalendario');
-  // Seguridad: sin tarjetas de inventario, pero sí Pedidos, Docs, Chat, Dashboard e Incidencias
+  // Seguridad: sin tarjetas de inventario, pero sí Pedidos, Docs, Dashboard e Incidencias
   if (dept === 'seguridad') {
     if (cardB) cardB.style.display = 'none';
     if (cardP) cardP.style.display = 'none';
@@ -3207,7 +3256,6 @@ function setupHomeModules() {
     if (cardPed) cardPed.style.display = 'flex';
     if (btnNuevo) btnNuevo.style.display = 'flex';
     if (cardDocs) cardDocs.style.display = 'flex';
-    if (cardChat) cardChat.style.display = 'flex';
     if (cardDash) cardDash.style.display = 'flex';
     if (cardInc)  cardInc.style.display  = 'flex';
     if (cardCal)  cardCal.style.display  = 'flex';
@@ -3227,9 +3275,8 @@ function setupHomeModules() {
   // Herramientas: visible para todos excepto seguridad
   const cardHerr = document.getElementById('cardHerramientas');
   if (cardHerr) cardHerr.style.display = 'flex';
-  // Documentación, Chat, Dashboard, Incidencias y Calendario: visible para todos
+  // Documentación, Dashboard, Incidencias y Calendario: visible para todos
   if (cardDocs) cardDocs.style.display = 'flex';
-  if (cardChat) cardChat.style.display = 'flex';
   if (cardDash) cardDash.style.display = 'flex';
   if (cardInc)  cardInc.style.display  = 'flex';
   if (cardCal)  cardCal.style.display  = 'flex';
@@ -3421,7 +3468,7 @@ function _navegarTrasObra(dept) {
   }
   if (dept === 'personal') {
     showScreen('personal');
-    personalSelTab(0);
+    personalSelTab(-1);
     return;
   }
   showScreen('home');
@@ -3617,7 +3664,7 @@ function _applyScreen(name) {
   if (name === 'ajustes')      { renderAjustesInfo(); initAjustesTabs(); }
   if (name === 'pedidos')      { cargarPedidos(); }
   if (name === 'herramientas') { herrSelTab(0); }
-  if (name === 'personal')     { personalSelTab(0); }
+  if (name === 'personal')     { personalSelTab(-1); }
   if (name === 'docs')         { docsCargar('screenDocsPanel'); }
   if (name === 'obraDashboard')  { cargarObraDashboard(); }
   if (name === 'incidencias')    { cargarIncidencias(); }
@@ -3715,7 +3762,7 @@ function navTo(target) {
   }
   if (target === 'personal') {
     _applyScreen('personal');
-    personalSelTab(0);
+    personalSelTab(-1);
     actualizarBtnAtras();
     return;
   }
@@ -7409,6 +7456,7 @@ function initAjustesTabs() {
   const esSA  = s.rol === 'superadmin';
   const esEnc = s.rol === 'encargado';
   const esEA  = s.rol === 'empresa_admin';
+  const esOp  = s.rol === 'operario';
   const dept  = s.departamento;
 
   document.getElementById('ajTabUsuarios').style.display = (esSA || esEnc || esEA) ? '' : 'none';
@@ -7421,11 +7469,16 @@ function initAjustesTabs() {
   const secGest = document.getElementById('seccionGestionSesiones');
   if (secGest) secGest.style.display = puedeGestionarSesiones ? '' : 'none';
 
-  // #37: Seguridad no necesita la pestaña Catálogos
-  document.getElementById('ajTabCatalogos').style.display = (dept === 'seguridad' && !esSA) ? 'none' : '';
+  // #37/#61: Catálogos — sólo roles con catálogos relevantes (no operarios, no seguridad, no personal)
+  const mostrarCatalogos = esSA || esEA || (!esOp && dept !== 'seguridad' && dept !== 'personal');
+  document.getElementById('ajTabCatalogos').style.display = mostrarCatalogos ? '' : 'none';
+
+  // #61: Backups — sólo admins/encargados, no operarios; inventario no aplica a Personal
+  const show = (id, visible) => { const el = document.getElementById(id); if (el) el.style.display = visible ? '' : 'none'; };
+  show('sistemaBackupInvSection', !esOp && dept !== 'personal');
+  show('sistemaBackupEmpSection', !esOp);
 
   // #35: Catálogos filtrados por departamento
-  const show = (id, visible) => { const el = document.getElementById(id); if (el) el.style.display = visible ? '' : 'none'; };
   show('cfgBobinasSection', esSA || esEA || dept === 'electrico');
   show('cfgPempSection',    esSA || esEA || dept === 'electrico' || dept === 'mecanicas');
   show('cfgCarrSection',    esSA || esEA || dept === 'electrico' || dept === 'mecanicas');
@@ -8276,7 +8329,7 @@ async function cargarObrasSelectUsuario() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '5.15';
+const APP_VERSION = '5.16';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -10003,28 +10056,37 @@ if ('serviceWorker' in navigator) {
 
   // ── Tab selector ──
   function personalSelTab(n) {
-    [0,1,2,3].forEach(i => {
-      const btn = document.getElementById('perTab'+i);
-      if (btn) btn.classList.toggle('active', i===n);
-    });
-    const panels = ['perPanelHoy','perPanelSemana','perPanelResumen','perPanelPlantilla'];
-    panels.forEach((id,i) => {
+    const home    = document.getElementById('perPanelHome');
+    const panels  = ['perPanelHoy','perPanelSemana','perPanelResumen','perPanelPlantilla'];
+    const fab     = document.getElementById('btnNuevoFichaje');
+    const fabEq   = document.getElementById('btnFichajeEquipo');
+    const s       = getSession();
+    const esAdmin = s?.rol !== 'operario';
+
+    if (n === -1) {
+      // Mostrar home con tarjetas
+      if (home) { home.style.display = 'flex'; home.style.flexDirection = 'column'; }
+      panels.forEach(id => { const el = document.getElementById(id); if (el) el.style.display = 'none'; });
+      if (fab)   fab.style.display   = 'none';
+      if (fabEq) fabEq.style.display = 'none';
+      return;
+    }
+
+    // Mostrar sub-panel concreto
+    if (home) home.style.display = 'none';
+    panels.forEach((id, i) => {
       const el = document.getElementById(id);
       if (!el) return;
-      el.style.display = (i===n) ? 'flex' : 'none';
-      el.style.flexDirection = 'column';
+      el.style.display = (i === n) ? 'flex' : 'none';
+      if (i === n) el.style.flexDirection = 'column';
     });
-    const fab   = document.getElementById('btnNuevoFichaje');
-    const fabEq = document.getElementById('btnFichajeEquipo');
-    const s = getSession();
-    const esAdmin = s?.rol !== 'operario';
-    // FABs solo visibles en tabs de fichajes, no en Plantilla
+    // FABs solo en paneles de fichajes (no en Plantilla ni home)
     if (fab)   fab.style.display   = (esAdmin && n !== 3) ? 'flex' : 'none';
     if (fabEq) fabEq.style.display = (esAdmin && n !== 3) ? 'flex' : 'none';
-    if (n===0) cargarHoy();
-    if (n===1) cargarSemana();
-    if (n===2) cargarResumenMes();
-    if (n===3) cargarPlantilla();
+    if (n === 0) cargarHoy();
+    if (n === 1) cargarSemana();
+    if (n === 2) cargarResumenMes();
+    if (n === 3) cargarPlantilla();
   }
 
   // ── Cargar trabajadores (cache) ──
