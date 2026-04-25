@@ -7,8 +7,8 @@
 
 **Sesión:** LIBRE
 **Última sesión:** 25/04/2026
-**Versión tras última sesión:** v5.15
-**Worker desplegado:** v5.15 (ID: 077375e5-2b54-4662-adce-30a32d00a6d3)
+**Versión tras última sesión:** v5.16
+**Worker desplegado:** v5.15 (ID: 077375e5 — worker sin cambios)
 **GitHub:** en sync ✅
 
 ---

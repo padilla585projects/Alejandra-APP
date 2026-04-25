@@ -5,7 +5,7 @@
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 25/04/2026
-VERSIÓN ACTUAL APP NUEVA: v5.15
+VERSIÓN ACTUAL APP NUEVA: v5.16
 VERSIÓN ACTUAL APP VIEJA: v4.19 (⛔ CONGELADA DEFINITIVAMENTE — no recibe más cambios)
 
 ================================================================================
@@ -129,6 +129,18 @@ PASO 4 — VERIFICAR WORKER (solo si se va a tocar worker.js)
 ================================================================================
   HISTORIAL DE VERSIONES — RECIENTES
 ================================================================================
+
+v5.16  |  25/04/2026  [SOLO NUEVA APP]
+  - BUG-170: emoji dept-pill aumentado a 22px, sin texto
+  - BUG-175: icono carretillas → SVG carretilla elevadora naranja
+  - BUG-173: Chat movido a pantalla de selección de departamento (visible para todos)
+    · Eliminado de screenHome, screenSeguridad y pestaña Personal
+  - BUG-173b: Personal rediseñado con tarjetas (igual que Seguridad v5.14)
+    · Home con 4 tarjetas: Fichajes de hoy, Semana, Resumen mensual, Equipo
+    · Cada sub-panel tiene botón ← para volver al home
+  - BUG-61: backup inventario oculto para dept Personal en Ajustes→Sistema
+  - Sugerencias DB marcadas resueltas: #61, #170, #173, #175
+  - GitHub actualizado ✅
 
 v5.15  |  25/04/2026  [SOLO NUEVA APP]
   - BUG-174: Error al renombrar archivo en Docs
