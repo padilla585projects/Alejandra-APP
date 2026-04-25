@@ -4,8 +4,8 @@
   Ruta local: C:\Users\Adrian\Downloads\Proyecto GestiBobina\NuevaApp
 ================================================================================
 
-ÚLTIMA ACTUALIZACIÓN: 24/04/2026
-VERSIÓN ACTUAL APP NUEVA: v5.09
+ÚLTIMA ACTUALIZACIÓN: 25/04/2026
+VERSIÓN ACTUAL APP NUEVA: v5.10
 VERSIÓN ACTUAL APP VIEJA: v4.19 (congelada — solo recibe bugs críticos)
 
 ⚠️  ANTES DE CODIFICAR: leer NuevaApp/IDEAS_PENDIENTES.txt
@@ -123,6 +123,16 @@ ANTES DE TOCAR CUALQUIER ARCHIVO, VERIFICAR QUE TODO ESTÁ AL DÍA:
 ================================================================================
   HISTORIAL DE VERSIONES — RECIENTES
 ================================================================================
+
+v5.10  |  25/04/2026  [SOLO NUEVA APP]
+  - BUG: obra-dashboard crasheaba en producción con "no such column: entrada"
+    · La query de fichajes usaba DATE(entrada) pero la columna real es 'fecha'
+    · Fix: DATE(entrada) → fecha en getObraDashboard() del worker
+    · Worker redesplegado (Version ID: bf48170b-8ed2-482e-8dd7-f8d8ea6fd103)
+    · Dashboard ahora responde: { fichajes_hoy, equipos_mantenimiento, ... }
+  - Bump versión para forzar actualización en dispositivos con caché vieja
+  - Sugerencias marcadas resueltas en DB: 88,93,97,98,84,87,167,168
+  - GitHub actualizado ✅
 
 v5.09  |  24/04/2026  [SOLO NUEVA APP]
   - MEJ: tarjetas del home reordenables por el usuario
