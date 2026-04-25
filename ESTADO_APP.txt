@@ -1,51 +1,59 @@
 ================================================================================
   ALEJANDRA APP — CONTROL DE ESTADO Y CHANGELOG
   Proyecto: GestiBobina / Alejandra
-  Ruta local: C:\Users\Adrian\Downloads\Proyecto GestiBobina\NuevaApp
+  Ruta local: C:\Users\Adrian\Downloads\Proyecto GestiBobina\Alejandra APP
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 25/04/2026
 VERSIÓN ACTUAL APP NUEVA: v5.14
-VERSIÓN ACTUAL APP VIEJA: v4.19 (congelada — solo recibe bugs críticos)
-
-⚠️  ANTES DE CODIFICAR: leer NuevaApp/IDEAS_PENDIENTES.txt
-    Lista completa de bugs activos, mejoras y features pendientes.
-    Marcar como [✓ HECHO vX.XX] los ítems que se resuelvan en cada sesión.
+VERSIÓN ACTUAL APP VIEJA: v4.19 (⛔ CONGELADA DEFINITIVAMENTE — no recibe más cambios)
 
 ================================================================================
-  ⚡ REGLA OBLIGATORIA AL INICIO DE CADA SESIÓN — SINCRONIZACIÓN
+  ⚡ REGLA OBLIGATORIA AL INICIO DE CADA SESIÓN
 ================================================================================
 
-ANTES DE TOCAR CUALQUIER ARCHIVO, VERIFICAR QUE TODO ESTÁ AL DÍA:
+PASO 1 — LEER SESION.md (en esta carpeta)
+  → Si dice EN CURSO: otro chat está trabajando, coordinarse antes de empezar
+  → Si dice LIBRE: continuar con los pasos siguientes
+  → Actualizar SESION.md a EN CURSO con fecha y qué se va a hacer
 
-  1. REPO LOCAL vs GITHUB:
-     → git status  (debe decir "Your branch is up to date with 'origin/main'")
-     → git log --oneline -3  (comparar con último commit conocido)
-     → Si hay cambios remotos: git pull
-     → Si hay cambios locales sin commitear: git stash → git pull → git stash pop
+PASO 2 — SINCRONIZAR REPO LOCAL con GITHUB
+  → git pull  (en Alejandra APP)
+  → git status  (debe decir "Your branch is up to date with 'origin/main'")
+  → git log --oneline -3  (verificar último commit conocido)
+  → Si hay cambios locales sin commitear: git stash → git pull → git stash pop
 
-  2. WORKER CLOUDFLARE vs WORKER.JS LOCAL:
-     → npx wrangler deployments list  (comprueba la última versión desplegada)
-     → Si el worker está desactualizado respecto al worker.js local:
-        npx wrangler deploy worker.js --name alejandra-app-api
-     → Si worker.js local está desactualizado respecto al Cloudflare:
-        npx wrangler workers get alejandra-app-api (o revisar el código remoto)
+PASO 3 — LEER IDEAS_PENDIENTES.txt
+  → Lista de bugs activos, mejoras y features pendientes
+  → Marcar como [✓ HECHO vX.XX] los ítems que se resuelvan
 
-  3. BASE DE DATOS D1 vs SCHEMA EN WORKER.JS:
-     → Si hay migraciones pendientes en runMigrations(), ejecutarlas via:
-        npx wrangler d1 execute alejandra-db --remote --command "..."
-     → No asumir que las migraciones se han aplicado — verificar con:
-        npx wrangler d1 execute alejandra-db --remote --command
-          "SELECT sql FROM sqlite_master WHERE type='table'"
+PASO 4 — VERIFICAR WORKER (solo si se va a tocar worker.js)
+  → npx wrangler deployments list
+  → Si worker está desactualizado: npx wrangler deploy worker.js --name alejandra-app-api
 
   ✅ Solo cuando todo está sincronizado, empezar a codificar.
   ❌ Nunca trabajar sobre archivos desactualizados.
 
 ================================================================================
+  ⚡ REGLA OBLIGATORIA AL FINAL DE CADA SESIÓN
+================================================================================
+
+  1. git add + git commit + git push
+  2. Actualizar ESTADO_APP.txt (versión, fecha, entrada en HISTORIAL)
+  3. Actualizar IDEAS_PENDIENTES.txt (marcar resueltos con [✓ HECHO vX.XX])
+  4. Actualizar SESION.md → estado LIBRE con resumen de lo hecho
+  5. Si se tocó worker.js → verificar que el deploy está hecho
+
+  ❌ No cerrar la sesión sin haber pusheado y actualizado los TXTs.
+
+⚠️  ANTES DE CODIFICAR: leer IDEAS_PENDIENTES.txt
+
+================================================================================
   INFRAESTRUCTURA
 ================================================================================
 
-  APP NUEVA (activa):
+  ALEJANDRA APP (única app activa):
+    Carpeta: Proyecto GestiBobina\Alejandra APP\
     GitHub:  https://github.com/padilla585projects/Alejandra-APP  (branch: main)
     Pages:   https://padilla585projects.github.io/Alejandra-APP/
     Worker:  https://alejandra-app-api.alejandra-app.workers.dev
@@ -53,12 +61,10 @@ ANTES DE TOCAR CUALQUIER ARCHIVO, VERIFICAR QUE TODO ESTÁ AL DÍA:
     R2:      alejandra-app-files
     Account: d65ead2b2967bf68ff3848a36cd7b1b4  (padilla585.projects@gmail.com)
 
-  APP VIEJA (congelada):
+  APP VIEJA (⛔ CONGELADA — archivada en appVieja\Bobinaap):
     GitHub:  https://github.com/padilla585/Bobinaap  (branch: main)
-    Pages:   https://padilla585.github.io/Bobinaap/
-    Worker:  https://gestibobina-proxy.padilla585.workers.dev
-    D1 ID:   eac9f2d2-0845-409c-9032-109c563d7eec
-    Account: c100d5a0ea37ee03989fe769c7259b83  (padilla585@gmail.com)
+    Pages:   https://padilla585.github.io/Bobinaap/  ← muestra banner "usa la nueva app"
+    ⚠️ No tocar. No deployar. Solo consulta histórica si hace falta.
 
   HERRAMIENTAS:
     Git:     instalado, conectado a GitHub, credenciales guardadas
@@ -67,8 +73,8 @@ ANTES DE TOCAR CUALQUIER ARCHIVO, VERIFICAR QUE TODO ESTÁ AL DÍA:
     Credenciales: NUEVA_CUENTA.txt (solo local, en .gitignore)
 
   REGLA DE DEPLOY:
-    - BUGS: actualizar SIEMPRE las dos apps
-    - MEJORAS/FEATURES: solo app nueva
+    - TODO va a Alejandra APP únicamente
+    - App vieja congelada: NO recibe ningún cambio
     - Worker: npx wrangler deploy worker.js --name alejandra-app-api
     - Siempre verificar que el deploy incluye bindings DB y FILES
 
