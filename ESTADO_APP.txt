@@ -5,7 +5,7 @@
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 25/04/2026
-VERSIÓN ACTUAL APP NUEVA: v5.14
+VERSIÓN ACTUAL APP NUEVA: v5.15
 VERSIÓN ACTUAL APP VIEJA: v4.19 (⛔ CONGELADA DEFINITIVAMENTE — no recibe más cambios)
 
 ================================================================================
@@ -129,6 +129,16 @@ PASO 4 — VERIFICAR WORKER (solo si se va a tocar worker.js)
 ================================================================================
   HISTORIAL DE VERSIONES — RECIENTES
 ================================================================================
+
+v5.15  |  25/04/2026  [SOLO NUEVA APP]
+  - BUG-174: Error al renombrar archivo en Docs
+    · editarDocDept hacía early-return al procesar carpeta_id sin aplicar el rename
+    · Refactorizado con SET dinámico: renombrar y mover se procesan en una sola query
+  - BUG-176: Calendario no mostraba vista de mes por defecto
+    · screenCalendario le faltaba clase flex-screen y height:100%
+    · Se mostraba como display:block → grid del mes colapsado
+  - Worker redesplegado (Version ID: 077375e5-2b54-4662-adce-30a32d00a6d3)
+  - GitHub actualizado ✅
 
 v5.14  |  25/04/2026  [SOLO NUEVA APP]
   - BUG-172: Departamento Seguridad rediseñado con tarjetas verticales
