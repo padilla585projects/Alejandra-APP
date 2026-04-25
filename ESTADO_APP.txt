@@ -5,7 +5,7 @@
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 25/04/2026
-VERSIÓN ACTUAL APP NUEVA: v5.10
+VERSIÓN ACTUAL APP NUEVA: v5.11
 VERSIÓN ACTUAL APP VIEJA: v4.19 (congelada — solo recibe bugs críticos)
 
 ⚠️  ANTES DE CODIFICAR: leer NuevaApp/IDEAS_PENDIENTES.txt
@@ -123,6 +123,19 @@ ANTES DE TOCAR CUALQUIER ARCHIVO, VERIFICAR QUE TODO ESTÁ AL DÍA:
 ================================================================================
   HISTORIAL DE VERSIONES — RECIENTES
 ================================================================================
+
+v5.11  |  25/04/2026  [SOLO NUEVA APP]
+  - BUG-116 + BUG-63: pedidos y datos de inventario cruzados entre departamentos
+    · Causa: getAuth() solo usaba X-Departamento header para SA/EA; encargados y
+      operarios ignoraban el header y usaban sesion.departamento de D1 (que podía
+      ser 'electrico' por defecto si el PUT /sesion/departamento fallaba en silencio)
+    · Fix: X-Departamento header tiene prioridad para TODOS los roles cuando presente
+      (sesion.departamento de D1 como fallback). Esto garantiza que el frontend
+      siempre manda el dept correcto desde localStorage.
+  - BUG-151: número descuadrado en tarjeta Docs — ya resuelto en versiones anteriores
+  - Worker redesplegado (Version ID: 54d348bd-dd8a-434e-bc12-c52f2843ecde)
+  - Sugerencias marcadas resueltas en DB: 63, 116, 151
+  - GitHub actualizado ✅
 
 v5.10  |  25/04/2026  [SOLO NUEVA APP]
   - BUG: obra-dashboard crasheaba en producción con "no such column: entrada"
