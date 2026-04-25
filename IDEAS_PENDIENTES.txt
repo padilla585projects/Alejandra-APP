@@ -1,7 +1,7 @@
 ================================================================================
   ALEJANDRA APP — IDEAS, MEJORAS Y ERRORES PENDIENTES
   Recogidos de: Canal Telegram @AlejandraAPP_bot
-  Última actualización: 25/04/2026 — v5.14: Seguridad rediseño tarjetas + fix chat + fix foto Atrás
+  Última actualización: 25/04/2026 — v5.16: rediseño Personal, Chat en depts, SVG carretilla, dept-pill
 
   ⚠️  LEER ESTE ARCHIVO ANTES DE CUALQUIER SESIÓN DE CODIFICACIÓN.
   ⚠️  Marcar como [HECHO vX.XX] cuando se implemente. No borrar las líneas.
@@ -326,6 +326,35 @@ LEYENDA DE ESTADO:
     · Reportado: 19/04/2026 — Adrian, CPD Getafe
 
 [✓] BUG-172 — Departamento Seguridad: reorganizar pestañas como tarjetas arriba-abajo  [HECHO v5.14]
+
+[✓] BUG-170 — Burbuja superior (dept-pill): mostrar icono más grande en vez del nombre  [HECHO v5.16]
+    · La pill mostraba el emoji a font-size:11px — demasiado pequeño.
+    · Fix: #deptPillIcon aumentado a 22px; padding reducido; span de nombre eliminado (ya era vacío).
+    · Reportado: 25/04/2026 — Adrian, Seguridad (#170 BD)
+
+[✓] BUG-173 — Chat en Personal y Seguridad enterrado en pestañas  [HECHO v5.16]
+    · Chat estaba como pestaña dentro de Personal y como tarjeta dentro de Seguridad.
+    · Fix: Chat movido a la pantalla de selección de departamento (antes de entrar en cualquier dept).
+    · Visible para todos los roles. Eliminado de screenHome, screenSeguridad y screenPersonal.
+    · Reportado: 25/04/2026 — Adrian, empresa Edison (#173 BD)
+
+[✓] BUG-173b — Departamento Personal: rediseño con tarjetas (modelo estándar)  [HECHO v5.16]
+    · Personal usaba pestañas directamente (diferente al resto de departamentos).
+    · Fix: home con 4 module-cards (Fichajes de hoy, Semana, Resumen mensual, Equipo).
+    · Cada sub-panel tiene botón ← para volver al home, igual que Seguridad (v5.14).
+    · Reportado: 25/04/2026 — Adrian, empresa Edison (#173 BD)
+
+[✓] BUG-175 — Icono de carretillas: cambiar 🚜 por carretilla elevadora  [HECHO v5.16]
+    · El emoji 🚜 (tractor) no representa bien una carretilla elevadora (toro mecánico).
+    · Fix: SVG de carretilla elevadora naranja (misma técnica que PEMP) en la tarjeta del home.
+    · Sección Catálogos actualizada a 🏗️ Carretillas.
+    · Reportado: 25/04/2026 — Adrian (#175 BD)
+
+[✓] BUG-61 — Ajustes: secciones de otras categorías visibles en departamentos que no aplican  [HECHO v5.16]
+    · Encargado de Personal veía backup de inventario (Bobinas/PEMP/Carretillas) en Ajustes→Sistema.
+    · Fix: sistemaBackupInvSection oculto para dept=personal (no tienen inventario).
+    · Resto del filtrado por dept ya estaba implementado en versiones anteriores.
+    · Reportado: (sugerencia #61 BD)
     · La barra de 5 tabs horizontales (Escáner, Inventario, Herramientas, Resumen, Chat)
       no encajaba bien y no seguía el patrón del resto de la app.
     · Fix: eliminada barra de tabs. Nuevo panel home de Seguridad con 5 module-cards
@@ -791,6 +820,14 @@ LEYENDA DE ESTADO:
     · Cada KPI clicable navega al módulo. Badge de alertas en la tarjeta home.
     · Pendiente: acceso desde screenPersonal y screenSeguridad según feedback.
     · Añadido: 24/04/2026 — Adrian | Hecho: 24/04/2026
+
+[ ] NEW-29 — Módulos configurables por departamento  [PENDIENTE]
+    · Desde Ajustes → Empresa, el admin puede elegir qué tarjetas (módulos) aparecen en cada dept.
+    · Cada empresa/obra puede tener una distribución diferente según sus necesidades.
+    · Los depts que no existan no aparecen (ya funciona), pero dentro de un dept activo
+      el admin elige qué módulos mostrar (ej: Seguridad sin Pedidos, Personal sin Docs...).
+    · Complementa la decisión de diseño de modelo estándar de tarjetas (v5.16).
+    · Añadido: 25/04/2026 — Adrian
 
 [ ] NEW-28 — Comparativa entre obras (SA / EA)  [PENDIENTE]
     · Solo visible para superadmin y empresa_admin.
