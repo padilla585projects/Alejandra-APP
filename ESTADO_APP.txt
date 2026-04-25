@@ -5,7 +5,7 @@
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 25/04/2026
-VERSIÓN ACTUAL APP NUEVA: v5.11
+VERSIÓN ACTUAL APP NUEVA: v5.12
 VERSIÓN ACTUAL APP VIEJA: v4.19 (congelada — solo recibe bugs críticos)
 
 ⚠️  ANTES DE CODIFICAR: leer NuevaApp/IDEAS_PENDIENTES.txt
@@ -123,6 +123,22 @@ ANTES DE TOCAR CUALQUIER ARCHIVO, VERIFICAR QUE TODO ESTÁ AL DÍA:
 ================================================================================
   HISTORIAL DE VERSIONES — RECIENTES
 ================================================================================
+
+v5.12  |  25/04/2026  [SOLO NUEVA APP]
+  - NEW/BUG-166: Herramientas propias para Seguridad — panel a medida
+    · Tarjeta 🔧 Herramientas añadida al home de Seguridad
+    · Desde home → va directamente a pestaña Herramientas en screenSeguridad
+    · Panel segPanelHerr con sub-tabs: 📋 Todos | 👤 Asignados
+    · Badges automáticos: CADUCADO (rojo), ⚠️ caduca pronto (naranja),
+      👤 asignado a (índigo), ✅ libre (verde)
+    · Formulario nuevo item: tipo (EPI/Extintor/Botiquín/Detector/Señalización/...),
+      modo individual (por código) o cantidad (stock), fecha caducidad, stock mínimo
+    · Modal detalle: Asignar / Devolver (individual), Salida / Entrada (cantidad), Dar de baja
+    · Scan QR + NFC ya funcionaba en pestaña Escáner → busca en mismo inventario_seg
+    · Reutiliza tabla inventario_seg y endpoints /inventario-seg existentes (sin migración)
+    · segTabHerr ya no redirige al módulo genérico de herramientas
+    · Sugerencias resueltas: 166, 87
+  - GitHub actualizado ✅
 
 v5.11  |  25/04/2026  [SOLO NUEVA APP]
   - BUG-116 + BUG-63: pedidos y datos de inventario cruzados entre departamentos
@@ -454,10 +470,26 @@ v4.80  |  22/04/2026  [SOLO NUEVA APP]
     · Orden guardado en localStorage (alejandra_home_order).
     · applyHomeOrder() llamado al final de setupHomeModules().
     · Al salir del home cancela el modo edición automáticamente.
-    · GitHub PENDIENTE DE PUSH ⚠️
+  v5.10 — BUG: dashboard crasheaba (DATE(entrada) → fecha), worker redesplegado
+  v5.11 — BUG-116 + BUG-63: getAuth() ahora usa X-Departamento header para todos
+           los roles (antes solo para SA/EA → encargados/operarios veían datos de
+           eléctrico por defecto si sesion.departamento en D1 no estaba bien)
+  v5.12 — BUG-166: herramientas propias para Seguridad (panel a medida, ver arriba)
 
-  ESTADO ACTUAL: v5.09, worker en sync (v5.08), GitHub pendiente de push.
-  SIGUIENTE: hacer push GitHub v5.09, luego NEW-17 — Galería de fotos por obra.
+  ESTADO ACTUAL: v5.12, worker v5.11 (last ID: 54d348bd), GitHub en sync ✅
+  SIGUIENTE: NEW-17 — Galería de fotos por obra (acordado como siguiente feature).
+
+  BUGS PENDIENTES AÚN SIN RESOLVER (de sugerencias DB):
+    - #149 Selector obra visual tras elegir empresa (en_progreso — puede estar resuelto, verificar)
+    - #107 Pulsar notificación navega al elemento (pendiente)
+    - #94  Barra de iconos: nombre de obra no se ve bien (en_progreso)
+    - #80  Historial filtrado por departamento (pendiente)
+    - #113 Añadir objetos con NFC en pestaña Escanear (pendiente)
+    - #110 Invitaciones en Ajustes/Usuarios → YA RESUELTO (marcar si no está hecho)
+
+  REGLA CLAVE (recordar al próximo chat):
+    Siempre explicar el plan técnico y esperar confirmación del usuario
+    ANTES de tocar cualquier archivo de código.
 
   REGLA CLAVE (recordar al próximo chat):
     Siempre explicar el plan técnico y esperar confirmación del usuario
