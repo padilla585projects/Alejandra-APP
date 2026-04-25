@@ -4573,21 +4573,29 @@ async function editarDocDept(id, request, env) {
   const body = await request.json().catch(() => ({}));
   const meta = await env.DB.prepare('SELECT id FROM docs_dept WHERE id = ? AND empresa_id = ?').bind(id, empresa_id).first();
   if (!meta) return err('Documento no encontrado', 404);
-  // Mover a otra carpeta
+
+  const sets = [], params = [];
+
+  if (body.nombre !== undefined) {
+    if (!body.nombre?.trim()) return err('El nombre es obligatorio', 400);
+    sets.push('nombre = ?', 'descripcion = ?');
+    params.push(body.nombre.trim(), body.descripcion?.trim() || null);
+  }
+
   if (body.carpeta_id !== undefined) {
     const nuevaId = body.carpeta_id ? parseInt(body.carpeta_id) : null;
     if (nuevaId) {
       const dest = await env.DB.prepare('SELECT id FROM carpetas WHERE id = ? AND empresa_id = ?').bind(nuevaId, empresa_id).first();
       if (!dest) return err('Carpeta destino no encontrada', 404);
     }
-    await env.DB.prepare('UPDATE docs_dept SET carpeta_id = ? WHERE id = ? AND empresa_id = ?').bind(nuevaId, id, empresa_id).run();
-    return json({ ok: true });
+    sets.push('carpeta_id = ?');
+    params.push(nuevaId);
   }
-  // Renombrar / editar descripción
-  const { nombre, descripcion } = body;
-  if (!nombre?.trim()) return err('El nombre es obligatorio', 400);
-  await env.DB.prepare('UPDATE docs_dept SET nombre = ?, descripcion = ? WHERE id = ? AND empresa_id = ?')
-    .bind(nombre.trim(), descripcion?.trim() || null, id, empresa_id).run();
+
+  if (!sets.length) return json({ ok: true });
+  params.push(id, empresa_id);
+  await env.DB.prepare(`UPDATE docs_dept SET ${sets.join(', ')} WHERE id = ? AND empresa_id = ?`)
+    .bind(...params).run();
   return json({ ok: true });
 }
 
