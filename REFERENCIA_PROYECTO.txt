@@ -1,7 +1,7 @@
 ================================================================================
   ALEJANDRA APP — REFERENCIA COMPLETA DEL PROYECTO
   Leer este archivo AL INICIO de cada sesión para continuar sin problemas.
-  Última actualización: 24/04/2026
+  Última actualización: 25/04/2026
   ⚠️  NORMA: actualizar ESTE archivo + ESTADO_APP.txt después de CADA cambio.
 ================================================================================
 
@@ -81,21 +81,22 @@ REGLA DE DEPLOY (actualizada 23/04/2026):
   - En todos los casos: subir versión + actualizar txts + deploy worker si toca + git push
 
 ÚLTIMO CAMBIO REALIZADO:
-  v4.93 [nueva] — 24/04/2026
-  · Chat: filtro por obra (botones "🏗️ Mi obra" / "🌐 General", worker acepta ?obra_id)
-  · Chat: notificaciones del navegador (Notification API + SW notificationclick)
+  v5.14 [nueva] — 25/04/2026
+  · BUG-172: Seguridad rediseñado con tarjetas verticales (home de secciones)
+    Eliminada barra de tabs. Home con 5 module-cards + botón ← en cada panel.
 
-  v4.92 [nueva] — 23/04/2026
-  · NEW-12: NFC en Escanear (leer + escribir tags, Chrome Android 89+)
+  v5.13 [nueva] — 25/04/2026
+  · BUG-171: pestaña 💬 Chat añadida en screenSeguridad
+  · BUG-169: botón Atrás cierra foto zoomed en Ideas (fix popstate handler)
 
-  v4.91 [nueva] — 23/04/2026
-  · NEW-08: chat interno entre empleados (panel 💬, polling 15s, D1 chat_mensajes)
+  v5.12 [nueva] — 25/04/2026
+  · BUG-166: herramientas propias para Seguridad — panel segPanelHerr a medida
 
-  v4.90 [nueva] — 23/04/2026
-  · NEW-02: wizard de bienvenida primera vez (4 slides + dots)
+  v5.11 [nueva] — 25/04/2026
+  · BUG-116 + BUG-63: getAuth() usa X-Departamento header para TODOS los roles
 
-  v4.89 [nueva] — 23/04/2026
-  · BUG-009: polling reducido + pausa Page Visibility API (ahorro batería)
+  v5.10 [nueva] — 25/04/2026
+  · BUG dashboard crasheaba: DATE(entrada) → fecha en getObraDashboard
 
   v4.88 [nueva] — 23/04/2026
   · MEJ-137: renombrar carpetas Docs completo (botón ✏️, raíz + subcarpetas)
@@ -309,26 +310,25 @@ git -c credential.helper= push https://padilla585:<TOKEN_GITHUB_VIEJO>@github.co
 ================================================================================
 
 APP VIEJA:  v4.19  (sw.js: alejandra-v4.19 | version.json: {"v":"4.19"})
-APP NUEVA:  v4.75  (sw.js: alejandra-v4.75 | version.json: {"v":"4.75"})
+APP NUEVA:  v5.14  (sw.js: alejandra-v5.14 | version.json: {"v":"5.14"})
 
 Historial reciente (app nueva):
-  v4.68 [nueva] — MEJ-131 horarios/día + MEJ-08 depts activos por empresa
-  v4.67 [nueva] — MEJ-128 fichaje equipo (FAB 👥, modal checkboxes, fichar en bloque)
-  v4.66 [nueva] — MEJ-134 foto Telegram, BUG-127 dept pill, BUG-133 user-chip, #53 filtro Personal
-  v4.65 [nueva] — BUG-129 botón atrás Android, BUG-124 herramientas/kits por obra, BUG-120 editar herr async, MEJ-132 Telegram bidireccional
-  v4.41 [nueva] — Login Google con invitaciones temporales (rol+dept, caduca, 1 uso)
-  v4.40 [nueva] — Login con Google OAuth (botón, redirect flow, worker endpoints)
-  v4.39 [nueva] — NEW-04 Herramientas Seguridad, NEW-07 exportar PDF+xlsx, NEW-11 café
-  v4.38 [nueva] — Fix notificaciones PEMP/carretillas averiadas, fix inventario-seg
-  v4.37 [nueva] — NEW-06 splash screen, NEW-09 notificaciones in-app, fix historial
-  v4.36 [nueva] — NEW-05 banner "App actualizada"
-  v4.35 [nueva] — Fix pantalla selección empresa superadmin
-  v4.34 [nueva] — MEJ-05 descripciones departamentos, MEJ-06 marcar/borrar todo Ideas
-  v4.33 [nueva] — MEJ-02 escáner herramientas, MEJ-03 ocultar pestañas, MEJ-04 selector empresa
-  v4.32 [ambas] — BUG-01 fichaje obra, BUG-03 nombre obra barra superior
-  v4.31 [nueva] — MEJ-01 rediseño Pedidos, BUG-02 icono dept
-  v4.30 [nueva] — BUG-06 borrar usuario libera credenciales
-  v4.26 [nueva] — Google Sheets sync herramientas y kits (Elec/Mec-Herramientas, Kits)
+  v5.14 [nueva] — BUG-172: Seguridad rediseño por tarjetas verticales (home + ← en cada panel)
+  v5.13 [nueva] — BUG-171: chat en Seguridad + BUG-169: botón Atrás al ver foto en Ideas
+  v5.12 [nueva] — BUG-166: herramientas propias para Seguridad (panel a medida)
+  v5.11 [nueva] — BUG-116+63: getAuth usa X-Departamento para todos los roles
+  v5.10 [nueva] — BUG dashboard (DATE(entrada)→fecha), worker redesplegado
+  v5.09 [nueva] — MEJ: tarjetas home reordenables (drag-and-drop + touch, localStorage)
+  v5.08 [nueva] — BUG CRÍTICO: splash screen congelado (guardarIncidencia declarada 2 veces)
+  v5.07 [nueva] — NEW-13: Calendario de obra con festivos automáticos (Nager.Date, cron 7am)
+  v5.06 [nueva] — NEW-22: Registro de incidencias con fotos (R2, Telegram, todos depts)
+  v5.05 [nueva] — Dashboard extendido a Seguridad y Personal
+  v5.04 [nueva] — NEW-27: Dashboard de obra (tarjeta Resumen, /obra-dashboard, KPIs)
+  v5.03 [nueva] — NEW-25: Escáner de albaranes (R2, tabla albaranes, apiCallRaw)
+  v5.02 [nueva] — NEW-26: Control combustible y carga de máquinas (repostajes)
+  v5.01 [nueva] — BUG-164: chat mensajes enviados no aparecían (obra_id faltaba en POST)
+  v5.00 [nueva] — NEW-24: alertas stock mínimo (herramientas, seg, bobinas + Telegram)
+  v4.99 [nueva] — Chat accesible desde Personal (pestaña 💬 en tabs screenPersonal)
   v4.25 [nueva] — Fix crítico: funciones async no hoistadas a scope global en Chrome
                    (guardarFichaje, guardarHerramienta, etc. → window.X = X)
   v4.24 [nueva] — Fix badge versión dinámico; intervalo update 30s

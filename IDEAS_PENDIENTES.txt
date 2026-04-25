@@ -1,7 +1,7 @@
 ================================================================================
   ALEJANDRA APP — IDEAS, MEJORAS Y ERRORES PENDIENTES
   Recogidos de: Canal Telegram @AlejandraAPP_bot
-  Última actualización: 24/04/2026 — NEW-13 hecho v5.07: calendario con festivos automáticos
+  Última actualización: 25/04/2026 — v5.14: Seguridad rediseño tarjetas + fix chat + fix foto Atrás
 
   ⚠️  LEER ESTE ARCHIVO ANTES DE CUALQUIER SESIÓN DE CODIFICACIÓN.
   ⚠️  Marcar como [HECHO vX.XX] cuando se implemente. No borrar las líneas.
@@ -270,6 +270,17 @@ LEYENDA DE ESTADO:
     · Fix: añadido filtro `(u.created_at||'') > lastSeen` al contador de pendientes.
     · Reportado: 24/04/2026 — usuario (sugerencia #164 BD)
 
+[✓] BUG-169 — Botón Atrás al abrir foto en Ideas hace salir de la app  [HECHO v5.13]
+    · abrirFotoSug pone position:fixed/inset:0 directamente en el <img> (zoom a pantalla completa).
+    · El handler popstate no sabía que había una foto abierta → navegaba/salía de la app.
+    · Fix: popstate comprueba img[data-zoomed="1"] y llama abrirFotoSug() para cerrarla.
+    · Reportado: 25/04/2026 — Adrian, CPD Getafe (#169 BD)
+
+[✓] BUG-171 — Chat no disponible en departamento Seguridad  [HECHO v5.13]
+    · screenSeguridad solo tenía tabs: Escáner, Inventario, Herramientas, Resumen.
+    · Fix: añadida pestaña 💬 Chat que llama chatAbrir(), igual que en Personal (perTab4).
+    · Reportado: 25/04/2026 — Adrian, CPD Getafe (#171 BD)
+
 ================================================================================
   🔧 MEJORAS (solo app nueva, salvo indicación contraria)
 ================================================================================
@@ -313,6 +324,14 @@ LEYENDA DE ESTADO:
     · En el panel de Ideas (Ajustes), añadir botones para marcar todas las sugerencias
       como leídas de golpe, y otro para borrar todas.
     · Reportado: 19/04/2026 — Adrian, CPD Getafe
+
+[✓] BUG-172 — Departamento Seguridad: reorganizar pestañas como tarjetas arriba-abajo  [HECHO v5.14]
+    · La barra de 5 tabs horizontales (Escáner, Inventario, Herramientas, Resumen, Chat)
+      no encajaba bien y no seguía el patrón del resto de la app.
+    · Fix: eliminada barra de tabs. Nuevo panel home de Seguridad con 5 module-cards
+      verticales (mismo estilo que el home principal). Cada sub-panel tiene botón ← volver.
+    · Apertura del depto Seguridad ahora muestra el home de tarjetas (antes iba directo al Escáner).
+    · Reportado: 25/04/2026 — Adrian, CPD Getafe (#172 BD)
 
 ================================================================================
   ✨ NUEVAS FUNCIONES (solo app nueva)

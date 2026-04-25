@@ -5,7 +5,7 @@
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 25/04/2026
-VERSIÓN ACTUAL APP NUEVA: v5.12
+VERSIÓN ACTUAL APP NUEVA: v5.14
 VERSIÓN ACTUAL APP VIEJA: v4.19 (congelada — solo recibe bugs críticos)
 
 ⚠️  ANTES DE CODIFICAR: leer NuevaApp/IDEAS_PENDIENTES.txt
@@ -123,6 +123,26 @@ ANTES DE TOCAR CUALQUIER ARCHIVO, VERIFICAR QUE TODO ESTÁ AL DÍA:
 ================================================================================
   HISTORIAL DE VERSIONES — RECIENTES
 ================================================================================
+
+v5.14  |  25/04/2026  [SOLO NUEVA APP]
+  - BUG-172: Departamento Seguridad rediseñado con tarjetas verticales
+    · Eliminada la barra de tabs horizontal
+    · Al entrar en Seguridad: home con 5 tarjetas (Escáner, Inventario EPIs,
+      Herramientas, Resumen, Chat del equipo) — mismo estilo que el home principal
+    · Cada sección tiene botón ← para volver al home de Seguridad
+    · Sugerencia 172 marcada resuelta en DB
+  - GitHub actualizado ✅
+
+v5.13  |  25/04/2026  [SOLO NUEVA APP]
+  - BUG-171: Chat disponible en departamento Seguridad
+    · Pestaña 💬 Chat añadida en la barra de tabs de screenSeguridad (igual que Personal)
+    · Antes el dept Seguridad no tenía acceso directo al chat desde su pantalla
+  - BUG-169: Botón Atrás (Android) al ver foto en Ideas salía de la app
+    · abrirFotoSug pone position:fixed en el img (zoom) pero el handler popstate
+      no lo detectaba → al pulsar Atrás navegaba/salía en vez de cerrar la foto
+    · Fix: popstate detecta img[data-zoomed="1"] y lo cierra antes de navegar
+  - Sugerencias 171 y 169 marcadas resueltas en DB
+  - GitHub actualizado ✅
 
 v5.12  |  25/04/2026  [SOLO NUEVA APP]
   - NEW/BUG-166: Herramientas propias para Seguridad — panel a medida
@@ -430,68 +450,42 @@ v4.80  |  22/04/2026  [SOLO NUEVA APP]
     [ ] NEW-10 — Planes de precios (futuro, cuando haya clientes reales)
 
 ================================================================================
-  RESUMEN SESIÓN 24/04/2026 — PARA EL PRÓXIMO CHAT
+  RESUMEN SESIÓN 25/04/2026 — PARA EL PRÓXIMO CHAT
 ================================================================================
 
-  Esta sesión implementó las siguientes features (de más fácil a más difícil):
+  Sesión empezó sincronizando local con GitHub (local estaba en v4.95,
+  remoto en v5.12 — reset --hard). Luego se trabajó sobre bugs del log de
+  sugerencias de la DB.
 
-  v5.03 — NEW-25: Escáner de albaranes
-    · Múltiples albaranes por pedido. R2 + tabla albaranes. Todos los roles suben.
-    · Botón 📎 en tarjeta pedido. Galería thumbnails/PDF. apiCallRaw() añadida.
+  v5.13 — BUG-171 + BUG-169
+    · BUG-171: Chat en Seguridad — añadida pestaña 💬 Chat en tabs de screenSeguridad
+    · BUG-169: Botón Atrás cerraba la app al ver foto en Ideas — fix en popstate handler
 
-  v5.04/5.05 — NEW-27: Dashboard de obra
-    · Tarjeta 📊 Resumen en home (electrico/mecanicas). /obra-dashboard endpoint.
-    · KPIs: fichajes hoy, equipos mantenimiento, herramientas fuera, pedidos
-      pendientes, alertas stock, incidencias abiertas, próximo evento.
-    · Seguridad: tab "📊 Resumen" propio. Personal: mini KPI bar en tab Hoy.
+  v5.14 — BUG-172: Rediseño Seguridad por tarjetas
+    · Eliminada barra de tabs horizontal en screenSeguridad
+    · Nuevo home de Seguridad con 5 tarjetas verticales (module-card)
+    · Cada sub-panel tiene botón ← para volver al home de Seguridad
 
-  v5.06 — NEW-22: Registro de incidencias con fotos
-    · Tablas incidencias + incidencia_fotos. Todos los depts.
-    · Tipos/gravedad/estado. Fotos en R2. Telegram alta gravedad y al resolver.
-    · Tarjeta 🚨 en home. screenIncidencias filtrable.
+  ESTADO ACTUAL: v5.14, worker sin cambios (último deploy: 54d348bd), GitHub en sync ✅
+  SIGUIENTE: continuar con sugerencias pendientes de la DB. Las más urgentes:
+    - #170 Burbuja superior: icono de sección en vez del nombre (tiene foto adjunta)
+    - #149 Panel selector de obra (como el de empresa al inicio)
+    - #107 Pulsar notificación navega al elemento
+    - #94  Barra de iconos: nombre de obra no se ve bien
 
-  v5.07 — NEW-13: Calendario de obra
-    · Tabla eventos_calendario. ALTER obras ADD comunidad (default 'MD').
-    · /festivos proxy Nager.Date API (nacionales + CC.AA., auto-anual).
-    · Grid mensual, festivos en rojo, hoy en índigo, dots en días con eventos.
-    · Cron 7am: Telegram eventos del día + recordatorios anticipados.
-    · Tarjeta 📅 en home. Dashboard 📅 Próximo evento conectado.
-
-  v5.08 — BUG CRÍTICO: app congelada en splash screen
-    · Causa: 'async function guardarIncidencia()' declarada dos veces → error
-      "Identifier already declared" en el segundo <script>, que impedía ejecutar
-      el código que elimina el splash. Fix: renombrada a _guardarIncidenciaBase().
-    · Worker redesplegado (estaba en v4.93). Todos los endpoints activos.
-    · SW bumpeado, version.json actualizado, GitHub en sync.
-
-  v5.09 — MEJ: tarjetas home reordenables
-    · Botón 🔀 (posición fija bottom-right, solo en screenHome).
-    · Modo edición: handles ⠿, arrastre drag-and-drop + touch.
-    · Orden guardado en localStorage (alejandra_home_order).
-    · applyHomeOrder() llamado al final de setupHomeModules().
-    · Al salir del home cancela el modo edición automáticamente.
-  v5.10 — BUG: dashboard crasheaba (DATE(entrada) → fecha), worker redesplegado
-  v5.11 — BUG-116 + BUG-63: getAuth() ahora usa X-Departamento header para todos
-           los roles (antes solo para SA/EA → encargados/operarios veían datos de
-           eléctrico por defecto si sesion.departamento en D1 no estaba bien)
-  v5.12 — BUG-166: herramientas propias para Seguridad (panel a medida, ver arriba)
-
-  ESTADO ACTUAL: v5.12, worker v5.11 (last ID: 54d348bd), GitHub en sync ✅
-  SIGUIENTE: NEW-17 — Galería de fotos por obra (acordado como siguiente feature).
-
-  BUGS PENDIENTES AÚN SIN RESOLVER (de sugerencias DB):
-    - #149 Selector obra visual tras elegir empresa (en_progreso — puede estar resuelto, verificar)
-    - #107 Pulsar notificación navega al elemento (pendiente)
-    - #94  Barra de iconos: nombre de obra no se ve bien (en_progreso)
-    - #80  Historial filtrado por departamento (pendiente)
-    - #113 Añadir objetos con NFC en pestaña Escanear (pendiente)
-    - #110 Invitaciones en Ajustes/Usuarios → YA RESUELTO (marcar si no está hecho)
+  BUGS/MEJORAS PENDIENTES (de sugerencias DB — estado en DB = pendiente/en_progreso):
+    - #170 Burbuja superior: mostrar icono de sección más grande en vez del nombre (pendiente)
+    - #149 Panel selector de obra visual tras elegir empresa (pendiente)
+    - #115 Asignar horario por obra + fichaje rápido (en_progreso — puede estar resuelto v4.62)
+    - #113 Añadir objetos con NFC en Escanear (pendiente)
+    - #107 Pulsar notificación → navegar al elemento (pendiente)
+    - #96  Planes de precios (futuro)
+    - #95  Exportar en más formatos / email / WhatsApp (pendiente)
+    - #94  Barra iconos: nombre de obra no se ve bien (en_progreso)
 
   REGLA CLAVE (recordar al próximo chat):
-    Siempre explicar el plan técnico y esperar confirmación del usuario
-    ANTES de tocar cualquier archivo de código.
-
-  REGLA CLAVE (recordar al próximo chat):
+    Al inicio de sesión: leer los 3 TXTs + hacer git reset --hard origin/main
+    para asegurarse de estar en la versión más reciente del remoto.
     Siempre explicar el plan técnico y esperar confirmación del usuario
     ANTES de tocar cualquier archivo de código.
 
@@ -564,5 +558,7 @@ v4.80  |  22/04/2026  [SOLO NUEVA APP]
     · Botón 💬 en el header (todos los usuarios logados)
     · Tarjeta en el home (eléctrico, mecánicas, seguridad)
     · Pestaña "💬 Chat" en Personal
+    · Tarjeta "💬 Chat del equipo" en el home de Seguridad (v5.13)
+    · Pestaña "💬 Chat" en la barra de tabs del home de Seguridad (v5.13)
 
 ================================================================================
