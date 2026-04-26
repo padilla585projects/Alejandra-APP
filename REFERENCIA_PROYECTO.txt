@@ -1,7 +1,7 @@
 ================================================================================
   ALEJANDRA APP — REFERENCIA COMPLETA DEL PROYECTO
   Leer este archivo AL INICIO de cada sesión para continuar sin problemas.
-  Última actualización: 25/04/2026
+  Última actualización: 26/04/2026
   ⚠️  NORMA: actualizar ESTE archivo + ESTADO_APP.txt después de CADA cambio.
 ================================================================================
 
@@ -81,6 +81,19 @@ REGLA DE DEPLOY (actualizada 23/04/2026):
   - En todos los casos: subir versión + actualizar txts + deploy worker si toca + git push
 
 ÚLTIMO CAMBIO REALIZADO:
+  v5.17 fix [nueva] — 26/04/2026
+  · HOTFIX: version.json desincronizado (5.16 vs APP_VERSION=5.17) → bucle de recarga infinita
+    El chat anterior pusheó v5.17 sin actualizar version.json. Fix: {"v":"5.17"} pusheado.
+
+  v5.17 [nueva] — 25/04/2026
+  · HOTFIX: tarjetas de departamento no navegaban (TypeError en renderHeader — span eliminado)
+
+  v5.16 [nueva] — 25/04/2026
+  · BUG-170/173/175: dept-pill, Chat en selector depts, SVG carretilla, Personal tarjetas
+
+  v5.15 [nueva] — 25/04/2026
+  · BUG-174: renombrar archivo docs + BUG-176: calendario vista mes
+
   v5.14 [nueva] — 25/04/2026
   · BUG-172: Seguridad rediseñado con tarjetas verticales (home de secciones)
     Eliminada barra de tabs. Home con 5 module-cards + botón ← en cada panel.

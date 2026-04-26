@@ -6,9 +6,9 @@
 ## ESTADO ACTUAL
 
 **Sesión:** LIBRE
-**Última sesión:** 25/04/2026
-**Versión tras última sesión:** v5.17
-**Worker desplegado:** v5.15 (ID: 077375e5 — worker sin cambios)
+**Última sesión:** 26/04/2026
+**Versión tras última sesión:** v5.17 (fix version.json)
+**Worker desplegado:** v5.15 (ID: 077375e5 — worker sin cambios desde v5.15)
 **GitHub:** en sync ✅
 
 ---

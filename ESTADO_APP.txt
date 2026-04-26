@@ -4,7 +4,7 @@
   Ruta local: C:\Users\Adrian\Downloads\Proyecto GestiBobina\Alejandra APP
 ================================================================================
 
-ÚLTIMA ACTUALIZACIÓN: 25/04/2026
+ÚLTIMA ACTUALIZACIÓN: 26/04/2026
 VERSIÓN ACTUAL APP NUEVA: v5.17
 VERSIÓN ACTUAL APP VIEJA: v4.19 (⛔ CONGELADA DEFINITIVAMENTE — no recibe más cambios)
 
@@ -130,12 +130,15 @@ PASO 4 — VERIFICAR WORKER (solo si se va a tocar worker.js)
   HISTORIAL DE VERSIONES — RECIENTES
 ================================================================================
 
-v5.17  |  25/04/2026  [SOLO NUEVA APP]
+v5.17  |  25/04/2026 → fix 26/04/2026  [SOLO NUEVA APP]
   - HOTFIX: tarjetas de departamento no navegaban al pulsar
     · renderHeader() hacía getElementById('deptPillName').textContent='' pero el span
       fue eliminado en v5.16 → TypeError cortaba seleccionarDepto() antes de navegar
     · Fix: línea eliminada (el elemento ya no existe)
     · Fix: onclick del dept-pill cambiado de clickDeptPill() (inexistente) a volverSelectorDepto()
+  - HOTFIX 26/04: version.json desincronizado (decía 5.16, app era 5.17) → bucle de recarga infinita
+    · El chat anterior olvidó actualizar version.json al hacer push de v5.17
+    · Fix: version.json actualizado a {"v":"5.17"} y pusheado
   - GitHub actualizado ✅
 
 v5.16  |  25/04/2026  [SOLO NUEVA APP]
