@@ -38,11 +38,20 @@ PASO 4 — VERIFICAR WORKER (solo si se va a tocar worker.js)
   ⚡ REGLA OBLIGATORIA AL FINAL DE CADA SESIÓN
 ================================================================================
 
-  1. git add + git commit + git push
-  2. Actualizar ESTADO_APP.txt (versión, fecha, entrada en HISTORIAL)
-  3. Actualizar IDEAS_PENDIENTES.txt (marcar resueltos con [✓ HECHO vX.XX])
-  4. Actualizar SESION.md → estado LIBRE con resumen de lo hecho
-  5. Si se tocó worker.js → verificar que el deploy está hecho
+  1. ANTES de hacer git push → verificar que los 3 archivos de versión coinciden:
+     ⛔ Si no coinciden → BUCLE INFINITO en producción (incidente x2: 22/04 y 26/04/2026)
+     Ejecutar en PowerShell:
+       $v=(gc version.json|ConvertFrom-Json).v
+       $sw=[regex]::Match((gc sw.js -Raw),"alejandra-v([^']+)'").Groups[1].Value
+       $h=[regex]::Match((gc index.html -Raw),"APP_VERSION = '([^']+)'").Groups[1].Value
+       if($v-ne$sw-or$v-ne$h){Write-Error "DESINCRONIZADO: json=$v sw=$sw html=$h"}else{Write-Host "OK: $v"}
+     Si da error → corregir antes de push.
+
+  2. git add + git commit + git push
+  3. Actualizar ESTADO_APP.txt (versión, fecha, entrada en HISTORIAL)
+  4. Actualizar IDEAS_PENDIENTES.txt (marcar resueltos con [✓ HECHO vX.XX])
+  5. Actualizar SESION.md → estado LIBRE con resumen de lo hecho
+  6. Si se tocó worker.js → verificar que el deploy está hecho
 
   ❌ No cerrar la sesión sin haber pusheado y actualizado los TXTs.
 

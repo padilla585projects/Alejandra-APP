@@ -61,6 +61,13 @@ SI CAMBIAS DE ORDENADOR:
      · sw.js              → const CACHE = 'alejandra-vX.XX'
      · index.html         → const APP_VERSION = 'X.XX'
      Los tres a la vez, siempre. Sin excepción.
+
+  ⛔ VERIFICACIÓN OBLIGATORIA ANTES DE git push (incidente 26/04/2026):
+     Si version.json no coincide con APP_VERSION → BUCLE INFINITO en producción.
+     Ejecutar antes de cada push:
+       powershell -c "$v=(gc version.json|ConvertFrom-Json).v; $sw=[regex]::Match((gc sw.js -Raw),\"alejandra-v([^']+)'\").Groups[1].Value; $h=[regex]::Match((gc index.html -Raw),\"APP_VERSION = '([^']+)'\").Groups[1].Value; if($v-ne$sw-or$v-ne$h){Write-Error \"DESINCRONIZADO: json=$v sw=$sw html=$h\"}else{Write-Host 'OK: '$v}"
+     Si da error → NO hacer push hasta corregir los tres.
+
   2. Actualizar los 5 archivos .txt con los cambios realizados (ver sección anterior)
   3. Deploy y push — DOS pasos SIEMPRE obligatorios si se toca worker.js:
      ⚠️  git push solo publica el FRONTEND (GitHub Pages).
@@ -68,6 +75,7 @@ SI CAMBIAS DE ORDENADOR:
      ⚠️  Si no se hace el deploy del worker, los endpoints nuevos NO existen en producción.
 
      CHECKLIST DE CIERRE DE SESIÓN:
+     [ ] version.json == sw.js == index.html → misma versión (ver verificación arriba)
      [ ] ¿Cambié worker.js?  → deploy curl (ver sección COMANDOS DE DEPLOY)
      [ ] ¿Cambié index.html/sw.js/version.json?  → git push
      [ ] ¿Cambié ambos?  → deploy curl PRIMERO, luego git push
