@@ -516,54 +516,49 @@ v4.80  |  22/04/2026  [SOLO NUEVA APP]
     [✓] NEW-22 — Registro de incidencias           → HECHO v5.06
     [✓] NEW-13 — Calendario de obra                → HECHO v5.07
     [✓] MEJ    — Reordenar tarjetas home           → HECHO v5.09
-    [ ] NEW-17 — Galería de fotos por obra         → SIGUIENTE
-    [ ] NEW-21 — Checklist pre-uso equipos
-    [ ] NEW-15 — Mantenimiento preventivo equipos
+    [✓] NEW-17 — Galería de fotos por obra         → HECHO v5.18
+    [✓] NEW-21 — Checklist pre-uso equipos         → HECHO v5.19
+    [ ] NEW-15 — Mantenimiento preventivo equipos  → SIGUIENTE
     [ ] NEW-23 — Control EPIs por trabajador
     [ ] NEW-19 — Carnets del personal
     [ ] NEW-16 — Partes de trabajo diarios
     [ ] NEW-20 — Gestión de turnos
     [ ] NEW-28 — Comparativa entre obras
+    [ ] NEW-29 — Módulos configurables por departamento
     [ ] NEW-18 — Informe automático Telegram (Cron)
     [ ] NEW-10 — Planes de precios (futuro, cuando haya clientes reales)
 
 ================================================================================
-  RESUMEN SESIÓN 25/04/2026 — PARA EL PRÓXIMO CHAT
+  RESUMEN SESIÓN 27/04/2026 — PARA EL PRÓXIMO CHAT
 ================================================================================
 
-  Sesión empezó sincronizando local con GitHub (local estaba en v4.95,
-  remoto en v5.12 — reset --hard). Luego se trabajó sobre bugs del log de
-  sugerencias de la DB.
+  Sesión: sincronización inicial + 2 nuevas features implementadas.
 
-  v5.13 — BUG-171 + BUG-169
-    · BUG-171: Chat en Seguridad — añadida pestaña 💬 Chat en tabs de screenSeguridad
-    · BUG-169: Botón Atrás cerraba la app al ver foto en Ideas — fix en popstate handler
+  v5.18 — NEW-17: Galería de fotos por obra
+    · Tabla fotos_obra en D1, endpoints R2, tarjeta 📷 en home
+    · Grid 3col miniaturas, lightbox, compartir, borrar (admin)
 
-  v5.14 — BUG-172: Rediseño Seguridad por tarjetas
-    · Eliminada barra de tabs horizontal en screenSeguridad
-    · Nuevo home de Seguridad con 5 tarjetas verticales (module-card)
-    · Cada sub-panel tiene botón ← para volver al home de Seguridad
+  v5.19 — NEW-21: Checklist pre-uso de equipos
+    · Tablas checklist_plantillas + checklist_registros en D1
+    · Botón ✅ Check en tarjetas PEMP y carretillas
+    · Modal con preguntas ✅/❌, historial, fallos → equipo a mantenimiento + Telegram
+    · Gestión de plantillas en Ajustes → Catálogos
 
-  ESTADO ACTUAL: v5.19, worker redesplegado (546933c9), GitHub en sync ✅
-  SIGUIENTE: NEW-15 (Mantenimiento preventivo equipos) o bugs pendientes DB.
-    - #170 Burbuja superior: icono de sección en vez del nombre (tiene foto adjunta)
-    - #149 Panel selector de obra (como el de empresa al inicio)
-    - #107 Pulsar notificación navega al elemento
-    - #94  Barra de iconos: nombre de obra no se ve bien
+  ESTADO ACTUAL: v5.19, worker (546933c9), GitHub en sync ✅
+  SIGUIENTE: NEW-15 (Mantenimiento preventivo equipos)
+    Plan acordado: columnas en pemp/carretillas + tabla historial_mantenimientos
+    toggle aviso + dias_aviso, botón 🔧 Mant. en tarjetas, modal registro + historial,
+    cron diario avisa por Telegram si revisión próxima y toggle activo.
 
   BUGS/MEJORAS PENDIENTES (de sugerencias DB — estado en DB = pendiente/en_progreso):
-    - #170 Burbuja superior: mostrar icono de sección más grande en vez del nombre (pendiente)
-    - #149 Panel selector de obra visual tras elegir empresa (pendiente)
-    - #115 Asignar horario por obra + fichaje rápido (en_progreso — puede estar resuelto v4.62)
     - #113 Añadir objetos con NFC en Escanear (pendiente)
     - #107 Pulsar notificación → navegar al elemento (pendiente)
-    - #96  Planes de precios (futuro)
     - #95  Exportar en más formatos / email / WhatsApp (pendiente)
     - #94  Barra iconos: nombre de obra no se ve bien (en_progreso)
+    - Revisar integración Google Sheets completa (muchas cosas, sesión dedicada pendiente)
 
   REGLA CLAVE (recordar al próximo chat):
-    Al inicio de sesión: leer los 3 TXTs + hacer git reset --hard origin/main
-    para asegurarse de estar en la versión más reciente del remoto.
+    Al inicio de sesión: leer los 3 TXTs + git pull.
     Siempre explicar el plan técnico y esperar confirmación del usuario
     ANTES de tocar cualquier archivo de código.
 
@@ -594,9 +589,12 @@ v4.80  |  22/04/2026  [SOLO NUEVA APP]
     - Cada KPI clicable navega al módulo. Badge de alertas en la tarjeta home.
     - v5.05: Seguridad con tab propio, Personal con mini KPI bar en tab Hoy. ✅ COMPLETO.
 
-  NEW-15 — Mantenimiento preventivo:
-    - Toggle por equipo para activar/desactivar aviso (no siempre se quiere).
-    - Aviso solo si toggle activo + X días antes de la fecha de revisión.
+  NEW-15 — Mantenimiento preventivo (SIGUIENTE):
+    - Columnas en pemp y carretillas: aviso_mantenimiento (toggle) + dias_aviso_mant (default 7).
+    - Tabla historial_mantenimientos: fecha, descripcion, realizado_por, adjunto R2 opcional.
+    - Botón 🔧 Mant. en tarjetas PEMP/carretilla → modal registro + historial.
+    - Cron 7am: avisa Telegram si revisión próxima ≤ dias_aviso Y toggle activo.
+    - Toggle y días de aviso editables desde el modal de editar cada equipo.
 
   NEW-19 — Carnets del personal:
     - Aplica a usuarios de la app Y a personal externo (personal_externo).

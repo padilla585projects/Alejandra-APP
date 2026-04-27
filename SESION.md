@@ -49,4 +49,6 @@ Y antes de cerrar, obligatorio:
 
 ## PENDIENTE PARA LA PRÓXIMA SESIÓN
 
-- (vacío — partir de IDEAS_PENDIENTES.txt)
+- NEW-15: Mantenimiento preventivo de equipos (plan técnico ya acordado — ver ESTADO_APP.txt)
+- Revisión Google Sheets (sesión dedicada pendiente)
+- Bugs DB: #107, #94, #95, #113
