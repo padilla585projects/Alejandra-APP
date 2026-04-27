@@ -761,7 +761,7 @@ LEYENDA DE ESTADO:
       fecha TEXT, turno TEXT, created_at).
     · Añadido: 24/04/2026 — Adrian
 
-[ ] NEW-21 — Checklist de inspección pre-uso de equipos  [PENDIENTE]
+[✓] NEW-21 — Checklist de inspección pre-uso de equipos  [HECHO v5.19]
     · Antes de usar una PEMP o carretilla, el operario/encargado rellena un check rápido.
     · Preguntas configurables por tipo de equipo (aceite, frenos, cinturón, luces, etc.).
     · Si algún ítem falla → equipo marcado automáticamente como "Revisión necesaria" + aviso.

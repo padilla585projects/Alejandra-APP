@@ -483,6 +483,15 @@ export default {
         if (method === 'DELETE') return await eliminarEvento(eid, request, env);
       }
 
+      // ── Checklist pre-uso equipos (NEW-21) ──────────────────────────────
+      if (path === '/checklist-plantillas' && method === 'GET')  return await listarPlantillaChecklist(request, env);
+      if (path === '/checklist-plantillas' && method === 'POST') return await crearPreguntaChecklist(request, env);
+      if (path.startsWith('/checklist-plantillas/') && method === 'DELETE') {
+        return await borrarPreguntaChecklist(parseInt(path.split('/checklist-plantillas/')[1]), request, env);
+      }
+      if (path === '/checklist-registros' && method === 'GET')  return await listarRegistrosChecklist(request, env);
+      if (path === '/checklist-registros' && method === 'POST') return await crearRegistroChecklist(request, env);
+
       // ── Galería de fotos por obra (NEW-17) ──────────────────────────────
       if (path === '/fotos-obra' && method === 'GET')  return await listarFotosObra(request, env);
       if (path === '/fotos-obra' && method === 'POST') return await subirFotoObra(request, env);
@@ -4733,6 +4742,34 @@ async function runMigrations(request, env) {
     )`).run();
     results.push('chat_mensajes: creada');
   } catch(e) { results.push('chat_mensajes: ' + e.message); }
+  // Tablas checklist (NEW-21)
+  try {
+    await env.DB.prepare(`CREATE TABLE IF NOT EXISTS checklist_plantillas (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      empresa_id  INTEGER NOT NULL,
+      tipo_equipo TEXT NOT NULL,
+      pregunta    TEXT NOT NULL,
+      orden       INTEGER DEFAULT 0,
+      created_at  TEXT DEFAULT (datetime('now'))
+    )`).run();
+    results.push('checklist_plantillas: creada');
+  } catch(e) { results.push('checklist_plantillas: ' + e.message); }
+  try {
+    await env.DB.prepare(`CREATE TABLE IF NOT EXISTS checklist_registros (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      empresa_id  INTEGER NOT NULL,
+      obra_id     INTEGER,
+      tipo_equipo TEXT NOT NULL,
+      equipo_id   INTEGER NOT NULL,
+      equipo_mat  TEXT,
+      resultado   TEXT NOT NULL,
+      respuestas  TEXT NOT NULL,
+      comentario  TEXT,
+      realizado_por TEXT,
+      created_at  TEXT DEFAULT (datetime('now'))
+    )`).run();
+    results.push('checklist_registros: creada');
+  } catch(e) { results.push('checklist_registros: ' + e.message); }
   // Tabla fotos_obra (NEW-17)
   try {
     await env.DB.prepare(`CREATE TABLE IF NOT EXISTS fotos_obra (
@@ -4751,6 +4788,98 @@ async function runMigrations(request, env) {
     results.push('fotos_obra: creada');
   } catch(e) { results.push('fotos_obra: ' + e.message); }
   return json({ ok: true, results });
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// CHECKLIST PRE-USO EQUIPOS (NEW-21)
+// ══════════════════════════════════════════════════════════════════════════════
+
+const CHECKLIST_DEFAULTS = {
+  pemp: [
+    'Nivel de aceite', 'Batería / Combustible', 'Cinturón de seguridad',
+    'Funcionamiento de mandos', 'Estado de neumáticos', 'Luces y señales', 'Estructura y plataforma'
+  ],
+  carretilla: [
+    'Nivel de aceite', 'Batería / Gas', 'Estado de horquillas',
+    'Frenos', 'Señal acústica', 'Estado de neumáticos', 'Luces'
+  ]
+};
+
+async function listarPlantillaChecklist(request, env) {
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const tipo = new URL(request.url).searchParams.get('tipo') || null;
+  const conds = ['empresa_id = ?'];
+  const params = [empresa_id];
+  if (tipo) { conds.push('tipo_equipo = ?'); params.push(tipo); }
+  const { results } = await env.DB.prepare(
+    `SELECT * FROM checklist_plantillas WHERE ${conds.join(' AND ')} ORDER BY tipo_equipo, orden, id`
+  ).bind(...params).all();
+  // Si no hay plantilla aún, devolver defaults
+  if (!results.length && tipo && CHECKLIST_DEFAULTS[tipo]) {
+    return json({ ok: true, preguntas: CHECKLIST_DEFAULTS[tipo].map((p, i) => ({ id: -(i+1), pregunta: p, tipo_equipo: tipo, es_default: true })) });
+  }
+  return json({ ok: true, preguntas: results });
+}
+
+async function crearPreguntaChecklist(request, env) {
+  const { empresa_id, rol } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  if (!['superadmin','empresa_admin','encargado'].includes(rol)) return err('No autorizado', 403);
+  const { tipo_equipo, pregunta, orden } = await request.json().catch(() => ({}));
+  if (!tipo_equipo || !pregunta) return err('Faltan campos', 400);
+  const r = await env.DB.prepare(
+    'INSERT INTO checklist_plantillas (empresa_id, tipo_equipo, pregunta, orden) VALUES (?,?,?,?)'
+  ).bind(empresa_id, tipo_equipo, pregunta.trim(), orden || 0).run();
+  return json({ ok: true, id: r.meta.last_row_id }, 201);
+}
+
+async function borrarPreguntaChecklist(id, request, env) {
+  const { empresa_id, rol } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  if (!['superadmin','empresa_admin','encargado'].includes(rol)) return err('No autorizado', 403);
+  await env.DB.prepare('DELETE FROM checklist_plantillas WHERE id = ? AND empresa_id = ?').bind(id, empresa_id).run();
+  return json({ ok: true });
+}
+
+async function listarRegistrosChecklist(request, env) {
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const url       = new URL(request.url);
+  const equipo_id = url.searchParams.get('equipo_id') ? parseInt(url.searchParams.get('equipo_id')) : null;
+  const tipo      = url.searchParams.get('tipo') || null;
+  const conds     = ['empresa_id = ?'];
+  const params    = [empresa_id];
+  if (equipo_id) { conds.push('equipo_id = ?'); params.push(equipo_id); }
+  if (tipo)      { conds.push('tipo_equipo = ?'); params.push(tipo); }
+  params.push(50);
+  const { results } = await env.DB.prepare(
+    `SELECT * FROM checklist_registros WHERE ${conds.join(' AND ')} ORDER BY created_at DESC LIMIT ?`
+  ).bind(...params).all();
+  return json({ ok: true, registros: results });
+}
+
+async function crearRegistroChecklist(request, env) {
+  const { empresa_id, obra_id: sesionObra, nombre: userNombre, rol } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const body = await request.json().catch(() => ({}));
+  const { tipo_equipo, equipo_id, equipo_mat, respuestas, comentario } = body;
+  if (!tipo_equipo || !equipo_id || !respuestas) return err('Faltan campos', 400);
+  const resp    = Array.isArray(respuestas) ? respuestas : [];
+  const fallos  = resp.filter(r => r.ok === false);
+  const resultado = fallos.length === 0 ? 'ok' : 'con_fallos';
+  const obra_id = body.obra_id || sesionObra || null;
+  const r = await env.DB.prepare(
+    'INSERT INTO checklist_registros (empresa_id, obra_id, tipo_equipo, equipo_id, equipo_mat, resultado, respuestas, comentario, realizado_por) VALUES (?,?,?,?,?,?,?,?,?)'
+  ).bind(empresa_id, obra_id, tipo_equipo, equipo_id, equipo_mat || null, resultado, JSON.stringify(resp), comentario || null, userNombre || rol).run();
+  // Si hay fallos: marcar equipo como "mantenimiento" y notificar Telegram
+  if (fallos.length > 0) {
+    const tabla = tipo_equipo === 'pemp' ? 'pemp' : 'carretillas';
+    await env.DB.prepare(`UPDATE ${tabla} SET estado = 'mantenimiento' WHERE id = ? AND empresa_id = ?`).bind(equipo_id, empresa_id).run();
+    const fallosTexto = fallos.map(f => `• ${f.pregunta}`).join('\n');
+    await sendTelegram(env, `⚠️ Checklist con FALLOS\nEquipo: ${equipo_mat || equipo_id} (${tipo_equipo})\nRealizado por: ${userNombre || rol}\n\nFallos:\n${fallosTexto}${comentario ? '\n\nComentario: ' + comentario : ''}`);
+  }
+  return json({ ok: true, id: r.meta.last_row_id, resultado }, 201);
 }
 
 // ══════════════════════════════════════════════════════════════════════════════

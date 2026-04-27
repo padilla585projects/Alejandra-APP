@@ -5,7 +5,7 @@
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 27/04/2026
-VERSIÓN ACTUAL APP NUEVA: v5.18
+VERSIÓN ACTUAL APP NUEVA: v5.19
 VERSIÓN ACTUAL APP VIEJA: v4.19 (⛔ CONGELADA DEFINITIVAMENTE — no recibe más cambios)
 
 ================================================================================
@@ -138,6 +138,21 @@ PASO 4 — VERIFICAR WORKER (solo si se va a tocar worker.js)
 ================================================================================
   HISTORIAL DE VERSIONES — RECIENTES
 ================================================================================
+
+v5.19  |  27/04/2026  [SOLO NUEVA APP]
+  - NEW-21: Checklist de inspección pre-uso de equipos
+    · D1: tablas checklist_plantillas + checklist_registros
+    · Worker: GET/POST /checklist-plantillas, DELETE /checklist-plantillas/:id
+      GET/POST /checklist-registros
+    · Si hay fallos: equipo marcado como 'mantenimiento' + Telegram automático
+    · Frontend: botón ✅ Check en cada tarjeta de PEMP y carretilla
+    · Modal checklist: preguntas con toggle ✅/❌, comentario opcional, guardar
+    · Modal historial: últimos 50 registros por equipo (resultado + fallos + fecha)
+    · Preguntas por defecto si no hay plantilla personalizada (7 PEMP, 7 carretilla)
+    · Ajustes → Catálogos: sección ✅ Checklist para añadir/borrar preguntas (encargado/EA/SA)
+  - Worker redesplegado (Version ID: 546933c9-7d9d-4134-8320-929885eb6e72)
+  - Migración D1: CREATE TABLE checklist_plantillas + checklist_registros ✅
+  - GitHub actualizado ✅
 
 v5.18  |  27/04/2026  [SOLO NUEVA APP]
   - NEW-17: Galería de fotos por obra
@@ -529,8 +544,8 @@ v4.80  |  22/04/2026  [SOLO NUEVA APP]
     · Nuevo home de Seguridad con 5 tarjetas verticales (module-card)
     · Cada sub-panel tiene botón ← para volver al home de Seguridad
 
-  ESTADO ACTUAL: v5.18, worker redesplegado (92e5f647), GitHub en sync ✅
-  SIGUIENTE: NEW-21 (Checklist pre-uso equipos) o bugs pendientes DB.
+  ESTADO ACTUAL: v5.19, worker redesplegado (546933c9), GitHub en sync ✅
+  SIGUIENTE: NEW-15 (Mantenimiento preventivo equipos) o bugs pendientes DB.
     - #170 Burbuja superior: icono de sección en vez del nombre (tiene foto adjunta)
     - #149 Panel selector de obra (como el de empresa al inicio)
     - #107 Pulsar notificación navega al elemento

@@ -1044,6 +1044,40 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
     </div>
   </div>
 
+  <!-- CHECKLIST PRE-USO (NEW-21) -->
+  <div class="modal-overlay" id="modalChecklist" onclick="if(event.target===this)checklistCerrar()" style="display:none;align-items:flex-end;justify-content:center;padding:0">
+    <div style="background:var(--card);border-radius:16px 16px 0 0;width:100%;max-width:520px;max-height:90vh;display:flex;flex-direction:column">
+      <div style="padding:14px 16px 12px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;flex-shrink:0">
+        <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:15px;color:var(--text);flex:1" id="checklistTitulo">✅ Checklist pre-uso</div>
+        <button onclick="checklistVerHistorial()" style="padding:5px 10px;background:var(--surface);border:1px solid var(--border);border-radius:7px;font-size:11px;font-weight:700;cursor:pointer;color:var(--muted)">📋 Historial</button>
+        <button onclick="checklistCerrar()" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--muted)">×</button>
+      </div>
+      <div style="overflow-y:auto;flex:1;padding:12px 16px" id="checklistPreguntas">
+        <div style="color:var(--muted);text-align:center;padding:20px;font-size:13px">Cargando…</div>
+      </div>
+      <div style="padding:12px 16px;border-top:1px solid var(--border);flex-shrink:0">
+        <div class="form-group" style="margin-bottom:10px">
+          <textarea id="checklistComentario" rows="2" placeholder="Comentario opcional…"
+            style="width:100%;padding:8px 10px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:'Poppins',sans-serif;font-size:13px;resize:none;outline:none;box-sizing:border-box"></textarea>
+        </div>
+        <button class="btn-primary" style="width:100%" onclick="checklistGuardar()">✅ Guardar checklist</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal historial checklist -->
+  <div class="modal-overlay" id="modalChecklistHistorial" onclick="if(event.target===this)this.style.display='none'" style="display:none;align-items:flex-end;justify-content:center;padding:0">
+    <div style="background:var(--card);border-radius:16px 16px 0 0;width:100%;max-width:520px;max-height:85vh;display:flex;flex-direction:column">
+      <div style="padding:14px 16px 12px;border-bottom:1px solid var(--border);display:flex;align-items:center;flex-shrink:0">
+        <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:15px;color:var(--text);flex:1" id="checklistHistTitulo">📋 Historial checklist</div>
+        <button onclick="document.getElementById('modalChecklistHistorial').style.display='none'" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--muted)">×</button>
+      </div>
+      <div id="checklistHistLista" style="overflow-y:auto;flex:1;padding:12px 16px">
+        <div style="color:var(--muted);text-align:center;padding:20px;font-size:13px">Cargando…</div>
+      </div>
+    </div>
+  </div>
+
   <!-- GALERÍA DE FOTOS (NEW-17) -->
   <div id="screenGaleria" class="screen flex-screen" style="padding:0;height:100%;display:none;flex-direction:column">
     <div style="padding:14px 16px 12px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;align-items:center;gap:8px">
@@ -1621,6 +1655,21 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
           <div class="tag-add-row" style="margin-top:10px">
             <input type="text" id="newTipoHerr" placeholder="Nuevo tipo...">
             <button onclick="addTipoHerr()">+</button>
+          </div>
+        </div>
+        <div class="admin-section" id="cfgChecklistSection">
+          <div class="admin-section-title">✅ Checklist pre-uso</div>
+          <div style="font-size:12px;color:var(--muted);margin-bottom:10px">Preguntas que aparecen al hacer el checklist de un equipo. Si no hay ninguna, se usan las preguntas por defecto.</div>
+          <div style="display:flex;gap:8px;margin-bottom:10px">
+            <select id="checklistCfgTipo" class="form-input" style="flex:1;font-size:13px;padding:7px 10px" onchange="checklistCfgCargar()">
+              <option value="pemp">🏗️ PEMP</option>
+              <option value="carretilla">🚜 Carretilla</option>
+            </select>
+          </div>
+          <div id="checklistCfgLista" style="margin-bottom:10px"></div>
+          <div class="tag-add-row">
+            <input type="text" id="newChecklistPregunta" placeholder="Nueva pregunta…">
+            <button onclick="checklistCfgAddPregunta()">+</button>
           </div>
         </div>
         <div class="admin-section" id="cfgSegSection">
@@ -5295,6 +5344,7 @@ function renderStock(items, mod) {
         <div class="stock-actions-row" onclick="event.stopPropagation()">
           ${!['devuelta','Devuelta'].includes(item.estado) ? `<button class="btn-sm" onclick="abrirDevolucion(${i}, '${mod}')"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/></svg> Dev.</button>` : ''}
           <button class="btn-sm" onclick="abrirRepostaje(${i}, '${mod}')" title="Registrar repostaje/carga">${item.energia === 'Eléctrica' ? '🔋' : '⛽'}</button>
+          <button class="btn-sm" onclick="checklistAbrir(${item.id}, '${mod}', '${(item.matricula||item.codigo||'').replace(/'/g,"\\'")}' )" title="Checklist pre-uso">✅ Check</button>
           <button class="btn-sm" onclick="abrirEdit(${i}, '${mod}')">✏️ Editar</button>
           <button class="btn-sm danger" onclick="borrarItem(${i}, '${mod}')">🗑️ Borrar</button>
         </div>
@@ -7529,8 +7579,10 @@ function initAjustesTabs() {
   show('cfgBobinasSection', esSA || esEA || dept === 'electrico');
   show('cfgPempSection',    esSA || esEA || dept === 'electrico' || dept === 'mecanicas');
   show('cfgCarrSection',    esSA || esEA || dept === 'electrico' || dept === 'mecanicas');
-  show('cfgHerrSection',    esSA || esEA || dept === 'electrico' || dept === 'mecanicas' || dept === 'seguridad');
-  show('cfgSegSection',     esSA || esEA || dept === 'seguridad');
+  show('cfgHerrSection',       esSA || esEA || dept === 'electrico' || dept === 'mecanicas' || dept === 'seguridad');
+  show('cfgSegSection',        esSA || esEA || dept === 'seguridad');
+  const esEncargado = s?.rol === 'encargado';
+  show('cfgChecklistSection',  esSA || esEA || esEncargado);
 }
 
 // ══════════════════════════════════════════════════════
@@ -8376,7 +8428,7 @@ async function cargarObrasSelectUsuario() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '5.18';
+const APP_VERSION = '5.19';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -10999,12 +11051,148 @@ if ('serviceWorker' in navigator) {
   window.docsCompartirArchivo    = docsCompartirArchivo;
   window.docsCompartirCarpeta    = docsCompartirCarpeta;
   window.docsVerArchivo          = docsVerArchivo;
+  // NEW-21 Checklist
+  window.checklistAbrir          = checklistAbrir;
+  window.checklistCerrar         = checklistCerrar;
+  window.checklistGuardar        = checklistGuardar;
+  window.checklistVerHistorial   = checklistVerHistorial;
+  window.checklistCfgCargar      = checklistCfgCargar;
+  window.checklistCfgAddPregunta = checklistCfgAddPregunta;
+  window.checklistCfgBorrar      = checklistCfgBorrar;
   // NEW-17 Galería
   window.galeriaSubirFoto     = galeriaSubirFoto;
   window.galeriaVerFoto       = galeriaVerFoto;
   window.galeriaCloseLightbox = galeriaCloseLightbox;
   window.galeriaCompartirFoto = galeriaCompartirFoto;
   window.galeriaBorrarFoto    = galeriaBorrarFoto;
+}
+
+// ── CHECKLIST PRE-USO EQUIPOS (NEW-21) ───────────────────────────────────────
+
+let _checklistEquipoId  = null;
+let _checklistTipoEquip = null;
+let _checklistMat       = null;
+let _checklistPreguntas = [];
+
+async function checklistAbrir(equipoId, mod, matricula) {
+  _checklistEquipoId  = equipoId;
+  _checklistTipoEquip = mod === 'carretillas' ? 'carretilla' : 'pemp';
+  _checklistMat       = matricula;
+  document.getElementById('checklistTitulo').textContent = `✅ Checklist — ${matricula || equipoId}`;
+  document.getElementById('checklistComentario').value = '';
+  const modal = document.getElementById('modalChecklist');
+  modal.style.display = 'flex';
+  const cont = document.getElementById('checklistPreguntas');
+  cont.innerHTML = '<div style="color:var(--muted);text-align:center;padding:20px;font-size:13px">Cargando…</div>';
+  const res = await apiCall('/checklist-plantillas?tipo=' + _checklistTipoEquip);
+  _checklistPreguntas = res?.preguntas || [];
+  if (!_checklistPreguntas.length) {
+    cont.innerHTML = '<div style="color:var(--muted);text-align:center;padding:20px;font-size:13px">No hay preguntas configuradas.</div>';
+    return;
+  }
+  cont.innerHTML = _checklistPreguntas.map((p, i) => `
+    <div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)">
+      <div style="flex:1;font-size:13px;color:var(--text)">${p.pregunta}</div>
+      <button id="chk_ok_${i}" onclick="checklistToggle(${i}, true)"
+        style="padding:5px 12px;border-radius:7px;border:1.5px solid #22c55e;background:#22c55e20;color:#22c55e;font-size:13px;font-weight:700;cursor:pointer">✅</button>
+      <button id="chk_ko_${i}" onclick="checklistToggle(${i}, false)"
+        style="padding:5px 12px;border-radius:7px;border:1.5px solid var(--border);background:var(--surface);color:var(--muted);font-size:13px;font-weight:700;cursor:pointer">❌</button>
+    </div>`).join('');
+  // inicializar todas como OK
+  _checklistPreguntas.forEach((_, i) => checklistToggle(i, true));
+}
+
+function checklistToggle(i, ok) {
+  _checklistPreguntas[i]._resp = ok;
+  const btnOk = document.getElementById('chk_ok_' + i);
+  const btnKo = document.getElementById('chk_ko_' + i);
+  if (!btnOk || !btnKo) return;
+  if (ok) {
+    btnOk.style.background = '#22c55e30'; btnOk.style.borderColor = '#22c55e'; btnOk.style.color = '#22c55e';
+    btnKo.style.background = 'var(--surface)'; btnKo.style.borderColor = 'var(--border)'; btnKo.style.color = 'var(--muted)';
+  } else {
+    btnKo.style.background = '#ef444430'; btnKo.style.borderColor = '#ef4444'; btnKo.style.color = '#ef4444';
+    btnOk.style.background = 'var(--surface)'; btnOk.style.borderColor = 'var(--border)'; btnOk.style.color = 'var(--muted)';
+  }
+}
+
+function checklistCerrar() {
+  document.getElementById('modalChecklist').style.display = 'none';
+  _checklistEquipoId = null; _checklistTipoEquip = null; _checklistMat = null; _checklistPreguntas = [];
+}
+
+async function checklistGuardar() {
+  if (!_checklistEquipoId || !_checklistTipoEquip) return;
+  const respuestas = _checklistPreguntas.map(p => ({ pregunta: p.pregunta, ok: p._resp !== false }));
+  const comentario = document.getElementById('checklistComentario').value.trim() || null;
+  const s = getSession();
+  const body = { tipo_equipo: _checklistTipoEquip, equipo_id: _checklistEquipoId, equipo_mat: _checklistMat, respuestas, comentario, obra_id: s?.obra_id || null };
+  const res = await apiCall('/checklist-registros', { method: 'POST', body: JSON.stringify(body) });
+  if (!res?.ok) { toast('❌ Error al guardar', 'error'); return; }
+  const fallos = respuestas.filter(r => !r.ok).length;
+  if (fallos > 0) {
+    toast(`⚠️ Checklist con ${fallos} fallo${fallos > 1 ? 's' : ''} — equipo marcado en mantenimiento`, 'warn');
+    cargarStock();
+  } else {
+    toast('✅ Checklist OK — equipo listo para usar');
+  }
+  checklistCerrar();
+}
+
+async function checklistVerHistorial() {
+  const modal = document.getElementById('modalChecklistHistorial');
+  modal.style.display = 'flex';
+  document.getElementById('checklistHistTitulo').textContent = `📋 Historial — ${_checklistMat || _checklistEquipoId || ''}`;
+  const lista = document.getElementById('checklistHistLista');
+  lista.innerHTML = '<div style="color:var(--muted);text-align:center;padding:20px;font-size:13px">Cargando…</div>';
+  const res = await apiCall(`/checklist-registros?equipo_id=${_checklistEquipoId}&tipo=${_checklistTipoEquip}`);
+  const registros = res?.registros || [];
+  if (!registros.length) { lista.innerHTML = '<div style="color:var(--muted);text-align:center;padding:20px;font-size:13px">Sin registros todavía.</div>'; return; }
+  lista.innerHTML = registros.map(r => {
+    const resp = JSON.parse(r.respuestas || '[]');
+    const fallos = resp.filter(x => !x.ok);
+    const fecha = r.created_at ? new Date(r.created_at).toLocaleString('es-ES', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' }) : '';
+    return `<div style="background:var(--surface);border-radius:10px;padding:10px 12px;margin-bottom:8px;border-left:3px solid ${r.resultado==='ok'?'#22c55e':'#ef4444'}">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+        <span style="font-weight:700;font-size:13px">${r.resultado === 'ok' ? '✅ Sin fallos' : `⚠️ ${fallos.length} fallo${fallos.length>1?'s':''}`}</span>
+        <span style="flex:1;font-size:11px;color:var(--muted)">${fecha}</span>
+        <span style="font-size:11px;color:var(--muted)">👤 ${r.realizado_por || '—'}</span>
+      </div>
+      ${fallos.length ? `<div style="font-size:12px;color:#ef4444">${fallos.map(f=>'• '+f.pregunta).join('<br>')}</div>` : ''}
+      ${r.comentario ? `<div style="font-size:12px;color:var(--muted);margin-top:4px">💬 ${r.comentario}</div>` : ''}
+    </div>`;
+  }).join('');
+}
+
+// ── Gestión de plantilla en Ajustes ──────────────────────────────────────────
+
+async function checklistCfgCargar() {
+  const tipo = document.getElementById('checklistCfgTipo')?.value || 'pemp';
+  const lista = document.getElementById('checklistCfgLista');
+  if (!lista) return;
+  lista.innerHTML = '<div style="color:var(--muted);font-size:12px">Cargando…</div>';
+  const res = await apiCall('/checklist-plantillas?tipo=' + tipo);
+  const preguntas = res?.preguntas || [];
+  if (!preguntas.length) { lista.innerHTML = '<div style="color:var(--muted);font-size:12px">Sin preguntas personalizadas (se usan las por defecto).</div>'; return; }
+  lista.innerHTML = `<div class="tag-row">${preguntas.map(p =>
+    `<span class="tag">${p.pregunta}${p.es_default ? '' : ` <button class="tag-del" onclick="checklistCfgBorrar(${p.id})">×</button>`}</span>`
+  ).join('')}</div>`;
+}
+
+async function checklistCfgAddPregunta() {
+  const tipo = document.getElementById('checklistCfgTipo')?.value || 'pemp';
+  const inp  = document.getElementById('newChecklistPregunta');
+  const v    = inp?.value.trim();
+  if (!v) return;
+  const r = await apiCall('/checklist-plantillas', { method: 'POST', body: JSON.stringify({ tipo_equipo: tipo, pregunta: v }) });
+  if (r?.ok) { inp.value = ''; checklistCfgCargar(); toast('✅ Pregunta añadida'); }
+  else toast('❌ Error al añadir', 'error');
+}
+
+async function checklistCfgBorrar(id) {
+  if (!confirm('¿Eliminar esta pregunta?')) return;
+  const r = await apiCall('/checklist-plantillas/' + id, { method: 'DELETE' });
+  if (r?.ok) { checklistCfgCargar(); toast('Pregunta eliminada'); }
 }
 
 // ── GALERÍA DE FOTOS POR OBRA (NEW-17) ────────────────────────────────────────
