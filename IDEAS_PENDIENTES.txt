@@ -720,7 +720,7 @@ LEYENDA DE ESTADO:
     · D1: nueva tabla `partes_trabajo`.
     · Añadido: 24/04/2026 — Adrian
 
-[ ] NEW-17 — Galería de fotos por obra  [PENDIENTE]
+[✓] NEW-17 — Galería de fotos por obra  [HECHO v5.18]
     · Sección 📷 dentro de cada obra/departamento (pestaña o tarjeta home).
     · Subir fotos desde cámara o galería del móvil; almacenadas en R2.
     · Vista cuadrícula con miniaturas, ordenadas por fecha.

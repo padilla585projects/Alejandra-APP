@@ -483,6 +483,15 @@ export default {
         if (method === 'DELETE') return await eliminarEvento(eid, request, env);
       }
 
+      // ── Galería de fotos por obra (NEW-17) ──────────────────────────────
+      if (path === '/fotos-obra' && method === 'GET')  return await listarFotosObra(request, env);
+      if (path === '/fotos-obra' && method === 'POST') return await subirFotoObra(request, env);
+      if (path.startsWith('/fotos-obra/')) {
+        const foid = parseInt(path.split('/fotos-obra/')[1]);
+        if (method === 'GET')    return await getFotoObra(foid, request, env);
+        if (method === 'DELETE') return await borrarFotoObra(foid, request, env);
+      }
+
       // ── Incidencias (NEW-22) ─────────────────────────────────────────────
       if (path === '/incidencias' && method === 'GET')  return await getIncidencias(request, env);
       if (path === '/incidencias' && method === 'POST') return await crearIncidencia(request, env);
@@ -4724,7 +4733,93 @@ async function runMigrations(request, env) {
     )`).run();
     results.push('chat_mensajes: creada');
   } catch(e) { results.push('chat_mensajes: ' + e.message); }
+  // Tabla fotos_obra (NEW-17)
+  try {
+    await env.DB.prepare(`CREATE TABLE IF NOT EXISTS fotos_obra (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      empresa_id  INTEGER NOT NULL,
+      obra_id     INTEGER,
+      departamento TEXT,
+      r2_key      TEXT NOT NULL,
+      nombre      TEXT NOT NULL,
+      mime_type   TEXT,
+      tamano      INTEGER,
+      comentario  TEXT,
+      subido_por  TEXT,
+      created_at  TEXT DEFAULT (datetime('now'))
+    )`).run();
+    results.push('fotos_obra: creada');
+  } catch(e) { results.push('fotos_obra: ' + e.message); }
   return json({ ok: true, results });
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// GALERÍA DE FOTOS POR OBRA (NEW-17)
+// ══════════════════════════════════════════════════════════════════════════════
+
+async function listarFotosObra(request, env) {
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const url    = new URL(request.url);
+  const obraId = url.searchParams.get('obra_id') ? parseInt(url.searchParams.get('obra_id')) : null;
+  const dept   = url.searchParams.get('departamento') || null;
+  const conds  = ['empresa_id = ?'];
+  const params = [empresa_id];
+  if (obraId) { conds.push('obra_id = ?'); params.push(obraId); }
+  if (dept)   { conds.push('departamento = ?'); params.push(dept); }
+  params.push(200);
+  const { results } = await env.DB.prepare(
+    `SELECT * FROM fotos_obra WHERE ${conds.join(' AND ')} ORDER BY created_at DESC LIMIT ?`
+  ).bind(...params).all();
+  return json({ ok: true, fotos: results });
+}
+
+async function subirFotoObra(request, env) {
+  const { empresa_id, obra_id: sesionObra, nombre: userNombre, rol, departamento } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const form = await request.formData().catch(() => null);
+  if (!form) return err('Falta el formulario', 400);
+  const file = form.get('file');
+  if (!file || !file.name) return err('Falta el archivo', 400);
+  if (file.size > 20971520) return err('El archivo supera 20 MB', 413);
+  const mime = file.type || 'image/jpeg';
+  const allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'];
+  if (!allowed.includes(mime)) return err('Solo se permiten imágenes', 400);
+  const obra_id    = parseInt(form.get('obra_id') || sesionObra || 0) || null;
+  const dept       = form.get('departamento') || departamento || null;
+  const comentario = (form.get('comentario') || '').trim() || null;
+  const ts         = Date.now();
+  const safeName   = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+  const r2Key      = `e${empresa_id}/galeria/${obra_id || 0}/${ts}_${safeName}`;
+  await env.FILES.put(r2Key, file.stream(), { httpMetadata: { contentType: mime } });
+  const r = await env.DB.prepare(
+    'INSERT INTO fotos_obra (empresa_id, obra_id, departamento, r2_key, nombre, mime_type, tamano, comentario, subido_por) VALUES (?,?,?,?,?,?,?,?,?)'
+  ).bind(empresa_id, obra_id, dept, r2Key, file.name, mime, file.size, comentario, userNombre || rol).run();
+  return json({ ok: true, id: r.meta.last_row_id }, 201);
+}
+
+async function getFotoObra(id, request, env) {
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const meta = await env.DB.prepare('SELECT * FROM fotos_obra WHERE id = ? AND empresa_id = ?').bind(id, empresa_id).first();
+  if (!meta) return err('Foto no encontrada', 404);
+  const obj = await env.FILES.get(meta.r2_key);
+  if (!obj) return err('Archivo no disponible', 404);
+  return new Response(obj.body, {
+    headers: { 'Content-Type': meta.mime_type || 'image/jpeg', 'Content-Disposition': 'inline', 'Cache-Control': 'private, max-age=3600', ...CORS }
+  });
+}
+
+async function borrarFotoObra(id, request, env) {
+  const { empresa_id, rol } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const isAdmin = ['superadmin', 'empresa_admin', 'encargado'].includes(rol);
+  if (!isAdmin) return err('No autorizado', 403);
+  const meta = await env.DB.prepare('SELECT * FROM fotos_obra WHERE id = ? AND empresa_id = ?').bind(id, empresa_id).first();
+  if (!meta) return err('Foto no encontrada', 404);
+  await env.FILES.delete(meta.r2_key);
+  await env.DB.prepare('DELETE FROM fotos_obra WHERE id = ? AND empresa_id = ?').bind(id, empresa_id).run();
+  return json({ ok: true });
 }
 
 // ══════════════════════════════════════════════════════════════════════════════

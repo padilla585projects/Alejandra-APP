@@ -822,6 +822,14 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
         <div class="module-count" id="cntIncidencias" style="background:#ef4444;display:none">0</div>
         <span class="drag-handle">⠿</span><svg class="module-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
       </div>
+      <div class="module-card" id="cardGaleria" onclick="navTo('galeria')" style="display:none;border-left:3px solid #ec4899">
+        <div class="module-emoji">📷</div>
+        <div class="module-info">
+          <div class="module-name">Galería</div>
+          <div class="module-desc">Fotos de obra por departamento</div>
+        </div>
+        <span class="drag-handle">⠿</span><svg class="module-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
+      </div>
       <div class="module-card" id="cardHerramientas" onclick="getSession()?.departamento==='seguridad'?(showScreen('seguridad'),segSelTab('herramientas')):navTo('herramientas')" style="display:none">
         <div class="module-emoji">🔧</div>
         <div class="module-info">
@@ -1033,6 +1041,38 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
     </div>
     <div id="dashContent" style="padding:14px;overflow-y:auto;flex:1">
       <div style="color:var(--muted);font-size:13px;text-align:center;padding:30px">Cargando…</div>
+    </div>
+  </div>
+
+  <!-- GALERÍA DE FOTOS (NEW-17) -->
+  <div id="screenGaleria" class="screen flex-screen" style="padding:0;height:100%;display:none;flex-direction:column">
+    <div style="padding:14px 16px 12px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;align-items:center;gap:8px">
+      <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:17px;color:var(--text);flex:1">📷 Galería</div>
+      <label style="padding:7px 14px;background:#ec489920;color:#ec4899;border:1px solid #ec489940;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">
+        📷 Foto
+        <input type="file" accept="image/*" capture="environment" id="galeriaInputCamara" style="display:none" onchange="galeriaSubirFoto(this)">
+      </label>
+      <label style="padding:7px 14px;background:var(--surface);border:1px solid var(--border);border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;color:var(--text)">
+        📁 Archivo
+        <input type="file" accept="image/*" id="galeriaInputArchivo" style="display:none" onchange="galeriaSubirFoto(this)">
+      </label>
+    </div>
+    <div id="galeriaGrid" style="padding:10px;overflow-y:auto;flex:1;display:grid;grid-template-columns:repeat(3,1fr);gap:6px;align-content:start">
+      <div style="grid-column:1/-1;color:var(--muted);text-align:center;padding:30px;font-size:13px">Cargando…</div>
+    </div>
+  </div>
+
+  <!-- Modal lightbox galería -->
+  <div class="modal-overlay" id="modalGaleriaFoto" onclick="if(event.target===this)galeriaCloseLightbox()" style="display:none;align-items:center;justify-content:center;padding:16px;flex-direction:column;gap:12px">
+    <img id="galeriaLightboxImg" src="" style="max-width:100%;max-height:60vh;border-radius:10px;object-fit:contain;display:block" alt="">
+    <div style="background:var(--surface);border-radius:12px;padding:12px 16px;width:100%;max-width:480px;box-sizing:border-box">
+      <div id="galeriaLightboxComentario" style="font-size:13px;color:var(--text);margin-bottom:4px"></div>
+      <div id="galeriaLightboxMeta" style="font-size:11px;color:var(--muted)"></div>
+      <div style="display:flex;gap:8px;margin-top:10px">
+        <button onclick="galeriaCompartirFoto()" style="flex:1;padding:8px;background:#ec489920;color:#ec4899;border:1px solid #ec489940;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">📤 Compartir</button>
+        <button id="galeriaLightboxBtnBorrar" onclick="galeriaBorrarFoto()" style="display:none;flex:0 0 80px;padding:8px;background:#ef444420;color:#ef4444;border:1px solid #ef444440;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">🗑 Borrar</button>
+        <button onclick="galeriaCloseLightbox()" style="flex:0 0 80px;padding:8px;background:var(--surface);border:1px solid var(--border);border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;color:var(--text)">Cerrar</button>
+      </div>
     </div>
   </div>
 
@@ -3247,7 +3287,8 @@ function setupHomeModules() {
   const cardDash  = document.getElementById('cardObraDashboard');
   const cardInc   = document.getElementById('cardIncidencias');
   const cardCal   = document.getElementById('cardCalendario');
-  // Seguridad: sin tarjetas de inventario, pero sí Pedidos, Docs, Dashboard e Incidencias
+  const cardGal   = document.getElementById('cardGaleria');
+  // Seguridad: sin tarjetas de inventario, pero sí Pedidos, Docs, Dashboard, Incidencias y Galería
   if (dept === 'seguridad') {
     if (cardB) cardB.style.display = 'none';
     if (cardP) cardP.style.display = 'none';
@@ -3258,6 +3299,7 @@ function setupHomeModules() {
     if (cardDash) cardDash.style.display = 'flex';
     if (cardInc)  cardInc.style.display  = 'flex';
     if (cardCal)  cardCal.style.display  = 'flex';
+    if (cardGal)  cardGal.style.display  = 'flex';
     const cardHerrSeg = document.getElementById('cardHerramientas');
     if (cardHerrSeg) cardHerrSeg.style.display = 'flex';
     applyHomeOrder();
@@ -3274,11 +3316,12 @@ function setupHomeModules() {
   // Herramientas: visible para todos excepto seguridad
   const cardHerr = document.getElementById('cardHerramientas');
   if (cardHerr) cardHerr.style.display = 'flex';
-  // Documentación, Dashboard, Incidencias y Calendario: visible para todos
+  // Documentación, Dashboard, Incidencias, Calendario y Galería: visible para todos
   if (cardDocs) cardDocs.style.display = 'flex';
   if (cardDash) cardDash.style.display = 'flex';
   if (cardInc)  cardInc.style.display  = 'flex';
   if (cardCal)  cardCal.style.display  = 'flex';
+  if (cardGal)  cardGal.style.display  = 'flex';
   applyHomeOrder();
 }
 
@@ -3747,6 +3790,11 @@ function navTo(target) {
   }
   if (target === 'incidencias') {
     showScreen('incidencias');
+    return;
+  }
+  if (target === 'galeria') {
+    showScreen('galeria');
+    galeriaCargar();
     return;
   }
   if (target === 'calendario') {
@@ -8328,7 +8376,7 @@ async function cargarObrasSelectUsuario() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '5.17';
+const APP_VERSION = '5.18';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -10951,6 +10999,127 @@ if ('serviceWorker' in navigator) {
   window.docsCompartirArchivo    = docsCompartirArchivo;
   window.docsCompartirCarpeta    = docsCompartirCarpeta;
   window.docsVerArchivo          = docsVerArchivo;
+  // NEW-17 Galería
+  window.galeriaSubirFoto     = galeriaSubirFoto;
+  window.galeriaVerFoto       = galeriaVerFoto;
+  window.galeriaCloseLightbox = galeriaCloseLightbox;
+  window.galeriaCompartirFoto = galeriaCompartirFoto;
+  window.galeriaBorrarFoto    = galeriaBorrarFoto;
+}
+
+// ── GALERÍA DE FOTOS POR OBRA (NEW-17) ────────────────────────────────────────
+
+let _galeriaFotos   = [];
+let _galeriaFotoIdx = -1;
+
+async function galeriaCargar() {
+  const grid = document.getElementById('galeriaGrid');
+  if (!grid) return;
+  grid.innerHTML = '<div style="grid-column:1/-1;color:var(--muted);text-align:center;padding:30px;font-size:13px">Cargando…</div>';
+  const s = getSession();
+  const params = new URLSearchParams();
+  if (s?.obra_id)      params.set('obra_id', s.obra_id);
+  if (s?.departamento) params.set('departamento', s.departamento);
+  const res = await apiCall('/fotos-obra?' + params.toString());
+  if (!res?.ok) { grid.innerHTML = '<div style="grid-column:1/-1;color:var(--muted);text-align:center;padding:30px;font-size:13px">Error al cargar</div>'; return; }
+  _galeriaFotos = res.fotos || [];
+  galeriaRender();
+}
+
+function galeriaRender() {
+  const grid = document.getElementById('galeriaGrid');
+  if (!grid) return;
+  if (!_galeriaFotos.length) {
+    grid.innerHTML = '<div style="grid-column:1/-1;color:var(--muted);text-align:center;padding:40px;font-size:13px">Sin fotos todavía.<br>Usa los botones de arriba para añadir.</div>';
+    return;
+  }
+  grid.innerHTML = _galeriaFotos.map((f, i) => `
+    <div onclick="galeriaVerFoto(${i})" style="aspect-ratio:1;border-radius:8px;overflow:hidden;cursor:pointer;background:var(--surface);border:1px solid var(--border);position:relative">
+      <img src="${getAPI()}/fotos-obra/${f.id}" loading="lazy"
+        style="width:100%;height:100%;object-fit:cover"
+        onerror="this.parentElement.innerHTML='<div style=\\'display:flex;align-items:center;justify-content:center;height:100%;font-size:28px\\'>🖼️</div>'">
+    </div>`).join('');
+}
+
+async function galeriaSubirFoto(input) {
+  const file = input.files[0];
+  if (!file) return;
+  input.value = '';
+  const s = getSession();
+  toast('Subiendo foto…');
+  const fd = new FormData();
+  fd.append('file', file);
+  if (s?.obra_id)      fd.append('obra_id', s.obra_id);
+  if (s?.departamento) fd.append('departamento', s.departamento);
+  const res = await apiCallRaw('/fotos-obra', { method: 'POST', body: fd });
+  const data = await res.json().catch(() => ({}));
+  if (res.ok && data.ok) {
+    toast('✅ Foto añadida');
+    galeriaCargar();
+  } else {
+    toast('❌ ' + (data.error || 'Error al subir'), 'error');
+  }
+}
+
+function galeriaVerFoto(idx) {
+  _galeriaFotoIdx = idx;
+  const f = _galeriaFotos[idx];
+  if (!f) return;
+  const s = getSession();
+  const isAdmin = ['superadmin', 'empresa_admin', 'encargado'].includes(s?.rol);
+  const modal    = document.getElementById('modalGaleriaFoto');
+  const img      = document.getElementById('galeriaLightboxImg');
+  const coment   = document.getElementById('galeriaLightboxComentario');
+  const meta     = document.getElementById('galeriaLightboxMeta');
+  const btnBorr  = document.getElementById('galeriaLightboxBtnBorrar');
+  img.src        = getAPI() + '/fotos-obra/' + f.id;
+  coment.textContent = f.comentario || '';
+  const fecha = f.created_at ? new Date(f.created_at).toLocaleString('es-ES', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' }) : '';
+  meta.textContent = (f.subido_por ? '📷 ' + f.subido_por : '') + (fecha ? '  ·  ' + fecha : '');
+  if (btnBorr) btnBorr.style.display = isAdmin ? 'block' : 'none';
+  modal.style.display = 'flex';
+}
+
+function galeriaCloseLightbox() {
+  const modal = document.getElementById('modalGaleriaFoto');
+  if (modal) modal.style.display = 'none';
+  const img = document.getElementById('galeriaLightboxImg');
+  if (img) img.src = '';
+  _galeriaFotoIdx = -1;
+}
+
+async function galeriaCompartirFoto() {
+  const f = _galeriaFotos[_galeriaFotoIdx];
+  if (!f) return;
+  const url = getAPI() + '/fotos-obra/' + f.id;
+  if (navigator.share) {
+    try {
+      const resp = await fetch(url);
+      const blob = await resp.blob();
+      const file = new File([blob], f.nombre || 'foto.jpg', { type: blob.type });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], title: 'Foto de obra' });
+        return;
+      }
+    } catch {}
+    try { await navigator.share({ url, title: 'Foto de obra' }); return; } catch {}
+  }
+  await navigator.clipboard.writeText(url).catch(() => {});
+  toast('🔗 Enlace copiado');
+}
+
+async function galeriaBorrarFoto() {
+  const f = _galeriaFotos[_galeriaFotoIdx];
+  if (!f) return;
+  if (!confirm('¿Borrar esta foto? No se puede deshacer.')) return;
+  const res = await apiCall('/fotos-obra/' + f.id, { method: 'DELETE' });
+  if (res?.ok) {
+    toast('✅ Foto borrada');
+    galeriaCloseLightbox();
+    galeriaCargar();
+  } else {
+    toast('❌ Error al borrar', 'error');
+  }
 }
 </script>
 </body>

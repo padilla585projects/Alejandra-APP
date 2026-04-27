@@ -4,8 +4,8 @@
   Ruta local: C:\Users\Adrian\Downloads\Proyecto GestiBobina\Alejandra APP
 ================================================================================
 
-ÚLTIMA ACTUALIZACIÓN: 26/04/2026
-VERSIÓN ACTUAL APP NUEVA: v5.17
+ÚLTIMA ACTUALIZACIÓN: 27/04/2026
+VERSIÓN ACTUAL APP NUEVA: v5.18
 VERSIÓN ACTUAL APP VIEJA: v4.19 (⛔ CONGELADA DEFINITIVAMENTE — no recibe más cambios)
 
 ================================================================================
@@ -138,6 +138,21 @@ PASO 4 — VERIFICAR WORKER (solo si se va a tocar worker.js)
 ================================================================================
   HISTORIAL DE VERSIONES — RECIENTES
 ================================================================================
+
+v5.18  |  27/04/2026  [SOLO NUEVA APP]
+  - NEW-17: Galería de fotos por obra
+    · D1: tabla fotos_obra (empresa_id, obra_id, departamento, r2_key, nombre, mime, comentario, subido_por)
+    · Worker: GET/POST /fotos-obra + GET/DELETE /fotos-obra/:id (stream R2)
+    · Frontend: tarjeta 📷 Galería en home (todos los depts, incluido Seguridad)
+    · Grid 3 columnas con miniaturas, lazy loading
+    · Subir desde cámara (📷) o archivo (📁) — solo imágenes ≤20MB
+    · Lightbox al pulsar: imagen a pantalla, comentario, autor y fecha
+    · Compartir foto individual (Web Share API con blob, fallback enlace)
+    · Borrar: solo encargado/EA/SA (con confirmación)
+    · Filtrado automático por obra_id y departamento de la sesión activa
+  - Worker redesplegado (Version ID: 92e5f647-027f-40f1-82e3-986611be354f)
+  - Migración D1: CREATE TABLE fotos_obra ✅
+  - GitHub actualizado ✅
 
 v5.17  |  25/04/2026 → fix 26/04/2026  [SOLO NUEVA APP]
   - HOTFIX: tarjetas de departamento no navegaban al pulsar
@@ -514,8 +529,8 @@ v4.80  |  22/04/2026  [SOLO NUEVA APP]
     · Nuevo home de Seguridad con 5 tarjetas verticales (module-card)
     · Cada sub-panel tiene botón ← para volver al home de Seguridad
 
-  ESTADO ACTUAL: v5.17, worker sin cambios (último deploy: 077375e5), GitHub en sync ✅
-  SIGUIENTE: continuar con sugerencias pendientes de la DB. Las más urgentes:
+  ESTADO ACTUAL: v5.18, worker redesplegado (92e5f647), GitHub en sync ✅
+  SIGUIENTE: NEW-21 (Checklist pre-uso equipos) o bugs pendientes DB.
     - #170 Burbuja superior: icono de sección en vez del nombre (tiene foto adjunta)
     - #149 Panel selector de obra (como el de empresa al inicio)
     - #107 Pulsar notificación navega al elemento
