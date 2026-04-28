@@ -47,8 +47,32 @@ Y antes de cerrar, obligatorio:
 
 ---
 
+## RESUMEN SESIÓN 28/04/2026
+
+- v5.20: HOTFIX checklistToggle no expuesto en window (botones ✅/❌ checklist no funcionaban)
+- v5.21: NEW-15 Mantenimiento preventivo de equipos completo:
+  · Tabla historial_mantenimientos + columnas aviso_mantenimiento/dias_aviso_mant en pemp/carretillas
+  · Worker: rutas /mantenimientos (GET/POST/DELETE + adjunto R2)
+  · Frontend: botón 🔧 Mant. en tarjetas + modal formulario + historial
+  · Edit modal PEMP/carretilla: toggle aviso + días configurables
+  · alertasDiarias: respeta toggle y días por equipo
+- Bug inicial de pantalla en blanco (era caché del navegador, no código)
+
+---
+
 ## PENDIENTE PARA LA PRÓXIMA SESIÓN
 
-- Revisión Google Sheets (sesión dedicada pendiente)
-- Bugs DB: #107, #94, #95, #113
-- NEW-15 hecho ✅ v5.21
+### 🔴 Prioritario
+- **Revisión Google Sheets** — sesión dedicada completa (ver project_sheets_pendiente.md en memory)
+  · La integración funciona parcial, hay muchas cosas por revisar y arreglar
+  · Requiere sesión dedicada sin mezclar con otras features
+
+### 🟡 Bugs activos (de la DB de sugerencias)
+- **Bug #107** — Notificaciones: al pulsar una notificación no navega correctamente a la sección
+- **Bug #94**  — Nombre de obra no se muestra bien en la barra de iconos (dept personal/seguridad)
+- **Bug #95**  — Formatos de exportación (Excel): algo no funciona bien en algún módulo
+- **Bug #113** — NFC: problema al añadir objetos/herramientas por NFC
+
+### 🟢 Features pendientes (ver IDEAS_PENDIENTES.txt para detalle)
+- NEW-16: Partes de trabajo diarios
+- NEW-18, NEW-19, NEW-20, NEW-22… (ver lista completa en IDEAS_PENDIENTES.txt)
