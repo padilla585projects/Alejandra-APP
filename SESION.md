@@ -6,9 +6,9 @@
 ## ESTADO ACTUAL
 
 **Sesión:** LIBRE
-**Última sesión:** 27/04/2026
-**Versión tras última sesión:** v5.19
-**Worker desplegado:** v5.19 (ID: 546933c9)
+**Última sesión:** 28/04/2026
+**Versión tras última sesión:** v5.21
+**Worker desplegado:** v5.21 (ID: d10d6f42)
 **GitHub:** en sync ✅
 
 ---
@@ -49,6 +49,6 @@ Y antes de cerrar, obligatorio:
 
 ## PENDIENTE PARA LA PRÓXIMA SESIÓN
 
-- NEW-15: Mantenimiento preventivo de equipos (plan técnico ya acordado — ver ESTADO_APP.txt)
 - Revisión Google Sheets (sesión dedicada pendiente)
 - Bugs DB: #107, #94, #95, #113
+- NEW-15 hecho ✅ v5.21

@@ -700,15 +700,17 @@ LEYENDA DE ESTADO:
     · Pendiente: soporte multi-comunidad por obra (campo comunidad en obras).
     · Añadido: 24/04/2026 — Adrian | Hecho: 24/04/2026
 
-[ ] NEW-15 — Control de mantenimiento preventivo de equipos  [PENDIENTE]
+[✓] NEW-15 — Control de mantenimiento preventivo de equipos  [HECHO v5.21]
     · En cada PEMP y carretilla: campo "Próxima revisión" (fecha) y "Próximo mantenimiento".
     · Toggle por equipo para activar/desactivar el aviso (no siempre se quiere notificación).
-    · Aviso automático en notificaciones in-app y Telegram X días antes (configurable, default 7).
-      Solo se dispara si el toggle de aviso está activado en ese equipo.
-    · Estado especial "🔧 En mantenimiento" que bloquea el registro como disponible.
-    · Historial de mantenimientos: fecha, descripción, quién lo hizo, adjunto opcional (factura/informe).
-    · Resumen en home: badge 🔧 con número de equipos con revisión próxima (<30 días).
-    · Añadido: 24/04/2026 — Adrian
+    · Aviso automático Telegram X días antes (configurable, default 15). Respeta toggle por equipo.
+    · Historial de mantenimientos: fecha, tipo (preventivo/correctivo/revisión), técnico, descripción, adjunto opcional.
+    · Si tipo='revision': actualiza automáticamente fecha_ultima_revision del equipo.
+    · Modal 🔧 Mant. en tarjetas PEMP/carretilla: formulario + historial con adjuntos.
+    · Edit modal: toggle 🔔 Aviso + días antes configurables.
+    · Worker: GET/POST /mantenimientos, GET /mantenimientos/:id/adjunto, DELETE /mantenimientos/:id
+    · D1: tabla historial_mantenimientos + columnas aviso_mantenimiento + dias_aviso_mant en pemp/carretillas
+    · Añadido: 24/04/2026 — Adrian | Hecho: 28/04/2026 v5.21
 
 [ ] NEW-16 — Partes de trabajo diarios  [PENDIENTE]
     · Formulario que rellena el encargado al cierre del día.

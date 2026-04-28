@@ -4,8 +4,8 @@
   Ruta local: C:\Users\Adrian\Downloads\Proyecto GestiBobina\Alejandra APP
 ================================================================================
 
-ÚLTIMA ACTUALIZACIÓN: 27/04/2026
-VERSIÓN ACTUAL APP NUEVA: v5.19
+ÚLTIMA ACTUALIZACIÓN: 28/04/2026
+VERSIÓN ACTUAL APP NUEVA: v5.21
 VERSIÓN ACTUAL APP VIEJA: v4.19 (⛔ CONGELADA DEFINITIVAMENTE — no recibe más cambios)
 
 ================================================================================
@@ -125,6 +125,16 @@ PASO 4 — VERIFICAR WORKER (solo si se va a tocar worker.js)
     empresas:      departamentos TEXT (depts activos en JSON)
     fichajes:      minutos_retraso INTEGER
 
+  Nuevas tablas/columnas (28/04/2026 — NEW-15):
+    ✅ ALTER TABLE pemp ADD COLUMN aviso_mantenimiento INTEGER DEFAULT 1
+    ✅ ALTER TABLE pemp ADD COLUMN dias_aviso_mant INTEGER DEFAULT 15
+    ✅ ALTER TABLE carretillas ADD COLUMN aviso_mantenimiento INTEGER DEFAULT 1
+    ✅ ALTER TABLE carretillas ADD COLUMN dias_aviso_mant INTEGER DEFAULT 15
+    ✅ CREATE TABLE historial_mantenimientos (id, empresa_id, tipo_equipo, equipo_id, matricula, obra_id, fecha_mant, tipo_mant, descripcion, realizado_por, adjunto_r2_key, adjunto_nombre, created_at)
+
+  Nuevas tablas (27/04/2026 — NEW-17/21):
+    ✅ fotos_obra, checklist_plantillas, checklist_registros
+
   Migraciones aplicadas en D1 (24/04/2026):
     ✅ ALTER TABLE carpetas ADD COLUMN parent_id INTEGER
     ✅ CREATE TABLE docs_notas (...)
@@ -138,6 +148,23 @@ PASO 4 — VERIFICAR WORKER (solo si se va a tocar worker.js)
 ================================================================================
   HISTORIAL DE VERSIONES — RECIENTES
 ================================================================================
+
+v5.21  |  28/04/2026  [SOLO NUEVA APP]
+  - NEW-15: Mantenimiento preventivo de equipos
+    · D1: tabla historial_mantenimientos + ALTER TABLE pemp/carretillas (aviso_mantenimiento, dias_aviso_mant)
+    · Worker: GET /mantenimientos, POST /mantenimientos (con adjunto R2 opcional)
+      GET /mantenimientos/:id/adjunto, DELETE /mantenimientos/:id
+    · Al registrar tipo 'revision': actualiza fecha_ultima_revision del equipo automáticamente
+    · alertasDiarias: respeta aviso_mantenimiento (1/0) y dias_aviso_mant por equipo
+    · Frontend: botón 🔧 Mant. en cada tarjeta PEMP/carretilla
+    · Modal bottom-sheet: form (fecha, tipo, técnico, descripción, adjunto) + historial
+    · Edit modal PEMP/carretilla: toggle 🔔 Aviso + campo días antes de revisión
+  - Worker redesplegado (Version ID: d10d6f42-b634-429f-b6b4-4fc6f14f55c7)
+  - GitHub actualizado ✅
+
+v5.20  |  28/04/2026  [SOLO NUEVA APP]
+  - HOTFIX: checklistToggle no estaba expuesto en window → botones ✅/❌ del checklist no funcionaban
+  - GitHub actualizado ✅
 
 v5.19  |  27/04/2026  [SOLO NUEVA APP]
   - NEW-21: Checklist de inspección pre-uso de equipos
