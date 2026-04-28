@@ -8428,7 +8428,7 @@ async function cargarObrasSelectUsuario() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '5.19';
+const APP_VERSION = '5.20';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -11054,6 +11054,7 @@ if ('serviceWorker' in navigator) {
   // NEW-21 Checklist
   window.checklistAbrir          = checklistAbrir;
   window.checklistCerrar         = checklistCerrar;
+  window.checklistToggle         = checklistToggle;
   window.checklistGuardar        = checklistGuardar;
   window.checklistVerHistorial   = checklistVerHistorial;
   window.checklistCfgCargar      = checklistCfgCargar;
