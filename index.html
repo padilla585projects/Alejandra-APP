@@ -1078,6 +1078,56 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
     </div>
   </div>
 
+  <!-- Modal mantenimiento preventivo (NEW-15) -->
+  <div class="modal-overlay" id="modalMantenimiento" onclick="if(event.target===this)mantCerrar()" style="display:none;align-items:flex-end;justify-content:center;padding:0">
+    <div style="background:var(--card);border-radius:16px 16px 0 0;width:100%;max-width:520px;max-height:92vh;display:flex;flex-direction:column">
+      <div style="padding:14px 16px 12px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;flex-shrink:0">
+        <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:15px;color:var(--text);flex:1" id="mantTitulo">🔧 Mantenimiento</div>
+        <button onclick="mantCerrar()" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--muted)">×</button>
+      </div>
+      <div style="overflow-y:auto;flex:1;padding:14px 16px">
+        <!-- Formulario nuevo registro -->
+        <div style="background:var(--surface);border-radius:10px;padding:12px;margin-bottom:14px;border:1px solid var(--border)">
+          <div style="font-weight:700;font-size:13px;color:var(--text);margin-bottom:10px">➕ Registrar mantenimiento</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+            <div>
+              <label style="font-size:11px;color:var(--muted);font-weight:600">Fecha</label>
+              <input type="date" id="mantFecha" class="form-input" style="margin-top:3px">
+            </div>
+            <div>
+              <label style="font-size:11px;color:var(--muted);font-weight:600">Tipo</label>
+              <select id="mantTipo" class="form-select" style="margin-top:3px">
+                <option value="preventivo">🔧 Preventivo</option>
+                <option value="correctivo">🛠️ Correctivo</option>
+                <option value="revision">📋 Revisión oficial</option>
+              </select>
+            </div>
+          </div>
+          <div style="margin-bottom:8px">
+            <label style="font-size:11px;color:var(--muted);font-weight:600">Realizado por</label>
+            <input type="text" id="mantRealizadoPor" class="form-input" placeholder="Nombre del técnico…" style="margin-top:3px">
+          </div>
+          <div style="margin-bottom:8px">
+            <label style="font-size:11px;color:var(--muted);font-weight:600">Descripción / notas</label>
+            <textarea id="mantDescripcion" rows="2" placeholder="Trabajo realizado…"
+              style="margin-top:3px;width:100%;padding:8px 10px;background:var(--card);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:'Poppins',sans-serif;font-size:13px;resize:none;outline:none;box-sizing:border-box"></textarea>
+          </div>
+          <div style="margin-bottom:10px">
+            <label style="font-size:11px;color:var(--muted);font-weight:600">Adjunto (foto/PDF opcional)</label>
+            <input type="file" id="mantAdjunto" accept="image/*,application/pdf"
+              style="margin-top:4px;width:100%;font-size:12px;color:var(--text)">
+          </div>
+          <button class="btn-primary" style="width:100%" onclick="mantGuardar()">💾 Guardar</button>
+        </div>
+        <!-- Historial -->
+        <div style="font-weight:700;font-size:13px;color:var(--text);margin-bottom:8px">📋 Historial</div>
+        <div id="mantHistorial">
+          <div style="color:var(--muted);text-align:center;padding:20px;font-size:13px">Cargando…</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- GALERÍA DE FOTOS (NEW-17) -->
   <div id="screenGaleria" class="screen flex-screen" style="padding:0;height:100%;display:none;flex-direction:column">
     <div style="padding:14px 16px 12px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;align-items:center;gap:8px">
@@ -5345,6 +5395,7 @@ function renderStock(items, mod) {
           ${!['devuelta','Devuelta'].includes(item.estado) ? `<button class="btn-sm" onclick="abrirDevolucion(${i}, '${mod}')"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/></svg> Dev.</button>` : ''}
           <button class="btn-sm" onclick="abrirRepostaje(${i}, '${mod}')" title="Registrar repostaje/carga">${item.energia === 'Eléctrica' ? '🔋' : '⛽'}</button>
           <button class="btn-sm" onclick="checklistAbrir(${item.id}, '${mod}', '${(item.matricula||item.codigo||'').replace(/'/g,"\\'")}' )" title="Checklist pre-uso">✅ Check</button>
+          <button class="btn-sm" onclick="mantAbrir('${mod}', '${(item.matricula||item.codigo||'').replace(/'/g,"\\'")}', ${item.id||'null'})" title="Mantenimiento">🔧 Mant.</button>
           <button class="btn-sm" onclick="abrirEdit(${i}, '${mod}')">✏️ Editar</button>
           <button class="btn-sm danger" onclick="borrarItem(${i}, '${mod}')">🗑️ Borrar</button>
         </div>
@@ -6112,6 +6163,16 @@ function abrirEdit(idx, mod) {
           <input class="form-input" id="editProxRev" type="date" value="${item.fecha_proxima_revision||''}">
         </div>
       </div>
+      <div style="display:grid;grid-template-columns:auto 1fr;gap:12px;align-items:center;padding:10px;background:var(--surface);border-radius:8px;border:1px solid var(--border)">
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text);cursor:pointer;white-space:nowrap">
+          <input type="checkbox" id="editAvisoMant" ${item.aviso_mantenimiento!==0?'checked':''} style="width:16px;height:16px;cursor:pointer">
+          🔔 Aviso mantenimiento
+        </label>
+        <div style="display:flex;align-items:center;gap:5px">
+          <input class="form-input" id="editDiasAviso" type="number" min="1" max="365" value="${item.dias_aviso_mant||15}" style="width:60px;text-align:center">
+          <span style="font-size:11px;color:var(--muted)">días antes</span>
+        </div>
+      </div>
       <div class="form-group"><label class="form-label">Notas</label>
         <input class="form-input" id="editNotas" type="text" value="${item.notas||''}">
       </div>
@@ -6150,6 +6211,16 @@ function abrirEdit(idx, mod) {
         </div>
         <div class="form-group"><label class="form-label">Próx. revisión</label>
           <input class="form-input" id="editProxRev" type="date" value="${item.fecha_proxima_revision||''}">
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:auto 1fr;gap:12px;align-items:center;padding:10px;background:var(--surface);border-radius:8px;border:1px solid var(--border)">
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text);cursor:pointer;white-space:nowrap">
+          <input type="checkbox" id="editAvisoMant" ${item.aviso_mantenimiento!==0?'checked':''} style="width:16px;height:16px;cursor:pointer">
+          🔔 Aviso mantenimiento
+        </label>
+        <div style="display:flex;align-items:center;gap:5px">
+          <input class="form-input" id="editDiasAviso" type="number" min="1" max="365" value="${item.dias_aviso_mant||15}" style="width:60px;text-align:center">
+          <span style="font-size:11px;color:var(--muted)">días antes</span>
         </div>
       </div>
       <div class="form-group"><label class="form-label">Notas</label>
@@ -6214,23 +6285,29 @@ async function guardarEdicion() {
              ...(deptEdit   !== undefined ? { departamento: deptEdit } : {}) };
     path = `/bobinas/${encodeURIComponent(id)}`;
   } else if (editingMod === 'pemp') {
-    const tipo    = document.getElementById('editTipo')?.value;
-    const marca   = document.getElementById('editMarca')?.value;
-    const prov    = document.getElementById('editProv')?.value;
-    const ultRev  = document.getElementById('editUltRev')?.value;
-    const proxRev = document.getElementById('editProxRev')?.value;
+    const tipo       = document.getElementById('editTipo')?.value;
+    const marca      = document.getElementById('editMarca')?.value;
+    const prov       = document.getElementById('editProv')?.value;
+    const ultRev     = document.getElementById('editUltRev')?.value;
+    const proxRev    = document.getElementById('editProxRev')?.value;
+    const avisoMant  = document.getElementById('editAvisoMant')?.checked ? 1 : 0;
+    const diasAviso  = parseInt(document.getElementById('editDiasAviso')?.value) || 15;
     body = { estado, tipo, marca, proveedor: prov, fecha_ultima_revision: ultRev, fecha_proxima_revision: proxRev, notas,
+             aviso_mantenimiento: avisoMant, dias_aviso_mant: diasAviso,
              ...(obraIdEdit !== undefined ? { obra_id: obraIdEdit } : {}),
              ...(deptEdit   !== undefined ? { departamento: deptEdit } : {}) };
     path = `/pemp/${encodeURIComponent(id)}`;
   } else {
-    const tipo    = document.getElementById('editTipo')?.value;
-    const energia = document.getElementById('editEnergia')?.value;
-    const marca   = document.getElementById('editMarca')?.value;
-    const prov    = document.getElementById('editProv')?.value;
-    const ultRev  = document.getElementById('editUltRev')?.value;
-    const proxRev = document.getElementById('editProxRev')?.value;
+    const tipo       = document.getElementById('editTipo')?.value;
+    const energia    = document.getElementById('editEnergia')?.value;
+    const marca      = document.getElementById('editMarca')?.value;
+    const prov       = document.getElementById('editProv')?.value;
+    const ultRev     = document.getElementById('editUltRev')?.value;
+    const proxRev    = document.getElementById('editProxRev')?.value;
+    const avisoMant  = document.getElementById('editAvisoMant')?.checked ? 1 : 0;
+    const diasAviso  = parseInt(document.getElementById('editDiasAviso')?.value) || 15;
     body = { estado, tipo, energia, marca, proveedor: prov, fecha_ultima_revision: ultRev, fecha_proxima_revision: proxRev, notas,
+             aviso_mantenimiento: avisoMant, dias_aviso_mant: diasAviso,
              ...(obraIdEdit !== undefined ? { obra_id: obraIdEdit } : {}),
              ...(deptEdit   !== undefined ? { departamento: deptEdit } : {}) };
     path = `/carretillas/${encodeURIComponent(id)}`;
@@ -8428,7 +8505,7 @@ async function cargarObrasSelectUsuario() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '5.20';
+const APP_VERSION = '5.21';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -11051,6 +11128,11 @@ if ('serviceWorker' in navigator) {
   window.docsCompartirArchivo    = docsCompartirArchivo;
   window.docsCompartirCarpeta    = docsCompartirCarpeta;
   window.docsVerArchivo          = docsVerArchivo;
+  // NEW-15 Mantenimiento preventivo
+  window.mantAbrir   = mantAbrir;
+  window.mantCerrar  = mantCerrar;
+  window.mantGuardar = mantGuardar;
+  window.mantBorrar  = mantBorrar;
   // NEW-21 Checklist
   window.checklistAbrir          = checklistAbrir;
   window.checklistCerrar         = checklistCerrar;
@@ -11194,6 +11276,101 @@ async function checklistCfgBorrar(id) {
   if (!confirm('¿Eliminar esta pregunta?')) return;
   const r = await apiCall('/checklist-plantillas/' + id, { method: 'DELETE' });
   if (r?.ok) { checklistCfgCargar(); toast('Pregunta eliminada'); }
+}
+
+// ── MANTENIMIENTO PREVENTIVO EQUIPOS (NEW-15) ────────────────────────────────
+
+let _mantMod        = null;
+let _mantMatricula  = null;
+let _mantEquipoId   = null;
+
+function mantAbrir(mod, matricula, equipoId) {
+  _mantMod       = mod;
+  _mantMatricula = matricula;
+  _mantEquipoId  = equipoId;
+  document.getElementById('mantTitulo').textContent = `🔧 Mant. — ${matricula}`;
+  // Fecha de hoy por defecto
+  const hoy = new Date().toISOString().slice(0, 10);
+  document.getElementById('mantFecha').value        = hoy;
+  document.getElementById('mantTipo').value         = 'preventivo';
+  document.getElementById('mantRealizadoPor').value = getSession()?.nombre || '';
+  document.getElementById('mantDescripcion').value  = '';
+  const adjEl = document.getElementById('mantAdjunto');
+  if (adjEl) adjEl.value = '';
+  document.getElementById('modalMantenimiento').style.display = 'flex';
+  mantCargar();
+}
+
+function mantCerrar() {
+  document.getElementById('modalMantenimiento').style.display = 'none';
+}
+
+async function mantCargar() {
+  const cont = document.getElementById('mantHistorial');
+  if (!cont) return;
+  cont.innerHTML = '<div style="color:var(--muted);text-align:center;padding:16px;font-size:13px">Cargando…</div>';
+  const params = new URLSearchParams();
+  const tipo = _mantMod === 'carretillas' ? 'carretilla' : 'pemp';
+  params.set('tipo_equipo', tipo);
+  if (_mantMatricula) params.set('matricula', _mantMatricula);
+  const res = await apiCall('/mantenimientos?' + params.toString());
+  const registros = res?.registros || [];
+  if (!registros.length) {
+    cont.innerHTML = '<div style="color:var(--muted);text-align:center;padding:16px;font-size:13px">Sin registros de mantenimiento.</div>';
+    return;
+  }
+  const s = getSession();
+  const isAdmin = ['superadmin','empresa_admin','encargado'].includes(s?.rol);
+  cont.innerHTML = registros.map(r => {
+    const tipoIcon = { preventivo:'🔧', correctivo:'🛠️', revision:'📋' }[r.tipo_mant] || '🔧';
+    const fecha = r.fecha_mant ? new Date(r.fecha_mant + 'T00:00:00').toLocaleDateString('es-ES', { day:'2-digit', month:'2-digit', year:'numeric' }) : '';
+    return `<div style="padding:10px 0;border-bottom:1px solid var(--border);display:flex;align-items:flex-start;gap:8px">
+      <div style="flex:1">
+        <div style="font-size:13px;font-weight:700;color:var(--text)">${tipoIcon} ${r.tipo_mant||'preventivo'} <span style="color:var(--muted);font-weight:400;font-size:12px">— ${fecha}</span></div>
+        ${r.realizado_por ? `<div style="font-size:12px;color:var(--muted)">👤 ${r.realizado_por}</div>` : ''}
+        ${r.descripcion   ? `<div style="font-size:12px;color:var(--text);margin-top:3px">${r.descripcion}</div>` : ''}
+        ${r.adjunto_r2_key ? `<a href="${getAPI()}/mantenimientos/${r.id}/adjunto" target="_blank" style="font-size:11px;color:var(--blue);text-decoration:none">📎 Ver adjunto</a>` : ''}
+      </div>
+      ${isAdmin ? `<button onclick="mantBorrar(${r.id})" style="background:none;border:none;cursor:pointer;color:var(--red);font-size:18px;padding:0;flex-shrink:0">🗑️</button>` : ''}
+    </div>`;
+  }).join('');
+}
+
+async function mantGuardar() {
+  const fecha       = document.getElementById('mantFecha')?.value;
+  const tipo_mant   = document.getElementById('mantTipo')?.value;
+  const realizado   = document.getElementById('mantRealizadoPor')?.value.trim();
+  const descripcion = document.getElementById('mantDescripcion')?.value.trim();
+  const adjuntoEl   = document.getElementById('mantAdjunto');
+  const adjunto     = adjuntoEl?.files?.[0];
+  if (!fecha) return toast('⚠️ Indica la fecha', 'err');
+  toast('Guardando…');
+  const fd = new FormData();
+  fd.append('tipo_equipo', _mantMod === 'carretillas' ? 'carretilla' : 'pemp');
+  if (_mantEquipoId) fd.append('equipo_id', _mantEquipoId);
+  fd.append('matricula',     _mantMatricula || '');
+  fd.append('fecha_mant',    fecha);
+  fd.append('tipo_mant',     tipo_mant || 'preventivo');
+  fd.append('realizado_por', realizado);
+  fd.append('descripcion',   descripcion);
+  if (adjunto) fd.append('file', adjunto);
+  const res = await apiCallRaw('/mantenimientos', { method: 'POST', body: fd });
+  const data = await res.json().catch(() => ({}));
+  if (res.ok && data.ok) {
+    toast('✅ Mantenimiento registrado');
+    if (adjuntoEl) adjuntoEl.value = '';
+    document.getElementById('mantDescripcion').value = '';
+    mantCargar();
+  } else {
+    toast('❌ ' + (data.error || 'Error'), 'error');
+  }
+}
+
+async function mantBorrar(id) {
+  if (!confirm('¿Borrar este registro de mantenimiento?')) return;
+  const res = await apiCall('/mantenimientos/' + id, { method: 'DELETE' });
+  if (res?.ok) { toast('✅ Eliminado'); mantCargar(); }
+  else toast('❌ Error al borrar', 'error');
 }
 
 // ── GALERÍA DE FOTOS POR OBRA (NEW-17) ────────────────────────────────────────

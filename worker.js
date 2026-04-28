@@ -483,6 +483,16 @@ export default {
         if (method === 'DELETE') return await eliminarEvento(eid, request, env);
       }
 
+      // ── Mantenimiento preventivo equipos (NEW-15) ───────────────────────
+      if (path === '/mantenimientos' && method === 'GET')  return await getMantenimientos(request, env);
+      if (path === '/mantenimientos' && method === 'POST') return await crearMantenimiento(request, env);
+      if (path.startsWith('/mantenimientos/')) {
+        const _mparts = path.split('/');
+        const _mid    = parseInt(_mparts[2]);
+        if (_mparts[3] === 'adjunto' && method === 'GET') return await getAdjuntoMantenimiento(_mid, request, env);
+        if (!_mparts[3] && method === 'DELETE') return await borrarMantenimiento(_mid, request, env);
+      }
+
       // ── Checklist pre-uso equipos (NEW-21) ──────────────────────────────
       if (path === '/checklist-plantillas' && method === 'GET')  return await listarPlantillaChecklist(request, env);
       if (path === '/checklist-plantillas' && method === 'POST') return await crearPreguntaChecklist(request, env);
@@ -1129,7 +1139,7 @@ async function editarPemp(matricula, request, env) {
   if (obraId && !isSuperadmin && pemp.obra_id !== obraId) return err('No autorizado', 403);
 
   const body = await request.json().catch(() => ({}));
-  const campos = ['tipo', 'marca', 'proveedor', 'energia', 'estado', 'notas', 'fecha_ultima_revision', 'fecha_proxima_revision', 'obra_id', 'departamento'];
+  const campos = ['tipo', 'marca', 'proveedor', 'energia', 'estado', 'notas', 'fecha_ultima_revision', 'fecha_proxima_revision', 'obra_id', 'departamento', 'aviso_mantenimiento', 'dias_aviso_mant'];
   let notifAveria = false, notifReparado = false;
   // Fechas automáticas según cambio de estado
   if (body.estado !== undefined) {
@@ -1289,7 +1299,7 @@ async function editarCarretilla(matricula, request, env) {
   if (obraId && !isSuperadmin && carretilla.obra_id !== obraId) return err('No autorizado', 403);
 
   const body = await request.json().catch(() => ({}));
-  const campos = ['tipo', 'marca', 'proveedor', 'energia', 'estado', 'notas', 'fecha_ultima_revision', 'fecha_proxima_revision', 'obra_id', 'departamento'];
+  const campos = ['tipo', 'marca', 'proveedor', 'energia', 'estado', 'notas', 'fecha_ultima_revision', 'fecha_proxima_revision', 'obra_id', 'departamento', 'aviso_mantenimiento', 'dias_aviso_mant'];
   let notifAveria = false, notifReparado = false;
   if (body.estado !== undefined) {
     if (body.estado === 'Averiada' && carretilla.estado !== 'Averiada') {
@@ -3810,21 +3820,25 @@ async function alertasDiarias(env) {
       );
     }
 
-    // 2. Revisiones próximas (dentro de 15 días o ya vencidas)
-    const DIAS_AVISO = 15;
-    const limite = new Date(hoy); limite.setDate(limite.getDate() + DIAS_AVISO);
-    const limiteStr = limite.toISOString().slice(0, 10);
+    // 2. Revisiones próximas — usa dias_aviso_mant por equipo (default 15) cuando aviso_mantenimiento=1
+    const DIAS_AVISO_DEFAULT = 15;
+    const maxLimite = new Date(hoy); maxLimite.setDate(maxLimite.getDate() + 365); // ventana amplia
+    const maxLimiteStr = maxLimite.toISOString().slice(0, 10);
+    const hoyStr2 = hoy.toISOString().slice(0, 10);
 
     const [revPemp, revCarr] = await Promise.all([
-      env.DB.prepare(`SELECT matricula, fecha_proxima_revision FROM pemp WHERE fecha_proxima_revision IS NOT NULL AND fecha_proxima_revision != '' AND fecha_proxima_revision <= ?`).bind(limiteStr).all(),
-      env.DB.prepare(`SELECT matricula, fecha_proxima_revision FROM carretillas WHERE fecha_proxima_revision IS NOT NULL AND fecha_proxima_revision != '' AND fecha_proxima_revision <= ?`).bind(limiteStr).all(),
+      env.DB.prepare(`SELECT matricula, fecha_proxima_revision, aviso_mantenimiento, dias_aviso_mant FROM pemp WHERE fecha_proxima_revision IS NOT NULL AND fecha_proxima_revision != '' AND fecha_proxima_revision <= ?`).bind(maxLimiteStr).all(),
+      env.DB.prepare(`SELECT matricula, fecha_proxima_revision, aviso_mantenimiento, dias_aviso_mant FROM carretillas WHERE fecha_proxima_revision IS NOT NULL AND fecha_proxima_revision != '' AND fecha_proxima_revision <= ?`).bind(maxLimiteStr).all(),
     ]);
 
     const revisiones = [];
     for (const m of [...(revPemp.results||[]), ...(revCarr.results||[])]) {
+      const aviso = m.aviso_mantenimiento !== undefined ? m.aviso_mantenimiento : 1;
+      if (!aviso) continue;
+      const diasAviso = m.dias_aviso_mant || DIAS_AVISO_DEFAULT;
       const dias = Math.floor((new Date(m.fecha_proxima_revision) - hoy) / 86400000);
       if (dias < 0) revisiones.push(`🔖 ${m.matricula} — VENCIDA hace ${Math.abs(dias)} días`);
-      else revisiones.push(`🔖 ${m.matricula} — vence en ${dias} días (${m.fecha_proxima_revision})`);
+      else if (dias <= diasAviso) revisiones.push(`🔖 ${m.matricula} — vence en ${dias} días (${m.fecha_proxima_revision})`);
     }
     if (revisiones.length) {
       await sendTelegram(env,
@@ -4770,6 +4784,41 @@ async function runMigrations(request, env) {
     )`).run();
     results.push('checklist_registros: creada');
   } catch(e) { results.push('checklist_registros: ' + e.message); }
+  // Mantenimiento preventivo (NEW-15) — columnas en pemp + carretillas + tabla historial
+  try {
+    await env.DB.prepare(`ALTER TABLE pemp ADD COLUMN aviso_mantenimiento INTEGER DEFAULT 1`).run();
+    results.push('pemp.aviso_mantenimiento: añadida');
+  } catch(e) { results.push('pemp.aviso_mantenimiento: ' + e.message); }
+  try {
+    await env.DB.prepare(`ALTER TABLE pemp ADD COLUMN dias_aviso_mant INTEGER DEFAULT 15`).run();
+    results.push('pemp.dias_aviso_mant: añadida');
+  } catch(e) { results.push('pemp.dias_aviso_mant: ' + e.message); }
+  try {
+    await env.DB.prepare(`ALTER TABLE carretillas ADD COLUMN aviso_mantenimiento INTEGER DEFAULT 1`).run();
+    results.push('carretillas.aviso_mantenimiento: añadida');
+  } catch(e) { results.push('carretillas.aviso_mantenimiento: ' + e.message); }
+  try {
+    await env.DB.prepare(`ALTER TABLE carretillas ADD COLUMN dias_aviso_mant INTEGER DEFAULT 15`).run();
+    results.push('carretillas.dias_aviso_mant: añadida');
+  } catch(e) { results.push('carretillas.dias_aviso_mant: ' + e.message); }
+  try {
+    await env.DB.prepare(`CREATE TABLE IF NOT EXISTS historial_mantenimientos (
+      id               INTEGER PRIMARY KEY AUTOINCREMENT,
+      empresa_id       INTEGER NOT NULL,
+      tipo_equipo      TEXT NOT NULL,
+      equipo_id        INTEGER,
+      matricula        TEXT NOT NULL,
+      obra_id          INTEGER,
+      fecha_mant       TEXT NOT NULL,
+      tipo_mant        TEXT NOT NULL DEFAULT 'preventivo',
+      descripcion      TEXT,
+      realizado_por    TEXT,
+      adjunto_r2_key   TEXT,
+      adjunto_nombre   TEXT,
+      created_at       TEXT DEFAULT (datetime('now'))
+    )`).run();
+    results.push('historial_mantenimientos: creada');
+  } catch(e) { results.push('historial_mantenimientos: ' + e.message); }
   // Tabla fotos_obra (NEW-17)
   try {
     await env.DB.prepare(`CREATE TABLE IF NOT EXISTS fotos_obra (
@@ -4788,6 +4837,112 @@ async function runMigrations(request, env) {
     results.push('fotos_obra: creada');
   } catch(e) { results.push('fotos_obra: ' + e.message); }
   return json({ ok: true, results });
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// MANTENIMIENTO PREVENTIVO EQUIPOS (NEW-15)
+// ══════════════════════════════════════════════════════════════════════════════
+
+async function getMantenimientos(request, env) {
+  const { empresa_id } = await getAuth(request, env);
+  const url = new URL(request.url);
+  const tipo_equipo = url.searchParams.get('tipo_equipo');
+  const matricula   = url.searchParams.get('matricula');
+  const conds = ['empresa_id = ?'];
+  const vals  = [empresa_id];
+  if (tipo_equipo) { conds.push('tipo_equipo = ?'); vals.push(tipo_equipo); }
+  if (matricula)   { conds.push('matricula = ?');   vals.push(matricula); }
+  const { results } = await env.DB.prepare(
+    `SELECT * FROM historial_mantenimientos WHERE ${conds.join(' AND ')} ORDER BY fecha_mant DESC, id DESC LIMIT 100`
+  ).bind(...vals).all();
+  return json({ ok: true, registros: results || [] });
+}
+
+async function crearMantenimiento(request, env) {
+  const { empresa_id, usuario, obra_id: obraAuth } = await getAuth(request, env);
+  let body = {};
+  let adjuntoKey = null;
+  let adjuntoNombre = null;
+  const ct = request.headers.get('content-type') || '';
+
+  if (ct.includes('multipart/form-data')) {
+    const fd = await request.formData();
+    for (const [k, v] of fd.entries()) {
+      if (k === 'file' && v instanceof File && v.size > 0) {
+        adjuntoNombre = v.name;
+        const ext = v.name.split('.').pop().toLowerCase();
+        adjuntoKey = `mant/${empresa_id}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+        await env.R2.put(adjuntoKey, v.stream(), { httpMetadata: { contentType: v.type || 'application/octet-stream' } });
+      } else {
+        body[k] = v;
+      }
+    }
+  } else {
+    body = await request.json().catch(() => ({}));
+  }
+
+  const { tipo_equipo, equipo_id, matricula, fecha_mant, tipo_mant, descripcion, realizado_por, obra_id } = body;
+  if (!matricula || !fecha_mant) return err('Faltan campos obligatorios (matricula, fecha_mant)');
+
+  const obraFinal = obra_id ? parseInt(obra_id) : obraAuth;
+
+  const r = await env.DB.prepare(
+    `INSERT INTO historial_mantenimientos (empresa_id, tipo_equipo, equipo_id, matricula, obra_id, fecha_mant, tipo_mant, descripcion, realizado_por, adjunto_r2_key, adjunto_nombre)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?)`
+  ).bind(
+    empresa_id,
+    tipo_equipo || 'pemp',
+    equipo_id ? parseInt(equipo_id) : null,
+    matricula.trim().toUpperCase(),
+    obraFinal || null,
+    fecha_mant,
+    tipo_mant || 'preventivo',
+    descripcion || null,
+    realizado_por || usuario || null,
+    adjuntoKey,
+    adjuntoNombre
+  ).run();
+
+  // Si es revisión → actualizar fecha_ultima_revision en la tabla del equipo
+  if (tipo_mant === 'revision') {
+    const tabla = (tipo_equipo === 'carretilla' || tipo_equipo === 'carretillas') ? 'carretillas' : 'pemp';
+    await env.DB.prepare(`UPDATE ${tabla} SET fecha_ultima_revision = ? WHERE matricula = ?`)
+      .bind(fecha_mant, matricula.trim().toUpperCase()).run().catch(() => {});
+  }
+
+  await sendTelegram(env,
+    `🔧 <b>Mantenimiento registrado</b>\n🔖 ${matricula.trim().toUpperCase()} (${tipo_mant || 'preventivo'})\n📅 ${fecha_mant}\n👤 ${realizado_por || usuario || '—'}${descripcion ? '\n📝 ' + descripcion : ''}`
+  );
+
+  return json({ ok: true, id: r.meta.last_row_id, mensaje: 'Mantenimiento registrado' }, 201);
+}
+
+async function getAdjuntoMantenimiento(id, request, env) {
+  const { empresa_id } = await getAuth(request, env);
+  const reg = await env.DB.prepare('SELECT * FROM historial_mantenimientos WHERE id = ? AND empresa_id = ?').bind(id, empresa_id).first();
+  if (!reg || !reg.adjunto_r2_key) return err('Adjunto no encontrado', 404);
+  const obj = await env.R2.get(reg.adjunto_r2_key);
+  if (!obj) return err('Archivo no encontrado en almacenamiento', 404);
+  const ct = obj.httpMetadata?.contentType || 'application/octet-stream';
+  return new Response(obj.body, {
+    headers: {
+      'Content-Type': ct,
+      'Content-Disposition': `inline; filename="${reg.adjunto_nombre || 'adjunto'}"`,
+      ...CORS,
+    },
+  });
+}
+
+async function borrarMantenimiento(id, request, env) {
+  const { empresa_id, isSuperadmin, isEmpresaAdmin, isEncargado } = await getAuth(request, env);
+  if (!isSuperadmin && !isEmpresaAdmin && !isEncargado) return err('No autorizado', 403);
+  const reg = await env.DB.prepare('SELECT * FROM historial_mantenimientos WHERE id = ? AND empresa_id = ?').bind(id, empresa_id).first();
+  if (!reg) return err('Registro no encontrado', 404);
+  if (reg.adjunto_r2_key) {
+    await env.R2.delete(reg.adjunto_r2_key).catch(() => {});
+  }
+  await env.DB.prepare('DELETE FROM historial_mantenimientos WHERE id = ? AND empresa_id = ?').bind(id, empresa_id).run();
+  return json({ ok: true, mensaje: 'Registro borrado' });
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
