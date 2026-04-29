@@ -1460,9 +1460,9 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
       <!-- Selector de modo -->
       <div style="padding:8px 14px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;gap:8px">
         <button id="segModoAnadir" onclick="segSetScanMode('anadir')"
-          style="flex:1;padding:8px 0;background:var(--surface2);color:var(--muted);border:1px solid var(--border);border-radius:8px;font-family:'Montserrat',sans-serif;font-weight:900;font-size:12px;cursor:pointer">➕ AÑADIR</button>
+          style="flex:1;padding:8px 0;background:var(--accent);color:#000;border:none;border-radius:8px;font-family:'Montserrat',sans-serif;font-weight:900;font-size:12px;cursor:pointer">➕ AÑADIR</button>
         <button id="segModoBuscar" onclick="segSetScanMode('buscar')"
-          style="flex:1;padding:8px 0;background:var(--accent);color:#000;border:none;border-radius:8px;font-family:'Montserrat',sans-serif;font-weight:900;font-size:12px;cursor:pointer">🔍 BUSCAR</button>
+          style="flex:1;padding:8px 0;background:var(--surface2);color:var(--muted);border:1px solid var(--border);border-radius:8px;font-family:'Montserrat',sans-serif;font-weight:900;font-size:12px;cursor:pointer">🔍 BUSCAR</button>
       </div>
       <!-- Cámara -->
       <div style="padding:10px 14px 6px;flex-shrink:0">
@@ -4290,7 +4290,7 @@ function setScanMode(mode) {
 // ══════════════════════════════════════════════════════
 let segStream   = null;
 let segQRLoop   = null;
-let segScanMode = 'buscar';
+let segScanMode = 'anadir';
 
 function segSetScanMode(mode) {
   segScanMode = mode;
@@ -8613,7 +8613,7 @@ async function cargarObrasSelectUsuario() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '5.24';
+const APP_VERSION = '5.25';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
