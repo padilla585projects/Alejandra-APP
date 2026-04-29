@@ -7,7 +7,7 @@
 
 **Sesión:** LIBRE
 **Última sesión:** 29/04/2026
-**Versión tras última sesión:** v5.23
+**Versión tras última sesión:** v5.24
 **Worker desplegado:** v5.22 (worker sin cambios)
 **GitHub:** en sync ✅
 

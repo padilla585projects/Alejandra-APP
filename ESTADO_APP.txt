@@ -5,7 +5,7 @@
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 29/04/2026
-VERSIÓN ACTUAL APP NUEVA: v5.23
+VERSIÓN ACTUAL APP NUEVA: v5.24
 VERSIÓN ACTUAL APP VIEJA: v4.19 (⛔ CONGELADA DEFINITIVAMENTE — no recibe más cambios)
 
 ================================================================================
@@ -148,6 +148,15 @@ PASO 4 — VERIFICAR WORKER (solo si se va a tocar worker.js)
 ================================================================================
   HISTORIAL DE VERSIONES — RECIENTES
 ================================================================================
+
+v5.24  |  29/04/2026  [SOLO NUEVA APP]
+  - MEJ: Modo AÑADIR en escáner de Seguridad
+    · Botones ➕ AÑADIR / 🔍 BUSCAR en panel Escáner
+    · Modo AÑADIR: NFC o cámara → abre formulario nuevo ítem con código pre-rellenado
+    · Modo BUSCAR: comportamiento previo (busca en inv seg y máquinas)
+    · Pensado para etiquetar arneses, EPIs, extintores, etc. con NFC y añadirlos al inventario
+  - Worker NO redesplegado (sin cambios en worker.js)
+  - GitHub actualizado ✅
 
 v5.23  |  29/04/2026  [SOLO NUEVA APP]
   - BUG-113: NFC — problema al añadir objetos/herramientas
