@@ -1457,6 +1457,13 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
           </button>
         </div>
       </div>
+      <!-- Selector de modo -->
+      <div style="padding:8px 14px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;gap:8px">
+        <button id="segModoAnadir" onclick="segSetScanMode('anadir')"
+          style="flex:1;padding:8px 0;background:var(--surface2);color:var(--muted);border:1px solid var(--border);border-radius:8px;font-family:'Montserrat',sans-serif;font-weight:900;font-size:12px;cursor:pointer">➕ AÑADIR</button>
+        <button id="segModoBuscar" onclick="segSetScanMode('buscar')"
+          style="flex:1;padding:8px 0;background:var(--accent);color:#000;border:none;border-radius:8px;font-family:'Montserrat',sans-serif;font-weight:900;font-size:12px;cursor:pointer">🔍 BUSCAR</button>
+      </div>
       <!-- Cámara -->
       <div style="padding:10px 14px 6px;flex-shrink:0">
         <div class="cam-viewport" id="segCamViewport">
@@ -4281,8 +4288,17 @@ function setScanMode(mode) {
 // ══════════════════════════════════════════════════════
 // ESCÁNER SEGURIDAD — cámara + buscador dedicados
 // ══════════════════════════════════════════════════════
-let segStream = null;
-let segQRLoop = null;
+let segStream   = null;
+let segQRLoop   = null;
+let segScanMode = 'buscar';
+
+function segSetScanMode(mode) {
+  segScanMode = mode;
+  const btnA = document.getElementById('segModoAnadir');
+  const btnB = document.getElementById('segModoBuscar');
+  if (btnA) { btnA.style.background = mode==='anadir'?'var(--accent)':'var(--surface2)'; btnA.style.color=mode==='anadir'?'#000':'var(--muted)'; btnA.style.border=mode==='anadir'?'none':'1px solid var(--border)'; }
+  if (btnB) { btnB.style.background = mode==='buscar'?'var(--accent)':'var(--surface2)'; btnB.style.color=mode==='buscar'?'#000':'var(--muted)'; btnB.style.border=mode==='buscar'?'none':'1px solid var(--border)'; }
+}
 let segScanActive = false;
 
 // ── NFC (NEW-12) ─────────────────────────────────────────────────────────────
@@ -4329,8 +4345,7 @@ async function nfcLeer(contexto) {
       nfcDetener(contexto);
       toast('📡 NFC: ' + codigo);
       if (contexto === 'seg') {
-        document.getElementById('segMatInput').value = codigo;
-        segBuscarCodigo();
+        segOnCode(codigo);
       } else if (contexto === 'herr') {
         if (typeof herrOnCode === 'function') herrOnCode(codigo);
         else { const el = document.getElementById('herrSerie'); if (el) el.value = codigo; }
@@ -4482,7 +4497,11 @@ function segOnCode(codigo) {
   if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
   document.getElementById('segMatInput').value = codigo;
   setTimeout(() => segCloseCamera(), 1200);
-  segBuscarCodigo(codigo);
+  if (segScanMode === 'anadir') {
+    segPreRegistrarInv(codigo);
+  } else {
+    segBuscarCodigo(codigo);
+  }
 }
 
 async function segBuscarMaquina(mat) {
@@ -8594,7 +8613,7 @@ async function cargarObrasSelectUsuario() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '5.23';
+const APP_VERSION = '5.24';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
