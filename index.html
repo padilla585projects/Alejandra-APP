@@ -4330,7 +4330,7 @@ async function nfcLeer(contexto) {
       toast('📡 NFC: ' + codigo);
       if (contexto === 'seg') {
         document.getElementById('segMatInput').value = codigo;
-        segBuscarMaquina();
+        segBuscarCodigo();
       } else if (contexto === 'herr') {
         if (typeof herrOnCode === 'function') herrOnCode(codigo);
         else { const el = document.getElementById('herrSerie'); if (el) el.value = codigo; }
@@ -8594,7 +8594,7 @@ async function cargarObrasSelectUsuario() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '5.22';
+const APP_VERSION = '5.23';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -8898,8 +8898,7 @@ if ('serviceWorker' in navigator) {
     if (navigator.vibrate) navigator.vibrate([100,50,100]);
     setTimeout(() => herrCloseCamera(), 1200);
     if (herrScanMode === 'agregar') {
-      await abrirFormHerramienta();
-      setTimeout(() => { const el = document.getElementById('herrSerie'); if (el) el.value = serie; }, 150);
+      abrirFormHerramienta(null, serie);
     } else {
       const c = document.getElementById('herrScanResult');
       c.innerHTML = '<div class="empty-state">Buscando...</div>';
@@ -8920,8 +8919,7 @@ if ('serviceWorker' in navigator) {
 
   function herrAgregarDesdeEscaner(serie) {
     document.getElementById('herrScanResult').innerHTML = '';
-    abrirFormHerramienta(null);
-    setTimeout(() => { const el = document.getElementById('herrSerie'); if (el) el.value = serie; }, 200);
+    abrirFormHerramienta(null, serie);
   }
 
   function renderHerrFicha(h, historial, conAcciones) {
@@ -9330,7 +9328,7 @@ if ('serviceWorker' in navigator) {
     } catch {}
   }
 
-  function abrirFormHerramienta(h) {
+  function abrirFormHerramienta(h, preSerial) {
     herrCargarSelects().then(() => {
       if (h) {
         document.getElementById('herrEditId').value    = h.id;
@@ -9350,10 +9348,10 @@ if ('serviceWorker' in navigator) {
         document.getElementById('herrAlimentacion').value = 'bateria';
         ['herrMarca','herrModelo','herrSerie','herrAsignado','herrNotas'].forEach(id => document.getElementById(id).value = '');
         document.getElementById('herrKit').value = '';
-        // Pre-rellenar obra actual de la sesión al crear herramienta nueva
         const _sHerr = getSession();
         document.getElementById('herrObra').value = _sHerr?.obra_id || '';
         document.getElementById('modalHerrTitulo').textContent = '🔧 Nueva herramienta';
+        if (preSerial) document.getElementById('herrSerie').value = preSerial;
       }
     });
     document.getElementById('modalHerramienta').classList.add('show');
