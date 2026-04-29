@@ -4,8 +4,8 @@
   Ruta local: C:\Users\Adrian\Downloads\Proyecto GestiBobina\Alejandra APP
 ================================================================================
 
-ÚLTIMA ACTUALIZACIÓN: 28/04/2026
-VERSIÓN ACTUAL APP NUEVA: v5.21
+ÚLTIMA ACTUALIZACIÓN: 29/04/2026
+VERSIÓN ACTUAL APP NUEVA: v5.22
 VERSIÓN ACTUAL APP VIEJA: v4.19 (⛔ CONGELADA DEFINITIVAMENTE — no recibe más cambios)
 
 ================================================================================
@@ -148,6 +148,25 @@ PASO 4 — VERIFICAR WORKER (solo si se va a tocar worker.js)
 ================================================================================
   HISTORIAL DE VERSIONES — RECIENTES
 ================================================================================
+
+v5.22  |  29/04/2026  [SOLO NUEVA APP]
+  - BUG-179/180/181: Resumen de Seguridad solapado y vacío
+    · segPanelResumen estaba fuera del div screenSeguridad (colocado después de los modales)
+    · Fix: movido al interior correcto de screenSeguridad, antes de su cierre
+  - BUG-177/178: Galería de fotos no mostraba nada tras subir
+    · galeriaCargar hacía res.fotos sin llamar res.json() → siempre []
+    · Fix: añadido await res.json() para parsear la respuesta correctamente
+    · Fix: thumbnails y lightbox ahora pasan ?token= en la URL para autenticación
+    · Worker: getAuth acepta token también via query param ?token= (para <img src>)
+  - BUG-183: Error al abrir/descargar imagen en Documentos
+    · window.open() tras await se bloquea en navegadores móviles
+    · Fix: reemplazado por anchor click (funciona tras await)
+    · Fix: detección de imagen mejorada — usa extensión del archivo si el MIME está vacío
+    · Lightbox reconstruido con DOM API en vez de innerHTML (evita problemas de escaping)
+  - BUG-182: UX botón 📷 en Docs forzaba cámara sin opción de galería
+    · Fix: eliminado capture="environment" → el sistema muestra picker con cámara Y galería
+  - Worker redesplegado ✅
+  - GitHub actualizado ✅
 
 v5.21  |  28/04/2026  [SOLO NUEVA APP]
   - NEW-15: Mantenimiento preventivo de equipos

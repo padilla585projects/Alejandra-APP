@@ -1,7 +1,7 @@
 ================================================================================
   ALEJANDRA APP — IDEAS, MEJORAS Y ERRORES PENDIENTES
   Recogidos de: Canal Telegram @AlejandraAPP_bot
-  Última actualización: 25/04/2026 — v5.16: rediseño Personal, Chat en depts, SVG carretilla, dept-pill
+  Última actualización: 29/04/2026 — v5.22: bugs galería, resumen seg, docs abrir imagen, UX subir
 
   ⚠️  LEER ESTE ARCHIVO ANTES DE CUALQUIER SESIÓN DE CODIFICACIÓN.
   ⚠️  Marcar como [HECHO vX.XX] cuando se implemente. No borrar las líneas.
@@ -841,6 +841,27 @@ LEYENDA DE ESTADO:
 [✓] NEW-11 — Botón "Invítame a un café" en Ajustes  [HECHO v4.37]
     · Enlace PayPal (https://www.paypal.me/padilla585) en Ajustes → Sistema.
     · Reportado: 18/04/2026 — Adrian, CPD Getafe
+
+[✓] BUG-177/178 — Galería de fotos no mostraba nada  [HECHO v5.22]
+    · galeriaCargar no llamaba res.json() → _galeriaFotos siempre [].
+    · Thumbnails y lightbox sin auth → imágenes no cargaban.
+    · Fix: json(), token en URL, worker getAuth acepta ?token=.
+    · Reportado: 28/04/2026 — empresa 1
+
+[✓] BUG-179/180/181 — Resumen Seguridad solapado y vacío  [HECHO v5.22]
+    · segPanelResumen fuera del div screenSeguridad → se superponía a otras pantallas.
+    · Fix: movido al interior correcto de screenSeguridad.
+    · Reportado: 28/04/2026 — empresa 1, seguridad
+
+[✓] BUG-182 — Botón 📷 Docs forzaba cámara sin opción galería  [HECHO v5.22]
+    · capture="environment" impedía elegir desde galería del móvil.
+    · Fix: eliminado capture → el OS muestra picker con cámara Y galería.
+    · Reportado: 28/04/2026 — empresa 1
+
+[✓] BUG-183 — Error al abrir imagen en Documentos  [HECHO v5.22]
+    · window.open() tras await bloqueado en móvil. MIME vacío no detectaba imagen.
+    · Fix: anchor click, detección por extensión, lightbox con DOM API.
+    · Reportado: 29/04/2026 — empresa 1, eléctrico
 
 ================================================================================
   📋 INSTRUCCIONES PARA CLAUDE

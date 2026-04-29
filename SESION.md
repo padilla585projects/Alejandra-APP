@@ -6,9 +6,9 @@
 ## ESTADO ACTUAL
 
 **Sesión:** LIBRE
-**Última sesión:** 28/04/2026
-**Versión tras última sesión:** v5.21
-**Worker desplegado:** v5.21 (ID: d10d6f42)
+**Última sesión:** 29/04/2026
+**Versión tras última sesión:** v5.22
+**Worker desplegado:** v5.22 (getAuth acepta ?token= para imágenes)
 **GitHub:** en sync ✅
 
 ---
