@@ -7,8 +7,8 @@
 
 **Sesión:** LIBRE
 **Última sesión:** 29/04/2026
-**Versión tras última sesión:** v5.22
-**Worker desplegado:** v5.22 (getAuth acepta ?token= para imágenes)
+**Versión tras última sesión:** v5.23
+**Worker desplegado:** v5.22 (worker sin cambios)
 **GitHub:** en sync ✅
 
 ---
@@ -47,16 +47,14 @@ Y antes de cerrar, obligatorio:
 
 ---
 
-## RESUMEN SESIÓN 28/04/2026
+## RESUMEN SESIÓN 29/04/2026
 
-- v5.20: HOTFIX checklistToggle no expuesto en window (botones ✅/❌ checklist no funcionaban)
-- v5.21: NEW-15 Mantenimiento preventivo de equipos completo:
-  · Tabla historial_mantenimientos + columnas aviso_mantenimiento/dias_aviso_mant en pemp/carretillas
-  · Worker: rutas /mantenimientos (GET/POST/DELETE + adjunto R2)
-  · Frontend: botón 🔧 Mant. en tarjetas + modal formulario + historial
-  · Edit modal PEMP/carretilla: toggle aviso + días configurables
-  · alertasDiarias: respeta toggle y días por equipo
-- Bug inicial de pantalla en blanco (era caché del navegador, no código)
+- v5.22: Corrección de 4 bugs/mejoras reportados en el log de sugerencias:
+  · BUG-177/178: Galería no recargaba ni mostraba fotos tras subir (fix condición res.ok + lazy loading)
+  · BUG-179/180/181: Resumen Seguridad solapado al navegar — _applyScreen ahora llama segSelTab('home')
+  · BUG-183: Error al abrir imagen en Docs en móvil — reemplazado blob por URL directa con ?token= para imágenes; fixed docsDescargarDoc (faltaba appendChild antes de click)
+  · MEJ-182: Bottom-sheet de previsualización al subir archivo en Docs (nombre, tamaño, preview imagen, botones Subir/Cancelar)
+- Worker NO redesplegado (sin cambios en worker.js)
 
 ---
 
@@ -72,6 +70,7 @@ Y antes de cerrar, obligatorio:
 - **Bug #94**  — Nombre de obra no se muestra bien en la barra de iconos (dept personal/seguridad)
 - **Bug #95**  — Formatos de exportación (Excel): algo no funciona bien en algún módulo
 - **Bug #113** — NFC: problema al añadir objetos/herramientas por NFC
+- **Bug #184** — Dotación de EPIs por trabajador (Katherine) — feature nueva, sesión dedicada
 
 ### 🟢 Features pendientes (ver IDEAS_PENDIENTES.txt para detalle)
 - NEW-16: Partes de trabajo diarios

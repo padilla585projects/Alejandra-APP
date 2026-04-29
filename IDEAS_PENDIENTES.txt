@@ -674,11 +674,15 @@ LEYENDA DE ESTADO:
     · Polling cada 60s. Badge desaparece al abrir el panel.
     · Reportado: 18/04/2026 — Adrian, CPD Getafe
 
-[✓] NEW-12 — Soporte NFC en pestaña Escanear (#113)  [✓ HECHO v4.92]
+[✓] NEW-12 — Soporte NFC en pestaña Escanear (#113)  [✓ HECHO v4.92 / BUG fix v5.23]
     · Botón 📡 NFC visible solo si NDEFReader disponible (Chrome Android 89+)
     · Leer tag NFC → busca el código en Seguridad y Herramientas
     · Escribir tag NFC con nfcEscribir(codigo)
     · Soporta records "text" y "url"
+    · BUG-113 fix v5.23: seg NFC llamaba segBuscarMaquina() en vez de segBuscarCodigo()
+      → ítems de inventario seg no se encontraban; ahora busca primero en inv seg y luego en máquinas
+    · BUG-113 fix v5.23: condición de carrera en herr modo agregar — preSerial ahora se aplica
+      dentro del .then() de herrCargarSelects(), eliminando setTimeout frágil
     · Reportado: 20/04/2026 — Adrian, CPD Getafe
 
 [ ] NEW-10 — Planes de precios  [FUTURO — pendiente de clientes reales]
