@@ -853,9 +853,9 @@ LEYENDA DE ESTADO:
     · Fix: movido al interior correcto de screenSeguridad.
     · Reportado: 28/04/2026 — empresa 1, seguridad
 
-[✓] BUG-182 — Botón 📷 Docs forzaba cámara sin opción galería  [HECHO v5.22]
-    · capture="environment" impedía elegir desde galería del móvil.
-    · Fix: eliminado capture → el OS muestra picker con cámara Y galería.
+[✓] MEJ-182 — Mejorar UI de subida de archivos en Docs  [HECHO v5.22]
+    · Al seleccionar un archivo se muestra bottom-sheet con nombre, tamaño, tipo e imagen preview.
+    · Botones "Subir" / "Cancelar" — la subida solo arranca al confirmar.
     · Reportado: 28/04/2026 — empresa 1
 
 [✓] BUG-183 — Error al abrir imagen en Documentos  [HECHO v5.22]

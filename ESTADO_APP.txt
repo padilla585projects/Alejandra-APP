@@ -163,8 +163,10 @@ v5.22  |  29/04/2026  [SOLO NUEVA APP]
     · Fix: reemplazado por anchor click (funciona tras await)
     · Fix: detección de imagen mejorada — usa extensión del archivo si el MIME está vacío
     · Lightbox reconstruido con DOM API en vez de innerHTML (evita problemas de escaping)
-  - BUG-182: UX botón 📷 en Docs forzaba cámara sin opción de galería
-    · Fix: eliminado capture="environment" → el sistema muestra picker con cámara Y galería
+  - MEJ-182: Bottom-sheet de previsualización al subir archivo en Documentos
+    · Al seleccionar archivo: se muestra modal con nombre, tamaño, tipo e imagen preview si es foto
+    · Botones "Subir" / "Cancelar" — la subida solo arranca al confirmar
+    · Afecta docsSubirArchivo y docsSubirRaiz
   - Worker redesplegado ✅
   - GitHub actualizado ✅
 

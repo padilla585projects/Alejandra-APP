@@ -2637,6 +2637,30 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
   </div>
 
 
+<!-- ══ DOCS UPLOAD PREVIEW BOTTOM SHEET (#182) ══ -->
+<div id="docsUploadSheet" style="display:none;position:fixed;inset:0;z-index:3000;background:rgba(0,0,0,.55)" onclick="docsUploadPreviewCancelar()">
+  <div id="docsUploadSheetInner" style="position:absolute;bottom:0;left:0;right:0;background:var(--card);border-radius:20px 20px 0 0;padding:20px;max-height:80vh;overflow-y:auto" onclick="event.stopPropagation()">
+    <div style="width:40px;height:4px;background:var(--border);border-radius:2px;margin:0 auto 16px"></div>
+    <div style="font-size:15px;font-weight:700;margin-bottom:14px;color:var(--text)">Vista previa del archivo</div>
+    <div id="docsUploadPreviewImg" style="display:none;text-align:center;margin-bottom:14px">
+      <img id="docsUploadPreviewImgEl" style="max-width:100%;max-height:200px;border-radius:10px;object-fit:contain" src="" alt="preview">
+    </div>
+    <div style="background:var(--bg);border-radius:12px;padding:14px;margin-bottom:16px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <span id="docsUploadPreviewIcon" style="font-size:28px">📄</span>
+        <div style="flex:1;min-width:0">
+          <div id="docsUploadPreviewNombre" style="font-size:14px;font-weight:600;color:var(--text);word-break:break-all"></div>
+          <div id="docsUploadPreviewTamanio" style="font-size:12px;color:var(--muted);margin-top:3px"></div>
+        </div>
+      </div>
+    </div>
+    <div style="display:flex;gap:10px">
+      <button onclick="docsUploadPreviewCancelar()" style="flex:1;padding:13px;background:var(--border);color:var(--text);border:none;border-radius:12px;font-size:14px;font-weight:600;cursor:pointer">Cancelar</button>
+      <button onclick="docsUploadPreviewConfirmar()" style="flex:1;padding:13px;background:#6366f1;color:#fff;border:none;border-radius:12px;font-size:14px;font-weight:700;cursor:pointer">⬆️ Subir</button>
+    </div>
+  </div>
+</div>
+
 </div><!-- end appContent -->
 
 <!-- ══════════════════════════════════════════
@@ -3810,6 +3834,7 @@ function _applyScreen(name) {
   if (name === 'obraDashboard')  { cargarObraDashboard(); }
   if (name === 'incidencias')    { cargarIncidencias(); }
   if (name === 'calendario')     { calCargar(); }
+  if (name === 'seguridad')      { segSelTab('home'); }
   if (name === 'dept' || name === 'empresaSel') {
     const p = document.getElementById('deptPill'); if (p) p.style.display = 'none';
     if (name === 'dept') aplicarDeptosActivos();
@@ -5712,47 +5737,52 @@ function docsRenderArchivo(d, puedeEditar, carpetaId, containerId, carpetaNombre
 }
 
 async function docsVerArchivo(id, nombre, mime) {
+  const ext   = (nombre || '').split('.').pop().toLowerCase();
+  const esImg = (mime && mime.startsWith('image/')) ||
+                (!mime && ['jpg','jpeg','png','webp','gif','heic','heif','bmp','svg'].includes(ext));
+  if (esImg) {
+    // Imágenes: mostrar directamente con URL+token, sin descargar el blob entero
+    const s   = getSession();
+    const tok = encodeURIComponent(s?.token || '');
+    const url = getAPI() + '/docs-dept/' + id + '?token=' + tok;
+    const ov  = document.createElement('div');
+    ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.92);display:flex;align-items:center;justify-content:center;z-index:9999;flex-direction:column;gap:12px';
+    const btnCerrar = document.createElement('button');
+    btnCerrar.textContent = '✕ Cerrar';
+    btnCerrar.style.cssText = 'padding:8px 14px;background:#333;color:#fff;border:none;border-radius:8px;font-size:13px;cursor:pointer';
+    btnCerrar.onclick = (e) => { e.stopPropagation(); ov.remove(); };
+    const btnGuardar = document.createElement('a');
+    btnGuardar.href = url; btnGuardar.download = nombre;
+    btnGuardar.textContent = '⬇️ Guardar';
+    btnGuardar.style.cssText = 'padding:8px 14px;background:var(--accent);color:#000;border-radius:8px;font-weight:700;font-size:13px;text-decoration:none';
+    btnGuardar.onclick = (e) => e.stopPropagation();
+    const btns = document.createElement('div');
+    btns.style.cssText = 'position:absolute;top:14px;right:14px;display:flex;gap:8px';
+    btns.appendChild(btnGuardar); btns.appendChild(btnCerrar);
+    const img = document.createElement('img');
+    img.src = url;
+    img.style.cssText = 'max-width:95vw;max-height:82vh;border-radius:8px;object-fit:contain';
+    img.onclick = (e) => e.stopPropagation();
+    img.onerror = () => { img.alt = '❌'; toast('❌ Error al cargar la imagen', 'err'); };
+    const lbl = document.createElement('div');
+    lbl.textContent = nombre; lbl.style.cssText = 'color:#aaa;font-size:12px';
+    ov.appendChild(btns); ov.appendChild(img); ov.appendChild(lbl);
+    ov.addEventListener('click', () => ov.remove());
+    document.body.appendChild(ov);
+    return;
+  }
+  // No-imágenes (PDF, docs...): descargar como blob y abrir en nueva pestaña
   try {
     toast('⏳ Abriendo...');
     const res = await apiCall('/docs-dept/' + id);
     if (!res.ok) return toast('❌ Error al abrir', 'err');
     const blob = await res.blob();
     const url  = URL.createObjectURL(blob);
-    // Detectar imagen por MIME o por extensión si MIME está vacío
-    const ext  = (nombre || '').split('.').pop().toLowerCase();
-    const esImg = (mime && mime.startsWith('image/')) ||
-                  (!mime && ['jpg','jpeg','png','webp','gif','heic','heif','bmp','svg'].includes(ext));
     toast('');
-    if (esImg) {
-      const ov = document.createElement('div');
-      ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.92);display:flex;align-items:center;justify-content:center;z-index:9999;flex-direction:column;gap:12px';
-      const btnCerrar = document.createElement('button');
-      btnCerrar.textContent = '✕ Cerrar';
-      btnCerrar.style.cssText = 'padding:8px 14px;background:#333;color:#fff;border:none;border-radius:8px;font-size:13px;cursor:pointer';
-      btnCerrar.onclick = (e) => { e.stopPropagation(); ov.remove(); URL.revokeObjectURL(url); };
-      const btnGuardar = document.createElement('a');
-      btnGuardar.href = url; btnGuardar.download = nombre;
-      btnGuardar.textContent = '⬇️ Guardar';
-      btnGuardar.style.cssText = 'padding:8px 14px;background:var(--accent);color:#000;border-radius:8px;font-weight:700;font-size:13px;text-decoration:none';
-      btnGuardar.onclick = (e) => e.stopPropagation();
-      const btns = document.createElement('div');
-      btns.style.cssText = 'position:absolute;top:14px;right:14px;display:flex;gap:8px';
-      btns.appendChild(btnGuardar); btns.appendChild(btnCerrar);
-      const img = document.createElement('img');
-      img.src = url; img.style.cssText = 'max-width:95vw;max-height:82vh;border-radius:8px;object-fit:contain';
-      img.onclick = (e) => e.stopPropagation();
-      const lbl = document.createElement('div');
-      lbl.textContent = nombre; lbl.style.cssText = 'color:#aaa;font-size:12px';
-      ov.appendChild(btns); ov.appendChild(img); ov.appendChild(lbl);
-      ov.addEventListener('click', () => { ov.remove(); URL.revokeObjectURL(url); });
-      document.body.appendChild(ov);
-    } else {
-      // Usar anchor click — funciona tras await a diferencia de window.open
-      const a = document.createElement('a');
-      a.href = url; a.target = '_blank'; a.rel = 'noopener';
-      document.body.appendChild(a); a.click(); document.body.removeChild(a);
-      setTimeout(() => URL.revokeObjectURL(url), 10000);
-    }
+    const a = document.createElement('a');
+    a.href = url; a.target = '_blank'; a.rel = 'noopener';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
   } catch { toast('❌ Error al abrir', 'err'); }
 }
 
@@ -5910,37 +5940,78 @@ async function docsBorrarCarpeta(id, containerId) {
   else toast('❌ Error al eliminar', 'err');
 }
 
+let _docsUploadPreviewCb = null;
+
+function docsPreviewArchivo(file, onConfirm) {
+  _docsUploadPreviewCb = onConfirm;
+  const esImg = file.type.startsWith('image/');
+  document.getElementById('docsUploadPreviewNombre').textContent = file.name;
+  const kb = file.size / 1024;
+  const tam = kb < 1024 ? kb.toFixed(1) + ' KB' : (kb / 1024).toFixed(2) + ' MB';
+  document.getElementById('docsUploadPreviewTamanio').textContent = tam;
+  const ext = file.name.split('.').pop().toLowerCase();
+  const icons = { pdf:'📕', doc:'📝', docx:'📝', xls:'📗', xlsx:'📗', zip:'🗜️', rar:'🗜️', txt:'📄', mp4:'🎬', mov:'🎬' };
+  document.getElementById('docsUploadPreviewIcon').textContent = esImg ? '🖼️' : (icons[ext] || '📄');
+  const imgBox = document.getElementById('docsUploadPreviewImg');
+  const imgEl  = document.getElementById('docsUploadPreviewImgEl');
+  if (esImg) {
+    const reader = new FileReader();
+    reader.onload = e => { imgEl.src = e.target.result; };
+    reader.readAsDataURL(file);
+    imgBox.style.display = 'block';
+  } else {
+    imgBox.style.display = 'none';
+    imgEl.src = '';
+  }
+  document.getElementById('docsUploadSheet').style.display = 'block';
+}
+
+function docsUploadPreviewConfirmar() {
+  document.getElementById('docsUploadSheet').style.display = 'none';
+  if (_docsUploadPreviewCb) { _docsUploadPreviewCb(); _docsUploadPreviewCb = null; }
+}
+
+function docsUploadPreviewCancelar() {
+  document.getElementById('docsUploadSheet').style.display = 'none';
+  _docsUploadPreviewCb = null;
+}
+
 async function docsSubirArchivo(carpetaId, containerId, carpetaNombre, input) {
   const file = input.files[0];
   if (!file) return;
   input.value = '';
-  toast('⬆️ Subiendo ' + file.name + '...');
-  const s = getSession();
-  const fd = new FormData();
-  fd.append('file', file);
-  if (carpetaId) {
-    fd.append('carpeta_id', carpetaId);
-  } else {
-    fd.append('obra_id', s?.obra_id);
-    fd.append('departamento', s?.departamento);
-  }
-  try {
-    const res = await subirArchivoRaw('/docs-dept', fd);
-    if (!res.ok) { const e = await res.json().catch(()=>{}); return toast('❌ ' + (e?.error||'Error al subir'), 'err'); }
-    toast('✅ Archivo subido');
-    carpetaId ? docsAbrirCarpeta(carpetaId, carpetaNombre, containerId, null, null) : docsCargar(containerId);
-  } catch { toast('❌ Error de red', 'err'); }
+  docsPreviewArchivo(file, async () => {
+    toast('⬆️ Subiendo ' + file.name + '...');
+    const s = getSession();
+    const fd = new FormData();
+    fd.append('file', file);
+    if (carpetaId) {
+      fd.append('carpeta_id', carpetaId);
+    } else {
+      fd.append('obra_id', s?.obra_id);
+      fd.append('departamento', s?.departamento);
+    }
+    try {
+      const res = await subirArchivoRaw('/docs-dept', fd);
+      if (!res.ok) { const e = await res.json().catch(()=>{}); return toast('❌ ' + (e?.error||'Error al subir'), 'err'); }
+      toast('✅ Archivo subido');
+      carpetaId ? docsAbrirCarpeta(carpetaId, carpetaNombre, containerId, null, null) : docsCargar(containerId);
+    } catch { toast('❌ Error de red', 'err'); }
+  });
 }
 
 async function docsDescargarDoc(id, nombre) {
   try {
+    toast('⬇️ Descargando...');
     const res = await apiCall('/docs-dept/' + id);
     if (!res.ok) return toast('❌ Error al descargar', 'err');
     const blob = await res.blob();
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    a.href = url; a.download = nombre; a.click();
+    a.href = url; a.download = nombre;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
     setTimeout(() => URL.revokeObjectURL(url), 5000);
+    toast('✅ Descargado');
   } catch { toast('❌ Error de red', 'err'); }
 }
 
@@ -5958,18 +6029,20 @@ async function docsSubirRaiz(containerId, input) {
   const file = input.files[0];
   if (!file) return;
   input.value = '';
-  toast('⬆️ Subiendo ' + file.name + '...');
-  const s = getSession();
-  const fd = new FormData();
-  fd.append('file', file);
-  fd.append('obra_id', s?.obra_id);
-  fd.append('departamento', s?.departamento);
-  try {
-    const res = await subirArchivoRaw('/docs-dept', fd);
-    if (!res.ok) { const e = await res.json().catch(()=>{}); return toast('❌ ' + (e?.error||'Error al subir'), 'err'); }
-    toast('✅ Archivo subido');
-    docsCargar(containerId);
-  } catch { toast('❌ Error de red', 'err'); }
+  docsPreviewArchivo(file, async () => {
+    toast('⬆️ Subiendo ' + file.name + '...');
+    const s = getSession();
+    const fd = new FormData();
+    fd.append('file', file);
+    fd.append('obra_id', s?.obra_id);
+    fd.append('departamento', s?.departamento);
+    try {
+      const res = await subirArchivoRaw('/docs-dept', fd);
+      if (!res.ok) { const e = await res.json().catch(()=>{}); return toast('❌ ' + (e?.error||'Error al subir'), 'err'); }
+      toast('✅ Archivo subido');
+      docsCargar(containerId);
+    } catch { toast('❌ Error de red', 'err'); }
+  });
 }
 
 // ── MEJ-155: nueva subcarpeta dentro de carpeta ──────────────────────────────
@@ -11419,7 +11492,7 @@ function galeriaRender() {
   const tok = encodeURIComponent(getSession()?.token || '');
   grid.innerHTML = _galeriaFotos.map((f, i) => `
     <div onclick="galeriaVerFoto(${i})" style="aspect-ratio:1;border-radius:8px;overflow:hidden;cursor:pointer;background:var(--surface);border:1px solid var(--border);position:relative">
-      <img src="${getAPI()}/fotos-obra/${f.id}?token=${tok}" loading="lazy"
+      <img src="${getAPI()}/fotos-obra/${f.id}?token=${tok}"
         style="width:100%;height:100%;object-fit:cover"
         onerror="this.parentElement.innerHTML='<div style=\\'display:flex;align-items:center;justify-content:center;height:100%;font-size:28px\\'>🖼️</div>'">
     </div>`).join('');
@@ -11437,7 +11510,7 @@ async function galeriaSubirFoto(input) {
   if (s?.departamento) fd.append('departamento', s.departamento);
   const res = await apiCallRaw('/fotos-obra', { method: 'POST', body: fd });
   const data = await res.json().catch(() => ({}));
-  if (res.ok && data.ok) {
+  if (res.ok) {
     toast('✅ Foto añadida');
     galeriaCargar();
   } else {
