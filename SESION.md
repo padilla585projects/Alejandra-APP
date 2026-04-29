@@ -7,8 +7,8 @@
 
 **Sesión:** LIBRE
 **Última sesión:** 29/04/2026
-**Versión tras última sesión:** v5.24
-**Worker desplegado:** v5.22 (worker sin cambios)
+**Versión tras última sesión:** v5.25
+**Worker desplegado:** v5.22 (worker sin cambios en toda la sesión)
 **GitHub:** en sync ✅
 
 ---
@@ -49,12 +49,16 @@ Y antes de cerrar, obligatorio:
 
 ## RESUMEN SESIÓN 29/04/2026
 
-- v5.22: Corrección de 4 bugs/mejoras reportados en el log de sugerencias:
-  · BUG-177/178: Galería no recargaba ni mostraba fotos tras subir (fix condición res.ok + lazy loading)
-  · BUG-179/180/181: Resumen Seguridad solapado al navegar — _applyScreen ahora llama segSelTab('home')
-  · BUG-183: Error al abrir imagen en Docs en móvil — reemplazado blob por URL directa con ?token= para imágenes; fixed docsDescargarDoc (faltaba appendChild antes de click)
-  · MEJ-182: Bottom-sheet de previsualización al subir archivo en Docs (nombre, tamaño, preview imagen, botones Subir/Cancelar)
-- Worker NO redesplegado (sin cambios en worker.js)
+- v5.23: BUG-113 — NFC: dos bugs al añadir objetos/herramientas
+  · Seg NFC llamaba segBuscarMaquina() en vez de segBuscarCodigo() → ítems de inv seg no se encontraban
+  · Herr NFC modo agregar: condición de carrera eliminada — preSerial dentro del .then() de herrCargarSelects()
+  · herrAgregarDesdeEscaner: mismo fix sin setTimeout
+- v5.24: Modo AÑADIR en escáner de Seguridad
+  · Botones ➕ AÑADIR / 🔍 BUSCAR en panel Escáner de Seguridad
+  · Modo AÑADIR: NFC/cámara → abre formulario nuevo ítem con código pre-rellenado (para etiquetar arneses, EPIs, etc.)
+  · Modo BUSCAR: comportamiento previo
+- v5.25: Modo AÑADIR activo por defecto al abrir el escáner de Seguridad
+- Worker NO redesplegado (sin cambios en worker.js en toda la sesión)
 
 ---
 
@@ -69,7 +73,6 @@ Y antes de cerrar, obligatorio:
 - **Bug #107** — Notificaciones: al pulsar una notificación no navega correctamente a la sección
 - **Bug #94**  — Nombre de obra no se muestra bien en la barra de iconos (dept personal/seguridad)
 - **Bug #95**  — Formatos de exportación (Excel): algo no funciona bien en algún módulo
-- **Bug #113** — NFC: problema al añadir objetos/herramientas por NFC
 - **Bug #184** — Dotación de EPIs por trabajador (Katherine) — feature nueva, sesión dedicada
 
 ### 🟢 Features pendientes (ver IDEAS_PENDIENTES.txt para detalle)

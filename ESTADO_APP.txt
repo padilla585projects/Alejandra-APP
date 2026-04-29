@@ -5,7 +5,7 @@
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 29/04/2026
-VERSIÓN ACTUAL APP NUEVA: v5.24
+VERSIÓN ACTUAL APP NUEVA: v5.25
 VERSIÓN ACTUAL APP VIEJA: v4.19 (⛔ CONGELADA DEFINITIVAMENTE — no recibe más cambios)
 
 ================================================================================
@@ -148,6 +148,10 @@ PASO 4 — VERIFICAR WORKER (solo si se va a tocar worker.js)
 ================================================================================
   HISTORIAL DE VERSIONES — RECIENTES
 ================================================================================
+
+v5.25  |  29/04/2026  [SOLO NUEVA APP]
+  - Escáner Seguridad: modo AÑADIR activo por defecto (antes era BUSCAR)
+  - GitHub actualizado ✅
 
 v5.24  |  29/04/2026  [SOLO NUEVA APP]
   - MEJ: Modo AÑADIR en escáner de Seguridad
