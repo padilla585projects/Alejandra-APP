@@ -41,8 +41,8 @@ async function verifyPassword(password, stored) {
 
 // ── Auth helper ──────────────────────────────────────────────────────────────
 async function getAuth(request, env) {
-  // 1. Token D1 (sistema nuevo)
-  const xToken = request.headers.get('X-Token');
+  // 1. Token D1 (sistema nuevo) — acepta también ?token= en URL para <img src>
+  const xToken = request.headers.get('X-Token') || new URL(request.url).searchParams.get('token');
   if (xToken) {
     try {
       const sesion = await env.DB.prepare('SELECT * FROM sesiones WHERE token = ?').bind(xToken).first();

@@ -1619,6 +1619,17 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
       </div>
     </div>
 
+    <!-- TAB RESUMEN SEG -->
+    <div id="segPanelResumen" style="display:none;flex-direction:column;flex:1;overflow:hidden">
+      <div style="padding:10px 14px 8px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;align-items:center;gap:8px">
+        <button onclick="segSelTab('home')" style="background:var(--surface2);border:none;border-radius:50%;width:30px;height:30px;font-size:16px;cursor:pointer;color:var(--text);flex-shrink:0">←</button>
+        <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:13px;color:var(--accent)">📊 Resumen de seguridad</div>
+      </div>
+      <div id="segDashContent" style="padding:14px;overflow-y:auto;flex:1">
+        <div style="color:var(--muted);font-size:13px;text-align:center;padding:30px">Cargando…</div>
+      </div>
+    </div>
+
   </div>
 
   <!-- AJUSTES (5 tabs) -->
@@ -2294,17 +2305,6 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
       <div id="modalKitDetalleBody"></div>
     </div>
   </div>
-
-    <!-- TAB RESUMEN SEG (NEW-27) -->
-    <div id="segPanelResumen" style="display:none;flex-direction:column;flex:1;overflow:hidden">
-      <div style="padding:10px 14px 8px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;align-items:center;gap:8px">
-        <button onclick="segSelTab('home')" style="background:var(--surface2);border:none;border-radius:50%;width:30px;height:30px;font-size:16px;cursor:pointer;color:var(--text);flex-shrink:0">←</button>
-        <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:13px;color:var(--accent)">📊 Resumen de seguridad</div>
-      </div>
-      <div id="segDashContent" style="padding:14px;overflow-y:auto;flex:1">
-        <div style="color:var(--muted);font-size:13px;text-align:center;padding:30px">Cargando…</div>
-      </div>
-    </div>
 
   <!-- ══════════════════════════════════════════
        PERSONAL
@@ -5590,7 +5590,7 @@ async function docsCargar(containerId) {
           <button onclick="docsCrearNota(null,'${containerId}',null)"
             style="padding:7px 12px;background:var(--surface);border:1px solid var(--border);border-radius:8px;font-family:'Montserrat',sans-serif;font-weight:700;font-size:12px;cursor:pointer">📝 Nota</button>
           <label style="padding:7px 11px;background:var(--surface);border:1px solid var(--border);border-radius:8px;font-size:16px;cursor:pointer" title="Foto">
-            📷<input type="file" accept="image/*" capture="environment" style="display:none" onchange="docsSubirRaiz('${containerId}',this)">
+            📷<input type="file" accept="image/*" style="display:none" onchange="docsSubirRaiz('${containerId}',this)">
           </label>
           <label style="padding:7px 12px;background:var(--surface);border:1px solid var(--border);border-radius:8px;font-family:'Montserrat',sans-serif;font-weight:700;font-size:12px;cursor:pointer">
             📎 Archivo<input type="file" accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.txt,.csv,.zip" style="display:none" onchange="docsSubirRaiz('${containerId}',this)">
@@ -5656,7 +5656,7 @@ async function docsAbrirCarpeta(carpetaId, nombre, containerId, parentCarpetaId,
           <button onclick="docsCrearNota(${carpetaId},'${containerId}','${nomEsc}')" title="Nueva nota"
             style="padding:7px 10px;background:var(--surface);border:1px solid var(--border);border-radius:8px;font-size:14px;cursor:pointer;flex-shrink:0">📝</button>
           <label title="Foto" style="padding:7px 11px;background:var(--surface);border:1px solid var(--border);border-radius:8px;font-size:16px;cursor:pointer;flex-shrink:0">
-            📷<input type="file" accept="image/*" capture="environment" style="display:none"
+            📷<input type="file" accept="image/*" style="display:none"
               onchange="docsSubirArchivo(${carpetaId},'${containerId}','${nomEsc}',this)">
           </label>
           <label title="Subir archivo" style="padding:7px 12px;background:var(--accent);color:#000;border-radius:8px;font-family:'Montserrat',sans-serif;font-weight:700;font-size:12px;cursor:pointer;white-space:nowrap;flex-shrink:0">
@@ -5718,25 +5718,41 @@ async function docsVerArchivo(id, nombre, mime) {
     if (!res.ok) return toast('❌ Error al abrir', 'err');
     const blob = await res.blob();
     const url  = URL.createObjectURL(blob);
-    if (mime.startsWith('image/')) {
-      // Lightbox
+    // Detectar imagen por MIME o por extensión si MIME está vacío
+    const ext  = (nombre || '').split('.').pop().toLowerCase();
+    const esImg = (mime && mime.startsWith('image/')) ||
+                  (!mime && ['jpg','jpeg','png','webp','gif','heic','heif','bmp','svg'].includes(ext));
+    toast('');
+    if (esImg) {
       const ov = document.createElement('div');
       ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.92);display:flex;align-items:center;justify-content:center;z-index:9999;flex-direction:column;gap:12px';
-      ov.innerHTML = `
-        <div style="position:absolute;top:14px;right:14px;display:flex;gap:8px">
-          <a href="${url}" download="${nombre}" style="padding:8px 14px;background:var(--accent);color:#000;border-radius:8px;font-weight:700;font-size:13px;text-decoration:none">⬇️ Guardar</a>
-          <button onclick="this.closest('div[style*=fixed]').remove();URL.revokeObjectURL('${url}')"
-            style="padding:8px 14px;background:#333;color:#fff;border:none;border-radius:8px;font-size:13px;cursor:pointer">✕ Cerrar</button>
-        </div>
-        <img src="${url}" style="max-width:95vw;max-height:82vh;border-radius:8px;object-fit:contain" onclick="event.stopPropagation()">
-        <div style="color:#aaa;font-size:12px">${nombre}</div>`;
+      const btnCerrar = document.createElement('button');
+      btnCerrar.textContent = '✕ Cerrar';
+      btnCerrar.style.cssText = 'padding:8px 14px;background:#333;color:#fff;border:none;border-radius:8px;font-size:13px;cursor:pointer';
+      btnCerrar.onclick = (e) => { e.stopPropagation(); ov.remove(); URL.revokeObjectURL(url); };
+      const btnGuardar = document.createElement('a');
+      btnGuardar.href = url; btnGuardar.download = nombre;
+      btnGuardar.textContent = '⬇️ Guardar';
+      btnGuardar.style.cssText = 'padding:8px 14px;background:var(--accent);color:#000;border-radius:8px;font-weight:700;font-size:13px;text-decoration:none';
+      btnGuardar.onclick = (e) => e.stopPropagation();
+      const btns = document.createElement('div');
+      btns.style.cssText = 'position:absolute;top:14px;right:14px;display:flex;gap:8px';
+      btns.appendChild(btnGuardar); btns.appendChild(btnCerrar);
+      const img = document.createElement('img');
+      img.src = url; img.style.cssText = 'max-width:95vw;max-height:82vh;border-radius:8px;object-fit:contain';
+      img.onclick = (e) => e.stopPropagation();
+      const lbl = document.createElement('div');
+      lbl.textContent = nombre; lbl.style.cssText = 'color:#aaa;font-size:12px';
+      ov.appendChild(btns); ov.appendChild(img); ov.appendChild(lbl);
       ov.addEventListener('click', () => { ov.remove(); URL.revokeObjectURL(url); });
       document.body.appendChild(ov);
     } else {
-      window.open(url, '_blank');
+      // Usar anchor click — funciona tras await a diferencia de window.open
+      const a = document.createElement('a');
+      a.href = url; a.target = '_blank'; a.rel = 'noopener';
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
       setTimeout(() => URL.revokeObjectURL(url), 10000);
     }
-    toast('');
   } catch { toast('❌ Error al abrir', 'err'); }
 }
 
@@ -8505,7 +8521,7 @@ async function cargarObrasSelectUsuario() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '5.21';
+const APP_VERSION = '5.22';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -11388,7 +11404,8 @@ async function galeriaCargar() {
   if (s?.departamento) params.set('departamento', s.departamento);
   const res = await apiCall('/fotos-obra?' + params.toString());
   if (!res?.ok) { grid.innerHTML = '<div style="grid-column:1/-1;color:var(--muted);text-align:center;padding:30px;font-size:13px">Error al cargar</div>'; return; }
-  _galeriaFotos = res.fotos || [];
+  const data = await res.json().catch(() => ({}));
+  _galeriaFotos = data.fotos || [];
   galeriaRender();
 }
 
@@ -11399,9 +11416,10 @@ function galeriaRender() {
     grid.innerHTML = '<div style="grid-column:1/-1;color:var(--muted);text-align:center;padding:40px;font-size:13px">Sin fotos todavía.<br>Usa los botones de arriba para añadir.</div>';
     return;
   }
+  const tok = encodeURIComponent(getSession()?.token || '');
   grid.innerHTML = _galeriaFotos.map((f, i) => `
     <div onclick="galeriaVerFoto(${i})" style="aspect-ratio:1;border-radius:8px;overflow:hidden;cursor:pointer;background:var(--surface);border:1px solid var(--border);position:relative">
-      <img src="${getAPI()}/fotos-obra/${f.id}" loading="lazy"
+      <img src="${getAPI()}/fotos-obra/${f.id}?token=${tok}" loading="lazy"
         style="width:100%;height:100%;object-fit:cover"
         onerror="this.parentElement.innerHTML='<div style=\\'display:flex;align-items:center;justify-content:center;height:100%;font-size:28px\\'>🖼️</div>'">
     </div>`).join('');
@@ -11438,7 +11456,7 @@ function galeriaVerFoto(idx) {
   const coment   = document.getElementById('galeriaLightboxComentario');
   const meta     = document.getElementById('galeriaLightboxMeta');
   const btnBorr  = document.getElementById('galeriaLightboxBtnBorrar');
-  img.src        = getAPI() + '/fotos-obra/' + f.id;
+  img.src        = getAPI() + '/fotos-obra/' + f.id + '?token=' + encodeURIComponent(getSession()?.token || '');
   coment.textContent = f.comentario || '';
   const fecha = f.created_at ? new Date(f.created_at).toLocaleString('es-ES', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' }) : '';
   meta.textContent = (f.subido_por ? '📷 ' + f.subido_por : '') + (fecha ? '  ·  ' + fecha : '');
