@@ -5,7 +5,7 @@
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 03/05/2026
-VERSIÓN ACTUAL APP NUEVA: v5.32
+VERSIÓN ACTUAL APP NUEVA: v5.33
 VERSIÓN ACTUAL APP VIEJA: v4.19 (⛔ CONGELADA DEFINITIVAMENTE — no recibe más cambios)
 
 ================================================================================
@@ -148,6 +148,18 @@ PASO 4 — VERIFICAR WORKER (solo si se va a tocar worker.js)
 ================================================================================
   HISTORIAL DE VERSIONES — RECIENTES
 ================================================================================
+
+v5.33  |  03/05/2026  [SOLO NUEVA APP]
+  - NEW-19: Carnets y certificaciones del personal
+    · Worker: GET/POST/PUT/DELETE /carnets (operario solo lectura)
+    · D1: tabla carnets (nombre_trabajador, tipo, numero, fecha_obtencion, fecha_caducidad, dias_aviso, estado, notas)
+    · Cron diario: alerta Telegram cuando carnet caduca dentro de dias_aviso días
+    · Frontend: tarjeta 📜 en home Personal → panel 5 (junto a EPIs)
+    · Lista filtrable por trabajador y estado con badges caducado/⚠️pronto/vigente
+    · Modal crear/editar: 18 tipos predefinidos (PRL básico/medio/superior, PEMP, carretilla, CAE, primeros auxilios…)
+    · IDEAS_PENDIENTES.txt: NEW-19 marcado [✓ HECHO v5.33]
+  - Worker redesplegado (Version ID: d224bf85-3013-47b2-be02-04c8c857c877)
+  - GitHub actualizado ✅
 
 v5.32  |  03/05/2026  [SOLO NUEVA APP]
   - BUG-94: headerObraLabel oculto cuando obra_nombre es null/vacío

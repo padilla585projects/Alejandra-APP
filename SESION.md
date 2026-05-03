@@ -7,8 +7,8 @@
 
 **Sesión:** LIBRE
 **Última sesión:** 03/05/2026
-**Versión tras última sesión:** v5.32
-**Worker desplegado:** v5.31 (ID: 2273550a-4d6d-4219-8243-4aa796a83e93)
+**Versión tras última sesión:** v5.33
+**Worker desplegado:** v5.33 (ID: d224bf85-3013-47b2-be02-04c8c857c877)
 **GitHub:** en sync ✅
 
 ---
@@ -44,6 +44,16 @@ Y antes de cerrar, obligatorio:
   2. Actualizar ESTADO_APP.txt (versión, fecha, changelog)
   3. Actualizar IDEAS_PENDIENTES.txt (marcar resueltos)
   4. Volver a poner este archivo en estado LIBRE con el resumen
+
+---
+
+## RESUMEN SESIÓN 03/05/2026 (v5.33 — NEW-19 Carnets + BUG-94/107/95)
+
+- NEW-19: Carnets y certificaciones completo (worker + D1 + frontend)
+  · 18 tipos: PRL básico/medio/superior, PEMP, carretilla, CAE, primeros auxilios, conducir…
+  · Panel 5 en Personal con filtros trabajador/estado y badges de caducidad
+  · Cron diario envía Telegram cuando un carnet caduca dentro de días_aviso
+- BUG-94/107/95: ver sesión anterior
 
 ---
 

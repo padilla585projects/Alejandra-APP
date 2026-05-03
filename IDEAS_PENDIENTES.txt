@@ -745,7 +745,7 @@ LEYENDA DE ESTADO:
     · Implementar con Cloudflare Cron Triggers (worker.js scheduled handler).
     · Añadido: 24/04/2026 — Adrian
 
-[ ] NEW-19 — Certificaciones y carnets del personal  [PENDIENTE]
+[✓] NEW-19 — Certificaciones y carnets del personal  [HECHO v5.33]
     · Registrar carnets de cada trabajador: PEMP, carretilla, PRL, CAE, primeros auxilios, etc.
     · Aplica tanto a usuarios de la app como a personal externo (tabla personal_externo).
     · Campos: tipo de carnet, número, fecha de obtención, fecha de caducidad, foto/PDF adjunto.
