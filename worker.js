@@ -502,6 +502,15 @@ export default {
       if (path === '/checklist-registros' && method === 'GET')  return await listarRegistrosChecklist(request, env);
       if (path === '/checklist-registros' && method === 'POST') return await crearRegistroChecklist(request, env);
 
+      // ── Partes de trabajo (NEW-16) ──────────────────────────────────────
+      if (path === '/partes-trabajo' && method === 'GET')  return await getPartesTrabajo(request, env);
+      if (path === '/partes-trabajo' && method === 'POST') return await crearParteTrabajo(request, env);
+      if (path.startsWith('/partes-trabajo/')) {
+        const _ptid = parseInt(path.split('/partes-trabajo/')[1]);
+        if (method === 'GET')    return await getParteTrabajo(_ptid, request, env);
+        if (method === 'DELETE') return await eliminarParteTrabajo(_ptid, request, env);
+      }
+
       // ── Galería de fotos por obra (NEW-17) ──────────────────────────────
       if (path === '/fotos-obra' && method === 'GET')  return await listarFotosObra(request, env);
       if (path === '/fotos-obra' && method === 'POST') return await subirFotoObra(request, env);
@@ -4895,7 +4904,93 @@ async function runMigrations(request, env) {
     )`).run();
     results.push('fotos_obra: creada');
   } catch(e) { results.push('fotos_obra: ' + e.message); }
+  // Tabla partes_trabajo (NEW-16)
+  try {
+    await env.DB.prepare(`CREATE TABLE IF NOT EXISTS partes_trabajo (
+      id                INTEGER PRIMARY KEY AUTOINCREMENT,
+      empresa_id        INTEGER NOT NULL,
+      obra_id           INTEGER,
+      fecha             TEXT,
+      cliente           TEXT,
+      nombre_encargado  TEXT,
+      direccion         TEXT,
+      obra              TEXT,
+      descripcion       TEXT,
+      personal          TEXT DEFAULT '[]',
+      material          TEXT DEFAULT '[]',
+      firma_cliente     TEXT,
+      firma_responsable TEXT,
+      departamento      TEXT,
+      creado_por        TEXT,
+      created_at        TEXT DEFAULT (datetime('now'))
+    )`).run();
+    results.push('partes_trabajo: creada');
+  } catch(e) { results.push('partes_trabajo: ' + e.message); }
+
   return json({ ok: true, results });
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// PARTES DE TRABAJO (NEW-16)
+// ══════════════════════════════════════════════════════════════════════════════
+
+async function getPartesTrabajo(request, env) {
+  const { empresa_id, isAdmin, isSuperadmin, isEmpresaAdmin, isEncargado } = await getAuth(request, env);
+  if (!isAdmin && !isSuperadmin && !isEmpresaAdmin) return err('No autorizado', 403);
+  const url = new URL(request.url);
+  const obra_id = url.searchParams.get('obra_id');
+  let sql = 'SELECT * FROM partes_trabajo WHERE empresa_id = ?';
+  const params = [empresa_id];
+  if (obra_id) { sql += ' AND obra_id = ?'; params.push(parseInt(obra_id)); }
+  sql += ' ORDER BY fecha DESC, id DESC LIMIT 100';
+  const { results } = await env.DB.prepare(sql).bind(...params).all();
+  return json(results);
+}
+
+async function getParteTrabajo(id, request, env) {
+  const { empresa_id, isAdmin, isSuperadmin, isEmpresaAdmin } = await getAuth(request, env);
+  if (!isAdmin && !isSuperadmin && !isEmpresaAdmin) return err('No autorizado', 403);
+  const parte = await env.DB.prepare(
+    'SELECT * FROM partes_trabajo WHERE id = ? AND empresa_id = ?'
+  ).bind(id, empresa_id).first();
+  if (!parte) return err('No encontrado', 404);
+  return json(parte);
+}
+
+async function crearParteTrabajo(request, env) {
+  const { empresa_id, isAdmin, isSuperadmin, isEmpresaAdmin, nombre, obra_id: obraAuth, departamento } = await getAuth(request, env);
+  if (!isAdmin && !isSuperadmin && !isEmpresaAdmin) return err('No autorizado', 403);
+  const body = await request.json();
+  const ahora = new Date().toISOString().slice(0,19).replace('T',' ');
+  const r = await env.DB.prepare(
+    `INSERT INTO partes_trabajo
+     (empresa_id,obra_id,fecha,cliente,nombre_encargado,direccion,obra,descripcion,personal,material,firma_cliente,firma_responsable,departamento,creado_por,created_at)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+  ).bind(
+    empresa_id,
+    body.obra_id || obraAuth || null,
+    body.fecha || ahora.slice(0,10),
+    body.cliente || '',
+    body.nombre_encargado || nombre || '',
+    body.direccion || '',
+    body.obra || '',
+    body.descripcion || '',
+    JSON.stringify(body.personal || []),
+    JSON.stringify(body.material || []),
+    body.firma_cliente || null,
+    body.firma_responsable || null,
+    body.departamento || departamento || '',
+    nombre || '',
+    ahora
+  ).run();
+  return json({ ok: true, id: r.meta.last_row_id });
+}
+
+async function eliminarParteTrabajo(id, request, env) {
+  const { empresa_id, isAdmin, isSuperadmin, isEmpresaAdmin } = await getAuth(request, env);
+  if (!isAdmin && !isSuperadmin && !isEmpresaAdmin) return err('No autorizado', 403);
+  await env.DB.prepare('DELETE FROM partes_trabajo WHERE id = ? AND empresa_id = ?').bind(id, empresa_id).run();
+  return json({ ok: true });
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
