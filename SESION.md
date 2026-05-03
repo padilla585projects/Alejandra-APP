@@ -7,8 +7,8 @@
 
 **Sesión:** LIBRE
 **Última sesión:** 03/05/2026
-**Versión tras última sesión:** v5.29
-**Worker desplegado:** v5.29 (ID: 142345f6-17c6-40df-8dc5-3a7f8454d5be)
+**Versión tras última sesión:** v5.30
+**Worker desplegado:** v5.30 (ID: f873b057-ec22-4f3d-96c8-f452a771ec0e)
 **GitHub:** en sync ✅
 
 ---
@@ -44,6 +44,19 @@ Y antes de cerrar, obligatorio:
   2. Actualizar ESTADO_APP.txt (versión, fecha, changelog)
   3. Actualizar IDEAS_PENDIENTES.txt (marcar resueltos)
   4. Volver a poner este archivo en estado LIBRE con el resumen
+
+---
+
+## RESUMEN SESIÓN 03/05/2026 (v5.30 — Mejoras visuales Sheets)
+
+- Bug crítico arreglado: applyTabFormatting acumulaba reglas condicionales
+  sin borrar las antiguas → cada sync añadía 13 nuevas → la Sheet se iba
+  haciendo más lenta con el tiempo. Ahora la metadata incluye
+  conditionalFormats + bandedRanges y se borran antes de re-aplicar.
+- Header oscuro con texto blanco centrado (dorado/azul/naranja por dept)
+- Banding zebra, filtro automático, bordes finos, wrap en Notas
+- Color condicional Estado ahora pinta TODA la fila (antes solo celda)
+- Worker redesplegado: f873b057-ec22-4f3d-96c8-f452a771ec0e
 
 ---
 

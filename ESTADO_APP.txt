@@ -149,6 +149,22 @@ PASO 4 — VERIFICAR WORKER (solo si se va a tocar worker.js)
   HISTORIAL DE VERSIONES — RECIENTES
 ================================================================================
 
+v5.30  |  03/05/2026  [SOLO NUEVA APP]
+  - MEJORAS VISUALES Google Sheets + fix bug de acumulación
+    · BUG CRÍTICO: applyTabFormatting acumulaba reglas condicionales sin borrar las viejas
+      → con el tiempo se acumulaban cientos de reglas duplicadas y la Sheet iba lentísima
+      → ahora la metadata incluye conditionalFormats y bandedRanges, y se borran antes de re-aplicar
+    · Header con fondo oscuro (dorado eléctrico / azul mecánicas / naranja seguridad)
+      · Texto blanco, centrado, fuente 11, altura de fila 36px
+    · Banding zebra (filas alternas) con tonos suaves del color del dept
+    · Filtro automático en la cabecera (basicFilter) — orden/filtro desde la propia Sheet
+    · Bordes finos en toda la tabla
+    · Wrap solo en columna Notas (última), ancho máximo 280px
+    · Color condicional Estado ahora pinta TODA la fila (antes solo la celda)
+    · Reglas Estado consolidadas con OR (1 regla por color en vez de 1 por valor)
+  - Worker redesplegado (Version ID: f873b057-ec22-4f3d-96c8-f452a771ec0e)
+  - GitHub actualizado ✅
+
 v5.29  |  03/05/2026  [SOLO NUEVA APP]
   - REVISIÓN GOOGLE SHEETS — auditoría completa y arreglos
     · BUG: editarBobina/editarPemp/editarCarretilla NO sincronizaban Sheets tras UPDATE → arreglado
