@@ -41,13 +41,16 @@ async function verifyPassword(password, stored) {
 
 // ── Auth helper ──────────────────────────────────────────────────────────────
 async function getAuth(request, env) {
-  // 1. Token D1 (sistema nuevo) — acepta también ?token= en URL para <img src>
-  const xToken = request.headers.get('X-Token') || new URL(request.url).searchParams.get('token');
+  // 1. Token D1 (sistema nuevo) — acepta también ?token= en URL pero SOLO para GET (imágenes/docs)
+  const tokenFromUrl = new URL(request.url).searchParams.get('token');
+  const xToken = request.headers.get('X-Token') || (request.method === 'GET' ? tokenFromUrl : null);
   if (xToken) {
     try {
-      const sesion = await env.DB.prepare('SELECT * FROM sesiones WHERE token = ?').bind(xToken).first();
+      const sesion = await env.DB.prepare(
+        "SELECT * FROM sesiones WHERE token = ? AND (expires_at IS NULL OR expires_at > datetime('now'))"
+      ).bind(xToken).first();
       if (sesion) {
-        env.DB.prepare('UPDATE sesiones SET last_used = CURRENT_TIMESTAMP WHERE token = ?').bind(xToken).run();
+        env.DB.prepare("UPDATE sesiones SET last_used = CURRENT_TIMESTAMP, expires_at = datetime('now', '+30 days') WHERE token = ?").bind(xToken).run();
         const isSuperadmin   = sesion.es_admin === 1 || sesion.rol === 'superadmin';
         const isEmpresaAdmin = sesion.rol === 'empresa_admin';
         // Header siempre tiene prioridad (frontend envía el dept actual desde localStorage)
@@ -677,15 +680,32 @@ function generarToken() {
 async function crearSesion(env, { nombre, rol, obra_id, obra_nombre, departamento, es_admin, usuario_id, empresa_id }) {
   const token = generarToken();
   await env.DB.prepare(
-    'INSERT INTO sesiones (token, usuario_id, nombre, rol, obra_id, obra_nombre, departamento, es_admin, empresa_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    "INSERT INTO sesiones (token, usuario_id, nombre, rol, obra_id, obra_nombre, departamento, es_admin, empresa_id, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now', '+30 days'))"
   ).bind(token, usuario_id || null, nombre, rol, obra_id || null, obra_nombre || null, departamento || 'electrico', es_admin ? 1 : 0, empresa_id || 1).run();
   return token;
 }
 
 async function verificarAcceso(request, env) {
+  // ── Rate limiting: máx 10 intentos por IP en 15 minutos ─────────────────
+  const ip = request.headers.get('CF-Connecting-IP') || request.headers.get('X-Forwarded-For') || 'unknown';
+  try {
+    const windowStart = new Date(Date.now() - 15 * 60 * 1000).toISOString().replace('T', ' ').split('.')[0];
+    const { cnt } = await env.DB.prepare(
+      "SELECT COUNT(*) as cnt FROM login_attempts WHERE ip = ? AND created_at > ?"
+    ).bind(ip, windowStart).first() || { cnt: 0 };
+    if (cnt >= 10) return err('Demasiados intentos. Espera 15 minutos.', 429);
+  } catch (_) {}
+
   const body = await request.json().catch(() => ({}));
   const codigo = body.codigo || body.code || '';
   const obraRef = body.obra_id || body.obra || null;
+
+  // Helper: registrar intento fallido
+  const registrarFallo = async (motivo) => {
+    try {
+      await env.DB.prepare('INSERT INTO login_attempts (ip, motivo) VALUES (?, ?)').bind(ip, motivo).run();
+    } catch (_) {}
+  };
 
   // 1.5 Login por email + contraseña (empresa_admin y usuarios con email)
   const emailInput = (body.email || '').trim().toLowerCase();
@@ -695,14 +715,16 @@ async function verificarAcceso(request, env) {
       const u = await env.DB.prepare(
         'SELECT u.*, o.nombre as obra_nombre FROM usuarios u LEFT JOIN obras o ON u.obra_id = o.id WHERE LOWER(u.email) = ? AND u.activo = 1 LIMIT 1'
       ).bind(emailInput).first();
-      if (!u || !u.password_hash) return err('Email o contraseña incorrectos', 401);
+      if (!u || !u.password_hash) { await registrarFallo('email_invalido'); return err('Email o contraseña incorrectos', 401); }
       const valid = await verifyPassword(passInput, u.password_hash);
-      if (!valid) return err('Email o contraseña incorrectos', 401);
+      if (!valid) { await registrarFallo('password_invalido'); return err('Email o contraseña incorrectos', 401); }
       const dept = u.rol === 'empresa_admin' ? null : (u.departamento || 'electrico');
       const token = await crearSesion(env, {
         nombre: u.nombre, rol: u.rol, obra_id: u.obra_id, obra_nombre: u.obra_nombre,
         departamento: dept, es_admin: false, usuario_id: u.id, empresa_id: u.empresa_id || 1,
       });
+      // Login exitoso → limpiar intentos fallidos de esta IP
+      env.DB.prepare('DELETE FROM login_attempts WHERE ip = ?').bind(ip).run().catch(() => {});
       return json({ ok: true, nombre: u.nombre, rol: u.rol, obra_id: u.obra_id, obra_nombre: u.obra_nombre, departamento: dept, token });
     } catch(e) { return err('Error en login: ' + e.message, 500); }
   }
@@ -712,6 +734,7 @@ async function verificarAcceso(request, env) {
   // 1. ¿Es superadmin?
   if (env.ADMIN_CODE && codigo.trim() === env.ADMIN_CODE) {
     const token = await crearSesion(env, { nombre: 'Admin', rol: 'superadmin', obra_id: null, obra_nombre: null, departamento: null, es_admin: true, empresa_id: 1 });
+    env.DB.prepare('DELETE FROM login_attempts WHERE ip = ?').bind(ip).run().catch(() => {});
     return json({ ok: true, rol: 'superadmin', nombre: 'Admin', obra_id: null, obra_nombre: null, token });
   }
 
@@ -730,6 +753,7 @@ async function verificarAcceso(request, env) {
           (usuario.obra_nombre?.toLowerCase() === obraRef.toLowerCase() ||
            String(usuario.obra_id) === String(obraRef));
         if (!coincideId && !coincideNombre) {
+          await registrarFallo('obra_no_coincide');
           return err('El usuario no pertenece a esa obra', 403);
         }
       }
@@ -742,6 +766,7 @@ async function verificarAcceso(request, env) {
         es_admin: false, usuario_id: usuario.id,
         empresa_id: usuario.empresa_id || 1,
       });
+      env.DB.prepare('DELETE FROM login_attempts WHERE ip = ?').bind(ip).run().catch(() => {});
       return json({
         ok: true,
         nombre: usuario.nombre,
@@ -763,10 +788,12 @@ async function verificarAcceso(request, env) {
     ).bind(codigo.trim().toUpperCase(), codigo.trim()).first();
     if (obra) {
       const token = await crearSesion(env, { nombre: obra.nombre, rol: 'operario', obra_id: obra.id, obra_nombre: obra.nombre, departamento: 'electrico', es_admin: false, empresa_id: 1 });
+      env.DB.prepare('DELETE FROM login_attempts WHERE ip = ?').bind(ip).run().catch(() => {});
       return json({ ok: true, tipo: 'obra', rol: 'operario', obra_id: obra.id, obra_nombre: obra.nombre, obra, token });
     }
   } catch (_) {}
 
+  await registrarFallo('codigo_invalido');
   return err('Código inválido', 401);
 }
 
@@ -5047,6 +5074,22 @@ async function runMigrations(request, env) {
     )`).run();
     results.push('partes_trabajo: creada');
   } catch(e) { results.push('partes_trabajo: ' + e.message); }
+  // Seguridad: expiración de sesiones (CRIT-3)
+  try {
+    await env.DB.prepare('ALTER TABLE sesiones ADD COLUMN expires_at TEXT').run();
+    results.push('sesiones.expires_at: añadida');
+  } catch { results.push('sesiones.expires_at: ya existe'); }
+  // Seguridad: rate limiting de login (CRIT-1)
+  try {
+    await env.DB.prepare(`CREATE TABLE IF NOT EXISTS login_attempts (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      ip         TEXT NOT NULL,
+      motivo     TEXT,
+      created_at TEXT DEFAULT (datetime('now'))
+    )`).run();
+    await env.DB.prepare('CREATE INDEX IF NOT EXISTS idx_login_attempts_ip ON login_attempts (ip, created_at)').run();
+    results.push('login_attempts: creada');
+  } catch(e) { results.push('login_attempts: ' + e.message); }
 
   return json({ ok: true, results });
 }
