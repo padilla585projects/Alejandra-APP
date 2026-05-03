@@ -1126,7 +1126,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
       </div>
 
       <div class="modal-actions">
-        <button class="btn-primary" style="flex:1" onclick="guardarIncidencia()">💾 Guardar</button>
+        <button id="btnGuardarIncidencia" class="btn-primary" style="flex:1" onclick="guardarIncidencia()">💾 Guardar</button>
         <button class="btn-primary btn-secondary" style="flex:0 0 100px;margin-top:0" onclick="cerrarFormIncidencia()">Cancelar</button>
       </div>
     </div>
@@ -2879,7 +2879,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
     <div class="modal-title">✏️ Editar</div>
     <div id="modalEditBody"></div>
     <div class="modal-actions">
-      <button class="btn-primary" style="flex:1" onclick="guardarEdicion()">Guardar</button>
+      <button id="btnGuardarEdicion" class="btn-primary" style="flex:1" onclick="guardarEdicion()">Guardar</button>
       <button class="btn-primary btn-secondary" style="flex:0 0 100px;margin-top:0" onclick="closeModalEdit()">Cancelar</button>
     </div>
   </div>
@@ -2930,7 +2930,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
         <label class="form-label">Notas (opcional)</label>
         <input class="form-input" id="repNotas" type="text" placeholder="Ej: Repostaje completo...">
       </div>
-      <button class="btn-primary" style="width:100%" onclick="guardarRepostaje()">💾 Guardar repostaje</button>
+      <button id="btnGuardarRepostaje" class="btn-primary" style="width:100%" onclick="guardarRepostaje()">💾 Guardar repostaje</button>
     </div>
     <!-- Resumen -->
     <div id="repResumen" style="display:none;background:var(--surface2);border-radius:12px;padding:12px;margin-bottom:14px">
@@ -3339,6 +3339,7 @@ function regSiguiente(step) {
       const pass   = document.getElementById('regPassword')?.value || '';
       const pass2  = document.getElementById('regPassword2')?.value || '';
       if (!nombre || !email || !pass) { toast('Rellena todos los campos obligatorios', 'err'); return; }
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { toast('El email no es válido', 'err'); return; }
       if (pass.length < 8) { toast('La contraseña debe tener al menos 8 caracteres', 'err'); return; }
       if (pass !== pass2) { toast('Las contraseñas no coinciden', 'err'); return; }
       regGoStep(3);
@@ -4905,19 +4906,23 @@ function segHerrCerrarModal() { document.getElementById('segHerrModal').style.di
 async function segHerrAsignar(id) {
   const nombre = prompt('¿A quién se asigna?');
   if (!nombre?.trim()) return;
-  const r = await apiCall(`/inventario-seg/${id}`, { method:'PUT', body: JSON.stringify({ accion:'salida', destino: nombre.trim(), cantidad:1 }) });
-  const d = await r.json();
-  if (!d.ok) { toast('❌ ' + (d.error||'Error'), 'err'); return; }
-  toast('✅ Asignado a ' + nombre.trim());
-  segHerrCerrarModal(); segHerrCargar();
+  try {
+    const r = await apiCall(`/inventario-seg/${id}`, { method:'PUT', body: JSON.stringify({ accion:'salida', destino: nombre.trim(), cantidad:1 }) });
+    const d = await r.json();
+    if (!d.ok) { toast('❌ ' + (d.error||'Error'), 'err'); return; }
+    toast('✅ Asignado a ' + nombre.trim());
+    segHerrCerrarModal(); segHerrCargar();
+  } catch { toast('❌ Error de red', 'err'); }
 }
 
 async function segHerrDevolver(id) {
-  const r = await apiCall(`/inventario-seg/${id}`, { method:'PUT', body: JSON.stringify({ accion:'devolucion', cantidad:1 }) });
-  const d = await r.json();
-  if (!d.ok) { toast('❌ ' + (d.error||'Error'), 'err'); return; }
-  toast('✅ Devuelto — disponible');
-  segHerrCerrarModal(); segHerrCargar();
+  try {
+    const r = await apiCall(`/inventario-seg/${id}`, { method:'PUT', body: JSON.stringify({ accion:'devolucion', cantidad:1 }) });
+    const d = await r.json();
+    if (!d.ok) { toast('❌ ' + (d.error||'Error'), 'err'); return; }
+    toast('✅ Devuelto — disponible');
+    segHerrCerrarModal(); segHerrCargar();
+  } catch { toast('❌ Error de red', 'err'); }
 }
 
 async function segHerrSalida(id) {
@@ -4926,11 +4931,13 @@ async function segHerrSalida(id) {
   const cant = parseInt(prompt(`¿Cuántas unidades salen? (disponible: ${i.cantidad_disponible})`));
   if (!cant || cant <= 0) return;
   const destino = prompt('¿A quién / dónde van?') || '';
-  const r = await apiCall(`/inventario-seg/${id}`, { method:'PUT', body: JSON.stringify({ accion:'salida', destino, cantidad: cant }) });
-  const d = await r.json();
-  if (!d.ok) { toast('❌ ' + (d.error||'Error'), 'err'); return; }
-  toast('✅ Salida registrada');
-  segHerrCerrarModal(); segHerrCargar();
+  try {
+    const r = await apiCall(`/inventario-seg/${id}`, { method:'PUT', body: JSON.stringify({ accion:'salida', destino, cantidad: cant }) });
+    const d = await r.json();
+    if (!d.ok) { toast('❌ ' + (d.error||'Error'), 'err'); return; }
+    toast('✅ Salida registrada');
+    segHerrCerrarModal(); segHerrCargar();
+  } catch { toast('❌ Error de red', 'err'); }
 }
 
 async function segHerrEntrada(id) {
@@ -4938,20 +4945,24 @@ async function segHerrEntrada(id) {
   if (!i) return;
   const fuera = (i.cantidad_total||0) - (i.cantidad_disponible||0);
   const cant = parseInt(prompt(`¿Cuántas unidades entran? (fuera: ${fuera})`)) || 1;
-  const r = await apiCall(`/inventario-seg/${id}`, { method:'PUT', body: JSON.stringify({ accion:'devolucion', cantidad: cant }) });
-  const d = await r.json();
-  if (!d.ok) { toast('❌ ' + (d.error||'Error'), 'err'); return; }
-  toast('✅ Entrada registrada');
-  segHerrCerrarModal(); segHerrCargar();
+  try {
+    const r = await apiCall(`/inventario-seg/${id}`, { method:'PUT', body: JSON.stringify({ accion:'devolucion', cantidad: cant }) });
+    const d = await r.json();
+    if (!d.ok) { toast('❌ ' + (d.error||'Error'), 'err'); return; }
+    toast('✅ Entrada registrada');
+    segHerrCerrarModal(); segHerrCargar();
+  } catch { toast('❌ Error de red', 'err'); }
 }
 
 async function segHerrBaja(id) {
   if (!confirm('¿Dar de baja este ítem? No se podrá deshacer.')) return;
-  const r = await apiCall(`/inventario-seg/${id}`, { method:'PUT', body: JSON.stringify({ accion:'baja', cantidad:1 }) });
-  const d = await r.json();
-  if (!d.ok) { toast('❌ ' + (d.error||'Error'), 'err'); return; }
-  toast('🗑️ Dado de baja');
-  segHerrCerrarModal(); segHerrCargar();
+  try {
+    const r = await apiCall(`/inventario-seg/${id}`, { method:'PUT', body: JSON.stringify({ accion:'baja', cantidad:1 }) });
+    const d = await r.json();
+    if (!d.ok) { toast('❌ ' + (d.error||'Error'), 'err'); return; }
+    toast('🗑️ Dado de baja');
+    segHerrCerrarModal(); segHerrCargar();
+  } catch { toast('❌ Error de red', 'err'); }
 }
 
 function segHerrNuevo(codigoPrefill = '') {
@@ -6113,9 +6124,11 @@ async function docsRenombrarCarpeta(id, nombreActual, containerId) {
 
 async function docsBorrarCarpeta(id, containerId) {
   if (!confirm('¿Eliminar la carpeta y todos sus archivos?')) return;
-  const res = await apiCall('/carpetas/' + id, { method: 'DELETE' });
-  if (res.ok) { toast('🗑️ Carpeta eliminada'); docsCargar(containerId); }
-  else toast('❌ Error al eliminar', 'err');
+  try {
+    const res = await apiCall('/carpetas/' + id, { method: 'DELETE' });
+    if (res.ok) { toast('🗑️ Carpeta eliminada'); docsCargar(containerId); }
+    else toast('❌ Error al eliminar', 'err');
+  } catch { toast('❌ Error de red', 'err'); }
 }
 
 let _docsUploadPreviewCb = null;
@@ -6195,11 +6208,13 @@ async function docsDescargarDoc(id, nombre) {
 
 async function docsBorrarArchivo(id, carpetaId, containerId, carpetaNombre) {
   if (!confirm('¿Eliminar este archivo?')) return;
-  const res = await apiCall('/docs-dept/' + id, { method: 'DELETE' });
-  if (res.ok) {
-    toast('🗑️ Archivo eliminado');
-    carpetaId ? docsAbrirCarpeta(carpetaId, carpetaNombre, containerId, null, null) : docsCargar(containerId);
-  } else toast('❌ Error al eliminar', 'err');
+  try {
+    const res = await apiCall('/docs-dept/' + id, { method: 'DELETE' });
+    if (res.ok) {
+      toast('🗑️ Archivo eliminado');
+      carpetaId ? docsAbrirCarpeta(carpetaId, carpetaNombre, containerId, null, null) : docsCargar(containerId);
+    } else toast('❌ Error al eliminar', 'err');
+  } catch { toast('❌ Error de red', 'err'); }
 }
 
 // ── MEJ-182: panel de subida mejorado (bottom sheet) ─────────────────────────
@@ -6389,11 +6404,13 @@ async function docsGuardarEditNota(id, carpetaId, containerId, carpetaNombre) {
 
 async function docsBorrarNota(id, carpetaId, containerId, carpetaNombre) {
   if (!confirm('¿Eliminar esta nota?')) return;
-  const res = await apiCall('/docs-notas/' + id, { method: 'DELETE' });
-  if (res.ok) {
-    toast('🗑️ Nota eliminada');
-    carpetaId ? docsAbrirCarpeta(carpetaId, carpetaNombre, containerId, null, null) : docsCargar(containerId);
-  } else toast('❌ Error al eliminar', 'err');
+  try {
+    const res = await apiCall('/docs-notas/' + id, { method: 'DELETE' });
+    if (res.ok) {
+      toast('🗑️ Nota eliminada');
+      carpetaId ? docsAbrirCarpeta(carpetaId, carpetaNombre, containerId, null, null) : docsCargar(containerId);
+    } else toast('❌ Error al eliminar', 'err');
+  } catch { toast('❌ Error de red', 'err'); }
 }
 
 // ══════════════════════════════════════════════════════
@@ -6572,6 +6589,8 @@ function closeModalEdit() {
 
 async function guardarEdicion() {
   if (!editingItem || !editingMod) return;
+  const btn = document.getElementById('btnGuardarEdicion');
+  if (btn) { btn.disabled = true; btn.textContent = 'Guardando…'; }
   const estado = document.getElementById('editEstado')?.value;
   const notas  = document.getElementById('editNotas')?.value;
   const s = getSession();
@@ -6633,8 +6652,12 @@ async function guardarEdicion() {
       cargarStock();
     } else {
       toast(`❌ ${data.error || 'Error'}`, 'err');
+      if (btn) { btn.disabled = false; btn.textContent = 'Guardar'; }
     }
-  } catch { toast('❌ Error de conexión', 'err'); }
+  } catch {
+    toast('❌ Error de conexión', 'err');
+    if (btn) { btn.disabled = false; btn.textContent = 'Guardar'; }
+  }
 }
 
 // ══════════════════════════════════════════════════════
@@ -6688,6 +6711,8 @@ function cerrarRepostaje() {
 }
 
 async function guardarRepostaje() {
+  const btn = document.getElementById('btnGuardarRepostaje');
+  if (btn) { btn.disabled = true; btn.textContent = 'Guardando…'; }
   const tipo     = document.getElementById('repTipo')?.value;
   const fecha    = document.getElementById('repFecha')?.value;
   const cantidad = document.getElementById('repCantidad')?.value;
@@ -6705,17 +6730,20 @@ async function guardarRepostaje() {
     notas:       notas   || null,
     obra_id:     s?.obra_id || null,
   };
+  const _repReset = () => { if (btn) { btn.disabled = false; btn.textContent = '💾 Guardar repostaje'; } };
   try {
     const res = await apiCall('/repostajes', { method: 'POST', body: JSON.stringify(body) });
     if (res.ok) {
       toast('✅ Repostaje registrado', 'ok');
       ['repCantidad','repCoste','repNotas'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+      _repReset();
       cargarHistorialRepostajes();
     } else {
       const d = await res.json().catch(() => ({}));
       toast('❌ ' + (d.error || 'Error'), 'err');
+      _repReset();
     }
-  } catch { toast('❌ Error de red', 'err'); }
+  } catch { toast('❌ Error de red', 'err'); _repReset(); }
 }
 
 async function cargarHistorialRepostajes() {
@@ -6998,51 +7026,61 @@ async function setStockMinCable(id, val) {
 async function addProveedor() {
   const v = document.getElementById('newProveedor').value.trim();
   if (!v) return;
-  const r = await apiCall('/proveedores', { method: 'POST', body: JSON.stringify({ nombre: v }) });
-  if (!r.ok) { const d = await r.json().catch(()=>({error:'Error'})); return toast('❌ ' + (d.error||'Error'), 'err'); }
-  document.getElementById('newProveedor').value = '';
-  toast('✅ Proveedor añadido');
-  cargarCatalogos();
+  try {
+    const r = await apiCall('/proveedores', { method: 'POST', body: JSON.stringify({ nombre: v }) });
+    if (!r.ok) { const d = await r.json().catch(()=>({error:'Error'})); return toast('❌ ' + (d.error||'Error'), 'err'); }
+    document.getElementById('newProveedor').value = '';
+    toast('✅ Proveedor añadido');
+    cargarCatalogos();
+  } catch { toast('❌ Error de red', 'err'); }
 }
 
 async function addTipo() {
   const v = document.getElementById('newTipo').value.trim();
   if (!v) return;
-  const r = await apiCall('/tipos-cable', { method: 'POST', body: JSON.stringify({ nombre: v }) });
-  if (!r.ok) { const d = await r.json().catch(()=>({error:'Error'})); return toast('❌ ' + (d.error||'Error'), 'err'); }
-  document.getElementById('newTipo').value = '';
-  toast('✅ Tipo de cable añadido');
-  cargarCatalogos();
+  try {
+    const r = await apiCall('/tipos-cable', { method: 'POST', body: JSON.stringify({ nombre: v }) });
+    if (!r.ok) { const d = await r.json().catch(()=>({error:'Error'})); return toast('❌ ' + (d.error||'Error'), 'err'); }
+    document.getElementById('newTipo').value = '';
+    toast('✅ Tipo de cable añadido');
+    cargarCatalogos();
+  } catch { toast('❌ Error de red', 'err'); }
 }
 
 async function addTipoPemp() {
   const v = document.getElementById('newTipoPemp').value.trim();
   if (!v) return;
-  const r = await apiCall('/tipos-pemp', { method: 'POST', body: JSON.stringify({ nombre: v }) });
-  if (!r.ok) { const d = await r.json().catch(()=>({error:'Error'})); return toast('❌ ' + (d.error||'Error'), 'err'); }
-  document.getElementById('newTipoPemp').value = '';
-  toast('✅ Tipo PEMP añadido');
-  cargarCatalogos();
+  try {
+    const r = await apiCall('/tipos-pemp', { method: 'POST', body: JSON.stringify({ nombre: v }) });
+    if (!r.ok) { const d = await r.json().catch(()=>({error:'Error'})); return toast('❌ ' + (d.error||'Error'), 'err'); }
+    document.getElementById('newTipoPemp').value = '';
+    toast('✅ Tipo PEMP añadido');
+    cargarCatalogos();
+  } catch { toast('❌ Error de red', 'err'); }
 }
 
 async function addTipoCarr() {
   const v = document.getElementById('newTipoCarr').value.trim();
   if (!v) return;
-  const r = await apiCall('/tipos-carretilla', { method: 'POST', body: JSON.stringify({ nombre: v }) });
-  if (!r.ok) { const d = await r.json().catch(()=>({error:'Error'})); return toast('❌ ' + (d.error||'Error'), 'err'); }
-  document.getElementById('newTipoCarr').value = '';
-  toast('✅ Tipo carretilla añadido');
-  cargarCatalogos();
+  try {
+    const r = await apiCall('/tipos-carretilla', { method: 'POST', body: JSON.stringify({ nombre: v }) });
+    if (!r.ok) { const d = await r.json().catch(()=>({error:'Error'})); return toast('❌ ' + (d.error||'Error'), 'err'); }
+    document.getElementById('newTipoCarr').value = '';
+    toast('✅ Tipo carretilla añadido');
+    cargarCatalogos();
+  } catch { toast('❌ Error de red', 'err'); }
 }
 
 async function addEnergiaCarr() {
   const v = document.getElementById('newEnergiaCarr').value.trim();
   if (!v) return;
-  const r = await apiCall('/energias-carretilla', { method: 'POST', body: JSON.stringify({ nombre: v }) });
-  if (!r.ok) { const d = await r.json().catch(()=>({error:'Error'})); return toast('❌ ' + (d.error||'Error'), 'err'); }
-  document.getElementById('newEnergiaCarr').value = '';
-  toast('✅ Energía añadida');
-  cargarCatalogos();
+  try {
+    const r = await apiCall('/energias-carretilla', { method: 'POST', body: JSON.stringify({ nombre: v }) });
+    if (!r.ok) { const d = await r.json().catch(()=>({error:'Error'})); return toast('❌ ' + (d.error||'Error'), 'err'); }
+    document.getElementById('newEnergiaCarr').value = '';
+    toast('✅ Energía añadida');
+    cargarCatalogos();
+  } catch { toast('❌ Error de red', 'err'); }
 }
 
 function renderTagsMatSeg(containerId, items) {
@@ -7061,20 +7099,25 @@ async function addTipoMatSeg() {
   const nombre = document.getElementById('newMatSeg').value.trim();
   const tipo   = document.getElementById('newMatSegModo').value;
   if (!nombre) return;
-  const r = await apiCall('/tipos-material-seg', { method: 'POST', body: JSON.stringify({ nombre, tipo }) });
-  if (r.ok) {
-    document.getElementById('newMatSeg').value = '';
-    toast('✅ Material añadido', 'ok');
-    cargarCatalogos();
-  } else {
-    const d = await r.json().catch(() => ({}));
-    toast(`❌ ${d.error || 'Error'}`, 'err');
-  }
+  try {
+    const r = await apiCall('/tipos-material-seg', { method: 'POST', body: JSON.stringify({ nombre, tipo }) });
+    if (r.ok) {
+      document.getElementById('newMatSeg').value = '';
+      toast('✅ Material añadido', 'ok');
+      cargarCatalogos();
+    } else {
+      const d = await r.json().catch(() => ({}));
+      toast(`❌ ${d.error || 'Error'}`, 'err');
+    }
+  } catch { toast('❌ Error de red', 'err'); }
 }
 
 async function delTipoMatSeg(id) {
-  await apiCall(`/tipos-material-seg/${id}`, { method: 'DELETE' });
-  cargarCatalogos();
+  try {
+    const r = await apiCall(`/tipos-material-seg/${id}`, { method: 'DELETE' });
+    if (!r.ok) { const d = await r.json().catch(()=>({})); toast('❌ ' + (d.error||'Error'), 'err'); return; }
+    cargarCatalogos();
+  } catch { toast('❌ Error de red', 'err'); }
 }
 
 function renderTagsTiposHerr(items) {
@@ -7099,20 +7142,25 @@ async function setStockMinHerr(id, val) {
 async function addTipoHerr() {
   const nombre = document.getElementById('newTipoHerr').value.trim();
   if (!nombre) return;
-  const r = await apiCall('/tipos-herramienta', { method: 'POST', body: JSON.stringify({ nombre }) });
-  if (r.ok) {
-    document.getElementById('newTipoHerr').value = '';
-    toast('✅ Tipo añadido');
-    cargarCatalogos();
-  } else {
-    const d = await r.json().catch(() => ({}));
-    toast('❌ ' + (d.error || 'Error'), 'err');
-  }
+  try {
+    const r = await apiCall('/tipos-herramienta', { method: 'POST', body: JSON.stringify({ nombre }) });
+    if (r.ok) {
+      document.getElementById('newTipoHerr').value = '';
+      toast('✅ Tipo añadido');
+      cargarCatalogos();
+    } else {
+      const d = await r.json().catch(() => ({}));
+      toast('❌ ' + (d.error || 'Error'), 'err');
+    }
+  } catch { toast('❌ Error de red', 'err'); }
 }
 
 async function delTipoHerr(id) {
-  await apiCall('/tipos-herramienta/' + id, { method: 'DELETE' });
-  cargarCatalogos();
+  try {
+    const r = await apiCall('/tipos-herramienta/' + id, { method: 'DELETE' });
+    if (!r.ok) { const d = await r.json().catch(()=>({})); toast('❌ ' + (d.error||'Error'), 'err'); return; }
+    cargarCatalogos();
+  } catch { toast('❌ Error de red', 'err'); }
 }
 
 async function delCatalogo(tipo, id) {
@@ -7123,8 +7171,11 @@ async function delCatalogo(tipo, id) {
     'tipo-carretilla':     `/tipos-carretilla/${id}`,
     'energia-carretilla':  `/energias-carretilla/${id}`,
   };
-  await apiCall(rutas[tipo], { method: 'DELETE' });
-  cargarCatalogos();
+  try {
+    const r = await apiCall(rutas[tipo], { method: 'DELETE' });
+    if (!r.ok) { const d = await r.json().catch(()=>({})); toast('❌ ' + (d.error||'Error al eliminar'), 'err'); return; }
+    cargarCatalogos();
+  } catch { toast('❌ Error de red', 'err'); }
 }
 
 // ══════════════════════════════════════════════════════
@@ -7593,16 +7644,20 @@ function filtrarSug(key, val) {
 }
 
 async function marcarLeida(id) {
-  await apiCall(`/sugerencias/${id}`, { method: 'PUT' });
-  cargarSugerenciasAdmin();
-  cargarBadgeIdeas();
+  try {
+    await apiCall(`/sugerencias/${id}`, { method: 'PUT' });
+    cargarSugerenciasAdmin();
+    cargarBadgeIdeas();
+  } catch { toast('❌ Error de red', 'err'); }
 }
 
 async function borrarSugerencia(id) {
   if (!confirm('¿Borrar esta sugerencia?')) return;
-  await apiCall(`/sugerencias/${id}`, { method: 'DELETE' });
-  cargarSugerenciasAdmin();
-  cargarBadgeIdeas();
+  try {
+    await apiCall(`/sugerencias/${id}`, { method: 'DELETE' });
+    cargarSugerenciasAdmin();
+    cargarBadgeIdeas();
+  } catch { toast('❌ Error de red', 'err'); }
 }
 
 // ══════════════════════════════════════════════════════
@@ -7760,9 +7815,11 @@ async function docsEmpresaSubir(input) {
 
 async function docsEmpresaBorrar(id) {
   if (!confirm('¿Eliminar este documento?')) return;
-  const res = await apiCall('/archivos/' + id, { method: 'DELETE' });
-  if (res.ok) { toast('🗑️ Documento eliminado'); docsEmpresaCargar(); }
-  else toast('❌ Error al eliminar', 'err');
+  try {
+    const res = await apiCall('/archivos/' + id, { method: 'DELETE' });
+    if (res.ok) { toast('🗑️ Documento eliminado'); docsEmpresaCargar(); }
+    else toast('❌ Error al eliminar', 'err');
+  } catch { toast('❌ Error de red', 'err'); }
 }
 
 async function cargarSolicitudesPendientes() {
@@ -8181,16 +8238,20 @@ async function cargarSugerencias() { return cargarSugerenciasAdmin(); }
 
 async function marcarTodasLeidas() {
   if (!confirm('¿Marcar todas las ideas como resueltas?')) return;
-  const res = await apiCall('/sugerencias/marcar-todas', { method: 'PUT', body: '{}' });
-  if (res.ok) { toast('✅ Todas marcadas como resueltas'); cargarSugerenciasAdmin(); cargarBadgeIdeas(); }
-  else toast('❌ Error', 'err');
+  try {
+    const res = await apiCall('/sugerencias/marcar-todas', { method: 'PUT', body: '{}' });
+    if (res.ok) { toast('✅ Todas marcadas como resueltas'); cargarSugerenciasAdmin(); cargarBadgeIdeas(); }
+    else toast('❌ Error', 'err');
+  } catch { toast('❌ Error de red', 'err'); }
 }
 
 async function borrarTodasSugerencias() {
   if (!confirm('⚠️ ¿Borrar TODAS las ideas? Esta acción no se puede deshacer.')) return;
-  const res = await apiCall('/sugerencias/borrar-todas', { method: 'DELETE' });
-  if (res.ok) { toast('🗑️ Todas las ideas borradas'); cargarSugerenciasAdmin(); cargarBadgeIdeas(); }
-  else toast('❌ Error', 'err');
+  try {
+    const res = await apiCall('/sugerencias/borrar-todas', { method: 'DELETE' });
+    if (res.ok) { toast('🗑️ Todas las ideas borradas'); cargarSugerenciasAdmin(); cargarBadgeIdeas(); }
+    else toast('❌ Error', 'err');
+  } catch { toast('❌ Error de red', 'err'); }
 }
 
 // ══════════════════════════════════════════════════════
@@ -8371,12 +8432,13 @@ async function chatEnviar() {
 
 async function chatBorrar(id) {
   if (!confirm('¿Eliminar este mensaje?')) return;
-  const res = await apiCall('/chat/' + id, { method: 'DELETE' });
-  if (res.ok) {
-    // Recarga
-    _chatLastTs = null;
-    chatCargar();
-  } else toast('❌ Error al borrar', 'err');
+  try {
+    const res = await apiCall('/chat/' + id, { method: 'DELETE' });
+    if (res.ok) {
+      _chatLastTs = null;
+      chatCargar();
+    } else toast('❌ Error al borrar', 'err');
+  } catch { toast('❌ Sin conexión', 'err'); }
 }
 
 async function checkChatBadge() {
@@ -8818,7 +8880,7 @@ async function cargarObrasSelectUsuario() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '5.33';
+const APP_VERSION = '5.34';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -10472,21 +10534,25 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
   }
 
   async function guardarIncidencia() {
+    const btn = document.getElementById('btnGuardarIncidencia');
+    if (btn) { btn.disabled = true; btn.textContent = 'Guardando…'; }
+    const _reset = () => { if (btn) { btn.disabled = false; btn.textContent = '💾 Guardar'; } };
     if (window._incCerrandoId) {
       const resolucion = document.getElementById('incResolucion').value.trim() || null;
       try {
         const res = await apiCall(`/incidencias/${window._incCerrandoId}`, {
           method: 'PUT', body: JSON.stringify({ estado: 'resuelta', resolucion })
         });
-        if (!res.ok) return toast('❌ Error', 'err');
+        if (!res.ok) { _reset(); return toast('❌ Error', 'err'); }
         cerrarFormIncidencia();
         window._incCerrandoId = null;
         toast('✅ Incidencia resuelta');
         cargarIncidencias();
-      } catch { toast('❌ Error de red', 'err'); }
+      } catch { toast('❌ Error de red', 'err'); _reset(); }
       return;
     }
     await _guardarIncidenciaBase();
+    _reset();
   }
 
   async function verIncidencia(id) {
@@ -12159,7 +12225,7 @@ function cerrarModalEpi() {
 
 async function guardarEpi() {
   const tVal = document.getElementById('epiTrabajador').value;
-  if (!tVal) { toast('Selecciona un trabajador', 'error'); return; }
+  if (!tVal) { toast('Selecciona un trabajador', 'err'); return; }
   const [tipo, tid, tnameEnc] = tVal.split(':');
   const nombre_trabajador = decodeURIComponent(tnameEnc);
   const body = {
@@ -12177,23 +12243,27 @@ async function guardarEpi() {
   };
   const url    = _epiEditId ? `/epis-asignados/${_epiEditId}` : '/epis-asignados';
   const method = _epiEditId ? 'PUT' : 'POST';
-  const res = await apiCall(url, { method, body: JSON.stringify(body) });
-  if (res.ok) {
-    toast(_epiEditId ? '✅ EPI actualizado' : '✅ EPI asignado');
-    cerrarModalEpi();
-    cargarEpis();
-  } else {
-    toast('❌ Error al guardar', 'error');
-  }
+  try {
+    const res = await apiCall(url, { method, body: JSON.stringify(body) });
+    if (res.ok) {
+      toast(_epiEditId ? '✅ EPI actualizado' : '✅ EPI asignado');
+      cerrarModalEpi();
+      cargarEpis();
+    } else {
+      toast('❌ Error al guardar', 'err');
+    }
+  } catch { toast('❌ Error de red', 'err'); }
 }
 
 async function editarEpi(id) { abrirModalEpi(id); }
 
 async function borrarEpi(id) {
   if (!confirm('¿Borrar este EPI asignado?')) return;
-  const res = await apiCall(`/epis-asignados/${id}`, { method: 'DELETE' });
-  if (res.ok) { toast('🗑 EPI eliminado'); cerrarModalEpi(); cargarEpis(); }
-  else toast('❌ Error al borrar', 'error');
+  try {
+    const res = await apiCall(`/epis-asignados/${id}`, { method: 'DELETE' });
+    if (res.ok) { toast('🗑 EPI eliminado'); cerrarModalEpi(); cargarEpis(); }
+    else toast('❌ Error al borrar', 'err');
+  } catch { toast('❌ Error de red', 'err'); }
 }
 
 window.cargarEpis       = cargarEpis;
@@ -12371,8 +12441,8 @@ function cerrarModalCarnet() {
 async function guardarCarnet() {
   const nombre = document.getElementById('carnetTrabajador').value;
   const tipo   = document.getElementById('carnetTipo').value;
-  if (!nombre) { toast('Selecciona un trabajador', 'error'); return; }
-  if (!tipo)   { toast('Selecciona el tipo de carnet', 'error'); return; }
+  if (!nombre) { toast('Selecciona un trabajador', 'err'); return; }
+  if (!tipo)   { toast('Selecciona el tipo de carnet', 'err'); return; }
 
   const trab = (window._perTrabajadores||[]).find(t => t.nombre === nombre) || {};
   const body = {
@@ -12390,21 +12460,25 @@ async function guardarCarnet() {
 
   const url    = _carnetEditId ? `/carnets/${_carnetEditId}` : '/carnets';
   const method = _carnetEditId ? 'PUT' : 'POST';
-  const res    = await apiCall(url, { method, body: JSON.stringify(body) });
-  if (res.ok) {
-    toast(_carnetEditId ? '✅ Carnet actualizado' : '✅ Carnet añadido', 'ok');
-    cerrarModalCarnet();
-    cargarCarnets();
-  } else {
-    toast('❌ Error al guardar', 'error');
-  }
+  try {
+    const res = await apiCall(url, { method, body: JSON.stringify(body) });
+    if (res.ok) {
+      toast(_carnetEditId ? '✅ Carnet actualizado' : '✅ Carnet añadido', 'ok');
+      cerrarModalCarnet();
+      cargarCarnets();
+    } else {
+      toast('❌ Error al guardar', 'err');
+    }
+  } catch { toast('❌ Error de red', 'err'); }
 }
 
 async function borrarCarnet(id) {
   if (!confirm('¿Eliminar este carnet?')) return;
-  const res = await apiCall(`/carnets/${id}`, { method: 'DELETE' });
-  if (res.ok) { toast('🗑 Carnet eliminado'); cerrarModalCarnet(); cargarCarnets(); }
-  else toast('❌ Error al borrar', 'error');
+  try {
+    const res = await apiCall(`/carnets/${id}`, { method: 'DELETE' });
+    if (res.ok) { toast('🗑 Carnet eliminado'); cerrarModalCarnet(); cargarCarnets(); }
+    else toast('❌ Error al borrar', 'err');
+  } catch { toast('❌ Error de red', 'err'); }
 }
 
 window.cargarCarnets    = cargarCarnets;

@@ -7,9 +7,9 @@
 
 **Sesión:** LIBRE
 **Última sesión:** 03/05/2026
-**Versión tras última sesión:** v5.33
-**Worker desplegado:** v5.33 (ID: d224bf85-3013-47b2-be02-04c8c857c877)
-**GitHub:** en sync ✅
+**Versión tras última sesión:** v5.34
+**Worker desplegado:** v5.33 (ID: d224bf85-3013-47b2-be02-04c8c857c877) — sin cambios
+**GitHub:** PENDIENTE DE PUSH ⚠️
 
 ---
 
@@ -44,6 +44,20 @@ Y antes de cerrar, obligatorio:
   2. Actualizar ESTADO_APP.txt (versión, fecha, changelog)
   3. Actualizar IDEAS_PENDIENTES.txt (marcar resueltos)
   4. Volver a poner este archivo en estado LIBRE con el resumen
+
+---
+
+## RESUMEN SESIÓN 03/05/2026 (v5.34 — Auditoría: robustez manejo de errores)
+
+- Protección doble-submit en guardarEdicion, guardarRepostaje, guardarIncidencia
+  · Botón se deshabilita y muestra "Guardando…" mientras espera respuesta
+- Validación de formato email en registro de empresa (paso 2)
+- try/catch añadido a ~25 funciones frontend sin cobertura de errores de red:
+  · chatBorrar, segHerr* (5), funciones add/del catálogo (8), docs borrar (4),
+    sugerencias admin (4), guardarEpi, borrarEpi, guardarCarnet, borrarCarnet
+- delTipoMatSeg, delTipoHerr, delCatalogo: ahora verifican res.ok antes de recargar
+- Corregido tipo de toast 'error' → 'err' en módulos EPI y carnets
+- Worker NO redesplegado (cero cambios en worker.js)
 
 ---
 

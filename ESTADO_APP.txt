@@ -5,7 +5,7 @@
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 03/05/2026
-VERSIÓN ACTUAL APP NUEVA: v5.33
+VERSIÓN ACTUAL APP NUEVA: v5.34
 VERSIÓN ACTUAL APP VIEJA: v4.19 (⛔ CONGELADA DEFINITIVAMENTE — no recibe más cambios)
 
 ================================================================================
@@ -148,6 +148,23 @@ PASO 4 — VERIFICAR WORKER (solo si se va a tocar worker.js)
 ================================================================================
   HISTORIAL DE VERSIONES — RECIENTES
 ================================================================================
+
+v5.34  |  03/05/2026  [SOLO NUEVA APP]
+  - AUDITORÍA: Robustez de manejo de errores en frontend
+    · Protección doble-submit: guardarEdicion, guardarRepostaje, guardarIncidencia
+      → botón se deshabilita + muestra "Guardando…" hasta respuesta del servidor
+    · Validación de formato email en paso 2 del registro de empresa
+    · try/catch añadido a ~25 funciones que llamaban apiCall sin protección de red:
+      chatBorrar, 5 funciones segHerr*, delTipoMatSeg, delTipoHerr, delCatalogo,
+      addProveedor/Tipo/TipoPemp/TipoCarr/EnergiaCarr/TipoMatSeg/TipoHerr,
+      docsBorrarNota, docsBorrarArchivo, docsBorrarCarpeta, docsEmpresaBorrar,
+      marcarLeida, borrarSugerencia, marcarTodasLeidas, borrarTodasSugerencias,
+      guardarEpi, borrarEpi, guardarCarnet, borrarCarnet
+    · delTipoMatSeg y delTipoHerr ahora verifican res.ok antes de recargar
+    · delCatalogo ahora verifica res.ok y muestra error si el servidor rechaza
+    · Corregido tipo de toast 'error' → 'err' en funciones EPI y carnet
+  - Worker NO redesplegado (sin cambios en worker.js)
+  - GitHub actualizado ✅
 
 v5.33  |  03/05/2026  [SOLO NUEVA APP]
   - NEW-19: Carnets y certificaciones del personal
