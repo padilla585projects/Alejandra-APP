@@ -612,6 +612,15 @@ export default {
         if (method === 'DELETE') return await eliminarEpiAsignado(epid, request, env);
       }
 
+      // ── Carnets y certificaciones (NEW-19) ───────────────────────────────
+      if (path === '/carnets' && method === 'GET')  return await getCarnets(request, env);
+      if (path === '/carnets' && method === 'POST') return await crearCarnet(request, env);
+      if (path.startsWith('/carnets/')) {
+        const cid = parseInt(path.split('/carnets/')[1]);
+        if (method === 'PUT')    return await actualizarCarnet(cid, request, env);
+        if (method === 'DELETE') return await eliminarCarnet(cid, request, env);
+      }
+
       // ── Chat interno (NEW-08) ─────────────────────────────────────────────
       if (path === '/chat' && method === 'GET')    return await getChatMensajes(request, env);
       if (path === '/chat' && method === 'POST')   return await enviarChatMensaje(request, env);
@@ -2891,6 +2900,56 @@ async function eliminarEpiAsignado(id, request, env) {
   return json({ ok: true });
 }
 
+// ── Carnets y certificaciones (NEW-19) ─────────────────────────────────────
+async function getCarnets(request, env) {
+  const { empresa_id, obra_id: obraAuth, isSuperadmin, isEmpresaAdmin, isAdmin } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const url = new URL(request.url);
+  const obra_id = url.searchParams.get('obra_id') || ((!isSuperadmin && !isEmpresaAdmin && !isAdmin) ? obraAuth : null);
+  let sql = 'SELECT * FROM carnets WHERE empresa_id=?';
+  const params = [empresa_id];
+  if (obra_id) { sql += ' AND obra_id=?'; params.push(parseInt(obra_id)); }
+  sql += ' ORDER BY nombre_trabajador, tipo';
+  const rows = await env.DB.prepare(sql).bind(...params).all();
+  return json(rows.results);
+}
+
+async function crearCarnet(request, env) {
+  const { empresa_id, nombre, rol, obra_id: obraAuth } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  if (rol === 'operario') return err('Sin permisos', 403);
+  const b = await request.json();
+  const { obra_id, usuario_id, externo_id, nombre_trabajador, tipo, numero, fecha_obtencion, fecha_caducidad, dias_aviso, estado, notas } = b;
+  if (!tipo || !nombre_trabajador) return err('Faltan campos obligatorios');
+  const r = await env.DB.prepare(
+    'INSERT INTO carnets (empresa_id,obra_id,usuario_id,externo_id,nombre_trabajador,tipo,numero,fecha_obtencion,fecha_caducidad,dias_aviso,estado,notas,created_by) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)'
+  ).bind(empresa_id, obra_id||obraAuth||null, usuario_id||null, externo_id||null, nombre_trabajador, tipo, numero||null, fecha_obtencion||null, fecha_caducidad||null, dias_aviso||30, estado||'vigente', notas||null, nombre||rol||'').run();
+  return json({ ok: true, id: r.meta.last_row_id });
+}
+
+async function actualizarCarnet(id, request, env) {
+  const { empresa_id, rol } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  if (rol === 'operario') return err('Sin permisos', 403);
+  const b = await request.json();
+  const campos = [], vals = [];
+  ['obra_id','usuario_id','externo_id','nombre_trabajador','tipo','numero','fecha_obtencion','fecha_caducidad','dias_aviso','estado','notas'].forEach(k => {
+    if (b[k] !== undefined) { campos.push(`${k}=?`); vals.push(b[k]); }
+  });
+  if (!campos.length) return err('Sin cambios');
+  vals.push(id, empresa_id);
+  await env.DB.prepare(`UPDATE carnets SET ${campos.join(',')} WHERE id=? AND empresa_id=?`).bind(...vals).run();
+  return json({ ok: true });
+}
+
+async function eliminarCarnet(id, request, env) {
+  const { empresa_id, rol } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  if (rol === 'operario') return err('Sin permisos', 403);
+  await env.DB.prepare('DELETE FROM carnets WHERE id=? AND empresa_id=?').bind(id, empresa_id).run();
+  return json({ ok: true });
+}
+
 // ── Fichajes ────────────────────────────────────────────────────────────────
 async function getFichajes(request, env) {
   const { empresa_id, isSuperadmin, isEmpresaAdmin, isAdmin, obra_id: obraAuth, rol, usuario_id } = await getAuth(request, env);
@@ -4080,7 +4139,23 @@ async function alertasDiarias(env) {
       await sendTelegram(env, `🏷️ <b>Material Seguridad — Caducidad próxima</b>\n\n` + lineas.join('\n'));
     }
 
-    // 4. Eventos del calendario — hoy + recordatorios previos
+    // 4. Carnets y certificaciones — caducidad próxima o vencida
+    const carnetsCad = await env.DB.prepare(
+      `SELECT nombre_trabajador, tipo, fecha_caducidad, dias_aviso FROM carnets
+       WHERE fecha_caducidad IS NOT NULL AND fecha_caducidad != '' AND estado = 'vigente'`
+    ).all();
+    const carnetAlertas = [];
+    for (const c of (carnetsCad.results || [])) {
+      const dias = Math.floor((new Date(c.fecha_caducidad) - hoy) / 86400000);
+      const aviso = c.dias_aviso || 30;
+      if (dias < 0) carnetAlertas.push(`⛔ ${c.nombre_trabajador} — ${c.tipo} CADUCADO hace ${Math.abs(dias)} días`);
+      else if (dias <= aviso) carnetAlertas.push(`⚠️ ${c.nombre_trabajador} — ${c.tipo} caduca en ${dias} días (${c.fecha_caducidad})`);
+    }
+    if (carnetAlertas.length) {
+      await sendTelegram(env, `📜 <b>Carnets y certificaciones — Caducidad próxima</b>\n\n` + carnetAlertas.join('\n'));
+    }
+
+    // 5. Eventos del calendario — hoy + recordatorios previos
     const hoyStr = hoy.toISOString().slice(0, 10);
     const { results: eventosHoy } = await env.DB.prepare(
       `SELECT e.titulo, e.hora, e.tipo, o.nombre as obra_nombre
@@ -5090,6 +5165,27 @@ async function runMigrations(request, env) {
     await env.DB.prepare('CREATE INDEX IF NOT EXISTS idx_login_attempts_ip ON login_attempts (ip, created_at)').run();
     results.push('login_attempts: creada');
   } catch(e) { results.push('login_attempts: ' + e.message); }
+  // Carnets y certificaciones (NEW-19)
+  try {
+    await env.DB.prepare(`CREATE TABLE IF NOT EXISTS carnets (
+      id                INTEGER PRIMARY KEY AUTOINCREMENT,
+      empresa_id        INTEGER NOT NULL,
+      obra_id           INTEGER,
+      usuario_id        INTEGER,
+      externo_id        INTEGER,
+      nombre_trabajador TEXT NOT NULL,
+      tipo              TEXT NOT NULL,
+      numero            TEXT,
+      fecha_obtencion   TEXT,
+      fecha_caducidad   TEXT,
+      dias_aviso        INTEGER DEFAULT 30,
+      estado            TEXT DEFAULT 'vigente',
+      notas             TEXT,
+      created_by        TEXT,
+      created_at        TEXT DEFAULT (datetime('now'))
+    )`).run();
+    results.push('carnets: creada');
+  } catch(e) { results.push('carnets: ' + e.message); }
 
   return json({ ok: true, results });
 }

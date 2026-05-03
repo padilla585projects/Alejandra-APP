@@ -2445,6 +2445,11 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
         <div class="module-info"><div class="module-name">Dotación EPIs</div><div class="module-desc">EPIs asignados a cada trabajador</div></div>
         <svg class="module-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
       </div>
+      <div class="module-card" onclick="personalSelTab(5)">
+        <div class="module-emoji">📜</div>
+        <div class="module-info"><div class="module-name">Carnets y certificaciones</div><div class="module-desc">PRL, PEMP, carretilla, CAE y más</div></div>
+        <svg class="module-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
+      </div>
     </div>
 
     <!-- PANEL 0: HOY -->
@@ -2526,6 +2531,29 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
         </select>
       </div>
       <div id="episLista" style="padding:10px 14px 80px;overflow-y:auto;flex:1">
+        <div class="empty-state">Cargando…</div>
+      </div>
+    </div>
+
+    <!-- PANEL 5: CARNETS Y CERTIFICACIONES (NEW-19) -->
+    <div id="perPanelCarnets" style="display:none;flex-direction:column;flex:1;overflow:hidden">
+      <div style="display:flex;align-items:center;gap:8px;padding:8px 14px;border-bottom:1px solid var(--border);flex-shrink:0">
+        <button onclick="personalSelTab(-1)" style="background:var(--surface2);border:none;border-radius:50%;width:30px;height:30px;font-size:16px;cursor:pointer;color:var(--text);flex-shrink:0">←</button>
+        <span style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:13px;flex:1">📜 Carnets y certificaciones</span>
+        <button id="btnNuevoCarnet" onclick="abrirModalCarnet()" style="padding:6px 12px;background:var(--accent);border:none;border-radius:8px;color:#000;font-family:'Montserrat',sans-serif;font-weight:900;font-size:12px;cursor:pointer;white-space:nowrap">+ Añadir</button>
+      </div>
+      <div style="padding:8px 14px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;gap:8px">
+        <select id="carnetFiltroTrabajador" class="form-input" style="flex:1;font-size:12px;padding:5px 8px" onchange="cargarCarnets()">
+          <option value="">— Todos —</option>
+        </select>
+        <select id="carnetFiltroEstado" class="form-input" style="width:110px;font-size:12px;padding:5px 8px" onchange="cargarCarnets()">
+          <option value="">Todos</option>
+          <option value="vigente">Vigentes</option>
+          <option value="caducado">Caducados</option>
+          <option value="baja">Baja</option>
+        </select>
+      </div>
+      <div id="carnetsLista" style="padding:10px 14px 80px;overflow-y:auto;flex:1">
         <div class="empty-state">Cargando…</div>
       </div>
     </div>
@@ -8790,7 +8818,7 @@ async function cargarObrasSelectUsuario() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '5.32';
+const APP_VERSION = '5.33';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -10735,7 +10763,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
   // ── Tab selector ──
   function personalSelTab(n) {
     const home    = document.getElementById('perPanelHome');
-    const panels  = ['perPanelHoy','perPanelSemana','perPanelResumen','perPanelPlantilla','perPanelEpis'];
+    const panels  = ['perPanelHoy','perPanelSemana','perPanelResumen','perPanelPlantilla','perPanelEpis','perPanelCarnets'];
     const fab     = document.getElementById('btnNuevoFichaje');
     const fabEq   = document.getElementById('btnFichajeEquipo');
     const s       = getSession();
@@ -10756,17 +10784,20 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
       el.style.display = (i === n) ? 'flex' : 'none';
       if (i === n) el.style.flexDirection = 'column';
     });
-    // FABs solo en paneles de fichajes (no en Plantilla/EPIs ni home)
+    // FABs solo en paneles de fichajes (no en Plantilla/EPIs/Carnets ni home)
     if (fab)   fab.style.display   = (esAdmin && n < 3) ? 'flex' : 'none';
     if (fabEq) fabEq.style.display = (esAdmin && n < 3) ? 'flex' : 'none';
-    // Botón Asignar EPI solo para admin
-    const btnEpi = document.getElementById('btnNuevoEpi');
-    if (btnEpi) btnEpi.style.display = (n === 4 && esAdmin) ? '' : (n === 4 ? 'none' : '');
+    // Botones de acción solo para admin
+    const btnEpi    = document.getElementById('btnNuevoEpi');
+    const btnCarnet = document.getElementById('btnNuevoCarnet');
+    if (btnEpi)    btnEpi.style.display    = (n === 4 && esAdmin) ? '' : 'none';
+    if (btnCarnet) btnCarnet.style.display = (n === 5 && esAdmin) ? '' : 'none';
     if (n === 0) cargarHoy();
     if (n === 1) cargarSemana();
     if (n === 2) cargarResumenMes();
     if (n === 3) cargarPlantilla();
     if (n === 4) cargarEpis();
+    if (n === 5) cargarCarnets();
   }
 
   // ── Cargar trabajadores (cache) ──
@@ -12171,6 +12202,216 @@ window.cerrarModalEpi   = cerrarModalEpi;
 window.guardarEpi       = guardarEpi;
 window.editarEpi        = editarEpi;
 window.borrarEpi        = borrarEpi;
+
+// ══════════════════════════════════════════════════════
+// CARNETS Y CERTIFICACIONES (NEW-19)
+// ══════════════════════════════════════════════════════
+
+const TIPOS_CARNET = [
+  'PRL Nivel Básico','PRL Nivel Intermedio','PRL Nivel Superior',
+  'PEMP (Plataformas)','Carretilla elevadora','Grúa torre','Grúa móvil',
+  'CAE (Coordinación actividades)','Primeros Auxilios',
+  'Conducir (B)','Conducir (C)','Conducir (C+E)',
+  'Trabajos en altura','Espacios confinados',
+  'Soldadura','Electricidad BT','Electricidad MT','Otro'
+];
+
+let _carnetsCache = [];
+
+async function cargarCarnets() {
+  const lista = document.getElementById('carnetsLista');
+  if (!lista) return;
+
+  // Poblar selector de trabajadores la primera vez
+  const selTrab = document.getElementById('carnetFiltroTrabajador');
+  if (selTrab && selTrab.options.length <= 1) {
+    const trabajadores = window._perTrabajadores || await perCargarTrabajadores();
+    trabajadores.forEach(t => {
+      const o = document.createElement('option');
+      o.value = t.nombre; o.textContent = t.nombre;
+      selTrab.appendChild(o);
+    });
+  }
+
+  lista.innerHTML = '<div class="empty-state">Cargando…</div>';
+  try {
+    const r = await apiCall('/carnets');
+    _carnetsCache = r.ok ? await r.json() : [];
+  } catch { _carnetsCache = []; }
+
+  const filtroTrab   = document.getElementById('carnetFiltroTrabajador')?.value || '';
+  const filtroEstado = document.getElementById('carnetFiltroEstado')?.value || '';
+  const hoy = new Date();
+
+  let items = _carnetsCache;
+  if (filtroTrab)   items = items.filter(c => c.nombre_trabajador === filtroTrab);
+
+  // Calcular estado real por fecha
+  items = items.map(c => {
+    let estadoReal = c.estado || 'vigente';
+    if (c.fecha_caducidad && estadoReal === 'vigente') {
+      const dias = Math.floor((new Date(c.fecha_caducidad) - hoy) / 86400000);
+      if (dias < 0) estadoReal = 'caducado';
+    }
+    return { ...c, _estadoReal: estadoReal };
+  });
+
+  if (filtroEstado) items = items.filter(c => c._estadoReal === filtroEstado);
+
+  if (!items.length) {
+    lista.innerHTML = '<div class="empty-state">Sin carnets registrados</div>';
+    return;
+  }
+
+  const s = getSession();
+  const esAdmin = s?.rol !== 'operario';
+
+  lista.innerHTML = items.map(c => {
+    const dias = c.fecha_caducidad ? Math.floor((new Date(c.fecha_caducidad) - hoy) / 86400000) : null;
+    const caducado  = dias !== null && dias < 0;
+    const pronto    = dias !== null && dias >= 0 && dias <= (c.dias_aviso || 30);
+    const badgeColor = caducado ? '#ef4444' : pronto ? '#f59e0b' : '#10b981';
+    const badgeTexto = caducado ? `CADUCADO (hace ${Math.abs(dias)}d)` : pronto ? `⚠️ Caduca en ${dias}d` : 'Vigente';
+
+    return `<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:10px">
+      <div style="display:flex;align-items:flex-start;gap:10px">
+        <span style="font-size:24px;flex-shrink:0">📜</span>
+        <div style="flex:1;min-width:0">
+          <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:14px;color:var(--text)">${c.tipo}</div>
+          <div style="font-size:12px;color:var(--muted);margin-top:2px">👤 ${c.nombre_trabajador}</div>
+          ${c.numero ? `<div style="font-size:11px;color:var(--muted);margin-top:2px">Nº ${c.numero}</div>` : ''}
+          <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px">
+            <span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;background:${badgeColor}22;color:${badgeColor}">${badgeTexto}</span>
+            ${c.fecha_obtencion ? `<span style="font-size:11px;padding:2px 8px;border-radius:20px;background:var(--surface2);color:var(--muted)">Obtención: ${c.fecha_obtencion}</span>` : ''}
+            ${c.fecha_caducidad ? `<span style="font-size:11px;padding:2px 8px;border-radius:20px;background:var(--surface2);color:var(--muted)">Caduca: ${c.fecha_caducidad}</span>` : ''}
+          </div>
+          ${c.notas ? `<div style="font-size:11px;color:var(--muted);margin-top:6px;font-style:italic">${c.notas}</div>` : ''}
+        </div>
+        ${esAdmin ? `<button onclick="abrirModalCarnet(${c.id})" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:5px 10px;font-size:12px;cursor:pointer;color:var(--text);flex-shrink:0">✏️</button>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+let _carnetEditId = null;
+
+async function abrirModalCarnet(id) {
+  _carnetEditId = id || null;
+  const trabajadores = window._perTrabajadores || await perCargarTrabajadores();
+
+  const c = id ? (_carnetsCache.find(x => x.id === id) || {}) : {};
+
+  const opsTrab = trabajadores.map(t =>
+    `<option value="${t.nombre}" ${c.nombre_trabajador === t.nombre ? 'selected' : ''}>${t.nombre}</option>`
+  ).join('');
+
+  const opsTipo = TIPOS_CARNET.map(t =>
+    `<option value="${t}" ${c.tipo === t ? 'selected' : ''}>${t}</option>`
+  ).join('');
+
+  const html = `
+  <div class="modal-overlay show" id="modalCarnet" onclick="if(event.target===this)cerrarModalCarnet()">
+    <div class="modal" style="max-height:90vh;overflow-y:auto">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px">
+        <div class="modal-title" style="margin-bottom:0;flex:1">${id ? 'Editar carnet' : 'Nuevo carnet'}</div>
+        <button onclick="cerrarModalCarnet()" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--muted)">×</button>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Trabajador *</label>
+        <select class="form-input" id="carnetTrabajador">
+          <option value="">— Selecciona —</option>${opsTrab}
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Tipo de carnet *</label>
+        <select class="form-input" id="carnetTipo"><option value="">— Selecciona —</option>${opsTipo}</select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Número / referencia</label>
+        <input class="form-input" id="carnetNumero" placeholder="Opcional" value="${c.numero||''}">
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div class="form-group">
+          <label class="form-label">Fecha obtención</label>
+          <input class="form-input" id="carnetFechaObt" type="date" value="${c.fecha_obtencion||''}">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Fecha caducidad</label>
+          <input class="form-input" id="carnetFechaCad" type="date" value="${c.fecha_caducidad||''}">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Avisar (días antes de caducar)</label>
+        <input class="form-input" id="carnetDiasAviso" type="number" min="1" max="365" value="${c.dias_aviso||30}">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Estado</label>
+        <select class="form-input" id="carnetEstado">
+          <option value="vigente" ${(!c.estado||c.estado==='vigente')?'selected':''}>Vigente</option>
+          <option value="baja" ${c.estado==='baja'?'selected':''}>Baja</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Notas</label>
+        <textarea class="form-input" id="carnetNotas" rows="2" placeholder="Opcional">${c.notas||''}</textarea>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:4px">
+        ${id ? `<button onclick="borrarCarnet(${id})" style="padding:10px 14px;background:#ef444422;border:1px solid #ef4444;border-radius:10px;color:#ef4444;font-family:'Montserrat',sans-serif;font-weight:700;font-size:13px;cursor:pointer">🗑</button>` : ''}
+        <button onclick="guardarCarnet()" style="flex:1;padding:12px;background:var(--accent);border:none;border-radius:10px;color:#000;font-family:'Montserrat',sans-serif;font-weight:900;font-size:14px;cursor:pointer">💾 Guardar</button>
+      </div>
+    </div>
+  </div>`;
+  document.body.insertAdjacentHTML('beforeend', html);
+}
+
+function cerrarModalCarnet() {
+  document.getElementById('modalCarnet')?.remove();
+}
+
+async function guardarCarnet() {
+  const nombre = document.getElementById('carnetTrabajador').value;
+  const tipo   = document.getElementById('carnetTipo').value;
+  if (!nombre) { toast('Selecciona un trabajador', 'error'); return; }
+  if (!tipo)   { toast('Selecciona el tipo de carnet', 'error'); return; }
+
+  const trab = (window._perTrabajadores||[]).find(t => t.nombre === nombre) || {};
+  const body = {
+    nombre_trabajador: nombre,
+    usuario_id:  trab.tipo === 'interno' ? (trab.id || null) : null,
+    externo_id:  trab.tipo === 'externo' ? (trab.id || null) : null,
+    tipo,
+    numero:          document.getElementById('carnetNumero').value.trim() || null,
+    fecha_obtencion: document.getElementById('carnetFechaObt').value || null,
+    fecha_caducidad: document.getElementById('carnetFechaCad').value || null,
+    dias_aviso:      parseInt(document.getElementById('carnetDiasAviso').value) || 30,
+    estado:          document.getElementById('carnetEstado').value,
+    notas:           document.getElementById('carnetNotas').value.trim() || null,
+  };
+
+  const url    = _carnetEditId ? `/carnets/${_carnetEditId}` : '/carnets';
+  const method = _carnetEditId ? 'PUT' : 'POST';
+  const res    = await apiCall(url, { method, body: JSON.stringify(body) });
+  if (res.ok) {
+    toast(_carnetEditId ? '✅ Carnet actualizado' : '✅ Carnet añadido', 'ok');
+    cerrarModalCarnet();
+    cargarCarnets();
+  } else {
+    toast('❌ Error al guardar', 'error');
+  }
+}
+
+async function borrarCarnet(id) {
+  if (!confirm('¿Eliminar este carnet?')) return;
+  const res = await apiCall(`/carnets/${id}`, { method: 'DELETE' });
+  if (res.ok) { toast('🗑 Carnet eliminado'); cerrarModalCarnet(); cargarCarnets(); }
+  else toast('❌ Error al borrar', 'error');
+}
+
+window.cargarCarnets    = cargarCarnets;
+window.abrirModalCarnet = abrirModalCarnet;
+window.cerrarModalCarnet = cerrarModalCarnet;
+window.guardarCarnet    = guardarCarnet;
+window.borrarCarnet     = borrarCarnet;
 </script>
 </body>
 </html>
