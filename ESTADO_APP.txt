@@ -5,7 +5,7 @@
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 03/05/2026
-VERSIÓN ACTUAL APP NUEVA: v5.26
+VERSIÓN ACTUAL APP NUEVA: v5.31
 VERSIÓN ACTUAL APP VIEJA: v4.19 (⛔ CONGELADA DEFINITIVAMENTE — no recibe más cambios)
 
 ================================================================================
@@ -148,6 +148,17 @@ PASO 4 — VERIFICAR WORKER (solo si se va a tocar worker.js)
 ================================================================================
   HISTORIAL DE VERSIONES — RECIENTES
 ================================================================================
+
+v5.31  |  03/05/2026  [SOLO NUEVA APP]
+  - SEGURIDAD CRÍTICA: 3 vulnerabilidades corregidas
+    · CRIT-1: Rate limiting en login — máx 10 intentos por IP en 15 minutos (tabla login_attempts)
+    · CRIT-2: Token en URL (?token=) ahora solo aceptado en peticiones GET (imágenes/docs)
+      Solo headers (X-Token) funcionan para mutaciones → token no puede filtrarse vía logs/referrer
+    · CRIT-3: Expiración de sesiones — expires_at 30 días sliding (se renueva en cada request)
+      Sesiones antiguas sin expires_at siguen funcionando hasta que expiren o se eliminen
+  - Migraciones D1 aplicadas: sesiones.expires_at + login_attempts + índice IP
+  - Worker redesplegado (Version ID: 2273550a-4d6d-4219-8243-4aa796a83e93)
+  - GitHub actualizado ✅
 
 v5.30  |  03/05/2026  [SOLO NUEVA APP]
   - MEJORAS VISUALES Google Sheets + fix bug de acumulación

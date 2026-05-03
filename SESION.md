@@ -7,8 +7,8 @@
 
 **Sesión:** LIBRE
 **Última sesión:** 03/05/2026
-**Versión tras última sesión:** v5.30
-**Worker desplegado:** v5.30 (ID: f873b057-ec22-4f3d-96c8-f452a771ec0e)
+**Versión tras última sesión:** v5.31
+**Worker desplegado:** v5.31 (ID: 2273550a-4d6d-4219-8243-4aa796a83e93)
 **GitHub:** en sync ✅
 
 ---
@@ -44,6 +44,23 @@ Y antes de cerrar, obligatorio:
   2. Actualizar ESTADO_APP.txt (versión, fecha, changelog)
   3. Actualizar IDEAS_PENDIENTES.txt (marcar resueltos)
   4. Volver a poner este archivo en estado LIBRE con el resumen
+
+---
+
+## RESUMEN SESIÓN 03/05/2026 (v5.31 — Seguridad crítica)
+
+- CRIT-1: Rate limiting en /verificar — 10 intentos máx por IP en 15 min
+  · Tabla login_attempts (ip, motivo, created_at) + índice por IP
+  · Al login exitoso se borran los intentos de esa IP
+  · Devuelve 429 si se supera el límite
+- CRIT-2: Token en URL restringido a GET únicamente
+  · ?token= en URL solo funciona para GET (imágenes/fotos/docs vía <img src>)
+  · POST/PUT/DELETE requieren X-Token en header → token no filtra vía logs/referrer/history
+- CRIT-3: Expiración de sesiones (30 días sliding)
+  · columna expires_at en sesiones, se pone datetime('now', '+30 days') al crear
+  · getAuth rechaza sesiones caducadas, y renueva expires_at en cada request válido
+- Worker redesplegado: 2273550a-4d6d-4219-8243-4aa796a83e93
+- GitHub actualizado ✅
 
 ---
 
