@@ -2341,6 +2341,11 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
         <div class="module-info"><div class="module-name">Equipo</div><div class="module-desc">Plantilla y personal externo</div></div>
         <svg class="module-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
       </div>
+      <div class="module-card" onclick="personalSelTab(4)">
+        <div class="module-emoji">🦺</div>
+        <div class="module-info"><div class="module-name">Dotación EPIs</div><div class="module-desc">EPIs asignados a cada trabajador</div></div>
+        <svg class="module-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
+      </div>
     </div>
 
     <!-- PANEL 0: HOY -->
@@ -2399,6 +2404,29 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
         </select>
       </div>
       <div id="perListaPlantilla" style="padding:10px 14px 80px;overflow-y:auto;flex:1">
+        <div class="empty-state">Cargando…</div>
+      </div>
+    </div>
+
+    <!-- PANEL 4: DOTACIÓN EPIs (NEW-23) -->
+    <div id="perPanelEpis" style="display:none;flex-direction:column;flex:1;overflow:hidden">
+      <div style="display:flex;align-items:center;gap:8px;padding:8px 14px;border-bottom:1px solid var(--border);flex-shrink:0">
+        <button onclick="personalSelTab(-1)" style="background:var(--surface2);border:none;border-radius:50%;width:30px;height:30px;font-size:16px;cursor:pointer;color:var(--text);flex-shrink:0">←</button>
+        <span style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:13px;flex:1">🦺 Dotación EPIs</span>
+        <button id="btnNuevoEpi" onclick="abrirModalEpi()" style="padding:6px 12px;background:var(--accent);border:none;border-radius:8px;color:#000;font-family:'Montserrat',sans-serif;font-weight:900;font-size:12px;cursor:pointer;white-space:nowrap">+ Asignar</button>
+      </div>
+      <div style="padding:8px 14px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;gap:8px">
+        <select id="episFiltroTrabajador" class="form-input" style="flex:1;font-size:12px;padding:5px 8px" onchange="cargarEpis()">
+          <option value="">— Todos los trabajadores —</option>
+        </select>
+        <select id="episFiltroEstado" class="form-input" style="width:110px;font-size:12px;padding:5px 8px" onchange="cargarEpis()">
+          <option value="">Todos</option>
+          <option value="activo">Activos</option>
+          <option value="devuelto">Devueltos</option>
+          <option value="baja">Baja</option>
+        </select>
+      </div>
+      <div id="episLista" style="padding:10px 14px 80px;overflow-y:auto;flex:1">
         <div class="empty-state">Cargando…</div>
       </div>
     </div>
@@ -8613,7 +8641,7 @@ async function cargarObrasSelectUsuario() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '5.25';
+const APP_VERSION = '5.26';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -10339,14 +10367,13 @@ if ('serviceWorker' in navigator) {
   // ── Tab selector ──
   function personalSelTab(n) {
     const home    = document.getElementById('perPanelHome');
-    const panels  = ['perPanelHoy','perPanelSemana','perPanelResumen','perPanelPlantilla'];
+    const panels  = ['perPanelHoy','perPanelSemana','perPanelResumen','perPanelPlantilla','perPanelEpis'];
     const fab     = document.getElementById('btnNuevoFichaje');
     const fabEq   = document.getElementById('btnFichajeEquipo');
     const s       = getSession();
     const esAdmin = s?.rol !== 'operario';
 
     if (n === -1) {
-      // Mostrar home con tarjetas
       if (home) { home.style.display = 'flex'; home.style.flexDirection = 'column'; }
       panels.forEach(id => { const el = document.getElementById(id); if (el) el.style.display = 'none'; });
       if (fab)   fab.style.display   = 'none';
@@ -10354,7 +10381,6 @@ if ('serviceWorker' in navigator) {
       return;
     }
 
-    // Mostrar sub-panel concreto
     if (home) home.style.display = 'none';
     panels.forEach((id, i) => {
       const el = document.getElementById(id);
@@ -10362,13 +10388,17 @@ if ('serviceWorker' in navigator) {
       el.style.display = (i === n) ? 'flex' : 'none';
       if (i === n) el.style.flexDirection = 'column';
     });
-    // FABs solo en paneles de fichajes (no en Plantilla ni home)
-    if (fab)   fab.style.display   = (esAdmin && n !== 3) ? 'flex' : 'none';
-    if (fabEq) fabEq.style.display = (esAdmin && n !== 3) ? 'flex' : 'none';
+    // FABs solo en paneles de fichajes (no en Plantilla/EPIs ni home)
+    if (fab)   fab.style.display   = (esAdmin && n < 3) ? 'flex' : 'none';
+    if (fabEq) fabEq.style.display = (esAdmin && n < 3) ? 'flex' : 'none';
+    // Botón Asignar EPI solo para admin
+    const btnEpi = document.getElementById('btnNuevoEpi');
+    if (btnEpi) btnEpi.style.display = (n === 4 && esAdmin) ? '' : (n === 4 ? 'none' : '');
     if (n === 0) cargarHoy();
     if (n === 1) cargarSemana();
     if (n === 2) cargarResumenMes();
     if (n === 3) cargarPlantilla();
+    if (n === 4) cargarEpis();
   }
 
   // ── Cargar trabajadores (cache) ──
@@ -11595,6 +11625,173 @@ async function galeriaBorrarFoto() {
     toast('❌ Error al borrar', 'error');
   }
 }
+
+// ── NEW-23: Dotación EPIs ────────────────────────────────────────────────────
+const TIPOS_EPI = ['Casco','Arnés anticaídas','Guantes','Botas de seguridad','Gafas/visera','Chaleco reflectante','Protección auditiva','Mascarilla/respirador','Ropa de trabajo','Cinturón lumbar','Rodilleras','Otro'];
+
+async function cargarEpis() {
+  const lista = document.getElementById('episLista');
+  if (!lista) return;
+  lista.innerHTML = '<div class="empty-state">Cargando…</div>';
+  const s = getSession();
+  const obraId = s?.obra_id || '';
+  const filtroT = document.getElementById('episFiltroTrabajador')?.value || '';
+  const filtroE = document.getElementById('episFiltroEstado')?.value || '';
+  try {
+    const res  = await apiCall('/epis-asignados' + (obraId ? `?obra_id=${obraId}` : ''));
+    let epis = res.ok ? await res.json() : [];
+    if (filtroT) epis = epis.filter(e => String(e.usuario_id||e.externo_id||'') === filtroT || e.nombre_trabajador === filtroT);
+    if (filtroE) epis = epis.filter(e => e.estado === filtroE);
+
+    // Rellenar selector de trabajadores
+    const sel = document.getElementById('episFiltroTrabajador');
+    if (sel && sel.options.length <= 1) {
+      const nombres = [...new Set(epis.map(e => e.nombre_trabajador))].sort();
+      nombres.forEach(n => { const o = document.createElement('option'); o.value = n; o.textContent = n; sel.appendChild(o); });
+    }
+
+    if (!epis.length) { lista.innerHTML = '<div class="empty-state">Sin EPIs asignados</div>'; return; }
+
+    const hoy = new Date(); const pronto = new Date(hoy); pronto.setDate(pronto.getDate() + 30);
+    lista.innerHTML = epis.map(e => {
+      const cad = e.fecha_caducidad ? new Date(e.fecha_caducidad) : null;
+      const caducado = cad && cad < hoy;
+      const prontoExp = cad && !caducado && cad <= pronto;
+      let badgeCad = '';
+      if (caducado)  badgeCad = '<span class="pill pill-red" style="font-size:9px">CADUCADO</span>';
+      else if (prontoExp) badgeCad = '<span class="pill pill-orange" style="font-size:9px">⚠️ caduca pronto</span>';
+      const estadoPill = e.estado === 'activo' ? 'pill-green' : e.estado === 'devuelto' ? 'pill-gray' : 'pill-red';
+      const esAdmin = getSession()?.rol !== 'operario';
+      return `<div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:8px">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+          <span style="font-size:18px">🦺</span>
+          <div style="flex:1;min-width:0">
+            <div style="font-weight:700;font-size:13px;color:var(--text)">${e.tipo_epi}${e.talla ? ` <span style="font-size:11px;color:var(--muted)">(${e.talla})</span>` : ''}</div>
+            <div style="font-size:11px;color:var(--accent);font-weight:700">👤 ${e.nombre_trabajador}</div>
+          </div>
+          ${esAdmin ? `<button onclick="editarEpi(${e.id})" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:11px;cursor:pointer;color:var(--text)">✏️</button>` : ''}
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:4px;align-items:center">
+          <span class="pill ${estadoPill}" style="font-size:9px">${e.estado}</span>
+          ${badgeCad}
+          ${e.fecha_entrega ? `<span class="stock-meta-pill">📅 entrega ${e.fecha_entrega}</span>` : ''}
+          ${e.fecha_caducidad ? `<span class="stock-meta-pill">⏳ cad. ${e.fecha_caducidad}</span>` : ''}
+          ${e.numero_serie ? `<span class="stock-meta-pill">#${e.numero_serie}</span>` : ''}
+        </div>
+        ${e.observaciones ? `<div style="font-size:11px;color:var(--muted);margin-top:4px">📝 ${e.observaciones}</div>` : ''}
+      </div>`;
+    }).join('');
+  } catch { lista.innerHTML = '<div class="empty-state" style="color:var(--red)">Error al cargar</div>'; }
+}
+
+let _epiEditId = null;
+async function abrirModalEpi(id) {
+  _epiEditId = id || null;
+  // Cargar trabajadores para el selector
+  const trabajadores = window._perTrabajadores || await perCargarTrabajadores();
+  const selT = `<select id="epiTrabajador" class="form-input" style="width:100%;margin-bottom:10px">
+    <option value="">— Selecciona trabajador —</option>
+    ${trabajadores.map(t => `<option value="${t.tipo}:${t.id}:${encodeURIComponent(t.nombre)}">${t.nombre}${t.obra_nombre ? ' · ' + t.obra_nombre : ''}</option>`).join('')}
+  </select>`;
+
+  let datos = { tipo_epi:'', talla:'', numero_serie:'', fecha_entrega:'', fecha_caducidad:'', proxima_revision:'', estado:'activo', observaciones:'', nombre_trabajador:'', usuario_id:null, externo_id:null, obra_id:null };
+  if (id) {
+    const lista = document.getElementById('episLista');
+    // Re-fetch the item
+    const r = await apiCall('/epis-asignados').then(rr => rr.json()).catch(() => []);
+    const found = r.find(e => e.id === id);
+    if (found) datos = { ...datos, ...found };
+  }
+
+  const tVal = datos.usuario_id ? `app:${datos.usuario_id}:${encodeURIComponent(datos.nombre_trabajador||'')}` : datos.externo_id ? `externo:${datos.externo_id}:${encodeURIComponent(datos.nombre_trabajador||'')}` : '';
+
+  document.body.insertAdjacentHTML('beforeend', `
+  <div class="modal-overlay show" id="modalEpi" onclick="if(event.target===this)cerrarModalEpi()" style="align-items:flex-end;justify-content:center;padding:0">
+    <div class="modal" style="max-height:90vh;overflow-y:auto;border-radius:18px 18px 0 0;width:100%;max-width:520px">
+      <div style="display:flex;align-items:center;margin-bottom:14px">
+        <div class="modal-title" style="margin-bottom:0;flex:1">${id ? '✏️ Editar EPI' : '🦺 Asignar EPI'}</div>
+        <button onclick="cerrarModalEpi()" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--muted)">×</button>
+      </div>
+      <label class="form-label">Trabajador *</label>
+      ${selT.replace(`value="${tVal}"`, `value="${tVal}" selected`)}
+      <label class="form-label">Tipo de EPI *</label>
+      <select id="epiTipo" class="form-input" style="width:100%;margin-bottom:10px">
+        ${TIPOS_EPI.map(t => `<option value="${t}"${t===datos.tipo_epi?' selected':''}>${t}</option>`).join('')}
+      </select>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+        <div><label class="form-label">Talla</label><input id="epiTalla" class="form-input" value="${datos.talla||''}" placeholder="M / 42 / etc."></div>
+        <div><label class="form-label">Nº serie</label><input id="epiSerie" class="form-input" value="${datos.numero_serie||''}" placeholder="Opcional"></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+        <div><label class="form-label">Fecha entrega</label><input id="epiFechaEntrega" type="date" class="form-input" value="${datos.fecha_entrega||''}"></div>
+        <div><label class="form-label">Fecha caducidad</label><input id="epiFechaCad" type="date" class="form-input" value="${datos.fecha_caducidad||''}"></div>
+      </div>
+      <label class="form-label">Estado</label>
+      <select id="epiEstado" class="form-input" style="width:100%;margin-bottom:10px">
+        <option value="activo"${datos.estado==='activo'?' selected':''}>Activo</option>
+        <option value="devuelto"${datos.estado==='devuelto'?' selected':''}>Devuelto</option>
+        <option value="baja"${datos.estado==='baja'?' selected':''}>Baja</option>
+      </select>
+      <label class="form-label">Observaciones</label>
+      <textarea id="epiObs" class="form-input" rows="2" style="width:100%;margin-bottom:14px;resize:vertical" placeholder="Opcional">${datos.observaciones||''}</textarea>
+      <div style="display:flex;gap:8px">
+        ${id ? `<button onclick="borrarEpi(${id})" style="padding:10px 14px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--red);font-family:'Montserrat',sans-serif;font-weight:700;font-size:12px;cursor:pointer">🗑 Borrar</button>` : ''}
+        <button onclick="guardarEpi()" style="flex:1;padding:12px;background:var(--accent);border:none;border-radius:8px;color:#000;font-family:'Montserrat',sans-serif;font-weight:900;font-size:13px;cursor:pointer">💾 Guardar</button>
+      </div>
+    </div>
+  </div>`);
+}
+
+function cerrarModalEpi() {
+  document.getElementById('modalEpi')?.remove();
+  _epiEditId = null;
+}
+
+async function guardarEpi() {
+  const tVal = document.getElementById('epiTrabajador').value;
+  if (!tVal) { toast('Selecciona un trabajador', 'error'); return; }
+  const [tipo, tid, tnameEnc] = tVal.split(':');
+  const nombre_trabajador = decodeURIComponent(tnameEnc);
+  const body = {
+    nombre_trabajador,
+    usuario_id:  tipo === 'app'     ? parseInt(tid) : null,
+    externo_id:  tipo === 'externo' ? parseInt(tid) : null,
+    obra_id:     getSession()?.obra_id || null,
+    tipo_epi:    document.getElementById('epiTipo').value,
+    talla:       document.getElementById('epiTalla').value.trim() || null,
+    numero_serie:document.getElementById('epiSerie').value.trim() || null,
+    fecha_entrega:    document.getElementById('epiFechaEntrega').value || null,
+    fecha_caducidad:  document.getElementById('epiFechaCad').value || null,
+    estado:      document.getElementById('epiEstado').value,
+    observaciones:document.getElementById('epiObs').value.trim() || null,
+  };
+  const url    = _epiEditId ? `/epis-asignados/${_epiEditId}` : '/epis-asignados';
+  const method = _epiEditId ? 'PUT' : 'POST';
+  const res = await apiCall(url, { method, body: JSON.stringify(body) });
+  if (res.ok) {
+    toast(_epiEditId ? '✅ EPI actualizado' : '✅ EPI asignado');
+    cerrarModalEpi();
+    cargarEpis();
+  } else {
+    toast('❌ Error al guardar', 'error');
+  }
+}
+
+async function editarEpi(id) { abrirModalEpi(id); }
+
+async function borrarEpi(id) {
+  if (!confirm('¿Borrar este EPI asignado?')) return;
+  const res = await apiCall(`/epis-asignados/${id}`, { method: 'DELETE' });
+  if (res.ok) { toast('🗑 EPI eliminado'); cerrarModalEpi(); cargarEpis(); }
+  else toast('❌ Error al borrar', 'error');
+}
+
+window.cargarEpis       = cargarEpis;
+window.abrirModalEpi    = abrirModalEpi;
+window.cerrarModalEpi   = cerrarModalEpi;
+window.guardarEpi       = guardarEpi;
+window.editarEpi        = editarEpi;
+window.borrarEpi        = borrarEpi;
 </script>
 </body>
 </html>

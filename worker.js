@@ -591,6 +591,15 @@ export default {
         if (method === 'DELETE') return await eliminarPersonalExterno(peid, request, env);
       }
 
+      // ── EPIs asignados (NEW-23) ───────────────────────────────────────────
+      if (path === '/epis-asignados' && method === 'GET')  return await getEpisAsignados(request, env);
+      if (path === '/epis-asignados' && method === 'POST') return await crearEpiAsignado(request, env);
+      if (path.startsWith('/epis-asignados/')) {
+        const epid = parseInt(path.split('/epis-asignados/')[1]);
+        if (method === 'PUT')    return await actualizarEpiAsignado(epid, request, env);
+        if (method === 'DELETE') return await eliminarEpiAsignado(epid, request, env);
+      }
+
       // ── Chat interno (NEW-08) ─────────────────────────────────────────────
       if (path === '/chat' && method === 'GET')    return await getChatMensajes(request, env);
       if (path === '/chat' && method === 'POST')   return await enviarChatMensaje(request, env);
@@ -2773,6 +2782,56 @@ async function getTrabajadores(request, env) {
     env.DB.prepare(sqlP).bind(...paramsP).all(),
   ]);
   return json([...ru.results, ...rp.results]);
+}
+
+// ── EPIs asignados (NEW-23) ────────────────────────────────────────────────
+async function getEpisAsignados(request, env) {
+  const { empresa_id, obra_id: obraAuth, isSuperadmin, isEmpresaAdmin, isAdmin } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const url     = new URL(request.url);
+  const obra_id = url.searchParams.get('obra_id') || ((!isSuperadmin && !isEmpresaAdmin && !isAdmin) ? obraAuth : null);
+  let sql = 'SELECT * FROM epis_asignados WHERE empresa_id=?';
+  const params = [empresa_id];
+  if (obra_id) { sql += ' AND obra_id=?'; params.push(parseInt(obra_id)); }
+  sql += ' ORDER BY nombre_trabajador, tipo_epi';
+  const rows = await env.DB.prepare(sql).bind(...params).all();
+  return json(rows.results);
+}
+
+async function crearEpiAsignado(request, env) {
+  const { empresa_id, nombre, rol } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  if (rol === 'operario') return err('Sin permisos', 403);
+  const b = await request.json();
+  const { obra_id, usuario_id, externo_id, nombre_trabajador, tipo_epi, talla, numero_serie, fecha_entrega, fecha_caducidad, proxima_revision, estado, observaciones } = b;
+  if (!tipo_epi || !nombre_trabajador) return err('Faltan campos obligatorios');
+  const r = await env.DB.prepare(
+    'INSERT INTO epis_asignados (empresa_id,obra_id,usuario_id,externo_id,nombre_trabajador,tipo_epi,talla,numero_serie,fecha_entrega,fecha_caducidad,proxima_revision,estado,observaciones,created_by) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)'
+  ).bind(empresa_id, obra_id||null, usuario_id||null, externo_id||null, nombre_trabajador, tipo_epi, talla||null, numero_serie||null, fecha_entrega||null, fecha_caducidad||null, proxima_revision||null, estado||'activo', observaciones||null, nombre||rol||'').run();
+  return json({ ok: true, id: r.meta.last_row_id });
+}
+
+async function actualizarEpiAsignado(id, request, env) {
+  const { empresa_id, rol } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  if (rol === 'operario') return err('Sin permisos', 403);
+  const b = await request.json();
+  const campos = [], vals = [];
+  ['obra_id','usuario_id','externo_id','nombre_trabajador','tipo_epi','talla','numero_serie','fecha_entrega','fecha_caducidad','proxima_revision','estado','observaciones'].forEach(k => {
+    if (b[k] !== undefined) { campos.push(`${k}=?`); vals.push(b[k]); }
+  });
+  if (!campos.length) return err('Sin cambios');
+  vals.push(id, empresa_id);
+  await env.DB.prepare(`UPDATE epis_asignados SET ${campos.join(',')} WHERE id=? AND empresa_id=?`).bind(...vals).run();
+  return json({ ok: true });
+}
+
+async function eliminarEpiAsignado(id, request, env) {
+  const { empresa_id, rol } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  if (rol === 'operario') return err('Sin permisos', 403);
+  await env.DB.prepare('DELETE FROM epis_asignados WHERE id=? AND empresa_id=?').bind(id, empresa_id).run();
+  return json({ ok: true });
 }
 
 // ── Fichajes ────────────────────────────────────────────────────────────────
