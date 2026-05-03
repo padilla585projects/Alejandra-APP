@@ -5,7 +5,7 @@
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 03/05/2026
-VERSIÓN ACTUAL APP NUEVA: v5.31
+VERSIÓN ACTUAL APP NUEVA: v5.32
 VERSIÓN ACTUAL APP VIEJA: v4.19 (⛔ CONGELADA DEFINITIVAMENTE — no recibe más cambios)
 
 ================================================================================
@@ -148,6 +148,16 @@ PASO 4 — VERIFICAR WORKER (solo si se va a tocar worker.js)
 ================================================================================
   HISTORIAL DE VERSIONES — RECIENTES
 ================================================================================
+
+v5.32  |  03/05/2026  [SOLO NUEVA APP]
+  - BUG-94: headerObraLabel oculto cuando obra_nombre es null/vacío
+    → ya no aparece "🏗 —" en depts personal/seguridad sin obra asignada
+  - BUG-107: notificaciones chat navegan al chat al pulsar desde pantalla bloqueada
+    → Notification incluye data.navTo; SW lo pasa via postMessage; listener en app navega
+  - BUG-95: exportarExcelCompleto no falla silenciosamente si workbook vacío
+    → muestra toast "Sin datos" en vez de error genérico antes de llamar XLSX.writeFile
+  - Worker NO redesplegado (sin cambios en worker.js)
+  - GitHub actualizado ✅
 
 v5.31  |  03/05/2026  [SOLO NUEVA APP]
   - SEGURIDAD CRÍTICA: 3 vulnerabilidades corregidas

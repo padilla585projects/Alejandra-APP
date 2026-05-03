@@ -7,7 +7,7 @@
 
 **Sesión:** LIBRE
 **Última sesión:** 03/05/2026
-**Versión tras última sesión:** v5.31
+**Versión tras última sesión:** v5.32
 **Worker desplegado:** v5.31 (ID: 2273550a-4d6d-4219-8243-4aa796a83e93)
 **GitHub:** en sync ✅
 
@@ -44,6 +44,14 @@ Y antes de cerrar, obligatorio:
   2. Actualizar ESTADO_APP.txt (versión, fecha, changelog)
   3. Actualizar IDEAS_PENDIENTES.txt (marcar resueltos)
   4. Volver a poner este archivo en estado LIBRE con el resumen
+
+---
+
+## RESUMEN SESIÓN 03/05/2026 (v5.32 — BUG-94/107/95)
+
+- BUG-94: obra label oculta cuando obra_nombre es null → no más "🏗 —" en personal/seguridad
+- BUG-107: notif chat pasa data.navTo → SW hace postMessage → app navega al chat
+- BUG-95: Excel completo muestra "Sin datos" en vez de error genérico si workbook vacío
 
 ---
 
