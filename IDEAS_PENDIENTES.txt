@@ -786,14 +786,13 @@ LEYENDA DE ESTADO:
     · Exportable a PDF: pendiente.
     · Añadido: 24/04/2026 — Adrian | Hecho: 24/04/2026
 
-[ ] NEW-23 — Control de EPIs por trabajador  [PENDIENTE]
-    · Registrar qué EPI tiene asignado cada trabajador: casco, arnés, guantes, botas, etc.
-    · Campos: tipo de EPI, talla, fecha de entrega, próxima revisión/sustitución, estado.
-    · Aviso automático cuando un EPI está próximo a caducar o necesita revisión.
-    · Vista en ficha del trabajador y también vista global por obra (quién tiene qué).
-    · Quién gestiona: encargado, EA, SA.
-    · D1: nueva tabla `epis_asignados`.
-    · Añadido: 24/04/2026 — Adrian
+[✓] NEW-23 — Control de EPIs por trabajador  [HECHO v5.26]
+    · D1: tabla epis_asignados (tipo, talla, fecha entrega/caducidad, estado, observaciones)
+    · Worker: GET/POST/PUT/DELETE /epis-asignados (operario solo lectura)
+    · Frontend: tarjeta 🦺 Dotación EPIs en home de Personal (panel 4 en personalSelTab)
+    · Lista con filtro por trabajador y estado, badges CADUCADO/⚠️caduca pronto
+    · Modal: asignar/editar con selector de trabajador (internos app + externos)
+    · Añadido: 24/04/2026 — Adrian | Hecho: 03/05/2026 v5.26
 
 [✓] NEW-24 — Alertas de stock mínimo  [HECHO v5.00]
     · En cada bobina, herramienta o material de seguridad: campo "Stock mínimo".
