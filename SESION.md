@@ -9,7 +9,7 @@
 **Última sesión:** 03/05/2026
 **Versión tras última sesión:** v5.34
 **Worker desplegado:** v5.33 (ID: d224bf85-3013-47b2-be02-04c8c857c877) — sin cambios
-**GitHub:** PENDIENTE DE PUSH ⚠️
+**GitHub:** en sync ✅
 
 ---
 
