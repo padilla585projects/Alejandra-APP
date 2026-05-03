@@ -716,7 +716,7 @@ LEYENDA DE ESTADO:
     · D1: tabla historial_mantenimientos + columnas aviso_mantenimiento + dias_aviso_mant en pemp/carretillas
     · Añadido: 24/04/2026 — Adrian | Hecho: 28/04/2026 v5.21
 
-[ ] NEW-16 — Partes de trabajo diarios  [PENDIENTE]
+[✓] NEW-16 — Partes de trabajo diarios  [HECHO v5.28]
     · Formulario que rellena el encargado al cierre del día.
     · Campos: obra, fecha, personal presente (multiselect), trabajos realizados (texto libre),
       materiales usados, incidencias, horas extra del equipo.

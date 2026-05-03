@@ -7,8 +7,8 @@
 
 **Sesión:** LIBRE
 **Última sesión:** 03/05/2026
-**Versión tras última sesión:** v5.26
-**Worker desplegado:** v5.26 (ID: 3e8e02cb-a527-499d-b9b8-ebb01570eb7b)
+**Versión tras última sesión:** v5.29
+**Worker desplegado:** v5.29 (ID: 142345f6-17c6-40df-8dc5-3a7f8454d5be)
 **GitHub:** en sync ✅
 
 ---
@@ -47,6 +47,22 @@ Y antes de cerrar, obligatorio:
 
 ---
 
+## RESUMEN SESIÓN 03/05/2026 (v5.29 — Revisión Google Sheets)
+
+- Auditoría completa de la integración con Google Sheets
+- Bugs encontrados y arreglados en worker.js:
+  · editarBobina/editarPemp/editarCarretilla NO sincronizaban Sheets tras UPDATE → ahora sí
+  · moverItemSeg (acción 'editar') NO sincronizaba Seg-Inventario → ahora sí
+  · Syncs fire-and-forget (seguridad, pedidos) ahora envueltos en ctx.waitUntil()
+  · actualizarPedido sincroniza solo la pestaña del dept afectado (no las 3)
+  · Cron diario (07:00 y 18:00) ahora hace syncSheets+syncPedidos completos para resiliencia
+  · /sync-sheets y /sync-debug requieren auth (empresa_id / superadmin respectivamente)
+  · syncSheetsDebug ahora filtra por empresa_id=1 (antes leía toda la tabla bobinas)
+- Worker redesplegado: 142345f6-17c6-40df-8dc5-3a7f8454d5be
+- Frontend bumpado a 5.29 por norma de versionado (sin cambios funcionales)
+
+---
+
 ## RESUMEN SESIÓN 29/04/2026
 
 - v5.23: BUG-113 — NFC: dos bugs al añadir objetos/herramientas
@@ -64,11 +80,6 @@ Y antes de cerrar, obligatorio:
 
 ## PENDIENTE PARA LA PRÓXIMA SESIÓN
 
-### 🔴 Prioritario
-- **Revisión Google Sheets** — sesión dedicada completa (ver project_sheets_pendiente.md en memory)
-  · La integración funciona parcial, hay muchas cosas por revisar y arreglar
-  · Requiere sesión dedicada sin mezclar con otras features
-
 ### 🟡 Bugs activos (de la DB de sugerencias)
 - **Bug #107** — Notificaciones: al pulsar una notificación no navega correctamente a la sección
 - **Bug #94**  — Nombre de obra no se muestra bien en la barra de iconos (dept personal/seguridad)
@@ -76,5 +87,4 @@ Y antes de cerrar, obligatorio:
 - **Bug #184** — Dotación de EPIs por trabajador (Katherine) — feature nueva, sesión dedicada
 
 ### 🟢 Features pendientes (ver IDEAS_PENDIENTES.txt para detalle)
-- NEW-16: Partes de trabajo diarios
 - NEW-18, NEW-19, NEW-20, NEW-22… (ver lista completa en IDEAS_PENDIENTES.txt)

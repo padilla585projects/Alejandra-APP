@@ -301,7 +301,7 @@ export default {
         const sub = decodeURIComponent(path.split('/bobinas/')[1]);
         if (sub.endsWith('/devolver'))    return await devolverBobina(sub.replace('/devolver', ''), request, env, ctx);
         if (sub.endsWith('/transferir'))  return await transferirRecurso('bobinas', sub.replace('/transferir', ''), request, env);
-        return await editarBobina(sub, request, env);
+        return await editarBobina(sub, request, env, ctx);
       }
       if (path.startsWith('/bobinas/') && method === 'DELETE') {
         return await eliminarBobina(decodeURIComponent(path.split('/bobinas/')[1]), request, env, ctx);
@@ -315,7 +315,7 @@ export default {
         const sub = decodeURIComponent(path.split('/pemp/')[1]);
         if (sub.endsWith('/devolver'))   return await devolverPemp(sub.replace('/devolver', ''), request, env, ctx);
         if (sub.endsWith('/transferir')) return await transferirRecurso('pemp', sub.replace('/transferir', ''), request, env);
-        return await editarPemp(sub, request, env);
+        return await editarPemp(sub, request, env, ctx);
       }
       if (path.startsWith('/pemp/') && method === 'DELETE') {
         return await eliminarPemp(decodeURIComponent(path.split('/pemp/')[1]), request, env, ctx);
@@ -329,7 +329,7 @@ export default {
         const sub = decodeURIComponent(path.split('/carretillas/')[1]);
         if (sub.endsWith('/devolver'))   return await devolverCarretilla(sub.replace('/devolver', ''), request, env, ctx);
         if (sub.endsWith('/transferir')) return await transferirRecurso('carretillas', sub.replace('/transferir', ''), request, env);
-        return await editarCarretilla(sub, request, env);
+        return await editarCarretilla(sub, request, env, ctx);
       }
       if (path.startsWith('/carretillas/') && method === 'DELETE') {
         return await eliminarCarretilla(decodeURIComponent(path.split('/carretillas/')[1]), request, env, ctx);
@@ -404,11 +404,11 @@ export default {
 
       // ── Inventario Seguridad ───────────────────────────────────────────────
       if (path === '/inventario-seg'           && method === 'GET')    return await getInventarioSeg(request, env);
-      if (path === '/inventario-seg'           && method === 'POST')   return await crearItemSeg(request, env);
+      if (path === '/inventario-seg'           && method === 'POST')   return await crearItemSeg(request, env, ctx);
       if (path.startsWith('/inventario-seg/')) {
         const segId = parseInt(path.split('/inventario-seg/')[1]);
-        if (method === 'DELETE') return await eliminarItemSeg(segId, request, env);
-        if (method === 'PUT')    return await moverItemSeg(segId, request, env);
+        if (method === 'DELETE') return await eliminarItemSeg(segId, request, env, ctx);
+        if (method === 'PUT')    return await moverItemSeg(segId, request, env, ctx);
       }
       if (path.startsWith('/buscar-item-seg/') && method === 'GET') {
         const cod = decodeURIComponent(path.split('/buscar-item-seg/')[1]);
@@ -423,7 +423,7 @@ export default {
 
       // ── Pedidos ──────────────────────────────────────────────────────────────
       if (path === '/pedidos' && method === 'GET')  return await getPedidos(request, env);
-      if (path === '/pedidos' && method === 'POST') return await crearPedido(request, env);
+      if (path === '/pedidos' && method === 'POST') return await crearPedido(request, env, ctx);
       if (path.startsWith('/pedidos/')) {
         const parts = path.split('/');  // ['','pedidos','5'] or ['','pedidos','5','albaranes']
         const pid = parseInt(parts[2]);
@@ -431,8 +431,8 @@ export default {
           if (method === 'GET')  return await getAlbaranesPedido(pid, request, env);
           if (method === 'POST') return await subirAlbaranPedido(pid, request, env);
         } else {
-          if (method === 'PUT')    return await actualizarPedido(pid, request, env);
-          if (method === 'DELETE') return await eliminarPedido(pid, request, env);
+          if (method === 'PUT')    return await actualizarPedido(pid, request, env, ctx);
+          if (method === 'DELETE') return await eliminarPedido(pid, request, env, ctx);
         }
       }
       if (path.startsWith('/albaranes/')) {
@@ -624,8 +624,17 @@ export default {
       if (path === '/carretillas/historial'  && method === 'GET') return await getHistorialTabla('historial_carretillas', request, env);
       if (path === '/stats'        && method === 'GET')   return await getStats(request, env);
       if (path === '/sheet-id'     && method === 'GET')   return json({ id: env.GOOGLE_SHEET_ID || null });
-      if ((path === '/sync' || path === '/sync-sheets') && method === 'POST') { await Promise.all([syncSheets(env), syncPedidos(env)]); return json({ ok: true, mensaje: 'Sync completado' }); }
-      if (path === '/sync-debug'   && method === 'POST')  return await syncSheetsDebug(env);
+      if ((path === '/sync' || path === '/sync-sheets') && method === 'POST') {
+        const { empresa_id } = await getAuth(request, env);
+        if (!empresa_id) return err('No autorizado', 403);
+        await Promise.all([syncSheets(env), syncPedidos(env)]);
+        return json({ ok: true, mensaje: 'Sync completado' });
+      }
+      if (path === '/sync-debug'   && method === 'POST')  {
+        const { isSuperadmin } = await getAuth(request, env);
+        if (!isSuperadmin) return err('No autorizado', 403);
+        return await syncSheetsDebug(env);
+      }
 
       // ── Backup / Restaurar ────────────────────────────────────────────────
       if (path === '/backup/inventario'    && method === 'GET')  return await backupInventario(request, env);
@@ -647,6 +656,9 @@ export default {
     } else {
       ctx.waitUntil(alertasDiarias(env));
     }
+    // Resync completo en cada cron — resiliencia ante fallos transitorios de Google API
+    ctx.waitUntil(syncSheets(env));
+    ctx.waitUntil(syncPedidos(env));
   },
 };
 
@@ -1000,7 +1012,7 @@ async function crearBobina(request, env, ctx) {
   }
 }
 
-async function editarBobina(codigo, request, env) {
+async function editarBobina(codigo, request, env, ctx) {
   const { obraId, isSuperadmin } = await getAuth(request, env);
   const bobina = await env.DB.prepare('SELECT * FROM bobinas WHERE codigo = ?').bind(codigo).first();
   if (!bobina) return err(`Bobina ${codigo} no encontrada`, 404);
@@ -1019,6 +1031,7 @@ async function editarBobina(codigo, request, env) {
     'UPDATE bobinas SET proveedor = ?, tipo_cable = ?, notas = ?, estado = ?, obra_id = ?, num_albaran = ?, departamento = ? WHERE codigo = ?'
   ).bind(proveedor, tipo_cable, notas, estado, obra_id, num_albaran || null, departamento, codigo).run();
 
+  ctx?.waitUntil(syncSheets(env, 'Elec-Bobinas'));
   return json({ ok: true, mensaje: `Bobina ${codigo} actualizada` });
 }
 
@@ -1150,7 +1163,7 @@ async function crearPemp(request, env, ctx) {
   }
 }
 
-async function editarPemp(matricula, request, env) {
+async function editarPemp(matricula, request, env, ctx) {
   const { obraId, isSuperadmin } = await getAuth(request, env);
   const pemp = await env.DB.prepare('SELECT * FROM pemp WHERE matricula = ?').bind(matricula).first();
   if (!pemp) return err(`PEMP ${matricula} no encontrada`, 404);
@@ -1182,6 +1195,7 @@ async function editarPemp(matricula, request, env) {
   await env.DB.prepare(`UPDATE pemp SET ${sets.join(', ')} WHERE matricula = ?`).bind(...vals).run();
   if (notifAveria)   await sendTelegram(env, `🔴 <b>PEMP AVERIADA</b>\n🔖 ${matricula}\n🏗 Obra: ${pemp.obra_id || '—'}`);
   if (notifReparado) await sendTelegram(env, `🟢 <b>PEMP Reparada</b>\n🔖 ${matricula}`);
+  ctx?.waitUntil(syncSheets(env, tabForDept('pemp', body.departamento || pemp.departamento)));
   return json({ ok: true, mensaje: `PEMP ${matricula} actualizada` });
 }
 
@@ -1310,7 +1324,7 @@ async function crearCarretilla(request, env, ctx) {
   }
 }
 
-async function editarCarretilla(matricula, request, env) {
+async function editarCarretilla(matricula, request, env, ctx) {
   const { obraId, isSuperadmin } = await getAuth(request, env);
   const carretilla = await env.DB.prepare('SELECT * FROM carretillas WHERE matricula = ?').bind(matricula).first();
   if (!carretilla) return err(`Carretilla ${matricula} no encontrada`, 404);
@@ -1341,6 +1355,7 @@ async function editarCarretilla(matricula, request, env) {
   await env.DB.prepare(`UPDATE carretillas SET ${sets.join(', ')} WHERE matricula = ?`).bind(...vals).run();
   if (notifAveria)   await sendTelegram(env, `🔴 <b>Carretilla AVERIADA</b>\n🔖 ${matricula}`);
   if (notifReparado) await sendTelegram(env, `🟢 <b>Carretilla Reparada</b>\n🔖 ${matricula}`);
+  ctx?.waitUntil(syncSheets(env, tabForDept('carretilla', body.departamento || carretilla.departamento)));
   return json({ ok: true, mensaje: `Carretilla ${matricula} actualizada` });
 }
 
@@ -2022,7 +2037,7 @@ async function getPedidos(request, env) {
   return json(results);
 }
 
-async function crearPedido(request, env) {
+async function crearPedido(request, env, ctx) {
   const { empresa_id, departamento } = await getAuth(request, env);
   if (!empresa_id) return err('No autorizado', 403);
   // Todos los roles (incluido operario) pueden crear pedidos
@@ -2033,12 +2048,12 @@ async function crearPedido(request, env) {
   const r = await env.DB.prepare(
     'INSERT INTO pedidos (empresa_id, obra_id, departamento, referencia, descripcion, cantidad, unidad, proveedor, solicitado_por, notas) VALUES (?,?,?,?,?,?,?,?,?,?)'
   ).bind(empresa_id, obra_id||null, dept, referencia||null, descripcion.trim(), cantidad||1, unidad||'ud', proveedor||null, solicitado_por||null, notas||null).run();
-  syncPedidos(env, tabForDept('pedido', dept));
+  ctx?.waitUntil(syncPedidos(env, tabForDept('pedido', dept)));
   await sendTelegram(env, `📦 <b>Nuevo pedido</b> [${dept}]\n👤 ${solicitado_por||'—'}\n📝 ${descripcion.trim().slice(0,200)}`);
   return json({ ok: true, id: r.meta.last_row_id });
 }
 
-async function actualizarPedido(id, request, env) {
+async function actualizarPedido(id, request, env, ctx) {
   const { empresa_id, isSuperadmin, isEmpresaAdmin, isEncargado } = await getAuth(request, env);
   if (!empresa_id) return err('No autorizado', 403);
   const body = await request.json().catch(() => ({}));
@@ -2058,24 +2073,30 @@ async function actualizarPedido(id, request, env) {
   if (!campos.length) return err('Sin campos para actualizar');
   vals.push(id);
   await env.DB.prepare(`UPDATE pedidos SET ${campos.join(', ')} WHERE id = ? AND empresa_id = ${empresa_id}`).bind(...vals).run();
+  let pedidoDept = null;
   if (body.estado !== undefined) {
     const pedido = await env.DB.prepare('SELECT descripcion, departamento FROM pedidos WHERE id = ?').bind(id).first();
+    pedidoDept = pedido?.departamento;
     const iconos = { solicitado: '📤', recibido: '✅', cancelado: '❌', pendiente: '⏳' };
     await sendTelegram(env,
       `${iconos[body.estado]||'📦'} <b>Pedido ${body.estado}</b> [${pedido?.departamento||'—'}]\n📝 ${(pedido?.descripcion||'').slice(0,200)}`
     );
   }
-  syncPedidos(env);
+  if (!pedidoDept) {
+    const p = await env.DB.prepare('SELECT departamento FROM pedidos WHERE id = ?').bind(id).first();
+    pedidoDept = p?.departamento;
+  }
+  ctx?.waitUntil(syncPedidos(env, tabForDept('pedido', pedidoDept)));
   return json({ ok: true });
 }
 
-async function eliminarPedido(id, request, env) {
+async function eliminarPedido(id, request, env, ctx) {
   const { empresa_id, isSuperadmin, isEmpresaAdmin, isEncargado } = await getAuth(request, env);
   if (!empresa_id) return err('No autorizado', 403);
   if (!isSuperadmin && !isEmpresaAdmin && !isEncargado) return err('Sin permiso', 403);
   const pedido = await env.DB.prepare('SELECT departamento FROM pedidos WHERE id = ? AND empresa_id = ?').bind(id, empresa_id).first();
   await env.DB.prepare('DELETE FROM pedidos WHERE id = ? AND empresa_id = ?').bind(id, empresa_id).run();
-  syncPedidos(env, tabForDept('pedido', pedido?.departamento));
+  ctx?.waitUntil(syncPedidos(env, tabForDept('pedido', pedido?.departamento)));
   return json({ ok: true });
 }
 
@@ -3530,8 +3551,8 @@ async function syncSheetsDebug(env) {
     const token = await getGoogleToken(env);
     log.push(`Token: OK (${token.slice(0, 20)}...)`);
 
-    const { results } = await env.DB.prepare('SELECT * FROM bobinas ORDER BY created_at DESC').all();
-    log.push(`Bobinas en DB: ${results.length}`);
+    const { results } = await env.DB.prepare('SELECT * FROM bobinas WHERE empresa_id = ? ORDER BY created_at DESC').bind(1).all();
+    log.push(`Bobinas en DB (empresa 1): ${results.length}`);
 
     const values = [
       ['Código', 'Proveedor', 'Tipo Cable', 'Fecha Entrada', 'Fecha Devolución', 'Estado', 'Notas'],
@@ -3702,7 +3723,7 @@ async function buscarItemSeg(codigo, request, env) {
   return json({ ok: true, data: item, historial: hist.results });
 }
 
-async function crearItemSeg(request, env) {
+async function crearItemSeg(request, env, ctx) {
   const { isSuperadmin, isSeguridad, isAdmin, usuario, empresa_id } = await getAuth(request, env);
   if (!isSuperadmin && !isAdmin && !isSeguridad) return err('No autorizado', 403);
   const body = await request.json().catch(() => ({}));
@@ -3722,7 +3743,7 @@ async function crearItemSeg(request, env) {
     if (fecha_caducidad) {
       await sendTelegram(env, `📦 <b>Nuevo material Seguridad</b>\n🔖 ${cod || tipo_material}  📋 ${tipo_material}\n📅 Caduca: ${fecha_caducidad}\n👤 ${reg}`);
     }
-    syncSheets(env, 'Seg-Inventario'); // fire & forget
+    ctx?.waitUntil(syncSheets(env, 'Seg-Inventario'));
     return json({ ok: true, id, mensaje: `${tipo_material} registrado` }, 201);
   } catch(e) {
     if (e.message?.includes('UNIQUE')) return err(`El código ${cod} ya está registrado`, 409);
@@ -3730,7 +3751,7 @@ async function crearItemSeg(request, env) {
   }
 }
 
-async function moverItemSeg(id, request, env) {
+async function moverItemSeg(id, request, env, ctx) {
   const { isSuperadmin, isSeguridad, isAdmin, usuario } = await getAuth(request, env);
   if (!isSuperadmin && !isAdmin && !isSeguridad) return err('No autorizado', 403);
   const item = await env.DB.prepare('SELECT * FROM inventario_seg WHERE id = ?').bind(id).first();
@@ -3750,6 +3771,7 @@ async function moverItemSeg(id, request, env) {
     if (campos.length) {
       vals.push(id);
       await env.DB.prepare(`UPDATE inventario_seg SET ${campos.join(', ')} WHERE id = ?`).bind(...vals).run();
+      ctx?.waitUntil(syncSheets(env, 'Seg-Inventario'));
     }
     return json({ ok: true, mensaje: 'Item actualizado' });
   }
@@ -3771,7 +3793,7 @@ async function moverItemSeg(id, request, env) {
     if (item.modo === 'cantidad' && item.stock_minimo > 0 && nuevaCantidad !== null && nuevaCantidad < item.stock_minimo) {
       await sendTelegram(env, `⚠️ <b>Stock mínimo alcanzado — Seguridad</b>\n📦 ${item.nombre || item.tipo_material}\n📉 Disponible: <b>${nuevaCantidad}</b> (mínimo: ${item.stock_minimo})\n👤 ${usuario || '—'}`);
     }
-    syncSheets(env, 'Seg-Inventario');
+    ctx?.waitUntil(syncSheets(env, 'Seg-Inventario'));
     return json({ ok: true, mensaje: 'Salida registrada' });
   }
 
@@ -3783,7 +3805,7 @@ async function moverItemSeg(id, request, env) {
       await env.DB.prepare('UPDATE inventario_seg SET cantidad_disponible = ?, estado = ?, destino_actual = NULL WHERE id = ?').bind(nueva, 'disponible', id).run();
     }
     await env.DB.prepare('INSERT INTO movimientos_seg (item_id, accion, cantidad, usuario, notas, fecha) VALUES (?, ?, ?, ?, ?, ?)').bind(id, 'devolucion', cantidad, usuario || '', notas || '', fecha).run();
-    syncSheets(env, 'Seg-Inventario');
+    ctx?.waitUntil(syncSheets(env, 'Seg-Inventario'));
     return json({ ok: true, mensaje: 'Devolución registrada' });
   }
 
@@ -3791,19 +3813,19 @@ async function moverItemSeg(id, request, env) {
     await env.DB.prepare('UPDATE inventario_seg SET estado = ? WHERE id = ?').bind('baja', id).run();
     await env.DB.prepare('INSERT INTO movimientos_seg (item_id, accion, cantidad, usuario, notas, fecha) VALUES (?, ?, ?, ?, ?, ?)').bind(id, 'baja', cantidad, usuario || '', notas || '', fecha).run();
     await sendTelegram(env, `🗑️ <b>Material Seguridad — Baja</b>\n🔖 ${item.codigo || item.nombre}  📋 ${item.tipo_material}\n👤 ${usuario || '—'}`);
-    syncSheets(env, 'Seg-Inventario');
+    ctx?.waitUntil(syncSheets(env, 'Seg-Inventario'));
     return json({ ok: true, mensaje: 'Dado de baja' });
   }
 
   return err('Acción no reconocida', 400);
 }
 
-async function eliminarItemSeg(id, request, env) {
+async function eliminarItemSeg(id, request, env, ctx) {
   const { isSuperadmin } = await getAuth(request, env);
   if (!isSuperadmin) return err('Solo el superadmin puede eliminar', 403);
   await env.DB.prepare('DELETE FROM inventario_seg WHERE id = ?').bind(id).run();
   await env.DB.prepare('DELETE FROM movimientos_seg WHERE item_id = ?').bind(id).run();
-  syncSheets(env, 'Seg-Inventario');
+  ctx?.waitUntil(syncSheets(env, 'Seg-Inventario'));
   return json({ ok: true, mensaje: 'Eliminado' });
 }
 

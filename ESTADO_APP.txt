@@ -149,6 +149,37 @@ PASO 4 — VERIFICAR WORKER (solo si se va a tocar worker.js)
   HISTORIAL DE VERSIONES — RECIENTES
 ================================================================================
 
+v5.29  |  03/05/2026  [SOLO NUEVA APP]
+  - REVISIÓN GOOGLE SHEETS — auditoría completa y arreglos
+    · BUG: editarBobina/editarPemp/editarCarretilla NO sincronizaban Sheets tras UPDATE → arreglado
+    · BUG: moverItemSeg (acción 'editar') NO sincronizaba Seg-Inventario → arreglado
+    · Todos los syncs fire-and-forget envueltos en ctx.waitUntil() para evitar truncamientos
+    · actualizarPedido ahora sincroniza solo la pestaña del dept afectado (no las 3)
+    · Cron diario (07:00 y 18:00) ahora hace syncSheets+syncPedidos completos (resiliencia)
+    · /sync-sheets y /sync-debug ahora requieren auth (empresa_id / superadmin)
+    · syncSheetsDebug filtra por empresa_id=1 (antes leía toda la tabla bobinas)
+    · Solo cambios en worker.js — frontend intacto, pero versión bumpada igualmente por norma
+  - Worker redesplegado (Version ID: 142345f6-17c6-40df-8dc5-3a7f8454d5be)
+  - GitHub actualizado ✅
+
+v5.28  |  03/05/2026  [SOLO NUEVA APP]
+  - NEW-16: Partes de trabajo diarios
+    · D1: tabla partes_trabajo (fecha, cliente, nombre, dirección, obra, descripción, personal, material, firmas)
+    · Worker: GET/POST/GET:id/DELETE /partes-trabajo
+    · Frontend: tarjeta 📋 en home (eléctrico + mecánicas), lista con imprimir/borrar
+    · Formulario: tablas dinámicas personal+material, canvas firma táctil x2
+    · PDF imprimible fiel al parte físico Edison (logo, tablas, firmas, diseño)
+    · Tabla creada directamente en D1 (migración manual aplicada)
+  - Worker redesplegado (Version ID: afdb9cd9-4e36-404f-80b5-218c8379f8df)
+  - GitHub actualizado ✅
+
+v5.27  |  03/05/2026  [SOLO NUEVA APP]
+  - BUG-186: Eliminar obra ya funciona — getObras filtraba sin AND activa=1, obras borradas seguían apareciendo
+  - BUG-185: Descripción departamento Mecánicas → "Climatización, fontanería y mantenimiento"
+  - MEJ-182: Explorador de archivos en Docs reemplazado por bottom-sheet con 3 opciones (Cámara / Galería / Archivo)
+  - Worker redesplegado (Version ID: b63c5fda-3b0e-4754-96d6-6abdf3518bb4)
+  - GitHub actualizado ✅
+
 v5.26  |  03/05/2026  [SOLO NUEVA APP]
   - NEW-23: Dotación EPIs por trabajador
     · D1: tabla epis_asignados
