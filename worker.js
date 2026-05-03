@@ -3232,18 +3232,11 @@ async function syncSheets(env, tabs = null, empresa_id = 1) {
     const tabsAntiguas   = ['Bobinas', 'PEMP', 'Carretillas', '⚡ Bobinas', '⚡ PEMP', '⚡ Carretillas', '🔧 PEMP', '🔧 Carretillas'];
     const tabsToSync     = tabs ? (Array.isArray(tabs) ? tabs : [tabs]) : tabsNecesarias;
 
-    // Metadata: nombres, IDs numéricos y frozenRowCount
-    const metaRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}`, { headers: authH });
+    // Metadata: incluye bandedRanges y conditionalFormats para poder limpiarlos antes de re-aplicar
+    const metaUrl = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}?fields=sheets(properties,bandedRanges,conditionalFormats)`;
+    const metaRes = await fetch(metaUrl, { headers: authH });
     const meta = await metaRes.json();
     let sheetsActuales = meta.sheets || [];
-
-    // Pestañas sin frozenRowCount → nunca tuvieron formato aplicado
-    const tabsNeedFormat = new Set(
-      tabsNecesarias.filter(t => {
-        const s = sheetsActuales.find(sh => sh.properties.title === t);
-        return !s || (s.properties.gridProperties?.frozenRowCount ?? 0) === 0;
-      })
-    );
 
     // Crear pestañas que faltan y borrar las antiguas en un solo batchUpdate
     const addReqs = tabsNecesarias
@@ -3257,12 +3250,12 @@ async function syncSheets(env, tabs = null, empresa_id = 1) {
       await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}:batchUpdate`, {
         method: 'POST', headers: authH, body: JSON.stringify({ requests: [...addReqs, ...delReqs] }),
       }).then(r => r.body?.cancel());
-      const m2 = await (await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}`, { headers: authH })).json();
+      const m2 = await (await fetch(metaUrl, { headers: authH })).json();
       sheetsActuales = m2.sheets || [];
     }
 
-    const numIdMap = {};
-    sheetsActuales.forEach(s => { numIdMap[s.properties.title] = s.properties.sheetId; });
+    const sheetMetaMap = {};
+    sheetsActuales.forEach(s => { sheetMetaMap[s.properties.title] = s; });
 
     const writeTab = async (tab, values) => {
       if (!tabsToSync.includes(tab)) return;
@@ -3275,8 +3268,8 @@ async function syncSheets(env, tabs = null, empresa_id = 1) {
         const errBody = await putRes.text();
         throw new Error(`writeTab(${tab}) HTTP ${putRes.status}: ${errBody.slice(0, 200)}`);
       } else { await putRes.body?.cancel(); }
-      if (numIdMap[tab] !== undefined) {
-        await applyTabFormatting(sheetId, authH, tab, numIdMap[tab], values[0]?.length || 1);
+      if (sheetMetaMap[tab]) {
+        await applyTabFormatting(sheetId, authH, tab, sheetMetaMap[tab], values[0]?.length || 1, values.length);
       }
     };
 
@@ -3374,17 +3367,11 @@ async function syncPedidos(env, tabs = null, empresa_id = 1) {
     const tabsNecesarias = ['Elec-Pedidos', 'Mec-Pedidos', 'Seg-Pedidos'];
     const tabsToSync     = tabs ? (Array.isArray(tabs) ? tabs : [tabs]) : tabsNecesarias;
 
-    // Metadata
-    const metaRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}`, { headers: authH });
+    // Metadata: incluye bandedRanges y conditionalFormats para limpiarlos antes de re-aplicar
+    const metaUrl = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}?fields=sheets(properties,bandedRanges,conditionalFormats)`;
+    const metaRes = await fetch(metaUrl, { headers: authH });
     const meta = await metaRes.json();
     let sheetsActuales = meta.sheets || [];
-
-    const tabsNeedFormat = new Set(
-      tabsNecesarias.filter(t => {
-        const s = sheetsActuales.find(sh => sh.properties.title === t);
-        return !s || (s.properties.gridProperties?.frozenRowCount ?? 0) === 0;
-      })
-    );
 
     // Crear pestañas que faltan
     const addReqs = tabsNecesarias
@@ -3395,12 +3382,12 @@ async function syncPedidos(env, tabs = null, empresa_id = 1) {
       await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}:batchUpdate`, {
         method: 'POST', headers: authH, body: JSON.stringify({ requests: addReqs }),
       }).then(r => r.body?.cancel());
-      const m2 = await (await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}`, { headers: authH })).json();
+      const m2 = await (await fetch(metaUrl, { headers: authH })).json();
       sheetsActuales = m2.sheets || [];
     }
 
-    const numIdMap = {};
-    sheetsActuales.forEach(s => { numIdMap[s.properties.title] = s.properties.sheetId; });
+    const sheetMetaMap = {};
+    sheetsActuales.forEach(s => { sheetMetaMap[s.properties.title] = s; });
 
     const cab = ['Obra', 'Referencia', 'Descripción', 'Cantidad', 'Unidad', 'Proveedor', 'Estado', 'Solicitado por', 'Fecha Solicitud', 'Fecha Recepción', 'Notas'];
     const fmt = p => [p.obra_nombre||'', p.referencia||'', p.descripcion||'', p.cantidad||1, p.unidad||'ud', p.proveedor||'', p.estado||'pendiente', p.solicitado_por||'', p.fecha_solicitud||p.created_at||'', p.fecha_recepcion||'', p.notas||''];
@@ -3414,8 +3401,8 @@ async function syncPedidos(env, tabs = null, empresa_id = 1) {
         { method: 'PUT', headers: authH, body: JSON.stringify({ values }) });
       if (!putRes.ok) throw new Error(`writeTab(${tab}) HTTP ${putRes.status}: ${(await putRes.text()).slice(0, 200)}`);
       else await putRes.body?.cancel();
-      if (numIdMap[tab] !== undefined) {
-        await applyTabFormatting(sheetId, authH, tab, numIdMap[tab], values[0]?.length || 1);
+      if (sheetMetaMap[tab]) {
+        await applyTabFormatting(sheetId, authH, tab, sheetMetaMap[tab], values[0]?.length || 1, values.length);
       }
     };
 
@@ -3450,12 +3437,18 @@ async function syncPedidos(env, tabs = null, empresa_id = 1) {
   }
 }
 
-async function applyTabFormatting(spreadsheetId, authH, tabName, numSheetId, numCols) {
-  const headerBg = tabName.startsWith('Elec')
-    ? { red: 1.0,   green: 0.851, blue: 0.4,   alpha: 1 }   // #FFD966 ámbar
+async function applyTabFormatting(spreadsheetId, authH, tabName, sheetMeta, numCols, numRows) {
+  const numSheetId = sheetMeta.properties.sheetId;
+
+  // Paleta por departamento (header oscuro + banda alterna clara)
+  const palette = tabName.startsWith('Elec')
+    ? { header: { red: 0.71, green: 0.51, blue: 0.04 }, band: { red: 1.0, green: 0.97, blue: 0.86 } }   // dorado
     : tabName.startsWith('Mec')
-    ? { red: 0.624, green: 0.773, blue: 0.910, alpha: 1 }   // #9FC5E8 azul
-    : { red: 0.965, green: 0.698, blue: 0.420, alpha: 1 };  // #F6B26B naranja (Seg)
+    ? { header: { red: 0.20, green: 0.40, blue: 0.62 }, band: { red: 0.91, green: 0.95, blue: 0.99 } }  // azul
+    : { header: { red: 0.78, green: 0.40, blue: 0.10 }, band: { red: 1.0, green: 0.93, blue: 0.86 } };  // naranja (Seg)
+  const headerBg = { ...palette.header, alpha: 1 };
+  const bandFirst = { red: 1, green: 1, blue: 1, alpha: 1 };
+  const bandSecond = { ...palette.band, alpha: 1 };
 
   // Columna "Estado" por pestaña (índice 0-based)
   const estadoColMap = {
@@ -3466,65 +3459,165 @@ async function applyTabFormatting(spreadsheetId, authH, tabName, numSheetId, num
   };
   const estadoCol = estadoColMap[tabName] ?? -1;
 
-  const requests = [
-    // Cabecera: negrita + color de fondo
-    {
+  // Última columna asumida como "Notas" (wrap)
+  const notasCol = numCols - 1;
+
+  const fullRange = { sheetId: numSheetId, startRowIndex: 0, endRowIndex: Math.max(numRows, 1), startColumnIndex: 0, endColumnIndex: numCols };
+  const dataRange = { sheetId: numSheetId, startRowIndex: 1, endRowIndex: Math.max(numRows, 1), startColumnIndex: 0, endColumnIndex: numCols };
+  const headerRange = { sheetId: numSheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: numCols };
+
+  const requests = [];
+
+  // 1. RESET: borrar reglas condicionales y bandings previos para evitar acumulación
+  const condCount = (sheetMeta.conditionalFormats || []).length;
+  for (let i = condCount - 1; i >= 0; i--) {
+    requests.push({ deleteConditionalFormatRule: { sheetId: numSheetId, index: i } });
+  }
+  for (const b of (sheetMeta.bandedRanges || [])) {
+    requests.push({ deleteBanding: { bandedRangeId: b.bandedRangeId } });
+  }
+
+  // 2. Reset de formato en todo el rango usado (limpia formatos previos antes de reaplicar)
+  requests.push({
+    repeatCell: {
+      range: fullRange,
+      cell: { userEnteredFormat: {} },
+      fields: 'userEnteredFormat',
+    },
+  });
+
+  // 3. Header: fondo oscuro, texto blanco, centrado, fila más alta
+  requests.push({
+    repeatCell: {
+      range: headerRange,
+      cell: {
+        userEnteredFormat: {
+          backgroundColor: headerBg,
+          textFormat: { bold: true, fontSize: 11, foregroundColor: { red: 1, green: 1, blue: 1 } },
+          horizontalAlignment: 'CENTER',
+          verticalAlignment: 'MIDDLE',
+          wrapStrategy: 'WRAP',
+          padding: { top: 6, bottom: 6, left: 4, right: 4 },
+        },
+      },
+      fields: 'userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,verticalAlignment,wrapStrategy,padding)',
+    },
+  });
+
+  // 4. Altura de la fila de cabecera
+  requests.push({
+    updateDimensionProperties: {
+      range: { sheetId: numSheetId, dimension: 'ROWS', startIndex: 0, endIndex: 1 },
+      properties: { pixelSize: 36 },
+      fields: 'pixelSize',
+    },
+  });
+
+  // 5. Datos: alineación + tamaño
+  if (numRows > 1) {
+    requests.push({
       repeatCell: {
-        range: { sheetId: numSheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: numCols },
+        range: dataRange,
         cell: {
           userEnteredFormat: {
-            backgroundColor: headerBg,
-            textFormat: { bold: true, fontSize: 10 },
+            textFormat: { fontSize: 10 },
             verticalAlignment: 'MIDDLE',
             wrapStrategy: 'CLIP',
           },
         },
-        fields: 'userEnteredFormat(backgroundColor,textFormat,verticalAlignment,wrapStrategy)',
+        fields: 'userEnteredFormat(textFormat,verticalAlignment,wrapStrategy)',
       },
-    },
-    // Congelar fila de cabecera
-    {
-      updateSheetProperties: {
-        properties: { sheetId: numSheetId, gridProperties: { frozenRowCount: 1 } },
-        fields: 'gridProperties.frozenRowCount',
-      },
-    },
-    // Auto-ajustar anchos de columna
-    {
-      autoResizeDimensions: {
-        dimensions: { sheetId: numSheetId, dimension: 'COLUMNS', startIndex: 0, endIndex: numCols },
-      },
-    },
-  ];
+    });
 
-  // Colores condicionales para columna Estado
-  if (estadoCol >= 0) {
-    const estadoRange = {
-      sheetId: numSheetId, startRowIndex: 1,
-      startColumnIndex: estadoCol, endColumnIndex: estadoCol + 1,
-    };
+    // 6. Wrap solo en la columna Notas (última)
+    requests.push({
+      repeatCell: {
+        range: { sheetId: numSheetId, startRowIndex: 1, endRowIndex: numRows, startColumnIndex: notasCol, endColumnIndex: notasCol + 1 },
+        cell: { userEnteredFormat: { wrapStrategy: 'WRAP' } },
+        fields: 'userEnteredFormat.wrapStrategy',
+      },
+    });
+  }
+
+  // 7. Bordes finos en todo el rango
+  if (numRows > 0) {
+    const thin = { style: 'SOLID', colorStyle: { rgbColor: { red: 0.85, green: 0.85, blue: 0.85 } } };
+    requests.push({
+      updateBorders: {
+        range: fullRange,
+        top: thin, bottom: thin, left: thin, right: thin,
+        innerHorizontal: thin, innerVertical: thin,
+      },
+    });
+  }
+
+  // 8. Banding zebra (solo si hay datos)
+  if (numRows > 1) {
+    requests.push({
+      addBanding: {
+        bandedRange: {
+          range: dataRange,
+          rowProperties: {
+            firstBandColorStyle:  { rgbColor: bandFirst },
+            secondBandColorStyle: { rgbColor: bandSecond },
+          },
+        },
+      },
+    });
+  }
+
+  // 9. Filtro automático en la cabecera (setBasicFilter reemplaza el existente)
+  if (numRows > 1) {
+    requests.push({ setBasicFilter: { filter: { range: fullRange } } });
+  }
+
+  // 10. Congelar fila de cabecera
+  requests.push({
+    updateSheetProperties: {
+      properties: { sheetId: numSheetId, gridProperties: { frozenRowCount: 1 } },
+      fields: 'gridProperties.frozenRowCount',
+    },
+  });
+
+  // 11. Auto-ajustar anchos de columna
+  requests.push({
+    autoResizeDimensions: {
+      dimensions: { sheetId: numSheetId, dimension: 'COLUMNS', startIndex: 0, endIndex: numCols },
+    },
+  });
+
+  // 12. Limitar ancho máximo de la columna Notas (evita columnas gigantes)
+  requests.push({
+    updateDimensionProperties: {
+      range: { sheetId: numSheetId, dimension: 'COLUMNS', startIndex: notasCol, endIndex: notasCol + 1 },
+      properties: { pixelSize: 280 },
+      fields: 'pixelSize',
+    },
+  });
+
+  // 13. Colores condicionales: pintar TODA la fila según el valor de la columna Estado
+  if (estadoCol >= 0 && numRows > 1) {
+    const colLetter = String.fromCharCode(65 + estadoCol); // A=0, B=1...
     const reglas = [
-      { valor: 'activa',         bg: { red: 0.714, green: 0.843, blue: 0.659, alpha: 1 } },  // verde
-      { valor: 'disponible',     bg: { red: 0.714, green: 0.843, blue: 0.659, alpha: 1 } },  // verde
-      { valor: 'recibido',       bg: { red: 0.714, green: 0.843, blue: 0.659, alpha: 1 } },  // verde
-      { valor: 'Averiada',       bg: { red: 0.918, green: 0.600, blue: 0.600, alpha: 1 } },  // rojo
-      { valor: 'averiado',       bg: { red: 0.918, green: 0.600, blue: 0.600, alpha: 1 } },  // rojo
-      { valor: 'devuelta',       bg: { red: 0.839, green: 0.839, blue: 0.839, alpha: 1 } },  // gris
-      { valor: 'cancelado',      bg: { red: 0.839, green: 0.839, blue: 0.839, alpha: 1 } },  // gris
-      { valor: 'baja',           bg: { red: 0.839, green: 0.839, blue: 0.839, alpha: 1 } },  // gris
-      { valor: 'perdido',        bg: { red: 0.800, green: 0.651, blue: 0.851, alpha: 1 } },  // morado
-      { valor: 'pendiente',      bg: { red: 1.0,   green: 0.949, blue: 0.800, alpha: 1 } },  // amarillo
-      { valor: 'solicitado',     bg: { red: 0.675, green: 0.843, blue: 0.902, alpha: 1 } },  // azul
-      { valor: 'en_uso',         bg: { red: 0.675, green: 0.843, blue: 0.902, alpha: 1 } },  // azul
-      { valor: 'en_reparacion',  bg: { red: 1.0,   green: 0.851, blue: 0.4,   alpha: 1 } },  // ámbar
+      { vals: ['activa', 'disponible', 'recibido'],   bg: { red: 0.85, green: 0.94, blue: 0.83 } }, // verde claro
+      { vals: ['Averiada', 'averiado'],               bg: { red: 0.97, green: 0.80, blue: 0.80 } }, // rojo claro
+      { vals: ['en_reparacion'],                       bg: { red: 1.00, green: 0.90, blue: 0.65 } }, // ámbar
+      { vals: ['pendiente'],                           bg: { red: 1.00, green: 0.97, blue: 0.85 } }, // amarillo
+      { vals: ['solicitado', 'en_uso'],                bg: { red: 0.83, green: 0.92, blue: 0.96 } }, // azul claro
+      { vals: ['perdido'],                             bg: { red: 0.90, green: 0.83, blue: 0.93 } }, // morado claro
+      { vals: ['devuelta', 'cancelado', 'baja'],       bg: { red: 0.93, green: 0.93, blue: 0.93 } }, // gris claro
     ];
+    const rangeFila = { sheetId: numSheetId, startRowIndex: 1, endRowIndex: numRows, startColumnIndex: 0, endColumnIndex: numCols };
     for (const r of reglas) {
+      const condicion = r.vals.length === 1
+        ? `=$${colLetter}2="${r.vals[0]}"`
+        : '=OR(' + r.vals.map(v => `$${colLetter}2="${v}"`).join(',') + ')';
       requests.push({
         addConditionalFormatRule: {
           rule: {
-            ranges: [estadoRange],
+            ranges: [rangeFila],
             booleanRule: {
-              condition: { type: 'TEXT_EQ', values: [{ userEnteredValue: r.valor }] },
+              condition: { type: 'CUSTOM_FORMULA', values: [{ userEnteredValue: condicion }] },
               format: { backgroundColor: r.bg },
             },
           },
@@ -3534,9 +3627,15 @@ async function applyTabFormatting(spreadsheetId, authH, tabName, numSheetId, num
     }
   }
 
-  await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`, {
+  const res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`, {
     method: 'POST', headers: authH, body: JSON.stringify({ requests }),
-  }).then(r => r.body?.cancel());
+  });
+  if (!res.ok) {
+    const errBody = await res.text();
+    console.error(`applyTabFormatting(${tabName}) HTTP ${res.status}: ${errBody.slice(0, 300)}`);
+  } else {
+    await res.body?.cancel();
+  }
 }
 
 async function syncSheetsDebug(env) {
