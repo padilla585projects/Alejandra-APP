@@ -908,7 +908,7 @@ async function updateMiEmpresa(request, env) {
 async function getObras(request, env) {
   const { isSuperadmin, isAdmin, isEmpresaAdmin, empresa_id } = await getAuth(request, env);
   if (!isSuperadmin && !isAdmin && !isEmpresaAdmin) return err('No autorizado', 403);
-  const { results } = await env.DB.prepare('SELECT * FROM obras WHERE empresa_id = ? ORDER BY nombre').bind(empresa_id).all();
+  const { results } = await env.DB.prepare('SELECT * FROM obras WHERE empresa_id = ? AND activa = 1 ORDER BY nombre').bind(empresa_id).all();
   return json(results);
 }
 
