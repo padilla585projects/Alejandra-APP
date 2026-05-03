@@ -1,5 +1,5 @@
 // Cambia este número cada vez que actualices la app
-const CACHE = 'alejandra-v5.31';
+const CACHE = 'alejandra-v5.32';
 
 self.addEventListener('install', e => {
   self.skipWaiting();
@@ -12,10 +12,16 @@ self.addEventListener('message', e => {
 
 self.addEventListener('notificationclick', e => {
   e.notification.close();
+  const navTo = e.notification.data?.navTo || null;
   e.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clients => {
-      if (clients.length) return clients[0].focus();
-      return self.clients.openWindow('/');
+      if (clients.length) {
+        const client = clients[0];
+        client.focus();
+        if (navTo) client.postMessage({ tipo: 'NOTIF_NAV', navTo });
+        return;
+      }
+      return self.clients.openWindow(navTo ? `/?nav=${navTo}` : '/');
     })
   );
 });

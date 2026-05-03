@@ -3509,8 +3509,13 @@ function renderHeader() {
       document.getElementById('headerObraSelect').style.display = 'none';
     }
   } else {
-    document.getElementById('headerObraLabel').textContent = '🏗 ' + (s.obra_nombre || '—');
-    document.getElementById('headerObraLabel').style.display = 'block';
+    const obraLabel = document.getElementById('headerObraLabel');
+    if (s.obra_nombre) {
+      obraLabel.textContent = '🏗 ' + s.obra_nombre;
+      obraLabel.style.display = 'block';
+    } else {
+      obraLabel.style.display = 'none';
+    }
     document.getElementById('headerObraSelect').style.display = 'none';
   }
 }
@@ -8362,7 +8367,8 @@ async function checkChatBadge() {
       new Notification('💬 ' + (msg.usuario_nombre || 'Mensaje nuevo'), {
         body: (msg.mensaje || '').substring(0, 100),
         icon: '/favicon.ico',
-        tag: 'alejandra-chat'
+        tag: 'alejandra-chat',
+        data: { navTo: 'chat' }
       });
     }
   } catch {}
@@ -8616,6 +8622,7 @@ async function exportarExcelCompleto() {
       const sugs = await apiCall('/sugerencias').then(r => r.json()).catch(() => []);
       if (sugs.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(sugs), 'Sugerencias');
     }
+    if (!wb.SheetNames.length) { toast('⚠️ Sin datos para exportar', 'err'); return; }
     XLSX.writeFile(wb, `alejandra-completo-${new Date().toISOString().slice(0,10)}.xlsx`);
     toast('✅ Excel generado', 'ok');
   } catch { toast('❌ Error al exportar', 'err'); }
@@ -8783,7 +8790,7 @@ async function cargarObrasSelectUsuario() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '5.31';
+const APP_VERSION = '5.32';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -11508,6 +11515,16 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
         mostrarBannerActualizacion(newV);
         setTimeout(forzarActualizacion, 4000);
       }
+    }
+    // Navegar a sección al pulsar notificación del sistema (Bug #107)
+    if (e.data?.tipo === 'NOTIF_NAV' && e.data.navTo) {
+      const dest = e.data.navTo;
+      if (dest === 'chat')        chatAbrir();
+      else if (dest === 'pedidos') navTo('pedidos');
+      else if (dest === 'pemp')    { currentModule = 'pemp'; navTo('stock'); }
+      else if (dest === 'carretillas') { currentModule = 'carretillas'; navTo('stock'); }
+      else if (dest === 'seg')    showScreen('seguridad');
+      else if (dest === 'herramientas') navTo('herramientas');
     }
   });
 
