@@ -5,7 +5,7 @@
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 04/05/2026
-VERSIÓN ACTUAL APP NUEVA: v5.38
+VERSIÓN ACTUAL APP NUEVA: v5.39
 VERSIÓN ACTUAL APP VIEJA: v4.19 (⛔ CONGELADA DEFINITIVAMENTE — no recibe más cambios)
 
 ================================================================================
@@ -148,6 +148,16 @@ PASO 4 — VERIFICAR WORKER (solo si se va a tocar worker.js)
 ================================================================================
   HISTORIAL DE VERSIONES — RECIENTES
 ================================================================================
+
+v5.39  |  04/05/2026  [SOLO NUEVA APP]
+  - Auditoría completa de roles y permisos — corregidos 6 gaps
+  - deleteCatalogo: operario no puede borrar (check de rol añadido al backend)
+    · También corregido alias `delCatalogo` que no existía → unificado
+  - Inventario seguridad: empresa_admin puede ver/crear/mover/eliminar ítems y tipos
+  - eliminarIncidencia: encargado puede borrar (antes solo SA/EA)
+  - puedeEliminar incidencias (frontend): encargado incluido
+  - Worker ID: 675197cf-d191-49ac-bede-646ac1361271
+  - GitHub actualizado ✅
 
 v5.38  |  04/05/2026  [SOLO NUEVA APP]
   - NEW-30: PDF de incidencias — exportar lista filtrada a ventana de impresión
