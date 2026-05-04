@@ -7,8 +7,8 @@
 
 **Sesión:** LIBRE
 **Última sesión:** 04/05/2026
-**Versión tras última sesión:** v5.37
-**Worker desplegado:** v5.37 (ID: dc088426-58bb-46d9-bdda-663d2770630c)
+**Versión tras última sesión:** v5.38
+**Worker desplegado:** v5.38 (ID: 1c4bef27-e8b7-441a-a4ce-e86675a17318)
 **GitHub:** en sync ✅
 
 ---
@@ -44,6 +44,27 @@ Y antes de cerrar, obligatorio:
   2. Actualizar ESTADO_APP.txt (versión, fecha, changelog)
   3. Actualizar IDEAS_PENDIENTES.txt (marcar resueltos)
   4. Volver a poner este archivo en estado LIBRE con el resumen
+
+---
+
+## RESUMEN SESIÓN 04/05/2026 (v5.38 — NEW-30/31/32/33: PDF, búsqueda global, Telegram personal, fotos perfil)
+
+- NEW-30: PDF incidencias — botón "📄 PDF" en header del módulo, genera tabla con filtros activos
+- NEW-31: Búsqueda global — botón 🔍 en header (visible tras login), modal con debounce 350ms
+  · Worker: /buscar?q= consulta paralela sobre incidencias/equipos/herramientas/usuarios/pedidos
+  · Click en resultado navega directamente a la sección correcta
+- NEW-32: Telegram personal via deep link — sin que el usuario sepa su chat_id
+  · tabla vincular_tokens (token 8 chars, expira 15 min)
+  · Ajustes→Sesión: sección "📱 Notificaciones personales" con estado vinculado/no-vinculado
+  · Bot @AlejandraAPP_bot registrado como webhook en /telegram/webhook
+  · Carnets y planificador de turnos envían Telegram personal si el usuario está vinculado
+- NEW-33: Foto de perfil trabajadores externos — avatar circular en plantilla, admins pueden cambiar
+  · R2 key: e{empresa_id}/perfiles/externo/{id}_{ts}.jpg; inicial como fallback
+- Bug fix: deploy siempre via `npx wrangler deploy` (wrangler.toml) — se estaba deployando a
+  `alejandra-worker` (incorrecto) en vez de `alejandra-app-api` (el que usa el frontend)
+- D1 migraciones aplicadas directamente: telegram_id, foto_r2_key en usuarios; foto_r2_key en
+  personal_externo; tabla vincular_tokens
+- Webhook Telegram registrado: ✅ "Webhook was set"
 
 ---
 

@@ -5,7 +5,7 @@
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 04/05/2026
-VERSIÓN ACTUAL APP NUEVA: v5.37
+VERSIÓN ACTUAL APP NUEVA: v5.38
 VERSIÓN ACTUAL APP VIEJA: v4.19 (⛔ CONGELADA DEFINITIVAMENTE — no recibe más cambios)
 
 ================================================================================
@@ -84,7 +84,7 @@ PASO 4 — VERIFICAR WORKER (solo si se va a tocar worker.js)
   REGLA DE DEPLOY:
     - TODO va a Alejandra APP únicamente
     - App vieja congelada: NO recibe ningún cambio
-    - Worker: npx wrangler deploy worker.js --name alejandra-app-api
+    - Worker: npx wrangler deploy  (usa wrangler.toml → alejandra-app-api automáticamente)
     - Siempre verificar que el deploy incluye bindings DB y FILES
 
 ================================================================================
@@ -148,6 +148,27 @@ PASO 4 — VERIFICAR WORKER (solo si se va a tocar worker.js)
 ================================================================================
   HISTORIAL DE VERSIONES — RECIENTES
 ================================================================================
+
+v5.38  |  04/05/2026  [SOLO NUEVA APP]
+  - NEW-30: PDF de incidencias — exportar lista filtrada a ventana de impresión
+  - NEW-31: Búsqueda global — botón 🔍 en header, modal con debounce, endpoint /buscar
+    · Resultados: incidencias, pemp, carretillas, herramientas, usuarios, pedidos
+    · Click en resultado navega directamente al módulo correspondiente
+  - NEW-32: Telegram personal por usuario — vinculación via deep link @AlejandraAPP_bot
+    · El usuario pulsa "Conectar Telegram" en Ajustes→Sesión → abre t.me/AlejandraAPP_bot?start=TOKEN
+    · Bot webhook captura el chat_id y lo guarda en D1 automáticamente
+    · Carnets que caducan: Telegram personal además del canal de empresa
+    · Planificador: botón "📤 Notificar" envía la semana a cada trabajador vinculado
+  - NEW-33: Foto de perfil para trabajadores externos en plantilla
+    · R2 upload, avatar circular con inicial como fallback, admins pueden pulsar para cambiar
+  - Worker: /buscar, /telegram/webhook, /telegram/vincular, /telegram/estado,
+    /telegram/desvincular, /telegram/notificar-turnos, /admin/setup-telegram-webhook,
+    /foto-perfil/{tipo}/{id} (GET/POST/DELETE)
+  - D1: telegram_id + foto_r2_key en usuarios; foto_r2_key en personal_externo; tabla vincular_tokens
+  - Webhook Telegram registrado: "Webhook was set" ✅
+  - Corregido: deploy siempre via npx wrangler deploy (wrangler.toml) NO --name alejandra-worker
+  - Worker ID: 1c4bef27-e8b7-441a-a4ce-e86675a17318
+  - GitHub actualizado ✅
 
 v5.37  |  04/05/2026  [SOLO NUEVA APP]
   - NEW-28: Comparativa entre obras (SA/EA)
