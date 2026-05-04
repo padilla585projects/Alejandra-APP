@@ -6,10 +6,10 @@
 ## ESTADO ACTUAL
 
 **Sesión:** LIBRE
-**Última sesión:** 03/05/2026
-**Versión tras última sesión:** v5.34
-**Worker desplegado:** v5.33 (ID: d224bf85-3013-47b2-be02-04c8c857c877) — sin cambios
-**GitHub:** en sync ✅
+**Última sesión:** 04/05/2026
+**Versión tras última sesión:** v5.35
+**Worker desplegado:** v5.35 (ID: fe8c3fc2-bdab-47ac-bec4-690721b485bc)
+**GitHub:** PENDIENTE DE PUSH ⚠️
 
 ---
 
@@ -44,6 +44,23 @@ Y antes de cerrar, obligatorio:
   2. Actualizar ESTADO_APP.txt (versión, fecha, changelog)
   3. Actualizar IDEAS_PENDIENTES.txt (marcar resueltos)
   4. Volver a poner este archivo en estado LIBRE con el resumen
+
+---
+
+## RESUMEN SESIÓN 04/05/2026 (v5.35 — NEW-18 Informe semanal Telegram)
+
+- Función informeSemanal(empresa_id, empresa_nombre, env):
+  · Calcula rango semana anterior (lunes–domingo)
+  · Datos: fichajes (total + horas + retraso), equipos averiados/mant,
+    herramientas fuera, pedidos pendientes, incidencias abiertas, stock bajo
+  · Envía resumen formateado por Telegram con <b>bold</b> y <i>italic</i>
+- alertasDiarias: punto 0 nuevo — cada mañana verifica empresas con informe activo
+  si hoy es su día configurado → llama a informeSemanal
+- GET/PUT /mi-empresa: añadidos campos informe_semanal + informe_dia
+- Migración D1 ejecutada: empresas.informe_semanal + empresas.informe_dia
+- Frontend Ajustes → Empresa: nueva sección "📊 Informe semanal"
+  · Toggle activar + selector día + botón guardar con protección doble-submit
+- Worker redesplegado (ID: fe8c3fc2-bdab-47ac-bec4-690721b485bc)
 
 ---
 

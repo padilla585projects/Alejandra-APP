@@ -4,8 +4,8 @@
   Ruta local: C:\Users\Adrian\Downloads\Proyecto GestiBobina\Alejandra APP
 ================================================================================
 
-ÚLTIMA ACTUALIZACIÓN: 03/05/2026
-VERSIÓN ACTUAL APP NUEVA: v5.34
+ÚLTIMA ACTUALIZACIÓN: 04/05/2026
+VERSIÓN ACTUAL APP NUEVA: v5.35
 VERSIÓN ACTUAL APP VIEJA: v4.19 (⛔ CONGELADA DEFINITIVAMENTE — no recibe más cambios)
 
 ================================================================================
@@ -148,6 +148,21 @@ PASO 4 — VERIFICAR WORKER (solo si se va a tocar worker.js)
 ================================================================================
   HISTORIAL DE VERSIONES — RECIENTES
 ================================================================================
+
+v5.35  |  04/05/2026  [SOLO NUEVA APP]
+  - NEW-18: Informe semanal automático por Telegram
+    · Worker: informeSemanal() calcula la semana anterior y envía resumen por empresa:
+      fichajes (total + horas), equipos sin servicio, herramientas fuera,
+      pedidos pendientes, incidencias abiertas, alertas de stock bajo
+    · alertasDiarias: cada mañana comprueba qué empresas tienen el informe activo
+      y si hoy es su día configurado → dispara el informe
+    · GET/PUT /mi-empresa incluye informe_semanal (0/1) + informe_dia (texto)
+    · Migración D1: empresas.informe_semanal + empresas.informe_dia ✅ aplicada
+    · Frontend: sección "📊 Informe semanal" en Ajustes → Empresa
+      toggle activar/desactivar + selector de día de envío (lunes a domingo)
+    · IDEAS_PENDIENTES.txt: NEW-18 marcado [✓ HECHO v5.35]
+  - Worker redesplegado (Version ID: fe8c3fc2-bdab-47ac-bec4-690721b485bc)
+  - GitHub actualizado ✅
 
 v5.34  |  03/05/2026  [SOLO NUEVA APP]
   - AUDITORÍA: Robustez de manejo de errores en frontend

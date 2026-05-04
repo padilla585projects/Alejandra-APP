@@ -735,7 +735,7 @@ LEYENDA DE ESTADO:
     · Borrar: encargado/admin. Ver: todos.
     · Añadido: 24/04/2026 — Adrian
 
-[ ] NEW-18 — Informe automático semanal/mensual por Telegram  [PENDIENTE]
+[✓] NEW-18 — Informe automático semanal/mensual por Telegram  [HECHO v5.35]
     · Cada lunes (o el 1 de cada mes) se envía al chat de Telegram un resumen por obra:
       - Fichajes: horas totales trabajadas, retrasos acumulados, horas extra.
       - Inventario: bobinas/PEMPs/carretillas usadas vs. disponibles.
