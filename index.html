@@ -9370,7 +9370,7 @@ async function cargarObrasSelectUsuario() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '5.38';
+const APP_VERSION = '5.39';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -10911,7 +10911,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     }
     const s = getSession();
     const puedeGestionar = s?.rol === 'encargado' || s?.rol === 'empresa_admin' || s?.rol === 'superadmin';
-    const puedeEliminar  = s?.rol === 'empresa_admin' || s?.rol === 'superadmin';
+    const puedeEliminar  = puedeGestionar;
     const gravedadColor  = { baja: '#22c55e', media: '#f59e0b', alta: '#ef4444' };
     const estadoIcon     = { abierta: '🔴', en_progreso: '🟠', resuelta: '✅' };
     const tipoIcon       = { averia: '🔧', accidente: '🤕', seguridad: '🔺', material: '📦', otro: '📋' };

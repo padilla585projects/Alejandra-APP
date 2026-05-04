@@ -371,32 +371,32 @@ export default {
       // ── Catálogos ─────────────────────────────────────────────────────────
       if (path === '/proveedores'  && method === 'GET')   return await getCatalogo('proveedores', env, request);
       if (path === '/proveedores'  && method === 'POST')  return await addCatalogo('proveedores', request, env);
-      if (path.startsWith('/proveedores/') && method === 'DELETE') return await deleteCatalogo('proveedores', path.split('/proveedores/')[1], env);
+      if (path.startsWith('/proveedores/') && method === 'DELETE') return await deleteCatalogo('proveedores', path.split('/proveedores/')[1], request, env);
 
       if (path === '/tipos-cable'  && method === 'GET')   return await getCatalogo('tipos_cable', env, request);
       if (path === '/tipos-cable'  && method === 'POST')  return await addCatalogo('tipos_cable', request, env);
       if (path.startsWith('/tipos-cable/')) {
         const tcId = parseInt(path.split('/tipos-cable/')[1]);
-        if (method === 'DELETE') return await deleteCatalogo('tipos_cable', tcId, env);
+        if (method === 'DELETE') return await deleteCatalogo('tipos_cable', tcId, request, env);
         if (method === 'PUT')    return await actualizarTipoCable(tcId, request, env);
       }
 
       // Legacy aliases for tipos-cable
       if (path === '/tipos'        && method === 'GET')   return await getCatalogo('tipos_cable', env, request);
       if (path === '/tipos'        && method === 'POST')  return await addCatalogo('tipos_cable', request, env);
-      if (path.startsWith('/tipos/') && method === 'DELETE') return await deleteCatalogo('tipos_cable', path.split('/tipos/')[1], env);
+      if (path.startsWith('/tipos/') && method === 'DELETE') return await deleteCatalogo('tipos_cable', path.split('/tipos/')[1], request, env);
 
       if (path === '/tipos-pemp'           && method === 'GET')   return await getCatalogo('tipos_pemp', env, request);
       if (path === '/tipos-pemp'           && method === 'POST')  return await addCatalogo('tipos_pemp', request, env);
-      if (path.startsWith('/tipos-pemp/')  && method === 'DELETE') return await deleteCatalogo('tipos_pemp', path.split('/tipos-pemp/')[1], env);
+      if (path.startsWith('/tipos-pemp/')  && method === 'DELETE') return await deleteCatalogo('tipos_pemp', path.split('/tipos-pemp/')[1], request, env);
 
       if (path === '/tipos-carretilla'          && method === 'GET')   return await getCatalogo('tipos_carretilla', env, request);
       if (path === '/tipos-carretilla'          && method === 'POST')  return await addCatalogo('tipos_carretilla', request, env);
-      if (path.startsWith('/tipos-carretilla/') && method === 'DELETE') return await deleteCatalogo('tipos_carretilla', path.split('/tipos-carretilla/')[1], env);
+      if (path.startsWith('/tipos-carretilla/') && method === 'DELETE') return await deleteCatalogo('tipos_carretilla', path.split('/tipos-carretilla/')[1], request, env);
 
       if (path === '/energias-carretilla'          && method === 'GET')   return await getCatalogo('energias_carretilla', env, request);
       if (path === '/energias-carretilla'          && method === 'POST')  return await addCatalogo('energias_carretilla', request, env);
-      if (path.startsWith('/energias-carretilla/') && method === 'DELETE') return await deleteCatalogo('energias_carretilla', path.split('/energias-carretilla/')[1], env);
+      if (path.startsWith('/energias-carretilla/') && method === 'DELETE') return await deleteCatalogo('energias_carretilla', path.split('/energias-carretilla/')[1], request, env);
 
       // ── Config ────────────────────────────────────────────────────────────
       if (path === '/config'       && method === 'GET')   return await getConfig(request, env);
@@ -441,7 +441,7 @@ export default {
       if (path === '/tipos-material-seg'       && method === 'POST')   return await addTipoMaterialSeg(request, env);
       if (path.startsWith('/tipos-material-seg/') && method === 'DELETE') {
         const tid = parseInt(path.split('/tipos-material-seg/')[1]);
-        return await delCatalogo('tipos_material_seg', tid, env);
+        return await deleteCatalogo('tipos_material_seg', tid, request, env);
       }
 
       // ── Pedidos ──────────────────────────────────────────────────────────────
@@ -1732,7 +1732,9 @@ async function addCatalogo(tabla, request, env) {
   }
 }
 
-async function deleteCatalogo(tabla, id, env) {
+async function deleteCatalogo(tabla, id, request, env) {
+  const { rol } = await getAuth(request, env);
+  if (rol === 'operario') return err('Sin permisos', 403);
   await env.DB.prepare(`DELETE FROM ${tabla} WHERE id = ?`).bind(id).run();
   return json({ ok: true });
 }
@@ -3959,8 +3961,8 @@ Si no puedes leer ningún código, responde: NO_LEIDO`;
 // ════════════════════════════════════════════════════════════════════════════
 
 async function getInventarioSeg(request, env) {
-  const { isSuperadmin, isSeguridad, isAdmin, empresa_id } = await getAuth(request, env);
-  if (!isSuperadmin && !isAdmin && !isSeguridad) return err('No autorizado', 403);
+  const { isSuperadmin, isSeguridad, isAdmin, isEmpresaAdmin, empresa_id } = await getAuth(request, env);
+  if (!isSuperadmin && !isAdmin && !isSeguridad && !isEmpresaAdmin) return err('No autorizado', 403);
   const url = new URL(request.url);
   const q = url.searchParams.get('q');
   let sql = 'SELECT * FROM inventario_seg WHERE empresa_id = ?';
@@ -3980,8 +3982,8 @@ async function buscarItemSeg(codigo, request, env) {
 }
 
 async function crearItemSeg(request, env, ctx) {
-  const { isSuperadmin, isSeguridad, isAdmin, usuario, empresa_id } = await getAuth(request, env);
-  if (!isSuperadmin && !isAdmin && !isSeguridad) return err('No autorizado', 403);
+  const { isSuperadmin, isSeguridad, isAdmin, isEmpresaAdmin, usuario, empresa_id } = await getAuth(request, env);
+  if (!isSuperadmin && !isAdmin && !isSeguridad && !isEmpresaAdmin) return err('No autorizado', 403);
   const body = await request.json().catch(() => ({}));
   const { tipo_material, modo = 'individual', codigo, nombre, cantidad_total = 1, fecha_entrada, fecha_caducidad, notas, stock_minimo = 0 } = body;
   if (!tipo_material) return err('Falta tipo_material');
@@ -4008,8 +4010,8 @@ async function crearItemSeg(request, env, ctx) {
 }
 
 async function moverItemSeg(id, request, env, ctx) {
-  const { isSuperadmin, isSeguridad, isAdmin, usuario } = await getAuth(request, env);
-  if (!isSuperadmin && !isAdmin && !isSeguridad) return err('No autorizado', 403);
+  const { isSuperadmin, isSeguridad, isAdmin, isEmpresaAdmin, usuario } = await getAuth(request, env);
+  if (!isSuperadmin && !isAdmin && !isSeguridad && !isEmpresaAdmin) return err('No autorizado', 403);
   const item = await env.DB.prepare('SELECT * FROM inventario_seg WHERE id = ?').bind(id).first();
   if (!item) return err('Item no encontrado', 404);
   const body = await request.json().catch(() => ({}));
@@ -4077,8 +4079,8 @@ async function moverItemSeg(id, request, env, ctx) {
 }
 
 async function eliminarItemSeg(id, request, env, ctx) {
-  const { isSuperadmin } = await getAuth(request, env);
-  if (!isSuperadmin) return err('Solo el superadmin puede eliminar', 403);
+  const { isSuperadmin, isEmpresaAdmin } = await getAuth(request, env);
+  if (!isSuperadmin && !isEmpresaAdmin) return err('Sin permisos', 403);
   await env.DB.prepare('DELETE FROM inventario_seg WHERE id = ?').bind(id).run();
   await env.DB.prepare('DELETE FROM movimientos_seg WHERE item_id = ?').bind(id).run();
   ctx?.waitUntil(syncSheets(env, 'Seg-Inventario'));
@@ -4086,8 +4088,8 @@ async function eliminarItemSeg(id, request, env, ctx) {
 }
 
 async function addTipoMaterialSeg(request, env) {
-  const { isSuperadmin, isSeguridad, empresa_id } = await getAuth(request, env);
-  if (!isSuperadmin && !isSeguridad) return err('No autorizado', 403);
+  const { isSuperadmin, isSeguridad, isEmpresaAdmin, empresa_id } = await getAuth(request, env);
+  if (!isSuperadmin && !isSeguridad && !isEmpresaAdmin) return err('No autorizado', 403);
   const body = await request.json().catch(() => ({}));
   const { nombre, tipo = 'individual', descripcion } = body;
   if (!nombre) return err('Falta el nombre');
@@ -4812,7 +4814,7 @@ async function actualizarIncidencia(id, request, env) {
 async function eliminarIncidencia(id, request, env) {
   const { empresa_id, rol } = await getAuth(request, env);
   if (!empresa_id) return err('No autorizado', 403);
-  if (rol !== 'superadmin' && rol !== 'empresa_admin') return err('Sin permisos', 403);
+  if (rol !== 'superadmin' && rol !== 'empresa_admin' && rol !== 'encargado') return err('Sin permisos', 403);
   // Borrar fotos de R2 primero
   const { results: fotos } = await env.DB.prepare('SELECT r2_key FROM incidencia_fotos WHERE incidencia_id = ? AND empresa_id = ?').bind(id, empresa_id).all();
   await Promise.all(fotos.map(f => env.FILES.delete(f.r2_key)));
