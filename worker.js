@@ -930,7 +930,7 @@ async function superadminSeleccionarEmpresa(request, env) {
 async function getMiEmpresa(request, env) {
   const auth = await getAuth(request, env);
   if (!auth.empresa_id) return err('Sin empresa asignada', 403);
-  const empresa = await env.DB.prepare('SELECT id, nombre, slug, email, telefono, direccion, cif, plan, activa, created_at, departamentos FROM empresas WHERE id = ?').bind(auth.empresa_id).first();
+  const empresa = await env.DB.prepare('SELECT id, nombre, slug, email, telefono, direccion, cif, plan, activa, created_at, departamentos, informe_semanal, informe_dia FROM empresas WHERE id = ?').bind(auth.empresa_id).first();
   if (!empresa) return err('Empresa no encontrada', 404);
   const obras    = (await env.DB.prepare('SELECT id, nombre, codigo FROM obras WHERE empresa_id = ? AND activa = 1 ORDER BY nombre').bind(auth.empresa_id).all()).results;
   const usuarios = (await env.DB.prepare('SELECT id, nombre, rol, departamento, obra_id FROM usuarios WHERE empresa_id = ? AND activo = 1 ORDER BY nombre').bind(auth.empresa_id).all()).results;
@@ -941,18 +941,20 @@ async function updateMiEmpresa(request, env) {
   const auth = await getAuth(request, env);
   if (!auth.empresa_id || (auth.rol !== 'empresa_admin' && !auth.isSuperadmin)) return err('Sin permisos', 403);
   const body = await request.json().catch(() => ({}));
-  const { nombre, email, telefono, direccion, cif, departamentos } = body;
+  const { nombre, email, telefono, direccion, cif, departamentos, informe_semanal, informe_dia } = body;
   if (!nombre?.trim()) return err('Falta el nombre de la empresa');
   const campos = ['nombre = ?'];
   const vals   = [nombre.trim()];
-  if (email         !== undefined) { campos.push('email = ?');         vals.push(email?.trim()     || null); }
-  if (telefono      !== undefined) { campos.push('telefono = ?');      vals.push(telefono?.trim()  || null); }
-  if (direccion     !== undefined) { campos.push('direccion = ?');     vals.push(direccion?.trim() || null); }
-  if (cif           !== undefined) { campos.push('cif = ?');           vals.push(cif?.trim()       || null); }
-  if (departamentos !== undefined) {
+  if (email             !== undefined) { campos.push('email = ?');             vals.push(email?.trim()       || null); }
+  if (telefono          !== undefined) { campos.push('telefono = ?');          vals.push(telefono?.trim()    || null); }
+  if (direccion         !== undefined) { campos.push('direccion = ?');         vals.push(direccion?.trim()   || null); }
+  if (cif               !== undefined) { campos.push('cif = ?');               vals.push(cif?.trim()         || null); }
+  if (departamentos     !== undefined) {
     const val = departamentos ? JSON.stringify(Array.isArray(departamentos) ? departamentos : departamentos) : null;
     campos.push('departamentos = ?'); vals.push(val);
   }
+  if (informe_semanal   !== undefined) { campos.push('informe_semanal = ?');   vals.push(informe_semanal ? 1 : 0); }
+  if (informe_dia       !== undefined) { campos.push('informe_dia = ?');       vals.push(informe_dia || 'lunes'); }
   vals.push(auth.empresa_id);
   await env.DB.prepare(`UPDATE empresas SET ${campos.join(', ')} WHERE id = ?`).bind(...vals).run();
   return json({ ok: true });
@@ -4073,9 +4075,107 @@ async function cierreAutomaticoJornada(env) {
 // ALERTAS DIARIAS (Cron)
 // ════════════════════════════════════════════════════════════════════════════
 
+async function informeSemanal(empresa_id, empresa_nombre, env) {
+  try {
+    // Rango: semana anterior completa (lunes–domingo)
+    const hoy  = new Date();
+    const dow   = hoy.getDay(); // 0=dom … 6=sáb
+    const diasDesdeL = dow === 0 ? 6 : dow - 1;
+    const lunesEsta  = new Date(hoy); lunesEsta.setDate(hoy.getDate() - diasDesdeL);
+    const lunesAnt   = new Date(lunesEsta); lunesAnt.setDate(lunesEsta.getDate() - 7);
+    const domAnt     = new Date(lunesAnt);  domAnt.setDate(lunesAnt.getDate() + 6);
+    const desde = lunesAnt.toISOString().slice(0,10);
+    const hasta = domAnt.toISOString().slice(0,10);
+
+    // 1. Fichajes semana pasada
+    const { results: fichajes } = await env.DB.prepare(
+      `SELECT COUNT(*) as total,
+              SUM(CASE WHEN hora_entrada IS NOT NULL AND hora_salida IS NOT NULL
+                  THEN ROUND((julianday(fecha||' '||hora_salida) - julianday(fecha||' '||hora_entrada)) * 24, 1)
+                  ELSE 0 END) as horas,
+              SUM(CASE WHEN minutos_retraso > 0 THEN minutos_retraso ELSE 0 END) as min_retraso
+       FROM fichajes WHERE empresa_id = ? AND fecha >= ? AND fecha <= ?`
+    ).bind(empresa_id, desde, hasta).all();
+    const fich = fichajes?.[0] || {};
+    const horasTotStr = fich.horas ? `${fich.horas.toFixed(1)}h` : '0h';
+    const retrasoStr  = fich.min_retraso ? ` (⏱ ${Math.round(fich.min_retraso)} min retraso acum.)` : '';
+
+    // 2. Herramientas fuera (asignadas)
+    const { results: herrFuera } = await env.DB.prepare(
+      `SELECT COUNT(*) as total FROM herramientas WHERE empresa_id = ? AND estado = 'fuera'`
+    ).bind(empresa_id).all();
+    const nHerrFuera = herrFuera?.[0]?.total || 0;
+
+    // 3. Equipos en mantenimiento/averiados
+    const [pempMant, carrMant] = await Promise.all([
+      env.DB.prepare(`SELECT COUNT(*) as total FROM pemp WHERE empresa_id = ? AND estado IN ('Mantenimiento','Averiada')`).bind(empresa_id).all(),
+      env.DB.prepare(`SELECT COUNT(*) as total FROM carretillas WHERE empresa_id = ? AND estado IN ('Mantenimiento','Averiada')`).bind(empresa_id).all(),
+    ]);
+    const nEquiposMant = (pempMant.results?.[0]?.total || 0) + (carrMant.results?.[0]?.total || 0);
+
+    // 4. Incidencias abiertas
+    const { results: incAb } = await env.DB.prepare(
+      `SELECT COUNT(*) as total FROM incidencias WHERE empresa_id = ? AND estado != 'resuelta'`
+    ).bind(empresa_id).all();
+    const nIncAb = incAb?.[0]?.total || 0;
+
+    // 5. Pedidos pendientes
+    const { results: pedPend } = await env.DB.prepare(
+      `SELECT COUNT(*) as total FROM pedidos WHERE empresa_id = ? AND estado = 'pendiente'`
+    ).bind(empresa_id).all();
+    const nPedPend = pedPend?.[0]?.total || 0;
+
+    // 6. Stock bajo (bobinas + tipos_cable + tipos_herramienta + inventario_seg)
+    let stockBajo = 0;
+    try {
+      const [sc, sh, ss] = await Promise.all([
+        env.DB.prepare(`SELECT COUNT(*) as c FROM tipos_cable tc
+          JOIN bobinas b ON b.tipo_cable = tc.nombre AND b.empresa_id = ?
+          WHERE tc.stock_minimo > 0 GROUP BY tc.id HAVING COUNT(b.codigo) < tc.stock_minimo`).bind(empresa_id).all(),
+        env.DB.prepare(`SELECT COUNT(*) as c FROM tipos_herramienta th
+          WHERE th.empresa_id = ? AND th.stock_minimo > 0
+          AND (SELECT COUNT(*) FROM herramientas h WHERE h.tipo_id = th.id AND h.empresa_id = ? AND h.estado = 'disponible') < th.stock_minimo`).bind(empresa_id, empresa_id).all(),
+        env.DB.prepare(`SELECT COUNT(*) as c FROM inventario_seg WHERE empresa_id = ? AND stock_minimo > 0 AND cantidad_disponible < stock_minimo AND estado != 'baja'`).bind(empresa_id).all(),
+      ]);
+      stockBajo = (sc.results?.length || 0) + (sh.results?.length || 0) + (ss.results?.[0]?.c || 0);
+    } catch {}
+
+    // Composición del mensaje
+    const semStr = `${desde} al ${hasta}`;
+    let msg = `📊 <b>Informe semanal — ${empresa_nombre}</b>\n`;
+    msg += `<i>Semana: ${semStr}</i>\n\n`;
+    msg += `👷 <b>Fichajes:</b> ${fich.total || 0} registros · ${horasTotStr}${retrasoStr}\n`;
+    msg += `🔧 <b>Equipos sin servicio:</b> ${nEquiposMant}\n`;
+    msg += `🛠 <b>Herramientas fuera:</b> ${nHerrFuera}\n`;
+    msg += `📦 <b>Pedidos pendientes:</b> ${nPedPend}\n`;
+    msg += `🚨 <b>Incidencias abiertas:</b> ${nIncAb}\n`;
+    if (stockBajo > 0) msg += `⚠️ <b>Alertas de stock bajo:</b> ${stockBajo}\n`;
+    msg += `\n_Generado automáticamente por Alejandra App_`;
+
+    await sendTelegram(env, msg);
+  } catch(e) {
+    console.error('informeSemanal error:', e.message);
+  }
+}
+
 async function alertasDiarias(env) {
   try {
     const hoy = new Date();
+
+    // 0. Informe semanal — para cada empresa que lo tenga activado en el día de hoy
+    const DIAS_ES = { 'lunes':1,'martes':2,'miércoles':3,'miercoles':3,'jueves':4,'viernes':5,'sábado':6,'sabado':6,'domingo':0 };
+    const dowHoy  = hoy.getDay(); // 0=dom … 6=sáb
+    try {
+      const { results: empresasInf } = await env.DB.prepare(
+        `SELECT id, nombre, informe_dia FROM empresas WHERE informe_semanal = 1 AND activa = 1`
+      ).all();
+      for (const emp of (empresasInf || [])) {
+        const diaNum = DIAS_ES[( emp.informe_dia || 'lunes').toLowerCase()] ?? 1;
+        if (diaNum === dowHoy) {
+          await informeSemanal(emp.id, emp.nombre, env);
+        }
+      }
+    } catch(e) { console.error('informeSemanal check error:', e.message); }
 
     // 1. Máquinas averiadas hace más de 3 días sin reparar
     const [avPemp, avCarr] = await Promise.all([
@@ -5165,6 +5265,15 @@ async function runMigrations(request, env) {
     await env.DB.prepare('CREATE INDEX IF NOT EXISTS idx_login_attempts_ip ON login_attempts (ip, created_at)').run();
     results.push('login_attempts: creada');
   } catch(e) { results.push('login_attempts: ' + e.message); }
+  // Informe semanal Telegram (NEW-18)
+  try {
+    await env.DB.prepare('ALTER TABLE empresas ADD COLUMN informe_semanal INTEGER DEFAULT 0').run();
+    results.push('empresas.informe_semanal: añadida');
+  } catch { results.push('empresas.informe_semanal: ya existe'); }
+  try {
+    await env.DB.prepare("ALTER TABLE empresas ADD COLUMN informe_dia TEXT DEFAULT 'lunes'").run();
+    results.push('empresas.informe_dia: añadida');
+  } catch { results.push('empresas.informe_dia: ya existe'); }
   // Carnets y certificaciones (NEW-19)
   try {
     await env.DB.prepare(`CREATE TABLE IF NOT EXISTS carnets (

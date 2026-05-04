@@ -2111,6 +2111,29 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
           <div id="empresaDeptosTogles"></div>
           <button class="btn-primary" style="margin-top:10px;width:100%;font-size:13px" onclick="guardarDeptosEmpresa()">💾 Guardar departamentos</button>
         </div>
+
+        <!-- NEW-18: Informe semanal Telegram -->
+        <div class="settings-section" style="margin-top:16px;display:none" id="empresaInformeSection">
+          <div class="settings-title">📊 Informe semanal por Telegram</div>
+          <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Recibe cada semana un resumen automático con fichajes, equipos, herramientas, pedidos e incidencias.</div>
+          <label style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border);cursor:pointer;margin-bottom:10px">
+            <input type="checkbox" id="informeSemanalActivo" style="width:18px;height:18px;accent-color:var(--accent)">
+            <span style="font-size:14px">Activar informe semanal</span>
+          </label>
+          <div id="informeSemanalOpciones" style="display:none">
+            <label class="form-label" style="margin-bottom:6px">Día de envío</label>
+            <select id="informeSemanalDia" class="form-input" style="margin-bottom:10px">
+              <option value="lunes">Lunes</option>
+              <option value="martes">Martes</option>
+              <option value="miercoles">Miércoles</option>
+              <option value="jueves">Jueves</option>
+              <option value="viernes">Viernes</option>
+              <option value="sabado">Sábado</option>
+              <option value="domingo">Domingo</option>
+            </select>
+          </div>
+          <button id="btnGuardarInforme" class="btn-primary" style="width:100%;font-size:13px" onclick="guardarConfigInforme()">💾 Guardar configuración</button>
+        </div>
       </div>
 
     </div>
@@ -3875,6 +3898,23 @@ async function guardarDeptosEmpresa() {
   } catch { toast('❌ Error de red', 'err'); }
 }
 window.guardarDeptosEmpresa = guardarDeptosEmpresa;
+
+async function guardarConfigInforme() {
+  const btn    = document.getElementById('btnGuardarInforme');
+  const activo = document.getElementById('informeSemanalActivo')?.checked ? 1 : 0;
+  const dia    = document.getElementById('informeSemanalDia')?.value || 'lunes';
+  if (btn) { btn.disabled = true; btn.textContent = 'Guardando…'; }
+  try {
+    const nombre = window._empresaData?.nombre || 'Mi empresa';
+    const res = await apiCall('/mi-empresa', { method: 'PUT', body: JSON.stringify({ nombre, informe_semanal: activo, informe_dia: dia }) });
+    if (!res.ok) { toast('❌ Error al guardar', 'err'); return; }
+    window._empresaData = { ...window._empresaData, informe_semanal: activo, informe_dia: dia };
+    toast(activo ? `✅ Informe semanal activado — envío los ${dia}` : '✅ Informe semanal desactivado');
+  } catch { toast('❌ Error de red', 'err'); }
+  finally { if (btn) { btn.disabled = false; btn.textContent = '💾 Guardar configuración'; } }
+}
+window.guardarConfigInforme = guardarConfigInforme;
+
 window.mostrarWizard       = mostrarWizard;
 window.wizardNext          = wizardNext;
 window.wizardSkip          = wizardSkip;
@@ -7770,6 +7810,22 @@ async function cargarPanelEmpresa() {
           </label>`).join('');
       }
     }
+    // NEW-18: sección informe semanal
+    const infSec = document.getElementById('empresaInformeSection');
+    if (infSec) {
+      infSec.style.display = puedeEditar ? '' : 'none';
+      if (puedeEditar) {
+        const chk = document.getElementById('informeSemanalActivo');
+        const sel = document.getElementById('informeSemanalDia');
+        const opc = document.getElementById('informeSemanalOpciones');
+        if (chk) {
+          chk.checked = !!data.empresa?.informe_semanal;
+          if (opc) opc.style.display = chk.checked ? '' : 'none';
+          chk.onchange = () => { if (opc) opc.style.display = chk.checked ? '' : 'none'; };
+        }
+        if (sel && data.empresa?.informe_dia) sel.value = data.empresa.informe_dia;
+      }
+    }
   } catch(e) {
     document.getElementById('empresaInfo').innerHTML = '<div style="color:var(--red)">Error al cargar</div>';
   }
@@ -8880,7 +8936,7 @@ async function cargarObrasSelectUsuario() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '5.34';
+const APP_VERSION = '5.35';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
