@@ -117,6 +117,19 @@ async function sendTelegram(env, mensaje) {
   } catch (_) {}
 }
 
+// Envía a un chat_id concreto (notificaciones personales)
+async function sendTelegramToChat(env, chatId, mensaje) {
+  try {
+    const token = env.TELEGRAM_BOT_TOKEN;
+    if (!token || !chatId) return;
+    await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: String(chatId), text: mensaje, parse_mode: 'HTML' }),
+    });
+  } catch (_) {}
+}
+
 // Envía una foto (base64 data URI) con caption y botones inline
 async function sendTelegramFotoConBotones(env, caption, base64DataUri, botones) {
   try {
@@ -233,19 +246,6 @@ async function handleTelegramWebhook(request, env) {
   return new Response('OK');
 }
 
-// Registra el webhook de Telegram (llamar una sola vez: GET /setup-telegram-webhook)
-async function setupTelegramWebhook(request, env) {
-  const token  = env.TELEGRAM_BOT_TOKEN;
-  const secret = env.TELEGRAM_WEBHOOK_SECRET;
-  if (!token)  return json({ error: 'TELEGRAM_BOT_TOKEN no configurado' });
-  if (!secret) return json({ error: 'TELEGRAM_WEBHOOK_SECRET no configurado' });
-  const webhookUrl = 'https://alejandra-app-api.alejandra-app.workers.dev/telegram-webhook';
-  const r = await fetch(`https://api.telegram.org/bot${token}/setWebhook`, {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ url: webhookUrl, secret_token: secret, allowed_updates: ['callback_query'] })
-  });
-  return json(await r.json());
-}
 
 function fechaEspana() {
   return new Date().toLocaleString('es-ES', { timeZone: 'Europe/Madrid' });
@@ -291,6 +291,25 @@ export default {
       if (path === '/mi-empresa'         && method === 'GET')  return await getMiEmpresa(request, env);
       if (path === '/mi-empresa'         && method === 'PUT')  return await updateMiEmpresa(request, env);
       if (path === '/comparativa-obras'  && method === 'GET')  return await getComparativaObras(request, env);
+      if (path === '/buscar'             && method === 'GET')  return await buscarGlobal(request, env);
+
+      // ── Telegram personal ────────────────────────────────────────────────────
+      if (path === '/telegram/webhook'   && method === 'POST') return await telegramWebhook(request, env);
+      if (path === '/telegram/vincular'  && method === 'POST') return await telegramVincular(request, env);
+      if (path === '/telegram/estado'    && method === 'GET')  return await telegramEstado(request, env);
+      if (path === '/telegram/desvincular' && method === 'POST') return await telegramDesvincular(request, env);
+      if (path === '/telegram/notificar-turnos' && method === 'POST') return await notificarTurnosSemana(request, env);
+      if (path === '/admin/setup-telegram-webhook' && method === 'POST') return await setupTelegramWebhook(request, env);
+
+      // ── Foto de perfil ───────────────────────────────────────────────────────
+      if (path.startsWith('/foto-perfil/')) {
+        const parts = path.split('/');
+        const tipo  = parts[2]; // 'usuario' | 'externo'
+        const fid   = parseInt(parts[3]);
+        if (method === 'POST') return await subirFotoPerfil(tipo, fid, request, env);
+        if (method === 'GET')  return await getFotoPerfil(tipo, fid, request, env);
+        if (method === 'DELETE') return await borrarFotoPerfil(tipo, fid, request, env);
+      }
 
       // ── Obras ──────────────────────────────────────────────────────────────
       if (path === '/obras'       && method === 'GET')    return await getObras(request, env);
@@ -2841,6 +2860,7 @@ async function getPersonalExterno(request, env) {
   const { results } = await env.DB.prepare(
     'SELECT p.*, o.nombre as obra_nombre FROM personal_externo p LEFT JOIN obras o ON p.obra_id = o.id WHERE p.empresa_id = ? AND p.activo = 1 ORDER BY p.nombre'
   ).bind(empresa_id).all();
+  // foto_r2_key ya viene en SELECT p.* si la columna existe
   return json(results);
 }
 
@@ -2884,12 +2904,12 @@ async function getTrabajadores(request, env) {
   const url = new URL(request.url);
   const obra_id = url.searchParams.get('obra_id') || ((!isSuperadmin && !isEmpresaAdmin && !isAdmin) ? obraAuth : null);
 
-  let sqlU = 'SELECT id, nombre, rol, departamento, obra_id, NULL as dni, "app" as tipo FROM usuarios WHERE empresa_id=? AND activo=1';
+  let sqlU = 'SELECT id, nombre, rol, departamento, obra_id, NULL as dni, "app" as tipo, foto_r2_key, CASE WHEN telegram_id IS NOT NULL THEN 1 ELSE 0 END as tiene_telegram FROM usuarios WHERE empresa_id=? AND activo=1';
   const paramsU = [empresa_id];
   if (obra_id) { sqlU += ' AND obra_id=?'; paramsU.push(parseInt(obra_id)); }
   sqlU += ' ORDER BY nombre';
 
-  let sqlP = 'SELECT id, nombre, NULL as rol, departamento, obra_id, dni, "externo" as tipo FROM personal_externo WHERE empresa_id=? AND activo=1';
+  let sqlP = 'SELECT id, nombre, NULL as rol, departamento, obra_id, dni, "externo" as tipo, foto_r2_key, 0 as tiene_telegram FROM personal_externo WHERE empresa_id=? AND activo=1';
   const paramsP = [empresa_id];
   if (obra_id) { sqlP += ' AND obra_id=?'; paramsP.push(parseInt(obra_id)); }
   sqlP += ' ORDER BY nombre';
@@ -4290,15 +4310,28 @@ async function alertasDiarias(env) {
 
     // 4. Carnets y certificaciones — caducidad próxima o vencida
     const carnetsCad = await env.DB.prepare(
-      `SELECT nombre_trabajador, tipo, fecha_caducidad, dias_aviso FROM carnets
-       WHERE fecha_caducidad IS NOT NULL AND fecha_caducidad != '' AND estado = 'vigente'`
+      `SELECT c.nombre_trabajador, c.tipo, c.fecha_caducidad, c.dias_aviso, c.usuario_id,
+              u.telegram_id
+       FROM carnets c LEFT JOIN usuarios u ON c.usuario_id = u.id
+       WHERE c.fecha_caducidad IS NOT NULL AND c.fecha_caducidad != '' AND c.estado = 'vigente'`
     ).all();
     const carnetAlertas = [];
     for (const c of (carnetsCad.results || [])) {
       const dias = Math.floor((new Date(c.fecha_caducidad) - hoy) / 86400000);
       const aviso = c.dias_aviso || 30;
-      if (dias < 0) carnetAlertas.push(`⛔ ${c.nombre_trabajador} — ${c.tipo} CADUCADO hace ${Math.abs(dias)} días`);
-      else if (dias <= aviso) carnetAlertas.push(`⚠️ ${c.nombre_trabajador} — ${c.tipo} caduca en ${dias} días (${c.fecha_caducidad})`);
+      let linea = null;
+      if (dias < 0) linea = `⛔ ${c.nombre_trabajador} — ${c.tipo} CADUCADO hace ${Math.abs(dias)} días`;
+      else if (dias <= aviso) linea = `⚠️ ${c.nombre_trabajador} — ${c.tipo} caduca en ${dias} días (${c.fecha_caducidad})`;
+      if (linea) {
+        carnetAlertas.push(linea);
+        // Notificación personal al trabajador si tiene Telegram vinculado
+        if (c.telegram_id) {
+          const msg = dias < 0
+            ? `📜 <b>Tu carnet ha caducado</b>\n\nTipo: ${c.tipo}\nCaducó: ${c.fecha_caducidad}\n\n⚠️ Renuévalo lo antes posible.`
+            : `📜 <b>Tu carnet caduca pronto</b>\n\nTipo: ${c.tipo}\nCaduca: ${c.fecha_caducidad} (<b>${dias} días</b>)\n\nRecuerda renovarlo a tiempo.`;
+          await sendTelegramToChat(env, c.telegram_id, msg);
+        }
+      }
     }
     if (carnetAlertas.length) {
       await sendTelegram(env, `📜 <b>Carnets y certificaciones — Caducidad próxima</b>\n\n` + carnetAlertas.join('\n'));
@@ -5219,6 +5252,213 @@ async function eliminarTurno(id, request, env) {
   return json({ ok: true });
 }
 
+// ════════════════════════════════════════════════════════════════════════════
+// BÚSQUEDA GLOBAL
+// ════════════════════════════════════════════════════════════════════════════
+
+async function buscarGlobal(request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth.empresa_id) return err('No autorizado', 403);
+  const q = new URL(request.url).searchParams.get('q')?.trim();
+  if (!q || q.length < 2) return json([]);
+  const like = `%${q}%`;
+  const eid  = auth.empresa_id;
+
+  const [inc, pemp, carr, herr, users, pedidos] = await Promise.all([
+    env.DB.prepare(`SELECT id,'incidencia' as tipo,titulo as nombre,tipo as subtipo,estado FROM incidencias WHERE empresa_id=? AND titulo LIKE ? LIMIT 5`).bind(eid,like).all(),
+    env.DB.prepare(`SELECT id,'pemp' as tipo,matricula as nombre,tipo as subtipo,estado FROM pemp WHERE empresa_id=? AND (matricula LIKE ? OR marca LIKE ?) AND estado!='baja' LIMIT 5`).bind(eid,like,like).all(),
+    env.DB.prepare(`SELECT id,'carretilla' as tipo,matricula as nombre,tipo as subtipo,estado FROM carretillas WHERE empresa_id=? AND (matricula LIKE ? OR marca LIKE ?) AND estado!='baja' LIMIT 5`).bind(eid,like,like).all(),
+    env.DB.prepare(`SELECT h.id,'herramienta' as tipo,COALESCE(t.nombre,h.numero_serie,'—') as nombre,h.estado as subtipo,h.estado FROM herramientas h LEFT JOIN tipos_herramienta t ON h.tipo_id=t.id WHERE h.empresa_id=? AND (h.numero_serie LIKE ? OR t.nombre LIKE ?) LIMIT 5`).bind(eid,like,like).all(),
+    env.DB.prepare(`SELECT id,'usuario' as tipo,nombre,rol as subtipo,NULL as estado FROM usuarios WHERE empresa_id=? AND nombre LIKE ? AND activo=1 LIMIT 5`).bind(eid,like).all(),
+    env.DB.prepare(`SELECT id,'pedido' as tipo,descripcion as nombre,departamento as subtipo,estado FROM pedidos WHERE empresa_id=? AND descripcion LIKE ? LIMIT 5`).bind(eid,like).all(),
+  ]);
+  return json([
+    ...inc.results, ...pemp.results, ...carr.results,
+    ...herr.results, ...users.results, ...pedidos.results,
+  ]);
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// TELEGRAM PERSONAL (vinculación por deep link + webhook)
+// ════════════════════════════════════════════════════════════════════════════
+
+async function telegramVincular(request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth.usuario_id) return err('Solo usuarios de la app pueden vincular Telegram', 403);
+  // Genera token aleatorio 8 chars alfanumérico
+  const bytes = crypto.getRandomValues(new Uint8Array(6));
+  const token = Array.from(bytes).map(b => b.toString(36).padStart(2,'0')).join('').slice(0,8).toUpperCase();
+  await env.DB.prepare(
+    "INSERT OR REPLACE INTO vincular_tokens (token,usuario_id,empresa_id,expires_at) VALUES (?,?,?,datetime('now','+15 minutes'))"
+  ).bind(token, auth.usuario_id, auth.empresa_id).run();
+  return json({ ok: true, token, link: `https://t.me/AlejandraAPP_bot?start=${token}` });
+}
+
+async function telegramEstado(request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth.usuario_id) return json({ vinculado: false });
+  const u = await env.DB.prepare('SELECT telegram_id FROM usuarios WHERE id=?').bind(auth.usuario_id).first();
+  return json({ vinculado: !!u?.telegram_id });
+}
+
+async function telegramDesvincular(request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth.usuario_id) return err('Sin sesión', 403);
+  await env.DB.prepare('UPDATE usuarios SET telegram_id=NULL WHERE id=?').bind(auth.usuario_id).run();
+  return json({ ok: true });
+}
+
+async function telegramWebhook(request, env) {
+  // Verificar que viene de Telegram con el secret derivado del token del bot
+  const secret = request.headers.get('X-Telegram-Bot-Api-Secret-Token');
+  const expectedSecret = env.TELEGRAM_BOT_TOKEN?.split(':')[1]?.slice(0, 32) || '';
+  if (expectedSecret && secret !== expectedSecret) return json({ ok: true }); // silencioso
+  const update = await request.json().catch(() => null);
+  if (!update) return json({ ok: true });
+  const msg    = update.message;
+  if (!msg)    return json({ ok: true });
+  const chatId = msg.chat?.id;
+  const text   = (msg.text || '').trim();
+  if (text.startsWith('/start')) {
+    const token = text.split(' ')[1]?.toUpperCase().trim();
+    if (token) {
+      const record = await env.DB.prepare(
+        "SELECT * FROM vincular_tokens WHERE token=? AND expires_at > datetime('now')"
+      ).bind(token).first();
+      if (record) {
+        await env.DB.prepare('UPDATE usuarios SET telegram_id=? WHERE id=?').bind(String(chatId), record.usuario_id).run();
+        await env.DB.prepare('DELETE FROM vincular_tokens WHERE token=?').bind(token).run();
+        await sendTelegramToChat(env, chatId,
+          '✅ <b>¡Cuenta vinculada!</b>\n\nDesde ahora recibirás notificaciones personales de <b>Alejandra App</b> directamente aquí:\n· Tus turnos de la semana\n· Carnets próximos a caducar\n· Avisos que te afecten directamente.');
+      } else {
+        await sendTelegramToChat(env, chatId,
+          '❌ El código ha caducado o no es válido.\nGenera un nuevo enlace desde la app en <b>Ajustes → Sesión → Conectar Telegram</b>.');
+      }
+    } else {
+      await sendTelegramToChat(env, chatId,
+        '👋 Hola. Soy el bot de <b>Alejandra App</b>.\nPara vincular tu cuenta, pulsa "Conectar Telegram" desde la app y sigue el enlace que aparecerá.');
+    }
+  }
+  return json({ ok: true });
+}
+
+async function setupTelegramWebhook(request, env) {
+  const { isSuperadmin } = await getAuth(request, env);
+  if (!isSuperadmin) return err('No autorizado', 403);
+  const token  = env.TELEGRAM_BOT_TOKEN;
+  if (!token) return err('TELEGRAM_BOT_TOKEN no configurado', 500);
+  const secret = token.split(':')[1]?.slice(0,32) || '';
+  const webhookUrl = `https://alejandra-worker.alejandra-app.workers.dev/telegram/webhook`;
+  const res = await fetch(`https://api.telegram.org/bot${token}/setWebhook`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ url: webhookUrl, secret_token: secret, allowed_updates: ['message'] }),
+  });
+  const data = await res.json();
+  return json({ ok: data.ok, result: data.description || data.result });
+}
+
+// Notificar turnos de una semana a los trabajadores vinculados con Telegram
+async function notificarTurnosSemana(request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth.isAdmin && !auth.isSuperadmin && !auth.isEmpresaAdmin && !auth.isEncargado) return err('Sin permisos', 403);
+  const { desde, hasta } = await request.json().catch(() => ({}));
+  if (!desde || !hasta) return err('Falta desde/hasta', 400);
+  const eid = auth.empresa_id;
+  // Cargar turnos de la semana con datos de usuarios
+  const { results: turnos } = await env.DB.prepare(
+    'SELECT t.*, u.nombre as u_nombre, u.telegram_id FROM turnos t LEFT JOIN usuarios u ON t.usuario_id = u.id WHERE t.empresa_id=? AND t.fecha>=? AND t.fecha<=?'
+  ).bind(eid, desde, hasta).all();
+  // Agrupar por usuario (solo los con telegram_id)
+  const porUsuario = {};
+  for (const t of turnos) {
+    if (!t.telegram_id) continue;
+    if (!porUsuario[t.telegram_id]) porUsuario[t.telegram_id] = { nombre: t.u_nombre, dias: [] };
+    porUsuario[t.telegram_id].dias.push({ fecha: t.fecha, turno: t.turno });
+  }
+  const LABEL = { 'mañana':'🌅 Mañana', tarde:'🌆 Tarde', noche:'🌙 Noche', libre:'💤 Libre' };
+  const DIAS_ES = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+  let notificados = 0;
+  for (const [chatId, data] of Object.entries(porUsuario)) {
+    data.dias.sort((a,b) => a.fecha.localeCompare(b.fecha));
+    const lineas = data.dias.map(d => {
+      const fecha = new Date(d.fecha + 'T00:00:00');
+      const dia   = DIAS_ES[fecha.getDay()];
+      const num   = String(fecha.getDate()).padStart(2,'0') + '/' + String(fecha.getMonth()+1).padStart(2,'0');
+      return `  ${dia} ${num}: ${LABEL[d.turno] || d.turno}`;
+    }).join('\n');
+    await sendTelegramToChat(env, chatId,
+      `📅 <b>Tus turnos</b> (${desde.slice(5).replace('-','/')} – ${hasta.slice(5).replace('-','/')})\n\n${lineas}`);
+    notificados++;
+  }
+  return json({ ok: true, notificados });
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// FOTO DE PERFIL DE TRABAJADORES
+// ════════════════════════════════════════════════════════════════════════════
+
+async function subirFotoPerfil(tipo, id, request, env) {
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const form = await request.formData().catch(() => null);
+  if (!form) return err('Falta formulario', 400);
+  const file = form.get('file');
+  if (!file?.name) return err('Falta archivo', 400);
+  if (file.size > 5242880) return err('Máximo 5 MB', 413);
+  const mime = file.type || 'image/jpeg';
+  if (!['image/jpeg','image/png','image/webp','image/heic','image/heif'].includes(mime)) return err('Solo imágenes', 400);
+  const r2Key = `e${empresa_id}/perfiles/${tipo}/${id}_${Date.now()}.jpg`;
+  await env.FILES.put(r2Key, file.stream(), { httpMetadata: { contentType: mime } });
+  // Borrar foto anterior si existe
+  let oldKey = null;
+  if (tipo === 'usuario') {
+    const u = await env.DB.prepare('SELECT foto_r2_key FROM usuarios WHERE id=? AND empresa_id=?').bind(id, empresa_id).first();
+    oldKey = u?.foto_r2_key;
+    await env.DB.prepare('UPDATE usuarios SET foto_r2_key=? WHERE id=? AND empresa_id=?').bind(r2Key, id, empresa_id).run();
+  } else {
+    const e = await env.DB.prepare('SELECT foto_r2_key FROM personal_externo WHERE id=? AND empresa_id=?').bind(id, empresa_id).first();
+    oldKey = e?.foto_r2_key;
+    await env.DB.prepare('UPDATE personal_externo SET foto_r2_key=? WHERE id=? AND empresa_id=?').bind(r2Key, id, empresa_id).run();
+  }
+  if (oldKey && oldKey !== r2Key) { try { await env.FILES.delete(oldKey); } catch {} }
+  return json({ ok: true, r2Key });
+}
+
+async function getFotoPerfil(tipo, id, request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth.empresa_id) return err('No autorizado', 403);
+  let r2Key = null;
+  if (tipo === 'usuario') {
+    const u = await env.DB.prepare('SELECT foto_r2_key FROM usuarios WHERE id=? AND empresa_id=?').bind(id, auth.empresa_id).first();
+    r2Key = u?.foto_r2_key;
+  } else {
+    const e = await env.DB.prepare('SELECT foto_r2_key FROM personal_externo WHERE id=? AND empresa_id=?').bind(id, auth.empresa_id).first();
+    r2Key = e?.foto_r2_key;
+  }
+  if (!r2Key) return err('Sin foto', 404);
+  const obj = await env.FILES.get(r2Key);
+  if (!obj) return err('Archivo no disponible', 404);
+  return new Response(obj.body, { headers: { 'Content-Type':'image/jpeg','Cache-Control':'private, max-age=86400',...CORS } });
+}
+
+async function borrarFotoPerfil(tipo, id, request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth.isAdmin && !auth.isSuperadmin && !auth.isEmpresaAdmin && !auth.isEncargado) return err('Sin permisos', 403);
+  let r2Key = null;
+  if (tipo === 'usuario') {
+    const u = await env.DB.prepare('SELECT foto_r2_key FROM usuarios WHERE id=? AND empresa_id=?').bind(id, auth.empresa_id).first();
+    r2Key = u?.foto_r2_key;
+    if (r2Key) await env.DB.prepare('UPDATE usuarios SET foto_r2_key=NULL WHERE id=?').bind(id).run();
+  } else {
+    const e = await env.DB.prepare('SELECT foto_r2_key FROM personal_externo WHERE id=? AND empresa_id=?').bind(id, auth.empresa_id).first();
+    r2Key = e?.foto_r2_key;
+    if (r2Key) await env.DB.prepare('UPDATE personal_externo SET foto_r2_key=NULL WHERE id=?').bind(id).run();
+  }
+  if (r2Key) { try { await env.FILES.delete(r2Key); } catch {} }
+  return json({ ok: true });
+}
+
 // ── Migración v4.86 ───────────────────────────────────────────────────────────
 async function runMigrations(request, env) {
   const { isSuperadmin } = await getAuth(request, env);
@@ -5405,6 +5645,31 @@ async function runMigrations(request, env) {
     await env.DB.prepare('ALTER TABLE empresas ADD COLUMN modulos_config TEXT').run();
     results.push('empresas.modulos_config: añadida');
   } catch { results.push('empresas.modulos_config: ya existe'); }
+  // Telegram personal (telegram_id en usuarios)
+  try {
+    await env.DB.prepare('ALTER TABLE usuarios ADD COLUMN telegram_id TEXT').run();
+    results.push('usuarios.telegram_id: añadida');
+  } catch { results.push('usuarios.telegram_id: ya existe'); }
+  // Tabla de tokens de vinculación de Telegram
+  try {
+    await env.DB.prepare(`CREATE TABLE IF NOT EXISTS vincular_tokens (
+      token       TEXT PRIMARY KEY,
+      usuario_id  INTEGER NOT NULL,
+      empresa_id  INTEGER NOT NULL,
+      created_at  TEXT DEFAULT (datetime('now')),
+      expires_at  TEXT
+    )`).run();
+    results.push('vincular_tokens: creada');
+  } catch(e) { results.push('vincular_tokens: ' + e.message); }
+  // Foto de perfil en usuarios y personal_externo
+  try {
+    await env.DB.prepare('ALTER TABLE usuarios ADD COLUMN foto_r2_key TEXT').run();
+    results.push('usuarios.foto_r2_key: añadida');
+  } catch { results.push('usuarios.foto_r2_key: ya existe'); }
+  try {
+    await env.DB.prepare('ALTER TABLE personal_externo ADD COLUMN foto_r2_key TEXT').run();
+    results.push('personal_externo.foto_r2_key: añadida');
+  } catch { results.push('personal_externo.foto_r2_key: ya existe'); }
   // Carnets y certificaciones (NEW-19)
   try {
     await env.DB.prepare(`CREATE TABLE IF NOT EXISTS carnets (

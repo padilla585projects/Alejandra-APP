@@ -566,6 +566,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
   <div class="user-chip" id="headerUserChip">
     <span>👤</span><span id="headerUserName">—</span>
   </div>
+  <button class="notif-bell" id="btnBuscar" onclick="abrirBusqueda()" style="display:none" title="Buscar">🔍</button>
   <button class="notif-bell" id="btnChat" onclick="chatAbrir()" style="display:none" title="Chat del equipo">
     💬<span class="notif-badge" id="chatBadge" style="display:none">0</span>
   </button>
@@ -585,6 +586,21 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
     </div>
   </div>
   <div id="notifList" style="flex:1;overflow-y:auto"></div>
+</div>
+
+<!-- Modal búsqueda global -->
+<div id="modalBusqueda" class="modal-overlay" onclick="if(event.target===this)cerrarBusqueda()" style="display:none;align-items:flex-start;padding-top:60px">
+  <div class="modal" style="width:100%;max-width:480px;max-height:80vh;display:flex;flex-direction:column">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+      <span style="font-size:18px">🔍</span>
+      <input id="buscarInput" class="form-input" type="search" placeholder="Buscar trabajadores, equipos, pedidos…" autocomplete="off"
+             style="flex:1;font-size:15px" oninput="buscarDebounce(this.value)" onkeydown="if(event.key==='Escape')cerrarBusqueda()">
+      <button onclick="cerrarBusqueda()" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--muted);flex-shrink:0">×</button>
+    </div>
+    <div id="buscarResultados" style="overflow-y:auto;flex:1">
+      <div style="font-size:13px;color:var(--muted);text-align:center;padding:20px">Escribe para buscar…</div>
+    </div>
+  </div>
 </div>
 
 <!-- Panel Chat (NEW-08) -->
@@ -1048,6 +1064,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
   <div id="screenIncidencias" class="screen" style="padding:0;display:none;flex-direction:column">
     <div style="padding:10px 14px 8px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;align-items:center;gap:8px">
       <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:17px;color:var(--text);flex:1">🚨 Incidencias</div>
+      <button onclick="exportarIncidenciasPDF()" style="padding:6px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;color:var(--text);margin-right:4px">📄 PDF</button>
       <button onclick="abrirFormIncidencia(null)" style="padding:6px 12px;background:#ef444420;color:#ef4444;border:1px solid #ef444440;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">+ Nueva</button>
     </div>
     <!-- Filtros estado -->
@@ -1761,6 +1778,21 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
           <div class="settings-row"><span>Obra</span><strong id="ajustesObra">—</strong></div>
           <div class="settings-row" id="ajDeptRow"><span>Departamento</span><strong id="ajustesDept">—</strong></div>
           <button class="btn-primary btn-danger" style="margin-top:12px;font-size:14px" onclick="cerrarSesion()">🚪 Cerrar mi sesión</button>
+        </div>
+        <!-- Telegram personal -->
+        <div class="settings-section" id="seccionMiTelegram" style="margin-top:16px;display:none">
+          <div class="settings-title">📱 Notificaciones personales</div>
+          <div style="font-size:12px;color:var(--muted);margin-bottom:14px">Vincula tu Telegram para recibir tus turnos, avisos de carnets y más directamente en tu móvil.</div>
+          <div id="telegramNoVinculado">
+            <button id="btnVincularTelegram" class="btn-primary" style="width:100%;font-size:13px" onclick="vincularTelegram()">📱 Conectar mi Telegram</button>
+          </div>
+          <div id="telegramVinculado" style="display:none">
+            <div style="display:flex;align-items:center;gap:8px;padding:10px;background:#22c55e15;border:1px solid #22c55e30;border-radius:10px;margin-bottom:10px">
+              <span style="font-size:20px">✅</span>
+              <span style="font-size:13px;font-weight:700;color:#22c55e">Telegram vinculado</span>
+            </div>
+            <button onclick="desvincularTelegram()" style="width:100%;padding:9px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;color:var(--muted)">🔗 Desvincular Telegram</button>
+          </div>
         </div>
         <div class="settings-section" id="seccionGestionSesiones" style="margin-top:16px;display:none">
           <div class="settings-title">🔐 Gestión de sesiones</div>
@@ -2619,6 +2651,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
         <span id="turnosLabel" style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:12px;flex:1;text-align:center;color:var(--accent)">—</span>
         <button onclick="turnosSemana(+1)" style="background:var(--surface2);border:none;border-radius:6px;padding:4px 8px;font-size:16px;cursor:pointer;color:var(--text)">›</button>
         <button onclick="turnosSemana(0)" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:10px;font-family:'Montserrat',sans-serif;font-weight:700;cursor:pointer;color:var(--text)">HOY</button>
+        <button id="btnNotificarTurnos" onclick="notificarTurnosTelegram()" style="background:var(--accent);border:none;border-radius:6px;padding:4px 9px;font-size:10px;font-family:'Montserrat',sans-serif;font-weight:700;cursor:pointer;color:#000" title="Notificar turnos por Telegram">📤</button>
       </div>
       <!-- Leyenda -->
       <div style="display:flex;gap:8px;padding:6px 14px;border-bottom:1px solid var(--border);flex-shrink:0;flex-wrap:wrap">
@@ -3505,6 +3538,10 @@ async function iniciarApp() {
     window._notifInterval = setInterval(checkNotifBadge, 180000); // cada 3 min (batería)
   }
 
+  // Botón Buscar
+  const btnBuscarEl = document.getElementById('btnBuscar');
+  if (btnBuscarEl) btnBuscarEl.style.display = '';
+
   // Botón Chat
   const btnChatEl = document.getElementById('btnChat');
   if (btnChatEl) btnChatEl.style.display = 'flex';
@@ -4002,6 +4039,222 @@ function applyModulosConfig() {
   });
 }
 window.applyModulosConfig = applyModulosConfig;
+
+// ════════════════════════════════════════════════════════════════════════════
+// PDF DE INCIDENCIAS
+// ════════════════════════════════════════════════════════════════════════════
+function exportarIncidenciasPDF() {
+  const lista = (window._incCache || []);
+  const filtro = window._incFiltro || 'todas';
+  const items  = filtro === 'todas' ? lista : lista.filter(i => i.estado === filtro);
+  if (!items.length) { toast('Sin incidencias para exportar', 'err'); return; }
+  const fecha = new Date().toLocaleDateString('es-ES');
+  const gravedadColor = { baja:'#22c55e', media:'#f59e0b', alta:'#ef4444' };
+  const estadoLabel   = { abierta:'🔴 Abierta', en_progreso:'🟠 En progreso', resuelta:'✅ Resuelta' };
+  const tipoLabel     = { averia:'🔧 Avería', accidente:'🤕 Accidente', seguridad:'🔺 Seguridad', material:'📦 Material', otro:'📋 Otro' };
+  const filas = items.map(i => {
+    const gc = gravedadColor[i.gravedad] || '#888';
+    return `<tr>
+      <td>${(i.fecha||'').slice(0,10)}</td>
+      <td><strong>${i.titulo}</strong>${i.descripcion ? '<br><small style="color:#666">'+i.descripcion+'</small>' : ''}</td>
+      <td>${tipoLabel[i.tipo]||i.tipo}</td>
+      <td style="color:${gc};font-weight:700">${(i.gravedad||'').toUpperCase()}</td>
+      <td>${estadoLabel[i.estado]||i.estado}</td>
+      <td>${i.asignado_a||'—'}</td>
+      <td>${i.obra_nombre||'—'}</td>
+      ${i.resolucion ? `<td>${i.resolucion}</td>` : '<td>—</td>'}
+    </tr>`;
+  }).join('');
+  const html = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>Incidencias — Alejandra App</title>
+  <style>
+    body{font-family:Arial,sans-serif;font-size:11px;margin:20px;color:#111}
+    h2{font-size:16px;margin-bottom:4px;color:#111}
+    .meta{font-size:10px;color:#666;margin-bottom:14px}
+    table{border-collapse:collapse;width:100%}
+    th{background:#ef4444;color:#fff;padding:7px 8px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.5px}
+    td{padding:6px 8px;border-bottom:1px solid #e5e5e5;vertical-align:top;font-size:11px}
+    tr:nth-child(even) td{background:#fafafa}
+    small{font-size:10px}
+    @media print{body{margin:8mm};button{display:none}}
+  </style></head><body>
+  <h2>🚨 Registro de Incidencias — Alejandra App</h2>
+  <div class="meta">📅 ${fecha} &nbsp;|&nbsp; ${items.length} incidencias &nbsp;|&nbsp; Filtro: ${filtro}</div>
+  <table>
+    <thead><tr><th>Fecha</th><th>Título / Descripción</th><th>Tipo</th><th>Gravedad</th><th>Estado</th><th>Asignado a</th><th>Obra</th><th>Resolución</th></tr></thead>
+    <tbody>${filas}</tbody>
+  </table>
+  </body></html>`;
+  const w = window.open('', '_blank', 'width=1000,height=700');
+  if (!w) { toast('⚠️ Activa ventanas emergentes para exportar', 'err'); return; }
+  w.document.write(html);
+  w.document.close();
+  w.focus();
+  setTimeout(() => w.print(), 300);
+}
+window.exportarIncidenciasPDF = exportarIncidenciasPDF;
+
+// ════════════════════════════════════════════════════════════════════════════
+// BÚSQUEDA GLOBAL
+// ════════════════════════════════════════════════════════════════════════════
+let _buscarTimer = null;
+
+function abrirBusqueda() {
+  const m = document.getElementById('modalBusqueda');
+  if (m) { m.style.display = 'flex'; setTimeout(() => document.getElementById('buscarInput')?.focus(), 100); }
+}
+function cerrarBusqueda() {
+  const m = document.getElementById('modalBusqueda');
+  if (m) m.style.display = 'none';
+  const inp = document.getElementById('buscarInput');
+  if (inp) inp.value = '';
+  const res = document.getElementById('buscarResultados');
+  if (res) res.innerHTML = '<div style="font-size:13px;color:var(--muted);text-align:center;padding:20px">Escribe para buscar…</div>';
+}
+window.abrirBusqueda  = abrirBusqueda;
+window.cerrarBusqueda = cerrarBusqueda;
+
+function buscarDebounce(q) {
+  clearTimeout(_buscarTimer);
+  if (!q || q.length < 2) {
+    document.getElementById('buscarResultados').innerHTML = '<div style="font-size:13px;color:var(--muted);text-align:center;padding:20px">Escribe para buscar…</div>';
+    return;
+  }
+  document.getElementById('buscarResultados').innerHTML = '<div style="font-size:13px;color:var(--muted);text-align:center;padding:20px">Buscando…</div>';
+  _buscarTimer = setTimeout(() => ejecutarBusqueda(q), 350);
+}
+window.buscarDebounce = buscarDebounce;
+
+async function ejecutarBusqueda(q) {
+  const c = document.getElementById('buscarResultados');
+  if (!c) return;
+  try {
+    const res = await apiCall('/buscar?q=' + encodeURIComponent(q));
+    if (!res.ok) { c.innerHTML = '<div class="empty-state">Error al buscar</div>'; return; }
+    const items = await res.json();
+    if (!items.length) { c.innerHTML = '<div style="font-size:13px;color:var(--muted);text-align:center;padding:20px">Sin resultados para «' + q + '»</div>'; return; }
+    const iconos = { incidencia:'🚨', pemp:'🏗️', carretilla:'🚜', herramienta:'🔧', usuario:'👤', pedido:'📦' };
+    const labels = { incidencia:'Incidencia', pemp:'PEMP', carretilla:'Carretilla', herramienta:'Herramienta', usuario:'Trabajador', pedido:'Pedido' };
+    c.innerHTML = items.map(r => `
+      <div onclick="buscarNavegar('${r.tipo}',${r.id})" style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .15s" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
+        <span style="font-size:22px;flex-shrink:0">${iconos[r.tipo]||'📋'}</span>
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${r.nombre||'—'}</div>
+          <div style="font-size:10px;color:var(--muted);margin-top:2px">${labels[r.tipo]||r.tipo}${r.subtipo?' · '+r.subtipo:''}${r.estado?' · '+r.estado:''}</div>
+        </div>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
+      </div>`).join('');
+  } catch { c.innerHTML = '<div class="empty-state">Error de red</div>'; }
+}
+
+function buscarNavegar(tipo, id) {
+  cerrarBusqueda();
+  if (tipo === 'incidencia')  { navTo('incidencias'); }
+  else if (tipo === 'pemp' || tipo === 'carretilla') { currentModule = tipo === 'pemp' ? 'pemp' : 'carretillas'; navTo('stock'); }
+  else if (tipo === 'herramienta') { navTo('herramientas'); }
+  else if (tipo === 'usuario') { navTo('ajustes'); setTimeout(() => selAjTab('usuarios'), 300); }
+  else if (tipo === 'pedido') { navTo('pedidos'); }
+}
+window.buscarNavegar = buscarNavegar;
+
+// ════════════════════════════════════════════════════════════════════════════
+// TELEGRAM PERSONAL
+// ════════════════════════════════════════════════════════════════════════════
+async function cargarEstadoTelegram() {
+  const s = getSession();
+  const sec = document.getElementById('seccionMiTelegram');
+  if (!sec) return;
+  // Solo mostrar para usuarios de la app (tienen usuario_id en sesión)
+  if (!s?.usuario_id) { sec.style.display = 'none'; return; }
+  sec.style.display = '';
+  try {
+    const res = await apiCall('/telegram/estado');
+    if (!res.ok) return;
+    const { vinculado } = await res.json();
+    document.getElementById('telegramNoVinculado').style.display = vinculado ? 'none' : '';
+    document.getElementById('telegramVinculado').style.display   = vinculado ? '' : 'none';
+  } catch {}
+}
+window.cargarEstadoTelegram = cargarEstadoTelegram;
+
+async function vincularTelegram() {
+  const btn = document.getElementById('btnVincularTelegram');
+  if (btn) { btn.disabled = true; btn.textContent = 'Generando enlace…'; }
+  try {
+    const res = await apiCall('/telegram/vincular', { method: 'POST' });
+    if (!res.ok) { toast('❌ Error al generar el enlace', 'err'); return; }
+    const { link } = await res.json();
+    window.open(link, '_blank');
+    toast('👆 Pulsa "Start" en Telegram para vincular tu cuenta');
+    // Comprobar si ya vinculó (polling suave: 3 intentos cada 5s)
+    let intentos = 0;
+    const check = setInterval(async () => {
+      intentos++;
+      const r = await apiCall('/telegram/estado').catch(() => null);
+      if (r?.ok) {
+        const d = await r.json().catch(() => ({}));
+        if (d.vinculado) { clearInterval(check); cargarEstadoTelegram(); toast('✅ ¡Telegram vinculado!'); }
+      }
+      if (intentos >= 6) clearInterval(check);
+    }, 5000);
+  } catch { toast('❌ Error de red', 'err'); }
+  finally { if (btn) { btn.disabled = false; btn.textContent = '📱 Conectar mi Telegram'; } }
+}
+window.vincularTelegram = vincularTelegram;
+
+async function desvincularTelegram() {
+  if (!confirm('¿Desvincular tu cuenta de Telegram? Dejarás de recibir notificaciones personales.')) return;
+  try {
+    const res = await apiCall('/telegram/desvincular', { method: 'POST' });
+    if (!res.ok) return toast('❌ Error', 'err');
+    toast('✅ Telegram desvinculado');
+    cargarEstadoTelegram();
+  } catch { toast('❌ Error de red', 'err'); }
+}
+window.desvincularTelegram = desvincularTelegram;
+
+async function notificarTurnosTelegram() {
+  const btn = document.getElementById('btnNotificarTurnos');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳'; }
+  try {
+    const lunes   = _turnosLunes(_turnosSemOffset);
+    const domingo = new Date(lunes); domingo.setDate(lunes.getDate() + 6);
+    const desde   = _turnosFmt(lunes);
+    const hasta   = _turnosFmt(domingo);
+    const res = await apiCall('/telegram/notificar-turnos', { method: 'POST', body: JSON.stringify({ desde, hasta }) });
+    if (!res.ok) { toast('❌ Error al notificar', 'err'); return; }
+    const { notificados } = await res.json();
+    toast(notificados > 0 ? `✅ ${notificados} trabajador${notificados>1?'es':''} notificado${notificados>1?'s':''}` : '⚠️ Ningún trabajador tiene Telegram vinculado');
+  } catch { toast('❌ Error de red', 'err'); }
+  finally { if (btn) { btn.disabled = false; btn.textContent = '📤'; } }
+}
+window.notificarTurnosTelegram = notificarTurnosTelegram;
+
+// ════════════════════════════════════════════════════════════════════════════
+// FOTO DE PERFIL DE TRABAJADORES
+// ════════════════════════════════════════════════════════════════════════════
+async function subirFotoPerfilWorker(tipo, id, file) {
+  if (!file) return;
+  const form = new FormData();
+  form.append('file', file);
+  try {
+    const res = await subirArchivoRaw(`/foto-perfil/${tipo}/${id}`, form);
+    if (!res.ok) { toast('❌ Error al subir foto', 'err'); return; }
+    toast('✅ Foto actualizada');
+    cargarPlantilla();
+  } catch { toast('❌ Error de red', 'err'); }
+}
+window.subirFotoPerfilWorker = subirFotoPerfilWorker;
+
+async function borrarFotoPerfilWorker(tipo, id) {
+  if (!confirm('¿Eliminar la foto de perfil?')) return;
+  try {
+    const res = await apiCall(`/foto-perfil/${tipo}/${id}`, { method: 'DELETE' });
+    if (!res.ok) return toast('❌ Error', 'err');
+    toast('✅ Foto eliminada');
+    cargarPlantilla();
+  } catch { toast('❌ Error de red', 'err'); }
+}
+window.borrarFotoPerfilWorker = borrarFotoPerfilWorker;
 
 // ── NEW-28: comparativa entre obras ─────────────────────────────────────────
 async function cargarComparativaObras() {
@@ -7905,6 +8158,7 @@ function selAjTab(tab) {
   }
   if (tab === 'obras')     cargarObrasAdmin();
   if (tab === 'ideas')     { cargarSugerenciasAdmin(); _ideasRefreshTimer = setInterval(cargarSugerenciasAdmin, 60000); } // 1 min (antes 30s)
+  if (tab === 'sesion')      cargarEstadoTelegram();
   if (tab === 'sistema')    { renderAjustesInfo(); checkConnection(); }
   if (tab === 'empresa')    cargarPanelEmpresa();
   if (tab === 'comparativa') cargarComparativaObras();
@@ -9116,7 +9370,7 @@ async function cargarObrasSelectUsuario() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '5.37';
+const APP_VERSION = '5.38';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -11684,8 +11938,12 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
       const btns = esAdmin ? `
         <button onclick="abrirModalPersonalExt(${p.id})" style="padding:4px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:11px;cursor:pointer;font-family:'Montserrat',sans-serif;font-weight:700">✏️</button>
         <button onclick="eliminarPersonalExt(${p.id},'${p.nombre.replace(/'/g,"\\'")}') " style="padding:4px 10px;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:6px;color:var(--red);font-size:11px;cursor:pointer;font-family:'Montserrat',sans-serif;font-weight:700">🗑️</button>` : '';
+      const avatarHtml = p.foto_r2_key
+        ? `<img src="${getAPI()}/foto-perfil/externo/${p.id}?token=${getSession()?.token || ''}" style="width:36px;height:36px;border-radius:50%;object-fit:cover;flex-shrink:0;cursor:${esAdmin ? 'pointer' : 'default'}" ${esAdmin ? `onclick="document.getElementById('fotoInputExt_${p.id}').click()"` : ''}>`
+        : `<div style="width:36px;height:36px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:900;color:#000;flex-shrink:0;cursor:${esAdmin ? 'pointer' : 'default'}" ${esAdmin ? `onclick="document.getElementById('fotoInputExt_${p.id}').click()"` : ''}>${p.nombre.charAt(0).toUpperCase()}</div>`;
+      const fotoInput = esAdmin ? `<input type="file" id="fotoInputExt_${p.id}" accept="image/*" style="display:none" onchange="subirFotoPerfilWorker('externo',${p.id},this.files[0])">` : '';
       return `<div style="padding:12px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px">
-        <div style="width:36px;height:36px;border-radius:50%;background:var(--surface2);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">👷</div>
+        ${avatarHtml}${fotoInput}
         <div style="flex:1;min-width:0">
           <div style="font-weight:600;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.nombre}</div>
           <div style="display:flex;align-items:center;gap:4px;margin-top:2px">${obraNombre}${dni}</div>
