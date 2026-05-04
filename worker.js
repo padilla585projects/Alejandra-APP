@@ -290,6 +290,7 @@ export default {
       if (path === '/superadmin/empresa' && method === 'POST') return await superadminSeleccionarEmpresa(request, env);
       if (path === '/mi-empresa'         && method === 'GET')  return await getMiEmpresa(request, env);
       if (path === '/mi-empresa'         && method === 'PUT')  return await updateMiEmpresa(request, env);
+      if (path === '/comparativa-obras'  && method === 'GET')  return await getComparativaObras(request, env);
 
       // ── Obras ──────────────────────────────────────────────────────────────
       if (path === '/obras'       && method === 'GET')    return await getObras(request, env);
@@ -938,7 +939,7 @@ async function superadminSeleccionarEmpresa(request, env) {
 async function getMiEmpresa(request, env) {
   const auth = await getAuth(request, env);
   if (!auth.empresa_id) return err('Sin empresa asignada', 403);
-  const empresa = await env.DB.prepare('SELECT id, nombre, slug, email, telefono, direccion, cif, plan, activa, created_at, departamentos, informe_semanal, informe_dia FROM empresas WHERE id = ?').bind(auth.empresa_id).first();
+  const empresa = await env.DB.prepare('SELECT id, nombre, slug, email, telefono, direccion, cif, plan, activa, created_at, departamentos, informe_semanal, informe_dia, modulos_config FROM empresas WHERE id = ?').bind(auth.empresa_id).first();
   if (!empresa) return err('Empresa no encontrada', 404);
   const obras    = (await env.DB.prepare('SELECT id, nombre, codigo FROM obras WHERE empresa_id = ? AND activa = 1 ORDER BY nombre').bind(auth.empresa_id).all()).results;
   const usuarios = (await env.DB.prepare('SELECT id, nombre, rol, departamento, obra_id FROM usuarios WHERE empresa_id = ? AND activo = 1 ORDER BY nombre').bind(auth.empresa_id).all()).results;
@@ -949,7 +950,7 @@ async function updateMiEmpresa(request, env) {
   const auth = await getAuth(request, env);
   if (!auth.empresa_id || (auth.rol !== 'empresa_admin' && !auth.isSuperadmin)) return err('Sin permisos', 403);
   const body = await request.json().catch(() => ({}));
-  const { nombre, email, telefono, direccion, cif, departamentos, informe_semanal, informe_dia } = body;
+  const { nombre, email, telefono, direccion, cif, departamentos, informe_semanal, informe_dia, modulos_config } = body;
   if (!nombre?.trim()) return err('Falta el nombre de la empresa');
   const campos = ['nombre = ?'];
   const vals   = [nombre.trim()];
@@ -963,9 +964,49 @@ async function updateMiEmpresa(request, env) {
   }
   if (informe_semanal   !== undefined) { campos.push('informe_semanal = ?');   vals.push(informe_semanal ? 1 : 0); }
   if (informe_dia       !== undefined) { campos.push('informe_dia = ?');       vals.push(informe_dia || 'lunes'); }
+  if (modulos_config    !== undefined) { campos.push('modulos_config = ?');    vals.push(modulos_config ? JSON.stringify(modulos_config) : null); }
   vals.push(auth.empresa_id);
   await env.DB.prepare(`UPDATE empresas SET ${campos.join(', ')} WHERE id = ?`).bind(...vals).run();
   return json({ ok: true });
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// COMPARATIVA ENTRE OBRAS (NEW-28)
+// ════════════════════════════════════════════════════════════════════════════
+
+async function getComparativaObras(request, env) {
+  const { isSuperadmin, isEmpresaAdmin, empresa_id } = await getAuth(request, env);
+  if (!isSuperadmin && !isEmpresaAdmin) return err('No autorizado', 403);
+  const hoy = new Date().toISOString().slice(0, 10);
+  const { results: obras } = await env.DB.prepare(
+    'SELECT id, nombre, codigo FROM obras WHERE empresa_id = ? AND activa = 1 ORDER BY nombre'
+  ).bind(empresa_id).all();
+  const datos = await Promise.all(obras.map(async o => {
+    const oid = o.id;
+    const [fichajes, equipos, herramientas, incidencias, pedidos] = await Promise.all([
+      env.DB.prepare('SELECT COUNT(*) as n FROM fichajes WHERE empresa_id=? AND obra_id=? AND fecha=?')
+        .bind(empresa_id, oid, hoy).first(),
+      env.DB.prepare(
+        `SELECT (SELECT COUNT(*) FROM pemp WHERE empresa_id=? AND obra_id=? AND estado IN ('mantenimiento','averiado'))
+              + (SELECT COUNT(*) FROM carretillas WHERE empresa_id=? AND obra_id=? AND estado IN ('mantenimiento','averiado')) as n`
+      ).bind(empresa_id, oid, empresa_id, oid).first(),
+      env.DB.prepare("SELECT COUNT(*) as n FROM herramientas WHERE empresa_id=? AND obra_id=? AND estado != 'disponible'")
+        .bind(empresa_id, oid).first(),
+      env.DB.prepare("SELECT COUNT(*) as n FROM incidencias WHERE empresa_id=? AND obra_id=? AND estado IN ('abierta','en_progreso')")
+        .bind(empresa_id, oid).first(),
+      env.DB.prepare("SELECT COUNT(*) as n FROM pedidos WHERE empresa_id=? AND obra_id=? AND estado IN ('pendiente','solicitado')")
+        .bind(empresa_id, oid).first(),
+    ]);
+    return {
+      id: o.id, nombre: o.nombre, codigo: o.codigo,
+      fichajes_hoy:        fichajes?.n    || 0,
+      equipos_problema:    equipos?.n     || 0,
+      herramientas_fuera:  herramientas?.n || 0,
+      incidencias_abiertas: incidencias?.n || 0,
+      pedidos_pendientes:  pedidos?.n     || 0,
+    };
+  }));
+  return json(datos);
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -5359,6 +5400,11 @@ async function runMigrations(request, env) {
     await env.DB.prepare("ALTER TABLE empresas ADD COLUMN informe_dia TEXT DEFAULT 'lunes'").run();
     results.push('empresas.informe_dia: añadida');
   } catch { results.push('empresas.informe_dia: ya existe'); }
+  // Módulos configurables (NEW-29)
+  try {
+    await env.DB.prepare('ALTER TABLE empresas ADD COLUMN modulos_config TEXT').run();
+    results.push('empresas.modulos_config: añadida');
+  } catch { results.push('empresas.modulos_config: ya existe'); }
   // Carnets y certificaciones (NEW-19)
   try {
     await env.DB.prepare(`CREATE TABLE IF NOT EXISTS carnets (

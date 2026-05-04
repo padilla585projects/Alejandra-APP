@@ -1515,22 +1515,22 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
     <!-- Home: tarjetas de sección -->
     <div id="segPanelHome" style="display:flex;flex-direction:column;flex:1;overflow-y:auto;padding:14px 14px 80px">
       <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:11px;letter-spacing:2px;color:var(--muted);text-transform:uppercase;margin-bottom:12px">🔺 Seguridad</div>
-      <div class="module-card" onclick="segSelTab('escaner')">
+      <div class="module-card" data-module="seg_escaner" onclick="segSelTab('escaner')">
         <div class="module-emoji">📷</div>
         <div class="module-info"><div class="module-name">Escáner</div><div class="module-desc">Buscar por matrícula o código</div></div>
         <svg class="module-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
       </div>
-      <div class="module-card" onclick="segSelTab('inventario')">
+      <div class="module-card" data-module="seg_inventario" onclick="segSelTab('inventario')">
         <div class="module-emoji">📦</div>
         <div class="module-info"><div class="module-name">Inventario EPIs</div><div class="module-desc">Equipos de protección individual</div></div>
         <svg class="module-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
       </div>
-      <div class="module-card" onclick="segSelTab('herramientas')">
+      <div class="module-card" data-module="seg_herramientas" onclick="segSelTab('herramientas')">
         <div class="module-emoji">🔧</div>
         <div class="module-info"><div class="module-name">Herramientas</div><div class="module-desc">Herramientas asignadas a seguridad</div></div>
         <svg class="module-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
       </div>
-      <div class="module-card" onclick="segSelTab('resumen')">
+      <div class="module-card" data-module="seg_resumen" onclick="segSelTab('resumen')">
         <div class="module-emoji">📊</div>
         <div class="module-info"><div class="module-name">Resumen</div><div class="module-desc">Estadísticas y estado de seguridad</div></div>
         <svg class="module-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
@@ -1746,8 +1746,9 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
       <button class="ajustes-tab"        id="ajTabUsuarios"  onclick="selAjTab('usuarios')" style="display:none">👥 Usuarios</button>
       <button class="ajustes-tab"        id="ajTabObras"     onclick="selAjTab('obras')" style="display:none">🏗 Obras</button>
       <button class="ajustes-tab"        id="ajTabIdeas"     onclick="selAjTab('ideas')" style="display:none">💡 Ideas</button>
-      <button class="ajustes-tab"        id="ajTabEmpresa"   onclick="selAjTab('empresa')" style="display:none">🏢 Empresa</button>
-      <button class="ajustes-tab"        id="ajTabSistema"   onclick="selAjTab('sistema')">⚙️ Sistema</button>
+      <button class="ajustes-tab"        id="ajTabEmpresa"      onclick="selAjTab('empresa')" style="display:none">🏢 Empresa</button>
+      <button class="ajustes-tab"        id="ajTabComparativa"  onclick="selAjTab('comparativa')" style="display:none">📊 Comparativa</button>
+      <button class="ajustes-tab"        id="ajTabSistema"      onclick="selAjTab('sistema')">⚙️ Sistema</button>
     </div>
     <div style="flex:1;overflow-y:auto">
 
@@ -2134,6 +2135,29 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
           </div>
           <button id="btnGuardarInforme" class="btn-primary" style="width:100%;font-size:13px" onclick="guardarConfigInforme()">💾 Guardar configuración</button>
         </div>
+
+        <!-- NEW-29: Módulos configurables por departamento -->
+        <div class="settings-section" style="margin-top:16px;display:none" id="empresaModulosSection">
+          <div class="settings-title">⚙️ Módulos visibles por departamento</div>
+          <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Elige qué secciones son visibles en las pantallas de Seguridad y Personal.</div>
+          <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:11px;letter-spacing:1.5px;color:var(--accent);text-transform:uppercase;margin-bottom:6px">🔺 Seguridad</div>
+          <div id="modulosSeguridadTogles"></div>
+          <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:11px;letter-spacing:1.5px;color:var(--accent);text-transform:uppercase;margin:14px 0 6px">👷 Personal</div>
+          <div id="modulosPersonalTogles"></div>
+          <button id="btnGuardarModulos" class="btn-primary" style="width:100%;font-size:13px;margin-top:14px" onclick="guardarModulosConfig()">💾 Guardar módulos</button>
+        </div>
+      </div>
+
+      <!-- NEW-28: Comparativa entre obras -->
+      <div class="ajustes-panel" id="ajPanelComparativa">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+          <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:16px">📊 Comparativa de obras</div>
+          <button onclick="cargarComparativaObras()" style="padding:6px 14px;background:var(--accent);border:none;border-radius:8px;font-family:'Montserrat',sans-serif;font-weight:900;font-size:12px;cursor:pointer;color:#000">🔄 Actualizar</button>
+        </div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:14px">KPIs de hoy por obra activa — solo visible para administradores.</div>
+        <div id="comparativaObrasContainer">
+          <div class="empty-state">Cargando...</div>
+        </div>
       </div>
 
     </div>
@@ -2443,37 +2467,37 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
     <!-- Home: tarjetas de sección -->
     <div id="perPanelHome" style="display:flex;flex-direction:column;flex:1;overflow-y:auto;padding:14px 14px 80px">
       <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:11px;letter-spacing:2px;color:var(--muted);text-transform:uppercase;margin-bottom:12px">👷 Personal</div>
-      <div class="module-card" onclick="personalSelTab(0)">
+      <div class="module-card" data-module="per_fichajes" onclick="personalSelTab(0)">
         <div class="module-emoji">📋</div>
         <div class="module-info"><div class="module-name">Fichajes de hoy</div><div class="module-desc">Registro de entrada y salida del día</div></div>
         <svg class="module-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
       </div>
-      <div class="module-card" onclick="personalSelTab(1)">
+      <div class="module-card" data-module="per_semana" onclick="personalSelTab(1)">
         <div class="module-emoji">📅</div>
         <div class="module-info"><div class="module-name">Semana</div><div class="module-desc">Vista semanal de fichajes</div></div>
         <svg class="module-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
       </div>
-      <div class="module-card" onclick="personalSelTab(2)">
+      <div class="module-card" data-module="per_resumen" onclick="personalSelTab(2)">
         <div class="module-emoji">📊</div>
         <div class="module-info"><div class="module-name">Resumen mensual</div><div class="module-desc">Estadísticas y horas del mes</div></div>
         <svg class="module-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
       </div>
-      <div class="module-card" onclick="personalSelTab(3)">
+      <div class="module-card" data-module="per_equipo" onclick="personalSelTab(3)">
         <div class="module-emoji">👷</div>
         <div class="module-info"><div class="module-name">Equipo</div><div class="module-desc">Plantilla y personal externo</div></div>
         <svg class="module-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
       </div>
-      <div class="module-card" onclick="personalSelTab(4)">
+      <div class="module-card" data-module="per_epis" onclick="personalSelTab(4)">
         <div class="module-emoji">🦺</div>
         <div class="module-info"><div class="module-name">Dotación EPIs</div><div class="module-desc">EPIs asignados a cada trabajador</div></div>
         <svg class="module-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
       </div>
-      <div class="module-card" onclick="personalSelTab(5)">
+      <div class="module-card" data-module="per_carnets" onclick="personalSelTab(5)">
         <div class="module-emoji">📜</div>
         <div class="module-info"><div class="module-name">Carnets y certificaciones</div><div class="module-desc">PRL, PEMP, carretilla, CAE y más</div></div>
         <svg class="module-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
       </div>
-      <div class="module-card" onclick="personalSelTab(6)">
+      <div class="module-card" data-module="per_turnos" onclick="personalSelTab(6)">
         <div class="module-emoji">🗓️</div>
         <div class="module-info"><div class="module-name">Planificador de turnos</div><div class="module-desc">Asigna mañana / tarde / noche / libre</div></div>
         <svg class="module-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
@@ -3944,6 +3968,93 @@ async function guardarConfigInforme() {
 }
 window.guardarConfigInforme = guardarConfigInforme;
 
+// ── NEW-29: guardar configuración de módulos ─────────────────────────────────
+async function guardarModulosConfig() {
+  const btn = document.getElementById('btnGuardarModulos');
+  if (btn) { btn.disabled = true; btn.textContent = 'Guardando…'; }
+  try {
+    const cfg = {};
+    document.querySelectorAll('[data-modkey]').forEach(cb => { cfg[cb.dataset.modkey] = cb.checked; });
+    window._modulosConfig = cfg;
+    localStorage.setItem('alejandra_modulos_config', JSON.stringify(cfg));
+    const nombre = window._empresaData?.empresa?.nombre || '';
+    const res = await apiCall('/mi-empresa', { method: 'PUT', body: JSON.stringify({ nombre, modulos_config: cfg }) });
+    if (!res.ok) { const e = await res.json().catch(()=>{}); return toast('❌ ' + (e?.error || 'Error al guardar'), 'err'); }
+    toast('✅ Módulos guardados');
+  } catch { toast('❌ Error de red', 'err'); }
+  finally { if (btn) { btn.disabled = false; btn.textContent = '💾 Guardar módulos'; } }
+}
+window.guardarModulosConfig = guardarModulosConfig;
+
+// ── NEW-29: aplicar configuración de módulos a las pantallas ─────────────────
+function applyModulosConfig() {
+  let cfg = window._modulosConfig;
+  if (!cfg) {
+    try { const raw = localStorage.getItem('alejandra_modulos_config'); cfg = raw ? JSON.parse(raw) : null; } catch {}
+    window._modulosConfig = cfg || null;
+  }
+  if (!cfg) return; // Sin config: todo visible
+  document.querySelectorAll('#segPanelHome .module-card[data-module]').forEach(card => {
+    card.style.display = cfg[card.dataset.module] === false ? 'none' : '';
+  });
+  document.querySelectorAll('#perPanelHome .module-card[data-module]').forEach(card => {
+    card.style.display = cfg[card.dataset.module] === false ? 'none' : '';
+  });
+}
+window.applyModulosConfig = applyModulosConfig;
+
+// ── NEW-28: comparativa entre obras ─────────────────────────────────────────
+async function cargarComparativaObras() {
+  const c = document.getElementById('comparativaObrasContainer');
+  if (!c) return;
+  c.innerHTML = '<div class="empty-state">Cargando...</div>';
+  try {
+    const res = await apiCall('/comparativa-obras');
+    if (!res.ok) { c.innerHTML = '<div class="empty-state">Error al cargar datos</div>'; return; }
+    const datos = await res.json();
+    if (!datos.length) { c.innerHTML = '<div class="empty-state">No hay obras activas</div>'; return; }
+    const fmtNum = n => n > 0
+      ? `<span style="font-weight:700;color:${n > 0 ? 'var(--text)' : 'var(--muted)'}">${n}</span>`
+      : `<span style="color:var(--muted)">—</span>`;
+    const fmtWarn = (n, color) => n > 0
+      ? `<span style="font-weight:700;color:${color}">${n}</span>`
+      : `<span style="color:var(--muted)">—</span>`;
+    c.innerHTML = `
+      <div style="overflow-x:auto;-webkit-overflow-scrolling:touch">
+        <table style="width:100%;border-collapse:collapse;font-size:12px;min-width:360px">
+          <thead>
+            <tr style="background:var(--surface2)">
+              <th style="padding:9px 10px;text-align:left;font-family:'Montserrat',sans-serif;font-weight:900;font-size:10px;letter-spacing:.8px;text-transform:uppercase;color:var(--muted)">OBRA</th>
+              <th style="padding:9px 6px;text-align:center;font-size:16px" title="Fichajes hoy">📋</th>
+              <th style="padding:9px 6px;text-align:center;font-size:16px" title="Equipos averiados o en mantenimiento">⚠️</th>
+              <th style="padding:9px 6px;text-align:center;font-size:16px" title="Herramientas fuera de servicio">🔧</th>
+              <th style="padding:9px 6px;text-align:center;font-size:16px" title="Incidencias abiertas">🚨</th>
+              <th style="padding:9px 6px;text-align:center;font-size:16px" title="Pedidos pendientes">📦</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${datos.map(o => `
+              <tr style="border-bottom:1px solid var(--border)">
+                <td style="padding:10px 10px">
+                  <div style="font-weight:700;font-size:13px;color:var(--text)">${o.nombre}</div>
+                  <div style="font-size:10px;color:var(--muted);margin-top:1px">${o.codigo}</div>
+                </td>
+                <td style="padding:10px 6px;text-align:center">${fmtNum(o.fichajes_hoy)}</td>
+                <td style="padding:10px 6px;text-align:center">${fmtWarn(o.equipos_problema, 'var(--red)')}</td>
+                <td style="padding:10px 6px;text-align:center">${fmtWarn(o.herramientas_fuera, 'var(--red)')}</td>
+                <td style="padding:10px 6px;text-align:center">${fmtWarn(o.incidencias_abiertas, '#f97316')}</td>
+                <td style="padding:10px 6px;text-align:center">${fmtWarn(o.pedidos_pendientes, '#f97316')}</td>
+              </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+      <div style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right">
+        Actualizado ${new Date().toLocaleString('es-ES',{hour:'2-digit',minute:'2-digit',day:'2-digit',month:'2-digit'})}
+      </div>`;
+  } catch { c.innerHTML = '<div class="empty-state">Error de red al cargar</div>'; }
+}
+window.cargarComparativaObras = cargarComparativaObras;
+
 window.mostrarWizard       = mostrarWizard;
 window.wizardNext          = wizardNext;
 window.wizardSkip          = wizardSkip;
@@ -4831,6 +4942,7 @@ function segSelTab(tab) {
   if (tab === 'inventario')    segCargarInv();
   if (tab === 'resumen')       segCargarResumen();
   if (tab === 'herramientas')  segHerrCargar();
+  if (tab === 'home')          applyModulosConfig();
 }
 
 // ── Herramientas Seguridad ────────────────────────────────────────────────────
@@ -7793,8 +7905,9 @@ function selAjTab(tab) {
   }
   if (tab === 'obras')     cargarObrasAdmin();
   if (tab === 'ideas')     { cargarSugerenciasAdmin(); _ideasRefreshTimer = setInterval(cargarSugerenciasAdmin, 60000); } // 1 min (antes 30s)
-  if (tab === 'sistema')   { renderAjustesInfo(); checkConnection(); }
-  if (tab === 'empresa')   cargarPanelEmpresa();
+  if (tab === 'sistema')    { renderAjustesInfo(); checkConnection(); }
+  if (tab === 'empresa')    cargarPanelEmpresa();
+  if (tab === 'comparativa') cargarComparativaObras();
 }
 
 // Guarda los datos de empresa en memoria para rellenar el formulario sin hacer otra llamada
@@ -7853,6 +7966,43 @@ async function cargarPanelEmpresa() {
           chk.onchange = () => { if (opc) opc.style.display = chk.checked ? '' : 'none'; };
         }
         if (sel && data.empresa?.informe_dia) sel.value = data.empresa.informe_dia;
+      }
+    }
+    // NEW-29: sección módulos configurables
+    const modSec = document.getElementById('empresaModulosSection');
+    if (modSec) {
+      modSec.style.display = puedeEditar ? '' : 'none';
+      if (puedeEditar) {
+        const rawCfg = data.empresa?.modulos_config;
+        const cfg = rawCfg
+          ? (typeof rawCfg === 'string' ? JSON.parse(rawCfg) : rawCfg)
+          : {};
+        window._modulosConfig = cfg;
+        localStorage.setItem('alejandra_modulos_config', JSON.stringify(cfg));
+        const SEG_MODS = [
+          { key: 'seg_escaner',      label: '📷 Escáner' },
+          { key: 'seg_inventario',   label: '📦 Inventario EPIs' },
+          { key: 'seg_herramientas', label: '🔧 Herramientas' },
+          { key: 'seg_resumen',      label: '📊 Resumen' },
+        ];
+        const PER_MODS = [
+          { key: 'per_fichajes', label: '📋 Fichajes de hoy' },
+          { key: 'per_semana',   label: '📅 Semana' },
+          { key: 'per_resumen',  label: '📊 Resumen mensual' },
+          { key: 'per_equipo',   label: '👷 Equipo' },
+          { key: 'per_epis',     label: '🦺 Dotación EPIs' },
+          { key: 'per_carnets',  label: '📜 Carnets y certificaciones' },
+          { key: 'per_turnos',   label: '🗓️ Planificador de turnos' },
+        ];
+        const renderMods = (mods, c) => mods.map(m => `
+          <label style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border);cursor:pointer">
+            <input type="checkbox" data-modkey="${m.key}" ${c[m.key] !== false ? 'checked' : ''} style="width:18px;height:18px;accent-color:var(--accent)">
+            <span style="font-size:14px">${m.label}</span>
+          </label>`).join('');
+        const tSeg = document.getElementById('modulosSeguridadTogles');
+        const tPer = document.getElementById('modulosPersonalTogles');
+        if (tSeg) tSeg.innerHTML = renderMods(SEG_MODS, cfg);
+        if (tPer) tPer.innerHTML = renderMods(PER_MODS, cfg);
       }
     }
   } catch(e) {
@@ -8089,7 +8239,8 @@ function initAjustesTabs() {
   document.getElementById('ajTabUsuarios').style.display = (esSA || esEnc || esEA) ? '' : 'none';
   document.getElementById('ajTabObras').style.display    = (esSA || esEA) ? '' : 'none';
   document.getElementById('ajTabIdeas').style.display    = (esSA || esEA) ? '' : 'none';
-  document.getElementById('ajTabEmpresa').style.display  = (esSA || esEA) ? '' : 'none';
+  document.getElementById('ajTabEmpresa').style.display     = (esSA || esEA) ? '' : 'none';
+  document.getElementById('ajTabComparativa').style.display = (esSA || esEA) ? '' : 'none';
   document.getElementById('sistemaSheetSection').style.display = esSA ? 'block' : 'none';
   document.getElementById('sistemaLogsSection').style.display  = esSA ? 'block' : 'none';
   const puedeGestionarSesiones = esSA || esEnc || esEA;
@@ -8965,7 +9116,7 @@ async function cargarObrasSelectUsuario() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '5.36';
+const APP_VERSION = '5.37';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -10925,6 +11076,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
       panels.forEach(id => { const el = document.getElementById(id); if (el) el.style.display = 'none'; });
       if (fab)   fab.style.display   = 'none';
       if (fabEq) fabEq.style.display = 'none';
+      applyModulosConfig();
       return;
     }
 
