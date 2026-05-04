@@ -5,7 +5,7 @@
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 04/05/2026
-VERSIÓN ACTUAL APP NUEVA: v5.36
+VERSIÓN ACTUAL APP NUEVA: v5.37
 VERSIÓN ACTUAL APP VIEJA: v4.19 (⛔ CONGELADA DEFINITIVAMENTE — no recibe más cambios)
 
 ================================================================================
@@ -148,6 +148,27 @@ PASO 4 — VERIFICAR WORKER (solo si se va a tocar worker.js)
 ================================================================================
   HISTORIAL DE VERSIONES — RECIENTES
 ================================================================================
+
+v5.37  |  04/05/2026  [SOLO NUEVA APP]
+  - NEW-28: Comparativa entre obras (SA/EA)
+    · Worker: GET /comparativa-obras → para cada obra activa: fichajes hoy,
+      equipos averiados/en mant (pemp+carretillas), herramientas fuera,
+      incidencias abiertas, pedidos pendientes
+    · Frontend: pestaña "📊 Comparativa" en Ajustes (oculta si no es SA/EA)
+      Tabla responsiva con iconos en cabecera, cifras en rojo/naranja si > 0,
+      botón Actualizar y timestamp de última carga
+  - NEW-29: Módulos configurables por departamento (SA/EA)
+    · D1: ALTER TABLE empresas ADD COLUMN modulos_config TEXT ✅ aplicada
+    · Worker: GET/PUT /mi-empresa incluyen modulos_config
+    · Cards de Seguridad y Personal: atributo data-module="seg_escaner" etc.
+    · Ajustes → Empresa: sección "⚙️ Módulos visibles" con checkboxes
+      Seguridad: Escáner, Inventario EPIs, Herramientas, Resumen (4 módulos)
+      Personal: Fichajes, Semana, Resumen mensual, Equipo, EPIs, Carnets, Turnos (7 módulos)
+    · guardarModulosConfig(): PUT /mi-empresa + cache en localStorage
+    · applyModulosConfig(): oculta/muestra cards según config
+      → se invoca al entrar en Seguridad (segSelTab 'home') y Personal (personalSelTab -1)
+  - Worker redesplegado (Version ID: dc088426-58bb-46d9-bdda-663d2770630c)
+  - GitHub actualizado ✅
 
 v5.36  |  04/05/2026  [SOLO NUEVA APP]
   - NEW-20: Planificador de turnos semanal

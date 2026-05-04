@@ -7,9 +7,9 @@
 
 **Sesión:** LIBRE
 **Última sesión:** 04/05/2026
-**Versión tras última sesión:** v5.36
-**Worker desplegado:** v5.36 (ID: 4b52bff0-966d-49bf-8b13-4a3cbc878f90)
-**GitHub:** PENDIENTE DE PUSH ⚠️
+**Versión tras última sesión:** v5.37
+**Worker desplegado:** v5.37 (ID: dc088426-58bb-46d9-bdda-663d2770630c)
+**GitHub:** en sync ✅
 
 ---
 
@@ -46,6 +46,22 @@ Y antes de cerrar, obligatorio:
   4. Volver a poner este archivo en estado LIBRE con el resumen
 
 ---
+
+## RESUMEN SESIÓN 04/05/2026 (v5.37 — NEW-28 Comparativa obras + NEW-29 Módulos configurables)
+
+- NEW-28: Comparativa entre obras
+  · Worker: GET /comparativa-obras → KPIs por obra activa (SA/EA solo)
+    Fichajes hoy, equipos averiados/mant, herramientas fuera, incidencias, pedidos
+  · Frontend: pestaña "📊 Comparativa" en Ajustes (oculta para no-SA/EA)
+    Tabla responsiva con cifras en rojo/naranja si > 0, botón Actualizar + timestamp
+- NEW-29: Módulos configurables por departamento
+  · D1: empresas.modulos_config TEXT (migración directa vía wrangler CLI)
+  · Worker: GET/PUT /mi-empresa incluyen modulos_config
+  · Cards seg/personal tienen data-module="seg_escaner" / "per_fichajes" etc.
+  · Ajustes → Empresa: sección "⚙️ Módulos visibles" con checkboxes
+    4 módulos seg, 7 módulos personal
+  · applyModulosConfig(): aplica config al entrar a home de seg y personal
+  · Config persistida en localStorage + D1
 
 ## RESUMEN SESIÓN 04/05/2026 (v5.36 — NEW-20 Planificador de turnos)
 

@@ -826,20 +826,20 @@ LEYENDA DE ESTADO:
     · Pendiente: acceso desde screenPersonal y screenSeguridad según feedback.
     · Añadido: 24/04/2026 — Adrian | Hecho: 24/04/2026
 
-[ ] NEW-29 — Módulos configurables por departamento  [PENDIENTE]
+[✓] NEW-29 — Módulos configurables por departamento  [✓ HECHO v5.37]
     · Desde Ajustes → Empresa, el admin puede elegir qué tarjetas (módulos) aparecen en cada dept.
     · Cada empresa/obra puede tener una distribución diferente según sus necesidades.
     · Los depts que no existan no aparecen (ya funciona), pero dentro de un dept activo
       el admin elige qué módulos mostrar (ej: Seguridad sin Pedidos, Personal sin Docs...).
     · Complementa la decisión de diseño de modelo estándar de tarjetas (v5.16).
-    · Añadido: 25/04/2026 — Adrian
+    · Añadido: 25/04/2026 — Adrian | Hecho: 04/05/2026
 
-[ ] NEW-28 — Comparativa entre obras (SA / EA)  [PENDIENTE]
+[✓] NEW-28 — Comparativa entre obras (SA / EA)  [✓ HECHO v5.37]
     · Solo visible para superadmin y empresa_admin.
     · Tabla o cards comparando KPIs de varias obras a la vez:
-      fichajes, horas, equipos activos, herramientas fuera, incidencias abiertas, stock bajo.
-    · Accesible desde Ajustes o desde el Dashboard (NEW-27).
-    · Añadido: 24/04/2026 — Adrian
+      fichajes, equipos averiados/mant, herramientas fuera, incidencias abiertas, pedidos pendientes.
+    · Accesible desde Ajustes → tab "📊 Comparativa".
+    · Añadido: 24/04/2026 — Adrian | Hecho: 04/05/2026
 
 [✓] NEW-11 — Botón "Invítame a un café" en Ajustes  [HECHO v4.37]
     · Enlace PayPal (https://www.paypal.me/padilla585) en Ajustes → Sistema.
