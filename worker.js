@@ -621,6 +621,14 @@ export default {
         if (method === 'DELETE') return await eliminarCarnet(cid, request, env);
       }
 
+      // ── Turnos (NEW-20) ───────────────────────────────────────────────────
+      if (path === '/turnos' && method === 'GET')  return await getTurnos(request, env);
+      if (path === '/turnos' && method === 'POST') return await upsertTurno(request, env);
+      if (path.startsWith('/turnos/') && method === 'DELETE') {
+        const tid = parseInt(path.split('/turnos/')[1]);
+        return await eliminarTurno(tid, request, env);
+      }
+
       // ── Chat interno (NEW-08) ─────────────────────────────────────────────
       if (path === '/chat' && method === 'GET')    return await getChatMensajes(request, env);
       if (path === '/chat' && method === 'POST')   return await enviarChatMensaje(request, env);
@@ -5109,6 +5117,67 @@ async function borrarNota(id, request, env) {
   return json({ ok: true });
 }
 
+// ════════════════════════════════════════════════════════════════════════════
+// TURNOS (NEW-20)
+// ════════════════════════════════════════════════════════════════════════════
+
+async function getTurnos(request, env) {
+  const { empresa_id, obra_id: obraAuth } = await getAuth(request, env);
+  const url    = new URL(request.url);
+  const desde  = url.searchParams.get('desde');
+  const hasta  = url.searchParams.get('hasta');
+  const obraQp = url.searchParams.get('obra_id');
+  const obra   = obraQp ? parseInt(obraQp) : (obraAuth || null);
+
+  let sql = 'SELECT * FROM turnos WHERE empresa_id = ?';
+  const params = [empresa_id];
+  if (desde) { sql += ' AND fecha >= ?'; params.push(desde); }
+  if (hasta) { sql += ' AND fecha <= ?'; params.push(hasta); }
+  if (obra)  { sql += ' AND obra_id = ?'; params.push(obra); }
+  sql += ' ORDER BY fecha, nombre_trabajador';
+
+  const { results } = await env.DB.prepare(sql).bind(...params).all();
+  return json(results || []);
+}
+
+async function upsertTurno(request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth.isAdmin && !auth.isSuperadmin && !auth.isEmpresaAdmin && !auth.isEncargado) return err('Sin permisos', 403);
+  const { empresa_id } = auth;
+  const body = await request.json().catch(() => ({}));
+  const { usuario_id, externo_id, nombre_trabajador, fecha, turno, obra_id } = body;
+  if (!fecha) return err('Falta fecha');
+  const obra = obra_id ? parseInt(obra_id) : (auth.obra_id || null);
+
+  // Sin turno → eliminar
+  if (!turno) {
+    if (usuario_id)  await env.DB.prepare('DELETE FROM turnos WHERE empresa_id=? AND usuario_id=? AND fecha=?').bind(empresa_id, usuario_id, fecha).run();
+    if (externo_id)  await env.DB.prepare('DELETE FROM turnos WHERE empresa_id=? AND externo_id=? AND fecha=?').bind(empresa_id, externo_id, fecha).run();
+    return json({ ok: true, accion: 'borrado' });
+  }
+
+  // Buscar existente
+  let existing = null;
+  if (usuario_id)  existing = await env.DB.prepare('SELECT id FROM turnos WHERE empresa_id=? AND usuario_id=? AND fecha=?').bind(empresa_id, usuario_id, fecha).first();
+  else if (externo_id) existing = await env.DB.prepare('SELECT id FROM turnos WHERE empresa_id=? AND externo_id=? AND fecha=?').bind(empresa_id, externo_id, fecha).first();
+
+  if (existing) {
+    await env.DB.prepare('UPDATE turnos SET turno=?, obra_id=? WHERE id=?').bind(turno, obra, existing.id).run();
+    return json({ ok: true, id: existing.id, accion: 'actualizado' });
+  }
+  const r = await env.DB.prepare(
+    'INSERT INTO turnos (empresa_id,obra_id,usuario_id,externo_id,nombre_trabajador,fecha,turno) VALUES (?,?,?,?,?,?,?)'
+  ).bind(empresa_id, obra, usuario_id||null, externo_id||null, nombre_trabajador||null, fecha, turno).run();
+  return json({ ok: true, id: r.meta.last_row_id, accion: 'creado' }, 201);
+}
+
+async function eliminarTurno(id, request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth.isAdmin && !auth.isSuperadmin && !auth.isEmpresaAdmin && !auth.isEncargado) return err('Sin permisos', 403);
+  await env.DB.prepare('DELETE FROM turnos WHERE id=? AND empresa_id=?').bind(id, auth.empresa_id).run();
+  return json({ ok: true });
+}
+
 // ── Migración v4.86 ───────────────────────────────────────────────────────────
 async function runMigrations(request, env) {
   const { isSuperadmin } = await getAuth(request, env);
@@ -5265,6 +5334,22 @@ async function runMigrations(request, env) {
     await env.DB.prepare('CREATE INDEX IF NOT EXISTS idx_login_attempts_ip ON login_attempts (ip, created_at)').run();
     results.push('login_attempts: creada');
   } catch(e) { results.push('login_attempts: ' + e.message); }
+  // Gestión de turnos (NEW-20)
+  try {
+    await env.DB.prepare(`CREATE TABLE IF NOT EXISTS turnos (
+      id               INTEGER PRIMARY KEY AUTOINCREMENT,
+      empresa_id       INTEGER NOT NULL,
+      obra_id          INTEGER,
+      usuario_id       INTEGER,
+      externo_id       INTEGER,
+      nombre_trabajador TEXT,
+      fecha            TEXT NOT NULL,
+      turno            TEXT NOT NULL,
+      created_at       TEXT DEFAULT (datetime('now'))
+    )`).run();
+    await env.DB.prepare('CREATE INDEX IF NOT EXISTS idx_turnos_empresa_fecha ON turnos (empresa_id, fecha)').run();
+    results.push('turnos: creada');
+  } catch(e) { results.push('turnos: ' + e.message); }
   // Informe semanal Telegram (NEW-18)
   try {
     await env.DB.prepare('ALTER TABLE empresas ADD COLUMN informe_semanal INTEGER DEFAULT 0').run();

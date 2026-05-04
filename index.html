@@ -2473,6 +2473,11 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
         <div class="module-info"><div class="module-name">Carnets y certificaciones</div><div class="module-desc">PRL, PEMP, carretilla, CAE y más</div></div>
         <svg class="module-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
       </div>
+      <div class="module-card" onclick="personalSelTab(6)">
+        <div class="module-emoji">🗓️</div>
+        <div class="module-info"><div class="module-name">Planificador de turnos</div><div class="module-desc">Asigna mañana / tarde / noche / libre</div></div>
+        <svg class="module-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
+      </div>
     </div>
 
     <!-- PANEL 0: HOY -->
@@ -2577,6 +2582,30 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
         </select>
       </div>
       <div id="carnetsLista" style="padding:10px 14px 80px;overflow-y:auto;flex:1">
+        <div class="empty-state">Cargando…</div>
+      </div>
+    </div>
+
+    <!-- PANEL 6: PLANIFICADOR DE TURNOS (NEW-20) -->
+    <div id="perPanelTurnos" style="display:none;flex-direction:column;flex:1;overflow:hidden">
+      <!-- Header -->
+      <div style="display:flex;align-items:center;gap:8px;padding:8px 14px;border-bottom:1px solid var(--border);flex-shrink:0">
+        <button onclick="personalSelTab(-1)" style="background:var(--surface2);border:none;border-radius:50%;width:30px;height:30px;font-size:16px;cursor:pointer;color:var(--text);flex-shrink:0">←</button>
+        <button onclick="turnosSemana(-1)" style="background:var(--surface2);border:none;border-radius:6px;padding:4px 8px;font-size:16px;cursor:pointer;color:var(--text)">‹</button>
+        <span id="turnosLabel" style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:12px;flex:1;text-align:center;color:var(--accent)">—</span>
+        <button onclick="turnosSemana(+1)" style="background:var(--surface2);border:none;border-radius:6px;padding:4px 8px;font-size:16px;cursor:pointer;color:var(--text)">›</button>
+        <button onclick="turnosSemana(0)" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:10px;font-family:'Montserrat',sans-serif;font-weight:700;cursor:pointer;color:var(--text)">HOY</button>
+      </div>
+      <!-- Leyenda -->
+      <div style="display:flex;gap:8px;padding:6px 14px;border-bottom:1px solid var(--border);flex-shrink:0;flex-wrap:wrap">
+        <span style="font-size:10px;padding:2px 8px;border-radius:4px;background:#1d4ed8;color:#fff;font-weight:700">M Mañana</span>
+        <span style="font-size:10px;padding:2px 8px;border-radius:4px;background:#f97316;color:#000;font-weight:700">T Tarde</span>
+        <span style="font-size:10px;padding:2px 8px;border-radius:4px;background:#7c3aed;color:#fff;font-weight:700">N Noche</span>
+        <span style="font-size:10px;padding:2px 8px;border-radius:4px;background:#4b5563;color:#fff;font-weight:700">L Libre</span>
+        <span style="font-size:10px;color:var(--muted)">(toca celda para asignar)</span>
+      </div>
+      <!-- Grid scrollable -->
+      <div id="turnosGrid" style="flex:1;overflow:auto;padding:0 0 80px">
         <div class="empty-state">Cargando…</div>
       </div>
     </div>
@@ -8936,7 +8965,7 @@ async function cargarObrasSelectUsuario() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '5.35';
+const APP_VERSION = '5.36';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -10885,7 +10914,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
   // ── Tab selector ──
   function personalSelTab(n) {
     const home    = document.getElementById('perPanelHome');
-    const panels  = ['perPanelHoy','perPanelSemana','perPanelResumen','perPanelPlantilla','perPanelEpis','perPanelCarnets'];
+    const panels  = ['perPanelHoy','perPanelSemana','perPanelResumen','perPanelPlantilla','perPanelEpis','perPanelCarnets','perPanelTurnos'];
     const fab     = document.getElementById('btnNuevoFichaje');
     const fabEq   = document.getElementById('btnFichajeEquipo');
     const s       = getSession();
@@ -10906,7 +10935,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
       el.style.display = (i === n) ? 'flex' : 'none';
       if (i === n) el.style.flexDirection = 'column';
     });
-    // FABs solo en paneles de fichajes (no en Plantilla/EPIs/Carnets ni home)
+    // FABs solo en paneles de fichajes (no en Plantilla/EPIs/Carnets/Turnos ni home)
     if (fab)   fab.style.display   = (esAdmin && n < 3) ? 'flex' : 'none';
     if (fabEq) fabEq.style.display = (esAdmin && n < 3) ? 'flex' : 'none';
     // Botones de acción solo para admin
@@ -10920,6 +10949,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     if (n === 3) cargarPlantilla();
     if (n === 4) cargarEpis();
     if (n === 5) cargarCarnets();
+    if (n === 6) cargarTurnos();
   }
 
   // ── Cargar trabajadores (cache) ──
@@ -12542,6 +12572,177 @@ window.abrirModalCarnet = abrirModalCarnet;
 window.cerrarModalCarnet = cerrarModalCarnet;
 window.guardarCarnet    = guardarCarnet;
 window.borrarCarnet     = borrarCarnet;
+
+// ════════════════════════════════════════════════════════════════════════════
+// PLANIFICADOR DE TURNOS (NEW-20)
+// ════════════════════════════════════════════════════════════════════════════
+
+let _turnosSemOffset = 0; // semanas desde hoy
+
+const _TURNO_CICLO  = [null, 'mañana', 'tarde', 'noche', 'libre'];
+const _TURNO_LABEL  = { mañana:'M', tarde:'T', noche:'N', libre:'L' };
+const _TURNO_COLOR  = {
+  mañana: { bg:'#1d4ed8', color:'#fff' },
+  tarde:  { bg:'#f97316', color:'#000' },
+  noche:  { bg:'#7c3aed', color:'#fff' },
+  libre:  { bg:'#4b5563', color:'#fff' },
+};
+
+function _turnosLunes(offset) {
+  const hoy = new Date();
+  const dow  = hoy.getDay(); // 0=dom…6=sáb
+  const diasL = dow === 0 ? -6 : 1 - dow;
+  const l = new Date(hoy);
+  l.setDate(hoy.getDate() + diasL + offset * 7);
+  l.setHours(0,0,0,0);
+  return l;
+}
+
+function _turnosFmt(d) {
+  return d.toISOString().slice(0,10);
+}
+
+function turnosSemana(delta) {
+  if (delta === 0) _turnosSemOffset = 0;
+  else _turnosSemOffset += delta;
+  cargarTurnos();
+}
+
+async function cargarTurnos() {
+  const grid = document.getElementById('turnosGrid');
+  const lbl  = document.getElementById('turnosLabel');
+  if (!grid) return;
+  grid.innerHTML = '<div class="empty-state">Cargando…</div>';
+
+  const lunes  = _turnosLunes(_turnosSemOffset);
+  const domingo = new Date(lunes); domingo.setDate(lunes.getDate() + 6);
+  const desde  = _turnosFmt(lunes);
+  const hasta  = _turnosFmt(domingo);
+
+  if (lbl) {
+    const fmt = d => `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}`;
+    lbl.textContent = `${fmt(lunes)} — ${fmt(domingo)} ${domingo.getFullYear()}`;
+  }
+
+  // Cargar trabajadores y turnos en paralelo
+  const s = getSession();
+  let trabajadores = window._perTrabajadores || [];
+  if (!trabajadores.length) trabajadores = await perCargarTrabajadores();
+
+  let turnos = [];
+  try {
+    const params = new URLSearchParams({ desde, hasta });
+    if (s?.obra_id) params.append('obra_id', s.obra_id);
+    const res = await apiCall('/turnos?' + params);
+    if (res.ok) turnos = await res.json();
+  } catch {}
+
+  // Indexar turnos: key = `${tipo}_${id}_${fecha}` → turno
+  const idx = {};
+  for (const t of turnos) {
+    const k = t.usuario_id ? `u_${t.usuario_id}_${t.fecha}` : `e_${t.externo_id}_${t.fecha}`;
+    idx[k] = t.turno;
+  }
+
+  const esAdmin = s?.rol !== 'operario';
+  const DIAS = ['L','M','X','J','V','S','D'];
+  const fechas = Array.from({length:7}, (_,i) => {
+    const d = new Date(lunes); d.setDate(lunes.getDate()+i);
+    return _turnosFmt(d);
+  });
+
+  if (!trabajadores.length) {
+    grid.innerHTML = '<div class="empty-state">Sin trabajadores en el equipo</div>';
+    return;
+  }
+
+  // Construir tabla
+  let html = `<table style="width:100%;border-collapse:collapse;min-width:360px">
+    <thead><tr>
+      <th style="position:sticky;left:0;background:var(--surface);z-index:2;padding:6px 8px;font-size:11px;color:var(--muted);text-align:left;border-bottom:2px solid var(--border);min-width:90px;max-width:110px">Trabajador</th>`;
+  fechas.forEach((f,i) => {
+    const esHoy = f === _turnosFmt(new Date());
+    const dia   = new Date(f);
+    const num   = dia.getDate();
+    html += `<th style="padding:4px 2px;font-size:11px;color:${esHoy?'var(--accent)':'var(--muted)'};text-align:center;border-bottom:2px solid var(--border);min-width:38px;font-family:'Montserrat',sans-serif;font-weight:${esHoy?'900':'700'}">
+      ${DIAS[i]}<br><span style="font-size:10px">${num}</span></th>`;
+  });
+  html += '</tr></thead><tbody>';
+
+  for (const trab of trabajadores) {
+    const tipo = trab.tipo === 'externo' ? 'e' : 'u';
+    const tid  = trab.id;
+    html += `<tr>
+      <td style="position:sticky;left:0;background:var(--surface);z-index:1;padding:6px 8px;font-size:12px;font-weight:600;border-bottom:1px solid var(--border);max-width:110px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${trab.nombre}">${trab.nombre}</td>`;
+    for (const fecha of fechas) {
+      const key   = `${tipo}_${tid}_${fecha}`;
+      const turno = idx[key] || null;
+      const c     = turno ? _TURNO_COLOR[turno] : null;
+      const label = turno ? _TURNO_LABEL[turno] : '·';
+      const cellStyle = c
+        ? `background:${c.bg};color:${c.color};border-radius:4px;font-weight:900;`
+        : 'color:var(--border);';
+      const clickAttr = esAdmin
+        ? `onclick="turnoToggle('${tipo}','${tid}','${trab.nombre.replace(/'/g,"\\'")}','${fecha}')" style="cursor:pointer;"`
+        : '';
+      html += `<td style="text-align:center;padding:3px 2px;border-bottom:1px solid var(--border)">
+        <span data-turno-key="${key}" ${clickAttr} style="display:inline-block;width:28px;height:24px;line-height:24px;font-size:12px;text-align:center;${cellStyle}transition:all .15s">${label}</span>
+      </td>`;
+    }
+    html += '</tr>';
+  }
+
+  html += '</tbody></table>';
+  grid.innerHTML = html;
+}
+
+async function turnoToggle(tipo, tid, nombre, fecha) {
+  const s      = getSession();
+  const esAdmin = s?.rol !== 'operario';
+  if (!esAdmin) return;
+
+  const key  = `${tipo}_${tid}_${fecha}`;
+  const span = document.querySelector(`[data-turno-key="${key}"]`);
+  if (!span) return;
+
+  // Leer turno actual desde el label
+  const labelActual = span.textContent.trim();
+  const turnoActual = Object.entries(_TURNO_LABEL).find(([,v]) => v === labelActual)?.[0] || null;
+  const idx         = _TURNO_CICLO.indexOf(turnoActual);
+  const nuevoTurno  = _TURNO_CICLO[(idx + 1) % _TURNO_CICLO.length];
+
+  // Actualizar UI inmediatamente (optimistic)
+  if (nuevoTurno) {
+    const c = _TURNO_COLOR[nuevoTurno];
+    span.textContent = _TURNO_LABEL[nuevoTurno];
+    span.style.background    = c.bg;
+    span.style.color         = c.color;
+    span.style.borderRadius  = '4px';
+    span.style.fontWeight    = '900';
+  } else {
+    span.textContent         = '·';
+    span.style.background    = '';
+    span.style.color         = 'var(--border)';
+    span.style.fontWeight    = '';
+  }
+
+  // Llamada al worker
+  try {
+    const body = {
+      fecha,
+      turno:            nuevoTurno || '',
+      nombre_trabajador: nombre,
+      obra_id:          s?.obra_id || null,
+    };
+    if (tipo === 'u') body.usuario_id  = parseInt(tid);
+    else               body.externo_id = parseInt(tid);
+    await apiCall('/turnos', { method: 'POST', body: JSON.stringify(body) });
+  } catch { toast('❌ Error de red', 'err'); }
+}
+
+window.cargarTurnos  = cargarTurnos;
+window.turnosSemana  = turnosSemana;
+window.turnoToggle   = turnoToggle;
 </script>
 </body>
 </html>
