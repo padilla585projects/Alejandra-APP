@@ -756,7 +756,7 @@ LEYENDA DE ESTADO:
       fecha_obtencion, fecha_caducidad, archivo_r2_key, created_at).
     · Añadido: 24/04/2026 — Adrian
 
-[ ] NEW-20 — Gestión de turnos  [PENDIENTE]
+[✓] NEW-20 — Gestión de turnos  [HECHO v5.36]
     · Planificador semanal: asignar cada trabajador (interno o externo) a un turno por día
       (Mañana / Tarde / Noche / Libre) en cada obra.
     · Vista tipo horario semanal con filas=trabajadores y columnas=días.

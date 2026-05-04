@@ -7,8 +7,8 @@
 
 **Sesión:** LIBRE
 **Última sesión:** 04/05/2026
-**Versión tras última sesión:** v5.35
-**Worker desplegado:** v5.35 (ID: fe8c3fc2-bdab-47ac-bec4-690721b485bc)
+**Versión tras última sesión:** v5.36
+**Worker desplegado:** v5.36 (ID: 4b52bff0-966d-49bf-8b13-4a3cbc878f90)
 **GitHub:** PENDIENTE DE PUSH ⚠️
 
 ---
@@ -44,6 +44,20 @@ Y antes de cerrar, obligatorio:
   2. Actualizar ESTADO_APP.txt (versión, fecha, changelog)
   3. Actualizar IDEAS_PENDIENTES.txt (marcar resueltos)
   4. Volver a poner este archivo en estado LIBRE con el resumen
+
+---
+
+## RESUMEN SESIÓN 04/05/2026 (v5.36 — NEW-20 Planificador de turnos)
+
+- Worker: GET/POST/DELETE /turnos con upsert inteligente
+- D1: tabla turnos + índice aplicados directamente
+- Frontend Panel 6 en Personal:
+  · Cuadrícula semanal: filas=trabajadores, columnas=días (L–D) con fechas
+  · Navegación entre semanas + botón HOY
+  · Celda: clic cicla vacío→Mañana→Tarde→Noche→Libre→vacío
+  · Update optimista (UI actualiza antes de respuesta del servidor)
+  · Solo admins/encargados pueden editar; operarios ven sin poder cambiar
+  · Leyenda de colores en el header del panel
 
 ---
 

@@ -5,7 +5,7 @@
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 04/05/2026
-VERSIÓN ACTUAL APP NUEVA: v5.35
+VERSIÓN ACTUAL APP NUEVA: v5.36
 VERSIÓN ACTUAL APP VIEJA: v4.19 (⛔ CONGELADA DEFINITIVAMENTE — no recibe más cambios)
 
 ================================================================================
@@ -148,6 +148,21 @@ PASO 4 — VERIFICAR WORKER (solo si se va a tocar worker.js)
 ================================================================================
   HISTORIAL DE VERSIONES — RECIENTES
 ================================================================================
+
+v5.36  |  04/05/2026  [SOLO NUEVA APP]
+  - NEW-20: Planificador de turnos semanal
+    · Worker: GET /turnos + POST /turnos (upsert) + DELETE /turnos/:id
+      Permisos: SA/EA/encargado editan; operario solo ve
+      Upsert: turno='' → elimina; existe → actualiza; no existe → inserta
+    · Migración D1: tabla turnos + índice idx_turnos_empresa_fecha ✅ aplicada
+    · Frontend: panel 6 en Personal → "🗓️ Planificador de turnos"
+      Vista semanal: filas=trabajadores, columnas=L M X J V S D
+      Navegación ‹ › + botón HOY para volver a la semana actual
+      Colores: Mañana=azul, Tarde=naranja, Noche=morado, Libre=gris
+      Clic en celda → cicla por turnos con update optimista
+    · IDEAS_PENDIENTES.txt: NEW-20 marcado [✓ HECHO v5.36]
+  - Worker redesplegado (Version ID: 4b52bff0-966d-49bf-8b13-4a3cbc878f90)
+  - GitHub actualizado ✅
 
 v5.35  |  04/05/2026  [SOLO NUEVA APP]
   - NEW-18: Informe semanal automático por Telegram
