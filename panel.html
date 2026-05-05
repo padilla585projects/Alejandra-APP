@@ -1,0 +1,1407 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Alejandra Office</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700;900&family=Poppins:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://unpkg.com/tabulator-tables@6.3.0/dist/css/tabulator_midnight.min.css" rel="stylesheet">
+<script src="https://unpkg.com/tabulator-tables@6.3.0/dist/js/tabulator.min.js"></script>
+<style>
+:root {
+  --bg:#0f172a; --surface:#162032; --surface2:#1e2d40;
+  --accent:#f97316; --accent2:#fb923c;
+  --blue:#2563eb; --green:#22c55e; --red:#ef4444; --yellow:#eab308;
+  --text:#e5e7eb; --muted:#64748b; --border:#334155;
+  --sidebar-w: 240px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);font-family:'Poppins',sans-serif;font-size:14px}
+
+/* ── LOGIN ── */
+#loginScreen{position:fixed;inset:0;background:var(--bg);z-index:9999;display:flex;align-items:center;justify-content:center}
+.login-box{background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:40px 36px;width:100%;max-width:400px;display:flex;flex-direction:column;gap:20px;box-shadow:0 20px 60px rgba(0,0,0,.5)}
+.login-brand{display:flex;flex-direction:column;align-items:center;gap:10px;margin-bottom:8px}
+.login-appname{font-family:'Montserrat',sans-serif;font-weight:900;font-size:28px;color:var(--text)}
+.login-sub{font-family:'Montserrat',sans-serif;font-weight:700;font-size:10px;letter-spacing:3px;color:var(--muted);text-transform:uppercase}
+.login-field{display:flex;flex-direction:column;gap:6px}
+.login-label{font-family:'Montserrat',sans-serif;font-weight:700;font-size:11px;letter-spacing:1px;color:var(--muted);text-transform:uppercase}
+.login-input{padding:12px 14px;background:var(--surface2);border:2px solid var(--border);border-radius:10px;color:var(--text);font-family:'Poppins',sans-serif;font-size:14px;outline:none;transition:border-color .2s;width:100%}
+.login-input:focus{border-color:var(--accent)}
+.login-btn{padding:14px;background:var(--accent);border:none;border-radius:10px;color:#000;font-family:'Montserrat',sans-serif;font-weight:900;font-size:15px;letter-spacing:2px;cursor:pointer;transition:opacity .2s}
+.login-btn:hover{opacity:.85}
+.login-btn:disabled{opacity:.5;cursor:not-allowed}
+.login-err{color:var(--red);font-size:12px;text-align:center;min-height:16px;font-family:'Montserrat',sans-serif}
+.login-api-row{display:flex;gap:8px}
+.login-api-row input{flex:1}
+.login-api-row button{padding:12px 14px;background:var(--surface2);border:2px solid var(--border);border-radius:10px;color:var(--muted);font-size:12px;cursor:pointer;font-family:'Montserrat',sans-serif;font-weight:700;white-space:nowrap;transition:border-color .2s}
+.login-api-row button:hover{border-color:var(--accent);color:var(--accent)}
+
+/* ── LAYOUT ── */
+#appShell{display:none;height:100%;flex-direction:row}
+#appShell.visible{display:flex}
+
+/* SIDEBAR */
+#sidebar{width:var(--sidebar-w);background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;overflow-y:auto;overflow-x:hidden}
+.sidebar-brand{display:flex;align-items:center;gap:10px;padding:20px 16px 16px;border-bottom:1px solid var(--border);flex-shrink:0}
+.sidebar-appname{font-family:'Montserrat',sans-serif;font-weight:900;font-size:16px;color:var(--text);line-height:1.1}
+.sidebar-sub{font-family:'Montserrat',sans-serif;font-weight:700;font-size:9px;letter-spacing:2px;color:var(--accent);text-transform:uppercase}
+.sidebar-section{padding:16px 12px 4px;font-family:'Montserrat',sans-serif;font-weight:700;font-size:9px;letter-spacing:2px;color:var(--muted);text-transform:uppercase}
+.nav-item{display:flex;align-items:center;gap:10px;padding:9px 14px;border-radius:8px;margin:2px 8px;cursor:pointer;font-family:'Poppins',sans-serif;font-weight:500;font-size:13px;color:var(--muted);transition:all .15s;border:none;background:none;width:calc(100% - 16px);text-align:left}
+.nav-item:hover{background:var(--surface2);color:var(--text)}
+.nav-item.active{background:rgba(249,115,22,.12);color:var(--accent);font-weight:600}
+.nav-item .nav-icon{font-size:16px;width:20px;text-align:center;flex-shrink:0}
+.nav-item .nav-badge{margin-left:auto;background:var(--red);color:#fff;font-family:'Montserrat',sans-serif;font-weight:700;font-size:10px;padding:1px 6px;border-radius:10px}
+
+/* MAIN AREA */
+#mainArea{flex:1;display:flex;flex-direction:column;overflow:hidden}
+
+/* TOPBAR */
+#topbar{background:var(--surface);border-bottom:2px solid var(--accent);padding:0 20px;display:flex;align-items:center;gap:12px;flex-shrink:0;height:52px}
+.topbar-title{font-family:'Montserrat',sans-serif;font-weight:900;font-size:16px;color:var(--text);flex:1}
+.topbar-empresa{font-family:'Montserrat',sans-serif;font-weight:700;font-size:11px;color:var(--muted)}
+.topbar-user{display:flex;align-items:center;gap:8px;background:var(--surface2);border:1px solid var(--border);border-radius:20px;padding:5px 12px;font-family:'Montserrat',sans-serif;font-weight:700;font-size:11px}
+.topbar-user .rol-badge{padding:2px 8px;border-radius:10px;font-size:9px;letter-spacing:.5px}
+.rol-empresa_admin{background:rgba(249,115,22,.2);color:var(--accent)}
+.rol-jefe_de_obra{background:rgba(37,99,235,.2);color:var(--blue)}
+.rol-oficina{background:rgba(34,197,94,.2);color:var(--green)}
+.rol-encargado{background:rgba(234,179,8,.2);color:var(--yellow)}
+.topbar-btn{background:none;border:1px solid var(--border);border-radius:8px;color:var(--muted);padding:6px 10px;cursor:pointer;font-size:13px;transition:all .15s}
+.topbar-btn:hover{border-color:var(--accent);color:var(--accent)}
+.conn-dot{width:9px;height:9px;border-radius:50%;background:var(--muted);transition:background .4s,box-shadow .4s;flex-shrink:0}
+.conn-dot.ok{background:var(--green);box-shadow:0 0 6px rgba(34,197,94,.7)}
+.conn-dot.err{background:var(--red);box-shadow:0 0 6px rgba(239,68,68,.7)}
+
+/* CONTENT */
+#content{flex:1;overflow-y:auto;padding:24px}
+.page{display:none}
+.page.active{display:block}
+.page-title{font-family:'Montserrat',sans-serif;font-weight:900;font-size:22px;color:var(--text);margin-bottom:6px}
+.page-sub{font-size:13px;color:var(--muted);margin-bottom:24px}
+
+/* KPI CARDS */
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:16px;margin-bottom:28px}
+.kpi-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:20px;display:flex;flex-direction:column;gap:8px;transition:border-color .2s;cursor:default}
+.kpi-card:hover{border-color:var(--accent)}
+.kpi-icon{font-size:28px;line-height:1}
+.kpi-value{font-family:'Montserrat',sans-serif;font-weight:900;font-size:32px;color:var(--text);line-height:1}
+.kpi-value.warn{color:var(--yellow)}
+.kpi-value.danger{color:var(--red)}
+.kpi-value.ok{color:var(--green)}
+.kpi-label{font-family:'Montserrat',sans-serif;font-weight:700;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+
+/* SECTION CARDS */
+.section-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:20px;margin-bottom:20px}
+.section-card-title{font-family:'Montserrat',sans-serif;font-weight:900;font-size:13px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:16px;display:flex;align-items:center;gap:8px}
+.section-card-title span{color:var(--accent)}
+
+/* TABLA BASE (antes de cargar Tabulator en cada módulo) */
+.tbl-wrap{border-radius:10px;overflow:hidden;border:1px solid var(--border)}
+.tabulator{background:var(--surface) !important;border:none !important;font-family:'Poppins',sans-serif !important;font-size:13px !important}
+.tabulator .tabulator-header{background:var(--surface2) !important;border-bottom:2px solid var(--accent) !important}
+.tabulator .tabulator-header .tabulator-col{background:var(--surface2) !important;color:var(--muted) !important;font-family:'Montserrat',sans-serif !important;font-weight:700 !important;font-size:10px !important;letter-spacing:1px !important;text-transform:uppercase !important;border-right:1px solid var(--border) !important}
+.tabulator .tabulator-header .tabulator-col:hover{background:var(--surface) !important}
+.tabulator-row{background:var(--surface) !important;border-bottom:1px solid var(--border) !important;color:var(--text) !important}
+.tabulator-row:nth-child(even){background:rgba(30,45,64,.5) !important}
+.tabulator-row:hover{background:var(--surface2) !important}
+.tabulator-row .tabulator-cell{border-right:1px solid var(--border) !important}
+.tabulator .tabulator-footer{background:var(--surface2) !important;border-top:1px solid var(--border) !important;color:var(--muted) !important;font-family:'Montserrat',sans-serif !important;font-size:11px !important}
+.tabulator-page-size,.tabulator-page{background:var(--surface) !important;border:1px solid var(--border) !important;color:var(--text) !important;border-radius:6px !important}
+.tabulator-page.active{background:var(--accent) !important;color:#000 !important;border-color:var(--accent) !important}
+
+/* TOOLBAR sobre tablas */
+.tbl-toolbar{display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap}
+.tbl-search{padding:8px 12px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:'Poppins',sans-serif;font-size:13px;outline:none;transition:border-color .2s;min-width:200px}
+.tbl-search:focus{border-color:var(--accent)}
+.btn{padding:8px 16px;border-radius:8px;font-family:'Montserrat',sans-serif;font-weight:700;font-size:12px;letter-spacing:.5px;cursor:pointer;border:none;transition:all .15s}
+.btn-primary{background:var(--accent);color:#000}
+.btn-primary:hover{opacity:.85}
+.btn-secondary{background:var(--surface2);border:1px solid var(--border);color:var(--text)}
+.btn-secondary:hover{border-color:var(--accent);color:var(--accent)}
+.btn-danger{background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.3);color:var(--red)}
+.btn-danger:hover{background:rgba(239,68,68,.25)}
+.btn-sm{padding:5px 10px;font-size:11px}
+
+/* BADGES */
+.badge{display:inline-block;padding:2px 8px;border-radius:20px;font-family:'Montserrat',sans-serif;font-weight:700;font-size:10px;letter-spacing:.3px}
+.badge-ok{background:rgba(34,197,94,.15);color:var(--green)}
+.badge-warn{background:rgba(234,179,8,.15);color:var(--yellow)}
+.badge-danger{background:rgba(239,68,68,.15);color:var(--red)}
+.badge-info{background:rgba(37,99,235,.15);color:var(--blue)}
+.badge-muted{background:rgba(100,116,139,.15);color:var(--muted)}
+
+/* MODAL */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:1000;display:none;align-items:center;justify-content:center;padding:20px}
+.modal-overlay.open{display:flex}
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:16px;width:100%;max-width:520px;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.5)}
+.modal-header{padding:20px 24px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.modal-title{font-family:'Montserrat',sans-serif;font-weight:900;font-size:16px}
+.modal-close{background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer;padding:4px;transition:color .15s}
+.modal-close:hover{color:var(--text)}
+.modal-body{padding:24px}
+.modal-footer{padding:16px 24px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:10px}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.form-group{display:flex;flex-direction:column;gap:6px;margin-bottom:14px}
+.form-group:last-child{margin-bottom:0}
+.form-label{font-family:'Montserrat',sans-serif;font-weight:700;font-size:11px;letter-spacing:.5px;color:var(--muted);text-transform:uppercase}
+.form-input{padding:10px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:'Poppins',sans-serif;font-size:13px;outline:none;transition:border-color .2s;width:100%}
+.form-input:focus{border-color:var(--accent)}
+.form-select{padding:10px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:'Poppins',sans-serif;font-size:13px;outline:none;cursor:pointer;width:100%}
+
+/* TOAST */
+#toastContainer{position:fixed;bottom:20px;right:20px;z-index:9999;display:flex;flex-direction:column;gap:8px;pointer-events:none}
+.toast{padding:12px 18px;border-radius:10px;font-family:'Montserrat',sans-serif;font-weight:700;font-size:13px;box-shadow:0 4px 20px rgba(0,0,0,.4);animation:toastIn .25s ease;pointer-events:auto;max-width:320px}
+.toast-ok{background:#14532d;border:1px solid var(--green);color:var(--green)}
+.toast-err{background:#450a0a;border:1px solid var(--red);color:var(--red)}
+.toast-info{background:var(--surface2);border:1px solid var(--border);color:var(--text)}
+@keyframes toastIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+
+/* LOADING */
+.loading{display:flex;align-items:center;justify-content:center;padding:60px;color:var(--muted);font-family:'Montserrat',sans-serif;font-weight:700;font-size:13px;letter-spacing:1px;gap:10px}
+.spinner{width:20px;height:20px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.empty-state{text-align:center;padding:60px 20px;color:var(--muted)}
+.empty-state .empty-icon{font-size:48px;margin-bottom:12px}
+.empty-state .empty-text{font-family:'Montserrat',sans-serif;font-weight:700;font-size:14px}
+
+/* SCROLLBAR */
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-track{background:var(--bg)}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+::-webkit-scrollbar-thumb:hover{background:var(--muted)}
+
+/* Tabulator override inside panel */
+.tabulator-editing input,.tabulator-editing select{background:var(--surface2) !important;color:var(--text) !important;border:1px solid var(--accent) !important;padding:4px 8px !important;font-family:'Poppins',sans-serif !important}
+
+/* RESPONSIVE sidebar collapse */
+@media(max-width:900px){
+  #sidebar{position:fixed;left:-260px;top:0;bottom:0;z-index:500;transition:left .25s;width:240px}
+  #sidebar.open{left:0;box-shadow:4px 0 30px rgba(0,0,0,.5)}
+  #mainArea{width:100%}
+}
+</style>
+</head>
+<body>
+
+<!-- ── LOGIN ── -->
+<div id="loginScreen">
+  <div class="login-box">
+    <div class="login-brand">
+      <svg width="56" height="56" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg" style="border-radius:14px;box-shadow:0 4px 20px rgba(0,0,0,.4)">
+        <rect width="512" height="512" rx="90" fill="#0f172a"/>
+        <path d="M60 148V60h88" stroke="#2563eb" stroke-width="26" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M452 148V60h-88" stroke="#2563eb" stroke-width="26" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M60 364v88h88" stroke="#2563eb" stroke-width="26" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M452 364v88h-88" stroke="#2563eb" stroke-width="26" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M256 88L148 424h44l30-88h68l30 88h44L256 88ZM256 168l50 128h-100Z" fill="#f97316"/>
+        <path d="M256 88l108 336h-44l-30-88h-34l-34-128 34-120Z" fill="#fb923c" opacity="0.4"/>
+      </svg>
+      <div>
+        <div class="login-appname">Alejandra</div>
+        <div class="login-sub">Office Panel</div>
+      </div>
+    </div>
+
+    <div class="login-field">
+      <div class="login-label">Email o código</div>
+      <input class="login-input" id="loginEmail" type="text" placeholder="usuario@empresa.com" autocomplete="username" onkeydown="if(e.key==='Enter')doLogin()">
+    </div>
+    <div class="login-field">
+      <div class="login-label">Contraseña</div>
+      <input class="login-input" id="loginPass" type="password" placeholder="••••••••" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()">
+    </div>
+
+    <div id="loginErr" class="login-err"></div>
+    <button class="login-btn" id="loginBtn" onclick="doLogin()">ENTRAR</button>
+
+    <details style="margin-top:-8px">
+      <summary style="font-family:'Montserrat',sans-serif;font-weight:700;font-size:10px;color:var(--muted);letter-spacing:1px;cursor:pointer;text-transform:uppercase">Configuración API</summary>
+      <div style="margin-top:10px;display:flex;flex-direction:column;gap:8px">
+        <div class="login-label">URL del Worker</div>
+        <div class="login-api-row">
+          <input class="login-input" id="loginApiUrl" type="url" placeholder="https://alejandra-app-api...workers.dev" style="font-size:12px">
+          <button onclick="saveApiUrl()">Guardar</button>
+        </div>
+      </div>
+    </details>
+  </div>
+</div>
+
+<!-- ── APP SHELL ── -->
+<div id="appShell">
+
+  <!-- SIDEBAR -->
+  <nav id="sidebar">
+    <div class="sidebar-brand">
+      <svg width="32" height="32" viewBox="0 0 512 512" fill="none" style="border-radius:8px;flex-shrink:0">
+        <rect width="512" height="512" rx="90" fill="#0f172a"/>
+        <path d="M60 148V60h88" stroke="#2563eb" stroke-width="26" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M452 148V60h-88" stroke="#2563eb" stroke-width="26" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M60 364v88h88" stroke="#2563eb" stroke-width="26" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M452 364v88h-88" stroke="#2563eb" stroke-width="26" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M256 88L148 424h44l30-88h68l30 88h44L256 88ZM256 168l50 128h-100Z" fill="#f97316"/>
+        <path d="M256 88l108 336h-44l-30-88h-34l-34-128 34-120Z" fill="#fb923c" opacity="0.4"/>
+      </svg>
+      <div>
+        <div class="sidebar-appname">Alejandra</div>
+        <div class="sidebar-sub">Office</div>
+      </div>
+    </div>
+
+    <div class="sidebar-section">Principal</div>
+    <button class="nav-item active" data-page="dashboard" onclick="navTo('dashboard')">
+      <span class="nav-icon">📊</span> Dashboard
+    </button>
+
+    <div class="sidebar-section">Personal</div>
+    <button class="nav-item" data-page="personal" onclick="navTo('personal')">
+      <span class="nav-icon">👷</span> Trabajadores
+    </button>
+    <button class="nav-item" data-page="fichajes" onclick="navTo('fichajes')">
+      <span class="nav-icon">⏱️</span> Fichajes
+    </button>
+    <button class="nav-item" data-page="turnos" onclick="navTo('turnos')">
+      <span class="nav-icon">📅</span> Turnos
+    </button>
+    <button class="nav-item" data-page="epis" onclick="navTo('epis')">
+      <span class="nav-icon">🦺</span> EPIs
+    </button>
+    <button class="nav-item" data-page="carnets" onclick="navTo('carnets')">
+      <span class="nav-icon">🪪</span> Carnets
+    </button>
+
+    <div class="sidebar-section">Inventarios</div>
+    <button class="nav-item" data-page="bobinas" onclick="navTo('bobinas')">
+      <span class="nav-icon">⚡</span> Bobinas
+    </button>
+    <button class="nav-item" data-page="pemp" onclick="navTo('pemp')">
+      <span class="nav-icon">🚜</span> PEMP
+    </button>
+    <button class="nav-item" data-page="carretillas" onclick="navTo('carretillas')">
+      <span class="nav-icon">🛺</span> Carretillas
+    </button>
+    <button class="nav-item" data-page="herramientas" onclick="navTo('herramientas')">
+      <span class="nav-icon">🔧</span> Herramientas
+    </button>
+    <button class="nav-item" data-page="seguridad" onclick="navTo('seguridad')">
+      <span class="nav-icon">🔺</span> Seguridad
+    </button>
+
+    <div class="sidebar-section">Obra</div>
+    <button class="nav-item" data-page="obras" onclick="navTo('obras')">
+      <span class="nav-icon">🏗️</span> Obras
+    </button>
+    <button class="nav-item" data-page="incidencias" onclick="navTo('incidencias')">
+      <span class="nav-icon">⚠️</span> Incidencias
+    </button>
+    <button class="nav-item" data-page="pedidos" onclick="navTo('pedidos')">
+      <span class="nav-icon">📦</span> Pedidos
+    </button>
+    <button class="nav-item" data-page="mantenimientos" onclick="navTo('mantenimientos')">
+      <span class="nav-icon">🔩</span> Mantenimientos
+    </button>
+
+    <div class="sidebar-section nav-admin-section" style="display:none">Admin</div>
+    <button class="nav-item nav-admin" data-page="usuarios" onclick="navTo('usuarios')" style="display:none">
+      <span class="nav-icon">👤</span> Usuarios
+    </button>
+    <button class="nav-item nav-admin" data-page="empresa" onclick="navTo('empresa')" style="display:none">
+      <span class="nav-icon">🏢</span> Empresa
+    </button>
+
+    <div style="flex:1"></div>
+    <div style="padding:12px 8px;border-top:1px solid var(--border)">
+      <button class="nav-item" onclick="doLogout()">
+        <span class="nav-icon">🚪</span> Cerrar sesión
+      </button>
+    </div>
+  </nav>
+
+  <!-- MAIN -->
+  <div id="mainArea">
+
+    <!-- TOPBAR -->
+    <div id="topbar">
+      <button class="topbar-btn" id="btnMenuToggle" style="display:none" onclick="toggleSidebar()">☰</button>
+      <div class="topbar-title" id="topbarTitle">Dashboard</div>
+      <div class="topbar-empresa" id="topbarEmpresa"></div>
+      <div class="topbar-user" id="topbarUser">
+        <span>👤</span>
+        <span id="topbarName">—</span>
+        <span class="rol-badge" id="topbarRol"></span>
+      </div>
+      <div class="conn-dot" id="connDot" title="Estado conexión"></div>
+    </div>
+
+    <!-- CONTENT PAGES -->
+    <div id="content">
+
+      <!-- DASHBOARD -->
+      <div class="page active" id="pageDashboard">
+        <div class="page-title">Dashboard</div>
+        <div class="page-sub" id="dashSub">Cargando datos...</div>
+        <div class="kpi-grid" id="kpiGrid">
+          <div class="kpi-card"><div class="kpi-icon">⏳</div><div class="kpi-value" id="kpiLoading">—</div><div class="kpi-label">Cargando</div></div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px" id="dashGridBottom">
+          <div class="section-card">
+            <div class="section-card-title"><span>⚠️</span> Incidencias recientes</div>
+            <div id="dashIncidencias"><div class="loading"><div class="spinner"></div> Cargando...</div></div>
+          </div>
+          <div class="section-card">
+            <div class="section-card-title"><span>📦</span> Pedidos pendientes</div>
+            <div id="dashPedidos"><div class="loading"><div class="spinner"></div> Cargando...</div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- PERSONAL -->
+      <div class="page" id="pagePersonal">
+        <div class="page-title">👷 Trabajadores</div>
+        <div class="page-sub">Gestión de personal interno y externo</div>
+        <div class="tbl-toolbar">
+          <input class="tbl-search" id="searchPersonal" placeholder="🔍 Buscar trabajador..." oninput="tblPersonal && tblPersonal.setFilter([{field:'nombre',type:'like',value:this.value},{field:'rol',type:'like',value:this.value}],'or')">
+          <button class="btn btn-primary" onclick="abrirModalPersonal()">+ Nuevo trabajador</button>
+          <button class="btn btn-secondary" onclick="exportarTabla(tblPersonal,'trabajadores')">⬇ CSV</button>
+        </div>
+        <div class="tbl-wrap"><div id="tblPersonal"></div></div>
+      </div>
+
+      <!-- FICHAJES -->
+      <div class="page" id="pageFichajes">
+        <div class="page-title">⏱️ Fichajes</div>
+        <div class="page-sub">Registro de entradas y salidas</div>
+        <div class="tbl-toolbar">
+          <input class="tbl-search" type="date" id="fichajesFechaDesde" onchange="cargarFichajes()">
+          <input class="tbl-search" type="date" id="fichajesFechaHasta" onchange="cargarFichajes()">
+          <input class="tbl-search" id="searchFichajes" placeholder="🔍 Buscar trabajador..." oninput="tblFichajes && tblFichajes.setFilter('nombre',  'like', this.value)" style="min-width:180px">
+          <button class="btn btn-secondary" onclick="cargarFichajes()">🔄 Actualizar</button>
+          <button class="btn btn-secondary" onclick="exportarTabla(tblFichajes,'fichajes')">⬇ CSV</button>
+        </div>
+        <div class="tbl-wrap"><div id="tblFichajes"></div></div>
+      </div>
+
+      <!-- TURNOS -->
+      <div class="page" id="pageTurnos">
+        <div class="page-title">📅 Turnos</div>
+        <div class="page-sub">Planificación semanal del equipo</div>
+        <div class="loading"><div class="spinner"></div> Próximamente en Fase 2</div>
+      </div>
+
+      <!-- EPIs -->
+      <div class="page" id="pageEpis">
+        <div class="page-title">🦺 EPIs asignados</div>
+        <div class="page-sub">Equipos de protección individual por trabajador</div>
+        <div class="tbl-toolbar">
+          <input class="tbl-search" id="searchEpis" placeholder="🔍 Buscar..." oninput="tblEpis && tblEpis.setFilter('trabajador','like',this.value)">
+          <button class="btn btn-secondary" onclick="cargarEpis()">🔄 Actualizar</button>
+        </div>
+        <div class="tbl-wrap"><div id="tblEpis"></div></div>
+      </div>
+
+      <!-- CARNETS -->
+      <div class="page" id="pageCarnets">
+        <div class="page-title">🪪 Carnets y certificaciones</div>
+        <div class="page-sub">Estado de habilitaciones del personal</div>
+        <div class="tbl-toolbar">
+          <input class="tbl-search" id="searchCarnets" placeholder="🔍 Buscar..." oninput="tblCarnets && tblCarnets.setFilter([{field:'trabajador',type:'like',value:this.value},{field:'tipo',type:'like',value:this.value}],'or')">
+          <select class="tbl-search" id="filterCarnets" style="min-width:140px" onchange="filtrarCarnets()">
+            <option value="">Todos los estados</option>
+            <option value="vigente">Vigente</option>
+            <option value="proximo">Próximo a caducar</option>
+            <option value="caducado">Caducado</option>
+          </select>
+          <button class="btn btn-secondary" onclick="cargarCarnets()">🔄 Actualizar</button>
+        </div>
+        <div class="tbl-wrap"><div id="tblCarnets"></div></div>
+      </div>
+
+      <!-- BOBINAS -->
+      <div class="page" id="pageBobinas">
+        <div class="page-title">⚡ Bobinas de cable</div>
+        <div class="page-sub">Inventario de bobinas eléctricas</div>
+        <div class="tbl-toolbar">
+          <input class="tbl-search" id="searchBobinas" placeholder="🔍 Buscar código o proveedor...">
+          <button class="btn btn-primary" onclick="abrirModalBobina()">+ Nueva bobina</button>
+          <button class="btn btn-secondary" onclick="exportarTabla(tblBobinas,'bobinas')">⬇ CSV</button>
+          <button class="btn btn-secondary" onclick="cargarBobinas()">🔄 Actualizar</button>
+        </div>
+        <div class="tbl-wrap"><div id="tblBobinas"></div></div>
+      </div>
+
+      <!-- PEMP -->
+      <div class="page" id="pagePemp">
+        <div class="page-title">🚜 PEMP</div>
+        <div class="page-sub">Plataformas elevadoras móviles de personal</div>
+        <div class="tbl-toolbar">
+          <input class="tbl-search" id="searchPemp" placeholder="🔍 Buscar matrícula o tipo...">
+          <button class="btn btn-secondary" onclick="cargarPemp()">🔄 Actualizar</button>
+        </div>
+        <div class="tbl-wrap"><div id="tblPemp"></div></div>
+      </div>
+
+      <!-- CARRETILLAS -->
+      <div class="page" id="pageCarretillas">
+        <div class="page-title">🛺 Carretillas elevadoras</div>
+        <div class="page-sub">Inventario de carretillas</div>
+        <div class="tbl-toolbar">
+          <input class="tbl-search" id="searchCarretillas" placeholder="🔍 Buscar matrícula o tipo...">
+          <button class="btn btn-secondary" onclick="cargarCarretillas()">🔄 Actualizar</button>
+        </div>
+        <div class="tbl-wrap"><div id="tblCarretillas"></div></div>
+      </div>
+
+      <!-- HERRAMIENTAS -->
+      <div class="page" id="pageHerramientas">
+        <div class="page-title">🔧 Herramientas</div>
+        <div class="page-sub">Inventario y asignación de herramientas</div>
+        <div class="tbl-toolbar">
+          <input class="tbl-search" id="searchHerramientas" placeholder="🔍 Buscar...">
+          <button class="btn btn-secondary" onclick="cargarHerramientas()">🔄 Actualizar</button>
+        </div>
+        <div class="tbl-wrap"><div id="tblHerramientas"></div></div>
+      </div>
+
+      <!-- SEGURIDAD -->
+      <div class="page" id="pageSeguridad">
+        <div class="page-title">🔺 Inventario Seguridad</div>
+        <div class="page-sub">EPIs, arneses, extintores y material de seguridad</div>
+        <div class="tbl-toolbar">
+          <input class="tbl-search" id="searchSeguridad" placeholder="🔍 Buscar...">
+          <button class="btn btn-secondary" onclick="cargarSeguridad()">🔄 Actualizar</button>
+        </div>
+        <div class="tbl-wrap"><div id="tblSeguridad"></div></div>
+      </div>
+
+      <!-- OBRAS -->
+      <div class="page" id="pageObras">
+        <div class="page-title">🏗️ Obras</div>
+        <div class="page-sub">Gestión de obras activas y cerradas</div>
+        <div class="tbl-toolbar">
+          <input class="tbl-search" id="searchObras" placeholder="🔍 Buscar obra...">
+          <button class="btn btn-secondary" onclick="cargarObras()">🔄 Actualizar</button>
+        </div>
+        <div class="tbl-wrap"><div id="tblObras"></div></div>
+      </div>
+
+      <!-- INCIDENCIAS -->
+      <div class="page" id="pageIncidencias">
+        <div class="page-title">⚠️ Incidencias</div>
+        <div class="page-sub">Registro y seguimiento de incidencias</div>
+        <div class="tbl-toolbar">
+          <input class="tbl-search" id="searchIncidencias" placeholder="🔍 Buscar...">
+          <select class="tbl-search" id="filterIncidencias" style="min-width:140px" onchange="filtrarIncidencias()">
+            <option value="">Todos los estados</option>
+            <option value="abierta">Abierta</option>
+            <option value="en_progreso">En progreso</option>
+            <option value="cerrada">Cerrada</option>
+          </select>
+          <button class="btn btn-secondary" onclick="cargarIncidencias()">🔄 Actualizar</button>
+          <button class="btn btn-secondary" onclick="exportarTabla(tblIncidencias,'incidencias')">⬇ CSV</button>
+        </div>
+        <div class="tbl-wrap"><div id="tblIncidencias"></div></div>
+      </div>
+
+      <!-- PEDIDOS -->
+      <div class="page" id="pagePedidos">
+        <div class="page-title">📦 Pedidos</div>
+        <div class="page-sub">Solicitudes de material y seguimiento</div>
+        <div class="tbl-toolbar">
+          <input class="tbl-search" id="searchPedidos" placeholder="🔍 Buscar...">
+          <select class="tbl-search" id="filterPedidos" style="min-width:140px" onchange="filtrarPedidos()">
+            <option value="">Todos los estados</option>
+            <option value="pendiente">Pendiente</option>
+            <option value="aprobado">Aprobado</option>
+            <option value="entregado">Entregado</option>
+          </select>
+          <button class="btn btn-secondary" onclick="cargarPedidos()">🔄 Actualizar</button>
+        </div>
+        <div class="tbl-wrap"><div id="tblPedidos"></div></div>
+      </div>
+
+      <!-- MANTENIMIENTOS -->
+      <div class="page" id="pageMantenimientos">
+        <div class="page-title">🔩 Mantenimientos</div>
+        <div class="page-sub">Registros de mantenimiento de equipos</div>
+        <div class="tbl-toolbar">
+          <input class="tbl-search" id="searchMantenimientos" placeholder="🔍 Buscar...">
+          <button class="btn btn-secondary" onclick="cargarMantenimientos()">🔄 Actualizar</button>
+        </div>
+        <div class="tbl-wrap"><div id="tblMantenimientos"></div></div>
+      </div>
+
+      <!-- USUARIOS (admin) -->
+      <div class="page" id="pageUsuarios">
+        <div class="page-title">👤 Usuarios</div>
+        <div class="page-sub">Gestión de cuentas y roles</div>
+        <div class="tbl-toolbar">
+          <input class="tbl-search" id="searchUsuarios" placeholder="🔍 Buscar usuario...">
+          <button class="btn btn-primary" onclick="abrirModalUsuario()">+ Nuevo usuario</button>
+          <button class="btn btn-secondary" onclick="cargarUsuarios()">🔄 Actualizar</button>
+        </div>
+        <div class="tbl-wrap"><div id="tblUsuarios"></div></div>
+      </div>
+
+      <!-- EMPRESA (admin) -->
+      <div class="page" id="pageEmpresa">
+        <div class="page-title">🏢 Mi empresa</div>
+        <div class="page-sub">Configuración general de la empresa</div>
+        <div class="loading"><div class="spinner"></div> Próximamente en Fase 6</div>
+      </div>
+
+    </div><!-- /content -->
+  </div><!-- /mainArea -->
+</div><!-- /appShell -->
+
+<!-- TOAST CONTAINER -->
+<div id="toastContainer"></div>
+
+<!-- MODAL GENÉRICO -->
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal" id="modalBox">
+    <div class="modal-header">
+      <div class="modal-title" id="modalTitle">Modal</div>
+      <button class="modal-close" onclick="cerrarModal()">✕</button>
+    </div>
+    <div class="modal-body" id="modalBody"></div>
+    <div class="modal-footer" id="modalFooter">
+      <button class="btn btn-secondary" onclick="cerrarModal()">Cancelar</button>
+      <button class="btn btn-primary" id="modalOkBtn">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── CONFIGURACIÓN ──────────────────────────────────────────────
+const API_DEFAULT = 'https://alejandra-app-api.alejandra-app.workers.dev';
+let API = localStorage.getItem('panel_api') || API_DEFAULT;
+let TOKEN = localStorage.getItem('panel_token') || '';
+let SESSION = JSON.parse(localStorage.getItem('panel_session') || 'null');
+
+// ── UTILIDADES ─────────────────────────────────────────────────
+function toast(msg, tipo = 'info') {
+  const el = document.createElement('div');
+  el.className = `toast toast-${tipo}`;
+  el.textContent = msg;
+  document.getElementById('toastContainer').appendChild(el);
+  setTimeout(() => el.remove(), 3500);
+}
+
+function api(path, opts = {}) {
+  const headers = { 'Content-Type': 'application/json', ...(opts.headers || {}) };
+  if (TOKEN) headers['X-Token'] = TOKEN;
+  return fetch(API + path, { ...opts, headers })
+    .then(r => r.json())
+    .catch(() => ({ ok: false, error: 'Sin conexión' }));
+}
+
+function fmtFecha(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return d.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
+}
+
+function fmtHora(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return d.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+}
+
+function fmtFechaHora(iso) {
+  if (!iso) return '—';
+  return fmtFecha(iso) + ' ' + fmtHora(iso);
+}
+
+function diasParaCaducar(fecha) {
+  if (!fecha) return null;
+  const diff = new Date(fecha) - new Date();
+  return Math.ceil(diff / 86400000);
+}
+
+function badgeDias(dias) {
+  if (dias === null) return '<span class="badge badge-muted">—</span>';
+  if (dias < 0)   return `<span class="badge badge-danger">Caducado hace ${Math.abs(dias)}d</span>`;
+  if (dias < 30)  return `<span class="badge badge-warn">${dias}d restantes</span>`;
+  return `<span class="badge badge-ok">${dias}d</span>`;
+}
+
+function exportarTabla(tabla, nombre) {
+  if (!tabla) return;
+  tabla.download('csv', `${nombre}_${new Date().toISOString().slice(0,10)}.csv`, { bom: true });
+}
+
+// ── LOGIN ──────────────────────────────────────────────────────
+document.getElementById('loginApiUrl').value = API;
+
+function saveApiUrl() {
+  API = document.getElementById('loginApiUrl').value.trim().replace(/\/$/, '');
+  localStorage.setItem('panel_api', API);
+  toast('URL guardada', 'ok');
+}
+
+async function doLogin() {
+  const email = document.getElementById('loginEmail').value.trim();
+  const pass  = document.getElementById('loginPass').value;
+  const errEl = document.getElementById('loginErr');
+  const btn   = document.getElementById('loginBtn');
+  if (!email || !pass) { errEl.textContent = 'Rellena todos los campos'; return; }
+  btn.disabled = true; btn.textContent = 'Entrando...';
+  errEl.textContent = '';
+  const r = await api('/verificar', { method: 'POST', body: JSON.stringify({ codigo: email, password: pass }) });
+  btn.disabled = false; btn.textContent = 'ENTRAR';
+  if (!r.ok) { errEl.textContent = r.error || 'Credenciales incorrectas'; return; }
+
+  const rolesPermitidos = ['empresa_admin', 'encargado', 'jefe_de_obra', 'oficina', 'superadmin'];
+  if (!rolesPermitidos.includes(r.rol)) {
+    errEl.textContent = 'Tu rol no tiene acceso al panel de oficina';
+    return;
+  }
+
+  TOKEN = r.token;
+  SESSION = { nombre: r.nombre, rol: r.rol, empresa_id: r.empresa_id, empresa_nombre: r.empresa_nombre };
+  localStorage.setItem('panel_token', TOKEN);
+  localStorage.setItem('panel_session', JSON.stringify(SESSION));
+  iniciarApp();
+}
+
+function doLogout() {
+  api('/logout', { method: 'POST' });
+  TOKEN = ''; SESSION = null;
+  localStorage.removeItem('panel_token');
+  localStorage.removeItem('panel_session');
+  location.reload();
+}
+
+// ── INICIAR APP ────────────────────────────────────────────────
+function iniciarApp() {
+  document.getElementById('loginScreen').style.display = 'none';
+  const shell = document.getElementById('appShell');
+  shell.classList.add('visible');
+
+  // topbar usuario
+  document.getElementById('topbarName').textContent = SESSION.nombre;
+  const rolEl = document.getElementById('topbarRol');
+  const rolLabels = {
+    superadmin: 'Super Admin', empresa_admin: 'Admin',
+    jefe_de_obra: 'Jefe de Obra', oficina: 'Oficina',
+    encargado: 'Encargado'
+  };
+  rolEl.textContent = rolLabels[SESSION.rol] || SESSION.rol;
+  rolEl.className = `rol-badge rol-${SESSION.rol}`;
+  if (SESSION.empresa_nombre) document.getElementById('topbarEmpresa').textContent = SESSION.empresa_nombre;
+
+  // mostrar sección admin si procede
+  const isAdmin = ['superadmin', 'empresa_admin'].includes(SESSION.rol);
+  if (isAdmin) {
+    document.querySelectorAll('.nav-admin, .nav-admin-section').forEach(el => el.style.display = '');
+  }
+
+  // responsive toggle
+  if (window.innerWidth <= 900) document.getElementById('btnMenuToggle').style.display = '';
+
+  checkConexion();
+  setInterval(checkConexion, 30000);
+  navTo('dashboard');
+}
+
+function toggleSidebar() {
+  document.getElementById('sidebar').classList.toggle('open');
+}
+
+// ── NAVEGACIÓN ─────────────────────────────────────────────────
+const PAGE_TITLES = {
+  dashboard: 'Dashboard', personal: 'Trabajadores', fichajes: 'Fichajes',
+  turnos: 'Turnos', epis: 'EPIs', carnets: 'Carnets', bobinas: 'Bobinas',
+  pemp: 'PEMP', carretillas: 'Carretillas', herramientas: 'Herramientas',
+  seguridad: 'Seguridad', obras: 'Obras', incidencias: 'Incidencias',
+  pedidos: 'Pedidos', mantenimientos: 'Mantenimientos', usuarios: 'Usuarios', empresa: 'Empresa'
+};
+
+const PAGE_LOADERS = {
+  dashboard: cargarDashboard,
+  personal: cargarPersonal,
+  fichajes: cargarFichajes,
+  epis: cargarEpis,
+  carnets: cargarCarnets,
+  bobinas: cargarBobinas,
+  pemp: cargarPemp,
+  carretillas: cargarCarretillas,
+  herramientas: cargarHerramientas,
+  seguridad: cargarSeguridad,
+  obras: cargarObras,
+  incidencias: cargarIncidencias,
+  pedidos: cargarPedidos,
+  mantenimientos: cargarMantenimientos,
+  usuarios: cargarUsuarios,
+};
+
+let currentPage = '';
+function navTo(page) {
+  if (currentPage === page) return;
+  currentPage = page;
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
+  const pg = document.getElementById('page' + page.charAt(0).toUpperCase() + page.slice(1));
+  if (pg) pg.classList.add('active');
+  const btn = document.querySelector(`.nav-item[data-page="${page}"]`);
+  if (btn) btn.classList.add('active');
+  document.getElementById('topbarTitle').textContent = PAGE_TITLES[page] || page;
+  if (window.innerWidth <= 900) document.getElementById('sidebar').classList.remove('open');
+  if (PAGE_LOADERS[page]) PAGE_LOADERS[page]();
+}
+
+// ── CONEXIÓN ───────────────────────────────────────────────────
+async function checkConexion() {
+  const dot = document.getElementById('connDot');
+  try {
+    const r = await fetch(API + '/verificar', { method: 'HEAD' }).catch(() => null);
+    dot.className = 'conn-dot ' + (r ? 'ok' : 'err');
+  } catch { dot.className = 'conn-dot err'; }
+}
+
+// ── DASHBOARD ──────────────────────────────────────────────────
+async function cargarDashboard() {
+  document.getElementById('dashSub').textContent = 'Actualizando...';
+  const [dash, incR, pedR] = await Promise.all([
+    api('/obra-dashboard'),
+    api('/incidencias?limit=5'),
+    api('/pedidos?limit=5'),
+  ]);
+
+  const kpis = [
+    { icon: '👷', value: dash.trabajadores_activos ?? '—', label: 'Trabajadores activos', cls: '' },
+    { icon: '🏗️', value: dash.obras_activas ?? '—', label: 'Obras activas', cls: '' },
+    { icon: '⚠️', value: dash.incidencias_abiertas ?? '—', label: 'Incidencias abiertas', cls: dash.incidencias_abiertas > 0 ? 'warn' : '' },
+    { icon: '📦', value: dash.pedidos_pendientes ?? '—', label: 'Pedidos pendientes', cls: dash.pedidos_pendientes > 0 ? 'warn' : '' },
+    { icon: '🔴', value: dash.equipos_averiados ?? '—', label: 'Equipos averiados', cls: dash.equipos_averiados > 0 ? 'danger' : '' },
+    { icon: '🔧', value: dash.equipos_mantenimiento ?? '—', label: 'En mantenimiento', cls: '' },
+    { icon: '🔺', value: dash.herramientas_fuera ?? '—', label: 'Herramientas fuera', cls: '' },
+    { icon: '📉', value: dash.stock_bajo ?? '—', label: 'Alertas de stock', cls: dash.stock_bajo > 0 ? 'danger' : '' },
+  ];
+
+  document.getElementById('kpiGrid').innerHTML = kpis.map(k =>
+    `<div class="kpi-card">
+      <div class="kpi-icon">${k.icon}</div>
+      <div class="kpi-value ${k.cls}">${k.value}</div>
+      <div class="kpi-label">${k.label}</div>
+    </div>`
+  ).join('');
+
+  document.getElementById('dashSub').textContent =
+    `Última actualización: ${new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}`;
+
+  // incidencias recientes
+  const incs = (incR.incidencias || incR.data || []).slice(0, 5);
+  document.getElementById('dashIncidencias').innerHTML = incs.length ? incs.map(i =>
+    `<div style="padding:10px 0;border-bottom:1px solid var(--border);display:flex;gap:10px;align-items:center">
+      <span class="badge badge-${i.estado === 'cerrada' ? 'ok' : i.estado === 'abierta' ? 'danger' : 'warn'}">${i.estado || '—'}</span>
+      <span style="flex:1;font-size:13px">${i.descripcion || i.titulo || '—'}</span>
+      <span style="font-size:11px;color:var(--muted)">${fmtFecha(i.fecha || i.created_at)}</span>
+    </div>`
+  ).join('') : '<div class="empty-state"><div class="empty-icon">✅</div><div class="empty-text">Sin incidencias recientes</div></div>';
+
+  // pedidos pendientes
+  const peds = (pedR.pedidos || pedR.data || []).filter(p => p.estado === 'pendiente').slice(0, 5);
+  document.getElementById('dashPedidos').innerHTML = peds.length ? peds.map(p =>
+    `<div style="padding:10px 0;border-bottom:1px solid var(--border);display:flex;gap:10px;align-items:center">
+      <span class="badge badge-warn">Pendiente</span>
+      <span style="flex:1;font-size:13px">${p.descripcion || p.articulo || '—'}</span>
+      <span style="font-size:11px;color:var(--muted)">${fmtFecha(p.fecha || p.created_at)}</span>
+    </div>`
+  ).join('') : '<div class="empty-state"><div class="empty-icon">✅</div><div class="empty-text">Sin pedidos pendientes</div></div>';
+}
+
+// ── PERSONAL ───────────────────────────────────────────────────
+let tblPersonal = null;
+async function cargarPersonal() {
+  const r = await api('/personal/trabajadores');
+  const data = r.trabajadores || r.data || [];
+  if (tblPersonal) { tblPersonal.replaceData(data); return; }
+
+  const canEdit = ['empresa_admin', 'jefe_de_obra', 'oficina', 'encargado', 'superadmin'].includes(SESSION.rol);
+
+  tblPersonal = new Tabulator('#tblPersonal', {
+    data, layout: 'fitColumns', responsiveLayout: 'collapse',
+    pagination: 'local', paginationSize: 20,
+    placeholder: '<div class="empty-state"><div class="empty-icon">👷</div><div class="empty-text">Sin trabajadores</div></div>',
+    columns: [
+      { title: 'Nombre', field: 'nombre', sorter: 'string', minWidth: 160,
+        editor: canEdit ? 'input' : false,
+        cellEdited: (cell) => guardarCampoPersonal(cell.getRow().getData(), 'nombre', cell.getValue()) },
+      { title: 'Rol', field: 'rol', sorter: 'string', width: 130,
+        formatter: (cell) => {
+          const v = cell.getValue();
+          const cls = { empresa_admin:'accent', encargado:'warn', operario:'info', jefe_de_obra:'blue', oficina:'ok' }[v] || 'muted';
+          return `<span class="badge badge-${cls}">${v || '—'}</span>`;
+        }
+      },
+      { title: 'Departamento', field: 'departamento', sorter: 'string', width: 140 },
+      { title: 'Obra', field: 'obra_nombre', sorter: 'string', minWidth: 140 },
+      { title: 'Email', field: 'email', sorter: 'string', minWidth: 180 },
+      { title: 'Activo', field: 'activo', width: 80, hozAlign: 'center',
+        formatter: (cell) => cell.getValue() ? '✅' : '❌' },
+    ]
+  });
+}
+
+async function guardarCampoPersonal(row, campo, valor) {
+  const r = await api(`/usuarios/${row.id}`, { method: 'PUT', body: JSON.stringify({ [campo]: valor }) });
+  if (r.ok) toast('Guardado ✓', 'ok'); else toast('Error al guardar', 'err');
+}
+
+function abrirModalPersonal() {
+  abrirModal('Nuevo trabajador', `
+    <div class="form-group"><div class="form-label">Nombre completo</div><input class="form-input" id="mNombre" placeholder="Juan García"></div>
+    <div class="form-group"><div class="form-label">Email</div><input class="form-input" id="mEmail" type="email" placeholder="juan@empresa.com"></div>
+    <div class="form-group"><div class="form-label">Contraseña</div><input class="form-input" id="mPass" type="password" placeholder="••••••••"></div>
+    <div class="form-row">
+      <div class="form-group"><div class="form-label">Rol</div>
+        <select class="form-select" id="mRol">
+          <option value="operario">Operario</option>
+          <option value="encargado">Encargado</option>
+          <option value="oficina">Oficina</option>
+          <option value="jefe_de_obra">Jefe de obra</option>
+          <option value="empresa_admin">Admin</option>
+        </select>
+      </div>
+      <div class="form-group"><div class="form-label">Departamento</div>
+        <select class="form-select" id="mDept">
+          <option value="electrico">Eléctrico</option>
+          <option value="mecanicas">Mecánicas</option>
+          <option value="seguridad">Seguridad</option>
+          <option value="personal">Personal</option>
+          <option value="obra_civil">Obra Civil</option>
+          <option value="albanileria">Albañilería</option>
+          <option value="pintura">Pintura</option>
+          <option value="carpinteria">Carpintería</option>
+          <option value="telecom">Telecom</option>
+          <option value="almacen">Almacén</option>
+          <option value="oficina">Oficina técnica</option>
+        </select>
+      </div>
+    </div>
+  `, async () => {
+    const body = {
+      nombre: document.getElementById('mNombre').value.trim(),
+      email: document.getElementById('mEmail').value.trim(),
+      password: document.getElementById('mPass').value,
+      rol: document.getElementById('mRol').value,
+      departamento: document.getElementById('mDept').value,
+    };
+    if (!body.nombre || !body.email || !body.password) { toast('Rellena todos los campos', 'err'); return; }
+    const r = await api('/usuarios', { method: 'POST', body: JSON.stringify(body) });
+    if (r.ok) { cerrarModal(); toast('Trabajador creado ✓', 'ok'); cargarPersonal(); }
+    else toast(r.error || 'Error al crear', 'err');
+  });
+}
+
+// ── FICHAJES ───────────────────────────────────────────────────
+let tblFichajes = null;
+async function cargarFichajes() {
+  const desde = document.getElementById('fichajesFechaDesde').value;
+  const hasta = document.getElementById('fichajesFechaHasta').value;
+  let url = '/fichajes?limit=200';
+  if (desde) url += `&desde=${desde}`;
+  if (hasta) url += `&hasta=${hasta}`;
+  const r = await api(url);
+  const data = (r.fichajes || r.data || []).map(f => ({
+    ...f,
+    nombre: f.nombre_usuario || f.nombre_externo || '—',
+    horaEntrada: fmtHora(f.entrada),
+    horaSalida: fmtHora(f.salida),
+    fechaDisplay: fmtFecha(f.entrada),
+    duracion: f.horas ? `${f.horas}h` : '—',
+  }));
+
+  if (tblFichajes) { tblFichajes.replaceData(data); return; }
+  tblFichajes = new Tabulator('#tblFichajes', {
+    data, layout: 'fitColumns',
+    pagination: 'local', paginationSize: 25,
+    placeholder: '<div class="empty-state"><div class="empty-icon">⏱️</div><div class="empty-text">Sin fichajes en este rango</div></div>',
+    columns: [
+      { title: 'Fecha',    field: 'fechaDisplay', width: 110, sorter: 'string' },
+      { title: 'Trabajador', field: 'nombre', sorter: 'string', minWidth: 160 },
+      { title: 'Obra',     field: 'obra_nombre', sorter: 'string', minWidth: 140 },
+      { title: 'Entrada',  field: 'horaEntrada', width: 90, hozAlign: 'center' },
+      { title: 'Salida',   field: 'horaSalida',  width: 90, hozAlign: 'center' },
+      { title: 'Horas',    field: 'duracion',    width: 80, hozAlign: 'center' },
+      { title: 'Tipo',     field: 'tipo', width: 100,
+        formatter: c => `<span class="badge badge-info">${c.getValue() || '—'}</span>` },
+    ]
+  });
+}
+
+// Inicializar fechas fichajes (semana actual)
+(function() {
+  const hoy = new Date();
+  const lunes = new Date(hoy);
+  lunes.setDate(hoy.getDate() - ((hoy.getDay() + 6) % 7));
+  document.getElementById('fichajesFechaDesde').value = lunes.toISOString().slice(0, 10);
+  document.getElementById('fichajesFechaHasta').value = hoy.toISOString().slice(0, 10);
+})();
+
+// ── EPIs ───────────────────────────────────────────────────────
+let tblEpis = null;
+async function cargarEpis() {
+  const r = await api('/epis-asignados');
+  const data = (r.epis || r.data || []).map(e => ({
+    ...e,
+    trabajador: e.nombre_usuario || e.nombre_externo || '—',
+    diasRestantes: diasParaCaducar(e.fecha_caducidad),
+  }));
+  if (tblEpis) { tblEpis.replaceData(data); return; }
+  tblEpis = new Tabulator('#tblEpis', {
+    data, layout: 'fitColumns',
+    pagination: 'local', paginationSize: 20,
+    columns: [
+      { title: 'Trabajador', field: 'trabajador', sorter: 'string', minWidth: 160 },
+      { title: 'EPI', field: 'tipo_epi', sorter: 'string', minWidth: 160 },
+      { title: 'Talla', field: 'talla', width: 80 },
+      { title: 'F. entrega', field: 'fecha_entrega', width: 110, formatter: c => fmtFecha(c.getValue()) },
+      { title: 'Caducidad', field: 'fecha_caducidad', width: 110, formatter: c => fmtFecha(c.getValue()) },
+      { title: 'Estado', field: 'diasRestantes', width: 160,
+        formatter: c => badgeDias(c.getValue()), sorter: 'number' },
+    ]
+  });
+}
+
+// ── CARNETS ────────────────────────────────────────────────────
+let tblCarnets = null;
+async function cargarCarnets() {
+  const r = await api('/carnets');
+  const data = (r.carnets || r.data || []).map(c => ({
+    ...c,
+    trabajador: c.nombre_usuario || c.nombre_externo || '—',
+    diasRestantes: diasParaCaducar(c.fecha_caducidad),
+  }));
+  if (tblCarnets) { tblCarnets.replaceData(data); return; }
+  tblCarnets = new Tabulator('#tblCarnets', {
+    data, layout: 'fitColumns',
+    pagination: 'local', paginationSize: 20,
+    columns: [
+      { title: 'Trabajador', field: 'trabajador', sorter: 'string', minWidth: 160 },
+      { title: 'Tipo carnet', field: 'tipo', sorter: 'string', minWidth: 180 },
+      { title: 'Número', field: 'numero', width: 130 },
+      { title: 'Expedición', field: 'fecha_expedicion', width: 110, formatter: c => fmtFecha(c.getValue()) },
+      { title: 'Caducidad', field: 'fecha_caducidad', width: 110, formatter: c => fmtFecha(c.getValue()) },
+      { title: 'Estado', field: 'diasRestantes', width: 180,
+        formatter: c => badgeDias(c.getValue()), sorter: 'number' },
+    ]
+  });
+}
+
+function filtrarCarnets() {
+  if (!tblCarnets) return;
+  const val = document.getElementById('filterCarnets').value;
+  tblCarnets.clearFilter();
+  if (val === 'vigente')  tblCarnets.setFilter('diasRestantes', '>=', 30);
+  if (val === 'proximo')  tblCarnets.setFilter([{field:'diasRestantes',type:'>=',value:0},{field:'diasRestantes',type:'<',value:30}]);
+  if (val === 'caducado') tblCarnets.setFilter('diasRestantes', '<', 0);
+}
+
+// ── BOBINAS ────────────────────────────────────────────────────
+let tblBobinas = null;
+async function cargarBobinas() {
+  const r = await api('/bobinas');
+  const data = r.bobinas || r.data || [];
+  if (tblBobinas) { tblBobinas.replaceData(data); return; }
+  const canEdit = ['empresa_admin', 'jefe_de_obra', 'oficina', 'encargado', 'superadmin'].includes(SESSION.rol);
+  tblBobinas = new Tabulator('#tblBobinas', {
+    data, layout: 'fitColumns',
+    pagination: 'local', paginationSize: 20,
+    columns: [
+      { title: 'Código', field: 'codigo', sorter: 'string', width: 120 },
+      { title: 'Tipo cable', field: 'tipo_cable', sorter: 'string', minWidth: 160 },
+      { title: 'Proveedor', field: 'proveedor', sorter: 'string', minWidth: 140 },
+      { title: 'Long. ini (m)', field: 'longitud_inicial', width: 110, hozAlign: 'right', sorter: 'number' },
+      { title: 'Long. actual', field: 'longitud_actual', width: 110, hozAlign: 'right', sorter: 'number',
+        editor: canEdit ? 'number' : false,
+        cellEdited: c => guardarCampoBobina(c.getRow().getData(), 'longitud_actual', c.getValue()) },
+      { title: 'Estado', field: 'estado', width: 110,
+        formatter: c => {
+          const v = c.getValue();
+          const cls = { disponible:'ok', asignada:'warn', agotada:'danger' }[v] || 'muted';
+          return `<span class="badge badge-${cls}">${v || '—'}</span>`;
+        }
+      },
+      { title: 'Obra', field: 'obra_nombre', sorter: 'string', minWidth: 140 },
+      { title: 'Fecha entrada', field: 'fecha_entrada', width: 120, formatter: c => fmtFecha(c.getValue()) },
+    ]
+  });
+  document.getElementById('searchBobinas').oninput = function() {
+    tblBobinas.setFilter([
+      {field:'codigo',type:'like',value:this.value},
+      {field:'tipo_cable',type:'like',value:this.value},
+      {field:'proveedor',type:'like',value:this.value},
+    ], 'or');
+  };
+}
+
+async function guardarCampoBobina(row, campo, valor) {
+  const r = await api(`/bobinas/${row.id}`, { method: 'PUT', body: JSON.stringify({ [campo]: valor }) });
+  if (r.ok) toast('Guardado ✓', 'ok'); else toast('Error al guardar', 'err');
+}
+
+function abrirModalBobina() {
+  abrirModal('Nueva bobina', `
+    <div class="form-row">
+      <div class="form-group"><div class="form-label">Código</div><input class="form-input" id="mCod" placeholder="BOB-001"></div>
+      <div class="form-group"><div class="form-label">Longitud inicial (m)</div><input class="form-input" id="mLong" type="number" placeholder="500"></div>
+    </div>
+    <div class="form-group"><div class="form-label">Tipo de cable</div><input class="form-input" id="mTipo" placeholder="RV-K 3x2.5mm²"></div>
+    <div class="form-group"><div class="form-label">Proveedor</div><input class="form-input" id="mProv" placeholder="Prysmian"></div>
+  `, async () => {
+    const body = {
+      codigo: document.getElementById('mCod').value.trim(),
+      longitud_inicial: parseFloat(document.getElementById('mLong').value),
+      tipo_cable: document.getElementById('mTipo').value.trim(),
+      proveedor: document.getElementById('mProv').value.trim(),
+    };
+    if (!body.codigo) { toast('El código es obligatorio', 'err'); return; }
+    const r = await api('/bobinas', { method: 'POST', body: JSON.stringify(body) });
+    if (r.ok) { cerrarModal(); toast('Bobina creada ✓', 'ok'); cargarBobinas(); }
+    else toast(r.error || 'Error al crear', 'err');
+  });
+}
+
+// ── PEMP ───────────────────────────────────────────────────────
+let tblPemp = null;
+async function cargarPemp() {
+  const r = await api('/pemp');
+  const data = r.pemp || r.data || [];
+  if (tblPemp) { tblPemp.replaceData(data); return; }
+  tblPemp = new Tabulator('#tblPemp', {
+    data, layout: 'fitColumns', pagination: 'local', paginationSize: 20,
+    columns: [
+      { title: 'Matrícula', field: 'matricula', sorter: 'string', width: 120 },
+      { title: 'Tipo', field: 'tipo', sorter: 'string', minWidth: 160 },
+      { title: 'Marca', field: 'marca', minWidth: 120 },
+      { title: 'Modelo', field: 'modelo', minWidth: 120 },
+      { title: 'Estado', field: 'estado', width: 110,
+        formatter: c => {
+          const v = c.getValue();
+          const cls = { disponible:'ok', averiado:'danger', mantenimiento:'warn' }[v] || 'muted';
+          return `<span class="badge badge-${cls}">${v || '—'}</span>`;
+        }
+      },
+      { title: 'ITV', field: 'fecha_itv', width: 110, formatter: c => fmtFecha(c.getValue()) },
+      { title: 'Revisión', field: 'fecha_revision', width: 110, formatter: c => fmtFecha(c.getValue()) },
+      { title: 'Obra', field: 'obra_nombre', minWidth: 140 },
+    ]
+  });
+  document.getElementById('searchPemp').oninput = function() {
+    tblPemp.setFilter([{field:'matricula',type:'like',value:this.value},{field:'tipo',type:'like',value:this.value}],'or');
+  };
+}
+
+// ── CARRETILLAS ────────────────────────────────────────────────
+let tblCarretillas = null;
+async function cargarCarretillas() {
+  const r = await api('/carretillas');
+  const data = r.carretillas || r.data || [];
+  if (tblCarretillas) { tblCarretillas.replaceData(data); return; }
+  tblCarretillas = new Tabulator('#tblCarretillas', {
+    data, layout: 'fitColumns', pagination: 'local', paginationSize: 20,
+    columns: [
+      { title: 'Matrícula', field: 'matricula', width: 120 },
+      { title: 'Tipo', field: 'tipo', minWidth: 140 },
+      { title: 'Energía', field: 'energia', width: 110 },
+      { title: 'Marca', field: 'marca', minWidth: 120 },
+      { title: 'Estado', field: 'estado', width: 110,
+        formatter: c => {
+          const v = c.getValue();
+          const cls = { disponible:'ok', averiado:'danger', mantenimiento:'warn' }[v] || 'muted';
+          return `<span class="badge badge-${cls}">${v || '—'}</span>`;
+        }
+      },
+      { title: 'ITV', field: 'fecha_itv', width: 110, formatter: c => fmtFecha(c.getValue()) },
+    ]
+  });
+  document.getElementById('searchCarretillas').oninput = function() {
+    tblCarretillas.setFilter([{field:'matricula',type:'like',value:this.value},{field:'tipo',type:'like',value:this.value}],'or');
+  };
+}
+
+// ── HERRAMIENTAS ───────────────────────────────────────────────
+let tblHerramientas = null;
+async function cargarHerramientas() {
+  const r = await api('/herramientas');
+  const data = r.herramientas || r.data || [];
+  if (tblHerramientas) { tblHerramientas.replaceData(data); return; }
+  tblHerramientas = new Tabulator('#tblHerramientas', {
+    data, layout: 'fitColumns', pagination: 'local', paginationSize: 20,
+    columns: [
+      { title: 'Código', field: 'codigo', width: 110 },
+      { title: 'Nombre', field: 'nombre', sorter: 'string', minWidth: 180 },
+      { title: 'Tipo', field: 'tipo', minWidth: 140 },
+      { title: 'Estado', field: 'estado', width: 110,
+        formatter: c => {
+          const v = c.getValue();
+          const cls = { disponible:'ok', asignada:'warn', averiada:'danger' }[v] || 'muted';
+          return `<span class="badge badge-${cls}">${v || '—'}</span>`;
+        }
+      },
+      { title: 'Obra', field: 'obra_nombre', minWidth: 140 },
+      { title: 'Trabajador', field: 'trabajador_nombre', minWidth: 140 },
+    ]
+  });
+  document.getElementById('searchHerramientas').oninput = function() {
+    tblHerramientas.setFilter([{field:'nombre',type:'like',value:this.value},{field:'codigo',type:'like',value:this.value}],'or');
+  };
+}
+
+// ── SEGURIDAD ──────────────────────────────────────────────────
+let tblSeguridad = null;
+async function cargarSeguridad() {
+  const r = await api('/inventario-seg');
+  const data = r.items || r.data || [];
+  if (tblSeguridad) { tblSeguridad.replaceData(data); return; }
+  tblSeguridad = new Tabulator('#tblSeguridad', {
+    data, layout: 'fitColumns', pagination: 'local', paginationSize: 20,
+    columns: [
+      { title: 'Código', field: 'codigo', width: 110 },
+      { title: 'Nombre', field: 'nombre', sorter: 'string', minWidth: 180 },
+      { title: 'Tipo', field: 'tipo_material', minWidth: 140 },
+      { title: 'Stock', field: 'cantidad', width: 80, hozAlign: 'center', sorter: 'number' },
+      { title: 'Mínimo', field: 'stock_minimo', width: 80, hozAlign: 'center' },
+      { title: 'Estado stock', field: 'cantidad', width: 120,
+        formatter: c => {
+          const cant = c.getValue();
+          const min  = c.getRow().getData().stock_minimo || 0;
+          if (cant <= 0) return '<span class="badge badge-danger">Agotado</span>';
+          if (cant <= min) return '<span class="badge badge-warn">Stock bajo</span>';
+          return '<span class="badge badge-ok">OK</span>';
+        }
+      },
+      { title: 'Caducidad', field: 'fecha_caducidad', width: 110, formatter: c => fmtFecha(c.getValue()) },
+    ]
+  });
+  document.getElementById('searchSeguridad').oninput = function() {
+    tblSeguridad.setFilter([{field:'nombre',type:'like',value:this.value},{field:'codigo',type:'like',value:this.value}],'or');
+  };
+}
+
+// ── OBRAS ──────────────────────────────────────────────────────
+let tblObras = null;
+async function cargarObras() {
+  const r = await api('/obras');
+  const data = r.obras || r.data || [];
+  if (tblObras) { tblObras.replaceData(data); return; }
+  tblObras = new Tabulator('#tblObras', {
+    data, layout: 'fitColumns', pagination: 'local', paginationSize: 20,
+    columns: [
+      { title: 'Nombre', field: 'nombre', sorter: 'string', minWidth: 200 },
+      { title: 'Estado', field: 'activa', width: 100, hozAlign: 'center',
+        formatter: c => c.getValue() ? '<span class="badge badge-ok">Activa</span>' : '<span class="badge badge-muted">Cerrada</span>' },
+      { title: 'Dirección', field: 'direccion', minWidth: 200 },
+      { title: 'Responsable', field: 'responsable', minWidth: 150 },
+      { title: 'Inicio', field: 'fecha_inicio', width: 110, formatter: c => fmtFecha(c.getValue()) },
+      { title: 'Fin previsto', field: 'fecha_fin', width: 110, formatter: c => fmtFecha(c.getValue()) },
+    ]
+  });
+  document.getElementById('searchObras').oninput = function() {
+    tblObras.setFilter('nombre', 'like', this.value);
+  };
+}
+
+// ── INCIDENCIAS ────────────────────────────────────────────────
+let tblIncidencias = null;
+async function cargarIncidencias() {
+  const r = await api('/incidencias?limit=200');
+  const data = (r.incidencias || r.data || []).map(i => ({
+    ...i, descripcionCorta: (i.descripcion || i.titulo || '').substring(0, 80)
+  }));
+  if (tblIncidencias) { tblIncidencias.replaceData(data); return; }
+  const canEdit = ['empresa_admin', 'jefe_de_obra', 'oficina', 'encargado', 'superadmin'].includes(SESSION.rol);
+  tblIncidencias = new Tabulator('#tblIncidencias', {
+    data, layout: 'fitColumns', pagination: 'local', paginationSize: 20,
+    columns: [
+      { title: 'Fecha', field: 'created_at', width: 110, formatter: c => fmtFecha(c.getValue()) },
+      { title: 'Descripción', field: 'descripcionCorta', sorter: 'string', minWidth: 250 },
+      { title: 'Tipo', field: 'tipo', width: 120 },
+      { title: 'Estado', field: 'estado', width: 120,
+        editor: canEdit ? 'select' : false,
+        editorParams: { values: ['abierta', 'en_progreso', 'cerrada'] },
+        formatter: c => {
+          const v = c.getValue();
+          const cls = { abierta:'danger', en_progreso:'warn', cerrada:'ok' }[v] || 'muted';
+          return `<span class="badge badge-${cls}">${v || '—'}</span>`;
+        },
+        cellEdited: c => guardarEstadoIncidencia(c.getRow().getData().id, c.getValue())
+      },
+      { title: 'Obra', field: 'obra_nombre', minWidth: 140 },
+      { title: 'Reportado por', field: 'nombre_usuario', minWidth: 140 },
+    ]
+  });
+  document.getElementById('searchIncidencias').oninput = function() {
+    tblIncidencias.setFilter('descripcionCorta', 'like', this.value);
+  };
+}
+
+async function guardarEstadoIncidencia(id, estado) {
+  const r = await api(`/incidencias/${id}`, { method: 'PUT', body: JSON.stringify({ estado }) });
+  if (r.ok) toast('Estado actualizado ✓', 'ok'); else toast('Error al guardar', 'err');
+}
+
+function filtrarIncidencias() {
+  if (!tblIncidencias) return;
+  const val = document.getElementById('filterIncidencias').value;
+  if (val) tblIncidencias.setFilter('estado', '=', val);
+  else tblIncidencias.clearFilter();
+}
+
+// ── PEDIDOS ────────────────────────────────────────────────────
+let tblPedidos = null;
+async function cargarPedidos() {
+  const r = await api('/pedidos?limit=200');
+  const data = r.pedidos || r.data || [];
+  if (tblPedidos) { tblPedidos.replaceData(data); return; }
+  tblPedidos = new Tabulator('#tblPedidos', {
+    data, layout: 'fitColumns', pagination: 'local', paginationSize: 20,
+    columns: [
+      { title: 'Fecha', field: 'created_at', width: 110, formatter: c => fmtFecha(c.getValue()) },
+      { title: 'Artículo / Descripción', field: 'descripcion', sorter: 'string', minWidth: 220 },
+      { title: 'Proveedor', field: 'proveedor', minWidth: 140 },
+      { title: 'Cantidad', field: 'cantidad', width: 90, hozAlign: 'center' },
+      { title: 'Estado', field: 'estado', width: 120,
+        formatter: c => {
+          const v = c.getValue();
+          const cls = { pendiente:'warn', aprobado:'info', entregado:'ok', cancelado:'danger' }[v] || 'muted';
+          return `<span class="badge badge-${cls}">${v || '—'}</span>`;
+        }
+      },
+      { title: 'Obra', field: 'obra_nombre', minWidth: 140 },
+    ]
+  });
+  document.getElementById('searchPedidos').oninput = function() {
+    tblPedidos.setFilter('descripcion', 'like', this.value);
+  };
+}
+
+function filtrarPedidos() {
+  if (!tblPedidos) return;
+  const val = document.getElementById('filterPedidos').value;
+  if (val) tblPedidos.setFilter('estado', '=', val);
+  else tblPedidos.clearFilter();
+}
+
+// ── MANTENIMIENTOS ─────────────────────────────────────────────
+let tblMantenimientos = null;
+async function cargarMantenimientos() {
+  const r = await api('/mantenimientos');
+  const data = r.mantenimientos || r.data || [];
+  if (tblMantenimientos) { tblMantenimientos.replaceData(data); return; }
+  tblMantenimientos = new Tabulator('#tblMantenimientos', {
+    data, layout: 'fitColumns', pagination: 'local', paginationSize: 20,
+    columns: [
+      { title: 'Fecha', field: 'fecha', width: 110, formatter: c => fmtFecha(c.getValue()) },
+      { title: 'Equipo', field: 'equipo_nombre', sorter: 'string', minWidth: 160 },
+      { title: 'Tipo', field: 'tipo', minWidth: 120 },
+      { title: 'Descripción', field: 'descripcion', minWidth: 220 },
+      { title: 'Técnico', field: 'tecnico', minWidth: 140 },
+      { title: 'Coste (€)', field: 'coste', width: 100, hozAlign: 'right',
+        formatter: c => c.getValue() != null ? `${parseFloat(c.getValue()).toFixed(2)} €` : '—' },
+    ]
+  });
+  document.getElementById('searchMantenimientos').oninput = function() {
+    tblMantenimientos.setFilter([{field:'equipo_nombre',type:'like',value:this.value},{field:'descripcion',type:'like',value:this.value}],'or');
+  };
+}
+
+// ── USUARIOS (admin) ───────────────────────────────────────────
+let tblUsuarios = null;
+async function cargarUsuarios() {
+  if (!['empresa_admin', 'superadmin'].includes(SESSION.rol)) return;
+  const r = await api('/usuarios');
+  const data = r.usuarios || r.data || [];
+  if (tblUsuarios) { tblUsuarios.replaceData(data); return; }
+  tblUsuarios = new Tabulator('#tblUsuarios', {
+    data, layout: 'fitColumns', pagination: 'local', paginationSize: 20,
+    columns: [
+      { title: 'Nombre', field: 'nombre', sorter: 'string', minWidth: 180 },
+      { title: 'Email', field: 'email', minWidth: 200 },
+      { title: 'Rol', field: 'rol', width: 140,
+        formatter: c => {
+          const v = c.getValue();
+          const cls = { empresa_admin:'accent', encargado:'warn', operario:'info', jefe_de_obra:'blue', oficina:'ok' }[v] || 'muted';
+          return `<span class="badge badge-${cls}">${v || '—'}</span>`;
+        }
+      },
+      { title: 'Dpto.', field: 'departamento', width: 130 },
+      { title: 'Activo', field: 'activo', width: 80, hozAlign: 'center',
+        formatter: c => c.getValue() ? '✅' : '❌' },
+    ]
+  });
+  document.getElementById('searchUsuarios').oninput = function() {
+    tblUsuarios.setFilter([{field:'nombre',type:'like',value:this.value},{field:'email',type:'like',value:this.value}],'or');
+  };
+}
+
+function abrirModalUsuario() {
+  abrirModal('Nuevo usuario', `
+    <div class="form-group"><div class="form-label">Nombre completo</div><input class="form-input" id="mNombre" placeholder="Juan García"></div>
+    <div class="form-group"><div class="form-label">Email</div><input class="form-input" id="mEmail" type="email" placeholder="juan@empresa.com"></div>
+    <div class="form-group"><div class="form-label">Contraseña</div><input class="form-input" id="mPass" type="password"></div>
+    <div class="form-row">
+      <div class="form-group"><div class="form-label">Rol</div>
+        <select class="form-select" id="mRol">
+          <option value="operario">Operario</option>
+          <option value="encargado">Encargado</option>
+          <option value="oficina">Oficina</option>
+          <option value="jefe_de_obra">Jefe de obra</option>
+          <option value="empresa_admin">Admin</option>
+        </select>
+      </div>
+      <div class="form-group"><div class="form-label">Departamento</div>
+        <select class="form-select" id="mDept">
+          <option value="electrico">Eléctrico</option>
+          <option value="mecanicas">Mecánicas</option>
+          <option value="seguridad">Seguridad</option>
+          <option value="personal">Personal</option>
+          <option value="obra_civil">Obra Civil</option>
+        </select>
+      </div>
+    </div>
+  `, async () => {
+    const body = {
+      nombre: document.getElementById('mNombre').value.trim(),
+      email: document.getElementById('mEmail').value.trim(),
+      password: document.getElementById('mPass').value,
+      rol: document.getElementById('mRol').value,
+      departamento: document.getElementById('mDept').value,
+    };
+    if (!body.nombre || !body.email || !body.password) { toast('Rellena todos los campos', 'err'); return; }
+    const r = await api('/usuarios', { method: 'POST', body: JSON.stringify(body) });
+    if (r.ok) { cerrarModal(); toast('Usuario creado ✓', 'ok'); cargarUsuarios(); }
+    else toast(r.error || 'Error al crear', 'err');
+  });
+}
+
+// ── MODAL ──────────────────────────────────────────────────────
+let _modalCallback = null;
+function abrirModal(titulo, html, onOk) {
+  document.getElementById('modalTitle').textContent = titulo;
+  document.getElementById('modalBody').innerHTML = html;
+  _modalCallback = onOk;
+  document.getElementById('modalOkBtn').onclick = () => _modalCallback && _modalCallback();
+  document.getElementById('modalOverlay').classList.add('open');
+}
+function cerrarModal() {
+  document.getElementById('modalOverlay').classList.remove('open');
+  _modalCallback = null;
+}
+document.getElementById('modalOverlay').addEventListener('click', e => {
+  if (e.target === document.getElementById('modalOverlay')) cerrarModal();
+});
+
+// ── INICIO ─────────────────────────────────────────────────────
+(function init() {
+  if (TOKEN && SESSION) {
+    iniciarApp();
+  }
+})();
+</script>
+</body>
+</html>

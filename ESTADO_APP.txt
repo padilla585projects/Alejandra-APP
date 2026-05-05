@@ -5,7 +5,7 @@
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 05/05/2026
-VERSIÓN ACTUAL APP NUEVA: v5.40
+VERSIÓN ACTUAL APP NUEVA: v5.40 (panel web: v0.1 — Fase 1)
 VERSIÓN ACTUAL APP VIEJA: v4.19 (⛔ CONGELADA DEFINITIVAMENTE — no recibe más cambios)
 
 ================================================================================
@@ -95,6 +95,8 @@ PASO 4 — VERIFICAR WORKER (solo si se va a tocar worker.js)
   empresa_admin  → Gestiona su empresa completa. Elige obra+departamento al entrar.
   encargado      → Código de obra. Gestiona su departamento. Obra fija asignada.
   operario       → Código de obra. Solo lectura/scan. Obra fija asignada.
+  jefe_de_obra   → PANEL WEB. Equivale a encargado pero desde oficina. Ve y gestiona su obra.
+  oficina        → PANEL WEB. Equivale a operario elevado. Ve todo + puede añadir/editar.
 
   Departamentos activos:
     ⚡ Eléctrico  → Bobinas + PEMP + Carretillas + Herramientas + Docs + Chat

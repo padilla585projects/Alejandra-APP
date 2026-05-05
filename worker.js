@@ -53,8 +53,6 @@ async function getAuth(request, env) {
         env.DB.prepare("UPDATE sesiones SET last_used = CURRENT_TIMESTAMP, expires_at = datetime('now', '+30 days') WHERE token = ?").bind(xToken).run();
         const isSuperadmin   = sesion.es_admin === 1 || sesion.rol === 'superadmin';
         const isEmpresaAdmin = sesion.rol === 'empresa_admin';
-        // Header siempre tiene prioridad (frontend envía el dept actual desde localStorage)
-        // D1 se usa como fallback si no hay header
         const deptHeader = request.headers.get('X-Departamento');
         const departamento = deptHeader || sesion.departamento || 'electrico';
         return {
@@ -62,6 +60,8 @@ async function getAuth(request, env) {
           isSuperadmin,
           isEmpresaAdmin,
           isEncargado: sesion.rol === 'encargado',
+          isJefeObra: sesion.rol === 'jefe_de_obra',
+          isOficina: sesion.rol === 'oficina',
           isSeguridad: departamento === 'seguridad',
           rol: sesion.rol,
           obraId: sesion.obra_id || null,
@@ -90,6 +90,8 @@ async function getAuth(request, env) {
     isSuperadmin,
     isEmpresaAdmin: rol === 'empresa_admin',
     isEncargado: rol === 'encargado',
+    isJefeObra: rol === 'jefe_de_obra',
+    isOficina: rol === 'oficina',
     isSeguridad: departamento === 'seguridad',
     rol: rol || (isAdmin ? 'superadmin' : null),
     obraId: obraId ? parseInt(obraId) : null,
