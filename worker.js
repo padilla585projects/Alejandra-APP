@@ -537,7 +537,7 @@ export default {
       if (path === '/alertas-stock'          && method === 'GET') return await getAlertasStock(request, env);
       if (path === '/obra-dashboard'         && method === 'GET') return await getObraDashboard(request, env);
       if (path === '/repostajes'             && method === 'GET')  return await getRepostajes(request, env);
-      if (path === '/repostajes'             && method === 'POST') return await crearRepostaje(request, env);
+      if (path === '/repostajes'             && method === 'POST') return await crearRepostaje(request, env, ctx);
       if (path === '/repostajes/resumen'     && method === 'GET')  return await getResumenRepostajes(request, env);
 
       // ── Calendario (NEW-13) ──────────────────────────────────────────────
@@ -589,7 +589,7 @@ export default {
 
       // ── Incidencias (NEW-22) ─────────────────────────────────────────────
       if (path === '/incidencias' && method === 'GET')  return await getIncidencias(request, env);
-      if (path === '/incidencias' && method === 'POST') return await crearIncidencia(request, env);
+      if (path === '/incidencias' && method === 'POST') return await crearIncidencia(request, env, ctx);
       if (path.startsWith('/incidencias/')) {
         const parts = path.split('/');
         const iid = parseInt(parts[2]);
@@ -597,7 +597,7 @@ export default {
           if (method === 'GET')  return await getIncidenciaFotos(iid, request, env);
           if (method === 'POST') return await subirFotoIncidencia(iid, request, env);
         } else {
-          if (method === 'PUT')    return await actualizarIncidencia(iid, request, env);
+          if (method === 'PUT')    return await actualizarIncidencia(iid, request, env, ctx);
           if (method === 'DELETE') return await eliminarIncidencia(iid, request, env);
         }
       }
@@ -650,10 +650,10 @@ export default {
         if (method === 'DELETE') return await eliminarHorarioObra(hoid, request, env);
       }
       if (path === '/fichajes' && method === 'GET')  return await getFichajes(request, env);
-      if (path === '/fichajes' && method === 'POST') return await crearFichaje(request, env);
+      if (path === '/fichajes' && method === 'POST') return await crearFichaje(request, env, ctx);
       if (path.startsWith('/fichajes/')) {
         const fid = parseInt(path.split('/fichajes/')[1]);
-        if (method === 'PUT')    return await actualizarFichaje(fid, request, env);
+        if (method === 'PUT')    return await actualizarFichaje(fid, request, env, ctx);
         if (method === 'DELETE') return await eliminarFichaje(fid, request, env);
       }
       if (path === '/personal/semana' && method === 'GET') return await getResumenSemana(request, env);
@@ -669,25 +669,25 @@ export default {
 
       // ── EPIs asignados (NEW-23) ───────────────────────────────────────────
       if (path === '/epis-asignados' && method === 'GET')  return await getEpisAsignados(request, env);
-      if (path === '/epis-asignados' && method === 'POST') return await crearEpiAsignado(request, env);
+      if (path === '/epis-asignados' && method === 'POST') return await crearEpiAsignado(request, env, ctx);
       if (path.startsWith('/epis-asignados/')) {
         const epid = parseInt(path.split('/epis-asignados/')[1]);
-        if (method === 'PUT')    return await actualizarEpiAsignado(epid, request, env);
+        if (method === 'PUT')    return await actualizarEpiAsignado(epid, request, env, ctx);
         if (method === 'DELETE') return await eliminarEpiAsignado(epid, request, env);
       }
 
       // ── Carnets y certificaciones (NEW-19) ───────────────────────────────
       if (path === '/carnets' && method === 'GET')  return await getCarnets(request, env);
-      if (path === '/carnets' && method === 'POST') return await crearCarnet(request, env);
+      if (path === '/carnets' && method === 'POST') return await crearCarnet(request, env, ctx);
       if (path.startsWith('/carnets/')) {
         const cid = parseInt(path.split('/carnets/')[1]);
-        if (method === 'PUT')    return await actualizarCarnet(cid, request, env);
+        if (method === 'PUT')    return await actualizarCarnet(cid, request, env, ctx);
         if (method === 'DELETE') return await eliminarCarnet(cid, request, env);
       }
 
       // ── Turnos (NEW-20) ───────────────────────────────────────────────────
       if (path === '/turnos' && method === 'GET')  return await getTurnos(request, env);
-      if (path === '/turnos' && method === 'POST') return await upsertTurno(request, env);
+      if (path === '/turnos' && method === 'POST') return await upsertTurno(request, env, ctx);
       if (path.startsWith('/turnos/') && method === 'DELETE') {
         const tid = parseInt(path.split('/turnos/')[1]);
         return await eliminarTurno(tid, request, env);
@@ -711,7 +711,7 @@ export default {
       if ((path === '/sync' || path === '/sync-sheets') && method === 'POST') {
         const { empresa_id } = await getAuth(request, env);
         if (!empresa_id) return err('No autorizado', 403);
-        await Promise.all([syncSheets(env), syncPedidos(env)]);
+        await Promise.all([syncSheets(env), syncPedidos(env), syncRRHH(env)]);
         return json({ ok: true, mensaje: 'Sync completado' });
       }
       if (path === '/sync-debug'   && method === 'POST')  {
@@ -743,6 +743,7 @@ export default {
     // Resync completo en cada cron — resiliencia ante fallos transitorios de Google API
     ctx.waitUntil(syncSheets(env));
     ctx.waitUntil(syncPedidos(env));
+    ctx.waitUntil(syncRRHH(env)); // SYNC-03: fichajes, incidencias, carnets, EPIs, turnos, repostajes
   },
 };
 
@@ -3267,7 +3268,7 @@ async function getEpisAsignados(request, env) {
   return json(rows.results);
 }
 
-async function crearEpiAsignado(request, env) {
+async function crearEpiAsignado(request, env, ctx) {
   const { empresa_id, nombre, rol } = await getAuth(request, env);
   if (!empresa_id) return err('No autorizado', 403);
   if (rol === 'operario') return err('Sin permisos', 403);
@@ -3277,10 +3278,11 @@ async function crearEpiAsignado(request, env) {
   const r = await env.DB.prepare(
     'INSERT INTO epis_asignados (empresa_id,obra_id,usuario_id,externo_id,nombre_trabajador,tipo_epi,talla,numero_serie,fecha_entrega,fecha_caducidad,proxima_revision,estado,observaciones,created_by) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)'
   ).bind(empresa_id, obra_id||null, usuario_id||null, externo_id||null, nombre_trabajador, tipo_epi, talla||null, numero_serie||null, fecha_entrega||null, fecha_caducidad||null, proxima_revision||null, estado||'activo', observaciones||null, nombre||rol||'').run();
+  ctx?.waitUntil(syncRRHH(env, 'EPIs', empresa_id));
   return json({ ok: true, id: r.meta.last_row_id });
 }
 
-async function actualizarEpiAsignado(id, request, env) {
+async function actualizarEpiAsignado(id, request, env, ctx) {
   const { empresa_id, rol } = await getAuth(request, env);
   if (!empresa_id) return err('No autorizado', 403);
   if (rol === 'operario') return err('Sin permisos', 403);
@@ -3292,6 +3294,7 @@ async function actualizarEpiAsignado(id, request, env) {
   if (!campos.length) return err('Sin cambios');
   vals.push(id, empresa_id);
   await env.DB.prepare(`UPDATE epis_asignados SET ${campos.join(',')} WHERE id=? AND empresa_id=?`).bind(...vals).run();
+  ctx?.waitUntil(syncRRHH(env, 'EPIs', empresa_id));
   return json({ ok: true });
 }
 
@@ -3317,7 +3320,7 @@ async function getCarnets(request, env) {
   return json(rows.results);
 }
 
-async function crearCarnet(request, env) {
+async function crearCarnet(request, env, ctx) {
   const { empresa_id, nombre, rol, obra_id: obraAuth } = await getAuth(request, env);
   if (!empresa_id) return err('No autorizado', 403);
   if (rol === 'operario') return err('Sin permisos', 403);
@@ -3327,10 +3330,11 @@ async function crearCarnet(request, env) {
   const r = await env.DB.prepare(
     'INSERT INTO carnets (empresa_id,obra_id,usuario_id,externo_id,nombre_trabajador,tipo,numero,fecha_obtencion,fecha_caducidad,dias_aviso,estado,notas,created_by) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)'
   ).bind(empresa_id, obra_id||obraAuth||null, usuario_id||null, externo_id||null, nombre_trabajador, tipo, numero||null, fecha_obtencion||null, fecha_caducidad||null, dias_aviso||30, estado||'vigente', notas||null, nombre||rol||'').run();
+  ctx?.waitUntil(syncRRHH(env, 'Carnets', empresa_id));
   return json({ ok: true, id: r.meta.last_row_id });
 }
 
-async function actualizarCarnet(id, request, env) {
+async function actualizarCarnet(id, request, env, ctx) {
   const { empresa_id, rol } = await getAuth(request, env);
   if (!empresa_id) return err('No autorizado', 403);
   if (rol === 'operario') return err('Sin permisos', 403);
@@ -3342,6 +3346,7 @@ async function actualizarCarnet(id, request, env) {
   if (!campos.length) return err('Sin cambios');
   vals.push(id, empresa_id);
   await env.DB.prepare(`UPDATE carnets SET ${campos.join(',')} WHERE id=? AND empresa_id=?`).bind(...vals).run();
+  ctx?.waitUntil(syncRRHH(env, 'Carnets', empresa_id));
   return json({ ok: true });
 }
 
@@ -3393,7 +3398,7 @@ async function getFichajes(request, env) {
   return json(results);
 }
 
-async function crearFichaje(request, env) {
+async function crearFichaje(request, env, ctx) {
   const { empresa_id, rol, nombre: encargadoNombre, obra_id: obraAuth, isSuperadmin, isEmpresaAdmin, isAdmin } = await getAuth(request, env);
   if (!empresa_id || rol === 'operario') return err('Sin permisos', 403);
   const body = await request.json().catch(() => ({}));
@@ -3430,10 +3435,11 @@ async function crearFichaje(request, env) {
     hora_entrada||null, hora_salida||null, horas, horas_extra, minutos_retraso,
     estadoFinal, motivo?.trim()||null, notas?.trim()||null, encargadoNombre||rol
   ).run();
+  ctx?.waitUntil(syncRRHH(env, 'Fichajes', empresa_id));
   return json({ ok: true, id: r.meta.last_row_id }, 201);
 }
 
-async function actualizarFichaje(id, request, env) {
+async function actualizarFichaje(id, request, env, ctx) {
   const { empresa_id, rol, nombre: encargadoNombre, obra_id: obraAuth } = await getAuth(request, env);
   if (!empresa_id || rol === 'operario') return err('Sin permisos', 403);
   const body = await request.json().catch(() => ({}));
@@ -3472,6 +3478,7 @@ async function actualizarFichaje(id, request, env) {
   if (!campos.length) return json({ ok: true });
   vals.push(id); vals.push(empresa_id);
   await env.DB.prepare(`UPDATE fichajes SET ${campos.join(',')} WHERE id=? AND empresa_id=?`).bind(...vals).run();
+  ctx?.waitUntil(syncRRHH(env, 'Fichajes', empresa_id));
   return json({ ok: true });
 }
 
@@ -4124,6 +4131,108 @@ async function applyTabFormatting(spreadsheetId, authH, tabName, sheetMeta, numC
     console.error(`applyTabFormatting(${tabName}) HTTP ${res.status}: ${errBody.slice(0, 300)}`);
   } else {
     await res.body?.cancel();
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// SYNC RRHH — Fichajes, Incidencias, Carnets, EPIs, Turnos, Repostajes (SYNC-03)
+// ════════════════════════════════════════════════════════════════════════════
+async function syncRRHH(env, tabs = null, empresa_id = 1) {
+  if (!env.GOOGLE_PRIVATE_KEY || !env.GOOGLE_CLIENT_EMAIL || !env.GOOGLE_SHEET_ID) return;
+  try {
+    const token   = await getGoogleToken(env);
+    const sheetId = env.GOOGLE_SHEET_ID;
+    const authH   = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
+    const tabsNecesarias = ['Fichajes', 'Incidencias', 'Carnets', 'EPIs', 'Turnos', 'Repostajes'];
+    const tabsToSync     = tabs ? (Array.isArray(tabs) ? tabs : [tabs]) : tabsNecesarias;
+
+    // Crear pestañas que faltan
+    const metaUrl = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}?fields=sheets(properties,bandedRanges,conditionalFormats)`;
+    let metaRes = await fetch(metaUrl, { headers: authH });
+    let meta = await metaRes.json();
+    let sheetsActuales = meta.sheets || [];
+    const addReqs = tabsNecesarias
+      .filter(t => tabsToSync.includes(t) && !sheetsActuales.map(s => s.properties.title).includes(t))
+      .map(t => ({ addSheet: { properties: { title: t } } }));
+    if (addReqs.length > 0) {
+      await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}:batchUpdate`,
+        { method: 'POST', headers: authH, body: JSON.stringify({ requests: addReqs }) }).then(r => r.body?.cancel());
+      const m2 = await (await fetch(metaUrl, { headers: authH })).json();
+      sheetsActuales = m2.sheets || [];
+    }
+    const sheetMetaMap = {};
+    sheetsActuales.forEach(s => { sheetMetaMap[s.properties.title] = s; });
+
+    const writeTab = async (tab, values) => {
+      if (!tabsToSync.includes(tab)) return;
+      const range = `${tab}!A1`;
+      await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(range)}:clear`,
+        { method: 'POST', headers: authH }).then(r => r.body?.cancel());
+      const putRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(range)}?valueInputOption=RAW`,
+        { method: 'PUT', headers: authH, body: JSON.stringify({ values }) });
+      if (!putRes.ok) { const eb = await putRes.text(); throw new Error(`writeTab(${tab}) ${putRes.status}: ${eb.slice(0,200)}`); }
+      else { await putRes.body?.cancel(); }
+      if (sheetMetaMap[tab]) await applyTabFormatting(sheetId, authH, tab, sheetMetaMap[tab], values[0]?.length || 1, values.length);
+    };
+
+    const cabFichajes   = ['Obra', 'Fecha', 'Trabajador', 'Hora Entrada', 'Hora Salida', 'Horas', 'H. Extra', 'Retraso (min)', 'Estado', 'Motivo', 'Notas', 'Registrado por'];
+    const cabIncid      = ['Obra', 'Fecha', 'Departamento', 'Título', 'Tipo', 'Gravedad', 'Estado', 'Reportado por', 'Asignado a', 'Resolución'];
+    const cabCarnets    = ['Obra', 'Trabajador', 'Tipo', 'Número', 'Fecha Obtención', 'Fecha Caducidad', 'Estado', 'Notas'];
+    const cabEPIs       = ['Obra', 'Trabajador', 'Tipo EPI', 'Talla', 'Nº Serie', 'Fecha Entrega', 'Fecha Caducidad', 'Próx. Revisión', 'Estado', 'Observaciones'];
+    const cabTurnos     = ['Obra', 'Fecha', 'Trabajador', 'Turno'];
+    const cabRepostajes = ['Obra', 'Fecha', 'Equipo', 'ID Equipo', 'Tipo', 'Cantidad', 'Unidad', 'Coste (€)', 'Usuario', 'Notas'];
+
+    const fmtF = f => [f.obra_nombre||'', f.fecha||'', f.nombre_usuario||f.nombre_externo||'', f.hora_entrada||'', f.hora_salida||'', f.horas_trabajadas||0, f.horas_extra||0, f.minutos_retraso||0, f.estado||'', f.motivo||'', f.notas||'', f.registrado_por||''];
+    const fmtI = i => [i.obra_nombre||'', i.fecha||'', i.departamento||'', i.titulo||'', i.tipo||'', i.gravedad||'', i.estado||'', i.reportado_por||'', i.asignado_a||'', i.resolucion||''];
+    const fmtK = k => [k.obra_nombre||'', k.nombre_trabajador||'', k.tipo||'', k.numero||'', k.fecha_obtencion||'', k.fecha_caducidad||'', k.estado||'', k.notas||''];
+    const fmtE = e => [e.obra_nombre||'', e.nombre_trabajador||'', e.tipo_epi||'', e.talla||'', e.numero_serie||'', e.fecha_entrega||'', e.fecha_caducidad||'', e.proxima_revision||'', e.estado||'', e.observaciones||''];
+    const fmtT = t => [t.obra_nombre||'', t.fecha||'', t.nombre_trabajador||'', t.turno||''];
+    const fmtR = r => [r.obra_nombre||'', r.fecha||'', r.equipo_tipo||'', String(r.equipo_id||''), r.tipo||'', r.cantidad||'', r.unidad||'', r.coste||'', r.usuario||'', r.notas||''];
+
+    await Promise.all([
+      tabsToSync.includes('Fichajes') && (async () => {
+        const { results } = await env.DB.prepare(
+          `SELECT f.*, u.nombre as nombre_usuario, pe.nombre as nombre_externo, o.nombre as obra_nombre
+           FROM fichajes f LEFT JOIN usuarios u ON f.usuario_id=u.id LEFT JOIN personal_externo pe ON f.personal_externo_id=pe.id LEFT JOIN obras o ON f.obra_id=o.id
+           WHERE f.empresa_id=? ORDER BY f.fecha DESC, f.hora_entrada ASC LIMIT 1000`
+        ).bind(empresa_id).all();
+        await writeTab('Fichajes', [cabFichajes, ...results.map(fmtF)]);
+      })(),
+      tabsToSync.includes('Incidencias') && (async () => {
+        const { results } = await env.DB.prepare(
+          `SELECT i.*, o.nombre as obra_nombre FROM incidencias i LEFT JOIN obras o ON i.obra_id=o.id WHERE i.empresa_id=? ORDER BY i.fecha DESC LIMIT 500`
+        ).bind(empresa_id).all();
+        await writeTab('Incidencias', [cabIncid, ...results.map(fmtI)]);
+      })(),
+      tabsToSync.includes('Carnets') && (async () => {
+        const { results } = await env.DB.prepare(
+          `SELECT c.*, o.nombre as obra_nombre FROM carnets c LEFT JOIN obras o ON c.obra_id=o.id WHERE c.empresa_id=? ORDER BY c.nombre_trabajador, c.tipo`
+        ).bind(empresa_id).all();
+        await writeTab('Carnets', [cabCarnets, ...results.map(fmtK)]);
+      })(),
+      tabsToSync.includes('EPIs') && (async () => {
+        const { results } = await env.DB.prepare(
+          `SELECT e.*, o.nombre as obra_nombre FROM epis_asignados e LEFT JOIN obras o ON e.obra_id=o.id WHERE e.empresa_id=? ORDER BY e.nombre_trabajador, e.tipo_epi`
+        ).bind(empresa_id).all();
+        await writeTab('EPIs', [cabEPIs, ...results.map(fmtE)]);
+      })(),
+      tabsToSync.includes('Turnos') && (async () => {
+        const { results } = await env.DB.prepare(
+          `SELECT t.*, o.nombre as obra_nombre FROM turnos t LEFT JOIN obras o ON t.obra_id=o.id WHERE t.empresa_id=? ORDER BY t.fecha DESC LIMIT 1000`
+        ).bind(empresa_id).all();
+        await writeTab('Turnos', [cabTurnos, ...results.map(fmtT)]);
+      })(),
+      tabsToSync.includes('Repostajes') && (async () => {
+        const { results } = await env.DB.prepare(
+          `SELECT r.*, o.nombre as obra_nombre FROM repostajes r LEFT JOIN obras o ON r.obra_id=o.id WHERE r.empresa_id=? ORDER BY r.fecha DESC LIMIT 500`
+        ).bind(empresa_id).all();
+        await writeTab('Repostajes', [cabRepostajes, ...results.map(fmtR)]);
+      })(),
+    ].filter(Boolean));
+    console.log(`RRHH sync OK [${tabsToSync.join(', ')}]`);
+  } catch (e) {
+    console.error('Error sync RRHH:', e.message);
+    try { await env.DB.prepare('INSERT INTO logs (nivel,origen,mensaje,detalle) VALUES (?,?,?,?)').bind('error','sync-rrhh','Error sync RRHH Sheets',e.message).run(); } catch (_) {}
   }
 }
 
@@ -5127,7 +5236,7 @@ async function getIncidencias(request, env) {
   return json(results);
 }
 
-async function crearIncidencia(request, env) {
+async function crearIncidencia(request, env, ctx) {
   const auth = await getAuth(request, env);
   const { empresa_id, obra_id, departamento, nombre } = auth;
   if (!empresa_id) return err('No autorizado', 403);
@@ -5144,10 +5253,11 @@ async function crearIncidencia(request, env) {
     const gravedadIcon = { baja: '🟢', media: '🟠', alta: '🔴' };
     await sendTelegram(env, `${gravedadIcon[gravedad]} <b>Incidencia ALTA [${dept}]</b>\n📋 ${titulo.trim()}\n${descripcion ? '📝 ' + descripcion.slice(0,200) + '\n' : ''}👤 ${nombre || '—'}`);
   }
+  ctx?.waitUntil(syncRRHH(env, 'Incidencias', empresa_id));
   return json({ ok: true, id: r.meta.last_row_id }, 201);
 }
 
-async function actualizarIncidencia(id, request, env) {
+async function actualizarIncidencia(id, request, env, ctx) {
   const { empresa_id, nombre, rol } = await getAuth(request, env);
   if (!empresa_id) return err('No autorizado', 403);
   const puedeGestionar = rol === 'encargado' || rol === 'empresa_admin' || rol === 'superadmin';
@@ -5172,6 +5282,7 @@ async function actualizarIncidencia(id, request, env) {
   if (body.estado === 'resuelta') {
     await sendTelegram(env, `✅ <b>Incidencia resuelta [${inc.departamento}]</b>\n📋 ${inc.titulo}\n${body.resolucion ? '📝 ' + body.resolucion.slice(0,200) : ''}`);
   }
+  ctx?.waitUntil(syncRRHH(env, 'Incidencias', empresa_id));
   return json({ ok: true });
 }
 
@@ -5580,7 +5691,7 @@ async function getTurnos(request, env) {
   return json(results || []);
 }
 
-async function upsertTurno(request, env) {
+async function upsertTurno(request, env, ctx) {
   const auth = await getAuth(request, env);
   if (!auth.isAdmin && !auth.isSuperadmin && !auth.isEmpresaAdmin && !auth.isEncargado) return err('Sin permisos', 403);
   const { empresa_id } = auth;
@@ -5603,11 +5714,13 @@ async function upsertTurno(request, env) {
 
   if (existing) {
     await env.DB.prepare('UPDATE turnos SET turno=?, obra_id=? WHERE id=?').bind(turno, obra, existing.id).run();
+    ctx?.waitUntil(syncRRHH(env, 'Turnos', empresa_id));
     return json({ ok: true, id: existing.id, accion: 'actualizado' });
   }
   const r = await env.DB.prepare(
     'INSERT INTO turnos (empresa_id,obra_id,usuario_id,externo_id,nombre_trabajador,fecha,turno) VALUES (?,?,?,?,?,?,?)'
   ).bind(empresa_id, obra, usuario_id||null, externo_id||null, nombre_trabajador||null, fecha, turno).run();
+  ctx?.waitUntil(syncRRHH(env, 'Turnos', empresa_id));
   return json({ ok: true, id: r.meta.last_row_id, accion: 'creado' }, 201);
 }
 
@@ -6657,7 +6770,7 @@ async function getRepostajes(request, env) {
   return json(results);
 }
 
-async function crearRepostaje(request, env) {
+async function crearRepostaje(request, env, ctx) {
   const { empresa_id, obra_id, nombre, rol } = await getAuth(request, env);
   if (!empresa_id) return err('No autorizado', 403);
   if (rol === 'operario') return err('Sin permisos', 403);
@@ -6681,6 +6794,7 @@ async function crearRepostaje(request, env) {
     const emoji = tipo === 'combustible' ? '⛽' : '🔋';
     await sendTelegram(env, `${emoji} <b>Repostaje registrado</b>\n🚜 ${equipo_tipo.toUpperCase()} ${equipo_id}\n📦 ${cantidad ? cantidad + ' ' + (unidad||'') : ''} · 💶 ${parseFloat(coste).toFixed(2)}€\n👤 ${nombre || rol || '—'}`);
   }
+  ctx?.waitUntil(syncRRHH(env, 'Repostajes', empresa_id));
   return json({ ok: true, id: r.meta.last_row_id });
 }
 
