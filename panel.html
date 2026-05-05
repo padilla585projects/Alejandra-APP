@@ -668,11 +668,21 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
       <!-- USUARIOS (admin) -->
       <div class="page" id="pageUsuarios">
         <div class="page-title">👤 Usuarios</div>
-        <div class="page-sub">Gestión de cuentas y roles</div>
+        <div class="page-sub">Gestión de cuentas y roles de la empresa</div>
+        <div id="usuResumen" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;margin-bottom:16px"></div>
         <div class="tbl-toolbar">
-          <input class="tbl-search" id="searchUsuarios" placeholder="🔍 Buscar usuario...">
+          <input class="tbl-search" id="searchUsuarios" placeholder="🔍 Buscar nombre o email...">
+          <select class="tbl-search" id="filterUsuRol" style="min-width:140px" onchange="filtrarUsuarios()">
+            <option value="">Todos los roles</option>
+            <option value="empresa_admin">Admin</option>
+            <option value="encargado">Encargado</option>
+            <option value="jefe_de_obra">Jefe de obra</option>
+            <option value="oficina">Oficina</option>
+            <option value="operario">Operario</option>
+          </select>
           <button class="btn btn-primary" onclick="abrirModalUsuario()">+ Nuevo usuario</button>
-          <button class="btn btn-secondary" onclick="cargarUsuarios()">🔄 Actualizar</button>
+          <button class="btn btn-secondary" onclick="exportarTabla(tblUsuarios,'usuarios')">⬇ CSV</button>
+          <button class="btn btn-secondary" onclick="tblUsuarios=null;cargarUsuarios()">🔄 Actualizar</button>
         </div>
         <div class="tbl-wrap"><div id="tblUsuarios"></div></div>
       </div>
@@ -680,8 +690,70 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
       <!-- EMPRESA (admin) -->
       <div class="page" id="pageEmpresa">
         <div class="page-title">🏢 Mi empresa</div>
-        <div class="page-sub">Configuración general de la empresa</div>
-        <div class="loading"><div class="spinner"></div> Próximamente en Fase 6</div>
+        <div class="page-sub">Configuración general y datos de la empresa</div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+          <!-- Datos generales -->
+          <div class="section-card">
+            <div class="section-card-title"><span>📋</span> Datos generales</div>
+            <div class="form-group"><div class="form-label">Nombre de la empresa</div><input class="form-input" id="empNombre" placeholder="Mi Empresa S.L."></div>
+            <div class="form-group"><div class="form-label">Email de contacto</div><input class="form-input" id="empEmail" type="email" placeholder="contacto@empresa.com"></div>
+            <div class="form-row">
+              <div class="form-group"><div class="form-label">Teléfono</div><input class="form-input" id="empTelefono" placeholder="+34 600 000 000"></div>
+              <div class="form-group"><div class="form-label">CIF</div><input class="form-input" id="empCif" placeholder="B12345678"></div>
+            </div>
+            <div class="form-group"><div class="form-label">Dirección</div><input class="form-input" id="empDireccion" placeholder="Calle Mayor 1, Madrid"></div>
+            <div style="margin-top:8px">
+              <button class="btn btn-primary" id="btnGuardarEmpresa" onclick="guardarEmpresa()">💾 Guardar cambios</button>
+            </div>
+          </div>
+
+          <!-- Stats + Plan -->
+          <div>
+            <div class="section-card" style="margin-bottom:20px">
+              <div class="section-card-title"><span>📊</span> Resumen</div>
+              <div id="empStats"><div class="loading"><div class="spinner"></div></div></div>
+            </div>
+            <div class="section-card">
+              <div class="section-card-title"><span>📱</span> Informe semanal Telegram</div>
+              <div class="form-group">
+                <label style="display:flex;align-items:center;gap:10px;cursor:pointer">
+                  <input type="checkbox" id="empInformeSemanal" style="width:18px;height:18px;accent-color:var(--accent)">
+                  <span style="font-size:13px">Activar informe semanal automático</span>
+                </label>
+              </div>
+              <div class="form-group"><div class="form-label">Día del informe</div>
+                <select class="form-select" id="empInformeDia">
+                  <option value="lunes">Lunes</option><option value="martes">Martes</option>
+                  <option value="miercoles">Miércoles</option><option value="jueves">Jueves</option>
+                  <option value="viernes">Viernes</option>
+                </select>
+              </div>
+              <button class="btn btn-secondary" onclick="guardarInformeSemanal()">Guardar configuración</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Sección crear empresa (solo superadmin/dev) -->
+        <div id="seccionCrearEmpresa" style="display:none;margin-top:20px">
+          <div class="section-card" style="border-color:rgba(168,85,247,.3)">
+            <div class="section-card-title"><span>🏗️</span> Crear nueva empresa <span style="background:rgba(168,85,247,.2);color:#a855f7;font-size:9px;padding:2px 8px;border-radius:10px;margin-left:6px">SUPERADMIN</span></div>
+            <p style="font-size:13px;color:var(--muted);margin-bottom:14px">Registra una nueva empresa en el sistema con su primer administrador.</p>
+            <button class="btn btn-secondary" onclick="abrirWizardEmpresa()" style="border-color:#a855f7;color:#a855f7">🏢 Registrar nueva empresa</button>
+          </div>
+        </div>
+
+        <!-- Lista de empresas (solo superadmin/dev) -->
+        <div id="seccionEmpresas" style="display:none;margin-top:20px">
+          <div class="section-card">
+            <div class="section-card-title"><span>🏢</span> Todas las empresas <span style="background:rgba(168,85,247,.2);color:#a855f7;font-size:9px;padding:2px 8px;border-radius:10px;margin-left:6px">SUPERADMIN</span></div>
+            <div class="tbl-toolbar" style="margin-bottom:12px">
+              <input class="tbl-search" id="searchEmpresas" placeholder="🔍 Buscar empresa..." oninput="tblEmpresas&&tblEmpresas.setFilter('nombre','like',this.value)">
+              <button class="btn btn-secondary" onclick="cargarListaEmpresas()">🔄 Actualizar</button>
+            </div>
+            <div class="tbl-wrap"><div id="tblEmpresas"></div></div>
+          </div>
+        </div>
       </div>
 
       <!-- LOGS (admin) -->
@@ -1054,6 +1126,12 @@ function iniciarApp() {
     document.querySelectorAll('.nav-dev, .nav-dev-section').forEach(el => el.style.display = '');
   }
 
+  // mostrar secciones superadmin en página empresa
+  if (['superadmin', 'desarrollador'].includes(SESSION.rol)) {
+    document.getElementById('seccionCrearEmpresa').style.display = '';
+    document.getElementById('seccionEmpresas').style.display = '';
+  }
+
   // responsive toggle
   if (window.innerWidth <= 900) document.getElementById('btnMenuToggle').style.display = '';
 
@@ -1074,7 +1152,7 @@ const PAGE_TITLES = {
   pemp: 'PEMP', carretillas: 'Carretillas', repostajes: 'Repostajes', herramientas: 'Herramientas',
   seguridad: 'Seguridad', obras: 'Obras', incidencias: 'Incidencias',
   pedidos: 'Pedidos', mantenimientos: 'Mantenimientos', usuarios: 'Usuarios',
-  empresa: 'Empresa', logs: 'Logs', devtools: '🛠️ DevTools'
+  empresa: 'Mi Empresa', logs: 'Logs', devtools: '🛠️ DevTools'
 };
 
 const PAGE_LOADERS = {
@@ -1095,6 +1173,7 @@ const PAGE_LOADERS = {
   pedidos: cargarPedidos,
   mantenimientos: cargarMantenimientos,
   usuarios: cargarUsuarios,
+  empresa: cargarEmpresa,
   logs: renderLogs,
   devtools: cargarDevtools,
 };
@@ -2520,26 +2599,58 @@ function abrirModalMantenimiento() {
 
 // ── USUARIOS (admin) ───────────────────────────────────────────
 let tblUsuarios = null;
+
 async function cargarUsuarios() {
   if (!['empresa_admin', 'superadmin', 'desarrollador'].includes(SESSION.rol)) return;
-  const r = await api('/usuarios');
-  const data = r.usuarios || r.data || [];
+  const r = await api('/personal/trabajadores');
+  const data = (r.trabajadores || r.data || []);
+
+  const activos   = data.filter(u => u.activo).length;
+  const admins    = data.filter(u => ['empresa_admin','encargado','jefe_de_obra','oficina'].includes(u.rol)).length;
+  const operarios = data.filter(u => u.rol === 'operario').length;
+  document.getElementById('usuResumen').innerHTML = [
+    { icon:'👥', value: data.length, label:'Total usuarios', cls:'' },
+    { icon:'✅', value: activos,     label:'Activos',        cls:'ok' },
+    { icon:'🔑', value: admins,      label:'Con acceso web', cls:'' },
+    { icon:'👷', value: operarios,   label:'Operarios',      cls:'' },
+  ].map(k => `<div class="kpi-card" style="padding:14px"><div class="kpi-icon" style="font-size:20px">${k.icon}</div><div class="kpi-value ${k.cls}" style="font-size:22px">${k.value}</div><div class="kpi-label">${k.label}</div></div>`).join('');
+
   if (tblUsuarios) { tblUsuarios.replaceData(data); return; }
+  const canEdit = ['empresa_admin','superadmin','desarrollador'].includes(SESSION.rol);
+
   tblUsuarios = new Tabulator('#tblUsuarios', {
-    data, layout: 'fitColumns', pagination: 'local', paginationSize: 20,
+    data, layout: 'fitColumns', pagination: 'local', paginationSize: 25,
+    placeholder: '<div class="empty-state"><div class="empty-icon">👤</div><div class="empty-text">Sin usuarios</div></div>',
     columns: [
-      { title: 'Nombre', field: 'nombre', sorter: 'string', minWidth: 180 },
-      { title: 'Email', field: 'email', minWidth: 200 },
-      { title: 'Rol', field: 'rol', width: 140,
+      { title: 'Nombre', field: 'nombre', sorter: 'string', minWidth: 180,
+        editor: canEdit ? 'input' : false,
+        cellEdited: c => guardarCampoUsuario(c.getRow().getData().id, 'nombre', c.getValue()) },
+      { title: 'Email', field: 'email', minWidth: 180 },
+      { title: 'Rol', field: 'rol', width: 150,
+        editor: canEdit ? 'select' : false,
+        editorParams: { values: { operario:'Operario', encargado:'Encargado', jefe_de_obra:'Jefe de obra', oficina:'Oficina', empresa_admin:'Admin' } },
         formatter: c => {
           const v = c.getValue();
-          const cls = { empresa_admin:'accent', encargado:'warn', operario:'info', jefe_de_obra:'blue', oficina:'ok' }[v] || 'muted';
-          return `<span class="badge badge-${cls}">${v || '—'}</span>`;
+          const color = { empresa_admin:'var(--accent)', encargado:'var(--yellow)', jefe_de_obra:'var(--blue)', oficina:'var(--green)', operario:'var(--muted)', desarrollador:'#a855f7' }[v] || 'var(--muted)';
+          return `<span style="background:${color}22;color:${color};border:1px solid ${color}44;font-family:'Montserrat',sans-serif;font-weight:700;font-size:10px;padding:2px 8px;border-radius:20px">${v || '—'}</span>`;
+        },
+        cellEdited: c => guardarCampoUsuario(c.getRow().getData().id, 'rol', c.getValue()) },
+      { title: 'Dpto.', field: 'departamento', width: 120,
+        formatter: c => c.getValue() ? `<span class="badge badge-muted">${c.getValue()}</span>` : '—' },
+      { title: 'Obra', field: 'obra_nombre', minWidth: 130,
+        formatter: c => c.getValue() ? `<span style="font-size:12px">🏗 ${c.getValue()}</span>` : '<span style="color:var(--muted)">—</span>' },
+      { title: 'Activo', field: 'activo', width: 80, hozAlign: 'center',
+        formatter: c => c.getValue() ? '<span class="badge badge-ok">✓</span>' : '<span class="badge badge-danger">✕</span>' },
+      { title: '', field: 'id', width: 130, hozAlign: 'center', headerSort: false,
+        formatter: c => {
+          const row = c.getRow().getData();
+          const toggleLabel = row.activo ? '🔒 Desactivar' : '🔓 Activar';
+          return canEdit ? `<div style="display:flex;gap:4px">
+            <button class="btn btn-sm btn-secondary" onclick="event.stopPropagation();cambiarPassUsuario(${row.id},'${row.nombre}')" title="Cambiar contraseña">🔑</button>
+            <button class="btn btn-sm ${row.activo ? 'btn-danger' : 'btn-secondary'}" onclick="event.stopPropagation();toggleUsuario(${row.id},${row.activo})" title="${toggleLabel}">${row.activo ? '🔒' : '🔓'}</button>
+          </div>` : '';
         }
       },
-      { title: 'Dpto.', field: 'departamento', width: 130 },
-      { title: 'Activo', field: 'activo', width: 80, hozAlign: 'center',
-        formatter: c => c.getValue() ? '✅' : '❌' },
     ]
   });
   document.getElementById('searchUsuarios').oninput = function() {
@@ -2547,11 +2658,44 @@ async function cargarUsuarios() {
   };
 }
 
+async function guardarCampoUsuario(id, campo, valor) {
+  const r = await api(`/usuarios/${id}`, { method: 'PUT', body: JSON.stringify({ [campo]: valor }) });
+  if (r.ok) toast('Guardado ✓', 'ok'); else toast('Error al guardar', 'err');
+}
+
+async function toggleUsuario(id, activo) {
+  const r = await api(`/usuarios/${id}`, { method: 'PUT', body: JSON.stringify({ activo: activo ? 0 : 1 }) });
+  if (r.ok) { toast(activo ? 'Usuario desactivado' : 'Usuario activado ✓', 'ok'); tblUsuarios = null; cargarUsuarios(); }
+  else toast('Error', 'err');
+}
+
+function filtrarUsuarios() {
+  if (!tblUsuarios) return;
+  const rol = document.getElementById('filterUsuRol').value;
+  if (rol) tblUsuarios.setFilter('rol', '=', rol);
+  else tblUsuarios.clearFilter();
+}
+
+function cambiarPassUsuario(id, nombre) {
+  abrirModal(`🔑 Cambiar contraseña — ${nombre}`, `
+    <div class="form-group"><div class="form-label">Nueva contraseña</div><input class="form-input" id="mNewPass" type="password" placeholder="Mín. 8 caracteres"></div>
+    <div class="form-group"><div class="form-label">Confirmar contraseña</div><input class="form-input" id="mNewPass2" type="password" placeholder="Repite la contraseña"></div>
+  `, async () => {
+    const p1 = document.getElementById('mNewPass').value;
+    const p2 = document.getElementById('mNewPass2').value;
+    if (!p1 || p1.length < 8) { toast('Mínimo 8 caracteres', 'err'); return; }
+    if (p1 !== p2) { toast('Las contraseñas no coinciden', 'err'); return; }
+    const r = await api(`/usuarios/${id}`, { method: 'PUT', body: JSON.stringify({ password: p1 }) });
+    if (r.ok) { cerrarModal(); toast('Contraseña actualizada ✓', 'ok'); }
+    else toast(r.error || 'Error al cambiar contraseña', 'err');
+  });
+}
+
 function abrirModalUsuario() {
   abrirModal('Nuevo usuario', `
-    <div class="form-group"><div class="form-label">Nombre completo</div><input class="form-input" id="mNombre" placeholder="Juan García"></div>
-    <div class="form-group"><div class="form-label">Email</div><input class="form-input" id="mEmail" type="email" placeholder="juan@empresa.com"></div>
-    <div class="form-group"><div class="form-label">Contraseña</div><input class="form-input" id="mPass" type="password"></div>
+    <div class="form-group"><div class="form-label">Nombre completo *</div><input class="form-input" id="mNombre" placeholder="Juan García"></div>
+    <div class="form-group"><div class="form-label">Email *</div><input class="form-input" id="mEmail" type="email" placeholder="juan@empresa.com"></div>
+    <div class="form-group"><div class="form-label">Contraseña *</div><input class="form-input" id="mPass" type="password" placeholder="Mín. 8 caracteres"></div>
     <div class="form-row">
       <div class="form-group"><div class="form-label">Rol</div>
         <select class="form-select" id="mRol">
@@ -2569,6 +2713,12 @@ function abrirModalUsuario() {
           <option value="seguridad">Seguridad</option>
           <option value="personal">Personal</option>
           <option value="obra_civil">Obra Civil</option>
+          <option value="albanileria">Albañilería</option>
+          <option value="pintura">Pintura</option>
+          <option value="carpinteria">Carpintería</option>
+          <option value="telecom">Telecom</option>
+          <option value="almacen">Almacén</option>
+          <option value="oficina_tec">Oficina técnica</option>
         </select>
       </div>
     </div>
@@ -2581,10 +2731,224 @@ function abrirModalUsuario() {
       departamento: document.getElementById('mDept').value,
     };
     if (!body.nombre || !body.email || !body.password) { toast('Rellena todos los campos', 'err'); return; }
+    if (body.password.length < 8) { toast('La contraseña debe tener al menos 8 caracteres', 'err'); return; }
     const r = await api('/usuarios', { method: 'POST', body: JSON.stringify(body) });
-    if (r.ok) { cerrarModal(); toast('Usuario creado ✓', 'ok'); cargarUsuarios(); }
+    if (r.ok) { cerrarModal(); toast('Usuario creado ✓', 'ok'); tblUsuarios = null; cargarUsuarios(); }
     else toast(r.error || 'Error al crear', 'err');
   });
+}
+
+// ── EMPRESA ────────────────────────────────────────────────────
+let _empData = null;
+let tblEmpresas = null;
+
+async function cargarEmpresa() {
+  const r = await api('/mi-empresa');
+  _empData = r.empresa || null;
+  if (!_empData) { toast('No se pudo cargar la empresa', 'err'); return; }
+
+  document.getElementById('empNombre').value    = _empData.nombre    || '';
+  document.getElementById('empEmail').value     = _empData.email     || '';
+  document.getElementById('empTelefono').value  = _empData.telefono  || '';
+  document.getElementById('empCif').value       = _empData.cif       || '';
+  document.getElementById('empDireccion').value = _empData.direccion || '';
+  document.getElementById('empInformeSemanal').checked = !!_empData.informe_semanal;
+  document.getElementById('empInformeDia').value = _empData.informe_dia || 'lunes';
+
+  // Stats
+  const obras = r.obras || [];
+  const usuarios = r.usuarios || [];
+  const admins = usuarios.filter(u => ['empresa_admin','encargado','jefe_de_obra','oficina'].includes(u.rol)).length;
+  document.getElementById('empStats').innerHTML = [
+    { icon:'🏢', label:'Plan', value: (_empData.plan || 'basic').toUpperCase() },
+    { icon:'🏗️', label:'Obras activas', value: obras.length },
+    { icon:'👥', label:'Usuarios activos', value: usuarios.length },
+    { icon:'🔑', label:'Con acceso web', value: admins },
+    { icon:'📅', label:'Alta', value: fmtFecha(_empData.created_at) },
+  ].map(s => `<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--border)">
+    <span style="color:var(--muted);font-size:12px">${s.icon} ${s.label}</span>
+    <span style="font-family:'Montserrat',sans-serif;font-weight:700;font-size:13px;color:var(--text)">${s.value}</span>
+  </div>`).join('');
+
+  // Superadmin: cargar lista de empresas
+  if (['superadmin','desarrollador'].includes(SESSION.rol)) cargarListaEmpresas();
+}
+
+async function guardarEmpresa() {
+  const btn = document.getElementById('btnGuardarEmpresa');
+  btn.disabled = true; btn.textContent = 'Guardando...';
+  const body = {
+    nombre:    document.getElementById('empNombre').value.trim(),
+    email:     document.getElementById('empEmail').value.trim()    || null,
+    telefono:  document.getElementById('empTelefono').value.trim() || null,
+    cif:       document.getElementById('empCif').value.trim()      || null,
+    direccion: document.getElementById('empDireccion').value.trim()|| null,
+  };
+  if (!body.nombre) { toast('El nombre es obligatorio', 'err'); btn.disabled=false; btn.textContent='💾 Guardar cambios'; return; }
+  const r = await api('/mi-empresa', { method: 'PUT', body: JSON.stringify(body) });
+  btn.disabled=false; btn.textContent='💾 Guardar cambios';
+  if (r.ok) toast('Empresa actualizada ✓', 'ok');
+  else toast(r.error || 'Error al guardar', 'err');
+}
+
+async function guardarInformeSemanal() {
+  const body = {
+    nombre: document.getElementById('empNombre').value.trim() || (_empData?.nombre || ''),
+    informe_semanal: document.getElementById('empInformeSemanal').checked,
+    informe_dia:     document.getElementById('empInformeDia').value,
+  };
+  const r = await api('/mi-empresa', { method: 'PUT', body: JSON.stringify(body) });
+  if (r.ok) toast('Informe semanal actualizado ✓', 'ok');
+  else toast(r.error || 'Error', 'err');
+}
+
+// ── LISTA DE EMPRESAS (superadmin) ─────────────────────────────
+async function cargarListaEmpresas() {
+  const r = await api('/empresas');
+  const data = r.empresas || r.data || r || [];
+  if (!Array.isArray(data)) return;
+  if (tblEmpresas) { tblEmpresas.replaceData(data); return; }
+  tblEmpresas = new Tabulator('#tblEmpresas', {
+    data, layout: 'fitColumns', pagination: 'local', paginationSize: 15,
+    placeholder: '<div class="empty-state"><div class="empty-icon">🏢</div><div class="empty-text">Sin empresas</div></div>',
+    columns: [
+      { title: 'ID', field: 'id', width: 55, hozAlign: 'center' },
+      { title: 'Nombre', field: 'nombre', sorter: 'string', minWidth: 200 },
+      { title: 'Email', field: 'email', minWidth: 180 },
+      { title: 'Plan', field: 'plan', width: 100,
+        formatter: c => `<span class="badge badge-info">${(c.getValue()||'—').toUpperCase()}</span>` },
+      { title: 'Activa', field: 'activa', width: 80, hozAlign: 'center',
+        formatter: c => c.getValue() ? '<span class="badge badge-ok">✓</span>' : '<span class="badge badge-danger">✕</span>' },
+      { title: 'Alta', field: 'created_at', width: 110, formatter: c => fmtFecha(c.getValue()) },
+      { title: '', field: 'id', width: 120, hozAlign: 'center', headerSort: false,
+        formatter: c => `<button class="btn btn-sm btn-secondary" onclick="seleccionarEmpresa(${c.getValue()})" title="Ver como esta empresa">👁 Ver</button>` },
+    ]
+  });
+}
+
+async function seleccionarEmpresa(id) {
+  const r = await api('/superadmin/empresa', { method: 'POST', body: JSON.stringify({ empresa_id: id }) });
+  if (r.ok) { toast('Empresa seleccionada — recargando...', 'ok'); setTimeout(() => location.reload(), 1200); }
+  else toast(r.error || 'Error', 'err');
+}
+
+// ── WIZARD CREAR EMPRESA (superadmin) ──────────────────────────
+let _wizardStep = 1;
+let _wizardData = {};
+
+function abrirWizardEmpresa() {
+  _wizardStep = 1; _wizardData = {};
+  mostrarWizardStep();
+}
+
+function mostrarWizardStep() {
+  const steps = {
+    1: {
+      titulo: '🏢 Nueva empresa — Paso 1/3: Datos',
+      html: `
+        <div style="margin-bottom:14px">
+          <div style="display:flex;gap:6px;margin-bottom:16px">
+            ${[1,2,3].map(i => `<div style="flex:1;height:4px;border-radius:2px;background:${i<=1?'var(--accent)':'var(--border)'}"></div>`).join('')}
+          </div>
+        </div>
+        <div class="form-group"><div class="form-label">Nombre de la empresa *</div><input class="form-input" id="wNombre" placeholder="Instalaciones XYZ S.L." value="${_wizardData.empresa_nombre||''}"></div>
+        <div class="form-row">
+          <div class="form-group"><div class="form-label">Email *</div><input class="form-input" id="wEmail" type="email" placeholder="admin@empresa.com" value="${_wizardData.email||''}"></div>
+          <div class="form-group"><div class="form-label">Teléfono</div><input class="form-input" id="wTel" placeholder="+34 600 000 000" value="${_wizardData.telefono||''}"></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><div class="form-label">CIF</div><input class="form-input" id="wCif" placeholder="B12345678" value="${_wizardData.cif||''}"></div>
+          <div class="form-group"><div class="form-label">Sector</div>
+            <select class="form-select" id="wSector">
+              <option value="instalaciones" ${_wizardData.sector==='instalaciones'?'selected':''}>Instalaciones eléctricas</option>
+              <option value="construccion" ${_wizardData.sector==='construccion'?'selected':''}>Construcción</option>
+              <option value="mantenimiento" ${_wizardData.sector==='mantenimiento'?'selected':''}>Mantenimiento</option>
+              <option value="otros" ${_wizardData.sector==='otros'?'selected':''}>Otros</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group"><div class="form-label">Dirección</div><input class="form-input" id="wDir" placeholder="Calle Mayor 1, Madrid" value="${_wizardData.direccion||''}"></div>
+        <div class="form-group"><div class="form-label">Primera obra (opcional)</div><input class="form-input" id="wObra" placeholder="Nombre de la primera obra" value="${_wizardData.obra_nombre||''}"></div>
+      `,
+      onOk: () => {
+        const nombre = document.getElementById('wNombre').value.trim();
+        const email  = document.getElementById('wEmail').value.trim();
+        if (!nombre || !email) { toast('Nombre y email son obligatorios', 'err'); return false; }
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { toast('Email inválido', 'err'); return false; }
+        Object.assign(_wizardData, { empresa_nombre: nombre, email, sector: document.getElementById('wSector').value, obra_nombre: document.getElementById('wObra').value.trim()||null });
+        _wizardStep = 2; mostrarWizardStep(); return false;
+      }
+    },
+    2: {
+      titulo: '👤 Nueva empresa — Paso 2/3: Administrador',
+      html: `
+        <div style="display:flex;gap:6px;margin-bottom:16px">
+          ${[1,2,3].map(i => `<div style="flex:1;height:4px;border-radius:2px;background:${i<=2?'var(--accent)':'var(--border)'}"></div>`).join('')}
+        </div>
+        <p style="font-size:13px;color:var(--muted);margin-bottom:14px">Crea el usuario administrador principal de <strong style="color:var(--text)">${_wizardData.empresa_nombre}</strong>.</p>
+        <div class="form-group"><div class="form-label">Nombre del administrador *</div><input class="form-input" id="wAdminNombre" placeholder="Nombre Apellidos" value="${_wizardData.admin_nombre||''}"></div>
+        <div class="form-group"><div class="form-label">Contraseña *</div><input class="form-input" id="wAdminPass" type="password" placeholder="Mín. 8 caracteres"></div>
+        <div class="form-group"><div class="form-label">Confirmar contraseña *</div><input class="form-input" id="wAdminPass2" type="password" placeholder="Repite la contraseña"></div>
+      `,
+      onOk: () => {
+        const nombre = document.getElementById('wAdminNombre').value.trim();
+        const pass   = document.getElementById('wAdminPass').value;
+        const pass2  = document.getElementById('wAdminPass2').value;
+        if (!nombre) { toast('El nombre es obligatorio', 'err'); return false; }
+        if (pass.length < 8) { toast('Contraseña mínimo 8 caracteres', 'err'); return false; }
+        if (pass !== pass2) { toast('Las contraseñas no coinciden', 'err'); return false; }
+        Object.assign(_wizardData, { admin_nombre: nombre, password: pass });
+        _wizardStep = 3; mostrarWizardStep(); return false;
+      }
+    },
+    3: {
+      titulo: '⚙️ Nueva empresa — Paso 3/3: Departamentos',
+      html: `
+        <div style="display:flex;gap:6px;margin-bottom:16px">
+          ${[1,2,3].map(i => `<div style="flex:1;height:4px;border-radius:2px;background:var(--accent)"></div>`).join('')}
+        </div>
+        <p style="font-size:13px;color:var(--muted);margin-bottom:14px">Selecciona los departamentos activos para <strong style="color:var(--text)">${_wizardData.empresa_nombre}</strong>.</p>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          ${[
+            ['electrico','⚡ Eléctrico'],['mecanicas','⚙️ Mecánicas'],['seguridad','🔺 Seguridad'],
+            ['personal','👷 Personal'],['obra_civil','🏗 Obra Civil'],['albanileria','🧱 Albañilería'],
+            ['pintura','🎨 Pintura'],['carpinteria','🪵 Carpintería'],['telecom','📡 Telecom'],
+            ['almacen','📦 Almacén'],['oficina','💼 Oficina']
+          ].map(([k,l]) => `<label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:8px;background:var(--surface2);border-radius:8px;border:1px solid var(--border)">
+            <input type="checkbox" id="wDept_${k}" checked style="accent-color:var(--accent);width:16px;height:16px">
+            <span style="font-size:13px">${l}</span>
+          </label>`).join('')}
+        </div>
+      `,
+      onOk: async () => {
+        const depts = ['electrico','mecanicas','seguridad','personal','obra_civil','albanileria','pintura','carpinteria','telecom','almacen','oficina']
+          .filter(k => document.getElementById(`wDept_${k}`)?.checked);
+        _wizardData.departamentos = depts;
+        const btn = document.getElementById('modalOkBtn');
+        btn.disabled = true; btn.textContent = 'Creando empresa...';
+        const r = await api('/empresas/registro', { method: 'POST', body: JSON.stringify(_wizardData) });
+        btn.disabled = false; btn.textContent = 'Crear empresa';
+        if (r.ok) {
+          cerrarModal();
+          toast(`✓ Empresa "${_wizardData.empresa_nombre}" creada correctamente`, 'ok');
+          cargarListaEmpresas();
+        } else toast(r.error || 'Error al crear empresa', 'err');
+        return false;
+      }
+    }
+  };
+
+  const step = steps[_wizardStep];
+  abrirModal(step.titulo, step.html, step.onOk);
+  document.getElementById('modalOkBtn').textContent = _wizardStep < 3 ? 'Siguiente →' : 'Crear empresa';
+  if (_wizardStep > 1) {
+    const footer = document.getElementById('modalFooter');
+    const backBtn = document.createElement('button');
+    backBtn.className = 'btn btn-secondary';
+    backBtn.textContent = '← Atrás';
+    backBtn.onclick = () => { _wizardStep--; mostrarWizardStep(); };
+    footer.insertBefore(backBtn, footer.firstChild);
+  }
 }
 
 // ── CHAT ───────────────────────────────────────────────────────
