@@ -3998,15 +3998,17 @@ async function cargarDevLoginHistory() {
   el.innerHTML = `
     <table style="width:100%;border-collapse:collapse;font-size:12px">
       <thead><tr>
-        <th style="padding:6px 8px;background:var(--surface2);color:var(--accent);text-align:left">Email / IP</th>
+        <th style="padding:6px 8px;background:var(--surface2);color:var(--accent);text-align:left">IP</th>
+        <th style="padding:6px 8px;background:var(--surface2);color:var(--accent);text-align:left">Motivo</th>
         <th style="padding:6px 8px;background:var(--surface2);color:var(--accent);text-align:center">Intentos</th>
-        <th style="padding:6px 8px;background:var(--surface2);color:var(--accent);text-align:left">Bloqueado hasta</th>
+        <th style="padding:6px 8px;background:var(--surface2);color:var(--accent);text-align:left">Último intento</th>
       </tr></thead>
       <tbody>${history.map((h,i)=>`
         <tr style="background:${i%2?'var(--surface2)':'transparent'}">
-          <td style="padding:5px 8px;font-family:monospace;font-size:11px">${h.email||'—'}</td>
-          <td style="padding:5px 8px;text-align:center"><span style="color:${h.intentos>=3?'var(--red)':h.intentos>=1?'#eab308':'var(--green)'};font-weight:700">${h.intentos}</span></td>
-          <td style="padding:5px 8px;font-size:11px;color:${h.bloqueado_hasta?'var(--red)':'var(--muted)'}">${h.bloqueado_hasta||'No bloqueado'}</td>
+          <td style="padding:5px 8px;font-family:monospace;font-size:11px">${h.ip||'—'}</td>
+          <td style="padding:5px 8px;font-size:11px;color:var(--muted)">${h.motivo||'—'}</td>
+          <td style="padding:5px 8px;text-align:center"><span style="color:${h.intentos>=5?'var(--red)':h.intentos>=2?'#eab308':'var(--green)'};font-weight:700">${h.intentos}</span></td>
+          <td style="padding:5px 8px;font-size:11px;color:var(--muted)">${(h.ultimo||'').slice(0,16)}</td>
         </tr>`).join('')}
       </tbody>
     </table>`;

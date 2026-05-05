@@ -6921,7 +6921,7 @@ async function devLoginHistory(request, env) {
   const s = await getAuth(request, env);
   if (!s || !['superadmin','desarrollador'].includes(s.rol)) return err('Sin permiso', 403);
   const rows = await env.DB.prepare(
-    'SELECT email, intentos, bloqueado_hasta FROM login_attempts ORDER BY intentos DESC LIMIT 100'
+    'SELECT ip, motivo, COUNT(*) as intentos, MAX(created_at) as ultimo FROM login_attempts GROUP BY ip ORDER BY intentos DESC LIMIT 100'
   ).all();
   return json({ ok: true, history: rows.results });
 }
@@ -6930,9 +6930,9 @@ async function devKPIs(request, env) {
   const s = await getAuth(request, env);
   if (!s || !['superadmin','desarrollador'].includes(s.rol)) return err('Sin permiso', 403);
   const [empresas, usuarios, obras, bobinas, fichajesHoy, incAbiertas, sesiones, invitaciones] = await Promise.all([
-    env.DB.prepare("SELECT COUNT(*) as n FROM empresas WHERE activo = 1").first(),
+    env.DB.prepare("SELECT COUNT(*) as n FROM empresas WHERE activa = 1").first(),
     env.DB.prepare("SELECT COUNT(*) as n FROM usuarios WHERE activo = 1").first(),
-    env.DB.prepare("SELECT COUNT(*) as n FROM obras WHERE estado = 'activa'").first(),
+    env.DB.prepare("SELECT COUNT(*) as n FROM obras WHERE activa = 1").first(),
     env.DB.prepare("SELECT COUNT(*) as n FROM bobinas").first(),
     env.DB.prepare("SELECT COUNT(*) as n FROM fichajes WHERE DATE(entrada) = DATE('now')").first(),
     env.DB.prepare("SELECT COUNT(*) as n FROM incidencias WHERE estado = 'abierta'").first(),
