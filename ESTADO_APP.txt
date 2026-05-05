@@ -4,8 +4,8 @@
   Ruta local: C:\Users\Adrian\Downloads\Proyecto GestiBobina\Alejandra APP
 ================================================================================
 
-ÚLTIMA ACTUALIZACIÓN: 04/05/2026
-VERSIÓN ACTUAL APP NUEVA: v5.39
+ÚLTIMA ACTUALIZACIÓN: 05/05/2026
+VERSIÓN ACTUAL APP NUEVA: v5.40
 VERSIÓN ACTUAL APP VIEJA: v4.19 (⛔ CONGELADA DEFINITIVAMENTE — no recibe más cambios)
 
 ================================================================================
@@ -148,6 +148,30 @@ PASO 4 — VERIFICAR WORKER (solo si se va a tocar worker.js)
 ================================================================================
   HISTORIAL DE VERSIONES — RECIENTES
 ================================================================================
+
+v5.40  |  05/05/2026  [SOLO NUEVA APP]
+  - Sugerencias DB #187/#188/#189 resueltas
+  - #189 (BUG) — getSesionesActivas devolvía 403 al empresa_admin (faltaba isEmpresaAdmin
+    en la guarda de auth). Frontend mostraba el botón pero backend lo rechazaba.
+    Fix: añadido !auth.isEmpresaAdmin a la condición en worker.js
+  - #187 — Catálogo cerrado de departamentos ampliado de 4 a 11:
+    nuevos: Obra Civil, Albañilería, Pintura, Carpintería, Telecomunicaciones,
+    Almacén y Oficina técnica. _DEPTS_CATALOG centraliza icon/name/desc/template.
+    DEPT_INFO + _ALL_DEPTS derivados del catálogo.
+    Selector de depts: extraDeptCards renderiza dinámicamente los nuevos.
+    MEJ-08 (depts activos): toggles ahora muestran las 11 opciones con icon+desc.
+  - #188 — Módulos togglables ampliados a TODOS los depts activos (antes solo
+    Seguridad y Personal). Cada dept "trade" expone toggles para sus 11 tarjetas
+    del home (Bobinas solo en Eléctrico). Keys home_{dept}_{cardId}.
+    _modsParaDept(dept) decide qué módulos aplican según template.
+    applyModulosConfig oculta cards trade según cfg + dept actual.
+    setupHomeModules llama a applyModulosConfig al final.
+  - WIZARD de crear empresa: nuevo paso 3 (Departamentos). El admin marca
+    los depts que usa su empresa antes de crearla → app personalizada al primer login.
+    POST /empresas/registro acepta `departamentos` y los guarda en JSON.
+    Cache local alejandra_deptos_activos rellenado tras registro exitoso.
+  - Worker ID: b433ed71-3614-4ef3-84ce-aa4483f4170b
+  - GitHub actualizado ✅
 
 v5.39  |  04/05/2026  [SOLO NUEVA APP]
   - Auditoría completa de roles y permisos — corregidos 6 gaps

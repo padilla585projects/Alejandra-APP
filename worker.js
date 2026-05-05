@@ -856,7 +856,7 @@ async function cerrarSesionServidor(request, env) {
 
 async function getSesionesActivas(request, env) {
   const auth = await getAuth(request, env);
-  if (!auth.isSuperadmin && !auth.isAdmin && !auth.isEncargado) return err('No autorizado', 403);
+  if (!auth.isSuperadmin && !auth.isAdmin && !auth.isEncargado && !auth.isEmpresaAdmin) return err('No autorizado', 403);
   const { results } = await env.DB.prepare(
     'SELECT id, nombre, rol, departamento, obra_nombre, last_used, created_at FROM sesiones WHERE empresa_id = ? ORDER BY last_used DESC'
   ).bind(auth.empresa_id).all();
@@ -885,7 +885,7 @@ async function cerrarTodasSesiones(request, env) {
 
 async function registrarEmpresa(request, env) {
   const body = await request.json().catch(() => ({}));
-  const { empresa_nombre, sector, admin_nombre, email, password, obra_nombre } = body;
+  const { empresa_nombre, sector, admin_nombre, email, password, obra_nombre, departamentos } = body;
   if (!empresa_nombre?.trim() || !email?.trim() || !password || !admin_nombre?.trim())
     return err('Faltan datos obligatorios (empresa, nombre, email, contraseña)');
   if (password.length < 8) return err('La contraseña debe tener al menos 8 caracteres');
@@ -897,10 +897,13 @@ async function registrarEmpresa(request, env) {
   const slug = empresa_nombre.trim().toLowerCase().replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
   const hash = await hashPassword(password);
 
+  // #187: depts seleccionados en el wizard (lista de keys del catálogo). Si no, NULL = todos activos.
+  const deptsJSON = (Array.isArray(departamentos) && departamentos.length) ? JSON.stringify(departamentos) : null;
+
   // Crear empresa
   const empResult = await env.DB.prepare(
-    'INSERT INTO empresas (nombre, slug, email, plan, activa) VALUES (?, ?, ?, ?, 1)'
-  ).bind(empresa_nombre.trim(), slug, emailClean, 'basic').run();
+    'INSERT INTO empresas (nombre, slug, email, plan, activa, departamentos) VALUES (?, ?, ?, ?, 1, ?)'
+  ).bind(empresa_nombre.trim(), slug, emailClean, 'basic', deptsJSON).run();
   const empresa_id = empResult.meta.last_row_id;
   if (!empresa_id) return err('Error al crear la empresa, intenta de nuevo');
 

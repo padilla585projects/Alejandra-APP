@@ -465,6 +465,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
       <div class="reg-dot done" id="regDot1"></div>
       <div class="reg-dot" id="regDot2"></div>
       <div class="reg-dot" id="regDot3"></div>
+      <div class="reg-dot" id="regDot4"></div>
     </div>
 
     <!-- Paso 1: Empresa -->
@@ -503,14 +504,25 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
       </div>
     </div>
 
-    <!-- Paso 3: Primera obra -->
+    <!-- Paso 3: Departamentos (#187) -->
     <div class="reg-step" id="regStep3">
+      <div class="reg-title">🧩 Departamentos</div>
+      <div class="reg-sub">¿Qué departamentos usa tu empresa? Marca solo los que necesites — luego puedes cambiarlo en Ajustes.</div>
+      <div id="regDeptosList" style="max-height:55vh;overflow-y:auto;margin:6px 0 12px;border:1px solid var(--border);border-radius:10px;padding:6px 12px"></div>
+      <div class="reg-actions">
+        <button class="login-btn" style="background:var(--surface2);color:var(--text);flex:0 0 90px" onclick="regAnterior(3)">← Atrás</button>
+        <button class="login-btn" style="flex:1" onclick="regSiguiente(3)">Siguiente →</button>
+      </div>
+    </div>
+
+    <!-- Paso 4: Primera obra -->
+    <div class="reg-step" id="regStep4">
       <div class="reg-title">🏗 Primera obra</div>
       <div class="reg-sub">¿Cuál es tu primera obra o proyecto? (opcional)</div>
       <input class="login-input" id="regObraNombre" type="text" placeholder="Nombre de la obra (ej: CPD Madrid)">
       <div class="login-err" id="regErr"></div>
       <div class="reg-actions">
-        <button class="login-btn" style="background:var(--surface2);color:var(--text);flex:0 0 90px" onclick="regAnterior(3)">← Atrás</button>
+        <button class="login-btn" style="background:var(--surface2);color:var(--text);flex:0 0 90px" onclick="regAnterior(4)">← Atrás</button>
         <button class="login-btn" style="flex:1" id="regFinBtn" onclick="regFinalizar()">✅ Crear empresa</button>
       </div>
     </div>
@@ -709,6 +721,8 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
         </div>
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="color:var(--muted)"><path d="m9 18 6-6-6-6"/></svg>
       </div>
+      <!-- NEW-187: contenedor para departamentos extra del catálogo -->
+      <div id="extraDeptCards"></div>
     </div>
     <!-- Chat del equipo — accesible desde todos los departamentos -->
     <div style="padding:0 16px 20px">
@@ -2168,14 +2182,11 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
           <button id="btnGuardarInforme" class="btn-primary" style="width:100%;font-size:13px" onclick="guardarConfigInforme()">💾 Guardar configuración</button>
         </div>
 
-        <!-- NEW-29: Módulos configurables por departamento -->
+        <!-- NEW-29 + #188: Módulos configurables por departamento -->
         <div class="settings-section" style="margin-top:16px;display:none" id="empresaModulosSection">
           <div class="settings-title">⚙️ Módulos visibles por departamento</div>
-          <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Elige qué secciones son visibles en las pantallas de Seguridad y Personal.</div>
-          <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:11px;letter-spacing:1.5px;color:var(--accent);text-transform:uppercase;margin-bottom:6px">🔺 Seguridad</div>
-          <div id="modulosSeguridadTogles"></div>
-          <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:11px;letter-spacing:1.5px;color:var(--accent);text-transform:uppercase;margin:14px 0 6px">👷 Personal</div>
-          <div id="modulosPersonalTogles"></div>
+          <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Elige qué tarjetas son visibles en cada departamento. Solo se muestran los departamentos activos en tu empresa.</div>
+          <div id="modulosTogglesContainer"></div>
           <button id="btnGuardarModulos" class="btn-primary" style="width:100%;font-size:13px;margin-top:14px" onclick="guardarModulosConfig()">💾 Guardar módulos</button>
         </div>
       </div>
@@ -3423,6 +3434,17 @@ function toggleRegPw() {
 function abrirRegistro() {
   document.getElementById('registroOverlay').style.display = 'flex';
   document.getElementById('loginOverlay').style.display = 'none';
+  // #187: poblar lista de departamentos del catálogo (todos marcados por defecto)
+  const cont = document.getElementById('regDeptosList');
+  if (cont) cont.innerHTML = Object.entries(_DEPTS_CATALOG).map(([k, v]) => `
+    <label style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);cursor:pointer">
+      <input type="checkbox" id="regDeptToggle_${k}" checked style="width:18px;height:18px;accent-color:var(--accent)">
+      <span style="font-size:20px">${v.icon}</span>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:14px;font-weight:600">${v.name}</div>
+        <div style="font-size:11px;color:var(--muted)">${v.desc}</div>
+      </div>
+    </label>`).join('');
   regGoStep(1);
 }
 function cerrarRegistro() {
@@ -3452,6 +3474,11 @@ function regSiguiente(step) {
       if (pass.length < 8) { toast('La contraseña debe tener al menos 8 caracteres', 'err'); return; }
       if (pass !== pass2) { toast('Las contraseñas no coinciden', 'err'); return; }
       regGoStep(3);
+    } else if (step === 3) {
+      // #187: validar al menos un departamento marcado
+      const seleccionados = _ALL_DEPTS.filter(d => document.getElementById('regDeptToggle_' + d)?.checked);
+      if (!seleccionados.length) { toast('Marca al menos un departamento', 'err'); return; }
+      regGoStep(4);
     }
   } catch(e) {
     const errEl = document.getElementById('regErr');
@@ -3475,6 +3502,8 @@ async function regFinalizar() {
         email:          document.getElementById('regEmail').value.trim(),
         password:       document.getElementById('regPassword').value,
         obra_nombre:    document.getElementById('regObraNombre').value.trim() || null,
+        // #187: depts marcados en el wizard
+        departamentos:  _ALL_DEPTS.filter(d => document.getElementById('regDeptToggle_' + d)?.checked),
       })
     });
     const data = await res.json();
@@ -3486,6 +3515,9 @@ async function regFinalizar() {
       obra_nombre: data.obra_nombre || null, token: data.token, departamento: null
     };
     setSession(session);
+    // #187: cachear depts activos elegidos en el wizard para que el selector ya esté filtrado
+    const deptosWizard = _ALL_DEPTS.filter(d => document.getElementById('regDeptToggle_' + d)?.checked);
+    if (deptosWizard.length) localStorage.setItem('alejandra_deptos_activos', JSON.stringify(deptosWizard));
     document.getElementById('registroOverlay').style.display = 'none';
     toast('🎉 Empresa creada correctamente');
     iniciarApp();
@@ -3616,12 +3648,22 @@ function rolLabel(rol) {
   return rol || '—';
 }
 
-const DEPT_INFO = {
-  electrico:  { icon: '⚡', name: 'Eléctrico' },
-  mecanicas:  { icon: '🔧', name: 'Mecánicas' },
-  seguridad:  { icon: '🔺', name: 'Seguridad' },
-  personal:   { icon: '👷', name: 'Personal' },
+// NEW-187: Catálogo cerrado de departamentos. Cada empresa activa los que necesite.
+// template: 'trade' usa screenHome; 'seguridad' y 'personal' tienen pantalla propia.
+const _DEPTS_CATALOG = {
+  electrico:   { icon: '⚡',  name: 'Eléctrico',          desc: 'Tendido de cable · Plataformas · Carretillas',  template: 'trade'     },
+  mecanicas:   { icon: '🔧',  name: 'Mecánicas',          desc: 'Climatización, fontanería y mantenimiento',     template: 'trade'     },
+  seguridad:   { icon: '🔺',  name: 'Seguridad',          desc: 'Control de EPIs y material de seguridad',       template: 'seguridad' },
+  personal:    { icon: '👷',  name: 'Personal',           desc: 'Fichajes y control de asistencia',              template: 'personal'  },
+  obra_civil:  { icon: '🏗️',  name: 'Obra Civil',         desc: 'Cimentaciones, estructuras y hormigón',         template: 'trade'     },
+  albanileria: { icon: '🧱',  name: 'Albañilería',        desc: 'Tabiquería, alicatados y acabados',             template: 'trade'     },
+  pintura:     { icon: '🎨',  name: 'Pintura',            desc: 'Pintura, barnices y revestimientos',            template: 'trade'     },
+  carpinteria: { icon: '🪟',  name: 'Carpintería',        desc: 'Madera, aluminio y PVC',                        template: 'trade'     },
+  telecom:     { icon: '🌐',  name: 'Telecomunicaciones', desc: 'Datos, fibra óptica y redes',                   template: 'trade'     },
+  almacen:     { icon: '📦',  name: 'Almacén',            desc: 'Logística, recepción y control de stock',       template: 'trade'     },
+  oficina:     { icon: '📐',  name: 'Oficina técnica',    desc: 'Planning, mediciones y documentación',          template: 'trade'     },
 };
+const DEPT_INFO = Object.fromEntries(Object.entries(_DEPTS_CATALOG).map(([k, v]) => [k, { icon: v.icon, name: v.name }]));
 
 function renderHeader() {
   const s = getSession();
@@ -3729,6 +3771,8 @@ function setupHomeModules() {
   if (cardCal)    cardCal.style.display    = 'flex';
   if (cardGal)    cardGal.style.display    = 'flex';
   if (cardPartes) cardPartes.style.display = 'flex';
+  // #188: aplicar config de módulos (oculta tarjetas marcadas off por la empresa)
+  applyModulosConfig();
   applyHomeOrder();
 }
 
@@ -3940,10 +3984,30 @@ function horarParaDia(horario, fecha) {
   return { hora_entrada: horario?.hora_entrada, hora_salida: horario?.hora_salida };
 }
 
-// ── MEJ-08: Departamentos activos por empresa ────────────────────────────────
-const _ALL_DEPTS = ['electrico','mecanicas','seguridad','personal'];
+// ── MEJ-08 + NEW-187: Departamentos activos por empresa (catálogo en _DEPTS_CATALOG) ──
+const _ALL_DEPTS = Object.keys(_DEPTS_CATALOG);
+
+// NEW-187: depts extra del catálogo (los que no tienen card hardcodeada en HTML)
+const _CORE_DEPTS = ['electrico', 'mecanicas', 'seguridad', 'personal'];
+function _renderExtraDeptCards() {
+  const cont = document.getElementById('extraDeptCards');
+  if (!cont) return;
+  const html = Object.entries(_DEPTS_CATALOG)
+    .filter(([k]) => !_CORE_DEPTS.includes(k))
+    .map(([k, v]) => `
+      <div id="deptCard_${k}" class="dept-card" onclick="seleccionarDepto('${k}')">
+        <div class="dept-icon-wrap" style="display:flex;align-items:center;justify-content:center;font-size:36px">${v.icon}</div>
+        <div style="flex:1">
+          <div class="dept-name">${v.name}</div>
+          <div class="dept-desc">${v.desc}</div>
+        </div>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="color:var(--muted)"><path d="m9 18 6-6-6-6"/></svg>
+      </div>`).join('');
+  cont.innerHTML = html;
+}
 
 async function aplicarDeptosActivos() {
+  _renderExtraDeptCards();
   // Aplicar caché inmediatamente
   let activos = _ALL_DEPTS;
   try {
@@ -4023,7 +4087,47 @@ async function guardarModulosConfig() {
 }
 window.guardarModulosConfig = guardarModulosConfig;
 
-// ── NEW-29: aplicar configuración de módulos a las pantallas ─────────────────
+// ── NEW-29 + #188: módulos disponibles por departamento ──────────────────────
+// keys: trade depts → home_{dept}_{card}; seg/per ya tenían sus prefijos.
+const _HOME_TRADE_MODS = [
+  { card: 'cardBobinas',          label: '⚡ Bobinas',           soloElectrico: true },
+  { card: 'cardPemp',             label: '🛠 PEMP' },
+  { card: 'cardCarretillas',      label: '🚜 Carretillas' },
+  { card: 'cardPedidos',          label: '📥 Pedidos' },
+  { card: 'cardHerramientas',     label: '🔧 Herramientas' },
+  { card: 'cardObraDashboard',    label: '📊 Resumen de obra' },
+  { card: 'cardCalendario',       label: '📅 Calendario' },
+  { card: 'cardIncidencias',      label: '🚨 Incidencias' },
+  { card: 'cardGaleria',          label: '📷 Galería de fotos' },
+  { card: 'cardPartes',           label: '📋 Partes de trabajo' },
+  { card: 'cardDocs',             label: '📂 Documentación' },
+];
+const _SEG_MODS = [
+  { key: 'seg_escaner',      label: '📷 Escáner' },
+  { key: 'seg_inventario',   label: '📦 Inventario EPIs' },
+  { key: 'seg_herramientas', label: '🔧 Herramientas' },
+  { key: 'seg_resumen',      label: '📊 Resumen' },
+];
+const _PER_MODS = [
+  { key: 'per_fichajes', label: '📋 Fichajes de hoy' },
+  { key: 'per_semana',   label: '📅 Semana' },
+  { key: 'per_resumen',  label: '📊 Resumen mensual' },
+  { key: 'per_equipo',   label: '👷 Equipo' },
+  { key: 'per_epis',     label: '🦺 Dotación EPIs' },
+  { key: 'per_carnets',  label: '📜 Carnets y certificaciones' },
+  { key: 'per_turnos',   label: '🗓️ Planificador de turnos' },
+];
+function _modsParaDept(dept) {
+  const tpl = _DEPTS_CATALOG[dept]?.template;
+  if (tpl === 'seguridad') return _SEG_MODS;
+  if (tpl === 'personal')  return _PER_MODS;
+  // trade
+  return _HOME_TRADE_MODS
+    .filter(m => !m.soloElectrico || dept === 'electrico')
+    .map(m => ({ key: `home_${dept}_${m.card}`, label: m.label, _card: m.card }));
+}
+
+// ── NEW-29 + #188: aplicar configuración de módulos a las pantallas ──────────
 function applyModulosConfig() {
   let cfg = window._modulosConfig;
   if (!cfg) {
@@ -4031,12 +4135,26 @@ function applyModulosConfig() {
     window._modulosConfig = cfg || null;
   }
   if (!cfg) return; // Sin config: todo visible
+  // Seguridad y Personal — sus paneles internos
   document.querySelectorAll('#segPanelHome .module-card[data-module]').forEach(card => {
     card.style.display = cfg[card.dataset.module] === false ? 'none' : '';
   });
   document.querySelectorAll('#perPanelHome .module-card[data-module]').forEach(card => {
     card.style.display = cfg[card.dataset.module] === false ? 'none' : '';
   });
+  // Trade depts — tarjetas del home (screenHome) según dept actual
+  const dept = getSession()?.departamento;
+  if (dept && _DEPTS_CATALOG[dept]?.template === 'trade') {
+    _HOME_TRADE_MODS.forEach(m => {
+      if (m.soloElectrico && dept !== 'electrico') return;
+      const el = document.getElementById(m.card);
+      if (!el) return;
+      const k = `home_${dept}_${m.card}`;
+      // Si el toggle está desactivado, ocultar. Si está activo o no definido, dejar como esté
+      // (setupHomeModules ya lo había puesto a 'flex' o 'none' por reglas básicas).
+      if (cfg[k] === false) el.style.display = 'none';
+    });
+  }
 }
 window.applyModulosConfig = applyModulosConfig;
 
@@ -8197,13 +8315,16 @@ async function cargarPanelEmpresa() {
         const activosActual = rawDepts
           ? (typeof rawDepts === 'string' ? JSON.parse(rawDepts) : rawDepts)
           : _ALL_DEPTS;
-        const LABELS = { electrico: '⚡ Eléctrico', mecanicas: '🔧 Mecánicas', seguridad: '🔺 Seguridad', personal: '👷 Personal' };
         const tEl = document.getElementById('empresaDeptosTogles');
-        if (tEl) tEl.innerHTML = _ALL_DEPTS.map(d => `
+        if (tEl) tEl.innerHTML = _ALL_DEPTS.map(d => {
+          const info = _DEPTS_CATALOG[d];
+          return `
           <label style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border);cursor:pointer">
             <input type="checkbox" id="deptToggle_${d}" ${activosActual.includes(d) ? 'checked' : ''} style="width:18px;height:18px;accent-color:var(--accent)">
-            <span style="font-size:14px">${LABELS[d]}</span>
-          </label>`).join('');
+            <span style="font-size:14px">${info.icon} ${info.name}</span>
+            <span style="font-size:11px;color:var(--muted);margin-left:auto">${info.desc}</span>
+          </label>`;
+        }).join('');
       }
     }
     // NEW-18: sección informe semanal
@@ -8222,7 +8343,7 @@ async function cargarPanelEmpresa() {
         if (sel && data.empresa?.informe_dia) sel.value = data.empresa.informe_dia;
       }
     }
-    // NEW-29: sección módulos configurables
+    // NEW-29 + #188: sección módulos configurables (todos los depts activos)
     const modSec = document.getElementById('empresaModulosSection');
     if (modSec) {
       modSec.style.display = puedeEditar ? '' : 'none';
@@ -8233,30 +8354,25 @@ async function cargarPanelEmpresa() {
           : {};
         window._modulosConfig = cfg;
         localStorage.setItem('alejandra_modulos_config', JSON.stringify(cfg));
-        const SEG_MODS = [
-          { key: 'seg_escaner',      label: '📷 Escáner' },
-          { key: 'seg_inventario',   label: '📦 Inventario EPIs' },
-          { key: 'seg_herramientas', label: '🔧 Herramientas' },
-          { key: 'seg_resumen',      label: '📊 Resumen' },
-        ];
-        const PER_MODS = [
-          { key: 'per_fichajes', label: '📋 Fichajes de hoy' },
-          { key: 'per_semana',   label: '📅 Semana' },
-          { key: 'per_resumen',  label: '📊 Resumen mensual' },
-          { key: 'per_equipo',   label: '👷 Equipo' },
-          { key: 'per_epis',     label: '🦺 Dotación EPIs' },
-          { key: 'per_carnets',  label: '📜 Carnets y certificaciones' },
-          { key: 'per_turnos',   label: '🗓️ Planificador de turnos' },
-        ];
-        const renderMods = (mods, c) => mods.map(m => `
-          <label style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border);cursor:pointer">
-            <input type="checkbox" data-modkey="${m.key}" ${c[m.key] !== false ? 'checked' : ''} style="width:18px;height:18px;accent-color:var(--accent)">
-            <span style="font-size:14px">${m.label}</span>
-          </label>`).join('');
-        const tSeg = document.getElementById('modulosSeguridadTogles');
-        const tPer = document.getElementById('modulosPersonalTogles');
-        if (tSeg) tSeg.innerHTML = renderMods(SEG_MODS, cfg);
-        if (tPer) tPer.innerHTML = renderMods(PER_MODS, cfg);
+        const rawDepts = data.empresa?.departamentos;
+        const deptsActivos = rawDepts
+          ? (typeof rawDepts === 'string' ? JSON.parse(rawDepts) : rawDepts)
+          : _ALL_DEPTS;
+        const cont = document.getElementById('modulosTogglesContainer');
+        if (cont) cont.innerHTML = deptsActivos
+          .filter(d => _DEPTS_CATALOG[d])
+          .map(d => {
+            const info = _DEPTS_CATALOG[d];
+            const mods = _modsParaDept(d);
+            const togs = mods.map(m => `
+              <label style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border);cursor:pointer">
+                <input type="checkbox" data-modkey="${m.key}" ${cfg[m.key] !== false ? 'checked' : ''} style="width:18px;height:18px;accent-color:var(--accent)">
+                <span style="font-size:14px">${m.label}</span>
+              </label>`).join('');
+            return `
+              <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:11px;letter-spacing:1.5px;color:var(--accent);text-transform:uppercase;margin:14px 0 6px">${info.icon} ${info.name}</div>
+              ${togs}`;
+          }).join('') || '<div style="font-size:13px;color:var(--muted);font-style:italic">No hay departamentos activos</div>';
       }
     }
   } catch(e) {
@@ -9370,7 +9486,7 @@ async function cargarObrasSelectUsuario() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '5.39';
+const APP_VERSION = '5.40';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes

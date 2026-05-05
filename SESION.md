@@ -6,10 +6,33 @@
 ## ESTADO ACTUAL
 
 **Sesión:** LIBRE
-**Última sesión:** 04/05/2026
-**Versión tras última sesión:** v5.39
-**Worker desplegado:** v5.39 (ID: 675197cf-d191-49ac-bede-646ac1361271)
+**Última sesión:** 05/05/2026
+**Versión tras última sesión:** v5.40
+**Worker desplegado:** v5.40 (ID: b433ed71-3614-4ef3-84ce-aa4483f4170b)
 **GitHub:** en sync ✅
+
+---
+
+## RESUMEN SESIÓN 05/05/2026 (v5.40 — Sugerencias #187/#188/#189)
+
+- **#189 BUG** — `getSesionesActivas` (worker) faltaba `isEmpresaAdmin` en la guarda
+  de auth → 403 al pulsar "Ver quién está conectado" como empresa_admin. Frontend
+  mostraba el botón pero el backend rechazaba. Fix de una palabra.
+- **#187 — Catálogo de departamentos ampliado a 11** (opción C: catálogo cerrado).
+  Nuevos: Obra Civil, Albañilería, Pintura, Carpintería, Telecom, Almacén, Oficina.
+  `_DEPTS_CATALOG` centraliza icon/name/desc/template. DEPT_INFO + _ALL_DEPTS derivados.
+  Cards extras renderizadas dinámicamente en `#extraDeptCards`. MEJ-08 (depts activos)
+  ahora muestra los 11 con descripción.
+- **#188 — Módulos togglables para TODOS los depts**. Antes solo Seguridad y
+  Personal. Trade depts ahora exponen 11 toggles (Bobinas solo en Eléctrico).
+  Keys: `home_{dept}_{cardId}`. `_modsParaDept(dept)` decide según template.
+  `applyModulosConfig` oculta cards trade según dept activo.
+- **WIZARD de crear empresa**: nuevo paso 3 (Departamentos). 11 toggles, todos
+  marcados por defecto. Worker `/empresas/registro` acepta `departamentos` y guarda
+  como JSON. Cache local rellenado tras registro → app personalizada al primer login.
+- Sugerencias #187/#188/#189 marcadas como `resuelto` en D1.
+- Worker redesplegado: b433ed71-3614-4ef3-84ce-aa4483f4170b
+- Cambios solo en index.html + worker.js + sw.js + version.json
 
 ---
 
