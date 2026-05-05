@@ -503,6 +503,15 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
         <div class="page-sub">Inventario de bobinas eléctricas</div>
         <div class="tbl-toolbar">
           <input class="tbl-search" id="searchBobinas" placeholder="🔍 Buscar código o proveedor...">
+          <select class="tbl-search" id="filtroDepBobinas" style="min-width:150px" onchange="cargarBobinas()">
+            <option value="">📁 Todos los depts</option>
+            <option value="electrico">⚡ Eléctrico</option>
+            <option value="mecanicas">🔧 Mecánicas</option>
+            <option value="seguridad">🔺 Seguridad</option>
+          </select>
+          <select class="tbl-search" id="filtroObraBobinas" style="min-width:150px" onchange="cargarBobinas()">
+            <option value="">🏗 Todas las obras</option>
+          </select>
           <button class="btn btn-primary" onclick="abrirModalBobina()">+ Nueva bobina</button>
           <button class="btn btn-secondary" onclick="exportarTabla(tblBobinas,'bobinas')">⬇ CSV</button>
           <button class="btn btn-secondary" onclick="cargarBobinas()">🔄 Actualizar</button>
@@ -516,6 +525,15 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
         <div class="page-sub">Plataformas elevadoras móviles de personal</div>
         <div class="tbl-toolbar">
           <input class="tbl-search" id="searchPemp" placeholder="🔍 Buscar matrícula o tipo...">
+          <select class="tbl-search" id="filtroDepPemp" style="min-width:150px" onchange="cargarPemp()">
+            <option value="">📁 Todos los depts</option>
+            <option value="electrico">⚡ Eléctrico</option>
+            <option value="mecanicas">🔧 Mecánicas</option>
+            <option value="seguridad">🔺 Seguridad</option>
+          </select>
+          <select class="tbl-search" id="filtroObraPemp" style="min-width:150px" onchange="cargarPemp()">
+            <option value="">🏗 Todas las obras</option>
+          </select>
           <button class="btn btn-primary" onclick="abrirModalPemp()">+ Nuevo PEMP</button>
           <button class="btn btn-secondary" onclick="exportarTabla(tblPemp,'pemp')">⬇ CSV</button>
           <button class="btn btn-secondary" onclick="cargarPemp()">🔄 Actualizar</button>
@@ -529,6 +547,15 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
         <div class="page-sub">Inventario de carretillas</div>
         <div class="tbl-toolbar">
           <input class="tbl-search" id="searchCarretillas" placeholder="🔍 Buscar matrícula o tipo...">
+          <select class="tbl-search" id="filtroDepCarretillas" style="min-width:150px" onchange="cargarCarretillas()">
+            <option value="">📁 Todos los depts</option>
+            <option value="electrico">⚡ Eléctrico</option>
+            <option value="mecanicas">🔧 Mecánicas</option>
+            <option value="seguridad">🔺 Seguridad</option>
+          </select>
+          <select class="tbl-search" id="filtroObraCarretillas" style="min-width:150px" onchange="cargarCarretillas()">
+            <option value="">🏗 Todas las obras</option>
+          </select>
           <button class="btn btn-primary" onclick="abrirModalCarretilla()">+ Nueva carretilla</button>
           <button class="btn btn-secondary" onclick="exportarTabla(tblCarretillas,'carretillas')">⬇ CSV</button>
           <button class="btn btn-secondary" onclick="cargarCarretillas()">🔄 Actualizar</button>
@@ -658,6 +685,16 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
             <option value="aprobado">Aprobado</option>
             <option value="entregado">Entregado</option>
             <option value="cancelado">Cancelado</option>
+          </select>
+          <select class="tbl-search" id="filtroDepPedidos" style="min-width:150px" onchange="tblPedidos=null;cargarPedidos()">
+            <option value="">📁 Todos los depts</option>
+            <option value="electrico">⚡ Eléctrico</option>
+            <option value="mecanicas">🔧 Mecánicas</option>
+            <option value="seguridad">🔺 Seguridad</option>
+            <option value="personal">👷 Personal</option>
+          </select>
+          <select class="tbl-search" id="filtroObraPedidos" style="min-width:150px" onchange="tblPedidos=null;cargarPedidos()">
+            <option value="">🏗 Todas las obras</option>
           </select>
           <button class="btn btn-primary" onclick="abrirModalPedido()">+ Nuevo pedido</button>
           <button class="btn btn-secondary" onclick="exportarTabla(tblPedidos,'pedidos')">⬇ CSV</button>
@@ -1399,6 +1436,7 @@ function iniciarApp() {
   setInterval(checkConexion, 30000);
   iniciarPollingNotif();
   _initSync();
+  cargarObrasPanel(); // rellena selects de obra en inventarios
   navTo('dashboard');
 }
 
@@ -1994,15 +2032,52 @@ function filtrarCarnets() {
 }
 
 // ── BOBINAS ────────────────────────────────────────────────────
+// ── Utilidades de inventario panel ────────────────────────────────────────────
+// Normaliza la respuesta del worker (raw array o {key:[]}) al array esperado
+function toArr(r, key) {
+  if (Array.isArray(r)) return r;
+  return r[key] || r.data || r.results || [];
+}
+
+// Rellena los <select> de obra en los inventarios
+let _panelObras = [];
+async function cargarObrasPanel() {
+  try {
+    const r = await api('/obras');
+    _panelObras = Array.isArray(r) ? r : (r.obras || r.data || r || []);
+    const opt = _panelObras.map(o => `<option value="${o.id}">${o.nombre}</option>`).join('');
+    ['filtroObraBobinas','filtroObraPemp','filtroObraCarretillas','filtroObraPedidos'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.innerHTML = '<option value="">🏗 Todas las obras</option>' + opt;
+    });
+  } catch(_) {}
+}
+
+// Construye query string de filtros de inventario
+function _invParams(idDept, idObra, extraParams = '') {
+  const dept = document.getElementById(idDept)?.value || '';
+  const obra = document.getElementById(idObra)?.value || '';
+  const parts = ['todos=1'];
+  if (dept) parts.push(`departamento=${encodeURIComponent(dept)}`);
+  if (obra) parts.push(`obra_id=${obra}`);
+  if (extraParams) parts.push(extraParams);
+  return parts.join('&');
+}
+
+// Formateador de departamento para Tabulator
+const DEPT_LABEL = { electrico:'⚡ Eléctrico', mecanicas:'🔧 Mecánicas', seguridad:'🔺 Seguridad', personal:'👷 Personal' };
+const fmtDept = c => DEPT_LABEL[c.getValue()] || c.getValue() || '—';
+
 let tblBobinas = null;
 async function cargarBobinas() {
-  const r = await api('/bobinas');
-  const data = r.bobinas || r.data || [];
+  const r = await api('/bobinas?' + _invParams('filtroDepBobinas', 'filtroObraBobinas'));
+  const data = toArr(r, 'bobinas');
   if (tblBobinas) { tblBobinas.replaceData(data); return; }
   const canEdit = ['empresa_admin', 'jefe_de_obra', 'oficina', 'encargado', 'superadmin', 'desarrollador'].includes(SESSION.rol);
   tblBobinas = new Tabulator('#tblBobinas', {
     data, layout: 'fitColumns',
     pagination: 'local', paginationSize: 20,
+    placeholder: '<div class="empty-state"><div class="empty-icon">⚡</div><div class="empty-text">Sin bobinas</div></div>',
     columns: [
       { title: 'Código', field: 'codigo', sorter: 'string', width: 120 },
       { title: 'Tipo cable', field: 'tipo_cable', sorter: 'string', minWidth: 160 },
@@ -2018,6 +2093,7 @@ async function cargarBobinas() {
           return `<span class="badge badge-${cls}">${v || '—'}</span>`;
         }
       },
+      { title: 'Dept.', field: 'departamento', width: 110, formatter: fmtDept },
       { title: 'Obra', field: 'obra_nombre', sorter: 'string', minWidth: 140 },
       { title: 'Fecha entrada', field: 'fecha_entrada', width: 120, formatter: c => fmtFecha(c.getValue()) },
     ]
@@ -2061,16 +2137,16 @@ function abrirModalBobina() {
 // ── PEMP ───────────────────────────────────────────────────────
 let tblPemp = null;
 async function cargarPemp() {
-  const r = await api('/pemp');
-  const data = r.pemp || r.data || [];
+  const r = await api('/pemp?' + _invParams('filtroDepPemp', 'filtroObraPemp'));
+  const data = toArr(r, 'pemp');
   if (tblPemp) { tblPemp.replaceData(data); return; }
   tblPemp = new Tabulator('#tblPemp', {
     data, layout: 'fitColumns', pagination: 'local', paginationSize: 20,
+    placeholder: '<div class="empty-state"><div class="empty-icon">🚜</div><div class="empty-text">Sin PEMPs</div></div>',
     columns: [
       { title: 'Matrícula', field: 'matricula', sorter: 'string', width: 120 },
       { title: 'Tipo', field: 'tipo', sorter: 'string', minWidth: 160 },
       { title: 'Marca', field: 'marca', minWidth: 120 },
-      { title: 'Modelo', field: 'modelo', minWidth: 120 },
       { title: 'Estado', field: 'estado', width: 110,
         formatter: c => {
           const v = c.getValue();
@@ -2079,7 +2155,8 @@ async function cargarPemp() {
         }
       },
       { title: 'ITV', field: 'fecha_itv', width: 110, formatter: c => fmtFecha(c.getValue()) },
-      { title: 'Revisión', field: 'fecha_revision', width: 110, formatter: c => fmtFecha(c.getValue()) },
+      { title: 'Revisión', field: 'fecha_proxima_revision', width: 110, formatter: c => fmtFecha(c.getValue()) },
+      { title: 'Dept.', field: 'departamento', width: 110, formatter: fmtDept },
       { title: 'Obra', field: 'obra_nombre', minWidth: 140 },
     ]
   });
@@ -2091,11 +2168,12 @@ async function cargarPemp() {
 // ── CARRETILLAS ────────────────────────────────────────────────
 let tblCarretillas = null;
 async function cargarCarretillas() {
-  const r = await api('/carretillas');
-  const data = r.carretillas || r.data || [];
+  const r = await api('/carretillas?' + _invParams('filtroDepCarretillas', 'filtroObraCarretillas'));
+  const data = toArr(r, 'carretillas');
   if (tblCarretillas) { tblCarretillas.replaceData(data); return; }
   tblCarretillas = new Tabulator('#tblCarretillas', {
     data, layout: 'fitColumns', pagination: 'local', paginationSize: 20,
+    placeholder: '<div class="empty-state"><div class="empty-icon">🛺</div><div class="empty-text">Sin carretillas</div></div>',
     columns: [
       { title: 'Matrícula', field: 'matricula', width: 120 },
       { title: 'Tipo', field: 'tipo', minWidth: 140 },
@@ -2178,8 +2256,8 @@ function filtrarHerramientas() {
 }
 
 async function cargarHerramientas() {
-  const r = await api('/herramientas');
-  const data = r.herramientas || r.data || [];
+  const r = await api('/herramientas?todos=1');
+  const data = toArr(r, 'herramientas');
 
   const total = data.length;
   const disponibles = data.filter(h => h.estado === 'disponible').length;
@@ -2219,6 +2297,7 @@ async function cargarHerramientas() {
         },
         cellEdited: c => guardarCampoHerramienta(c.getRow().getData().id, 'estado', c.getValue())
       },
+      { title: 'Dept.', field: 'departamento', width: 110, formatter: fmtDept },
       { title: 'Obra', field: 'obra_nombre', minWidth: 130 },
       { title: 'Asignada a', field: 'trabajador_nombre', minWidth: 140 },
     ]
@@ -2235,7 +2314,7 @@ async function guardarCampoHerramienta(id, campo, valor) {
 
 async function cargarHistorialHerramientas() {
   const r = await api('/historial-herramientas');
-  const data = r.historial || r.data || [];
+  const data = toArr(r, 'historial');
   if (tblHerrHist) { tblHerrHist.replaceData(data); return; }
   tblHerrHist = new Tabulator('#tblHerrHist', {
     data, layout: 'fitColumns', pagination: 'local', paginationSize: 25,
@@ -2684,8 +2763,8 @@ let tblPedidos = null;
 let _pedData = [];
 
 async function cargarPedidos() {
-  const r = await api('/pedidos?limit=500&todos=1');
-  _pedData = r.pedidos || r.data || [];
+  const r = await api('/pedidos?limit=500&' + _invParams('filtroDepPedidos', 'filtroObraPedidos'));
+  _pedData = toArr(r, 'pedidos');
 
   const pendientes = _pedData.filter(p => p.estado === 'pendiente').length;
   const aprobados  = _pedData.filter(p => p.estado === 'aprobado').length;
@@ -2722,8 +2801,7 @@ async function cargarPedidos() {
       },
       { title: 'Obra', field: 'obra_nombre', minWidth: 130,
         formatter: c => c.getValue() ? `<span style="font-size:12px">🏗 ${c.getValue()}</span>` : '<span style="color:var(--muted)">—</span>' },
-      { title: 'Dept.', field: 'departamento', width: 110,
-        formatter: c => c.getValue() ? `<span class="badge badge-muted">${c.getValue()}</span>` : '—' },
+      { title: 'Dept.', field: 'departamento', width: 110, formatter: fmtDept },
       { title: 'Solicitado por', field: 'solicitado_por', minWidth: 130 },
     ]
   });

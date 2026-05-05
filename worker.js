@@ -1280,25 +1280,28 @@ async function eliminarObra(id, request, env) {
 // ════════════════════════════════════════════════════════════════════════════
 
 async function getBobinas(request, env) {
-  const { obraId, isSuperadmin, isEmpresaAdmin, departamento, empresa_id } = await getAuth(request, env);
+  const { obraId, isSuperadmin, isEmpresaAdmin, isJefeObra, departamento, empresa_id } = await getAuth(request, env);
   const url = new URL(request.url);
   const estado = url.searchParams.get('estado');
   const buscar = url.searchParams.get('q');
   const obraParamRaw = url.searchParams.get('obra_id');
   const obraParam = obraParamRaw ? parseInt(obraParamRaw) : null;
-  // SA/EA can override obra via query param; regular users use their session obra
-  const obraFilter = (isSuperadmin || isEmpresaAdmin) ? obraParam : (obraId || null);
+  const isAdminRole = isSuperadmin || isEmpresaAdmin || isJefeObra;
+  const obraFilter = isAdminRole ? obraParam : (obraId || null);
+  // Admins: dept filter solo si se pasa explícitamente (?departamento=X); operarios: siempre su dept
+  const deptParam = url.searchParams.get('departamento');
+  const deptFilter = deptParam || (!isAdminRole ? departamento : null);
 
-  let sql = 'SELECT * FROM bobinas WHERE empresa_id = ?';
+  let sql = 'SELECT b.*, o.nombre as obra_nombre FROM bobinas b LEFT JOIN obras o ON b.obra_id = o.id WHERE b.empresa_id = ?';
   const params = [empresa_id];
-  sql += ' AND departamento = ?'; params.push(departamento);
-  if (obraFilter) { sql += ' AND obra_id = ?'; params.push(obraFilter); }
-  if (estado)     { sql += ' AND estado = ?';  params.push(estado); }
+  if (deptFilter) { sql += ' AND b.departamento = ?'; params.push(deptFilter); }
+  if (obraFilter) { sql += ' AND b.obra_id = ?'; params.push(obraFilter); }
+  if (estado)     { sql += ' AND b.estado = ?';  params.push(estado); }
   if (buscar) {
-    sql += ' AND (codigo LIKE ? OR proveedor LIKE ? OR tipo_cable LIKE ?)';
+    sql += ' AND (b.codigo LIKE ? OR b.proveedor LIKE ? OR b.tipo_cable LIKE ?)';
     params.push(`%${buscar}%`, `%${buscar}%`, `%${buscar}%`);
   }
-  sql += ' ORDER BY created_at DESC';
+  sql += ' ORDER BY b.created_at DESC';
 
   const { results } = await env.DB.prepare(sql).bind(...params).all();
   return json(results);
@@ -1414,24 +1417,27 @@ async function eliminarBobina(codigo, request, env, ctx) {
 // ════════════════════════════════════════════════════════════════════════════
 
 async function getPemp(request, env) {
-  const { obraId, isSuperadmin, isEmpresaAdmin, isSeguridad, departamento, empresa_id } = await getAuth(request, env);
+  const { obraId, isSuperadmin, isEmpresaAdmin, isJefeObra, isSeguridad, departamento, empresa_id } = await getAuth(request, env);
   const url = new URL(request.url);
   const estado = url.searchParams.get('estado');
   const buscar = url.searchParams.get('q');
   const obraParamRaw = url.searchParams.get('obra_id');
   const obraParam = obraParamRaw ? parseInt(obraParamRaw) : null;
-  const obraFilter = (isSuperadmin || isEmpresaAdmin) ? obraParam : (obraId || null);
+  const isAdminRole = isSuperadmin || isEmpresaAdmin || isJefeObra;
+  const obraFilter = isAdminRole ? obraParam : (obraId || null);
+  const deptParam = url.searchParams.get('departamento');
+  const deptFilter = deptParam || (!isAdminRole ? departamento : null);
 
-  let sql = 'SELECT * FROM pemp WHERE empresa_id = ?';
+  let sql = 'SELECT p.*, o.nombre as obra_nombre FROM pemp p LEFT JOIN obras o ON p.obra_id = o.id WHERE p.empresa_id = ?';
   const params = [empresa_id];
-  sql += ' AND departamento = ?'; params.push(departamento);
-  if (obraFilter)  { sql += ' AND obra_id = ?'; params.push(obraFilter); }
-  if (estado)  { sql += ' AND estado = ?';  params.push(estado); }
+  if (deptFilter)  { sql += ' AND p.departamento = ?'; params.push(deptFilter); }
+  if (obraFilter)  { sql += ' AND p.obra_id = ?'; params.push(obraFilter); }
+  if (estado)      { sql += ' AND p.estado = ?';  params.push(estado); }
   if (buscar) {
-    sql += ' AND (matricula LIKE ? OR tipo LIKE ? OR marca LIKE ? OR proveedor LIKE ?)';
+    sql += ' AND (p.matricula LIKE ? OR p.tipo LIKE ? OR p.marca LIKE ? OR p.proveedor LIKE ?)';
     params.push(`%${buscar}%`, `%${buscar}%`, `%${buscar}%`, `%${buscar}%`);
   }
-  sql += ' ORDER BY created_at DESC';
+  sql += ' ORDER BY p.created_at DESC';
 
   const { results } = await env.DB.prepare(sql).bind(...params).all();
   return json(results);
@@ -1575,24 +1581,27 @@ async function eliminarPemp(matricula, request, env, ctx) {
 // ════════════════════════════════════════════════════════════════════════════
 
 async function getCarretillas(request, env) {
-  const { obraId, isSuperadmin, isEmpresaAdmin, isSeguridad, departamento, empresa_id } = await getAuth(request, env);
+  const { obraId, isSuperadmin, isEmpresaAdmin, isJefeObra, isSeguridad, departamento, empresa_id } = await getAuth(request, env);
   const url = new URL(request.url);
   const estado = url.searchParams.get('estado');
   const buscar = url.searchParams.get('q');
   const obraParamRaw = url.searchParams.get('obra_id');
   const obraParam = obraParamRaw ? parseInt(obraParamRaw) : null;
-  const obraFilter = (isSuperadmin || isEmpresaAdmin) ? obraParam : (obraId || null);
+  const isAdminRole = isSuperadmin || isEmpresaAdmin || isJefeObra;
+  const obraFilter = isAdminRole ? obraParam : (obraId || null);
+  const deptParam = url.searchParams.get('departamento');
+  const deptFilter = deptParam || (!isAdminRole ? departamento : null);
 
-  let sql = 'SELECT * FROM carretillas WHERE empresa_id = ?';
+  let sql = 'SELECT c.*, o.nombre as obra_nombre FROM carretillas c LEFT JOIN obras o ON c.obra_id = o.id WHERE c.empresa_id = ?';
   const params = [empresa_id];
-  sql += ' AND departamento = ?'; params.push(departamento);
-  if (obraFilter)  { sql += ' AND obra_id = ?'; params.push(obraFilter); }
-  if (estado)  { sql += ' AND estado = ?';  params.push(estado); }
+  if (deptFilter)  { sql += ' AND c.departamento = ?'; params.push(deptFilter); }
+  if (obraFilter)  { sql += ' AND c.obra_id = ?'; params.push(obraFilter); }
+  if (estado)      { sql += ' AND c.estado = ?';  params.push(estado); }
   if (buscar) {
-    sql += ' AND (matricula LIKE ? OR tipo LIKE ? OR marca LIKE ? OR proveedor LIKE ?)';
+    sql += ' AND (c.matricula LIKE ? OR c.tipo LIKE ? OR c.marca LIKE ? OR c.proveedor LIKE ?)';
     params.push(`%${buscar}%`, `%${buscar}%`, `%${buscar}%`, `%${buscar}%`);
   }
-  sql += ' ORDER BY created_at DESC';
+  sql += ' ORDER BY c.created_at DESC';
 
   const { results } = await env.DB.prepare(sql).bind(...params).all();
   return json(results);
@@ -2417,11 +2426,19 @@ async function getPedidos(request, env) {
   const url = new URL(request.url);
   const estadoFilter = url.searchParams.get('estado');
   const obraFilter   = url.searchParams.get('obra_id');
-  const todos        = url.searchParams.get('todos') === '1' && (isSuperadmin || isEmpresaAdmin || isJefeObra || isDesarrollador);
+  const isAdminRole = isSuperadmin || isEmpresaAdmin || isJefeObra || isDesarrollador;
+  const todos       = url.searchParams.get('todos') === '1' && isAdminRole;
+  const deptParam   = url.searchParams.get('departamento');
 
   let sql = 'SELECT p.*, o.nombre as obra_nombre FROM pedidos p LEFT JOIN obras o ON p.obra_id = o.id WHERE p.empresa_id = ?';
   const params = [empresa_id];
-  if (!todos) { sql += ' AND p.departamento = ?'; params.push(departamento || 'electrico'); }
+  if (!todos) {
+    const deptFinal = deptParam || departamento || 'electrico';
+    sql += ' AND p.departamento = ?'; params.push(deptFinal);
+  } else if (deptParam) {
+    // Admin con filtro explícito de dept
+    sql += ' AND p.departamento = ?'; params.push(deptParam);
+  }
   if (estadoFilter) { sql += ' AND p.estado = ?';  params.push(estadoFilter); }
   if (obraFilter)   { sql += ' AND p.obra_id = ?'; params.push(parseInt(obraFilter)); }
   sql += ' ORDER BY p.created_at DESC LIMIT 500';
@@ -2849,9 +2866,13 @@ async function eliminarKit(id, request, env, ctx) {
 }
 
 async function getHerramientas(request, env) {
-  const { empresa_id, departamento } = await getAuth(request, env);
+  const { empresa_id, departamento, isSuperadmin, isEmpresaAdmin, isJefeObra } = await getAuth(request, env);
   if (!empresa_id) return err('No autorizado', 403);
   const url = new URL(request.url);
+  const isAdminRole = isSuperadmin || isEmpresaAdmin || isJefeObra;
+  const todos = url.searchParams.get('todos') === '1' && isAdminRole;
+  const deptParam = url.searchParams.get('departamento');
+  const deptFilter = deptParam || (!todos ? departamento : null);
   let sql = `SELECT h.*, t.nombre as tipo_nombre, o.nombre as obra_nombre, k.numero_kit
              FROM herramientas h
              LEFT JOIN tipos_herramienta t ON h.tipo_id = t.id
@@ -2859,7 +2880,7 @@ async function getHerramientas(request, env) {
              LEFT JOIN kits_herramientas k ON h.kit_id = k.id
              WHERE h.empresa_id = ?`;
   const params = [empresa_id];
-  if (departamento) { sql += ' AND h.departamento = ?'; params.push(departamento); }
+  if (deptFilter) { sql += ' AND h.departamento = ?'; params.push(deptFilter); }
   const estado  = url.searchParams.get('estado');
   const kit_id  = url.searchParams.get('kit_id');
   const obra_id = url.searchParams.get('obra_id');
