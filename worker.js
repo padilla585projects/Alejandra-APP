@@ -349,6 +349,18 @@ export default {
       if (path === '/admin/login-attempts' && method === 'DELETE') return await adminBorrarLoginAttempts(request, env);
       if (path === '/admin/server-logs'   && method === 'DELETE') return await adminBorrarServerLogs(request, env);
 
+      // ── Dev endpoints (superadmin/desarrollador) ─────────────────────────────
+      if (path === '/dev/sql'           && method === 'POST')   return await devSQL(request, env);
+      if (path === '/dev/table-counts'  && method === 'GET')    return await devTableCounts(request, env);
+      if (path === '/dev/sesiones'      && method === 'GET')    return await devSesionesDetalle(request, env);
+      if (path === '/dev/kill-session'  && method === 'DELETE') return await devKillSession(request, env);
+      if (path === '/dev/login-history' && method === 'GET')    return await devLoginHistory(request, env);
+      if (path === '/dev/kpis'          && method === 'GET')    return await devKPIs(request, env);
+      if (path === '/dev/r2'            && method === 'GET')    return await devR2List(request, env);
+      if (path === '/dev/r2'            && method === 'DELETE') return await devR2Delete(request, env);
+      if (path === '/dev/cambiar-rol'   && method === 'PUT')    return await devCambiarRol(request, env);
+      if (path === '/dev/activity'      && method === 'GET')    return await devActivity(request, env);
+
       // ── Log viewer (DevTools) ────────────────────────────────────────────────
       if (path === '/log'            && method === 'GET')  return await getLogsAdmin(request, env);
 
@@ -6838,4 +6850,153 @@ async function getResumenRepostajes(request, env) {
     ).bind(empresa_id, equipoTipo, equipoId, mesActual).first(),
   ]);
   return json({ ...totalRow, ...mesRow });
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// DEV TOOLS — endpoints solo para superadmin/desarrollador
+// ══════════════════════════════════════════════════════════════════════
+
+async function devSQL(request, env) {
+  const s = await getAuth(request, env);
+  if (!s || !['superadmin','desarrollador'].includes(s.rol)) return err('Sin permiso', 403);
+  const { sql } = await request.json().catch(() => ({}));
+  if (!sql) return err('Falta SQL', 400);
+  const trimmed = sql.trim().toUpperCase();
+  if (!trimmed.startsWith('SELECT') && !trimmed.startsWith('PRAGMA')) {
+    return err('Solo se permiten consultas SELECT o PRAGMA', 403);
+  }
+  try {
+    const result = await env.DB.prepare(sql).all();
+    return json({ ok: true, results: result.results, meta: result.meta });
+  } catch (e) {
+    return json({ ok: false, error: e.message });
+  }
+}
+
+async function devTableCounts(request, env) {
+  const s = await getAuth(request, env);
+  if (!s || !['superadmin','desarrollador'].includes(s.rol)) return err('Sin permiso', 403);
+  const tables = [
+    'usuarios','empresas','obras','bobinas','herramientas','seguridad_items',
+    'epis','carretillas','pemp','fichajes','incidencias','pedidos','turnos',
+    'mantenimientos','repostajes','kits','sesiones','invitaciones','carnets',
+    'logs','login_attempts','reset_tokens','vincular_tokens','sugerencias'
+  ];
+  const counts = {};
+  await Promise.all(tables.map(async t => {
+    try {
+      const r = await env.DB.prepare(`SELECT COUNT(*) as n FROM ${t}`).first();
+      counts[t] = r?.n ?? 0;
+    } catch { counts[t] = null; }
+  }));
+  return json({ ok: true, counts });
+}
+
+async function devSesionesDetalle(request, env) {
+  const s = await getAuth(request, env);
+  if (!s || !['superadmin','desarrollador'].includes(s.rol)) return err('Sin permiso', 403);
+  const rows = await env.DB.prepare(`
+    SELECT s.token, s.nombre, s.rol, s.empresa_id, s.created_at, s.last_used,
+           u.email, e.nombre as empresa_nombre
+    FROM sesiones s
+    LEFT JOIN usuarios u ON u.id = s.usuario_id
+    LEFT JOIN empresas e ON e.id = s.empresa_id
+    ORDER BY s.created_at DESC
+    LIMIT 100
+  `).all();
+  return json({ ok: true, sesiones: rows.results });
+}
+
+async function devKillSession(request, env) {
+  const s = await getAuth(request, env);
+  if (!s || !['superadmin','desarrollador'].includes(s.rol)) return err('Sin permiso', 403);
+  const { token } = await request.json().catch(() => ({}));
+  if (!token) return err('Falta token', 400);
+  if (token === (await getAuth(request, env))?.token) return err('No puedes matar tu propia sesión', 403);
+  await env.DB.prepare('DELETE FROM sesiones WHERE token = ?').bind(token).run();
+  return json({ ok: true });
+}
+
+async function devLoginHistory(request, env) {
+  const s = await getAuth(request, env);
+  if (!s || !['superadmin','desarrollador'].includes(s.rol)) return err('Sin permiso', 403);
+  const rows = await env.DB.prepare(
+    'SELECT email, intentos, bloqueado_hasta FROM login_attempts ORDER BY intentos DESC LIMIT 100'
+  ).all();
+  return json({ ok: true, history: rows.results });
+}
+
+async function devKPIs(request, env) {
+  const s = await getAuth(request, env);
+  if (!s || !['superadmin','desarrollador'].includes(s.rol)) return err('Sin permiso', 403);
+  const [empresas, usuarios, obras, bobinas, fichajesHoy, incAbiertas, sesiones, invitaciones] = await Promise.all([
+    env.DB.prepare("SELECT COUNT(*) as n FROM empresas WHERE activo = 1").first(),
+    env.DB.prepare("SELECT COUNT(*) as n FROM usuarios WHERE activo = 1").first(),
+    env.DB.prepare("SELECT COUNT(*) as n FROM obras WHERE estado = 'activa'").first(),
+    env.DB.prepare("SELECT COUNT(*) as n FROM bobinas").first(),
+    env.DB.prepare("SELECT COUNT(*) as n FROM fichajes WHERE DATE(entrada) = DATE('now')").first(),
+    env.DB.prepare("SELECT COUNT(*) as n FROM incidencias WHERE estado = 'abierta'").first(),
+    env.DB.prepare("SELECT COUNT(*) as n FROM sesiones").first(),
+    env.DB.prepare("SELECT COUNT(*) as n FROM invitaciones WHERE usado = 0 AND expira_at > datetime('now')").first(),
+  ]);
+  return json({ ok: true, kpis: {
+    empresas: empresas?.n ?? 0,
+    usuarios: usuarios?.n ?? 0,
+    obras: obras?.n ?? 0,
+    bobinas: bobinas?.n ?? 0,
+    fichajes_hoy: fichajesHoy?.n ?? 0,
+    incidencias_abiertas: incAbiertas?.n ?? 0,
+    sesiones_activas: sesiones?.n ?? 0,
+    invitaciones_activas: invitaciones?.n ?? 0,
+  }});
+}
+
+async function devR2List(request, env) {
+  const s = await getAuth(request, env);
+  if (!s || !['superadmin','desarrollador'].includes(s.rol)) return err('Sin permiso', 403);
+  if (!env.R2) return json({ ok: true, objects: [], truncated: false });
+  const listed = await env.R2.list({ limit: 500 });
+  const objects = listed.objects.map(o => ({ key: o.key, size: o.size, uploaded: o.uploaded?.toISOString?.() || o.uploaded }));
+  return json({ ok: true, objects, truncated: listed.truncated });
+}
+
+async function devR2Delete(request, env) {
+  const s = await getAuth(request, env);
+  if (!s || !['superadmin','desarrollador'].includes(s.rol)) return err('Sin permiso', 403);
+  const { key } = await request.json().catch(() => ({}));
+  if (!key) return err('Falta key', 400);
+  if (!env.R2) return err('R2 no configurado', 503);
+  await env.R2.delete(key);
+  return json({ ok: true });
+}
+
+async function devCambiarRol(request, env) {
+  const s = await getAuth(request, env);
+  if (!s || !['superadmin','desarrollador'].includes(s.rol)) return err('Sin permiso', 403);
+  const { usuario_id, rol } = await request.json().catch(() => ({}));
+  const rolesValidos = ['superadmin','empresa_admin','encargado','jefe_de_obra','oficina','operario','desarrollador'];
+  if (!usuario_id || !rolesValidos.includes(rol)) return err('Datos inválidos', 400);
+  if (Number(usuario_id) === Number(s.usuario_id)) return err('No puedes cambiar tu propio rol desde aquí', 403);
+  const u = await env.DB.prepare('SELECT id FROM usuarios WHERE id = ?').bind(usuario_id).first();
+  if (!u) return err('Usuario no encontrado', 404);
+  await env.DB.prepare('UPDATE usuarios SET rol = ? WHERE id = ?').bind(rol, usuario_id).run();
+  return json({ ok: true });
+}
+
+async function devActivity(request, env) {
+  const s = await getAuth(request, env);
+  if (!s || !['superadmin','desarrollador'].includes(s.rol)) return err('Sin permiso', 403);
+  const [fichajes, incidencias] = await Promise.all([
+    env.DB.prepare(`
+      SELECT DATE(entrada) as dia, COUNT(*) as total
+      FROM fichajes WHERE entrada >= DATE('now', '-30 days')
+      GROUP BY DATE(entrada) ORDER BY dia
+    `).all(),
+    env.DB.prepare(`
+      SELECT DATE(fecha) as dia, COUNT(*) as total
+      FROM incidencias WHERE fecha >= DATE('now', '-30 days')
+      GROUP BY DATE(fecha) ORDER BY dia
+    `).all(),
+  ]);
+  return json({ ok: true, fichajes: fichajes.results, incidencias: incidencias.results });
 }

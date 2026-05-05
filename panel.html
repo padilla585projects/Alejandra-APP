@@ -992,48 +992,141 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
         </div>
       </div>
 
-      <!-- DEVTOOLS (solo desarrollador) -->
+      <!-- DEVTOOLS (solo desarrollador/superadmin) -->
       <div class="page" id="pageDevtools">
         <div style="display:flex;align-items:center;gap:14px;margin-bottom:6px">
           <div class="page-title" style="margin-bottom:0">🛠️ DevTools</div>
-          <span style="background:rgba(168,85,247,.2);color:#a855f7;font-family:'Montserrat',sans-serif;font-weight:900;font-size:10px;letter-spacing:1px;padding:3px 10px;border-radius:20px;border:1px solid rgba(168,85,247,.3)">SOLO DESARROLLADOR</span>
+          <span style="background:rgba(168,85,247,.2);color:#a855f7;font-family:'Montserrat',sans-serif;font-weight:900;font-size:10px;letter-spacing:1px;padding:3px 10px;border-radius:20px;border:1px solid rgba(168,85,247,.3)">SUPERADMIN / DESARROLLADOR</span>
         </div>
-        <div class="page-sub">Monitor de salud, estadísticas de base de datos y herramientas de diagnóstico</div>
+        <div class="page-sub">Monitor de salud, estadísticas, base de datos y herramientas de diagnóstico</div>
 
-        <!-- API URL + botón refresh -->
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px 16px">
+        <!-- API URL + botones -->
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px 16px;flex-wrap:wrap">
           <span style="font-family:'Montserrat',sans-serif;font-weight:700;font-size:11px;color:var(--muted);letter-spacing:1px">API:</span>
-          <span id="devApiUrl" style="font-family:monospace;font-size:12px;color:#a855f7;flex:1"></span>
+          <span id="devApiUrl" style="font-family:monospace;font-size:12px;color:#a855f7;flex:1;min-width:200px"></span>
           <button class="btn btn-secondary btn-sm" onclick="cargarDevtools()">🔄 Actualizar todo</button>
           <button class="btn btn-secondary btn-sm" onclick="devCopiarToken()">📋 Copiar token</button>
+          <button class="btn btn-secondary btn-sm" onclick="devCambiarApi()">🔗 Cambiar API</button>
         </div>
 
-        <!-- HEALTH CHECK grid -->
+        <!-- KPIs GLOBALES -->
         <div class="section-card" style="margin-bottom:20px">
-          <div class="section-card-title"><span>💓</span> Health Check — Endpoints</div>
-          <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
-            <span style="font-size:11px;color:var(--muted);font-family:'Montserrat',sans-serif;font-weight:700">LEYENDA:</span>
-            <span style="font-size:11px"><span style="background:rgba(34,197,94,.2);color:var(--green);padding:2px 8px;border-radius:4px">✓</span> OK</span>
-            <span style="font-size:11px"><span style="background:rgba(234,179,8,.2);color:var(--yellow);padding:2px 8px;border-radius:4px">⚠</span> Lento (&gt;1s)</span>
-            <span style="font-size:11px"><span style="background:rgba(239,68,68,.2);color:var(--red);padding:2px 8px;border-radius:4px">✕</span> Error/Sin respuesta</span>
-          </div>
-          <div id="devHealthGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:8px">
-            <div class="loading"><div class="spinner"></div> Comprobando endpoints...</div>
+          <div class="section-card-title"><span>🌐</span> KPIs Globales — Toda la plataforma</div>
+          <div id="devKpisGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;margin-top:4px">
+            <div class="loading"><div class="spinner"></div></div>
           </div>
         </div>
 
+        <!-- HEALTH CHECK + PERFORMANCE -->
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px">
-          <!-- DB STATS -->
+          <div class="section-card">
+            <div class="section-card-title"><span>💓</span> Health Check — Endpoints</div>
+            <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">
+              <span style="font-size:10px"><span style="background:rgba(34,197,94,.2);color:var(--green);padding:1px 6px;border-radius:4px">✓</span> OK</span>
+              <span style="font-size:10px"><span style="background:rgba(234,179,8,.2);color:#eab308;padding:1px 6px;border-radius:4px">⚠</span> Lento</span>
+              <span style="font-size:10px"><span style="background:rgba(239,68,68,.2);color:var(--red);padding:1px 6px;border-radius:4px">✕</span> Error</span>
+            </div>
+            <div id="devHealthGrid" style="display:flex;flex-direction:column;gap:6px">
+              <div class="loading"><div class="spinner"></div> Comprobando...</div>
+            </div>
+          </div>
+          <div class="section-card">
+            <div class="section-card-title"><span>⚡</span> Test de Rendimiento</div>
+            <div id="devPerfGrid" style="display:flex;flex-direction:column;gap:6px">
+              <div style="color:var(--muted);font-size:12px">Pulsa el botón para medir tiempos</div>
+            </div>
+            <button class="btn btn-secondary btn-sm" onclick="devTestRendimiento()" style="margin-top:10px">▶ Medir tiempos</button>
+          </div>
+        </div>
+
+        <!-- DB STATS + CONTEO TABLAS -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px">
           <div class="section-card">
             <div class="section-card-title"><span>🗄️</span> Estadísticas D1</div>
-            <div id="devDbStats"><div class="loading"><div class="spinner"></div> Cargando...</div></div>
+            <div id="devDbStats"><div class="loading"><div class="spinner"></div></div></div>
           </div>
-
-          <!-- SESIONES ACTIVAS -->
           <div class="section-card">
-            <div class="section-card-title"><span>👥</span> Sesiones activas ahora</div>
-            <div id="devSesiones"><div class="loading"><div class="spinner"></div> Cargando...</div></div>
+            <div class="section-card-title"><span>📊</span> Registros por tabla</div>
+            <div id="devTableCounts"><div class="loading"><div class="spinner"></div></div></div>
           </div>
+        </div>
+
+        <!-- SQL RUNNER -->
+        <div class="section-card" style="margin-bottom:20px">
+          <div class="section-card-title"><span>💻</span> SQL Runner <span style="font-size:10px;color:var(--muted);font-weight:400;margin-left:6px">(Solo SELECT / PRAGMA)</span></div>
+          <textarea id="devSqlInput" rows="4" placeholder="SELECT * FROM usuarios LIMIT 10" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:monospace;font-size:13px;padding:10px;resize:vertical;margin-bottom:8px"></textarea>
+          <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">
+            <button class="btn btn-secondary btn-sm" onclick="devRunSQL()">▶ Ejecutar</button>
+            <button class="btn btn-secondary btn-sm" onclick="devSqlPreset('SELECT * FROM usuarios ORDER BY id DESC LIMIT 20')">👤 Usuarios</button>
+            <button class="btn btn-secondary btn-sm" onclick="devSqlPreset('SELECT * FROM sesiones ORDER BY created_at DESC LIMIT 20')">🔑 Sesiones</button>
+            <button class="btn btn-secondary btn-sm" onclick="devSqlPreset('SELECT * FROM logs ORDER BY id DESC LIMIT 30')">📋 Logs</button>
+            <button class="btn btn-secondary btn-sm" onclick="devSqlPreset('SELECT * FROM invitaciones WHERE usado=0 AND expira_at > datetime(\'now\')')">🎫 Invitaciones activas</button>
+            <button class="btn btn-secondary btn-sm" onclick="devSqlPreset('SELECT * FROM login_attempts ORDER BY intentos DESC')">🔒 Login attempts</button>
+          </div>
+          <div id="devSqlResult" style="overflow-x:auto;max-height:300px;overflow-y:auto"></div>
+        </div>
+
+        <!-- SESIONES ACTIVAS DETALLADAS -->
+        <div class="section-card" style="margin-bottom:20px">
+          <div class="section-card-title">
+            <span>👥</span> Sesiones activas
+            <button class="btn btn-secondary btn-sm" onclick="cargarDevSesiones()" style="margin-left:auto">🔄</button>
+          </div>
+          <div id="devSesionesTable"><div class="loading"><div class="spinner"></div></div></div>
+        </div>
+
+        <!-- HISTORIAL LOGIN ATTEMPTS -->
+        <div class="section-card" style="margin-bottom:20px">
+          <div class="section-card-title">
+            <span>🔐</span> Historial Login Attempts
+            <button class="btn btn-secondary btn-sm" onclick="cargarDevLoginHistory()" style="margin-left:auto">🔄</button>
+          </div>
+          <div id="devLoginHistoryTable"><div class="loading"><div class="spinner"></div></div></div>
+        </div>
+
+        <!-- CAMBIAR ROL DE USUARIO -->
+        <div class="section-card" style="margin-bottom:20px">
+          <div class="section-card-title"><span>🎭</span> Cambiar rol de usuario</div>
+          <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
+            <div style="flex:1;min-width:200px">
+              <label style="font-size:11px;color:var(--muted);font-family:'Montserrat',sans-serif;font-weight:700;letter-spacing:1px;display:block;margin-bottom:4px">USUARIO (ID o email)</label>
+              <input id="devRolUsuario" class="tbl-search" placeholder="ID o email del usuario" style="width:100%">
+            </div>
+            <div style="min-width:160px">
+              <label style="font-size:11px;color:var(--muted);font-family:'Montserrat',sans-serif;font-weight:700;letter-spacing:1px;display:block;margin-bottom:4px">NUEVO ROL</label>
+              <select id="devRolSelect" class="tbl-search" style="width:100%">
+                <option value="operario">operario</option>
+                <option value="oficina">oficina</option>
+                <option value="encargado">encargado</option>
+                <option value="jefe_de_obra">jefe_de_obra</option>
+                <option value="empresa_admin">empresa_admin</option>
+                <option value="desarrollador">desarrollador</option>
+                <option value="superadmin">superadmin</option>
+              </select>
+            </div>
+            <button class="btn btn-secondary" onclick="devCambiarRolUsuario()">✏️ Cambiar rol</button>
+          </div>
+          <div id="devRolLog" style="margin-top:8px;font-family:monospace;font-size:12px;color:var(--muted);min-height:16px"></div>
+        </div>
+
+        <!-- GRÁFICA DE ACTIVIDAD -->
+        <div class="section-card" style="margin-bottom:20px">
+          <div class="section-card-title">
+            <span>📈</span> Actividad últimos 30 días
+            <button class="btn btn-secondary btn-sm" onclick="cargarDevActivity()" style="margin-left:auto">🔄</button>
+          </div>
+          <div id="devActivityChart" style="overflow-x:auto;padding-top:8px">
+            <div class="loading"><div class="spinner"></div></div>
+          </div>
+        </div>
+
+        <!-- R2 FILE BROWSER -->
+        <div class="section-card" style="margin-bottom:20px">
+          <div class="section-card-title">
+            <span>🗂️</span> Visor de archivos R2
+            <button class="btn btn-secondary btn-sm" onclick="cargarDevR2()" style="margin-left:auto">🔄</button>
+          </div>
+          <div id="devR2List"><div class="loading"><div class="spinner"></div></div></div>
         </div>
 
         <!-- ACCIONES RÁPIDAS -->
@@ -1042,9 +1135,9 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
           <div style="display:flex;gap:10px;flex-wrap:wrap">
             <button class="btn btn-secondary" onclick="devLimpiarStorage()">🗑 Limpiar localStorage</button>
             <button class="btn btn-secondary" onclick="devLimpiarLogs()">📋 Borrar logs panel</button>
-            <button class="btn btn-secondary" onclick="devForzarLogout()">🔐 Invalidar sesión (forzar logout)</button>
+            <button class="btn btn-secondary" onclick="devForzarLogout()">🔐 Invalidar sesión</button>
             <button class="btn btn-secondary" onclick="devTestTelegram()">📱 Test Telegram</button>
-            <button class="btn btn-danger" onclick="devBorrarLoginAttempts()">🔓 Limpiar login_attempts D1</button>
+            <button class="btn btn-danger" onclick="devBorrarLoginAttempts()">🔓 Limpiar login_attempts</button>
           </div>
           <div id="devAccionLog" style="margin-top:12px;font-family:monospace;font-size:12px;color:var(--muted);min-height:20px"></div>
         </div>
@@ -3774,11 +3867,297 @@ let _serverLogs = [];
 async function cargarDevtools() {
   document.getElementById('devApiUrl').textContent = API;
   await Promise.all([
-    devHealthCheck(),
-    devDbStats(),
-    devSesiones(),
+    devCheckHealth(),
+    cargarDevDbStats(),
+    cargarDevTableCounts(),
+    cargarDevKPIs(),
+    cargarDevSesiones(),
+    cargarDevLoginHistory(),
+    cargarDevActivity(),
+    cargarDevR2(),
     cargarServerLogs(),
   ]);
+}
+
+// KPIs globales
+async function cargarDevKPIs() {
+  const el = document.getElementById('devKpisGrid');
+  if (!el) return;
+  const r = await api('/dev/kpis');
+  if (!r.ok) { el.innerHTML = `<div style="color:var(--red);font-size:12px">${r.error}</div>`; return; }
+  const k = r.kpis;
+  const items = [
+    { icon:'🏢', label:'Empresas', value: k.empresas, color:'var(--blue)' },
+    { icon:'👤', label:'Usuarios activos', value: k.usuarios, color:'var(--green)' },
+    { icon:'🏗️', label:'Obras activas', value: k.obras, color:'var(--accent)' },
+    { icon:'🔌', label:'Bobinas', value: k.bobinas, color:'#a855f7' },
+    { icon:'⏱️', label:'Fichajes hoy', value: k.fichajes_hoy, color:'var(--green)' },
+    { icon:'⚠️', label:'Incidencias abiertas', value: k.incidencias_abiertas, color:'var(--red)' },
+    { icon:'🔑', label:'Sesiones activas', value: k.sesiones_activas, color:'#eab308' },
+    { icon:'🎫', label:'Invitaciones vivas', value: k.invitaciones_activas, color:'var(--muted)' },
+  ];
+  el.innerHTML = items.map(i => `
+    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:12px;text-align:center">
+      <div style="font-size:22px">${i.icon}</div>
+      <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:22px;color:${i.color}">${i.value}</div>
+      <div style="font-size:10px;color:var(--muted);font-family:'Montserrat',sans-serif;font-weight:700;letter-spacing:.5px">${i.label}</div>
+    </div>`).join('');
+}
+
+// Conteo de tablas
+async function cargarDevTableCounts() {
+  const el = document.getElementById('devTableCounts');
+  if (!el) return;
+  const r = await api('/dev/table-counts');
+  if (!r.ok) { el.innerHTML = `<div style="color:var(--red);font-size:12px">${r.error}</div>`; return; }
+  const counts = r.counts;
+  const rows = Object.entries(counts)
+    .sort((a,b) => (b[1]??-1) - (a[1]??-1))
+    .map(([tabla, n]) => `
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 8px;border-radius:6px;background:var(--surface2);margin-bottom:4px">
+        <span style="font-family:monospace;font-size:12px;color:var(--text)">${tabla}</span>
+        <span style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:13px;color:${n===null?'var(--red)':n>0?'var(--green)':'var(--muted)'}">${n===null?'N/A':n}</span>
+      </div>`).join('');
+  el.innerHTML = `<div style="max-height:280px;overflow-y:auto">${rows}</div>`;
+}
+
+// SQL Runner
+async function devRunSQL() {
+  const sql = document.getElementById('devSqlInput').value.trim();
+  const el = document.getElementById('devSqlResult');
+  if (!sql) return;
+  el.innerHTML = '<div class="loading"><div class="spinner"></div> Ejecutando...</div>';
+  const r = await api('/dev/sql', { method: 'POST', body: JSON.stringify({ sql }) });
+  if (!r.ok) {
+    el.innerHTML = `<div style="color:var(--red);font-family:monospace;font-size:12px;padding:8px;background:rgba(239,68,68,.1);border-radius:6px">❌ ${r.error}</div>`;
+    return;
+  }
+  const results = r.results || [];
+  if (!results.length) { el.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:8px">Sin resultados (0 filas)</div>'; return; }
+  const cols = Object.keys(results[0]);
+  el.innerHTML = `
+    <div style="font-size:11px;color:var(--muted);margin-bottom:6px;font-family:'Montserrat',sans-serif;font-weight:700">${results.length} fila(s)</div>
+    <table style="width:100%;border-collapse:collapse;font-size:12px;font-family:monospace">
+      <thead><tr>${cols.map(c=>`<th style="padding:6px 8px;background:var(--surface2);color:var(--accent);text-align:left;border-bottom:1px solid var(--border);white-space:nowrap">${c}</th>`).join('')}</tr></thead>
+      <tbody>${results.map((row,i)=>`<tr style="background:${i%2?'var(--surface2)':'transparent'}">${cols.map(c=>`<td style="padding:5px 8px;border-bottom:1px solid rgba(51,65,85,.3);max-width:250px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${String(row[c]??'').replace(/"/g,'&quot;')}">${row[c]===null?'<span style="color:var(--muted)">NULL</span>':String(row[c]).slice(0,120)}</td>`).join('')}</tr>`).join('')}
+      </tbody>
+    </table>`;
+}
+
+function devSqlPreset(sql) {
+  document.getElementById('devSqlInput').value = sql;
+  devRunSQL();
+}
+
+// Sesiones detalladas
+async function cargarDevSesiones() {
+  const el = document.getElementById('devSesionesTable');
+  if (!el) return;
+  const r = await api('/dev/sesiones');
+  if (!r.ok) { el.innerHTML = `<div style="color:var(--red);font-size:12px">${r.error}</div>`; return; }
+  const sesiones = r.sesiones || [];
+  if (!sesiones.length) { el.innerHTML = '<div style="color:var(--muted);font-size:12px">Sin sesiones activas</div>'; return; }
+  el.innerHTML = `
+    <table style="width:100%;border-collapse:collapse;font-size:12px">
+      <thead><tr>
+        <th style="padding:6px 8px;background:var(--surface2);color:var(--accent);text-align:left">Usuario</th>
+        <th style="padding:6px 8px;background:var(--surface2);color:var(--accent);text-align:left">Email</th>
+        <th style="padding:6px 8px;background:var(--surface2);color:var(--accent);text-align:left">Rol</th>
+        <th style="padding:6px 8px;background:var(--surface2);color:var(--accent);text-align:left">Empresa</th>
+        <th style="padding:6px 8px;background:var(--surface2);color:var(--accent);text-align:left">Inicio</th>
+        <th style="padding:6px 8px;background:var(--surface2);color:var(--accent);text-align:left">Acción</th>
+      </tr></thead>
+      <tbody>${sesiones.map((s,i)=>`
+        <tr style="background:${i%2?'var(--surface2)':'transparent'}">
+          <td style="padding:5px 8px">${s.nombre||'—'}</td>
+          <td style="padding:5px 8px;font-family:monospace;font-size:11px">${s.email||'—'}</td>
+          <td style="padding:5px 8px"><span class="rol-badge rol-${s.rol}" style="font-size:10px">${s.rol}</span></td>
+          <td style="padding:5px 8px">${s.empresa_nombre||s.empresa_id||'—'}</td>
+          <td style="padding:5px 8px;font-size:11px;color:var(--muted)">${(s.created_at||'').slice(0,16)}</td>
+          <td style="padding:5px 8px"><button class="btn btn-danger btn-sm" style="padding:3px 8px;font-size:10px" onclick="devKillSesion('${s.token}')">🗑 Matar</button></td>
+        </tr>`).join('')}
+      </tbody>
+    </table>`;
+}
+
+async function devKillSesion(token) {
+  if (!confirm('¿Cerrar esta sesión?')) return;
+  const r = await api('/dev/kill-session', { method: 'DELETE', body: JSON.stringify({ token }) });
+  toast(r.ok ? 'Sesión cerrada' : (r.error||'Error'), r.ok ? 'ok' : 'error');
+  if (r.ok) cargarDevSesiones();
+}
+
+// Login history
+async function cargarDevLoginHistory() {
+  const el = document.getElementById('devLoginHistoryTable');
+  if (!el) return;
+  const r = await api('/dev/login-history');
+  if (!r.ok) { el.innerHTML = `<div style="color:var(--red);font-size:12px">${r.error}</div>`; return; }
+  const history = r.history || [];
+  if (!history.length) { el.innerHTML = '<div style="color:var(--muted);font-size:12px">Sin intentos registrados</div>'; return; }
+  el.innerHTML = `
+    <table style="width:100%;border-collapse:collapse;font-size:12px">
+      <thead><tr>
+        <th style="padding:6px 8px;background:var(--surface2);color:var(--accent);text-align:left">Email / IP</th>
+        <th style="padding:6px 8px;background:var(--surface2);color:var(--accent);text-align:center">Intentos</th>
+        <th style="padding:6px 8px;background:var(--surface2);color:var(--accent);text-align:left">Bloqueado hasta</th>
+      </tr></thead>
+      <tbody>${history.map((h,i)=>`
+        <tr style="background:${i%2?'var(--surface2)':'transparent'}">
+          <td style="padding:5px 8px;font-family:monospace;font-size:11px">${h.email||'—'}</td>
+          <td style="padding:5px 8px;text-align:center"><span style="color:${h.intentos>=3?'var(--red)':h.intentos>=1?'#eab308':'var(--green)'};font-weight:700">${h.intentos}</span></td>
+          <td style="padding:5px 8px;font-size:11px;color:${h.bloqueado_hasta?'var(--red)':'var(--muted)'}">${h.bloqueado_hasta||'No bloqueado'}</td>
+        </tr>`).join('')}
+      </tbody>
+    </table>`;
+}
+
+// Cambiar rol usuario
+async function devCambiarRolUsuario() {
+  const el = document.getElementById('devRolLog');
+  const input = document.getElementById('devRolUsuario').value.trim();
+  const rol = document.getElementById('devRolSelect').value;
+  if (!input || !rol) { el.textContent = '❌ Rellena el usuario y el rol'; return; }
+
+  // Buscar usuario por email o ID usando SQL runner
+  let usuario_id = null;
+  if (/^\d+$/.test(input)) {
+    usuario_id = parseInt(input);
+  } else {
+    const r = await api('/dev/sql', { method: 'POST', body: JSON.stringify({ sql: `SELECT id FROM usuarios WHERE LOWER(email) = LOWER('${input.replace(/'/g,"''")}') LIMIT 1` }) });
+    if (r.ok && r.results?.length) usuario_id = r.results[0].id;
+  }
+  if (!usuario_id) { el.textContent = `❌ Usuario no encontrado: ${input}`; return; }
+
+  const r = await api('/dev/cambiar-rol', { method: 'PUT', body: JSON.stringify({ usuario_id, rol }) });
+  el.textContent = r.ok ? `✅ Rol de usuario ${usuario_id} cambiado a "${rol}"` : `❌ ${r.error}`;
+  el.style.color = r.ok ? 'var(--green)' : 'var(--red)';
+}
+
+// Gráfica de actividad (barras simples HTML/CSS)
+async function cargarDevActivity() {
+  const el = document.getElementById('devActivityChart');
+  if (!el) return;
+  const r = await api('/dev/activity');
+  if (!r.ok) { el.innerHTML = `<div style="color:var(--red);font-size:12px">${r.error}</div>`; return; }
+  const fichajes = r.fichajes || [];
+  const incidencias = r.incidencias || [];
+  if (!fichajes.length && !incidencias.length) { el.innerHTML = '<div style="color:var(--muted);font-size:12px">Sin datos los últimos 30 días</div>'; return; }
+
+  // Unificar días
+  const dias = [...new Set([...fichajes.map(f=>f.dia), ...incidencias.map(i=>i.dia)])].sort();
+  const fMap = Object.fromEntries(fichajes.map(f=>[f.dia,f.total]));
+  const iMap = Object.fromEntries(incidencias.map(i=>[i.dia,i.total]));
+  const maxVal = Math.max(1, ...fichajes.map(f=>f.total), ...incidencias.map(i=>i.total));
+
+  el.innerHTML = `
+    <div style="display:flex;gap:12px;margin-bottom:8px">
+      <span style="display:flex;align-items:center;gap:4px;font-size:11px"><span style="width:12px;height:12px;border-radius:2px;background:var(--blue);display:inline-block"></span> Fichajes</span>
+      <span style="display:flex;align-items:center;gap:4px;font-size:11px"><span style="width:12px;height:12px;border-radius:2px;background:var(--red);display:inline-block"></span> Incidencias</span>
+    </div>
+    <div style="display:flex;align-items:flex-end;gap:3px;height:80px;overflow-x:auto;padding-bottom:4px">
+      ${dias.map(d => {
+        const f = fMap[d]||0, inc = iMap[d]||0;
+        const fH = Math.round((f/maxVal)*70), iH = Math.round((inc/maxVal)*70);
+        const label = d.slice(5); // MM-DD
+        return `<div style="display:flex;flex-direction:column;align-items:center;gap:1px;flex-shrink:0;min-width:18px" title="${d}: ${f} fichajes, ${inc} incidencias">
+          <div style="display:flex;gap:1px;align-items:flex-end">
+            <div style="width:7px;height:${fH||1}px;background:var(--blue);border-radius:1px 1px 0 0" title="Fichajes: ${f}"></div>
+            <div style="width:7px;height:${iH||1}px;background:var(--red);border-radius:1px 1px 0 0" title="Incidencias: ${inc}"></div>
+          </div>
+          <div style="font-size:7px;color:var(--muted);transform:rotate(-45deg);transform-origin:top left;white-space:nowrap;margin-left:4px">${label}</div>
+        </div>`;
+      }).join('')}
+    </div>`;
+}
+
+// R2 File Browser
+async function cargarDevR2() {
+  const el = document.getElementById('devR2List');
+  if (!el) return;
+  const r = await api('/dev/r2');
+  if (!r.ok) { el.innerHTML = `<div style="color:var(--red);font-size:12px">${r.error}</div>`; return; }
+  const objects = r.objects || [];
+  if (!objects.length) { el.innerHTML = '<div style="color:var(--muted);font-size:12px">R2 vacío o no configurado</div>'; return; }
+  const totalSize = objects.reduce((a,o)=>a+(o.size||0),0);
+  el.innerHTML = `
+    <div style="font-size:11px;color:var(--muted);margin-bottom:8px;font-family:'Montserrat',sans-serif;font-weight:700">${objects.length} archivo(s) · ${(totalSize/1024/1024).toFixed(2)} MB total${r.truncated?' (truncado a 500)':''}</div>
+    <div style="max-height:280px;overflow-y:auto">
+      <table style="width:100%;border-collapse:collapse;font-size:12px">
+        <thead><tr>
+          <th style="padding:5px 8px;background:var(--surface2);color:var(--accent);text-align:left">Archivo (key)</th>
+          <th style="padding:5px 8px;background:var(--surface2);color:var(--accent);text-align:right">Tamaño</th>
+          <th style="padding:5px 8px;background:var(--surface2);color:var(--accent);text-align:left">Subido</th>
+          <th style="padding:5px 8px;background:var(--surface2);color:var(--accent)"></th>
+        </tr></thead>
+        <tbody>${objects.map((o,i)=>`
+          <tr style="background:${i%2?'var(--surface2)':'transparent'}">
+            <td style="padding:4px 8px;font-family:monospace;font-size:11px;max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${o.key}">${o.key}</td>
+            <td style="padding:4px 8px;text-align:right;color:var(--muted);font-size:11px">${o.size>1024*1024?(o.size/1024/1024).toFixed(1)+' MB':(o.size/1024).toFixed(0)+' KB'}</td>
+            <td style="padding:4px 8px;font-size:11px;color:var(--muted)">${(o.uploaded||'').slice(0,10)}</td>
+            <td style="padding:4px 8px"><button class="btn btn-danger btn-sm" style="padding:2px 8px;font-size:10px" onclick="devR2Delete('${o.key.replace(/'/g,"\\'")}')">🗑</button></td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>`;
+}
+
+async function devR2Delete(key) {
+  if (!confirm(`¿Borrar "${key}"? Esta acción es irreversible.`)) return;
+  const r = await api('/dev/r2', { method: 'DELETE', body: JSON.stringify({ key }) });
+  toast(r.ok ? 'Archivo borrado' : (r.error||'Error'), r.ok ? 'ok' : 'error');
+  if (r.ok) cargarDevR2();
+}
+
+// Test de rendimiento
+async function devTestRendimiento() {
+  const el = document.getElementById('devPerfGrid');
+  el.innerHTML = '<div class="loading"><div class="spinner"></div> Midiendo...</div>';
+  const endpoints = [
+    { name: 'Health (config)', url: '/config' },
+    { name: 'Obras', url: '/obras' },
+    { name: 'Usuarios', url: '/personal/trabajadores' },
+    { name: 'Bobinas', url: '/bobinas' },
+    { name: 'Fichajes', url: '/fichajes' },
+    { name: 'Dashboard', url: '/dashboard' },
+  ];
+  const results = await Promise.all(endpoints.map(async ep => {
+    const t0 = performance.now();
+    try {
+      await api(ep.url);
+      const ms = Math.round(performance.now() - t0);
+      return { name: ep.name, ms, ok: true };
+    } catch {
+      return { name: ep.name, ms: null, ok: false };
+    }
+  }));
+  el.innerHTML = results.map(r => {
+    const color = !r.ok ? 'var(--red)' : r.ms > 1000 ? '#eab308' : 'var(--green)';
+    const icon = !r.ok ? '✕' : r.ms > 1000 ? '⚠' : '✓';
+    return `<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 8px;background:var(--surface2);border-radius:6px;margin-bottom:4px">
+      <span style="font-size:12px">${r.name}</span>
+      <span style="font-family:monospace;font-size:12px;color:${color}">${icon} ${r.ok?(r.ms+'ms'):'Error'}</span>
+    </div>`;
+  }).join('');
+}
+
+function devCambiarApi() {
+  const nueva = prompt('Nueva URL de la API:', API);
+  if (!nueva) return;
+  API = nueva.trim().replace(/\/$/, '');
+  localStorage.setItem('panel_api', API);
+  document.getElementById('devApiUrl').textContent = API;
+  toast('API URL actualizada', 'ok');
+}
+
+// Wrapper para compatibilidad con el health check existente
+function devCheckHealth() {
+  if (typeof devHealthCheck === 'function') return devHealthCheck();
+}
+
+// Wrapper para cargarDevDbStats (usa la función existente devDbStats)
+function cargarDevDbStats() {
+  if (typeof devDbStats === 'function') return devDbStats();
 }
 
 // ── HEALTH CHECK ────────────────────────────────────────────────
