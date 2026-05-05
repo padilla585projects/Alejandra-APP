@@ -7,12 +7,27 @@
 
 **Sesión:** LIBRE
 **Última sesión:** 05/05/2026
-**Versión tras última sesión:** v5.41 — sync bidireccional en tiempo real
-**Worker desplegado:** 10fb5cf7-0bf2-48bd-b711-f9c0eac9be5b
+**Versión tras última sesión:** v5.41 + security patch (worker 6b18efd1)
+**Worker desplegado:** 6b18efd1-c089-4576-a8f3-fdd7e31208bd
 **GitHub:** en sync ✅
 **Panel web:** https://padilla585projects.github.io/Alejandra-APP/panel.html ✅ FUNCIONA
 
 ---
+
+## RESUMEN SESIÓN 05/05/2026 (security patch — 4 vulnerabilidades críticas)
+
+- **SEC-13 (CRÍTICO)**: `getAuth()` legacy path aceptaba `X-Rol: superadmin` como suficiente
+  para obtener acceso total sin token. Cualquier petición HTTP sin sesión podía enviar esa
+  cabecera y pasar como superadmin. Fix: solo `X-Admin-Code` verificado contra `env.ADMIN_CODE`
+  concede privilegios en la ruta legacy. `X-Rol` queda como metadata, nunca concede acceso.
+- **SEC-08/09**: `/scan`, `/ocr`, `/log POST` eran públicos. Permitía consumir cuota de
+  Gemini/Cloud Vision sin autenticar y spamear Telegram con errores falsos. Ahora requieren
+  `X-Token` válido en D1.
+- **SEC-02**: `getCatalogo/addCatalogo/deleteCatalogo` interpolaban el nombre de tabla en SQL
+  sin validación. Añadida `CATALOG_WHITELIST` con 6 tablas permitidas; cualquier otro → 400.
+- **UX-06**: `alertasDiarias` mezclaba alertas de todas las empresas sin etiquetar. Ahora
+  cada línea lleva `[NombreEmpresa]` para que el superadmin identifique el origen.
+- Worker: 6b18efd1-c089-4576-a8f3-fdd7e31208bd ✅
 
 ## RESUMEN SESIÓN 05/05/2026 (v5.41 — Sync bidireccional panel ↔ app móvil)
 
