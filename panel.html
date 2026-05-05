@@ -2211,24 +2211,33 @@ async function cargarChat() {
     const mismoAutor = lastAuthor === (m.usuario_id || nombre);
     lastAuthor = m.usuario_id || nombre;
 
+    // Avatar: foto si existe, si no inicial con color de rol
+    const fotoUrl = m.foto_r2_key
+      ? `${API}/foto-perfil/usuario/${m.usuario_id}?token=${TOKEN}`
+      : null;
+    const avatarHtml = fotoUrl
+      ? `<img src="${fotoUrl}" style="width:30px;height:30px;border-radius:50%;object-fit:cover;border:2px solid ${color};flex-shrink:0" onerror="this.outerHTML='<div style=\\'width:30px;height:30px;border-radius:50%;background:${color}22;border:2px solid ${color};display:flex;align-items:center;justify-content:center;font-family:Montserrat,sans-serif;font-weight:900;font-size:12px;color:${color};flex-shrink:0\\'>${inicial}</div>'">`
+      : `<div style="width:30px;height:30px;border-radius:50%;background:${color}22;border:2px solid ${color};display:flex;align-items:center;justify-content:center;font-family:'Montserrat',sans-serif;font-weight:900;font-size:12px;color:${color};flex-shrink:0">${inicial}</div>`;
+
     if (propio) {
       // Burbuja propia — derecha, naranja
-      return `<div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px;margin-bottom:${mismoAutor ? '2px' : '10px'}">
-        ${!mismoAutor ? `<div style="display:flex;align-items:center;gap:6px;justify-content:flex-end">
-          <span style="font-family:'Montserrat',sans-serif;font-weight:700;font-size:10px;color:var(--accent)">Tú</span>
-          ${obra ? `<span style="font-family:'Montserrat',sans-serif;font-size:9px;color:var(--muted);background:var(--surface2);border:1px solid var(--border);padding:1px 5px;border-radius:4px">🏗 ${obra}</span>` : ''}
-          <span style="font-size:10px;color:var(--muted)">${hora}</span>
-        </div>` : `<span style="font-size:9px;color:var(--muted);margin-right:2px">${hora}</span>`}
-        <div style="max-width:82%;padding:9px 13px;border-radius:14px 14px 3px 14px;background:var(--accent);color:#000;font-size:13px;word-break:break-word;line-height:1.45">${m.mensaje}</div>
+      return `<div style="display:flex;gap:8px;align-items:flex-end;justify-content:flex-end;margin-bottom:${mismoAutor ? '2px' : '10px'}">
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px;max-width:82%">
+          ${!mismoAutor ? `<div style="display:flex;align-items:center;gap:6px;justify-content:flex-end">
+            <span style="font-family:'Montserrat',sans-serif;font-weight:700;font-size:10px;color:var(--accent)">Tú</span>
+            ${obra ? `<span style="font-family:'Montserrat',sans-serif;font-size:9px;color:var(--muted);background:var(--surface2);border:1px solid var(--border);padding:1px 5px;border-radius:4px">🏗 ${obra}</span>` : ''}
+            <span style="font-size:10px;color:var(--muted)">${hora}</span>
+          </div>` : `<span style="font-size:9px;color:var(--muted);text-align:right">${hora}</span>`}
+          <div style="padding:9px 13px;border-radius:14px 14px 3px 14px;background:var(--accent);color:#000;font-size:13px;word-break:break-word;line-height:1.45">${m.mensaje}</div>
+        </div>
+        ${!mismoAutor ? avatarHtml : `<div style="width:30px;flex-shrink:0"></div>`}
       </div>`;
     } else {
       // Burbuja ajena — izquierda, con avatar
       return `<div style="display:flex;gap:8px;align-items:flex-end;margin-bottom:${mismoAutor ? '2px' : '10px'}">
-        ${!mismoAutor
-          ? `<div style="width:30px;height:30px;border-radius:50%;background:${color}22;border:2px solid ${color};display:flex;align-items:center;justify-content:center;font-family:'Montserrat',sans-serif;font-weight:900;font-size:12px;color:${color};flex-shrink:0">${inicial}</div>`
-          : `<div style="width:30px;flex-shrink:0"></div>`}
+        ${!mismoAutor ? avatarHtml : `<div style="width:30px;flex-shrink:0"></div>`}
         <div style="display:flex;flex-direction:column;gap:2px;max-width:82%">
-          ${!mismoAutor ? `<div style="display:flex;align-items:center;gap:6px">
+          ${!mismoAutor ? `<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
             <span style="font-family:'Montserrat',sans-serif;font-weight:700;font-size:11px;color:${color}">${nombre}</span>
             <span style="font-family:'Montserrat',sans-serif;font-size:9px;color:var(--muted);background:${color}18;border:1px solid ${color}44;padding:1px 5px;border-radius:4px">${chatRolLabel(rol)}</span>
             ${obra ? `<span style="font-family:'Montserrat',sans-serif;font-size:9px;color:var(--muted);background:var(--surface2);border:1px solid var(--border);padding:1px 5px;border-radius:4px">🏗 ${obra}</span>` : ''}
