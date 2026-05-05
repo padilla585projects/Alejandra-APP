@@ -7,9 +7,21 @@
 
 **Sesión:** LIBRE
 **Última sesión:** 05/05/2026
-**Versión tras última sesión:** v5.44 (worker a6efb717)
-**GitHub:** 1e982db ✅
+**Versión tras última sesión:** v5.46 (worker a6efb717 — sin cambios)
+**GitHub:** 7655cfc ✅
 **Panel web:** https://padilla585projects.github.io/Alejandra-APP/panel.html ✅ FUNCIONA
+
+---
+
+## RESUMEN SESIÓN 05/05/2026 (PANEL-03: inventario seg vacío v5.46)
+
+- **BUG-PANEL-03**: panel.html `cargarSeguridad()` hacía `r.items || r.data || []`
+  pero `getInventarioSeg()` del worker devuelve array crudo (`json(results)`).
+  Sobre un array no hay `.items` ni `.data` → siempre `[]` → tabla vacía.
+  Fix: `toArr(r, 'items')` (mismo helper ya usado en bobinas/PEMP/carretillas/herramientas).
+- Worker NO redesplegado (sin cambios en worker.js).
+- Versiones sincronizadas: version.json, sw.js, index.html → v5.46.
+- GitHub: 7655cfc ✅
 
 ---
 

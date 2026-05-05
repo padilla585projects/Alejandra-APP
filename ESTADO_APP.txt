@@ -5,7 +5,7 @@
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 05/05/2026
-VERSIÓN ACTUAL APP NUEVA: v5.44 (worker a6efb717)
+VERSIÓN ACTUAL APP NUEVA: v5.46 (worker a6efb717 — sin cambios desde v5.44)
 VERSIÓN ACTUAL APP VIEJA: v4.19 (⛔ CONGELADA DEFINITIVAMENTE — no recibe más cambios)
 
 ================================================================================
@@ -150,6 +150,17 @@ PASO 4 — VERIFICAR WORKER (solo si se va a tocar worker.js)
 ================================================================================
   HISTORIAL DE VERSIONES — RECIENTES
 ================================================================================
+
+v5.46        |  05/05/2026  [PANEL-03: inventario seguridad vacío]
+  - BUG-PANEL-03: cargarSeguridad() en panel.html hacía r.items || r.data || []
+    pero getInventarioSeg del worker devuelve array crudo (json(results)).
+    Sobre un array no existen las propiedades .items ni .data → tabla siempre vacía.
+    Fix: toArr(r, 'items') (mismo helper ya usado en bobinas/PEMP/carretillas/herramientas).
+  - Worker NO redesplegado (sin cambios en worker.js).
+  - GitHub: 7655cfc
+
+v5.45        |  05/05/2026  [feat(panel): KPI cards del dashboard como accesos directos]
+  - Sin cambios funcionales destacables registrados aquí (commit 9f0dd22).
 
 v5.44        |  05/05/2026  [PANEL-02: bugs RGPD corregidos]
   - BUG-RGPD-01: rgpdInforme tenía columnas incorrectas en TODAS las queries de informe DSAR.
