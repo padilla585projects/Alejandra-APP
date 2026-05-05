@@ -5,7 +5,7 @@
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 05/05/2026
-VERSIÓN ACTUAL APP NUEVA: v5.41 + security patch (worker 6b18efd1)
+VERSIÓN ACTUAL APP NUEVA: v5.42 (worker 96d839ef)
 VERSIÓN ACTUAL APP VIEJA: v4.19 (⛔ CONGELADA DEFINITIVAMENTE — no recibe más cambios)
 
 ================================================================================
@@ -150,6 +150,16 @@ PASO 4 — VERIFICAR WORKER (solo si se va a tocar worker.js)
 ================================================================================
   HISTORIAL DE VERSIONES — RECIENTES
 ================================================================================
+
+v5.42        |  05/05/2026  [ROLE AUDIT — 2 bugs de roles corregidos]
+  - BUG-R01: jefe_de_obra veía bobinas/PEMP/carretillas/herramientas de TODAS las obras.
+    Fix: split isAdminRole → isUnrestrictedAdmin (SA/EA para obra scope) + isAdminRole
+    (incluye JO para dept scope). Aplicado en getBobinas, getPemp, getCarretillas, getHerramientas.
+  - BUG-R02: isDesarrollador no se incluía en el objeto de retorno de getAuth() vía token.
+    Fix: añadido isDesarrollador: sesion.rol === 'desarrollador' al return del path token.
+  - Audit completo: superadmin/empresa_admin/desarrollador ✅, oficina/encargado/operario ✅
+  - Worker ID: 96d839ef-cfc1-4af8-a784-c27163e6e291
+  - GitHub: bfa1583
 
 security     |  05/05/2026  [SECURITY PATCH — 4 vulnerabilidades resueltas]
   - SEC-13 CRÍTICO: getAuth() legacy path aceptaba X-Rol: superadmin sin token → acceso total.

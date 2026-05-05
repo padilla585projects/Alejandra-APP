@@ -7,12 +7,24 @@
 
 **Sesión:** LIBRE
 **Última sesión:** 05/05/2026
-**Versión tras última sesión:** v5.41 + security patch + inventarios panel (worker a67c0ee8)
-**Worker desplegado:** 6b18efd1-c089-4576-a8f3-fdd7e31208bd
-**GitHub:** en sync ✅
+**Versión tras última sesión:** v5.42 (worker 96d839ef)
+**GitHub:** bfa1583 ✅
 **Panel web:** https://padilla585projects.github.io/Alejandra-APP/panel.html ✅ FUNCIONA
 
 ---
+
+## RESUMEN SESIÓN 05/05/2026 (role audit + fixes v5.42)
+
+- **BUG-R01 (Importante)**: `jefe_de_obra` veía bobinas/PEMP/carretillas/herramientas de TODAS
+  las obras cuando no pasaba `obra_id` URL param.
+  Causa: `isAdminRole = isSuperadmin || isEmpresaAdmin || isJefeObra` → `obraFilter = null`.
+  Fix: split en `isUnrestrictedAdmin` (SA/EA) para obra scope vs `isAdminRole` (incluy JO) para
+  dept scope. Aplicado en getBobinas, getPemp, getCarretillas, getHerramientas.
+- **BUG-R02 (Menor)**: `isDesarrollador` no se incluía en el return de `getAuth()` vía token.
+  Fix: `isDesarrollador: sesion.rol === 'desarrollador'` añadido. Funcional por `isSuperadmin=true`
+  pero latente para checks futuros.
+- Audit completo de 7 roles: todos OK tras correcciones.
+- App bumpeada a v5.42, worker 96d839ef, pusheado ✅.
 
 ## RESUMEN SESIÓN 05/05/2026 (inventarios panel — bug fix + filtros dept/obra)
 
