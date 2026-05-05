@@ -332,6 +332,11 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
       <span class="nav-icon">📋</span> Logs
     </button>
 
+    <div class="sidebar-section nav-dev-section" style="display:none">Desarrollador</div>
+    <button class="nav-item nav-dev" data-page="devtools" onclick="navTo('devtools')" style="display:none">
+      <span class="nav-icon">🛠️</span> DevTools
+    </button>
+
     <div style="flex:1"></div>
     <div style="padding:12px 8px;border-top:1px solid var(--border)">
       <button class="nav-item" onclick="doLogout()">
@@ -505,22 +510,63 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
       </div>
 
       <!-- HERRAMIENTAS -->
+      <!-- HERRAMIENTAS -->
       <div class="page" id="pageHerramientas">
         <div class="page-title">🔧 Herramientas</div>
-        <div class="page-sub">Inventario y asignación de herramientas</div>
-        <div class="tbl-toolbar">
-          <input class="tbl-search" id="searchHerramientas" placeholder="🔍 Buscar...">
-          <button class="btn btn-secondary" onclick="cargarHerramientas()">🔄 Actualizar</button>
+        <div class="page-sub">Inventario, asignación e historial de herramientas</div>
+        <div id="herrResumen" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:16px"></div>
+        <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+          <button class="btn btn-secondary" id="herrTabInv" onclick="herrTab('inventario')" style="border-color:var(--accent);color:var(--accent)">📦 Inventario</button>
+          <button class="btn btn-secondary" id="herrTabHist" onclick="herrTab('historial')">📋 Historial</button>
+          <button class="btn btn-secondary" id="herrTabKits" onclick="herrTab('kits')">🗂 Kits</button>
         </div>
-        <div class="tbl-wrap"><div id="tblHerramientas"></div></div>
+        <div id="herrPanelInventario">
+          <div class="tbl-toolbar">
+            <input class="tbl-search" id="searchHerramientas" placeholder="🔍 Buscar nombre o código...">
+            <select class="tbl-search" id="filterHerramientas" style="min-width:140px" onchange="filtrarHerramientas()">
+              <option value="">Todos los estados</option>
+              <option value="disponible">Disponible</option>
+              <option value="asignada">Asignada</option>
+              <option value="averiada">Averiada</option>
+            </select>
+            <button class="btn btn-primary" onclick="abrirModalHerramienta()">+ Nueva herramienta</button>
+            <button class="btn btn-secondary" onclick="exportarTabla(tblHerramientas,'herramientas')">⬇ CSV</button>
+            <button class="btn btn-secondary" onclick="cargarHerramientas()">🔄 Actualizar</button>
+          </div>
+          <div class="tbl-wrap"><div id="tblHerramientas"></div></div>
+        </div>
+        <div id="herrPanelHistorial" style="display:none">
+          <div class="tbl-toolbar">
+            <input class="tbl-search" id="searchHerrHist" placeholder="🔍 Buscar...">
+            <button class="btn btn-secondary" onclick="cargarHistorialHerramientas()">🔄 Actualizar</button>
+            <button class="btn btn-secondary" onclick="exportarTabla(tblHerrHist,'historial_herramientas')">⬇ CSV</button>
+          </div>
+          <div class="tbl-wrap"><div id="tblHerrHist"></div></div>
+        </div>
+        <div id="herrPanelKits" style="display:none">
+          <div class="tbl-toolbar">
+            <input class="tbl-search" id="searchKits" placeholder="🔍 Buscar kit...">
+            <button class="btn btn-secondary" onclick="cargarKits()">🔄 Actualizar</button>
+          </div>
+          <div class="tbl-wrap"><div id="tblKits"></div></div>
+        </div>
       </div>
 
       <!-- SEGURIDAD -->
       <div class="page" id="pageSeguridad">
         <div class="page-title">🔺 Inventario Seguridad</div>
         <div class="page-sub">EPIs, arneses, extintores y material de seguridad</div>
+        <div id="segResumen" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:16px"></div>
         <div class="tbl-toolbar">
-          <input class="tbl-search" id="searchSeguridad" placeholder="🔍 Buscar...">
+          <input class="tbl-search" id="searchSeguridad" placeholder="🔍 Buscar nombre o código...">
+          <select class="tbl-search" id="filterSeguridad" style="min-width:160px" onchange="filtrarSeguridad()">
+            <option value="">Todos</option>
+            <option value="agotado">Agotado</option>
+            <option value="bajo">Stock bajo</option>
+            <option value="ok">Stock OK</option>
+          </select>
+          <button class="btn btn-primary" onclick="abrirModalSeguridad()">+ Nuevo ítem</button>
+          <button class="btn btn-secondary" onclick="exportarTabla(tblSeguridad,'seguridad')">⬇ CSV</button>
           <button class="btn btn-secondary" onclick="cargarSeguridad()">🔄 Actualizar</button>
         </div>
         <div class="tbl-wrap"><div id="tblSeguridad"></div></div>
@@ -631,6 +677,80 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
           <button class="btn btn-secondary" onclick="cargarRepostajes()">🔄 Actualizar</button>
         </div>
         <div class="tbl-wrap"><div id="tblRepostajes"></div></div>
+      </div>
+
+      <!-- DEVTOOLS (solo desarrollador) -->
+      <div class="page" id="pageDevtools">
+        <div style="display:flex;align-items:center;gap:14px;margin-bottom:6px">
+          <div class="page-title" style="margin-bottom:0">🛠️ DevTools</div>
+          <span style="background:rgba(168,85,247,.2);color:#a855f7;font-family:'Montserrat',sans-serif;font-weight:900;font-size:10px;letter-spacing:1px;padding:3px 10px;border-radius:20px;border:1px solid rgba(168,85,247,.3)">SOLO DESARROLLADOR</span>
+        </div>
+        <div class="page-sub">Monitor de salud, estadísticas de base de datos y herramientas de diagnóstico</div>
+
+        <!-- API URL + botón refresh -->
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px 16px">
+          <span style="font-family:'Montserrat',sans-serif;font-weight:700;font-size:11px;color:var(--muted);letter-spacing:1px">API:</span>
+          <span id="devApiUrl" style="font-family:monospace;font-size:12px;color:#a855f7;flex:1"></span>
+          <button class="btn btn-secondary btn-sm" onclick="cargarDevtools()">🔄 Actualizar todo</button>
+          <button class="btn btn-secondary btn-sm" onclick="devCopiarToken()">📋 Copiar token</button>
+        </div>
+
+        <!-- HEALTH CHECK grid -->
+        <div class="section-card" style="margin-bottom:20px">
+          <div class="section-card-title"><span>💓</span> Health Check — Endpoints</div>
+          <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+            <span style="font-size:11px;color:var(--muted);font-family:'Montserrat',sans-serif;font-weight:700">LEYENDA:</span>
+            <span style="font-size:11px"><span style="background:rgba(34,197,94,.2);color:var(--green);padding:2px 8px;border-radius:4px">✓</span> OK</span>
+            <span style="font-size:11px"><span style="background:rgba(234,179,8,.2);color:var(--yellow);padding:2px 8px;border-radius:4px">⚠</span> Lento (&gt;1s)</span>
+            <span style="font-size:11px"><span style="background:rgba(239,68,68,.2);color:var(--red);padding:2px 8px;border-radius:4px">✕</span> Error/Sin respuesta</span>
+          </div>
+          <div id="devHealthGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:8px">
+            <div class="loading"><div class="spinner"></div> Comprobando endpoints...</div>
+          </div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px">
+          <!-- DB STATS -->
+          <div class="section-card">
+            <div class="section-card-title"><span>🗄️</span> Estadísticas D1</div>
+            <div id="devDbStats"><div class="loading"><div class="spinner"></div> Cargando...</div></div>
+          </div>
+
+          <!-- SESIONES ACTIVAS -->
+          <div class="section-card">
+            <div class="section-card-title"><span>👥</span> Sesiones activas ahora</div>
+            <div id="devSesiones"><div class="loading"><div class="spinner"></div> Cargando...</div></div>
+          </div>
+        </div>
+
+        <!-- ACCIONES RÁPIDAS -->
+        <div class="section-card" style="margin-bottom:20px">
+          <div class="section-card-title"><span>⚡</span> Acciones rápidas</div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap">
+            <button class="btn btn-secondary" onclick="devLimpiarStorage()">🗑 Limpiar localStorage</button>
+            <button class="btn btn-secondary" onclick="devLimpiarLogs()">📋 Borrar logs panel</button>
+            <button class="btn btn-secondary" onclick="devForzarLogout()">🔐 Invalidar sesión (forzar logout)</button>
+            <button class="btn btn-secondary" onclick="devTestTelegram()">📱 Test Telegram</button>
+            <button class="btn btn-danger" onclick="devBorrarLoginAttempts()">🔓 Limpiar login_attempts D1</button>
+          </div>
+          <div id="devAccionLog" style="margin-top:12px;font-family:monospace;font-size:12px;color:var(--muted);min-height:20px"></div>
+        </div>
+
+        <!-- LOGS DEL SERVIDOR -->
+        <div class="section-card">
+          <div class="section-card-title"><span>📋</span> Logs del servidor (últimos 50)</div>
+          <div class="tbl-toolbar">
+            <select class="tbl-search" id="devFilterServerLogs" style="min-width:140px" onchange="cargarServerLogs()">
+              <option value="">Todos los niveles</option>
+              <option value="error">Solo errores</option>
+              <option value="warn">Avisos</option>
+              <option value="info">Info</option>
+            </select>
+            <input class="tbl-search" id="devSearchServerLogs" placeholder="🔍 Filtrar..." oninput="devFiltrarServerLogs(this.value)" style="min-width:180px">
+            <button class="btn btn-secondary btn-sm" onclick="cargarServerLogs()">🔄 Actualizar</button>
+          </div>
+          <div id="devServerLogs"><div class="empty-state"><div class="empty-icon">📋</div><div class="empty-text">Cargando logs...</div></div></div>
+        </div>
       </div>
 
     </div><!-- /content -->
@@ -884,6 +1004,11 @@ function iniciarApp() {
     document.querySelectorAll('.nav-admin, .nav-admin-section').forEach(el => el.style.display = '');
   }
 
+  // mostrar sección dev solo para desarrollador
+  if (SESSION.rol === 'desarrollador') {
+    document.querySelectorAll('.nav-dev, .nav-dev-section').forEach(el => el.style.display = '');
+  }
+
   // responsive toggle
   if (window.innerWidth <= 900) document.getElementById('btnMenuToggle').style.display = '';
 
@@ -904,7 +1029,7 @@ const PAGE_TITLES = {
   pemp: 'PEMP', carretillas: 'Carretillas', repostajes: 'Repostajes', herramientas: 'Herramientas',
   seguridad: 'Seguridad', obras: 'Obras', incidencias: 'Incidencias',
   pedidos: 'Pedidos', mantenimientos: 'Mantenimientos', usuarios: 'Usuarios',
-  empresa: 'Empresa', logs: 'Logs'
+  empresa: 'Empresa', logs: 'Logs', devtools: '🛠️ DevTools'
 };
 
 const PAGE_LOADERS = {
@@ -926,6 +1051,7 @@ const PAGE_LOADERS = {
   mantenimientos: cargarMantenimientos,
   usuarios: cargarUsuarios,
   logs: renderLogs,
+  devtools: cargarDevtools,
 };
 
 let currentPage = '';
@@ -1535,26 +1661,110 @@ async function cargarCarretillas() {
 }
 
 // ── HERRAMIENTAS ───────────────────────────────────────────────
-let tblHerramientas = null;
+let tblHerramientas = null, tblHerrHist = null, tblKits = null;
+let herrTabActual = 'inventario';
+
+function herrTab(tab) {
+  herrTabActual = tab;
+  ['inventario','historial','kits'].forEach(t => {
+    document.getElementById(`herrPanel${t.charAt(0).toUpperCase()+t.slice(1)}`).style.display = t === tab ? '' : 'none';
+    const btn = document.getElementById(`herrTab${t.charAt(0).toUpperCase()+t.slice(1)}`);
+    btn.style.borderColor = t === tab ? 'var(--accent)' : 'var(--border)';
+    btn.style.color = t === tab ? 'var(--accent)' : 'var(--muted)';
+  });
+  if (tab === 'historial' && !tblHerrHist) cargarHistorialHerramientas();
+  if (tab === 'kits' && !tblKits) cargarKits();
+}
+
+function abrirModalHerramienta() {
+  abrirModal('Nueva herramienta', `
+    <div class="form-row">
+      <div class="form-group"><div class="form-label">Código / referencia</div><input class="form-input" id="mHCod" placeholder="HERR-001"></div>
+      <div class="form-group"><div class="form-label">Nombre</div><input class="form-input" id="mHNombre" placeholder="Taladro percutor"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><div class="form-label">Tipo</div><input class="form-input" id="mHTipo" placeholder="Eléctrica, Manual..."></div>
+      <div class="form-group"><div class="form-label">Marca / Modelo</div><input class="form-input" id="mHMarca" placeholder="Bosch, DeWalt..."></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><div class="form-label">Número de serie</div><input class="form-input" id="mHSerie" placeholder="SN-12345"></div>
+      <div class="form-group"><div class="form-label">Estado</div>
+        <select class="form-select" id="mHEstado">
+          <option value="disponible">Disponible</option>
+          <option value="asignada">Asignada</option>
+          <option value="averiada">Averiada</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-group"><div class="form-label">Observaciones</div><input class="form-input" id="mHObs" placeholder="Notas opcionales"></div>
+  `, async () => {
+    const body = {
+      codigo: document.getElementById('mHCod').value.trim(),
+      nombre: document.getElementById('mHNombre').value.trim(),
+      tipo: document.getElementById('mHTipo').value.trim(),
+      marca: document.getElementById('mHMarca').value.trim(),
+      numero_serie: document.getElementById('mHSerie').value.trim(),
+      estado: document.getElementById('mHEstado').value,
+      observaciones: document.getElementById('mHObs').value.trim(),
+    };
+    if (!body.nombre) { toast('El nombre es obligatorio', 'err'); return; }
+    const r = await api('/herramientas', { method: 'POST', body: JSON.stringify(body) });
+    if (r.ok) { cerrarModal(); toast('Herramienta creada ✓', 'ok'); tblHerramientas = null; cargarHerramientas(); }
+    else toast(r.error || 'Error al crear', 'err');
+  });
+}
+
+function filtrarHerramientas() {
+  if (!tblHerramientas) return;
+  const val = document.getElementById('filterHerramientas').value;
+  if (val) tblHerramientas.setFilter('estado', '=', val);
+  else tblHerramientas.clearFilter();
+}
+
 async function cargarHerramientas() {
   const r = await api('/herramientas');
   const data = r.herramientas || r.data || [];
+
+  const total = data.length;
+  const disponibles = data.filter(h => h.estado === 'disponible').length;
+  const asignadas = data.filter(h => h.estado === 'asignada').length;
+  const averiadas = data.filter(h => h.estado === 'averiada').length;
+  document.getElementById('herrResumen').innerHTML = [
+    { icon:'🔧', value: total, label:'Total', cls:'' },
+    { icon:'✅', value: disponibles, label:'Disponibles', cls:'ok' },
+    { icon:'📤', value: asignadas, label:'Asignadas', cls:'' },
+    { icon:'🔴', value: averiadas, label:'Averiadas', cls: averiadas > 0 ? 'danger' : '' },
+  ].map(k => `<div class="kpi-card" style="padding:14px">
+    <div class="kpi-icon" style="font-size:20px">${k.icon}</div>
+    <div class="kpi-value ${k.cls}" style="font-size:22px">${k.value}</div>
+    <div class="kpi-label">${k.label}</div>
+  </div>`).join('');
+
   if (tblHerramientas) { tblHerramientas.replaceData(data); return; }
+  const canEdit = ['empresa_admin','jefe_de_obra','oficina','encargado','superadmin','desarrollador'].includes(SESSION.rol);
   tblHerramientas = new Tabulator('#tblHerramientas', {
     data, layout: 'fitColumns', pagination: 'local', paginationSize: 20,
+    placeholder:'<div class="empty-state"><div class="empty-icon">🔧</div><div class="empty-text">Sin herramientas</div></div>',
     columns: [
       { title: 'Código', field: 'codigo', width: 110 },
-      { title: 'Nombre', field: 'nombre', sorter: 'string', minWidth: 180 },
-      { title: 'Tipo', field: 'tipo', minWidth: 140 },
-      { title: 'Estado', field: 'estado', width: 110,
+      { title: 'Nombre', field: 'nombre', sorter:'string', minWidth: 180,
+        editor: canEdit ? 'input' : false,
+        cellEdited: c => guardarCampoHerramienta(c.getRow().getData().id, 'nombre', c.getValue()) },
+      { title: 'Tipo', field: 'tipo', minWidth: 120 },
+      { title: 'Marca', field: 'marca', minWidth: 120 },
+      { title: 'N° serie', field: 'numero_serie', minWidth: 120 },
+      { title: 'Estado', field: 'estado', width: 120,
+        editor: canEdit ? 'select' : false,
+        editorParams: { values: ['disponible','asignada','averiada'] },
         formatter: c => {
           const v = c.getValue();
           const cls = { disponible:'ok', asignada:'warn', averiada:'danger' }[v] || 'muted';
           return `<span class="badge badge-${cls}">${v || '—'}</span>`;
-        }
+        },
+        cellEdited: c => guardarCampoHerramienta(c.getRow().getData().id, 'estado', c.getValue())
       },
-      { title: 'Obra', field: 'obra_nombre', minWidth: 140 },
-      { title: 'Trabajador', field: 'trabajador_nombre', minWidth: 140 },
+      { title: 'Obra', field: 'obra_nombre', minWidth: 130 },
+      { title: 'Asignada a', field: 'trabajador_nombre', minWidth: 140 },
     ]
   });
   document.getElementById('searchHerramientas').oninput = function() {
@@ -1562,35 +1772,179 @@ async function cargarHerramientas() {
   };
 }
 
+async function guardarCampoHerramienta(id, campo, valor) {
+  const r = await api(`/herramientas/${id}`, { method: 'PUT', body: JSON.stringify({ [campo]: valor }) });
+  if (r.ok) toast('Guardado ✓', 'ok'); else toast('Error al guardar', 'err');
+}
+
+async function cargarHistorialHerramientas() {
+  const r = await api('/historial-herramientas');
+  const data = r.historial || r.data || [];
+  if (tblHerrHist) { tblHerrHist.replaceData(data); return; }
+  tblHerrHist = new Tabulator('#tblHerrHist', {
+    data, layout: 'fitColumns', pagination: 'local', paginationSize: 25,
+    placeholder:'<div class="empty-state"><div class="empty-icon">📋</div><div class="empty-text">Sin historial</div></div>',
+    columns: [
+      { title: 'Fecha', field: 'created_at', width: 130, formatter: c => fmtFechaHora(c.getValue()) },
+      { title: 'Herramienta', field: 'herramienta_nombre', sorter:'string', minWidth: 180 },
+      { title: 'Acción', field: 'accion', width: 120,
+        formatter: c => {
+          const v = c.getValue();
+          const cls = { entrada:'ok', salida:'warn', devolucion:'info', baja:'danger' }[v] || 'muted';
+          return `<span class="badge badge-${cls}">${v || '—'}</span>`;
+        }
+      },
+      { title: 'Trabajador', field: 'trabajador_nombre', minWidth: 150 },
+      { title: 'Obra', field: 'obra_nombre', minWidth: 130 },
+      { title: 'Notas', field: 'notas', minWidth: 180 },
+    ]
+  });
+  document.getElementById('searchHerrHist').oninput = function() {
+    tblHerrHist.setFilter('herramienta_nombre','like',this.value);
+  };
+}
+
+async function cargarKits() {
+  const r = await api('/kits-herramientas');
+  const data = r.kits || r.data || [];
+  if (tblKits) { tblKits.replaceData(data); return; }
+  tblKits = new Tabulator('#tblKits', {
+    data, layout: 'fitColumns', pagination: 'local', paginationSize: 20,
+    placeholder:'<div class="empty-state"><div class="empty-icon">🗂</div><div class="empty-text">Sin kits</div></div>',
+    columns: [
+      { title: 'Nombre del kit', field: 'nombre', sorter:'string', minWidth: 200 },
+      { title: 'Descripción', field: 'descripcion', minWidth: 220 },
+      { title: 'Herramientas', field: 'num_herramientas', width: 130, hozAlign:'center' },
+      { title: 'Estado', field: 'estado', width: 110,
+        formatter: c => {
+          const v = c.getValue();
+          const cls = { disponible:'ok', asignado:'warn' }[v] || 'muted';
+          return `<span class="badge badge-${cls}">${v || '—'}</span>`;
+        }
+      },
+      { title: 'Asignado a', field: 'obra_nombre', minWidth: 150 },
+    ]
+  });
+  document.getElementById('searchKits').oninput = function() {
+    tblKits.setFilter('nombre','like',this.value);
+  };
+}
+
 // ── SEGURIDAD ──────────────────────────────────────────────────
 let tblSeguridad = null;
+
+function abrirModalSeguridad() {
+  abrirModal('Nuevo ítem de seguridad', `
+    <div class="form-row">
+      <div class="form-group"><div class="form-label">Código</div><input class="form-input" id="mSCod" placeholder="SEG-001"></div>
+      <div class="form-group"><div class="form-label">Nombre</div><input class="form-input" id="mSNombre" placeholder="Arnés anticaídas"></div>
+    </div>
+    <div class="form-group"><div class="form-label">Tipo de material</div>
+      <select class="form-select" id="mSTipo">
+        <option>EPI</option><option>Arnés anticaídas</option><option>Extintor</option>
+        <option>Señalización</option><option>Botiquín</option><option>Casco</option>
+        <option>Calzado seguridad</option><option>Guantes</option><option>Gafas</option>
+        <option>Protección auditiva</option><option>Mascarilla</option><option>Otro</option>
+      </select>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><div class="form-label">Stock actual</div><input class="form-input" id="mSCant" type="number" placeholder="10" value="1"></div>
+      <div class="form-group"><div class="form-label">Stock mínimo</div><input class="form-input" id="mSMin" type="number" placeholder="2" value="1"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><div class="form-label">Fecha caducidad</div><input class="form-input" id="mSCad" type="date"></div>
+      <div class="form-group"><div class="form-label">Ubicación</div><input class="form-input" id="mSUbic" placeholder="Almacén A, Obra..."></div>
+    </div>
+  `, async () => {
+    const body = {
+      codigo: document.getElementById('mSCod').value.trim(),
+      nombre: document.getElementById('mSNombre').value.trim(),
+      tipo_material: document.getElementById('mSTipo').value,
+      cantidad: parseInt(document.getElementById('mSCant').value) || 0,
+      stock_minimo: parseInt(document.getElementById('mSMin').value) || 0,
+      fecha_caducidad: document.getElementById('mSCad').value || null,
+      ubicacion: document.getElementById('mSUbic').value.trim(),
+    };
+    if (!body.nombre) { toast('El nombre es obligatorio', 'err'); return; }
+    const r = await api('/inventario-seg', { method: 'POST', body: JSON.stringify(body) });
+    if (r.ok) { cerrarModal(); toast('Ítem creado ✓', 'ok'); tblSeguridad = null; cargarSeguridad(); }
+    else toast(r.error || 'Error al crear', 'err');
+  });
+}
+
+function filtrarSeguridad() {
+  if (!tblSeguridad) return;
+  const val = document.getElementById('filterSeguridad').value;
+  tblSeguridad.clearFilter();
+  if (val === 'agotado') tblSeguridad.setFilter('cantidad','<=',0);
+  if (val === 'bajo') tblSeguridad.setFilter([{field:'cantidad',type:'>',value:0}]);
+  if (val === 'ok') tblSeguridad.setFilter('cantidad','>',5);
+}
+
 async function cargarSeguridad() {
   const r = await api('/inventario-seg');
   const data = r.items || r.data || [];
+
+  const total = data.length;
+  const agotados = data.filter(i => (i.cantidad || 0) <= 0).length;
+  const bajos = data.filter(i => (i.cantidad || 0) > 0 && (i.cantidad || 0) <= (i.stock_minimo || 0)).length;
+  const proxCad = data.filter(i => { const d = diasParaCaducar(i.fecha_caducidad); return d !== null && d >= 0 && d <= 30; }).length;
+  document.getElementById('segResumen').innerHTML = [
+    { icon:'🔺', value: total, label:'Ítems totales', cls:'' },
+    { icon:'📉', value: agotados, label:'Agotados', cls: agotados > 0 ? 'danger' : '' },
+    { icon:'⚠️', value: bajos, label:'Stock bajo', cls: bajos > 0 ? 'warn' : '' },
+    { icon:'📅', value: proxCad, label:'Caducan en 30d', cls: proxCad > 0 ? 'warn' : '' },
+  ].map(k => `<div class="kpi-card" style="padding:14px">
+    <div class="kpi-icon" style="font-size:20px">${k.icon}</div>
+    <div class="kpi-value ${k.cls}" style="font-size:22px">${k.value}</div>
+    <div class="kpi-label">${k.label}</div>
+  </div>`).join('');
+
   if (tblSeguridad) { tblSeguridad.replaceData(data); return; }
+  const canEdit = ['empresa_admin','jefe_de_obra','oficina','encargado','superadmin','desarrollador'].includes(SESSION.rol);
   tblSeguridad = new Tabulator('#tblSeguridad', {
     data, layout: 'fitColumns', pagination: 'local', paginationSize: 20,
+    placeholder:'<div class="empty-state"><div class="empty-icon">🔺</div><div class="empty-text">Sin ítems</div></div>',
     columns: [
-      { title: 'Código', field: 'codigo', width: 110 },
-      { title: 'Nombre', field: 'nombre', sorter: 'string', minWidth: 180 },
-      { title: 'Tipo', field: 'tipo_material', minWidth: 140 },
-      { title: 'Stock', field: 'cantidad', width: 80, hozAlign: 'center', sorter: 'number' },
-      { title: 'Mínimo', field: 'stock_minimo', width: 80, hozAlign: 'center' },
-      { title: 'Estado stock', field: 'cantidad', width: 120,
+      { title: 'Código', field: 'codigo', width: 100 },
+      { title: 'Nombre', field: 'nombre', sorter:'string', minWidth: 180 },
+      { title: 'Tipo', field: 'tipo_material', minWidth: 130 },
+      { title: 'Stock', field: 'cantidad', width: 80, hozAlign:'center', sorter:'number',
+        editor: canEdit ? 'number' : false,
+        cellEdited: c => guardarCampoSeg(c.getRow().getData().id, 'cantidad', c.getValue()),
         formatter: c => {
-          const cant = c.getValue();
-          const min  = c.getRow().getData().stock_minimo || 0;
+          const cant = c.getValue() || 0;
+          const min = c.getRow().getData().stock_minimo || 0;
+          const color = cant <= 0 ? 'var(--red)' : cant <= min ? 'var(--yellow)' : 'var(--text)';
+          return `<span style="font-weight:700;color:${color}">${cant}</span>`;
+        }
+      },
+      { title: 'Mín.', field: 'stock_minimo', width: 70, hozAlign:'center' },
+      { title: 'Estado', field: 'cantidad', width: 120,
+        formatter: c => {
+          const cant = c.getValue() || 0;
+          const min = c.getRow().getData().stock_minimo || 0;
           if (cant <= 0) return '<span class="badge badge-danger">Agotado</span>';
           if (cant <= min) return '<span class="badge badge-warn">Stock bajo</span>';
           return '<span class="badge badge-ok">OK</span>';
         }
       },
       { title: 'Caducidad', field: 'fecha_caducidad', width: 110, formatter: c => fmtFecha(c.getValue()) },
+      { title: 'Días', field: 'fecha_caducidad', width: 140,
+        formatter: c => badgeDias(diasParaCaducar(c.getValue())),
+        sorter: (a, b) => (diasParaCaducar(a) ?? 9999) - (diasParaCaducar(b) ?? 9999)
+      },
+      { title: 'Ubicación', field: 'ubicacion', minWidth: 120 },
     ]
   });
   document.getElementById('searchSeguridad').oninput = function() {
     tblSeguridad.setFilter([{field:'nombre',type:'like',value:this.value},{field:'codigo',type:'like',value:this.value}],'or');
   };
+}
+
+async function guardarCampoSeg(id, campo, valor) {
+  const r = await api(`/inventario-seg/${id}`, { method: 'PUT', body: JSON.stringify({ [campo]: valor }) });
+  if (r.ok) toast('Guardado ✓', 'ok'); else toast('Error al guardar', 'err');
 }
 
 // ── OBRAS ──────────────────────────────────────────────────────
@@ -2087,6 +2441,224 @@ async function cargarRepostajes() {
   document.getElementById('searchRepostajes').oninput = function() {
     tblRepostajes.setFilter('matricula', 'like', this.value);
   };
+}
+
+// ── DEVTOOLS ────────────────────────────────────────────────────
+
+// Lista de endpoints a testear: [método, ruta, descripción]
+const DEV_ENDPOINTS = [
+  ['HEAD', '/verificar',            'Auth — verificar'],
+  ['GET',  '/obra-dashboard',       'Dashboard KPIs'],
+  ['GET',  '/personal/trabajadores','Personal — trabajadores'],
+  ['GET',  '/fichajes?limit=1',     'Fichajes'],
+  ['GET',  '/turnos?desde=2025-01-01&hasta=2025-01-07', 'Turnos'],
+  ['GET',  '/epis-asignados',       'EPIs asignados'],
+  ['GET',  '/carnets?limit=1',      'Carnets'],
+  ['GET',  '/bobinas?limit=1',      'Bobinas'],
+  ['GET',  '/pemp?limit=1',         'PEMP'],
+  ['GET',  '/carretillas?limit=1',  'Carretillas'],
+  ['GET',  '/herramientas?limit=1', 'Herramientas'],
+  ['GET',  '/seguridad/inventario?limit=1', 'Seguridad inventario'],
+  ['GET',  '/pedidos?limit=1',      'Pedidos'],
+  ['GET',  '/incidencias?limit=1',  'Incidencias'],
+  ['GET',  '/alertas-stock',        'Alertas stock'],
+  ['GET',  '/chat?limit=1',         'Chat'],
+  ['GET',  '/sesiones',             'Sesiones activas'],
+  ['GET',  '/repostajes?limit=1',   'Repostajes'],
+];
+
+// Stats de tablas D1 que queremos contar
+const DEV_DB_ENDPOINTS = [
+  ['GET', '/personal/trabajadores', 'trabajadores', r => (r.trabajadores || r.data || []).length],
+  ['GET', '/bobinas?limit=9999',    'bobinas',      r => (r.bobinas    || r.data || []).length],
+  ['GET', '/pemp?limit=9999',       'PEMP',         r => (r.pemp       || r.data || []).length],
+  ['GET', '/carretillas?limit=9999','carretillas',  r => (r.carretillas|| r.data || []).length],
+  ['GET', '/carnets?limit=9999',    'carnets',      r => (r.carnets    || r.data || []).length],
+  ['GET', '/epis-asignados',        'EPIs asignados',r => (r.epis      || r.data || []).length],
+  ['GET', '/incidencias?limit=9999','incidencias',  r => (r.incidencias|| r.data || []).length],
+  ['GET', '/pedidos?limit=9999',    'pedidos',      r => (r.pedidos    || r.data || []).length],
+];
+
+let _serverLogs = [];
+
+async function cargarDevtools() {
+  document.getElementById('devApiUrl').textContent = API;
+  await Promise.all([
+    devHealthCheck(),
+    devDbStats(),
+    devSesiones(),
+    cargarServerLogs(),
+  ]);
+}
+
+// ── HEALTH CHECK ────────────────────────────────────────────────
+async function devHealthCheck() {
+  const grid = document.getElementById('devHealthGrid');
+  grid.innerHTML = '<div class="loading"><div class="spinner"></div> Comprobando...</div>';
+
+  const results = await Promise.all(DEV_ENDPOINTS.map(async ([metodo, ruta, desc]) => {
+    const t0 = performance.now();
+    try {
+      const headers = {};
+      if (TOKEN) headers['X-Token'] = TOKEN;
+      const r = await fetch(API + ruta, { method: metodo, headers });
+      const ms = Math.round(performance.now() - t0);
+      return { desc, ruta, metodo, status: r.status, ms, ok: r.ok };
+    } catch (e) {
+      const ms = Math.round(performance.now() - t0);
+      return { desc, ruta, metodo, status: 0, ms, ok: false, err: e.message };
+    }
+  }));
+
+  grid.innerHTML = results.map(r => {
+    let cls, icon, colorBg, colorTxt;
+    if (!r.ok || r.status === 0) {
+      cls = 'danger'; icon = '✕'; colorBg = 'rgba(239,68,68,.1)'; colorTxt = 'var(--red)';
+    } else if (r.ms > 1000) {
+      cls = 'warn'; icon = '⚠'; colorBg = 'rgba(234,179,8,.1)'; colorTxt = 'var(--yellow)';
+    } else {
+      cls = 'ok'; icon = '✓'; colorBg = 'rgba(34,197,94,.05)'; colorTxt = 'var(--green)';
+    }
+    return `<div style="background:${colorBg};border:1px solid ${colorTxt}33;border-radius:8px;padding:10px 14px;display:flex;align-items:center;gap:10px">
+      <span style="font-size:16px;color:${colorTxt};font-weight:900;width:18px;flex-shrink:0;text-align:center">${icon}</span>
+      <div style="flex:1;min-width:0">
+        <div style="font-family:'Montserrat',sans-serif;font-weight:700;font-size:12px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${r.desc}</div>
+        <div style="font-family:monospace;font-size:10px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${r.metodo} ${r.ruta}</div>
+      </div>
+      <div style="text-align:right;flex-shrink:0">
+        <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:13px;color:${colorTxt}">${r.status || 'ERR'}</div>
+        <div style="font-size:10px;color:var(--muted)">${r.ms}ms</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ── DB STATS ────────────────────────────────────────────────────
+async function devDbStats() {
+  const cont = document.getElementById('devDbStats');
+  cont.innerHTML = '<div class="loading" style="padding:20px"><div class="spinner"></div></div>';
+
+  const results = await Promise.all(DEV_DB_ENDPOINTS.map(async ([metodo, ruta, label, extractor]) => {
+    try {
+      const headers = {};
+      if (TOKEN) headers['X-Token'] = TOKEN;
+      const r = await fetch(API + ruta, { method: metodo, headers });
+      const data = await r.json();
+      const count = extractor(data);
+      return { label, count, ok: r.ok };
+    } catch {
+      return { label, count: '?', ok: false };
+    }
+  }));
+
+  cont.innerHTML = results.map(r =>
+    `<div style="display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border)">
+      <span style="font-size:13px;color:var(--text)">${r.label}</span>
+      <span style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:16px;color:${r.ok ? 'var(--accent)' : 'var(--muted)'}">${r.count}</span>
+    </div>`
+  ).join('') + `<div style="padding-top:8px;font-size:11px;color:var(--muted);font-family:'Montserrat',sans-serif">Actualizado: ${new Date().toLocaleTimeString('es-ES')}</div>`;
+}
+
+// ── SESIONES ACTIVAS ────────────────────────────────────────────
+async function devSesiones() {
+  const cont = document.getElementById('devSesiones');
+  cont.innerHTML = '<div class="loading" style="padding:20px"><div class="spinner"></div></div>';
+  const r = await api('/sesiones');
+  const sesiones = r.sesiones || r.data || [];
+  if (!sesiones.length) {
+    cont.innerHTML = '<div class="empty-state" style="padding:20px"><div class="empty-icon" style="font-size:32px">👥</div><div class="empty-text">Solo tú estás conectado</div></div>';
+    return;
+  }
+  cont.innerHTML = sesiones.map(s =>
+    `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
+      <div style="width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 5px rgba(34,197,94,.7);flex-shrink:0"></div>
+      <div style="flex:1">
+        <div style="font-size:13px;font-weight:600;color:var(--text)">${s.nombre || '—'}</div>
+        <div style="font-size:11px;color:var(--muted)">${s.rol || '—'} · ${s.empresa_nombre || 'Sin empresa'}</div>
+      </div>
+      <div style="font-size:10px;color:var(--muted);font-family:monospace;text-align:right">${s.ip || ''}<br>${s.created_at ? new Date(s.created_at).toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'}) : ''}</div>
+    </div>`
+  ).join('') + `<div style="padding-top:8px;font-size:11px;color:var(--muted);font-family:'Montserrat',sans-serif;font-weight:700">${sesiones.length} sesión${sesiones.length !== 1 ? 'es' : ''} activa${sesiones.length !== 1 ? 's' : ''}</div>`;
+}
+
+// ── SERVER LOGS ─────────────────────────────────────────────────
+async function cargarServerLogs() {
+  const nivel = document.getElementById('devFilterServerLogs')?.value || '';
+  let url = '/log?limit=50';
+  if (nivel) url += `&nivel=${nivel}`;
+  const r = await api(url);
+  _serverLogs = r.logs || r.data || [];
+  devFiltrarServerLogs(document.getElementById('devSearchServerLogs')?.value || '');
+}
+
+function devFiltrarServerLogs(q) {
+  const cont = document.getElementById('devServerLogs');
+  const logs = q
+    ? _serverLogs.filter(l => (l.mensaje || '').toLowerCase().includes(q.toLowerCase()) || (l.detalle || '').toLowerCase().includes(q.toLowerCase()))
+    : _serverLogs;
+
+  if (!logs.length) {
+    cont.innerHTML = '<div class="empty-state" style="padding:30px"><div class="empty-icon">📋</div><div class="empty-text">Sin logs del servidor</div></div>';
+    return;
+  }
+  cont.innerHTML = logs.map(l => {
+    const cls = { error:'badge-danger', warn:'badge-warn', info:'badge-info' }[l.nivel] || 'badge-muted';
+    const ts = l.created_at ? new Date(l.created_at).toLocaleString('es-ES',{hour:'2-digit',minute:'2-digit',second:'2-digit',day:'2-digit',month:'2-digit'}) : '—';
+    return `<div style="padding:8px 0;border-bottom:1px solid var(--border);font-size:12px;display:flex;gap:10px;align-items:flex-start">
+      <span class="badge ${cls}" style="flex-shrink:0;margin-top:1px">${l.nivel || '—'}</span>
+      <span style="color:var(--muted);flex-shrink:0;font-family:monospace;font-size:10px;padding-top:2px;min-width:110px">${ts}</span>
+      <div style="flex:1">
+        <div style="color:var(--text)">${l.mensaje || '—'}</div>
+        ${l.detalle ? `<div style="color:var(--muted);font-size:11px;margin-top:2px">${l.detalle}</div>` : ''}
+        ${l.origen ? `<div style="color:#a855f7;font-size:10px;margin-top:1px;font-family:monospace">${l.origen}</div>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ── ACCIONES RÁPIDAS ────────────────────────────────────────────
+function devLog(msg, tipo = 'info') {
+  const el = document.getElementById('devAccionLog');
+  const color = { ok: 'var(--green)', err: 'var(--red)', info: 'var(--muted)' }[tipo] || 'var(--muted)';
+  el.innerHTML = `<span style="color:${color}">[${new Date().toLocaleTimeString('es-ES')}] ${msg}</span>`;
+}
+
+function devCopiarToken() {
+  if (!TOKEN) { devLog('No hay token activo', 'err'); return; }
+  navigator.clipboard.writeText(TOKEN).then(() => devLog('Token copiado al portapapeles ✓', 'ok')).catch(() => devLog('No se pudo copiar (sin permiso de portapapeles)', 'err'));
+}
+
+function devLimpiarStorage() {
+  const keys = Object.keys(localStorage).filter(k => k.startsWith('panel_') && k !== 'panel_token' && k !== 'panel_session' && k !== 'panel_api');
+  keys.forEach(k => localStorage.removeItem(k));
+  devLog(`localStorage limpiado (${keys.length} claves eliminadas, token/sesión conservados) ✓`, 'ok');
+}
+
+function devLimpiarLogs() {
+  localStorage.removeItem('panel_logs');
+  devLog('Logs locales del panel eliminados ✓', 'ok');
+}
+
+async function devForzarLogout() {
+  if (!confirm('¿Cerrar tu sesión activa ahora mismo?')) return;
+  await api('/logout', { method: 'POST' });
+  devLog('Sesión cerrada. Redirigiendo...', 'ok');
+  setTimeout(() => { TOKEN = ''; SESSION = null; localStorage.removeItem('panel_token'); localStorage.removeItem('panel_session'); location.reload(); }, 1500);
+}
+
+async function devTestTelegram() {
+  devLog('Enviando mensaje de prueba por Telegram...', 'info');
+  const r = await api('/telegram/test', { method: 'POST', body: JSON.stringify({ mensaje: '🛠️ Test desde Alejandra Office DevTools — ' + new Date().toLocaleString('es-ES') }) });
+  if (r.ok) devLog('Telegram enviado ✓', 'ok');
+  else devLog(`Error Telegram: ${r.error || 'sin respuesta'}`, 'err');
+}
+
+async function devBorrarLoginAttempts() {
+  if (!confirm('¿Borrar todos los intentos de login fallidos de la base de datos?')) return;
+  devLog('Limpiando login_attempts...', 'info');
+  const r = await api('/admin/login-attempts', { method: 'DELETE' });
+  if (r.ok) devLog(`login_attempts limpiado ✓ (${r.borrados || 0} filas)`, 'ok');
+  else devLog(`Error: ${r.error || 'sin respuesta (puede que el endpoint no exista aún)'}`, 'err');
 }
 
 // ── MODAL ──────────────────────────────────────────────────────
