@@ -893,12 +893,8 @@ async function resetearPass(request, env) {
 
   if (!reset) return err('El enlace no es válido o ha caducado. Solicita uno nuevo.');
 
-  // Hash de la nueva contraseña (mismo método que verificarAcceso)
-  const encoder = new TextEncoder();
-  const data = encoder.encode(nueva_pass);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  // Hash de la nueva contraseña — PBKDF2 igual que hashPassword() en verificarAcceso
+  const hashHex = await hashPassword(nueva_pass);
 
   // Actualizar contraseña e invalidar token
   await Promise.all([
@@ -952,7 +948,8 @@ async function verificarAcceso(request, env) {
       });
       // Login exitoso → limpiar intentos fallidos de esta IP
       env.DB.prepare('DELETE FROM login_attempts WHERE ip = ?').bind(ip).run().catch(() => {});
-      return json({ ok: true, nombre: u.nombre, rol: u.rol, obra_id: u.obra_id, obra_nombre: u.obra_nombre, departamento: dept, token });
+      const empRow = u.empresa_id ? await env.DB.prepare('SELECT nombre FROM empresas WHERE id = ?').bind(u.empresa_id).first().catch(() => null) : null;
+      return json({ ok: true, nombre: u.nombre, rol: u.rol, obra_id: u.obra_id, obra_nombre: u.obra_nombre, departamento: dept, token, empresa_id: u.empresa_id || 1, empresa_nombre: empRow?.nombre || '', usuario_id: u.id });
     } catch(e) { return err('Error en login: ' + e.message, 500); }
   }
 
@@ -1319,7 +1316,7 @@ async function crearBobina(request, env, ctx) {
     ).bind(codigo.trim().toUpperCase(), proveedor, tipo_cable, fecha, 'activa', notas || '', reg, obraFinal || null, num_albaran || null, departamento, empresa_id).run();
 
     ctx.waitUntil(Promise.all([
-      syncSheets(env, 'Elec-Bobinas'),
+      syncSheets(env, 'Elec-Bobinas', empresa_id),
       registrarHistorial(env, { obra_id: obraFinal, bobina_codigo: codigo.trim().toUpperCase(), accion: 'entrada', usuario: reg, notas: notas || '' }),
       sendTelegram(env, `📦 <b>Nueva bobina registrada</b>\n🔖 ${codigo.trim().toUpperCase()}\n🔌 ${tipo_cable}  📦 ${proveedor}\n👤 ${reg}`),
     ]));
@@ -1332,7 +1329,7 @@ async function crearBobina(request, env, ctx) {
 }
 
 async function editarBobina(codigo, request, env, ctx) {
-  const { obraId, isSuperadmin } = await getAuth(request, env);
+  const { obraId, isSuperadmin, empresa_id } = await getAuth(request, env);
   const bobina = await env.DB.prepare('SELECT * FROM bobinas WHERE codigo = ?').bind(codigo).first();
   if (!bobina) return err(`Bobina ${codigo} no encontrada`, 404);
   if (obraId && !isSuperadmin && bobina.obra_id !== obraId) return err('No autorizado', 403);
@@ -1350,7 +1347,7 @@ async function editarBobina(codigo, request, env, ctx) {
     'UPDATE bobinas SET proveedor = ?, tipo_cable = ?, notas = ?, estado = ?, obra_id = ?, num_albaran = ?, departamento = ? WHERE codigo = ?'
   ).bind(proveedor, tipo_cable, notas, estado, obra_id, num_albaran || null, departamento, codigo).run();
 
-  ctx?.waitUntil(syncSheets(env, 'Elec-Bobinas'));
+  ctx?.waitUntil(syncSheets(env, 'Elec-Bobinas', empresa_id));
   return json({ ok: true, mensaje: `Bobina ${codigo} actualizada` });
 }
 
@@ -1363,14 +1360,14 @@ async function devolverBobina(codigo, request, env, ctx) {
 
   if (!bobina) {
     // Auto-crear como devuelta si no existe
-    const { obraId } = await getAuth(request, env);
+    const { obraId, empresa_id: eid } = await getAuth(request, env);
     await env.DB.prepare(
-      `INSERT INTO bobinas (codigo, estado, fecha_entrada, fecha_devolucion, devuelto_por, notas, obra_id)
-       VALUES (?, 'devuelta', ?, ?, ?, ?, ?)`
-    ).bind(codigo.trim().toUpperCase(), fecha, fecha, devuelto_por || '', 'Creado automáticamente en devolución', obraId || null).run();
+      `INSERT INTO bobinas (codigo, estado, fecha_entrada, fecha_devolucion, devuelto_por, notas, obra_id, empresa_id)
+       VALUES (?, 'devuelta', ?, ?, ?, ?, ?, ?)`
+    ).bind(codigo.trim().toUpperCase(), fecha, fecha, devuelto_por || '', 'Creado automáticamente en devolución', obraId || null, eid || 1).run();
     bobina = await env.DB.prepare('SELECT * FROM bobinas WHERE codigo = ?').bind(codigo).first();
     ctx.waitUntil(Promise.all([
-      syncSheets(env, 'Elec-Bobinas'),
+      syncSheets(env, 'Elec-Bobinas', eid || 1),
       registrarHistorial(env, { obra_id: bobina?.obra_id, bobina_codigo: codigo, accion: 'devolucion', usuario: devuelto_por, notas: 'Auto-creado en devolución' }),
     ]));
     return json({ ok: true, mensaje: `Bobina ${codigo} no estaba registrada. Se ha creado y marcado como devuelta automáticamente`, fecha_devolucion: fecha });
@@ -1383,7 +1380,7 @@ async function devolverBobina(codigo, request, env, ctx) {
   ).bind('devuelta', fecha, notas || bobina.notas || '', devuelto_por || '', codigo).run();
 
   ctx.waitUntil(Promise.all([
-    syncSheets(env, 'Elec-Bobinas'),
+    syncSheets(env, 'Elec-Bobinas', bobina.empresa_id),
     registrarHistorial(env, { obra_id: bobina.obra_id, bobina_codigo: codigo, accion: 'devolucion', usuario: devuelto_por, notas: notas || '' }),
     sendTelegram(env, `📤 <b>Bobina devuelta</b>\n🔖 ${codigo}\n👤 ${devuelto_por || '—'}`),
   ]));
@@ -1392,7 +1389,7 @@ async function devolverBobina(codigo, request, env, ctx) {
 }
 
 async function eliminarBobina(codigo, request, env, ctx) {
-  const { isSuperadmin, isAdmin, obraId } = await getAuth(request, env);
+  const { isSuperadmin, isAdmin, obraId, empresa_id } = await getAuth(request, env);
   const bobina = await env.DB.prepare('SELECT * FROM bobinas WHERE codigo = ?').bind(codigo).first();
   if (!bobina) return err(`Bobina ${codigo} no encontrada`, 404);
   if (!isSuperadmin && !isAdmin && bobina.obra_id !== obraId) return err('No autorizado', 403);
@@ -1400,7 +1397,7 @@ async function eliminarBobina(codigo, request, env, ctx) {
   await env.DB.prepare('DELETE FROM bobinas WHERE codigo = ?').bind(codigo).run();
 
   ctx.waitUntil(Promise.all([
-    syncSheets(env, 'Elec-Bobinas'),
+    syncSheets(env, 'Elec-Bobinas', empresa_id || bobina.empresa_id),
     registrarHistorial(env, { obra_id: bobina.obra_id, bobina_codigo: codigo, accion: 'eliminacion', usuario: '' }),
     sendTelegram(env, `🗑️ <b>Bobina eliminada</b>\n🔖 ${codigo}`),
   ]));
@@ -1467,7 +1464,7 @@ async function crearPemp(request, env, ctx) {
     const id = r.meta.last_row_id;
 
     ctx.waitUntil(Promise.all([
-      syncSheets(env, tabForDept('pemp', departamento)),
+      syncSheets(env, tabForDept('pemp', departamento), empresa_id),
       registrarHistorialPemp(env, {
         obra_id: obraFinal, matricula: matricula.trim().toUpperCase(),
         accion: 'entrada', usuario: reg, notas: notas || '',
@@ -1483,7 +1480,7 @@ async function crearPemp(request, env, ctx) {
 }
 
 async function editarPemp(matricula, request, env, ctx) {
-  const { obraId, isSuperadmin } = await getAuth(request, env);
+  const { obraId, isSuperadmin, empresa_id } = await getAuth(request, env);
   const pemp = await env.DB.prepare('SELECT * FROM pemp WHERE matricula = ?').bind(matricula).first();
   if (!pemp) return err(`PEMP ${matricula} no encontrada`, 404);
   if (obraId && !isSuperadmin && pemp.obra_id !== obraId) return err('No autorizado', 403);
@@ -1514,7 +1511,7 @@ async function editarPemp(matricula, request, env, ctx) {
   await env.DB.prepare(`UPDATE pemp SET ${sets.join(', ')} WHERE matricula = ?`).bind(...vals).run();
   if (notifAveria)   await sendTelegram(env, `🔴 <b>PEMP AVERIADA</b>\n🔖 ${matricula}\n🏗 Obra: ${pemp.obra_id || '—'}`);
   if (notifReparado) await sendTelegram(env, `🟢 <b>PEMP Reparada</b>\n🔖 ${matricula}`);
-  ctx?.waitUntil(syncSheets(env, tabForDept('pemp', body.departamento || pemp.departamento)));
+  ctx?.waitUntil(syncSheets(env, tabForDept('pemp', body.departamento || pemp.departamento), empresa_id || pemp.empresa_id));
   return json({ ok: true, mensaje: `PEMP ${matricula} actualizada` });
 }
 
@@ -1527,14 +1524,14 @@ async function devolverPemp(matricula, request, env, ctx) {
 
   if (!pemp) {
     // Auto-crear como devuelta si no existe
-    const { obraId, departamento } = await getAuth(request, env);
+    const { obraId, departamento, empresa_id: eid } = await getAuth(request, env);
     await env.DB.prepare(
-      `INSERT INTO pemp (matricula, estado, fecha_entrada, fecha_devolucion, devuelto_por, notas, obra_id)
-       VALUES (?, 'devuelta', ?, ?, ?, ?, ?)`
-    ).bind(matricula.trim().toUpperCase(), fecha, fecha, devuelto_por || '', 'Creado automáticamente en devolución', obraId || null).run();
+      `INSERT INTO pemp (matricula, estado, fecha_entrada, fecha_devolucion, devuelto_por, notas, obra_id, empresa_id)
+       VALUES (?, 'devuelta', ?, ?, ?, ?, ?, ?)`
+    ).bind(matricula.trim().toUpperCase(), fecha, fecha, devuelto_por || '', 'Creado automáticamente en devolución', obraId || null, eid || 1).run();
     pemp = await env.DB.prepare('SELECT * FROM pemp WHERE matricula = ?').bind(matricula).first();
     ctx.waitUntil(Promise.all([
-      syncSheets(env, tabForDept('pemp', departamento)),
+      syncSheets(env, tabForDept('pemp', departamento), eid || 1),
       registrarHistorialPemp(env, { obra_id: pemp?.obra_id, matricula, accion: 'devolucion', usuario: devuelto_por, notas: 'Auto-creado en devolución' }),
     ]));
     return json({ ok: true, mensaje: `PEMP ${matricula} no estaba registrada. Se ha creado y marcado como devuelta automáticamente`, fecha_devolucion: fecha });
@@ -1547,7 +1544,7 @@ async function devolverPemp(matricula, request, env, ctx) {
   ).bind('devuelta', fecha, devuelto_por || '', notas || pemp.notas || '', matricula).run();
 
   ctx.waitUntil(Promise.all([
-    syncSheets(env, tabForDept('pemp', pemp.departamento)),
+    syncSheets(env, tabForDept('pemp', pemp.departamento), pemp.empresa_id),
     registrarHistorialPemp(env, { obra_id: pemp.obra_id, matricula, accion: 'devolucion', usuario: devuelto_por, notas: notas || '' }),
     sendTelegram(env, `📤 <b>PEMP devuelta</b>\n🔖 ${matricula}\n👤 ${devuelto_por || '—'}`),
   ]));
@@ -1556,14 +1553,14 @@ async function devolverPemp(matricula, request, env, ctx) {
 }
 
 async function eliminarPemp(matricula, request, env, ctx) {
-  const { isSuperadmin, isAdmin, obraId } = await getAuth(request, env);
+  const { isSuperadmin, isAdmin, obraId, empresa_id } = await getAuth(request, env);
   const pemp = await env.DB.prepare('SELECT * FROM pemp WHERE matricula = ?').bind(matricula).first();
   if (!pemp) return err(`PEMP ${matricula} no encontrada`, 404);
   if (!isSuperadmin && !isAdmin && pemp.obra_id !== obraId) return err('No autorizado', 403);
 
   await env.DB.prepare('DELETE FROM pemp WHERE matricula = ?').bind(matricula).run();
   ctx.waitUntil(Promise.all([
-    syncSheets(env, tabForDept('pemp', pemp.departamento)),
+    syncSheets(env, tabForDept('pemp', pemp.departamento), empresa_id || pemp.empresa_id),
     sendTelegram(env, `🗑️ <b>PEMP eliminada</b>\n🔖 ${matricula}`),
   ]));
   return json({ ok: true, mensaje: `PEMP ${matricula} eliminada` });
@@ -1628,7 +1625,7 @@ async function crearCarretilla(request, env, ctx) {
     const id = r.meta.last_row_id;
 
     ctx.waitUntil(Promise.all([
-      syncSheets(env, tabForDept('carretilla', departamento)),
+      syncSheets(env, tabForDept('carretilla', departamento), empresa_id),
       registrarHistorialCarretillas(env, {
         obra_id: obraFinal, matricula: matricula.trim().toUpperCase(),
         accion: 'entrada', usuario: reg, notas: notas || '',
@@ -1644,7 +1641,7 @@ async function crearCarretilla(request, env, ctx) {
 }
 
 async function editarCarretilla(matricula, request, env, ctx) {
-  const { obraId, isSuperadmin } = await getAuth(request, env);
+  const { obraId, isSuperadmin, empresa_id } = await getAuth(request, env);
   const carretilla = await env.DB.prepare('SELECT * FROM carretillas WHERE matricula = ?').bind(matricula).first();
   if (!carretilla) return err(`Carretilla ${matricula} no encontrada`, 404);
   if (obraId && !isSuperadmin && carretilla.obra_id !== obraId) return err('No autorizado', 403);
@@ -1674,7 +1671,7 @@ async function editarCarretilla(matricula, request, env, ctx) {
   await env.DB.prepare(`UPDATE carretillas SET ${sets.join(', ')} WHERE matricula = ?`).bind(...vals).run();
   if (notifAveria)   await sendTelegram(env, `🔴 <b>Carretilla AVERIADA</b>\n🔖 ${matricula}`);
   if (notifReparado) await sendTelegram(env, `🟢 <b>Carretilla Reparada</b>\n🔖 ${matricula}`);
-  ctx?.waitUntil(syncSheets(env, tabForDept('carretilla', body.departamento || carretilla.departamento)));
+  ctx?.waitUntil(syncSheets(env, tabForDept('carretilla', body.departamento || carretilla.departamento), empresa_id || carretilla.empresa_id));
   return json({ ok: true, mensaje: `Carretilla ${matricula} actualizada` });
 }
 
@@ -1687,14 +1684,14 @@ async function devolverCarretilla(matricula, request, env, ctx) {
 
   if (!carretilla) {
     // Auto-crear como devuelta si no existe
-    const { obraId, departamento } = await getAuth(request, env);
+    const { obraId, departamento, empresa_id: eid } = await getAuth(request, env);
     await env.DB.prepare(
-      `INSERT INTO carretillas (matricula, estado, fecha_entrada, fecha_devolucion, devuelto_por, notas, obra_id)
-       VALUES (?, 'devuelta', ?, ?, ?, ?, ?)`
-    ).bind(matricula.trim().toUpperCase(), fecha, fecha, devuelto_por || '', 'Creado automáticamente en devolución', obraId || null).run();
+      `INSERT INTO carretillas (matricula, estado, fecha_entrada, fecha_devolucion, devuelto_por, notas, obra_id, empresa_id)
+       VALUES (?, 'devuelta', ?, ?, ?, ?, ?, ?)`
+    ).bind(matricula.trim().toUpperCase(), fecha, fecha, devuelto_por || '', 'Creado automáticamente en devolución', obraId || null, eid || 1).run();
     carretilla = await env.DB.prepare('SELECT * FROM carretillas WHERE matricula = ?').bind(matricula).first();
     ctx.waitUntil(Promise.all([
-      syncSheets(env, tabForDept('carretilla', departamento)),
+      syncSheets(env, tabForDept('carretilla', departamento), eid || 1),
       registrarHistorialCarretillas(env, { obra_id: carretilla?.obra_id, matricula, accion: 'devolucion', usuario: devuelto_por, notas: 'Auto-creado en devolución' }),
     ]));
     return json({ ok: true, mensaje: `Carretilla ${matricula} no estaba registrada. Se ha creado y marcado como devuelta automáticamente`, fecha_devolucion: fecha });
@@ -1707,7 +1704,7 @@ async function devolverCarretilla(matricula, request, env, ctx) {
   ).bind('devuelta', fecha, devuelto_por || '', notas || carretilla.notas || '', matricula).run();
 
   ctx.waitUntil(Promise.all([
-    syncSheets(env, tabForDept('carretilla', carretilla.departamento)),
+    syncSheets(env, tabForDept('carretilla', carretilla.departamento), carretilla.empresa_id),
     registrarHistorialCarretillas(env, { obra_id: carretilla.obra_id, matricula, accion: 'devolucion', usuario: devuelto_por, notas: notas || '' }),
     sendTelegram(env, `📤 <b>Carretilla devuelta</b>\n🔖 ${matricula}\n👤 ${devuelto_por || '—'}`),
   ]));
@@ -1716,14 +1713,14 @@ async function devolverCarretilla(matricula, request, env, ctx) {
 }
 
 async function eliminarCarretilla(matricula, request, env, ctx) {
-  const { isSuperadmin, isAdmin, obraId } = await getAuth(request, env);
+  const { isSuperadmin, isAdmin, obraId, empresa_id } = await getAuth(request, env);
   const carretilla = await env.DB.prepare('SELECT * FROM carretillas WHERE matricula = ?').bind(matricula).first();
   if (!carretilla) return err(`Carretilla ${matricula} no encontrada`, 404);
   if (!isSuperadmin && !isAdmin && carretilla.obra_id !== obraId) return err('No autorizado', 403);
 
   await env.DB.prepare('DELETE FROM carretillas WHERE matricula = ?').bind(matricula).run();
   ctx.waitUntil(Promise.all([
-    syncSheets(env, tabForDept('carretilla', carretilla.departamento)),
+    syncSheets(env, tabForDept('carretilla', carretilla.departamento), empresa_id || carretilla.empresa_id),
     sendTelegram(env, `🗑️ <b>Carretilla eliminada</b>\n🔖 ${matricula}`),
   ]));
   return json({ ok: true, mensaje: `Carretilla ${matricula} eliminada` });
@@ -2424,7 +2421,7 @@ async function crearPedido(request, env, ctx) {
   const r = await env.DB.prepare(
     'INSERT INTO pedidos (empresa_id, obra_id, departamento, referencia, descripcion, cantidad, unidad, proveedor, solicitado_por, notas) VALUES (?,?,?,?,?,?,?,?,?,?)'
   ).bind(empresa_id, obra_id||null, dept, referencia||null, descripcion.trim(), cantidad||1, unidad||'ud', proveedor||null, solicitado_por||null, notas||null).run();
-  ctx?.waitUntil(syncPedidos(env, tabForDept('pedido', dept)));
+  ctx?.waitUntil(syncPedidos(env, tabForDept('pedido', dept), empresa_id));
   await sendTelegram(env, `📦 <b>Nuevo pedido</b> [${dept}]\n👤 ${solicitado_por||'—'}\n📝 ${descripcion.trim().slice(0,200)}`);
   return json({ ok: true, id: r.meta.last_row_id });
 }
@@ -2447,8 +2444,8 @@ async function actualizarPedido(id, request, env, ctx) {
   if (body.cantidad     !== undefined) { campos.push('cantidad = ?');        vals.push(body.cantidad); }
   if (body.unidad       !== undefined) { campos.push('unidad = ?');          vals.push(body.unidad); }
   if (!campos.length) return err('Sin campos para actualizar');
-  vals.push(id);
-  await env.DB.prepare(`UPDATE pedidos SET ${campos.join(', ')} WHERE id = ? AND empresa_id = ${empresa_id}`).bind(...vals).run();
+  vals.push(id); vals.push(empresa_id);
+  await env.DB.prepare(`UPDATE pedidos SET ${campos.join(', ')} WHERE id = ? AND empresa_id = ?`).bind(...vals).run();
   let pedidoDept = null;
   if (body.estado !== undefined) {
     const pedido = await env.DB.prepare('SELECT descripcion, departamento FROM pedidos WHERE id = ?').bind(id).first();
@@ -2462,7 +2459,7 @@ async function actualizarPedido(id, request, env, ctx) {
     const p = await env.DB.prepare('SELECT departamento FROM pedidos WHERE id = ?').bind(id).first();
     pedidoDept = p?.departamento;
   }
-  ctx?.waitUntil(syncPedidos(env, tabForDept('pedido', pedidoDept)));
+  ctx?.waitUntil(syncPedidos(env, tabForDept('pedido', pedidoDept), empresa_id));
   return json({ ok: true });
 }
 
@@ -2472,7 +2469,7 @@ async function eliminarPedido(id, request, env, ctx) {
   if (!isSuperadmin && !isEmpresaAdmin && !isEncargado) return err('Sin permiso', 403);
   const pedido = await env.DB.prepare('SELECT departamento FROM pedidos WHERE id = ? AND empresa_id = ?').bind(id, empresa_id).first();
   await env.DB.prepare('DELETE FROM pedidos WHERE id = ? AND empresa_id = ?').bind(id, empresa_id).run();
-  ctx?.waitUntil(syncPedidos(env, tabForDept('pedido', pedido?.departamento)));
+  ctx?.waitUntil(syncPedidos(env, tabForDept('pedido', pedido?.departamento), empresa_id));
   return json({ ok: true });
 }
 
@@ -2773,7 +2770,7 @@ async function crearKit(request, env, ctx) {
     asignado_a?.trim() ? ahora : null
   ).run();
   await registrarHistorialKitHerr(env, empresa_id, r.meta.last_row_id, null, 'alta', null, 'disponible', userNombre || rol, 'Kit creado');
-  ctx?.waitUntil(syncSheets(env, 'Kits'));
+  ctx?.waitUntil(syncSheets(env, 'Kits', empresa_id));
   return json({ ok: true, id: r.meta.last_row_id }, 201);
 }
 
@@ -2819,7 +2816,7 @@ async function actualizarKit(id, request, env, ctx) {
   if (!campos.length) return json({ ok: true });
   vals.push(id); vals.push(empresa_id);
   await env.DB.prepare(`UPDATE kits_herramientas SET ${campos.join(', ')} WHERE id = ? AND empresa_id = ?`).bind(...vals).run();
-  ctx?.waitUntil(syncSheets(env, 'Kits'));
+  ctx?.waitUntil(syncSheets(env, 'Kits', empresa_id));
   return json({ ok: true });
 }
 
@@ -2828,7 +2825,7 @@ async function eliminarKit(id, request, env, ctx) {
   if (!empresa_id || (rol !== 'encargado' && rol !== 'empresa_admin' && rol !== 'superadmin')) return err('Sin permisos', 403);
   await env.DB.prepare('UPDATE herramientas SET kit_id = NULL WHERE kit_id = ? AND empresa_id = ?').bind(id, empresa_id).run();
   await env.DB.prepare('DELETE FROM kits_herramientas WHERE id = ? AND empresa_id = ?').bind(id, empresa_id).run();
-  ctx?.waitUntil(syncSheets(env, 'Kits'));
+  ctx?.waitUntil(syncSheets(env, 'Kits', empresa_id));
   return json({ ok: true });
 }
 
@@ -2910,7 +2907,7 @@ async function crearHerramienta(request, env, ctx) {
   ).run();
   const hid = r.meta.last_row_id;
   await registrarHistorialHerr(env, empresa_id, hid, kit_id || null, 'alta', null, 'disponible', userNombre || rol, 'Herramienta registrada');
-  ctx?.waitUntil(syncSheets(env, tabForDept('herramienta', dept)));
+  ctx?.waitUntil(syncSheets(env, tabForDept('herramienta', dept), empresa_id));
   // Notificación Telegram con botón para marcar disponible
   const tipoRow = tipo_id ? await env.DB.prepare('SELECT nombre FROM tipos_herramienta WHERE id = ?').bind(tipo_id).first().catch(() => null) : null;
   const tipoNom = tipoRow?.nombre || body.modelo || 'herramienta';
@@ -2991,7 +2988,7 @@ async function actualizarHerramienta(id, request, env, ctx) {
     }
   }
 
-  ctx?.waitUntil(syncSheets(env, tabForDept('herramienta', body.departamento || h.departamento)));
+  ctx?.waitUntil(syncSheets(env, tabForDept('herramienta', body.departamento || h.departamento), empresa_id));
   return json({ ok: true });
 }
 
@@ -3000,7 +2997,7 @@ async function eliminarHerramienta(id, request, env, ctx) {
   if (!empresa_id || (rol !== 'encargado' && rol !== 'empresa_admin' && rol !== 'superadmin')) return err('Sin permisos', 403);
   const h = await env.DB.prepare('SELECT departamento FROM herramientas WHERE id = ? AND empresa_id = ?').bind(id, empresa_id).first();
   await env.DB.prepare('DELETE FROM herramientas WHERE id = ? AND empresa_id = ?').bind(id, empresa_id).run();
-  ctx?.waitUntil(syncSheets(env, tabForDept('herramienta', h?.departamento)));
+  ctx?.waitUntil(syncSheets(env, tabForDept('herramienta', h?.departamento), empresa_id));
   return json({ ok: true });
 }
 
@@ -4269,7 +4266,7 @@ async function crearItemSeg(request, env, ctx) {
     if (fecha_caducidad) {
       await sendTelegram(env, `📦 <b>Nuevo material Seguridad</b>\n🔖 ${cod || tipo_material}  📋 ${tipo_material}\n📅 Caduca: ${fecha_caducidad}\n👤 ${reg}`);
     }
-    ctx?.waitUntil(syncSheets(env, 'Seg-Inventario'));
+    ctx?.waitUntil(syncSheets(env, 'Seg-Inventario', empresa_id));
     return json({ ok: true, id, mensaje: `${tipo_material} registrado` }, 201);
   } catch(e) {
     if (e.message?.includes('UNIQUE')) return err(`El código ${cod} ya está registrado`, 409);
@@ -4297,7 +4294,7 @@ async function moverItemSeg(id, request, env, ctx) {
     if (campos.length) {
       vals.push(id);
       await env.DB.prepare(`UPDATE inventario_seg SET ${campos.join(', ')} WHERE id = ?`).bind(...vals).run();
-      ctx?.waitUntil(syncSheets(env, 'Seg-Inventario'));
+      ctx?.waitUntil(syncSheets(env, 'Seg-Inventario', item.empresa_id));
     }
     return json({ ok: true, mensaje: 'Item actualizado' });
   }
@@ -4319,7 +4316,7 @@ async function moverItemSeg(id, request, env, ctx) {
     if (item.modo === 'cantidad' && item.stock_minimo > 0 && nuevaCantidad !== null && nuevaCantidad < item.stock_minimo) {
       await sendTelegram(env, `⚠️ <b>Stock mínimo alcanzado — Seguridad</b>\n📦 ${item.nombre || item.tipo_material}\n📉 Disponible: <b>${nuevaCantidad}</b> (mínimo: ${item.stock_minimo})\n👤 ${usuario || '—'}`);
     }
-    ctx?.waitUntil(syncSheets(env, 'Seg-Inventario'));
+    ctx?.waitUntil(syncSheets(env, 'Seg-Inventario', item.empresa_id));
     return json({ ok: true, mensaje: 'Salida registrada' });
   }
 
@@ -4331,7 +4328,7 @@ async function moverItemSeg(id, request, env, ctx) {
       await env.DB.prepare('UPDATE inventario_seg SET cantidad_disponible = ?, estado = ?, destino_actual = NULL WHERE id = ?').bind(nueva, 'disponible', id).run();
     }
     await env.DB.prepare('INSERT INTO movimientos_seg (item_id, accion, cantidad, usuario, notas, fecha) VALUES (?, ?, ?, ?, ?, ?)').bind(id, 'devolucion', cantidad, usuario || '', notas || '', fecha).run();
-    ctx?.waitUntil(syncSheets(env, 'Seg-Inventario'));
+    ctx?.waitUntil(syncSheets(env, 'Seg-Inventario', item.empresa_id));
     return json({ ok: true, mensaje: 'Devolución registrada' });
   }
 
@@ -4339,7 +4336,7 @@ async function moverItemSeg(id, request, env, ctx) {
     await env.DB.prepare('UPDATE inventario_seg SET estado = ? WHERE id = ?').bind('baja', id).run();
     await env.DB.prepare('INSERT INTO movimientos_seg (item_id, accion, cantidad, usuario, notas, fecha) VALUES (?, ?, ?, ?, ?, ?)').bind(id, 'baja', cantidad, usuario || '', notas || '', fecha).run();
     await sendTelegram(env, `🗑️ <b>Material Seguridad — Baja</b>\n🔖 ${item.codigo || item.nombre}  📋 ${item.tipo_material}\n👤 ${usuario || '—'}`);
-    ctx?.waitUntil(syncSheets(env, 'Seg-Inventario'));
+    ctx?.waitUntil(syncSheets(env, 'Seg-Inventario', item.empresa_id));
     return json({ ok: true, mensaje: 'Dado de baja' });
   }
 
@@ -4347,11 +4344,11 @@ async function moverItemSeg(id, request, env, ctx) {
 }
 
 async function eliminarItemSeg(id, request, env, ctx) {
-  const { isSuperadmin, isEmpresaAdmin } = await getAuth(request, env);
+  const { isSuperadmin, isEmpresaAdmin, empresa_id } = await getAuth(request, env);
   if (!isSuperadmin && !isEmpresaAdmin) return err('Sin permisos', 403);
   await env.DB.prepare('DELETE FROM inventario_seg WHERE id = ?').bind(id).run();
   await env.DB.prepare('DELETE FROM movimientos_seg WHERE item_id = ?').bind(id).run();
-  ctx?.waitUntil(syncSheets(env, 'Seg-Inventario'));
+  ctx?.waitUntil(syncSheets(env, 'Seg-Inventario', empresa_id));
   return json({ ok: true, mensaje: 'Eliminado' });
 }
 
@@ -4729,7 +4726,7 @@ async function googleAuthCallback(request, env) {
         'INSERT INTO sesiones (token, usuario_id, empresa_id, nombre, rol, departamento, obra_id, created_at) VALUES (?,?,?,?,?,?,?,?)'
       ).bind(token, nuevoUser.id, inv.empresa_id, gUser.name || gUser.email, inv.rol, inv.departamento || null, null, ahora).run();
       await sendTelegram(env, `✅ <b>Nuevo usuario registrado</b>\n👤 ${gUser.name || gUser.email}\n📧 ${gUser.email}\nRol: ${inv.rol} | Dpto: ${inv.departamento || '—'} | Empresa: ${empresa?.nombre || inv.empresa_id}`);
-      return json({ ok: true, token, nombre: gUser.name || gUser.email, rol: inv.rol, departamento: inv.departamento || null, empresa_id: inv.empresa_id, empresa_nombre: empresa?.nombre || '', obra_id: null, obra_nombre: null });
+      return json({ ok: true, token, nombre: gUser.name || gUser.email, rol: inv.rol, departamento: inv.departamento || null, empresa_id: inv.empresa_id, empresa_nombre: empresa?.nombre || '', obra_id: null, obra_nombre: null, usuario_id: nuevoUser?.id || null });
     }
 
     // Sin invitación: crear solicitud pendiente para que el admin la apruebe
@@ -4787,6 +4784,7 @@ async function googleAuthCallback(request, env) {
     empresa_nombre: empresa ? empresa.nombre : '',
     obra_id:        u.obra_id   || null,
     obra_nombre:    obra        ? obra.nombre : null,
+    usuario_id:     u.id,
   });
 }
 

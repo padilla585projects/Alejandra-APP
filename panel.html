@@ -215,7 +215,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
 
     <div class="login-field">
       <div class="login-label">Email o código</div>
-      <input class="login-input" id="loginEmail" type="text" placeholder="usuario@empresa.com" autocomplete="username" onkeydown="if(e.key==='Enter')doLogin()">
+      <input class="login-input" id="loginEmail" type="text" placeholder="usuario@empresa.com" autocomplete="username" onkeydown="if(event.key==='Enter')doLogin()">
     </div>
     <div class="login-field">
       <div class="login-label">Contraseña</div>
@@ -1307,7 +1307,7 @@ async function handleGoogleCallback(code) {
       return;
     }
     TOKEN = data.token;
-    SESSION = { nombre: data.nombre, rol: data.rol, empresa_id: data.empresa_id, empresa_nombre: data.empresa_nombre };
+    SESSION = { nombre: data.nombre, rol: data.rol, empresa_id: data.empresa_id, empresa_nombre: data.empresa_nombre, usuario_id: data.usuario_id || null };
     localStorage.setItem('panel_token', TOKEN);
     localStorage.setItem('panel_session', JSON.stringify(SESSION));
     iniciarApp();
@@ -1333,7 +1333,7 @@ async function doLogin() {
   }
 
   TOKEN = r.token;
-  SESSION = { nombre: r.nombre, rol: r.rol, empresa_id: r.empresa_id, empresa_nombre: r.empresa_nombre };
+  SESSION = { nombre: r.nombre, rol: r.rol, empresa_id: r.empresa_id, empresa_nombre: r.empresa_nombre, usuario_id: r.usuario_id || null };
   localStorage.setItem('panel_token', TOKEN);
   localStorage.setItem('panel_session', JSON.stringify(SESSION));
   iniciarApp();
@@ -1797,7 +1797,7 @@ function renderTurnosGrid(lunes) {
     return d;
   });
   const turnoMap = {};
-  turnosData.forEach(t => { turnoMap[`${t.trabajador_id}_${t.fecha}`] = t.turno; });
+  turnosData.forEach(t => { turnoMap[`${t.usuario_id}_${t.fecha}`] = t.turno; });
 
   let html = `<table style="width:100%;border-collapse:collapse">
     <thead><tr>
@@ -1835,17 +1835,16 @@ async function ciclaTurno(trabajadorId, fecha, actual) {
   const siguiente = TURNO_CICLO[(idx + 1) % TURNO_CICLO.length];
   const r = await api('/turnos', {
     method: 'POST',
-    body: JSON.stringify({ trabajador_id: trabajadorId, fecha, turno: siguiente }),
+    body: JSON.stringify({ usuario_id: trabajadorId, fecha, turno: siguiente }),
   });
   if (!r.ok) { toast('Error al guardar turno', 'err'); return; }
   // Update local data optimista
-  const key = `${trabajadorId}_${fecha}`;
-  const existing = turnosData.findIndex(t => t.trabajador_id === trabajadorId && t.fecha === fecha);
+  const existing = turnosData.findIndex(t => t.usuario_id === trabajadorId && t.fecha === fecha);
   if (siguiente === null) {
     if (existing >= 0) turnosData.splice(existing, 1);
   } else {
     if (existing >= 0) turnosData[existing].turno = siguiente;
-    else turnosData.push({ trabajador_id: trabajadorId, fecha, turno: siguiente });
+    else turnosData.push({ usuario_id: trabajadorId, fecha, turno: siguiente });
   }
   renderTurnosGrid(getLunes(turnosOffset));
 }
