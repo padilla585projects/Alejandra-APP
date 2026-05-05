@@ -5,10 +5,18 @@
 // Multi-obra + Roles (superadmin / encargado / operario)
 
 const CORS = {
-  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Origin': 'https://padilla585projects.github.io',
   'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type, X-Admin-Code, X-Obra-Id, X-Usuario, X-Rol, X-Codigo, X-Departamento, X-Token',
+  'Vary': 'Origin',
 };
+
+// Genera N bytes aleatorios criptográficamente seguros como string hex
+function randomHex(bytes = 16) {
+  const arr = new Uint8Array(bytes);
+  crypto.getRandomValues(arr);
+  return Array.from(arr).map(b => b.toString(16).padStart(2, '0')).join('');
+}
 
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
@@ -1122,7 +1130,7 @@ async function registrarEmpresa(request, env) {
   // Crear primera obra (opcional)
   let obra_id = null, obra_nombre_final = null;
   if (obra_nombre?.trim()) {
-    const codObra = Math.random().toString(36).substring(2, 8).toUpperCase();
+    const codObra = randomHex(4).toUpperCase(); // 8 chars hex criptográficamente seguro
     const obraResult = await env.DB.prepare(
       'INSERT INTO obras (nombre, codigo, activa, empresa_id) VALUES (?, ?, 1, ?)'
     ).bind(obra_nombre.trim(), codObra, empresa_id).run();
@@ -1131,7 +1139,7 @@ async function registrarEmpresa(request, env) {
   }
 
   // Crear usuario admin
-  const codAdmin = 'ADM' + empresa_id + '_' + Math.random().toString(36).substring(2,5).toUpperCase();
+  const codAdmin = 'ADM_' + randomHex(6).toUpperCase(); // 12 chars hex criptográficamente seguro
   await env.DB.prepare(
     'INSERT INTO usuarios (nombre, codigo, email, password_hash, rol, departamento, activo, empresa_id, obra_id) VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)'
   ).bind(admin_nombre.trim(), codAdmin, emailClean, hash, 'empresa_admin', 'electrico', empresa_id, obra_id).run();
@@ -1918,6 +1926,8 @@ async function editarUsuario(id, request, env) {
 // ════════════════════════════════════════════════════════════════════════════
 
 async function getConfig(request, env) {
+  const { isSuperadmin, isAdmin, isEmpresaAdmin, isDesarrollador } = await getAuth(request, env);
+  if (!isSuperadmin && !isAdmin && !isEmpresaAdmin && !isDesarrollador) return err('No autorizado', 403);
   try {
     const { results } = await env.DB.prepare('SELECT * FROM config ORDER BY clave').all();
     const config = {};
@@ -2003,7 +2013,8 @@ async function deleteCatalogo(tabla, id, request, env) {
 // ════════════════════════════════════════════════════════════════════════════
 
 async function exportCSV(request, env) {
-  const { obraId } = await getAuth(request, env);
+  const { obraId, empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
   const url  = new URL(request.url);
   const tipo = url.searchParams.get('tipo'); // bobinas | pemp | carretillas | (vacío = todo)
   const f    = obraId || null;
@@ -2016,9 +2027,9 @@ async function exportCSV(request, env) {
 
   if (!tipo || tipo === 'bobinas') {
     const sql = f
-      ? 'SELECT * FROM bobinas WHERE obra_id = ? ORDER BY created_at DESC'
-      : 'SELECT * FROM bobinas ORDER BY created_at DESC';
-    const { results } = await env.DB.prepare(sql).bind(...(f ? [f] : [])).all();
+      ? 'SELECT * FROM bobinas WHERE empresa_id = ? AND obra_id = ? ORDER BY created_at DESC'
+      : 'SELECT * FROM bobinas WHERE empresa_id = ? ORDER BY created_at DESC';
+    const { results } = await env.DB.prepare(sql).bind(...(f ? [empresa_id, f] : [empresa_id])).all();
     sections.push('=== BOBINAS ===');
     sections.push(row(['Código', 'Proveedor', 'Tipo Cable', 'Registrado por', 'Fecha Entrada', 'Devuelto por', 'Fecha Devolución', 'Estado', 'Notas', 'Obra ID']));
     for (const b of results) {
@@ -2029,9 +2040,9 @@ async function exportCSV(request, env) {
 
   if (!tipo || tipo === 'pemp') {
     const sql = f
-      ? 'SELECT * FROM pemp WHERE obra_id = ? ORDER BY created_at DESC'
-      : 'SELECT * FROM pemp ORDER BY created_at DESC';
-    const { results } = await env.DB.prepare(sql).bind(...(f ? [f] : [])).all();
+      ? 'SELECT * FROM pemp WHERE empresa_id = ? AND obra_id = ? ORDER BY created_at DESC'
+      : 'SELECT * FROM pemp WHERE empresa_id = ? ORDER BY created_at DESC';
+    const { results } = await env.DB.prepare(sql).bind(...(f ? [empresa_id, f] : [empresa_id])).all();
     sections.push('=== PEMP ===');
     sections.push(row(['ID', 'Matrícula', 'Tipo', 'Marca', 'Proveedor', 'Estado', 'Fecha Entrada', 'Fecha Devolución', 'Última Revisión', 'Próxima Revisión', 'Registrado por', 'Devuelto por', 'Notas', 'Obra ID']));
     for (const p of results) {
@@ -2042,9 +2053,9 @@ async function exportCSV(request, env) {
 
   if (!tipo || tipo === 'carretillas') {
     const sql = f
-      ? 'SELECT * FROM carretillas WHERE obra_id = ? ORDER BY created_at DESC'
-      : 'SELECT * FROM carretillas ORDER BY created_at DESC';
-    const { results } = await env.DB.prepare(sql).bind(...(f ? [f] : [])).all();
+      ? 'SELECT * FROM carretillas WHERE empresa_id = ? AND obra_id = ? ORDER BY created_at DESC'
+      : 'SELECT * FROM carretillas WHERE empresa_id = ? ORDER BY created_at DESC';
+    const { results } = await env.DB.prepare(sql).bind(...(f ? [empresa_id, f] : [empresa_id])).all();
     sections.push('=== CARRETILLAS ===');
     sections.push(row(['ID', 'Matrícula', 'Tipo', 'Marca', 'Proveedor', 'Energía', 'Estado', 'Fecha Entrada', 'Fecha Devolución', 'Última Revisión', 'Próxima Revisión', 'Registrado por', 'Devuelto por', 'Notas', 'Obra ID']));
     for (const c of results) {
@@ -4682,6 +4693,12 @@ async function alertasDiarias(env) {
   try {
     const hoy = new Date();
 
+    // 0-prev. Limpiar tokens caducados (reset_tokens y vincular_tokens)
+    try {
+      await env.DB.prepare("DELETE FROM reset_tokens WHERE expires_at < datetime('now')").run();
+      await env.DB.prepare("DELETE FROM vincular_tokens WHERE expires_at < datetime('now')").run();
+    } catch(e) { console.error('cleanup tokens error:', e.message); }
+
     // 0. Informe semanal — para cada empresa que lo tenga activado en el día de hoy
     const DIAS_ES = { 'lunes':1,'martes':2,'miércoles':3,'miercoles':3,'jueves':4,'viernes':5,'sábado':6,'sabado':6,'domingo':0 };
     const dowHoy  = hoy.getDay(); // 0=dom … 6=sáb
@@ -4985,7 +5002,7 @@ async function crearInvitacion(request, env) {
   if (!s || !['superadmin','empresa_admin'].includes(s.rol)) return err('Sin permiso', 403);
   const { duracion_min, rol, departamento } = await request.json().catch(() => ({}));
   if (!duracion_min || !rol) return err('Faltan datos', 400);
-  const codigo = Math.random().toString(36).slice(2,7).toUpperCase() + Math.random().toString(36).slice(2,5).toUpperCase();
+  const codigo = randomHex(6).toUpperCase(); // 12 chars hex criptográficamente seguro
   const expira = new Date(Date.now() + duracion_min * 60000).toISOString().slice(0,19).replace('T',' ');
   await env.DB.prepare(
     'INSERT INTO invitaciones (codigo, empresa_id, rol, departamento, expira_at, creado_por) VALUES (?,?,?,?,?,?)'
@@ -5983,8 +6000,8 @@ async function telegramDesvincular(request, env) {
 async function telegramWebhook(request, env) {
   // Verificar que viene de Telegram con el secret derivado del token del bot
   const secret = request.headers.get('X-Telegram-Bot-Api-Secret-Token');
-  const expectedSecret = env.TELEGRAM_BOT_TOKEN?.split(':')[1]?.slice(0, 32) || '';
-  if (expectedSecret && secret !== expectedSecret) return json({ ok: true }); // silencioso
+  const expectedSecret = env.TELEGRAM_WEBHOOK_SECRET || env.TELEGRAM_BOT_TOKEN?.split(':')[1]?.slice(0, 32) || '';
+  if (!expectedSecret || secret !== expectedSecret) return json({ ok: true }); // rechazar — sin secret configurado rechaza todo
   const update = await request.json().catch(() => null);
   if (!update) return json({ ok: true });
   const msg    = update.message;
@@ -6462,7 +6479,7 @@ async function crearMantenimiento(request, env) {
       if (k === 'file' && v instanceof File && v.size > 0) {
         adjuntoNombre = v.name;
         const ext = v.name.split('.').pop().toLowerCase();
-        adjuntoKey = `mant/${empresa_id}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+        adjuntoKey = `mant/${empresa_id}/${Date.now()}_${randomHex(4)}.${ext}`;
         await env.R2.put(adjuntoKey, v.stream(), { httpMetadata: { contentType: v.type || 'application/octet-stream' } });
       } else {
         body[k] = v;

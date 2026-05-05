@@ -5,7 +5,7 @@
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 05/05/2026
-VERSIÓN ACTUAL APP NUEVA: v5.47 (worker a6efb717 — sin cambios desde v5.44)
+VERSIÓN ACTUAL APP NUEVA: v5.48 (worker 150a6c74)
 VERSIÓN ACTUAL APP VIEJA: v4.19 (⛔ CONGELADA DEFINITIVAMENTE — no recibe más cambios)
 
 ================================================================================
@@ -150,6 +150,20 @@ PASO 4 — VERIFICAR WORKER (solo si se va a tocar worker.js)
 ================================================================================
   HISTORIAL DE VERSIONES — RECIENTES
 ================================================================================
+
+v5.48        |  05/05/2026  [SEC-15: auditoría de seguridad — 8 mejoras]
+  - CRIT-2: Telegram webhook ahora rechaza si no hay secret configurado (antes aceptaba todo).
+    Prioridad: TELEGRAM_WEBHOOK_SECRET env var; fallback: derivado del bot token.
+  - CRIT-3: /config GET requería auth (antes era público — exponía config interna).
+    Requiere isSuperadmin|isAdmin|isEmpresaAdmin|isDesarrollador.
+  - HIGH-1: CORS restringido de '*' a 'https://padilla585projects.github.io' + Vary: Origin.
+  - HIGH-2: códigos de invitación — Math.random() → randomHex(6) = 12 chars hex (crypto).
+  - HIGH-3: codObra y codAdmin al registrar empresa — Math.random() → randomHex (crypto).
+  - MED-1: cron diario (alertasDiarias) limpia reset_tokens y vincular_tokens caducados.
+  - MED-2: /export filtra siempre por empresa_id (antes sin obra_id exportaba TODA la BD).
+  - LOW-2: clave R2 de adjunto mantenimiento — Math.random() → randomHex(4) (crypto).
+  - Helper randomHex(bytes) añadido al worker — elimina Math.random() del código (0 usos).
+  - Worker ID: 150a6c74-2d82-4557-a64a-58231bccbf4b
 
 v5.47        |  05/05/2026  [SYNC-04: auditoría completa sincronización app↔web]
   - 18 bugs del patrón r.clave||r.data sobre arrays crudos → tablas vacías.

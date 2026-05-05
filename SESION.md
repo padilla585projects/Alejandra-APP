@@ -7,11 +7,24 @@
 
 **Sesión:** LIBRE
 **Última sesión:** 05/05/2026
-**Versión tras última sesión:** v5.47 (worker a6efb717 — sin cambios)
-**GitHub:** dd9a6a0 ✅
+**Versión tras última sesión:** v5.48 (worker 150a6c74)
+**GitHub:** en sync ✅
 **Panel web:** https://padilla585projects.github.io/Alejandra-APP/panel.html ✅ FUNCIONA
 
 ---
+
+## RESUMEN SESIÓN 05/05/2026 (SEC-15: auditoría de seguridad v5.48)
+
+- CRIT-2: telegramWebhook rechaza si no hay secret (antes aceptaba todo si var vacía).
+- CRIT-3: getConfig requiere auth (antes /config GET era público).
+- HIGH-1: CORS '*' → 'https://padilla585projects.github.io' + Vary: Origin.
+- HIGH-2/3: Math.random() en códigos invitación/obra/admin → randomHex() crypto.
+- MED-1: alertasDiarias limpia reset_tokens + vincular_tokens caducados cada día.
+- MED-2: /export siempre filtra por empresa_id (antes sin obra_id exponía toda la BD).
+- LOW-2: adjunto mantenimiento R2 key usa randomHex en vez de Math.random.
+- Helper randomHex(bytes) centraliza generación de aleatoriedad segura.
+- Math.random() en worker.js: 0 ocurrencias (todas eliminadas).
+- Worker: 150a6c74 ✅  GitHub: en sync ✅
 
 ## RESUMEN SESIÓN 05/05/2026 (SYNC-04: auditoría completa sync app↔web v5.47)
 
