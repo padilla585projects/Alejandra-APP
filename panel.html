@@ -1419,8 +1419,8 @@ function iniciarApp() {
     document.querySelectorAll('.nav-admin, .nav-admin-section').forEach(el => el.style.display = '');
   }
 
-  // mostrar sección dev solo para desarrollador
-  if (SESSION.rol === 'desarrollador') {
+  // mostrar sección dev para superadmin y desarrollador
+  if (['superadmin', 'desarrollador'].includes(SESSION.rol)) {
     document.querySelectorAll('.nav-dev, .nav-dev-section').forEach(el => el.style.display = '');
   }
 
