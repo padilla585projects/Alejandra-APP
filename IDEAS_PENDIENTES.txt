@@ -866,6 +866,24 @@ LEYENDA DE ESTADO:
     · Fix: anchor click, detección por extensión, lightbox con DOM API.
     · Reportado: 29/04/2026 — empresa 1, eléctrico
 
+[ ] PANEL-01 — Recuperación de contraseña vía email (Resend)
+    · Enlace "¿Olvidaste tu contraseña?" en pantalla de login del panel
+    · Worker: endpoint /recuperar-pass → genera token, envía email con Resend
+    · Worker: endpoint /resetear-pass → verifica token, actualiza contraseña
+    · También en app móvil (index.html)
+    · Requiere: RESEND_API_KEY en variables de entorno Cloudflare
+    · Pendiente de API key de Resend por parte del usuario
+
+[ ] PANEL-02 — Plan de revisión de protección de datos para empresas (GDPR / LOPD)
+    · Auditar qué datos personales almacena la app por empresa (usuarios, fichajes, fotos, chat...)
+    · Definir política de retención (cuánto tiempo se guardan los datos)
+    · Añadir en panel web sección "Protección de datos" o en Ajustes > Empresa:
+      - Descargar informe de datos personales almacenados (DSAR)
+      - Eliminar datos de un trabajador concreto (derecho al olvido)
+      - Configurar retención automática (X días para fichajes, logs, chat...)
+    · Posible endpoint /rgpd/informe + /rgpd/eliminar-usuario + /rgpd/config-retencion
+    · Sesión dedicada — requiere análisis previo de tablas D1 con datos personales
+
 ================================================================================
   📋 INSTRUCCIONES PARA CLAUDE
 ================================================================================
