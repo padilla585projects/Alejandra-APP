@@ -5,7 +5,7 @@
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 05/05/2026
-VERSIÓN ACTUAL APP NUEVA: v5.42 (worker 96d839ef)
+VERSIÓN ACTUAL APP NUEVA: v5.43 (worker 54b05f9e)
 VERSIÓN ACTUAL APP VIEJA: v4.19 (⛔ CONGELADA DEFINITIVAMENTE — no recibe más cambios)
 
 ================================================================================
@@ -150,6 +150,17 @@ PASO 4 — VERIFICAR WORKER (solo si se va a tocar worker.js)
 ================================================================================
   HISTORIAL DE VERSIONES — RECIENTES
 ================================================================================
+
+v5.43        |  05/05/2026  [SEC-14 + SYNC-03]
+  - SEC-14: Rate limiting X-Admin-Code legacy path. IP bloqueada tras 5 intentos fallidos/15 min.
+    Registrado como 'admin_brute' en login_attempts. Mitiga brute-force del código admin.
+  - SYNC-03: syncRRHH() — 6 nuevas pestañas Google Sheets en el Sheet principal:
+    Fichajes, Incidencias, Carnets, EPIs, Turnos, Repostajes.
+    Llamado con ctx.waitUntil en CREATE/UPDATE de cada módulo + cron diario.
+    JOIN con usuarios/personal_externo/obras para nombres legibles.
+  - PANEL-01: ya estaba hecho (recuperar contraseña en app móvil).
+  - Worker ID: 54b05f9e-699c-47b7-ab86-cb095ce03aa1
+  - GitHub: f18c249
 
 v5.42        |  05/05/2026  [ROLE AUDIT — 2 bugs de roles corregidos]
   - BUG-R01: jefe_de_obra veía bobinas/PEMP/carretillas/herramientas de TODAS las obras.

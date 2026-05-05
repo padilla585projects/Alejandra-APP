@@ -7,11 +7,18 @@
 
 **Sesión:** LIBRE
 **Última sesión:** 05/05/2026
-**Versión tras última sesión:** v5.42 (worker 96d839ef)
-**GitHub:** bfa1583 ✅
+**Versión tras última sesión:** v5.43 (worker 54b05f9e)
+**GitHub:** f18c249 ✅
 **Panel web:** https://padilla585projects.github.io/Alejandra-APP/panel.html ✅ FUNCIONA
 
 ---
+
+## RESUMEN SESIÓN 05/05/2026 (SEC-14 + SYNC-03 v5.43)
+
+- **SEC-14**: Rate limiting X-Admin-Code en legacy path. 5 fallos → IP bloqueada 15 min. 'admin_brute' en login_attempts.
+- **SYNC-03**: `syncRRHH()` nueva función, sincroniza 6 módulos a Google Sheets: Fichajes, Incidencias, Carnets, EPIs, Turnos, Repostajes. ctx.waitUntil en CRUD + cron. JOIN con nombres.
+- **PANEL-01**: Confirmado como ya hecho (recuperar contraseña app móvil).
+- Clarificación: `superadmin` = acceso via ADMIN_CODE; `desarrollador` = cuenta D1 mismos permisos + DevTools.
 
 ## RESUMEN SESIÓN 05/05/2026 (role audit + fixes v5.42)
 
