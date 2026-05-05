@@ -273,8 +273,10 @@ export default {
       if (path === '/scan'        && method === 'POST') return await handleScan(request, env);
       if (path === '/ocr'         && method === 'POST') return await handleOCR(request, env);
       if (path === '/log'         && method === 'POST') return await guardarLog(request, env);
-      if (path === '/verificar'   && method === 'POST') return await verificarAcceso(request, env);
-      if (path === '/auth/google/url'      && method === 'GET')  return googleAuthUrl(request, env);
+      if (path === '/verificar'        && method === 'POST') return await verificarAcceso(request, env);
+      if (path === '/recuperar-pass'   && method === 'POST') return await recuperarPass(request, env);
+      if (path === '/resetear-pass'    && method === 'POST') return await resetearPass(request, env);
+      if (path === '/auth/google/url'  && method === 'GET')  return googleAuthUrl(request, env);
       if (path === '/auth/google/callback' && method === 'POST') return await googleAuthCallback(request, env);
       if (path === '/usuarios/pendientes'  && method === 'GET')  return await getUsuariosPendientes(request, env);
       if (path === '/usuarios/pendientes/aprobar' && method === 'POST') return await aprobarUsuarioPendiente(request, env);
@@ -731,6 +733,176 @@ async function crearSesion(env, { nombre, rol, obra_id, obra_nombre, departament
     "INSERT INTO sesiones (token, usuario_id, nombre, rol, obra_id, obra_nombre, departamento, es_admin, empresa_id, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now', '+30 days'))"
   ).bind(token, usuario_id || null, nombre, rol, obra_id || null, obra_nombre || null, departamento || 'electrico', es_admin ? 1 : 0, empresa_id || 1).run();
   return token;
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// RECUPERACIÓN DE CONTRASEÑA (Resend)
+// Para activar: añadir RESEND_API_KEY en Cloudflare Workers → Variables de entorno
+// ════════════════════════════════════════════════════════════════════════════
+
+async function enviarEmailResend(env, { to, subject, html }) {
+  if (!env.RESEND_API_KEY) {
+    console.error('[Resend] RESEND_API_KEY no configurada en variables de entorno');
+    return false;
+  }
+  try {
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${env.RESEND_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from: 'Alejandra App <noreply@resend.dev>',  // ← cambiar cuando tengas dominio propio
+        to: [to],
+        subject,
+        html,
+      }),
+    });
+    if (!res.ok) {
+      const err = await res.text();
+      console.error('[Resend] Error al enviar email:', err);
+      return false;
+    }
+    return true;
+  } catch (e) {
+    console.error('[Resend] Excepción:', e.message);
+    return false;
+  }
+}
+
+async function recuperarPass(request, env) {
+  const { email } = await request.json().catch(() => ({}));
+  if (!email) return err('Email requerido');
+
+  // Buscar usuario por email (activo)
+  const usuario = await env.DB.prepare(
+    `SELECT id, nombre, empresa_id FROM usuarios WHERE email=? AND activo=1 LIMIT 1`
+  ).bind(email.trim().toLowerCase()).first();
+
+  // Respuesta siempre igual para no revelar si el email existe (seguridad)
+  const okMsg = json({ ok: true, mensaje: 'Si ese email existe recibirás un enlace en breve' });
+
+  if (!usuario) return okMsg;
+
+  // Crear tabla si no existe (idempotente)
+  await env.DB.prepare(`
+    CREATE TABLE IF NOT EXISTS reset_tokens (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      token TEXT NOT NULL UNIQUE,
+      usuario_id INTEGER NOT NULL,
+      empresa_id INTEGER NOT NULL,
+      expires_at TEXT NOT NULL,
+      usado INTEGER DEFAULT 0,
+      created_at TEXT DEFAULT (datetime('now'))
+    )
+  `).run().catch(() => {});
+
+  // Invalidar tokens anteriores de este usuario
+  await env.DB.prepare(`UPDATE reset_tokens SET usado=1 WHERE usuario_id=? AND usado=0`)
+    .bind(usuario.id).run();
+
+  // Generar token seguro (32 chars hex)
+  const tokenBytes = crypto.getRandomValues(new Uint8Array(16));
+  const token = Array.from(tokenBytes).map(b => b.toString(16).padStart(2, '0')).join('');
+
+  await env.DB.prepare(`
+    INSERT INTO reset_tokens (token, usuario_id, empresa_id, expires_at)
+    VALUES (?, ?, ?, datetime('now', '+2 hours'))
+  `).bind(token, usuario.id, usuario.empresa_id).run();
+
+  // URL del panel con el token
+  const panelUrl = `https://padilla585projects.github.io/Alejandra-APP/panel.html?reset_token=${token}`;
+
+  const html = `
+<!DOCTYPE html>
+<html lang="es">
+<body style="margin:0;padding:0;background:#0f172a;font-family:'Segoe UI',Helvetica,Arial,sans-serif">
+  <table width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;margin:40px auto">
+    <tr><td style="background:#162032;border-radius:16px;padding:40px;border:1px solid #334155">
+      <div style="text-align:center;margin-bottom:28px">
+        <div style="font-size:32px;margin-bottom:8px">🔐</div>
+        <div style="font-family:'Montserrat',Helvetica,Arial,sans-serif;font-weight:900;font-size:22px;color:#f97316">
+          Alejandra Office
+        </div>
+        <div style="font-size:11px;color:#64748b;letter-spacing:2px;text-transform:uppercase;margin-top:4px">
+          Recuperación de contraseña
+        </div>
+      </div>
+      <p style="color:#e5e7eb;font-size:15px;margin:0 0 16px">Hola <strong>${usuario.nombre}</strong>,</p>
+      <p style="color:#94a3b8;font-size:14px;margin:0 0 28px;line-height:1.6">
+        Hemos recibido una solicitud para restablecer la contraseña de tu cuenta en Alejandra Office.
+        El enlace es válido durante <strong style="color:#e5e7eb">2 horas</strong>.
+      </p>
+      <div style="text-align:center;margin-bottom:28px">
+        <a href="${panelUrl}" style="display:inline-block;background:#f97316;color:#fff;font-family:'Montserrat',Helvetica,Arial,sans-serif;font-weight:700;font-size:14px;letter-spacing:1px;text-decoration:none;padding:14px 32px;border-radius:10px;text-transform:uppercase">
+          Restablecer contraseña →
+        </a>
+      </div>
+      <p style="color:#475569;font-size:12px;margin:0 0 8px;line-height:1.5">
+        Si no puedes pulsar el botón, copia este enlace en tu navegador:
+      </p>
+      <p style="color:#64748b;font-size:11px;word-break:break-all;margin:0 0 24px;font-family:monospace">
+        ${panelUrl}
+      </p>
+      <hr style="border:none;border-top:1px solid #1e2d40;margin:0 0 20px">
+      <p style="color:#475569;font-size:12px;margin:0;text-align:center">
+        Si no has solicitado esto, ignora este email. Tu contraseña no cambiará.
+      </p>
+    </td></tr>
+    <tr><td style="text-align:center;padding-top:20px">
+      <p style="color:#334155;font-size:11px;margin:0">Alejandra App · Sistema de gestión de obras</p>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+
+  const enviado = await enviarEmailResend(env, {
+    to: email.trim().toLowerCase(),
+    subject: '🔐 Restablecer contraseña — Alejandra Office',
+    html,
+  });
+
+  if (!enviado && env.RESEND_API_KEY) {
+    // Si hay key pero falló el envío, devolvemos error real
+    return err('Error al enviar el email. Inténtalo de nuevo.', 500);
+  }
+
+  return okMsg;
+}
+
+async function resetearPass(request, env) {
+  const { token, nueva_pass } = await request.json().catch(() => ({}));
+  if (!token || !nueva_pass) return err('Datos incompletos');
+  if (nueva_pass.length < 6) return err('La contraseña debe tener al menos 6 caracteres');
+
+  // Verificar token válido, no usado y no expirado
+  const reset = await env.DB.prepare(`
+    SELECT rt.*, u.email, u.nombre FROM reset_tokens rt
+    JOIN usuarios u ON u.id = rt.usuario_id
+    WHERE rt.token=? AND rt.usado=0 AND rt.expires_at > datetime('now')
+    LIMIT 1
+  `).bind(token).first().catch(() => null);
+
+  if (!reset) return err('El enlace no es válido o ha caducado. Solicita uno nuevo.');
+
+  // Hash de la nueva contraseña (mismo método que verificarAcceso)
+  const encoder = new TextEncoder();
+  const data = encoder.encode(nueva_pass);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+
+  // Actualizar contraseña e invalidar token
+  await Promise.all([
+    env.DB.prepare(`UPDATE usuarios SET password=? WHERE id=?`).bind(hashHex, reset.usuario_id).run(),
+    env.DB.prepare(`UPDATE reset_tokens SET usado=1 WHERE token=?`).bind(token).run(),
+  ]);
+
+  // Invalidar todas las sesiones activas de ese usuario
+  await env.DB.prepare(`DELETE FROM sesiones WHERE usuario_id=?`).bind(reset.usuario_id).run().catch(() => {});
+
+  return json({ ok: true, nombre: reset.nombre });
 }
 
 async function verificarAcceso(request, env) {

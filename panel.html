@@ -224,6 +224,9 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
 
     <div id="loginErr" class="login-err"></div>
     <button class="login-btn" id="loginBtn" onclick="doLogin()">ENTRAR</button>
+    <div style="text-align:right;margin-top:-8px">
+      <button onclick="abrirRecuperarPass()" style="background:none;border:none;color:var(--muted);font-size:12px;cursor:pointer;font-family:'Poppins',sans-serif;padding:0" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--muted)'">¿Olvidaste tu contraseña?</button>
+    </div>
 
     <div style="display:flex;align-items:center;gap:10px;margin-top:4px">
       <div style="flex:1;height:1px;background:var(--border)"></div>
@@ -913,6 +916,55 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
     </div><!-- /content -->
   </div><!-- /mainArea -->
 </div><!-- /appShell -->
+
+<!-- RECUPERAR CONTRASEÑA — solicitar email -->
+<div id="recuperarOverlay" onclick="if(event.target===this)cerrarRecuperarPass()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:9998;align-items:center;justify-content:center">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;width:100%;max-width:400px;padding:32px;box-shadow:0 24px 60px rgba(0,0,0,.6)">
+    <div style="text-align:center;margin-bottom:24px">
+      <div style="font-size:28px;margin-bottom:8px">🔐</div>
+      <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:18px;color:var(--text)">¿Olvidaste tu contraseña?</div>
+      <div style="font-size:13px;color:var(--muted);margin-top:6px">Te enviaremos un enlace por email</div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <input id="recuperarEmail" type="email" placeholder="tu@email.com"
+             style="padding:12px 14px;background:var(--surface2);border:2px solid var(--border);border-radius:10px;color:var(--text);font-family:'Poppins',sans-serif;font-size:14px;outline:none;transition:border-color .2s"
+             onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'"
+             onkeydown="if(event.key==='Enter')enviarRecuperarPass()">
+      <div id="recuperarMsg" style="font-size:13px;text-align:center;min-height:18px"></div>
+      <button id="recuperarBtn" onclick="enviarRecuperarPass()" class="login-btn" style="margin:0">ENVIAR ENLACE</button>
+      <button onclick="cerrarRecuperarPass()" style="background:none;border:none;color:var(--muted);font-size:13px;cursor:pointer;font-family:'Poppins',sans-serif;padding:4px">← Volver al login</button>
+    </div>
+  </div>
+</div>
+
+<!-- RESTABLECER CONTRASEÑA — nueva contraseña (viene desde email ?reset_token=) -->
+<div id="resetOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:9999;align-items:center;justify-content:center">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;width:100%;max-width:400px;padding:32px;box-shadow:0 24px 60px rgba(0,0,0,.6)">
+    <div style="text-align:center;margin-bottom:24px">
+      <div style="font-size:28px;margin-bottom:8px">🔑</div>
+      <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:18px;color:var(--text)">Nueva contraseña</div>
+      <div style="font-size:13px;color:var(--muted);margin-top:6px" id="resetNombre"></div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <div>
+        <div style="font-family:'Montserrat',sans-serif;font-weight:700;font-size:10px;letter-spacing:1px;color:var(--muted);text-transform:uppercase;margin-bottom:6px">Nueva contraseña</div>
+        <input id="resetPass1" type="password" placeholder="Mínimo 6 caracteres"
+               style="width:100%;padding:12px 14px;background:var(--surface2);border:2px solid var(--border);border-radius:10px;color:var(--text);font-family:'Poppins',sans-serif;font-size:14px;outline:none;transition:border-color .2s"
+               onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'"
+               onkeydown="if(event.key==='Enter')document.getElementById('resetPass2').focus()">
+      </div>
+      <div>
+        <div style="font-family:'Montserrat',sans-serif;font-weight:700;font-size:10px;letter-spacing:1px;color:var(--muted);text-transform:uppercase;margin-bottom:6px">Confirmar contraseña</div>
+        <input id="resetPass2" type="password" placeholder="Repite la contraseña"
+               style="width:100%;padding:12px 14px;background:var(--surface2);border:2px solid var(--border);border-radius:10px;color:var(--text);font-family:'Poppins',sans-serif;font-size:14px;outline:none;transition:border-color .2s"
+               onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'"
+               onkeydown="if(event.key==='Enter')confirmarResetPass()">
+      </div>
+      <div id="resetMsg" style="font-size:13px;text-align:center;min-height:18px"></div>
+      <button id="resetBtn" onclick="confirmarResetPass()" class="login-btn" style="margin:0">GUARDAR CONTRASEÑA</button>
+    </div>
+  </div>
+</div>
 
 <!-- BÚSQUEDA GLOBAL -->
 <div id="searchOverlay" onclick="if(event.target===this)cerrarBusqueda()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:3000;align-items:flex-start;justify-content:center;padding-top:80px">
@@ -3974,10 +4026,114 @@ document.getElementById('modalOverlay').addEventListener('click', e => {
   if (e.target === document.getElementById('modalOverlay')) cerrarModal();
 });
 
+// ════════════════════════════════════════════════════════════════
+// RECUPERAR / RESETEAR CONTRASEÑA
+// ════════════════════════════════════════════════════════════════
+
+function abrirRecuperarPass() {
+  document.getElementById('recuperarEmail').value = '';
+  document.getElementById('recuperarMsg').textContent = '';
+  const btn = document.getElementById('recuperarBtn');
+  btn.disabled = false; btn.textContent = 'ENVIAR ENLACE';
+  document.getElementById('recuperarOverlay').style.display = 'flex';
+  setTimeout(() => document.getElementById('recuperarEmail').focus(), 50);
+}
+
+function cerrarRecuperarPass() {
+  document.getElementById('recuperarOverlay').style.display = 'none';
+}
+
+async function enviarRecuperarPass() {
+  const email = document.getElementById('recuperarEmail').value.trim();
+  const msgEl = document.getElementById('recuperarMsg');
+  const btn   = document.getElementById('recuperarBtn');
+  if (!email) { msgEl.style.color = 'var(--red)'; msgEl.textContent = 'Introduce tu email'; return; }
+
+  btn.disabled = true; btn.textContent = 'Enviando...';
+  msgEl.textContent = '';
+
+  try {
+    const res = await fetch(API + '/recuperar-pass', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+    });
+    const data = await res.json();
+    if (res.ok && data.ok) {
+      msgEl.style.color = 'var(--green)';
+      msgEl.textContent = '✓ ' + (data.mensaje || 'Enlace enviado. Revisa tu bandeja de entrada.');
+      btn.textContent = 'ENVIADO ✓';
+    } else {
+      msgEl.style.color = 'var(--red)';
+      msgEl.textContent = data.error || 'Error al enviar. Inténtalo de nuevo.';
+      btn.disabled = false; btn.textContent = 'ENVIAR ENLACE';
+    }
+  } catch {
+    msgEl.style.color = 'var(--red)';
+    msgEl.textContent = 'Error de conexión';
+    btn.disabled = false; btn.textContent = 'ENVIAR ENLACE';
+  }
+}
+
+let _resetToken = '';
+
+function mostrarResetPass(token) {
+  _resetToken = token;
+  document.getElementById('resetPass1').value = '';
+  document.getElementById('resetPass2').value = '';
+  document.getElementById('resetMsg').textContent = '';
+  document.getElementById('resetNombre').textContent = 'Introduce tu nueva contraseña';
+  const btn = document.getElementById('resetBtn');
+  btn.disabled = false; btn.textContent = 'GUARDAR CONTRASEÑA';
+  document.getElementById('resetOverlay').style.display = 'flex';
+  setTimeout(() => document.getElementById('resetPass1').focus(), 50);
+}
+
+async function confirmarResetPass() {
+  const p1 = document.getElementById('resetPass1').value;
+  const p2 = document.getElementById('resetPass2').value;
+  const msgEl = document.getElementById('resetMsg');
+  const btn   = document.getElementById('resetBtn');
+
+  if (p1.length < 6) { msgEl.style.color = 'var(--red)'; msgEl.textContent = 'Mínimo 6 caracteres'; return; }
+  if (p1 !== p2)     { msgEl.style.color = 'var(--red)'; msgEl.textContent = 'Las contraseñas no coinciden'; return; }
+
+  btn.disabled = true; btn.textContent = 'Guardando...';
+  msgEl.textContent = '';
+
+  try {
+    const res = await fetch(API + '/resetear-pass', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: _resetToken, nueva_pass: p1 }),
+    });
+    const data = await res.json();
+    if (res.ok && data.ok) {
+      msgEl.style.color = 'var(--green)';
+      msgEl.textContent = `✓ Contraseña actualizada${data.nombre ? ', ' + data.nombre : ''}. Ya puedes iniciar sesión.`;
+      btn.textContent = 'LISTO ✓';
+      // Limpiar token de la URL y ocultar overlay después de 2s
+      window.history.replaceState({}, '', window.location.pathname);
+      setTimeout(() => { document.getElementById('resetOverlay').style.display = 'none'; }, 2500);
+    } else {
+      msgEl.style.color = 'var(--red)';
+      msgEl.textContent = data.error || 'Error. El enlace puede haber caducado.';
+      btn.disabled = false; btn.textContent = 'GUARDAR CONTRASEÑA';
+    }
+  } catch {
+    msgEl.style.color = 'var(--red)';
+    msgEl.textContent = 'Error de conexión';
+    btn.disabled = false; btn.textContent = 'GUARDAR CONTRASEÑA';
+  }
+}
+
 // ── INICIO ─────────────────────────────────────────────────────
 (function init() {
-  // Detectar callback OAuth de Google (?code= en la URL)
   const urlParams = new URLSearchParams(window.location.search);
+  // Detectar ?reset_token= (viene del enlace de email)
+  const resetToken = urlParams.get('reset_token');
+  if (resetToken) { mostrarResetPass(resetToken); return; }
+  // Detectar callback OAuth de Google (?code=)
   const code = urlParams.get('code');
   if (code) { handleGoogleCallback(code); return; }
   if (TOKEN && SESSION) { iniciarApp(); }
