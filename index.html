@@ -13,6 +13,8 @@
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;900&family=Poppins:wght@300;400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.min.js"></script>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <style>
 :root {
   --bg:#0f172a; --surface:#162032; --surface2:#1e2d40;
@@ -2267,6 +2269,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
         <button onclick="filtrarPedidos('solicitado')"id="pfSolicitado"class="sug-filter">📤 Solicitado</button>
         <button onclick="filtrarPedidos('recibido')"  id="pfRecibido"  class="sug-filter">✅ Recibido</button>
         <button onclick="filtrarPedidos('cancelado')" id="pfCancelado" class="sug-filter">❌ Cancelado</button>
+        <button onclick="exportarPedidosPDF()" class="sug-filter" style="margin-left:auto;background:var(--surface2)">📄 PDF</button>
       </div>
     </div>
 
@@ -4339,6 +4342,47 @@ function exportarIncidenciasPDF() {
 }
 window.exportarIncidenciasPDF = exportarIncidenciasPDF;
 
+function exportarPedidosPDF() {
+  const lista  = window._pedidosCache || [];
+  const filtro = window._pedFiltroActivo || 'todos';
+  const items  = filtro === 'todos' ? lista : lista.filter(p => p.estado === filtro);
+  if (!items.length) { toast('Sin pedidos para exportar', 'err'); return; }
+  const fecha = new Date().toLocaleDateString('es-ES');
+  const estadoIcon = { pendiente:'⏳', solicitado:'📤', recibido:'✅', en_curso:'🔄', cancelado:'❌' };
+  const filas = items.map(p => `<tr>
+    <td>${(p.created_at||'').slice(0,10)}</td>
+    <td><strong>${p.descripcion||'—'}</strong></td>
+    <td>${p.proveedor||'—'}</td>
+    <td>${p.departamento||'—'}</td>
+    <td>${p.cantidad ?? '—'}</td>
+    <td>${estadoIcon[p.estado]||''} ${p.estado||'—'}</td>
+    <td>${p.obra_nombre||'—'}</td>
+  </tr>`).join('');
+  const html = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>Pedidos — Alejandra App</title>
+  <style>
+    body{font-family:Arial,sans-serif;font-size:11px;margin:20px;color:#111}
+    h2{font-size:16px;margin-bottom:4px}
+    .meta{font-size:10px;color:#666;margin-bottom:14px}
+    table{border-collapse:collapse;width:100%}
+    th{background:#2563eb;color:#fff;padding:7px 8px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.5px}
+    td{padding:6px 8px;border-bottom:1px solid #e5e5e5;vertical-align:top;font-size:11px}
+    tr:nth-child(even) td{background:#fafafa}
+    @media print{body{margin:8mm};button{display:none}}
+  </style></head><body>
+  <h2>📦 Pedidos — Alejandra App</h2>
+  <div class="meta">📅 ${fecha} &nbsp;|&nbsp; ${items.length} pedidos &nbsp;|&nbsp; Filtro: ${filtro}</div>
+  <table>
+    <thead><tr><th>Fecha</th><th>Descripción</th><th>Proveedor</th><th>Dpto</th><th>Cant.</th><th>Estado</th><th>Obra</th></tr></thead>
+    <tbody>${filas}</tbody>
+  </table>
+  </body></html>`;
+  const w = window.open('', '_blank', 'width=1000,height=700');
+  if (!w) { toast('⚠️ Activa ventanas emergentes para exportar', 'err'); return; }
+  w.document.write(html); w.document.close(); w.focus();
+  setTimeout(() => w.print(), 300);
+}
+window.exportarPedidosPDF = exportarPedidosPDF;
+
 // ════════════════════════════════════════════════════════════════════════════
 // BÚSQUEDA GLOBAL
 // ════════════════════════════════════════════════════════════════════════════
@@ -4378,8 +4422,8 @@ async function ejecutarBusqueda(q) {
     if (!res.ok) { c.innerHTML = '<div class="empty-state">Error al buscar</div>'; return; }
     const items = await res.json();
     if (!items.length) { c.innerHTML = '<div style="font-size:13px;color:var(--muted);text-align:center;padding:20px">Sin resultados para «' + q + '»</div>'; return; }
-    const iconos = { incidencia:'🚨', pemp:'🏗️', carretilla:'🚜', herramienta:'🔧', usuario:'👤', pedido:'📦' };
-    const labels = { incidencia:'Incidencia', pemp:'PEMP', carretilla:'Carretilla', herramienta:'Herramienta', usuario:'Trabajador', pedido:'Pedido' };
+    const iconos = { incidencia:'🚨', pemp:'🏗️', carretilla:'🚜', herramienta:'🔧', usuario:'👤', pedido:'📦', obra:'🏗️' };
+    const labels = { incidencia:'Incidencia', pemp:'PEMP', carretilla:'Carretilla', herramienta:'Herramienta', usuario:'Trabajador', pedido:'Pedido', obra:'Obra' };
     c.innerHTML = items.map(r => `
       <div onclick="buscarNavegar('${r.tipo}',${r.id})" style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .15s" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
         <span style="font-size:22px;flex-shrink:0">${iconos[r.tipo]||'📋'}</span>
@@ -4399,6 +4443,7 @@ function buscarNavegar(tipo, id) {
   else if (tipo === 'herramienta') { navTo('herramientas'); }
   else if (tipo === 'usuario') { navTo('ajustes'); setTimeout(() => selAjTab('usuarios'), 300); }
   else if (tipo === 'pedido') { navTo('pedidos'); }
+  else if (tipo === 'obra')   { navTo('obras'); }
 }
 window.buscarNavegar = buscarNavegar;
 
@@ -11780,6 +11825,40 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
   // Agrega fichajes brutos en resumen mensual por trabajador
   function renderResumenMes(container, fichajes) {
     if (!fichajes.length) { container.innerHTML = '<div class="empty-state">Sin datos este mes</div>'; return; }
+
+    // ── Mini gráfica de asistencia por día ──────────────────────────────────
+    const diasMap = {};
+    fichajes.forEach(f => {
+      if (!f.fecha) return;
+      const dia = f.fecha.slice(8, 10); // 'DD'
+      if (!diasMap[dia]) diasMap[dia] = new Set();
+      diasMap[dia].add(perTrabId(f));
+    });
+    const dias = Object.keys(diasMap).sort();
+    const maxN = Math.max(...dias.map(d => diasMap[d].size), 1);
+    const graficaHTML = dias.length ? `
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:12px">
+        <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:11px;color:var(--muted);letter-spacing:1px;text-transform:uppercase;margin-bottom:10px">📊 Asistencia por día</div>
+        <div style="display:flex;align-items:flex-end;gap:3px;height:52px;overflow-x:auto;padding-bottom:4px">
+          ${dias.map(d => {
+            const n = diasMap[d].size;
+            const pct = Math.round((n / maxN) * 100);
+            const col = pct >= 80 ? '#22c55e' : pct >= 50 ? '#f97316' : '#ef4444';
+            return `<div style="display:flex;flex-direction:column;align-items:center;flex-shrink:0;width:22px" title="${parseInt(d)}: ${n} trabajador${n===1?'':'es'}">
+              <div style="font-family:'Montserrat',sans-serif;font-size:9px;font-weight:700;color:${col};margin-bottom:2px">${n}</div>
+              <div style="width:14px;height:${Math.max(pct * 0.36, 4)}px;background:${col};border-radius:3px 3px 0 0;opacity:.85"></div>
+              <div style="font-size:8px;color:var(--muted);margin-top:2px">${parseInt(d)}</div>
+            </div>`;
+          }).join('')}
+        </div>
+        <div style="display:flex;gap:12px;margin-top:6px;font-size:10px;color:var(--muted)">
+          <span style="color:#22c55e">● ≥80%</span>
+          <span style="color:#f97316">● ≥50%</span>
+          <span style="color:#ef4444">● &lt;50%</span>
+          <span style="margin-left:auto">${dias.length} días con datos · máx. ${maxN} trab.</span>
+        </div>
+      </div>` : '';
+
     // Agrupar por trabajador
     const map = {};
     fichajes.forEach(f => {
@@ -11796,7 +11875,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
       t.horas_totales += parseFloat(f.horas_trabajadas || 0);
       t.horas_extra   += parseFloat(f.horas_extra || 0);
     });
-    container.innerHTML = Object.values(map).map(t => {
+    container.innerHTML = graficaHTML + Object.values(map).map(t => {
       const diasTot = t.dias_presencia + t.dias_ausencia + t.dias_baja;
       const pct = diasTot > 0 ? Math.round((t.dias_presencia / diasTot) * 100) : 0;
       return `<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:8px">
