@@ -1,0 +1,16 @@
+# Wrangler local dev cache (R2 emulation, D1 local, etc.)
+.wrangler/
+
+# R2 local emulation data (fotos subidas en wrangler dev)
+e1/
+e2/
+e3/
+e4/
+e5/
+
+# Node
+node_modules/
+
+# OS
+.DS_Store
+Thumbs.db
