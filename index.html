@@ -437,6 +437,9 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
     </div>
     <button class="login-btn" id="loginBtn" onclick="doLogin()" style="margin-top:4px">ACCEDER</button>
     <div class="login-err" id="loginErr"></div>
+    <div id="loginOlvidaste" style="display:none;text-align:right;margin-top:-4px">
+      <button onclick="abrirRecuperarPassApp()" style="background:none;border:none;color:var(--muted);font-size:12px;cursor:pointer;font-family:'Poppins',sans-serif;padding:0" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--muted)'">¿Olvidaste tu contraseña?</button>
+    </div>
     <div style="display:flex;align-items:center;gap:8px;margin:10px 0">
       <div style="flex:1;height:1px;background:var(--border)"></div>
       <span style="font-size:11px;color:var(--muted);white-space:nowrap">o continúa con</span>
@@ -3137,6 +3140,48 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
   </div>
 </div>
 
+<!-- RECUPERAR CONTRASEÑA (solicitar email) -->
+<div id="appRecuperarOverlay" onclick="if(event.target===this)cerrarRecuperarPassApp()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:9000;align-items:center;justify-content:center;padding:20px">
+  <div style="background:var(--surface,#1e293b);border:1px solid var(--border,#334155);border-radius:20px;width:100%;max-width:360px;padding:28px;box-shadow:0 20px 60px rgba(0,0,0,.6)">
+    <div style="text-align:center;margin-bottom:22px">
+      <div style="font-size:32px;margin-bottom:8px">🔐</div>
+      <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:18px;color:#e5e7eb">¿Olvidaste tu contraseña?</div>
+      <div style="font-size:13px;color:#64748b;margin-top:4px">Te enviamos un enlace por email</div>
+    </div>
+    <input id="appRecuperarEmail" type="email" placeholder="tu@email.com"
+           style="width:100%;padding:13px 14px;background:#0f172a;border:2px solid #334155;border-radius:12px;color:#e5e7eb;font-family:'Poppins',sans-serif;font-size:15px;outline:none;margin-bottom:12px"
+           onkeydown="if(event.key==='Enter')enviarRecuperarPassApp()">
+    <div id="appRecuperarMsg" style="font-size:13px;text-align:center;margin-bottom:12px;min-height:18px"></div>
+    <button id="appRecuperarBtn" onclick="enviarRecuperarPassApp()" style="width:100%;padding:14px;background:#f97316;border:none;border-radius:12px;color:#000;font-family:'Montserrat',sans-serif;font-weight:900;font-size:15px;letter-spacing:1px;cursor:pointer;margin-bottom:8px">ENVIAR ENLACE</button>
+    <button onclick="cerrarRecuperarPassApp()" style="width:100%;padding:10px;background:none;border:none;color:#64748b;font-family:'Poppins',sans-serif;font-size:13px;cursor:pointer">← Volver al login</button>
+  </div>
+</div>
+
+<!-- RESTABLECER CONTRASEÑA (viene del enlace del email ?reset_token=) -->
+<div id="appResetOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.95);z-index:9500;align-items:center;justify-content:center;padding:20px">
+  <div style="background:var(--surface,#1e293b);border:1px solid var(--border,#334155);border-radius:20px;width:100%;max-width:360px;padding:28px;box-shadow:0 20px 60px rgba(0,0,0,.6)">
+    <div style="text-align:center;margin-bottom:22px">
+      <div style="font-size:32px;margin-bottom:8px">🔑</div>
+      <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:18px;color:#e5e7eb">Nueva contraseña</div>
+      <div style="font-size:13px;color:#64748b;margin-top:4px">Introduce tu nueva contraseña</div>
+    </div>
+    <div style="margin-bottom:10px">
+      <div style="font-family:'Montserrat',sans-serif;font-size:11px;font-weight:700;color:#64748b;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px">Nueva contraseña</div>
+      <input id="appResetPass1" type="password" placeholder="Mínimo 6 caracteres"
+             style="width:100%;padding:13px 14px;background:#0f172a;border:2px solid #334155;border-radius:12px;color:#e5e7eb;font-family:'Poppins',sans-serif;font-size:15px;outline:none"
+             onkeydown="if(event.key==='Enter')document.getElementById('appResetPass2').focus()">
+    </div>
+    <div style="margin-bottom:12px">
+      <div style="font-family:'Montserrat',sans-serif;font-size:11px;font-weight:700;color:#64748b;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px">Confirmar contraseña</div>
+      <input id="appResetPass2" type="password" placeholder="Repite la contraseña"
+             style="width:100%;padding:13px 14px;background:#0f172a;border:2px solid #334155;border-radius:12px;color:#e5e7eb;font-family:'Poppins',sans-serif;font-size:15px;outline:none"
+             onkeydown="if(event.key==='Enter')confirmarResetPassApp()">
+    </div>
+    <div id="appResetMsg" style="font-size:13px;text-align:center;margin-bottom:12px;min-height:18px"></div>
+    <button id="appResetBtn" onclick="confirmarResetPassApp()" style="width:100%;padding:14px;background:#f97316;border:none;border-radius:12px;color:#000;font-family:'Montserrat',sans-serif;font-weight:900;font-size:15px;letter-spacing:1px;cursor:pointer">GUARDAR CONTRASEÑA</button>
+  </div>
+</div>
+
 <!-- TOAST -->
 <div class="toast" id="toast"></div>
 <div id="updatedBanner"></div>
@@ -3419,11 +3464,94 @@ function setLoginMode(mode) {
   document.getElementById('loginModeEmail').classList.toggle('active', mode === 'email');
   document.getElementById('loginCodeFields').style.display = mode === 'code' ? 'block' : 'none';
   document.getElementById('loginEmailFields').style.display = mode === 'email' ? 'flex' : 'none';
+  document.getElementById('loginOlvidaste').style.display = mode === 'email' ? 'block' : 'none';
   document.getElementById('loginErr').textContent = '';
 }
 function toggleLoginPw2() {
   const inp = document.getElementById('loginPassword');
   inp.type = inp.type === 'password' ? 'text' : 'password';
+}
+
+// ── Recuperar contraseña ────────────────────────────────────────────────────
+function abrirRecuperarPassApp() {
+  document.getElementById('appRecuperarEmail').value = '';
+  document.getElementById('appRecuperarMsg').textContent = '';
+  const btn = document.getElementById('appRecuperarBtn');
+  btn.disabled = false; btn.textContent = 'ENVIAR ENLACE';
+  const el = document.getElementById('appRecuperarOverlay');
+  el.style.display = 'flex';
+  setTimeout(() => document.getElementById('appRecuperarEmail').focus(), 50);
+}
+function cerrarRecuperarPassApp() {
+  document.getElementById('appRecuperarOverlay').style.display = 'none';
+}
+async function enviarRecuperarPassApp() {
+  const email = document.getElementById('appRecuperarEmail').value.trim();
+  const msgEl = document.getElementById('appRecuperarMsg');
+  const btn   = document.getElementById('appRecuperarBtn');
+  if (!email) { msgEl.style.color = '#ef4444'; msgEl.textContent = 'Introduce tu email'; return; }
+  btn.disabled = true; btn.textContent = 'Enviando...'; msgEl.textContent = '';
+  try {
+    const res = await fetch(getAPI() + '/recuperar-pass', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email })
+    });
+    const data = await res.json();
+    if (res.ok && data.ok) {
+      msgEl.style.color = '#22c55e';
+      msgEl.textContent = '✓ ' + (data.mensaje || 'Enlace enviado. Revisa tu email.');
+      btn.textContent = 'ENVIADO ✓';
+    } else {
+      msgEl.style.color = '#ef4444';
+      msgEl.textContent = data.error || 'Error. Inténtalo de nuevo.';
+      btn.disabled = false; btn.textContent = 'ENVIAR ENLACE';
+    }
+  } catch {
+    msgEl.style.color = '#ef4444'; msgEl.textContent = 'Error de conexión';
+    btn.disabled = false; btn.textContent = 'ENVIAR ENLACE';
+  }
+}
+
+let _appResetToken = '';
+function mostrarResetPassApp(token) {
+  _appResetToken = token;
+  document.getElementById('appResetPass1').value = '';
+  document.getElementById('appResetPass2').value = '';
+  document.getElementById('appResetMsg').textContent = '';
+  const btn = document.getElementById('appResetBtn');
+  btn.disabled = false; btn.textContent = 'GUARDAR CONTRASEÑA';
+  document.getElementById('appResetOverlay').style.display = 'flex';
+  setTimeout(() => document.getElementById('appResetPass1').focus(), 50);
+}
+async function confirmarResetPassApp() {
+  const p1 = document.getElementById('appResetPass1').value;
+  const p2 = document.getElementById('appResetPass2').value;
+  const msgEl = document.getElementById('appResetMsg');
+  const btn   = document.getElementById('appResetBtn');
+  if (p1.length < 6) { msgEl.style.color = '#ef4444'; msgEl.textContent = 'Mínimo 6 caracteres'; return; }
+  if (p1 !== p2)     { msgEl.style.color = '#ef4444'; msgEl.textContent = 'Las contraseñas no coinciden'; return; }
+  btn.disabled = true; btn.textContent = 'Guardando...'; msgEl.textContent = '';
+  try {
+    const res = await fetch(getAPI() + '/resetear-pass', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: _appResetToken, nueva_pass: p1 })
+    });
+    const data = await res.json();
+    if (res.ok && data.ok) {
+      msgEl.style.color = '#22c55e';
+      msgEl.textContent = `✓ Contraseña actualizada${data.nombre ? ', ' + data.nombre : ''}. Ya puedes iniciar sesión.`;
+      btn.textContent = 'LISTO ✓';
+      window.history.replaceState({}, document.title, window.location.pathname);
+      setTimeout(() => { document.getElementById('appResetOverlay').style.display = 'none'; }, 2500);
+    } else {
+      msgEl.style.color = '#ef4444';
+      msgEl.textContent = data.error || 'Enlace no válido o caducado.';
+      btn.disabled = false; btn.textContent = 'GUARDAR CONTRASEÑA';
+    }
+  } catch {
+    msgEl.style.color = '#ef4444'; msgEl.textContent = 'Error de conexión';
+    btn.disabled = false; btn.textContent = 'GUARDAR CONTRASEÑA';
+  }
 }
 function toggleRegPw() {
   const inp = document.getElementById('regPassword');
@@ -9472,6 +9600,11 @@ async function cargarObrasSelectUsuario() {
   if (_urlParams.has('inv')) {
     localStorage.setItem('alejandra_inv_codigo', _urlParams.get('inv').toUpperCase());
     window.history.replaceState({}, document.title, window.location.pathname);
+  }
+  // Detectar ?reset_token= (enlace de recuperación de contraseña)
+  if (_urlParams.has('reset_token') && !getSession()) {
+    mostrarResetPassApp(_urlParams.get('reset_token'));
+    return;
   }
   // Detectar callback de Google OAuth (?code=xxx en la URL)
   if (_urlParams.has('code') && !getSession()) {
