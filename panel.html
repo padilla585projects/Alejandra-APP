@@ -2422,7 +2422,7 @@ function filtrarSeguridad() {
 
 async function cargarSeguridad() {
   const r = await api('/inventario-seg');
-  const data = r.items || r.data || [];
+  const data = toArr(r, 'items');
 
   const total = data.length;
   const agotados = data.filter(i => (i.cantidad || 0) <= 0).length;
