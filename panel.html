@@ -87,8 +87,12 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
 
 /* KPI CARDS */
 .kpi-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:16px;margin-bottom:28px}
-.kpi-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:20px;display:flex;flex-direction:column;gap:8px;transition:border-color .2s;cursor:default}
+.kpi-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:20px;display:flex;flex-direction:column;gap:8px;transition:border-color .2s,transform .15s;cursor:default;position:relative}
 .kpi-card:hover{border-color:var(--accent)}
+.kpi-card.nav-card{cursor:pointer}
+.kpi-card.nav-card:hover{border-color:var(--accent);transform:translateY(-2px)}
+.kpi-card.nav-card::after{content:'→';position:absolute;top:12px;right:14px;font-size:13px;color:var(--muted);opacity:0;transition:opacity .2s,right .15s}
+.kpi-card.nav-card:hover::after{opacity:1;right:11px}
 .kpi-icon{font-size:28px;line-height:1}
 .kpi-value{font-family:'Montserrat',sans-serif;font-weight:900;font-size:32px;color:var(--text);line-height:1}
 .kpi-value.warn{color:var(--yellow)}
@@ -1583,18 +1587,18 @@ async function cargarDashboard() {
   ]);
 
   const kpis = [
-    { icon: '👷', value: dash.trabajadores_activos ?? '—', label: 'Trabajadores activos', cls: '' },
-    { icon: '🏗️', value: dash.obras_activas ?? '—', label: 'Obras activas', cls: '' },
-    { icon: '⚠️', value: dash.incidencias_abiertas ?? '—', label: 'Incidencias abiertas', cls: dash.incidencias_abiertas > 0 ? 'warn' : '' },
-    { icon: '📦', value: dash.pedidos_pendientes ?? '—', label: 'Pedidos pendientes', cls: dash.pedidos_pendientes > 0 ? 'warn' : '' },
-    { icon: '🔴', value: dash.equipos_averiados ?? '—', label: 'Equipos averiados', cls: dash.equipos_averiados > 0 ? 'danger' : '' },
-    { icon: '🔧', value: dash.equipos_mantenimiento ?? '—', label: 'En mantenimiento', cls: '' },
-    { icon: '🔺', value: dash.herramientas_fuera ?? '—', label: 'Herramientas fuera', cls: '' },
-    { icon: '📉', value: dash.stock_bajo ?? '—', label: 'Alertas de stock', cls: dash.stock_bajo > 0 ? 'danger' : '' },
+    { icon: '👷', value: dash.trabajadores_activos ?? '—', label: 'Trabajadores activos', cls: '',                                          nav: 'personal' },
+    { icon: '🏗️', value: dash.obras_activas ?? '—',        label: 'Obras activas',        cls: '',                                          nav: 'obras' },
+    { icon: '⚠️', value: dash.incidencias_abiertas ?? '—', label: 'Incidencias abiertas', cls: dash.incidencias_abiertas > 0 ? 'warn' : '',  nav: 'incidencias' },
+    { icon: '📦', value: dash.pedidos_pendientes ?? '—',   label: 'Pedidos pendientes',   cls: dash.pedidos_pendientes > 0 ? 'warn' : '',    nav: 'pedidos' },
+    { icon: '🔴', value: dash.equipos_averiados ?? '—',    label: 'Equipos averiados',    cls: dash.equipos_averiados > 0 ? 'danger' : '',   nav: 'pemp' },
+    { icon: '🔧', value: dash.equipos_mantenimiento ?? '—',label: 'En mantenimiento',     cls: '',                                           nav: 'mantenimientos' },
+    { icon: '🔺', value: dash.herramientas_fuera ?? '—',   label: 'Herramientas fuera',   cls: '',                                           nav: 'herramientas' },
+    { icon: '📉', value: dash.stock_bajo ?? '—',           label: 'Alertas de stock',     cls: dash.stock_bajo > 0 ? 'danger' : '',          nav: 'seguridad' },
   ];
 
   document.getElementById('kpiGrid').innerHTML = kpis.map(k =>
-    `<div class="kpi-card">
+    `<div class="kpi-card nav-card" onclick="navTo('${k.nav}')" title="Ir a ${k.label}">
       <div class="kpi-icon">${k.icon}</div>
       <div class="kpi-value ${k.cls}">${k.value}</div>
       <div class="kpi-label">${k.label}</div>
