@@ -581,8 +581,16 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
       <div class="page" id="pageObras">
         <div class="page-title">🏗️ Obras</div>
         <div class="page-sub">Gestión de obras activas y cerradas</div>
+        <div id="obrasResumen" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:16px"></div>
         <div class="tbl-toolbar">
           <input class="tbl-search" id="searchObras" placeholder="🔍 Buscar obra...">
+          <select class="tbl-search" id="filterObras" style="min-width:140px" onchange="filtrarObras()">
+            <option value="">Todas</option>
+            <option value="1">Activas</option>
+            <option value="0">Cerradas</option>
+          </select>
+          <button class="btn btn-primary" id="btnNuevaObra" onclick="abrirModalObra()">+ Nueva obra</button>
+          <button class="btn btn-secondary" onclick="exportarTabla(tblObras,'obras')">⬇ CSV</button>
           <button class="btn btn-secondary" onclick="cargarObras()">🔄 Actualizar</button>
         </div>
         <div class="tbl-wrap"><div id="tblObras"></div></div>
@@ -592,16 +600,24 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
       <div class="page" id="pageIncidencias">
         <div class="page-title">⚠️ Incidencias</div>
         <div class="page-sub">Registro y seguimiento de incidencias</div>
+        <div id="incResumen" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:16px"></div>
         <div class="tbl-toolbar">
-          <input class="tbl-search" id="searchIncidencias" placeholder="🔍 Buscar...">
+          <input class="tbl-search" id="searchIncidencias" placeholder="🔍 Buscar título o descripción...">
           <select class="tbl-search" id="filterIncidencias" style="min-width:140px" onchange="filtrarIncidencias()">
             <option value="">Todos los estados</option>
             <option value="abierta">Abierta</option>
             <option value="en_progreso">En progreso</option>
             <option value="cerrada">Cerrada</option>
           </select>
-          <button class="btn btn-secondary" onclick="cargarIncidencias()">🔄 Actualizar</button>
+          <select class="tbl-search" id="filterIncGravedad" style="min-width:130px" onchange="filtrarIncidencias()">
+            <option value="">Toda gravedad</option>
+            <option value="alta">🔴 Alta</option>
+            <option value="media">🟠 Media</option>
+            <option value="baja">🟢 Baja</option>
+          </select>
+          <button class="btn btn-primary" onclick="abrirModalIncidencia()">+ Nueva incidencia</button>
           <button class="btn btn-secondary" onclick="exportarTabla(tblIncidencias,'incidencias')">⬇ CSV</button>
+          <button class="btn btn-secondary" onclick="tblIncidencias=null;cargarIncidencias()">🔄 Actualizar</button>
         </div>
         <div class="tbl-wrap"><div id="tblIncidencias"></div></div>
       </div>
@@ -610,15 +626,19 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
       <div class="page" id="pagePedidos">
         <div class="page-title">📦 Pedidos</div>
         <div class="page-sub">Solicitudes de material y seguimiento</div>
+        <div id="pedResumen" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:16px"></div>
         <div class="tbl-toolbar">
-          <input class="tbl-search" id="searchPedidos" placeholder="🔍 Buscar...">
+          <input class="tbl-search" id="searchPedidos" placeholder="🔍 Buscar artículo o proveedor...">
           <select class="tbl-search" id="filterPedidos" style="min-width:140px" onchange="filtrarPedidos()">
             <option value="">Todos los estados</option>
             <option value="pendiente">Pendiente</option>
             <option value="aprobado">Aprobado</option>
             <option value="entregado">Entregado</option>
+            <option value="cancelado">Cancelado</option>
           </select>
-          <button class="btn btn-secondary" onclick="cargarPedidos()">🔄 Actualizar</button>
+          <button class="btn btn-primary" onclick="abrirModalPedido()">+ Nuevo pedido</button>
+          <button class="btn btn-secondary" onclick="exportarTabla(tblPedidos,'pedidos')">⬇ CSV</button>
+          <button class="btn btn-secondary" onclick="tblPedidos=null;cargarPedidos()">🔄 Actualizar</button>
         </div>
         <div class="tbl-wrap"><div id="tblPedidos"></div></div>
       </div>
@@ -627,9 +647,20 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
       <div class="page" id="pageMantenimientos">
         <div class="page-title">🔩 Mantenimientos</div>
         <div class="page-sub">Registros de mantenimiento de equipos</div>
+        <div id="mantResumen" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:16px"></div>
         <div class="tbl-toolbar">
-          <input class="tbl-search" id="searchMantenimientos" placeholder="🔍 Buscar...">
-          <button class="btn btn-secondary" onclick="cargarMantenimientos()">🔄 Actualizar</button>
+          <input class="tbl-search" id="searchMantenimientos" placeholder="🔍 Buscar matrícula o equipo...">
+          <select class="tbl-search" id="filterMantTipo" style="min-width:150px" onchange="filtrarMantenimientos()">
+            <option value="">Todos los equipos</option>
+            <option value="bobina">Bobinas</option>
+            <option value="pemp">PEMP</option>
+            <option value="carretilla">Carretillas</option>
+            <option value="herramienta">Herramientas</option>
+            <option value="vehiculo">Vehículos</option>
+          </select>
+          <button class="btn btn-primary" onclick="abrirModalMantenimiento()">+ Nuevo registro</button>
+          <button class="btn btn-secondary" onclick="exportarTabla(tblMantenimientos,'mantenimientos')">⬇ CSV</button>
+          <button class="btn btn-secondary" onclick="tblMantenimientos=null;cargarMantenimientos()">🔄 Actualizar</button>
         </div>
         <div class="tbl-wrap"><div id="tblMantenimientos"></div></div>
       </div>
@@ -1965,99 +1996,341 @@ async function guardarCampoSeg(id, campo, valor) {
 
 // ── OBRAS ──────────────────────────────────────────────────────
 let tblObras = null;
+let _obrasData = [];
+
 async function cargarObras() {
-  const r = await api('/obras');
-  const data = r.obras || r.data || [];
-  if (tblObras) { tblObras.replaceData(data); return; }
+  const r = await api('/obras?todas=1');
+  _obrasData = r.obras || r.data || r || [];
+  // Si el worker devuelve solo activas, usamos lo que venga
+  if (!Array.isArray(_obrasData)) _obrasData = [];
+
+  const activas  = _obrasData.filter(o => o.activa == 1).length;
+  const cerradas = _obrasData.filter(o => o.activa == 0).length;
+  document.getElementById('obrasResumen').innerHTML = [
+    { icon:'🏗️', value: activas,  label:'Obras activas',  cls: activas  > 0 ? 'ok'  : '' },
+    { icon:'🔒', value: cerradas, label:'Obras cerradas', cls: '' },
+    { icon:'📊', value: _obrasData.length, label:'Total obras', cls: '' },
+  ].map(k => `<div class="kpi-card" style="padding:14px"><div class="kpi-icon" style="font-size:20px">${k.icon}</div><div class="kpi-value ${k.cls}" style="font-size:22px">${k.value}</div><div class="kpi-label">${k.label}</div></div>`).join('');
+
+  if (tblObras) { tblObras.replaceData(_obrasData); return; }
+  const canEdit = ['empresa_admin', 'superadmin', 'desarrollador', 'jefe_de_obra'].includes(SESSION.rol);
   tblObras = new Tabulator('#tblObras', {
-    data, layout: 'fitColumns', pagination: 'local', paginationSize: 20,
+    data: _obrasData, layout: 'fitColumns', pagination: 'local', paginationSize: 20,
+    placeholder: '<div class="empty-state"><div class="empty-icon">🏗️</div><div class="empty-text">Sin obras registradas</div></div>',
+    rowClick: (e, row) => verDetalleObra(row.getData()),
     columns: [
-      { title: 'Nombre', field: 'nombre', sorter: 'string', minWidth: 200 },
-      { title: 'Estado', field: 'activa', width: 100, hozAlign: 'center',
-        formatter: c => c.getValue() ? '<span class="badge badge-ok">Activa</span>' : '<span class="badge badge-muted">Cerrada</span>' },
-      { title: 'Dirección', field: 'direccion', minWidth: 200 },
-      { title: 'Responsable', field: 'responsable', minWidth: 150 },
+      { title: 'Nombre', field: 'nombre', sorter: 'string', minWidth: 200,
+        editor: canEdit ? 'input' : false,
+        cellEdited: c => guardarCampoObra(c.getRow().getData().id, 'nombre', c.getValue()) },
+      { title: 'Código', field: 'codigo', width: 100, hozAlign: 'center',
+        formatter: c => `<code style="background:var(--surface2);padding:2px 6px;border-radius:4px;font-size:11px">${c.getValue() || '—'}</code>` },
+      { title: 'Estado', field: 'activa', width: 110, hozAlign: 'center',
+        formatter: c => c.getValue() == 1
+          ? '<span class="badge badge-ok">✓ Activa</span>'
+          : '<span class="badge badge-muted">Cerrada</span>' },
+      { title: 'Dirección', field: 'direccion', minWidth: 200,
+        editor: canEdit ? 'input' : false,
+        cellEdited: c => guardarCampoObra(c.getRow().getData().id, 'direccion', c.getValue()) },
+      { title: 'Responsable', field: 'responsable', minWidth: 150,
+        editor: canEdit ? 'input' : false,
+        cellEdited: c => guardarCampoObra(c.getRow().getData().id, 'responsable', c.getValue()) },
       { title: 'Inicio', field: 'fecha_inicio', width: 110, formatter: c => fmtFecha(c.getValue()) },
-      { title: 'Fin previsto', field: 'fecha_fin', width: 110, formatter: c => fmtFecha(c.getValue()) },
+      { title: 'Fin previsto', field: 'fecha_fin', width: 120, formatter: c => fmtFecha(c.getValue()) },
+      { title: '', field: 'id', width: 80, hozAlign: 'center', headerSort: false,
+        formatter: c => canEdit ? `<button class="btn btn-sm btn-danger" onclick="event.stopPropagation();toggleObra(${c.getValue()},${c.getRow().getData().activa})" title="${c.getRow().getData().activa==1?'Cerrar':'Reabrir'} obra">${c.getRow().getData().activa==1?'🔒':'🔓'}</button>` : '' }
     ]
   });
   document.getElementById('searchObras').oninput = function() {
-    tblObras.setFilter('nombre', 'like', this.value);
+    tblObras.setFilter([{field:'nombre',type:'like',value:this.value},{field:'codigo',type:'like',value:this.value}],'or');
   };
+}
+
+async function guardarCampoObra(id, campo, valor) {
+  const r = await api(`/obras/${id}`, { method: 'PUT', body: JSON.stringify({ [campo]: valor }) });
+  if (r.ok) toast('Guardado ✓', 'ok'); else toast('Error al guardar', 'err');
+}
+
+async function toggleObra(id, activa) {
+  const accion = activa == 1 ? 'cerrar' : 'reabrir';
+  if (!confirm(`¿${accion.charAt(0).toUpperCase() + accion.slice(1)} esta obra?`)) return;
+  const r = await api(`/obras/${id}`, { method: 'PUT', body: JSON.stringify({ activa: activa == 1 ? 0 : 1 }) });
+  if (r.ok) { toast(`Obra ${accion === 'cerrar' ? 'cerrada' : 'reabierta'} ✓`, 'ok'); tblObras = null; cargarObras(); }
+  else toast(r.error || 'Error', 'err');
+}
+
+function filtrarObras() {
+  if (!tblObras) return;
+  const val = document.getElementById('filterObras').value;
+  if (val !== '') tblObras.setFilter('activa', '=', parseInt(val));
+  else tblObras.clearFilter();
+}
+
+function verDetalleObra(obra) {
+  abrirModal(`🏗️ ${obra.nombre}`, `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div class="form-group"><div class="form-label">Código</div><div style="font-family:monospace;padding:8px;background:var(--surface2);border-radius:6px">${obra.codigo || '—'}</div></div>
+      <div class="form-group"><div class="form-label">Estado</div><div style="padding:8px">${obra.activa == 1 ? '<span class="badge badge-ok">Activa</span>' : '<span class="badge badge-muted">Cerrada</span>'}</div></div>
+    </div>
+    <div class="form-group"><div class="form-label">Dirección</div><div style="padding:8px;background:var(--surface2);border-radius:6px">${obra.direccion || '—'}</div></div>
+    <div class="form-group"><div class="form-label">Responsable</div><div style="padding:8px;background:var(--surface2);border-radius:6px">${obra.responsable || '—'}</div></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div class="form-group"><div class="form-label">Inicio</div><div style="padding:8px;background:var(--surface2);border-radius:6px">${fmtFecha(obra.fecha_inicio)}</div></div>
+      <div class="form-group"><div class="form-label">Fin previsto</div><div style="padding:8px;background:var(--surface2);border-radius:6px">${fmtFecha(obra.fecha_fin)}</div></div>
+    </div>
+  `, null);
+  document.getElementById('modalFooter').innerHTML = '<button class="btn btn-secondary" onclick="cerrarModal()">Cerrar</button>';
+}
+
+function abrirModalObra() {
+  abrirModal('Nueva obra', `
+    <div class="form-row">
+      <div class="form-group"><div class="form-label">Nombre de la obra *</div><input class="form-input" id="mObraNombre" placeholder="Centro Comercial Norte"></div>
+      <div class="form-group"><div class="form-label">Código *</div><input class="form-input" id="mObraCod" placeholder="CCN-001" style="text-transform:uppercase"></div>
+    </div>
+    <div class="form-group"><div class="form-label">Dirección</div><input class="form-input" id="mObraDir" placeholder="Calle Mayor 1, Madrid"></div>
+    <div class="form-group"><div class="form-label">Responsable</div><input class="form-input" id="mObraResp" placeholder="Nombre del jefe de obra"></div>
+    <div class="form-row">
+      <div class="form-group"><div class="form-label">Fecha inicio</div><input class="form-input" id="mObraInicio" type="date"></div>
+      <div class="form-group"><div class="form-label">Fin previsto</div><input class="form-input" id="mObraFin" type="date"></div>
+    </div>
+  `, async () => {
+    const body = {
+      nombre: document.getElementById('mObraNombre').value.trim(),
+      codigo: document.getElementById('mObraCod').value.trim().toUpperCase(),
+      direccion: document.getElementById('mObraDir').value.trim() || null,
+      responsable: document.getElementById('mObraResp').value.trim() || null,
+      fecha_inicio: document.getElementById('mObraInicio').value || null,
+      fecha_fin: document.getElementById('mObraFin').value || null,
+    };
+    if (!body.nombre || !body.codigo) { toast('Nombre y código son obligatorios', 'err'); return; }
+    const r = await api('/obras', { method: 'POST', body: JSON.stringify(body) });
+    if (r.ok) { cerrarModal(); toast('Obra creada ✓', 'ok'); tblObras = null; cargarObras(); }
+    else toast(r.error || 'Error al crear obra', 'err');
+  });
 }
 
 // ── INCIDENCIAS ────────────────────────────────────────────────
 let tblIncidencias = null;
+let _incData = [];
+
 async function cargarIncidencias() {
-  const r = await api('/incidencias?limit=200');
-  const data = (r.incidencias || r.data || []).map(i => ({
-    ...i, descripcionCorta: (i.descripcion || i.titulo || '').substring(0, 80)
+  const r = await api('/incidencias?limit=500&sin_dept=1');
+  _incData = (r.incidencias || r.data || []).map(i => ({
+    ...i,
+    tituloCorto: (i.titulo || i.descripcion || '').substring(0, 100),
   }));
-  if (tblIncidencias) { tblIncidencias.replaceData(data); return; }
+
+  const abiertas    = _incData.filter(i => i.estado === 'abierta').length;
+  const en_progreso = _incData.filter(i => i.estado === 'en_progreso').length;
+  const cerradas    = _incData.filter(i => i.estado === 'cerrada').length;
+  const altas       = _incData.filter(i => i.gravedad === 'alta' && i.estado !== 'cerrada').length;
+  document.getElementById('incResumen').innerHTML = [
+    { icon:'🔴', value: abiertas,    label:'Abiertas',    cls: abiertas > 0 ? 'danger' : '' },
+    { icon:'🟠', value: en_progreso, label:'En progreso', cls: en_progreso > 0 ? 'warn' : '' },
+    { icon:'✅', value: cerradas,    label:'Cerradas',    cls: '' },
+    { icon:'⚡', value: altas,       label:'Gravedad alta',cls: altas > 0 ? 'danger' : '' },
+  ].map(k => `<div class="kpi-card" style="padding:14px"><div class="kpi-icon" style="font-size:20px">${k.icon}</div><div class="kpi-value ${k.cls}" style="font-size:22px">${k.value}</div><div class="kpi-label">${k.label}</div></div>`).join('');
+
+  if (tblIncidencias) { tblIncidencias.replaceData(_incData); return; }
   const canEdit = ['empresa_admin', 'jefe_de_obra', 'oficina', 'encargado', 'superadmin', 'desarrollador'].includes(SESSION.rol);
+
   tblIncidencias = new Tabulator('#tblIncidencias', {
-    data, layout: 'fitColumns', pagination: 'local', paginationSize: 20,
+    data: _incData, layout: 'fitColumns', pagination: 'local', paginationSize: 25,
+    placeholder: '<div class="empty-state"><div class="empty-icon">✅</div><div class="empty-text">Sin incidencias</div></div>',
+    rowClick: (e, row) => verDetalleIncidencia(row.getData()),
     columns: [
-      { title: 'Fecha', field: 'created_at', width: 110, formatter: c => fmtFecha(c.getValue()) },
-      { title: 'Descripción', field: 'descripcionCorta', sorter: 'string', minWidth: 250 },
-      { title: 'Tipo', field: 'tipo', width: 120 },
-      { title: 'Estado', field: 'estado', width: 120,
+      { title: 'Fecha', field: 'created_at', width: 100, sorter: 'string', formatter: c => fmtFecha(c.getValue()) },
+      { title: 'G', field: 'gravedad', width: 50, hozAlign: 'center', headerSort: false,
+        formatter: c => ({ alta:'🔴', media:'🟠', baja:'🟢' }[c.getValue()] || '⚪') },
+      { title: 'Título', field: 'tituloCorto', sorter: 'string', minWidth: 220 },
+      { title: 'Tipo', field: 'tipo', width: 110,
+        formatter: c => `<span class="badge badge-info">${c.getValue() || '—'}</span>` },
+      { title: 'Estado', field: 'estado', width: 130,
         editor: canEdit ? 'select' : false,
-        editorParams: { values: ['abierta', 'en_progreso', 'cerrada'] },
+        editorParams: { values: { abierta:'Abierta', en_progreso:'En progreso', cerrada:'Cerrada' } },
         formatter: c => {
           const v = c.getValue();
           const cls = { abierta:'danger', en_progreso:'warn', cerrada:'ok' }[v] || 'muted';
-          return `<span class="badge badge-${cls}">${v || '—'}</span>`;
+          return `<span class="badge badge-${cls}">${v?.replace('_',' ') || '—'}</span>`;
         },
         cellEdited: c => guardarEstadoIncidencia(c.getRow().getData().id, c.getValue())
       },
-      { title: 'Obra', field: 'obra_nombre', minWidth: 140 },
-      { title: 'Reportado por', field: 'nombre_usuario', minWidth: 140 },
+      { title: 'Obra', field: 'obra_nombre', minWidth: 130,
+        formatter: c => c.getValue() ? `<span style="font-size:12px">🏗 ${c.getValue()}</span>` : '<span style="color:var(--muted)">—</span>' },
+      { title: 'Dept.', field: 'departamento', width: 110,
+        formatter: c => c.getValue() ? `<span class="badge badge-muted">${c.getValue()}</span>` : '—' },
+      { title: 'Reportado por', field: 'reportado_por', minWidth: 130 },
     ]
   });
   document.getElementById('searchIncidencias').oninput = function() {
-    tblIncidencias.setFilter('descripcionCorta', 'like', this.value);
+    tblIncidencias.setFilter([
+      {field:'tituloCorto',type:'like',value:this.value},
+      {field:'reportado_por',type:'like',value:this.value}
+    ],'or');
   };
 }
 
 async function guardarEstadoIncidencia(id, estado) {
   const r = await api(`/incidencias/${id}`, { method: 'PUT', body: JSON.stringify({ estado }) });
-  if (r.ok) toast('Estado actualizado ✓', 'ok'); else toast('Error al guardar', 'err');
+  if (r.ok) { toast('Estado actualizado ✓', 'ok'); cargarIncidencias(); }
+  else toast('Error al guardar', 'err');
 }
 
 function filtrarIncidencias() {
   if (!tblIncidencias) return;
-  const val = document.getElementById('filterIncidencias').value;
-  if (val) tblIncidencias.setFilter('estado', '=', val);
-  else tblIncidencias.clearFilter();
+  const estado   = document.getElementById('filterIncidencias').value;
+  const gravedad = document.getElementById('filterIncGravedad').value;
+  const filters  = [];
+  if (estado)   filters.push({ field:'estado',   type:'=', value: estado });
+  if (gravedad) filters.push({ field:'gravedad', type:'=', value: gravedad });
+  tblIncidencias.clearFilter();
+  filters.forEach(f => tblIncidencias.addFilter(f.field, f.type, f.value));
+}
+
+function verDetalleIncidencia(inc) {
+  const gravedadColor = { alta:'var(--red)', media:'var(--yellow)', baja:'var(--green)' }[inc.gravedad] || 'var(--muted)';
+  const estadoCls = { abierta:'badge-danger', en_progreso:'badge-warn', cerrada:'badge-ok' }[inc.estado] || 'badge-muted';
+  abrirModal(`⚠️ Incidencia #${inc.id}`, `
+    <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap">
+      <span class="badge ${estadoCls}">${(inc.estado||'—').replace('_',' ')}</span>
+      <span style="background:${gravedadColor}22;color:${gravedadColor};border:1px solid ${gravedadColor}44;font-family:'Montserrat',sans-serif;font-weight:700;font-size:10px;padding:2px 8px;border-radius:20px">
+        ${{ alta:'🔴 ALTA', media:'🟠 MEDIA', baja:'🟢 BAJA' }[inc.gravedad] || inc.gravedad}
+      </span>
+      <span class="badge badge-info">${inc.tipo || '—'}</span>
+      ${inc.departamento ? `<span class="badge badge-muted">${inc.departamento}</span>` : ''}
+    </div>
+    <div class="form-group"><div class="form-label">Título</div><div style="font-size:15px;font-weight:600;color:var(--text);padding:8px 0">${inc.titulo || '—'}</div></div>
+    ${inc.descripcion ? `<div class="form-group"><div class="form-label">Descripción</div><div style="padding:10px;background:var(--surface2);border-radius:8px;font-size:13px;line-height:1.6">${inc.descripcion}</div></div>` : ''}
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div class="form-group"><div class="form-label">Obra</div><div style="padding:8px;background:var(--surface2);border-radius:6px">🏗 ${inc.obra_nombre || '—'}</div></div>
+      <div class="form-group"><div class="form-label">Fecha</div><div style="padding:8px;background:var(--surface2);border-radius:6px">${fmtFecha(inc.fecha || inc.created_at)}</div></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div class="form-group"><div class="form-label">Reportado por</div><div style="padding:8px;background:var(--surface2);border-radius:6px">${inc.reportado_por || '—'}</div></div>
+      <div class="form-group"><div class="form-label">Asignado a</div><div style="padding:8px;background:var(--surface2);border-radius:6px">${inc.asignado_a || 'Sin asignar'}</div></div>
+    </div>
+    <div class="form-group" style="margin-top:8px">
+      <div class="form-label">Cambiar estado</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px">
+        <button class="btn btn-secondary btn-sm" onclick="guardarEstadoIncidencia(${inc.id},'abierta');cerrarModal()">🔴 Abierta</button>
+        <button class="btn btn-secondary btn-sm" onclick="guardarEstadoIncidencia(${inc.id},'en_progreso');cerrarModal()">🟠 En progreso</button>
+        <button class="btn btn-secondary btn-sm" onclick="guardarEstadoIncidencia(${inc.id},'cerrada');cerrarModal()">✅ Cerrada</button>
+      </div>
+    </div>
+  `, null);
+  document.getElementById('modalFooter').innerHTML = '<button class="btn btn-secondary" onclick="cerrarModal()">Cerrar</button>';
+}
+
+function abrirModalIncidencia() {
+  const hoy = new Date().toISOString().slice(0, 10);
+  const obrasOpts = _obrasData.filter(o => o.activa == 1).map(o => `<option value="${o.id}">${o.nombre}</option>`).join('');
+  abrirModal('Nueva incidencia', `
+    <div class="form-group"><div class="form-label">Título *</div><input class="form-input" id="mIncTitulo" placeholder="Descripción breve del problema"></div>
+    <div class="form-group"><div class="form-label">Descripción</div><textarea class="form-input" id="mIncDesc" rows="3" placeholder="Detalles adicionales..." style="resize:vertical"></textarea></div>
+    <div class="form-row">
+      <div class="form-group"><div class="form-label">Tipo</div>
+        <select class="form-select" id="mIncTipo">
+          <option value="seguridad">Seguridad</option>
+          <option value="calidad">Calidad</option>
+          <option value="averia">Avería</option>
+          <option value="accidente">Accidente</option>
+          <option value="medio_ambiente">Medio ambiente</option>
+          <option value="otro">Otro</option>
+        </select>
+      </div>
+      <div class="form-group"><div class="form-label">Gravedad</div>
+        <select class="form-select" id="mIncGravedad">
+          <option value="baja">🟢 Baja</option>
+          <option value="media" selected>🟠 Media</option>
+          <option value="alta">🔴 Alta</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><div class="form-label">Obra</div>
+        <select class="form-select" id="mIncObra"><option value="">Sin asignar</option>${obrasOpts}</select>
+      </div>
+      <div class="form-group"><div class="form-label">Fecha</div><input class="form-input" id="mIncFecha" type="date" value="${hoy}"></div>
+    </div>
+    <div class="form-group"><div class="form-label">Asignado a</div><input class="form-input" id="mIncAsig" placeholder="Nombre del responsable"></div>
+  `, async () => {
+    const body = {
+      titulo: document.getElementById('mIncTitulo').value.trim(),
+      descripcion: document.getElementById('mIncDesc').value.trim() || null,
+      tipo: document.getElementById('mIncTipo').value,
+      gravedad: document.getElementById('mIncGravedad').value,
+      obra_id: parseInt(document.getElementById('mIncObra').value) || null,
+      fecha: document.getElementById('mIncFecha').value,
+      asignado_a: document.getElementById('mIncAsig').value.trim() || null,
+    };
+    if (!body.titulo) { toast('El título es obligatorio', 'err'); return; }
+    const r = await api('/incidencias', { method: 'POST', body: JSON.stringify(body) });
+    if (r.ok) { cerrarModal(); toast('Incidencia registrada ✓', 'ok'); tblIncidencias = null; cargarIncidencias(); }
+    else toast(r.error || 'Error al crear', 'err');
+  });
 }
 
 // ── PEDIDOS ────────────────────────────────────────────────────
 let tblPedidos = null;
+let _pedData = [];
+
 async function cargarPedidos() {
-  const r = await api('/pedidos?limit=200');
-  const data = r.pedidos || r.data || [];
-  if (tblPedidos) { tblPedidos.replaceData(data); return; }
+  const r = await api('/pedidos?limit=500&todos=1');
+  _pedData = r.pedidos || r.data || [];
+
+  const pendientes = _pedData.filter(p => p.estado === 'pendiente').length;
+  const aprobados  = _pedData.filter(p => p.estado === 'aprobado').length;
+  const entregados = _pedData.filter(p => p.estado === 'entregado').length;
+  document.getElementById('pedResumen').innerHTML = [
+    { icon:'⏳', value: pendientes, label:'Pendientes', cls: pendientes > 0 ? 'warn' : '' },
+    { icon:'✅', value: aprobados,  label:'Aprobados',  cls: '' },
+    { icon:'📬', value: entregados, label:'Entregados', cls: '' },
+    { icon:'📋', value: _pedData.length, label:'Total', cls: '' },
+  ].map(k => `<div class="kpi-card" style="padding:14px"><div class="kpi-icon" style="font-size:20px">${k.icon}</div><div class="kpi-value ${k.cls}" style="font-size:22px">${k.value}</div><div class="kpi-label">${k.label}</div></div>`).join('');
+
+  if (tblPedidos) { tblPedidos.replaceData(_pedData); return; }
+  const canEdit = ['empresa_admin', 'jefe_de_obra', 'oficina', 'encargado', 'superadmin', 'desarrollador'].includes(SESSION.rol);
+
   tblPedidos = new Tabulator('#tblPedidos', {
-    data, layout: 'fitColumns', pagination: 'local', paginationSize: 20,
+    data: _pedData, layout: 'fitColumns', pagination: 'local', paginationSize: 25,
+    placeholder: '<div class="empty-state"><div class="empty-icon">📦</div><div class="empty-text">Sin pedidos</div></div>',
+    rowClick: (e, row) => verDetallePedido(row.getData()),
     columns: [
-      { title: 'Fecha', field: 'created_at', width: 110, formatter: c => fmtFecha(c.getValue()) },
-      { title: 'Artículo / Descripción', field: 'descripcion', sorter: 'string', minWidth: 220 },
-      { title: 'Proveedor', field: 'proveedor', minWidth: 140 },
-      { title: 'Cantidad', field: 'cantidad', width: 90, hozAlign: 'center' },
-      { title: 'Estado', field: 'estado', width: 120,
+      { title: 'Fecha', field: 'created_at', width: 100, formatter: c => fmtFecha(c.getValue()) },
+      { title: 'Descripción', field: 'descripcion', sorter: 'string', minWidth: 220 },
+      { title: 'Proveedor', field: 'proveedor', minWidth: 130 },
+      { title: 'Cant.', field: 'cantidad', width: 70, hozAlign: 'center',
+        formatter: c => `${c.getValue() || 1} ${c.getRow().getData().unidad || 'ud'}` },
+      { title: 'Estado', field: 'estado', width: 130,
+        editor: canEdit ? 'select' : false,
+        editorParams: { values: { pendiente:'Pendiente', aprobado:'Aprobado', entregado:'Entregado', cancelado:'Cancelado' } },
         formatter: c => {
           const v = c.getValue();
           const cls = { pendiente:'warn', aprobado:'info', entregado:'ok', cancelado:'danger' }[v] || 'muted';
           return `<span class="badge badge-${cls}">${v || '—'}</span>`;
-        }
+        },
+        cellEdited: c => guardarEstadoPedido(c.getRow().getData().id, c.getValue())
       },
-      { title: 'Obra', field: 'obra_nombre', minWidth: 140 },
+      { title: 'Obra', field: 'obra_nombre', minWidth: 130,
+        formatter: c => c.getValue() ? `<span style="font-size:12px">🏗 ${c.getValue()}</span>` : '<span style="color:var(--muted)">—</span>' },
+      { title: 'Dept.', field: 'departamento', width: 110,
+        formatter: c => c.getValue() ? `<span class="badge badge-muted">${c.getValue()}</span>` : '—' },
+      { title: 'Solicitado por', field: 'solicitado_por', minWidth: 130 },
     ]
   });
   document.getElementById('searchPedidos').oninput = function() {
-    tblPedidos.setFilter('descripcion', 'like', this.value);
+    tblPedidos.setFilter([
+      {field:'descripcion',type:'like',value:this.value},
+      {field:'proveedor',type:'like',value:this.value},
+      {field:'solicitado_por',type:'like',value:this.value}
+    ],'or');
   };
+}
+
+async function guardarEstadoPedido(id, estado) {
+  const r = await api(`/pedidos/${id}`, { method: 'PUT', body: JSON.stringify({ estado }) });
+  if (r.ok) { toast('Estado actualizado ✓', 'ok'); cargarPedidos(); }
+  else toast('Error al guardar', 'err');
 }
 
 function filtrarPedidos() {
@@ -2067,27 +2340,182 @@ function filtrarPedidos() {
   else tblPedidos.clearFilter();
 }
 
+function verDetallePedido(p) {
+  const estadoCls = { pendiente:'badge-warn', aprobado:'badge-info', entregado:'badge-ok', cancelado:'badge-danger' }[p.estado] || 'badge-muted';
+  abrirModal(`📦 Pedido #${p.id}`, `
+    <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+      <span class="badge ${estadoCls}">${p.estado || '—'}</span>
+      ${p.departamento ? `<span class="badge badge-muted">${p.departamento}</span>` : ''}
+    </div>
+    <div class="form-group"><div class="form-label">Descripción / Artículo</div><div style="font-size:14px;font-weight:600;padding:8px 0;color:var(--text)">${p.descripcion || '—'}</div></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div class="form-group"><div class="form-label">Referencia</div><div style="padding:8px;background:var(--surface2);border-radius:6px">${p.referencia || '—'}</div></div>
+      <div class="form-group"><div class="form-label">Cantidad</div><div style="padding:8px;background:var(--surface2);border-radius:6px">${p.cantidad || 1} ${p.unidad || 'ud'}</div></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div class="form-group"><div class="form-label">Proveedor</div><div style="padding:8px;background:var(--surface2);border-radius:6px">${p.proveedor || '—'}</div></div>
+      <div class="form-group"><div class="form-label">Obra</div><div style="padding:8px;background:var(--surface2);border-radius:6px">🏗 ${p.obra_nombre || '—'}</div></div>
+    </div>
+    ${p.notas ? `<div class="form-group"><div class="form-label">Notas</div><div style="padding:10px;background:var(--surface2);border-radius:8px;font-size:13px">${p.notas}</div></div>` : ''}
+    <div class="form-group"><div class="form-label">Solicitado por</div><div style="padding:8px;background:var(--surface2);border-radius:6px">${p.solicitado_por || '—'}</div></div>
+    <div class="form-group" style="margin-top:8px">
+      <div class="form-label">Cambiar estado</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px">
+        <button class="btn btn-secondary btn-sm" onclick="guardarEstadoPedido(${p.id},'pendiente');cerrarModal()">⏳ Pendiente</button>
+        <button class="btn btn-secondary btn-sm" onclick="guardarEstadoPedido(${p.id},'aprobado');cerrarModal()">✅ Aprobado</button>
+        <button class="btn btn-secondary btn-sm" onclick="guardarEstadoPedido(${p.id},'entregado');cerrarModal()">📬 Entregado</button>
+        <button class="btn btn-danger btn-sm"   onclick="guardarEstadoPedido(${p.id},'cancelado');cerrarModal()">✕ Cancelado</button>
+      </div>
+    </div>
+  `, null);
+  document.getElementById('modalFooter').innerHTML = '<button class="btn btn-secondary" onclick="cerrarModal()">Cerrar</button>';
+}
+
+function abrirModalPedido() {
+  const obrasOpts = _obrasData.filter(o => o.activa == 1).map(o => `<option value="${o.id}">${o.nombre}</option>`).join('');
+  abrirModal('Nuevo pedido', `
+    <div class="form-group"><div class="form-label">Descripción / Artículo *</div><input class="form-input" id="mPedDesc" placeholder="Cable 25mm² Cu, Clavijas, Herramienta..."></div>
+    <div class="form-row">
+      <div class="form-group"><div class="form-label">Referencia</div><input class="form-input" id="mPedRef" placeholder="REF-001"></div>
+      <div class="form-group"><div class="form-label">Proveedor</div><input class="form-input" id="mPedProv" placeholder="Rexel, Schneider..."></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><div class="form-label">Cantidad</div><input class="form-input" id="mPedCant" type="number" value="1" min="1"></div>
+      <div class="form-group"><div class="form-label">Unidad</div>
+        <select class="form-select" id="mPedUnidad">
+          <option value="ud">ud</option><option value="m">m</option><option value="kg">kg</option>
+          <option value="caja">caja</option><option value="rollo">rollo</option><option value="litro">litro</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-group"><div class="form-label">Obra</div>
+      <select class="form-select" id="mPedObra"><option value="">Sin asignar</option>${obrasOpts}</select>
+    </div>
+    <div class="form-group"><div class="form-label">Notas</div><textarea class="form-input" id="mPedNotas" rows="2" placeholder="Indicaciones adicionales..." style="resize:vertical"></textarea></div>
+  `, async () => {
+    const body = {
+      descripcion: document.getElementById('mPedDesc').value.trim(),
+      referencia: document.getElementById('mPedRef').value.trim() || null,
+      proveedor: document.getElementById('mPedProv').value.trim() || null,
+      cantidad: parseFloat(document.getElementById('mPedCant').value) || 1,
+      unidad: document.getElementById('mPedUnidad').value,
+      obra_id: parseInt(document.getElementById('mPedObra').value) || null,
+      notas: document.getElementById('mPedNotas').value.trim() || null,
+      solicitado_por: SESSION.nombre,
+    };
+    if (!body.descripcion) { toast('La descripción es obligatoria', 'err'); return; }
+    const r = await api('/pedidos', { method: 'POST', body: JSON.stringify(body) });
+    if (r.ok) { cerrarModal(); toast('Pedido creado ✓', 'ok'); tblPedidos = null; cargarPedidos(); }
+    else toast(r.error || 'Error al crear', 'err');
+  });
+}
+
 // ── MANTENIMIENTOS ─────────────────────────────────────────────
 let tblMantenimientos = null;
+
 async function cargarMantenimientos() {
   const r = await api('/mantenimientos');
-  const data = r.mantenimientos || r.data || [];
+  const data = (r.registros || r.mantenimientos || r.data || []).map(m => ({
+    ...m,
+    equipo_nombre: m.equipo_nombre || m.matricula || '—',
+    tipo: m.tipo_mant || m.tipo || '—',
+    fecha: m.fecha_mant || m.fecha,
+  }));
+
+  const total       = data.length;
+  const costeTotal  = data.reduce((s, m) => s + (parseFloat(m.coste) || 0), 0);
+  const esteMes     = data.filter(m => {
+    const f = m.fecha; if (!f) return false;
+    const hoy = new Date();
+    return f.startsWith(`${hoy.getFullYear()}-${String(hoy.getMonth()+1).padStart(2,'0')}`);
+  }).length;
+  document.getElementById('mantResumen').innerHTML = [
+    { icon:'🔩', value: total,               label:'Total registros', cls: '' },
+    { icon:'📅', value: esteMes,             label:'Este mes',        cls: '' },
+    { icon:'💶', value: costeTotal.toFixed(2)+'€', label:'Coste total', cls: '' },
+  ].map(k => `<div class="kpi-card" style="padding:14px"><div class="kpi-icon" style="font-size:20px">${k.icon}</div><div class="kpi-value" style="font-size:20px">${k.value}</div><div class="kpi-label">${k.label}</div></div>`).join('');
+
   if (tblMantenimientos) { tblMantenimientos.replaceData(data); return; }
   tblMantenimientos = new Tabulator('#tblMantenimientos', {
-    data, layout: 'fitColumns', pagination: 'local', paginationSize: 20,
+    data, layout: 'fitColumns', pagination: 'local', paginationSize: 25,
+    placeholder: '<div class="empty-state"><div class="empty-icon">🔩</div><div class="empty-text">Sin registros de mantenimiento</div></div>',
     columns: [
-      { title: 'Fecha', field: 'fecha', width: 110, formatter: c => fmtFecha(c.getValue()) },
-      { title: 'Equipo', field: 'equipo_nombre', sorter: 'string', minWidth: 160 },
-      { title: 'Tipo', field: 'tipo', minWidth: 120 },
+      { title: 'Fecha', field: 'fecha', width: 100, sorter: 'string', formatter: c => fmtFecha(c.getValue()) },
+      { title: 'Tipo equipo', field: 'tipo_equipo', width: 120,
+        formatter: c => c.getValue() ? `<span class="badge badge-info">${c.getValue()}</span>` : '—' },
+      { title: 'Matrícula / ID', field: 'equipo_nombre', minWidth: 140 },
+      { title: 'Tipo mant.', field: 'tipo', minWidth: 120,
+        formatter: c => `<span class="badge badge-muted">${c.getValue() || '—'}</span>` },
       { title: 'Descripción', field: 'descripcion', minWidth: 220 },
-      { title: 'Técnico', field: 'tecnico', minWidth: 140 },
-      { title: 'Coste (€)', field: 'coste', width: 100, hozAlign: 'right',
+      { title: 'Técnico', field: 'tecnico', minWidth: 130 },
+      { title: 'Coste', field: 'coste', width: 100, hozAlign: 'right',
         formatter: c => c.getValue() != null ? `${parseFloat(c.getValue()).toFixed(2)} €` : '—' },
     ]
   });
   document.getElementById('searchMantenimientos').oninput = function() {
-    tblMantenimientos.setFilter([{field:'equipo_nombre',type:'like',value:this.value},{field:'descripcion',type:'like',value:this.value}],'or');
+    tblMantenimientos.setFilter([
+      {field:'equipo_nombre',type:'like',value:this.value},
+      {field:'descripcion',type:'like',value:this.value},
+      {field:'matricula',type:'like',value:this.value}
+    ],'or');
   };
+}
+
+function filtrarMantenimientos() {
+  if (!tblMantenimientos) return;
+  const val = document.getElementById('filterMantTipo').value;
+  if (val) tblMantenimientos.setFilter('tipo_equipo', '=', val);
+  else tblMantenimientos.clearFilter();
+}
+
+function abrirModalMantenimiento() {
+  const hoy = new Date().toISOString().slice(0, 10);
+  abrirModal('Nuevo registro de mantenimiento', `
+    <div class="form-row">
+      <div class="form-group"><div class="form-label">Tipo de equipo *</div>
+        <select class="form-select" id="mMantTipoEq">
+          <option value="pemp">PEMP</option>
+          <option value="carretilla">Carretilla</option>
+          <option value="bobina">Bobina</option>
+          <option value="herramienta">Herramienta</option>
+          <option value="vehiculo">Vehículo</option>
+          <option value="otro">Otro</option>
+        </select>
+      </div>
+      <div class="form-group"><div class="form-label">Matrícula / ID *</div><input class="form-input" id="mMantMat" placeholder="1234ABC o ID"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><div class="form-label">Tipo mantenimiento</div>
+        <select class="form-select" id="mMantTipo">
+          <option value="preventivo">Preventivo</option>
+          <option value="correctivo">Correctivo</option>
+          <option value="revision">Revisión</option>
+          <option value="ITV">ITV</option>
+          <option value="limpieza">Limpieza</option>
+        </select>
+      </div>
+      <div class="form-group"><div class="form-label">Fecha *</div><input class="form-input" id="mMantFecha" type="date" value="${hoy}"></div>
+    </div>
+    <div class="form-group"><div class="form-label">Descripción</div><textarea class="form-input" id="mMantDesc" rows="3" placeholder="Trabajo realizado..." style="resize:vertical"></textarea></div>
+    <div class="form-row">
+      <div class="form-group"><div class="form-label">Técnico</div><input class="form-input" id="mMantTec" placeholder="Nombre del técnico"></div>
+      <div class="form-group"><div class="form-label">Coste (€)</div><input class="form-input" id="mMantCoste" type="number" step="0.01" placeholder="0.00"></div>
+    </div>
+  `, async () => {
+    const body = {
+      tipo_equipo: document.getElementById('mMantTipoEq').value,
+      matricula: document.getElementById('mMantMat').value.trim(),
+      tipo_mant: document.getElementById('mMantTipo').value,
+      fecha_mant: document.getElementById('mMantFecha').value,
+      descripcion: document.getElementById('mMantDesc').value.trim() || null,
+      tecnico: document.getElementById('mMantTec').value.trim() || null,
+      coste: parseFloat(document.getElementById('mMantCoste').value) || null,
+    };
+    if (!body.matricula || !body.fecha_mant) { toast('Matrícula y fecha son obligatorias', 'err'); return; }
+    const r = await api('/mantenimientos', { method: 'POST', body: JSON.stringify(body) });
+    if (r.ok) { cerrarModal(); toast('Registro creado ✓', 'ok'); tblMantenimientos = null; cargarMantenimientos(); }
+    else toast(r.error || 'Error al crear', 'err');
+  });
 }
 
 // ── USUARIOS (admin) ───────────────────────────────────────────

@@ -323,6 +323,7 @@ export default {
       // ── Obras ──────────────────────────────────────────────────────────────
       if (path === '/obras'       && method === 'GET')    return await getObras(request, env);
       if (path === '/obras'       && method === 'POST')   return await crearObra(request, env);
+      if (path.startsWith('/obras/') && method === 'PUT')    return await actualizarObra(path.split('/obras/')[1], request, env);
       if (path.startsWith('/obras/') && method === 'DELETE') return await eliminarObra(path.split('/obras/')[1], request, env);
 
       // ── Bobinas ───────────────────────────────────────────────────────────
@@ -1045,9 +1046,14 @@ async function getComparativaObras(request, env) {
 // ════════════════════════════════════════════════════════════════════════════
 
 async function getObras(request, env) {
-  const { isSuperadmin, isAdmin, isEmpresaAdmin, empresa_id } = await getAuth(request, env);
-  if (!isSuperadmin && !isAdmin && !isEmpresaAdmin) return err('No autorizado', 403);
-  const { results } = await env.DB.prepare('SELECT * FROM obras WHERE empresa_id = ? AND activa = 1 ORDER BY nombre').bind(empresa_id).all();
+  const { isSuperadmin, isAdmin, isEmpresaAdmin, isJefeObra, empresa_id } = await getAuth(request, env);
+  if (!isSuperadmin && !isAdmin && !isEmpresaAdmin && !isJefeObra) return err('No autorizado', 403);
+  const url   = new URL(request.url);
+  const todas = url.searchParams.get('todas') === '1';
+  let sql = 'SELECT * FROM obras WHERE empresa_id = ?';
+  if (!todas) sql += ' AND activa = 1';
+  sql += ' ORDER BY activa DESC, nombre';
+  const { results } = await env.DB.prepare(sql).bind(empresa_id).all();
   return json(results);
 }
 
@@ -1064,6 +1070,21 @@ async function crearObra(request, env) {
     if (e.message.includes('UNIQUE')) return err(`El código "${codigo}" ya existe`, 409);
     throw e;
   }
+}
+
+async function actualizarObra(id, request, env) {
+  const { isSuperadmin, isAdmin, isEmpresaAdmin, isJefeObra, empresa_id } = await getAuth(request, env);
+  if (!isSuperadmin && !isAdmin && !isEmpresaAdmin && !isJefeObra) return err('No autorizado', 403);
+  const body = await request.json().catch(() => ({}));
+  const campos = ['nombre', 'codigo', 'direccion', 'responsable', 'fecha_inicio', 'fecha_fin', 'activa'];
+  const sets = []; const vals = [];
+  for (const c of campos) {
+    if (c in body) { sets.push(`${c} = ?`); vals.push(body[c]); }
+  }
+  if (!sets.length) return err('Nada que actualizar', 400);
+  vals.push(parseInt(id)); vals.push(empresa_id);
+  await env.DB.prepare(`UPDATE obras SET ${sets.join(', ')} WHERE id = ? AND empresa_id = ?`).bind(...vals).run();
+  return json({ ok: true });
 }
 
 async function eliminarObra(id, request, env) {
@@ -2194,18 +2215,19 @@ async function adminBorrarLoginAttempts(request, env) {
 // ════════════════════════════════════════════════════════════════════════════
 
 async function getPedidos(request, env) {
-  const { empresa_id, isSuperadmin, isEmpresaAdmin, departamento } = await getAuth(request, env);
+  const auth = await getAuth(request, env);
+  const { empresa_id, isSuperadmin, isEmpresaAdmin, isJefeObra, isDesarrollador, departamento } = auth;
   if (!empresa_id) return err('No autorizado', 403);
   const url = new URL(request.url);
   const estadoFilter = url.searchParams.get('estado');
   const obraFilter   = url.searchParams.get('obra_id');
+  const todos        = url.searchParams.get('todos') === '1' && (isSuperadmin || isEmpresaAdmin || isJefeObra || isDesarrollador);
 
   let sql = 'SELECT p.*, o.nombre as obra_nombre FROM pedidos p LEFT JOIN obras o ON p.obra_id = o.id WHERE p.empresa_id = ?';
   const params = [empresa_id];
-  sql += ' AND p.departamento = ?';
-  params.push(departamento || 'electrico');
-  if (estadoFilter) { sql += ' AND p.estado = ?';   params.push(estadoFilter); }
-  if (obraFilter)   { sql += ' AND p.obra_id = ?';  params.push(parseInt(obraFilter)); }
+  if (!todos) { sql += ' AND p.departamento = ?'; params.push(departamento || 'electrico'); }
+  if (estadoFilter) { sql += ' AND p.estado = ?';  params.push(estadoFilter); }
+  if (obraFilter)   { sql += ' AND p.obra_id = ?'; params.push(parseInt(obraFilter)); }
   sql += ' ORDER BY p.created_at DESC LIMIT 500';
   const { results } = await env.DB.prepare(sql).bind(...params).all();
   return json(results);
@@ -4813,18 +4835,23 @@ async function eliminarEvento(id, request, env) {
 // ── Incidencias (NEW-22) ──────────────────────────────────────────────────────
 
 async function getIncidencias(request, env) {
-  const { empresa_id, departamento } = await getAuth(request, env);
+  const auth = await getAuth(request, env);
+  const { empresa_id, departamento, isSuperadmin, isEmpresaAdmin, isJefeObra, isDesarrollador } = auth;
   if (!empresa_id) return err('No autorizado', 403);
   const url = new URL(request.url);
   let sql = 'SELECT i.*, o.nombre as obra_nombre FROM incidencias i LEFT JOIN obras o ON i.obra_id = o.id WHERE i.empresa_id = ?';
   const params = [empresa_id];
-  const dept = url.searchParams.get('departamento') || departamento;
-  if (dept) { sql += ' AND i.departamento = ?'; params.push(dept); }
+  // sin_dept=1 → admins/jefes pueden ver todas las incidencias sin filtrar por dept
+  const sinDept = url.searchParams.get('sin_dept') === '1' && (isSuperadmin || isEmpresaAdmin || isJefeObra || isDesarrollador);
+  if (!sinDept) {
+    const dept = url.searchParams.get('departamento') || departamento;
+    if (dept) { sql += ' AND i.departamento = ?'; params.push(dept); }
+  }
   const estado = url.searchParams.get('estado');
   if (estado) { sql += ' AND i.estado = ?'; params.push(estado); }
   const obra_id = url.searchParams.get('obra_id');
   if (obra_id) { sql += ' AND i.obra_id = ?'; params.push(parseInt(obra_id)); }
-  sql += ' ORDER BY i.created_at DESC';
+  sql += ' ORDER BY i.created_at DESC LIMIT 500';
   const { results } = await env.DB.prepare(sql).bind(...params).all();
   return json(results);
 }
