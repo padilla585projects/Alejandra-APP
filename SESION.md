@@ -7,12 +7,26 @@
 
 **Sesión:** LIBRE
 **Última sesión:** 05/05/2026
-**Versión tras última sesión:** v5.40 + panel web v0.7 (Fases 1-7 completas)
-**Worker desplegado:** eaf862c1-97ca-4931-9bcf-2695590decf8
+**Versión tras última sesión:** v5.40 + panel web v0.8 (Fases 1-7 + recuperar pass)
+**Worker desplegado:** 8e7dddec-66c4-43f2-80c3-ce95456c10b2
 **GitHub:** en sync ✅
 **Panel web:** https://padilla585projects.github.io/Alejandra-APP/panel.html ✅ FUNCIONA
 
 ---
+
+## RESUMEN SESIÓN 05/05/2026 (panel web v0.8 — Recuperación de contraseña Resend)
+
+- **Recuperar contraseña** vía email (Resend API):
+  · Worker: `POST /recuperar-pass` → genera token hex 32 chars, tabla `reset_tokens` (expira 2h),
+    envía email HTML branded con botón naranja vía Resend API
+  · Worker: `POST /resetear-pass` → verifica token, actualiza password (SHA-256), invalida sesiones
+  · Panel: enlace "¿Olvidaste tu contraseña?" en login, overlay solicitar email con feedback
+  · Panel: overlay nueva contraseña (detecta `?reset_token=` en URL al abrir desde email)
+  · Resend API key guardada como secret en Cloudflare (`RESEND_API_KEY`) — nunca en código
+  · Cuenta Resend registrada con GitHub, sender actual: `onboarding@resend.dev`
+- **Pendiente RGPD**: plan de protección de datos para empresas (sesión dedicada)
+- Worker ID: 8e7dddec-66c4-43f2-80c3-ce95456c10b2
+- GitHub: en sync ✅
 
 ## RESUMEN SESIÓN 05/05/2026 (panel web v0.7 — Fases 4-7: DevTools + Fase5 + Admin + Analítica)
 
