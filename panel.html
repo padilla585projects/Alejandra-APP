@@ -8,6 +8,9 @@
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700;900&family=Poppins:wght@400;500;600&display=swap" rel="stylesheet">
 <link href="https://unpkg.com/tabulator-tables@6.3.0/dist/css/tabulator_midnight.min.css" rel="stylesheet">
 <script src="https://unpkg.com/tabulator-tables@6.3.0/dist/js/tabulator.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <style>
 :root {
   --bg:#0f172a; --surface:#162032; --surface2:#1e2d40;
@@ -326,6 +329,11 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
       <span class="nav-icon">🔩</span> Mantenimientos
     </button>
 
+    <div class="sidebar-section">Analítica</div>
+    <button class="nav-item" data-page="graficas" onclick="navTo('graficas')">
+      <span class="nav-icon">📊</span> Gráficas
+    </button>
+
     <div class="sidebar-section nav-admin-section" style="display:none">Admin</div>
     <button class="nav-item nav-admin" data-page="usuarios" onclick="navTo('usuarios')" style="display:none">
       <span class="nav-icon">👤</span> Usuarios
@@ -363,6 +371,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
         <span id="topbarName">—</span>
         <span class="rol-badge" id="topbarRol"></span>
       </div>
+      <button class="topbar-btn" id="btnBuscar" onclick="abrirBusqueda()" title="Búsqueda global" style="display:none">🔍</button>
       <button class="topbar-btn" onclick="notifAbrir()" style="position:relative" title="Notificaciones">
         🔔<span id="notifBadge" style="display:none;position:absolute;top:-4px;right:-4px;background:var(--red);color:#fff;font-family:'Montserrat',sans-serif;font-weight:900;font-size:9px;padding:1px 5px;border-radius:10px">0</span>
       </button>
@@ -617,6 +626,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
           </select>
           <button class="btn btn-primary" onclick="abrirModalIncidencia()">+ Nueva incidencia</button>
           <button class="btn btn-secondary" onclick="exportarTabla(tblIncidencias,'incidencias')">⬇ CSV</button>
+          <button class="btn btn-secondary" onclick="exportarPDFIncidencias()">📄 PDF</button>
           <button class="btn btn-secondary" onclick="tblIncidencias=null;cargarIncidencias()">🔄 Actualizar</button>
         </div>
         <div class="tbl-wrap"><div id="tblIncidencias"></div></div>
@@ -638,6 +648,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
           </select>
           <button class="btn btn-primary" onclick="abrirModalPedido()">+ Nuevo pedido</button>
           <button class="btn btn-secondary" onclick="exportarTabla(tblPedidos,'pedidos')">⬇ CSV</button>
+          <button class="btn btn-secondary" onclick="exportarPDFPedidos()">📄 PDF</button>
           <button class="btn btn-secondary" onclick="tblPedidos=null;cargarPedidos()">🔄 Actualizar</button>
         </div>
         <div class="tbl-wrap"><div id="tblPedidos"></div></div>
@@ -870,9 +881,53 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
         </div>
       </div>
 
+      <!-- GRÁFICAS -->
+      <div class="page" id="pageGraficas">
+        <div style="display:flex;align-items:center;gap:14px;margin-bottom:6px">
+          <div class="page-title" style="margin-bottom:0">📊 Gráficas</div>
+          <button class="btn btn-secondary btn-sm" onclick="cargarGraficas()">🔄 Actualizar</button>
+          <button class="btn btn-primary btn-sm" onclick="exportarPDFGraficas()">📄 PDF Resumen</button>
+        </div>
+        <div class="page-sub">Analítica visual — equipos, fichajes, incidencias, pedidos</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:16px">
+          <div class="section-card">
+            <div class="section-card-title"><span>📅</span> Fichajes últimos 7 días</div>
+            <canvas id="chartFichajes" style="max-height:220px"></canvas>
+          </div>
+          <div class="section-card">
+            <div class="section-card-title"><span>⚠️</span> Incidencias por estado</div>
+            <canvas id="chartIncidencias" style="max-height:220px"></canvas>
+          </div>
+          <div class="section-card">
+            <div class="section-card-title"><span>📦</span> Pedidos por estado</div>
+            <canvas id="chartPedidos" style="max-height:220px"></canvas>
+          </div>
+          <div class="section-card">
+            <div class="section-card-title"><span>🔌</span> Equipos por estado (bobinas / PEMP / carretillas)</div>
+            <canvas id="chartEquipos" style="max-height:220px"></canvas>
+          </div>
+        </div>
+        <div id="graficasEmpty" style="display:none" class="empty-state"><div class="empty-icon">📊</div><div class="empty-text">Sin datos suficientes para mostrar gráficas</div></div>
+      </div>
+
     </div><!-- /content -->
   </div><!-- /mainArea -->
 </div><!-- /appShell -->
+
+<!-- BÚSQUEDA GLOBAL -->
+<div id="searchOverlay" onclick="if(event.target===this)cerrarBusqueda()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:3000;align-items:flex-start;justify-content:center;padding-top:80px">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;width:100%;max-width:620px;padding:20px;box-shadow:0 24px 60px rgba(0,0,0,.6)">
+    <div style="display:flex;gap:10px;margin-bottom:16px">
+      <input id="searchInput" type="text" placeholder="🔍 Buscar usuarios, equipos, obras, incidencias, pedidos..."
+             style="flex:1;padding:11px 14px;background:var(--surface2);border:2px solid var(--border);border-radius:10px;color:var(--text);font-family:'Poppins',sans-serif;font-size:14px;outline:none;transition:border-color .2s"
+             oninput="buscarGlobalDebounce()" onkeydown="if(event.key==='Escape')cerrarBusqueda()">
+      <button class="btn btn-secondary" onclick="cerrarBusqueda()" style="flex-shrink:0">✕ Cerrar</button>
+    </div>
+    <div id="searchResults">
+      <div class="empty-state" style="padding:24px 0"><div class="empty-icon" style="font-size:32px">🔍</div><div class="empty-text">Escribe al menos 2 caracteres para buscar</div></div>
+    </div>
+  </div>
+</div>
 
 <!-- CHAT FLOTANTE -->
 <div id="chatPanel" style="display:none;position:fixed;bottom:20px;right:20px;width:360px;height:520px;background:var(--surface);border:1px solid var(--border);border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,.5);z-index:800;display:none;flex-direction:column">
@@ -1132,6 +1187,9 @@ function iniciarApp() {
     document.getElementById('seccionEmpresas').style.display = '';
   }
 
+  // mostrar búsqueda global
+  document.getElementById('btnBuscar').style.display = '';
+
   // responsive toggle
   if (window.innerWidth <= 900) document.getElementById('btnMenuToggle').style.display = '';
 
@@ -1176,6 +1234,7 @@ const PAGE_LOADERS = {
   empresa: cargarEmpresa,
   logs: renderLogs,
   devtools: cargarDevtools,
+  graficas: cargarGraficas,
 };
 
 let currentPage = '';
@@ -3609,6 +3668,293 @@ async function devBorrarLoginAttempts() {
   const r = await api('/admin/login-attempts', { method: 'DELETE' });
   if (r.ok) devLog(`login_attempts limpiado ✓ (${r.borrados || 0} filas)`, 'ok');
   else devLog(`Error: ${r.error || 'sin respuesta (puede que el endpoint no exista aún)'}`, 'err');
+}
+
+// ════════════════════════════════════════════════════════════════
+// GRÁFICAS (Chart.js)
+// ════════════════════════════════════════════════════════════════
+let _charts = {};
+
+function _destroyChart(id) {
+  if (_charts[id]) { _charts[id].destroy(); delete _charts[id]; }
+}
+
+const CHART_COLORS = {
+  blue:   'rgba(37,99,235,.8)',
+  green:  'rgba(34,197,94,.8)',
+  yellow: 'rgba(234,179,8,.8)',
+  red:    'rgba(239,68,68,.8)',
+  purple: 'rgba(168,85,247,.8)',
+  orange: 'rgba(249,115,22,.8)',
+  gray:   'rgba(100,116,139,.8)',
+};
+
+function _chartDefaults() {
+  return {
+    plugins: { legend: { labels: { color: '#e5e7eb', font: { family: 'Poppins' } } } },
+    scales: { x: { ticks: { color: '#94a3b8' }, grid: { color: 'rgba(51,65,85,.5)' } },
+               y: { ticks: { color: '#94a3b8' }, grid: { color: 'rgba(51,65,85,.5)' }, beginAtZero: true } }
+  };
+}
+
+async function cargarGraficas() {
+  const r = await api('/graficas');
+  if (!r.ok && !r.fichajes_dia) { toast('Error cargando gráficas', 'err'); return; }
+
+  // ── Fichajes últimos 7 días ──
+  const dias7 = [];
+  const hoy = new Date();
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(hoy); d.setDate(d.getDate() - i);
+    dias7.push(d.toISOString().slice(0, 10));
+  }
+  const fichajesMap = {};
+  (r.fichajes_dia || []).forEach(f => fichajesMap[f.dia] = f.n);
+  const fichajesData = dias7.map(d => fichajesMap[d] || 0);
+  const diasLabel = dias7.map(d => {
+    const [, m, dd] = d.split('-');
+    return `${parseInt(dd)}/${parseInt(m)}`;
+  });
+
+  _destroyChart('fichajes');
+  _charts.fichajes = new Chart(document.getElementById('chartFichajes'), {
+    type: 'bar',
+    data: {
+      labels: diasLabel,
+      datasets: [{ label: 'Fichajes', data: fichajesData,
+        backgroundColor: dias7.map((_, i) => i === 6 ? CHART_COLORS.orange : CHART_COLORS.blue),
+        borderRadius: 6 }]
+    },
+    options: { ..._chartDefaults(), plugins: { legend: { display: false } } }
+  });
+
+  // ── Incidencias por estado ──
+  const incData = r.incidencias_estado || [];
+  const incColors = { abierta: CHART_COLORS.red, en_proceso: CHART_COLORS.yellow, cerrada: CHART_COLORS.green, resuelta: CHART_COLORS.blue };
+  _destroyChart('incidencias');
+  if (incData.length) {
+    _charts.incidencias = new Chart(document.getElementById('chartIncidencias'), {
+      type: 'doughnut',
+      data: {
+        labels: incData.map(x => x.estado),
+        datasets: [{ data: incData.map(x => x.n),
+          backgroundColor: incData.map(x => incColors[x.estado] || CHART_COLORS.gray),
+          borderWidth: 2, borderColor: '#162032' }]
+      },
+      options: { plugins: { legend: { labels: { color: '#e5e7eb', font: { family: 'Poppins' } } } } }
+    });
+  }
+
+  // ── Pedidos por estado ──
+  const pedData = r.pedidos_estado || [];
+  const pedColors = { pendiente: CHART_COLORS.yellow, en_curso: CHART_COLORS.blue, recibido: CHART_COLORS.green, cancelado: CHART_COLORS.gray };
+  _destroyChart('pedidos');
+  if (pedData.length) {
+    _charts.pedidos = new Chart(document.getElementById('chartPedidos'), {
+      type: 'doughnut',
+      data: {
+        labels: pedData.map(x => x.estado),
+        datasets: [{ data: pedData.map(x => x.n),
+          backgroundColor: pedData.map(x => pedColors[x.estado] || CHART_COLORS.purple),
+          borderWidth: 2, borderColor: '#162032' }]
+      },
+      options: { plugins: { legend: { labels: { color: '#e5e7eb', font: { family: 'Poppins' } } } } }
+    });
+  }
+
+  // ── Equipos (bobinas / PEMP / carretillas) por estado ──
+  const equipos = [];
+  const colorEquipo = { activa: CHART_COLORS.green, mantenimiento: CHART_COLORS.yellow, averiada: CHART_COLORS.red, devuelta: CHART_COLORS.blue, baja: CHART_COLORS.gray };
+  const allEstados = [...new Set([
+    ...(r.bobinas_estado || []).map(x => x.estado),
+    ...(r.pemp_estado || []).map(x => x.estado),
+    ...(r.carretillas_estado || []).map(x => x.estado),
+  ])];
+  const bobMap = {}; (r.bobinas_estado || []).forEach(x => bobMap[x.estado] = x.n);
+  const pempMap = {}; (r.pemp_estado || []).forEach(x => pempMap[x.estado] = x.n);
+  const carrMap = {}; (r.carretillas_estado || []).forEach(x => carrMap[x.estado] = x.n);
+
+  _destroyChart('equipos');
+  if (allEstados.length) {
+    _charts.equipos = new Chart(document.getElementById('chartEquipos'), {
+      type: 'bar',
+      data: {
+        labels: allEstados,
+        datasets: [
+          { label: 'Bobinas', data: allEstados.map(e => bobMap[e] || 0), backgroundColor: CHART_COLORS.blue, borderRadius: 4 },
+          { label: 'PEMP', data: allEstados.map(e => pempMap[e] || 0), backgroundColor: CHART_COLORS.orange, borderRadius: 4 },
+          { label: 'Carretillas', data: allEstados.map(e => carrMap[e] || 0), backgroundColor: CHART_COLORS.green, borderRadius: 4 },
+        ]
+      },
+      options: { ..._chartDefaults() }
+    });
+  }
+}
+
+// ── PDF Resumen Gráficas ──────────────────────────────────────
+async function exportarPDFGraficas() {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: 'landscape' });
+  const hoy = new Date().toLocaleDateString('es-ES');
+  const empresa = SESSION.empresa_nombre || 'Mi empresa';
+
+  doc.setFontSize(18); doc.setTextColor(249, 115, 22);
+  doc.text('Alejandra Office — Resumen Gráficas', 14, 18);
+  doc.setFontSize(11); doc.setTextColor(100, 116, 139);
+  doc.text(`${empresa} · Generado: ${hoy}`, 14, 26);
+
+  // Capturar canvas como imagen
+  let y = 35;
+  const canvases = ['chartFichajes', 'chartIncidencias', 'chartPedidos', 'chartEquipos'];
+  const titles = ['Fichajes últimos 7 días', 'Incidencias por estado', 'Pedidos por estado', 'Equipos por estado'];
+  const cols = [[14, 155], [155, 14]]; // x positions for 2-column layout
+
+  for (let i = 0; i < canvases.length; i++) {
+    const canvas = document.getElementById(canvases[i]);
+    if (!canvas || !_charts[canvases[i].replace('chart', '').toLowerCase()]) continue;
+    const imgData = canvas.toDataURL('image/png');
+    const col = i % 2;
+    const row = Math.floor(i / 2);
+    const xPos = col === 0 ? 14 : 155;
+    const yPos = 35 + row * 105;
+    doc.setFontSize(10); doc.setTextColor(229, 231, 235);
+    doc.text(titles[i], xPos, yPos);
+    doc.addImage(imgData, 'PNG', xPos, yPos + 4, 135, 90);
+  }
+
+  doc.save(`alejandra-graficas-${hoy.replace(/\//g, '-')}.pdf`);
+  toast('PDF generado ✓', 'ok');
+}
+
+// ── PDF Incidencias ───────────────────────────────────────────
+async function exportarPDFIncidencias() {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: 'landscape' });
+  const hoy = new Date().toLocaleDateString('es-ES');
+  doc.setFontSize(16); doc.setTextColor(249, 115, 22);
+  doc.text('Incidencias — Alejandra Office', 14, 16);
+  doc.setFontSize(10); doc.setTextColor(100, 116, 139);
+  doc.text(`${SESSION.empresa_nombre || ''} · ${hoy}`, 14, 23);
+
+  const r = await api('/incidencias?sin_dept=1&limit=500');
+  const rows = (r.incidencias || r.data || []).map(i => [
+    i.id, i.titulo || '—', i.tipo || '—', i.gravedad || '—',
+    i.estado || '—', i.obra_nombre || '—',
+    i.created_at ? new Date(i.created_at).toLocaleDateString('es-ES') : '—'
+  ]);
+  doc.autoTable({
+    startY: 28,
+    head: [['ID', 'Título', 'Tipo', 'Gravedad', 'Estado', 'Obra', 'Fecha']],
+    body: rows,
+    styles: { fontSize: 8, cellPadding: 3 },
+    headStyles: { fillColor: [239, 68, 68], textColor: 255 },
+    alternateRowStyles: { fillColor: [30, 45, 64] },
+    bodyStyles: { fillColor: [22, 32, 50], textColor: [229, 231, 235] },
+  });
+  doc.save(`incidencias-${hoy.replace(/\//g, '-')}.pdf`);
+  toast('PDF generado ✓', 'ok');
+}
+
+// ── PDF Pedidos ───────────────────────────────────────────────
+async function exportarPDFPedidos() {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: 'landscape' });
+  const hoy = new Date().toLocaleDateString('es-ES');
+  doc.setFontSize(16); doc.setTextColor(249, 115, 22);
+  doc.text('Pedidos — Alejandra Office', 14, 16);
+  doc.setFontSize(10); doc.setTextColor(100, 116, 139);
+  doc.text(`${SESSION.empresa_nombre || ''} · ${hoy}`, 14, 23);
+
+  const r = await api('/pedidos?todos=1&limit=500');
+  const rows = (r.pedidos || r.data || []).map(p => [
+    p.id, p.descripcion || '—', p.departamento || '—', p.proveedor || '—',
+    p.estado || '—', p.cantidad ?? '—',
+    p.created_at ? new Date(p.created_at).toLocaleDateString('es-ES') : '—'
+  ]);
+  doc.autoTable({
+    startY: 28,
+    head: [['ID', 'Descripción', 'Dpto', 'Proveedor', 'Estado', 'Cant.', 'Fecha']],
+    body: rows,
+    styles: { fontSize: 8, cellPadding: 3 },
+    headStyles: { fillColor: [37, 99, 235], textColor: 255 },
+    alternateRowStyles: { fillColor: [30, 45, 64] },
+    bodyStyles: { fillColor: [22, 32, 50], textColor: [229, 231, 235] },
+  });
+  doc.save(`pedidos-${hoy.replace(/\//g, '-')}.pdf`);
+  toast('PDF generado ✓', 'ok');
+}
+
+// ════════════════════════════════════════════════════════════════
+// BÚSQUEDA GLOBAL
+// ════════════════════════════════════════════════════════════════
+let _buscarTimer = null;
+
+function abrirBusqueda() {
+  const overlay = document.getElementById('searchOverlay');
+  overlay.style.display = 'flex';
+  setTimeout(() => document.getElementById('searchInput').focus(), 50);
+}
+
+function cerrarBusqueda() {
+  document.getElementById('searchOverlay').style.display = 'none';
+  document.getElementById('searchInput').value = '';
+  document.getElementById('searchResults').innerHTML = '<div class="empty-state" style="padding:24px 0"><div class="empty-icon" style="font-size:32px">🔍</div><div class="empty-text">Escribe al menos 2 caracteres para buscar</div></div>';
+  clearTimeout(_buscarTimer);
+}
+
+function buscarGlobalDebounce() {
+  clearTimeout(_buscarTimer);
+  const q = document.getElementById('searchInput').value.trim();
+  if (q.length < 2) {
+    document.getElementById('searchResults').innerHTML = '<div class="empty-state" style="padding:24px 0"><div class="empty-icon" style="font-size:32px">🔍</div><div class="empty-text">Escribe al menos 2 caracteres para buscar</div></div>';
+    return;
+  }
+  document.getElementById('searchResults').innerHTML = '<div class="loading" style="padding:16px"><div class="spinner"></div> Buscando...</div>';
+  _buscarTimer = setTimeout(() => buscarGlobal(q), 400);
+}
+
+async function buscarGlobal(q) {
+  const r = await api('/buscar?q=' + encodeURIComponent(q));
+  const resultados = Array.isArray(r) ? r : [];
+  const el = document.getElementById('searchResults');
+
+  if (!resultados.length) {
+    el.innerHTML = '<div class="empty-state" style="padding:24px 0"><div class="empty-icon" style="font-size:32px">🚫</div><div class="empty-text">Sin resultados para "' + q + '"</div></div>';
+    return;
+  }
+
+  // Agrupar por tipo
+  const grupos = {};
+  resultados.forEach(item => {
+    if (!grupos[item.tipo]) grupos[item.tipo] = [];
+    grupos[item.tipo].push(item);
+  });
+
+  const tipoIcono = { incidencia: '⚠️', pemp: '🚜', carretilla: '🏗️', herramienta: '🔧', usuario: '👤', pedido: '📦', obra: '🏗️' };
+  const tipoLabel = { incidencia: 'Incidencias', pemp: 'PEMP', carretilla: 'Carretillas', herramienta: 'Herramientas', usuario: 'Usuarios', pedido: 'Pedidos', obra: 'Obras' };
+  const tipoNav   = { incidencia: 'incidencias', pemp: 'pemp', carretilla: 'carretillas', herramienta: 'herramientas', usuario: 'usuarios', pedido: 'pedidos', obra: 'obras' };
+
+  let html = '';
+  for (const [tipo, items] of Object.entries(grupos)) {
+    html += `<div style="margin-bottom:14px">
+      <div style="font-family:'Montserrat',sans-serif;font-weight:700;font-size:10px;letter-spacing:1px;color:var(--muted);text-transform:uppercase;margin-bottom:6px">${tipoIcono[tipo] || '📋'} ${tipoLabel[tipo] || tipo}</div>`;
+    items.forEach(item => {
+      const estadoBadge = item.estado ? `<span style="font-size:10px;padding:2px 7px;border-radius:10px;background:rgba(249,115,22,.15);color:var(--accent)">${item.estado}</span>` : '';
+      html += `<div onclick="cerrarBusqueda();navTo('${tipoNav[tipo] || tipo}')"
+        style="padding:10px 12px;background:var(--surface2);border-radius:8px;margin-bottom:4px;cursor:pointer;display:flex;align-items:center;gap:10px;transition:background .15s"
+        onmouseover="this.style.background='var(--surface)'" onmouseout="this.style.background='var(--surface2)'">
+        <span style="font-size:16px">${tipoIcono[tipo] || '📋'}</span>
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${item.nombre || '—'}</div>
+          ${item.subtipo ? `<div style="font-size:11px;color:var(--muted)">${item.subtipo}</div>` : ''}
+        </div>
+        ${estadoBadge}
+      </div>`;
+    });
+    html += '</div>';
+  }
+
+  el.innerHTML = `<div style="font-size:11px;color:var(--muted);margin-bottom:12px">${resultados.length} resultado(s) para "<strong>${q}</strong>"</div>` + html;
 }
 
 // ── MODAL ──────────────────────────────────────────────────────

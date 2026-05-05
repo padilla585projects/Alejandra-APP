@@ -294,6 +294,7 @@ export default {
       if (path === '/mi-empresa'         && method === 'GET')  return await getMiEmpresa(request, env);
       if (path === '/mi-empresa'         && method === 'PUT')  return await updateMiEmpresa(request, env);
       if (path === '/comparativa-obras'  && method === 'GET')  return await getComparativaObras(request, env);
+      if (path === '/graficas'           && method === 'GET')  return await getGraficasData(request, env);
       if (path === '/buscar'             && method === 'GET')  return await buscarGlobal(request, env);
 
       // ── Telegram personal ────────────────────────────────────────────────────
@@ -5350,6 +5351,36 @@ async function eliminarTurno(id, request, env) {
 // ════════════════════════════════════════════════════════════════════════════
 // BÚSQUEDA GLOBAL
 // ════════════════════════════════════════════════════════════════════════════
+
+async function getGraficasData(request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth.empresa_id) return err('No autorizado', 403);
+  if (!auth.isEmpresaAdmin && !auth.isSuperadmin) return err('Sin permisos', 403);
+  const eid = auth.empresa_id;
+
+  const [fichajesDia, incEstado, pedEstado, bobEstado, pempEstado, carrEstado] = await Promise.all([
+    env.DB.prepare(`
+      SELECT date(entrada) as dia, COUNT(*) as n
+      FROM fichajes WHERE empresa_id=? AND entrada >= date('now','-6 days')
+      GROUP BY dia ORDER BY dia
+    `).bind(eid).all(),
+    env.DB.prepare(`SELECT estado, COUNT(*) as n FROM incidencias WHERE empresa_id=? GROUP BY estado`).bind(eid).all(),
+    env.DB.prepare(`SELECT estado, COUNT(*) as n FROM pedidos WHERE empresa_id=? GROUP BY estado`).bind(eid).all(),
+    env.DB.prepare(`SELECT estado, COUNT(*) as n FROM bobinas WHERE empresa_id=? GROUP BY estado`).bind(eid).all(),
+    env.DB.prepare(`SELECT estado, COUNT(*) as n FROM pemp WHERE empresa_id=? GROUP BY estado`).bind(eid).all(),
+    env.DB.prepare(`SELECT estado, COUNT(*) as n FROM carretillas WHERE empresa_id=? GROUP BY estado`).bind(eid).all(),
+  ]);
+
+  return json({
+    ok: true,
+    fichajes_dia:       fichajesDia.results,
+    incidencias_estado: incEstado.results,
+    pedidos_estado:     pedEstado.results,
+    bobinas_estado:     bobEstado.results,
+    pemp_estado:        pempEstado.results,
+    carretillas_estado: carrEstado.results,
+  });
+}
 
 async function buscarGlobal(request, env) {
   const auth = await getAuth(request, env);
