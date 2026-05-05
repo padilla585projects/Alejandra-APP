@@ -5748,14 +5748,14 @@ async function rgpdInforme(request, env) {
 
   const eid = auth.empresa_id;
 
-  const [usuario, fichajes, carnets, epis, turnos, chat, repostajes] = await Promise.all([
-    env.DB.prepare(`SELECT id,nombre,email,rol,activo,created_at FROM usuarios WHERE id=? AND empresa_id=?`).bind(uid,eid).first(),
-    env.DB.prepare(`SELECT id,entrada,salida,obra_id,minutos_retraso,created_at FROM fichajes WHERE usuario_id=? AND empresa_id=? ORDER BY entrada DESC LIMIT 500`).bind(uid,eid).all(),
-    env.DB.prepare(`SELECT id,tipo_carnet,numero,fecha_emision,fecha_caducidad,estado FROM carnets WHERE usuario_id=? AND empresa_id=? ORDER BY created_at DESC`).bind(uid,eid).all(),
-    env.DB.prepare(`SELECT id,tipo_epi,talla,fecha_entrega,estado FROM epis WHERE usuario_id=? AND empresa_id=? ORDER BY created_at DESC`).bind(uid,eid).all(),
-    env.DB.prepare(`SELECT id,semana,dia,turno FROM turnos WHERE usuario_id=? AND empresa_id=? ORDER BY semana DESC LIMIT 200`).bind(uid,eid).all(),
+  // Queries con columnas correctas según el esquema real de la BD
+  const [usuario, fichajes, carnets, epis, turnos, chat] = await Promise.all([
+    env.DB.prepare(`SELECT id,nombre,email,rol,departamento,activo,created_at FROM usuarios WHERE id=? AND empresa_id=?`).bind(uid,eid).first(),
+    env.DB.prepare(`SELECT id,fecha,hora_entrada,hora_salida,horas_trabajadas,horas_extra,minutos_retraso,estado,motivo,obra_id,created_at FROM fichajes WHERE usuario_id=? AND empresa_id=? ORDER BY fecha DESC LIMIT 500`).bind(uid,eid).all(),
+    env.DB.prepare(`SELECT id,tipo,numero,fecha_obtencion,fecha_caducidad,estado,notas,created_at FROM carnets WHERE usuario_id=? AND empresa_id=? ORDER BY created_at DESC`).bind(uid,eid).all(),
+    env.DB.prepare(`SELECT id,tipo_epi,talla,numero_serie,fecha_entrega,fecha_caducidad,proxima_revision,estado,observaciones,created_at FROM epis_asignados WHERE usuario_id=? AND empresa_id=? ORDER BY created_at DESC`).bind(uid,eid).all(),
+    env.DB.prepare(`SELECT id,fecha,turno,obra_id FROM turnos WHERE usuario_id=? AND empresa_id=? ORDER BY fecha DESC LIMIT 200`).bind(uid,eid).all(),
     env.DB.prepare(`SELECT id,mensaje,obra_id,created_at FROM chat_mensajes WHERE usuario_id=? AND empresa_id=? ORDER BY created_at DESC LIMIT 200`).bind(uid,eid).all(),
-    env.DB.prepare(`SELECT id,matricula,litros,coste,created_at FROM repostajes WHERE usuario_id=? AND empresa_id=? ORDER BY created_at DESC`).bind(uid,eid).all().catch(() => ({results:[]})),
   ]);
 
   if (!usuario) return err('Usuario no encontrado en esta empresa', 404);
@@ -5766,10 +5766,10 @@ async function rgpdInforme(request, env) {
     datos_personales: usuario,
     fichajes: fichajes.results,
     carnets: carnets.results,
-    epis: epis.results,
+    epis_asignados: epis.results,
     turnos: turnos.results,
     mensajes_chat: chat.results,
-    repostajes: repostajes.results,
+    // repostajes no se indexan por usuario_id (solo por nombre), no se incluyen en DSAR
   };
 
   return new Response(JSON.stringify(informe, null, 2), {
@@ -5796,9 +5796,13 @@ async function rgpdAnonimizar(request, env) {
 
   await Promise.all([
     // Anonimizar datos personales del usuario
-    env.DB.prepare(`UPDATE usuarios SET nombre='Usuario anonimizado', email=NULL, password=NULL, telegram_id=NULL, foto_r2_key=NULL, activo=0 WHERE id=? AND empresa_id=?`).bind(uid,eid).run(),
+    env.DB.prepare(`UPDATE usuarios SET nombre='Usuario anonimizado', email=NULL, password_hash=NULL, telegram_id=NULL, foto_r2_key=NULL, activo=0 WHERE id=? AND empresa_id=?`).bind(uid,eid).run(),
     // Anonimizar nombre en mensajes de chat
-    env.DB.prepare(`UPDATE chat_mensajes SET usuario_nombre='Usuario anonimizado' WHERE usuario_id=? AND empresa_id=?`).bind(uid,eid).run(),
+    env.DB.prepare(`UPDATE chat_mensajes SET usuario_nombre='Trabajador anonimizado' WHERE usuario_id=? AND empresa_id=?`).bind(uid,eid).run(),
+    // Anonimizar nombre en carnets y EPIs (RGPD — también son datos personales)
+    env.DB.prepare(`UPDATE carnets SET nombre_trabajador='Trabajador anonimizado' WHERE usuario_id=? AND empresa_id=?`).bind(uid,eid).run().catch(()=>{}),
+    env.DB.prepare(`UPDATE epis_asignados SET nombre_trabajador='Trabajador anonimizado' WHERE usuario_id=? AND empresa_id=?`).bind(uid,eid).run().catch(()=>{}),
+    env.DB.prepare(`UPDATE turnos SET nombre_trabajador='Trabajador anonimizado' WHERE usuario_id=? AND empresa_id=?`).bind(uid,eid).run().catch(()=>{}),
     // Borrar sesiones activas
     env.DB.prepare(`DELETE FROM sesiones WHERE usuario_id=?`).bind(uid).run(),
     // Borrar tokens de reset
@@ -5874,7 +5878,7 @@ async function rgpdAplicarRetencion(env, empresa_id) {
     if (!config.activo) return { saltado: true, motivo: 'retención desactivada' };
 
     const [rFichajes, rChat, rLogs] = await Promise.all([
-      env.DB.prepare(`DELETE FROM fichajes WHERE empresa_id=? AND entrada < date('now', '-' || ? || ' days')`)
+      env.DB.prepare(`DELETE FROM fichajes WHERE empresa_id=? AND fecha < date('now', '-' || ? || ' days')`)
         .bind(empresa_id, config.fichajes_dias).run(),
       env.DB.prepare(`DELETE FROM chat_mensajes WHERE empresa_id=? AND created_at < datetime('now', '-' || ? || ' days')`)
         .bind(empresa_id, config.chat_dias).run(),

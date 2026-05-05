@@ -923,7 +923,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
               <ul style="list-style:none;padding:0;display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--muted)">
                 <li>📧 Email de acceso</li>
                 <li>👤 Nombre completo</li>
-                <li>🔑 Contraseña (hash SHA-256, no reversible)</li>
+                <li>🔑 Contraseña (hash PBKDF2-SHA256, no reversible)</li>
                 <li>📱 ID de Telegram (si vincula)</li>
                 <li>🖼 Foto de perfil (R2)</li>
                 <li>📍 IP de último acceso (logs)</li>
@@ -4332,7 +4332,7 @@ async function cargarPrivacidad() {
   el.innerHTML = '<div class="loading" style="padding:20px"><div class="spinner"></div> Cargando trabajadores...</div>';
 
   const r = await api('/usuarios?limit=500');
-  _rgpdDatos = r.usuarios || r.data || [];
+  _rgpdDatos = Array.isArray(r) ? r : (r.usuarios || r.data || []);
 
   renderTblRgpd(_rgpdDatos);
 }
