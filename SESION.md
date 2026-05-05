@@ -7,10 +7,31 @@
 
 **Sesión:** LIBRE
 **Última sesión:** 05/05/2026
-**Versión tras última sesión:** v5.40 + panel web (Fases 1-7 + RGPD + RecoverPass + Audit fixes)
-**Worker desplegado:** 4b13c2c3-2bc8-49ca-b8b2-70b6d2cce786
+**Versión tras última sesión:** v5.41 — sync bidireccional en tiempo real
+**Worker desplegado:** 10fb5cf7-0bf2-48bd-b711-f9c0eac9be5b
 **GitHub:** en sync ✅
 **Panel web:** https://padilla585projects.github.io/Alejandra-APP/panel.html ✅ FUNCIONA
+
+---
+
+## RESUMEN SESIÓN 05/05/2026 (v5.41 — Sync bidireccional panel ↔ app móvil)
+
+- **Panel (panel.html)**: motor de auto-refresh completo
+  · Chip "⟳ hace Xs" en topbar — muestra cuándo fue el último refresh, clic = refresh manual
+  · Intervalos configurados por sección: fichajes 20s, dashboard/incidencias/pedidos 30s,
+    personal/turnos/bobinas/pemp/carretillas/herramientas/seguridad 60s, mant/repostajes 90s
+  · `visibilitychange`: al volver al tab → recarga inmediata + reinicia contador
+  · `navTo()` para timers anteriores y arranca el nuevo, evitando acumulación
+  · Admin hace un cambio → operario lo ve en ≤ intervalo de la sección
+- **App móvil (index.html)**: polling + visibilitychange
+  · `_APP_SCREEN_REFRESH`: mapa de funciones de recarga por pantalla activa
+  · `_startAppSectionPoll()`: polling automático según `_APP_SECTION_POLL_SECS`
+  · `_applyScreen()`: limpia timer anterior y arranca el de la nueva sección
+  · `personalSelTab()`: polling fichajes-hoy (tab 0, 30s) y turnos (tab 6, 60s)
+  · `visibilitychange`: refresh con debounce 15s al volver a primer plano
+  · `window.calCargar` expuesto globalmente (estaba dentro de closure)
+- Worker redesplegado: 10fb5cf7-0bf2-48bd-b711-f9c0eac9be5b (incluye fixes de auditoría de sesión anterior)
+- GitHub: en sync ✅
 
 ---
 

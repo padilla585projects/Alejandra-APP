@@ -5,7 +5,7 @@
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 05/05/2026
-VERSIÓN ACTUAL APP NUEVA: v5.40 (panel web: v0.7 — Fases 1-7 completas)
+VERSIÓN ACTUAL APP NUEVA: v5.41 (sync bidireccional panel ↔ app móvil en tiempo real)
 VERSIÓN ACTUAL APP VIEJA: v4.19 (⛔ CONGELADA DEFINITIVAMENTE — no recibe más cambios)
 
 ================================================================================
