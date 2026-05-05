@@ -151,6 +151,22 @@ PASO 4 — VERIFICAR WORKER (solo si se va a tocar worker.js)
   HISTORIAL DE VERSIONES — RECIENTES
 ================================================================================
 
+panel audit  |  05/05/2026  [AUDITORÍA — 7 bugs/vulnerabilidades resueltos]
+  - SEC-01 CRÍTICO: resetearPass usaba SHA-256, login usa PBKDF2 → usuarios bloqueados
+    tras reset de contraseña. Fix: hashPassword() (PBKDF2) en toda la ruta de reset.
+  - SEC-03: SQL injection en actualizarPedido (template literal empresa_id → ? binding)
+  - SEC-04: devolverBobina/PEMP/Carretilla auto-creaban sin empresa_id → registros huérfanos.
+    Fix: INSERT incluye empresa_id de auth.
+  - SYNC-01/02: syncSheets/syncPedidos defaultaban a empresa_id=1. Fix: empresa_id pasado
+    desde auth en todos los handlers CRUD (10+ funciones afectadas).
+  - BUG-01: panel.html campo email — e.key (ReferenceError) → event.key
+  - BUG-05: SESSION no guardaba usuario_id. Worker devuelve usuario_id en login email y
+    Google OAuth. Panel incluye usuario_id en SESSION.
+  - UX-07: Turnos panel mandaba trabajador_id, worker espera usuario_id. Corregido
+    en POST body, turnoMap key y actualización optimista.
+  - Worker ID: 4b13c2c3-2bc8-49ca-b8b2-70b6d2cce786
+  - GitHub actualizado ✅
+
 panel v0.7  |  05/05/2026  [PANEL WEB — Fases 6+7]
   - Fase 6 (Administración):
     · Usuarios: KPIs total/activos/admins/operarios, Tabulator con inline edit nombre/rol,

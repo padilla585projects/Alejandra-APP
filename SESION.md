@@ -7,12 +7,35 @@
 
 **Sesión:** LIBRE
 **Última sesión:** 05/05/2026
-**Versión tras última sesión:** v5.40 + panel web v0.8 (Fases 1-7 + recuperar pass)
-**Worker desplegado:** 8e7dddec-66c4-43f2-80c3-ce95456c10b2
+**Versión tras última sesión:** v5.40 + panel web (Fases 1-7 + RGPD + RecoverPass + Audit fixes)
+**Worker desplegado:** 4b13c2c3-2bc8-49ca-b8b2-70b6d2cce786
 **GitHub:** en sync ✅
 **Panel web:** https://padilla585projects.github.io/Alejandra-APP/panel.html ✅ FUNCIONA
 
 ---
+
+## RESUMEN SESIÓN 05/05/2026 (auditoría crítica — 7 bugs/vulnerabilidades resueltos)
+
+- **SEC-01 CRÍTICO**: `resetearPass()` usaba SHA-256 puro pero el login usa PBKDF2 →
+  cualquier usuario que reseteara su contraseña quedaba bloqueado permanentemente.
+  Fix: ahora llama a `hashPassword()` (PBKDF2 con salt, idéntico al alta de usuarios).
+- **SEC-03**: SQL injection en `actualizarPedido` — `empresa_id` se interpolaba directamente
+  en el SQL. Fix: ahora se usa `?` binding como todos los demás campos.
+- **SEC-04**: `devolverBobina/PEMP/Carretilla` creaban registros auto sin `empresa_id` → registros
+  huérfanos invisibles para la empresa. Fix: INSERT ahora incluye `empresa_id` de auth.
+- **SYNC-01/02**: `syncSheets/syncPedidos` defaulaban a `empresa_id=1`. Fix: todos los handlers
+  CRUD pasan `empresa_id` del auth context a la llamada de sync. Afecta bobinas, PEMP,
+  carretillas, pedidos, herramientas, kits, inventario seg (crearItemSeg, moverItemSeg,
+  editarItemSeg, eliminarItemSeg — 10+ funciones).
+- **BUG-01**: panel.html campo email — `onkeydown="if(e.key==='Enter')"` → ReferenceError.
+  Fix: `event.key` (la variable implícita en onkeydown inline es `event`, no `e`).
+- **BUG-05**: SESSION en panel.html no guardaba `usuario_id` → burbujas de chat nunca marcadas
+  como propias ("own"). Fix: worker devuelve `usuario_id` en login email y Google OAuth;
+  panel incluye `usuario_id` en SESSION al construirlo.
+- **UX-07**: Planificador de turnos mandaba `trabajador_id` pero el worker espera `usuario_id`.
+  Fix: corregido en POST body, turnoMap key y actualización optimista.
+- Worker redesplegado: 4b13c2c3-2bc8-49ca-b8b2-70b6d2cce786
+- GitHub: en sync ✅
 
 ## RESUMEN SESIÓN 05/05/2026 (panel web v0.8 — Recuperación de contraseña Resend)
 
