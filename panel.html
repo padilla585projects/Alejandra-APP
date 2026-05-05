@@ -835,7 +835,7 @@ async function doLogin() {
   if (!email || !pass) { errEl.textContent = 'Rellena todos los campos'; return; }
   btn.disabled = true; btn.textContent = 'Entrando...';
   errEl.textContent = '';
-  const r = await api('/verificar', { method: 'POST', body: JSON.stringify({ codigo: email, password: pass }) });
+  const r = await api('/verificar', { method: 'POST', body: JSON.stringify({ email, password: pass }) });
   btn.disabled = false; btn.textContent = 'ENTRAR';
   if (!r.ok) { errEl.textContent = r.error || 'Credenciales incorrectas'; return; }
 
