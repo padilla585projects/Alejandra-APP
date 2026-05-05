@@ -5,7 +5,7 @@
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 05/05/2026
-VERSIÓN ACTUAL APP NUEVA: v5.40 (panel web: v0.1 — Fase 1)
+VERSIÓN ACTUAL APP NUEVA: v5.40 (panel web: v0.7 — Fases 1-7 completas)
 VERSIÓN ACTUAL APP VIEJA: v4.19 (⛔ CONGELADA DEFINITIVAMENTE — no recibe más cambios)
 
 ================================================================================
@@ -150,6 +150,28 @@ PASO 4 — VERIFICAR WORKER (solo si se va a tocar worker.js)
 ================================================================================
   HISTORIAL DE VERSIONES — RECIENTES
 ================================================================================
+
+panel v0.7  |  05/05/2026  [PANEL WEB — Fases 6+7]
+  - Fase 6 (Administración):
+    · Usuarios: KPIs total/activos/admins/operarios, Tabulator con inline edit nombre/rol,
+      toggle activo/inactivo, cambiar contraseña modal, filtro por rol, exportar CSV
+    · Empresa: formulario completo (nombre/email/tel/CIF/dirección), stats card,
+      sección informe semanal, módulos configurables
+    · Superadmin: wizard 3 pasos crear empresa (datos/admin/departamentos),
+      lista de todas las empresas con selector activo
+    · Worker: nuevas rutas /telegram/test, /admin/login-attempts DELETE,
+      /admin/server-logs DELETE, /log GET con since_id, /obras/:id PUT
+  - Fase 7 (Analítica y extras):
+    · Gráficas (nueva página 📊): fichajes/7días, incidencias/estado, pedidos/estado,
+      equipos bobinas/PEMP/carretillas (Chart.js v4.4)
+    · Exportar PDF del resumen gráficas (jsPDF con captura canvas)
+    · PDF Incidencias y PDF Pedidos (jsPDF + autoTable con colores oscuros)
+    · Búsqueda global 🔍 en topbar: modal con debounce 400ms, resultados agrupados
+      por tipo (incidencias/PEMP/carretillas/herramientas/usuarios/pedidos),
+      click navega a la sección correspondiente
+    · Worker: nuevo endpoint GET /graficas (6 queries paralelas)
+  - Worker ID: eaf862c1-97ca-4931-9bcf-2695590decf8
+  - GitHub actualizado ✅
 
 v5.40  |  05/05/2026  [SOLO NUEVA APP]
   - Sugerencias DB #187/#188/#189 resueltas
