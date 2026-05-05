@@ -7,9 +7,10 @@
 
 **Sesión:** LIBRE
 **Última sesión:** 05/05/2026
-**Versión tras última sesión:** v5.40 + panel web v0.3 (Fases 1-3)
+**Versión tras última sesión:** v5.40 + panel web v0.4 (Fases 1-3 + fix login)
 **Worker desplegado:** v5.40 + roles nuevos (ID: 48609304-b918-4799-8226-87c65418e904)
 **GitHub:** en sync ✅
+**Panel web:** https://padilla585projects.github.io/Alejandra-APP/panel.html ✅ FUNCIONA
 
 ---
 
