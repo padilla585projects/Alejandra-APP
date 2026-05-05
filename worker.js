@@ -299,6 +299,13 @@ export default {
       if (path === '/graficas'           && method === 'GET')  return await getGraficasData(request, env);
       if (path === '/buscar'             && method === 'GET')  return await buscarGlobal(request, env);
 
+      // ── RGPD / Protección de datos ───────────────────────────────────────────
+      if (path === '/rgpd/informe'          && method === 'GET')    return await rgpdInforme(request, env);
+      if (path === '/rgpd/anonimizar'       && method === 'DELETE') return await rgpdAnonimizar(request, env);
+      if (path === '/rgpd/config'           && method === 'GET')    return await rgpdGetConfig(request, env);
+      if (path === '/rgpd/config'           && method === 'PUT')    return await rgpdSetConfig(request, env);
+      if (path === '/rgpd/aplicar-retencion'&& method === 'POST')   return await rgpdAplicarRetencionEndpoint(request, env);
+
       // ── Telegram personal ────────────────────────────────────────────────────
       if (path === '/telegram/webhook'   && method === 'POST') return await telegramWebhook(request, env);
       if (path === '/telegram/vincular'  && method === 'POST') return await telegramVincular(request, env);
@@ -4630,6 +4637,16 @@ async function alertasDiarias(env) {
       }
     }
 
+    // RGPD — aplicar retención automática a todas las empresas que la tengan activa
+    try {
+      const { results: empresasRgpd } = await env.DB.prepare(
+        `SELECT id FROM empresas WHERE activa=1 AND retencion_config IS NOT NULL`
+      ).all().catch(() => ({ results: [] }));
+      for (const emp of (empresasRgpd || [])) {
+        await rgpdAplicarRetencion(env, emp.id);
+      }
+    } catch(e) { console.error('rgpd retencion cron error:', e.message); }
+
   } catch(e) {
     console.error('alertasDiarias error:', e.message);
   }
@@ -5523,6 +5540,164 @@ async function eliminarTurno(id, request, env) {
 // ════════════════════════════════════════════════════════════════════════════
 // BÚSQUEDA GLOBAL
 // ════════════════════════════════════════════════════════════════════════════
+
+// ════════════════════════════════════════════════════════════════════════════
+// RGPD / LOPD — Protección de datos
+// ════════════════════════════════════════════════════════════════════════════
+
+async function rgpdInforme(request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth.isEmpresaAdmin && !auth.isSuperadmin) return err('Sin permisos', 403);
+  const url = new URL(request.url);
+  const uid = parseInt(url.searchParams.get('usuario_id'));
+  if (!uid) return err('usuario_id requerido');
+
+  const eid = auth.empresa_id;
+
+  const [usuario, fichajes, carnets, epis, turnos, chat, repostajes] = await Promise.all([
+    env.DB.prepare(`SELECT id,nombre,email,rol,activo,created_at FROM usuarios WHERE id=? AND empresa_id=?`).bind(uid,eid).first(),
+    env.DB.prepare(`SELECT id,entrada,salida,obra_id,minutos_retraso,created_at FROM fichajes WHERE usuario_id=? AND empresa_id=? ORDER BY entrada DESC LIMIT 500`).bind(uid,eid).all(),
+    env.DB.prepare(`SELECT id,tipo_carnet,numero,fecha_emision,fecha_caducidad,estado FROM carnets WHERE usuario_id=? AND empresa_id=? ORDER BY created_at DESC`).bind(uid,eid).all(),
+    env.DB.prepare(`SELECT id,tipo_epi,talla,fecha_entrega,estado FROM epis WHERE usuario_id=? AND empresa_id=? ORDER BY created_at DESC`).bind(uid,eid).all(),
+    env.DB.prepare(`SELECT id,semana,dia,turno FROM turnos WHERE usuario_id=? AND empresa_id=? ORDER BY semana DESC LIMIT 200`).bind(uid,eid).all(),
+    env.DB.prepare(`SELECT id,mensaje,obra_id,created_at FROM chat_mensajes WHERE usuario_id=? AND empresa_id=? ORDER BY created_at DESC LIMIT 200`).bind(uid,eid).all(),
+    env.DB.prepare(`SELECT id,matricula,litros,coste,created_at FROM repostajes WHERE usuario_id=? AND empresa_id=? ORDER BY created_at DESC`).bind(uid,eid).all().catch(() => ({results:[]})),
+  ]);
+
+  if (!usuario) return err('Usuario no encontrado en esta empresa', 404);
+
+  const informe = {
+    generado_el: new Date().toISOString(),
+    empresa_id: eid,
+    datos_personales: usuario,
+    fichajes: fichajes.results,
+    carnets: carnets.results,
+    epis: epis.results,
+    turnos: turnos.results,
+    mensajes_chat: chat.results,
+    repostajes: repostajes.results,
+  };
+
+  return new Response(JSON.stringify(informe, null, 2), {
+    headers: {
+      'Content-Type': 'application/json',
+      'Content-Disposition': `attachment; filename="dsar_usuario_${uid}_${new Date().toISOString().slice(0,10)}.json"`,
+      'Access-Control-Allow-Origin': '*',
+    }
+  });
+}
+
+async function rgpdAnonimizar(request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth.isEmpresaAdmin && !auth.isSuperadmin) return err('Sin permisos', 403);
+  const url = new URL(request.url);
+  const uid = parseInt(url.searchParams.get('usuario_id'));
+  if (!uid) return err('usuario_id requerido');
+
+  const eid = auth.empresa_id;
+  const usuario = await env.DB.prepare(`SELECT id,nombre,foto_r2_key FROM usuarios WHERE id=? AND empresa_id=?`).bind(uid,eid).first();
+  if (!usuario) return err('Usuario no encontrado', 404);
+
+  const tag = `anonimizado_${uid}`;
+
+  await Promise.all([
+    // Anonimizar datos personales del usuario
+    env.DB.prepare(`UPDATE usuarios SET nombre='Usuario anonimizado', email=NULL, password=NULL, telegram_id=NULL, foto_r2_key=NULL, activo=0 WHERE id=? AND empresa_id=?`).bind(uid,eid).run(),
+    // Anonimizar nombre en mensajes de chat
+    env.DB.prepare(`UPDATE chat_mensajes SET usuario_nombre='Usuario anonimizado' WHERE usuario_id=? AND empresa_id=?`).bind(uid,eid).run(),
+    // Borrar sesiones activas
+    env.DB.prepare(`DELETE FROM sesiones WHERE usuario_id=?`).bind(uid).run(),
+    // Borrar tokens de reset
+    env.DB.prepare(`DELETE FROM reset_tokens WHERE usuario_id=?`).bind(uid).run().catch(()=>{}),
+  ]);
+
+  // Borrar foto de R2 si existe
+  if (usuario.foto_r2_key) {
+    await env.FILES.delete(usuario.foto_r2_key).catch(() => {});
+  }
+
+  await registrarLog(null, env, {
+    nivel: 'warn',
+    mensaje: `RGPD: usuario ${uid} (${usuario.nombre}) anonimizado por admin ${auth.usuario_id}`,
+    empresa_id: eid,
+  }).catch(() => {});
+
+  return json({ ok: true, mensaje: `Datos de "${usuario.nombre}" anonimizados correctamente` });
+}
+
+async function rgpdGetConfig(request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth.isEmpresaAdmin && !auth.isSuperadmin) return err('Sin permisos', 403);
+
+  const empresa = await env.DB.prepare(`SELECT retencion_config FROM empresas WHERE id=?`).bind(auth.empresa_id).first().catch(() => null);
+  const config = empresa?.retencion_config ? JSON.parse(empresa.retencion_config) : {};
+
+  return json({
+    ok: true,
+    config: {
+      activo:         config.activo         ?? false,
+      fichajes_dias:  config.fichajes_dias  ?? 730,   // 2 años por defecto
+      chat_dias:      config.chat_dias      ?? 365,
+      logs_dias:      config.logs_dias      ?? 90,
+    }
+  });
+}
+
+async function rgpdSetConfig(request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth.isEmpresaAdmin && !auth.isSuperadmin) return err('Sin permisos', 403);
+
+  const body = await request.json().catch(() => ({}));
+  const config = {
+    activo:        !!body.activo,
+    fichajes_dias: Math.max(30, parseInt(body.fichajes_dias) || 730),
+    chat_dias:     Math.max(30, parseInt(body.chat_dias)     || 365),
+    logs_dias:     Math.max(7,  parseInt(body.logs_dias)     || 90),
+  };
+
+  // Asegurarse de que la columna existe (migración on-the-fly)
+  await env.DB.prepare(`ALTER TABLE empresas ADD COLUMN retencion_config TEXT`).run().catch(() => {});
+
+  await env.DB.prepare(`UPDATE empresas SET retencion_config=? WHERE id=?`)
+    .bind(JSON.stringify(config), auth.empresa_id).run();
+
+  return json({ ok: true });
+}
+
+async function rgpdAplicarRetencionEndpoint(request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth.isEmpresaAdmin && !auth.isSuperadmin) return err('Sin permisos', 403);
+  const resultado = await rgpdAplicarRetencion(env, auth.empresa_id);
+  return json({ ok: true, ...resultado });
+}
+
+// Llamada interna (también desde cron)
+async function rgpdAplicarRetencion(env, empresa_id) {
+  try {
+    const empresa = await env.DB.prepare(`SELECT retencion_config FROM empresas WHERE id=?`).bind(empresa_id).first();
+    if (!empresa?.retencion_config) return { saltado: true, motivo: 'sin config' };
+    const config = JSON.parse(empresa.retencion_config);
+    if (!config.activo) return { saltado: true, motivo: 'retención desactivada' };
+
+    const [rFichajes, rChat, rLogs] = await Promise.all([
+      env.DB.prepare(`DELETE FROM fichajes WHERE empresa_id=? AND entrada < date('now', '-' || ? || ' days')`)
+        .bind(empresa_id, config.fichajes_dias).run(),
+      env.DB.prepare(`DELETE FROM chat_mensajes WHERE empresa_id=? AND created_at < datetime('now', '-' || ? || ' days')`)
+        .bind(empresa_id, config.chat_dias).run(),
+      env.DB.prepare(`DELETE FROM logs WHERE empresa_id=? AND created_at < datetime('now', '-' || ? || ' days')`)
+        .bind(empresa_id, config.logs_dias).run().catch(() => ({ meta: { changes: 0 } })),
+    ]);
+
+    return {
+      fichajes_borrados: rFichajes.meta?.changes ?? 0,
+      chat_borrados:     rChat.meta?.changes     ?? 0,
+      logs_borrados:     rLogs.meta?.changes     ?? 0,
+    };
+  } catch(e) {
+    console.error(`rgpdAplicarRetencion empresa ${empresa_id}:`, e.message);
+    return { error: e.message };
+  }
+}
 
 async function getGraficasData(request, env) {
   const auth = await getAuth(request, env);

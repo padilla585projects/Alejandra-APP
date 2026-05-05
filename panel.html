@@ -347,6 +347,9 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
     <button class="nav-item nav-admin" data-page="logs" onclick="navTo('logs')" style="display:none">
       <span class="nav-icon">📋</span> Logs
     </button>
+    <button class="nav-item nav-admin" data-page="privacidad" onclick="navTo('privacidad')" style="display:none">
+      <span class="nav-icon">🔒</span> Privacidad
+    </button>
 
     <div class="sidebar-section nav-dev-section" style="display:none">Desarrollador</div>
     <button class="nav-item nav-dev" data-page="devtools" onclick="navTo('devtools')" style="display:none">
@@ -799,6 +802,146 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
           <button class="btn btn-secondary" onclick="cargarRepostajes()">🔄 Actualizar</button>
         </div>
         <div class="tbl-wrap"><div id="tblRepostajes"></div></div>
+      </div>
+
+      <!-- PRIVACIDAD / RGPD -->
+      <div class="page" id="pagePrivacidad">
+        <div style="display:flex;align-items:center;gap:14px;margin-bottom:6px">
+          <div class="page-title" style="margin-bottom:0">🔒 Privacidad y Protección de Datos</div>
+          <span style="background:rgba(37,99,235,.2);color:#60a5fa;font-family:'Montserrat',sans-serif;font-weight:900;font-size:10px;letter-spacing:1px;padding:3px 10px;border-radius:20px;border:1px solid rgba(37,99,235,.3)">RGPD · LOPD</span>
+        </div>
+        <div class="page-sub">Gestión de datos personales de trabajadores — cumplimiento legal</div>
+
+        <!-- PESTAÑAS -->
+        <div style="display:flex;gap:4px;margin:16px 0 20px;border-bottom:1px solid var(--border);padding-bottom:0">
+          <button id="rgpdTab1" onclick="rgpdVerTab(1)" style="padding:8px 18px;border:none;border-radius:8px 8px 0 0;font-family:'Montserrat',sans-serif;font-weight:700;font-size:12px;cursor:pointer;background:var(--accent);color:#fff;border-bottom:2px solid var(--accent)">👤 Trabajadores</button>
+          <button id="rgpdTab2" onclick="rgpdVerTab(2)" style="padding:8px 18px;border:none;border-radius:8px 8px 0 0;font-family:'Montserrat',sans-serif;font-weight:700;font-size:12px;cursor:pointer;background:var(--surface2);color:var(--muted)">⏱ Retención</button>
+          <button id="rgpdTab3" onclick="rgpdVerTab(3)" style="padding:8px 18px;border:none;border-radius:8px 8px 0 0;font-family:'Montserrat',sans-serif;font-weight:700;font-size:12px;cursor:pointer;background:var(--surface2);color:var(--muted)">📋 ¿Qué guardamos?</button>
+        </div>
+
+        <!-- TAB 1: TRABAJADORES -->
+        <div id="rgpdTabContent1">
+          <div class="tbl-toolbar">
+            <input class="tbl-search" id="searchRgpd" placeholder="🔍 Buscar trabajador..." oninput="filtrarRgpd()">
+            <button class="btn btn-secondary" onclick="cargarPrivacidad()">🔄 Actualizar</button>
+          </div>
+          <div class="section-card" style="padding:0">
+            <div id="tblRgpd"></div>
+          </div>
+          <div style="margin-top:12px;padding:12px 16px;background:rgba(234,179,8,.08);border:1px solid rgba(234,179,8,.2);border-radius:10px;font-size:12px;color:#eab308;line-height:1.6">
+            ⚠️ <strong>Importante:</strong> "Anonimizar" elimina los datos personales identificativos del trabajador (nombre, email, foto, Telegram) pero mantiene los registros de actividad de forma anónima para integridad del historial. Esta acción es <strong>irreversible</strong>.
+          </div>
+        </div>
+
+        <!-- TAB 2: RETENCIÓN -->
+        <div id="rgpdTabContent2" style="display:none">
+          <div class="section-card" style="max-width:560px">
+            <div class="section-card-title"><span>⏱</span> Retención automática de datos</div>
+            <p style="color:var(--muted);font-size:13px;margin-bottom:20px;line-height:1.6">
+              Cuando está activa, cada noche a las 07:00 se eliminan automáticamente los registros más antiguos que los días configurados. Mínimos: fichajes 30 días, chat 30 días, logs 7 días.
+            </p>
+            <div style="display:flex;align-items:center;gap:12px;margin-bottom:24px;padding:14px 16px;background:var(--surface2);border-radius:10px">
+              <label style="font-family:'Montserrat',sans-serif;font-weight:700;font-size:12px;color:var(--text);display:flex;align-items:center;gap:8px;cursor:pointer">
+                <input type="checkbox" id="rgpdActivo" style="width:16px;height:16px;accent-color:var(--accent)">
+                Retención automática activada
+              </label>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:24px">
+              <div>
+                <div style="font-family:'Montserrat',sans-serif;font-weight:700;font-size:11px;color:var(--muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:1px">📅 Fichajes (días)</div>
+                <input type="number" id="rgpdFichajesDias" min="30" max="3650" value="730" style="width:100%;padding:10px;background:var(--surface2);border:2px solid var(--border);border-radius:8px;color:var(--text);font-size:14px;font-family:'Poppins',sans-serif">
+                <div style="font-size:11px;color:var(--muted);margin-top:4px">Mín. 30 días</div>
+              </div>
+              <div>
+                <div style="font-family:'Montserrat',sans-serif;font-weight:700;font-size:11px;color:var(--muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:1px">💬 Chat (días)</div>
+                <input type="number" id="rgpdChatDias" min="30" max="3650" value="365" style="width:100%;padding:10px;background:var(--surface2);border:2px solid var(--border);border-radius:8px;color:var(--text);font-size:14px;font-family:'Poppins',sans-serif">
+                <div style="font-size:11px;color:var(--muted);margin-top:4px">Mín. 30 días</div>
+              </div>
+              <div>
+                <div style="font-family:'Montserrat',sans-serif;font-weight:700;font-size:11px;color:var(--muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:1px">📋 Logs (días)</div>
+                <input type="number" id="rgpdLogsDias" min="7" max="365" value="90" style="width:100%;padding:10px;background:var(--surface2);border:2px solid var(--border);border-radius:8px;color:var(--text);font-size:14px;font-family:'Poppins',sans-serif">
+                <div style="font-size:11px;color:var(--muted);margin-top:4px">Mín. 7 días</div>
+              </div>
+            </div>
+            <div style="display:flex;gap:10px">
+              <button class="btn btn-primary" onclick="guardarRetencionConfig()">💾 Guardar configuración</button>
+              <button class="btn btn-danger" onclick="aplicarRetencionAhora()">⚡ Aplicar ahora</button>
+            </div>
+            <div id="rgpdRetencionMsg" style="margin-top:12px;font-size:13px;min-height:18px"></div>
+          </div>
+        </div>
+
+        <!-- TAB 3: QUÉ GUARDAMOS -->
+        <div id="rgpdTabContent3" style="display:none">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+            <div class="section-card">
+              <div class="section-card-title"><span>👤</span> Usuarios (panel)</div>
+              <ul style="list-style:none;padding:0;display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--muted)">
+                <li>📧 Email de acceso</li>
+                <li>👤 Nombre completo</li>
+                <li>🔑 Contraseña (hash SHA-256, no reversible)</li>
+                <li>📱 ID de Telegram (si vincula)</li>
+                <li>🖼 Foto de perfil (R2)</li>
+                <li>📍 IP de último acceso (logs)</li>
+                <li>🕐 Fecha de registro y último acceso</li>
+              </ul>
+            </div>
+            <div class="section-card">
+              <div class="section-card-title"><span>👷</span> Personal externo (obra)</div>
+              <ul style="list-style:none;padding:0;display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--muted)">
+                <li>👤 Nombre completo</li>
+                <li>🪪 DNI/NIE</li>
+                <li>📞 Teléfono</li>
+                <li>📧 Email</li>
+                <li>🏢 Empresa subcontratista</li>
+                <li>🖼 Foto de perfil (R2)</li>
+              </ul>
+            </div>
+            <div class="section-card">
+              <div class="section-card-title"><span>⏱</span> Fichajes</div>
+              <ul style="list-style:none;padding:0;display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--muted)">
+                <li>🕐 Hora de entrada y salida</li>
+                <li>📍 Obra asociada</li>
+                <li>⏱ Minutos de retraso</li>
+                <li>📅 Fecha del fichaje</li>
+              </ul>
+              <div style="margin-top:10px;font-size:11px;color:var(--blue)">⚖️ Base legal: contrato laboral — obligación legal de registro</div>
+            </div>
+            <div class="section-card">
+              <div class="section-card-title"><span>🏅</span> Carnets y EPIs</div>
+              <ul style="list-style:none;padding:0;display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--muted)">
+                <li>📜 Tipo de carnet/certificación</li>
+                <li>📅 Fecha de emisión y caducidad</li>
+                <li>🔢 Número de documento</li>
+                <li>🦺 EPIs entregados con fecha</li>
+              </ul>
+              <div style="margin-top:10px;font-size:11px;color:var(--blue)">⚖️ Base legal: PRL — obligación de seguridad laboral</div>
+            </div>
+            <div class="section-card">
+              <div class="section-card-title"><span>💬</span> Chat del equipo</div>
+              <ul style="list-style:none;padding:0;display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--muted)">
+                <li>👤 Nombre del remitente</li>
+                <li>💬 Contenido del mensaje</li>
+                <li>🕐 Fecha y hora</li>
+                <li>🏗 Obra asociada</li>
+              </ul>
+              <div style="margin-top:10px;font-size:11px;color:var(--yellow)">⚠️ Recomendado: configurar retención de 12 meses</div>
+            </div>
+            <div class="section-card">
+              <div class="section-card-title"><span>📋</span> Logs del sistema</div>
+              <ul style="list-style:none;padding:0;display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--muted)">
+                <li>🕐 Fecha y hora del evento</li>
+                <li>📝 Descripción del evento (puede incluir nombres)</li>
+                <li>⚠️ Nivel (info / warn / error)</li>
+              </ul>
+              <div style="margin-top:10px;font-size:11px;color:var(--yellow)">⚠️ Recomendado: retención de 90 días</div>
+            </div>
+          </div>
+          <div style="margin-top:16px;padding:14px 16px;background:rgba(37,99,235,.08);border:1px solid rgba(37,99,235,.2);border-radius:10px;font-size:12px;color:#60a5fa;line-height:1.7">
+            📌 <strong>Derechos de los trabajadores (Art. 15-22 RGPD):</strong> acceso a sus datos (DSAR), rectificación, supresión (derecho al olvido), portabilidad y oposición al tratamiento.
+            Puedes generar el informe DSAR de cualquier trabajador desde la pestaña "Trabajadores" y enviárselo si lo solicita. El plazo legal de respuesta es <strong>30 días</strong>.
+          </div>
+        </div>
       </div>
 
       <!-- DEVTOOLS (solo desarrollador) -->
@@ -1287,6 +1430,7 @@ const PAGE_LOADERS = {
   logs: renderLogs,
   devtools: cargarDevtools,
   graficas: cargarGraficas,
+  privacidad: cargarPrivacidad,
 };
 
 let currentPage = '';
@@ -4007,6 +4151,174 @@ async function buscarGlobal(q) {
   }
 
   el.innerHTML = `<div style="font-size:11px;color:var(--muted);margin-bottom:12px">${resultados.length} resultado(s) para "<strong>${q}</strong>"</div>` + html;
+}
+
+// ════════════════════════════════════════════════════════════════
+// PRIVACIDAD / RGPD
+// ════════════════════════════════════════════════════════════════
+let tblRgpd = null;
+let _rgpdDatos = [];
+
+function rgpdVerTab(n) {
+  [1,2,3].forEach(i => {
+    const content = document.getElementById(`rgpdTabContent${i}`);
+    const btn = document.getElementById(`rgpdTab${i}`);
+    if (content) content.style.display = i === n ? '' : 'none';
+    if (btn) {
+      btn.style.background = i === n ? 'var(--accent)' : 'var(--surface2)';
+      btn.style.color = i === n ? '#fff' : 'var(--muted)';
+    }
+  });
+  if (n === 2) cargarRetencionConfig();
+}
+
+async function cargarPrivacidad() {
+  rgpdVerTab(1);
+  const el = document.getElementById('tblRgpd');
+  if (!el) return;
+  el.innerHTML = '<div class="loading" style="padding:20px"><div class="spinner"></div> Cargando trabajadores...</div>';
+
+  const r = await api('/usuarios?limit=500');
+  _rgpdDatos = r.usuarios || r.data || [];
+
+  renderTblRgpd(_rgpdDatos);
+}
+
+function filtrarRgpd() {
+  const q = document.getElementById('searchRgpd').value.toLowerCase();
+  const filtrados = q ? _rgpdDatos.filter(u => (u.nombre||'').toLowerCase().includes(q) || (u.email||'').toLowerCase().includes(q)) : _rgpdDatos;
+  renderTblRgpd(filtrados);
+}
+
+function renderTblRgpd(datos) {
+  if (tblRgpd) { tblRgpd.destroy(); tblRgpd = null; }
+  if (!datos.length) {
+    document.getElementById('tblRgpd').innerHTML = '<div class="empty-state"><div class="empty-icon">👤</div><div class="empty-text">Sin trabajadores</div></div>';
+    return;
+  }
+
+  tblRgpd = new Tabulator('#tblRgpd', {
+    data: datos,
+    layout: 'fitColumns',
+    height: '420px',
+    columns: [
+      { title: 'ID',     field: 'id',     width: 60, hozAlign: 'center' },
+      { title: 'Nombre', field: 'nombre', minWidth: 160,
+        formatter: cell => {
+          const r = cell.getRow().getData();
+          const anon = !r.nombre || r.nombre === 'Usuario anonimizado';
+          return anon ? `<span style="color:var(--muted);font-style:italic">🔒 Anonimizado</span>` : `<strong>${r.nombre}</strong>`;
+        }
+      },
+      { title: 'Email',  field: 'email',  minWidth: 180, formatter: cell => cell.getValue() || '<span style="color:var(--muted)">—</span>' },
+      { title: 'Rol',    field: 'rol',    width: 120 },
+      { title: 'Estado', field: 'activo', width: 90, hozAlign: 'center',
+        formatter: cell => cell.getValue() ? '<span style="color:var(--green)">✓ Activo</span>' : '<span style="color:var(--muted)">Inactivo</span>'
+      },
+      { title: 'Acciones', width: 220, hozAlign: 'center', formatter: cell => {
+          const r = cell.getRow().getData();
+          const anon = !r.nombre || r.nombre === 'Usuario anonimizado';
+          if (anon) return '<span style="color:var(--muted);font-size:12px">Ya anonimizado</span>';
+          return `<div style="display:flex;gap:6px;justify-content:center">
+            <button onclick="descargarDSAR(${r.id},'${(r.nombre||'').replace(/'/g,'')}')" class="btn btn-secondary btn-sm" title="Descargar informe de datos">📄 DSAR</button>
+            <button onclick="confirmarAnonimizar(${r.id},'${(r.nombre||'').replace(/'/g,'')}')" class="btn btn-danger btn-sm" title="Eliminar datos personales">🗑 Anonimizar</button>
+          </div>`;
+        }
+      },
+    ],
+  });
+}
+
+async function descargarDSAR(uid, nombre) {
+  toast(`Generando informe de ${nombre}...`, 'info');
+  try {
+    const res = await fetch(`${API}/rgpd/informe?usuario_id=${uid}`, {
+      headers: { 'X-Token': TOKEN }
+    });
+    if (!res.ok) { toast('Error al generar informe', 'err'); return; }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `dsar_${nombre.replace(/\s+/g,'_')}_${new Date().toISOString().slice(0,10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast('Informe DSAR descargado ✓', 'ok');
+  } catch { toast('Error de conexión', 'err'); }
+}
+
+function confirmarAnonimizar(uid, nombre) {
+  abrirModal(
+    '⚠️ Confirmar anonimización',
+    `<div style="line-height:1.7;color:var(--muted)">
+      <p style="margin-bottom:12px">Vas a anonimizar los datos personales de <strong style="color:var(--text)">${nombre}</strong>.</p>
+      <p style="margin-bottom:12px">Esto eliminará permanentemente:</p>
+      <ul style="margin-left:16px;margin-bottom:12px">
+        <li>Nombre, email y foto de perfil</li>
+        <li>ID de Telegram vinculado</li>
+        <li>Contraseña y sesiones activas</li>
+      </ul>
+      <p style="color:var(--red);font-weight:600">⚠️ Esta acción es irreversible.</p>
+      <p style="margin-top:8px">Los registros de actividad (fichajes, carnets, etc.) se conservan de forma anónima.</p>
+    </div>`,
+    () => ejecutarAnonimizar(uid, nombre)
+  );
+}
+
+async function ejecutarAnonimizar(uid, nombre) {
+  cerrarModal();
+  const r = await api(`/rgpd/anonimizar?usuario_id=${uid}`, { method: 'DELETE' });
+  if (r.ok) {
+    toast(r.mensaje || 'Usuario anonimizado ✓', 'ok');
+    tblRgpd = null;
+    cargarPrivacidad();
+  } else {
+    toast(r.error || 'Error al anonimizar', 'err');
+  }
+}
+
+async function cargarRetencionConfig() {
+  const r = await api('/rgpd/config');
+  if (!r.ok) return;
+  const c = r.config;
+  document.getElementById('rgpdActivo').checked      = !!c.activo;
+  document.getElementById('rgpdFichajesDias').value  = c.fichajes_dias;
+  document.getElementById('rgpdChatDias').value      = c.chat_dias;
+  document.getElementById('rgpdLogsDias').value      = c.logs_dias;
+}
+
+async function guardarRetencionConfig() {
+  const msgEl = document.getElementById('rgpdRetencionMsg');
+  msgEl.textContent = '';
+  const r = await api('/rgpd/config', {
+    method: 'PUT',
+    body: JSON.stringify({
+      activo:        document.getElementById('rgpdActivo').checked,
+      fichajes_dias: document.getElementById('rgpdFichajesDias').value,
+      chat_dias:     document.getElementById('rgpdChatDias').value,
+      logs_dias:     document.getElementById('rgpdLogsDias').value,
+    })
+  });
+  if (r.ok) { msgEl.style.color = 'var(--green)'; msgEl.textContent = '✓ Configuración guardada'; }
+  else       { msgEl.style.color = 'var(--red)';   msgEl.textContent = r.error || 'Error al guardar'; }
+  setTimeout(() => msgEl.textContent = '', 3000);
+}
+
+async function aplicarRetencionAhora() {
+  if (!confirm('¿Aplicar la retención ahora? Se eliminarán los registros más antiguos de lo configurado.')) return;
+  const msgEl = document.getElementById('rgpdRetencionMsg');
+  msgEl.style.color = 'var(--muted)'; msgEl.textContent = 'Aplicando...';
+  const r = await api('/rgpd/aplicar-retencion', { method: 'POST' });
+  if (r.ok) {
+    const res = [];
+    if (r.fichajes_borrados != null) res.push(`${r.fichajes_borrados} fichajes`);
+    if (r.chat_borrados     != null) res.push(`${r.chat_borrados} mensajes chat`);
+    if (r.logs_borrados     != null) res.push(`${r.logs_borrados} logs`);
+    msgEl.style.color = 'var(--green)';
+    msgEl.textContent = res.length ? `✓ Eliminados: ${res.join(', ')}` : (r.motivo ? `ℹ️ ${r.motivo}` : '✓ Completado sin cambios');
+  } else {
+    msgEl.style.color = 'var(--red)'; msgEl.textContent = r.error || 'Error';
+  }
 }
 
 // ── MODAL ──────────────────────────────────────────────────────
