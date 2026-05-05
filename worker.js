@@ -6112,7 +6112,11 @@ async function getChatMensajes(request, env) {
   params.push(limit);
 
   const order = since ? 'ASC' : 'DESC';
-  const q = `SELECT * FROM chat_mensajes WHERE ${conds.join(' AND ')} ORDER BY created_at ${order} LIMIT ?`;
+  const q = `SELECT cm.*, o.nombre AS obra_nombre
+             FROM chat_mensajes cm
+             LEFT JOIN obras o ON o.id = cm.obra_id
+             WHERE ${conds.join(' AND ')}
+             ORDER BY cm.created_at ${order} LIMIT ?`;
   const rows = await env.DB.prepare(q).bind(...params).all();
   const msgs = since ? rows.results : rows.results.reverse();
   return json({ ok: true, mensajes: msgs });
