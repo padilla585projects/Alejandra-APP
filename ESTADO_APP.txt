@@ -5,7 +5,7 @@
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 05/05/2026
-VERSIÓN ACTUAL APP NUEVA: v5.41 (sync bidireccional panel ↔ app móvil en tiempo real)
+VERSIÓN ACTUAL APP NUEVA: v5.41 + security patch (worker 6b18efd1)
 VERSIÓN ACTUAL APP VIEJA: v4.19 (⛔ CONGELADA DEFINITIVAMENTE — no recibe más cambios)
 
 ================================================================================
@@ -150,6 +150,25 @@ PASO 4 — VERIFICAR WORKER (solo si se va a tocar worker.js)
 ================================================================================
   HISTORIAL DE VERSIONES — RECIENTES
 ================================================================================
+
+security     |  05/05/2026  [SECURITY PATCH — 4 vulnerabilidades resueltas]
+  - SEC-13 CRÍTICO: getAuth() legacy path aceptaba X-Rol: superadmin sin token → acceso total.
+    Fix: solo X-Admin-Code verificado contra env concede privilegios en ruta legacy.
+  - SEC-08/09: /scan, /ocr, /log POST eran públicos → consumo API sin auth + spam Telegram.
+    Fix: requieren X-Token válido en D1.
+  - SEC-02: nombres de tabla interpolados en SQL sin whitelist en getCatalogo/add/delete.
+    Fix: CATALOG_WHITELIST con 6 tablas permitidas, resto → 400.
+  - UX-06: alertasDiarias mezclaba alertas de todas las empresas sin etiquetar.
+    Fix: cada línea lleva [NombreEmpresa] en los mensajes Telegram.
+  - Worker ID: 6b18efd1-c089-4576-a8f3-fdd7e31208bd
+  - GitHub actualizado ✅
+
+v5.41        |  05/05/2026  [SYNC BIDIRECCIONAL panel ↔ app móvil]
+  - Panel: chip ⟳ en topbar, auto-refresh por sección (20-90s), visibilitychange, navTo limpio.
+  - App móvil: polling por pantalla activa, visibilitychange con debounce 15s,
+    sub-polling en personal (fichajes 30s, turnos 60s), window.calCargar expuesto.
+  - sw.js: bump caché → alejandra-v5.41
+  - Worker: mismo que auditoría anterior (fixes SEC-01/03/04/SYNC/BUG ya incluidos)
 
 panel audit  |  05/05/2026  [AUDITORÍA — 7 bugs/vulnerabilidades resueltos]
   - SEC-01 CRÍTICO: resetearPass usaba SHA-256, login usa PBKDF2 → usuarios bloqueados
