@@ -51,8 +51,8 @@ async function getAuth(request, env) {
       ).bind(xToken).first();
       if (sesion) {
         env.DB.prepare("UPDATE sesiones SET last_used = CURRENT_TIMESTAMP, expires_at = datetime('now', '+30 days') WHERE token = ?").bind(xToken).run();
-        const isSuperadmin   = sesion.es_admin === 1 || sesion.rol === 'superadmin';
-        const isEmpresaAdmin = sesion.rol === 'empresa_admin';
+        const isSuperadmin   = sesion.es_admin === 1 || sesion.rol === 'superadmin' || sesion.rol === 'desarrollador';
+        const isEmpresaAdmin = sesion.rol === 'empresa_admin' || sesion.rol === 'desarrollador';
         const deptHeader = request.headers.get('X-Departamento');
         const departamento = deptHeader || sesion.departamento || 'electrico';
         return {
@@ -88,10 +88,11 @@ async function getAuth(request, env) {
   return {
     isAdmin,
     isSuperadmin,
-    isEmpresaAdmin: rol === 'empresa_admin',
+    isEmpresaAdmin: rol === 'empresa_admin' || rol === 'desarrollador',
     isEncargado: rol === 'encargado',
     isJefeObra: rol === 'jefe_de_obra',
     isOficina: rol === 'oficina',
+    isDesarrollador: rol === 'desarrollador',
     isSeguridad: departamento === 'seguridad',
     rol: rol || (isAdmin ? 'superadmin' : null),
     obraId: obraId ? parseInt(obraId) : null,

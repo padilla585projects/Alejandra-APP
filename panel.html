@@ -67,6 +67,8 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
 .rol-jefe_de_obra{background:rgba(37,99,235,.2);color:var(--blue)}
 .rol-oficina{background:rgba(34,197,94,.2);color:var(--green)}
 .rol-encargado{background:rgba(234,179,8,.2);color:var(--yellow)}
+.rol-desarrollador{background:rgba(168,85,247,.2);color:#a855f7}
+.rol-superadmin{background:rgba(168,85,247,.2);color:#a855f7}
 .topbar-btn{background:none;border:1px solid var(--border);border-radius:8px;color:var(--muted);padding:6px 10px;cursor:pointer;font-size:13px;transition:all .15s}
 .topbar-btn:hover{border-color:var(--accent);color:var(--accent)}
 .conn-dot{width:9px;height:9px;border-radius:50%;background:var(--muted);transition:background .4s,box-shadow .4s;flex-shrink:0}
@@ -214,6 +216,16 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
 
     <div id="loginErr" class="login-err"></div>
     <button class="login-btn" id="loginBtn" onclick="doLogin()">ENTRAR</button>
+
+    <div style="display:flex;align-items:center;gap:10px;margin-top:4px">
+      <div style="flex:1;height:1px;background:var(--border)"></div>
+      <span style="font-family:'Montserrat',sans-serif;font-size:10px;color:var(--muted);letter-spacing:1px">O</span>
+      <div style="flex:1;height:1px;background:var(--border)"></div>
+    </div>
+    <button class="login-btn" id="loginGoogleBtn" onclick="doLoginGoogle()" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);display:flex;align-items:center;justify-content:center;gap:10px">
+      <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.31-8.16 2.31-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+      ENTRAR CON GOOGLE
+    </button>
 
     <details style="margin-top:-8px">
       <summary style="font-family:'Montserrat',sans-serif;font-weight:700;font-size:10px;color:var(--muted);letter-spacing:1px;cursor:pointer;text-transform:uppercase">Configuración API</summary>
@@ -377,17 +389,35 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
           <input class="tbl-search" type="date" id="fichajesFechaDesde" onchange="cargarFichajes()">
           <input class="tbl-search" type="date" id="fichajesFechaHasta" onchange="cargarFichajes()">
           <input class="tbl-search" id="searchFichajes" placeholder="🔍 Buscar trabajador..." oninput="tblFichajes && tblFichajes.setFilter('nombre',  'like', this.value)" style="min-width:180px">
+          <button class="btn btn-primary" onclick="abrirModalFichaje()">+ Fichaje manual</button>
           <button class="btn btn-secondary" onclick="cargarFichajes()">🔄 Actualizar</button>
           <button class="btn btn-secondary" onclick="exportarTabla(tblFichajes,'fichajes')">⬇ CSV</button>
         </div>
+        <div id="fichajesResumen" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:16px"></div>
         <div class="tbl-wrap"><div id="tblFichajes"></div></div>
       </div>
 
       <!-- TURNOS -->
       <div class="page" id="pageTurnos">
-        <div class="page-title">📅 Turnos</div>
-        <div class="page-sub">Planificación semanal del equipo</div>
-        <div class="loading"><div class="spinner"></div> Próximamente en Fase 2</div>
+        <div class="page-title">📅 Planificador de turnos</div>
+        <div class="page-sub">Vista semanal del equipo — haz clic en una celda para cambiar el turno</div>
+        <div class="tbl-toolbar">
+          <button class="btn btn-secondary" onclick="turnosSemana(-1)">← Semana anterior</button>
+          <button class="btn btn-secondary" onclick="turnosSemana(0)">Hoy</button>
+          <button class="btn btn-secondary" onclick="turnosSemana(1)">Semana siguiente →</button>
+          <span id="turnosRangoLabel" style="font-family:'Montserrat',sans-serif;font-weight:700;font-size:12px;color:var(--muted);margin-left:8px"></span>
+        </div>
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;overflow:auto">
+          <div id="turnosGrid" style="min-width:700px"></div>
+        </div>
+        <div style="display:flex;gap:16px;margin-top:12px;flex-wrap:wrap">
+          <span style="font-size:12px;color:var(--muted);font-family:'Montserrat',sans-serif;font-weight:700">LEYENDA:</span>
+          <span style="font-size:12px"><span style="background:#1d4ed8;color:#fff;padding:2px 8px;border-radius:4px;font-size:11px">M</span> Mañana</span>
+          <span style="font-size:12px"><span style="background:#d97706;color:#fff;padding:2px 8px;border-radius:4px;font-size:11px">T</span> Tarde</span>
+          <span style="font-size:12px"><span style="background:#7c3aed;color:#fff;padding:2px 8px;border-radius:4px;font-size:11px">N</span> Noche</span>
+          <span style="font-size:12px"><span style="background:#16a34a;color:#fff;padding:2px 8px;border-radius:4px;font-size:11px">L</span> Libre</span>
+          <span style="font-size:12px"><span style="background:var(--surface2);color:var(--muted);padding:2px 8px;border-radius:4px;border:1px solid var(--border);font-size:11px">—</span> Sin asignar</span>
+        </div>
       </div>
 
       <!-- EPIs -->
@@ -396,7 +426,9 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
         <div class="page-sub">Equipos de protección individual por trabajador</div>
         <div class="tbl-toolbar">
           <input class="tbl-search" id="searchEpis" placeholder="🔍 Buscar..." oninput="tblEpis && tblEpis.setFilter('trabajador','like',this.value)">
+          <button class="btn btn-primary" onclick="abrirModalEpi()">+ Asignar EPI</button>
           <button class="btn btn-secondary" onclick="cargarEpis()">🔄 Actualizar</button>
+          <button class="btn btn-secondary" onclick="exportarTabla(tblEpis,'epis')">⬇ CSV</button>
         </div>
         <div class="tbl-wrap"><div id="tblEpis"></div></div>
       </div>
@@ -413,7 +445,9 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
             <option value="proximo">Próximo a caducar</option>
             <option value="caducado">Caducado</option>
           </select>
+          <button class="btn btn-primary" onclick="abrirModalCarnet()">+ Nuevo carnet</button>
           <button class="btn btn-secondary" onclick="cargarCarnets()">🔄 Actualizar</button>
+          <button class="btn btn-secondary" onclick="exportarTabla(tblCarnets,'carnets')">⬇ CSV</button>
         </div>
         <div class="tbl-wrap"><div id="tblCarnets"></div></div>
       </div>
@@ -641,6 +675,54 @@ function saveApiUrl() {
   toast('URL guardada', 'ok');
 }
 
+async function doLoginGoogle() {
+  const btn = document.getElementById('loginGoogleBtn');
+  const errEl = document.getElementById('loginErr');
+  errEl.textContent = '';
+  btn.disabled = true; btn.textContent = 'Conectando...';
+  try {
+    const redirectUri = window.location.origin + window.location.pathname;
+    const res = await fetch(API + '/auth/google/url?redirect_uri=' + encodeURIComponent(redirectUri));
+    const data = await res.json();
+    if (!res.ok || !data.url) { errEl.textContent = data.error || 'Error al conectar con Google'; btn.disabled = false; return; }
+    window.location.href = data.url;
+  } catch { errEl.textContent = 'Error de conexión'; btn.disabled = false; }
+}
+
+async function handleGoogleCallback(code) {
+  document.getElementById('loginScreen').style.display = 'flex';
+  const errEl = document.getElementById('loginErr');
+  const btn = document.getElementById('loginGoogleBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Verificando...'; }
+  try {
+    const redirectUri = window.location.origin + window.location.pathname;
+    const res = await fetch(API + '/auth/google/callback', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code, redirect_uri: redirectUri }),
+    });
+    const data = await res.json();
+    // Limpiar el ?code= de la URL sin recargar
+    window.history.replaceState({}, '', window.location.pathname);
+    if (!res.ok || !data.ok) {
+      errEl.textContent = data.pendiente ? 'Tu cuenta está pendiente de aprobación.' : (data.error || 'Error al verificar con Google');
+      if (btn) { btn.disabled = false; }
+      return;
+    }
+    const rolesPermitidos = ['empresa_admin', 'encargado', 'jefe_de_obra', 'oficina', 'superadmin', 'desarrollador'];
+    if (!rolesPermitidos.includes(data.rol)) {
+      errEl.textContent = 'Tu rol no tiene acceso al panel de oficina';
+      if (btn) { btn.disabled = false; }
+      return;
+    }
+    TOKEN = data.token;
+    SESSION = { nombre: data.nombre, rol: data.rol, empresa_id: data.empresa_id, empresa_nombre: data.empresa_nombre };
+    localStorage.setItem('panel_token', TOKEN);
+    localStorage.setItem('panel_session', JSON.stringify(SESSION));
+    iniciarApp();
+  } catch { errEl.textContent = 'Error de conexión'; if (btn) btn.disabled = false; }
+}
+
 async function doLogin() {
   const email = document.getElementById('loginEmail').value.trim();
   const pass  = document.getElementById('loginPass').value;
@@ -653,7 +735,7 @@ async function doLogin() {
   btn.disabled = false; btn.textContent = 'ENTRAR';
   if (!r.ok) { errEl.textContent = r.error || 'Credenciales incorrectas'; return; }
 
-  const rolesPermitidos = ['empresa_admin', 'encargado', 'jefe_de_obra', 'oficina', 'superadmin'];
+  const rolesPermitidos = ['empresa_admin', 'encargado', 'jefe_de_obra', 'oficina', 'superadmin', 'desarrollador'];
   if (!rolesPermitidos.includes(r.rol)) {
     errEl.textContent = 'Tu rol no tiene acceso al panel de oficina';
     return;
@@ -686,14 +768,14 @@ function iniciarApp() {
   const rolLabels = {
     superadmin: 'Super Admin', empresa_admin: 'Admin',
     jefe_de_obra: 'Jefe de Obra', oficina: 'Oficina',
-    encargado: 'Encargado'
+    encargado: 'Encargado', desarrollador: 'Desarrollador'
   };
   rolEl.textContent = rolLabels[SESSION.rol] || SESSION.rol;
   rolEl.className = `rol-badge rol-${SESSION.rol}`;
   if (SESSION.empresa_nombre) document.getElementById('topbarEmpresa').textContent = SESSION.empresa_nombre;
 
   // mostrar sección admin si procede
-  const isAdmin = ['superadmin', 'empresa_admin'].includes(SESSION.rol);
+  const isAdmin = ['superadmin', 'empresa_admin', 'desarrollador'].includes(SESSION.rol);
   if (isAdmin) {
     document.querySelectorAll('.nav-admin, .nav-admin-section').forEach(el => el.style.display = '');
   }
@@ -723,6 +805,7 @@ const PAGE_LOADERS = {
   dashboard: cargarDashboard,
   personal: cargarPersonal,
   fichajes: cargarFichajes,
+  turnos: cargarTurnos,
   epis: cargarEpis,
   carnets: cargarCarnets,
   bobinas: cargarBobinas,
@@ -820,7 +903,7 @@ async function cargarPersonal() {
   const data = r.trabajadores || r.data || [];
   if (tblPersonal) { tblPersonal.replaceData(data); return; }
 
-  const canEdit = ['empresa_admin', 'jefe_de_obra', 'oficina', 'encargado', 'superadmin'].includes(SESSION.rol);
+  const canEdit = ['empresa_admin', 'jefe_de_obra', 'oficina', 'encargado', 'superadmin', 'desarrollador'].includes(SESSION.rol);
 
   tblPersonal = new Tabulator('#tblPersonal', {
     data, layout: 'fitColumns', responsiveLayout: 'collapse',
@@ -899,6 +982,39 @@ function abrirModalPersonal() {
 
 // ── FICHAJES ───────────────────────────────────────────────────
 let tblFichajes = null;
+function abrirModalFichaje() {
+  const hoy = new Date().toISOString().slice(0, 10);
+  abrirModal('Fichaje manual', `
+    <div class="form-group"><div class="form-label">Trabajador (ID)</div><input class="form-input" id="mFichTrab" type="number" placeholder="ID del trabajador"></div>
+    <div class="form-row">
+      <div class="form-group"><div class="form-label">Fecha entrada</div><input class="form-input" id="mFichFecha" type="date" value="${hoy}"></div>
+      <div class="form-group"><div class="form-label">Hora entrada</div><input class="form-input" id="mFichHoraE" type="time" value="08:00"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><div class="form-label">Fecha salida</div><input class="form-input" id="mFichFechaS" type="date" value="${hoy}"></div>
+      <div class="form-group"><div class="form-label">Hora salida</div><input class="form-input" id="mFichHoraS" type="time" value="17:00"></div>
+    </div>
+    <div class="form-group"><div class="form-label">Tipo</div>
+      <select class="form-select" id="mFichTipo">
+        <option value="normal">Normal</option>
+        <option value="extra">Extra</option>
+        <option value="guardia">Guardia</option>
+      </select>
+    </div>
+  `, async () => {
+    const entrada = `${document.getElementById('mFichFecha').value}T${document.getElementById('mFichHoraE').value}:00`;
+    const salida  = `${document.getElementById('mFichFechaS').value}T${document.getElementById('mFichHoraS').value}:00`;
+    const body = {
+      usuario_id: parseInt(document.getElementById('mFichTrab').value),
+      entrada, salida,
+      tipo: document.getElementById('mFichTipo').value,
+    };
+    if (!body.usuario_id) { toast('Indica el ID del trabajador', 'err'); return; }
+    const r = await api('/fichajes', { method: 'POST', body: JSON.stringify(body) });
+    if (r.ok) { cerrarModal(); toast('Fichaje registrado ✓', 'ok'); tblFichajes = null; cargarFichajes(); }
+    else toast(r.error || 'Error al guardar', 'err');
+  });
+}
 async function cargarFichajes() {
   const desde = document.getElementById('fichajesFechaDesde').value;
   const hasta = document.getElementById('fichajesFechaHasta').value;
@@ -914,6 +1030,20 @@ async function cargarFichajes() {
     fechaDisplay: fmtFecha(f.entrada),
     duracion: f.horas ? `${f.horas}h` : '—',
   }));
+
+  // Resumen de horas
+  const totalFichajes = data.length;
+  const totalHoras = data.reduce((s, f) => s + (parseFloat(f.horas) || 0), 0);
+  const trabajadoresUnicos = new Set(data.map(f => f.nombre)).size;
+  document.getElementById('fichajesResumen').innerHTML = [
+    { icon:'⏱️', value: totalHoras.toFixed(1) + 'h', label:'Total horas' },
+    { icon:'📋', value: totalFichajes, label:'Fichajes' },
+    { icon:'👷', value: trabajadoresUnicos, label:'Trabajadores' },
+  ].map(k => `<div class="kpi-card" style="padding:14px">
+    <div class="kpi-icon" style="font-size:20px">${k.icon}</div>
+    <div class="kpi-value" style="font-size:22px">${k.value}</div>
+    <div class="kpi-label">${k.label}</div>
+  </div>`).join('');
 
   if (tblFichajes) { tblFichajes.replaceData(data); return; }
   tblFichajes = new Tabulator('#tblFichajes', {
@@ -944,6 +1074,37 @@ async function cargarFichajes() {
 
 // ── EPIs ───────────────────────────────────────────────────────
 let tblEpis = null;
+function abrirModalEpi() {
+  abrirModal('Asignar EPI', `
+    <div class="form-group"><div class="form-label">Tipo de EPI</div>
+      <select class="form-select" id="mEpiTipo">
+        <option>Casco de seguridad</option><option>Chaleco reflectante</option>
+        <option>Botas de seguridad</option><option>Guantes</option>
+        <option>Gafas de protección</option><option>Arnés anticaídas</option>
+        <option>Protección auditiva</option><option>Mascarilla FFP2</option>
+        <option>Ropa ignífuga</option><option>Otro</option>
+      </select>
+    </div>
+    <div class="form-group"><div class="form-label">Trabajador (ID)</div><input class="form-input" id="mEpiTrab" type="number" placeholder="ID del trabajador"></div>
+    <div class="form-row">
+      <div class="form-group"><div class="form-label">Talla</div><input class="form-input" id="mEpiTalla" placeholder="L, XL, 42..."></div>
+      <div class="form-group"><div class="form-label">Fecha entrega</div><input class="form-input" id="mEpiFecha" type="date"></div>
+    </div>
+    <div class="form-group"><div class="form-label">Fecha caducidad</div><input class="form-input" id="mEpiCad" type="date"></div>
+  `, async () => {
+    const body = {
+      tipo_epi: document.getElementById('mEpiTipo').value,
+      usuario_id: parseInt(document.getElementById('mEpiTrab').value),
+      talla: document.getElementById('mEpiTalla').value.trim(),
+      fecha_entrega: document.getElementById('mEpiFecha').value,
+      fecha_caducidad: document.getElementById('mEpiCad').value || null,
+    };
+    if (!body.usuario_id) { toast('Indica el ID del trabajador', 'err'); return; }
+    const r = await api('/epis-asignados', { method: 'POST', body: JSON.stringify(body) });
+    if (r.ok) { cerrarModal(); toast('EPI asignado ✓', 'ok'); tblEpis = null; cargarEpis(); }
+    else toast(r.error || 'Error al guardar', 'err');
+  });
+}
 async function cargarEpis() {
   const r = await api('/epis-asignados');
   const data = (r.epis || r.data || []).map(e => ({
@@ -967,8 +1128,149 @@ async function cargarEpis() {
   });
 }
 
+// ── TURNOS ─────────────────────────────────────────────────────
+let turnosOffset = 0;
+let turnosData = [];
+let turnosTrabajadores = [];
+
+function turnosSemana(dir) {
+  if (dir === 0) turnosOffset = 0;
+  else turnosOffset += dir;
+  cargarTurnos();
+}
+
+function getLunes(offset = 0) {
+  const hoy = new Date();
+  const dia = hoy.getDay();
+  const diff = (dia + 6) % 7;
+  const lunes = new Date(hoy);
+  lunes.setDate(hoy.getDate() - diff + offset * 7);
+  lunes.setHours(0, 0, 0, 0);
+  return lunes;
+}
+
+const DIAS_SEMANA = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
+const TURNO_CICLO = [null, 'Mañana', 'Tarde', 'Noche', 'Libre'];
+const TURNO_STYLE = {
+  Mañana: 'background:#1d4ed8;color:#fff',
+  Tarde:  'background:#d97706;color:#fff',
+  Noche:  'background:#7c3aed;color:#fff',
+  Libre:  'background:#16a34a;color:#fff',
+};
+const TURNO_SHORT = { Mañana:'M', Tarde:'T', Noche:'N', Libre:'L' };
+
+async function cargarTurnos() {
+  const lunes = getLunes(turnosOffset);
+  const domingo = new Date(lunes); domingo.setDate(lunes.getDate() + 6);
+  const fmt = d => d.toISOString().slice(0, 10);
+  document.getElementById('turnosRangoLabel').textContent =
+    `${fmt(lunes).split('-').reverse().join('/')} — ${fmt(domingo).split('-').reverse().join('/')}`;
+
+  const [tR, trabR] = await Promise.all([
+    api(`/turnos?desde=${fmt(lunes)}&hasta=${fmt(domingo)}`),
+    api('/personal/trabajadores'),
+  ]);
+  turnosData = tR.turnos || [];
+  turnosTrabajadores = (trabR.trabajadores || []).slice(0, 30);
+  renderTurnosGrid(lunes);
+}
+
+function renderTurnosGrid(lunes) {
+  const canEdit = ['empresa_admin', 'jefe_de_obra', 'encargado', 'superadmin', 'desarrollador'].includes(SESSION.rol);
+  const dias = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(lunes); d.setDate(lunes.getDate() + i);
+    return d;
+  });
+  const turnoMap = {};
+  turnosData.forEach(t => { turnoMap[`${t.trabajador_id}_${t.fecha}`] = t.turno; });
+
+  let html = `<table style="width:100%;border-collapse:collapse">
+    <thead><tr>
+      <th style="padding:12px 16px;text-align:left;font-family:'Montserrat',sans-serif;font-size:11px;letter-spacing:1px;color:var(--muted);border-bottom:2px solid var(--accent);background:var(--surface2);min-width:160px">TRABAJADOR</th>`;
+  dias.forEach((d, i) => {
+    const hoy = new Date(); hoy.setHours(0,0,0,0);
+    const esHoy = d.getTime() === hoy.getTime();
+    html += `<th style="padding:10px 8px;text-align:center;font-family:'Montserrat',sans-serif;font-size:11px;letter-spacing:.5px;color:${esHoy ? 'var(--accent)' : 'var(--muted)'};border-bottom:2px solid ${esHoy ? 'var(--accent)' : 'var(--border)'};background:var(--surface2);min-width:80px">
+      ${DIAS_SEMANA[i]}<br><span style="font-size:13px;font-weight:900;color:${esHoy ? 'var(--accent)' : 'var(--text)'}">${d.getDate()}</span></th>`;
+  });
+  html += '</tr></thead><tbody>';
+
+  turnosTrabajadores.forEach((tr, idx) => {
+    html += `<tr style="background:${idx % 2 === 0 ? 'var(--surface)' : 'rgba(30,45,64,.4)'}">
+      <td style="padding:10px 16px;font-size:13px;font-weight:500;border-bottom:1px solid var(--border);white-space:nowrap">${tr.nombre}</td>`;
+    dias.forEach(d => {
+      const fecha = d.toISOString().slice(0, 10);
+      const turno = turnoMap[`${tr.id}_${fecha}`] || null;
+      const style = turno ? TURNO_STYLE[turno] : 'background:transparent;color:var(--muted)';
+      const label = turno ? TURNO_SHORT[turno] : '—';
+      const cursor = canEdit ? 'cursor:pointer' : '';
+      const onclick = canEdit ? `onclick="ciclaTurno(${tr.id},'${fecha}','${turno || ''}')"` : '';
+      html += `<td style="padding:6px;text-align:center;border-bottom:1px solid var(--border);border-left:1px solid var(--border)">
+        <span ${onclick} style="display:inline-block;width:32px;height:32px;line-height:32px;border-radius:8px;font-family:'Montserrat',sans-serif;font-weight:900;font-size:13px;${style};${cursor};user-select:none;transition:opacity .15s" title="${turno || 'Sin asignar'}">${label}</span>
+      </td>`;
+    });
+    html += '</tr>';
+  });
+  html += '</tbody></table>';
+  document.getElementById('turnosGrid').innerHTML = html;
+}
+
+async function ciclaTurno(trabajadorId, fecha, actual) {
+  const idx = TURNO_CICLO.indexOf(actual || null);
+  const siguiente = TURNO_CICLO[(idx + 1) % TURNO_CICLO.length];
+  const r = await api('/turnos', {
+    method: 'POST',
+    body: JSON.stringify({ trabajador_id: trabajadorId, fecha, turno: siguiente }),
+  });
+  if (!r.ok) { toast('Error al guardar turno', 'err'); return; }
+  // Update local data optimista
+  const key = `${trabajadorId}_${fecha}`;
+  const existing = turnosData.findIndex(t => t.trabajador_id === trabajadorId && t.fecha === fecha);
+  if (siguiente === null) {
+    if (existing >= 0) turnosData.splice(existing, 1);
+  } else {
+    if (existing >= 0) turnosData[existing].turno = siguiente;
+    else turnosData.push({ trabajador_id: trabajadorId, fecha, turno: siguiente });
+  }
+  renderTurnosGrid(getLunes(turnosOffset));
+}
+
 // ── CARNETS ────────────────────────────────────────────────────
 let tblCarnets = null;
+const TIPOS_CARNET = [
+  'PRL Básico (20h)', 'PRL Medio (60h)', 'PRL Superior', 'Trabajos en altura (PEMP)',
+  'Carretilla elevadora', 'CAE / Coordinación actividades', 'Primeros auxilios',
+  'Carnet de conducir B', 'Carnet de conducir C', 'ADR (mercancías peligrosas)',
+  'Operador de grúa', 'Soldador homologado', 'Electricista BT', 'Electricista AT',
+  'Manejo de explosivos', 'Responsable medio ambiente', 'Coordinador de seguridad', 'Otro',
+];
+function abrirModalCarnet() {
+  abrirModal('Nuevo carnet / certificación', `
+    <div class="form-group"><div class="form-label">Tipo de carnet</div>
+      <select class="form-select" id="mCarnTipo">${TIPOS_CARNET.map(t => `<option>${t}</option>`).join('')}</select>
+    </div>
+    <div class="form-group"><div class="form-label">Trabajador (ID)</div><input class="form-input" id="mCarnTrab" type="number" placeholder="ID del trabajador"></div>
+    <div class="form-group"><div class="form-label">Número / referencia</div><input class="form-input" id="mCarnNum" placeholder="Nº de certificado"></div>
+    <div class="form-row">
+      <div class="form-group"><div class="form-label">Fecha expedición</div><input class="form-input" id="mCarnExp" type="date"></div>
+      <div class="form-group"><div class="form-label">Fecha caducidad</div><input class="form-input" id="mCarnCad" type="date"></div>
+    </div>
+    <div class="form-group"><div class="form-label">Avisar con X días de antelación</div><input class="form-input" id="mCarnAviso" type="number" value="30" min="1" max="365"></div>
+  `, async () => {
+    const body = {
+      tipo: document.getElementById('mCarnTipo').value,
+      usuario_id: parseInt(document.getElementById('mCarnTrab').value),
+      numero: document.getElementById('mCarnNum').value.trim(),
+      fecha_expedicion: document.getElementById('mCarnExp').value || null,
+      fecha_caducidad: document.getElementById('mCarnCad').value || null,
+      dias_aviso: parseInt(document.getElementById('mCarnAviso').value) || 30,
+    };
+    if (!body.usuario_id) { toast('Indica el ID del trabajador', 'err'); return; }
+    const r = await api('/carnets', { method: 'POST', body: JSON.stringify(body) });
+    if (r.ok) { cerrarModal(); toast('Carnet registrado ✓', 'ok'); tblCarnets = null; cargarCarnets(); }
+    else toast(r.error || 'Error al guardar', 'err');
+  });
+}
 async function cargarCarnets() {
   const r = await api('/carnets');
   const data = (r.carnets || r.data || []).map(c => ({
@@ -1007,7 +1309,7 @@ async function cargarBobinas() {
   const r = await api('/bobinas');
   const data = r.bobinas || r.data || [];
   if (tblBobinas) { tblBobinas.replaceData(data); return; }
-  const canEdit = ['empresa_admin', 'jefe_de_obra', 'oficina', 'encargado', 'superadmin'].includes(SESSION.rol);
+  const canEdit = ['empresa_admin', 'jefe_de_obra', 'oficina', 'encargado', 'superadmin', 'desarrollador'].includes(SESSION.rol);
   tblBobinas = new Tabulator('#tblBobinas', {
     data, layout: 'fitColumns',
     pagination: 'local', paginationSize: 20,
@@ -1214,7 +1516,7 @@ async function cargarIncidencias() {
     ...i, descripcionCorta: (i.descripcion || i.titulo || '').substring(0, 80)
   }));
   if (tblIncidencias) { tblIncidencias.replaceData(data); return; }
-  const canEdit = ['empresa_admin', 'jefe_de_obra', 'oficina', 'encargado', 'superadmin'].includes(SESSION.rol);
+  const canEdit = ['empresa_admin', 'jefe_de_obra', 'oficina', 'encargado', 'superadmin', 'desarrollador'].includes(SESSION.rol);
   tblIncidencias = new Tabulator('#tblIncidencias', {
     data, layout: 'fitColumns', pagination: 'local', paginationSize: 20,
     columns: [
@@ -1313,7 +1615,7 @@ async function cargarMantenimientos() {
 // ── USUARIOS (admin) ───────────────────────────────────────────
 let tblUsuarios = null;
 async function cargarUsuarios() {
-  if (!['empresa_admin', 'superadmin'].includes(SESSION.rol)) return;
+  if (!['empresa_admin', 'superadmin', 'desarrollador'].includes(SESSION.rol)) return;
   const r = await api('/usuarios');
   const data = r.usuarios || r.data || [];
   if (tblUsuarios) { tblUsuarios.replaceData(data); return; }
@@ -1398,9 +1700,11 @@ document.getElementById('modalOverlay').addEventListener('click', e => {
 
 // ── INICIO ─────────────────────────────────────────────────────
 (function init() {
-  if (TOKEN && SESSION) {
-    iniciarApp();
-  }
+  // Detectar callback OAuth de Google (?code= en la URL)
+  const urlParams = new URLSearchParams(window.location.search);
+  const code = urlParams.get('code');
+  if (code) { handleGoogleCallback(code); return; }
+  if (TOKEN && SESSION) { iniciarApp(); }
 })();
 </script>
 </body>
