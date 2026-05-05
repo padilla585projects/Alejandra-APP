@@ -5,7 +5,7 @@
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 05/05/2026
-VERSIÓN ACTUAL APP NUEVA: v5.43 (worker 54b05f9e)
+VERSIÓN ACTUAL APP NUEVA: v5.44 (worker a6efb717)
 VERSIÓN ACTUAL APP VIEJA: v4.19 (⛔ CONGELADA DEFINITIVAMENTE — no recibe más cambios)
 
 ================================================================================
@@ -150,6 +150,21 @@ PASO 4 — VERIFICAR WORKER (solo si se va a tocar worker.js)
 ================================================================================
   HISTORIAL DE VERSIONES — RECIENTES
 ================================================================================
+
+v5.44        |  05/05/2026  [PANEL-02: bugs RGPD corregidos]
+  - BUG-RGPD-01: rgpdInforme tenía columnas incorrectas en TODAS las queries de informe DSAR.
+    fichajes: 'entrada' → 'fecha', 'hora_entrada', 'hora_salida'…; carnets: 'tipo_carnet'/'fecha_emision'
+    → 'tipo'/'numero'/'fecha_obtencion'/'fecha_caducidad'…; epis: tabla 'epis' (no existe) → 'epis_asignados';
+    turnos: 'semana'/'dia' → 'fecha'/'turno'. Repostajes sin usuario_id → eliminado del DSAR.
+  - BUG-RGPD-02: rgpdAplicarRetencion usaba columna 'entrada' en DELETE de fichajes → nunca borraba nada.
+    Fix: 'fecha' (nombre real de la columna).
+  - BUG-RGPD-03: rgpdAnonimizar solo actualizaba usuarios + chat_mensajes. nombre_trabajador en carnets,
+    epis_asignados y turnos quedaba sin anonimizar. También: 'password=NULL' → 'password_hash=NULL'.
+  - BUG-RGPD-04 (panel): cargarPrivacidad hacía r.usuarios||r.data||[] sobre array crudo → lista siempre
+    vacía. Fix: Array.isArray(r) ? r : (r.usuarios || r.data || []).
+  - Text fix panel: "hash SHA-256" → "hash PBKDF2-SHA256" en sección Datos personales.
+  - Worker ID: a6efb717-0b27-4a32-a2a4-f7d6cbf5d04c
+  - GitHub: 1e982db
 
 v5.43        |  05/05/2026  [SEC-14 + SYNC-03]
   - SEC-14: Rate limiting X-Admin-Code legacy path. IP bloqueada tras 5 intentos fallidos/15 min.

@@ -7,11 +7,25 @@
 
 **Sesión:** LIBRE
 **Última sesión:** 05/05/2026
-**Versión tras última sesión:** v5.43 (worker 54b05f9e)
-**GitHub:** f18c249 ✅
+**Versión tras última sesión:** v5.44 (worker a6efb717)
+**GitHub:** 1e982db ✅
 **Panel web:** https://padilla585projects.github.io/Alejandra-APP/panel.html ✅ FUNCIONA
 
 ---
+
+## RESUMEN SESIÓN 05/05/2026 (PANEL-02: RGPD bugs v5.44)
+
+- **BUG-RGPD-01**: rgpdInforme — columnas incorrectas en todas las queries del informe DSAR.
+  Fichajes: 'entrada'→'fecha'+'hora_entrada'+'hora_salida'+más campos. Carnets: 'tipo_carnet'/'fecha_emision'
+  → esquema real. EPIs: tabla 'epis' (inexistente) → 'epis_asignados'. Turnos: 'semana'/'dia'→'fecha'/'turno'.
+  Repostajes: sin usuario_id → eliminado del DSAR con comentario explicativo.
+- **BUG-RGPD-02**: rgpdAplicarRetencion DELETE fichajes usaba 'entrada' → nunca borraba. Fix: 'fecha'.
+- **BUG-RGPD-03**: rgpdAnonimizar incompleto — nombre_trabajador en carnets/epis_asignados/turnos no
+  se anonimizaba. Columna 'password' → 'password_hash'. Ahora anonimiza 5 tablas + borra sesiones/tokens.
+- **BUG-RGPD-04**: cargarPrivacidad (panel) — r.usuarios||r.data||[] sobre array crudo → lista siempre vacía.
+  Fix: Array.isArray(r) guard.
+- Text fix: "SHA-256" → "PBKDF2-SHA256" en sección datos personales del panel.
+- Worker: a6efb717, App: v5.44, GitHub: 1e982db ✅
 
 ## RESUMEN SESIÓN 05/05/2026 (SEC-14 + SYNC-03 v5.43)
 
