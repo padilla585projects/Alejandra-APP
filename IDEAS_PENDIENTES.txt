@@ -866,23 +866,19 @@ LEYENDA DE ESTADO:
     · Fix: anchor click, detección por extensión, lightbox con DOM API.
     · Reportado: 29/04/2026 — empresa 1, eléctrico
 
-[ ] PANEL-01 — Recuperación de contraseña vía email (Resend)
-    · Enlace "¿Olvidaste tu contraseña?" en pantalla de login del panel
-    · Worker: endpoint /recuperar-pass → genera token, envía email con Resend
-    · Worker: endpoint /resetear-pass → verifica token, actualiza contraseña
-    · También en app móvil (index.html)
-    · Requiere: RESEND_API_KEY en variables de entorno Cloudflare
-    · Pendiente de API key de Resend por parte del usuario
+[✓] PANEL-01 — Recuperación de contraseña vía email (Resend)  [HECHO panel v0.8 / app móvil v5.31]
+    · Enlace "¿Olvidaste tu contraseña?" en login del panel y de la app móvil.
+    · Worker: /recuperar-pass genera token hex 32 chars (tabla reset_tokens, expira 2h), envía email HTML vía Resend API.
+    · Worker: /resetear-pass verifica token, actualiza password (PBKDF2), invalida sesiones.
+    · RESEND_API_KEY configurada como secret en Cloudflare. Sender: onboarding@resend.dev.
 
-[ ] PANEL-02 — Plan de revisión de protección de datos para empresas (GDPR / LOPD)
-    · Auditar qué datos personales almacena la app por empresa (usuarios, fichajes, fotos, chat...)
-    · Definir política de retención (cuánto tiempo se guardan los datos)
-    · Añadir en panel web sección "Protección de datos" o en Ajustes > Empresa:
-      - Descargar informe de datos personales almacenados (DSAR)
-      - Eliminar datos de un trabajador concreto (derecho al olvido)
-      - Configurar retención automática (X días para fichajes, logs, chat...)
-    · Posible endpoint /rgpd/informe + /rgpd/eliminar-usuario + /rgpd/config-retencion
-    · Sesión dedicada — requiere análisis previo de tablas D1 con datos personales
+[✓] PANEL-02 — Protección de datos RGPD/LOPD  [HECHO v5.40 + bugs corregidos v5.44]
+    · Sección "⚖️ Privacidad" en panel web con lista de usuarios y sus datos.
+    · Worker: GET /rgpd/informe → DSAR completo por usuario (fichajes, EPIs, carnets, turnos).
+    · Worker: DELETE /rgpd/anonimizar → anonimiza 5 tablas + borra sesiones/tokens.
+    · Worker: GET/PUT /rgpd/config → retención configurable (X días) por tabla.
+    · Worker: POST /rgpd/aplicar-retencion → borra registros antiguos según config.
+    · Bugs corregidos en v5.44: columnas incorrectas en queries DSAR, retención fichajes, anonimizado incompleto.
 
 ================================================================================
   📋 INSTRUCCIONES PARA CLAUDE

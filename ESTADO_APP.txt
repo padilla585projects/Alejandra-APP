@@ -5,7 +5,7 @@
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 05/05/2026
-VERSIÓN ACTUAL APP NUEVA: v5.48 (worker 150a6c74)
+VERSIÓN ACTUAL APP NUEVA: v5.49 (worker 8651d4bf)
 VERSIÓN ACTUAL APP VIEJA: v4.19 (⛔ CONGELADA DEFINITIVAMENTE — no recibe más cambios)
 
 ================================================================================
@@ -150,6 +150,16 @@ PASO 4 — VERIFICAR WORKER (solo si se va a tocar worker.js)
 ================================================================================
   HISTORIAL DE VERSIONES — RECIENTES
 ================================================================================
+
+v5.49        |  05/05/2026  [pendientes backlog — Telegram secret + auto-refresh + docs]
+  - TELEGRAM_WEBHOOK_SECRET configurado en Cloudflare secrets (64 chars hex, crypto-seguro).
+    setupTelegramWebhook actualizado: usa TELEGRAM_WEBHOOK_SECRET si existe, si no deriva del token.
+    URL del webhook corregida: alejandra-worker → alejandra-app-api (estaba incorrecta).
+    allowed_updates ampliado: ['message','callback_query'] (antes faltaba callback_query).
+    ⚠️ Pendiente: re-registrar webhook desde panel DevTools para aplicar el nuevo secret.
+  - Auto-refresh panel: kits:120s, obras:120s, usuarios:120s añadidos a SYNC_INTERVALS.
+  - IDEAS_PENDIENTES.txt: PANEL-01 y PANEL-02 marcados como [✓ HECHO].
+  - Worker ID: 8651d4bf-90ac-46b3-89ed-7cfacb8ad9c9
 
 v5.48        |  05/05/2026  [SEC-15: auditoría de seguridad — 8 mejoras]
   - CRIT-2: Telegram webhook ahora rechaza si no hay secret configurado (antes aceptaba todo).

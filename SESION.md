@@ -7,11 +7,22 @@
 
 **Sesión:** LIBRE
 **Última sesión:** 05/05/2026
-**Versión tras última sesión:** v5.48 (worker 150a6c74)
+**Versión tras última sesión:** v5.49 (worker 8651d4bf)
 **GitHub:** en sync ✅
 **Panel web:** https://padilla585projects.github.io/Alejandra-APP/panel.html ✅ FUNCIONA
 
 ---
+
+## RESUMEN SESIÓN 05/05/2026 (v5.49 — pendientes backlog + Telegram secret + auto-refresh)
+
+- TELEGRAM_WEBHOOK_SECRET subido a Cloudflare secrets (64 hex chars, randomHex).
+  setupTelegramWebhook: usa env.TELEGRAM_WEBHOOK_SECRET (prioridad) o deriva del token.
+  URL del webhook corregida (era alejandra-worker, debe ser alejandra-app-api).
+  allowed_updates: añadido callback_query (faltaba para botones inline).
+  ⚠️ Pendiente re-registrar desde panel → DevTools → Registrar Webhook Telegram.
+- Auto-refresh panel: kits:120s, obras:120s, usuarios:120s en SYNC_INTERVALS.
+- IDEAS_PENDIENTES.txt: PANEL-01 y PANEL-02 marcados como hechos.
+- Worker: 8651d4bf ✅
 
 ## RESUMEN SESIÓN 05/05/2026 (SEC-15: auditoría de seguridad v5.48)
 

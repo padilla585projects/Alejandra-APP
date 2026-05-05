@@ -6036,15 +6036,17 @@ async function setupTelegramWebhook(request, env) {
   if (!isSuperadmin) return err('No autorizado', 403);
   const token  = env.TELEGRAM_BOT_TOKEN;
   if (!token) return err('TELEGRAM_BOT_TOKEN no configurado', 500);
-  const secret = token.split(':')[1]?.slice(0,32) || '';
-  const webhookUrl = `https://alejandra-worker.alejandra-app.workers.dev/telegram/webhook`;
+  // Usa TELEGRAM_WEBHOOK_SECRET si está configurado, si no lo deriva del token
+  const secret = env.TELEGRAM_WEBHOOK_SECRET || token.split(':')[1]?.slice(0, 32) || '';
+  if (!secret) return err('No hay secret configurado para el webhook', 500);
+  const webhookUrl = `https://alejandra-app-api.alejandra-app.workers.dev/telegram/webhook`;
   const res = await fetch(`https://api.telegram.org/bot${token}/setWebhook`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ url: webhookUrl, secret_token: secret, allowed_updates: ['message'] }),
+    body: JSON.stringify({ url: webhookUrl, secret_token: secret, allowed_updates: ['message', 'callback_query'] }),
   });
   const data = await res.json();
-  return json({ ok: data.ok, result: data.description || data.result });
+  return json({ ok: data.ok, result: data.description || data.result, webhookUrl, secret_configured: !!env.TELEGRAM_WEBHOOK_SECRET });
 }
 
 // Notificar turnos de una semana a los trabajadores vinculados con Telegram
