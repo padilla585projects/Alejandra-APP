@@ -6934,7 +6934,7 @@ async function devKPIs(request, env) {
     env.DB.prepare("SELECT COUNT(*) as n FROM usuarios WHERE activo = 1").first(),
     env.DB.prepare("SELECT COUNT(*) as n FROM obras WHERE activa = 1").first(),
     env.DB.prepare("SELECT COUNT(*) as n FROM bobinas").first(),
-    env.DB.prepare("SELECT COUNT(*) as n FROM fichajes WHERE DATE(entrada) = DATE('now')").first(),
+    env.DB.prepare("SELECT COUNT(*) as n FROM fichajes WHERE fecha = DATE('now')").first(),
     env.DB.prepare("SELECT COUNT(*) as n FROM incidencias WHERE estado = 'abierta'").first(),
     env.DB.prepare("SELECT COUNT(*) as n FROM sesiones").first(),
     env.DB.prepare("SELECT COUNT(*) as n FROM invitaciones WHERE usado = 0 AND expira_at > datetime('now')").first(),
@@ -6975,8 +6975,8 @@ async function devCambiarRol(request, env) {
   if (!s || !['superadmin','desarrollador'].includes(s.rol)) return err('Sin permiso', 403);
   const { usuario_id, rol } = await request.json().catch(() => ({}));
   const rolesValidos = ['superadmin','empresa_admin','encargado','jefe_de_obra','oficina','operario','desarrollador'];
-  if (!usuario_id || !rolesValidos.includes(rol)) return err('Datos invÃ¡lidos', 400);
-  if (Number(usuario_id) === Number(s.usuario_id)) return err('No puedes cambiar tu propio rol desde aquÃ­', 403);
+  if (!usuario_id || !rolesValidos.includes(rol)) return err('Datos invalidos', 400);
+  if (Number(usuario_id) === Number(s.usuario_id)) return err('No puedes cambiar tu propio rol desde aqui', 403);
   const u = await env.DB.prepare('SELECT id FROM usuarios WHERE id = ?').bind(usuario_id).first();
   if (!u) return err('Usuario no encontrado', 404);
   await env.DB.prepare('UPDATE usuarios SET rol = ? WHERE id = ?').bind(rol, usuario_id).run();
@@ -6988,9 +6988,9 @@ async function devActivity(request, env) {
   if (!s || !['superadmin','desarrollador'].includes(s.rol)) return err('Sin permiso', 403);
   const [fichajes, incidencias] = await Promise.all([
     env.DB.prepare(`
-      SELECT DATE(entrada) as dia, COUNT(*) as total
-      FROM fichajes WHERE entrada >= DATE('now', '-30 days')
-      GROUP BY DATE(entrada) ORDER BY dia
+      SELECT fecha as dia, COUNT(*) as total
+      FROM fichajes WHERE fecha >= DATE('now', '-30 days')
+      GROUP BY fecha ORDER BY dia
     `).all(),
     env.DB.prepare(`
       SELECT DATE(fecha) as dia, COUNT(*) as total
