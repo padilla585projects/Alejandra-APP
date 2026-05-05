@@ -265,6 +265,10 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
     <button class="nav-item active" data-page="dashboard" onclick="navTo('dashboard')">
       <span class="nav-icon">📊</span> Dashboard
     </button>
+    <button class="nav-item" onclick="chatAbrir()" style="position:relative">
+      <span class="nav-icon">💬</span> Chat del equipo
+      <span class="nav-badge" id="chatBadgeSidebar" style="display:none">0</span>
+    </button>
 
     <div class="sidebar-section">Personal</div>
     <button class="nav-item" data-page="personal" onclick="navTo('personal')">
@@ -292,6 +296,9 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
     </button>
     <button class="nav-item" data-page="carretillas" onclick="navTo('carretillas')">
       <span class="nav-icon">🛺</span> Carretillas
+    </button>
+    <button class="nav-item" data-page="repostajes" onclick="navTo('repostajes')">
+      <span class="nav-icon">⛽</span> Repostajes
     </button>
     <button class="nav-item" data-page="herramientas" onclick="navTo('herramientas')">
       <span class="nav-icon">🔧</span> Herramientas
@@ -321,6 +328,9 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
     <button class="nav-item nav-admin" data-page="empresa" onclick="navTo('empresa')" style="display:none">
       <span class="nav-icon">🏢</span> Empresa
     </button>
+    <button class="nav-item nav-admin" data-page="logs" onclick="navTo('logs')" style="display:none">
+      <span class="nav-icon">📋</span> Logs
+    </button>
 
     <div style="flex:1"></div>
     <div style="padding:12px 8px;border-top:1px solid var(--border)">
@@ -343,6 +353,9 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
         <span id="topbarName">—</span>
         <span class="rol-badge" id="topbarRol"></span>
       </div>
+      <button class="topbar-btn" onclick="notifAbrir()" style="position:relative" title="Notificaciones">
+        🔔<span id="notifBadge" style="display:none;position:absolute;top:-4px;right:-4px;background:var(--red);color:#fff;font-family:'Montserrat',sans-serif;font-weight:900;font-size:9px;padding:1px 5px;border-radius:10px">0</span>
+      </button>
       <div class="conn-dot" id="connDot" title="Estado conexión"></div>
     </div>
 
@@ -471,6 +484,8 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
         <div class="page-sub">Plataformas elevadoras móviles de personal</div>
         <div class="tbl-toolbar">
           <input class="tbl-search" id="searchPemp" placeholder="🔍 Buscar matrícula o tipo...">
+          <button class="btn btn-primary" onclick="abrirModalPemp()">+ Nuevo PEMP</button>
+          <button class="btn btn-secondary" onclick="exportarTabla(tblPemp,'pemp')">⬇ CSV</button>
           <button class="btn btn-secondary" onclick="cargarPemp()">🔄 Actualizar</button>
         </div>
         <div class="tbl-wrap"><div id="tblPemp"></div></div>
@@ -482,6 +497,8 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
         <div class="page-sub">Inventario de carretillas</div>
         <div class="tbl-toolbar">
           <input class="tbl-search" id="searchCarretillas" placeholder="🔍 Buscar matrícula o tipo...">
+          <button class="btn btn-primary" onclick="abrirModalCarretilla()">+ Nueva carretilla</button>
+          <button class="btn btn-secondary" onclick="exportarTabla(tblCarretillas,'carretillas')">⬇ CSV</button>
           <button class="btn btn-secondary" onclick="cargarCarretillas()">🔄 Actualizar</button>
         </div>
         <div class="tbl-wrap"><div id="tblCarretillas"></div></div>
@@ -585,9 +602,65 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
         <div class="loading"><div class="spinner"></div> Próximamente en Fase 6</div>
       </div>
 
+      <!-- LOGS (admin) -->
+      <div class="page" id="pageLogs">
+        <div class="page-title">📋 Logs del panel</div>
+        <div class="page-sub">Errores y eventos registrados por el panel web</div>
+        <div class="tbl-toolbar">
+          <select class="tbl-search" id="filterLogs" style="min-width:140px" onchange="renderLogs()">
+            <option value="">Todos</option>
+            <option value="error">Solo errores</option>
+            <option value="warn">Avisos</option>
+            <option value="info">Info</option>
+          </select>
+          <button class="btn btn-danger btn-sm" onclick="if(confirm('¿Borrar todos los logs locales?')){localStorage.removeItem('panel_logs');renderLogs();}">🗑 Borrar logs locales</button>
+          <button class="btn btn-secondary" onclick="renderLogs()">🔄 Actualizar</button>
+        </div>
+        <div class="section-card"><div id="logsContainer"><div class="empty-state"><div class="empty-icon">📋</div><div class="empty-text">Sin logs registrados</div></div></div></div>
+      </div>
+
+      <!-- REPOSTAJES -->
+      <div class="page" id="pageRepostajes">
+        <div class="page-title">⛽ Repostajes</div>
+        <div class="page-sub">Historial de repostajes de vehículos y maquinaria</div>
+        <div id="repostajesResumen" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:16px"></div>
+        <div class="tbl-toolbar">
+          <input class="tbl-search" id="searchRepostajes" placeholder="🔍 Buscar matrícula...">
+          <button class="btn btn-primary" onclick="abrirModalRepostaje()">+ Nuevo repostaje</button>
+          <button class="btn btn-secondary" onclick="exportarTabla(tblRepostajes,'repostajes')">⬇ CSV</button>
+          <button class="btn btn-secondary" onclick="cargarRepostajes()">🔄 Actualizar</button>
+        </div>
+        <div class="tbl-wrap"><div id="tblRepostajes"></div></div>
+      </div>
+
     </div><!-- /content -->
   </div><!-- /mainArea -->
 </div><!-- /appShell -->
+
+<!-- CHAT FLOTANTE -->
+<div id="chatPanel" style="display:none;position:fixed;bottom:20px;right:20px;width:360px;height:520px;background:var(--surface);border:1px solid var(--border);border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,.5);z-index:800;display:none;flex-direction:column">
+  <div style="padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-shrink:0">
+    <span style="font-size:18px">💬</span>
+    <span style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:14px;flex:1">Chat del equipo</span>
+    <button onclick="chatCerrar()" style="background:none;border:none;color:var(--muted);font-size:18px;cursor:pointer;padding:2px">✕</button>
+  </div>
+  <div id="chatMensajes" style="flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:8px">
+    <div class="loading"><div class="spinner"></div> Cargando...</div>
+  </div>
+  <div style="padding:10px;border-top:1px solid var(--border);display:flex;gap:8px;flex-shrink:0">
+    <input id="chatInput" class="form-input" placeholder="Escribe un mensaje..." style="flex:1;padding:8px 12px" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();chatEnviar()}">
+    <button class="btn btn-primary" onclick="chatEnviar()" style="padding:8px 14px">➤</button>
+  </div>
+</div>
+
+<!-- NOTIF PANEL FLOTANTE -->
+<div id="notifPanel" style="display:none;position:fixed;top:52px;right:12px;width:340px;max-height:500px;background:var(--surface);border:1px solid var(--border);border-radius:14px;box-shadow:0 16px 40px rgba(0,0,0,.5);z-index:700;overflow-y:auto">
+  <div style="padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px">
+    <span style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:13px;flex:1">🔔 Notificaciones</span>
+    <button onclick="notifCerrar()" style="background:none;border:none;color:var(--muted);cursor:pointer">✕</button>
+  </div>
+  <div id="notifLista" style="padding:8px"></div>
+</div>
 
 <!-- TOAST CONTAINER -->
 <div id="toastContainer"></div>
@@ -627,9 +700,40 @@ function api(path, opts = {}) {
   const headers = { 'Content-Type': 'application/json', ...(opts.headers || {}) };
   if (TOKEN) headers['X-Token'] = TOKEN;
   return fetch(API + path, { ...opts, headers })
-    .then(r => r.json())
-    .catch(() => ({ ok: false, error: 'Sin conexión' }));
+    .then(async r => {
+      const data = await r.json();
+      if (!r.ok && r.status >= 500) {
+        panelLog('error', `API ${opts.method || 'GET'} ${path} → ${r.status}`, data.error || '');
+      }
+      return data;
+    })
+    .catch(err => {
+      panelLog('error', `API ${opts.method || 'GET'} ${path} → sin conexión`, err.message || '');
+      return { ok: false, error: 'Sin conexión' };
+    });
 }
+
+function panelLog(nivel, mensaje, detalle = '') {
+  const entry = { ts: new Date().toISOString(), nivel, mensaje, detalle };
+  const logs = JSON.parse(localStorage.getItem('panel_logs') || '[]');
+  logs.unshift(entry);
+  if (logs.length > 200) logs.splice(200);
+  localStorage.setItem('panel_logs', JSON.stringify(logs));
+  if (TOKEN) {
+    fetch(API + '/log', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Token': TOKEN },
+      body: JSON.stringify({ nivel, origen: 'panel_web', mensaje, detalle }),
+    }).catch(() => {});
+  }
+}
+
+window.onerror = (msg, src, line, col, err) => {
+  panelLog('error', `JS: ${msg}`, `${src}:${line}:${col}`);
+};
+window.onunhandledrejection = e => {
+  panelLog('warn', `Promise sin manejar: ${e.reason?.message || e.reason}`, '');
+};
 
 function fmtFecha(iso) {
   if (!iso) return '—';
@@ -785,6 +889,7 @@ function iniciarApp() {
 
   checkConexion();
   setInterval(checkConexion, 30000);
+  iniciarPollingNotif();
   navTo('dashboard');
 }
 
@@ -796,9 +901,10 @@ function toggleSidebar() {
 const PAGE_TITLES = {
   dashboard: 'Dashboard', personal: 'Trabajadores', fichajes: 'Fichajes',
   turnos: 'Turnos', epis: 'EPIs', carnets: 'Carnets', bobinas: 'Bobinas',
-  pemp: 'PEMP', carretillas: 'Carretillas', herramientas: 'Herramientas',
+  pemp: 'PEMP', carretillas: 'Carretillas', repostajes: 'Repostajes', herramientas: 'Herramientas',
   seguridad: 'Seguridad', obras: 'Obras', incidencias: 'Incidencias',
-  pedidos: 'Pedidos', mantenimientos: 'Mantenimientos', usuarios: 'Usuarios', empresa: 'Empresa'
+  pedidos: 'Pedidos', mantenimientos: 'Mantenimientos', usuarios: 'Usuarios',
+  empresa: 'Empresa', logs: 'Logs'
 };
 
 const PAGE_LOADERS = {
@@ -811,6 +917,7 @@ const PAGE_LOADERS = {
   bobinas: cargarBobinas,
   pemp: cargarPemp,
   carretillas: cargarCarretillas,
+  repostajes: cargarRepostajes,
   herramientas: cargarHerramientas,
   seguridad: cargarSeguridad,
   obras: cargarObras,
@@ -818,6 +925,7 @@ const PAGE_LOADERS = {
   pedidos: cargarPedidos,
   mantenimientos: cargarMantenimientos,
   usuarios: cargarUsuarios,
+  logs: renderLogs,
 };
 
 let currentPage = '';
@@ -1679,6 +1787,306 @@ function abrirModalUsuario() {
     if (r.ok) { cerrarModal(); toast('Usuario creado ✓', 'ok'); cargarUsuarios(); }
     else toast(r.error || 'Error al crear', 'err');
   });
+}
+
+// ── CHAT ───────────────────────────────────────────────────────
+let chatAbierto = false;
+let chatPolling = null;
+
+function chatAbrir() {
+  const panel = document.getElementById('chatPanel');
+  panel.style.display = 'flex';
+  chatAbierto = true;
+  cargarChat();
+  if (!chatPolling) chatPolling = setInterval(cargarChat, 10000);
+}
+function chatCerrar() {
+  document.getElementById('chatPanel').style.display = 'none';
+  chatAbierto = false;
+  clearInterval(chatPolling); chatPolling = null;
+}
+
+async function cargarChat() {
+  const r = await api('/chat?limit=50');
+  const msgs = (r.mensajes || r.data || []).reverse();
+  const cont = document.getElementById('chatMensajes');
+  if (!msgs.length) { cont.innerHTML = '<div class="empty-state"><div class="empty-icon">💬</div><div class="empty-text">Sin mensajes aún</div></div>'; return; }
+  const esPropio = m => m.usuario_id && SESSION && m.usuario_id === SESSION.usuario_id;
+  cont.innerHTML = msgs.map(m => {
+    const propio = esPropio(m);
+    return `<div style="display:flex;flex-direction:column;align-items:${propio ? 'flex-end' : 'flex-start'};gap:2px">
+      <span style="font-family:'Montserrat',sans-serif;font-weight:700;font-size:10px;color:var(--muted)">${propio ? 'Tú' : (m.nombre || '?')} · ${fmtHora(m.created_at)}</span>
+      <div style="max-width:80%;padding:8px 12px;border-radius:${propio ? '12px 12px 2px 12px' : '12px 12px 12px 2px'};background:${propio ? 'var(--accent)' : 'var(--surface2)'};color:${propio ? '#000' : 'var(--text)'};font-size:13px;word-break:break-word">${m.mensaje}</div>
+    </div>`;
+  }).join('');
+  cont.scrollTop = cont.scrollHeight;
+}
+
+async function chatEnviar() {
+  const input = document.getElementById('chatInput');
+  const msg = input.value.trim();
+  if (!msg) return;
+  input.value = '';
+  const r = await api('/chat', { method: 'POST', body: JSON.stringify({ mensaje: msg }) });
+  if (r.ok) cargarChat();
+  else toast('Error al enviar mensaje', 'err');
+}
+
+// ── NOTIFICACIONES ─────────────────────────────────────────────
+let notifPanelAbierto = false;
+let notificaciones = [];
+
+function notifAbrir() {
+  notifPanelAbierto = !notifPanelAbierto;
+  document.getElementById('notifPanel').style.display = notifPanelAbierto ? 'block' : 'none';
+  if (notifPanelAbierto) cargarNotificaciones();
+}
+function notifCerrar() {
+  notifPanelAbierto = false;
+  document.getElementById('notifPanel').style.display = 'none';
+}
+document.addEventListener('click', e => {
+  if (notifPanelAbierto && !document.getElementById('notifPanel').contains(e.target) && !e.target.closest('[onclick="notifAbrir()"]')) notifCerrar();
+});
+
+async function cargarNotificaciones() {
+  const [alertasR, pedidosR, carnetR] = await Promise.all([
+    api('/alertas-stock'),
+    api('/pedidos?limit=50'),
+    api('/carnets?limit=200'),
+  ]);
+  notificaciones = [];
+
+  // Stock bajo
+  (alertasR.alertas || []).forEach(a => notificaciones.push({
+    tipo: 'danger', icono: '📉', titulo: `Stock bajo: ${a.nombre}`,
+    texto: `${a.cantidad} uds (mínimo: ${a.stock_minimo})`, nav: 'seguridad'
+  }));
+
+  // Pedidos pendientes
+  const pendientes = (pedidosR.pedidos || []).filter(p => p.estado === 'pendiente');
+  if (pendientes.length) notificaciones.push({
+    tipo: 'warn', icono: '📦', titulo: `${pendientes.length} pedido${pendientes.length > 1 ? 's' : ''} pendiente${pendientes.length > 1 ? 's' : ''}`,
+    texto: 'Requieren atención o aprobación', nav: 'pedidos'
+  });
+
+  // Carnets próximos a caducar (< 30 días)
+  const hoy = new Date();
+  const proximos = (carnetR.carnets || []).filter(c => {
+    if (!c.fecha_caducidad) return false;
+    const dias = Math.ceil((new Date(c.fecha_caducidad) - hoy) / 86400000);
+    return dias >= 0 && dias <= 30;
+  });
+  if (proximos.length) notificaciones.push({
+    tipo: 'warn', icono: '🪪', titulo: `${proximos.length} carnet${proximos.length > 1 ? 's' : ''} próximo${proximos.length > 1 ? 's' : ''} a caducar`,
+    texto: proximos.slice(0, 3).map(c => c.trabajador || c.tipo).join(', '), nav: 'carnets'
+  });
+
+  // Actualizar badge
+  const badge = document.getElementById('notifBadge');
+  if (notificaciones.length > 0) {
+    badge.textContent = notificaciones.length;
+    badge.style.display = '';
+  } else {
+    badge.style.display = 'none';
+  }
+
+  renderNotificaciones();
+}
+
+function renderNotificaciones() {
+  const lista = document.getElementById('notifLista');
+  if (!notificaciones.length) {
+    lista.innerHTML = '<div class="empty-state" style="padding:30px 20px"><div class="empty-icon">✅</div><div class="empty-text">Sin notificaciones pendientes</div></div>';
+    return;
+  }
+  lista.innerHTML = notificaciones.map(n => `
+    <div onclick="notifCerrar();navTo('${n.nav}')" style="padding:12px;border-radius:10px;margin-bottom:6px;cursor:pointer;display:flex;gap:10px;align-items:flex-start;transition:background .15s" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
+      <span style="font-size:20px;flex-shrink:0">${n.icono}</span>
+      <div>
+        <div style="font-family:'Montserrat',sans-serif;font-weight:700;font-size:12px;color:${n.tipo === 'danger' ? 'var(--red)' : 'var(--yellow)'}">${n.titulo}</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:2px">${n.texto}</div>
+      </div>
+    </div>
+  `).join('');
+}
+
+// Polling de notificaciones cada 2 minutos
+function iniciarPollingNotif() {
+  cargarNotificaciones();
+  setInterval(cargarNotificaciones, 120000);
+}
+
+// ── LOGS ───────────────────────────────────────────────────────
+function renderLogs() {
+  const filtro = document.getElementById('filterLogs')?.value || '';
+  let logs = JSON.parse(localStorage.getItem('panel_logs') || '[]');
+  if (filtro) logs = logs.filter(l => l.nivel === filtro);
+  const cont = document.getElementById('logsContainer');
+  if (!logs.length) { cont.innerHTML = '<div class="empty-state"><div class="empty-icon">📋</div><div class="empty-text">Sin logs registrados</div></div>'; return; }
+  cont.innerHTML = logs.slice(0, 100).map(l => {
+    const cls = { error: 'badge-danger', warn: 'badge-warn', info: 'badge-info' }[l.nivel] || 'badge-muted';
+    return `<div style="padding:8px 0;border-bottom:1px solid var(--border);font-size:12px;display:flex;gap:10px;align-items:flex-start">
+      <span class="badge ${cls}" style="flex-shrink:0;margin-top:1px">${l.nivel}</span>
+      <span style="color:var(--muted);flex-shrink:0;font-family:'Montserrat',sans-serif;font-size:10px;padding-top:2px">${l.ts ? new Date(l.ts).toLocaleTimeString('es-ES') : '—'}</span>
+      <div style="flex:1"><div style="color:var(--text)">${l.mensaje}</div>${l.detalle ? `<div style="color:var(--muted);font-size:11px;margin-top:2px">${l.detalle}</div>` : ''}</div>
+    </div>`;
+  }).join('');
+}
+
+// ── PEMP — MODALES ─────────────────────────────────────────────
+function abrirModalPemp() {
+  abrirModal('Nuevo PEMP', `
+    <div class="form-row">
+      <div class="form-group"><div class="form-label">Matrícula</div><input class="form-input" id="mPMat" placeholder="1234ABC"></div>
+      <div class="form-group"><div class="form-label">Tipo</div><input class="form-input" id="mPTipo" placeholder="Tijera eléctrica, Articulada..."></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><div class="form-label">Marca</div><input class="form-input" id="mPMarca" placeholder="Genie, JLG..."></div>
+      <div class="form-group"><div class="form-label">Modelo</div><input class="form-input" id="mPModelo" placeholder="GS-2632"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><div class="form-label">Fecha ITV</div><input class="form-input" id="mPItv" type="date"></div>
+      <div class="form-group"><div class="form-label">Fecha revisión</div><input class="form-input" id="mPRev" type="date"></div>
+    </div>
+    <div class="form-group"><div class="form-label">Estado</div>
+      <select class="form-select" id="mPEstado">
+        <option value="disponible">Disponible</option>
+        <option value="averiado">Averiado</option>
+        <option value="mantenimiento">En mantenimiento</option>
+      </select>
+    </div>
+  `, async () => {
+    const body = {
+      matricula: document.getElementById('mPMat').value.trim(),
+      tipo: document.getElementById('mPTipo').value.trim(),
+      marca: document.getElementById('mPMarca').value.trim(),
+      modelo: document.getElementById('mPModelo').value.trim(),
+      fecha_itv: document.getElementById('mPItv').value || null,
+      fecha_revision: document.getElementById('mPRev').value || null,
+      estado: document.getElementById('mPEstado').value,
+    };
+    if (!body.matricula) { toast('La matrícula es obligatoria', 'err'); return; }
+    const r = await api('/pemp', { method: 'POST', body: JSON.stringify(body) });
+    if (r.ok) { cerrarModal(); toast('PEMP creado ✓', 'ok'); tblPemp = null; cargarPemp(); }
+    else toast(r.error || 'Error al crear', 'err');
+  });
+}
+
+function abrirModalCarretilla() {
+  abrirModal('Nueva carretilla', `
+    <div class="form-row">
+      <div class="form-group"><div class="form-label">Matrícula</div><input class="form-input" id="mCMat" placeholder="1234ABC"></div>
+      <div class="form-group"><div class="form-label">Tipo</div><input class="form-input" id="mCTipo" placeholder="Contrapesada, Retráctil..."></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><div class="form-label">Energía</div>
+        <select class="form-select" id="mCEnergia">
+          <option value="gasoil">Gasoil</option><option value="gas">Gas</option>
+          <option value="eléctrica">Eléctrica</option><option value="dual">Dual</option>
+        </select>
+      </div>
+      <div class="form-group"><div class="form-label">Capacidad (kg)</div><input class="form-input" id="mCCap" type="number" placeholder="2500"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><div class="form-label">Marca</div><input class="form-input" id="mCMarca" placeholder="Toyota, Linde..."></div>
+      <div class="form-group"><div class="form-label">Fecha ITV</div><input class="form-input" id="mCItv" type="date"></div>
+    </div>
+    <div class="form-group"><div class="form-label">Estado</div>
+      <select class="form-select" id="mCEstado">
+        <option value="disponible">Disponible</option>
+        <option value="averiado">Averiado</option>
+        <option value="mantenimiento">En mantenimiento</option>
+      </select>
+    </div>
+  `, async () => {
+    const body = {
+      matricula: document.getElementById('mCMat').value.trim(),
+      tipo: document.getElementById('mCTipo').value.trim(),
+      energia: document.getElementById('mCEnergia').value,
+      capacidad_kg: parseFloat(document.getElementById('mCCap').value) || null,
+      marca: document.getElementById('mCMarca').value.trim(),
+      fecha_itv: document.getElementById('mCItv').value || null,
+      estado: document.getElementById('mCEstado').value,
+    };
+    if (!body.matricula) { toast('La matrícula es obligatoria', 'err'); return; }
+    const r = await api('/carretillas', { method: 'POST', body: JSON.stringify(body) });
+    if (r.ok) { cerrarModal(); toast('Carretilla creada ✓', 'ok'); tblCarretillas = null; cargarCarretillas(); }
+    else toast(r.error || 'Error al crear', 'err');
+  });
+}
+
+// ── REPOSTAJES ─────────────────────────────────────────────────
+let tblRepostajes = null;
+function abrirModalRepostaje() {
+  const hoy = new Date().toISOString().slice(0, 10);
+  abrirModal('Nuevo repostaje', `
+    <div class="form-row">
+      <div class="form-group"><div class="form-label">Matrícula / equipo</div><input class="form-input" id="mRMat" placeholder="1234ABC"></div>
+      <div class="form-group"><div class="form-label">Fecha</div><input class="form-input" id="mRFecha" type="date" value="${hoy}"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><div class="form-label">Litros</div><input class="form-input" id="mRLitros" type="number" step="0.1" placeholder="40.5"></div>
+      <div class="form-group"><div class="form-label">€/litro</div><input class="form-input" id="mRPrecio" type="number" step="0.001" placeholder="1.499"></div>
+    </div>
+    <div class="form-group"><div class="form-label">Combustible</div>
+      <select class="form-select" id="mRComb">
+        <option value="gasoil">Gasoil</option><option value="gasolina">Gasolina</option>
+        <option value="gas">Gas</option><option value="adblue">AdBlue</option>
+      </select>
+    </div>
+    <div class="form-group"><div class="form-label">Km / horas</div><input class="form-input" id="mRKm" type="number" placeholder="12500"></div>
+  `, async () => {
+    const litros = parseFloat(document.getElementById('mRLitros').value);
+    const precio = parseFloat(document.getElementById('mRPrecio').value);
+    const body = {
+      matricula: document.getElementById('mRMat').value.trim(),
+      fecha: document.getElementById('mRFecha').value,
+      litros, precio_litro: precio || null,
+      importe_total: (litros && precio) ? +(litros * precio).toFixed(2) : null,
+      combustible: document.getElementById('mRComb').value,
+      km_horas: parseFloat(document.getElementById('mRKm').value) || null,
+    };
+    if (!body.matricula || !body.litros) { toast('Matrícula y litros son obligatorios', 'err'); return; }
+    const r = await api('/repostajes', { method: 'POST', body: JSON.stringify(body) });
+    if (r.ok) { cerrarModal(); toast('Repostaje registrado ✓', 'ok'); tblRepostajes = null; cargarRepostajes(); }
+    else toast(r.error || 'Error al crear', 'err');
+  });
+}
+
+async function cargarRepostajes() {
+  const r = await api('/repostajes');
+  const data = r.repostajes || r.data || [];
+  const totalLitros = data.reduce((s, r) => s + (parseFloat(r.litros) || 0), 0);
+  const totalImporte = data.reduce((s, r) => s + (parseFloat(r.importe_total) || 0), 0);
+  document.getElementById('repostajesResumen').innerHTML = [
+    { icon:'⛽', value: totalLitros.toFixed(0) + 'L', label:'Litros totales' },
+    { icon:'💶', value: totalImporte.toFixed(2) + '€', label:'Gasto total' },
+    { icon:'📋', value: data.length, label:'Repostajes' },
+  ].map(k => `<div class="kpi-card" style="padding:14px">
+    <div class="kpi-icon" style="font-size:20px">${k.icon}</div>
+    <div class="kpi-value" style="font-size:22px">${k.value}</div>
+    <div class="kpi-label">${k.label}</div>
+  </div>`).join('');
+
+  if (tblRepostajes) { tblRepostajes.replaceData(data); return; }
+  tblRepostajes = new Tabulator('#tblRepostajes', {
+    data, layout: 'fitColumns', pagination: 'local', paginationSize: 25,
+    placeholder: '<div class="empty-state"><div class="empty-icon">⛽</div><div class="empty-text">Sin repostajes</div></div>',
+    columns: [
+      { title: 'Fecha', field: 'fecha', width: 110, formatter: c => fmtFecha(c.getValue()) },
+      { title: 'Matrícula', field: 'matricula', width: 120 },
+      { title: 'Combustible', field: 'combustible', width: 110 },
+      { title: 'Litros', field: 'litros', width: 90, hozAlign: 'right', formatter: c => `${c.getValue() || 0}L` },
+      { title: '€/L', field: 'precio_litro', width: 80, hozAlign: 'right', formatter: c => c.getValue() ? `${parseFloat(c.getValue()).toFixed(3)}€` : '—' },
+      { title: 'Total', field: 'importe_total', width: 100, hozAlign: 'right', formatter: c => c.getValue() ? `${parseFloat(c.getValue()).toFixed(2)}€` : '—' },
+      { title: 'Km/h', field: 'km_horas', width: 90, hozAlign: 'right' },
+      { title: 'Obra', field: 'obra_nombre', minWidth: 140 },
+    ]
+  });
+  document.getElementById('searchRepostajes').oninput = function() {
+    tblRepostajes.setFilter('matricula', 'like', this.value);
+  };
 }
 
 // ── MODAL ──────────────────────────────────────────────────────
