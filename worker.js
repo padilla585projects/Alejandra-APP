@@ -270,6 +270,24 @@ export default {
     const path   = url.pathname;
     const method = request.method;
 
+    // ── SEC-14: Rate limiting para X-Admin-Code (brute-force legacy path) ───────
+    // Si llega X-Admin-Code pero no coincide → registrar intento; bloquear tras 5 en 15min
+    {
+      const xAdminCode = request.headers.get('X-Admin-Code');
+      if (xAdminCode && env.ADMIN_CODE && xAdminCode !== env.ADMIN_CODE) {
+        const ip = request.headers.get('CF-Connecting-IP') || request.headers.get('X-Forwarded-For') || 'unknown';
+        try {
+          const win = new Date(Date.now() - 15 * 60 * 1000).toISOString().replace('T',' ').split('.')[0];
+          const row = await env.DB.prepare(
+            "SELECT COUNT(*) as cnt FROM login_attempts WHERE ip = ? AND motivo = 'admin_brute' AND created_at > ?"
+          ).bind(ip, win).first().catch(() => ({ cnt: 0 }));
+          const cnt = row?.cnt ?? 0;
+          env.DB.prepare('INSERT INTO login_attempts (ip, motivo) VALUES (?, ?)').bind(ip, 'admin_brute').run().catch(() => {});
+          if (cnt >= 5) return err('Demasiados intentos. Espera 15 minutos.', 429);
+        } catch (_) {}
+      }
+    }
+
     try {
       // ── Telegram webhook (sin auth — valida con secret header) ───────────────
       if (path === '/telegram-webhook'       && method === 'POST') return await handleTelegramWebhook(request, env);
