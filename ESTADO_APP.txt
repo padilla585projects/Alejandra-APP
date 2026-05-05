@@ -5,7 +5,7 @@
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 05/05/2026
-VERSIÓN ACTUAL APP NUEVA: v5.46 (worker a6efb717 — sin cambios desde v5.44)
+VERSIÓN ACTUAL APP NUEVA: v5.47 (worker a6efb717 — sin cambios desde v5.44)
 VERSIÓN ACTUAL APP VIEJA: v4.19 (⛔ CONGELADA DEFINITIVAMENTE — no recibe más cambios)
 
 ================================================================================
@@ -150,6 +150,16 @@ PASO 4 — VERIFICAR WORKER (solo si se va a tocar worker.js)
 ================================================================================
   HISTORIAL DE VERSIONES — RECIENTES
 ================================================================================
+
+v5.47        |  05/05/2026  [SYNC-04: auditoría completa sincronización app↔web]
+  - 18 bugs del patrón r.clave||r.data sobre arrays crudos → tablas vacías.
+    Módulos afectados: fichajes, personal (x3), EPIs, turnos (x2), carnets (x2),
+    incidencias (x3), pedidos (x2), kits, repostajes, sesiones, logs, DevTools stats.
+    Fix: toArr(r, key) en todos los casos.
+  - /alertas-stock: worker devuelve {herramientas,seguridad,bobinas}; panel esperaba
+    .alertas → notificaciones de stock nunca aparecían. Reescrito con 3 arrays normalizados.
+  - Auto-refresh: epis:120s y carnets:120s añadidos a SYNC_INTERVALS.
+  - Worker NO redesplegado. GitHub: dd9a6a0
 
 v5.46        |  05/05/2026  [PANEL-03: inventario seguridad vacío]
   - BUG-PANEL-03: cargarSeguridad() en panel.html hacía r.items || r.data || []

@@ -7,11 +7,23 @@
 
 **Sesión:** LIBRE
 **Última sesión:** 05/05/2026
-**Versión tras última sesión:** v5.46 (worker a6efb717 — sin cambios)
-**GitHub:** 7655cfc ✅
+**Versión tras última sesión:** v5.47 (worker a6efb717 — sin cambios)
+**GitHub:** dd9a6a0 ✅
 **Panel web:** https://padilla585projects.github.io/Alejandra-APP/panel.html ✅ FUNCIONA
 
 ---
+
+## RESUMEN SESIÓN 05/05/2026 (SYNC-04: auditoría completa sync app↔web v5.47)
+
+- **SYNC-04**: Auditoría estática completa de todos los módulos del panel web.
+  18 bugs del mismo patrón — cargarXxx() buscaba r.clave||r.data sobre arrays crudos.
+  Afectados: fichajes, personal (x3), EPIs, turnos (x2), carnets (x2),
+  incidencias (x3), pedidos (x2), kits, repostajes, sesiones, logs, DevTools stats (x8).
+  Fix global: toArr(r, key) en todos los casos.
+  Caso especial /alertas-stock: devuelve {herramientas,seguridad,bobinas} — 3 arrays
+  separados. Bloque notificaciones reescrito para iterar los 3 y normalizar campos.
+  Auto-refresh añadido: epis:120s, carnets:120s en SYNC_INTERVALS.
+  Worker NO redesplegado. GitHub: dd9a6a0 ✅
 
 ## RESUMEN SESIÓN 05/05/2026 (PANEL-03: inventario seg vacío v5.46)
 
