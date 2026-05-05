@@ -7,12 +7,23 @@
 
 **Sesión:** LIBRE
 **Última sesión:** 05/05/2026
-**Versión tras última sesión:** v5.41 + security patch (worker 6b18efd1)
+**Versión tras última sesión:** v5.41 + security patch + inventarios panel (worker a67c0ee8)
 **Worker desplegado:** 6b18efd1-c089-4576-a8f3-fdd7e31208bd
 **GitHub:** en sync ✅
 **Panel web:** https://padilla585projects.github.io/Alejandra-APP/panel.html ✅ FUNCIONA
 
 ---
+
+## RESUMEN SESIÓN 05/05/2026 (inventarios panel — bug fix + filtros dept/obra)
+
+- **Bug crítico**: worker devuelve array crudo pero panel buscaba `r.bobinas`, `r.pemp` etc.
+  → tablas siempre vacías. Fix: `toArr(r, key)` acepta ambos formatos sin romper app móvil.
+- **Filtros por departamento y obra** en Bobinas, PEMP, Carretillas, Pedidos, Herramientas:
+  · Selectores `📁 Todos los depts` y `🏗 Todas las obras` en cada toolbar
+  · Admins (SA/EA/JefeObra) ven todos los depts por defecto; operarios solo el suyo
+  · `cargarObrasPanel()` rellena los selects al iniciar sesión
+  · Columna `Dept.` añadida a todas las tablas con emoji+nombre
+- Worker: `a67c0ee8` ✅
 
 ## RESUMEN SESIÓN 05/05/2026 (security patch — 4 vulnerabilidades críticas)
 
