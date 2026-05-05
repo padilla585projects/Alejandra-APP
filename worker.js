@@ -83,18 +83,22 @@ async function getAuth(request, env) {
   const rol          = request.headers.get('X-Rol');
   const codigo       = request.headers.get('X-Codigo');
   const departamento = request.headers.get('X-Departamento') || 'electrico';
-  const isAdmin      = env.ADMIN_CODE && adminCode === env.ADMIN_CODE;
-  const isSuperadmin = rol === 'superadmin' || isAdmin;
+  const isAdmin = env.ADMIN_CODE && adminCode === env.ADMIN_CODE;
+  // SEC-13: Los privilegios elevados SOLO se conceden por X-Admin-Code verificado contra env.
+  // X-Rol es metadata informativa (departamento, logging) — NUNCA concede isAdmin/isSuperadmin.
+  // Sin esto cualquier petición podría enviar "X-Rol: superadmin" y obtener acceso total.
+  const isSuperadmin   = isAdmin;
+  const isEmpresaAdmin = isAdmin;
   return {
     isAdmin,
     isSuperadmin,
-    isEmpresaAdmin: rol === 'empresa_admin' || rol === 'desarrollador',
-    isEncargado: rol === 'encargado',
-    isJefeObra: rol === 'jefe_de_obra',
-    isOficina: rol === 'oficina',
-    isDesarrollador: rol === 'desarrollador',
+    isEmpresaAdmin,
+    isEncargado:   isAdmin ? false : rol === 'encargado',
+    isJefeObra:    isAdmin ? false : rol === 'jefe_de_obra',
+    isOficina:     isAdmin ? false : rol === 'oficina',
+    isDesarrollador: false, // nunca por legacy headers
     isSeguridad: departamento === 'seguridad',
-    rol: rol || (isAdmin ? 'superadmin' : null),
+    rol: isAdmin ? 'superadmin' : (rol || 'operario'),
     obraId: obraId ? parseInt(obraId) : null,
     obra_id: obraId ? parseInt(obraId) : null,
     usuario_id: null,
@@ -1914,7 +1918,15 @@ async function setConfig(request, env) {
 // CATÁLOGOS (proveedores, tipos_cable)
 // ════════════════════════════════════════════════════════════════════════════
 
+// SEC-02: whitelist estricta de tablas permitidas en el catálogo
+// Evita inyección de nombre de tabla vía el parámetro `tabla`
+const CATALOG_WHITELIST = new Set([
+  'proveedores', 'tipos_cable', 'tipos_pemp',
+  'tipos_carretilla', 'energias_carretilla', 'tipos_material_seg',
+]);
+
 async function getCatalogo(tabla, env, requestOrEmpresaId = null) {
+  if (!CATALOG_WHITELIST.has(tabla)) return err('Tabla no permitida', 400);
   let empresa_id = 1;
   if (requestOrEmpresaId && typeof requestOrEmpresaId === 'object') {
     // Es un Request — hacer auth
@@ -1928,6 +1940,7 @@ async function getCatalogo(tabla, env, requestOrEmpresaId = null) {
 }
 
 async function addCatalogo(tabla, request, env) {
+  if (!CATALOG_WHITELIST.has(tabla)) return err('Tabla no permitida', 400);
   const auth = await getAuth(request, env);
   if (!auth.empresa_id) return err('No autorizado', 403);
   if (auth.rol === 'operario') return err('Sin permisos', 403);
@@ -1943,6 +1956,7 @@ async function addCatalogo(tabla, request, env) {
 }
 
 async function deleteCatalogo(tabla, id, request, env) {
+  if (!CATALOG_WHITELIST.has(tabla)) return err('Tabla no permitida', 400);
   const { rol } = await getAuth(request, env);
   if (rol === 'operario') return err('Sin permisos', 403);
   await env.DB.prepare(`DELETE FROM ${tabla} WHERE id = ?`).bind(id).run();
@@ -2296,6 +2310,11 @@ async function logActividad(env, { nivel = 'info', origen = 'server', mensaje, d
 }
 
 async function guardarLog(request, env) {
+  // SEC-08: requiere sesión válida — evita spam de logs y mensajes Telegram desde fuera
+  const xTok = request.headers.get('X-Token');
+  if (!xTok) return err('No autorizado', 401);
+  const _s = await env.DB.prepare("SELECT id FROM sesiones WHERE token = ? AND (expires_at IS NULL OR expires_at > datetime('now'))").bind(xTok).first().catch(() => null);
+  if (!_s) return err('No autorizado', 401);
   try {
     const body = await request.json();
     const { nivel = 'info', origen, mensaje, detalle, usuario, rol, obra, url, ts } = body;
@@ -4114,6 +4133,11 @@ async function syncSheetsDebug(env) {
 // ════════════════════════════════════════════════════════════════════════════
 
 async function handleOCR(request, env) {
+  // SEC-09: requiere sesión válida — evita consumo de cuota de Cloud Vision sin autenticar
+  const xTokOcr = request.headers.get('X-Token');
+  if (!xTokOcr) return err('No autorizado', 401);
+  const _sOcr = await env.DB.prepare("SELECT id FROM sesiones WHERE token = ? AND (expires_at IS NULL OR expires_at > datetime('now'))").bind(xTokOcr).first().catch(() => null);
+  if (!_sOcr) return err('No autorizado', 401);
   if (!env.GOOGLE_CLIENT_EMAIL || !env.GOOGLE_PRIVATE_KEY) {
     return err('Credenciales Google no configuradas', 500);
   }
@@ -4170,6 +4194,11 @@ async function handleOCR(request, env) {
 }
 
 async function handleScan(request, env) {
+  // SEC-09: requiere sesión válida — evita consumo de cuota de Gemini sin autenticar
+  const xTokScan = request.headers.get('X-Token');
+  if (!xTokScan) return err('No autorizado', 401);
+  const _sScan = await env.DB.prepare("SELECT id FROM sesiones WHERE token = ? AND (expires_at IS NULL OR expires_at > datetime('now'))").bind(xTokScan).first().catch(() => null);
+  if (!_sScan) return err('No autorizado', 401);
   const apiKey = env.GEMINI_API_KEY;
   if (!apiKey) return err('GEMINI_API_KEY no configurada', 500);
 
@@ -4513,17 +4542,26 @@ async function alertasDiarias(env) {
       }
     } catch(e) { console.error('informeSemanal check error:', e.message); }
 
+    // UX-06: obtener todas las empresas activas para filtrar alertas por empresa
+    // (antes las queries mezclaban datos de TODAS las empresas sin indicar cuál)
+    const { results: empresasActivas } = await env.DB.prepare(
+      `SELECT id, nombre FROM empresas WHERE activa = 1`
+    ).all().catch(() => ({ results: [] }));
+    const empMap = {};
+    for (const e of (empresasActivas || [])) empMap[e.id] = e.nombre;
+    const empLabel = (eid) => empMap[eid] ? ` [${empMap[eid]}]` : '';
+
     // 1. Máquinas averiadas hace más de 3 días sin reparar
     const [avPemp, avCarr] = await Promise.all([
-      env.DB.prepare(`SELECT matricula, fecha_averia, obra_id FROM pemp WHERE estado = 'Averiada' AND fecha_averia IS NOT NULL`).all(),
-      env.DB.prepare(`SELECT matricula, fecha_averia, obra_id FROM carretillas WHERE estado = 'Averiada' AND fecha_averia IS NOT NULL`).all(),
+      env.DB.prepare(`SELECT matricula, fecha_averia, obra_id, empresa_id FROM pemp WHERE estado = 'Averiada' AND fecha_averia IS NOT NULL`).all(),
+      env.DB.prepare(`SELECT matricula, fecha_averia, obra_id, empresa_id FROM carretillas WHERE estado = 'Averiada' AND fecha_averia IS NOT NULL`).all(),
     ]);
 
     const DIAS_AVERIA = 3;
     const averiadas = [];
     for (const m of [...(avPemp.results||[]), ...(avCarr.results||[])]) {
       const dias = Math.floor((hoy - new Date(m.fecha_averia)) / 86400000);
-      if (dias >= DIAS_AVERIA) averiadas.push(`🔖 ${m.matricula} — ${dias} días averiada`);
+      if (dias >= DIAS_AVERIA) averiadas.push(`🔖 ${m.matricula}${empLabel(m.empresa_id)} — ${dias} días averiada`);
     }
     if (averiadas.length) {
       await sendTelegram(env,
@@ -4535,11 +4573,10 @@ async function alertasDiarias(env) {
     const DIAS_AVISO_DEFAULT = 15;
     const maxLimite = new Date(hoy); maxLimite.setDate(maxLimite.getDate() + 365); // ventana amplia
     const maxLimiteStr = maxLimite.toISOString().slice(0, 10);
-    const hoyStr2 = hoy.toISOString().slice(0, 10);
 
     const [revPemp, revCarr] = await Promise.all([
-      env.DB.prepare(`SELECT matricula, fecha_proxima_revision, aviso_mantenimiento, dias_aviso_mant FROM pemp WHERE fecha_proxima_revision IS NOT NULL AND fecha_proxima_revision != '' AND fecha_proxima_revision <= ?`).bind(maxLimiteStr).all(),
-      env.DB.prepare(`SELECT matricula, fecha_proxima_revision, aviso_mantenimiento, dias_aviso_mant FROM carretillas WHERE fecha_proxima_revision IS NOT NULL AND fecha_proxima_revision != '' AND fecha_proxima_revision <= ?`).bind(maxLimiteStr).all(),
+      env.DB.prepare(`SELECT matricula, fecha_proxima_revision, aviso_mantenimiento, dias_aviso_mant, empresa_id FROM pemp WHERE fecha_proxima_revision IS NOT NULL AND fecha_proxima_revision != '' AND fecha_proxima_revision <= ?`).bind(maxLimiteStr).all(),
+      env.DB.prepare(`SELECT matricula, fecha_proxima_revision, aviso_mantenimiento, dias_aviso_mant, empresa_id FROM carretillas WHERE fecha_proxima_revision IS NOT NULL AND fecha_proxima_revision != '' AND fecha_proxima_revision <= ?`).bind(maxLimiteStr).all(),
     ]);
 
     const revisiones = [];
@@ -4548,8 +4585,8 @@ async function alertasDiarias(env) {
       if (!aviso) continue;
       const diasAviso = m.dias_aviso_mant || DIAS_AVISO_DEFAULT;
       const dias = Math.floor((new Date(m.fecha_proxima_revision) - hoy) / 86400000);
-      if (dias < 0) revisiones.push(`🔖 ${m.matricula} — VENCIDA hace ${Math.abs(dias)} días`);
-      else if (dias <= diasAviso) revisiones.push(`🔖 ${m.matricula} — vence en ${dias} días (${m.fecha_proxima_revision})`);
+      if (dias < 0) revisiones.push(`🔖 ${m.matricula}${empLabel(m.empresa_id)} — VENCIDA hace ${Math.abs(dias)} días`);
+      else if (dias <= diasAviso) revisiones.push(`🔖 ${m.matricula}${empLabel(m.empresa_id)} — vence en ${dias} días (${m.fecha_proxima_revision})`);
     }
     if (revisiones.length) {
       await sendTelegram(env,
@@ -4562,15 +4599,15 @@ async function alertasDiarias(env) {
     const limiteCad = new Date(hoy); limiteCad.setDate(limiteCad.getDate() + DIAS_CAD);
     const limiteCadStr = limiteCad.toISOString().slice(0, 10);
     const matCad = await env.DB.prepare(
-      `SELECT tipo_material, codigo, nombre, fecha_caducidad FROM inventario_seg
+      `SELECT tipo_material, codigo, nombre, fecha_caducidad, empresa_id FROM inventario_seg
        WHERE fecha_caducidad IS NOT NULL AND fecha_caducidad != '' AND fecha_caducidad <= ? AND estado != 'baja'`
     ).bind(limiteCadStr).all();
     if (matCad.results?.length) {
       const lineas = matCad.results.map(m => {
         const dias = Math.floor((new Date(m.fecha_caducidad) - hoy) / 86400000);
         return dias < 0
-          ? `⛔ ${m.codigo||m.nombre} (${m.tipo_material}) — CADUCADO hace ${Math.abs(dias)} días`
-          : `⚠️ ${m.codigo||m.nombre} (${m.tipo_material}) — caduca en ${dias} días (${m.fecha_caducidad})`;
+          ? `⛔ ${m.codigo||m.nombre} (${m.tipo_material})${empLabel(m.empresa_id)} — CADUCADO hace ${Math.abs(dias)} días`
+          : `⚠️ ${m.codigo||m.nombre} (${m.tipo_material})${empLabel(m.empresa_id)} — caduca en ${dias} días (${m.fecha_caducidad})`;
       });
       await sendTelegram(env, `🏷️ <b>Material Seguridad — Caducidad próxima</b>\n\n` + lineas.join('\n'));
     }
@@ -4578,7 +4615,7 @@ async function alertasDiarias(env) {
     // 4. Carnets y certificaciones — caducidad próxima o vencida
     const carnetsCad = await env.DB.prepare(
       `SELECT c.nombre_trabajador, c.tipo, c.fecha_caducidad, c.dias_aviso, c.usuario_id,
-              u.telegram_id
+              c.empresa_id, u.telegram_id
        FROM carnets c LEFT JOIN usuarios u ON c.usuario_id = u.id
        WHERE c.fecha_caducidad IS NOT NULL AND c.fecha_caducidad != '' AND c.estado = 'vigente'`
     ).all();
@@ -4587,8 +4624,8 @@ async function alertasDiarias(env) {
       const dias = Math.floor((new Date(c.fecha_caducidad) - hoy) / 86400000);
       const aviso = c.dias_aviso || 30;
       let linea = null;
-      if (dias < 0) linea = `⛔ ${c.nombre_trabajador} — ${c.tipo} CADUCADO hace ${Math.abs(dias)} días`;
-      else if (dias <= aviso) linea = `⚠️ ${c.nombre_trabajador} — ${c.tipo} caduca en ${dias} días (${c.fecha_caducidad})`;
+      if (dias < 0) linea = `⛔ ${c.nombre_trabajador}${empLabel(c.empresa_id)} — ${c.tipo} CADUCADO hace ${Math.abs(dias)} días`;
+      else if (dias <= aviso) linea = `⚠️ ${c.nombre_trabajador}${empLabel(c.empresa_id)} — ${c.tipo} caduca en ${dias} días (${c.fecha_caducidad})`;
       if (linea) {
         carnetAlertas.push(linea);
         // Notificación personal al trabajador si tiene Telegram vinculado
