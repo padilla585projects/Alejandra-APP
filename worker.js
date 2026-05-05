@@ -305,6 +305,7 @@ export default {
       if (path === '/telegram/test'      && method === 'POST') return await telegramTest(request, env);
       if (path === '/admin/setup-telegram-webhook' && method === 'POST') return await setupTelegramWebhook(request, env);
       if (path === '/admin/login-attempts' && method === 'DELETE') return await adminBorrarLoginAttempts(request, env);
+      if (path === '/admin/server-logs'   && method === 'DELETE') return await adminBorrarServerLogs(request, env);
 
       // ── Log viewer (DevTools) ────────────────────────────────────────────────
       if (path === '/log'            && method === 'GET')  return await getLogsAdmin(request, env);
@@ -2134,18 +2135,32 @@ async function getLogs(request, env) {
 async function getLogsAdmin(request, env) {
   const auth = await getAuth(request, env);
   if (!auth.isSuperadmin && !auth.isEmpresaAdmin && !auth.isDesarrollador) return err('Sin acceso', 403);
-  const url   = new URL(request.url);
-  const limit = Math.min(parseInt(url.searchParams.get('limit') || '50'), 200);
-  const nivel = url.searchParams.get('nivel');
-  let sql = 'SELECT id, nivel, origen, mensaje, detalle, created_at FROM logs';
+  const url     = new URL(request.url);
+  const limit   = Math.min(parseInt(url.searchParams.get('limit') || '100'), 500);
+  const nivel   = url.searchParams.get('nivel');
+  const sinceId = parseInt(url.searchParams.get('since_id') || '0');
+  const wheres = [];
   const params = [];
-  if (nivel) { sql += ' WHERE nivel = ?'; params.push(nivel); }
+  if (nivel)   { wheres.push('nivel = ?');  params.push(nivel); }
+  if (sinceId) { wheres.push('id > ?');     params.push(sinceId); }
+  let sql = 'SELECT id, nivel, origen, mensaje, detalle, created_at FROM logs';
+  if (wheres.length) sql += ' WHERE ' + wheres.join(' AND ');
   sql += ' ORDER BY created_at DESC LIMIT ?';
   params.push(limit);
   try {
     const { results } = await env.DB.prepare(sql).bind(...params).all();
     return json({ ok: true, logs: results });
   } catch (e) { return err('Error al leer logs: ' + e.message, 500); }
+}
+
+// ── DevTools: DELETE /admin/server-logs ──────────────────────────────────────
+async function adminBorrarServerLogs(request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth.isSuperadmin && !auth.isDesarrollador) return err('Solo superadmin o desarrollador', 403);
+  try {
+    const res = await env.DB.prepare('DELETE FROM logs').run();
+    return json({ ok: true, borrados: res.changes || 0 });
+  } catch (e) { return err('Error al borrar logs: ' + e.message, 500); }
 }
 
 // ── DevTools: POST /telegram/test ────────────────────────────────────────────

@@ -176,6 +176,11 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
 /* Tabulator override inside panel */
 .tabulator-editing input,.tabulator-editing select{background:var(--surface2) !important;color:var(--text) !important;border:1px solid var(--accent) !important;padding:4px 8px !important;font-family:'Poppins',sans-serif !important}
 
+/* LIVE LOG */
+@keyframes livePulse{0%,100%{opacity:1;box-shadow:0 0 0 0 rgba(239,68,68,.5)}50%{opacity:.6;box-shadow:0 0 0 5px rgba(239,68,68,0)}}
+@keyframes logHighlight{from{background:rgba(168,85,247,.25)}to{background:transparent}}
+.log-new{animation:logHighlight 1.5s ease forwards}
+
 /* RESPONSIVE sidebar collapse */
 @media(max-width:900px){
   #sidebar{position:fixed;left:-260px;top:0;bottom:0;z-index:500;transition:left .25s;width:240px}
@@ -738,7 +743,14 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
 
         <!-- LOGS DEL SERVIDOR -->
         <div class="section-card">
-          <div class="section-card-title"><span>📋</span> Logs del servidor (últimos 50)</div>
+          <div class="section-card-title" style="margin-bottom:12px">
+            <span>📋</span> Logs del servidor
+            <span id="devLiveIndicator" style="display:none;align-items:center;gap:6px;margin-left:8px">
+              <span style="width:8px;height:8px;border-radius:50%;background:var(--red);animation:livePulse 1s ease-in-out infinite;display:inline-block"></span>
+              <span style="font-size:10px;color:var(--red);letter-spacing:1px">LIVE</span>
+            </span>
+            <span id="devLiveCount" style="margin-left:auto;font-family:'Montserrat',sans-serif;font-weight:700;font-size:11px;color:var(--muted)"></span>
+          </div>
           <div class="tbl-toolbar">
             <select class="tbl-search" id="devFilterServerLogs" style="min-width:140px" onchange="cargarServerLogs()">
               <option value="">Todos los niveles</option>
@@ -747,9 +759,11 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
               <option value="info">Info</option>
             </select>
             <input class="tbl-search" id="devSearchServerLogs" placeholder="🔍 Filtrar..." oninput="devFiltrarServerLogs(this.value)" style="min-width:180px">
-            <button class="btn btn-secondary btn-sm" onclick="cargarServerLogs()">🔄 Actualizar</button>
+            <button class="btn btn-secondary btn-sm" onclick="cargarServerLogs()">🔄 Cargar</button>
+            <button class="btn btn-secondary btn-sm" id="devLiveBtn" onclick="devToggleLive()" style="border-color:var(--red);color:var(--red)">🔴 Live</button>
+            <button class="btn btn-secondary btn-sm" onclick="devBorrarServerLogs()" style="margin-left:auto">🗑 Borrar logs D1</button>
           </div>
-          <div id="devServerLogs"><div class="empty-state"><div class="empty-icon">📋</div><div class="empty-text">Cargando logs...</div></div></div>
+          <div id="devServerLogs" style="max-height:500px;overflow-y:auto;font-family:monospace"><div class="empty-state"><div class="empty-icon">📋</div><div class="empty-text">Pulsa "Cargar" o activa Live</div></div></div>
         </div>
       </div>
 
@@ -1057,6 +1071,8 @@ const PAGE_LOADERS = {
 let currentPage = '';
 function navTo(page) {
   if (currentPage === page) return;
+  // Parar live logs si salimos de devtools
+  if (currentPage === 'devtools' && _liveActive) devToggleLive();
   currentPage = page;
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
@@ -2582,13 +2598,24 @@ async function devSesiones() {
 }
 
 // ── SERVER LOGS ─────────────────────────────────────────────────
+let _liveInterval = null;
+let _liveMaxId    = 0;
+let _liveActive   = false;
+
 async function cargarServerLogs() {
   const nivel = document.getElementById('devFilterServerLogs')?.value || '';
-  let url = '/log?limit=50';
+  let url = '/log?limit=100';
   if (nivel) url += `&nivel=${nivel}`;
   const r = await api(url);
   _serverLogs = r.logs || r.data || [];
+  _liveMaxId = _serverLogs.length ? Math.max(..._serverLogs.map(l => l.id || 0)) : 0;
+  devActualizarContador();
   devFiltrarServerLogs(document.getElementById('devSearchServerLogs')?.value || '');
+}
+
+function devActualizarContador() {
+  const el = document.getElementById('devLiveCount');
+  if (el) el.textContent = `${_serverLogs.length} entradas`;
 }
 
 function devFiltrarServerLogs(q) {
@@ -2601,19 +2628,90 @@ function devFiltrarServerLogs(q) {
     cont.innerHTML = '<div class="empty-state" style="padding:30px"><div class="empty-icon">📋</div><div class="empty-text">Sin logs del servidor</div></div>';
     return;
   }
-  cont.innerHTML = logs.map(l => {
-    const cls = { error:'badge-danger', warn:'badge-warn', info:'badge-info' }[l.nivel] || 'badge-muted';
-    const ts = l.created_at ? new Date(l.created_at).toLocaleString('es-ES',{hour:'2-digit',minute:'2-digit',second:'2-digit',day:'2-digit',month:'2-digit'}) : '—';
-    return `<div style="padding:8px 0;border-bottom:1px solid var(--border);font-size:12px;display:flex;gap:10px;align-items:flex-start">
-      <span class="badge ${cls}" style="flex-shrink:0;margin-top:1px">${l.nivel || '—'}</span>
-      <span style="color:var(--muted);flex-shrink:0;font-family:monospace;font-size:10px;padding-top:2px;min-width:110px">${ts}</span>
-      <div style="flex:1">
-        <div style="color:var(--text)">${l.mensaje || '—'}</div>
-        ${l.detalle ? `<div style="color:var(--muted);font-size:11px;margin-top:2px">${l.detalle}</div>` : ''}
-        ${l.origen ? `<div style="color:#a855f7;font-size:10px;margin-top:1px;font-family:monospace">${l.origen}</div>` : ''}
-      </div>
-    </div>`;
-  }).join('');
+  cont.innerHTML = logs.map(l => devLogRow(l, false)).join('');
+}
+
+function devLogRow(l, isNew) {
+  const cls = { error:'badge-danger', warn:'badge-warn', info:'badge-info' }[l.nivel] || 'badge-muted';
+  const ts = l.created_at ? new Date(l.created_at).toLocaleString('es-ES',{hour:'2-digit',minute:'2-digit',second:'2-digit',day:'2-digit',month:'2-digit'}) : '—';
+  return `<div class="${isNew ? 'log-new' : ''}" style="padding:8px 4px;border-bottom:1px solid var(--border);font-size:12px;display:flex;gap:10px;align-items:flex-start">
+    <span class="badge ${cls}" style="flex-shrink:0;margin-top:1px">${l.nivel || '—'}</span>
+    <span style="color:var(--muted);flex-shrink:0;font-size:10px;padding-top:2px;min-width:110px">${ts}</span>
+    <div style="flex:1;min-width:0">
+      <div style="color:var(--text);word-break:break-word">${l.mensaje || '—'}</div>
+      ${l.detalle ? `<div style="color:var(--muted);font-size:11px;margin-top:2px;word-break:break-word">${l.detalle}</div>` : ''}
+      ${l.origen ? `<div style="color:#a855f7;font-size:10px;margin-top:1px">${l.origen}</div>` : ''}
+    </div>
+  </div>`;
+}
+
+function devToggleLive() {
+  _liveActive = !_liveActive;
+  const btn  = document.getElementById('devLiveBtn');
+  const ind  = document.getElementById('devLiveIndicator');
+  if (_liveActive) {
+    btn.textContent = '⏸ Pausar';
+    btn.style.borderColor = 'var(--yellow)';
+    btn.style.color = 'var(--yellow)';
+    ind.style.display = 'flex';
+    // carga inicial si no hay logs
+    if (!_serverLogs.length) cargarServerLogs();
+    _liveInterval = setInterval(devLiveTick, 2000);
+    devLog('Live activado — actualizando cada 2s', 'ok');
+  } else {
+    clearInterval(_liveInterval);
+    _liveInterval = null;
+    btn.textContent = '🔴 Live';
+    btn.style.borderColor = 'var(--red)';
+    btn.style.color = 'var(--red)';
+    ind.style.display = 'none';
+    devLog('Live pausado', 'info');
+  }
+}
+
+async function devLiveTick() {
+  const nivel = document.getElementById('devFilterServerLogs')?.value || '';
+  let url = `/log?limit=50&since_id=${_liveMaxId}`;
+  if (nivel) url += `&nivel=${nivel}`;
+  const r = await api(url);
+  const nuevos = r.logs || [];
+  if (!nuevos.length) return;
+
+  // Los logs llegan DESC; los invertimos para prependerlos en orden correcto
+  const ordenados = [...nuevos].reverse();
+  _serverLogs = [...nuevos, ..._serverLogs].slice(0, 500);
+  _liveMaxId = Math.max(..._serverLogs.map(l => l.id || 0));
+  devActualizarContador();
+
+  const cont = document.getElementById('devServerLogs');
+  // Quitar empty-state si existía
+  if (cont.querySelector('.empty-state')) cont.innerHTML = '';
+
+  const q = document.getElementById('devSearchServerLogs')?.value || '';
+  const filtrados = q ? ordenados.filter(l =>
+    (l.mensaje || '').toLowerCase().includes(q.toLowerCase()) ||
+    (l.detalle  || '').toLowerCase().includes(q.toLowerCase())
+  ) : ordenados;
+
+  // Prepender nuevas filas con highlight
+  const frag = document.createDocumentFragment();
+  filtrados.forEach(l => {
+    const div = document.createElement('div');
+    div.innerHTML = devLogRow(l, true);
+    frag.appendChild(div.firstChild);
+  });
+  cont.prepend(frag);
+
+  // Auto-scroll al top (últimos primero)
+  cont.scrollTop = 0;
+}
+
+async function devBorrarServerLogs() {
+  if (!confirm('¿Borrar TODOS los logs del servidor en D1? Esto no se puede deshacer.')) return;
+  devLog('Borrando logs del servidor...', 'info');
+  const r = await api('/admin/server-logs', { method: 'DELETE' });
+  if (r.ok) { _serverLogs = []; _liveMaxId = 0; devFiltrarServerLogs(''); devActualizarContador(); devLog(`Logs borrados ✓ (${r.borrados || 0} filas)`, 'ok'); }
+  else devLog(`Error: ${r.error || 'no implementado aún'}`, 'err');
 }
 
 // ── ACCIONES RÁPIDAS ────────────────────────────────────────────
