@@ -53,12 +53,14 @@ async function getAuth(request, env) {
         env.DB.prepare("UPDATE sesiones SET last_used = CURRENT_TIMESTAMP, expires_at = datetime('now', '+30 days') WHERE token = ?").bind(xToken).run();
         const isSuperadmin   = sesion.es_admin === 1 || sesion.rol === 'superadmin' || sesion.rol === 'desarrollador';
         const isEmpresaAdmin = sesion.rol === 'empresa_admin' || sesion.rol === 'desarrollador';
+        const isDesarrollador = sesion.rol === 'desarrollador';
         const deptHeader = request.headers.get('X-Departamento');
         const departamento = deptHeader || sesion.departamento || 'electrico';
         return {
           isAdmin: sesion.es_admin === 1,
           isSuperadmin,
           isEmpresaAdmin,
+          isDesarrollador,
           isEncargado: sesion.rol === 'encargado',
           isJefeObra: sesion.rol === 'jefe_de_obra',
           isOficina: sesion.rol === 'oficina',
@@ -1286,8 +1288,11 @@ async function getBobinas(request, env) {
   const buscar = url.searchParams.get('q');
   const obraParamRaw = url.searchParams.get('obra_id');
   const obraParam = obraParamRaw ? parseInt(obraParamRaw) : null;
-  const isAdminRole = isSuperadmin || isEmpresaAdmin || isJefeObra;
-  const obraFilter = isAdminRole ? obraParam : (obraId || null);
+  // superadmin/empresa_admin pueden ver todas las obras (sin restricción de obraId de sesión)
+  // jefe_de_obra se incluye en isAdminRole solo para el dept scoping (no para obra scoping)
+  const isUnrestrictedAdmin = isSuperadmin || isEmpresaAdmin;
+  const isAdminRole = isUnrestrictedAdmin || isJefeObra;
+  const obraFilter = isUnrestrictedAdmin ? obraParam : (obraId || null);
   // Admins: dept filter solo si se pasa explícitamente (?departamento=X); operarios: siempre su dept
   const deptParam = url.searchParams.get('departamento');
   const deptFilter = deptParam || (!isAdminRole ? departamento : null);
@@ -1423,8 +1428,9 @@ async function getPemp(request, env) {
   const buscar = url.searchParams.get('q');
   const obraParamRaw = url.searchParams.get('obra_id');
   const obraParam = obraParamRaw ? parseInt(obraParamRaw) : null;
-  const isAdminRole = isSuperadmin || isEmpresaAdmin || isJefeObra;
-  const obraFilter = isAdminRole ? obraParam : (obraId || null);
+  const isUnrestrictedAdmin = isSuperadmin || isEmpresaAdmin;
+  const isAdminRole = isUnrestrictedAdmin || isJefeObra;
+  const obraFilter = isUnrestrictedAdmin ? obraParam : (obraId || null);
   const deptParam = url.searchParams.get('departamento');
   const deptFilter = deptParam || (!isAdminRole ? departamento : null);
 
@@ -1587,8 +1593,9 @@ async function getCarretillas(request, env) {
   const buscar = url.searchParams.get('q');
   const obraParamRaw = url.searchParams.get('obra_id');
   const obraParam = obraParamRaw ? parseInt(obraParamRaw) : null;
-  const isAdminRole = isSuperadmin || isEmpresaAdmin || isJefeObra;
-  const obraFilter = isAdminRole ? obraParam : (obraId || null);
+  const isUnrestrictedAdmin = isSuperadmin || isEmpresaAdmin;
+  const isAdminRole = isUnrestrictedAdmin || isJefeObra;
+  const obraFilter = isUnrestrictedAdmin ? obraParam : (obraId || null);
   const deptParam = url.searchParams.get('departamento');
   const deptFilter = deptParam || (!isAdminRole ? departamento : null);
 
@@ -2426,7 +2433,7 @@ async function getPedidos(request, env) {
   const url = new URL(request.url);
   const estadoFilter = url.searchParams.get('estado');
   const obraFilter   = url.searchParams.get('obra_id');
-  const isAdminRole = isSuperadmin || isEmpresaAdmin || isJefeObra || isDesarrollador;
+  const isAdminRole = isSuperadmin || isEmpresaAdmin || isJefeObra || isDesarrollador; // todos ven todos los depts con ?todos=1
   const todos       = url.searchParams.get('todos') === '1' && isAdminRole;
   const deptParam   = url.searchParams.get('departamento');
 
@@ -2870,7 +2877,7 @@ async function getHerramientas(request, env) {
   if (!empresa_id) return err('No autorizado', 403);
   const url = new URL(request.url);
   const isAdminRole = isSuperadmin || isEmpresaAdmin || isJefeObra;
-  const todos = url.searchParams.get('todos') === '1' && isAdminRole;
+  const todos = url.searchParams.get('todos') === '1' && (isSuperadmin || isEmpresaAdmin);
   const deptParam = url.searchParams.get('departamento');
   const deptFilter = deptParam || (!todos ? departamento : null);
   let sql = `SELECT h.*, t.nombre as tipo_nombre, o.nombre as obra_nombre, k.numero_kit
