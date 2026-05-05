@@ -1516,6 +1516,8 @@ const SYNC_INTERVALS = {
   carretillas:   60,
   herramientas:  60,
   seguridad:     60,
+  epis:         120,
+  carnets:      120,
   mantenimientos:90,
   repostajes:    90,
 };
@@ -1609,7 +1611,7 @@ async function cargarDashboard() {
     `Última actualización: ${new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}`;
 
   // incidencias recientes
-  const incs = (incR.incidencias || incR.data || []).slice(0, 5);
+  const incs = toArr(incR, 'incidencias').slice(0, 5);
   document.getElementById('dashIncidencias').innerHTML = incs.length ? incs.map(i =>
     `<div style="padding:10px 0;border-bottom:1px solid var(--border);display:flex;gap:10px;align-items:center">
       <span class="badge badge-${i.estado === 'cerrada' ? 'ok' : i.estado === 'abierta' ? 'danger' : 'warn'}">${i.estado || '—'}</span>
@@ -1619,7 +1621,7 @@ async function cargarDashboard() {
   ).join('') : '<div class="empty-state"><div class="empty-icon">✅</div><div class="empty-text">Sin incidencias recientes</div></div>';
 
   // pedidos pendientes
-  const peds = (pedR.pedidos || pedR.data || []).filter(p => p.estado === 'pendiente').slice(0, 5);
+  const peds = toArr(pedR, 'pedidos').filter(p => p.estado === 'pendiente').slice(0, 5);
   document.getElementById('dashPedidos').innerHTML = peds.length ? peds.map(p =>
     `<div style="padding:10px 0;border-bottom:1px solid var(--border);display:flex;gap:10px;align-items:center">
       <span class="badge badge-warn">Pendiente</span>
@@ -1633,7 +1635,7 @@ async function cargarDashboard() {
 let tblPersonal = null;
 async function cargarPersonal() {
   const r = await api('/personal/trabajadores');
-  const data = r.trabajadores || r.data || [];
+  const data = toArr(r, 'trabajadores');
   if (tblPersonal) { tblPersonal.replaceData(data); return; }
 
   const canEdit = ['empresa_admin', 'jefe_de_obra', 'oficina', 'encargado', 'superadmin', 'desarrollador'].includes(SESSION.rol);
@@ -1755,7 +1757,7 @@ async function cargarFichajes() {
   if (desde) url += `&desde=${desde}`;
   if (hasta) url += `&hasta=${hasta}`;
   const r = await api(url);
-  const data = (r.fichajes || r.data || []).map(f => ({
+  const data = toArr(r, 'fichajes').map(f => ({
     ...f,
     nombre: f.nombre_usuario || f.nombre_externo || '—',
     horaEntrada: fmtHora(f.entrada),
@@ -1840,7 +1842,7 @@ function abrirModalEpi() {
 }
 async function cargarEpis() {
   const r = await api('/epis-asignados');
-  const data = (r.epis || r.data || []).map(e => ({
+  const data = toArr(r, 'epis').map(e => ({
     ...e,
     trabajador: e.nombre_usuario || e.nombre_externo || '—',
     diasRestantes: diasParaCaducar(e.fecha_caducidad),
@@ -1903,8 +1905,8 @@ async function cargarTurnos() {
     api(`/turnos?desde=${fmt(lunes)}&hasta=${fmt(domingo)}`),
     api('/personal/trabajadores'),
   ]);
-  turnosData = tR.turnos || [];
-  turnosTrabajadores = (trabR.trabajadores || []).slice(0, 30);
+  turnosData = toArr(tR, 'turnos');
+  turnosTrabajadores = toArr(trabR, 'trabajadores').slice(0, 30);
   renderTurnosGrid(lunes);
 }
 
@@ -2005,7 +2007,7 @@ function abrirModalCarnet() {
 }
 async function cargarCarnets() {
   const r = await api('/carnets');
-  const data = (r.carnets || r.data || []).map(c => ({
+  const data = toArr(r, 'carnets').map(c => ({
     ...c,
     trabajador: c.nombre_usuario || c.nombre_externo || '—',
     diasRestantes: diasParaCaducar(c.fecha_caducidad),
@@ -2345,7 +2347,7 @@ async function cargarHistorialHerramientas() {
 
 async function cargarKits() {
   const r = await api('/kits-herramientas');
-  const data = r.kits || r.data || [];
+  const data = toArr(r, 'kits');
   if (tblKits) { tblKits.replaceData(data); return; }
   tblKits = new Tabulator('#tblKits', {
     data, layout: 'fitColumns', pagination: 'local', paginationSize: 20,
@@ -2607,7 +2609,7 @@ let _incData = [];
 
 async function cargarIncidencias() {
   const r = await api('/incidencias?limit=500&sin_dept=1');
-  _incData = (r.incidencias || r.data || []).map(i => ({
+  _incData = toArr(r, 'incidencias').map(i => ({
     ...i,
     tituloCorto: (i.titulo || i.descripcion || '').substring(0, 100),
   }));
@@ -3015,7 +3017,7 @@ let tblUsuarios = null;
 async function cargarUsuarios() {
   if (!['empresa_admin', 'superadmin', 'desarrollador'].includes(SESSION.rol)) return;
   const r = await api('/personal/trabajadores');
-  const data = (r.trabajadores || r.data || []);
+  const data = toArr(r, 'trabajadores');
 
   const activos   = data.filter(u => u.activo).length;
   const admins    = data.filter(u => ['empresa_admin','encargado','jefe_de_obra','oficina'].includes(u.rol)).length;
@@ -3491,14 +3493,19 @@ async function cargarNotificaciones() {
   ]);
   notificaciones = [];
 
-  // Stock bajo
-  (alertasR.alertas || []).forEach(a => notificaciones.push({
+  // Stock bajo — el worker devuelve {herramientas, seguridad, bobinas} cada uno con su esquema
+  const alertasStock = [
+    ...(alertasR.herramientas || []).map(a => ({ nombre: a.nombre, cantidad: a.disponibles, stock_minimo: a.stock_minimo, nav: 'herramientas' })),
+    ...(alertasR.seguridad    || []).map(a => ({ nombre: a.nombre, cantidad: a.cantidad_disponible, stock_minimo: a.stock_minimo, nav: 'seguridad' })),
+    ...(alertasR.bobinas      || []).map(a => ({ nombre: a.nombre, cantidad: a.total_bobinas, stock_minimo: a.stock_minimo, nav: 'bobinas' })),
+  ];
+  alertasStock.forEach(a => notificaciones.push({
     tipo: 'danger', icono: '📉', titulo: `Stock bajo: ${a.nombre}`,
-    texto: `${a.cantidad} uds (mínimo: ${a.stock_minimo})`, nav: 'seguridad'
+    texto: `${a.cantidad} uds (mínimo: ${a.stock_minimo})`, nav: a.nav
   }));
 
   // Pedidos pendientes
-  const pendientes = (pedidosR.pedidos || []).filter(p => p.estado === 'pendiente');
+  const pendientes = toArr(pedidosR, 'pedidos').filter(p => p.estado === 'pendiente');
   if (pendientes.length) notificaciones.push({
     tipo: 'warn', icono: '📦', titulo: `${pendientes.length} pedido${pendientes.length > 1 ? 's' : ''} pendiente${pendientes.length > 1 ? 's' : ''}`,
     texto: 'Requieren atención o aprobación', nav: 'pedidos'
@@ -3506,7 +3513,7 @@ async function cargarNotificaciones() {
 
   // Carnets próximos a caducar (< 30 días)
   const hoy = new Date();
-  const proximos = (carnetR.carnets || []).filter(c => {
+  const proximos = toArr(carnetR, 'carnets').filter(c => {
     if (!c.fecha_caducidad) return false;
     const dias = Math.ceil((new Date(c.fecha_caducidad) - hoy) / 86400000);
     return dias >= 0 && dias <= 30;
@@ -3690,7 +3697,7 @@ function abrirModalRepostaje() {
 
 async function cargarRepostajes() {
   const r = await api('/repostajes');
-  const data = r.repostajes || r.data || [];
+  const data = toArr(r, 'repostajes');
   const totalLitros = data.reduce((s, r) => s + (parseFloat(r.litros) || 0), 0);
   const totalImporte = data.reduce((s, r) => s + (parseFloat(r.importe_total) || 0), 0);
   document.getElementById('repostajesResumen').innerHTML = [
@@ -3749,14 +3756,14 @@ const DEV_ENDPOINTS = [
 
 // Stats de tablas D1 que queremos contar
 const DEV_DB_ENDPOINTS = [
-  ['GET', '/personal/trabajadores', 'trabajadores', r => (r.trabajadores || r.data || []).length],
-  ['GET', '/bobinas?limit=9999',    'bobinas',      r => (r.bobinas    || r.data || []).length],
-  ['GET', '/pemp?limit=9999',       'PEMP',         r => (r.pemp       || r.data || []).length],
-  ['GET', '/carretillas?limit=9999','carretillas',  r => (r.carretillas|| r.data || []).length],
-  ['GET', '/carnets?limit=9999',    'carnets',      r => (r.carnets    || r.data || []).length],
-  ['GET', '/epis-asignados',        'EPIs asignados',r => (r.epis      || r.data || []).length],
-  ['GET', '/incidencias?limit=9999','incidencias',  r => (r.incidencias|| r.data || []).length],
-  ['GET', '/pedidos?limit=9999',    'pedidos',      r => (r.pedidos    || r.data || []).length],
+  ['GET', '/personal/trabajadores', 'trabajadores', r => toArr(r,'trabajadores').length],
+  ['GET', '/bobinas?limit=9999',    'bobinas',      r => toArr(r,'bobinas').length],
+  ['GET', '/pemp?limit=9999',       'PEMP',         r => toArr(r,'pemp').length],
+  ['GET', '/carretillas?limit=9999','carretillas',  r => toArr(r,'carretillas').length],
+  ['GET', '/carnets?limit=9999',    'carnets',      r => toArr(r,'carnets').length],
+  ['GET', '/epis-asignados',        'EPIs asignados',r => toArr(r,'epis').length],
+  ['GET', '/incidencias?limit=9999','incidencias',  r => toArr(r,'incidencias').length],
+  ['GET', '/pedidos?limit=9999',    'pedidos',      r => toArr(r,'pedidos').length],
 ];
 
 let _serverLogs = [];
@@ -3844,7 +3851,7 @@ async function devSesiones() {
   const cont = document.getElementById('devSesiones');
   cont.innerHTML = '<div class="loading" style="padding:20px"><div class="spinner"></div></div>';
   const r = await api('/sesiones');
-  const sesiones = r.sesiones || r.data || [];
+  const sesiones = toArr(r, 'sesiones');
   if (!sesiones.length) {
     cont.innerHTML = '<div class="empty-state" style="padding:20px"><div class="empty-icon" style="font-size:32px">👥</div><div class="empty-text">Solo tú estás conectado</div></div>';
     return;
@@ -3871,7 +3878,7 @@ async function cargarServerLogs() {
   let url = '/log?limit=100';
   if (nivel) url += `&nivel=${nivel}`;
   const r = await api(url);
-  _serverLogs = r.logs || r.data || [];
+  _serverLogs = toArr(r, 'logs');
   _liveMaxId = _serverLogs.length ? Math.max(..._serverLogs.map(l => l.id || 0)) : 0;
   devActualizarContador();
   devFiltrarServerLogs(document.getElementById('devSearchServerLogs')?.value || '');
@@ -4190,7 +4197,7 @@ async function exportarPDFIncidencias() {
   doc.text(`${SESSION.empresa_nombre || ''} · ${hoy}`, 14, 23);
 
   const r = await api('/incidencias?sin_dept=1&limit=500');
-  const rows = (r.incidencias || r.data || []).map(i => [
+  const rows = toArr(r, 'incidencias').map(i => [
     i.id, i.titulo || '—', i.tipo || '—', i.gravedad || '—',
     i.estado || '—', i.obra_nombre || '—',
     i.created_at ? new Date(i.created_at).toLocaleDateString('es-ES') : '—'
@@ -4219,7 +4226,7 @@ async function exportarPDFPedidos() {
   doc.text(`${SESSION.empresa_nombre || ''} · ${hoy}`, 14, 23);
 
   const r = await api('/pedidos?todos=1&limit=500');
-  const rows = (r.pedidos || r.data || []).map(p => [
+  const rows = toArr(r, 'pedidos').map(p => [
     p.id, p.descripcion || '—', p.departamento || '—', p.proveedor || '—',
     p.estado || '—', p.cantidad ?? '—',
     p.created_at ? new Date(p.created_at).toLocaleDateString('es-ES') : '—'
