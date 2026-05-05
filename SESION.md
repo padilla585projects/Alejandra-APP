@@ -6,10 +6,35 @@
 ## ESTADO ACTUAL
 
 **Sesión:** LIBRE
-**Última sesión:** 05/05/2026
-**Versión tras última sesión:** v5.49 (worker 8651d4bf)
+**Última sesión:** 06/05/2026
+**Versión tras última sesión:** v5.50 (worker d877dcc5)
 **GitHub:** en sync ✅
 **Panel web:** https://padilla585projects.github.io/Alejandra-APP/panel.html ✅ FUNCIONA
+
+---
+
+## RESUMEN SESIÓN 06/05/2026 (v5.50 — DevTools expandido + fixes roles + env.FILES)
+
+- **Fix DevTools superadmin**: panel solo mostraba DevTools si rol==='desarrollador'.
+  Corregido a `['superadmin','desarrollador'].includes(SESSION.rol)`.
+- **Rol Adrian cambiado a 'desarrollador'** en D1 via wrangler CLI.
+- **DevTools v5.50 — 10 nuevos endpoints + secciones**:
+  · `/dev/kpis` → KPIs globales: empresas, usuarios, obras, bobinas, fichajes hoy, incidencias, sesiones, invitaciones
+  · `/dev/table-counts` → conteo de registros de las 24 tablas D1
+  · `/dev/sql` → SQL Runner (solo SELECT/PRAGMA, protegido)
+  · `/dev/sesiones` → sesiones activas con email, rol, empresa, timestamps
+  · `/dev/kill-session` → cerrar sesión de cualquier usuario
+  · `/dev/login-history` → historial login_attempts agrupado por IP
+  · `/dev/r2` GET/DELETE → visor y borrador de archivos R2
+  · `/dev/cambiar-rol` → cambiar rol de usuario por ID o email
+  · `/dev/activity` → gráfica de barras fichajes+incidencias últimos 30 días
+  · Test de rendimiento (client-side): mide ms de cada endpoint
+- **Fix crítico**: `env.R2` → `env.FILES` en todo el worker (binding correcto del wrangler.toml).
+  Afectaba también funciones de fotos de perfil y adjuntos de mantenimiento (silenciosamente rotas).
+- **Fixes D1 en devKPIs**: `empresas.activo` → `activa`, `obras.estado='activa'` → `activa=1`, `fichajes.entrada` → `fecha`.
+- **Fix devLoginHistory**: columnas incorrectas (`email/intentos/bloqueado_hasta`) → `ip/motivo + COUNT(*) + MAX(created_at)`.
+- **Fix devActivity**: `DATE(entrada)` → `fecha` en fichajes.
+- Worker: d877dcc5 ✅  GitHub: en sync ✅
 
 ---
 
