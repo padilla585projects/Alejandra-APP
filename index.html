@@ -3662,6 +3662,51 @@ async function regFinalizar() {
 // ══════════════════════════════════════════════════════
 let currentModule = (()=>{ try { return JSON.parse(localStorage.getItem('alejandra_session')||'{}').departamento === 'mecanicas' ? 'pemp' : 'bobinas'; } catch { return 'bobinas'; } })();
 
+// ── SYNC BIDIRECCIONAL ─────────────────────────────────────────
+// Refresca la pantalla activa cuando la app vuelve a primer plano
+// → operario abre la app y ve los turnos/pedidos actualizados por el panel admin
+const _APP_SCREEN_REFRESH = {
+  pedidos:     () => typeof cargarPedidos       === 'function' && cargarPedidos(),
+  incidencias: () => typeof cargarIncidencias   === 'function' && cargarIncidencias(),
+  obraDashboard:()=> typeof cargarObraDashboard === 'function' && cargarObraDashboard(),
+  calendario:  () => typeof calCargar           === 'function' && calCargar(),
+};
+
+// Polling de secciones activas (detectar cambios del panel admin en tiempo real)
+let _appSectionTimer = null;
+const _APP_SECTION_POLL_SECS = {
+  pedidos:     60,   // jefe cambia estado pedido → operario lo ve en ≤60s
+  incidencias: 60,
+  personal:    30,   // operarios fichan → jefe mobile lo ve en ≤30s
+  obraDashboard: 30,
+};
+
+function _startAppSectionPoll(screenName) {
+  if (_appSectionTimer) clearInterval(_appSectionTimer);
+  _appSectionTimer = null;
+  const secs = _APP_SECTION_POLL_SECS[screenName];
+  if (!secs || !_APP_SCREEN_REFRESH[screenName]) return;
+  _appSectionTimer = setInterval(() => {
+    if (!document.hidden) _APP_SCREEN_REFRESH[screenName]?.();
+  }, secs * 1000);
+}
+
+let _lastAppVisible = 0;
+function _onAppVisible() {
+  if (document.hidden || !getSession()) return;
+  const now = Date.now();
+  if (now - _lastAppVisible < 15000) return; // ignorar si fue hace menos de 15s
+  _lastAppVisible = now;
+  // Detectar pantalla activa
+  const activeEl = document.querySelector('.screen.active');
+  if (!activeEl?.id) return;
+  const raw  = activeEl.id.replace(/^screen/, '');
+  const name = raw.charAt(0).toLowerCase() + raw.slice(1);
+  _APP_SCREEN_REFRESH[name]?.();
+  checkNotifBadge?.();
+  checkChatBadge?.();
+}
+
 async function iniciarApp() {
   const s = getSession();
   if (!s) {
@@ -3723,6 +3768,12 @@ async function iniciarApp() {
   checkConnection();
   if (!window._connInterval) {
     window._connInterval = setInterval(checkConnection, 120000); // cada 2 min (batería)
+  }
+
+  // Sync bidireccional — refrescar al volver a primer plano
+  if (!window._visibilityListenerApp) {
+    window._visibilityListenerApp = true;
+    document.addEventListener('visibilitychange', _onAppVisible);
   }
 
   const esSuperAdmin   = s.rol === 'superadmin';
@@ -4710,6 +4761,14 @@ async function checkConnection() {
 let _navHistory = [];
 
 function _applyScreen(name) {
+  // Limpiar timer de sub-panel personal si salimos de personal
+  if (name !== 'personal' && window._perTabTimer) {
+    clearInterval(window._perTabTimer);
+    window._perTabTimer = null;
+  }
+  // Arrancar/parar polling de sección activa
+  _startAppSectionPoll(name);
+
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   const el = document.getElementById('screen' + name.charAt(0).toUpperCase() + name.slice(1));
   if (el) el.classList.add('active');
@@ -9664,7 +9723,7 @@ async function cargarObrasSelectUsuario() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '5.40';
+const APP_VERSION = '5.41';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -10952,6 +11011,7 @@ if ('serviceWorker' in navigator) {
     } catch { toast('❌ Error de red', 'err'); }
   }
 
+  window.calCargar       = calCargar;
   window.calNavMes       = calNavMes;
   window.calDiaClick     = calDiaClick;
   window.abrirFormEvento = abrirFormEvento;
@@ -11650,6 +11710,12 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     if (n === 4) cargarEpis();
     if (n === 5) cargarCarnets();
     if (n === 6) cargarTurnos();
+
+    // Polling de secciones personales en tiempo real
+    if (window._perTabTimer) clearInterval(window._perTabTimer);
+    window._perTabTimer = null;
+    if (n === 0) window._perTabTimer = setInterval(() => { if (!document.hidden) cargarHoy(); }, 30000); // fichajes hoy cada 30s
+    if (n === 6) window._perTabTimer = setInterval(() => { if (!document.hidden) cargarTurnos(); }, 60000); // turnos cada 60s
   }
 
   // ── Cargar trabajadores (cache) ──

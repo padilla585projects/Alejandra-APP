@@ -184,6 +184,12 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
 @keyframes logHighlight{from{background:rgba(168,85,247,.25)}to{background:transparent}}
 .log-new{animation:logHighlight 1.5s ease forwards}
 
+/* SYNC indicator */
+.sync-chip{font-family:'Montserrat',sans-serif;font-size:9px;color:var(--muted);white-space:nowrap;cursor:pointer;padding:3px 8px;border-radius:8px;background:var(--surface2);border:1px solid var(--border);transition:all .2s;user-select:none}
+.sync-chip:hover{border-color:var(--accent);color:var(--accent)}
+@keyframes syncPulse{0%,100%{opacity:1}50%{opacity:.4}}
+.sync-chip.syncing{animation:syncPulse .6s ease-in-out}
+
 /* RESPONSIVE sidebar collapse */
 @media(max-width:900px){
   #sidebar{position:fixed;left:-260px;top:0;bottom:0;z-index:500;transition:left .25s;width:240px}
@@ -377,6 +383,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
         <span id="topbarName">—</span>
         <span class="rol-badge" id="topbarRol"></span>
       </div>
+      <span class="sync-chip" id="syncChip" style="display:none" onclick="_manualSync()" title="Clic para actualizar ahora"></span>
       <button class="topbar-btn" id="btnBuscar" onclick="abrirBusqueda()" title="Búsqueda global" style="display:none">🔍</button>
       <button class="topbar-btn" onclick="notifAbrir()" style="position:relative" title="Notificaciones">
         🔔<span id="notifBadge" style="display:none;position:absolute;top:-4px;right:-4px;background:var(--red);color:#fff;font-family:'Montserrat',sans-serif;font-weight:900;font-size:9px;padding:1px 5px;border-radius:10px">0</span>
@@ -1391,6 +1398,7 @@ function iniciarApp() {
   checkConexion();
   setInterval(checkConexion, 30000);
   iniciarPollingNotif();
+  _initSync();
   navTo('dashboard');
 }
 
@@ -1438,6 +1446,7 @@ function navTo(page) {
   if (currentPage === page) return;
   // Parar live logs si salimos de devtools
   if (currentPage === 'devtools' && _liveActive) devToggleLive();
+  _stopSync();  // cancelar auto-refresh de la página anterior
   currentPage = page;
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
@@ -1448,6 +1457,73 @@ function navTo(page) {
   document.getElementById('topbarTitle').textContent = PAGE_TITLES[page] || page;
   if (window.innerWidth <= 900) document.getElementById('sidebar').classList.remove('open');
   if (PAGE_LOADERS[page]) PAGE_LOADERS[page]();
+  _startSync(page);  // arrancar auto-refresh para la nueva página
+}
+
+// ── SYNC BIDIRECCIONAL ─────────────────────────────────────────
+// Segundos entre auto-refresh por sección. Secciones no listadas = solo visibilitychange.
+const SYNC_INTERVALS = {
+  dashboard:     30,
+  fichajes:      20,   // ficha operario → jefe ve en ≤20s
+  incidencias:   30,
+  pedidos:       30,
+  personal:      60,
+  turnos:        60,
+  bobinas:       60,
+  pemp:          60,
+  carretillas:   60,
+  herramientas:  60,
+  seguridad:     60,
+  mantenimientos:90,
+  repostajes:    90,
+};
+
+let _syncTimer = null, _syncLabelTimer = null, _syncLastTs = null;
+
+function _updateSyncChip() {
+  const el = document.getElementById('syncChip');
+  if (!el || !_syncLastTs) return;
+  const s = Math.round((Date.now() - _syncLastTs) / 1000);
+  if (s < 5)        el.textContent = '⟳ Ahora';
+  else if (s < 60)  el.textContent = `⟳ hace ${s}s`;
+  else              el.textContent = `⟳ hace ${Math.round(s/60)}min`;
+}
+
+function _startSync(page) {
+  _stopSync();
+  const secs = SYNC_INTERVALS[page];
+  const el = document.getElementById('syncChip');
+  if (!el) return;
+  if (!secs) { el.style.display = 'none'; return; }
+  el.style.display = '';
+  _syncLastTs = Date.now();
+  _updateSyncChip();
+  _syncTimer     = setInterval(() => { PAGE_LOADERS[currentPage]?.(); _syncLastTs = Date.now(); _updateSyncChip(); }, secs * 1000);
+  _syncLabelTimer = setInterval(_updateSyncChip, 4000);
+}
+
+function _stopSync() {
+  if (_syncTimer)      clearInterval(_syncTimer);
+  if (_syncLabelTimer) clearInterval(_syncLabelTimer);
+  _syncTimer = _syncLabelTimer = null;
+}
+
+function _manualSync() {
+  const el = document.getElementById('syncChip');
+  if (el) { el.textContent = '⟳ ...'; el.classList.add('syncing'); }
+  PAGE_LOADERS[currentPage]?.();
+  _syncLastTs = Date.now();
+  setTimeout(() => { if (el) el.classList.remove('syncing'); _updateSyncChip(); }, 800);
+}
+
+function _initSync() {
+  // Refresh al volver al tab (panel → siempre carga datos frescos)
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && SESSION && currentPage) {
+      _manualSync();
+      _startSync(currentPage); // reinicia contador
+    }
+  });
 }
 
 // ── CONEXIÓN ───────────────────────────────────────────────────
