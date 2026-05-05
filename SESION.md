@@ -7,9 +7,25 @@
 
 **Sesión:** LIBRE
 **Última sesión:** 05/05/2026
-**Versión tras última sesión:** v5.40
-**Worker desplegado:** v5.40 (ID: b433ed71-3614-4ef3-84ce-aa4483f4170b)
+**Versión tras última sesión:** v5.40 + panel web v0.3 (Fases 1-3)
+**Worker desplegado:** v5.40 + roles nuevos (ID: 48609304-b918-4799-8226-87c65418e904)
 **GitHub:** en sync ✅
+
+---
+
+## RESUMEN SESIÓN 05/05/2026 (panel web v0.3 — Fases 1/2/3 + roles + chat + notif + logs)
+
+- **Panel web Alejandra Office** — nuevo archivo `panel.html` en el mismo repo/worker
+- **Fase 1**: layout sidebar+topbar, login email/pass, dashboard KPIs, todas las páginas stub
+- **Fase 2**: turnos grid interactivo, fichajes manuales+KPIs, EPIs modal, carnets modal,
+  rol `desarrollador` (acceso total), Google OAuth (botón + callback), 
+- **Fase 3**: chat flotante polling 10s, notificaciones badge (stock/pedidos/carnets),
+  logs automáticos JS+API con visor admin, PEMP/Carretillas modales, Repostajes sección nueva
+- **Roles nuevos**: `jefe_de_obra`, `oficina`, `desarrollador` en worker.js getAuth
+- **Worker**: desplegado 3 veces esta sesión, último ID: 48609304
+- **GitHub**: en sync ✅
+- **Plan guardado**: PLAN_PANEL_WEB.md con fases pendientes (4-7)
+- **.gitignore**: añadido (`.wrangler/`, `e1/`...) + historial limpiado con filter-branch
 
 ---
 
