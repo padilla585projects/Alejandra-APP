@@ -13639,7 +13639,7 @@ window.turnoToggle   = turnoToggle;
   function checkIABtn() {
     const s = getSession ? getSession() : null;
     const btn = document.getElementById('navIA');
-    if (btn && s && ['desarrollador','superadmin','empresa_admin'].includes(s.rol)) btn.style.display = '';
+    if (btn && s && ['desarrollador','superadmin'].includes(s.rol)) btn.style.display = '';
   }
   document.addEventListener('sessionReady', checkIABtn);
   setTimeout(checkIABtn, 1000);
