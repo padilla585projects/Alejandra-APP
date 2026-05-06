@@ -5510,7 +5510,7 @@ async function confirmarResetPass() {
   function showAIBtn() {
     const rol = (typeof SESSION !== 'undefined' && SESSION?.rol) || JSON.parse(localStorage.getItem('panel_session') || '{}')?.rol;
     const btn = document.getElementById('aiFloatBtn');
-    if (btn && rol && ['desarrollador','superadmin'].includes(rol)) btn.style.display = 'flex';
+    if (btn && rol && ['desarrollador','superadmin','empresa_admin'].includes(rol)) btn.style.display = 'flex';
   }
 
   window.toggleAIChat = function() {
