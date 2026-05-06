@@ -818,8 +818,24 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
       <!-- USUARIOS (admin) -->
       <div class="page" id="pageUsuarios">
         <div class="page-title">👤 Usuarios</div>
-        <div class="page-sub">Gestión de cuentas y roles de la empresa</div>
+        <div class="page-sub">Gestión de cuentas, roles, invitaciones y aprobaciones</div>
         <div id="usuResumen" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;margin-bottom:16px"></div>
+
+        <!-- Pendientes de aprobación -->
+        <div id="pendientesSection" style="display:none;margin-bottom:20px;background:var(--surface);border:1px solid var(--yellow);border-radius:12px;padding:16px">
+          <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:13px;color:var(--yellow);margin-bottom:10px">⏳ Usuarios pendientes de aprobación</div>
+          <div id="pendientesList"></div>
+        </div>
+
+        <!-- Invitaciones -->
+        <div style="margin-bottom:16px;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+            <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:13px;color:var(--accent)">🔗 Invitaciones</div>
+            <button class="btn btn-primary btn-sm" onclick="abrirModalInvitacion()">+ Crear invitación</button>
+          </div>
+          <div id="invitacionesList" style="font-size:13px;color:var(--muted)">Cargando...</div>
+        </div>
+
         <div class="tbl-toolbar">
           <input class="tbl-search" id="searchUsuarios" placeholder="🔍 Buscar nombre o email...">
           <select class="tbl-search" id="filterUsuRol" style="min-width:140px" onchange="filtrarUsuarios()">
@@ -3385,6 +3401,9 @@ let tblUsuarios = null;
 
 async function cargarUsuarios() {
   if (!['empresa_admin', 'superadmin', 'desarrollador'].includes(SESSION.rol)) return;
+  if (!window._obrasPanel) await cargarObrasPanel();
+  cargarInvitaciones();
+  cargarPendientes();
   const r = await api('/personal/trabajadores');
   const data = toArr(r, 'trabajadores');
 
@@ -3418,10 +3437,16 @@ async function cargarUsuarios() {
           return `<span style="background:${color}22;color:${color};border:1px solid ${color}44;font-family:'Montserrat',sans-serif;font-weight:700;font-size:10px;padding:2px 8px;border-radius:20px">${v || '—'}</span>`;
         },
         cellEdited: c => guardarCampoUsuario(c.getRow().getData().id, 'rol', c.getValue()) },
-      { title: 'Dpto.', field: 'departamento', width: 120,
-        formatter: c => c.getValue() ? `<span class="badge badge-muted">${c.getValue()}</span>` : '—' },
-      { title: 'Obra', field: 'obra_nombre', minWidth: 130,
-        formatter: c => c.getValue() ? `<span style="font-size:12px">🏗 ${c.getValue()}</span>` : '<span style="color:var(--muted)">—</span>' },
+      { title: 'Dpto.', field: 'departamento', width: 140,
+        editor: canEdit ? 'select' : false,
+        editorParams: { values: Object.fromEntries(_ALL_DEPTS.map(d => [d, _DEPTS_CATALOG[d].icon + ' ' + _DEPTS_CATALOG[d].name])) },
+        formatter: c => { const v = c.getValue(); const info = _DEPTS_CATALOG[v]; return info ? `<span class="badge badge-muted">${info.icon} ${info.name}</span>` : (v || '—'); },
+        cellEdited: c => guardarCampoUsuario(c.getRow().getData().id, 'departamento', c.getValue()) },
+      { title: 'Obra', field: 'obra_id', minWidth: 150,
+        editor: canEdit ? 'select' : false,
+        editorParams: () => ({ values: Object.fromEntries([['', '— Sin obra —'], ...(window._obrasPanel || []).map(o => [o.id, o.nombre])]) }),
+        formatter: c => { const row = c.getRow().getData(); return row.obra_nombre ? `<span style="font-size:12px">🏗 ${row.obra_nombre}</span>` : '<span style="color:var(--muted)">—</span>'; },
+        cellEdited: c => guardarCampoUsuario(c.getRow().getData().id, 'obra_id', c.getValue() || null).then(() => { tblUsuarios = null; cargarUsuarios(); }) },
       { title: 'Activo', field: 'activo', width: 80, hozAlign: 'center',
         formatter: c => c.getValue() ? '<span class="badge badge-ok">✓</span>' : '<span class="badge badge-danger">✕</span>' },
       { title: '', field: 'id', width: 130, hozAlign: 'center', headerSort: false,
@@ -3475,6 +3500,8 @@ function cambiarPassUsuario(id, nombre) {
 }
 
 function abrirModalUsuario() {
+  const deptOpts = _ALL_DEPTS.map(d => `<option value="${d}">${_DEPTS_CATALOG[d].icon} ${_DEPTS_CATALOG[d].name}</option>`).join('');
+  const obraOpts = (window._obrasPanel || []).map(o => `<option value="${o.id}">${o.nombre}</option>`).join('');
   abrirModal('Nuevo usuario', `
     <div class="form-group"><div class="form-label">Nombre completo *</div><input class="form-input" id="mNombre" placeholder="Juan García"></div>
     <div class="form-group"><div class="form-label">Email *</div><input class="form-input" id="mEmail" type="email" placeholder="juan@empresa.com"></div>
@@ -3490,20 +3517,14 @@ function abrirModalUsuario() {
         </select>
       </div>
       <div class="form-group"><div class="form-label">Departamento</div>
-        <select class="form-select" id="mDept">
-          <option value="electrico">Eléctrico</option>
-          <option value="mecanicas">Mecánicas</option>
-          <option value="seguridad">Seguridad</option>
-          <option value="personal">Personal</option>
-          <option value="obra_civil">Obra Civil</option>
-          <option value="albanileria">Albañilería</option>
-          <option value="pintura">Pintura</option>
-          <option value="carpinteria">Carpintería</option>
-          <option value="telecom">Telecom</option>
-          <option value="almacen">Almacén</option>
-          <option value="oficina_tec">Oficina técnica</option>
-        </select>
+        <select class="form-select" id="mDept">${deptOpts}</select>
       </div>
+    </div>
+    <div class="form-group"><div class="form-label">Obra asignada</div>
+      <select class="form-select" id="mObra">
+        <option value="">— Sin obra —</option>
+        ${obraOpts}
+      </select>
     </div>
   `, async () => {
     const body = {
@@ -3512,6 +3533,7 @@ function abrirModalUsuario() {
       password: document.getElementById('mPass').value,
       rol: document.getElementById('mRol').value,
       departamento: document.getElementById('mDept').value,
+      obra_id: document.getElementById('mObra').value || null,
     };
     if (!body.nombre || !body.email || !body.password) { toast('Rellena todos los campos', 'err'); return; }
     if (body.password.length < 8) { toast('La contraseña debe tener al menos 8 caracteres', 'err'); return; }
@@ -3519,6 +3541,138 @@ function abrirModalUsuario() {
     if (r.ok) { cerrarModal(); toast('Usuario creado ✓', 'ok'); tblUsuarios = null; cargarUsuarios(); }
     else toast(r.error || 'Error al crear', 'err');
   });
+}
+
+// ── OBRAS (para selects de usuario) ───────────────────────────
+async function cargarObrasPanel() {
+  const r = await api('/mi-empresa');
+  if (r.obras) window._obrasPanel = r.obras;
+}
+
+// ── INVITACIONES ──────────────────────────────────────────────
+async function cargarInvitaciones() {
+  const cont = document.getElementById('invitacionesList');
+  if (!cont) return;
+  const r = await api('/invitaciones');
+  const lista = r.invitaciones || [];
+  const activas = lista.filter(i => !i.usado);
+  if (!activas.length) { cont.innerHTML = '<div style="font-size:13px;color:var(--muted);font-style:italic">No hay invitaciones activas</div>'; return; }
+  cont.innerHTML = activas.map(inv => {
+    const expira = new Date(inv.expira_at + 'Z');
+    const restante = Math.max(0, Math.round((expira - Date.now()) / 60000));
+    const rolLabel = { operario:'Operario', encargado:'Encargado', oficina:'Oficina', jefe_de_obra:'Jefe de obra', empresa_admin:'Admin' }[inv.rol] || inv.rol;
+    const deptInfo = _DEPTS_CATALOG[inv.departamento];
+    const deptLabel = deptInfo ? deptInfo.icon + ' ' + deptInfo.name : (inv.departamento || '—');
+    return `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
+      <div style="flex:1;min-width:0">
+        <div style="font-family:'Montserrat',sans-serif;font-weight:700;font-size:14px;color:var(--accent);letter-spacing:1px">${inv.codigo}</div>
+        <div style="font-size:11px;color:var(--muted)">${rolLabel} · ${deptLabel} · ${restante} min restantes</div>
+      </div>
+      <button class="btn btn-sm btn-secondary" onclick="copiarInvitacion('${inv.codigo}')" title="Copiar código">📋</button>
+      <button class="btn btn-sm btn-danger" onclick="anularInvitacion('${inv.codigo}')" title="Anular">✕</button>
+    </div>`;
+  }).join('');
+}
+
+function copiarInvitacion(codigo) {
+  navigator.clipboard.writeText(codigo).then(() => toast('Código copiado: ' + codigo, 'ok')).catch(() => toast('No se pudo copiar', 'err'));
+}
+
+async function anularInvitacion(codigo) {
+  const r = await api('/invitaciones/anular', { method: 'POST', body: JSON.stringify({ codigo }) });
+  if (r.ok) { toast('Invitación anulada', 'ok'); cargarInvitaciones(); }
+  else toast(r.error || 'Error', 'err');
+}
+
+function abrirModalInvitacion() {
+  const deptOpts = _ALL_DEPTS.map(d => `<option value="${d}">${_DEPTS_CATALOG[d].icon} ${_DEPTS_CATALOG[d].name}</option>`).join('');
+  abrirModal('🔗 Crear invitación', `
+    <p style="font-size:13px;color:var(--muted);margin-bottom:14px">Genera un código de invitación para que un nuevo usuario se registre con rol y departamento pre-asignados.</p>
+    <div class="form-row">
+      <div class="form-group"><div class="form-label">Rol</div>
+        <select class="form-select" id="invRol">
+          <option value="operario">Operario</option>
+          <option value="encargado">Encargado</option>
+          <option value="oficina">Oficina</option>
+          <option value="jefe_de_obra">Jefe de obra</option>
+          <option value="empresa_admin">Admin</option>
+        </select>
+      </div>
+      <div class="form-group"><div class="form-label">Departamento</div>
+        <select class="form-select" id="invDept">${deptOpts}</select>
+      </div>
+    </div>
+    <div class="form-group"><div class="form-label">Duración (minutos)</div>
+      <select class="form-select" id="invDuracion">
+        <option value="30">30 minutos</option>
+        <option value="60" selected>1 hora</option>
+        <option value="240">4 horas</option>
+        <option value="1440">24 horas</option>
+        <option value="10080">7 días</option>
+      </select>
+    </div>
+  `, async () => {
+    const r = await api('/invitaciones', { method: 'POST', body: JSON.stringify({
+      rol: document.getElementById('invRol').value,
+      departamento: document.getElementById('invDept').value,
+      duracion_min: parseInt(document.getElementById('invDuracion').value),
+    })});
+    if (r.ok && r.codigo) {
+      cerrarModal();
+      toast('Invitación creada: ' + r.codigo, 'ok');
+      navigator.clipboard.writeText(r.codigo).catch(() => {});
+      cargarInvitaciones();
+    } else toast(r.error || 'Error al crear invitación', 'err');
+  });
+}
+
+// ── USUARIOS PENDIENTES ───────────────────────────────────────
+async function cargarPendientes() {
+  const sec = document.getElementById('pendientesSection');
+  const cont = document.getElementById('pendientesList');
+  if (!sec || !cont) return;
+  const r = await api('/usuarios/pendientes');
+  const lista = r.pendientes || [];
+  if (!lista.length) { sec.style.display = 'none'; return; }
+  sec.style.display = '';
+  const deptOpts = _ALL_DEPTS.map(d => `<option value="${d}">${_DEPTS_CATALOG[d].icon} ${_DEPTS_CATALOG[d].name}</option>`).join('');
+  const obraOpts = (window._obrasPanel || []).map(o => `<option value="${o.id}">${o.nombre}</option>`).join('');
+  cont.innerHTML = lista.map(u => `
+    <div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);flex-wrap:wrap">
+      <div style="flex:1;min-width:180px">
+        <div style="font-size:14px;font-weight:600;color:var(--text)">${u.nombre || 'Sin nombre'}</div>
+        <div style="font-size:12px;color:var(--muted)">${u.email} · ${u.created_at?.slice(0,10) || ''}</div>
+      </div>
+      <select class="form-select" id="pendRol_${u.id}" style="width:auto;min-width:120px;font-size:12px;padding:6px 8px">
+        <option value="operario">Operario</option>
+        <option value="encargado">Encargado</option>
+        <option value="oficina">Oficina</option>
+        <option value="jefe_de_obra">Jefe de obra</option>
+      </select>
+      <select class="form-select" id="pendDept_${u.id}" style="width:auto;min-width:120px;font-size:12px;padding:6px 8px">${deptOpts}</select>
+      <select class="form-select" id="pendObra_${u.id}" style="width:auto;min-width:120px;font-size:12px;padding:6px 8px">
+        <option value="">— Sin obra —</option>
+        ${obraOpts}
+      </select>
+      <button class="btn btn-sm btn-primary" onclick="aprobarPendiente(${u.id})">✓ Aprobar</button>
+      <button class="btn btn-sm btn-danger" onclick="rechazarPendiente(${u.id})">✕ Rechazar</button>
+    </div>
+  `).join('');
+}
+
+async function aprobarPendiente(id) {
+  const rol = document.getElementById('pendRol_' + id)?.value || 'operario';
+  const departamento = document.getElementById('pendDept_' + id)?.value || 'electrico';
+  const obra_id = document.getElementById('pendObra_' + id)?.value || null;
+  const r = await api('/usuarios/pendientes/aprobar', { method: 'POST', body: JSON.stringify({ id, empresa_id: SESSION.empresa_id, rol, departamento, obra_id }) });
+  if (r.ok) { toast('Usuario aprobado ✓', 'ok'); cargarPendientes(); tblUsuarios = null; cargarUsuarios(); }
+  else toast(r.error || 'Error al aprobar', 'err');
+}
+
+async function rechazarPendiente(id) {
+  const r = await api('/usuarios/pendientes/rechazar', { method: 'POST', body: JSON.stringify({ id }) });
+  if (r.ok) { toast('Usuario rechazado', 'ok'); cargarPendientes(); }
+  else toast(r.error || 'Error', 'err');
 }
 
 // ── EMPRESA ────────────────────────────────────────────────────

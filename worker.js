@@ -211,12 +211,300 @@ async function _tgEditMsg(env, chatId, msgId, newText) {
   } catch (_) {}
 }
 
+// --- ASISTENTE IA DEV (Anthropic Claude) ---
+
+async function transcribeAudio(env, audioBuffer) {
+  try {
+    const resp = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${env.OPENAI_API_KEY}` },
+      body: (() => {
+        const form = new FormData();
+        form.append('file', new Blob([audioBuffer], { type: 'audio/ogg' }), 'audio.ogg');
+        form.append('model', 'whisper-1');
+        form.append('language', 'es');
+        return form;
+      })()
+    });
+    const data = await resp.json();
+    return data.text || null;
+  } catch { return null; }
+}
+
+const AI_TOOLS = [
+  {
+    name: 'sql_query',
+    description: 'Ejecuta cualquier consulta SQL en la base de datos D1 (SELECT, INSERT, UPDATE, DELETE, CREATE, ALTER, DROP). Control total.',
+    input_schema: { type: 'object', properties: { sql: { type: 'string', description: 'Consulta SQL a ejecutar' } }, required: ['sql'] }
+  },
+  {
+    name: 'list_tables',
+    description: 'Lista todas las tablas y su cantidad de registros',
+    input_schema: { type: 'object', properties: {} }
+  },
+  {
+    name: 'send_notification',
+    description: 'Envía una notificación por Telegram a un usuario vinculado o al chat principal',
+    input_schema: {
+      type: 'object',
+      properties: {
+        chat_id: { type: 'string', description: 'Chat ID destino. Si no se indica, va al chat principal.' },
+        message: { type: 'string', description: 'Mensaje en HTML' }
+      },
+      required: ['message']
+    }
+  },
+  {
+    name: 'r2_list',
+    description: 'Lista archivos en R2 (almacenamiento de ficheros)',
+    input_schema: { type: 'object', properties: { prefix: { type: 'string', description: 'Prefijo para filtrar (opcional)' } } }
+  },
+  {
+    name: 'r2_delete',
+    description: 'Elimina un archivo de R2',
+    input_schema: { type: 'object', properties: { key: { type: 'string', description: 'Key del archivo a eliminar' } }, required: ['key'] }
+  },
+  {
+    name: 'app_status',
+    description: 'Devuelve estado general de la app: usuarios activos, sesiones, obras, bobinas, errores recientes, sugerencias pendientes',
+    input_schema: { type: 'object', properties: {} }
+  },
+  {
+    name: 'manage_user',
+    description: 'Gestiona un usuario: activar, desactivar, cambiar rol, eliminar, resetear contraseña',
+    input_schema: {
+      type: 'object',
+      properties: {
+        action: { type: 'string', enum: ['activate', 'deactivate', 'change_role', 'delete', 'reset_password', 'info'], description: 'Acción a realizar' },
+        user_id: { type: 'integer', description: 'ID del usuario' },
+        value: { type: 'string', description: 'Nuevo valor (rol, contraseña, etc.)' }
+      },
+      required: ['action', 'user_id']
+    }
+  },
+  {
+    name: 'filter_notifications',
+    description: 'Configura qué notificaciones quieres recibir o silenciar. Consulta o modifica los filtros activos.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        action: { type: 'string', enum: ['get', 'set'], description: 'Consultar filtros actuales o establecer nuevos' },
+        filters: { type: 'object', description: 'Objeto con categorías y si están activas: {sugerencias: true, usuarios: true, errores: true, bobinas: false}' }
+      },
+      required: ['action']
+    }
+  }
+];
+
+async function executeAITool(env, toolName, toolInput) {
+  switch (toolName) {
+    case 'sql_query': {
+      const { sql } = toolInput;
+      try {
+        const trimmed = sql.trim().toUpperCase();
+        if (trimmed.startsWith('SELECT') || trimmed.startsWith('PRAGMA')) {
+          const result = await env.DB.prepare(sql).all();
+          return JSON.stringify({ ok: true, rows: result.results?.length ?? 0, results: result.results?.slice(0, 50), meta: result.meta });
+        } else {
+          const result = await env.DB.prepare(sql).run();
+          return JSON.stringify({ ok: true, changes: result.meta?.changes ?? 0, meta: result.meta });
+        }
+      } catch (e) { return JSON.stringify({ ok: false, error: e.message }); }
+    }
+    case 'list_tables': {
+      const tables = ['usuarios','empresas','obras','bobinas','herramientas','seguridad_items','epis','carretillas','pemp','fichajes','incidencias','pedidos','turnos','mantenimientos','repostajes','kits','sesiones','invitaciones','carnets','logs','login_attempts','reset_tokens','vincular_tokens','sugerencias'];
+      const counts = {};
+      await Promise.all(tables.map(async t => {
+        try { const r = await env.DB.prepare(`SELECT COUNT(*) as n FROM ${t}`).first(); counts[t] = r?.n ?? 0; } catch { counts[t] = null; }
+      }));
+      return JSON.stringify({ ok: true, counts });
+    }
+    case 'send_notification': {
+      const { chat_id, message } = toolInput;
+      if (chat_id) { await sendTelegramToChat(env, chat_id, message); }
+      else { await sendTelegram(env, message); }
+      return JSON.stringify({ ok: true, sent_to: chat_id || 'main_chat' });
+    }
+    case 'r2_list': {
+      const opts = toolInput.prefix ? { prefix: toolInput.prefix } : {};
+      const listed = await env.FILES.list(opts);
+      const files = listed.objects.map(o => ({ key: o.key, size: o.size, uploaded: o.uploaded }));
+      return JSON.stringify({ ok: true, files: files.slice(0, 100), total: listed.objects.length });
+    }
+    case 'r2_delete': {
+      await env.FILES.delete(toolInput.key);
+      return JSON.stringify({ ok: true, deleted: toolInput.key });
+    }
+    case 'app_status': {
+      const [users, sessions, obras, bobinas, errors, sugerencias] = await Promise.all([
+        env.DB.prepare('SELECT COUNT(*) as n FROM usuarios WHERE activo=1').first(),
+        env.DB.prepare('SELECT COUNT(*) as n FROM sesiones WHERE expires_at > datetime(\'now\')').first(),
+        env.DB.prepare('SELECT COUNT(*) as n FROM obras').first(),
+        env.DB.prepare('SELECT COUNT(*) as n FROM bobinas').first(),
+        env.DB.prepare("SELECT COUNT(*) as n FROM logs WHERE nivel='error' AND created_at > datetime('now','-24 hours')").first(),
+        env.DB.prepare("SELECT COUNT(*) as n FROM sugerencias WHERE estado='pendiente'").first()
+      ]);
+      return JSON.stringify({ ok: true, usuarios_activos: users?.n, sesiones_activas: sessions?.n, obras: obras?.n, bobinas: bobinas?.n, errores_24h: errors?.n, sugerencias_pendientes: sugerencias?.n });
+    }
+    case 'manage_user': {
+      const { action, user_id, value } = toolInput;
+      try {
+        if (action === 'info') {
+          const u = await env.DB.prepare('SELECT id, nombre, email, rol, activo, departamento, empresa_id, telegram_id FROM usuarios WHERE id=?').bind(user_id).first();
+          return JSON.stringify({ ok: true, user: u });
+        }
+        if (action === 'activate') {
+          await env.DB.prepare('UPDATE usuarios SET activo=1 WHERE id=?').bind(user_id).run();
+          return JSON.stringify({ ok: true, action: 'activated' });
+        }
+        if (action === 'deactivate') {
+          await env.DB.prepare('UPDATE usuarios SET activo=0 WHERE id=?').bind(user_id).run();
+          return JSON.stringify({ ok: true, action: 'deactivated' });
+        }
+        if (action === 'change_role') {
+          await env.DB.prepare('UPDATE usuarios SET rol=? WHERE id=?').bind(value, user_id).run();
+          return JSON.stringify({ ok: true, action: 'role_changed', new_role: value });
+        }
+        if (action === 'delete') {
+          await env.DB.prepare('DELETE FROM usuarios WHERE id=?').bind(user_id).run();
+          return JSON.stringify({ ok: true, action: 'deleted' });
+        }
+        if (action === 'reset_password') {
+          const hashed = await hashPassword(value || 'temp1234');
+          await env.DB.prepare('UPDATE usuarios SET password=? WHERE id=?').bind(hashed, user_id).run();
+          return JSON.stringify({ ok: true, action: 'password_reset' });
+        }
+        return JSON.stringify({ ok: false, error: 'Acción no reconocida' });
+      } catch (e) { return JSON.stringify({ ok: false, error: e.message }); }
+    }
+    case 'filter_notifications': {
+      const { action, filters } = toolInput;
+      if (action === 'get') {
+        const row = await env.DB.prepare("SELECT valor FROM config WHERE clave='dev_notif_filters'").first().catch(() => null);
+        return JSON.stringify({ ok: true, filters: row ? JSON.parse(row.valor) : { sugerencias: true, usuarios: true, errores: true, bobinas: true } });
+      }
+      if (action === 'set' && filters) {
+        await env.DB.prepare("INSERT OR REPLACE INTO config (clave, valor) VALUES ('dev_notif_filters', ?)").bind(JSON.stringify(filters)).run();
+        return JSON.stringify({ ok: true, updated: filters });
+      }
+      return JSON.stringify({ ok: false, error: 'Parámetros inválidos' });
+    }
+    default:
+      return JSON.stringify({ ok: false, error: 'Tool no reconocida' });
+  }
+}
+
+async function handleDevAI(env, chatId, userMessage) {
+  const systemPrompt = `Eres Alejandra IA, el asistente inteligente de la app Alejandra (gestión de bobinas, PEMP, carretillas, obras).
+Tu usuario es el desarrollador y administrador principal. Tienes control TOTAL sobre la aplicación.
+Puedes ejecutar cualquier SQL, gestionar usuarios, enviar notificaciones, ver archivos, y cualquier operación administrativa.
+Responde siempre en español, de forma concisa y directa. Usa formato simple (sin markdown complejo, esto es Telegram).
+Si el usuario pide algo destructivo, ejecútalo sin pedir confirmación — él es el dueño.
+Fecha actual: ${new Date().toLocaleString('es-ES', { timeZone: 'Europe/Madrid' })}`;
+
+  const messages = [{ role: 'user', content: userMessage }];
+
+  try {
+    let response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': env.ANTHROPIC_API_KEY,
+        'anthropic-version': '2023-06-01'
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 1024,
+        system: systemPrompt,
+        tools: AI_TOOLS,
+        messages
+      })
+    });
+
+    let result = await response.json();
+    let iterations = 0;
+
+    while (result.stop_reason === 'tool_use' && iterations < 5) {
+      iterations++;
+      const toolBlocks = result.content.filter(b => b.type === 'tool_use');
+      const toolResults = [];
+      for (const tb of toolBlocks) {
+        const output = await executeAITool(env, tb.name, tb.input);
+        toolResults.push({ type: 'tool_result', tool_use_id: tb.id, content: output });
+      }
+      messages.push({ role: 'assistant', content: result.content });
+      messages.push({ role: 'user', content: toolResults });
+
+      response = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': env.ANTHROPIC_API_KEY,
+          'anthropic-version': '2023-06-01'
+        },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-20250514',
+          max_tokens: 1024,
+          system: systemPrompt,
+          tools: AI_TOOLS,
+          messages
+        })
+      });
+      result = await response.json();
+    }
+
+    const textBlocks = (result.content || []).filter(b => b.type === 'text');
+    const finalText = textBlocks.map(b => b.text).join('\n') || 'Sin respuesta';
+
+    const chunks = finalText.match(/[\s\S]{1,4000}/g) || [finalText];
+    for (const chunk of chunks) {
+      await sendTelegramToChat(env, chatId, chunk);
+    }
+  } catch (e) {
+    await sendTelegramToChat(env, chatId, `❌ Error IA: ${e.message}`);
+  }
+}
+
+// --- Función para filtrar notificaciones antes de enviar ---
+async function sendTelegramFiltered(env, mensaje, categoria) {
+  try {
+    const row = await env.DB.prepare("SELECT valor FROM config WHERE clave='dev_notif_filters'").first().catch(() => null);
+    const filters = row ? JSON.parse(row.valor) : { sugerencias: true, usuarios: true, errores: true, bobinas: true };
+    if (categoria && filters[categoria] === false) return;
+    await sendTelegram(env, mensaje);
+  } catch { await sendTelegram(env, mensaje); }
+}
+
 // Gestiona las pulsaciones de botones inline enviadas por Telegram
 async function handleTelegramWebhook(request, env) {
   const secret = request.headers.get('X-Telegram-Bot-Api-Secret-Token');
   if (!secret || secret !== env.TELEGRAM_WEBHOOK_SECRET) return new Response('Unauthorized', { status: 401 });
   const update = await request.json().catch(() => null);
-  if (!update?.callback_query) return new Response('OK');
+  if (!update) return new Response('OK');
+
+  // --- Asistente IA para el desarrollador ---
+  if (update.message && String(update.message.chat?.id) === String(env.DEV_CHAT_ID)) {
+    let texto = update.message.text || '';
+    if (update.message.voice || update.message.audio) {
+      const fileId = (update.message.voice || update.message.audio).file_id;
+      const filePath = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/getFile?file_id=${fileId}`)
+        .then(r => r.json()).then(d => d.result?.file_path).catch(() => null);
+      if (filePath) {
+        const audioUrl = `https://api.telegram.org/file/bot${env.TELEGRAM_BOT_TOKEN}/${filePath}`;
+        const audioBlob = await fetch(audioUrl).then(r => r.arrayBuffer()).catch(() => null);
+        if (audioBlob) {
+          const transcription = await transcribeAudio(env, audioBlob);
+          texto = transcription || '[No se pudo transcribir el audio]';
+        }
+      }
+    }
+    if (texto) {
+      await handleDevAI(env, update.message.chat.id, texto);
+    }
+    return new Response('OK');
+  }
+
+  if (!update.callback_query) return new Response('OK');
   const cq     = update.callback_query;
   const data   = cq.data || '';
   const chatId = cq.message?.chat?.id;
@@ -5070,11 +5358,11 @@ async function getUsuariosPendientes(request, env) {
 async function aprobarUsuarioPendiente(request, env) {
   const s = await getAuth(request, env);
   if (!s || !['superadmin','empresa_admin'].includes(s.rol)) return err('Sin permiso', 403);
-  const { id, empresa_id, rol, departamento } = await request.json().catch(() => ({}));
+  const { id, empresa_id, rol, departamento, obra_id } = await request.json().catch(() => ({}));
   if (!id || !empresa_id || !rol) return err('Faltan datos', 400);
   await env.DB.prepare(
-    'UPDATE usuarios SET activo=1, google_pending=0, empresa_id=?, rol=?, departamento=? WHERE id=? AND google_pending=1'
-  ).bind(empresa_id, rol, departamento || null, id).run();
+    'UPDATE usuarios SET activo=1, google_pending=0, empresa_id=?, rol=?, departamento=?, obra_id=? WHERE id=? AND google_pending=1'
+  ).bind(empresa_id, rol, departamento || null, obra_id || null, id).run();
   const u = await env.DB.prepare('SELECT nombre, email FROM usuarios WHERE id=?').bind(id).first();
   await sendTelegram(env, `âœ… <b>Acceso aprobado</b>\nðŸ‘¤ ${u?.nombre || 'â€”'}\nðŸ“§ ${u?.email || 'â€”'}\nRol: ${rol} | Empresa ID: ${empresa_id}`);
   return json({ ok: true });
