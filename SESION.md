@@ -7,32 +7,49 @@
 
 **Sesión:** LIBRE
 **Última sesión:** 06/05/2026
-**Versión tras última sesión:** v5.53 + Alejandra IA integrada
-**Worker desplegado:** 7d4380d (con memoria, historial, tools completas)
-**GitHub:** en sync ✅ — GitHub Actions deploy activo y funcionando
+**Versión tras última sesión:** v5.53 + Alejandra IA completa v2
+**Worker desplegado:** 16e9ed5 (aprendizaje activo, repo tools, system prompt completo)
+**GitHub:** en sync ✅ — GitHub Actions deploy activo (Pages + Worker)
 
 ---
 
-## RESUMEN SESIÓN 06/05/2026 (Fix GitHub Pages deploy + verificación chat IA web)
+## RESUMEN SESIÓN 06/05/2026 — tarde (Alejandra IA v2 — repo, aprendizaje, UI chat)
 
 ### Qué se hizo:
-- **GitHub Pages roto**: build tipo `legacy` (Jekyll) se quedaba colgada en 0ms sin error
-  · El `.nojekyll` añadido en sesión anterior no fue suficiente
-  · Diagnóstico via API GitHub: `status: errored`, `build_type: legacy`
-- **Fix definitivo**: cambiado a `build_type: workflow` (GitHub Actions)
-  · Creado `.github/workflows/pages.yml` — deploy automático en cada push a main
-  · Solo sube archivos frontend (index.html, panel.html, sw.js, iconos) — excluye worker.js (700KB+)
-  · `cancel-in-progress: true` — no se acumula cola de builds
-  · Deploy en ~30 segundos tras cada push ✅
-- **Chat IA web verificado**: botón 🤖 visible y endpoint /dev/ai-chat respondiendo correctamente
-  · Probado con token real de D1 — respuesta OK de claude-sonnet-4-6
-- **Pendientes anteriores resueltos**: chat flotante panel.html ✅, pestaña IA index.html ✅
+
+**Fix GitHub Pages (build rota):**
+- Build tipo `legacy` se quedaba colgada en 0ms — cambiado a `build_type: workflow`
+- Creado `.github/workflows/pages.yml` — deploy automático en cada push (~30s)
+- Solo sube frontend (index.html, panel.html, sw.js, iconos) — excluye worker.js
+
+**Acceso al repo para Alejandra:**
+- Tools nuevas: `repo_read_file`, `repo_list_dir`, `repo_write_file`
+- GITHUB_TOKEN configurado como secret en el worker
+- Creado `.github/workflows/deploy-worker.yml` — al modificar worker.js → auto-deploy a CF (~1min)
+- CLOUDFLARE_API_TOKEN (AlejandraChat-IA) creado y guardado en GitHub Secrets
+
+**Sistema de aprendizaje activo:**
+- Tipos de memoria: `aprendizaje` + `error` (además de hecho/pendiente/contexto/aviso)
+- `autoLearn()` — función que guarda automáticamente sin bloquear
+- Auto-guardado: errores SQL, cambios SQL, archivos leídos, commits hechos/fallidos
+- System prompt instruye aprendizaje activo: qué guardar y cuándo
+
+**System prompt completo (`buildAlejandraSystemPrompt()`):**
+- Función compartida entre Telegram y Web
+- Incluye: infraestructura CF, estructura repo, archivos, CI/CD, módulos, schema DB, tools, reglas de aprendizaje
+
+**UI del chat flotante (panel.html):**
+- Botón ⛶ pantalla completa (toggle) + scroll automático al fondo
+- Botón ⧉ ventana nueva — carga la conversación actual, sincroniza de vuelta al padre
+- Si ya hay una ventana abierta, la enfoca en vez de crear otra
+- Quitado mensaje de bienvenida largo
 
 ### Estado final:
-- GitHub Pages: ✅ desplegando via GitHub Actions
-- Chat IA web (panel.html): ✅ funcionando
-- Chat IA Telegram: ✅ (no tocado, estaba OK)
-- Worker: sin cambios (7d4380d)
+- GitHub Pages: ✅ GitHub Actions
+- Worker auto-deploy: ✅ al modificar worker.js
+- Chat IA web: ✅ con pantalla completa, ventana nueva, sin intro
+- Alejandra aprende: ✅ de errores, aciertos y código que lee
+- Worker: 16e9ed5
 
 ---
 
