@@ -304,13 +304,13 @@ const AI_TOOLS = [
   },
   {
     name: 'memory_save',
-    description: 'Guarda algo importante en tu memoria persistente: una acción que hiciste, algo pendiente, un aviso o contexto relevante. Úsalo siempre que hagas algo importante o que Adrián te pida recordar algo.',
+    description: 'Guarda en tu memoria persistente. USA ESTO MUCHO — es tu forma de aprender y no repetir errores. Guarda: lo que hiciste, lo que aprendiste sobre la app, errores que cometiste, patrones que funcionan, comportamientos que descubriste.',
     input_schema: {
       type: 'object',
       properties: {
-        tipo: { type: 'string', enum: ['hecho', 'pendiente', 'contexto', 'aviso'], description: 'hecho=algo que ya hiciste, pendiente=tarea por hacer, contexto=info importante, aviso=algo crítico a no olvidar' },
+        tipo: { type: 'string', enum: ['hecho', 'pendiente', 'contexto', 'aviso', 'aprendizaje', 'error'], description: 'hecho=acción completada | pendiente=tarea futura | contexto=info sobre la app | aviso=crítico no olvidar | aprendizaje=algo que descubriste sobre cómo funciona la app | error=algo que falló y cómo resolverlo' },
         titulo: { type: 'string', description: 'Título corto descriptivo' },
-        contenido: { type: 'string', description: 'Descripción detallada' },
+        contenido: { type: 'string', description: 'Descripción detallada — sé específica para poder usarlo después' },
         importancia: { type: 'integer', description: '1=baja, 3=media, 5=crítica', minimum: 1, maximum: 5 }
       },
       required: ['tipo', 'titulo', 'contenido']
@@ -318,11 +318,11 @@ const AI_TOOLS = [
   },
   {
     name: 'memory_read',
-    description: 'Lee tu memoria persistente. Úsalo para recordar qué has hecho, qué tienes pendiente o contexto importante antes de actuar.',
+    description: 'Lee tu memoria persistente. Úsalo SIEMPRE antes de actuar para recordar qué has hecho, qué errores cometiste antes y qué has aprendido.',
     input_schema: {
       type: 'object',
       properties: {
-        tipo: { type: 'string', enum: ['hecho', 'pendiente', 'contexto', 'aviso', 'all'], description: 'Filtrar por tipo o "all" para ver todo' },
+        tipo: { type: 'string', enum: ['hecho', 'pendiente', 'contexto', 'aviso', 'aprendizaje', 'error', 'all'], description: 'Filtrar por tipo o "all" para ver todo' },
         limit: { type: 'integer', description: 'Máximo de entradas a devolver (default 20)' }
       }
     }
@@ -374,6 +374,14 @@ const AI_TOOLS = [
   }
 ];
 
+async function autoLearn(env, tipo, titulo, contenido, importancia = 2) {
+  try {
+    await env.DB.prepare(
+      "INSERT INTO alejandra_memoria (tipo, titulo, contenido, importancia) VALUES (?, ?, ?, ?)"
+    ).bind(tipo, titulo, contenido.slice(0, 1000), importancia).run();
+  } catch {}
+}
+
 async function executeAITool(env, toolName, toolInput) {
   switch (toolName) {
     case 'web_search': {
@@ -398,9 +406,17 @@ async function executeAITool(env, toolName, toolInput) {
           return JSON.stringify({ ok: true, rows: result.results?.length ?? 0, results: result.results?.slice(0, 50), meta: result.meta });
         } else {
           const result = await env.DB.prepare(sql).run();
+          // Auto-guardar cambios importantes en D1
+          if ((result.meta?.changes ?? 0) > 0) {
+            autoLearn(env, 'hecho', `SQL ejecutado: ${sql.slice(0, 60)}...`, `SQL: ${sql.slice(0, 300)} | Cambios: ${result.meta?.changes}`, 1);
+          }
           return JSON.stringify({ ok: true, changes: result.meta?.changes ?? 0, meta: result.meta });
         }
-      } catch (e) { return JSON.stringify({ ok: false, error: e.message }); }
+      } catch (e) {
+        // Auto-guardar errores SQL para aprender
+        autoLearn(env, 'error', `Error SQL: ${sql.slice(0, 60)}`, `SQL que falló: ${sql.slice(0, 300)}\nError: ${e.message}\nPosible causa: sintaxis incorrecta, tabla/columna inexistente o restricción violada.`, 3);
+        return JSON.stringify({ ok: false, error: e.message });
+      }
     }
     case 'list_tables': {
       const tables = ['usuarios','empresas','obras','bobinas','herramientas','seguridad_items','epis','carretillas','pemp','fichajes','incidencias','pedidos','turnos','mantenimientos','repostajes','kits','sesiones','invitaciones','carnets','logs','login_attempts','reset_tokens','vincular_tokens','sugerencias'];
@@ -509,6 +525,8 @@ async function executeAITool(env, toolName, toolInput) {
         const data = await res.json();
         if (data.type === 'file') {
           const content = atob(data.content.replace(/\n/g, ''));
+          // Auto-registrar que leyó este archivo (para saber qué partes conoce)
+          autoLearn(env, 'aprendizaje', `Leído: ${path}`, `Archivo ${path} leído (${data.size} bytes). SHA: ${data.sha?.slice(0,7)}. Líneas aprox: ${content.split('\n').length}`, 1);
           return JSON.stringify({ ok: true, path, size: data.size, sha: data.sha, content: content.slice(0, 50000), truncated: content.length > 50000 });
         }
         return JSON.stringify({ ok: false, error: 'No es un archivo (es un directorio — usa repo_list_dir)' });
@@ -544,10 +562,19 @@ async function executeAITool(env, toolName, toolInput) {
           headers: { 'Authorization': `token ${env.GITHUB_TOKEN}`, 'Accept': 'application/vnd.github.v3+json', 'User-Agent': 'AlejandraIA', 'Content-Type': 'application/json' },
           body: JSON.stringify(body)
         });
-        if (!putRes.ok) return JSON.stringify({ ok: false, error: `HTTP ${putRes.status}: ${await putRes.text()}` });
+        if (!putRes.ok) {
+          const errText = await putRes.text();
+          autoLearn(env, 'error', `Error escribiendo ${path}`, `Intento de escritura en ${path} falló. HTTP ${putRes.status}: ${errText.slice(0,300)}. Commit message: "${message}"`, 3);
+          return JSON.stringify({ ok: false, error: `HTTP ${putRes.status}: ${errText}` });
+        }
         const result = await putRes.json();
-        return JSON.stringify({ ok: true, path, commit: result.commit?.sha?.slice(0, 7), message, action: sha ? 'updated' : 'created' });
-      } catch (e) { return JSON.stringify({ ok: false, error: e.message }); }
+        const commitSha = result.commit?.sha?.slice(0, 7);
+        autoLearn(env, 'hecho', `Modificado: ${path}`, `Archivo ${path} ${sha ? 'actualizado' : 'creado'} — commit ${commitSha}. Cambio: "${message}"`, 2);
+        return JSON.stringify({ ok: true, path, commit: commitSha, message, action: sha ? 'updated' : 'created' });
+      } catch (e) {
+        autoLearn(env, 'error', `Excepción escribiendo ${path}`, `Error: ${e.message}`, 3);
+        return JSON.stringify({ ok: false, error: e.message });
+      }
     }
     default:
       return JSON.stringify({ ok: false, error: 'Tool no reconocida' });
@@ -708,13 +735,49 @@ MEMORIA:
 - memory_read(tipo?, limit?): leer memoria persistente
 - memory_delete(id): eliminar entrada de memoria
 
-════ REGLAS DE MEMORIA ════
-- Al inicio de cada conversación carga tu memoria para tener contexto.
-- Después de cualquier acción importante (SQL que modifica datos, edición de código, cambios de config): guarda memory_save tipo 'hecho'.
-- Si Adrián te pide hacer algo para más tarde: guarda tipo 'pendiente'.
-- Si detectas algo crítico o que no debes olvidar: tipo 'aviso', importancia 5.
-- Cuando completes un pendiente: memory_delete para limpiarlo.
-- Revisa sugerencias pendientes al inicio de sesión: SELECT * FROM sugerencias WHERE estado='pendiente' AND leida=0.`;
+════ SISTEMA DE APRENDIZAJE — MUY IMPORTANTE ════
+Tienes memoria persistente. Úsala agresivamente para aprender y mejorar con el tiempo.
+
+CUÁNDO GUARDAR (hazlo siempre, no solo cuando Adrián te lo pida):
+
+tipo 'aprendizaje' — cuando descubras algo sobre cómo funciona la app:
+  · "La tabla X tiene una columna Y que no aparece en el schema del prompt"
+  · "El endpoint Z devuelve los datos en formato tal"
+  · "El módulo de fichajes usa empresa_id + usuario_id como clave única"
+  · "panel.html carga la sesión desde localStorage con clave 'panel_session'"
+  · Cualquier patrón, convención o comportamiento que descubras leyendo código
+
+tipo 'error' — cuando algo falle o salga mal:
+  · "Intenté modificar la línea X de worker.js y rompí el build porque..."
+  · "El SQL Y da error porque Z — la forma correcta es..."
+  · "No puedes usar btoa() con caracteres UTF-8, hay que usar encodeURIComponent primero"
+  · Guarda el error Y la solución que funcionó
+
+tipo 'hecho' — después de cualquier acción que modifique datos o código:
+  · SQL que insertó/actualizó/borró registros
+  · Archivo modificado y qué cambió
+  · Configuración cambiada
+
+tipo 'contexto' — info importante sobre la app que te sea útil recordar:
+  · Preferencias de Adrián
+  · Decisiones de diseño que descubras
+  · Cómo está configurada alguna parte específica
+
+tipo 'aviso' (importancia 5) — cosas críticas que no debes olvidar nunca:
+  · Partes del código que son frágiles o peligrosas de tocar
+  · Configuraciones que no deben cambiarse
+  · Dependencias ocultas entre módulos
+
+tipo 'pendiente' — tareas que Adrián menciona para hacer después
+
+REGLAS:
+- Lee tu memoria (memory_read tipo 'error' y 'aprendizaje') ANTES de hacer algo que hayas intentado antes
+- Después de leer un archivo de código y entender algo, guárdalo como 'aprendizaje'
+- Después de que un SQL o acción falle, guarda el error Y la solución como 'error'
+- Después de resolver un problema correctamente, guarda el método como 'aprendizaje'
+- Al final de cada conversación larga, guarda un resumen de lo más importante
+- Cuando un pendiente esté completado: memory_delete para limpiarlo
+- Revisa sugerencias al inicio: SELECT * FROM sugerencias WHERE estado='pendiente' AND leida=0`;
 }
 
 async function handleDevAI(env, chatId, userMessage) {
