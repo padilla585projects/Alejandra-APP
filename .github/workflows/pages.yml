@@ -27,10 +27,24 @@ jobs:
       - name: Setup Pages
         uses: actions/configure-pages@v4
 
+      - name: Prepare site (excluir archivos de backend)
+        run: |
+          mkdir -p _site
+          cp index.html _site/
+          cp panel.html _site/
+          cp sw.js _site/ 2>/dev/null || true
+          cp .nojekyll _site/ 2>/dev/null || true
+          cp -r icons _site/ 2>/dev/null || true
+          cp -r fonts _site/ 2>/dev/null || true
+          cp -r img _site/ 2>/dev/null || true
+          cp manifest.json _site/ 2>/dev/null || true
+          cp favicon.ico _site/ 2>/dev/null || true
+          echo "Archivos en _site:" && ls -lh _site/
+
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: '.'
+          path: '_site'
 
       - name: Deploy to GitHub Pages
         id: deployment
