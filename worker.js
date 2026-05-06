@@ -7,8 +7,12 @@
 const CORS = {
   'Access-Control-Allow-Origin': 'https://padilla585projects.github.io',
   'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, X-Admin-Code, X-Obra-Id, X-Usuario, X-Rol, X-Codigo, X-Departamento, X-Token',
+  'Access-Control-Allow-Headers': 'Content-Type, X-Admin-Code, X-Obra-Id, X-Departamento, X-Token',
   'Vary': 'Origin',
+  'X-Content-Type-Options': 'nosniff',
+  'X-Frame-Options': 'DENY',
+  'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
+  'Referrer-Policy': 'strict-origin-when-cross-origin',
 };
 
 // Genera N bytes aleatorios criptogrÃ¡ficamente seguros como string hex
@@ -1117,7 +1121,7 @@ async function cerrarTodasSesiones(request, env) {
 
 async function registrarEmpresa(request, env) {
   const body = await request.json().catch(() => ({}));
-  const { empresa_nombre, sector, admin_nombre, email, password, obra_nombre, departamentos } = body;
+  const { empresa_nombre, sector, admin_nombre, email, password, obra_nombre, departamentos, modulos_config } = body;
   if (!empresa_nombre?.trim() || !email?.trim() || !password || !admin_nombre?.trim())
     return err('Faltan datos obligatorios (empresa, nombre, email, contraseÃ±a)');
   if (password.length < 8) return err('La contraseÃ±a debe tener al menos 8 caracteres');
@@ -1129,13 +1133,13 @@ async function registrarEmpresa(request, env) {
   const slug = empresa_nombre.trim().toLowerCase().replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
   const hash = await hashPassword(password);
 
-  // #187: depts seleccionados en el wizard (lista de keys del catÃ¡logo). Si no, NULL = todos activos.
   const deptsJSON = (Array.isArray(departamentos) && departamentos.length) ? JSON.stringify(departamentos) : null;
+  const modsJSON = (modulos_config && typeof modulos_config === 'object') ? JSON.stringify(modulos_config) : null;
 
   // Crear empresa
   const empResult = await env.DB.prepare(
-    'INSERT INTO empresas (nombre, slug, email, plan, activa, departamentos) VALUES (?, ?, ?, ?, 1, ?)'
-  ).bind(empresa_nombre.trim(), slug, emailClean, 'basic', deptsJSON).run();
+    'INSERT INTO empresas (nombre, slug, email, plan, activa, departamentos, modulos_config) VALUES (?, ?, ?, ?, 1, ?, ?)'
+  ).bind(empresa_nombre.trim(), slug, emailClean, 'basic', deptsJSON, modsJSON).run();
   const empresa_id = empResult.meta.last_row_id;
   if (!empresa_id) return err('Error al crear la empresa, intenta de nuevo');
 
@@ -5805,7 +5809,7 @@ async function rgpdInforme(request, env) {
     headers: {
       'Content-Type': 'application/json',
       'Content-Disposition': `attachment; filename="dsar_usuario_${uid}_${new Date().toISOString().slice(0,10)}.json"`,
-      'Access-Control-Allow-Origin': '*',
+      ...CORS,
     }
   });
 }
