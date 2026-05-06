@@ -7,9 +7,39 @@
 
 **Sesión:** LIBRE
 **Última sesión:** 06/05/2026
-**Versión tras última sesión:** v5.50 (worker d877dcc5)
+**Versión tras última sesión:** v5.53 (worker e8e2ecb8)
 **GitHub:** en sync ✅
 **Panel web:** https://padilla585projects.github.io/Alejandra-APP/panel.html ✅ FUNCIONA
+
+---
+
+## RESUMEN SESIÓN 06/05/2026 (v5.53 — Registro empresa desde web + wizard dept+submódulos + gestión usuarios)
+
+- **FASE 1 (v5.51)**: Wizard registro empresa ampliado con departamentos expandibles + submódulos
+  · Paso 3 del wizard: cada dept se expande (▼) para mostrar sus submódulos configurables
+  · `_renderDeptConModulos()` componente reutilizable con prefijo (wizard, ajustes, panel)
+  · `_collectDeptModulos()` recoge dept activos + modulos_config de cualquier instancia
+  · regFinalizar() envía modulos_config al worker; registrarEmpresa() lo guarda en INSERT
+  · Ajustes → Empresa usa el mismo componente expandible
+  · Security headers: HSTS, X-Frame-Options, X-Content-Type-Options, Referrer-Policy
+  · CORS cleanup: eliminadas cabeceras legacy (X-Usuario, X-Rol, X-Codigo)
+- **FASE 2 (panel.html)**: Registro de empresa público desde login del panel web
+  · Botón "¿Primera vez? Registra tu empresa" en pantalla de login
+  · Overlay 4 pasos idéntico a la app: empresa → admin → dept+submódulos → obra
+  · Auto-login tras registro + entrada directa al panel
+  · _DEPTS_CATALOG + helpers duplicados en panel.html (sync con index.html)
+  · Wizard superadmin actualizado con componente expandible
+- **FASE 3 (v5.52)**: Gestión completa de usuarios desde panel web
+  · Sección invitaciones: crear código con rol/dept/duración, listar, copiar, anular
+  · Sección pendientes: aprobar usuarios Google con selectores de rol/dept/obra
+  · Modal crear usuario: añadido campo obra + departamentos del catálogo
+  · Tabla usuarios: dept y obra editables inline (select con catálogo)
+  · Worker: aprobarUsuarioPendiente() acepta obra_id
+- **FASE 4 (v5.53)**: Config dept+submódulos desde panel web → sync con app
+  · Sección "Departamentos y submódulos" en Mi empresa (panel web)
+  · guardarModulosPanel() escribe dept+modulos_config via PUT /mi-empresa
+  · Cambios desde panel se reflejan en app móvil en próximo refresh (y viceversa)
+- Worker: e8e2ecb8 ✅  GitHub: en sync ✅
 
 ---
 

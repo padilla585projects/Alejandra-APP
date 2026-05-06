@@ -5,7 +5,7 @@
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 06/05/2026
-VERSIÓN ACTUAL APP NUEVA: v5.50 (worker d877dcc5)
+VERSIÓN ACTUAL APP NUEVA: v5.53 (worker e8e2ecb8)
 VERSIÓN ACTUAL APP VIEJA: v4.19 (⛔ CONGELADA DEFINITIVAMENTE — no recibe más cambios)
 
 ================================================================================
