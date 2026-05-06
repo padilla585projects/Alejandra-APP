@@ -900,6 +900,18 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
           </div>
         </div>
 
+        <!-- Departamentos y submódulos configurables -->
+        <div id="seccionDeptModulos" style="display:none;margin-top:20px">
+          <div class="section-card">
+            <div class="section-card-title"><span>⚙️</span> Departamentos y submódulos</div>
+            <p style="font-size:13px;color:var(--muted);margin-bottom:12px">Activa o desactiva departamentos y personaliza sus submódulos. Los cambios se aplican tanto en la app móvil como en el panel web.</p>
+            <div id="panelModulosContainer" style="max-height:50vh;overflow-y:auto;border:1px solid var(--border);border-radius:10px;padding:6px 12px"></div>
+            <div style="margin-top:14px">
+              <button class="btn btn-primary" id="btnGuardarModulosPanel" onclick="guardarModulosPanel()">💾 Guardar configuración</button>
+            </div>
+          </div>
+        </div>
+
         <!-- Sección crear empresa (solo superadmin/dev) -->
         <div id="seccionCrearEmpresa" style="display:none;margin-top:20px">
           <div class="section-card" style="border-color:rgba(168,85,247,.3)">
@@ -3707,8 +3719,35 @@ async function cargarEmpresa() {
     <span style="font-family:'Montserrat',sans-serif;font-weight:700;font-size:13px;color:var(--text)">${s.value}</span>
   </div>`).join('');
 
+  // Departamentos y submódulos (admins)
+  const modSec = document.getElementById('seccionDeptModulos');
+  const puedeEditar = ['empresa_admin','superadmin','desarrollador'].includes(SESSION.rol);
+  if (modSec) {
+    modSec.style.display = puedeEditar ? '' : 'none';
+    if (puedeEditar) {
+      const rawCfg = _empData.modulos_config;
+      const cfg = rawCfg ? (typeof rawCfg === 'string' ? JSON.parse(rawCfg) : rawCfg) : {};
+      const rawDepts = _empData.departamentos;
+      const deptsActivos = rawDepts ? (typeof rawDepts === 'string' ? JSON.parse(rawDepts) : rawDepts) : null;
+      _renderDeptConModulos('panelModulosContainer', 'pcfg', deptsActivos, cfg);
+    }
+  }
+
   // Superadmin: cargar lista de empresas
   if (['superadmin','desarrollador'].includes(SESSION.rol)) cargarListaEmpresas();
+}
+
+async function guardarModulosPanel() {
+  const btn = document.getElementById('btnGuardarModulosPanel');
+  if (btn) { btn.disabled = true; btn.textContent = 'Guardando...'; }
+  try {
+    const { departamentos, modulos_config } = _collectDeptModulos('pcfg');
+    const nombre = _empData?.nombre || '';
+    const r = await api('/mi-empresa', { method: 'PUT', body: JSON.stringify({ nombre, departamentos, modulos_config }) });
+    if (!r.ok) { toast(r.error || 'Error al guardar', 'err'); return; }
+    toast('Configuración guardada ✓', 'ok');
+  } catch { toast('Error de red', 'err'); }
+  finally { if (btn) { btn.disabled = false; btn.textContent = '💾 Guardar configuración'; } }
 }
 
 async function guardarEmpresa() {
