@@ -2982,6 +2982,10 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
     Ajustes
   </button>
+  <button class="nav-btn" id="navIA" onclick="navTo('ia')" style="display:none">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M9 12l-3 8"/><path d="M15 12l3 8"/><path d="M9 20h6"/><circle cx="12" cy="8" r="1.5" fill="currentColor" stroke="none"/></svg>
+    IA
+  </button>
 </nav>
 
 <!-- ══════════════════════════════════════════
@@ -13583,6 +13587,140 @@ async function turnoToggle(tipo, tid, nombre, fecha) {
 window.cargarTurnos  = cargarTurnos;
 window.turnosSemana  = turnosSemana;
 window.turnoToggle   = turnoToggle;
+</script>
+
+<!-- ═══ ALEJANDRA IA — PANTALLA APP (solo desarrollador) ═══ -->
+<style>
+#screenIA{display:none;flex-direction:column;height:100%;background:var(--bg)}
+#screenIA.active{display:flex}
+.ia-header{background:var(--surface);border-bottom:2px solid #a855f7;padding:10px 16px;display:flex;align-items:center;gap:10px;flex-shrink:0}
+.ia-header-title{font-family:'Montserrat',sans-serif;font-weight:900;font-size:16px;color:var(--text)}
+.ia-header-sub{font-size:11px;color:#a855f7;font-family:'Montserrat',sans-serif;font-weight:700}
+#iaMessages{flex:1;overflow-y:auto;padding:12px 14px;display:flex;flex-direction:column;gap:10px}
+.ia-bubble{max-width:88%;padding:10px 14px;border-radius:14px;font-size:14px;line-height:1.5;word-break:break-word}
+.ia-bubble.user{background:#f97316;color:#000;align-self:flex-end;border-bottom-right-radius:4px;font-family:'Montserrat',sans-serif;font-weight:600}
+.ia-bubble.bot{background:var(--surface);color:var(--text);align-self:flex-start;border:1px solid var(--border);border-bottom-left-radius:4px}
+.ia-bubble.bot code{background:#0f172a;padding:1px 5px;border-radius:4px;font-size:12px;color:#f97316}
+.ia-typing-bubble{display:flex;gap:5px;align-items:center;padding:12px 14px;background:var(--surface);border:1px solid var(--border);border-radius:14px;border-bottom-left-radius:4px;align-self:flex-start}
+.ia-typing-bubble span{width:7px;height:7px;border-radius:50%;background:#a855f7;animation:iaDot .9s infinite}
+.ia-typing-bubble span:nth-child(2){animation-delay:.2s}
+.ia-typing-bubble span:nth-child(3){animation-delay:.4s}
+@keyframes iaDot{0%,60%,100%{transform:translateY(0)}30%{transform:translateY(-6px)}}
+.ia-input-row{display:flex;gap:8px;padding:10px 12px;background:var(--surface);border-top:1px solid var(--border);flex-shrink:0}
+.ia-input-row textarea{flex:1;background:var(--bg);border:1.5px solid var(--border);border-radius:10px;color:var(--text);padding:10px 14px;font-family:'Poppins',sans-serif;font-size:14px;outline:none;resize:none;max-height:90px;line-height:1.4}
+.ia-input-row textarea:focus{border-color:#a855f7}
+.ia-send-btn{background:linear-gradient(135deg,#f97316,#a855f7);border:none;border-radius:10px;color:#fff;padding:10px 16px;cursor:pointer;font-family:'Montserrat',sans-serif;font-weight:900;font-size:16px;flex-shrink:0;align-self:flex-end}
+.ia-send-btn:disabled{opacity:.4;cursor:not-allowed}
+</style>
+
+<div id="screenIA">
+  <div class="ia-header">
+    <div>
+      <div class="ia-header-title">Alejandra IA</div>
+      <div class="ia-header-sub">Control total · Solo desarrollador</div>
+    </div>
+  </div>
+  <div id="iaMessages">
+    <div class="ia-bubble bot">Hola Adrián 👋 Soy Alejandra. Tengo acceso total a la app. Pregúntame o pídeme que haga algo.</div>
+  </div>
+  <div class="ia-input-row">
+    <textarea id="iaInput" placeholder="Escríbeme algo..." rows="1" onkeydown="iaKeydown(event)"></textarea>
+    <button class="ia-send-btn" id="iaSendBtn" onclick="iaSend()">↑</button>
+  </div>
+</div>
+
+<script>
+(function(){
+  const IA_API = getApiUrl ? getApiUrl() : (localStorage.getItem('alejandra_api') || 'https://alejandra-app-api.alejandra-app.workers.dev');
+  let iaHistory = [];
+
+  // Mostrar botón IA solo para desarrollador
+  const _origLogin = window.onLoginSuccess;
+  function checkIABtn() {
+    const s = getSession ? getSession() : null;
+    const btn = document.getElementById('navIA');
+    if (btn && s && ['desarrollador','superadmin'].includes(s.rol)) btn.style.display = '';
+  }
+  document.addEventListener('sessionReady', checkIABtn);
+  setTimeout(checkIABtn, 1000);
+  setInterval(checkIABtn, 3000);
+
+  // Registrar pantalla en el sistema de navegación
+  const _origApplyScreen = window._applyScreen;
+  if (_origApplyScreen) {
+    window._applyScreen = function(name) {
+      const iaScreen = document.getElementById('screenIA');
+      if (name === 'ia') {
+        document.querySelectorAll('.screen.active').forEach(s => s.classList.remove('active'));
+        if (iaScreen) iaScreen.classList.add('active');
+        document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+        const nb = document.getElementById('navIA');
+        if (nb) nb.classList.add('active');
+        document.getElementById('iaInput')?.focus();
+        return;
+      }
+      if (iaScreen) iaScreen.classList.remove('active');
+      _origApplyScreen(name);
+    };
+  }
+
+  window.iaKeydown = function(e) {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); iaSend(); }
+  };
+
+  window.iaSend = async function() {
+    const input = document.getElementById('iaInput');
+    const msg = input.value.trim();
+    if (!msg) return;
+    input.value = '';
+
+    appendIAMsg('user', msg);
+    const typing = appendIATyping();
+    document.getElementById('iaSendBtn').disabled = true;
+
+    const s = getSession ? getSession() : null;
+    const token = s?.token || '';
+
+    try {
+      const res = await fetch(IA_API + '/dev/ai-chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Token': token },
+        body: JSON.stringify({ message: msg, history: iaHistory })
+      });
+      const data = await res.json();
+      typing.remove();
+      const reply = data.ok ? data.reply : ('❌ ' + (data.error || 'Error'));
+      appendIAMsg('bot', reply);
+      iaHistory.push({ role: 'user', content: msg });
+      iaHistory.push({ role: 'assistant', content: reply });
+      if (iaHistory.length > 20) iaHistory = iaHistory.slice(-20);
+    } catch(e) {
+      typing.remove();
+      appendIAMsg('bot', '❌ Error: ' + e.message);
+    }
+    document.getElementById('iaSendBtn').disabled = false;
+  };
+
+  function appendIAMsg(role, text) {
+    const box = document.getElementById('iaMessages');
+    const d = document.createElement('div');
+    d.className = 'ia-bubble ' + role;
+    d.innerHTML = text.replace(/\n/g, '<br>');
+    box.appendChild(d);
+    box.scrollTop = box.scrollHeight;
+    return d;
+  }
+
+  function appendIATyping() {
+    const box = document.getElementById('iaMessages');
+    const d = document.createElement('div');
+    d.className = 'ia-typing-bubble';
+    d.innerHTML = '<span></span><span></span><span></span>';
+    box.appendChild(d);
+    box.scrollTop = box.scrollHeight;
+    return d;
+  }
+})();
 </script>
 </body>
 </html>

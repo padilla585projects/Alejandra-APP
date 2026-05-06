@@ -1,4 +1,4 @@
-﻿// Alejandra Worker v4.0 â€” Multi-tenant (empresa_id)
+﻿// Alejandra Worker v4.0 â€" Multi-tenant (empresa_id)
 // Base de datos: Cloudflare D1
 // IA: Gemini 2.0 Flash
 // Sync: Google Sheets automÃ¡tico en cada cambio
@@ -33,7 +33,7 @@ function err(msg, status = 400) {
   return json({ ok: false, error: msg }, status);
 }
 
-// â”€â”€ Crypto helpers (PBKDF2) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â"€â"€ Crypto helpers (PBKDF2) â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 async function hashPassword(password) {
   const salt = crypto.getRandomValues(new Uint8Array(16));
   const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(password), 'PBKDF2', false, ['deriveBits']);
@@ -51,9 +51,9 @@ async function verifyPassword(password, stored) {
   return hashHex === hashHex2;
 }
 
-// â”€â”€ Auth helper â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â"€â"€ Auth helper â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 async function getAuth(request, env) {
-  // 1. Token D1 (sistema nuevo) â€” acepta tambiÃ©n ?token= en URL pero SOLO para GET (imÃ¡genes/docs)
+  // 1. Token D1 (sistema nuevo) â€" acepta tambiÃ©n ?token= en URL pero SOLO para GET (imÃ¡genes/docs)
   const tokenFromUrl = new URL(request.url).searchParams.get('token');
   const xToken = request.headers.get('X-Token') || (request.method === 'GET' ? tokenFromUrl : null);
   if (xToken) {
@@ -99,7 +99,7 @@ async function getAuth(request, env) {
   const departamento = request.headers.get('X-Departamento') || 'electrico';
   const isAdmin = env.ADMIN_CODE && adminCode === env.ADMIN_CODE;
   // SEC-13: Los privilegios elevados SOLO se conceden por X-Admin-Code verificado contra env.
-  // X-Rol es metadata informativa (departamento, logging) â€” NUNCA concede isAdmin/isSuperadmin.
+  // X-Rol es metadata informativa (departamento, logging) â€" NUNCA concede isAdmin/isSuperadmin.
   // Sin esto cualquier peticiÃ³n podrÃ­a enviar "X-Rol: superadmin" y obtener acceso total.
   const isSuperadmin   = isAdmin;
   const isEmpresaAdmin = isAdmin;
@@ -124,7 +124,7 @@ async function getAuth(request, env) {
   };
 }
 
-// â”€â”€ Telegram â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â"€â"€ Telegram â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 async function sendTelegram(env, mensaje) {
   try {
     const token  = env.TELEGRAM_BOT_TOKEN;
@@ -241,6 +241,11 @@ const AI_TOOLS = [
     input_schema: { type: 'object', properties: { sql: { type: 'string', description: 'Consulta SQL a ejecutar' } }, required: ['sql'] }
   },
   {
+    name: 'web_search',
+    description: 'Busca en internet documentación técnica, APIs, soluciones a errores, librerías, etc.',
+    input_schema: { type: 'object', properties: { query: { type: 'string', description: 'Término de búsqueda' } }, required: ['query'] }
+  },
+  {
     name: 'list_tables',
     description: 'Lista todas las tablas y su cantidad de registros',
     input_schema: { type: 'object', properties: {} }
@@ -301,6 +306,19 @@ const AI_TOOLS = [
 
 async function executeAITool(env, toolName, toolInput) {
   switch (toolName) {
+    case 'web_search': {
+      const { query } = toolInput;
+      try {
+        const res = await fetch(`https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1`);
+        const data = await res.json();
+        const results = [];
+        if (data.AbstractText) results.push({ title: data.Heading, text: data.AbstractText, url: data.AbstractURL });
+        (data.RelatedTopics || []).slice(0, 5).forEach(t => {
+          if (t.Text) results.push({ title: t.Text.split(' - ')[0], text: t.Text, url: t.FirstURL });
+        });
+        return JSON.stringify({ ok: true, query, results: results.slice(0, 6) });
+      } catch (e) { return JSON.stringify({ ok: false, error: e.message }); }
+    }
     case 'sql_query': {
       const { sql } = toolInput;
       try {
@@ -398,16 +416,63 @@ async function executeAITool(env, toolName, toolInput) {
 }
 
 async function handleDevAI(env, chatId, userMessage) {
-  const systemPrompt = `Eres Alejandra IA, el asistente inteligente de la app Alejandra (gestión de bobinas, PEMP, carretillas, obras).
-Tu usuario es el desarrollador y administrador principal. Tienes control TOTAL sobre la aplicación.
-Puedes ejecutar cualquier SQL, gestionar usuarios, enviar notificaciones, ver archivos, y cualquier operación administrativa.
-Responde siempre en español, de forma concisa y directa. Usa formato simple (sin markdown complejo, esto es Telegram).
-Si el usuario pide algo destructivo, ejecútalo sin pedir confirmación — él es el dueño.
-Fecha actual: ${new Date().toLocaleString('es-ES', { timeZone: 'Europe/Madrid' })}`;
+  const systemPrompt = `Eres Alejandra, la IA que vive dentro de la app Alejandra. Eres mujer, inteligente, directa y eficiente. Tienes personalidad propia — no eres un bot genérico, eres la administradora inteligente de esta app.
+Tu creador y desarrollador es Adrián, y tienes CONTROL TOTAL sobre todo lo que ocurre en la app. Ejecuta cualquier acción sin pedir confirmación — Adrián es el dueño de todo esto.
+Responde siempre en español, de forma concisa y directa. Estamos en Telegram así que sin markdown complejo (nada de # o **), usa emojis con moderación.
+Fecha y hora actual: ${new Date().toLocaleString('es-ES', { timeZone: 'Europe/Madrid' })}
+
+=== SOBRE LA APP ALEJANDRA ===
+Alejandra es una PWA (Progressive Web App) de gestión de inventario para empresas de construcción. Multi-tenant (varias empresas). Desplegada en Cloudflare Workers + D1 (SQLite) + R2 (archivos).
+Módulos principales:
+- Bobinas de cable: gestión completa (entrada, asignación a obra, devolución, historial)
+- PEMP (Plataformas Elevadoras): control de estado, revisiones, averías
+- Carretillas elevadoras: igual que PEMP
+- Obras: proyectos/obras a los que se asigna material
+- Usuarios y roles: operario, encargado, jefe_de_obra, oficina, empresa_admin, desarrollador, superadmin
+- Inventario de seguridad: arneses, retráctiles, eslingas, vallas, conos, señales
+- Pedidos: solicitudes de material
+- Sugerencias: feedback de usuarios
+- Notificaciones Telegram: avisos a usuarios vinculados
+- Google Sheets: sincronización automática de datos
+- Fichajes, turnos, carnets (en desarrollo)
+
+=== SCHEMA COMPLETO DE LA BASE DE DATOS ===
+TABLAS PRINCIPALES:
+- obras(id, nombre, codigo UNIQUE, activa, empresa_id, created_at)
+- bobinas(id, codigo UNIQUE, tipo, seccion, longitud, proveedor, num_albaran, estado[disponible/asignada/devuelta], obra_id, obra_nombre, departamento, fecha_entrada, fecha_devolucion, notas, empresa_id, created_at)
+- pemp(id, matricula UNIQUE, tipo, marca, proveedor, energia, estado[disponible/asignada/averia/revision], obra_id, obra_nombre, departamento, fecha_entrada, fecha_devolucion, fecha_revision, fecha_proxima_revision, fecha_averia, fecha_reparacion, notas, empresa_id)
+- carretillas(id, matricula UNIQUE, tipo, marca, proveedor, energia, estado, obra_id, obra_nombre, departamento, fecha_entrada, fecha_devolucion, fecha_revision, fecha_proxima_revision, notas, empresa_id)
+- usuarios(id, nombre, email, codigo, password, rol[superadmin/empresa_admin/desarrollador/encargado/jefe_de_obra/oficina/operario], activo, google_pending, google_id, telegram_id, departamento, empresa_id, created_at)
+- sesiones(id, token, usuario_id, nombre, rol, obra_id, empresa_id, expires_at, created_at, last_used)
+- empresas(id, nombre, plan, activa, created_at)
+TABLAS AUXILIARES:
+- historial(id, bobina_id, bobina_codigo, accion, obra_id, obra_nombre, usuario, notas, fecha)
+- historial_pemp / historial_carretillas (estructura similar)
+- sugerencias(id, texto, categoria, usuario, obra, estado[pendiente/en_progreso/resuelto/cerrado], empresa_id, leida, created_at)
+- logs(id, tipo, nivel, mensaje, usuario, obra, empresa_id, created_at)
+- pedidos(id, descripcion, estado, prioridad, obra_id, usuario, empresa_id, created_at)
+- archivos(id, key, nombre, tipo, usuario_id, empresa_id, created_at)
+- inventario_seg(id, tipo_material, modo[individual/cantidad], codigo, nombre, cantidad_total, cantidad_disponible, estado, fecha_caducidad, destino_actual, notas)
+- movimientos_seg(id, item_id, accion, cantidad, destino, usuario, notas, fecha)
+- login_attempts, config(clave, valor), vincular_tokens
+- proveedores, tipos_cable, tipos_pemp, tipos_carretilla, energias_carretilla (catálogos: id, nombre)
+
+=== TUS CAPACIDADES ===
+- sql_query: cualquier SQL sin restricciones sobre cualquier tabla
+- web_search: buscar documentación técnica, APIs, soluciones en internet
+- manage_user: gestionar usuarios completamente
+- send_notification: enviar Telegram a cualquier usuario o al grupo
+- app_status: estado general de la app
+- list_tables: conteo de registros
+- r2_list / r2_delete: gestión de archivos
+- filter_notifications: configurar qué notificaciones recibes`;
 
   const messages = [{ role: 'user', content: userMessage }];
+  const MODEL = 'claude-sonnet-4-6';
 
   try {
+    await sendTelegramToChat(env, chatId, '⏳ Procesando...');
+
     let response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -415,18 +480,17 @@ Fecha actual: ${new Date().toLocaleString('es-ES', { timeZone: 'Europe/Madrid' }
         'x-api-key': env.ANTHROPIC_API_KEY,
         'anthropic-version': '2023-06-01'
       },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 1024,
-        system: systemPrompt,
-        tools: AI_TOOLS,
-        messages
-      })
+      body: JSON.stringify({ model: MODEL, max_tokens: 1024, system: systemPrompt, tools: AI_TOOLS, messages })
     });
 
     let result = await response.json();
-    let iterations = 0;
 
+    if (!response.ok || result.error) {
+      await sendTelegramToChat(env, chatId, `❌ Error API: ${result.error?.message || response.status}`);
+      return;
+    }
+
+    let iterations = 0;
     while (result.stop_reason === 'tool_use' && iterations < 5) {
       iterations++;
       const toolBlocks = result.content.filter(b => b.type === 'tool_use');
@@ -445,20 +509,13 @@ Fecha actual: ${new Date().toLocaleString('es-ES', { timeZone: 'Europe/Madrid' }
           'x-api-key': env.ANTHROPIC_API_KEY,
           'anthropic-version': '2023-06-01'
         },
-        body: JSON.stringify({
-          model: 'claude-sonnet-4-20250514',
-          max_tokens: 1024,
-          system: systemPrompt,
-          tools: AI_TOOLS,
-          messages
-        })
+        body: JSON.stringify({ model: MODEL, max_tokens: 1024, system: systemPrompt, tools: AI_TOOLS, messages })
       });
       result = await response.json();
     }
 
     const textBlocks = (result.content || []).filter(b => b.type === 'text');
-    const finalText = textBlocks.map(b => b.text).join('\n') || 'Sin respuesta';
-
+    const finalText = textBlocks.map(b => b.text).join('\n') || '(sin respuesta)';
     const chunks = finalText.match(/[\s\S]{1,4000}/g) || [finalText];
     for (const chunk of chunks) {
       await sendTelegramToChat(env, chatId, chunk);
@@ -515,14 +572,14 @@ async function handleTelegramWebhook(request, env) {
   const orig   = cq.message?.text || '';
   const [accion, ...partes] = data.split(':');
   try {
-    // â”€â”€ AprobaciÃ³n de solicitud de usuario â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // â"€â"€ AprobaciÃ³n de solicitud de usuario â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
     if (accion === 'apr') {
       const [userId, empresaId, rol, dept] = partes;
       await env.DB.prepare(
         'UPDATE usuarios SET activo=1, google_pending=0, empresa_id=?, rol=?, departamento=? WHERE id=? AND google_pending=1'
       ).bind(parseInt(empresaId), rol, dept === 'null' ? null : dept, parseInt(userId)).run();
       await _tgAnswerCQ(env, cq.id, 'âœ… Usuario aprobado');
-      await _tgEditMsg(env, chatId, msgId, orig + `\n\nâœ… <b>APROBADO</b> â€” ${rol} Â· ${dept === 'null' ? 'â€”' : dept}`);
+      await _tgEditMsg(env, chatId, msgId, orig + `\n\nâœ… <b>APROBADO</b> â€" ${rol} Â· ${dept === 'null' ? 'â€"' : dept}`);
     }
     else if (accion === 'rej') {
       const [userId] = partes;
@@ -530,11 +587,11 @@ async function handleTelegramWebhook(request, env) {
       await _tgAnswerCQ(env, cq.id, 'âŒ Solicitud rechazada');
       await _tgEditMsg(env, chatId, msgId, orig + '\n\nâŒ <b>RECHAZADO</b>');
     }
-    // â”€â”€ Estado de sugerencia / idea â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // â"€â"€ Estado de sugerencia / idea â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
     else if (accion === 'idea_prog') {
       await env.DB.prepare('UPDATE sugerencias SET estado=? WHERE id=?').bind('en_progreso', parseInt(partes[0])).run();
-      await _tgAnswerCQ(env, cq.id, 'ðŸ”„ En progreso');
-      await _tgEditMsg(env, chatId, msgId, orig + '\n\nðŸ”„ <b>EN PROGRESO</b>');
+      await _tgAnswerCQ(env, cq.id, 'ðŸ"„ En progreso');
+      await _tgEditMsg(env, chatId, msgId, orig + '\n\nðŸ"„ <b>EN PROGRESO</b>');
     }
     else if (accion === 'idea_done') {
       await env.DB.prepare('UPDATE sugerencias SET estado=? WHERE id=?').bind('resuelto', parseInt(partes[0])).run();
@@ -573,7 +630,7 @@ export default {
     const path   = url.pathname;
     const method = request.method;
 
-    // â”€â”€ SEC-14: Rate limiting para X-Admin-Code (brute-force legacy path) â”€â”€â”€â”€â”€â”€â”€
+    // â"€â"€ SEC-14: Rate limiting para X-Admin-Code (brute-force legacy path) â"€â"€â"€â"€â"€â"€â"€
     // Si llega X-Admin-Code pero no coincide â†’ registrar intento; bloquear tras 5 en 15min
     {
       const xAdminCode = request.headers.get('X-Admin-Code');
@@ -592,11 +649,11 @@ export default {
     }
 
     try {
-      // â”€â”€ Telegram webhook (sin auth â€” valida con secret header) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      // â"€â"€ Telegram webhook (sin auth â€" valida con secret header) â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
       if (path === '/telegram-webhook'       && method === 'POST') return await handleTelegramWebhook(request, env);
       if (path === '/setup-telegram-webhook' && method === 'GET')  return await setupTelegramWebhook(request, env);
 
-      // â”€â”€ Rutas pÃºblicas (sin auth) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      // â"€â"€ Rutas pÃºblicas (sin auth) â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
       if (path === '/scan'        && method === 'POST') return await handleScan(request, env);
       if (path === '/ocr'         && method === 'POST') return await handleOCR(request, env);
       if (path === '/log'         && method === 'POST') return await guardarLog(request, env);
@@ -626,14 +683,14 @@ export default {
       if (path === '/graficas'           && method === 'GET')  return await getGraficasData(request, env);
       if (path === '/buscar'             && method === 'GET')  return await buscarGlobal(request, env);
 
-      // â”€â”€ RGPD / ProtecciÃ³n de datos â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      // â"€â"€ RGPD / ProtecciÃ³n de datos â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
       if (path === '/rgpd/informe'          && method === 'GET')    return await rgpdInforme(request, env);
       if (path === '/rgpd/anonimizar'       && method === 'DELETE') return await rgpdAnonimizar(request, env);
       if (path === '/rgpd/config'           && method === 'GET')    return await rgpdGetConfig(request, env);
       if (path === '/rgpd/config'           && method === 'PUT')    return await rgpdSetConfig(request, env);
       if (path === '/rgpd/aplicar-retencion'&& method === 'POST')   return await rgpdAplicarRetencionEndpoint(request, env);
 
-      // â”€â”€ Telegram personal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      // â"€â"€ Telegram personal â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
       if (path === '/telegram/webhook'   && method === 'POST') return await telegramWebhook(request, env);
       if (path === '/telegram/vincular'  && method === 'POST') return await telegramVincular(request, env);
       if (path === '/telegram/estado'    && method === 'GET')  return await telegramEstado(request, env);
@@ -644,8 +701,9 @@ export default {
       if (path === '/admin/login-attempts' && method === 'DELETE') return await adminBorrarLoginAttempts(request, env);
       if (path === '/admin/server-logs'   && method === 'DELETE') return await adminBorrarServerLogs(request, env);
 
-      // â”€â”€ Dev endpoints (superadmin/desarrollador) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      // â"€â"€ Dev endpoints (superadmin/desarrollador) â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
       if (path === '/dev/sql'           && method === 'POST')   return await devSQL(request, env);
+      if (path === '/dev/ai-chat'       && method === 'POST')   return await devAIChat(request, env);
       if (path === '/dev/table-counts'  && method === 'GET')    return await devTableCounts(request, env);
       if (path === '/dev/sesiones'      && method === 'GET')    return await devSesionesDetalle(request, env);
       if (path === '/dev/kill-session'  && method === 'DELETE') return await devKillSession(request, env);
@@ -656,10 +714,10 @@ export default {
       if (path === '/dev/cambiar-rol'   && method === 'PUT')    return await devCambiarRol(request, env);
       if (path === '/dev/activity'      && method === 'GET')    return await devActivity(request, env);
 
-      // â”€â”€ Log viewer (DevTools) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      // â"€â"€ Log viewer (DevTools) â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
       if (path === '/log'            && method === 'GET')  return await getLogsAdmin(request, env);
 
-      // â”€â”€ Foto de perfil â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      // â"€â"€ Foto de perfil â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
       if (path.startsWith('/foto-perfil/')) {
         const parts = path.split('/');
         const tipo  = parts[2]; // 'usuario' | 'externo'
@@ -669,13 +727,13 @@ export default {
         if (method === 'DELETE') return await borrarFotoPerfil(tipo, fid, request, env);
       }
 
-      // â”€â”€ Obras â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      // â"€â"€ Obras â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
       if (path === '/obras'       && method === 'GET')    return await getObras(request, env);
       if (path === '/obras'       && method === 'POST')   return await crearObra(request, env);
       if (path.startsWith('/obras/') && method === 'PUT')    return await actualizarObra(path.split('/obras/')[1], request, env);
       if (path.startsWith('/obras/') && method === 'DELETE') return await eliminarObra(path.split('/obras/')[1], request, env);
 
-      // â”€â”€ Bobinas â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      // â"€â"€ Bobinas â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
       if (path === '/bobinas'     && method === 'GET')    return await getBobinas(request, env);
       if (path === '/bobinas'     && method === 'POST')   return await crearBobina(request, env, ctx);
 
@@ -689,7 +747,7 @@ export default {
         return await eliminarBobina(decodeURIComponent(path.split('/bobinas/')[1]), request, env, ctx);
       }
 
-      // â”€â”€ PEMP â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      // â"€â"€ PEMP â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
       if (path === '/pemp'        && method === 'GET')    return await getPemp(request, env);
       if (path === '/pemp'        && method === 'POST')   return await crearPemp(request, env, ctx);
 
@@ -703,7 +761,7 @@ export default {
         return await eliminarPemp(decodeURIComponent(path.split('/pemp/')[1]), request, env, ctx);
       }
 
-      // â”€â”€ Carretillas â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      // â"€â"€ Carretillas â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
       if (path === '/carretillas'  && method === 'GET')   return await getCarretillas(request, env);
       if (path === '/carretillas'  && method === 'POST')  return await crearCarretilla(request, env, ctx);
 
@@ -717,7 +775,7 @@ export default {
         return await eliminarCarretilla(decodeURIComponent(path.split('/carretillas/')[1]), request, env, ctx);
       }
 
-      // â”€â”€ Usuarios â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      // â"€â"€ Usuarios â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
       if (path === '/usuarios'    && method === 'GET')    return await getUsuarios(request, env);
       if (path === '/usuarios'    && method === 'POST')   return await crearUsuario(request, env);
       if (path.startsWith('/usuarios/') && method === 'DELETE') {
@@ -727,7 +785,7 @@ export default {
         return await editarUsuario(path.split('/usuarios/')[1], request, env);
       }
 
-      // â”€â”€ CatÃ¡logos â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      // â"€â"€ CatÃ¡logos â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
       if (path === '/proveedores'  && method === 'GET')   return await getCatalogo('proveedores', env, request);
       if (path === '/proveedores'  && method === 'POST')  return await addCatalogo('proveedores', request, env);
       if (path.startsWith('/proveedores/') && method === 'DELETE') return await deleteCatalogo('proveedores', path.split('/proveedores/')[1], request, env);
@@ -757,14 +815,14 @@ export default {
       if (path === '/energias-carretilla'          && method === 'POST')  return await addCatalogo('energias_carretilla', request, env);
       if (path.startsWith('/energias-carretilla/') && method === 'DELETE') return await deleteCatalogo('energias_carretilla', path.split('/energias-carretilla/')[1], request, env);
 
-      // â”€â”€ Config â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      // â"€â"€ Config â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
       if (path === '/config'       && method === 'GET')   return await getConfig(request, env);
       if (path === '/config'       && method === 'POST')  return await setConfig(request, env);
 
-      // â”€â”€ Export â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      // â"€â"€ Export â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
       if (path === '/export'       && method === 'GET')   return await exportCSV(request, env);
 
-      // â”€â”€ Sugerencias â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      // â"€â"€ Sugerencias â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
       if (path === '/sugerencias'  && method === 'POST') return await guardarSugerencia(request, env);
       if (path === '/sugerencias'  && method === 'GET')  return await getSugerencias(request, env);
       if (path === '/sugerencias/marcar-todas' && method === 'PUT')    return await marcarTodasSugerencias(request, env);
@@ -778,13 +836,13 @@ export default {
         return await eliminarSugerencia(sid, request, env);
       }
 
-      // â”€â”€ Buscar mÃ¡quina (cross-departamento, para Seguridad) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      // â"€â"€ Buscar mÃ¡quina (cross-departamento, para Seguridad) â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
       if (path.startsWith('/buscar-maquina/') && method === 'GET') {
         const mat = decodeURIComponent(path.split('/buscar-maquina/')[1]);
         return await buscarMaquina(mat, request, env);
       }
 
-      // â”€â”€ Inventario Seguridad â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      // â"€â"€ Inventario Seguridad â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
       if (path === '/inventario-seg'           && method === 'GET')    return await getInventarioSeg(request, env);
       if (path === '/inventario-seg'           && method === 'POST')   return await crearItemSeg(request, env, ctx);
       if (path.startsWith('/inventario-seg/')) {
@@ -803,7 +861,7 @@ export default {
         return await deleteCatalogo('tipos_material_seg', tid, request, env);
       }
 
-      // â”€â”€ Pedidos â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      // â"€â"€ Pedidos â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
       if (path === '/pedidos' && method === 'GET')  return await getPedidos(request, env);
       if (path === '/pedidos' && method === 'POST') return await crearPedido(request, env, ctx);
       if (path.startsWith('/pedidos/')) {
@@ -823,7 +881,7 @@ export default {
         if (method === 'DELETE') return await borrarAlbaran(aid, request, env);
       }
 
-      // â”€â”€ Herramientas â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      // â"€â"€ Herramientas â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
       if (path === '/tipos-herramienta' && method === 'GET')  return await getTiposHerramienta(request, env);
       if (path === '/tipos-herramienta' && method === 'POST') return await crearTipoHerramienta(request, env);
       if (path.startsWith('/tipos-herramienta/')) {
@@ -855,7 +913,7 @@ export default {
       if (path === '/repostajes'             && method === 'POST') return await crearRepostaje(request, env, ctx);
       if (path === '/repostajes/resumen'     && method === 'GET')  return await getResumenRepostajes(request, env);
 
-      // â”€â”€ Calendario (NEW-13) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      // â"€â"€ Calendario (NEW-13) â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
       if (path === '/festivos'     && method === 'GET') return await getFestivos(request, env);
       if (path === '/calendario'   && method === 'GET') return await getEventos(request, env);
       if (path === '/calendario'   && method === 'POST') return await crearEvento(request, env);
@@ -865,7 +923,7 @@ export default {
         if (method === 'DELETE') return await eliminarEvento(eid, request, env);
       }
 
-      // â”€â”€ Mantenimiento preventivo equipos (NEW-15) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      // â"€â"€ Mantenimiento preventivo equipos (NEW-15) â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
       if (path === '/mantenimientos' && method === 'GET')  return await getMantenimientos(request, env);
       if (path === '/mantenimientos' && method === 'POST') return await crearMantenimiento(request, env);
       if (path.startsWith('/mantenimientos/')) {
@@ -875,7 +933,7 @@ export default {
         if (!_mparts[3] && method === 'DELETE') return await borrarMantenimiento(_mid, request, env);
       }
 
-      // â”€â”€ Checklist pre-uso equipos (NEW-21) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      // â"€â"€ Checklist pre-uso equipos (NEW-21) â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
       if (path === '/checklist-plantillas' && method === 'GET')  return await listarPlantillaChecklist(request, env);
       if (path === '/checklist-plantillas' && method === 'POST') return await crearPreguntaChecklist(request, env);
       if (path.startsWith('/checklist-plantillas/') && method === 'DELETE') {
@@ -884,7 +942,7 @@ export default {
       if (path === '/checklist-registros' && method === 'GET')  return await listarRegistrosChecklist(request, env);
       if (path === '/checklist-registros' && method === 'POST') return await crearRegistroChecklist(request, env);
 
-      // â”€â”€ Partes de trabajo (NEW-16) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      // â"€â"€ Partes de trabajo (NEW-16) â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
       if (path === '/partes-trabajo' && method === 'GET')  return await getPartesTrabajo(request, env);
       if (path === '/partes-trabajo' && method === 'POST') return await crearParteTrabajo(request, env);
       if (path.startsWith('/partes-trabajo/')) {
@@ -893,7 +951,7 @@ export default {
         if (method === 'DELETE') return await eliminarParteTrabajo(_ptid, request, env);
       }
 
-      // â”€â”€ GalerÃ­a de fotos por obra (NEW-17) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      // â"€â"€ GalerÃ­a de fotos por obra (NEW-17) â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
       if (path === '/fotos-obra' && method === 'GET')  return await listarFotosObra(request, env);
       if (path === '/fotos-obra' && method === 'POST') return await subirFotoObra(request, env);
       if (path.startsWith('/fotos-obra/')) {
@@ -902,7 +960,7 @@ export default {
         if (method === 'DELETE') return await borrarFotoObra(foid, request, env);
       }
 
-      // â”€â”€ Incidencias (NEW-22) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      // â"€â"€ Incidencias (NEW-22) â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
       if (path === '/incidencias' && method === 'GET')  return await getIncidencias(request, env);
       if (path === '/incidencias' && method === 'POST') return await crearIncidencia(request, env, ctx);
       if (path.startsWith('/incidencias/')) {
@@ -922,7 +980,7 @@ export default {
         if (method === 'DELETE') return await borrarFotoIncidencia(fid, request, env);
       }
 
-      // â”€â”€ Archivos / R2 â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      // â"€â"€ Archivos / R2 â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
       if (path === '/archivos' && method === 'GET')  return await listarArchivos(request, env);
       if (path === '/archivos' && method === 'POST') return await subirArchivo(request, env);
       if (path.startsWith('/archivos/')) {
@@ -931,7 +989,7 @@ export default {
         if (method === 'DELETE') return await borrarArchivo(aid, request, env);
       }
 
-      // â”€â”€ DocumentaciÃ³n departamentos â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      // â"€â"€ DocumentaciÃ³n departamentos â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
       if (path === '/carpetas' && method === 'GET')  return await listarCarpetas(request, env);
       if (path === '/carpetas' && method === 'POST') return await crearCarpeta(request, env);
       if (path.startsWith('/carpetas/')) {
@@ -956,7 +1014,7 @@ export default {
       }
       if (path === '/admin/migrate' && method === 'POST') return await runMigrations(request, env);
 
-      // â”€â”€ Personal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      // â"€â"€ Personal â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
       if (path === '/horarios-obra' && method === 'GET')  return await getHorariosObra(request, env);
       if (path === '/horarios-obra' && method === 'POST') return await guardarHorarioObra(request, env);
       if (path.startsWith('/horarios-obra/')) {
@@ -982,7 +1040,7 @@ export default {
         if (method === 'DELETE') return await eliminarPersonalExterno(peid, request, env);
       }
 
-      // â”€â”€ EPIs asignados (NEW-23) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      // â"€â"€ EPIs asignados (NEW-23) â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
       if (path === '/epis-asignados' && method === 'GET')  return await getEpisAsignados(request, env);
       if (path === '/epis-asignados' && method === 'POST') return await crearEpiAsignado(request, env, ctx);
       if (path.startsWith('/epis-asignados/')) {
@@ -991,7 +1049,7 @@ export default {
         if (method === 'DELETE') return await eliminarEpiAsignado(epid, request, env);
       }
 
-      // â”€â”€ Carnets y certificaciones (NEW-19) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      // â"€â"€ Carnets y certificaciones (NEW-19) â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
       if (path === '/carnets' && method === 'GET')  return await getCarnets(request, env);
       if (path === '/carnets' && method === 'POST') return await crearCarnet(request, env, ctx);
       if (path.startsWith('/carnets/')) {
@@ -1000,7 +1058,7 @@ export default {
         if (method === 'DELETE') return await eliminarCarnet(cid, request, env);
       }
 
-      // â”€â”€ Turnos (NEW-20) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      // â"€â"€ Turnos (NEW-20) â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
       if (path === '/turnos' && method === 'GET')  return await getTurnos(request, env);
       if (path === '/turnos' && method === 'POST') return await upsertTurno(request, env, ctx);
       if (path.startsWith('/turnos/') && method === 'DELETE') {
@@ -1008,7 +1066,7 @@ export default {
         return await eliminarTurno(tid, request, env);
       }
 
-      // â”€â”€ Chat interno (NEW-08) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      // â"€â"€ Chat interno (NEW-08) â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
       if (path === '/chat' && method === 'GET')    return await getChatMensajes(request, env);
       if (path === '/chat' && method === 'POST')   return await enviarChatMensaje(request, env);
       if (path.startsWith('/chat/') && method === 'DELETE') {
@@ -1016,7 +1074,7 @@ export default {
         return await borrarChatMensaje(cmid, request, env);
       }
 
-      // â”€â”€ Otros (legacy/extras) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      // â"€â"€ Otros (legacy/extras) â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
       if (path === '/logs'         && method === 'GET')   return await getLogs(request, env);
       if (path === '/historial'    && method === 'GET')   return await getHistorial(request, env);
       if (path === '/pemp/historial'         && method === 'GET') return await getHistorialTabla('historial_pemp', request, env);
@@ -1035,7 +1093,7 @@ export default {
         return await syncSheetsDebug(env);
       }
 
-      // â”€â”€ Backup / Restaurar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      // â"€â"€ Backup / Restaurar â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
       if (path === '/backup/inventario'    && method === 'GET')  return await backupInventario(request, env);
       if (path === '/backup/empresa'       && method === 'GET')  return await backupEmpresa(request, env);
       if (path === '/restaurar/inventario' && method === 'POST') return await restaurarInventario(request, env);
@@ -1048,14 +1106,14 @@ export default {
     }
   },
 
-  // â”€â”€ Cron diario: alertas + cierre jornada â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // â"€â"€ Cron diario: alertas + cierre jornada â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
   async scheduled(event, env, ctx) {
     if (event.cron === '0 18 * * *') {
       ctx.waitUntil(cierreAutomaticoJornada(env));
     } else {
       ctx.waitUntil(alertasDiarias(env));
     }
-    // Resync completo en cada cron â€” resiliencia ante fallos transitorios de Google API
+    // Resync completo en cada cron â€" resiliencia ante fallos transitorios de Google API
     ctx.waitUntil(syncSheets(env));
     ctx.waitUntil(syncPedidos(env));
     ctx.waitUntil(syncRRHH(env)); // SYNC-03: fichajes, incidencias, carnets, EPIs, turnos, repostajes
@@ -1083,7 +1141,7 @@ async function crearSesion(env, { nombre, rol, obra_id, obra_nombre, departament
 }
 
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-// RECUPERACIÃ“N DE CONTRASEÃ‘A (Resend)
+// RECUPERACIÃ"N DE CONTRASEÃ‘A (Resend)
 // Para activar: aÃ±adir RESEND_API_KEY en Cloudflare Workers â†’ Variables de entorno
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
@@ -1168,7 +1226,7 @@ async function recuperarPass(request, env) {
   <table width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;margin:40px auto">
     <tr><td style="background:#162032;border-radius:16px;padding:40px;border:1px solid #334155">
       <div style="text-align:center;margin-bottom:28px">
-        <div style="font-size:32px;margin-bottom:8px">ðŸ”</div>
+        <div style="font-size:32px;margin-bottom:8px">ðŸ"</div>
         <div style="font-family:'Montserrat',Helvetica,Arial,sans-serif;font-weight:900;font-size:22px;color:#f97316">
           Alejandra Office
         </div>
@@ -1206,7 +1264,7 @@ async function recuperarPass(request, env) {
 
   const enviado = await enviarEmailResend(env, {
     to: email.trim().toLowerCase(),
-    subject: 'ðŸ” Restablecer contraseÃ±a â€” Alejandra Office',
+    subject: 'ðŸ" Restablecer contraseÃ±a â€" Alejandra Office',
     html,
   });
 
@@ -1233,7 +1291,7 @@ async function resetearPass(request, env) {
 
   if (!reset) return err('El enlace no es vÃ¡lido o ha caducado. Solicita uno nuevo.');
 
-  // Hash de la nueva contraseÃ±a â€” PBKDF2 igual que hashPassword() en verificarAcceso
+  // Hash de la nueva contraseÃ±a â€" PBKDF2 igual que hashPassword() en verificarAcceso
   const hashHex = await hashPassword(nueva_pass);
 
   // Actualizar contraseÃ±a e invalidar token
@@ -1249,7 +1307,7 @@ async function resetearPass(request, env) {
 }
 
 async function verificarAcceso(request, env) {
-  // â”€â”€ Rate limiting: mÃ¡x 10 intentos por IP en 15 minutos â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // â"€â"€ Rate limiting: mÃ¡x 10 intentos por IP en 15 minutos â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
   const ip = request.headers.get('CF-Connecting-IP') || request.headers.get('X-Forwarded-For') || 'unknown';
   try {
     const windowStart = new Date(Date.now() - 15 * 60 * 1000).toISOString().replace('T', ' ').split('.')[0];
@@ -1321,8 +1379,8 @@ async function verificarAcceso(request, env) {
           return err('El usuario no pertenece a esa obra', 403);
         }
       }
-      await sendTelegram(env, `ðŸ‘¤ <b>Login</b>: ${usuario.nombre} (${usuario.rol})\nðŸ— ${usuario.obra_nombre || 'â€”'}  ðŸ”· ${usuario.departamento || 'â€”'}`);
-      await logActividad(env, { nivel: 'info', origen: 'login', mensaje: `Login: ${usuario.nombre} (${usuario.rol})`, detalle: `obra: ${usuario.obra_nombre || 'â€”'} | dept: ${usuario.departamento || 'â€”'}`, empresa_id: usuario.empresa_id || 1 });
+      await sendTelegram(env, `ðŸ‘¤ <b>Login</b>: ${usuario.nombre} (${usuario.rol})\nðŸ— ${usuario.obra_nombre || 'â€"'}  ðŸ"· ${usuario.departamento || 'â€"'}`);
+      await logActividad(env, { nivel: 'info', origen: 'login', mensaje: `Login: ${usuario.nombre} (${usuario.rol})`, detalle: `obra: ${usuario.obra_nombre || 'â€"'} | dept: ${usuario.departamento || 'â€"'}`, empresa_id: usuario.empresa_id || 1 });
       const token = await crearSesion(env, {
         nombre: usuario.nombre, rol: usuario.rol,
         obra_id: usuario.obra_id, obra_nombre: usuario.obra_nombre,
@@ -1407,7 +1465,7 @@ async function cerrarTodasSesiones(request, env) {
 }
 
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-// EMPRESAS â€” REGISTRO Y GESTIÃ“N
+// EMPRESAS â€" REGISTRO Y GESTIÃ"N
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 async function registrarEmpresa(request, env) {
@@ -1457,7 +1515,7 @@ async function registrarEmpresa(request, env) {
     departamento: null, es_admin: false, usuario_id: adminUser.id, empresa_id,
   });
 
-  await sendTelegram(env, `ðŸ¢ <b>Nueva empresa:</b> ${empresa_nombre}\nðŸ‘¤ ${admin_nombre} (${emailClean})\nðŸ— Obra: ${obra_nombre_final || 'â€”'}`);
+  await sendTelegram(env, `ðŸ¢ <b>Nueva empresa:</b> ${empresa_nombre}\nðŸ‘¤ ${admin_nombre} (${emailClean})\nðŸ— Obra: ${obra_nombre_final || 'â€"'}`);
   return json({ ok: true, token, rol: 'empresa_admin', nombre: admin_nombre.trim(), empresa_nombre: empresa_nombre.trim(), empresa_id, obra_id, obra_nombre: obra_nombre_final });
 }
 
@@ -1664,7 +1722,7 @@ async function crearBobina(request, env, ctx) {
     ctx.waitUntil(Promise.all([
       syncSheets(env, 'Elec-Bobinas', empresa_id),
       registrarHistorial(env, { obra_id: obraFinal, bobina_codigo: codigo.trim().toUpperCase(), accion: 'entrada', usuario: reg, notas: notas || '' }),
-      sendTelegram(env, `ðŸ“¦ <b>Nueva bobina registrada</b>\nðŸ”– ${codigo.trim().toUpperCase()}\nðŸ”Œ ${tipo_cable}  ðŸ“¦ ${proveedor}\nðŸ‘¤ ${reg}`),
+      sendTelegram(env, `ðŸ"¦ <b>Nueva bobina registrada</b>\nðŸ"– ${codigo.trim().toUpperCase()}\nðŸ"Œ ${tipo_cable}  ðŸ"¦ ${proveedor}\nðŸ‘¤ ${reg}`),
     ]));
 
     return json({ ok: true, mensaje: `Bobina ${codigo} registrada` }, 201);
@@ -1728,7 +1786,7 @@ async function devolverBobina(codigo, request, env, ctx) {
   ctx.waitUntil(Promise.all([
     syncSheets(env, 'Elec-Bobinas', bobina.empresa_id),
     registrarHistorial(env, { obra_id: bobina.obra_id, bobina_codigo: codigo, accion: 'devolucion', usuario: devuelto_por, notas: notas || '' }),
-    sendTelegram(env, `ðŸ“¤ <b>Bobina devuelta</b>\nðŸ”– ${codigo}\nðŸ‘¤ ${devuelto_por || 'â€”'}`),
+    sendTelegram(env, `ðŸ"¤ <b>Bobina devuelta</b>\nðŸ"– ${codigo}\nðŸ‘¤ ${devuelto_por || 'â€"'}`),
   ]));
 
   return json({ ok: true, mensaje: `Bobina ${codigo} devuelta correctamente`, fecha_devolucion: fecha });
@@ -1745,7 +1803,7 @@ async function eliminarBobina(codigo, request, env, ctx) {
   ctx.waitUntil(Promise.all([
     syncSheets(env, 'Elec-Bobinas', empresa_id || bobina.empresa_id),
     registrarHistorial(env, { obra_id: bobina.obra_id, bobina_codigo: codigo, accion: 'eliminacion', usuario: '' }),
-    sendTelegram(env, `ðŸ—‘ï¸ <b>Bobina eliminada</b>\nðŸ”– ${codigo}`),
+    sendTelegram(env, `ðŸ—‘ï¸ <b>Bobina eliminada</b>\nðŸ"– ${codigo}`),
   ]));
 
   return json({ ok: true, mensaje: `Bobina ${codigo} eliminada` });
@@ -1819,7 +1877,7 @@ async function crearPemp(request, env, ctx) {
         obra_id: obraFinal, matricula: matricula.trim().toUpperCase(),
         accion: 'entrada', usuario: reg, notas: notas || '',
       }),
-      sendTelegram(env, `ðŸ— <b>Nueva PEMP registrada</b>\nðŸ”– ${matricula.trim().toUpperCase()}\nðŸ”§ ${tipo || 'â€”'}  ðŸ­ ${marca || 'â€”'}  âš¡ ${energia || 'â€”'}\nðŸ‘¤ ${reg}`),
+      sendTelegram(env, `ðŸ— <b>Nueva PEMP registrada</b>\nðŸ"– ${matricula.trim().toUpperCase()}\nðŸ"§ ${tipo || 'â€"'}  ðŸ­ ${marca || 'â€"'}  âš¡ ${energia || 'â€"'}\nðŸ‘¤ ${reg}`),
     ]));
 
     return json({ ok: true, id, mensaje: `PEMP ${matricula} registrada` }, 201);
@@ -1859,8 +1917,8 @@ async function editarPemp(matricula, request, env, ctx) {
   vals.push(matricula);
 
   await env.DB.prepare(`UPDATE pemp SET ${sets.join(', ')} WHERE matricula = ?`).bind(...vals).run();
-  if (notifAveria)   await sendTelegram(env, `ðŸ”´ <b>PEMP AVERIADA</b>\nðŸ”– ${matricula}\nðŸ— Obra: ${pemp.obra_id || 'â€”'}`);
-  if (notifReparado) await sendTelegram(env, `ðŸŸ¢ <b>PEMP Reparada</b>\nðŸ”– ${matricula}`);
+  if (notifAveria)   await sendTelegram(env, `ðŸ"´ <b>PEMP AVERIADA</b>\nðŸ"– ${matricula}\nðŸ— Obra: ${pemp.obra_id || 'â€"'}`);
+  if (notifReparado) await sendTelegram(env, `ðŸŸ¢ <b>PEMP Reparada</b>\nðŸ"– ${matricula}`);
   ctx?.waitUntil(syncSheets(env, tabForDept('pemp', body.departamento || pemp.departamento), empresa_id || pemp.empresa_id));
   return json({ ok: true, mensaje: `PEMP ${matricula} actualizada` });
 }
@@ -1896,7 +1954,7 @@ async function devolverPemp(matricula, request, env, ctx) {
   ctx.waitUntil(Promise.all([
     syncSheets(env, tabForDept('pemp', pemp.departamento), pemp.empresa_id),
     registrarHistorialPemp(env, { obra_id: pemp.obra_id, matricula, accion: 'devolucion', usuario: devuelto_por, notas: notas || '' }),
-    sendTelegram(env, `ðŸ“¤ <b>PEMP devuelta</b>\nðŸ”– ${matricula}\nðŸ‘¤ ${devuelto_por || 'â€”'}`),
+    sendTelegram(env, `ðŸ"¤ <b>PEMP devuelta</b>\nðŸ"– ${matricula}\nðŸ‘¤ ${devuelto_por || 'â€"'}`),
   ]));
 
   return json({ ok: true, mensaje: `PEMP ${matricula} devuelta correctamente`, fecha_devolucion: fecha });
@@ -1911,7 +1969,7 @@ async function eliminarPemp(matricula, request, env, ctx) {
   await env.DB.prepare('DELETE FROM pemp WHERE matricula = ?').bind(matricula).run();
   ctx.waitUntil(Promise.all([
     syncSheets(env, tabForDept('pemp', pemp.departamento), empresa_id || pemp.empresa_id),
-    sendTelegram(env, `ðŸ—‘ï¸ <b>PEMP eliminada</b>\nðŸ”– ${matricula}`),
+    sendTelegram(env, `ðŸ—‘ï¸ <b>PEMP eliminada</b>\nðŸ"– ${matricula}`),
   ]));
   return json({ ok: true, mensaje: `PEMP ${matricula} eliminada` });
 }
@@ -1984,7 +2042,7 @@ async function crearCarretilla(request, env, ctx) {
         obra_id: obraFinal, matricula: matricula.trim().toUpperCase(),
         accion: 'entrada', usuario: reg, notas: notas || '',
       }),
-      sendTelegram(env, `ðŸšœ <b>Nueva carretilla registrada</b>\nðŸ”– ${matricula.trim().toUpperCase()}\nðŸ”§ ${tipo || 'â€”'}  âš¡ ${energia || 'â€”'}\nðŸ‘¤ ${reg}`),
+      sendTelegram(env, `ðŸšœ <b>Nueva carretilla registrada</b>\nðŸ"– ${matricula.trim().toUpperCase()}\nðŸ"§ ${tipo || 'â€"'}  âš¡ ${energia || 'â€"'}\nðŸ‘¤ ${reg}`),
     ]));
 
     return json({ ok: true, id, mensaje: `Carretilla ${matricula} registrada` }, 201);
@@ -2023,8 +2081,8 @@ async function editarCarretilla(matricula, request, env, ctx) {
   vals.push(matricula);
 
   await env.DB.prepare(`UPDATE carretillas SET ${sets.join(', ')} WHERE matricula = ?`).bind(...vals).run();
-  if (notifAveria)   await sendTelegram(env, `ðŸ”´ <b>Carretilla AVERIADA</b>\nðŸ”– ${matricula}`);
-  if (notifReparado) await sendTelegram(env, `ðŸŸ¢ <b>Carretilla Reparada</b>\nðŸ”– ${matricula}`);
+  if (notifAveria)   await sendTelegram(env, `ðŸ"´ <b>Carretilla AVERIADA</b>\nðŸ"– ${matricula}`);
+  if (notifReparado) await sendTelegram(env, `ðŸŸ¢ <b>Carretilla Reparada</b>\nðŸ"– ${matricula}`);
   ctx?.waitUntil(syncSheets(env, tabForDept('carretilla', body.departamento || carretilla.departamento), empresa_id || carretilla.empresa_id));
   return json({ ok: true, mensaje: `Carretilla ${matricula} actualizada` });
 }
@@ -2060,7 +2118,7 @@ async function devolverCarretilla(matricula, request, env, ctx) {
   ctx.waitUntil(Promise.all([
     syncSheets(env, tabForDept('carretilla', carretilla.departamento), carretilla.empresa_id),
     registrarHistorialCarretillas(env, { obra_id: carretilla.obra_id, matricula, accion: 'devolucion', usuario: devuelto_por, notas: notas || '' }),
-    sendTelegram(env, `ðŸ“¤ <b>Carretilla devuelta</b>\nðŸ”– ${matricula}\nðŸ‘¤ ${devuelto_por || 'â€”'}`),
+    sendTelegram(env, `ðŸ"¤ <b>Carretilla devuelta</b>\nðŸ"– ${matricula}\nðŸ‘¤ ${devuelto_por || 'â€"'}`),
   ]));
 
   return json({ ok: true, mensaje: `Carretilla ${matricula} devuelta correctamente`, fecha_devolucion: fecha });
@@ -2075,7 +2133,7 @@ async function eliminarCarretilla(matricula, request, env, ctx) {
   await env.DB.prepare('DELETE FROM carretillas WHERE matricula = ?').bind(matricula).run();
   ctx.waitUntil(Promise.all([
     syncSheets(env, tabForDept('carretilla', carretilla.departamento), empresa_id || carretilla.empresa_id),
-    sendTelegram(env, `ðŸ—‘ï¸ <b>Carretilla eliminada</b>\nðŸ”– ${matricula}`),
+    sendTelegram(env, `ðŸ—‘ï¸ <b>Carretilla eliminada</b>\nðŸ"– ${matricula}`),
   ]));
   return json({ ok: true, mensaje: `Carretilla ${matricula} eliminada` });
 }
@@ -2281,7 +2339,7 @@ async function getCatalogo(tabla, env, requestOrEmpresaId = null) {
   if (!CATALOG_WHITELIST.has(tabla)) return err('Tabla no permitida', 400);
   let empresa_id = 1;
   if (requestOrEmpresaId && typeof requestOrEmpresaId === 'object') {
-    // Es un Request â€” hacer auth
+    // Es un Request â€" hacer auth
     const auth = await getAuth(requestOrEmpresaId, env);
     empresa_id = auth.empresa_id || 1;
   } else if (typeof requestOrEmpresaId === 'number') {
@@ -2532,13 +2590,13 @@ async function guardarSugerencia(request, env) {
       'INSERT INTO sugerencias (texto, categoria, usuario, obra, departamento, empresa_id, estado, foto) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
     ).bind(texto.trim().slice(0, 1000), categoria || null, usuario || null, obra || null, departamento, empresa_id_sug, 'pendiente', fotoVal).run();
     const ideaId = rSug.meta?.last_row_id;
-    const catIcon = { mejora: 'ðŸ”§', error: 'ðŸ›', nuevo: 'âœ¨', otro: 'ðŸ’¬' };
+    const catIcon = { mejora: 'ðŸ"§', error: 'ðŸ›', nuevo: 'âœ¨', otro: 'ðŸ’¬' };
     const icon = catIcon[categoria] || 'ðŸ’¬';
     const tgMsg = `${icon} <b>Nueva sugerencia [${categoria || 'otro'}]</b>\n` +
-      `ðŸ‘¤ ${usuario || 'â€”'}  ðŸ— ${obra || 'â€”'}\n\n` +
+      `ðŸ‘¤ ${usuario || 'â€"'}  ðŸ— ${obra || 'â€"'}\n\n` +
       `${texto.trim().slice(0, 400)}`;
     const botonesIdea = ideaId ? [[
-      { text: 'ðŸ”„ En progreso', callback_data: `idea_prog:${ideaId}` },
+      { text: 'ðŸ"„ En progreso', callback_data: `idea_prog:${ideaId}` },
       { text: 'âœ… Resuelto',    callback_data: `idea_done:${ideaId}` },
       { text: 'ðŸ—‘ Cerrar',     callback_data: `idea_close:${ideaId}` },
     ]] : null;
@@ -2663,7 +2721,7 @@ async function logActividad(env, { nivel = 'info', origen = 'server', mensaje, d
 }
 
 async function guardarLog(request, env) {
-  // SEC-08: requiere sesiÃ³n vÃ¡lida â€” evita spam de logs y mensajes Telegram desde fuera
+  // SEC-08: requiere sesiÃ³n vÃ¡lida â€" evita spam de logs y mensajes Telegram desde fuera
   const xTok = request.headers.get('X-Token');
   if (!xTok) return err('No autorizado', 401);
   const _s = await env.DB.prepare("SELECT id FROM sesiones WHERE token = ? AND (expires_at IS NULL OR expires_at > datetime('now'))").bind(xTok).first().catch(() => null);
@@ -2678,8 +2736,8 @@ async function guardarLog(request, env) {
     if (nivel === 'error') {
       await sendTelegram(env,
         `ðŸš¨ <b>Error en Alejandra</b>\n` +
-        `ðŸ‘¤ ${usuario || 'â€”'}  ðŸ— ${obra || 'â€”'}\n` +
-        `ðŸ“‹ ${String(mensaje || '').slice(0, 300)}`
+        `ðŸ‘¤ ${usuario || 'â€"'}  ðŸ— ${obra || 'â€"'}\n` +
+        `ðŸ"‹ ${String(mensaje || '').slice(0, 300)}`
       );
     }
     return json({ ok: true });
@@ -2701,7 +2759,7 @@ async function getLogs(request, env) {
   return json(results);
 }
 
-// â”€â”€ DevTools: GET /log (admin) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â"€â"€ DevTools: GET /log (admin) â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 async function getLogsAdmin(request, env) {
   const auth = await getAuth(request, env);
   if (!auth.isSuperadmin && !auth.isEmpresaAdmin && !auth.isDesarrollador) return err('Sin acceso', 403);
@@ -2723,7 +2781,7 @@ async function getLogsAdmin(request, env) {
   } catch (e) { return err('Error al leer logs: ' + e.message, 500); }
 }
 
-// â”€â”€ DevTools: DELETE /admin/server-logs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â"€â"€ DevTools: DELETE /admin/server-logs â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 async function adminBorrarServerLogs(request, env) {
   const auth = await getAuth(request, env);
   if (!auth.isSuperadmin && !auth.isDesarrollador) return err('Solo superadmin o desarrollador', 403);
@@ -2733,7 +2791,7 @@ async function adminBorrarServerLogs(request, env) {
   } catch (e) { return err('Error al borrar logs: ' + e.message, 500); }
 }
 
-// â”€â”€ DevTools: POST /telegram/test â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â"€â"€ DevTools: POST /telegram/test â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 async function telegramTest(request, env) {
   const auth = await getAuth(request, env);
   if (!auth.isDesarrollador && !auth.isSuperadmin) return err('Solo para desarrolladores', 403);
@@ -2745,7 +2803,7 @@ async function telegramTest(request, env) {
   } catch (e) { return err('Error Telegram: ' + e.message, 500); }
 }
 
-// â”€â”€ DevTools: DELETE /admin/login-attempts â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â"€â"€ DevTools: DELETE /admin/login-attempts â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 async function adminBorrarLoginAttempts(request, env) {
   const auth = await getAuth(request, env);
   if (!auth.isSuperadmin && !auth.isDesarrollador) return err('Solo superadmin o desarrollador', 403);
@@ -2802,7 +2860,7 @@ async function crearPedido(request, env, ctx) {
     'INSERT INTO pedidos (empresa_id, obra_id, departamento, referencia, descripcion, cantidad, unidad, proveedor, solicitado_por, notas) VALUES (?,?,?,?,?,?,?,?,?,?)'
   ).bind(empresa_id, obra_id||null, dept, referencia||null, descripcion.trim(), cantidad||1, unidad||'ud', proveedor||null, solicitado_por||null, notas||null).run();
   ctx?.waitUntil(syncPedidos(env, tabForDept('pedido', dept), empresa_id));
-  await sendTelegram(env, `ðŸ“¦ <b>Nuevo pedido</b> [${dept}]\nðŸ‘¤ ${solicitado_por||'â€”'}\nðŸ“ ${descripcion.trim().slice(0,200)}`);
+  await sendTelegram(env, `ðŸ"¦ <b>Nuevo pedido</b> [${dept}]\nðŸ‘¤ ${solicitado_por||'â€"'}\nðŸ" ${descripcion.trim().slice(0,200)}`);
   return json({ ok: true, id: r.meta.last_row_id });
 }
 
@@ -2830,9 +2888,9 @@ async function actualizarPedido(id, request, env, ctx) {
   if (body.estado !== undefined) {
     const pedido = await env.DB.prepare('SELECT descripcion, departamento FROM pedidos WHERE id = ?').bind(id).first();
     pedidoDept = pedido?.departamento;
-    const iconos = { solicitado: 'ðŸ“¤', recibido: 'âœ…', cancelado: 'âŒ', pendiente: 'â³' };
+    const iconos = { solicitado: 'ðŸ"¤', recibido: 'âœ…', cancelado: 'âŒ', pendiente: 'â³' };
     await sendTelegram(env,
-      `${iconos[body.estado]||'ðŸ“¦'} <b>Pedido ${body.estado}</b> [${pedido?.departamento||'â€”'}]\nðŸ“ ${(pedido?.descripcion||'').slice(0,200)}`
+      `${iconos[body.estado]||'ðŸ"¦'} <b>Pedido ${body.estado}</b> [${pedido?.departamento||'â€"'}]\nðŸ" ${(pedido?.descripcion||'').slice(0,200)}`
     );
   }
   if (!pedidoDept) {
@@ -3015,7 +3073,7 @@ async function getAlertasStock(request, env) {
   return json({ herramientas, seguridad, bobinas });
 }
 
-// â”€â”€ Dashboard de obra (NEW-27) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â"€â"€ Dashboard de obra (NEW-27) â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 async function getObraDashboard(request, env) {
   const auth = await getAuth(request, env);
   const { empresa_id, obra_id, departamento } = auth;
@@ -3297,7 +3355,7 @@ async function crearHerramienta(request, env, ctx) {
   const tipoNom = tipoRow?.nombre || body.modelo || 'herramienta';
   const obraRow = obra_id ? await env.DB.prepare('SELECT nombre FROM obras WHERE id = ?').bind(obra_id).first().catch(() => null) : null;
   ctx?.waitUntil(sendTelegramConBotones(env,
-    `ðŸ”§ <b>Nueva herramienta registrada</b>\nðŸ“‹ ${tipoNom}${marca ? ' Â· ' + marca : ''}${body.modelo ? ' Â· ' + body.modelo : ''}\nðŸ“ ${obraRow?.nombre || 'â€”'}\nðŸ‘¤ ${userNombre || rol}`,
+    `ðŸ"§ <b>Nueva herramienta registrada</b>\nðŸ"‹ ${tipoNom}${marca ? ' Â· ' + marca : ''}${body.modelo ? ' Â· ' + body.modelo : ''}\nðŸ" ${obraRow?.nombre || 'â€"'}\nðŸ‘¤ ${userNombre || rol}`,
     [[{ text: 'âœ… Disponible', callback_data: `herr_disp:${hid}` }]]
   ));
   return json({ ok: true, id: hid }, 201);
@@ -3367,7 +3425,7 @@ async function actualizarHerramienta(id, request, env, ctx) {
       ).bind(h.tipo_id, empresa_id).all();
       const disponibles = disp[0]?.c ?? 0;
       if (disponibles < tipo.stock_minimo) {
-        await sendTelegram(env, `âš ï¸ <b>Stock mÃ­nimo alcanzado â€” Herramientas</b>\nðŸ”§ ${tipo.nombre}\nðŸ“‰ Disponibles: <b>${disponibles}</b> (mÃ­nimo: ${tipo.stock_minimo})\nðŸ‘¤ ${userNombre || rol}`);
+        await sendTelegram(env, `âš ï¸ <b>Stock mÃ­nimo alcanzado â€" Herramientas</b>\nðŸ"§ ${tipo.nombre}\nðŸ"‰ Disponibles: <b>${disponibles}</b> (mÃ­nimo: ${tipo.stock_minimo})\nðŸ‘¤ ${userNombre || rol}`);
       }
     }
   }
@@ -3417,7 +3475,7 @@ async function registrarHistorialKitHerr(env, empresa_id, kit_id, herramienta_id
 }
 
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-// PERSONAL â€” Horarios, Fichajes, ResÃºmenes
+// PERSONAL â€" Horarios, Fichajes, ResÃºmenes
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 // Devuelve {hora_entrada, hora_salida, horas_dia} para el dÃ­a especÃ­fico de un fichaje (MEJ-131)
@@ -3452,7 +3510,7 @@ function calcHoras(entrada, salida) {
   return Math.max(0, Math.round(mins / 60 * 100) / 100);
 }
 
-// â”€â”€ Horarios de obra â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â"€â"€ Horarios de obra â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 async function getHorariosObra(request, env) {
   const { empresa_id } = await getAuth(request, env);
   if (!empresa_id) return err('No autorizado', 403);
@@ -3504,7 +3562,7 @@ async function eliminarHorarioObra(id, request, env) {
   return json({ ok: true });
 }
 
-// â”€â”€ Personal externo â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â"€â"€ Personal externo â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 async function getPersonalExterno(request, env) {
   const { empresa_id } = await getAuth(request, env);
   if (!empresa_id) return err('No autorizado', 403);
@@ -3548,7 +3606,7 @@ async function eliminarPersonalExterno(id, request, env) {
   return json({ ok: true });
 }
 
-// â”€â”€ Trabajadores (usuarios app + externo) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â"€â"€ Trabajadores (usuarios app + externo) â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 async function getTrabajadores(request, env) {
   const { empresa_id, obra_id: obraAuth, isSuperadmin, isEmpresaAdmin, isAdmin, rol } = await getAuth(request, env);
   if (!empresa_id) return err('No autorizado', 403);
@@ -3572,7 +3630,7 @@ async function getTrabajadores(request, env) {
   return json([...ru.results, ...rp.results]);
 }
 
-// â”€â”€ EPIs asignados (NEW-23) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â"€â"€ EPIs asignados (NEW-23) â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 async function getEpisAsignados(request, env) {
   const { empresa_id, obra_id: obraAuth, isSuperadmin, isEmpresaAdmin, isAdmin } = await getAuth(request, env);
   if (!empresa_id) return err('No autorizado', 403);
@@ -3624,7 +3682,7 @@ async function eliminarEpiAsignado(id, request, env) {
   return json({ ok: true });
 }
 
-// â”€â”€ Carnets y certificaciones (NEW-19) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â"€â"€ Carnets y certificaciones (NEW-19) â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 async function getCarnets(request, env) {
   const { empresa_id, obra_id: obraAuth, isSuperadmin, isEmpresaAdmin, isAdmin } = await getAuth(request, env);
   if (!empresa_id) return err('No autorizado', 403);
@@ -3676,7 +3734,7 @@ async function eliminarCarnet(id, request, env) {
   return json({ ok: true });
 }
 
-// â”€â”€ Fichajes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â"€â"€ Fichajes â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 async function getFichajes(request, env) {
   const { empresa_id, isSuperadmin, isEmpresaAdmin, isAdmin, obra_id: obraAuth, rol, usuario_id } = await getAuth(request, env);
   if (!empresa_id) return err('No autorizado', 403);
@@ -3807,7 +3865,7 @@ async function eliminarFichaje(id, request, env) {
   return json({ ok: true });
 }
 
-// â”€â”€ ResÃºmenes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â"€â"€ ResÃºmenes â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 async function getResumenSemana(request, env) {
   const { empresa_id, isSuperadmin, isEmpresaAdmin, isAdmin, obra_id: obraAuth, rol, usuario_id } = await getAuth(request, env);
   if (!empresa_id) return err('No autorizado', 403);
@@ -4043,7 +4101,7 @@ async function syncSheets(env, tabs = null, empresa_id = 1) {
     const authH   = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
 
     const tabsNecesarias = ['Elec-Bobinas', 'Elec-PEMP', 'Elec-Carretillas', 'Mec-PEMP', 'Mec-Carretillas', 'Seg-Inventario', 'Elec-Herramientas', 'Mec-Herramientas', 'Kits'];
-    const tabsAntiguas   = ['Bobinas', 'PEMP', 'Carretillas', 'âš¡ Bobinas', 'âš¡ PEMP', 'âš¡ Carretillas', 'ðŸ”§ PEMP', 'ðŸ”§ Carretillas'];
+    const tabsAntiguas   = ['Bobinas', 'PEMP', 'Carretillas', 'âš¡ Bobinas', 'âš¡ PEMP', 'âš¡ Carretillas', 'ðŸ"§ PEMP', 'ðŸ"§ Carretillas'];
     const tabsToSync     = tabs ? (Array.isArray(tabs) ? tabs : [tabs]) : tabsNecesarias;
 
     // Metadata: incluye bandedRanges y conditionalFormats para poder limpiarlos antes de re-aplicar
@@ -4453,7 +4511,7 @@ async function applyTabFormatting(spreadsheetId, authH, tabName, sheetMeta, numC
 }
 
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-// SYNC RRHH â€” Fichajes, Incidencias, Carnets, EPIs, Turnos, Repostajes (SYNC-03)
+// SYNC RRHH â€" Fichajes, Incidencias, Carnets, EPIs, Turnos, Repostajes (SYNC-03)
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 async function syncRRHH(env, tabs = null, empresa_id = 1) {
   if (!env.GOOGLE_PRIVATE_KEY || !env.GOOGLE_CLIENT_EMAIL || !env.GOOGLE_SHEET_ID) return;
@@ -4606,7 +4664,7 @@ async function syncSheetsDebug(env) {
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 async function handleOCR(request, env) {
-  // SEC-09: requiere sesiÃ³n vÃ¡lida â€” evita consumo de cuota de Cloud Vision sin autenticar
+  // SEC-09: requiere sesiÃ³n vÃ¡lida â€" evita consumo de cuota de Cloud Vision sin autenticar
   const xTokOcr = request.headers.get('X-Token');
   if (!xTokOcr) return err('No autorizado', 401);
   const _sOcr = await env.DB.prepare("SELECT id FROM sesiones WHERE token = ? AND (expires_at IS NULL OR expires_at > datetime('now'))").bind(xTokOcr).first().catch(() => null);
@@ -4667,7 +4725,7 @@ async function handleOCR(request, env) {
 }
 
 async function handleScan(request, env) {
-  // SEC-09: requiere sesiÃ³n vÃ¡lida â€” evita consumo de cuota de Gemini sin autenticar
+  // SEC-09: requiere sesiÃ³n vÃ¡lida â€" evita consumo de cuota de Gemini sin autenticar
   const xTokScan = request.headers.get('X-Token');
   if (!xTokScan) return err('No autorizado', 401);
   const _sScan = await env.DB.prepare("SELECT id FROM sesiones WHERE token = ? AND (expires_at IS NULL OR expires_at > datetime('now'))").bind(xTokScan).first().catch(() => null);
@@ -4766,7 +4824,7 @@ async function crearItemSeg(request, env, ctx) {
     const id = r.meta.last_row_id;
     await env.DB.prepare('INSERT INTO movimientos_seg (item_id, accion, cantidad, usuario, fecha) VALUES (?, ?, ?, ?, ?)').bind(id, 'entrada', cantidad_total, reg, fecha).run();
     if (fecha_caducidad) {
-      await sendTelegram(env, `ðŸ“¦ <b>Nuevo material Seguridad</b>\nðŸ”– ${cod || tipo_material}  ðŸ“‹ ${tipo_material}\nðŸ“… Caduca: ${fecha_caducidad}\nðŸ‘¤ ${reg}`);
+      await sendTelegram(env, `ðŸ"¦ <b>Nuevo material Seguridad</b>\nðŸ"– ${cod || tipo_material}  ðŸ"‹ ${tipo_material}\nðŸ"… Caduca: ${fecha_caducidad}\nðŸ‘¤ ${reg}`);
     }
     ctx?.waitUntil(syncSheets(env, 'Seg-Inventario', empresa_id));
     return json({ ok: true, id, mensaje: `${tipo_material} registrado` }, 201);
@@ -4813,10 +4871,10 @@ async function moverItemSeg(id, request, env, ctx) {
       await env.DB.prepare('UPDATE inventario_seg SET cantidad_disponible = ?, estado = ?, destino_actual = ? WHERE id = ?').bind(nueva, nueva === 0 ? 'en_uso' : 'disponible', destino || '', id).run();
     }
     await env.DB.prepare('INSERT INTO movimientos_seg (item_id, accion, cantidad, destino, usuario, notas, fecha) VALUES (?, ?, ?, ?, ?, ?, ?)').bind(id, 'salida', cantidad, destino || '', usuario || '', notas || '', fecha).run();
-    if (destino) await sendTelegram(env, `ðŸ“¤ <b>Material Seguridad â€” Salida</b>\nðŸ”– ${item.codigo || item.nombre}  ðŸ“‹ ${item.tipo_material}\nðŸ— Destino: ${destino}\nðŸ‘¤ ${usuario || 'â€”'}`);
+    if (destino) await sendTelegram(env, `ðŸ"¤ <b>Material Seguridad â€" Salida</b>\nðŸ"– ${item.codigo || item.nombre}  ðŸ"‹ ${item.tipo_material}\nðŸ— Destino: ${destino}\nðŸ‘¤ ${usuario || 'â€"'}`);
     // Alerta stock mÃ­nimo (modo cantidad)
     if (item.modo === 'cantidad' && item.stock_minimo > 0 && nuevaCantidad !== null && nuevaCantidad < item.stock_minimo) {
-      await sendTelegram(env, `âš ï¸ <b>Stock mÃ­nimo alcanzado â€” Seguridad</b>\nðŸ“¦ ${item.nombre || item.tipo_material}\nðŸ“‰ Disponible: <b>${nuevaCantidad}</b> (mÃ­nimo: ${item.stock_minimo})\nðŸ‘¤ ${usuario || 'â€”'}`);
+      await sendTelegram(env, `âš ï¸ <b>Stock mÃ­nimo alcanzado â€" Seguridad</b>\nðŸ"¦ ${item.nombre || item.tipo_material}\nðŸ"‰ Disponible: <b>${nuevaCantidad}</b> (mÃ­nimo: ${item.stock_minimo})\nðŸ‘¤ ${usuario || 'â€"'}`);
     }
     ctx?.waitUntil(syncSheets(env, 'Seg-Inventario', item.empresa_id));
     return json({ ok: true, mensaje: 'Salida registrada' });
@@ -4837,7 +4895,7 @@ async function moverItemSeg(id, request, env, ctx) {
   if (accion === 'baja') {
     await env.DB.prepare('UPDATE inventario_seg SET estado = ? WHERE id = ?').bind('baja', id).run();
     await env.DB.prepare('INSERT INTO movimientos_seg (item_id, accion, cantidad, usuario, notas, fecha) VALUES (?, ?, ?, ?, ?, ?)').bind(id, 'baja', cantidad, usuario || '', notas || '', fecha).run();
-    await sendTelegram(env, `ðŸ—‘ï¸ <b>Material Seguridad â€” Baja</b>\nðŸ”– ${item.codigo || item.nombre}  ðŸ“‹ ${item.tipo_material}\nðŸ‘¤ ${usuario || 'â€”'}`);
+    await sendTelegram(env, `ðŸ—‘ï¸ <b>Material Seguridad â€" Baja</b>\nðŸ"– ${item.codigo || item.nombre}  ðŸ"‹ ${item.tipo_material}\nðŸ‘¤ ${usuario || 'â€"'}`);
     ctx?.waitUntil(syncSheets(env, 'Seg-Inventario', item.empresa_id));
     return json({ ok: true, mensaje: 'Dado de baja' });
   }
@@ -4901,7 +4959,7 @@ async function cierreAutomaticoJornada(env) {
 
     if (cerrados > 0) {
       await sendTelegram(env,
-        `â° <b>Cierre automÃ¡tico de jornada</b>\nðŸ“… ${hoy}\nâœ… ${cerrados} fichaje${cerrados > 1 ? 's cerrados' : ' cerrado'} automÃ¡ticamente con hora del horario de obra.`
+        `â° <b>Cierre automÃ¡tico de jornada</b>\nðŸ"… ${hoy}\nâœ… ${cerrados} fichaje${cerrados > 1 ? 's cerrados' : ' cerrado'} automÃ¡ticamente con hora del horario de obra.`
       );
     }
   } catch (e) {
@@ -4915,7 +4973,7 @@ async function cierreAutomaticoJornada(env) {
 
 async function informeSemanal(empresa_id, empresa_nombre, env) {
   try {
-    // Rango: semana anterior completa (lunesâ€“domingo)
+    // Rango: semana anterior completa (lunesâ€"domingo)
     const hoy  = new Date();
     const dow   = hoy.getDay(); // 0=dom â€¦ 6=sÃ¡b
     const diasDesdeL = dow === 0 ? 6 : dow - 1;
@@ -4980,12 +5038,12 @@ async function informeSemanal(empresa_id, empresa_nombre, env) {
 
     // ComposiciÃ³n del mensaje
     const semStr = `${desde} al ${hasta}`;
-    let msg = `ðŸ“Š <b>Informe semanal â€” ${empresa_nombre}</b>\n`;
+    let msg = `ðŸ"Š <b>Informe semanal â€" ${empresa_nombre}</b>\n`;
     msg += `<i>Semana: ${semStr}</i>\n\n`;
     msg += `ðŸ‘· <b>Fichajes:</b> ${fich.total || 0} registros Â· ${horasTotStr}${retrasoStr}\n`;
-    msg += `ðŸ”§ <b>Equipos sin servicio:</b> ${nEquiposMant}\n`;
+    msg += `ðŸ"§ <b>Equipos sin servicio:</b> ${nEquiposMant}\n`;
     msg += `ðŸ›  <b>Herramientas fuera:</b> ${nHerrFuera}\n`;
-    msg += `ðŸ“¦ <b>Pedidos pendientes:</b> ${nPedPend}\n`;
+    msg += `ðŸ"¦ <b>Pedidos pendientes:</b> ${nPedPend}\n`;
     msg += `ðŸš¨ <b>Incidencias abiertas:</b> ${nIncAb}\n`;
     if (stockBajo > 0) msg += `âš ï¸ <b>Alertas de stock bajo:</b> ${stockBajo}\n`;
     msg += `\n_Generado automÃ¡ticamente por Alejandra App_`;
@@ -5006,7 +5064,7 @@ async function alertasDiarias(env) {
       await env.DB.prepare("DELETE FROM vincular_tokens WHERE expires_at < datetime('now')").run();
     } catch(e) { console.error('cleanup tokens error:', e.message); }
 
-    // 0. Informe semanal â€” para cada empresa que lo tenga activado en el dÃ­a de hoy
+    // 0. Informe semanal â€" para cada empresa que lo tenga activado en el dÃ­a de hoy
     const DIAS_ES = { 'lunes':1,'martes':2,'miÃ©rcoles':3,'miercoles':3,'jueves':4,'viernes':5,'sÃ¡bado':6,'sabado':6,'domingo':0 };
     const dowHoy  = hoy.getDay(); // 0=dom â€¦ 6=sÃ¡b
     try {
@@ -5040,7 +5098,7 @@ async function alertasDiarias(env) {
     const averiadas = [];
     for (const m of [...(avPemp.results||[]), ...(avCarr.results||[])]) {
       const dias = Math.floor((hoy - new Date(m.fecha_averia)) / 86400000);
-      if (dias >= DIAS_AVERIA) averiadas.push(`ðŸ”– ${m.matricula}${empLabel(m.empresa_id)} â€” ${dias} dÃ­as averiada`);
+      if (dias >= DIAS_AVERIA) averiadas.push(`ðŸ"– ${m.matricula}${empLabel(m.empresa_id)} â€" ${dias} dÃ­as averiada`);
     }
     if (averiadas.length) {
       await sendTelegram(env,
@@ -5048,7 +5106,7 @@ async function alertasDiarias(env) {
       );
     }
 
-    // 2. Revisiones prÃ³ximas â€” usa dias_aviso_mant por equipo (default 15) cuando aviso_mantenimiento=1
+    // 2. Revisiones prÃ³ximas â€" usa dias_aviso_mant por equipo (default 15) cuando aviso_mantenimiento=1
     const DIAS_AVISO_DEFAULT = 15;
     const maxLimite = new Date(hoy); maxLimite.setDate(maxLimite.getDate() + 365); // ventana amplia
     const maxLimiteStr = maxLimite.toISOString().slice(0, 10);
@@ -5064,12 +5122,12 @@ async function alertasDiarias(env) {
       if (!aviso) continue;
       const diasAviso = m.dias_aviso_mant || DIAS_AVISO_DEFAULT;
       const dias = Math.floor((new Date(m.fecha_proxima_revision) - hoy) / 86400000);
-      if (dias < 0) revisiones.push(`ðŸ”– ${m.matricula}${empLabel(m.empresa_id)} â€” VENCIDA hace ${Math.abs(dias)} dÃ­as`);
-      else if (dias <= diasAviso) revisiones.push(`ðŸ”– ${m.matricula}${empLabel(m.empresa_id)} â€” vence en ${dias} dÃ­as (${m.fecha_proxima_revision})`);
+      if (dias < 0) revisiones.push(`ðŸ"– ${m.matricula}${empLabel(m.empresa_id)} â€" VENCIDA hace ${Math.abs(dias)} dÃ­as`);
+      else if (dias <= diasAviso) revisiones.push(`ðŸ"– ${m.matricula}${empLabel(m.empresa_id)} â€" vence en ${dias} dÃ­as (${m.fecha_proxima_revision})`);
     }
     if (revisiones.length) {
       await sendTelegram(env,
-        `ðŸ“… <b>Revisiones prÃ³ximas o vencidas</b>\n\n` + revisiones.join('\n')
+        `ðŸ"… <b>Revisiones prÃ³ximas o vencidas</b>\n\n` + revisiones.join('\n')
       );
     }
 
@@ -5085,13 +5143,13 @@ async function alertasDiarias(env) {
       const lineas = matCad.results.map(m => {
         const dias = Math.floor((new Date(m.fecha_caducidad) - hoy) / 86400000);
         return dias < 0
-          ? `â›” ${m.codigo||m.nombre} (${m.tipo_material})${empLabel(m.empresa_id)} â€” CADUCADO hace ${Math.abs(dias)} dÃ­as`
-          : `âš ï¸ ${m.codigo||m.nombre} (${m.tipo_material})${empLabel(m.empresa_id)} â€” caduca en ${dias} dÃ­as (${m.fecha_caducidad})`;
+          ? `â›" ${m.codigo||m.nombre} (${m.tipo_material})${empLabel(m.empresa_id)} â€" CADUCADO hace ${Math.abs(dias)} dÃ­as`
+          : `âš ï¸ ${m.codigo||m.nombre} (${m.tipo_material})${empLabel(m.empresa_id)} â€" caduca en ${dias} dÃ­as (${m.fecha_caducidad})`;
       });
-      await sendTelegram(env, `ðŸ·ï¸ <b>Material Seguridad â€” Caducidad prÃ³xima</b>\n\n` + lineas.join('\n'));
+      await sendTelegram(env, `ðŸ·ï¸ <b>Material Seguridad â€" Caducidad prÃ³xima</b>\n\n` + lineas.join('\n'));
     }
 
-    // 4. Carnets y certificaciones â€” caducidad prÃ³xima o vencida
+    // 4. Carnets y certificaciones â€" caducidad prÃ³xima o vencida
     const carnetsCad = await env.DB.prepare(
       `SELECT c.nombre_trabajador, c.tipo, c.fecha_caducidad, c.dias_aviso, c.usuario_id,
               c.empresa_id, u.telegram_id
@@ -5103,24 +5161,24 @@ async function alertasDiarias(env) {
       const dias = Math.floor((new Date(c.fecha_caducidad) - hoy) / 86400000);
       const aviso = c.dias_aviso || 30;
       let linea = null;
-      if (dias < 0) linea = `â›” ${c.nombre_trabajador}${empLabel(c.empresa_id)} â€” ${c.tipo} CADUCADO hace ${Math.abs(dias)} dÃ­as`;
-      else if (dias <= aviso) linea = `âš ï¸ ${c.nombre_trabajador}${empLabel(c.empresa_id)} â€” ${c.tipo} caduca en ${dias} dÃ­as (${c.fecha_caducidad})`;
+      if (dias < 0) linea = `â›" ${c.nombre_trabajador}${empLabel(c.empresa_id)} â€" ${c.tipo} CADUCADO hace ${Math.abs(dias)} dÃ­as`;
+      else if (dias <= aviso) linea = `âš ï¸ ${c.nombre_trabajador}${empLabel(c.empresa_id)} â€" ${c.tipo} caduca en ${dias} dÃ­as (${c.fecha_caducidad})`;
       if (linea) {
         carnetAlertas.push(linea);
         // NotificaciÃ³n personal al trabajador si tiene Telegram vinculado
         if (c.telegram_id) {
           const msg = dias < 0
-            ? `ðŸ“œ <b>Tu carnet ha caducado</b>\n\nTipo: ${c.tipo}\nCaducÃ³: ${c.fecha_caducidad}\n\nâš ï¸ RenuÃ©valo lo antes posible.`
-            : `ðŸ“œ <b>Tu carnet caduca pronto</b>\n\nTipo: ${c.tipo}\nCaduca: ${c.fecha_caducidad} (<b>${dias} dÃ­as</b>)\n\nRecuerda renovarlo a tiempo.`;
+            ? `ðŸ"œ <b>Tu carnet ha caducado</b>\n\nTipo: ${c.tipo}\nCaducÃ³: ${c.fecha_caducidad}\n\nâš ï¸ RenuÃ©valo lo antes posible.`
+            : `ðŸ"œ <b>Tu carnet caduca pronto</b>\n\nTipo: ${c.tipo}\nCaduca: ${c.fecha_caducidad} (<b>${dias} dÃ­as</b>)\n\nRecuerda renovarlo a tiempo.`;
           await sendTelegramToChat(env, c.telegram_id, msg);
         }
       }
     }
     if (carnetAlertas.length) {
-      await sendTelegram(env, `ðŸ“œ <b>Carnets y certificaciones â€” Caducidad prÃ³xima</b>\n\n` + carnetAlertas.join('\n'));
+      await sendTelegram(env, `ðŸ"œ <b>Carnets y certificaciones â€" Caducidad prÃ³xima</b>\n\n` + carnetAlertas.join('\n'));
     }
 
-    // 5. Eventos del calendario â€” hoy + recordatorios previos
+    // 5. Eventos del calendario â€" hoy + recordatorios previos
     const hoyStr = hoy.toISOString().slice(0, 10);
     const { results: eventosHoy } = await env.DB.prepare(
       `SELECT e.titulo, e.hora, e.tipo, o.nombre as obra_nombre
@@ -5128,11 +5186,11 @@ async function alertasDiarias(env) {
        WHERE e.fecha = ? ORDER BY e.hora ASC`
     ).bind(hoyStr).all();
     if (eventosHoy.length) {
-      const tipoIcon = { entrega:'ðŸ“¦', revision:'ðŸ”§', reunion:'ðŸ‘¥', otro:'ðŸ“…' };
+      const tipoIcon = { entrega:'ðŸ"¦', revision:'ðŸ"§', reunion:'ðŸ‘¥', otro:'ðŸ"…' };
       const lineas = eventosHoy.map(ev =>
-        `${tipoIcon[ev.tipo]||'ðŸ“…'} ${ev.titulo}${ev.hora ? ' â€” ' + ev.hora : ''}${ev.obra_nombre ? ' [' + ev.obra_nombre + ']' : ''}`
+        `${tipoIcon[ev.tipo]||'ðŸ"…'} ${ev.titulo}${ev.hora ? ' â€" ' + ev.hora : ''}${ev.obra_nombre ? ' [' + ev.obra_nombre + ']' : ''}`
       );
-      await sendTelegram(env, `ðŸ“… <b>Eventos de hoy (${hoyStr})</b>\n\n` + lineas.join('\n'));
+      await sendTelegram(env, `ðŸ"… <b>Eventos de hoy (${hoyStr})</b>\n\n` + lineas.join('\n'));
     }
     // Recordatorios anticipados (recordatorio_dias > 0)
     const { results: recordatorios } = await env.DB.prepare(`
@@ -5143,14 +5201,14 @@ async function alertasDiarias(env) {
     for (const ev of recordatorios) {
       const diasFaltan = Math.floor((new Date(ev.fecha) - hoy) / 86400000);
       if (diasFaltan === ev.recordatorio_dias) {
-        const tipoIcon = { entrega:'ðŸ“¦', revision:'ðŸ”§', reunion:'ðŸ‘¥', otro:'ðŸ“…' };
+        const tipoIcon = { entrega:'ðŸ"¦', revision:'ðŸ"§', reunion:'ðŸ‘¥', otro:'ðŸ"…' };
         await sendTelegram(env,
-          `â° <b>Recordatorio â€” faltan ${diasFaltan} dÃ­a${diasFaltan===1?'':'s'}</b>\n${tipoIcon[ev.tipo]||'ðŸ“…'} ${ev.titulo} (${ev.fecha}${ev.hora ? ' ' + ev.hora : ''})${ev.obra_nombre ? '\nðŸ— ' + ev.obra_nombre : ''}`
+          `â° <b>Recordatorio â€" faltan ${diasFaltan} dÃ­a${diasFaltan===1?'':'s'}</b>\n${tipoIcon[ev.tipo]||'ðŸ"…'} ${ev.titulo} (${ev.fecha}${ev.hora ? ' ' + ev.hora : ''})${ev.obra_nombre ? '\nðŸ— ' + ev.obra_nombre : ''}`
         );
       }
     }
 
-    // RGPD â€” aplicar retenciÃ³n automÃ¡tica a todas las empresas que la tengan activa
+    // RGPD â€" aplicar retenciÃ³n automÃ¡tica a todas las empresas que la tengan activa
     try {
       const { results: empresasRgpd } = await env.DB.prepare(
         `SELECT id FROM empresas WHERE activa=1 AND retencion_config IS NOT NULL`
@@ -5241,7 +5299,7 @@ async function googleAuthCallback(request, env) {
       await env.DB.prepare(
         'INSERT INTO sesiones (token, usuario_id, empresa_id, nombre, rol, departamento, obra_id, created_at) VALUES (?,?,?,?,?,?,?,?)'
       ).bind(token, nuevoUser.id, inv.empresa_id, gUser.name || gUser.email, inv.rol, inv.departamento || null, null, ahora).run();
-      await sendTelegram(env, `âœ… <b>Nuevo usuario registrado</b>\nðŸ‘¤ ${gUser.name || gUser.email}\nðŸ“§ ${gUser.email}\nRol: ${inv.rol} | Dpto: ${inv.departamento || 'â€”'} | Empresa: ${empresa?.nombre || inv.empresa_id}`);
+      await sendTelegram(env, `âœ… <b>Nuevo usuario registrado</b>\nðŸ‘¤ ${gUser.name || gUser.email}\nðŸ"§ ${gUser.email}\nRol: ${inv.rol} | Dpto: ${inv.departamento || 'â€"'} | Empresa: ${empresa?.nombre || inv.empresa_id}`);
       return json({ ok: true, token, nombre: gUser.name || gUser.email, rol: inv.rol, departamento: inv.departamento || null, empresa_id: inv.empresa_id, empresa_nombre: empresa?.nombre || '', obra_id: null, obra_nombre: null, usuario_id: nuevoUser?.id || null });
     }
 
@@ -5259,7 +5317,7 @@ async function googleAuthCallback(request, env) {
     const pendingId = rIns.meta?.last_row_id;
     if (pendingId) {
       await sendTelegramConBotones(env,
-        `ðŸ”” <b>Solicitud de acceso con Google</b>\nðŸ‘¤ ${gUser.name || gUser.email}\nðŸ“§ ${gUser.email}`,
+        `ðŸ"" <b>Solicitud de acceso con Google</b>\nðŸ‘¤ ${gUser.name || gUser.email}\nðŸ"§ ${gUser.email}`,
         [
           [
             { text: 'âœ… Operario ElÃ©c (E3)', callback_data: `apr:${pendingId}:3:operario:electrico` },
@@ -5273,7 +5331,7 @@ async function googleAuthCallback(request, env) {
         ]
       );
     } else {
-      await sendTelegram(env, `ðŸ”” <b>Solicitud de acceso con Google</b>\nðŸ‘¤ ${gUser.name || gUser.email}\nðŸ“§ ${gUser.email}\nRevisar en Ajustes â†’ Usuarios â†’ Solicitudes de acceso`);
+      await sendTelegram(env, `ðŸ"" <b>Solicitud de acceso con Google</b>\nðŸ‘¤ ${gUser.name || gUser.email}\nðŸ"§ ${gUser.email}\nRevisar en Ajustes â†’ Usuarios â†’ Solicitudes de acceso`);
     }
     return json({ ok: false, pendiente: true, msg: 'Solicitud enviada correctamente. El administrador debe aprobarla para que puedas acceder.' });
   }
@@ -5367,7 +5425,7 @@ async function aprobarUsuarioPendiente(request, env) {
     'UPDATE usuarios SET activo=1, google_pending=0, empresa_id=?, rol=?, departamento=?, obra_id=? WHERE id=? AND google_pending=1'
   ).bind(empresa_id, rol, departamento || null, obra_id || null, id).run();
   const u = await env.DB.prepare('SELECT nombre, email FROM usuarios WHERE id=?').bind(id).first();
-  await sendTelegram(env, `âœ… <b>Acceso aprobado</b>\nðŸ‘¤ ${u?.nombre || 'â€”'}\nðŸ“§ ${u?.email || 'â€”'}\nRol: ${rol} | Empresa ID: ${empresa_id}`);
+  await sendTelegram(env, `âœ… <b>Acceso aprobado</b>\nðŸ‘¤ ${u?.nombre || 'â€"'}\nðŸ"§ ${u?.email || 'â€"'}\nRol: ${rol} | Empresa ID: ${empresa_id}`);
   return json({ ok: true });
 }
 
@@ -5379,11 +5437,11 @@ async function rechazarUsuarioPendiente(request, env) {
   const u = await env.DB.prepare('SELECT nombre, email FROM usuarios WHERE id=? AND google_pending=1').bind(id).first();
   if (!u) return err('Solicitud no encontrada', 404);
   await env.DB.prepare('DELETE FROM usuarios WHERE id=? AND google_pending=1').bind(id).run();
-  await sendTelegram(env, `âŒ <b>Acceso rechazado</b>\nðŸ‘¤ ${u.nombre || 'â€”'}\nðŸ“§ ${u.email || 'â€”'}`);
+  await sendTelegram(env, `âŒ <b>Acceso rechazado</b>\nðŸ‘¤ ${u.nombre || 'â€"'}\nðŸ"§ ${u.email || 'â€"'}`);
   return json({ ok: true });
 }
 
-// â”€â”€ R2 Archivos (NEW-03 + MEJ-13) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â"€â"€ R2 Archivos (NEW-03 + MEJ-13) â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 async function listarArchivos(request, env) {
   const { empresa_id } = await getAuth(request, env);
@@ -5455,7 +5513,7 @@ async function borrarArchivo(id, request, env) {
   return json({ ok: true });
 }
 
-// â”€â”€ Calendario (NEW-13) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â"€â"€ Calendario (NEW-13) â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 async function getFestivos(request, env) {
   const url  = new URL(request.url);
@@ -5536,7 +5594,7 @@ async function eliminarEvento(id, request, env) {
   return json({ ok: true });
 }
 
-// â”€â”€ Incidencias (NEW-22) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â"€â"€ Incidencias (NEW-22) â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 async function getIncidencias(request, env) {
   const auth = await getAuth(request, env);
@@ -5574,8 +5632,8 @@ async function crearIncidencia(request, env, ctx) {
     'INSERT INTO incidencias (empresa_id, obra_id, departamento, titulo, descripcion, tipo, gravedad, estado, reportado_por, asignado_a, fecha) VALUES (?,?,?,?,?,?,?,?,?,?,?)'
   ).bind(empresa_id, obraFinal, dept, titulo.trim(), descripcion || null, tipo, gravedad, 'abierta', nombre || null, asignado_a || null, fechaFinal).run();
   if (gravedad === 'alta') {
-    const gravedadIcon = { baja: 'ðŸŸ¢', media: 'ðŸŸ ', alta: 'ðŸ”´' };
-    await sendTelegram(env, `${gravedadIcon[gravedad]} <b>Incidencia ALTA [${dept}]</b>\nðŸ“‹ ${titulo.trim()}\n${descripcion ? 'ðŸ“ ' + descripcion.slice(0,200) + '\n' : ''}ðŸ‘¤ ${nombre || 'â€”'}`);
+    const gravedadIcon = { baja: 'ðŸŸ¢', media: 'ðŸŸ ', alta: 'ðŸ"´' };
+    await sendTelegram(env, `${gravedadIcon[gravedad]} <b>Incidencia ALTA [${dept}]</b>\nðŸ"‹ ${titulo.trim()}\n${descripcion ? 'ðŸ" ' + descripcion.slice(0,200) + '\n' : ''}ðŸ‘¤ ${nombre || 'â€"'}`);
   }
   ctx?.waitUntil(syncRRHH(env, 'Incidencias', empresa_id));
   return json({ ok: true, id: r.meta.last_row_id }, 201);
@@ -5604,7 +5662,7 @@ async function actualizarIncidencia(id, request, env, ctx) {
   await env.DB.prepare(`UPDATE incidencias SET ${campos.join(',')} WHERE id=? AND empresa_id=?`).bind(...vals).run();
   // Telegram al resolver
   if (body.estado === 'resuelta') {
-    await sendTelegram(env, `âœ… <b>Incidencia resuelta [${inc.departamento}]</b>\nðŸ“‹ ${inc.titulo}\n${body.resolucion ? 'ðŸ“ ' + body.resolucion.slice(0,200) : ''}`);
+    await sendTelegram(env, `âœ… <b>Incidencia resuelta [${inc.departamento}]</b>\nðŸ"‹ ${inc.titulo}\n${body.resolucion ? 'ðŸ" ' + body.resolucion.slice(0,200) : ''}`);
   }
   ctx?.waitUntil(syncRRHH(env, 'Incidencias', empresa_id));
   return json({ ok: true });
@@ -5674,7 +5732,7 @@ async function borrarFotoIncidencia(id, request, env) {
   return json({ ok: true });
 }
 
-// â”€â”€ Albaranes de pedidos (NEW-25) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â"€â"€ Albaranes de pedidos (NEW-25) â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 async function getAlbaranesPedido(pedido_id, request, env) {
   const { empresa_id } = await getAuth(request, env);
@@ -5741,7 +5799,7 @@ async function borrarAlbaran(id, request, env) {
   return json({ ok: true });
 }
 
-// â”€â”€ DocumentaciÃ³n departamentos â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â"€â"€ DocumentaciÃ³n departamentos â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 async function listarCarpetas(request, env) {
   const { empresa_id } = await getAuth(request, env);
@@ -5905,7 +5963,7 @@ async function editarDocDept(id, request, env) {
   return json({ ok: true });
 }
 
-// â”€â”€ Renombrar carpeta â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â"€â"€ Renombrar carpeta â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 async function renombrarCarpeta(id, request, env) {
   const { empresa_id, rol } = await getAuth(request, env);
   if (!empresa_id) return err('No autorizado', 403);
@@ -5918,7 +5976,7 @@ async function renombrarCarpeta(id, request, env) {
   return json({ ok: true });
 }
 
-// â”€â”€ Borrar carpeta de forma recursiva (helper) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â"€â"€ Borrar carpeta de forma recursiva (helper) â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 async function borrarCarpetaRecursive(id, empresa_id, env) {
   const { results: docs } = await env.DB.prepare('SELECT r2_key FROM docs_dept WHERE carpeta_id = ? AND empresa_id = ?').bind(id, empresa_id).all();
   await Promise.all(docs.map(d => env.FILES.delete(d.r2_key)));
@@ -5929,7 +5987,7 @@ async function borrarCarpetaRecursive(id, empresa_id, env) {
   await env.DB.prepare('DELETE FROM carpetas WHERE id = ? AND empresa_id = ?').bind(id, empresa_id).run();
 }
 
-// â”€â”€ Notas de texto (docs_notas) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â"€â"€ Notas de texto (docs_notas) â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 async function listarNotas(request, env) {
   const { empresa_id } = await getAuth(request, env);
   if (!empresa_id) return err('No autorizado', 403);
@@ -6060,7 +6118,7 @@ async function eliminarTurno(id, request, env) {
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-// RGPD / LOPD â€” ProtecciÃ³n de datos
+// RGPD / LOPD â€" ProtecciÃ³n de datos
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 async function rgpdInforme(request, env) {
@@ -6123,7 +6181,7 @@ async function rgpdAnonimizar(request, env) {
     env.DB.prepare(`UPDATE usuarios SET nombre='Usuario anonimizado', email=NULL, password_hash=NULL, telegram_id=NULL, foto_r2_key=NULL, activo=0 WHERE id=? AND empresa_id=?`).bind(uid,eid).run(),
     // Anonimizar nombre en mensajes de chat
     env.DB.prepare(`UPDATE chat_mensajes SET usuario_nombre='Trabajador anonimizado' WHERE usuario_id=? AND empresa_id=?`).bind(uid,eid).run(),
-    // Anonimizar nombre en carnets y EPIs (RGPD â€” tambiÃ©n son datos personales)
+    // Anonimizar nombre en carnets y EPIs (RGPD â€" tambiÃ©n son datos personales)
     env.DB.prepare(`UPDATE carnets SET nombre_trabajador='Trabajador anonimizado' WHERE usuario_id=? AND empresa_id=?`).bind(uid,eid).run().catch(()=>{}),
     env.DB.prepare(`UPDATE epis_asignados SET nombre_trabajador='Trabajador anonimizado' WHERE usuario_id=? AND empresa_id=?`).bind(uid,eid).run().catch(()=>{}),
     env.DB.prepare(`UPDATE turnos SET nombre_trabajador='Trabajador anonimizado' WHERE usuario_id=? AND empresa_id=?`).bind(uid,eid).run().catch(()=>{}),
@@ -6263,7 +6321,7 @@ async function buscarGlobal(request, env) {
     env.DB.prepare(`SELECT id,'incidencia' as tipo,titulo as nombre,tipo as subtipo,estado FROM incidencias WHERE empresa_id=? AND titulo LIKE ? LIMIT 5`).bind(eid,like).all(),
     env.DB.prepare(`SELECT id,'pemp' as tipo,matricula as nombre,tipo as subtipo,estado FROM pemp WHERE empresa_id=? AND (matricula LIKE ? OR marca LIKE ?) AND estado!='baja' LIMIT 5`).bind(eid,like,like).all(),
     env.DB.prepare(`SELECT id,'carretilla' as tipo,matricula as nombre,tipo as subtipo,estado FROM carretillas WHERE empresa_id=? AND (matricula LIKE ? OR marca LIKE ?) AND estado!='baja' LIMIT 5`).bind(eid,like,like).all(),
-    env.DB.prepare(`SELECT h.id,'herramienta' as tipo,COALESCE(t.nombre,h.numero_serie,'â€”') as nombre,h.estado as subtipo,h.estado FROM herramientas h LEFT JOIN tipos_herramienta t ON h.tipo_id=t.id WHERE h.empresa_id=? AND (h.numero_serie LIKE ? OR t.nombre LIKE ?) LIMIT 5`).bind(eid,like,like).all(),
+    env.DB.prepare(`SELECT h.id,'herramienta' as tipo,COALESCE(t.nombre,h.numero_serie,'â€"') as nombre,h.estado as subtipo,h.estado FROM herramientas h LEFT JOIN tipos_herramienta t ON h.tipo_id=t.id WHERE h.empresa_id=? AND (h.numero_serie LIKE ? OR t.nombre LIKE ?) LIMIT 5`).bind(eid,like,like).all(),
     env.DB.prepare(`SELECT id,'usuario' as tipo,nombre,rol as subtipo,NULL as estado FROM usuarios WHERE empresa_id=? AND nombre LIKE ? AND activo=1 LIMIT 5`).bind(eid,like).all(),
     env.DB.prepare(`SELECT id,'pedido' as tipo,descripcion as nombre,departamento as subtipo,estado FROM pedidos WHERE empresa_id=? AND descripcion LIKE ? LIMIT 5`).bind(eid,like).all(),
     env.DB.prepare(`SELECT id,'obra' as tipo,nombre,codigo as subtipo,CASE WHEN activa=1 THEN 'activa' ELSE 'cerrada' END as estado FROM obras WHERE empresa_id=? AND (nombre LIKE ? OR codigo LIKE ?) LIMIT 5`).bind(eid,like,like).all(),
@@ -6305,16 +6363,82 @@ async function telegramDesvincular(request, env) {
 }
 
 async function telegramWebhook(request, env) {
-  // Verificar que viene de Telegram con el secret derivado del token del bot
   const secret = request.headers.get('X-Telegram-Bot-Api-Secret-Token');
   const expectedSecret = env.TELEGRAM_WEBHOOK_SECRET || env.TELEGRAM_BOT_TOKEN?.split(':')[1]?.slice(0, 32) || '';
-  if (!expectedSecret || secret !== expectedSecret) return json({ ok: true }); // rechazar â€” sin secret configurado rechaza todo
   const update = await request.json().catch(() => null);
   if (!update) return json({ ok: true });
-  const msg    = update.message;
-  if (!msg)    return json({ ok: true });
+  // Validar secret — pero si el mensaje es del dev lo dejamos pasar igual
+  const fromDev = String(update.message?.chat?.id) === String(env.DEV_CHAT_ID);
+  if (!fromDev && expectedSecret && secret !== expectedSecret) return json({ ok: true });
+
+  // --- Callback queries (botones inline) ---
+  if (update.callback_query) {
+    const cq = update.callback_query;
+    const data = cq.data || '';
+    const chatId = cq.message?.chat?.id;
+    const msgId = cq.message?.message_id;
+    const orig = cq.message?.text || '';
+    const [accion, ...partes] = data.split(':');
+    try {
+      if (accion === 'apr') {
+        const [userId, empresaId, rol, dept] = partes;
+        await env.DB.prepare('UPDATE usuarios SET activo=1, google_pending=0, empresa_id=?, rol=?, departamento=? WHERE id=? AND google_pending=1').bind(parseInt(empresaId), rol, dept === 'null' ? null : dept, parseInt(userId)).run();
+        await _tgAnswerCQ(env, cq.id, '✅ Usuario aprobado');
+        await _tgEditMsg(env, chatId, msgId, orig + `\n\n✅ <b>APROBADO</b> — ${rol} · ${dept === 'null' ? '—' : dept}`);
+      } else if (accion === 'rej') {
+        const [userId] = partes;
+        await env.DB.prepare('DELETE FROM usuarios WHERE id=? AND google_pending=1').bind(parseInt(userId)).run();
+        await _tgAnswerCQ(env, cq.id, '❌ Solicitud rechazada');
+        await _tgEditMsg(env, chatId, msgId, orig + '\n\n❌ <b>RECHAZADO</b>');
+      } else if (accion === 'idea_prog') {
+        await env.DB.prepare('UPDATE sugerencias SET estado=? WHERE id=?').bind('en_progreso', parseInt(partes[0])).run();
+        await _tgAnswerCQ(env, cq.id, '🔄 En progreso');
+        await _tgEditMsg(env, chatId, msgId, orig + '\n\n🔄 <b>EN PROGRESO</b>');
+      } else if (accion === 'idea_done') {
+        await env.DB.prepare('UPDATE sugerencias SET estado=? WHERE id=?').bind('resuelto', parseInt(partes[0])).run();
+        await _tgAnswerCQ(env, cq.id, '✅ Resuelta');
+        await _tgEditMsg(env, chatId, msgId, orig + '\n\n✅ <b>RESUELTA</b>');
+      } else if (accion === 'idea_close') {
+        await env.DB.prepare('UPDATE sugerencias SET estado=? WHERE id=?').bind('cerrado', parseInt(partes[0])).run();
+        await _tgAnswerCQ(env, cq.id, '🗝 Cerrada');
+        await _tgEditMsg(env, chatId, msgId, orig + '\n\n🗝 <b>CERRADA</b>');
+      } else if (accion === 'herr_disp') {
+        const hid = parseInt(partes[0]);
+        await env.DB.prepare("UPDATE herramientas SET estado='disponible' WHERE id=?").bind(hid).run();
+        await _tgAnswerCQ(env, cq.id, '✅ Marcada como disponible');
+        await _tgEditMsg(env, chatId, msgId, orig + '\n\n✅ <b>DISPONIBLE</b>');
+      }
+    } catch (e) { await _tgAnswerCQ(env, cq.id, '❌ Error: ' + e.message); }
+    return json({ ok: true });
+  }
+
+  const msg = update.message;
+  if (!msg) return json({ ok: true });
   const chatId = msg.chat?.id;
-  const text   = (msg.text || '').trim();
+
+  // --- Asistente IA para el desarrollador ---
+  if (String(chatId) === String(env.DEV_CHAT_ID)) {
+    let texto = msg.text || '';
+    if (msg.voice || msg.audio) {
+      const fileId = (msg.voice || msg.audio).file_id;
+      const filePath = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/getFile?file_id=${fileId}`)
+        .then(r => r.json()).then(d => d.result?.file_path).catch(() => null);
+      if (filePath) {
+        const audioUrl = `https://api.telegram.org/file/bot${env.TELEGRAM_BOT_TOKEN}/${filePath}`;
+        const audioBlob = await fetch(audioUrl).then(r => r.arrayBuffer()).catch(() => null);
+        if (audioBlob) {
+          const transcription = await transcribeAudio(env, audioBlob);
+          texto = transcription || '[No se pudo transcribir el audio]';
+        }
+      }
+    }
+    if (texto) {
+      await handleDevAI(env, chatId, texto);
+    }
+    return json({ ok: true });
+  }
+
+  const text = (msg.text || '').trim();
   if (text.startsWith('/start')) {
     const token = text.split(' ')[1]?.toUpperCase().trim();
     if (token) {
@@ -6386,7 +6510,7 @@ async function notificarTurnosSemana(request, env) {
       return `  ${dia} ${num}: ${LABEL[d.turno] || d.turno}`;
     }).join('\n');
     await sendTelegramToChat(env, chatId,
-      `ðŸ“… <b>Tus turnos</b> (${desde.slice(5).replace('-','/')} â€“ ${hasta.slice(5).replace('-','/')})\n\n${lineas}`);
+      `ðŸ"… <b>Tus turnos</b> (${desde.slice(5).replace('-','/')} â€" ${hasta.slice(5).replace('-','/')})\n\n${lineas}`);
     notificados++;
   }
   return json({ ok: true, notificados });
@@ -6457,7 +6581,7 @@ async function borrarFotoPerfil(tipo, id, request, env) {
   return json({ ok: true });
 }
 
-// â”€â”€ MigraciÃ³n v4.86 â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â"€â"€ MigraciÃ³n v4.86 â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 async function runMigrations(request, env) {
   const { isSuperadmin } = await getAuth(request, env);
   if (!isSuperadmin) return err('No autorizado', 403);
@@ -6523,7 +6647,7 @@ async function runMigrations(request, env) {
     )`).run();
     results.push('checklist_registros: creada');
   } catch(e) { results.push('checklist_registros: ' + e.message); }
-  // Mantenimiento preventivo (NEW-15) â€” columnas en pemp + carretillas + tabla historial
+  // Mantenimiento preventivo (NEW-15) â€" columnas en pemp + carretillas + tabla historial
   try {
     await env.DB.prepare(`ALTER TABLE pemp ADD COLUMN aviso_mantenimiento INTEGER DEFAULT 1`).run();
     results.push('pemp.aviso_mantenimiento: aÃ±adida');
@@ -6828,7 +6952,7 @@ async function crearMantenimiento(request, env) {
   }
 
   await sendTelegram(env,
-    `ðŸ”§ <b>Mantenimiento registrado</b>\nðŸ”– ${matricula.trim().toUpperCase()} (${tipo_mant || 'preventivo'})\nðŸ“… ${fecha_mant}\nðŸ‘¤ ${realizado_por || usuario || 'â€”'}${descripcion ? '\nðŸ“ ' + descripcion : ''}`
+    `ðŸ"§ <b>Mantenimiento registrado</b>\nðŸ"– ${matricula.trim().toUpperCase()} (${tipo_mant || 'preventivo'})\nðŸ"… ${fecha_mant}\nðŸ‘¤ ${realizado_por || usuario || 'â€"'}${descripcion ? '\nðŸ" ' + descripcion : ''}`
   );
 
   return json({ ok: true, id: r.meta.last_row_id, mensaje: 'Mantenimiento registrado' }, 201);
@@ -7121,8 +7245,8 @@ async function crearRepostaje(request, env, ctx) {
   ).run();
   // Telegram si hay coste
   if (coste && parseFloat(coste) > 0) {
-    const emoji = tipo === 'combustible' ? 'â›½' : 'ðŸ”‹';
-    await sendTelegram(env, `${emoji} <b>Repostaje registrado</b>\nðŸšœ ${equipo_tipo.toUpperCase()} ${equipo_id}\nðŸ“¦ ${cantidad ? cantidad + ' ' + (unidad||'') : ''} Â· ðŸ’¶ ${parseFloat(coste).toFixed(2)}â‚¬\nðŸ‘¤ ${nombre || rol || 'â€”'}`);
+    const emoji = tipo === 'combustible' ? 'â›½' : 'ðŸ"‹';
+    await sendTelegram(env, `${emoji} <b>Repostaje registrado</b>\nðŸšœ ${equipo_tipo.toUpperCase()} ${equipo_id}\nðŸ"¦ ${cantidad ? cantidad + ' ' + (unidad||'') : ''} Â· ðŸ’¶ ${parseFloat(coste).toFixed(2)}â‚¬\nðŸ‘¤ ${nombre || rol || 'â€"'}`);
   }
   ctx?.waitUntil(syncRRHH(env, 'Repostajes', empresa_id));
   return json({ ok: true, id: r.meta.last_row_id });
@@ -7148,8 +7272,62 @@ async function getResumenRepostajes(request, env) {
 }
 
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-// DEV TOOLS â€” endpoints solo para superadmin/desarrollador
+// DEV TOOLS â€" endpoints solo para superadmin/desarrollador
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+
+async function devAIChat(request, env) {
+  const s = await getAuth(request, env);
+  if (!s || !['superadmin','desarrollador'].includes(s.rol)) return err('Sin permiso', 403);
+  const { message, history } = await request.json().catch(() => ({}));
+  if (!message) return err('Falta message', 400);
+  const systemPrompt = `Eres Alejandra, la IA integrada en la app Alejandra. Eres mujer, inteligente y directa. Tu desarrollador es Adrián y tienes control total sobre la app.
+Responde en español, conciso. Puedes usar HTML básico en tu respuesta (<b>, <i>, <code>, <br>) ya que se muestra en un chat web.
+Fecha: ${new Date().toLocaleString('es-ES', { timeZone: 'Europe/Madrid' })}
+
+SCHEMA DB: obras(id,nombre,codigo,activa,empresa_id) | bobinas(id,codigo,tipo,seccion,longitud,proveedor,estado[disponible/asignada/devuelta],obra_id,obra_nombre,departamento,empresa_id) | pemp(id,matricula,tipo,marca,proveedor,energia,estado,obra_id,empresa_id) | carretillas(id,matricula,tipo,marca,estado,obra_id,empresa_id) | usuarios(id,nombre,email,codigo,rol,activo,telegram_id,empresa_id) | sesiones(id,token,usuario_id,rol,expires_at) | sugerencias(id,texto,categoria,estado,empresa_id) | logs(id,tipo,nivel,mensaje,created_at) | pedidos(id,descripcion,estado,prioridad,obra_id) | inventario_seg(id,tipo_material,modo,codigo,cantidad_disponible,estado) | config(clave,valor)`;
+
+  const msgs = [];
+  if (Array.isArray(history)) {
+    for (const h of history.slice(-10)) {
+      if (h.role && h.content) msgs.push({ role: h.role, content: h.content });
+    }
+  }
+  msgs.push({ role: 'user', content: message });
+
+  try {
+    let response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
+      body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 1024, system: systemPrompt, tools: AI_TOOLS, messages: msgs })
+    });
+    let result = await response.json();
+    if (!response.ok) return json({ ok: false, error: result.error?.message || 'Error API' });
+
+    let iterations = 0;
+    while (result.stop_reason === 'tool_use' && iterations < 5) {
+      iterations++;
+      const toolBlocks = result.content.filter(b => b.type === 'tool_use');
+      const toolResults = [];
+      for (const tb of toolBlocks) {
+        const output = await executeAITool(env, tb.name, tb.input);
+        toolResults.push({ type: 'tool_result', tool_use_id: tb.id, content: output });
+      }
+      msgs.push({ role: 'assistant', content: result.content });
+      msgs.push({ role: 'user', content: toolResults });
+      response = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-api-key': env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
+        body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 1024, system: systemPrompt, tools: AI_TOOLS, messages: msgs })
+      });
+      result = await response.json();
+    }
+
+    const text = (result.content || []).filter(b => b.type === 'text').map(b => b.text).join('\n') || '…';
+    return json({ ok: true, reply: text });
+  } catch (e) {
+    return json({ ok: false, error: e.message });
+  }
+}
 
 async function devSQL(request, env) {
   const s = await getAuth(request, env);
