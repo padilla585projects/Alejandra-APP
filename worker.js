@@ -301,6 +301,42 @@ const AI_TOOLS = [
       },
       required: ['action']
     }
+  },
+  {
+    name: 'memory_save',
+    description: 'Guarda algo importante en tu memoria persistente: una acción que hiciste, algo pendiente, un aviso o contexto relevante. Úsalo siempre que hagas algo importante o que Adrián te pida recordar algo.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        tipo: { type: 'string', enum: ['hecho', 'pendiente', 'contexto', 'aviso'], description: 'hecho=algo que ya hiciste, pendiente=tarea por hacer, contexto=info importante, aviso=algo crítico a no olvidar' },
+        titulo: { type: 'string', description: 'Título corto descriptivo' },
+        contenido: { type: 'string', description: 'Descripción detallada' },
+        importancia: { type: 'integer', description: '1=baja, 3=media, 5=crítica', minimum: 1, maximum: 5 }
+      },
+      required: ['tipo', 'titulo', 'contenido']
+    }
+  },
+  {
+    name: 'memory_read',
+    description: 'Lee tu memoria persistente. Úsalo para recordar qué has hecho, qué tienes pendiente o contexto importante antes de actuar.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        tipo: { type: 'string', enum: ['hecho', 'pendiente', 'contexto', 'aviso', 'all'], description: 'Filtrar por tipo o "all" para ver todo' },
+        limit: { type: 'integer', description: 'Máximo de entradas a devolver (default 20)' }
+      }
+    }
+  },
+  {
+    name: 'memory_delete',
+    description: 'Elimina una entrada de tu memoria (cuando una tarea pendiente ya está hecha, o algo ya no es relevante).',
+    input_schema: {
+      type: 'object',
+      properties: {
+        id: { type: 'integer', description: 'ID de la entrada a eliminar' }
+      },
+      required: ['id']
+    }
   }
 ];
 
@@ -410,6 +446,25 @@ async function executeAITool(env, toolName, toolInput) {
       }
       return JSON.stringify({ ok: false, error: 'Parámetros inválidos' });
     }
+    case 'memory_save': {
+      const { tipo, titulo, contenido, importancia = 1 } = toolInput;
+      const r = await env.DB.prepare(
+        "INSERT INTO alejandra_memoria (tipo, titulo, contenido, importancia) VALUES (?, ?, ?, ?)"
+      ).bind(tipo, titulo, contenido, importancia).run();
+      return JSON.stringify({ ok: true, id: r.meta?.last_row_id, guardado: titulo });
+    }
+    case 'memory_read': {
+      const { tipo = 'all', limit = 20 } = toolInput;
+      let sql = 'SELECT id, tipo, titulo, contenido, importancia, created_at FROM alejandra_memoria';
+      if (tipo !== 'all') sql += ` WHERE tipo = '${tipo}'`;
+      sql += ` ORDER BY importancia DESC, updated_at DESC LIMIT ${limit}`;
+      const r = await env.DB.prepare(sql).all();
+      return JSON.stringify({ ok: true, memorias: r.results });
+    }
+    case 'memory_delete': {
+      await env.DB.prepare("DELETE FROM alejandra_memoria WHERE id=?").bind(toolInput.id).run();
+      return JSON.stringify({ ok: true, deleted: toolInput.id });
+    }
     default:
       return JSON.stringify({ ok: false, error: 'Tool no reconocida' });
   }
@@ -465,10 +520,41 @@ TABLAS AUXILIARES:
 - app_status: estado general de la app
 - list_tables: conteo de registros
 - r2_list / r2_delete: gestión de archivos
-- filter_notifications: configurar qué notificaciones recibes`;
+- filter_notifications: configurar qué notificaciones recibes
+- memory_save: guarda algo en tu memoria persistente (acciones hechas, pendientes, avisos, contexto). ÚSALO siempre que hagas algo relevante.
+- memory_read: lee tu memoria persistente para no repetir errores ni olvidar contexto
+- memory_delete: elimina memorias obsoletas
 
-  const messages = [{ role: 'user', content: userMessage }];
+=== INSTRUCCIONES DE MEMORIA ===
+- Antes de hacer algo importante, usa memory_read para ver si ya lo hiciste o si hay avisos relevantes.
+- Después de ejecutar cualquier acción importante (SQL que modifica datos, cambios de usuario, configuraciones), usa memory_save para registrarlo como 'hecho'.
+- Si Adrián te da una tarea para hacer más tarde, guárdala como 'pendiente'.
+- Si detectas algo crítico (error grave, inconsistencia de datos), guárdalo como 'aviso' con importancia 5.
+- Puedes hacer resúmenes y guardarlos como 'contexto'.
+- Cuando una tarea pendiente esté completada, usa memory_delete para limpiarla.`;
+
   const MODEL = 'claude-sonnet-4-6';
+
+  // Cargar memoria e historial previo
+  const [memoriaRows, historialRows] = await Promise.all([
+    env.DB.prepare("SELECT id, tipo, titulo, contenido, importancia FROM alejandra_memoria ORDER BY importancia DESC, updated_at DESC LIMIT 30").all().catch(() => ({ results: [] })),
+    env.DB.prepare("SELECT rol, contenido FROM alejandra_historial WHERE canal='telegram' ORDER BY created_at DESC LIMIT 20").all().catch(() => ({ results: [] }))
+  ]);
+
+  const memoriaCtx = memoriaRows.results?.length
+    ? '\n\n=== TU MEMORIA ACTUAL ===\n' + memoriaRows.results.map(m => `[${m.id}][${m.tipo.toUpperCase()}][imp:${m.importancia}] ${m.titulo}: ${m.contenido}`).join('\n')
+    : '';
+
+  const fullSystemPrompt = systemPrompt + memoriaCtx;
+
+  // Historial previo de conversación (más reciente al final)
+  const historialMsgs = (historialRows.results || []).reverse().map(h => ({ role: h.rol, content: h.contenido }));
+  const messages = [...historialMsgs, { role: 'user', content: userMessage }];
+
+  // Guardar mensaje del usuario en historial
+  env.DB.prepare("INSERT INTO alejandra_historial (canal, rol, contenido) VALUES ('telegram', 'user', ?)").bind(userMessage.slice(0, 2000)).run().catch(() => {});
+  // Limpiar historial antiguo (mantener solo 50 por canal)
+  env.DB.prepare("DELETE FROM alejandra_historial WHERE canal='telegram' AND id NOT IN (SELECT id FROM alejandra_historial WHERE canal='telegram' ORDER BY created_at DESC LIMIT 50)").run().catch(() => {});
 
   try {
     await sendTelegramToChat(env, chatId, '⏳ Procesando...');
@@ -480,7 +566,7 @@ TABLAS AUXILIARES:
         'x-api-key': env.ANTHROPIC_API_KEY,
         'anthropic-version': '2023-06-01'
       },
-      body: JSON.stringify({ model: MODEL, max_tokens: 1024, system: systemPrompt, tools: AI_TOOLS, messages })
+      body: JSON.stringify({ model: MODEL, max_tokens: 2048, system: fullSystemPrompt, tools: AI_TOOLS, messages })
     });
 
     let result = await response.json();
@@ -491,7 +577,7 @@ TABLAS AUXILIARES:
     }
 
     let iterations = 0;
-    while (result.stop_reason === 'tool_use' && iterations < 5) {
+    while (result.stop_reason === 'tool_use' && iterations < 8) {
       iterations++;
       const toolBlocks = result.content.filter(b => b.type === 'tool_use');
       const toolResults = [];
@@ -501,21 +587,20 @@ TABLAS AUXILIARES:
       }
       messages.push({ role: 'assistant', content: result.content });
       messages.push({ role: 'user', content: toolResults });
-
       response = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': env.ANTHROPIC_API_KEY,
-          'anthropic-version': '2023-06-01'
-        },
-        body: JSON.stringify({ model: MODEL, max_tokens: 1024, system: systemPrompt, tools: AI_TOOLS, messages })
+        headers: { 'Content-Type': 'application/json', 'x-api-key': env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
+        body: JSON.stringify({ model: MODEL, max_tokens: 2048, system: fullSystemPrompt, tools: AI_TOOLS, messages })
       });
       result = await response.json();
     }
 
     const textBlocks = (result.content || []).filter(b => b.type === 'text');
     const finalText = textBlocks.map(b => b.text).join('\n') || '(sin respuesta)';
+
+    // Guardar respuesta en historial
+    env.DB.prepare("INSERT INTO alejandra_historial (canal, rol, contenido) VALUES ('telegram', 'assistant', ?)").bind(finalText.slice(0, 2000)).run().catch(() => {});
+
     const chunks = finalText.match(/[\s\S]{1,4000}/g) || [finalText];
     for (const chunk of chunks) {
       await sendTelegramToChat(env, chatId, chunk);
@@ -7278,33 +7363,44 @@ async function getResumenRepostajes(request, env) {
 async function devAIChat(request, env) {
   const s = await getAuth(request, env);
   if (!s || !['superadmin','desarrollador'].includes(s.rol)) return err('Sin permiso', 403);
-  const { message, history } = await request.json().catch(() => ({}));
+  const { message } = await request.json().catch(() => ({}));
   if (!message) return err('Falta message', 400);
+
+  // Cargar memoria e historial desde DB
+  const [memoriaRows, historialRows] = await Promise.all([
+    env.DB.prepare("SELECT id, tipo, titulo, contenido, importancia FROM alejandra_memoria ORDER BY importancia DESC, updated_at DESC LIMIT 30").all().catch(() => ({ results: [] })),
+    env.DB.prepare("SELECT rol, contenido FROM alejandra_historial WHERE canal='web' ORDER BY created_at DESC LIMIT 20").all().catch(() => ({ results: [] }))
+  ]);
+
+  const memoriaCtx = memoriaRows.results?.length
+    ? '\n\n=== TU MEMORIA ACTUAL ===\n' + memoriaRows.results.map(m => `[${m.id}][${m.tipo.toUpperCase()}][imp:${m.importancia}] ${m.titulo}: ${m.contenido}`).join('\n')
+    : '';
+
   const systemPrompt = `Eres Alejandra, la IA integrada en la app Alejandra. Eres mujer, inteligente y directa. Tu desarrollador es Adrián y tienes control total sobre la app.
-Responde en español, conciso. Puedes usar HTML básico en tu respuesta (<b>, <i>, <code>, <br>) ya que se muestra en un chat web.
+Responde en español, conciso. Puedes usar HTML básico (<b>, <i>, <code>, <br>) ya que se muestra en un chat web.
 Fecha: ${new Date().toLocaleString('es-ES', { timeZone: 'Europe/Madrid' })}
+SCHEMA DB: obras(id,nombre,codigo,activa,empresa_id) | bobinas(id,codigo,tipo,seccion,longitud,proveedor,estado,obra_id,empresa_id) | pemp(id,matricula,tipo,marca,estado,obra_id,empresa_id) | carretillas(id,matricula,tipo,marca,estado,obra_id,empresa_id) | usuarios(id,nombre,email,codigo,rol,activo,telegram_id,empresa_id) | sugerencias(id,texto,categoria,estado,empresa_id) | logs(id,tipo,nivel,mensaje,created_at) | pedidos(id,descripcion,estado,prioridad,obra_id) | alejandra_memoria(id,tipo,titulo,contenido,importancia) | alejandra_historial(id,canal,rol,contenido,created_at)
+MEMORIA: Usa memory_save tras acciones importantes, memory_read antes de actuar, memory_delete cuando algo ya no aplica.${memoriaCtx}`;
 
-SCHEMA DB: obras(id,nombre,codigo,activa,empresa_id) | bobinas(id,codigo,tipo,seccion,longitud,proveedor,estado[disponible/asignada/devuelta],obra_id,obra_nombre,departamento,empresa_id) | pemp(id,matricula,tipo,marca,proveedor,energia,estado,obra_id,empresa_id) | carretillas(id,matricula,tipo,marca,estado,obra_id,empresa_id) | usuarios(id,nombre,email,codigo,rol,activo,telegram_id,empresa_id) | sesiones(id,token,usuario_id,rol,expires_at) | sugerencias(id,texto,categoria,estado,empresa_id) | logs(id,tipo,nivel,mensaje,created_at) | pedidos(id,descripcion,estado,prioridad,obra_id) | inventario_seg(id,tipo_material,modo,codigo,cantidad_disponible,estado) | config(clave,valor)`;
-
-  const msgs = [];
-  if (Array.isArray(history)) {
-    for (const h of history.slice(-10)) {
-      if (h.role && h.content) msgs.push({ role: h.role, content: h.content });
-    }
-  }
+  // Historial previo (más antiguo primero)
+  const msgs = (historialRows.results || []).reverse().map(h => ({ role: h.rol, content: h.contenido }));
   msgs.push({ role: 'user', content: message });
+
+  // Guardar mensaje usuario
+  env.DB.prepare("INSERT INTO alejandra_historial (canal, rol, contenido) VALUES ('web', 'user', ?)").bind(message.slice(0, 2000)).run().catch(() => {});
+  env.DB.prepare("DELETE FROM alejandra_historial WHERE canal='web' AND id NOT IN (SELECT id FROM alejandra_historial WHERE canal='web' ORDER BY created_at DESC LIMIT 50)").run().catch(() => {});
 
   try {
     let response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-api-key': env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
-      body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 1024, system: systemPrompt, tools: AI_TOOLS, messages: msgs })
+      body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 2048, system: systemPrompt, tools: AI_TOOLS, messages: msgs })
     });
     let result = await response.json();
     if (!response.ok) return json({ ok: false, error: result.error?.message || 'Error API' });
 
     let iterations = 0;
-    while (result.stop_reason === 'tool_use' && iterations < 5) {
+    while (result.stop_reason === 'tool_use' && iterations < 8) {
       iterations++;
       const toolBlocks = result.content.filter(b => b.type === 'tool_use');
       const toolResults = [];
@@ -7317,12 +7413,13 @@ SCHEMA DB: obras(id,nombre,codigo,activa,empresa_id) | bobinas(id,codigo,tipo,se
       response = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-api-key': env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
-        body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 1024, system: systemPrompt, tools: AI_TOOLS, messages: msgs })
+        body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 2048, system: systemPrompt, tools: AI_TOOLS, messages: msgs })
       });
       result = await response.json();
     }
 
     const text = (result.content || []).filter(b => b.type === 'text').map(b => b.text).join('\n') || '…';
+    env.DB.prepare("INSERT INTO alejandra_historial (canal, rol, contenido) VALUES ('web', 'assistant', ?)").bind(text.slice(0, 2000)).run().catch(() => {});
     return json({ ok: true, reply: text });
   } catch (e) {
     return json({ ok: false, error: e.message });
