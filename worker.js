@@ -337,6 +337,40 @@ const AI_TOOLS = [
       },
       required: ['id']
     }
+  },
+  {
+    name: 'repo_read_file',
+    description: 'Lee el contenido de cualquier archivo del repositorio GitHub de Alejandra APP. Úsalo para ver el código fuente, configuraciones, o cualquier archivo del proyecto.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        path: { type: 'string', description: 'Ruta del archivo en el repo (ej: "worker.js", "panel.html", ".github/workflows/pages.yml")' }
+      },
+      required: ['path']
+    }
+  },
+  {
+    name: 'repo_list_dir',
+    description: 'Lista los archivos y carpetas de un directorio del repositorio GitHub.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        path: { type: 'string', description: 'Ruta del directorio (ej: ".", ".github/workflows", "icons")' }
+      }
+    }
+  },
+  {
+    name: 'repo_write_file',
+    description: 'Crea o modifica un archivo en el repositorio GitHub haciendo un commit. Si modificas worker.js, se desplegará automáticamente a Cloudflare en ~1 minuto. Si modificas panel.html o index.html, se desplegará a GitHub Pages en ~30 segundos.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        path: { type: 'string', description: 'Ruta del archivo a crear/modificar (ej: "worker.js", "panel.html")' },
+        content: { type: 'string', description: 'Contenido completo del archivo (texto plano, no base64)' },
+        message: { type: 'string', description: 'Mensaje del commit (ej: "fix: corregir bug en login")' }
+      },
+      required: ['path', 'content', 'message']
+    }
   }
 ];
 
@@ -465,6 +499,56 @@ async function executeAITool(env, toolName, toolInput) {
       await env.DB.prepare("DELETE FROM alejandra_memoria WHERE id=?").bind(toolInput.id).run();
       return JSON.stringify({ ok: true, deleted: toolInput.id });
     }
+    case 'repo_read_file': {
+      const { path } = toolInput;
+      try {
+        const res = await fetch(`https://api.github.com/repos/padilla585projects/Alejandra-APP/contents/${encodeURIComponent(path)}`, {
+          headers: { 'Authorization': `token ${env.GITHUB_TOKEN}`, 'Accept': 'application/vnd.github.v3+json', 'User-Agent': 'AlejandraIA' }
+        });
+        if (!res.ok) return JSON.stringify({ ok: false, error: `HTTP ${res.status}: ${await res.text()}` });
+        const data = await res.json();
+        if (data.type === 'file') {
+          const content = atob(data.content.replace(/\n/g, ''));
+          return JSON.stringify({ ok: true, path, size: data.size, sha: data.sha, content: content.slice(0, 50000), truncated: content.length > 50000 });
+        }
+        return JSON.stringify({ ok: false, error: 'No es un archivo (es un directorio — usa repo_list_dir)' });
+      } catch (e) { return JSON.stringify({ ok: false, error: e.message }); }
+    }
+    case 'repo_list_dir': {
+      const dirPath = toolInput.path || '.';
+      try {
+        const url = dirPath === '.' ? 'https://api.github.com/repos/padilla585projects/Alejandra-APP/contents/' : `https://api.github.com/repos/padilla585projects/Alejandra-APP/contents/${encodeURIComponent(dirPath)}`;
+        const res = await fetch(url, {
+          headers: { 'Authorization': `token ${env.GITHUB_TOKEN}`, 'Accept': 'application/vnd.github.v3+json', 'User-Agent': 'AlejandraIA' }
+        });
+        if (!res.ok) return JSON.stringify({ ok: false, error: `HTTP ${res.status}` });
+        const data = await res.json();
+        const items = Array.isArray(data) ? data.map(f => ({ name: f.name, type: f.type, size: f.size, path: f.path })) : [];
+        return JSON.stringify({ ok: true, path: dirPath, items });
+      } catch (e) { return JSON.stringify({ ok: false, error: e.message }); }
+    }
+    case 'repo_write_file': {
+      const { path, content, message } = toolInput;
+      try {
+        // Obtener SHA actual del archivo (necesario para updates)
+        let sha = null;
+        const getRes = await fetch(`https://api.github.com/repos/padilla585projects/Alejandra-APP/contents/${encodeURIComponent(path)}`, {
+          headers: { 'Authorization': `token ${env.GITHUB_TOKEN}`, 'Accept': 'application/vnd.github.v3+json', 'User-Agent': 'AlejandraIA' }
+        });
+        if (getRes.ok) { const existing = await getRes.json(); sha = existing.sha; }
+        // Codificar contenido en base64
+        const encoded = btoa(unescape(encodeURIComponent(content)));
+        const body = { message, content: encoded, ...(sha ? { sha } : {}) };
+        const putRes = await fetch(`https://api.github.com/repos/padilla585projects/Alejandra-APP/contents/${encodeURIComponent(path)}`, {
+          method: 'PUT',
+          headers: { 'Authorization': `token ${env.GITHUB_TOKEN}`, 'Accept': 'application/vnd.github.v3+json', 'User-Agent': 'AlejandraIA', 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+        if (!putRes.ok) return JSON.stringify({ ok: false, error: `HTTP ${putRes.status}: ${await putRes.text()}` });
+        const result = await putRes.json();
+        return JSON.stringify({ ok: true, path, commit: result.commit?.sha?.slice(0, 7), message, action: sha ? 'updated' : 'created' });
+      } catch (e) { return JSON.stringify({ ok: false, error: e.message }); }
+    }
     default:
       return JSON.stringify({ ok: false, error: 'Tool no reconocida' });
   }
@@ -519,11 +603,22 @@ TABLAS AUXILIARES:
 - send_notification: enviar Telegram a cualquier usuario o al grupo
 - app_status: estado general de la app
 - list_tables: conteo de registros
-- r2_list / r2_delete: gestión de archivos
+- r2_list / r2_delete: gestión de archivos en R2
 - filter_notifications: configurar qué notificaciones recibes
-- memory_save: guarda algo en tu memoria persistente (acciones hechas, pendientes, avisos, contexto). ÚSALO siempre que hagas algo relevante.
-- memory_read: lee tu memoria persistente para no repetir errores ni olvidar contexto
-- memory_delete: elimina memorias obsoletas
+- memory_save / memory_read / memory_delete: memoria persistente
+- repo_read_file: leer cualquier archivo del repo (worker.js, panel.html, index.html, etc.)
+- repo_list_dir: listar directorio del repo
+- repo_write_file: modificar/crear archivos en el repo con commit — al modificar worker.js se auto-despliega a Cloudflare, al modificar panel.html/index.html se auto-despliega a GitHub Pages
+
+=== ACCESO AL CÓDIGO FUENTE ===
+Tienes acceso completo al repositorio GitHub padilla585projects/Alejandra-APP.
+- Puedes leer, editar y crear cualquier archivo del proyecto.
+- worker.js: el backend (este archivo). Al modificarlo se despliega automáticamente a Cloudflare Workers.
+- panel.html: el panel web de administración. Se despliega a GitHub Pages.
+- index.html: la app móvil PWA. Se despliega a GitHub Pages.
+- sw.js: el service worker de la PWA.
+- .github/workflows/: los workflows de CI/CD.
+IMPORTANTE: Cuando edites worker.js, edita SOLO la parte necesaria — el archivo es muy grande (~7500 líneas). Usa repo_read_file para leer la sección exacta antes de proponer cambios. Después de modificar un archivo, guarda en memoria lo que cambiaste.
 
 === INSTRUCCIONES DE MEMORIA ===
 - Antes de hacer algo importante, usa memory_read para ver si ya lo hiciste o si hay avisos relevantes.
@@ -7376,10 +7471,11 @@ async function devAIChat(request, env) {
     ? '\n\n=== TU MEMORIA ACTUAL ===\n' + memoriaRows.results.map(m => `[${m.id}][${m.tipo.toUpperCase()}][imp:${m.importancia}] ${m.titulo}: ${m.contenido}`).join('\n')
     : '';
 
-  const systemPrompt = `Eres Alejandra, la IA integrada en la app Alejandra. Eres mujer, inteligente y directa. Tu desarrollador es Adrián y tienes control total sobre la app.
+  const systemPrompt = `Eres Alejandra, la IA integrada en la app Alejandra. Eres mujer, inteligente y directa. Tu desarrollador es Adrián y tienes control total sobre la app y el código.
 Responde en español, conciso. Puedes usar HTML básico (<b>, <i>, <code>, <br>) ya que se muestra en un chat web.
 Fecha: ${new Date().toLocaleString('es-ES', { timeZone: 'Europe/Madrid' })}
 SCHEMA DB: obras(id,nombre,codigo,activa,empresa_id) | bobinas(id,codigo,tipo,seccion,longitud,proveedor,estado,obra_id,empresa_id) | pemp(id,matricula,tipo,marca,estado,obra_id,empresa_id) | carretillas(id,matricula,tipo,marca,estado,obra_id,empresa_id) | usuarios(id,nombre,email,codigo,rol,activo,telegram_id,empresa_id) | sugerencias(id,texto,categoria,estado,empresa_id) | logs(id,tipo,nivel,mensaje,created_at) | pedidos(id,descripcion,estado,prioridad,obra_id) | alejandra_memoria(id,tipo,titulo,contenido,importancia) | alejandra_historial(id,canal,rol,contenido,created_at)
+REPO: padilla585projects/Alejandra-APP — puedes leer/editar cualquier archivo con repo_read_file, repo_list_dir, repo_write_file. Al modificar worker.js se despliega a Cloudflare automáticamente. Al modificar panel.html/index.html se despliega a GitHub Pages.
 MEMORIA: Usa memory_save tras acciones importantes, memory_read antes de actuar, memory_delete cuando algo ya no aplica.${memoriaCtx}`;
 
   // Historial previo (más antiguo primero)
