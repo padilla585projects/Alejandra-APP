@@ -9,34 +9,30 @@
 **Última sesión:** 06/05/2026
 **Versión tras última sesión:** v5.53 + Alejandra IA integrada
 **Worker desplegado:** 7d4380d (con memoria, historial, tools completas)
-**GitHub:** en sync ✅ (.nojekyll añadido — fix GitHub Pages)
+**GitHub:** en sync ✅ — GitHub Actions deploy activo y funcionando
 
 ---
 
-## RESUMEN SESIÓN 06/05/2026 (Alejandra IA — Telegram + Web + Memoria)
+## RESUMEN SESIÓN 06/05/2026 (Fix GitHub Pages deploy + verificación chat IA web)
 
 ### Qué se hizo:
-- **Asistente IA Telegram**: bot @AlejandraAPP_bot responde mensajes privados de Adrián (DEV_CHAT_ID=6965043)
-  · Solo accesible al desarrollador (chat ID verificado)
-  · Transcripción de notas de voz con Gemini (gratis)
-  · Usa claude-sonnet-4-6 via API Anthropic
-- **Tools completas**: sql_query (SQL libre), web_search (DuckDuckGo), manage_user, send_notification, app_status, list_tables, r2_list, r2_delete, filter_notifications, memory_save, memory_read, memory_delete
-- **Memoria persistente en D1**: tablas alejandra_memoria + alejandra_historial
-  · Alejandra guarda automáticamente acciones importantes, pendientes, avisos
-  · Historial de conversación por canal (telegram/web) — últimos 50 mensajes
-  · Carga memoria al inicio de cada conversación para tener contexto
-- **Chat web en panel.html**: botón flotante 🤖 abajo derecha (solo superadmin/desarrollador)
-- **Sección IA en index.html**: pestaña "IA" en nav inferior (solo superadmin/desarrollador)
-- **Endpoint /dev/ai-chat**: POST autenticado para chat desde web
-- **GitHub Pages fix**: añadido .nojekyll para evitar fallos de Jekyll en deploy
-  · Los workflows fallaban (#347-#351) — fix aplicado, #352 en queue
-- **Secrets configurados**: ANTHROPIC_API_KEY + DEV_CHAT_ID en Cloudflare
-- **padilla585.projects@gmail.com** cambiado a rol superadmin
+- **GitHub Pages roto**: build tipo `legacy` (Jekyll) se quedaba colgada en 0ms sin error
+  · El `.nojekyll` añadido en sesión anterior no fue suficiente
+  · Diagnóstico via API GitHub: `status: errored`, `build_type: legacy`
+- **Fix definitivo**: cambiado a `build_type: workflow` (GitHub Actions)
+  · Creado `.github/workflows/pages.yml` — deploy automático en cada push a main
+  · Solo sube archivos frontend (index.html, panel.html, sw.js, iconos) — excluye worker.js (700KB+)
+  · `cancel-in-progress: true` — no se acumula cola de builds
+  · Deploy en ~30 segundos tras cada push ✅
+- **Chat IA web verificado**: botón 🤖 visible y endpoint /dev/ai-chat respondiendo correctamente
+  · Probado con token real de D1 — respuesta OK de claude-sonnet-4-6
+- **Pendientes anteriores resueltos**: chat flotante panel.html ✅, pestaña IA index.html ✅
 
-### Pendiente verificar:
-- Que GitHub Pages despliege correctamente tras .nojekyll (workflow #352+)
-- Verificar chat flotante visible en panel.html tras deploy
-- Verificar pestaña IA visible en index.html (requiere login con superadmin)
+### Estado final:
+- GitHub Pages: ✅ desplegando via GitHub Actions
+- Chat IA web (panel.html): ✅ funcionando
+- Chat IA Telegram: ✅ (no tocado, estaba OK)
+- Worker: sin cambios (7d4380d)
 
 ---
 
