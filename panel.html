@@ -5506,12 +5506,11 @@ async function confirmarResetPass() {
   let aiHistory = [];
 
   function getToken(){ return typeof TOKEN !== 'undefined' ? TOKEN : localStorage.getItem('panel_token') || ''; }
-  function getSession(){ try { return JSON.parse(localStorage.getItem('panel_session') || 'null'); } catch { return null; } }
 
   function showAIBtn() {
-    const s = getSession();
+    const rol = (typeof SESSION !== 'undefined' && SESSION?.rol) || JSON.parse(localStorage.getItem('panel_session') || '{}')?.rol;
     const btn = document.getElementById('aiFloatBtn');
-    if (btn && s && ['desarrollador','superadmin'].includes(s.rol)) btn.style.display = 'flex';
+    if (btn && rol && ['desarrollador','superadmin'].includes(rol)) btn.style.display = 'flex';
   }
 
   window.toggleAIChat = function() {
