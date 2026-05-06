@@ -215,19 +215,22 @@ async function _tgEditMsg(env, chatId, msgId, newText) {
 
 async function transcribeAudio(env, audioBuffer) {
   try {
-    const resp = await fetch('https://api.openai.com/v1/audio/transcriptions', {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${env.OPENAI_API_KEY}` },
-      body: (() => {
-        const form = new FormData();
-        form.append('file', new Blob([audioBuffer], { type: 'audio/ogg' }), 'audio.ogg');
-        form.append('model', 'whisper-1');
-        form.append('language', 'es');
-        return form;
-      })()
-    });
+    const base64 = btoa(String.fromCharCode(...new Uint8Array(audioBuffer)));
+    const resp = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${env.GEMINI_API_KEY}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [
+            { inline_data: { mime_type: 'audio/ogg', data: base64 } },
+            { text: 'Transcribe este audio en español. Devuelve SOLO el texto transcrito, sin explicaciones.' }
+          ]}]
+        })
+      }
+    );
     const data = await resp.json();
-    return data.text || null;
+    return data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || null;
   } catch { return null; }
 }
 
