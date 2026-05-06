@@ -41,6 +41,19 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
 .login-api-row button{padding:12px 14px;background:var(--surface2);border:2px solid var(--border);border-radius:10px;color:var(--muted);font-size:12px;cursor:pointer;font-family:'Montserrat',sans-serif;font-weight:700;white-space:nowrap;transition:border-color .2s}
 .login-api-row button:hover{border-color:var(--accent);color:var(--accent)}
 
+/* ── REGISTRO OVERLAY ── */
+#regOverlay{position:fixed;inset:0;background:var(--bg);z-index:10000;display:none;align-items:center;justify-content:center;padding:24px;overflow-y:auto}
+#regOverlay.open{display:flex}
+.reg-box{background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:36px 32px;width:100%;max-width:440px;display:flex;flex-direction:column;gap:16px;box-shadow:0 20px 60px rgba(0,0,0,.5)}
+.reg-progress{display:flex;gap:6px;margin-bottom:4px}
+.reg-dot{flex:1;height:4px;border-radius:2px;background:var(--border);transition:background .3s}
+.reg-dot.done{background:var(--accent)}
+.reg-step{display:none;flex-direction:column;gap:12px}
+.reg-step.active{display:flex}
+.reg-title{font-family:'Montserrat',sans-serif;font-weight:900;font-size:20px;color:var(--text);text-align:center}
+.reg-sub{font-size:13px;color:var(--muted);text-align:center;line-height:1.5}
+.reg-actions{display:flex;gap:10px;margin-top:8px}
+
 /* ── LAYOUT ── */
 #appShell{display:none;height:100%;flex-direction:row}
 #appShell.visible{display:flex}
@@ -205,6 +218,74 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
 <body>
 
 <!-- ── LOGIN ── -->
+<!-- ── REGISTRO EMPRESA (público) ── -->
+<div id="regOverlay">
+  <div class="reg-box">
+    <div class="reg-progress">
+      <div class="reg-dot done"></div>
+      <div class="reg-dot"></div>
+      <div class="reg-dot"></div>
+      <div class="reg-dot"></div>
+    </div>
+
+    <!-- Paso 1: Empresa -->
+    <div class="reg-step active" id="pRegStep1">
+      <div class="reg-title">🏢 Tu empresa</div>
+      <div class="reg-sub">Cuéntanos sobre tu empresa</div>
+      <input class="login-input" id="pRegEmpresaNombre" type="text" placeholder="Nombre de la empresa *" autocomplete="organization">
+      <select class="login-input" id="pRegSector" style="cursor:pointer">
+        <option value="">Sector (opcional)</option>
+        <option value="construccion">Construcción</option>
+        <option value="instalaciones">Instalaciones</option>
+        <option value="mantenimiento">Mantenimiento</option>
+        <option value="logistica">Logística</option>
+        <option value="otro">Otro</option>
+      </select>
+      <div class="reg-actions">
+        <button class="login-btn" style="background:var(--surface2);color:var(--text);flex:0 0 90px" onclick="cerrarRegistroPanel()">Cancelar</button>
+        <button class="login-btn" style="flex:1" onclick="pRegSiguiente(1)">Siguiente →</button>
+      </div>
+    </div>
+
+    <!-- Paso 2: Admin -->
+    <div class="reg-step" id="pRegStep2">
+      <div class="reg-title">👤 Tu cuenta</div>
+      <div class="reg-sub">Crea la cuenta de administrador</div>
+      <input class="login-input" id="pRegAdminNombre" type="text" placeholder="Tu nombre *" autocomplete="name">
+      <input class="login-input" id="pRegEmail" type="email" placeholder="Email *" autocomplete="email">
+      <input class="login-input" id="pRegPassword" type="password" placeholder="Contraseña (mín. 8 caracteres) *" autocomplete="new-password">
+      <input class="login-input" id="pRegPassword2" type="password" placeholder="Confirmar contraseña *" autocomplete="new-password">
+      <div class="reg-actions">
+        <button class="login-btn" style="background:var(--surface2);color:var(--text);flex:0 0 90px" onclick="pRegGoStep(1)">← Atrás</button>
+        <button class="login-btn" style="flex:1" onclick="pRegSiguiente(2)">Siguiente →</button>
+      </div>
+    </div>
+
+    <!-- Paso 3: Departamentos + submódulos -->
+    <div class="reg-step" id="pRegStep3">
+      <div class="reg-title">🧩 Departamentos y submódulos</div>
+      <div class="reg-sub">Activa los departamentos que usa tu empresa y personaliza sus submódulos. Pulsa ▼ para expandir.</div>
+      <div id="pRegDeptosList" style="max-height:45vh;overflow-y:auto;border:1px solid var(--border);border-radius:10px;padding:6px 12px"></div>
+      <div class="reg-actions">
+        <button class="login-btn" style="background:var(--surface2);color:var(--text);flex:0 0 90px" onclick="pRegGoStep(2)">← Atrás</button>
+        <button class="login-btn" style="flex:1" onclick="pRegSiguiente(3)">Siguiente →</button>
+      </div>
+    </div>
+
+    <!-- Paso 4: Primera obra -->
+    <div class="reg-step" id="pRegStep4">
+      <div class="reg-title">🏗 Primera obra</div>
+      <div class="reg-sub">¿Cuál es tu primera obra o proyecto? (opcional)</div>
+      <input class="login-input" id="pRegObraNombre" type="text" placeholder="Nombre de la obra (ej: CPD Madrid)">
+      <div class="login-err" id="pRegErr"></div>
+      <div class="reg-actions">
+        <button class="login-btn" style="background:var(--surface2);color:var(--text);flex:0 0 90px" onclick="pRegGoStep(3)">← Atrás</button>
+        <button class="login-btn" style="flex:1" id="pRegFinBtn" onclick="pRegFinalizar()">✅ Crear empresa</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div id="loginScreen">
   <div class="login-box">
     <div class="login-brand">
@@ -247,6 +328,10 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
       <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.31-8.16 2.31-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
       ENTRAR CON GOOGLE
     </button>
+
+    <div style="text-align:center;margin-top:-4px">
+      <button onclick="abrirRegistroPanel()" style="background:none;border:none;color:var(--muted);font-size:12px;cursor:pointer;font-family:'Poppins',sans-serif;text-decoration:underline" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--muted)'">¿Primera vez? Registra tu empresa</button>
+    </div>
 
     <details style="margin-top:-8px">
       <summary style="font-family:'Montserrat',sans-serif;font-weight:700;font-size:10px;color:var(--muted);letter-spacing:1px;cursor:pointer;text-transform:uppercase">Configuración API</summary>
@@ -1396,6 +1481,194 @@ function badgeDias(dias) {
 function exportarTabla(tabla, nombre) {
   if (!tabla) return;
   tabla.download('csv', `${nombre}_${new Date().toISOString().slice(0,10)}.csv`, { bom: true });
+}
+
+// ── CATÁLOGO DEPARTAMENTOS + SUBMÓDULOS (sync con index.html) ─
+const _DEPTS_CATALOG = {
+  electrico:   { icon: '⚡',  name: 'Eléctrico',          desc: 'Tendido de cable · Plataformas · Carretillas',  template: 'trade'     },
+  mecanicas:   { icon: '🔧',  name: 'Mecánicas',          desc: 'Climatización, fontanería y mantenimiento',     template: 'trade'     },
+  seguridad:   { icon: '🔺',  name: 'Seguridad',          desc: 'Control de EPIs y material de seguridad',       template: 'seguridad' },
+  personal:    { icon: '👷',  name: 'Personal',           desc: 'Fichajes y control de asistencia',              template: 'personal'  },
+  obra_civil:  { icon: '🏗️',  name: 'Obra Civil',         desc: 'Cimentaciones, estructuras y hormigón',         template: 'trade'     },
+  albanileria: { icon: '🧱',  name: 'Albañilería',        desc: 'Tabiquería, alicatados y acabados',             template: 'trade'     },
+  pintura:     { icon: '🎨',  name: 'Pintura',            desc: 'Pintura, barnices y revestimientos',            template: 'trade'     },
+  carpinteria: { icon: '🪟',  name: 'Carpintería',        desc: 'Madera, aluminio y PVC',                        template: 'trade'     },
+  telecom:     { icon: '🌐',  name: 'Telecomunicaciones', desc: 'Datos, fibra óptica y redes',                   template: 'trade'     },
+  almacen:     { icon: '📦',  name: 'Almacén',            desc: 'Logística, recepción y control de stock',       template: 'trade'     },
+  oficina:     { icon: '📐',  name: 'Oficina técnica',    desc: 'Planning, mediciones y documentación',          template: 'trade'     },
+};
+const _ALL_DEPTS = Object.keys(_DEPTS_CATALOG);
+const _HOME_TRADE_MODS = [
+  { card: 'cardBobinas', label: '⚡ Bobinas', soloElectrico: true },
+  { card: 'cardPemp', label: '🛠 PEMP' },
+  { card: 'cardCarretillas', label: '🚜 Carretillas' },
+  { card: 'cardPedidos', label: '📥 Pedidos' },
+  { card: 'cardHerramientas', label: '🔧 Herramientas' },
+  { card: 'cardObraDashboard', label: '📊 Resumen de obra' },
+  { card: 'cardCalendario', label: '📅 Calendario' },
+  { card: 'cardIncidencias', label: '🚨 Incidencias' },
+  { card: 'cardGaleria', label: '📷 Galería de fotos' },
+  { card: 'cardPartes', label: '📋 Partes de trabajo' },
+  { card: 'cardDocs', label: '📂 Documentación' },
+];
+const _SEG_MODS = [
+  { key: 'seg_escaner', label: '📷 Escáner' },
+  { key: 'seg_inventario', label: '📦 Inventario EPIs' },
+  { key: 'seg_herramientas', label: '🔧 Herramientas' },
+  { key: 'seg_resumen', label: '📊 Resumen' },
+];
+const _PER_MODS = [
+  { key: 'per_fichajes', label: '📋 Fichajes de hoy' },
+  { key: 'per_semana', label: '📅 Semana' },
+  { key: 'per_resumen', label: '📊 Resumen mensual' },
+  { key: 'per_equipo', label: '👷 Equipo' },
+  { key: 'per_epis', label: '🦺 Dotación EPIs' },
+  { key: 'per_carnets', label: '📜 Carnets y certificaciones' },
+  { key: 'per_turnos', label: '🗓️ Planificador de turnos' },
+];
+function _modsParaDept(dept) {
+  const tpl = _DEPTS_CATALOG[dept]?.template;
+  if (tpl === 'seguridad') return _SEG_MODS;
+  if (tpl === 'personal')  return _PER_MODS;
+  return _HOME_TRADE_MODS
+    .filter(m => !m.soloElectrico || dept === 'electrico')
+    .map(m => ({ key: `home_${dept}_${m.card}`, label: m.label, _card: m.card }));
+}
+function _renderDeptConModulos(containerId, prefijo, activeDepts, existingCfg) {
+  const cont = document.getElementById(containerId);
+  if (!cont) return;
+  const allActive = !activeDepts;
+  cont.innerHTML = Object.entries(_DEPTS_CATALOG).map(([k, v]) => {
+    const deptOn = allActive || (activeDepts && activeDepts.includes(k));
+    const mods = _modsParaDept(k);
+    const modsHtml = mods.map(m => {
+      const modOn = existingCfg ? existingCfg[m.key] !== false : true;
+      return `
+      <label style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid rgba(255,255,255,.04);cursor:pointer">
+        <input type="checkbox" data-modkey-${prefijo}="${m.key}" ${modOn ? 'checked' : ''} ${!deptOn ? 'disabled' : ''}
+          style="width:16px;height:16px;accent-color:var(--accent)">
+        <span style="font-size:13px;color:var(--text)">${m.label}</span>
+      </label>`;
+    }).join('');
+    return `
+    <div style="border-bottom:1px solid var(--border)">
+      <label style="display:flex;align-items:center;gap:10px;padding:10px 0;cursor:pointer" onclick="event.stopPropagation()">
+        <input type="checkbox" id="${prefijo}DeptToggle_${k}" ${deptOn ? 'checked' : ''}
+          onchange="_toggleDeptMods(this,'${prefijo}','${k}')"
+          style="width:18px;height:18px;accent-color:var(--accent)">
+        <span style="font-size:20px">${v.icon}</span>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:14px;font-weight:600">${v.name}</div>
+          <div style="font-size:11px;color:var(--muted)">${v.desc}</div>
+        </div>
+        <span id="${prefijo}Chev_${k}" style="font-size:12px;color:var(--muted);transition:transform .2s;cursor:pointer"
+          onclick="event.preventDefault();event.stopPropagation();_expandDept('${prefijo}','${k}')">&#9660;</span>
+      </label>
+      <div id="${prefijo}Mods_${k}" style="display:none;padding:0 0 8px 46px">
+        <div style="font-size:11px;color:var(--muted);margin-bottom:4px;font-weight:600;letter-spacing:.5px">SUBMÓDULOS</div>
+        ${modsHtml}
+      </div>
+    </div>`;
+  }).join('');
+}
+function _toggleDeptMods(cb, prefijo, dept) {
+  const wrap = document.getElementById(prefijo + 'Mods_' + dept);
+  if (!wrap) return;
+  wrap.querySelectorAll('input[type=checkbox]').forEach(c => { c.checked = cb.checked; c.disabled = !cb.checked; });
+  if (!cb.checked) wrap.style.display = 'none';
+}
+function _expandDept(prefijo, dept) {
+  const wrap = document.getElementById(prefijo + 'Mods_' + dept);
+  const chev = document.getElementById(prefijo + 'Chev_' + dept);
+  if (!wrap) return;
+  const open = wrap.style.display !== 'none';
+  wrap.style.display = open ? 'none' : 'block';
+  if (chev) chev.style.transform = open ? '' : 'rotate(-90deg)';
+}
+function _collectDeptModulos(prefijo) {
+  const departamentos = _ALL_DEPTS.filter(d => document.getElementById(prefijo + 'DeptToggle_' + d)?.checked);
+  const modulos_config = {};
+  document.querySelectorAll(`[data-modkey-${prefijo}]`).forEach(cb => {
+    modulos_config[cb.getAttribute(`data-modkey-${prefijo}`)] = cb.checked;
+  });
+  return { departamentos, modulos_config };
+}
+
+// ── REGISTRO DE EMPRESA (público, pre-login) ─────────────────
+function abrirRegistroPanel() {
+  document.getElementById('regOverlay').classList.add('open');
+  document.getElementById('loginScreen').style.display = 'none';
+  _renderDeptConModulos('pRegDeptosList', 'preg');
+  pRegGoStep(1);
+}
+function cerrarRegistroPanel() {
+  document.getElementById('regOverlay').classList.remove('open');
+  document.getElementById('loginScreen').style.display = 'flex';
+}
+function pRegGoStep(n) {
+  document.querySelectorAll('#regOverlay .reg-step').forEach((s,i) => s.classList.toggle('active', i+1 === n));
+  document.querySelectorAll('#regOverlay .reg-dot').forEach((d,i) => d.classList.toggle('done', i < n));
+  const overlay = document.getElementById('regOverlay');
+  if (overlay) overlay.scrollTop = 0;
+}
+function pRegSiguiente(step) {
+  if (step === 1) {
+    const val = document.getElementById('pRegEmpresaNombre')?.value?.trim();
+    if (!val) { toast('Introduce el nombre de la empresa', 'err'); return; }
+    pRegGoStep(2);
+  } else if (step === 2) {
+    const nombre = document.getElementById('pRegAdminNombre')?.value?.trim() || '';
+    const email  = document.getElementById('pRegEmail')?.value?.trim() || '';
+    const pass   = document.getElementById('pRegPassword')?.value || '';
+    const pass2  = document.getElementById('pRegPassword2')?.value || '';
+    if (!nombre || !email || !pass) { toast('Rellena todos los campos obligatorios', 'err'); return; }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { toast('El email no es válido', 'err'); return; }
+    if (pass.length < 8) { toast('La contraseña debe tener al menos 8 caracteres', 'err'); return; }
+    if (pass !== pass2) { toast('Las contraseñas no coinciden', 'err'); return; }
+    pRegGoStep(3);
+  } else if (step === 3) {
+    const { departamentos } = _collectDeptModulos('preg');
+    if (!departamentos.length) { toast('Marca al menos un departamento', 'err'); return; }
+    pRegGoStep(4);
+  }
+}
+async function pRegFinalizar() {
+  const btn = document.getElementById('pRegFinBtn');
+  const errEl = document.getElementById('pRegErr');
+  errEl.textContent = '';
+  btn.textContent = 'Creando...'; btn.disabled = true;
+  try {
+    const { departamentos, modulos_config } = _collectDeptModulos('preg');
+    const res = await fetch(API + '/empresas/registro', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        empresa_nombre: document.getElementById('pRegEmpresaNombre').value.trim(),
+        sector:         document.getElementById('pRegSector').value,
+        admin_nombre:   document.getElementById('pRegAdminNombre').value.trim(),
+        email:          document.getElementById('pRegEmail').value.trim(),
+        password:       document.getElementById('pRegPassword').value,
+        obra_nombre:    document.getElementById('pRegObraNombre').value.trim() || null,
+        departamentos,
+        modulos_config,
+      })
+    });
+    const data = await res.json();
+    if (!res.ok || !data.ok) {
+      errEl.textContent = data.error || 'Error al registrar';
+      btn.textContent = '✅ Crear empresa'; btn.disabled = false; return;
+    }
+    TOKEN = data.token;
+    SESSION = { nombre: data.nombre, rol: data.rol, empresa_id: data.empresa_id, empresa_nombre: data.empresa_nombre, usuario_id: data.usuario_id || null };
+    localStorage.setItem('panel_token', TOKEN);
+    localStorage.setItem('panel_session', JSON.stringify(SESSION));
+    document.getElementById('regOverlay').classList.remove('open');
+    toast('🎉 Empresa creada correctamente');
+    iniciarApp();
+  } catch {
+    errEl.textContent = 'Error de conexión';
+    btn.textContent = '✅ Crear empresa'; btn.disabled = false;
+  }
 }
 
 // ── LOGIN ──────────────────────────────────────────────────────
@@ -3412,28 +3685,18 @@ function mostrarWizardStep() {
       }
     },
     3: {
-      titulo: '⚙️ Nueva empresa — Paso 3/3: Departamentos',
+      titulo: '⚙️ Nueva empresa — Paso 3/3: Departamentos y submódulos',
       html: `
         <div style="display:flex;gap:6px;margin-bottom:16px">
           ${[1,2,3].map(i => `<div style="flex:1;height:4px;border-radius:2px;background:var(--accent)"></div>`).join('')}
         </div>
-        <p style="font-size:13px;color:var(--muted);margin-bottom:14px">Selecciona los departamentos activos para <strong style="color:var(--text)">${_wizardData.empresa_nombre}</strong>.</p>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-          ${[
-            ['electrico','⚡ Eléctrico'],['mecanicas','⚙️ Mecánicas'],['seguridad','🔺 Seguridad'],
-            ['personal','👷 Personal'],['obra_civil','🏗 Obra Civil'],['albanileria','🧱 Albañilería'],
-            ['pintura','🎨 Pintura'],['carpinteria','🪵 Carpintería'],['telecom','📡 Telecom'],
-            ['almacen','📦 Almacén'],['oficina','💼 Oficina']
-          ].map(([k,l]) => `<label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:8px;background:var(--surface2);border-radius:8px;border:1px solid var(--border)">
-            <input type="checkbox" id="wDept_${k}" checked style="accent-color:var(--accent);width:16px;height:16px">
-            <span style="font-size:13px">${l}</span>
-          </label>`).join('')}
-        </div>
+        <p style="font-size:13px;color:var(--muted);margin-bottom:14px">Configura departamentos y submódulos para <strong style="color:var(--text)">${_wizardData.empresa_nombre}</strong>. Pulsa ▼ para expandir.</p>
+        <div id="wDeptsContainer" style="max-height:45vh;overflow-y:auto;border:1px solid var(--border);border-radius:10px;padding:6px 12px"></div>
       `,
       onOk: async () => {
-        const depts = ['electrico','mecanicas','seguridad','personal','obra_civil','albanileria','pintura','carpinteria','telecom','almacen','oficina']
-          .filter(k => document.getElementById(`wDept_${k}`)?.checked);
-        _wizardData.departamentos = depts;
+        const { departamentos, modulos_config } = _collectDeptModulos('wiz');
+        _wizardData.departamentos = departamentos;
+        _wizardData.modulos_config = modulos_config;
         const btn = document.getElementById('modalOkBtn');
         btn.disabled = true; btn.textContent = 'Creando empresa...';
         const r = await api('/empresas/registro', { method: 'POST', body: JSON.stringify(_wizardData) });
@@ -3450,6 +3713,7 @@ function mostrarWizardStep() {
 
   const step = steps[_wizardStep];
   abrirModal(step.titulo, step.html, step.onOk);
+  if (_wizardStep === 3) _renderDeptConModulos('wDeptsContainer', 'wiz');
   document.getElementById('modalOkBtn').textContent = _wizardStep < 3 ? 'Siguiente →' : 'Crear empresa';
   if (_wizardStep > 1) {
     const footer = document.getElementById('modalFooter');
