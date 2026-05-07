@@ -2964,13 +2964,16 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
     Inventario
   </button>
   <div class="nav-center-wrap">
-    <button class="nav-qr-btn" onclick="navTo('scan')" title="Escanear">
+    <button class="nav-qr-btn" id="navScanBtn" onclick="navTo('scan')" title="Escanear">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:#000">
         <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
         <line x1="14" y1="14" x2="14" y2="14"/><line x1="17" y1="14" x2="17" y2="14"/><line x1="20" y1="14" x2="20" y2="14"/>
         <line x1="14" y1="17" x2="14" y2="17"/><line x1="17" y1="17" x2="20" y2="17"/>
         <line x1="20" y1="20" x2="20" y2="20"/><line x1="14" y1="20" x2="17" y2="20"/>
       </svg>
+    </button>
+    <button class="nav-qr-btn" id="navIABtn" onclick="navTo('ia')" title="Alejandra IA" style="display:none;background:linear-gradient(135deg,#a855f7,#f97316);box-shadow:0 -4px 16px rgba(168,85,247,.5)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:#fff"><circle cx="12" cy="8" r="4"/><path d="M9 12l-3 8"/><path d="M15 12l3 8"/><path d="M9 20h6"/><circle cx="12" cy="8" r="1.5" fill="currentColor" stroke="none"/></svg>
     </button>
   </div>
   <button class="nav-btn" id="navSugerencias" onclick="navTo('sugerencias')">
@@ -13637,11 +13640,15 @@ window.turnoToggle   = turnoToggle;
   const IA_API = getApiUrl ? getApiUrl() : (localStorage.getItem('alejandra_api') || 'https://alejandra-app-api.alejandra-app.workers.dev');
   let iaHistory = [];
 
-  // Mostrar tab IA para superadmin y desarrollador
+  // Botón central: QR para usuarios normales, IA para superadmin/desarrollador
   function checkIABtn() {
     const s = typeof getSession === 'function' ? getSession() : null;
-    const btn = document.getElementById('navIA');
-    if (btn && s && ['desarrollador','superadmin'].includes(s.rol)) btn.style.display = '';
+    if (!s) return;
+    const esAdmin = ['desarrollador','superadmin'].includes(s.rol);
+    const scanBtn = document.getElementById('navScanBtn');
+    const iaBtn   = document.getElementById('navIABtn');
+    if (scanBtn) scanBtn.style.display = esAdmin ? 'none' : '';
+    if (iaBtn)   iaBtn.style.display   = esAdmin ? '' : 'none';
   }
   document.addEventListener('sessionReady', checkIABtn);
   setTimeout(checkIABtn, 500);
