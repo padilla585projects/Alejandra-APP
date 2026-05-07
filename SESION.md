@@ -7,9 +7,30 @@
 
 **Sesión:** LIBRE
 **Última sesión:** 07/05/2026
-**Versión tras última sesión:** v5.63 (worker 50e260b — rate limit retry + aprendizaje obligatorio)
-**Worker desplegado:** 50e260b — en deploy via GitHub Actions
-**GitHub:** en sync ✅ — GitHub Actions deploy activo (Pages + Worker)
+**Versión tras última sesión:** v5.63 (worker 8b48fb37 — fix historial assistant messages)
+**Worker desplegado:** 8b48fb37 ✅ desplegado via wrangler directo
+**GitHub:** en sync ✅ — commit 732f16c
+
+---
+
+## RESUMEN SESIÓN 07/05/2026 — hotfix (agente no contestaba)
+
+### Qué se hizo:
+
+**Fix crítico — historial web corrupto:**
+- Diagnóstico: `alejandra_historial` tenía 40 mensajes `rol='user'` y 0 `rol='assistant'`
+- Causa: el INSERT del assistant se hacía sin `await` justo antes de `return json()` → el worker terminaba antes de que el INSERT completara
+- Los mensajes de usuario sí se guardaban porque el INSERT se hacía ANTES del AI call (segundos de margen)
+- Consecuencia: msgs array con solo user messages → Anthropic API rechaza (consecutive user messages inválido) → ciclo vicioso
+- **Fix 1:** `await env.DB.prepare(...assistant INSERT...).run()` — espera confirmación antes de devolver respuesta
+- **Fix 2:** Filtro de seguridad `rawHist.filter((m,i) => i===0 || m.role !== rawHist[i-1].role)` — elimina consecutivos del mismo rol al construir msgs
+- **D1:** `DELETE FROM alejandra_historial WHERE canal='web'` — limpiados los 40 mensajes corruptos
+- Worker desplegado: 8b48fb37
+
+### Estado final:
+- Worker: 8b48fb37 ✅
+- GitHub: commit 732f16c ✅
+- Historial: limpio, listo para empezar desde cero
 
 ---
 
