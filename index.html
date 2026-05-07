@@ -4824,12 +4824,14 @@ function _applyScreen(name) {
   _startAppSectionPoll(name);
 
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-  const el = document.getElementById('screen' + name.charAt(0).toUpperCase() + name.slice(1));
+  // screenIA tiene ID con mayúsculas — caso especial
+  const screenId = name === 'ia' ? 'screenIA' : ('screen' + name.charAt(0).toUpperCase() + name.slice(1));
+  const el = document.getElementById(screenId);
   if (el) el.classList.add('active');
 
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
-  const navMap = { home: 'navInicio', ajustes: 'navAjustes', sugerencias: 'navSugerencias' };
-  if (navMap[name]) document.getElementById(navMap[name]).classList.add('active');
+  const navMap = { home: 'navInicio', ajustes: 'navAjustes', sugerencias: 'navSugerencias', ia: 'navIA' };
+  if (navMap[name]) document.getElementById(navMap[name])?.classList.add('active');
 
   const btnOrd = document.getElementById('btnOrdenarHome');
   if (btnOrd) btnOrd.style.display = (name === 'home') ? 'flex' : 'none';
@@ -4903,6 +4905,7 @@ function navTo(target) {
   // Pantallas secundarias — conservar historial para que Atrás funcione
   if (target === 'sugerencias') { showScreen('sugerencias'); return; }
   if (target === 'docs')        { showScreen('docs'); return; }
+  if (target === 'ia')          { _applyScreen('ia'); document.getElementById('iaInput')?.focus(); return; }
   // El resto son pantallas raíz: limpiar historial para que atrás = "salir de la app"
   _navHistory = [];
   if (target === 'home') {
@@ -13634,34 +13637,18 @@ window.turnoToggle   = turnoToggle;
   const IA_API = getApiUrl ? getApiUrl() : (localStorage.getItem('alejandra_api') || 'https://alejandra-app-api.alejandra-app.workers.dev');
   let iaHistory = [];
 
-  // Mostrar botón IA solo para desarrollador
-  const _origLogin = window.onLoginSuccess;
+  // Mostrar tab IA para superadmin y desarrollador
   function checkIABtn() {
-    const s = getSession ? getSession() : null;
+    const s = typeof getSession === 'function' ? getSession() : null;
     const btn = document.getElementById('navIA');
     if (btn && s && ['desarrollador','superadmin'].includes(s.rol)) btn.style.display = '';
   }
   document.addEventListener('sessionReady', checkIABtn);
-  setTimeout(checkIABtn, 1000);
-  setInterval(checkIABtn, 3000);
+  setTimeout(checkIABtn, 500);
+  setInterval(checkIABtn, 2000);
 
-  // Registrar pantalla en el sistema de navegación
-  const _origApplyScreen = window._applyScreen;
-  if (_origApplyScreen) {
-    window._applyScreen = function(name) {
-      const iaScreen = document.getElementById('screenIA');
-      if (name === 'ia') {
-        document.querySelectorAll('.screen.active').forEach(s => s.classList.remove('active'));
-        if (iaScreen) iaScreen.classList.add('active');
-        document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
-        const nb = document.getElementById('navIA');
-        if (nb) nb.classList.add('active');
-        document.getElementById('iaInput')?.focus();
-        return;
-      }
-      if (iaScreen) iaScreen.classList.remove('active');
-      _origApplyScreen(name);
-    };
+  // bloque eliminado — navTo('ia') y _applyScreen ya manejan la pantalla directamente
+  if (false) {
   }
 
   window.iaKeydown = function(e) {
