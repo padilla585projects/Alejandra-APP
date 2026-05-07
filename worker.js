@@ -676,7 +676,7 @@ CLOUDFLARE:
 - Worker: alejandra-app-api → https://alejandra-app-api.alejandra-app.workers.dev
   · Este archivo ES worker.js. Runtime: Cloudflare Workers (V8 isolate, no Node.js)
   · Account ID: d65ead2b2967bf68ff3848a36cd7b1b4
-  · Compatibilidad: 2024-01-01. Crons: 07:00 y 18:00 UTC diarios
+  · Compatibilidad: 2024-01-01. Crons: 23:00 UTC (revisión nocturna, solo propone) y 18:00 UTC (cierre jornada)
 - D1 (SQLite): alejandra-db (ID: 0c9eccde-78f1-476d-ac68-bf452bec0c62) — base de datos principal
 - R2: alejandra-app-files — almacenamiento de archivos (fotos, documentos, etc.)
 - Secrets configurados: ANTHROPIC_API_KEY, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, TELEGRAM_WEBHOOK_SECRET, DEV_CHAT_ID, GITHUB_TOKEN, CLOUDFLARE_API_TOKEN, GOOGLE_* (Sheets/OAuth), RESEND_API_KEY
@@ -1027,6 +1027,34 @@ async function sendTelegramFiltered(env, mensaje, categoria) {
   } catch { await sendTelegram(env, mensaje); }
 }
 
+// Aplica un fix de alejandra_fixes en GitHub — compartido por fix_apply y fix_confirm
+async function _ejecutarFix(env, fix, fixId, chatId, msgId, orig, cqId) {
+  const { old: oldCode, new: newCode } = JSON.parse(fix.contenido_nuevo);
+  const getRes = await fetch(`https://api.github.com/repos/padilla585projects/Alejandra-APP/contents/${encodeURIComponent(fix.archivo)}`, {
+    headers: { 'Authorization': `token ${env.GITHUB_TOKEN}`, 'Accept': 'application/vnd.github.v3+json', 'User-Agent': 'AlejandraIA' }
+  });
+  if (!getRes.ok) throw new Error(`GitHub ${getRes.status} leyendo ${fix.archivo}`);
+  const fileData = await getRes.json();
+  const currentContent = atob(fileData.content.replace(/\n/g, ''));
+  if (!currentContent.includes(oldCode)) {
+    await _tgEditMsg(env, chatId, msgId, orig + '\n\n⚠️ <b>NO APLICADO</b> — el código a reemplazar ya no existe (archivo modificado desde que se propuso el fix).');
+    return;
+  }
+  const newContent = currentContent.replace(oldCode, newCode);
+  const encoded = btoa(unescape(encodeURIComponent(newContent)));
+  const putRes = await fetch(`https://api.github.com/repos/padilla585projects/Alejandra-APP/contents/${encodeURIComponent(fix.archivo)}`, {
+    method: 'PUT',
+    headers: { 'Authorization': `token ${env.GITHUB_TOKEN}`, 'Accept': 'application/vnd.github.v3+json', 'User-Agent': 'AlejandraIA', 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message: `fix(alejandra): ${fix.descripcion.slice(0, 70)}`, content: encoded, sha: fileData.sha })
+  });
+  if (!putRes.ok) throw new Error(`GitHub ${putRes.status} escribiendo fix`);
+  const commitSha = (await putRes.json()).commit?.sha?.slice(0, 7);
+  await env.DB.prepare("UPDATE alejandra_fixes SET estado='aplicado', updated_at=CURRENT_TIMESTAMP WHERE id=?").bind(fixId).run();
+  if (fix.sugerencia_id) await env.DB.prepare("UPDATE sugerencias SET estado='resuelto' WHERE id=?").bind(fix.sugerencia_id).run();
+  autoLearn(env, 'hecho', `Fix #${fixId} aplicado: ${fix.descripcion.slice(0,60)}`, `Archivo: ${fix.archivo} | Commit: ${commitSha} | Aprobado por Adrián`, 2);
+  await _tgEditMsg(env, chatId, msgId, orig + `\n\n✅ <b>APLICADO</b> — commit <code>${commitSha}</code>. Deploy automático en ~1 min.`);
+}
+
 // Gestiona las pulsaciones de botones inline enviadas por Telegram
 async function handleTelegramWebhook(request, env) {
   const secret = request.headers.get('X-Telegram-Bot-Api-Secret-Token');
@@ -1122,32 +1150,39 @@ async function handleTelegramWebhook(request, env) {
         await _tgAnswerCQ(env, cq.id, fix?.estado === 'aplicado' ? 'Ya fue aplicado' : 'Fix no encontrado');
         return new Response('OK');
       }
-      const { old: oldCode, new: newCode } = JSON.parse(fix.contenido_nuevo);
-      const getRes = await fetch(`https://api.github.com/repos/padilla585projects/Alejandra-APP/contents/${encodeURIComponent(fix.archivo)}`, {
-        headers: { 'Authorization': `token ${env.GITHUB_TOKEN}`, 'Accept': 'application/vnd.github.v3+json', 'User-Agent': 'AlejandraIA' }
-      });
-      if (!getRes.ok) throw new Error(`GitHub ${getRes.status} leyendo ${fix.archivo}`);
-      const fileData = await getRes.json();
-      const currentContent = atob(fileData.content.replace(/\n/g, ''));
-      if (!currentContent.includes(oldCode)) {
-        await _tgAnswerCQ(env, cq.id, '⚠️ El código ya no existe en el archivo');
-        await _tgEditMsg(env, chatId, msgId, orig + '\n\n⚠️ <b>NO APLICADO</b> — el código a reemplazar ya no existe (archivo modificado desde que se propuso el fix).');
+      // Bloqueo horario: no aplicar en producción durante horas de trabajo (07:00-19:00 España)
+      const nowUtc = new Date();
+      const mes = nowUtc.getUTCMonth() + 1;
+      const offsetEsp = (mes >= 4 && mes <= 10) ? 2 : 1; // CEST/CET
+      const horaEsp = (nowUtc.getUTCHours() + offsetEsp) % 24;
+      const minEsp = nowUtc.getUTCMinutes();
+      if (horaEsp >= 7 && horaEsp < 19) {
+        await _tgAnswerCQ(env, cq.id, '⚠️ Horario laboral — confirma para aplicar');
+        const horaStr = `${String(horaEsp).padStart(2,'0')}:${String(minEsp).padStart(2,'0')}`;
+        await sendTelegramConBotonesTo(env, chatId,
+          `⚠️ <b>Son las ${horaStr} (hora España) — horario laboral</b>\n\nAplicar el fix <b>${fix.descripcion.slice(0,60)}</b> en <code>${fix.archivo}</code> desencadenará un deploy automático (~1 min) mientras la app puede estar en uso.\n\n¿Aplicar igualmente o esperar esta noche?`,
+          [[{ text: '⚠️ Aplicar ahora', callback_data: `fix_confirm:${fixId}` }, { text: '⏰ Esta noche lo reviso', callback_data: `fix_snooze:${fixId}` }]]
+        );
         return new Response('OK');
       }
-      const newContent = currentContent.replace(oldCode, newCode);
-      const encoded = btoa(unescape(encodeURIComponent(newContent)));
-      const putRes = await fetch(`https://api.github.com/repos/padilla585projects/Alejandra-APP/contents/${encodeURIComponent(fix.archivo)}`, {
-        method: 'PUT',
-        headers: { 'Authorization': `token ${env.GITHUB_TOKEN}`, 'Accept': 'application/vnd.github.v3+json', 'User-Agent': 'AlejandraIA', 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: `fix(alejandra): ${fix.descripcion.slice(0, 70)}`, content: encoded, sha: fileData.sha })
-      });
-      if (!putRes.ok) throw new Error(`GitHub ${putRes.status} escribiendo fix`);
-      const commitSha = (await putRes.json()).commit?.sha?.slice(0, 7);
-      await env.DB.prepare("UPDATE alejandra_fixes SET estado='aplicado', updated_at=CURRENT_TIMESTAMP WHERE id=?").bind(fixId).run();
-      if (fix.sugerencia_id) await env.DB.prepare("UPDATE sugerencias SET estado='resuelto' WHERE id=?").bind(fix.sugerencia_id).run();
-      autoLearn(env, 'hecho', `Fix #${fixId} aplicado: ${fix.descripcion.slice(0,60)}`, `Archivo: ${fix.archivo} | Commit: ${commitSha} | Aprobado por Adrián`, 2);
-      await _tgAnswerCQ(env, cq.id, '✅ Fix aplicado');
-      await _tgEditMsg(env, chatId, msgId, orig + `\n\n✅ <b>APLICADO</b> — commit <code>${commitSha}</code>. Deploy automático en ~1 min.`);
+      // Fuera de horario laboral — aplicar directamente
+      await _ejecutarFix(env, fix, fixId, chatId, msgId, orig, cq.id);
+    }
+    else if (accion === 'fix_confirm') {
+      // Segunda confirmación — aplica sin importar la hora
+      const fixId = parseInt(partes[0]);
+      const fix = await env.DB.prepare('SELECT * FROM alejandra_fixes WHERE id=?').bind(fixId).first();
+      if (!fix || fix.estado !== 'pendiente') {
+        await _tgAnswerCQ(env, cq.id, fix?.estado === 'aplicado' ? 'Ya fue aplicado' : 'Fix no encontrado');
+        return new Response('OK');
+      }
+      await _tgAnswerCQ(env, cq.id, '⚙️ Aplicando fix...');
+      await _ejecutarFix(env, fix, fixId, chatId, msgId, orig, cq.id);
+    }
+    else if (accion === 'fix_snooze') {
+      const fixId = parseInt(partes[0]);
+      await _tgAnswerCQ(env, cq.id, '⏰ Ok, fix en espera');
+      await _tgEditMsg(env, chatId, msgId, orig + `\n\n⏰ <b>EN ESPERA</b> — fix #${fixId} sigue pendiente. Aplícalo esta noche fuera de horario laboral.`);
     }
     else if (accion === 'fix_reject') {
       const fixId = parseInt(partes[0]);
@@ -1658,9 +1693,11 @@ export default {
   async scheduled(event, env, ctx) {
     if (event.cron === '0 18 * * *') {
       ctx.waitUntil(cierreAutomaticoJornada(env));
+    } else if (event.cron === '0 23 * * *') {
+      // Revisión autónoma nocturna — solo propone fixes, nunca aplica
+      ctx.waitUntil(runAutonomousReview(env));
     } else {
       ctx.waitUntil(alertasDiarias(env));
-      ctx.waitUntil(runAutonomousReview(env));
     }
     // Resync completo en cada cron â€" resiliencia ante fallos transitorios de Google API
     ctx.waitUntil(syncSheets(env));
