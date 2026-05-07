@@ -340,11 +340,13 @@ const AI_TOOLS = [
   },
   {
     name: 'repo_read_file',
-    description: 'Lee el contenido de cualquier archivo del repositorio GitHub de Alejandra APP. Úsalo para ver el código fuente, configuraciones, o cualquier archivo del proyecto.',
+    description: 'Lee contenido de un archivo del repo GitHub. Para archivos grandes usa line_start/line_end — worker.js tiene ~7100 lineas, lee en bloques de 300-500 a la vez.',
     input_schema: {
       type: 'object',
       properties: {
-        path: { type: 'string', description: 'Ruta del archivo en el repo (ej: "worker.js", "panel.html", ".github/workflows/pages.yml")' }
+        path: { type: 'string', description: 'Ruta del archivo en el repo' },
+        line_start: { type: 'integer', description: 'Linea inicial (1-based). Omitir para empezar al principio.' },
+        line_end: { type: 'integer', description: 'Linea final (inclusive). Omitir para leer hasta fin o limite de 50K chars.' }
       },
       required: ['path']
     }
@@ -505,10 +507,12 @@ async function executeAITool(env, toolName, toolInput) {
     }
     case 'memory_read': {
       const { tipo = 'all', limit = 20 } = toolInput;
-      let sql = 'SELECT id, tipo, titulo, contenido, importancia, created_at FROM alejandra_memoria';
-      if (tipo !== 'all') sql += ` WHERE tipo = '${tipo}'`;
-      sql += ` ORDER BY importancia DESC, updated_at DESC LIMIT ${limit}`;
-      const r = await env.DB.prepare(sql).all();
+      let r;
+      if (tipo !== 'all') {
+        r = await env.DB.prepare('SELECT id, tipo, titulo, contenido, importancia, created_at FROM alejandra_memoria WHERE tipo=? ORDER BY importancia DESC, created_at DESC LIMIT ?').bind(tipo, limit).all();
+      } else {
+        r = await env.DB.prepare('SELECT id, tipo, titulo, contenido, importancia, created_at FROM alejandra_memoria ORDER BY importancia DESC, created_at DESC LIMIT ?').bind(limit).all();
+      }
       return JSON.stringify({ ok: true, memorias: r.results });
     }
     case 'memory_delete': {
@@ -524,10 +528,23 @@ async function executeAITool(env, toolName, toolInput) {
         if (!res.ok) return JSON.stringify({ ok: false, error: `HTTP ${res.status}: ${await res.text()}` });
         const data = await res.json();
         if (data.type === 'file') {
-          const content = atob(data.content.replace(/\n/g, ''));
-          // Auto-registrar que leyó este archivo (para saber qué partes conoce)
-          autoLearn(env, 'aprendizaje', `Leído: ${path}`, `Archivo ${path} leído (${data.size} bytes). SHA: ${data.sha?.slice(0,7)}. Líneas aprox: ${content.split('\n').length}`, 1);
-          return JSON.stringify({ ok: true, path, size: data.size, sha: data.sha, content: content.slice(0, 50000), truncated: content.length > 50000 });
+          const fullContent = atob(data.content.replace(/\n/g, ''));
+          const allLines = fullContent.split('\n');
+          const totalLines = allLines.length;
+          const { line_start, line_end } = toolInput;
+          let content;
+          let rangeDesc = '';
+          if (line_start || line_end) {
+            const s = Math.max(1, line_start || 1) - 1;
+            const e = Math.min(totalLines, line_end || totalLines);
+            content = allLines.slice(s, e).join('\n');
+            rangeDesc = ` (líneas ${s+1}-${e} de ${totalLines})`;
+          } else {
+            content = fullContent.slice(0, 50000);
+          }
+          const truncated = !line_start && !line_end && fullContent.length > 50000;
+          autoLearn(env, 'aprendizaje', `Leído: ${path}${rangeDesc}`, `Archivo ${path} (${data.size} bytes, ${totalLines} líneas total). SHA: ${data.sha?.slice(0,7)}.${rangeDesc}`, 1);
+          return JSON.stringify({ ok: true, path, size: data.size, total_lines: totalLines, sha: data.sha, content, truncated, hint: truncated ? `Archivo grande: usa line_start/line_end para leer por secciones (total ${totalLines} líneas)` : undefined });
         }
         return JSON.stringify({ ok: false, error: 'No es un archivo (es un directorio — usa repo_list_dir)' });
       } catch (e) { return JSON.stringify({ ok: false, error: e.message }); }
@@ -726,7 +743,7 @@ INTERNET:
 - web_search(query): buscar en DuckDuckGo (documentación, errores, APIs, librerías)
 
 CÓDIGO Y REPO:
-- repo_read_file(path): leer cualquier archivo del repo (soporta archivos grandes, muestra 50K chars)
+- repo_read_file(path, line_start?, line_end?): leer archivo del repo. IMPORTANTE: worker.js tiene ~7100 líneas — NUNCA intentes leerlo entero. Usa line_start/line_end para leer bloques (ej: líneas 1-300, luego 300-600, etc.). La respuesta incluye total_lines y un hint si el archivo está truncado.
 - repo_list_dir(path?): listar archivos/carpetas de un directorio
 - repo_write_file(path, content, message): crear/modificar archivo con commit → auto-deploy
 
@@ -802,7 +819,7 @@ async function handleDevAI(env, chatId, userMessage) {
   const messages = [...historialMsgs, { role: 'user', content: userMessage }];
 
   // Guardar mensaje del usuario en historial
-  env.DB.prepare("INSERT INTO alejandra_historial (canal, rol, contenido) VALUES ('telegram', 'user', ?)").bind(userMessage.slice(0, 2000)).run().catch(() => {});
+  env.DB.prepare("INSERT INTO alejandra_historial (canal, rol, contenido) VALUES ('telegram', 'user', ?)").bind(userMessage.slice(0, 4000)).run().catch(() => {});
   // Limpiar historial antiguo (mantener solo 50 por canal)
   env.DB.prepare("DELETE FROM alejandra_historial WHERE canal='telegram' AND id NOT IN (SELECT id FROM alejandra_historial WHERE canal='telegram' ORDER BY created_at DESC LIMIT 50)").run().catch(() => {});
 
@@ -816,7 +833,7 @@ async function handleDevAI(env, chatId, userMessage) {
         'x-api-key': env.ANTHROPIC_API_KEY,
         'anthropic-version': '2023-06-01'
       },
-      body: JSON.stringify({ model: MODEL, max_tokens: 2048, system: fullSystemPrompt, tools: AI_TOOLS, messages })
+      body: JSON.stringify({ model: MODEL, max_tokens: 8192, system: fullSystemPrompt, tools: AI_TOOLS, messages })
     });
 
     let result = await response.json();
@@ -830,17 +847,16 @@ async function handleDevAI(env, chatId, userMessage) {
     while (result.stop_reason === 'tool_use' && iterations < 8) {
       iterations++;
       const toolBlocks = result.content.filter(b => b.type === 'tool_use');
-      const toolResults = [];
-      for (const tb of toolBlocks) {
-        const output = await executeAITool(env, tb.name, tb.input);
-        toolResults.push({ type: 'tool_result', tool_use_id: tb.id, content: output });
-      }
+      const toolResults = await Promise.all(toolBlocks.map(async tb => ({
+        type: 'tool_result', tool_use_id: tb.id,
+        content: await executeAITool(env, tb.name, tb.input)
+      })));
       messages.push({ role: 'assistant', content: result.content });
       messages.push({ role: 'user', content: toolResults });
       response = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-api-key': env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
-        body: JSON.stringify({ model: MODEL, max_tokens: 2048, system: fullSystemPrompt, tools: AI_TOOLS, messages })
+        body: JSON.stringify({ model: MODEL, max_tokens: 8192, system: fullSystemPrompt, tools: AI_TOOLS, messages })
       });
       result = await response.json();
     }
@@ -849,7 +865,7 @@ async function handleDevAI(env, chatId, userMessage) {
     const finalText = textBlocks.map(b => b.text).join('\n') || '(sin respuesta)';
 
     // Guardar respuesta en historial
-    env.DB.prepare("INSERT INTO alejandra_historial (canal, rol, contenido) VALUES ('telegram', 'assistant', ?)").bind(finalText.slice(0, 2000)).run().catch(() => {});
+    env.DB.prepare("INSERT INTO alejandra_historial (canal, rol, contenido) VALUES ('telegram', 'assistant', ?)").bind(finalText.slice(0, 4000)).run().catch(() => {});
 
     const chunks = finalText.match(/[\s\S]{1,4000}/g) || [finalText];
     for (const chunk of chunks) {
@@ -7633,14 +7649,14 @@ async function devAIChat(request, env) {
   msgs.push({ role: 'user', content: message });
 
   // Guardar mensaje usuario
-  env.DB.prepare("INSERT INTO alejandra_historial (canal, rol, contenido) VALUES ('web', 'user', ?)").bind(message.slice(0, 2000)).run().catch(() => {});
+  env.DB.prepare("INSERT INTO alejandra_historial (canal, rol, contenido) VALUES ('web', 'user', ?)").bind(message.slice(0, 4000)).run().catch(() => {});
   env.DB.prepare("DELETE FROM alejandra_historial WHERE canal='web' AND id NOT IN (SELECT id FROM alejandra_historial WHERE canal='web' ORDER BY created_at DESC LIMIT 50)").run().catch(() => {});
 
   try {
     let response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-api-key': env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
-      body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 2048, system: systemPrompt, tools: AI_TOOLS, messages: msgs })
+      body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 8192, system: systemPrompt, tools: AI_TOOLS, messages: msgs })
     });
     let result = await response.json();
     if (!response.ok) return json({ ok: false, error: result.error?.message || 'Error API' });
@@ -7649,23 +7665,22 @@ async function devAIChat(request, env) {
     while (result.stop_reason === 'tool_use' && iterations < 8) {
       iterations++;
       const toolBlocks = result.content.filter(b => b.type === 'tool_use');
-      const toolResults = [];
-      for (const tb of toolBlocks) {
-        const output = await executeAITool(env, tb.name, tb.input);
-        toolResults.push({ type: 'tool_result', tool_use_id: tb.id, content: output });
-      }
+      const toolResults = await Promise.all(toolBlocks.map(async tb => ({
+        type: 'tool_result', tool_use_id: tb.id,
+        content: await executeAITool(env, tb.name, tb.input)
+      })));
       msgs.push({ role: 'assistant', content: result.content });
       msgs.push({ role: 'user', content: toolResults });
       response = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-api-key': env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
-        body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 2048, system: systemPrompt, tools: AI_TOOLS, messages: msgs })
+        body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 8192, system: systemPrompt, tools: AI_TOOLS, messages: msgs })
       });
       result = await response.json();
     }
 
     const text = (result.content || []).filter(b => b.type === 'text').map(b => b.text).join('\n') || '…';
-    env.DB.prepare("INSERT INTO alejandra_historial (canal, rol, contenido) VALUES ('web', 'assistant', ?)").bind(text.slice(0, 2000)).run().catch(() => {});
+    env.DB.prepare("INSERT INTO alejandra_historial (canal, rol, contenido) VALUES ('web', 'assistant', ?)").bind(text.slice(0, 4000)).run().catch(() => {});
     return json({ ok: true, reply: text });
   } catch (e) {
     return json({ ok: false, error: e.message });
