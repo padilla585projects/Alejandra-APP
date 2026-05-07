@@ -8082,8 +8082,9 @@ async function devAIChat(request, env) {
 
   const systemPrompt = buildAlejandraSystemPrompt('web') + memoriaCtx;
 
-  // Historial previo (más antiguo primero)
-  const msgs = (historialRows.results || []).reverse().map(h => ({ role: h.rol, content: h.contenido }));
+  // Historial previo (más antiguo primero) — filtrar consecutivos del mismo rol
+  const rawHist = (historialRows.results || []).reverse().map(h => ({ role: h.rol, content: h.contenido }));
+  const msgs = rawHist.filter((m, i) => i === 0 || m.role !== rawHist[i - 1].role);
 
   // Mensaje del usuario: texto solo o texto+imagen
   const userContent = image?.data
@@ -8137,7 +8138,7 @@ async function devAIChat(request, env) {
     }
 
     const text = (result.content || []).filter(b => b.type === 'text').map(b => b.text).join('\n') || '…';
-    env.DB.prepare("INSERT INTO alejandra_historial (canal, rol, contenido) VALUES ('web', 'assistant', ?)").bind(text.slice(0, 4000)).run().catch(() => {});
+    await env.DB.prepare("INSERT INTO alejandra_historial (canal, rol, contenido) VALUES ('web', 'assistant', ?)").bind(text.slice(0, 4000)).run().catch(() => {});
     return json({ ok: true, reply: text });
   } catch (e) {
     return json({ ok: false, error: e.message });
