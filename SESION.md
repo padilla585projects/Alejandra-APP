@@ -7,8 +7,8 @@
 
 **Sesión:** LIBRE
 **Última sesión:** 07/05/2026
-**Versión tras última sesión:** v5.54 (worker e34cf08 — Alejandra autónoma)
-**Worker desplegado:** e34cf08 (visión, Tavily, propose_fix, cron review, paginación)
+**Versión tras última sesión:** v5.55 (worker 43e1731 — bloqueo horario laboral + cron nocturno)
+**Worker desplegado:** 43e1731 (cron 23:00 UTC, bloqueo 07-19h España, fix_confirm, fix_snooze)
 **GitHub:** en sync ✅ — GitHub Actions deploy activo (Pages + Worker)
 
 ---
