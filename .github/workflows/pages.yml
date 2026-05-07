@@ -39,7 +39,9 @@ jobs:
           cp -r img _site/ 2>/dev/null || true
           cp manifest.json _site/ 2>/dev/null || true
           cp favicon.ico _site/ 2>/dev/null || true
-          echo "Archivos en _site:" && ls -lh _site/
+          VERSION=$(grep -oP "(?<=APP_VERSION = ')[\d.]+" index.html | head -1)
+          echo "{\"v\":\"$VERSION\"}" > _site/version.json
+          echo "Version desplegada: $VERSION" && ls -lh _site/
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
