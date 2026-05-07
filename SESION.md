@@ -7,9 +7,9 @@
 
 **Sesión:** LIBRE
 **Última sesión:** 07/05/2026
-**Versión tras última sesión:** v5.64 (worker 70134293 — auto-diagnóstico + timeout 25s chat IA)
-**Worker desplegado:** 70134293 ✅
-**GitHub:** en sync ✅ — commit cf6a44b
+**Versión tras última sesión:** v5.65 (worker e75da22b — watchdog autónomo en crons)
+**Worker desplegado:** e75da22b ✅
+**GitHub:** en sync ✅ — commit 3fd7241
 
 ---
 
