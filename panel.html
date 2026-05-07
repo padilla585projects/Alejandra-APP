@@ -5643,9 +5643,9 @@ async function confirmarResetPass() {
   function showAIBtn() {
     const btn = document.getElementById('aiFloatBtn');
     if (!btn) return;
-    // Mostrar si el nav de DevTools está visible (ya controlado por la lógica de roles principal)
+    // Si el nav de DevTools está visible (display != 'none'), mostrar el botón
     const devNav = document.querySelector('.nav-dev');
-    if (devNav && devNav.style.display !== 'none' && devNav.style.display !== '') {
+    if (devNav && devNav.style.display !== 'none') {
       btn.style.display = 'flex';
       return;
     }
