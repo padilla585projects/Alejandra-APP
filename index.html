@@ -9772,7 +9772,7 @@ async function cargarObrasSelectUsuario() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '5.63';
+const APP_VERSION = '5.64';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -13724,14 +13724,20 @@ window.turnoToggle   = turnoToggle;
     try {
       for (let i = 0; i < slices.length; i++) {
         try {
-          const res = await fetch(IA_API + '/dev/ai-chat', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-Token': token },
-            body: JSON.stringify({ message: msg, history: slices[i] })
-          });
-          data = await res.json();
+          const _iaCtrl = new AbortController();
+          const _iaTid = setTimeout(() => _iaCtrl.abort(), 25000);
+          try {
+            const res = await fetch(IA_API + '/dev/ai-chat', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'X-Token': token },
+              body: JSON.stringify({ message: msg, history: slices[i] }),
+              signal: _iaCtrl.signal
+            });
+            clearTimeout(_iaTid);
+            data = await res.json();
+          } finally { clearTimeout(_iaTid); }
         } catch(fe) {
-          data = { ok: false, error: fe.message };
+          data = { ok: false, error: fe.name === 'AbortError' ? '⏱️ Sin respuesta en 25 segundos. Vuelve a intentarlo.' : fe.message };
         }
         if (data.ok) break;
         if (!isCapacityErr(data.error) || i === slices.length - 1) break;

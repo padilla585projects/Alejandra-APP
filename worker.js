@@ -1455,6 +1455,7 @@ export default {
       // â"€â"€ Dev endpoints (superadmin/desarrollador) â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
       if (path === '/dev/sql'           && method === 'POST')   return await devSQL(request, env);
       if (path === '/dev/ai-chat'       && method === 'POST')   return await devAIChat(request, env);
+      if (path === '/dev/ai-status'     && method === 'GET')    return await devAIStatus(request, env);
       if (path === '/dev/table-counts'  && method === 'GET')    return await devTableCounts(request, env);
       if (path === '/dev/sesiones'      && method === 'GET')    return await devSesionesDetalle(request, env);
       if (path === '/dev/kill-session'  && method === 'DELETE') return await devKillSession(request, env);
@@ -8096,12 +8097,28 @@ async function devAIChat(request, env) {
   env.DB.prepare("INSERT INTO alejandra_historial (canal, rol, contenido) VALUES ('web', 'user', ?)").bind(message.slice(0, 4000)).run().catch(() => {});
   env.DB.prepare("DELETE FROM alejandra_historial WHERE canal='web' AND id NOT IN (SELECT id FROM alejandra_historial WHERE canal='web' ORDER BY created_at DESC LIMIT 50)").run().catch(() => {});
 
+  // Auto-sanar: si todos los mensajes del historial son del mismo rol, es historial corrupto
+  const _roles = (historialRows.results || []).map(h => h.rol);
+  if (_roles.length > 2 && _roles.every(r => r === _roles[0])) {
+    env.DB.prepare("DELETE FROM alejandra_historial WHERE canal='web'").run().catch(() => {});
+    msgs.length = 0;
+    msgs.push({ role: 'user', content: userContent });
+    autoLearn(env, 'error', 'Historial web corrupto — auto-limpiado',
+      'Historial tenia ' + _roles.length + ' mensajes todos rol=' + _roles[0] + '. Borrado automatico para recuperar chat.', 5).catch(() => {});
+    sendTelegramMessage(env, '⚠️ Alejandra auto-diagnóstico: historial web corrupto detectado y limpiado (' + _roles.length + ' mensajes ' + _roles[0] + '). Chat restaurado.').catch(() => {});
+  }
+
   const _isCapacity = msg => msg && (msg.includes('rate_limit') || msg.includes('tokens per minute') || msg.includes('overloaded'));
-  const _callAI = (messages) => fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-api-key': env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
-    body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 8192, system: systemPrompt, tools: AI_TOOLS, messages })
-  });
+  const _callAI = (messages) => {
+    const _ctrl = new AbortController();
+    const _tId = setTimeout(() => _ctrl.abort(), 25000);
+    return fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
+      body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 8192, system: systemPrompt, tools: AI_TOOLS, messages }),
+      signal: _ctrl.signal
+    }).finally(() => clearTimeout(_tId));
+  };
 
   try {
     let response = await _callAI(msgs);
@@ -8141,6 +8158,41 @@ async function devAIChat(request, env) {
     await env.DB.prepare("INSERT INTO alejandra_historial (canal, rol, contenido) VALUES ('web', 'assistant', ?)").bind(text.slice(0, 4000)).run().catch(() => {});
     return json({ ok: true, reply: text });
   } catch (e) {
+    const isTimeout = e.name === 'AbortError';
+    const errMsg = isTimeout ? 'timeout_ia_25s' : e.message;
+    autoLearn(env, 'error', 'devAIChat excepcion', errMsg, 5).catch(() => {});
+    if (isTimeout) {
+      sendTelegramMessage(env, '⏱️ Alejandra IA: timeout (>25s) en respuesta de Anthropic. El sistema está lento. Considera reducir el system prompt o aumentar el plan.').catch(() => {});
+    }
+    return json({ ok: false, error: isTimeout ? '⏱️ Respuesta demasiada lenta (timeout 25s). Inténtalo de nuevo en unos segundos.' : e.message });
+  }
+}
+
+async function devAIStatus(request, env) {
+  const s = await getAuth(request, env);
+  if (!s || !['superadmin','desarrollador'].includes(s.rol)) return err('Sin permiso', 403);
+  try {
+    const [histRows, errRows, memRows] = await Promise.all([
+      env.DB.prepare("SELECT rol, COUNT(*) as n FROM alejandra_historial WHERE canal='web' GROUP BY rol").all().catch(() => ({ results: [] })),
+      env.DB.prepare("SELECT titulo, contenido, created_at FROM alejandra_memoria WHERE tipo='error' ORDER BY updated_at DESC LIMIT 5").all().catch(() => ({ results: [] })),
+      env.DB.prepare("SELECT COUNT(*) as n FROM alejandra_memoria").all().catch(() => ({ results: [{ n: 0 }] }))
+    ]);
+    const hist = {};
+    (histRows.results || []).forEach(r => { hist[r.rol] = r.n; });
+    const totalHist = (hist.user || 0) + (hist.assistant || 0);
+    const histOk = totalHist === 0 || (hist.user > 0 && hist.assistant > 0);
+    const corruptoMsg = !histOk ? 'Historial corrupto: ' + JSON.stringify(hist) : null;
+    return json({
+      ok: true,
+      historial: hist,
+      historial_sano: histOk,
+      alerta: corruptoMsg,
+      errores_recientes: (errRows.results || []),
+      total_memorias: (memRows.results[0]?.n || 0),
+      worker_version: '5.64',
+      timestamp: new Date().toISOString()
+    });
+  } catch(e) {
     return json({ ok: false, error: e.message });
   }
 }
