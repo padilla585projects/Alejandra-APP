@@ -882,7 +882,16 @@ REGLAS:
 - Después de resolver un problema correctamente, guarda el método como 'aprendizaje'
 - Al final de cada conversación larga, guarda un resumen de lo más importante
 - Cuando un pendiente esté completado: memory_delete para limpiarlo
-- Revisa sugerencias al inicio: SELECT * FROM sugerencias WHERE estado='pendiente' AND leida=0`;
+- Revisa sugerencias al inicio: SELECT * FROM sugerencias WHERE estado='pendiente' AND leida=0
+
+APRENDIZAJE OBLIGATORIO DESPUES DE CADA ACCION:
+- Completaste un fix o cambio de codigo: memory_save tipo='hecho', titulo='Fix [que arreglaste]', contenido='Archivo X linea Y, cambio Z. Funciono/No funciono porque...'. OBLIGATORIO.
+- Un tool devolvio error: memory_save tipo='error' ANTES de reintentar. Incluye: tool usado, input exacto, error recibido, que haras diferente.
+- Descubriste como funciona algo en el codigo: memory_save tipo='aprendizaje'. Ejemplos: estructura de una tabla, formato de una respuesta, comportamiento de un modulo.
+- Rate limit de Anthropic: el sistema ya reintenta automaticamente con menos historial. Tu mision: usar memory_read al inicio de sesiones importantes en lugar de depender del historial de chat.
+- Resolviste algo que antes habia fallado: memory_save tipo='aprendizaje' con la solucion que funciono. Esto es lo mas valioso — aprende de tus propios errores anteriores.
+
+REGLA FUNDAMENTAL: Si haces algo y no lo guardas en memoria, lo perderas. Cada vez que ejecutes herramientas, guarda lo que aprendiste. No esperes a que Adrian te lo pida.`;
 }
 
 async function handleDevAI(env, chatId, userMessage) {
@@ -1883,22 +1892,22 @@ export default {
   async scheduled(event, env, ctx) {
     if (event.cron === '0 18 * * *') {
       ctx.waitUntil(cierreAutomaticoJornada(env));
+      ctx.waitUntil(syncPedidos(env)); // ~10 subrequests, seguro en este slot
     } else if (event.cron === '0 23 * * *') {
-      // Revisión autónoma nocturna — solo propone fixes, nunca aplica
+      // Revision autonoma nocturna - solo propone fixes, nunca aplica
       ctx.waitUntil(runAutonomousReview(env));
+      ctx.waitUntil(syncRRHH(env)); // ~20 subrequests, seguro en este slot
     } else if (event.cron === '0 7 * * *') {
       // Recordatorio matutino: fixes pendientes > 12h
       ctx.waitUntil(recordatorioFixesPendientes(env));
       ctx.waitUntil(alertasDiarias(env));
+      ctx.waitUntil(syncSheets(env)); // ~29 subrequests, seguro en este slot
     } else {
       ctx.waitUntil(alertasDiarias(env));
     }
-    // Resync completo en cada cron â€" resiliencia ante fallos transitorios de Google API
-    ctx.waitUntil(syncSheets(env));
-    ctx.waitUntil(syncPedidos(env));
-    ctx.waitUntil(syncRRHH(env)); // SYNC-03: fichajes, incidencias, carnets, EPIs, turnos, repostajes
-  },
-};
+    // syncSheets/syncPedidos/syncRRHH distribuidos 1 por cron para no superar
+    // el limite de 50 subrequests por invocacion (limite Cloudflare Workers free).
+  },};
 
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // VERIFICAR ACCESO
@@ -8085,14 +8094,28 @@ async function devAIChat(request, env) {
   // Guardar mensaje usuario
   env.DB.prepare("INSERT INTO alejandra_historial (canal, rol, contenido) VALUES ('web', 'user', ?)").bind(message.slice(0, 4000)).run().catch(() => {});
   env.DB.prepare("DELETE FROM alejandra_historial WHERE canal='web' AND id NOT IN (SELECT id FROM alejandra_historial WHERE canal='web' ORDER BY created_at DESC LIMIT 50)").run().catch(() => {});
+
+  const _isCapacity = msg => msg && (msg.includes('rate_limit') || msg.includes('tokens per minute') || msg.includes('overloaded'));
+  const _callAI = (messages) => fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-api-key': env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
+    body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 8192, system: systemPrompt, tools: AI_TOOLS, messages })
+  });
 
   try {
-    let response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-api-key': env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
-      body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 8192, system: systemPrompt, tools: AI_TOOLS, messages: msgs })
-    });
+    let response = await _callAI(msgs);
     let result = await response.json();
+
+    // Rate limit: reintentar con historial reducido + guardar aprendizaje automatico
+    if (!response.ok && _isCapacity(result.error?.message)) {
+      autoLearn(env, 'error', 'Rate limit chat web — historial largo',
+        'Contexto de ' + msgs.length + ' mensajes causa rate_limit (30k tokens/min). Solucion: reducir historial a ultimos 4 mensajes. Usar memory_read para contexto en lugar de acumular historial largo.', 4).catch(() => {});
+      const userMsg = msgs[msgs.length - 1];
+      const msgsCorto = msgs.length > 5 ? [...msgs.slice(-5, -1), userMsg] : msgs;
+      response = await _callAI(msgsCorto);
+      result = await response.json();
+    }
+
     if (!response.ok) return json({ ok: false, error: result.error?.message || 'Error API' });
 
     let iterations = 0;

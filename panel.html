@@ -5827,27 +5827,58 @@ document.getElementById('wInput').focus();
 
     const previewHtml = _aiImage ? `<div style="display:flex;align-items:center;gap:8px"><img src="data:${_aiImage.media_type};base64,${_aiImage.data}" style="width:48px;height:48px;object-fit:cover;border-radius:6px;border:1px solid #334155"><span>${_aiImage.name}</span></div>` : msgText;
     appendMsg('user', previewHtml);
-    const typing = appendTyping();
+    let typing = appendTyping();
     document.getElementById('aiSendBtn').disabled = true;
 
-    const body = { message: msgText, history: aiHistory };
-    if (_aiImage) body.image = { data: _aiImage.data, media_type: _aiImage.media_type };
+    const imageData = _aiImage ? { data: _aiImage.data, media_type: _aiImage.media_type } : null;
     aiClearImage();
 
+    const isCapacityErr = e => e && (
+      e.includes('rate_limit') || e.includes('rate limit') ||
+      e.includes('tokens per minute') || e.includes('overloaded') ||
+      e.includes('529')
+    );
+
+    // Reintentos con historial reducido: completo → 10 msgs → 4 msgs → sin historial
+    const slices = [aiHistory, aiHistory.slice(-10), aiHistory.slice(-4), []];
+    let data = null;
+
     try {
-      const res = await fetch(AI_API + '/dev/ai-chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Token': getToken() },
-        body: JSON.stringify(body)
-      });
-      const data = await res.json();
+      for (let i = 0; i < slices.length; i++) {
+        try {
+          const body = { message: msgText, history: slices[i] };
+          if (i === 0 && imageData) body.image = imageData; // imagen solo en primer intento
+          const res = await fetch(AI_API + '/dev/ai-chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-Token': getToken() },
+            body: JSON.stringify(body)
+          });
+          data = await res.json();
+        } catch(fe) {
+          data = { ok: false, error: fe.message };
+        }
+        if (data.ok) break;
+        if (!isCapacityErr(data.error) || i === slices.length - 1) break;
+        // Reintento silencioso — el usuario solo ve que sigue pensando
+        typing.remove();
+        typing = appendTyping();
+      }
+
       typing.remove();
-      const reply = data.ok ? data.reply : ('❌ ' + (data.error || 'Error'));
+      let reply;
+      if (data && data.ok) {
+        reply = data.reply;
+        aiHistory.push({ role: 'user', content: msgText });
+        aiHistory.push({ role: 'assistant', content: reply });
+        if (aiHistory.length > 40) aiHistory = aiHistory.slice(-40);
+        try { localStorage.setItem(AI_HIST_KEY, JSON.stringify(aiHistory)); } catch {}
+      } else {
+        const err = data?.error || '';
+        reply = isCapacityErr(err)
+          ? '⚠️ Hay demasiado tráfico en este momento. Espera unos segundos e inténtalo de nuevo.'
+          : ('❌ ' + (err || 'Error desconocido'));
+      }
       appendMsg('bot', reply);
-      aiHistory.push({ role: 'user', content: msgText });
-      aiHistory.push({ role: 'assistant', content: reply });
-      if (aiHistory.length > 40) aiHistory = aiHistory.slice(-40);
-      try { localStorage.setItem(AI_HIST_KEY, JSON.stringify(aiHistory)); } catch {}
     } catch(e) {
       typing.remove();
       appendMsg('bot', '❌ Error de conexión: ' + e.message);
