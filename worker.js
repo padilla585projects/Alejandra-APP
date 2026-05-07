@@ -1200,6 +1200,15 @@ async function handleTelegramWebhook(request, env, ctx) {
       await sendTelegram(env, '▶️ <b>Agente activado.</b> Volveré a revisar esta noche a las 01:00 AM.');
       return new Response('OK');
     }
+    if (texto === '/reiniciar' || texto === '/reiniciar_agente') {
+      await Promise.all([
+        env.DB.prepare("INSERT OR REPLACE INTO alejandra_config (key, value, updated_at) VALUES ('agente_activo', '1', CURRENT_TIMESTAMP)").run(),
+        env.DB.prepare("DELETE FROM alejandra_historial WHERE canal='telegram'").run(),
+        env.DB.prepare("DELETE FROM alejandra_historial WHERE canal='web'").run(),
+      ]);
+      await sendTelegram(env, '🔄 <b>Reiniciada.</b> Historial de conversación borrado. Agente activo y listo desde cero.');
+      return new Response('OK');
+    }
     if (texto === '/estado_agente') {
       const pausado = await isAgentePausado(env);
       const pendFixes = await env.DB.prepare("SELECT COUNT(*) as n FROM alejandra_fixes WHERE estado='pendiente'").first();
@@ -1845,6 +1854,17 @@ export default {
         const activo = nuevoValor === '1';
         if (env.DEV_CHAT_ID) await sendTelegramConBotonesTo(env, env.DEV_CHAT_ID, activo ? '▶️ Agente activado desde el panel web.' : '⛔ Agente pausado desde el panel web.', []);
         return json({ ok: true, agente_activo: activo });
+      }
+      if (path === '/alejandra-agente-restart' && method === 'POST') {
+        const { isSuperadmin } = await getAuth(request, env);
+        if (!isSuperadmin) return err('No autorizado', 403);
+        await Promise.all([
+          env.DB.prepare("INSERT OR REPLACE INTO alejandra_config (key, value, updated_at) VALUES ('agente_activo', '1', CURRENT_TIMESTAMP)").run(),
+          env.DB.prepare("DELETE FROM alejandra_historial WHERE canal='telegram'").run(),
+          env.DB.prepare("DELETE FROM alejandra_historial WHERE canal='web'").run(),
+        ]);
+        if (env.DEV_CHAT_ID) await sendTelegramConBotonesTo(env, env.DEV_CHAT_ID, '🔄 <b>Agente reiniciado desde el panel web.</b>\nHistorial de conversación borrado. Agente activo y listo.', []);
+        return json({ ok: true });
       }
 
       if (path === '/backup/inventario'    && method === 'GET')  return await backupInventario(request, env);
