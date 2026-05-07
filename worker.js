@@ -1890,7 +1890,61 @@ export default {
   },
 
   // â"€â"€ Cron diario: alertas + cierre jornada â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+async function checkChatHealth(env) {
+  try {
+    // Comprobar historial web — detecta y repara corrupcion automaticamente
+    const histRows = await env.DB.prepare(
+      "SELECT rol, COUNT(*) as n FROM alejandra_historial WHERE canal='web' GROUP BY rol"
+    ).all().catch(() => ({ results: [] }));
+
+    const hist = {};
+    (histRows.results || []).forEach(r => { hist[r.rol] = r.n; });
+    const userCount = hist.user || 0;
+    const assistantCount = hist.assistant || 0;
+    const totalHist = userCount + assistantCount;
+
+    // Corrupto: tiene mensajes user pero cero assistant
+    const corrupto = totalHist > 2 && assistantCount === 0;
+    // Desequilibrado: hay mas de 3x mensajes user vs assistant (indica que asst INSERT falla)
+    const desequilibrio = totalHist > 4 && userCount > assistantCount * 3;
+
+    if (corrupto || desequilibrio) {
+      await env.DB.prepare("DELETE FROM alejandra_historial WHERE canal='web'").run().catch(() => {});
+      const tipo = corrupto
+        ? 'corrupto (' + userCount + ' user, 0 assistant)'
+        : 'desequilibrado (' + userCount + ' user, ' + assistantCount + ' assistant)';
+      autoLearn(env, 'error', 'Healthcheck auto-fix historial web',
+        'Historial ' + tipo + '. Auto-limpiado en cron. Chat restaurado sin intervencion humana.', 5).catch(() => {});
+      sendTelegramMessage(env,
+        '🩺 Auto-diagnóstico Alejandra
+' +
+        '⚠️ Historial web ' + tipo + '
+' +
+        '✅ Limpiado automáticamente — chat IA restaurado.
+' +
+        'No necesitas hacer nada.'
+      ).catch(() => {});
+    }
+
+    // Errores recientes acumulados (ultimas 3h) — avisa si hay muchos
+    const errRows = await env.DB.prepare(
+      "SELECT COUNT(*) as n FROM alejandra_memoria WHERE tipo='error' AND updated_at > datetime('now', '-3 hours')"
+    ).all().catch(() => ({ results: [{ n: 0 }] }));
+    const recentErrors = errRows.results[0]?.n || 0;
+    if (recentErrors >= 5) {
+      sendTelegramMessage(env,
+        '⚠️ Alejandra auto-diagnóstico: ' + recentErrors + ' errores en últimas 3h. Revisa el panel › DevTools › Agente IA.'
+      ).catch(() => {});
+    }
+  } catch (e) {
+    // Nunca lanzar excepcion — el healthcheck no debe romper el cron
+  }
+}
+
   async scheduled(event, env, ctx) {
+    // Healthcheck en TODOS los crons: Alejandra se autodiagnostica y se autorrepara
+    ctx.waitUntil(checkChatHealth(env));
+
     if (event.cron === '0 18 * * *') {
       ctx.waitUntil(cierreAutomaticoJornada(env));
       ctx.waitUntil(syncPedidos(env)); // ~10 subrequests, seguro en este slot
@@ -8162,7 +8216,9 @@ async function devAIChat(request, env) {
     const errMsg = isTimeout ? 'timeout_ia_25s' : e.message;
     autoLearn(env, 'error', 'devAIChat excepcion', errMsg, 5).catch(() => {});
     if (isTimeout) {
-      sendTelegramMessage(env, '⏱️ Alejandra IA: timeout (>25s) en respuesta de Anthropic. El sistema está lento. Considera reducir el system prompt o aumentar el plan.').catch(() => {});
+      // Auto-limpiar historial: un timeout suele ser por historial muy largo
+      env.DB.prepare("DELETE FROM alejandra_historial WHERE canal='web'").run().catch(() => {});
+      sendTelegramMessage(env, '⏱️ Alejandra IA: timeout >25s. Historial web auto-limpiado para que el próximo intento sea más rápido.').catch(() => {});
     }
     return json({ ok: false, error: isTimeout ? '⏱️ Respuesta demasiada lenta (timeout 25s). Inténtalo de nuevo en unos segundos.' : e.message });
   }
