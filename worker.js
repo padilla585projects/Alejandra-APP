@@ -7939,10 +7939,10 @@ async function getChatMensajes(request, env) {
   const since  = url.searchParams.get('since') || null;
   const obraId = url.searchParams.get('obra_id') ? parseInt(url.searchParams.get('obra_id')) : null;
 
-  const conds  = ['empresa_id = ?'];
+  const conds  = ['cm.empresa_id = ?'];
   const params = [empresa_id];
-  if (obraId) { conds.push('obra_id = ?'); params.push(obraId); }
-  if (since)  { conds.push('created_at > ?'); params.push(since); }
+  if (obraId) { conds.push('cm.obra_id = ?'); params.push(obraId); }
+  if (since)  { conds.push('cm.created_at > ?'); params.push(since); }
   params.push(limit);
 
   const order = since ? 'ASC' : 'DESC';
