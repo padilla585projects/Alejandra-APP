@@ -652,6 +652,7 @@ async function executeAITool(env, toolName, toolInput) {
     }
     case 'propose_fix': {
       const { descripcion, archivo, old_code, new_code, razon, sugerencia_id } = toolInput;
+      if (await isAgentePausado(env)) return JSON.stringify({ ok: false, error: 'Agente pausado por Adrián. No puedo proponer fixes hasta que lo reactive con /activar.' });
       try {
         const fixData = JSON.stringify({ old: old_code, new: new_code });
         const r = await env.DB.prepare(
@@ -965,6 +966,11 @@ async function handleDevAI(env, chatId, userMessage) {
 
 // ── REVISIÓN AUTÓNOMA DIARIA ─────────────────────────────────────────────────
 async function runAutonomousReview(env) {
+  const devChatId = env.DEV_CHAT_ID;
+  if (await isAgentePausado(env)) {
+    if (devChatId) await sendTelegramConBotonesTo(env, devChatId, '⏸️ <b>Agente pausado</b> — revisión nocturna omitida. Usa /activar para reactivarlo.', []);
+    return;
+  }
   try {
     const [sugs, errores, pendientes, fixesPend] = await Promise.all([
       env.DB.prepare("SELECT id, texto, categoria, (foto IS NOT NULL AND foto != '') as tiene_foto, usuario, obra FROM sugerencias WHERE estado='pendiente' AND leida=0 ORDER BY created_at DESC LIMIT 10").all().catch(() => ({ results: [] })),
@@ -1046,6 +1052,74 @@ async function sendTelegramFiltered(env, mensaje, categoria) {
   } catch { await sendTelegram(env, mensaje); }
 }
 
+// Comprueba si el agente autónomo está pausado por Adrián
+async function isAgentePausado(env) {
+  try {
+    const r = await env.DB.prepare("SELECT value FROM alejandra_config WHERE key='agente_activo'").first();
+    return r?.value === '0';
+  } catch { return false; }
+}
+
+// Recordatorio matutino: fixes pendientes con más de 12h sin revisar
+async function recordatorioFixesPendientes(env) {
+  const devChatId = env.DEV_CHAT_ID;
+  if (!devChatId) return;
+  const pending = await env.DB.prepare(
+    "SELECT id, descripcion, archivo, created_at FROM alejandra_fixes WHERE estado='pendiente' AND created_at < datetime('now', '-12 hours') ORDER BY created_at ASC"
+  ).all();
+  if (!pending.results?.length) return;
+  const n = pending.results.length;
+  let msg = `⏳ <b>${n} fix${n > 1 ? 'es' : ''} pendiente${n > 1 ? 's' : ''} de aprobación</b>\n\n`;
+  for (const f of pending.results) {
+    const horas = Math.floor((Date.now() - new Date(f.created_at + 'Z').getTime()) / 3600000);
+    msg += `• Fix #${f.id} — <i>${f.descripcion.slice(0, 60)}</i>\n  📄 <code>${f.archivo}</code> — hace ${horas}h\n\n`;
+  }
+  msg += 'Revisa el panel DevTools → Agente IA, o los mensajes originales de Telegram.';
+  await sendTelegramConBotonesTo(env, devChatId, msg, []);
+}
+
+// Health check post-deploy: espera 90s, comprueba el worker, auto-revierte si falla
+async function _checkearSaludPostDeploy(env, fixId, chatId) {
+  await new Promise(r => setTimeout(r, 90000));
+  let saludOk = false;
+  try {
+    const res = await fetch('https://alejandra-app-api.alejandra-app.workers.dev/health', { signal: AbortSignal.timeout(10000) });
+    saludOk = res.ok;
+  } catch (_) {}
+  if (saludOk) {
+    await env.DB.prepare("UPDATE alejandra_fixes SET estado='verificado', updated_at=CURRENT_TIMESTAMP WHERE id=? AND estado='aplicado'").bind(fixId).run();
+    return;
+  }
+  // Fallo — intentar auto-revert
+  const fix = await env.DB.prepare('SELECT * FROM alejandra_fixes WHERE id=?').bind(fixId).first();
+  if (!fix || fix.estado !== 'aplicado') return;
+  try {
+    const { old: oldCode, new: newCode } = JSON.parse(fix.contenido_nuevo);
+    const getRes = await fetch(`https://api.github.com/repos/padilla585projects/Alejandra-APP/contents/${encodeURIComponent(fix.archivo)}`, {
+      headers: { 'Authorization': `token ${env.GITHUB_TOKEN}`, 'Accept': 'application/vnd.github.v3+json', 'User-Agent': 'AlejandraIA' }
+    });
+    if (!getRes.ok) throw new Error('GitHub error');
+    const fileData = await getRes.json();
+    const currentContent = atob(fileData.content.replace(/\n/g, ''));
+    if (!currentContent.includes(newCode)) throw new Error('Código ya no existe en el archivo');
+    const revertedContent = currentContent.replace(newCode, oldCode);
+    const encoded = btoa(unescape(encodeURIComponent(revertedContent)));
+    const putRes = await fetch(`https://api.github.com/repos/padilla585projects/Alejandra-APP/contents/${encodeURIComponent(fix.archivo)}`, {
+      method: 'PUT',
+      headers: { 'Authorization': `token ${env.GITHUB_TOKEN}`, 'Accept': 'application/vnd.github.v3+json', 'User-Agent': 'AlejandraIA', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: `revert(alejandra-auto): health check falló — fix #${fixId}`, content: encoded, sha: fileData.sha })
+    });
+    const revertSha = putRes.ok ? (await putRes.json()).commit?.sha?.slice(0, 7) : '?';
+    await env.DB.prepare("UPDATE alejandra_fixes SET estado='revertido_auto', updated_at=CURRENT_TIMESTAMP WHERE id=?").bind(fixId).run();
+    autoLearn(env, 'error', `Fix #${fixId} auto-revertido`, `Health check falló 90s post-deploy. Archivo: ${fix.archivo}. Revisar qué causó el fallo.`, 5);
+    await sendTelegramConBotonesTo(env, chatId,
+      `🚨 <b>AUTO-REVERT activado</b>\n\nEl health check falló 90s después del deploy del fix #${fixId}.\nEl sistema ha sido restaurado automáticamente.\n\n<i>${fix.descripcion.slice(0, 80)}</i>\nCommit revert: <code>${revertSha}</code>`, []);
+  } catch (e) {
+    await sendTelegramConBotonesTo(env, chatId,
+      `🚨 <b>ALERTA CRÍTICA</b> — Health check falló tras fix #${fixId} pero no pude auto-revertir:\n<code>${e.message}</code>\n\n<b>¡Revisar manualmente!</b>`, []);
+  }
+}
+
 // Aplica un fix de alejandra_fixes en GitHub — compartido por fix_apply y fix_confirm
 async function _ejecutarFix(env, fix, fixId, chatId, msgId, orig, cqId) {
   const { old: oldCode, new: newCode } = JSON.parse(fix.contenido_nuevo);
@@ -1078,7 +1152,7 @@ async function _ejecutarFix(env, fix, fixId, chatId, msgId, orig, cqId) {
 }
 
 // Gestiona las pulsaciones de botones inline enviadas por Telegram
-async function handleTelegramWebhook(request, env) {
+async function handleTelegramWebhook(request, env, ctx) {
   const secret = request.headers.get('X-Telegram-Bot-Api-Secret-Token');
   if (!secret || secret !== env.TELEGRAM_WEBHOOK_SECRET) return new Response('Unauthorized', { status: 401 });
   const update = await request.json().catch(() => null);
@@ -1114,6 +1188,23 @@ async function handleTelegramWebhook(request, env) {
           return new Response('OK');
         }
       }
+    }
+    // Comandos de control del agente autónomo
+    if (texto === '/parar' || texto === '/parar_agente') {
+      await env.DB.prepare("INSERT OR REPLACE INTO alejandra_config (key, value, updated_at) VALUES ('agente_activo', '0', CURRENT_TIMESTAMP)").run();
+      await sendTelegram(env, '⛔ <b>Agente pausado.</b> No haré revisiones autónomas ni propondré fixes hasta que uses /activar.');
+      return new Response('OK');
+    }
+    if (texto === '/activar' || texto === '/activar_agente') {
+      await env.DB.prepare("INSERT OR REPLACE INTO alejandra_config (key, value, updated_at) VALUES ('agente_activo', '1', CURRENT_TIMESTAMP)").run();
+      await sendTelegram(env, '▶️ <b>Agente activado.</b> Volveré a revisar esta noche a las 01:00 AM.');
+      return new Response('OK');
+    }
+    if (texto === '/estado_agente') {
+      const pausado = await isAgentePausado(env);
+      const pendFixes = await env.DB.prepare("SELECT COUNT(*) as n FROM alejandra_fixes WHERE estado='pendiente'").first();
+      await sendTelegram(env, `${pausado ? '⛔ Agente PAUSADO' : '▶️ Agente ACTIVO'}\n\nFixes pendientes: ${pendFixes?.n || 0}\nCron revisión: 01:00 AM (hora España)\nCron recordatorio: 09:00 AM si hay fixes pendientes`);
+      return new Response('OK');
     }
     if (texto) await handleDevAI(env, update.message.chat.id, texto);
     return new Response('OK');
@@ -1189,6 +1280,7 @@ async function handleTelegramWebhook(request, env) {
       }
       // Fuera de horario laboral — aplicar directamente
       await _ejecutarFix(env, fix, fixId, chatId, msgId, orig, cq.id);
+      if (ctx) ctx.waitUntil(_checkearSaludPostDeploy(env, fixId, chatId));
     }
     else if (accion === 'fix_confirm') {
       // Segunda confirmación — aplica sin importar la hora
@@ -1200,6 +1292,7 @@ async function handleTelegramWebhook(request, env) {
       }
       await _tgAnswerCQ(env, cq.id, '⚙️ Aplicando fix...');
       await _ejecutarFix(env, fix, fixId, chatId, msgId, orig, cq.id);
+      if (ctx) ctx.waitUntil(_checkearSaludPostDeploy(env, fixId, chatId));
     }
     else if (accion === 'fix_snooze') {
       const fixId = parseInt(partes[0]);
@@ -1289,10 +1382,11 @@ export default {
 
     try {
       // â"€â"€ Telegram webhook (sin auth â€" valida con secret header) â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
-      if (path === '/telegram-webhook'       && method === 'POST') return await handleTelegramWebhook(request, env);
+      if (path === '/telegram-webhook'       && method === 'POST') return await handleTelegramWebhook(request, env, ctx);
       if (path === '/setup-telegram-webhook' && method === 'GET')  return await setupTelegramWebhook(request, env);
 
       // â"€â"€ Rutas pÃºblicas (sin auth) â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+      if (path === '/health'      && method === 'GET')  return new Response(JSON.stringify({ ok: true, ts: Date.now() }), { headers: { 'Content-Type': 'application/json' } });
       if (path === '/scan'        && method === 'POST') return await handleScan(request, env);
       if (path === '/ocr'         && method === 'POST') return await handleOCR(request, env);
       if (path === '/log'         && method === 'POST') return await guardarLog(request, env);
@@ -1733,6 +1827,26 @@ export default {
       }
 
       // â"€â"€ Backup / Restaurar â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+      // ── Agente IA — control y monitoreo ──────────────────────────────────────
+      if (path === '/alejandra-fixes' && method === 'GET') {
+        const { isSuperadmin } = await getAuth(request, env);
+        if (!isSuperadmin) return err('No autorizado', 403);
+        const fixes = await env.DB.prepare(
+          "SELECT id, descripcion, archivo, estado, razon, commit_sha, sugerencia_id, created_at, updated_at FROM alejandra_fixes ORDER BY created_at DESC LIMIT 100"
+        ).all();
+        return json(fixes.results || []);
+      }
+      if (path === '/alejandra-agente-toggle' && method === 'POST') {
+        const { isSuperadmin } = await getAuth(request, env);
+        if (!isSuperadmin) return err('No autorizado', 403);
+        const actual = await env.DB.prepare("SELECT value FROM alejandra_config WHERE key='agente_activo'").first();
+        const nuevoValor = (actual?.value === '0') ? '1' : '0';
+        await env.DB.prepare("INSERT OR REPLACE INTO alejandra_config (key, value, updated_at) VALUES ('agente_activo', ?, CURRENT_TIMESTAMP)").bind(nuevoValor).run();
+        const activo = nuevoValor === '1';
+        if (env.DEV_CHAT_ID) await sendTelegramConBotonesTo(env, env.DEV_CHAT_ID, activo ? '▶️ Agente activado desde el panel web.' : '⛔ Agente pausado desde el panel web.', []);
+        return json({ ok: true, agente_activo: activo });
+      }
+
       if (path === '/backup/inventario'    && method === 'GET')  return await backupInventario(request, env);
       if (path === '/backup/empresa'       && method === 'GET')  return await backupEmpresa(request, env);
       if (path === '/restaurar/inventario' && method === 'POST') return await restaurarInventario(request, env);
@@ -1752,6 +1866,10 @@ export default {
     } else if (event.cron === '0 23 * * *') {
       // Revisión autónoma nocturna — solo propone fixes, nunca aplica
       ctx.waitUntil(runAutonomousReview(env));
+    } else if (event.cron === '0 7 * * *') {
+      // Recordatorio matutino: fixes pendientes > 12h
+      ctx.waitUntil(recordatorioFixesPendientes(env));
+      ctx.waitUntil(alertasDiarias(env));
     } else {
       ctx.waitUntil(alertasDiarias(env));
     }
