@@ -5825,7 +5825,7 @@ document.getElementById('wInput').focus();
     input.value = '';
     input.style.height = '';
 
-    const previewHtml = _aiImage ? <div style="display:flex;align-items:center;gap:8px"><img src="data:;base64," style="width:48px;height:48px;object-fit:cover;border-radius:6px;border:1px solid #334155"><span></span></div> : msgText;
+    const previewHtml = _aiImage ? `<div style="display:flex;align-items:center;gap:8px"><img src="data:${_aiImage.media_type};base64,${_aiImage.data}" style="width:48px;height:48px;object-fit:cover;border-radius:6px;border:1px solid #334155"><span>${_aiImage.name}</span></div>` : msgText;
     appendMsg('user', previewHtml);
     const typing = appendTyping();
     document.getElementById('aiSendBtn').disabled = true;
