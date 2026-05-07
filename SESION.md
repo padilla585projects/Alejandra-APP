@@ -6,9 +6,9 @@
 ## ESTADO ACTUAL
 
 **Sesión:** LIBRE
-**Última sesión:** 06/05/2026
-**Versión tras última sesión:** v5.53 + Alejandra IA completa v2
-**Worker desplegado:** 16e9ed5 (aprendizaje activo, repo tools, system prompt completo)
+**Última sesión:** 07/05/2026
+**Versión tras última sesión:** v5.53 (worker d997455 — mejoras agente IA)
+**Worker desplegado:** d997455 (max_tokens 8192, tools paralelas, paginación repo_read_file, SQL seguro)
 **GitHub:** en sync ✅ — GitHub Actions deploy activo (Pages + Worker)
 
 ---

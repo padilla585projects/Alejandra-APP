@@ -4,8 +4,8 @@
   Ruta local: C:\Users\Adrian\Downloads\Proyecto GestiBobina\Alejandra APP
 ================================================================================
 
-ÚLTIMA ACTUALIZACIÓN: 06/05/2026
-VERSIÓN ACTUAL APP NUEVA: v5.53 (worker e8e2ecb8)
+ÚLTIMA ACTUALIZACIÓN: 07/05/2026
+VERSIÓN ACTUAL APP NUEVA: v5.53 (worker d997455 — mejoras agente IA)
 VERSIÓN ACTUAL APP VIEJA: v4.19 (⛔ CONGELADA DEFINITIVAMENTE — no recibe más cambios)
 
 ================================================================================
