@@ -5,7 +5,7 @@
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 07/05/2026
-VERSIÓN ACTUAL APP NUEVA: v5.53 (worker d997455 — mejoras agente IA)
+VERSIÓN ACTUAL APP NUEVA: v5.54 (worker e34cf08 — Alejandra autónoma: visión, Tavily, propose_fix, cron review)
 VERSIÓN ACTUAL APP VIEJA: v4.19 (⛔ CONGELADA DEFINITIVAMENTE — no recibe más cambios)
 
 ================================================================================
@@ -150,6 +150,28 @@ PASO 4 — VERIFICAR WORKER (solo si se va a tocar worker.js)
 ================================================================================
   HISTORIAL DE VERSIONES — RECIENTES
 ================================================================================
+
+v5.54        |  07/05/2026  [Alejandra autónoma: visión + Tavily + propose_fix + cron review]
+  - VISION: Alejandra puede analizar imágenes. read_suggestion_image devuelve imagen de R2.
+    Panel web: botón adjuntar imagen en chat IA — preview + envío como base64 con media_type.
+    Telegram: fotos enviadas al bot → descargadas y pasadas como visión al Claude API.
+  - TAVILY: web_search reemplaza DuckDuckGo (inútil) por Tavily API (api.tavily.com/search).
+    Devuelve answer sintetizada + resultados con title/url/content. TAVILY_API_KEY en secrets.
+  - PROPOSE_FIX: nueva tool que guarda fix en alejandra_fixes + envía Telegram con botones.
+    [✅ Aplicar fix] → lee archivo de GitHub, reemplaza old→new, commit automático.
+    [❌ Ignorar] → marca fix como ignorado. Solo se aplica con aprobación explícita de Adrian.
+  - CRON REVIEW: runAutonomousReview() ejecuta en cron 07:00 UTC.
+    Lee: sugerencias no leídas, errores en logs (24h), fixes pendientes, memorias no leídas.
+    Si hay nada: "✅ Todo tranquilo". Si hay algo: lanza agente Claude con tools completas.
+    Alejandra puede leer imágenes, leer código, proponer fixes — todo bajo supervisión.
+  - sendTelegramConBotonesTo(): variante con chatId configurable para cron review.
+  - repo_read_file: paginación por líneas (line_start/line_end) para archivos grandes.
+  - D1: CREATE TABLE alejandra_fixes (id, descripcion, archivo, contenido_nuevo, razon,
+    sugerencia_id, estado, created_at, updated_at).
+  - Worker: e34cf08
+
+v5.53        |  07/05/2026  [mejoras agente IA — max_tokens, herramientas paralelas, SQL seguro]
+  - Worker: d997455
 
 v5.49        |  05/05/2026  [pendientes backlog — Telegram secret + auto-refresh + docs]
   - TELEGRAM_WEBHOOK_SECRET configurado en Cloudflare secrets (64 chars hex, crypto-seguro).

@@ -7,9 +7,44 @@
 
 **Sesión:** LIBRE
 **Última sesión:** 07/05/2026
-**Versión tras última sesión:** v5.53 (worker d997455 — mejoras agente IA)
-**Worker desplegado:** d997455 (max_tokens 8192, tools paralelas, paginación repo_read_file, SQL seguro)
+**Versión tras última sesión:** v5.54 (worker e34cf08 — Alejandra autónoma)
+**Worker desplegado:** e34cf08 (visión, Tavily, propose_fix, cron review, paginación)
 **GitHub:** en sync ✅ — GitHub Actions deploy activo (Pages + Worker)
+
+---
+
+## RESUMEN SESIÓN 07/05/2026 — tarde (Alejandra autónoma v5.54)
+
+### Qué se hizo:
+
+**Revisión y mejora del agente IA (v5.53 → v5.54):**
+- max_tokens 8192, herramientas paralelas con Promise.all, SQL parametrizado en memory_read
+- repo_read_file con paginación line_start/line_end + total_lines devuelto
+
+**Búsqueda web real (Tavily):**
+- web_search reemplaza DuckDuckGo por Tavily API (api.tavily.com/search, POST)
+- Devuelve: answer sintetizada + lista de resultados title/url/content
+- TAVILY_API_KEY subido a Cloudflare secrets
+
+**Visión / análisis de imágenes:**
+- read_suggestion_image: lee sugerencia de D1, descarga imagen de R2, devuelve array [{type:'text'},{type:'image',base64}]
+- Panel web: botón 📎 en chat IA → preview de imagen → enviada como base64 al worker
+- Telegram: fotos enviadas al bot → descargadas via Telegram API → pasadas como visión a Claude
+- tool_result acepta array con imágenes (Anthropic API lo soporta nativamente)
+
+**Alejandra autónoma con supervisión:**
+- propose_fix: nueva tool → guarda fix en alejandra_fixes → envía Telegram con [✅ Aplicar] [❌ Ignorar]
+- fix_apply callback: lee archivo GitHub, reemplaza old→new, commit automático, actualiza sugerencia
+- fix_reject callback: marca fix como ignorado
+- runAutonomousReview(): cron 07:00 UTC — lee sugerencias/errores/pendientes, lanza agente Claude
+- sendTelegramConBotonesTo(): variante con chatId configurable
+- CREATE TABLE alejandra_fixes en D1 (creada manualmente)
+
+### Estado final:
+- Worker: e34cf08 ✅ desplegado via GitHub Actions
+- GitHub: en sync ✅
+- D1: tabla alejandra_fixes creada ✅
+- Cron 07:00 UTC: runAutonomousReview activo ✅
 
 ---
 
