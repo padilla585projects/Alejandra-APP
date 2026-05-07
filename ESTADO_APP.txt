@@ -5,7 +5,7 @@
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 07/05/2026
-VERSIÓN ACTUAL APP NUEVA: v5.55 (worker 43e1731 — bloqueo horario laboral fixes + cron nocturno)
+VERSIÓN ACTUAL APP NUEVA: v5.58 (worker 4184bb2 — agente autonomo completo con control total)
 VERSIÓN ACTUAL APP VIEJA: v4.19 (⛔ CONGELADA DEFINITIVAMENTE — no recibe más cambios)
 
 ================================================================================

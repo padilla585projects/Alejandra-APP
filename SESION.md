@@ -7,9 +7,54 @@
 
 **Sesión:** LIBRE
 **Última sesión:** 07/05/2026
-**Versión tras última sesión:** v5.55 (worker 43e1731 — bloqueo horario laboral + cron nocturno)
-**Worker desplegado:** 43e1731 (cron 23:00 UTC, bloqueo 07-19h España, fix_confirm, fix_snooze)
+**Versión tras última sesión:** v5.58 (worker 4184bb2 — agente autónomo completo)
+**Worker desplegado:** 4184bb2 (health check auto-revert, recordatorio, panel agente, parar/reiniciar)
 **GitHub:** en sync ✅ — GitHub Actions deploy activo (Pages + Worker)
+
+---
+
+## RESUMEN SESIÓN 07/05/2026 — completa (Alejandra autónoma v5.54→v5.58)
+
+### Qué se hizo:
+
+**v5.54 — Base autónoma:**
+- Visión: read_suggestion_image + adjuntar imágenes en panel y Telegram
+- Tavily: web_search real con answer sintetizada (TAVILY_API_KEY en secrets)
+- propose_fix: stagea fix en D1 + Telegram [✅ Aplicar] [❌ Ignorar]
+- fix_apply/fix_confirm: lógica de aplicar con commit a GitHub
+- fix_revert: sustitución inversa new→old con commit revert
+- runAutonomousReview: cron nocturno 23:00 UTC
+
+**v5.55 — Seguridad horaria:**
+- Cron review movido a 23:00 UTC (01:00 AM España) — fuera de horario obra
+- fix_apply bloqueado 07:00-19:00 España → doble confirmación obligatoria
+- fix_snooze: posponer para esta noche
+
+**v5.56 — Trazabilidad:**
+- _ejecutarFix: botón [↩️ Revertir] tras aplicar
+- fix_revert callback: sustitución inversa automática
+- System prompt: FLUJO OBLIGATORIO — leer archivo antes de proponer
+
+**v5.57 — Control total:**
+- Health check 90s post-deploy: auto-revert si el worker no responde
+- Cron 07:00 UTC: recordatorio matutino si hay fixes pendientes > 12h
+- Panel DevTools → sección Agente IA: tabla de fixes + toggle pausar/activar
+- /parar, /activar, /estado_agente comandos Telegram
+- isAgentePausado() bloquea cron review y propose_fix cuando pausado
+- alejandra_config D1: key/value para estado del agente
+- /health endpoint público para health checks
+- /alejandra-fixes GET: historial de fixes (superadmin)
+- /alejandra-agente-toggle POST: pausar/activar desde panel
+
+**v5.58 — Reinicio:**
+- /reiniciar comando Telegram: borra historial + reactiva
+- /alejandra-agente-restart POST: mismo desde panel web
+- Botón 🔄 Reiniciar en DevTools
+
+### Estado final:
+- Worker: 4184bb2 ✅
+- D1: alejandra_config ✅, alejandra_fixes.commit_sha ✅
+- GitHub: en sync ✅
 
 ---
 
