@@ -7,9 +7,28 @@
 
 **Sesión:** LIBRE
 **Última sesión:** 07/05/2026
-**Versión tras última sesión:** v5.63 (worker 8b48fb37 — fix historial assistant messages)
-**Worker desplegado:** 8b48fb37 ✅ desplegado via wrangler directo
-**GitHub:** en sync ✅ — commit 732f16c
+**Versión tras última sesión:** v5.64 (worker 70134293 — auto-diagnóstico + timeout 25s chat IA)
+**Worker desplegado:** 70134293 ✅
+**GitHub:** en sync ✅ — commit cf6a44b
+
+---
+
+## RESUMEN SESIÓN 07/05/2026 — v5.64 (auto-diagnóstico chat IA)
+
+### Qué se hizo:
+
+**v5.64 — Chat IA auto-recuperable:**
+- **Timeout 25s** en `_callAI` (AbortController) — si Anthropic no responde en 25s el worker devuelve error legible en lugar de que Cloudflare corte la conexión a los 30s y deje el frontend colgado
+- **Timeout 25s en frontend** (panel.html + index.html) — AbortController en el fetch del chat: mensaje ⏱️ amigable en lugar de spinner eterno
+- **Auto-saneado de historial corrupto**: antes de cada llamada a Anthropic, si todos los mensajes del historial son del mismo rol → borra automáticamente + notifica por Telegram + guarda en memoria
+- **Catch mejorado en worker**: distingue AbortError (timeout) de otros errores; ambos tipos se guardan en `alejandra_memoria` y los timeouts mandan alerta Telegram
+- **Endpoint `/dev/ai-status`**: devuelve estado del historial (sano/corrupto), errores recientes de memoria, total memorias
+- **Botón 🩺 Diagnóstico** en panel DevTools → Agente IA: muestra estado del chat en un alert, ofrece limpiar si detecta corrupción
+
+### Estado final:
+- Worker: 70134293 ✅
+- GitHub: commit cf6a44b ✅
+- Versión: v5.64
 
 ---
 
