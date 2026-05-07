@@ -189,6 +189,16 @@ async function sendTelegramConBotones(env, mensaje, botones) {
   } catch (_) {}
 }
 
+async function sendTelegramConBotonesTo(env, chatId, mensaje, botones) {
+  try {
+    await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: chatId, text: mensaje, parse_mode: 'HTML', reply_markup: { inline_keyboard: botones } }),
+    });
+  } catch (_) {}
+}
+
 async function _tgAnswerCQ(env, cqId, text) {
   try {
     await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/answerCallbackQuery`, {
@@ -377,6 +387,22 @@ const AI_TOOLS = [
         message: { type: 'string', description: 'Mensaje del commit (ej: "fix: corregir bug en login")' }
       },
       required: ['path', 'content', 'message']
+    }
+  },
+  {
+    name: 'propose_fix',
+    description: 'Propone un fix de código para aprobación de Adrián. SIEMPRE usa esto en vez de repo_write_file cuando detectes un bug — jamás toques código en producción sin aprobación. Guarda el fix en staging y envía mensaje Telegram con botones [✅ Aplicar] [❌ Ignorar]. El fix se aplica solo si Adrián lo aprueba.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        descripcion: { type: 'string', description: 'Descripción clara del bug detectado (qué falla y dónde)' },
+        archivo: { type: 'string', description: 'Archivo a modificar (ej: "worker.js", "index.html")' },
+        old_code: { type: 'string', description: 'Fragmento EXACTO de código actual que hay que reemplazar (debe existir tal cual en el archivo)' },
+        new_code: { type: 'string', description: 'Código nuevo que lo reemplaza' },
+        razon: { type: 'string', description: 'Explicación técnica: qué estaba mal y por qué este fix lo resuelve' },
+        sugerencia_id: { type: 'integer', description: 'ID de la sugerencia relacionada (si aplica — se marcará como resuelta al aplicar el fix)' }
+      },
+      required: ['descripcion', 'archivo', 'old_code', 'new_code', 'razon']
     }
   }
 ];
@@ -611,6 +637,27 @@ async function executeAITool(env, toolName, toolInput) {
         return JSON.stringify({ ok: false, error: e.message });
       }
     }
+    case 'propose_fix': {
+      const { descripcion, archivo, old_code, new_code, razon, sugerencia_id } = toolInput;
+      try {
+        const fixData = JSON.stringify({ old: old_code, new: new_code });
+        const r = await env.DB.prepare(
+          "INSERT INTO alejandra_fixes (descripcion, archivo, contenido_nuevo, razon, sugerencia_id) VALUES (?, ?, ?, ?, ?)"
+        ).bind(descripcion, archivo, fixData, razon, sugerencia_id || null).run();
+        const fixId = r.meta?.last_row_id;
+
+        const oldSnippet = old_code.split('\n').slice(0, 6).map(l => `- ${l}`).join('\n');
+        const newSnippet = new_code.split('\n').slice(0, 6).map(l => `+ ${l}`).join('\n');
+        const diff = `<code>${oldSnippet}\n${newSnippet}</code>`;
+
+        const msg = `🔍 <b>Fix propuesto #${fixId}</b>\n\n📋 <b>Bug:</b> ${descripcion}\n📁 <b>Archivo:</b> <code>${archivo}</code>\n🎯 <b>Fix:</b> ${razon}${sugerencia_id ? `\n🐛 <b>Sugerencia:</b> #${sugerencia_id}` : ''}\n\n${diff}`;
+        const devChatId = env.DEV_CHAT_ID || env.TELEGRAM_CHAT_ID;
+        await sendTelegramConBotonesTo(env, devChatId, msg, [
+          [{ text: '✅ Aplicar fix', callback_data: `fix_apply:${fixId}` }, { text: '❌ Ignorar', callback_data: `fix_reject:${fixId}` }]
+        ]);
+        return JSON.stringify({ ok: true, fix_id: fixId, status: 'pendiente_aprobacion', msg: 'Fix propuesto enviado a Adrián para aprobación' });
+      } catch (e) { return JSON.stringify({ ok: false, error: e.message }); }
+    }
     default:
       return JSON.stringify({ ok: false, error: 'Tool no reconocida' });
   }
@@ -766,7 +813,8 @@ VISIÓN:
 CÓDIGO Y REPO:
 - repo_read_file(path, line_start?, line_end?): leer archivo del repo. IMPORTANTE: worker.js tiene ~7100 líneas — NUNCA intentes leerlo entero. Usa line_start/line_end para leer bloques (ej: líneas 1-300, luego 300-600, etc.). La respuesta incluye total_lines y un hint si el archivo está truncado.
 - repo_list_dir(path?): listar archivos/carpetas de un directorio
-- repo_write_file(path, content, message): crear/modificar archivo con commit → auto-deploy
+- repo_write_file(path, content, message): crear/modificar archivo con commit → auto-deploy. USA SOLO cuando Adrián te pida algo directamente en el chat. Para bugs detectados autónomamente, usa propose_fix.
+- propose_fix(descripcion, archivo, old_code, new_code, razon, sugerencia_id?): PREFERIDO para bugs autónomos. Stagea el fix y envía a Adrián para aprobación con botones [✅ Aplicar] [❌ Ignorar]. El fix se aplica solo si aprueba. old_code debe ser el fragmento EXACTO que existe en el archivo.
 
 MEMORIA:
 - memory_save(tipo, titulo, contenido, importancia): guardar en memoria persistente
@@ -897,6 +945,78 @@ async function handleDevAI(env, chatId, userMessage) {
   }
 }
 
+// ── REVISIÓN AUTÓNOMA DIARIA ─────────────────────────────────────────────────
+async function runAutonomousReview(env) {
+  try {
+    const [sugs, errores, pendientes, fixesPend] = await Promise.all([
+      env.DB.prepare("SELECT id, texto, categoria, (foto IS NOT NULL AND foto != '') as tiene_foto, usuario, obra FROM sugerencias WHERE estado='pendiente' AND leida=0 ORDER BY created_at DESC LIMIT 10").all().catch(() => ({ results: [] })),
+      env.DB.prepare("SELECT mensaje, created_at FROM logs WHERE nivel='error' AND created_at > datetime('now','-24 hours') ORDER BY created_at DESC LIMIT 15").all().catch(() => ({ results: [] })),
+      env.DB.prepare("SELECT id, titulo, contenido FROM alejandra_memoria WHERE tipo='pendiente' ORDER BY importancia DESC LIMIT 10").all().catch(() => ({ results: [] })),
+      env.DB.prepare("SELECT COUNT(*) as n FROM alejandra_fixes WHERE estado='pendiente'").first().catch(() => ({ n: 0 }))
+    ]);
+
+    const sugsArr = sugs.results || [];
+    const errArr  = errores.results || [];
+    const pendArr = pendientes.results || [];
+
+    if (sugsArr.length === 0 && errArr.length === 0 && pendArr.length === 0) {
+      await sendTelegramToChat(env, env.DEV_CHAT_ID, '🤖 <b>Revisión autónoma</b>\n\n✅ Todo tranquilo — sin sugerencias pendientes ni errores en las últimas 24h.');
+      return;
+    }
+
+    const memoriaRows = await env.DB.prepare("SELECT id, tipo, titulo, contenido, importancia FROM alejandra_memoria ORDER BY importancia DESC, created_at DESC LIMIT 30").all().catch(() => ({ results: [] }));
+    const memoriaCtx = memoriaRows.results?.length
+      ? '\n\n=== TU MEMORIA ACTUAL ===\n' + memoriaRows.results.map(m => `[${m.id}][${m.tipo.toUpperCase()}][imp:${m.importancia}] ${m.titulo}: ${m.contenido}`).join('\n')
+      : '';
+
+    let prompt = `Revisión autónoma — ${new Date().toLocaleString('es-ES', { timeZone: 'Europe/Madrid' })}. Actúa directamente sin esperar más instrucciones.\n\n`;
+    if (sugsArr.length)  prompt += `📋 SUGERENCIAS SIN LEER (${sugsArr.length}):\n` + sugsArr.map(s => `- #${s.id}: "${s.texto}" | ${s.categoria} | ${s.usuario}${s.tiene_foto ? ' | 📸 tiene captura' : ''}`).join('\n') + '\n\n';
+    if (errArr.length)   prompt += `🔴 ERRORES 24H (${errArr.length}):\n` + errArr.slice(0, 8).map(e => `- ${e.mensaje}`).join('\n') + '\n\n';
+    if (pendArr.length)  prompt += `📌 TUS PENDIENTES:\n` + pendArr.map(p => `- [mem:${p.id}] ${p.titulo}: ${p.contenido}`).join('\n') + '\n\n';
+    if (fixesPend?.n > 0) prompt += `⏳ ${fixesPend.n} fixes esperando aprobación de Adrián.\n\n`;
+    prompt += `INSTRUCCIONES:
+1. Para sugerencias con 📸: usa read_suggestion_image para ver la captura
+2. Lee el código relevante con repo_read_file si necesitas contexto
+3. Para cada bug que puedas resolver: usa propose_fix (NUNCA repo_write_file directamente)
+4. Para bugs que no puedas resolver: describe el análisis y envíalo con send_notification
+5. Marca las sugerencias analizadas: UPDATE sugerencias SET leida=1 WHERE id=?
+6. Guarda resumen en memoria y envía mensaje de cierre a Adrián`;
+
+    const systemPrompt = buildAlejandraSystemPrompt('telegram') + memoriaCtx;
+    const messages = [{ role: 'user', content: prompt }];
+
+    let response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
+      body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 8192, system: systemPrompt, tools: AI_TOOLS, messages })
+    });
+    let result = await response.json();
+
+    let iters = 0;
+    while (result.stop_reason === 'tool_use' && iters < 15) {
+      iters++;
+      const toolBlocks = result.content.filter(b => b.type === 'tool_use');
+      const toolResults = await Promise.all(toolBlocks.map(async tb => ({
+        type: 'tool_result', tool_use_id: tb.id,
+        content: await executeAITool(env, tb.name, tb.input)
+      })));
+      messages.push({ role: 'assistant', content: result.content });
+      messages.push({ role: 'user', content: toolResults });
+      response = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-api-key': env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
+        body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 8192, system: systemPrompt, tools: AI_TOOLS, messages })
+      });
+      result = await response.json();
+    }
+
+    const finalText = (result.content || []).filter(b => b.type === 'text').map(b => b.text).join('\n');
+    if (finalText) await sendTelegramToChat(env, env.DEV_CHAT_ID, finalText.slice(0, 4000));
+  } catch (e) {
+    await sendTelegramToChat(env, env.DEV_CHAT_ID, `❌ Error en revisión autónoma: ${e.message}`).catch(() => {});
+  }
+}
+
 // --- Función para filtrar notificaciones antes de enviar ---
 async function sendTelegramFiltered(env, mensaje, categoria) {
   try {
@@ -993,6 +1113,49 @@ async function handleTelegramWebhook(request, env) {
       await env.DB.prepare("UPDATE herramientas SET estado='disponible' WHERE id=?").bind(hid).run();
       await _tgAnswerCQ(env, cq.id, 'âœ… Marcada como disponible');
       await _tgEditMsg(env, chatId, msgId, orig + '\n\nâœ… <b>DISPONIBLE</b>');
+    }
+    // ── Fixes autónomos de Alejandra ─────────────────────────────────────────
+    else if (accion === 'fix_apply') {
+      const fixId = parseInt(partes[0]);
+      const fix = await env.DB.prepare('SELECT * FROM alejandra_fixes WHERE id=?').bind(fixId).first();
+      if (!fix || fix.estado !== 'pendiente') {
+        await _tgAnswerCQ(env, cq.id, fix?.estado === 'aplicado' ? 'Ya fue aplicado' : 'Fix no encontrado');
+        return new Response('OK');
+      }
+      const { old: oldCode, new: newCode } = JSON.parse(fix.contenido_nuevo);
+      const getRes = await fetch(`https://api.github.com/repos/padilla585projects/Alejandra-APP/contents/${encodeURIComponent(fix.archivo)}`, {
+        headers: { 'Authorization': `token ${env.GITHUB_TOKEN}`, 'Accept': 'application/vnd.github.v3+json', 'User-Agent': 'AlejandraIA' }
+      });
+      if (!getRes.ok) throw new Error(`GitHub ${getRes.status} leyendo ${fix.archivo}`);
+      const fileData = await getRes.json();
+      const currentContent = atob(fileData.content.replace(/\n/g, ''));
+      if (!currentContent.includes(oldCode)) {
+        await _tgAnswerCQ(env, cq.id, '⚠️ El código ya no existe en el archivo');
+        await _tgEditMsg(env, chatId, msgId, orig + '\n\n⚠️ <b>NO APLICADO</b> — el código a reemplazar ya no existe (archivo modificado desde que se propuso el fix).');
+        return new Response('OK');
+      }
+      const newContent = currentContent.replace(oldCode, newCode);
+      const encoded = btoa(unescape(encodeURIComponent(newContent)));
+      const putRes = await fetch(`https://api.github.com/repos/padilla585projects/Alejandra-APP/contents/${encodeURIComponent(fix.archivo)}`, {
+        method: 'PUT',
+        headers: { 'Authorization': `token ${env.GITHUB_TOKEN}`, 'Accept': 'application/vnd.github.v3+json', 'User-Agent': 'AlejandraIA', 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: `fix(alejandra): ${fix.descripcion.slice(0, 70)}`, content: encoded, sha: fileData.sha })
+      });
+      if (!putRes.ok) throw new Error(`GitHub ${putRes.status} escribiendo fix`);
+      const commitSha = (await putRes.json()).commit?.sha?.slice(0, 7);
+      await env.DB.prepare("UPDATE alejandra_fixes SET estado='aplicado', updated_at=CURRENT_TIMESTAMP WHERE id=?").bind(fixId).run();
+      if (fix.sugerencia_id) await env.DB.prepare("UPDATE sugerencias SET estado='resuelto' WHERE id=?").bind(fix.sugerencia_id).run();
+      autoLearn(env, 'hecho', `Fix #${fixId} aplicado: ${fix.descripcion.slice(0,60)}`, `Archivo: ${fix.archivo} | Commit: ${commitSha} | Aprobado por Adrián`, 2);
+      await _tgAnswerCQ(env, cq.id, '✅ Fix aplicado');
+      await _tgEditMsg(env, chatId, msgId, orig + `\n\n✅ <b>APLICADO</b> — commit <code>${commitSha}</code>. Deploy automático en ~1 min.`);
+    }
+    else if (accion === 'fix_reject') {
+      const fixId = parseInt(partes[0]);
+      await env.DB.prepare("UPDATE alejandra_fixes SET estado='rechazado', updated_at=CURRENT_TIMESTAMP WHERE id=?").bind(fixId).run();
+      const fix = await env.DB.prepare('SELECT descripcion, razon FROM alejandra_fixes WHERE id=?').bind(fixId).first().catch(() => null);
+      if (fix) autoLearn(env, 'contexto', `Fix rechazado #${fixId}: ${fix.descripcion.slice(0,60)}`, `Fix rechazado por Adrián. Mi propuesta: ${fix.razon?.slice(0,200)}. Revisar enfoque.`, 3);
+      await _tgAnswerCQ(env, cq.id, '❌ Fix rechazado');
+      await _tgEditMsg(env, chatId, msgId, orig + '\n\n❌ <b>RECHAZADO</b> — guardado en memoria para aprender.');
     }
   } catch (e) {
     await _tgAnswerCQ(env, cq.id, 'âŒ Error: ' + e.message);
@@ -1497,6 +1660,7 @@ export default {
       ctx.waitUntil(cierreAutomaticoJornada(env));
     } else {
       ctx.waitUntil(alertasDiarias(env));
+      ctx.waitUntil(runAutonomousReview(env));
     }
     // Resync completo en cada cron â€" resiliencia ante fallos transitorios de Google API
     ctx.waitUntil(syncSheets(env));
