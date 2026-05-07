@@ -4908,7 +4908,10 @@ function navTo(target) {
   // Pantallas secundarias — conservar historial para que Atrás funcione
   if (target === 'sugerencias') { showScreen('sugerencias'); return; }
   if (target === 'docs')        { showScreen('docs'); return; }
-  if (target === 'ia')          { _applyScreen('ia'); document.getElementById('iaInput')?.focus(); return; }
+  if (target === 'ia') {
+    if (document.getElementById('screenIA')?.classList.contains('active')) { irAtras(); return; }
+    _applyScreen('ia'); document.getElementById('iaInput')?.focus(); return;
+  }
   // El resto son pantallas raíz: limpiar historial para que atrás = "salir de la app"
   _navHistory = [];
   if (target === 'home') {
@@ -9769,7 +9772,7 @@ async function cargarObrasSelectUsuario() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '5.59';
+const APP_VERSION = '5.60';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -13621,14 +13624,14 @@ window.turnoToggle   = turnoToggle;
 
 <div id="screenIA">
   <div class="ia-header">
-    <div>
+    <button onclick="irAtras()" style="background:none;border:none;color:#a855f7;cursor:pointer;font-size:22px;line-height:1;padding:0 10px 0 0;flex-shrink:0">←</button>
+    <div style="flex:1">
       <div class="ia-header-title">Alejandra IA</div>
       <div class="ia-header-sub">Control total · Solo desarrollador</div>
     </div>
+    <button onclick="iaLimpiarChat()" title="Borrar historial" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:16px;padding:4px;flex-shrink:0">🗑️</button>
   </div>
-  <div id="iaMessages">
-    <div class="ia-bubble bot">Hola Adrián 👋 Soy Alejandra. Tengo acceso total a la app. Pregúntame o pídeme que haga algo.</div>
-  </div>
+  <div id="iaMessages"></div>
   <div class="ia-input-row">
     <textarea id="iaInput" placeholder="Escríbeme algo..." rows="1" onkeydown="iaKeydown(event)"></textarea>
     <button class="ia-send-btn" id="iaSendBtn" onclick="iaSend()">↑</button>
@@ -13638,7 +13641,40 @@ window.turnoToggle   = turnoToggle;
 <script>
 (function(){
   const IA_API = typeof getAPI === 'function' ? getAPI() : (localStorage.getItem('alejandra_api') || 'https://alejandra-app-api.alejandra-app.workers.dev');
+  const IA_HIST_KEY = 'alejandra_ia_history';
   let iaHistory = [];
+
+  function iaSaludo() {
+    return '<div class="ia-bubble bot">Hola Adrián 👋 Soy Alejandra. Tengo acceso total a la app. Pregúntame o pídeme que haga algo.</div>';
+  }
+
+  // Cargar historial guardado
+  (function() {
+    try {
+      const saved = JSON.parse(localStorage.getItem(IA_HIST_KEY) || '[]');
+      if (saved.length > 0) {
+        iaHistory = saved;
+        const box = document.getElementById('iaMessages');
+        box.innerHTML = '';
+        for (const m of iaHistory) {
+          const d = document.createElement('div');
+          d.className = 'ia-bubble ' + (m.role === 'assistant' ? 'bot' : 'user');
+          d.innerHTML = m.content.replace(/\n/g, '<br>');
+          box.appendChild(d);
+        }
+        box.scrollTop = box.scrollHeight;
+        return;
+      }
+    } catch {}
+    document.getElementById('iaMessages').innerHTML = iaSaludo();
+  })();
+
+  window.iaLimpiarChat = function() {
+    if (!confirm('¿Borrar el historial del chat con Alejandra?')) return;
+    iaHistory = [];
+    try { localStorage.removeItem(IA_HIST_KEY); } catch {}
+    document.getElementById('iaMessages').innerHTML = iaSaludo();
+  };
 
   // Botón central: QR para usuarios normales, IA para superadmin/desarrollador
   function checkIABtn() {
@@ -13687,7 +13723,8 @@ window.turnoToggle   = turnoToggle;
       appendIAMsg('bot', reply);
       iaHistory.push({ role: 'user', content: msg });
       iaHistory.push({ role: 'assistant', content: reply });
-      if (iaHistory.length > 20) iaHistory = iaHistory.slice(-20);
+      if (iaHistory.length > 40) iaHistory = iaHistory.slice(-40);
+      try { localStorage.setItem(IA_HIST_KEY, JSON.stringify(iaHistory)); } catch {}
     } catch(e) {
       typing.remove();
       appendIAMsg('bot', '❌ Error: ' + e.message);

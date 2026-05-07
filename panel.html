@@ -5636,10 +5636,32 @@ async function confirmarResetPass() {
 <script>
 (function(){
   const AI_API = (typeof API !== 'undefined' ? API : (localStorage.getItem('panel_api') || 'https://alejandra-app-api.alejandra-app.workers.dev'));
+  const AI_HIST_KEY = 'alejandra_panel_ia_history';
   let aiHistory = [];
   let _aiFullscreen = false;
 
   function getToken(){ return typeof TOKEN !== 'undefined' ? TOKEN : localStorage.getItem('panel_token') || ''; }
+
+  // Cargar historial guardado
+  (function() {
+    try {
+      const saved = JSON.parse(localStorage.getItem(AI_HIST_KEY) || '[]');
+      if (saved.length > 0) {
+        aiHistory = saved;
+        const box = document.getElementById('aiMessages');
+        if (box) {
+          box.innerHTML = '';
+          for (const m of aiHistory) {
+            const d = document.createElement('div');
+            d.className = 'ai-msg ' + (m.role === 'assistant' ? 'bot' : 'user');
+            d.textContent = m.content;
+            box.appendChild(d);
+          }
+          box.scrollTop = box.scrollHeight;
+        }
+      }
+    } catch {}
+  })();
 
   function showAIBtn() {
     const btn = document.getElementById('aiFloatBtn');
@@ -5758,7 +5780,8 @@ document.getElementById('wInput').focus();
   // Recibe mensajes desde la ventana hija para sincronizar historial
   window._aiSyncFromChild = function(userMsg, botMsg) {
     aiHistory.push(userMsg, botMsg);
-    if (aiHistory.length > 20) aiHistory = aiHistory.slice(-20);
+    if (aiHistory.length > 40) aiHistory = aiHistory.slice(-40);
+    try { localStorage.setItem(AI_HIST_KEY, JSON.stringify(aiHistory)); } catch {};
     appendMsg('user', userMsg.content);
     appendMsg('bot', botMsg.content);
   };
@@ -5823,7 +5846,8 @@ document.getElementById('wInput').focus();
       appendMsg('bot', reply);
       aiHistory.push({ role: 'user', content: msgText });
       aiHistory.push({ role: 'assistant', content: reply });
-      if (aiHistory.length > 20) aiHistory = aiHistory.slice(-20);
+      if (aiHistory.length > 40) aiHistory = aiHistory.slice(-40);
+      try { localStorage.setItem(AI_HIST_KEY, JSON.stringify(aiHistory)); } catch {}
     } catch(e) {
       typing.remove();
       appendMsg('bot', '❌ Error de conexión: ' + e.message);
