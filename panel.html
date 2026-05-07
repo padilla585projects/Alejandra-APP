@@ -1852,8 +1852,9 @@ function iniciarApp() {
   setInterval(checkConexion, 30000);
   iniciarPollingNotif();
   _initSync();
-  cargarObrasPanel(); // rellena selects de obra en inventarios
+  cargarObrasPanel();
   navTo('dashboard');
+  if (typeof showAIBtn === 'function') showAIBtn();
 }
 
 function toggleSidebar() {
@@ -5643,16 +5644,11 @@ async function confirmarResetPass() {
   function showAIBtn() {
     const btn = document.getElementById('aiFloatBtn');
     if (!btn) return;
-    // Si el nav de DevTools está visible (display != 'none'), mostrar el botón
-    const devNav = document.querySelector('.nav-dev');
-    if (devNav && devNav.style.display !== 'none') {
-      btn.style.display = 'flex';
-      return;
-    }
-    // Fallback: comprobar rol directamente
-    const rol = (typeof SESSION !== 'undefined' && SESSION?.rol) || JSON.parse(localStorage.getItem('panel_session') || '{}')?.rol;
+    const rol = (typeof SESSION !== 'undefined' ? SESSION?.rol : null)
+             || JSON.parse(localStorage.getItem('panel_session') || 'null')?.rol;
     if (rol && ['desarrollador','superadmin'].includes(rol)) btn.style.display = 'flex';
   }
+  window.showAIBtn = showAIBtn;
 
   window.toggleAIChat = function() {
     const panel = document.getElementById('aiChatPanel');
