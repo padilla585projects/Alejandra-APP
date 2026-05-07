@@ -221,6 +221,19 @@ async function _tgEditMsg(env, chatId, msgId, newText) {
   } catch (_) {}
 }
 
+async function _tgEditMsgConBotones(env, chatId, msgId, newText, botones) {
+  try {
+    await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/editMessageText`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: chatId, message_id: msgId,
+        text: newText, parse_mode: 'HTML',
+        reply_markup: { inline_keyboard: botones }
+      })
+    });
+  } catch (_) {}
+}
+
 // --- ASISTENTE IA DEV (Anthropic Claude) ---
 
 async function transcribeAudio(env, audioBuffer) {
@@ -814,7 +827,12 @@ CÓDIGO Y REPO:
 - repo_read_file(path, line_start?, line_end?): leer archivo del repo. IMPORTANTE: worker.js tiene ~7100 líneas — NUNCA intentes leerlo entero. Usa line_start/line_end para leer bloques (ej: líneas 1-300, luego 300-600, etc.). La respuesta incluye total_lines y un hint si el archivo está truncado.
 - repo_list_dir(path?): listar archivos/carpetas de un directorio
 - repo_write_file(path, content, message): crear/modificar archivo con commit → auto-deploy. USA SOLO cuando Adrián te pida algo directamente en el chat. Para bugs detectados autónomamente, usa propose_fix.
-- propose_fix(descripcion, archivo, old_code, new_code, razon, sugerencia_id?): PREFERIDO para bugs autónomos. Stagea el fix y envía a Adrián para aprobación con botones [✅ Aplicar] [❌ Ignorar]. El fix se aplica solo si aprueba. old_code debe ser el fragmento EXACTO que existe en el archivo.
+- propose_fix(descripcion, archivo, old_code, new_code, razon, sugerencia_id?): PREFERIDO para bugs autónomos. FLUJO OBLIGATORIO antes de llamar:
+  1. Leer el archivo con repo_read_file para localizar el código exacto
+  2. Verificar que old_code existe literalmente en el archivo (copiar el fragmento exacto, sin cambiar ni un espacio)
+  3. Asegurarte de que new_code es un cambio mínimo y quirúrgico — no reescribir más de lo necesario
+  4. Escribir en razon: qué bug corrige, por qué este cambio lo soluciona, qué podría romperse si falla
+  El fix se stagea y envía a Adrián con [✅ Aplicar] [❌ Ignorar]. Tras aplicarse aparece [↩️ Revertir] automáticamente por si algo va mal.
 
 MEMORIA:
 - memory_save(tipo, titulo, contenido, importancia): guardar en memoria persistente
@@ -976,11 +994,12 @@ async function runAutonomousReview(env) {
     if (fixesPend?.n > 0) prompt += `⏳ ${fixesPend.n} fixes esperando aprobación de Adrián.\n\n`;
     prompt += `INSTRUCCIONES:
 1. Para sugerencias con 📸: usa read_suggestion_image para ver la captura
-2. Lee el código relevante con repo_read_file si necesitas contexto
-3. Para cada bug que puedas resolver: usa propose_fix (NUNCA repo_write_file directamente)
-4. Para bugs que no puedas resolver: describe el análisis y envíalo con send_notification
-5. Marca las sugerencias analizadas: UPDATE sugerencias SET leida=1 WHERE id=?
-6. Guarda resumen en memoria y envía mensaje de cierre a Adrián`;
+2. SIEMPRE lee el código relevante con repo_read_file antes de proponer cualquier fix — debes saber exactamente qué estás tocando y por qué
+3. Para proponer un fix: primero localiza el fragmento exacto en el archivo, luego usa propose_fix con old_code copiado literalmente del archivo. En razon explica: qué bug corrige, por qué este cambio funciona, qué puede romperse si falla
+4. Sé conservadora: solo propone fixes cuando estés segura del diagnóstico. Si no estás segura, describe el análisis sin proponer fix
+5. Para bugs que no puedas resolver con certeza: describe el análisis con send_notification, sin proponer fix
+6. Marca las sugerencias analizadas: UPDATE sugerencias SET leida=1 WHERE id=?
+7. Guarda resumen en memoria y envía mensaje de cierre a Adrián`;
 
     const systemPrompt = buildAlejandraSystemPrompt('telegram') + memoriaCtx;
     const messages = [{ role: 'user', content: prompt }];
@@ -1049,10 +1068,13 @@ async function _ejecutarFix(env, fix, fixId, chatId, msgId, orig, cqId) {
   });
   if (!putRes.ok) throw new Error(`GitHub ${putRes.status} escribiendo fix`);
   const commitSha = (await putRes.json()).commit?.sha?.slice(0, 7);
-  await env.DB.prepare("UPDATE alejandra_fixes SET estado='aplicado', updated_at=CURRENT_TIMESTAMP WHERE id=?").bind(fixId).run();
+  await env.DB.prepare("UPDATE alejandra_fixes SET estado='aplicado', commit_sha=?, updated_at=CURRENT_TIMESTAMP WHERE id=?").bind(commitSha, fixId).run();
   if (fix.sugerencia_id) await env.DB.prepare("UPDATE sugerencias SET estado='resuelto' WHERE id=?").bind(fix.sugerencia_id).run();
   autoLearn(env, 'hecho', `Fix #${fixId} aplicado: ${fix.descripcion.slice(0,60)}`, `Archivo: ${fix.archivo} | Commit: ${commitSha} | Aprobado por Adrián`, 2);
-  await _tgEditMsg(env, chatId, msgId, orig + `\n\n✅ <b>APLICADO</b> — commit <code>${commitSha}</code>. Deploy automático en ~1 min.`);
+  await _tgEditMsgConBotones(env, chatId, msgId,
+    orig + `\n\n✅ <b>APLICADO</b> — commit <code>${commitSha}</code>. Deploy automático en ~1 min.\n<i>Si algo va mal, pulsa Revertir.</i>`,
+    [[{ text: '↩️ Revertir este fix', callback_data: `fix_revert:${fixId}` }]]
+  );
 }
 
 // Gestiona las pulsaciones de botones inline enviadas por Telegram
@@ -1191,6 +1213,40 @@ async function handleTelegramWebhook(request, env) {
       if (fix) autoLearn(env, 'contexto', `Fix rechazado #${fixId}: ${fix.descripcion.slice(0,60)}`, `Fix rechazado por Adrián. Mi propuesta: ${fix.razon?.slice(0,200)}. Revisar enfoque.`, 3);
       await _tgAnswerCQ(env, cq.id, '❌ Fix rechazado');
       await _tgEditMsg(env, chatId, msgId, orig + '\n\n❌ <b>RECHAZADO</b> — guardado en memoria para aprender.');
+    }
+    else if (accion === 'fix_revert') {
+      const fixId = parseInt(partes[0]);
+      const fix = await env.DB.prepare('SELECT * FROM alejandra_fixes WHERE id=?').bind(fixId).first();
+      if (!fix || fix.estado !== 'aplicado') {
+        await _tgAnswerCQ(env, cq.id, fix?.estado === 'revertido' ? 'Ya fue revertido' : 'Fix no encontrado o no aplicado');
+        return new Response('OK');
+      }
+      await _tgAnswerCQ(env, cq.id, '↩️ Revirtiendo...');
+      // Sustitución inversa: new → old
+      const { old: oldCode, new: newCode } = JSON.parse(fix.contenido_nuevo);
+      const getRes = await fetch(`https://api.github.com/repos/padilla585projects/Alejandra-APP/contents/${encodeURIComponent(fix.archivo)}`, {
+        headers: { 'Authorization': `token ${env.GITHUB_TOKEN}`, 'Accept': 'application/vnd.github.v3+json', 'User-Agent': 'AlejandraIA' }
+      });
+      if (!getRes.ok) throw new Error(`GitHub ${getRes.status} leyendo ${fix.archivo}`);
+      const fileData = await getRes.json();
+      const currentContent = atob(fileData.content.replace(/\n/g, ''));
+      if (!currentContent.includes(newCode)) {
+        await _tgEditMsg(env, chatId, msgId, orig + '\n\n⚠️ <b>NO REVERTIDO</b> — el código aplicado ya no está en el archivo (fue modificado después). Revisar manualmente.');
+        return new Response('OK');
+      }
+      const revertedContent = currentContent.replace(newCode, oldCode);
+      const encoded = btoa(unescape(encodeURIComponent(revertedContent)));
+      const putRes = await fetch(`https://api.github.com/repos/padilla585projects/Alejandra-APP/contents/${encodeURIComponent(fix.archivo)}`, {
+        method: 'PUT',
+        headers: { 'Authorization': `token ${env.GITHUB_TOKEN}`, 'Accept': 'application/vnd.github.v3+json', 'User-Agent': 'AlejandraIA', 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: `revert(alejandra): revertir fix #${fixId} — ${fix.descripcion.slice(0, 60)}`, content: encoded, sha: fileData.sha })
+      });
+      if (!putRes.ok) throw new Error(`GitHub ${putRes.status} escribiendo revert`);
+      const revertSha = (await putRes.json()).commit?.sha?.slice(0, 7);
+      await env.DB.prepare("UPDATE alejandra_fixes SET estado='revertido', updated_at=CURRENT_TIMESTAMP WHERE id=?").bind(fixId).run();
+      if (fix.sugerencia_id) await env.DB.prepare("UPDATE sugerencias SET estado='abierta' WHERE id=?").bind(fix.sugerencia_id).run();
+      autoLearn(env, 'error', `Fix #${fixId} revertido: ${fix.descripcion.slice(0,60)}`, `Archivo: ${fix.archivo} | Commit revert: ${revertSha} | El fix causó problemas — revisar enfoque.`, 3);
+      await _tgEditMsg(env, chatId, msgId, orig + `\n\n↩️ <b>REVERTIDO</b> — commit <code>${revertSha}</code>. Deploy automático en ~1 min. La sugerencia vuelve a estado abierto.`);
     }
   } catch (e) {
     await _tgAnswerCQ(env, cq.id, 'âŒ Error: ' + e.message);
