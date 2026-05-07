@@ -1370,6 +1370,52 @@ function fechaEspana() {
   return new Date().toLocaleString('es-ES', { timeZone: 'Europe/Madrid' });
 }
 
+
+async function checkChatHealth(env) {
+  try {
+    // Comprobar historial web — detecta y repara corrupcion automaticamente
+    const histRows = await env.DB.prepare(
+      "SELECT rol, COUNT(*) as n FROM alejandra_historial WHERE canal='web' GROUP BY rol"
+    ).all().catch(() => ({ results: [] }));
+
+    const hist = {};
+    (histRows.results || []).forEach(r => { hist[r.rol] = r.n; });
+    const userCount = hist.user || 0;
+    const assistantCount = hist.assistant || 0;
+    const totalHist = userCount + assistantCount;
+
+    // Corrupto: tiene mensajes user pero cero assistant
+    const corrupto = totalHist > 2 && assistantCount === 0;
+    // Desequilibrado: hay mas de 3x mensajes user vs assistant (indica que asst INSERT falla)
+    const desequilibrio = totalHist > 4 && userCount > assistantCount * 3;
+
+    if (corrupto || desequilibrio) {
+      await env.DB.prepare("DELETE FROM alejandra_historial WHERE canal='web'").run().catch(() => {});
+      const tipo = corrupto
+        ? 'corrupto (' + userCount + ' user, 0 assistant)'
+        : 'desequilibrado (' + userCount + ' user, ' + assistantCount + ' assistant)';
+      autoLearn(env, 'error', 'Healthcheck auto-fix historial web',
+        'Historial ' + tipo + '. Auto-limpiado en cron. Chat restaurado sin intervencion humana.', 5).catch(() => {});
+      sendTelegramMessage(env,
+        '🩺 Auto-diagnóstico Alejandra\n⚠️ Historial web ' + tipo + '\n✅ Limpiado automáticamente — chat IA restaurado.\nNo necesitas hacer nada.'
+      ).catch(() => {});
+    }
+
+    // Errores recientes acumulados (ultimas 3h) — avisa si hay muchos
+    const errRows = await env.DB.prepare(
+      "SELECT COUNT(*) as n FROM alejandra_memoria WHERE tipo='error' AND updated_at > datetime('now', '-3 hours')"
+    ).all().catch(() => ({ results: [{ n: 0 }] }));
+    const recentErrors = errRows.results[0]?.n || 0;
+    if (recentErrors >= 5) {
+      sendTelegramMessage(env,
+        '⚠️ Alejandra auto-diagnóstico: ' + recentErrors + ' errores en últimas 3h. Revisa el panel › DevTools › Agente IA.'
+      ).catch(() => {});
+    }
+  } catch (e) {
+    // Nunca lanzar excepcion — el healthcheck no debe romper el cron
+  }
+}
+
 export default {
   async fetch(request, env, ctx) {
     if (request.method === 'OPTIONS') {
@@ -1890,56 +1936,6 @@ export default {
   },
 
   // â"€â"€ Cron diario: alertas + cierre jornada â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
-async function checkChatHealth(env) {
-  try {
-    // Comprobar historial web — detecta y repara corrupcion automaticamente
-    const histRows = await env.DB.prepare(
-      "SELECT rol, COUNT(*) as n FROM alejandra_historial WHERE canal='web' GROUP BY rol"
-    ).all().catch(() => ({ results: [] }));
-
-    const hist = {};
-    (histRows.results || []).forEach(r => { hist[r.rol] = r.n; });
-    const userCount = hist.user || 0;
-    const assistantCount = hist.assistant || 0;
-    const totalHist = userCount + assistantCount;
-
-    // Corrupto: tiene mensajes user pero cero assistant
-    const corrupto = totalHist > 2 && assistantCount === 0;
-    // Desequilibrado: hay mas de 3x mensajes user vs assistant (indica que asst INSERT falla)
-    const desequilibrio = totalHist > 4 && userCount > assistantCount * 3;
-
-    if (corrupto || desequilibrio) {
-      await env.DB.prepare("DELETE FROM alejandra_historial WHERE canal='web'").run().catch(() => {});
-      const tipo = corrupto
-        ? 'corrupto (' + userCount + ' user, 0 assistant)'
-        : 'desequilibrado (' + userCount + ' user, ' + assistantCount + ' assistant)';
-      autoLearn(env, 'error', 'Healthcheck auto-fix historial web',
-        'Historial ' + tipo + '. Auto-limpiado en cron. Chat restaurado sin intervencion humana.', 5).catch(() => {});
-      sendTelegramMessage(env,
-        '🩺 Auto-diagnóstico Alejandra
-' +
-        '⚠️ Historial web ' + tipo + '
-' +
-        '✅ Limpiado automáticamente — chat IA restaurado.
-' +
-        'No necesitas hacer nada.'
-      ).catch(() => {});
-    }
-
-    // Errores recientes acumulados (ultimas 3h) — avisa si hay muchos
-    const errRows = await env.DB.prepare(
-      "SELECT COUNT(*) as n FROM alejandra_memoria WHERE tipo='error' AND updated_at > datetime('now', '-3 hours')"
-    ).all().catch(() => ({ results: [{ n: 0 }] }));
-    const recentErrors = errRows.results[0]?.n || 0;
-    if (recentErrors >= 5) {
-      sendTelegramMessage(env,
-        '⚠️ Alejandra auto-diagnóstico: ' + recentErrors + ' errores en últimas 3h. Revisa el panel › DevTools › Agente IA.'
-      ).catch(() => {});
-    }
-  } catch (e) {
-    // Nunca lanzar excepcion — el healthcheck no debe romper el cron
-  }
-}
 
   async scheduled(event, env, ctx) {
     // Healthcheck en TODOS los crons: Alejandra se autodiagnostica y se autorrepara
@@ -8150,7 +8146,7 @@ async function devAIChat(request, env) {
   // Guardar mensaje usuario
   env.DB.prepare("INSERT INTO alejandra_historial (canal, rol, contenido) VALUES ('web', 'user', ?)").bind(message.slice(0, 4000)).run().catch(() => {});
   env.DB.prepare("DELETE FROM alejandra_historial WHERE canal='web' AND id NOT IN (SELECT id FROM alejandra_historial WHERE canal='web' ORDER BY created_at DESC LIMIT 50)").run().catch(() => {});
-
+
   // Auto-sanar: si todos los mensajes del historial son del mismo rol, es historial corrupto
   const _roles = (historialRows.results || []).map(h => h.rol);
   if (_roles.length > 2 && _roles.every(r => r === _roles[0])) {
