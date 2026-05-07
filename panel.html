@@ -5641,9 +5641,17 @@ async function confirmarResetPass() {
   function getToken(){ return typeof TOKEN !== 'undefined' ? TOKEN : localStorage.getItem('panel_token') || ''; }
 
   function showAIBtn() {
-    const rol = (typeof SESSION !== 'undefined' && SESSION?.rol) || JSON.parse(localStorage.getItem('panel_session') || '{}')?.rol;
     const btn = document.getElementById('aiFloatBtn');
-    if (btn && rol && ['desarrollador','superadmin'].includes(rol)) btn.style.display = 'flex';
+    if (!btn) return;
+    // Mostrar si el nav de DevTools está visible (ya controlado por la lógica de roles principal)
+    const devNav = document.querySelector('.nav-dev');
+    if (devNav && devNav.style.display !== 'none' && devNav.style.display !== '') {
+      btn.style.display = 'flex';
+      return;
+    }
+    // Fallback: comprobar rol directamente
+    const rol = (typeof SESSION !== 'undefined' && SESSION?.rol) || JSON.parse(localStorage.getItem('panel_session') || '{}')?.rol;
+    if (rol && ['desarrollador','superadmin'].includes(rol)) btn.style.display = 'flex';
   }
 
   window.toggleAIChat = function() {
