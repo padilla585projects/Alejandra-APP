@@ -151,6 +151,25 @@ PASO 4 — VERIFICAR WORKER (solo si se va a tocar worker.js)
   HISTORIAL DE VERSIONES — RECIENTES
 ================================================================================
 
+v5.65        |  07/05/2026  [Watchdog autónomo — Alejandra se autorepara sola]
+  - checkChatHealth() en los 3 crons (7am/18pm/23pm): detecta historial web corrupto o
+    desequilibrado, lo borra automáticamente y envía Telegram confirmando restauración.
+  - Si hay ≥5 errores en últimas 3h, alerta por Telegram al desarrollador.
+  - Timeout en devAIChat: si Anthropic no responde en 25s, auto-limpia historial para
+    que el próximo intento arranque limpio y sea más rápido.
+
+v5.64        |  07/05/2026  [Auto-diagnóstico chat IA + timeout 25s]
+  - Timeout 25s AbortController en _callAI: evita que Cloudflare corte la conexión
+    silenciosamente y deje el frontend con spinner eterno.
+  - Timeout 25s en frontend (panel.html + index.html): mensaje ⏱️ amigable.
+  - Auto-saneado historial corrupto dentro de devAIChat (detecta mismo rol consecutivo).
+  - Endpoint GET /dev/ai-status + botón 🩺 Diagnóstico en panel DevTools › Agente IA.
+
+v5.63-hotfix |  07/05/2026  [Fix historial web corrupto — chat IA roto]
+  - BUG CRÍTICO: INSERT assistant sin await → se perdía al terminar el worker.
+    40 mensajes user sin assistant → Anthropic rechazaba cada request → chat roto.
+  - Fix: await en INSERT assistant + filtro dedup (roles consecutivos) + limpieza D1.
+
 v5.63        |  07/05/2026  [Alejandra aprende de errores + retry rate limit inteligente]
   - RATE LIMIT RETRY (worker): devAIChat reintenta automáticamente con historial reducido
     cuando Anthropic devuelve rate_limit (30k tokens/min). Auto-guarda en alejandra_memoria.
