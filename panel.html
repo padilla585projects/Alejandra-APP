@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="es">
 <head>
 <meta charset="UTF-8">
@@ -5484,6 +5484,11 @@ async function confirmarResetPass() {
 #aiInput:focus{border-color:#f97316}
 #aiSendBtn{background:#f97316;border:none;border-radius:8px;color:#000;padding:8px 14px;cursor:pointer;font-family:'Montserrat',sans-serif;font-weight:900;font-size:13px;flex-shrink:0}
 #aiSendBtn:disabled{opacity:.4;cursor:not-allowed}
+#aiAttachBtn{background:none;border:1px solid #334155;border-radius:8px;color:#94a3b8;padding:8px 10px;cursor:pointer;font-size:16px;flex-shrink:0;transition:border-color .2s,color .2s}
+#aiAttachBtn:hover,#aiAttachBtn.has-image{border-color:#f97316;color:#f97316}
+#aiImagePreview{display:none;padding:6px 10px;background:#0f172a;border-top:1px solid #334155;align-items:center;gap:8px;font-size:12px;color:#94a3b8}
+#aiImagePreview img{width:40px;height:40px;object-fit:cover;border-radius:6px;border:1px solid #334155}
+#aiImagePreview button{background:none;border:none;color:#ef4444;cursor:pointer;font-size:16px;padding:0 4px}
 </style>
 
 <button id="aiFloatBtn" title="Hablar con Alejandra IA" onclick="toggleAIChat()">🤖</button>
@@ -5498,7 +5503,14 @@ async function confirmarResetPass() {
   <div id="aiMessages">
     <div class="ai-msg bot">👋</div>
   </div>
+  <div id="aiImagePreview">
+    <img id="aiPreviewImg" src="" alt="preview">
+    <span id="aiPreviewName" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>
+    <button onclick="aiClearImage()" title="Quitar imagen">✕</button>
+  </div>
   <div id="aiInputRow">
+    <input type="file" id="aiFileInput" accept="image/*" style="display:none" onchange="aiOnImageSelect(event)">
+    <button id="aiAttachBtn" onclick="document.getElementById('aiFileInput').click()" title="Adjuntar imagen">📎</button>
     <textarea id="aiInput" placeholder="Escribe tu mensaje..." rows="1" onkeydown="aiKeydown(event)"></textarea>
     <button id="aiSendBtn" onclick="aiSend()">↑</button>
   </div>
@@ -5635,28 +5647,61 @@ document.getElementById('wInput').focus();
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); aiSend(); }
   };
 
+  let _aiImage = null; // { data: base64, media_type, name }
+
+  window.aiOnImageSelect = function(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      const dataUrl = ev.target.result;
+      const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
+      if (!match) return;
+      _aiImage = { data: match[2], media_type: match[1], name: file.name };
+      document.getElementById('aiPreviewImg').src = dataUrl;
+      document.getElementById('aiPreviewName').textContent = file.name;
+      document.getElementById('aiImagePreview').style.display = 'flex';
+      document.getElementById('aiAttachBtn').classList.add('has-image');
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+
+  window.aiClearImage = function() {
+    _aiImage = null;
+    document.getElementById('aiImagePreview').style.display = 'none';
+    document.getElementById('aiPreviewImg').src = '';
+    document.getElementById('aiAttachBtn').classList.remove('has-image');
+  };
+
   window.aiSend = async function() {
     const input = document.getElementById('aiInput');
     const msg = input.value.trim();
-    if (!msg) return;
+    if (!msg && !_aiImage) return;
+    const msgText = msg || '(imagen adjunta)';
     input.value = '';
     input.style.height = '';
 
-    appendMsg('user', msg);
+    const previewHtml = _aiImage ? <div style="display:flex;align-items:center;gap:8px"><img src="data:;base64," style="width:48px;height:48px;object-fit:cover;border-radius:6px;border:1px solid #334155"><span></span></div> : msgText;
+    appendMsg('user', previewHtml);
     const typing = appendTyping();
     document.getElementById('aiSendBtn').disabled = true;
+
+    const body = { message: msgText, history: aiHistory };
+    if (_aiImage) body.image = { data: _aiImage.data, media_type: _aiImage.media_type };
+    aiClearImage();
 
     try {
       const res = await fetch(AI_API + '/dev/ai-chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-Token': getToken() },
-        body: JSON.stringify({ message: msg, history: aiHistory })
+        body: JSON.stringify(body)
       });
       const data = await res.json();
       typing.remove();
       const reply = data.ok ? data.reply : ('❌ ' + (data.error || 'Error'));
       appendMsg('bot', reply);
-      aiHistory.push({ role: 'user', content: msg });
+      aiHistory.push({ role: 'user', content: msgText });
       aiHistory.push({ role: 'assistant', content: reply });
       if (aiHistory.length > 20) aiHistory = aiHistory.slice(-20);
     } catch(e) {

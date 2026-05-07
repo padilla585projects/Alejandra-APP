@@ -242,8 +242,13 @@ const AI_TOOLS = [
   },
   {
     name: 'web_search',
-    description: 'Busca en internet documentación técnica, APIs, soluciones a errores, librerías, etc.',
-    input_schema: { type: 'object', properties: { query: { type: 'string', description: 'Término de búsqueda' } }, required: ['query'] }
+    description: 'Busca en internet usando Tavily (resultados reales de páginas web). Úsalo para documentación técnica, APIs, errores de JS/CF Workers, librerías, etc. Devuelve una respuesta directa + fragmentos de páginas reales.',
+    input_schema: { type: 'object', properties: { query: { type: 'string', description: 'Término de búsqueda' }, depth: { type: 'string', enum: ['basic', 'advanced'], description: 'basic=rápido, advanced=más detalle (usa advanced solo para preguntas complejas)' } }, required: ['query'] }
+  },
+  {
+    name: 'read_suggestion_image',
+    description: 'Lee una sugerencia/reporte de bug de la BD y muestra su imagen adjunta para analizarla visualmente. Usa esto para entender bugs reportados con capturas de pantalla y poder arreglarlos directamente.',
+    input_schema: { type: 'object', properties: { id: { type: 'integer', description: 'ID de la sugerencia en la tabla sugerencias' } }, required: ['id'] }
   },
   {
     name: 'list_tables',
@@ -387,16 +392,29 @@ async function autoLearn(env, tipo, titulo, contenido, importancia = 2) {
 async function executeAITool(env, toolName, toolInput) {
   switch (toolName) {
     case 'web_search': {
-      const { query } = toolInput;
+      const { query, depth = 'basic' } = toolInput;
       try {
-        const res = await fetch(`https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1`);
-        const data = await res.json();
-        const results = [];
-        if (data.AbstractText) results.push({ title: data.Heading, text: data.AbstractText, url: data.AbstractURL });
-        (data.RelatedTopics || []).slice(0, 5).forEach(t => {
-          if (t.Text) results.push({ title: t.Text.split(' - ')[0], text: t.Text, url: t.FirstURL });
+        const res = await fetch('https://api.tavily.com/search', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ api_key: env.TAVILY_API_KEY, query, search_depth: depth, max_results: 5, include_answer: true })
         });
-        return JSON.stringify({ ok: true, query, results: results.slice(0, 6) });
+        const data = await res.json();
+        if (!res.ok) return JSON.stringify({ ok: false, error: data.message || `HTTP ${res.status}` });
+        return JSON.stringify({ ok: true, query, answer: data.answer, results: (data.results || []).map(r => ({ title: r.title, url: r.url, content: r.content?.slice(0, 500) })) });
+      } catch (e) { return JSON.stringify({ ok: false, error: e.message }); }
+    }
+    case 'read_suggestion_image': {
+      const { id } = toolInput;
+      try {
+        const sug = await env.DB.prepare('SELECT id, texto, categoria, foto, usuario, obra, estado, created_at FROM sugerencias WHERE id=?').bind(id).first();
+        if (!sug) return JSON.stringify({ ok: false, error: 'Sugerencia no encontrada' });
+        const content = [{ type: 'text', text: `Sugerencia #${sug.id} | Estado: ${sug.estado} | Categoría: ${sug.categoria} | Usuario: ${sug.usuario} | Obra: ${sug.obra || 'N/A'} | Fecha: ${sug.created_at}\n\nDescripción: ${sug.texto}` }];
+        if (sug.foto) {
+          const match = sug.foto.match(/^data:([^;]+);base64,(.+)$/s);
+          if (match) content.push({ type: 'image', source: { type: 'base64', media_type: match[1], data: match[2] } });
+        }
+        return content;
       } catch (e) { return JSON.stringify({ ok: false, error: e.message }); }
     }
     case 'sql_query': {
@@ -740,7 +758,10 @@ ARCHIVOS R2:
 - r2_delete(key): eliminar un archivo
 
 INTERNET:
-- web_search(query): buscar en DuckDuckGo (documentación, errores, APIs, librerías)
+- web_search(query, depth?): buscar con Tavily (resultados reales de páginas web). Devuelve respuesta directa + fragmentos de contenido. depth='advanced' para preguntas complejas.
+
+VISIÓN:
+- read_suggestion_image(id): lee una sugerencia de la BD y muestra su captura de pantalla adjunta. Úsalo para analizar bugs visuales reportados por usuarios y arreglarlos directamente.
 
 CÓDIGO Y REPO:
 - repo_read_file(path, line_start?, line_end?): leer archivo del repo. IMPORTANTE: worker.js tiene ~7100 líneas — NUNCA intentes leerlo entero. Usa line_start/line_end para leer bloques (ej: líneas 1-300, luego 300-600, etc.). La respuesta incluye total_lines y un hint si el archivo está truncado.
@@ -818,9 +839,9 @@ async function handleDevAI(env, chatId, userMessage) {
   const historialMsgs = (historialRows.results || []).reverse().map(h => ({ role: h.rol, content: h.contenido }));
   const messages = [...historialMsgs, { role: 'user', content: userMessage }];
 
-  // Guardar mensaje del usuario en historial
-  env.DB.prepare("INSERT INTO alejandra_historial (canal, rol, contenido) VALUES ('telegram', 'user', ?)").bind(userMessage.slice(0, 4000)).run().catch(() => {});
-  // Limpiar historial antiguo (mantener solo 50 por canal)
+  // Guardar mensaje del usuario en historial (si es array con imagen, guardamos el texto)
+  const msgTextTg = Array.isArray(userMessage) ? (userMessage.find(b => b.type === 'text')?.text || '[imagen]') : userMessage;
+  env.DB.prepare("INSERT INTO alejandra_historial (canal, rol, contenido) VALUES ('telegram', 'user', ?)").bind(msgTextTg.slice(0, 4000)).run().catch(() => {});
   env.DB.prepare("DELETE FROM alejandra_historial WHERE canal='telegram' AND id NOT IN (SELECT id FROM alejandra_historial WHERE canal='telegram' ORDER BY created_at DESC LIMIT 50)").run().catch(() => {});
 
   try {
@@ -895,23 +916,36 @@ async function handleTelegramWebhook(request, env) {
 
   // --- Asistente IA para el desarrollador ---
   if (update.message && String(update.message.chat?.id) === String(env.DEV_CHAT_ID)) {
-    let texto = update.message.text || '';
+    let texto = update.message.text || update.message.caption || '';
+    // Audio / voz
     if (update.message.voice || update.message.audio) {
       const fileId = (update.message.voice || update.message.audio).file_id;
       const filePath = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/getFile?file_id=${fileId}`)
         .then(r => r.json()).then(d => d.result?.file_path).catch(() => null);
       if (filePath) {
-        const audioUrl = `https://api.telegram.org/file/bot${env.TELEGRAM_BOT_TOKEN}/${filePath}`;
-        const audioBlob = await fetch(audioUrl).then(r => r.arrayBuffer()).catch(() => null);
-        if (audioBlob) {
-          const transcription = await transcribeAudio(env, audioBlob);
-          texto = transcription || '[No se pudo transcribir el audio]';
+        const audioBlob = await fetch(`https://api.telegram.org/file/bot${env.TELEGRAM_BOT_TOKEN}/${filePath}`).then(r => r.arrayBuffer()).catch(() => null);
+        if (audioBlob) texto = await transcribeAudio(env, audioBlob) || '[No se pudo transcribir el audio]';
+      }
+    }
+    // Imagen / foto
+    if (update.message.photo) {
+      const photo = update.message.photo[update.message.photo.length - 1];
+      const filePath = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/getFile?file_id=${photo.file_id}`)
+        .then(r => r.json()).then(d => d.result?.file_path).catch(() => null);
+      if (filePath) {
+        const imgBuf = await fetch(`https://api.telegram.org/file/bot${env.TELEGRAM_BOT_TOKEN}/${filePath}`).then(r => r.arrayBuffer()).catch(() => null);
+        if (imgBuf) {
+          const base64 = btoa(String.fromCharCode(...new Uint8Array(imgBuf)));
+          const userContent = [
+            { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: base64 } },
+            { type: 'text', text: texto || 'Analiza esta imagen' }
+          ];
+          await handleDevAI(env, update.message.chat.id, userContent);
+          return new Response('OK');
         }
       }
     }
-    if (texto) {
-      await handleDevAI(env, update.message.chat.id, texto);
-    }
+    if (texto) await handleDevAI(env, update.message.chat.id, texto);
     return new Response('OK');
   }
 
@@ -7629,7 +7663,7 @@ async function getResumenRepostajes(request, env) {
 async function devAIChat(request, env) {
   const s = await getAuth(request, env);
   if (!s || !['superadmin','desarrollador'].includes(s.rol)) return err('Sin permiso', 403);
-  const { message } = await request.json().catch(() => ({}));
+  const { message, image } = await request.json().catch(() => ({}));
   if (!message) return err('Falta message', 400);
 
   // Cargar memoria e historial desde DB
@@ -7646,7 +7680,12 @@ async function devAIChat(request, env) {
 
   // Historial previo (más antiguo primero)
   const msgs = (historialRows.results || []).reverse().map(h => ({ role: h.rol, content: h.contenido }));
-  msgs.push({ role: 'user', content: message });
+
+  // Mensaje del usuario: texto solo o texto+imagen
+  const userContent = image?.data
+    ? [{ type: 'image', source: { type: 'base64', media_type: image.media_type || 'image/jpeg', data: image.data } }, { type: 'text', text: message }]
+    : message;
+  msgs.push({ role: 'user', content: userContent });
 
   // Guardar mensaje usuario
   env.DB.prepare("INSERT INTO alejandra_historial (canal, rol, contenido) VALUES ('web', 'user', ?)").bind(message.slice(0, 4000)).run().catch(() => {});
