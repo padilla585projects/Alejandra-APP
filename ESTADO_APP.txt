@@ -5,7 +5,7 @@
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 07/05/2026
-VERSIÓN ACTUAL APP NUEVA: v5.58 (worker 4184bb2 — agente autonomo completo con control total)
+VERSIÓN ACTUAL APP NUEVA: v5.63 (worker 50e260b — Alejandra aprende de errores + retry rate limit)
 VERSIÓN ACTUAL APP VIEJA: v4.19 (⛔ CONGELADA DEFINITIVAMENTE — no recibe más cambios)
 
 ================================================================================
@@ -150,6 +150,18 @@ PASO 4 — VERIFICAR WORKER (solo si se va a tocar worker.js)
 ================================================================================
   HISTORIAL DE VERSIONES — RECIENTES
 ================================================================================
+
+v5.63        |  07/05/2026  [Alejandra aprende de errores + retry rate limit inteligente]
+  - RATE LIMIT RETRY (worker): devAIChat reintenta automáticamente con historial reducido
+    cuando Anthropic devuelve rate_limit (30k tokens/min). Auto-guarda en alejandra_memoria.
+  - RATE LIMIT RETRY (frontend): iaSend + aiSend reintentan con slices de historial más cortos
+    (40→10→4→0 msgs) antes de mostrar cualquier error al usuario.
+  - CRONS DISTRIBUIDOS: syncSheets/syncPedidos/syncRRHH asignados uno por slot de cron
+    (7am/18pm/23pm) para no superar el límite de 50 subrequests de Cloudflare Workers.
+  - APRENDIZAJE OBLIGATORIO: system prompt actualizado — memory_save después de cada tool use
+    es obligatorio (no opcional). Tipos: hecho tras acción, error antes de reintentar, aprendizaje
+    al descubrir algo nuevo sobre el código.
+  - Worker: 50e260b
 
 v5.54        |  07/05/2026  [Alejandra autónoma: visión + Tavily + propose_fix + cron review]
   - VISION: Alejandra puede analizar imágenes. read_suggestion_image devuelve imagen de R2.

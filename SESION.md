@@ -7,9 +7,44 @@
 
 **Sesión:** LIBRE
 **Última sesión:** 07/05/2026
-**Versión tras última sesión:** v5.58 (worker 4184bb2 — agente autónomo completo)
-**Worker desplegado:** 4184bb2 (health check auto-revert, recordatorio, panel agente, parar/reiniciar)
+**Versión tras última sesión:** v5.63 (worker 50e260b — rate limit retry + aprendizaje obligatorio)
+**Worker desplegado:** 50e260b — en deploy via GitHub Actions
 **GitHub:** en sync ✅ — GitHub Actions deploy activo (Pages + Worker)
+
+---
+
+## RESUMEN SESIÓN 07/05/2026 — continuación (v5.59→v5.63)
+
+### Qué se hizo:
+
+**v5.60 — Fixes IA chat (app + panel web):**
+- navIABtn visible para superadmin en bottom nav
+- Botón flotante 🤖 en panel.html: fix condición showAIBtn (usaba devNav.style.display que siempre era '')
+- IA chat app: botón ← para cerrar + 🗑️ para borrar historial
+- Historial IA persistente en localStorage (app y panel) — no se pierde al cerrar
+- Fix getApiUrl → getAPI() (ReferenceError que rompía todo el IIFE de IA)
+- Fix SyntaxError template literal en aiSend de panel.html (backticks perdidos)
+- version.json: fix — no se copiaba al _site en pages.yml (banner nunca aparecía)
+- pages.yml: auto-genera version.json desde APP_VERSION en index.html al hacer deploy
+
+**v5.61 — Fix crons subrequests:**
+- syncSheets/syncPedidos/syncRRHH distribuidos uno por cron (7am/18pm/23pm)
+- Antes corrían todos juntos (>50 subrequests) → ahora cada slot tiene <35
+
+**v5.62 — Retry rate limit frontend:**
+- iaSend (app) y aiSend (panel): retry silencioso con historial reducido
+  (40→10→4→0 mensajes) antes de mostrar cualquier error
+
+**v5.63 — Alejandra aprende de errores:**
+- devAIChat (worker): retry rate limit en el servidor con historial reducido
+  + autoLearn automático al detectar el error (guarda en alejandra_memoria)
+- System prompt: aprendizaje OBLIGATORIO tras cada tool use — memory_save es
+  mandatorio (hecho/error/aprendizaje según el caso), no opcional
+
+### Estado final:
+- Worker: 50e260b ✅ (en deploy)
+- GitHub: en sync ✅
+- Versión: v5.63
 
 ---
 
