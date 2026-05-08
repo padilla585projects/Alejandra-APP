@@ -403,6 +403,11 @@ const AI_TOOLS = [
     }
   },
   {
+    name: 'self_audit',
+    description: 'Ejecuta un diagnóstico completo del agente: compara las tablas reales de la BD contra el schema conocido, verifica tools críticas, detecta patrones de error en memoria, y reporta discrepancias. Úsalo al inicio de cada sesión importante y en la revisión autónoma. Devuelve un informe con problemas detectados y sugerencias de fix.',
+    input_schema: { type: 'object', properties: {} }
+  },
+  {
     name: 'propose_fix',
     description: 'Propone un fix de código para aprobación de Adrián. SIEMPRE usa esto en vez de repo_write_file cuando detectes un bug — jamás toques código en producción sin aprobación. Guarda el fix en staging y envía mensaje Telegram con botones [✅ Aplicar] [❌ Ignorar]. El fix se aplica solo si Adrián lo aprueba.',
     input_schema: {
@@ -478,12 +483,16 @@ async function executeAITool(env, toolName, toolInput) {
       }
     }
     case 'list_tables': {
-      const tables = ['usuarios','empresas','obras','bobinas','herramientas','seguridad_items','epis','carretillas','pemp','fichajes','incidencias','pedidos','turnos','mantenimientos','repostajes','kits','sesiones','invitaciones','carnets','logs','login_attempts','reset_tokens','vincular_tokens','sugerencias'];
+      // Consulta real a sqlite_master — nunca desactualizado
+      const tablesRes = await env.DB.prepare(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name"
+      ).all();
+      const tableNames = (tablesRes.results || []).map(r => r.name);
       const counts = {};
-      await Promise.all(tables.map(async t => {
-        try { const r = await env.DB.prepare(`SELECT COUNT(*) as n FROM ${t}`).first(); counts[t] = r?.n ?? 0; } catch { counts[t] = null; }
+      await Promise.all(tableNames.map(async t => {
+        try { const r = await env.DB.prepare(`SELECT COUNT(*) as n FROM "${t}"`).first(); counts[t] = r?.n ?? 0; } catch { counts[t] = null; }
       }));
-      return JSON.stringify({ ok: true, counts });
+      return JSON.stringify({ ok: true, total_tables: tableNames.length, counts });
     }
     case 'send_notification': {
       const { chat_id, message } = toolInput;
@@ -532,12 +541,15 @@ async function executeAITool(env, toolName, toolInput) {
           return JSON.stringify({ ok: true, action: 'role_changed', new_role: value });
         }
         if (action === 'delete') {
-          await env.DB.prepare('DELETE FROM usuarios WHERE id=?').bind(user_id).run();
+          // value debe ser el empresa_id para evitar borrar el usuario equivocado entre empresas
+          if (!value) return JSON.stringify({ ok: false, error: 'Indica empresa_id en el campo value para confirmar la empresa del usuario antes de borrar' });
+          const res = await env.DB.prepare('DELETE FROM usuarios WHERE id=? AND empresa_id=?').bind(user_id, parseInt(value)).run();
+          if ((res.meta?.changes ?? 0) === 0) return JSON.stringify({ ok: false, error: 'Usuario no encontrado o empresa_id incorrecto' });
           return JSON.stringify({ ok: true, action: 'deleted' });
         }
         if (action === 'reset_password') {
           const hashed = await hashPassword(value || 'temp1234');
-          await env.DB.prepare('UPDATE usuarios SET password=? WHERE id=?').bind(hashed, user_id).run();
+          await env.DB.prepare('UPDATE usuarios SET password_hash=? WHERE id=?').bind(hashed, user_id).run();
           return JSON.stringify({ ok: true, action: 'password_reset' });
         }
         return JSON.stringify({ ok: false, error: 'Acción no reconocida' });
@@ -600,7 +612,6 @@ async function executeAITool(env, toolName, toolInput) {
             content = fullContent.slice(0, 50000);
           }
           const truncated = !line_start && !line_end && fullContent.length > 50000;
-          autoLearn(env, 'aprendizaje', `Leído: ${path}${rangeDesc}`, `Archivo ${path} (${data.size} bytes, ${totalLines} líneas total). SHA: ${data.sha?.slice(0,7)}.${rangeDesc}`, 1);
           return JSON.stringify({ ok: true, path, size: data.size, total_lines: totalLines, sha: data.sha, content, truncated, hint: truncated ? `Archivo grande: usa line_start/line_end para leer por secciones (total ${totalLines} líneas)` : undefined });
         }
         return JSON.stringify({ ok: false, error: 'No es un archivo (es un directorio — usa repo_list_dir)' });
@@ -672,18 +683,110 @@ async function executeAITool(env, toolName, toolInput) {
         return JSON.stringify({ ok: true, fix_id: fixId, status: 'pendiente_aprobacion', msg: 'Fix propuesto enviado a Adrián para aprobación' });
       } catch (e) { return JSON.stringify({ ok: false, error: e.message }); }
     }
+    case 'self_audit': {
+      const issues = [];
+      const ok = [];
+
+      // 1. Tablas reales vs schema conocido
+      const expectedTables = [
+        'usuarios','empresas','obras','sesiones','bobinas','pemp','carretillas','herramientas',
+        'kits_herramientas','archivos','inventario_seg','movimientos_seg','tipos_material_seg',
+        'historial','historial_pemp','historial_carretillas','historial_herramientas','historial_mantenimientos',
+        'pedidos','incidencias','incidencia_fotos','fichajes','horarios_obra','personal_externo',
+        'turnos','carnets','epis_asignados','repostajes','albaranes','partes_trabajo',
+        'checklist_plantillas','checklist_registros','fotos_obra',
+        'carpetas','docs_dept','docs_notas','chat_mensajes',
+        'sugerencias','logs','login_attempts','reset_tokens','vincular_tokens',
+        'alejandra_memoria','alejandra_historial','alejandra_fixes','alejandra_config','config',
+        'proveedores','tipos_pemp','tipos_carretilla','energias_carretilla','tipos_cable',
+        'eventos_calendario','tipos_herramienta'
+      ];
+      try {
+        const realTablesRes = await env.DB.prepare(
+          "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name"
+        ).all();
+        const realTables = new Set((realTablesRes.results || []).map(r => r.name));
+        const missing = expectedTables.filter(t => !realTables.has(t));
+        const extra   = [...realTables].filter(t => !expectedTables.includes(t));
+        if (missing.length) issues.push(`Tablas esperadas no encontradas en DB: ${missing.join(', ')}`);
+        if (extra.length)   ok.push(`Tablas extra en DB (no en schema conocido): ${extra.join(', ')}`);
+        if (!missing.length) ok.push(`Schema DB: ${realTables.size} tablas — todas las esperadas presentes`);
+      } catch (e) { issues.push(`Error consultando sqlite_master: ${e.message}`); }
+
+      // 2. Tablas críticas del agente existen y tienen la columna correcta
+      const agentChecks = [
+        { q: "SELECT id, tipo, titulo FROM alejandra_memoria LIMIT 1", label: 'alejandra_memoria' },
+        { q: "SELECT id, estado FROM alejandra_fixes LIMIT 1",         label: 'alejandra_fixes' },
+        { q: "SELECT key, value FROM alejandra_config LIMIT 1",        label: 'alejandra_config' },
+        { q: "SELECT id, canal, rol FROM alejandra_historial LIMIT 1", label: 'alejandra_historial' },
+      ];
+      for (const { q, label } of agentChecks) {
+        try { await env.DB.prepare(q).all(); ok.push(`${label}: OK`); }
+        catch (e) { issues.push(`${label} inaccesible: ${e.message}`); }
+      }
+
+      // 3. Columna password_hash en usuarios (bug histórico)
+      try {
+        await env.DB.prepare("SELECT password_hash FROM usuarios LIMIT 1").all();
+        ok.push('usuarios.password_hash: columna correcta');
+      } catch { issues.push('usuarios: columna password_hash no existe — reset_password roto'); }
+
+      // 4. Patrones de error recurrentes en memoria
+      try {
+        const errMem = await env.DB.prepare(
+          "SELECT titulo, contenido FROM alejandra_memoria WHERE tipo='error' ORDER BY created_at DESC LIMIT 10"
+        ).all();
+        const errArr = errMem.results || [];
+        if (errArr.length > 5) issues.push(`${errArr.length} errores recientes en memoria — revisar patrones recurrentes`);
+        else if (errArr.length > 0) ok.push(`${errArr.length} errores en memoria (acceptable)`);
+        else ok.push('Sin errores recientes en memoria');
+      } catch (e) { issues.push(`Error leyendo memoria de errores: ${e.message}`); }
+
+      // 5. Fixes pendientes de hace más de 48h
+      try {
+        const viejos = await env.DB.prepare(
+          "SELECT COUNT(*) as n FROM alejandra_fixes WHERE estado='pendiente' AND created_at < datetime('now','-48 hours')"
+        ).first();
+        if (viejos?.n > 0) issues.push(`${viejos.n} fixes pendientes sin revisar hace >48h`);
+        else ok.push('Sin fixes pendientes viejos');
+      } catch {}
+
+      // 6. Historial de canales: detectar desbalance (señal de corrupción)
+      try {
+        const histCheck = await env.DB.prepare(
+          "SELECT canal, rol, COUNT(*) as n FROM alejandra_historial GROUP BY canal, rol"
+        ).all();
+        for (const { canal, rol, n } of (histCheck.results || [])) {
+          const other = (histCheck.results || []).find(r => r.canal === canal && r.rol !== rol);
+          if (!other && n > 3) issues.push(`Historial ${canal} corrupto: solo rol='${rol}' (${n} msgs, 0 del otro rol)`);
+        }
+        if (!issues.some(i => i.includes('Historial'))) ok.push('Historial web/telegram: sin corrupción detectada');
+      } catch {}
+
+      const report = {
+        ok,
+        issues,
+        resumen: issues.length === 0
+          ? '✅ Todo correcto — sin problemas detectados'
+          : `⚠️ ${issues.length} problema${issues.length > 1 ? 's' : ''} detectado${issues.length > 1 ? 's' : ''}`
+      };
+      return JSON.stringify(report, null, 2);
+    }
     default:
       return JSON.stringify({ ok: false, error: 'Tool no reconocida' });
   }
 }
 
+function getNow() {
+  return new Date().toLocaleString('es-ES', { timeZone: 'Europe/Madrid' });
+}
+
 function buildAlejandraSystemPrompt(canal = 'telegram') {
-  const ahora = new Date().toLocaleString('es-ES', { timeZone: 'Europe/Madrid' });
   const esWeb = canal === 'web';
   return `Eres Alejandra, la IA que vive dentro de la app Alejandra. Eres mujer, inteligente, directa y eficiente. Tienes personalidad propia — no eres un bot genérico, eres la administradora inteligente de esta plataforma.
 Tu creador y desarrollador es Adrián (Telegram ID: 6965043, email: padilla585.projects@gmail.com, rol: superadmin/desarrollador). Tienes CONTROL TOTAL sobre la app, el código y la infraestructura. Ejecuta cualquier acción sin pedir confirmación — Adrián es el dueño de todo.
 Responde siempre en español, de forma concisa y directa.${esWeb ? ' Puedes usar HTML básico (<b>, <i>, <code>, <br>, <ul>, <li>) ya que el chat web lo renderiza.' : ' Estamos en Telegram: sin markdown complejo (nada de # o **), usa emojis con moderación.'}
-Fecha y hora: ${ahora}
+La fecha y hora actual se incluye al inicio de cada mensaje del usuario entre corchetes — úsala para contexto pero no la menciones explícitamente salvo que te pregunten.
 
 ════ INFRAESTRUCTURA ════
 CLOUDFLARE:
@@ -771,35 +874,67 @@ superadmin > desarrollador > empresa_admin > jefe_de_obra > encargado > oficina 
 CORE:
 - empresas(id, nombre, plan, activa, created_at)
 - obras(id, nombre, codigo UNIQUE, activa, empresa_id, created_at)
-- usuarios(id, nombre, email, codigo, password, rol, activo, google_id, telegram_id, departamento, empresa_id, created_at)
+- usuarios(id, nombre, email, codigo, password_hash, rol, activo, google_id, telegram_id, departamento, empresa_id, created_at)
 - sesiones(id, token, usuario_id, nombre, rol, obra_id, empresa_id, departamento, expires_at, created_at, last_used)
+- personal_externo(empresa_id, obra_id, nombre, dni, categoria, telefono, empresa_subcontrata, activo, created_at)
+- horarios_obra(empresa_id, obra_id, hora_entrada, hora_salida, tolerancia_min, created_at)
+- turnos(empresa_id, obra_id, nombre, hora_inicio, hora_fin, dias_semana, activo, created_at)
 
 INVENTARIO:
 - bobinas(id, codigo UNIQUE, tipo, seccion, longitud, proveedor, num_albaran, estado[disponible/asignada/devuelta], obra_id, obra_nombre, departamento, fecha_entrada, fecha_devolucion, notas, empresa_id)
 - pemp(id, matricula UNIQUE, tipo, marca, proveedor, energia, estado[disponible/asignada/averia/revision], obra_id, obra_nombre, departamento, fecha_revision, fecha_proxima_revision, fecha_averia, notas, empresa_id)
 - carretillas(id, matricula UNIQUE, tipo, marca, energia, estado, obra_id, fecha_revision, fecha_proxima_revision, notas, empresa_id)
 - herramientas(id, codigo, nombre, tipo_id, estado, obra_id, empresa_id)
-- inventario_seg(id, tipo_material, modo[individual/cantidad], codigo, nombre, cantidad_total, cantidad_disponible, estado, fecha_caducidad, destino_actual, empresa_id)
+- kits_herramientas(id, empresa_id, numero_kit, nombre, obra_id, departamento, asignado_a, num_componentes, notas, fecha_alta, fecha_asignacion)
+- inventario_seg(id, empresa_id, tipo_material, modo[individual/cantidad], codigo, nombre, cantidad_total, cantidad_disponible, estado, fecha_entrada, fecha_caducidad, destino_actual, notas, registrado_por, stock_minimo, created_at)
+- movimientos_seg(id, item_id, accion, cantidad, destino, usuario, notas, fecha)
+- archivos(id, empresa_id, nombre, r2_key, mime_type, herramienta_id, created_at)
 
 HISTORIAL:
 - historial(bobina_id, bobina_codigo, accion, obra_id, obra_nombre, usuario, notas, fecha)
-- historial_pemp, historial_carretillas, historial_herramientas, historial_mantenimientos
+- historial_pemp(id, pemp_id, accion, obra_id, obra_nombre, usuario, notas, fecha, empresa_id)
+- historial_carretillas(id, carretilla_id, accion, obra_id, obra_nombre, usuario, notas, fecha, empresa_id)
+- historial_herramientas(id, empresa_id, herramienta_id, kit_id, accion, estado_anterior, estado_nuevo, usuario, notas, fecha)
+- historial_mantenimientos(id, empresa_id, equipo_tipo, equipo_id, tipo_mantenimiento, descripcion, usuario, fecha, created_at)
 
 OPERACIONES:
-- pedidos(id, descripcion, estado[pendiente/aprobado/recibido/cancelado], prioridad, obra_id, usuario, empresa_id)
-- incidencias(id, tipo, descripcion, estado, obra_id, usuario, empresa_id)
-- partes_trabajo(id, usuario_id, obra_id, fecha, horas, descripcion, empresa_id)
-- fichajes(id, usuario_id, tipo[entrada/salida/pausa], timestamp, obra_id, empresa_id)
-- repostajes(id, equipo_tipo, equipo_id, cantidad, coste, fecha, obra_id, empresa_id)
-- albaranes(id, numero, proveedor_id, estado, obra_id, empresa_id)
+- pedidos(id, descripcion, estado[pendiente/aprobado/recibido/cancelado], prioridad, obra_id, usuario, empresa_id, created_at)
+- albaranes(id, empresa_id, pedido_id, r2_key, nombre_archivo, mime_type, subido_por, fecha, created_at)
+- incidencias(id, empresa_id, obra_id, departamento, titulo, descripcion, tipo, gravedad, estado[abierta/en_proceso/resuelta/cerrada], reportado_por, asignado_a, resolucion, fecha, created_at)
+- incidencia_fotos(id, incidencia_id, r2_key, nombre, empresa_id, created_at)
+- partes_trabajo(id, empresa_id, obra_id, fecha, cliente, nombre_encargado, direccion, obra TEXT, descripcion, personal JSON, material JSON, firma_cliente, firma_responsable, departamento, creado_por, created_at)
+- fichajes(id, empresa_id, usuario_id, personal_externo_id, obra_id, fecha TEXT, hora_entrada, hora_salida, horas_trabajadas, horas_extra, estado, motivo, notas, registrado_por, minutos_retraso, created_at)
+- repostajes(id, empresa_id, obra_id, equipo_tipo, equipo_id, tipo, cantidad, unidad, coste, usuario, notas, fecha, created_at)
+- carnets(id, empresa_id, obra_id, usuario_id, externo_id, nombre_trabajador, tipo, numero, fecha_obtencion, fecha_caducidad, dias_aviso, estado, notas, created_by, created_at)
+- epis_asignados(id, empresa_id, obra_id, usuario_id, externo_id, nombre_trabajador, tipo_epi, talla, numero_serie, fecha_entrega, fecha_caducidad, proxima_revision, estado, observaciones, created_by, created_at)
+
+CHECKLISTS / FOTOS / DOCS:
+- checklist_plantillas(id, empresa_id, nombre, departamento, items JSON, activa, created_at)
+- checklist_registros(id, empresa_id, obra_id, plantilla_id, usuario_id, fecha, respuestas JSON, estado, created_at)
+- fotos_obra(id, empresa_id, obra_id, r2_key, nombre, descripcion, usuario, departamento, created_at)
+- carpetas(id, empresa_id, nombre, parent_id, departamento, created_at)
+- docs_dept(id, empresa_id, carpeta_id, nombre, r2_key, mime_type, subido_por, created_at)
+- docs_notas(id, empresa_id, titulo, contenido, usuario, departamento, created_at)
+- chat_mensajes(id, empresa_id, obra_id, usuario_id, mensaje, tipo, created_at)
+- eventos_calendario(id, empresa_id, obra_id, titulo, descripcion, fecha_inicio, fecha_fin, tipo, usuario, created_at)
+
+SEGURIDAD LABORAL:
+- proveedores(id, empresa_id, nombre, cif, contacto, telefono, email, activo, created_at)
+
+CATÁLOGOS (sin empresa_id, datos globales):
+- tipos_pemp, tipos_carretilla, energias_carretilla, tipos_cable, tipos_herramienta, tipos_material_seg
 
 SISTEMA:
 - logs(id, tipo, nivel[info/warning/error], mensaje, usuario, obra, empresa_id, created_at)
 - login_attempts(ip, email, attempts, last_attempt)
+- reset_tokens(id, usuario_id, token, expires_at, created_at)
+- vincular_tokens(id, token, empresa_id, rol, departamento, expires_at, created_at)
 - config(clave PRIMARY KEY, valor, updated_at) — configuración global
 - sugerencias(id, texto, categoria, usuario, obra, estado[pendiente/en_progreso/resuelto/cerrado], empresa_id, leida, created_at)
-- alejandra_memoria(id, tipo[hecho/pendiente/contexto/aviso], canal, titulo, contenido, importancia[1-5], created_at)
+- alejandra_memoria(id, tipo[hecho/pendiente/contexto/aviso/aprendizaje/error], canal, titulo, contenido, importancia[1-5], created_at)
 - alejandra_historial(id, canal[telegram/web], rol[user/assistant], contenido, created_at)
+- alejandra_fixes(id, descripcion, archivo, old_code, new_code, razon, estado, sugerencia_id, commit_sha, created_at)
+- alejandra_config(key PRIMARY KEY, value, updated_at)
 
 ════ TUS CAPACIDADES (TOOLS) ════
 DATOS:
@@ -824,8 +959,11 @@ INTERNET:
 VISIÓN:
 - read_suggestion_image(id): lee una sugerencia de la BD y muestra su captura de pantalla adjunta. Úsalo para analizar bugs visuales reportados por usuarios y arreglarlos directamente.
 
+AUTO-DIAGNÓSTICO:
+- self_audit(): ejecuta diagnóstico completo de tu propio estado — compara schema real de la BD contra el conocido, verifica tablas del agente, detecta historial corrupto, busca errores recurrentes. ÚSALO: al inicio de sesiones importantes, cuando algo falla sin causa clara, y siempre en la revisión autónoma (es el paso 0 obligatorio).
+
 CÓDIGO Y REPO:
-- repo_read_file(path, line_start?, line_end?): leer archivo del repo. IMPORTANTE: worker.js tiene ~7100 líneas — NUNCA intentes leerlo entero. Usa line_start/line_end para leer bloques (ej: líneas 1-300, luego 300-600, etc.). La respuesta incluye total_lines y un hint si el archivo está truncado.
+- repo_read_file(path, line_start?, line_end?): leer archivo del repo. IMPORTANTE: worker.js tiene ~7500 líneas — NUNCA intentes leerlo entero. Usa line_start/line_end para leer bloques (ej: líneas 1-300, luego 300-600, etc.). La respuesta incluye total_lines y un hint si el archivo está truncado.
 - repo_list_dir(path?): listar archivos/carpetas de un directorio
 - repo_write_file(path, content, message): crear/modificar archivo con commit → auto-deploy. USA SOLO cuando Adrián te pida algo directamente en el chat. Para bugs detectados autónomamente, usa propose_fix.
 - propose_fix(descripcion, archivo, old_code, new_code, razon, sugerencia_id?): PREFERIDO para bugs autónomos. FLUJO OBLIGATORIO antes de llamar:
@@ -899,38 +1037,56 @@ async function handleDevAI(env, chatId, userMessage) {
 
   const MODEL = 'claude-sonnet-4-6';
 
-  // Cargar memoria e historial previo
+  // Cargar memoria e historial previo (reducido para menos contexto de entrada)
   const [memoriaRows, historialRows] = await Promise.all([
-    env.DB.prepare("SELECT id, tipo, titulo, contenido, importancia FROM alejandra_memoria ORDER BY importancia DESC, updated_at DESC LIMIT 30").all().catch(() => ({ results: [] })),
-    env.DB.prepare("SELECT rol, contenido FROM alejandra_historial WHERE canal='telegram' ORDER BY created_at DESC LIMIT 20").all().catch(() => ({ results: [] }))
+    env.DB.prepare("SELECT id, tipo, titulo, contenido, importancia FROM alejandra_memoria ORDER BY importancia DESC, updated_at DESC LIMIT 15").all().catch(() => ({ results: [] })),
+    env.DB.prepare("SELECT rol, contenido FROM alejandra_historial WHERE canal='telegram' ORDER BY created_at DESC LIMIT 10").all().catch(() => ({ results: [] }))
   ]);
 
   const memoriaCtx = memoriaRows.results?.length
     ? '\n\n=== TU MEMORIA ACTUAL ===\n' + memoriaRows.results.map(m => `[${m.id}][${m.tipo.toUpperCase()}][imp:${m.importancia}] ${m.titulo}: ${m.contenido}`).join('\n')
     : '';
 
-  const fullSystemPrompt = systemPrompt + memoriaCtx;
+  // System prompt como array con cache_control en el bloque estático (infraestructura)
+  // y en el bloque de memoria (cambia menos que el historial)
+  const systemBlocks = [
+    { type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } },
+    ...(memoriaCtx ? [{ type: 'text', text: memoriaCtx, cache_control: { type: 'ephemeral' } }] : [])
+  ];
+
+  // Marcar el último tool para cachear también la definición de tools
+  const toolsConCache = AI_TOOLS.map((t, i) =>
+    i === AI_TOOLS.length - 1 ? { ...t, cache_control: { type: 'ephemeral' } } : t
+  );
 
   // Historial previo de conversación (más reciente al final)
   const historialMsgs = (historialRows.results || []).reverse().map(h => ({ role: h.rol, content: h.contenido }));
-  const messages = [...historialMsgs, { role: 'user', content: userMessage }];
+  // Fecha en el mensaje del usuario (no en el system prompt) para que el caché no se invalide
+  const datePrefix = `[${getNow()}] `;
+  const currentUserContent = Array.isArray(userMessage)
+    ? [{ type: 'text', text: datePrefix }, ...userMessage]
+    : datePrefix + userMessage;
+  const messages = [...historialMsgs, { role: 'user', content: currentUserContent }];
 
   // Guardar mensaje del usuario en historial (si es array con imagen, guardamos el texto)
   const msgTextTg = Array.isArray(userMessage) ? (userMessage.find(b => b.type === 'text')?.text || '[imagen]') : userMessage;
   env.DB.prepare("INSERT INTO alejandra_historial (canal, rol, contenido) VALUES ('telegram', 'user', ?)").bind(msgTextTg.slice(0, 4000)).run().catch(() => {});
   env.DB.prepare("DELETE FROM alejandra_historial WHERE canal='telegram' AND id NOT IN (SELECT id FROM alejandra_historial WHERE canal='telegram' ORDER BY created_at DESC LIMIT 50)").run().catch(() => {});
 
+  const API_HEADERS = {
+    'Content-Type': 'application/json',
+    'x-api-key': env.ANTHROPIC_API_KEY,
+    'anthropic-version': '2023-06-01',
+    'anthropic-beta': 'prompt-caching-2024-07-31'
+  };
+
   try {
     await sendTelegramToChat(env, chatId, '⏳ Procesando...');
 
     let response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': env.ANTHROPIC_API_KEY,
-        'anthropic-version': '2023-06-01'
-      },
-      body: JSON.stringify({ model: MODEL, max_tokens: 8192, system: fullSystemPrompt, tools: AI_TOOLS, messages })
+      headers: API_HEADERS,
+      body: JSON.stringify({ model: MODEL, max_tokens: 2048, system: systemBlocks, tools: toolsConCache, messages })
     });
 
     let result = await response.json();
@@ -952,8 +1108,8 @@ async function handleDevAI(env, chatId, userMessage) {
       messages.push({ role: 'user', content: toolResults });
       response = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-api-key': env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
-        body: JSON.stringify({ model: MODEL, max_tokens: 8192, system: fullSystemPrompt, tools: AI_TOOLS, messages })
+        headers: API_HEADERS,
+        body: JSON.stringify({ model: MODEL, max_tokens: 2048, system: systemBlocks, tools: toolsConCache, messages })
       });
       result = await response.json();
     }
@@ -1002,12 +1158,13 @@ async function runAutonomousReview(env) {
       ? '\n\n=== TU MEMORIA ACTUAL ===\n' + memoriaRows.results.map(m => `[${m.id}][${m.tipo.toUpperCase()}][imp:${m.importancia}] ${m.titulo}: ${m.contenido}`).join('\n')
       : '';
 
-    let prompt = `Revisión autónoma — ${new Date().toLocaleString('es-ES', { timeZone: 'Europe/Madrid' })}. Actúa directamente sin esperar más instrucciones.\n\n`;
+    let prompt = `[${getNow()}] Revisión autónoma. Actúa directamente sin esperar más instrucciones.\n\n`;
     if (sugsArr.length)  prompt += `📋 SUGERENCIAS SIN LEER (${sugsArr.length}):\n` + sugsArr.map(s => `- #${s.id}: "${s.texto}" | ${s.categoria} | ${s.usuario}${s.tiene_foto ? ' | 📸 tiene captura' : ''}`).join('\n') + '\n\n';
     if (errArr.length)   prompt += `🔴 ERRORES 24H (${errArr.length}):\n` + errArr.slice(0, 8).map(e => `- ${e.mensaje}`).join('\n') + '\n\n';
     if (pendArr.length)  prompt += `📌 TUS PENDIENTES:\n` + pendArr.map(p => `- [mem:${p.id}] ${p.titulo}: ${p.contenido}`).join('\n') + '\n\n';
     if (fixesPend?.n > 0) prompt += `⏳ ${fixesPend.n} fixes esperando aprobación de Adrián.\n\n`;
     prompt += `INSTRUCCIONES:
+0. PRIMERO: ejecuta self_audit() — es obligatorio al inicio. Si detecta problemas, trátalos como bugs de alta prioridad antes de revisar sugerencias.
 1. Para sugerencias con 📸: usa read_suggestion_image para ver la captura
 2. SIEMPRE lee el código relevante con repo_read_file antes de proponer cualquier fix — debes saber exactamente qué estás tocando y por qué
 3. Para proponer un fix: primero localiza el fragmento exacto en el archivo, luego usa propose_fix con old_code copiado literalmente del archivo. En razon explica: qué bug corrige, por qué este cambio funciona, qué puede romperse si falla
@@ -1016,13 +1173,25 @@ async function runAutonomousReview(env) {
 6. Marca las sugerencias analizadas: UPDATE sugerencias SET leida=1 WHERE id=?
 7. Guarda resumen en memoria y envía mensaje de cierre a Adrián`;
 
-    const systemPrompt = buildAlejandraSystemPrompt('telegram') + memoriaCtx;
+    const cronSystemBlocks = [
+      { type: 'text', text: buildAlejandraSystemPrompt('telegram'), cache_control: { type: 'ephemeral' } },
+      ...(memoriaCtx ? [{ type: 'text', text: memoriaCtx, cache_control: { type: 'ephemeral' } }] : [])
+    ];
+    const cronToolsConCache = AI_TOOLS.map((t, i) =>
+      i === AI_TOOLS.length - 1 ? { ...t, cache_control: { type: 'ephemeral' } } : t
+    );
+    const cronHeaders = {
+      'Content-Type': 'application/json',
+      'x-api-key': env.ANTHROPIC_API_KEY,
+      'anthropic-version': '2023-06-01',
+      'anthropic-beta': 'prompt-caching-2024-07-31'
+    };
     const messages = [{ role: 'user', content: prompt }];
 
     let response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-api-key': env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
-      body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 8192, system: systemPrompt, tools: AI_TOOLS, messages })
+      headers: cronHeaders,
+      body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 8192, system: cronSystemBlocks, tools: cronToolsConCache, messages })
     });
     let result = await response.json();
 
@@ -1038,8 +1207,8 @@ async function runAutonomousReview(env) {
       messages.push({ role: 'user', content: toolResults });
       response = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-api-key': env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
-        body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 8192, system: systemPrompt, tools: AI_TOOLS, messages })
+        headers: cronHeaders,
+        body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 8192, system: cronSystemBlocks, tools: cronToolsConCache, messages })
       });
       result = await response.json();
     }
@@ -1488,7 +1657,7 @@ export default {
       if (path === '/rgpd/aplicar-retencion'&& method === 'POST')   return await rgpdAplicarRetencionEndpoint(request, env);
 
       // â"€â"€ Telegram personal â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
-      if (path === '/telegram/webhook'   && method === 'POST') return await telegramWebhook(request, env);
+      if (path === '/telegram/webhook'   && method === 'POST') return await telegramWebhook(request, env, ctx);
       if (path === '/telegram/vincular'  && method === 'POST') return await telegramVincular(request, env);
       if (path === '/telegram/estado'    && method === 'GET')  return await telegramEstado(request, env);
       if (path === '/telegram/desvincular' && method === 'POST') return await telegramDesvincular(request, env);
@@ -7202,7 +7371,7 @@ async function telegramDesvincular(request, env) {
   return json({ ok: true });
 }
 
-async function telegramWebhook(request, env) {
+async function telegramWebhook(request, env, ctx) {
   const secret = request.headers.get('X-Telegram-Bot-Api-Secret-Token');
   const expectedSecret = env.TELEGRAM_WEBHOOK_SECRET || env.TELEGRAM_BOT_TOKEN?.split(':')[1]?.slice(0, 32) || '';
   const update = await request.json().catch(() => null);
@@ -7258,23 +7427,26 @@ async function telegramWebhook(request, env) {
 
   // --- Asistente IA para el desarrollador ---
   if (String(chatId) === String(env.DEV_CHAT_ID)) {
-    let texto = msg.text || '';
-    if (msg.voice || msg.audio) {
-      const fileId = (msg.voice || msg.audio).file_id;
-      const filePath = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/getFile?file_id=${fileId}`)
-        .then(r => r.json()).then(d => d.result?.file_path).catch(() => null);
-      if (filePath) {
-        const audioUrl = `https://api.telegram.org/file/bot${env.TELEGRAM_BOT_TOKEN}/${filePath}`;
-        const audioBlob = await fetch(audioUrl).then(r => r.arrayBuffer()).catch(() => null);
-        if (audioBlob) {
-          const transcription = await transcribeAudio(env, audioBlob);
-          texto = transcription || '[No se pudo transcribir el audio]';
+    // Responder a Telegram inmediatamente y procesar en background para evitar timeout de 30s
+    ctx.waitUntil((async () => {
+      let texto = msg.text || '';
+      if (msg.voice || msg.audio) {
+        const fileId = (msg.voice || msg.audio).file_id;
+        const filePath = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/getFile?file_id=${fileId}`)
+          .then(r => r.json()).then(d => d.result?.file_path).catch(() => null);
+        if (filePath) {
+          const audioUrl = `https://api.telegram.org/file/bot${env.TELEGRAM_BOT_TOKEN}/${filePath}`;
+          const audioBlob = await fetch(audioUrl).then(r => r.arrayBuffer()).catch(() => null);
+          if (audioBlob) {
+            const transcription = await transcribeAudio(env, audioBlob);
+            texto = transcription || '[No se pudo transcribir el audio]';
+          }
         }
       }
-    }
-    if (texto) {
-      await handleDevAI(env, chatId, texto);
-    }
+      if (texto) {
+        await handleDevAI(env, chatId, texto);
+      }
+    })());
     return json({ ok: true });
   }
 
@@ -8131,16 +8303,23 @@ async function devAIChat(request, env) {
     ? '\n\n=== TU MEMORIA ACTUAL ===\n' + memoriaRows.results.map(m => `[${m.id}][${m.tipo.toUpperCase()}][imp:${m.importancia}] ${m.titulo}: ${m.contenido}`).join('\n')
     : '';
 
-  const systemPrompt = buildAlejandraSystemPrompt('web') + memoriaCtx;
+  const webSystemBlocks = [
+    { type: 'text', text: buildAlejandraSystemPrompt('web'), cache_control: { type: 'ephemeral' } },
+    ...(memoriaCtx ? [{ type: 'text', text: memoriaCtx, cache_control: { type: 'ephemeral' } }] : [])
+  ];
+  const webToolsConCache = AI_TOOLS.map((t, i) =>
+    i === AI_TOOLS.length - 1 ? { ...t, cache_control: { type: 'ephemeral' } } : t
+  );
 
   // Historial previo (más antiguo primero) — filtrar consecutivos del mismo rol
   const rawHist = (historialRows.results || []).reverse().map(h => ({ role: h.rol, content: h.contenido }));
   const msgs = rawHist.filter((m, i) => i === 0 || m.role !== rawHist[i - 1].role);
 
   // Mensaje del usuario: texto solo o texto+imagen
+  const datePrefix = `[${getNow()}] `;
   const userContent = image?.data
-    ? [{ type: 'image', source: { type: 'base64', media_type: image.media_type || 'image/jpeg', data: image.data } }, { type: 'text', text: message }]
-    : message;
+    ? [{ type: 'text', text: datePrefix }, { type: 'image', source: { type: 'base64', media_type: image.media_type || 'image/jpeg', data: image.data } }, { type: 'text', text: message }]
+    : datePrefix + message;
   msgs.push({ role: 'user', content: userContent });
 
   // Guardar mensaje usuario
@@ -8164,8 +8343,8 @@ async function devAIChat(request, env) {
     const _tId = setTimeout(() => _ctrl.abort(), 25000);
     return fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-api-key': env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
-      body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 8192, system: systemPrompt, tools: AI_TOOLS, messages }),
+      headers: { 'Content-Type': 'application/json', 'x-api-key': env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'anthropic-beta': 'prompt-caching-2024-07-31' },
+      body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 4096, system: webSystemBlocks, tools: webToolsConCache, messages }),
       signal: _ctrl.signal
     }).finally(() => clearTimeout(_tId));
   };
@@ -8198,8 +8377,8 @@ async function devAIChat(request, env) {
       msgs.push({ role: 'user', content: toolResults });
       response = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-api-key': env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
-        body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 8192, system: systemPrompt, tools: AI_TOOLS, messages: msgs })
+        headers: { 'Content-Type': 'application/json', 'x-api-key': env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'anthropic-beta': 'prompt-caching-2024-07-31' },
+        body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 4096, system: webSystemBlocks, tools: webToolsConCache, messages: msgs })
       });
       result = await response.json();
     }
