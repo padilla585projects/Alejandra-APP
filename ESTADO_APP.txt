@@ -4,8 +4,8 @@
   Ruta local: C:\Users\Adrian\Downloads\Proyecto GestiBobina\Alejandra APP
 ================================================================================
 
-ÚLTIMA ACTUALIZACIÓN: 07/05/2026
-VERSIÓN ACTUAL APP NUEVA: v5.63 (worker 50e260b — Alejandra aprende de errores + retry rate limit)
+ÚLTIMA ACTUALIZACIÓN: 08/05/2026
+VERSIÓN ACTUAL APP NUEVA: v5.66 (worker 4dbb4c18 — auditoría completa agente + self_audit tool)
 VERSIÓN ACTUAL APP VIEJA: v4.19 (⛔ CONGELADA DEFINITIVAMENTE — no recibe más cambios)
 
 ================================================================================
@@ -150,6 +150,21 @@ PASO 4 — VERIFICAR WORKER (solo si se va a tocar worker.js)
 ================================================================================
   HISTORIAL DE VERSIONES — RECIENTES
 ================================================================================
+
+v5.66        |  08/05/2026  [Auditoría completa agente — self_audit + fixes críticos]
+  - SELF_AUDIT TOOL: Alejandra puede diagnosticarse sola — compara schema real vs conocido,
+    verifica tablas del agente, detecta historial corrupto, patrones de error recurrentes.
+    Es el paso 0 obligatorio en runAutonomousReview cada noche.
+  - ctx.waitUntil() en Telegram webhook: respuesta 200 inmediata, handleDevAI en background.
+    El bot ya no se queda "pensando" sin responder.
+  - PROMPT CACHING: cache_control en system prompt y tools (handleDevAI, devAIChat, cron).
+    Fecha/hora movida a prefijo del mensaje de usuario — ya no rompe la caché.
+  - manage_user reset_password: columna password→password_hash (fix silencioso).
+  - list_tables: dinámico via sqlite_master, ya no usa nombres hardcoded incorrectos.
+  - SCHEMA PROMPT: actualizado con columnas reales de D1 (fichajes, albaranes, partes_trabajo,
+    incidencias, carnets, epis_asignados, repostajes, inventario_seg, +15 tablas nuevas).
+  - manage_user delete: requiere empresa_id para confirmar antes de borrar.
+  - repo_read_file: quitado autoLearn automático que llenaba memoria con lecturas.
 
 v5.65        |  07/05/2026  [Watchdog autónomo — Alejandra se autorepara sola]
   - checkChatHealth() en los 3 crons (7am/18pm/23pm): detecta historial web corrupto o

@@ -6,10 +6,35 @@
 ## ESTADO ACTUAL
 
 **Sesión:** LIBRE
-**Última sesión:** 07/05/2026
-**Versión tras última sesión:** v5.65 (worker e75da22b — watchdog autónomo en crons)
-**Worker desplegado:** e75da22b ✅
-**GitHub:** en sync ✅ — commit 3fd7241
+**Última sesión:** 08/05/2026
+**Versión tras última sesión:** v5.66 (worker 4dbb4c18 — auditoría completa agente + self_audit)
+**Worker desplegado:** 4dbb4c18 ✅
+**GitHub:** en sync ✅ — commit 3eecc38
+
+---
+
+## RESUMEN SESIÓN 08/05/2026 — v5.66 (auditoría completa agente)
+
+### Qué se hizo:
+
+**Auditoría completa del Agente Alejandra — todos los bugs corregidos:**
+
+- **ctx.waitUntil() en Telegram**: respuesta 200 inmediata, `handleDevAI` en background → bot ya no se queda "pensando" sin responder (causa raíz: timeout 30s de Cloudflare Workers)
+- **Prompt caching**: `cache_control: {type:'ephemeral'}` en system blocks y última tool en `handleDevAI`, `devAIChat` y `runAutonomousReview`. Reducidos max_tokens (8192→2048/4096) e historial (20→10, memoria 30→15)
+- **BUG-3 fix**: Fecha/hora eliminada del system prompt (invalidaba la caché cada segundo). Ahora se inyecta como prefijo `[DD/MM/YYYY, HH:MM:SS]` al inicio de cada mensaje de usuario
+- **BUG-1 fix**: `manage_user reset_password` usaba columna `password` → corregido a `password_hash`
+- **BUG-2 fix**: `list_tables` usaba nombres hardcoded incorrectos → ahora dinámico via `sqlite_master`
+- **BUG-4 fix**: `runAutonomousReview` y `devAIChat` ahora usan prompt caching correctamente
+- **PROB-1 fix**: Schema DB en system prompt actualizado con columnas reales de D1 (8 tablas corregidas, +15 tablas añadidas: carnets, epis_asignados, kits_herramientas, historial_herramientas, etc.)
+- **PROB-2 fix**: `repo_read_file` ya no crea entrada de memoria por cada lectura (eliminado autoLearn de ruido)
+- **PROB-4 fix**: `manage_user delete` requiere `empresa_id` como confirmación antes de borrar
+- **self_audit tool**: nueva herramienta — diagnóstico completo del agente (schema, tablas, historial, errores). Es paso 0 obligatorio en `runAutonomousReview`
+- **expectedTables fix**: `kits`→`kits_herramientas`, eliminado `herramienta_archivos` (no existe), añadido `historial_herramientas`
+
+### Estado final:
+- Worker: 4dbb4c18 ✅
+- GitHub: commit 3eecc38 ✅
+- Versión: v5.66
 
 ---
 
