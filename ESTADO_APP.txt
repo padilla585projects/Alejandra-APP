@@ -4,8 +4,8 @@
   Ruta local: C:\Users\Adrian\Downloads\Proyecto GestiBobina\Alejandra APP
 ================================================================================
 
-ÚLTIMA ACTUALIZACIÓN: 08/05/2026
-VERSIÓN ACTUAL APP NUEVA: v5.66 (worker 4dbb4c18 — auditoría completa agente + self_audit tool)
+ÚLTIMA ACTUALIZACIÓN: 09/05/2026
+VERSIÓN ACTUAL APP NUEVA: v5.67 (worker eb58f09d — 4 bugs IA críticos + sin bloqueo horario developer)
 VERSIÓN ACTUAL APP VIEJA: v4.19 (⛔ CONGELADA DEFINITIVAMENTE — no recibe más cambios)
 
 ================================================================================
@@ -150,6 +150,18 @@ PASO 4 — VERIFICAR WORKER (solo si se va a tocar worker.js)
 ================================================================================
   HISTORIAL DE VERSIONES — RECIENTES
 ================================================================================
+
+v5.67        |  09/05/2026  [4 bugs críticos Alejandra IA — chat y fix_apply]
+  - FIX fix_apply: eliminado bloqueo horario (Adrian = desarrollador, decide él).
+    _tgAnswerCQ inmediato antes de _ejecutarFix → el botón ya responde siempre.
+    try/catch alrededor de _ejecutarFix → si GitHub falla, notificación por Telegram.
+  - FIX historial Telegram corrupto: await en INSERT assistant de handleDevAI.
+    Causa raíz de los '(sin respuesta)' — el Worker terminaba antes de guardar.
+  - FIX devAIChat tool loop: usa _callAI (timeout 25s) en cada iteración.
+    Antes el loop usaba fetch directo sin AbortController → podía colgarse 30s.
+  - Límites developer subidos: max_tokens 2048→4096, historial 10→20, memoria 15→30.
+  - version.json corregida (formato inválido {:.65} → {"v":"5.67"}).
+  - Worker: eb58f09d ✅  GitHub: commit c41d0d2 ✅
 
 v5.66        |  08/05/2026  [Auditoría completa agente — self_audit + fixes críticos]
   - SELF_AUDIT TOOL: Alejandra puede diagnosticarse sola — compara schema real vs conocido,

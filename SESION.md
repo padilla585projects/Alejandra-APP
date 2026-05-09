@@ -6,10 +6,10 @@
 ## ESTADO ACTUAL
 
 **Sesión:** LIBRE
-**Última sesión:** 08/05/2026
-**Versión tras última sesión:** v5.66 (worker 4dbb4c18 — auditoría completa agente + self_audit)
-**Worker desplegado:** 4dbb4c18 ✅
-**GitHub:** en sync ✅ — commit 3eecc38
+**Última sesión:** 09/05/2026
+**Versión tras última sesión:** v5.67 (worker eb58f09d — 4 bugs IA + sin bloqueo horario developer)
+**Worker desplegado:** eb58f09d ✅
+**GitHub:** en sync ✅ — commit c41d0d2
 
 ---
 
