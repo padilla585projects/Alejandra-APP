@@ -5,7 +5,7 @@
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 09/05/2026
-VERSIÓN ACTUAL APP NUEVA: v5.67 (worker eb58f09d — 4 bugs IA críticos + sin bloqueo horario developer)
+VERSIÓN ACTUAL APP NUEVA: v5.68 (worker 08488d63 — Alejandra autosuficiente + push notifications developer)
 VERSIÓN ACTUAL APP VIEJA: v4.19 (⛔ CONGELADA DEFINITIVAMENTE — no recibe más cambios)
 
 ================================================================================
@@ -150,6 +150,27 @@ PASO 4 — VERIFICAR WORKER (solo si se va a tocar worker.js)
 ================================================================================
   HISTORIAL DE VERSIONES — RECIENTES
 ================================================================================
+
+v5.68        |  09/05/2026  [Alejandra autosuficiente + push notifications developer]
+  - AUTOCONCIENCIA: buildAlejandraSystemPrompt ampliado con mapa completo del repo
+    (worker.js, index.html, panel.html, sw.js, workflows), nombres de sus propias
+    funciones (handleDevAI, devAIChat, self_audit, runAutonomousReview, etc.),
+    flujo de autorreparación obligatorio con propose_fix + consentimiento de Adrián.
+  - SELF_AUDIT EXPANDIDA: detecta push subscription, bugs recurrentes por patrón
+    (>=3 del mismo tipo en 7 días), longitud del system prompt, genera sugerencias
+    de auto_fix automáticamente cuando encuentra issues.
+  - REVISIÓN NOCTURNA: incluso cuando "todo tranquilo" ejecuta self_audit y avisa
+    si hay problemas. Push notification al terminar si hay fixes o problemas.
+  - WEB PUSH COMPLETO (RFC 8291 + VAPID ES256):
+    · Cifrado real: ECDH P-256 + HKDF-SHA-256 + AES-128-GCM
+    · VAPID JWT firmado con clave privada ES256
+    · Endpoints: /dev/vapid-public-key, /dev/push-subscribe, /dev/generate-vapid
+    · Push automático cuando Alejandra responde (chat web y Telegram)
+  - SW.JS: push event handler + notificationclick (abre panel.html)
+  - INDEX.HTML: _registrarPushDeveloper() auto en login para superadmin/desarrollador
+  - Worker: 08488d63 ✅  GitHub: commit 7bc2aff ✅
+  ⚠️ PENDIENTE MANUAL: npx wrangler secret put VAPID_PUBLIC_KEY/VAPID_PRIVATE_KEY
+     (obtener valores desde GET /dev/generate-vapid en el panel)
 
 v5.67        |  09/05/2026  [4 bugs críticos Alejandra IA — chat y fix_apply]
   - FIX fix_apply: eliminado bloqueo horario (Adrian = desarrollador, decide él).

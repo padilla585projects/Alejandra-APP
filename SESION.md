@@ -7,9 +7,9 @@
 
 **Sesión:** LIBRE
 **Última sesión:** 09/05/2026
-**Versión tras última sesión:** v5.67 (worker eb58f09d — 4 bugs IA + sin bloqueo horario developer)
-**Worker desplegado:** eb58f09d ✅
-**GitHub:** en sync ✅ — commit c41d0d2
+**Versión tras última sesión:** v5.68 (worker 08488d63 — Alejandra autosuficiente + push developer)
+**Worker desplegado:** 08488d63 ✅
+**GitHub:** en sync ✅ — commit 7bc2aff
 
 ---
 
