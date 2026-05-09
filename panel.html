@@ -5627,12 +5627,12 @@ async function activarPushDev() {
     const reg = await navigator.serviceWorker.ready;
     let sub = await reg.pushManager.getSubscription();
     if (!sub) {
-      const vapidRes = await fetch(getAPI() + '/dev/vapid-public-key', { headers: { 'X-Token': TOKEN } });
+      const vapidRes = await fetch(API + '/dev/vapid-public-key', { headers: { 'X-Token': TOKEN } });
       if (!vapidRes.ok) { alert('❌ Error obteniendo clave VAPID del servidor (' + vapidRes.status + ')'); btn.disabled = false; btn.textContent = '🔔 Activar Push'; return; }
       const { publicKey } = await vapidRes.json();
       sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: _urlB64ToUint8(publicKey) });
     }
-    const saveRes = await fetch(getAPI() + '/dev/push-subscribe', {
+    const saveRes = await fetch(API + '/dev/push-subscribe', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-Token': TOKEN },
       body: JSON.stringify({ subscription: sub.toJSON() })
@@ -5664,7 +5664,7 @@ async function _registrarPushDeveloper() {
   const reg = await navigator.serviceWorker.ready;
   let sub = await reg.pushManager.getSubscription();
   if (!sub) {
-    const vapidRes = await fetch(getAPI() + '/dev/vapid-public-key', {
+    const vapidRes = await fetch(API + '/dev/vapid-public-key', {
       headers: { 'X-Token': TOKEN }
     });
     if (!vapidRes.ok) return;
@@ -5674,7 +5674,7 @@ async function _registrarPushDeveloper() {
       applicationServerKey: _urlB64ToUint8(publicKey)
     });
   }
-  await fetch(getAPI() + '/dev/push-subscribe', {
+  await fetch(API + '/dev/push-subscribe', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-Token': TOKEN },
     body: JSON.stringify({ subscription: sub.toJSON() })
