@@ -1037,10 +1037,10 @@ async function handleDevAI(env, chatId, userMessage) {
 
   const MODEL = 'claude-sonnet-4-6';
 
-  // Cargar memoria e historial previo (reducido para menos contexto de entrada)
+  // Cargar memoria e historial (canal developer — sin límites reducidos)
   const [memoriaRows, historialRows] = await Promise.all([
-    env.DB.prepare("SELECT id, tipo, titulo, contenido, importancia FROM alejandra_memoria ORDER BY importancia DESC, updated_at DESC LIMIT 15").all().catch(() => ({ results: [] })),
-    env.DB.prepare("SELECT rol, contenido FROM alejandra_historial WHERE canal='telegram' ORDER BY created_at DESC LIMIT 10").all().catch(() => ({ results: [] }))
+    env.DB.prepare("SELECT id, tipo, titulo, contenido, importancia FROM alejandra_memoria ORDER BY importancia DESC, updated_at DESC LIMIT 30").all().catch(() => ({ results: [] })),
+    env.DB.prepare("SELECT rol, contenido FROM alejandra_historial WHERE canal='telegram' ORDER BY created_at DESC LIMIT 20").all().catch(() => ({ results: [] }))
   ]);
 
   const memoriaCtx = memoriaRows.results?.length
@@ -1086,7 +1086,7 @@ async function handleDevAI(env, chatId, userMessage) {
     let response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: API_HEADERS,
-      body: JSON.stringify({ model: MODEL, max_tokens: 2048, system: systemBlocks, tools: toolsConCache, messages })
+      body: JSON.stringify({ model: MODEL, max_tokens: 4096, system: systemBlocks, tools: toolsConCache, messages })
     });
 
     let result = await response.json();
@@ -1109,7 +1109,7 @@ async function handleDevAI(env, chatId, userMessage) {
       response = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: API_HEADERS,
-        body: JSON.stringify({ model: MODEL, max_tokens: 2048, system: systemBlocks, tools: toolsConCache, messages })
+        body: JSON.stringify({ model: MODEL, max_tokens: 4096, system: systemBlocks, tools: toolsConCache, messages })
       });
       result = await response.json();
     }
@@ -1117,8 +1117,8 @@ async function handleDevAI(env, chatId, userMessage) {
     const textBlocks = (result.content || []).filter(b => b.type === 'text');
     const finalText = textBlocks.map(b => b.text).join('\n') || '(sin respuesta)';
 
-    // Guardar respuesta en historial
-    env.DB.prepare("INSERT INTO alejandra_historial (canal, rol, contenido) VALUES ('telegram', 'assistant', ?)").bind(finalText.slice(0, 4000)).run().catch(() => {});
+    // Guardar respuesta en historial — await obligatorio para que no se pierda antes de que el Worker termine
+    await env.DB.prepare("INSERT INTO alejandra_historial (canal, rol, contenido) VALUES ('telegram', 'assistant', ?)").bind(finalText.slice(0, 4000)).run().catch(() => {});
 
     const chunks = finalText.match(/[\s\S]{1,4000}/g) || [finalText];
     for (const chunk of chunks) {
@@ -1450,24 +1450,16 @@ async function handleTelegramWebhook(request, env, ctx) {
         await _tgAnswerCQ(env, cq.id, fix?.estado === 'aplicado' ? 'Ya fue aplicado' : 'Fix no encontrado');
         return new Response('OK');
       }
-      // Bloqueo horario: no aplicar en producción durante horas de trabajo (07:00-19:00 España)
-      const nowUtc = new Date();
-      const mes = nowUtc.getUTCMonth() + 1;
-      const offsetEsp = (mes >= 4 && mes <= 10) ? 2 : 1; // CEST/CET
-      const horaEsp = (nowUtc.getUTCHours() + offsetEsp) % 24;
-      const minEsp = nowUtc.getUTCMinutes();
-      if (horaEsp >= 7 && horaEsp < 19) {
-        await _tgAnswerCQ(env, cq.id, '⚠️ Horario laboral — confirma para aplicar');
-        const horaStr = `${String(horaEsp).padStart(2,'0')}:${String(minEsp).padStart(2,'0')}`;
+      // Adrián es el desarrollador — aplicar siempre de inmediato sin bloqueo horario
+      await _tgAnswerCQ(env, cq.id, '⚙️ Aplicando fix...');
+      try {
+        await _ejecutarFix(env, fix, fixId, chatId, msgId, orig, cq.id);
+        if (ctx) ctx.waitUntil(_checkearSaludPostDeploy(env, fixId, chatId));
+      } catch (e) {
         await sendTelegramConBotonesTo(env, chatId,
-          `⚠️ <b>Son las ${horaStr} (hora España) — horario laboral</b>\n\nAplicar el fix <b>${fix.descripcion.slice(0,60)}</b> en <code>${fix.archivo}</code> desencadenará un deploy automático (~1 min) mientras la app puede estar en uso.\n\n¿Aplicar igualmente o esperar esta noche?`,
-          [[{ text: '⚠️ Aplicar ahora', callback_data: `fix_confirm:${fixId}` }, { text: '⏰ Esta noche lo reviso', callback_data: `fix_snooze:${fixId}` }]]
-        );
-        return new Response('OK');
+          `❌ <b>Error aplicando fix #${fixId}</b>\n\n<code>${e.message}</code>\n\nEl fix sigue pendiente. Revisa el repo o el log de GitHub.`, []);
+        autoLearn(env, 'error', `Fix #${fixId} falló al aplicar`, `Error: ${e.message}. Archivo: ${fix.archivo}. Revisar GITHUB_TOKEN o formato old/new_code.`, 5);
       }
-      // Fuera de horario laboral — aplicar directamente
-      await _ejecutarFix(env, fix, fixId, chatId, msgId, orig, cq.id);
-      if (ctx) ctx.waitUntil(_checkearSaludPostDeploy(env, fixId, chatId));
     }
     else if (accion === 'fix_confirm') {
       // Segunda confirmación — aplica sin importar la hora
@@ -8375,11 +8367,7 @@ async function devAIChat(request, env) {
       })));
       msgs.push({ role: 'assistant', content: result.content });
       msgs.push({ role: 'user', content: toolResults });
-      response = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-api-key': env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'anthropic-beta': 'prompt-caching-2024-07-31' },
-        body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 4096, system: webSystemBlocks, tools: webToolsConCache, messages: msgs })
-      });
+      response = await _callAI(msgs);
       result = await response.json();
     }
 
