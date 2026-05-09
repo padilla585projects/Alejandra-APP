@@ -1161,6 +1161,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
               <button class="btn btn-sm" id="agenteToggleBtn" onclick="toggleAgente()" style="font-size:12px">⏳ Cargando...</button>
               <button class="btn btn-sm" onclick="reiniciarAgente()" style="font-size:12px;background:rgba(59,130,246,.15);color:#3b82f6;border:1px solid rgba(59,130,246,.3)">🔄 Reiniciar</button>
               <button class="btn btn-sm" onclick="diagnoseIA()" style="font-size:12px;background:rgba(168,85,247,.15);color:#a855f7;border:1px solid rgba(168,85,247,.3)">🩺 Diagnóstico</button>
+              <button class="btn btn-sm" id="btnPushSub" onclick="activarPushDev()" style="font-size:12px;background:rgba(34,197,94,.15);color:#22c55e;border:1px solid rgba(34,197,94,.3)">🔔 Activar Push</button>
             </div>
           </div>
           <div style="font-size:12px;color:var(--muted);margin:6px 0 12px">
@@ -5609,6 +5610,46 @@ if ('serviceWorker' in navigator) {
   if (code) { handleGoogleCallback(code); return; }
   if (TOKEN && SESSION) { iniciarApp(); }
 })();
+
+// ── ACTIVAR PUSH MANUAL (botón DevTools) ──────────────────────────────────
+async function activarPushDev() {
+  const btn = document.getElementById('btnPushSub');
+  btn.disabled = true; btn.textContent = '⏳ Activando...';
+  try {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+      alert('❌ Este navegador no soporta Push Notifications'); btn.disabled = false; btn.textContent = '🔔 Activar Push'; return;
+    }
+    const perm = await Notification.requestPermission();
+    if (perm !== 'granted') {
+      alert('❌ Permiso denegado. Ve a ajustes del navegador → Notificaciones → permite este sitio.');
+      btn.disabled = false; btn.textContent = '🔔 Activar Push'; return;
+    }
+    const reg = await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) {
+      const vapidRes = await fetch(getAPI() + '/dev/vapid-public-key', { headers: { 'X-Token': TOKEN } });
+      if (!vapidRes.ok) { alert('❌ Error obteniendo clave VAPID del servidor (' + vapidRes.status + ')'); btn.disabled = false; btn.textContent = '🔔 Activar Push'; return; }
+      const { publicKey } = await vapidRes.json();
+      sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: _urlB64ToUint8(publicKey) });
+    }
+    const saveRes = await fetch(getAPI() + '/dev/push-subscribe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Token': TOKEN },
+      body: JSON.stringify({ subscription: sub.toJSON() })
+    });
+    const saveData = await saveRes.json();
+    if (saveRes.ok && saveData.ok) {
+      btn.textContent = '✅ Push activo';
+      btn.style.background = 'rgba(34,197,94,.3)';
+    } else {
+      alert('❌ Error guardando suscripción: ' + (saveData.error || saveRes.status));
+      btn.disabled = false; btn.textContent = '🔔 Activar Push';
+    }
+  } catch (e) {
+    alert('❌ Error: ' + e.message);
+    btn.disabled = false; btn.textContent = '🔔 Activar Push';
+  }
+}
 
 // ── PUSH NOTIFICATIONS (developer/superadmin) ─────────────────────────────
 function _urlB64ToUint8(b64) {
