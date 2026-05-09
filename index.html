@@ -8944,7 +8944,7 @@ function initAjustesTabs() {
   document.getElementById('ajTabComparativa').style.display = (esSA || esEA) ? '' : 'none';
   document.getElementById('sistemaSheetSection').style.display = esSA ? 'block' : 'none';
   document.getElementById('sistemaLogsSection').style.display  = esSA ? 'block' : 'none';
-  document.getElementById('sistemaPushSection').style.display  = esSA ? 'block' : 'none';
+  document.getElementById('sistemaPushSection').style.display  = (esSA || s.rol === 'desarrollador') ? 'block' : 'none';
   const puedeGestionarSesiones = esSA || esEnc || esEA;
   const secGest = document.getElementById('seccionGestionSesiones');
   if (secGest) secGest.style.display = puedeGestionarSesiones ? '' : 'none';
