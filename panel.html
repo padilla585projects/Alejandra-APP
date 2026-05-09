@@ -1856,6 +1856,9 @@ function iniciarApp() {
   cargarObrasPanel();
   navTo('dashboard');
   if (typeof showAIBtn === 'function') showAIBtn();
+  if (['superadmin', 'desarrollador'].includes(SESSION.rol)) {
+    _registrarPushDeveloper().catch(() => {});
+  }
 }
 
 function toggleSidebar() {
@@ -5590,6 +5593,11 @@ async function confirmarResetPass() {
   }
 }
 
+// ── SERVICE WORKER ─────────────────────────────────────────────
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/sw.js').catch(() => {});
+}
+
 // ── INICIO ─────────────────────────────────────────────────────
 (function init() {
   const urlParams = new URLSearchParams(window.location.search);
@@ -5601,6 +5609,36 @@ async function confirmarResetPass() {
   if (code) { handleGoogleCallback(code); return; }
   if (TOKEN && SESSION) { iniciarApp(); }
 })();
+
+// ── PUSH NOTIFICATIONS (developer/superadmin) ─────────────────────────────
+function _urlB64ToUint8(b64) {
+  const raw = atob(b64.replace(/-/g, '+').replace(/_/g, '/'));
+  return Uint8Array.from([...raw].map(c => c.charCodeAt(0)));
+}
+async function _registrarPushDeveloper() {
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+  if (!['superadmin', 'desarrollador'].includes(SESSION?.rol)) return;
+  const perm = await Notification.requestPermission();
+  if (perm !== 'granted') return;
+  const reg = await navigator.serviceWorker.ready;
+  let sub = await reg.pushManager.getSubscription();
+  if (!sub) {
+    const vapidRes = await fetch(getAPI() + '/dev/vapid-public-key', {
+      headers: { 'Authorization': 'Bearer ' + TOKEN }
+    });
+    if (!vapidRes.ok) return;
+    const { publicKey } = await vapidRes.json();
+    sub = await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: _urlB64ToUint8(publicKey)
+    });
+  }
+  await fetch(getAPI() + '/dev/push-subscribe', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + TOKEN },
+    body: JSON.stringify(sub.toJSON())
+  });
+}
 </script>
 
 <!-- ═══ ALEJANDRA IA — CHAT FLOTANTE (solo desarrollador) ═══ -->
