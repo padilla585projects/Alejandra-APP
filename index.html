@@ -3216,6 +3216,49 @@ function getSession() {
 
 function setSession(data) {
   localStorage.setItem('alejandra_session', JSON.stringify(data));
+  // Registrar push si es developer/superadmin
+  if (['superadmin', 'desarrollador'].includes(data?.rol)) {
+    _registrarPushDeveloper().catch(() => {});
+  }
+}
+
+// ── Push notifications Alejandra → developer ──────────────────────────────
+function _urlB64ToUint8(b64) {
+  const b = (b64 + '=='.slice(0, (4 - b64.length % 4) % 4)).replace(/-/g, '+').replace(/_/g, '/');
+  return Uint8Array.from(atob(b), c => c.charCodeAt(0));
+}
+
+async function _registrarPushDeveloper() {
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+  try {
+    // Pedir permiso si no está concedido
+    const perm = await Notification.requestPermission();
+    if (perm !== 'granted') return;
+
+    const reg = window._swReg || await navigator.serviceWorker.ready;
+    // Obtener suscripción existente o crear nueva
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) {
+      // Obtener la clave pública VAPID del servidor
+      const vapidRes = await fetch(getAPI() + '/dev/vapid-public-key', {
+        headers: { 'X-Token': getSession()?.token || '' }
+      });
+      if (!vapidRes.ok) return; // VAPID no configurado aún
+      const { publicKey } = await vapidRes.json();
+      sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: _urlB64ToUint8(publicKey)
+      });
+    }
+    // Guardar suscripción en el worker
+    await fetch(getAPI() + '/dev/push-subscribe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Token': getSession()?.token || '' },
+      body: JSON.stringify({ subscription: sub.toJSON() })
+    });
+  } catch (e) {
+    console.warn('[Push] Error registrando push developer:', e.message);
+  }
 }
 
 function cerrarSesion() {
@@ -9772,7 +9815,7 @@ async function cargarObrasSelectUsuario() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '5.67';
+const APP_VERSION = '5.68';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -9927,6 +9970,9 @@ if ('serviceWorker' in navigator) {
     });
 
     setInterval(() => reg.update(), 5 * 60 * 1000); // chequeo cada 5 min
+
+    // Push notifications para developer/superadmin — se registra al hacer login
+    window._swReg = reg;
   }).catch(() => {});
 
   // ══════════════════════════════════════════════════════

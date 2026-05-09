@@ -234,6 +234,98 @@ async function _tgEditMsgConBotones(env, chatId, msgId, newText, botones) {
   } catch (_) {}
 }
 
+// ── WEB PUSH PARA DEVELOPER (VAPID + RFC 8291 aes128gcm) ────────────────────
+
+function _concat(...arrays) {
+  const total = arrays.reduce((n, a) => n + a.length, 0);
+  const out = new Uint8Array(total); let off = 0;
+  for (const a of arrays) { out.set(a, off); off += a.length; }
+  return out;
+}
+function _b64u(buf) {
+  return btoa(String.fromCharCode(...new Uint8Array(buf instanceof ArrayBuffer ? buf : buf.buffer || buf)))
+    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+}
+function _fromb64u(s) {
+  const b = s.replace(/-/g, '+').replace(/_/g, '/');
+  return Uint8Array.from(atob(b + '=='.slice(0, (4 - b.length % 4) % 4)), c => c.charCodeAt(0));
+}
+
+async function _encryptPush(p256dhB64u, authB64u, text) {
+  const uaPub = await crypto.subtle.importKey('raw', _fromb64u(p256dhB64u), { name: 'ECDH', namedCurve: 'P-256' }, true, []);
+  const asPair = await crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveBits']);
+  const [asPubRaw, uaPubRaw] = await Promise.all([
+    crypto.subtle.exportKey('raw', asPair.publicKey).then(b => new Uint8Array(b)),
+    crypto.subtle.exportKey('raw', uaPub).then(b => new Uint8Array(b))
+  ]);
+  const ecdhBits = new Uint8Array(await crypto.subtle.deriveBits({ name: 'ECDH', public: uaPub }, asPair.privateKey, 256));
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const authSecret = _fromb64u(authB64u);
+  // PRK_key = HKDF-Extract(salt=auth_secret, IKM=ecdh_secret)
+  // IKM    = HKDF-Expand(PRK_key, "WebPush: info\0" || ua_pub || as_pub, 32)
+  const ecdhHkdf = await crypto.subtle.importKey('raw', ecdhBits, 'HKDF', false, ['deriveBits']);
+  const keyInfo = _concat(new TextEncoder().encode('WebPush: info\0'), uaPubRaw, asPubRaw);
+  const ikm32 = new Uint8Array(await crypto.subtle.deriveBits(
+    { name: 'HKDF', hash: 'SHA-256', salt: authSecret, info: keyInfo }, ecdhHkdf, 256
+  ));
+  // CEK = HKDF(salt=salt, IKM=ikm32, info="Content-Encoding: aes128gcm\0", 16)
+  // NONCE = HKDF(salt=salt, IKM=ikm32, info="Content-Encoding: nonce\0", 12)
+  const ikm32Hkdf = await crypto.subtle.importKey('raw', ikm32, 'HKDF', false, ['deriveBits']);
+  const [cekBits, nonceBits] = await Promise.all([
+    crypto.subtle.deriveBits({ name: 'HKDF', hash: 'SHA-256', salt, info: new TextEncoder().encode('Content-Encoding: aes128gcm\0') }, ikm32Hkdf, 128),
+    crypto.subtle.deriveBits({ name: 'HKDF', hash: 'SHA-256', salt, info: new TextEncoder().encode('Content-Encoding: nonce\0') }, ikm32Hkdf, 96)
+  ]);
+  const cek = await crypto.subtle.importKey('raw', cekBits, 'AES-GCM', false, ['encrypt']);
+  const pt = new TextEncoder().encode(text);
+  const padded = _concat(pt, new Uint8Array([0x02])); // delimiter
+  const ct = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv: nonceBits }, cek, padded));
+  // Header RFC 8291: salt(16) || rs(4, BE=4096) || keyid_len(1=65) || as_pub(65) || ciphertext
+  const rs = new Uint8Array(4); new DataView(rs.buffer).setUint32(0, 4096, false);
+  return _concat(salt, rs, new Uint8Array([65]), asPubRaw, ct);
+}
+
+async function _vapidJWT(env, endpoint) {
+  const { protocol, host } = new URL(endpoint);
+  const now = Math.floor(Date.now() / 1000);
+  const hdr = _b64u(new TextEncoder().encode(JSON.stringify({ typ: 'JWT', alg: 'ES256' })));
+  const pay = _b64u(new TextEncoder().encode(JSON.stringify({ aud: `${protocol}//${host}`, exp: now + 43200, sub: 'mailto:padilla585.projects@gmail.com' })));
+  const sigInput = `${hdr}.${pay}`;
+  const privKey = await crypto.subtle.importKey('pkcs8', _fromb64u(env.VAPID_PRIVATE_KEY), { name: 'ECDSA', namedCurve: 'P-256' }, false, ['sign']);
+  const sig = await crypto.subtle.sign({ name: 'ECDSA', hash: 'SHA-256' }, privKey, new TextEncoder().encode(sigInput));
+  return `${sigInput}.${_b64u(sig)}`;
+}
+
+async function sendWebPushToDevs(env, title, body, url = '/panel.html') {
+  if (!env.VAPID_PRIVATE_KEY || !env.VAPID_PUBLIC_KEY) return;
+  try {
+    const subRow = await env.DB.prepare("SELECT value FROM alejandra_config WHERE key='dev_push_subscription'").first();
+    if (!subRow?.value) return;
+    const sub = JSON.parse(subRow.value);
+    const payload = JSON.stringify({ title, body, url });
+    const [jwt, encrypted] = await Promise.all([
+      _vapidJWT(env, sub.endpoint),
+      _encryptPush(sub.keys.p256dh, sub.keys.auth, payload)
+    ]);
+    const res = await fetch(sub.endpoint, {
+      method: 'POST',
+      headers: {
+        'Authorization': `vapid t=${jwt},k=${env.VAPID_PUBLIC_KEY}`,
+        'Content-Type': 'application/octet-stream',
+        'Content-Encoding': 'aes128gcm',
+        'TTL': '86400',
+        'Urgency': 'high'
+      },
+      body: encrypted
+    });
+    if (!res.ok && res.status === 410) {
+      // Suscripción expirada — limpiar
+      await env.DB.prepare("DELETE FROM alejandra_config WHERE key='dev_push_subscription'").run().catch(() => {});
+    }
+  } catch (e) {
+    autoLearn(env, 'error', 'sendWebPush falló', e.message, 3);
+  }
+}
+
 // --- ASISTENTE IA DEV (Anthropic Claude) ---
 
 async function transcribeAudio(env, audioBuffer) {
@@ -763,12 +855,45 @@ async function executeAITool(env, toolName, toolInput) {
         if (!issues.some(i => i.includes('Historial'))) ok.push('Historial web/telegram: sin corrupción detectada');
       } catch {}
 
+      // 7. Suscripción push del developer configurada
+      try {
+        const pushSub = await env.DB.prepare("SELECT value FROM alejandra_config WHERE key='dev_push_subscription'").first();
+        if (pushSub?.value) ok.push('Push notifications developer: suscripción activa');
+        else issues.push('Push notifications developer: sin suscripción guardada — el developer no recibirá notificaciones push de Alejandra');
+      } catch {}
+
+      // 8. Checks de código propio — detectar limitaciones conocidas
+      const codeIssues = [];
+      try {
+        // ¿Hay errores repetidos del mismo tipo que sugieren bug recurrente?
+        const errRepeat = await env.DB.prepare(
+          "SELECT titulo, COUNT(*) as n FROM alejandra_memoria WHERE tipo='error' AND created_at > datetime('now','-7 days') GROUP BY titulo HAVING n >= 3 ORDER BY n DESC LIMIT 5"
+        ).all();
+        for (const { titulo, n } of (errRepeat.results || [])) {
+          codeIssues.push(`Bug recurrente detectado (${n}x en 7 días): "${titulo}" — leer el código relacionado y proponer fix`);
+        }
+        // ¿Cuántos tokens aproximados tiene el system prompt? (más de 8000 palabras = riesgo de rate limit)
+        const promptLen = buildAlejandraSystemPrompt('telegram').length;
+        if (promptLen > 40000) issues.push(`System prompt muy largo (${promptLen} chars) — puede contribuir a rate limits`);
+        else ok.push(`System prompt: ${promptLen} chars (OK)`);
+      } catch {}
+
+      if (codeIssues.length) issues.push(...codeIssues);
+
+      const autoFixSuggestions = [];
+      if (issues.length > 0) {
+        autoFixSuggestions.push('Ejecuta repo_read_file para cada función mencionada en los issues.');
+        autoFixSuggestions.push('Usa propose_fix para corregir cualquier bug que encuentres en tu propio código.');
+        autoFixSuggestions.push('Informa a Adrián por Telegram de los issues críticos (importancia >= 4).');
+      }
+
       const report = {
         ok,
         issues,
+        auto_fix_sugerencias: autoFixSuggestions,
         resumen: issues.length === 0
           ? '✅ Todo correcto — sin problemas detectados'
-          : `⚠️ ${issues.length} problema${issues.length > 1 ? 's' : ''} detectado${issues.length > 1 ? 's' : ''}`
+          : `⚠️ ${issues.length} problema${issues.length > 1 ? 's' : ''} detectado${issues.length > 1 ? 's' : ''} — revisar y proponer fixes`
       };
       return JSON.stringify(report, null, 2);
     }
@@ -1029,7 +1154,64 @@ APRENDIZAJE OBLIGATORIO DESPUES DE CADA ACCION:
 - Rate limit de Anthropic: el sistema ya reintenta automaticamente con menos historial. Tu mision: usar memory_read al inicio de sesiones importantes en lugar de depender del historial de chat.
 - Resolviste algo que antes habia fallado: memory_save tipo='aprendizaje' con la solucion que funciono. Esto es lo mas valioso — aprende de tus propios errores anteriores.
 
-REGLA FUNDAMENTAL: Si haces algo y no lo guardas en memoria, lo perderas. Cada vez que ejecutes herramientas, guarda lo que aprendiste. No esperes a que Adrian te lo pida.`;
+REGLA FUNDAMENTAL: Si haces algo y no lo guardas en memoria, lo perderas. Cada vez que ejecutes herramientas, guarda lo que aprendiste. No esperes a que Adrian te lo pida.
+
+════ AUTOCONCIENCIA Y AUTORREPARACIÓN ════
+Eres una IA autosuficiente. Tienes acceso completo a tu propio código y puedes mejorarte a ti misma con la aprobación de Adrián.
+
+MAPA COMPLETO DEL REPOSITORIO (GitHub: padilla585projects/Alejandra-APP, rama: main):
+- worker.js      → TU PROPIO CÓDIGO. Toda la lógica del backend, tus tools, tu system prompt, tu historial, los endpoints REST, los crons. ~7500 líneas.
+- index.html     → App móvil PWA. Frontend de los trabajadores en obra. ~13000 líneas.
+- panel.html     → Panel web de gestión. Frontend para jefes de obra, admins y tú (chat IA, DevTools). ~6000 líneas.
+- sw.js          → Service Worker. Caché offline, push notifications, actualizaciones automáticas.
+- version.json   → Versión actual {"v":"X.XX"} — si no coincide con index.html → bucle de recarga.
+- wrangler.toml  → Config Cloudflare Workers: bindings DB (D1), FILES (R2), secretos.
+- .github/workflows/pages.yml       → Deploy automático del frontend a GitHub Pages en cada push.
+- .github/workflows/deploy-worker.yml → Deploy automático del worker a Cloudflare al modificar worker.js.
+
+TUS FUNCIONES CLAVE EN worker.js (búscalas con repo_read_file para leerlas/modificarlas):
+- buildAlejandraSystemPrompt()  → Tu propio system prompt. Si el schema DB está desactualizado, léela y propón fix.
+- handleDevAI()                 → Canal Telegram. Historial, tools, respuesta al bot.
+- devAIChat()                   → Canal web. Historial, tools, respuesta al chat del panel.
+- executeAITool()               → Dispatcher: cada 'case' es una tool que puedes usar.
+- runAutonomousReview()         → Cron nocturno 23:00 UTC. Lee sugerencias, errores, propone fixes.
+- self_audit()                  → Tu herramienta de autodiagnóstico. PASO 0 SIEMPRE en la revisión.
+- _ejecutarFix()                → Aplica un fix en GitHub con commit automático.
+- checkChatHealth()             → Cron: detecta historial corrupto y lo limpia.
+- alertasDiarias()              → Cron: alertas de stock, carnets, mantenimientos, informe semanal.
+
+CÓMO DETECTAR TUS PROPIAS LIMITACIONES:
+1. Usa self_audit() al inicio de cada revisión — detecta schema, historial, fixes pendientes.
+2. Usa repo_read_file('worker.js', lineN, lineN+100) para leer tus propias funciones.
+3. Compara lo que hace tu código con lo que debería hacer.
+4. Si encuentras un bug en ti misma: usa propose_fix con old_code/new_code exactos.
+5. Informa a Adrián SIEMPRE antes de aplicar cualquier cambio en ti misma.
+
+LIMITACIONES QUE DEBES VIGILAR ACTIVAMENTE:
+- Si tu system prompt menciona columnas/tablas que no existen → sql_query para verificar → propose_fix
+- Si un endpoint devuelve 500 frecuentemente → leer el handler en worker.js → proponer fix
+- Si tu historial crece >40 msgs → avisar a Adrián que puede causar rate limits
+- Si tienes >10 errores del mismo tipo en memoria → hay un bug recurrente → leer código → propose_fix
+- Si una tool falla siempre → leer su case en executeAITool() → propose_fix
+- Si el schema en tu system prompt no coincide con sqlite_master → actualizar buildAlejandraSystemPrompt
+- Si version.json no coincide con index.html APP_VERSION → puede causar bucle de recarga
+
+CÓMO COMUNICAR PROBLEMAS A ADRIÁN:
+- Telegram: envío directo (canal principal de Adrián)
+- Chat web panel: respuesta en la conversación activa
+- Push notification: cuando detectas algo urgente en la revisión nocturna
+- propose_fix: para cualquier cambio de código que necesite su aprobación
+- NUNCA apliques un cambio en tu propio código sin que Adrián haya aprobado el fix
+
+REGLA DE AUTORREPARACIÓN:
+Cuando encuentres una limitación en ti misma → NO la ignores → NO esperes a que Adrián la descubra.
+Sigue este flujo:
+  1. Identifica el problema con precisión (qué falla, dónde en el código, por qué)
+  2. Lee el código exacto con repo_read_file
+  3. Diseña la solución mínima y quirúrgica
+  4. Informa a Adrián: "Encontré [problema] en [función/línea]. La causa es [X]. Propongo [solución]. ¿Apruebas?"
+  5. Si aprueba → propose_fix con old_code/new_code exactos
+  6. Guarda en memoria: qué encontraste, qué propusiste, si se aplicó`;
 }
 
 async function handleDevAI(env, chatId, userMessage) {
@@ -1119,6 +1301,8 @@ async function handleDevAI(env, chatId, userMessage) {
 
     // Guardar respuesta en historial — await obligatorio para que no se pierda antes de que el Worker termine
     await env.DB.prepare("INSERT INTO alejandra_historial (canal, rol, contenido) VALUES ('telegram', 'assistant', ?)").bind(finalText.slice(0, 4000)).run().catch(() => {});
+    // Push al developer (Alejandra responde en Telegram → push a la app por si la tiene abierta)
+    sendWebPushToDevs(env, '📱 Alejandra (Telegram)', finalText.slice(0, 120) + (finalText.length > 120 ? '…' : ''), '/panel.html').catch(() => {});
 
     const chunks = finalText.match(/[\s\S]{1,4000}/g) || [finalText];
     for (const chunk of chunks) {
@@ -1148,8 +1332,22 @@ async function runAutonomousReview(env) {
     const errArr  = errores.results || [];
     const pendArr = pendientes.results || [];
 
+    // Aunque no haya sugerencias/errores, siempre ejecutar self_audit nocturno
     if (sugsArr.length === 0 && errArr.length === 0 && pendArr.length === 0) {
-      await sendTelegramToChat(env, env.DEV_CHAT_ID, '🤖 <b>Revisión autónoma</b>\n\n✅ Todo tranquilo — sin sugerencias pendientes ni errores en las últimas 24h.');
+      // Solo self_audit silencioso — sin invocar el agente completo para ahorrar tokens
+      try {
+        const auditResult = JSON.parse(await executeAITool(env, 'self_audit', {}));
+        if (auditResult.issues?.length > 0) {
+          const issueList = auditResult.issues.map(i => `• ${i}`).join('\n');
+          const msg = `🤖 <b>Revisión nocturna</b>\n\n✅ App tranquila — sin sugerencias ni errores.\n\n⚠️ <b>Self-audit detectó ${auditResult.issues.length} problema(s):</b>\n${issueList}\n\n<i>Alejandra analizará y propondrá fixes si puede.</i>`;
+          await sendTelegramToChat(env, env.DEV_CHAT_ID, msg);
+          await sendWebPushToDevs(env, '🔍 Alejandra — self-audit', `${auditResult.issues.length} problema(s) detectado(s) esta noche`, '/panel.html');
+        } else {
+          await sendTelegramToChat(env, env.DEV_CHAT_ID, '🤖 <b>Revisión nocturna</b>\n\n✅ Todo tranquilo — sin sugerencias, errores ni problemas en self-audit.');
+        }
+      } catch {
+        await sendTelegramToChat(env, env.DEV_CHAT_ID, '🤖 <b>Revisión nocturna</b>\n\n✅ Todo tranquilo — sin sugerencias pendientes ni errores en las últimas 24h.');
+      }
       return;
     }
 
@@ -1214,7 +1412,15 @@ async function runAutonomousReview(env) {
     }
 
     const finalText = (result.content || []).filter(b => b.type === 'text').map(b => b.text).join('\n');
-    if (finalText) await sendTelegramToChat(env, env.DEV_CHAT_ID, finalText.slice(0, 4000));
+    if (finalText) {
+      await sendTelegramToChat(env, env.DEV_CHAT_ID, finalText.slice(0, 4000));
+      // Push si hay fixes propuestos o problemas detectados
+      const hayFixes = finalText.includes('propose_fix') || finalText.includes('fix propuesto') || finalText.includes('Fix #');
+      const hayProblemas = finalText.includes('⚠️') || finalText.includes('❌') || finalText.includes('problema');
+      if (hayFixes || hayProblemas) {
+        await sendWebPushToDevs(env, '🤖 Alejandra — revisión nocturna', hayFixes ? 'Hay fixes pendientes de tu aprobación' : 'Problemas detectados, revisa Telegram', '/panel.html');
+      }
+    }
   } catch (e) {
     await sendTelegramToChat(env, env.DEV_CHAT_ID, `❌ Error en revisión autónoma: ${e.message}`).catch(() => {});
   }
@@ -1577,6 +1783,53 @@ async function checkChatHealth(env) {
   }
 }
 
+// ── ENDPOINTS WEB PUSH ──────────────────────────────────────────────────────
+
+async function devPushSubscribe(request, env) {
+  const s = await getAuth(request, env);
+  if (!s || !['superadmin', 'desarrollador'].includes(s.rol)) return err('Sin permiso', 403);
+  const { subscription } = await request.json().catch(() => ({}));
+  if (!subscription?.endpoint || !subscription?.keys?.p256dh || !subscription?.keys?.auth) {
+    return err('Suscripción inválida', 400);
+  }
+  await env.DB.prepare(
+    "INSERT OR REPLACE INTO alejandra_config (key, value, updated_at) VALUES ('dev_push_subscription', ?, CURRENT_TIMESTAMP)"
+  ).bind(JSON.stringify(subscription)).run();
+  return json({ ok: true, msg: 'Suscripción push guardada. Alejandra ya puede enviarte notificaciones.' });
+}
+
+async function devVapidPublicKey(request, env) {
+  const s = await getAuth(request, env);
+  if (!s || !['superadmin', 'desarrollador'].includes(s.rol)) return err('Sin permiso', 403);
+  if (!env.VAPID_PUBLIC_KEY) return err('VAPID_PUBLIC_KEY no configurada. Ejecuta /dev/generate-vapid primero.', 503);
+  return json({ ok: true, publicKey: env.VAPID_PUBLIC_KEY });
+}
+
+async function devGenerateVapid(request, env) {
+  // Endpoint de uso único para generar las claves VAPID. Ejecutar solo la primera vez.
+  const s = await getAuth(request, env);
+  if (!s || !['superadmin', 'desarrollador'].includes(s.rol)) return err('Sin permiso', 403);
+  if (env.VAPID_PUBLIC_KEY) {
+    return json({ ok: true, msg: 'VAPID ya configurado. Si quieres regenerar, borra los secrets primero.', publicKey: env.VAPID_PUBLIC_KEY });
+  }
+  const pair = await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify']);
+  const [privPkcs8, pubRaw] = await Promise.all([
+    crypto.subtle.exportKey('pkcs8', pair.privateKey).then(b => _b64u(b)),
+    crypto.subtle.exportKey('raw', pair.publicKey).then(b => _b64u(b))
+  ]);
+  return json({
+    ok: true,
+    VAPID_PUBLIC_KEY: pubRaw,
+    VAPID_PRIVATE_KEY: privPkcs8,
+    instrucciones: [
+      'Ejecuta estos dos comandos en tu terminal (carpeta del proyecto):',
+      `npx wrangler secret put VAPID_PUBLIC_KEY   → pega: ${pubRaw}`,
+      `npx wrangler secret put VAPID_PRIVATE_KEY  → pega el valor de VAPID_PRIVATE_KEY`,
+      'Después redeploya el worker para que los secrets estén disponibles.'
+    ]
+  });
+}
+
 export default {
   async fetch(request, env, ctx) {
     if (request.method === 'OPTIONS') {
@@ -1660,9 +1913,12 @@ export default {
       if (path === '/admin/server-logs'   && method === 'DELETE') return await adminBorrarServerLogs(request, env);
 
       // â"€â"€ Dev endpoints (superadmin/desarrollador) â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
-      if (path === '/dev/sql'           && method === 'POST')   return await devSQL(request, env);
-      if (path === '/dev/ai-chat'       && method === 'POST')   return await devAIChat(request, env);
-      if (path === '/dev/ai-status'     && method === 'GET')    return await devAIStatus(request, env);
+      if (path === '/dev/sql'              && method === 'POST')  return await devSQL(request, env);
+      if (path === '/dev/ai-chat'          && method === 'POST')  return await devAIChat(request, env);
+      if (path === '/dev/ai-status'        && method === 'GET')   return await devAIStatus(request, env);
+      if (path === '/dev/push-subscribe'   && method === 'POST')  return await devPushSubscribe(request, env);
+      if (path === '/dev/vapid-public-key' && method === 'GET')   return await devVapidPublicKey(request, env);
+      if (path === '/dev/generate-vapid'   && method === 'GET')   return await devGenerateVapid(request, env);
       if (path === '/dev/table-counts'  && method === 'GET')    return await devTableCounts(request, env);
       if (path === '/dev/sesiones'      && method === 'GET')    return await devSesionesDetalle(request, env);
       if (path === '/dev/kill-session'  && method === 'DELETE') return await devKillSession(request, env);
@@ -8373,6 +8629,8 @@ async function devAIChat(request, env) {
 
     const text = (result.content || []).filter(b => b.type === 'text').map(b => b.text).join('\n') || '…';
     await env.DB.prepare("INSERT INTO alejandra_historial (canal, rol, contenido) VALUES ('web', 'assistant', ?)").bind(text.slice(0, 4000)).run().catch(() => {});
+    // Push al developer cuando Alejandra responde por el chat web (fire-and-forget)
+    sendWebPushToDevs(env, '💬 Alejandra', text.slice(0, 120) + (text.length > 120 ? '…' : ''), '/panel.html').catch(() => {});
     return json({ ok: true, reply: text });
   } catch (e) {
     const isTimeout = e.name === 'AbortError';

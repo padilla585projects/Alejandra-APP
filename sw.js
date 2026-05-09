@@ -1,5 +1,5 @@
 // Cambia este número cada vez que actualices la app
-const CACHE = 'alejandra-v5.67';
+const CACHE = 'alejandra-v5.68';
 
 self.addEventListener('install', e => {
   self.skipWaiting();
@@ -10,18 +10,38 @@ self.addEventListener('message', e => {
   if (e.data?.tipo === 'SKIP_WAITING') self.skipWaiting();
 });
 
+// ── Push notifications de Alejandra IA (solo developer) ─────────────────────
+self.addEventListener('push', e => {
+  let data = {};
+  try { data = e.data ? e.data.json() : {}; } catch { data = { title: 'Alejandra', body: e.data?.text() || '' }; }
+  const title = data.title || 'Alejandra';
+  const options = {
+    body: data.body || '',
+    icon: '/icons/icon-192.png',
+    badge: '/icons/icon-96.png',
+    tag: 'alejandra-ia',
+    renotify: true,
+    data: { url: data.url || '/panel.html' },
+    vibrate: [200, 100, 200]
+  };
+  e.waitUntil(self.registration.showNotification(title, options));
+});
+
 self.addEventListener('notificationclick', e => {
   e.notification.close();
+  const url = e.notification.data?.url || '/panel.html';
   const navTo = e.notification.data?.navTo || null;
   e.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clients => {
-      if (clients.length) {
-        const client = clients[0];
-        client.focus();
-        if (navTo) client.postMessage({ tipo: 'NOTIF_NAV', navTo });
-        return;
+      // Buscar ventana ya abierta con la app
+      for (const client of clients) {
+        if (client.url.includes(self.location.origin)) {
+          client.focus();
+          if (navTo) client.postMessage({ tipo: 'NOTIF_NAV', navTo });
+          return;
+        }
       }
-      return self.clients.openWindow(navTo ? `/?nav=${navTo}` : '/');
+      return self.clients.openWindow(url);
     })
   );
 });
