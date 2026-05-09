@@ -2061,6 +2061,11 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
           <button class="btn-primary btn-secondary" style="font-size:13px;margin-top:8px" onclick="limpiarCache()">🗑 Limpiar caché SW</button>
           <button class="btn-primary btn-secondary" style="font-size:13px;margin-top:8px;background:var(--red)" onclick="resetSesionCompleto()">⚠️ Resetear sesión y caché</button>
         </div>
+        <div class="settings-section" id="sistemaPushSection" style="display:none">
+          <div class="settings-title">🔔 Notificaciones push (Alejandra)</div>
+          <div style="color:var(--muted);font-size:12px;margin-bottom:8px">Recibe avisos cuando Alejandra te responda o detecte problemas.</div>
+          <button class="btn-primary btn-secondary" id="btnPushSubApp" style="font-size:13px;margin-top:0" onclick="activarPushDevApp()">🔔 Activar notificaciones push</button>
+        </div>
         <div class="settings-section" id="sistemaLogsSection" style="display:none">
           <div class="settings-title" style="display:flex;justify-content:space-between;align-items:center">
             <span>📋 Logs de errores</span>
@@ -8939,6 +8944,7 @@ function initAjustesTabs() {
   document.getElementById('ajTabComparativa').style.display = (esSA || esEA) ? '' : 'none';
   document.getElementById('sistemaSheetSection').style.display = esSA ? 'block' : 'none';
   document.getElementById('sistemaLogsSection').style.display  = esSA ? 'block' : 'none';
+  document.getElementById('sistemaPushSection').style.display  = esSA ? 'block' : 'none';
   const puedeGestionarSesiones = esSA || esEnc || esEA;
   const secGest = document.getElementById('seccionGestionSesiones');
   if (secGest) secGest.style.display = puedeGestionarSesiones ? '' : 'none';
@@ -9811,6 +9817,44 @@ async function cargarObrasSelectUsuario() {
   }
   iniciarApp();
 })();
+
+async function activarPushDevApp() {
+  const btn = document.getElementById('btnPushSubApp');
+  btn.disabled = true; btn.textContent = '⏳ Activando...';
+  try {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+      alert('❌ Este navegador no soporta Push Notifications'); btn.disabled = false; btn.textContent = '🔔 Activar notificaciones push'; return;
+    }
+    const perm = await Notification.requestPermission();
+    if (perm !== 'granted') {
+      alert('❌ Permiso denegado. Ve a ajustes del navegador → Notificaciones → permite este sitio.');
+      btn.disabled = false; btn.textContent = '🔔 Activar notificaciones push'; return;
+    }
+    const reg = window._swReg || await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) {
+      const vapidRes = await fetch(getAPI() + '/dev/vapid-public-key', { headers: { 'X-Token': getSession()?.token || '' } });
+      if (!vapidRes.ok) { alert('❌ Error obteniendo clave VAPID (' + vapidRes.status + ')'); btn.disabled = false; btn.textContent = '🔔 Activar notificaciones push'; return; }
+      const { publicKey } = await vapidRes.json();
+      sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: _urlB64ToUint8(publicKey) });
+    }
+    const saveRes = await fetch(getAPI() + '/dev/push-subscribe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Token': getSession()?.token || '' },
+      body: JSON.stringify({ subscription: sub.toJSON() })
+    });
+    const saveData = await saveRes.json();
+    if (saveRes.ok && saveData.ok) {
+      btn.textContent = '✅ Push activo';
+    } else {
+      alert('❌ Error guardando suscripción: ' + (saveData.error || saveRes.status));
+      btn.disabled = false; btn.textContent = '🔔 Activar notificaciones push';
+    }
+  } catch (e) {
+    alert('❌ Error: ' + e.message);
+    btn.disabled = false; btn.textContent = '🔔 Activar notificaciones push';
+  }
+}
 </script>
 
 <script>
