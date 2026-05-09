@@ -7,9 +7,9 @@
 
 **Sesión:** LIBRE
 **Última sesión:** 09/05/2026
-**Versión tras última sesión:** v5.68 (worker 08488d63 — Alejandra autosuficiente + push developer)
-**Worker desplegado:** 08488d63 ✅
-**GitHub:** en sync ✅ — commit 7bc2aff
+**Versión tras última sesión:** v5.68 (worker 5fdde7ce — VAPID secrets subidos, push listo)
+**Worker desplegado:** 5fdde7ce ✅
+**GitHub:** en sync ✅
 
 ---
 

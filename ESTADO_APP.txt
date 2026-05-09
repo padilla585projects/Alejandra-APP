@@ -5,7 +5,7 @@
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 09/05/2026
-VERSIÓN ACTUAL APP NUEVA: v5.68 (worker 08488d63 — Alejandra autosuficiente + push notifications developer)
+VERSIÓN ACTUAL APP NUEVA: v5.68 (worker 5fdde7ce — Alejandra autosuficiente + push notifications developer)
 VERSIÓN ACTUAL APP VIEJA: v4.19 (⛔ CONGELADA DEFINITIVAMENTE — no recibe más cambios)
 
 ================================================================================
@@ -168,9 +168,8 @@ v5.68        |  09/05/2026  [Alejandra autosuficiente + push notifications devel
     · Push automático cuando Alejandra responde (chat web y Telegram)
   - SW.JS: push event handler + notificationclick (abre panel.html)
   - INDEX.HTML: _registrarPushDeveloper() auto en login para superadmin/desarrollador
-  - Worker: 08488d63 ✅  GitHub: commit 7bc2aff ✅
-  ⚠️ PENDIENTE MANUAL: npx wrangler secret put VAPID_PUBLIC_KEY/VAPID_PRIVATE_KEY
-     (obtener valores desde GET /dev/generate-vapid en el panel)
+  - VAPID keys subidas como secrets: VAPID_PUBLIC_KEY + VAPID_PRIVATE_KEY ✅
+  - Worker: 5fdde7ce ✅  GitHub: commit 7bc2aff ✅
 
 v5.67        |  09/05/2026  [4 bugs críticos Alejandra IA — chat y fix_apply]
   - FIX fix_apply: eliminado bloqueo horario (Adrian = desarrollador, decide él).
