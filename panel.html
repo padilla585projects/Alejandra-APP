@@ -5624,7 +5624,7 @@ async function _registrarPushDeveloper() {
   let sub = await reg.pushManager.getSubscription();
   if (!sub) {
     const vapidRes = await fetch(getAPI() + '/dev/vapid-public-key', {
-      headers: { 'Authorization': 'Bearer ' + TOKEN }
+      headers: { 'X-Token': TOKEN }
     });
     if (!vapidRes.ok) return;
     const { publicKey } = await vapidRes.json();
@@ -5635,8 +5635,8 @@ async function _registrarPushDeveloper() {
   }
   await fetch(getAPI() + '/dev/push-subscribe', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + TOKEN },
-    body: JSON.stringify(sub.toJSON())
+    headers: { 'Content-Type': 'application/json', 'X-Token': TOKEN },
+    body: JSON.stringify({ subscription: sub.toJSON() })
   });
 }
 </script>

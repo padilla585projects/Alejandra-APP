@@ -3852,7 +3852,9 @@ async function iniciarApp() {
   // Botón Chat
   const btnChatEl = document.getElementById('btnChat');
   if (btnChatEl) btnChatEl.style.display = 'flex';
-  if ('Notification' in window && Notification.permission === 'default') {
+  if (['superadmin', 'desarrollador'].includes(s.rol)) {
+    _registrarPushDeveloper().catch(() => {});
+  } else if ('Notification' in window && Notification.permission === 'default') {
     Notification.requestPermission();
   }
   checkChatBadge();
