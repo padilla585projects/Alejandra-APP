@@ -4,8 +4,8 @@
   Ruta local: C:\Users\Adrian\Downloads\Proyecto GestiBobina\Alejandra APP
 ================================================================================
 
-ÚLTIMA ACTUALIZACIÓN: 09/05/2026
-VERSIÓN ACTUAL APP NUEVA: v5.68 (worker 5fdde7ce — Alejandra autosuficiente + push notifications developer)
+ÚLTIMA ACTUALIZACIÓN: 10/05/2026
+VERSIÓN ACTUAL APP NUEVA: v5.70 (worker 05c74f82 — auditoría agente: 3 bugs corregidos)
 VERSIÓN ACTUAL APP VIEJA: v4.19 (⛔ CONGELADA DEFINITIVAMENTE — no recibe más cambios)
 
 ================================================================================
@@ -150,6 +150,18 @@ PASO 4 — VERIFICAR WORKER (solo si se va a tocar worker.js)
 ================================================================================
   HISTORIAL DE VERSIONES — RECIENTES
 ================================================================================
+
+v5.70        |  10/05/2026  [Auditoría agente Alejandra — 3 bugs corregidos]
+  - FIX CRÍTICO: resetearPass() actualizaba columna `password` (no existe) en vez de
+    `password_hash` → reset de contraseña roto silenciosamente para todos los usuarios
+  - FIX: getHistorial() bobinas filtraba por `WHERE h.empresa_id` pero la tabla `historial`
+    no tiene esa columna → cambiado a INNER JOIN filtrando por bobinas.empresa_id
+  - OPT: runAutonomousReview() reducido de 15 a 10 iteraciones máx (ahorro ~30% tokens cron)
+  - Worker: 05c74f82 ✅  GitHub: fb5abe8 ✅
+
+v5.69        |  09/05/2026  [bump versión para forzar auto-update navegadores]
+  - Sin cambios funcionales. Forzar recarga en dispositivos con v5.68 cacheada.
+  - Worker: sin redesploy  GitHub: 2664dd6 ✅
 
 v5.68        |  09/05/2026  [Alejandra autosuficiente + push notifications developer]
   - AUTOCONCIENCIA: buildAlejandraSystemPrompt ampliado con mapa completo del repo

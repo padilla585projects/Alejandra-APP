@@ -6,9 +6,9 @@
 ## ESTADO ACTUAL
 
 **Sesión:** LIBRE
-**Última sesión:** 09/05/2026
-**Versión tras última sesión:** v5.68 (worker 5fdde7ce — VAPID secrets subidos, push listo)
-**Worker desplegado:** 5fdde7ce ✅
+**Última sesión:** 10/05/2026
+**Versión tras última sesión:** v5.70 (worker 05c74f82 — auditoría agente: 3 bugs corregidos)
+**Worker desplegado:** 05c74f82 ✅
 **GitHub:** en sync ✅
 
 ---
