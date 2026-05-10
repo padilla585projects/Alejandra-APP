@@ -1394,7 +1394,7 @@ async function runAutonomousReview(env) {
     let result = await response.json();
 
     let iters = 0;
-    while (result.stop_reason === 'tool_use' && iters < 15) {
+    while (result.stop_reason === 'tool_use' && iters < 10) {
       iters++;
       const toolBlocks = result.content.filter(b => b.type === 'tool_use');
       const toolResults = await Promise.all(toolBlocks.map(async tb => ({
@@ -2553,7 +2553,7 @@ async function resetearPass(request, env) {
 
   // Actualizar contraseÃ±a e invalidar token
   await Promise.all([
-    env.DB.prepare(`UPDATE usuarios SET password=? WHERE id=?`).bind(hashHex, reset.usuario_id).run(),
+    env.DB.prepare(`UPDATE usuarios SET password_hash=? WHERE id=?`).bind(hashHex, reset.usuario_id).run(),
     env.DB.prepare(`UPDATE reset_tokens SET usado=1 WHERE token=?`).bind(token).run(),
   ]);
 
@@ -3741,9 +3741,9 @@ async function getHistorial(request, env) {
   const limit  = parseInt(url.searchParams.get('limit') || '100');
   const accion = url.searchParams.get('accion');
 
-  // JOIN en bobina_codigo (bobina_id nunca se inserta en historial)
-  let sql = `SELECT h.*, b.departamento FROM historial h LEFT JOIN bobinas b ON h.bobina_codigo = b.codigo AND b.empresa_id = ? WHERE h.empresa_id = ?`;
-  const params = [empresa_id || 1, empresa_id || 1];
+  // INNER JOIN para filtrar por empresa via bobinas (historial no tiene empresa_id)
+  let sql = `SELECT h.*, b.departamento FROM historial h INNER JOIN bobinas b ON h.bobina_codigo = b.codigo AND b.empresa_id = ? WHERE 1=1`;
+  const params = [empresa_id || 1];
   if (obraId) { sql += ' AND h.obra_id = ?'; params.push(obraId); }
   if (accion) { sql += ' AND h.accion = ?';  params.push(accion); }
 
