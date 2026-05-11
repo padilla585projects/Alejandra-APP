@@ -7,9 +7,39 @@
 
 **Sesión:** LIBRE
 **Última sesión:** 11/05/2026
-**Versión tras última sesión:** v5.74 (migrar scans a Gemini Flash + dashboard costes IA)
-**Worker desplegado:** 5bd505c8 ✅
+**Versión tras última sesión:** v5.76 (filtros bobinas + Excel/imprimir + selector trabajador scan)
+**Worker desplegado:** 2ab055f6 ✅
 **GitHub:** en sync ✅
+
+---
+
+## RESUMEN SESIÓN 11/05/2026 — v5.74→v5.76
+
+### Qué se hizo:
+
+**Infraestructura / arranque:**
+- `CLAUDE.md` creado — guía de arranque para cualquier ordenador (se carga automáticamente al inicio de cada sesión)
+- Tabla `ai_usage` creada manualmente en D1 remoto (las sesiones de hoy no habían disparado `runMigrations`)
+- Versiones desincronizadas detectadas (version.json/sw.js/index.html seguían en 5.70) → corregidas a 5.75 y luego 5.76
+
+**v5.75 — Selector editable de trabajador en scan parte semanal (panel web):**
+- La columna de nombre en la tabla de revisión pasa de texto fijo a `<select>` con todos los trabajadores de la empresa
+- Si Gemini hace match incorrecto → el usuario puede corregirlo antes de importar
+- Worker devuelve `trabajadores_db` junto con el resultado del scan
+- `spImportar` lee IDs del `<select>` en lugar de `_scanData`
+
+**v5.76 — Mejoras app móvil + panel web bobinas:**
+- App móvil scan parte: mismo selector editable de trabajador que el panel web
+- App móvil stock bobinas: nuevo filtro 🔌 Tipo cable junto al existente 📦 Proveedor
+- Panel web bobinas: filtros 📦 Proveedor y 🔌 Tipo cable (auto-populados con valores de BD)
+- Panel web bobinas: botón 📊 Excel (SheetJS, descarga .xlsx con todos los campos)
+- Panel web bobinas: botón 🖨️ Imprimir (Tabulator print, solo filas filtradas)
+- Worker: `/bobinas` acepta nuevo query param `tipo_cable` para filtrar
+
+### Estado final:
+- Worker: 2ab055f6 ✅
+- GitHub: en sync ✅
+- Versión: v5.76
 
 ---
 

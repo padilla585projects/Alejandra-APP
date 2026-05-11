@@ -5,7 +5,7 @@
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 11/05/2026
-VERSIÓN ACTUAL APP NUEVA: v5.70 (multi-rol, filtro proveedor bobinas, página documentos panel)
+VERSIÓN ACTUAL APP NUEVA: v5.76 (filtros bobinas + Excel/imprimir + selector trabajador scan)
 VERSIÓN ACTUAL APP VIEJA: v4.19 (⛔ CONGELADA DEFINITIVAMENTE — no recibe más cambios)
 
 ================================================================================
@@ -150,6 +150,46 @@ PASO 4 — VERIFICAR WORKER (solo si se va a tocar worker.js)
 ================================================================================
   HISTORIAL DE VERSIONES — RECIENTES
 ================================================================================
+
+v5.76        |  11/05/2026  [Filtros bobinas + Excel/imprimir panel + selector trabajador scan]
+  - Panel web bobinas: filtros 📦 Proveedor y 🔌 Tipo cable (auto-populados), botón 📊 Excel (SheetJS), botón 🖨️ Imprimir
+  - App móvil bobinas stock: nuevo filtro 🔌 Tipo cable junto al existente 📦 Proveedor
+  - App móvil scan parte: selector editable de trabajador (igual que panel web v5.75)
+  - Worker: /bobinas acepta ?tipo_cable= para filtrar
+  - Worker: 2ab055f6 ✅  GitHub: 3866116 ✅
+
+v5.75        |  11/05/2026  [Selector editable de trabajador en scan parte semanal (panel web)]
+  - Columna nombre en tabla de revisión: `<select>` con todos los trabajadores de la empresa
+  - Worker: devuelve `trabajadores_db` en respuesta de /scan-parte
+  - Worker: 2ab055f6 ✅  GitHub: c525ded ✅
+
+v5.74        |  11/05/2026  [Migrar scans a Gemini Flash + Dashboard costes IA]
+  - scanParte y scanBobinas migrados de Anthropic a Gemini Flash (fallback 1.5-flash)
+  - Tabla ai_usage en D1: registra cada llamada IA con tokens y coste_usd
+  - Endpoint GET /admin/ai-costs: KPIs por día/semana/mes + proyección anual + por modelo/endpoint
+  - Panel DevTools: tarjeta "💰 Costes IA" con 4 KPIs y tablas desglosadas
+  - CLAUDE.md creado: guía de arranque para cualquier ordenador (auto-cargado por Claude Code)
+  - Worker: 2ab055f6 ✅  GitHub: e17cd7a ✅
+
+v5.73        |  11/05/2026  [Scan albarán bobinas con IA]
+  - POST /scan-bobinas: imagen → Gemini Flash → extrae código/proveedor/cable/albarán
+  - POST /bobinas/batch: crea múltiples bobinas, detecta duplicados UNIQUE
+  - App móvil: FAB 📷 morado en bobinas. Panel web: botón "📷 Escanear albarán"
+  - Worker: 76fb4c8 ✅  GitHub: b00ae49 ✅
+
+v5.72        |  11/05/2026  [Scan parte semanal con IA]
+  - POST /scan-parte: imagen → Gemini Flash → extrae nombres+horas manuscritas, match con trabajadores
+  - POST /fichajes/batch: crea múltiples fichajes, detecta duplicados
+  - App móvil: FAB 📋 morado en fichajes. Panel web: botón "📋 Escanear parte"
+  - Trabajadores sin match: botón ➕ para crear como personal externo
+  - Worker: 76fb4c8 ✅  GitHub: 76fb4c8 ✅
+
+v5.71        |  11/05/2026  [Documentos panel completo + visor archivos]
+  - Tabs por dept: Fotos/Eléctrico/Mecánicas/Seguridad
+  - Explorador carpetas con breadcrumb, visor inline (img/PDF/video)
+  - fetch+blob evita Content-Disposition. Error amigable + botón eliminar huérfano
+  - _docsObraId persiste entre navegaciones. worker: Content-Disposition inline
+  - Worker: desplegado ✅  GitHub: b22a247 ✅
 
 v5.70        |  10/05/2026  [Auditoría agente Alejandra — 3 bugs corregidos]
   - FIX CRÍTICO: resetearPass() actualizaba columna `password` (no existe) en vez de
