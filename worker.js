@@ -2949,6 +2949,7 @@ async function getBobinas(request, env) {
   const url = new URL(request.url);
   const estado = url.searchParams.get('estado');
   const buscar = url.searchParams.get('q');
+  const proveedorParam = url.searchParams.get('proveedor');
   const obraParamRaw = url.searchParams.get('obra_id');
   const obraParam = obraParamRaw ? parseInt(obraParamRaw) : null;
   // superadmin/empresa_admin pueden ver todas las obras (sin restricciÃ³n de obraId de sesiÃ³n)
@@ -2962,9 +2963,10 @@ async function getBobinas(request, env) {
 
   let sql = 'SELECT b.*, o.nombre as obra_nombre FROM bobinas b LEFT JOIN obras o ON b.obra_id = o.id WHERE b.empresa_id = ?';
   const params = [empresa_id];
-  if (deptFilter) { sql += ' AND b.departamento = ?'; params.push(deptFilter); }
-  if (obraFilter) { sql += ' AND b.obra_id = ?'; params.push(obraFilter); }
-  if (estado)     { sql += ' AND b.estado = ?';  params.push(estado); }
+  if (deptFilter)      { sql += ' AND b.departamento = ?'; params.push(deptFilter); }
+  if (obraFilter)      { sql += ' AND b.obra_id = ?'; params.push(obraFilter); }
+  if (estado)          { sql += ' AND b.estado = ?';  params.push(estado); }
+  if (proveedorParam)  { sql += ' AND b.proveedor = ?'; params.push(proveedorParam); }
   if (buscar) {
     sql += ' AND (b.codigo LIKE ? OR b.proveedor LIKE ? OR b.tipo_cable LIKE ?)';
     params.push(`%${buscar}%`, `%${buscar}%`, `%${buscar}%`);

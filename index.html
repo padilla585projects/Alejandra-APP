@@ -1510,6 +1510,9 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
       <div id="modPanelStock" class="mod-panel">
         <div class="stock-controls">
           <input class="search-input" id="stockSearch" placeholder="🔍 Buscar..." oninput="filtrarStock()">
+          <select id="stockProvSelect" class="search-input" style="flex:0 0 auto;min-width:120px;max-width:160px;display:none" onchange="filtrarStock()">
+            <option value="">📦 Proveedor</option>
+          </select>
           <div class="filter-row">
             <button class="filter-btn active" id="fTodos" onclick="setStockFiltro('')">Todos</button>
             <button class="filter-btn" id="fActiva" onclick="setStockFiltro('activa')">Activas</button>
@@ -6416,12 +6419,16 @@ async function cargarStock() {
   const mod = currentModule;
   const s = getSession();
   const obraParam = s?.obra_id ? `obra_id=${s.obra_id}` : '';
+  const provSel = document.getElementById('stockProvSelect');
+  if (provSel) provSel.style.display = mod === 'bobinas' ? '' : 'none';
   let path;
 
   if (mod === 'bobinas') {
+    const prov = provSel?.value || '';
     const parts = [];
     if (stockFiltro) parts.push(`estado=${stockFiltro}`);
     if (q) parts.push(`q=${encodeURIComponent(q)}`);
+    if (prov) parts.push(`proveedor=${encodeURIComponent(prov)}`);
     if (obraParam) parts.push(obraParam);
     path = '/bobinas' + (parts.length ? '?' + parts.join('&') : '');
   } else if (mod === 'pemp') {
@@ -7870,6 +7877,13 @@ async function cargarCatalogos() {
     _catalogos.tiposHerr    = rth.ok ? await rth.json() : [];
 
     poblarSelect('fieldProv',        _catalogos.proveedores);
+    // poblar filtro de proveedor en stock
+    const provSel = document.getElementById('stockProvSelect');
+    if (provSel && _catalogos.proveedores.length) {
+      const cur = provSel.value;
+      provSel.innerHTML = '<option value="">📦 Proveedor</option>' +
+        _catalogos.proveedores.map(p => `<option value="${p.nombre}"${p.nombre===cur?' selected':''}>${p.nombre}</option>`).join('');
+    }
     poblarSelect('fieldTipoCable',   _catalogos.tipos);
     poblarSelect('fieldPempTipo',    _catalogos.tiposPemp);
     poblarSelect('fieldCarrTipo',    _catalogos.tiposCarr);
