@@ -2698,6 +2698,75 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
     <!-- FAB: Fichar equipo (solo admin/encargado) — MEJ-128 -->
     <button id="btnFichajeEquipo" onclick="abrirFichajeEquipo()" title="Fichar equipo"
       style="position:fixed;bottom:72px;right:78px;width:44px;height:44px;border-radius:50%;background:#10b981;border:none;font-size:19px;cursor:pointer;box-shadow:0 4px 12px rgba(16,185,129,.45);z-index:200;display:none;align-items:center;justify-content:center">👥</button>
+    <!-- FAB: Escanear parte semanal -->
+    <button id="btnScanParte" onclick="abrirScanParte()" title="Escanear parte semanal"
+      style="position:fixed;bottom:72px;right:132px;width:44px;height:44px;border-radius:50%;background:#8b5cf6;border:none;font-size:19px;cursor:pointer;box-shadow:0 4px 12px rgba(139,92,246,.45);z-index:200;display:none;align-items:center;justify-content:center">📋</button>
+  </div>
+
+  <!-- Modal: Scan parte semanal -->
+  <div class="modal-overlay" id="modalScanParte" onclick="if(event.target===this)cerrarScanParte()" style="display:none">
+    <div class="modal" style="max-width:min(98vw,700px);max-height:92vh;overflow-y:auto;padding:20px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px">
+        <div style="font-size:18px;font-weight:800;font-family:'Montserrat',sans-serif;flex:1">📋 Escanear parte semanal</div>
+        <button onclick="cerrarScanParte()" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--muted)">×</button>
+      </div>
+
+      <!-- Paso 1: Selección imagen + obra -->
+      <div id="scanStep1">
+        <div style="margin-bottom:12px">
+          <label style="font-size:12px;font-weight:700;color:var(--muted);letter-spacing:.5px;display:block;margin-bottom:6px">OBRA</label>
+          <select id="scanObraId" class="form-input" style="width:100%">
+            <option value="">— Sin asignar —</option>
+          </select>
+        </div>
+        <div style="border:2px dashed var(--border);border-radius:12px;padding:24px;text-align:center;cursor:pointer;transition:border-color .2s" onclick="document.getElementById('scanImgInput').click()" id="scanDropzone">
+          <div style="font-size:36px;margin-bottom:8px">📸</div>
+          <div style="font-size:14px;font-weight:700;color:var(--text)">Toca para fotografiar o seleccionar el parte</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:4px">JPG, PNG — máx 20 MB</div>
+          <input type="file" id="scanImgInput" accept="image/*" capture="environment" style="display:none" onchange="scanPreviewImg(this)">
+        </div>
+        <img id="scanPreview" style="display:none;width:100%;max-height:200px;object-fit:contain;border-radius:10px;margin-top:10px;border:1px solid var(--border)">
+        <button id="btnScanEnviar" onclick="scanEnviar()" class="btn-primary" style="width:100%;margin-top:14px;display:none">🔍 Analizar con IA</button>
+      </div>
+
+      <!-- Paso 2: Procesando -->
+      <div id="scanStep2" style="display:none;text-align:center;padding:30px 0">
+        <div style="font-size:40px;margin-bottom:12px">🤖</div>
+        <div style="font-size:15px;font-weight:700;margin-bottom:6px">Alejandra está leyendo el parte...</div>
+        <div style="font-size:12px;color:var(--muted)">Puede tardar 10-20 segundos</div>
+        <div class="spinner" style="margin:16px auto 0"></div>
+      </div>
+
+      <!-- Paso 3: Revisión -->
+      <div id="scanStep3" style="display:none">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+          <div style="font-size:13px;font-weight:700">Semana del</div>
+          <input type="date" id="scanFechaLunes" class="form-input" style="width:auto;font-size:13px;padding:6px 10px">
+          <div id="scanResumen" style="font-size:11px;color:var(--muted);flex:1;text-align:right"></div>
+        </div>
+        <div style="overflow-x:auto;margin-bottom:14px">
+          <table id="scanTabla" style="width:100%;border-collapse:collapse;font-size:12px;min-width:560px">
+            <thead>
+              <tr style="background:var(--surface2)">
+                <th style="padding:7px 8px;text-align:left;font-weight:700;border-bottom:1px solid var(--border)">Trabajador</th>
+                <th style="padding:7px 5px;text-align:center;border-bottom:1px solid var(--border)">L</th>
+                <th style="padding:7px 5px;text-align:center;border-bottom:1px solid var(--border)">M</th>
+                <th style="padding:7px 5px;text-align:center;border-bottom:1px solid var(--border)">X</th>
+                <th style="padding:7px 5px;text-align:center;border-bottom:1px solid var(--border)">J</th>
+                <th style="padding:7px 5px;text-align:center;border-bottom:1px solid var(--border)">V</th>
+                <th style="padding:7px 5px;text-align:center;border-bottom:1px solid var(--border)">S</th>
+                <th style="padding:7px 5px;text-align:center;border-bottom:1px solid var(--border)">✓</th>
+              </tr>
+            </thead>
+            <tbody id="scanTbody"></tbody>
+          </table>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button onclick="scanVolver()" class="btn-primary btn-secondary" style="flex:0 0 90px">← Volver</button>
+          <button onclick="scanImportar()" class="btn-primary" style="flex:1" id="btnScanImportar">⚡ Importar fichajes</button>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- Modal: Nuevo/Editar Fichaje -->
@@ -4939,6 +5008,8 @@ function irAtras() {
   if (fabFichaje) fabFichaje.style.display = 'none';
   const fabFichajeEq = document.getElementById('btnFichajeEquipo');
   if (fabFichajeEq) fabFichajeEq.style.display = 'none';
+  const fabScanP = document.getElementById('btnScanParte');
+  if (fabScanP) fabScanP.style.display = 'none';
   // Si estamos dentro de una carpeta en Docs, navegar dentro de Docs (no salir)
   if (document.getElementById('screenDocs')?.classList.contains('active')) {
     const docsVolverBtn = document.getElementById('docsVolverBtn');
@@ -4958,6 +5029,8 @@ function navTo(target) {
   if (fabFichaje && target !== 'personal') fabFichaje.style.display = 'none';
   const fabFichajeEq = document.getElementById('btnFichajeEquipo');
   if (fabFichajeEq && target !== 'personal') fabFichajeEq.style.display = 'none';
+  const fabScanBtn = document.getElementById('btnScanParte');
+  if (fabScanBtn && target !== 'personal') fabScanBtn.style.display = 'none';
   // Pantallas secundarias — conservar historial para que Atrás funcione
   if (target === 'sugerencias') { showScreen('sugerencias'); return; }
   if (target === 'docs')        { showScreen('docs'); return; }
@@ -11829,16 +11902,18 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
   function personalSelTab(n) {
     const home    = document.getElementById('perPanelHome');
     const panels  = ['perPanelHoy','perPanelSemana','perPanelResumen','perPanelPlantilla','perPanelEpis','perPanelCarnets','perPanelTurnos'];
-    const fab     = document.getElementById('btnNuevoFichaje');
-    const fabEq   = document.getElementById('btnFichajeEquipo');
+    const fab       = document.getElementById('btnNuevoFichaje');
+    const fabEq     = document.getElementById('btnFichajeEquipo');
+    const fabScan   = document.getElementById('btnScanParte');
     const s       = getSession();
     const esAdmin = s?.rol !== 'operario';
 
     if (n === -1) {
       if (home) { home.style.display = 'flex'; home.style.flexDirection = 'column'; }
       panels.forEach(id => { const el = document.getElementById(id); if (el) el.style.display = 'none'; });
-      if (fab)   fab.style.display   = 'none';
-      if (fabEq) fabEq.style.display = 'none';
+      if (fab)     fab.style.display     = 'none';
+      if (fabEq)   fabEq.style.display   = 'none';
+      if (fabScan) fabScan.style.display = 'none';
       applyModulosConfig();
       return;
     }
@@ -11851,8 +11926,9 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
       if (i === n) el.style.flexDirection = 'column';
     });
     // FABs solo en paneles de fichajes (no en Plantilla/EPIs/Carnets/Turnos ni home)
-    if (fab)   fab.style.display   = (esAdmin && n < 3) ? 'flex' : 'none';
-    if (fabEq) fabEq.style.display = (esAdmin && n < 3) ? 'flex' : 'none';
+    if (fab)     fab.style.display     = (esAdmin && n < 3) ? 'flex' : 'none';
+    if (fabEq)   fabEq.style.display   = (esAdmin && n < 3) ? 'flex' : 'none';
+    if (fabScan) fabScan.style.display = (esAdmin && n < 3) ? 'flex' : 'none';
     // Botones de acción solo para admin
     const btnEpi    = document.getElementById('btnNuevoEpi');
     const btnCarnet = document.getElementById('btnNuevoCarnet');
@@ -12758,6 +12834,166 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
   window.cerrarModalPersonalExt  = cerrarModalPersonalExt;
   window.guardarPersonalExt      = guardarPersonalExt;
   window.eliminarPersonalExt     = eliminarPersonalExt;
+
+  // ── SCAN PARTE SEMANAL ──────────────────────────────────────────
+  let _scanData = null; // resultado de la IA
+
+  function abrirScanParte() {
+    const modal = document.getElementById('modalScanParte');
+    modal.style.display = 'flex';
+    document.getElementById('scanStep1').style.display = '';
+    document.getElementById('scanStep2').style.display = 'none';
+    document.getElementById('scanStep3').style.display = 'none';
+    document.getElementById('scanPreview').style.display = 'none';
+    document.getElementById('btnScanEnviar').style.display = 'none';
+    document.getElementById('scanImgInput').value = '';
+    _scanData = null;
+    // Poblar obras
+    const sel = document.getElementById('scanObraId');
+    if (sel.options.length <= 1) {
+      const s = getSession();
+      apiCall('/obras').then(r => {
+        (r.obras || r || []).forEach(o => {
+          const opt = document.createElement('option');
+          opt.value = o.id; opt.textContent = o.nombre;
+          if (s?.obra_id && String(o.id) === String(s.obra_id)) opt.selected = true;
+          sel.appendChild(opt);
+        });
+      }).catch(() => {});
+    }
+  }
+
+  function cerrarScanParte() {
+    document.getElementById('modalScanParte').style.display = 'none';
+  }
+
+  function scanPreviewImg(input) {
+    const file = input.files[0];
+    if (!file) return;
+    const prev = document.getElementById('scanPreview');
+    prev.src = URL.createObjectURL(file);
+    prev.style.display = 'block';
+    document.getElementById('btnScanEnviar').style.display = 'block';
+    document.getElementById('scanDropzone').style.borderColor = 'var(--accent)';
+  }
+
+  async function scanEnviar() {
+    const file = document.getElementById('scanImgInput').files[0];
+    if (!file) { toast('Selecciona una imagen', 'err'); return; }
+    document.getElementById('scanStep1').style.display = 'none';
+    document.getElementById('scanStep2').style.display = '';
+    try {
+      const fd = new FormData();
+      fd.append('image', file);
+      const obraId = document.getElementById('scanObraId')?.value;
+      if (obraId) fd.append('obra_id', obraId);
+      const res  = await apiCallRaw('/scan-parte', { method: 'POST', body: fd });
+      const data = await res.json();
+      if (!res.ok || !data.ok) throw new Error(data.error || 'Error desconocido');
+      _scanData = data;
+      scanMostrarReview(data);
+    } catch(e) {
+      document.getElementById('scanStep2').style.display = 'none';
+      document.getElementById('scanStep1').style.display = '';
+      toast('❌ ' + e.message, 'err');
+    }
+  }
+
+  function scanMostrarReview(data) {
+    document.getElementById('scanStep2').style.display = 'none';
+    document.getElementById('scanStep3').style.display = '';
+    document.getElementById('scanFechaLunes').value = data.fecha_lunes || '';
+    const DIAS = ['lunes','martes','miercoles','jueves','viernes','sabado'];
+    const DIAS_L = ['L','M','X','J','V','S'];
+    const tbody = document.getElementById('scanTbody');
+    tbody.innerHTML = '';
+    (data.trabajadores || []).forEach((t, i) => {
+      const matched = t.matched;
+      const tr = document.createElement('tr');
+      tr.style.borderBottom = '1px solid var(--border)';
+      const nombreCell = matched
+        ? `<span style="font-size:11px;font-weight:600">${t.nombre_match}</span>
+           <span style="font-size:9px;color:var(--muted);display:block">${t.nombre_parte}</span>`
+        : `<span style="font-size:11px;color:#f59e0b;font-weight:600">⚠ ${t.nombre_parte}</span>
+           <span style="font-size:9px;color:var(--muted);display:block">Sin coincidencia</span>`;
+      const horasCells = DIAS.map((d, di) => {
+        const v = t[d] !== null && t[d] !== undefined ? t[d] : '';
+        return `<td style="padding:4px 3px;text-align:center">
+          <input type="number" min="0" max="24" step="0.5" value="${v}"
+            data-idx="${i}" data-dia="${d}"
+            style="width:38px;padding:3px 2px;text-align:center;border:1px solid var(--border);border-radius:5px;background:var(--surface2);color:var(--text);font-size:12px">
+        </td>`;
+      }).join('');
+      tr.innerHTML = `
+        <td style="padding:6px 6px">${nombreCell}</td>
+        ${horasCells}
+        <td style="padding:4px;text-align:center">
+          <input type="checkbox" data-idx="${i}" ${matched ? 'checked' : ''} style="width:16px;height:16px;cursor:pointer">
+        </td>`;
+      tbody.appendChild(tr);
+    });
+    const total = (data.trabajadores||[]).filter(t=>t.matched).length;
+    const sinMatch = (data.trabajadores||[]).filter(t=>!t.matched).length;
+    document.getElementById('scanResumen').textContent =
+      `${total} coincidencias${sinMatch ? ` · ${sinMatch} sin match` : ''}`;
+  }
+
+  function scanVolver() {
+    document.getElementById('scanStep3').style.display = 'none';
+    document.getElementById('scanStep1').style.display = '';
+  }
+
+  async function scanImportar() {
+    const fechaLunes = document.getElementById('scanFechaLunes').value;
+    if (!fechaLunes) { toast('Indica la fecha del lunes', 'err'); return; }
+    const obraId = document.getElementById('scanObraId')?.value || null;
+    const DIAS = ['lunes','martes','miercoles','jueves','viernes','sabado'];
+    const fichajes = [];
+    const rows = document.querySelectorAll('#scanTbody tr');
+    rows.forEach((tr, i) => {
+      const check = tr.querySelector(`input[type=checkbox][data-idx="${i}"]`);
+      if (!check?.checked) return;
+      const t = _scanData?.trabajadores?.[i];
+      if (!t) return;
+      DIAS.forEach(dia => {
+        const inp = tr.querySelector(`input[data-idx="${i}"][data-dia="${dia}"]`);
+        const horas = parseFloat(inp?.value);
+        if (!isNaN(horas) && horas > 0) {
+          fichajes.push({
+            usuario_id:          t.usuario_id,
+            personal_externo_id: t.personal_externo_id,
+            obra_id: obraId ? parseInt(obraId) : null,
+            fecha_lunes: fechaLunes,
+            dia, horas,
+            nombre: t.nombre_match || t.nombre_parte,
+          });
+        }
+      });
+    });
+    if (!fichajes.length) { toast('No hay fichajes seleccionados', 'err'); return; }
+    document.getElementById('btnScanImportar').disabled = true;
+    document.getElementById('btnScanImportar').textContent = '⏳ Importando...';
+    try {
+      const res  = await apiCall('/fichajes/batch', { method: 'POST', body: JSON.stringify({ fichajes }) });
+      if (!res.ok && !res.importados) throw new Error(res.error || 'Error');
+      toast(`✅ ${res.importados} fichajes importados${res.duplicados ? ` · ${res.duplicados} duplicados omitidos` : ''}`, 'ok');
+      cerrarScanParte();
+      if (typeof cargarFichajes === 'function') cargarFichajes();
+    } catch(e) {
+      toast('❌ ' + e.message, 'err');
+    } finally {
+      const btn = document.getElementById('btnScanImportar');
+      if (btn) { btn.disabled = false; btn.textContent = '⚡ Importar fichajes'; }
+    }
+  }
+
+  window.abrirScanParte  = abrirScanParte;
+  window.cerrarScanParte = cerrarScanParte;
+  window.scanPreviewImg  = scanPreviewImg;
+  window.scanEnviar      = scanEnviar;
+  window.scanVolver      = scanVolver;
+  window.scanImportar    = scanImportar;
+
   window.cargarEmpresasAdmin     = cargarEmpresasAdmin;
   window.seleccionarEmpresaAdmin = seleccionarEmpresaAdmin;
   window.abrirNotificaciones     = abrirNotificaciones;

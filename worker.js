@@ -1841,6 +1841,169 @@ async function devGenerateVapid(request, env) {
   });
 }
 
+// ── SCAN PARTE SEMANAL ──────────────────────────────────────────────────────
+async function scanParte(request, env) {
+  const { empresa_id, rol, obra_id: obraAuth } = await getAuth(request, env);
+  if (!empresa_id || rol === 'operario') return err('Sin permisos', 403);
+
+  const form = await request.formData().catch(() => null);
+  if (!form) return err('Falta el formulario', 400);
+  const imageFile = form.get('image');
+  if (!imageFile || !imageFile.size) return err('Falta la imagen', 400);
+  if (imageFile.size > 20 * 1024 * 1024) return err('Imagen demasiado grande (máx 20 MB)', 413);
+
+  // Cargar lista de trabajadores para hacer el match
+  const [usrs, ext] = await Promise.all([
+    env.DB.prepare('SELECT id, nombre FROM usuarios WHERE empresa_id=? AND activo=1 ORDER BY nombre').bind(empresa_id).all(),
+    env.DB.prepare('SELECT id, nombre FROM personal_externo WHERE empresa_id=? AND activo=1 ORDER BY nombre').bind(empresa_id).all(),
+  ]);
+  const trabajadores = [
+    ...(usrs.results || []).map(u => ({ id: u.id, tipo: 'usuario', nombre: u.nombre })),
+    ...(ext.results  || []).map(p => ({ id: p.id, tipo: 'personal_externo', nombre: p.nombre })),
+  ];
+  const nombresLista = trabajadores.map(t => t.nombre).join('\n');
+
+  // Convertir imagen a base64
+  const bytes = await imageFile.arrayBuffer();
+  const b64   = btoa(String.fromCharCode(...new Uint8Array(bytes)));
+  const mime  = imageFile.type || 'image/jpeg';
+
+  const prompt = `Analiza este parte de trabajo semanal manuscrito.
+Extrae:
+1. La fecha del LUNES de esa semana (formato YYYY-MM-DD).
+2. Para cada fila de trabajador: su nombre completo tal como aparece y las horas de cada día.
+
+Las horas están escritas como "8H", "9H", "5H", etc. — extrae solo el número entero.
+Si una celda está vacía, ilegible o sin horas, pon null.
+Ignora filas que sean de empresa/subcontrata (texto en mayúsculas sin horas).
+
+Lista de trabajadores registrados en el sistema (úsala para hacer el match):
+${nombresLista}
+
+Para cada nombre extraído del parte, busca el trabajador más parecido de esa lista (ignora mayúsculas, tildes y pequeñas diferencias ortográficas).
+
+Responde ÚNICAMENTE con un JSON válido, sin texto adicional:
+{
+  "fecha_lunes": "YYYY-MM-DD",
+  "trabajadores": [
+    {
+      "nombre_parte": "nombre como aparece en el parte",
+      "nombre_match": "nombre exacto del sistema (null si no hay coincidencia clara)",
+      "lunes": 8,
+      "martes": 8,
+      "miercoles": null,
+      "jueves": 8,
+      "viernes": 5,
+      "sabado": null
+    }
+  ]
+}`;
+
+  const aiResp = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': env.ANTHROPIC_API_KEY,
+      'anthropic-version': '2023-06-01',
+    },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 4096,
+      messages: [{
+        role: 'user',
+        content: [
+          { type: 'image', source: { type: 'base64', media_type: mime, data: b64 } },
+          { type: 'text',  text: prompt }
+        ]
+      }]
+    })
+  });
+
+  if (!aiResp.ok) {
+    const t = await aiResp.text();
+    return err('Error IA: ' + t.slice(0, 200), 502);
+  }
+
+  const aiJson = await aiResp.json();
+  const texto  = (aiJson.content || []).find(c => c.type === 'text')?.text || '';
+  const match  = texto.match(/\{[\s\S]*\}/);
+  if (!match) return err('La IA no devolvió JSON válido', 502);
+
+  let data;
+  try { data = JSON.parse(match[0]); }
+  catch(e) { return err('JSON inválido de la IA: ' + e.message, 502); }
+
+  // Mapear nombre_match → IDs
+  const DIAS = ['lunes','martes','miercoles','jueves','viernes','sabado'];
+  const resultado = (data.trabajadores || []).map(t => {
+    const w = trabajadores.find(x => x.nombre === t.nombre_match);
+    return {
+      nombre_parte: t.nombre_parte,
+      nombre_match: t.nombre_match || null,
+      usuario_id:          w?.tipo === 'usuario'          ? w.id : null,
+      personal_externo_id: w?.tipo === 'personal_externo' ? w.id : null,
+      matched: !!w,
+      ...Object.fromEntries(DIAS.map(d => [d, t[d] ?? null]))
+    };
+  });
+
+  return json({ ok: true, fecha_lunes: data.fecha_lunes, trabajadores: resultado });
+}
+
+// ── FICHAJES BATCH (importación desde parte) ────────────────────────────────
+async function fichajesBatch(request, env, ctx) {
+  const { empresa_id, rol, nombre: registradoPor } = await getAuth(request, env);
+  if (!empresa_id || rol === 'operario') return err('Sin permisos', 403);
+
+  const body = await request.json().catch(() => ({}));
+  const { fichajes } = body;
+  if (!Array.isArray(fichajes) || !fichajes.length) return err('Falta el array fichajes');
+
+  const DIAS_OFFSET = { lunes:0, martes:1, miercoles:2, jueves:3, viernes:4, sabado:5 };
+  const resultados = [];
+
+  for (const f of fichajes) {
+    // calcular fecha del día a partir de fecha_lunes
+    const baseDate = new Date(f.fecha_lunes + 'T00:00:00Z');
+    baseDate.setUTCDate(baseDate.getUTCDate() + (DIAS_OFFSET[f.dia] || 0));
+    const fecha = baseDate.toISOString().slice(0, 10);
+
+    try {
+      const dup = await env.DB.prepare(
+        'SELECT id FROM fichajes WHERE empresa_id=? AND fecha=? AND (usuario_id=? OR personal_externo_id=?)'
+      ).bind(empresa_id, fecha, f.usuario_id || null, f.personal_externo_id || null).first();
+
+      if (dup) { resultados.push({ dia: f.dia, nombre: f.nombre, status: 'dup' }); continue; }
+
+      // Calcular hora_salida desde hora_entrada + horas (usa horario obra si existe)
+      const horario = f.obra_id
+        ? await env.DB.prepare('SELECT * FROM horarios_obra WHERE empresa_id=? AND obra_id=?').bind(empresa_id, f.obra_id).first()
+        : null;
+      const horaEnt = horario ? (getHorarioParaDia(horario, fecha).hora_entrada || '07:00') : '07:00';
+      const [hh, mm] = horaEnt.split(':').map(Number);
+      const salidaMins = hh * 60 + mm + (f.horas || 0) * 60;
+      const horaSal = String(Math.floor(salidaMins / 60)).padStart(2, '0') + ':' + String(salidaMins % 60).padStart(2, '0');
+
+      await env.DB.prepare(
+        'INSERT INTO fichajes (empresa_id,usuario_id,personal_externo_id,obra_id,fecha,hora_entrada,hora_salida,horas_trabajadas,horas_extra,minutos_retraso,estado,notas,registrado_por) VALUES (?,?,?,?,?,?,?,?,0,0,?,?,?)'
+      ).bind(
+        empresa_id, f.usuario_id || null, f.personal_externo_id || null,
+        f.obra_id || null, fecha, horaEnt, horaSal, f.horas || 0,
+        'presente', 'Importado desde parte semanal escaneado', registradoPor || rol
+      ).run();
+
+      resultados.push({ dia: f.dia, nombre: f.nombre, status: 'ok' });
+    } catch(e) {
+      resultados.push({ dia: f.dia, nombre: f.nombre, status: 'error', error: e.message });
+    }
+  }
+
+  ctx?.waitUntil(syncRRHH(env, 'Fichajes', empresa_id));
+  const ok  = resultados.filter(r => r.status === 'ok').length;
+  const dup = resultados.filter(r => r.status === 'dup').length;
+  return json({ ok: true, importados: ok, duplicados: dup, errores: resultados.filter(r=>r.status==='error').length });
+}
+
 export default {
   async fetch(request, env, ctx) {
     if (request.method === 'OPTIONS') {
@@ -2355,6 +2518,10 @@ export default {
       if (path === '/backup/empresa'       && method === 'GET')  return await backupEmpresa(request, env);
       if (path === '/restaurar/inventario' && method === 'POST') return await restaurarInventario(request, env);
       if (path === '/restaurar/empresa'    && method === 'POST') return await restaurarEmpresa(request, env);
+
+      // ── Scan parte semanal ──────────────────────────────────────
+      if (path === '/scan-parte'      && method === 'POST') return await scanParte(request, env);
+      if (path === '/fichajes/batch'  && method === 'POST') return await fichajesBatch(request, env, ctx);
 
       return err('Ruta no encontrada', 404);
     } catch (e) {
