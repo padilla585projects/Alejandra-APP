@@ -101,6 +101,13 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
 /* KPI CARDS */
 .kpi-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:16px;margin-bottom:28px}
 .kpi-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:20px;display:flex;flex-direction:column;gap:8px;transition:border-color .2s,transform .15s;cursor:default;position:relative}
+.docs-tab{padding:7px 16px;background:transparent;border:none;border-bottom:2px solid transparent;color:var(--muted);font-family:'Montserrat',sans-serif;font-weight:700;font-size:12px;cursor:pointer;white-space:nowrap;transition:all .2s;border-radius:6px 6px 0 0}
+.docs-tab:hover{color:var(--text)}
+.docs-tab.active{color:var(--accent);border-bottom-color:var(--accent);background:var(--accent)11}
+.docs-file{display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;cursor:pointer;transition:border-color .2s}
+.docs-file:hover{border-color:var(--accent)}
+.docs-folder{display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--surface);border:1px solid var(--border);border-radius:10px;cursor:pointer;transition:all .2s;margin-bottom:6px}
+.docs-folder:hover{border-color:var(--yellow);background:var(--yellow)0d}
 .kpi-card:hover{border-color:var(--accent)}
 .kpi-card.nav-card{cursor:pointer}
 .kpi-card.nav-card:hover{border-color:var(--accent);transform:translateY(-2px)}
@@ -821,14 +828,20 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
       <!-- DOCUMENTOS -->
       <div class="page" id="pageDocumentos">
         <div class="page-title">📁 Documentos</div>
-        <div class="page-sub">Fotos y archivos subidos desde la app por obra</div>
-        <div class="tbl-toolbar">
-          <select class="tbl-search" id="docsFiltroObra" style="min-width:180px" onchange="cargarDocumentos()">
-            <option value="">Todas las obras</option>
+        <div class="page-sub">Archivos, planos y fotos organizados por obra y departamento</div>
+        <div class="tbl-toolbar" style="margin-bottom:0">
+          <select class="tbl-search" id="docsFiltroObra" style="min-width:200px" onchange="docsOnObraChange()">
+            <option value="">— Selecciona una obra —</option>
           </select>
-          <button class="btn btn-secondary" onclick="cargarDocumentos()">🔄 Actualizar</button>
+          <button class="btn btn-secondary" onclick="docsRecargar()">🔄</button>
         </div>
-        <div id="docsContenido" style="margin-top:8px"></div>
+        <div id="docsTabBar" style="display:flex;gap:4px;padding:12px 0 0;border-bottom:1px solid var(--border);margin-bottom:14px;overflow-x:auto">
+          <button class="docs-tab active" data-tab="fotos"     onclick="docsSetTab('fotos')">📷 Fotos</button>
+          <button class="docs-tab"        data-tab="electrico" onclick="docsSetTab('electrico')">⚡ Eléctrico</button>
+          <button class="docs-tab"        data-tab="mecanicas" onclick="docsSetTab('mecanicas')">🔧 Mecánicas</button>
+          <button class="docs-tab"        data-tab="seguridad" onclick="docsSetTab('seguridad')">🔺 Seguridad</button>
+        </div>
+        <div id="docsContenido"></div>
       </div>
 
       <!-- USUARIOS (admin) -->
@@ -1494,6 +1507,12 @@ function api(path, opts = {}) {
       panelLog('error', `API ${opts.method || 'GET'} ${path} → sin conexión`, err.message || '');
       return { ok: false, error: 'Sin conexión' };
     });
+}
+
+function apiRaw(path, opts = {}) {
+  const headers = { ...(opts.headers || {}) };
+  if (TOKEN) headers['X-Token'] = TOKEN;
+  return fetch(API + path, { ...opts, headers });
 }
 
 function panelLog(nivel, mensaje, detalle = '') {
@@ -2985,12 +3004,17 @@ async function cargarObras() {
   };
 }
 
-async function cargarDocumentos() {
-  const obraFiltro = document.getElementById('docsFiltroObra')?.value || '';
-  const cont = document.getElementById('docsContenido');
-  if (!cont) return;
-  cont.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+// ── DOCUMENTOS ────────────────────────────────────────────────
+let _docsTab = 'fotos';
+let _docsCarpetaStack = []; // [{id, nombre}]
 
+const _DOCS_DEPTS = [
+  { key: 'electrico', icon: '⚡', label: 'Eléctrico' },
+  { key: 'mecanicas', icon: '🔧', label: 'Mecánicas' },
+  { key: 'seguridad', icon: '🔺', label: 'Seguridad' },
+];
+
+async function cargarDocumentos() {
   // poblar select de obras si está vacío
   const sel = document.getElementById('docsFiltroObra');
   if (sel && sel.options.length <= 1) {
@@ -2998,61 +3022,251 @@ async function cargarDocumentos() {
     (window._obrasPanel || []).forEach(o => {
       const opt = document.createElement('option');
       opt.value = o.id; opt.textContent = o.nombre;
-      if (String(o.id) === String(obraFiltro)) opt.selected = true;
       sel.appendChild(opt);
     });
   }
+  _docsCarpetaStack = [];
+  docsRenderTab();
+}
+
+function docsOnObraChange() { _docsCarpetaStack = []; docsRenderTab(); }
+function docsRecargar()     { _docsCarpetaStack = []; docsRenderTab(); }
+
+function docsSetTab(tab) {
+  _docsTab = tab;
+  _docsCarpetaStack = [];
+  document.querySelectorAll('.docs-tab').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+  docsRenderTab();
+}
+
+function docsRenderTab() {
+  const obraId = document.getElementById('docsFiltroObra')?.value || '';
+  if (_docsTab === 'fotos') docsCargarFotos(obraId);
+  else docsCargarDept(_docsTab, obraId, _docsCarpetaStack.at(-1)?.id || null);
+}
+
+async function docsCargarFotos(obraId) {
+  const cont = document.getElementById('docsContenido');
+  cont.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+  const canEdit = hasSessionRole('empresa_admin', 'superadmin', 'desarrollador', 'encargado', 'jefe_de_obra', 'oficina');
 
   const params = new URLSearchParams();
-  if (obraFiltro) params.set('obra_id', obraFiltro);
+  if (obraId) params.set('obra_id', obraId);
   const r = await api('/fotos-obra?' + params.toString());
   const fotos = r.fotos || [];
 
+  const toolbar = `<div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+    ${canEdit ? `<button class="btn btn-primary" onclick="docsSubirFoto()">📷 Subir foto</button>` : ''}
+    <span style="color:var(--muted);font-size:12px;align-self:center">${fotos.length} foto${fotos.length!==1?'s':''}</span>
+  </div>`;
+
   if (!fotos.length) {
-    cont.innerHTML = '<div class="empty-state" style="padding:40px 0"><div style="font-size:40px">📷</div><div style="color:var(--muted);margin-top:8px">No hay fotos subidas aún</div></div>';
+    cont.innerHTML = toolbar + '<div class="empty-state" style="padding:30px 0"><div style="font-size:36px">📷</div><div style="color:var(--muted);margin-top:8px">No hay fotos aún</div></div>';
     return;
   }
 
-  // agrupar por obra
-  const grupos = {};
-  fotos.forEach(f => {
-    const k = f.obra_id || 0;
-    if (!grupos[k]) grupos[k] = { nombre: f.obra_nombre || (f.obra_id ? `Obra ${f.obra_id}` : 'Sin obra'), fotos: [] };
-    grupos[k].fotos.push(f);
-  });
-
-  cont.innerHTML = Object.values(grupos).map(g => `
-    <div style="margin-bottom:24px">
-      <div style="font-family:'Montserrat',sans-serif;font-weight:700;font-size:13px;color:var(--yellow);margin-bottom:10px;display:flex;align-items:center;gap:8px">
-        🏗️ ${g.nombre} <span style="font-weight:400;color:var(--muted);font-size:11px">${g.fotos.length} foto${g.fotos.length!==1?'s':''}</span>
+  const grid = fotos.map(f => `
+    <div style="background:var(--surface2);border-radius:10px;overflow:hidden;border:1px solid var(--border);position:relative">
+      <img src="${API}/fotos-obra/${f.id}?token=${encodeURIComponent(TOKEN)}"
+        style="width:100%;height:110px;object-fit:cover;display:block;cursor:pointer"
+        onclick="docsVerFoto(${f.id},'${esc(f.nombre)}','${esc(f.comentario)}')"
+        onerror="this.style.display='none';this.nextElementSibling.style.display='flex'" loading="lazy">
+      <div style="display:none;height:110px;align-items:center;justify-content:center;font-size:32px;cursor:pointer" onclick="docsVerFoto(${f.id},'${esc(f.nombre)}','${esc(f.comentario)}')">📷</div>
+      <div style="padding:7px 8px">
+        <div style="font-size:11px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${f.comentario||f.nombre||'—'}</div>
+        <div style="font-size:10px;color:var(--muted);margin-top:2px">${fmtFecha(f.created_at)} · ${f.subido_por||''}</div>
       </div>
-      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px">
-        ${g.fotos.map(f => `
-          <div style="background:var(--surface2);border-radius:10px;overflow:hidden;cursor:pointer;border:1px solid var(--border)" onclick="verFotoPanel(${f.id},'${(f.nombre||'').replace(/'/g,"\\'")}','${(f.comentario||'').replace(/'/g,"\\'")}')">
-            <img src="${API}/fotos-obra/${f.id}?token=${encodeURIComponent(TOKEN)}"
-              style="width:100%;height:100px;object-fit:cover;display:block"
-              onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"
-              loading="lazy">
-            <div style="display:none;height:100px;align-items:center;justify-content:center;font-size:28px">📷</div>
-            <div style="padding:6px 8px">
-              <div style="font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${f.comentario||f.nombre||'—'}</div>
-              <div style="font-size:10px;color:var(--muted);margin-top:2px">${fmtFecha(f.created_at)} · ${f.subido_por||''}</div>
-            </div>
-          </div>`).join('')}
-      </div>
+      ${canEdit ? `<button onclick="docsEliminarFoto(${f.id})" style="position:absolute;top:4px;right:4px;background:#ef444488;border:none;border-radius:6px;color:#fff;font-size:12px;padding:2px 6px;cursor:pointer">🗑</button>` : ''}
     </div>`).join('');
+
+  cont.innerHTML = toolbar + `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px">${grid}</div>`;
 }
 
-function verFotoPanel(id, nombre, comentario) {
+async function docsCargarDept(dept, obraId, carpetaId) {
+  const cont = document.getElementById('docsContenido');
+  cont.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+  const canEdit = hasSessionRole('empresa_admin', 'superadmin', 'desarrollador', 'encargado', 'jefe_de_obra', 'oficina');
+  const deptInfo = _DOCS_DEPTS.find(d => d.key === dept);
+
+  if (!obraId) {
+    cont.innerHTML = '<div style="color:var(--muted);padding:30px 0;text-align:center">Selecciona una obra para ver sus documentos</div>';
+    return;
+  }
+
+  // breadcrumb
+  const breadcrumb = [{ id: null, nombre: '📁 Raíz' }, ..._docsCarpetaStack];
+  const bcHtml = `<div style="display:flex;align-items:center;gap:6px;margin-bottom:12px;flex-wrap:wrap;font-size:12px">
+    ${breadcrumb.map((b, i) => i < breadcrumb.length - 1
+      ? `<span style="color:var(--accent);cursor:pointer;font-weight:700" onclick="docsNavBreadcrumb(${i})">${b.nombre}</span><span style="color:var(--muted)">/</span>`
+      : `<span style="color:var(--text);font-weight:700">${b.nombre}</span>`
+    ).join('')}
+  </div>`;
+
+  const toolbar = `<div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">
+    ${canEdit ? `
+      <button class="btn btn-primary" onclick="docsSubirArchivo('${obraId}','${dept}',${carpetaId||'null'})">⬆ Subir archivo</button>
+      ${!carpetaId ? `<button class="btn btn-secondary" onclick="docsCrearCarpeta('${obraId}','${dept}')">📁 Nueva carpeta</button>` : ''}` : ''}
+  </div>`;
+
+  // fetch carpetas y docs en paralelo
+  const [rCarp, rDocs] = await Promise.all([
+    carpetaId ? Promise.resolve({ ok: false }) : api(`/carpetas?obra_id=${obraId}&departamento=${dept}`),
+    carpetaId
+      ? api(`/docs-dept?carpeta_id=${carpetaId}`)
+      : api(`/docs-dept?obra_id=${obraId}&departamento=${dept}`),
+  ]);
+
+  const carpetas = Array.isArray(rCarp) ? rCarp : [];
+  const docs     = Array.isArray(rDocs) ? rDocs : [];
+
+  const carpetasHtml = carpetas.map(c => `
+    <div class="docs-folder" onclick="docsAbrirCarpeta(${c.id},'${esc(c.nombre)}')">
+      <span style="font-size:20px">📁</span>
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:700;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${c.nombre}</div>
+        <div style="font-size:11px;color:var(--muted)">${fmtFecha(c.created_at)}</div>
+      </div>
+      ${canEdit ? `<button onclick="event.stopPropagation();docsEliminarCarpeta(${c.id})" style="background:transparent;border:none;color:var(--muted);cursor:pointer;font-size:14px;padding:4px">🗑</button>` : ''}
+      <span style="color:var(--muted);font-size:16px">›</span>
+    </div>`).join('');
+
+  const docsHtml = docs.length ? `
+    <div style="display:flex;flex-direction:column;gap:6px">
+      ${docs.map(d => {
+        const ext  = (d.nombre||'').split('.').pop().toLowerCase();
+        const icon = { pdf:'📄', jpg:'🖼', jpeg:'🖼', png:'🖼', webp:'🖼', xlsx:'📊', xls:'📊', docx:'📝', doc:'📝', mp4:'🎬', zip:'🗜' }[ext] || '📎';
+        const size = d.tamano ? (d.tamano > 1048576 ? (d.tamano/1048576).toFixed(1)+' MB' : Math.round(d.tamano/1024)+' KB') : '';
+        return `<div class="docs-file" onclick="docsDescargar(${d.id},'${esc(d.nombre)}')">
+          <span style="font-size:22px">${icon}</span>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${d.nombre}</div>
+            <div style="font-size:11px;color:var(--muted)">${fmtFecha(d.created_at)} · ${d.subido_por||''} ${size?'· '+size:''}</div>
+            ${d.descripcion ? `<div style="font-size:11px;color:var(--muted);font-style:italic">${d.descripcion}</div>` : ''}
+          </div>
+          <a href="${API}/docs-dept/${d.id}?token=${encodeURIComponent(TOKEN)}" download="${d.nombre||'archivo'}" onclick="event.stopPropagation()" class="btn btn-secondary btn-sm" style="flex-shrink:0">⬇</a>
+          ${canEdit ? `<button onclick="event.stopPropagation();docsEliminarDoc(${d.id})" class="btn btn-danger btn-sm" style="flex-shrink:0">🗑</button>` : ''}
+        </div>`;
+      }).join('')}
+    </div>` : '';
+
+  const empty = !carpetas.length && !docs.length
+    ? '<div style="color:var(--muted);padding:30px 0;text-align:center">Carpeta vacía</div>'
+    : '';
+
+  cont.innerHTML = bcHtml + toolbar + carpetasHtml + docsHtml + empty;
+}
+
+function docsAbrirCarpeta(id, nombre) {
+  _docsCarpetaStack.push({ id, nombre });
+  docsRenderTab();
+}
+
+function docsNavBreadcrumb(idx) {
+  _docsCarpetaStack = _docsCarpetaStack.slice(0, idx);
+  docsRenderTab();
+}
+
+function docsVerFoto(id, nombre, comentario) {
   const url = `${API}/fotos-obra/${id}?token=${encodeURIComponent(TOKEN)}`;
-  abrirModal(`📷 ${nombre || 'Foto'}`, `
-    <img src="${url}" style="width:100%;max-height:60vh;object-fit:contain;border-radius:8px;display:block;margin-bottom:10px">
-    ${comentario ? `<div style="font-size:13px;color:var(--text)">${comentario}</div>` : ''}
-    <div style="margin-top:12px;display:flex;gap:8px">
+  abrirModal(`📷 ${nombre||'Foto'}`, `
+    <img src="${url}" style="width:100%;max-height:55vh;object-fit:contain;border-radius:8px;display:block;margin-bottom:10px">
+    ${comentario ? `<div style="font-size:13px;color:var(--text);margin-bottom:10px">${comentario}</div>` : ''}
+    <div style="display:flex;gap:8px">
       <a href="${url}" download="${nombre||'foto'}" class="btn btn-primary" style="text-decoration:none;flex:1;text-align:center">⬇ Descargar</a>
       <a href="${url}" target="_blank" class="btn btn-secondary" style="text-decoration:none;flex:1;text-align:center">🔗 Abrir</a>
     </div>`);
 }
+
+function docsDescargar(id, nombre) {
+  const a = document.createElement('a');
+  a.href = `${API}/docs-dept/${id}?token=${encodeURIComponent(TOKEN)}`;
+  a.download = nombre || 'archivo';
+  a.target = '_blank';
+  a.click();
+}
+
+function docsSubirFoto() {
+  const obraId = document.getElementById('docsFiltroObra')?.value || '';
+  const obraOpts = (window._obrasPanel||[]).map(o => `<option value="${o.id}"${String(o.id)===String(obraId)?' selected':''}>${o.nombre}</option>`).join('');
+  abrirModal('📷 Subir foto', `
+    <div class="form-group"><div class="form-label">Obra</div>
+      <select class="form-input" id="mFotoObra">${obraOpts}</select></div>
+    <div class="form-group"><div class="form-label">Foto *</div>
+      <input class="form-input" id="mFotoFile" type="file" accept="image/*,video/*"></div>
+    <div class="form-group"><div class="form-label">Comentario</div>
+      <input class="form-input" id="mFotoComentario" placeholder="Descripción opcional..."></div>`,
+  async () => {
+    const file = document.getElementById('mFotoFile')?.files[0];
+    if (!file) { toast('Selecciona una foto', 'err'); return; }
+    const fd = new FormData();
+    fd.append('file', file);
+    fd.append('obra_id', document.getElementById('mFotoObra')?.value || '');
+    fd.append('comentario', document.getElementById('mFotoComentario')?.value || '');
+    const r = await apiRaw('/fotos-obra', { method: 'POST', body: fd });
+    const data = await r.json().catch(() => ({}));
+    if (r.ok) { cerrarModal(); toast('Foto subida ✓', 'ok'); docsRenderTab(); }
+    else toast(data.error || 'Error al subir', 'err');
+  });
+}
+
+function docsSubirArchivo(obraId, dept, carpetaId) {
+  const deptInfo = _DOCS_DEPTS.find(d => d.key === dept);
+  abrirModal(`⬆ Subir archivo — ${deptInfo?.icon} ${deptInfo?.label}`, `
+    <div class="form-group"><div class="form-label">Archivo * (máx. 50 MB)</div>
+      <input class="form-input" id="mDocFile" type="file"></div>
+    <div class="form-group"><div class="form-label">Descripción</div>
+      <input class="form-input" id="mDocDesc" placeholder="Opcional..."></div>`,
+  async () => {
+    const file = document.getElementById('mDocFile')?.files[0];
+    if (!file) { toast('Selecciona un archivo', 'err'); return; }
+    const fd = new FormData();
+    fd.append('file', file);
+    fd.append('obra_id', obraId);
+    fd.append('departamento', dept);
+    if (carpetaId) fd.append('carpeta_id', carpetaId);
+    fd.append('descripcion', document.getElementById('mDocDesc')?.value || '');
+    const r = await apiRaw('/docs-dept', { method: 'POST', body: fd });
+    const data = await r.json().catch(() => ({}));
+    if (r.ok) { cerrarModal(); toast('Archivo subido ✓', 'ok'); docsRenderTab(); }
+    else toast(data.error || 'Error al subir', 'err');
+  });
+}
+
+function docsCrearCarpeta(obraId, dept) {
+  abrirModal('📁 Nueva carpeta', `
+    <div class="form-group"><div class="form-label">Nombre *</div>
+      <input class="form-input" id="mCarpNombre" placeholder="Ej: Planos, Permisos..."></div>`,
+  async () => {
+    const nombre = document.getElementById('mCarpNombre')?.value.trim();
+    if (!nombre) { toast('Escribe un nombre', 'err'); return; }
+    const r = await api('/carpetas', { method: 'POST', body: JSON.stringify({ obra_id: parseInt(obraId), departamento: dept, nombre }) });
+    if (r.ok || r.id) { cerrarModal(); toast('Carpeta creada ✓', 'ok'); docsRenderTab(); }
+    else toast(r.error || 'Error al crear', 'err');
+  });
+}
+
+async function docsEliminarFoto(id) {
+  if (!confirm('¿Eliminar esta foto?')) return;
+  const r = await api(`/fotos-obra/${id}`, { method: 'DELETE' });
+  if (r.ok) { toast('Foto eliminada', 'ok'); docsRenderTab(); }
+  else toast('Error al eliminar', 'err');
+}
+
+async function docsEliminarDoc(id) {
+  if (!confirm('¿Eliminar este archivo?')) return;
+  const r = await api(`/docs-dept/${id}`, { method: 'DELETE' });
+  if (r.ok) { toast('Archivo eliminado', 'ok'); docsRenderTab(); }
+  else toast('Error al eliminar', 'err');
+}
+
+async function docsEliminarCarpeta(id) {
+  if (!confirm('¿Eliminar esta carpeta y todo su contenido?')) return;
+  const r = await api(`/carpetas/${id}`, { method: 'DELETE' });
+  if (r.ok) { toast('Carpeta eliminada', 'ok'); docsRenderTab(); }
+  else toast('Error al eliminar', 'err');
+}
+
+function esc(s) { return (s||'').replace(/'/g,"\\'").replace(/"/g,'&quot;'); }
 
 async function guardarCampoObra(id, campo, valor) {
   const r = await api(`/obras/${id}`, { method: 'PUT', body: JSON.stringify({ [campo]: valor }) });
