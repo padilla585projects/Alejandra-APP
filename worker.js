@@ -7184,10 +7184,15 @@ async function descargarDocDept(id, request, env) {
   if (!meta) return err('Documento no encontrado', 404);
   const obj = await env.FILES.get(meta.r2_key);
   if (!obj) return err('Archivo no disponible en almacenamiento', 404);
+  const mime = meta.mime || 'application/octet-stream';
+  const inline = mime.startsWith('image/') || mime === 'application/pdf' || mime.startsWith('video/');
+  const disposition = inline
+    ? `inline; filename="${encodeURIComponent(meta.nombre)}"`
+    : `attachment; filename="${encodeURIComponent(meta.nombre)}"`;
   return new Response(obj.body, {
     headers: {
-      'Content-Type': meta.mime || 'application/octet-stream',
-      'Content-Disposition': `attachment; filename="${encodeURIComponent(meta.nombre)}"`,
+      'Content-Type': mime,
+      'Content-Disposition': disposition,
       'Cache-Control': 'private, max-age=3600',
       ...CORS,
     },
