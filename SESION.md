@@ -7,9 +7,36 @@
 
 **Sesión:** LIBRE
 **Última sesión:** 11/05/2026
-**Versión tras última sesión:** v5.70 (multi-rol usuarios, filtro proveedor bobinas, página documentos panel)
-**Worker desplegado:** 05c74f82 ✅
+**Versión tras última sesión:** v5.72 (documentos panel mejorado, scan parte semanal IA)
+**Worker desplegado:** 76fb4c8 ✅
 **GitHub:** en sync ✅
+
+---
+
+## RESUMEN SESIÓN 11/05/2026 — v5.71→v5.72
+
+### Qué se hizo:
+
+**v5.71 — Documentos panel completo:**
+- Tabs por departamento: Fotos / Eléctrico / Mecánicas / Seguridad
+- Explorador carpetas con breadcrumb, botón "Abrir →" explícito
+- Visor inline: imágenes, PDFs, vídeos — fetch+blob (evita Content-Disposition attachment)
+- Error amigable en modal cuando archivo no existe en R2 + botón eliminar registro huérfano
+- Obra seleccionada persiste entre navegaciones (_docsObraId)
+- worker: Content-Disposition inline para imágenes/PDFs/vídeos
+- apiRaw() para uploads con FormData
+
+**v5.72 — Scan parte semanal con IA:**
+- Worker: POST /scan-parte — recibe imagen, llama Claude Vision, extrae nombres+horas manuscritas, cruza con trabajadores del sistema
+- Worker: POST /fichajes/batch — crea múltiples fichajes de una vez, detecta duplicados
+- App móvil: FAB 📋 morado en sección fichajes → elige cámara o galería → IA analiza (10-20s) → tabla editable revisión → importar
+- Panel web: botón "📋 Escanear parte" en toolbar fichajes → subir archivo/imagen (sin cámara) → mismo flujo
+- Trabajadores sin match: botón ➕ Añadir los crea como personal externo y activa el checkbox automáticamente
+
+### Estado final:
+- Worker: 76fb4c8 ✅
+- GitHub: en sync ✅
+- Versión: v5.72
 
 ---
 
