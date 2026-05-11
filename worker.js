@@ -3308,6 +3308,8 @@ async function getBobinas(request, env) {
   if (obraFilter)      { sql += ' AND b.obra_id = ?'; params.push(obraFilter); }
   if (estado)          { sql += ' AND b.estado = ?';  params.push(estado); }
   if (proveedorParam)  { sql += ' AND b.proveedor = ?'; params.push(proveedorParam); }
+  const tipoCableParam = url.searchParams.get('tipo_cable');
+  if (tipoCableParam)  { sql += ' AND b.tipo_cable = ?'; params.push(tipoCableParam); }
   if (buscar) {
     sql += ' AND (b.codigo LIKE ? OR b.proveedor LIKE ? OR b.tipo_cable LIKE ?)';
     params.push(`%${buscar}%`, `%${buscar}%`, `%${buscar}%`);

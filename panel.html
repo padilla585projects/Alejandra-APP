@@ -9,6 +9,7 @@
 <link href="https://unpkg.com/tabulator-tables@6.3.0/dist/css/tabulator_midnight.min.css" rel="stylesheet">
 <script src="https://unpkg.com/tabulator-tables@6.3.0/dist/js/tabulator.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <style>
@@ -612,8 +613,16 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
           <select class="tbl-search" id="filtroObraBobinas" style="min-width:150px" onchange="cargarBobinas()">
             <option value="">🏗 Todas las obras</option>
           </select>
+          <select class="tbl-search" id="filtroProvBobinas" style="min-width:140px" onchange="cargarBobinas()">
+            <option value="">📦 Proveedor</option>
+          </select>
+          <select class="tbl-search" id="filtroTipoBobinas" style="min-width:140px" onchange="cargarBobinas()">
+            <option value="">🔌 Tipo cable</option>
+          </select>
           <button class="btn btn-primary" onclick="abrirModalBobina()">+ Nueva bobina</button>
           <button class="btn btn-secondary" style="background:#8b5cf6;color:#fff;border-color:#8b5cf6" onclick="abrirScanBobinasPanel()">📷 Escanear albarán</button>
+          <button class="btn btn-secondary" onclick="exportarBobinasExcel()">📊 Excel</button>
+          <button class="btn btn-secondary" onclick="tblBobinas && tblBobinas.print(false,true)">🖨️ Imprimir</button>
           <button class="btn btn-secondary" onclick="exportarTabla(tblBobinas,'bobinas')">⬇ CSV</button>
           <button class="btn btn-secondary" onclick="cargarBobinas()">🔄 Actualizar</button>
         </div>
@@ -1579,6 +1588,29 @@ function badgeDias(dias) {
 function exportarTabla(tabla, nombre) {
   if (!tabla) return;
   tabla.download('csv', `${nombre}_${new Date().toISOString().slice(0,10)}.csv`, { bom: true });
+}
+
+function exportarBobinasExcel() {
+  if (!tblBobinas) return toast('Carga el inventario primero', 'err');
+  const rows = tblBobinas.getData('active');
+  if (!rows.length) return toast('Sin datos que exportar', 'err');
+  const filas = rows.map(b => ({
+    'Código':         b.codigo        || '',
+    'Tipo cable':     b.tipo_cable    || '',
+    'Proveedor':      b.proveedor     || '',
+    'Estado':         b.estado        || '',
+    'Departamento':   b.departamento  || '',
+    'Obra':           b.obra_nombre   || '',
+    'Albarán':        b.num_albaran   || '',
+    'Registrado por': b.registrado_por|| '',
+    'Notas':          b.notas         || '',
+    'Fecha entrada':  (b.fecha_entrada||'').slice(0,10),
+    'Fecha salida':   (b.fecha_salida ||'').slice(0,10),
+  }));
+  const ws = XLSX.utils.json_to_sheet(filas);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Bobinas');
+  XLSX.writeFile(wb, `bobinas_${new Date().toISOString().slice(0,10)}.xlsx`);
 }
 
 // ── CATÁLOGO DEPARTAMENTOS + SUBMÓDULOS (sync con index.html) ─
@@ -2550,8 +2582,24 @@ const fmtDept = c => DEPT_LABEL[c.getValue()] || c.getValue() || '—';
 
 let tblBobinas = null;
 async function cargarBobinas() {
-  const r = await api('/bobinas?' + _invParams('filtroDepBobinas', 'filtroObraBobinas'));
+  const prov = document.getElementById('filtroProvBobinas')?.value || '';
+  const tipo = document.getElementById('filtroTipoBobinas')?.value || '';
+  const extra = [prov && `proveedor=${encodeURIComponent(prov)}`, tipo && `tipo_cable=${encodeURIComponent(tipo)}`].filter(Boolean).join('&');
+  const r = await api('/bobinas?' + _invParams('filtroDepBobinas', 'filtroObraBobinas', extra));
   const data = toArr(r, 'bobinas');
+  // Poblar selectores con valores únicos presentes en los datos
+  const provSel = document.getElementById('filtroProvBobinas');
+  if (provSel) {
+    const cur = provSel.value;
+    const provs = [...new Set(data.map(b => b.proveedor).filter(Boolean))].sort();
+    provSel.innerHTML = '<option value="">📦 Proveedor</option>' + provs.map(p => `<option value="${p}"${p===cur?' selected':''}>${p}</option>`).join('');
+  }
+  const tipoSel = document.getElementById('filtroTipoBobinas');
+  if (tipoSel) {
+    const cur = tipoSel.value;
+    const tipos = [...new Set(data.map(b => b.tipo_cable).filter(Boolean))].sort();
+    tipoSel.innerHTML = '<option value="">🔌 Tipo cable</option>' + tipos.map(t => `<option value="${t}"${t===cur?' selected':''}>${t}</option>`).join('');
+  }
   if (tblBobinas) { tblBobinas.replaceData(data); return; }
   const canEdit = ['empresa_admin', 'jefe_de_obra', 'oficina', 'encargado', 'superadmin', 'desarrollador'].includes(SESSION.rol);
   tblBobinas = new Tabulator('#tblBobinas', {

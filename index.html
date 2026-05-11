@@ -1513,6 +1513,9 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
           <select id="stockProvSelect" class="search-input" style="flex:0 0 auto;min-width:120px;max-width:160px;display:none" onchange="filtrarStock()">
             <option value="">📦 Proveedor</option>
           </select>
+          <select id="stockTipoSelect" class="search-input" style="flex:0 0 auto;min-width:120px;max-width:160px;display:none" onchange="filtrarStock()">
+            <option value="">🔌 Tipo cable</option>
+          </select>
           <div class="filter-row">
             <button class="filter-btn active" id="fTodos" onclick="setStockFiltro('')">Todos</button>
             <button class="filter-btn" id="fActiva" onclick="setStockFiltro('activa')">Activas</button>
@@ -6574,12 +6577,17 @@ async function cargarStock() {
   if (provSel) provSel.style.display = mod === 'bobinas' ? '' : 'none';
   let path;
 
+  const tipoSel = document.getElementById('stockTipoSelect');
+  if (tipoSel) tipoSel.style.display = mod === 'bobinas' ? '' : 'none';
+
   if (mod === 'bobinas') {
     const prov = provSel?.value || '';
+    const tipo = tipoSel?.value || '';
     const parts = [];
     if (stockFiltro) parts.push(`estado=${stockFiltro}`);
     if (q) parts.push(`q=${encodeURIComponent(q)}`);
     if (prov) parts.push(`proveedor=${encodeURIComponent(prov)}`);
+    if (tipo) parts.push(`tipo_cable=${encodeURIComponent(tipo)}`);
     if (obraParam) parts.push(obraParam);
     path = '/bobinas' + (parts.length ? '?' + parts.join('&') : '');
   } else if (mod === 'pemp') {
@@ -8028,12 +8036,17 @@ async function cargarCatalogos() {
     _catalogos.tiposHerr    = rth.ok ? await rth.json() : [];
 
     poblarSelect('fieldProv',        _catalogos.proveedores);
-    // poblar filtro de proveedor en stock
     const provSel = document.getElementById('stockProvSelect');
     if (provSel && _catalogos.proveedores.length) {
       const cur = provSel.value;
       provSel.innerHTML = '<option value="">📦 Proveedor</option>' +
         _catalogos.proveedores.map(p => `<option value="${p.nombre}"${p.nombre===cur?' selected':''}>${p.nombre}</option>`).join('');
+    }
+    const tipoSel = document.getElementById('stockTipoSelect');
+    if (tipoSel && _catalogos.tipos.length) {
+      const cur = tipoSel.value;
+      tipoSel.innerHTML = '<option value="">🔌 Tipo cable</option>' +
+        _catalogos.tipos.map(t => `<option value="${t.nombre}"${t.nombre===cur?' selected':''}>${t.nombre}</option>`).join('');
     }
     poblarSelect('fieldTipoCable',   _catalogos.tipos);
     poblarSelect('fieldPempTipo',    _catalogos.tiposPemp);
@@ -10026,7 +10039,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '5.75';
+const APP_VERSION = '5.76';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -12983,18 +12996,23 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     document.getElementById('scanFechaLunes').value = data.fecha_lunes || '';
     const DIAS = ['lunes','martes','miercoles','jueves','viernes','sabado'];
     const DIAS_L = ['L','M','X','J','V','S'];
+    const wList = data.trabajadores_db || [];
     const tbody = document.getElementById('scanTbody');
     tbody.innerHTML = '';
     (data.trabajadores || []).forEach((t, i) => {
       const matched = t.matched;
       const tr = document.createElement('tr');
       tr.style.borderBottom = '1px solid var(--border)';
-      const nombreCell = matched
-        ? `<span style="font-size:11px;font-weight:600">${t.nombre_match}</span>
-           <span style="font-size:9px;color:var(--muted);display:block">${t.nombre_parte}</span>`
-        : `<span style="font-size:11px;color:#f59e0b;font-weight:600">⚠ ${t.nombre_parte}</span>
-           <span style="font-size:9px;color:var(--muted);display:block">Sin coincidencia</span>
-           <button onclick="scanAnadirTrabajador(${i})" style="margin-top:3px;font-size:10px;padding:2px 7px;border-radius:5px;background:#8b5cf6;color:#fff;border:none;cursor:pointer">➕ Añadir</button>`;
+      const currentVal = t.usuario_id ? `u_${t.usuario_id}` : t.personal_externo_id ? `p_${t.personal_externo_id}` : '';
+      const borderColor = matched ? 'var(--border)' : '#f59e0b';
+      const opts = `<option value="">— Sin asignar —</option>` +
+        wList.map(w => {
+          const v = w.tipo === 'usuario' ? `u_${w.id}` : `p_${w.id}`;
+          return `<option value="${v}" ${v === currentVal ? 'selected' : ''}>${w.nombre}</option>`;
+        }).join('');
+      const nombreCell = `
+        <span style="font-size:9px;color:var(--muted);display:block;margin-bottom:2px">${t.nombre_parte}</span>
+        <select data-idx="${i}" style="font-size:10px;padding:2px 3px;border:1px solid ${borderColor};border-radius:5px;background:var(--surface2);color:var(--text);width:100%;max-width:150px">${opts}</select>`;
       const horasCells = DIAS.map((d, di) => {
         const v = t[d] !== null && t[d] !== undefined ? t[d] : '';
         return `<td style="padding:4px 3px;text-align:center">
@@ -13032,19 +13050,21 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     rows.forEach((tr, i) => {
       const check = tr.querySelector(`input[type=checkbox][data-idx="${i}"]`);
       if (!check?.checked) return;
-      const t = _scanData?.trabajadores?.[i];
-      if (!t) return;
+      const sel = tr.querySelector(`select[data-idx="${i}"]`);
+      const val = sel?.value || '';
+      let usuario_id = null, personal_externo_id = null;
+      if (val.startsWith('u_')) usuario_id = parseInt(val.slice(2));
+      else if (val.startsWith('p_')) personal_externo_id = parseInt(val.slice(2));
+      const nombre = sel?.options[sel.selectedIndex]?.text || _scanData?.trabajadores?.[i]?.nombre_parte || '';
       DIAS.forEach(dia => {
         const inp = tr.querySelector(`input[data-idx="${i}"][data-dia="${dia}"]`);
         const horas = parseFloat(inp?.value);
         if (!isNaN(horas) && horas > 0) {
           fichajes.push({
-            usuario_id:          t.usuario_id,
-            personal_externo_id: t.personal_externo_id,
+            usuario_id, personal_externo_id,
             obra_id: obraId ? parseInt(obraId) : null,
             fecha_lunes: fechaLunes,
-            dia, horas,
-            nombre: t.nombre_match || t.nombre_parte,
+            dia, horas, nombre,
           });
         }
       });
@@ -14397,5 +14417,6 @@ window.turnoToggle   = turnoToggle;
 </script>
 </body>
 </html>
+
 
 
