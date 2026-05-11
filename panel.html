@@ -6592,18 +6592,23 @@ document.getElementById('wInput').focus();
     document.getElementById('spStep3').style.display = '';
     document.getElementById('spFechaLunes').value = data.fecha_lunes || '';
     const DIAS = ['lunes','martes','miercoles','jueves','viernes','sabado'];
+    const wList = data.trabajadores_db || [];
     const tbody = document.getElementById('spTbody');
     tbody.innerHTML = '';
     (data.trabajadores || []).forEach((t, i) => {
       const matched = t.matched;
       const tr = document.createElement('tr');
       tr.style.borderBottom = '1px solid var(--border)';
-      const nombreCell = matched
-        ? `<div style="font-size:12px;font-weight:600">${t.nombre_match}</div>
-           <div style="font-size:10px;color:var(--muted)">${t.nombre_parte}</div>`
-        : `<div style="font-size:12px;font-weight:600;color:#f59e0b">⚠ ${t.nombre_parte}</div>
-           <div style="font-size:10px;color:var(--muted)">Sin coincidencia</div>
-           <button onclick="spAnadir(${i})" style="margin-top:3px;font-size:10px;padding:2px 8px;border-radius:5px;background:#8b5cf6;color:#fff;border:none;cursor:pointer">➕ Añadir trabajador</button>`;
+      const currentVal = t.usuario_id ? `u_${t.usuario_id}` : t.personal_externo_id ? `p_${t.personal_externo_id}` : '';
+      const borderColor = matched ? 'var(--border)' : '#f59e0b';
+      const opts = `<option value="">— Sin asignar —</option>` +
+        wList.map(w => {
+          const v = w.tipo === 'usuario' ? `u_${w.id}` : `p_${w.id}`;
+          return `<option value="${v}" ${v === currentVal ? 'selected' : ''}>${w.nombre}</option>`;
+        }).join('');
+      const nombreCell = `
+        <div style="font-size:10px;color:var(--muted);margin-bottom:3px">${t.nombre_parte}</div>
+        <select data-idx="${i}" style="font-size:11px;padding:2px 4px;border:1px solid ${borderColor};border-radius:5px;background:var(--surface2);color:var(--text);width:100%;max-width:190px">${opts}</select>`;
       const horasCells = DIAS.map(d => {
         const v = (t[d] !== null && t[d] !== undefined) ? t[d] : '';
         return `<td style="padding:4px 3px;text-align:center">
@@ -6663,18 +6668,22 @@ document.getElementById('wInput').focus();
     document.querySelectorAll('#spTbody tr').forEach((tr, i) => {
       const cb = tr.querySelector(`input[type=checkbox][data-idx="${i}"]`);
       if (!cb?.checked) return;
-      const t = _scanData?.trabajadores?.[i];
-      if (!t) return;
+      const sel = tr.querySelector(`select[data-idx="${i}"]`);
+      const val = sel?.value || '';
+      let usuario_id = null, personal_externo_id = null;
+      if (val.startsWith('u_')) usuario_id = parseInt(val.slice(2));
+      else if (val.startsWith('p_')) personal_externo_id = parseInt(val.slice(2));
+      const nombre = sel?.options[sel.selectedIndex]?.text || _scanData?.trabajadores?.[i]?.nombre_parte || '';
       DIAS.forEach(dia => {
         const inp = tr.querySelector(`input[data-idx="${i}"][data-dia="${dia}"]`);
         const horas = parseFloat(inp?.value);
         if (!isNaN(horas) && horas > 0) {
           fichajes.push({
-            usuario_id: t.usuario_id,
-            personal_externo_id: t.personal_externo_id,
+            usuario_id,
+            personal_externo_id,
             obra_id: obraId ? parseInt(obraId) : null,
             fecha_lunes: fechaLunes, dia, horas,
-            nombre: t.nombre_match || t.nombre_parte,
+            nombre,
           });
         }
       });

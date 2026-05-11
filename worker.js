@@ -1981,7 +1981,7 @@ Responde ÚNICAMENTE con un JSON válido, sin texto adicional:
     };
   });
 
-  return json({ ok: true, fecha_lunes: data.fecha_lunes, trabajadores: resultado });
+  return json({ ok: true, fecha_lunes: data.fecha_lunes, trabajadores: resultado, trabajadores_db: trabajadores });
 }
 
 // ── FICHAJES BATCH (importación desde parte) ────────────────────────────────
