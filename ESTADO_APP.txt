@@ -4,8 +4,8 @@
   Ruta local: C:\Users\Adrian\Downloads\Proyecto GestiBobina\Alejandra APP
 ================================================================================
 
-ÚLTIMA ACTUALIZACIÓN: 10/05/2026
-VERSIÓN ACTUAL APP NUEVA: v5.70 (worker 05c74f82 — auditoría agente: 3 bugs corregidos)
+ÚLTIMA ACTUALIZACIÓN: 11/05/2026
+VERSIÓN ACTUAL APP NUEVA: v5.70 (multi-rol, filtro proveedor bobinas, página documentos panel)
 VERSIÓN ACTUAL APP VIEJA: v4.19 (⛔ CONGELADA DEFINITIVAMENTE — no recibe más cambios)
 
 ================================================================================

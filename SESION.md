@@ -6,8 +6,8 @@
 ## ESTADO ACTUAL
 
 **Sesión:** LIBRE
-**Última sesión:** 10/05/2026
-**Versión tras última sesión:** v5.70 (worker 05c74f82 — auditoría agente: 3 bugs corregidos)
+**Última sesión:** 11/05/2026
+**Versión tras última sesión:** v5.70 (multi-rol usuarios, filtro proveedor bobinas, página documentos panel)
 **Worker desplegado:** 05c74f82 ✅
 **GitHub:** en sync ✅
 
