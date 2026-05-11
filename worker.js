@@ -15,6 +15,25 @@ const CORS = {
   'Referrer-Policy': 'strict-origin-when-cross-origin',
 };
 
+// ── Precios IA (USD por token) ────────────────────────────────────────────────
+const AI_PRICES = {
+  'claude-sonnet-4-6':    { input: 3/1e6,     output: 15/1e6  },
+  'claude-opus-4-6':      { input: 15/1e6,    output: 75/1e6  },
+  'gemini-2.0-flash':     { input: 0.10/1e6,  output: 0.40/1e6 },
+  'gemini-1.5-flash-002': { input: 0.075/1e6, output: 0.30/1e6 },
+  'gemini-1.5-flash':     { input: 0.075/1e6, output: 0.30/1e6 },
+};
+function calcAICost(modelo, inputTok, outputTok) {
+  const p = AI_PRICES[modelo] || { input: 0, output: 0 };
+  return p.input * inputTok + p.output * outputTok;
+}
+function logAIUsage(env, { empresa_id, proveedor, modelo, endpoint, input_tokens, output_tokens }) {
+  const coste = calcAICost(modelo, input_tokens, output_tokens);
+  env.DB.prepare(
+    'INSERT INTO ai_usage (empresa_id,proveedor,modelo,endpoint,input_tokens,output_tokens,coste_usd) VALUES (?,?,?,?,?,?,?)'
+  ).bind(empresa_id||null, proveedor, modelo, endpoint||null, input_tokens||0, output_tokens||0, coste).run().catch(()=>{});
+}
+
 // Genera N bytes aleatorios criptogrÃ¡ficamente seguros como string hex
 function randomHex(bytes = 16) {
   const arr = new Uint8Array(bytes);
@@ -1423,6 +1442,14 @@ async function runAutonomousReview(env) {
     }
 
     const finalText = (result.content || []).filter(b => b.type === 'text').map(b => b.text).join('\n');
+    logAIUsage(env, {
+      empresa_id: null,
+      proveedor: 'anthropic',
+      modelo: 'claude-sonnet-4-6',
+      endpoint: 'agente_cron',
+      input_tokens: result.usage?.input_tokens || 0,
+      output_tokens: result.usage?.output_tokens || 0,
+    });
     if (finalText) {
       await sendTelegramToChat(env, env.DEV_CHAT_ID, finalText.slice(0, 4000));
       // Push si hay fixes propuestos o problemas detectados
@@ -1899,33 +1926,40 @@ Responde ÚNICAMENTE con un JSON válido, sin texto adicional:
   ]
 }`;
 
-  const aiResp = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': env.ANTHROPIC_API_KEY,
-      'anthropic-version': '2023-06-01',
-    },
-    body: JSON.stringify({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 4096,
-      messages: [{
-        role: 'user',
-        content: [
-          { type: 'image', source: { type: 'base64', media_type: mime, data: b64 } },
-          { type: 'text',  text: prompt }
-        ]
-      }]
-    })
+  const apiKey = env.GEMINI_API_KEY;
+  if (!apiKey) return err('GEMINI_API_KEY no configurada', 500);
+
+  const geminiBody = {
+    contents: [{ parts: [
+      { inline_data: { mime_type: mime, data: b64 } },
+      { text: prompt },
+    ]}],
+    generationConfig: { temperature: 0.1, maxOutputTokens: 4096 },
+  };
+
+  let aiJson = null;
+  let usedModel = null;
+  for (const model of ['gemini-2.0-flash', 'gemini-1.5-flash-002', 'gemini-1.5-flash']) {
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+      { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(geminiBody) }
+    );
+    const data = await res.json();
+    if (res.ok) { aiJson = data; usedModel = model; break; }
+    if (res.status !== 429 && res.status !== 404) return err('Error IA Gemini: ' + JSON.stringify(data).slice(0, 200), 502);
+  }
+  if (!aiJson) return err('Cuota Gemini agotada para scan-parte', 429);
+
+  const texto = aiJson.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  logAIUsage(env, {
+    empresa_id,
+    proveedor: 'gemini',
+    modelo: usedModel,
+    endpoint: 'scan_parte',
+    input_tokens: aiJson.usageMetadata?.promptTokenCount || 0,
+    output_tokens: aiJson.usageMetadata?.candidatesTokenCount || 0,
   });
 
-  if (!aiResp.ok) {
-    const t = await aiResp.text();
-    return err('Error IA: ' + t.slice(0, 200), 502);
-  }
-
-  const aiJson = await aiResp.json();
-  const texto  = (aiJson.content || []).find(c => c.type === 'text')?.text || '';
   const match  = texto.match(/\{[\s\S]*\}/);
   if (!match) return err('La IA no devolvió JSON válido', 502);
 
@@ -2043,33 +2077,40 @@ Responde SOLO con JSON válido sin texto adicional:
 }
 Si un campo no está claro o no aparece, pon null. El código/matrícula es el campo más importante — si no está claro, intenta inferirlo.`;
 
-  const aiResp = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': env.ANTHROPIC_API_KEY,
-      'anthropic-version': '2023-06-01',
-    },
-    body: JSON.stringify({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 4096,
-      messages: [{
-        role: 'user',
-        content: [
-          { type: 'image', source: { type: 'base64', media_type: mime, data: b64 } },
-          { type: 'text',  text: prompt }
-        ]
-      }]
-    })
+  const apiKey = env.GEMINI_API_KEY;
+  if (!apiKey) return err('GEMINI_API_KEY no configurada', 500);
+
+  const geminiBody = {
+    contents: [{ parts: [
+      { inline_data: { mime_type: mime, data: b64 } },
+      { text: prompt },
+    ]}],
+    generationConfig: { temperature: 0.1, maxOutputTokens: 4096 },
+  };
+
+  let aiJson = null;
+  let usedModel = null;
+  for (const model of ['gemini-2.0-flash', 'gemini-1.5-flash-002', 'gemini-1.5-flash']) {
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+      { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(geminiBody) }
+    );
+    const data = await res.json();
+    if (res.ok) { aiJson = data; usedModel = model; break; }
+    if (res.status !== 429 && res.status !== 404) return err('Error IA Gemini: ' + JSON.stringify(data).slice(0, 200), 502);
+  }
+  if (!aiJson) return err('Cuota Gemini agotada para scan-bobinas', 429);
+
+  const texto = aiJson.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  logAIUsage(env, {
+    empresa_id,
+    proveedor: 'gemini',
+    modelo: usedModel,
+    endpoint: 'scan_bobinas',
+    input_tokens: aiJson.usageMetadata?.promptTokenCount || 0,
+    output_tokens: aiJson.usageMetadata?.candidatesTokenCount || 0,
   });
 
-  if (!aiResp.ok) {
-    const t = await aiResp.text();
-    return err('Error IA: ' + t.slice(0, 200), 502);
-  }
-
-  const aiJson = await aiResp.json();
-  const texto  = (aiJson.content || []).find(c => c.type === 'text')?.text || '';
   const match  = texto.match(/\{[\s\S]*\}/);
   if (!match) return err('La IA no devolvió JSON válido', 502);
 
@@ -2529,7 +2570,8 @@ export default {
         if (method === 'PUT')    return await editarNota(nid, request, env);
         if (method === 'DELETE') return await borrarNota(nid, request, env);
       }
-      if (path === '/admin/migrate' && method === 'POST') return await runMigrations(request, env);
+      if (path === '/admin/migrate'    && method === 'POST') return await runMigrations(request, env);
+      if (path === '/admin/ai-costs'   && method === 'GET')  return await getAICosts(request, env);
 
       // â"€â"€ Personal â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
       if (path === '/horarios-obra' && method === 'GET')  return await getHorariosObra(request, env);
@@ -6331,6 +6373,14 @@ Si no puedes leer ningÃºn cÃ³digo, responde: NO_LEIDO`;
     );
     const data = await res.json();
     if (res.ok) {
+      logAIUsage(env, {
+        empresa_id: null,
+        proveedor: 'gemini',
+        modelo: model,
+        endpoint: 'ocr',
+        input_tokens: data.usageMetadata?.promptTokenCount || 0,
+        output_tokens: data.usageMetadata?.candidatesTokenCount || 0,
+      });
       return json({ codigo: data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || 'NO_LEIDO', modelo: model });
     }
     if (res.status !== 429 && res.status !== 404) return json({ error: 'Error Gemini', details: data }, res.status);
@@ -8164,6 +8214,25 @@ async function borrarFotoPerfil(tipo, id, request, env) {
 }
 
 // â"€â"€ MigraciÃ³n v4.86 â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+// ── Costes IA ─────────────────────────────────────────────────────────────────
+async function getAICosts(request, env) {
+  const { isSuperadmin } = await getAuth(request, env);
+  if (!isSuperadmin) return err('Sin permiso', 403);
+
+  const [hoy, semana, mes, total, porModelo, porEndpoint] = await Promise.all([
+    env.DB.prepare("SELECT COALESCE(SUM(coste_usd),0) as total, COALESCE(SUM(input_tokens),0) as input_tok, COALESCE(SUM(output_tokens),0) as output_tok, COUNT(*) as llamadas FROM ai_usage WHERE DATE(created_at)=DATE('now')").first(),
+    env.DB.prepare("SELECT COALESCE(SUM(coste_usd),0) as total, COUNT(*) as llamadas FROM ai_usage WHERE created_at >= datetime('now','-7 days')").first(),
+    env.DB.prepare("SELECT COALESCE(SUM(coste_usd),0) as total, COUNT(*) as llamadas FROM ai_usage WHERE created_at >= datetime('now','-30 days')").first(),
+    env.DB.prepare("SELECT COALESCE(SUM(coste_usd),0) as total, COUNT(*) as llamadas FROM ai_usage").first(),
+    env.DB.prepare("SELECT modelo, proveedor, COUNT(*) as llamadas, SUM(input_tokens) as input_tok, SUM(output_tokens) as output_tok, SUM(coste_usd) as coste FROM ai_usage GROUP BY modelo ORDER BY coste DESC").all(),
+    env.DB.prepare("SELECT endpoint, COUNT(*) as llamadas, SUM(coste_usd) as coste FROM ai_usage GROUP BY endpoint ORDER BY coste DESC").all(),
+  ]);
+
+  const anual = (mes.total / 30) * 365;
+
+  return json({ ok: true, hoy, semana, mes, total, anual_proyectado: anual, por_modelo: porModelo.results, por_endpoint: porEndpoint.results });
+}
+
 async function runMigrations(request, env) {
   const { isSuperadmin } = await getAuth(request, env);
   if (!isSuperadmin) return err('No autorizado', 403);
@@ -8395,6 +8464,21 @@ async function runMigrations(request, env) {
     )`).run();
     results.push('carnets: creada');
   } catch(e) { results.push('carnets: ' + e.message); }
+  // Tabla ai_usage (NEW-20)
+  try {
+    await env.DB.prepare(`CREATE TABLE IF NOT EXISTS ai_usage (
+      id             INTEGER PRIMARY KEY AUTOINCREMENT,
+      empresa_id     INTEGER,
+      proveedor      TEXT NOT NULL,
+      modelo         TEXT NOT NULL,
+      endpoint       TEXT,
+      input_tokens   INTEGER DEFAULT 0,
+      output_tokens  INTEGER DEFAULT 0,
+      coste_usd      REAL DEFAULT 0,
+      created_at     TEXT DEFAULT (datetime('now'))
+    )`).run();
+    results.push('ai_usage: creada');
+  } catch(e) { results.push('ai_usage: ' + e.message); }
 
   return json({ ok: true, results });
 }
@@ -8950,6 +9034,14 @@ async function devAIChat(request, env) {
     }
 
     const text = (result.content || []).filter(b => b.type === 'text').map(b => b.text).join('\n') || '…';
+    logAIUsage(env, {
+      empresa_id: null,
+      proveedor: 'anthropic',
+      modelo: 'claude-sonnet-4-6',
+      endpoint: 'agente_chat',
+      input_tokens: result.usage?.input_tokens || 0,
+      output_tokens: result.usage?.output_tokens || 0,
+    });
     await env.DB.prepare("INSERT INTO alejandra_historial (canal, rol, contenido) VALUES ('web', 'assistant', ?)").bind(text.slice(0, 4000)).run().catch(() => {});
     // Push al developer cuando Alejandra responde por el chat web (fire-and-forget)
     sendWebPushToDevs(env, '💬 Alejandra', text.slice(0, 120) + (text.length > 120 ? '…' : ''), '/panel.html').catch(() => {});

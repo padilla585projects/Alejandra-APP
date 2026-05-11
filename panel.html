@@ -1306,6 +1306,13 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
           <div id="devAccionLog" style="margin-top:12px;font-family:monospace;font-size:12px;color:var(--muted);min-height:20px"></div>
         </div>
 
+        <!-- COSTES IA -->
+        <div class="section-card" id="seccionAICosts" style="margin-bottom:20px">
+          <div class="section-card-title"><span>💰</span> Costes IA</div>
+          <div id="aiCostsContent"><div style="color:var(--muted);font-size:13px">Cargando...</div></div>
+          <button class="btn btn-secondary" style="margin-top:12px" onclick="cargarAICosts()">🔄 Actualizar</button>
+        </div>
+
         <!-- LOGS DEL SERVIDOR -->
         <div class="section-card">
           <div class="section-card-title" style="margin-bottom:12px">
@@ -4761,7 +4768,93 @@ async function cargarDevtools() {
     cargarDevR2(),
     cargarServerLogs(),
     cargarAgente(),
+    cargarAICosts(),
   ]);
+}
+
+async function cargarAICosts() {
+  const el = document.getElementById('aiCostsContent');
+  if (!el) return;
+  try {
+    const d = await api('/admin/ai-costs');
+    if (!d || !d.ok) { el.innerHTML = '<div style="color:var(--red);font-size:12px">Error cargando costes IA</div>'; return; }
+
+    const fmt = v => '$' + (v || 0).toFixed(4);
+    const fmtN = v => (v || 0).toLocaleString('es-ES');
+
+    let html = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin-bottom:16px">
+      <div class="kpi-card" style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:12px 14px">
+        <div style="font-size:10px;color:var(--muted);font-family:'Montserrat',sans-serif;font-weight:700;letter-spacing:1px;margin-bottom:4px">HOY</div>
+        <div style="font-size:22px;font-weight:900;color:#22c55e">${fmt(d.hoy?.total)}</div>
+        <div style="font-size:11px;color:var(--muted)">${fmtN(d.hoy?.llamadas)} llamadas</div>
+      </div>
+      <div class="kpi-card" style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:12px 14px">
+        <div style="font-size:10px;color:var(--muted);font-family:'Montserrat',sans-serif;font-weight:700;letter-spacing:1px;margin-bottom:4px">SEMANA</div>
+        <div style="font-size:22px;font-weight:900;color:#3b82f6">${fmt(d.semana?.total)}</div>
+        <div style="font-size:11px;color:var(--muted)">${fmtN(d.semana?.llamadas)} llamadas</div>
+      </div>
+      <div class="kpi-card" style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:12px 14px">
+        <div style="font-size:10px;color:var(--muted);font-family:'Montserrat',sans-serif;font-weight:700;letter-spacing:1px;margin-bottom:4px">MES (30d)</div>
+        <div style="font-size:22px;font-weight:900;color:#a855f7">${fmt(d.mes?.total)}</div>
+        <div style="font-size:11px;color:var(--muted)">${fmtN(d.mes?.llamadas)} llamadas</div>
+      </div>
+      <div class="kpi-card" style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:12px 14px">
+        <div style="font-size:10px;color:var(--muted);font-family:'Montserrat',sans-serif;font-weight:700;letter-spacing:1px;margin-bottom:4px">ANUAL PROYECTADO</div>
+        <div style="font-size:22px;font-weight:900;color:#eab308">${fmt(d.anual_proyectado)}</div>
+        <div style="font-size:11px;color:var(--muted)">Total acum: ${fmt(d.total?.total)}</div>
+      </div>
+    </div>`;
+
+    if (d.por_modelo && d.por_modelo.length) {
+      html += `<div style="font-size:11px;color:var(--muted);font-family:'Montserrat',sans-serif;font-weight:700;letter-spacing:1px;margin-bottom:6px">POR MODELO</div>
+        <div style="overflow-x:auto;margin-bottom:14px"><table style="width:100%;border-collapse:collapse;font-size:12px">
+        <thead><tr style="border-bottom:1px solid var(--border);color:var(--muted);text-align:left">
+          <th style="padding:5px 8px">Modelo</th>
+          <th style="padding:5px 8px">Proveedor</th>
+          <th style="padding:5px 8px;text-align:right">Llamadas</th>
+          <th style="padding:5px 8px;text-align:right">Tokens entrada</th>
+          <th style="padding:5px 8px;text-align:right">Tokens salida</th>
+          <th style="padding:5px 8px;text-align:right">Coste</th>
+        </tr></thead><tbody>`;
+      for (const r of d.por_modelo) {
+        html += `<tr style="border-bottom:1px solid var(--border)">
+          <td style="padding:5px 8px;font-family:monospace;font-size:11px;color:#a855f7">${r.modelo}</td>
+          <td style="padding:5px 8px;color:var(--muted)">${r.proveedor}</td>
+          <td style="padding:5px 8px;text-align:right">${fmtN(r.llamadas)}</td>
+          <td style="padding:5px 8px;text-align:right;color:var(--muted)">${fmtN(r.input_tok)}</td>
+          <td style="padding:5px 8px;text-align:right;color:var(--muted)">${fmtN(r.output_tok)}</td>
+          <td style="padding:5px 8px;text-align:right;color:#22c55e;font-weight:700">${fmt(r.coste)}</td>
+        </tr>`;
+      }
+      html += '</tbody></table></div>';
+    }
+
+    if (d.por_endpoint && d.por_endpoint.length) {
+      html += `<div style="font-size:11px;color:var(--muted);font-family:'Montserrat',sans-serif;font-weight:700;letter-spacing:1px;margin-bottom:6px">POR ENDPOINT</div>
+        <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">
+        <thead><tr style="border-bottom:1px solid var(--border);color:var(--muted);text-align:left">
+          <th style="padding:5px 8px">Endpoint</th>
+          <th style="padding:5px 8px;text-align:right">Llamadas</th>
+          <th style="padding:5px 8px;text-align:right">Coste</th>
+        </tr></thead><tbody>`;
+      for (const r of d.por_endpoint) {
+        html += `<tr style="border-bottom:1px solid var(--border)">
+          <td style="padding:5px 8px;font-family:monospace;font-size:11px">${r.endpoint || '—'}</td>
+          <td style="padding:5px 8px;text-align:right">${fmtN(r.llamadas)}</td>
+          <td style="padding:5px 8px;text-align:right;color:#22c55e;font-weight:700">${fmt(r.coste)}</td>
+        </tr>`;
+      }
+      html += '</tbody></table></div>';
+    }
+
+    if ((!d.por_modelo || !d.por_modelo.length) && (!d.por_endpoint || !d.por_endpoint.length)) {
+      html += '<div style="color:var(--muted);font-size:13px;margin-top:8px">Sin datos de uso IA todavía.</div>';
+    }
+
+    el.innerHTML = html;
+  } catch(e) {
+    el.innerHTML = `<div style="color:var(--red);font-size:12px">Error: ${e.message}</div>`;
+  }
 }
 
 // ── Agente IA ─────────────────────────────────────────────────────────────────

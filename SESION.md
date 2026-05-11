@@ -7,9 +7,31 @@
 
 **Sesión:** LIBRE
 **Última sesión:** 11/05/2026
-**Versión tras última sesión:** v5.73 (scan albarán bobinas — visión IA)
+**Versión tras última sesión:** v5.74 (migrar scans a Gemini Flash + dashboard costes IA)
 **Worker desplegado:** pendiente de deploy
 **GitHub:** en sync ✅
+
+---
+
+## RESUMEN SESIÓN 11/05/2026 — v5.73→v5.74
+
+### Qué se hizo:
+
+**v5.74 — Migración scans a Gemini Flash + Dashboard costes IA:**
+- Worker: `scanParte` y `scanBobinas` migrados de Anthropic (claude-sonnet-4-6) a Gemini Flash (gemini-2.0-flash con fallback a gemini-1.5-flash-002 / gemini-1.5-flash)
+- Constante global `AI_PRICES` con precios por token para todos los modelos usados
+- Función `calcAICost()` para cálculo de coste en USD
+- Función `logAIUsage()` fire-and-forget: registra cada llamada IA en tabla `ai_usage`
+- Logging en todos los endpoints IA: scan_parte, scan_bobinas, ocr (Gemini); agente_chat y agente_cron (Anthropic)
+- `runMigrations`: nueva tabla `ai_usage` (id, empresa_id, proveedor, modelo, endpoint, input_tokens, output_tokens, coste_usd, created_at)
+- Endpoint GET `/admin/ai-costs` (superadmin): estadísticas agrupadas por día/semana/mes/total + por modelo + por endpoint + proyección anual
+- Panel DevTools: nueva tarjeta "💰 Costes IA" con 4 KPIs (hoy/semana/mes/anual proyectado) + tablas por modelo y por endpoint
+- `cargarAICosts()` llamada automáticamente en `cargarDevtools()`
+
+### Estado final:
+- Worker: pendiente de deploy
+- GitHub: en sync ✅
+- Versión: v5.74
 
 ---
 
