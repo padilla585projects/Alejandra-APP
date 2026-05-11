@@ -59,13 +59,16 @@ async function getAuth(request, env) {
   if (xToken) {
     try {
       const sesion = await env.DB.prepare(
-        "SELECT * FROM sesiones WHERE token = ? AND (expires_at IS NULL OR expires_at > datetime('now'))"
+        "SELECT s.*, u.roles_extra FROM sesiones s LEFT JOIN usuarios u ON s.usuario_id = u.id WHERE s.token = ? AND (s.expires_at IS NULL OR s.expires_at > datetime('now'))"
       ).bind(xToken).first();
       if (sesion) {
         env.DB.prepare("UPDATE sesiones SET last_used = CURRENT_TIMESTAMP, expires_at = datetime('now', '+30 days') WHERE token = ?").bind(xToken).run();
-        const isSuperadmin   = sesion.es_admin === 1 || sesion.rol === 'superadmin' || sesion.rol === 'desarrollador';
-        const isEmpresaAdmin = sesion.rol === 'empresa_admin' || sesion.rol === 'desarrollador';
-        const isDesarrollador = sesion.rol === 'desarrollador';
+        const extras = [];
+        try { if (sesion.roles_extra) extras.push(...JSON.parse(sesion.roles_extra)); } catch {}
+        const roles = [sesion.rol, ...extras].filter(Boolean);
+        const isSuperadmin   = sesion.es_admin === 1 || roles.includes('superadmin') || roles.includes('desarrollador');
+        const isEmpresaAdmin = roles.includes('empresa_admin') || roles.includes('desarrollador');
+        const isDesarrollador = roles.includes('desarrollador');
         const deptHeader = request.headers.get('X-Departamento');
         const departamento = deptHeader || sesion.departamento || 'electrico';
         return {
@@ -73,11 +76,12 @@ async function getAuth(request, env) {
           isSuperadmin,
           isEmpresaAdmin,
           isDesarrollador,
-          isEncargado: sesion.rol === 'encargado',
-          isJefeObra: sesion.rol === 'jefe_de_obra',
-          isOficina: sesion.rol === 'oficina',
+          isEncargado: roles.includes('encargado'),
+          isJefeObra: roles.includes('jefe_de_obra'),
+          isOficina: roles.includes('oficina'),
           isSeguridad: departamento === 'seguridad',
           rol: sesion.rol,
+          roles,
           obraId: sesion.obra_id || null,
           obra_id: sesion.obra_id || null,
           usuario_id: sesion.usuario_id || null,
@@ -113,6 +117,7 @@ async function getAuth(request, env) {
     isDesarrollador: false, // nunca por legacy headers
     isSeguridad: departamento === 'seguridad',
     rol: isAdmin ? 'superadmin' : (rol || 'operario'),
+    roles: [isAdmin ? 'superadmin' : (rol || 'operario')],
     obraId: obraId ? parseInt(obraId) : null,
     obra_id: obraId ? parseInt(obraId) : null,
     usuario_id: null,
@@ -122,6 +127,12 @@ async function getAuth(request, env) {
     departamento,
     empresa_id: 1,
   };
+}
+
+function hasRole(auth, ...rols) {
+  if (!auth) return false;
+  const arr = auth.roles || [auth.rol];
+  return rols.some(r => arr.includes(r));
 }
 
 // â"€â"€ Telegram â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
@@ -1787,7 +1798,7 @@ async function checkChatHealth(env) {
 
 async function devPushSubscribe(request, env) {
   const s = await getAuth(request, env);
-  if (!s || !['superadmin', 'desarrollador'].includes(s.rol)) return err('Sin permiso', 403);
+  if (!s || !hasRole(s, 'superadmin', 'desarrollador')) return err('Sin permiso', 403);
   const { subscription } = await request.json().catch(() => ({}));
   if (!subscription?.endpoint || !subscription?.keys?.p256dh || !subscription?.keys?.auth) {
     return err('Suscripción inválida', 400);
@@ -1800,7 +1811,7 @@ async function devPushSubscribe(request, env) {
 
 async function devVapidPublicKey(request, env) {
   const s = await getAuth(request, env);
-  if (!s || !['superadmin', 'desarrollador'].includes(s.rol)) return err('Sin permiso', 403);
+  if (!s || !hasRole(s, 'superadmin', 'desarrollador')) return err('Sin permiso', 403);
   if (!env.VAPID_PUBLIC_KEY) return err('VAPID_PUBLIC_KEY no configurada. Ejecuta /dev/generate-vapid primero.', 503);
   return json({ ok: true, publicKey: env.VAPID_PUBLIC_KEY });
 }
@@ -1808,7 +1819,7 @@ async function devVapidPublicKey(request, env) {
 async function devGenerateVapid(request, env) {
   // Endpoint de uso único para generar las claves VAPID. Ejecutar solo la primera vez.
   const s = await getAuth(request, env);
-  if (!s || !['superadmin', 'desarrollador'].includes(s.rol)) return err('Sin permiso', 403);
+  if (!s || !hasRole(s, 'superadmin', 'desarrollador')) return err('Sin permiso', 403);
   if (env.VAPID_PUBLIC_KEY) {
     return json({ ok: true, msg: 'VAPID ya configurado. Si quieres regenerar, borra los secrets primero.', publicKey: env.VAPID_PUBLIC_KEY });
   }
@@ -2604,7 +2615,8 @@ async function verificarAcceso(request, env) {
       // Login exitoso â†’ limpiar intentos fallidos de esta IP
       env.DB.prepare('DELETE FROM login_attempts WHERE ip = ?').bind(ip).run().catch(() => {});
       const empRow = u.empresa_id ? await env.DB.prepare('SELECT nombre FROM empresas WHERE id = ?').bind(u.empresa_id).first().catch(() => null) : null;
-      return json({ ok: true, nombre: u.nombre, rol: u.rol, obra_id: u.obra_id, obra_nombre: u.obra_nombre, departamento: dept, token, empresa_id: u.empresa_id || 1, empresa_nombre: empRow?.nombre || '', usuario_id: u.id });
+      const rolesExtra = (() => { try { return u.roles_extra ? JSON.parse(u.roles_extra) : []; } catch { return []; } })();
+      return json({ ok: true, nombre: u.nombre, rol: u.rol, roles_extra: rolesExtra, obra_id: u.obra_id, obra_nombre: u.obra_nombre, departamento: dept, token, empresa_id: u.empresa_id || 1, empresa_nombre: empRow?.nombre || '', usuario_id: u.id });
     } catch(e) { return err('Error en login: ' + e.message, 500); }
   }
 
@@ -2646,10 +2658,12 @@ async function verificarAcceso(request, env) {
         empresa_id: usuario.empresa_id || 1,
       });
       env.DB.prepare('DELETE FROM login_attempts WHERE ip = ?').bind(ip).run().catch(() => {});
+      const rolesExtraCod = (() => { try { return usuario.roles_extra ? JSON.parse(usuario.roles_extra) : []; } catch { return []; } })();
       return json({
         ok: true,
         nombre: usuario.nombre,
         rol: usuario.rol,
+        roles_extra: rolesExtraCod,
         obra_id: usuario.obra_id,
         obra_nombre: usuario.obra_nombre,
         departamento: usuario.departamento || 'electrico',
@@ -2812,7 +2826,7 @@ async function getMiEmpresa(request, env) {
 
 async function updateMiEmpresa(request, env) {
   const auth = await getAuth(request, env);
-  if (!auth.empresa_id || (auth.rol !== 'empresa_admin' && !auth.isSuperadmin)) return err('Sin permisos', 403);
+  if (!auth.empresa_id || (!hasRole(auth, 'empresa_admin') && !auth.isSuperadmin)) return err('Sin permisos', 403);
   const body = await request.json().catch(() => ({}));
   const { nombre, email, telefono, direccion, cif, departamentos, informe_semanal, informe_dia, modulos_config } = body;
   if (!nombre?.trim()) return err('Falta el nombre de la empresa');
@@ -3514,7 +3528,7 @@ async function editarUsuario(id, request, env) {
     // Encargado solo puede asignar su propia obra (no la de otro encargado)
     if (body.obra_id !== undefined && body.obra_id !== null && parseInt(body.obra_id) !== obraId) return err('No autorizado', 403);
   }
-  const campos = ['nombre', 'codigo', 'rol', 'obra_id', 'departamento'];
+  const campos = ['nombre', 'codigo', 'rol', 'obra_id', 'departamento', 'roles_extra'];
   const sets = [];
   const vals = [];
   for (const c of campos) {
@@ -3610,7 +3624,7 @@ async function addCatalogo(tabla, request, env) {
   if (!CATALOG_WHITELIST.has(tabla)) return err('Tabla no permitida', 400);
   const auth = await getAuth(request, env);
   if (!auth.empresa_id) return err('No autorizado', 403);
-  if (auth.rol === 'operario') return err('Sin permisos', 403);
+  if (!hasRole(auth, 'encargado', 'empresa_admin', 'jefe_de_obra', 'oficina', 'superadmin', 'desarrollador')) return err('Sin permisos', 403);
   const { nombre } = await request.json();
   if (!nombre?.trim()) return err('Falta el nombre');
   try {
@@ -5245,7 +5259,7 @@ async function backupEmpresa(request, env) {
 async function restaurarInventario(request, env) {
   const auth = await getAuth(request, env).catch(() => null);
   if (!auth?.empresa_id) return err('No autorizado', 401);
-  if (auth.rol !== 'superadmin' && auth.rol !== 'empresa_admin' && !auth.isAdmin) return err('Sin permisos', 403);
+  if (!hasRole(auth, 'superadmin', 'empresa_admin') && !auth.isAdmin) return err('Sin permisos', 403);
   const eid = auth.empresa_id;
 
   const bk = await request.json();
@@ -5314,7 +5328,7 @@ async function restaurarInventario(request, env) {
 async function restaurarEmpresa(request, env) {
   const auth = await getAuth(request, env).catch(() => null);
   if (!auth?.empresa_id) return err('No autorizado', 401);
-  if (auth.rol !== 'superadmin' && auth.rol !== 'empresa_admin' && !auth.isAdmin) return err('Sin permisos', 403);
+  if (!hasRole(auth, 'superadmin', 'empresa_admin') && !auth.isAdmin) return err('Sin permisos', 403);
   const eid = auth.empresa_id;
 
   const bk = await request.json();
@@ -6605,11 +6619,13 @@ async function googleAuthCallback(request, env) {
   const obra    = u.obra_id    ? await env.DB.prepare('SELECT nombre FROM obras WHERE id = ?').bind(u.obra_id).first()       : null;
   const empresa = u.empresa_id ? await env.DB.prepare('SELECT nombre FROM empresas WHERE id = ?').bind(u.empresa_id).first() : null;
 
+  const rolesExtraGoogle = (() => { try { return u.roles_extra ? JSON.parse(u.roles_extra) : []; } catch { return []; } })();
   return json({
     ok:             true,
     token,
     nombre:         gUser.name || u.nombre,
     rol:            u.rol,
+    roles_extra:    rolesExtraGoogle,
     departamento:   u.departamento || null,
     empresa_id:     u.empresa_id,
     empresa_nombre: empresa ? empresa.nombre : '',
@@ -6621,7 +6637,7 @@ async function googleAuthCallback(request, env) {
 
 async function crearInvitacion(request, env) {
   const s = await getAuth(request, env);
-  if (!s || !['superadmin','empresa_admin'].includes(s.rol)) return err('Sin permiso', 403);
+  if (!s || !hasRole(s, 'superadmin', 'empresa_admin')) return err('Sin permiso', 403);
   const { duracion_min, rol, departamento } = await request.json().catch(() => ({}));
   if (!duracion_min || !rol) return err('Faltan datos', 400);
   const codigo = randomHex(6).toUpperCase(); // 12 chars hex criptogrÃ¡ficamente seguro
@@ -6634,7 +6650,7 @@ async function crearInvitacion(request, env) {
 
 async function listarInvitaciones(request, env) {
   const s = await getAuth(request, env);
-  if (!s || !['superadmin','empresa_admin'].includes(s.rol)) return err('Sin permiso', 403);
+  if (!s || !hasRole(s, 'superadmin', 'empresa_admin')) return err('Sin permiso', 403);
   const ahora = AHORA();
   const { results } = await env.DB.prepare(
     'SELECT codigo, rol, departamento, expira_at, usado FROM invitaciones WHERE empresa_id = ? AND expira_at > ? ORDER BY expira_at DESC'
@@ -6644,7 +6660,7 @@ async function listarInvitaciones(request, env) {
 
 async function anularInvitacion(request, env) {
   const s = await getAuth(request, env);
-  if (!s || !['superadmin','empresa_admin'].includes(s.rol)) return err('Sin permiso', 403);
+  if (!s || !hasRole(s, 'superadmin', 'empresa_admin')) return err('Sin permiso', 403);
   const { codigo } = await request.json().catch(() => ({}));
   if (!codigo) return err('Falta cÃ³digo', 400);
   await env.DB.prepare('DELETE FROM invitaciones WHERE codigo = ? AND empresa_id = ?').bind(codigo, s.empresa_id).run();
@@ -6666,7 +6682,7 @@ async function verificarInvitacion(request, env) {
 
 async function getUsuariosPendientes(request, env) {
   const s = await getAuth(request, env);
-  if (!s || !['superadmin','empresa_admin'].includes(s.rol)) return err('Sin permiso', 403);
+  if (!s || !hasRole(s, 'superadmin', 'empresa_admin')) return err('Sin permiso', 403);
   const { results } = await env.DB.prepare(
     'SELECT id, nombre, email, created_at FROM usuarios WHERE google_pending = 1 AND activo = 0 ORDER BY created_at DESC'
   ).all();
@@ -6675,7 +6691,7 @@ async function getUsuariosPendientes(request, env) {
 
 async function aprobarUsuarioPendiente(request, env) {
   const s = await getAuth(request, env);
-  if (!s || !['superadmin','empresa_admin'].includes(s.rol)) return err('Sin permiso', 403);
+  if (!s || !hasRole(s, 'superadmin', 'empresa_admin')) return err('Sin permiso', 403);
   const { id, empresa_id, rol, departamento, obra_id } = await request.json().catch(() => ({}));
   if (!id || !empresa_id || !rol) return err('Faltan datos', 400);
   await env.DB.prepare(
@@ -6688,7 +6704,7 @@ async function aprobarUsuarioPendiente(request, env) {
 
 async function rechazarUsuarioPendiente(request, env) {
   const s = await getAuth(request, env);
-  if (!s || !['superadmin','empresa_admin'].includes(s.rol)) return err('Sin permiso', 403);
+  if (!s || !hasRole(s, 'superadmin', 'empresa_admin')) return err('Sin permiso', 403);
   const { id } = await request.json().catch(() => ({}));
   if (!id) return err('Falta id', 400);
   const u = await env.DB.prepare('SELECT nombre, email FROM usuarios WHERE id=? AND google_pending=1').bind(id).first();
@@ -8537,7 +8553,7 @@ async function getResumenRepostajes(request, env) {
 
 async function devAIChat(request, env) {
   const s = await getAuth(request, env);
-  if (!s || !['superadmin','desarrollador'].includes(s.rol)) return err('Sin permiso', 403);
+  if (!s || !hasRole(s, 'superadmin', 'desarrollador')) return err('Sin permiso', 403);
   const { message, image } = await request.json().catch(() => ({}));
   if (!message) return err('Falta message', 400);
 
@@ -8647,7 +8663,7 @@ async function devAIChat(request, env) {
 
 async function devAIStatus(request, env) {
   const s = await getAuth(request, env);
-  if (!s || !['superadmin','desarrollador'].includes(s.rol)) return err('Sin permiso', 403);
+  if (!s || !hasRole(s, 'superadmin', 'desarrollador')) return err('Sin permiso', 403);
   try {
     const [histRows, errRows, memRows] = await Promise.all([
       env.DB.prepare("SELECT rol, COUNT(*) as n FROM alejandra_historial WHERE canal='web' GROUP BY rol").all().catch(() => ({ results: [] })),
@@ -8676,7 +8692,7 @@ async function devAIStatus(request, env) {
 
 async function devSQL(request, env) {
   const s = await getAuth(request, env);
-  if (!s || !['superadmin','desarrollador'].includes(s.rol)) return err('Sin permiso', 403);
+  if (!s || !hasRole(s, 'superadmin', 'desarrollador')) return err('Sin permiso', 403);
   const { sql } = await request.json().catch(() => ({}));
   if (!sql) return err('Falta SQL', 400);
   const trimmed = sql.trim().toUpperCase();
@@ -8693,7 +8709,7 @@ async function devSQL(request, env) {
 
 async function devTableCounts(request, env) {
   const s = await getAuth(request, env);
-  if (!s || !['superadmin','desarrollador'].includes(s.rol)) return err('Sin permiso', 403);
+  if (!s || !hasRole(s, 'superadmin', 'desarrollador')) return err('Sin permiso', 403);
   const tables = [
     'usuarios','empresas','obras','bobinas','herramientas','seguridad_items',
     'epis','carretillas','pemp','fichajes','incidencias','pedidos','turnos',
@@ -8712,7 +8728,7 @@ async function devTableCounts(request, env) {
 
 async function devSesionesDetalle(request, env) {
   const s = await getAuth(request, env);
-  if (!s || !['superadmin','desarrollador'].includes(s.rol)) return err('Sin permiso', 403);
+  if (!s || !hasRole(s, 'superadmin', 'desarrollador')) return err('Sin permiso', 403);
   const rows = await env.DB.prepare(`
     SELECT s.token, s.nombre, s.rol, s.empresa_id, s.created_at, s.last_used,
            u.email, e.nombre as empresa_nombre
@@ -8727,7 +8743,7 @@ async function devSesionesDetalle(request, env) {
 
 async function devKillSession(request, env) {
   const s = await getAuth(request, env);
-  if (!s || !['superadmin','desarrollador'].includes(s.rol)) return err('Sin permiso', 403);
+  if (!s || !hasRole(s, 'superadmin', 'desarrollador')) return err('Sin permiso', 403);
   const { token } = await request.json().catch(() => ({}));
   if (!token) return err('Falta token', 400);
   if (token === (await getAuth(request, env))?.token) return err('No puedes matar tu propia sesiÃ³n', 403);
@@ -8737,7 +8753,7 @@ async function devKillSession(request, env) {
 
 async function devLoginHistory(request, env) {
   const s = await getAuth(request, env);
-  if (!s || !['superadmin','desarrollador'].includes(s.rol)) return err('Sin permiso', 403);
+  if (!s || !hasRole(s, 'superadmin', 'desarrollador')) return err('Sin permiso', 403);
   const rows = await env.DB.prepare(
     'SELECT ip, motivo, COUNT(*) as intentos, MAX(created_at) as ultimo FROM login_attempts GROUP BY ip ORDER BY intentos DESC LIMIT 100'
   ).all();
@@ -8746,7 +8762,7 @@ async function devLoginHistory(request, env) {
 
 async function devKPIs(request, env) {
   const s = await getAuth(request, env);
-  if (!s || !['superadmin','desarrollador'].includes(s.rol)) return err('Sin permiso', 403);
+  if (!s || !hasRole(s, 'superadmin', 'desarrollador')) return err('Sin permiso', 403);
   const [empresas, usuarios, obras, bobinas, fichajesHoy, incAbiertas, sesiones, invitaciones] = await Promise.all([
     env.DB.prepare("SELECT COUNT(*) as n FROM empresas WHERE activa = 1").first(),
     env.DB.prepare("SELECT COUNT(*) as n FROM usuarios WHERE activo = 1").first(),
@@ -8771,7 +8787,7 @@ async function devKPIs(request, env) {
 
 async function devR2List(request, env) {
   const s = await getAuth(request, env);
-  if (!s || !['superadmin','desarrollador'].includes(s.rol)) return err('Sin permiso', 403);
+  if (!s || !hasRole(s, 'superadmin', 'desarrollador')) return err('Sin permiso', 403);
   if (!env.FILES) return json({ ok: true, objects: [], truncated: false });
   const listed = await env.FILES.list({ limit: 500 });
   const objects = listed.objects.map(o => ({ key: o.key, size: o.size, uploaded: o.uploaded?.toISOString?.() || o.uploaded }));
@@ -8780,7 +8796,7 @@ async function devR2List(request, env) {
 
 async function devR2Delete(request, env) {
   const s = await getAuth(request, env);
-  if (!s || !['superadmin','desarrollador'].includes(s.rol)) return err('Sin permiso', 403);
+  if (!s || !hasRole(s, 'superadmin', 'desarrollador')) return err('Sin permiso', 403);
   const { key } = await request.json().catch(() => ({}));
   if (!key) return err('Falta key', 400);
   if (!env.FILES) return err('R2 no configurado', 503);
@@ -8790,7 +8806,7 @@ async function devR2Delete(request, env) {
 
 async function devCambiarRol(request, env) {
   const s = await getAuth(request, env);
-  if (!s || !['superadmin','desarrollador'].includes(s.rol)) return err('Sin permiso', 403);
+  if (!s || !hasRole(s, 'superadmin', 'desarrollador')) return err('Sin permiso', 403);
   const { usuario_id, rol } = await request.json().catch(() => ({}));
   const rolesValidos = ['superadmin','empresa_admin','encargado','jefe_de_obra','oficina','operario','desarrollador'];
   if (!usuario_id || !rolesValidos.includes(rol)) return err('Datos invalidos', 400);
@@ -8803,7 +8819,7 @@ async function devCambiarRol(request, env) {
 
 async function devActivity(request, env) {
   const s = await getAuth(request, env);
-  if (!s || !['superadmin','desarrollador'].includes(s.rol)) return err('Sin permiso', 403);
+  if (!s || !hasRole(s, 'superadmin', 'desarrollador')) return err('Sin permiso', 403);
   const [fichajes, incidencias] = await Promise.all([
     env.DB.prepare(`
       SELECT fecha as dia, COUNT(*) as total

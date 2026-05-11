@@ -1448,6 +1448,12 @@ let API = localStorage.getItem('panel_api') || API_DEFAULT;
 let TOKEN = localStorage.getItem('panel_token') || '';
 let SESSION = JSON.parse(localStorage.getItem('panel_session') || 'null');
 
+function hasSessionRole(...rols) {
+  if (!SESSION) return false;
+  const all = [SESSION.rol, ...(SESSION.roles_extra || [])].filter(Boolean);
+  return rols.some(r => all.includes(r));
+}
+
 // ── UTILIDADES ─────────────────────────────────────────────────
 function toast(msg, tipo = 'info') {
   const el = document.createElement('div');
@@ -1763,13 +1769,14 @@ async function handleGoogleCallback(code) {
       return;
     }
     const rolesPermitidos = ['empresa_admin', 'encargado', 'jefe_de_obra', 'oficina', 'superadmin', 'desarrollador'];
-    if (!rolesPermitidos.includes(data.rol)) {
+    const todosRolesGoogle = [data.rol, ...(data.roles_extra || [])];
+    if (!todosRolesGoogle.some(rol => rolesPermitidos.includes(rol))) {
       errEl.textContent = 'Tu rol no tiene acceso al panel de oficina';
       if (btn) { btn.disabled = false; }
       return;
     }
     TOKEN = data.token;
-    SESSION = { nombre: data.nombre, rol: data.rol, empresa_id: data.empresa_id, empresa_nombre: data.empresa_nombre, usuario_id: data.usuario_id || null };
+    SESSION = { nombre: data.nombre, rol: data.rol, roles_extra: data.roles_extra || [], empresa_id: data.empresa_id, empresa_nombre: data.empresa_nombre, usuario_id: data.usuario_id || null };
     localStorage.setItem('panel_token', TOKEN);
     localStorage.setItem('panel_session', JSON.stringify(SESSION));
     iniciarApp();
@@ -1789,13 +1796,14 @@ async function doLogin() {
   if (!r.ok) { errEl.textContent = r.error || 'Credenciales incorrectas'; return; }
 
   const rolesPermitidos = ['empresa_admin', 'encargado', 'jefe_de_obra', 'oficina', 'superadmin', 'desarrollador'];
-  if (!rolesPermitidos.includes(r.rol)) {
+  const todosRolesLogin = [r.rol, ...(r.roles_extra || [])];
+  if (!todosRolesLogin.some(rol => rolesPermitidos.includes(rol))) {
     errEl.textContent = 'Tu rol no tiene acceso al panel de oficina';
     return;
   }
 
   TOKEN = r.token;
-  SESSION = { nombre: r.nombre, rol: r.rol, empresa_id: r.empresa_id, empresa_nombre: r.empresa_nombre, usuario_id: r.usuario_id || null };
+  SESSION = { nombre: r.nombre, rol: r.rol, roles_extra: r.roles_extra || [], empresa_id: r.empresa_id, empresa_nombre: r.empresa_nombre, usuario_id: r.usuario_id || null };
   localStorage.setItem('panel_token', TOKEN);
   localStorage.setItem('panel_session', JSON.stringify(SESSION));
   iniciarApp();
@@ -1828,18 +1836,18 @@ function iniciarApp() {
   if (SESSION.empresa_nombre) document.getElementById('topbarEmpresa').textContent = SESSION.empresa_nombre;
 
   // mostrar sección admin si procede
-  const isAdmin = ['superadmin', 'empresa_admin', 'desarrollador'].includes(SESSION.rol);
+  const isAdmin = hasSessionRole('superadmin', 'empresa_admin', 'desarrollador');
   if (isAdmin) {
     document.querySelectorAll('.nav-admin, .nav-admin-section').forEach(el => el.style.display = '');
   }
 
   // mostrar sección dev para superadmin y desarrollador
-  if (['superadmin', 'desarrollador'].includes(SESSION.rol)) {
+  if (hasSessionRole('superadmin', 'desarrollador')) {
     document.querySelectorAll('.nav-dev, .nav-dev-section').forEach(el => el.style.display = '');
   }
 
   // mostrar secciones superadmin en página empresa
-  if (['superadmin', 'desarrollador'].includes(SESSION.rol)) {
+  if (hasSessionRole('superadmin', 'desarrollador')) {
     document.getElementById('seccionCrearEmpresa').style.display = '';
     document.getElementById('seccionEmpresas').style.display = '';
   }
@@ -3436,7 +3444,7 @@ function abrirModalMantenimiento() {
 let tblUsuarios = null;
 
 async function cargarUsuarios() {
-  if (!['empresa_admin', 'superadmin', 'desarrollador'].includes(SESSION.rol)) return;
+  if (!hasSessionRole('empresa_admin', 'superadmin', 'desarrollador')) return;
   if (!window._obrasPanel) await cargarObrasPanel();
   cargarInvitaciones();
   cargarPendientes();
@@ -3454,7 +3462,7 @@ async function cargarUsuarios() {
   ].map(k => `<div class="kpi-card" style="padding:14px"><div class="kpi-icon" style="font-size:20px">${k.icon}</div><div class="kpi-value ${k.cls}" style="font-size:22px">${k.value}</div><div class="kpi-label">${k.label}</div></div>`).join('');
 
   if (tblUsuarios) { tblUsuarios.replaceData(data); return; }
-  const canEdit = ['empresa_admin','superadmin','desarrollador'].includes(SESSION.rol);
+  const canEdit = hasSessionRole('empresa_admin', 'superadmin', 'desarrollador');
 
   tblUsuarios = new Tabulator('#tblUsuarios', {
     data, layout: 'fitColumns', pagination: 'local', paginationSize: 25,
@@ -3473,6 +3481,15 @@ async function cargarUsuarios() {
           return `<span style="background:${color}22;color:${color};border:1px solid ${color}44;font-family:'Montserrat',sans-serif;font-weight:700;font-size:10px;padding:2px 8px;border-radius:20px">${v || '—'}</span>`;
         },
         cellEdited: c => guardarCampoUsuario(c.getRow().getData().id, 'rol', c.getValue()) },
+      { title: 'Roles extra', field: 'roles_extra', minWidth: 160,
+        formatter: c => {
+          let extras = [];
+          try { if (c.getValue()) extras = JSON.parse(c.getValue()); } catch {}
+          if (!extras.length) return canEdit ? '<span style="color:var(--muted);font-size:11px">+ añadir</span>' : '<span style="color:var(--muted)">—</span>';
+          const colors = { empresa_admin:'var(--accent)', encargado:'var(--yellow)', jefe_de_obra:'var(--blue)', oficina:'var(--green)', desarrollador:'#a855f7' };
+          return extras.map(r => { const col = colors[r] || 'var(--muted)'; return `<span style="background:${col}22;color:${col};border:1px solid ${col}44;font-family:'Montserrat',sans-serif;font-weight:700;font-size:10px;padding:2px 7px;border-radius:20px;margin-right:3px">${r}</span>`; }).join('');
+        },
+        cellClick: canEdit ? (e, c) => editarRolesExtra(c.getRow().getData()) : undefined },
       { title: 'Dpto.', field: 'departamento', width: 140,
         editor: canEdit ? 'select' : false,
         editorParams: { values: Object.fromEntries(_ALL_DEPTS.map(d => [d, _DEPTS_CATALOG[d].icon + ' ' + _DEPTS_CATALOG[d].name])) },
@@ -3500,6 +3517,25 @@ async function cargarUsuarios() {
   document.getElementById('searchUsuarios').oninput = function() {
     tblUsuarios.setFilter([{field:'nombre',type:'like',value:this.value},{field:'email',type:'like',value:this.value}],'or');
   };
+}
+
+function editarRolesExtra(row) {
+  let extras = [];
+  try { if (row.roles_extra) extras = JSON.parse(row.roles_extra); } catch {}
+  const opciones = ['encargado', 'jefe_de_obra', 'oficina', 'empresa_admin'];
+  const checks = opciones.map(r => `
+    <label style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:7px 0;border-bottom:1px solid var(--border)">
+      <input type="checkbox" id="rex_${r}" ${extras.includes(r) ? 'checked' : ''} style="width:16px;height:16px;accent-color:var(--accent)">
+      <span style="font-size:13px">${r}</span>
+    </label>`).join('');
+  abrirModal(`🎭 Roles extra — ${row.nombre}`, `
+    <p style="color:var(--muted);font-size:12px;margin-bottom:12px">Roles adicionales al rol principal (${row.rol})</p>
+    ${checks}`, async () => {
+    const nuevos = opciones.filter(r => document.getElementById('rex_' + r)?.checked);
+    const r2 = await api(`/usuarios/${row.id}`, { method: 'PUT', body: JSON.stringify({ roles_extra: JSON.stringify(nuevos) }) });
+    if (r2.ok) { cerrarModal(); toast('Roles extra guardados ✓', 'ok'); tblUsuarios = null; cargarUsuarios(); }
+    else toast(r2.error || 'Error al guardar', 'err');
+  });
 }
 
 async function guardarCampoUsuario(id, campo, valor) {
