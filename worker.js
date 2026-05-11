@@ -2004,6 +2004,134 @@ async function fichajesBatch(request, env, ctx) {
   return json({ ok: true, importados: ok, duplicados: dup, errores: resultados.filter(r=>r.status==='error').length });
 }
 
+// ── SCAN ALBARÁN BOBINAS ────────────────────────────────────────────────────
+async function scanBobinas(request, env) {
+  const { empresa_id, rol } = await getAuth(request, env);
+  if (!empresa_id || rol === 'operario') return err('Sin permisos', 403);
+
+  const form = await request.formData().catch(() => null);
+  if (!form) return err('Falta el formulario', 400);
+  const imageFile = form.get('image');
+  if (!imageFile || !imageFile.size) return err('Falta la imagen', 400);
+  if (imageFile.size > 20 * 1024 * 1024) return err('Imagen demasiado grande (máx 20 MB)', 413);
+
+  // Convertir imagen a base64
+  const bytes = await imageFile.arrayBuffer();
+  const b64   = btoa(String.fromCharCode(...new Uint8Array(bytes)));
+  const mime  = imageFile.type || 'image/jpeg';
+
+  const prompt = `Analiza esta imagen de un albarán o hoja de registro de bobinas de cable eléctrico.
+Extrae cada bobina que aparezca. Para cada una identifica:
+- codigo: matrícula o código de bobina (puede ser numérico o alfanumérico, ej: "12345", "BOB-001")
+- proveedor: fabricante del cable (ej: PRYSMIAN, NEXANS, GENERAL CABLE, LAPP, BELDEN)
+- tipo_cable: sección y tipo de cable (ej: "RZ1-K 1x240", "VV 3x35+16", "RV 4x16")
+- num_albaran: número de albarán si aparece (puede ser un número en la cabecera)
+- notas: cualquier observación adicional por bobina
+
+Responde SOLO con JSON válido sin texto adicional:
+{
+  "num_albaran": "número de albarán general si aparece, o null",
+  "bobinas": [
+    {
+      "codigo": "12345",
+      "proveedor": "PRYSMIAN",
+      "tipo_cable": "RZ1-K 1x240",
+      "num_albaran": null,
+      "notas": null
+    }
+  ]
+}
+Si un campo no está claro o no aparece, pon null. El código/matrícula es el campo más importante — si no está claro, intenta inferirlo.`;
+
+  const aiResp = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': env.ANTHROPIC_API_KEY,
+      'anthropic-version': '2023-06-01',
+    },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 4096,
+      messages: [{
+        role: 'user',
+        content: [
+          { type: 'image', source: { type: 'base64', media_type: mime, data: b64 } },
+          { type: 'text',  text: prompt }
+        ]
+      }]
+    })
+  });
+
+  if (!aiResp.ok) {
+    const t = await aiResp.text();
+    return err('Error IA: ' + t.slice(0, 200), 502);
+  }
+
+  const aiJson = await aiResp.json();
+  const texto  = (aiJson.content || []).find(c => c.type === 'text')?.text || '';
+  const match  = texto.match(/\{[\s\S]*\}/);
+  if (!match) return err('La IA no devolvió JSON válido', 502);
+
+  let data;
+  try { data = JSON.parse(match[0]); }
+  catch(e) { return err('JSON inválido de la IA: ' + e.message, 502); }
+
+  return json({
+    ok: true,
+    num_albaran: data.num_albaran || null,
+    bobinas: (data.bobinas || []).map(b => ({
+      codigo:      b.codigo      || null,
+      proveedor:   b.proveedor   || null,
+      tipo_cable:  b.tipo_cable  || null,
+      num_albaran: b.num_albaran || data.num_albaran || null,
+      notas:       b.notas       || null,
+    }))
+  });
+}
+
+// ── BOBINAS BATCH (importación desde albarán escaneado) ────────────────────
+async function bobinasBatch(request, env, ctx) {
+  const { empresa_id, rol, nombre: registradoPor, obraId, departamento } = await getAuth(request, env);
+  if (!empresa_id || rol === 'operario') return err('Sin permisos', 403);
+
+  const body = await request.json().catch(() => ({}));
+  const { bobinas } = body;
+  if (!Array.isArray(bobinas) || !bobinas.length) return err('Falta el array bobinas');
+
+  const fecha = fechaEspana();
+  const detalle = [];
+  let importadas = 0, duplicadas = 0, errores = 0;
+
+  for (const b of bobinas) {
+    if (!b.codigo || !b.proveedor || !b.tipo_cable) {
+      detalle.push({ codigo: b.codigo || '?', status: 'error', error: 'Faltan campos obligatorios' });
+      errores++;
+      continue;
+    }
+    const codigo = b.codigo.trim().toUpperCase();
+    const obraFinal = b.obra_id ? parseInt(b.obra_id) : obraId;
+    try {
+      await env.DB.prepare(
+        'INSERT INTO bobinas (codigo, proveedor, tipo_cable, fecha_entrada, estado, notas, registrado_por, obra_id, num_albaran, departamento, empresa_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+      ).bind(codigo, b.proveedor, b.tipo_cable, fecha, 'activa', b.notas || '', registradoPor || rol, obraFinal || null, b.num_albaran || null, departamento, empresa_id).run();
+      detalle.push({ codigo, status: 'ok' });
+      importadas++;
+    } catch(e) {
+      if (e.message.includes('UNIQUE')) {
+        detalle.push({ codigo, status: 'dup' });
+        duplicadas++;
+      } else {
+        detalle.push({ codigo, status: 'error', error: e.message });
+        errores++;
+      }
+    }
+  }
+
+  ctx?.waitUntil(syncSheets(env, 'Elec-Bobinas', empresa_id));
+  return json({ ok: true, importadas, duplicadas, errores, detalle });
+}
+
 export default {
   async fetch(request, env, ctx) {
     if (request.method === 'OPTIONS') {
@@ -2522,6 +2650,10 @@ export default {
       // ── Scan parte semanal ──────────────────────────────────────
       if (path === '/scan-parte'      && method === 'POST') return await scanParte(request, env);
       if (path === '/fichajes/batch'  && method === 'POST') return await fichajesBatch(request, env, ctx);
+
+      // ── Scan albarán bobinas ─────────────────────────────────────
+      if (path === '/scan-bobinas'   && method === 'POST') return await scanBobinas(request, env);
+      if (path === '/bobinas/batch'  && method === 'POST') return await bobinasBatch(request, env, ctx);
 
       return err('Ruta no encontrada', 404);
     } catch (e) {

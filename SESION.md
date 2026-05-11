@@ -7,9 +7,28 @@
 
 **Sesión:** LIBRE
 **Última sesión:** 11/05/2026
-**Versión tras última sesión:** v5.72 (documentos panel mejorado, scan parte semanal IA)
-**Worker desplegado:** 76fb4c8 ✅
+**Versión tras última sesión:** v5.73 (scan albarán bobinas — visión IA)
+**Worker desplegado:** pendiente de deploy
 **GitHub:** en sync ✅
+
+---
+
+## RESUMEN SESIÓN 11/05/2026 — v5.72→v5.73
+
+### Qué se hizo:
+
+**v5.73 — Scan albarán bobinas con IA:**
+- Worker: POST /scan-bobinas — recibe imagen de albarán, llama Claude Vision, extrae lista de bobinas (código, proveedor, tipo de cable, albarán, notas)
+- Worker: POST /bobinas/batch — crea múltiples bobinas en una sola llamada, detecta UNIQUE duplicados, syncSheets al final
+- App móvil: FAB 📷 morado en sección bobinas → elige imagen/cámara → IA analiza → tabla editable con 6 columnas → importar
+- Panel web: botón "📷 Escanear albarán" en toolbar bobinas → subir imagen/PDF → mismo flujo de revisión
+- Modal panel: id=modalScanBobinas; Modal app: id=modalScanBobinasApp (sin colisión)
+- FAB visible solo cuando currentModule==='bobinas' y rol !== 'operario'; oculto en irAtras() y navTo()
+
+### Estado final:
+- Worker: pendiente de deploy
+- GitHub: en sync ✅
+- Versión: v5.73
 
 ---
 

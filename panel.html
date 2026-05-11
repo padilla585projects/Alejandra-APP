@@ -613,6 +613,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
             <option value="">🏗 Todas las obras</option>
           </select>
           <button class="btn btn-primary" onclick="abrirModalBobina()">+ Nueva bobina</button>
+          <button class="btn btn-secondary" style="background:#8b5cf6;color:#fff;border-color:#8b5cf6" onclick="abrirScanBobinasPanel()">📷 Escanear albarán</button>
           <button class="btn btn-secondary" onclick="exportarTabla(tblBobinas,'bobinas')">⬇ CSV</button>
           <button class="btn btn-secondary" onclick="cargarBobinas()">🔄 Actualizar</button>
         </div>
@@ -6612,6 +6613,155 @@ document.getElementById('wInput').focus();
     document.getElementById('spStep1').style.display = '';
   };
 })();
+
+// ── SCAN ALBARÁN BOBINAS (panel web) ────────────────────────────────────────
+(function() {
+  let _sbData = null;
+
+  function abrirScanBobinasPanel() {
+    const modal = document.getElementById('modalScanBobinas');
+    modal.style.display = 'flex';
+    document.getElementById('sbStep1').style.display = '';
+    document.getElementById('sbStep2').style.display = 'none';
+    document.getElementById('sbStep3').style.display = 'none';
+    document.getElementById('sbPreview').style.display = 'none';
+    document.getElementById('sbBtnAnalizar').style.display = 'none';
+    document.getElementById('sbFileInput').value = '';
+    _sbData = null;
+    // poblar obras
+    const sel = document.getElementById('sbObra');
+    if (sel && sel.options.length <= 1 && window._obrasPanel?.length) {
+      window._obrasPanel.forEach(o => {
+        const opt = document.createElement('option');
+        opt.value = o.id; opt.textContent = o.nombre;
+        sel.appendChild(opt);
+      });
+    }
+  }
+
+  function cerrarScanBobinas() {
+    document.getElementById('modalScanBobinas').style.display = 'none';
+  }
+
+  function sbPreviewFile(input) {
+    const file = input.files[0];
+    if (!file) return;
+    const prev = document.getElementById('sbPreview');
+    if (file.type.startsWith('image/')) {
+      prev.src = URL.createObjectURL(file);
+      prev.style.display = 'block';
+    } else {
+      prev.style.display = 'none';
+    }
+    document.getElementById('sbBtnAnalizar').style.display = '';
+    document.getElementById('sbDropzone').style.borderColor = 'var(--accent)';
+  }
+
+  async function sbEnviar() {
+    const file = document.getElementById('sbFileInput').files[0];
+    if (!file) { toast('Selecciona un archivo', 'err'); return; }
+    document.getElementById('sbStep1').style.display = 'none';
+    document.getElementById('sbStep2').style.display = '';
+    try {
+      const fd = new FormData();
+      fd.append('image', file);
+      const res  = await apiRaw('/scan-bobinas', { method: 'POST', body: fd });
+      const data = await res.json();
+      if (!res.ok || !data.ok) throw new Error(data.error || 'Error desconocido');
+      _sbData = data;
+      sbMostrarReview(data);
+    } catch(e) {
+      document.getElementById('sbStep2').style.display = 'none';
+      document.getElementById('sbStep1').style.display = '';
+      toast('❌ ' + e.message, 'err');
+    }
+  }
+
+  function sbMostrarReview(data) {
+    document.getElementById('sbStep2').style.display = 'none';
+    document.getElementById('sbStep3').style.display = '';
+    const obraId = document.getElementById('sbObra')?.value || '';
+    const tbody = document.getElementById('sbTbody');
+    tbody.innerHTML = '';
+    (data.bobinas || []).forEach((b, i) => {
+      const alb = b.num_albaran || data.num_albaran || '';
+      const tr = document.createElement('tr');
+      tr.style.borderBottom = '1px solid var(--border)';
+      tr.innerHTML = `
+        <td style="padding:4px;text-align:center">
+          <input type="checkbox" data-idx="${i}" checked style="width:16px;height:16px;cursor:pointer">
+        </td>
+        <td style="padding:4px 6px">
+          <input type="text" value="${escH(b.codigo || '')}" data-idx="${i}" data-field="codigo"
+            style="width:100%;padding:4px 6px;border:1px solid var(--border);border-radius:5px;background:var(--surface2);color:var(--text);font-size:12px;text-transform:uppercase" placeholder="Código *">
+        </td>
+        <td style="padding:4px 6px">
+          <input type="text" value="${escH(b.proveedor || '')}" data-idx="${i}" data-field="proveedor"
+            style="width:100%;padding:4px 6px;border:1px solid var(--border);border-radius:5px;background:var(--surface2);color:var(--text);font-size:12px" placeholder="Proveedor *">
+        </td>
+        <td style="padding:4px 6px">
+          <input type="text" value="${escH(b.tipo_cable || '')}" data-idx="${i}" data-field="tipo_cable"
+            style="width:100%;padding:4px 6px;border:1px solid var(--border);border-radius:5px;background:var(--surface2);color:var(--text);font-size:12px" placeholder="Tipo cable *">
+        </td>
+        <td style="padding:4px 6px">
+          <input type="text" value="${escH(alb)}" data-idx="${i}" data-field="num_albaran"
+            style="width:80px;padding:4px 6px;border:1px solid var(--border);border-radius:5px;background:var(--surface2);color:var(--text);font-size:12px" placeholder="Albarán">
+        </td>
+        <td style="padding:4px 6px">
+          <input type="text" value="${escH(b.notas || '')}" data-idx="${i}" data-field="notas"
+            style="width:100%;padding:4px 6px;border:1px solid var(--border);border-radius:5px;background:var(--surface2);color:var(--text);font-size:12px" placeholder="Notas">
+        </td>`;
+      tbody.appendChild(tr);
+    });
+    document.getElementById('sbResumen').textContent = `${(data.bobinas||[]).length} bobinas extraídas`;
+  }
+
+  function escH(s) { return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
+
+  async function sbImportar() {
+    const obraId = document.getElementById('sbObra')?.value || null;
+    const bobinas = [];
+    document.querySelectorAll('#sbTbody tr').forEach((tr, i) => {
+      const cb = tr.querySelector(`input[type=checkbox][data-idx="${i}"]`);
+      if (!cb?.checked) return;
+      const get = f => tr.querySelector(`input[data-field="${f}"][data-idx="${i}"]`)?.value?.trim() || '';
+      const codigo = get('codigo');
+      const proveedor = get('proveedor');
+      const tipo_cable = get('tipo_cable');
+      if (!codigo || !proveedor || !tipo_cable) return;
+      bobinas.push({
+        codigo, proveedor, tipo_cable,
+        num_albaran: get('num_albaran') || null,
+        notas:       get('notas') || null,
+        obra_id:     obraId ? parseInt(obraId) : null,
+      });
+    });
+    if (!bobinas.length) { toast('No hay bobinas seleccionadas o faltan campos', 'err'); return; }
+    const btn = document.getElementById('sbBtnImportar');
+    btn.disabled = true; btn.textContent = '⏳ Importando...';
+    try {
+      const r = await api('/bobinas/batch', { method: 'POST', body: JSON.stringify({ bobinas }) });
+      if (!r.ok && r.importadas === undefined) throw new Error(r.error || 'Error');
+      toast(`✅ ${r.importadas} bobinas importadas${r.duplicadas ? ` · ${r.duplicadas} duplicadas omitidas` : ''}`, 'ok');
+      cerrarScanBobinas();
+      if (typeof cargarBobinas === 'function') cargarBobinas();
+    } catch(e) {
+      toast('❌ ' + e.message, 'err');
+    } finally {
+      btn.disabled = false; btn.textContent = '⚡ Importar bobinas';
+    }
+  }
+
+  window.abrirScanBobinasPanel = abrirScanBobinasPanel;
+  window.cerrarScanBobinas     = cerrarScanBobinas;
+  window.sbPreviewFile         = sbPreviewFile;
+  window.sbEnviar              = sbEnviar;
+  window.sbImportar            = sbImportar;
+  window.sbVolver              = () => {
+    document.getElementById('sbStep3').style.display = 'none';
+    document.getElementById('sbStep1').style.display = '';
+  };
+})();
 </script>
 
 <!-- Modal scan parte panel -->
@@ -6675,6 +6825,69 @@ document.getElementById('wInput').focus();
       <div style="display:flex;gap:8px">
         <button onclick="spVolver()" class="btn btn-secondary" style="flex:0 0 100px">← Volver</button>
         <button onclick="spImportar()" class="btn btn-primary" style="flex:1" id="spBtnImportar">⚡ Importar fichajes</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal scan albarán bobinas panel -->
+<div id="modalScanBobinas" onclick="if(event.target===this)cerrarScanBobinas()"
+  style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:2000;align-items:center;justify-content:center">
+  <div style="background:var(--surface);border-radius:16px;padding:24px;width:min(96vw,780px);max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.4)">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:18px">
+      <div style="font-size:18px;font-weight:800;font-family:'Montserrat',sans-serif;flex:1">📷 Escanear albarán de bobinas</div>
+      <button onclick="cerrarScanBobinas()" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--muted)">×</button>
+    </div>
+
+    <!-- Paso 1 -->
+    <div id="sbStep1">
+      <div class="form-group">
+        <div class="form-label">Obra (opcional)</div>
+        <select id="sbObra" class="form-input"><option value="">— Sin asignar —</option></select>
+      </div>
+      <div id="sbDropzone" onclick="document.getElementById('sbFileInput').click()"
+        style="border:2px dashed var(--border);border-radius:12px;padding:32px;text-align:center;cursor:pointer;transition:border-color .2s;margin-bottom:12px">
+        <div style="font-size:40px;margin-bottom:8px">🖼️</div>
+        <div style="font-size:14px;font-weight:700">Haz clic para subir la imagen del albarán</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:4px">JPG, PNG, PDF — máx 20 MB</div>
+        <input type="file" id="sbFileInput" accept="image/*,.pdf" style="display:none" onchange="sbPreviewFile(this)">
+      </div>
+      <img id="sbPreview" style="display:none;width:100%;max-height:220px;object-fit:contain;border-radius:10px;margin-bottom:12px;border:1px solid var(--border)">
+      <button id="sbBtnAnalizar" onclick="sbEnviar()" class="btn btn-primary" style="width:100%;display:none">🔍 Analizar con IA</button>
+    </div>
+
+    <!-- Paso 2 -->
+    <div id="sbStep2" style="display:none;text-align:center;padding:40px 0">
+      <div style="font-size:44px;margin-bottom:14px">🤖</div>
+      <div style="font-size:15px;font-weight:700;margin-bottom:6px">Alejandra está leyendo el albarán...</div>
+      <div style="font-size:12px;color:var(--muted)">Puede tardar 10-20 segundos</div>
+      <div class="spinner" style="margin:20px auto 0"></div>
+    </div>
+
+    <!-- Paso 3 -->
+    <div id="sbStep3" style="display:none">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap">
+        <div style="font-size:13px;font-weight:700">Bobinas extraídas</div>
+        <div id="sbResumen" style="font-size:11px;color:var(--muted);flex:1;text-align:right"></div>
+      </div>
+      <div style="overflow-x:auto;margin-bottom:14px">
+        <table style="width:100%;border-collapse:collapse;font-size:12px;min-width:640px">
+          <thead>
+            <tr style="background:var(--surface2)">
+              <th style="padding:8px 5px;text-align:center;border-bottom:1px solid var(--border);width:32px">✓</th>
+              <th style="padding:8px;text-align:left;border-bottom:1px solid var(--border)">Código</th>
+              <th style="padding:8px;text-align:left;border-bottom:1px solid var(--border)">Proveedor</th>
+              <th style="padding:8px;text-align:left;border-bottom:1px solid var(--border)">Tipo cable</th>
+              <th style="padding:8px;text-align:left;border-bottom:1px solid var(--border)">Albarán</th>
+              <th style="padding:8px;text-align:left;border-bottom:1px solid var(--border)">Notas</th>
+            </tr>
+          </thead>
+          <tbody id="sbTbody"></tbody>
+        </table>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button onclick="sbVolver()" class="btn btn-secondary" style="flex:0 0 100px">← Volver</button>
+        <button onclick="sbImportar()" class="btn btn-primary" style="flex:1" id="sbBtnImportar">⚡ Importar bobinas</button>
       </div>
     </div>
   </div>

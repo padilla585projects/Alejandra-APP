@@ -2703,6 +2703,10 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
       style="position:fixed;bottom:72px;right:132px;width:44px;height:44px;border-radius:50%;background:#8b5cf6;border:none;font-size:19px;cursor:pointer;box-shadow:0 4px 12px rgba(139,92,246,.45);z-index:200;display:none;align-items:center;justify-content:center">📋</button>
   </div>
 
+  <!-- FAB: Escanear albarán bobinas -->
+  <button id="btnScanBobinas" onclick="abrirScanBobinas()" title="Escanear albarán"
+    style="position:fixed;bottom:72px;right:132px;width:44px;height:44px;border-radius:50%;background:#8b5cf6;border:none;font-size:19px;cursor:pointer;box-shadow:0 4px 12px rgba(139,92,246,.45);z-index:200;display:none;align-items:center;justify-content:center">📷</button>
+
   <!-- Modal: Scan parte semanal -->
   <div class="modal-overlay" id="modalScanParte" onclick="if(event.target===this)cerrarScanParte()" style="display:none">
     <div class="modal" style="max-width:min(98vw,700px);max-height:92vh;overflow-y:auto;padding:20px">
@@ -2764,6 +2768,69 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
         <div style="display:flex;gap:8px">
           <button onclick="scanVolver()" class="btn-primary btn-secondary" style="flex:0 0 90px">← Volver</button>
           <button onclick="scanImportar()" class="btn-primary" style="flex:1" id="btnScanImportar">⚡ Importar fichajes</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Scan albarán bobinas (app) -->
+  <div class="modal-overlay" id="modalScanBobinasApp" onclick="if(event.target===this)cerrarScanBobinas()" style="display:none">
+    <div class="modal" style="max-width:min(98vw,700px);max-height:92vh;overflow-y:auto;padding:20px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px">
+        <div style="font-size:18px;font-weight:800;font-family:'Montserrat',sans-serif;flex:1">📷 Escanear albarán de bobinas</div>
+        <button onclick="cerrarScanBobinas()" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--muted)">×</button>
+      </div>
+
+      <!-- Paso 1 -->
+      <div id="sbAppStep1">
+        <div style="margin-bottom:12px">
+          <label style="font-size:12px;font-weight:700;color:var(--muted);letter-spacing:.5px;display:block;margin-bottom:6px">OBRA (OPCIONAL)</label>
+          <select id="sbAppObraId" class="form-input" style="width:100%">
+            <option value="">— Sin asignar —</option>
+          </select>
+        </div>
+        <div style="border:2px dashed var(--border);border-radius:12px;padding:24px;text-align:center;cursor:pointer;transition:border-color .2s" onclick="document.getElementById('sbAppImgInput').click()" id="sbAppDropzone">
+          <div style="font-size:36px;margin-bottom:8px">📸</div>
+          <div style="font-size:14px;font-weight:700;color:var(--text)">Toca para fotografiar o seleccionar el albarán</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:4px">JPG, PNG — máx 20 MB</div>
+          <input type="file" id="sbAppImgInput" accept="image/*" style="display:none" onchange="sbAppPreviewImg(this)">
+        </div>
+        <img id="sbAppPreview" style="display:none;width:100%;max-height:200px;object-fit:contain;border-radius:10px;margin-top:10px;border:1px solid var(--border)">
+        <button id="btnSbAppEnviar" onclick="sbAppEnviar()" class="btn-primary" style="width:100%;margin-top:14px;display:none">🔍 Analizar con IA</button>
+      </div>
+
+      <!-- Paso 2 -->
+      <div id="sbAppStep2" style="display:none;text-align:center;padding:30px 0">
+        <div style="font-size:40px;margin-bottom:12px">🤖</div>
+        <div style="font-size:15px;font-weight:700;margin-bottom:6px">Alejandra está leyendo el albarán...</div>
+        <div style="font-size:12px;color:var(--muted)">Puede tardar 10-20 segundos</div>
+        <div class="spinner" style="margin:16px auto 0"></div>
+      </div>
+
+      <!-- Paso 3 -->
+      <div id="sbAppStep3" style="display:none">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+          <div style="font-size:13px;font-weight:700">Bobinas extraídas</div>
+          <div id="sbAppResumen" style="font-size:11px;color:var(--muted);flex:1;text-align:right"></div>
+        </div>
+        <div style="overflow-x:auto;margin-bottom:14px">
+          <table style="width:100%;border-collapse:collapse;font-size:12px;min-width:560px">
+            <thead>
+              <tr style="background:var(--surface2)">
+                <th style="padding:7px 5px;text-align:center;border-bottom:1px solid var(--border);width:28px">✓</th>
+                <th style="padding:7px 6px;text-align:left;border-bottom:1px solid var(--border)">Código</th>
+                <th style="padding:7px 6px;text-align:left;border-bottom:1px solid var(--border)">Proveedor</th>
+                <th style="padding:7px 6px;text-align:left;border-bottom:1px solid var(--border)">Tipo cable</th>
+                <th style="padding:7px 6px;text-align:left;border-bottom:1px solid var(--border)">Albarán</th>
+                <th style="padding:7px 6px;text-align:left;border-bottom:1px solid var(--border)">Notas</th>
+              </tr>
+            </thead>
+            <tbody id="sbAppTbody"></tbody>
+          </table>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button onclick="sbAppVolver()" class="btn-primary btn-secondary" style="flex:0 0 90px">← Volver</button>
+          <button onclick="sbAppImportar()" class="btn-primary" style="flex:1" id="btnSbAppImportar">⚡ Importar bobinas</button>
         </div>
       </div>
     </div>
@@ -5010,6 +5077,8 @@ function irAtras() {
   if (fabFichajeEq) fabFichajeEq.style.display = 'none';
   const fabScanP = document.getElementById('btnScanParte');
   if (fabScanP) fabScanP.style.display = 'none';
+  const fabScanBob = document.getElementById('btnScanBobinas');
+  if (fabScanBob) fabScanBob.style.display = 'none';
   // Si estamos dentro de una carpeta en Docs, navegar dentro de Docs (no salir)
   if (document.getElementById('screenDocs')?.classList.contains('active')) {
     const docsVolverBtn = document.getElementById('docsVolverBtn');
@@ -5031,6 +5100,8 @@ function navTo(target) {
   if (fabFichajeEq && target !== 'personal') fabFichajeEq.style.display = 'none';
   const fabScanBtn = document.getElementById('btnScanParte');
   if (fabScanBtn && target !== 'personal') fabScanBtn.style.display = 'none';
+  const fabScanBob = document.getElementById('btnScanBobinas');
+  if (fabScanBob && !['scan','stock','historial'].includes(target)) fabScanBob.style.display = 'none';
   // Pantallas secundarias — conservar historial para que Atrás funcione
   if (target === 'sugerencias') { showScreen('sugerencias'); return; }
   if (target === 'docs')        { showScreen('docs'); return; }
@@ -5148,6 +5219,13 @@ function updateModuleUI() {
   const esSeguridad = s?.departamento === 'seguridad';
   const buscarBox = document.getElementById('buscarMaquinaBox');
   if (buscarBox) buscarBox.style.display = (esSeguridad && mod !== 'bobinas') ? 'block' : 'none';
+
+  // FAB escanear albarán bobinas — solo cuando módulo bobinas y usuario no operario
+  const fabScanBob = document.getElementById('btnScanBobinas');
+  if (fabScanBob) {
+    const esAdmin = s?.rol !== 'operario';
+    fabScanBob.style.display = (mod === 'bobinas' && esAdmin) ? 'flex' : 'none';
+  }
 }
 
 async function cargarObrasSelectScan() {
@@ -13077,6 +13155,157 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
   window.galeriaCompartirFoto = galeriaCompartirFoto;
   window.galeriaBorrarFoto    = galeriaBorrarFoto;
 }
+
+// ── SCAN ALBARÁN BOBINAS (app móvil) ────────────────────────────────────────
+(function() {
+  let _sbAppData = null;
+
+  function abrirScanBobinas() {
+    const modal = document.getElementById('modalScanBobinasApp');
+    modal.style.display = 'flex';
+    document.getElementById('sbAppStep1').style.display = '';
+    document.getElementById('sbAppStep2').style.display = 'none';
+    document.getElementById('sbAppStep3').style.display = 'none';
+    document.getElementById('sbAppPreview').style.display = 'none';
+    document.getElementById('btnSbAppEnviar').style.display = 'none';
+    document.getElementById('sbAppImgInput').value = '';
+    _sbAppData = null;
+    // Poblar obras
+    const sel = document.getElementById('sbAppObraId');
+    if (sel.options.length <= 1) {
+      const s = getSession();
+      apiCall('/obras').then(r => {
+        (r.obras || r || []).forEach(o => {
+          const opt = document.createElement('option');
+          opt.value = o.id; opt.textContent = o.nombre;
+          if (s?.obra_id && String(o.id) === String(s.obra_id)) opt.selected = true;
+          sel.appendChild(opt);
+        });
+      }).catch(() => {});
+    }
+  }
+
+  function cerrarScanBobinas() {
+    const m = document.getElementById('modalScanBobinasApp');
+    if (m) m.style.display = 'none';
+  }
+
+  function sbAppPreviewImg(input) {
+    const file = input.files[0];
+    if (!file) return;
+    const prev = document.getElementById('sbAppPreview');
+    prev.src = URL.createObjectURL(file);
+    prev.style.display = 'block';
+    document.getElementById('btnSbAppEnviar').style.display = 'block';
+    document.getElementById('sbAppDropzone').style.borderColor = 'var(--accent)';
+  }
+
+  async function sbAppEnviar() {
+    const file = document.getElementById('sbAppImgInput').files[0];
+    if (!file) { toast('Selecciona una imagen', 'err'); return; }
+    document.getElementById('sbAppStep1').style.display = 'none';
+    document.getElementById('sbAppStep2').style.display = '';
+    try {
+      const fd = new FormData();
+      fd.append('image', file);
+      const res  = await apiCallRaw('/scan-bobinas', { method: 'POST', body: fd });
+      const data = await res.json();
+      if (!res.ok || !data.ok) throw new Error(data.error || 'Error desconocido');
+      _sbAppData = data;
+      sbAppMostrarReview(data);
+    } catch(e) {
+      document.getElementById('sbAppStep2').style.display = 'none';
+      document.getElementById('sbAppStep1').style.display = '';
+      toast('❌ ' + e.message, 'err');
+    }
+  }
+
+  function sbAppMostrarReview(data) {
+    document.getElementById('sbAppStep2').style.display = 'none';
+    document.getElementById('sbAppStep3').style.display = '';
+    const tbody = document.getElementById('sbAppTbody');
+    tbody.innerHTML = '';
+    (data.bobinas || []).forEach((b, i) => {
+      const escH = s => String(s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
+      const alb  = b.num_albaran || data.num_albaran || '';
+      const tr   = document.createElement('tr');
+      tr.style.borderBottom = '1px solid var(--border)';
+      tr.innerHTML = `
+        <td style="padding:4px;text-align:center">
+          <input type="checkbox" data-idx="${i}" checked style="width:16px;height:16px;cursor:pointer">
+        </td>
+        <td style="padding:4px 5px">
+          <input type="text" value="${escH(b.codigo)}" data-idx="${i}" data-field="codigo"
+            style="width:100%;padding:3px 5px;border:1px solid var(--border);border-radius:5px;background:var(--surface2);color:var(--text);font-size:11px;text-transform:uppercase" placeholder="Código *">
+        </td>
+        <td style="padding:4px 5px">
+          <input type="text" value="${escH(b.proveedor)}" data-idx="${i}" data-field="proveedor"
+            style="width:100%;padding:3px 5px;border:1px solid var(--border);border-radius:5px;background:var(--surface2);color:var(--text);font-size:11px" placeholder="Proveedor *">
+        </td>
+        <td style="padding:4px 5px">
+          <input type="text" value="${escH(b.tipo_cable)}" data-idx="${i}" data-field="tipo_cable"
+            style="width:100%;padding:3px 5px;border:1px solid var(--border);border-radius:5px;background:var(--surface2);color:var(--text);font-size:11px" placeholder="Tipo cable *">
+        </td>
+        <td style="padding:4px 5px">
+          <input type="text" value="${escH(alb)}" data-idx="${i}" data-field="num_albaran"
+            style="width:70px;padding:3px 5px;border:1px solid var(--border);border-radius:5px;background:var(--surface2);color:var(--text);font-size:11px" placeholder="Albarán">
+        </td>
+        <td style="padding:4px 5px">
+          <input type="text" value="${escH(b.notas)}" data-idx="${i}" data-field="notas"
+            style="width:100%;padding:3px 5px;border:1px solid var(--border);border-radius:5px;background:var(--surface2);color:var(--text);font-size:11px" placeholder="Notas">
+        </td>`;
+      tbody.appendChild(tr);
+    });
+    document.getElementById('sbAppResumen').textContent = `${(data.bobinas||[]).length} bobinas extraídas`;
+  }
+
+  function sbAppVolver() {
+    document.getElementById('sbAppStep3').style.display = 'none';
+    document.getElementById('sbAppStep1').style.display = '';
+  }
+
+  async function sbAppImportar() {
+    const obraId = document.getElementById('sbAppObraId')?.value || null;
+    const bobinas = [];
+    document.querySelectorAll('#sbAppTbody tr').forEach((tr, i) => {
+      const cb = tr.querySelector(`input[type=checkbox][data-idx="${i}"]`);
+      if (!cb?.checked) return;
+      const get = f => tr.querySelector(`input[data-field="${f}"][data-idx="${i}"]`)?.value?.trim() || '';
+      const codigo = get('codigo');
+      const proveedor = get('proveedor');
+      const tipo_cable = get('tipo_cable');
+      if (!codigo || !proveedor || !tipo_cable) return;
+      bobinas.push({
+        codigo, proveedor, tipo_cable,
+        num_albaran: get('num_albaran') || null,
+        notas:       get('notas') || null,
+        obra_id:     obraId ? parseInt(obraId) : null,
+      });
+    });
+    if (!bobinas.length) { toast('No hay bobinas seleccionadas o faltan campos', 'err'); return; }
+    document.getElementById('btnSbAppImportar').disabled = true;
+    document.getElementById('btnSbAppImportar').textContent = '⏳ Importando...';
+    try {
+      const res = await apiCall('/bobinas/batch', { method: 'POST', body: JSON.stringify({ bobinas }) });
+      if (!res.ok && res.importadas === undefined) throw new Error(res.error || 'Error');
+      toast(`✅ ${res.importadas} bobinas importadas${res.duplicadas ? ` · ${res.duplicadas} duplicadas omitidas` : ''}`, 'ok');
+      cerrarScanBobinas();
+      if (typeof cargarStock === 'function') cargarStock();
+    } catch(e) {
+      toast('❌ ' + e.message, 'err');
+    } finally {
+      const btn = document.getElementById('btnSbAppImportar');
+      if (btn) { btn.disabled = false; btn.textContent = '⚡ Importar bobinas'; }
+    }
+  }
+
+  window.abrirScanBobinas  = abrirScanBobinas;
+  window.cerrarScanBobinas = cerrarScanBobinas;
+  window.sbAppPreviewImg   = sbAppPreviewImg;
+  window.sbAppEnviar       = sbAppEnviar;
+  window.sbAppVolver       = sbAppVolver;
+  window.sbAppImportar     = sbAppImportar;
+})();
 
 // ── CHECKLIST PRE-USO EQUIPOS (NEW-21) ───────────────────────────────────────
 
