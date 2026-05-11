@@ -3184,6 +3184,13 @@ function docsVerFoto(id, nombre, comentario) {
     </div>`);
 }
 
+async function docsEliminarDocHuerfano(id) {
+  if (!confirm('¿Eliminar este registro? El archivo no existe en almacenamiento.')) return;
+  const r = await api(`/docs-dept/${id}`, { method: 'DELETE' });
+  if (r.ok) { cerrarModal(); toast('Registro eliminado ✓', 'ok'); docsRenderTab(); }
+  else toast(r.error || 'Error al eliminar', 'err');
+}
+
 function docsDescargar(id, nombre) {
   const a = document.createElement('a');
   a.href = `${API}/docs-dept/${id}?token=${encodeURIComponent(TOKEN)}`;
@@ -3216,8 +3223,10 @@ async function docsVerArchivo(id, nombre) {
 
     if (!resp.ok) {
       const data = await resp.json().catch(() => ({}));
+      const canEdit = hasSessionRole('empresa_admin', 'superadmin', 'desarrollador', 'encargado', 'jefe_de_obra', 'oficina');
       vb.innerHTML = `<div style="font-size:40px;margin-bottom:10px">❌</div>
-        <div style="color:var(--danger);font-size:13px">${data.error || 'Error al cargar el archivo'}</div>`;
+        <div style="color:var(--danger);font-size:13px;margin-bottom:${canEdit?'14px':'0'}">${data.error || 'Error al cargar el archivo'}</div>
+        ${canEdit ? `<button class="btn btn-danger btn-sm" onclick="docsEliminarDocHuerfano(${id})">🗑 Eliminar registro sin archivo</button>` : ''}`;
       return;
     }
 
