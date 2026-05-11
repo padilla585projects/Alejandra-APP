@@ -8,7 +8,7 @@
 **Sesión:** LIBRE
 **Última sesión:** 11/05/2026
 **Versión tras última sesión:** v5.74 (migrar scans a Gemini Flash + dashboard costes IA)
-**Worker desplegado:** pendiente de deploy
+**Worker desplegado:** 5bd505c8 ✅
 **GitHub:** en sync ✅
 
 ---
