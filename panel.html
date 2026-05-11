@@ -3007,6 +3007,7 @@ async function cargarObras() {
 // ── DOCUMENTOS ────────────────────────────────────────────────
 let _docsTab = 'fotos';
 let _docsCarpetaStack = []; // [{id, nombre}]
+let _docsObraId = '';       // obra persistente entre navegaciones
 
 const _DOCS_DEPTS = [
   { key: 'electrico', icon: '⚡', label: 'Eléctrico' },
@@ -3025,12 +3026,18 @@ async function cargarDocumentos() {
       sel.appendChild(opt);
     });
   }
+  // restaurar obra previamente seleccionada
+  if (sel && _docsObraId) sel.value = _docsObraId;
   _docsCarpetaStack = [];
   docsRenderTab();
 }
 
-function docsOnObraChange() { _docsCarpetaStack = []; docsRenderTab(); }
-function docsRecargar()     { _docsCarpetaStack = []; docsRenderTab(); }
+function docsOnObraChange() {
+  _docsObraId = document.getElementById('docsFiltroObra')?.value || '';
+  _docsCarpetaStack = [];
+  docsRenderTab();
+}
+function docsRecargar() { _docsCarpetaStack = []; docsRenderTab(); }
 
 function docsSetTab(tab) {
   _docsTab = tab;
