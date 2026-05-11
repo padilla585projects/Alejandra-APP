@@ -2723,7 +2723,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
           <div style="font-size:36px;margin-bottom:8px">📸</div>
           <div style="font-size:14px;font-weight:700;color:var(--text)">Toca para fotografiar o seleccionar el parte</div>
           <div style="font-size:11px;color:var(--muted);margin-top:4px">JPG, PNG — máx 20 MB</div>
-          <input type="file" id="scanImgInput" accept="image/*" capture="environment" style="display:none" onchange="scanPreviewImg(this)">
+          <input type="file" id="scanImgInput" accept="image/*" style="display:none" onchange="scanPreviewImg(this)">
         </div>
         <img id="scanPreview" style="display:none;width:100%;max-height:200px;object-fit:contain;border-radius:10px;margin-top:10px;border:1px solid var(--border)">
         <button id="btnScanEnviar" onclick="scanEnviar()" class="btn-primary" style="width:100%;margin-top:14px;display:none">🔍 Analizar con IA</button>
@@ -12915,7 +12915,8 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
         ? `<span style="font-size:11px;font-weight:600">${t.nombre_match}</span>
            <span style="font-size:9px;color:var(--muted);display:block">${t.nombre_parte}</span>`
         : `<span style="font-size:11px;color:#f59e0b;font-weight:600">⚠ ${t.nombre_parte}</span>
-           <span style="font-size:9px;color:var(--muted);display:block">Sin coincidencia</span>`;
+           <span style="font-size:9px;color:var(--muted);display:block">Sin coincidencia</span>
+           <button onclick="scanAnadirTrabajador(${i})" style="margin-top:3px;font-size:10px;padding:2px 7px;border-radius:5px;background:#8b5cf6;color:#fff;border:none;cursor:pointer">➕ Añadir</button>`;
       const horasCells = DIAS.map((d, di) => {
         const v = t[d] !== null && t[d] !== undefined ? t[d] : '';
         return `<td style="padding:4px 3px;text-align:center">
@@ -12987,12 +12988,46 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     }
   }
 
-  window.abrirScanParte  = abrirScanParte;
-  window.cerrarScanParte = cerrarScanParte;
-  window.scanPreviewImg  = scanPreviewImg;
-  window.scanEnviar      = scanEnviar;
-  window.scanVolver      = scanVolver;
-  window.scanImportar    = scanImportar;
+  async function scanAnadirTrabajador(idx) {
+    const t = _scanData?.trabajadores?.[idx];
+    if (!t) return;
+    const nombre = t.nombre_parte;
+    const obraId = document.getElementById('scanObraId')?.value || null;
+    const btn = document.querySelector(`button[onclick="scanAnadirTrabajador(${idx})"]`);
+    if (btn) { btn.disabled = true; btn.textContent = '⏳'; }
+    try {
+      const res  = await apiCall('/personal-externo', {
+        method: 'POST',
+        body: JSON.stringify({ nombre, obra_id: obraId ? parseInt(obraId) : null })
+      });
+      if (!res.ok && !res.id) throw new Error(res.error || 'Error al crear');
+      // Actualizar _scanData con el nuevo trabajador
+      t.personal_externo_id = res.id;
+      t.nombre_match = nombre;
+      t.matched = true;
+      // Re-renderizar solo esa fila
+      const tr = document.querySelectorAll('#scanTbody tr')[idx];
+      if (tr) {
+        const td = tr.querySelector('td:first-child');
+        if (td) td.innerHTML = `<span style="font-size:11px;font-weight:600;color:#10b981">✓ ${nombre}</span>
+          <span style="font-size:9px;color:var(--muted);display:block">Añadido como personal externo</span>`;
+        const cb = tr.querySelector(`input[type=checkbox][data-idx="${idx}"]`);
+        if (cb) cb.checked = true;
+      }
+      toast('✅ ' + nombre + ' añadido', 'ok');
+    } catch(e) {
+      toast('❌ ' + e.message, 'err');
+      if (btn) { btn.disabled = false; btn.textContent = '➕ Añadir'; }
+    }
+  }
+
+  window.abrirScanParte      = abrirScanParte;
+  window.cerrarScanParte     = cerrarScanParte;
+  window.scanPreviewImg      = scanPreviewImg;
+  window.scanEnviar          = scanEnviar;
+  window.scanVolver          = scanVolver;
+  window.scanImportar        = scanImportar;
+  window.scanAnadirTrabajador = scanAnadirTrabajador;
 
   window.cargarEmpresasAdmin     = cargarEmpresasAdmin;
   window.seleccionarEmpresaAdmin = seleccionarEmpresaAdmin;

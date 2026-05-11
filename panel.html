@@ -534,6 +534,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
           <input class="tbl-search" type="date" id="fichajesFechaHasta" onchange="cargarFichajes()">
           <input class="tbl-search" id="searchFichajes" placeholder="🔍 Buscar trabajador..." oninput="tblFichajes && tblFichajes.setFilter('nombre',  'like', this.value)" style="min-width:180px">
           <button class="btn btn-primary" onclick="abrirModalFichaje()">+ Fichaje manual</button>
+          <button class="btn btn-secondary" style="background:#8b5cf6;color:#fff;border-color:#8b5cf6" onclick="abrirScanPartePanel()">📋 Escanear parte</button>
           <button class="btn btn-secondary" onclick="cargarFichajes()">🔄 Actualizar</button>
           <button class="btn btn-secondary" onclick="exportarTabla(tblFichajes,'fichajes')">⬇ CSV</button>
         </div>
@@ -6430,6 +6431,253 @@ document.getElementById('wInput').focus();
   setTimeout(showAIBtn, 1500);
   setInterval(showAIBtn, 3000);
 })();
+
+// ── SCAN PARTE SEMANAL (panel web) ──────────────────────────────────────────
+(function() {
+  let _scanData = null;
+
+  function abrirScanPartePanel() {
+    const modal = document.getElementById('modalScanPanel');
+    modal.style.display = 'flex';
+    document.getElementById('spStep1').style.display = '';
+    document.getElementById('spStep2').style.display = 'none';
+    document.getElementById('spStep3').style.display = 'none';
+    document.getElementById('spPreview').style.display = 'none';
+    document.getElementById('spBtnAnalizar').style.display = 'none';
+    document.getElementById('spFileInput').value = '';
+    _scanData = null;
+    // poblar obras
+    const sel = document.getElementById('spObra');
+    if (sel && sel.options.length <= 1 && window._obrasPanel?.length) {
+      window._obrasPanel.forEach(o => {
+        const opt = document.createElement('option');
+        opt.value = o.id; opt.textContent = o.nombre;
+        sel.appendChild(opt);
+      });
+    }
+  }
+
+  function cerrarScanPanel() {
+    document.getElementById('modalScanPanel').style.display = 'none';
+  }
+
+  function spPreviewFile(input) {
+    const file = input.files[0];
+    if (!file) return;
+    const prev = document.getElementById('spPreview');
+    prev.src = URL.createObjectURL(file);
+    prev.style.display = 'block';
+    document.getElementById('spBtnAnalizar').style.display = '';
+    document.getElementById('spDropzone').style.borderColor = 'var(--accent)';
+  }
+
+  async function spEnviar() {
+    const file = document.getElementById('spFileInput').files[0];
+    if (!file) { toast('Selecciona un archivo', 'err'); return; }
+    document.getElementById('spStep1').style.display = 'none';
+    document.getElementById('spStep2').style.display = '';
+    try {
+      const fd = new FormData();
+      fd.append('image', file);
+      const obraId = document.getElementById('spObra')?.value;
+      if (obraId) fd.append('obra_id', obraId);
+      const res  = await apiRaw('/scan-parte', { method: 'POST', body: fd });
+      const data = await res.json();
+      if (!res.ok || !data.ok) throw new Error(data.error || 'Error desconocido');
+      _scanData = data;
+      spMostrarReview(data);
+    } catch(e) {
+      document.getElementById('spStep2').style.display = 'none';
+      document.getElementById('spStep1').style.display = '';
+      toast('❌ ' + e.message, 'err');
+    }
+  }
+
+  function spMostrarReview(data) {
+    document.getElementById('spStep2').style.display = 'none';
+    document.getElementById('spStep3').style.display = '';
+    document.getElementById('spFechaLunes').value = data.fecha_lunes || '';
+    const DIAS = ['lunes','martes','miercoles','jueves','viernes','sabado'];
+    const tbody = document.getElementById('spTbody');
+    tbody.innerHTML = '';
+    (data.trabajadores || []).forEach((t, i) => {
+      const matched = t.matched;
+      const tr = document.createElement('tr');
+      tr.style.borderBottom = '1px solid var(--border)';
+      const nombreCell = matched
+        ? `<div style="font-size:12px;font-weight:600">${t.nombre_match}</div>
+           <div style="font-size:10px;color:var(--muted)">${t.nombre_parte}</div>`
+        : `<div style="font-size:12px;font-weight:600;color:#f59e0b">⚠ ${t.nombre_parte}</div>
+           <div style="font-size:10px;color:var(--muted)">Sin coincidencia</div>
+           <button onclick="spAnadir(${i})" style="margin-top:3px;font-size:10px;padding:2px 8px;border-radius:5px;background:#8b5cf6;color:#fff;border:none;cursor:pointer">➕ Añadir trabajador</button>`;
+      const horasCells = DIAS.map(d => {
+        const v = (t[d] !== null && t[d] !== undefined) ? t[d] : '';
+        return `<td style="padding:4px 3px;text-align:center">
+          <input type="number" min="0" max="24" step="0.5" value="${v}"
+            data-idx="${i}" data-dia="${d}"
+            style="width:42px;padding:3px 2px;text-align:center;border:1px solid var(--border);border-radius:5px;background:var(--surface2);color:var(--text);font-size:12px">
+        </td>`;
+      }).join('');
+      tr.innerHTML = `<td style="padding:6px 8px;min-width:160px">${nombreCell}</td>${horasCells}
+        <td style="padding:4px;text-align:center">
+          <input type="checkbox" data-idx="${i}" ${matched?'checked':''} style="width:16px;height:16px;cursor:pointer">
+        </td>`;
+      tbody.appendChild(tr);
+    });
+    const sinMatch = (data.trabajadores||[]).filter(t=>!t.matched).length;
+    document.getElementById('spResumen').textContent =
+      `${(data.trabajadores||[]).filter(t=>t.matched).length} coincidencias` +
+      (sinMatch ? ` · ${sinMatch} sin match` : '');
+  }
+
+  async function spAnadir(idx) {
+    const t = _scanData?.trabajadores?.[idx];
+    if (!t) return;
+    const obraId = document.getElementById('spObra')?.value || null;
+    const btn = document.querySelector(`button[onclick="spAnadir(${idx})"]`);
+    if (btn) { btn.disabled = true; btn.textContent = '⏳'; }
+    try {
+      const r = await api('/personal-externo', {
+        method: 'POST',
+        body: JSON.stringify({ nombre: t.nombre_parte, obra_id: obraId ? parseInt(obraId) : null })
+      });
+      if (!r.ok && !r.id) throw new Error(r.error || 'Error');
+      t.personal_externo_id = r.id;
+      t.nombre_match = t.nombre_parte;
+      t.matched = true;
+      const tr = document.querySelectorAll('#spTbody tr')[idx];
+      if (tr) {
+        const td = tr.querySelector('td:first-child');
+        td.innerHTML = `<div style="font-size:12px;font-weight:600;color:#10b981">✓ ${t.nombre_parte}</div>
+          <div style="font-size:10px;color:var(--muted)">Añadido como personal externo</div>`;
+        const cb = tr.querySelector(`input[type=checkbox][data-idx="${idx}"]`);
+        if (cb) cb.checked = true;
+      }
+      toast('✅ ' + t.nombre_parte + ' añadido', 'ok');
+    } catch(e) {
+      toast('❌ ' + e.message, 'err');
+      if (btn) { btn.disabled = false; btn.textContent = '➕ Añadir trabajador'; }
+    }
+  }
+
+  async function spImportar() {
+    const fechaLunes = document.getElementById('spFechaLunes').value;
+    if (!fechaLunes) { toast('Indica la fecha del lunes', 'err'); return; }
+    const obraId = document.getElementById('spObra')?.value || null;
+    const DIAS = ['lunes','martes','miercoles','jueves','viernes','sabado'];
+    const fichajes = [];
+    document.querySelectorAll('#spTbody tr').forEach((tr, i) => {
+      const cb = tr.querySelector(`input[type=checkbox][data-idx="${i}"]`);
+      if (!cb?.checked) return;
+      const t = _scanData?.trabajadores?.[i];
+      if (!t) return;
+      DIAS.forEach(dia => {
+        const inp = tr.querySelector(`input[data-idx="${i}"][data-dia="${dia}"]`);
+        const horas = parseFloat(inp?.value);
+        if (!isNaN(horas) && horas > 0) {
+          fichajes.push({
+            usuario_id: t.usuario_id,
+            personal_externo_id: t.personal_externo_id,
+            obra_id: obraId ? parseInt(obraId) : null,
+            fecha_lunes: fechaLunes, dia, horas,
+            nombre: t.nombre_match || t.nombre_parte,
+          });
+        }
+      });
+    });
+    if (!fichajes.length) { toast('No hay fichajes seleccionados', 'err'); return; }
+    const btn = document.getElementById('spBtnImportar');
+    btn.disabled = true; btn.textContent = '⏳ Importando...';
+    try {
+      const r = await api('/fichajes/batch', { method: 'POST', body: JSON.stringify({ fichajes }) });
+      if (!r.ok && !r.importados) throw new Error(r.error || 'Error');
+      toast(`✅ ${r.importados} fichajes importados${r.duplicados ? ` · ${r.duplicados} duplicados omitidos` : ''}`, 'ok');
+      cerrarScanPanel();
+      if (typeof cargarFichajes === 'function') cargarFichajes();
+    } catch(e) {
+      toast(e.message, 'err');
+    } finally {
+      btn.disabled = false; btn.textContent = '⚡ Importar fichajes';
+    }
+  }
+
+  window.abrirScanPartePanel = abrirScanPartePanel;
+  window.cerrarScanPanel     = cerrarScanPanel;
+  window.spPreviewFile       = spPreviewFile;
+  window.spEnviar            = spEnviar;
+  window.spAnadir            = spAnadir;
+  window.spImportar          = spImportar;
+  window.spVolver            = () => {
+    document.getElementById('spStep3').style.display = 'none';
+    document.getElementById('spStep1').style.display = '';
+  };
+})();
 </script>
+
+<!-- Modal scan parte panel -->
+<div id="modalScanPanel" onclick="if(event.target===this)cerrarScanPanel()"
+  style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:2000;align-items:center;justify-content:center">
+  <div style="background:var(--surface);border-radius:16px;padding:24px;width:min(96vw,680px);max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.4)">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:18px">
+      <div style="font-size:18px;font-weight:800;font-family:'Montserrat',sans-serif;flex:1">📋 Escanear parte semanal</div>
+      <button onclick="cerrarScanPanel()" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--muted)">×</button>
+    </div>
+
+    <!-- Paso 1 -->
+    <div id="spStep1">
+      <div class="form-group">
+        <div class="form-label">Obra</div>
+        <select id="spObra" class="form-input"><option value="">— Sin asignar —</option></select>
+      </div>
+      <div id="spDropzone" onclick="document.getElementById('spFileInput').click()"
+        style="border:2px dashed var(--border);border-radius:12px;padding:32px;text-align:center;cursor:pointer;transition:border-color .2s;margin-bottom:12px">
+        <div style="font-size:40px;margin-bottom:8px">🖼️</div>
+        <div style="font-size:14px;font-weight:700">Haz clic para subir la imagen del parte</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:4px">JPG, PNG, PDF — máx 20 MB</div>
+        <input type="file" id="spFileInput" accept="image/*,.pdf" style="display:none" onchange="spPreviewFile(this)">
+      </div>
+      <img id="spPreview" style="display:none;width:100%;max-height:220px;object-fit:contain;border-radius:10px;margin-bottom:12px;border:1px solid var(--border)">
+      <button id="spBtnAnalizar" onclick="spEnviar()" class="btn btn-primary" style="width:100%;display:none">🔍 Analizar con IA</button>
+    </div>
+
+    <!-- Paso 2 -->
+    <div id="spStep2" style="display:none;text-align:center;padding:40px 0">
+      <div style="font-size:44px;margin-bottom:14px">🤖</div>
+      <div style="font-size:15px;font-weight:700;margin-bottom:6px">Alejandra está leyendo el parte...</div>
+      <div style="font-size:12px;color:var(--muted)">Puede tardar 10-20 segundos</div>
+      <div class="spinner" style="margin:20px auto 0"></div>
+    </div>
+
+    <!-- Paso 3 -->
+    <div id="spStep3" style="display:none">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap">
+        <div style="font-size:13px;font-weight:700">Semana del lunes</div>
+        <input type="date" id="spFechaLunes" class="form-input" style="width:auto;font-size:13px;padding:6px 10px">
+        <div id="spResumen" style="font-size:11px;color:var(--muted);flex:1;text-align:right"></div>
+      </div>
+      <div style="overflow-x:auto;margin-bottom:14px">
+        <table id="spTabla" style="width:100%;border-collapse:collapse;font-size:12px;min-width:560px">
+          <thead>
+            <tr style="background:var(--surface2)">
+              <th style="padding:8px;text-align:left;font-weight:700;border-bottom:1px solid var(--border)">Trabajador</th>
+              <th style="padding:8px 5px;text-align:center;border-bottom:1px solid var(--border)">Lun</th>
+              <th style="padding:8px 5px;text-align:center;border-bottom:1px solid var(--border)">Mar</th>
+              <th style="padding:8px 5px;text-align:center;border-bottom:1px solid var(--border)">Mié</th>
+              <th style="padding:8px 5px;text-align:center;border-bottom:1px solid var(--border)">Jue</th>
+              <th style="padding:8px 5px;text-align:center;border-bottom:1px solid var(--border)">Vie</th>
+              <th style="padding:8px 5px;text-align:center;border-bottom:1px solid var(--border)">Sáb</th>
+              <th style="padding:8px 5px;text-align:center;border-bottom:1px solid var(--border)">✓</th>
+            </tr>
+          </thead>
+          <tbody id="spTbody"></tbody>
+        </table>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button onclick="spVolver()" class="btn btn-secondary" style="flex:0 0 100px">← Volver</button>
+        <button onclick="spImportar()" class="btn btn-primary" style="flex:1" id="spBtnImportar">⚡ Importar fichajes</button>
+      </div>
+    </div>
+  </div>
+</div>
 </body>
 </html>
