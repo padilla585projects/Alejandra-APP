@@ -3127,7 +3127,7 @@ async function docsCargarDept(dept, obraId, carpetaId) {
         <div style="font-size:11px;color:var(--muted)">${fmtFecha(c.created_at)}</div>
       </div>
       ${canEdit ? `<button onclick="event.stopPropagation();docsEliminarCarpeta(${c.id})" style="background:transparent;border:none;color:var(--muted);cursor:pointer;font-size:14px;padding:4px">🗑</button>` : ''}
-      <span style="color:var(--muted);font-size:16px">›</span>
+      <button onclick="event.stopPropagation();docsAbrirCarpeta(${c.id},'${esc(c.nombre)}')" class="btn btn-secondary btn-sm" style="flex-shrink:0">Abrir →</button>
     </div>`).join('');
 
   const docsHtml = docs.length ? `
@@ -3136,7 +3136,7 @@ async function docsCargarDept(dept, obraId, carpetaId) {
         const ext  = (d.nombre||'').split('.').pop().toLowerCase();
         const icon = { pdf:'📄', jpg:'🖼', jpeg:'🖼', png:'🖼', webp:'🖼', xlsx:'📊', xls:'📊', docx:'📝', doc:'📝', mp4:'🎬', zip:'🗜' }[ext] || '📎';
         const size = d.tamano ? (d.tamano > 1048576 ? (d.tamano/1048576).toFixed(1)+' MB' : Math.round(d.tamano/1024)+' KB') : '';
-        return `<div class="docs-file" onclick="docsDescargar(${d.id},'${esc(d.nombre)}')">
+        return `<div class="docs-file" onclick="docsVerArchivo(${d.id},'${esc(d.nombre)}')">
           <span style="font-size:22px">${icon}</span>
           <div style="flex:1;min-width:0">
             <div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${d.nombre}</div>
@@ -3183,6 +3183,33 @@ function docsDescargar(id, nombre) {
   a.download = nombre || 'archivo';
   a.target = '_blank';
   a.click();
+}
+
+function docsVerArchivo(id, nombre) {
+  const url = `${API}/docs-dept/${id}?token=${encodeURIComponent(TOKEN)}`;
+  const ext = (nombre || '').split('.').pop().toLowerCase();
+  const isImg   = ['jpg','jpeg','png','webp','gif','bmp','svg'].includes(ext);
+  const isPdf   = ext === 'pdf';
+  const isVideo = ['mp4','webm','mov','avi'].includes(ext);
+
+  let preview;
+  if (isImg) {
+    preview = `<img src="${url}" style="width:100%;max-height:65vh;object-fit:contain;border-radius:8px;display:block;margin-bottom:12px" loading="lazy">`;
+  } else if (isPdf) {
+    preview = `<iframe src="${url}" style="width:100%;height:65vh;border:none;border-radius:8px;display:block;margin-bottom:12px"></iframe>`;
+  } else if (isVideo) {
+    preview = `<video src="${url}" controls style="width:100%;max-height:60vh;border-radius:8px;display:block;margin-bottom:12px"></video>`;
+  } else {
+    preview = `<div style="text-align:center;padding:30px 0;font-size:52px">📎</div>
+      <div style="text-align:center;color:var(--muted);margin-bottom:20px;font-size:13px">Vista previa no disponible para este tipo de archivo</div>`;
+  }
+
+  abrirModal(nombre || 'Archivo', `
+    ${preview}
+    <div style="display:flex;gap:8px">
+      <a href="${url}" download="${nombre||'archivo'}" class="btn btn-primary" style="text-decoration:none;flex:1;text-align:center">⬇ Descargar</a>
+      <a href="${url}" target="_blank" class="btn btn-secondary" style="text-decoration:none;flex:1;text-align:center">🔗 Abrir pestaña</a>
+    </div>`, null);
 }
 
 function docsSubirFoto() {
