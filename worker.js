@@ -590,6 +590,28 @@ const AI_TOOLS = [
       },
       required: ['path', 'pattern']
     }
+  },
+  {
+    name: 'diagnose_user',
+    description: 'Diagnóstico completo de un usuario: busca por nombre/email/ID y detecta TODOS los problemas de acceso (cuenta inactiva, sin obra asignada, sin contraseña/Google, login bloqueado, pendiente de aprobación, sesiones activas). Devuelve problemas encontrados + soluciones accionables.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        identifier: { type: 'string', description: 'Nombre, email o ID del usuario a diagnosticar' }
+      },
+      required: ['identifier']
+    }
+  },
+  {
+    name: 'patrol_logs',
+    description: 'Patrulla los logs de las últimas N horas buscando errores recurrentes, patrones sospechosos y anomalías. Agrupa errores por mensaje, identifica los que se repiten 3+ veces y devuelve un informe estructurado con severidad.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        hours: { type: 'integer', description: 'Horas hacia atrás a analizar (default: 24, max: 168)' },
+        min_occurrences: { type: 'integer', description: 'Mínimo de ocurrencias para reportar un patrón (default: 3)' }
+      }
+    }
   }
 ];
 
@@ -1140,6 +1162,150 @@ async function executeAITool(env, toolName, toolInput) {
       }
     }
 
+    case 'diagnose_user': {
+      const { identifier } = toolInput;
+      try {
+        let user;
+        const id = parseInt(identifier);
+        if (!isNaN(id)) {
+          user = await env.DB.prepare('SELECT * FROM usuarios WHERE id=?').bind(id).first();
+        }
+        if (!user) {
+          user = await env.DB.prepare('SELECT * FROM usuarios WHERE email=? COLLATE NOCASE').bind(identifier).first();
+        }
+        if (!user) {
+          user = await env.DB.prepare("SELECT * FROM usuarios WHERE nombre LIKE ? COLLATE NOCASE LIMIT 1").bind(`%${identifier}%`).first();
+        }
+        if (!user) return JSON.stringify({ ok: false, error: `Usuario no encontrado: "${identifier}". Prueba con otro nombre, email o ID.` });
+
+        const problemas = [];
+        const soluciones = [];
+
+        if (!user.activo) {
+          problemas.push('Cuenta DESACTIVADA');
+          soluciones.push({ accion: 'Activar cuenta', tool: 'manage_user', params: { action: 'activate', user_id: user.id } });
+        }
+
+        if (!user.obra_id) {
+          problemas.push('Sin obra asignada — no puede ver nada en la app');
+          soluciones.push({ accion: 'Asignar obra', tool: 'sql_query', sql: `UPDATE usuarios SET obra_id=<OBRA_ID> WHERE id=${user.id}` });
+        }
+
+        if (!user.password_hash && !user.google_id) {
+          problemas.push('Sin método de autenticación (ni contraseña ni Google)');
+          soluciones.push({ accion: 'Resetear contraseña', tool: 'manage_user', params: { action: 'reset_password', user_id: user.id, value: 'temp1234' } });
+        }
+
+        if (user.aprobado === 0 || user.aprobado === '0') {
+          problemas.push('Pendiente de APROBACIÓN — no puede hacer login');
+          soluciones.push({ accion: 'Aprobar usuario', tool: 'sql_query', sql: `UPDATE usuarios SET aprobado=1 WHERE id=${user.id}` });
+        }
+
+        const loginAttempts = await env.DB.prepare(
+          "SELECT COUNT(*) as n FROM login_attempts WHERE email=? AND success=0 AND created_at > datetime('now','-1 hour')"
+        ).bind(user.email).first().catch(() => null);
+        if (loginAttempts && loginAttempts.n >= 5) {
+          problemas.push(`Login BLOQUEADO por intentos fallidos (${loginAttempts.n} en última hora)`);
+          soluciones.push({ accion: 'Limpiar intentos', tool: 'sql_query', sql: `DELETE FROM login_attempts WHERE email='${user.email}'` });
+        }
+
+        const sessions = await env.DB.prepare(
+          "SELECT COUNT(*) as n FROM sesiones WHERE usuario_id=? AND activa=1"
+        ).bind(user.id).first().catch(() => ({ n: 0 }));
+
+        const obra = user.obra_id
+          ? await env.DB.prepare('SELECT nombre FROM obras WHERE id=?').bind(user.obra_id).first().catch(() => null)
+          : null;
+
+        const empresa = user.empresa_id
+          ? await env.DB.prepare('SELECT nombre FROM empresas WHERE id=?').bind(user.empresa_id).first().catch(() => null)
+          : null;
+
+        return JSON.stringify({
+          ok: true,
+          usuario: {
+            id: user.id, nombre: user.nombre, email: user.email, rol: user.rol,
+            activo: !!user.activo, aprobado: user.aprobado !== 0 && user.aprobado !== '0',
+            empresa: empresa?.nombre || user.empresa_id, obra: obra?.nombre || user.obra_id,
+            tiene_password: !!user.password_hash, tiene_google: !!user.google_id,
+            sesiones_activas: sessions?.n || 0,
+            created_at: user.created_at
+          },
+          problemas: problemas.length ? problemas : ['Ningún problema detectado — el usuario debería poder acceder sin problemas'],
+          soluciones,
+          resumen: problemas.length === 0
+            ? `✅ ${user.nombre} — sin problemas de acceso`
+            : `⚠️ ${user.nombre} — ${problemas.length} problema(s): ${problemas.join(', ')}`
+        });
+      } catch (e) { return JSON.stringify({ ok: false, error: e.message }); }
+    }
+
+    case 'patrol_logs': {
+      const hours = Math.min(toolInput.hours || 24, 168);
+      const minOcc = toolInput.min_occurrences || 3;
+      try {
+        const logs = await env.DB.prepare(
+          `SELECT nivel, mensaje, usuario, ruta, created_at FROM logs
+           WHERE created_at > datetime('now', '-${hours} hours')
+           ORDER BY created_at DESC LIMIT 500`
+        ).all();
+        const rows = logs.results || [];
+
+        const errorGroups = {};
+        const warnGroups = {};
+        let totalErrors = 0, totalWarnings = 0, totalInfo = 0;
+
+        for (const log of rows) {
+          const nivel = (log.nivel || '').toLowerCase();
+          if (nivel === 'error' || nivel === 'critical') {
+            totalErrors++;
+            const key = (log.mensaje || '').slice(0, 100);
+            if (!errorGroups[key]) errorGroups[key] = { mensaje: log.mensaje, count: 0, usuarios: new Set(), rutas: new Set(), last: log.created_at };
+            errorGroups[key].count++;
+            if (log.usuario) errorGroups[key].usuarios.add(log.usuario);
+            if (log.ruta) errorGroups[key].rutas.add(log.ruta);
+          } else if (nivel === 'warning' || nivel === 'warn') {
+            totalWarnings++;
+            const key = (log.mensaje || '').slice(0, 100);
+            if (!warnGroups[key]) warnGroups[key] = { mensaje: log.mensaje, count: 0, last: log.created_at };
+            warnGroups[key].count++;
+          } else {
+            totalInfo++;
+          }
+        }
+
+        const recurrentes = Object.values(errorGroups)
+          .filter(g => g.count >= minOcc)
+          .sort((a, b) => b.count - a.count)
+          .map(g => ({
+            mensaje: g.mensaje?.slice(0, 200),
+            ocurrencias: g.count,
+            usuarios_afectados: [...g.usuarios].slice(0, 5),
+            rutas: [...g.rutas].slice(0, 5),
+            ultima_vez: g.last,
+            severidad: g.count >= 10 ? 'CRITICO' : g.count >= 5 ? 'ALTO' : 'MEDIO'
+          }));
+
+        const warningsRecurrentes = Object.values(warnGroups)
+          .filter(g => g.count >= minOcc)
+          .sort((a, b) => b.count - a.count)
+          .slice(0, 5)
+          .map(g => ({ mensaje: g.mensaje?.slice(0, 200), ocurrencias: g.count }));
+
+        return JSON.stringify({
+          ok: true,
+          periodo: `Últimas ${hours}h`,
+          total_logs: rows.length,
+          resumen: { errors: totalErrors, warnings: totalWarnings, info: totalInfo },
+          patrones_error: recurrentes,
+          patrones_warning: warningsRecurrentes,
+          salud: recurrentes.length === 0
+            ? `✅ Sin errores recurrentes en las últimas ${hours}h`
+            : `⚠️ ${recurrentes.length} patrón(es) de error recurrente detectado(s)`
+        });
+      } catch (e) { return JSON.stringify({ ok: false, error: e.message }); }
+    }
+
     default:
       return JSON.stringify({ ok: false, error: 'Tool no reconocida' });
   }
@@ -1621,13 +1787,13 @@ const NEXUS_EXPERTS = {
     model: 'claude-sonnet-4-6',
     max_tokens: 2048,
     modules: ['base', 'infraestructura', 'schema_core', 'schema_sistema', 'tools_usuarios', 'tools_datos', 'tools_memoria', 'aprendizaje'],
-    tool_names: ['sql_query', 'manage_user', 'send_notification', 'app_status', 'memory_save', 'memory_read', 'memory_delete', 'list_tables', 'run_migration', 'filter_notifications']
+    tool_names: ['sql_query', 'manage_user', 'diagnose_user', 'send_notification', 'app_status', 'memory_save', 'memory_read', 'memory_delete', 'list_tables', 'run_migration', 'filter_notifications']
   },
   analista: {
     model: 'claude-sonnet-4-6',
     max_tokens: 2048,
     modules: ['base', 'schema_core', 'schema_inventario', 'schema_operaciones', 'schema_sistema', 'tools_datos', 'tools_memoria', 'aprendizaje'],
-    tool_names: ['sql_query', 'list_tables', 'app_status', 'memory_save', 'memory_read', 'r2_list', 'send_notification', 'web_search']
+    tool_names: ['sql_query', 'list_tables', 'app_status', 'memory_save', 'memory_read', 'r2_list', 'send_notification', 'web_search', 'patrol_logs']
   },
   desarrollador: {
     model: 'claude-sonnet-4-6',
@@ -1806,6 +1972,63 @@ async function handleDevAI(env, chatId, userMessage) {
   }
 }
 
+// ── NEXUS WATCHERS — vigilancia sin LLM, coste 0 ────────────────────────────
+async function nexusWatchers(env) {
+  const alerts = [];
+
+  // 1. UserAccessWatcher — logins bloqueados en la última hora
+  try {
+    const blocked = await env.DB.prepare(
+      "SELECT email, COUNT(*) as n FROM login_attempts WHERE success=0 AND created_at > datetime('now','-1 hour') GROUP BY email HAVING n >= 5"
+    ).all();
+    for (const row of (blocked.results || [])) {
+      alerts.push({ watcher: 'UserAccess', severity: 'HIGH', msg: `Login bloqueado: ${row.email} (${row.n} intentos fallidos en 1h)` });
+    }
+  } catch {}
+
+  // 2. PendingUsersWatcher — usuarios pendientes >24h
+  try {
+    const pending = await env.DB.prepare(
+      "SELECT nombre, email, created_at FROM usuarios WHERE (aprobado=0 OR activo=0) AND created_at < datetime('now','-24 hours') LIMIT 10"
+    ).all();
+    for (const u of (pending.results || [])) {
+      alerts.push({ watcher: 'PendingUsers', severity: 'MEDIUM', msg: `Usuario pendiente >24h: ${u.nombre} (${u.email}) — registrado ${u.created_at}` });
+    }
+  } catch {}
+
+  // 3. ErrorWatcher — errores recurrentes (3+ en 24h)
+  try {
+    const errors = await env.DB.prepare(
+      "SELECT mensaje, COUNT(*) as n FROM logs WHERE nivel='error' AND created_at > datetime('now','-24 hours') GROUP BY mensaje HAVING n >= 3 ORDER BY n DESC LIMIT 5"
+    ).all();
+    for (const e of (errors.results || [])) {
+      alerts.push({ watcher: 'ErrorPatrol', severity: e.n >= 10 ? 'CRITICAL' : 'HIGH', msg: `Error recurrente (${e.n}x/24h): ${e.mensaje?.slice(0, 150)}` });
+    }
+  } catch {}
+
+  // 4. CarnetWatcher — carnets que expiran en <30 días
+  try {
+    const expiring = await env.DB.prepare(
+      "SELECT c.tipo, u.nombre FROM carnets c JOIN usuarios u ON c.usuario_id=u.id WHERE c.fecha_caducidad BETWEEN date('now') AND date('now','+30 days') LIMIT 10"
+    ).all();
+    for (const c of (expiring.results || [])) {
+      alerts.push({ watcher: 'Carnets', severity: 'MEDIUM', msg: `Carnet por expirar: ${c.nombre} — ${c.tipo}` });
+    }
+  } catch {}
+
+  // 5. FixesPendientesWatcher — fixes sin revisar >48h
+  try {
+    const stale = await env.DB.prepare(
+      "SELECT COUNT(*) as n FROM alejandra_fixes WHERE estado='pendiente' AND created_at < datetime('now','-48 hours')"
+    ).first();
+    if (stale?.n > 0) {
+      alerts.push({ watcher: 'FixesStale', severity: 'MEDIUM', msg: `${stale.n} fix(es) pendiente(s) de aprobación >48h` });
+    }
+  } catch {}
+
+  return alerts;
+}
+
 // ── REVISIÓN AUTÓNOMA DIARIA ─────────────────────────────────────────────────
 async function runAutonomousReview(env) {
   const devChatId = env.DEV_CHAT_ID;
@@ -1814,6 +2037,9 @@ async function runAutonomousReview(env) {
     return;
   }
   try {
+    // ── Fase 1: Watchers (coste 0, sin LLM) ──────────────────────────────
+    const watcherAlerts = await nexusWatchers(env);
+
     const [sugs, errores, pendientes, fixesPend] = await Promise.all([
       env.DB.prepare("SELECT id, texto, categoria, (foto IS NOT NULL AND foto != '') as tiene_foto, usuario, obra FROM sugerencias WHERE estado='pendiente' AND leida=0 ORDER BY created_at DESC LIMIT 10").all().catch(() => ({ results: [] })),
       env.DB.prepare("SELECT mensaje, created_at FROM logs WHERE nivel='error' AND created_at > datetime('now','-24 hours') ORDER BY created_at DESC LIMIT 15").all().catch(() => ({ results: [] })),
@@ -1825,9 +2051,7 @@ async function runAutonomousReview(env) {
     const errArr  = errores.results || [];
     const pendArr = pendientes.results || [];
 
-    // Aunque no haya sugerencias/errores, siempre ejecutar self_audit nocturno
-    if (sugsArr.length === 0 && errArr.length === 0 && pendArr.length === 0) {
-      // Solo self_audit silencioso — sin invocar el agente completo para ahorrar tokens
+    if (sugsArr.length === 0 && errArr.length === 0 && pendArr.length === 0 && watcherAlerts.length === 0) {
       try {
         const auditResult = JSON.parse(await executeAITool(env, 'self_audit', {}));
         if (auditResult.issues?.length > 0) {
@@ -1850,30 +2074,44 @@ async function runAutonomousReview(env) {
       : '';
 
     let prompt = `[${getNow()}] Revisión autónoma. Actúa directamente sin esperar más instrucciones.\n\n`;
+
+    // Alertas de watchers (prioridad máxima — ya confirmadas sin LLM)
+    if (watcherAlerts.length) {
+      prompt += `🚨 ALERTAS WATCHERS (${watcherAlerts.length}):\n` + watcherAlerts.map(a => `- [${a.severity}][${a.watcher}] ${a.msg}`).join('\n') + '\n\n';
+    }
     if (sugsArr.length)  prompt += `📋 SUGERENCIAS SIN LEER (${sugsArr.length}):\n` + sugsArr.map(s => `- #${s.id}: "${s.texto}" | ${s.categoria} | ${s.usuario}${s.tiene_foto ? ' | 📸 tiene captura' : ''}`).join('\n') + '\n\n';
     if (errArr.length)   prompt += `🔴 ERRORES 24H (${errArr.length}):\n` + errArr.slice(0, 8).map(e => `- ${e.mensaje}`).join('\n') + '\n\n';
     if (pendArr.length)  prompt += `📌 TUS PENDIENTES:\n` + pendArr.map(p => `- [mem:${p.id}] ${p.titulo}: ${p.contenido}`).join('\n') + '\n\n';
     if (fixesPend?.n > 0) prompt += `⏳ ${fixesPend.n} fixes esperando aprobación de Adrián.\n\n`;
     prompt += `INSTRUCCIONES (Nivel B — ingeniería autónoma):
 0. SIEMPRE ejecuta self_audit() primero. Problemas detectados = bugs de alta prioridad.
-1. Para sugerencias con 📸: read_suggestion_image para ver la captura antes de analizar.
-2. FLUJO PARA CADA BUG CONFIRMADO:
+1. ALERTAS WATCHERS = problemas CONFIRMADOS. Resuélvelos directamente:
+   - UserAccess: usa diagnose_user para diagnosticar y resolver bloqueos.
+   - PendingUsers: notifica a Adrián con datos del usuario.
+   - ErrorPatrol: usa patrol_logs + grep_code para localizar y fixear.
+   - Carnets: notifica a los encargados del usuario afectado.
+2. Para sugerencias con 📸: read_suggestion_image para ver la captura antes de analizar.
+3. FLUJO PARA CADA BUG CONFIRMADO:
    a. grep_code(archivo, función_o_patrón) → localizar el código exacto
    b. repo_read_file(archivo, línea_inicio, línea_fin) → leer contexto completo
    c. Si el fix es <30 líneas y bajo riesgo → direct_fix directamente (sin pedir permiso)
    d. Si el fix es >30 líneas o afecta auth/seguridad → propose_fix para aprobación
-3. Para migraciones pendientes (tablas que faltan, columnas nuevas): run_migration directamente.
-4. Si no puedes estar segura del diagnóstico: send_notification describiendo el análisis.
-5. Marca las sugerencias analizadas: sql_query con UPDATE sugerencias SET leida=1 WHERE id=?
-6. Después de cada direct_fix: check_deploy_status para confirmar el deploy.
-7. Al terminar: memory_save resumen + send_notification con informe a Adrián.`;
+4. Para migraciones pendientes (tablas que faltan, columnas nuevas): run_migration directamente.
+5. Si no puedes estar segura del diagnóstico: send_notification describiendo el análisis.
+6. Marca las sugerencias analizadas: sql_query con UPDATE sugerencias SET leida=1 WHERE id=?
+7. Después de cada direct_fix: check_deploy_status para confirmar el deploy.
+8. Al terminar: memory_save resumen + send_notification con informe a Adrián.`;
 
+    // ── Fase 2: LLM con NEXUS (experto autónomo) ────────────────────────
+    const nexusPrompt = buildNexusPrompt('autonomo', 'telegram');
     const cronSystemBlocks = [
-      { type: 'text', text: buildAlejandraSystemPrompt('telegram'), cache_control: { type: 'ephemeral' } },
+      { type: 'text', text: nexusPrompt, cache_control: { type: 'ephemeral' } },
       ...(memoriaCtx ? [{ type: 'text', text: memoriaCtx, cache_control: { type: 'ephemeral' } }] : [])
     ];
-    const cronToolsConCache = AI_TOOLS.map((t, i) =>
-      i === AI_TOOLS.length - 1 ? { ...t, cache_control: { type: 'ephemeral' } } : t
+    const expertConfig = NEXUS_EXPERTS.autonomo;
+    const cronTools = nexusTools('autonomo') || AI_TOOLS;
+    const cronToolsConCache = cronTools.map((t, i) =>
+      i === cronTools.length - 1 ? { ...t, cache_control: { type: 'ephemeral' } } : t
     );
     const cronHeaders = {
       'Content-Type': 'application/json',
@@ -1886,12 +2124,12 @@ async function runAutonomousReview(env) {
     let response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: cronHeaders,
-      body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 8192, system: cronSystemBlocks, tools: cronToolsConCache, messages })
+      body: JSON.stringify({ model: expertConfig.model, max_tokens: 8192, system: cronSystemBlocks, tools: cronToolsConCache, messages })
     });
     let result = await response.json();
 
     let iters = 0;
-    while (result.stop_reason === 'tool_use' && iters < 10) {
+    while (result.stop_reason === 'tool_use' && iters < 15) {
       iters++;
       const toolBlocks = result.content.filter(b => b.type === 'tool_use');
       const toolResults = await Promise.all(toolBlocks.map(async tb => ({
@@ -1903,7 +2141,7 @@ async function runAutonomousReview(env) {
       response = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: cronHeaders,
-        body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 8192, system: cronSystemBlocks, tools: cronToolsConCache, messages })
+        body: JSON.stringify({ model: expertConfig.model, max_tokens: 8192, system: cronSystemBlocks, tools: cronToolsConCache, messages })
       });
       result = await response.json();
     }
@@ -1912,18 +2150,18 @@ async function runAutonomousReview(env) {
     logAIUsage(env, {
       empresa_id: null,
       proveedor: 'anthropic',
-      modelo: 'claude-sonnet-4-6',
-      endpoint: 'agente_cron',
+      modelo: expertConfig.model,
+      endpoint: 'agente_cron:autonomo',
       input_tokens: result.usage?.input_tokens || 0,
       output_tokens: result.usage?.output_tokens || 0,
     });
+    trackExpertHealth(env, 'autonomo', result.usage?.input_tokens || 0, result.usage?.output_tokens || 0);
     if (finalText) {
       await sendTelegramToChat(env, env.DEV_CHAT_ID, finalText.slice(0, 4000));
-      // Push si hay fixes propuestos o problemas detectados
       const hayFixes = finalText.includes('propose_fix') || finalText.includes('fix propuesto') || finalText.includes('Fix #');
-      const hayProblemas = finalText.includes('⚠️') || finalText.includes('❌') || finalText.includes('problema');
+      const hayProblemas = finalText.includes('⚠️') || finalText.includes('❌') || finalText.includes('problema') || watcherAlerts.some(a => a.severity === 'CRITICAL');
       if (hayFixes || hayProblemas) {
-        await sendWebPushToDevs(env, '🤖 Alejandra — revisión nocturna', hayFixes ? 'Hay fixes pendientes de tu aprobación' : 'Problemas detectados, revisa Telegram', '/panel.html');
+        await sendWebPushToDevs(env, '🤖 Alejandra — revisión nocturna', hayFixes ? 'Hay fixes pendientes de tu aprobación' : `${watcherAlerts.length} alertas + problemas detectados`, '/panel.html');
       }
     }
   } catch (e) {
