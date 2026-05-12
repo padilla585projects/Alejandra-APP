@@ -5047,6 +5047,10 @@ function _applyScreen(name) {
     if (name === 'dept') aplicarDeptosActivos();
   }
   if (name === 'empresaSel')   { cargarEmpresasAdmin(); }
+  if (name !== 'module') {
+    const fabScanBob = document.getElementById('btnScanBobinas');
+    if (fabScanBob) fabScanBob.style.display = 'none';
+  }
   actualizarBtnAtras();
   cargarBadgeIdeas();
 }
