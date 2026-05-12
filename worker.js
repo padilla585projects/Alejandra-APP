@@ -1478,43 +1478,274 @@ Monitoriza estas señales de alarma:
 - deploy_status failure → investigar GitHub Actions log → corregir causa raíz`;
 }
 
+// ══════════════════════════════════════════════════════════════════════════════
+// NEXUS — Neural EXpert Unified System
+// Router + módulos de prompt dinámicos + expertos + health scores.
+// Reemplaza el system prompt monolítico (~4000 tokens) por prompts ensamblados
+// (~800 tokens efectivos). El router usa Haiku (~0.04¢/msg) para decidir qué
+// experto y qué módulos cargar. Fallback algorítmico instantáneo si Haiku falla.
+// ══════════════════════════════════════════════════════════════════════════════
+
+const NEXUS_MODULES = {
+  base: `Eres Alejandra, la IA administradora de la plataforma Alejandra APP. Eres mujer, inteligente, directa y eficiente — no eres un bot genérico. Tu creador es Adrián (superadmin/desarrollador, Telegram: 6965043). Tienes CONTROL TOTAL sobre la app, el código y la infraestructura. Responde siempre en español, de forma concisa. La fecha/hora actual viene entre corchetes al inicio de cada mensaje del usuario — úsala para contexto sin mencionarla explícitamente.`,
+
+  infraestructura: `INFRAESTRUCTURA:
+Worker CF: alejandra-app-api.alejandra-app.workers.dev (worker.js ~9400 líneas, V8 isolate, no Node.js)
+D1 SQLite: alejandra-db (ID: 0c9eccde-78f1-476d-ac68-bf452bec0c62) | R2: alejandra-app-files
+Cuenta CF: d65ead2b2967bf68ff3848a36cd7b1b4 | Compatibilidad: 2024-01-01
+Secrets: ANTHROPIC_API_KEY, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, DEV_CHAT_ID, GITHUB_TOKEN, CLOUDFLARE_API_TOKEN, RESEND_API_KEY, TAVILY_API_KEY, GOOGLE_* (Sheets/OAuth)
+GitHub: padilla585projects/Alejandra-APP (main) | Pages: padilla585projects.github.io/Alejandra-APP/
+Telegram bot: @AlejandraAPP_bot | Webhook: /telegram/webhook | Dev chat (DEV_CHAT_ID): 6965043`,
+
+  cicd: `CI/CD AUTO-DEPLOY:
+worker.js o wrangler.toml → deploy-worker.yml → wrangler deploy → CF activo en ~1 min
+index.html, panel.html, sw.js, version.json → pages.yml → GitHub Pages en ~30 seg
+CRÍTICO: version.json, sw.js CACHE y index.html APP_VERSION deben ser IDÉNTICOS o hay bucle de recarga infinita.
+NUNCA reescribas worker.js completo con repo_write_file. Usa direct_fix (patch: grep → read → fix → verify).`,
+
+  schema_core: `SCHEMA BD — CORE:
+empresas(id, nombre, plan, activa, departamentos TEXT, config_modulos TEXT)
+obras(id, nombre, codigo UNIQUE, activa, empresa_id, horario_obra TEXT)
+usuarios(id, nombre, email, codigo, password_hash, rol, activo, google_id, telegram_id, departamento, empresa_id, obra_id, obra_nombre)
+sesiones(id, token, usuario_id, nombre, rol, obra_id, obra_nombre, empresa_id, departamento, expires_at, created_at, last_used)
+personal_externo(id, empresa_id, obra_id, nombre, dni, categoria, telefono, empresa_subcontrata, activo)
+horarios_obra(id, empresa_id, obra_id, hora_entrada, hora_salida, tolerancia_min, horarios_dia TEXT)
+ROLES: superadmin > desarrollador > empresa_admin > jefe_de_obra > encargado > oficina > operario`,
+
+  schema_inventario: `SCHEMA BD — INVENTARIO:
+bobinas(id, codigo UNIQUE, tipo, seccion, longitud, proveedor, num_albaran, estado[disponible/asignada/devuelta], obra_id, obra_nombre, departamento, empresa_id, tipo_cable, notas)
+pemp(id, matricula UNIQUE, tipo, marca, energia, estado[disponible/asignada/averia/revision], obra_id, fecha_proxima_revision, empresa_id, aviso_mantenimiento, dias_aviso_mant)
+carretillas(id, matricula UNIQUE, tipo, marca, energia, estado, obra_id, fecha_proxima_revision, empresa_id)
+herramientas(id, codigo, nombre, tipo_id, estado, obra_id, empresa_id) | kits_herramientas(id, empresa_id, numero_kit, nombre, obra_id, departamento, asignado_a)
+inventario_seg(id, empresa_id, tipo_material, modo[individual/cantidad], codigo, nombre, cantidad_total, cantidad_disponible, estado, fecha_caducidad, stock_minimo)
+historial_mantenimientos(id, empresa_id, equipo_tipo, equipo_id, tipo_mantenimiento, descripcion, usuario, fecha)
+repostajes(id, empresa_id, obra_id, equipo_tipo, equipo_id, tipo, cantidad, unidad, coste, usuario, fecha)`,
+
+  schema_operaciones: `SCHEMA BD — OPERACIONES:
+pedidos(id, descripcion, estado[pendiente/aprobado/recibido/cancelado], prioridad, obra_id, usuario, empresa_id)
+albaranes(id, empresa_id, pedido_id, r2_key, nombre_archivo, mime_type, subido_por)
+incidencias(id, empresa_id, obra_id, departamento, titulo, tipo, gravedad, estado[abierta/en_proceso/resuelta/cerrada], reportado_por)
+fichajes(id, empresa_id, usuario_id, personal_externo_id, obra_id, fecha, hora_entrada, hora_salida, horas_extra, estado, minutos_retraso)
+partes_trabajo(id, empresa_id, obra_id, fecha, personal JSON, material JSON, descripcion, firma_cliente, firma_responsable)
+carnets(id, empresa_id, usuario_id, externo_id, tipo, numero, fecha_caducidad, dias_aviso, estado)
+epis_asignados(id, empresa_id, usuario_id, externo_id, tipo_epi, talla, fecha_entrega, fecha_caducidad, estado)
+turnos(id, empresa_id, obra_id, nombre, hora_inicio, hora_fin, dias_semana, activo)
+eventos_calendario(id, empresa_id, obra_id, titulo, fecha_inicio, fecha_fin, tipo, usuario)`,
+
+  schema_sistema: `SCHEMA BD — SISTEMA ALEJANDRA:
+alejandra_memoria(id, tipo[hecho/pendiente/contexto/aviso/aprendizaje/error], canal, titulo, contenido, importancia[1-5], updated_at)
+alejandra_historial(id, canal[telegram/web], rol[user/assistant], contenido, created_at)
+alejandra_fixes(id, descripcion, archivo, old_code, new_code, razon, estado, commit_sha)
+alejandra_config(key PRIMARY KEY, value, updated_at)
+nexus_experts(id, nombre, score, total_calls, tokens_in, tokens_out, cost_cents, updated_at)
+logs(id, tipo, nivel[info/warning/error], mensaje, usuario, empresa_id, created_at)
+ai_usage(id, empresa_id, proveedor, modelo, endpoint, input_tokens, output_tokens, coste_usd)
+config(clave PRIMARY KEY, valor) | sugerencias(id, texto, categoria, usuario, obra, estado, empresa_id, foto)
+reset_tokens | vincular_tokens | login_attempts`,
+
+  app_modulos: `MÓDULOS DE LA APP (multi-tenant por empresa_id):
+Bobinas cable · PEMP (plataformas elevadoras) · Carretillas elevadoras · Obras/proyectos
+Personal y fichajes · Turnos · Carnets/certificados · EPIs asignados
+Inventario seguridad · Pedidos · Proveedores · Herramientas · Kits herramientas
+Documentos (carpetas + docs_dept + docs_notas) · Albaranes · Checklists inspección
+Incidencias · Chat de equipo · Partes de trabajo · Galería fotos · Repostajes · Calendario`,
+
+  tools_datos: `TOOLS — DATOS:
+sql_query(sql): SQL libre (SELECT/INSERT/UPDATE/DELETE/CREATE/ALTER/DROP)
+list_tables(): conteo de registros en todas las tablas
+app_status(): resumen ejecutivo (usuarios activos, sesiones, obras, errores 24h, sugerencias pendientes)
+run_migration(sql, descripcion?): DDL en D1 (CREATE TABLE IF NOT EXISTS, ALTER TABLE)`,
+
+  tools_usuarios: `TOOLS — USUARIOS Y COMUNICACIÓN:
+manage_user(action, user_id, value): activate|deactivate|change_role|delete|reset_password|info
+send_notification(message, chat_id?): Telegram al grupo principal o a un usuario específico
+filter_notifications(action, filters?): ver/configurar qué notificaciones recibes`,
+
+  tools_codigo: `TOOLS — CÓDIGO (flujo obligatorio: grep → read → fix → verify):
+grep_code(path, pattern, context_lines?): busca en archivo. SIEMPRE antes de editar.
+repo_read_file(path, line_start?, line_end?): lee bloque. Úsalo tras grep para ver contexto completo.
+repo_list_dir(path?): lista directorio en GitHub
+repo_write_file(path, content, message): crea archivo nuevo pequeño. NUNCA para worker.js entero.
+direct_fix(desc, archivo, old_code, new_code, razon, sug_id?): patch inmediato sin esperar OK. Notifica después con [↩️ Revertir].
+propose_fix(desc, archivo, old_code, new_code, razon, sug_id?): envía a Adrián para aprobación. Para cambios arriesgados o >50 líneas.
+check_deploy_status(): estado del último deploy en GitHub Actions`,
+
+  tools_memoria: `TOOLS — MEMORIA, VISIÓN E INTERNET:
+memory_save(tipo, titulo, contenido, importancia): persiste aprendizajes entre sesiones
+memory_read(tipo?, limit?): recupera memoria. Úsalo al inicio si el contexto es corto.
+memory_delete(id): elimina entrada de memoria
+read_suggestion_image(id): muestra imagen adjunta de una sugerencia para analizar visualmente bugs
+web_search(query, depth?): Tavily — resultados reales web. depth='advanced' para preguntas complejas.
+self_audit(): diagnóstico completo (schema BD, tablas, historial, errores). Paso 0 obligatorio en revisión autónoma.
+r2_list(prefix?): lista archivos en R2 | r2_delete(key): elimina archivo de R2`,
+
+  aprendizaje: `SISTEMA DE APRENDIZAJE — guarda SIEMPRE en memoria:
+· Después de cada fix: memory_save tipo='hecho' con archivo, línea y qué cambió.
+· Si un tool devuelve error: memory_save tipo='error' ANTES de reintentar. Incluye: tool, input, error, qué harás diferente.
+· Si descubres cómo funciona algo: memory_save tipo='aprendizaje'.
+· Lee memoria al inicio de tareas importantes: memory_read tipo='error' para no repetir fallos previos.
+REGLA FUNDAMENTAL: si no lo guardas, lo pierdes. Cada acción → guardar qué aprendiste.`,
+
+  flujo_ingeniero: `FLUJO OBLIGATORIO PARA TOCAR CÓDIGO:
+1. grep_code(archivo, patrón) → localiza el código afectado (línea exacta)
+2. repo_read_file(archivo, inicio, fin) → lee contexto completo alrededor del match
+3. memory_read tipo='error' → ¿ya fallé aquí antes?
+4. Diseña solución mínima. Decide: direct_fix (<30 líneas, 1 función) o propose_fix (>50 líneas, auth, estructural)
+5. old_code copiado LITERALMENTE de repo_read_file (nunca de memoria ni de estimaciones)
+6. Espera 90s → check_deploy_status()
+7. Si falla el deploy: investigar log de Actions → corregir → volver al paso 5
+8. memory_save tipo='hecho' + send_notification con resultado`,
+
+  autonomia: `AUTONOMÍA NIVEL B:
+✅ ACTÚA DIRECTO (direct_fix sin pedir permiso): bug confirmado por 1+ usuario, error recurrente en logs (3+ veces/24h), fix quirúrgico <30 líneas en 1 función, migración BD (añadir columna/tabla), feature simple pedida directamente por Adrián.
+⚠️ PIDE PERMISO (propose_fix): cambios en auth/permisos/seguridad, reescritura >50 líneas, cambios estructurales BD (DROP/renombrar), nueva feature compleja multi-módulo.
+🚨 NUNCA: reescribir archivos completos, modificar auth sin propose_fix, borrar datos de producción sin confirmación explícita de Adrián.`,
+
+  vigilancia: `VIGILANCIA ACTIVA — señales de alarma:
+· version.json ≠ index.html APP_VERSION → bucle de recarga infinita → fix inmediato
+· Endpoint con >3 errores 500 en 24h → bug en producción → investigar + fix
+· Tabla en schema pero no en sqlite_master → migración pendiente → run_migration
+· nexus_experts score < 60 → experto degradado → revisar configuración
+· deploy_status failure → investigar GitHub Actions log → corregir causa raíz`
+};
+
+// ── Configuración de expertos NEXUS ──────────────────────────────────────────
+const NEXUS_EXPERTS = {
+  asistente: {
+    model: 'claude-haiku-4-5-20251001',
+    max_tokens: 1024,
+    modules: ['base', 'app_modulos', 'tools_datos'],
+    tool_names: ['app_status', 'send_notification', 'memory_read', 'list_tables']
+  },
+  gestor_app: {
+    model: 'claude-sonnet-4-6',
+    max_tokens: 2048,
+    modules: ['base', 'infraestructura', 'schema_core', 'schema_sistema', 'tools_usuarios', 'tools_datos', 'tools_memoria', 'aprendizaje'],
+    tool_names: ['sql_query', 'manage_user', 'send_notification', 'app_status', 'memory_save', 'memory_read', 'memory_delete', 'list_tables', 'run_migration', 'filter_notifications']
+  },
+  analista: {
+    model: 'claude-sonnet-4-6',
+    max_tokens: 2048,
+    modules: ['base', 'schema_core', 'schema_inventario', 'schema_operaciones', 'schema_sistema', 'tools_datos', 'tools_memoria', 'aprendizaje'],
+    tool_names: ['sql_query', 'list_tables', 'app_status', 'memory_save', 'memory_read', 'r2_list', 'send_notification', 'web_search']
+  },
+  desarrollador: {
+    model: 'claude-sonnet-4-6',
+    max_tokens: 4096,
+    modules: ['base', 'infraestructura', 'cicd', 'schema_sistema', 'tools_codigo', 'tools_datos', 'tools_memoria', 'aprendizaje', 'flujo_ingeniero', 'autonomia', 'vigilancia'],
+    tool_names: null // null = todas las tools
+  },
+  autonomo: {
+    model: 'claude-sonnet-4-6',
+    max_tokens: 4096,
+    modules: ['base', 'infraestructura', 'cicd', 'app_modulos', 'schema_core', 'schema_inventario', 'schema_operaciones', 'schema_sistema', 'tools_codigo', 'tools_datos', 'tools_usuarios', 'tools_memoria', 'aprendizaje', 'flujo_ingeniero', 'autonomia', 'vigilancia'],
+    tool_names: null
+  }
+};
+
+// ── Router NEXUS: elige experto en <1s con Haiku + fallback algorítmico ───────
+async function nexusRoute(env, message) {
+  const txt = (typeof message === 'string' ? message : JSON.stringify(message)).toLowerCase();
+
+  // Fallback algorítmico — instantáneo, coste 0
+  const fallback = () => {
+    if (/código|bug|fix|deploy|github|worker\.js|index\.html|panel\.html|línea|función|error.*log|log.*error|commit|push|wrangler|direct_fix|propose_fix|grep|repo_|check_deploy/.test(txt))
+      return 'desarrollador';
+    if (/usuario|acceso|contraseña|rol|permiso|aprobación|bloqueado|sesión.*cerr|activar|desactivar|manage_user|invitación/.test(txt))
+      return 'gestor_app';
+    if (/informe|estadística|sql|select|count\b|cuántos|cuántas|datos|exportar|historial|resumen.*mes|resumen.*obra|analizar/.test(txt))
+      return 'analista';
+    return 'asistente';
+  };
+
+  try {
+    const routerPrompt = `Clasifica este mensaje en uno de estos expertos y devuelve SOLO JSON válido sin texto adicional.
+Expertos: asistente (preguntas simples, estado, saludos, conversación), gestor_app (usuarios, accesos, permisos, configuración de empresa, aprobaciones), desarrollador (código, bugs, fixes, deploy, git, worker.js, html), analista (informes, SQL, estadísticas, datos, conteos, resúmenes).
+Mensaje: "${txt.slice(0, 400)}"
+JSON requerido: {"expert":"<nombre>","compress_history":<bool>}`;
+
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
+      body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 64, messages: [{ role: 'user', content: routerPrompt }] })
+    });
+    if (!res.ok) return { expert: fallback(), compress_history: false };
+    const data = await res.json();
+    const raw = data.content?.[0]?.text || '';
+    const match = raw.match(/\{[^}]+\}/);
+    const parsed = match ? JSON.parse(match[0]) : {};
+    const expert = NEXUS_EXPERTS[parsed.expert] ? parsed.expert : fallback();
+    return { expert, compress_history: !!parsed.compress_history };
+  } catch {
+    return { expert: fallback(), compress_history: false };
+  }
+}
+
+// ── Ensambla prompt dinámico desde los módulos del experto ───────────────────
+function buildNexusPrompt(expertName, canal = 'telegram') {
+  const expert = NEXUS_EXPERTS[expertName] || NEXUS_EXPERTS.autonomo;
+  const canalNote = canal === 'web'
+    ? ' Puedes usar HTML básico (<b>, <i>, <code>, <br>, <ul>, <li>) — el chat web lo renderiza.'
+    : ' Estamos en Telegram: sin markdown complejo (evita # y **), usa emojis con moderación.';
+  return expert.modules.map(m => NEXUS_MODULES[m] || '').filter(Boolean).join('\n\n') + canalNote;
+}
+
+// ── Filtra tools según el experto (null = todas) ─────────────────────────────
+function nexusTools(expertName) {
+  const expert = NEXUS_EXPERTS[expertName];
+  if (!expert || !expert.tool_names) return AI_TOOLS;
+  return AI_TOOLS.filter(t => expert.tool_names.includes(t.name));
+}
+
+// ── Actualiza health score del experto en D1 (fire-and-forget) ───────────────
+function trackExpertHealth(env, expertName, tokensIn, tokensOut) {
+  env.DB.prepare(`
+    INSERT INTO nexus_experts (nombre, score, total_calls, tokens_in, tokens_out, cost_cents, updated_at)
+    VALUES (?, 80, 1, ?, ?, 0, datetime('now'))
+    ON CONFLICT(nombre) DO UPDATE SET
+      total_calls = total_calls + 1,
+      tokens_in   = tokens_in + excluded.tokens_in,
+      tokens_out  = tokens_out + excluded.tokens_out,
+      updated_at  = datetime('now')
+  `).bind(expertName, tokensIn || 0, tokensOut || 0).run().catch(() => {});
+}
+
+// ── Fin bloque NEXUS ──────────────────────────────────────────────────────────
+
 async function handleDevAI(env, chatId, userMessage) {
-  const systemPrompt = buildAlejandraSystemPrompt('telegram');
+  // ── NEXUS: routing dinámico ──────────────────────────────────────────────
+  const { expert: expertName, compress_history } = await nexusRoute(env, userMessage);
+  const expert = NEXUS_EXPERTS[expertName];
+  const histLimit = compress_history ? 6 : 20;
 
-  const MODEL = 'claude-sonnet-4-6';
-
-  // Cargar memoria e historial (canal developer — sin límites reducidos)
+  // Cargar memoria e historial con límite dinámico según routing
   const [memoriaRows, historialRows] = await Promise.all([
-    env.DB.prepare("SELECT id, tipo, titulo, contenido, importancia FROM alejandra_memoria ORDER BY importancia DESC, updated_at DESC LIMIT 30").all().catch(() => ({ results: [] })),
-    env.DB.prepare("SELECT rol, contenido FROM alejandra_historial WHERE canal='telegram' ORDER BY created_at DESC LIMIT 20").all().catch(() => ({ results: [] }))
+    env.DB.prepare("SELECT id, tipo, titulo, contenido, importancia FROM alejandra_memoria ORDER BY importancia DESC, updated_at DESC LIMIT 20").all().catch(() => ({ results: [] })),
+    env.DB.prepare(`SELECT rol, contenido FROM alejandra_historial WHERE canal='telegram' ORDER BY created_at DESC LIMIT ${histLimit}`).all().catch(() => ({ results: [] }))
   ]);
 
   const memoriaCtx = memoriaRows.results?.length
-    ? '\n\n=== TU MEMORIA ACTUAL ===\n' + memoriaRows.results.map(m => `[${m.id}][${m.tipo.toUpperCase()}][imp:${m.importancia}] ${m.titulo}: ${m.contenido}`).join('\n')
+    ? '\n\n=== MEMORIA ===\n' + memoriaRows.results.map(m => `[${m.id}][${m.tipo.toUpperCase()}][${m.importancia}] ${m.titulo}: ${m.contenido}`).join('\n')
     : '';
 
-  // System prompt como array con cache_control en el bloque estático (infraestructura)
-  // y en el bloque de memoria (cambia menos que el historial)
+  // Prompt dinámico ensamblado desde módulos del experto elegido
   const systemBlocks = [
-    { type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } },
+    { type: 'text', text: buildNexusPrompt(expertName, 'telegram'), cache_control: { type: 'ephemeral' } },
     ...(memoriaCtx ? [{ type: 'text', text: memoriaCtx, cache_control: { type: 'ephemeral' } }] : [])
   ];
 
-  // Marcar el último tool para cachear también la definición de tools
-  const toolsConCache = AI_TOOLS.map((t, i) =>
-    i === AI_TOOLS.length - 1 ? { ...t, cache_control: { type: 'ephemeral' } } : t
-  );
+  // Tools filtradas según el experto
+  const tools = nexusTools(expertName);
+  const toolsConCache = tools.map((t, i) => i === tools.length - 1 ? { ...t, cache_control: { type: 'ephemeral' } } : t);
 
-  // Historial previo de conversación (más reciente al final)
+  // Historial previo (más reciente al final)
   const historialMsgs = (historialRows.results || []).reverse().map(h => ({ role: h.rol, content: h.contenido }));
-  // Fecha en el mensaje del usuario (no en el system prompt) para que el caché no se invalide
   const datePrefix = `[${getNow()}] `;
   const currentUserContent = Array.isArray(userMessage)
     ? [{ type: 'text', text: datePrefix }, ...userMessage]
     : datePrefix + userMessage;
   const messages = [...historialMsgs, { role: 'user', content: currentUserContent }];
 
-  // Guardar mensaje del usuario en historial (si es array con imagen, guardamos el texto)
   const msgTextTg = Array.isArray(userMessage) ? (userMessage.find(b => b.type === 'text')?.text || '[imagen]') : userMessage;
   env.DB.prepare("INSERT INTO alejandra_historial (canal, rol, contenido) VALUES ('telegram', 'user', ?)").bind(msgTextTg.slice(0, 4000)).run().catch(() => {});
   env.DB.prepare("DELETE FROM alejandra_historial WHERE canal='telegram' AND id NOT IN (SELECT id FROM alejandra_historial WHERE canal='telegram' ORDER BY created_at DESC LIMIT 50)").run().catch(() => {});
@@ -1527,14 +1758,13 @@ async function handleDevAI(env, chatId, userMessage) {
   };
 
   try {
-    await sendTelegramToChat(env, chatId, '⏳ Procesando...');
+    await sendTelegramToChat(env, chatId, `⏳ [${expertName}] Procesando...`);
 
     let response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: API_HEADERS,
-      body: JSON.stringify({ model: MODEL, max_tokens: 4096, system: systemBlocks, tools: toolsConCache, messages })
+      body: JSON.stringify({ model: expert.model, max_tokens: expert.max_tokens, system: systemBlocks, tools: toolsConCache, messages })
     });
-
     let result = await response.json();
 
     if (!response.ok || result.error) {
@@ -1555,7 +1785,7 @@ async function handleDevAI(env, chatId, userMessage) {
       response = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: API_HEADERS,
-        body: JSON.stringify({ model: MODEL, max_tokens: 4096, system: systemBlocks, tools: toolsConCache, messages })
+        body: JSON.stringify({ model: expert.model, max_tokens: expert.max_tokens, system: systemBlocks, tools: toolsConCache, messages })
       });
       result = await response.json();
     }
@@ -1563,10 +1793,9 @@ async function handleDevAI(env, chatId, userMessage) {
     const textBlocks = (result.content || []).filter(b => b.type === 'text');
     const finalText = textBlocks.map(b => b.text).join('\n') || '(sin respuesta)';
 
-    // Guardar respuesta en historial — await obligatorio para que no se pierda antes de que el Worker termine
     await env.DB.prepare("INSERT INTO alejandra_historial (canal, rol, contenido) VALUES ('telegram', 'assistant', ?)").bind(finalText.slice(0, 4000)).run().catch(() => {});
-    // Push al developer (Alejandra responde en Telegram → push a la app por si la tiene abierta)
     sendWebPushToDevs(env, '📱 Alejandra (Telegram)', finalText.slice(0, 120) + (finalText.length > 120 ? '…' : ''), '/panel.html').catch(() => {});
+    trackExpertHealth(env, expertName, result.usage?.input_tokens, result.usage?.output_tokens);
 
     const chunks = finalText.match(/[\s\S]{1,4000}/g) || [finalText];
     for (const chunk of chunks) {
@@ -8719,6 +8948,20 @@ async function runMigrations(request, env) {
     )`).run();
     results.push('ai_usage: creada');
   } catch(e) { results.push('ai_usage: ' + e.message); }
+  // nexus_experts (NEXUS health scores)
+  try {
+    await env.DB.prepare(`CREATE TABLE IF NOT EXISTS nexus_experts (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      nombre      TEXT UNIQUE NOT NULL,
+      score       INTEGER DEFAULT 80,
+      total_calls INTEGER DEFAULT 0,
+      tokens_in   INTEGER DEFAULT 0,
+      tokens_out  INTEGER DEFAULT 0,
+      cost_cents  INTEGER DEFAULT 0,
+      updated_at  TEXT DEFAULT (datetime('now'))
+    )`).run();
+    results.push('nexus_experts: creada');
+  } catch(e) { results.push('nexus_experts: ' + e.message); }
 
   return json({ ok: true, results });
 }
@@ -9187,22 +9430,29 @@ async function devAIChat(request, env) {
   const { message, image } = await request.json().catch(() => ({}));
   if (!message) return err('Falta message', 400);
 
-  // Cargar memoria e historial desde DB
+  // ── NEXUS: routing dinámico ──────────────────────────────────────────────
+  const { expert: expertName, compress_history } = await nexusRoute(env, message);
+  const expert = NEXUS_EXPERTS[expertName];
+  const histLimit = compress_history ? 6 : 20;
+
+  // Cargar memoria e historial con límite dinámico según routing
   const [memoriaRows, historialRows] = await Promise.all([
-    env.DB.prepare("SELECT id, tipo, titulo, contenido, importancia FROM alejandra_memoria ORDER BY importancia DESC, updated_at DESC LIMIT 30").all().catch(() => ({ results: [] })),
-    env.DB.prepare("SELECT rol, contenido FROM alejandra_historial WHERE canal='web' ORDER BY created_at DESC LIMIT 20").all().catch(() => ({ results: [] }))
+    env.DB.prepare("SELECT id, tipo, titulo, contenido, importancia FROM alejandra_memoria ORDER BY importancia DESC, updated_at DESC LIMIT 20").all().catch(() => ({ results: [] })),
+    env.DB.prepare(`SELECT rol, contenido FROM alejandra_historial WHERE canal='web' ORDER BY created_at DESC LIMIT ${histLimit}`).all().catch(() => ({ results: [] }))
   ]);
 
   const memoriaCtx = memoriaRows.results?.length
-    ? '\n\n=== TU MEMORIA ACTUAL ===\n' + memoriaRows.results.map(m => `[${m.id}][${m.tipo.toUpperCase()}][imp:${m.importancia}] ${m.titulo}: ${m.contenido}`).join('\n')
+    ? '\n\n=== MEMORIA ===\n' + memoriaRows.results.map(m => `[${m.id}][${m.tipo.toUpperCase()}][${m.importancia}] ${m.titulo}: ${m.contenido}`).join('\n')
     : '';
 
+  // Prompt dinámico ensamblado desde módulos del experto elegido
   const webSystemBlocks = [
-    { type: 'text', text: buildAlejandraSystemPrompt('web'), cache_control: { type: 'ephemeral' } },
+    { type: 'text', text: buildNexusPrompt(expertName, 'web'), cache_control: { type: 'ephemeral' } },
     ...(memoriaCtx ? [{ type: 'text', text: memoriaCtx, cache_control: { type: 'ephemeral' } }] : [])
   ];
-  const webToolsConCache = AI_TOOLS.map((t, i) =>
-    i === AI_TOOLS.length - 1 ? { ...t, cache_control: { type: 'ephemeral' } } : t
+  const webTools = nexusTools(expertName);
+  const webToolsConCache = webTools.map((t, i) =>
+    i === webTools.length - 1 ? { ...t, cache_control: { type: 'ephemeral' } } : t
   );
 
   // Historial previo (más antiguo primero) — filtrar consecutivos del mismo rol
@@ -9238,7 +9488,7 @@ async function devAIChat(request, env) {
     return fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-api-key': env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'anthropic-beta': 'prompt-caching-2024-07-31' },
-      body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 4096, system: webSystemBlocks, tools: webToolsConCache, messages }),
+      body: JSON.stringify({ model: expert.model, max_tokens: expert.max_tokens, system: webSystemBlocks, tools: webToolsConCache, messages }),
       signal: _ctrl.signal
     }).finally(() => clearTimeout(_tId));
   };
@@ -9277,11 +9527,12 @@ async function devAIChat(request, env) {
     logAIUsage(env, {
       empresa_id: null,
       proveedor: 'anthropic',
-      modelo: 'claude-sonnet-4-6',
-      endpoint: 'agente_chat',
+      modelo: expert.model,
+      endpoint: `agente_chat:${expertName}`,
       input_tokens: result.usage?.input_tokens || 0,
       output_tokens: result.usage?.output_tokens || 0,
     });
+    trackExpertHealth(env, expertName, result.usage?.input_tokens, result.usage?.output_tokens);
     await env.DB.prepare("INSERT INTO alejandra_historial (canal, rol, contenido) VALUES ('web', 'assistant', ?)").bind(text.slice(0, 4000)).run().catch(() => {});
     // Push al developer cuando Alejandra responde por el chat web (fire-and-forget)
     sendWebPushToDevs(env, '💬 Alejandra', text.slice(0, 120) + (text.length > 120 ? '…' : ''), '/panel.html').catch(() => {});
