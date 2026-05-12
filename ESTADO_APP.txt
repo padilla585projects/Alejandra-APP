@@ -4,8 +4,8 @@
   Ruta local: C:\Users\Adrian\Downloads\Proyecto GestiBobina\Alejandra APP
 ================================================================================
 
-ÚLTIMA ACTUALIZACIÓN: 11/05/2026
-VERSIÓN ACTUAL APP NUEVA: v5.76 (filtros bobinas + Excel/imprimir + selector trabajador scan)
+ÚLTIMA ACTUALIZACIÓN: 12/05/2026
+VERSIÓN ACTUAL APP NUEVA: v5.77 (Alejandra autonomía Nivel B + CI/CD auto-deploy)
 VERSIÓN ACTUAL APP VIEJA: v4.19 (⛔ CONGELADA DEFINITIVAMENTE — no recibe más cambios)
 
 ================================================================================
@@ -150,6 +150,17 @@ PASO 4 — VERIFICAR WORKER (solo si se va a tocar worker.js)
 ================================================================================
   HISTORIAL DE VERSIONES — RECIENTES
 ================================================================================
+
+v5.77        |  12/05/2026  [Alejandra autonomía Nivel B + CI/CD auto-deploy completo]
+  - GitHub Actions deploy-worker.yml: cada push a worker.js → wrangler deploy automático a Cloudflare (~1 min)
+  - Tool direct_fix: aplica patches quirúrgicos inmediatamente sin aprobación (notifica después con [↩️ Revertir])
+  - Tool run_migration: ejecuta SQL DDL en D1 directamente (CREATE TABLE, ALTER TABLE — sin wrangler CLI)
+  - Tool check_deploy_status: consulta GitHub Actions para verificar que el deploy fue OK
+  - Tool grep_code: busca texto/regex en archivos del repo sin leerlos entero (esencial para worker.js 9000+ líneas)
+  - System prompt reescrito: flujo de ingeniero (Investigar→Planificar→Implementar→Verificar→Documentar)
+  - Cron nocturno: pasa de "solo propone" a Nivel B (actúa directamente para bugs pequeños confirmados)
+  - GitHub Secrets CLOUDFLARE_API_TOKEN + CLOUDFLARE_ACCOUNT_ID configurados automáticamente
+  - Worker: b44c8a24 ✅  GitHub: 6afdeb0 ✅
 
 v5.76        |  11/05/2026  [Filtros bobinas + Excel/imprimir panel + selector trabajador scan]
   - Panel web bobinas: filtros 📦 Proveedor y 🔌 Tipo cable (auto-populados), botón 📊 Excel (SheetJS), botón 🖨️ Imprimir

@@ -152,10 +152,10 @@ npx wrangler tail
 
 ## Estado actual (última sesión conocida)
 
-- **Versión:** v5.74
-- **Fecha:** 11/05/2026
-- **Worker:** pendiente de deploy (los cambios de v5.72–v5.74 no están desplegados aún)
-- **GitHub:** en sync ✅
-- **Últimas features:** scan parte semanal (IA), scan albarán bobinas (IA), migración scans a Gemini Flash, dashboard costes IA
+- **Versión:** v5.77
+- **Fecha:** 12/05/2026
+- **Worker:** b44c8a24 ✅ desplegado
+- **GitHub:** en sync ✅ (commit 6afdeb0)
+- **Últimas features:** Alejandra autonomía Nivel B — direct_fix, run_migration, grep_code, check_deploy_status, CI/CD auto-deploy funcionando
 
 > Para el estado exacto y actualizado, leer `SESION.md` y `ESTADO_APP.txt`.

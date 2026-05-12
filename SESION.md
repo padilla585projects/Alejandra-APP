@@ -6,10 +6,44 @@
 ## ESTADO ACTUAL
 
 **Sesión:** LIBRE
-**Última sesión:** 11/05/2026
-**Versión tras última sesión:** v5.76 (filtros bobinas + Excel/imprimir + selector trabajador scan)
-**Worker desplegado:** 2ab055f6 ✅
-**GitHub:** en sync ✅
+**Última sesión:** 12/05/2026
+**Versión tras última sesión:** v5.77 (Alejandra autonomía Nivel B + CI/CD auto-deploy)
+**Worker desplegado:** b44c8a24 ✅
+**GitHub:** en sync ✅ (commit 6afdeb0)
+
+---
+
+## RESUMEN SESIÓN 12/05/2026 — v5.77 (Alejandra como ingeniero autónomo)
+
+### Qué se hizo:
+
+**Infraestructura CI/CD:**
+- `git pull` al inicio para sincronizar archivos locales con el repo
+- Creado `.github/workflows/deploy-worker.yml`: cada push a `worker.js` o `wrangler.toml` → GitHub Actions ejecuta `wrangler deploy` → Cloudflare actualizado en ~1 min (¡esto faltaba desde siempre!)
+- GitHub Secrets configurados automáticamente: `CLOUDFLARE_API_TOKEN` y `CLOUDFLARE_ACCOUNT_ID` añadidos al repo via gh CLI
+- Worker desplegado localmente con `npx wrangler deploy` tras confirmar que el token `cfut_` es válido
+
+**4 tools nuevas de ingeniería en Alejandra:**
+- `grep_code(path, pattern, context_lines?)`: busca texto/regex en archivos sin leerlos entero. Esencial para worker.js de 9000+ líneas
+- `direct_fix(descripcion, archivo, old_code, new_code, razon)`: aplica patch quirúrgico INMEDIATAMENTE sin esperar aprobación. Hace commit en GitHub, CI/CD despliega. Notifica a Adrián después con [↩️ Revertir]
+- `run_migration(sql, descripcion?)`: ejecuta SQL DDL directamente en D1 (CREATE TABLE IF NOT EXISTS, ALTER TABLE, etc.) — ya no necesita wrangler CLI
+- `check_deploy_status()`: consulta GitHub Actions API — estado del último deploy, si falló y por qué
+
+**System prompt reescrito — Nivel B de autonomía:**
+- Flujo de ingeniero: Investigar → Planificar → Implementar → Verificar → Documentar
+- Reglas claras: actúa sola para bugs confirmados y fixes < 30 líneas; pide permiso para cambios en auth/seguridad o >50 líneas
+- Eliminada restricción "NUNCA apliques sin aprobación" — sustituida por criterios concretos
+- Cron nocturno actualizado: pasa de "solo propone" a aplicar directamente fixes pequeños
+
+**`propose_fix` mejorado:**
+- Descripción actualizada para dejar claro que es para cambios arriesgados o grandes (>50 líneas)
+- `direct_fix` es ahora el camino por defecto para bugs pequeños
+
+### Estado final:
+- Worker: b44c8a24 ✅
+- GitHub: en sync ✅ (6afdeb0)
+- CI/CD: completamente funcional ✅
+- Alejandra: puede detectar bugs, arreglarlos, desplegarlos y verificarlos autónomamente ✅
 
 ---
 
