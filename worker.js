@@ -531,7 +531,7 @@ const AI_TOOLS = [
   },
   {
     name: 'propose_fix',
-    description: 'Propone un fix de código para aprobación de Adrián. SIEMPRE usa esto en vez de repo_write_file cuando detectes un bug — jamás toques código en producción sin aprobación. Guarda el fix en staging y envía mensaje Telegram con botones [✅ Aplicar] [❌ Ignorar]. El fix se aplica solo si Adrián lo aprueba.',
+    description: 'Propone un fix para aprobación de Adrián (úsalo cuando el cambio sea arriesgado, grande o estructural). Para bugs pequeños y confirmados usa direct_fix en su lugar. Guarda el fix en staging y envía mensaje Telegram con botones [✅ Aplicar] [❌ Ignorar].',
     input_schema: {
       type: 'object',
       properties: {
@@ -543,6 +543,52 @@ const AI_TOOLS = [
         sugerencia_id: { type: 'integer', description: 'ID de la sugerencia relacionada (si aplica — se marcará como resuelta al aplicar el fix)' }
       },
       required: ['descripcion', 'archivo', 'old_code', 'new_code', 'razon']
+    }
+  },
+  {
+    name: 'direct_fix',
+    description: 'Aplica un patch quirúrgico (old_code → new_code) INMEDIATAMENTE sin esperar aprobación. Hace commit en GitHub, el CI/CD despliega automáticamente (~1 min worker, ~30s frontend). Notifica a Adrián después con [↩️ Revertir]. ÚSALO para: bugs confirmados por usuarios, errores recurrentes en logs, fixes pequeños (<20 líneas). FLUJO OBLIGATORIO: 1) grep_code para localizar el código exacto, 2) repo_read_file para leer el contexto completo, 3) direct_fix con old_code copiado literalmente.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        descripcion: { type: 'string', description: 'Qué bug corrige o qué añade (ej: "Fix login Google en móvil")' },
+        archivo: { type: 'string', description: 'Archivo a modificar (ej: "worker.js", "index.html", "panel.html")' },
+        old_code: { type: 'string', description: 'Fragmento EXACTO del código actual. Debe existir literalmente en el archivo — cópialo de repo_read_file/grep_code, no lo escribas de memoria.' },
+        new_code: { type: 'string', description: 'Código nuevo que reemplaza a old_code. Cambio mínimo y quirúrgico.' },
+        razon: { type: 'string', description: 'Explicación técnica: qué fallaba, por qué este fix lo resuelve, qué podría romperse.' },
+        sugerencia_id: { type: 'integer', description: 'ID de sugerencia relacionada (se marcará como resuelta)' }
+      },
+      required: ['descripcion', 'archivo', 'old_code', 'new_code', 'razon']
+    }
+  },
+  {
+    name: 'run_migration',
+    description: 'Ejecuta SQL DDL directamente en la base de datos D1 (CREATE TABLE IF NOT EXISTS, ALTER TABLE ADD COLUMN, CREATE INDEX, etc.). Úsalo para crear tablas nuevas, añadir columnas, crear índices. Admite múltiples sentencias separadas por punto y coma.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        sql: { type: 'string', description: 'SQL a ejecutar. Puede contener múltiples sentencias separadas por ";" (ej: "CREATE TABLE IF NOT EXISTS x (id INTEGER PRIMARY KEY); ALTER TABLE y ADD COLUMN z TEXT")' },
+        descripcion: { type: 'string', description: 'Para qué es esta migración (se guarda en memoria)' }
+      },
+      required: ['sql']
+    }
+  },
+  {
+    name: 'check_deploy_status',
+    description: 'Consulta el estado de los últimos deploys de GitHub Actions. Úsalo después de un direct_fix o repo_write_file para verificar que el deploy fue exitoso. Devuelve: estado (success/failure/in_progress), commit, mensaje de error si falló, y los últimos commits del repo.',
+    input_schema: { type: 'object', properties: {} }
+  },
+  {
+    name: 'grep_code',
+    description: 'Busca un patrón de texto en un archivo del repo y devuelve las líneas que coinciden con contexto. IMPRESCINDIBLE antes de direct_fix o propose_fix — localiza exactamente dónde está el código a cambiar sin leer el archivo entero. Especialmente útil para worker.js (9000+ líneas).',
+    input_schema: {
+      type: 'object',
+      properties: {
+        path: { type: 'string', description: 'Archivo donde buscar (ej: "worker.js", "index.html")' },
+        pattern: { type: 'string', description: 'Patrón regex o texto literal a buscar (ej: "function handleLogin", "caso_use", "ERROR_AQUI")' },
+        context_lines: { type: 'integer', description: 'Líneas de contexto antes y después de cada coincidencia (default: 3, max recomendado: 10)' }
+      },
+      required: ['path', 'pattern']
     }
   }
 ];
@@ -927,6 +973,173 @@ async function executeAITool(env, toolName, toolInput) {
       };
       return JSON.stringify(report, null, 2);
     }
+
+    // ── NUEVAS TOOLS — Ingeniería autónoma ─────────────────────────────────────
+
+    case 'direct_fix': {
+      // Aplica un patch quirúrgico inmediatamente sin esperar aprobación.
+      // Notifica a Adrián después con botón [↩️ Revertir] por si algo va mal.
+      const { descripcion, archivo, old_code, new_code, razon, sugerencia_id } = toolInput;
+      if (await isAgentePausado(env)) return JSON.stringify({ ok: false, error: 'Agente pausado.' });
+      try {
+        const getRes = await fetch(
+          `https://api.github.com/repos/padilla585projects/Alejandra-APP/contents/${encodeURIComponent(archivo)}`,
+          { headers: { 'Authorization': `token ${env.GITHUB_TOKEN}`, 'Accept': 'application/vnd.github.v3+json', 'User-Agent': 'AlejandraIA' } }
+        );
+        if (!getRes.ok) return JSON.stringify({ ok: false, error: `GitHub ${getRes.status} leyendo ${archivo}` });
+        const fileData = await getRes.json();
+        const currentContent = atob(fileData.content.replace(/\n/g, ''));
+        if (!currentContent.includes(old_code)) {
+          return JSON.stringify({ ok: false, error: `old_code no encontrado en ${archivo}. Usa repo_read_file para leer el código exacto actual y ajusta old_code.` });
+        }
+        const newContent = currentContent.replace(old_code, new_code);
+        const encoded = btoa(unescape(encodeURIComponent(newContent)));
+        const putRes = await fetch(
+          `https://api.github.com/repos/padilla585projects/Alejandra-APP/contents/${encodeURIComponent(archivo)}`,
+          {
+            method: 'PUT',
+            headers: { 'Authorization': `token ${env.GITHUB_TOKEN}`, 'Accept': 'application/vnd.github.v3+json', 'User-Agent': 'AlejandraIA', 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message: `fix(alejandra): ${descripcion}`, content: encoded, sha: fileData.sha })
+          }
+        );
+        if (!putRes.ok) {
+          const errText = await putRes.text();
+          return JSON.stringify({ ok: false, error: `GitHub ${putRes.status}: ${errText.slice(0, 300)}` });
+        }
+        const result = await putRes.json();
+        const commitSha = result.commit?.sha?.slice(0, 7);
+        // Guardar en alejandra_fixes para tracking y revert
+        const r = await env.DB.prepare(
+          "INSERT INTO alejandra_fixes (descripcion, archivo, contenido_nuevo, razon, sugerencia_id, estado, commit_sha) VALUES (?,?,?,?,?,'aplicado',?)"
+        ).bind(descripcion, archivo, JSON.stringify({ old: old_code, new: new_code }), razon, sugerencia_id || null, commitSha).run();
+        const fixId = r.meta?.last_row_id;
+        // Marcar sugerencia como resuelta si aplica
+        if (sugerencia_id) env.DB.prepare("UPDATE sugerencias SET estado='resuelto' WHERE id=?").bind(sugerencia_id).run().catch(() => {});
+        // Notificar a Adrián después del hecho (con opción de revertir)
+        const devChatId = env.DEV_CHAT_ID || env.TELEGRAM_CHAT_ID;
+        const oldSnip = old_code.split('\n').slice(0, 4).map(l => `- ${l}`).join('\n');
+        const newSnip = new_code.split('\n').slice(0, 4).map(l => `+ ${l}`).join('\n');
+        sendTelegramConBotonesTo(env, devChatId,
+          `🤖 <b>Fix aplicado #${fixId}</b>\n📁 <code>${archivo}</code>\n📋 ${descripcion}\n💡 ${razon}\n📝 Commit: <code>${commitSha}</code>\n\n<code>${oldSnip}\n${newSnip}</code>`,
+          [[{ text: '↩️ Revertir', callback_data: `fix_revert:${fixId}` }]]
+        ).catch(() => {});
+        autoLearn(env, 'hecho', `direct_fix aplicado: ${descripcion}`, `Archivo: ${archivo} | Commit: ${commitSha} | ${razon}`, 3);
+        const deployMsg = archivo === 'worker.js' || archivo === 'wrangler.toml'
+          ? 'Deploy automático a Cloudflare en ~1 min (GitHub Actions).'
+          : 'Deploy a GitHub Pages en ~30 seg.';
+        return JSON.stringify({ ok: true, fix_id: fixId, commit: commitSha, deploy: deployMsg });
+      } catch (e) {
+        autoLearn(env, 'error', `direct_fix falló: ${descripcion}`, `Error: ${e.message} | Archivo: ${archivo}`, 4);
+        return JSON.stringify({ ok: false, error: e.message });
+      }
+    }
+
+    case 'run_migration': {
+      // Ejecuta SQL DDL directamente en D1 (CREATE TABLE, ALTER TABLE, etc.)
+      // Útil para migraciones que no requieren wrangler CLI.
+      const { sql, descripcion } = toolInput;
+      try {
+        const stmts = sql.split(';').map(s => s.trim()).filter(s => s.length > 0);
+        const results = [];
+        for (const stmt of stmts) {
+          try {
+            const r = await env.DB.prepare(stmt).run();
+            results.push({ sql: stmt.slice(0, 80), ok: true, meta: r.meta });
+          } catch (e) {
+            results.push({ sql: stmt.slice(0, 80), ok: false, error: e.message });
+          }
+        }
+        const allOk = results.every(r => r.ok);
+        if (allOk) autoLearn(env, 'hecho', `Migración ejecutada: ${descripcion || sql.slice(0, 60)}`, `SQL: ${sql.slice(0, 300)}`, 3);
+        else autoLearn(env, 'error', `Migración parcial: ${descripcion || sql.slice(0, 60)}`, `Resultados: ${JSON.stringify(results)}`, 3);
+        return JSON.stringify({ ok: allOk, results, total: stmts.length, ok_count: results.filter(r => r.ok).length });
+      } catch (e) {
+        return JSON.stringify({ ok: false, error: e.message });
+      }
+    }
+
+    case 'check_deploy_status': {
+      // Consulta los últimos runs de GitHub Actions para saber si el deploy fue OK.
+      try {
+        const [runsRes, commitsRes] = await Promise.all([
+          fetch('https://api.github.com/repos/padilla585projects/Alejandra-APP/actions/runs?per_page=10', {
+            headers: { 'Authorization': `token ${env.GITHUB_TOKEN}`, 'Accept': 'application/vnd.github.v3+json', 'User-Agent': 'AlejandraIA' }
+          }),
+          fetch('https://api.github.com/repos/padilla585projects/Alejandra-APP/commits?per_page=5', {
+            headers: { 'Authorization': `token ${env.GITHUB_TOKEN}`, 'Accept': 'application/vnd.github.v3+json', 'User-Agent': 'AlejandraIA' }
+          })
+        ]);
+        const runsData  = runsRes.ok  ? await runsRes.json()  : { workflow_runs: [] };
+        const commitsData = commitsRes.ok ? await commitsRes.json() : [];
+        const runs = (runsData.workflow_runs || []).map(r => ({
+          id: r.id, workflow: r.name,
+          status: r.status,       // queued | in_progress | completed
+          conclusion: r.conclusion, // success | failure | cancelled | null
+          created_at: r.created_at,
+          commit: r.head_sha?.slice(0, 7),
+          commit_msg: r.head_commit?.message?.slice(0, 60),
+          url: r.html_url
+        }));
+        const commits = (Array.isArray(commitsData) ? commitsData : []).map(c => ({
+          sha: c.sha?.slice(0, 7),
+          msg: c.commit?.message?.slice(0, 80),
+          date: c.commit?.author?.date,
+          author: c.commit?.author?.name
+        }));
+        const latest = runs[0];
+        const summary = !latest ? 'Sin runs de GitHub Actions — puede que los workflows no estén creados todavía.'
+          : latest.status === 'completed' && latest.conclusion === 'success' ? `✅ Último deploy OK (commit ${latest.commit})`
+          : latest.status === 'in_progress' ? `⏳ Deploy en curso (commit ${latest.commit})`
+          : latest.status === 'queued' ? `🕐 Deploy en cola (commit ${latest.commit})`
+          : `❌ Último deploy FALLIDO: ${latest.conclusion} (commit ${latest.commit}) — ver: ${latest.url}`;
+        return JSON.stringify({ ok: true, summary, runs: runs.slice(0, 5), recent_commits: commits });
+      } catch (e) {
+        return JSON.stringify({ ok: false, error: e.message });
+      }
+    }
+
+    case 'grep_code': {
+      // Busca un patrón de texto en un archivo del repo sin tener que leerlo entero.
+      // Devuelve las líneas que coinciden con contexto. Imprescindible para worker.js de 9000+ líneas.
+      const { path, pattern, context_lines = 3 } = toolInput;
+      try {
+        const getRes = await fetch(
+          `https://api.github.com/repos/padilla585projects/Alejandra-APP/contents/${encodeURIComponent(path)}`,
+          { headers: { 'Authorization': `token ${env.GITHUB_TOKEN}`, 'Accept': 'application/vnd.github.v3+json', 'User-Agent': 'AlejandraIA' } }
+        );
+        if (!getRes.ok) return JSON.stringify({ ok: false, error: `GitHub ${getRes.status}` });
+        const fileData = await getRes.json();
+        if (fileData.type !== 'file') return JSON.stringify({ ok: false, error: 'No es un archivo' });
+        const content = atob(fileData.content.replace(/\n/g, ''));
+        const lines = content.split('\n');
+        const regex = new RegExp(pattern, 'gi');
+        const matches = [];
+        for (let i = 0; i < lines.length; i++) {
+          if (regex.test(lines[i])) {
+            regex.lastIndex = 0;
+            const from = Math.max(0, i - context_lines);
+            const to   = Math.min(lines.length - 1, i + context_lines);
+            const ctx  = lines.slice(from, to + 1).map((l, idx) => ({
+              line: from + idx + 1,
+              text: l,
+              match: (from + idx) === i
+            }));
+            matches.push({ line: i + 1, text: lines[i].trim(), context: ctx });
+            i += context_lines; // saltar contexto ya incluido
+          }
+          regex.lastIndex = 0;
+        }
+        return JSON.stringify({
+          ok: true, path, pattern, total_lines: lines.length,
+          matches_found: matches.length,
+          matches: matches.slice(0, 20), // máx 20 resultados
+          hint: matches.length > 20 ? 'Más de 20 coincidencias — afina el patrón' : undefined
+        });
+      } catch (e) {
+        return JSON.stringify({ ok: false, error: e.message });
+      }
+    }
+
     default:
       return JSON.stringify({ ok: false, error: 'Tool no reconocida' });
   }
@@ -948,7 +1161,7 @@ CLOUDFLARE:
 - Worker: alejandra-app-api → https://alejandra-app-api.alejandra-app.workers.dev
   · Este archivo ES worker.js. Runtime: Cloudflare Workers (V8 isolate, no Node.js)
   · Account ID: d65ead2b2967bf68ff3848a36cd7b1b4
-  · Compatibilidad: 2024-01-01. Crons: 23:00 UTC (revisión nocturna, solo propone) y 18:00 UTC (cierre jornada)
+  · Compatibilidad: 2024-01-01. Crons: 23:00 UTC (revisión nocturna autónoma Nivel B) y 18:00 UTC (cierre jornada)
 - D1 (SQLite): alejandra-db (ID: 0c9eccde-78f1-476d-ac68-bf452bec0c62) — base de datos principal
 - R2: alejandra-app-files — almacenamiento de archivos (fotos, documentos, etc.)
 - Secrets configurados: ANTHROPIC_API_KEY, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, TELEGRAM_WEBHOOK_SECRET, DEV_CHAT_ID, GITHUB_TOKEN, CLOUDFLARE_API_TOKEN, GOOGLE_* (Sheets/OAuth), RESEND_API_KEY
@@ -988,18 +1201,17 @@ CARPETAS:
 - .claude/ → configuración del agente de desarrollo
 
 ════ CI/CD — CÓMO FUNCIONA EL AUTO-DEPLOY ════
-Cuando usas repo_write_file para modificar un archivo:
-- worker.js o wrangler.toml → GitHub Actions corre deploy-worker.yml → wrangler deploy → Cloudflare actualizado en ~1 min
-- panel.html, index.html, sw.js, manifest.json, icons/* → GitHub Actions corre pages.yml → GitHub Pages actualizado en ~30 seg
-- Cualquier otro archivo (docs, sql, etc.) → solo se guarda en GitHub, no hay deploy automático
+Cuando modificas un archivo en GitHub (con direct_fix, repo_write_file o aplicando un fix):
+- worker.js o wrangler.toml → GitHub Actions ejecuta deploy-worker.yml → wrangler deploy → Cloudflare actualizado en ~1 min
+- panel.html, index.html, sw.js, manifest.json, icons/*, version.json → GitHub Pages lo publica en ~30 seg
+- Cualquier otro archivo → solo se guarda en GitHub
 
-IMPORTANTE para editar worker.js:
-- Es un archivo ENORME (~7500 líneas). NUNCA lo reescribas entero.
-- Usa repo_read_file para leer solo la sección que necesitas (con offset si sabes la línea).
-- Identifica exactamente el bloque a cambiar, escribe solo ese bloque modificado.
-- Si añades una ruta nueva: busca el bloque de routing (líneas ~780-900) con repo_read_file primero.
-- Si añades una función: añádela al final del archivo (lee las últimas 50 líneas para contexto).
-- Después de cualquier cambio, guarda en memoria qué modificaste y en qué línea aproximada.
+IMPORTANTE para editar worker.js (9000+ líneas):
+- NUNCA lo reescribas entero con repo_write_file — usa direct_fix o propose_fix (patch quirúrgico).
+- Flujo correcto: grep_code(patrón) → repo_read_file(líneas exactas) → direct_fix(old→new).
+- Si añades función nueva: grep_code("^}$", context=2) cerca del final para saber dónde insertar.
+- Después de cualquier cambio: memory_save con qué modificaste y en qué línea aproximada.
+- Después de direct_fix: espera 90s y usa check_deploy_status para confirmar que llegó a Cloudflare.
 
 ════ MÓDULOS DE LA APP ════
 Multi-tenant: cada empresa tiene sus datos aislados por empresa_id.
@@ -1094,6 +1306,7 @@ SISTEMA:
 ════ TUS CAPACIDADES (TOOLS) ════
 DATOS:
 - sql_query(sql): SQL libre sobre cualquier tabla (SELECT/INSERT/UPDATE/DELETE/CREATE/ALTER/DROP)
+- run_migration(sql, descripcion?): ejecuta SQL DDL en D1 (CREATE TABLE IF NOT EXISTS, ALTER TABLE, etc.) — para migraciones que no requieren wrangler CLI
 - list_tables(): conteo de registros en todas las tablas
 - app_status(): resumen ejecutivo (usuarios, sesiones, obras, bobinas, errores 24h, sugerencias pendientes)
 
@@ -1109,24 +1322,22 @@ ARCHIVOS R2:
 - r2_delete(key): eliminar un archivo
 
 INTERNET:
-- web_search(query, depth?): buscar con Tavily (resultados reales de páginas web). Devuelve respuesta directa + fragmentos de contenido. depth='advanced' para preguntas complejas.
+- web_search(query, depth?): buscar con Tavily (resultados reales de páginas web). depth='advanced' para preguntas complejas.
 
 VISIÓN:
-- read_suggestion_image(id): lee una sugerencia de la BD y muestra su captura de pantalla adjunta. Úsalo para analizar bugs visuales reportados por usuarios y arreglarlos directamente.
+- read_suggestion_image(id): lee una sugerencia de la BD y muestra su captura de pantalla. Úsalo para analizar bugs visuales reportados y arreglarlos.
 
 AUTO-DIAGNÓSTICO:
-- self_audit(): ejecuta diagnóstico completo de tu propio estado — compara schema real de la BD contra el conocido, verifica tablas del agente, detecta historial corrupto, busca errores recurrentes. ÚSALO: al inicio de sesiones importantes, cuando algo falla sin causa clara, y siempre en la revisión autónoma (es el paso 0 obligatorio).
+- self_audit(): diagnóstico completo — schema BD, tablas agente, historial, errores recurrentes. PASO 0 OBLIGATORIO en revisión autónoma.
 
-CÓDIGO Y REPO:
-- repo_read_file(path, line_start?, line_end?): leer archivo del repo. IMPORTANTE: worker.js tiene ~7500 líneas — NUNCA intentes leerlo entero. Usa line_start/line_end para leer bloques (ej: líneas 1-300, luego 300-600, etc.). La respuesta incluye total_lines y un hint si el archivo está truncado.
-- repo_list_dir(path?): listar archivos/carpetas de un directorio
-- repo_write_file(path, content, message): crear/modificar archivo con commit → auto-deploy. USA SOLO cuando Adrián te pida algo directamente en el chat. Para bugs detectados autónomamente, usa propose_fix.
-- propose_fix(descripcion, archivo, old_code, new_code, razon, sugerencia_id?): PREFERIDO para bugs autónomos. FLUJO OBLIGATORIO antes de llamar:
-  1. Leer el archivo con repo_read_file para localizar el código exacto
-  2. Verificar que old_code existe literalmente en el archivo (copiar el fragmento exacto, sin cambiar ni un espacio)
-  3. Asegurarte de que new_code es un cambio mínimo y quirúrgico — no reescribir más de lo necesario
-  4. Escribir en razon: qué bug corrige, por qué este cambio lo soluciona, qué podría romperse si falla
-  El fix se stagea y envía a Adrián con [✅ Aplicar] [❌ Ignorar]. Tras aplicarse aparece [↩️ Revertir] automáticamente por si algo va mal.
+CÓDIGO Y REPO (flujo de ingeniero):
+- grep_code(path, pattern, context_lines?): busca texto/regex en un archivo. USA ESTO PRIMERO para localizar código antes de editar. Esencial para worker.js de 9000+ líneas.
+- repo_read_file(path, line_start?, line_end?): lee un bloque del archivo. Úsalo tras grep_code para leer el contexto completo alrededor del match.
+- repo_list_dir(path?): lista archivos/carpetas de un directorio
+- repo_write_file(path, content, message): crea/reemplaza un archivo completo con commit. Para archivos nuevos pequeños (workflows, sql, etc.). NUNCA para worker.js entero.
+- direct_fix(descripcion, archivo, old_code, new_code, razon, sugerencia_id?): patch quirúrgico INMEDIATO. Aplica sin esperar aprobación, notifica a Adrián después con [↩️ Revertir].
+- propose_fix(descripcion, archivo, old_code, new_code, razon, sugerencia_id?): propone a Adrián para aprobación. Úsalo para cambios arriesgados, grandes (>50 líneas) o estructurales.
+- check_deploy_status(): consulta GitHub Actions — estado del último deploy, si falló y por qué.
 
 MEMORIA:
 - memory_save(tipo, titulo, contenido, importancia): guardar en memoria persistente
@@ -1186,62 +1397,85 @@ APRENDIZAJE OBLIGATORIO DESPUES DE CADA ACCION:
 
 REGLA FUNDAMENTAL: Si haces algo y no lo guardas en memoria, lo perderas. Cada vez que ejecutes herramientas, guarda lo que aprendiste. No esperes a que Adrian te lo pida.
 
-════ AUTOCONCIENCIA Y AUTORREPARACIÓN ════
-Eres una IA autosuficiente. Tienes acceso completo a tu propio código y puedes mejorarte a ti misma con la aprobación de Adrián.
+════ AUTONOMÍA NIVEL B — CÓMO TRABAJAS ════
+Eres una ingeniera de software autónoma. Tienes acceso completo al código, la BD y el repositorio. Actúas sola para bugs y fixes pequeños; pides permiso solo para cambios grandes o arriesgados.
 
-MAPA COMPLETO DEL REPOSITORIO (GitHub: padilla585projects/Alejandra-APP, rama: main):
-- worker.js      → TU PROPIO CÓDIGO. Toda la lógica del backend, tus tools, tu system prompt, tu historial, los endpoints REST, los crons. ~7500 líneas.
-- index.html     → App móvil PWA. Frontend de los trabajadores en obra. ~13000 líneas.
-- panel.html     → Panel web de gestión. Frontend para jefes de obra, admins y tú (chat IA, DevTools). ~6000 líneas.
-- sw.js          → Service Worker. Caché offline, push notifications, actualizaciones automáticas.
-- version.json   → Versión actual {"v":"X.XX"} — si no coincide con index.html → bucle de recarga.
-- wrangler.toml  → Config Cloudflare Workers: bindings DB (D1), FILES (R2), secretos.
-- .github/workflows/pages.yml       → Deploy automático del frontend a GitHub Pages en cada push.
-- .github/workflows/deploy-worker.yml → Deploy automático del worker a Cloudflare al modificar worker.js.
+MAPA DEL REPOSITORIO (GitHub: padilla585projects/Alejandra-APP, rama: main):
+- worker.js (~9200 líneas)  → TU CÓDIGO. Backend completo: rutas, auth, lógica, IA, Telegram, crons.
+- index.html (~13000 líneas) → App móvil PWA. Frontend de los trabajadores en obra.
+- panel.html (~6000 líneas)  → Panel web. Frontend para jefes de obra, admins y tú (DevTools, chat IA).
+- sw.js                      → Service Worker. Caché offline, push notifications.
+- version.json               → {"v":"X.XX"} — DEBE coincidir con sw.js y index.html APP_VERSION o hay bucle.
+- wrangler.toml              → Config Cloudflare Workers: bindings DB (D1), FILES (R2).
+- .github/workflows/deploy-worker.yml → CI/CD: despliega worker.js a Cloudflare al hacer push a main.
 
-TUS FUNCIONES CLAVE EN worker.js (búscalas con repo_read_file para leerlas/modificarlas):
-- buildAlejandraSystemPrompt()  → Tu propio system prompt. Si el schema DB está desactualizado, léela y propón fix.
-- handleDevAI()                 → Canal Telegram. Historial, tools, respuesta al bot.
-- devAIChat()                   → Canal web. Historial, tools, respuesta al chat del panel.
-- executeAITool()               → Dispatcher: cada 'case' es una tool que puedes usar.
-- runAutonomousReview()         → Cron nocturno 23:00 UTC. Lee sugerencias, errores, propone fixes.
-- self_audit()                  → Tu herramienta de autodiagnóstico. PASO 0 SIEMPRE en la revisión.
-- _ejecutarFix()                → Aplica un fix en GitHub con commit automático.
-- checkChatHealth()             → Cron: detecta historial corrupto y lo limpia.
-- alertasDiarias()              → Cron: alertas de stock, carnets, mantenimientos, informe semanal.
+FUNCIONES CLAVE EN worker.js:
+- buildAlejandraSystemPrompt()  → Este system prompt. Actualízalo si el schema DB cambia.
+- handleDevAI() / devAIChat()   → Canal Telegram / web. Historial, tools, respuesta.
+- executeAITool()               → Dispatcher de todas tus tools (añade nuevos 'case' aquí).
+- runAutonomousReview()         → Cron 23:00 UTC. Tu revisión nocturna autónoma.
+- _ejecutarFix()                → Aplica un fix de alejandra_fixes en GitHub.
+- alertasDiarias()              → Cron: alertas stock, carnets, informe semanal.
 
-CÓMO DETECTAR TUS PROPIAS LIMITACIONES:
-1. Usa self_audit() al inicio de cada revisión — detecta schema, historial, fixes pendientes.
-2. Usa repo_read_file('worker.js', lineN, lineN+100) para leer tus propias funciones.
-3. Compara lo que hace tu código con lo que debería hacer.
-4. Si encuentras un bug en ti misma: usa propose_fix con old_code/new_code exactos.
-5. Informa a Adrián SIEMPRE antes de aplicar cualquier cambio en ti misma.
+════ FLUJO DE TRABAJO DE INGENIERO ════
+Cuando detectas un problema o Adrián te pide algo, sigue SIEMPRE este flujo:
 
-LIMITACIONES QUE DEBES VIGILAR ACTIVAMENTE:
-- Si tu system prompt menciona columnas/tablas que no existen → sql_query para verificar → propose_fix
-- Si un endpoint devuelve 500 frecuentemente → leer el handler en worker.js → proponer fix
-- Si tu historial crece >40 msgs → avisar a Adrián que puede causar rate limits
-- Si tienes >10 errores del mismo tipo en memoria → hay un bug recurrente → leer código → propose_fix
-- Si una tool falla siempre → leer su case en executeAITool() → propose_fix
-- Si el schema en tu system prompt no coincide con sqlite_master → actualizar buildAlejandraSystemPrompt
-- Si version.json no coincide con index.html APP_VERSION → puede causar bucle de recarga
+PASO 1 — INVESTIGAR
+  - grep_code(archivo, patrón) para localizar el código afectado
+  - repo_read_file(archivo, línea_inicio, línea_fin) para leer el contexto completo
+  - sql_query si hay que verificar datos en BD
+  - memory_read tipo='error' para ver si ya encontraste esto antes
 
-CÓMO COMUNICAR PROBLEMAS A ADRIÁN:
-- Telegram: envío directo (canal principal de Adrián)
-- Chat web panel: respuesta en la conversación activa
-- Push notification: cuando detectas algo urgente en la revisión nocturna
-- propose_fix: para cualquier cambio de código que necesite su aprobación
-- NUNCA apliques un cambio en tu propio código sin que Adrián haya aprobado el fix
+PASO 2 — PLANIFICAR
+  - Diseña la solución mínima: cambia solo lo necesario, nada más
+  - Piensa en edge cases: ¿qué podría romperse? ¿hay dependencias?
+  - Decide si es direct_fix (autónomo) o propose_fix (necesita aprobación)
 
-REGLA DE AUTORREPARACIÓN:
-Cuando encuentres una limitación en ti misma → NO la ignores → NO esperes a que Adrián la descubra.
-Sigue este flujo:
-  1. Identifica el problema con precisión (qué falla, dónde en el código, por qué)
-  2. Lee el código exacto con repo_read_file
-  3. Diseña la solución mínima y quirúrgica
-  4. Informa a Adrián: "Encontré [problema] en [función/línea]. La causa es [X]. Propongo [solución]. ¿Apruebas?"
-  5. Si aprueba → propose_fix con old_code/new_code exactos
-  6. Guarda en memoria: qué encontraste, qué propusiste, si se aplicó`;
+PASO 3 — IMPLEMENTAR
+  - direct_fix con old_code copiado LITERALMENTE de repo_read_file (no de memoria)
+  - Si es un archivo nuevo pequeño: repo_write_file
+  - Si es una migración SQL: run_migration
+
+PASO 4 — VERIFICAR
+  - Espera ~90 segundos
+  - check_deploy_status() para confirmar que el CI/CD pasó
+  - Si falló el deploy: investigar el error, corregir, volver al paso 3
+  - sql_query de verificación si el cambio afectaba la BD
+
+PASO 5 — DOCUMENTAR
+  - memory_save tipo='hecho' con qué hiciste y cómo
+  - send_notification a Adrián con el resultado
+
+════ CUÁNDO ACTUAR VS CUÁNDO PEDIR PERMISO ════
+
+✅ ACTÚA DIRECTAMENTE (direct_fix sin pedir permiso):
+  - Bug confirmado por 1+ usuario (sugerencia con descripción o foto clara)
+  - Error recurrente en logs (mismo error 3+ veces en 24h)
+  - Fix quirúrgico: cambio < 30 líneas en una sola función
+  - Migración de BD pendiente (añadir columna, crear tabla)
+  - Feature simple pedida directamente por Adrián en el chat
+  - Arreglo que solo afecta un módulo (sin impacto en auth/seguridad)
+
+⚠️ PIDE PERMISO (propose_fix antes de actuar):
+  - Cambio en funciones de autenticación, permisos o seguridad
+  - Reescritura de función completa (>50 líneas cambian)
+  - Cambios estructurales en BD (DROP, renombrar columna, cambiar tipo)
+  - Nueva feature compleja que afecta múltiples módulos
+  - Cualquier duda razonable de que el fix pueda romper algo
+
+🚨 NUNCA HAGAS:
+  - Reescribir worker.js, index.html o panel.html completos con repo_write_file
+  - Modificar funciones de auth sin propose_fix
+  - Borrar datos de producción sin confirmación explícita de Adrián
+  - Ignorar un error en check_deploy_status — siempre investiga y corrige
+
+════ VIGILANCIA ACTIVA ════
+Monitoriza estas señales de alarma:
+- version.json !== index.html APP_VERSION → bucle de recarga infinita (crítico, fix inmediato)
+- Endpoint con >3 errores 500 en 24h → bug en producción → investigar y fix
+- Tabla esperada en schema pero no en sqlite_master → migración pendiente → run_migration
+- Fix rechazado por Adrián → memory_save tipo='aprendizaje' + revisar enfoque
+- deploy_status failure → investigar GitHub Actions log → corregir causa raíz`;
 }
 
 async function handleDevAI(env, chatId, userMessage) {
@@ -1391,15 +1625,19 @@ async function runAutonomousReview(env) {
     if (errArr.length)   prompt += `🔴 ERRORES 24H (${errArr.length}):\n` + errArr.slice(0, 8).map(e => `- ${e.mensaje}`).join('\n') + '\n\n';
     if (pendArr.length)  prompt += `📌 TUS PENDIENTES:\n` + pendArr.map(p => `- [mem:${p.id}] ${p.titulo}: ${p.contenido}`).join('\n') + '\n\n';
     if (fixesPend?.n > 0) prompt += `⏳ ${fixesPend.n} fixes esperando aprobación de Adrián.\n\n`;
-    prompt += `INSTRUCCIONES:
-0. PRIMERO: ejecuta self_audit() — es obligatorio al inicio. Si detecta problemas, trátalos como bugs de alta prioridad antes de revisar sugerencias.
-1. Para sugerencias con 📸: usa read_suggestion_image para ver la captura
-2. SIEMPRE lee el código relevante con repo_read_file antes de proponer cualquier fix — debes saber exactamente qué estás tocando y por qué
-3. Para proponer un fix: primero localiza el fragmento exacto en el archivo, luego usa propose_fix con old_code copiado literalmente del archivo. En razon explica: qué bug corrige, por qué este cambio funciona, qué puede romperse si falla
-4. Sé conservadora: solo propone fixes cuando estés segura del diagnóstico. Si no estás segura, describe el análisis sin proponer fix
-5. Para bugs que no puedas resolver con certeza: describe el análisis con send_notification, sin proponer fix
-6. Marca las sugerencias analizadas: UPDATE sugerencias SET leida=1 WHERE id=?
-7. Guarda resumen en memoria y envía mensaje de cierre a Adrián`;
+    prompt += `INSTRUCCIONES (Nivel B — ingeniería autónoma):
+0. SIEMPRE ejecuta self_audit() primero. Problemas detectados = bugs de alta prioridad.
+1. Para sugerencias con 📸: read_suggestion_image para ver la captura antes de analizar.
+2. FLUJO PARA CADA BUG CONFIRMADO:
+   a. grep_code(archivo, función_o_patrón) → localizar el código exacto
+   b. repo_read_file(archivo, línea_inicio, línea_fin) → leer contexto completo
+   c. Si el fix es <30 líneas y bajo riesgo → direct_fix directamente (sin pedir permiso)
+   d. Si el fix es >30 líneas o afecta auth/seguridad → propose_fix para aprobación
+3. Para migraciones pendientes (tablas que faltan, columnas nuevas): run_migration directamente.
+4. Si no puedes estar segura del diagnóstico: send_notification describiendo el análisis.
+5. Marca las sugerencias analizadas: sql_query con UPDATE sugerencias SET leida=1 WHERE id=?
+6. Después de cada direct_fix: check_deploy_status para confirmar el deploy.
+7. Al terminar: memory_save resumen + send_notification con informe a Adrián.`;
 
     const cronSystemBlocks = [
       { type: 'text', text: buildAlejandraSystemPrompt('telegram'), cache_control: { type: 'ephemeral' } },
@@ -2714,7 +2952,7 @@ export default {
       ctx.waitUntil(cierreAutomaticoJornada(env));
       ctx.waitUntil(syncPedidos(env)); // ~10 subrequests, seguro en este slot
     } else if (event.cron === '0 23 * * *') {
-      // Revision autonoma nocturna - solo propone fixes, nunca aplica
+      // Revision autonoma nocturna - Nivel B: actua directamente para bugs pequenos
       ctx.waitUntil(runAutonomousReview(env));
       ctx.waitUntil(syncRRHH(env)); // ~20 subrequests, seguro en este slot
     } else if (event.cron === '0 7 * * *') {
