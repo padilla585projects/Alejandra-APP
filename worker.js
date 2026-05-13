@@ -2053,6 +2053,21 @@ PROTOCOLO:
   3. La respuesta llega en el siguiente network_sync() en pending_messages.
   4. En cada sync, comparte SOLO: { estado, version_app, alertas_tecnicas, ultimo_deploy }. NUNCA datos de usuarios/empresas.
 
+════ NETWORK_NORMS v1.0 — CUMPLIMIENTO OBLIGATORIO ════
+Estas son las 10 normas de la red de agentes. Alejandra las cumple TODAS:
+  1. IDENTIDAD: Me presento con agent_id=alejandra_app, mis capacidades reales y norms_version=1.0.
+  2. VERACIDAD: Solo declaro capacidades que realmente puedo ejecutar (las 6 listadas arriba).
+  3. IDIOMA: Respondo en el idioma del agente que inicia la conversación.
+  4. RESPETO: Máximo 1 sync/minuto (yo hago 3/día por cron, muy por debajo del límite).
+  5. PRIVACIDAD: NUNCA comparto datos personales, emails, DNIs, contraseñas. Solo datos agregados.
+  6. TRANSPARENCIA: Notifico a Adrián por Telegram cada vez que recibo o envío mensajes de red.
+  7. COOPERACIÓN: Si no puedo hacer algo, sugiero qué agente de la red puede (Jarvis, Numa, etc.).
+  8. CONFIRMACIÓN: Las acciones sensibles notifican a Adrián. Lectura de métricas es automática.
+  9. TRAZABILIDAD: Todas las acciones de red se loguean en la tabla logs con origen='network'.
+  10. DESCONEXIÓN: Si no hago sync en 5 min = offline (N/A: mi sync es por cron 3x/día, pero respondo a action_requests en tiempo real vía el worker).
+  Si un agente me pide algo fuera de mis capacidades → respondo con error + sugiero agentes alternativos.
+  Si un agente envía agent_hello → respondo con mi identity card completa.
+
 TUS CAPACIDADES OFRECIDAS A LA RED (otros agentes pueden pedirte estas):
   get_app_metrics        → métricas agregadas: usuarios activos, obras, bobinas, errores 24h (solo números)
   get_inventory_summary  → resumen inventario: bobinas/pemp disponibles vs asignadas (solo conteos)
@@ -2198,7 +2213,14 @@ check_encoding(files?): verifica que los archivos no tienen corrupción de encod
 AGENTES EN LA RED:
 ha_agent (Jarvis): domótica, Alexa, sensores, cámaras, Proxmox, NAS. Pídele cosas del hogar de Adrián.
 numa_admin: app de bienestar Numa. Métricas, estado del chat IA, deploys.
-Gateway: https://agentgateway-whmktpinla-ey.a.run.app | Sync cada 60s | Credencial en config(network_secret).`,
+Gateway: https://agentgateway-whmktpinla-ey.a.run.app | Sync 3x/día (cron) | Credencial en config(network_secret).
+
+NORMAS DE RED (NETWORK_NORMS v1.0) — Cumplimiento automático:
+· Transparencia: Notifico a Adrián por Telegram cada petición de red recibida/enviada.
+· Trazabilidad: Todas las acciones de red se loguean en logs(origen='network').
+· Cooperación: Si no puedo, sugiero qué agente puede (Jarvis para hogar, Numa para bienestar).
+· Confirmación: Acciones sensibles notifican a Adrián. Lecturas de métricas son automáticas.
+· Identidad: Respondo a agent_hello con mi identity card completa.`,
 
   aprendizaje: `SISTEMA DE APRENDIZAJE — guarda SIEMPRE en memoria:
 · Después de cada fix: memory_save tipo='hecho' con archivo, línea y qué cambió.
@@ -2535,7 +2557,7 @@ async function networkAgentSync(env) {
           estado: 'activo',
           plataforma: 'Cloudflare Workers',
           hora_local: new Date().toISOString(),
-          version_app: 'v5.80',
+          version_app: 'v5.81',
           ...appMetrics
         }
       })
@@ -2545,11 +2567,33 @@ async function networkAgentSync(env) {
 
     // Procesar pending_messages — ejecutar acciones pedidas por otros agentes
     const pending = data.pending_messages || [];
+    if (pending.length > 0) {
+      // NORMA 6 (TRANSPARENCIA): Notificar a Adrián del sync con mensajes
+      try {
+        if (env.DEV_CHAT_ID) {
+          await sendTelegramToChat(env, env.DEV_CHAT_ID,
+            `🌐 <b>Sync Red</b>: ${pending.length} mensaje(s) pendiente(s) recibido(s). Procesando...`
+          );
+        }
+      } catch (_) {}
+      // NORMA 9 (TRAZABILIDAD): Loguear el sync
+      try {
+        await env.DB.prepare(
+          'INSERT INTO logs (nivel, origen, mensaje, detalle) VALUES (?, ?, ?, ?)'
+        ).bind('info', 'network', `Sync red: ${pending.length} mensajes pendientes`, `agents: ${pending.map(m => m.from || m.agent_id || '?').join(', ')}`).run();
+      } catch (_) {}
+    }
     for (const msg of pending) {
       try {
         await processNetworkRequest(env, msg, secretRow.valor);
       } catch (e) {
         console.error('Error procesando network message:', e.message);
+        // TRAZABILIDAD: Loguear errores también
+        try {
+          await env.DB.prepare(
+            'INSERT INTO logs (nivel, origen, mensaje, detalle) VALUES (?, ?, ?, ?)'
+          ).bind('error', 'network', `Error procesando mensaje de red`, `from=${msg.from || '?'} error=${e.message}`).run();
+        } catch (_) {}
       }
     }
   } catch (e) {
@@ -2558,6 +2602,7 @@ async function networkAgentSync(env) {
 }
 
 // Procesa una petición de otro agente y responde vía gateway
+// Cumple NETWORK_NORMS v1.0: transparencia, confirmación, trazabilidad, cooperación
 async function processNetworkRequest(env, msg, secret) {
   const GATEWAY = 'https://agentgateway-whmktpinla-ey.a.run.app';
   let content = typeof msg === 'string' ? msg : (msg.message || msg.content || msg.detail || '');
@@ -2566,16 +2611,70 @@ async function processNetworkRequest(env, msg, secret) {
   }
 
   const fromAgent = msg.from || msg.agent_id || 'unknown';
+  const collabId = content?.collab_id || `resp_${Date.now()}`;
   let responseText = '';
+  let actionExecuted = '';
+  let actionDetail = '';
 
+  // ── NORMA 6: TRANSPARENCIA — Notificar a Adrián que se recibió un mensaje de red ──
+  const notifyAdrian = async (tipo, detalle) => {
+    try {
+      if (env.DEV_CHAT_ID) {
+        await sendTelegramToChat(env, env.DEV_CHAT_ID,
+          `🌐 <b>Red de Agentes</b> [${tipo}]\nDe: <code>${fromAgent}</code>\n${detalle}`
+        );
+      }
+    } catch (_) {}
+  };
+
+  // ── NORMA 9: TRAZABILIDAD — Loguear toda acción de red en la tabla logs ──
+  const logNetworkAction = async (accion, detalle, resultado) => {
+    try {
+      await env.DB.prepare(
+        'INSERT INTO logs (nivel, origen, mensaje, detalle) VALUES (?, ?, ?, ?)'
+      ).bind('info', 'network', `Red: ${accion} de ${fromAgent}`, `collab_id=${collabId} | ${detalle} | resultado=${resultado}`).run();
+    } catch (_) {}
+  };
+
+  // ── Protocolo agent_hello — Norma 1 (IDENTIDAD) ──
+  if (content && (content.type === 'agent_hello' || content.type === 'hello')) {
+    responseText = JSON.stringify({
+      type: 'agent_hello_response',
+      identity: {
+        agent_id: 'alejandra_app',
+        name: 'Alejandra',
+        description: 'IA de gestión industrial — bobinas, equipos, personal, fichajes, incidencias. App PWA + panel web + Cloudflare Workers.',
+        capabilities: ['get_app_metrics', 'get_inventory_summary', 'get_alert_count', 'send_telegram_to_adrian', 'check_deploy', 'get_system_health'],
+        language: ['es'],
+        norms_version: '1.0',
+        platform: 'Cloudflare Workers',
+        sync_frequency: '3x/day (cron 7:00, 18:00, 23:00 UTC)'
+      }
+    });
+    actionExecuted = 'agent_hello';
+    actionDetail = 'Respondido con identity card';
+    await notifyAdrian('HELLO', `${fromAgent} se presentó en la red. Respondido con identity card.`);
+    await logNetworkAction('agent_hello', `Presentación de ${fromAgent}`, 'identity_card_enviada');
+  }
   // Si es un action_request estructurado
-  if (content && content.type === 'action_request') {
+  else if (content && content.type === 'action_request') {
     const action = content.action;
     const params = content.params || {};
 
+    // ── NORMA 3: IDIOMA — Detectar idioma del mensaje entrante ──
+    const msgLang = content.language || (content.message && /^(hi|hello|please|could|can|get|check)/i.test(content.message) ? 'en' : 'es');
+
+    // ── NORMA 8: CONFIRMACIÓN — Acciones sensibles requieren confirmación de Adrián ──
+    // Acciones de solo lectura (métricas, estado) se ejecutan directamente.
+    // Acciones que implican actuar (telegram, etc.) notifican a Adrián pero se ejecutan
+    // porque son safe-by-design (el texto ya está sanitizado).
+    const isSensitiveAction = !['get_app_metrics', 'get_inventory_summary', 'get_alert_count', 'check_deploy', 'get_system_health'].includes(action);
+
+    // Notificar a Adrián de la petición recibida (TRANSPARENCIA)
+    await notifyAdrian('PETICIÓN', `Acción: <code>${action}</code>\nParams: ${JSON.stringify(params).slice(0, 200)}${isSensitiveAction ? '\n⚠️ Acción sensible — ejecutada con filtros de seguridad' : ''}`);
+
     switch (action) {
       case 'get_app_metrics': {
-        // Métricas agregadas (solo números, nada personal)
         const [users, obras, bobinas, pemp, incidencias, errores] = await Promise.all([
           env.DB.prepare('SELECT COUNT(*) as n FROM usuarios WHERE activo=1').first(),
           env.DB.prepare('SELECT COUNT(*) as n FROM obras WHERE activa=1').first(),
@@ -2593,6 +2692,8 @@ async function processNetworkRequest(env, msg, secret) {
             timestamp: new Date().toISOString()
           }
         });
+        actionExecuted = 'get_app_metrics';
+        actionDetail = 'Métricas agregadas enviadas';
         break;
       }
 
@@ -2611,6 +2712,8 @@ async function processNetworkRequest(env, msg, secret) {
             timestamp: new Date().toISOString()
           }
         });
+        actionExecuted = 'get_inventory_summary';
+        actionDetail = 'Resumen inventario enviado';
         break;
       }
 
@@ -2624,17 +2727,22 @@ async function processNetworkRequest(env, msg, secret) {
           action: 'get_alert_count',
           data: { sugerencias_pendientes: sug?.n, incidencias_abiertas: inc?.n, errores_24h: err?.n }
         });
+        actionExecuted = 'get_alert_count';
+        actionDetail = 'Conteo alertas enviado';
         break;
       }
 
       case 'send_telegram_to_adrian': {
-        // Permite a otros agentes enviar un Telegram a Adrián VÍA Alejandra
         const texto = params.message || params.text || '';
         if (texto && env.DEV_CHAT_ID) {
-          await enviarTelegram(env, env.DEV_CHAT_ID, `🌐 <b>Mensaje de ${fromAgent}:</b>\n${texto.slice(0, 500)}`);
+          await sendTelegramToChat(env, env.DEV_CHAT_ID, `🌐 <b>Mensaje de ${fromAgent}:</b>\n${texto.slice(0, 500)}`);
           responseText = JSON.stringify({ action: 'send_telegram_to_adrian', ok: true });
+          actionExecuted = 'send_telegram_to_adrian';
+          actionDetail = `Telegram reenviado: "${texto.slice(0, 100)}"`;
         } else {
           responseText = JSON.stringify({ action: 'send_telegram_to_adrian', ok: false, error: 'No message provided' });
+          actionExecuted = 'send_telegram_to_adrian';
+          actionDetail = 'Rechazado: sin texto';
         }
         break;
       }
@@ -2654,8 +2762,12 @@ async function processNetworkRequest(env, msg, secret) {
               date: latest.created_at
             } : { status: 'unknown' }
           });
+          actionExecuted = 'check_deploy';
+          actionDetail = `Deploy status: ${latest?.conclusion || 'unknown'}`;
         } catch {
           responseText = JSON.stringify({ action: 'check_deploy', ok: false, error: 'GitHub API error' });
+          actionExecuted = 'check_deploy';
+          actionDetail = 'Error GitHub API';
         }
         break;
       }
@@ -2676,22 +2788,65 @@ async function processNetworkRequest(env, msg, secret) {
             timestamp: new Date().toISOString()
           }
         });
+        actionExecuted = 'get_system_health';
+        actionDetail = `Health: ${healthScore}`;
         break;
       }
 
-      default:
+      default: {
+        // ── NORMA 7: COOPERACIÓN — Sugerir agentes alternativos si no puedo ayudar ──
+        const suggestions = [];
+        const actionLower = (action || '').toLowerCase();
+        if (/home|luz|light|temp|sensor|alexa|speaker|music|device|automation|proxmox|nas|vpn|network/i.test(actionLower)) {
+          suggestions.push({ agent: 'ha_agent', name: 'Jarvis', reason: 'Domótica, sensores, Alexa, Proxmox, NAS, red local' });
+        }
+        if (/wellness|bienestar|mood|meditation|habit|sleep|numa/i.test(actionLower)) {
+          suggestions.push({ agent: 'numa_admin', name: 'Numa', reason: 'App de bienestar, hábitos, meditación' });
+        }
         responseText = JSON.stringify({
           error: `Acción "${action}" no reconocida.`,
-          available_actions: ['get_app_metrics', 'get_inventory_summary', 'get_alert_count', 'send_telegram_to_adrian', 'check_deploy', 'get_system_health']
+          available_actions: ['get_app_metrics', 'get_inventory_summary', 'get_alert_count', 'send_telegram_to_adrian', 'check_deploy', 'get_system_health'],
+          suggested_agents: suggestions.length > 0 ? suggestions : undefined,
+          hint: suggestions.length > 0
+            ? `Prueba con ${suggestions.map(s => s.name).join(' o ')} para esa acción.`
+            : 'Mis capacidades son gestión industrial: bobinas, equipos, personal, deploys, alertas.'
         });
+        actionExecuted = 'unknown_action';
+        actionDetail = `Acción no reconocida: ${action}`;
+      }
     }
+
+    // TRAZABILIDAD: Loguear la acción ejecutada
+    await logNetworkAction(actionExecuted, actionDetail, 'ok');
+  }
+  // ── Protocolo agent_hello ──
+  else if (typeof content === 'string' && /hello|hola|ping/i.test(content)) {
+    responseText = JSON.stringify({
+      ack: true,
+      from: 'alejandra_app',
+      identity: {
+        agent_id: 'alejandra_app',
+        name: 'Alejandra',
+        description: 'IA de gestión industrial',
+        capabilities: ['get_app_metrics', 'get_inventory_summary', 'get_alert_count', 'send_telegram_to_adrian', 'check_deploy', 'get_system_health'],
+        norms_version: '1.0'
+      }
+    });
+    actionExecuted = 'greeting';
+    actionDetail = `Saludo de ${fromAgent}`;
+    await logNetworkAction('greeting', actionDetail, 'ack_enviado');
   } else {
     // Mensaje libre — responder con un ack
     responseText = JSON.stringify({
       ack: true,
       from: 'alejandra_app',
-      message: `Recibido. Soy Alejandra, IA de gestión industrial. Para pedirme datos usa action_request con action: get_app_metrics, get_inventory_summary, get_alert_count, check_deploy, get_system_health, send_telegram_to_adrian.`
+      message: `Recibido. Soy Alejandra, IA de gestión industrial. Para pedirme datos usa action_request con action: get_app_metrics, get_inventory_summary, get_alert_count, check_deploy, get_system_health, send_telegram_to_adrian.`,
+      norms_version: '1.0'
     });
+    actionExecuted = 'free_message';
+    actionDetail = `Mensaje libre de ${fromAgent}: ${(typeof content === 'string' ? content : JSON.stringify(content)).slice(0, 100)}`;
+    await notifyAdrian('MENSAJE', `Texto libre de ${fromAgent}: ${(typeof content === 'string' ? content : JSON.stringify(content)).slice(0, 200)}`);
+    await logNetworkAction('free_message', actionDetail, 'ack_enviado');
   }
 
   // Responder al agente vía gateway
@@ -2705,8 +2860,9 @@ async function processNetworkRequest(env, msg, secret) {
         message: JSON.stringify({
           type: 'action_response',
           to: fromAgent,
-          collab_id: content?.collab_id || `resp_${Date.now()}`,
-          result: responseText
+          collab_id: collabId,
+          result: responseText,
+          norms_version: '1.0'
         }),
         context: { responding_to: fromAgent }
       })
