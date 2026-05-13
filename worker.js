@@ -1,7 +1,7 @@
-﻿// Alejandra Worker v4.0 â€" Multi-tenant (empresa_id)
+// Alejandra Worker v4.0 — Multi-tenant (empresa_id)
 // Base de datos: Cloudflare D1
 // IA: Gemini 2.0 Flash
-// Sync: Google Sheets automÃ¡tico en cada cambio
+// Sync: Google Sheets automático en cada cambio
 // Multi-obra + Roles (superadmin / encargado / operario)
 
 const CORS = {
@@ -34,7 +34,7 @@ function logAIUsage(env, { empresa_id, proveedor, modelo, endpoint, input_tokens
   ).bind(empresa_id||null, proveedor, modelo, endpoint||null, input_tokens||0, output_tokens||0, coste).run().catch(()=>{});
 }
 
-// Genera N bytes aleatorios criptogrÃ¡ficamente seguros como string hex
+// Genera N bytes aleatorios criptográficamente seguros como string hex
 function randomHex(bytes = 16) {
   const arr = new Uint8Array(bytes);
   crypto.getRandomValues(arr);
@@ -72,7 +72,7 @@ async function verifyPassword(password, stored) {
 
 // â"€â"€ Auth helper â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 async function getAuth(request, env) {
-  // 1. Token D1 (sistema nuevo) â€" acepta tambiÃ©n ?token= en URL pero SOLO para GET (imÃ¡genes/docs)
+  // 1. Token D1 (sistema nuevo) — acepta también ?token= en URL pero SOLO para GET (imágenes/docs)
   const tokenFromUrl = new URL(request.url).searchParams.get('token');
   const xToken = request.headers.get('X-Token') || (request.method === 'GET' ? tokenFromUrl : null);
   if (xToken) {
@@ -122,8 +122,8 @@ async function getAuth(request, env) {
   const departamento = request.headers.get('X-Departamento') || 'electrico';
   const isAdmin = env.ADMIN_CODE && adminCode === env.ADMIN_CODE;
   // SEC-13: Los privilegios elevados SOLO se conceden por X-Admin-Code verificado contra env.
-  // X-Rol es metadata informativa (departamento, logging) â€" NUNCA concede isAdmin/isSuperadmin.
-  // Sin esto cualquier peticiÃ³n podrÃ­a enviar "X-Rol: superadmin" y obtener acceso total.
+  // X-Rol es metadata informativa (departamento, logging) — NUNCA concede isAdmin/isSuperadmin.
+  // Sin esto cualquier petición podría enviar "X-Rol: superadmin" y obtener acceso total.
   const isSuperadmin   = isAdmin;
   const isEmpresaAdmin = isAdmin;
   return {
@@ -168,7 +168,7 @@ async function sendTelegram(env, mensaje) {
   } catch (_) {}
 }
 
-// EnvÃ­a a un chat_id concreto (notificaciones personales)
+// Envía a un chat_id concreto (notificaciones personales)
 async function sendTelegramToChat(env, chatId, mensaje) {
   try {
     const token = env.TELEGRAM_BOT_TOKEN;
@@ -181,7 +181,7 @@ async function sendTelegramToChat(env, chatId, mensaje) {
   } catch (_) {}
 }
 
-// EnvÃ­a una foto (base64 data URI) con caption y botones inline
+// Envía una foto (base64 data URI) con caption y botones inline
 async function sendTelegramFotoConBotones(env, caption, base64DataUri, botones) {
   try {
     const token  = env.TELEGRAM_BOT_TOKEN;
@@ -577,6 +577,16 @@ const AI_TOOLS = [
     name: 'check_deploy_status',
     description: 'Consulta el estado de los últimos deploys de GitHub Actions. Úsalo después de un direct_fix o repo_write_file para verificar que el deploy fue exitoso. Devuelve: estado (success/failure/in_progress), commit, mensaje de error si falló, y los últimos commits del repo.',
     input_schema: { type: 'object', properties: {} }
+  },
+  {
+    name: 'check_encoding',
+    description: 'Verifica que los archivos HTML/JS del proyecto no tienen corrupción de encoding (doble-codificación UTF-8). ÚSALO después de cada direct_fix en panel.html, index.html, worker.js o sw.js. Busca patrones de corrupción conocidos (Ã, Â, â€, BOM). Incidente real 13/05/2026: este error rompió el panel web.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        files: { type: 'array', items: { type: 'string' }, description: 'Archivos a verificar. Por defecto: panel.html, index.html, worker.js, sw.js' }
+      }
+    }
   },
   {
     name: 'grep_code',
@@ -1120,6 +1130,69 @@ async function executeAITool(env, toolName, toolInput) {
       }
     }
 
+    case 'check_encoding': {
+      // Verifica que los archivos principales no tienen corrupción de encoding.
+      // Busca patrones conocidos de doble-codificación UTF-8 (incidente 13/05/2026).
+      const filesToCheck = toolInput.files || ['panel.html', 'index.html', 'worker.js', 'sw.js'];
+      // Patrones de corrupción: usamos hex escapes para que no se auto-corrompan
+      // \xC3\xB3 = “Ã³” (ó corrupta), \xC3\xA9 = “Ã©” (é corrupta), etc.
+      const corruptionPatterns = [
+        { label: 'tilde_o', pat: '\xC3\xB3' },   // Ã³ = ó corrupta
+        { label: 'tilde_e', pat: '\xC3\xA9' },   // Ã© = é corrupta
+        { label: 'tilde_a', pat: '\xC3\xA1' },   // Ã¡ = á corrupta
+        { label: 'enie',    pat: '\xC3\xB1' },   // Ã± = ñ corrupta
+        { label: 'tilde_i', pat: '\xC3\xAD' },   // Ã­ = í corrupta
+        { label: 'bom_triple', pat: '\xC3\xAF\xC2\xBB\xC2\xBF' }, // BOM triple-corrupta
+        { label: 'inverted_q', pat: '\xC2\xBF' }, // Â¿
+        { label: 'emdash', pat: '\xE2\x80\x9C' }, // â€” (parte de em-dash corrupto)
+      ];
+      const results = [];
+      for (const file of filesToCheck) {
+        try {
+          const res = await fetch(
+            `https://api.github.com/repos/padilla585projects/Alejandra-APP/contents/${encodeURIComponent(file)}`,
+            { headers: { 'Authorization': `token ${env.GITHUB_TOKEN}`, 'Accept': 'application/vnd.github.v3+json', 'User-Agent': 'AlejandraIA' } }
+          );
+          if (!res.ok) { results.push({ file, status: 'error', error: `HTTP ${res.status}` }); continue; }
+          const data = await res.json();
+          // atob devuelve bytes crudos como string — buscamos los patrones en bytes
+          const rawBytes = atob(data.content.replace(/\n/g, ''));
+          // También decodificar como UTF-8 para buscar patrones de texto
+          const bytes = new Uint8Array(rawBytes.length);
+          for (let i = 0; i < rawBytes.length; i++) bytes[i] = rawBytes.charCodeAt(i);
+          const text = new TextDecoder('utf-8').decode(bytes);
+          const found = [];
+          // Buscar patron \xC3\x83 en bytes crudos (indica doble-codificación: Ã en UTF-8 = C3 83)
+          let doubleEncoded = 0;
+          for (let i = 0; i < rawBytes.length - 1; i++) {
+            if (rawBytes.charCodeAt(i) === 0xC3 && rawBytes.charCodeAt(i + 1) === 0x83) doubleEncoded++;
+          }
+          if (doubleEncoded > 0) found.push({ pattern: 'double-encoded-UTF8 (C3 83 = Ã)', count: doubleEncoded });
+          // Buscar â€ en texto decodificado (em-dash/comillas corruptas)
+          const emDashCorrupt = (text.match(/â€[“”™œ˜]/g) || []).length;
+          if (emDashCorrupt > 0) found.push({ pattern: 'em-dash/comillas corruptas', count: emDashCorrupt });
+          // Buscar BOM
+          const hasBOM = rawBytes.charCodeAt(0) === 0xEF && rawBytes.charCodeAt(1) === 0xBB && rawBytes.charCodeAt(2) === 0xBF;
+          results.push({
+            file,
+            status: found.length === 0 ? '✅ limpio' : '❌ CORRUPTO',
+            has_bom: hasBOM,
+            corruptions: found,
+            size_chars: text.length
+          });
+        } catch (e) {
+          results.push({ file, status: 'error', error: e.message });
+        }
+      }
+      const anyCorrupt = results.some(r => r.status === '❌ CORRUPTO');
+      return JSON.stringify({
+        ok: true,
+        resultado: anyCorrupt ? '❌ HAY CORRUPCIÓN DE ENCODING — restaurar versión limpia de git y notificar a Adrián' : '✅ Todos los archivos tienen encoding correcto',
+        archivos: results,
+        nota: 'Si hay corrupción: NO intentar arreglar carácter por carácter. Restaurar desde git (última versión limpia) y reaplicar cambios funcionales.'
+      });
+    }
+
     case 'grep_code': {
       // Busca un patrón de texto en un archivo del repo sin tener que leerlo entero.
       // Devuelve las líneas que coinciden con contexto. Imprescindible para worker.js de 9000+ líneas.
@@ -1605,7 +1678,9 @@ PASO 3 — IMPLEMENTAR
 PASO 4 — VERIFICAR
   - Espera ~90 segundos
   - check_deploy_status() para confirmar que el CI/CD pasó
+  - check_encoding() si tocaste archivos HTML/JS — OBLIGATORIO (incidente 13/05/2026)
   - Si falló el deploy: investigar el error, corregir, volver al paso 3
+  - Si check_encoding detecta corrupción: revertir inmediatamente con la versión anterior de git
   - sql_query de verificación si el cambio afectaba la BD
 
 PASO 5 — DOCUMENTAR
@@ -1635,13 +1710,40 @@ PASO 5 — DOCUMENTAR
   - Borrar datos de producción sin confirmación explícita de Adrián
   - Ignorar un error en check_deploy_status — siempre investiga y corrige
 
+════ CODIFICACIÓN DE ARCHIVOS — CRÍTICO ════
+INCIDENTE 13/05/2026: panel.html y worker.js se corrompieron por guardarlos con encoding incorrecto. Costó horas arreglarlo. NUNCA debe repetirse.
+
+REGLAS ABSOLUTAS:
+1. Todos los archivos del proyecto son UTF-8 SIN BOM. Nunca Latin-1, nunca Windows-1252, nunca UTF-8 with BOM.
+2. Cuando uses direct_fix o repo_write_file, el contenido DEBE ser UTF-8 limpio.
+3. Caracteres españoles válidos en el código: á, é, í, ó, ú, ñ, ü, ¿, ¡, — (em-dash). Usarlos normalmente.
+4. SEÑALES DE CORRUPCIÓN DE ENCODING — si ves CUALQUIERA de estos en el código, hay un problema:
+   - La letra "Ã" (A con tilde) seguida de otro carácter donde debería ir una vocal acentuada = doble-codificación
+   - La letra "Â" suelta antes de signos como ¿ o © = carácter especial corrupto
+   - Secuencias de 3 caracteres raros donde debería ir un em-dash (—) = comillas/dash corruptos
+   - Usa check_encoding() para verificar automáticamente — es la forma más fiable
+5. Si detectas corrupción de encoding en un archivo:
+   a) NO intentes arreglar reemplazando carácter por carácter — eso causó más daño el 13/05/2026
+   b) USA check_encoding() para medir la extensión del daño
+   c) Restaura la última versión limpia del archivo desde git (git log para encontrarla)
+   d) Reaplicar solo los cambios funcionales encima con direct_fix
+   e) Notifica a Adrián inmediatamente con send_notification
+   f) memory_save tipo='error' con lo que pasó para no repetirlo
+6. ANTES de hacer direct_fix en archivos HTML/JS con texto en español:
+   - Verifica que tu old_code y new_code contengan los caracteres correctos (no corruptos)
+   - Si copias texto de repo_read_file, los caracteres deberían venir bien
+7. DESPUÉS de hacer direct_fix en archivos HTML/JS:
+   - check_encoding() OBLIGATORIO — si detecta corrupción, revertir inmediatamente
+   - Esto es tan importante como check_deploy_status()
+
 ════ VIGILANCIA ACTIVA ════
 Monitoriza estas señales de alarma:
 - version.json !== index.html APP_VERSION → bucle de recarga infinita (crítico, fix inmediato)
 - Endpoint con >3 errores 500 en 24h → bug en producción → investigar y fix
 - Tabla esperada en schema pero no en sqlite_master → migración pendiente → run_migration
 - Fix rechazado por Adrián → memory_save tipo='aprendizaje' + revisar enfoque
-- deploy_status failure → investigar GitHub Actions log → corregir causa raíz`;
+- deploy_status failure → investigar GitHub Actions log → corregir causa raíz
+- Caracteres Ã/Â/â€ en archivos HTML/JS → CORRUPCIÓN DE ENCODING → restaurar versión limpia de git + notificar`;
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -1667,7 +1769,8 @@ Telegram bot: @AlejandraAPP_bot | Webhook: /telegram/webhook | Dev chat (DEV_CHA
 worker.js o wrangler.toml → deploy-worker.yml → wrangler deploy → CF activo en ~1 min
 index.html, panel.html, sw.js, version.json → pages.yml → GitHub Pages en ~30 seg
 CRÍTICO: version.json, sw.js CACHE y index.html APP_VERSION deben ser IDÉNTICOS o hay bucle de recarga infinita.
-NUNCA reescribas worker.js completo con repo_write_file. Usa direct_fix (patch: grep → read → fix → verify).`,
+NUNCA reescribas worker.js completo con repo_write_file. Usa direct_fix (patch: grep → read → fix → verify).
+ENCODING: Todos los archivos son UTF-8 sin BOM. Después de direct_fix en HTML/JS: grep_code(archivo, "Ã|Â|â€") — si hay resultados, REVERTIR (hay corrupción de encoding). Incidente real 13/05/2026.`,
 
   schema_core: `SCHEMA BD — CORE:
 empresas(id, nombre, plan, activa, departamentos TEXT, config_modulos TEXT)
@@ -2354,14 +2457,14 @@ async function handleTelegramWebhook(request, env, ctx) {
   const orig   = cq.message?.text || '';
   const [accion, ...partes] = data.split(':');
   try {
-    // â"€â"€ AprobaciÃ³n de solicitud de usuario â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+    // â"€â"€ Aprobación de solicitud de usuario â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
     if (accion === 'apr') {
       const [userId, empresaId, rol, dept] = partes;
       await env.DB.prepare(
         'UPDATE usuarios SET activo=1, google_pending=0, empresa_id=?, rol=?, departamento=? WHERE id=? AND google_pending=1'
       ).bind(parseInt(empresaId), rol, dept === 'null' ? null : dept, parseInt(userId)).run();
       await _tgAnswerCQ(env, cq.id, 'âœ… Usuario aprobado');
-      await _tgEditMsg(env, chatId, msgId, orig + `\n\nâœ… <b>APROBADO</b> â€" ${rol} Â· ${dept === 'null' ? 'â€"' : dept}`);
+      await _tgEditMsg(env, chatId, msgId, orig + `\n\nâœ… <b>APROBADO</b> — ${rol} Â· ${dept === 'null' ? '—' : dept}`);
     }
     else if (accion === 'rej') {
       const [userId] = partes;
@@ -2907,11 +3010,11 @@ export default {
     }
 
     try {
-      // â"€â"€ Telegram webhook (sin auth â€" valida con secret header) â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+      // â"€â"€ Telegram webhook (sin auth — valida con secret header) â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
       if (path === '/telegram-webhook'       && method === 'POST') return await handleTelegramWebhook(request, env, ctx);
       if (path === '/setup-telegram-webhook' && method === 'GET')  return await setupTelegramWebhook(request, env);
 
-      // â"€â"€ Rutas pÃºblicas (sin auth) â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+      // â"€â"€ Rutas públicas (sin auth) â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
       if (path === '/health'      && method === 'GET')  return new Response(JSON.stringify({ ok: true, ts: Date.now() }), { headers: { 'Content-Type': 'application/json' } });
       if (path === '/scan'        && method === 'POST') return await handleScan(request, env);
       if (path === '/ocr'         && method === 'POST') return await handleOCR(request, env);
@@ -2942,7 +3045,7 @@ export default {
       if (path === '/graficas'           && method === 'GET')  return await getGraficasData(request, env);
       if (path === '/buscar'             && method === 'GET')  return await buscarGlobal(request, env);
 
-      // â"€â"€ RGPD / ProtecciÃ³n de datos â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+      // â"€â"€ RGPD / Protección de datos â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
       if (path === '/rgpd/informe'          && method === 'GET')    return await rgpdInforme(request, env);
       if (path === '/rgpd/anonimizar'       && method === 'DELETE') return await rgpdAnonimizar(request, env);
       if (path === '/rgpd/config'           && method === 'GET')    return await rgpdGetConfig(request, env);
@@ -3048,7 +3151,7 @@ export default {
         return await editarUsuario(path.split('/usuarios/')[1], request, env);
       }
 
-      // â"€â"€ CatÃ¡logos â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+      // â"€â"€ Catálogos â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
       if (path === '/proveedores'  && method === 'GET')   return await getCatalogo('proveedores', env, request);
       if (path === '/proveedores'  && method === 'POST')  return await addCatalogo('proveedores', request, env);
       if (path.startsWith('/proveedores/') && method === 'DELETE') return await deleteCatalogo('proveedores', path.split('/proveedores/')[1], request, env);
@@ -3099,7 +3202,7 @@ export default {
         return await eliminarSugerencia(sid, request, env);
       }
 
-      // â"€â"€ Buscar mÃ¡quina (cross-departamento, para Seguridad) â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+      // â"€â"€ Buscar máquina (cross-departamento, para Seguridad) â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
       if (path.startsWith('/buscar-maquina/') && method === 'GET') {
         const mat = decodeURIComponent(path.split('/buscar-maquina/')[1]);
         return await buscarMaquina(mat, request, env);
@@ -3214,7 +3317,7 @@ export default {
         if (method === 'DELETE') return await eliminarParteTrabajo(_ptid, request, env);
       }
 
-      // â"€â"€ GalerÃ­a de fotos por obra (NEW-17) â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+      // â"€â"€ Galería de fotos por obra (NEW-17) â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
       if (path === '/fotos-obra' && method === 'GET')  return await listarFotosObra(request, env);
       if (path === '/fotos-obra' && method === 'POST') return await subirFotoObra(request, env);
       if (path.startsWith('/fotos-obra/')) {
@@ -3252,7 +3355,7 @@ export default {
         if (method === 'DELETE') return await borrarArchivo(aid, request, env);
       }
 
-      // â"€â"€ DocumentaciÃ³n departamentos â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+      // â"€â"€ Documentación departamentos â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
       if (path === '/carpetas' && method === 'GET')  return await listarCarpetas(request, env);
       if (path === '/carpetas' && method === 'POST') return await crearCarpeta(request, env);
       if (path.startsWith('/carpetas/')) {
@@ -3445,7 +3548,7 @@ function generarToken() {
   return Array.from(arr).map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
-// Crea una sesiÃ³n en D1 y devuelve el token
+// Crea una sesión en D1 y devuelve el token
 async function crearSesion(env, { nombre, rol, obra_id, obra_nombre, departamento, es_admin, usuario_id, empresa_id }) {
   const token = generarToken();
   await env.DB.prepare(
@@ -3456,7 +3559,7 @@ async function crearSesion(env, { nombre, rol, obra_id, obra_nombre, departament
 
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // RECUPERACIÃ"N DE CONTRASEÃ‘A (Resend)
-// Para activar: aÃ±adir RESEND_API_KEY en Cloudflare Workers â†’ Variables de entorno
+// Para activar: añadir RESEND_API_KEY en Cloudflare Workers â†’ Variables de entorno
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 async function enviarEmailResend(env, { to, subject, html }) {
@@ -3485,7 +3588,7 @@ async function enviarEmailResend(env, { to, subject, html }) {
     }
     return true;
   } catch (e) {
-    console.error('[Resend] ExcepciÃ³n:', e.message);
+    console.error('[Resend] Excepción:', e.message);
     return false;
   }
 }
@@ -3500,7 +3603,7 @@ async function recuperarPass(request, env) {
   ).bind(email.trim().toLowerCase()).first();
 
   // Respuesta siempre igual para no revelar si el email existe (seguridad)
-  const okMsg = json({ ok: true, mensaje: 'Si ese email existe recibirÃ¡s un enlace en breve' });
+  const okMsg = json({ ok: true, mensaje: 'Si ese email existe recibirás un enlace en breve' });
 
   if (!usuario) return okMsg;
 
@@ -3545,32 +3648,32 @@ async function recuperarPass(request, env) {
           Alejandra Office
         </div>
         <div style="font-size:11px;color:#64748b;letter-spacing:2px;text-transform:uppercase;margin-top:4px">
-          RecuperaciÃ³n de contraseÃ±a
+          Recuperación de contraseña
         </div>
       </div>
       <p style="color:#e5e7eb;font-size:15px;margin:0 0 16px">Hola <strong>${usuario.nombre}</strong>,</p>
       <p style="color:#94a3b8;font-size:14px;margin:0 0 28px;line-height:1.6">
-        Hemos recibido una solicitud para restablecer la contraseÃ±a de tu cuenta en Alejandra Office.
-        El enlace es vÃ¡lido durante <strong style="color:#e5e7eb">2 horas</strong>.
+        Hemos recibido una solicitud para restablecer la contraseña de tu cuenta en Alejandra Office.
+        El enlace es válido durante <strong style="color:#e5e7eb">2 horas</strong>.
       </p>
       <div style="text-align:center;margin-bottom:28px">
         <a href="${panelUrl}" style="display:inline-block;background:#f97316;color:#fff;font-family:'Montserrat',Helvetica,Arial,sans-serif;font-weight:700;font-size:14px;letter-spacing:1px;text-decoration:none;padding:14px 32px;border-radius:10px;text-transform:uppercase">
-          Restablecer contraseÃ±a â†’
+          Restablecer contraseña â†’
         </a>
       </div>
       <p style="color:#475569;font-size:12px;margin:0 0 8px;line-height:1.5">
-        Si no puedes pulsar el botÃ³n, copia este enlace en tu navegador:
+        Si no puedes pulsar el botón, copia este enlace en tu navegador:
       </p>
       <p style="color:#64748b;font-size:11px;word-break:break-all;margin:0 0 24px;font-family:monospace">
         ${panelUrl}
       </p>
       <hr style="border:none;border-top:1px solid #1e2d40;margin:0 0 20px">
       <p style="color:#475569;font-size:12px;margin:0;text-align:center">
-        Si no has solicitado esto, ignora este email. Tu contraseÃ±a no cambiarÃ¡.
+        Si no has solicitado esto, ignora este email. Tu contraseña no cambiará.
       </p>
     </td></tr>
     <tr><td style="text-align:center;padding-top:20px">
-      <p style="color:#334155;font-size:11px;margin:0">Alejandra App Â· Sistema de gestiÃ³n de obras</p>
+      <p style="color:#334155;font-size:11px;margin:0">Alejandra App Â· Sistema de gestión de obras</p>
     </td></tr>
   </table>
 </body>
@@ -3578,13 +3681,13 @@ async function recuperarPass(request, env) {
 
   const enviado = await enviarEmailResend(env, {
     to: email.trim().toLowerCase(),
-    subject: 'ðŸ" Restablecer contraseÃ±a â€" Alejandra Office',
+    subject: 'ðŸ" Restablecer contraseña — Alejandra Office',
     html,
   });
 
   if (!enviado && env.RESEND_API_KEY) {
-    // Si hay key pero fallÃ³ el envÃ­o, devolvemos error real
-    return err('Error al enviar el email. IntÃ©ntalo de nuevo.', 500);
+    // Si hay key pero falló el envío, devolvemos error real
+    return err('Error al enviar el email. Inténtalo de nuevo.', 500);
   }
 
   return okMsg;
@@ -3593,9 +3696,9 @@ async function recuperarPass(request, env) {
 async function resetearPass(request, env) {
   const { token, nueva_pass } = await request.json().catch(() => ({}));
   if (!token || !nueva_pass) return err('Datos incompletos');
-  if (nueva_pass.length < 6) return err('La contraseÃ±a debe tener al menos 6 caracteres');
+  if (nueva_pass.length < 6) return err('La contraseña debe tener al menos 6 caracteres');
 
-  // Verificar token vÃ¡lido, no usado y no expirado
+  // Verificar token válido, no usado y no expirado
   const reset = await env.DB.prepare(`
     SELECT rt.*, u.email, u.nombre FROM reset_tokens rt
     JOIN usuarios u ON u.id = rt.usuario_id
@@ -3603,12 +3706,12 @@ async function resetearPass(request, env) {
     LIMIT 1
   `).bind(token).first().catch(() => null);
 
-  if (!reset) return err('El enlace no es vÃ¡lido o ha caducado. Solicita uno nuevo.');
+  if (!reset) return err('El enlace no es válido o ha caducado. Solicita uno nuevo.');
 
-  // Hash de la nueva contraseÃ±a â€" PBKDF2 igual que hashPassword() en verificarAcceso
+  // Hash de la nueva contraseña — PBKDF2 igual que hashPassword() en verificarAcceso
   const hashHex = await hashPassword(nueva_pass);
 
-  // Actualizar contraseÃ±a e invalidar token
+  // Actualizar contraseña e invalidar token
   await Promise.all([
     env.DB.prepare(`UPDATE usuarios SET password_hash=? WHERE id=?`).bind(hashHex, reset.usuario_id).run(),
     env.DB.prepare(`UPDATE reset_tokens SET usado=1 WHERE token=?`).bind(token).run(),
@@ -3621,7 +3724,7 @@ async function resetearPass(request, env) {
 }
 
 async function verificarAcceso(request, env) {
-  // â"€â"€ Rate limiting: mÃ¡x 10 intentos por IP en 15 minutos â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+  // â"€â"€ Rate limiting: máx 10 intentos por IP en 15 minutos â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
   const ip = request.headers.get('CF-Connecting-IP') || request.headers.get('X-Forwarded-For') || 'unknown';
   try {
     const windowStart = new Date(Date.now() - 15 * 60 * 1000).toISOString().replace('T', ' ').split('.')[0];
@@ -3642,7 +3745,7 @@ async function verificarAcceso(request, env) {
     } catch (_) {}
   };
 
-  // 1.5 Login por email + contraseÃ±a (empresa_admin y usuarios con email)
+  // 1.5 Login por email + contraseña (empresa_admin y usuarios con email)
   const emailInput = (body.email || '').trim().toLowerCase();
   const passInput  = body.password || '';
   if (emailInput && passInput) {
@@ -3650,9 +3753,9 @@ async function verificarAcceso(request, env) {
       const u = await env.DB.prepare(
         'SELECT u.*, o.nombre as obra_nombre FROM usuarios u LEFT JOIN obras o ON u.obra_id = o.id WHERE LOWER(u.email) = ? AND u.activo = 1 LIMIT 1'
       ).bind(emailInput).first();
-      if (!u || !u.password_hash) { await registrarFallo('email_invalido'); return err('Email o contraseÃ±a incorrectos', 401); }
+      if (!u || !u.password_hash) { await registrarFallo('email_invalido'); return err('Email o contraseña incorrectos', 401); }
       const valid = await verifyPassword(passInput, u.password_hash);
-      if (!valid) { await registrarFallo('password_invalido'); return err('Email o contraseÃ±a incorrectos', 401); }
+      if (!valid) { await registrarFallo('password_invalido'); return err('Email o contraseña incorrectos', 401); }
       const dept = u.rol === 'empresa_admin' ? null : (u.departamento || 'electrico');
       const token = await crearSesion(env, {
         nombre: u.nombre, rol: u.rol, obra_id: u.obra_id, obra_nombre: u.obra_nombre,
@@ -3666,7 +3769,7 @@ async function verificarAcceso(request, env) {
     } catch(e) { return err('Error en login: ' + e.message, 500); }
   }
 
-  if (!codigo) return err('Falta el cÃ³digo');
+  if (!codigo) return err('Falta el código');
 
   // 1. Â¿Es superadmin?
   if (env.ADMIN_CODE && codigo.trim() === env.ADMIN_CODE) {
@@ -3694,8 +3797,8 @@ async function verificarAcceso(request, env) {
           return err('El usuario no pertenece a esa obra', 403);
         }
       }
-      await sendTelegram(env, `ðŸ‘¤ <b>Login</b>: ${usuario.nombre} (${usuario.rol})\nðŸ— ${usuario.obra_nombre || 'â€"'}  ðŸ"· ${usuario.departamento || 'â€"'}`);
-      await logActividad(env, { nivel: 'info', origen: 'login', mensaje: `Login: ${usuario.nombre} (${usuario.rol})`, detalle: `obra: ${usuario.obra_nombre || 'â€"'} | dept: ${usuario.departamento || 'â€"'}`, empresa_id: usuario.empresa_id || 1 });
+      await sendTelegram(env, `ðŸ‘¤ <b>Login</b>: ${usuario.nombre} (${usuario.rol})\nðŸ— ${usuario.obra_nombre || '—'}  ðŸ"· ${usuario.departamento || '—'}`);
+      await logActividad(env, { nivel: 'info', origen: 'login', mensaje: `Login: ${usuario.nombre} (${usuario.rol})`, detalle: `obra: ${usuario.obra_nombre || '—'} | dept: ${usuario.departamento || '—'}`, empresa_id: usuario.empresa_id || 1 });
       const token = await crearSesion(env, {
         nombre: usuario.nombre, rol: usuario.rol,
         obra_id: usuario.obra_id, obra_nombre: usuario.obra_nombre,
@@ -3720,7 +3823,7 @@ async function verificarAcceso(request, env) {
     console.error('Error verificar usuario:', e.message);
   }
 
-  // 3. Fallback legacy: cÃ³digo o nombre de obra
+  // 3. Fallback legacy: código o nombre de obra
   try {
     const obra = await env.DB.prepare(
       'SELECT * FROM obras WHERE (codigo = ? OR LOWER(nombre) = LOWER(?)) AND activa = 1'
@@ -3733,7 +3836,7 @@ async function verificarAcceso(request, env) {
   } catch (_) {}
 
   await registrarFallo('codigo_invalido');
-  return err('CÃ³digo invÃ¡lido', 401);
+  return err('Código inválido', 401);
 }
 
 async function actualizarSesionDepartamento(request, env) {
@@ -3741,7 +3844,7 @@ async function actualizarSesionDepartamento(request, env) {
   if (!xToken) return err('No autorizado', 403);
   const { departamento } = await request.json().catch(() => ({}));
   const validos = ['electrico', 'mecanicas', 'seguridad', 'personal'];
-  if (!departamento || !validos.includes(departamento)) return err('Departamento invÃ¡lido', 400);
+  if (!departamento || !validos.includes(departamento)) return err('Departamento inválido', 400);
   await env.DB.prepare('UPDATE sesiones SET departamento = ? WHERE token = ?').bind(departamento, xToken).run();
   return json({ ok: true });
 }
@@ -3782,19 +3885,19 @@ async function cerrarTodasSesiones(request, env) {
 }
 
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-// EMPRESAS â€" REGISTRO Y GESTIÃ"N
+// EMPRESAS — REGISTRO Y GESTIÃ"N
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 async function registrarEmpresa(request, env) {
   const body = await request.json().catch(() => ({}));
   const { empresa_nombre, sector, admin_nombre, email, password, obra_nombre, departamentos, modulos_config } = body;
   if (!empresa_nombre?.trim() || !email?.trim() || !password || !admin_nombre?.trim())
-    return err('Faltan datos obligatorios (empresa, nombre, email, contraseÃ±a)');
-  if (password.length < 8) return err('La contraseÃ±a debe tener al menos 8 caracteres');
+    return err('Faltan datos obligatorios (empresa, nombre, email, contraseña)');
+  if (password.length < 8) return err('La contraseña debe tener al menos 8 caracteres');
 
   const emailClean = email.trim().toLowerCase();
   const existing = await env.DB.prepare('SELECT id FROM usuarios WHERE LOWER(email) = ? LIMIT 1').bind(emailClean).first();
-  if (existing) return err('Este email ya estÃ¡ registrado', 409);
+  if (existing) return err('Este email ya está registrado', 409);
 
   const slug = empresa_nombre.trim().toLowerCase().replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
   const hash = await hashPassword(password);
@@ -3812,7 +3915,7 @@ async function registrarEmpresa(request, env) {
   // Crear primera obra (opcional)
   let obra_id = null, obra_nombre_final = null;
   if (obra_nombre?.trim()) {
-    const codObra = randomHex(4).toUpperCase(); // 8 chars hex criptogrÃ¡ficamente seguro
+    const codObra = randomHex(4).toUpperCase(); // 8 chars hex criptográficamente seguro
     const obraResult = await env.DB.prepare(
       'INSERT INTO obras (nombre, codigo, activa, empresa_id) VALUES (?, ?, 1, ?)'
     ).bind(obra_nombre.trim(), codObra, empresa_id).run();
@@ -3821,7 +3924,7 @@ async function registrarEmpresa(request, env) {
   }
 
   // Crear usuario admin
-  const codAdmin = 'ADM_' + randomHex(6).toUpperCase(); // 12 chars hex criptogrÃ¡ficamente seguro
+  const codAdmin = 'ADM_' + randomHex(6).toUpperCase(); // 12 chars hex criptográficamente seguro
   await env.DB.prepare(
     'INSERT INTO usuarios (nombre, codigo, email, password_hash, rol, departamento, activo, empresa_id, obra_id) VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)'
   ).bind(admin_nombre.trim(), codAdmin, emailClean, hash, 'empresa_admin', 'electrico', empresa_id, obra_id).run();
@@ -3832,7 +3935,7 @@ async function registrarEmpresa(request, env) {
     departamento: null, es_admin: false, usuario_id: adminUser.id, empresa_id,
   });
 
-  await sendTelegram(env, `ðŸ¢ <b>Nueva empresa:</b> ${empresa_nombre}\nðŸ‘¤ ${admin_nombre} (${emailClean})\nðŸ— Obra: ${obra_nombre_final || 'â€"'}`);
+  await sendTelegram(env, `ðŸ¢ <b>Nueva empresa:</b> ${empresa_nombre}\nðŸ‘¤ ${admin_nombre} (${emailClean})\nðŸ— Obra: ${obra_nombre_final || '—'}`);
   return json({ ok: true, token, rol: 'empresa_admin', nombre: admin_nombre.trim(), empresa_nombre: empresa_nombre.trim(), empresa_id, obra_id, obra_nombre: obra_nombre_final });
 }
 
@@ -3953,13 +4056,13 @@ async function crearObra(request, env) {
   const { isSuperadmin, isAdmin, isEmpresaAdmin, empresa_id } = await getAuth(request, env);
   if (!isSuperadmin && !isAdmin && !isEmpresaAdmin) return err('No autorizado', 403);
   const { nombre, codigo } = await request.json();
-  if (!nombre?.trim() || !codigo?.trim()) return err('Faltan nombre y cÃ³digo');
+  if (!nombre?.trim() || !codigo?.trim()) return err('Faltan nombre y código');
   try {
     const r = await env.DB.prepare('INSERT INTO obras (nombre, codigo, empresa_id) VALUES (?, ?, ?)')
       .bind(nombre.trim(), codigo.trim().toUpperCase(), empresa_id).run();
     return json({ ok: true, id: r.meta.last_row_id, nombre: nombre.trim(), codigo: codigo.trim().toUpperCase() }, 201);
   } catch (e) {
-    if (e.message.includes('UNIQUE')) return err(`El cÃ³digo "${codigo}" ya existe`, 409);
+    if (e.message.includes('UNIQUE')) return err(`El código "${codigo}" ya existe`, 409);
     throw e;
   }
 }
@@ -3998,12 +4101,12 @@ async function getBobinas(request, env) {
   const proveedorParam = url.searchParams.get('proveedor');
   const obraParamRaw = url.searchParams.get('obra_id');
   const obraParam = obraParamRaw ? parseInt(obraParamRaw) : null;
-  // superadmin/empresa_admin pueden ver todas las obras (sin restricciÃ³n de obraId de sesiÃ³n)
+  // superadmin/empresa_admin pueden ver todas las obras (sin restricción de obraId de sesión)
   // jefe_de_obra se incluye en isAdminRole solo para el dept scoping (no para obra scoping)
   const isUnrestrictedAdmin = isSuperadmin || isEmpresaAdmin;
   const isAdminRole = isUnrestrictedAdmin || isJefeObra;
   const obraFilter = isUnrestrictedAdmin ? obraParam : (obraId || null);
-  // Admins: dept filter solo si se pasa explÃ­citamente (?departamento=X); operarios: siempre su dept
+  // Admins: dept filter solo si se pasa explícitamente (?departamento=X); operarios: siempre su dept
   const deptParam = url.searchParams.get('departamento');
   const deptFilter = deptParam || (!isAdminRole ? departamento : null);
 
@@ -4048,7 +4151,7 @@ async function crearBobina(request, env, ctx) {
 
     return json({ ok: true, mensaje: `Bobina ${codigo} registrada` }, 201);
   } catch (e) {
-    if (e.message.includes('UNIQUE')) return err(`La bobina ${codigo} ya estÃ¡ registrada`, 409);
+    if (e.message.includes('UNIQUE')) return err(`La bobina ${codigo} ya está registrada`, 409);
     throw e;
   }
 }
@@ -4089,13 +4192,13 @@ async function devolverBobina(codigo, request, env, ctx) {
     await env.DB.prepare(
       `INSERT INTO bobinas (codigo, estado, fecha_entrada, fecha_devolucion, devuelto_por, notas, obra_id, empresa_id)
        VALUES (?, 'devuelta', ?, ?, ?, ?, ?, ?)`
-    ).bind(codigo.trim().toUpperCase(), fecha, fecha, devuelto_por || '', 'Creado automÃ¡ticamente en devoluciÃ³n', obraId || null, eid || 1).run();
+    ).bind(codigo.trim().toUpperCase(), fecha, fecha, devuelto_por || '', 'Creado automáticamente en devolución', obraId || null, eid || 1).run();
     bobina = await env.DB.prepare('SELECT * FROM bobinas WHERE codigo = ?').bind(codigo).first();
     ctx.waitUntil(Promise.all([
       syncSheets(env, 'Elec-Bobinas', eid || 1),
-      registrarHistorial(env, { obra_id: bobina?.obra_id, bobina_codigo: codigo, accion: 'devolucion', usuario: devuelto_por, notas: 'Auto-creado en devoluciÃ³n' }),
+      registrarHistorial(env, { obra_id: bobina?.obra_id, bobina_codigo: codigo, accion: 'devolucion', usuario: devuelto_por, notas: 'Auto-creado en devolución' }),
     ]));
-    return json({ ok: true, mensaje: `Bobina ${codigo} no estaba registrada. Se ha creado y marcado como devuelta automÃ¡ticamente`, fecha_devolucion: fecha });
+    return json({ ok: true, mensaje: `Bobina ${codigo} no estaba registrada. Se ha creado y marcado como devuelta automáticamente`, fecha_devolucion: fecha });
   }
 
   if (bobina.estado === 'devuelta') return err(`Bobina ${codigo} ya fue devuelta el ${bobina.fecha_devolucion}`, 409);
@@ -4107,7 +4210,7 @@ async function devolverBobina(codigo, request, env, ctx) {
   ctx.waitUntil(Promise.all([
     syncSheets(env, 'Elec-Bobinas', bobina.empresa_id),
     registrarHistorial(env, { obra_id: bobina.obra_id, bobina_codigo: codigo, accion: 'devolucion', usuario: devuelto_por, notas: notas || '' }),
-    sendTelegram(env, `ðŸ"¤ <b>Bobina devuelta</b>\nðŸ"– ${codigo}\nðŸ‘¤ ${devuelto_por || 'â€"'}`),
+    sendTelegram(env, `ðŸ"¤ <b>Bobina devuelta</b>\nðŸ"– ${codigo}\nðŸ‘¤ ${devuelto_por || '—'}`),
   ]));
 
   return json({ ok: true, mensaje: `Bobina ${codigo} devuelta correctamente`, fecha_devolucion: fecha });
@@ -4198,12 +4301,12 @@ async function crearPemp(request, env, ctx) {
         obra_id: obraFinal, matricula: matricula.trim().toUpperCase(),
         accion: 'entrada', usuario: reg, notas: notas || '',
       }),
-      sendTelegram(env, `ðŸ— <b>Nueva PEMP registrada</b>\nðŸ"– ${matricula.trim().toUpperCase()}\nðŸ"§ ${tipo || 'â€"'}  ðŸ­ ${marca || 'â€"'}  âš¡ ${energia || 'â€"'}\nðŸ‘¤ ${reg}`),
+      sendTelegram(env, `ðŸ— <b>Nueva PEMP registrada</b>\nðŸ"– ${matricula.trim().toUpperCase()}\nðŸ"§ ${tipo || '—'}  ðŸ­ ${marca || '—'}  âš¡ ${energia || '—'}\nðŸ‘¤ ${reg}`),
     ]));
 
     return json({ ok: true, id, mensaje: `PEMP ${matricula} registrada` }, 201);
   } catch (e) {
-    if (e.message.includes('UNIQUE')) return err(`La PEMP ${matricula} ya estÃ¡ registrada`, 409);
+    if (e.message.includes('UNIQUE')) return err(`La PEMP ${matricula} ya está registrada`, 409);
     throw e;
   }
 }
@@ -4217,7 +4320,7 @@ async function editarPemp(matricula, request, env, ctx) {
   const body = await request.json().catch(() => ({}));
   const campos = ['tipo', 'marca', 'proveedor', 'energia', 'estado', 'notas', 'fecha_ultima_revision', 'fecha_proxima_revision', 'obra_id', 'departamento', 'aviso_mantenimiento', 'dias_aviso_mant'];
   let notifAveria = false, notifReparado = false;
-  // Fechas automÃ¡ticas segÃºn cambio de estado
+  // Fechas automáticas según cambio de estado
   if (body.estado !== undefined) {
     if (body.estado === 'Averiada' && pemp.estado !== 'Averiada') {
       body.fecha_averia = fechaEspana();
@@ -4238,7 +4341,7 @@ async function editarPemp(matricula, request, env, ctx) {
   vals.push(matricula);
 
   await env.DB.prepare(`UPDATE pemp SET ${sets.join(', ')} WHERE matricula = ?`).bind(...vals).run();
-  if (notifAveria)   await sendTelegram(env, `ðŸ"´ <b>PEMP AVERIADA</b>\nðŸ"– ${matricula}\nðŸ— Obra: ${pemp.obra_id || 'â€"'}`);
+  if (notifAveria)   await sendTelegram(env, `ðŸ"´ <b>PEMP AVERIADA</b>\nðŸ"– ${matricula}\nðŸ— Obra: ${pemp.obra_id || '—'}`);
   if (notifReparado) await sendTelegram(env, `ðŸŸ¢ <b>PEMP Reparada</b>\nðŸ"– ${matricula}`);
   ctx?.waitUntil(syncSheets(env, tabForDept('pemp', body.departamento || pemp.departamento), empresa_id || pemp.empresa_id));
   return json({ ok: true, mensaje: `PEMP ${matricula} actualizada` });
@@ -4257,13 +4360,13 @@ async function devolverPemp(matricula, request, env, ctx) {
     await env.DB.prepare(
       `INSERT INTO pemp (matricula, estado, fecha_entrada, fecha_devolucion, devuelto_por, notas, obra_id, empresa_id)
        VALUES (?, 'devuelta', ?, ?, ?, ?, ?, ?)`
-    ).bind(matricula.trim().toUpperCase(), fecha, fecha, devuelto_por || '', 'Creado automÃ¡ticamente en devoluciÃ³n', obraId || null, eid || 1).run();
+    ).bind(matricula.trim().toUpperCase(), fecha, fecha, devuelto_por || '', 'Creado automáticamente en devolución', obraId || null, eid || 1).run();
     pemp = await env.DB.prepare('SELECT * FROM pemp WHERE matricula = ?').bind(matricula).first();
     ctx.waitUntil(Promise.all([
       syncSheets(env, tabForDept('pemp', departamento), eid || 1),
-      registrarHistorialPemp(env, { obra_id: pemp?.obra_id, matricula, accion: 'devolucion', usuario: devuelto_por, notas: 'Auto-creado en devoluciÃ³n' }),
+      registrarHistorialPemp(env, { obra_id: pemp?.obra_id, matricula, accion: 'devolucion', usuario: devuelto_por, notas: 'Auto-creado en devolución' }),
     ]));
-    return json({ ok: true, mensaje: `PEMP ${matricula} no estaba registrada. Se ha creado y marcado como devuelta automÃ¡ticamente`, fecha_devolucion: fecha });
+    return json({ ok: true, mensaje: `PEMP ${matricula} no estaba registrada. Se ha creado y marcado como devuelta automáticamente`, fecha_devolucion: fecha });
   }
 
   if (pemp.estado === 'devuelta') return err(`PEMP ${matricula} ya fue devuelta el ${pemp.fecha_devolucion}`, 409);
@@ -4275,7 +4378,7 @@ async function devolverPemp(matricula, request, env, ctx) {
   ctx.waitUntil(Promise.all([
     syncSheets(env, tabForDept('pemp', pemp.departamento), pemp.empresa_id),
     registrarHistorialPemp(env, { obra_id: pemp.obra_id, matricula, accion: 'devolucion', usuario: devuelto_por, notas: notas || '' }),
-    sendTelegram(env, `ðŸ"¤ <b>PEMP devuelta</b>\nðŸ"– ${matricula}\nðŸ‘¤ ${devuelto_por || 'â€"'}`),
+    sendTelegram(env, `ðŸ"¤ <b>PEMP devuelta</b>\nðŸ"– ${matricula}\nðŸ‘¤ ${devuelto_por || '—'}`),
   ]));
 
   return json({ ok: true, mensaje: `PEMP ${matricula} devuelta correctamente`, fecha_devolucion: fecha });
@@ -4363,12 +4466,12 @@ async function crearCarretilla(request, env, ctx) {
         obra_id: obraFinal, matricula: matricula.trim().toUpperCase(),
         accion: 'entrada', usuario: reg, notas: notas || '',
       }),
-      sendTelegram(env, `ðŸšœ <b>Nueva carretilla registrada</b>\nðŸ"– ${matricula.trim().toUpperCase()}\nðŸ"§ ${tipo || 'â€"'}  âš¡ ${energia || 'â€"'}\nðŸ‘¤ ${reg}`),
+      sendTelegram(env, `ðŸšœ <b>Nueva carretilla registrada</b>\nðŸ"– ${matricula.trim().toUpperCase()}\nðŸ"§ ${tipo || '—'}  âš¡ ${energia || '—'}\nðŸ‘¤ ${reg}`),
     ]));
 
     return json({ ok: true, id, mensaje: `Carretilla ${matricula} registrada` }, 201);
   } catch (e) {
-    if (e.message.includes('UNIQUE')) return err(`La carretilla ${matricula} ya estÃ¡ registrada`, 409);
+    if (e.message.includes('UNIQUE')) return err(`La carretilla ${matricula} ya está registrada`, 409);
     throw e;
   }
 }
@@ -4421,13 +4524,13 @@ async function devolverCarretilla(matricula, request, env, ctx) {
     await env.DB.prepare(
       `INSERT INTO carretillas (matricula, estado, fecha_entrada, fecha_devolucion, devuelto_por, notas, obra_id, empresa_id)
        VALUES (?, 'devuelta', ?, ?, ?, ?, ?, ?)`
-    ).bind(matricula.trim().toUpperCase(), fecha, fecha, devuelto_por || '', 'Creado automÃ¡ticamente en devoluciÃ³n', obraId || null, eid || 1).run();
+    ).bind(matricula.trim().toUpperCase(), fecha, fecha, devuelto_por || '', 'Creado automáticamente en devolución', obraId || null, eid || 1).run();
     carretilla = await env.DB.prepare('SELECT * FROM carretillas WHERE matricula = ?').bind(matricula).first();
     ctx.waitUntil(Promise.all([
       syncSheets(env, tabForDept('carretilla', departamento), eid || 1),
-      registrarHistorialCarretillas(env, { obra_id: carretilla?.obra_id, matricula, accion: 'devolucion', usuario: devuelto_por, notas: 'Auto-creado en devoluciÃ³n' }),
+      registrarHistorialCarretillas(env, { obra_id: carretilla?.obra_id, matricula, accion: 'devolucion', usuario: devuelto_por, notas: 'Auto-creado en devolución' }),
     ]));
-    return json({ ok: true, mensaje: `Carretilla ${matricula} no estaba registrada. Se ha creado y marcado como devuelta automÃ¡ticamente`, fecha_devolucion: fecha });
+    return json({ ok: true, mensaje: `Carretilla ${matricula} no estaba registrada. Se ha creado y marcado como devuelta automáticamente`, fecha_devolucion: fecha });
   }
 
   if (carretilla.estado === 'devuelta') return err(`Carretilla ${matricula} ya fue devuelta el ${carretilla.fecha_devolucion}`, 409);
@@ -4439,7 +4542,7 @@ async function devolverCarretilla(matricula, request, env, ctx) {
   ctx.waitUntil(Promise.all([
     syncSheets(env, tabForDept('carretilla', carretilla.departamento), carretilla.empresa_id),
     registrarHistorialCarretillas(env, { obra_id: carretilla.obra_id, matricula, accion: 'devolucion', usuario: devuelto_por, notas: notas || '' }),
-    sendTelegram(env, `ðŸ"¤ <b>Carretilla devuelta</b>\nðŸ"– ${matricula}\nðŸ‘¤ ${devuelto_por || 'â€"'}`),
+    sendTelegram(env, `ðŸ"¤ <b>Carretilla devuelta</b>\nðŸ"– ${matricula}\nðŸ‘¤ ${devuelto_por || '—'}`),
   ]));
 
   return json({ ok: true, mensaje: `Carretilla ${matricula} devuelta correctamente`, fecha_devolucion: fecha });
@@ -4475,7 +4578,7 @@ async function transferirRecurso(tabla, id, request, env) {
   const obra = await env.DB.prepare('SELECT id FROM obras WHERE id = ? AND activa = 1').bind(nueva_obra_id).first();
   if (!obra) return err(`Obra ${nueva_obra_id} no encontrada o inactiva`, 404);
 
-  // Para bobinas la PK es codigo; para pemp y carretillas es id numÃ©rico
+  // Para bobinas la PK es codigo; para pemp y carretillas es id numérico
   let registro;
   if (tabla === 'bobinas') {
     registro = await env.DB.prepare('SELECT * FROM bobinas WHERE codigo = ?').bind(id).first();
@@ -4524,7 +4627,7 @@ async function crearUsuario(request, env) {
 
   const body = await request.json();
   const { nombre, codigo, rol, obra_id, departamento: deptBody } = body;
-  if (!nombre?.trim() || !codigo?.trim()) return err('Faltan nombre y cÃ³digo');
+  if (!nombre?.trim() || !codigo?.trim()) return err('Faltan nombre y código');
 
   const obraFinal = obra_id ? parseInt(obra_id) : obraId;
   const deptFinal = deptBody || 'electrico';
@@ -4540,7 +4643,7 @@ async function crearUsuario(request, env) {
     ).bind(nombre.trim(), codigo.trim(), rol || 'operario', obraFinal || null, deptFinal, empresa_id).run();
     return json({ ok: true, id: r.meta.last_row_id, nombre: nombre.trim(), rol: rol || 'operario', departamento: deptFinal, codigo: codigo.trim() }, 201);
   } catch (e) {
-    if (e.message.includes('UNIQUE')) return err(`El cÃ³digo "${codigo}" ya existe`, 409);
+    if (e.message.includes('UNIQUE')) return err(`El código "${codigo}" ya existe`, 409);
     throw e;
   }
 }
@@ -4556,7 +4659,7 @@ async function eliminarUsuario(id, request, env) {
     if (!isEncargado) return err('No autorizado', 403);
   }
 
-  // Liberar credenciales Ãºnicas para que puedan reutilizarse en otro usuario
+  // Liberar credenciales únicas para que puedan reutilizarse en otro usuario
   await env.DB.prepare(
     'UPDATE usuarios SET activo = 0, email = NULL, password_hash = NULL, codigo = \'_del_\' || id WHERE id = ?'
   ).bind(id).run();
@@ -4590,7 +4693,7 @@ async function editarUsuario(id, request, env) {
   try {
     await env.DB.prepare(`UPDATE usuarios SET ${sets.join(', ')} WHERE id = ?`).bind(...vals).run();
 
-    // Si cambiÃ³ obra_id, sincronizar todas las sesiones activas del usuario
+    // Si cambió obra_id, sincronizar todas las sesiones activas del usuario
     if (body.obra_id !== undefined) {
       const nuevaObraId = body.obra_id ? parseInt(body.obra_id) : null;
       const obraRow = nuevaObraId
@@ -4602,7 +4705,7 @@ async function editarUsuario(id, request, env) {
 
     return json({ ok: true, mensaje: 'Usuario actualizado' });
   } catch (e) {
-    if (e.message.includes('UNIQUE')) return err('El cÃ³digo ya existe', 409);
+    if (e.message.includes('UNIQUE')) return err('El código ya existe', 409);
     throw e;
   }
 }
@@ -4646,11 +4749,11 @@ async function setConfig(request, env) {
 }
 
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-// CATÃLOGOS (proveedores, tipos_cable)
+// CATÁLOGOS (proveedores, tipos_cable)
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
-// SEC-02: whitelist estricta de tablas permitidas en el catÃ¡logo
-// Evita inyecciÃ³n de nombre de tabla vÃ­a el parÃ¡metro `tabla`
+// SEC-02: whitelist estricta de tablas permitidas en el catálogo
+// Evita inyección de nombre de tabla vía el parámetro `tabla`
 const CATALOG_WHITELIST = new Set([
   'proveedores', 'tipos_cable', 'tipos_pemp',
   'tipos_carretilla', 'energias_carretilla', 'tipos_material_seg',
@@ -4660,7 +4763,7 @@ async function getCatalogo(tabla, env, requestOrEmpresaId = null) {
   if (!CATALOG_WHITELIST.has(tabla)) return err('Tabla no permitida', 400);
   let empresa_id = 1;
   if (requestOrEmpresaId && typeof requestOrEmpresaId === 'object') {
-    // Es un Request â€" hacer auth
+    // Es un Request — hacer auth
     const auth = await getAuth(requestOrEmpresaId, env);
     empresa_id = auth.empresa_id || 1;
   } else if (typeof requestOrEmpresaId === 'number') {
@@ -4702,7 +4805,7 @@ async function exportCSV(request, env) {
   const { obraId, empresa_id } = await getAuth(request, env);
   if (!empresa_id) return err('No autorizado', 403);
   const url  = new URL(request.url);
-  const tipo = url.searchParams.get('tipo'); // bobinas | pemp | carretillas | (vacÃ­o = todo)
+  const tipo = url.searchParams.get('tipo'); // bobinas | pemp | carretillas | (vacío = todo)
   const f    = obraId || null;
   const fecha = new Date().toISOString().slice(0, 10);
 
@@ -4717,7 +4820,7 @@ async function exportCSV(request, env) {
       : 'SELECT * FROM bobinas WHERE empresa_id = ? ORDER BY created_at DESC';
     const { results } = await env.DB.prepare(sql).bind(...(f ? [empresa_id, f] : [empresa_id])).all();
     sections.push('=== BOBINAS ===');
-    sections.push(row(['CÃ³digo', 'Proveedor', 'Tipo Cable', 'Registrado por', 'Fecha Entrada', 'Devuelto por', 'Fecha DevoluciÃ³n', 'Estado', 'Notas', 'Obra ID']));
+    sections.push(row(['Código', 'Proveedor', 'Tipo Cable', 'Registrado por', 'Fecha Entrada', 'Devuelto por', 'Fecha Devolución', 'Estado', 'Notas', 'Obra ID']));
     for (const b of results) {
       sections.push(row([b.codigo, b.proveedor, b.tipo_cable, b.registrado_por, b.fecha_entrada, b.devuelto_por, b.fecha_devolucion, b.estado, b.notas, b.obra_id]));
     }
@@ -4730,7 +4833,7 @@ async function exportCSV(request, env) {
       : 'SELECT * FROM pemp WHERE empresa_id = ? ORDER BY created_at DESC';
     const { results } = await env.DB.prepare(sql).bind(...(f ? [empresa_id, f] : [empresa_id])).all();
     sections.push('=== PEMP ===');
-    sections.push(row(['ID', 'MatrÃ­cula', 'Tipo', 'Marca', 'Proveedor', 'Estado', 'Fecha Entrada', 'Fecha DevoluciÃ³n', 'Ãšltima RevisiÃ³n', 'PrÃ³xima RevisiÃ³n', 'Registrado por', 'Devuelto por', 'Notas', 'Obra ID']));
+    sections.push(row(['ID', 'Matrícula', 'Tipo', 'Marca', 'Proveedor', 'Estado', 'Fecha Entrada', 'Fecha Devolución', 'Ãšltima Revisión', 'Próxima Revisión', 'Registrado por', 'Devuelto por', 'Notas', 'Obra ID']));
     for (const p of results) {
       sections.push(row([p.id, p.matricula, p.tipo, p.marca, p.proveedor, p.estado, p.fecha_entrada, p.fecha_devolucion, p.fecha_ultima_revision, p.fecha_proxima_revision, p.registrado_por, p.devuelto_por, p.notas, p.obra_id]));
     }
@@ -4743,7 +4846,7 @@ async function exportCSV(request, env) {
       : 'SELECT * FROM carretillas WHERE empresa_id = ? ORDER BY created_at DESC';
     const { results } = await env.DB.prepare(sql).bind(...(f ? [empresa_id, f] : [empresa_id])).all();
     sections.push('=== CARRETILLAS ===');
-    sections.push(row(['ID', 'MatrÃ­cula', 'Tipo', 'Marca', 'Proveedor', 'EnergÃ­a', 'Estado', 'Fecha Entrada', 'Fecha DevoluciÃ³n', 'Ãšltima RevisiÃ³n', 'PrÃ³xima RevisiÃ³n', 'Registrado por', 'Devuelto por', 'Notas', 'Obra ID']));
+    sections.push(row(['ID', 'Matrícula', 'Tipo', 'Marca', 'Proveedor', 'Energía', 'Estado', 'Fecha Entrada', 'Fecha Devolución', 'Ãšltima Revisión', 'Próxima Revisión', 'Registrado por', 'Devuelto por', 'Notas', 'Obra ID']));
     for (const c of results) {
       sections.push(row([c.id, c.matricula, c.tipo, c.marca, c.proveedor, c.energia, c.estado, c.fecha_entrada, c.fecha_devolucion, c.fecha_ultima_revision, c.fecha_proxima_revision, c.registrado_por, c.devuelto_por, c.notas, c.obra_id]));
     }
@@ -4828,7 +4931,7 @@ async function getHistorialTabla(tabla, request, env) {
   const limit  = parseInt(url.searchParams.get('limit') || '100');
   const accion = url.searchParams.get('accion');
 
-  // INNER JOIN para obtener empresa_id y departamento de la mÃ¡quina
+  // INNER JOIN para obtener empresa_id y departamento de la máquina
   const mainTable = tabla === 'historial_pemp' ? 'pemp' : 'carretillas';
   let sql = `SELECT h.*, m.departamento FROM ${tabla} h INNER JOIN ${mainTable} m ON h.matricula = m.matricula AND m.empresa_id = ? WHERE 1=1`;
   const params = [empresa_id || 1];
@@ -4853,7 +4956,7 @@ async function getStats(request, env) {
   const { obraId, empresa_id } = await getAuth(request, env);
   const f = obraId || null;
   const w = f ? ' AND obra_id = ?' : '';
-  // empresa_id siempre primero, obra_id opcional despuÃ©s
+  // empresa_id siempre primero, obra_id opcional después
   const p = f ? [empresa_id, f] : [empresa_id];
   const baseW = ' AND empresa_id = ?' + w;
 
@@ -4899,7 +5002,7 @@ async function guardarSugerencia(request, env) {
     const body = await request.json().catch(() => ({}));
     const { texto, categoria, usuario, obra, foto } = body;
     if (!texto || !texto.trim()) return err('El texto de la sugerencia es obligatorio');
-    // Intentar obtener departamento y empresa_id del token (silencioso si no hay sesiÃ³n)
+    // Intentar obtener departamento y empresa_id del token (silencioso si no hay sesión)
     let departamento = null, empresa_id_sug = 1;
     try {
       const auth = await getAuth(request, env);
@@ -4914,7 +5017,7 @@ async function guardarSugerencia(request, env) {
     const catIcon = { mejora: 'ðŸ"§', error: 'ðŸ›', nuevo: 'âœ¨', otro: 'ðŸ’¬' };
     const icon = catIcon[categoria] || 'ðŸ’¬';
     const tgMsg = `${icon} <b>Nueva sugerencia [${categoria || 'otro'}]</b>\n` +
-      `ðŸ‘¤ ${usuario || 'â€"'}  ðŸ— ${obra || 'â€"'}\n\n` +
+      `ðŸ‘¤ ${usuario || '—'}  ðŸ— ${obra || '—'}\n\n` +
       `${texto.trim().slice(0, 400)}`;
     const botonesIdea = ideaId ? [[
       { text: 'ðŸ"„ En progreso', callback_data: `idea_prog:${ideaId}` },
@@ -4992,7 +5095,7 @@ async function borrarTodasSugerencias(request, env) {
 }
 
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-// BUSCAR MÃQUINA (cross-departamento, para Seguridad y consulta general)
+// BUSCAR MÁQUINA (cross-departamento, para Seguridad y consulta general)
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 async function buscarMaquina(matricula, request, env) {
@@ -5042,7 +5145,7 @@ async function logActividad(env, { nivel = 'info', origen = 'server', mensaje, d
 }
 
 async function guardarLog(request, env) {
-  // SEC-08: requiere sesiÃ³n vÃ¡lida â€" evita spam de logs y mensajes Telegram desde fuera
+  // SEC-08: requiere sesión válida — evita spam de logs y mensajes Telegram desde fuera
   const xTok = request.headers.get('X-Token');
   if (!xTok) return err('No autorizado', 401);
   const _s = await env.DB.prepare("SELECT id FROM sesiones WHERE token = ? AND (expires_at IS NULL OR expires_at > datetime('now'))").bind(xTok).first().catch(() => null);
@@ -5057,7 +5160,7 @@ async function guardarLog(request, env) {
     if (nivel === 'error') {
       await sendTelegram(env,
         `ðŸš¨ <b>Error en Alejandra</b>\n` +
-        `ðŸ‘¤ ${usuario || 'â€"'}  ðŸ— ${obra || 'â€"'}\n` +
+        `ðŸ‘¤ ${usuario || '—'}  ðŸ— ${obra || '—'}\n` +
         `ðŸ"‹ ${String(mensaje || '').slice(0, 300)}`
       );
     }
@@ -5159,7 +5262,7 @@ async function getPedidos(request, env) {
     const deptFinal = deptParam || departamento || 'electrico';
     sql += ' AND p.departamento = ?'; params.push(deptFinal);
   } else if (deptParam) {
-    // Admin con filtro explÃ­cito de dept
+    // Admin con filtro explícito de dept
     sql += ' AND p.departamento = ?'; params.push(deptParam);
   }
   if (estadoFilter) { sql += ' AND p.estado = ?';  params.push(estadoFilter); }
@@ -5175,13 +5278,13 @@ async function crearPedido(request, env, ctx) {
   // Todos los roles (incluido operario) pueden crear pedidos
   const body = await request.json().catch(() => ({}));
   const { descripcion, referencia, cantidad, unidad, proveedor, obra_id, solicitado_por, notas } = body;
-  if (!descripcion?.trim()) return err('La descripciÃ³n es obligatoria');
+  if (!descripcion?.trim()) return err('La descripción es obligatoria');
   const dept = departamento || 'electrico';
   const r = await env.DB.prepare(
     'INSERT INTO pedidos (empresa_id, obra_id, departamento, referencia, descripcion, cantidad, unidad, proveedor, solicitado_por, notas) VALUES (?,?,?,?,?,?,?,?,?,?)'
   ).bind(empresa_id, obra_id||null, dept, referencia||null, descripcion.trim(), cantidad||1, unidad||'ud', proveedor||null, solicitado_por||null, notas||null).run();
   ctx?.waitUntil(syncPedidos(env, tabForDept('pedido', dept), empresa_id));
-  await sendTelegram(env, `ðŸ"¦ <b>Nuevo pedido</b> [${dept}]\nðŸ‘¤ ${solicitado_por||'â€"'}\nðŸ" ${descripcion.trim().slice(0,200)}`);
+  await sendTelegram(env, `ðŸ"¦ <b>Nuevo pedido</b> [${dept}]\nðŸ‘¤ ${solicitado_por||'—'}\nðŸ" ${descripcion.trim().slice(0,200)}`);
   return json({ ok: true, id: r.meta.last_row_id });
 }
 
@@ -5211,7 +5314,7 @@ async function actualizarPedido(id, request, env, ctx) {
     pedidoDept = pedido?.departamento;
     const iconos = { solicitado: 'ðŸ"¤', recibido: 'âœ…', cancelado: 'âŒ', pendiente: 'â³' };
     await sendTelegram(env,
-      `${iconos[body.estado]||'ðŸ"¦'} <b>Pedido ${body.estado}</b> [${pedido?.departamento||'â€"'}]\nðŸ" ${(pedido?.descripcion||'').slice(0,200)}`
+      `${iconos[body.estado]||'ðŸ"¦'} <b>Pedido ${body.estado}</b> [${pedido?.departamento||'—'}]\nðŸ" ${(pedido?.descripcion||'').slice(0,200)}`
     );
   }
   if (!pedidoDept) {
@@ -5360,7 +5463,7 @@ async function getAlertasStock(request, env) {
   const { empresa_id } = await getAuth(request, env);
   if (!empresa_id) return err('No autorizado', 403);
 
-  // 1. Herramientas: tipos con menos disponibles que el mÃ­nimo
+  // 1. Herramientas: tipos con menos disponibles que el mínimo
   const { results: herramientas } = await env.DB.prepare(`
     SELECT t.id, t.nombre, t.stock_minimo,
            COUNT(CASE WHEN h.estado = 'disponible' THEN 1 END) as disponibles
@@ -5371,7 +5474,7 @@ async function getAlertasStock(request, env) {
     HAVING disponibles < t.stock_minimo
   `).bind(empresa_id).all();
 
-  // 2. Inventario seg: items modo='cantidad' con stock bajo mÃ­nimo
+  // 2. Inventario seg: items modo='cantidad' con stock bajo mínimo
   const { results: seguridad } = await env.DB.prepare(`
     SELECT id, nombre, tipo_material, cantidad_disponible, stock_minimo
     FROM inventario_seg
@@ -5379,7 +5482,7 @@ async function getAlertasStock(request, env) {
       AND cantidad_disponible < stock_minimo AND estado != 'baja'
   `).bind(empresa_id).all();
 
-  // 3. Bobinas: tipos_cable con menos bobinas activas que el mÃ­nimo
+  // 3. Bobinas: tipos_cable con menos bobinas activas que el mínimo
   const { results: bobinas } = await env.DB.prepare(`
     SELECT tc.id, tc.nombre, tc.stock_minimo,
            COUNT(b.id) as total_bobinas
@@ -5466,7 +5569,7 @@ async function getObraDashboard(request, env) {
       `SELECT COUNT(*) as n FROM incidencias WHERE empresa_id=?${queryObraId?' AND obra_id=?':''} AND estado IN ('abierta','en_progreso')${departamento?' AND departamento=?':''}`
     ).bind(...buildParams(empresa_id)).first(),
 
-    // PrÃ³ximo evento del calendario
+    // Próximo evento del calendario
     env.DB.prepare(
       `SELECT titulo, fecha, hora, tipo FROM eventos_calendario WHERE empresa_id=?${queryObraId?' AND (obra_id=? OR obra_id IS NULL)':''} AND fecha >= ? ORDER BY fecha ASC, hora ASC LIMIT 1`
     ).bind(...[empresa_id, ...(queryObraId?[queryObraId]:[]), hoy]).first(),
@@ -5519,7 +5622,7 @@ async function crearKit(request, env, ctx) {
   if (rol === 'operario') return err('Sin permisos', 403);
   const body = await request.json().catch(() => ({}));
   const { numero_kit, nombre, obra_id, asignado_a, num_componentes, notas } = body;
-  if (!numero_kit?.trim()) return err('Falta el nÃºmero de kit');
+  if (!numero_kit?.trim()) return err('Falta el número de kit');
   const dept = departamento || 'electrico';
   const ahora = AHORA();
   const r = await env.DB.prepare(
@@ -5551,7 +5654,7 @@ async function actualizarKit(id, request, env, ctx) {
   if (body.num_componentes !== undefined) { campos.push('num_componentes = ?'); vals.push(body.num_componentes); }
   if (body.notas       !== undefined) { campos.push('notas = ?');         vals.push(body.notas?.trim() || null); }
 
-  // AsignaciÃ³n
+  // Asignación
   if (body.asignado_a !== undefined) {
     campos.push('asignado_a = ?'); vals.push(body.asignado_a?.trim() || null);
     if (body.asignado_a?.trim() && !kit.asignado_a) {
@@ -5559,7 +5662,7 @@ async function actualizarKit(id, request, env, ctx) {
       campos.push('fecha_devolucion = ?'); vals.push(null);
     }
   }
-  // DevoluciÃ³n
+  // Devolución
   if (body.estado !== undefined) {
     const estadoAnterior = kit.estado;
     campos.push('estado = ?'); vals.push(body.estado);
@@ -5638,7 +5741,7 @@ async function buscarHerramienta(request, env) {
   if (!empresa_id) return err('No autorizado', 403);
   const url  = new URL(request.url);
   const serie = url.searchParams.get('serie')?.trim();
-  if (!serie) return err('Falta el nÃºmero de serie');
+  if (!serie) return err('Falta el número de serie');
   const h = await env.DB.prepare(
     `SELECT h.*, t.nombre as tipo_nombre, o.nombre as obra_nombre, k.numero_kit, k.nombre as kit_nombre
      FROM herramientas h
@@ -5671,12 +5774,12 @@ async function crearHerramienta(request, env, ctx) {
   const hid = r.meta.last_row_id;
   await registrarHistorialHerr(env, empresa_id, hid, kit_id || null, 'alta', null, 'disponible', userNombre || rol, 'Herramienta registrada');
   ctx?.waitUntil(syncSheets(env, tabForDept('herramienta', dept), empresa_id));
-  // NotificaciÃ³n Telegram con botÃ³n para marcar disponible
+  // Notificación Telegram con botón para marcar disponible
   const tipoRow = tipo_id ? await env.DB.prepare('SELECT nombre FROM tipos_herramienta WHERE id = ?').bind(tipo_id).first().catch(() => null) : null;
   const tipoNom = tipoRow?.nombre || body.modelo || 'herramienta';
   const obraRow = obra_id ? await env.DB.prepare('SELECT nombre FROM obras WHERE id = ?').bind(obra_id).first().catch(() => null) : null;
   ctx?.waitUntil(sendTelegramConBotones(env,
-    `ðŸ"§ <b>Nueva herramienta registrada</b>\nðŸ"‹ ${tipoNom}${marca ? ' Â· ' + marca : ''}${body.modelo ? ' Â· ' + body.modelo : ''}\nðŸ" ${obraRow?.nombre || 'â€"'}\nðŸ‘¤ ${userNombre || rol}`,
+    `ðŸ"§ <b>Nueva herramienta registrada</b>\nðŸ"‹ ${tipoNom}${marca ? ' Â· ' + marca : ''}${body.modelo ? ' Â· ' + body.modelo : ''}\nðŸ" ${obraRow?.nombre || '—'}\nðŸ‘¤ ${userNombre || rol}`,
     [[{ text: 'âœ… Disponible', callback_data: `herr_disp:${hid}` }]]
   ));
   return json({ ok: true, id: hid }, 201);
@@ -5707,7 +5810,7 @@ async function actualizarHerramienta(id, request, env, ctx) {
   if (body.alimentacion!== undefined) { campos.push('alimentacion = ?');vals.push(body.alimentacion); }
   if (body.notas       !== undefined) { campos.push('notas = ?');       vals.push(body.notas?.trim() || null); }
 
-  // AsignaciÃ³n / devoluciÃ³n
+  // Asignación / devolución
   if (body.asignado_a !== undefined) {
     campos.push('asignado_a = ?'); vals.push(body.asignado_a?.trim() || null);
     if (body.asignado_a?.trim() && !h.asignado_a) {
@@ -5718,7 +5821,7 @@ async function actualizarHerramienta(id, request, env, ctx) {
     }
   }
 
-  // Cambio de estado con fechas automÃ¡ticas
+  // Cambio de estado con fechas automáticas
   if (body.estado !== undefined && body.estado !== h.estado) {
     campos.push('estado = ?'); vals.push(body.estado);
     if (body.estado === 'averiado')      { campos.push('fecha_averia = ?');    vals.push(ahora); }
@@ -5737,7 +5840,7 @@ async function actualizarHerramienta(id, request, env, ctx) {
   vals.push(id); vals.push(empresa_id);
   await env.DB.prepare(`UPDATE herramientas SET ${campos.join(', ')} WHERE id = ? AND empresa_id = ?`).bind(...vals).run();
 
-  // Alerta stock mÃ­nimo: si el tipo tiene stock_minimo y el estado pasa a no-disponible
+  // Alerta stock mínimo: si el tipo tiene stock_minimo y el estado pasa a no-disponible
   if (body.estado !== undefined && body.estado !== 'disponible' && h.tipo_id) {
     const tipo = await env.DB.prepare('SELECT nombre, stock_minimo FROM tipos_herramienta WHERE id = ? AND empresa_id = ?').bind(h.tipo_id, empresa_id).first().catch(() => null);
     if (tipo?.stock_minimo > 0) {
@@ -5746,7 +5849,7 @@ async function actualizarHerramienta(id, request, env, ctx) {
       ).bind(h.tipo_id, empresa_id).all();
       const disponibles = disp[0]?.c ?? 0;
       if (disponibles < tipo.stock_minimo) {
-        await sendTelegram(env, `âš ï¸ <b>Stock mÃ­nimo alcanzado â€" Herramientas</b>\nðŸ"§ ${tipo.nombre}\nðŸ"‰ Disponibles: <b>${disponibles}</b> (mÃ­nimo: ${tipo.stock_minimo})\nðŸ‘¤ ${userNombre || rol}`);
+        await sendTelegram(env, `âš ï¸ <b>Stock mínimo alcanzado — Herramientas</b>\nðŸ"§ ${tipo.nombre}\nðŸ"‰ Disponibles: <b>${disponibles}</b> (mínimo: ${tipo.stock_minimo})\nðŸ‘¤ ${userNombre || rol}`);
       }
     }
   }
@@ -5796,10 +5899,10 @@ async function registrarHistorialKitHerr(env, empresa_id, kit_id, herramienta_id
 }
 
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-// PERSONAL â€" Horarios, Fichajes, ResÃºmenes
+// PERSONAL — Horarios, Fichajes, Resúmenes
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
-// Devuelve {hora_entrada, hora_salida, horas_dia} para el dÃ­a especÃ­fico de un fichaje (MEJ-131)
+// Devuelve {hora_entrada, hora_salida, horas_dia} para el día específico de un fichaje (MEJ-131)
 function getHorarioParaDia(horario, fecha) {
   if (horario.horarios_dia) {
     try {
@@ -6110,7 +6213,7 @@ async function crearFichaje(request, env, ctx) {
   if (dup) return err('Ya existe un fichaje para este trabajador en esta fecha', 409);
 
   const horas = calcHoras(hora_entrada, hora_salida);
-  // Calcular horas extra y detectar retraso segÃºn horario de obra
+  // Calcular horas extra y detectar retraso según horario de obra
   let horas_extra = 0, minutos_retraso = 0;
   let estadoFinal = estado || 'presente';
   if (obra_id || obraAuth) {
@@ -6160,7 +6263,7 @@ async function actualizarFichaje(id, request, env, ctx) {
       const hd = horarioRow ? getHorarioParaDia(horarioRow, f.fecha) : null;
       const horas_extra = hd ? Math.max(0, Math.round((horas - hd.horas_dia)*100)/100) : 0;
       campos.push('horas_extra=?'); vals.push(horas_extra);
-      // Recalcular retraso si cambiÃ³ hora_entrada
+      // Recalcular retraso si cambió hora_entrada
       if (body.hora_entrada !== undefined && hd) {
         const mins = calcMinutosRetraso(ent, hd.hora_entrada);
         campos.push('minutos_retraso=?'); vals.push(Math.max(0, mins));
@@ -6186,7 +6289,7 @@ async function eliminarFichaje(id, request, env) {
   return json({ ok: true });
 }
 
-// â"€â"€ ResÃºmenes â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+// â"€â"€ Resúmenes â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 async function getResumenSemana(request, env) {
   const { empresa_id, isSuperadmin, isEmpresaAdmin, isAdmin, obra_id: obraAuth, rol, usuario_id } = await getAuth(request, env);
   if (!empresa_id) return err('No autorizado', 403);
@@ -6194,7 +6297,7 @@ async function getResumenSemana(request, env) {
   // lunes de la semana pedida
   const lunes = url.searchParams.get('lunes'); // formato YYYY-MM-DD
   const obra_id = url.searchParams.get('obra_id');
-  if (!lunes) return err('Falta el parÃ¡metro lunes');
+  if (!lunes) return err('Falta el parámetro lunes');
 
   // Calcular domingo
   const d = new Date(lunes + 'T00:00:00Z');
@@ -6313,7 +6416,7 @@ async function restaurarInventario(request, env) {
   const eid = auth.empresa_id;
 
   const bk = await request.json();
-  if (bk.tipo !== 'inventario') return err('Archivo no vÃ¡lido: se esperaba backup de inventario', 400);
+  if (bk.tipo !== 'inventario') return err('Archivo no válido: se esperaba backup de inventario', 400);
 
   // 1. Borrar datos actuales
   await env.DB.batch([
@@ -6382,7 +6485,7 @@ async function restaurarEmpresa(request, env) {
   const eid = auth.empresa_id;
 
   const bk = await request.json();
-  if (bk.tipo !== 'empresa') return err('Archivo no vÃ¡lido: se esperaba backup de empresa', 400);
+  if (bk.tipo !== 'empresa') return err('Archivo no válido: se esperaba backup de empresa', 400);
 
   const batchInsert = async (rows, stmt) => {
     if (!rows?.length) return;
@@ -6396,7 +6499,7 @@ async function restaurarEmpresa(request, env) {
     'INSERT OR REPLACE INTO obras (id,nombre,codigo,activa,empresa_id) VALUES (?,?,?,?,?)'
   ).bind(o.id, o.nombre, o.codigo, o.activa??1, eid));
 
-  // CatÃ¡logos: borrar los actuales e insertar los del backup
+  // Catálogos: borrar los actuales e insertar los del backup
   const catalogos = [
     { tabla: 'proveedores',        rows: bk.proveedores,          stmt: r => env.DB.prepare('INSERT OR REPLACE INTO proveedores (id,nombre,empresa_id) VALUES (?,?,?)').bind(r.id,r.nombre,eid) },
     { tabla: 'tipos_cable',        rows: bk.tipos_cable,          stmt: r => env.DB.prepare('INSERT OR REPLACE INTO tipos_cable (id,nombre,empresa_id) VALUES (?,?,?)').bind(r.id,r.nombre,eid) },
@@ -6431,7 +6534,7 @@ async function syncSheets(env, tabs = null, empresa_id = 1) {
     const meta = await metaRes.json();
     let sheetsActuales = meta.sheets || [];
 
-    // Crear pestaÃ±as que faltan y borrar las antiguas en un solo batchUpdate
+    // Crear pestañas que faltan y borrar las antiguas en un solo batchUpdate
     const addReqs = tabsNecesarias
       .filter(t => !sheetsActuales.map(s => s.properties.title).includes(t))
       .map(t => ({ addSheet: { properties: { title: t } } }));
@@ -6466,12 +6569,12 @@ async function syncSheets(env, tabs = null, empresa_id = 1) {
       }
     };
 
-    const cabBobinas     = ['Obra', 'CÃ³digo', 'NÂº AlbarÃ¡n', 'Proveedor', 'Tipo Cable', 'Registrado por', 'Fecha Entrada', 'Devuelto por', 'Fecha DevoluciÃ³n', 'Estado', 'Notas'];
-    const cabPemp        = ['Obra', 'MatrÃ­cula', 'Tipo', 'Marca', 'Proveedor', 'Estado', 'Fecha Entrada', 'Fecha AverÃ­a', 'Fecha ReparaciÃ³n', 'Devuelto por', 'Fecha DevoluciÃ³n', 'Ãšlt. RevisiÃ³n', 'PrÃ³x. RevisiÃ³n', 'Registrado por', 'Notas'];
-    const cabCarretillas = ['Obra', 'MatrÃ­cula', 'Tipo', 'Marca', 'Proveedor', 'EnergÃ­a', 'Estado', 'Fecha Entrada', 'Fecha AverÃ­a', 'Fecha ReparaciÃ³n', 'Devuelto por', 'Fecha DevoluciÃ³n', 'Ãšlt. RevisiÃ³n', 'PrÃ³x. RevisiÃ³n', 'Registrado por', 'Notas'];
-    const cabSegInv      = ['Tipo', 'Modo', 'CÃ³digo/Serie', 'Nombre', 'Cantidad Total', 'Disponible', 'Estado', 'Fecha Entrada', 'Fecha Caducidad', 'Destino Actual', 'Registrado por', 'Notas'];
-    const cabHerr        = ['Obra', 'Kit', 'Tipo', 'Marca', 'Modelo', 'NÂº Serie', 'Asignado a', 'AlimentaciÃ³n', 'Estado', 'Fecha Alta', 'Fecha AsignaciÃ³n', 'Fecha DevoluciÃ³n', 'Fecha AverÃ­a', 'Fecha ReparaciÃ³n', 'Notas'];
-    const cabKits        = ['NÂº Kit', 'Nombre', 'Obra', 'Departamento', 'Asignado a', 'Componentes', 'Fecha Alta', 'Fecha AsignaciÃ³n', 'Estado', 'Fecha DevoluciÃ³n', 'Notas'];
+    const cabBobinas     = ['Obra', 'Código', 'NÂº Albarán', 'Proveedor', 'Tipo Cable', 'Registrado por', 'Fecha Entrada', 'Devuelto por', 'Fecha Devolución', 'Estado', 'Notas'];
+    const cabPemp        = ['Obra', 'Matrícula', 'Tipo', 'Marca', 'Proveedor', 'Estado', 'Fecha Entrada', 'Fecha Avería', 'Fecha Reparación', 'Devuelto por', 'Fecha Devolución', 'Ãšlt. Revisión', 'Próx. Revisión', 'Registrado por', 'Notas'];
+    const cabCarretillas = ['Obra', 'Matrícula', 'Tipo', 'Marca', 'Proveedor', 'Energía', 'Estado', 'Fecha Entrada', 'Fecha Avería', 'Fecha Reparación', 'Devuelto por', 'Fecha Devolución', 'Ãšlt. Revisión', 'Próx. Revisión', 'Registrado por', 'Notas'];
+    const cabSegInv      = ['Tipo', 'Modo', 'Código/Serie', 'Nombre', 'Cantidad Total', 'Disponible', 'Estado', 'Fecha Entrada', 'Fecha Caducidad', 'Destino Actual', 'Registrado por', 'Notas'];
+    const cabHerr        = ['Obra', 'Kit', 'Tipo', 'Marca', 'Modelo', 'NÂº Serie', 'Asignado a', 'Alimentación', 'Estado', 'Fecha Alta', 'Fecha Asignación', 'Fecha Devolución', 'Fecha Avería', 'Fecha Reparación', 'Notas'];
+    const cabKits        = ['NÂº Kit', 'Nombre', 'Obra', 'Departamento', 'Asignado a', 'Componentes', 'Fecha Alta', 'Fecha Asignación', 'Estado', 'Fecha Devolución', 'Notas'];
 
     const fmtB    = b => [b.obra_nombre||'', b.codigo, b.num_albaran||'', b.proveedor, b.tipo_cable, b.registrado_por||'', b.fecha_entrada, b.devuelto_por||'', b.fecha_devolucion||'', b.estado, b.notas||''];
     const fmtP    = p => [p.obra_nombre||'', p.matricula, p.tipo||'', p.marca||'', p.proveedor||'', p.estado, p.fecha_entrada, p.fecha_averia||'', p.fecha_reparacion||'', p.devuelto_por||'', p.fecha_devolucion||'', p.fecha_ultima_revision||'', p.fecha_proxima_revision||'', p.registrado_por||'', p.notas||''];
@@ -6480,7 +6583,7 @@ async function syncSheets(env, tabs = null, empresa_id = 1) {
     const fmtHerr = h => [h.obra_nombre||'', h.kit_nombre||'', h.tipo_nombre||'', h.marca||'', h.modelo||'', h.numero_serie||'', h.asignado_a||'', h.alimentacion||'', h.estado||'disponible', h.fecha_alta||'', h.fecha_asignacion||'', h.fecha_devolucion||'', h.fecha_averia||'', h.fecha_reparacion||'', h.notas||''];
     const fmtKit  = k => [k.numero_kit||'', k.nombre||'', k.obra_nombre||'', k.departamento||'', k.asignado_a||'', k.num_componentes||0, k.fecha_alta||'', k.fecha_asignacion||'', k.estado||'disponible', k.fecha_devolucion||'', k.notas||''];
 
-    // Solo ejecutar queries para las pestaÃ±as que toca sincronizar, en paralelo
+    // Solo ejecutar queries para las pestañas que toca sincronizar, en paralelo
     await Promise.all([
       tabsToSync.includes('Elec-Bobinas') && (async () => {
         const { results } = await env.DB.prepare(
@@ -6544,7 +6647,7 @@ async function syncSheets(env, tabs = null, empresa_id = 1) {
     try {
       await env.DB.prepare(
         'INSERT INTO logs (nivel, origen, mensaje, detalle) VALUES (?, ?, ?, ?)'
-      ).bind('error', 'sync-sheets', 'Error sincronizaciÃ³n Google Sheets', e.message).run();
+      ).bind('error', 'sync-sheets', 'Error sincronización Google Sheets', e.message).run();
     } catch (_) {}
   }
 }
@@ -6566,7 +6669,7 @@ async function syncPedidos(env, tabs = null, empresa_id = 1) {
     const meta = await metaRes.json();
     let sheetsActuales = meta.sheets || [];
 
-    // Crear pestaÃ±as que faltan
+    // Crear pestañas que faltan
     const addReqs = tabsNecesarias
       .filter(t => !sheetsActuales.map(s => s.properties.title).includes(t))
       .map(t => ({ addSheet: { properties: { title: t } } }));
@@ -6582,7 +6685,7 @@ async function syncPedidos(env, tabs = null, empresa_id = 1) {
     const sheetMetaMap = {};
     sheetsActuales.forEach(s => { sheetMetaMap[s.properties.title] = s; });
 
-    const cab = ['Obra', 'Referencia', 'DescripciÃ³n', 'Cantidad', 'Unidad', 'Proveedor', 'Estado', 'Solicitado por', 'Fecha Solicitud', 'Fecha RecepciÃ³n', 'Notas'];
+    const cab = ['Obra', 'Referencia', 'Descripción', 'Cantidad', 'Unidad', 'Proveedor', 'Estado', 'Solicitado por', 'Fecha Solicitud', 'Fecha Recepción', 'Notas'];
     const fmt = p => [p.obra_nombre||'', p.referencia||'', p.descripcion||'', p.cantidad||1, p.unidad||'ud', p.proveedor||'', p.estado||'pendiente', p.solicitado_por||'', p.fecha_solicitud||p.created_at||'', p.fecha_recepcion||'', p.notas||''];
 
     const writeTab = async (tab, values) => {
@@ -6625,7 +6728,7 @@ async function syncPedidos(env, tabs = null, empresa_id = 1) {
     console.error('Error sync Pedidos:', e.message);
     try {
       await env.DB.prepare('INSERT INTO logs (nivel, origen, mensaje, detalle) VALUES (?, ?, ?, ?)')
-        .bind('error', 'sync-pedidos', 'Error sincronizaciÃ³n Pedidos Sheets', e.message).run();
+        .bind('error', 'sync-pedidos', 'Error sincronización Pedidos Sheets', e.message).run();
     } catch (_) {}
   }
 }
@@ -6643,7 +6746,7 @@ async function applyTabFormatting(spreadsheetId, authH, tabName, sheetMeta, numC
   const bandFirst = { red: 1, green: 1, blue: 1, alpha: 1 };
   const bandSecond = { ...palette.band, alpha: 1 };
 
-  // Columna "Estado" por pestaÃ±a (Ã­ndice 0-based)
+  // Columna "Estado" por pestaña (índice 0-based)
   const estadoColMap = {
     'Elec-Bobinas': 9, 'Elec-PEMP': 5, 'Elec-Carretillas': 6,
     'Mec-PEMP': 5,     'Mec-Carretillas': 6,
@@ -6661,7 +6764,7 @@ async function applyTabFormatting(spreadsheetId, authH, tabName, sheetMeta, numC
 
   const requests = [];
 
-  // 1. RESET: borrar reglas condicionales y bandings previos para evitar acumulaciÃ³n
+  // 1. RESET: borrar reglas condicionales y bandings previos para evitar acumulación
   const condCount = (sheetMeta.conditionalFormats || []).length;
   for (let i = condCount - 1; i >= 0; i--) {
     requests.push({ deleteConditionalFormatRule: { sheetId: numSheetId, index: i } });
@@ -6679,7 +6782,7 @@ async function applyTabFormatting(spreadsheetId, authH, tabName, sheetMeta, numC
     },
   });
 
-  // 3. Header: fondo oscuro, texto blanco, centrado, fila mÃ¡s alta
+  // 3. Header: fondo oscuro, texto blanco, centrado, fila más alta
   requests.push({
     repeatCell: {
       range: headerRange,
@@ -6706,7 +6809,7 @@ async function applyTabFormatting(spreadsheetId, authH, tabName, sheetMeta, numC
     },
   });
 
-  // 5. Datos: alineaciÃ³n + tamaÃ±o
+  // 5. Datos: alineación + tamaño
   if (numRows > 1) {
     requests.push({
       repeatCell: {
@@ -6722,7 +6825,7 @@ async function applyTabFormatting(spreadsheetId, authH, tabName, sheetMeta, numC
       },
     });
 
-    // 6. Wrap solo en la columna Notas (Ãºltima)
+    // 6. Wrap solo en la columna Notas (última)
     requests.push({
       repeatCell: {
         range: { sheetId: numSheetId, startRowIndex: 1, endRowIndex: numRows, startColumnIndex: notasCol, endColumnIndex: notasCol + 1 },
@@ -6759,7 +6862,7 @@ async function applyTabFormatting(spreadsheetId, authH, tabName, sheetMeta, numC
     });
   }
 
-  // 9. Filtro automÃ¡tico en la cabecera (setBasicFilter reemplaza el existente)
+  // 9. Filtro automático en la cabecera (setBasicFilter reemplaza el existente)
   if (numRows > 1) {
     requests.push({ setBasicFilter: { filter: { range: fullRange } } });
   }
@@ -6779,7 +6882,7 @@ async function applyTabFormatting(spreadsheetId, authH, tabName, sheetMeta, numC
     },
   });
 
-  // 12. Limitar ancho mÃ¡ximo de la columna Notas (evita columnas gigantes)
+  // 12. Limitar ancho máximo de la columna Notas (evita columnas gigantes)
   requests.push({
     updateDimensionProperties: {
       range: { sheetId: numSheetId, dimension: 'COLUMNS', startIndex: notasCol, endIndex: notasCol + 1 },
@@ -6788,13 +6891,13 @@ async function applyTabFormatting(spreadsheetId, authH, tabName, sheetMeta, numC
     },
   });
 
-  // 13. Colores condicionales: pintar TODA la fila segÃºn el valor de la columna Estado
+  // 13. Colores condicionales: pintar TODA la fila según el valor de la columna Estado
   if (estadoCol >= 0 && numRows > 1) {
     const colLetter = String.fromCharCode(65 + estadoCol); // A=0, B=1...
     const reglas = [
       { vals: ['activa', 'disponible', 'recibido'],   bg: { red: 0.85, green: 0.94, blue: 0.83 } }, // verde claro
       { vals: ['Averiada', 'averiado'],               bg: { red: 0.97, green: 0.80, blue: 0.80 } }, // rojo claro
-      { vals: ['en_reparacion'],                       bg: { red: 1.00, green: 0.90, blue: 0.65 } }, // Ã¡mbar
+      { vals: ['en_reparacion'],                       bg: { red: 1.00, green: 0.90, blue: 0.65 } }, // ámbar
       { vals: ['pendiente'],                           bg: { red: 1.00, green: 0.97, blue: 0.85 } }, // amarillo
       { vals: ['solicitado', 'en_uso'],                bg: { red: 0.83, green: 0.92, blue: 0.96 } }, // azul claro
       { vals: ['perdido'],                             bg: { red: 0.90, green: 0.83, blue: 0.93 } }, // morado claro
@@ -6832,7 +6935,7 @@ async function applyTabFormatting(spreadsheetId, authH, tabName, sheetMeta, numC
 }
 
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-// SYNC RRHH â€" Fichajes, Incidencias, Carnets, EPIs, Turnos, Repostajes (SYNC-03)
+// SYNC RRHH — Fichajes, Incidencias, Carnets, EPIs, Turnos, Repostajes (SYNC-03)
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 async function syncRRHH(env, tabs = null, empresa_id = 1) {
   if (!env.GOOGLE_PRIVATE_KEY || !env.GOOGLE_CLIENT_EMAIL || !env.GOOGLE_SHEET_ID) return;
@@ -6843,7 +6946,7 @@ async function syncRRHH(env, tabs = null, empresa_id = 1) {
     const tabsNecesarias = ['Fichajes', 'Incidencias', 'Carnets', 'EPIs', 'Turnos', 'Repostajes'];
     const tabsToSync     = tabs ? (Array.isArray(tabs) ? tabs : [tabs]) : tabsNecesarias;
 
-    // Crear pestaÃ±as que faltan
+    // Crear pestañas que faltan
     const metaUrl = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}?fields=sheets(properties,bandedRanges,conditionalFormats)`;
     let metaRes = await fetch(metaUrl, { headers: authH });
     let meta = await metaRes.json();
@@ -6873,9 +6976,9 @@ async function syncRRHH(env, tabs = null, empresa_id = 1) {
     };
 
     const cabFichajes   = ['Obra', 'Fecha', 'Trabajador', 'Hora Entrada', 'Hora Salida', 'Horas', 'H. Extra', 'Retraso (min)', 'Estado', 'Motivo', 'Notas', 'Registrado por'];
-    const cabIncid      = ['Obra', 'Fecha', 'Departamento', 'TÃ­tulo', 'Tipo', 'Gravedad', 'Estado', 'Reportado por', 'Asignado a', 'ResoluciÃ³n'];
-    const cabCarnets    = ['Obra', 'Trabajador', 'Tipo', 'NÃºmero', 'Fecha ObtenciÃ³n', 'Fecha Caducidad', 'Estado', 'Notas'];
-    const cabEPIs       = ['Obra', 'Trabajador', 'Tipo EPI', 'Talla', 'NÂº Serie', 'Fecha Entrega', 'Fecha Caducidad', 'PrÃ³x. RevisiÃ³n', 'Estado', 'Observaciones'];
+    const cabIncid      = ['Obra', 'Fecha', 'Departamento', 'Título', 'Tipo', 'Gravedad', 'Estado', 'Reportado por', 'Asignado a', 'Resolución'];
+    const cabCarnets    = ['Obra', 'Trabajador', 'Tipo', 'Número', 'Fecha Obtención', 'Fecha Caducidad', 'Estado', 'Notas'];
+    const cabEPIs       = ['Obra', 'Trabajador', 'Tipo EPI', 'Talla', 'NÂº Serie', 'Fecha Entrega', 'Fecha Caducidad', 'Próx. Revisión', 'Estado', 'Observaciones'];
     const cabTurnos     = ['Obra', 'Fecha', 'Trabajador', 'Turno'];
     const cabRepostajes = ['Obra', 'Fecha', 'Equipo', 'ID Equipo', 'Tipo', 'Cantidad', 'Unidad', 'Coste (â‚¬)', 'Usuario', 'Notas'];
 
@@ -6949,7 +7052,7 @@ async function syncSheetsDebug(env) {
     log.push(`Bobinas en DB (empresa 1): ${results.length}`);
 
     const values = [
-      ['CÃ³digo', 'Proveedor', 'Tipo Cable', 'Fecha Entrada', 'Fecha DevoluciÃ³n', 'Estado', 'Notas'],
+      ['Código', 'Proveedor', 'Tipo Cable', 'Fecha Entrada', 'Fecha Devolución', 'Estado', 'Notas'],
       ...results.map(b => [b.codigo, b.proveedor, b.tipo_cable, b.fecha_entrada, b.fecha_devolucion || '', b.estado, b.notas || '']),
     ];
 
@@ -6985,7 +7088,7 @@ async function syncSheetsDebug(env) {
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 async function handleOCR(request, env) {
-  // SEC-09: requiere sesiÃ³n vÃ¡lida â€" evita consumo de cuota de Cloud Vision sin autenticar
+  // SEC-09: requiere sesión válida — evita consumo de cuota de Cloud Vision sin autenticar
   const xTokOcr = request.headers.get('X-Token');
   if (!xTokOcr) return err('No autorizado', 401);
   const _sOcr = await env.DB.prepare("SELECT id FROM sesiones WHERE token = ? AND (expires_at IS NULL OR expires_at > datetime('now'))").bind(xTokOcr).first().catch(() => null);
@@ -7046,7 +7149,7 @@ async function handleOCR(request, env) {
 }
 
 async function handleScan(request, env) {
-  // SEC-09: requiere sesiÃ³n vÃ¡lida â€" evita consumo de cuota de Gemini sin autenticar
+  // SEC-09: requiere sesión válida — evita consumo de cuota de Gemini sin autenticar
   const xTokScan = request.headers.get('X-Token');
   if (!xTokScan) return err('No autorizado', 401);
   const _sScan = await env.DB.prepare("SELECT id FROM sesiones WHERE token = ? AND (expires_at IS NULL OR expires_at > datetime('now'))").bind(xTokScan).first().catch(() => null);
@@ -7059,11 +7162,11 @@ async function handleScan(request, env) {
   const mimeType  = body.mimeType || 'image/jpeg';
   if (!imageData) return err('Se requiere imagen en base64');
 
-  const prompt = `Eres un lector OCR especializado en matrÃ­culas de bobinas de cable elÃ©ctrico.
-Extrae ÃšNICAMENTE el cÃ³digo alfanumÃ©rico principal de la matrÃ­cula/etiqueta visible en la imagen.
-El cÃ³digo suele ser una combinaciÃ³n de letras y nÃºmeros (ej: AB1234, C-2891-X, 45872-B).
-Responde SOLO con el cÃ³digo, sin explicaciones, sin espacios extra, sin puntos al final.
-Si no puedes leer ningÃºn cÃ³digo, responde: NO_LEIDO`;
+  const prompt = `Eres un lector OCR especializado en matrículas de bobinas de cable eléctrico.
+Extrae ÃšNICAMENTE el código alfanumérico principal de la matrícula/etiqueta visible en la imagen.
+El código suele ser una combinación de letras y números (ej: AB1234, C-2891-X, 45872-B).
+Responde SOLO con el código, sin explicaciones, sin espacios extra, sin puntos al final.
+Si no puedes leer ningún código, responde: NO_LEIDO`;
 
   const geminiBody = {
     contents: [{ parts: [
@@ -7093,7 +7196,7 @@ Si no puedes leer ningÃºn cÃ³digo, responde: NO_LEIDO`;
     if (res.status !== 429 && res.status !== 404) return json({ error: 'Error Gemini', details: data }, res.status);
   }
 
-  // Fallback a Cloud Vision si Gemini estÃ¡ agotado
+  // Fallback a Cloud Vision si Gemini está agotado
   if (env.GOOGLE_CLIENT_EMAIL && env.GOOGLE_PRIVATE_KEY) {
     const ocrRequest = new Request('https://dummy/ocr', {
       method: 'POST',
@@ -7141,7 +7244,7 @@ async function crearItemSeg(request, env, ctx) {
   const body = await request.json().catch(() => ({}));
   const { tipo_material, modo = 'individual', codigo, nombre, cantidad_total = 1, fecha_entrada, fecha_caducidad, notas, stock_minimo = 0 } = body;
   if (!tipo_material) return err('Falta tipo_material');
-  if (modo === 'individual' && !codigo) return err('Falta el cÃ³digo identificador');
+  if (modo === 'individual' && !codigo) return err('Falta el código identificador');
   const cod = codigo ? codigo.trim().toUpperCase() : null;
   const fecha = fecha_entrada || fechaEspana();
   const reg = usuario || '';
@@ -7158,7 +7261,7 @@ async function crearItemSeg(request, env, ctx) {
     ctx?.waitUntil(syncSheets(env, 'Seg-Inventario', empresa_id));
     return json({ ok: true, id, mensaje: `${tipo_material} registrado` }, 201);
   } catch(e) {
-    if (e.message?.includes('UNIQUE')) return err(`El cÃ³digo ${cod} ya estÃ¡ registrado`, 409);
+    if (e.message?.includes('UNIQUE')) return err(`El código ${cod} ya está registrado`, 409);
     throw e;
   }
 }
@@ -7172,7 +7275,7 @@ async function moverItemSeg(id, request, env, ctx) {
   const { accion, cantidad = 1, destino, notas } = body;
   const fecha = fechaEspana();
 
-  // EdiciÃ³n directa de campos del item (sin movimiento)
+  // Edición directa de campos del item (sin movimiento)
   if (accion === 'editar') {
     const { estado: nuevoEstado, destino_actual, notas: nuevasNotas, stock_minimo: nuevoMin } = body;
     const campos = [], vals = [];
@@ -7191,7 +7294,7 @@ async function moverItemSeg(id, request, env, ctx) {
   if (accion === 'salida') {
     let nuevaCantidad = null;
     if (item.modo === 'individual') {
-      if (item.estado !== 'disponible') return err('El item no estÃ¡ disponible', 409);
+      if (item.estado !== 'disponible') return err('El item no está disponible', 409);
       await env.DB.prepare('UPDATE inventario_seg SET estado = ?, destino_actual = ? WHERE id = ?').bind('en_uso', destino || '', id).run();
     } else {
       const nueva = item.cantidad_disponible - cantidad;
@@ -7200,10 +7303,10 @@ async function moverItemSeg(id, request, env, ctx) {
       await env.DB.prepare('UPDATE inventario_seg SET cantidad_disponible = ?, estado = ?, destino_actual = ? WHERE id = ?').bind(nueva, nueva === 0 ? 'en_uso' : 'disponible', destino || '', id).run();
     }
     await env.DB.prepare('INSERT INTO movimientos_seg (item_id, accion, cantidad, destino, usuario, notas, fecha) VALUES (?, ?, ?, ?, ?, ?, ?)').bind(id, 'salida', cantidad, destino || '', usuario || '', notas || '', fecha).run();
-    if (destino) await sendTelegram(env, `ðŸ"¤ <b>Material Seguridad â€" Salida</b>\nðŸ"– ${item.codigo || item.nombre}  ðŸ"‹ ${item.tipo_material}\nðŸ— Destino: ${destino}\nðŸ‘¤ ${usuario || 'â€"'}`);
-    // Alerta stock mÃ­nimo (modo cantidad)
+    if (destino) await sendTelegram(env, `ðŸ"¤ <b>Material Seguridad — Salida</b>\nðŸ"– ${item.codigo || item.nombre}  ðŸ"‹ ${item.tipo_material}\nðŸ— Destino: ${destino}\nðŸ‘¤ ${usuario || '—'}`);
+    // Alerta stock mínimo (modo cantidad)
     if (item.modo === 'cantidad' && item.stock_minimo > 0 && nuevaCantidad !== null && nuevaCantidad < item.stock_minimo) {
-      await sendTelegram(env, `âš ï¸ <b>Stock mÃ­nimo alcanzado â€" Seguridad</b>\nðŸ"¦ ${item.nombre || item.tipo_material}\nðŸ"‰ Disponible: <b>${nuevaCantidad}</b> (mÃ­nimo: ${item.stock_minimo})\nðŸ‘¤ ${usuario || 'â€"'}`);
+      await sendTelegram(env, `âš ï¸ <b>Stock mínimo alcanzado — Seguridad</b>\nðŸ"¦ ${item.nombre || item.tipo_material}\nðŸ"‰ Disponible: <b>${nuevaCantidad}</b> (mínimo: ${item.stock_minimo})\nðŸ‘¤ ${usuario || '—'}`);
     }
     ctx?.waitUntil(syncSheets(env, 'Seg-Inventario', item.empresa_id));
     return json({ ok: true, mensaje: 'Salida registrada' });
@@ -7218,18 +7321,18 @@ async function moverItemSeg(id, request, env, ctx) {
     }
     await env.DB.prepare('INSERT INTO movimientos_seg (item_id, accion, cantidad, usuario, notas, fecha) VALUES (?, ?, ?, ?, ?, ?)').bind(id, 'devolucion', cantidad, usuario || '', notas || '', fecha).run();
     ctx?.waitUntil(syncSheets(env, 'Seg-Inventario', item.empresa_id));
-    return json({ ok: true, mensaje: 'DevoluciÃ³n registrada' });
+    return json({ ok: true, mensaje: 'Devolución registrada' });
   }
 
   if (accion === 'baja') {
     await env.DB.prepare('UPDATE inventario_seg SET estado = ? WHERE id = ?').bind('baja', id).run();
     await env.DB.prepare('INSERT INTO movimientos_seg (item_id, accion, cantidad, usuario, notas, fecha) VALUES (?, ?, ?, ?, ?, ?)').bind(id, 'baja', cantidad, usuario || '', notas || '', fecha).run();
-    await sendTelegram(env, `ðŸ—‘ï¸ <b>Material Seguridad â€" Baja</b>\nðŸ"– ${item.codigo || item.nombre}  ðŸ"‹ ${item.tipo_material}\nðŸ‘¤ ${usuario || 'â€"'}`);
+    await sendTelegram(env, `ðŸ—‘ï¸ <b>Material Seguridad — Baja</b>\nðŸ"– ${item.codigo || item.nombre}  ðŸ"‹ ${item.tipo_material}\nðŸ‘¤ ${usuario || '—'}`);
     ctx?.waitUntil(syncSheets(env, 'Seg-Inventario', item.empresa_id));
     return json({ ok: true, mensaje: 'Dado de baja' });
   }
 
-  return err('AcciÃ³n no reconocida', 400);
+  return err('Acción no reconocida', 400);
 }
 
 async function eliminarItemSeg(id, request, env, ctx) {
@@ -7249,7 +7352,7 @@ async function addTipoMaterialSeg(request, env) {
   if (!nombre) return err('Falta el nombre');
   try {
     await env.DB.prepare('INSERT INTO tipos_material_seg (nombre, tipo, descripcion, empresa_id) VALUES (?, ?, ?, ?)').bind(nombre.trim(), tipo, descripcion || '', empresa_id).run();
-    return json({ ok: true, mensaje: `Tipo "${nombre}" aÃ±adido` }, 201);
+    return json({ ok: true, mensaje: `Tipo "${nombre}" añadido` }, 201);
   } catch(e) {
     if (e.message?.includes('UNIQUE')) return err(`El tipo "${nombre}" ya existe`, 409);
     throw e;
@@ -7257,7 +7360,7 @@ async function addTipoMaterialSeg(request, env) {
 }
 
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-// CIERRE AUTOMÃTICO JORNADA (Cron 20:00 hora EspaÃ±a)
+// CIERRE AUTOMÁTICO JORNADA (Cron 20:00 hora España)
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 async function cierreAutomaticoJornada(env) {
@@ -7282,17 +7385,17 @@ async function cierreAutomaticoJornada(env) {
       const notasActual = f.notas ? f.notas + ' | ' : '';
       await env.DB.prepare(
         `UPDATE fichajes SET hora_salida=?, horas_trabajadas=?, horas_extra=?, notas=? WHERE id=?`
-      ).bind(horaSalida, horas, horas_extra, notasActual + 'â° Cierre automÃ¡tico', f.id).run();
+      ).bind(horaSalida, horas, horas_extra, notasActual + 'â° Cierre automático', f.id).run();
       cerrados++;
     }
 
     if (cerrados > 0) {
       await sendTelegram(env,
-        `â° <b>Cierre automÃ¡tico de jornada</b>\nðŸ"… ${hoy}\nâœ… ${cerrados} fichaje${cerrados > 1 ? 's cerrados' : ' cerrado'} automÃ¡ticamente con hora del horario de obra.`
+        `â° <b>Cierre automático de jornada</b>\nðŸ"… ${hoy}\nâœ… ${cerrados} fichaje${cerrados > 1 ? 's cerrados' : ' cerrado'} automáticamente con hora del horario de obra.`
       );
     }
   } catch (e) {
-    console.error('Error cierre automÃ¡tico jornada:', e.message);
+    console.error('Error cierre automático jornada:', e.message);
   }
 }
 
@@ -7302,9 +7405,9 @@ async function cierreAutomaticoJornada(env) {
 
 async function informeSemanal(empresa_id, empresa_nombre, env) {
   try {
-    // Rango: semana anterior completa (lunesâ€"domingo)
+    // Rango: semana anterior completa (lunes—domingo)
     const hoy  = new Date();
-    const dow   = hoy.getDay(); // 0=dom â€¦ 6=sÃ¡b
+    const dow   = hoy.getDay(); // 0=dom â€¦ 6=sáb
     const diasDesdeL = dow === 0 ? 6 : dow - 1;
     const lunesEsta  = new Date(hoy); lunesEsta.setDate(hoy.getDate() - diasDesdeL);
     const lunesAnt   = new Date(lunesEsta); lunesAnt.setDate(lunesEsta.getDate() - 7);
@@ -7365,9 +7468,9 @@ async function informeSemanal(empresa_id, empresa_nombre, env) {
       stockBajo = (sc.results?.length || 0) + (sh.results?.length || 0) + (ss.results?.[0]?.c || 0);
     } catch {}
 
-    // ComposiciÃ³n del mensaje
+    // Composición del mensaje
     const semStr = `${desde} al ${hasta}`;
-    let msg = `ðŸ"Š <b>Informe semanal â€" ${empresa_nombre}</b>\n`;
+    let msg = `ðŸ"Š <b>Informe semanal — ${empresa_nombre}</b>\n`;
     msg += `<i>Semana: ${semStr}</i>\n\n`;
     msg += `ðŸ‘· <b>Fichajes:</b> ${fich.total || 0} registros Â· ${horasTotStr}${retrasoStr}\n`;
     msg += `ðŸ"§ <b>Equipos sin servicio:</b> ${nEquiposMant}\n`;
@@ -7375,7 +7478,7 @@ async function informeSemanal(empresa_id, empresa_nombre, env) {
     msg += `ðŸ"¦ <b>Pedidos pendientes:</b> ${nPedPend}\n`;
     msg += `ðŸš¨ <b>Incidencias abiertas:</b> ${nIncAb}\n`;
     if (stockBajo > 0) msg += `âš ï¸ <b>Alertas de stock bajo:</b> ${stockBajo}\n`;
-    msg += `\n_Generado automÃ¡ticamente por Alejandra App_`;
+    msg += `\n_Generado automáticamente por Alejandra App_`;
 
     await sendTelegram(env, msg);
   } catch(e) {
@@ -7393,9 +7496,9 @@ async function alertasDiarias(env) {
       await env.DB.prepare("DELETE FROM vincular_tokens WHERE expires_at < datetime('now')").run();
     } catch(e) { console.error('cleanup tokens error:', e.message); }
 
-    // 0. Informe semanal â€" para cada empresa que lo tenga activado en el dÃ­a de hoy
-    const DIAS_ES = { 'lunes':1,'martes':2,'miÃ©rcoles':3,'miercoles':3,'jueves':4,'viernes':5,'sÃ¡bado':6,'sabado':6,'domingo':0 };
-    const dowHoy  = hoy.getDay(); // 0=dom â€¦ 6=sÃ¡b
+    // 0. Informe semanal — para cada empresa que lo tenga activado en el día de hoy
+    const DIAS_ES = { 'lunes':1,'martes':2,'miércoles':3,'miercoles':3,'jueves':4,'viernes':5,'sábado':6,'sabado':6,'domingo':0 };
+    const dowHoy  = hoy.getDay(); // 0=dom â€¦ 6=sáb
     try {
       const { results: empresasInf } = await env.DB.prepare(
         `SELECT id, nombre, informe_dia FROM empresas WHERE informe_semanal = 1 AND activa = 1`
@@ -7409,7 +7512,7 @@ async function alertasDiarias(env) {
     } catch(e) { console.error('informeSemanal check error:', e.message); }
 
     // UX-06: obtener todas las empresas activas para filtrar alertas por empresa
-    // (antes las queries mezclaban datos de TODAS las empresas sin indicar cuÃ¡l)
+    // (antes las queries mezclaban datos de TODAS las empresas sin indicar cuál)
     const { results: empresasActivas } = await env.DB.prepare(
       `SELECT id, nombre FROM empresas WHERE activa = 1`
     ).all().catch(() => ({ results: [] }));
@@ -7417,7 +7520,7 @@ async function alertasDiarias(env) {
     for (const e of (empresasActivas || [])) empMap[e.id] = e.nombre;
     const empLabel = (eid) => empMap[eid] ? ` [${empMap[eid]}]` : '';
 
-    // 1. MÃ¡quinas averiadas hace mÃ¡s de 3 dÃ­as sin reparar
+    // 1. Máquinas averiadas hace más de 3 días sin reparar
     const [avPemp, avCarr] = await Promise.all([
       env.DB.prepare(`SELECT matricula, fecha_averia, obra_id, empresa_id FROM pemp WHERE estado = 'Averiada' AND fecha_averia IS NOT NULL`).all(),
       env.DB.prepare(`SELECT matricula, fecha_averia, obra_id, empresa_id FROM carretillas WHERE estado = 'Averiada' AND fecha_averia IS NOT NULL`).all(),
@@ -7427,15 +7530,15 @@ async function alertasDiarias(env) {
     const averiadas = [];
     for (const m of [...(avPemp.results||[]), ...(avCarr.results||[])]) {
       const dias = Math.floor((hoy - new Date(m.fecha_averia)) / 86400000);
-      if (dias >= DIAS_AVERIA) averiadas.push(`ðŸ"– ${m.matricula}${empLabel(m.empresa_id)} â€" ${dias} dÃ­as averiada`);
+      if (dias >= DIAS_AVERIA) averiadas.push(`ðŸ"– ${m.matricula}${empLabel(m.empresa_id)} — ${dias} días averiada`);
     }
     if (averiadas.length) {
       await sendTelegram(env,
-        `âš ï¸ <b>MÃ¡quinas averiadas sin reparar (â‰¥${DIAS_AVERIA} dÃ­as)</b>\n\n` + averiadas.join('\n')
+        `âš ï¸ <b>Máquinas averiadas sin reparar (â‰¥${DIAS_AVERIA} días)</b>\n\n` + averiadas.join('\n')
       );
     }
 
-    // 2. Revisiones prÃ³ximas â€" usa dias_aviso_mant por equipo (default 15) cuando aviso_mantenimiento=1
+    // 2. Revisiones próximas — usa dias_aviso_mant por equipo (default 15) cuando aviso_mantenimiento=1
     const DIAS_AVISO_DEFAULT = 15;
     const maxLimite = new Date(hoy); maxLimite.setDate(maxLimite.getDate() + 365); // ventana amplia
     const maxLimiteStr = maxLimite.toISOString().slice(0, 10);
@@ -7451,16 +7554,16 @@ async function alertasDiarias(env) {
       if (!aviso) continue;
       const diasAviso = m.dias_aviso_mant || DIAS_AVISO_DEFAULT;
       const dias = Math.floor((new Date(m.fecha_proxima_revision) - hoy) / 86400000);
-      if (dias < 0) revisiones.push(`ðŸ"– ${m.matricula}${empLabel(m.empresa_id)} â€" VENCIDA hace ${Math.abs(dias)} dÃ­as`);
-      else if (dias <= diasAviso) revisiones.push(`ðŸ"– ${m.matricula}${empLabel(m.empresa_id)} â€" vence en ${dias} dÃ­as (${m.fecha_proxima_revision})`);
+      if (dias < 0) revisiones.push(`ðŸ"– ${m.matricula}${empLabel(m.empresa_id)} — VENCIDA hace ${Math.abs(dias)} días`);
+      else if (dias <= diasAviso) revisiones.push(`ðŸ"– ${m.matricula}${empLabel(m.empresa_id)} — vence en ${dias} días (${m.fecha_proxima_revision})`);
     }
     if (revisiones.length) {
       await sendTelegram(env,
-        `ðŸ"… <b>Revisiones prÃ³ximas o vencidas</b>\n\n` + revisiones.join('\n')
+        `ðŸ"… <b>Revisiones próximas o vencidas</b>\n\n` + revisiones.join('\n')
       );
     }
 
-    // 3. Material Seguridad con caducidad prÃ³xima o vencida
+    // 3. Material Seguridad con caducidad próxima o vencida
     const DIAS_CAD = 30;
     const limiteCad = new Date(hoy); limiteCad.setDate(limiteCad.getDate() + DIAS_CAD);
     const limiteCadStr = limiteCad.toISOString().slice(0, 10);
@@ -7472,13 +7575,13 @@ async function alertasDiarias(env) {
       const lineas = matCad.results.map(m => {
         const dias = Math.floor((new Date(m.fecha_caducidad) - hoy) / 86400000);
         return dias < 0
-          ? `â›" ${m.codigo||m.nombre} (${m.tipo_material})${empLabel(m.empresa_id)} â€" CADUCADO hace ${Math.abs(dias)} dÃ­as`
-          : `âš ï¸ ${m.codigo||m.nombre} (${m.tipo_material})${empLabel(m.empresa_id)} â€" caduca en ${dias} dÃ­as (${m.fecha_caducidad})`;
+          ? `â›" ${m.codigo||m.nombre} (${m.tipo_material})${empLabel(m.empresa_id)} — CADUCADO hace ${Math.abs(dias)} días`
+          : `âš ï¸ ${m.codigo||m.nombre} (${m.tipo_material})${empLabel(m.empresa_id)} — caduca en ${dias} días (${m.fecha_caducidad})`;
       });
-      await sendTelegram(env, `ðŸ·ï¸ <b>Material Seguridad â€" Caducidad prÃ³xima</b>\n\n` + lineas.join('\n'));
+      await sendTelegram(env, `ðŸ·ï¸ <b>Material Seguridad — Caducidad próxima</b>\n\n` + lineas.join('\n'));
     }
 
-    // 4. Carnets y certificaciones â€" caducidad prÃ³xima o vencida
+    // 4. Carnets y certificaciones — caducidad próxima o vencida
     const carnetsCad = await env.DB.prepare(
       `SELECT c.nombre_trabajador, c.tipo, c.fecha_caducidad, c.dias_aviso, c.usuario_id,
               c.empresa_id, u.telegram_id
@@ -7490,24 +7593,24 @@ async function alertasDiarias(env) {
       const dias = Math.floor((new Date(c.fecha_caducidad) - hoy) / 86400000);
       const aviso = c.dias_aviso || 30;
       let linea = null;
-      if (dias < 0) linea = `â›" ${c.nombre_trabajador}${empLabel(c.empresa_id)} â€" ${c.tipo} CADUCADO hace ${Math.abs(dias)} dÃ­as`;
-      else if (dias <= aviso) linea = `âš ï¸ ${c.nombre_trabajador}${empLabel(c.empresa_id)} â€" ${c.tipo} caduca en ${dias} dÃ­as (${c.fecha_caducidad})`;
+      if (dias < 0) linea = `â›" ${c.nombre_trabajador}${empLabel(c.empresa_id)} — ${c.tipo} CADUCADO hace ${Math.abs(dias)} días`;
+      else if (dias <= aviso) linea = `âš ï¸ ${c.nombre_trabajador}${empLabel(c.empresa_id)} — ${c.tipo} caduca en ${dias} días (${c.fecha_caducidad})`;
       if (linea) {
         carnetAlertas.push(linea);
-        // NotificaciÃ³n personal al trabajador si tiene Telegram vinculado
+        // Notificación personal al trabajador si tiene Telegram vinculado
         if (c.telegram_id) {
           const msg = dias < 0
-            ? `ðŸ"œ <b>Tu carnet ha caducado</b>\n\nTipo: ${c.tipo}\nCaducÃ³: ${c.fecha_caducidad}\n\nâš ï¸ RenuÃ©valo lo antes posible.`
-            : `ðŸ"œ <b>Tu carnet caduca pronto</b>\n\nTipo: ${c.tipo}\nCaduca: ${c.fecha_caducidad} (<b>${dias} dÃ­as</b>)\n\nRecuerda renovarlo a tiempo.`;
+            ? `ðŸ"œ <b>Tu carnet ha caducado</b>\n\nTipo: ${c.tipo}\nCaducó: ${c.fecha_caducidad}\n\nâš ï¸ Renuévalo lo antes posible.`
+            : `ðŸ"œ <b>Tu carnet caduca pronto</b>\n\nTipo: ${c.tipo}\nCaduca: ${c.fecha_caducidad} (<b>${dias} días</b>)\n\nRecuerda renovarlo a tiempo.`;
           await sendTelegramToChat(env, c.telegram_id, msg);
         }
       }
     }
     if (carnetAlertas.length) {
-      await sendTelegram(env, `ðŸ"œ <b>Carnets y certificaciones â€" Caducidad prÃ³xima</b>\n\n` + carnetAlertas.join('\n'));
+      await sendTelegram(env, `ðŸ"œ <b>Carnets y certificaciones — Caducidad próxima</b>\n\n` + carnetAlertas.join('\n'));
     }
 
-    // 5. Eventos del calendario â€" hoy + recordatorios previos
+    // 5. Eventos del calendario — hoy + recordatorios previos
     const hoyStr = hoy.toISOString().slice(0, 10);
     const { results: eventosHoy } = await env.DB.prepare(
       `SELECT e.titulo, e.hora, e.tipo, o.nombre as obra_nombre
@@ -7517,7 +7620,7 @@ async function alertasDiarias(env) {
     if (eventosHoy.length) {
       const tipoIcon = { entrega:'ðŸ"¦', revision:'ðŸ"§', reunion:'ðŸ‘¥', otro:'ðŸ"…' };
       const lineas = eventosHoy.map(ev =>
-        `${tipoIcon[ev.tipo]||'ðŸ"…'} ${ev.titulo}${ev.hora ? ' â€" ' + ev.hora : ''}${ev.obra_nombre ? ' [' + ev.obra_nombre + ']' : ''}`
+        `${tipoIcon[ev.tipo]||'ðŸ"…'} ${ev.titulo}${ev.hora ? ' — ' + ev.hora : ''}${ev.obra_nombre ? ' [' + ev.obra_nombre + ']' : ''}`
       );
       await sendTelegram(env, `ðŸ"… <b>Eventos de hoy (${hoyStr})</b>\n\n` + lineas.join('\n'));
     }
@@ -7532,12 +7635,12 @@ async function alertasDiarias(env) {
       if (diasFaltan === ev.recordatorio_dias) {
         const tipoIcon = { entrega:'ðŸ"¦', revision:'ðŸ"§', reunion:'ðŸ‘¥', otro:'ðŸ"…' };
         await sendTelegram(env,
-          `â° <b>Recordatorio â€" faltan ${diasFaltan} dÃ­a${diasFaltan===1?'':'s'}</b>\n${tipoIcon[ev.tipo]||'ðŸ"…'} ${ev.titulo} (${ev.fecha}${ev.hora ? ' ' + ev.hora : ''})${ev.obra_nombre ? '\nðŸ— ' + ev.obra_nombre : ''}`
+          `â° <b>Recordatorio — faltan ${diasFaltan} día${diasFaltan===1?'':'s'}</b>\n${tipoIcon[ev.tipo]||'ðŸ"…'} ${ev.titulo} (${ev.fecha}${ev.hora ? ' ' + ev.hora : ''})${ev.obra_nombre ? '\nðŸ— ' + ev.obra_nombre : ''}`
         );
       }
     }
 
-    // RGPD â€" aplicar retenciÃ³n automÃ¡tica a todas las empresas que la tengan activa
+    // RGPD — aplicar retención automática a todas las empresas que la tengan activa
     try {
       const { results: empresasRgpd } = await env.DB.prepare(
         `SELECT id FROM empresas WHERE activa=1 AND retencion_config IS NOT NULL`
@@ -7574,10 +7677,10 @@ function googleAuthUrl(request, env) {
 async function googleAuthCallback(request, env) {
   const body = await request.json().catch(() => ({}));
   const { code, redirect_uri, inv_codigo } = body;
-  if (!code) return err('Falta el cÃ³digo de autorizaciÃ³n', 400);
+  if (!code) return err('Falta el código de autorización', 400);
   if (!env.GOOGLE_OAUTH_CLIENT_ID || !env.GOOGLE_OAUTH_CLIENT_SECRET) return err('Google OAuth no configurado', 503);
 
-  // Intercambiar cÃ³digo por tokens
+  // Intercambiar código por tokens
   const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -7591,7 +7694,7 @@ async function googleAuthCallback(request, env) {
   });
   const tokenData = await tokenRes.json();
   if (!tokenData.access_token) {
-    const msg = tokenData.error_description || tokenData.error || 'token invÃ¡lido';
+    const msg = tokenData.error_description || tokenData.error || 'token inválido';
     return err('Error al autenticar con Google: ' + msg, 401);
   }
 
@@ -7608,13 +7711,13 @@ async function googleAuthCallback(request, env) {
   ).bind(gUser.email).first();
 
   if (!u) {
-    // Si viene con cÃ³digo de invitaciÃ³n, registrar directamente
+    // Si viene con código de invitación, registrar directamente
     if (inv_codigo) {
       const ahora = AHORA();
       const inv = await env.DB.prepare(
         'SELECT * FROM invitaciones WHERE codigo = ? AND usado = 0 AND expira_at > ?'
       ).bind(inv_codigo.toUpperCase(), ahora).first();
-      if (!inv) return json({ ok: false, inv_error: true, msg: 'El enlace de invitaciÃ³n ha caducado o ya fue utilizado.' });
+      if (!inv) return json({ ok: false, inv_error: true, msg: 'El enlace de invitación ha caducado o ya fue utilizado.' });
 
       const codigoUser = 'g_' + Date.now();
       await env.DB.prepare(
@@ -7628,16 +7731,16 @@ async function googleAuthCallback(request, env) {
       await env.DB.prepare(
         'INSERT INTO sesiones (token, usuario_id, empresa_id, nombre, rol, departamento, obra_id, created_at) VALUES (?,?,?,?,?,?,?,?)'
       ).bind(token, nuevoUser.id, inv.empresa_id, gUser.name || gUser.email, inv.rol, inv.departamento || null, null, ahora).run();
-      await sendTelegram(env, `âœ… <b>Nuevo usuario registrado</b>\nðŸ‘¤ ${gUser.name || gUser.email}\nðŸ"§ ${gUser.email}\nRol: ${inv.rol} | Dpto: ${inv.departamento || 'â€"'} | Empresa: ${empresa?.nombre || inv.empresa_id}`);
+      await sendTelegram(env, `âœ… <b>Nuevo usuario registrado</b>\nðŸ‘¤ ${gUser.name || gUser.email}\nðŸ"§ ${gUser.email}\nRol: ${inv.rol} | Dpto: ${inv.departamento || '—'} | Empresa: ${empresa?.nombre || inv.empresa_id}`);
       return json({ ok: true, token, nombre: gUser.name || gUser.email, rol: inv.rol, departamento: inv.departamento || null, empresa_id: inv.empresa_id, empresa_nombre: empresa?.nombre || '', obra_id: null, obra_nombre: null, usuario_id: nuevoUser?.id || null });
     }
 
-    // Sin invitaciÃ³n: crear solicitud pendiente para que el admin la apruebe
+    // Sin invitación: crear solicitud pendiente para que el admin la apruebe
     const yaExiste = await env.DB.prepare(
       'SELECT id FROM usuarios WHERE LOWER(email) = LOWER(?) AND google_pending = 1 AND activo = 0 LIMIT 1'
     ).bind(gUser.email).first();
     if (yaExiste) {
-      return json({ ok: false, pendiente: true, msg: 'Tu solicitud ya estÃ¡ pendiente de aprobaciÃ³n. El administrador la revisarÃ¡ pronto.' });
+      return json({ ok: false, pendiente: true, msg: 'Tu solicitud ya está pendiente de aprobación. El administrador la revisará pronto.' });
     }
     const codigoPend = 'g_pend_' + Date.now();
     const rIns = await env.DB.prepare(
@@ -7649,8 +7752,8 @@ async function googleAuthCallback(request, env) {
         `ðŸ"" <b>Solicitud de acceso con Google</b>\nðŸ‘¤ ${gUser.name || gUser.email}\nðŸ"§ ${gUser.email}`,
         [
           [
-            { text: 'âœ… Operario ElÃ©c (E3)', callback_data: `apr:${pendingId}:3:operario:electrico` },
-            { text: 'âœ… Operario ElÃ©c (E1)', callback_data: `apr:${pendingId}:1:operario:electrico` },
+            { text: 'âœ… Operario Eléc (E3)', callback_data: `apr:${pendingId}:3:operario:electrico` },
+            { text: 'âœ… Operario Eléc (E1)', callback_data: `apr:${pendingId}:1:operario:electrico` },
           ],
           [
             { text: 'âœ… Admin (E3)',          callback_data: `apr:${pendingId}:3:empresa_admin:null` },
@@ -7665,7 +7768,7 @@ async function googleAuthCallback(request, env) {
     return json({ ok: false, pendiente: true, msg: 'Solicitud enviada correctamente. El administrador debe aprobarla para que puedas acceder.' });
   }
 
-  // Crear sesiÃ³n
+  // Crear sesión
   const tokenArr = new Uint8Array(32);
   crypto.getRandomValues(tokenArr);
   const token = Array.from(tokenArr).map(b => b.toString(16).padStart(2,'0')).join('');
@@ -7698,7 +7801,7 @@ async function crearInvitacion(request, env) {
   if (!s || !hasRole(s, 'superadmin', 'empresa_admin')) return err('Sin permiso', 403);
   const { duracion_min, rol, departamento } = await request.json().catch(() => ({}));
   if (!duracion_min || !rol) return err('Faltan datos', 400);
-  const codigo = randomHex(6).toUpperCase(); // 12 chars hex criptogrÃ¡ficamente seguro
+  const codigo = randomHex(6).toUpperCase(); // 12 chars hex criptográficamente seguro
   const expira = new Date(Date.now() + duracion_min * 60000).toISOString().slice(0,19).replace('T',' ');
   await env.DB.prepare(
     'INSERT INTO invitaciones (codigo, empresa_id, rol, departamento, expira_at, creado_por) VALUES (?,?,?,?,?,?)'
@@ -7720,7 +7823,7 @@ async function anularInvitacion(request, env) {
   const s = await getAuth(request, env);
   if (!s || !hasRole(s, 'superadmin', 'empresa_admin')) return err('Sin permiso', 403);
   const { codigo } = await request.json().catch(() => ({}));
-  if (!codigo) return err('Falta cÃ³digo', 400);
+  if (!codigo) return err('Falta código', 400);
   await env.DB.prepare('DELETE FROM invitaciones WHERE codigo = ? AND empresa_id = ?').bind(codigo, s.empresa_id).run();
   return json({ ok: true });
 }
@@ -7728,7 +7831,7 @@ async function anularInvitacion(request, env) {
 async function verificarInvitacion(request, env) {
   const url = new URL(request.url);
   const codigo = url.searchParams.get('codigo');
-  if (!codigo) return err('Falta cÃ³digo', 400);
+  if (!codigo) return err('Falta código', 400);
   const ahora = AHORA();
   const inv = await env.DB.prepare(
     'SELECT codigo, rol, departamento, expira_at FROM invitaciones WHERE codigo = ? AND usado = 0 AND expira_at > ?'
@@ -7756,7 +7859,7 @@ async function aprobarUsuarioPendiente(request, env) {
     'UPDATE usuarios SET activo=1, google_pending=0, empresa_id=?, rol=?, departamento=?, obra_id=? WHERE id=? AND google_pending=1'
   ).bind(empresa_id, rol, departamento || null, obra_id || null, id).run();
   const u = await env.DB.prepare('SELECT nombre, email FROM usuarios WHERE id=?').bind(id).first();
-  await sendTelegram(env, `âœ… <b>Acceso aprobado</b>\nðŸ‘¤ ${u?.nombre || 'â€"'}\nðŸ"§ ${u?.email || 'â€"'}\nRol: ${rol} | Empresa ID: ${empresa_id}`);
+  await sendTelegram(env, `âœ… <b>Acceso aprobado</b>\nðŸ‘¤ ${u?.nombre || '—'}\nðŸ"§ ${u?.email || '—'}\nRol: ${rol} | Empresa ID: ${empresa_id}`);
   return json({ ok: true });
 }
 
@@ -7768,7 +7871,7 @@ async function rechazarUsuarioPendiente(request, env) {
   const u = await env.DB.prepare('SELECT nombre, email FROM usuarios WHERE id=? AND google_pending=1').bind(id).first();
   if (!u) return err('Solicitud no encontrada', 404);
   await env.DB.prepare('DELETE FROM usuarios WHERE id=? AND google_pending=1').bind(id).run();
-  await sendTelegram(env, `âŒ <b>Acceso rechazado</b>\nðŸ‘¤ ${u.nombre || 'â€"'}\nðŸ"§ ${u.email || 'â€"'}`);
+  await sendTelegram(env, `âŒ <b>Acceso rechazado</b>\nðŸ‘¤ ${u.nombre || '—'}\nðŸ"§ ${u.email || '—'}`);
   return json({ ok: true });
 }
 
@@ -7800,7 +7903,7 @@ async function subirArchivo(request, env) {
   const file = form.get('file');
   const herramienta_id = form.get('herramienta_id') || null;
   if (!file || !file.name) return err('Falta el archivo', 400);
-  if (file.size > 52428800) return err('El archivo supera el lÃ­mite de 50 MB', 413);
+  if (file.size > 52428800) return err('El archivo supera el límite de 50 MB', 413);
   const ts = Date.now();
   const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
   const r2Key = herramienta_id
@@ -7883,7 +7986,7 @@ async function crearEvento(request, env) {
   if (!empresa_id) return err('No autorizado', 403);
   const body = await request.json().catch(() => ({}));
   const { titulo, descripcion, tipo = 'otro', fecha, hora, recordatorio_dias = 1 } = body;
-  if (!titulo?.trim()) return err('El tÃ­tulo es obligatorio', 400);
+  if (!titulo?.trim()) return err('El título es obligatorio', 400);
   if (!fecha) return err('La fecha es obligatoria', 400);
   const dept     = body.departamento || departamento || 'electrico';
   const obraFinal = body.obra_id || obra_id || null;
@@ -7955,7 +8058,7 @@ async function crearIncidencia(request, env, ctx) {
   if (!empresa_id) return err('No autorizado', 403);
   const body = await request.json().catch(() => ({}));
   const { titulo, descripcion, tipo = 'otro', gravedad = 'media', asignado_a, fecha } = body;
-  if (!titulo?.trim()) return err('El tÃ­tulo es obligatorio', 400);
+  if (!titulo?.trim()) return err('El título es obligatorio', 400);
   const dept = body.departamento || departamento || 'electrico';
   const obraFinal = body.obra_id || obra_id || null;
   const fechaFinal = fecha || new Date().toISOString().slice(0, 10);
@@ -7964,7 +8067,7 @@ async function crearIncidencia(request, env, ctx) {
   ).bind(empresa_id, obraFinal, dept, titulo.trim(), descripcion || null, tipo, gravedad, 'abierta', nombre || null, asignado_a || null, fechaFinal).run();
   if (gravedad === 'alta') {
     const gravedadIcon = { baja: 'ðŸŸ¢', media: 'ðŸŸ ', alta: 'ðŸ"´' };
-    await sendTelegram(env, `${gravedadIcon[gravedad]} <b>Incidencia ALTA [${dept}]</b>\nðŸ"‹ ${titulo.trim()}\n${descripcion ? 'ðŸ" ' + descripcion.slice(0,200) + '\n' : ''}ðŸ‘¤ ${nombre || 'â€"'}`);
+    await sendTelegram(env, `${gravedadIcon[gravedad]} <b>Incidencia ALTA [${dept}]</b>\nðŸ"‹ ${titulo.trim()}\n${descripcion ? 'ðŸ" ' + descripcion.slice(0,200) + '\n' : ''}ðŸ‘¤ ${nombre || '—'}`);
   }
   ctx?.waitUntil(syncRRHH(env, 'Incidencias', empresa_id));
   return json({ ok: true, id: r.meta.last_row_id }, 201);
@@ -7977,7 +8080,7 @@ async function actualizarIncidencia(id, request, env, ctx) {
   const body = await request.json().catch(() => ({}));
   const inc = await env.DB.prepare('SELECT * FROM incidencias WHERE id = ? AND empresa_id = ?').bind(id, empresa_id).first();
   if (!inc) return err('Incidencia no encontrada', 404);
-  // Solo admins/encargados pueden cambiar estado/asignaciÃ³n/resoluciÃ³n
+  // Solo admins/encargados pueden cambiar estado/asignación/resolución
   if ((body.estado || body.asignado_a !== undefined || body.resolucion !== undefined) && !puedeGestionar)
     return err('Sin permisos', 403);
   const campos = [], vals = [];
@@ -8030,7 +8133,7 @@ async function subirFotoIncidencia(incidencia_id, request, env) {
   if (file.size > 20971520) return err('El archivo supera 20 MB', 413);
   const mime = file.type || 'image/jpeg';
   const allowed = ['image/jpeg','image/png','image/webp','image/heic','image/heif'];
-  if (!allowed.includes(mime)) return err('Solo se permiten imÃ¡genes', 400);
+  if (!allowed.includes(mime)) return err('Solo se permiten imágenes', 400);
   const ts = Date.now();
   const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
   const r2Key = `e${empresa_id}/incidencias/${incidencia_id}/${ts}_${safeName}`;
@@ -8081,7 +8184,7 @@ async function subirAlbaranPedido(pedido_id, request, env) {
   if (!form) return err('Falta el formulario', 400);
   const file = form.get('file');
   if (!file || !file.name) return err('Falta el archivo', 400);
-  if (file.size > 20971520) return err('El archivo supera el lÃ­mite de 20 MB', 413);
+  if (file.size > 20971520) return err('El archivo supera el límite de 20 MB', 413);
   const allowedMimes = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif', 'application/pdf'];
   const mime = file.type || 'application/octet-stream';
   if (!allowedMimes.includes(mime)) return err('Tipo de archivo no permitido', 400);
@@ -8104,7 +8207,7 @@ async function getAlbaranFile(id, request, env) {
   const meta = await env.DB.prepare(
     'SELECT * FROM albaranes WHERE id = ? AND empresa_id = ?'
   ).bind(id, empresa_id).first();
-  if (!meta) return err('AlbarÃ¡n no encontrado', 404);
+  if (!meta) return err('Albarán no encontrado', 404);
   const obj = await env.FILES.get(meta.r2_key);
   if (!obj) return err('Archivo no disponible', 404);
   const inline = meta.mime_type?.startsWith('image/') || meta.mime_type === 'application/pdf';
@@ -8124,13 +8227,13 @@ async function borrarAlbaran(id, request, env) {
   const meta = await env.DB.prepare(
     'SELECT * FROM albaranes WHERE id = ? AND empresa_id = ?'
   ).bind(id, empresa_id).first();
-  if (!meta) return err('AlbarÃ¡n no encontrado', 404);
+  if (!meta) return err('Albarán no encontrado', 404);
   await env.FILES.delete(meta.r2_key);
   await env.DB.prepare('DELETE FROM albaranes WHERE id = ? AND empresa_id = ?').bind(id, empresa_id).run();
   return json({ ok: true });
 }
 
-// â"€â"€ DocumentaciÃ³n departamentos â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+// â"€â"€ Documentación departamentos â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 async function listarCarpetas(request, env) {
   const { empresa_id } = await getAuth(request, env);
@@ -8138,7 +8241,7 @@ async function listarCarpetas(request, env) {
   const url = new URL(request.url);
   const obra_id     = url.searchParams.get('obra_id');
   const departamento = url.searchParams.get('departamento');
-  if (!obra_id || !departamento) return err('Faltan parÃ¡metros', 400);
+  if (!obra_id || !departamento) return err('Faltan parámetros', 400);
   const parent_id = url.searchParams.get('parent_id');
   let q, params;
   if (parent_id !== null && parent_id !== '') {
@@ -8212,7 +8315,7 @@ async function subirDocDept(request, env) {
   const obra_id_f   = form.get('obra_id');
   const dept_f      = form.get('departamento');
   if (!file || !file.name) return err('Falta el archivo', 400);
-  if (file.size > 52428800) return err('El archivo supera el lÃ­mite de 50 MB', 413);
+  if (file.size > 52428800) return err('El archivo supera el límite de 50 MB', 413);
   let obraId, deptName;
   if (carpeta_id) {
     const carpeta = await env.DB.prepare('SELECT * FROM carpetas WHERE id = ? AND empresa_id = ?').bind(parseInt(carpeta_id), empresa_id).first();
@@ -8343,7 +8446,7 @@ async function listarNotas(request, env) {
     ).bind(parseInt(obra_id_p), dept_p, empresa_id).all();
     return json(results);
   }
-  return err('Faltan parÃ¡metros', 400);
+  return err('Faltan parámetros', 400);
 }
 
 async function crearNota(request, env) {
@@ -8351,7 +8454,7 @@ async function crearNota(request, env) {
   if (!empresa_id) return err('No autorizado', 403);
   if (rol === 'operario') return err('Sin permisos', 403);
   const { titulo, contenido, carpeta_id, obra_id, departamento: dept_param } = await request.json().catch(() => ({}));
-  if (!titulo?.trim()) return err('El tÃ­tulo es obligatorio', 400);
+  if (!titulo?.trim()) return err('El título es obligatorio', 400);
   let obraIdFinal = parseInt(obra_id || obraId || 0) || null;
   let deptFinal   = dept_param || departamento || null;
   if (carpeta_id) {
@@ -8370,7 +8473,7 @@ async function editarNota(id, request, env) {
   if (!empresa_id) return err('No autorizado', 403);
   if (rol === 'operario') return err('Sin permisos', 403);
   const { titulo, contenido } = await request.json().catch(() => ({}));
-  if (!titulo?.trim()) return err('El tÃ­tulo es obligatorio', 400);
+  if (!titulo?.trim()) return err('El título es obligatorio', 400);
   const nota = await env.DB.prepare('SELECT id FROM docs_notas WHERE id = ? AND empresa_id = ?').bind(id, empresa_id).first();
   if (!nota) return err('Nota no encontrada', 404);
   await env.DB.prepare('UPDATE docs_notas SET titulo = ?, contenido = ?, updated_at = ? WHERE id = ? AND empresa_id = ?')
@@ -8454,7 +8557,7 @@ async function eliminarTurno(id, request, env) {
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-// RGPD / LOPD â€" ProtecciÃ³n de datos
+// RGPD / LOPD — Protección de datos
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 async function rgpdInforme(request, env) {
@@ -8466,7 +8569,7 @@ async function rgpdInforme(request, env) {
 
   const eid = auth.empresa_id;
 
-  // Queries con columnas correctas segÃºn el esquema real de la BD
+  // Queries con columnas correctas según el esquema real de la BD
   const [usuario, fichajes, carnets, epis, turnos, chat] = await Promise.all([
     env.DB.prepare(`SELECT id,nombre,email,rol,departamento,activo,created_at FROM usuarios WHERE id=? AND empresa_id=?`).bind(uid,eid).first(),
     env.DB.prepare(`SELECT id,fecha,hora_entrada,hora_salida,horas_trabajadas,horas_extra,minutos_retraso,estado,motivo,obra_id,created_at FROM fichajes WHERE usuario_id=? AND empresa_id=? ORDER BY fecha DESC LIMIT 500`).bind(uid,eid).all(),
@@ -8517,7 +8620,7 @@ async function rgpdAnonimizar(request, env) {
     env.DB.prepare(`UPDATE usuarios SET nombre='Usuario anonimizado', email=NULL, password_hash=NULL, telegram_id=NULL, foto_r2_key=NULL, activo=0 WHERE id=? AND empresa_id=?`).bind(uid,eid).run(),
     // Anonimizar nombre en mensajes de chat
     env.DB.prepare(`UPDATE chat_mensajes SET usuario_nombre='Trabajador anonimizado' WHERE usuario_id=? AND empresa_id=?`).bind(uid,eid).run(),
-    // Anonimizar nombre en carnets y EPIs (RGPD â€" tambiÃ©n son datos personales)
+    // Anonimizar nombre en carnets y EPIs (RGPD — también son datos personales)
     env.DB.prepare(`UPDATE carnets SET nombre_trabajador='Trabajador anonimizado' WHERE usuario_id=? AND empresa_id=?`).bind(uid,eid).run().catch(()=>{}),
     env.DB.prepare(`UPDATE epis_asignados SET nombre_trabajador='Trabajador anonimizado' WHERE usuario_id=? AND empresa_id=?`).bind(uid,eid).run().catch(()=>{}),
     env.DB.prepare(`UPDATE turnos SET nombre_trabajador='Trabajador anonimizado' WHERE usuario_id=? AND empresa_id=?`).bind(uid,eid).run().catch(()=>{}),
@@ -8552,7 +8655,7 @@ async function rgpdGetConfig(request, env) {
     ok: true,
     config: {
       activo:         config.activo         ?? false,
-      fichajes_dias:  config.fichajes_dias  ?? 730,   // 2 aÃ±os por defecto
+      fichajes_dias:  config.fichajes_dias  ?? 730,   // 2 años por defecto
       chat_dias:      config.chat_dias      ?? 365,
       logs_dias:      config.logs_dias      ?? 90,
     }
@@ -8571,7 +8674,7 @@ async function rgpdSetConfig(request, env) {
     logs_dias:     Math.max(7,  parseInt(body.logs_dias)     || 90),
   };
 
-  // Asegurarse de que la columna existe (migraciÃ³n on-the-fly)
+  // Asegurarse de que la columna existe (migración on-the-fly)
   await env.DB.prepare(`ALTER TABLE empresas ADD COLUMN retencion_config TEXT`).run().catch(() => {});
 
   await env.DB.prepare(`UPDATE empresas SET retencion_config=? WHERE id=?`)
@@ -8587,13 +8690,13 @@ async function rgpdAplicarRetencionEndpoint(request, env) {
   return json({ ok: true, ...resultado });
 }
 
-// Llamada interna (tambiÃ©n desde cron)
+// Llamada interna (también desde cron)
 async function rgpdAplicarRetencion(env, empresa_id) {
   try {
     const empresa = await env.DB.prepare(`SELECT retencion_config FROM empresas WHERE id=?`).bind(empresa_id).first();
     if (!empresa?.retencion_config) return { saltado: true, motivo: 'sin config' };
     const config = JSON.parse(empresa.retencion_config);
-    if (!config.activo) return { saltado: true, motivo: 'retenciÃ³n desactivada' };
+    if (!config.activo) return { saltado: true, motivo: 'retención desactivada' };
 
     const [rFichajes, rChat, rLogs] = await Promise.all([
       env.DB.prepare(`DELETE FROM fichajes WHERE empresa_id=? AND fecha < date('now', '-' || ? || ' days')`)
@@ -8657,7 +8760,7 @@ async function buscarGlobal(request, env) {
     env.DB.prepare(`SELECT id,'incidencia' as tipo,titulo as nombre,tipo as subtipo,estado FROM incidencias WHERE empresa_id=? AND titulo LIKE ? LIMIT 5`).bind(eid,like).all(),
     env.DB.prepare(`SELECT id,'pemp' as tipo,matricula as nombre,tipo as subtipo,estado FROM pemp WHERE empresa_id=? AND (matricula LIKE ? OR marca LIKE ?) AND estado!='baja' LIMIT 5`).bind(eid,like,like).all(),
     env.DB.prepare(`SELECT id,'carretilla' as tipo,matricula as nombre,tipo as subtipo,estado FROM carretillas WHERE empresa_id=? AND (matricula LIKE ? OR marca LIKE ?) AND estado!='baja' LIMIT 5`).bind(eid,like,like).all(),
-    env.DB.prepare(`SELECT h.id,'herramienta' as tipo,COALESCE(t.nombre,h.numero_serie,'â€"') as nombre,h.estado as subtipo,h.estado FROM herramientas h LEFT JOIN tipos_herramienta t ON h.tipo_id=t.id WHERE h.empresa_id=? AND (h.numero_serie LIKE ? OR t.nombre LIKE ?) LIMIT 5`).bind(eid,like,like).all(),
+    env.DB.prepare(`SELECT h.id,'herramienta' as tipo,COALESCE(t.nombre,h.numero_serie,'—') as nombre,h.estado as subtipo,h.estado FROM herramientas h LEFT JOIN tipos_herramienta t ON h.tipo_id=t.id WHERE h.empresa_id=? AND (h.numero_serie LIKE ? OR t.nombre LIKE ?) LIMIT 5`).bind(eid,like,like).all(),
     env.DB.prepare(`SELECT id,'usuario' as tipo,nombre,rol as subtipo,NULL as estado FROM usuarios WHERE empresa_id=? AND nombre LIKE ? AND activo=1 LIMIT 5`).bind(eid,like).all(),
     env.DB.prepare(`SELECT id,'pedido' as tipo,descripcion as nombre,departamento as subtipo,estado FROM pedidos WHERE empresa_id=? AND descripcion LIKE ? LIMIT 5`).bind(eid,like).all(),
     env.DB.prepare(`SELECT id,'obra' as tipo,nombre,codigo as subtipo,CASE WHEN activa=1 THEN 'activa' ELSE 'cerrada' END as estado FROM obras WHERE empresa_id=? AND (nombre LIKE ? OR codigo LIKE ?) LIMIT 5`).bind(eid,like,like).all(),
@@ -8669,13 +8772,13 @@ async function buscarGlobal(request, env) {
 }
 
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-// TELEGRAM PERSONAL (vinculaciÃ³n por deep link + webhook)
+// TELEGRAM PERSONAL (vinculación por deep link + webhook)
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 async function telegramVincular(request, env) {
   const auth = await getAuth(request, env);
   if (!auth.usuario_id) return err('Solo usuarios de la app pueden vincular Telegram', 403);
-  // Genera token aleatorio 8 chars alfanumÃ©rico
+  // Genera token aleatorio 8 chars alfanumérico
   const bytes = crypto.getRandomValues(new Uint8Array(6));
   const token = Array.from(bytes).map(b => b.toString(36).padStart(2,'0')).join('').slice(0,8).toUpperCase();
   await env.DB.prepare(
@@ -8693,7 +8796,7 @@ async function telegramEstado(request, env) {
 
 async function telegramDesvincular(request, env) {
   const auth = await getAuth(request, env);
-  if (!auth.usuario_id) return err('Sin sesiÃ³n', 403);
+  if (!auth.usuario_id) return err('Sin sesión', 403);
   await env.DB.prepare('UPDATE usuarios SET telegram_id=NULL WHERE id=?').bind(auth.usuario_id).run();
   return json({ ok: true });
 }
@@ -8788,14 +8891,14 @@ async function telegramWebhook(request, env, ctx) {
         await env.DB.prepare('UPDATE usuarios SET telegram_id=? WHERE id=?').bind(String(chatId), record.usuario_id).run();
         await env.DB.prepare('DELETE FROM vincular_tokens WHERE token=?').bind(token).run();
         await sendTelegramToChat(env, chatId,
-          'âœ… <b>Â¡Cuenta vinculada!</b>\n\nDesde ahora recibirÃ¡s notificaciones personales de <b>Alejandra App</b> directamente aquÃ­:\nÂ· Tus turnos de la semana\nÂ· Carnets prÃ³ximos a caducar\nÂ· Avisos que te afecten directamente.');
+          'âœ… <b>Â¡Cuenta vinculada!</b>\n\nDesde ahora recibirás notificaciones personales de <b>Alejandra App</b> directamente aquí:\nÂ· Tus turnos de la semana\nÂ· Carnets próximos a caducar\nÂ· Avisos que te afecten directamente.');
       } else {
         await sendTelegramToChat(env, chatId,
-          'âŒ El cÃ³digo ha caducado o no es vÃ¡lido.\nGenera un nuevo enlace desde la app en <b>Ajustes â†’ SesiÃ³n â†’ Conectar Telegram</b>.');
+          'âŒ El código ha caducado o no es válido.\nGenera un nuevo enlace desde la app en <b>Ajustes â†’ Sesión â†’ Conectar Telegram</b>.');
       }
     } else {
       await sendTelegramToChat(env, chatId,
-        'ðŸ‘‹ Hola. Soy el bot de <b>Alejandra App</b>.\nPara vincular tu cuenta, pulsa "Conectar Telegram" desde la app y sigue el enlace que aparecerÃ¡.');
+        'ðŸ‘‹ Hola. Soy el bot de <b>Alejandra App</b>.\nPara vincular tu cuenta, pulsa "Conectar Telegram" desde la app y sigue el enlace que aparecerá.');
     }
   }
   return json({ ok: true });
@@ -8806,7 +8909,7 @@ async function setupTelegramWebhook(request, env) {
   if (!isSuperadmin) return err('No autorizado', 403);
   const token  = env.TELEGRAM_BOT_TOKEN;
   if (!token) return err('TELEGRAM_BOT_TOKEN no configurado', 500);
-  // Usa TELEGRAM_WEBHOOK_SECRET si estÃ¡ configurado, si no lo deriva del token
+  // Usa TELEGRAM_WEBHOOK_SECRET si está configurado, si no lo deriva del token
   const secret = env.TELEGRAM_WEBHOOK_SECRET || token.split(':')[1]?.slice(0, 32) || '';
   if (!secret) return err('No hay secret configurado para el webhook', 500);
   const webhookUrl = `https://alejandra-app-api.alejandra-app.workers.dev/telegram/webhook`;
@@ -8837,8 +8940,8 @@ async function notificarTurnosSemana(request, env) {
     if (!porUsuario[t.telegram_id]) porUsuario[t.telegram_id] = { nombre: t.u_nombre, dias: [] };
     porUsuario[t.telegram_id].dias.push({ fecha: t.fecha, turno: t.turno });
   }
-  const LABEL = { 'maÃ±ana':'ðŸŒ… MaÃ±ana', tarde:'ðŸŒ† Tarde', noche:'ðŸŒ™ Noche', libre:'ðŸ’¤ Libre' };
-  const DIAS_ES = ['Dom','Lun','Mar','MiÃ©','Jue','Vie','SÃ¡b'];
+  const LABEL = { 'mañana':'ðŸŒ… Mañana', tarde:'ðŸŒ† Tarde', noche:'ðŸŒ™ Noche', libre:'ðŸ’¤ Libre' };
+  const DIAS_ES = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
   let notificados = 0;
   for (const [chatId, data] of Object.entries(porUsuario)) {
     data.dias.sort((a,b) => a.fecha.localeCompare(b.fecha));
@@ -8849,7 +8952,7 @@ async function notificarTurnosSemana(request, env) {
       return `  ${dia} ${num}: ${LABEL[d.turno] || d.turno}`;
     }).join('\n');
     await sendTelegramToChat(env, chatId,
-      `ðŸ"… <b>Tus turnos</b> (${desde.slice(5).replace('-','/')} â€" ${hasta.slice(5).replace('-','/')})\n\n${lineas}`);
+      `ðŸ"… <b>Tus turnos</b> (${desde.slice(5).replace('-','/')} — ${hasta.slice(5).replace('-','/')})\n\n${lineas}`);
     notificados++;
   }
   return json({ ok: true, notificados });
@@ -8866,9 +8969,9 @@ async function subirFotoPerfil(tipo, id, request, env) {
   if (!form) return err('Falta formulario', 400);
   const file = form.get('file');
   if (!file?.name) return err('Falta archivo', 400);
-  if (file.size > 5242880) return err('MÃ¡ximo 5 MB', 413);
+  if (file.size > 5242880) return err('Máximo 5 MB', 413);
   const mime = file.type || 'image/jpeg';
-  if (!['image/jpeg','image/png','image/webp','image/heic','image/heif'].includes(mime)) return err('Solo imÃ¡genes', 400);
+  if (!['image/jpeg','image/png','image/webp','image/heic','image/heif'].includes(mime)) return err('Solo imágenes', 400);
   const r2Key = `e${empresa_id}/perfiles/${tipo}/${id}_${Date.now()}.jpg`;
   await env.FILES.put(r2Key, file.stream(), { httpMetadata: { contentType: mime } });
   // Borrar foto anterior si existe
@@ -8920,7 +9023,7 @@ async function borrarFotoPerfil(tipo, id, request, env) {
   return json({ ok: true });
 }
 
-// â"€â"€ MigraciÃ³n v4.86 â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+// â"€â"€ Migración v4.86 â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 // ── Costes IA ─────────────────────────────────────────────────────────────────
 async function getAICosts(request, env) {
   const { isSuperadmin } = await getAuth(request, env);
@@ -8946,7 +9049,7 @@ async function runMigrations(request, env) {
   const results = [];
   try {
     await env.DB.prepare('ALTER TABLE carpetas ADD COLUMN parent_id INTEGER').run();
-    results.push('carpetas.parent_id: aÃ±adido');
+    results.push('carpetas.parent_id: añadido');
   } catch { results.push('carpetas.parent_id: ya existe'); }
   try {
     await env.DB.prepare(`CREATE TABLE IF NOT EXISTS docs_notas (
@@ -9005,22 +9108,22 @@ async function runMigrations(request, env) {
     )`).run();
     results.push('checklist_registros: creada');
   } catch(e) { results.push('checklist_registros: ' + e.message); }
-  // Mantenimiento preventivo (NEW-15) â€" columnas en pemp + carretillas + tabla historial
+  // Mantenimiento preventivo (NEW-15) — columnas en pemp + carretillas + tabla historial
   try {
     await env.DB.prepare(`ALTER TABLE pemp ADD COLUMN aviso_mantenimiento INTEGER DEFAULT 1`).run();
-    results.push('pemp.aviso_mantenimiento: aÃ±adida');
+    results.push('pemp.aviso_mantenimiento: añadida');
   } catch(e) { results.push('pemp.aviso_mantenimiento: ' + e.message); }
   try {
     await env.DB.prepare(`ALTER TABLE pemp ADD COLUMN dias_aviso_mant INTEGER DEFAULT 15`).run();
-    results.push('pemp.dias_aviso_mant: aÃ±adida');
+    results.push('pemp.dias_aviso_mant: añadida');
   } catch(e) { results.push('pemp.dias_aviso_mant: ' + e.message); }
   try {
     await env.DB.prepare(`ALTER TABLE carretillas ADD COLUMN aviso_mantenimiento INTEGER DEFAULT 1`).run();
-    results.push('carretillas.aviso_mantenimiento: aÃ±adida');
+    results.push('carretillas.aviso_mantenimiento: añadida');
   } catch(e) { results.push('carretillas.aviso_mantenimiento: ' + e.message); }
   try {
     await env.DB.prepare(`ALTER TABLE carretillas ADD COLUMN dias_aviso_mant INTEGER DEFAULT 15`).run();
-    results.push('carretillas.dias_aviso_mant: aÃ±adida');
+    results.push('carretillas.dias_aviso_mant: añadida');
   } catch(e) { results.push('carretillas.dias_aviso_mant: ' + e.message); }
   try {
     await env.DB.prepare(`CREATE TABLE IF NOT EXISTS historial_mantenimientos (
@@ -9079,10 +9182,10 @@ async function runMigrations(request, env) {
     )`).run();
     results.push('partes_trabajo: creada');
   } catch(e) { results.push('partes_trabajo: ' + e.message); }
-  // Seguridad: expiraciÃ³n de sesiones (CRIT-3)
+  // Seguridad: expiración de sesiones (CRIT-3)
   try {
     await env.DB.prepare('ALTER TABLE sesiones ADD COLUMN expires_at TEXT').run();
-    results.push('sesiones.expires_at: aÃ±adida');
+    results.push('sesiones.expires_at: añadida');
   } catch { results.push('sesiones.expires_at: ya existe'); }
   // Seguridad: rate limiting de login (CRIT-1)
   try {
@@ -9095,7 +9198,7 @@ async function runMigrations(request, env) {
     await env.DB.prepare('CREATE INDEX IF NOT EXISTS idx_login_attempts_ip ON login_attempts (ip, created_at)').run();
     results.push('login_attempts: creada');
   } catch(e) { results.push('login_attempts: ' + e.message); }
-  // GestiÃ³n de turnos (NEW-20)
+  // Gestión de turnos (NEW-20)
   try {
     await env.DB.prepare(`CREATE TABLE IF NOT EXISTS turnos (
       id               INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -9114,23 +9217,23 @@ async function runMigrations(request, env) {
   // Informe semanal Telegram (NEW-18)
   try {
     await env.DB.prepare('ALTER TABLE empresas ADD COLUMN informe_semanal INTEGER DEFAULT 0').run();
-    results.push('empresas.informe_semanal: aÃ±adida');
+    results.push('empresas.informe_semanal: añadida');
   } catch { results.push('empresas.informe_semanal: ya existe'); }
   try {
     await env.DB.prepare("ALTER TABLE empresas ADD COLUMN informe_dia TEXT DEFAULT 'lunes'").run();
-    results.push('empresas.informe_dia: aÃ±adida');
+    results.push('empresas.informe_dia: añadida');
   } catch { results.push('empresas.informe_dia: ya existe'); }
-  // MÃ³dulos configurables (NEW-29)
+  // Módulos configurables (NEW-29)
   try {
     await env.DB.prepare('ALTER TABLE empresas ADD COLUMN modulos_config TEXT').run();
-    results.push('empresas.modulos_config: aÃ±adida');
+    results.push('empresas.modulos_config: añadida');
   } catch { results.push('empresas.modulos_config: ya existe'); }
   // Telegram personal (telegram_id en usuarios)
   try {
     await env.DB.prepare('ALTER TABLE usuarios ADD COLUMN telegram_id TEXT').run();
-    results.push('usuarios.telegram_id: aÃ±adida');
+    results.push('usuarios.telegram_id: añadida');
   } catch { results.push('usuarios.telegram_id: ya existe'); }
-  // Tabla de tokens de vinculaciÃ³n de Telegram
+  // Tabla de tokens de vinculación de Telegram
   try {
     await env.DB.prepare(`CREATE TABLE IF NOT EXISTS vincular_tokens (
       token       TEXT PRIMARY KEY,
@@ -9144,11 +9247,11 @@ async function runMigrations(request, env) {
   // Foto de perfil en usuarios y personal_externo
   try {
     await env.DB.prepare('ALTER TABLE usuarios ADD COLUMN foto_r2_key TEXT').run();
-    results.push('usuarios.foto_r2_key: aÃ±adida');
+    results.push('usuarios.foto_r2_key: añadida');
   } catch { results.push('usuarios.foto_r2_key: ya existe'); }
   try {
     await env.DB.prepare('ALTER TABLE personal_externo ADD COLUMN foto_r2_key TEXT').run();
-    results.push('personal_externo.foto_r2_key: aÃ±adida');
+    results.push('personal_externo.foto_r2_key: añadida');
   } catch { results.push('personal_externo.foto_r2_key: ya existe'); }
   // Carnets y certificaciones (NEW-19)
   try {
@@ -9331,7 +9434,7 @@ async function crearMantenimiento(request, env) {
     adjuntoNombre
   ).run();
 
-  // Si es revisiÃ³n â†’ actualizar fecha_ultima_revision en la tabla del equipo
+  // Si es revisión â†’ actualizar fecha_ultima_revision en la tabla del equipo
   if (tipo_mant === 'revision') {
     const tabla = (tipo_equipo === 'carretilla' || tipo_equipo === 'carretillas') ? 'carretillas' : 'pemp';
     await env.DB.prepare(`UPDATE ${tabla} SET fecha_ultima_revision = ? WHERE matricula = ?`)
@@ -9339,7 +9442,7 @@ async function crearMantenimiento(request, env) {
   }
 
   await sendTelegram(env,
-    `ðŸ"§ <b>Mantenimiento registrado</b>\nðŸ"– ${matricula.trim().toUpperCase()} (${tipo_mant || 'preventivo'})\nðŸ"… ${fecha_mant}\nðŸ‘¤ ${realizado_por || usuario || 'â€"'}${descripcion ? '\nðŸ" ' + descripcion : ''}`
+    `ðŸ"§ <b>Mantenimiento registrado</b>\nðŸ"– ${matricula.trim().toUpperCase()} (${tipo_mant || 'preventivo'})\nðŸ"… ${fecha_mant}\nðŸ‘¤ ${realizado_por || usuario || '—'}${descripcion ? '\nðŸ" ' + descripcion : ''}`
   );
 
   return json({ ok: true, id: r.meta.last_row_id, mensaje: 'Mantenimiento registrado' }, 201);
@@ -9379,12 +9482,12 @@ async function borrarMantenimiento(id, request, env) {
 
 const CHECKLIST_DEFAULTS = {
   pemp: [
-    'Nivel de aceite', 'BaterÃ­a / Combustible', 'CinturÃ³n de seguridad',
-    'Funcionamiento de mandos', 'Estado de neumÃ¡ticos', 'Luces y seÃ±ales', 'Estructura y plataforma'
+    'Nivel de aceite', 'Batería / Combustible', 'Cinturón de seguridad',
+    'Funcionamiento de mandos', 'Estado de neumáticos', 'Luces y señales', 'Estructura y plataforma'
   ],
   carretilla: [
-    'Nivel de aceite', 'BaterÃ­a / Gas', 'Estado de horquillas',
-    'Frenos', 'SeÃ±al acÃºstica', 'Estado de neumÃ¡ticos', 'Luces'
+    'Nivel de aceite', 'Batería / Gas', 'Estado de horquillas',
+    'Frenos', 'Señal acústica', 'Estado de neumáticos', 'Luces'
   ]
 };
 
@@ -9398,7 +9501,7 @@ async function listarPlantillaChecklist(request, env) {
   const { results } = await env.DB.prepare(
     `SELECT * FROM checklist_plantillas WHERE ${conds.join(' AND ')} ORDER BY tipo_equipo, orden, id`
   ).bind(...params).all();
-  // Si no hay plantilla aÃºn, devolver defaults
+  // Si no hay plantilla aún, devolver defaults
   if (!results.length && tipo && CHECKLIST_DEFAULTS[tipo]) {
     return json({ ok: true, preguntas: CHECKLIST_DEFAULTS[tipo].map((p, i) => ({ id: -(i+1), pregunta: p, tipo_equipo: tipo, es_default: true })) });
   }
@@ -9466,7 +9569,7 @@ async function crearRegistroChecklist(request, env) {
 }
 
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-// GALERÃA DE FOTOS POR OBRA (NEW-17)
+// GALERÍA DE FOTOS POR OBRA (NEW-17)
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 async function listarFotosObra(request, env) {
@@ -9496,7 +9599,7 @@ async function subirFotoObra(request, env) {
   if (file.size > 20971520) return err('El archivo supera 20 MB', 413);
   const mime = file.type || 'image/jpeg';
   const allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'];
-  if (!allowed.includes(mime)) return err('Solo se permiten imÃ¡genes', 400);
+  if (!allowed.includes(mime)) return err('Solo se permiten imágenes', 400);
   const obra_id    = parseInt(form.get('obra_id') || sesionObra || 0) || null;
   const dept       = form.get('departamento') || departamento || null;
   const comentario = (form.get('comentario') || '').trim() || null;
@@ -9570,8 +9673,8 @@ async function enviarChatMensaje(request, env) {
   if (!empresa_id) return err('No autorizado', 403);
   const body = await request.json().catch(() => ({}));
   const mensaje = (body.mensaje || '').trim();
-  if (!mensaje) return err('Mensaje vacÃ­o', 400);
-  if (mensaje.length > 500) return err('Mensaje demasiado largo (mÃ¡x 500 caracteres)', 400);
+  if (!mensaje) return err('Mensaje vacío', 400);
+  if (mensaje.length > 500) return err('Mensaje demasiado largo (máx 500 caracteres)', 400);
   const obra_id = body.obra_id || auth.obra_id || null;
   await env.DB.prepare(
     'INSERT INTO chat_mensajes (empresa_id, obra_id, usuario_id, usuario_nombre, rol, mensaje) VALUES (?,?,?,?,?,?)'
@@ -9633,7 +9736,7 @@ async function crearRepostaje(request, env, ctx) {
   // Telegram si hay coste
   if (coste && parseFloat(coste) > 0) {
     const emoji = tipo === 'combustible' ? 'â›½' : 'ðŸ"‹';
-    await sendTelegram(env, `${emoji} <b>Repostaje registrado</b>\nðŸšœ ${equipo_tipo.toUpperCase()} ${equipo_id}\nðŸ"¦ ${cantidad ? cantidad + ' ' + (unidad||'') : ''} Â· ðŸ’¶ ${parseFloat(coste).toFixed(2)}â‚¬\nðŸ‘¤ ${nombre || rol || 'â€"'}`);
+    await sendTelegram(env, `${emoji} <b>Repostaje registrado</b>\nðŸšœ ${equipo_tipo.toUpperCase()} ${equipo_id}\nðŸ"¦ ${cantidad ? cantidad + ' ' + (unidad||'') : ''} Â· ðŸ’¶ ${parseFloat(coste).toFixed(2)}â‚¬\nðŸ‘¤ ${nombre || rol || '—'}`);
   }
   ctx?.waitUntil(syncRRHH(env, 'Repostajes', empresa_id));
   return json({ ok: true, id: r.meta.last_row_id });
@@ -9659,7 +9762,7 @@ async function getResumenRepostajes(request, env) {
 }
 
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-// DEV TOOLS â€" endpoints solo para superadmin/desarrollador
+// DEV TOOLS — endpoints solo para superadmin/desarrollador
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 async function devAIChat(request, env) {
@@ -9873,7 +9976,7 @@ async function devKillSession(request, env) {
   if (!s || !hasRole(s, 'superadmin', 'desarrollador')) return err('Sin permiso', 403);
   const { token } = await request.json().catch(() => ({}));
   if (!token) return err('Falta token', 400);
-  if (token === (await getAuth(request, env))?.token) return err('No puedes matar tu propia sesiÃ³n', 403);
+  if (token === (await getAuth(request, env))?.token) return err('No puedes matar tu propia sesión', 403);
   await env.DB.prepare('DELETE FROM sesiones WHERE token = ?').bind(token).run();
   return json({ ok: true });
 }

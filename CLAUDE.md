@@ -66,7 +66,15 @@ if ($v -ne $sw -or $v -ne $h) { Write-Error "DESINCRONIZADO: json=$v sw=$sw html
 > ⛔ Si no coinciden → **NO hacer push**. Corregirlo primero.
 > Este error causó bucles de recarga infinita en producción (incidentes 22/04 y 26/04/2026).
 
-### 2. Commit y push
+### 2. Verificar encoding ANTES de commit
+
+```powershell
+# Buscar caracteres corruptos en archivos modificados
+git diff -- "*.html" "*.js" | Select-String -Pattern "Ã|Â|â€|ï»¿"
+# Si sale ALGO → PARAR. Hay corrupción de encoding. Ver sección "CODIFICACIÓN DE ARCHIVOS".
+```
+
+### 3. Commit y push
 
 ```powershell
 git add <archivos modificados>   # Nunca "git add -A" a ciegas
@@ -115,6 +123,53 @@ npx wrangler tail
 - Los 3 archivos de versión (`version.json`, `sw.js`, `index.html`) deben estar siempre sincronizados.
 - Deploy del worker: siempre `npx wrangler deploy` (usa `wrangler.toml` → nombre `alejandra-app-api`).
 - La app vieja (`Bobinaap` en GitHub) está **CONGELADA**. No tocar, no deployar.
+
+---
+
+## CODIFICACIÓN DE ARCHIVOS (CRÍTICO — leer siempre)
+
+> ⛔ **INCIDENTE 13/05/2026**: Los archivos `panel.html` y `worker.js` se corrompieron por guardarlos con codificación incorrecta. Costó horas arreglarlo. NUNCA debe volver a ocurrir.
+
+### Reglas obligatorias:
+
+1. **Todos los archivos del proyecto son UTF-8 SIN BOM.** No usar UTF-8 with BOM, no usar Latin-1, no usar Windows-1252.
+
+2. **NUNCA abrir ni guardar archivos con un editor que no esté configurado en UTF-8.** Si usas Notepad, VS Code, Notepad++ u otro, verificar que la codificación sea UTF-8 (sin BOM) ANTES de guardar.
+
+3. **Antes de hacer commit, verificar que no hay caracteres corruptos:**
+   ```powershell
+   # Verificación de encoding — ejecutar SIEMPRE antes de push
+   git diff --staged -- "*.html" "*.js" | Select-String -Pattern "Ã|Â|â€|ï»¿"
+   # Si devuelve ALGO → STOP. Los archivos están corruptos. NO hacer push.
+   ```
+
+4. **Caracteres válidos que SÍ deben aparecer en el código:**
+   - Tildes: á, é, í, ó, ú, ñ, ü (en strings de texto español)
+   - Emojis: 📊, 💬, 🏢, etc. (en UI)
+   - Flechas/decoración: ──, →, ═ (en comentarios)
+   - Em-dash: — (en comentarios descriptivos)
+
+5. **Caracteres que NUNCA deben aparecer (indican corrupción):**
+   - `Ã` seguido de otro carácter (ej: `Ã³`, `Ã±`, `Ã©`)
+   - `Â` suelto (ej: `Â¿`, `Â©`)
+   - `â€"`, `â€œ`, `â€™` (em-dash/comillas corruptas)
+   - `ï»¿` (BOM corrupta)
+   - `Ã¯Â»Â¿` (BOM triplemente corrupta)
+
+6. **Si escribes archivos con PowerShell:**
+   ```powershell
+   # CORRECTO — UTF-8 sin BOM
+   $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+   [System.IO.File]::WriteAllText($path, $content, $utf8NoBom)
+   
+   # INCORRECTO — Set-Content por defecto usa UTF-16 en Windows
+   # INCORRECTO — Out-File por defecto añade BOM
+   ```
+
+7. **Si se detecta corrupción en un archivo ya commiteado:**
+   - Restaurar la última versión limpia: `git show <commit_limpio>:<archivo> > <archivo>`
+   - Reaplicar los cambios funcionales manualmente
+   - Nunca intentar "arreglar" encoding in-place — siempre restaurar desde la fuente limpia
 
 ---
 
