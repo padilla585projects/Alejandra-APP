@@ -9,7 +9,47 @@
 **Última sesión:** 13/05/2026
 **Versión tras última sesión:** v5.82 (Inteligencia mejorada — analyze_trends, dailyPulse, watchers predictivos, patrol_logs mejorado)
 **Worker desplegado:** 3cf7fb2f ✅
-**GitHub:** en sync ✅ (commit 620a084)
+**GitHub:** en sync ✅ (commit 47f264a)
+
+---
+
+## PENDIENTE: ARREGLAR CI/CD (deploy-worker.yml)
+
+**Problema:** `CLOUDFLARE_API_TOKEN` en GitHub Secrets está expirado → Authentication error [code: 10000].
+
+**Solución — crear nuevo API Token en Cloudflare:**
+
+1. Ir a: https://dash.cloudflare.com/profile/api-tokens
+2. Click **"Create Token"**
+3. Plantilla: **"Edit Cloudflare Workers"** → "Use template"
+4. Permisos (ya incluidos en plantilla):
+   - Account > Workers Scripts > Edit ✅
+   - Account > Account Settings > Read ✅
+5. **Añadir permiso extra** (click "Add more"):
+   - Account > D1 > Edit
+6. Account Resources: seleccionar `Padilla585.projects@gmail.com's Account`
+7. **Sin fecha de expiración** (o poner 2030+)
+8. "Continue to summary" → "Create Token"
+9. **Copiar el token** (solo se ve una vez)
+
+**Después, actualizar GitHub Secret:**
+```powershell
+# Opción A: con gh CLI (si está instalado)
+gh secret set CLOUDFLARE_API_TOKEN --body "EL_TOKEN_NUEVO"
+
+# Opción B: con API de GitHub
+$token = "TOKEN_GITHUB"
+$headers = @{Authorization="Bearer $token"; Accept="application/vnd.github+json"}
+# Primero obtener public key del repo, luego encriptar y subir
+# Más fácil: hacerlo desde GitHub.com → Settings → Secrets → Actions → editar CLOUDFLARE_API_TOKEN
+```
+
+**Opción más fácil para el secret:**
+- Ir a https://github.com/padilla585projects/Alejandra-APP/settings/secrets/actions
+- Editar `CLOUDFLARE_API_TOKEN` → pegar el nuevo token
+
+**También actualizar workflow a wrangler v4** (actualmente instala v3.90.0):
+- Cambiar `cloudflare/wrangler-action@v3` por `cloudflare/wrangler-action@v3` con `wranglerVersion: '4'`
 
 ---
 
