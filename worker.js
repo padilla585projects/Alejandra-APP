@@ -534,7 +534,7 @@ const AI_TOOLS = [
   },
   {
     name: 'repo_read_file',
-    description: 'Lee contenido de un archivo del repo GitHub. Para archivos grandes usa line_start/line_end â worker.js tiene ~7100 lineas, lee en bloques de 300-500 a la vez.',
+    description: 'Lee contenido de un archivo del repo GitHub. Para archivos grandes usa line_start/line_end â worker.js tiene ~11000 lineas, lee en bloques de 300-500 a la vez.',
     input_schema: {
       type: 'object',
       properties: {
@@ -1184,7 +1184,7 @@ async function executeAITool(env, toolName, toolInput) {
         'checklist_plantillas','checklist_registros','fotos_obra',
         'carpetas','docs_dept','docs_notas','chat_mensajes',
         'sugerencias','logs','login_attempts','reset_tokens','vincular_tokens',
-        'alejandra_memoria','alejandra_historial','alejandra_fixes','alejandra_config','config',
+        'alejandra_memoria','alejandra_historial','alejandra_fixes','alejandra_config','alejandra_alert_cache','config',
         'proveedores','tipos_pemp','tipos_carretilla','energias_carretilla','tipos_cable',
         'eventos_calendario','tipos_herramienta'
       ];
@@ -2377,6 +2377,7 @@ alejandra_memoria(id, tipo[hecho/pendiente/contexto/aviso/aprendizaje/error], ca
 alejandra_historial(id, canal[telegram/web], rol[user/assistant], contenido, created_at)
 alejandra_fixes(id, descripcion, archivo, old_code, new_code, razon, estado, commit_sha)
 alejandra_config(key PRIMARY KEY, value, updated_at)
+alejandra_alert_cache(id, watcher, alert_key, expires_at, created_at)
 nexus_experts(id, nombre, score, total_calls, tokens_in, tokens_out, cost_cents, updated_at)
 logs(id, tipo, nivel[info/warning/error], mensaje, usuario, empresa_id, created_at)
 ai_usage(id, empresa_id, proveedor, modelo, endpoint, input_tokens, output_tokens, coste_usd)
@@ -2759,7 +2760,20 @@ async function nexusWatchers(env) {
     }
   } catch {}
 
-  return alerts;
+  // Filtrar alertas ya procesadas recientemente (evita spam nocturno del mismo problema)
+  if (alerts.length === 0) return alerts;
+  const now = new Date().toISOString();
+  const filtered = [];
+  for (const alert of alerts) {
+    const alertKey = alert.msg.slice(0, 100);
+    try {
+      const cached = await env.DB.prepare(
+        "SELECT id FROM alejandra_alert_cache WHERE watcher=? AND alert_key=? AND expires_at > ?"
+      ).bind(alert.watcher, alertKey, now).first();
+      if (!cached) filtered.push(alert);
+    } catch { filtered.push(alert); }
+  }
+  return filtered;
 }
 
 // ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
@@ -3242,6 +3256,34 @@ async function runAutonomousReview(env) {
       });
       result = await response.json();
     }
+
+    // Contar tools usadas durante la sesión autónoma para el resumen
+    let directFixes = 0, migrations = 0;
+    for (const msg of messages) {
+      if (msg.role === 'assistant' && Array.isArray(msg.content)) {
+        for (const blk of msg.content) {
+          if (blk.type === 'tool_use') {
+            if (blk.name === 'direct_fix') directFixes++;
+            if (blk.name === 'run_migration') migrations++;
+          }
+        }
+      }
+    }
+    // Guardar alertas procesadas en caché (TTL: CRITICAL=2h, HIGH=8h, MEDIUM=24h)
+    if (watcherAlerts.length) {
+      const ttlMap = { CRITICAL: 2, HIGH: 8, MEDIUM: 24 };
+      for (const alert of watcherAlerts) {
+        const ttlH = ttlMap[alert.severity] || 8;
+        try {
+          await env.DB.prepare(
+            `INSERT OR REPLACE INTO alejandra_alert_cache (watcher, alert_key, expires_at) VALUES (?, ?, datetime('now', '+${ttlH} hours'))`
+          ).bind(alert.watcher, alert.msg.slice(0, 100)).run();
+        } catch {}
+      }
+    }
+    // Auto-resumen de sesión autónoma (importancia 1 = informativo, no ensucia memoria)
+    const sessionNote = `${new Date().toLocaleString('es-ES', {timeZone:'Europe/Madrid',day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})} — Watchers: ${watcherAlerts.length}, Sugs: ${sugsArr.length}, Errores: ${errArr.length}, iters LLM: ${iters}${directFixes ? `, direct_fix: ${directFixes}` : ''}${migrations ? `, migraciones: ${migrations}` : ''}`;
+    autoLearn(env, 'hecho', 'Sesión autónoma', sessionNote, 1);
 
     const finalText = (result.content || []).filter(b => b.type === 'text').map(b => b.text).join('\n');
     logAIUsage(env, {
@@ -10367,6 +10409,18 @@ async function runMigrations(request, env) {
     )`).run();
     results.push('nexus_experts: creada');
   } catch(e) { results.push('nexus_experts: ' + e.message); }
+  // alejandra_alert_cache — deduplicación de alertas de watchers
+  try {
+    await env.DB.prepare(`CREATE TABLE IF NOT EXISTS alejandra_alert_cache (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      watcher    TEXT NOT NULL,
+      alert_key  TEXT NOT NULL,
+      expires_at TEXT NOT NULL,
+      created_at TEXT DEFAULT (datetime('now')),
+      UNIQUE(watcher, alert_key)
+    )`).run();
+    results.push('alejandra_alert_cache: creada');
+  } catch(e) { results.push('alejandra_alert_cache: ' + e.message); }
 
   return json({ ok: true, results });
 }
