@@ -13,43 +13,36 @@
 
 ---
 
-## PENDIENTE: ARREGLAR CI/CD (deploy-worker.yml)
+## CI/CD — ESTADO Y GUÍA DE RECUPERACIÓN
 
-**Problema:** `CLOUDFLARE_API_TOKEN` en GitHub Secrets está expirado → Authentication error [code: 10000].
+**Estado actual (13/05/2026): ✅ FUNCIONANDO**
+- Token: `cfut_BBj8ZR...` (creado 13/05/2026, sin expiración)
+- Workflow: `deploy-worker.yml` con wrangler v4
+- Cada push a `worker.js` o `wrangler.toml` → deploy automático en ~30s
 
-**Solución — crear nuevo API Token en Cloudflare:**
+### Si el CI/CD vuelve a fallar (Authentication error 10000):
 
+**Paso 1 — Crear nuevo API Token en Cloudflare:**
 1. Ir a: https://dash.cloudflare.com/profile/api-tokens
 2. Click **"Create Token"**
 3. Plantilla: **"Edit Cloudflare Workers"** → "Use template"
-4. Permisos (ya incluidos en plantilla):
-   - Account > Workers Scripts > Edit ✅
-   - Account > Account Settings > Read ✅
-5. **Añadir permiso extra** (click "Add more"):
-   - Account > D1 > Edit
-6. Account Resources: seleccionar `Padilla585.projects@gmail.com's Account`
-7. **Sin fecha de expiración** (o poner 2030+)
-8. "Continue to summary" → "Create Token"
-9. **Copiar el token** (solo se ve una vez)
+4. **Añadir permiso extra**: Account > D1 > Edit
+5. Account Resources: `Padilla585.projects@gmail.com's Account`
+6. **Sin fecha de expiración**
+7. "Continue to summary" → "Create Token" → copiar token
 
-**Después, actualizar GitHub Secret:**
-```powershell
-# Opción A: con gh CLI (si está instalado)
-gh secret set CLOUDFLARE_API_TOKEN --body "EL_TOKEN_NUEVO"
-
-# Opción B: con API de GitHub
-$token = "TOKEN_GITHUB"
-$headers = @{Authorization="Bearer $token"; Accept="application/vnd.github+json"}
-# Primero obtener public key del repo, luego encriptar y subir
-# Más fácil: hacerlo desde GitHub.com → Settings → Secrets → Actions → editar CLOUDFLARE_API_TOKEN
-```
-
-**Opción más fácil para el secret:**
+**Paso 2 — Actualizar GitHub Secret:**
 - Ir a https://github.com/padilla585projects/Alejandra-APP/settings/secrets/actions
 - Editar `CLOUDFLARE_API_TOKEN` → pegar el nuevo token
+- O dárselo a Claude y él lo actualiza vía API de GitHub
 
-**También actualizar workflow a wrangler v4** (actualmente instala v3.90.0):
-- Cambiar `cloudflare/wrangler-action@v3` por `cloudflare/wrangler-action@v3` con `wranglerVersion: '4'`
+### Deploy manual (si CI/CD no está disponible):
+```powershell
+$env:PATH = "D:\Descargas\node\node-v22.16.0-win-x64;$env:PATH"
+cmd /c "npx wrangler deploy"
+# Si el login ha expirado:
+cmd /c "npx wrangler login"
+```
 
 ---
 
