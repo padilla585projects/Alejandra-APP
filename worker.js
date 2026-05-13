@@ -1,4 +1,4 @@
-// Alejandra Worker v4.0 — Multi-tenant (empresa_id)
+// Alejandra Worker v5.82 — Multi-tenant (empresa_id)
 // Base de datos: Cloudflare D1
 // IA: Gemini 2.0 Flash
 // Sync: Google Sheets automático en cada cambio
