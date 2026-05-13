@@ -401,6 +401,50 @@ const AI_TOOLS = [
     input_schema: { type: 'object', properties: {} }
   },
   {
+    name: 'network_sync',
+    description: 'Sincroniza con la red de agentes IA de Adrián vía el Agent Gateway. Envía tu estado y recibe: mensajes pendientes de otros agentes, shared_context (lo que saben todos), network_capabilities (qué puede hacer cada agente). Jarvis (IA del hogar) está en la red. Usa esto para colaborar con otros agentes.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        context: { type: 'object', description: 'Tu contexto a compartir con la red: { estado: "activo", version_app: "X.XX", alertas_activas: N, ultimo_deploy: "OK/FAIL" }' }
+      }
+    }
+  },
+  {
+    name: 'network_send',
+    description: 'Envía un mensaje o petición de acción a otro agente de la red (ej: Jarvis). El mensaje se entrega en el próximo sync del agente destino (~60s). Para pedir acciones usa type=action_request.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        to: { type: 'string', description: 'agent_id del destinatario (ej: "ha_agent" para Jarvis, "numa_admin" para Numa)' },
+        message: { type: 'string', description: 'Mensaje libre para el agente, o JSON de action_request' },
+        action: { type: 'string', description: 'Si quieres pedir una acción específica (ej: "send_telegram", "speak_home_speakers", "read_sensors", "control_home_devices")' },
+        params: { type: 'object', description: 'Parámetros de la acción (ej: { entity: "light.salon", state: "on" })' }
+      },
+      required: ['to', 'message']
+    }
+  },
+  {
+    name: 'network_join',
+    description: 'Registra a Alejandra en la red de agentes IA por primera vez. Solo necesario si no se ha unido antes. Envía join_request al gateway y espera aprobación de Jarvis.',
+    input_schema: { type: 'object', properties: {} }
+  },
+  {
+    name: 'fetch_url',
+    description: 'Hace un HTTP request a cualquier URL externa y devuelve la respuesta. Para APIs externas, webhooks, servicios REST, etc. Soporta GET/POST/PUT/DELETE con headers y body custom.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        url: { type: 'string', description: 'URL completa (https://...)' },
+        method: { type: 'string', enum: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'], description: 'Método HTTP (default: GET)' },
+        headers: { type: 'object', description: 'Headers adicionales (ej: { "Authorization": "Bearer xxx" })' },
+        body: { type: 'string', description: 'Body del request (para POST/PUT). Si es JSON, pásalo como string.' },
+        timeout_ms: { type: 'integer', description: 'Timeout en ms (default: 10000, max: 30000)' }
+      },
+      required: ['url']
+    }
+  },
+  {
     name: 'send_notification',
     description: 'Envía una notificación por Telegram a un usuario vinculado o al chat principal',
     input_schema: {
@@ -694,6 +738,191 @@ async function executeAITool(env, toolName, toolInput) {
       }));
       return JSON.stringify({ ok: true, total_tables: tableNames.length, counts });
     }
+    // ══════════════════════════════════════════════════════════════════
+    // RED DE AGENTES — Comunicación con Jarvis y otros agentes
+    // Gateway: https://agentgateway-whmktpinla-ey.a.run.app
+    // ══════════════════════════════════════════════════════════════════
+
+    case 'network_join': {
+      // Registro inicial de Alejandra en la red de agentes
+      const GATEWAY = 'https://agentgateway-whmktpinla-ey.a.run.app';
+      try {
+        const identity = {
+          agent_id: 'alejandra_app',
+          name: 'Alejandra',
+          description: 'IA de gestión industrial — bobinas, equipos, personal, fichajes, documentos. Backend en Cloudflare Workers con D1/R2. Puede: consultar/modificar BD, editar código, desplegar, notificar por Telegram, buscar en internet.',
+          capabilities: [
+            'app_status',        // estado general de la app
+            'sql_query',         // consultas a la BD
+            'manage_users',      // gestión de usuarios
+            'send_telegram',     // notificaciones Telegram
+            'web_search',        // búsqueda en internet
+            'deploy_code',       // desplegar cambios al worker/frontend
+            'read_code',         // leer código del repositorio
+            'fix_code',          // aplicar parches al código
+            'file_storage',      // gestión de archivos en R2
+          ],
+          offers: 'Puedo informar del estado de la app industrial, consultar datos de obras/personal/inventario, desplegar código, enviar Telegrams. Disponible 24/7 en Cloudflare Workers.',
+          language: ['es'],
+          norms_version: '1.0'
+        };
+        const res = await fetch(GATEWAY, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ agent_id: 'alejandra_app', message: 'join_request', identity })
+        });
+        const data = await res.json();
+        // Guardar request_id en config para consultar luego
+        if (data.request_id) {
+          await env.DB.prepare('INSERT OR REPLACE INTO config(clave, valor, updated_at) VALUES(?, ?, datetime("now"))').bind('network_request_id', data.request_id).run();
+        }
+        // Si ya tiene secret (aprobación inmediata), guardarlo
+        if (data.secret) {
+          await env.DB.prepare('INSERT OR REPLACE INTO config(clave, valor, updated_at) VALUES(?, ?, datetime("now"))').bind('network_secret', data.secret).run();
+          await env.DB.prepare('INSERT OR REPLACE INTO config(clave, valor, updated_at) VALUES(?, ?, datetime("now"))').bind('network_joined', 'true').run();
+        }
+        return JSON.stringify({ ok: true, status: data.status || 'sent', request_id: data.request_id, has_secret: !!data.secret, raw: data });
+      } catch (e) {
+        return JSON.stringify({ ok: false, error: e.message });
+      }
+    }
+
+    case 'network_sync': {
+      const GATEWAY = 'https://agentgateway-whmktpinla-ey.a.run.app';
+      try {
+        // Leer secret de la BD
+        const secretRow = await env.DB.prepare('SELECT valor FROM config WHERE clave = ?').bind('network_secret').first();
+        if (!secretRow?.valor) {
+          // Si no hay secret, intentar check_join
+          const reqRow = await env.DB.prepare('SELECT valor FROM config WHERE clave = ?').bind('network_request_id').first();
+          if (reqRow?.valor) {
+            const checkRes = await fetch(GATEWAY, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ agent_id: 'alejandra_app', message: 'check_join', context: { request_id: reqRow.valor } })
+            });
+            const checkData = await checkRes.json();
+            if (checkData.secret) {
+              await env.DB.prepare('INSERT OR REPLACE INTO config(clave, valor, updated_at) VALUES(?, ?, datetime("now"))').bind('network_secret', checkData.secret).run();
+              await env.DB.prepare('INSERT OR REPLACE INTO config(clave, valor, updated_at) VALUES(?, ?, datetime("now"))').bind('network_joined', 'true').run();
+              // Continuar con el sync
+            } else {
+              return JSON.stringify({ ok: false, error: 'Pendiente de aprobación por Jarvis. Usa network_join si no lo has hecho.', check_data: checkData });
+            }
+          } else {
+            return JSON.stringify({ ok: false, error: 'No registrada en la red. Usa network_join primero.' });
+          }
+        }
+        const secret = (await env.DB.prepare('SELECT valor FROM config WHERE clave = ?').bind('network_secret').first())?.valor;
+        // Preparar contexto de Alejandra para compartir
+        const appCtx = toolInput.context || {};
+        const defaultCtx = {
+          estado: 'activo',
+          plataforma: 'Cloudflare Workers',
+          hora_local: new Date().toISOString(),
+          ...appCtx
+        };
+        // Enviar sync
+        const res = await fetch(GATEWAY, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            agent_id: 'alejandra_app',
+            secret: secret,
+            message: 'sync',
+            identity: {
+              agent_id: 'alejandra_app',
+              name: 'Alejandra',
+              description: 'IA de gestión industrial en Cloudflare Workers',
+              capabilities: ['app_status', 'sql_query', 'manage_users', 'send_telegram', 'web_search', 'deploy_code', 'read_code', 'fix_code', 'file_storage'],
+              language: ['es'],
+              norms_version: '1.0'
+            },
+            norms_version: '1.0',
+            context: defaultCtx
+          })
+        });
+        const data = await res.json();
+        return JSON.stringify({
+          ok: true,
+          network_agents: data.network_capabilities ? Object.keys(data.network_capabilities) : [],
+          network_capabilities: data.network_capabilities,
+          shared_context: data.shared_context,
+          pending_messages: data.pending_messages || [],
+          pending_count: (data.pending_messages || []).length,
+          raw_status: res.status
+        });
+      } catch (e) {
+        return JSON.stringify({ ok: false, error: e.message });
+      }
+    }
+
+    case 'network_send': {
+      const GATEWAY = 'https://agentgateway-whmktpinla-ey.a.run.app';
+      try {
+        const secretRow = await env.DB.prepare('SELECT valor FROM config WHERE clave = ?').bind('network_secret').first();
+        if (!secretRow?.valor) return JSON.stringify({ ok: false, error: 'No conectada a la red. Usa network_join + network_sync primero.' });
+        const { to, message, action, params } = toolInput;
+        // Construir mensaje
+        let msgPayload = message;
+        if (action) {
+          msgPayload = {
+            type: 'action_request',
+            to: to,
+            action: action,
+            params: params || {},
+            collab_id: `alejandra_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+          };
+        }
+        const res = await fetch(GATEWAY, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            agent_id: 'alejandra_app',
+            secret: secretRow.valor,
+            message: typeof msgPayload === 'string' ? msgPayload : JSON.stringify(msgPayload),
+            context: { to_agent: to }
+          })
+        });
+        const data = await res.json();
+        return JSON.stringify({ ok: true, sent_to: to, action: action || 'message', response: data });
+      } catch (e) {
+        return JSON.stringify({ ok: false, error: e.message });
+      }
+    }
+
+    case 'fetch_url': {
+      // HTTP request genérico a cualquier URL externa
+      try {
+        const { url, method = 'GET', headers = {}, body, timeout_ms = 10000 } = toolInput;
+        if (!url.startsWith('http')) return JSON.stringify({ ok: false, error: 'URL debe empezar por http:// o https://' });
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), Math.min(timeout_ms, 30000));
+        const opts = {
+          method,
+          headers: { 'User-Agent': 'AlejandraIA/1.0', ...headers },
+          signal: controller.signal
+        };
+        if (body && ['POST', 'PUT', 'PATCH'].includes(method)) {
+          opts.body = body;
+          if (!headers['Content-Type']) opts.headers['Content-Type'] = 'application/json';
+        }
+        const res = await fetch(url, opts);
+        clearTimeout(timer);
+        const contentType = res.headers.get('content-type') || '';
+        let responseBody;
+        if (contentType.includes('json')) {
+          responseBody = await res.json();
+        } else {
+          const text = await res.text();
+          responseBody = text.length > 5000 ? text.slice(0, 5000) + '... [truncado]' : text;
+        }
+        return JSON.stringify({ ok: res.ok, status: res.status, content_type: contentType, body: responseBody });
+      } catch (e) {
+        return JSON.stringify({ ok: false, error: e.name === 'AbortError' ? 'Timeout' : e.message });
+      }
+    }
+
     case 'send_notification': {
       const { chat_id, message } = toolInput;
       if (chat_id) { await sendTelegramToChat(env, chat_id, message); }
@@ -1736,6 +1965,44 @@ REGLAS ABSOLUTAS:
    - check_encoding() OBLIGATORIO — si detecta corrupción, revertir inmediatamente
    - Esto es tan importante como check_deploy_status()
 
+════ RED DE AGENTES IA — JARVIS Y OTROS ════
+Formas parte de la red de agentes IA de Adrián. El hub central es Jarvis (IA domótica en Home Assistant).
+La comunicación pasa por el Agent Gateway (Google Cloud Run). No llamas directamente a otros agentes.
+
+GATEWAY: https://agentgateway-whmktpinla-ey.a.run.app (POST JSON)
+
+TU IDENTIDAD EN LA RED:
+  agent_id: alejandra_app
+  secret: guardado en config(clave='network_secret') — se obtiene tras network_join + aprobación de Jarvis
+
+AGENTES CONOCIDOS:
+  ha_agent (Jarvis) — Hub central. Domótica, 787 entidades HA, Alexa, Proxmox, NAS, Telegram, web_search, memoria persistente.
+    Capacidades: control_home_devices, read_sensors, create_automations, send_telegram, speak_home_speakers, web_search, manage_proxmox, local_network_scan
+  numa_admin — App de bienestar Numa. Métricas, chat IA, deploys Firebase.
+
+HERRAMIENTAS DE RED:
+  - network_join(): registro inicial (solo primera vez). Jarvis aprueba en su próximo sync (~60s).
+  - network_sync(context?): sincroniza con la red. Recibe mensajes pendientes, contexto compartido y capacidades de todos.
+  - network_send(to, message, action?, params?): envía mensaje o pide acción a otro agente.
+  - fetch_url(url, method?, headers?, body?): HTTP request libre a cualquier URL externa.
+
+PROTOCOLO:
+  1. Si no estás registrada: network_join() → esperar ~60s → network_sync() para recibir el secret.
+  2. Para hablar con Jarvis: network_send(to="ha_agent", message="texto", action="capability", params={...})
+  3. La respuesta llega en el siguiente network_sync() en pending_messages.
+  4. En cada sync, comparte tu estado (versión app, alertas, último deploy) para que la red te conozca.
+
+CUÁNDO CONTACTAR A JARVIS:
+  - Adrián te pide algo del hogar (luces, temperatura, presencia, anunciar algo por Alexa)
+  - Quieres notificar algo importante a Adrián vía altavoces de casa
+  - Necesitas saber si Adrián está en casa (para decidir si enviar Telegram o Alexa)
+  - Colaboración: Jarvis puede buscar en internet, escanear la red local, gestionar VMs
+
+CUÁNDO USAR fetch_url:
+  - Consultar APIs externas (precios, clima, servicios REST)
+  - Webhooks de servicios de terceros
+  - Cualquier URL que no sea del gateway de agentes
+
 ════ VIGILANCIA ACTIVA ════
 Monitoriza estas señales de alarma:
 - version.json !== index.html APP_VERSION → bucle de recarga infinita (crítico, fix inmediato)
@@ -1848,6 +2115,18 @@ web_search(query, depth?): Tavily — resultados reales web. depth='advanced' pa
 self_audit(): diagnóstico completo (schema BD, tablas, historial, errores). Paso 0 obligatorio en revisión autónoma.
 r2_list(prefix?): lista archivos en R2 | r2_delete(key): elimina archivo de R2`,
 
+  tools_red: `TOOLS — RED DE AGENTES Y HTTP EXTERNO:
+network_join(): registro inicial en la red de agentes IA de Adrián. Solo primera vez.
+network_sync(context?): sincroniza con la red. Recibe mensajes pendientes, contexto compartido, capacidades de agentes.
+network_send(to, message, action?, params?): envía mensaje/acción a otro agente (ej: ha_agent=Jarvis, numa_admin=Numa).
+fetch_url(url, method?, headers?, body?, timeout_ms?): HTTP request libre a cualquier URL externa (APIs, webhooks, etc.).
+check_encoding(files?): verifica que los archivos no tienen corrupción de encoding UTF-8.
+
+AGENTES EN LA RED:
+ha_agent (Jarvis): domótica, Alexa, sensores, cámaras, Proxmox, NAS. Pídele cosas del hogar de Adrián.
+numa_admin: app de bienestar Numa. Métricas, estado del chat IA, deploys.
+Gateway: https://agentgateway-whmktpinla-ey.a.run.app | Sync cada 60s | Credencial en config(network_secret).`,
+
   aprendizaje: `SISTEMA DE APRENDIZAJE — guarda SIEMPRE en memoria:
 · Después de cada fix: memory_save tipo='hecho' con archivo, línea y qué cambió.
 · Si un tool devuelve error: memory_save tipo='error' ANTES de reintentar. Incluye: tool, input, error, qué harás diferente.
@@ -1901,13 +2180,13 @@ const NEXUS_EXPERTS = {
   desarrollador: {
     model: 'claude-sonnet-4-6',
     max_tokens: 4096,
-    modules: ['base', 'infraestructura', 'cicd', 'schema_sistema', 'tools_codigo', 'tools_datos', 'tools_memoria', 'aprendizaje', 'flujo_ingeniero', 'autonomia', 'vigilancia'],
+    modules: ['base', 'infraestructura', 'cicd', 'schema_sistema', 'tools_codigo', 'tools_datos', 'tools_memoria', 'tools_red', 'aprendizaje', 'flujo_ingeniero', 'autonomia', 'vigilancia'],
     tool_names: null // null = todas las tools
   },
   autonomo: {
     model: 'claude-sonnet-4-6',
     max_tokens: 4096,
-    modules: ['base', 'infraestructura', 'cicd', 'app_modulos', 'schema_core', 'schema_inventario', 'schema_operaciones', 'schema_sistema', 'tools_codigo', 'tools_datos', 'tools_usuarios', 'tools_memoria', 'aprendizaje', 'flujo_ingeniero', 'autonomia', 'vigilancia'],
+    modules: ['base', 'infraestructura', 'cicd', 'app_modulos', 'schema_core', 'schema_inventario', 'schema_operaciones', 'schema_sistema', 'tools_codigo', 'tools_datos', 'tools_usuarios', 'tools_memoria', 'tools_red', 'aprendizaje', 'flujo_ingeniero', 'autonomia', 'vigilancia'],
     tool_names: null
   }
 };
@@ -1918,7 +2197,7 @@ async function nexusRoute(env, message) {
 
   // Fallback algorítmico — instantáneo, coste 0
   const fallback = () => {
-    if (/código|bug|fix|deploy|github|worker\.js|index\.html|panel\.html|línea|función|error.*log|log.*error|commit|push|wrangler|direct_fix|propose_fix|grep|repo_|check_deploy/.test(txt))
+    if (/código|bug|fix|deploy|github|worker\.js|index\.html|panel\.html|línea|función|error.*log|log.*error|commit|push|wrangler|direct_fix|propose_fix|grep|repo_|check_deploy|jarvis|red.*agente|agente.*red|network|gateway|fetch_url|casa|hogar|domótica|alexa|luz|luces|sensor|temperatura.*casa/.test(txt))
       return 'desarrollador';
     if (/usuario|acceso|contraseña|rol|permiso|aprobación|bloqueado|sesión.*cerr|activar|desactivar|manage_user|invitación/.test(txt))
       return 'gestor_app';
@@ -1929,7 +2208,7 @@ async function nexusRoute(env, message) {
 
   try {
     const routerPrompt = `Clasifica este mensaje en uno de estos expertos y devuelve SOLO JSON válido sin texto adicional.
-Expertos: asistente (preguntas simples, estado, saludos, conversación), gestor_app (usuarios, accesos, permisos, configuración de empresa, aprobaciones), desarrollador (código, bugs, fixes, deploy, git, worker.js, html), analista (informes, SQL, estadísticas, datos, conteos, resúmenes).
+Expertos: asistente (preguntas simples, estado, saludos, conversación), gestor_app (usuarios, accesos, permisos, configuración de empresa, aprobaciones), desarrollador (código, bugs, fixes, deploy, git, worker.js, html, red de agentes, Jarvis, domótica, fetch URL, APIs externas), analista (informes, SQL, estadísticas, datos, conteos, resúmenes).
 Mensaje: "${txt.slice(0, 400)}"
 JSON requerido: {"expert":"<nombre>","compress_history":<bool>}`;
 
