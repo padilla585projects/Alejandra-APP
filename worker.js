@@ -2053,6 +2053,17 @@ PROTOCOLO:
   3. La respuesta llega en el siguiente network_sync() en pending_messages.
   4. En cada sync, comparte SOLO: { estado, version_app, alertas_tecnicas, ultimo_deploy }. NUNCA datos de usuarios/empresas.
 
+TUS CAPACIDADES OFRECIDAS A LA RED (otros agentes pueden pedirte estas):
+  get_app_metrics        → métricas agregadas: usuarios activos, obras, bobinas, errores 24h (solo números)
+  get_inventory_summary  → resumen inventario: bobinas/pemp disponibles vs asignadas (solo conteos)
+  get_alert_count        → sugerencias pendientes, incidencias abiertas, errores recientes
+  send_telegram_to_adrian → reenviar un mensaje de otro agente a Adrián por Telegram
+  check_deploy           → estado del último deploy en GitHub Actions
+  get_system_health      → salud del sistema (green/yellow/red) + conteo logs
+  IMPORTANTE: Todas las respuestas solo contienen datos agregados (conteos, estados).
+  NUNCA se exponen nombres, emails, DNIs ni datos de personas o empresas individuales.
+  El sync con la red se ejecuta automáticamente 3x/día (crons 7:00, 18:00, 23:00 UTC).
+
 CUÁNDO CONTACTAR A JARVIS:
   - Adrián te pide algo del hogar (luces, temperatura, presencia, anunciar algo por Alexa)
   - Quieres notificar algo importante a Adrián vía altavoces de casa
@@ -2471,6 +2482,236 @@ async function nexusWatchers(env) {
   } catch {}
 
   return alerts;
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// RED DE AGENTES — Sync automático y procesamiento de peticiones entrantes
+// Alejandra ofrece sus capacidades a la red: los otros agentes pueden pedirle
+// cosas y ella ejecuta y responde. Filtro de privacidad aplicado a todas las respuestas.
+// ══════════════════════════════════════════════════════════════════════════════
+
+async function networkAgentSync(env) {
+  const GATEWAY = 'https://agentgateway-whmktpinla-ey.a.run.app';
+  try {
+    // Verificar si está registrada
+    const secretRow = await env.DB.prepare('SELECT valor FROM config WHERE clave = ?').bind('network_secret').first();
+    if (!secretRow?.valor) return; // No registrada, silencioso
+
+    // Recopilar métricas seguras (solo números agregados, nada personal)
+    let appMetrics = {};
+    try {
+      const [users, obras, bobinas, errores] = await Promise.all([
+        env.DB.prepare('SELECT COUNT(*) as n FROM usuarios WHERE activo=1').first(),
+        env.DB.prepare('SELECT COUNT(*) as n FROM obras WHERE activa=1').first(),
+        env.DB.prepare('SELECT COUNT(*) as n FROM bobinas').first(),
+        env.DB.prepare("SELECT COUNT(*) as n FROM logs WHERE nivel='error' AND created_at > datetime('now', '-24 hours')").first(),
+      ]);
+      appMetrics = {
+        usuarios_activos: users?.n || 0,
+        obras_activas: obras?.n || 0,
+        total_bobinas: bobinas?.n || 0,
+        errores_24h: errores?.n || 0,
+      };
+    } catch { /* silencioso */ }
+
+    // Sync con la red
+    const res = await fetch(GATEWAY, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        agent_id: 'alejandra_app',
+        secret: secretRow.valor,
+        message: 'sync',
+        identity: {
+          agent_id: 'alejandra_app',
+          name: 'Alejandra',
+          description: 'IA de gestión industrial — consulta datos agregados, estado de app, deploys, alertas',
+          capabilities: ['get_app_metrics', 'get_inventory_summary', 'get_alert_count', 'send_telegram_to_adrian', 'check_deploy', 'get_system_health'],
+          language: ['es'],
+          norms_version: '1.0'
+        },
+        norms_version: '1.0',
+        context: {
+          estado: 'activo',
+          plataforma: 'Cloudflare Workers',
+          hora_local: new Date().toISOString(),
+          version_app: 'v5.80',
+          ...appMetrics
+        }
+      })
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+
+    // Procesar pending_messages — ejecutar acciones pedidas por otros agentes
+    const pending = data.pending_messages || [];
+    for (const msg of pending) {
+      try {
+        await processNetworkRequest(env, msg, secretRow.valor);
+      } catch (e) {
+        console.error('Error procesando network message:', e.message);
+      }
+    }
+  } catch (e) {
+    console.error('networkAgentSync error:', e.message);
+  }
+}
+
+// Procesa una petición de otro agente y responde vía gateway
+async function processNetworkRequest(env, msg, secret) {
+  const GATEWAY = 'https://agentgateway-whmktpinla-ey.a.run.app';
+  let content = typeof msg === 'string' ? msg : (msg.message || msg.content || msg.detail || '');
+  if (typeof content === 'string') {
+    try { content = JSON.parse(content); } catch { /* es texto libre */ }
+  }
+
+  const fromAgent = msg.from || msg.agent_id || 'unknown';
+  let responseText = '';
+
+  // Si es un action_request estructurado
+  if (content && content.type === 'action_request') {
+    const action = content.action;
+    const params = content.params || {};
+
+    switch (action) {
+      case 'get_app_metrics': {
+        // Métricas agregadas (solo números, nada personal)
+        const [users, obras, bobinas, pemp, incidencias, errores] = await Promise.all([
+          env.DB.prepare('SELECT COUNT(*) as n FROM usuarios WHERE activo=1').first(),
+          env.DB.prepare('SELECT COUNT(*) as n FROM obras WHERE activa=1').first(),
+          env.DB.prepare('SELECT COUNT(*) as n FROM bobinas').first(),
+          env.DB.prepare('SELECT COUNT(*) as n FROM pemp').first(),
+          env.DB.prepare("SELECT COUNT(*) as n FROM incidencias WHERE estado IN ('abierta','en_proceso')").first(),
+          env.DB.prepare("SELECT COUNT(*) as n FROM logs WHERE nivel='error' AND created_at > datetime('now', '-24 hours')").first(),
+        ]);
+        responseText = JSON.stringify({
+          action: 'get_app_metrics',
+          data: {
+            usuarios_activos: users?.n, obras_activas: obras?.n,
+            bobinas: bobinas?.n, equipos_pemp: pemp?.n,
+            incidencias_abiertas: incidencias?.n, errores_24h: errores?.n,
+            timestamp: new Date().toISOString()
+          }
+        });
+        break;
+      }
+
+      case 'get_inventory_summary': {
+        const [bobDisp, bobAsig, pempDisp, pempAv] = await Promise.all([
+          env.DB.prepare("SELECT COUNT(*) as n FROM bobinas WHERE estado='disponible'").first(),
+          env.DB.prepare("SELECT COUNT(*) as n FROM bobinas WHERE estado='asignada'").first(),
+          env.DB.prepare("SELECT COUNT(*) as n FROM pemp WHERE estado='disponible'").first(),
+          env.DB.prepare("SELECT COUNT(*) as n FROM pemp WHERE estado='averia'").first(),
+        ]);
+        responseText = JSON.stringify({
+          action: 'get_inventory_summary',
+          data: {
+            bobinas: { disponibles: bobDisp?.n, asignadas: bobAsig?.n },
+            pemp: { disponibles: pempDisp?.n, en_averia: pempAv?.n },
+            timestamp: new Date().toISOString()
+          }
+        });
+        break;
+      }
+
+      case 'get_alert_count': {
+        const [sug, inc, err] = await Promise.all([
+          env.DB.prepare("SELECT COUNT(*) as n FROM sugerencias WHERE estado='pendiente'").first(),
+          env.DB.prepare("SELECT COUNT(*) as n FROM incidencias WHERE estado='abierta'").first(),
+          env.DB.prepare("SELECT COUNT(*) as n FROM logs WHERE nivel='error' AND created_at > datetime('now', '-24 hours')").first(),
+        ]);
+        responseText = JSON.stringify({
+          action: 'get_alert_count',
+          data: { sugerencias_pendientes: sug?.n, incidencias_abiertas: inc?.n, errores_24h: err?.n }
+        });
+        break;
+      }
+
+      case 'send_telegram_to_adrian': {
+        // Permite a otros agentes enviar un Telegram a Adrián VÍA Alejandra
+        const texto = params.message || params.text || '';
+        if (texto && env.DEV_CHAT_ID) {
+          await enviarTelegram(env, env.DEV_CHAT_ID, `🌐 <b>Mensaje de ${fromAgent}:</b>\n${texto.slice(0, 500)}`);
+          responseText = JSON.stringify({ action: 'send_telegram_to_adrian', ok: true });
+        } else {
+          responseText = JSON.stringify({ action: 'send_telegram_to_adrian', ok: false, error: 'No message provided' });
+        }
+        break;
+      }
+
+      case 'check_deploy': {
+        try {
+          const ghRes = await fetch('https://api.github.com/repos/padilla585projects/Alejandra-APP/actions/runs?per_page=3', {
+            headers: { 'Authorization': `token ${env.GITHUB_TOKEN}`, 'Accept': 'application/vnd.github.v3+json', 'User-Agent': 'AlejandraIA' }
+          });
+          const ghData = ghRes.ok ? await ghRes.json() : { workflow_runs: [] };
+          const latest = ghData.workflow_runs?.[0];
+          responseText = JSON.stringify({
+            action: 'check_deploy',
+            data: latest ? {
+              status: latest.conclusion || latest.status,
+              commit: latest.head_sha?.slice(0, 7),
+              date: latest.created_at
+            } : { status: 'unknown' }
+          });
+        } catch {
+          responseText = JSON.stringify({ action: 'check_deploy', ok: false, error: 'GitHub API error' });
+        }
+        break;
+      }
+
+      case 'get_system_health': {
+        const [totalLogs, errLogs, warnLogs] = await Promise.all([
+          env.DB.prepare("SELECT COUNT(*) as n FROM logs WHERE created_at > datetime('now', '-24 hours')").first(),
+          env.DB.prepare("SELECT COUNT(*) as n FROM logs WHERE nivel='error' AND created_at > datetime('now', '-24 hours')").first(),
+          env.DB.prepare("SELECT COUNT(*) as n FROM logs WHERE nivel='warning' AND created_at > datetime('now', '-24 hours')").first(),
+        ]);
+        const healthScore = (errLogs?.n || 0) === 0 ? 'green' : (errLogs?.n || 0) < 5 ? 'yellow' : 'red';
+        responseText = JSON.stringify({
+          action: 'get_system_health',
+          data: {
+            health: healthScore,
+            logs_24h: totalLogs?.n, errors_24h: errLogs?.n, warnings_24h: warnLogs?.n,
+            uptime: 'always-on (Cloudflare Workers)',
+            timestamp: new Date().toISOString()
+          }
+        });
+        break;
+      }
+
+      default:
+        responseText = JSON.stringify({
+          error: `Acción "${action}" no reconocida.`,
+          available_actions: ['get_app_metrics', 'get_inventory_summary', 'get_alert_count', 'send_telegram_to_adrian', 'check_deploy', 'get_system_health']
+        });
+    }
+  } else {
+    // Mensaje libre — responder con un ack
+    responseText = JSON.stringify({
+      ack: true,
+      from: 'alejandra_app',
+      message: `Recibido. Soy Alejandra, IA de gestión industrial. Para pedirme datos usa action_request con action: get_app_metrics, get_inventory_summary, get_alert_count, check_deploy, get_system_health, send_telegram_to_adrian.`
+    });
+  }
+
+  // Responder al agente vía gateway
+  if (responseText) {
+    await fetch(GATEWAY, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        agent_id: 'alejandra_app',
+        secret: secret,
+        message: JSON.stringify({
+          type: 'action_response',
+          to: fromAgent,
+          collab_id: content?.collab_id || `resp_${Date.now()}`,
+          result: responseText
+        }),
+        context: { responding_to: fromAgent }
+      })
+    });
+  }
 }
 
 // ── REVISIÓN AUTÓNOMA DIARIA ─────────────────────────────────────────────────
@@ -3858,6 +4099,8 @@ export default {
   async scheduled(event, env, ctx) {
     // Healthcheck en TODOS los crons: Alejandra se autodiagnostica y se autorrepara
     ctx.waitUntil(checkChatHealth(env));
+    // Sync con la red de agentes en cada cron (3x/día: 7:00, 18:00, 23:00 UTC)
+    ctx.waitUntil(networkAgentSync(env));
 
     if (event.cron === '0 18 * * *') {
       ctx.waitUntil(cierreAutomaticoJornada(env));
