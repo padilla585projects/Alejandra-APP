@@ -6,10 +6,54 @@
 ## ESTADO ACTUAL
 
 **Sesión:** LIBRE
-**Última sesión:** 12/05/2026
-**Versión tras última sesión:** v5.77 (Alejandra autonomía Nivel B + CI/CD auto-deploy)
-**Worker desplegado:** b44c8a24 ✅
-**GitHub:** en sync ✅ (commit 6afdeb0)
+**Última sesión:** 13/05/2026
+**Versión tras última sesión:** v5.82 (Inteligencia mejorada — analyze_trends, dailyPulse, watchers predictivos, patrol_logs mejorado)
+**Worker desplegado:** 3cf7fb2f ✅
+**GitHub:** en sync ✅ (commit 620a084)
+
+---
+
+## RESUMEN SESIÓN 13/05/2026 — v5.78→v5.82 (Red de agentes + Inteligencia mejorada)
+
+### Qué se hizo:
+
+**v5.78→v5.81 — Red de agentes IA:**
+- NEXUS base module: Alejandra ahora sabe que pertenece a la red de agentes (Jarvis, Numa) en TODOS los expertos
+- processNetworkRequest reescrito: cumple las 10 normas NETWORK_NORMS v1.0 (transparencia, trazabilidad, confirmación, cooperación)
+- Bug fix: `enviarTelegram` (inexistente) → `sendTelegramToChat` (correcto)
+- networkAgentSync con notificación Telegram al recibir mensajes pendientes
+- Router NEXUS ampliado: patrones de red/agentes/Jarvis/Numa capturados
+- Asistente expert: ahora tiene tools network_sync y network_send
+
+**v5.82 — Inteligencia mejorada (4 mejoras):**
+1. **Nueva tool `analyze_trends`**: análisis temporal comparativo (fichajes, incidencias, errores, usuarios, bobinas) con detección automática de anomalías. Periodos: día/semana/mes.
+2. **`dailyPulse`**: pulso matutino automático (cron 7:00 UTC) — Telegram con KPIs comparados vs ayer + detección de anomalías. Coste 0 (solo queries D1).
+3. **3 watchers predictivos nuevos**: ErrorVelocity (mismo error 2+ veces/1h), DeployCorrelation (errores post-deploy <6h), Security (fuerza bruta 10+ intentos/30min).
+4. **`patrol_logs` mejorado**: análisis de seguridad (logins fallidos, rutas 403, sesiones sospechosas de usuarios inactivos) + correlación con último deploy.
+
+**Infraestructura:**
+- Node.js portable instalado en `D:\Descargas\node\node-v22.16.0-win-x64`
+- Wrangler autenticado via OAuth (login manual — CI/CD sigue roto)
+- Deploy manual: `$env:PATH = "D:\Descargas\node\node-v22.16.0-win-x64;$env:PATH"; cmd /c "npx wrangler deploy"`
+
+**Red de agentes — PARCIALMENTE FUNCIONAL:**
+- Alejandra envió join_requests al gateway (IDs: afd7dcbe75d3fabe, c5a418b449e1b8f8)
+- Jarvis no ve las requests pendientes — problema en el gateway o en el sync de Jarvis
+- Se generó un prompt detallado para Jarvis para arreglar el flujo de aprobación
+- Secret manual insertado en D1 (`network_secret`) pero gateway lo rechaza (HTTP 403)
+- **Pendiente**: que Jarvis apruebe la request o que se arregle el gateway
+
+### Estado final:
+- Worker: 3cf7fb2f ✅
+- GitHub: en sync ✅ (commit 620a084)
+- Versión: v5.82
+- CI/CD: ⚠️ ROTO (GitHub Actions falla, deploy manual funciona)
+
+### Pendiente para próxima sesión:
+1. **Red de agentes**: Jarvis debe aprobar join_request. Si no funciona, revisar gateway con Jarvis (dar prompt al chat de Jarvis).
+2. **CI/CD**: Arreglar GitHub Secrets (CLOUDFLARE_API_TOKEN probablemente expirado). Alternativa: eliminar workflow y seguir con deploy manual.
+3. **Encoding incidente**: `panel.html` y `worker.js` se corrompieron durante esta sesión (13/05/2026). Restaurados desde git. Ver sección CODIFICACIÓN en CLAUDE.md.
+4. **Mejoras Alejandra opcionales**: sistema de caché de decisiones, auto-documentación de aprendizajes, contexto compartido con Jarvis cuando la red funcione.
 
 ---
 
