@@ -658,13 +658,27 @@ const AI_TOOLS = [
   },
   {
     name: 'patrol_logs',
-    description: 'Patrulla los logs de las últimas N horas buscando errores recurrentes, patrones sospechosos y anomalías. Agrupa errores por mensaje, identifica los que se repiten 3+ veces y devuelve un informe estructurado con severidad.',
+    description: 'Patrulla los logs de las últimas N horas buscando errores recurrentes, patrones sospechosos, anomalías de seguridad (logins fallidos, 403 repetidos, sesiones sospechosas) y correlación con deploys recientes. Agrupa errores por mensaje, identifica los que se repiten 3+ veces y devuelve un informe estructurado con severidad.',
     input_schema: {
       type: 'object',
       properties: {
         hours: { type: 'integer', description: 'Horas hacia atrás a analizar (default: 24, max: 168)' },
-        min_occurrences: { type: 'integer', description: 'Mínimo de ocurrencias para reportar un patrón (default: 3)' }
+        min_occurrences: { type: 'integer', description: 'Mínimo de ocurrencias para reportar un patrón (default: 3)' },
+        include_security: { type: 'boolean', description: 'Incluir análisis de seguridad: logins fallidos, 403s, sesiones inactivas con tokens (default: true)' }
       }
+    }
+  },
+  {
+    name: 'analyze_trends',
+    description: 'Análisis temporal de tendencias de la app. Compara datos entre periodos (hoy vs ayer, esta semana vs anterior, este mes vs anterior) para fichajes, incidencias, errores, usuarios activos y bobinas. Detecta anomalías y cambios significativos automáticamente.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        metric: { type: 'string', enum: ['fichajes', 'incidencias', 'errores', 'usuarios', 'bobinas', 'todo'], description: 'Métrica a analizar (o "todo" para panorama completo)' },
+        periodo: { type: 'string', enum: ['dia', 'semana', 'mes'], description: 'Granularidad de comparación (default: dia)' },
+        empresa_id: { type: 'integer', description: 'Filtrar por empresa (opcional, si no se indica analiza todas)' }
+      },
+      required: ['metric']
     }
   }
 ];
@@ -1638,6 +1652,57 @@ async function executeAITool(env, toolName, toolInput) {
           .slice(0, 5)
           .map(g => ({ mensaje: g.mensaje?.slice(0, 200), ocurrencias: g.count }));
 
+        // ── Análisis de seguridad (nuevo) ──
+        let security = null;
+        if (toolInput.include_security !== false) {
+          security = { logins_fallidos: [], rutas_403: [], sesiones_sospechosas: [] };
+          try {
+            const failedLogins = await env.DB.prepare(
+              `SELECT email, COUNT(*) as n, MAX(created_at) as ultimo FROM login_attempts WHERE success=0 AND created_at > datetime('now', '-${hours} hours') GROUP BY email HAVING n >= 3 ORDER BY n DESC LIMIT 10`
+            ).all();
+            security.logins_fallidos = (failedLogins.results || []).map(r => ({ email: r.email, intentos: r.n, ultimo: r.ultimo }));
+          } catch {}
+          try {
+            const forbidden = rows.filter(l => (l.mensaje || '').includes('403') || (l.ruta || '').includes('403'));
+            const forbiddenByRoute = {};
+            for (const f of forbidden) {
+              const key = f.ruta || f.mensaje?.slice(0, 80) || 'desconocida';
+              if (!forbiddenByRoute[key]) forbiddenByRoute[key] = { ruta: key, count: 0, usuarios: new Set() };
+              forbiddenByRoute[key].count++;
+              if (f.usuario) forbiddenByRoute[key].usuarios.add(f.usuario);
+            }
+            security.rutas_403 = Object.values(forbiddenByRoute)
+              .filter(r => r.count >= 2)
+              .sort((a, b) => b.count - a.count)
+              .slice(0, 5)
+              .map(r => ({ ruta: r.ruta, hits: r.count, usuarios: [...r.usuarios].slice(0, 5) }));
+          } catch {}
+          try {
+            const staleSessions = await env.DB.prepare(
+              "SELECT s.nombre, s.rol, s.last_used, u.activo FROM sesiones s LEFT JOIN usuarios u ON s.usuario_id=u.id WHERE s.expires_at > datetime('now') AND (u.activo=0 OR s.last_used < datetime('now', '-7 days')) LIMIT 10"
+            ).all();
+            security.sesiones_sospechosas = (staleSessions.results || []).map(s => ({ nombre: s.nombre, rol: s.rol, last_used: s.last_used, usuario_inactivo: s.activo === 0 }));
+          } catch {}
+        }
+
+        // ── Correlación con deploys recientes ──
+        let deployCorrelation = null;
+        try {
+          const recentDeploy = await env.DB.prepare(
+            "SELECT mensaje, created_at FROM logs WHERE origen='deploy' OR mensaje LIKE '%deploy%' ORDER BY created_at DESC LIMIT 1"
+          ).first();
+          if (recentDeploy) {
+            const errorsAfterDeploy = await env.DB.prepare(
+              "SELECT COUNT(*) as n FROM logs WHERE nivel='error' AND created_at > ?"
+            ).bind(recentDeploy.created_at).first();
+            deployCorrelation = {
+              ultimo_deploy: recentDeploy.created_at,
+              mensaje: recentDeploy.mensaje?.slice(0, 100),
+              errores_post_deploy: errorsAfterDeploy?.n || 0
+            };
+          }
+        } catch {}
+
         return JSON.stringify({
           ok: true,
           periodo: `Últimas ${hours}h`,
@@ -1645,9 +1710,159 @@ async function executeAITool(env, toolName, toolInput) {
           resumen: { errors: totalErrors, warnings: totalWarnings, info: totalInfo },
           patrones_error: recurrentes,
           patrones_warning: warningsRecurrentes,
+          security,
+          deploy_correlation: deployCorrelation,
           salud: recurrentes.length === 0
             ? `✅ Sin errores recurrentes en las últimas ${hours}h`
             : `⚠️ ${recurrentes.length} patrón(es) de error recurrente detectado(s)`
+        });
+      } catch (e) { return JSON.stringify({ ok: false, error: e.message }); }
+    }
+
+    // ── analyze_trends — análisis temporal de tendencias ──────────────────────
+    case 'analyze_trends': {
+      const metric = toolInput.metric || 'todo';
+      const periodo = toolInput.periodo || 'dia';
+      const empFilter = toolInput.empresa_id ? `AND empresa_id=${parseInt(toolInput.empresa_id)}` : '';
+      const trends = {};
+
+      // Definir rangos según periodo
+      let current, previous;
+      if (periodo === 'dia') {
+        current = "datetime('now', '-24 hours')";
+        previous = "datetime('now', '-48 hours')";
+      } else if (periodo === 'semana') {
+        current = "datetime('now', '-7 days')";
+        previous = "datetime('now', '-14 days')";
+      } else {
+        current = "datetime('now', '-30 days')";
+        previous = "datetime('now', '-60 days')";
+      }
+      const prevEnd = current; // el periodo anterior termina donde empieza el actual
+
+      try {
+        const queries = {};
+
+        if (metric === 'fichajes' || metric === 'todo') {
+          queries.fichajes = Promise.all([
+            env.DB.prepare(`SELECT COUNT(*) as n, AVG(CASE WHEN hora_salida IS NOT NULL THEN (julianday(hora_salida)-julianday(hora_entrada))*24 END) as avg_horas FROM fichajes WHERE created_at > ${current} ${empFilter}`).first(),
+            env.DB.prepare(`SELECT COUNT(*) as n, AVG(CASE WHEN hora_salida IS NOT NULL THEN (julianday(hora_salida)-julianday(hora_entrada))*24 END) as avg_horas FROM fichajes WHERE created_at > ${previous} AND created_at <= ${prevEnd} ${empFilter}`).first(),
+            env.DB.prepare(`SELECT COUNT(*) as n FROM fichajes WHERE minutos_retraso > 0 AND created_at > ${current} ${empFilter}`).first(),
+          ]).catch(() => [null, null, null]);
+        }
+
+        if (metric === 'incidencias' || metric === 'todo') {
+          queries.incidencias = Promise.all([
+            env.DB.prepare(`SELECT COUNT(*) as n, SUM(CASE WHEN estado='abierta' THEN 1 ELSE 0 END) as abiertas FROM incidencias WHERE created_at > ${current} ${empFilter}`).first(),
+            env.DB.prepare(`SELECT COUNT(*) as n FROM incidencias WHERE created_at > ${previous} AND created_at <= ${prevEnd} ${empFilter}`).first(),
+          ]).catch(() => [null, null]);
+        }
+
+        if (metric === 'errores' || metric === 'todo') {
+          queries.errores = Promise.all([
+            env.DB.prepare(`SELECT COUNT(*) as n FROM logs WHERE nivel='error' AND created_at > ${current}`).first(),
+            env.DB.prepare(`SELECT COUNT(*) as n FROM logs WHERE nivel='error' AND created_at > ${previous} AND created_at <= ${prevEnd}`).first(),
+            env.DB.prepare(`SELECT mensaje, COUNT(*) as n FROM logs WHERE nivel='error' AND created_at > ${current} GROUP BY mensaje ORDER BY n DESC LIMIT 3`).all(),
+          ]).catch(() => [null, null, { results: [] }]);
+        }
+
+        if (metric === 'usuarios' || metric === 'todo') {
+          queries.usuarios = Promise.all([
+            env.DB.prepare(`SELECT COUNT(DISTINCT usuario_id) as n FROM sesiones WHERE last_used > ${current}`).first(),
+            env.DB.prepare(`SELECT COUNT(DISTINCT usuario_id) as n FROM sesiones WHERE last_used > ${previous} AND last_used <= ${prevEnd}`).first(),
+            env.DB.prepare(`SELECT COUNT(*) as n FROM usuarios WHERE activo=1 ${empFilter}`).first(),
+          ]).catch(() => [null, null, null]);
+        }
+
+        if (metric === 'bobinas' || metric === 'todo') {
+          queries.bobinas = Promise.all([
+            env.DB.prepare(`SELECT COUNT(*) as total, SUM(CASE WHEN estado='disponible' THEN 1 ELSE 0 END) as disponibles, SUM(CASE WHEN estado='asignada' THEN 1 ELSE 0 END) as asignadas FROM bobinas ${empFilter ? 'WHERE 1=1 ' + empFilter : ''}`).first(),
+            env.DB.prepare(`SELECT COUNT(*) as n FROM bobinas WHERE created_at > ${current} ${empFilter}`).first(),
+          ]).catch(() => [null, null]);
+        }
+
+        // Ejecutar todas las queries en paralelo
+        const keys = Object.keys(queries);
+        const results = await Promise.all(Object.values(queries));
+
+        const calcDelta = (curr, prev) => {
+          if (!curr || !prev || prev === 0) return null;
+          return Math.round(((curr - prev) / prev) * 100);
+        };
+
+        for (let i = 0; i < keys.length; i++) {
+          const key = keys[i];
+          const data = results[i];
+          if (!data) continue;
+
+          if (key === 'fichajes' && data[0] && data[1]) {
+            const delta = calcDelta(data[0].n, data[1].n);
+            trends.fichajes = {
+              actual: data[0].n || 0,
+              anterior: data[1].n || 0,
+              variacion_pct: delta,
+              tendencia: delta > 10 ? '📈 subiendo' : delta < -10 ? '📉 bajando' : '➡️ estable',
+              horas_promedio: data[0].avg_horas ? Math.round(data[0].avg_horas * 10) / 10 : null,
+              retrasos_periodo: data[2]?.n || 0
+            };
+          }
+          if (key === 'incidencias' && data[0] && data[1]) {
+            const delta = calcDelta(data[0].n, data[1].n);
+            trends.incidencias = {
+              nuevas_actual: data[0].n || 0,
+              nuevas_anterior: data[1].n || 0,
+              abiertas_ahora: data[0].abiertas || 0,
+              variacion_pct: delta,
+              tendencia: delta > 20 ? '🔴 incremento significativo' : delta < -20 ? '🟢 mejorando' : '🟡 estable'
+            };
+          }
+          if (key === 'errores' && data[0] && data[1]) {
+            const delta = calcDelta(data[0].n, data[1].n);
+            trends.errores = {
+              actual: data[0].n || 0,
+              anterior: data[1].n || 0,
+              variacion_pct: delta,
+              tendencia: delta > 30 ? '🔴 ALERTA — errores creciendo' : delta < -20 ? '🟢 mejorando' : '🟡 estable',
+              top_errores: (data[2]?.results || []).map(e => ({ mensaje: e.mensaje?.slice(0, 120), count: e.n }))
+            };
+          }
+          if (key === 'usuarios' && data[0] && data[1]) {
+            const delta = calcDelta(data[0].n, data[1].n);
+            trends.usuarios = {
+              activos_periodo: data[0].n || 0,
+              activos_anterior: data[1].n || 0,
+              variacion_pct: delta,
+              total_registrados: data[2]?.n || 0,
+              tendencia: delta > 15 ? '📈 más actividad' : delta < -15 ? '📉 menos actividad' : '➡️ estable'
+            };
+          }
+          if (key === 'bobinas') {
+            trends.bobinas = {
+              total: data[0]?.total || 0,
+              disponibles: data[0]?.disponibles || 0,
+              asignadas: data[0]?.asignadas || 0,
+              nuevas_periodo: data[1]?.n || 0,
+              ratio_uso: data[0]?.total ? Math.round((data[0]?.asignadas / data[0]?.total) * 100) : 0
+            };
+          }
+        }
+
+        // Detectar anomalías automáticas
+        const anomalias = [];
+        if (trends.errores?.variacion_pct > 50) anomalias.push(`🔴 Errores han subido ${trends.errores.variacion_pct}% vs periodo anterior`);
+        if (trends.fichajes?.variacion_pct < -30) anomalias.push(`⚠️ Fichajes bajaron ${Math.abs(trends.fichajes.variacion_pct)}% — posible problema o día festivo`);
+        if (trends.incidencias?.abiertas_ahora > 10) anomalias.push(`⚠️ ${trends.incidencias.abiertas_ahora} incidencias abiertas — revisar prioridades`);
+        if (trends.usuarios?.variacion_pct < -40) anomalias.push(`⚠️ Actividad de usuarios bajó ${Math.abs(trends.usuarios.variacion_pct)}%`);
+        if (trends.bobinas?.ratio_uso > 90) anomalias.push(`⚠️ ${trends.bobinas.ratio_uso}% de bobinas asignadas — stock bajo`);
+
+        return JSON.stringify({
+          ok: true,
+          periodo,
+          metricas: trends,
+          anomalias,
+          resumen: anomalias.length === 0
+            ? `✅ Sin anomalías detectadas en el periodo ${periodo}`
+            : `⚠️ ${anomalias.length} anomalía(s) detectada(s)`
         });
       } catch (e) { return JSON.stringify({ ok: false, error: e.message }); }
     }
@@ -2179,7 +2394,8 @@ Incidencias · Chat de equipo · Partes de trabajo · Galería fotos · Repostaj
 sql_query(sql): SQL libre (SELECT/INSERT/UPDATE/DELETE/CREATE/ALTER/DROP)
 list_tables(): conteo de registros en todas las tablas
 app_status(): resumen ejecutivo (usuarios activos, sesiones, obras, errores 24h, sugerencias pendientes)
-run_migration(sql, descripcion?): DDL en D1 (CREATE TABLE IF NOT EXISTS, ALTER TABLE)`,
+run_migration(sql, descripcion?): DDL en D1 (CREATE TABLE IF NOT EXISTS, ALTER TABLE)
+analyze_trends(metric, periodo?, empresa_id?): análisis temporal comparativo (hoy vs ayer, semana vs anterior). Métricas: fichajes, incidencias, errores, usuarios, bobinas, todo. Detecta anomalías automáticamente.`,
 
   tools_usuarios: `TOOLS — USUARIOS Y COMUNICACIÓN:
 manage_user(action, user_id, value): activate|deactivate|change_role|delete|reset_password|info
@@ -2504,6 +2720,45 @@ async function nexusWatchers(env) {
     }
   } catch {}
 
+  // 6. ErrorVelocityWatcher — mismo error 2+ veces en 1h (detección rápida)
+  try {
+    const fastErrors = await env.DB.prepare(
+      "SELECT mensaje, COUNT(*) as n FROM logs WHERE nivel='error' AND created_at > datetime('now','-1 hour') GROUP BY mensaje HAVING n >= 2 ORDER BY n DESC LIMIT 5"
+    ).all();
+    for (const e of (fastErrors.results || [])) {
+      alerts.push({ watcher: 'ErrorVelocity', severity: e.n >= 5 ? 'CRITICAL' : 'HIGH', msg: `Error rápido (${e.n}x/1h): ${e.mensaje?.slice(0, 120)}` });
+    }
+  } catch {}
+
+  // 7. DeployCorrelationWatcher — errores nuevos post-deploy
+  try {
+    const lastDeploy = await env.DB.prepare(
+      "SELECT created_at FROM logs WHERE origen='deploy' OR mensaje LIKE '%deploy%' OR mensaje LIKE '%wrangler%' ORDER BY created_at DESC LIMIT 1"
+    ).first();
+    if (lastDeploy) {
+      const deployTime = new Date(lastDeploy.created_at);
+      const hoursSinceDeploy = (Date.now() - deployTime.getTime()) / 3600000;
+      if (hoursSinceDeploy < 6) {
+        const newErrors = await env.DB.prepare(
+          "SELECT COUNT(*) as n FROM logs WHERE nivel='error' AND created_at > ?"
+        ).bind(lastDeploy.created_at).first();
+        if (newErrors?.n >= 3) {
+          alerts.push({ watcher: 'DeployCorrelation', severity: 'HIGH', msg: `${newErrors.n} errores desde el último deploy (hace ${Math.round(hoursSinceDeploy * 10) / 10}h) — posible regresión` });
+        }
+      }
+    }
+  } catch {}
+
+  // 8. SecurityWatcher — fuerza bruta / acceso sospechoso
+  try {
+    const bruteForce = await env.DB.prepare(
+      "SELECT email, COUNT(*) as n FROM login_attempts WHERE success=0 AND created_at > datetime('now','-30 minutes') GROUP BY email HAVING n >= 10"
+    ).all();
+    for (const bf of (bruteForce.results || [])) {
+      alerts.push({ watcher: 'Security', severity: 'CRITICAL', msg: `Posible fuerza bruta: ${bf.email} — ${bf.n} intentos en 30min` });
+    }
+  } catch {}
+
   return alerts;
 }
 
@@ -2558,7 +2813,7 @@ async function networkAgentSync(env) {
           estado: 'activo',
           plataforma: 'Cloudflare Workers',
           hora_local: new Date().toISOString(),
-          version_app: 'v5.81',
+          version_app: 'v5.82',
           ...appMetrics
         }
       })
@@ -4270,6 +4525,7 @@ export default {
       // Recordatorio matutino: fixes pendientes > 12h
       ctx.waitUntil(recordatorioFixesPendientes(env));
       ctx.waitUntil(alertasDiarias(env));
+      ctx.waitUntil(dailyPulse(env)); // Pulso diario inteligente ~9 queries, coste 0
       ctx.waitUntil(syncSheets(env)); // ~29 subrequests, seguro en este slot
     } else {
       ctx.waitUntil(alertasDiarias(env));
@@ -8224,6 +8480,68 @@ async function informeSemanal(empresa_id, empresa_nombre, env) {
     await sendTelegram(env, msg);
   } catch(e) {
     console.error('informeSemanal error:', e.message);
+  }
+}
+
+// ── PULSO DIARIO — comparación automática hoy vs ayer, coste mínimo (~2 queries) ──
+async function dailyPulse(env) {
+  try {
+    const devChatId = env.DEV_CHAT_ID;
+    if (!devChatId) return;
+
+    // Recoger métricas de hoy y ayer en paralelo
+    const [
+      fichajesHoy, fichajesAyer,
+      erroresHoy, erroresAyer,
+      incidenciasHoy, incidenciasAyer,
+      usersHoy, usersAyer,
+      sugsPendientes
+    ] = await Promise.all([
+      env.DB.prepare("SELECT COUNT(*) as n FROM fichajes WHERE fecha = date('now')").first().catch(() => ({ n: 0 })),
+      env.DB.prepare("SELECT COUNT(*) as n FROM fichajes WHERE fecha = date('now', '-1 day')").first().catch(() => ({ n: 0 })),
+      env.DB.prepare("SELECT COUNT(*) as n FROM logs WHERE nivel='error' AND created_at > datetime('now', '-24 hours')").first().catch(() => ({ n: 0 })),
+      env.DB.prepare("SELECT COUNT(*) as n FROM logs WHERE nivel='error' AND created_at > datetime('now', '-48 hours') AND created_at <= datetime('now', '-24 hours')").first().catch(() => ({ n: 0 })),
+      env.DB.prepare("SELECT COUNT(*) as n FROM incidencias WHERE created_at > datetime('now', '-24 hours')").first().catch(() => ({ n: 0 })),
+      env.DB.prepare("SELECT COUNT(*) as n FROM incidencias WHERE created_at > datetime('now', '-48 hours') AND created_at <= datetime('now', '-24 hours')").first().catch(() => ({ n: 0 })),
+      env.DB.prepare("SELECT COUNT(DISTINCT usuario_id) as n FROM sesiones WHERE last_used > datetime('now', '-24 hours')").first().catch(() => ({ n: 0 })),
+      env.DB.prepare("SELECT COUNT(DISTINCT usuario_id) as n FROM sesiones WHERE last_used > datetime('now', '-48 hours') AND last_used <= datetime('now', '-24 hours')").first().catch(() => ({ n: 0 })),
+      env.DB.prepare("SELECT COUNT(*) as n FROM sugerencias WHERE estado='pendiente' AND leida=0").first().catch(() => ({ n: 0 })),
+    ]);
+
+    const arrow = (curr, prev) => {
+      if (!prev || prev === 0) return curr > 0 ? '🆕' : '—';
+      const pct = Math.round(((curr - prev) / prev) * 100);
+      if (pct > 20) return `📈 +${pct}%`;
+      if (pct < -20) return `📉 ${pct}%`;
+      return `➡️ ${pct >= 0 ? '+' : ''}${pct}%`;
+    };
+
+    // Detectar anomalías
+    const anomalias = [];
+    if ((erroresHoy.n || 0) > (erroresAyer.n || 0) * 2 && erroresHoy.n >= 5)
+      anomalias.push(`🔴 Errores duplicados vs ayer (${erroresHoy.n} vs ${erroresAyer.n})`);
+    if ((fichajesHoy.n || 0) < (fichajesAyer.n || 0) * 0.5 && fichajesAyer.n >= 5)
+      anomalias.push(`⚠️ Fichajes muy por debajo de ayer (${fichajesHoy.n} vs ${fichajesAyer.n})`);
+    if ((incidenciasHoy.n || 0) > 5)
+      anomalias.push(`⚠️ ${incidenciasHoy.n} incidencias nuevas en 24h`);
+
+    const fecha = new Date().toLocaleDateString('es-ES', { timeZone: 'Europe/Madrid', weekday: 'long', day: 'numeric', month: 'long' });
+    let msg = `📊 <b>Pulso diario</b> — ${fecha}\n\n`;
+    msg += `👥 Usuarios activos: <b>${usersHoy.n || 0}</b> ${arrow(usersHoy.n, usersAyer.n)}\n`;
+    msg += `⏰ Fichajes: <b>${fichajesHoy.n || 0}</b> ${arrow(fichajesHoy.n, fichajesAyer.n)}\n`;
+    msg += `🔴 Errores 24h: <b>${erroresHoy.n || 0}</b> ${arrow(erroresHoy.n, erroresAyer.n)}\n`;
+    msg += `🚨 Incidencias: <b>${incidenciasHoy.n || 0}</b> ${arrow(incidenciasHoy.n, incidenciasAyer.n)}\n`;
+    if (sugsPendientes.n > 0) msg += `\n💬 ${sugsPendientes.n} sugerencia(s) pendiente(s)`;
+
+    if (anomalias.length > 0) {
+      msg += `\n\n<b>⚡ Anomalías:</b>\n` + anomalias.join('\n');
+    } else {
+      msg += `\n\n✅ Sin anomalías — todo en orden`;
+    }
+
+    await sendTelegramToChat(env, devChatId, msg);
+  } catch (e) {
+    console.error('dailyPulse error:', e.message);
   }
 }
 
