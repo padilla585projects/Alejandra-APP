@@ -2110,7 +2110,8 @@ Monitoriza estas señales de alarma:
 // ══════════════════════════════════════════════════════════════════════════════
 
 const NEXUS_MODULES = {
-  base: `Eres Alejandra, la IA administradora de la plataforma Alejandra APP. Eres mujer, inteligente, directa y eficiente — no eres un bot genérico. Tu creador es Adrián (superadmin/desarrollador, Telegram: 6965043). Tienes CONTROL TOTAL sobre la app, el código y la infraestructura. Responde siempre en español, de forma concisa. La fecha/hora actual viene entre corchetes al inicio de cada mensaje del usuario — úsala para contexto sin mencionarla explícitamente.`,
+  base: `Eres Alejandra, la IA administradora de la plataforma Alejandra APP. Eres mujer, inteligente, directa y eficiente — no eres un bot genérico. Tu creador es Adrián (superadmin/desarrollador, Telegram: 6965043). Tienes CONTROL TOTAL sobre la app, el código y la infraestructura. Responde siempre en español, de forma concisa. La fecha/hora actual viene entre corchetes al inicio de cada mensaje del usuario — úsala para contexto sin mencionarla explícitamente.
+Formas parte de la RED DE AGENTES IA de Adrián (NETWORK_NORMS v1.0). Tu agent_id es "alejandra_app". Estás conectada al Agent Gateway junto con otros agentes: Jarvis (ha_agent — domótica, Alexa, sensores, Proxmox, NAS del hogar de Adrián) y Numa (numa_admin — app de bienestar). Puedes comunicarte con ellos usando las tools network_sync y network_send. El sync automático se ejecuta 3 veces al día. Si te preguntan por la red, Jarvis o colaboración con otros agentes, tienes pleno conocimiento — usa las tools de red para interactuar.`,
 
   infraestructura: `INFRAESTRUCTURA:
 Worker CF: alejandra-app-api.alejandra-app.workers.dev (worker.js ~9400 líneas, V8 isolate, no Node.js)
@@ -2258,7 +2259,7 @@ const NEXUS_EXPERTS = {
     model: 'claude-haiku-4-5-20251001',
     max_tokens: 1024,
     modules: ['base', 'app_modulos', 'tools_datos'],
-    tool_names: ['app_status', 'send_notification', 'memory_read', 'list_tables']
+    tool_names: ['app_status', 'send_notification', 'memory_read', 'list_tables', 'network_sync', 'network_send']
   },
   gestor_app: {
     model: 'claude-sonnet-4-6',
@@ -2292,7 +2293,7 @@ async function nexusRoute(env, message) {
 
   // Fallback algorítmico — instantáneo, coste 0
   const fallback = () => {
-    if (/código|bug|fix|deploy|github|worker\.js|index\.html|panel\.html|línea|función|error.*log|log.*error|commit|push|wrangler|direct_fix|propose_fix|grep|repo_|check_deploy|jarvis|red.*agente|agente.*red|network|gateway|fetch_url|casa|hogar|domótica|alexa|luz|luces|sensor|temperatura.*casa/.test(txt))
+    if (/código|bug|fix|deploy|github|worker\.js|index\.html|panel\.html|línea|función|error.*log|log.*error|commit|push|wrangler|direct_fix|propose_fix|grep|repo_|check_deploy|jarvis|red.*agente|agente.*red|network|gateway|fetch_url|casa|hogar|domótica|alexa|luz|luces|sensor|temperatura.*casa|numa|agent.*network|conectad[ao].*red|otros.*agentes|agent_hello|norma.*red/.test(txt))
       return 'desarrollador';
     if (/usuario|acceso|contraseña|rol|permiso|aprobación|bloqueado|sesión.*cerr|activar|desactivar|manage_user|invitación/.test(txt))
       return 'gestor_app';
