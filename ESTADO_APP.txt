@@ -4,8 +4,8 @@
   Ruta local: C:\Users\Adrian\Downloads\Proyecto GestiBobina\Alejandra APP
 ================================================================================
 
-ÚLTIMA ACTUALIZACIÓN: 13/05/2026
-VERSIÓN ACTUAL APP NUEVA: v5.82 (Inteligencia mejorada — analyze_trends, dailyPulse, watchers predictivos)
+ÚLTIMA ACTUALIZACIÓN: 14/05/2026
+VERSIÓN ACTUAL APP NUEVA: v5.83 (Caché alertas watchers + auto-resumen sesión autónoma)
 VERSIÓN ACTUAL APP VIEJA: v4.19 (⛔ CONGELADA DEFINITIVAMENTE — no recibe más cambios)
 
 ================================================================================
