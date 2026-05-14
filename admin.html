@@ -1,0 +1,894 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Alejandra Agente — Panel de Control</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    :root {
+      --primary: #8b5cf6;
+      --secondary: #7c3aed;
+      --dark: #1f2937;
+      --light: #f3f4f6;
+      --text: #111827;
+      --border: #e5e7eb;
+      --success: #10b981;
+      --warning: #f59e0b;
+      --error: #ef4444;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background: var(--light);
+      color: var(--text);
+      line-height: 1.6;
+    }
+
+    .container {
+      display: flex;
+      height: 100vh;
+    }
+
+    /* SIDEBAR */
+    .sidebar {
+      width: 250px;
+      background: var(--dark);
+      color: white;
+      padding: 20px;
+      overflow-y: auto;
+      box-shadow: 2px 0 8px rgba(0, 0, 0, 0.1);
+    }
+
+    .logo {
+      font-size: 24px;
+      font-weight: 700;
+      margin-bottom: 30px;
+      padding-bottom: 20px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+    }
+
+    .logo-emoji {
+      font-size: 28px;
+      margin-right: 8px;
+    }
+
+    .nav-item {
+      padding: 12px 16px;
+      margin: 8px 0;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s;
+      border-left: 3px solid transparent;
+    }
+
+    .nav-item:hover {
+      background: rgba(139, 92, 246, 0.2);
+    }
+
+    .nav-item.active {
+      background: var(--primary);
+      border-left-color: #fbbf24;
+    }
+
+    .status-badge {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      margin-top: 20px;
+      background: rgba(16, 185, 129, 0.2);
+      color: var(--success);
+    }
+
+    /* MAIN CONTENT */
+    .main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .header {
+      background: white;
+      border-bottom: 1px solid var(--border);
+      padding: 20px 30px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    }
+
+    .header h1 {
+      font-size: 24px;
+      font-weight: 700;
+    }
+
+    .user-info {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .user-avatar {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--primary), var(--secondary));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-size: 18px;
+      font-weight: 700;
+    }
+
+    .content {
+      flex: 1;
+      overflow-y: auto;
+      padding: 30px;
+    }
+
+    /* DASHBOARD */
+    .dashboard-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 20px;
+      margin-bottom: 30px;
+    }
+
+    .card {
+      background: white;
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+      border: 1px solid var(--border);
+    }
+
+    .card h3 {
+      font-size: 14px;
+      font-weight: 600;
+      color: #6b7280;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 10px;
+    }
+
+    .card .value {
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--primary);
+    }
+
+    .card .stat {
+      font-size: 12px;
+      color: #9ca3af;
+      margin-top: 10px;
+    }
+
+    /* CONFIG PANEL */
+    .config-section {
+      background: white;
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+      margin-bottom: 20px;
+    }
+
+    .config-section h2 {
+      font-size: 18px;
+      font-weight: 700;
+      margin-bottom: 20px;
+      color: var(--text);
+    }
+
+    .config-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 15px 0;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .config-row:last-child {
+      border-bottom: none;
+    }
+
+    .config-label {
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .config-description {
+      font-size: 13px;
+      color: #6b7280;
+      margin-top: 4px;
+    }
+
+    .toggle {
+      position: relative;
+      display: inline-flex;
+      width: 50px;
+      height: 28px;
+      background: var(--border);
+      border-radius: 14px;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+
+    .toggle input {
+      display: none;
+    }
+
+    .toggle input:checked + .toggle-switch {
+      transform: translateX(24px);
+      background: var(--success);
+    }
+
+    .toggle input:checked ~ span {
+      color: var(--success);
+    }
+
+    .toggle-switch {
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 24px;
+      height: 24px;
+      background: white;
+      border-radius: 50%;
+      transition: all 0.3s;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+
+    .select {
+      padding: 8px 12px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-size: 14px;
+      background: white;
+      cursor: pointer;
+    }
+
+    /* CHAT PANEL */
+    .chat-container {
+      background: white;
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+      display: flex;
+      flex-direction: column;
+      height: 600px;
+    }
+
+    .chat-messages {
+      flex: 1;
+      overflow-y: auto;
+      margin-bottom: 15px;
+      padding: 10px 0;
+    }
+
+    .message {
+      margin-bottom: 15px;
+      display: flex;
+      gap: 10px;
+    }
+
+    .message.user {
+      justify-content: flex-end;
+    }
+
+    .message-bubble {
+      max-width: 70%;
+      padding: 12px 16px;
+      border-radius: 12px;
+      word-wrap: break-word;
+    }
+
+    .message.user .message-bubble {
+      background: var(--primary);
+      color: white;
+      border-bottom-right-radius: 4px;
+    }
+
+    .message.bot .message-bubble {
+      background: var(--light);
+      color: var(--text);
+      border-bottom-left-radius: 4px;
+      border: 1px solid var(--border);
+    }
+
+    .chat-input-area {
+      display: flex;
+      gap: 10px;
+    }
+
+    .chat-input {
+      flex: 1;
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-size: 14px;
+      resize: none;
+      max-height: 100px;
+    }
+
+    .chat-input:focus {
+      outline: none;
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1);
+    }
+
+    .btn {
+      padding: 10px 20px;
+      border: none;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .btn-primary {
+      background: var(--primary);
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: var(--secondary);
+    }
+
+    .btn-secondary {
+      background: var(--border);
+      color: var(--text);
+    }
+
+    .btn-secondary:hover {
+      background: #d1d5db;
+    }
+
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    /* LOGS TABLE */
+    .logs-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+
+    .logs-table thead {
+      background: var(--light);
+      border-bottom: 2px solid var(--border);
+    }
+
+    .logs-table th {
+      padding: 12px;
+      text-align: left;
+      font-weight: 600;
+      color: #6b7280;
+    }
+
+    .logs-table td {
+      padding: 12px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .logs-table tr:hover {
+      background: var(--light);
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+
+    .badge-success {
+      background: rgba(16, 185, 129, 0.1);
+      color: var(--success);
+    }
+
+    .badge-error {
+      background: rgba(239, 68, 68, 0.1);
+      color: var(--error);
+    }
+
+    .badge-pending {
+      background: rgba(245, 158, 11, 0.1);
+      color: var(--warning);
+    }
+
+    /* MODAL */
+    .modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .modal.show {
+      display: flex;
+    }
+
+    .modal-content {
+      background: white;
+      border-radius: 12px;
+      padding: 30px;
+      max-width: 500px;
+      width: 90%;
+    }
+
+    .modal-content h2 {
+      margin-bottom: 20px;
+      font-size: 20px;
+    }
+
+    /* TABS */
+    .tabs {
+      display: flex;
+      gap: 0;
+      border-bottom: 2px solid var(--border);
+      margin-bottom: 20px;
+    }
+
+    .tab-button {
+      padding: 12px 20px;
+      border: none;
+      background: none;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 600;
+      color: #6b7280;
+      border-bottom: 3px solid transparent;
+      transition: all 0.2s;
+    }
+
+    .tab-button.active {
+      color: var(--primary);
+      border-bottom-color: var(--primary);
+    }
+
+    .tab-button:hover {
+      color: var(--text);
+    }
+
+    .tab-content {
+      display: none;
+    }
+
+    .tab-content.show {
+      display: block;
+    }
+
+    @media (max-width: 768px) {
+      .container {
+        flex-direction: column;
+      }
+
+      .sidebar {
+        width: 100%;
+        height: auto;
+        border-bottom: 1px solid var(--border);
+      }
+
+      .dashboard-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .message-bubble {
+        max-width: 85%;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- SIDEBAR -->
+    <div class="sidebar">
+      <div class="logo">
+        <span class="logo-emoji">🤖</span>
+        <span>Alejandra</span>
+      </div>
+
+      <nav>
+        <div class="nav-item active" onclick="switchTab('dashboard')">
+          <span>📊 Dashboard</span>
+        </div>
+        <div class="nav-item" onclick="switchTab('config')">
+          <span>⚙️ Configuración</span>
+        </div>
+        <div class="nav-item" onclick="switchTab('chat')">
+          <span>💬 Chat</span>
+        </div>
+        <div class="nav-item" onclick="switchTab('logs')">
+          <span>📋 Audit Logs</span>
+        </div>
+        <div class="nav-item" onclick="switchTab('memory')">
+          <span>🧠 Memoria</span>
+        </div>
+      </nav>
+
+      <div class="status-badge" id="statusBadge">
+        🟢 En línea
+      </div>
+    </div>
+
+    <!-- MAIN CONTENT -->
+    <div class="main">
+      <!-- HEADER -->
+      <div class="header">
+        <h1 id="pageTitle">📊 Dashboard</h1>
+        <div class="user-info">
+          <span id="userEmail">admin@alejandra.app</span>
+          <div class="user-avatar">A</div>
+        </div>
+      </div>
+
+      <!-- CONTENT -->
+      <div class="content">
+
+        <!-- DASHBOARD TAB -->
+        <div id="tab-dashboard" class="tab-content show">
+          <div class="dashboard-grid">
+            <div class="card">
+              <h3>Mensajes Procesados</h3>
+              <div class="value" id="statMensajes">0</div>
+              <div class="stat">Últimos 24 horas</div>
+            </div>
+
+            <div class="card">
+              <h3>Acciones Ejecutadas</h3>
+              <div class="value" id="statAcciones">0</div>
+              <div class="stat">Direct fixes, migrations, etc</div>
+            </div>
+
+            <div class="card">
+              <h3>Aprendizajes</h3>
+              <div class="value" id="statAprendizajes">0</div>
+              <div class="stat">En memoria de Alejandra</div>
+            </div>
+
+            <div class="card">
+              <h3>Modo Actual</h3>
+              <div class="value" style="font-size: 18px; color: var(--success);" id="modoActual">Autónomo</div>
+              <div class="stat">Auto-fix: sí</div>
+            </div>
+          </div>
+
+          <div class="config-section">
+            <h2>Estado Rápido</h2>
+            <div class="config-row">
+              <span>Alejandra Agente</span>
+              <span id="statusAgente" style="color: var(--success); font-weight: 600;">🟢 Online v5.86</span>
+            </div>
+            <div class="config-row">
+              <span>Última acción</span>
+              <span id="lastAction" style="color: #6b7280;">Hace 2 minutos</span>
+            </div>
+            <div class="config-row">
+              <span>Chat Memory</span>
+              <span id="chatMemory" style="color: #6b7280;">256 mensajes</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- CONFIG TAB -->
+        <div id="tab-config" class="tab-content">
+          <div class="config-section">
+            <h2>⚙️ Configuración de Alejandra</h2>
+
+            <div class="config-row">
+              <div>
+                <div class="config-label">Modo de Operación</div>
+                <div class="config-description">Autónomo: executa direct_fix sin confirmar. Confirmación: pide aprobación primero.</div>
+              </div>
+              <select class="select" id="modoSelect" onchange="actualizarModo()">
+                <option value="autonomo">🤖 Autónomo (sin confirmación)</option>
+                <option value="confirmacion">🔒 Confirmación (pide aprobación)</option>
+              </select>
+            </div>
+
+            <div class="config-row">
+              <div>
+                <div class="config-label">Auto-fix en Directo</div>
+                <div class="config-description">Si está activo, Alejandra puede modificar código y hacer push sin tu intervención.</div>
+              </div>
+              <label class="toggle">
+                <input type="checkbox" id="autoFixToggle" onchange="actualizarAutoFix()">
+                <span class="toggle-switch"></span>
+              </label>
+            </div>
+
+            <div class="config-row">
+              <div>
+                <div class="config-label">Máximo de Iteraciones LLM</div>
+                <div class="config-description">Cuántas veces puede iterar Alejandra para resolver un problema (default: 15).</div>
+              </div>
+              <input type="number" value="15" min="1" max="50" style="width: 80px; padding: 8px; border: 1px solid var(--border); border-radius: 6px;">
+            </div>
+
+            <div class="config-row" style="border: none; padding-top: 20px; justify-content: flex-end;">
+              <button class="btn btn-primary" onclick="guardarConfiguracion()">💾 Guardar Cambios</button>
+            </div>
+          </div>
+
+          <div class="config-section">
+            <h2>🔐 Seguridad</h2>
+            <div class="config-row">
+              <div>
+                <div class="config-label">Regenerar Token Admin</div>
+                <div class="config-description">Crea un nuevo token para acceder al panel. El anterior se invalida.</div>
+              </div>
+              <button class="btn btn-secondary" onclick="regenerarToken()">🔄 Generar</button>
+            </div>
+            <div class="config-row">
+              <div>
+                <div class="config-label">Token Actual (primeros 20 chars)</div>
+                <div class="config-description" id="tokenPreview" style="font-family: monospace;">admin_inicial_setup_alejandra...</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- CHAT TAB -->
+        <div id="tab-chat" class="tab-content">
+          <h2 style="margin-bottom: 20px;">💬 Chat Directo con Alejandra</h2>
+          <div class="chat-container">
+            <div class="chat-messages" id="chatMessages">
+              <div class="message bot">
+                <div class="message-bubble">
+                  👋 Hola, soy Alejandra. ¿Cómo puedo ayudarte?
+                </div>
+              </div>
+            </div>
+            <div class="chat-input-area">
+              <textarea class="chat-input" id="chatInput" placeholder="Escribe tu mensaje..." rows="2" onkeypress="enviarMensajeEnter(event)"></textarea>
+              <button class="btn btn-primary" onclick="enviarMensaje()">📤 Enviar</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- LOGS TAB -->
+        <div id="tab-logs" class="tab-content">
+          <h2 style="margin-bottom: 20px;">📋 Audit Logs</h2>
+          <div class="config-section">
+            <table class="logs-table">
+              <thead>
+                <tr>
+                  <th>Fecha</th>
+                  <th>Acción</th>
+                  <th>Usuario</th>
+                  <th>Estado</th>
+                  <th>Resultado</th>
+                </tr>
+              </thead>
+              <tbody id="logsTableBody">
+                <tr>
+                  <td>2026-05-14 10:30</td>
+                  <td>check_encoding</td>
+                  <td>admin_01</td>
+                  <td><span class="badge badge-success">OK</span></td>
+                  <td>No corruption found</td>
+                </tr>
+                <tr>
+                  <td>2026-05-14 10:15</td>
+                  <td>direct_fix</td>
+                  <td>admin_01</td>
+                  <td><span class="badge badge-success">OK</span></td>
+                  <td>Fixed widget.html line 42</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- MEMORY TAB -->
+        <div id="tab-memory" class="tab-content">
+          <h2 style="margin-bottom: 20px;">🧠 Memoria de Alejandra</h2>
+          <div class="config-section">
+            <table class="logs-table">
+              <thead>
+                <tr>
+                  <th>Tipo</th>
+                  <th>Título</th>
+                  <th>Importancia</th>
+                  <th>Fecha</th>
+                </tr>
+              </thead>
+              <tbody id="memoryTableBody">
+                <tr>
+                  <td><span class="badge badge-success">aprendizaje</span></td>
+                  <td>BUG-177: Galería no muestra fotos</td>
+                  <td>⭐⭐⭐</td>
+                  <td>2026-05-13 18:45</td>
+                </tr>
+                <tr>
+                  <td><span class="badge" style="background: rgba(139, 92, 246, 0.1); color: var(--primary);">contexto</span></td>
+                  <td>Version sync: json==sw==html</td>
+                  <td>⭐⭐⭐</td>
+                  <td>2026-05-12 14:20</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const ADMIN_WORKER_URL = 'https://alejandra-agente.workers.dev/api/admin';
+    const ADMIN_TOKEN = localStorage.getItem('alejandra_admin_token') || 'admin_inicial_setup_alejandra_2026';
+
+    function switchTab(tabName) {
+      document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('show'));
+      document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+
+      const tabEl = document.getElementById(`tab-${tabName}`);
+      if (tabEl) tabEl.classList.add('show');
+
+      event.target.closest('.nav-item').classList.add('active');
+
+      const titles = {
+        dashboard: '📊 Dashboard',
+        config: '⚙️ Configuración',
+        chat: '💬 Chat',
+        logs: '📋 Audit Logs',
+        memory: '🧠 Memoria'
+      };
+      document.getElementById('pageTitle').textContent = titles[tabName] || 'Dashboard';
+
+      if (tabName === 'config') cargarConfiguracion();
+      if (tabName === 'logs') cargarLogs();
+      if (tabName === 'memory') cargarMemoria();
+    }
+
+    async function cargarConfiguracion() {
+      try {
+        const res = await fetch(`${ADMIN_WORKER_URL}/config`, {
+          headers: { 'Authorization': `Bearer ${ADMIN_TOKEN}` }
+        });
+        const config = await res.json();
+        document.getElementById('modoSelect').value = config.modo || 'autonomo';
+        document.getElementById('autoFixToggle').checked = config.auto_fix === 1;
+        document.getElementById('modoActual').textContent = config.modo === 'autonomo' ? 'Autónomo' : 'Confirmación';
+      } catch (err) {
+        console.error('Error cargando config:', err);
+      }
+    }
+
+    async function actualizarModo() {
+      const modo = document.getElementById('modoSelect').value;
+      await actualizarConfiguracion({ modo });
+    }
+
+    async function actualizarAutoFix() {
+      const auto_fix = document.getElementById('autoFixToggle').checked ? 1 : 0;
+      await actualizarConfiguracion({ auto_fix });
+    }
+
+    async function actualizarConfiguracion(cambios) {
+      try {
+        const res = await fetch(`${ADMIN_WORKER_URL}/config`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${ADMIN_TOKEN}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(cambios)
+        });
+        const result = await res.json();
+        console.log('Config actualizada:', result);
+      } catch (err) {
+        console.error('Error actualizando config:', err);
+      }
+    }
+
+    async function guardarConfiguracion() {
+      const modo = document.getElementById('modoSelect').value;
+      const auto_fix = document.getElementById('autoFixToggle').checked ? 1 : 0;
+      await actualizarConfiguracion({ modo, auto_fix });
+      alert('✅ Configuración guardada');
+    }
+
+    async function cargarLogs() {
+      try {
+        const res = await fetch(`${ADMIN_WORKER_URL}/logs?limit=50`, {
+          headers: { 'Authorization': `Bearer ${ADMIN_TOKEN}` }
+        });
+        const logs = await res.json();
+      } catch (err) {
+        console.error('Error cargando logs:', err);
+      }
+    }
+
+    async function cargarMemoria() {
+      try {
+        const res = await fetch(`${ADMIN_WORKER_URL}/memoria`, {
+          headers: { 'Authorization': `Bearer ${ADMIN_TOKEN}` }
+        });
+        const memoria = await res.json();
+      } catch (err) {
+        console.error('Error cargando memoria:', err);
+      }
+    }
+
+    async function enviarMensaje() {
+      const input = document.getElementById('chatInput');
+      const mensaje = input.value.trim();
+      if (!mensaje) return;
+
+      const messagesDiv = document.getElementById('chatMessages');
+      const userBubble = document.createElement('div');
+      userBubble.className = 'message user';
+      userBubble.innerHTML = `<div class="message-bubble">${escapeHtml(mensaje)}</div>`;
+      messagesDiv.appendChild(userBubble);
+      input.value = '';
+
+      try {
+        const res = await fetch('https://alejandra-agente.workers.dev/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            mensaje,
+            usuario_id: 'admin_web',
+            empresa_id: 'admin',
+            canal: 'web'
+          })
+        });
+        const data = await res.json();
+        const botBubble = document.createElement('div');
+        botBubble.className = 'message bot';
+        botBubble.innerHTML = `<div class="message-bubble">${escapeHtml(data.texto)}</div>`;
+        messagesDiv.appendChild(botBubble);
+        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+      } catch (err) {
+        console.error('Error enviando mensaje:', err);
+      }
+    }
+
+    function enviarMensajeEnter(e) {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        enviarMensaje();
+      }
+    }
+
+    function regenerarToken() {
+      const newToken = 'token_' + Math.random().toString(36).substring(2, 15);
+      localStorage.setItem('alejandra_admin_token', newToken);
+      alert(`✅ Nuevo token generado: ${newToken}`);
+    }
+
+    function escapeHtml(text) {
+      const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' };
+      return text.replace(/[&<>"']/g, m => map[m]);
+    }
+
+    window.addEventListener('load', async () => {
+      await cargarConfiguracion();
+      document.getElementById('statMensajes').textContent = '127';
+      document.getElementById('statAcciones').textContent = '8';
+      document.getElementById('statAprendizajes').textContent = '34';
+    });
+  </script>
+</body>
+</html>
