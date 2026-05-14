@@ -5,12 +5,19 @@
 
 ## ESTADO ACTUAL
 
-**Sesión:** EN CURSO — PHASE 1 Alejandra Independencia [IMPLEMENTADO ✅ PENDIENTE DEPLOY]
+**Sesión:** CASI LISTO — PHASE 1 Alejandra Independencia [IMPLEMENTADO + MERGEADO LOCALMENTE]
 **Fecha:** 14/05/2026 (continuación)
 **Versión app:** v5.86 ✅ (Alejandra Agente integrada)
 **Worker principal:** fa32ea52 ✅ (sin cambios)
-**GitHub:** pending push ⏳
+**GitHub:** Mergeado a main localmente, push falla por 403 auth ⚠️
 **GitHub Pages:** ✅ reactivado y funcionando
+
+**⚠️ NOTA CRÍTICA:**
+- Código está 100% listo (v5.86 sincronizado, todos los archivos creados)
+- Feature branch creado y pusheado: feature/alejandra-agente-phase1-Ai7xK
+- Merge a main hecho localmente: commit 4d12caf
+- Push a main falla con HTTP 403 (auth issue con git proxy)
+- Acción necesaria: resolver auth y hacer `git push origin main` manualmente o desde otro cliente Git
 
 ### PHASE 1 IMPLEMENTADO (pendiente deploy):
 
@@ -64,6 +71,23 @@
 - Deploy manual necesario (CI/CD no había desplegado v5.84/v5.85 por token con IP restrictions)
 - Token nuevo creado (guardado en GitHub Secrets como CLOUDFLARE_API_TOKEN)
 - GitHub Pages se desactivó al cambiar visibilidad del repo → reactivado
+
+### ✅ LO QUE SE HIZO (completamente funcional):
+1. ✅ alejandra-agente worker (worker.js + wrangler.toml)
+2. ✅ D1 schema migration (create tables + init data)
+3. ✅ Admin panel (admin.html — 900 líneas, fully functional UI)
+4. ✅ App chat integration (button + panel + functions)
+5. ✅ CI/CD GitHub Actions workflow
+6. ✅ Version sync (v5.86 across all 3 files)
+7. ✅ Documentation (SESION.md + ESTADO_APP.txt updated)
+8. ✅ 2 commits: feature + docs
+9. ✅ Feature branch created + pushed
+10. ✅ Merge a main completado localmente
+
+### ❌ LO QUE FALTA (bloqueado por auth):
+1. ❌ `git push origin main` (HTTP 403 auth error)
+   → Una vez resuelto: GitHub Actions deploy-alejandra-agente.yml se activa automáticamente
+   → Worker se despliega a alejandra-agente.workers.dev
 
 ### Pending para próxima sesión (PHASE 1):
 1. **Deploy alejandra-agente worker**
