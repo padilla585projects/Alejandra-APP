@@ -5,7 +5,7 @@
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 14/05/2026
-VERSIÓN ACTUAL APP NUEVA: v5.83 (Caché alertas watchers + auto-resumen sesión autónoma)
+VERSIÓN ACTUAL APP NUEVA: v5.85 (Red de agentes endpoints + fixes Alejandra + incidencia resuelta)
 VERSIÓN ACTUAL APP VIEJA: v4.19 (⛔ CONGELADA DEFINITIVAMENTE — no recibe más cambios)
 
 ================================================================================

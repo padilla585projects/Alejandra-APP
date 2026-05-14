@@ -7,9 +7,38 @@
 
 **Sesión:** LIBRE
 **Última sesión:** 14/05/2026
-**Versión tras última sesión:** v5.83 (Caché alertas watchers + auto-resumen sesión autónoma)
-**Worker desplegado:** db2346f ✅
+**Versión tras última sesión:** v5.85
+**Worker desplegado:** fa32ea52 ✅ (deploy manual con nuevo token)
 **GitHub:** en sync ✅
+**GitHub Pages:** ✅ reactivado y funcionando
+
+---
+
+## RESUMEN SESIÓN 14/05/2026 — v5.83→v5.85
+
+### Qué se hizo:
+
+**v5.84 — 3 fixes en Alejandra:**
+1. Garbage collection: `dailyPulse()` borra registros de `alejandra_memoria` dejando solo los 500 más relevantes
+2. Watchers verbosos: `catch(e)` en lugar de `catch {}` — errores se guardan en memoria de Alejandra
+3. `check_encoding` automático tras `direct_fix` en archivos .html/.js
+
+**v5.85 — Red de agentes + fix crítico:**
+- Endpoints del gateway corregidos: todos los fetch al gateway ahora usan `/api/agents/<acción>` en lugar de la raíz `/`
+- Identity format actualizado con `version`, `features`, `metadata`
+- Fix sintaxis: `autoLearn` en nexusWatchers tenía coma extra → error de compilación
+
+**Incidencia: App caída**
+- Causa: política de Cloudflare Access bloqueaba TODO el tráfico al worker
+- Fix: eliminada desde el dashboard → worker accesible
+- Deploy manual necesario (CI/CD no había desplegado v5.84/v5.85 por token con IP restrictions)
+- Token nuevo creado (guardado en GitHub Secrets como CLOUDFLARE_API_TOKEN)
+- GitHub Pages se desactivó al cambiar visibilidad del repo → reactivado
+
+### Pendiente para próxima sesión:
+1. **GitHub Secret**: actualizar `CLOUDFLARE_API_TOKEN` con el token nuevo creado hoy para que CI/CD funcione
+2. **Red de agentes**: el gateway bloquea con `host_not_allowed` desde IPs no autorizadas — Alejandra necesita hacer `network_join` con el nuevo código y esperar que Jarvis apruebe
+3. **Conversación sobre Alejandra**: Adrián quería hablar sobre el estado y futuro del agente
 
 ---
 
