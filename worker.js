@@ -778,9 +778,12 @@ async function executeAITool(env, toolName, toolInput) {
           ],
           offers: 'Puedo informar del estado de la app industrial, consultar datos de obras/personal/inventario, desplegar cÃ³digo, enviar Telegrams. Disponible 24/7 en Cloudflare Workers.',
           language: ['es'],
-          norms_version: '1.0'
+          norms_version: '1.0',
+          version: '5.84',
+          features: ['app_status', 'sql_query', 'send_telegram', 'web_search', 'deploy_code', 'fix_code'],
+          metadata: { platform: 'Cloudflare Workers', language: 'es', region: 'EU' }
         };
-        const res = await fetch(GATEWAY, {
+        const res = await fetch(GATEWAY + '/api/agents/join', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ agent_id: 'alejandra_app', message: 'join_request', identity })
@@ -810,7 +813,7 @@ async function executeAITool(env, toolName, toolInput) {
           // Si no hay secret, intentar check_join
           const reqRow = await env.DB.prepare('SELECT valor FROM config WHERE clave = ?').bind('network_request_id').first();
           if (reqRow?.valor) {
-            const checkRes = await fetch(GATEWAY, {
+            const checkRes = await fetch(GATEWAY + '/api/agents/join', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ agent_id: 'alejandra_app', message: 'check_join', context: { request_id: reqRow.valor } })
@@ -843,7 +846,7 @@ async function executeAITool(env, toolName, toolInput) {
           ...safeCtx
         };
         // Enviar sync
-        const res = await fetch(GATEWAY, {
+        const res = await fetch(GATEWAY + '/api/agents/sync', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -914,7 +917,7 @@ async function executeAITool(env, toolName, toolInput) {
             collab_id: `alejandra_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
           };
         }
-        const res = await fetch(GATEWAY, {
+        const res = await fetch(GATEWAY + '/api/agents/send', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -2823,7 +2826,7 @@ async function networkAgentSync(env) {
     } catch { /* silencioso */ }
 
     // Sync con la red
-    const res = await fetch(GATEWAY, {
+    const res = await fetch(GATEWAY + '/api/agents/sync', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -3137,7 +3140,7 @@ async function processNetworkRequest(env, msg, secret) {
 
   // Responder al agente vÃ­a gateway
   if (responseText) {
-    await fetch(GATEWAY, {
+    await fetch(GATEWAY + '/api/agents/send', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
