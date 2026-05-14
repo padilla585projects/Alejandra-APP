@@ -2790,7 +2790,7 @@ async function nexusWatchers(env) {
     } catch { filtered.push(alert); }
   }
   if (watcherErrors.length > 0) {
-    autoLearn(env, 'error', , watcherErrors.join(' | '), 2);
+    autoLearn(env, 'error', `Watchers con error (${watcherErrors.length})`, watcherErrors.join(' | '), 2);
   }
   return filtered;
 }
