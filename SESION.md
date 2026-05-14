@@ -5,7 +5,7 @@
 
 ## ESTADO ACTUAL
 
-**Sesión:** CASI LISTO — PHASE 1 Alejandra Independencia [IMPLEMENTADO + MERGEADO LOCALMENTE]
+**Sesión:** LIBRE — PHASE 1 Alejandra Independencia [IMPLEMENTADO, SOLO FALTA PUSH DESDE PC]
 **Fecha:** 14/05/2026 (continuación)
 **Versión app:** v5.86 ✅ (Alejandra Agente integrada)
 **Worker principal:** fa32ea52 ✅ (sin cambios)
@@ -84,10 +84,15 @@
 9. ✅ Feature branch created + pushed
 10. ✅ Merge a main completado localmente
 
-### ❌ LO QUE FALTA (bloqueado por auth):
-1. ❌ `git push origin main` (HTTP 403 auth error)
-   → Una vez resuelto: GitHub Actions deploy-alejandra-agente.yml se activa automáticamente
-   → Worker se despliega a alejandra-agente.workers.dev
+### ⏳ ACCIÓN INMEDIATA (PRÓXIMA SESIÓN):
+**PASO 0 — HACER AHORA (desde tu PC):**
+```bash
+cd Alejandra-APP
+git push origin main
+```
+→ Esto activa GitHub Actions
+→ Deploy alejandra-agente.workers.dev automático (~2 min)
+→ Luego testear: click 🤖 botón en app
 
 ### Pending para próxima sesión (PHASE 1):
 1. **Deploy alejandra-agente worker**
