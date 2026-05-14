@@ -5,12 +5,42 @@
 
 ## ESTADO ACTUAL
 
-**Sesión:** LIBRE
-**Última sesión:** 14/05/2026
-**Versión tras última sesión:** v5.85
-**Worker desplegado:** fa32ea52 ✅ (deploy manual con nuevo token)
-**GitHub:** en sync ✅
+**Sesión:** EN CURSO — PHASE 1 Alejandra Independencia [IMPLEMENTADO ✅ PENDIENTE DEPLOY]
+**Fecha:** 14/05/2026 (continuación)
+**Versión app:** v5.86 ✅ (Alejandra Agente integrada)
+**Worker principal:** fa32ea52 ✅ (sin cambios)
+**GitHub:** pending push ⏳
 **GitHub Pages:** ✅ reactivado y funcionando
+
+### PHASE 1 IMPLEMENTADO (pendiente deploy):
+
+**✅ Alejandra Agente Worker:**
+- Ubicación: `/alejandra-agente/worker.js` + `wrangler.toml`
+- Endpoints: `/api/chat` (chat + memory), `/api/admin/config/logs/memoria` (panel)
+- D1 Schema: chat_alejandra (memory), alejandra_config (modo), tokens, logs
+- Chat memory: guarda últimos 500 mensajes con contexto
+- Config: modo autonomo/confirmacion + auto_fix toggle
+
+**✅ Admin Panel Web:**
+- Ubicación: `/admin.html`
+- Funcionalidad: dashboard, config (modo/auto_fix), direct chat, audit logs, memoria viewer
+- Estilo: purple (#8b5cf6) para diferenciar de app azul
+- Token-based auth con regeneración
+
+**✅ Integración App Principal:**
+- Botón 🤖 Alejandra en header (visible cuando autenticado)
+- Panel chat separado: alejandraPanel (chat_alejandra con memoria)
+- Funcs: alejandraAbrir(), alejandraEnviar(), alejandraCargarContexto()
+- Endpoint: https://alejandra-agente.workers.dev/api/chat
+
+**✅ CI/CD:**
+- GitHub Actions: `.github/workflows/deploy-alejandra-agente.yml`
+- Deploy automático en push a main (rutas: alejandra-agente/*)
+
+**✅ Versión Sincronizada:**
+- version.json = 5.86 ✅
+- sw.js cache = alejandra-v5.86 ✅  
+- index.html APP_VERSION = 5.86 ✅
 
 ---
 
@@ -35,10 +65,30 @@
 - Token nuevo creado (guardado en GitHub Secrets como CLOUDFLARE_API_TOKEN)
 - GitHub Pages se desactivó al cambiar visibilidad del repo → reactivado
 
-### Pendiente para próxima sesión:
-1. **GitHub Secret**: actualizar `CLOUDFLARE_API_TOKEN` con el token nuevo creado hoy para que CI/CD funcione
-2. **Red de agentes**: el gateway bloquea con `host_not_allowed` desde IPs no autorizadas — Alejandra necesita hacer `network_join` con el nuevo código y esperar que Jarvis apruebe
-3. **Conversación sobre Alejandra**: Adrián quería hablar sobre el estado y futuro del agente
+### Pending para próxima sesión (PHASE 1):
+1. **Deploy alejandra-agente worker**
+   - `npm install -g wrangler` (ya está)
+   - `cd alejandra-agente && npx wrangler deploy` (CI/CD lo hace automáticamente en push)
+   - Verifica: curl https://alejandra-agente.workers.dev/health
+   - Ejecutar migración D1: el deploy crea las tablas
+   
+2. **Test integración app:**
+   - Click botón 🤖 Alejandra en header (debe mostrar panel)
+   - Enviar mensaje: debe conectar con alejandra-agente.workers.dev
+   - Chat memory: guardar/recuperar últimos mensajes
+   - Verificar que no se pierdan tokens entre sesiones
+
+3. **Repo separado (OPCIONAL PHASE 2):**
+   - User preguntó si crear nuevo repo para alejandra-agente solo
+   - Recomendación: esperar a que PHASE 1 esté probado, luego migrar a `github.com/padilla585projects/alejandra-agente`
+   - Por ahora funciona en mismo repo
+
+4. **Próximas features (PHASE 2):**
+   - Integración Anthropic API para NEXUS 5 expertos real (ahora es stub)
+   - 32 tools completos: sql_query, direct_fix, github_*, etc
+   - Autonomous review cron (23:00) con loop LLM hasta 15 iteraciones
+   - Red de agentes: join/sync/send con gateway
+   - Telegram bidireccional real
 
 ---
 

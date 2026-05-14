@@ -1,0 +1,48 @@
+name: Deploy Alejandra Agente Worker
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'alejandra-agente/**'
+      - '.github/workflows/deploy-alejandra-agente.yml'
+
+jobs:
+  deploy:
+    name: Deploy Alejandra Agente to Cloudflare
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm install -g wrangler@latest
+
+      - name: Create migration context for D1
+        run: |
+          cd alejandra-agente
+          mkdir -p migrations
+          cp migrate_001_init_schema.sql migrations/
+          ls -la migrations/
+
+      - name: Deploy Alejandra Agente Worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: d65ead2b2967bf68ff3848a36cd7b1b4
+        run: |
+          cd alejandra-agente
+          npx wrangler deploy --name alejandra-agente
+
+      - name: Notify deployment
+        if: success()
+        run: |
+          echo "✅ Alejandra Agente deployed successfully to alejandra-agente.workers.dev"
+          echo "Version: v5.86"
