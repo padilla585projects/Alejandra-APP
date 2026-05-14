@@ -624,3 +624,23 @@ Y antes de cerrar, obligatorio:
   2. Actualizar ESTADO_APP.txt (versión, fecha, changelog)
   3. Actualizar IDEAS_PENDIENTES.txt (marcar resueltos)
   4. Volver a poner este archivo en estado LIBRE con el resumen
+
+---
+
+## NOTA FINAL: Commits Pendientes de Push
+
+**7 commits en main, esperando `git push origin main` desde PC:**
+1. feat: PHASE 1 Alejandra Independence complete
+2. feat: PHASE 1 Alejandra agente worker + admin panel
+3. docs: PHASE 1 implementation complete
+4. docs: mark PHASE 1 implementation, pending deployment
+5. docs: final session summary
+6. docs: final session summary (actualizado)
+7. docs: session LIBRE — ready for PC push
+
+**Todos están listos. Al hacer push desde la PC:**
+- GitHub Actions dispara deploy-alejandra-agente.yml
+- alejandra-agente.workers.dev se despliega automáticamente
+- D1 tables se crean con la migración
+- PHASE 1 queda en vivo
+
