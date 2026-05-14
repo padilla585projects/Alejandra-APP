@@ -1343,6 +1343,18 @@ async function executeAITool(env, toolName, toolInput) {
           [[{ text: 'â©ï¸ Revertir', callback_data: `fix_revert:${fixId}` }]]
         ).catch(() => {});
         autoLearn(env, 'hecho', `direct_fix aplicado: ${descripcion}`, `Archivo: ${archivo} | Commit: ${commitSha} | ${razon}`, 3);
+        // Auto-verificar encoding si se tocó un archivo HTML o JS
+        if (archivo.endsWith('.html') || archivo.endsWith('.js')) {
+          executeAITool(env, 'check_encoding', { files: [archivo] }).then(encResult => {
+            try {
+              const enc = JSON.parse(encResult);
+              if (enc.archivos?.some(a => a.status?.includes('CORRUPTO'))) {
+                autoLearn(env, 'error', `Encoding corrupto tras direct_fix en ${archivo}`, `Commit: ${commitSha}. Revertir inmediatamente.`, 5);
+                sendTelegramToChat(env, devChatId, `⚠️ ENCODING CORRUPTO en ${archivo} tras fix ${commitSha}. Revertir inmediatamente.`).catch(() => {});
+              }
+            } catch {}
+          }).catch(() => {});
+        }
         const deployMsg = archivo === 'worker.js' || archivo === 'wrangler.toml'
           ? 'Deploy automÃ¡tico a Cloudflare en ~1 min (GitHub Actions).'
           : 'Deploy a GitHub Pages en ~30 seg.';
@@ -2670,6 +2682,7 @@ async function handleDevAI(env, chatId, userMessage) {
 // ââ NEXUS WATCHERS â vigilancia sin LLM, coste 0 ââââââââââââââââââââââââââââ
 async function nexusWatchers(env) {
   const alerts = [];
+  const watcherErrors = [];
 
   // 1. UserAccessWatcher â logins bloqueados en la Ãºltima hora
   try {
@@ -2679,7 +2692,7 @@ async function nexusWatchers(env) {
     for (const row of (blocked.results || [])) {
       alerts.push({ watcher: 'UserAccess', severity: 'HIGH', msg: `Login bloqueado: ${row.email} (${row.n} intentos fallidos en 1h)` });
     }
-  } catch {}
+  } catch(e) { watcherErrors.push('UserAccess: ' + e.message); }
 
   // 2. PendingUsersWatcher â usuarios pendientes >24h
   try {
@@ -2689,7 +2702,7 @@ async function nexusWatchers(env) {
     for (const u of (pending.results || [])) {
       alerts.push({ watcher: 'PendingUsers', severity: 'MEDIUM', msg: `Usuario pendiente >24h: ${u.nombre} (${u.email}) â registrado ${u.created_at}` });
     }
-  } catch {}
+  } catch(e) { watcherErrors.push('PendingUsers: ' + e.message); }
 
   // 3. ErrorWatcher â errores recurrentes (3+ en 24h)
   try {
@@ -2699,7 +2712,7 @@ async function nexusWatchers(env) {
     for (const e of (errors.results || [])) {
       alerts.push({ watcher: 'ErrorPatrol', severity: e.n >= 10 ? 'CRITICAL' : 'HIGH', msg: `Error recurrente (${e.n}x/24h): ${e.mensaje?.slice(0, 150)}` });
     }
-  } catch {}
+  } catch(e) { watcherErrors.push('ErrorPatrol: ' + e.message); }
 
   // 4. CarnetWatcher â carnets que expiran en <30 dÃ­as
   try {
@@ -2709,7 +2722,7 @@ async function nexusWatchers(env) {
     for (const c of (expiring.results || [])) {
       alerts.push({ watcher: 'Carnets', severity: 'MEDIUM', msg: `Carnet por expirar: ${c.nombre} â ${c.tipo}` });
     }
-  } catch {}
+  } catch(e) { watcherErrors.push('Carnets: ' + e.message); }
 
   // 5. FixesPendientesWatcher â fixes sin revisar >48h
   try {
@@ -2719,7 +2732,7 @@ async function nexusWatchers(env) {
     if (stale?.n > 0) {
       alerts.push({ watcher: 'FixesStale', severity: 'MEDIUM', msg: `${stale.n} fix(es) pendiente(s) de aprobaciÃ³n >48h` });
     }
-  } catch {}
+  } catch(e) { watcherErrors.push('FixesStale: ' + e.message); }
 
   // 6. ErrorVelocityWatcher â mismo error 2+ veces en 1h (detecciÃ³n rÃ¡pida)
   try {
@@ -2729,7 +2742,7 @@ async function nexusWatchers(env) {
     for (const e of (fastErrors.results || [])) {
       alerts.push({ watcher: 'ErrorVelocity', severity: e.n >= 5 ? 'CRITICAL' : 'HIGH', msg: `Error rÃ¡pido (${e.n}x/1h): ${e.mensaje?.slice(0, 120)}` });
     }
-  } catch {}
+  } catch(e) { watcherErrors.push('ErrorVelocity: ' + e.message); }
 
   // 7. DeployCorrelationWatcher â errores nuevos post-deploy
   try {
@@ -2748,7 +2761,7 @@ async function nexusWatchers(env) {
         }
       }
     }
-  } catch {}
+  } catch(e) { watcherErrors.push('DeployCorrelation: ' + e.message); }
 
   // 8. SecurityWatcher â fuerza bruta / acceso sospechoso
   try {
@@ -2758,7 +2771,7 @@ async function nexusWatchers(env) {
     for (const bf of (bruteForce.results || [])) {
       alerts.push({ watcher: 'Security', severity: 'CRITICAL', msg: `Posible fuerza bruta: ${bf.email} â ${bf.n} intentos en 30min` });
     }
-  } catch {}
+  } catch(e) { watcherErrors.push('Security: ' + e.message); }
 
   // Filtrar alertas ya procesadas recientemente (evita spam nocturno del mismo problema)
   if (alerts.length === 0) return alerts;
@@ -2772,6 +2785,9 @@ async function nexusWatchers(env) {
       ).bind(alert.watcher, alertKey, now).first();
       if (!cached) filtered.push(alert);
     } catch { filtered.push(alert); }
+  }
+  if (watcherErrors.length > 0) {
+    autoLearn(env, 'error', , watcherErrors.join(' | '), 2);
   }
   return filtered;
 }
