@@ -13,9 +13,5 @@ database_id = "0c9eccde-78f1-476d-ac68-bf452bec0c62"
 binding = "FILES"
 bucket_name = "alejandra-app-files"
 
-[env.production]
-name = "alejandra-agente"
-routes = [{ pattern = "alejandra-agente.workers.dev/*", zone_name = "alejandra-app.workers.dev" }]
-
 [triggers]
 crons = ["0 7 * * *", "0 23 * * *"]
