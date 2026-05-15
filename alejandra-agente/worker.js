@@ -1,13 +1,20 @@
 // ══════════════════════════════════════════════════════════════════════════════
 // ALEJANDRA AGENTE — Worker autónomo, NEXUS router, prompts dinámicos, auto-mejora
 // URL: alejandra-agente.alejandra-app.workers.dev
-// Versión: v5.91 (PHASE 2C — autoconciencia + toma de decisiones autónoma)
+// Versión: v5.92 (PHASE 2D — panel de control + tracking de gastos de tokens)
 // ══════════════════════════════════════════════════════════════════════════════
 
 const ANTHROPIC_API = 'https://api.anthropic.com/v1/messages';
 const OPENAI_API    = 'https://api.openai.com/v1/responses';
 const MODEL_ROUTER  = 'claude-haiku-4-5';
 const MODEL_EXPERTO = 'claude-sonnet-4-6';
+
+const PRECIOS_USD = {
+  'claude-haiku-4-5':  { in: 1.00,  out: 5.00  },
+  'claude-sonnet-4-6': { in: 3.00,  out: 15.00 },
+  'gpt-4o-mini':       { in: 0.15,  out: 0.60  }
+};
+const EUR_RATE = 0.92;
 
 // ── NEXUS MODULES — prompts dinámicos ────────────────────────────────────────
 const NEXUS_MODULES = {
@@ -39,7 +46,8 @@ v5.87: API Anthropic real + memoria de chat D1
 v5.88: OpenAI web search + voz bidireccional
 v5.89: NEXUS router real + prompts dinámicos por módulos
 v5.90: reflexión activa + memory_save + propose_mejora
-v5.91: autoconciencia completa + toma de decisiones autónoma (esta versión)`,
+v5.91: autoconciencia completa + toma de decisiones autónoma
+v5.92: panel de control web + tracking de gastos de tokens (esta versión)`,
 
   web: `BÚSQUEDA WEB: usa buscar_web para info actual — precios, normativas recientes, noticias. OpenAI gpt-4o-mini busca, tú procesas. Indica la fuente.`,
 
@@ -189,7 +197,7 @@ export default {
 
     try {
       if (path === '/health') {
-        return json({ status: 'ok', version: 'v5.91', nexus: true, reflexion: true, decisiones: true, web_search: !!env.OPENAI_API_KEY });
+        return json({ status: 'ok', version: 'v5.92', nexus: true, reflexion: true, decisiones: true, web_search: !!env.OPENAI_API_KEY });
       }
 
       // ── Reflexión manual — Alejandra piensa sobre sí misma ───────────────
@@ -258,6 +266,32 @@ export default {
             : await env.DB.prepare('SELECT * FROM chat_alejandra ORDER BY created_at DESC LIMIT ?').bind(limit).all();
           return json((rows.results||[]).reverse());
         }
+        if (path === '/api/admin/gastos' && req.method === 'GET') {
+          const dias  = parseInt(url.searchParams.get('dias') || '30');
+          const desde = new Date(Date.now() - dias * 86400000).toISOString().split('T')[0];
+          const porModelo = await env.DB.prepare(`
+            SELECT proveedor, modelo,
+                   SUM(tokens_entrada) as total_entrada, SUM(tokens_salida) as total_salida,
+                   ROUND(SUM(coste_usd),6) as total_usd, COUNT(*) as llamadas
+            FROM alejandra_token_uso WHERE date(created_at) >= ?
+            GROUP BY proveedor, modelo ORDER BY total_usd DESC
+          `).bind(desde).all().catch(()=>({results:[]}));
+          const porDia = await env.DB.prepare(`
+            SELECT date(created_at) as fecha, ROUND(SUM(coste_usd),6) as coste_usd,
+                   SUM(tokens_entrada + tokens_salida) as tokens_total
+            FROM alejandra_token_uso WHERE date(created_at) >= ?
+            GROUP BY date(created_at) ORDER BY fecha ASC
+          `).bind(desde).all().catch(()=>({results:[]}));
+          const totalUSD = (porModelo.results||[]).reduce((s,r)=>s+(r.total_usd||0), 0);
+          return json({
+            periodo_dias: dias,
+            total_usd:  Math.round(totalUSD*10000)/10000,
+            total_eur:  Math.round(totalUSD*EUR_RATE*10000)/10000,
+            por_modelo: porModelo.results || [],
+            por_dia:    porDia.results || []
+          });
+        }
+
         return json({ error: 'Ruta no encontrada' }, 404);
       }
 
@@ -309,6 +343,7 @@ async function procesarConNEXUS(env, mensaje, contexto, usuario_id, empresa_id) 
 
     // PASO 5: Llamar al modelo en loop hasta respuesta final (máx 5 iteraciones)
     let respAPI  = await llamarAnthropic(env, messages, tools, expert.model, expert.maxTokens, systemPrompt);
+    if (respAPI.usage) registrarTokenUso(env, expert.model, `chat_${clas.experto}`, respAPI.usage.input_tokens||0, respAPI.usage.output_tokens||0, usuario_id);
     let iter     = 0;
     const MAX_ITER = 5;
 
@@ -326,9 +361,9 @@ async function procesarConNEXUS(env, mensaje, contexto, usuario_id, empresa_id) 
       }
 
       messages.push({ role: 'user', content: toolResults });
-      // En iteraciones de tool, sin tools para evitar loops (salvo web que siempre puede)
       const toolsSiguiente = iter < MAX_ITER - 1 ? tools.filter(t => t.name === 'buscar_web') : [];
       respAPI = await llamarAnthropic(env, messages, toolsSiguiente, expert.model, expert.maxTokens, systemPrompt);
+      if (respAPI.usage) registrarTokenUso(env, expert.model, `chat_${clas.experto}`, respAPI.usage.input_tokens||0, respAPI.usage.output_tokens||0, usuario_id);
       iter++;
     }
 
@@ -556,6 +591,7 @@ Ejemplos:
     });
     if (!resp.ok) throw new Error(`Haiku ${resp.status}`);
     const data  = await resp.json();
+    if (data.usage) registrarTokenUso(env, MODEL_ROUTER, 'clasificacion', data.usage.input_tokens||0, data.usage.output_tokens||0, null);
     const texto = data.content?.[0]?.text?.trim() || '{}';
     const match = texto.match(/\{[^}]+\}/);
     return match ? JSON.parse(match[0]) : { experto: 'app', buscar_web: false, query_web: null };
@@ -591,6 +627,7 @@ async function buscarWebOpenAI(env, query) {
     });
     if (!resp.ok) return `Sin resultados para: "${query}"`;
     const data  = await resp.json();
+    if (data.usage) registrarTokenUso(env, 'gpt-4o-mini', 'web_search', data.usage.input_tokens||0, data.usage.output_tokens||0, null);
     const texto = data.output?.filter(b=>b.type==='message')?.flatMap(m=>m.content)?.filter(c=>c.type==='output_text')?.map(c=>c.text)?.join('\n') || 'Sin resultados';
     return texto.substring(0, 2000);
   } catch (err) {
@@ -648,11 +685,23 @@ async function autoLearnChat(env, usuario_id, empresa_id, respuesta) {
   } catch (err) { console.error('autoLearn:', err.message); }
 }
 
-async function registrarLog(env, usuario_id, tipo, entrada, salida) {
+async function registrarTokenUso(env, modelo, tipo, entrada, salida, usuario_id) {
+  try {
+    const p       = PRECIOS_USD[modelo] || { in: 1.00, out: 5.00 };
+    const coste   = (entrada * p.in + salida * p.out) / 1_000_000;
+    const proveedor = modelo.startsWith('gpt') ? 'openai' : 'anthropic';
+    await env.DB.prepare(
+      `INSERT INTO alejandra_token_uso (proveedor,modelo,tipo,tokens_entrada,tokens_salida,coste_usd,usuario_id,created_at)
+       VALUES(?,?,?,?,?,?,?,datetime('now'))`
+    ).bind(proveedor, modelo, tipo, entrada, salida, coste, usuario_id||'system').run();
+  } catch (err) { console.error('tokenUso:', err.message); }
+}
+
+async function registrarLog(env, usuario_id, accion, parametros, resultado) {
   try {
     await env.DB.prepare(
-      `INSERT INTO alejandra_logs (usuario_id,tipo,entrada,salida,created_at) VALUES(?,?,?,?,datetime('now'))`
-    ).bind(usuario_id||'system', tipo, entrada, salida).run();
+      `INSERT INTO alejandra_logs (usuario_id,accion,parametros,resultado,status,created_at) VALUES(?,?,?,?,'ok',datetime('now'))`
+    ).bind(usuario_id||'system', accion, parametros||'', resultado||'').run();
   } catch (_) {}
 }
 

@@ -33,7 +33,10 @@ jobs:
           cd alejandra-agente
           npx wrangler d1 execute alejandra-db \
             --file=migrate_001_init_schema.sql \
-            --remote || echo "Migración ya aplicada, continuando..."
+            --remote || echo "Migración 001 ya aplicada, continuando..."
+          npx wrangler d1 execute alejandra-db \
+            --file=migrate_002_token_uso.sql \
+            --remote || echo "Migración 002 ya aplicada, continuando..."
 
       - name: Desplegar worker
         env:
@@ -66,7 +69,7 @@ jobs:
             https://alejandra-agente.alejandra-app.workers.dev/health || echo "000")
           echo "Health check: HTTP $STATUS"
           if [ "$STATUS" = "200" ]; then
-            echo "✅ Alejandra Agente v5.88 desplegada y operativa"
+            echo "✅ Alejandra Agente v5.92 desplegada y operativa"
           else
             echo "⚠️ Health check retornó $STATUS (puede tardar unos segundos en propagar)"
           fi
