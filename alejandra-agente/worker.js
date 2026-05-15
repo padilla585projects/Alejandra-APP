@@ -6,7 +6,8 @@
 
 const ANTHROPIC_API  = 'https://api.anthropic.com/v1/messages';
 const OPENAI_API     = 'https://api.openai.com/v1/responses';
-const MODEL_EXPERTO  = 'claude-sonnet-4-6';
+const MODEL_ROUTER   = 'claude-haiku-4-5';   // Clasificador — rápido y barato
+const MODEL_EXPERTO  = 'claude-sonnet-4-6';  // Experto — para lo complejo
 
 const SYSTEM_ALEJANDRA = `Eres Alejandra, agente IA autónoma creada por Adrián Padilla para gestionar empresas del sector eléctrico/mecánico.
 
@@ -219,102 +220,162 @@ export default {
 // NEXUS — Router con tool use y búsqueda web
 // ══════════════════════════════════════════════════════════════════════════════
 
+// ── NEXUS Router ─────────────────────────────────────────────────────────────
+// Haiku clasifica → decide modelo y si necesita búsqueda web
+// Simple  → Haiku responde directamente (barato, rápido)
+// Complejo → Sonnet con contexto completo (potente)
+// Web     → OpenAI busca → Haiku/Sonnet procesa (actualizado)
+
 async function procesarConNEXUS(env, mensaje, contexto, usuario_id) {
   if (!env.ANTHROPIC_API_KEY) {
-    return {
-      texto: 'Error: ANTHROPIC_API_KEY no configurada en el worker.',
-      acciones: [],
-      requiere_confirmacion: false
-    };
+    return { texto: 'Error: ANTHROPIC_API_KEY no configurada.', acciones: [], requiere_confirmacion: false };
   }
 
   const config = await env.DB.prepare(
     'SELECT modo, auto_fix FROM alejandra_config ORDER BY updated_at DESC LIMIT 1'
   ).first().catch(() => null);
-
   const modo = config?.modo || 'autonomo';
 
-  // Construir historial de mensajes
-  const messages = construirMessages(mensaje, contexto);
-
-  // Tools disponibles (solo buscar_web si hay OPENAI_API_KEY)
-  const tools = env.OPENAI_API_KEY ? [TOOL_BUSCAR_WEB] : [];
-
   try {
-    // Llamar a Claude con tools habilitados
-    let respuestaAPI = await llamarAnthropicConTools(env, messages, tools, MODEL_EXPERTO, 1024);
+    // ── PASO 1: Haiku clasifica el mensaje (mínimo de tokens) ──────────────
+    const clasificacion = await clasificarConHaiku(env, mensaje, contexto);
+    console.log(`🔀 NEXUS: tipo=${clasificacion.tipo} modelo=${clasificacion.modelo} web=${clasificacion.buscar_web}`);
 
-    // Loop de tool use (máx 3 iteraciones de búsqueda)
-    let iteraciones = 0;
-    while (respuestaAPI.stop_reason === 'tool_use' && iteraciones < 3) {
-      const toolBlock = respuestaAPI.content.find(b => b.type === 'tool_use');
-      if (!toolBlock) break;
+    let textoFinal = '';
+    let usoBusquedaWeb = false;
+    let modeloUsado = clasificacion.modelo;
 
-      let toolResult = '';
-
-      if (toolBlock.name === 'buscar_web') {
-        console.log(`🔍 Buscando: ${toolBlock.input.query}`);
-        toolResult = await buscarWebOpenAI(env, toolBlock.input.query);
-        await registrarLog(env, usuario_id, 'web_search', toolBlock.input.query, toolResult.substring(0, 200));
-      }
-
-      // Añadir respuesta del asistente y resultado de la tool al historial
-      messages.push({ role: 'assistant', content: respuestaAPI.content });
-      messages.push({
-        role: 'user',
-        content: [{
-          type: 'tool_result',
-          tool_use_id: toolBlock.id,
-          content: toolResult
-        }]
-      });
-
-      respuestaAPI = await llamarAnthropicConTools(env, messages, tools, MODEL_EXPERTO, 1024);
-      iteraciones++;
+    // ── PASO 2: Ejecutar búsqueda web si Haiku lo decidió ──────────────────
+    let resultadoWeb = null;
+    if (clasificacion.buscar_web && env.OPENAI_API_KEY) {
+      console.log(`🔍 OpenAI buscando: ${clasificacion.query_web}`);
+      resultadoWeb = await buscarWebOpenAI(env, clasificacion.query_web || mensaje);
+      usoBusquedaWeb = true;
+      await registrarLog(env, usuario_id, 'web_search', clasificacion.query_web, resultadoWeb.substring(0, 200));
     }
 
-    // Extraer texto final
-    const textoFinal = respuestaAPI.content
-      .filter(b => b.type === 'text')
-      .map(b => b.text)
-      .join('\n')
-      .trim() || 'Sin respuesta';
+    // ── PASO 3: Construir mensajes con contexto apropiado ──────────────────
+    // Simple → menos historial (ahorra tokens)
+    // Complejo → historial completo
+    const limitHistorial = clasificacion.tipo === 'simple' ? 4 : 10;
+    const incluirAprendizajes = clasificacion.tipo !== 'simple';
+    const messages = construirMessages(mensaje, contexto, limitHistorial, incluirAprendizajes, resultadoWeb);
 
-    await registrarLog(env, usuario_id, 'chat', mensaje.substring(0, 100), textoFinal.substring(0, 200));
+    // ── PASO 4: Llamar al modelo apropiado ─────────────────────────────────
+    if (clasificacion.modelo === 'haiku') {
+      // Haiku responde directamente (preguntas simples, saludos, info básica)
+      const resp = await llamarAnthropicConTools(env, messages, [], MODEL_ROUTER, 512);
+      textoFinal = resp.content?.find(b => b.type === 'text')?.text?.trim() || 'Sin respuesta';
+
+    } else {
+      // Sonnet con tool use para preguntas complejas
+      const tools = env.OPENAI_API_KEY && !resultadoWeb ? [TOOL_BUSCAR_WEB] : [];
+      let respAPI = await llamarAnthropicConTools(env, messages, tools, MODEL_EXPERTO, 1024);
+
+      // Loop tool use si Sonnet decide buscar más
+      let iter = 0;
+      while (respAPI.stop_reason === 'tool_use' && iter < 2) {
+        const tb = respAPI.content.find(b => b.type === 'tool_use');
+        if (!tb) break;
+        const result = await buscarWebOpenAI(env, tb.input.query);
+        usoBusquedaWeb = true;
+        messages.push({ role: 'assistant', content: respAPI.content });
+        messages.push({ role: 'user', content: [{ type: 'tool_result', tool_use_id: tb.id, content: result }] });
+        respAPI = await llamarAnthropicConTools(env, messages, [], MODEL_EXPERTO, 1024);
+        iter++;
+      }
+
+      textoFinal = respAPI.content?.filter(b => b.type === 'text').map(b => b.text).join('\n').trim() || 'Sin respuesta';
+    }
+
+    await registrarLog(env, usuario_id, 'chat', `[${modeloUsado}] ${mensaje.substring(0, 80)}`, textoFinal.substring(0, 200));
 
     return {
       texto: textoFinal,
       acciones: [],
       requiere_confirmacion: modo === 'confirmacion',
-      modelo: MODEL_EXPERTO,
-      busqueda_web: iteraciones > 0
+      modelo: modeloUsado,
+      busqueda_web: usoBusquedaWeb
     };
 
   } catch (err) {
     console.error('ERROR procesarConNEXUS:', err.message);
-    return {
-      texto: `Lo siento, hubo un error al procesar tu mensaje: ${err.message}`,
-      acciones: [],
-      requiere_confirmacion: false
-    };
+    return { texto: `Error al procesar: ${err.message}`, acciones: [], requiere_confirmacion: false };
   }
 }
 
-function construirMessages(mensaje, contexto) {
+// ── Clasificador Haiku — decide routing con mínimo de tokens ─────────────────
+async function clasificarConHaiku(env, mensaje, contexto) {
+  const sistemaClasificador = `Eres un clasificador de mensajes para un agente IA. Responde SOLO con JSON válido, sin texto adicional.
+
+Clasifica el mensaje según:
+- tipo: "simple" (saludo, pregunta básica, confirmación) | "tecnico" (app, datos, gestión) | "complejo" (análisis, múltiples pasos)
+- modelo: "haiku" (simple/saludo) | "sonnet" (técnico/complejo)
+- buscar_web: true si necesita info actual (precios, normativas recientes, noticias) | false si no
+- query_web: string con la búsqueda optimizada en inglés si buscar_web=true | null si no
+
+Ejemplos:
+"hola" → {"tipo":"simple","modelo":"haiku","buscar_web":false,"query_web":null}
+"precio del cobre hoy" → {"tipo":"simple","modelo":"haiku","buscar_web":true,"query_web":"copper price today per kg"}
+"analiza los fichajes del mes" → {"tipo":"complejo","modelo":"sonnet","buscar_web":false,"query_web":null}
+"normativa IEC 60364" → {"tipo":"tecnico","modelo":"sonnet","buscar_web":true,"query_web":"IEC 60364 electrical installation standard 2024"}`;
+
+  try {
+    const resp = await fetch(ANTHROPIC_API, {
+      method: 'POST',
+      headers: {
+        'x-api-key': env.ANTHROPIC_API_KEY,
+        'anthropic-version': '2023-06-01',
+        'content-type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: MODEL_ROUTER,
+        max_tokens: 120,
+        system: sistemaClasificador,
+        messages: [{ role: 'user', content: mensaje.substring(0, 200) }]
+      })
+    });
+
+    if (!resp.ok) throw new Error(`Haiku ${resp.status}`);
+    const data = await resp.json();
+    const texto = data.content?.[0]?.text?.trim() || '{}';
+
+    // Extraer JSON aunque venga con texto alrededor
+    const match = texto.match(/\{[^}]+\}/);
+    return match ? JSON.parse(match[0]) : { tipo: 'tecnico', modelo: 'sonnet', buscar_web: false, query_web: null };
+
+  } catch (err) {
+    console.error('ERROR clasificarConHaiku:', err.message);
+    // Fallback seguro: Sonnet sin búsqueda
+    return { tipo: 'tecnico', modelo: 'sonnet', buscar_web: false, query_web: null };
+  }
+}
+
+function construirMessages(mensaje, contexto, limitHistorial = 10, incluirAprendizajes = true, resultadoWeb = null) {
   const messages = [];
 
-  for (const item of contexto.historial) {
+  // Historial recortado según complejidad
+  const historial = contexto.historial.slice(-limitHistorial);
+  for (const item of historial) {
     if (item.mensaje)   messages.push({ role: 'user',      content: item.mensaje });
     if (item.respuesta) messages.push({ role: 'assistant', content: item.respuesta });
   }
 
-  let contenidoUsuario = mensaje;
-  if (contexto.aprendizajes?.length > 0) {
+  // Construir mensaje del usuario con contexto adicional
+  let partes = [];
+
+  if (incluirAprendizajes && contexto.aprendizajes?.length > 0) {
     const ctx = contexto.aprendizajes.map(a => `[${a.tipo}] ${a.titulo}: ${a.contenido}`).join('\n');
-    contenidoUsuario = `Contexto:\n${ctx}\n\nMensaje: ${mensaje}`;
+    partes.push(`Contexto relevante:\n${ctx}`);
   }
 
-  messages.push({ role: 'user', content: contenidoUsuario });
+  if (resultadoWeb) {
+    partes.push(`Información actual de internet:\n${resultadoWeb}`);
+  }
+
+  partes.push(partes.length > 0 ? `Mensaje del usuario: ${mensaje}` : mensaje);
+
+  messages.push({ role: 'user', content: partes.join('\n\n') });
   return messages;
 }
 
