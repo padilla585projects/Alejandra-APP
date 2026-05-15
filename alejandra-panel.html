@@ -136,9 +136,14 @@ a{color:var(--acc2);text-decoration:none}
 .reflex-btn:disabled{opacity:.4;cursor:default}
 
 /* ── LOG ITEM ── */
-.log-item{border-bottom:1px solid var(--border);padding:10px 0}
+.log-item{border-bottom:1px solid var(--border);padding:10px 0;cursor:pointer;transition:background .15s}
+.log-item:hover{background:rgba(139,92,246,.06);border-radius:8px;padding-left:6px}
 .log-item:last-child{border-bottom:none}
 .log-head{display:flex;align-items:center;gap:6px;margin-bottom:4px;flex-wrap:wrap}
+.log-full{display:none;margin-top:8px;padding:10px;background:var(--bg);border-radius:8px;border:1px solid var(--border)}
+.log-full.open{display:block}
+.log-full-u{font-size:12px;line-height:1.5;white-space:pre-wrap;word-break:break-word}
+.log-full-a{font-size:12px;line-height:1.5;color:var(--acc2);margin-top:8px;white-space:pre-wrap;word-break:break-word}
 
 /* ── RESPONSIVE ── */
 @media(max-width:767px){
@@ -242,18 +247,37 @@ function historialAPares(rows) {
   }
   return pares;
 }
+const CANAL_COLOR = { web:'b-green', telegram:'b-blue', panel:'b-acc', app:'b-green' };
+
+function logItemHtml(x, uid) {
+  const preview = (s, n) => { const t = (s||''); return esc(t.substring(0,n)) + (t.length>n?'…':''); };
+  return `
+    <div class="log-item" onclick="toggleLog('li_${uid}')">
+      <div class="log-head">
+        <span class="badge ${CANAL_COLOR[x.canal]||'b-muted'}">${x.canal||'?'}</span>
+        <span style="margin-left:auto;font-size:10px;color:var(--muted)">${fmtDate(x.created_at)}</span>
+        <span style="font-size:10px;color:var(--muted)" id="arr_${uid}">▸</span>
+      </div>
+      <div style="font-size:12px"><b style="color:var(--muted)">↑</b> ${preview(x.mensaje, 100)}</div>
+      <div style="font-size:11px;color:var(--acc2);margin-top:2px"><b>↓</b> ${preview(x.respuesta, 100)}</div>
+      <div class="log-full" id="li_${uid}">
+        <div class="log-full-u"><b style="color:var(--muted)">Tú:</b><br>${esc(x.mensaje||'')}</div>
+        <div class="log-full-a"><b>Alejandra:</b><br>${esc(x.respuesta||'')}</div>
+      </div>
+    </div>`;
+}
+
+function toggleLog(id) {
+  const el  = document.getElementById(id);
+  const arr = document.getElementById('arr_' + id.replace('li_',''));
+  if (!el) return;
+  const open = el.classList.toggle('open');
+  if (arr) arr.textContent = open ? '▾' : '▸';
+}
+
 function renderHistorial(items) {
   if (!items.length) return '<div style="color:var(--muted);font-size:12px;text-align:center;padding:16px">Sin conversaciones</div>';
-  const CANAL_COLOR = { web:'b-green', telegram:'b-blue', panel:'b-acc', app:'b-green' };
-  return [...items].reverse().map(x=>`
-    <div class="log-item">
-      <div class="log-head">
-        <span class="badge ${CANAL_COLOR[x.canal]||'b-muted'}">${x.canal}</span>
-        <span style="margin-left:auto;font-size:10px;color:var(--muted)">${fmtDate(x.created_at)}</span>
-      </div>
-      <div style="font-size:12px"><b style="color:var(--muted)">↑</b> ${esc((x.mensaje||'').substring(0,150))}${(x.mensaje||'').length>150?'…':''}</div>
-      <div style="font-size:11px;color:var(--acc2);margin-top:3px"><b>↓</b> ${esc((x.respuesta||'').substring(0,150))}${(x.respuesta||'').length>150?'…':''}</div>
-    </div>`).join('');
+  return [...items].reverse().map((x,i)=>logItemHtml(x,`lg${i}`)).join('');
 }
 function filtrarHistorial(canal, btn) {
   document.querySelectorAll('#histListBox').forEach(()=>{});
@@ -511,18 +535,9 @@ async function initDashboard() {
           .map(([n,v])=>`<span class="badge ${v?'b-green':'b-muted'}">${v?'✓':'✗'} ${n}</span>`).join('')}
       </div>
 
-      <div class="sec-title" style="margin-top:14px">Últimas conversaciones</div>
+      <div class="sec-title" style="margin-top:14px">Últimas conversaciones <span style="font-size:10px;color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0">(toca para expandir)</span></div>
       <div class="card">
-        ${chatList.length ? [...chatList].reverse().slice(0,6).map(c=>`
-          <div class="log-item">
-            <div class="log-head">
-              <span class="badge b-muted">${c.usuario_id||'?'}</span>
-              <span class="badge b-blue">${c.canal||'web'}</span>
-              <span style="margin-left:auto;font-size:10px;color:var(--muted)">${fmtDate(c.created_at)}</span>
-            </div>
-            <div style="font-size:12px"><b>↑</b> ${esc((c.mensaje||'').substring(0,90))}${(c.mensaje||'').length>90?'…':''}</div>
-            <div style="font-size:11px;color:var(--acc2);margin-top:3px"><b>↓</b> ${esc((c.respuesta||'').substring(0,90))}${(c.respuesta||'').length>90?'…':''}</div>
-          </div>`).join('')
+        ${chatList.length ? [...chatList].reverse().slice(0,8).map((c,i)=>logItemHtml(c,`db${i}`)).join('')
         : '<div style="color:var(--muted);font-size:12px;text-align:center;padding:16px">Sin conversaciones aún</div>'}
       </div>`;
   } catch(err) { c.innerHTML = `<div style="color:var(--red)">Error: ${esc(err.message)}</div>`; }
