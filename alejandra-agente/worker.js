@@ -1,7 +1,7 @@
 // ══════════════════════════════════════════════════════════════════════════════
 // ALEJANDRA AGENTE — Worker autónomo, NEXUS router, prompts dinámicos, auto-mejora
 // URL: alejandra-agente.alejandra-app.workers.dev
-// Versión: v5.92 (PHASE 2D — panel de control + tracking de gastos de tokens)
+// Versión: v5.93 (PHASE 2D — panel de control + tracking de gastos de tokens)
 // ══════════════════════════════════════════════════════════════════════════════
 
 const ANTHROPIC_API = 'https://api.anthropic.com/v1/messages';
@@ -47,7 +47,7 @@ v5.88: OpenAI web search + voz bidireccional
 v5.89: NEXUS router real + prompts dinámicos por módulos
 v5.90: reflexión activa + memory_save + propose_mejora
 v5.91: autoconciencia completa + toma de decisiones autónoma
-v5.92: panel de control web + tracking de gastos de tokens (esta versión)`,
+v5.93: panel de control web + tracking de gastos de tokens (esta versión)`,
 
   web: `BÚSQUEDA WEB: usa buscar_web para info actual — precios, normativas recientes, noticias. OpenAI gpt-4o-mini busca, tú procesas. Indica la fuente.`,
 
@@ -197,7 +197,7 @@ export default {
 
     try {
       if (path === '/health') {
-        return json({ status: 'ok', version: 'v5.92', nexus: true, reflexion: true, decisiones: true, web_search: !!env.OPENAI_API_KEY });
+        return json({ status: 'ok', version: 'v5.93', nexus: true, reflexion: true, decisiones: true, web_search: !!env.OPENAI_API_KEY });
       }
 
       // ── Reflexión manual — Alejandra piensa sobre sí misma ───────────────
@@ -707,6 +707,7 @@ async function registrarLog(env, usuario_id, accion, parametros, resultado) {
 
 async function verificarAdminToken(env, token) {
   if (!token) return false;
+  if (env.ADMIN_TOKEN && token === env.ADMIN_TOKEN) return true;
   try {
     const r = await env.DB.prepare('SELECT id FROM alejandra_tokens WHERE token=? AND tipo="admin" AND activo=1').bind(token).first();
     return !!r;

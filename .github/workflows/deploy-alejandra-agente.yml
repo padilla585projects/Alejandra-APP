@@ -37,6 +37,9 @@ jobs:
           npx wrangler d1 execute alejandra-db \
             --file=migrate_002_token_uso.sql \
             --remote || echo "Migración 002 ya aplicada, continuando..."
+          npx wrangler d1 execute alejandra-db \
+            --file=migrate_003_fix_schema.sql \
+            --remote || echo "Migración 003 ya aplicada, continuando..."
 
       - name: Desplegar worker
         env:
@@ -61,6 +64,13 @@ jobs:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
           echo "$OPENAI_API_KEY" | npx wrangler secret put OPENAI_API_KEY --name alejandra-agente
+
+      - name: Configurar ADMIN_TOKEN (contraseña panel)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: d65ead2b2967bf68ff3848a36cd7b1b4
+        run: |
+          echo "alejandra2026" | npx wrangler secret put ADMIN_TOKEN --name alejandra-agente
 
       - name: Verificar health
         run: |
