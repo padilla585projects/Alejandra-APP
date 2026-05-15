@@ -17,3 +17,9 @@ Thumbs.db
 node_modules/
 package.json
 package-lock.json
+
+# Claves y secretos — NUNCA commitear
+CLAVES.txt
+NUEVA_CUENTA.txt
+*.env
+.env*
