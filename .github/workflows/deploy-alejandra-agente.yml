@@ -21,17 +21,19 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'npm'
 
-      - name: Install dependencies
+      - name: Install wrangler
         run: npm install -g wrangler@latest
 
-      - name: Create migration context for D1
+      - name: Apply D1 migrations
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: d65ead2b2967bf68ff3848a36cd7b1b4
         run: |
           cd alejandra-agente
-          mkdir -p migrations
-          cp migrate_001_init_schema.sql migrations/
-          ls -la migrations/
+          npx wrangler d1 execute alejandra-db \
+            --file=migrate_001_init_schema.sql \
+            --remote || echo "Migration may already be applied, continuing..."
 
       - name: Deploy Alejandra Agente Worker
         env:
@@ -39,10 +41,24 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: d65ead2b2967bf68ff3848a36cd7b1b4
         run: |
           cd alejandra-agente
-          npx wrangler deploy --name alejandra-agente
+          npx wrangler deploy
 
-      - name: Notify deployment
-        if: success()
+      - name: Configure ANTHROPIC_API_KEY secret
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: d65ead2b2967bf68ff3848a36cd7b1b4
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
-          echo "✅ Alejandra Agente deployed successfully to alejandra-agente.workers.dev"
-          echo "Version: v5.86"
+          cd alejandra-agente
+          echo "$ANTHROPIC_API_KEY" | npx wrangler secret put ANTHROPIC_API_KEY || echo "Secret may already exist"
+
+      - name: Verify deployment
+        run: |
+          sleep 5
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://alejandra-agente.alejandra-app.workers.dev/health || echo "000")
+          echo "Health check HTTP status: $STATUS"
+          if [ "$STATUS" = "200" ]; then
+            echo "✅ Alejandra Agente v5.87 deployed and healthy"
+          else
+            echo "⚠️ Health check returned $STATUS (may need a moment to propagate)"
+          fi

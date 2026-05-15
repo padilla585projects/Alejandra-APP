@@ -650,22 +650,28 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
   <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:2px solid #8b5cf6;flex-shrink:0;background:var(--surface)">
     <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:15px">🤖 Alejandra Agente</div>
     <div style="display:flex;gap:8px;align-items:center">
-      <span style="font-size:11px;color:var(--muted)">v5.86</span>
+      <button id="alejandraHablarBtn" onclick="alejandraToggleAutoHablar()" title="Activar/desactivar voz de Alejandra"
+        style="background:var(--surface2);border:1px solid var(--border);border-radius:50%;width:32px;height:32px;font-size:16px;cursor:pointer;line-height:1">🔊</button>
+      <span style="font-size:11px;color:var(--muted)">v5.88</span>
       <button onclick="alejandraAbrir(false)" style="background:var(--surface2);border:none;border-radius:50%;width:32px;height:32px;font-size:18px;cursor:pointer;color:var(--text)">×</button>
     </div>
   </div>
   <div id="alejandraList" style="flex:1;overflow-y:auto;padding:12px 16px;display:flex;flex-direction:column;gap:8px">
-    <div style="text-align:center;color:var(--muted);font-size:13px;padding:20px">Cargando contexto de Alejandra...</div>
+    <div style="text-align:center;color:var(--muted);font-size:13px;padding:20px">🤖 Alejandra lista. Cuéntame qué necesitas...</div>
   </div>
-  <div style="flex-shrink:0;padding:10px 12px;border-top:1px solid var(--border);display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap">
-    <textarea id="alejandraInput" placeholder="Pregunta a Alejandra..." rows="1"
-      style="flex:1;background:var(--surface2);border:1px solid #8b5cf6;border-radius:12px;padding:10px 14px;font-size:14px;color:var(--text);resize:none;line-height:1.4;max-height:100px;outline:none;min-width:200px"
-      onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();alejandraEnviar()}"
-      oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,100)+'px'"></textarea>
-    <button onclick="alejandraEnviar()" class="login-btn" style="margin:0;width:44px;height:44px;padding:0;border-radius:12px;flex-shrink:0;font-size:18px;background:#8b5cf6">⚡</button>
-  </div>
-  <div id="alejandraCapabilities" style="padding:8px 12px;font-size:11px;color:var(--muted);border-top:1px solid var(--border);display:none">
-    📊 Alejandra está analizando... (máx 15 iteraciones)
+  <div style="flex-shrink:0;padding:10px 12px;border-top:1px solid var(--border)">
+    <div style="display:flex;gap:8px;align-items:flex-end">
+      <button id="alejandraVozBtn" onclick="alejandraToggleVoz()" title="Hablar con Alejandra"
+        style="width:44px;height:44px;padding:0;border-radius:12px;flex-shrink:0;font-size:20px;background:var(--surface2);border:1px solid var(--border);cursor:pointer;line-height:1">🎙️</button>
+      <textarea id="alejandraInput" placeholder="Escribe o usa el micrófono..." rows="1"
+        style="flex:1;background:var(--surface2);border:1px solid #8b5cf6;border-radius:12px;padding:10px 14px;font-size:14px;color:var(--text);resize:none;line-height:1.4;max-height:100px;outline:none"
+        onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();alejandraEnviar()}"
+        oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,100)+'px'"></textarea>
+      <button onclick="alejandraEnviar()" class="login-btn" style="margin:0;width:44px;height:44px;padding:0;border-radius:12px;flex-shrink:0;font-size:18px;background:#8b5cf6">⚡</button>
+    </div>
+    <div id="alejandraVozStatus" style="display:none;font-size:11px;color:#8b5cf6;text-align:center;padding-top:6px;animation:pulse 1s infinite">
+      🎙️ Escuchando... (habla ahora)
+    </div>
   </div>
 </div>
 
@@ -10070,7 +10076,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '5.86';
+const APP_VERSION = '5.88';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -14574,34 +14580,109 @@ window.turnoToggle   = turnoToggle;
 // ALEJANDRA AI CHAT (v5.86 — worker autónomo en alejandra-agente.workers.dev)
 // ═══════════════════════════════════════════════════════════════════════════
 
-const ALEJANDRA_API = 'https://alejandra-agente.workers.dev/api/chat';
+const ALEJANDRA_API = 'https://alejandra-agente.alejandra-app.workers.dev/api/chat';
+
+// ── Estado de voz ─────────────────────────────────────────────────────────────
+let _alejandraAutoHablar  = false;
+let _alejandraRecognition = null;
+let _alejandraEscuchando  = false;
 
 function alejandraAbrir(show = true) {
   const panel = document.getElementById('alejandraPanel');
   if (!panel) return;
   if (show) {
     panel.style.display = 'flex';
-    document.getElementById('alejandraInput').focus();
-    alejandraCargarContexto();
+    document.getElementById('alejandraInput')?.focus();
   } else {
     panel.style.display = 'none';
+    if (_alejandraEscuchando && _alejandraRecognition) _alejandraRecognition.stop();
+    window.speechSynthesis?.cancel();
   }
 }
 
-async function alejandraCargarContexto() {
-  const list = document.getElementById('alejandraList');
-  if (!list) return;
-  const s = getSession();
-  try {
-    list.innerHTML = '<div style="text-align:center;color:var(--muted);font-size:13px;padding:20px">🤖 Alejandra lista. Cuéntame qué necesitas...</div>';
-  } catch {
-    list.innerHTML = '<div style="text-align:center;color:var(--muted);font-size:13px;padding:20px">❌ Error al conectar con Alejandra</div>';
+// ── Voz de Alejandra (TTS) ────────────────────────────────────────────────────
+function alejandraToggleAutoHablar() {
+  _alejandraAutoHablar = !_alejandraAutoHablar;
+  const btn = document.getElementById('alejandraHablarBtn');
+  if (btn) {
+    btn.textContent = _alejandraAutoHablar ? '🔊' : '🔇';
+    btn.style.borderColor = _alejandraAutoHablar ? '#8b5cf6' : 'var(--border)';
   }
+  if (!_alejandraAutoHablar) window.speechSynthesis?.cancel();
+  toast(_alejandraAutoHablar ? '🔊 Alejandra hablará' : '🔇 Voz desactivada', 'ok');
 }
 
+function alejandraHablar(texto) {
+  if (!_alejandraAutoHablar) return;
+  const synth = window.speechSynthesis;
+  if (!synth) return;
+  synth.cancel();
+  const utt = new SpeechSynthesisUtterance(texto.substring(0, 500));
+  utt.lang  = 'es-ES';
+  utt.rate  = 1.05;
+  utt.pitch = 1.0;
+  // Buscar voz española femenina
+  const voces = synth.getVoices();
+  const voz   = voces.find(v => v.lang.startsWith('es') && /female|mujer|lucia|maria/i.test(v.name))
+             || voces.find(v => v.lang.startsWith('es'));
+  if (voz) utt.voice = voz;
+  synth.speak(utt);
+}
+
+// ── Reconocimiento de voz (STT) ───────────────────────────────────────────────
+function alejandraToggleVoz() {
+  if (_alejandraEscuchando) {
+    _alejandraRecognition?.stop();
+    return;
+  }
+
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) {
+    toast('Tu navegador no soporta reconocimiento de voz (usa Chrome)', 'err');
+    return;
+  }
+
+  const rec = new SR();
+  rec.lang             = 'es-ES';
+  rec.continuous       = false;
+  rec.interimResults   = false;
+  _alejandraRecognition = rec;
+
+  const btn    = document.getElementById('alejandraVozBtn');
+  const status = document.getElementById('alejandraVozStatus');
+
+  rec.onstart = () => {
+    _alejandraEscuchando = true;
+    if (btn)    { btn.textContent = '⏹️'; btn.style.background = '#ef4444'; btn.style.borderColor = '#ef4444'; }
+    if (status) status.style.display = 'block';
+    window.speechSynthesis?.cancel();
+  };
+
+  rec.onresult = (e) => {
+    const transcript = e.results[0][0].transcript.trim();
+    const input = document.getElementById('alejandraInput');
+    if (input) input.value = transcript;
+    alejandraEnviar();
+  };
+
+  rec.onerror = (e) => {
+    console.error('STT error:', e.error);
+    if (e.error !== 'aborted') toast('Error de micrófono: ' + e.error, 'err');
+  };
+
+  rec.onend = () => {
+    _alejandraEscuchando = false;
+    if (btn)    { btn.textContent = '🎙️'; btn.style.background = 'var(--surface2)'; btn.style.borderColor = 'var(--border)'; }
+    if (status) status.style.display = 'none';
+  };
+
+  rec.start();
+}
+
+// ── Chat principal ────────────────────────────────────────────────────────────
 async function alejandraEnviar() {
   const input = document.getElementById('alejandraInput');
-  const msg = (input?.value || '').trim();
+  const msg   = (input?.value || '').trim();
   if (!msg) return;
 
   input.value = '';
@@ -14613,53 +14694,54 @@ async function alejandraEnviar() {
     return;
   }
 
-  // Mostrar mensaje del usuario
   _alejandraAñadirMensaje(msg, 'user');
 
   try {
-    // Mostrar indicador de carga
     _alejandraAñadirMensaje('⏳ Analizando...', 'bot', true);
 
     const res = await fetch(ALEJANDRA_API, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        mensaje: msg,
+        mensaje:    msg,
         usuario_id: s.usuario_id,
         empresa_id: s.empresa_id || null,
-        canal: 'app'
+        canal:      'app'
       })
     });
 
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-
     const data = await res.json();
 
-    // Eliminar el mensaje de "analizando"
     const list = document.getElementById('alejandraList');
     if (list?.lastChild?.dataset?.loading) list.lastChild.remove();
 
-    // Mostrar respuesta
-    _alejandraAñadirMensaje(data.texto || 'Sin respuesta', 'bot');
+    const textoRespuesta = data.texto || 'Sin respuesta';
+    _alejandraAñadirMensaje(textoRespuesta, 'bot');
 
-    // Mostrar acciones si las hay
-    if (data.acciones && data.acciones.length > 0) {
-      const accionesStr = data.acciones.map(a => `• ${a.tipo}: ${a.descripcion}`).join('\n');
-      _alejandraAñadirMensaje(`📋 Acciones:\n${accionesStr}`, 'bot-info');
+    // Indicar si usó búsqueda web
+    if (data.busqueda_web) {
+      _alejandraAñadirMensaje('🔍 (resultado con búsqueda web)', 'bot-info');
     }
 
-    // Si requiere confirmación, mostrar botones
+    if (data.acciones?.length > 0) {
+      const str = data.acciones.map(a => `• ${a.tipo}: ${a.descripcion}`).join('\n');
+      _alejandraAñadirMensaje(`📋 Acciones:\n${str}`, 'bot-info');
+    }
+
     if (data.requiere_confirmacion) {
       _alejandraAñadirMensaje('⚠️ Esta acción requiere tu confirmación', 'bot-warning');
     }
+
+    // Hablar la respuesta si la voz está activada
+    alejandraHablar(textoRespuesta);
+
   } catch (err) {
-    // Eliminar el mensaje de "analizando"
     const list = document.getElementById('alejandraList');
     if (list?.lastChild?.dataset?.loading) list.lastChild.remove();
-
     toast('❌ Error: ' + err.message, 'err');
-    _alejandraAñadirMensaje('❌ Error: ' + err.message, 'bot-error');
-    input.value = msg;
+    _alejandraAñadirMensaje('❌ Error al conectar con Alejandra', 'bot-error');
+    if (input) input.value = msg;
   }
 }
 
@@ -14668,41 +14750,21 @@ function _alejandraAñadirMensaje(texto, tipo = 'user', isLoading = false) {
   if (!list) return;
 
   const div = document.createElement('div');
-  div.style.cssText = `
-    display:flex;
-    flex-direction:column;
-    align-items:${tipo === 'user' ? 'flex-end' : 'flex-start'};
-    margin-bottom:8px
-  `;
+  div.style.cssText = `display:flex;flex-direction:column;align-items:${tipo === 'user' ? 'flex-end' : 'flex-start'};margin-bottom:8px`;
 
-  let bgColor, txtColor;
-  if (tipo === 'user') {
-    bgColor = '#8b5cf6';
-    txtColor = '#fff';
-  } else if (tipo === 'bot-info') {
-    bgColor = 'var(--surface2)';
-    txtColor = '#22c55e';
-  } else if (tipo === 'bot-warning') {
-    bgColor = 'var(--surface2)';
-    txtColor = '#f59e0b';
-  } else if (tipo === 'bot-error') {
-    bgColor = 'var(--surface2)';
-    txtColor = '#ef4444';
-  } else {
-    bgColor = 'var(--surface2)';
-    txtColor = 'var(--text)';
-  }
+  const colores = {
+    user:        ['#8b5cf6',        '#fff'],
+    bot:         ['var(--surface2)', 'var(--text)'],
+    'bot-info':  ['var(--surface2)', '#22c55e'],
+    'bot-warning':['var(--surface2)','#f59e0b'],
+    'bot-error': ['var(--surface2)', '#ef4444']
+  };
+  const [bg, fg] = colores[tipo] || colores.bot;
+  const radius = tipo === 'user' ? '16px 16px 4px 16px' : '16px 16px 16px 4px';
 
-  div.innerHTML = `
-    <div style="max-width:85%;background:${bgColor};color:${txtColor};border-radius:${tipo === 'user' ? '16px 16px 4px 16px' : '16px 16px 16px 4px'};padding:10px 14px;font-size:14px;line-height:1.5;word-wrap:break-word;white-space:pre-wrap">
-      ${_escHtml(texto)}
-    </div>
-  `;
+  div.innerHTML = `<div style="max-width:85%;background:${bg};color:${fg};border-radius:${radius};padding:10px 14px;font-size:14px;line-height:1.5;word-wrap:break-word;white-space:pre-wrap">${_escHtml(texto)}</div>`;
 
-  if (isLoading) {
-    div.dataset.loading = '1';
-  }
-
+  if (isLoading) div.dataset.loading = '1';
   list.appendChild(div);
   list.scrollTop = list.scrollHeight;
 }

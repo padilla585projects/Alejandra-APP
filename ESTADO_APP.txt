@@ -9,6 +9,32 @@ VERSIÓN ACTUAL APP NUEVA: v5.86 (PHASE 1 Alejandra Independencia — worker aut
 VERSIÓN ACTUAL APP VIEJA: v4.19 (⛔ CONGELADA DEFINITIVAMENTE — no recibe más cambios)
 
 ================================================================================
+  PLAN ALEJANDRA INDEPENDENCIA (ROADMAP)
+================================================================================
+
+✅ PHASE 1: SCAFFOLDING (v5.86 — COMPLETADO)
+   - Worker stub: alejandra-agente.workers.dev
+   - D1 schema: chat memory + config tables
+   - Admin panel: dashboard + config + logs viewer
+   - App integration: botón 🤖 + panel chat
+   - GitHub Actions: auto-deploy en push
+   - **Decisión:** Option A — Worker Independiente (NOT opción B integrada)
+
+📋 PHASE 2A: ANTHROPIC API + TOOL PORTING (PRÓXIMA)
+   - Conectar procesarConNEXUS() a Claude Sonnet real via Anthropic API
+   - Portar las 32 herramientas existentes al nuevo worker
+   - Probar NEXUS router: Haiku classifier → 5 Sonnet experts
+   - Implementar respuestas dinámicas (no mocks)
+   - Usar chat memory para contexto (último 10 msgs + aprendizajes)
+
+📊 PHASE 3: FULL AUTONOMY (TBD)
+   - runAutonomousReview() cron cada 6h (máx 15 iteraciones)
+   - Watchers (GitHub, D1 schema, app logs)
+   - Self-audit y propose_fix
+   - Telegram bidireccional (actualmente solo mock)
+   - Red de agentes (sync con main Alejandra)
+
+================================================================================
   ⚡ REGLA OBLIGATORIA AL INICIO DE CADA SESIÓN
 ================================================================================
 

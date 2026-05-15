@@ -15,3 +15,7 @@ bucket_name = "alejandra-app-files"
 
 [triggers]
 crons = ["0 7 * * *", "0 23 * * *"]
+
+# Secrets (configurar con: wrangler secret put <NOMBRE>)
+# ANTHROPIC_API_KEY — clave de Anthropic (Claude Sonnet)
+# OPENAI_API_KEY    — clave de OpenAI (búsqueda web con gpt-4o-mini)

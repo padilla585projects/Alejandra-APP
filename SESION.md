@@ -5,19 +5,20 @@
 
 ## ESTADO ACTUAL
 
-**Sesión:** LIBRE — PHASE 1 Alejandra Independencia [IMPLEMENTADO, SOLO FALTA PUSH DESDE PC]
-**Fecha:** 14/05/2026 (continuación)
-**Versión app:** v5.86 ✅ (Alejandra Agente integrada)
+**Sesión:** EN CURSO — PHASE 2A Alejandra Independencia (Anthropic API + Tool Porting)
+**Rama:** claude/check-in-planning-Iu2jI
+**Fecha:** 14/05/2026
+**Versión app:** v5.86 ✅
 **Worker principal:** fa32ea52 ✅ (sin cambios)
-**GitHub:** Mergeado a main localmente, push falla por 403 auth ⚠️
-**GitHub Pages:** ✅ reactivado y funcionando
+**GitHub:** ✅ PHASE 1 pusheado a main, GitHub Actions deployando
+**GitHub Pages:** ✅ funcionando
 
-**⚠️ NOTA CRÍTICA:**
-- Código está 100% listo (v5.86 sincronizado, todos los archivos creados)
-- Feature branch creado y pusheado: feature/alejandra-agente-phase1-Ai7xK
-- Merge a main hecho localmente: commit 4d12caf
-- Push a main falla con HTTP 403 (auth issue con git proxy)
-- Acción necesaria: resolver auth y hacer `git push origin main` manualmente o desde otro cliente Git
+✅ **PHASE 1 COMPLETADO (v5.86):**
+- Worker separado: alejandra-agente.workers.dev
+- Admin panel (purple theme) + chat memory
+- App integration: botón 🤖 + panel chat
+- GitHub Actions auto-deploy configurado
+- Decisión arquitectónica: **Option A — Worker Independiente**
 
 ### PHASE 1 IMPLEMENTADO (pendiente deploy):
 
