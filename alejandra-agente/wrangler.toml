@@ -15,3 +15,6 @@ bucket_name = "alejandra-app-files"
 
 [triggers]
 crons = ["0 7 * * *", "0 23 * * *"]
+
+# Secrets (configurar con: wrangler secret put ANTHROPIC_API_KEY)
+# ANTHROPIC_API_KEY — clave de la API de Anthropic
