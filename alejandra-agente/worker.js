@@ -9,6 +9,10 @@ const OPENAI_API     = 'https://api.openai.com/v1/responses';
 const MODEL_ROUTER   = 'claude-haiku-4-5';   // Clasificador — rápido y barato
 const MODEL_EXPERTO  = 'claude-sonnet-4-6';  // Experto — para lo complejo
 
+// Prompt CORTO para Haiku (preguntas simples) — ~150 tokens
+const SYSTEM_HAIKU = `Eres Alejandra, agente IA para gestión industrial (bobinas, equipos, fichajes, incidencias). Creada por Adrián Padilla. Respondes en español, de forma directa y concisa. Si la pregunta es técnica o compleja, di que necesitas más contexto.`;
+
+// Prompt COMPLETO para Sonnet (preguntas técnicas/complejas) — solo cuando hace falta
 const SYSTEM_ALEJANDRA = `Eres Alejandra, agente IA autónoma creada por Adrián Padilla para gestionar empresas del sector eléctrico/mecánico.
 
 ═══ QUIÉN ERES ═══
@@ -303,16 +307,16 @@ async function procesarConNEXUS(env, mensaje, contexto, usuario_id) {
 
     // ── PASO 4: Llamar al modelo apropiado ─────────────────────────────────
     if (clasificacion.modelo === 'haiku') {
-      // Haiku responde directamente (preguntas simples, saludos, info básica)
-      const resp = await llamarAnthropicConTools(env, messages, [], MODEL_ROUTER, 512);
+      // Haiku con prompt corto — rápido y barato
+      const resp = await llamarAnthropicConTools(env, messages, [], MODEL_ROUTER, 400, SYSTEM_HAIKU);
       textoFinal = resp.content?.find(b => b.type === 'text')?.text?.trim() || 'Sin respuesta';
 
     } else {
-      // Sonnet con tool use para preguntas complejas
+      // Sonnet con prompt completo + tool use
       const tools = env.OPENAI_API_KEY && !resultadoWeb ? [TOOL_BUSCAR_WEB] : [];
-      let respAPI = await llamarAnthropicConTools(env, messages, tools, MODEL_EXPERTO, 1024);
+      let respAPI = await llamarAnthropicConTools(env, messages, tools, MODEL_EXPERTO, 1024, SYSTEM_ALEJANDRA);
 
-      // Loop tool use si Sonnet decide buscar más
+      // Loop tool use si Sonnet decide buscar más (máx 2 iter)
       let iter = 0;
       while (respAPI.stop_reason === 'tool_use' && iter < 2) {
         const tb = respAPI.content.find(b => b.type === 'tool_use');
@@ -321,7 +325,7 @@ async function procesarConNEXUS(env, mensaje, contexto, usuario_id) {
         usoBusquedaWeb = true;
         messages.push({ role: 'assistant', content: respAPI.content });
         messages.push({ role: 'user', content: [{ type: 'tool_result', tool_use_id: tb.id, content: result }] });
-        respAPI = await llamarAnthropicConTools(env, messages, [], MODEL_EXPERTO, 1024);
+        respAPI = await llamarAnthropicConTools(env, messages, [], MODEL_EXPERTO, 1024, SYSTEM_ALEJANDRA);
         iter++;
       }
 
@@ -419,11 +423,11 @@ function construirMessages(mensaje, contexto, limitHistorial = 10, incluirAprend
   return messages;
 }
 
-async function llamarAnthropicConTools(env, messages, tools, model, maxTokens) {
+async function llamarAnthropicConTools(env, messages, tools, model, maxTokens, systemPrompt = SYSTEM_ALEJANDRA) {
   const body = {
     model,
     max_tokens: maxTokens,
-    system: SYSTEM_ALEJANDRA,
+    system: systemPrompt,
     messages
   };
 
