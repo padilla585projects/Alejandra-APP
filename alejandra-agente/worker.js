@@ -164,10 +164,8 @@ export default {
     }
   },
 
-  async scheduled(event, env, ctx) {
-    if (event.cron === '0 7 * * *')  ctx.waitUntil(dailyPulse(env));
-    if (event.cron === '0 23 * * *') ctx.waitUntil(runAutonomousReview(env));
-  }
+  // scheduled: desactivado — cuenta free tiene límite de 5 cron triggers
+  // async scheduled(event, env, ctx) { ... }
 };
 
 // ══════════════════════════════════════════════════════════════════════════════
