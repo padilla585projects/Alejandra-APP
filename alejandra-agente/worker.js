@@ -1,40 +1,54 @@
 // ══════════════════════════════════════════════════════════════════════════════
-// ALEJANDRA AGENTE — Worker autónomo con NEXUS, chat memory, herramientas
+// ALEJANDRA AGENTE — Worker autónomo con NEXUS, búsqueda web, chat memory
 // Desplegado en: alejandra-agente.alejandra-app.workers.dev
-// Versión: v5.87 (PHASE 2A — Anthropic API integrada)
+// Versión: v5.88 (PHASE 2A — Anthropic + OpenAI web search)
 // ══════════════════════════════════════════════════════════════════════════════
 
-const ANTHROPIC_API = 'https://api.anthropic.com/v1/messages';
-const MODEL_ROUTER  = 'claude-haiku-4-5';   // Clasificador rápido
-const MODEL_EXPERTO = 'claude-sonnet-4-6';  // Respuestas expertas
+const ANTHROPIC_API  = 'https://api.anthropic.com/v1/messages';
+const OPENAI_API     = 'https://api.openai.com/v1/responses';
+const MODEL_EXPERTO  = 'claude-sonnet-4-6';
 
 const SYSTEM_ALEJANDRA = `Eres Alejandra, agente IA autónoma integrada en una app de gestión industrial para empresas del sector eléctrico/mecánico.
 
-Respondes en ESPAÑOL siempre. Eres directa, concisa y profesional.
+Siempre respondes en ESPAÑOL. Eres directa, concisa y profesional.
 
 Contexto de la app:
 - Gestiona bobinas de cable, equipos, personal, fichajes, documentos e incidencias
-- Los usuarios son operarios, encargados, empresa_admin y superadmin
-- Tienes acceso a herramientas para consultar y modificar la base de datos
+- Usuarios: operarios, encargados, empresa_admin y superadmin
+- Puedes buscar información actual en internet cuando lo necesitas
 
-Cuando el usuario pide información o acciones:
-1. Analiza qué necesita exactamente
-2. Si puedes responder directamente, hazlo
-3. Si necesitas ejecutar una herramienta, indícalo claramente
-4. Mantén el hilo de la conversación usando el historial previo
+Cuándo usar la búsqueda web:
+- Precios de materiales, normativas técnicas recientes
+- Información que puede haber cambiado (noticias, datos del sector)
+- Cualquier pregunta que requiera información actualizada
 
 Formato de respuesta:
-- Sin markdown excesivo — texto claro y directo
-- Para listas cortas usa guiones simples
-- Para datos numéricos usa tablas solo si hay más de 3 filas
-- Máximo 300 palabras salvo que el usuario pida más detalle`;
+- Texto claro y directo, sin markdown excesivo
+- Para listas usa guiones simples
+- Máximo 300 palabras salvo que pidan más detalle
+- Si usaste búsqueda web, indica brevemente la fuente`;
+
+// Herramienta de búsqueda web disponible cuando existe OPENAI_API_KEY
+const TOOL_BUSCAR_WEB = {
+  name: 'buscar_web',
+  description: 'Busca información actualizada en internet. Úsala cuando necesites datos recientes, precios, normativas o cualquier información que pueda haber cambiado.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      query: {
+        type: 'string',
+        description: 'La consulta de búsqueda en español o inglés según convenga'
+      }
+    },
+    required: ['query']
+  }
+};
 
 export default {
   async fetch(req, env, ctx) {
     const url  = new URL(req.url);
     const path = url.pathname;
 
-    // CORS para el panel admin y la app
     const corsHeaders = {
       'Access-Control-Allow-Origin': '*',
       'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
@@ -54,7 +68,14 @@ export default {
     try {
       // ── Health ────────────────────────────────────────────────────────────
       if (path === '/health') {
-        return json({ status: 'ok', version: 'v5.87', phase: '2A', model: MODEL_EXPERTO });
+        return json({
+          status: 'ok',
+          version: 'v5.88',
+          phase: '2A',
+          model: MODEL_EXPERTO,
+          web_search: !!env.OPENAI_API_KEY,
+          voice: true
+        });
       }
 
       // ── Chat ─────────────────────────────────────────────────────────────
@@ -66,7 +87,7 @@ export default {
           return json({ error: 'mensaje y usuario_id requeridos' }, 400);
         }
 
-        const empresa = empresa_id || 'default';
+        const empresa  = empresa_id || 'default';
         const contexto = await obtenerContextoChat(env, usuario_id, empresa, 10);
         const respuesta = await procesarConNEXUS(env, mensaje, contexto, usuario_id);
 
@@ -110,7 +131,7 @@ export default {
 
         if (path === '/api/admin/logs' && req.method === 'GET') {
           const limit = parseInt(url.searchParams.get('limit') || '100');
-          const logs = await env.DB.prepare(
+          const logs  = await env.DB.prepare(
             'SELECT * FROM alejandra_logs ORDER BY created_at DESC LIMIT ?'
           ).bind(limit).all();
           return json(logs.results || []);
@@ -124,15 +145,11 @@ export default {
         }
 
         if (path === '/api/admin/chat' && req.method === 'GET') {
-          const uid = url.searchParams.get('usuario_id');
+          const uid   = url.searchParams.get('usuario_id');
           const limit = parseInt(url.searchParams.get('limit') || '50');
-          const query = uid
-            ? 'SELECT * FROM chat_alejandra WHERE usuario_id = ? ORDER BY created_at DESC LIMIT ?'
-            : 'SELECT * FROM chat_alejandra ORDER BY created_at DESC LIMIT ?';
-          const stmt = uid
-            ? env.DB.prepare(query).bind(uid, limit)
-            : env.DB.prepare(query).bind(limit);
-          const rows = await stmt.all();
+          const rows  = uid
+            ? await env.DB.prepare('SELECT * FROM chat_alejandra WHERE usuario_id = ? ORDER BY created_at DESC LIMIT ?').bind(uid, limit).all()
+            : await env.DB.prepare('SELECT * FROM chat_alejandra ORDER BY created_at DESC LIMIT ?').bind(limit).all();
           return json((rows.results || []).reverse());
         }
 
@@ -148,45 +165,84 @@ export default {
   },
 
   async scheduled(event, env, ctx) {
-    if (event.cron === '0 7 * * *') ctx.waitUntil(dailyPulse(env));
+    if (event.cron === '0 7 * * *')  ctx.waitUntil(dailyPulse(env));
     if (event.cron === '0 23 * * *') ctx.waitUntil(runAutonomousReview(env));
   }
 };
 
 // ══════════════════════════════════════════════════════════════════════════════
-// NEXUS — Router inteligente con Anthropic API
+// NEXUS — Router con tool use y búsqueda web
 // ══════════════════════════════════════════════════════════════════════════════
 
 async function procesarConNEXUS(env, mensaje, contexto, usuario_id) {
   if (!env.ANTHROPIC_API_KEY) {
-    console.error('ANTHROPIC_API_KEY no configurada');
     return {
-      texto: 'Error: Alejandra no tiene acceso a la API de IA. Configura ANTHROPIC_API_KEY como secret de Cloudflare.',
+      texto: 'Error: ANTHROPIC_API_KEY no configurada en el worker.',
       acciones: [],
       requiere_confirmacion: false
     };
   }
 
   const config = await env.DB.prepare(
-    'SELECT modo, auto_fix, max_iterations FROM alejandra_config ORDER BY updated_at DESC LIMIT 1'
-  ).first();
+    'SELECT modo, auto_fix FROM alejandra_config ORDER BY updated_at DESC LIMIT 1'
+  ).first().catch(() => null);
 
   const modo = config?.modo || 'autonomo';
 
-  // Construir historial de mensajes para la API
+  // Construir historial de mensajes
   const messages = construirMessages(mensaje, contexto);
 
-  try {
-    const respuestaTexto = await llamarAnthropicAPI(env, messages, MODEL_EXPERTO, 1024);
+  // Tools disponibles (solo buscar_web si hay OPENAI_API_KEY)
+  const tools = env.OPENAI_API_KEY ? [TOOL_BUSCAR_WEB] : [];
 
-    // Registrar en logs
-    await registrarLog(env, usuario_id, 'chat', mensaje.substring(0, 100), respuestaTexto.substring(0, 200));
+  try {
+    // Llamar a Claude con tools habilitados
+    let respuestaAPI = await llamarAnthropicConTools(env, messages, tools, MODEL_EXPERTO, 1024);
+
+    // Loop de tool use (máx 3 iteraciones de búsqueda)
+    let iteraciones = 0;
+    while (respuestaAPI.stop_reason === 'tool_use' && iteraciones < 3) {
+      const toolBlock = respuestaAPI.content.find(b => b.type === 'tool_use');
+      if (!toolBlock) break;
+
+      let toolResult = '';
+
+      if (toolBlock.name === 'buscar_web') {
+        console.log(`🔍 Buscando: ${toolBlock.input.query}`);
+        toolResult = await buscarWebOpenAI(env, toolBlock.input.query);
+        await registrarLog(env, usuario_id, 'web_search', toolBlock.input.query, toolResult.substring(0, 200));
+      }
+
+      // Añadir respuesta del asistente y resultado de la tool al historial
+      messages.push({ role: 'assistant', content: respuestaAPI.content });
+      messages.push({
+        role: 'user',
+        content: [{
+          type: 'tool_result',
+          tool_use_id: toolBlock.id,
+          content: toolResult
+        }]
+      });
+
+      respuestaAPI = await llamarAnthropicConTools(env, messages, tools, MODEL_EXPERTO, 1024);
+      iteraciones++;
+    }
+
+    // Extraer texto final
+    const textoFinal = respuestaAPI.content
+      .filter(b => b.type === 'text')
+      .map(b => b.text)
+      .join('\n')
+      .trim() || 'Sin respuesta';
+
+    await registrarLog(env, usuario_id, 'chat', mensaje.substring(0, 100), textoFinal.substring(0, 200));
 
     return {
-      texto: respuestaTexto,
+      texto: textoFinal,
       acciones: [],
       requiere_confirmacion: modo === 'confirmacion',
-      modelo: MODEL_EXPERTO
+      modelo: MODEL_EXPERTO,
+      busqueda_web: iteraciones > 0
     };
 
   } catch (err) {
@@ -202,28 +258,33 @@ async function procesarConNEXUS(env, mensaje, contexto, usuario_id) {
 function construirMessages(mensaje, contexto) {
   const messages = [];
 
-  // Añadir historial previo de chat
   for (const item of contexto.historial) {
-    if (item.mensaje) messages.push({ role: 'user', content: item.mensaje });
+    if (item.mensaje)   messages.push({ role: 'user',      content: item.mensaje });
     if (item.respuesta) messages.push({ role: 'assistant', content: item.respuesta });
   }
 
-  // Construir el mensaje actual incluyendo contexto de aprendizajes si los hay
   let contenidoUsuario = mensaje;
-
   if (contexto.aprendizajes?.length > 0) {
-    const aprendizajesStr = contexto.aprendizajes
-      .map(a => `[${a.tipo}] ${a.titulo}: ${a.contenido}`)
-      .join('\n');
-    contenidoUsuario = `Contexto relevante:\n${aprendizajesStr}\n\nMensaje del usuario: ${mensaje}`;
+    const ctx = contexto.aprendizajes.map(a => `[${a.tipo}] ${a.titulo}: ${a.contenido}`).join('\n');
+    contenidoUsuario = `Contexto:\n${ctx}\n\nMensaje: ${mensaje}`;
   }
 
   messages.push({ role: 'user', content: contenidoUsuario });
-
   return messages;
 }
 
-async function llamarAnthropicAPI(env, messages, model, maxTokens = 1024) {
+async function llamarAnthropicConTools(env, messages, tools, model, maxTokens) {
+  const body = {
+    model,
+    max_tokens: maxTokens,
+    system: SYSTEM_ALEJANDRA,
+    messages
+  };
+
+  if (tools.length > 0) {
+    body.tools = tools;
+  }
+
   const response = await fetch(ANTHROPIC_API, {
     method: 'POST',
     headers: {
@@ -231,31 +292,63 @@ async function llamarAnthropicAPI(env, messages, model, maxTokens = 1024) {
       'anthropic-version': '2023-06-01',
       'content-type': 'application/json'
     },
-    body: JSON.stringify({
-      model,
-      max_tokens: maxTokens,
-      system: SYSTEM_ALEJANDRA,
-      messages
-    })
+    body: JSON.stringify(body)
   });
 
   if (!response.ok) {
     const errText = await response.text();
-    throw new Error(`Anthropic API ${response.status}: ${errText.substring(0, 200)}`);
+    throw new Error(`Anthropic API ${response.status}: ${errText.substring(0, 300)}`);
   }
 
-  const data = await response.json();
-  const content = data.content?.[0];
-
-  if (!content || content.type !== 'text') {
-    throw new Error('Respuesta inesperada de la API de Anthropic');
-  }
-
-  return content.text;
+  return response.json();
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// CONTEXTO Y MEMORIA
+// OPENAI — Búsqueda web con web_search_preview
+// ══════════════════════════════════════════════════════════════════════════════
+
+async function buscarWebOpenAI(env, query) {
+  try {
+    const response = await fetch(OPENAI_API, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${env.OPENAI_API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        tools: [{ type: 'web_search_preview' }],
+        input: query
+      })
+    });
+
+    if (!response.ok) {
+      const err = await response.text();
+      console.error('OpenAI search error:', err.substring(0, 200));
+      return `No se pudo obtener resultados de búsqueda para: "${query}"`;
+    }
+
+    const data = await response.json();
+
+    // Extraer texto de la respuesta de OpenAI Responses API
+    const textoRespuesta = data.output
+      ?.filter(block => block.type === 'message')
+      ?.flatMap(msg => msg.content)
+      ?.filter(c => c.type === 'output_text')
+      ?.map(c => c.text)
+      ?.join('\n')
+      || 'Sin resultados de búsqueda';
+
+    return textoRespuesta.substring(0, 2000);
+
+  } catch (err) {
+    console.error('ERROR buscarWebOpenAI:', err.message);
+    return `Error en búsqueda web: ${err.message}`;
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// MEMORIA Y CONTEXTO
 // ══════════════════════════════════════════════════════════════════════════════
 
 async function obtenerContextoChat(env, usuario_id, empresa_id, limit = 10) {
@@ -298,11 +391,11 @@ async function guardarMensajeChat(env, usuario_id, empresa_id, mensaje, respuest
 async function autoLearnChat(env, usuario_id, empresa_id, respuesta) {
   try {
     if (respuesta.acciones?.length > 0) {
-      const accionesStr = respuesta.acciones.map(a => `${a.tipo}: ${a.descripcion}`).join('; ');
+      const str = respuesta.acciones.map(a => `${a.tipo}: ${a.descripcion}`).join('; ');
       await env.DB.prepare(
         `INSERT INTO alejandra_memoria (usuario_id, empresa_id, tipo, titulo, contenido, importancia, created_at)
          VALUES (?, ?, 'aprendizaje', 'Chat acción', ?, 2, datetime('now'))`
-      ).bind(usuario_id, empresa_id, accionesStr).run();
+      ).bind(usuario_id, empresa_id, str).run();
     }
   } catch (err) {
     console.error('ERROR autoLearnChat:', err.message);
@@ -314,10 +407,8 @@ async function registrarLog(env, usuario_id, tipo, entrada, salida) {
     await env.DB.prepare(
       `INSERT INTO alejandra_logs (usuario_id, tipo, entrada, salida, created_at)
        VALUES (?, ?, ?, ?, datetime('now'))`
-    ).bind(usuario_id, tipo, entrada, salida).run();
-  } catch (_) {
-    // silencioso — logs no críticos
-  }
+    ).bind(usuario_id || 'system', tipo, entrada, salida).run();
+  } catch (_) { /* logs no críticos */ }
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -339,12 +430,11 @@ async function verificarAdminToken(env, token) {
 
 async function enviarPorTelegram(botToken, mensaje) {
   try {
-    const chatId = -1002199087689;
     await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        chat_id: chatId,
+        chat_id: -1002199087689,
         text: `🤖 Alejandra: ${mensaje}`,
         parse_mode: 'HTML'
       })
@@ -359,22 +449,14 @@ async function enviarPorTelegram(botToken, mensaje) {
 // ══════════════════════════════════════════════════════════════════════════════
 
 async function dailyPulse(env) {
-  console.log('📊 Daily pulse — Alejandra Agente v5.87');
+  console.log('📊 Daily pulse — Alejandra Agente v5.88');
   try {
-    const countResult = await env.DB.prepare(
-      'SELECT COUNT(*) as cnt FROM chat_alejandra'
-    ).first();
-    const count = countResult?.cnt || 0;
-    if (count > 500) {
-      const toDelete = count - 500;
+    const { cnt } = await env.DB.prepare('SELECT COUNT(*) as cnt FROM chat_alejandra').first() || { cnt: 0 };
+    if (cnt > 500) {
       await env.DB.prepare(
-        `DELETE FROM chat_alejandra WHERE id IN (
-           SELECT id FROM chat_alejandra ORDER BY created_at ASC LIMIT ?
-         )`
-      ).bind(toDelete).run();
-      console.log(`🗑️ Deleted ${toDelete} old chat messages`);
+        `DELETE FROM chat_alejandra WHERE id IN (SELECT id FROM chat_alejandra ORDER BY created_at ASC LIMIT ?)`
+      ).bind(cnt - 500).run();
     }
-    // Limpiar logs mayores de 30 días
     await env.DB.prepare(
       `DELETE FROM alejandra_logs WHERE created_at < datetime('now', '-30 days')`
     ).run();
@@ -384,47 +466,25 @@ async function dailyPulse(env) {
 }
 
 async function runAutonomousReview(env) {
-  console.log('🤖 Autonomous review — Alejandra Agente v5.87');
-  if (!env.ANTHROPIC_API_KEY) {
-    console.error('ANTHROPIC_API_KEY no configurada — saltando autonomous review');
-    return;
-  }
+  console.log('🤖 Autonomous review — Alejandra Agente v5.88');
+  if (!env.ANTHROPIC_API_KEY) return;
 
   try {
-    // Obtener estadísticas del día para el resumen nocturno
-    const statsHoy = await env.DB.prepare(
-      `SELECT COUNT(*) as total_chats,
-              COUNT(DISTINCT usuario_id) as usuarios_activos
-       FROM chat_alejandra
-       WHERE created_at >= datetime('now', '-24 hours')`
+    const stats = await env.DB.prepare(
+      `SELECT COUNT(*) as total, COUNT(DISTINCT usuario_id) as usuarios
+       FROM chat_alejandra WHERE created_at >= datetime('now', '-24 hours')`
     ).first();
 
-    const erroresHoy = await env.DB.prepare(
-      `SELECT COUNT(*) as errores FROM alejandra_logs
-       WHERE tipo = 'error' AND created_at >= datetime('now', '-24 hours')`
-    ).first();
+    const msgs = [{ role: 'user', content: `Resumen del día: ${stats?.total || 0} chats, ${stats?.usuarios || 0} usuarios activos. Genera un análisis breve y recomendaciones para mañana.` }];
+    const resp = await llamarAnthropicConTools(env, msgs, [], MODEL_EXPERTO, 512);
+    const texto = resp.content?.find(b => b.type === 'text')?.text || '';
 
-    const resumenMensaje = `Resumen del día:
-- Chats procesados: ${statsHoy?.total_chats || 0}
-- Usuarios activos: ${statsHoy?.usuarios_activos || 0}
-- Errores registrados: ${erroresHoy?.errores || 0}
-
-Genera un breve análisis de actividad y recomendaciones.`;
-
-    const respuesta = await llamarAnthropicAPI(
-      env,
-      [{ role: 'user', content: resumenMensaje }],
-      MODEL_EXPERTO,
-      512
-    );
-
-    // Guardar resumen en memoria
-    await env.DB.prepare(
-      `INSERT INTO alejandra_memoria (tipo, titulo, contenido, importancia, created_at)
-       VALUES ('resumen', 'Revisión nocturna', ?, 3, datetime('now'))`
-    ).bind(respuesta).run();
-
-    console.log('✅ Autonomous review completado');
+    if (texto) {
+      await env.DB.prepare(
+        `INSERT INTO alejandra_memoria (tipo, titulo, contenido, importancia, created_at)
+         VALUES ('resumen', 'Revisión nocturna', ?, 3, datetime('now'))`
+      ).bind(texto).run();
+    }
   } catch (err) {
     console.error('ERROR runAutonomousReview:', err.message);
   }
