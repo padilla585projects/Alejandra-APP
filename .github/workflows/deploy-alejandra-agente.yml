@@ -22,10 +22,10 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Install wrangler
+      - name: Instalar wrangler
         run: npm install -g wrangler@latest
 
-      - name: Apply D1 migrations
+      - name: Aplicar migración D1
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: d65ead2b2967bf68ff3848a36cd7b1b4
@@ -33,9 +33,9 @@ jobs:
           cd alejandra-agente
           npx wrangler d1 execute alejandra-db \
             --file=migrate_001_init_schema.sql \
-            --remote || echo "Migration may already be applied, continuing..."
+            --remote || echo "Migración ya aplicada, continuando..."
 
-      - name: Deploy Alejandra Agente Worker
+      - name: Desplegar worker
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: d65ead2b2967bf68ff3848a36cd7b1b4
@@ -43,22 +43,30 @@ jobs:
           cd alejandra-agente
           npx wrangler deploy
 
-      - name: Configure ANTHROPIC_API_KEY secret
+      - name: Configurar ANTHROPIC_API_KEY
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: d65ead2b2967bf68ff3848a36cd7b1b4
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
-          cd alejandra-agente
-          echo "$ANTHROPIC_API_KEY" | npx wrangler secret put ANTHROPIC_API_KEY || echo "Secret may already exist"
+          echo "$ANTHROPIC_API_KEY" | npx wrangler secret put ANTHROPIC_API_KEY --name alejandra-agente
 
-      - name: Verify deployment
+      - name: Configurar OPENAI_API_KEY
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: d65ead2b2967bf68ff3848a36cd7b1b4
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          echo "$OPENAI_API_KEY" | npx wrangler secret put OPENAI_API_KEY --name alejandra-agente
+
+      - name: Verificar health
         run: |
           sleep 5
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://alejandra-agente.alejandra-app.workers.dev/health || echo "000")
-          echo "Health check HTTP status: $STATUS"
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            https://alejandra-agente.alejandra-app.workers.dev/health || echo "000")
+          echo "Health check: HTTP $STATUS"
           if [ "$STATUS" = "200" ]; then
-            echo "✅ Alejandra Agente v5.87 deployed and healthy"
+            echo "✅ Alejandra Agente v5.88 desplegada y operativa"
           else
-            echo "⚠️ Health check returned $STATUS (may need a moment to propagate)"
+            echo "⚠️ Health check retornó $STATUS (puede tardar unos segundos en propagar)"
           fi
