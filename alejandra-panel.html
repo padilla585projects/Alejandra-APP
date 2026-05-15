@@ -223,6 +223,7 @@ const SECTIONS = [
   { id:'logs',      icon:'📋', label:'Logs' },
   { id:'config',    icon:'⚙️',  label:'Config' },
   { id:'reflexion', icon:'🔄', label:'Reflexión' },
+  { id:'seguridad', icon:'🔐', label:'Seguridad' },
 ];
 
 let currentSection = 'chat';
@@ -343,6 +344,7 @@ function navigate(id) {
     logs:      initLogs,
     config:    initConfig,
     reflexion: initReflexion,
+    seguridad: initSeguridad,
   }[id];
   if (fn) fn();
 }
@@ -769,6 +771,105 @@ async function loadReflexMems() {
       </div>`).join('')
     : '<div style="color:var(--muted);font-size:12px">Sin reflexiones guardadas aún</div>';
   } catch {}
+}
+
+// ═══════════════ SEGURIDAD ══════════════════════════════════
+async function initSeguridad() {
+  const c = document.getElementById('content');
+  c.innerHTML = '<div style="color:var(--muted);font-size:13px">Cargando...</div>';
+  try {
+    const lista = await adminFetch('/api/admin/tokens');
+    const activos = (Array.isArray(lista) ? lista : []).filter(t => t.activo);
+    c.innerHTML = `
+      <div style="max-width:520px">
+        <div class="sec-title">Cambiar mi contraseña</div>
+        <div class="card" style="margin-bottom:16px">
+          <div class="fg">
+            <label class="fl">Nueva contraseña</label>
+            <input type="password" id="pwNueva" class="inp" placeholder="Mínimo 6 caracteres">
+          </div>
+          <div class="fg" style="margin-top:10px">
+            <label class="fl">Confirmar</label>
+            <input type="password" id="pwConfirm" class="inp" placeholder="Repite la contraseña" onkeydown="if(event.key==='Enter')cambiarPassword()">
+          </div>
+          <div id="pwMsg" style="font-size:12px;margin-top:8px;min-height:16px"></div>
+          <button class="btn-acc" style="margin-top:10px" onclick="cambiarPassword()">Guardar nueva contraseña</button>
+        </div>
+
+        <div class="sec-title">Usuarios con acceso</div>
+        <div class="card" id="tokensLista" style="margin-bottom:16px">
+          ${activos.length ? activos.map(t => `
+            <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
+              <div style="flex:1">
+                <div style="font-size:13px;font-weight:600">${esc(t.descripcion || 'Sin nombre')}</div>
+                <div style="font-size:10px;color:var(--muted)">${fmtDate(t.created_at)}</div>
+              </div>
+              <button onclick="revocarToken(${t.id},'${esc(t.descripcion||'?')}')"
+                style="background:rgba(239,68,68,.15);color:#f87171;border:1px solid rgba(239,68,68,.3);border-radius:8px;padding:4px 10px;font-size:11px;cursor:pointer">
+                Revocar
+              </button>
+            </div>`).join('')
+          : '<div style="color:var(--muted);font-size:12px;text-align:center;padding:10px">Solo tú tienes acceso</div>'}
+        </div>
+
+        <div class="sec-title">Añadir usuario</div>
+        <div class="card">
+          <div class="fg">
+            <label class="fl">Nombre / descripción</label>
+            <input type="text" id="nuevoNombre" class="inp" placeholder="ej: Adrian móvil, Panel oficina…">
+          </div>
+          <div class="fg" style="margin-top:10px">
+            <label class="fl">Contraseña</label>
+            <input type="password" id="nuevoToken" class="inp" placeholder="Mínimo 6 caracteres" onkeydown="if(event.key==='Enter')crearUsuario()">
+          </div>
+          <div id="nuevoMsg" style="font-size:12px;margin-top:8px;min-height:16px"></div>
+          <button class="btn-acc" style="margin-top:10px" onclick="crearUsuario()">Crear acceso</button>
+        </div>
+      </div>`;
+  } catch(err) { c.innerHTML = `<div style="color:var(--red)">Error: ${esc(err.message)}</div>`; }
+}
+
+async function cambiarPassword() {
+  const nueva  = document.getElementById('pwNueva').value;
+  const conf   = document.getElementById('pwConfirm').value;
+  const msg    = document.getElementById('pwMsg');
+  msg.textContent = '';
+  if (!nueva || nueva.length < 6) { msg.style.color='var(--red)'; msg.textContent='Mínimo 6 caracteres'; return; }
+  if (nueva !== conf) { msg.style.color='var(--red)'; msg.textContent='Las contraseñas no coinciden'; return; }
+  try {
+    await adminFetch('/api/admin/tokens/change', 'POST', { token_nuevo: nueva });
+    adminToken = nueva;
+    localStorage.setItem('alej_token', nueva);
+    msg.style.color = 'var(--green)';
+    msg.textContent = '✅ Contraseña cambiada. Sesión actualizada.';
+    document.getElementById('pwNueva').value = '';
+    document.getElementById('pwConfirm').value = '';
+  } catch(err) { msg.style.color='var(--red)'; msg.textContent='❌ '+err.message; }
+}
+
+async function crearUsuario() {
+  const nombre = document.getElementById('nuevoNombre').value.trim();
+  const token  = document.getElementById('nuevoToken').value;
+  const msg    = document.getElementById('nuevoMsg');
+  msg.textContent = '';
+  if (!nombre) { msg.style.color='var(--red)'; msg.textContent='El nombre es obligatorio'; return; }
+  if (!token || token.length < 6) { msg.style.color='var(--red)'; msg.textContent='Mínimo 6 caracteres'; return; }
+  try {
+    await adminFetch('/api/admin/tokens', 'POST', { nombre, token_valor: token });
+    msg.style.color = 'var(--green)';
+    msg.textContent = '✅ Acceso creado correctamente';
+    document.getElementById('nuevoNombre').value = '';
+    document.getElementById('nuevoToken').value = '';
+    setTimeout(initSeguridad, 800);
+  } catch(err) { msg.style.color='var(--red)'; msg.textContent='❌ '+err.message; }
+}
+
+async function revocarToken(id, nombre) {
+  if (!confirm(`¿Revocar acceso de "${nombre}"?`)) return;
+  try {
+    await adminFetch('/api/admin/tokens', 'DELETE', { id });
+    initSeguridad();
+  } catch(err) { alert('Error: '+err.message); }
 }
 
 // ═══════════════ HELPERS ════════════════════════════════════

@@ -292,6 +292,34 @@ export default {
           });
         }
 
+        if (path === '/api/admin/tokens' && req.method === 'GET') {
+          const rows = await env.DB.prepare(
+            'SELECT id, descripcion, tipo, activo, created_at FROM alejandra_tokens ORDER BY created_at DESC'
+          ).all().catch(()=>({results:[]}));
+          return json(rows.results || []);
+        }
+        if (path === '/api/admin/tokens' && req.method === 'POST') {
+          const { nombre, token_valor } = await req.json();
+          if (!nombre || !token_valor) return json({ error: 'nombre y token_valor requeridos' }, 400);
+          if (token_valor.length < 6) return json({ error: 'Mínimo 6 caracteres' }, 400);
+          await env.DB.prepare(
+            `INSERT INTO alejandra_tokens (token, tipo, descripcion, activo, created_at) VALUES (?, 'admin', ?, 1, datetime('now'))`
+          ).bind(token_valor, nombre).run();
+          return json({ ok: true });
+        }
+        if (path === '/api/admin/tokens' && req.method === 'DELETE') {
+          const { id } = await req.json();
+          if (!id) return json({ error: 'id requerido' }, 400);
+          await env.DB.prepare('UPDATE alejandra_tokens SET activo=0 WHERE id=?').bind(id).run();
+          return json({ ok: true });
+        }
+        if (path === '/api/admin/tokens/change' && req.method === 'POST') {
+          const { token_nuevo } = await req.json();
+          if (!token_nuevo || token_nuevo.length < 6) return json({ error: 'Mínimo 6 caracteres' }, 400);
+          await env.DB.prepare('UPDATE alejandra_tokens SET token=? WHERE token=?').bind(token_nuevo, adminToken).run();
+          return json({ ok: true });
+        }
+
         return json({ error: 'Ruta no encontrada' }, 404);
       }
 
