@@ -1,7 +1,18 @@
 -- ══════════════════════════════════════════════════════════════════════════════
--- ALEJANDRA AGENTE — Migración 003: Corregir schema y token de acceso
--- Corrige la sintaxis INDEX inline (inválida en SQLite/D1)
+-- ALEJANDRA AGENTE — Migración 003: Corregir schema, token y historial unificado
 -- ══════════════════════════════════════════════════════════════════════════════
+
+-- Historial unificado de conversaciones (compartido con app principal)
+-- Una sola Alejandra: app + panel + telegram leen/escriben aquí
+CREATE TABLE IF NOT EXISTS alejandra_historial (
+  id INTEGER PRIMARY KEY,
+  canal TEXT DEFAULT 'panel',
+  rol TEXT NOT NULL,
+  contenido TEXT,
+  created_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_historial_canal ON alejandra_historial(canal);
+CREATE INDEX IF NOT EXISTS idx_historial_created ON alejandra_historial(created_at DESC);
 
 -- Logs de acciones (auditoría) — sintaxis correcta para D1
 CREATE TABLE IF NOT EXISTS alejandra_logs (

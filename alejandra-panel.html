@@ -229,6 +229,38 @@ let currentSection = 'chat';
 let adminToken = '';
 let chatUserId = localStorage.getItem('alej_uid') || 'adrian';
 
+// Convierte array de filas {rol,contenido,canal,created_at} en pares {user,assistant}
+function historialAPares(rows) {
+  const pares = [];
+  for (let i = 0; i < rows.length; i++) {
+    if (rows[i].rol === 'user') {
+      const asst = rows[i+1]?.rol === 'assistant' ? rows[i+1] : null;
+      pares.push({ canal: rows[i].canal||'?', mensaje: rows[i].contenido, respuesta: asst?.contenido||'', created_at: rows[i].created_at });
+      if (asst) i++;
+    }
+  }
+  return pares;
+}
+function renderHistorial(items) {
+  if (!items.length) return '<div style="color:var(--muted);font-size:12px;text-align:center;padding:16px">Sin conversaciones</div>';
+  const CANAL_COLOR = { web:'b-green', telegram:'b-blue', panel:'b-acc', app:'b-green' };
+  return [...items].reverse().map(x=>`
+    <div class="log-item">
+      <div class="log-head">
+        <span class="badge ${CANAL_COLOR[x.canal]||'b-muted'}">${x.canal}</span>
+        <span style="margin-left:auto;font-size:10px;color:var(--muted)">${fmtDate(x.created_at)}</span>
+      </div>
+      <div style="font-size:12px"><b style="color:var(--muted)">↑</b> ${esc((x.mensaje||'').substring(0,150))}${(x.mensaje||'').length>150?'…':''}</div>
+      <div style="font-size:11px;color:var(--acc2);margin-top:3px"><b>↓</b> ${esc((x.respuesta||'').substring(0,150))}${(x.respuesta||'').length>150?'…':''}</div>
+    </div>`).join('');
+}
+function filtrarHistorial(canal, btn) {
+  document.querySelectorAll('#histListBox').forEach(()=>{});
+  const items = canal === 'todos' ? window._histItems : (window._histItems||[]).filter(x=>x.canal===canal);
+  const box = document.getElementById('histListBox');
+  if (box) box.innerHTML = renderHistorial(items);
+}
+
 // ── Voz ──────────────────────────────────────────────────────
 let _vozAuto = false, _escuchando = false, _rec = null;
 
@@ -435,10 +467,11 @@ async function initDashboard() {
       adminFetch('/api/admin/chat?limit=20').catch(()=>[]),
       adminFetch('/api/admin/memoria?limit=200').catch(()=>[]),
     ]);
-    const chatList = Array.isArray(chats) ? chats : [];
+    const rawChats = Array.isArray(chats) ? chats : [];
+    const chatList = historialAPares(rawChats);
     const memList  = Array.isArray(mem)   ? mem   : (mem.results||[]);
     const today    = new Date().toISOString().split('T')[0];
-    const msgsHoy  = chatList.filter(x=>(x.created_at||'').startsWith(today)).length;
+    const msgsHoy  = rawChats.filter(x=>(x.created_at||'').startsWith(today) && x.rol==='user').length;
     const decCount = memList.filter(x=>x.tipo==='decision').length;
 
     c.innerHTML = `
@@ -603,24 +636,22 @@ async function initLogs() {
   const c = document.getElementById('content');
   c.innerHTML = '<div style="color:var(--muted);font-size:13px">Cargando logs...</div>';
   try {
-    const data  = await adminFetch('/api/admin/chat?limit=60');
-    const items = Array.isArray(data) ? data : [];
+    const raw   = await adminFetch('/api/admin/chat?limit=100');
+    const items = historialAPares(Array.isArray(raw) ? raw : []);
+
+    const canales = [...new Set(items.map(x=>x.canal))];
+    const filtros = ['todos', ...canales];
 
     c.innerHTML = `
-      <div style="font-size:11px;color:var(--muted);margin-bottom:10px">${items.length} conversaciones recientes</div>
-      <div class="card">
-        ${items.length ? [...items].reverse().map(x=>`
-          <div class="log-item">
-            <div class="log-head">
-              <span class="badge b-muted">${esc(x.usuario_id||'?')}</span>
-              <span class="badge b-blue">${x.canal||'web'}</span>
-              <span style="margin-left:auto;font-size:10px;color:var(--muted)">${fmtDate(x.created_at)}</span>
-            </div>
-            <div style="font-size:12px"><b style="color:var(--muted)">↑</b> ${esc((x.mensaje||'').substring(0,120))}${(x.mensaje||'').length>120?'…':''}</div>
-            <div style="font-size:11px;color:var(--acc2);margin-top:3px"><b>↓</b> ${esc((x.respuesta||'').substring(0,120))}${(x.respuesta||'').length>120?'…':''}</div>
-          </div>`).join('')
-        : '<div style="color:var(--muted);font-size:12px;text-align:center;padding:16px">Sin conversaciones</div>'}
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">
+        ${filtros.map(f=>`<button class="badge b-blue" style="cursor:pointer;border:none;background:var(--surf2)" onclick="filtrarHistorial('${f}',this)">${f}</button>`).join('')}
+        <span style="margin-left:auto;font-size:11px;color:var(--muted);align-self:center">${items.length} conversaciones · app+panel+telegram</span>
+      </div>
+      <div class="card" id="histListBox">
+        ${renderHistorial(items)}
       </div>`;
+
+    window._histItems = items;
   } catch(err) { c.innerHTML = `<div style="color:var(--red)">Error: ${esc(err.message)}</div>`; }
 }
 

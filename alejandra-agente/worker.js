@@ -27,7 +27,7 @@ Integraciones: Google Sheets, Telegram (@AlejandraAPP_bot), R2 (archivos), GitHu
   tecnica: `INFRAESTRUCTURA PROPIA:
 - Worker: alejandra-agente.alejandra-app.workers.dev (Cloudflare Workers, ES modules)
 - Worker principal: alejandra-app-api.alejandra-app.workers.dev (32+ tools, ~9400 líneas)
-- BD D1: alejandra-db — tablas: chat_alejandra, alejandra_memoria, alejandra_logs, alejandra_config, alejandra_tokens
+- BD D1: alejandra-db — tablas compartidas con app: alejandra_historial, alejandra_memoria. Propias: alejandra_logs, alejandra_config, alejandra_tokens
 - Deploy: auto via GitHub Actions (deploy-alejandra-agente.yml) en push a main
 - Repo: github.com/padilla585projects/Alejandra-APP | PWA: padilla585projects.github.io/Alejandra-APP`,
 
@@ -37,7 +37,7 @@ Integraciones: Google Sheets, Telegram (@AlejandraAPP_bot), R2 (archivos), GitHu
 3. simple→Haiku (~80 tokens). completo→Sonnet con todos los módulos.
 4. buscar_web=true → OpenAI gpt-4o-mini busca → resultado como contexto
 5. Historial dinámico: 4 msgs para simple, 10 msgs para complejo
-BD: chat_alejandra · alejandra_memoria · alejandra_logs · alejandra_config`,
+BD compartida: alejandra_historial (todas las conversaciones app+panel+telegram) · alejandra_memoria (toda la memoria)`,
 
   evolucion: `EVOLUCIÓN:
 v5.83-85: worker principal, 32 tools, autonomía Nivel B (direct_fix, run_migration)
@@ -259,11 +259,11 @@ export default {
           return json(rows.results || []);
         }
         if (path === '/api/admin/chat' && req.method === 'GET') {
-          const uid   = url.searchParams.get('usuario_id');
-          const limit = parseInt(url.searchParams.get('limit') || '50');
-          const rows  = uid
-            ? await env.DB.prepare('SELECT * FROM chat_alejandra WHERE usuario_id=? ORDER BY created_at DESC LIMIT ?').bind(uid,limit).all()
-            : await env.DB.prepare('SELECT * FROM chat_alejandra ORDER BY created_at DESC LIMIT ?').bind(limit).all();
+          const canal = url.searchParams.get('canal'); // 'web','telegram','panel' o null=todos
+          const limit = parseInt(url.searchParams.get('limit') || '100');
+          const rows  = canal
+            ? await env.DB.prepare('SELECT canal,rol,contenido,created_at FROM alejandra_historial WHERE canal=? ORDER BY created_at DESC LIMIT ?').bind(canal,limit).all()
+            : await env.DB.prepare('SELECT canal,rol,contenido,created_at FROM alejandra_historial ORDER BY created_at DESC LIMIT ?').bind(limit).all();
           return json((rows.results||[]).reverse());
         }
         if (path === '/api/admin/gastos' && req.method === 'GET') {
@@ -501,18 +501,27 @@ async function ejecutarReflexion(env) {
   console.log('Reflexión autónoma iniciada...');
 
   try {
-    // Leer últimas conversaciones y memoria actual
+    // Leer historial unificado (app + panel + telegram) y memoria compartida
     const chats = await env.DB.prepare(
-      `SELECT mensaje,respuesta FROM chat_alejandra ORDER BY created_at DESC LIMIT 30`
+      `SELECT canal, rol, contenido FROM alejandra_historial ORDER BY created_at DESC LIMIT 60`
     ).all();
     const memoria = await env.DB.prepare(
       `SELECT tipo,titulo,contenido FROM alejandra_memoria ORDER BY importancia DESC,created_at DESC LIMIT 20`
     ).all();
 
-    const resumen = `Últimas ${chats.results?.length||0} conversaciones y ${memoria.results?.length||0} registros en memoria.
+    const mensajesRecientes = (chats.results||[]).reverse();
+    const pares = [];
+    for (let i = 0; i < mensajesRecientes.length - 1; i++) {
+      if (mensajesRecientes[i].rol === 'user' && mensajesRecientes[i+1].rol === 'assistant') {
+        pares.push(`[${mensajesRecientes[i].canal}] U: ${mensajesRecientes[i].contenido?.substring(0,80)}\nA: ${mensajesRecientes[i+1].contenido?.substring(0,80)}`);
+        i++;
+      }
+    }
+
+    const resumen = `Últimas ${pares.length} conversaciones (app+panel+telegram) y ${memoria.results?.length||0} registros en memoria.
 
 Conversaciones recientes:
-${(chats.results||[]).slice(0,10).map(c=>`U: ${c.mensaje?.substring(0,80)}\nA: ${c.respuesta?.substring(0,80)}`).join('\n---\n')}
+${pares.slice(-10).join('\n---\n')}
 
 Memoria actual:
 ${(memoria.results||[]).map(m=>`[${m.tipo}] ${m.titulo}`).join('\n')}`;
@@ -639,8 +648,13 @@ async function buscarWebOpenAI(env, query) {
 function construirMessages(mensaje, contexto, limitHistorial=10, incluirAprendizajes=true, resultadoWeb=null) {
   const messages = [];
   for (const item of contexto.historial.slice(-limitHistorial)) {
-    if (item.mensaje)   messages.push({ role: 'user',      content: item.mensaje });
-    if (item.respuesta) messages.push({ role: 'assistant', content: item.respuesta });
+    // Soporta tanto {rol,contenido} (alejandra_historial) como {mensaje,respuesta} (legacy)
+    if (item.rol && item.contenido) {
+      messages.push({ role: item.rol, content: item.contenido });
+    } else {
+      if (item.mensaje)   messages.push({ role: 'user',      content: item.mensaje });
+      if (item.respuesta) messages.push({ role: 'assistant', content: item.respuesta });
+    }
   }
   const partes = [];
   if (incluirAprendizajes && contexto.aprendizajes?.length > 0) {
@@ -652,25 +666,35 @@ function construirMessages(mensaje, contexto, limitHistorial=10, incluirAprendiz
   return messages;
 }
 
-async function obtenerContextoChat(env, usuario_id, empresa_id, limit=10) {
+async function obtenerContextoChat(env, usuario_id, empresa_id, limit=20) {
   try {
+    // Lee el historial unificado de TODOS los canales (app, web, telegram, panel)
+    // Misma tabla que usa la app principal → Alejandra recuerda TODO
     const historial = await env.DB.prepare(
-      `SELECT mensaje,respuesta,created_at FROM chat_alejandra WHERE usuario_id=? AND empresa_id=? ORDER BY created_at DESC LIMIT ?`
-    ).bind(usuario_id, empresa_id, limit).all();
+      `SELECT rol, contenido, canal, created_at FROM alejandra_historial ORDER BY created_at DESC LIMIT ?`
+    ).bind(limit * 2).all();
     const aprendizajes = await env.DB.prepare(
-      `SELECT titulo,contenido,tipo FROM alejandra_memoria WHERE empresa_id=? AND (tipo='aprendizaje' OR tipo='contexto') ORDER BY importancia DESC,created_at DESC LIMIT 5`
-    ).bind(empresa_id).all();
+      `SELECT titulo,contenido,tipo FROM alejandra_memoria WHERE (tipo='aprendizaje' OR tipo='contexto') ORDER BY importancia DESC,created_at DESC LIMIT 10`
+    ).all();
     return { historial: (historial.results||[]).reverse(), aprendizajes: aprendizajes.results||[], usuario_id, empresa_id };
   } catch {
     return { historial: [], aprendizajes: [], usuario_id, empresa_id };
   }
 }
 
-async function guardarMensajeChat(env, usuario_id, empresa_id, mensaje, respuesta, canal='web') {
+async function guardarMensajeChat(env, usuario_id, empresa_id, mensaje, respuesta, canal='panel') {
   try {
+    // Guarda en alejandra_historial (tabla unificada compartida con la app)
     await env.DB.prepare(
-      `INSERT INTO chat_alejandra (usuario_id,empresa_id,mensaje,respuesta,canal,created_at) VALUES(?,?,?,?,?,datetime('now'))`
-    ).bind(usuario_id, empresa_id, mensaje, respuesta, canal).run();
+      `INSERT INTO alejandra_historial (canal, rol, contenido, created_at) VALUES (?, 'user', ?, datetime('now'))`
+    ).bind(canal, mensaje.slice(0, 4000)).run();
+    await env.DB.prepare(
+      `INSERT INTO alejandra_historial (canal, rol, contenido, created_at) VALUES (?, 'assistant', ?, datetime('now'))`
+    ).bind(canal, respuesta.slice(0, 4000)).run();
+    // Limitar a 100 mensajes por canal
+    await env.DB.prepare(
+      `DELETE FROM alejandra_historial WHERE canal=? AND id NOT IN (SELECT id FROM alejandra_historial WHERE canal=? ORDER BY created_at DESC LIMIT 100)`
+    ).bind(canal, canal).run();
   } catch (err) { console.error('guardarChat:', err.message); }
 }
 
