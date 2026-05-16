@@ -3518,36 +3518,36 @@ async function handleTelegramWebhook(request, env, ctx) {
       await env.DB.prepare(
         'UPDATE usuarios SET activo=1, google_pending=0, empresa_id=?, rol=?, departamento=? WHERE id=? AND google_pending=1'
       ).bind(parseInt(empresaId), rol, dept === 'null' ? null : dept, parseInt(userId)).run();
-      await _tgAnswerCQ(env, cq.id, 'âÅ… Usuario aprobado');
-      await _tgEditMsg(env, chatId, msgId, orig + `\n\nâÅ… <b>APROBADO</b> — ${rol} Ã· ${dept === 'null' ? '—' : dept}`);
+      await _tgAnswerCQ(env, cq.id, '✅ Usuario aprobado');
+      await _tgEditMsg(env, chatId, msgId, orig + `\n\n✅ <b>APROBADO</b> — ${rol} Ã· ${dept === 'null' ? '—' : dept}`);
     }
     else if (accion === 'rej') {
       const [userId] = partes;
       await env.DB.prepare('DELETE FROM usuarios WHERE id=? AND google_pending=1').bind(parseInt(userId)).run();
-      await _tgAnswerCQ(env, cq.id, 'âÂÅ Solicitud rechazada');
-      await _tgEditMsg(env, chatId, msgId, orig + '\n\nâÂÅ <b>RECHAZADO</b>');
+      await _tgAnswerCQ(env, cq.id, '❌ Solicitud rechazada');
+      await _tgEditMsg(env, chatId, msgId, orig + '\n\n❌ <b>RECHAZADO</b>');
     }
     // â"€â"€ Estado de sugerencia / idea â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
     else if (accion === 'idea_prog') {
       await env.DB.prepare('UPDATE sugerencias SET estado=? WHERE id=?').bind('en_progreso', parseInt(partes[0])).run();
-      await _tgAnswerCQ(env, cq.id, 'ðÅ¸"„ En progreso');
-      await _tgEditMsg(env, chatId, msgId, orig + '\n\nðÅ¸"„ <b>EN PROGRESO</b>');
+      await _tgAnswerCQ(env, cq.id, '📄 En progreso');
+      await _tgEditMsg(env, chatId, msgId, orig + '\n\n📄 <b>EN PROGRESO</b>');
     }
     else if (accion === 'idea_done') {
       await env.DB.prepare('UPDATE sugerencias SET estado=? WHERE id=?').bind('resuelto', parseInt(partes[0])).run();
-      await _tgAnswerCQ(env, cq.id, 'âÅ… Resuelta');
-      await _tgEditMsg(env, chatId, msgId, orig + '\n\nâÅ… <b>RESUELTA</b>');
+      await _tgAnswerCQ(env, cq.id, '✅ Resuelta');
+      await _tgEditMsg(env, chatId, msgId, orig + '\n\n✅ <b>RESUELTA</b>');
     }
     else if (accion === 'idea_close') {
       await env.DB.prepare('UPDATE sugerencias SET estado=? WHERE id=?').bind('cerrado', parseInt(partes[0])).run();
-      await _tgAnswerCQ(env, cq.id, 'ðÅ¸—‘ Cerrada');
-      await _tgEditMsg(env, chatId, msgId, orig + '\n\nðÅ¸—‘ <b>CERRADA</b>');
+      await _tgAnswerCQ(env, cq.id, '🗑 Cerrada');
+      await _tgEditMsg(env, chatId, msgId, orig + '\n\n🗑 <b>CERRADA</b>');
     }
     else if (accion === 'herr_disp') {
       const hid = parseInt(partes[0]);
       await env.DB.prepare("UPDATE herramientas SET estado='disponible' WHERE id=?").bind(hid).run();
-      await _tgAnswerCQ(env, cq.id, 'âÅ… Marcada como disponible');
-      await _tgEditMsg(env, chatId, msgId, orig + '\n\nâÅ… <b>DISPONIBLE</b>');
+      await _tgAnswerCQ(env, cq.id, '✅ Marcada como disponible');
+      await _tgEditMsg(env, chatId, msgId, orig + '\n\n✅ <b>DISPONIBLE</b>');
     }
     // ── Fixes autónomos de Alejandra ─────────────────────────────────────────
     else if (accion === 'fix_apply') {
@@ -3628,7 +3628,7 @@ async function handleTelegramWebhook(request, env, ctx) {
       await _tgEditMsg(env, chatId, msgId, orig + `\n\n↩️ <b>REVERTIDO</b> — commit <code>${revertSha}</code>. Deploy automático en ~1 min. La sugerencia vuelve a estado abierto.`);
     }
   } catch (e) {
-    await _tgAnswerCQ(env, cq.id, 'âÂÅ Error: ' + e.message);
+    await _tgAnswerCQ(env, cq.id, '❌ Error: ' + e.message);
   }
   return new Response('OK');
 }
@@ -4706,7 +4706,7 @@ async function recuperarPass(request, env) {
   <table width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;margin:40px auto">
     <tr><td style="background:#162032;border-radius:16px;padding:40px;border:1px solid #334155">
       <div style="text-align:center;margin-bottom:28px">
-        <div style="font-size:32px;margin-bottom:8px">ðÅ¸"Â</div>
+        <div style="font-size:32px;margin-bottom:8px">📐</div>
         <div style="font-family:'Montserrat',Helvetica,Arial,sans-serif;font-weight:900;font-size:22px;color:#f97316">
           Alejandra Office
         </div>
@@ -4744,7 +4744,7 @@ async function recuperarPass(request, env) {
 
   const enviado = await enviarEmailResend(env, {
     to: email.trim().toLowerCase(),
-    subject: 'ðÅ¸"Â Restablecer contraseña — Alejandra Office',
+    subject: '📐 Restablecer contraseña — Alejandra Office',
     html,
   });
 
@@ -4860,7 +4860,7 @@ async function verificarAcceso(request, env) {
           return err('El usuario no pertenece a esa obra', 403);
         }
       }
-      await sendTelegram(env, `ðÅ¸‘¤ <b>Login</b>: ${usuario.nombre} (${usuario.rol})\nðÅ¸Â— ${usuario.obra_nombre || '—'}  ðÅ¸"· ${usuario.departamento || '—'}`);
+      await sendTelegram(env, `👤 <b>Login</b>: ${usuario.nombre} (${usuario.rol})\n🏗 ${usuario.obra_nombre || '—'}  📷 ${usuario.departamento || '—'}`);
       await logActividad(env, { nivel: 'info', origen: 'login', mensaje: `Login: ${usuario.nombre} (${usuario.rol})`, detalle: `obra: ${usuario.obra_nombre || '—'} | dept: ${usuario.departamento || '—'}`, empresa_id: usuario.empresa_id || 1 });
       const token = await crearSesion(env, {
         nombre: usuario.nombre, rol: usuario.rol,
@@ -4998,7 +4998,7 @@ async function registrarEmpresa(request, env) {
     departamento: null, es_admin: false, usuario_id: adminUser.id, empresa_id,
   });
 
-  await sendTelegram(env, `ðÅ¸Â¢ <b>Nueva empresa:</b> ${empresa_nombre}\nðÅ¸‘¤ ${admin_nombre} (${emailClean})\nðÅ¸Â— Obra: ${obra_nombre_final || '—'}`);
+  await sendTelegram(env, `🏢 <b>Nueva empresa:</b> ${empresa_nombre}\n👤 ${admin_nombre} (${emailClean})\n🏗 Obra: ${obra_nombre_final || '—'}`);
   return json({ ok: true, token, rol: 'empresa_admin', nombre: admin_nombre.trim(), empresa_nombre: empresa_nombre.trim(), empresa_id, obra_id, obra_nombre: obra_nombre_final });
 }
 
@@ -5209,7 +5209,7 @@ async function crearBobina(request, env, ctx) {
     ctx.waitUntil(Promise.all([
       syncSheets(env, 'Elec-Bobinas', empresa_id),
       registrarHistorial(env, { obra_id: obraFinal, bobina_codigo: codigo.trim().toUpperCase(), accion: 'entrada', usuario: reg, notas: notas || '' }),
-      sendTelegram(env, `ðÅ¸"¦ <b>Nueva bobina registrada</b>\nðÅ¸"– ${codigo.trim().toUpperCase()}\nðÅ¸"Å ${tipo_cable}  ðÅ¸"¦ ${proveedor}\nðÅ¸‘¤ ${reg}`),
+      sendTelegram(env, `📦 <b>Nueva bobina registrada</b>\n📖 ${codigo.trim().toUpperCase()}\n📌 ${tipo_cable}  📦 ${proveedor}\n👤 ${reg}`),
     ]));
 
     return json({ ok: true, mensaje: `Bobina ${codigo} registrada` }, 201);
@@ -5273,7 +5273,7 @@ async function devolverBobina(codigo, request, env, ctx) {
   ctx.waitUntil(Promise.all([
     syncSheets(env, 'Elec-Bobinas', bobina.empresa_id),
     registrarHistorial(env, { obra_id: bobina.obra_id, bobina_codigo: codigo, accion: 'devolucion', usuario: devuelto_por, notas: notas || '' }),
-    sendTelegram(env, `ðÅ¸"¤ <b>Bobina devuelta</b>\nðÅ¸"– ${codigo}\nðÅ¸‘¤ ${devuelto_por || '—'}`),
+    sendTelegram(env, `📤 <b>Bobina devuelta</b>\n📖 ${codigo}\n👤 ${devuelto_por || '—'}`),
   ]));
 
   return json({ ok: true, mensaje: `Bobina ${codigo} devuelta correctamente`, fecha_devolucion: fecha });
@@ -5290,7 +5290,7 @@ async function eliminarBobina(codigo, request, env, ctx) {
   ctx.waitUntil(Promise.all([
     syncSheets(env, 'Elec-Bobinas', empresa_id || bobina.empresa_id),
     registrarHistorial(env, { obra_id: bobina.obra_id, bobina_codigo: codigo, accion: 'eliminacion', usuario: '' }),
-    sendTelegram(env, `ðÅ¸—‘ï¸Â <b>Bobina eliminada</b>\nðÅ¸"– ${codigo}`),
+    sendTelegram(env, `🗑️ <b>Bobina eliminada</b>\n📖 ${codigo}`),
   ]));
 
   return json({ ok: true, mensaje: `Bobina ${codigo} eliminada` });
@@ -5364,7 +5364,7 @@ async function crearPemp(request, env, ctx) {
         obra_id: obraFinal, matricula: matricula.trim().toUpperCase(),
         accion: 'entrada', usuario: reg, notas: notas || '',
       }),
-      sendTelegram(env, `ðÅ¸Â— <b>Nueva PEMP registrada</b>\nðÅ¸"– ${matricula.trim().toUpperCase()}\nðÅ¸"§ ${tipo || '—'}  ðÅ¸Â­ ${marca || '—'}  âÅ¡¡ ${energia || '—'}\nðÅ¸‘¤ ${reg}`),
+      sendTelegram(env, `🏗 <b>Nueva PEMP registrada</b>\n📖 ${matricula.trim().toUpperCase()}\n📧 ${tipo || '—'}  🏭 ${marca || '—'}  ⚡ ${energia || '—'}\n👤 ${reg}`),
     ]));
 
     return json({ ok: true, id, mensaje: `PEMP ${matricula} registrada` }, 201);
@@ -5404,8 +5404,8 @@ async function editarPemp(matricula, request, env, ctx) {
   vals.push(matricula);
 
   await env.DB.prepare(`UPDATE pemp SET ${sets.join(', ')} WHERE matricula = ?`).bind(...vals).run();
-  if (notifAveria)   await sendTelegram(env, `ðÅ¸"´ <b>PEMP AVERIADA</b>\nðÅ¸"– ${matricula}\nðÅ¸Â— Obra: ${pemp.obra_id || '—'}`);
-  if (notifReparado) await sendTelegram(env, `ðÅ¸Å¸¢ <b>PEMP Reparada</b>\nðÅ¸"– ${matricula}`);
+  if (notifAveria)   await sendTelegram(env, `📴 <b>PEMP AVERIADA</b>\n📖 ${matricula}\n🏗 Obra: ${pemp.obra_id || '—'}`);
+  if (notifReparado) await sendTelegram(env, `🟢 <b>PEMP Reparada</b>\n📖 ${matricula}`);
   ctx?.waitUntil(syncSheets(env, tabForDept('pemp', body.departamento || pemp.departamento), empresa_id || pemp.empresa_id));
   return json({ ok: true, mensaje: `PEMP ${matricula} actualizada` });
 }
@@ -5441,7 +5441,7 @@ async function devolverPemp(matricula, request, env, ctx) {
   ctx.waitUntil(Promise.all([
     syncSheets(env, tabForDept('pemp', pemp.departamento), pemp.empresa_id),
     registrarHistorialPemp(env, { obra_id: pemp.obra_id, matricula, accion: 'devolucion', usuario: devuelto_por, notas: notas || '' }),
-    sendTelegram(env, `ðÅ¸"¤ <b>PEMP devuelta</b>\nðÅ¸"– ${matricula}\nðÅ¸‘¤ ${devuelto_por || '—'}`),
+    sendTelegram(env, `📤 <b>PEMP devuelta</b>\n📖 ${matricula}\n👤 ${devuelto_por || '—'}`),
   ]));
 
   return json({ ok: true, mensaje: `PEMP ${matricula} devuelta correctamente`, fecha_devolucion: fecha });
@@ -5456,7 +5456,7 @@ async function eliminarPemp(matricula, request, env, ctx) {
   await env.DB.prepare('DELETE FROM pemp WHERE matricula = ?').bind(matricula).run();
   ctx.waitUntil(Promise.all([
     syncSheets(env, tabForDept('pemp', pemp.departamento), empresa_id || pemp.empresa_id),
-    sendTelegram(env, `ðÅ¸—‘ï¸Â <b>PEMP eliminada</b>\nðÅ¸"– ${matricula}`),
+    sendTelegram(env, `🗑️ <b>PEMP eliminada</b>\n📖 ${matricula}`),
   ]));
   return json({ ok: true, mensaje: `PEMP ${matricula} eliminada` });
 }
@@ -5529,7 +5529,7 @@ async function crearCarretilla(request, env, ctx) {
         obra_id: obraFinal, matricula: matricula.trim().toUpperCase(),
         accion: 'entrada', usuario: reg, notas: notas || '',
       }),
-      sendTelegram(env, `ðÅ¸Å¡Å <b>Nueva carretilla registrada</b>\nðÅ¸"– ${matricula.trim().toUpperCase()}\nðÅ¸"§ ${tipo || '—'}  âÅ¡¡ ${energia || '—'}\nðÅ¸‘¤ ${reg}`),
+      sendTelegram(env, `🚜 <b>Nueva carretilla registrada</b>\n📖 ${matricula.trim().toUpperCase()}\n📧 ${tipo || '—'}  ⚡ ${energia || '—'}\n👤 ${reg}`),
     ]));
 
     return json({ ok: true, id, mensaje: `Carretilla ${matricula} registrada` }, 201);
@@ -5568,8 +5568,8 @@ async function editarCarretilla(matricula, request, env, ctx) {
   vals.push(matricula);
 
   await env.DB.prepare(`UPDATE carretillas SET ${sets.join(', ')} WHERE matricula = ?`).bind(...vals).run();
-  if (notifAveria)   await sendTelegram(env, `ðÅ¸"´ <b>Carretilla AVERIADA</b>\nðÅ¸"– ${matricula}`);
-  if (notifReparado) await sendTelegram(env, `ðÅ¸Å¸¢ <b>Carretilla Reparada</b>\nðÅ¸"– ${matricula}`);
+  if (notifAveria)   await sendTelegram(env, `📴 <b>Carretilla AVERIADA</b>\n📖 ${matricula}`);
+  if (notifReparado) await sendTelegram(env, `🟢 <b>Carretilla Reparada</b>\n📖 ${matricula}`);
   ctx?.waitUntil(syncSheets(env, tabForDept('carretilla', body.departamento || carretilla.departamento), empresa_id || carretilla.empresa_id));
   return json({ ok: true, mensaje: `Carretilla ${matricula} actualizada` });
 }
@@ -5605,7 +5605,7 @@ async function devolverCarretilla(matricula, request, env, ctx) {
   ctx.waitUntil(Promise.all([
     syncSheets(env, tabForDept('carretilla', carretilla.departamento), carretilla.empresa_id),
     registrarHistorialCarretillas(env, { obra_id: carretilla.obra_id, matricula, accion: 'devolucion', usuario: devuelto_por, notas: notas || '' }),
-    sendTelegram(env, `ðÅ¸"¤ <b>Carretilla devuelta</b>\nðÅ¸"– ${matricula}\nðÅ¸‘¤ ${devuelto_por || '—'}`),
+    sendTelegram(env, `📤 <b>Carretilla devuelta</b>\n📖 ${matricula}\n👤 ${devuelto_por || '—'}`),
   ]));
 
   return json({ ok: true, mensaje: `Carretilla ${matricula} devuelta correctamente`, fecha_devolucion: fecha });
@@ -5620,7 +5620,7 @@ async function eliminarCarretilla(matricula, request, env, ctx) {
   await env.DB.prepare('DELETE FROM carretillas WHERE matricula = ?').bind(matricula).run();
   ctx.waitUntil(Promise.all([
     syncSheets(env, tabForDept('carretilla', carretilla.departamento), empresa_id || carretilla.empresa_id),
-    sendTelegram(env, `ðÅ¸—‘ï¸Â <b>Carretilla eliminada</b>\nðÅ¸"– ${matricula}`),
+    sendTelegram(env, `🗑️ <b>Carretilla eliminada</b>\n📖 ${matricula}`),
   ]));
   return json({ ok: true, mensaje: `Carretilla ${matricula} eliminada` });
 }
@@ -6077,15 +6077,15 @@ async function guardarSugerencia(request, env) {
       'INSERT INTO sugerencias (texto, categoria, usuario, obra, departamento, empresa_id, estado, foto) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
     ).bind(texto.trim().slice(0, 1000), categoria || null, usuario || null, obra || null, departamento, empresa_id_sug, 'pendiente', fotoVal).run();
     const ideaId = rSug.meta?.last_row_id;
-    const catIcon = { mejora: 'ðÅ¸"§', error: 'ðÅ¸Â›', nuevo: 'âÅ¨', otro: 'ðÅ¸’¬' };
-    const icon = catIcon[categoria] || 'ðÅ¸’¬';
+    const catIcon = { mejora: '📧', error: '🐛', nuevo: '✨', otro: '💬' };
+    const icon = catIcon[categoria] || '💬';
     const tgMsg = `${icon} <b>Nueva sugerencia [${categoria || 'otro'}]</b>\n` +
-      `ðÅ¸‘¤ ${usuario || '—'}  ðÅ¸Â— ${obra || '—'}\n\n` +
+      `👤 ${usuario || '—'}  🏗 ${obra || '—'}\n\n` +
       `${texto.trim().slice(0, 400)}`;
     const botonesIdea = ideaId ? [[
-      { text: 'ðÅ¸"„ En progreso', callback_data: `idea_prog:${ideaId}` },
-      { text: 'âÅ… Resuelto',    callback_data: `idea_done:${ideaId}` },
-      { text: 'ðÅ¸—‘ Cerrar',     callback_data: `idea_close:${ideaId}` },
+      { text: '📄 En progreso', callback_data: `idea_prog:${ideaId}` },
+      { text: '✅ Resuelto',    callback_data: `idea_done:${ideaId}` },
+      { text: '🗑 Cerrar',     callback_data: `idea_close:${ideaId}` },
     ]] : null;
     if (fotoVal && ideaId) {
       await sendTelegramFotoConBotones(env, tgMsg, fotoVal, botonesIdea);
@@ -6222,9 +6222,9 @@ async function guardarLog(request, env) {
     ).bind(nivel, origen || 'cliente', String(mensaje || '').slice(0, 500), contexto, 1).run();
     if (nivel === 'error') {
       await sendTelegram(env,
-        `ðÅ¸Å¡¨ <b>Error en Alejandra</b>\n` +
-        `ðÅ¸‘¤ ${usuario || '—'}  ðÅ¸Â— ${obra || '—'}\n` +
-        `ðÅ¸"‹ ${String(mensaje || '').slice(0, 300)}`
+        `🚨 <b>Error en Alejandra</b>\n` +
+        `👤 ${usuario || '—'}  🏗 ${obra || '—'}\n` +
+        `📋 ${String(mensaje || '').slice(0, 300)}`
       );
     }
     return json({ ok: true });
@@ -6284,7 +6284,7 @@ async function telegramTest(request, env) {
   if (!auth.isDesarrollador && !auth.isSuperadmin) return err('Solo para desarrolladores', 403);
   try {
     const body = await request.json().catch(() => ({}));
-    const msg = body.mensaje || 'ðÅ¸› ï¸Â Test desde Alejandra DevTools';
+    const msg = body.mensaje || '🛠️ Test desde Alejandra DevTools';
     await sendTelegram(env, msg);
     return json({ ok: true });
   } catch (e) { return err('Error Telegram: ' + e.message, 500); }
@@ -6347,7 +6347,7 @@ async function crearPedido(request, env, ctx) {
     'INSERT INTO pedidos (empresa_id, obra_id, departamento, referencia, descripcion, cantidad, unidad, proveedor, solicitado_por, notas) VALUES (?,?,?,?,?,?,?,?,?,?)'
   ).bind(empresa_id, obra_id||null, dept, referencia||null, descripcion.trim(), cantidad||1, unidad||'ud', proveedor||null, solicitado_por||null, notas||null).run();
   ctx?.waitUntil(syncPedidos(env, tabForDept('pedido', dept), empresa_id));
-  await sendTelegram(env, `ðÅ¸"¦ <b>Nuevo pedido</b> [${dept}]\nðÅ¸‘¤ ${solicitado_por||'—'}\nðÅ¸"Â ${descripcion.trim().slice(0,200)}`);
+  await sendTelegram(env, `📦 <b>Nuevo pedido</b> [${dept}]\n👤 ${solicitado_por||'—'}\n📝 ${descripcion.trim().slice(0,200)}`);
   return json({ ok: true, id: r.meta.last_row_id });
 }
 
@@ -6375,9 +6375,9 @@ async function actualizarPedido(id, request, env, ctx) {
   if (body.estado !== undefined) {
     const pedido = await env.DB.prepare('SELECT descripcion, departamento FROM pedidos WHERE id = ?').bind(id).first();
     pedidoDept = pedido?.departamento;
-    const iconos = { solicitado: 'ðÅ¸"¤', recibido: 'âÅ…', cancelado: 'âÂÅ', pendiente: 'âÂ³' };
+    const iconos = { solicitado: '📤', recibido: '✅', cancelado: '❌', pendiente: 'âÂ³' };
     await sendTelegram(env,
-      `${iconos[body.estado]||'ðÅ¸"¦'} <b>Pedido ${body.estado}</b> [${pedido?.departamento||'—'}]\nðÅ¸"Â ${(pedido?.descripcion||'').slice(0,200)}`
+      `${iconos[body.estado]||'📦'} <b>Pedido ${body.estado}</b> [${pedido?.departamento||'—'}]\n📝 ${(pedido?.descripcion||'').slice(0,200)}`
     );
   }
   if (!pedidoDept) {
@@ -6842,8 +6842,8 @@ async function crearHerramienta(request, env, ctx) {
   const tipoNom = tipoRow?.nombre || body.modelo || 'herramienta';
   const obraRow = obra_id ? await env.DB.prepare('SELECT nombre FROM obras WHERE id = ?').bind(obra_id).first().catch(() => null) : null;
   ctx?.waitUntil(sendTelegramConBotones(env,
-    `ðÅ¸"§ <b>Nueva herramienta registrada</b>\nðÅ¸"‹ ${tipoNom}${marca ? ' Ã· ' + marca : ''}${body.modelo ? ' Ã· ' + body.modelo : ''}\nðÅ¸"Â ${obraRow?.nombre || '—'}\nðÅ¸‘¤ ${userNombre || rol}`,
-    [[{ text: 'âÅ… Disponible', callback_data: `herr_disp:${hid}` }]]
+    `📧 <b>Nueva herramienta registrada</b>\n📋 ${tipoNom}${marca ? ' Ã· ' + marca : ''}${body.modelo ? ' Ã· ' + body.modelo : ''}\n📍 ${obraRow?.nombre || '—'}\n👤 ${userNombre || rol}`,
+    [[{ text: '✅ Disponible', callback_data: `herr_disp:${hid}` }]]
   ));
   return json({ ok: true, id: hid }, 201);
 }
@@ -6912,7 +6912,7 @@ async function actualizarHerramienta(id, request, env, ctx) {
       ).bind(h.tipo_id, empresa_id).all();
       const disponibles = disp[0]?.c ?? 0;
       if (disponibles < tipo.stock_minimo) {
-        await sendTelegram(env, `âÅ¡ ï¸Â <b>Stock mínimo alcanzado — Herramientas</b>\nðÅ¸"§ ${tipo.nombre}\nðÅ¸"‰ Disponibles: <b>${disponibles}</b> (mínimo: ${tipo.stock_minimo})\nðÅ¸‘¤ ${userNombre || rol}`);
+        await sendTelegram(env, `⚠️ <b>Stock mínimo alcanzado — Herramientas</b>\n📧 ${tipo.nombre}\n📉 Disponibles: <b>${disponibles}</b> (mínimo: ${tipo.stock_minimo})\n👤 ${userNombre || rol}`);
       }
     }
   }
@@ -7588,7 +7588,7 @@ async function syncSheets(env, tabs = null, empresa_id = 1) {
     const authH   = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
 
     const tabsNecesarias = ['Elec-Bobinas', 'Elec-PEMP', 'Elec-Carretillas', 'Mec-PEMP', 'Mec-Carretillas', 'Seg-Inventario', 'Elec-Herramientas', 'Mec-Herramientas', 'Kits'];
-    const tabsAntiguas   = ['Bobinas', 'PEMP', 'Carretillas', 'âÅ¡¡ Bobinas', 'âÅ¡¡ PEMP', 'âÅ¡¡ Carretillas', 'ðÅ¸"§ PEMP', 'ðÅ¸"§ Carretillas'];
+    const tabsAntiguas   = ['Bobinas', 'PEMP', 'Carretillas', '⚡ Bobinas', '⚡ PEMP', '⚡ Carretillas', '📧 PEMP', '📧 Carretillas'];
     const tabsToSync     = tabs ? (Array.isArray(tabs) ? tabs : [tabs]) : tabsNecesarias;
 
     // Metadata: incluye bandedRanges y conditionalFormats para poder limpiarlos antes de re-aplicar
@@ -8319,7 +8319,7 @@ async function crearItemSeg(request, env, ctx) {
     const id = r.meta.last_row_id;
     await env.DB.prepare('INSERT INTO movimientos_seg (item_id, accion, cantidad, usuario, fecha) VALUES (?, ?, ?, ?, ?)').bind(id, 'entrada', cantidad_total, reg, fecha).run();
     if (fecha_caducidad) {
-      await sendTelegram(env, `ðÅ¸"¦ <b>Nuevo material Seguridad</b>\nðÅ¸"– ${cod || tipo_material}  ðÅ¸"‹ ${tipo_material}\nðÅ¸"… Caduca: ${fecha_caducidad}\nðÅ¸‘¤ ${reg}`);
+      await sendTelegram(env, `📦 <b>Nuevo material Seguridad</b>\n📖 ${cod || tipo_material}  📋 ${tipo_material}\n📅 Caduca: ${fecha_caducidad}\n👤 ${reg}`);
     }
     ctx?.waitUntil(syncSheets(env, 'Seg-Inventario', empresa_id));
     return json({ ok: true, id, mensaje: `${tipo_material} registrado` }, 201);
@@ -8366,10 +8366,10 @@ async function moverItemSeg(id, request, env, ctx) {
       await env.DB.prepare('UPDATE inventario_seg SET cantidad_disponible = ?, estado = ?, destino_actual = ? WHERE id = ?').bind(nueva, nueva === 0 ? 'en_uso' : 'disponible', destino || '', id).run();
     }
     await env.DB.prepare('INSERT INTO movimientos_seg (item_id, accion, cantidad, destino, usuario, notas, fecha) VALUES (?, ?, ?, ?, ?, ?, ?)').bind(id, 'salida', cantidad, destino || '', usuario || '', notas || '', fecha).run();
-    if (destino) await sendTelegram(env, `ðÅ¸"¤ <b>Material Seguridad — Salida</b>\nðÅ¸"– ${item.codigo || item.nombre}  ðÅ¸"‹ ${item.tipo_material}\nðÅ¸Â— Destino: ${destino}\nðÅ¸‘¤ ${usuario || '—'}`);
+    if (destino) await sendTelegram(env, `📤 <b>Material Seguridad — Salida</b>\n📖 ${item.codigo || item.nombre}  📋 ${item.tipo_material}\n🏗 Destino: ${destino}\n👤 ${usuario || '—'}`);
     // Alerta stock mínimo (modo cantidad)
     if (item.modo === 'cantidad' && item.stock_minimo > 0 && nuevaCantidad !== null && nuevaCantidad < item.stock_minimo) {
-      await sendTelegram(env, `âÅ¡ ï¸Â <b>Stock mínimo alcanzado — Seguridad</b>\nðÅ¸"¦ ${item.nombre || item.tipo_material}\nðÅ¸"‰ Disponible: <b>${nuevaCantidad}</b> (mínimo: ${item.stock_minimo})\nðÅ¸‘¤ ${usuario || '—'}`);
+      await sendTelegram(env, `⚠️ <b>Stock mínimo alcanzado — Seguridad</b>\n📦 ${item.nombre || item.tipo_material}\n📉 Disponible: <b>${nuevaCantidad}</b> (mínimo: ${item.stock_minimo})\n👤 ${usuario || '—'}`);
     }
     ctx?.waitUntil(syncSheets(env, 'Seg-Inventario', item.empresa_id));
     return json({ ok: true, mensaje: 'Salida registrada' });
@@ -8390,7 +8390,7 @@ async function moverItemSeg(id, request, env, ctx) {
   if (accion === 'baja') {
     await env.DB.prepare('UPDATE inventario_seg SET estado = ? WHERE id = ?').bind('baja', id).run();
     await env.DB.prepare('INSERT INTO movimientos_seg (item_id, accion, cantidad, usuario, notas, fecha) VALUES (?, ?, ?, ?, ?, ?)').bind(id, 'baja', cantidad, usuario || '', notas || '', fecha).run();
-    await sendTelegram(env, `ðÅ¸—‘ï¸Â <b>Material Seguridad — Baja</b>\nðÅ¸"– ${item.codigo || item.nombre}  ðÅ¸"‹ ${item.tipo_material}\nðÅ¸‘¤ ${usuario || '—'}`);
+    await sendTelegram(env, `🗑️ <b>Material Seguridad — Baja</b>\n📖 ${item.codigo || item.nombre}  📋 ${item.tipo_material}\n👤 ${usuario || '—'}`);
     ctx?.waitUntil(syncSheets(env, 'Seg-Inventario', item.empresa_id));
     return json({ ok: true, mensaje: 'Dado de baja' });
   }
@@ -8454,7 +8454,7 @@ async function cierreAutomaticoJornada(env) {
 
     if (cerrados > 0) {
       await sendTelegram(env,
-        `âÂ° <b>Cierre automático de jornada</b>\nðÅ¸"… ${hoy}\nâÅ… ${cerrados} fichaje${cerrados > 1 ? 's cerrados' : ' cerrado'} automáticamente con hora del horario de obra.`
+        `âÂ° <b>Cierre automático de jornada</b>\n📅 ${hoy}\n✅ ${cerrados} fichaje${cerrados > 1 ? 's cerrados' : ' cerrado'} automáticamente con hora del horario de obra.`
       );
     }
   } catch (e) {
@@ -8533,14 +8533,14 @@ async function informeSemanal(empresa_id, empresa_nombre, env) {
 
     // Composición del mensaje
     const semStr = `${desde} al ${hasta}`;
-    let msg = `ðÅ¸"Å  <b>Informe semanal — ${empresa_nombre}</b>\n`;
+    let msg = `📊 <b>Informe semanal — ${empresa_nombre}</b>\n`;
     msg += `<i>Semana: ${semStr}</i>\n\n`;
-    msg += `ðÅ¸‘· <b>Fichajes:</b> ${fich.total || 0} registros Ã· ${horasTotStr}${retrasoStr}\n`;
-    msg += `ðÅ¸"§ <b>Equipos sin servicio:</b> ${nEquiposMant}\n`;
-    msg += `ðÅ¸›  <b>Herramientas fuera:</b> ${nHerrFuera}\n`;
-    msg += `ðÅ¸"¦ <b>Pedidos pendientes:</b> ${nPedPend}\n`;
-    msg += `ðÅ¸Å¡¨ <b>Incidencias abiertas:</b> ${nIncAb}\n`;
-    if (stockBajo > 0) msg += `âÅ¡ ï¸Â <b>Alertas de stock bajo:</b> ${stockBajo}\n`;
+    msg += `👷 <b>Fichajes:</b> ${fich.total || 0} registros Ã· ${horasTotStr}${retrasoStr}\n`;
+    msg += `📧 <b>Equipos sin servicio:</b> ${nEquiposMant}\n`;
+    msg += `🛠 <b>Herramientas fuera:</b> ${nHerrFuera}\n`;
+    msg += `📦 <b>Pedidos pendientes:</b> ${nPedPend}\n`;
+    msg += `🚨 <b>Incidencias abiertas:</b> ${nIncAb}\n`;
+    if (stockBajo > 0) msg += `⚠️ <b>Alertas de stock bajo:</b> ${stockBajo}\n`;
     msg += `\n_Generado automáticamente por Alejandra App_`;
 
     await sendTelegram(env, msg);
@@ -8655,11 +8655,11 @@ async function alertasDiarias(env) {
     const averiadas = [];
     for (const m of [...(avPemp.results||[]), ...(avCarr.results||[])]) {
       const dias = Math.floor((hoy - new Date(m.fecha_averia)) / 86400000);
-      if (dias >= DIAS_AVERIA) averiadas.push(`ðÅ¸"– ${m.matricula}${empLabel(m.empresa_id)} — ${dias} días averiada`);
+      if (dias >= DIAS_AVERIA) averiadas.push(`📖 ${m.matricula}${empLabel(m.empresa_id)} — ${dias} días averiada`);
     }
     if (averiadas.length) {
       await sendTelegram(env,
-        `âÅ¡ ï¸Â <b>Máquinas averiadas sin reparar (â‰¥${DIAS_AVERIA} días)</b>\n\n` + averiadas.join('\n')
+        `⚠️ <b>Máquinas averiadas sin reparar (â‰¥${DIAS_AVERIA} días)</b>\n\n` + averiadas.join('\n')
       );
     }
 
@@ -8679,12 +8679,12 @@ async function alertasDiarias(env) {
       if (!aviso) continue;
       const diasAviso = m.dias_aviso_mant || DIAS_AVISO_DEFAULT;
       const dias = Math.floor((new Date(m.fecha_proxima_revision) - hoy) / 86400000);
-      if (dias < 0) revisiones.push(`ðÅ¸"– ${m.matricula}${empLabel(m.empresa_id)} — VENCIDA hace ${Math.abs(dias)} días`);
-      else if (dias <= diasAviso) revisiones.push(`ðÅ¸"– ${m.matricula}${empLabel(m.empresa_id)} — vence en ${dias} días (${m.fecha_proxima_revision})`);
+      if (dias < 0) revisiones.push(`📖 ${m.matricula}${empLabel(m.empresa_id)} — VENCIDA hace ${Math.abs(dias)} días`);
+      else if (dias <= diasAviso) revisiones.push(`📖 ${m.matricula}${empLabel(m.empresa_id)} — vence en ${dias} días (${m.fecha_proxima_revision})`);
     }
     if (revisiones.length) {
       await sendTelegram(env,
-        `ðÅ¸"… <b>Revisiones próximas o vencidas</b>\n\n` + revisiones.join('\n')
+        `📅 <b>Revisiones próximas o vencidas</b>\n\n` + revisiones.join('\n')
       );
     }
 
@@ -8701,9 +8701,9 @@ async function alertasDiarias(env) {
         const dias = Math.floor((new Date(m.fecha_caducidad) - hoy) / 86400000);
         return dias < 0
           ? `â›" ${m.codigo||m.nombre} (${m.tipo_material})${empLabel(m.empresa_id)} — CADUCADO hace ${Math.abs(dias)} días`
-          : `âÅ¡ ï¸Â ${m.codigo||m.nombre} (${m.tipo_material})${empLabel(m.empresa_id)} — caduca en ${dias} días (${m.fecha_caducidad})`;
+          : `⚠️ ${m.codigo||m.nombre} (${m.tipo_material})${empLabel(m.empresa_id)} — caduca en ${dias} días (${m.fecha_caducidad})`;
       });
-      await sendTelegram(env, `ðÅ¸Â·ï¸Â <b>Material Seguridad — Caducidad próxima</b>\n\n` + lineas.join('\n'));
+      await sendTelegram(env, `🏷️ <b>Material Seguridad — Caducidad próxima</b>\n\n` + lineas.join('\n'));
     }
 
     // 4. Carnets y certificaciones — caducidad próxima o vencida
@@ -8719,20 +8719,20 @@ async function alertasDiarias(env) {
       const aviso = c.dias_aviso || 30;
       let linea = null;
       if (dias < 0) linea = `â›" ${c.nombre_trabajador}${empLabel(c.empresa_id)} — ${c.tipo} CADUCADO hace ${Math.abs(dias)} días`;
-      else if (dias <= aviso) linea = `âÅ¡ ï¸Â ${c.nombre_trabajador}${empLabel(c.empresa_id)} — ${c.tipo} caduca en ${dias} días (${c.fecha_caducidad})`;
+      else if (dias <= aviso) linea = `⚠️ ${c.nombre_trabajador}${empLabel(c.empresa_id)} — ${c.tipo} caduca en ${dias} días (${c.fecha_caducidad})`;
       if (linea) {
         carnetAlertas.push(linea);
         // Notificación personal al trabajador si tiene Telegram vinculado
         if (c.telegram_id) {
           const msg = dias < 0
-            ? `ðÅ¸"Å <b>Tu carnet ha caducado</b>\n\nTipo: ${c.tipo}\nCaducó: ${c.fecha_caducidad}\n\nâÅ¡ ï¸Â Renuévalo lo antes posible.`
-            : `ðÅ¸"Å <b>Tu carnet caduca pronto</b>\n\nTipo: ${c.tipo}\nCaduca: ${c.fecha_caducidad} (<b>${dias} días</b>)\n\nRecuerda renovarlo a tiempo.`;
+            ? `📜 <b>Tu carnet ha caducado</b>\n\nTipo: ${c.tipo}\nCaducó: ${c.fecha_caducidad}\n\n⚠️ Renuévalo lo antes posible.`
+            : `📜 <b>Tu carnet caduca pronto</b>\n\nTipo: ${c.tipo}\nCaduca: ${c.fecha_caducidad} (<b>${dias} días</b>)\n\nRecuerda renovarlo a tiempo.`;
           await sendTelegramToChat(env, c.telegram_id, msg);
         }
       }
     }
     if (carnetAlertas.length) {
-      await sendTelegram(env, `ðÅ¸"Å <b>Carnets y certificaciones — Caducidad próxima</b>\n\n` + carnetAlertas.join('\n'));
+      await sendTelegram(env, `📜 <b>Carnets y certificaciones — Caducidad próxima</b>\n\n` + carnetAlertas.join('\n'));
     }
 
     // 5. Eventos del calendario — hoy + recordatorios previos
@@ -8743,11 +8743,11 @@ async function alertasDiarias(env) {
        WHERE e.fecha = ? ORDER BY e.hora ASC`
     ).bind(hoyStr).all();
     if (eventosHoy.length) {
-      const tipoIcon = { entrega:'ðÅ¸"¦', revision:'ðÅ¸"§', reunion:'ðÅ¸‘¥', otro:'ðÅ¸"…' };
+      const tipoIcon = { entrega:'📦', revision:'📧', reunion:'👥', otro:'📅' };
       const lineas = eventosHoy.map(ev =>
-        `${tipoIcon[ev.tipo]||'ðÅ¸"…'} ${ev.titulo}${ev.hora ? ' — ' + ev.hora : ''}${ev.obra_nombre ? ' [' + ev.obra_nombre + ']' : ''}`
+        `${tipoIcon[ev.tipo]||'📅'} ${ev.titulo}${ev.hora ? ' — ' + ev.hora : ''}${ev.obra_nombre ? ' [' + ev.obra_nombre + ']' : ''}`
       );
-      await sendTelegram(env, `ðÅ¸"… <b>Eventos de hoy (${hoyStr})</b>\n\n` + lineas.join('\n'));
+      await sendTelegram(env, `📅 <b>Eventos de hoy (${hoyStr})</b>\n\n` + lineas.join('\n'));
     }
     // Recordatorios anticipados (recordatorio_dias > 0)
     const { results: recordatorios } = await env.DB.prepare(`
@@ -8758,9 +8758,9 @@ async function alertasDiarias(env) {
     for (const ev of recordatorios) {
       const diasFaltan = Math.floor((new Date(ev.fecha) - hoy) / 86400000);
       if (diasFaltan === ev.recordatorio_dias) {
-        const tipoIcon = { entrega:'ðÅ¸"¦', revision:'ðÅ¸"§', reunion:'ðÅ¸‘¥', otro:'ðÅ¸"…' };
+        const tipoIcon = { entrega:'📦', revision:'📧', reunion:'👥', otro:'📅' };
         await sendTelegram(env,
-          `âÂ° <b>Recordatorio — faltan ${diasFaltan} día${diasFaltan===1?'':'s'}</b>\n${tipoIcon[ev.tipo]||'ðÅ¸"…'} ${ev.titulo} (${ev.fecha}${ev.hora ? ' ' + ev.hora : ''})${ev.obra_nombre ? '\nðÅ¸Â— ' + ev.obra_nombre : ''}`
+          `âÂ° <b>Recordatorio — faltan ${diasFaltan} día${diasFaltan===1?'':'s'}</b>\n${tipoIcon[ev.tipo]||'📅'} ${ev.titulo} (${ev.fecha}${ev.hora ? ' ' + ev.hora : ''})${ev.obra_nombre ? '\n🏗 ' + ev.obra_nombre : ''}`
         );
       }
     }
@@ -8856,7 +8856,7 @@ async function googleAuthCallback(request, env) {
       await env.DB.prepare(
         'INSERT INTO sesiones (token, usuario_id, empresa_id, nombre, rol, departamento, obra_id, created_at) VALUES (?,?,?,?,?,?,?,?)'
       ).bind(token, nuevoUser.id, inv.empresa_id, gUser.name || gUser.email, inv.rol, inv.departamento || null, null, ahora).run();
-      await sendTelegram(env, `âÅ… <b>Nuevo usuario registrado</b>\nðÅ¸‘¤ ${gUser.name || gUser.email}\nðÅ¸"§ ${gUser.email}\nRol: ${inv.rol} | Dpto: ${inv.departamento || '—'} | Empresa: ${empresa?.nombre || inv.empresa_id}`);
+      await sendTelegram(env, `✅ <b>Nuevo usuario registrado</b>\n👤 ${gUser.name || gUser.email}\n📧 ${gUser.email}\nRol: ${inv.rol} | Dpto: ${inv.departamento || '—'} | Empresa: ${empresa?.nombre || inv.empresa_id}`);
       return json({ ok: true, token, nombre: gUser.name || gUser.email, rol: inv.rol, departamento: inv.departamento || null, empresa_id: inv.empresa_id, empresa_nombre: empresa?.nombre || '', obra_id: null, obra_nombre: null, usuario_id: nuevoUser?.id || null });
     }
 
@@ -8874,21 +8874,21 @@ async function googleAuthCallback(request, env) {
     const pendingId = rIns.meta?.last_row_id;
     if (pendingId) {
       await sendTelegramConBotones(env,
-        `ðÅ¸"" <b>Solicitud de acceso con Google</b>\nðÅ¸‘¤ ${gUser.name || gUser.email}\nðÅ¸"§ ${gUser.email}`,
+        `📓 <b>Solicitud de acceso con Google</b>\n👤 ${gUser.name || gUser.email}\n📧 ${gUser.email}`,
         [
           [
-            { text: 'âÅ… Operario Eléc (E3)', callback_data: `apr:${pendingId}:3:operario:electrico` },
-            { text: 'âÅ… Operario Eléc (E1)', callback_data: `apr:${pendingId}:1:operario:electrico` },
+            { text: '✅ Operario Eléc (E3)', callback_data: `apr:${pendingId}:3:operario:electrico` },
+            { text: '✅ Operario Eléc (E1)', callback_data: `apr:${pendingId}:1:operario:electrico` },
           ],
           [
-            { text: 'âÅ… Admin (E3)',          callback_data: `apr:${pendingId}:3:empresa_admin:null` },
-            { text: 'âÅ… Admin (E1)',           callback_data: `apr:${pendingId}:1:empresa_admin:null` },
+            { text: '✅ Admin (E3)',          callback_data: `apr:${pendingId}:3:empresa_admin:null` },
+            { text: '✅ Admin (E1)',           callback_data: `apr:${pendingId}:1:empresa_admin:null` },
           ],
-          [{ text: 'âÂÅ Rechazar',             callback_data: `rej:${pendingId}` }]
+          [{ text: '❌ Rechazar',             callback_data: `rej:${pendingId}` }]
         ]
       );
     } else {
-      await sendTelegram(env, `ðÅ¸"" <b>Solicitud de acceso con Google</b>\nðÅ¸‘¤ ${gUser.name || gUser.email}\nðÅ¸"§ ${gUser.email}\nRevisar en Ajustes â†’ Usuarios â†’ Solicitudes de acceso`);
+      await sendTelegram(env, `📓 <b>Solicitud de acceso con Google</b>\n👤 ${gUser.name || gUser.email}\n📧 ${gUser.email}\nRevisar en Ajustes â†’ Usuarios â†’ Solicitudes de acceso`);
     }
     return json({ ok: false, pendiente: true, msg: 'Solicitud enviada correctamente. El administrador debe aprobarla para que puedas acceder.' });
   }
@@ -8984,7 +8984,7 @@ async function aprobarUsuarioPendiente(request, env) {
     'UPDATE usuarios SET activo=1, google_pending=0, empresa_id=?, rol=?, departamento=?, obra_id=? WHERE id=? AND google_pending=1'
   ).bind(empresa_id, rol, departamento || null, obra_id || null, id).run();
   const u = await env.DB.prepare('SELECT nombre, email FROM usuarios WHERE id=?').bind(id).first();
-  await sendTelegram(env, `âÅ… <b>Acceso aprobado</b>\nðÅ¸‘¤ ${u?.nombre || '—'}\nðÅ¸"§ ${u?.email || '—'}\nRol: ${rol} | Empresa ID: ${empresa_id}`);
+  await sendTelegram(env, `✅ <b>Acceso aprobado</b>\n👤 ${u?.nombre || '—'}\n📧 ${u?.email || '—'}\nRol: ${rol} | Empresa ID: ${empresa_id}`);
   return json({ ok: true });
 }
 
@@ -8996,7 +8996,7 @@ async function rechazarUsuarioPendiente(request, env) {
   const u = await env.DB.prepare('SELECT nombre, email FROM usuarios WHERE id=? AND google_pending=1').bind(id).first();
   if (!u) return err('Solicitud no encontrada', 404);
   await env.DB.prepare('DELETE FROM usuarios WHERE id=? AND google_pending=1').bind(id).run();
-  await sendTelegram(env, `âÂÅ <b>Acceso rechazado</b>\nðÅ¸‘¤ ${u.nombre || '—'}\nðÅ¸"§ ${u.email || '—'}`);
+  await sendTelegram(env, `❌ <b>Acceso rechazado</b>\n👤 ${u.nombre || '—'}\n📧 ${u.email || '—'}`);
   return json({ ok: true });
 }
 
@@ -9191,8 +9191,8 @@ async function crearIncidencia(request, env, ctx) {
     'INSERT INTO incidencias (empresa_id, obra_id, departamento, titulo, descripcion, tipo, gravedad, estado, reportado_por, asignado_a, fecha) VALUES (?,?,?,?,?,?,?,?,?,?,?)'
   ).bind(empresa_id, obraFinal, dept, titulo.trim(), descripcion || null, tipo, gravedad, 'abierta', nombre || null, asignado_a || null, fechaFinal).run();
   if (gravedad === 'alta') {
-    const gravedadIcon = { baja: 'ðÅ¸Å¸¢', media: 'ðÅ¸Å¸ ', alta: 'ðÅ¸"´' };
-    await sendTelegram(env, `${gravedadIcon[gravedad]} <b>Incidencia ALTA [${dept}]</b>\nðÅ¸"‹ ${titulo.trim()}\n${descripcion ? 'ðÅ¸"Â ' + descripcion.slice(0,200) + '\n' : ''}ðÅ¸‘¤ ${nombre || '—'}`);
+    const gravedadIcon = { baja: '🟢', media: '🟠', alta: '📴' };
+    await sendTelegram(env, `${gravedadIcon[gravedad]} <b>Incidencia ALTA [${dept}]</b>\n📋 ${titulo.trim()}\n${descripcion ? '📝 ' + descripcion.slice(0,200) + '\n' : ''}👤 ${nombre || '—'}`);
   }
   ctx?.waitUntil(syncRRHH(env, 'Incidencias', empresa_id));
   return json({ ok: true, id: r.meta.last_row_id }, 201);
@@ -9221,7 +9221,7 @@ async function actualizarIncidencia(id, request, env, ctx) {
   await env.DB.prepare(`UPDATE incidencias SET ${campos.join(',')} WHERE id=? AND empresa_id=?`).bind(...vals).run();
   // Telegram al resolver
   if (body.estado === 'resuelta') {
-    await sendTelegram(env, `âÅ… <b>Incidencia resuelta [${inc.departamento}]</b>\nðÅ¸"‹ ${inc.titulo}\n${body.resolucion ? 'ðÅ¸"Â ' + body.resolucion.slice(0,200) : ''}`);
+    await sendTelegram(env, `✅ <b>Incidencia resuelta [${inc.departamento}]</b>\n📋 ${inc.titulo}\n${body.resolucion ? '📝 ' + body.resolucion.slice(0,200) : ''}`);
   }
   ctx?.waitUntil(syncRRHH(env, 'Incidencias', empresa_id));
   return json({ ok: true });
@@ -10016,14 +10016,14 @@ async function telegramWebhook(request, env, ctx) {
         await env.DB.prepare('UPDATE usuarios SET telegram_id=? WHERE id=?').bind(String(chatId), record.usuario_id).run();
         await env.DB.prepare('DELETE FROM vincular_tokens WHERE token=?').bind(token).run();
         await sendTelegramToChat(env, chatId,
-          'âÅ… <b>Ã¡Cuenta vinculada!</b>\n\nDesde ahora recibirás notificaciones personales de <b>Alejandra App</b> directamente aquí:\nÃ· Tus turnos de la semana\nÃ· Carnets próximos a caducar\nÃ· Avisos que te afecten directamente.');
+          '✅ <b>Ã¡Cuenta vinculada!</b>\n\nDesde ahora recibirás notificaciones personales de <b>Alejandra App</b> directamente aquí:\nÃ· Tus turnos de la semana\nÃ· Carnets próximos a caducar\nÃ· Avisos que te afecten directamente.');
       } else {
         await sendTelegramToChat(env, chatId,
-          'âÂÅ El código ha caducado o no es válido.\nGenera un nuevo enlace desde la app en <b>Ajustes â†’ Sesión â†’ Conectar Telegram</b>.');
+          '❌ El código ha caducado o no es válido.\nGenera un nuevo enlace desde la app en <b>Ajustes â†’ Sesión â†’ Conectar Telegram</b>.');
       }
     } else {
       await sendTelegramToChat(env, chatId,
-        'ðÅ¸‘‹ Hola. Soy el bot de <b>Alejandra App</b>.\nPara vincular tu cuenta, pulsa "Conectar Telegram" desde la app y sigue el enlace que aparecerá.');
+        '👋 Hola. Soy el bot de <b>Alejandra App</b>.\nPara vincular tu cuenta, pulsa "Conectar Telegram" desde la app y sigue el enlace que aparecerá.');
     }
   }
   return json({ ok: true });
@@ -10065,7 +10065,7 @@ async function notificarTurnosSemana(request, env) {
     if (!porUsuario[t.telegram_id]) porUsuario[t.telegram_id] = { nombre: t.u_nombre, dias: [] };
     porUsuario[t.telegram_id].dias.push({ fecha: t.fecha, turno: t.turno });
   }
-  const LABEL = { 'mañana':'ðÅ¸Å… Mañana', tarde:'ðÅ¸Å† Tarde', noche:'ðÅ¸Å™ Noche', libre:'ðÅ¸’¤ Libre' };
+  const LABEL = { 'mañana':'🌅 Mañana', tarde:'🌆 Tarde', noche:'🌙 Noche', libre:'💤 Libre' };
   const DIAS_ES = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
   let notificados = 0;
   for (const [chatId, data] of Object.entries(porUsuario)) {
@@ -10077,7 +10077,7 @@ async function notificarTurnosSemana(request, env) {
       return `  ${dia} ${num}: ${LABEL[d.turno] || d.turno}`;
     }).join('\n');
     await sendTelegramToChat(env, chatId,
-      `ðÅ¸"… <b>Tus turnos</b> (${desde.slice(5).replace('-','/')} — ${hasta.slice(5).replace('-','/')})\n\n${lineas}`);
+      `📅 <b>Tus turnos</b> (${desde.slice(5).replace('-','/')} — ${hasta.slice(5).replace('-','/')})\n\n${lineas}`);
     notificados++;
   }
   return json({ ok: true, notificados });
@@ -10579,7 +10579,7 @@ async function crearMantenimiento(request, env) {
   }
 
   await sendTelegram(env,
-    `ðÅ¸"§ <b>Mantenimiento registrado</b>\nðÅ¸"– ${matricula.trim().toUpperCase()} (${tipo_mant || 'preventivo'})\nðÅ¸"… ${fecha_mant}\nðÅ¸‘¤ ${realizado_por || usuario || '—'}${descripcion ? '\nðÅ¸"Â ' + descripcion : ''}`
+    `📧 <b>Mantenimiento registrado</b>\n📖 ${matricula.trim().toUpperCase()} (${tipo_mant || 'preventivo'})\n📅 ${fecha_mant}\n👤 ${realizado_por || usuario || '—'}${descripcion ? '\n📝 ' + descripcion : ''}`
   );
 
   return json({ ok: true, id: r.meta.last_row_id, mensaje: 'Mantenimiento registrado' }, 201);
@@ -10700,7 +10700,7 @@ async function crearRegistroChecklist(request, env) {
     const tabla = tipo_equipo === 'pemp' ? 'pemp' : 'carretillas';
     await env.DB.prepare(`UPDATE ${tabla} SET estado = 'mantenimiento' WHERE id = ? AND empresa_id = ?`).bind(equipo_id, empresa_id).run();
     const fallosTexto = fallos.map(f => `â€¢ ${f.pregunta}`).join('\n');
-    await sendTelegram(env, `âÅ¡ ï¸Â Checklist con FALLOS\nEquipo: ${equipo_mat || equipo_id} (${tipo_equipo})\nRealizado por: ${userNombre || rol}\n\nFallos:\n${fallosTexto}${comentario ? '\n\nComentario: ' + comentario : ''}`);
+    await sendTelegram(env, `⚠️ Checklist con FALLOS\nEquipo: ${equipo_mat || equipo_id} (${tipo_equipo})\nRealizado por: ${userNombre || rol}\n\nFallos:\n${fallosTexto}${comentario ? '\n\nComentario: ' + comentario : ''}`);
   }
   return json({ ok: true, id: r.meta.last_row_id, resultado }, 201);
 }
@@ -10872,8 +10872,8 @@ async function crearRepostaje(request, env, ctx) {
   ).run();
   // Telegram si hay coste
   if (coste && parseFloat(coste) > 0) {
-    const emoji = tipo === 'combustible' ? 'â›½' : 'ðÅ¸"‹';
-    await sendTelegram(env, `${emoji} <b>Repostaje registrado</b>\nðÅ¸Å¡Å ${equipo_tipo.toUpperCase()} ${equipo_id}\nðÅ¸"¦ ${cantidad ? cantidad + ' ' + (unidad||'') : ''} Ã· ðÅ¸’¶ ${parseFloat(coste).toFixed(2)}â‚¬\nðÅ¸‘¤ ${nombre || rol || '—'}`);
+    const emoji = tipo === 'combustible' ? 'â›½' : '📋';
+    await sendTelegram(env, `${emoji} <b>Repostaje registrado</b>\n🚜 ${equipo_tipo.toUpperCase()} ${equipo_id}\n📦 ${cantidad ? cantidad + ' ' + (unidad||'') : ''} Ã· 💶 ${parseFloat(coste).toFixed(2)}â‚¬\n👤 ${nombre || rol || '—'}`);
   }
   ctx?.waitUntil(syncRRHH(env, 'Repostajes', empresa_id));
   return json({ ok: true, id: r.meta.last_row_id });
