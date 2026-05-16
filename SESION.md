@@ -7,7 +7,41 @@
 
 **Sesión:** LIBRE
 **Última sesión:** 16/05/2026
-**Versión actual:** v5.95
+**Versión actual:** v5.97
+
+---
+
+## RESUMEN SESIÓN 16/05/2026 — v5.97 (Fix encoding index.html + splash + scan-parte)
+
+### Qué se hizo:
+
+**Fix encoding doble en index.html (11.855 sustituciones):**
+- index.html tenía doble-corrupción UTF-8 (ÃƒÂX → á/é/ó/ñ…)
+- Patrón alternativo para Ó/Ñ/Ú/× (Latin-1 primera capa, cp1252 segunda)
+- Splash screen: "GESTIÓN DE OBRA" y "Adrián Padilla" ahora correctos
+- Script `fix_index.js` aplicado → v5.96
+
+**Fix splash congelado (stuck on logo):**
+- sw.js tenía BOM (EF BB BF) al inicio → eliminado
+- Comentarios corruptos en sw.js corregidos
+- Bump a v5.97 para forzar ciclo de actualización del service worker
+
+**Fix scan-parte (escaneo fichajes con IA):**
+- Causa: `GEMINI_API_KEY` no estaba configurada como secret en Cloudflare → subida
+- Modelo: `gemini-2.0-flash` → `gemini-2.0-flash-001`
+- Prompt: `ÚNICAMENTE` estaba corrupto → corregido
+- v5.96 desplegada con `npx wrangler deploy`
+
+### Archivos modificados:
+- `worker.js` — fix scan-parte (v5.96)
+- `index.html` — fix encoding doble 11.855 sust. (v5.96 → v5.97)
+- `sw.js` — eliminado BOM, fix comentarios (v5.97)
+- `version.json` — v5.97
+
+### Pendiente:
+- Probar login con Google en panel (Alejandra lo añadió: `alejandra-panel.html`)
+- Verificar que splash carga correctamente tras limpiar caché en móvil
+- Limpiar archivos temporales si quedan (fix_index.js, etc.)
 
 ---
 
