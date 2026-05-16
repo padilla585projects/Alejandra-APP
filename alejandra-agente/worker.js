@@ -225,6 +225,45 @@ export default {
         return json(respuesta);
       }
 
+      // ── Chat streaming SSE ────────────────────────────────────────────────
+      if (path === '/api/chat/stream' && req.method === 'POST') {
+        const body = await req.json().catch(() => ({}));
+        const { mensaje, usuario_id, empresa_id, canal } = body;
+        if (!mensaje || !usuario_id) return json({ error: 'mensaje y usuario_id requeridos' }, 400);
+
+        const empresa  = empresa_id || 'default';
+        const contexto = await obtenerContextoChat(env, usuario_id, empresa, 10);
+
+        const { readable, writable } = new TransformStream();
+        const writer = writable.getWriter();
+        const enc    = new TextEncoder();
+        const send   = async (data) => {
+          try { await writer.write(enc.encode(`data: ${JSON.stringify(data)}\n\n`)); } catch(e) {}
+        };
+
+        (async () => {
+          try {
+            const resp = await procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empresa, send);
+            await guardarMensajeChat(env, usuario_id, empresa, mensaje, resp.texto, canal || 'panel');
+            await send({ type: 'done', experto: resp.experto, modelo: resp.modelo, busqueda_web: resp.busqueda_web });
+          } catch(e) {
+            await send({ type: 'error', mensaje: e.message });
+          } finally {
+            await writer.close();
+          }
+        })();
+
+        return new Response(readable, {
+          headers: {
+            'Content-Type': 'text/event-stream',
+            'Cache-Control': 'no-cache',
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
+            'Access-Control-Allow-Headers': 'Content-Type,Authorization',
+          }
+        });
+      }
+
       // ── Google OAuth — verifica sesión del worker principal via BD compartida ──
       if (path === '/auth/verify-session' && req.method === 'POST') {
         const { session_token } = await req.json().catch(() => ({}));
@@ -429,6 +468,82 @@ async function procesarConNEXUS(env, mensaje, contexto, usuario_id, empresa_id) 
   } catch (err) {
     console.error('ERROR NEXUS:', err.message);
     return { texto: `Error: ${err.message}`, acciones: [], requiere_confirmacion: false };
+  }
+}
+
+// ── NEXUS con streaming SSE ───────────────────────────────────────────────────
+async function procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empresa_id, send) {
+  if (!env.ANTHROPIC_API_KEY) {
+    await send({ type: 'error', mensaje: 'ANTHROPIC_API_KEY no configurada.' });
+    return { texto: 'Error: sin clave API.', herramientas_usadas: [] };
+  }
+  const config = await env.DB.prepare('SELECT modo FROM alejandra_config ORDER BY updated_at DESC LIMIT 1').first().catch(() => null);
+  const modo = config?.modo || 'autonomo';
+
+  try {
+    // PASO 1: Clasificar
+    const clas   = await clasificarConHaiku(env, mensaje);
+    const expert = NEXUS_EXPERTS[clas.experto] || NEXUS_EXPERTS.app;
+    const tools  = TOOLS_POR_EXPERTO[clas.experto] || [];
+    await send({ type: 'routing', experto: clas.experto, buscar_web: clas.buscar_web, modelo: expert.model });
+
+    // PASO 2: Búsqueda web previa
+    let resultadoWeb = null, usoBusquedaWeb = false;
+    if (clas.buscar_web && env.OPENAI_API_KEY) {
+      const t0 = Date.now();
+      await send({ type: 'tool_start', nombre: 'buscar_web', input: { query: clas.query_web || mensaje } });
+      resultadoWeb   = await buscarWebOpenAI(env, clas.query_web || mensaje);
+      usoBusquedaWeb = true;
+      await send({ type: 'tool_end', nombre: 'buscar_web', preview: resultadoWeb.substring(0, 200), duracion_ms: Date.now() - t0 });
+      await registrarLog(env, usuario_id, 'web_search', clas.query_web, resultadoWeb.substring(0, 200));
+    }
+
+    // PASO 3-4: System + historial
+    const systemPrompt      = buildSystemPrompt(expert.modules);
+    const limitHistorial    = clas.experto === 'simple' ? 4 : 10;
+    const incluirAprendizajes = clas.experto !== 'simple';
+    const messages          = construirMessages(mensaje, contexto, limitHistorial, incluirAprendizajes, resultadoWeb);
+
+    // PASO 5: Loop Anthropic + tools
+    let respAPI = await llamarAnthropic(env, messages, tools, expert.model, expert.maxTokens, systemPrompt);
+    if (respAPI.usage) registrarTokenUso(env, expert.model, 'chat_stream', respAPI.usage.input_tokens||0, respAPI.usage.output_tokens||0, usuario_id);
+    let iter = 0;
+    const MAX_ITER = 5;
+    const herramientasUsadas = [];
+
+    while (respAPI.stop_reason === 'tool_use' && iter < MAX_ITER) {
+      const toolBlocks = respAPI.content.filter(b => b.type === 'tool_use');
+      if (!toolBlocks.length) break;
+      messages.push({ role: 'assistant', content: respAPI.content });
+      const toolResults = [];
+
+      for (const tb of toolBlocks) {
+        const t0 = Date.now();
+        herramientasUsadas.push({ nombre: tb.name, input: tb.input });
+        await send({ type: 'tool_start', nombre: tb.name, input: tb.input });
+        const resultado = await ejecutarTool(env, tb.name, tb.input, usuario_id, empresa_id);
+        if (tb.name === 'buscar_web') usoBusquedaWeb = true;
+        await send({ type: 'tool_end', nombre: tb.name, preview: String(resultado).substring(0, 200), duracion_ms: Date.now() - t0 });
+        toolResults.push({ type: 'tool_result', tool_use_id: tb.id, content: resultado });
+      }
+
+      messages.push({ role: 'user', content: toolResults });
+      const toolsSiguiente = iter < MAX_ITER - 1 ? tools.filter(t => t.name === 'buscar_web') : [];
+      respAPI = await llamarAnthropic(env, messages, toolsSiguiente, expert.model, expert.maxTokens, systemPrompt);
+      if (respAPI.usage) registrarTokenUso(env, expert.model, 'chat_stream', respAPI.usage.input_tokens||0, respAPI.usage.output_tokens||0, usuario_id);
+      iter++;
+    }
+
+    const textoFinal = respAPI.content?.filter(b => b.type === 'text').map(b => b.text).join('\n').trim() || 'Sin respuesta';
+    await registrarLog(env, usuario_id, 'chat', `[${clas.experto}] ${mensaje.substring(0,80)}`, textoFinal.substring(0,200));
+    await send({ type: 'text', texto: textoFinal });
+
+    return { texto: textoFinal, herramientas_usadas: herramientasUsadas, modelo: expert.model, experto: clas.experto, busqueda_web: usoBusquedaWeb };
+
+  } catch(err) {
+    console.error('ERROR NEXUS STREAM:', err.message);
+    await send({ type: 'error', mensaje: err.message });
+    return { texto: `Error: ${err.message}`, herramientas_usadas: [] };
   }
 }
 

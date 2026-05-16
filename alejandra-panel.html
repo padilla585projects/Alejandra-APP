@@ -116,17 +116,30 @@ a{color:var(--acc2);text-decoration:none}
 .code-lang{font-size:11px;color:#6c7086;font-family:'Courier New',monospace;text-transform:uppercase;letter-spacing:1px}
 .code-copy{font-size:11px;color:#6c7086;background:none;border:none;cursor:pointer;padding:2px 6px;border-radius:4px;transition:color .2s}
 .code-copy:hover{color:var(--acc2)}
-/* herramientas */
-.msg-tools{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px;padding-left:38px}
-.tool-chip{display:inline-flex;align-items:center;gap:4px;font-size:11px;color:var(--muted);background:var(--surf);border:1px solid var(--border);border-radius:20px;padding:2px 8px;font-family:'Courier New',monospace}
+/* ── Streaming: routing + tools ── */
+.stream-block{display:flex;flex-direction:column;gap:2px;margin-bottom:16px}
+.stream-routing{display:flex;align-items:center;gap:8px;padding:0 0 6px 38px;font-family:'Courier New',monospace}
+.routing-badge{font-size:11px;color:var(--acc2);background:rgba(139,92,246,.12);border:1px solid rgba(139,92,246,.3);padding:2px 10px;border-radius:20px}
+.routing-model{font-size:10px;color:var(--muted)}
+.tool-block{margin:1px 0 1px 38px;border-left:2px solid var(--border);padding:5px 0 5px 12px;font-family:'Courier New',monospace;font-size:12px;transition:border-color .3s}
+.tool-block.running{border-left-color:var(--acc)}
+.tool-block.done{border-left-color:var(--green)}
+.tool-header{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.tool-icon-spin{color:var(--acc);display:inline-block;animation:spin .8s linear infinite}
+.tool-icon-done{color:var(--green)}
+@keyframes spin{to{transform:rotate(360deg)}}
+.tool-name{color:var(--text);font-weight:700}
+.tool-input-preview{color:var(--muted);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:260px}
+.tool-ms{color:var(--muted);font-size:10px;margin-left:auto}
+.tool-result-preview{color:#6c7086;font-size:11px;margin-top:3px;line-height:1.4;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;padding-left:16px}
 /* loading dots */
-.typing-dots{display:inline-flex;gap:4px;padding:4px 0}
+.typing-dots{display:inline-flex;gap:4px;padding:6px 0}
 .typing-dots span{width:6px;height:6px;border-radius:50%;background:var(--acc);animation:dotBounce 1.2s infinite}
 .typing-dots span:nth-child(2){animation-delay:.2s}
 .typing-dots span:nth-child(3){animation-delay:.4s}
 @keyframes dotBounce{0%,60%,100%{transform:translateY(0);opacity:.4}30%{transform:translateY(-6px);opacity:1}}
 /* meta */
-.msg-meta{font-size:10px;color:var(--muted);padding-left:38px;margin-top:-10px;margin-bottom:10px}
+.msg-meta{font-size:10px;color:var(--muted);padding-left:38px;margin-top:-8px;margin-bottom:8px}
 .bub-err{color:var(--red);font-size:13px;padding:6px 0}
 .voz-status{font-size:11px;color:var(--acc);text-align:center;padding:5px;animation:pulse 1.2s infinite;display:none}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
@@ -556,30 +569,192 @@ function initChat() {
     </div>`;
 }
 
+// ── Helpers ───────────────────────────────────────────────────
+function formatToolInput(nombre, input) {
+  if (!input) return '';
+  switch(nombre) {
+    case 'buscar_web':      return `"${(input.query||'').substring(0,50)}"`;
+    case 'memory_save':     return `[${input.tipo||''}] ${(input.titulo||'').substring(0,40)}`;
+    case 'memory_read':     return input.tipo ? `tipo:${input.tipo}` : `limit:${input.limit||10}`;
+    case 'propose_mejora':  return `[${input.prioridad||''}] ${(input.descripcion||'').substring(0,40)}`;
+    case 'leer_estado':     return 'estado actual';
+    case 'tomar_decision':  return `[${input.tipo||''}] confianza:${Math.round((input.confianza||0)*100)}%`;
+    default: return JSON.stringify(input).substring(0,50);
+  }
+}
+
+// ── Enviar con streaming SSE ──────────────────────────────────
+let _chatBusy = false;
+
 async function enviarChat() {
+  if (_chatBusy) return;
   const input = document.getElementById('chatInput');
   const msg   = (input?.value || '').trim();
   if (!msg) return;
+  _chatBusy = true;
   input.value = ''; input.style.height = 'auto';
 
-  addMsgUser(msg);
-  const ldEl = addMsgLoading();
+  const msgs = document.getElementById('chatMsgs');
+
+  // Mensaje usuario
+  const mu = document.createElement('div');
+  mu.className = 'msg-u';
+  mu.innerHTML = `<div class="bub-u">${esc(msg)}</div>`;
+  msgs.appendChild(mu);
+  msgs.scrollTop = msgs.scrollHeight;
+
+  // Bloque de respuesta streaming
+  const block = document.createElement('div');
+  block.className = 'stream-block';
+  // Dots iniciales de carga
+  const dotsRow = document.createElement('div');
+  dotsRow.className = 'msg-b';
+  dotsRow.innerHTML = `<div class="msg-avatar">🤖</div><div class="bub-b"><div class="typing-dots"><span></span><span></span><span></span></div></div>`;
+  block.appendChild(dotsRow);
+  msgs.appendChild(block);
+  msgs.scrollTop = msgs.scrollHeight;
+
+  // Estado compartido
+  const state = {
+    block, msgs,
+    textBub: null,
+    _toolStack: [],
+    _toolCounter: 0,
+  };
 
   try {
-    const r = await fetch(`${API}/api/chat`, {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ mensaje:msg, usuario_id:chatUserId, canal:'panel' })
+    const resp = await fetch(`${API}/api/chat/stream`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mensaje: msg, usuario_id: chatUserId, canal: 'panel' })
     });
-    const d = await r.json();
-    ldEl.remove();
-    const txt = d.texto || d.error || 'Sin respuesta';
-    await addMsgBot(txt, d.herramientas_usadas || [], d);
-    hablar(txt);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+
+    const reader  = resp.body.getReader();
+    const dec     = new TextDecoder();
+    let buf       = '';
+    let dotsRemoved = false;
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      const lines = buf.split('\n');
+      buf = lines.pop();
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        try {
+          const ev = JSON.parse(line.slice(6));
+          if (!dotsRemoved && ev.type !== 'error') { dotsRow.remove(); dotsRemoved = true; }
+          await handleStreamEv(ev, state);
+        } catch(e) {}
+      }
+    }
   } catch(err) {
-    ldEl.remove();
-    addMsgErr('Error: ' + err.message);
+    dotsRow.remove();
+    const errEl = document.createElement('div');
+    errEl.className = 'msg-b';
+    errEl.innerHTML = `<div class="msg-avatar">🤖</div><div class="bub-b"><div class="bub-err">❌ ${esc(err.message)}</div></div>`;
+    block.appendChild(errEl);
     if (input) input.value = msg;
+  } finally {
+    _chatBusy = false;
+    msgs.scrollTop = msgs.scrollHeight;
   }
+}
+
+async function handleStreamEv(ev, state) {
+  const { block, msgs } = state;
+
+  if (ev.type === 'routing') {
+    const r = document.createElement('div');
+    r.className = 'stream-routing';
+    const modelo = (ev.modelo||'').replace('claude-','').replace(/-4-[0-9]/,'');
+    r.innerHTML = `<span class="routing-badge">⚡ ${ev.experto}</span><span class="routing-model">${modelo}${ev.buscar_web ? ' · 🌐 web' : ''}</span>`;
+    block.appendChild(r);
+    msgs.scrollTop = msgs.scrollHeight;
+  }
+
+  else if (ev.type === 'tool_start') {
+    const id = ++state._toolCounter;
+    const inputTxt = formatToolInput(ev.nombre, ev.input);
+    const el = document.createElement('div');
+    el.className = 'tool-block running';
+    el.dataset.tid = id;
+    el.innerHTML = `<div class="tool-header">
+      <span class="tool-icon-spin">⟳</span>
+      <span class="tool-name">${toolIcon(ev.nombre)} ${ev.nombre}</span>
+      <span class="tool-input-preview">${esc(inputTxt)}</span>
+    </div>`;
+    block.appendChild(el);
+    state._toolStack.push({ id, nombre: ev.nombre });
+    msgs.scrollTop = msgs.scrollHeight;
+  }
+
+  else if (ev.type === 'tool_end') {
+    const info = state._toolStack.shift();
+    if (!info) return;
+    const el = block.querySelector(`.tool-block[data-tid="${info.id}"]`);
+    if (!el) return;
+    el.classList.remove('running');
+    el.classList.add('done');
+    const inputTxt = el.querySelector('.tool-input-preview')?.textContent || '';
+    const preview  = ev.preview ? esc(ev.preview.substring(0,140)) + (ev.preview.length>140?'…':'') : '';
+    el.innerHTML = `<div class="tool-header">
+      <span class="tool-icon-done">✓</span>
+      <span class="tool-name">${toolIcon(info.nombre)} ${info.nombre}</span>
+      <span class="tool-input-preview">${inputTxt}</span>
+      <span class="tool-ms">${ev.duracion_ms||0}ms</span>
+    </div>${preview ? `<div class="tool-result-preview">${preview}</div>` : ''}`;
+    msgs.scrollTop = msgs.scrollHeight;
+  }
+
+  else if (ev.type === 'text') {
+    // Crear burbuja de respuesta
+    const row = document.createElement('div');
+    row.className = 'msg-b';
+    row.innerHTML = `<div class="msg-avatar">🤖</div>`;
+    const bub = document.createElement('div');
+    bub.className = 'bub-b';
+    row.appendChild(bub);
+    block.appendChild(row);
+    state.textBub = bub;
+
+    // Typewriter palabra a palabra
+    const words = ev.texto.split(' ');
+    let cur = '';
+    for (let i = 0; i < words.length; i++) {
+      cur += (i > 0 ? ' ' : '') + words[i];
+      bub.innerHTML = renderMd(cur);
+      msgs.scrollTop = msgs.scrollHeight;
+      if (i % 5 === 0) await new Promise(r => setTimeout(r, 16));
+    }
+    bub.innerHTML = renderMd(ev.texto);
+    addCopyBtns(bub);
+    hablar(ev.texto);
+  }
+
+  else if (ev.type === 'done') {
+    const parts = [];
+    if (ev.experto)      parts.push(`experto: ${ev.experto}`);
+    if (ev.busqueda_web) parts.push('web search');
+    if (ev.modelo)       parts.push((ev.modelo).replace('claude-','').replace(/-4-[0-9]/,''));
+    if (parts.length) {
+      const meta = document.createElement('div');
+      meta.className = 'msg-meta';
+      meta.textContent = parts.join(' · ');
+      block.appendChild(meta);
+    }
+  }
+
+  else if (ev.type === 'error') {
+    const el = document.createElement('div');
+    el.className = 'msg-b';
+    el.innerHTML = `<div class="msg-avatar">🤖</div><div class="bub-b"><div class="bub-err">❌ ${esc(ev.mensaje||'Error')}</div></div>`;
+    block.appendChild(el);
+  }
+
+  msgs.scrollTop = msgs.scrollHeight;
 }
 
 function addMsgUser(txt) {
@@ -588,85 +763,22 @@ function addMsgUser(txt) {
   const d = document.createElement('div');
   d.className = 'msg-u';
   d.innerHTML = `<div class="bub-u">${esc(txt)}</div>`;
-  msgs.appendChild(d);
-  msgs.scrollTop = msgs.scrollHeight;
+  msgs.appendChild(d); msgs.scrollTop = msgs.scrollHeight;
 }
-
-function addMsgLoading() {
-  const msgs = document.getElementById('chatMsgs');
-  const d = document.createElement('div');
-  d.className = 'msg-b';
-  d.innerHTML = `<div class="msg-avatar">🤖</div><div class="bub-b"><div class="typing-dots"><span></span><span></span><span></span></div></div>`;
-  msgs.appendChild(d);
-  msgs.scrollTop = msgs.scrollHeight;
-  return d;
-}
-
-async function addMsgBot(txt, herramientas, meta) {
-  const msgs = document.getElementById('chatMsgs');
-  if (!msgs) return;
-
-  // Chips de herramientas usadas
-  if (herramientas.length > 0) {
-    const chips = document.createElement('div');
-    chips.className = 'msg-tools';
-    chips.innerHTML = herramientas.map(h => `<span class="tool-chip">${toolIcon(h.nombre)} ${h.nombre}</span>`).join('');
-    msgs.appendChild(chips);
-  }
-
-  // Contenedor del mensaje
-  const d = document.createElement('div');
-  d.className = 'msg-b';
-  const bub = document.createElement('div');
-  bub.className = 'bub-b';
-  d.innerHTML = `<div class="msg-avatar">🤖</div>`;
-  d.appendChild(bub);
-  msgs.appendChild(d);
-
-  // Typewriter — animar palabra a palabra
-  const words = txt.split(' ');
-  let current = '';
-  for (let i = 0; i < words.length; i++) {
-    current += (i > 0 ? ' ' : '') + words[i];
-    bub.innerHTML = renderMd(current);
-    msgs.scrollTop = msgs.scrollHeight;
-    if (i % 4 === 0) await new Promise(r => setTimeout(r, 18));
-  }
-  bub.innerHTML = renderMd(txt);
-  addCopyBtns(bub);
-  msgs.scrollTop = msgs.scrollHeight;
-
-  // Metadata (experto, web search)
-  if (meta?.experto || meta?.busqueda_web || meta?.modelo) {
-    const metaEl = document.createElement('div');
-    metaEl.className = 'msg-meta';
-    const parts = [];
-    if (meta.experto) parts.push(`experto: ${meta.experto}`);
-    if (meta.busqueda_web) parts.push('web search');
-    if (meta.modelo) parts.push(meta.modelo.replace('claude-','').replace('-4-6',''));
-    metaEl.textContent = parts.join(' · ');
-    msgs.appendChild(metaEl);
-  }
-}
-
 function addMsgErr(txt) {
   const msgs = document.getElementById('chatMsgs');
   if (!msgs) return;
   const d = document.createElement('div');
   d.className = 'msg-b';
   d.innerHTML = `<div class="msg-avatar">🤖</div><div class="bub-b"><div class="bub-err">❌ ${esc(txt)}</div></div>`;
-  msgs.appendChild(d);
-  msgs.scrollTop = msgs.scrollHeight;
+  msgs.appendChild(d); msgs.scrollTop = msgs.scrollHeight;
 }
-
+function addMsgLoading() { return document.createElement('div'); }
 function addMsg(txt, tipo, isLd=false) {
-  // Compatibilidad con código antiguo
   if (tipo === 'u') return addMsgUser(txt);
   if (tipo === 'err') return addMsgErr(txt);
-  if (isLd) return;
-  addMsgBot(txt, [], {});
 }
-function removeLd() { document.getElementById('chatMsgs')?.querySelector('[data-ld]')?.remove(); }
+function removeLd() {}
 
 // ── Voz ──────────────────────────────────────────────────────
 function toggleVozAuto() {
