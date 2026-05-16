@@ -7,11 +7,38 @@
 
 **Sesión:** LIBRE
 **Última sesión:** 16/05/2026
-**Versión actual:** v5.81
+**Versión actual:** v5.95
 
 ---
 
-## RESUMEN SESIÓN 16/05/2026 — v5.81 (Fix encoding Telegram)
+## RESUMEN SESIÓN 16/05/2026 — v5.95 (Fix triple-encoding Telegram)
+
+### Qué se hizo:
+
+**Fix triple-encoding en strings Telegram (211 ocurrencias):**
+- Diagnóstico: tras el fix v5.94 (22,810 sustituciones doble-encoding), quedaban 29 líneas Telegram con triple-encoding residual
+- Patrón: emojis F0 9F XX YY donde XX=9F→Ÿ(U+0178) se triple-codificaba a Å+¸ (bytes UTF-8 C5 B8 tratados como Latin-1)
+- También C1 controls (C2+0x80-0x9F) se dividían en sus bytes UTF-8 individuales
+- Script `fix_triple.js` con `corruptOfTriple()`: aplica corrupción cp1252, luego divide chars C5-xx y C2-0x80-9F
+- Bug crítico: regex de normalización `/"|"/g` usaba comillas ASCII en vez de U+201C/U+201D → tabla sin match. Corregido.
+- 211 ocurrencias corregidas (📦, 📖, 🚜, 🏗, 🗑, 🏷️, 👤, ✅, ⚠️, etc.)
+- 0 líneas con triple-encoding restantes
+- worker.fixed.js validado (node --check), reemplazó worker.js
+
+### Archivos modificados:
+- `worker.js` — fix triple-encoding (211 sustituciones adicionales)
+- `version.json`, `sw.js`, `index.html` — bump a v5.95
+
+### Deploy:
+- Commit: da4400c — pusheado a GitHub main
+- Worker desplegado: Version ID 40266843-1613-41cd-b018-69dd9f79951f
+
+### Pendiente:
+- Limpiar archivos temporales: fix_triple.js, worker.fixed.js, fix_encoding.js
+
+---
+
+## RESUMEN SESIÓN 16/05/2026 — v5.81→v5.94 (Fix encoding Telegram)
 
 ### Qué se hizo:
 
