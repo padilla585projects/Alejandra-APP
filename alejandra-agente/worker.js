@@ -389,6 +389,7 @@ async function procesarConNEXUS(env, mensaje, contexto, usuario_id, empresa_id) 
     if (respAPI.usage) registrarTokenUso(env, expert.model, `chat_${clas.experto}`, respAPI.usage.input_tokens||0, respAPI.usage.output_tokens||0, usuario_id);
     let iter     = 0;
     const MAX_ITER = 5;
+    const herramientasUsadas = [];
 
     while (respAPI.stop_reason === 'tool_use' && iter < MAX_ITER) {
       const toolBlocks = respAPI.content.filter(b => b.type === 'tool_use');
@@ -398,6 +399,7 @@ async function procesarConNEXUS(env, mensaje, contexto, usuario_id, empresa_id) 
       const toolResults = [];
 
       for (const tb of toolBlocks) {
+        herramientasUsadas.push({ nombre: tb.name, input: tb.input });
         const resultado = await ejecutarTool(env, tb.name, tb.input, usuario_id, empresa_id);
         if (tb.name === 'buscar_web') usoBusquedaWeb = true;
         toolResults.push({ type: 'tool_result', tool_use_id: tb.id, content: resultado });
@@ -417,6 +419,7 @@ async function procesarConNEXUS(env, mensaje, contexto, usuario_id, empresa_id) 
     return {
       texto: textoFinal,
       acciones: [],
+      herramientas_usadas: herramientasUsadas,
       requiere_confirmacion: modo === 'confirmacion',
       modelo: expert.model,
       experto: clas.experto,

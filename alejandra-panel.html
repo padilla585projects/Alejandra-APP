@@ -5,6 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Alejandra — Panel de Control</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700;900&family=Poppins:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
 <style>
 :root{
   --bg:#0d0b1a;--surf:#17132b;--surf2:#221d3d;
@@ -86,14 +89,45 @@ a{color:var(--acc2);text-decoration:none}
 .chat-ta{flex:1;background:var(--surf2);border:1px solid var(--acc);border-radius:12px;padding:10px 14px;color:var(--text);font-size:14px;resize:none;max-height:100px;outline:none;line-height:1.4}
 .chat-btn{width:44px;height:44px;border-radius:12px;border:1px solid var(--border);flex-shrink:0;font-size:18px;background:var(--surf2);color:var(--text)}
 .chat-btn-send{background:var(--acc);border-color:var(--acc);color:#fff}
-.msg-u{display:flex;justify-content:flex-end;margin-bottom:6px}
-.msg-b{display:flex;justify-content:flex-start;margin-bottom:6px}
-.bub{max-width:82%;padding:10px 14px;font-size:14px;line-height:1.5;white-space:pre-wrap;word-break:break-word;border-radius:16px}
-.bub-u{background:var(--acc);color:#fff;border-radius:16px 16px 4px 16px}
-.bub-b{background:var(--surf2);color:var(--text);border-radius:16px 16px 16px 4px}
-.bub-info{font-size:11px;color:var(--green);padding:2px 14px;background:none;border-radius:0}
-.bub-err{font-size:11px;color:var(--red);padding:2px 14px;background:none;border-radius:0}
-.bub-meta{font-size:10px;color:var(--muted);text-align:center;padding:0 4px;background:none;border-radius:0}
+/* ── CHAT — estilo Claude Code ── */
+.msg-u{display:flex;justify-content:flex-end;margin-bottom:16px}
+.msg-b{display:flex;justify-content:flex-start;margin-bottom:16px;gap:10px}
+.msg-avatar{width:28px;height:28px;border-radius:50%;background:var(--acc);display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;margin-top:2px}
+.bub-u{max-width:78%;padding:10px 16px;background:var(--surf2);border:1px solid var(--border);color:var(--text);border-radius:18px 18px 4px 18px;font-size:14px;line-height:1.6;word-break:break-word}
+.bub-b{flex:1;min-width:0;color:var(--text);font-size:14px;line-height:1.7;word-break:break-word}
+/* Markdown dentro de bub-b */
+.bub-b p{margin:0 0 10px}
+.bub-b p:last-child{margin-bottom:0}
+.bub-b h1,.bub-b h2,.bub-b h3{font-family:'Montserrat',sans-serif;font-weight:700;margin:16px 0 8px;color:var(--acc2)}
+.bub-b h1{font-size:18px}.bub-b h2{font-size:16px}.bub-b h3{font-size:14px}
+.bub-b ul,.bub-b ol{margin:6px 0 10px 20px}
+.bub-b li{margin-bottom:4px}
+.bub-b strong{color:#fff;font-weight:600}
+.bub-b em{color:var(--acc2)}
+.bub-b code{background:#1e1e2e;color:#cba6f7;padding:2px 6px;border-radius:4px;font-family:'Courier New',monospace;font-size:13px}
+.bub-b pre{background:#1e1e2e;border:1px solid #313244;border-radius:10px;margin:10px 0;overflow:hidden}
+.bub-b pre code{background:none;color:inherit;padding:14px 16px;display:block;overflow-x:auto;font-size:13px;line-height:1.5}
+.bub-b blockquote{border-left:3px solid var(--acc);padding:6px 12px;color:var(--muted);margin:8px 0;font-style:italic}
+.bub-b hr{border:none;border-top:1px solid var(--border);margin:12px 0}
+.bub-b table{border-collapse:collapse;width:100%;margin:8px 0;font-size:13px}
+.bub-b th{padding:6px 10px;border:1px solid var(--border);background:var(--surf2);color:var(--acc2);text-align:left}
+.bub-b td{padding:6px 10px;border:1px solid var(--border)}
+.code-header{display:flex;align-items:center;justify-content:space-between;padding:6px 14px;background:#181825;border-bottom:1px solid #313244}
+.code-lang{font-size:11px;color:#6c7086;font-family:'Courier New',monospace;text-transform:uppercase;letter-spacing:1px}
+.code-copy{font-size:11px;color:#6c7086;background:none;border:none;cursor:pointer;padding:2px 6px;border-radius:4px;transition:color .2s}
+.code-copy:hover{color:var(--acc2)}
+/* herramientas */
+.msg-tools{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px;padding-left:38px}
+.tool-chip{display:inline-flex;align-items:center;gap:4px;font-size:11px;color:var(--muted);background:var(--surf);border:1px solid var(--border);border-radius:20px;padding:2px 8px;font-family:'Courier New',monospace}
+/* loading dots */
+.typing-dots{display:inline-flex;gap:4px;padding:4px 0}
+.typing-dots span{width:6px;height:6px;border-radius:50%;background:var(--acc);animation:dotBounce 1.2s infinite}
+.typing-dots span:nth-child(2){animation-delay:.2s}
+.typing-dots span:nth-child(3){animation-delay:.4s}
+@keyframes dotBounce{0%,60%,100%{transform:translateY(0);opacity:.4}30%{transform:translateY(-6px);opacity:1}}
+/* meta */
+.msg-meta{font-size:10px;color:var(--muted);padding-left:38px;margin-top:-10px;margin-bottom:10px}
+.bub-err{color:var(--red);font-size:13px;padding:6px 0}
 .voz-status{font-size:11px;color:var(--acc);text-align:center;padding:5px;animation:pulse 1.2s infinite;display:none}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
 
@@ -454,8 +488,48 @@ async function fetchHealth() {
   } catch {}
 }
 
-// ═══════════════ CHAT ═══════════════════════════════════════
+// ═══════════════ CHAT — estilo Claude Code ═══════════════════
+// Inicializar marked + highlight.js
+function setupMarked() {
+  if (typeof marked === 'undefined' || typeof hljs === 'undefined') return;
+  marked.setOptions({
+    breaks: true,
+    gfm: true,
+    highlight: (code, lang) => {
+      if (lang && hljs.getLanguage(lang)) return hljs.highlight(code, { language: lang }).value;
+      return hljs.highlightAuto(code).value;
+    }
+  });
+}
+
+function renderMd(txt) {
+  if (typeof marked === 'undefined') return `<p>${esc(txt)}</p>`;
+  return marked.parse(txt);
+}
+
+function addCopyBtns(el) {
+  el.querySelectorAll('pre').forEach(pre => {
+    if (pre.querySelector('.code-header')) return;
+    const code = pre.querySelector('code');
+    const lang = (code?.className || '').replace('language-','').replace('hljs ','').split(' ')[0] || '';
+    const header = document.createElement('div');
+    header.className = 'code-header';
+    header.innerHTML = `<span class="code-lang">${lang}</span><button class="code-copy" onclick="copyCode(this)">Copiar</button>`;
+    pre.insertBefore(header, pre.firstChild);
+  });
+}
+
+function copyCode(btn) {
+  const code = btn.closest('pre')?.querySelector('code')?.innerText || '';
+  navigator.clipboard.writeText(code).then(() => { btn.textContent = 'Copiado!'; setTimeout(() => btn.textContent = 'Copiar', 2000); });
+}
+
+const TOOL_ICONS = { memory_save:'💾', memory_read:'🧠', buscar_web:'🔍', propose_mejora:'✏️', buscar_web_openai:'🌐' };
+
+function toolIcon(nombre) { return TOOL_ICONS[nombre] || '🔧'; }
+
 function initChat() {
+  setupMarked();
   document.getElementById('content').innerHTML = `
     <div class="chat-wrap" style="height:100%">
       <div class="chat-toolbar">
@@ -465,12 +539,16 @@ function initChat() {
           style="margin-left:auto;background:var(--surf2);border:1px solid var(--border);border-radius:50%;width:30px;height:30px;font-size:14px;line-height:1">🔇</button>
       </div>
       <div id="chatMsgs" class="chat-msgs">
-        <div style="text-align:center;color:var(--muted);font-size:13px;padding:30px 0">🤖 Alejandra lista. ¿Qué necesitas?</div>
+        <div style="text-align:center;color:var(--muted);font-size:13px;padding:40px 0">
+          <div style="font-size:32px;margin-bottom:10px">🤖</div>
+          <div style="font-weight:600;color:var(--text)">Alejandra lista</div>
+          <div style="font-size:12px;margin-top:4px">Puedo escribir código, buscar en la web y recordar contexto</div>
+        </div>
       </div>
       <div id="vozStatus" class="voz-status">🎙️ Escuchando...</div>
       <div class="chat-input-bar">
         <button id="vozBtn" class="chat-btn" onclick="toggleVoz()">🎙️</button>
-        <textarea id="chatInput" class="chat-ta" rows="1" placeholder="Escribe tu mensaje..."
+        <textarea id="chatInput" class="chat-ta" rows="1" placeholder="Pregunta algo a Alejandra..."
           onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();enviarChat()}"
           oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,100)+'px'"></textarea>
         <button class="chat-btn chat-btn-send" onclick="enviarChat()">⚡</button>
@@ -484,8 +562,8 @@ async function enviarChat() {
   if (!msg) return;
   input.value = ''; input.style.height = 'auto';
 
-  addMsg(msg, 'u');
-  addMsg('⏳ Analizando...', 'b', true);
+  addMsgUser(msg);
+  const ldEl = addMsgLoading();
 
   try {
     const r = await fetch(`${API}/api/chat`, {
@@ -493,31 +571,100 @@ async function enviarChat() {
       body: JSON.stringify({ mensaje:msg, usuario_id:chatUserId, canal:'panel' })
     });
     const d = await r.json();
-    removeLd();
+    ldEl.remove();
     const txt = d.texto || d.error || 'Sin respuesta';
-    addMsg(txt, 'b');
-    if (d.busqueda_web) addMsg('🔍 Con búsqueda web', 'info');
-    if (d.experto)      addMsg(`experto:${d.experto}`, 'meta');
+    await addMsgBot(txt, d.herramientas_usadas || [], d);
     hablar(txt);
   } catch(err) {
-    removeLd();
-    addMsg('❌ Error: ' + err.message, 'err');
+    ldEl.remove();
+    addMsgErr('Error: ' + err.message);
     if (input) input.value = msg;
   }
 }
 
-function addMsg(txt, tipo, isLd=false) {
+function addMsgUser(txt) {
   const msgs = document.getElementById('chatMsgs');
   if (!msgs) return;
   const d = document.createElement('div');
-  if (tipo === 'meta')      d.innerHTML = `<div class="msg-b"><div class="bub bub-meta">${esc(txt)}</div></div>`;
-  else if (tipo === 'info') d.innerHTML = `<div class="msg-b"><div class="bub bub-info">${esc(txt)}</div></div>`;
-  else if (tipo === 'err')  d.innerHTML = `<div class="msg-b"><div class="bub bub-err">${esc(txt)}</div></div>`;
-  else if (tipo === 'u')    d.innerHTML = `<div class="msg-u"><div class="bub bub-u">${esc(txt)}</div></div>`;
-  else                      d.innerHTML = `<div class="msg-b"><div class="bub bub-b">${esc(txt)}</div></div>`;
-  if (isLd) d.dataset.ld = '1';
+  d.className = 'msg-u';
+  d.innerHTML = `<div class="bub-u">${esc(txt)}</div>`;
   msgs.appendChild(d);
   msgs.scrollTop = msgs.scrollHeight;
+}
+
+function addMsgLoading() {
+  const msgs = document.getElementById('chatMsgs');
+  const d = document.createElement('div');
+  d.className = 'msg-b';
+  d.innerHTML = `<div class="msg-avatar">🤖</div><div class="bub-b"><div class="typing-dots"><span></span><span></span><span></span></div></div>`;
+  msgs.appendChild(d);
+  msgs.scrollTop = msgs.scrollHeight;
+  return d;
+}
+
+async function addMsgBot(txt, herramientas, meta) {
+  const msgs = document.getElementById('chatMsgs');
+  if (!msgs) return;
+
+  // Chips de herramientas usadas
+  if (herramientas.length > 0) {
+    const chips = document.createElement('div');
+    chips.className = 'msg-tools';
+    chips.innerHTML = herramientas.map(h => `<span class="tool-chip">${toolIcon(h.nombre)} ${h.nombre}</span>`).join('');
+    msgs.appendChild(chips);
+  }
+
+  // Contenedor del mensaje
+  const d = document.createElement('div');
+  d.className = 'msg-b';
+  const bub = document.createElement('div');
+  bub.className = 'bub-b';
+  d.innerHTML = `<div class="msg-avatar">🤖</div>`;
+  d.appendChild(bub);
+  msgs.appendChild(d);
+
+  // Typewriter — animar palabra a palabra
+  const words = txt.split(' ');
+  let current = '';
+  for (let i = 0; i < words.length; i++) {
+    current += (i > 0 ? ' ' : '') + words[i];
+    bub.innerHTML = renderMd(current);
+    msgs.scrollTop = msgs.scrollHeight;
+    if (i % 4 === 0) await new Promise(r => setTimeout(r, 18));
+  }
+  bub.innerHTML = renderMd(txt);
+  addCopyBtns(bub);
+  msgs.scrollTop = msgs.scrollHeight;
+
+  // Metadata (experto, web search)
+  if (meta?.experto || meta?.busqueda_web || meta?.modelo) {
+    const metaEl = document.createElement('div');
+    metaEl.className = 'msg-meta';
+    const parts = [];
+    if (meta.experto) parts.push(`experto: ${meta.experto}`);
+    if (meta.busqueda_web) parts.push('web search');
+    if (meta.modelo) parts.push(meta.modelo.replace('claude-','').replace('-4-6',''));
+    metaEl.textContent = parts.join(' · ');
+    msgs.appendChild(metaEl);
+  }
+}
+
+function addMsgErr(txt) {
+  const msgs = document.getElementById('chatMsgs');
+  if (!msgs) return;
+  const d = document.createElement('div');
+  d.className = 'msg-b';
+  d.innerHTML = `<div class="msg-avatar">🤖</div><div class="bub-b"><div class="bub-err">❌ ${esc(txt)}</div></div>`;
+  msgs.appendChild(d);
+  msgs.scrollTop = msgs.scrollHeight;
+}
+
+function addMsg(txt, tipo, isLd=false) {
+  // Compatibilidad con código antiguo
+  if (tipo === 'u') return addMsgUser(txt);
+  if (tipo === 'err') return addMsgErr(txt);
+  if (isLd) return;
+  addMsgBot(txt, [], {});
 }
 function removeLd() { document.getElementById('chatMsgs')?.querySelector('[data-ld]')?.remove(); }
 
