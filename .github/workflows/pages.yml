@@ -32,6 +32,7 @@ jobs:
           mkdir -p _site
           cp index.html _site/
           cp panel.html _site/
+          cp alejandra-panel.html _site/ 2>/dev/null || true
           cp sw.js _site/ 2>/dev/null || true
           cp .nojekyll _site/ 2>/dev/null || true
           cp -r icons _site/ 2>/dev/null || true

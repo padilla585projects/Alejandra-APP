@@ -4,9 +4,35 @@
   Ruta local: C:\Users\Adrian\Downloads\Proyecto GestiBobina\Alejandra APP
 ================================================================================
 
-ÚLTIMA ACTUALIZACIÓN: 12/05/2026
-VERSIÓN ACTUAL APP NUEVA: v5.77 (Alejandra autonomía Nivel B + CI/CD auto-deploy)
+ÚLTIMA ACTUALIZACIÓN: 14/05/2026
+VERSIÓN ACTUAL APP NUEVA: v5.86 (PHASE 1 Alejandra Independencia — worker autónomo + admin panel)
 VERSIÓN ACTUAL APP VIEJA: v4.19 (⛔ CONGELADA DEFINITIVAMENTE — no recibe más cambios)
+
+================================================================================
+  PLAN ALEJANDRA INDEPENDENCIA (ROADMAP)
+================================================================================
+
+✅ PHASE 1: SCAFFOLDING (v5.86 — COMPLETADO)
+   - Worker stub: alejandra-agente.workers.dev
+   - D1 schema: chat memory + config tables
+   - Admin panel: dashboard + config + logs viewer
+   - App integration: botón 🤖 + panel chat
+   - GitHub Actions: auto-deploy en push
+   - **Decisión:** Option A — Worker Independiente (NOT opción B integrada)
+
+📋 PHASE 2A: ANTHROPIC API + TOOL PORTING (PRÓXIMA)
+   - Conectar procesarConNEXUS() a Claude Sonnet real via Anthropic API
+   - Portar las 32 herramientas existentes al nuevo worker
+   - Probar NEXUS router: Haiku classifier → 5 Sonnet experts
+   - Implementar respuestas dinámicas (no mocks)
+   - Usar chat memory para contexto (último 10 msgs + aprendizajes)
+
+📊 PHASE 3: FULL AUTONOMY (TBD)
+   - runAutonomousReview() cron cada 6h (máx 15 iteraciones)
+   - Watchers (GitHub, D1 schema, app logs)
+   - Self-audit y propose_fix
+   - Telegram bidireccional (actualmente solo mock)
+   - Red de agentes (sync con main Alejandra)
 
 ================================================================================
   ⚡ REGLA OBLIGATORIA AL INICIO DE CADA SESIÓN
@@ -150,6 +176,20 @@ PASO 4 — VERIFICAR WORKER (solo si se va a tocar worker.js)
 ================================================================================
   HISTORIAL DE VERSIONES — RECIENTES
 ================================================================================
+
+v5.86        |  14/05/2026  [PHASE 1 Alejandra Independencia — worker autónomo + admin panel]
+  - Nuevo worker: alejandra-agente.workers.dev (separado, escalable, autonomía Nivel C)
+  - D1 schema: chat_alejandra (guarda 500 últimos msgs), alejandra_config (modo/auto_fix), tokens, logs
+  - Admin panel: admin.html — dashboard, config (autonomo/confirmacion toggle), direct chat, audit logs
+  - App chat: botón 🤖 Alejandra en header, panel separado con memory
+  - Endpoint: POST /api/chat con usuario_id+empresa_id, guarda historial para context retention
+  - GitHub Actions: CI/CD deploy-alejandra-agente.yml para push automático
+  - Versión: v5.86 sincronizada en version.json + sw.js + index.html ✅
+  - Pendiente: deploy manual o CI/CD automático al hacer push
+  - Status: ✅ IMPLEMENTADO, ⏳ PENDIENTE DEPLOY Y TEST
+
+v5.85        |  14/05/2026  [Red de agentes endpoints + fixes Alejandra + incidencia resuelta]
+  - [ver SESION.md anterior para detalles]
 
 v5.77        |  12/05/2026  [Alejandra autonomía Nivel B + CI/CD auto-deploy completo]
   - GitHub Actions deploy-worker.yml: cada push a worker.js → wrangler deploy automático a Cloudflare (~1 min)

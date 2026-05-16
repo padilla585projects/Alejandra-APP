@@ -1,0 +1,923 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Alejandra — Panel de Control</title>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700;900&family=Poppins:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0d0b1a;--surf:#17132b;--surf2:#221d3d;
+  --acc:#8b5cf6;--acc2:#a78bfa;
+  --text:#e5e7eb;--muted:#6b7280;--border:#2d2550;
+  --green:#22c55e;--red:#ef4444;--yellow:#f59e0b;--blue:#3b82f6;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;font-family:'Poppins',sans-serif;background:var(--bg);color:var(--text);font-size:14px}
+button,input,textarea,select{font-family:inherit}
+button{cursor:pointer}
+a{color:var(--acc2);text-decoration:none}
+
+/* ── LOGIN ── */
+#loginView{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:20px;padding:24px}
+.login-card{background:var(--surf);border:1px solid var(--border);border-radius:20px;padding:32px;width:100%;max-width:380px;display:flex;flex-direction:column;gap:16px;box-shadow:0 20px 60px rgba(0,0,0,.5)}
+.login-logo{text-align:center;font-size:48px}
+.login-title{font-family:'Montserrat',sans-serif;font-weight:900;font-size:22px;text-align:center}
+.login-sub{color:var(--muted);font-size:12px;text-align:center}
+.inp{background:var(--surf2);border:1px solid var(--border);border-radius:10px;padding:12px 14px;color:var(--text);font-size:14px;width:100%;outline:none;transition:border-color .2s}
+.inp:focus{border-color:var(--acc)}
+.btn-acc{background:var(--acc);color:#fff;border:none;border-radius:10px;padding:12px;font-family:'Montserrat',sans-serif;font-weight:700;font-size:14px;width:100%;transition:opacity .2s;letter-spacing:.5px}
+.btn-acc:hover{opacity:.85}
+.btn-acc:disabled{opacity:.4;cursor:default}
+
+/* ── APP LAYOUT ── */
+#appView{display:none;height:100%;flex-direction:row}
+
+/* Sidebar desktop */
+#sidebar{width:220px;background:var(--surf);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;overflow-y:auto}
+.sidebar-header{padding:18px 20px 14px;border-bottom:1px solid var(--border)}
+.sidebar-title{font-family:'Montserrat',sans-serif;font-weight:900;font-size:15px;display:flex;align-items:center;gap:8px}
+.sidebar-sub{font-size:10px;color:var(--acc);font-family:'Montserrat',sans-serif;font-weight:700;letter-spacing:2px;text-transform:uppercase;margin-top:2px}
+.nav-item{display:flex;align-items:center;gap:10px;padding:10px 20px;font-family:'Montserrat',sans-serif;font-weight:700;font-size:12px;color:var(--muted);cursor:pointer;border-left:3px solid transparent;transition:all .15s;letter-spacing:.3px}
+.nav-item:hover{color:var(--text);background:var(--surf2)}
+.nav-item.active{color:var(--acc2);border-left-color:var(--acc);background:rgba(139,92,246,.08)}
+.nav-icon{font-size:15px;width:18px;text-align:center;flex-shrink:0}
+.sidebar-footer{margin-top:auto;padding:14px 20px;border-top:1px solid var(--border);font-size:11px;color:var(--muted)}
+.sidebar-ver{font-family:'Montserrat',sans-serif;font-weight:700;color:var(--acc2)}
+.btn-logout{background:none;border:none;color:var(--muted);font-size:11px;cursor:pointer;padding:4px 0;display:block}
+.btn-logout:hover{color:var(--red)}
+
+/* Content wrap */
+#contentWrap{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
+#topbar{background:var(--surf);border-bottom:1px solid var(--border);padding:10px 16px;display:flex;align-items:center;gap:10px;flex-shrink:0}
+#topbar-hamburger{display:none;background:none;border:none;font-size:22px;color:var(--text);padding:0}
+#topbar-title{font-family:'Montserrat',sans-serif;font-weight:900;font-size:14px}
+#topbar-status{margin-left:auto;font-size:11px;color:var(--muted)}
+#content{flex:1;overflow-y:auto;padding:20px}
+#bottomNav{display:none;background:var(--surf);border-top:1px solid var(--border);flex-shrink:0}
+
+/* Mobile sidebar overlay */
+#mobileOverlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:200}
+#mobileSidebar{display:none;position:fixed;left:0;top:0;bottom:0;width:220px;background:var(--surf);z-index:201;border-right:1px solid var(--border);flex-direction:column;overflow-y:auto}
+
+/* ── CARDS / STATS ── */
+.card{background:var(--surf);border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:12px}
+.card-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:14px}
+.stat-card{background:var(--surf);border:1px solid var(--border);border-radius:14px;padding:16px}
+.stat-val{font-family:'Montserrat',sans-serif;font-weight:900;font-size:24px;color:var(--acc)}
+.stat-label{font-size:11px;color:var(--muted);margin-top:3px}
+.sec-title{font-family:'Montserrat',sans-serif;font-weight:900;font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:10px}
+
+/* ── BADGES ── */
+.badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:10px;font-family:'Montserrat',sans-serif;font-weight:700;letter-spacing:.3px}
+.b-acc{background:rgba(139,92,246,.2);color:var(--acc2)}
+.b-green{background:rgba(34,197,94,.15);color:var(--green)}
+.b-yellow{background:rgba(245,158,11,.15);color:var(--yellow)}
+.b-red{background:rgba(239,68,68,.15);color:var(--red)}
+.b-blue{background:rgba(59,130,246,.15);color:var(--blue)}
+.b-muted{background:var(--surf2);color:var(--muted)}
+
+/* ── CHAT ── */
+.chat-wrap{display:flex;flex-direction:column;height:100%}
+.chat-toolbar{background:var(--surf);border-bottom:1px solid var(--border);padding:8px 14px;display:flex;align-items:center;gap:10px;flex-shrink:0}
+.chat-uid{background:var(--surf2);border:1px solid var(--border);border-radius:6px;padding:3px 8px;color:var(--text);font-size:12px;width:100px;outline:none}
+.chat-msgs{flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:8px}
+.chat-input-bar{flex-shrink:0;padding:10px 12px;border-top:1px solid var(--border);display:flex;gap:8px;align-items:flex-end}
+.chat-ta{flex:1;background:var(--surf2);border:1px solid var(--acc);border-radius:12px;padding:10px 14px;color:var(--text);font-size:14px;resize:none;max-height:100px;outline:none;line-height:1.4}
+.chat-btn{width:44px;height:44px;border-radius:12px;border:1px solid var(--border);flex-shrink:0;font-size:18px;background:var(--surf2);color:var(--text)}
+.chat-btn-send{background:var(--acc);border-color:var(--acc);color:#fff}
+.msg-u{display:flex;justify-content:flex-end;margin-bottom:6px}
+.msg-b{display:flex;justify-content:flex-start;margin-bottom:6px}
+.bub{max-width:82%;padding:10px 14px;font-size:14px;line-height:1.5;white-space:pre-wrap;word-break:break-word;border-radius:16px}
+.bub-u{background:var(--acc);color:#fff;border-radius:16px 16px 4px 16px}
+.bub-b{background:var(--surf2);color:var(--text);border-radius:16px 16px 16px 4px}
+.bub-info{font-size:11px;color:var(--green);padding:2px 14px;background:none;border-radius:0}
+.bub-err{font-size:11px;color:var(--red);padding:2px 14px;background:none;border-radius:0}
+.bub-meta{font-size:10px;color:var(--muted);text-align:center;padding:0 4px;background:none;border-radius:0}
+.voz-status{font-size:11px;color:var(--acc);text-align:center;padding:5px;animation:pulse 1.2s infinite;display:none}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+
+/* ── TABLE ── */
+.tbl{width:100%;border-collapse:collapse;font-size:12px}
+.tbl th{text-align:left;padding:8px 10px;color:var(--muted);font-family:'Montserrat',sans-serif;font-weight:700;font-size:10px;letter-spacing:1px;border-bottom:1px solid var(--border)}
+.tbl td{padding:8px 10px;border-bottom:1px solid var(--border);vertical-align:top}
+.tbl tr:last-child td{border-bottom:none}
+
+/* ── COST BARS ── */
+.bar-row{display:flex;align-items:center;gap:10px;margin-bottom:6px}
+.bar-label{font-size:11px;color:var(--muted);text-align:right;width:60px;flex-shrink:0}
+.bar-track{flex:1;background:var(--surf2);border-radius:4px;height:14px;overflow:hidden}
+.bar-fill{background:var(--acc);height:100%;border-radius:4px;transition:width .5s}
+.bar-val{width:70px;font-size:11px;color:var(--text);flex-shrink:0}
+
+/* ── MEMORY LIST ── */
+.mem-item{background:var(--surf);border:1px solid var(--border);border-radius:12px;padding:12px;margin-bottom:8px}
+.mem-head{display:flex;align-items:center;gap:7px;margin-bottom:4px;flex-wrap:wrap}
+.mem-tit{font-family:'Montserrat',sans-serif;font-weight:700;font-size:12px;flex:1}
+.mem-body{font-size:12px;color:var(--muted);line-height:1.45}
+.mem-date{font-size:10px;color:var(--muted);margin-top:4px}
+
+/* ── FILTER TABS ── */
+.ftabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+.ftab{padding:4px 12px;border-radius:20px;border:1px solid var(--border);background:var(--surf2);color:var(--muted);font-family:'Montserrat',sans-serif;font-weight:700;font-size:10px;letter-spacing:.5px;cursor:pointer;transition:all .15s}
+.ftab.active{background:var(--acc);border-color:var(--acc);color:#fff}
+
+/* ── FORM ── */
+.fg{margin-bottom:16px}
+.fl{display:block;font-family:'Montserrat',sans-serif;font-weight:700;font-size:10px;letter-spacing:1px;color:var(--muted);text-transform:uppercase;margin-bottom:6px}
+.radio-group{display:flex;gap:8px}
+.radio-card{flex:1;padding:12px;border:2px solid var(--border);border-radius:10px;cursor:pointer;text-align:center;font-family:'Montserrat',sans-serif;font-weight:700;font-size:12px;transition:all .15s;line-height:1.5}
+.radio-card.sel{border-color:var(--acc);color:var(--acc);background:rgba(139,92,246,.1)}
+.range-row{display:flex;align-items:center;gap:12px}
+
+/* ── REFLEXION ── */
+.reflex-btn{width:100%;padding:16px;background:var(--acc);color:#fff;border:none;border-radius:14px;font-family:'Montserrat',sans-serif;font-weight:900;font-size:14px;letter-spacing:.5px;transition:opacity .2s}
+.reflex-btn:hover{opacity:.85}
+.reflex-btn:disabled{opacity:.4;cursor:default}
+
+/* ── LOG ITEM ── */
+.log-item{border-bottom:1px solid var(--border);padding:10px 0;cursor:pointer;transition:background .15s}
+.log-item:hover{background:rgba(139,92,246,.06);border-radius:8px;padding-left:6px}
+.log-item:last-child{border-bottom:none}
+.log-head{display:flex;align-items:center;gap:6px;margin-bottom:4px;flex-wrap:wrap}
+.log-full{display:none;margin-top:8px;padding:10px;background:var(--bg);border-radius:8px;border:1px solid var(--border)}
+.log-full.open{display:block}
+.log-full-u{font-size:12px;line-height:1.5;white-space:pre-wrap;word-break:break-word}
+.log-full-a{font-size:12px;line-height:1.5;color:var(--acc2);margin-top:8px;white-space:pre-wrap;word-break:break-word}
+
+/* ── RESPONSIVE ── */
+@media(max-width:767px){
+  #sidebar{display:none}
+  #topbar-hamburger{display:block}
+  #bottomNav{display:flex}
+  .bnav-btn{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:8px 2px;background:none;border:none;color:var(--muted);font-family:'Montserrat',sans-serif;font-weight:700;font-size:9px;text-transform:uppercase;letter-spacing:.3px}
+  .bnav-btn.active{color:var(--acc2)}
+  .bnav-icon{font-size:19px}
+  .card-grid{grid-template-columns:repeat(2,1fr)}
+  #content{padding:12px}
+  .bub{max-width:92%}
+}
+</style>
+</head>
+<body>
+
+<!-- ═══════════════ LOGIN ═══════════════ -->
+<div id="loginView">
+  <div class="login-card">
+    <div class="login-logo">🤖</div>
+    <div>
+      <div class="login-title">Alejandra</div>
+      <div class="login-sub">Panel de Control v5.92</div>
+    </div>
+    <div>
+      <label class="fl">Token de administrador</label>
+      <input type="password" id="loginToken" class="inp" placeholder="••••••••••••••••••••••" onkeydown="if(event.key==='Enter')login()">
+    </div>
+    <button class="btn-acc" onclick="login()" id="loginBtn">Entrar</button>
+    <div id="loginErr" style="color:var(--red);font-size:12px;text-align:center;display:none">Token incorrecto o error de conexión</div>
+  </div>
+</div>
+
+<!-- ═══════════════ APP ═══════════════ -->
+<div id="appView">
+
+  <!-- Sidebar desktop -->
+  <div id="sidebar">
+    <div class="sidebar-header">
+      <div class="sidebar-title">🤖 Alejandra</div>
+      <div class="sidebar-sub">Panel de control</div>
+    </div>
+    <div id="sideNav"></div>
+    <div class="sidebar-footer">
+      <div class="sidebar-ver" id="sideVer">v5.92</div>
+      <button class="btn-logout" onclick="logout()">Cerrar sesión</button>
+    </div>
+  </div>
+
+  <!-- Mobile overlay + sidebar -->
+  <div id="mobileOverlay" onclick="closeMobile()"></div>
+  <div id="mobileSidebar">
+    <div class="sidebar-header">
+      <div class="sidebar-title">🤖 Alejandra</div>
+      <div class="sidebar-sub">Panel de control</div>
+    </div>
+    <div id="mobileNav"></div>
+  </div>
+
+  <!-- Content -->
+  <div id="contentWrap">
+    <div id="topbar">
+      <button id="topbar-hamburger" onclick="openMobile()">☰</button>
+      <div id="topbar-title">💬 Chat</div>
+      <div id="topbar-status"></div>
+    </div>
+    <div id="content">Cargando...</div>
+    <div id="bottomNav"></div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════
+const API = 'https://alejandra-agente.alejandra-app.workers.dev';
+
+const SECTIONS = [
+  { id:'chat',      icon:'💬', label:'Chat' },
+  { id:'dashboard', icon:'📊', label:'Dashboard' },
+  { id:'gastos',    icon:'💰', label:'Gastos' },
+  { id:'memoria',   icon:'🧠', label:'Memoria' },
+  { id:'logs',      icon:'📋', label:'Logs' },
+  { id:'config',    icon:'⚙️',  label:'Config' },
+  { id:'reflexion', icon:'🔄', label:'Reflexión' },
+  { id:'seguridad', icon:'🔐', label:'Seguridad' },
+];
+
+let currentSection = 'chat';
+let adminToken = '';
+let chatUserId = localStorage.getItem('alej_uid') || 'adrian';
+
+// Convierte array de filas {rol,contenido,canal,created_at} en pares {user,assistant}
+function historialAPares(rows) {
+  const pares = [];
+  for (let i = 0; i < rows.length; i++) {
+    if (rows[i].rol === 'user') {
+      const asst = rows[i+1]?.rol === 'assistant' ? rows[i+1] : null;
+      pares.push({ canal: rows[i].canal||'?', mensaje: rows[i].contenido, respuesta: asst?.contenido||'', created_at: rows[i].created_at });
+      if (asst) i++;
+    }
+  }
+  return pares;
+}
+const CANAL_COLOR = { web:'b-green', telegram:'b-blue', panel:'b-acc', app:'b-green' };
+
+function logItemHtml(x, uid) {
+  const preview = (s, n) => { const t = (s||''); return esc(t.substring(0,n)) + (t.length>n?'…':''); };
+  return `
+    <div class="log-item" onclick="toggleLog('li_${uid}')">
+      <div class="log-head">
+        <span class="badge ${CANAL_COLOR[x.canal]||'b-muted'}">${x.canal||'?'}</span>
+        <span style="margin-left:auto;font-size:10px;color:var(--muted)">${fmtDate(x.created_at)}</span>
+        <span style="font-size:10px;color:var(--muted)" id="arr_${uid}">▸</span>
+      </div>
+      <div style="font-size:12px"><b style="color:var(--muted)">↑</b> ${preview(x.mensaje, 100)}</div>
+      <div style="font-size:11px;color:var(--acc2);margin-top:2px"><b>↓</b> ${preview(x.respuesta, 100)}</div>
+      <div class="log-full" id="li_${uid}">
+        <div class="log-full-u"><b style="color:var(--muted)">Tú:</b><br>${esc(x.mensaje||'')}</div>
+        <div class="log-full-a"><b>Alejandra:</b><br>${esc(x.respuesta||'')}</div>
+      </div>
+    </div>`;
+}
+
+function toggleLog(id) {
+  const el  = document.getElementById(id);
+  const arr = document.getElementById('arr_' + id.replace('li_',''));
+  if (!el) return;
+  const open = el.classList.toggle('open');
+  if (arr) arr.textContent = open ? '▾' : '▸';
+}
+
+function renderHistorial(items) {
+  if (!items.length) return '<div style="color:var(--muted);font-size:12px;text-align:center;padding:16px">Sin conversaciones</div>';
+  return [...items].reverse().map((x,i)=>logItemHtml(x,`lg${i}`)).join('');
+}
+function filtrarHistorial(canal, btn) {
+  document.querySelectorAll('#histListBox').forEach(()=>{});
+  const items = canal === 'todos' ? window._histItems : (window._histItems||[]).filter(x=>x.canal===canal);
+  const box = document.getElementById('histListBox');
+  if (box) box.innerHTML = renderHistorial(items);
+}
+
+// ── Voz ──────────────────────────────────────────────────────
+let _vozAuto = false, _escuchando = false, _rec = null;
+
+// ═══════════════ AUTH ═══════════════════════════════════════
+async function login() {
+  const t = document.getElementById('loginToken').value.trim();
+  if (!t) return;
+  const btn = document.getElementById('loginBtn');
+  btn.disabled = true; btn.textContent = 'Verificando...';
+  try {
+    const r = await fetch(`${API}/api/admin/config`, { headers:{ Authorization:`Bearer ${t}` } });
+    if (r.status === 403) throw new Error('Token incorrecto');
+    adminToken = t;
+    localStorage.setItem('alej_token', t);
+    showApp();
+  } catch(err) {
+    document.getElementById('loginErr').style.display = 'block';
+    document.getElementById('loginErr').textContent = err.message;
+  } finally {
+    btn.disabled = false; btn.textContent = 'Entrar';
+  }
+}
+
+function logout() {
+  localStorage.removeItem('alej_token');
+  adminToken = '';
+  document.getElementById('appView').style.display = 'none';
+  document.getElementById('loginView').style.display = 'flex';
+}
+
+function showApp() {
+  document.getElementById('loginView').style.display = 'none';
+  document.getElementById('appView').style.display = 'flex';
+  buildNav();
+  navigate('chat');
+  fetchHealth();
+}
+
+// ═══════════════ NAV ════════════════════════════════════════
+function buildNav() {
+  const items = SECTIONS.map(s =>
+    `<div class="nav-item" id="n_${s.id}" onclick="navigate('${s.id}')"><span class="nav-icon">${s.icon}</span>${s.label}</div>`
+  ).join('');
+  document.getElementById('sideNav').innerHTML   = items;
+  document.getElementById('mobileNav').innerHTML = items;
+
+  const bnav = SECTIONS.slice(0, 5).map(s =>
+    `<button class="bnav-btn" id="b_${s.id}" onclick="navigate('${s.id}')"><span class="bnav-icon">${s.icon}</span>${s.label}</button>`
+  ).join('');
+  document.getElementById('bottomNav').innerHTML = bnav;
+  updateActiveNav('chat');
+}
+
+function updateActiveNav(id) {
+  SECTIONS.forEach(s => {
+    document.getElementById(`n_${s.id}`)?.classList.toggle('active', s.id === id);
+    document.getElementById(`b_${s.id}`)?.classList.toggle('active', s.id === id);
+  });
+}
+
+function navigate(id) {
+  currentSection = id;
+  const s = SECTIONS.find(x => x.id === id);
+  document.getElementById('topbar-title').textContent = `${s.icon} ${s.label}`;
+  updateActiveNav(id);
+  closeMobile();
+
+  const c = document.getElementById('content');
+  if (id === 'chat') {
+    c.style.cssText = 'flex:1;overflow:hidden;padding:0';
+  } else {
+    c.style.cssText = 'flex:1;overflow-y:auto;padding:20px';
+  }
+
+  const fn = {
+    chat:      initChat,
+    dashboard: initDashboard,
+    gastos:    () => initGastos(30),
+    memoria:   () => initMemoria(''),
+    logs:      initLogs,
+    config:    initConfig,
+    reflexion: initReflexion,
+    seguridad: initSeguridad,
+  }[id];
+  if (fn) fn();
+}
+
+function openMobile()  { document.getElementById('mobileOverlay').style.display='block'; document.getElementById('mobileSidebar').style.display='flex'; }
+function closeMobile() { document.getElementById('mobileOverlay').style.display='none';  document.getElementById('mobileSidebar').style.display='none'; }
+
+async function fetchHealth() {
+  try {
+    const d = await fetch(`${API}/health`).then(r=>r.json());
+    document.getElementById('sideVer').textContent  = d.version || 'v?';
+    document.getElementById('topbar-status').textContent = d.status === 'ok' ? '● online' : '● error';
+    document.getElementById('topbar-status').style.color = d.status === 'ok' ? 'var(--green)' : 'var(--red)';
+  } catch {}
+}
+
+// ═══════════════ CHAT ═══════════════════════════════════════
+function initChat() {
+  document.getElementById('content').innerHTML = `
+    <div class="chat-wrap" style="height:100%">
+      <div class="chat-toolbar">
+        <span style="font-size:11px;color:var(--muted)">Como</span>
+        <input class="chat-uid" id="chatUid" value="${chatUserId}" onchange="chatUserId=this.value;localStorage.setItem('alej_uid',this.value)">
+        <button id="vozAutoBtn" onclick="toggleVozAuto()" title="Voz de Alejandra"
+          style="margin-left:auto;background:var(--surf2);border:1px solid var(--border);border-radius:50%;width:30px;height:30px;font-size:14px;line-height:1">🔇</button>
+      </div>
+      <div id="chatMsgs" class="chat-msgs">
+        <div style="text-align:center;color:var(--muted);font-size:13px;padding:30px 0">🤖 Alejandra lista. ¿Qué necesitas?</div>
+      </div>
+      <div id="vozStatus" class="voz-status">🎙️ Escuchando...</div>
+      <div class="chat-input-bar">
+        <button id="vozBtn" class="chat-btn" onclick="toggleVoz()">🎙️</button>
+        <textarea id="chatInput" class="chat-ta" rows="1" placeholder="Escribe tu mensaje..."
+          onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();enviarChat()}"
+          oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,100)+'px'"></textarea>
+        <button class="chat-btn chat-btn-send" onclick="enviarChat()">⚡</button>
+      </div>
+    </div>`;
+}
+
+async function enviarChat() {
+  const input = document.getElementById('chatInput');
+  const msg   = (input?.value || '').trim();
+  if (!msg) return;
+  input.value = ''; input.style.height = 'auto';
+
+  addMsg(msg, 'u');
+  addMsg('⏳ Analizando...', 'b', true);
+
+  try {
+    const r = await fetch(`${API}/api/chat`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ mensaje:msg, usuario_id:chatUserId, canal:'panel' })
+    });
+    const d = await r.json();
+    removeLd();
+    const txt = d.texto || d.error || 'Sin respuesta';
+    addMsg(txt, 'b');
+    if (d.busqueda_web) addMsg('🔍 Con búsqueda web', 'info');
+    if (d.experto)      addMsg(`experto:${d.experto}`, 'meta');
+    hablar(txt);
+  } catch(err) {
+    removeLd();
+    addMsg('❌ Error: ' + err.message, 'err');
+    if (input) input.value = msg;
+  }
+}
+
+function addMsg(txt, tipo, isLd=false) {
+  const msgs = document.getElementById('chatMsgs');
+  if (!msgs) return;
+  const d = document.createElement('div');
+  if (tipo === 'meta')      d.innerHTML = `<div class="msg-b"><div class="bub bub-meta">${esc(txt)}</div></div>`;
+  else if (tipo === 'info') d.innerHTML = `<div class="msg-b"><div class="bub bub-info">${esc(txt)}</div></div>`;
+  else if (tipo === 'err')  d.innerHTML = `<div class="msg-b"><div class="bub bub-err">${esc(txt)}</div></div>`;
+  else if (tipo === 'u')    d.innerHTML = `<div class="msg-u"><div class="bub bub-u">${esc(txt)}</div></div>`;
+  else                      d.innerHTML = `<div class="msg-b"><div class="bub bub-b">${esc(txt)}</div></div>`;
+  if (isLd) d.dataset.ld = '1';
+  msgs.appendChild(d);
+  msgs.scrollTop = msgs.scrollHeight;
+}
+function removeLd() { document.getElementById('chatMsgs')?.querySelector('[data-ld]')?.remove(); }
+
+// ── Voz ──────────────────────────────────────────────────────
+function toggleVozAuto() {
+  _vozAuto = !_vozAuto;
+  const btn = document.getElementById('vozAutoBtn');
+  if (btn) { btn.textContent = _vozAuto ? '🔊' : '🔇'; btn.style.borderColor = _vozAuto ? 'var(--acc)' : 'var(--border)'; }
+  if (!_vozAuto) window.speechSynthesis?.cancel();
+}
+function hablar(txt) {
+  if (!_vozAuto) return;
+  const synth = window.speechSynthesis; if (!synth) return;
+  synth.cancel();
+  const u = new SpeechSynthesisUtterance(txt.substring(0,500));
+  u.lang = 'es-ES'; u.rate = 1.05;
+  const voz = synth.getVoices().find(v=>v.lang.startsWith('es')&&/female|lucia|maria/i.test(v.name)) || synth.getVoices().find(v=>v.lang.startsWith('es'));
+  if (voz) u.voice = voz;
+  synth.speak(u);
+}
+function toggleVoz() {
+  if (_escuchando) { _rec?.stop(); return; }
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) { alert('Usa Chrome para voz'); return; }
+  _rec = new SR(); _rec.lang='es-ES'; _rec.continuous=false; _rec.interimResults=false;
+  const btn=document.getElementById('vozBtn'), st=document.getElementById('vozStatus');
+  _rec.onstart  = ()=>{ _escuchando=true; if(btn){btn.textContent='⏹️';btn.style.background='var(--red)';btn.style.borderColor='var(--red)';} if(st)st.style.display='block'; window.speechSynthesis?.cancel(); };
+  _rec.onresult = e=>{ const t=e.results[0][0].transcript.trim(); const i=document.getElementById('chatInput'); if(i)i.value=t; enviarChat(); };
+  _rec.onerror  = e=>{ if(e.error!=='aborted')console.error('STT:',e.error); };
+  _rec.onend    = ()=>{ _escuchando=false; if(btn){btn.textContent='🎙️';btn.style.background='var(--surf2)';btn.style.borderColor='var(--border)';} if(st)st.style.display='none'; };
+  _rec.start();
+}
+
+// ═══════════════ DASHBOARD ══════════════════════════════════
+async function initDashboard() {
+  const c = document.getElementById('content');
+  c.innerHTML = '<div style="color:var(--muted);font-size:13px">Cargando...</div>';
+  try {
+    const [health, cfg, chats, mem] = await Promise.all([
+      fetch(`${API}/health`).then(r=>r.json()).catch(()=>({})),
+      adminFetch('/api/admin/config').catch(()=>({})),
+      adminFetch('/api/admin/chat?limit=20').catch(()=>[]),
+      adminFetch('/api/admin/memoria?limit=200').catch(()=>[]),
+    ]);
+    const rawChats = Array.isArray(chats) ? chats : [];
+    const chatList = historialAPares(rawChats);
+    const memList  = Array.isArray(mem)   ? mem   : (mem.results||[]);
+    const today    = new Date().toISOString().split('T')[0];
+    const msgsHoy  = rawChats.filter(x=>(x.created_at||'').startsWith(today) && x.rol==='user').length;
+    const decCount = memList.filter(x=>x.tipo==='decision').length;
+
+    c.innerHTML = `
+      <div class="sec-title">Estado del sistema</div>
+      <div class="card-grid">
+        <div class="stat-card">
+          <div class="stat-val" style="font-size:28px">${health.status==='ok'?'✅':'❌'}</div>
+          <div class="stat-label">Worker ${health.version||'?'}</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-val" style="font-size:16px;text-transform:capitalize">${cfg.modo||'autonomo'}</div>
+          <div class="stat-label">Modo actual</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-val">${memList.length}</div>
+          <div class="stat-label">Memorias totales</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-val">${msgsHoy}</div>
+          <div class="stat-label">Mensajes hoy</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-val">${decCount}</div>
+          <div class="stat-label">Decisiones tomadas</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-val" style="font-size:16px">${cfg.max_iterations||15}</div>
+          <div class="stat-label">Max iteraciones</div>
+        </div>
+      </div>
+
+      <div class="sec-title">Capacidades activas</div>
+      <div class="card" style="display:flex;gap:8px;flex-wrap:wrap">
+        ${[['NEXUS Router',health.nexus],['Reflexión',health.reflexion],['Decisiones',health.decisiones],['Búsqueda web',health.web_search]]
+          .map(([n,v])=>`<span class="badge ${v?'b-green':'b-muted'}">${v?'✓':'✗'} ${n}</span>`).join('')}
+      </div>
+
+      <div class="sec-title" style="margin-top:14px">Últimas conversaciones <span style="font-size:10px;color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0">(toca para expandir)</span></div>
+      <div class="card">
+        ${chatList.length ? [...chatList].reverse().slice(0,8).map((c,i)=>logItemHtml(c,`db${i}`)).join('')
+        : '<div style="color:var(--muted);font-size:12px;text-align:center;padding:16px">Sin conversaciones aún</div>'}
+      </div>`;
+  } catch(err) { c.innerHTML = `<div style="color:var(--red)">Error: ${esc(err.message)}</div>`; }
+}
+
+// ═══════════════ GASTOS ═════════════════════════════════════
+async function initGastos(dias=30) {
+  const c = document.getElementById('content');
+  c.innerHTML = '<div style="color:var(--muted);font-size:13px">Cargando gastos...</div>';
+  try {
+    const data = await adminFetch(`/api/admin/gastos?dias=${dias}`);
+    const modelos = data.por_modelo || [];
+    const porDia  = data.por_dia || [];
+    const maxEUR  = Math.max(...porDia.map(d=>(d.coste_usd||0)*0.92), 0.000001);
+
+    c.innerHTML = `
+      <div class="ftabs">
+        ${[7,30,90].map(d=>`<button class="ftab ${dias===d?'active':''}" onclick="initGastos(${d})">${d} días</button>`).join('')}
+      </div>
+
+      <div class="card-grid">
+        <div class="stat-card" style="border-color:var(--acc)">
+          <div class="stat-val" style="font-size:28px">${(data.total_eur||0).toFixed(4)}€</div>
+          <div class="stat-label">Total últimos ${dias} días (EUR)</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-val" style="font-size:20px;color:var(--muted)">$${(data.total_usd||0).toFixed(4)}</div>
+          <div class="stat-label">En dólares</div>
+        </div>
+      </div>
+
+      <div class="sec-title">Por modelo</div>
+      <div class="card">
+        ${modelos.length ? `
+          <table class="tbl">
+            <thead><tr>
+              <th>Proveedor</th><th>Modelo</th><th>Llamadas</th>
+              <th>Tokens entrada</th><th>Tokens salida</th><th>USD</th><th>EUR</th>
+            </tr></thead>
+            <tbody>${modelos.map(m=>`
+              <tr>
+                <td><span class="badge ${m.proveedor==='anthropic'?'b-acc':'b-blue'}">${m.proveedor}</span></td>
+                <td style="font-size:11px;color:var(--muted)">${m.modelo}</td>
+                <td>${m.llamadas||0}</td>
+                <td>${fmtN(m.total_entrada)}</td>
+                <td>${fmtN(m.total_salida)}</td>
+                <td style="color:var(--muted)">$${(m.total_usd||0).toFixed(5)}</td>
+                <td><b>${((m.total_usd||0)*0.92).toFixed(5)}€</b></td>
+              </tr>`).join('')}
+            </tbody>
+          </table>
+        ` : `<div style="color:var(--muted);font-size:12px;text-align:center;padding:20px">
+          Sin datos de tokens aún.<br>A partir de ahora cada llamada a la API queda registrada.
+        </div>`}
+      </div>
+
+      <div class="sec-title" style="margin-top:14px">Gasto diario (EUR)</div>
+      <div class="card">
+        ${porDia.length ? porDia.map(d=>{
+          const eur = ((d.coste_usd||0)*0.92);
+          const pct = eur/maxEUR*100;
+          return `<div class="bar-row">
+            <div class="bar-label">${(d.fecha||'').substring(5)}</div>
+            <div class="bar-track"><div class="bar-fill" style="width:${Math.max(pct,1)}%"></div></div>
+            <div class="bar-val">${eur.toFixed(5)}€</div>
+          </div>`;
+        }).join('')
+        : '<div style="color:var(--muted);font-size:12px;text-align:center;padding:16px">Sin datos por día</div>'}
+      </div>
+
+      <div style="font-size:10px;color:var(--muted);text-align:right;margin-top:6px">
+        Precios: Haiku $1/$5 · Sonnet $3/$15 · GPT-4o-mini $0.15/$0.60 (por millón tokens entrada/salida). EUR = USD × 0.92
+      </div>`;
+  } catch(err) {
+    c.innerHTML = `<div style="color:var(--red)">Error: ${esc(err.message)}</div>`;
+  }
+}
+
+// ═══════════════ MEMORIA ════════════════════════════════════
+async function initMemoria(filtro='') {
+  const c = document.getElementById('content');
+  c.innerHTML = '<div style="color:var(--muted);font-size:13px">Cargando memoria...</div>';
+  try {
+    const url   = filtro ? `/api/admin/memoria?tipo=${filtro}&limit=100` : '/api/admin/memoria?limit=100';
+    const data  = await adminFetch(url);
+    const items = Array.isArray(data) ? data : (data.results||data||[]);
+
+    const tipos  = ['','aprendizaje','decision','mejora','error','patron','contexto'];
+    const labels = {'':'Todo',aprendizaje:'Aprendizajes',decision:'Decisiones',mejora:'Mejoras',error:'Errores',patron:'Patrones',contexto:'Contexto'};
+    const bclass = {aprendizaje:'b-green',decision:'b-acc',mejora:'b-yellow',error:'b-red',patron:'b-blue',contexto:'b-muted'};
+
+    c.innerHTML = `
+      <div class="ftabs">
+        ${tipos.map(t=>`<button class="ftab ${filtro===t?'active':''}" onclick="initMemoria('${t}')">${labels[t]||t}</button>`).join('')}
+      </div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:10px">${items.length} registros</div>
+      ${items.length ? items.map(m=>`
+        <div class="mem-item">
+          <div class="mem-head">
+            <span class="badge ${bclass[m.tipo]||'b-muted'}">${m.tipo||'?'}</span>
+            <span class="mem-tit">${esc(m.titulo||'Sin título')}</span>
+            <span style="font-size:11px;color:var(--yellow)">${'★'.repeat(Math.min(m.importancia||1,5))}</span>
+          </div>
+          <div class="mem-body">${esc((m.contenido||'').substring(0,220))}${(m.contenido||'').length>220?'…':''}</div>
+          <div class="mem-date">${fmtDate(m.created_at)}</div>
+        </div>`).join('')
+      : '<div style="color:var(--muted);font-size:13px;text-align:center;padding:30px">Sin registros</div>'}`;
+  } catch(err) { document.getElementById('content').innerHTML = `<div style="color:var(--red)">Error: ${esc(err.message)}</div>`; }
+}
+
+// ═══════════════ LOGS ═══════════════════════════════════════
+async function initLogs() {
+  const c = document.getElementById('content');
+  c.innerHTML = '<div style="color:var(--muted);font-size:13px">Cargando logs...</div>';
+  try {
+    const raw   = await adminFetch('/api/admin/chat?limit=100');
+    const items = historialAPares(Array.isArray(raw) ? raw : []);
+
+    const canales = [...new Set(items.map(x=>x.canal))];
+    const filtros = ['todos', ...canales];
+
+    c.innerHTML = `
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">
+        ${filtros.map(f=>`<button class="badge b-blue" style="cursor:pointer;border:none;background:var(--surf2)" onclick="filtrarHistorial('${f}',this)">${f}</button>`).join('')}
+        <span style="margin-left:auto;font-size:11px;color:var(--muted);align-self:center">${items.length} conversaciones · app+panel+telegram</span>
+      </div>
+      <div class="card" id="histListBox">
+        ${renderHistorial(items)}
+      </div>`;
+
+    window._histItems = items;
+  } catch(err) { c.innerHTML = `<div style="color:var(--red)">Error: ${esc(err.message)}</div>`; }
+}
+
+// ═══════════════ CONFIG ═════════════════════════════════════
+let _cfgModo = 'autonomo';
+async function initConfig() {
+  const c = document.getElementById('content');
+  c.innerHTML = '<div style="color:var(--muted);font-size:13px">Cargando config...</div>';
+  try {
+    const cfg = await adminFetch('/api/admin/config');
+    _cfgModo = cfg.modo || 'autonomo';
+    c.innerHTML = `
+      <div class="card" style="max-width:480px">
+        <div class="sec-title" style="margin-bottom:16px">Configuración de Alejandra</div>
+
+        <div class="fg">
+          <label class="fl">Modo de operación</label>
+          <div class="radio-group">
+            <div class="radio-card ${_cfgModo==='autonomo'?'sel':''}" onclick="selModo('autonomo',this)">
+              🤖 Autónomo<br><small style="font-weight:400;color:var(--muted);font-size:11px">Actúa sola</small>
+            </div>
+            <div class="radio-card ${_cfgModo==='confirmacion'?'sel':''}" onclick="selModo('confirmacion',this)">
+              ⏸️ Confirmación<br><small style="font-weight:400;color:var(--muted);font-size:11px">Espera aprobación</small>
+            </div>
+          </div>
+        </div>
+
+        <div class="fg">
+          <label class="fl">Máx. iteraciones de herramientas</label>
+          <div class="range-row">
+            <input type="range" id="maxIter" min="1" max="20" value="${cfg.max_iterations||15}"
+              oninput="document.getElementById('maxIterV').textContent=this.value"
+              style="flex:1;accent-color:var(--acc)">
+            <span id="maxIterV" style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:20px;color:var(--acc);width:32px">${cfg.max_iterations||15}</span>
+          </div>
+        </div>
+
+        <button class="btn-acc" onclick="saveConfig()">💾 Guardar</button>
+        <div id="cfgMsg" style="margin-top:10px;font-size:12px;text-align:center;display:none"></div>
+      </div>`;
+  } catch(err) { c.innerHTML = `<div style="color:var(--red)">Error: ${esc(err.message)}</div>`; }
+}
+
+function selModo(modo, el) {
+  _cfgModo = modo;
+  document.querySelectorAll('.radio-card').forEach(x => x.classList.remove('sel'));
+  el.classList.add('sel');
+}
+
+async function saveConfig() {
+  const max_iterations = parseInt(document.getElementById('maxIter').value);
+  try {
+    await adminFetch('/api/admin/config', 'POST', { modo: _cfgModo, max_iterations });
+    const msg = document.getElementById('cfgMsg');
+    msg.style.display='block'; msg.style.color='var(--green)'; msg.textContent='✅ Guardado correctamente';
+    setTimeout(()=>msg.style.display='none', 3000);
+  } catch(err) {
+    const msg = document.getElementById('cfgMsg');
+    msg.style.display='block'; msg.style.color='var(--red)'; msg.textContent='❌ '+err.message;
+  }
+}
+
+// ═══════════════ REFLEXIÓN ══════════════════════════════════
+function initReflexion() {
+  const c = document.getElementById('content');
+  c.innerHTML = `
+    <div style="max-width:520px">
+      <div class="sec-title">Reflexión autónoma</div>
+      <div class="card" style="margin-bottom:14px">
+        <div style="font-size:13px;color:var(--muted);margin-bottom:14px;line-height:1.6">
+          Alejandra analiza sus últimas 30 conversaciones y 20 memorias, detecta patrones, guarda aprendizajes y propone mejoras. Puede tardar 30–60 segundos.
+        </div>
+        <button class="reflex-btn" id="reflexBtn" onclick="lanzarReflexion()">🔄 Lanzar reflexión</button>
+        <div id="reflexSt" style="display:none;text-align:center;color:var(--muted);font-size:12px;padding:10px;animation:pulse 1.5s infinite">⏳ Reflexión en curso...</div>
+        <div id="reflexRes" style="display:none;font-size:13px;text-align:center;margin-top:10px"></div>
+      </div>
+      <div class="sec-title">Memorias de reflexiones anteriores</div>
+      <div id="reflexMems"><div style="color:var(--muted);font-size:12px">Cargando...</div></div>
+    </div>`;
+  loadReflexMems();
+}
+
+async function lanzarReflexion() {
+  const btn=document.getElementById('reflexBtn'), st=document.getElementById('reflexSt'), res=document.getElementById('reflexRes');
+  btn.disabled=true; btn.textContent='⏳ Reflexionando...';
+  st.style.display='block'; res.style.display='none';
+  try {
+    const r = await fetch(`${API}/api/reflexion`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ token: adminToken })
+    });
+    const d = await r.json();
+    st.style.display='none'; res.style.display='block';
+    res.style.color = d.ok ? 'var(--green)' : 'var(--red)';
+    res.textContent = d.ok ? '✅ Reflexión iniciada. Alejandra está pensando...' : ('❌ '+(d.error||'Error'));
+    if (d.ok) setTimeout(loadReflexMems, 15000);
+  } catch(err) {
+    st.style.display='none'; res.style.display='block';
+    res.style.color='var(--red)'; res.textContent='❌ Error: '+err.message;
+  }
+  btn.disabled=false; btn.textContent='🔄 Lanzar reflexión';
+}
+
+async function loadReflexMems() {
+  const el = document.getElementById('reflexMems');
+  if (!el) return;
+  try {
+    const data  = await adminFetch('/api/admin/memoria?tipo=contexto&limit=5');
+    const items = Array.isArray(data) ? data : (data.results||[]);
+    el.innerHTML = items.length ? items.map(m=>`
+      <div class="mem-item">
+        <div class="mem-head"><span class="badge b-acc">reflexión</span><span class="mem-tit">${esc(m.titulo||'?')}</span></div>
+        <div class="mem-body">${esc((m.contenido||'').substring(0,200))}</div>
+        <div class="mem-date">${fmtDate(m.created_at)}</div>
+      </div>`).join('')
+    : '<div style="color:var(--muted);font-size:12px">Sin reflexiones guardadas aún</div>';
+  } catch {}
+}
+
+// ═══════════════ SEGURIDAD ══════════════════════════════════
+async function initSeguridad() {
+  const c = document.getElementById('content');
+  c.innerHTML = '<div style="color:var(--muted);font-size:13px">Cargando...</div>';
+  try {
+    const lista = await adminFetch('/api/admin/tokens');
+    const activos = (Array.isArray(lista) ? lista : []).filter(t => t.activo);
+    c.innerHTML = `
+      <div style="max-width:520px">
+        <div class="sec-title">Cambiar mi contraseña</div>
+        <div class="card" style="margin-bottom:16px">
+          <div class="fg">
+            <label class="fl">Nueva contraseña</label>
+            <input type="password" id="pwNueva" class="inp" placeholder="Mínimo 6 caracteres">
+          </div>
+          <div class="fg" style="margin-top:10px">
+            <label class="fl">Confirmar</label>
+            <input type="password" id="pwConfirm" class="inp" placeholder="Repite la contraseña" onkeydown="if(event.key==='Enter')cambiarPassword()">
+          </div>
+          <div id="pwMsg" style="font-size:12px;margin-top:8px;min-height:16px"></div>
+          <button class="btn-acc" style="margin-top:10px" onclick="cambiarPassword()">Guardar nueva contraseña</button>
+        </div>
+
+        <div class="sec-title">Usuarios con acceso</div>
+        <div class="card" id="tokensLista" style="margin-bottom:16px">
+          ${activos.length ? activos.map(t => `
+            <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
+              <div style="flex:1">
+                <div style="font-size:13px;font-weight:600">${esc(t.descripcion || 'Sin nombre')}</div>
+                <div style="font-size:10px;color:var(--muted)">${fmtDate(t.created_at)}</div>
+              </div>
+              <button onclick="revocarToken(${t.id},'${esc(t.descripcion||'?')}')"
+                style="background:rgba(239,68,68,.15);color:#f87171;border:1px solid rgba(239,68,68,.3);border-radius:8px;padding:4px 10px;font-size:11px;cursor:pointer">
+                Revocar
+              </button>
+            </div>`).join('')
+          : '<div style="color:var(--muted);font-size:12px;text-align:center;padding:10px">Solo tú tienes acceso</div>'}
+        </div>
+
+        <div class="sec-title">Añadir usuario</div>
+        <div class="card">
+          <div class="fg">
+            <label class="fl">Nombre / descripción</label>
+            <input type="text" id="nuevoNombre" class="inp" placeholder="ej: Adrian móvil, Panel oficina…">
+          </div>
+          <div class="fg" style="margin-top:10px">
+            <label class="fl">Contraseña</label>
+            <input type="password" id="nuevoToken" class="inp" placeholder="Mínimo 6 caracteres" onkeydown="if(event.key==='Enter')crearUsuario()">
+          </div>
+          <div id="nuevoMsg" style="font-size:12px;margin-top:8px;min-height:16px"></div>
+          <button class="btn-acc" style="margin-top:10px" onclick="crearUsuario()">Crear acceso</button>
+        </div>
+      </div>`;
+  } catch(err) { c.innerHTML = `<div style="color:var(--red)">Error: ${esc(err.message)}</div>`; }
+}
+
+async function cambiarPassword() {
+  const nueva  = document.getElementById('pwNueva').value;
+  const conf   = document.getElementById('pwConfirm').value;
+  const msg    = document.getElementById('pwMsg');
+  msg.textContent = '';
+  if (!nueva || nueva.length < 6) { msg.style.color='var(--red)'; msg.textContent='Mínimo 6 caracteres'; return; }
+  if (nueva !== conf) { msg.style.color='var(--red)'; msg.textContent='Las contraseñas no coinciden'; return; }
+  try {
+    await adminFetch('/api/admin/tokens/change', 'POST', { token_nuevo: nueva });
+    adminToken = nueva;
+    localStorage.setItem('alej_token', nueva);
+    msg.style.color = 'var(--green)';
+    msg.textContent = '✅ Contraseña cambiada. Sesión actualizada.';
+    document.getElementById('pwNueva').value = '';
+    document.getElementById('pwConfirm').value = '';
+  } catch(err) { msg.style.color='var(--red)'; msg.textContent='❌ '+err.message; }
+}
+
+async function crearUsuario() {
+  const nombre = document.getElementById('nuevoNombre').value.trim();
+  const token  = document.getElementById('nuevoToken').value;
+  const msg    = document.getElementById('nuevoMsg');
+  msg.textContent = '';
+  if (!nombre) { msg.style.color='var(--red)'; msg.textContent='El nombre es obligatorio'; return; }
+  if (!token || token.length < 6) { msg.style.color='var(--red)'; msg.textContent='Mínimo 6 caracteres'; return; }
+  try {
+    await adminFetch('/api/admin/tokens', 'POST', { nombre, token_valor: token });
+    msg.style.color = 'var(--green)';
+    msg.textContent = '✅ Acceso creado correctamente';
+    document.getElementById('nuevoNombre').value = '';
+    document.getElementById('nuevoToken').value = '';
+    setTimeout(initSeguridad, 800);
+  } catch(err) { msg.style.color='var(--red)'; msg.textContent='❌ '+err.message; }
+}
+
+async function revocarToken(id, nombre) {
+  if (!confirm(`¿Revocar acceso de "${nombre}"?`)) return;
+  try {
+    await adminFetch('/api/admin/tokens', 'DELETE', { id });
+    initSeguridad();
+  } catch(err) { alert('Error: '+err.message); }
+}
+
+// ═══════════════ HELPERS ════════════════════════════════════
+async function adminFetch(path, method='GET', body=null) {
+  const opts = { method, headers:{ Authorization:`Bearer ${adminToken}` } };
+  if (body) { opts.headers['Content-Type']='application/json'; opts.body=JSON.stringify(body); }
+  const r = await fetch(`${API}${path}`, opts);
+  if (r.status===403) throw new Error('No autorizado — token inválido');
+  return r.json();
+}
+
+function esc(s) {
+  if (!s) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
+}
+
+function fmtDate(str) {
+  if (!str) return '?';
+  try { return new Date(str).toLocaleString('es-ES',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}); }
+  catch { return str; }
+}
+
+function fmtN(n) {
+  if (!n && n!==0) return '–';
+  return Number(n).toLocaleString('es-ES');
+}
+
+// ═══════════════ INIT ═══════════════════════════════════════
+const saved = localStorage.getItem('alej_token');
+if (saved) {
+  adminToken = saved;
+  showApp();
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,85 @@
+name: Deploy Alejandra Agente Worker
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'alejandra-agente/**'
+      - '.github/workflows/deploy-alejandra-agente.yml'
+
+jobs:
+  deploy:
+    name: Deploy Alejandra Agente to Cloudflare
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Instalar wrangler
+        run: npm install -g wrangler@latest
+
+      - name: Aplicar migración D1
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: d65ead2b2967bf68ff3848a36cd7b1b4
+        run: |
+          cd alejandra-agente
+          npx wrangler d1 execute alejandra-db \
+            --file=migrate_001_init_schema.sql \
+            --remote || echo "Migración 001 ya aplicada, continuando..."
+          npx wrangler d1 execute alejandra-db \
+            --file=migrate_002_token_uso.sql \
+            --remote || echo "Migración 002 ya aplicada, continuando..."
+          npx wrangler d1 execute alejandra-db \
+            --file=migrate_003_fix_schema.sql \
+            --remote || echo "Migración 003 ya aplicada, continuando..."
+
+      - name: Desplegar worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: d65ead2b2967bf68ff3848a36cd7b1b4
+        run: |
+          cd alejandra-agente
+          npx wrangler deploy
+
+      - name: Configurar ANTHROPIC_API_KEY
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: d65ead2b2967bf68ff3848a36cd7b1b4
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          echo "$ANTHROPIC_API_KEY" | npx wrangler secret put ANTHROPIC_API_KEY --name alejandra-agente
+
+      - name: Configurar OPENAI_API_KEY
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: d65ead2b2967bf68ff3848a36cd7b1b4
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          echo "$OPENAI_API_KEY" | npx wrangler secret put OPENAI_API_KEY --name alejandra-agente
+
+      - name: Configurar ADMIN_TOKEN (contraseña panel)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: d65ead2b2967bf68ff3848a36cd7b1b4
+        run: |
+          echo "alejandra2026" | npx wrangler secret put ADMIN_TOKEN --name alejandra-agente
+
+      - name: Verificar health
+        run: |
+          sleep 5
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            https://alejandra-agente.alejandra-app.workers.dev/health || echo "000")
+          echo "Health check: HTTP $STATUS"
+          if [ "$STATUS" = "200" ]; then
+            echo "✅ Alejandra Agente v5.93 desplegada y operativa"
+          else
+            echo "⚠️ Health check retornó $STATUS (puede tardar unos segundos en propagar)"
+          fi
