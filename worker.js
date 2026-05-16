@@ -3777,7 +3777,7 @@ ${nombresLista}
 
 Para cada nombre extraído del parte, busca el trabajador más parecido de esa lista (ignora mayúsculas, tildes y pequeñas diferencias ortográficas).
 
-Responde ÃNICAMENTE con un JSON válido, sin texto adicional:
+Responde ÚNICAMENTE con un JSON válido, sin texto adicional:
 {
   "fecha_lunes": "YYYY-MM-DD",
   "trabajadores": [
@@ -3807,7 +3807,7 @@ Responde ÃNICAMENTE con un JSON válido, sin texto adicional:
 
   let aiJson = null;
   let usedModel = null;
-  for (const model of ['gemini-2.0-flash', 'gemini-1.5-flash-002', 'gemini-1.5-flash']) {
+  for (const model of ['gemini-2.0-flash-001', 'gemini-1.5-flash-002', 'gemini-1.5-flash']) {
     const res = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
       { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(geminiBody) }
