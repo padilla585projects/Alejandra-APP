@@ -225,6 +225,21 @@ export default {
         return json(respuesta);
       }
 
+      // ── Google OAuth — verifica sesión del worker principal via BD compartida ──
+      if (path === '/auth/verify-session' && req.method === 'POST') {
+        const { session_token } = await req.json().catch(() => ({}));
+        if (!session_token) return json({ error: 'Falta session_token' }, 400);
+        try {
+          const sesion = await env.DB.prepare(
+            "SELECT s.rol, u.nombre FROM sesiones s LEFT JOIN usuarios u ON u.id = s.usuario_id WHERE s.token = ? AND s.rol IN ('superadmin','desarrollador') LIMIT 1"
+          ).bind(session_token).first();
+          if (!sesion) return json({ error: 'Sesión no válida o sin permisos' }, 403);
+          return json({ ok: true, token: env.ADMIN_TOKEN, nombre: sesion.nombre || 'Admin' });
+        } catch(e) {
+          return json({ error: 'Error verificando sesión: ' + e.message }, 500);
+        }
+      }
+
       // ── Admin API ─────────────────────────────────────────────────────────
       if (path.startsWith('/api/admin/')) {
         const adminToken = req.headers.get('Authorization')?.replace('Bearer ', '');

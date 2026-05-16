@@ -174,6 +174,15 @@ a{color:var(--acc2);text-decoration:none}
       <input type="password" id="loginToken" class="inp" placeholder="••••••••••••••••••••••" onkeydown="if(event.key==='Enter')login()">
     </div>
     <button class="btn-acc" onclick="login()" id="loginBtn">Entrar</button>
+    <div style="display:flex;align-items:center;gap:10px;margin:4px 0">
+      <div style="flex:1;height:1px;background:var(--border)"></div>
+      <span style="font-size:11px;color:var(--muted)">o</span>
+      <div style="flex:1;height:1px;background:var(--border)"></div>
+    </div>
+    <button class="btn-acc" id="loginGoogleBtn" onclick="doLoginGoogle()" style="background:var(--surf);border:1px solid var(--border);color:var(--text);display:flex;align-items:center;justify-content:center;gap:10px;font-size:14px">
+      <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.31-8.16 2.31-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+      Entrar con Google
+    </button>
     <div id="loginErr" style="color:var(--red);font-size:12px;text-align:center;display:none">Token incorrecto o error de conexión</div>
   </div>
 </div>
@@ -290,6 +299,66 @@ function filtrarHistorial(canal, btn) {
 let _vozAuto = false, _escuchando = false, _rec = null;
 
 // ═══════════════ AUTH ═══════════════════════════════════════
+const API_MAIN = 'https://alejandra-app-api.alejandra-app.workers.dev';
+
+async function doLoginGoogle() {
+  const btn = document.getElementById('loginGoogleBtn');
+  const errEl = document.getElementById('loginErr');
+  errEl.style.display = 'none';
+  btn.disabled = true; btn.textContent = 'Conectando...';
+  try {
+    const redirectUri = window.location.origin + window.location.pathname;
+    const res = await fetch(`${API_MAIN}/auth/google/url?redirect_uri=${encodeURIComponent(redirectUri)}`);
+    const data = await res.json();
+    if (!res.ok || !data.url) {
+      errEl.style.display = 'block';
+      errEl.textContent = data.error || 'Error al conectar con Google';
+      btn.disabled = false; btn.textContent = 'Entrar con Google'; return;
+    }
+    window.location.href = data.url;
+  } catch { errEl.style.display = 'block'; errEl.textContent = 'Error de conexión'; btn.disabled = false; }
+}
+
+async function handleGoogleCallback(code) {
+  document.getElementById('loginView').style.display = 'flex';
+  const errEl = document.getElementById('loginErr');
+  const btn = document.getElementById('loginGoogleBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Verificando...'; }
+  try {
+    const redirectUri = window.location.origin + window.location.pathname;
+    // 1. Intercambiar code por sesión en el worker principal
+    const r1 = await fetch(`${API_MAIN}/auth/google/callback`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code, redirect_uri: redirectUri }),
+    });
+    const d1 = await r1.json();
+    window.history.replaceState({}, '', window.location.pathname);
+    if (!r1.ok || !d1.ok) {
+      errEl.style.display = 'block';
+      errEl.textContent = d1.pendiente ? 'Cuenta pendiente de aprobación.' : (d1.error || 'Error al verificar con Google');
+      if (btn) btn.disabled = false;
+      return;
+    }
+    // 2. Verificar que tiene rol superadmin y obtener ADMIN_TOKEN del agente
+    const r2 = await fetch(`${API}/auth/verify-session`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session_token: d1.token }),
+    });
+    const d2 = await r2.json();
+    if (!r2.ok || !d2.ok) {
+      errEl.style.display = 'block';
+      errEl.textContent = d2.error || 'Sin permisos para el panel del agente';
+      if (btn) btn.disabled = false;
+      return;
+    }
+    adminToken = d2.token;
+    localStorage.setItem('alej_token', adminToken);
+    showApp();
+  } catch(e) { errEl.style.display = 'block'; errEl.textContent = 'Error de conexión'; if (btn) btn.disabled = false; }
+}
+
 async function login() {
   const t = document.getElementById('loginToken').value.trim();
   if (!t) return;
@@ -913,11 +982,13 @@ function fmtN(n) {
 }
 
 // ═══════════════ INIT ═══════════════════════════════════════
-const saved = localStorage.getItem('alej_token');
-if (saved) {
-  adminToken = saved;
-  showApp();
-}
+(function init() {
+  const urlParams = new URLSearchParams(window.location.search);
+  const code = urlParams.get('code');
+  if (code) { handleGoogleCallback(code); return; }
+  const saved = localStorage.getItem('alej_token');
+  if (saved) { adminToken = saved; showApp(); }
+})();
 </script>
 </body>
 </html>
