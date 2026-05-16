@@ -1,11 +1,11 @@
-﻿// Cambia este nÃºmero cada vez que actualices la app
-const CACHE = 'alejandra-v5.96';
+// Cambia este número cada vez que actualices la app
+const CACHE = 'alejandra-v5.97';
 
 self.addEventListener('install', e => {
   self.skipWaiting();
 });
 
-// La pÃ¡gina puede pedirle al SW que se active si estÃ¡ en espera
+// La página puede pedirle al SW que se active si estÃ¡ en espera
 self.addEventListener('message', e => {
   if (e.data?.tipo === 'SKIP_WAITING') self.skipWaiting();
 });
@@ -56,8 +56,8 @@ self.addEventListener('activate', e => {
   );
 });
 
-// NavegaciÃ³n (HTML): siempre red, sin cachear â€” asÃ­ el HTML siempre es fresco
-// Resto de recursos: red primero, cachÃ© como fallback offline
+// Navegación (HTML): siempre red, sin cachear â€” así el HTML siempre es fresco
+// Resto de recursos: red primero, caché como fallback offline
 self.addEventListener('fetch', e => {
   if (e.request.mode === 'navigate') {
     e.respondWith(
