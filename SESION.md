@@ -11,7 +11,7 @@
 
 ---
 
-## RESUMEN SESIÓN 17/05/2026 — v5.98 (Fix encoding completo index.html + sw.js)
+## RESUMEN SESIÓN 17/05/2026 — v5.98 (Fix encoding + layout + PWA icons)
 
 ### Qué se hizo:
 
@@ -39,12 +39,24 @@
 - `sw.js` — fix 3 comentarios corruptos
 - `version.json` — v5.98
 
+### Fix screenIA layout:
+- `#screenIA` estaba después de `#bottomNav` en el DOM → nav aparecía arriba en vez de abajo
+- Movido antes del nav + CSS cambiado de `height:100%` a `flex:1`
+
+### Fix PWA icons:
+- Creado `icon.svg` con el logo de la app (faltaba, causaba 404 en manifest)
+- Añadido `<meta name="mobile-web-app-capable">` (el apple-* estaba deprecated)
+
 ### Archivos temporales (pueden eliminarse):
 - `fix_index2.js`, `index.fixed.html`
 
 ### Deploy:
-- Commit: 7d94145 — pusheado a GitHub main
+- Commits: 7d94145, dcdcf11, 4cc7e3a, 91962bc — pusheados a GitHub main
 - Worker NO modificado → no se necesita redeploy
+
+### Pendiente:
+- worker.js tiene ~79 líneas con patrón Ã en código no-comentario (prompt Alejandra y strings API) — fix encoding pendiente
+- Probar login con Google en alejandra-panel.html
 
 ---
 
