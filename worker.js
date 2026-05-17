@@ -202,7 +202,7 @@ async function sendTelegramFotoConBotones(env, caption, base64DataUri, botones) 
   } catch (_) {}
 }
 
-// botones = [[{text, callback_data}, ...], ...]  (filas Ã— columnas)
+// botones = [[{text, callback_data}, ...], ...]  (filas × columnas)
 async function sendTelegramConBotones(env, mensaje, botones) {
   try {
     const token  = env.TELEGRAM_BOT_TOKEN;
@@ -387,7 +387,7 @@ const AI_TOOLS = [
   },
   {
     name: 'web_search',
-    description: 'Busca en internet usando Tavily (resultados reales de páginas web). Ãsalo para documentación técnica, APIs, errores de JS/CF Workers, librerías, etc. Devuelve una respuesta directa + fragmentos de páginas reales.',
+    description: 'Busca en internet usando Tavily (resultados reales de páginas web). Úsalo para documentación técnica, APIs, errores de JS/CF Workers, librerías, etc. Devuelve una respuesta directa + fragmentos de páginas reales.',
     input_schema: { type: 'object', properties: { query: { type: 'string', description: 'Término de búsqueda' }, depth: { type: 'string', enum: ['basic', 'advanced'], description: 'basic=rápido, advanced=más detalle (usa advanced solo para preguntas complejas)' } }, required: ['query'] }
   },
   {
@@ -512,7 +512,7 @@ const AI_TOOLS = [
   },
   {
     name: 'memory_read',
-    description: 'Lee tu memoria persistente. Ãsalo SIEMPRE antes de actuar para recordar qué has hecho, qué errores cometiste antes y qué has aprendido.',
+    description: 'Lee tu memoria persistente. Úsalo SIEMPRE antes de actuar para recordar qué has hecho, qué errores cometiste antes y qué has aprendido.',
     input_schema: {
       type: 'object',
       properties: {
@@ -570,7 +570,7 @@ const AI_TOOLS = [
   },
   {
     name: 'self_audit',
-    description: 'Ejecuta un diagnóstico completo del agente: compara las tablas reales de la BD contra el schema conocido, verifica tools críticas, detecta patrones de error en memoria, y reporta discrepancias. Ãsalo al inicio de cada sesión importante y en la revisión autónoma. Devuelve un informe con problemas detectados y sugerencias de fix.',
+    description: 'Ejecuta un diagnóstico completo del agente: compara las tablas reales de la BD contra el schema conocido, verifica tools críticas, detecta patrones de error en memoria, y reporta discrepancias. Úsalo al inicio de cada sesión importante y en la revisión autónoma. Devuelve un informe con problemas detectados y sugerencias de fix.',
     input_schema: { type: 'object', properties: {} }
   },
   {
@@ -591,7 +591,7 @@ const AI_TOOLS = [
   },
   {
     name: 'direct_fix',
-    description: 'Aplica un patch quirúrgico (old_code → new_code) INMEDIATAMENTE sin esperar aprobación. Hace commit en GitHub, el CI/CD despliega automáticamente (~1 min worker, ~30s frontend). Notifica a Adrián después con [↩️ Revertir]. ÃSALO para: bugs confirmados por usuarios, errores recurrentes en logs, fixes pequeños (<20 líneas). FLUJO OBLIGATORIO: 1) grep_code para localizar el código exacto, 2) repo_read_file para leer el contexto completo, 3) direct_fix con old_code copiado literalmente.',
+    description: 'Aplica un patch quirúrgico (old_code → new_code) INMEDIATAMENTE sin esperar aprobación. Hace commit en GitHub, el CI/CD despliega automáticamente (~1 min worker, ~30s frontend). Notifica a Adrián después con [↩️ Revertir]. ÚSALO para: bugs confirmados por usuarios, errores recurrentes en logs, fixes pequeños (<20 líneas). FLUJO OBLIGATORIO: 1) grep_code para localizar el código exacto, 2) repo_read_file para leer el contexto completo, 3) direct_fix con old_code copiado literalmente.',
     input_schema: {
       type: 'object',
       properties: {
@@ -607,7 +607,7 @@ const AI_TOOLS = [
   },
   {
     name: 'run_migration',
-    description: 'Ejecuta SQL DDL directamente en la base de datos D1 (CREATE TABLE IF NOT EXISTS, ALTER TABLE ADD COLUMN, CREATE INDEX, etc.). Ãsalo para crear tablas nuevas, añadir columnas, crear índices. Admite múltiples sentencias separadas por punto y coma.',
+    description: 'Ejecuta SQL DDL directamente en la base de datos D1 (CREATE TABLE IF NOT EXISTS, ALTER TABLE ADD COLUMN, CREATE INDEX, etc.). Úsalo para crear tablas nuevas, añadir columnas, crear índices. Admite múltiples sentencias separadas por punto y coma.',
     input_schema: {
       type: 'object',
       properties: {
@@ -619,12 +619,12 @@ const AI_TOOLS = [
   },
   {
     name: 'check_deploy_status',
-    description: 'Consulta el estado de los últimos deploys de GitHub Actions. Ãsalo después de un direct_fix o repo_write_file para verificar que el deploy fue exitoso. Devuelve: estado (success/failure/in_progress), commit, mensaje de error si falló, y los últimos commits del repo.',
+    description: 'Consulta el estado de los últimos deploys de GitHub Actions. Úsalo después de un direct_fix o repo_write_file para verificar que el deploy fue exitoso. Devuelve: estado (success/failure/in_progress), commit, mensaje de error si falló, y los últimos commits del repo.',
     input_schema: { type: 'object', properties: {} }
   },
   {
     name: 'check_encoding',
-    description: 'Verifica que los archivos HTML/JS del proyecto no tienen corrupción de encoding (doble-codificación UTF-8). ÃSALO después de cada direct_fix en panel.html, index.html, worker.js o sw.js. Busca patrones de corrupción conocidos (Ã, Ã, â€, BOM). Incidente real 13/05/2026: este error rompió el panel web.',
+    description: 'Verifica que los archivos HTML/JS del proyecto no tienen corrupción de encoding (doble-codificación UTF-8). ÚSALO después de cada direct_fix en panel.html, index.html, worker.js o sw.js. Busca patrones de corrupción conocidos (Ã, Ã, â€, BOM). Incidente real 13/05/2026: este error rompió el panel web.',
     input_schema: {
       type: 'object',
       properties: {
@@ -1370,7 +1370,7 @@ async function executeAITool(env, toolName, toolInput) {
 
     case 'run_migration': {
       // Ejecuta SQL DDL directamente en D1 (CREATE TABLE, ALTER TABLE, etc.)
-      // Ãtil para migraciones que no requieren wrangler CLI.
+      // Útil para migraciones que no requieren wrangler CLI.
       const { sql, descripcion } = toolInput;
       try {
         const stmts = sql.split(';').map(s => s.trim()).filter(s => s.length > 0);
@@ -1422,10 +1422,10 @@ async function executeAITool(env, toolName, toolInput) {
         }));
         const latest = runs[0];
         const summary = !latest ? 'Sin runs de GitHub Actions — puede que los workflows no estén creados todavía.'
-          : latest.status === 'completed' && latest.conclusion === 'success' ? `✅ Ãltimo deploy OK (commit ${latest.commit})`
+          : latest.status === 'completed' && latest.conclusion === 'success' ? `✅ Último deploy OK (commit ${latest.commit})`
           : latest.status === 'in_progress' ? `⏳ Deploy en curso (commit ${latest.commit})`
           : latest.status === 'queued' ? `🕐 Deploy en cola (commit ${latest.commit})`
-          : `❌ Ãltimo deploy FALLIDO: ${latest.conclusion} (commit ${latest.commit}) — ver: ${latest.url}`;
+          : `❌ Último deploy FALLIDO: ${latest.conclusion} (commit ${latest.commit}) — ver: ${latest.url}`;
         return JSON.stringify({ ok: true, summary, runs: runs.slice(0, 5), recent_commits: commits });
       } catch (e) {
         return JSON.stringify({ ok: false, error: e.message });
@@ -1445,7 +1445,7 @@ async function executeAITool(env, toolName, toolInput) {
         { label: 'enie',    pat: '\xC3\xB1' },   // Ã± = ñ corrupta
         { label: 'tilde_i', pat: '\xC3\xAD' },   // Ã­ = í corrupta
         { label: 'bom_triple', pat: '\xC3\xAF\xC2\xBB\xC2\xBF' }, // BOM triple-corrupta
-        { label: 'inverted_q', pat: '\xC2\xBF' }, // Ã¿
+        { label: 'inverted_q', pat: '\xC2\xBF' }, // ¿
         { label: 'emdash', pat: '\xE2\x80\x9C' }, // â€” (parte de em-dash corrupto)
       ];
       const results = [];
@@ -1489,7 +1489,7 @@ async function executeAITool(env, toolName, toolInput) {
       const anyCorrupt = results.some(r => r.status === '❌ CORRUPTO');
       return JSON.stringify({
         ok: true,
-        resultado: anyCorrupt ? '❌ HAY CORRUPCIÃN DE ENCODING — restaurar versión limpia de git y notificar a Adrián' : '✅ Todos los archivos tienen encoding correcto',
+        resultado: anyCorrupt ? '❌ HAY CORRUPCIÓN DE ENCODING — restaurar versión limpia de git y notificar a Adrián' : '✅ Todos los archivos tienen encoding correcto',
         archivos: results,
         nota: 'Si hay corrupción: NO intentar arreglar carácter por carácter. Restaurar desde git (última versión limpia) y reaplicar cambios funcionales.'
       });
@@ -1572,7 +1572,7 @@ async function executeAITool(env, toolName, toolInput) {
         }
 
         if (user.aprobado === 0 || user.aprobado === '0') {
-          problemas.push('Pendiente de APROBACIÃN — no puede hacer login');
+          problemas.push('Pendiente de APROBACIÓN — no puede hacer login');
           soluciones.push({ accion: 'Aprobar usuario', tool: 'sql_query', sql: `UPDATE usuarios SET aprobado=1 WHERE id=${user.id}` });
         }
 
@@ -1720,7 +1720,7 @@ async function executeAITool(env, toolName, toolInput) {
 
         return JSON.stringify({
           ok: true,
-          periodo: `Ãltimas ${hours}h`,
+          periodo: `Últimas ${hours}h`,
           total_logs: rows.length,
           resumen: { errors: totalErrors, warnings: totalWarnings, info: totalInfo },
           patrones_error: recurrentes,
@@ -1942,7 +1942,7 @@ CARPETAS:
 - icons/ → iconos PWA
 - .claude/ → configuración del agente de desarrollo
 
-════ CI/CD — CÃMO FUNCIONA EL AUTO-DEPLOY ════
+════ CI/CD — CÓMO FUNCIONA EL AUTO-DEPLOY ════
 Cuando modificas un archivo en GitHub (con direct_fix, repo_write_file o aplicando un fix):
 - worker.js o wrangler.toml → GitHub Actions ejecuta deploy-worker.yml → wrangler deploy → Cloudflare actualizado en ~1 min
 - panel.html, index.html, sw.js, manifest.json, icons/*, version.json → GitHub Pages lo publica en ~30 seg
@@ -1955,7 +1955,7 @@ IMPORTANTE para editar worker.js (9000+ líneas):
 - Después de cualquier cambio: memory_save con qué modificaste y en qué línea aproximada.
 - Después de direct_fix: espera 90s y usa check_deploy_status para confirmar que llegó a Cloudflare.
 
-════ MÃDULOS DE LA APP ════
+════ MÓDULOS DE LA APP ════
 Multi-tenant: cada empresa tiene sus datos aislados por empresa_id.
 - Bobinas de cable: entrada, asignación a obra, devolución, historial completo
 - PEMP (Plataformas Elevadoras Móviles de Personal): estado, revisiones, averías
@@ -2055,7 +2055,7 @@ DATOS:
 USUARIOS:
 - manage_user(action, user_id, value): activar/desactivar/cambiar_rol/eliminar/reset_password/info
 
-COMUNICACIÃN:
+COMUNICACIÓN:
 - send_notification(message, chat_id?): Telegram al grupo principal o a un usuario específico
 - filter_notifications(action, filters?): ver/configurar qué notificaciones recibes
 
@@ -2066,19 +2066,19 @@ ARCHIVOS R2:
 INTERNET:
 - web_search(query, depth?): buscar con Tavily (resultados reales de páginas web). depth='advanced' para preguntas complejas.
 
-VISIÃN:
-- read_suggestion_image(id): lee una sugerencia de la BD y muestra su captura de pantalla. Ãsalo para analizar bugs visuales reportados y arreglarlos.
+VISIÓN:
+- read_suggestion_image(id): lee una sugerencia de la BD y muestra su captura de pantalla. Úsalo para analizar bugs visuales reportados y arreglarlos.
 
-AUTO-DIAGNÃSTICO:
+AUTO-DIAGNÓSTICO:
 - self_audit(): diagnóstico completo — schema BD, tablas agente, historial, errores recurrentes. PASO 0 OBLIGATORIO en revisión autónoma.
 
-CÃDIGO Y REPO (flujo de ingeniero):
+CÓDIGO Y REPO (flujo de ingeniero):
 - grep_code(path, pattern, context_lines?): busca texto/regex en un archivo. USA ESTO PRIMERO para localizar código antes de editar. Esencial para worker.js de 9000+ líneas.
-- repo_read_file(path, line_start?, line_end?): lee un bloque del archivo. Ãsalo tras grep_code para leer el contexto completo alrededor del match.
+- repo_read_file(path, line_start?, line_end?): lee un bloque del archivo. Úsalo tras grep_code para leer el contexto completo alrededor del match.
 - repo_list_dir(path?): lista archivos/carpetas de un directorio
 - repo_write_file(path, content, message): crea/reemplaza un archivo completo con commit. Para archivos nuevos pequeños (workflows, sql, etc.). NUNCA para worker.js entero.
 - direct_fix(descripcion, archivo, old_code, new_code, razon, sugerencia_id?): patch quirúrgico INMEDIATO. Aplica sin esperar aprobación, notifica a Adrián después con [↩️ Revertir].
-- propose_fix(descripcion, archivo, old_code, new_code, razon, sugerencia_id?): propone a Adrián para aprobación. Ãsalo para cambios arriesgados, grandes (>50 líneas) o estructurales.
+- propose_fix(descripcion, archivo, old_code, new_code, razon, sugerencia_id?): propone a Adrián para aprobación. Úsalo para cambios arriesgados, grandes (>50 líneas) o estructurales.
 - check_deploy_status(): consulta GitHub Actions — estado del último deploy, si falló y por qué.
 
 MEMORIA:
@@ -2087,7 +2087,7 @@ MEMORIA:
 - memory_delete(id): eliminar entrada de memoria
 
 ════ SISTEMA DE APRENDIZAJE — MUY IMPORTANTE ════
-Tienes memoria persistente. Ãsala agresivamente para aprender y mejorar con el tiempo.
+Tienes memoria persistente. Úsala agresivamente para aprender y mejorar con el tiempo.
 
 CUÁNDO GUARDAR (hazlo siempre, no solo cuando Adrián te lo pida):
 
@@ -2139,11 +2139,11 @@ APRENDIZAJE OBLIGATORIO DESPUES DE CADA ACCION:
 
 REGLA FUNDAMENTAL: Si haces algo y no lo guardas en memoria, lo perderas. Cada vez que ejecutes herramientas, guarda lo que aprendiste. No esperes a que Adrian te lo pida.
 
-════ AUTONOMÍA NIVEL B — CÃMO TRABAJAS ════
+════ AUTONOMÍA NIVEL B — CÓMO TRABAJAS ════
 Eres una ingeniera de software autónoma. Tienes acceso completo al código, la BD y el repositorio. Actúas sola para bugs y fixes pequeños; pides permiso solo para cambios grandes o arriesgados.
 
 MAPA DEL REPOSITORIO (GitHub: padilla585projects/Alejandra-APP, rama: main):
-- worker.js (~9200 líneas)  → TU CÃDIGO. Backend completo: rutas, auth, lógica, IA, Telegram, crons.
+- worker.js (~9200 líneas)  → TU CÓDIGO. Backend completo: rutas, auth, lógica, IA, Telegram, crons.
 - index.html (~13000 líneas) → App móvil PWA. Frontend de los trabajadores en obra.
 - panel.html (~6000 líneas)  → Panel web. Frontend para jefes de obra, admins y tú (DevTools, chat IA).
 - sw.js                      → Service Worker. Caché offline, push notifications.
@@ -2192,7 +2192,7 @@ PASO 5 — DOCUMENTAR
 
 ════ CUÁNDO ACTUAR VS CUÁNDO PEDIR PERMISO ════
 
-✅ ACTÃA DIRECTAMENTE (direct_fix sin pedir permiso):
+✅ ACTÚA DIRECTAMENTE (direct_fix sin pedir permiso):
   - Bug confirmado por 1+ usuario (sugerencia con descripción o foto clara)
   - Error recurrente en logs (mismo error 3+ veces en 24h)
   - Fix quirúrgico: cambio < 30 líneas en una sola función
@@ -2213,15 +2213,15 @@ PASO 5 — DOCUMENTAR
   - Borrar datos de producción sin confirmación explícita de Adrián
   - Ignorar un error en check_deploy_status — siempre investiga y corrige
 
-════ CODIFICACIÃN DE ARCHIVOS — CRÍTICO ════
+════ CODIFICACIÓN DE ARCHIVOS — CRÍTICO ════
 INCIDENTE 13/05/2026: panel.html y worker.js se corrompieron por guardarlos con encoding incorrecto. Costó horas arreglarlo. NUNCA debe repetirse.
 
 REGLAS ABSOLUTAS:
 1. Todos los archivos del proyecto son UTF-8 SIN BOM. Nunca Latin-1, nunca Windows-1252, nunca UTF-8 with BOM.
 2. Cuando uses direct_fix o repo_write_file, el contenido DEBE ser UTF-8 limpio.
 3. Caracteres españoles válidos en el código: á, é, í, ó, ú, ñ, ü, ¿, ¡, — (em-dash). Usarlos normalmente.
-4. SEÃALES DE CORRUPCIÃN DE ENCODING — si ves CUALQUIERA de estos en el código, hay un problema:
-   - La letra "Ã" (A con tilde) seguida de otro carácter donde debería ir una vocal acentuada = doble-codificación
+4. SEÑALES DE CORRUPCIÓN DE ENCODING — si ves CUALQUIERA de estos en el código, hay un problema:
+   - La letra "Ó (A con tilde) seguida de otro carácter donde debería ir una vocal acentuada = doble-codificación
    - La letra "Ã" suelta antes de signos como ¿ o © = carácter especial corrupto
    - Secuencias de 3 caracteres raros donde debería ir un em-dash (—) = comillas/dash corruptos
    - Usa check_encoding() para verificar automáticamente — es la forma más fiable
@@ -2235,7 +2235,7 @@ REGLAS ABSOLUTAS:
 6. ANTES de hacer direct_fix en archivos HTML/JS con texto en español:
    - Verifica que tu old_code y new_code contengan los caracteres correctos (no corruptos)
    - Si copias texto de repo_read_file, los caracteres deberían venir bien
-7. DESPUÃS de hacer direct_fix en archivos HTML/JS:
+7. DESPUÉS de hacer direct_fix en archivos HTML/JS:
    - check_encoding() OBLIGATORIO — si detecta corrupción, revertir inmediatamente
    - Esto es tan importante como check_deploy_status()
 
@@ -2291,10 +2291,10 @@ Estas son las 10 normas de la red de agentes. Alejandra las cumple TODAS:
   4. RESPETO: Máximo 1 sync/minuto (yo hago 3/día por cron, muy por debajo del límite).
   5. PRIVACIDAD: NUNCA comparto datos personales, emails, DNIs, contraseñas. Solo datos agregados.
   6. TRANSPARENCIA: Notifico a Adrián por Telegram cada vez que recibo o envío mensajes de red.
-  7. COOPERACIÃN: Si no puedo hacer algo, sugiero qué agente de la red puede (Jarvis, Numa, etc.).
-  8. CONFIRMACIÃN: Las acciones sensibles notifican a Adrián. Lectura de métricas es automática.
+  7. COOPERACIÓN: Si no puedo hacer algo, sugiero qué agente de la red puede (Jarvis, Numa, etc.).
+  8. CONFIRMACIÓN: Las acciones sensibles notifican a Adrián. Lectura de métricas es automática.
   9. TRAZABILIDAD: Todas las acciones de red se loguean en la tabla logs con origen='network'.
-  10. DESCONEXIÃN: Si no hago sync en 5 min = offline (N/A: mi sync es por cron 3x/día, pero respondo a action_requests en tiempo real vía el worker).
+  10. DESCONEXIÓN: Si no hago sync en 5 min = offline (N/A: mi sync es por cron 3x/día, pero respondo a action_requests en tiempo real vía el worker).
   Si un agente me pide algo fuera de mis capacidades → respondo con error + sugiero agentes alternativos.
   Si un agente envía agent_hello → respondo con mi identity card completa.
 
@@ -2328,7 +2328,7 @@ Monitoriza estas señales de alarma:
 - Tabla esperada en schema pero no en sqlite_master → migración pendiente → run_migration
 - Fix rechazado por Adrián → memory_save tipo='aprendizaje' + revisar enfoque
 - deploy_status failure → investigar GitHub Actions log → corregir causa raíz
-- Caracteres Ã/Ã/â€ en archivos HTML/JS → CORRUPCIÃN DE ENCODING → restaurar versión limpia de git + notificar`;
+- Caracteres Ã/Ã/â€ en archivos HTML/JS → CORRUPCIÓN DE ENCODING → restaurar versión limpia de git + notificar`;
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -2354,7 +2354,7 @@ Telegram bot: @AlejandraAPP_bot | Webhook: /telegram/webhook | Dev chat (DEV_CHA
   cicd: `CI/CD AUTO-DEPLOY:
 worker.js o wrangler.toml → deploy-worker.yml → wrangler deploy → CF activo en ~1 min
 index.html, panel.html, sw.js, version.json → pages.yml → GitHub Pages en ~30 seg
-CRÍTICO: version.json, sw.js CACHE y index.html APP_VERSION deben ser IDÃNTICOS o hay bucle de recarga infinita.
+CRÍTICO: version.json, sw.js CACHE y index.html APP_VERSION deben ser IDÉNTICOS o hay bucle de recarga infinita.
 NUNCA reescribas worker.js completo con repo_write_file. Usa direct_fix (patch: grep → read → fix → verify).
 ENCODING: Todos los archivos son UTF-8 sin BOM. Después de direct_fix en HTML/JS: grep_code(archivo, "Ã|Ã|â€") — si hay resultados, REVERTIR (hay corrupción de encoding). Incidente real 13/05/2026.`,
 
@@ -2399,7 +2399,7 @@ ai_usage(id, empresa_id, proveedor, modelo, endpoint, input_tokens, output_token
 config(clave PRIMARY KEY, valor) | sugerencias(id, texto, categoria, usuario, obra, estado, empresa_id, foto)
 reset_tokens | vincular_tokens | login_attempts`,
 
-  app_modulos: `MÃDULOS DE LA APP (multi-tenant por empresa_id):
+  app_modulos: `MÓDULOS DE LA APP (multi-tenant por empresa_id):
 Bobinas cable · PEMP (plataformas elevadoras) · Carretillas elevadoras · Obras/proyectos
 Personal y fichajes · Turnos · Carnets/certificados · EPIs asignados
 Inventario seguridad · Pedidos · Proveedores · Herramientas · Kits herramientas
@@ -2413,23 +2413,23 @@ app_status(): resumen ejecutivo (usuarios activos, sesiones, obras, errores 24h,
 run_migration(sql, descripcion?): DDL en D1 (CREATE TABLE IF NOT EXISTS, ALTER TABLE)
 analyze_trends(metric, periodo?, empresa_id?): análisis temporal comparativo (hoy vs ayer, semana vs anterior). Métricas: fichajes, incidencias, errores, usuarios, bobinas, todo. Detecta anomalías automáticamente.`,
 
-  tools_usuarios: `TOOLS — USUARIOS Y COMUNICACIÃN:
+  tools_usuarios: `TOOLS — USUARIOS Y COMUNICACIÓN:
 manage_user(action, user_id, value): activate|deactivate|change_role|delete|reset_password|info
 send_notification(message, chat_id?): Telegram al grupo principal o a un usuario específico
 filter_notifications(action, filters?): ver/configurar qué notificaciones recibes`,
 
-  tools_codigo: `TOOLS — CÃDIGO (flujo obligatorio: grep → read → fix → verify):
+  tools_codigo: `TOOLS — CÓDIGO (flujo obligatorio: grep → read → fix → verify):
 grep_code(path, pattern, context_lines?): busca en archivo. SIEMPRE antes de editar.
-repo_read_file(path, line_start?, line_end?): lee bloque. Ãsalo tras grep para ver contexto completo.
+repo_read_file(path, line_start?, line_end?): lee bloque. Úsalo tras grep para ver contexto completo.
 repo_list_dir(path?): lista directorio en GitHub
 repo_write_file(path, content, message): crea archivo nuevo pequeño. NUNCA para worker.js entero.
 direct_fix(desc, archivo, old_code, new_code, razon, sug_id?): patch inmediato sin esperar OK. Notifica después con [↩️ Revertir].
 propose_fix(desc, archivo, old_code, new_code, razon, sug_id?): envía a Adrián para aprobación. Para cambios arriesgados o >50 líneas.
 check_deploy_status(): estado del último deploy en GitHub Actions`,
 
-  tools_memoria: `TOOLS — MEMORIA, VISIÃN E INTERNET:
+  tools_memoria: `TOOLS — MEMORIA, VISIÓN E INTERNET:
 memory_save(tipo, titulo, contenido, importancia): persiste aprendizajes entre sesiones
-memory_read(tipo?, limit?): recupera memoria. Ãsalo al inicio si el contexto es corto.
+memory_read(tipo?, limit?): recupera memoria. Úsalo al inicio si el contexto es corto.
 memory_delete(id): elimina entrada de memoria
 read_suggestion_image(id): muestra imagen adjunta de una sugerencia para analizar visualmente bugs
 web_search(query, depth?): Tavily — resultados reales web. depth='advanced' para preguntas complejas.
@@ -2462,7 +2462,7 @@ NORMAS DE RED (NETWORK_NORMS v1.0) — Cumplimiento automático:
 · Lee memoria al inicio de tareas importantes: memory_read tipo='error' para no repetir fallos previos.
 REGLA FUNDAMENTAL: si no lo guardas, lo pierdes. Cada acción → guardar qué aprendiste.`,
 
-  flujo_ingeniero: `FLUJO OBLIGATORIO PARA TOCAR CÃDIGO:
+  flujo_ingeniero: `FLUJO OBLIGATORIO PARA TOCAR CÓDIGO:
 1. grep_code(archivo, patrón) → localiza el código afectado (línea exacta)
 2. repo_read_file(archivo, inicio, fin) → lee contexto completo alrededor del match
 3. memory_read tipo='error' → ¿ya fallé aquí antes?
@@ -2473,7 +2473,7 @@ REGLA FUNDAMENTAL: si no lo guardas, lo pierdes. Cada acción → guardar qué a
 8. memory_save tipo='hecho' + send_notification con resultado`,
 
   autonomia: `AUTONOMÍA NIVEL B:
-✅ ACTÃA DIRECTO (direct_fix sin pedir permiso): bug confirmado por 1+ usuario, error recurrente en logs (3+ veces/24h), fix quirúrgico <30 líneas en 1 función, migración BD (añadir columna/tabla), feature simple pedida directamente por Adrián.
+✅ ACTÚA DIRECTO (direct_fix sin pedir permiso): bug confirmado por 1+ usuario, error recurrente en logs (3+ veces/24h), fix quirúrgico <30 líneas en 1 función, migración BD (añadir columna/tabla), feature simple pedida directamente por Adrián.
 ⚠️ PIDE PERMISO (propose_fix): cambios en auth/permisos/seguridad, reescritura >50 líneas, cambios estructurales BD (DROP/renombrar), nueva feature compleja multi-módulo.
 🚨 NUNCA: reescribir archivos completos, modificar auth sin propose_fix, borrar datos de producción sin confirmación explícita de Adrián.`,
 
@@ -2953,14 +2953,14 @@ async function processNetworkRequest(env, msg, secret) {
     // ── NORMA 3: IDIOMA — Detectar idioma del mensaje entrante ──
     const msgLang = content.language || (content.message && /^(hi|hello|please|could|can|get|check)/i.test(content.message) ? 'en' : 'es');
 
-    // ── NORMA 8: CONFIRMACIÃN — Acciones sensibles requieren confirmación de Adrián ──
+    // ── NORMA 8: CONFIRMACIÓN — Acciones sensibles requieren confirmación de Adrián ──
     // Acciones de solo lectura (métricas, estado) se ejecutan directamente.
     // Acciones que implican actuar (telegram, etc.) notifican a Adrián pero se ejecutan
     // porque son safe-by-design (el texto ya está sanitizado).
     const isSensitiveAction = !['get_app_metrics', 'get_inventory_summary', 'get_alert_count', 'check_deploy', 'get_system_health'].includes(action);
 
     // Notificar a Adrián de la petición recibida (TRANSPARENCIA)
-    await notifyAdrian('PETICIÃN', `Acción: <code>${action}</code>\nParams: ${JSON.stringify(params).slice(0, 200)}${isSensitiveAction ? '\n⚠️ Acción sensible — ejecutada con filtros de seguridad' : ''}`);
+    await notifyAdrian('PETICIÓN', `Acción: <code>${action}</code>\nParams: ${JSON.stringify(params).slice(0, 200)}${isSensitiveAction ? '\n⚠️ Acción sensible — ejecutada con filtros de seguridad' : ''}`);
 
     switch (action) {
       case 'get_app_metrics': {
@@ -3083,7 +3083,7 @@ async function processNetworkRequest(env, msg, secret) {
       }
 
       default: {
-        // ── NORMA 7: COOPERACIÃN — Sugerir agentes alternativos si no puedo ayudar ──
+        // ── NORMA 7: COOPERACIÓN — Sugerir agentes alternativos si no puedo ayudar ──
         const suggestions = [];
         const actionLower = (action || '').toLowerCase();
         if (/home|luz|light|temp|sensor|alexa|speaker|music|device|automation|proxmox|nas|vpn|network/i.test(actionLower)) {
@@ -3159,7 +3159,7 @@ async function processNetworkRequest(env, msg, secret) {
   }
 }
 
-// ── REVISIÃN AUTÃNOMA DIARIA ─────────────────────────────────────────────────
+// ── REVISIÓN AUTÓNOMA DIARIA ─────────────────────────────────────────────────
 async function runAutonomousReview(env) {
   const devChatId = env.DEV_CHAT_ID;
   if (await isAgentePausado(env)) {
@@ -3519,7 +3519,7 @@ async function handleTelegramWebhook(request, env, ctx) {
         'UPDATE usuarios SET activo=1, google_pending=0, empresa_id=?, rol=?, departamento=? WHERE id=? AND google_pending=1'
       ).bind(parseInt(empresaId), rol, dept === 'null' ? null : dept, parseInt(userId)).run();
       await _tgAnswerCQ(env, cq.id, '✅ Usuario aprobado');
-      await _tgEditMsg(env, chatId, msgId, orig + `\n\n✅ <b>APROBADO</b> — ${rol} Ã· ${dept === 'null' ? '—' : dept}`);
+      await _tgEditMsg(env, chatId, msgId, orig + `\n\n✅ <b>APROBADO</b> — ${rol} · ${dept === 'null' ? '—' : dept}`);
     }
     else if (accion === 'rej') {
       const [userId] = partes;
@@ -4621,7 +4621,7 @@ async function crearSesion(env, { nombre, rol, obra_id, obra_nombre, departament
 }
 
 // â•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Â
-// RECUPERACIÃ"N DE CONTRASEÃ‘A (Resend)
+// RECUPERACIÓN DE CONTRASEÑA (Resend)
 // Para activar: añadir RESEND_API_KEY en Cloudflare Workers â†’ Variables de entorno
 // â•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Â
 
@@ -4736,7 +4736,7 @@ async function recuperarPass(request, env) {
       </p>
     </td></tr>
     <tr><td style="text-align:center;padding-top:20px">
-      <p style="color:#334155;font-size:11px;margin:0">Alejandra App Ã· Sistema de gestión de obras</p>
+      <p style="color:#334155;font-size:11px;margin:0">Alejandra App · Sistema de gestión de obras</p>
     </td></tr>
   </table>
 </body>
@@ -4834,7 +4834,7 @@ async function verificarAcceso(request, env) {
 
   if (!codigo) return err('Falta el código');
 
-  // 1. Ã¿Es superadmin?
+  // 1. ¿Es superadmin?
   if (env.ADMIN_CODE && codigo.trim() === env.ADMIN_CODE) {
     const token = await crearSesion(env, { nombre: 'Admin', rol: 'superadmin', obra_id: null, obra_nombre: null, departamento: null, es_admin: true, empresa_id: 1 });
     env.DB.prepare('DELETE FROM login_attempts WHERE ip = ?').bind(ip).run().catch(() => {});
@@ -4948,7 +4948,7 @@ async function cerrarTodasSesiones(request, env) {
 }
 
 // â•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Â
-// EMPRESAS — REGISTRO Y GESTIÃ"N
+// EMPRESAS — REGISTRO Y GESTIÓN
 // â•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Â
 
 async function registrarEmpresa(request, env) {
@@ -5896,7 +5896,7 @@ async function exportCSV(request, env) {
       : 'SELECT * FROM pemp WHERE empresa_id = ? ORDER BY created_at DESC';
     const { results } = await env.DB.prepare(sql).bind(...(f ? [empresa_id, f] : [empresa_id])).all();
     sections.push('=== PEMP ===');
-    sections.push(row(['ID', 'Matrícula', 'Tipo', 'Marca', 'Proveedor', 'Estado', 'Fecha Entrada', 'Fecha Devolución', 'ÃÅ¡ltima Revisión', 'Próxima Revisión', 'Registrado por', 'Devuelto por', 'Notas', 'Obra ID']));
+    sections.push(row(['ID', 'Matrícula', 'Tipo', 'Marca', 'Proveedor', 'Estado', 'Fecha Entrada', 'Fecha Devolución', 'Última Revisión', 'Próxima Revisión', 'Registrado por', 'Devuelto por', 'Notas', 'Obra ID']));
     for (const p of results) {
       sections.push(row([p.id, p.matricula, p.tipo, p.marca, p.proveedor, p.estado, p.fecha_entrada, p.fecha_devolucion, p.fecha_ultima_revision, p.fecha_proxima_revision, p.registrado_por, p.devuelto_por, p.notas, p.obra_id]));
     }
@@ -5909,7 +5909,7 @@ async function exportCSV(request, env) {
       : 'SELECT * FROM carretillas WHERE empresa_id = ? ORDER BY created_at DESC';
     const { results } = await env.DB.prepare(sql).bind(...(f ? [empresa_id, f] : [empresa_id])).all();
     sections.push('=== CARRETILLAS ===');
-    sections.push(row(['ID', 'Matrícula', 'Tipo', 'Marca', 'Proveedor', 'Energía', 'Estado', 'Fecha Entrada', 'Fecha Devolución', 'ÃÅ¡ltima Revisión', 'Próxima Revisión', 'Registrado por', 'Devuelto por', 'Notas', 'Obra ID']));
+    sections.push(row(['ID', 'Matrícula', 'Tipo', 'Marca', 'Proveedor', 'Energía', 'Estado', 'Fecha Entrada', 'Fecha Devolución', 'Última Revisión', 'Próxima Revisión', 'Registrado por', 'Devuelto por', 'Notas', 'Obra ID']));
     for (const c of results) {
       sections.push(row([c.id, c.matricula, c.tipo, c.marca, c.proveedor, c.energia, c.estado, c.fecha_entrada, c.fecha_devolucion, c.fecha_ultima_revision, c.fecha_proxima_revision, c.registrado_por, c.devuelto_por, c.notas, c.obra_id]));
     }
@@ -6094,7 +6094,7 @@ async function guardarSugerencia(request, env) {
     } else {
       await sendTelegram(env, tgMsg);
     }
-    return json({ ok: true, mensaje: 'Sugerencia enviada. Ã¡Gracias!' });
+    return json({ ok: true, mensaje: 'Sugerencia enviada. ¡Gracias!' });
   } catch (e) {
     return err('No se pudo guardar la sugerencia: ' + e.message);
   }
@@ -6842,7 +6842,7 @@ async function crearHerramienta(request, env, ctx) {
   const tipoNom = tipoRow?.nombre || body.modelo || 'herramienta';
   const obraRow = obra_id ? await env.DB.prepare('SELECT nombre FROM obras WHERE id = ?').bind(obra_id).first().catch(() => null) : null;
   ctx?.waitUntil(sendTelegramConBotones(env,
-    `📧 <b>Nueva herramienta registrada</b>\n📋 ${tipoNom}${marca ? ' Ã· ' + marca : ''}${body.modelo ? ' Ã· ' + body.modelo : ''}\n📍 ${obraRow?.nombre || '—'}\n👤 ${userNombre || rol}`,
+    `📧 <b>Nueva herramienta registrada</b>\n📋 ${tipoNom}${marca ? ' · ' + marca : ''}${body.modelo ? ' · ' + body.modelo : ''}\n📍 ${obraRow?.nombre || '—'}\n👤 ${userNombre || rol}`,
     [[{ text: '✅ Disponible', callback_data: `herr_disp:${hid}` }]]
   ));
   return json({ ok: true, id: hid }, 201);
@@ -7632,12 +7632,12 @@ async function syncSheets(env, tabs = null, empresa_id = 1) {
       }
     };
 
-    const cabBobinas     = ['Obra', 'Código', 'NÃº Albarán', 'Proveedor', 'Tipo Cable', 'Registrado por', 'Fecha Entrada', 'Devuelto por', 'Fecha Devolución', 'Estado', 'Notas'];
-    const cabPemp        = ['Obra', 'Matrícula', 'Tipo', 'Marca', 'Proveedor', 'Estado', 'Fecha Entrada', 'Fecha Avería', 'Fecha Reparación', 'Devuelto por', 'Fecha Devolución', 'ÃÅ¡lt. Revisión', 'Próx. Revisión', 'Registrado por', 'Notas'];
-    const cabCarretillas = ['Obra', 'Matrícula', 'Tipo', 'Marca', 'Proveedor', 'Energía', 'Estado', 'Fecha Entrada', 'Fecha Avería', 'Fecha Reparación', 'Devuelto por', 'Fecha Devolución', 'ÃÅ¡lt. Revisión', 'Próx. Revisión', 'Registrado por', 'Notas'];
+    const cabBobinas     = ['Obra', 'Código', 'Nº Albarán', 'Proveedor', 'Tipo Cable', 'Registrado por', 'Fecha Entrada', 'Devuelto por', 'Fecha Devolución', 'Estado', 'Notas'];
+    const cabPemp        = ['Obra', 'Matrícula', 'Tipo', 'Marca', 'Proveedor', 'Estado', 'Fecha Entrada', 'Fecha Avería', 'Fecha Reparación', 'Devuelto por', 'Fecha Devolución', 'Últ. Revisión', 'Próx. Revisión', 'Registrado por', 'Notas'];
+    const cabCarretillas = ['Obra', 'Matrícula', 'Tipo', 'Marca', 'Proveedor', 'Energía', 'Estado', 'Fecha Entrada', 'Fecha Avería', 'Fecha Reparación', 'Devuelto por', 'Fecha Devolución', 'Últ. Revisión', 'Próx. Revisión', 'Registrado por', 'Notas'];
     const cabSegInv      = ['Tipo', 'Modo', 'Código/Serie', 'Nombre', 'Cantidad Total', 'Disponible', 'Estado', 'Fecha Entrada', 'Fecha Caducidad', 'Destino Actual', 'Registrado por', 'Notas'];
-    const cabHerr        = ['Obra', 'Kit', 'Tipo', 'Marca', 'Modelo', 'NÃº Serie', 'Asignado a', 'Alimentación', 'Estado', 'Fecha Alta', 'Fecha Asignación', 'Fecha Devolución', 'Fecha Avería', 'Fecha Reparación', 'Notas'];
-    const cabKits        = ['NÃº Kit', 'Nombre', 'Obra', 'Departamento', 'Asignado a', 'Componentes', 'Fecha Alta', 'Fecha Asignación', 'Estado', 'Fecha Devolución', 'Notas'];
+    const cabHerr        = ['Obra', 'Kit', 'Tipo', 'Marca', 'Modelo', 'Nº Serie', 'Asignado a', 'Alimentación', 'Estado', 'Fecha Alta', 'Fecha Asignación', 'Fecha Devolución', 'Fecha Avería', 'Fecha Reparación', 'Notas'];
+    const cabKits        = ['Nº Kit', 'Nombre', 'Obra', 'Departamento', 'Asignado a', 'Componentes', 'Fecha Alta', 'Fecha Asignación', 'Estado', 'Fecha Devolución', 'Notas'];
 
     const fmtB    = b => [b.obra_nombre||'', b.codigo, b.num_albaran||'', b.proveedor, b.tipo_cable, b.registrado_por||'', b.fecha_entrada, b.devuelto_por||'', b.fecha_devolucion||'', b.estado, b.notas||''];
     const fmtP    = p => [p.obra_nombre||'', p.matricula, p.tipo||'', p.marca||'', p.proveedor||'', p.estado, p.fecha_entrada, p.fecha_averia||'', p.fecha_reparacion||'', p.devuelto_por||'', p.fecha_devolucion||'', p.fecha_ultima_revision||'', p.fecha_proxima_revision||'', p.registrado_por||'', p.notas||''];
@@ -7818,7 +7818,7 @@ async function applyTabFormatting(spreadsheetId, authH, tabName, sheetMeta, numC
   };
   const estadoCol = estadoColMap[tabName] ?? -1;
 
-  // ÃÅ¡ltima columna asumida como "Notas" (wrap)
+  // Última columna asumida como "Notas" (wrap)
   const notasCol = numCols - 1;
 
   const fullRange = { sheetId: numSheetId, startRowIndex: 0, endRowIndex: Math.max(numRows, 1), startColumnIndex: 0, endColumnIndex: numCols };
@@ -8041,9 +8041,9 @@ async function syncRRHH(env, tabs = null, empresa_id = 1) {
     const cabFichajes   = ['Obra', 'Fecha', 'Trabajador', 'Hora Entrada', 'Hora Salida', 'Horas', 'H. Extra', 'Retraso (min)', 'Estado', 'Motivo', 'Notas', 'Registrado por'];
     const cabIncid      = ['Obra', 'Fecha', 'Departamento', 'Título', 'Tipo', 'Gravedad', 'Estado', 'Reportado por', 'Asignado a', 'Resolución'];
     const cabCarnets    = ['Obra', 'Trabajador', 'Tipo', 'Número', 'Fecha Obtención', 'Fecha Caducidad', 'Estado', 'Notas'];
-    const cabEPIs       = ['Obra', 'Trabajador', 'Tipo EPI', 'Talla', 'NÃº Serie', 'Fecha Entrega', 'Fecha Caducidad', 'Próx. Revisión', 'Estado', 'Observaciones'];
+    const cabEPIs       = ['Obra', 'Trabajador', 'Tipo EPI', 'Talla', 'Nº Serie', 'Fecha Entrega', 'Fecha Caducidad', 'Próx. Revisión', 'Estado', 'Observaciones'];
     const cabTurnos     = ['Obra', 'Fecha', 'Trabajador', 'Turno'];
-    const cabRepostajes = ['Obra', 'Fecha', 'Equipo', 'ID Equipo', 'Tipo', 'Cantidad', 'Unidad', 'Coste (â‚¬)', 'Usuario', 'Notas'];
+    const cabRepostajes = ['Obra', 'Fecha', 'Equipo', 'ID Equipo', 'Tipo', 'Cantidad', 'Unidad', 'Coste (€)', 'Usuario', 'Notas'];
 
     const fmtF = f => [f.obra_nombre||'', f.fecha||'', f.nombre_usuario||f.nombre_externo||'', f.hora_entrada||'', f.hora_salida||'', f.horas_trabajadas||0, f.horas_extra||0, f.minutos_retraso||0, f.estado||'', f.motivo||'', f.notas||'', f.registrado_por||''];
     const fmtI = i => [i.obra_nombre||'', i.fecha||'', i.departamento||'', i.titulo||'', i.tipo||'', i.gravedad||'', i.estado||'', i.reportado_por||'', i.asignado_a||'', i.resolucion||''];
@@ -8226,7 +8226,7 @@ async function handleScan(request, env) {
   if (!imageData) return err('Se requiere imagen en base64');
 
   const prompt = `Eres un lector OCR especializado en matrículas de bobinas de cable eléctrico.
-Extrae ÃÅ¡NICAMENTE el código alfanumérico principal de la matrícula/etiqueta visible en la imagen.
+Extrae ÚNICAMENTE el código alfanumérico principal de la matrícula/etiqueta visible en la imagen.
 El código suele ser una combinación de letras y números (ej: AB1234, C-2891-X, 45872-B).
 Responde SOLO con el código, sin explicaciones, sin espacios extra, sin puntos al final.
 Si no puedes leer ningún código, responde: NO_LEIDO`;
@@ -8470,7 +8470,7 @@ async function informeSemanal(empresa_id, empresa_nombre, env) {
   try {
     // Rango: semana anterior completa (lunes—domingo)
     const hoy  = new Date();
-    const dow   = hoy.getDay(); // 0=dom â€¦ 6=sáb
+    const dow   = hoy.getDay(); // 0=dom … 6=sáb
     const diasDesdeL = dow === 0 ? 6 : dow - 1;
     const lunesEsta  = new Date(hoy); lunesEsta.setDate(hoy.getDate() - diasDesdeL);
     const lunesAnt   = new Date(lunesEsta); lunesAnt.setDate(lunesEsta.getDate() - 7);
@@ -8535,7 +8535,7 @@ async function informeSemanal(empresa_id, empresa_nombre, env) {
     const semStr = `${desde} al ${hasta}`;
     let msg = `📊 <b>Informe semanal — ${empresa_nombre}</b>\n`;
     msg += `<i>Semana: ${semStr}</i>\n\n`;
-    msg += `👷 <b>Fichajes:</b> ${fich.total || 0} registros Ã· ${horasTotStr}${retrasoStr}\n`;
+    msg += `👷 <b>Fichajes:</b> ${fich.total || 0} registros · ${horasTotStr}${retrasoStr}\n`;
     msg += `📧 <b>Equipos sin servicio:</b> ${nEquiposMant}\n`;
     msg += `🛠 <b>Herramientas fuera:</b> ${nHerrFuera}\n`;
     msg += `📦 <b>Pedidos pendientes:</b> ${nPedPend}\n`;
@@ -8623,7 +8623,7 @@ async function alertasDiarias(env) {
 
     // 0. Informe semanal — para cada empresa que lo tenga activado en el día de hoy
     const DIAS_ES = { 'lunes':1,'martes':2,'miércoles':3,'miercoles':3,'jueves':4,'viernes':5,'sábado':6,'sabado':6,'domingo':0 };
-    const dowHoy  = hoy.getDay(); // 0=dom â€¦ 6=sáb
+    const dowHoy  = hoy.getDay(); // 0=dom … 6=sáb
     try {
       const { results: empresasInf } = await env.DB.prepare(
         `SELECT id, nombre, informe_dia FROM empresas WHERE informe_semanal = 1 AND activa = 1`
@@ -9678,7 +9678,7 @@ async function eliminarTurno(id, request, env) {
 }
 
 // â•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Â
-// BÃÅ¡SQUEDA GLOBAL
+// BÚSQUEDA GLOBAL
 // â•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Â
 
 // â•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Â
@@ -10016,7 +10016,7 @@ async function telegramWebhook(request, env, ctx) {
         await env.DB.prepare('UPDATE usuarios SET telegram_id=? WHERE id=?').bind(String(chatId), record.usuario_id).run();
         await env.DB.prepare('DELETE FROM vincular_tokens WHERE token=?').bind(token).run();
         await sendTelegramToChat(env, chatId,
-          '✅ <b>Ã¡Cuenta vinculada!</b>\n\nDesde ahora recibirás notificaciones personales de <b>Alejandra App</b> directamente aquí:\nÃ· Tus turnos de la semana\nÃ· Carnets próximos a caducar\nÃ· Avisos que te afecten directamente.');
+          '✅ <b>¡Cuenta vinculada!</b>\n\nDesde ahora recibirás notificaciones personales de <b>Alejandra App</b> directamente aquí:\n· Tus turnos de la semana\n· Carnets próximos a caducar\n· Avisos que te afecten directamente.');
       } else {
         await sendTelegramToChat(env, chatId,
           '❌ El código ha caducado o no es válido.\nGenera un nuevo enlace desde la app en <b>Ajustes â†’ Sesión â†’ Conectar Telegram</b>.');
@@ -10699,7 +10699,7 @@ async function crearRegistroChecklist(request, env) {
   if (fallos.length > 0) {
     const tabla = tipo_equipo === 'pemp' ? 'pemp' : 'carretillas';
     await env.DB.prepare(`UPDATE ${tabla} SET estado = 'mantenimiento' WHERE id = ? AND empresa_id = ?`).bind(equipo_id, empresa_id).run();
-    const fallosTexto = fallos.map(f => `â€¢ ${f.pregunta}`).join('\n');
+    const fallosTexto = fallos.map(f => `• ${f.pregunta}`).join('\n');
     await sendTelegram(env, `⚠️ Checklist con FALLOS\nEquipo: ${equipo_mat || equipo_id} (${tipo_equipo})\nRealizado por: ${userNombre || rol}\n\nFallos:\n${fallosTexto}${comentario ? '\n\nComentario: ' + comentario : ''}`);
   }
   return json({ ok: true, id: r.meta.last_row_id, resultado }, 201);
@@ -10873,7 +10873,7 @@ async function crearRepostaje(request, env, ctx) {
   // Telegram si hay coste
   if (coste && parseFloat(coste) > 0) {
     const emoji = tipo === 'combustible' ? 'â›½' : '📋';
-    await sendTelegram(env, `${emoji} <b>Repostaje registrado</b>\n🚜 ${equipo_tipo.toUpperCase()} ${equipo_id}\n📦 ${cantidad ? cantidad + ' ' + (unidad||'') : ''} Ã· 💶 ${parseFloat(coste).toFixed(2)}â‚¬\n👤 ${nombre || rol || '—'}`);
+    await sendTelegram(env, `${emoji} <b>Repostaje registrado</b>\n🚜 ${equipo_tipo.toUpperCase()} ${equipo_id}\n📦 ${cantidad ? cantidad + ' ' + (unidad||'') : ''} · 💶 ${parseFloat(coste).toFixed(2)}€\n👤 ${nombre || rol || '—'}`);
   }
   ctx?.waitUntil(syncRRHH(env, 'Repostajes', empresa_id));
   return json({ ok: true, id: r.meta.last_row_id });
