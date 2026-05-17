@@ -7,7 +7,46 @@
 
 **Sesión:** LIBRE
 **Última sesión:** 17/05/2026
-**Versión actual:** v5.98
+**Versión actual:** v5.99
+
+---
+
+## RESUMEN SESIÓN 17/05/2026 — v5.99 (Fix encoding worker.js — 82 sustituciones)
+
+### Qué se hizo:
+
+**Fix encoding worker.js (82 sustituciones):**
+- 14 patrones únicos de corrupción identificados y corregidos:
+  - 26x `Ã\x93` → Ó (CORRUPCIÓN, GESTIÓN, RECUPERACIÓN, etc.)
+  - 19x `Ã\x9A` → Ú (Último, Úsalo, etc.)
+  - 9x `Ã\x82·` → · (separadores punto medio en Telegram)
+  - 7x `ÃÅ¡` → Ú (triple-encoding residual: ÃÅ¡ltima → Última)
+  - 4x `Ã\x82º` → º (Nº Albarán, etc.)
+  - 3x `Ã\x83"` → Ó (triple-encoding via cp1252 0x93 normalizado a ASCII `"`)
+  - Y más: É, Ñ, ¡, ¿, €, …, •, ×
+- 12 líneas restantes con Ã son **intencionales** (ejemplos en descripción de tool `check_encoding` y system prompt)
+- Script `fix_worker.js` + `fix_worker2.js` → `worker.fixed.js` → reemplazó `worker.js`
+- Sintaxis validada: `node --check` ✅
+
+**Bump a v5.99** (version.json, sw.js, index.html en sync ✅)
+
+### Archivos modificados:
+- `worker.js` — fix encoding 82 sustituciones + bump v5.99
+- `sw.js` — CACHE `alejandra-v5.99`
+- `index.html` — APP_VERSION `5.99`
+- `version.json` — `{"v":"5.99"}`
+
+### Deploy:
+- Commit: 94035b6 — pusheado a GitHub main
+- Worker desplegado: Version ID 80cc82c6 (13:23:39 UTC)
+- Error crons (10072): límite 5 crons plan free — **no afecta**, crons existentes siguen activos
+
+### Archivos temporales (pueden eliminarse):
+- `fix_worker.js`, `fix_worker2.js`, `worker.fixed.js`, `fix_index2.js`, `index.fixed.html`
+
+### Pendiente:
+- Probar login con Google en `alejandra-panel.html` (frontend completo, backend listo)
+- Limpiar archivos temporales de encoding
 
 ---
 
