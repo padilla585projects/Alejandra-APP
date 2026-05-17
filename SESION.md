@@ -6,8 +6,45 @@
 ## ESTADO ACTUAL
 
 **Sesión:** LIBRE
-**Última sesión:** 16/05/2026
-**Versión actual:** v5.97
+**Última sesión:** 17/05/2026
+**Versión actual:** v5.98
+
+---
+
+## RESUMEN SESIÓN 17/05/2026 — v5.98 (Fix encoding completo index.html + sw.js)
+
+### Qué se hizo:
+
+**Fix encoding completo index.html (10,728 sustituciones):**
+- Nuevo patrón de corrupción distinto a las capas anteriores:
+  - Lead bytes 0xC2-0xF4 → almacenados como Latin-1 U+(byte)
+  - Continuation bytes → Â (U+00C2) + carácter cp1252/Latin-1 (Patrón A)
+  - Última continuation en algunos casos directa sin Â (Patrón B)
+- Script `fix_index2.js`: detecta ambos patrones. 0 líneas corruptas restantes.
+- Emojis tab bar (📷, ⚡, ↻, 📡, 💡, 🏢, 🙈…), em-dashes, flechas, ✓, ❌ todos correctos.
+
+**Fix sw.js comments (3 líneas):**
+- `estÃ¡` → `está`
+- `â€"` → `—`
+- `â"€â"€` → `──`
+
+**Bump a v5.98** (version.json, sw.js, index.html en sync ✅)
+
+### Error al cargar empresas:
+- Causa: token de sesión caducado en D1. Solución: Ajustes → Cerrar Sesión → volver a iniciar sesión.
+- El worker y D1 funcionan correctamente.
+
+### Archivos modificados:
+- `index.html` — fix encoding 10,728 sustituciones
+- `sw.js` — fix 3 comentarios corruptos
+- `version.json` — v5.98
+
+### Archivos temporales (pueden eliminarse):
+- `fix_index2.js`, `index.fixed.html`
+
+### Deploy:
+- Commit: 7d94145 — pusheado a GitHub main
+- Worker NO modificado → no se necesita redeploy
 
 ---
 
