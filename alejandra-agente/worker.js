@@ -918,20 +918,67 @@ async function registrarLog(env, usuario_id, accion, parametros, resultado) {
   } catch (_) {}
 }
 
+async function getGoogleAccessToken(env) {
+  const clientEmail  = env.FIREBASE_CLIENT_EMAIL;
+  const privateKeyPem = env.FIREBASE_PRIVATE_KEY;
+  if (!clientEmail || !privateKeyPem) throw new Error('FIREBASE_CLIENT_EMAIL / FIREBASE_PRIVATE_KEY no configuradas');
+
+  const now = Math.floor(Date.now() / 1000);
+  const header  = { alg: 'RS256', typ: 'JWT' };
+  const payload = {
+    iss: clientEmail,
+    scope: 'https://www.googleapis.com/auth/firebase.messaging',
+    aud: 'https://oauth2.googleapis.com/token',
+    iat: now,
+    exp: now + 3600,
+  };
+
+  const b64url = (obj) => btoa(JSON.stringify(obj)).replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,'');
+  const sigInput = `${b64url(header)}.${b64url(payload)}`;
+
+  // Importar clave privada PKCS8
+  const pemBody = privateKeyPem.replace(/-----BEGIN PRIVATE KEY-----|-----END PRIVATE KEY-----|\n/g, '');
+  const derBin  = atob(pemBody);
+  const derBuf  = new Uint8Array(derBin.length);
+  for (let i = 0; i < derBin.length; i++) derBuf[i] = derBin.charCodeAt(i);
+
+  const cryptoKey = await crypto.subtle.importKey(
+    'pkcs8', derBuf.buffer,
+    { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
+    false, ['sign']
+  );
+
+  const enc = new TextEncoder();
+  const sig = await crypto.subtle.sign('RSASSA-PKCS1-v1_5', cryptoKey, enc.encode(sigInput));
+  const sigB64 = btoa(String.fromCharCode(...new Uint8Array(sig))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,'');
+  const jwt = `${sigInput}.${sigB64}`;
+
+  const tokenResp = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: `grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Ajwt-bearer&assertion=${jwt}`,
+  });
+  const tokenData = await tokenResp.json();
+  if (!tokenData.access_token) throw new Error('No se obtuvo access_token: ' + JSON.stringify(tokenData));
+  return tokenData.access_token;
+}
+
 async function enviarFCM(env, fcmToken, titulo, cuerpo) {
-  if (!env.FIREBASE_SERVER_KEY) return { ok: false, error: 'FIREBASE_SERVER_KEY no configurada' };
   try {
-    const r = await fetch('https://fcm.googleapis.com/fcm/send', {
+    const accessToken = await getGoogleAccessToken(env);
+    const r = await fetch(`https://fcm.googleapis.com/v1/projects/alejandra-ia-app/messages:send`, {
       method: 'POST',
       headers: {
-        'Authorization': `key=${env.FIREBASE_SERVER_KEY}`,
+        'Authorization': `Bearer ${accessToken}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        to: fcmToken,
-        notification: { title: titulo, body: cuerpo, sound: 'default' },
-        priority: 'high',
-        data: { click_action: 'FLUTTER_NOTIFICATION_CLICK' },
+        message: {
+          token: fcmToken,
+          notification: { title: titulo, body: cuerpo },
+          android: { priority: 'HIGH', notification: { sound: 'default', click_action: 'FLUTTER_NOTIFICATION_CLICK' } },
+          data: { tipo: 'alejandra_mensaje' },
+        },
       }),
     });
     const data = await r.json();
