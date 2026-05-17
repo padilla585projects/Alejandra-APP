@@ -377,6 +377,34 @@ export default {
         return json({ error: 'Ruta no encontrada' }, 404);
       }
 
+      // ── FCM token — guarda token de notificaciones del móvil ─────────────
+      if (path === '/fcm-token' && req.method === 'POST') {
+        const { usuario_id, token } = await req.json().catch(() => ({}));
+        if (!usuario_id || !token) return json({ error: 'usuario_id y token requeridos' }, 400);
+        // Upsert en alejandra_memoria con tipo='fcm_token' y usuario_id
+        await env.DB.prepare(
+          `DELETE FROM alejandra_memoria WHERE tipo='fcm_token' AND usuario_id=?`
+        ).bind(usuario_id).run();
+        await env.DB.prepare(
+          `INSERT INTO alejandra_memoria (usuario_id, tipo, titulo, contenido, importancia, created_at)
+           VALUES (?, 'fcm_token', 'FCM Push Token', ?, 10, datetime('now'))`
+        ).bind(usuario_id, token).run();
+        return json({ ok: true });
+      }
+
+      // ── Enviar push notification a un usuario ─────────────────────────────
+      if (path === '/push' && req.method === 'POST') {
+        const { usuario_id, titulo, cuerpo, token: adminToken } = await req.json().catch(() => ({}));
+        if (!(await verificarAdminToken(env, adminToken))) return json({ error: 'No autorizado' }, 403);
+        if (!usuario_id || !titulo) return json({ error: 'usuario_id y titulo requeridos' }, 400);
+        const row = await env.DB.prepare(
+          `SELECT contenido FROM alejandra_memoria WHERE tipo='fcm_token' AND usuario_id=? LIMIT 1`
+        ).bind(usuario_id).first();
+        if (!row) return json({ error: 'No hay token FCM para este usuario' }, 404);
+        const result = await enviarFCM(env, row.contenido, titulo, cuerpo || '');
+        return json({ ok: result.ok, fcm: result });
+      }
+
       return json({ error: 'Not found' }, 404);
 
     } catch (err) {
@@ -888,6 +916,29 @@ async function registrarLog(env, usuario_id, accion, parametros, resultado) {
       `INSERT INTO alejandra_logs (usuario_id,accion,parametros,resultado,status,created_at) VALUES(?,?,?,?,'ok',datetime('now'))`
     ).bind(usuario_id||'system', accion, parametros||'', resultado||'').run();
   } catch (_) {}
+}
+
+async function enviarFCM(env, fcmToken, titulo, cuerpo) {
+  if (!env.FIREBASE_SERVER_KEY) return { ok: false, error: 'FIREBASE_SERVER_KEY no configurada' };
+  try {
+    const r = await fetch('https://fcm.googleapis.com/fcm/send', {
+      method: 'POST',
+      headers: {
+        'Authorization': `key=${env.FIREBASE_SERVER_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        to: fcmToken,
+        notification: { title: titulo, body: cuerpo, sound: 'default' },
+        priority: 'high',
+        data: { click_action: 'FLUTTER_NOTIFICATION_CLICK' },
+      }),
+    });
+    const data = await r.json();
+    return { ok: r.ok, status: r.status, ...data };
+  } catch (e) {
+    return { ok: false, error: e.message };
+  }
 }
 
 async function verificarAdminToken(env, token) {
