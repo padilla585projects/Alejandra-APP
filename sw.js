@@ -1,16 +1,16 @@
 // Cambia este número cada vez que actualices la app
-const CACHE = 'alejandra-v5.97';
+const CACHE = 'alejandra-v5.98';
 
 self.addEventListener('install', e => {
   self.skipWaiting();
 });
 
-// La página puede pedirle al SW que se active si estÃ¡ en espera
+// La página puede pedirle al SW que se active si está en espera
 self.addEventListener('message', e => {
   if (e.data?.tipo === 'SKIP_WAITING') self.skipWaiting();
 });
 
-// â”€â”€ Push notifications de Alejandra IA (solo developer) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Push notifications de Alejandra IA (solo developer) ─────────────────────
 self.addEventListener('push', e => {
   let data = {};
   try { data = e.data ? e.data.json() : {}; } catch { data = { title: 'Alejandra', body: e.data?.text() || '' }; }
@@ -56,7 +56,7 @@ self.addEventListener('activate', e => {
   );
 });
 
-// Navegación (HTML): siempre red, sin cachear â€” así el HTML siempre es fresco
+// Navegación (HTML): siempre red, sin cachear — así el HTML siempre es fresco
 // Resto de recursos: red primero, caché como fallback offline
 self.addEventListener('fetch', e => {
   if (e.request.mode === 'navigate') {
