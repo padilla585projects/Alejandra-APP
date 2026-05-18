@@ -1087,7 +1087,7 @@ async function executeAITool(env, toolName, toolInput) {
         if (!res.ok) return JSON.stringify({ ok: false, error: `HTTP ${res.status}: ${await res.text()}` });
         const data = await res.json();
         if (data.type === 'file') {
-          const fullContent = atob(data.content.replace(/\n/g, ''));
+          const _b64r = atob(data.content.replace(/\n/g, '')); const _byr = new Uint8Array(_b64r.length); for (let i = 0; i < _b64r.length; i++) _byr[i] = _b64r.charCodeAt(i); const fullContent = new TextDecoder('utf-8').decode(_byr);
           const allLines = fullContent.split('\n');
           const totalLines = allLines.length;
           const { line_start, line_end } = toolInput;
@@ -1310,7 +1310,7 @@ async function executeAITool(env, toolName, toolInput) {
         );
         if (!getRes.ok) return JSON.stringify({ ok: false, error: `GitHub ${getRes.status} leyendo ${archivo}` });
         const fileData = await getRes.json();
-        const currentContent = atob(fileData.content.replace(/\n/g, ''));
+        const _b64f = atob(fileData.content.replace(/\n/g, '')); const _byf = new Uint8Array(_b64f.length); for (let i = 0; i < _b64f.length; i++) _byf[i] = _b64f.charCodeAt(i); const currentContent = new TextDecoder('utf-8').decode(_byf);
         if (!currentContent.includes(old_code)) {
           return JSON.stringify({ ok: false, error: `old_code no encontrado en ${archivo}. Usa repo_read_file para leer el código exacto actual y ajusta old_code.` });
         }
