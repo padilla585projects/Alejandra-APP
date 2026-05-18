@@ -3536,6 +3536,11 @@ async function apiCall(path, options = {}) {
     ...options.headers
   };
   const res = await fetch(base + path, { ...options, headers });
+  if (res.status === 401 && getSession()) {
+    localStorage.removeItem('alejandra_session');
+    alert('Tu sesión ha caducado. Vuelve a iniciar sesión.');
+    location.reload();
+  }
   return res;
 }
 
@@ -3552,7 +3557,13 @@ async function apiCallRaw(path, options = {}) {
     ...(s && s.departamento ? { 'X-Departamento': s.departamento } : {}),
     ...options.headers
   };
-  return fetch(base + path, { ...options, headers });
+  const res = await fetch(base + path, { ...options, headers });
+  if (res.status === 401 && getSession()) {
+    localStorage.removeItem('alejandra_session');
+    alert('Tu sesión ha caducado. Vuelve a iniciar sesión.');
+    location.reload();
+  }
+  return res;
 }
 
 // ══════════════════════════════════════════════════════
@@ -10128,7 +10139,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '6.00';
+const APP_VERSION = '6.01';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
