@@ -7,11 +7,38 @@
 
 **Sesión:** LIBRE
 **Última sesión:** 18/05/2026
-**Versión actual:** v6.00
+**Versión actual:** v6.01
 
 ---
 
-## RESUMEN SESIÓN 18/05/2026 — v6.00 (Fix raíz corrupción encoding en direct_fix y repo_read_file)
+## RESUMEN SESIÓN 18/05/2026 — v6.01 (Fix encoding raíz + auto-logout 401 + verificaciones)
+
+### Qué se hizo:
+
+**Fix raíz encoding (v6.00 — worker.js):**
+- `atob()` en `repo_read_file` y `direct_fix` devuelve binary string → doble-encoding al re-subir
+- Fix: `TextDecoder('utf-8')` convierte bytes a Unicode correcto antes de operar
+- Este era el bug que causó semanas de corrupción con caracteres Ã
+
+**Auto-logout en 401 (v6.01 — index.html):**
+- Antes: sesión caducada → "Error al cargar empresas" sin explicación
+- Ahora: 401 → limpia localStorage + aviso + recarga automática al login
+- Aplica en `apiCall` y `apiCallRaw`
+
+**Archivos temporales creados (pueden eliminarse):**
+- `D:\Descargas\Alejandra APP\query_alberto.js`
+- `D:\Descargas\Alejandra APP\query_alberto2.js`
+- `D:\Descargas\Alejandra APP\query_schema.js`
+
+**Verificaciones:**
+- App en producción: ✅ v6.01 cargando correctamente (CPD Getafe)
+- Login Google en alejandra-panel.html: ✅ funciona
+- Login Google en panel.html para Alberto Martínez: ✅ listo (email amartinezc@levitec.es coincide con Google)
+
+### Pendiente:
+- Limpiar archivos temporales query_*.js
+
+---
 
 ### Qué se hizo:
 
