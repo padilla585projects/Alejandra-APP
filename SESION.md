@@ -6,8 +6,38 @@
 ## ESTADO ACTUAL
 
 **Sesión:** LIBRE
-**Última sesión:** 17/05/2026
-**Versión actual:** v5.99
+**Última sesión:** 18/05/2026
+**Versión actual:** v6.00
+
+---
+
+## RESUMEN SESIÓN 18/05/2026 — v6.00 (Fix raíz corrupción encoding en direct_fix y repo_read_file)
+
+### Qué se hizo:
+
+**Fix raíz del bug de encoding que causó semanas de corrupción:**
+- Diagnóstico: `atob()` devuelve binary string (cada byte = 1 char). Al re-codificar con
+  `btoa(unescape(encodeURIComponent(...)))`, cada byte se trataba como codepoint Unicode
+  y se volvía a encodificar en UTF-8 → doble-encoding → caracteres `Ã` en toda la app.
+- Afectaba a DOS sitios en worker.js:
+  - `repo_read_file`: la IA veía el contenido corrupto (Ã¡ en vez de á)
+  - `direct_fix`: cada patch que tocaba un archivo con acentos corrompía el resto del archivo
+- Fix: `TextDecoder('utf-8')` convierte los bytes a Unicode correcto antes de operar.
+  El re-encoding `btoa(unescape(encodeURIComponent()))` ya funciona bien sobre Unicode.
+- `repo_write_file` no tenía el bug (recibe contenido directo del LLM, no de atob).
+
+### Archivos modificados:
+- `worker.js` — fix TextDecoder en repo_read_file y direct_fix (commit 32e142c) + bump v6.00
+- `sw.js` — CACHE `alejandra-v6.00`
+- `index.html` — APP_VERSION `6.00`
+- `version.json` — `{"v":"6.00"}`
+
+### Deploy:
+- Worker desplegado: `npx wrangler deploy` ✅ (error crons 10072 conocido, no afecta)
+- Push a GitHub main ✅
+
+### Pendiente:
+- Probar login con Google en `alejandra-panel.html`
 
 ---
 

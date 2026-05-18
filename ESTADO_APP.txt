@@ -4,8 +4,8 @@
   Ruta local: C:\Users\Adrian\Downloads\Proyecto GestiBobina\Alejandra APP
 ================================================================================
 
-ÚLTIMA ACTUALIZACIÓN: 14/05/2026
-VERSIÓN ACTUAL APP NUEVA: v5.86 (PHASE 1 Alejandra Independencia — worker autónomo + admin panel)
+ÚLTIMA ACTUALIZACIÓN: 18/05/2026
+VERSIÓN ACTUAL APP NUEVA: v6.00 (Fix raíz encoding — TextDecoder en direct_fix/repo_read_file)
 VERSIÓN ACTUAL APP VIEJA: v4.19 (⛔ CONGELADA DEFINITIVAMENTE — no recibe más cambios)
 
 ================================================================================
