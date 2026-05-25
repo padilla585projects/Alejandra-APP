@@ -11,6 +11,41 @@
 
 ---
 
+## RESUMEN SESIÓN 25/05/2026 — v6.02 (Auditoría completa + fixes)
+
+### Qué se hizo:
+
+**Auditoría completa de Alejandra APP y Alejandra Office:**
+- Revisión exhaustiva de worker.js (120+ endpoints), index.html, panel.html, admin.html, alejandra-panel.html, sw.js, manifest.json, schema, agente
+
+**Bugs corregidos:**
+- sw.js: rutas de iconos push rotas → `/icon-192.png` (antes apuntaban a `/icons/` que no existe)
+- manifest.json: iconos apuntaban al SVG → ahora usan PNGs reales, añadido id/lang/categories/maskable separado
+- agente/worker.js: conflicto alejandra_config renombrada a agente_config (schemas incompatibles en la misma D1)
+- migrate_003: token hardcodeado 'alejandra2026' eliminado del repo público y rotado en D1
+- worker.js: comentario cabecera v5.85 → v6.01
+
+**Mejoras aplicadas:**
+- wrangler.toml: compatibility_date 2024 → 2025
+- PLAN_PANEL_WEB.md: fases marcadas como [✅ IMPLEMENTADO]
+- CLAUDE.md: versión actualizada + sección de dónde buscar credenciales desde otro ordenador
+- 20 índices nuevos aplicados en D1 (bobinas, pemp, carretillas, sesiones, usuarios, obras, historial, inventario_seg)
+- .env.example creado con los 19 secrets documentados
+- schema_completo.sql: nota de desactualización añadida
+
+**Limpieza:**
+- query_alberto.js, query_alberto2.js, query_schema.js eliminados
+
+**Token agente rotado:**
+- 'alejandra2026' eliminado de D1 y del repo
+- Nuevo token (64 chars) en NUEVA_CUENTA.txt y backup en GitHub Secret AGENTE_ADMIN_TOKEN
+
+**Bump:** v6.01 → v6.02 (sw.js, index.html, version.json sincronizados ✅)
+**Worker desplegado:** ✅ (error crons 10072 conocido, no afecta)
+**GitHub:** ✅ commits f27437a → 31b1dd6
+
+---
+
 ## RESUMEN SESIÓN 18/05/2026 — v6.01 (Fix encoding raíz + auto-logout 401 + verificaciones)
 
 ### Qué se hizo:
