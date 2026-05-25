@@ -5,9 +5,9 @@
 
 ## ESTADO ACTUAL
 
-**Sesión:** EN CURSO
+**Sesión:** LIBRE
 **Última sesión:** 25/05/2026
-**Versión actual:** v6.01
+**Versión actual:** v6.02
 
 ---
 
