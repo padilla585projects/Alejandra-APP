@@ -27,7 +27,7 @@ Integraciones: Google Sheets, Telegram (@AlejandraAPP_bot), R2 (archivos), GitHu
   tecnica: `INFRAESTRUCTURA PROPIA:
 - Worker: alejandra-agente.alejandra-app.workers.dev (Cloudflare Workers, ES modules)
 - Worker principal: alejandra-app-api.alejandra-app.workers.dev (32+ tools, ~9400 líneas)
-- BD D1: alejandra-db — tablas compartidas con app: alejandra_historial, alejandra_memoria. Propias: alejandra_logs, alejandra_config, alejandra_tokens
+- BD D1: alejandra-db — tablas compartidas con app: alejandra_historial, alejandra_memoria. Propias: alejandra_logs, agente_config, alejandra_tokens
 - Deploy: auto via GitHub Actions (deploy-alejandra-agente.yml) en push a main
 - Repo: github.com/padilla585projects/Alejandra-APP | PWA: padilla585projects.github.io/Alejandra-APP`,
 
@@ -285,13 +285,13 @@ export default {
         if (!(await verificarAdminToken(env, adminToken))) return json({ error: 'No autorizado' }, 403);
 
         if (path === '/api/admin/config' && req.method === 'GET') {
-          const c = await env.DB.prepare('SELECT * FROM alejandra_config ORDER BY updated_at DESC LIMIT 1').first();
+          const c = await env.DB.prepare('SELECT * FROM agente_config ORDER BY updated_at DESC LIMIT 1').first();
           return json(c || { modo: 'autonomo', auto_fix: 1, max_iterations: 15 });
         }
         if (path === '/api/admin/config' && req.method === 'POST') {
           const { modo, auto_fix, max_iterations } = await req.json();
           await env.DB.prepare(
-            `INSERT INTO alejandra_config (modo,auto_fix,max_iterations,updated_at) VALUES(?,?,?,datetime('now'))
+            `INSERT INTO agente_config (modo,auto_fix,max_iterations,updated_at) VALUES(?,?,?,datetime('now'))
              ON CONFLICT(id) DO UPDATE SET modo=?,auto_fix=?,max_iterations=?,updated_at=datetime('now')`
           ).bind(modo,auto_fix??1,max_iterations??15,modo,auto_fix??1,max_iterations??15).run();
           return json({ ok: true, modo });
@@ -424,7 +424,7 @@ async function procesarConNEXUS(env, mensaje, contexto, usuario_id, empresa_id) 
     return { texto: 'Error: ANTHROPIC_API_KEY no configurada.', acciones: [], requiere_confirmacion: false };
   }
 
-  const config = await env.DB.prepare('SELECT modo FROM alejandra_config ORDER BY updated_at DESC LIMIT 1').first().catch(() => null);
+  const config = await env.DB.prepare('SELECT modo FROM agente_config ORDER BY updated_at DESC LIMIT 1').first().catch(() => null);
   const modo = config?.modo || 'autonomo';
 
   try {
@@ -505,7 +505,7 @@ async function procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empres
     await send({ type: 'error', mensaje: 'ANTHROPIC_API_KEY no configurada.' });
     return { texto: 'Error: sin clave API.', herramientas_usadas: [] };
   }
-  const config = await env.DB.prepare('SELECT modo FROM alejandra_config ORDER BY updated_at DESC LIMIT 1').first().catch(() => null);
+  const config = await env.DB.prepare('SELECT modo FROM agente_config ORDER BY updated_at DESC LIMIT 1').first().catch(() => null);
   const modo = config?.modo || 'autonomo';
 
   try {
@@ -628,7 +628,7 @@ ${input.codigo_sugerido ? `CÓDIGO SUGERIDO:\n${input.codigo_sugerido}` : ''}`;
 
     case 'leer_estado': {
       try {
-        const config   = await env.DB.prepare('SELECT modo,auto_fix,max_iterations FROM alejandra_config ORDER BY updated_at DESC LIMIT 1').first().catch(()=>null);
+        const config   = await env.DB.prepare('SELECT modo,auto_fix,max_iterations FROM agente_config ORDER BY updated_at DESC LIMIT 1').first().catch(()=>null);
         const memCount = await env.DB.prepare('SELECT COUNT(*) as n FROM alejandra_memoria').first().catch(()=>({n:0}));
         const decCount = await env.DB.prepare("SELECT COUNT(*) as n FROM alejandra_memoria WHERE tipo='decision'").first().catch(()=>({n:0}));
         const logCount = await env.DB.prepare('SELECT COUNT(*) as n FROM alejandra_logs').first().catch(()=>({n:0}));
@@ -655,7 +655,7 @@ ${input.codigo_sugerido ? `CÓDIGO SUGERIDO:\n${input.codigo_sugerido}` : ''}`;
           const modo      = parametros.modo || 'autonomo';
           const maxIter   = parametros.max_iterations || 15;
           await env.DB.prepare(
-            `INSERT INTO alejandra_config (modo,auto_fix,max_iterations,updated_at) VALUES(?,1,?,datetime('now'))
+            `INSERT INTO agente_config (modo,auto_fix,max_iterations,updated_at) VALUES(?,1,?,datetime('now'))
              ON CONFLICT(id) DO UPDATE SET modo=?,auto_fix=1,max_iterations=?,updated_at=datetime('now')`
           ).bind(modo, maxIter, modo, maxIter).run();
           aplicado  = true;

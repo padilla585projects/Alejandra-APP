@@ -1,5 +1,5 @@
 // Cambia este número cada vez que actualices la app
-const CACHE = 'alejandra-v6.01';
+const CACHE = 'alejandra-v6.02';
 
 self.addEventListener('install', e => {
   self.skipWaiting();
@@ -17,8 +17,8 @@ self.addEventListener('push', e => {
   const title = data.title || 'Alejandra';
   const options = {
     body: data.body || '',
-    icon: '/icons/icon-192.png',
-    badge: '/icons/icon-96.png',
+    icon: '/icon-192.png',
+    badge: '/icon-192.png',
     tag: 'alejandra-ia',
     renotify: true,
     data: { url: data.url || '/panel.html' },

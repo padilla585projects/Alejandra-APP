@@ -68,7 +68,7 @@ CREATE TABLE IF NOT EXISTS alejandra_tokens (
 );
 
 -- Config inicial (asegurar existe)
-CREATE TABLE IF NOT EXISTS alejandra_config (
+CREATE TABLE IF NOT EXISTS agente_config (
   id INTEGER PRIMARY KEY DEFAULT 1,
   modo TEXT DEFAULT 'autonomo',
   auto_fix INTEGER DEFAULT 1,
@@ -103,9 +103,12 @@ CREATE INDEX IF NOT EXISTS idx_token_uso_created ON alejandra_token_uso(created_
 CREATE INDEX IF NOT EXISTS idx_token_uso_proveedor ON alejandra_token_uso(proveedor, modelo);
 
 -- Configuración inicial
-INSERT OR IGNORE INTO alejandra_config (id, modo, auto_fix, max_iterations, updated_at)
+INSERT OR IGNORE INTO agente_config (id, modo, auto_fix, max_iterations, updated_at)
 VALUES (1, 'autonomo', 1, 15, datetime('now'));
 
--- Token de acceso al panel (renovado)
-INSERT OR REPLACE INTO alejandra_tokens (token, tipo, descripcion, activo, created_at)
-VALUES ('alejandra2026', 'admin', 'Token panel admin v5.93', 1, datetime('now'));
+-- Token de acceso al panel — ROTAR en producción con un valor aleatorio seguro.
+-- Ejecutar manualmente en D1:
+--   INSERT OR REPLACE INTO alejandra_tokens (token, tipo, descripcion, activo, created_at)
+--   VALUES ('<TOKEN_SEGURO_ALEATORIO>', 'admin', 'Token panel admin', 1, datetime('now'));
+-- NO commitear el token real. Generar con: openssl rand -hex 32
+-- El valor 'alejandra2026' que existía aquí fue eliminado por seguridad (estaba en repo público).

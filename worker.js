@@ -1,4 +1,4 @@
-// Alejandra Worker v5.85 — Multi-tenant (empresa_id)
+// Alejandra Worker v6.01 — Multi-tenant (empresa_id)
 // Base de datos: Cloudflare D1
 // IA: Gemini 2.0 Flash
 // Sync: Google Sheets automático en cada cambio
@@ -4076,6 +4076,24 @@ export default {
 
       // â"€â"€ Rutas públicas (sin auth) â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
       if (path === '/health'      && method === 'GET')  return new Response(JSON.stringify({ ok: true, ts: Date.now() }), { headers: { 'Content-Type': 'application/json' } });
+
+      // ── OTA App Flutter ────────────────────────────────────────────────────
+      if (path === '/version' && method === 'GET') {
+        const obj = await env.FILES.get('ota/version.json');
+        if (!obj) return new Response(JSON.stringify({ error: 'no version' }), { status: 404, headers: { 'Content-Type': 'application/json' } });
+        const text = await obj.text();
+        return new Response(text, { headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' } });
+      }
+      if (path === '/apk/download' && method === 'GET') {
+        const obj = await env.FILES.get('apk/alejandra_ia_latest.apk');
+        if (!obj) return new Response('APK no encontrado', { status: 404 });
+        return new Response(obj.body, { headers: {
+          'Content-Type': 'application/vnd.android.package-archive',
+          'Content-Disposition': 'attachment; filename="AlejandraIA.apk"',
+          'Cache-Control': 'no-store',
+        }});
+      }
+      // ── Fin OTA ────────────────────────────────────────────────────────────
       if (path === '/scan'        && method === 'POST') return await handleScan(request, env);
       if (path === '/ocr'         && method === 'POST') return await handleOCR(request, env);
       if (path === '/log'         && method === 'POST') return await guardarLog(request, env);

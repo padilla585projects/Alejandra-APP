@@ -1,5 +1,15 @@
 -- ============================================================
--- ALEJANDRA APP — Schema completo v3.11
+-- ALEJANDRA APP — Schema base v3.11 (REFERENCIA HISTÓRICA)
+-- ⚠️ DESACTUALIZADO — Solo contiene las tablas del schema original.
+--    Le faltan 30+ tablas añadidas vía migraciones posteriores.
+--
+-- Para obtener el schema real actual de D1:
+--   npx wrangler d1 execute alejandra-db --command ".schema"
+--
+-- Migraciones adicionales aplicadas (en orden):
+--   migrate_sesiones.sql, migrate_config.sql, migrate_pedidos.sql,
+--   migrate_seg.sql, migrate_archivos.sql, migrate_roles_extra.sql,
+--   migrate_alejandra_memoria.sql, migrate_indices_tablas_base.sql
 -- ============================================================
 
 -- Obras

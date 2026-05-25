@@ -207,10 +207,10 @@ npx wrangler tail
 
 ## Estado actual (última sesión conocida)
 
-- **Versión:** v5.77
-- **Fecha:** 12/05/2026
-- **Worker:** b44c8a24 ✅ desplegado
-- **GitHub:** en sync ✅ (commit 6afdeb0)
-- **Últimas features:** Alejandra autonomía Nivel B — direct_fix, run_migration, grep_code, check_deploy_status, CI/CD auto-deploy funcionando
+- **Versión:** v6.01
+- **Fecha:** 18/05/2026
+- **Worker:** desplegado ✅
+- **GitHub:** en sync ✅ (ver SESION.md para commit exacto)
+- **Últimas features:** Fix raíz encoding (TextDecoder), auto-logout en 401, alejandra-panel.html con Google OAuth
 
 > Para el estado exacto y actualizado, leer `SESION.md` y `ESTADO_APP.txt`.

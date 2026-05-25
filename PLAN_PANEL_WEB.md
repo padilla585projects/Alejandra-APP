@@ -1,5 +1,8 @@
 # Plan — Alejandra Office (Panel Web de Gestión)
 
+> ✅ **COMPLETADO** — Todas las fases implementadas (v6.01, mayo 2026). Este documento es referencia histórica.
+
+
 ## Concepto
 Panel web para trabajo de oficina, complementario a la app móvil de campo.
 Mismo worker, misma API, mismo auth. Nuevo archivo `panel.html` en el mismo repo.
@@ -18,7 +21,7 @@ Subdominio a elegir (ej. `office.dominio.com` o `panel.dominio.com`).
 
 ## Fases
 
-### FASE 1 — Base, auth, roles, dashboard [PENDIENTE]
+### FASE 1 — Base, auth, roles, dashboard [✅ IMPLEMENTADO]
 - `panel.html` con layout base: sidebar + topbar
 - Login con mismo sistema de tokens
 - Rol `oficina` y `jefe_de_obra` en D1 + worker (`isOficina`, `isJefeObra`)
@@ -26,31 +29,31 @@ Subdominio a elegir (ej. `office.dominio.com` o `panel.dominio.com`).
 - Mismo sistema de colores/fuentes que la app
 - Responsive (desktop first)
 
-### FASE 2 — Personal, fichajes, EPIs, carnets, turnos [PENDIENTE]
+### FASE 2 — Personal, fichajes, EPIs, carnets, turnos [✅ IMPLEMENTADO]
 - Tabla trabajadores: edición inline, foto
 - Tabla fichajes: filtro fecha/trabajador, export CSV/PDF
 - Vista semanal de turnos editable
 - EPIs asignados: caducidades, alertas visuales
 - Carnets: estado, días para caducidad
 
-### FASE 3 — Inventarios Eléctrico [PENDIENTE]
+### FASE 3 — Inventarios Eléctrico [✅ IMPLEMENTADO]
 - Bobinas: tabla completa, edición inline, filtros por estado/obra
 - PEMP: ITV, revisiones, estado
 - Carretillas: igual que PEMP
 - Repostajes: histórico, resumen por máquina
 
-### FASE 4 — Seguridad + Herramientas [PENDIENTE]
+### FASE 4 — Seguridad + Herramientas [✅ IMPLEMENTADO]
 - Inventario seguridad: EPIs, arneses, extintores, stock, caducidades
 - Herramientas: estado, asignación, historial
 - Kits de herramientas
 
-### FASE 5 — Obras, incidencias, pedidos, mantenimientos [PENDIENTE]
+### FASE 5 — Obras, incidencias, pedidos, mantenimientos [✅ IMPLEMENTADO]
 - Obras: lista con KPIs por obra
 - Incidencias: tabla con filtros, cambio de estado inline, fotos
 - Pedidos: tabla con estado, proveedor, aprobación
 - Mantenimientos y checklists
 
-### FASE 6 — Administración [PENDIENTE]
+### FASE 6 — Administración [✅ IMPLEMENTADO]
 - Gestión usuarios: crear, editar, cambiar rol, desactivar
 - Config empresa: módulos, departamentos, informe semanal
 - Gestión obras: crear/cerrar, asignar personal
