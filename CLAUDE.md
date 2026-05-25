@@ -26,6 +26,13 @@ El agente IA integrado se llama **Alejandra** (Claude Sonnet via Anthropic API, 
 | Wrangler | v4.84.1 (autenticado, usa `wrangler.toml` automáticamente) |
 
 > ⚠️ Credenciales en `NUEVA_CUENTA.txt` (local, en `.gitignore`, nunca commitear).
+>
+> 🔑 **¿En otro ordenador y no tienes NUEVA_CUENTA.txt?** Busca aquí:
+> - Secrets de Cloudflare Workers: https://dash.cloudflare.com → Workers → alejandra-app-api → Settings → Variables
+> - Secrets de GitHub Actions (tokens de backup): https://github.com/padilla585projects/Alejandra-APP/settings/secrets/actions
+>   - `AGENTE_ADMIN_TOKEN` → token del panel admin del agente (admin.html)
+>   - `CLOUDFLARE_API_TOKEN` → token de deploy del worker
+> - Variables de entorno requeridas: ver `.env.example` en la raíz del repo
 
 ---
 
