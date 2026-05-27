@@ -11,6 +11,24 @@
 
 ---
 
+## RESUMEN SESIÓN 27/05/2026 (2ª) — v6.02 (Rotación keys Gemini)
+
+### Qué se hizo:
+- Nueva función `callGemini()` con rotación automática de 3 API keys
+- Si una key da 429 (cuota agotada), prueba la siguiente antes de fallar
+- Aplicado en scan-parte, scan-bobinas y OCR de matrículas
+- 3 keys configuradas: GEMINI_API_KEY, GEMINI_API_KEY_2, GEMINI_API_KEY_3
+
+### Deploy:
+- Worker: ef48ca08 ✅
+- GitHub: 84d8005 → push main ✅
+
+### Pendiente:
+- Revisar permisos de usuarios en Alejandra Office
+- Probar escaneo de parte con las nuevas keys
+
+---
+
 ## RESUMEN SESIÓN 27/05/2026 — v6.02 (Scan parte multi-imagen + filtro empresas)
 
 ### Qué se hizo:
