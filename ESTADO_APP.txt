@@ -4,8 +4,8 @@
   Ruta local: C:\Users\Adrian\Downloads\Proyecto GestiBobina\Alejandra APP
 ================================================================================
 
-ÚLTIMA ACTUALIZACIÓN: 18/05/2026
-VERSIÓN ACTUAL APP NUEVA: v6.00 (Fix raíz encoding — TextDecoder en direct_fix/repo_read_file)
+ÚLTIMA ACTUALIZACIÓN: 27/05/2026
+VERSIÓN ACTUAL APP NUEVA: v6.02 (Scan parte multi-imagen + filtro empresas + auto obra)
 VERSIÓN ACTUAL APP VIEJA: v4.19 (⛔ CONGELADA DEFINITIVAMENTE — no recibe más cambios)
 
 ================================================================================
@@ -176,6 +176,21 @@ PASO 4 — VERIFICAR WORKER (solo si se va a tocar worker.js)
 ================================================================================
   HISTORIAL DE VERSIONES — RECIENTES
 ================================================================================
+
+v6.02        |  27/05/2026  [Scan parte multi-imagen + filtro empresas + auto obra + Excel pro]
+  - Scan parte (worker.js): prompt reescrito para partes manuscritos con columna empresa,
+    extrae todos los trabajadores con su empresa, multi-imagen hasta 5, compresión chunked base64
+  - Scan bobinas (worker.js): multi-imagen con cotejo albarán↔hoja control, campos metros/proveedor
+  - Bobinasbatch: lógica update-or-insert (actualiza existentes, crea nuevos)
+  - Frontend (index.html + panel.html): multi-archivo con previews y eliminación,
+    compresión Canvas API, obra automática desde sesión con fallback selector
+  - Nuevo paso intermedio: selección de empresas detectadas en el parte (checkboxes),
+    pre-selecciona la empresa del usuario, filtra trabajadores antes de revisión
+  - Excel profesional con ExcelJS: colores, zebra rows, auto-filtros, fila total
+  - Filtro de proveedores en inventario poblado desde datos reales
+  - Fix navegación: bobinas desaparecían al ir a home y volver al mismo depto
+  - Limpiados crons del worker viejo (alejandra-worker) — resuelto error 10072
+  - Worker: 33f8a284 ✅  GitHub: 316004a ✅
 
 v5.86        |  14/05/2026  [PHASE 1 Alejandra Independencia — worker autónomo + admin panel]
   - Nuevo worker: alejandra-agente.workers.dev (separado, escalable, autonomía Nivel C)

@@ -6,8 +6,41 @@
 ## ESTADO ACTUAL
 
 **Sesión:** LIBRE
-**Última sesión:** 25/05/2026
+**Última sesión:** 27/05/2026
 **Versión actual:** v6.02
+
+---
+
+## RESUMEN SESIÓN 27/05/2026 — v6.02 (Scan parte multi-imagen + filtro empresas)
+
+### Qué se hizo:
+
+**Scan parte/fichajes — reescritura completa (worker + index.html + panel.html):**
+- Worker `scanParte`: prompt mejorado para partes manuscritos con columna EMPRESA, extrae todos los trabajadores con su empresa, multi-imagen hasta 5, chunked base64
+- Frontend: multi-archivo con previews + botón eliminar, compresión Canvas (2000px, JPEG 85%), obra automática desde sesión con fallback selector
+- Nuevo paso intermedio: modal de selección de empresas detectadas (checkboxes), pre-selecciona la empresa del usuario, solo las seleccionadas pasan a revisión
+- Etiqueta azul con empresa visible en tabla de revisión
+
+**Scan bobinas (terminado en sesión anterior, corregido aquí):**
+- panel.html: corregidas referencias a `spObra` → `SESSION?.obra_id || spObraSel`
+- panel.html: export `spPreviewFile` → `spPreviewFiles`
+
+**Crons Cloudflare:**
+- Worker viejo `alejandra-worker` tenía 2 crons ocupando el límite de 5 → eliminados vía API
+- Deploy ahora funciona sin error 10072, los 3 crons activos (7:00, 18:00, 23:00 UTC)
+
+### Archivos modificados:
+- `worker.js` — scanParte prompt + empresa_parte + empresa_nombre en respuesta
+- `index.html` — scan parte reescrito (multi-imagen, empresas, auto obra)
+- `panel.html` — scan parte corregido (obra, exports, empresas)
+
+### Deploy:
+- Worker: Version 33f8a284 ✅ (3 crons activos)
+- GitHub: commit 316004a → push main ✅
+
+### Pendiente:
+- Revisar permisos de usuarios en Alejandra Office (mencionado pero no abordado)
+- Revisar IDEAS_PENDIENTES.txt para próximos bugs/features
 
 ---
 
