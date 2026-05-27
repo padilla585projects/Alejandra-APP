@@ -3731,6 +3731,27 @@ async function devGenerateVapid(request, env) {
   });
 }
 
+// ── HELPER: llamada a Gemini con rotación de keys ──────────────────────────
+async function callGemini(env, geminiBody, endpointLabel) {
+  const keys = [env.GEMINI_API_KEY, env.GEMINI_API_KEY_2, env.GEMINI_API_KEY_3].filter(Boolean);
+  if (!keys.length) return { error: 'GEMINI_API_KEY no configurada', status: 500 };
+  const models = ['gemini-2.0-flash', 'gemini-1.5-flash-002', 'gemini-1.5-flash'];
+  for (const key of keys) {
+    for (const model of models) {
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`,
+        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(geminiBody) }
+      );
+      const data = await res.json();
+      if (res.ok) return { ok: true, data, model };
+      if (res.status === 429) break; // cuota agotada para esta key, probar siguiente key
+      if (res.status === 404) continue; // modelo no disponible, probar siguiente modelo
+      return { error: 'Error IA Gemini: ' + JSON.stringify(data).slice(0, 200), status: 502 };
+    }
+  }
+  return { error: `Cuota Gemini agotada para ${endpointLabel}`, status: 429 };
+}
+
 // ── SCAN PARTE SEMANAL ──────────────────────────────────────────────────────
 async function scanParte(request, env) {
   const { empresa_id, rol, obra_id: obraAuth } = await getAuth(request, env);
@@ -3811,29 +3832,14 @@ ${baseInstructions}`
 
 ${baseInstructions}`;
 
-  const apiKey = env.GEMINI_API_KEY;
-  if (!apiKey) return err('GEMINI_API_KEY no configurada', 500);
-
   const geminiBody = {
-    contents: [{ parts: [
-      ...imageParts,
-      { text: prompt },
-    ]}],
+    contents: [{ parts: [...imageParts, { text: prompt }] }],
     generationConfig: { temperature: 0.1, maxOutputTokens: 8192 },
   };
-
-  let aiJson = null;
-  let usedModel = null;
-  for (const model of ['gemini-2.0-flash', 'gemini-1.5-flash-002', 'gemini-1.5-flash']) {
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
-      { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(geminiBody) }
-    );
-    const data = await res.json();
-    if (res.ok) { aiJson = data; usedModel = model; break; }
-    if (res.status !== 429 && res.status !== 404) return err('Error IA Gemini: ' + JSON.stringify(data).slice(0, 200), 502);
-  }
-  if (!aiJson) return err('Cuota Gemini agotada para scan-parte', 429);
+  const gemResult = await callGemini(env, geminiBody, 'scan-parte');
+  if (!gemResult.ok) return err(gemResult.error, gemResult.status);
+  const aiJson = gemResult.data;
+  const usedModel = gemResult.model;
 
   const texto = aiJson.candidates?.[0]?.content?.parts?.[0]?.text || '';
   logAIUsage(env, {
@@ -4008,29 +4014,14 @@ Responde SOLO con JSON válido sin texto adicional:
 }
 Si un campo no está claro o no aparece, pon null. El código/matrícula es el campo más importante.`;
 
-  const apiKey = env.GEMINI_API_KEY;
-  if (!apiKey) return err('GEMINI_API_KEY no configurada', 500);
-
   const geminiBody = {
-    contents: [{ parts: [
-      ...imageParts,
-      { text: prompt },
-    ]}],
+    contents: [{ parts: [...imageParts, { text: prompt }] }],
     generationConfig: { temperature: 0.1, maxOutputTokens: 8192 },
   };
-
-  let aiJson = null;
-  let usedModel = null;
-  for (const model of ['gemini-2.0-flash', 'gemini-1.5-flash-002', 'gemini-1.5-flash']) {
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
-      { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(geminiBody) }
-    );
-    const data = await res.json();
-    if (res.ok) { aiJson = data; usedModel = model; break; }
-    if (res.status !== 429 && res.status !== 404) return err('Error IA Gemini: ' + JSON.stringify(data).slice(0, 200), 502);
-  }
-  if (!aiJson) return err('Cuota Gemini agotada para scan-bobinas', 429);
+  const gemResult = await callGemini(env, geminiBody, 'scan-bobinas');
+  if (!gemResult.ok) return err(gemResult.error, gemResult.status);
+  const aiJson = gemResult.data;
+  const usedModel = gemResult.model;
 
   const texto = aiJson.candidates?.[0]?.content?.parts?.[0]?.text || '';
   logAIUsage(env, {
@@ -8319,9 +8310,6 @@ async function handleScan(request, env) {
   if (!xTokScan) return err('No autorizado', 401);
   const _sScan = await env.DB.prepare("SELECT id FROM sesiones WHERE token = ? AND (expires_at IS NULL OR expires_at > datetime('now'))").bind(xTokScan).first().catch(() => null);
   if (!_sScan) return err('No autorizado', 401);
-  const apiKey = env.GEMINI_API_KEY;
-  if (!apiKey) return err('GEMINI_API_KEY no configurada', 500);
-
   const body      = await request.json();
   const imageData = body.image;
   const mimeType  = body.mimeType || 'image/jpeg';
@@ -8340,25 +8328,17 @@ Si no puedes leer ningún código, responde: NO_LEIDO`;
     ]}],
     generationConfig: { temperature: 0, maxOutputTokens: 50 },
   };
-
-  for (const model of ['gemini-2.0-flash', 'gemini-1.5-flash-002', 'gemini-1.5-flash']) {
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
-      { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(geminiBody) }
-    );
-    const data = await res.json();
-    if (res.ok) {
-      logAIUsage(env, {
-        empresa_id: null,
-        proveedor: 'gemini',
-        modelo: model,
-        endpoint: 'ocr',
-        input_tokens: data.usageMetadata?.promptTokenCount || 0,
-        output_tokens: data.usageMetadata?.candidatesTokenCount || 0,
-      });
-      return json({ codigo: data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || 'NO_LEIDO', modelo: model });
-    }
-    if (res.status !== 429 && res.status !== 404) return json({ error: 'Error Gemini', details: data }, res.status);
+  const gemResult = await callGemini(env, geminiBody, 'ocr');
+  if (gemResult.ok) {
+    logAIUsage(env, {
+      empresa_id: null,
+      proveedor: 'gemini',
+      modelo: gemResult.model,
+      endpoint: 'ocr',
+      input_tokens: gemResult.data.usageMetadata?.promptTokenCount || 0,
+      output_tokens: gemResult.data.usageMetadata?.candidatesTokenCount || 0,
+    });
+    return json({ codigo: gemResult.data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || 'NO_LEIDO', modelo: gemResult.model });
   }
 
   // Fallback a Cloud Vision si Gemini está agotado
