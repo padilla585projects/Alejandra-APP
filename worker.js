@@ -3738,76 +3738,93 @@ async function scanParte(request, env) {
 
   const form = await request.formData().catch(() => null);
   if (!form) return err('Falta el formulario', 400);
-  const imageFile = form.get('image');
-  if (!imageFile || !imageFile.size) return err('Falta la imagen', 400);
-  if (imageFile.size > 20 * 1024 * 1024) return err('Imagen demasiado grande (máx 20 MB)', 413);
 
-  // Cargar lista de trabajadores para hacer el match
-  const [usrs, ext] = await Promise.all([
+  // Recoger todas las imágenes (soporta múltiples partes semanales)
+  const imageParts = [];
+  for (const key of ['image', 'image2', 'image3', 'image4', 'image5']) {
+    const file = form.get(key);
+    if (!file || !file.size) continue;
+    if (file.size > 20 * 1024 * 1024) return err(`${key}: imagen demasiado grande (máx 20 MB)`, 413);
+    const bytes = await file.arrayBuffer();
+    const u8 = new Uint8Array(bytes);
+    let b64 = '';
+    for (let i = 0; i < u8.length; i += 8192) {
+      b64 += String.fromCharCode(...u8.slice(i, i + 8192));
+    }
+    b64 = btoa(b64);
+    imageParts.push({ inline_data: { mime_type: file.type || 'image/jpeg', data: b64 } });
+  }
+  if (!imageParts.length) return err('Falta al menos una imagen', 400);
+
+  // Cargar nombre de empresa y lista de trabajadores para hacer el match
+  const [empresaRow, usrs, ext] = await Promise.all([
+    env.DB.prepare('SELECT nombre FROM empresas WHERE id=?').bind(empresa_id).first().catch(() => null),
     env.DB.prepare('SELECT id, nombre FROM usuarios WHERE empresa_id=? AND activo=1 ORDER BY nombre').bind(empresa_id).all(),
     env.DB.prepare('SELECT id, nombre FROM personal_externo WHERE empresa_id=? AND activo=1 ORDER BY nombre').bind(empresa_id).all(),
   ]);
+  const empresaNombre = empresaRow?.nombre || '';
   const trabajadores = [
     ...(usrs.results || []).map(u => ({ id: u.id, tipo: 'usuario', nombre: u.nombre })),
     ...(ext.results  || []).map(p => ({ id: p.id, tipo: 'personal_externo', nombre: p.nombre })),
   ];
   const nombresLista = trabajadores.map(t => t.nombre).join('\n');
 
-  // Convertir imagen a base64 (sin spread para evitar stack overflow en imágenes grandes)
-  const bytes = await imageFile.arrayBuffer();
-  const u8 = new Uint8Array(bytes);
-  let b64 = '';
-  for (let i = 0; i < u8.length; i += 8192) {
-    b64 += String.fromCharCode(...u8.slice(i, i + 8192));
-  }
-  b64 = btoa(b64);
-  const mime  = imageFile.type || 'image/jpeg';
+  const multiDoc = imageParts.length > 1;
+  const baseInstructions = `FORMATO DEL DOCUMENTO:
+Es un parte de trabajo semanal manuscrito en formato tabla con columnas:
+EMPRESA | NOMBRE | LUNES (Horas+Firmas) | MARTES | MIÉRCOLES | JUEVES | VIERNES | SÁBADO
 
-  const prompt = `Analiza este parte de trabajo semanal manuscrito.
-Extrae:
-1. La fecha del LUNES de esa semana (formato YYYY-MM-DD).
-2. Para cada fila de trabajador: su nombre completo tal como aparece y las horas de cada día.
+REGLAS DE EXTRACCIÓN:
+- La columna EMPRESA indica la subcontrata/empresa de cada trabajador (ej: EDISON, ALAN, COPUNO, CARBONELL, RINKO, DEXMEN...). Extráela tal cual.
+- Extrae TODOS los trabajadores de TODAS las empresas del parte.
+- Las horas están escritas como "8H", "9H", "5H", etc. — extrae SOLO el número (8, 9, 5).
+- Las columnas de FIRMAS contienen firmas manuscritas — IGNÓRALAS, solo interesan las horas.
+- Si una celda de horas está vacía, ilegible o sin número, pon null.
+- La fecha del lunes aparece en la cabecera (ej: "Semana 20 (11 al 16 de mayo de 2026)" → "2026-05-11").
 
-Las horas están escritas como "8H", "9H", "5H", etc. — extrae solo el número entero.
-Si una celda está vacía, ilegible o sin horas, pon null.
-Ignora filas que sean de empresa/subcontrata (texto en mayúsculas sin horas).
-
-Lista de trabajadores registrados en el sistema (úsala para hacer el match):
+Lista de trabajadores registrados en el sistema (úsala para hacer match por nombre):
 ${nombresLista}
 
-Para cada nombre extraído del parte, busca el trabajador más parecido de esa lista (ignora mayúsculas, tildes y pequeñas diferencias ortográficas).
+Para cada nombre extraído, busca el más parecido de esa lista (ignora mayúsculas, tildes, diferencias ortográficas menores). Si no hay coincidencia clara, pon nombre_match: null.
 
-Responde ÚNICAMENTE con un JSON válido, sin texto adicional:
+Responde ÚNICAMENTE con JSON válido, sin texto adicional:
 {
   "fecha_lunes": "YYYY-MM-DD",
   "trabajadores": [
     {
       "nombre_parte": "nombre como aparece en el parte",
-      "nombre_match": "nombre exacto del sistema (null si no hay coincidencia clara)",
-      "lunes": 8,
-      "martes": 8,
-      "miercoles": null,
-      "jueves": 8,
-      "viernes": 5,
-      "sabado": null
+      "nombre_match": "nombre exacto del sistema o null",
+      "empresa_parte": "empresa como aparece en el parte",
+      "lunes": 8, "martes": 8, "miercoles": null, "jueves": 8, "viernes": 5, "sabado": null
     }
   ]
 }`;
+
+  const prompt = multiDoc
+    ? `Analiza estas ${imageParts.length} imágenes de partes de trabajo semanales manuscritos.
+Pueden ser varias páginas del mismo parte o semanas distintas.
+Si son de la misma semana, combina los datos (un trabajador puede aparecer en varias hojas).
+Si son de semanas distintas, incluye TODOS los trabajadores de TODAS las semanas.
+
+${baseInstructions}`
+    : `Analiza este parte de trabajo semanal manuscrito.
+
+${baseInstructions}`;
 
   const apiKey = env.GEMINI_API_KEY;
   if (!apiKey) return err('GEMINI_API_KEY no configurada', 500);
 
   const geminiBody = {
     contents: [{ parts: [
-      { inline_data: { mime_type: mime, data: b64 } },
+      ...imageParts,
       { text: prompt },
     ]}],
-    generationConfig: { temperature: 0.1, maxOutputTokens: 4096 },
+    generationConfig: { temperature: 0.1, maxOutputTokens: 8192 },
   };
 
   let aiJson = null;
   let usedModel = null;
-  for (const model of ['gemini-2.0-flash-001', 'gemini-1.5-flash-002', 'gemini-1.5-flash']) {
+  for (const model of ['gemini-2.0-flash', 'gemini-1.5-flash-002', 'gemini-1.5-flash']) {
     const res = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
       { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(geminiBody) }
@@ -3842,6 +3859,7 @@ Responde ÚNICAMENTE con un JSON válido, sin texto adicional:
     return {
       nombre_parte: t.nombre_parte,
       nombre_match: t.nombre_match || null,
+      empresa_parte: t.empresa_parte || null,
       usuario_id:          w?.tipo === 'usuario'          ? w.id : null,
       personal_externo_id: w?.tipo === 'personal_externo' ? w.id : null,
       matched: !!w,
@@ -3849,7 +3867,7 @@ Responde ÚNICAMENTE con un JSON válido, sin texto adicional:
     };
   });
 
-  return json({ ok: true, fecha_lunes: data.fecha_lunes, trabajadores: resultado, trabajadores_db: trabajadores });
+  return json({ ok: true, fecha_lunes: data.fecha_lunes, trabajadores: resultado, trabajadores_db: trabajadores, imagenes_procesadas: imageParts.length, empresa_nombre: empresaNombre });
 }
 
 // ── FICHAJES BATCH (importación desde parte) ────────────────────────────────
@@ -3913,47 +3931,92 @@ async function scanBobinas(request, env) {
 
   const form = await request.formData().catch(() => null);
   if (!form) return err('Falta el formulario', 400);
-  const imageFile = form.get('image');
-  if (!imageFile || !imageFile.size) return err('Falta la imagen', 400);
-  if (imageFile.size > 20 * 1024 * 1024) return err('Imagen demasiado grande (máx 20 MB)', 413);
 
-  // Convertir imagen a base64
-  const bytes = await imageFile.arrayBuffer();
-  const b64   = btoa(String.fromCharCode(...new Uint8Array(bytes)));
-  const mime  = imageFile.type || 'image/jpeg';
+  // Recoger todas las imágenes (soporta múltiples: image, image2, image3...)
+  const imageParts = [];
+  for (const key of ['image', 'image2', 'image3', 'image4', 'image5']) {
+    const file = form.get(key);
+    if (!file || !file.size) continue;
+    if (file.size > 20 * 1024 * 1024) return err(`${key}: imagen demasiado grande (máx 20 MB)`, 413);
+    const bytes = await file.arrayBuffer();
+    const u8 = new Uint8Array(bytes);
+    let b64 = '';
+    for (let i = 0; i < u8.length; i += 8192) {
+      b64 += String.fromCharCode(...u8.slice(i, i + 8192));
+    }
+    b64 = btoa(b64);
+    imageParts.push({ inline_data: { mime_type: file.type || 'image/jpeg', data: b64 } });
+  }
+  if (!imageParts.length) return err('Falta al menos una imagen', 400);
 
-  const prompt = `Analiza esta imagen de un albarán o hoja de registro de bobinas de cable eléctrico.
-Extrae cada bobina que aparezca. Para cada una identifica:
-- codigo: matrícula o código de bobina (puede ser numérico o alfanumérico, ej: "12345", "BOB-001")
-- proveedor: fabricante del cable (ej: PRYSMIAN, NEXANS, GENERAL CABLE, LAPP, BELDEN)
-- tipo_cable: sección y tipo de cable (ej: "RZ1-K 1x240", "VV 3x35+16", "RV 4x16")
-- num_albaran: número de albarán si aparece (puede ser un número en la cabecera)
-- notas: cualquier observación adicional por bobina
+  const multiDoc = imageParts.length > 1;
+  const prompt = multiDoc
+    ? `Analiza estas ${imageParts.length} imágenes de documentos de bobinas de cable eléctrico.
+Pueden ser ALBARANES DE ENTREGA (impresos, con datos exactos del fabricante) y/o HOJAS DE CONTROL DE BOBINAS (manuscritas, con registro de recepción en obra).
+
+INSTRUCCIONES DE COTEJO:
+- Cruza los datos entre todos los documentos usando la MATRÍCULA/CÓDIGO de bobina como clave.
+- Del albarán extrae: código/contramarca exacto, proveedor/fabricante, tipo de cable completo, nº albarán, metros por bobina.
+- De la hoja de control extrae: fecha de recepción, nº albarán, matrícula, fabricante abreviado, tipo cable, metros.
+- Si una bobina aparece en ambos documentos, combina la información (prioriza datos del albarán por ser más precisos).
+- Si una bobina solo aparece en un documento, inclúyela igualmente con los datos disponibles.
 
 Responde SOLO con JSON válido sin texto adicional:
 {
-  "num_albaran": "número de albarán general si aparece, o null",
+  "num_albaran": "número de albarán principal o null",
+  "proveedor_general": "fabricante principal si es común a todas (ej: GENERAL CABLE, PRYSMIAN)",
   "bobinas": [
     {
-      "codigo": "12345",
-      "proveedor": "PRYSMIAN",
-      "tipo_cable": "RZ1-K 1x240",
-      "num_albaran": null,
+      "codigo": "82AXWVZ",
+      "proveedor": "GENERAL CABLE",
+      "tipo_cable": "RZ1-K(AS) 1kV 1x95",
+      "num_albaran": "5051217424",
+      "metros": 500,
+      "fecha_recepcion": "2026-05-08",
       "notas": null
     }
   ]
 }
-Si un campo no está claro o no aparece, pon null. El código/matrícula es el campo más importante — si no está claro, intenta inferirlo.`;
+Si un campo no está claro o no aparece, pon null. El código/matrícula es el campo más importante.`
+    : `Analiza esta imagen de un documento de bobinas de cable eléctrico.
+Puede ser un ALBARÁN DE ENTREGA (impreso) o una HOJA DE CONTROL DE BOBINAS (manuscrita).
+
+Extrae cada bobina que aparezca. Para cada una identifica:
+- codigo: matrícula o contramarca de bobina (alfanumérico, ej: "82AXWVZ", "BOB-001", "12345")
+- proveedor: fabricante del cable (ej: PRYSMIAN, NEXANS, GENERAL CABLE, LAPP, BELDEN, TECNOHM)
+- tipo_cable: sección y tipo completo del cable (ej: "RZ1-K(AS) 1kV 1x95", "RV 4x16")
+- num_albaran: número de albarán si aparece
+- metros: metros de cable por bobina si aparece
+- fecha_recepcion: fecha de recepción si aparece (formato YYYY-MM-DD)
+- notas: cualquier observación adicional
+
+Responde SOLO con JSON válido sin texto adicional:
+{
+  "num_albaran": "número de albarán general o null",
+  "proveedor_general": "fabricante principal o null",
+  "bobinas": [
+    {
+      "codigo": "82AXWVZ",
+      "proveedor": "GENERAL CABLE",
+      "tipo_cable": "RZ1-K(AS) 1kV 1x95",
+      "num_albaran": null,
+      "metros": 500,
+      "fecha_recepcion": "2026-05-08",
+      "notas": null
+    }
+  ]
+}
+Si un campo no está claro o no aparece, pon null. El código/matrícula es el campo más importante.`;
 
   const apiKey = env.GEMINI_API_KEY;
   if (!apiKey) return err('GEMINI_API_KEY no configurada', 500);
 
   const geminiBody = {
     contents: [{ parts: [
-      { inline_data: { mime_type: mime, data: b64 } },
+      ...imageParts,
       { text: prompt },
     ]}],
-    generationConfig: { temperature: 0.1, maxOutputTokens: 4096 },
+    generationConfig: { temperature: 0.1, maxOutputTokens: 8192 },
   };
 
   let aiJson = null;
@@ -3989,12 +4052,16 @@ Si un campo no está claro o no aparece, pon null. El código/matrícula es el c
   return json({
     ok: true,
     num_albaran: data.num_albaran || null,
+    proveedor_general: data.proveedor_general || null,
+    imagenes_procesadas: imageParts.length,
     bobinas: (data.bobinas || []).map(b => ({
-      codigo:      b.codigo      || null,
-      proveedor:   b.proveedor   || null,
-      tipo_cable:  b.tipo_cable  || null,
-      num_albaran: b.num_albaran || data.num_albaran || null,
-      notas:       b.notas       || null,
+      codigo:           b.codigo           || null,
+      proveedor:        b.proveedor        || data.proveedor_general || null,
+      tipo_cable:       b.tipo_cable       || null,
+      num_albaran:      b.num_albaran      || data.num_albaran || null,
+      metros:           b.metros           || null,
+      fecha_recepcion:  b.fecha_recepcion  || null,
+      notas:            b.notas            || null,
     }))
   });
 }
@@ -4012,6 +4079,7 @@ async function bobinasBatch(request, env, ctx) {
   const detalle = [];
   let importadas = 0, duplicadas = 0, errores = 0;
 
+  let actualizadas = 0;
   for (const b of bobinas) {
     if (!b.codigo || !b.proveedor || !b.tipo_cable) {
       detalle.push({ codigo: b.codigo || '?', status: 'error', error: 'Faltan campos obligatorios' });
@@ -4021,24 +4089,40 @@ async function bobinasBatch(request, env, ctx) {
     const codigo = b.codigo.trim().toUpperCase();
     const obraFinal = b.obra_id ? parseInt(b.obra_id) : obraId;
     try {
+      const existing = await env.DB.prepare(
+        'SELECT id, proveedor, tipo_cable, num_albaran, notas FROM bobinas WHERE codigo = ? AND empresa_id = ?'
+      ).bind(codigo, empresa_id).first();
+      if (existing) {
+        const campos = [], vals = [];
+        if (b.proveedor && !existing.proveedor)   { campos.push('proveedor = ?');   vals.push(b.proveedor); }
+        if (b.tipo_cable && !existing.tipo_cable)  { campos.push('tipo_cable = ?');  vals.push(b.tipo_cable); }
+        if (b.num_albaran && !existing.num_albaran){ campos.push('num_albaran = ?'); vals.push(b.num_albaran); }
+        if (b.notas && !existing.notas)            { campos.push('notas = ?');       vals.push(b.notas); }
+        if (obraFinal)                             { campos.push('obra_id = ?');     vals.push(obraFinal); }
+        if (campos.length) {
+          vals.push(existing.id);
+          await env.DB.prepare(`UPDATE bobinas SET ${campos.join(', ')} WHERE id = ?`).bind(...vals).run();
+          detalle.push({ codigo, status: 'updated' });
+          actualizadas++;
+        } else {
+          detalle.push({ codigo, status: 'dup' });
+          duplicadas++;
+        }
+        continue;
+      }
       await env.DB.prepare(
         'INSERT INTO bobinas (codigo, proveedor, tipo_cable, fecha_entrada, estado, notas, registrado_por, obra_id, num_albaran, departamento, empresa_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
       ).bind(codigo, b.proveedor, b.tipo_cable, fecha, 'activa', b.notas || '', registradoPor || rol, obraFinal || null, b.num_albaran || null, departamento, empresa_id).run();
       detalle.push({ codigo, status: 'ok' });
       importadas++;
     } catch(e) {
-      if (e.message.includes('UNIQUE')) {
-        detalle.push({ codigo, status: 'dup' });
-        duplicadas++;
-      } else {
-        detalle.push({ codigo, status: 'error', error: e.message });
-        errores++;
-      }
+      detalle.push({ codigo, status: 'error', error: e.message });
+      errores++;
     }
   }
 
   ctx?.waitUntil(syncSheets(env, 'Elec-Bobinas', empresa_id));
-  return json({ ok: true, importadas, duplicadas, errores, detalle });
+  return json({ ok: true, importadas, actualizadas, duplicadas, errores, detalle });
 }
 
 export default {

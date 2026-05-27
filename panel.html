@@ -10,6 +10,7 @@
 <script src="https://unpkg.com/tabulator-tables@6.3.0/dist/js/tabulator.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <style>
@@ -1590,27 +1591,96 @@ function exportarTabla(tabla, nombre) {
   tabla.download('csv', `${nombre}_${new Date().toISOString().slice(0,10)}.csv`, { bom: true });
 }
 
-function exportarBobinasExcel() {
+async function exportarBobinasExcel() {
   if (!tblBobinas) return toast('Carga el inventario primero', 'err');
   const rows = tblBobinas.getData('active');
   if (!rows.length) return toast('Sin datos que exportar', 'err');
-  const filas = rows.map(b => ({
-    'Código':         b.codigo        || '',
-    'Tipo cable':     b.tipo_cable    || '',
-    'Proveedor':      b.proveedor     || '',
-    'Estado':         b.estado        || '',
-    'Departamento':   b.departamento  || '',
-    'Obra':           b.obra_nombre   || '',
-    'Albarán':        b.num_albaran   || '',
-    'Registrado por': b.registrado_por|| '',
-    'Notas':          b.notas         || '',
-    'Fecha entrada':  (b.fecha_entrada||'').slice(0,10),
-    'Fecha salida':   (b.fecha_salida ||'').slice(0,10),
-  }));
-  const ws = XLSX.utils.json_to_sheet(filas);
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'Bobinas');
-  XLSX.writeFile(wb, `bobinas_${new Date().toISOString().slice(0,10)}.xlsx`);
+
+  const wb = new ExcelJS.Workbook();
+  wb.creator = 'Alejandra APP';
+  const ws = wb.addWorksheet('Bobinas', { views: [{ state: 'frozen', ySplit: 2 }] });
+
+  const accent = '2563EB';
+  const headerFill = { type: 'pattern', pattern: 'solid', fgColor: { argb: accent } };
+  const headerFont = { bold: true, color: { argb: 'FFFFFF' }, size: 11, name: 'Calibri' };
+  const borderThin = { top: {style:'thin',color:{argb:'D0D0D0'}}, bottom: {style:'thin',color:{argb:'D0D0D0'}}, left: {style:'thin',color:{argb:'D0D0D0'}}, right: {style:'thin',color:{argb:'D0D0D0'}} };
+
+  // Título
+  ws.mergeCells('A1:K1');
+  const titleCell = ws.getCell('A1');
+  titleCell.value = `INVENTARIO DE BOBINAS — ${new Date().toLocaleDateString('es-ES')}`;
+  titleCell.font = { bold: true, size: 14, color: { argb: accent }, name: 'Calibri' };
+  titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
+  ws.getRow(1).height = 32;
+
+  // Cabeceras
+  const cols = [
+    { header: 'Código', key: 'codigo', width: 16 },
+    { header: 'Tipo cable', key: 'tipo_cable', width: 24 },
+    { header: 'Proveedor', key: 'proveedor', width: 18 },
+    { header: 'Estado', key: 'estado', width: 12 },
+    { header: 'Departamento', key: 'departamento', width: 14 },
+    { header: 'Obra', key: 'obra_nombre', width: 22 },
+    { header: 'Nº Albarán', key: 'num_albaran', width: 14 },
+    { header: 'Registrado por', key: 'registrado_por', width: 16 },
+    { header: 'Notas', key: 'notas', width: 28 },
+    { header: 'Fecha entrada', key: 'fecha_entrada', width: 14 },
+    { header: 'Fecha salida', key: 'fecha_salida', width: 14 },
+  ];
+  ws.columns = cols;
+  const headerRow = ws.getRow(2);
+  cols.forEach((c, i) => {
+    const cell = headerRow.getCell(i + 1);
+    cell.value = c.header;
+    cell.fill = headerFill;
+    cell.font = headerFont;
+    cell.alignment = { horizontal: 'center', vertical: 'middle' };
+    cell.border = borderThin;
+  });
+  headerRow.height = 24;
+
+  // Datos
+  const estadoColors = { activa: '22C55E', disponible: '22C55E', devuelta: '94A3B8', agotada: 'EF4444' };
+  rows.forEach((b, idx) => {
+    const r = ws.addRow({
+      codigo: b.codigo || '',
+      tipo_cable: b.tipo_cable || '',
+      proveedor: b.proveedor || '',
+      estado: b.estado || '',
+      departamento: b.departamento || '',
+      obra_nombre: b.obra_nombre || '',
+      num_albaran: b.num_albaran || '',
+      registrado_por: b.registrado_por || '',
+      notas: b.notas || '',
+      fecha_entrada: (b.fecha_entrada || '').slice(0, 10),
+      fecha_salida: (b.fecha_salida || '').slice(0, 10),
+    });
+    const zebra = idx % 2 === 0 ? 'F8FAFC' : 'FFFFFF';
+    r.eachCell({ includeEmpty: true }, (cell) => {
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: zebra } };
+      cell.border = borderThin;
+      cell.font = { size: 10, name: 'Calibri' };
+      cell.alignment = { vertical: 'middle' };
+    });
+    // Color del estado
+    const estCell = r.getCell(4);
+    const ec = estadoColors[(b.estado || '').toLowerCase()];
+    if (ec) { estCell.font = { size: 10, name: 'Calibri', bold: true, color: { argb: ec } }; }
+    // Código en negrita
+    r.getCell(1).font = { size: 10, name: 'Calibri', bold: true };
+  });
+
+  // Autofiltro
+  ws.autoFilter = { from: 'A2', to: `K${rows.length + 2}` };
+
+  const buf = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `bobinas_${new Date().toISOString().slice(0, 10)}.xlsx`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+  toast('Excel generado', 'ok');
 }
 
 // ── CATÁLOGO DEPARTAMENTOS + SUBMÓDULOS (sync con index.html) ─
@@ -6593,25 +6663,39 @@ document.getElementById('wInput').focus();
 // ── SCAN PARTE SEMANAL (panel web) ──────────────────────────────────────────
 (function() {
   let _scanData = null;
+  let _spFiles = [];
 
   function abrirScanPartePanel() {
     const modal = document.getElementById('modalScanPanel');
     modal.style.display = 'flex';
     document.getElementById('spStep1').style.display = '';
     document.getElementById('spStep2').style.display = 'none';
+    document.getElementById('spStepEmpresas').style.display = 'none';
     document.getElementById('spStep3').style.display = 'none';
-    document.getElementById('spPreview').style.display = 'none';
+    document.getElementById('spPreviews').innerHTML = '';
+    document.getElementById('spPreviews').style.display = 'none';
     document.getElementById('spBtnAnalizar').style.display = 'none';
+    document.getElementById('spDropzone').style.borderColor = 'var(--border)';
     document.getElementById('spFileInput').value = '';
+    _spFiles = [];
     _scanData = null;
-    // poblar obras
-    const sel = document.getElementById('spObra');
-    if (sel && sel.options.length <= 1 && window._obrasPanel?.length) {
-      window._obrasPanel.forEach(o => {
-        const opt = document.createElement('option');
-        opt.value = o.id; opt.textContent = o.nombre;
-        sel.appendChild(opt);
-      });
+    const info = document.getElementById('spObraInfo');
+    const selGroup = document.getElementById('spObraSelGroup');
+    if (SESSION?.obra_id) {
+      info.textContent = `🏗 Obra: ${SESSION.obra_nombre || 'Obra ' + SESSION.obra_id}`;
+      info.style.display = '';
+      selGroup.style.display = 'none';
+    } else {
+      info.style.display = 'none';
+      selGroup.style.display = '';
+      const sel = document.getElementById('spObraSel');
+      if (sel.options.length <= 1 && window._obrasPanel?.length) {
+        window._obrasPanel.forEach(o => {
+          const opt = document.createElement('option');
+          opt.value = o.id; opt.textContent = o.nombre;
+          sel.appendChild(opt);
+        });
+      }
     }
   }
 
@@ -6619,36 +6703,130 @@ document.getElementById('wInput').focus();
     document.getElementById('modalScanPanel').style.display = 'none';
   }
 
-  function spPreviewFile(input) {
-    const file = input.files[0];
-    if (!file) return;
-    const prev = document.getElementById('spPreview');
-    prev.src = URL.createObjectURL(file);
-    prev.style.display = 'block';
+  function spPreviewFiles(input) {
+    const files = Array.from(input.files).slice(0, 5);
+    if (!files.length) return;
+    _spFiles = files;
+    _spRefreshPreviews();
     document.getElementById('spBtnAnalizar').style.display = '';
     document.getElementById('spDropzone').style.borderColor = 'var(--accent)';
   }
 
+  function _spRefreshPreviews() {
+    const cont = document.getElementById('spPreviews');
+    cont.innerHTML = '';
+    if (!_spFiles.length) {
+      cont.style.display = 'none';
+      document.getElementById('spBtnAnalizar').style.display = 'none';
+      document.getElementById('spDropzone').style.borderColor = 'var(--border)';
+      return;
+    }
+    cont.style.display = 'flex';
+    _spFiles.forEach((f, i) => {
+      const wrap = document.createElement('div');
+      wrap.style.cssText = 'position:relative;flex:0 0 auto';
+      const img = document.createElement('img');
+      img.src = URL.createObjectURL(f);
+      img.style.cssText = 'height:100px;border-radius:8px;border:1px solid var(--border);object-fit:cover';
+      const del = document.createElement('button');
+      del.textContent = '×';
+      del.style.cssText = 'position:absolute;top:-6px;right:-6px;background:var(--red);color:#fff;border:none;border-radius:50%;width:20px;height:20px;font-size:14px;cursor:pointer;line-height:1';
+      del.onclick = (e) => { e.stopPropagation(); _spFiles.splice(i, 1); _spRefreshPreviews(); };
+      wrap.appendChild(img);
+      wrap.appendChild(del);
+      cont.appendChild(wrap);
+    });
+  }
+
+  function _spCompressImage(file, maxDim, quality) {
+    return new Promise((resolve) => {
+      if (!file.type.startsWith('image/')) { resolve(file); return; }
+      const img = new Image();
+      img.onload = () => {
+        let w = img.width, h = img.height;
+        if (w <= maxDim && h <= maxDim && file.size < 1.5 * 1024 * 1024) {
+          URL.revokeObjectURL(img.src); resolve(file); return;
+        }
+        if (w > h) { if (w > maxDim) { h = Math.round(h * maxDim / w); w = maxDim; } }
+        else       { if (h > maxDim) { w = Math.round(w * maxDim / h); h = maxDim; } }
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        canvas.toBlob(blob => {
+          URL.revokeObjectURL(img.src);
+          resolve(blob ? new File([blob], file.name, { type: 'image/jpeg' }) : file);
+        }, 'image/jpeg', quality);
+      };
+      img.onerror = () => resolve(file);
+      img.src = URL.createObjectURL(file);
+    });
+  }
+
   async function spEnviar() {
-    const file = document.getElementById('spFileInput').files[0];
-    if (!file) { toast('Selecciona un archivo', 'err'); return; }
+    if (!_spFiles.length) { toast('Selecciona al menos una imagen', 'err'); return; }
     document.getElementById('spStep1').style.display = 'none';
     document.getElementById('spStep2').style.display = '';
+    const infoEl = document.getElementById('spStep2Info');
+    infoEl.textContent = _spFiles.length > 1
+      ? `Analizando ${_spFiles.length} partes — puede tardar 15-30 segundos`
+      : 'Analizando parte — puede tardar 10-20 segundos';
     try {
       const fd = new FormData();
-      fd.append('image', file);
-      const obraId = document.getElementById('spObra')?.value;
-      if (obraId) fd.append('obra_id', obraId);
+      const keys = ['image', 'image2', 'image3', 'image4', 'image5'];
+      for (let i = 0; i < _spFiles.length; i++) {
+        const compressed = await _spCompressImage(_spFiles[i], 2000, 0.85);
+        fd.append(keys[i], compressed);
+      }
       const res  = await apiRaw('/scan-parte', { method: 'POST', body: fd });
       const data = await res.json();
       if (!res.ok || !data.ok) throw new Error(data.error || 'Error desconocido');
       _scanData = data;
-      spMostrarReview(data);
+      spMostrarEmpresas(data);
     } catch(e) {
       document.getElementById('spStep2').style.display = 'none';
       document.getElementById('spStep1').style.display = '';
       toast('❌ ' + e.message, 'err');
     }
+  }
+
+  function spMostrarEmpresas(data) {
+    document.getElementById('spStep2').style.display = 'none';
+    const empresas = [...new Set((data.trabajadores || []).map(t => t.empresa_parte).filter(Boolean))];
+    if (empresas.length <= 1) {
+      spMostrarReview(data);
+      return;
+    }
+    const cont = document.getElementById('spEmpresasCheck');
+    cont.innerHTML = '';
+    const miEmpresa = (data.empresa_nombre || '').toUpperCase();
+    empresas.forEach(emp => {
+      const count = data.trabajadores.filter(t => t.empresa_parte === emp).length;
+      const isMe = miEmpresa && emp.toUpperCase().includes(miEmpresa);
+      const label = document.createElement('label');
+      label.style.cssText = 'display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--surface2);border-radius:8px;cursor:pointer;border:1px solid ' + (isMe ? 'var(--accent)' : 'var(--border)');
+      label.innerHTML = `<input type="checkbox" value="${emp}" ${isMe ? 'checked' : ''} style="width:18px;height:18px;cursor:pointer">
+        <div style="flex:1">
+          <div style="font-size:13px;font-weight:700">${emp}</div>
+          <div style="font-size:11px;color:var(--muted)">${count} trabajador${count > 1 ? 'es' : ''}</div>
+        </div>`;
+      cont.appendChild(label);
+    });
+    document.getElementById('spStepEmpresas').style.display = '';
+  }
+
+  function spVolverAStep1() {
+    document.getElementById('spStepEmpresas').style.display = 'none';
+    document.getElementById('spStep1').style.display = '';
+  }
+
+  function spConfirmarEmpresas() {
+    const checks = document.querySelectorAll('#spEmpresasCheck input[type=checkbox]:checked');
+    const selected = [...checks].map(c => c.value);
+    if (!selected.length) { toast('Selecciona al menos una empresa', 'err'); return; }
+    const filtered = { ..._scanData, trabajadores: _scanData.trabajadores.filter(t => selected.includes(t.empresa_parte)) };
+    _scanData = filtered;
+    document.getElementById('spStepEmpresas').style.display = 'none';
+    spMostrarReview(filtered);
   }
 
   function spMostrarReview(data) {
@@ -6670,9 +6848,13 @@ document.getElementById('wInput').focus();
           const v = w.tipo === 'usuario' ? `u_${w.id}` : `p_${w.id}`;
           return `<option value="${v}" ${v === currentVal ? 'selected' : ''}>${w.nombre}</option>`;
         }).join('');
+      const empresaTag = t.empresa_parte ? `<span style="font-size:9px;padding:1px 6px;border-radius:3px;background:#1d4ed820;color:#1d4ed8;font-weight:600;display:inline-block;margin-bottom:2px">${t.empresa_parte}</span>` : '';
+      const addBtn = !matched ? `<button onclick="spAnadir(${i})" style="font-size:9px;padding:2px 6px;border:1px solid #f59e0b;border-radius:4px;background:rgba(245,158,11,.1);color:#f59e0b;cursor:pointer;margin-top:2px">➕ Añadir</button>` : '';
       const nombreCell = `
+        ${empresaTag}
         <div style="font-size:10px;color:var(--muted);margin-bottom:3px">${t.nombre_parte}</div>
-        <select data-idx="${i}" style="font-size:11px;padding:2px 4px;border:1px solid ${borderColor};border-radius:5px;background:var(--surface2);color:var(--text);width:100%;max-width:190px">${opts}</select>`;
+        <select data-idx="${i}" style="font-size:11px;padding:2px 4px;border:1px solid ${borderColor};border-radius:5px;background:var(--surface2);color:var(--text);width:100%;max-width:190px">${opts}</select>
+        ${addBtn}`;
       const horasCells = DIAS.map(d => {
         const v = (t[d] !== null && t[d] !== undefined) ? t[d] : '';
         return `<td style="padding:4px 3px;text-align:center">
@@ -6696,7 +6878,7 @@ document.getElementById('wInput').focus();
   async function spAnadir(idx) {
     const t = _scanData?.trabajadores?.[idx];
     if (!t) return;
-    const obraId = document.getElementById('spObra')?.value || null;
+    const obraId = SESSION?.obra_id || document.getElementById('spObraSel')?.value || null;
     const btn = document.querySelector(`button[onclick="spAnadir(${idx})"]`);
     if (btn) { btn.disabled = true; btn.textContent = '⏳'; }
     try {
@@ -6726,7 +6908,7 @@ document.getElementById('wInput').focus();
   async function spImportar() {
     const fechaLunes = document.getElementById('spFechaLunes').value;
     if (!fechaLunes) { toast('Indica la fecha del lunes', 'err'); return; }
-    const obraId = document.getElementById('spObra')?.value || null;
+    const obraId = SESSION?.obra_id || document.getElementById('spObraSel')?.value || null;
     const DIAS = ['lunes','martes','miercoles','jueves','viernes','sabado'];
     const fichajes = [];
     document.querySelectorAll('#spTbody tr').forEach((tr, i) => {
@@ -6768,13 +6950,15 @@ document.getElementById('wInput').focus();
     }
   }
 
-  window.abrirScanPartePanel = abrirScanPartePanel;
-  window.cerrarScanPanel     = cerrarScanPanel;
-  window.spPreviewFile       = spPreviewFile;
-  window.spEnviar            = spEnviar;
-  window.spAnadir            = spAnadir;
-  window.spImportar          = spImportar;
-  window.spVolver            = () => {
+  window.abrirScanPartePanel  = abrirScanPartePanel;
+  window.cerrarScanPanel      = cerrarScanPanel;
+  window.spPreviewFiles       = spPreviewFiles;
+  window.spEnviar             = spEnviar;
+  window.spVolverAStep1       = spVolverAStep1;
+  window.spConfirmarEmpresas  = spConfirmarEmpresas;
+  window.spAnadir             = spAnadir;
+  window.spImportar           = spImportar;
+  window.spVolver             = () => {
     document.getElementById('spStep3').style.display = 'none';
     document.getElementById('spStep1').style.display = '';
   };
@@ -6790,18 +6974,30 @@ document.getElementById('wInput').focus();
     document.getElementById('sbStep1').style.display = '';
     document.getElementById('sbStep2').style.display = 'none';
     document.getElementById('sbStep3').style.display = 'none';
-    document.getElementById('sbPreview').style.display = 'none';
+    document.getElementById('sbPreviews').innerHTML = '';
+    document.getElementById('sbPreviews').style.display = 'none';
     document.getElementById('sbBtnAnalizar').style.display = 'none';
+    document.getElementById('sbDropzone').style.borderColor = 'var(--border)';
     document.getElementById('sbFileInput').value = '';
+    _sbFiles = [];
     _sbData = null;
-    // poblar obras
-    const sel = document.getElementById('sbObra');
-    if (sel && sel.options.length <= 1 && window._obrasPanel?.length) {
-      window._obrasPanel.forEach(o => {
-        const opt = document.createElement('option');
-        opt.value = o.id; opt.textContent = o.nombre;
-        sel.appendChild(opt);
-      });
+    const info = document.getElementById('sbObraInfo');
+    const selGroup = document.getElementById('sbObraSelGroup');
+    if (SESSION?.obra_id) {
+      info.textContent = `🏗 Obra: ${SESSION.obra_nombre || 'Obra ' + SESSION.obra_id}`;
+      info.style.display = '';
+      selGroup.style.display = 'none';
+    } else {
+      info.style.display = 'none';
+      selGroup.style.display = '';
+      const sel = document.getElementById('sbObraSel');
+      if (sel.options.length <= 1 && window._obrasPanel?.length) {
+        window._obrasPanel.forEach(o => {
+          const opt = document.createElement('option');
+          opt.value = o.id; opt.textContent = o.nombre;
+          sel.appendChild(opt);
+        });
+      }
     }
   }
 
@@ -6809,28 +7005,104 @@ document.getElementById('wInput').focus();
     document.getElementById('modalScanBobinas').style.display = 'none';
   }
 
-  function sbPreviewFile(input) {
-    const file = input.files[0];
-    if (!file) return;
-    const prev = document.getElementById('sbPreview');
-    if (file.type.startsWith('image/')) {
-      prev.src = URL.createObjectURL(file);
-      prev.style.display = 'block';
-    } else {
-      prev.style.display = 'none';
-    }
+  let _sbFiles = [];
+
+  function sbPreviewFiles(input) {
+    const files = Array.from(input.files).slice(0, 5);
+    if (!files.length) return;
+    _sbFiles = files;
+    const cont = document.getElementById('sbPreviews');
+    cont.innerHTML = '';
+    cont.style.display = 'flex';
+    files.forEach((f, i) => {
+      if (!f.type.startsWith('image/')) return;
+      const wrap = document.createElement('div');
+      wrap.style.cssText = 'position:relative;flex:0 0 auto';
+      const img = document.createElement('img');
+      img.src = URL.createObjectURL(f);
+      img.style.cssText = 'height:100px;border-radius:8px;border:1px solid var(--border);object-fit:cover';
+      const label = document.createElement('div');
+      label.style.cssText = 'font-size:9px;color:var(--muted);text-align:center;margin-top:2px';
+      label.textContent = f.name.length > 18 ? f.name.slice(0,15) + '...' : f.name;
+      const del = document.createElement('button');
+      del.textContent = '×';
+      del.style.cssText = 'position:absolute;top:-6px;right:-6px;background:var(--red);color:#fff;border:none;border-radius:50%;width:20px;height:20px;font-size:14px;cursor:pointer;line-height:1';
+      del.onclick = (e) => { e.stopPropagation(); _sbFiles.splice(i, 1); sbRefreshPreviews(); };
+      wrap.appendChild(img);
+      wrap.appendChild(label);
+      wrap.appendChild(del);
+      cont.appendChild(wrap);
+    });
     document.getElementById('sbBtnAnalizar').style.display = '';
     document.getElementById('sbDropzone').style.borderColor = 'var(--accent)';
   }
 
+  function sbRefreshPreviews() {
+    const cont = document.getElementById('sbPreviews');
+    cont.innerHTML = '';
+    if (!_sbFiles.length) {
+      cont.style.display = 'none';
+      document.getElementById('sbBtnAnalizar').style.display = 'none';
+      document.getElementById('sbDropzone').style.borderColor = 'var(--border)';
+      return;
+    }
+    _sbFiles.forEach((f, i) => {
+      const wrap = document.createElement('div');
+      wrap.style.cssText = 'position:relative;flex:0 0 auto';
+      const img = document.createElement('img');
+      img.src = URL.createObjectURL(f);
+      img.style.cssText = 'height:100px;border-radius:8px;border:1px solid var(--border);object-fit:cover';
+      const del = document.createElement('button');
+      del.textContent = '×';
+      del.style.cssText = 'position:absolute;top:-6px;right:-6px;background:var(--red);color:#fff;border:none;border-radius:50%;width:20px;height:20px;font-size:14px;cursor:pointer;line-height:1';
+      del.onclick = (e) => { e.stopPropagation(); _sbFiles.splice(i, 1); sbRefreshPreviews(); };
+      wrap.appendChild(img);
+      wrap.appendChild(del);
+      cont.appendChild(wrap);
+    });
+  }
+
+  function sbCompressImage(file, maxDim, quality) {
+    return new Promise((resolve) => {
+      if (!file.type.startsWith('image/')) { resolve(file); return; }
+      const img = new Image();
+      img.onload = () => {
+        let w = img.width, h = img.height;
+        if (w <= maxDim && h <= maxDim && file.size < 1.5 * 1024 * 1024) {
+          URL.revokeObjectURL(img.src);
+          resolve(file);
+          return;
+        }
+        if (w > h) { if (w > maxDim) { h = Math.round(h * maxDim / w); w = maxDim; } }
+        else       { if (h > maxDim) { w = Math.round(w * maxDim / h); h = maxDim; } }
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        canvas.toBlob(blob => {
+          URL.revokeObjectURL(img.src);
+          resolve(blob ? new File([blob], file.name, { type: 'image/jpeg' }) : file);
+        }, 'image/jpeg', quality);
+      };
+      img.onerror = () => resolve(file);
+      img.src = URL.createObjectURL(file);
+    });
+  }
+
   async function sbEnviar() {
-    const file = document.getElementById('sbFileInput').files[0];
-    if (!file) { toast('Selecciona un archivo', 'err'); return; }
+    if (!_sbFiles.length) { toast('Selecciona al menos una imagen', 'err'); return; }
     document.getElementById('sbStep1').style.display = 'none';
     document.getElementById('sbStep2').style.display = '';
+    const infoEl = document.getElementById('sbStep2Info');
+    infoEl.textContent = _sbFiles.length > 1
+      ? `Comprimiendo y cotejando ${_sbFiles.length} documentos — puede tardar 15-30 segundos`
+      : 'Analizando documento — puede tardar 10-20 segundos';
     try {
       const fd = new FormData();
-      fd.append('image', file);
+      const keys = ['image', 'image2', 'image3', 'image4', 'image5'];
+      for (let i = 0; i < _sbFiles.length; i++) {
+        const compressed = await sbCompressImage(_sbFiles[i], 2000, 0.85);
+        fd.append(keys[i], compressed);
+      }
       const res  = await apiRaw('/scan-bobinas', { method: 'POST', body: fd });
       const data = await res.json();
       if (!res.ok || !data.ok) throw new Error(data.error || 'Error desconocido');
@@ -6846,9 +7118,9 @@ document.getElementById('wInput').focus();
   function sbMostrarReview(data) {
     document.getElementById('sbStep2').style.display = 'none';
     document.getElementById('sbStep3').style.display = '';
-    const obraId = document.getElementById('sbObra')?.value || '';
     const tbody = document.getElementById('sbTbody');
     tbody.innerHTML = '';
+    const inpStyle = 'width:100%;padding:4px 6px;border:1px solid var(--border);border-radius:5px;background:var(--surface2);color:var(--text);font-size:12px';
     (data.bobinas || []).forEach((b, i) => {
       const alb = b.num_albaran || data.num_albaran || '';
       const tr = document.createElement('tr');
@@ -6859,33 +7131,39 @@ document.getElementById('wInput').focus();
         </td>
         <td style="padding:4px 6px">
           <input type="text" value="${escH(b.codigo || '')}" data-idx="${i}" data-field="codigo"
-            style="width:100%;padding:4px 6px;border:1px solid var(--border);border-radius:5px;background:var(--surface2);color:var(--text);font-size:12px;text-transform:uppercase" placeholder="Código *">
+            style="${inpStyle};text-transform:uppercase" placeholder="Código *">
         </td>
         <td style="padding:4px 6px">
           <input type="text" value="${escH(b.proveedor || '')}" data-idx="${i}" data-field="proveedor"
-            style="width:100%;padding:4px 6px;border:1px solid var(--border);border-radius:5px;background:var(--surface2);color:var(--text);font-size:12px" placeholder="Proveedor *">
+            style="${inpStyle}" placeholder="Proveedor *">
         </td>
         <td style="padding:4px 6px">
           <input type="text" value="${escH(b.tipo_cable || '')}" data-idx="${i}" data-field="tipo_cable"
-            style="width:100%;padding:4px 6px;border:1px solid var(--border);border-radius:5px;background:var(--surface2);color:var(--text);font-size:12px" placeholder="Tipo cable *">
+            style="${inpStyle}" placeholder="Tipo cable *">
+        </td>
+        <td style="padding:4px 6px">
+          <input type="text" value="${escH(b.metros != null ? String(b.metros) : '')}" data-idx="${i}" data-field="metros"
+            style="${inpStyle};width:70px" placeholder="Metros">
         </td>
         <td style="padding:4px 6px">
           <input type="text" value="${escH(alb)}" data-idx="${i}" data-field="num_albaran"
-            style="width:80px;padding:4px 6px;border:1px solid var(--border);border-radius:5px;background:var(--surface2);color:var(--text);font-size:12px" placeholder="Albarán">
+            style="${inpStyle};width:100px" placeholder="Albarán">
         </td>
         <td style="padding:4px 6px">
           <input type="text" value="${escH(b.notas || '')}" data-idx="${i}" data-field="notas"
-            style="width:100%;padding:4px 6px;border:1px solid var(--border);border-radius:5px;background:var(--surface2);color:var(--text);font-size:12px" placeholder="Notas">
+            style="${inpStyle}" placeholder="Notas">
         </td>`;
       tbody.appendChild(tr);
     });
-    document.getElementById('sbResumen').textContent = `${(data.bobinas||[]).length} bobinas extraídas`;
+    const n = (data.bobinas||[]).length;
+    const extra = data.imagenes_procesadas > 1 ? ` — ${data.imagenes_procesadas} docs cotejados` : '';
+    document.getElementById('sbResumen').textContent = `${n} bobinas extraídas${extra}`;
   }
 
   function escH(s) { return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
 
   async function sbImportar() {
-    const obraId = document.getElementById('sbObra')?.value || null;
+    const obraId = SESSION?.obra_id || document.getElementById('sbObraSel')?.value || null;
     const bobinas = [];
     document.querySelectorAll('#sbTbody tr').forEach((tr, i) => {
       const cb = tr.querySelector(`input[type=checkbox][data-idx="${i}"]`);
@@ -6895,10 +7173,11 @@ document.getElementById('wInput').focus();
       const proveedor = get('proveedor');
       const tipo_cable = get('tipo_cable');
       if (!codigo || !proveedor || !tipo_cable) return;
+      const metros = get('metros');
       bobinas.push({
         codigo, proveedor, tipo_cable,
         num_albaran: get('num_albaran') || null,
-        notas:       get('notas') || null,
+        notas:       [get('notas'), metros ? `${metros}m` : ''].filter(Boolean).join(' · ') || null,
         obra_id:     obraId ? parseInt(obraId) : null,
       });
     });
@@ -6908,7 +7187,7 @@ document.getElementById('wInput').focus();
     try {
       const r = await api('/bobinas/batch', { method: 'POST', body: JSON.stringify({ bobinas }) });
       if (!r.ok && r.importadas === undefined) throw new Error(r.error || 'Error');
-      toast(`✅ ${r.importadas} bobinas importadas${r.duplicadas ? ` · ${r.duplicadas} duplicadas omitidas` : ''}`, 'ok');
+      toast(`✅ ${r.importadas} nuevas${r.actualizadas ? ` · ${r.actualizadas} actualizadas` : ''}${r.duplicadas ? ` · ${r.duplicadas} sin cambios` : ''}`, 'ok');
       cerrarScanBobinas();
       if (typeof cargarBobinas === 'function') cargarBobinas();
     } catch(e) {
@@ -6920,7 +7199,7 @@ document.getElementById('wInput').focus();
 
   window.abrirScanBobinasPanel = abrirScanBobinasPanel;
   window.cerrarScanBobinas     = cerrarScanBobinas;
-  window.sbPreviewFile         = sbPreviewFile;
+  window.sbPreviewFiles        = sbPreviewFiles;
   window.sbEnviar              = sbEnviar;
   window.sbImportar            = sbImportar;
   window.sbVolver              = () => {
@@ -6941,27 +7220,40 @@ document.getElementById('wInput').focus();
 
     <!-- Paso 1 -->
     <div id="spStep1">
-      <div class="form-group">
-        <div class="form-label">Obra</div>
-        <select id="spObra" class="form-input"><option value="">— Sin asignar —</option></select>
+      <div id="spObraInfo" style="margin-bottom:12px;padding:8px 12px;background:var(--surface2);border-radius:8px;font-size:12px;display:none"></div>
+      <div id="spObraSelGroup" class="form-group" style="display:none">
+        <div class="form-label">Selecciona obra</div>
+        <select id="spObraSel" class="form-input"><option value="">— Elige obra —</option></select>
       </div>
       <div id="spDropzone" onclick="document.getElementById('spFileInput').click()"
         style="border:2px dashed var(--border);border-radius:12px;padding:32px;text-align:center;cursor:pointer;transition:border-color .2s;margin-bottom:12px">
-        <div style="font-size:40px;margin-bottom:8px">🖼️</div>
-        <div style="font-size:14px;font-weight:700">Haz clic para subir la imagen del parte</div>
-        <div style="font-size:11px;color:var(--muted);margin-top:4px">JPG, PNG, PDF — máx 20 MB</div>
-        <input type="file" id="spFileInput" accept="image/*,.pdf" style="display:none" onchange="spPreviewFile(this)">
+        <div style="font-size:40px;margin-bottom:8px">📄</div>
+        <div style="font-size:14px;font-weight:700">Sube fotos de partes semanales</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:4px">Puedes subir varios — Alejandra cruzará los datos</div>
+        <div style="font-size:10px;color:var(--muted);margin-top:2px">JPG, PNG — máx 5 imágenes</div>
+        <input type="file" id="spFileInput" accept="image/*" multiple style="display:none" onchange="spPreviewFiles(this)">
       </div>
-      <img id="spPreview" style="display:none;width:100%;max-height:220px;object-fit:contain;border-radius:10px;margin-bottom:12px;border:1px solid var(--border)">
-      <button id="spBtnAnalizar" onclick="spEnviar()" class="btn btn-primary" style="width:100%;display:none">🔍 Analizar con IA</button>
+      <div id="spPreviews" style="display:none;display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px"></div>
+      <button id="spBtnAnalizar" onclick="spEnviar()" class="btn btn-primary" style="width:100%;display:none">🔍 Analizar con Alejandra</button>
     </div>
 
     <!-- Paso 2 -->
     <div id="spStep2" style="display:none;text-align:center;padding:40px 0">
       <div style="font-size:44px;margin-bottom:14px">🤖</div>
-      <div style="font-size:15px;font-weight:700;margin-bottom:6px">Alejandra está leyendo el parte...</div>
-      <div style="font-size:12px;color:var(--muted)">Puede tardar 10-20 segundos</div>
+      <div style="font-size:15px;font-weight:700;margin-bottom:6px">Alejandra está analizando los partes...</div>
+      <div id="spStep2Info" style="font-size:12px;color:var(--muted)">Puede tardar 15-30 segundos</div>
       <div class="spinner" style="margin:20px auto 0"></div>
+    </div>
+
+    <!-- Paso 2b: Selección de empresas -->
+    <div id="spStepEmpresas" style="display:none">
+      <div style="font-size:15px;font-weight:700;margin-bottom:12px">🏢 Empresas detectadas en el parte</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:14px">Selecciona las empresas cuyos trabajadores quieres importar:</div>
+      <div id="spEmpresasCheck" style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px"></div>
+      <div style="display:flex;gap:8px">
+        <button onclick="spVolverAStep1()" class="btn btn-secondary" style="flex:0 0 100px">← Volver</button>
+        <button onclick="spConfirmarEmpresas()" class="btn btn-primary" style="flex:1">Continuar →</button>
+      </div>
     </div>
 
     <!-- Paso 3 -->
@@ -7007,26 +7299,28 @@ document.getElementById('wInput').focus();
 
     <!-- Paso 1 -->
     <div id="sbStep1">
-      <div class="form-group">
-        <div class="form-label">Obra (opcional)</div>
-        <select id="sbObra" class="form-input"><option value="">— Sin asignar —</option></select>
+      <div id="sbObraInfo" style="margin-bottom:12px;padding:8px 12px;background:var(--surface2);border-radius:8px;font-size:12px;display:none"></div>
+      <div id="sbObraSelGroup" class="form-group" style="display:none">
+        <div class="form-label">Selecciona obra</div>
+        <select id="sbObraSel" class="form-input"><option value="">— Elige obra —</option></select>
       </div>
       <div id="sbDropzone" onclick="document.getElementById('sbFileInput').click()"
         style="border:2px dashed var(--border);border-radius:12px;padding:32px;text-align:center;cursor:pointer;transition:border-color .2s;margin-bottom:12px">
-        <div style="font-size:40px;margin-bottom:8px">🖼️</div>
-        <div style="font-size:14px;font-weight:700">Haz clic para subir la imagen del albarán</div>
-        <div style="font-size:11px;color:var(--muted);margin-top:4px">JPG, PNG, PDF — máx 20 MB</div>
-        <input type="file" id="sbFileInput" accept="image/*,.pdf" style="display:none" onchange="sbPreviewFile(this)">
+        <div style="font-size:40px;margin-bottom:8px">📄</div>
+        <div style="font-size:14px;font-weight:700">Sube fotos de albaranes y hojas de control</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:4px">Puedes subir varias a la vez — Alejandra cruzará los datos</div>
+        <div style="font-size:10px;color:var(--muted);margin-top:2px">JPG, PNG — máx 5 imágenes</div>
+        <input type="file" id="sbFileInput" accept="image/*" multiple style="display:none" onchange="sbPreviewFiles(this)">
       </div>
-      <img id="sbPreview" style="display:none;width:100%;max-height:220px;object-fit:contain;border-radius:10px;margin-bottom:12px;border:1px solid var(--border)">
-      <button id="sbBtnAnalizar" onclick="sbEnviar()" class="btn btn-primary" style="width:100%;display:none">🔍 Analizar con IA</button>
+      <div id="sbPreviews" style="display:none;display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px"></div>
+      <button id="sbBtnAnalizar" onclick="sbEnviar()" class="btn btn-primary" style="width:100%;display:none">🔍 Analizar con Alejandra</button>
     </div>
 
     <!-- Paso 2 -->
     <div id="sbStep2" style="display:none;text-align:center;padding:40px 0">
       <div style="font-size:44px;margin-bottom:14px">🤖</div>
-      <div style="font-size:15px;font-weight:700;margin-bottom:6px">Alejandra está leyendo el albarán...</div>
-      <div style="font-size:12px;color:var(--muted)">Puede tardar 10-20 segundos</div>
+      <div style="font-size:15px;font-weight:700;margin-bottom:6px">Alejandra está analizando los documentos...</div>
+      <div id="sbStep2Info" style="font-size:12px;color:var(--muted)">Cotejando datos entre documentos — puede tardar 15-30 segundos</div>
       <div class="spinner" style="margin:20px auto 0"></div>
     </div>
 
@@ -7037,13 +7331,14 @@ document.getElementById('wInput').focus();
         <div id="sbResumen" style="font-size:11px;color:var(--muted);flex:1;text-align:right"></div>
       </div>
       <div style="overflow-x:auto;margin-bottom:14px">
-        <table style="width:100%;border-collapse:collapse;font-size:12px;min-width:640px">
+        <table style="width:100%;border-collapse:collapse;font-size:12px;min-width:780px">
           <thead>
             <tr style="background:var(--surface2)">
               <th style="padding:8px 5px;text-align:center;border-bottom:1px solid var(--border);width:32px">✓</th>
               <th style="padding:8px;text-align:left;border-bottom:1px solid var(--border)">Código</th>
               <th style="padding:8px;text-align:left;border-bottom:1px solid var(--border)">Proveedor</th>
               <th style="padding:8px;text-align:left;border-bottom:1px solid var(--border)">Tipo cable</th>
+              <th style="padding:8px;text-align:left;border-bottom:1px solid var(--border)">Metros</th>
               <th style="padding:8px;text-align:left;border-bottom:1px solid var(--border)">Albarán</th>
               <th style="padding:8px;text-align:left;border-bottom:1px solid var(--border)">Notas</th>
             </tr>
