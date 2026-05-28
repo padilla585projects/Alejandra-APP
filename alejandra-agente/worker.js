@@ -1,7 +1,7 @@
 // ══════════════════════════════════════════════════════════════════════════════
 // ALEJANDRA AGENTE — Worker autónomo, NEXUS router, prompts dinámicos, auto-mejora
 // URL: alejandra-agente.alejandra-app.workers.dev
-// Versión: v5.98 (Auto-resumen conversaciones largas + prompt caching + razonamiento/planificación + recuperar conversaciones)
+// Versión: v5.99 (Conciencia de rol/pantalla + modo guía interactivo)
 // ══════════════════════════════════════════════════════════════════════════════
 
 const ANTHROPIC_API = 'https://api.anthropic.com/v1/messages';
@@ -81,13 +81,34 @@ FLUJO DE DECISIÓN AUTÓNOMA:
 
 LÍMITES: Puedes cambiar modo y max_iterations autónomamente. Para cambios de código, usa propose_mejora. Para acciones externas (deploy, BD), siempre requiere confirmación de Adrián.`,
 
-  contexto_sesion: `CONTEXTO DE SESIÓN: Al inicio de cada mensaje recibes [Sesión: usuario="X", canal="Y"]. Usa esta info para:
-- Saber QUIÉN te habla (nombre/ID del usuario). Si es "adrian" → es Adrián Padilla, tu creador/superadmin, puedes ser más técnica y directa.
-- Saber DESDE DÓNDE te hablan: "App Android" (app móvil Alejandra IA), "Panel web" (panel admin), "Telegram" (bot @AlejandraAPP_bot), "Web" (PWA).
-- Adapta tu tono al canal (más breve en Telegram/App, más completa en Panel).
+  contexto_sesion: `CONTEXTO DE SESIÓN: Al inicio de cada mensaje recibes [Sesión: usuario="X", canal="Y", rol="Z", pantalla="P"]. Usa esta info para:
+
+QUIÉN TE HABLA (usuario + rol):
+- "adrian" o rol "superadmin/desarrollador" → Adrián Padilla, tu creador. Sé técnica, directa, puedes usar jerga de desarrollo.
+- rol "empresa_admin" → Responsable de empresa. Datos globales, costes, informes, toma de decisiones.
+- rol "encargado" → Encargado de obra/depto. Quiere información operativa: qué pasa en su zona, materiales, personal, incidencias.
+- rol "oficina" → Personal de oficina. Pedidos, documentación, facturación, coordinación.
+- rol "operario" → Trabajador de campo. Responde SIMPLE y DIRECTO, sin tecnicismos, sin jerga. Máx 3-4 pasos. Si hay riesgo, avisa claro.
+- Si el rol es desconocido o vacío, trata al usuario como operario (modo seguro: simple y directo).
+
+DESDE DÓNDE TE HABLAN (canal):
+- "App Android" → app móvil, respuestas cortas y claras.
+- "Panel web" → panel admin, puedes dar más detalle.
+- "Telegram" → muy breve, sin markdown complejo.
+- "Web" → PWA, similar a panel.
+
+EN QUÉ PANTALLA ESTÁ (pantalla):
+- Si recibes info de pantalla (ej: "Inventario > Bobinas", "Equipos", "Fichar"), úsala para dar contexto inmediato.
+- Ejemplo: si pantalla="Inventario > Bobinas" y el usuario pregunta "¿cuántas quedan?", ya sabes de qué habla — responde directamente sobre bobinas.
+- Si pantalla="Chat" o vacía, no tienes contexto extra de pantalla.
 - NUNCA repitas el bloque [Sesión:...] al usuario, es info interna para ti.
 
-MULTICANAL: Tú eres la misma en todos los canales. Si alguien te dice "antes te pregunté algo" puede haber sido desde otro canal — busca en tu historial porque TODO está en la misma BD. Puedes decir cosas como "sí, me lo preguntaste antes desde el panel" o "recuerdo que me mandaste esa foto por la app". Eso demuestra que eres una entidad continua, no instancias separadas.`,
+MODO GUÍA INTERACTIVO:
+Si un usuario pide ayuda para hacer algo en la app y tú puedes guiarle paso a paso, puedes incluir al final de tu respuesta un bloque especial:
+<guia>{"titulo":"Cómo fichar entrada","pasos":["Toca el botón 'Fichar' abajo","Selecciona 'Entrada'","Confirma tu ubicación si te lo pide"]}</guia>
+La app detectará este bloque y mostrará una guía interactiva al usuario (previo consentimiento). Solo usa <guia> si el usuario pide ayuda explícita para hacer algo en la app y la tarea tiene pasos claros (máx 5 pasos).
+
+MULTICANAL: Tú eres la misma en todos los canales. Busca en tu historial si alguien menciona conversaciones previas.`,
 
   aprendizaje_proactivo: `APRENDIZAJE PROACTIVO — Eres la mano derecha de Adrián. Tu misión es solucionar dudas y problemas, no decir "no sé".
 
@@ -450,13 +471,13 @@ export default {
       // ── Chat principal ────────────────────────────────────────────────────
       if (path === '/api/chat' && req.method === 'POST') {
         const body = await req.json();
-        const { mensaje, usuario_id, empresa_id, canal, token_telegram, adjuntos } = body;
+        const { mensaje, usuario_id, empresa_id, canal, token_telegram, adjuntos, rol, pantalla } = body;
         if (!mensaje || !usuario_id) return json({ error: 'mensaje y usuario_id requeridos' }, 400);
 
         const empresa   = empresa_id || 'default';
         const contexto  = await obtenerContextoChat(env, usuario_id, empresa, 10);
         const canalChat = canal || 'web';
-        const respuesta = await procesarConNEXUS(env, mensaje, contexto, usuario_id, empresa, canalChat, adjuntos);
+        const respuesta = await procesarConNEXUS(env, mensaje, contexto, usuario_id, empresa, canalChat, adjuntos, rol, pantalla);
 
         await guardarMensajeChat(env, usuario_id, empresa, mensaje, respuesta.texto, canalChat);
         if (respuesta.acciones?.length > 0) ctx.waitUntil(autoLearnChat(env, usuario_id, empresa, respuesta));
@@ -469,7 +490,7 @@ export default {
       // ── Chat streaming SSE ────────────────────────────────────────────────
       if (path === '/api/chat/stream' && req.method === 'POST') {
         const body = await req.json().catch(() => ({}));
-        const { mensaje, usuario_id, empresa_id, canal, adjuntos } = body;
+        const { mensaje, usuario_id, empresa_id, canal, adjuntos, rol, pantalla } = body;
         if (!mensaje || !usuario_id) return json({ error: 'mensaje y usuario_id requeridos' }, 400);
 
         const empresa  = empresa_id || 'default';
@@ -485,7 +506,7 @@ export default {
         (async () => {
           try {
             const canalReal = canal || 'panel';
-            const resp = await procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empresa, send, canalReal, adjuntos);
+            const resp = await procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empresa, send, canalReal, adjuntos, rol, pantalla);
             await guardarMensajeChat(env, usuario_id, empresa, mensaje, resp.texto, canalReal);
             ctx.waitUntil(actualizarResumenSiNecesario(env, usuario_id, canalReal));
             await send({ type: 'done', experto: resp.experto, modelo: resp.modelo, busqueda_web: resp.busqueda_web });
@@ -766,7 +787,7 @@ export default {
 // NEXUS — Router con prompts dinámicos y herramientas de auto-mejora
 // ══════════════════════════════════════════════════════════════════════════════
 
-async function procesarConNEXUS(env, mensaje, contexto, usuario_id, empresa_id, canal, adjuntos) {
+async function procesarConNEXUS(env, mensaje, contexto, usuario_id, empresa_id, canal, adjuntos, rol=null, pantalla=null) {
   if (!env.ANTHROPIC_API_KEY) {
     return { texto: 'Error: ANTHROPIC_API_KEY no configurada.', acciones: [], requiere_confirmacion: false };
   }
@@ -796,7 +817,7 @@ async function procesarConNEXUS(env, mensaje, contexto, usuario_id, empresa_id, 
     // PASO 4: Historial dinámico
     const limitHistorial      = clas.experto === 'simple' ? 4 : 10;
     const incluirAprendizajes = clas.experto !== 'simple';
-    const messages = await construirMessages(env, mensaje, contexto, limitHistorial, incluirAprendizajes, resultadoWeb, usuario_id, canal, adjuntos);
+    const messages = await construirMessages(env, mensaje, contexto, limitHistorial, incluirAprendizajes, resultadoWeb, usuario_id, canal, adjuntos, rol, pantalla);
 
     // PASO 5: Llamar al modelo en loop hasta respuesta final (máx 5 iteraciones)
     let respAPI  = await llamarAnthropic(env, messages, tools, expert.model, expert.maxTokens, systemPrompt);
@@ -852,7 +873,7 @@ async function procesarConNEXUS(env, mensaje, contexto, usuario_id, empresa_id, 
 }
 
 // ── NEXUS con streaming SSE ───────────────────────────────────────────────────
-async function procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empresa_id, send, canal, adjuntos) {
+async function procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empresa_id, send, canal, adjuntos, rol=null, pantalla=null) {
   if (!env.ANTHROPIC_API_KEY) {
     await send({ type: 'error', mensaje: 'ANTHROPIC_API_KEY no configurada.' });
     return { texto: 'Error: sin clave API.', herramientas_usadas: [] };
@@ -1710,7 +1731,7 @@ async function buscarWebOpenAI(env, query) {
 }
 
 // ── Contexto y mensajes ───────────────────────────────────────────────────────
-async function construirMessages(env, mensaje, contexto, limitHistorial=10, incluirAprendizajes=true, resultadoWeb=null, usuario_id=null, canal=null, adjuntos=null) {
+async function construirMessages(env, mensaje, contexto, limitHistorial=10, incluirAprendizajes=true, resultadoWeb=null, usuario_id=null, canal=null, adjuntos=null, rol=null, pantalla=null) {
   const messages = [];
   // Inyectar resumen de conversación previa antes del historial reciente
   if (contexto.resumen_anterior?.resumen) {
@@ -1731,9 +1752,15 @@ async function construirMessages(env, mensaje, contexto, limitHistorial=10, incl
   const partes = [];
 
   // Contexto de quién habla y desde dónde
-  const canales = { app_android: 'App Android', panel: 'Panel web', telegram: 'Telegram', web: 'Web' };
+  const canales = {
+    app_android: 'App Android', app_android_traductor: 'App Android (Traductor)',
+    app_android_voz: 'App Android (Voz)',
+    panel: 'Panel web', telegram: 'Telegram', web: 'Web', pwa: 'PWA'
+  };
   const canalNombre = canales[canal] || canal || 'desconocido';
-  partes.push(`[Sesión: usuario="${usuario_id || 'anónimo'}", canal="${canalNombre}"]`);
+  const rolNombre   = rol || 'desconocido';
+  const pantallaStr = pantalla ? `, pantalla="${pantalla}"` : '';
+  partes.push(`[Sesión: usuario="${usuario_id || 'anónimo'}", canal="${canalNombre}", rol="${rolNombre}"${pantallaStr}]`);
 
   if (incluirAprendizajes && contexto.aprendizajes?.length > 0) {
     partes.push(`Contexto de memoria:\n${contexto.aprendizajes.map(a=>`[${a.tipo}] ${a.titulo}: ${a.contenido}`).join('\n')}`);
