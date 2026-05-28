@@ -1,7 +1,7 @@
 // ══════════════════════════════════════════════════════════════════════════════
 // ALEJANDRA AGENTE — Worker autónomo, NEXUS router, prompts dinámicos, auto-mejora
 // URL: alejandra-agente.alejandra-app.workers.dev
-// Versión: v6.02 (Optimización tokens: DOM lazy, historial 10→6, aprendizajes solo expertos técnicos)
+// Versión: v6.03 (Fotos en obra: HEIC, 30MB, límite Claude corregido a 3.7MB raw, fallback a analizar_foto_obra)
 // ══════════════════════════════════════════════════════════════════════════════
 
 const ANTHROPIC_API = 'https://api.anthropic.com/v1/messages';
@@ -753,20 +753,22 @@ export default {
             return json({ error: 'Campo "file" requerido' }, 400);
           }
 
-          // Validar tamaño (20MB)
-          const MAX_SIZE = 20 * 1024 * 1024;
+          // Validar tamaño (30MB — fotos de obra a veces son grandes)
+          const MAX_SIZE = 30 * 1024 * 1024;
           if (file.size > MAX_SIZE) {
-            return json({ error: `Archivo demasiado grande (${(file.size/1024/1024).toFixed(1)}MB). Máx: 20MB` }, 413);
+            return json({ error: `Archivo demasiado grande (${(file.size/1024/1024).toFixed(1)}MB). Máx: 30MB` }, 413);
           }
 
-          // Validar tipo MIME
+          // Validar tipo MIME — incluido HEIC/HEIF para iPhone y formato sin tipo conocido
           const ALLOWED_TYPES = [
-            'image/jpeg', 'image/png', 'image/gif', 'image/webp',
+            'image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp',
+            'image/heic', 'image/heif', 'image/avif',
             'application/pdf',
             'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // xlsx
             'application/vnd.ms-excel', // xls
             'text/csv', 'text/plain',
             'application/json',
+            'application/octet-stream', // permitir: el filename indicará el tipo real
           ];
           const mimeType = file.type || 'application/octet-stream';
           if (!ALLOWED_TYPES.includes(mimeType)) {
@@ -1024,18 +1026,38 @@ async function buildUserContentWithAdjuntos(env, mensaje, adjuntos) {
         contentBlocks.push({ type: 'text', text: `[Adjunto no encontrado: ${key}]` });
         continue;
       }
-      const ct = obj.httpMetadata?.contentType || '';
+      let ct = obj.httpMetadata?.contentType || '';
+      // Detectar por extensión si el contentType es genérico
+      if (ct === 'application/octet-stream' || !ct) {
+        const lower = key.toLowerCase();
+        if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) ct = 'image/jpeg';
+        else if (lower.endsWith('.png')) ct = 'image/png';
+        else if (lower.endsWith('.webp')) ct = 'image/webp';
+        else if (lower.endsWith('.heic')) ct = 'image/heic';
+        else if (lower.endsWith('.heif')) ct = 'image/heif';
+        else if (lower.endsWith('.gif')) ct = 'image/gif';
+        else if (lower.endsWith('.pdf')) ct = 'application/pdf';
+      }
       if (ct.startsWith('image/')) {
         const buf = await obj.arrayBuffer();
         const bytes = new Uint8Array(buf);
-        if (bytes.length <= 5 * 1024 * 1024) {
+        // Anthropic acepta hasta 5MB base64 por imagen (~3.7MB raw).
+        // HEIC/HEIF Anthropic NO los soporta nativamente: avisamos al modelo.
+        const isHeic = ct === 'image/heic' || ct === 'image/heif';
+        if (isHeic) {
+          contentBlocks.push({ type: 'text', text: `[Imagen HEIC adjunta: ${key} — usa la tool analizar_foto_obra para verla]` });
+        } else if (bytes.length <= 3.7 * 1024 * 1024) {
           const base64 = uint8ToBase64(bytes);
           contentBlocks.push({
             type: 'image',
             source: { type: 'base64', media_type: ct, data: base64 }
           });
         } else {
-          contentBlocks.push({ type: 'text', text: `[Imagen demasiado grande para analizar: ${key}]` });
+          // Imagen grande: avisamos a Alejandra para que use la tool de análisis (Gemini si está disponible)
+          contentBlocks.push({
+            type: 'text',
+            text: `[Imagen grande adjunta: ${key} (${(bytes.length/1024/1024).toFixed(1)}MB). Usa la tool analizar_foto_obra con key="${key}" para analizarla.]`
+          });
         }
       } else if (ct.startsWith('text/') || ct === 'application/json') {
         const text = await obj.text();
