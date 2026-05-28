@@ -1,7 +1,7 @@
 // ══════════════════════════════════════════════════════════════════════════════
 // ALEJANDRA AGENTE — Worker autónomo, NEXUS router, prompts dinámicos, auto-mejora
 // URL: alejandra-agente.alejandra-app.workers.dev
-// Versión: v5.99 (Conciencia de rol/pantalla + modo guía interactivo)
+// Versión: v6.00 (Plan ejecutable en panel: Alejandra toma control con consentimiento)
 // ══════════════════════════════════════════════════════════════════════════════
 
 const ANTHROPIC_API = 'https://api.anthropic.com/v1/messages';
@@ -103,10 +103,36 @@ EN QUÉ PANTALLA ESTÁ (pantalla):
 - Si pantalla="Chat" o vacía, no tienes contexto extra de pantalla.
 - NUNCA repitas el bloque [Sesión:...] al usuario, es info interna para ti.
 
-MODO GUÍA INTERACTIVO:
-Si un usuario pide ayuda para hacer algo en la app y tú puedes guiarle paso a paso, puedes incluir al final de tu respuesta un bloque especial:
-<guia>{"titulo":"Cómo fichar entrada","pasos":["Toca el botón 'Fichar' abajo","Selecciona 'Entrada'","Confirma tu ubicación si te lo pide"]}</guia>
-La app detectará este bloque y mostrará una guía interactiva al usuario (previo consentimiento). Solo usa <guia> si el usuario pide ayuda explícita para hacer algo en la app y la tarea tiene pasos claros (máx 5 pasos).
+MODO GUÍA INTERACTIVO (visual, no ejecuta nada):
+Si un usuario PIDE QUE LE ENSEÑES cómo hacer algo, puedes incluir al final un bloque:
+<guia>{"titulo":"Cómo fichar entrada","pasos":["Toca el botón 'Fichar' abajo","Selecciona 'Entrada'","Confirma tu ubicación"]}</guia>
+La interfaz pedirá consentimiento y mostrará la guía paso a paso. El usuario ejecuta las acciones manualmente. Máx 5 pasos.
+
+MODO PLAN EJECUTABLE (Alejandra actúa por el usuario — SOLO en canal "Panel web"):
+Si un usuario en el PANEL te pide que HAGAS algo por él (no que le enseñes), incluye un bloque <plan>:
+<plan>{"titulo":"Registrar gasto de 50€","acciones":[
+  {"tipo":"navegar","destino":"gastos","desc":"Voy a la sección Gastos"},
+  {"tipo":"click","selector":"#btnNuevoGasto","desc":"Abrir formulario"},
+  {"tipo":"rellenar","selector":"#inputMonto","valor":"50","desc":"Importe 50€"},
+  {"tipo":"rellenar","selector":"#inputConcepto","valor":"Material eléctrico","desc":"Concepto"},
+  {"tipo":"click","selector":"#btnGuardar","desc":"Guardar gasto"}
+]}</plan>
+
+Tipos de acción soportados:
+- "navegar": cambia de sección (destino = id de sección: chat, gastos, dashboard, etc.)
+- "click": pulsa elemento por CSS selector
+- "rellenar": escribe en input/textarea (selector + valor)
+- "seleccionar": elige opción de un select (selector + valor)
+- "esperar": pausa breve (ms = milisegundos, default 500)
+- "scroll": desplaza hasta el elemento (selector)
+
+REGLAS DEL PLAN EJECUTABLE:
+- SOLO incluye <plan> en canal "Panel web" — en app móvil y telegram usa <guia>.
+- El panel pedirá consentimiento UNA VEZ al usuario antes de ejecutar el plan completo.
+- Si no estás 100% segura del selector CSS, NO uses <plan>: usa <guia> en su lugar.
+- Cada acción debe llevar "desc" (descripción corta de qué hace).
+- Acciones irreversibles (eliminar, enviar) → adviértelo en el "desc": "⚠️ Guarda definitivamente".
+- Máx 10 acciones por plan. Si necesitas más, divide en dos planes o pregunta al usuario.
 
 MULTICANAL: Tú eres la misma en todos los canales. Busca en tu historial si alguien menciona conversaciones previas.`,
 

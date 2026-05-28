@@ -785,14 +785,21 @@ async function handleStreamEv(ev, state) {
       msgs.scrollTop = msgs.scrollHeight;
       if (i % 5 === 0) await new Promise(r => setTimeout(r, 16));
     }
-    // Detectar y extraer bloque <guia>...</guia>
-    const guiaMatch = ev.texto.match(/<guia>([\s\S]*?)<\/guia>/);
+    // Detectar y extraer bloques <plan>...</plan> y <guia>...</guia>
     let textoLimpio = ev.texto;
+    const planMatch = textoLimpio.match(/<plan>([\s\S]*?)<\/plan>/);
+    if (planMatch) {
+      textoLimpio = textoLimpio.replace(planMatch[0], '').trim();
+      try {
+        const plan = JSON.parse(planMatch[1]);
+        setTimeout(() => ofrecerPlan(plan), 200);
+      } catch (e) { console.warn('[plan] JSON inválido:', e); }
+    }
+    const guiaMatch = textoLimpio.match(/<guia>([\s\S]*?)<\/guia>/);
     if (guiaMatch) {
-      textoLimpio = ev.texto.replace(guiaMatch[0], '').trim();
+      textoLimpio = textoLimpio.replace(guiaMatch[0], '').trim();
       try {
         const guia = JSON.parse(guiaMatch[1]);
-        // mostrar oferta de guía tras pintar el texto
         setTimeout(() => ofrecerGuia(guia), 200);
       } catch (e) { console.warn('[guia] JSON inválido:', e); }
     }
@@ -859,6 +866,166 @@ function ofrecerGuia(guia) {
   document.body.appendChild(back);
   back.querySelector('#gNo').onclick = () => back.remove();
   back.querySelector('#gSi').onclick = () => { back.remove(); mostrarOverlayGuia(titulo, pasos); };
+}
+
+// ═══════════════ MODO PLAN EJECUTABLE (Alejandra toma control) ═══════════
+const _ICONO_ACCION = {
+  navegar: '🧭', click: '👆', rellenar: '⌨️', seleccionar: '☑️',
+  esperar: '⏱️', scroll: '⬇️'
+};
+
+function ofrecerPlan(plan) {
+  const titulo = plan.titulo || 'Acción solicitada';
+  const acciones = Array.isArray(plan.acciones) ? plan.acciones : [];
+  if (!acciones.length) return;
+
+  const listaHtml = acciones.map((a, i) => {
+    const ico = _ICONO_ACCION[a.tipo] || '•';
+    const desc = esc(a.desc || `${a.tipo} ${a.selector || a.destino || ''}`);
+    return `<div style="display:flex;align-items:flex-start;gap:8px;padding:6px 0;border-bottom:1px solid var(--bord)">
+      <span style="flex:0 0 22px;color:var(--muted);font-size:11px;font-weight:600">${i+1}.</span>
+      <span style="flex:0 0 22px">${ico}</span>
+      <span style="flex:1;color:var(--text);font-size:13px;line-height:1.4">${desc}</span>
+    </div>`;
+  }).join('');
+
+  const back = document.createElement('div');
+  back.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:9999;animation:fadeIn .15s';
+  back.innerHTML = `
+    <div style="background:var(--surf);border:1px solid var(--bord);border-radius:14px;padding:24px;max-width:540px;width:92%;font-family:'Montserrat',sans-serif;max-height:80vh;display:flex;flex-direction:column">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+        <span style="font-size:22px">🤖</span>
+        <div style="flex:1;font-weight:700;color:var(--text);font-size:15px">Alejandra quiere tomar el control</div>
+      </div>
+      <div style="color:var(--muted);font-size:12px;margin-bottom:14px">
+        <strong style="color:var(--text)">${esc(titulo)}</strong> — ${acciones.length} ${acciones.length === 1 ? 'acción' : 'acciones'}
+      </div>
+      <div style="background:var(--surf2);border:1px solid var(--bord);border-radius:8px;padding:6px 14px;overflow-y:auto;flex:1;margin-bottom:18px">
+        ${listaHtml}
+      </div>
+      <div style="background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.3);border-radius:6px;padding:10px 12px;margin-bottom:18px;color:#f59e0b;font-size:12px">
+        ⚠️ Alejandra ejecutará estas acciones por ti. Puedes cancelar en cualquier momento.
+      </div>
+      <div style="display:flex;justify-content:flex-end;gap:8px">
+        <button id="pNo" style="padding:9px 16px;background:transparent;color:var(--muted);border:1px solid var(--bord);border-radius:6px;cursor:pointer;font-size:13px">Cancelar</button>
+        <button id="pSi" style="padding:9px 16px;background:var(--acc);color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:600;font-size:13px">✓ Adelante, hazlo</button>
+      </div>
+    </div>`;
+  document.body.appendChild(back);
+  back.querySelector('#pNo').onclick = () => back.remove();
+  back.querySelector('#pSi').onclick = () => { back.remove(); ejecutarPlan(titulo, acciones); };
+}
+
+async function ejecutarPlan(titulo, acciones) {
+  // Overlay flotante de progreso
+  const float = document.createElement('div');
+  float.id = 'planFloat';
+  float.style.cssText = 'position:fixed;bottom:20px;right:20px;background:var(--surf);border:1px solid var(--acc);border-radius:10px;padding:14px 16px;width:340px;z-index:9998;box-shadow:0 8px 32px rgba(0,0,0,.4);font-family:Montserrat,sans-serif';
+  float.innerHTML = `
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+      <span style="font-size:16px">🤖</span>
+      <div style="flex:1;font-weight:700;color:var(--text);font-size:13px">${esc(titulo)}</div>
+      <button id="planStop" style="background:transparent;border:none;color:var(--muted);cursor:pointer;font-size:18px;line-height:1">×</button>
+    </div>
+    <div id="planProgress" style="height:3px;background:var(--bord);border-radius:3px;overflow:hidden;margin-bottom:10px">
+      <div id="planBar" style="height:100%;width:0;background:var(--acc);transition:width .3s"></div>
+    </div>
+    <div id="planEstado" style="color:var(--muted);font-size:12px;line-height:1.4;min-height:34px"></div>`;
+  document.body.appendChild(float);
+
+  let cancelado = false;
+  float.querySelector('#planStop').onclick = () => { cancelado = true; float.remove(); };
+  const bar = float.querySelector('#planBar');
+  const estado = float.querySelector('#planEstado');
+
+  const total = acciones.length;
+  for (let i = 0; i < total && !cancelado; i++) {
+    const a = acciones[i];
+    const ico = _ICONO_ACCION[a.tipo] || '•';
+    estado.innerHTML = `${ico} <strong>${i+1}/${total}</strong>: ${esc(a.desc || a.tipo)}`;
+    bar.style.width = `${((i+1)/total)*100}%`;
+
+    try {
+      await ejecutarAccion(a);
+    } catch (e) {
+      estado.innerHTML = `<span style="color:#ef4444">❌ Error en paso ${i+1}: ${esc(e.message)}</span>`;
+      console.error('[plan] error:', a, e);
+      // Esperar 3s y abortar
+      await new Promise(r => setTimeout(r, 3000));
+      float.remove();
+      return;
+    }
+    // pausa breve entre acciones para que el usuario vea qué pasa
+    await new Promise(r => setTimeout(r, 600));
+  }
+
+  if (!cancelado) {
+    estado.innerHTML = `<span style="color:#10b981">✓ Plan completado</span>`;
+    bar.style.background = '#10b981';
+    setTimeout(() => float.remove(), 2500);
+  }
+}
+
+async function ejecutarAccion(a) {
+  const findEl = (sel) => {
+    const el = document.querySelector(sel);
+    if (!el) throw new Error(`No encuentro elemento: ${sel}`);
+    return el;
+  };
+  const highlight = (el) => {
+    const orig = el.style.boxShadow;
+    el.style.boxShadow = '0 0 0 3px var(--acc), 0 0 18px rgba(139,92,246,.6)';
+    el.style.transition = 'box-shadow .25s';
+    setTimeout(() => { el.style.boxShadow = orig; }, 900);
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  };
+
+  switch (a.tipo) {
+    case 'navegar': {
+      if (typeof navigate === 'function') navigate(a.destino);
+      else throw new Error('navigate() no disponible');
+      break;
+    }
+    case 'click': {
+      const el = findEl(a.selector);
+      highlight(el);
+      await new Promise(r => setTimeout(r, 350));
+      el.click();
+      break;
+    }
+    case 'rellenar': {
+      const el = findEl(a.selector);
+      highlight(el);
+      el.focus();
+      // setter nativo para inputs/textarea (compatible con React/Vue si los hubiera)
+      const proto = el.tagName === 'TEXTAREA'
+        ? window.HTMLTextAreaElement.prototype
+        : window.HTMLInputElement.prototype;
+      const setter = Object.getOwnPropertyDescriptor(proto, 'value')?.set;
+      if (setter) setter.call(el, a.valor); else el.value = a.valor;
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+      el.dispatchEvent(new Event('change', { bubbles: true }));
+      break;
+    }
+    case 'seleccionar': {
+      const el = findEl(a.selector);
+      highlight(el);
+      el.value = a.valor;
+      el.dispatchEvent(new Event('change', { bubbles: true }));
+      break;
+    }
+    case 'esperar': {
+      await new Promise(r => setTimeout(r, Number(a.ms) || 500));
+      break;
+    }
+    case 'scroll': {
+      const el = findEl(a.selector);
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      break;
+    }
+    default:
+      throw new Error(`Tipo de acción desconocido: ${a.tipo}`);
+  }
 }
 
 function mostrarOverlayGuia(titulo, pasos) {
