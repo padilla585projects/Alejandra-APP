@@ -559,8 +559,11 @@ function initChat() {
         </div>
       </div>
       <div id="vozStatus" class="voz-status">🎙️ Escuchando...</div>
+      <div id="chatAdjuntos" style="display:none;padding:6px 12px;flex-wrap:wrap;gap:6px;border-top:1px solid var(--border);background:var(--surf)"></div>
       <div class="chat-input-bar">
-        <button id="vozBtn" class="chat-btn" onclick="toggleVoz()">🎙️</button>
+        <button id="vozBtn" class="chat-btn" onclick="toggleVoz()" title="Voz">🎙️</button>
+        <button class="chat-btn" onclick="document.getElementById('chatFile').click()" title="Adjuntar archivo">📎</button>
+        <input type="file" id="chatFile" multiple accept="image/*,application/pdf,.xlsx,.csv,.txt,.json,.dwg,.dxf" style="display:none" onchange="subirAdjuntos(event)">
         <textarea id="chatInput" class="chat-ta" rows="1" placeholder="Pregunta algo a Alejandra..."
           onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();enviarChat()}"
           oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,100)+'px'"></textarea>
@@ -583,6 +586,42 @@ function formatToolInput(nombre, input) {
   }
 }
 
+// ── Adjuntos (R2 upload) ──────────────────────────────────────
+let _adjuntos = [];
+
+async function subirAdjuntos(ev) {
+  const files = Array.from(ev.target.files || []);
+  ev.target.value = '';
+  for (const f of files) {
+    if (f.size > 20 * 1024 * 1024) { alert(`${f.name} supera 20MB`); continue; }
+    const cont = document.getElementById('chatAdjuntos');
+    const chip = document.createElement('div');
+    chip.style.cssText = 'background:var(--surf2);border:1px solid var(--border);border-radius:8px;padding:4px 10px;display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text)';
+    chip.innerHTML = `<span>⏳</span><span>${esc(f.name)}</span>`;
+    cont.appendChild(chip); cont.style.display = 'flex';
+    try {
+      const fd = new FormData();
+      fd.append('file', f);
+      fd.append('usuario_id', chatUserId || 'adrian');
+      const r = await fetch(`${API}/upload`, { method: 'POST', body: fd });
+      const j = await r.json();
+      if (!j.ok) throw new Error(j.error || 'upload failed');
+      _adjuntos.push(j.url);
+      chip.innerHTML = `<span>📎</span><span>${esc(f.name)}</span><span style="cursor:pointer;color:var(--muted)" onclick="quitarAdjunto('${j.url}', this.parentElement)">×</span>`;
+    } catch(e) {
+      chip.innerHTML = `<span style="color:#f55">❌ ${esc(f.name)}</span>`;
+      setTimeout(()=>chip.remove(), 3000);
+    }
+  }
+}
+
+function quitarAdjunto(url, chip) {
+  _adjuntos = _adjuntos.filter(u => u !== url);
+  chip.remove();
+  const cont = document.getElementById('chatAdjuntos');
+  if (!cont.children.length) cont.style.display = 'none';
+}
+
 // ── Enviar con streaming SSE ──────────────────────────────────
 let _chatBusy = false;
 
@@ -593,6 +632,10 @@ async function enviarChat() {
   if (!msg) return;
   _chatBusy = true;
   input.value = ''; input.style.height = 'auto';
+  const adjuntosEnviados = _adjuntos.slice();
+  _adjuntos = [];
+  const cont = document.getElementById('chatAdjuntos');
+  if (cont) { cont.innerHTML = ''; cont.style.display = 'none'; }
 
   const msgs = document.getElementById('chatMsgs');
 
@@ -626,7 +669,7 @@ async function enviarChat() {
     const resp = await fetch(`${API}/api/chat/stream`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ mensaje: msg, usuario_id: chatUserId, canal: 'panel' })
+      body: JSON.stringify({ mensaje: msg, usuario_id: chatUserId, canal: 'panel', adjuntos: adjuntosEnviados })
     });
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
 

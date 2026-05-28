@@ -661,11 +661,15 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
   <div id="alejandraList" style="flex:1;overflow-y:auto;padding:12px 16px;display:flex;flex-direction:column;gap:8px">
     <div style="text-align:center;color:var(--muted);font-size:13px;padding:20px">🤖 Alejandra lista. Cuéntame qué necesitas...</div>
   </div>
+  <div id="alejandraAdjuntos" style="display:none;padding:6px 12px;flex-wrap:wrap;gap:6px;border-top:1px solid var(--border)"></div>
   <div style="flex-shrink:0;padding:10px 12px;border-top:1px solid var(--border)">
     <div style="display:flex;gap:8px;align-items:flex-end">
       <button id="alejandraVozBtn" onclick="alejandraToggleVoz()" title="Hablar con Alejandra"
         style="width:44px;height:44px;padding:0;border-radius:12px;flex-shrink:0;font-size:20px;background:var(--surface2);border:1px solid var(--border);cursor:pointer;line-height:1">🎙️</button>
-      <textarea id="alejandraInput" placeholder="Escribe o usa el micrófono..." rows="1"
+      <button onclick="document.getElementById('alejandraFile').click()" title="Adjuntar archivo o foto"
+        style="width:44px;height:44px;padding:0;border-radius:12px;flex-shrink:0;font-size:20px;background:var(--surface2);border:1px solid var(--border);cursor:pointer;line-height:1">📎</button>
+      <input type="file" id="alejandraFile" multiple accept="image/*,application/pdf,.xlsx,.csv,.txt,.json,.dwg,.dxf" style="display:none" onchange="alejandraSubirAdjuntos(event)">
+      <textarea id="alejandraInput" placeholder="Escribe, usa el micrófono o adjunta archivos..." rows="1"
         style="flex:1;background:var(--surface2);border:1px solid #8b5cf6;border-radius:12px;padding:10px 14px;font-size:14px;color:var(--text);resize:none;line-height:1.4;max-height:100px;outline:none"
         onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();alejandraEnviar()}"
         oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,100)+'px'"></textarea>
@@ -14947,11 +14951,51 @@ function alejandraToggleVoz() {
   rec.start();
 }
 
+// ── Adjuntos ──────────────────────────────────────────────────────────────────
+let _alejandraAdjuntos = [];
+
+async function alejandraSubirAdjuntos(ev) {
+  const files = Array.from(ev.target.files || []);
+  ev.target.value = '';
+  const s = getSession();
+  if (!s?.usuario_id) { toast('❌ Inicia sesión', 'err'); return; }
+  const cont = document.getElementById('alejandraAdjuntos');
+  for (const f of files) {
+    if (f.size > 20*1024*1024) { toast(`❌ ${f.name} supera 20MB`, 'err'); continue; }
+    const chip = document.createElement('div');
+    chip.style.cssText = 'background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:4px 10px;display:flex;align-items:center;gap:6px;font-size:12px';
+    chip.innerHTML = `<span>⏳</span><span>${alejandraEsc(f.name)}</span>`;
+    cont.appendChild(chip); cont.style.display = 'flex';
+    try {
+      const fd = new FormData();
+      fd.append('file', f);
+      fd.append('usuario_id', s.usuario_id);
+      const r = await fetch('https://alejandra-agente.alejandra-app.workers.dev/upload', { method:'POST', body:fd });
+      const j = await r.json();
+      if (!j.ok) throw new Error(j.error || 'fail');
+      _alejandraAdjuntos.push(j.url);
+      chip.innerHTML = `<span>📎</span><span>${alejandraEsc(f.name)}</span><span style="cursor:pointer;color:var(--muted)" onclick="alejandraQuitarAdj('${j.url}',this.parentElement)">×</span>`;
+    } catch(e) {
+      chip.innerHTML = `<span style="color:#f55">❌ ${alejandraEsc(f.name)}</span>`;
+      setTimeout(()=>chip.remove(), 3000);
+    }
+  }
+}
+
+function alejandraQuitarAdj(url, chip) {
+  _alejandraAdjuntos = _alejandraAdjuntos.filter(u => u !== url);
+  chip.remove();
+  const cont = document.getElementById('alejandraAdjuntos');
+  if (!cont.children.length) cont.style.display = 'none';
+}
+
+function alejandraEsc(t) { return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
 // ── Chat principal ────────────────────────────────────────────────────────────
 async function alejandraEnviar() {
   const input = document.getElementById('alejandraInput');
   const msg   = (input?.value || '').trim();
-  if (!msg) return;
+  if (!msg && _alejandraAdjuntos.length === 0) return;
 
   input.value = '';
   input.style.height = 'auto';
@@ -14962,7 +15006,13 @@ async function alejandraEnviar() {
     return;
   }
 
-  _alejandraAñadirMensaje(msg, 'user');
+  const adjEnv = _alejandraAdjuntos.slice();
+  _alejandraAdjuntos = [];
+  const cont = document.getElementById('alejandraAdjuntos');
+  if (cont) { cont.innerHTML=''; cont.style.display='none'; }
+
+  const msgDisplay = msg + (adjEnv.length ? `\n📎 ${adjEnv.length} archivo(s) adjunto(s)` : '');
+  _alejandraAñadirMensaje(msgDisplay, 'user');
 
   try {
     _alejandraAñadirMensaje('⏳ Analizando...', 'bot', true);
@@ -14971,10 +15021,11 @@ async function alejandraEnviar() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        mensaje:    msg,
+        mensaje:    msg || '(archivo adjunto sin mensaje)',
         usuario_id: s.usuario_id,
         empresa_id: s.empresa_id || null,
-        canal:      'app'
+        canal:      'pwa',
+        adjuntos:   adjEnv
       })
     });
 
