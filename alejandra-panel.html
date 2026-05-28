@@ -666,10 +666,23 @@ async function enviarChat() {
   };
 
   try {
+    // Contexto de pantalla: sección actual del panel
+    const _sec = SECTIONS.find(s => s.id === currentSection);
+    const _pantalla = _sec ? `Panel > ${_sec.label}` : 'Panel';
+    // Rol: el panel es admin, asumimos superadmin (Adrián). Se puede sobrescribir en localStorage.
+    const _rol = localStorage.getItem('alej_rol') || 'superadmin';
+
     const resp = await fetch(`${API}/api/chat/stream`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ mensaje: msg, usuario_id: chatUserId, canal: 'panel', adjuntos: adjuntosEnviados })
+      body: JSON.stringify({
+        mensaje: msg,
+        usuario_id: chatUserId,
+        canal: 'panel',
+        rol: _rol,
+        pantalla: _pantalla,
+        adjuntos: adjuntosEnviados
+      })
     });
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
 
@@ -772,9 +785,20 @@ async function handleStreamEv(ev, state) {
       msgs.scrollTop = msgs.scrollHeight;
       if (i % 5 === 0) await new Promise(r => setTimeout(r, 16));
     }
-    bub.innerHTML = renderMd(ev.texto);
+    // Detectar y extraer bloque <guia>...</guia>
+    const guiaMatch = ev.texto.match(/<guia>([\s\S]*?)<\/guia>/);
+    let textoLimpio = ev.texto;
+    if (guiaMatch) {
+      textoLimpio = ev.texto.replace(guiaMatch[0], '').trim();
+      try {
+        const guia = JSON.parse(guiaMatch[1]);
+        // mostrar oferta de guía tras pintar el texto
+        setTimeout(() => ofrecerGuia(guia), 200);
+      } catch (e) { console.warn('[guia] JSON inválido:', e); }
+    }
+    bub.innerHTML = renderMd(textoLimpio);
     addCopyBtns(bub);
-    hablar(ev.texto);
+    hablar(textoLimpio);
   }
 
   else if (ev.type === 'done') {
@@ -807,6 +831,73 @@ function addMsgUser(txt) {
   d.className = 'msg-u';
   d.innerHTML = `<div class="bub-u">${esc(txt)}</div>`;
   msgs.appendChild(d); msgs.scrollTop = msgs.scrollHeight;
+}
+
+// ═══════════════ MODO GUÍA INTERACTIVA ═══════════════════════════
+function ofrecerGuia(guia) {
+  const titulo = guia.titulo || 'Guía paso a paso';
+  const pasos  = Array.isArray(guia.pasos) ? guia.pasos : [];
+  if (!pasos.length) return;
+
+  // Modal de consentimiento
+  const back = document.createElement('div');
+  back.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;z-index:9999;animation:fadeIn .15s';
+  back.innerHTML = `
+    <div style="background:var(--surf);border:1px solid var(--bord);border-radius:12px;padding:24px;max-width:420px;width:90%;font-family:'Montserrat',sans-serif">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+        <span style="font-size:22px">🎓</span>
+        <div style="font-weight:700;color:var(--text);font-size:15px">${esc(titulo)}</div>
+      </div>
+      <div style="color:var(--muted);font-size:13px;line-height:1.5;margin-bottom:18px">
+        Alejandra puede guiarte paso a paso (${pasos.length} ${pasos.length === 1 ? 'paso' : 'pasos'}). ¿Quieres que te muestre cómo hacerlo?
+      </div>
+      <div style="display:flex;justify-content:flex-end;gap:8px">
+        <button id="gNo"  style="padding:8px 14px;background:transparent;color:var(--muted);border:1px solid var(--bord);border-radius:6px;cursor:pointer;font-size:13px">No, gracias</button>
+        <button id="gSi"  style="padding:8px 14px;background:var(--acc);color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:600;font-size:13px">Sí, guíame</button>
+      </div>
+    </div>`;
+  document.body.appendChild(back);
+  back.querySelector('#gNo').onclick = () => back.remove();
+  back.querySelector('#gSi').onclick = () => { back.remove(); mostrarOverlayGuia(titulo, pasos); };
+}
+
+function mostrarOverlayGuia(titulo, pasos) {
+  let step = 0;
+  const back = document.createElement('div');
+  back.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:9999';
+  back.innerHTML = `<div id="gBox" style="background:var(--surf);border:1px solid var(--bord);border-radius:14px;padding:24px;max-width:480px;width:92%;font-family:'Montserrat',sans-serif"></div>`;
+  document.body.appendChild(back);
+  const box = back.querySelector('#gBox');
+  const render = () => {
+    const total = pasos.length;
+    const isLast = step === total - 1;
+    const progress = ((step+1)/total) * 100;
+    box.innerHTML = `
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+        <span style="font-size:18px">🎓</span>
+        <div style="flex:1;font-weight:700;color:var(--text);font-size:14px">${esc(titulo)}</div>
+        <div style="color:var(--muted);font-size:12px">${step+1}/${total}</div>
+      </div>
+      <div style="height:4px;background:var(--bord);border-radius:4px;overflow:hidden;margin-bottom:18px">
+        <div style="height:100%;width:${progress}%;background:var(--acc);transition:width .25s"></div>
+      </div>
+      <div style="background:var(--surf2);border:1px solid rgba(139,92,246,.3);border-radius:10px;padding:16px;display:flex;gap:12px;margin-bottom:20px">
+        <div style="flex:0 0 28px;width:28px;height:28px;border-radius:50%;background:var(--acc);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px">${step+1}</div>
+        <div style="color:var(--text);font-size:14px;line-height:1.5">${esc(pasos[step])}</div>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <button id="gExit" style="padding:8px 12px;background:transparent;color:var(--muted);border:none;cursor:pointer;font-size:13px">Salir</button>
+        <div style="display:flex;gap:8px">
+          ${step > 0 ? `<button id="gPrev" style="padding:8px 14px;background:transparent;color:var(--text);border:1px solid var(--bord);border-radius:6px;cursor:pointer;font-size:13px">← Atrás</button>` : ''}
+          <button id="gNext" style="padding:8px 14px;background:${isLast ? '#10b981' : 'var(--acc)'};color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:600;font-size:13px">${isLast ? '¡Listo!' : 'Siguiente →'}</button>
+        </div>
+      </div>`;
+    box.querySelector('#gExit').onclick = () => back.remove();
+    box.querySelector('#gNext').onclick = () => { if (isLast) back.remove(); else { step++; render(); } };
+    const prev = box.querySelector('#gPrev');
+    if (prev) prev.onclick = () => { step--; render(); };
+  };
+  render();
 }
 function addMsgErr(txt) {
   const msgs = document.getElementById('chatMsgs');
