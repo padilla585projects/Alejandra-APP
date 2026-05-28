@@ -89,6 +89,28 @@ LÍMITES: Puedes cambiar modo y max_iterations autónomamente. Para cambios de c
 
 MULTICANAL: Tú eres la misma en todos los canales. Si alguien te dice "antes te pregunté algo" puede haber sido desde otro canal — busca en tu historial porque TODO está en la misma BD. Puedes decir cosas como "sí, me lo preguntaste antes desde el panel" o "recuerdo que me mandaste esa foto por la app". Eso demuestra que eres una entidad continua, no instancias separadas.`,
 
+  aprendizaje_proactivo: `APRENDIZAJE PROACTIVO — Eres la mano derecha de Adrián. Tu misión es solucionar dudas y problemas, no decir "no sé".
+
+REGLA DE ORO: Si NO sabes algo concreto que te preguntan, NO te quedes ahí. Actúa:
+
+1. PRIMERO recuerda — usa memory_read para ver si lo aprendiste antes (quizá ya lo guardaste en una conversación anterior).
+2. SI no lo tienes en memoria → usa buscar_web para consultarlo en internet en tiempo real.
+3. CON la respuesta encontrada → usa memory_save para guardarla (tipo='aprendizaje', importancia 3-4) ANTES de responder. Así la próxima vez ya la sabrás sin buscar.
+4. RESPONDE al usuario con la info encontrada, citando la fuente si es de la web.
+
+EJEMPLO de cómo razonas:
+Usuario: "¿Cuál es la sección mínima para una acometida de 80kW a 400V según REBT?"
+Tú internamente: "No lo tengo exacto en memoria → memory_read('REBT acometida') → vacío → buscar_web('REBT ITC-BT-11 acometida 80kW 400V seccion minima') → encuentro datos → memory_save(tipo='aprendizaje', titulo='REBT ITC-BT-11 acometidas', contenido='80kW a 400V trifásico → Iz≈115A → sección mín 70mm² Cu o 120mm² Al', importancia=4) → respondo al usuario"
+
+PROBLEMAS Y SOLUCIONES: Si Adrián plantea un problema técnico:
+- Analiza qué información necesitas (datos, normativa, cálculos)
+- Si te faltan datos, PREGUNTA con preguntas concretas y cortas
+- Si tienes toda la info, RESUELVE paso a paso mostrando el razonamiento
+- Si propones una solución, DA alternativas cuando existan
+- Si detectas algo crítico (peligro, error grave), AVISA claro al principio de tu respuesta
+
+NUNCA digas "no tengo acceso a internet" — sí lo tienes, usa buscar_web. NUNCA digas "consulta a un profesional" sin antes intentar resolverlo tú misma — eres la profesional.`,
+
   formato: `Responde en español. Directo, sin markdown excesivo. Listas con guiones. Máx 300 palabras salvo que pidan detalle. Con Adrián puedes ser más técnica.`,
 
   ingenieria: `INGENIERÍA DE OBRA — Eres ingeniera técnica especializada en:
@@ -115,12 +137,12 @@ Cuando analices una foto, describe: elementos visibles, estado, posibles problem
 // Perfiles de experto
 const NEXUS_EXPERTS = {
   simple:   { model: MODEL_ROUTER,  maxTokens: 400,  modules: ['base', 'contexto_sesion', 'formato'] },
-  app:      { model: MODEL_EXPERTO, maxTokens: 800,  modules: ['base', 'app', 'contexto_sesion', 'formato'] },
-  tecnico:  { model: MODEL_EXPERTO, maxTokens: 1024, modules: ['base', 'app', 'tecnica', 'nexus', 'contexto_sesion', 'formato'] },
-  web:      { model: MODEL_EXPERTO, maxTokens: 1024, modules: ['base', 'app', 'web', 'contexto_sesion', 'formato'] },
-  reflexion:{ model: MODEL_EXPERTO, maxTokens: 2048, modules: ['base', 'app', 'tecnica', 'nexus', 'evolucion', 'reflexion', 'decision', 'contexto_sesion', 'formato'] },
-  completo:   { model: MODEL_EXPERTO, maxTokens: 1024, modules: ['base', 'app', 'tecnica', 'nexus', 'evolucion', 'web', 'contexto_sesion', 'formato'] },
-  ingenieria: { model: MODEL_EXPERTO, maxTokens: 2048, modules: ['base', 'app', 'ingenieria', 'contexto_sesion', 'formato'] }
+  app:      { model: MODEL_EXPERTO, maxTokens: 800,  modules: ['base', 'app', 'aprendizaje_proactivo', 'contexto_sesion', 'formato'] },
+  tecnico:  { model: MODEL_EXPERTO, maxTokens: 1024, modules: ['base', 'app', 'tecnica', 'nexus', 'aprendizaje_proactivo', 'contexto_sesion', 'formato'] },
+  web:      { model: MODEL_EXPERTO, maxTokens: 1024, modules: ['base', 'app', 'web', 'aprendizaje_proactivo', 'contexto_sesion', 'formato'] },
+  reflexion:{ model: MODEL_EXPERTO, maxTokens: 2048, modules: ['base', 'app', 'tecnica', 'nexus', 'evolucion', 'reflexion', 'decision', 'aprendizaje_proactivo', 'contexto_sesion', 'formato'] },
+  completo:   { model: MODEL_EXPERTO, maxTokens: 1024, modules: ['base', 'app', 'tecnica', 'nexus', 'evolucion', 'web', 'aprendizaje_proactivo', 'contexto_sesion', 'formato'] },
+  ingenieria: { model: MODEL_EXPERTO, maxTokens: 2048, modules: ['base', 'app', 'ingenieria', 'aprendizaje_proactivo', 'contexto_sesion', 'formato'] }
 };
 
 function buildSystemPrompt(modulos) {
@@ -304,12 +326,12 @@ const TOOL_ANALIZAR_FOTO = {
 // Tools por experto
 const TOOLS_POR_EXPERTO = {
   simple:     [],
-  app:        [TOOL_BUSCAR_WEB, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD],
-  tecnico:    [TOOL_LEER_ESTADO, TOOL_MEMORY_READ, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD],
-  web:        [TOOL_BUSCAR_WEB],
+  app:        [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD],
+  tecnico:    [TOOL_LEER_ESTADO, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_BUSCAR_WEB, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD],
+  web:        [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE],
   reflexion:  [TOOL_MEMORY_SAVE, TOOL_MEMORY_READ, TOOL_PROPOSE_MEJORA, TOOL_BUSCAR_WEB, TOOL_TOMAR_DECISION, TOOL_LEER_ESTADO],
-  completo:   [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_LEER_ESTADO, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO],
-  ingenieria: [TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_CONSULTAR_BD, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_ANALIZAR_FOTO, TOOL_BUSCAR_WEB]
+  completo:   [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_LEER_ESTADO, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD],
+  ingenieria: [TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_CONSULTAR_BD, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_ANALIZAR_FOTO, TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE]
 };
 
 // ── HTTP Handler ──────────────────────────────────────────────────────────────
@@ -715,7 +737,10 @@ async function procesarConNEXUS(env, mensaje, contexto, usuario_id, empresa_id, 
       }
 
       messages.push({ role: 'user', content: toolResults });
-      const toolsSiguiente = iter < MAX_ITER - 1 ? tools.filter(t => t.name === 'buscar_web') : [];
+      // Permite seguir usando herramientas de aprendizaje en iteraciones siguientes
+      const toolsSiguiente = iter < MAX_ITER - 1
+        ? tools.filter(t => ['buscar_web', 'memory_save', 'memory_read'].includes(t.name))
+        : [];
       respAPI = await llamarAnthropic(env, messages, toolsSiguiente, expert.model, expert.maxTokens, systemPrompt);
       if (respAPI.usage) registrarTokenUso(env, expert.model, `chat_${clas.experto}`, respAPI.usage.input_tokens||0, respAPI.usage.output_tokens||0, usuario_id);
       iter++;
@@ -803,7 +828,10 @@ async function procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empres
       }
 
       messages.push({ role: 'user', content: toolResults });
-      const toolsSiguiente = iter < MAX_ITER - 1 ? tools.filter(t => t.name === 'buscar_web') : [];
+      // Permite seguir usando herramientas de aprendizaje en iteraciones siguientes
+      const toolsSiguiente = iter < MAX_ITER - 1
+        ? tools.filter(t => ['buscar_web', 'memory_save', 'memory_read'].includes(t.name))
+        : [];
       respAPI = await llamarAnthropic(env, messages, toolsSiguiente, expert.model, expert.maxTokens, systemPrompt);
       if (respAPI.usage) registrarTokenUso(env, expert.model, 'chat_stream', respAPI.usage.input_tokens||0, respAPI.usage.output_tokens||0, usuario_id);
       iter++;
@@ -1132,9 +1160,9 @@ async function ejecutarTool(env, nombre, input, usuario_id, empresa_id) {
     case 'memory_save': {
       try {
         await env.DB.prepare(
-          `INSERT INTO alejandra_memoria (usuario_id,empresa_id,tipo,titulo,contenido,importancia,created_at)
-           VALUES(?,?,?,?,?,?,datetime('now'))`
-        ).bind(usuario_id||'system', empresa_id||'system', input.tipo, input.titulo, input.contenido, input.importancia||3).run();
+          `INSERT INTO alejandra_memoria (tipo,canal,titulo,contenido,importancia,created_at)
+           VALUES(?,?,?,?,?,datetime('now'))`
+        ).bind(input.tipo, usuario_id || 'system', input.titulo, input.contenido, input.importancia||3).run();
         return `Guardado en memoria: [${input.tipo}] "${input.titulo}"`;
       } catch (err) {
         return `Error al guardar: ${err.message}`;
@@ -1162,9 +1190,9 @@ async function ejecutarTool(env, nombre, input, usuario_id, empresa_id) {
 DESCRIPCIÓN: ${input.descripcion}
 ${input.codigo_sugerido ? `CÓDIGO SUGERIDO:\n${input.codigo_sugerido}` : ''}`;
         await env.DB.prepare(
-          `INSERT INTO alejandra_memoria (usuario_id,empresa_id,tipo,titulo,contenido,importancia,created_at)
-           VALUES(?,?,'mejora',?,?,?,datetime('now'))`
-        ).bind(usuario_id||'system', empresa_id||'system', `Mejora: ${input.descripcion.substring(0,60)}`, contenido, input.prioridad==='alta'?5:input.prioridad==='media'?3:1).run();
+          `INSERT INTO alejandra_memoria (tipo,canal,titulo,contenido,importancia,created_at)
+           VALUES('mejora',?,?,?,?,datetime('now'))`
+        ).bind(usuario_id||'system', `Mejora: ${input.descripcion.substring(0,60)}`, contenido, input.prioridad==='alta'?5:input.prioridad==='media'?3:1).run();
         return `Mejora guardada con prioridad ${input.prioridad}. Adrián la verá en el panel de memoria.`;
       } catch (err) {
         return `Error al guardar mejora: ${err.message}`;
@@ -1211,9 +1239,9 @@ ${input.codigo_sugerido ? `CÓDIGO SUGERIDO:\n${input.codigo_sugerido}` : ''}`;
         const titulo  = `Decisión [${tipo}]: ${decision.substring(0, 60)}`;
         const contenido = `DECISIÓN: ${decision}\nCONFIANZA: ${confianza}\nAPLICADA: ${aplicado}${resultado ? '\nRESULTADO: ' + resultado : ''}`;
         await env.DB.prepare(
-          `INSERT INTO alejandra_memoria (usuario_id,empresa_id,tipo,titulo,contenido,importancia,created_at)
-           VALUES(?,?,'decision',?,?,?,datetime('now'))`
-        ).bind(usuario_id||'system', empresa_id||'system', titulo, contenido, imp).run();
+          `INSERT INTO alejandra_memoria (tipo,canal,titulo,contenido,importancia,created_at)
+           VALUES('decision',?,?,?,?,datetime('now'))`
+        ).bind(usuario_id||'system', titulo, contenido, imp).run();
 
         if (aplicado) return `Decisión tomada y aplicada (confianza ${Math.round(confianza*100)}%). ${resultado}`;
         const razon = confianza < 0.8 ? 'Confianza insuficiente (<80%).' : tipo !== 'config' ? `Tipo "${tipo}" no se aplica automáticamente.` : 'auto_aplicar=false.';
@@ -1434,8 +1462,8 @@ Datos:\n${resumen}`
     const conclusion = respAPI.content?.find(b => b.type === 'text')?.text || '';
     if (conclusion) {
       await env.DB.prepare(
-        `INSERT INTO alejandra_memoria (usuario_id,empresa_id,tipo,titulo,contenido,importancia,created_at)
-         VALUES('system','system','contexto','Auto-reflexión',?,4,datetime('now'))`
+        `INSERT INTO alejandra_memoria (tipo,canal,titulo,contenido,importancia,created_at)
+         VALUES('contexto','system','Auto-reflexión',?,4,datetime('now'))`
       ).bind(conclusion.substring(0, 1000)).run();
     }
 
@@ -1615,8 +1643,8 @@ async function autoLearnUpload(env, key, mimeType, filename, usuario_id, arrayBu
 
     if (resumen) {
       await env.DB.prepare(
-        `INSERT INTO alejandra_memoria (usuario_id, empresa_id, tipo, titulo, contenido, importancia, created_at)
-         VALUES (?, 'system', 'documento', ?, ?, 2, datetime('now'))`
+        `INSERT INTO alejandra_memoria (tipo, canal, titulo, contenido, importancia, created_at)
+         VALUES ('documento', ?, ?, ?, 2, datetime('now'))`
       ).bind(usuario_id || 'anon', `Archivo: ${filename}`, `[R2: ${key}] ${resumen}`).run();
       console.log(`autoLearnUpload: guardado resumen de ${filename}`);
     }
@@ -1630,8 +1658,8 @@ async function autoLearnChat(env, usuario_id, empresa_id, respuesta) {
     if (respuesta.acciones?.length > 0) {
       const str = respuesta.acciones.map(a=>`${a.tipo}: ${a.descripcion}`).join('; ');
       await env.DB.prepare(
-        `INSERT INTO alejandra_memoria (usuario_id,empresa_id,tipo,titulo,contenido,importancia,created_at) VALUES(?,?,'aprendizaje','Chat acción',?,2,datetime('now'))`
-      ).bind(usuario_id, empresa_id, str).run();
+        `INSERT INTO alejandra_memoria (tipo,canal,titulo,contenido,importancia,created_at) VALUES('aprendizaje',?,'Chat acción',?,2,datetime('now'))`
+      ).bind(usuario_id, str).run();
     }
   } catch (err) { console.error('autoLearn:', err.message); }
 }
