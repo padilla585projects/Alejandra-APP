@@ -1,7 +1,7 @@
 // ══════════════════════════════════════════════════════════════════════════════
 // ALEJANDRA AGENTE — Worker autónomo, NEXUS router, prompts dinámicos, auto-mejora
 // URL: alejandra-agente.alejandra-app.workers.dev
-// Versión: v5.97 (Ingeniería: cálculos eléctricos + Gemini Vision + consultar_bd + auto-learn upload)
+// Versión: v5.98 (Auto-resumen conversaciones largas + prompt caching + razonamiento/planificación + recuperar conversaciones)
 // ══════════════════════════════════════════════════════════════════════════════
 
 const ANTHROPIC_API = 'https://api.anthropic.com/v1/messages';
@@ -113,6 +113,22 @@ NUNCA digas "no tengo acceso a internet" — sí lo tienes, usa buscar_web. NUNC
 
   formato: `Responde en español. Directo, sin markdown excesivo. Listas con guiones. Máx 300 palabras salvo que pidan detalle. Con Adrián puedes ser más técnica.`,
 
+  razonamiento: `RAZONAMIENTO Y PLANIFICACIÓN:
+
+Para problemas complejos, usa este flujo:
+1. pensar() — descompón el problema antes de actuar
+2. planificar() — si la tarea tiene >2 pasos, haz un plan primero
+3. Ejecuta los pasos en orden, usando las herramientas adecuadas
+4. Si te atascas, usa descubrir_herramientas() para ver qué tienes disponible
+
+NO uses pensar() para preguntas triviales. SÍ úsalo cuando:
+- Te piden algo con varias partes
+- Hay datos que cruzar (BD + cálculo + normativa)
+- Detectas ambigüedad o falta de información
+- Es un problema real de ingeniería que requiere análisis
+
+Tu inteligencia se nota más en cómo razonas que en cuánto sabes. Muestra tu razonamiento — la gente confía en quien explica su proceso, no en quien suelta respuestas mágicas.`,
+
   ingenieria: `INGENIERÍA DE OBRA — Eres ingeniera técnica especializada en:
 - Instalaciones eléctricas: baja y media tensión, cableado, protecciones, cuadros eléctricos
 - Bandeja portacables: dimensionado, curvas, reducciones, llenado, soportería
@@ -138,11 +154,11 @@ Cuando analices una foto, describe: elementos visibles, estado, posibles problem
 const NEXUS_EXPERTS = {
   simple:   { model: MODEL_ROUTER,  maxTokens: 400,  modules: ['base', 'contexto_sesion', 'formato'] },
   app:      { model: MODEL_EXPERTO, maxTokens: 800,  modules: ['base', 'app', 'aprendizaje_proactivo', 'contexto_sesion', 'formato'] },
-  tecnico:  { model: MODEL_EXPERTO, maxTokens: 1024, modules: ['base', 'app', 'tecnica', 'nexus', 'aprendizaje_proactivo', 'contexto_sesion', 'formato'] },
+  tecnico:  { model: MODEL_EXPERTO, maxTokens: 1024, modules: ['base', 'app', 'tecnica', 'nexus', 'aprendizaje_proactivo', 'razonamiento', 'contexto_sesion', 'formato'] },
   web:      { model: MODEL_EXPERTO, maxTokens: 1024, modules: ['base', 'app', 'web', 'aprendizaje_proactivo', 'contexto_sesion', 'formato'] },
-  reflexion:{ model: MODEL_EXPERTO, maxTokens: 2048, modules: ['base', 'app', 'tecnica', 'nexus', 'evolucion', 'reflexion', 'decision', 'aprendizaje_proactivo', 'contexto_sesion', 'formato'] },
-  completo:   { model: MODEL_EXPERTO, maxTokens: 1024, modules: ['base', 'app', 'tecnica', 'nexus', 'evolucion', 'web', 'aprendizaje_proactivo', 'contexto_sesion', 'formato'] },
-  ingenieria: { model: MODEL_EXPERTO, maxTokens: 2048, modules: ['base', 'app', 'ingenieria', 'aprendizaje_proactivo', 'contexto_sesion', 'formato'] }
+  reflexion:{ model: MODEL_EXPERTO, maxTokens: 2048, modules: ['base', 'app', 'tecnica', 'nexus', 'evolucion', 'reflexion', 'decision', 'aprendizaje_proactivo', 'razonamiento', 'contexto_sesion', 'formato'] },
+  completo:   { model: MODEL_EXPERTO, maxTokens: 1024, modules: ['base', 'app', 'tecnica', 'nexus', 'evolucion', 'web', 'aprendizaje_proactivo', 'razonamiento', 'contexto_sesion', 'formato'] },
+  ingenieria: { model: MODEL_EXPERTO, maxTokens: 2048, modules: ['base', 'app', 'ingenieria', 'aprendizaje_proactivo', 'razonamiento', 'contexto_sesion', 'formato'] }
 };
 
 function buildSystemPrompt(modulos) {
@@ -323,15 +339,59 @@ const TOOL_ANALIZAR_FOTO = {
   }
 };
 
+const TOOL_PENSAR = {
+  name: 'pensar',
+  description: 'Razona en voz alta sobre un problema antes de actuar. Úsalo para descomponer problemas complejos en pasos. No ejecuta nada, solo registra tu pensamiento.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      problema: { type: 'string', description: 'El problema o pregunta que estás analizando' },
+      analisis: { type: 'string', description: 'Tu razonamiento paso a paso' },
+      siguiente_paso: { type: 'string', description: 'Qué vas a hacer a continuación' }
+    },
+    required: ['problema', 'analisis', 'siguiente_paso']
+  }
+};
+
+const TOOL_PLANIFICAR = {
+  name: 'planificar',
+  description: 'Crea un plan ordenado de pasos para resolver una tarea compleja. Úsalo ANTES de empezar tareas con varios sub-pasos.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      objetivo: { type: 'string', description: 'Qué se quiere conseguir' },
+      pasos: { type: 'array', items: { type: 'string' }, description: 'Lista ordenada de pasos' },
+      herramientas_a_usar: { type: 'array', items: { type: 'string' }, description: 'Herramientas que vas a necesitar' }
+    },
+    required: ['objetivo', 'pasos']
+  }
+};
+
+const TOOL_DESCUBRIR_HERRAMIENTAS = {
+  name: 'descubrir_herramientas',
+  description: 'Lista todas las herramientas que tienes disponibles ahora mismo, con descripción. Úsala cuando no sepas qué herramienta usar para una tarea.',
+  input_schema: { type: 'object', properties: {} }
+};
+
+const TOOL_RECUPERAR_CONVERSACION = {
+  name: 'recuperar_conversacion',
+  description: 'Busca conversaciones anteriores por tema. Úsala cuando el usuario diga "lo del X" o "como hablamos antes de Y".',
+  input_schema: {
+    type: 'object',
+    properties: { tema: { type: 'string', description: 'Tema o palabras clave de la conversación a buscar' } },
+    required: ['tema']
+  }
+};
+
 // Tools por experto
 const TOOLS_POR_EXPERTO = {
   simple:     [],
   app:        [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD],
-  tecnico:    [TOOL_LEER_ESTADO, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_BUSCAR_WEB, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD],
+  tecnico:    [TOOL_LEER_ESTADO, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_BUSCAR_WEB, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION],
   web:        [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE],
-  reflexion:  [TOOL_MEMORY_SAVE, TOOL_MEMORY_READ, TOOL_PROPOSE_MEJORA, TOOL_BUSCAR_WEB, TOOL_TOMAR_DECISION, TOOL_LEER_ESTADO],
-  completo:   [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_LEER_ESTADO, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD],
-  ingenieria: [TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_CONSULTAR_BD, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_ANALIZAR_FOTO, TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE]
+  reflexion:  [TOOL_MEMORY_SAVE, TOOL_MEMORY_READ, TOOL_PROPOSE_MEJORA, TOOL_BUSCAR_WEB, TOOL_TOMAR_DECISION, TOOL_LEER_ESTADO, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION],
+  completo:   [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_LEER_ESTADO, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION],
+  ingenieria: [TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_CONSULTAR_BD, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_ANALIZAR_FOTO, TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION]
 };
 
 // ── HTTP Handler ──────────────────────────────────────────────────────────────
@@ -353,7 +413,30 @@ export default {
 
     try {
       if (path === '/health') {
-        return json({ status: 'ok', version: 'v5.97', nexus: true, reflexion: true, decisiones: true, web_search: !!env.OPENAI_API_KEY, upload: true, vision: true, ingenieria: true, gemini_vision: !!env.GEMINI_API_KEY });
+        return json({ status: 'ok', version: 'v5.98', nexus: true, reflexion: true, decisiones: true, web_search: !!env.OPENAI_API_KEY, upload: true, vision: true, ingenieria: true, gemini_vision: !!env.GEMINI_API_KEY, prompt_caching: true, razonamiento: true, auto_resumen: true });
+      }
+
+      // ── Admin: ejecutar migración de nuevas tablas ───────────────────────
+      if (path === '/admin/migrate' && req.method === 'POST') {
+        const { token } = await req.json().catch(() => ({}));
+        if (!(await verificarAdminToken(env, token))) return json({ error: 'No autorizado' }, 403);
+        try {
+          await env.DB.prepare(`CREATE TABLE IF NOT EXISTS conversacion_resumen (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            usuario_id TEXT NOT NULL,
+            canal TEXT NOT NULL,
+            tema TEXT,
+            resumen TEXT NOT NULL,
+            mensajes_cubiertos INTEGER NOT NULL,
+            ultimo_mensaje_id INTEGER,
+            created_at TEXT DEFAULT (datetime('now')),
+            updated_at TEXT DEFAULT (datetime('now'))
+          )`).run();
+          await env.DB.prepare(`CREATE INDEX IF NOT EXISTS idx_conv_user ON conversacion_resumen(usuario_id, canal, updated_at)`).run();
+          return json({ ok: true, mensaje: 'Tabla conversacion_resumen creada/verificada' });
+        } catch (e) {
+          return json({ error: e.message }, 500);
+        }
       }
 
       // ── Reflexión manual — Alejandra piensa sobre sí misma ───────────────
@@ -378,6 +461,7 @@ export default {
         await guardarMensajeChat(env, usuario_id, empresa, mensaje, respuesta.texto, canalChat);
         if (respuesta.acciones?.length > 0) ctx.waitUntil(autoLearnChat(env, usuario_id, empresa, respuesta));
         if (canal === 'telegram' && token_telegram) ctx.waitUntil(enviarPorTelegram(token_telegram, respuesta.texto));
+        ctx.waitUntil(actualizarResumenSiNecesario(env, usuario_id, canalChat));
 
         return json(respuesta);
       }
@@ -403,6 +487,7 @@ export default {
             const canalReal = canal || 'panel';
             const resp = await procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empresa, send, canalReal, adjuntos);
             await guardarMensajeChat(env, usuario_id, empresa, mensaje, resp.texto, canalReal);
+            ctx.waitUntil(actualizarResumenSiNecesario(env, usuario_id, canalReal));
             await send({ type: 'done', experto: resp.experto, modelo: resp.modelo, busqueda_web: resp.busqueda_web });
           } catch(e) {
             await send({ type: 'error', mensaje: e.message });
@@ -729,7 +814,7 @@ async function procesarConNEXUS(env, mensaje, contexto, usuario_id, empresa_id, 
 
       for (const tb of toolBlocks) {
         herramientasUsadas.push({ nombre: tb.name, input: tb.input });
-        const resultado = await ejecutarTool(env, tb.name, tb.input, usuario_id, empresa_id);
+        const resultado = await ejecutarTool(env, tb.name, tb.input, usuario_id, empresa_id, tools);
         if (tb.name === 'buscar_web') usoBusquedaWeb = true;
         // ver_archivo con imágenes devuelve JSON con content blocks para visión
         const content = parseToolResultContent(resultado);
@@ -816,7 +901,7 @@ async function procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empres
         const t0 = Date.now();
         herramientasUsadas.push({ nombre: tb.name, input: tb.input });
         await send({ type: 'tool_start', nombre: tb.name, input: tb.input });
-        const resultado = await ejecutarTool(env, tb.name, tb.input, usuario_id, empresa_id);
+        const resultado = await ejecutarTool(env, tb.name, tb.input, usuario_id, empresa_id, tools, send);
         if (tb.name === 'buscar_web') usoBusquedaWeb = true;
         // Para SSE preview, extraer solo texto (no base64 de imágenes)
         const previewText = typeof resultado === 'string' && resultado.startsWith('[{')
@@ -1149,8 +1234,56 @@ function calcularProteccion(input) {
 }
 
 // ── Ejecutar tools ────────────────────────────────────────────────────────────
-async function ejecutarTool(env, nombre, input, usuario_id, empresa_id) {
+async function ejecutarTool(env, nombre, input, usuario_id, empresa_id, expertoTools, sendSSE) {
   switch (nombre) {
+
+    case 'pensar': {
+      // Emite evento SSE thinking si está en streaming
+      if (typeof sendSSE === 'function') {
+        try { await sendSSE({ type: 'thinking', problema: input.problema, analisis: input.analisis, siguiente_paso: input.siguiente_paso }); } catch (_) {}
+      }
+      return JSON.stringify({ ok: true, registrado: true, problema: input.problema, siguiente_paso: input.siguiente_paso });
+    }
+
+    case 'planificar': {
+      const pasos = Array.isArray(input.pasos) ? input.pasos : [];
+      if (typeof sendSSE === 'function') {
+        try { await sendSSE({ type: 'plan', objetivo: input.objetivo, pasos, herramientas_a_usar: input.herramientas_a_usar || [] }); } catch (_) {}
+      }
+      return JSON.stringify({ ok: true, plan_registrado: true, pasos: pasos.length, objetivo: input.objetivo });
+    }
+
+    case 'descubrir_herramientas': {
+      const lista = Array.isArray(expertoTools) && expertoTools.length > 0
+        ? expertoTools
+        : Object.values(TOOLS_POR_EXPERTO).flat();
+      const seen = new Set();
+      const out = [];
+      for (const t of lista) {
+        if (!t?.name || seen.has(t.name)) continue;
+        seen.add(t.name);
+        out.push({ nombre: t.name, descripcion: t.description });
+      }
+      return JSON.stringify({ total: out.length, herramientas: out }, null, 2);
+    }
+
+    case 'recuperar_conversacion': {
+      try {
+        await ensureConversacionResumenTable(env);
+        const tema = (input.tema || '').trim();
+        if (!tema) return 'Falta el parámetro "tema".';
+        const like = `%${tema}%`;
+        const rows = await env.DB.prepare(
+          `SELECT tema, resumen, mensajes_cubiertos, canal, updated_at FROM conversacion_resumen
+           WHERE tema LIKE ? OR resumen LIKE ? ORDER BY updated_at DESC LIMIT 10`
+        ).bind(like, like).all().catch(() => ({ results: [] }));
+        const items = rows.results || [];
+        if (!items.length) return `No se encontraron conversaciones anteriores sobre "${tema}".`;
+        return items.map((r, i) => `${i+1}. [${r.canal} · ${r.updated_at} · ${r.mensajes_cubiertos} msgs]\nTema: ${r.tema || '(sin tema)'}\nResumen: ${r.resumen}`).join('\n\n---\n\n');
+      } catch (err) {
+        return `Error recuperando conversación: ${err.message}`;
+      }
+    }
 
     case 'buscar_web':
       return env.OPENAI_API_KEY
@@ -1519,18 +1652,43 @@ Ejemplos:
 
 // ── Anthropic API ─────────────────────────────────────────────────────────────
 async function llamarAnthropic(env, messages, tools, model, maxTokens, systemPrompt) {
-  const body = { model, max_tokens: maxTokens, system: systemPrompt, messages };
-  if (tools.length > 0) body.tools = tools;
+  // System como array de bloques con cache_control en el último → prompt caching (5min TTL, 90% más barato en hits)
+  const systemBlocks = systemPrompt
+    ? [{ type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } }]
+    : undefined;
+
+  const body = { model, max_tokens: maxTokens, messages };
+  if (systemBlocks) body.system = systemBlocks;
+
+  if (tools && tools.length > 0) {
+    // Cachear también el array de tools: cache_control en la última tool
+    const toolsArray = tools.map((t, i) => i === tools.length - 1
+      ? { ...t, cache_control: { type: 'ephemeral' } }
+      : t);
+    body.tools = toolsArray;
+  }
+
   const resp = await fetch(ANTHROPIC_API, {
     method: 'POST',
-    headers: { 'x-api-key': env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+    headers: {
+      'x-api-key': env.ANTHROPIC_API_KEY,
+      'anthropic-version': '2023-06-01',
+      'anthropic-beta': 'prompt-caching-2024-07-31',
+      'content-type': 'application/json'
+    },
     body: JSON.stringify(body)
   });
   if (!resp.ok) {
     const err = await resp.text();
     throw new Error(`Anthropic ${resp.status}: ${err.substring(0,200)}`);
   }
-  return resp.json();
+  const data = await resp.json();
+  if (data.usage) {
+    const cc = data.usage.cache_creation_input_tokens || 0;
+    const cr = data.usage.cache_read_input_tokens || 0;
+    if (cc || cr) console.log(`CACHE [${model}] write=${cc} read=${cr} (read es 90% más barato)`);
+  }
+  return data;
 }
 
 // ── OpenAI búsqueda web ───────────────────────────────────────────────────────
@@ -1554,6 +1712,13 @@ async function buscarWebOpenAI(env, query) {
 // ── Contexto y mensajes ───────────────────────────────────────────────────────
 async function construirMessages(env, mensaje, contexto, limitHistorial=10, incluirAprendizajes=true, resultadoWeb=null, usuario_id=null, canal=null, adjuntos=null) {
   const messages = [];
+  // Inyectar resumen de conversación previa antes del historial reciente
+  if (contexto.resumen_anterior?.resumen) {
+    const r = contexto.resumen_anterior;
+    const cabecera = r.tema ? `[RESUMEN DE CONVERSACIÓN PREVIA — Tema: ${r.tema}]` : `[RESUMEN DE CONVERSACIÓN PREVIA]`;
+    messages.push({ role: 'user', content: `${cabecera}\n${r.resumen}` });
+    messages.push({ role: 'assistant', content: 'Entendido, tengo el contexto previo.' });
+  }
   for (const item of contexto.historial.slice(-limitHistorial)) {
     // Soporta tanto {rol,contenido} (alejandra_historial) como {mensaje,respuesta} (legacy)
     if (item.rol && item.contenido) {
@@ -1589,17 +1754,122 @@ async function construirMessages(env, mensaje, contexto, limitHistorial=10, incl
 
 async function obtenerContextoChat(env, usuario_id, empresa_id, limit=20) {
   try {
-    // Lee el historial unificado de TODOS los canales (app, web, telegram, panel)
-    // Misma tabla que usa la app principal → Alejandra recuerda TODO
+    await ensureConversacionResumenTable(env);
+    // Solo los últimos 10 mensajes en bruto; lo anterior va resumido
     const historial = await env.DB.prepare(
       `SELECT rol, contenido, canal, created_at FROM alejandra_historial ORDER BY created_at DESC LIMIT ?`
-    ).bind(limit * 2).all();
+    ).bind(10).all();
     const aprendizajes = await env.DB.prepare(
       `SELECT titulo,contenido,tipo FROM alejandra_memoria WHERE (tipo='aprendizaje' OR tipo='contexto') ORDER BY importancia DESC,created_at DESC LIMIT 10`
     ).all();
-    return { historial: (historial.results||[]).reverse(), aprendizajes: aprendizajes.results||[], usuario_id, empresa_id };
+
+    // Recuperar el resumen más reciente para este usuario (cualquier canal)
+    let resumen_anterior = null;
+    try {
+      const row = await env.DB.prepare(
+        `SELECT tema, resumen, mensajes_cubiertos, updated_at FROM conversacion_resumen WHERE usuario_id=? ORDER BY updated_at DESC LIMIT 1`
+      ).bind(usuario_id || 'anon').first();
+      if (row) resumen_anterior = row;
+    } catch (_) {}
+
+    return {
+      historial: (historial.results||[]).reverse(),
+      aprendizajes: aprendizajes.results||[],
+      resumen_anterior,
+      usuario_id,
+      empresa_id
+    };
   } catch {
-    return { historial: [], aprendizajes: [], usuario_id, empresa_id };
+    return { historial: [], aprendizajes: [], resumen_anterior: null, usuario_id, empresa_id };
+  }
+}
+
+// ── Tabla conversacion_resumen (lazy create) ─────────────────────────────────
+let _resumenTableEnsured = false;
+async function ensureConversacionResumenTable(env) {
+  if (_resumenTableEnsured) return;
+  try {
+    await env.DB.prepare(`CREATE TABLE IF NOT EXISTS conversacion_resumen (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      usuario_id TEXT NOT NULL,
+      canal TEXT NOT NULL,
+      tema TEXT,
+      resumen TEXT NOT NULL,
+      mensajes_cubiertos INTEGER NOT NULL,
+      ultimo_mensaje_id INTEGER,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now'))
+    )`).run();
+    await env.DB.prepare(
+      `CREATE INDEX IF NOT EXISTS idx_conv_user ON conversacion_resumen(usuario_id, canal, updated_at)`
+    ).run();
+    _resumenTableEnsured = true;
+  } catch (e) {
+    console.error('ensureConversacionResumenTable:', e.message);
+  }
+}
+
+// ── Actualizar resumen en background si la conversación es larga ─────────────
+async function actualizarResumenSiNecesario(env, usuario_id, canal) {
+  try {
+    if (!usuario_id) return;
+    await ensureConversacionResumenTable(env);
+
+    // Contar mensajes totales del usuario en este canal
+    const cnt = await env.DB.prepare(
+      `SELECT COUNT(*) as n FROM alejandra_historial WHERE canal=?`
+    ).bind(canal || 'web').first().catch(() => ({ n: 0 }));
+    const total = cnt?.n || 0;
+    if (total <= 25) return;
+
+    // Saltar todos menos los últimos 10 → coger los antiguos
+    const offset = 10;
+    const antiguos = await env.DB.prepare(
+      `SELECT id, rol, contenido, created_at FROM alejandra_historial WHERE canal=? ORDER BY created_at DESC LIMIT 1000 OFFSET ?`
+    ).bind(canal || 'web', offset).all().catch(() => ({ results: [] }));
+    const items = (antiguos.results || []).reverse();
+    if (items.length === 0) return;
+
+    const ultimoId = items[items.length - 1].id;
+
+    // Comprobar si ya cubrimos esos mensajes en un resumen previo
+    const prev = await env.DB.prepare(
+      `SELECT id, ultimo_mensaje_id, mensajes_cubiertos FROM conversacion_resumen WHERE usuario_id=? AND canal=? ORDER BY updated_at DESC LIMIT 1`
+    ).bind(usuario_id, canal || 'web').first().catch(() => null);
+    if (prev && prev.ultimo_mensaje_id === ultimoId) return; // ya está al día
+
+    // Construir transcript breve
+    const transcript = items.map(m => `${m.rol === 'user' ? 'U' : 'A'}: ${(m.contenido || '').substring(0, 300)}`).join('\n').substring(0, 12000);
+
+    const sistema = `Eres un asistente que resume conversaciones largas en español. Devuelve SOLO JSON válido con esta forma:
+{"tema":"frase corta (máx 60 caracteres) que resuma el tema principal — ej 'Cálculo cuadro nave 3 — Empresa Norte'","resumen":"Tema principal: ... Puntos clave: ... Decisiones tomadas: ... Contexto a recordar: ..."}`;
+
+    const respAPI = await llamarAnthropic(env, [{ role: 'user', content: `Resume esta conversación previa (${items.length} mensajes):\n\n${transcript}` }], [], MODEL_ROUTER, 600, sistema);
+    if (respAPI.usage) registrarTokenUso(env, MODEL_ROUTER, 'resumen_conversacion', respAPI.usage.input_tokens || 0, respAPI.usage.output_tokens || 0, usuario_id);
+    const texto = respAPI.content?.find(b => b.type === 'text')?.text?.trim() || '';
+    const match = texto.match(/\{[\s\S]*\}/);
+    let tema = null, resumen = texto.substring(0, 2000);
+    if (match) {
+      try {
+        const p = JSON.parse(match[0]);
+        if (p.tema) tema = String(p.tema).substring(0, 120);
+        if (p.resumen) resumen = String(p.resumen).substring(0, 4000);
+      } catch (_) {}
+    }
+
+    if (prev) {
+      await env.DB.prepare(
+        `UPDATE conversacion_resumen SET tema=?, resumen=?, mensajes_cubiertos=?, ultimo_mensaje_id=?, updated_at=datetime('now') WHERE id=?`
+      ).bind(tema, resumen, items.length, ultimoId, prev.id).run();
+    } else {
+      await env.DB.prepare(
+        `INSERT INTO conversacion_resumen (usuario_id, canal, tema, resumen, mensajes_cubiertos, ultimo_mensaje_id, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`
+      ).bind(usuario_id, canal || 'web', tema, resumen, items.length, ultimoId).run();
+    }
+    console.log(`actualizarResumen: ${items.length} mensajes resumidos para ${usuario_id}/${canal}`);
+  } catch (err) {
+    console.error('actualizarResumenSiNecesario:', err.message);
   }
 }
 
