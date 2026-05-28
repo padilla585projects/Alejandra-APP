@@ -1,7 +1,7 @@
 // ══════════════════════════════════════════════════════════════════════════════
 // ALEJANDRA AGENTE — Worker autónomo, NEXUS router, prompts dinámicos, auto-mejora
 // URL: alejandra-agente.alejandra-app.workers.dev
-// Versión: v6.01 (Panel envía DOM compacto → Alejandra usa selectores reales en <plan>)
+// Versión: v6.02 (Optimización tokens: DOM lazy, historial 10→6, aprendizajes solo expertos técnicos)
 // ══════════════════════════════════════════════════════════════════════════════
 
 const ANTHROPIC_API = 'https://api.anthropic.com/v1/messages';
@@ -843,9 +843,10 @@ async function procesarConNEXUS(env, mensaje, contexto, usuario_id, empresa_id, 
     const systemPrompt = buildSystemPrompt(expert.modules);
 
     // PASO 4: Historial dinámico
-    const limitHistorial      = clas.experto === 'simple' ? 4 : 10;
-    const incluirAprendizajes = clas.experto !== 'simple';
-    const messages = await construirMessages(env, mensaje, contexto, limitHistorial, incluirAprendizajes, resultadoWeb, usuario_id, canal, adjuntos, rol, pantalla, dom_actual);
+    const limitHistorial      = clas.experto === 'simple' ? 3 : 6;
+    // Aprendizajes solo para expertos técnicos donde aportan valor real
+    const incluirAprendizajes = ['tecnico','ingenieria','reflexion','completo'].includes(clas.experto);
+    const messages = await construirMessages(env, mensaje, contexto, limitHistorial, incluirAprendizajes, resultadoWeb, usuario_id, canal, adjuntos, rol, pantalla, dom_actual, clas.experto);
 
     // PASO 5: Llamar al modelo en loop hasta respuesta final (máx 5 iteraciones)
     let respAPI  = await llamarAnthropic(env, messages, tools, expert.model, expert.maxTokens, systemPrompt);
@@ -1759,7 +1760,10 @@ async function buscarWebOpenAI(env, query) {
 }
 
 // ── Contexto y mensajes ───────────────────────────────────────────────────────
-async function construirMessages(env, mensaje, contexto, limitHistorial=10, incluirAprendizajes=true, resultadoWeb=null, usuario_id=null, canal=null, adjuntos=null, rol=null, pantalla=null, dom_actual=null) {
+// Detecta si el mensaje del usuario tiene intención de acción (para enviar DOM)
+const _RE_INTENCION_ACCION = /\b(haz|hazlo|hazme|crea|cr[eé]ame|abre|ábreme|registra|reg[íi]strame|borra|elimina|guarda|modifica|cambia|edita|ve\s+a|navega|navega\s+a|rellena|escribe|selecciona|click|clic|pulsa|ejecuta|enseña|enséñame|muestra|mu[eé]strame|añade|a[ñn]ade|quita|configura|act[íi]vame|act[íi]va|desact[íi]va|fija|pon|ponme|busca|consulta)\b/i;
+
+async function construirMessages(env, mensaje, contexto, limitHistorial=10, incluirAprendizajes=true, resultadoWeb=null, usuario_id=null, canal=null, adjuntos=null, rol=null, pantalla=null, dom_actual=null, experto=null) {
   const messages = [];
   // Inyectar resumen de conversación previa antes del historial reciente
   if (contexto.resumen_anterior?.resumen) {
@@ -1791,10 +1795,18 @@ async function construirMessages(env, mensaje, contexto, limitHistorial=10, incl
   partes.push(`[Sesión: usuario="${usuario_id || 'anónimo'}", canal="${canalNombre}", rol="${rolNombre}"${pantallaStr}]`);
 
   // DOM de la pantalla actual (solo panel web) — permite usar selectores reales en <plan>
-  if (Array.isArray(dom_actual) && dom_actual.length > 0) {
+  // Optimización tokens: solo lo enviamos cuando hay intención de acción Y el experto
+  // no es 'simple'. En conversación normal saltan ~600 tokens por mensaje.
+  const queremosDOM =
+    Array.isArray(dom_actual) && dom_actual.length > 0 &&
+    experto !== 'simple' &&
+    _RE_INTENCION_ACCION.test(mensaje);
+
+  if (queremosDOM) {
+    // Compresión: limitamos a 40 elementos y soltamos el prefijo "NAV "
+    const lineasComp = dom_actual.slice(0, 40).map(l => l.replace(/^NAV /, ''));
     partes.push(
-      `[DOM de la pantalla actual — usa estos selectores en <plan>]\n` +
-      dom_actual.join('\n')
+      `[DOM actual — usa selectores reales en <plan>]\n` + lineasComp.join('\n')
     );
   }
 
