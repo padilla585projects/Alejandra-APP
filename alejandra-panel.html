@@ -671,6 +671,8 @@ async function enviarChat() {
     const _pantalla = _sec ? `Panel > ${_sec.label}` : 'Panel';
     // Rol: el panel es admin, asumimos superadmin (Adrián). Se puede sobrescribir en localStorage.
     const _rol = localStorage.getItem('alej_rol') || 'superadmin';
+    // DOM compacto de la pantalla actual — para que Alejandra sepa qué selectores usar en <plan>
+    const _domActual = capturarDomActual();
 
     const resp = await fetch(`${API}/api/chat/stream`, {
       method: 'POST',
@@ -681,6 +683,7 @@ async function enviarChat() {
         canal: 'panel',
         rol: _rol,
         pantalla: _pantalla,
+        dom_actual: _domActual,
         adjuntos: adjuntosEnviados
       })
     });
@@ -866,6 +869,68 @@ function ofrecerGuia(guia) {
   document.body.appendChild(back);
   back.querySelector('#gNo').onclick = () => back.remove();
   back.querySelector('#gSi').onclick = () => { back.remove(); mostrarOverlayGuia(titulo, pasos); };
+}
+
+// ═══════════════ CAPTURA DE DOM (para que Alejandra sepa los selectores) ═══
+function capturarDomActual() {
+  // Capturamos elementos interactivos del contenido principal y la nav
+  const lineas = [];
+  const yaVisto = new Set();
+
+  const procesar = (el, scope) => {
+    if (!el || yaVisto.has(el)) return;
+    yaVisto.add(el);
+    const tag = el.tagName.toLowerCase();
+    const id  = el.id ? `#${el.id}` : '';
+    const cls = (!id && el.className && typeof el.className === 'string')
+      ? '.' + el.className.split(/\s+/).filter(Boolean).slice(0,2).join('.')
+      : '';
+    if (!id && !cls) return; // sin selector útil, lo saltamos
+
+    let etiqueta = '';
+    if (tag === 'input' || tag === 'textarea') {
+      const type = el.type || 'text';
+      const ph   = (el.placeholder || '').slice(0, 40);
+      const name = el.name ? ` name="${el.name}"` : '';
+      etiqueta = `[${type}]${name}${ph ? ` placeholder="${ph}"` : ''}`;
+    } else if (tag === 'select') {
+      const opts = Array.from(el.options).slice(0, 5)
+        .map(o => o.value || o.text).filter(Boolean).join('|');
+      etiqueta = `[opciones: ${opts}]`;
+    } else {
+      // button, a, [onclick]
+      const txt = (el.textContent || '').trim().replace(/\s+/g, ' ').slice(0, 50);
+      etiqueta = txt ? `"${txt}"` : '';
+    }
+    lineas.push(`${scope}${tag}${id}${cls}: ${etiqueta}`);
+  };
+
+  // 1) Navegación lateral (siempre disponible)
+  document.querySelectorAll('#sideNav .nav-item, #bottomNav .bnav-btn').forEach(el => {
+    procesar(el, 'NAV ');
+  });
+
+  // 2) Contenido de la sección actual
+  const content = document.getElementById('content');
+  if (content) {
+    const selectores = 'button, input, textarea, select, a[href], [onclick]';
+    content.querySelectorAll(selectores).forEach(el => {
+      // ignorar elementos invisibles
+      if (el.offsetParent === null && el.tagName !== 'INPUT') return;
+      procesar(el, '');
+    });
+  }
+
+  // 3) Chat tiene botones flotantes (adjuntar, enviar)
+  if (currentSection === 'chat') {
+    ['chatInput', 'chatAdjuntoBtn', 'chatSendBtn'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) procesar(el, '');
+    });
+  }
+
+  // Limitar a 60 elementos para no inflar tokens
+  return lineas.slice(0, 60);
 }
 
 // ═══════════════ MODO PLAN EJECUTABLE (Alejandra toma control) ═══════════

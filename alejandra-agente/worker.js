@@ -1,7 +1,7 @@
 // ══════════════════════════════════════════════════════════════════════════════
 // ALEJANDRA AGENTE — Worker autónomo, NEXUS router, prompts dinámicos, auto-mejora
 // URL: alejandra-agente.alejandra-app.workers.dev
-// Versión: v6.00 (Plan ejecutable en panel: Alejandra toma control con consentimiento)
+// Versión: v6.01 (Panel envía DOM compacto → Alejandra usa selectores reales en <plan>)
 // ══════════════════════════════════════════════════════════════════════════════
 
 const ANTHROPIC_API = 'https://api.anthropic.com/v1/messages';
@@ -129,7 +129,9 @@ Tipos de acción soportados:
 REGLAS DEL PLAN EJECUTABLE:
 - SOLO incluye <plan> en canal "Panel web" — en app móvil y telegram usa <guia>.
 - El panel pedirá consentimiento UNA VEZ al usuario antes de ejecutar el plan completo.
-- Si no estás 100% segura del selector CSS, NO uses <plan>: usa <guia> en su lugar.
+- Cuando recibas un bloque [DOM de la pantalla actual: ...] al inicio del mensaje, esos son los selectores REALES disponibles ahora mismo en pantalla. ÚSALOS — no inventes IDs.
+- Si el DOM actual no contiene el elemento que necesitas, primero usa <plan> con una acción "navegar" a la sección que sí lo tendrá, o pide al usuario que cambie de sección.
+- Si NO has visto el selector en el DOM ni puedes inferirlo con seguridad, NO uses <plan>: usa <guia> en su lugar.
 - Cada acción debe llevar "desc" (descripción corta de qué hace).
 - Acciones irreversibles (eliminar, enviar) → adviértelo en el "desc": "⚠️ Guarda definitivamente".
 - Máx 10 acciones por plan. Si necesitas más, divide en dos planes o pregunta al usuario.
@@ -497,13 +499,13 @@ export default {
       // ── Chat principal ────────────────────────────────────────────────────
       if (path === '/api/chat' && req.method === 'POST') {
         const body = await req.json();
-        const { mensaje, usuario_id, empresa_id, canal, token_telegram, adjuntos, rol, pantalla } = body;
+        const { mensaje, usuario_id, empresa_id, canal, token_telegram, adjuntos, rol, pantalla, dom_actual } = body;
         if (!mensaje || !usuario_id) return json({ error: 'mensaje y usuario_id requeridos' }, 400);
 
         const empresa   = empresa_id || 'default';
         const contexto  = await obtenerContextoChat(env, usuario_id, empresa, 10);
         const canalChat = canal || 'web';
-        const respuesta = await procesarConNEXUS(env, mensaje, contexto, usuario_id, empresa, canalChat, adjuntos, rol, pantalla);
+        const respuesta = await procesarConNEXUS(env, mensaje, contexto, usuario_id, empresa, canalChat, adjuntos, rol, pantalla, dom_actual);
 
         await guardarMensajeChat(env, usuario_id, empresa, mensaje, respuesta.texto, canalChat);
         if (respuesta.acciones?.length > 0) ctx.waitUntil(autoLearnChat(env, usuario_id, empresa, respuesta));
@@ -516,7 +518,7 @@ export default {
       // ── Chat streaming SSE ────────────────────────────────────────────────
       if (path === '/api/chat/stream' && req.method === 'POST') {
         const body = await req.json().catch(() => ({}));
-        const { mensaje, usuario_id, empresa_id, canal, adjuntos, rol, pantalla } = body;
+        const { mensaje, usuario_id, empresa_id, canal, adjuntos, rol, pantalla, dom_actual } = body;
         if (!mensaje || !usuario_id) return json({ error: 'mensaje y usuario_id requeridos' }, 400);
 
         const empresa  = empresa_id || 'default';
@@ -532,7 +534,7 @@ export default {
         (async () => {
           try {
             const canalReal = canal || 'panel';
-            const resp = await procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empresa, send, canalReal, adjuntos, rol, pantalla);
+            const resp = await procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empresa, send, canalReal, adjuntos, rol, pantalla, dom_actual);
             await guardarMensajeChat(env, usuario_id, empresa, mensaje, resp.texto, canalReal);
             ctx.waitUntil(actualizarResumenSiNecesario(env, usuario_id, canalReal));
             await send({ type: 'done', experto: resp.experto, modelo: resp.modelo, busqueda_web: resp.busqueda_web });
@@ -813,7 +815,7 @@ export default {
 // NEXUS — Router con prompts dinámicos y herramientas de auto-mejora
 // ══════════════════════════════════════════════════════════════════════════════
 
-async function procesarConNEXUS(env, mensaje, contexto, usuario_id, empresa_id, canal, adjuntos, rol=null, pantalla=null) {
+async function procesarConNEXUS(env, mensaje, contexto, usuario_id, empresa_id, canal, adjuntos, rol=null, pantalla=null, dom_actual=null) {
   if (!env.ANTHROPIC_API_KEY) {
     return { texto: 'Error: ANTHROPIC_API_KEY no configurada.', acciones: [], requiere_confirmacion: false };
   }
@@ -843,7 +845,7 @@ async function procesarConNEXUS(env, mensaje, contexto, usuario_id, empresa_id, 
     // PASO 4: Historial dinámico
     const limitHistorial      = clas.experto === 'simple' ? 4 : 10;
     const incluirAprendizajes = clas.experto !== 'simple';
-    const messages = await construirMessages(env, mensaje, contexto, limitHistorial, incluirAprendizajes, resultadoWeb, usuario_id, canal, adjuntos, rol, pantalla);
+    const messages = await construirMessages(env, mensaje, contexto, limitHistorial, incluirAprendizajes, resultadoWeb, usuario_id, canal, adjuntos, rol, pantalla, dom_actual);
 
     // PASO 5: Llamar al modelo en loop hasta respuesta final (máx 5 iteraciones)
     let respAPI  = await llamarAnthropic(env, messages, tools, expert.model, expert.maxTokens, systemPrompt);
@@ -899,7 +901,7 @@ async function procesarConNEXUS(env, mensaje, contexto, usuario_id, empresa_id, 
 }
 
 // ── NEXUS con streaming SSE ───────────────────────────────────────────────────
-async function procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empresa_id, send, canal, adjuntos, rol=null, pantalla=null) {
+async function procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empresa_id, send, canal, adjuntos, rol=null, pantalla=null, dom_actual=null) {
   if (!env.ANTHROPIC_API_KEY) {
     await send({ type: 'error', mensaje: 'ANTHROPIC_API_KEY no configurada.' });
     return { texto: 'Error: sin clave API.', herramientas_usadas: [] };
@@ -1757,7 +1759,7 @@ async function buscarWebOpenAI(env, query) {
 }
 
 // ── Contexto y mensajes ───────────────────────────────────────────────────────
-async function construirMessages(env, mensaje, contexto, limitHistorial=10, incluirAprendizajes=true, resultadoWeb=null, usuario_id=null, canal=null, adjuntos=null, rol=null, pantalla=null) {
+async function construirMessages(env, mensaje, contexto, limitHistorial=10, incluirAprendizajes=true, resultadoWeb=null, usuario_id=null, canal=null, adjuntos=null, rol=null, pantalla=null, dom_actual=null) {
   const messages = [];
   // Inyectar resumen de conversación previa antes del historial reciente
   if (contexto.resumen_anterior?.resumen) {
@@ -1787,6 +1789,14 @@ async function construirMessages(env, mensaje, contexto, limitHistorial=10, incl
   const rolNombre   = rol || 'desconocido';
   const pantallaStr = pantalla ? `, pantalla="${pantalla}"` : '';
   partes.push(`[Sesión: usuario="${usuario_id || 'anónimo'}", canal="${canalNombre}", rol="${rolNombre}"${pantallaStr}]`);
+
+  // DOM de la pantalla actual (solo panel web) — permite usar selectores reales en <plan>
+  if (Array.isArray(dom_actual) && dom_actual.length > 0) {
+    partes.push(
+      `[DOM de la pantalla actual — usa estos selectores en <plan>]\n` +
+      dom_actual.join('\n')
+    );
+  }
 
   if (incluirAprendizajes && contexto.aprendizajes?.length > 0) {
     partes.push(`Contexto de memoria:\n${contexto.aprendizajes.map(a=>`[${a.tipo}] ${a.titulo}: ${a.contenido}`).join('\n')}`);
