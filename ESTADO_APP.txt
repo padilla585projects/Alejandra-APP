@@ -4,8 +4,8 @@
   Ruta local: C:\Users\Adrian\Downloads\Proyecto GestiBobina\Alejandra APP
 ================================================================================
 
-ÚLTIMA ACTUALIZACIÓN: 27/05/2026
-VERSIÓN ACTUAL APP NUEVA: v6.02 (Scan parte multi-imagen + filtro empresas + auto obra)
+ÚLTIMA ACTUALIZACIÓN: 29/05/2026
+VERSIÓN ACTUAL APP NUEVA: v6.03 (Fotos en obra HEIC/30MB + upload archivos PWA + agente optimizado)
 VERSIÓN ACTUAL APP VIEJA: v4.19 (⛔ CONGELADA DEFINITIVAMENTE — no recibe más cambios)
 
 ================================================================================
@@ -176,6 +176,23 @@ PASO 4 — VERIFICAR WORKER (solo si se va a tocar worker.js)
 ================================================================================
   HISTORIAL DE VERSIONES — RECIENTES
 ================================================================================
+
+v6.03        |  29/05/2026  [Fotos en obra HEIC/30MB + upload archivos PWA + agente optimizado]
+  - Cambios hechos el 28/05 desde otro ordenador (worker del agente alejandra-agente),
+    sincronizados y desplegados. Bump del PWA a v6.03 el 29/05 para invalidar caché del
+    service worker (el commit de upload había cambiado index.html sin subir APP_VERSION).
+  - Worker agente /upload: acepta image/heic, image/heif, image/avif (iPhone) y
+    application/octet-stream; límite de upload subido 20→30MB.
+  - buildUserContentWithAdjuntos: detecta tipo por extensión, límite raw 5MB→3.7MB para
+    encajar el de Anthropic (5MB base64 ≈ 3.7MB raw); HEIC/HEIF avisa al modelo para usar
+    analizar_foto_obra (Gemini); imágenes >3.7MB pasan key R2 al modelo en vez de descartarse.
+  - Optimización de tokens del agente: DOM lazy, historial 10→6, memoria solo para expertos.
+  - Panel acepta <plan> ejecutable: Alejandra toma control con consentimiento; el panel envía
+    rol/pantalla y DOM compacto al worker para generar selectores reales.
+  - Auto-resumen de conversaciones largas + prompt caching + razonamiento.
+  - Aprendizaje proactivo + fix schema alejandra_memoria + upload de archivos multicanal
+    (panel, PWA y app Android) + identidad multicanal de Alejandra.
+  - Deploy agente: versión 3d812eab (2026-05-28 22:53 UTC, auto-deploy CI/CD).
 
 v6.02        |  27/05/2026  [Scan parte multi-imagen + filtro empresas + auto obra + Excel pro]
   - Scan parte (worker.js): prompt reescrito para partes manuscritos con columna empresa,

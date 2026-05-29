@@ -6,8 +6,42 @@
 ## ESTADO ACTUAL
 
 **Sesión:** LIBRE
-**Última sesión:** 27/05/2026
-**Versión actual:** v6.02
+**Última sesión:** 29/05/2026
+**Versión actual:** v6.03
+
+---
+
+## RESUMEN SESIÓN 29/05/2026 — v6.03 (Sync estado + bump PWA)
+
+### Contexto:
+- El 28/05 se hicieron cambios desde OTRO ordenador (commits hasta v6.03) que no
+  quedaron reflejados en los archivos de estado.
+- Al hacer `git pull` se trajeron 9 commits (v5.98 → v6.03) del worker del agente.
+
+### Qué se hizo:
+- **Bump app PWA a v6.03** (version.json, sw.js, index.html sincronizados ✅).
+  Motivo: el commit `4757e1b` añadió upload de archivos en index.html pero NO subió
+  APP_VERSION → la caché del service worker (alejandra-v6.02) no se invalidaba y los
+  usuarios PWA no recibían la feature. El bump fuerza el refresco de caché.
+- Actualizado SESION.md y ESTADO_APP.txt para reflejar el estado real.
+
+### Estado del deploy (verificado):
+- **Worker del agente** (`alejandra-agente`): v6.03 desplegado ✅
+  (versión 3d812eab, 2026-05-28 22:53 UTC — auto-deploy CI/CD tras el commit).
+- **Worker principal** (`alejandra-app-api`): sin cambios en este lote, no requería redeploy.
+
+### Cambios traídos en el pull (worker del agente, hechos el 28/05 desde otro PC):
+- v6.03: fotos en obra — HEIC/HEIF/AVIF, límite 30MB, fix límite Claude 3.7MB, fallback Gemini
+- v6.02: optimización tokens — DOM lazy + historial 10→6 + memoria solo expertos
+- v6.01: panel envía DOM compacto → selectores reales en `<plan>`
+- v6.00: panel acepta `<plan>` ejecutable (Alejandra toma control con consentimiento)
+- v5.99: conciencia de rol/pantalla + modo guía interactivo
+- v5.98: auto-resumen conversaciones largas + prompt caching + razonamiento
+- + aprendizaje proactivo, fix schema alejandra_memoria, upload archivos multicanal
+
+### Pendiente:
+- Revisar permisos de usuarios en Alejandra Office (arrastrado de sesiones previas)
+- Probar la feature de upload de archivos en PWA tras el refresco de caché
 
 ---
 
