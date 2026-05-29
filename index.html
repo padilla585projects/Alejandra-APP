@@ -67,7 +67,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
 #appContent{flex:1;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch}
 
 /* ── BOTTOM NAV ── */
-#bottomNav{background:var(--surface);border-top:1px solid var(--border);display:flex;align-items:stretch;flex-shrink:0;position:relative;z-index:100}
+#bottomNav{background:var(--surface);border-top:1px solid var(--border);display:flex;align-items:stretch;flex-shrink:0;position:relative;z-index:1060}
 .nav-btn{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;padding:8px 4px;background:none;border:none;color:var(--muted);font-family:'Montserrat',sans-serif;font-weight:700;font-size:9px;letter-spacing:.5px;text-transform:uppercase;cursor:pointer;transition:color .2s;border-top:2px solid transparent;position:relative}
 .nav-btn.active{color:var(--accent);border-top-color:var(--accent)}
 .nav-btn svg{width:20px;height:20px}
@@ -5217,7 +5217,8 @@ function irAtras() {
 function navTo(target) {
   // Si el chat de Alejandra está abierto, cerrarlo al navegar
   const _aleP = document.getElementById('alejandraPanel');
-  if (_aleP && _aleP.style.display === 'flex') alejandraAbrir(false);
+  const _aleChatAbierto = _aleP && _aleP.style.display === 'flex';
+  if (_aleChatAbierto) alejandraAbrir(false);
   if (target !== 'ajustes') { clearInterval(_ideasRefreshTimer); _ideasRefreshTimer = null; }
   closeCamera();
   segCloseCamera();
@@ -5234,6 +5235,8 @@ function navTo(target) {
   if (target === 'sugerencias') { showScreen('sugerencias'); return; }
   if (target === 'docs')        { showScreen('docs'); return; }
   if (target === 'ia') {
+    // Si el chat estaba abierto, solo cerrarlo (ya se cerró arriba), no navegar
+    if (_aleChatAbierto) return;
     if (document.getElementById('screenIA')?.classList.contains('active')) { irAtras(); return; }
     _applyScreen('ia'); document.getElementById('iaInput')?.focus(); return;
   }
@@ -10223,7 +10226,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '6.07';
+const APP_VERSION = '6.08';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
