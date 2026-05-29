@@ -7,7 +7,51 @@
 
 **Sesión:** LIBRE
 **Última sesión:** 29/05/2026
-**Versión actual:** v6.07
+**Versión actual:** v6.09
+
+---
+
+## RESUMEN SESIÓN 29/05/2026 (6ª) — v6.09 (Unificación chats + agente multicanal consciente)
+
+### Qué se hizo:
+
+**Unificación de todos los chats hacia el agente (v6.08-v6.09):**
+- screenIA (chat principal PWA) migrado del viejo endpoint /dev/ai-chat al agente completo (alejandra-agente.workers.dev/api/chat)
+- Añadido botón 📎 + upload de archivos en screenIA (imágenes, PDF, Excel, etc.)
+- panel.html: ambos chats (aiSend y wSend) migrados al agente
+- Todos los frontends ahora usan el mismo backend con NEXUS, tools, Gemini y catálogos
+
+**Fix nav bar bloqueada por chat (v6.08):**
+- bottomNav z-index subido de 100 a 1060 (por encima del chat overlay 1050)
+- Botón IA en nav ahora cierra el chat si está abierto (toggle)
+
+**Alejandra consciente de su arquitectura (agente/worker.js):**
+- System prompt actualizado: canales pwa/panel/telegram con descripciones detalladas
+- Nueva sección TU ARQUITECTURA: agente unificado, memoria compartida, multi-plataforma
+- Alejandra sabe que es UN SOLO agente con cerebro en alejandra-agente.workers.dev
+- Sabe que tiene la misma memoria y herramientas en todos los canales
+
+**Google OAuth mobile redirect (worker.js):**
+- Nueva función googleMobileRedirect para deep-link OAuth en apps móviles
+
+### Archivos modificados:
+- index.html — screenIA migrado a agente, 📎 upload, nav z-index, toggle IA, v6.09
+- panel.html — chats migrados a agente
+- sw.js — CACHE alejandra-v6.09
+- version.json — 6.09
+- alejandra-agente/worker.js — system prompt arquitectura multicanal
+- worker.js — googleMobileRedirect
+
+### Deploy:
+- GitHub: fd774fd → push main ✅
+- Worker agente: 37369b0c ✅
+- Worker principal: 2446a8f3 ✅
+
+### Pendiente:
+- Usuario debe probar todos los chats en móvil tras limpiar caché
+- Test en Android real: plan ejecutable, PDF upload, back button
+- Botón Alejandra en barra inferior a veces no registra click
+- Revisar permisos de usuarios en Alejandra Office
 
 ---
 
