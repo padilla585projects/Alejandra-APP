@@ -78,8 +78,23 @@ v5.97: ingeniería de obra (cálculos eléctricos, Gemini Vision, consultar_bd, 
 - leer_estado: lee tu config actual, memoria y decisiones antes de actuar
 - tomar_decision: registra y aplica decisiones autónomamente (tipo config, confianza≥0.8)
 
+AUTOMODIFICACIÓN — puedes tocar tu propio código:
+- grep_code: busca patrones en archivos del repo sin leerlos entero
+- repo_read_file: lee archivos completos o por rango de líneas
+- direct_fix: aplica un patch quirúrgico (old_code→new_code), hace commit y el CI/CD despliega automaticamente
+- repo_write_file: crea o modifica archivos enteros en GitHub
+- run_migration: ejecuta SQL DDL en la base de datos (CREATE TABLE, ALTER TABLE, etc.)
+- check_deploy_status: verifica si el deploy via GitHub Actions fue exitoso
+
+FLUJO PARA ARREGLAR UN BUG:
+1. grep_code para localizar el codigo exacto
+2. repo_read_file para leer el contexto completo
+3. direct_fix con old_code copiado LITERALMENTE (no de memoria)
+4. check_deploy_status para verificar que se desplegó bien
+5. Notificas a Adrian por Telegram automaticamente
+
 REGLA DE APRENDIZAJE: cuando identifiques un patrón útil, guárdalo. Tu memoria es tu ventaja — lo que guardas hoy te hace mejor mañana.
-REGLA DE MEJORA: si ves una limitación concreta, usa propose_mejora con descripción técnica exacta.
+REGLA DE MEJORA: si ves una limitación concreta, usa direct_fix para arreglarla directamente. Solo usa propose_mejora si el cambio es muy grande o arriesgado.
 REGLA DE DECISIÓN: si el config no es óptimo, usa leer_estado + tomar_decision. No solo propongas — decide cuando tengas confianza suficiente.`,
 
   decision: `AUTOCONCIENCIA Y TOMA DE DECISIONES:
@@ -99,12 +114,13 @@ LÍMITES: Puedes cambiar modo y max_iterations autónomamente. Para cambios de c
   contexto_sesion: `CONTEXTO DE SESIÓN: Al inicio de cada mensaje recibes [Sesión: usuario="X", canal="Y", rol="Z", pantalla="P"]. Usa esta info para:
 
 QUIÉN TE HABLA (usuario + rol):
-- "adrian" o rol "superadmin/desarrollador" → Adrián Padilla, tu creador. Sé técnica, directa, puedes usar jerga de desarrollo.
-- rol "empresa_admin" → Responsable de empresa. Datos globales, costes, informes, toma de decisiones.
+- "adrian" o rol "superadmin/desarrollador" → Adrián Padilla, tu creador y jefe de desarrollo. Sé técnica, directa, jerga de desarrollo OK. Con él puedes usar tools de código (direct_fix, grep_code, etc.) para arreglar bugs o implementar features. Es la ÚNICA persona que te puede pedir cambios de código. Trátalo como tu compañero de equipo — confianza total.
+- rol "empresa_admin" → Responsable de empresa. Datos globales, costes, informes, toma de decisiones. Tono profesional pero cercano.
 - rol "encargado" → Encargado de obra/depto. Quiere información operativa: qué pasa en su zona, materiales, personal, incidencias.
 - rol "oficina" → Personal de oficina. Pedidos, documentación, facturación, coordinación.
 - rol "operario" → Trabajador de campo. Responde SIMPLE y DIRECTO, sin tecnicismos, sin jerga. Máx 3-4 pasos. Si hay riesgo, avisa claro.
 - Si el rol es desconocido o vacío, trata al usuario como operario (modo seguro: simple y directo).
+- IMPORTANTE: Tu conversación es POR USUARIO, no por canal. Si adrian te habla desde la app y luego desde el panel, continúa la misma conversación. Cada usuario tiene su propio hilo.
 
 DESDE DÓNDE TE HABLAN (canal):
 - "pwa" → App móvil Alejandra (PWA instalada en Android/iOS). Es tu plataforma principal. Los trabajadores de obra te hablan desde aquí. Respuestas claras, directas, optimizadas para pantalla pequeña.
@@ -498,14 +514,118 @@ const TOOL_VER_ESQUEMA_BD = {
   input_schema: { type: 'object', properties: {} }
 };
 
+// ── Tools de automodificación (Alejandra modifica su propio código) ───────────
+const TOOL_REPO_READ = {
+  name: 'repo_read_file',
+  description: 'Lee contenido de un archivo del repo GitHub. Para archivos grandes usa line_start/line_end — worker.js tiene ~9000 lineas, lee en bloques de 300-500.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      path: { type: 'string', description: 'Ruta del archivo en el repo (ej: "worker.js", "index.html", "alejandra-agente/worker.js")' },
+      line_start: { type: 'integer', description: 'Linea inicial (1-based). Omitir para empezar al principio.' },
+      line_end: { type: 'integer', description: 'Linea final (inclusive). Omitir para leer hasta fin o limite de 50K chars.' }
+    },
+    required: ['path']
+  }
+};
+
+const TOOL_REPO_WRITE = {
+  name: 'repo_write_file',
+  description: 'Crea o modifica un archivo en GitHub haciendo commit. Si modificas worker.js se despliega a Cloudflare en ~1min via CI/CD. Si modificas index.html/panel.html se despliega a GitHub Pages en ~30s.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      path: { type: 'string', description: 'Ruta del archivo (ej: "worker.js", "index.html")' },
+      content: { type: 'string', description: 'Contenido completo del archivo (texto plano)' },
+      message: { type: 'string', description: 'Mensaje del commit' }
+    },
+    required: ['path', 'content', 'message']
+  }
+};
+
+const TOOL_DIRECT_FIX = {
+  name: 'direct_fix',
+  description: 'Aplica un patch quirúrgico (old_code -> new_code) INMEDIATAMENTE. Hace commit en GitHub, CI/CD despliega. Notifica a Adrian por Telegram. FLUJO: 1) grep_code para localizar, 2) repo_read_file para leer contexto, 3) direct_fix con old_code copiado literalmente.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      descripcion: { type: 'string', description: 'Qué bug corrige o qué añade' },
+      archivo: { type: 'string', description: 'Archivo a modificar (ej: "worker.js")' },
+      old_code: { type: 'string', description: 'Fragmento EXACTO del codigo actual — copialo de repo_read_file/grep_code' },
+      new_code: { type: 'string', description: 'Codigo nuevo que reemplaza a old_code' },
+      razon: { type: 'string', description: 'Explicacion tecnica del fix' }
+    },
+    required: ['descripcion', 'archivo', 'old_code', 'new_code', 'razon']
+  }
+};
+
+const TOOL_GREP_CODE = {
+  name: 'grep_code',
+  description: 'Busca un patron de texto en un archivo del repo y devuelve las lineas que coinciden con contexto. IMPRESCINDIBLE antes de direct_fix.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      path: { type: 'string', description: 'Archivo donde buscar (ej: "worker.js")' },
+      pattern: { type: 'string', description: 'Patron regex o texto literal a buscar' },
+      context_lines: { type: 'integer', description: 'Lineas de contexto (default 3, max 10)' }
+    },
+    required: ['path', 'pattern']
+  }
+};
+
+const TOOL_RUN_MIGRATION = {
+  name: 'run_migration',
+  description: 'Ejecuta SQL DDL en D1 (CREATE TABLE, ALTER TABLE, CREATE INDEX). Admite varias sentencias separadas por ;',
+  input_schema: {
+    type: 'object',
+    properties: {
+      sql: { type: 'string', description: 'SQL a ejecutar' },
+      descripcion: { type: 'string', description: 'Para que es esta migracion' }
+    },
+    required: ['sql']
+  }
+};
+
+const TOOL_CHECK_DEPLOY = {
+  name: 'check_deploy_status',
+  description: 'Consulta estado de los ultimos deploys de GitHub Actions. Usalo despues de direct_fix o repo_write_file para verificar que el deploy fue OK.',
+  input_schema: { type: 'object', properties: {} }
+};
+
+// ── Helper: notificar a Adrian por Telegram ──────────────────────────────────
+async function notificarAdrian(env, mensaje) {
+  try {
+    const token = env.TELEGRAM_BOT_TOKEN;
+    const chatId = env.DEV_CHAT_ID;
+    if (!token || !chatId) return;
+    await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: String(chatId), text: mensaje, parse_mode: 'HTML' })
+    });
+  } catch (_) {}
+}
+
+// ── Helper: auto-aprender (guardar en memoria automaticamente) ───────────────
+async function autoLearnAgente(env, tipo, titulo, contenido, importancia = 2) {
+  try {
+    await env.DB.prepare(
+      "INSERT INTO alejandra_memoria (tipo, usuario_id, titulo, contenido, importancia, created_at) VALUES (?, 'system', ?, ?, ?, datetime('now'))"
+    ).bind(tipo, titulo, contenido.slice(0, 1000), importancia).run();
+  } catch {}
+}
+
 // Tools por experto
+// Tools de código — solo para Adrian (rol desarrollador/superadmin)
+const CODE_TOOLS = [TOOL_REPO_READ, TOOL_REPO_WRITE, TOOL_DIRECT_FIX, TOOL_GREP_CODE, TOOL_RUN_MIGRATION, TOOL_CHECK_DEPLOY];
+
 const TOOLS_POR_EXPERTO = {
   simple:     [],
   app:        [TOOL_BUSCAR_WEB, TOOL_BUSCAR_GOOGLE, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_VER_ESQUEMA_BD, TOOL_ANALIZAR_FOTO, TOOL_ANALIZAR_ARCHIVO],
-  tecnico:    [TOOL_LEER_ESTADO, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_BUSCAR_WEB, TOOL_BUSCAR_GOOGLE, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_VER_ESQUEMA_BD, TOOL_ANALIZAR_FOTO, TOOL_ANALIZAR_ARCHIVO, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION],
+  tecnico:    [TOOL_LEER_ESTADO, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_BUSCAR_WEB, TOOL_BUSCAR_GOOGLE, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_VER_ESQUEMA_BD, TOOL_ANALIZAR_FOTO, TOOL_ANALIZAR_ARCHIVO, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, ...CODE_TOOLS],
   web:        [TOOL_BUSCAR_WEB, TOOL_BUSCAR_GOOGLE, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE],
-  reflexion:  [TOOL_MEMORY_SAVE, TOOL_MEMORY_READ, TOOL_PROPOSE_MEJORA, TOOL_BUSCAR_WEB, TOOL_BUSCAR_GOOGLE, TOOL_TOMAR_DECISION, TOOL_LEER_ESTADO, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION],
-  completo:   [TOOL_BUSCAR_WEB, TOOL_BUSCAR_GOOGLE, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_LEER_ESTADO, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_VER_ESQUEMA_BD, TOOL_ANALIZAR_FOTO, TOOL_ANALIZAR_ARCHIVO, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION],
+  reflexion:  [TOOL_MEMORY_SAVE, TOOL_MEMORY_READ, TOOL_PROPOSE_MEJORA, TOOL_BUSCAR_WEB, TOOL_BUSCAR_GOOGLE, TOOL_TOMAR_DECISION, TOOL_LEER_ESTADO, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, ...CODE_TOOLS],
+  completo:   [TOOL_BUSCAR_WEB, TOOL_BUSCAR_GOOGLE, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_LEER_ESTADO, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_VER_ESQUEMA_BD, TOOL_ANALIZAR_FOTO, TOOL_ANALIZAR_ARCHIVO, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, ...CODE_TOOLS],
   ingenieria: [TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_CONSULTAR_BD, TOOL_VER_ESQUEMA_BD, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_ANALIZAR_FOTO, TOOL_ANALIZAR_ARCHIVO, TOOL_BUSCAR_WEB, TOOL_BUSCAR_GOOGLE, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION]
 };
 
@@ -1495,7 +1615,7 @@ async function ejecutarTool(env, nombre, input, usuario_id, empresa_id, expertoT
     case 'memory_save': {
       try {
         await env.DB.prepare(
-          `INSERT INTO alejandra_memoria (tipo,canal,titulo,contenido,importancia,created_at)
+          `INSERT INTO alejandra_memoria (tipo,usuario_id,titulo,contenido,importancia,created_at)
            VALUES(?,?,?,?,?,datetime('now'))`
         ).bind(input.tipo, usuario_id || 'system', input.titulo, input.contenido, input.importancia||3).run();
         return `Guardado en memoria: [${input.tipo}] "${input.titulo}"`;
@@ -1772,6 +1892,176 @@ ${input.codigo_sugerido ? `CÓDIGO SUGERIDO:\n${input.codigo_sugerido}` : ''}`;
       }
     }
 
+    // ── Tools de automodificación ────────────────────────────────────────────
+    case 'repo_read_file': {
+      if (!env.GITHUB_TOKEN) return 'GITHUB_TOKEN no configurado.';
+      const { path } = input;
+      try {
+        const res = await fetch(`https://api.github.com/repos/padilla585projects/Alejandra-APP/contents/${encodeURIComponent(path)}`, {
+          headers: { 'Authorization': `token ${env.GITHUB_TOKEN}`, 'Accept': 'application/vnd.github.v3+json', 'User-Agent': 'AlejandraIA' }
+        });
+        if (!res.ok) return JSON.stringify({ ok: false, error: `HTTP ${res.status}: ${await res.text()}` });
+        const data = await res.json();
+        if (data.type !== 'file') return JSON.stringify({ ok: false, error: 'No es un archivo' });
+        const _b64 = atob(data.content.replace(/\n/g, '')); const _by = new Uint8Array(_b64.length); for (let i = 0; i < _b64.length; i++) _by[i] = _b64.charCodeAt(i);
+        const fullContent = new TextDecoder('utf-8').decode(_by);
+        const allLines = fullContent.split('\n');
+        const totalLines = allLines.length;
+        let content; let rangeDesc = '';
+        if (input.line_start || input.line_end) {
+          const s = Math.max(1, input.line_start || 1) - 1;
+          const e = Math.min(totalLines, input.line_end || totalLines);
+          content = allLines.slice(s, e).join('\n');
+          rangeDesc = ` (lineas ${s+1}-${e} de ${totalLines})`;
+        } else {
+          content = fullContent.slice(0, 50000);
+        }
+        const truncated = !input.line_start && !input.line_end && fullContent.length > 50000;
+        return JSON.stringify({ ok: true, path, total_lines: totalLines, sha: data.sha, content, truncated, hint: truncated ? `Archivo grande: usa line_start/line_end (total ${totalLines} lineas)` : undefined });
+      } catch (e) { return JSON.stringify({ ok: false, error: e.message }); }
+    }
+
+    case 'repo_write_file': {
+      if (!env.GITHUB_TOKEN) return 'GITHUB_TOKEN no configurado.';
+      const { path, content, message } = input;
+      try {
+        let sha = null;
+        const getRes = await fetch(`https://api.github.com/repos/padilla585projects/Alejandra-APP/contents/${encodeURIComponent(path)}`, {
+          headers: { 'Authorization': `token ${env.GITHUB_TOKEN}`, 'Accept': 'application/vnd.github.v3+json', 'User-Agent': 'AlejandraIA' }
+        });
+        if (getRes.ok) { const existing = await getRes.json(); sha = existing.sha; }
+        const encoded = btoa(unescape(encodeURIComponent(content)));
+        const body = { message, content: encoded, ...(sha ? { sha } : {}) };
+        const putRes = await fetch(`https://api.github.com/repos/padilla585projects/Alejandra-APP/contents/${encodeURIComponent(path)}`, {
+          method: 'PUT',
+          headers: { 'Authorization': `token ${env.GITHUB_TOKEN}`, 'Accept': 'application/vnd.github.v3+json', 'User-Agent': 'AlejandraIA', 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+        if (!putRes.ok) return JSON.stringify({ ok: false, error: `HTTP ${putRes.status}: ${(await putRes.text()).slice(0,300)}` });
+        const result = await putRes.json();
+        const commitSha = result.commit?.sha?.slice(0, 7);
+        autoLearnAgente(env, 'hecho', `Modificado: ${path}`, `Commit ${commitSha}. Cambio: "${message}"`, 2);
+        return JSON.stringify({ ok: true, path, commit: commitSha, message, action: sha ? 'updated' : 'created' });
+      } catch (e) { return JSON.stringify({ ok: false, error: e.message }); }
+    }
+
+    case 'direct_fix': {
+      if (!env.GITHUB_TOKEN) return 'GITHUB_TOKEN no configurado.';
+      const { descripcion, archivo, old_code, new_code, razon } = input;
+      try {
+        const getRes = await fetch(`https://api.github.com/repos/padilla585projects/Alejandra-APP/contents/${encodeURIComponent(archivo)}`, {
+          headers: { 'Authorization': `token ${env.GITHUB_TOKEN}`, 'Accept': 'application/vnd.github.v3+json', 'User-Agent': 'AlejandraIA' }
+        });
+        if (!getRes.ok) return JSON.stringify({ ok: false, error: `GitHub ${getRes.status} leyendo ${archivo}` });
+        const fileData = await getRes.json();
+        const _b64f = atob(fileData.content.replace(/\n/g, '')); const _byf = new Uint8Array(_b64f.length); for (let i = 0; i < _b64f.length; i++) _byf[i] = _b64f.charCodeAt(i);
+        const currentContent = new TextDecoder('utf-8').decode(_byf);
+        if (!currentContent.includes(old_code)) {
+          return JSON.stringify({ ok: false, error: `old_code no encontrado en ${archivo}. Usa repo_read_file para leer el codigo exacto actual.` });
+        }
+        const newContent = currentContent.replace(old_code, new_code);
+        const encoded = btoa(unescape(encodeURIComponent(newContent)));
+        const putRes = await fetch(`https://api.github.com/repos/padilla585projects/Alejandra-APP/contents/${encodeURIComponent(archivo)}`, {
+          method: 'PUT',
+          headers: { 'Authorization': `token ${env.GITHUB_TOKEN}`, 'Accept': 'application/vnd.github.v3+json', 'User-Agent': 'AlejandraIA', 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message: `fix(alejandra): ${descripcion}`, content: encoded, sha: fileData.sha })
+        });
+        if (!putRes.ok) return JSON.stringify({ ok: false, error: `GitHub ${putRes.status}: ${(await putRes.text()).slice(0,300)}` });
+        const result = await putRes.json();
+        const commitSha = result.commit?.sha?.slice(0, 7);
+        // Guardar fix en BD para tracking
+        const r = await env.DB.prepare(
+          "INSERT INTO alejandra_fixes (descripcion, archivo, contenido_nuevo, razon, estado, commit_sha) VALUES (?,?,?,?,'aplicado',?)"
+        ).bind(descripcion, archivo, JSON.stringify({ old: old_code.slice(0,500), new: new_code.slice(0,500) }), razon, commitSha).run().catch(()=>({meta:{}}));
+        const fixId = r.meta?.last_row_id || '?';
+        // Notificar a Adrian por Telegram
+        notificarAdrian(env, `🤖 <b>Fix aplicado #${fixId}</b>\n📁 <code>${archivo}</code>\n📋 ${descripcion}\n💡 ${razon}\n📝 Commit: <code>${commitSha}</code>`).catch(()=>{});
+        autoLearnAgente(env, 'hecho', `direct_fix: ${descripcion}`, `Archivo: ${archivo} | Commit: ${commitSha}`, 3);
+        const deployMsg = archivo.includes('worker') ? 'Deploy a Cloudflare en ~1min (GitHub Actions).' : 'Deploy a GitHub Pages en ~30s.';
+        return JSON.stringify({ ok: true, fix_id: fixId, commit: commitSha, deploy: deployMsg });
+      } catch (e) {
+        autoLearnAgente(env, 'error', `direct_fix fallo: ${descripcion}`, e.message, 4);
+        return JSON.stringify({ ok: false, error: e.message });
+      }
+    }
+
+    case 'grep_code': {
+      if (!env.GITHUB_TOKEN) return 'GITHUB_TOKEN no configurado.';
+      const { path, pattern, context_lines = 3 } = input;
+      try {
+        const getRes = await fetch(`https://api.github.com/repos/padilla585projects/Alejandra-APP/contents/${encodeURIComponent(path)}`, {
+          headers: { 'Authorization': `token ${env.GITHUB_TOKEN}`, 'Accept': 'application/vnd.github.v3+json', 'User-Agent': 'AlejandraIA' }
+        });
+        if (!getRes.ok) return JSON.stringify({ ok: false, error: `GitHub ${getRes.status}` });
+        const fileData = await getRes.json();
+        const raw = atob(fileData.content.replace(/\n/g, ''));
+        const lines = raw.split('\n');
+        const regex = new RegExp(pattern, 'gi');
+        const matches = [];
+        for (let i = 0; i < lines.length; i++) {
+          if (regex.test(lines[i])) {
+            regex.lastIndex = 0;
+            const from = Math.max(0, i - context_lines);
+            const to = Math.min(lines.length - 1, i + context_lines);
+            const ctx = lines.slice(from, to + 1).map((l, idx) => ({ line: from + idx + 1, text: l, match: (from + idx) === i }));
+            matches.push({ line: i + 1, text: lines[i].trim(), context: ctx });
+            i += context_lines;
+          }
+          regex.lastIndex = 0;
+        }
+        return JSON.stringify({ ok: true, path, pattern, total_lines: lines.length, matches_found: matches.length, matches: matches.slice(0, 20) });
+      } catch (e) { return JSON.stringify({ ok: false, error: e.message }); }
+    }
+
+    case 'run_migration': {
+      const { sql, descripcion } = input;
+      try {
+        const stmts = sql.split(';').map(s => s.trim()).filter(s => s.length > 0);
+        const results = [];
+        for (const stmt of stmts) {
+          try {
+            const r = await env.DB.prepare(stmt).run();
+            results.push({ sql: stmt.slice(0, 80), ok: true });
+          } catch (e) {
+            results.push({ sql: stmt.slice(0, 80), ok: false, error: e.message });
+          }
+        }
+        const allOk = results.every(r => r.ok);
+        if (allOk) autoLearnAgente(env, 'hecho', `Migracion: ${descripcion || sql.slice(0, 60)}`, sql.slice(0, 300), 3);
+        return JSON.stringify({ ok: allOk, results, total: stmts.length, ok_count: results.filter(r => r.ok).length });
+      } catch (e) { return JSON.stringify({ ok: false, error: e.message }); }
+    }
+
+    case 'check_deploy_status': {
+      if (!env.GITHUB_TOKEN) return 'GITHUB_TOKEN no configurado.';
+      try {
+        const [runsRes, commitsRes] = await Promise.all([
+          fetch('https://api.github.com/repos/padilla585projects/Alejandra-APP/actions/runs?per_page=5', {
+            headers: { 'Authorization': `token ${env.GITHUB_TOKEN}`, 'Accept': 'application/vnd.github.v3+json', 'User-Agent': 'AlejandraIA' }
+          }),
+          fetch('https://api.github.com/repos/padilla585projects/Alejandra-APP/commits?per_page=5', {
+            headers: { 'Authorization': `token ${env.GITHUB_TOKEN}`, 'Accept': 'application/vnd.github.v3+json', 'User-Agent': 'AlejandraIA' }
+          })
+        ]);
+        const runsData = runsRes.ok ? await runsRes.json() : { workflow_runs: [] };
+        const commitsData = commitsRes.ok ? await commitsRes.json() : [];
+        const runs = (runsData.workflow_runs || []).map(r => ({
+          workflow: r.name, status: r.status, conclusion: r.conclusion,
+          created_at: r.created_at, commit: r.head_sha?.slice(0, 7),
+          commit_msg: r.head_commit?.message?.slice(0, 60)
+        }));
+        const commits = (Array.isArray(commitsData) ? commitsData : []).map(c => ({
+          sha: c.sha?.slice(0, 7), msg: c.commit?.message?.slice(0, 80), date: c.commit?.author?.date
+        }));
+        const latest = runs[0];
+        const summary = !latest ? 'Sin runs de GitHub Actions.'
+          : latest.status === 'completed' && latest.conclusion === 'success' ? `OK (commit ${latest.commit})`
+          : latest.status === 'in_progress' ? `En curso (commit ${latest.commit})`
+          : `FALLO: ${latest.conclusion} (commit ${latest.commit})`;
+        return JSON.stringify({ ok: true, summary, runs: runs.slice(0, 5), recent_commits: commits });
+      } catch (e) { return JSON.stringify({ ok: false, error: e.message }); }
+    }
+
     default:
       return `Tool "${nombre}" no reconocida.`;
   }
@@ -2027,10 +2317,11 @@ async function construirMessages(env, mensaje, contexto, limitHistorial=10, incl
 async function obtenerContextoChat(env, usuario_id, empresa_id, limit=20) {
   try {
     await ensureConversacionResumenTable(env);
-    // Solo los últimos 10 mensajes en bruto; lo anterior va resumido
+    const uid = usuario_id || 'unknown';
+    // Historial POR USUARIO (cross-canal: misma conversacion desde app, panel o telegram)
     const historial = await env.DB.prepare(
-      `SELECT rol, contenido, canal, created_at FROM alejandra_historial ORDER BY created_at DESC LIMIT ?`
-    ).bind(10).all();
+      `SELECT rol, contenido, canal, created_at FROM alejandra_historial WHERE usuario_id=? ORDER BY created_at DESC LIMIT ?`
+    ).bind(uid, 10).all();
     const aprendizajes = await env.DB.prepare(
       `SELECT titulo,contenido,tipo FROM alejandra_memoria WHERE (tipo='aprendizaje' OR tipo='contexto') ORDER BY importancia DESC,created_at DESC LIMIT 10`
     ).all();
@@ -2087,18 +2378,18 @@ async function actualizarResumenSiNecesario(env, usuario_id, canal) {
     if (!usuario_id) return;
     await ensureConversacionResumenTable(env);
 
-    // Contar mensajes totales del usuario en este canal
+    // Contar mensajes totales del usuario (cross-canal)
     const cnt = await env.DB.prepare(
-      `SELECT COUNT(*) as n FROM alejandra_historial WHERE canal=?`
-    ).bind(canal || 'web').first().catch(() => ({ n: 0 }));
+      `SELECT COUNT(*) as n FROM alejandra_historial WHERE usuario_id=?`
+    ).bind(usuario_id).first().catch(() => ({ n: 0 }));
     const total = cnt?.n || 0;
     if (total <= 25) return;
 
     // Saltar todos menos los últimos 10 → coger los antiguos
     const offset = 10;
     const antiguos = await env.DB.prepare(
-      `SELECT id, rol, contenido, created_at FROM alejandra_historial WHERE canal=? ORDER BY created_at DESC LIMIT 1000 OFFSET ?`
-    ).bind(canal || 'web', offset).all().catch(() => ({ results: [] }));
+      `SELECT id, rol, contenido, created_at FROM alejandra_historial WHERE usuario_id=? ORDER BY created_at DESC LIMIT 1000 OFFSET ?`
+    ).bind(usuario_id, offset).all().catch(() => ({ results: [] }));
     const items = (antiguos.results || []).reverse();
     if (items.length === 0) return;
 
@@ -2147,17 +2438,18 @@ async function actualizarResumenSiNecesario(env, usuario_id, canal) {
 
 async function guardarMensajeChat(env, usuario_id, empresa_id, mensaje, respuesta, canal='panel') {
   try {
-    // Guarda en alejandra_historial (tabla unificada compartida con la app)
+    const uid = usuario_id || 'unknown';
+    // Guarda en alejandra_historial con usuario_id (conversacion por usuario, no por canal)
     await env.DB.prepare(
-      `INSERT INTO alejandra_historial (canal, rol, contenido, created_at) VALUES (?, 'user', ?, datetime('now'))`
-    ).bind(canal, mensaje.slice(0, 4000)).run();
+      `INSERT INTO alejandra_historial (canal, rol, contenido, usuario_id, created_at) VALUES (?, 'user', ?, ?, datetime('now'))`
+    ).bind(canal, mensaje.slice(0, 4000), uid).run();
     await env.DB.prepare(
-      `INSERT INTO alejandra_historial (canal, rol, contenido, created_at) VALUES (?, 'assistant', ?, datetime('now'))`
-    ).bind(canal, respuesta.slice(0, 4000)).run();
-    // Limitar a 100 mensajes por canal
+      `INSERT INTO alejandra_historial (canal, rol, contenido, usuario_id, created_at) VALUES (?, 'assistant', ?, ?, datetime('now'))`
+    ).bind(canal, respuesta.slice(0, 4000), uid).run();
+    // Limitar a 200 mensajes por usuario (cross-canal)
     await env.DB.prepare(
-      `DELETE FROM alejandra_historial WHERE canal=? AND id NOT IN (SELECT id FROM alejandra_historial WHERE canal=? ORDER BY created_at DESC LIMIT 100)`
-    ).bind(canal, canal).run();
+      `DELETE FROM alejandra_historial WHERE usuario_id=? AND id NOT IN (SELECT id FROM alejandra_historial WHERE usuario_id=? ORDER BY created_at DESC LIMIT 200)`
+    ).bind(uid, uid).run();
   } catch (err) { console.error('guardarChat:', err.message); }
 }
 
