@@ -11,6 +11,39 @@
 
 ---
 
+## RESUMEN SESIÓN 29/05/2026 (3ª) — v6.04 (Gemini + catálogos de fabricantes)
+
+### Qué se hizo:
+
+**Integración Gemini en agente (alejandra-agente/worker.js):**
+- callGemini() con rotación de 3 API keys y fallback de modelos (2.0-flash → 1.5-flash-002 → 1.5-flash).
+- Nueva tool analizar_archivo: lee Excel, PDF grande, HEIC, CAD vía Gemini.
+- Nueva tool buscar_google: Google Search grounding vía Gemini.
+- Handlers ejecutarTool para ambas tools.
+- PDFs >4.5MB y Excel se leen automáticamente con Gemini en el chat.
+- GEMINI_API_KEY_2 y _3 configuradas como secrets en worker agente.
+
+**Alejandra como ingeniera con catálogos:**
+- System prompt base ampliado: marcas habituales del sector (Pemsa, Schneider, Prysmian, ABB, etc.).
+- Protocolo de material: si no conoce un producto, busca catálogo del fabricante automáticamente con buscar_google antes de responder. Si no encuentra, pregunta al usuario.
+- Prompt ingeniería actualizado: buscar_google y analizar_archivo como herramientas, protocolo de datos reales de fabricante.
+- Guarda en memoria productos nuevos para futuras consultas.
+
+### Pruebas realizadas (desde Claude Code):
+- buscar_google: precio del cobre ✅, normativa REBT 2026 ✅
+- ingeniería + catálogos: curva 90° bandeja Pemsa Megaband ✅, magnetotérmico Schneider GV3P32 para motor 15kW ✅
+- NEXUS routing correcto: web para búsquedas, ingenieria para cálculos ✅
+
+### Deploy:
+- GitHub: d65cf65 → push main ✅
+- Worker agente: 7be72edc ✅ (D1 + R2 + 3 Gemini keys)
+
+### Pendiente:
+- Probar en Android real: fix back + plan ejecutable + chat con archivos
+- Probar upload de Excel y PDF grande desde la PWA (verificar lectura Gemini)
+
+---
+
 ## RESUMEN SESIÓN 29/05/2026 — v6.03 (Sync estado + bump PWA)
 
 ### Contexto:
