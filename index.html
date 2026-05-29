@@ -648,7 +648,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
 </div>
 
 <!-- Panel Alejandra AI Chat -->
-<div id="alejandraPanel" style="display:none;position:fixed;inset:0;z-index:1050;background:var(--bg);flex-direction:column">
+<div id="alejandraPanel" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;z-index:1050;background:var(--bg);flex-direction:column">
   <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:2px solid #8b5cf6;flex-shrink:0;background:var(--surface)">
     <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:15px">🤖 Alejandra Agente</div>
     <div style="display:flex;gap:8px;align-items:center">
@@ -5209,6 +5209,9 @@ function irAtras() {
 }
 
 function navTo(target) {
+  // Si el chat de Alejandra está abierto, cerrarlo al navegar
+  const _aleP = document.getElementById('alejandraPanel');
+  if (_aleP && _aleP.style.display === 'flex') alejandraAbrir(false);
   if (target !== 'ajustes') { clearInterval(_ideasRefreshTimer); _ideasRefreshTimer = null; }
   closeCamera();
   segCloseCamera();
@@ -14871,12 +14874,14 @@ function alejandraAbrir(show = true) {
   const panel = document.getElementById('alejandraPanel');
   if (!panel) return;
   if (show) {
+    const nav = document.getElementById('bottomNav');
+    panel.style.bottom = (nav && nav.style.display !== 'none') ? nav.offsetHeight + 'px' : '0';
     panel.style.display = 'flex';
     document.getElementById('alejandraInput')?.focus();
-    // Asegurar un estado en el historial para que el botón atrás físico cierre el chat
     if (!history.state?.alejandra) history.pushState({ alejandra: 1 }, '');
   } else {
     panel.style.display = 'none';
+    panel.style.bottom = '0';
     if (_alejandraEscuchando && _alejandraRecognition) _alejandraRecognition.stop();
     window.speechSynthesis?.cancel();
   }
