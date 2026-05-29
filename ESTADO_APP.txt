@@ -5,7 +5,7 @@
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 29/05/2026
-VERSIÓN ACTUAL APP NUEVA: v6.04 (Fix back + PDFs + esquema BD + plan PWA + Gemini + catálogos)
+VERSIÓN ACTUAL APP NUEVA: v6.05 (Fix sesión usuario_id + Gemini + catálogos fabricantes)
 VERSIÓN ACTUAL APP VIEJA: v4.19 (⛔ CONGELADA DEFINITIVAMENTE — no recibe más cambios)
 
 ================================================================================
@@ -176,6 +176,16 @@ PASO 4 — VERIFICAR WORKER (solo si se va a tocar worker.js)
 ================================================================================
   HISTORIAL DE VERSIONES — RECIENTES
 ================================================================================
+
+v6.05        |  29/05/2026  [Fix sesión usuario_id — chat Alejandra no funcionaba en PWA]
+  - BUG CRÍTICO: login por código (/verificar) no devolvía usuario_id ni empresa_id en respuesta JSON.
+  - El frontend no guardaba esos campos en sesión → alejandraEnviar() fallaba silenciosamente.
+  - Fix worker.js: /verificar devuelve usuario_id y empresa_id en JSON (login código + superadmin).
+  - Fix index.html: login por código y por email guardan usuario_id y empresa_id en sesión.
+  - Deploy worker principal: ada9fe4d.
+  - Alejandra como ingeniera con catálogos: system prompt ampliado con marcas habituales
+    (Pemsa, Schneider, Prysmian, ABB, etc.) y protocolo de material (busca catálogo si no conoce).
+  - Deploy agente: 7be72edc (catálogos + Gemini handlers).
 
 v6.04        |  29/05/2026  [Fix back + leer PDFs + esquema BD + Alejandra toma control en PWA + Gemini]
   - Fix bug navegación: botón atrás Android cierra el chat en vez de romper la app.
