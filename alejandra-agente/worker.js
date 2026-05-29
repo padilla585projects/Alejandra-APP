@@ -615,18 +615,193 @@ async function autoLearnAgente(env, tipo, titulo, contenido, importancia = 2) {
   } catch {}
 }
 
+// ── Web Push (VAPID + RFC 8291 aes128gcm) ────────────────────────────────────
+function _wpConcat(...arrays) {
+  const total = arrays.reduce((n, a) => n + a.length, 0);
+  const out = new Uint8Array(total); let off = 0;
+  for (const a of arrays) { out.set(a, off); off += a.length; }
+  return out;
+}
+function _wpB64u(buf) {
+  return btoa(String.fromCharCode(...new Uint8Array(buf instanceof ArrayBuffer ? buf : buf.buffer || buf)))
+    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+}
+function _wpFromB64u(s) {
+  const b = s.replace(/-/g, '+').replace(/_/g, '/');
+  return Uint8Array.from(atob(b + '=='.slice(0, (4 - b.length % 4) % 4)), c => c.charCodeAt(0));
+}
+
+async function _encryptWebPush(p256dhB64u, authB64u, text) {
+  const uaPub = await crypto.subtle.importKey('raw', _wpFromB64u(p256dhB64u), { name: 'ECDH', namedCurve: 'P-256' }, true, []);
+  const asPair = await crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveBits']);
+  const [asPubRaw, uaPubRaw] = await Promise.all([
+    crypto.subtle.exportKey('raw', asPair.publicKey).then(b => new Uint8Array(b)),
+    crypto.subtle.exportKey('raw', uaPub).then(b => new Uint8Array(b))
+  ]);
+  const ecdhBits = new Uint8Array(await crypto.subtle.deriveBits({ name: 'ECDH', public: uaPub }, asPair.privateKey, 256));
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const authSecret = _wpFromB64u(authB64u);
+  const ecdhHkdf = await crypto.subtle.importKey('raw', ecdhBits, 'HKDF', false, ['deriveBits']);
+  const keyInfo = _wpConcat(new TextEncoder().encode('WebPush: info\0'), uaPubRaw, asPubRaw);
+  const ikm32 = new Uint8Array(await crypto.subtle.deriveBits({ name: 'HKDF', hash: 'SHA-256', salt: authSecret, info: keyInfo }, ecdhHkdf, 256));
+  const ikm32Hkdf = await crypto.subtle.importKey('raw', ikm32, 'HKDF', false, ['deriveBits']);
+  const [cekBits, nonceBits] = await Promise.all([
+    crypto.subtle.deriveBits({ name: 'HKDF', hash: 'SHA-256', salt, info: new TextEncoder().encode('Content-Encoding: aes128gcm\0') }, ikm32Hkdf, 128),
+    crypto.subtle.deriveBits({ name: 'HKDF', hash: 'SHA-256', salt, info: new TextEncoder().encode('Content-Encoding: nonce\0') }, ikm32Hkdf, 96)
+  ]);
+  const cek = await crypto.subtle.importKey('raw', cekBits, 'AES-GCM', false, ['encrypt']);
+  const padded = _wpConcat(new TextEncoder().encode(text), new Uint8Array([0x02]));
+  const ct = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv: nonceBits }, cek, padded));
+  const rs = new Uint8Array(4); new DataView(rs.buffer).setUint32(0, 4096, false);
+  return _wpConcat(salt, rs, new Uint8Array([65]), asPubRaw, ct);
+}
+
+async function _vapidJWT(privKeyB64u, endpoint) {
+  const { protocol, host } = new URL(endpoint);
+  const now = Math.floor(Date.now() / 1000);
+  const hdr = _wpB64u(new TextEncoder().encode(JSON.stringify({ typ: 'JWT', alg: 'ES256' })));
+  const pay = _wpB64u(new TextEncoder().encode(JSON.stringify({ aud: `${protocol}//${host}`, exp: now + 43200, sub: 'mailto:padilla585.projects@gmail.com' })));
+  const sigInput = `${hdr}.${pay}`;
+  const privKey = await crypto.subtle.importKey('pkcs8', _wpFromB64u(privKeyB64u), { name: 'ECDSA', namedCurve: 'P-256' }, false, ['sign']);
+  const sig = await crypto.subtle.sign({ name: 'ECDSA', hash: 'SHA-256' }, privKey, new TextEncoder().encode(sigInput));
+  return `${sigInput}.${_wpB64u(sig)}`;
+}
+
+// Obtener o generar VAPID keys (auto-provisioning vía D1)
+async function getVapidKeys(env) {
+  // 1. Intentar env secrets primero
+  if (env.VAPID_PUBLIC_KEY && env.VAPID_PRIVATE_KEY) {
+    return { pub: env.VAPID_PUBLIC_KEY, priv: env.VAPID_PRIVATE_KEY };
+  }
+  // 2. Intentar leer de D1
+  try {
+    const pubRow = await env.DB.prepare("SELECT value FROM alejandra_config WHERE key='VAPID_PUBLIC_KEY'").first();
+    const privRow = await env.DB.prepare("SELECT value FROM alejandra_config WHERE key='VAPID_PRIVATE_KEY'").first();
+    if (pubRow?.value && privRow?.value) return { pub: pubRow.value, priv: privRow.value };
+  } catch {}
+  // 3. Generar nuevas y guardar en D1
+  try {
+    const pair = await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify']);
+    const [privPkcs8, pubRaw] = await Promise.all([
+      crypto.subtle.exportKey('pkcs8', pair.privateKey).then(b => _wpB64u(b)),
+      crypto.subtle.exportKey('raw', pair.publicKey).then(b => _wpB64u(b))
+    ]);
+    await env.DB.prepare("INSERT OR REPLACE INTO alejandra_config (key, value) VALUES ('VAPID_PUBLIC_KEY', ?)").bind(pubRaw).run();
+    await env.DB.prepare("INSERT OR REPLACE INTO alejandra_config (key, value) VALUES ('VAPID_PRIVATE_KEY', ?)").bind(privPkcs8).run();
+    console.log('VAPID keys auto-generadas y guardadas en D1');
+    return { pub: pubRaw, priv: privPkcs8 };
+  } catch (e) {
+    console.error('Error generando VAPID:', e);
+    return null;
+  }
+}
+
+// Enviar push a un usuario concreto (todas sus suscripciones)
+async function sendPushToUser(env, usuario_id, title, body, url = '/index.html') {
+  const vapid = await getVapidKeys(env);
+  if (!vapid) return { sent: 0, error: 'VAPID no configurado' };
+  try {
+    const subs = await env.DB.prepare('SELECT id, endpoint, p256dh, auth FROM push_subscriptions WHERE usuario_id=?').bind(usuario_id).all();
+    const items = subs.results || [];
+    if (!items.length) return { sent: 0, error: 'Sin suscripciones push para este usuario' };
+    const payload = JSON.stringify({ title, body, url });
+    let sent = 0;
+    for (const sub of items) {
+      try {
+        const [jwt, encrypted] = await Promise.all([
+          _vapidJWT(vapid.priv, sub.endpoint),
+          _encryptWebPush(sub.p256dh, sub.auth, payload)
+        ]);
+        const res = await fetch(sub.endpoint, {
+          method: 'POST',
+          headers: {
+            'Authorization': `vapid t=${jwt},k=${vapid.pub}`,
+            'Content-Type': 'application/octet-stream',
+            'Content-Encoding': 'aes128gcm',
+            'TTL': '86400',
+            'Urgency': 'high'
+          },
+          body: encrypted
+        });
+        if (res.ok || res.status === 201) sent++;
+        else if (res.status === 410) {
+          await env.DB.prepare('DELETE FROM push_subscriptions WHERE id=?').bind(sub.id).run().catch(()=>{});
+        }
+      } catch {}
+    }
+    return { sent };
+  } catch (e) {
+    return { sent: 0, error: e.message };
+  }
+}
+
+// Tool para que Alejandra envie push
+const TOOL_ENVIAR_PUSH = {
+  name: 'enviar_notificacion',
+  description: 'Envia una notificacion push al movil/navegador de un usuario. Usalo para avisar a alguien de algo importante, informar que terminaste una tarea, o comunicar algo proactivamente.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      usuario_id: { type: 'string', description: 'ID del usuario al que enviar la notificacion (ej: "adrian")' },
+      titulo: { type: 'string', description: 'Titulo de la notificacion (breve)' },
+      mensaje: { type: 'string', description: 'Cuerpo de la notificacion' }
+    },
+    required: ['usuario_id', 'titulo', 'mensaje']
+  }
+};
+
+// Tools de tareas en background
+const TOOL_CREAR_TAREA = {
+  name: 'crear_tarea_background',
+  description: 'Crea una tarea para hacerla en segundo plano. Úsalo cuando el usuario pida algo que requiere tiempo (investigar, procesar datos, generar informes). La tarea queda registrada y puedes completarla después.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      descripcion: { type: 'string', description: 'Qué hay que hacer' },
+      usuario_id: { type: 'string', description: 'Para quién es la tarea (opcional, se usa el usuario actual)' }
+    },
+    required: ['descripcion']
+  }
+};
+
+const TOOL_VER_TAREAS = {
+  name: 'ver_tareas',
+  description: 'Lista las tareas pendientes/completadas de un usuario.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      usuario_id: { type: 'string', description: 'ID del usuario (opcional)' },
+      estado: { type: 'string', description: 'Filtrar por estado: pendiente, en_progreso, completada (opcional)' }
+    }
+  }
+};
+
+const TOOL_COMPLETAR_TAREA = {
+  name: 'completar_tarea',
+  description: 'Marca una tarea como completada y opcionalmente notifica al usuario.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      tarea_id: { type: 'integer', description: 'ID de la tarea a completar' },
+      resultado: { type: 'string', description: 'Resultado o resumen de lo que se hizo' }
+    },
+    required: ['tarea_id']
+  }
+};
+
 // Tools por experto
 // Tools de código — solo para Adrian (rol desarrollador/superadmin)
 const CODE_TOOLS = [TOOL_REPO_READ, TOOL_REPO_WRITE, TOOL_DIRECT_FIX, TOOL_GREP_CODE, TOOL_RUN_MIGRATION, TOOL_CHECK_DEPLOY];
+const TASK_TOOLS = [TOOL_ENVIAR_PUSH, TOOL_CREAR_TAREA, TOOL_VER_TAREAS, TOOL_COMPLETAR_TAREA];
 
 const TOOLS_POR_EXPERTO = {
-  simple:     [],
-  app:        [TOOL_BUSCAR_WEB, TOOL_BUSCAR_GOOGLE, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_VER_ESQUEMA_BD, TOOL_ANALIZAR_FOTO, TOOL_ANALIZAR_ARCHIVO],
-  tecnico:    [TOOL_LEER_ESTADO, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_BUSCAR_WEB, TOOL_BUSCAR_GOOGLE, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_VER_ESQUEMA_BD, TOOL_ANALIZAR_FOTO, TOOL_ANALIZAR_ARCHIVO, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, ...CODE_TOOLS],
-  web:        [TOOL_BUSCAR_WEB, TOOL_BUSCAR_GOOGLE, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE],
-  reflexion:  [TOOL_MEMORY_SAVE, TOOL_MEMORY_READ, TOOL_PROPOSE_MEJORA, TOOL_BUSCAR_WEB, TOOL_BUSCAR_GOOGLE, TOOL_TOMAR_DECISION, TOOL_LEER_ESTADO, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, ...CODE_TOOLS],
-  completo:   [TOOL_BUSCAR_WEB, TOOL_BUSCAR_GOOGLE, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_LEER_ESTADO, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_VER_ESQUEMA_BD, TOOL_ANALIZAR_FOTO, TOOL_ANALIZAR_ARCHIVO, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, ...CODE_TOOLS],
-  ingenieria: [TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_CONSULTAR_BD, TOOL_VER_ESQUEMA_BD, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_ANALIZAR_FOTO, TOOL_ANALIZAR_ARCHIVO, TOOL_BUSCAR_WEB, TOOL_BUSCAR_GOOGLE, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION]
+  simple:     [...TASK_TOOLS],
+  app:        [TOOL_BUSCAR_WEB, TOOL_BUSCAR_GOOGLE, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_VER_ESQUEMA_BD, TOOL_ANALIZAR_FOTO, TOOL_ANALIZAR_ARCHIVO, ...TASK_TOOLS],
+  tecnico:    [TOOL_LEER_ESTADO, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_BUSCAR_WEB, TOOL_BUSCAR_GOOGLE, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_VER_ESQUEMA_BD, TOOL_ANALIZAR_FOTO, TOOL_ANALIZAR_ARCHIVO, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, ...CODE_TOOLS, ...TASK_TOOLS],
+  web:        [TOOL_BUSCAR_WEB, TOOL_BUSCAR_GOOGLE, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, ...TASK_TOOLS],
+  reflexion:  [TOOL_MEMORY_SAVE, TOOL_MEMORY_READ, TOOL_PROPOSE_MEJORA, TOOL_BUSCAR_WEB, TOOL_BUSCAR_GOOGLE, TOOL_TOMAR_DECISION, TOOL_LEER_ESTADO, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, ...CODE_TOOLS, ...TASK_TOOLS],
+  completo:   [TOOL_BUSCAR_WEB, TOOL_BUSCAR_GOOGLE, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_LEER_ESTADO, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_VER_ESQUEMA_BD, TOOL_ANALIZAR_FOTO, TOOL_ANALIZAR_ARCHIVO, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, ...CODE_TOOLS, ...TASK_TOOLS],
+  ingenieria: [TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_CONSULTAR_BD, TOOL_VER_ESQUEMA_BD, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_ANALIZAR_FOTO, TOOL_ANALIZAR_ARCHIVO, TOOL_BUSCAR_WEB, TOOL_BUSCAR_GOOGLE, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, ...TASK_TOOLS]
 };
 
 // ── HTTP Handler ──────────────────────────────────────────────────────────────
@@ -648,7 +823,44 @@ export default {
 
     try {
       if (path === '/health') {
-        return json({ status: 'ok', version: 'v5.98', nexus: true, reflexion: true, decisiones: true, web_search: !!env.OPENAI_API_KEY, upload: true, vision: true, ingenieria: true, gemini_vision: !!env.GEMINI_API_KEY, prompt_caching: true, razonamiento: true, auto_resumen: true });
+        return json({ status: 'ok', version: 'v6.10', nexus: true, reflexion: true, decisiones: true, web_search: !!env.OPENAI_API_KEY, upload: true, vision: true, ingenieria: true, gemini_vision: !!env.GEMINI_API_KEY, prompt_caching: true, razonamiento: true, auto_resumen: true, push: !!env.VAPID_PUBLIC_KEY, automod: !!env.GITHUB_TOKEN });
+      }
+
+      // ── Historial del chat (sync entre dispositivos) ────────────────────
+      if (path === '/api/chat/history' && req.method === 'GET') {
+        const usuario_id = url.searchParams.get('usuario_id');
+        if (!usuario_id) return json({ error: 'usuario_id requerido' }, 400);
+        try {
+          const rows = await env.DB.prepare(
+            `SELECT rol, contenido, canal, created_at FROM alejandra_historial WHERE usuario_id=? ORDER BY created_at DESC LIMIT 60`
+          ).bind(usuario_id).all();
+          const mensajes = (rows.results || []).reverse();
+          return json({ ok: true, mensajes });
+        } catch (e) {
+          return json({ ok: true, mensajes: [] });
+        }
+      }
+
+      // ── Push: suscribir usuario ─────────────────────────────────────────
+      if (path === '/push-subscribe' && req.method === 'POST') {
+        const { usuario_id, subscription } = await req.json().catch(() => ({}));
+        if (!usuario_id || !subscription?.endpoint || !subscription?.keys) return json({ error: 'Faltan datos' }, 400);
+        try {
+          await env.DB.prepare(
+            `INSERT INTO push_subscriptions (usuario_id, endpoint, p256dh, auth) VALUES (?,?,?,?)
+             ON CONFLICT(usuario_id, endpoint) DO UPDATE SET p256dh=?, auth=?, created_at=datetime('now')`
+          ).bind(usuario_id, subscription.endpoint, subscription.keys.p256dh, subscription.keys.auth, subscription.keys.p256dh, subscription.keys.auth).run();
+          return json({ ok: true });
+        } catch (e) {
+          return json({ error: e.message }, 500);
+        }
+      }
+
+      // ── Push: obtener VAPID public key ──────────────────────────────────
+      if (path === '/push-vapid-key' && req.method === 'GET') {
+        const vapid = await getVapidKeys(env);
+        if (!vapid) return json({ error: 'VAPID no configurado' }, 503);
+        return json({ ok: true, publicKey: vapid.pub });
       }
 
       // ── Admin: ejecutar migración de nuevas tablas ───────────────────────
@@ -2059,6 +2271,58 @@ ${input.codigo_sugerido ? `CÓDIGO SUGERIDO:\n${input.codigo_sugerido}` : ''}`;
           : latest.status === 'in_progress' ? `En curso (commit ${latest.commit})`
           : `FALLO: ${latest.conclusion} (commit ${latest.commit})`;
         return JSON.stringify({ ok: true, summary, runs: runs.slice(0, 5), recent_commits: commits });
+      } catch (e) { return JSON.stringify({ ok: false, error: e.message }); }
+    }
+
+    case 'enviar_notificacion': {
+      const uid = (input.usuario_id || '').trim();
+      const titulo = (input.titulo || '').trim();
+      const msg = (input.mensaje || '').trim();
+      if (!uid || !titulo || !msg) return 'Faltan parámetros: usuario_id, titulo, mensaje.';
+      const pushResult = await sendPushToUser(env, uid, titulo, msg);
+      return JSON.stringify(pushResult);
+    }
+
+    case 'crear_tarea_background': {
+      const desc = (input.descripcion || '').trim();
+      if (!desc) return 'Falta "descripcion" de la tarea.';
+      const uid = input.usuario_id || usuario_id || 'system';
+      try {
+        await env.DB.prepare(
+          `INSERT INTO alejandra_tareas (usuario_id, descripcion, estado) VALUES (?, ?, 'pendiente')`
+        ).bind(uid, desc).run();
+        return JSON.stringify({ ok: true, msg: `Tarea creada para ${uid}: ${desc}` });
+      } catch (e) { return JSON.stringify({ ok: false, error: e.message }); }
+    }
+
+    case 'ver_tareas': {
+      const uid = input.usuario_id || usuario_id || 'system';
+      const estado = input.estado || null;
+      try {
+        let q = 'SELECT id, descripcion, estado, resultado, created_at, completed_at FROM alejandra_tareas WHERE usuario_id=?';
+        const binds = [uid];
+        if (estado) { q += ' AND estado=?'; binds.push(estado); }
+        q += ' ORDER BY created_at DESC LIMIT 20';
+        const stmt = env.DB.prepare(q);
+        const rows = binds.length === 2 ? await stmt.bind(binds[0], binds[1]).all() : await stmt.bind(binds[0]).all();
+        return JSON.stringify({ ok: true, tareas: rows.results || [] });
+      } catch (e) { return JSON.stringify({ ok: false, error: e.message }); }
+    }
+
+    case 'completar_tarea': {
+      const id = input.tarea_id;
+      const resultado = (input.resultado || '').trim();
+      if (!id) return 'Falta "tarea_id".';
+      try {
+        await env.DB.prepare(
+          `UPDATE alejandra_tareas SET estado='completada', resultado=?, completed_at=datetime('now') WHERE id=?`
+        ).bind(resultado, id).run();
+        // Notificar al usuario si tiene push
+        const tarea = await env.DB.prepare('SELECT usuario_id, descripcion FROM alejandra_tareas WHERE id=?').bind(id).first();
+        if (tarea) {
+          await sendPushToUser(env, tarea.usuario_id, '✅ Tarea completada', tarea.descripcion).catch(()=>{});
+        }
+        return JSON.stringify({ ok: true, msg: 'Tarea marcada como completada.' });
       } catch (e) { return JSON.stringify({ ok: false, error: e.message }); }
     }
 

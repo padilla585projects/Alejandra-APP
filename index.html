@@ -3470,9 +3470,13 @@ function getSession() {
 
 function setSession(data) {
   localStorage.setItem('alejandra_session', JSON.stringify(data));
-  // Registrar push si es developer/superadmin
+  // Registrar push para developer (legacy, worker principal)
   if (['superadmin', 'desarrollador'].includes(data?.rol)) {
     _registrarPushDeveloper().catch(() => {});
+  }
+  // Registrar push de Alejandra IA para TODOS los usuarios
+  if (data?.usuario_id || data?.nombre) {
+    _registrarPushAlejandra(data).catch(() => {});
   }
 }
 
@@ -3512,6 +3516,51 @@ async function _registrarPushDeveloper() {
     });
   } catch (e) {
     console.warn('[Push] Error registrando push developer:', e.message);
+  }
+}
+
+// ── Push notifications Alejandra IA → todos los usuarios ─────────────────
+const _AGENTE_PUSH_BASE = 'https://alejandra-agente.alejandra-app.workers.dev';
+async function _registrarPushAlejandra(sessionData) {
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+  try {
+    const perm = await Notification.requestPermission();
+    if (perm !== 'granted') return;
+    const reg = window._swReg || await navigator.serviceWorker.ready;
+    // Obtener VAPID key del agente
+    const vapidRes = await fetch(`${_AGENTE_PUSH_BASE}/push-vapid-key`);
+    if (!vapidRes.ok) return;
+    const { publicKey } = await vapidRes.json();
+    // Comprobar suscripción existente — si es con otra key, recrear
+    let sub = await reg.pushManager.getSubscription();
+    if (sub) {
+      // Verificar que la key coincide (si no, unsuscribir y recrear)
+      const existingKey = sub.options?.applicationServerKey;
+      const newKeyArr = _urlB64ToUint8(publicKey);
+      if (existingKey) {
+        const existing = new Uint8Array(existingKey);
+        if (existing.length !== newKeyArr.length || !existing.every((v,i) => v === newKeyArr[i])) {
+          await sub.unsubscribe();
+          sub = null;
+        }
+      }
+    }
+    if (!sub) {
+      sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: _urlB64ToUint8(publicKey)
+      });
+    }
+    const uid = sessionData?.usuario_id || sessionData?.nombre || 'unknown';
+    // Registrar en agente
+    await fetch(`${_AGENTE_PUSH_BASE}/push-subscribe`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ usuario_id: uid, subscription: sub.toJSON() })
+    });
+    console.log('[Push Alejandra] Suscripción registrada para', uid);
+  } catch (e) {
+    console.warn('[Push Alejandra] Error:', e.message);
   }
 }
 
@@ -4125,6 +4174,8 @@ async function iniciarApp() {
   } else if ('Notification' in window && Notification.permission === 'default') {
     Notification.requestPermission();
   }
+  // Push de Alejandra IA para todos los usuarios
+  _registrarPushAlejandra(s).catch(() => {});
   checkChatBadge();
   if (!window._chatBadgeInterval) {
     window._chatBadgeInterval = setInterval(checkChatBadge, 60000); // cada 1 min
@@ -10229,7 +10280,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '6.10';
+const APP_VERSION = '6.11';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -14617,13 +14668,37 @@ window.turnoToggle   = turnoToggle;
     return '<div class="ia-bubble bot">Hola Adrián 👋 Soy Alejandra. Tengo acceso total a la app. Pregúntame o pídeme que haga algo.</div>';
   }
 
-  // Cargar historial guardado
-  (function() {
+  // Cargar historial: servidor primero, fallback a localStorage
+  const AGENTE_BASE = 'https://alejandra-agente.alejandra-app.workers.dev';
+  async function iaCargarHistorial() {
+    const box = document.getElementById('iaMessages');
+    // Intentar cargar desde servidor
+    const s = typeof getSession === 'function' ? getSession() : null;
+    const uid = s?.usuario_id || s?.nombre || null;
+    if (uid) {
+      try {
+        const res = await fetch(`${AGENTE_BASE}/api/chat/history?usuario_id=${encodeURIComponent(uid)}`);
+        const data = await res.json();
+        if (data.ok && data.mensajes && data.mensajes.length > 0) {
+          iaHistory = data.mensajes.map(m => ({ role: m.rol === 'assistant' ? 'assistant' : 'user', content: m.contenido }));
+          box.innerHTML = '';
+          for (const m of iaHistory) {
+            const d = document.createElement('div');
+            d.className = 'ia-bubble ' + (m.role === 'assistant' ? 'bot' : 'user');
+            d.innerHTML = m.content.replace(/\n/g, '<br>');
+            box.appendChild(d);
+          }
+          box.scrollTop = box.scrollHeight;
+          try { localStorage.setItem(IA_HIST_KEY, JSON.stringify(iaHistory)); } catch {}
+          return;
+        }
+      } catch {}
+    }
+    // Fallback: localStorage
     try {
       const saved = JSON.parse(localStorage.getItem(IA_HIST_KEY) || '[]');
       if (saved.length > 0) {
         iaHistory = saved;
-        const box = document.getElementById('iaMessages');
         box.innerHTML = '';
         for (const m of iaHistory) {
           const d = document.createElement('div');
@@ -14635,8 +14710,11 @@ window.turnoToggle   = turnoToggle;
         return;
       }
     } catch {}
-    document.getElementById('iaMessages').innerHTML = iaSaludo();
-  })();
+    box.innerHTML = iaSaludo();
+  }
+  // Ejecutar carga — reintenta cuando session esté lista
+  iaCargarHistorial();
+  document.addEventListener('sessionReady', () => iaCargarHistorial());
 
   window.iaLimpiarChat = function() {
     if (!confirm('¿Borrar el historial del chat con Alejandra?')) return;
