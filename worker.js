@@ -4931,7 +4931,7 @@ async function verificarAcceso(request, env) {
   if (env.ADMIN_CODE && codigo.trim() === env.ADMIN_CODE) {
     const token = await crearSesion(env, { nombre: 'Admin', rol: 'superadmin', obra_id: null, obra_nombre: null, departamento: null, es_admin: true, empresa_id: 1 });
     env.DB.prepare('DELETE FROM login_attempts WHERE ip = ?').bind(ip).run().catch(() => {});
-    return json({ ok: true, rol: 'superadmin', nombre: 'Admin', obra_id: null, obra_nombre: null, token });
+    return json({ ok: true, rol: 'superadmin', nombre: 'Admin', obra_id: null, obra_nombre: null, token, usuario_id: 3, empresa_id: 1 });
   }
 
   // 2. Buscar en tabla usuarios
@@ -4973,6 +4973,8 @@ async function verificarAcceso(request, env) {
         obra_nombre: usuario.obra_nombre,
         departamento: usuario.departamento || 'electrico',
         token,
+        usuario_id: usuario.id,
+        empresa_id: usuario.empresa_id || 1,
       });
     }
   } catch (e) {

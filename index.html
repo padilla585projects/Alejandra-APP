@@ -3665,6 +3665,7 @@ async function doLogin() {
       const session = {
         nombre: data.nombre, rol: data.rol, obra_id: data.obra_id || null,
         obra_nombre: data.obra_nombre || null, token: data.token,
+        usuario_id: data.usuario_id || null, empresa_id: data.empresa_id || null,
         departamento: (data.rol === 'empresa_admin') ? null : (data.departamento || 'electrico')
       };
       setSession(session); iniciarApp();
@@ -3699,6 +3700,8 @@ async function doLogin() {
       obra_id: data.obra_id || null,
       obra_nombre: data.obra_nombre || null,
       token: data.token || null,
+      usuario_id: data.usuario_id || null,
+      empresa_id: data.empresa_id || null,
       // SuperAdmin elige depto en pantalla selectora; resto lo tiene fijo
       departamento: data.rol !== 'superadmin' ? (data.departamento || 'electrico') : null
     };
@@ -10217,7 +10220,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '6.04';
+const APP_VERSION = '6.05';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
