@@ -657,7 +657,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
     <div style="display:flex;gap:8px;align-items:center">
       <button id="alejandraHablarBtn" onclick="alejandraToggleAutoHablar()" title="Activar/desactivar voz de Alejandra"
         style="background:var(--surface2);border:1px solid var(--border);border-radius:50%;width:32px;height:32px;font-size:16px;cursor:pointer;line-height:1">🔊</button>
-      <span style="font-size:11px;color:var(--muted)">v5.88</span>
+      <span id="alejandraVer" style="font-size:11px;color:var(--muted)"></span>
       <button onclick="alejandraAbrir(false)" style="background:var(--surface2);border:none;border-radius:50%;width:32px;height:32px;font-size:18px;cursor:pointer;color:var(--text)">×</button>
     </div>
   </div>
@@ -10223,7 +10223,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '6.06';
+const APP_VERSION = '6.07';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -14883,6 +14883,8 @@ function alejandraAbrir(show = true) {
     const nav = document.getElementById('bottomNav');
     panel.style.bottom = (nav && nav.style.display !== 'none') ? nav.offsetHeight + 'px' : '0';
     panel.style.display = 'flex';
+    const verSpan = document.getElementById('alejandraVer');
+    if (verSpan) verSpan.textContent = 'v' + APP_VERSION;
     document.getElementById('alejandraInput')?.focus();
     if (!history.state?.alejandra) history.pushState({ alejandra: 1 }, '');
   } else {
