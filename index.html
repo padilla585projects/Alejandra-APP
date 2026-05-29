@@ -3193,8 +3193,11 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
   </div>
   <div id="iaVoiceStatus" class="ia-voice-status" style="text-align:center;padding:4px 0"></div>
   <div id="iaMessages"></div>
+  <div id="iaAdjuntos" style="display:none;padding:6px 12px;flex-wrap:wrap;gap:6px;border-top:1px solid var(--border)"></div>
   <div class="ia-input-row">
-    <textarea id="iaInput" placeholder="Escríbeme algo..." rows="1" onkeydown="iaKeydown(event)"></textarea>
+    <textarea id="iaInput" placeholder="Escribe, usa el micrófono o adjunta archivos..." rows="1" onkeydown="iaKeydown(event)"></textarea>
+    <button onclick="document.getElementById('iaFileInput').click()" title="Adjuntar archivo o foto" class="ia-mic-btn" style="font-size:18px">📎</button>
+    <input type="file" id="iaFileInput" multiple accept="image/*,application/pdf,.xlsx,.csv,.txt,.json,.dwg,.dxf" style="display:none" onchange="iaSubirAdjuntos(event)">
     <button class="ia-mic-btn" id="iaMicBtn" onclick="iaToggleVoice()" title="Hablar con Alejandra">🎤</button>
     <button class="ia-send-btn" id="iaSendBtn" onclick="iaSend()">↑</button>
   </div>
@@ -10226,7 +10229,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '6.08';
+const APP_VERSION = '6.09';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -14778,71 +14781,132 @@ window.turnoToggle   = turnoToggle;
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); iaSend(); }
   };
 
+  // ── Adjuntos para screenIA ──────────────────────────────────────────────
+  let _iaAdjuntos = [];
+
+  window.iaSubirAdjuntos = async function(ev) {
+    const files = Array.from(ev.target.files || []);
+    ev.target.value = '';
+    const s = getSession ? getSession() : null;
+    if (!s?.usuario_id) { toast('❌ Inicia sesión', 'err'); return; }
+    const cont = document.getElementById('iaAdjuntos');
+    for (const f of files) {
+      if (f.size > 20*1024*1024) { toast('❌ ' + f.name + ' supera 20MB', 'err'); continue; }
+      const chip = document.createElement('div');
+      chip.style.cssText = 'background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:4px 10px;display:flex;align-items:center;gap:6px;font-size:12px';
+      chip.innerHTML = '<span>⏳</span><span>' + _escHtml(f.name) + '</span>';
+      cont.appendChild(chip); cont.style.display = 'flex';
+      try {
+        const fd = new FormData();
+        fd.append('file', f);
+        fd.append('usuario_id', s.usuario_id);
+        const r = await fetch('https://alejandra-agente.alejandra-app.workers.dev/upload', { method:'POST', body:fd });
+        const j = await r.json();
+        if (!j.ok) throw new Error(j.error || 'fail');
+        _iaAdjuntos.push(j.url);
+        chip.innerHTML = '<span>📎</span><span>' + _escHtml(f.name) + '</span><span style="cursor:pointer;color:var(--muted)" onclick="iaQuitarAdj(\'' + j.url + '\',this.parentElement)">×</span>';
+      } catch(e) {
+        chip.innerHTML = '<span style="color:#f55">❌ ' + _escHtml(f.name) + '</span>';
+        setTimeout(() => chip.remove(), 3000);
+      }
+    }
+  };
+
+  window.iaQuitarAdj = function(url, chip) {
+    _iaAdjuntos = _iaAdjuntos.filter(u => u !== url);
+    chip.remove();
+    const cont = document.getElementById('iaAdjuntos');
+    if (!cont.children.length) cont.style.display = 'none';
+  };
+
+  // ── Envío al agente Alejandra (con herramientas, Gemini, catálogos) ────
   window.iaSend = async function() {
     const input = document.getElementById('iaInput');
     const msg = input.value.trim();
-    if (!msg) return;
+    if (!msg && _iaAdjuntos.length === 0) return;
     input.value = '';
+    input.style.height = 'auto';
 
-    appendIAMsg('user', msg);
+    const s = getSession ? getSession() : null;
+    if (!s || !s.usuario_id) { toast('❌ Debes estar autenticado', 'err'); return; }
+
+    // Recoger adjuntos
+    const adjEnv = _iaAdjuntos.slice();
+    _iaAdjuntos = [];
+    const cont = document.getElementById('iaAdjuntos');
+    if (cont) { cont.innerHTML = ''; cont.style.display = 'none'; }
+
+    const msgDisplay = msg + (adjEnv.length ? '\n📎 ' + adjEnv.length + ' archivo(s) adjunto(s)' : '');
+    appendIAMsg('user', msgDisplay);
     let typing = appendIATyping();
     document.getElementById('iaSendBtn').disabled = true;
 
-    const s = getSession ? getSession() : null;
-    const token = s?.token || '';
-
-    const isCapacityErr = e => e && (
-      e.includes('rate_limit') || e.includes('rate limit') ||
-      e.includes('tokens per minute') || e.includes('overloaded') ||
-      e.includes('529')
-    );
-
-    const slices = [iaHistory, iaHistory.slice(-10), iaHistory.slice(-4), []];
-    let data = null;
-
     try {
-      for (let i = 0; i < slices.length; i++) {
-        try {
-          const _iaCtrl = new AbortController();
-          const _iaTid = setTimeout(() => _iaCtrl.abort(), 25000);
-          try {
-            const res = await fetch(IA_API + '/dev/ai-chat', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json', 'X-Token': token },
-              body: JSON.stringify({ message: msg, history: slices[i] }),
-              signal: _iaCtrl.signal
-            });
-            clearTimeout(_iaTid);
-            data = await res.json();
-          } finally { clearTimeout(_iaTid); }
-        } catch(fe) {
-          data = { ok: false, error: fe.name === 'AbortError' ? '⏱️ Sin respuesta en 25 segundos. Vuelve a intentarlo.' : fe.message };
-        }
-        if (data.ok) break;
-        if (!isCapacityErr(data.error) || i === slices.length - 1) break;
-        typing.remove();
-        typing = appendIATyping();
-      }
+      const _iaCtrl = new AbortController();
+      const _iaTid = setTimeout(() => _iaCtrl.abort(), 60000);
+      try {
+        const res = await fetch(ALEJANDRA_API, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            mensaje:    msg || '(archivo adjunto sin mensaje)',
+            usuario_id: s.usuario_id,
+            empresa_id: s.empresa_id || null,
+            canal:      'pwa',
+            adjuntos:   adjEnv,
+            rol:        s.rol || null,
+            pantalla:   'ia',
+            dom_actual: null
+          }),
+          signal: _iaCtrl.signal
+        });
+        clearTimeout(_iaTid);
 
-      typing.remove();
-      let reply;
-      if (data && data.ok) {
-        reply = data.reply;
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const data = await res.json();
+        typing.remove();
+
+        let reply = data.texto || 'Sin respuesta';
+
+        // Parsear <plan> y <guia> de la respuesta
+        let planDetectado = null;
+        let guiaDetectada = null;
+        const planMatch = reply.match(/<plan>([\s\S]*?)<\/plan>/);
+        if (planMatch) {
+          try { planDetectado = JSON.parse(planMatch[1]); } catch (_) {}
+          reply = reply.replace(/<plan>[\s\S]*?<\/plan>/, '').trim();
+        }
+        const guiaMatch = reply.match(/<guia>([\s\S]*?)<\/guia>/);
+        if (guiaMatch) {
+          try { guiaDetectada = JSON.parse(guiaMatch[1]); } catch (_) {}
+          reply = reply.replace(/<guia>[\s\S]*?<\/guia>/, '').trim();
+        }
+
+        if (reply) appendIAMsg('bot', reply);
+
+        if (data.busqueda_web) {
+          appendIAMsg('bot-info', '🔍 (resultado con búsqueda web)');
+        }
+
+        // Guardar en historial local
         iaHistory.push({ role: 'user', content: msg });
         iaHistory.push({ role: 'assistant', content: reply });
         if (iaHistory.length > 40) iaHistory = iaHistory.slice(-40);
         try { localStorage.setItem(IA_HIST_KEY, JSON.stringify(iaHistory)); } catch {}
-      } else {
-        const err = data?.error || '';
-        reply = isCapacityErr(err)
-          ? '⚠️ Hay demasiado tráfico en este momento. Espera unos segundos e inténtalo de nuevo.'
-          : ('❌ ' + (err || 'Error desconocido'));
-      }
-      appendIAMsg('bot', reply);
-      iaSpeak(reply);
+
+        iaSpeak(reply);
+
+        // Mostrar plan/guia si los hay (reutilizar funciones del alejandraPanel)
+        if (planDetectado && typeof _alejandraOfrecerPlan === 'function') _alejandraOfrecerPlan(planDetectado);
+        if (guiaDetectada && typeof _alejandraOfrecerGuia === 'function') _alejandraOfrecerGuia(guiaDetectada);
+
+      } finally { clearTimeout(_iaTid); }
     } catch(e) {
       typing.remove();
-      appendIAMsg('bot', '❌ Error de conexión: ' + e.message);
+      const errMsg = e.name === 'AbortError'
+        ? '⏱️ Sin respuesta en 60 segundos. Vuelve a intentarlo.'
+        : '❌ Error: ' + e.message;
+      appendIAMsg('bot', errMsg);
     }
     document.getElementById('iaSendBtn').disabled = false;
   };
