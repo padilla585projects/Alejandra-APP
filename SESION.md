@@ -7,7 +7,7 @@
 
 **Sesión:** LIBRE
 **Última sesión:** 29/05/2026
-**Versión actual:** v6.03
+**Versión actual:** v6.04
 
 ---
 
@@ -42,6 +42,53 @@
 ### Pendiente:
 - Revisar permisos de usuarios en Alejandra Office (arrastrado de sesiones previas)
 - Probar la feature de upload de archivos en PWA tras el refresco de caché
+
+---
+
+## RESUMEN SESIÓN 29/05/2026 (2ª) — v6.04 (Fix back + PDFs + esquema BD + plan ejecutable PWA)
+
+### Qué se hizo:
+
+**Fase 1 — Bug navegación (index.html):**
+- El chat de Alejandra (alejandraPanel) no se integraba con el historial del navegador.
+  El botón atrás físico de Android no cerraba el chat → rompía la app.
+- Fix: popstate handler detecta si el panel está abierto y lo cierra. alejandraAbrir()
+  empuja estado al historial para capturar el back.
+
+**Fase 2 — Leer documentos (alejandra-agente/worker.js):**
+- PDF: soporte nativo Claude (document content block base64, hasta 4.5MB).
+- Detección por extensión: .csv→text/csv, .txt→text/plain, .json→application/json,
+  .xlsx/.xls→MIME correcto (antes caían como octet-stream y no se leían).
+- Excel: mensaje informativo con sugerencia de exportar a CSV o usar ver_archivo.
+
+**Fase 3 — Permisos y acceso (worker.js + index.html):**
+- Nueva tool ver_esquema_bd: Alejandra ve todas las tablas y columnas de la BD D1.
+- TOOL_ANALIZAR_FOTO + ver_esquema_bd añadidas a expertos app, tecnico y completo.
+- La app móvil ahora envía rol, pantalla y dom_actual (DOM compacto, 40 elementos) al worker.
+
+**Fase 4 — Alejandra toma el control (worker.js + index.html):**
+- Worker: <plan> habilitado para canal PWA (antes solo Panel web).
+- App: parser de <plan> y <guia> en respuestas, strip del bloque antes de mostrar texto.
+- Modal de confirmación (Cancelar / Adelante, hazlo) con lista de acciones.
+- Ejecución secuencial con overlay de progreso, highlight visual (box-shadow púrpura),
+  botón de cancelar en tiempo real.
+- Tipos de acción: navegar, click, rellenar, seleccionar, esperar, scroll.
+- <guia> paso a paso (visual, no ejecuta) para instrucciones.
+
+### Archivos modificados:
+- alejandra-agente/worker.js — PDF, extensiones, ver_esquema_bd, tools ampliadas, <plan> PWA
+- index.html — fix back, enviar contexto, plan ejecutable, guía, bump v6.04
+- sw.js — CACHE alejandra-v6.04
+- version.json — 6.04
+
+### Deploy:
+- GitHub: ddd993f → push main ✅
+- Worker agente: fcea06f3 ✅ (D1 + R2 bindings)
+- Worker principal: sin cambios, no requiere redeploy
+
+### Pendiente:
+- Probar en Android real: fix back + plan ejecutable
+- Probar upload de PDF en el chat y verificar que Claude lo lee
 
 ---
 

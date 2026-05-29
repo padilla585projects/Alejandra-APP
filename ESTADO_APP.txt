@@ -5,7 +5,7 @@
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 29/05/2026
-VERSIÓN ACTUAL APP NUEVA: v6.03 (Fotos en obra HEIC/30MB + upload archivos PWA + agente optimizado)
+VERSIÓN ACTUAL APP NUEVA: v6.04 (Fix back + leer PDFs + esquema BD + Alejandra toma control en PWA)
 VERSIÓN ACTUAL APP VIEJA: v4.19 (⛔ CONGELADA DEFINITIVAMENTE — no recibe más cambios)
 
 ================================================================================
@@ -176,6 +176,16 @@ PASO 4 — VERIFICAR WORKER (solo si se va a tocar worker.js)
 ================================================================================
   HISTORIAL DE VERSIONES — RECIENTES
 ================================================================================
+
+v6.04        |  29/05/2026  [Fix back + leer PDFs + esquema BD + Alejandra toma control en PWA]
+  - Fix bug navegación: botón atrás Android cierra el chat en vez de romper la app.
+  - Worker: PDF nativo Claude (document block), detección extensiones CSV/TXT/JSON/XLSX.
+  - Nueva tool ver_esquema_bd (tablas + columnas D1).
+  - TOOL_ANALIZAR_FOTO + ver_esquema_bd en expertos app/tecnico/completo.
+  - App envía rol + pantalla + DOM compacto al worker.
+  - <plan> ejecutable en PWA: parser, modal confirmación, ejecución con overlay y highlight.
+  - <guia> paso a paso visual.
+  - Deploy agente: fcea06f3.
 
 v6.03        |  29/05/2026  [Fotos en obra HEIC/30MB + upload archivos PWA + agente optimizado]
   - Cambios hechos el 28/05 desde otro ordenador (worker del agente alejandra-agente),
