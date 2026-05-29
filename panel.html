@@ -6489,9 +6489,9 @@ async function wSend(){
   const typing=addTyping();
   document.getElementById('wSend').disabled=true;
   try{
-    const r=await fetch(_api+'/dev/ai-chat',{method:'POST',headers:{'Content-Type':'application/json','X-Token':_tok},body:JSON.stringify({message:msg})});
+    const r=await fetch('https://alejandra-agente.alejandra-app.workers.dev/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mensaje:msg,usuario_id:null,empresa_id:null,canal:'panel',rol:'desarrollador',pantalla:'popup-ai',dom_actual:null})});
     const d=await r.json(); typing.remove();
-    const reply=d.ok?d.reply:('❌ '+(d.error||'Error'));
+    const reply=d.texto||'Sin respuesta';
     addMsg('bot',reply);
     _hist.push({role:'user',content:msg},{role:'assistant',content:reply});
     if(_hist.length>20)_hist=_hist.slice(-20);
@@ -6555,80 +6555,87 @@ document.getElementById('wInput').focus();
     document.getElementById('aiAttachBtn').classList.remove('has-image');
   };
 
+  const AGENTE_API = 'https://alejandra-agente.alejandra-app.workers.dev/api/chat';
+  const AGENTE_UPLOAD = 'https://alejandra-agente.alejandra-app.workers.dev/upload';
+  let _aiAdjuntos = [];
+
   window.aiSend = async function() {
     const input = document.getElementById('aiInput');
     const msg = input.value.trim();
-    if (!msg && !_aiImage) return;
-    const msgText = msg || '(imagen adjunta)';
+    if (!msg && !_aiImage && _aiAdjuntos.length === 0) return;
+    const msgText = msg || '(archivo adjunto)';
     input.value = '';
     input.style.height = '';
 
-    const previewHtml = _aiImage ? `<div style="display:flex;align-items:center;gap:8px"><img src="data:${_aiImage.media_type};base64,${_aiImage.data}" style="width:48px;height:48px;object-fit:cover;border-radius:6px;border:1px solid #334155"><span>${_aiImage.name}</span></div>` : msgText;
+    // Si hay imagen adjunta, subirla al agente primero
+    let adjuntos = _aiAdjuntos.slice();
+    if (_aiImage) {
+      try {
+        const blob = await fetch(`data:${_aiImage.media_type};base64,${_aiImage.data}`).then(r => r.blob());
+        const fd = new FormData();
+        fd.append('file', blob, _aiImage.name);
+        fd.append('usuario_id', SESSION?.usuario_id || '0');
+        const upRes = await fetch(AGENTE_UPLOAD, { method: 'POST', body: fd });
+        const upData = await upRes.json();
+        if (upData.ok) adjuntos.push(upData.url);
+      } catch(ue) { console.warn('Upload error:', ue); }
+    }
+    _aiAdjuntos = [];
+
+    const previewHtml = _aiImage
+      ? `<div style="display:flex;align-items:center;gap:8px"><img src="data:${_aiImage.media_type};base64,${_aiImage.data}" style="width:48px;height:48px;object-fit:cover;border-radius:6px;border:1px solid #334155"><span>${_aiImage.name}</span></div>`
+      : msgText + (adjuntos.length ? '<br>📎 ' + adjuntos.length + ' archivo(s)' : '');
     appendMsg('user', previewHtml);
     let typing = appendTyping();
     document.getElementById('aiSendBtn').disabled = true;
-
-    const imageData = _aiImage ? { data: _aiImage.data, media_type: _aiImage.media_type } : null;
     aiClearImage();
 
-    const isCapacityErr = e => e && (
-      e.includes('rate_limit') || e.includes('rate limit') ||
-      e.includes('tokens per minute') || e.includes('overloaded') ||
-      e.includes('529')
-    );
-
-    // Reintentos con historial reducido: completo → 10 msgs → 4 msgs → sin historial
-    const slices = [aiHistory, aiHistory.slice(-10), aiHistory.slice(-4), []];
-    let data = null;
-
     try {
-      for (let i = 0; i < slices.length; i++) {
-        try {
-          const body = { message: msgText, history: slices[i] };
-          if (i === 0 && imageData) body.image = imageData; // imagen solo en primer intento
-          const _ctrl = new AbortController();
-          const _tid = setTimeout(() => _ctrl.abort(), 25000);
-          try {
-            const res = await fetch(AI_API + '/dev/ai-chat', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json', 'X-Token': getToken() },
-              body: JSON.stringify(body),
-              signal: _ctrl.signal
-            });
-            clearTimeout(_tid);
-            data = await res.json();
-          } finally { clearTimeout(_tid); }
-        } catch(fe) {
-          clearTimeout(_tid);
-          data = { ok: false, error: fe.name === 'AbortError' ? '⏱️ Sin respuesta en 25 segundos. Vuelve a intentarlo.' : fe.message };
-        }
-        if (data.ok) break;
-        if (!isCapacityErr(data.error) || i === slices.length - 1) break;
-        // Reintento silencioso — el usuario solo ve que sigue pensando
-        typing.remove();
-        typing = appendTyping();
-      }
+      const _ctrl = new AbortController();
+      const _tid = setTimeout(() => _ctrl.abort(), 60000);
+      try {
+        const res = await fetch(AGENTE_API, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            mensaje:    msgText,
+            usuario_id: SESSION?.usuario_id || null,
+            empresa_id: SESSION?.empresa_id || null,
+            canal:      'panel',
+            adjuntos:   adjuntos,
+            rol:        SESSION?.rol || null,
+            pantalla:   'panel-ai',
+            dom_actual: null
+          }),
+          signal: _ctrl.signal
+        });
+        clearTimeout(_tid);
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const data = await res.json();
 
-      typing.remove();
-      let reply;
-      if (data && data.ok) {
-        reply = data.reply;
+        typing.remove();
+        let reply = data.texto || 'Sin respuesta';
+
+        // Parsear <plan> y <guia>
+        const planMatch = reply.match(/<plan>([\s\S]*?)<\/plan>/);
+        if (planMatch) reply = reply.replace(/<plan>[\s\S]*?<\/plan>/, '').trim();
+        const guiaMatch = reply.match(/<guia>([\s\S]*?)<\/guia>/);
+        if (guiaMatch) reply = reply.replace(/<guia>[\s\S]*?<\/guia>/, '').trim();
+
+        if (reply) appendMsg('bot', reply);
+        if (data.busqueda_web) appendMsg('bot', '<span style="color:#22c55e;font-size:12px">🔍 Resultado con búsqueda web</span>');
+
         aiHistory.push({ role: 'user', content: msgText });
         aiHistory.push({ role: 'assistant', content: reply });
         if (aiHistory.length > 40) aiHistory = aiHistory.slice(-40);
         try { localStorage.setItem(AI_HIST_KEY, JSON.stringify(aiHistory)); } catch {}
-      } else {
-        const err = data?.error || '';
-        reply = isCapacityErr(err)
-          ? '⚠️ Hay demasiado tráfico en este momento. Espera unos segundos e inténtalo de nuevo.'
-          : err.startsWith('⏱️')
-            ? err
-            : ('❌ ' + (err || 'Error desconocido'));
-      }
-      appendMsg('bot', reply);
+      } finally { clearTimeout(_tid); }
     } catch(e) {
       typing.remove();
-      appendMsg('bot', '❌ Error de conexión: ' + e.message);
+      const errMsg = e.name === 'AbortError'
+        ? '⏱️ Sin respuesta en 60 segundos. Vuelve a intentarlo.'
+        : '❌ Error: ' + e.message;
+      appendMsg('bot', errMsg);
     }
     document.getElementById('aiSendBtn').disabled = false;
   };
