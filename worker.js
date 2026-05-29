@@ -4177,6 +4177,7 @@ export default {
       if (path === '/resetear-pass'    && method === 'POST') return await resetearPass(request, env);
       if (path === '/auth/google/url'  && method === 'GET')  return googleAuthUrl(request, env);
       if (path === '/auth/google/callback' && method === 'POST') return await googleAuthCallback(request, env);
+      if (path === '/auth/google/mobile-redirect' && method === 'GET') return googleMobileRedirect(request);
       if (path === '/usuarios/pendientes'  && method === 'GET')  return await getUsuariosPendientes(request, env);
       if (path === '/usuarios/pendientes/aprobar' && method === 'POST') return await aprobarUsuarioPendiente(request, env);
       if (path === '/usuarios/pendientes/rechazar' && method === 'POST') return await rechazarUsuarioPendiente(request, env);
@@ -8867,6 +8868,26 @@ async function alertasDiarias(env) {
 // â•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Â
 // GOOGLE OAUTH
 // â•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Â
+// Relay para apps móviles: Google redirige aquí con ?code=, y reenviamos a custom scheme
+function googleMobileRedirect(request) {
+  const url = new URL(request.url);
+  const code  = url.searchParams.get('code');
+  const error = url.searchParams.get('error');
+  if (error) {
+    return new Response(`<h2>Login cancelado</h2><p>${error}</p>`, {
+      status: 400, headers: { 'Content-Type': 'text/html; charset=utf-8' }
+    });
+  }
+  if (!code) {
+    return new Response('<h2>Falta el código</h2>', {
+      status: 400, headers: { 'Content-Type': 'text/html; charset=utf-8' }
+    });
+  }
+  const deepLink = 'alejandriaia://callback?code=' + encodeURIComponent(code);
+  // Redirigir al custom scheme de la app Flutter
+  return new Response(null, { status: 302, headers: { Location: deepLink } });
+}
+
 function googleAuthUrl(request, env) {
   const url = new URL(request.url);
   const redirect_uri = url.searchParams.get('redirect_uri') || 'https://padilla585projects.github.io/Alejandra-APP/';
