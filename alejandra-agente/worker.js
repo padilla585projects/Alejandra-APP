@@ -432,6 +432,29 @@ const TOOL_RECUPERAR_CONVERSACION = {
   }
 };
 
+const TOOL_ANALIZAR_ARCHIVO = {
+  name: 'analizar_archivo',
+  description: 'Analiza un archivo con Gemini (Excel, PDF grande, imagen HEIC, CAD). Lee su contenido y responde preguntas. Úsalo cuando Claude no pueda leer el archivo directamente.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      key:      { type: 'string', description: 'Clave del archivo en R2' },
+      pregunta: { type: 'string', description: 'Qué quieres saber del archivo (opcional, si se omite extrae todo el contenido)' }
+    },
+    required: ['key']
+  }
+};
+
+const TOOL_BUSCAR_GOOGLE = {
+  name: 'buscar_google',
+  description: 'Busca en Google con resultados actualizados (via Gemini con Google Search grounding). Úsalo para normativas, precios, fichas técnicas, noticias recientes.',
+  input_schema: {
+    type: 'object',
+    properties: { query: { type: 'string', description: 'Consulta de búsqueda' } },
+    required: ['query']
+  }
+};
+
 const TOOL_VER_ESQUEMA_BD = {
   name: 'ver_esquema_bd',
   description: 'Muestra el esquema de la base de datos: tablas y columnas con sus tipos. Úsalo ANTES de consultar_bd si no sabes qué tablas o columnas existen.',
@@ -441,12 +464,12 @@ const TOOL_VER_ESQUEMA_BD = {
 // Tools por experto
 const TOOLS_POR_EXPERTO = {
   simple:     [],
-  app:        [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_VER_ESQUEMA_BD, TOOL_ANALIZAR_FOTO],
-  tecnico:    [TOOL_LEER_ESTADO, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_BUSCAR_WEB, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_VER_ESQUEMA_BD, TOOL_ANALIZAR_FOTO, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION],
-  web:        [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE],
-  reflexion:  [TOOL_MEMORY_SAVE, TOOL_MEMORY_READ, TOOL_PROPOSE_MEJORA, TOOL_BUSCAR_WEB, TOOL_TOMAR_DECISION, TOOL_LEER_ESTADO, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION],
-  completo:   [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_LEER_ESTADO, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_VER_ESQUEMA_BD, TOOL_ANALIZAR_FOTO, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION],
-  ingenieria: [TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_CONSULTAR_BD, TOOL_VER_ESQUEMA_BD, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_ANALIZAR_FOTO, TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION]
+  app:        [TOOL_BUSCAR_WEB, TOOL_BUSCAR_GOOGLE, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_VER_ESQUEMA_BD, TOOL_ANALIZAR_FOTO, TOOL_ANALIZAR_ARCHIVO],
+  tecnico:    [TOOL_LEER_ESTADO, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_BUSCAR_WEB, TOOL_BUSCAR_GOOGLE, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_VER_ESQUEMA_BD, TOOL_ANALIZAR_FOTO, TOOL_ANALIZAR_ARCHIVO, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION],
+  web:        [TOOL_BUSCAR_WEB, TOOL_BUSCAR_GOOGLE, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE],
+  reflexion:  [TOOL_MEMORY_SAVE, TOOL_MEMORY_READ, TOOL_PROPOSE_MEJORA, TOOL_BUSCAR_WEB, TOOL_BUSCAR_GOOGLE, TOOL_TOMAR_DECISION, TOOL_LEER_ESTADO, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION],
+  completo:   [TOOL_BUSCAR_WEB, TOOL_BUSCAR_GOOGLE, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_LEER_ESTADO, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_VER_ESQUEMA_BD, TOOL_ANALIZAR_FOTO, TOOL_ANALIZAR_ARCHIVO, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION],
+  ingenieria: [TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_CONSULTAR_BD, TOOL_VER_ESQUEMA_BD, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_ANALIZAR_FOTO, TOOL_ANALIZAR_ARCHIVO, TOOL_BUSCAR_WEB, TOOL_BUSCAR_GOOGLE, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION]
 };
 
 // ── HTTP Handler ──────────────────────────────────────────────────────────────
@@ -1079,11 +1102,33 @@ async function buildUserContentWithAdjuntos(env, mensaje, adjuntos) {
             type: 'document',
             source: { type: 'base64', media_type: 'application/pdf', data: base64 }
           });
+        } else if (env.GEMINI_API_KEY) {
+          try {
+            const base64 = uint8ToBase64(bytes);
+            const texto = await analizarArchivoConGemini(env, base64, 'application/pdf',
+              'Extrae TODO el texto y datos de este PDF. Responde con el contenido completo, manteniendo la estructura (tablas, listas, secciones).');
+            contentBlocks.push({ type: 'text', text: `Contenido del PDF (${key}, ${(bytes.length/1024/1024).toFixed(1)}MB, extraído con Gemini):\n${texto}` });
+          } catch (e) {
+            contentBlocks.push({ type: 'text', text: `[PDF grande: ${key} (${(bytes.length/1024/1024).toFixed(1)}MB). Error al leer con Gemini: ${e.message}. Usa ver_archivo con key="${key}" para extraer texto básico.]` });
+          }
         } else {
           contentBlocks.push({ type: 'text', text: `[PDF muy grande: ${key} (${(bytes.length/1024/1024).toFixed(1)}MB). Pide al usuario las páginas relevantes o usa ver_archivo con key="${key}" para extraer texto.]` });
         }
       } else if (ct.includes('spreadsheet') || ct.includes('excel')) {
-        contentBlocks.push({ type: 'text', text: `[Archivo Excel adjunto: ${key}. No puedo leer Excel directamente en el chat. Usa la herramienta ver_archivo con key="${key}" para obtener metadatos, o sugiere al usuario exportar como CSV.]` });
+        const buf = await obj.arrayBuffer();
+        const bytes = new Uint8Array(buf);
+        if (env.GEMINI_API_KEY && bytes.length <= 20 * 1024 * 1024) {
+          try {
+            const base64 = uint8ToBase64(bytes);
+            const texto = await analizarArchivoConGemini(env, base64, ct,
+              'Lee este archivo Excel/hoja de cálculo. Extrae TODOS los datos en formato tabla texto. Incluye nombres de hojas si hay varias. Mantén números, fechas y fórmulas visibles.');
+            contentBlocks.push({ type: 'text', text: `Contenido del Excel (${key}, extraído con Gemini):\n${texto}` });
+          } catch (e) {
+            contentBlocks.push({ type: 'text', text: `[Archivo Excel: ${key}. Error al leer con Gemini: ${e.message}. Sugiere al usuario exportar como CSV.]` });
+          }
+        } else {
+          contentBlocks.push({ type: 'text', text: `[Archivo Excel adjunto: ${key}. Sugiere al usuario exportar como CSV para poder leerlo.]` });
+        }
       } else if (ct.startsWith('text/') || ct === 'application/json') {
         const text = await obj.text();
         contentBlocks.push({ type: 'text', text: `Archivo adjunto (${key}):\n${text.substring(0, 4000)}` });
@@ -1104,27 +1149,50 @@ async function buildUserContentWithAdjuntos(env, mensaje, adjuntos) {
 }
 
 // ── Gemini Vision — analizar foto con IA de visión ──────────────────────────
-async function analizarFotoConGemini(env, imageBase64, mediaType, prompt) {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${env.GEMINI_API_KEY}`;
-  const body = {
-    contents: [{
-      parts: [
-        { inline_data: { mime_type: mediaType, data: imageBase64 } },
-        { text: prompt }
-      ]
-    }]
-  };
-  const resp = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body)
-  });
-  if (!resp.ok) {
-    const err = await resp.text();
-    throw new Error(`Gemini ${resp.status}: ${err.substring(0, 200)}`);
+// ── Gemini con rotación de keys y fallback de modelos ────────────────────────
+async function callGemini(env, geminiBody, label) {
+  const keys = [env.GEMINI_API_KEY, env.GEMINI_API_KEY_2, env.GEMINI_API_KEY_3].filter(Boolean);
+  if (!keys.length) throw new Error('GEMINI_API_KEY no configurada');
+  const models = ['gemini-2.0-flash', 'gemini-1.5-flash-002', 'gemini-1.5-flash'];
+  for (const key of keys) {
+    for (const model of models) {
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`,
+        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(geminiBody) }
+      );
+      const data = await res.json();
+      if (res.ok) return data.candidates?.[0]?.content?.parts?.[0]?.text || 'Sin resultado.';
+      if (res.status === 429) break;
+      if (res.status === 404) continue;
+      throw new Error(`Gemini ${res.status} [${label}]: ${JSON.stringify(data).slice(0, 200)}`);
+    }
   }
-  const data = await resp.json();
-  return data.candidates?.[0]?.content?.parts?.[0]?.text || 'Sin análisis disponible.';
+  throw new Error(`Cuota Gemini agotada (${label})`);
+}
+
+async function analizarFotoConGemini(env, imageBase64, mediaType, prompt) {
+  return callGemini(env, {
+    contents: [{ parts: [
+      { inline_data: { mime_type: mediaType, data: imageBase64 } },
+      { text: prompt }
+    ]}]
+  }, 'foto_obra');
+}
+
+async function analizarArchivoConGemini(env, fileBase64, mimeType, prompt) {
+  return callGemini(env, {
+    contents: [{ parts: [
+      { inline_data: { mime_type: mimeType, data: fileBase64 } },
+      { text: prompt }
+    ]}]
+  }, 'archivo');
+}
+
+async function buscarConGemini(env, query) {
+  return callGemini(env, {
+    contents: [{ parts: [{ text: query }] }],
+    tools: [{ google_search: {} }]
+  }, 'busqueda');
 }
 
 // ── Cálculos de ingeniería ───────────────────────────────────────────────────
@@ -1633,6 +1701,37 @@ ${input.codigo_sugerido ? `CÓDIGO SUGERIDO:\n${input.codigo_sugerido}` : ''}`;
         return `Análisis de imagen (${input.key}):\n\n${analisis}`;
       } catch (err) {
         return `Error analizando foto: ${err.message}`;
+      }
+    }
+
+    case 'analizar_archivo': {
+      try {
+        if (!env.GEMINI_API_KEY) return 'GEMINI_API_KEY no configurada — análisis de archivos no disponible.';
+        if (!env.FILES) return 'R2 bucket FILES no configurado.';
+        const obj = await env.FILES.get(input.key);
+        if (!obj) return `Archivo no encontrado: "${input.key}"`;
+        const ct = obj.httpMetadata?.contentType || 'application/octet-stream';
+        const arrayBuf = await obj.arrayBuffer();
+        const bytes = new Uint8Array(arrayBuf);
+        if (bytes.length > 20 * 1024 * 1024) return 'Archivo demasiado grande (máx 20MB).';
+        const base64 = uint8ToBase64(bytes);
+        const prompt = input.pregunta
+          ? `Analiza este archivo y responde en español: ${input.pregunta}`
+          : `Analiza este archivo en detalle. Describe su contenido, estructura y datos relevantes. Responde en español.`;
+        const resultado = await analizarArchivoConGemini(env, base64, ct, prompt);
+        return `Análisis de archivo (${input.key}):\n\n${resultado}`;
+      } catch (err) {
+        return `Error analizando archivo: ${err.message}`;
+      }
+    }
+
+    case 'buscar_google': {
+      try {
+        if (!env.GEMINI_API_KEY) return 'GEMINI_API_KEY no configurada — búsqueda no disponible.';
+        const resultado = await buscarConGemini(env, input.consulta);
+        return `Resultados de búsqueda:\n\n${resultado}`;
+      } catch (err) {
+        return `Error en búsqueda: ${err.message}`;
       }
     }
 
