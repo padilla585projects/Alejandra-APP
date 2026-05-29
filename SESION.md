@@ -7,7 +7,29 @@
 
 **Sesión:** LIBRE
 **Última sesión:** 29/05/2026
-**Versión actual:** v6.05
+**Versión actual:** v6.07
+
+---
+
+## RESUMEN SESIÓN 29/05/2026 (5ª) — v6.07 (Versión dinámica header + anti-caché)
+
+### Qué se hizo:
+- Verificado que producción (GitHub Pages) sirve v6.06/6.07 correctamente con TODAS las mejoras (📎, chat, Gemini).
+- Verificado que el agente responde correctamente con catálogos y todas las herramientas.
+- Problema: el móvil del usuario tenía una versión muy vieja cacheada de la PWA.
+- Header del chat mostraba "v5.88" hardcodeado → ahora muestra APP_VERSION dinámicamente.
+- Añadido meta tags Cache-Control/Pragma/Expires al `<head>` para evitar caché agresiva del HTML.
+- Bump v6.05 → v6.06 → v6.07 para forzar ciclo de actualización del SW.
+
+### Deploy:
+- GitHub: b796c14 → push main ✅
+- Workers: sin cambios, no requiere redeploy
+
+### Pendiente:
+- Usuario debe borrar caché de Chrome en el móvil para recibir la versión actual
+- Probar en Android real tras limpieza de caché
+- Botón Alejandra en barra inferior a veces no registra el click
+- Revisar permisos de usuarios en Alejandra Office
 
 ---
 

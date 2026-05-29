@@ -5,7 +5,7 @@
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 29/05/2026
-VERSIÓN ACTUAL APP NUEVA: v6.05 (Fix sesión usuario_id + Gemini + catálogos fabricantes)
+VERSIÓN ACTUAL APP NUEVA: v6.07 (Versión dinámica header + anti-caché PWA)
 VERSIÓN ACTUAL APP VIEJA: v4.19 (⛔ CONGELADA DEFINITIVAMENTE — no recibe más cambios)
 
 ================================================================================
@@ -176,6 +176,11 @@ PASO 4 — VERIFICAR WORKER (solo si se va a tocar worker.js)
 ================================================================================
   HISTORIAL DE VERSIONES — RECIENTES
 ================================================================================
+
+v6.07        |  29/05/2026  [Versión dinámica header chat + anti-caché PWA]
+  - Header del chat Alejandra mostraba "v5.88" hardcodeado → ahora muestra APP_VERSION real.
+  - Meta tags Cache-Control/Pragma/Expires en <head> para evitar caché agresiva del HTML.
+  - Bump v6.05→v6.06→v6.07 para forzar actualización en dispositivos con caché vieja.
 
 v6.05        |  29/05/2026  [Fix sesión usuario_id — chat Alejandra no funcionaba en PWA]
   - BUG CRÍTICO: login por código (/verificar) no devolvía usuario_id ni empresa_id en respuesta JSON.
