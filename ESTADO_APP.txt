@@ -5,7 +5,7 @@
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 29/05/2026
-VERSIÓN ACTUAL APP NUEVA: v6.07 (Versión dinámica header + anti-caché PWA)
+VERSIÓN ACTUAL APP NUEVA: v6.11 (Push notifications + background tasks + chat sync)
 VERSIÓN ACTUAL APP VIEJA: v4.19 (⛔ CONGELADA DEFINITIVAMENTE — no recibe más cambios)
 
 ================================================================================
@@ -176,6 +176,19 @@ PASO 4 — VERIFICAR WORKER (solo si se va a tocar worker.js)
 ================================================================================
   HISTORIAL DE VERSIONES — RECIENTES
 ================================================================================
+
+v6.11        |  29/05/2026  [Push notifications + background tasks + chat sync]
+  - VAPID auto-provisioning: agente genera VAPID keys en D1 al primer uso
+  - Alejandra puede enviar push notifications a cualquier usuario (tool enviar_notificacion)
+  - Tareas en background: crear/ver/completar con notificación al terminar
+  - Historial del chat se sincroniza entre dispositivos (carga desde servidor)
+  - Todos los usuarios se suscriben a push (no solo developers)
+
+v6.10        |  29/05/2026  [Conversación per-user + identidad + automodificación]
+  - Historial por usuario_id (no por canal) — memoria y conversaciones personalizadas
+  - Alejandra sabe quién habla: Adrian como creador, otros como usuarios
+  - 6 herramientas de automodificación: repo_read/write, direct_fix, grep_code, etc.
+  - GitHub token configurado para escritura autónoma del código
 
 v6.07        |  29/05/2026  [Versión dinámica header chat + anti-caché PWA]
   - Header del chat Alejandra mostraba "v5.88" hardcodeado → ahora muestra APP_VERSION real.

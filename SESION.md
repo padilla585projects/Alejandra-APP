@@ -7,7 +7,41 @@
 
 **Sesión:** LIBRE
 **Última sesión:** 29/05/2026
-**Versión actual:** v6.09
+**Versión actual:** v6.11
+
+---
+
+## RESUMEN SESIÓN 29/05/2026 (7ª) — v6.10-v6.11 (Conversación per-user + automod + push + tasks + sync)
+
+### Qué se hizo:
+
+**v6.10 — Conversación per-user + identidad + automodificación:**
+- Historial de chat por usuario_id (no por canal) — columna añadida a alejandra_historial
+- Alejandra sabe QUIÉN habla: Adrian como creador/compañero, otros como usuarios
+- 6 herramientas de automodificación: repo_read_file, repo_write_file, direct_fix, grep_code, run_migration, check_deploy_status
+- GitHub token (AgenteAlejandra, sin expiración) configurado como secret
+- Memoria (alejandra_memoria) ahora usa usuario_id en vez de canal
+
+**v6.11 — Push notifications + tareas background + sincronización chat:**
+- VAPID auto-provisioning: el agente genera sus propias VAPID keys en D1 al primer uso
+- Push notifications: Alejandra puede enviar notificaciones push a cualquier usuario
+- 4 nuevas herramientas: enviar_notificacion, crear_tarea_background, ver_tareas, completar_tarea
+- Tareas en background con notificación automática al completar
+- Historial del chat sincronizado entre dispositivos (carga desde /api/chat/history)
+- TODOS los usuarios se suscriben a push de Alejandra (no solo developers)
+- Endpoints nuevos en agente: /api/chat/history, /push-subscribe, /push-vapid-key
+- Tablas D1 creadas: push_subscriptions, alejandra_tareas
+
+### Archivos modificados:
+- alejandra-agente/worker.js (tools, handlers, endpoints, VAPID auto-gen, push crypto)
+- index.html (chat sync desde servidor, push suscripción universal, v6.11)
+- sw.js (cache v6.11)
+- version.json (6.11)
+
+### Estado:
+- Worker agente: desplegado ✅ (3646c6fb)
+- GitHub: push ✅ (63f34ff)
+- Versiones sincronizadas: ✅
 
 ---
 
