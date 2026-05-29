@@ -10214,7 +10214,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '6.03';
+const APP_VERSION = '6.04';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -10313,6 +10313,14 @@ let _backPressTimer  = null;
 window.addEventListener('popstate', function() {
   const s = getSession();
   if (!s) return;
+
+  // Si el chat de Alejandra está abierto, el botón atrás lo cierra (no navega la app)
+  const alePanel = document.getElementById('alejandraPanel');
+  if (alePanel && alePanel.style.display === 'flex') {
+    alejandraAbrir(false);
+    history.pushState({ alejandra: 1 }, '');
+    return;
+  }
 
   // Si hay una foto de sugerencia zoomed, cerrarla primero
   const zoomedImg = document.querySelector('img[data-zoomed="1"]');
@@ -14865,6 +14873,8 @@ function alejandraAbrir(show = true) {
   if (show) {
     panel.style.display = 'flex';
     document.getElementById('alejandraInput')?.focus();
+    // Asegurar un estado en el historial para que el botón atrás físico cierre el chat
+    if (!history.state?.alejandra) history.pushState({ alejandra: 1 }, '');
   } else {
     panel.style.display = 'none';
     if (_alejandraEscuchando && _alejandraRecognition) _alejandraRecognition.stop();
@@ -15025,7 +15035,10 @@ async function alejandraEnviar() {
         usuario_id: s.usuario_id,
         empresa_id: s.empresa_id || null,
         canal:      'pwa',
-        adjuntos:   adjEnv
+        adjuntos:   adjEnv,
+        rol:        s.rol || null,
+        pantalla:   _alejandraGetPantalla(),
+        dom_actual: _alejandraGetDOMCompacto()
       })
     });
 
@@ -15035,24 +15048,42 @@ async function alejandraEnviar() {
     const list = document.getElementById('alejandraList');
     if (list?.lastChild?.dataset?.loading) list.lastChild.remove();
 
-    const textoRespuesta = data.texto || 'Sin respuesta';
-    _alejandraAñadirMensaje(textoRespuesta, 'bot');
+    let textoRespuesta = data.texto || 'Sin respuesta';
 
-    // Indicar si usó búsqueda web
-    if (data.busqueda_web) {
-      _alejandraAñadirMensaje('🔍 (resultado con búsqueda web)', 'bot-info');
+    // Extraer <plan> y <guia> de la respuesta antes de mostrar
+    let planDetectado = null;
+    let guiaDetectada = null;
+    const planMatch = textoRespuesta.match(/<plan>([\s\S]*?)<\/plan>/);
+    if (planMatch) {
+      try { planDetectado = JSON.parse(planMatch[1]); } catch (_) {}
+      textoRespuesta = textoRespuesta.replace(/<plan>[\s\S]*?<\/plan>/, '').trim();
+    }
+    const guiaMatch = textoRespuesta.match(/<guia>([\s\S]*?)<\/guia>/);
+    if (guiaMatch) {
+      try { guiaDetectada = JSON.parse(guiaMatch[1]); } catch (_) {}
+      textoRespuesta = textoRespuesta.replace(/<guia>[\s\S]*?<\/guia>/, '').trim();
     }
 
-    if (data.acciones?.length > 0) {
-      const str = data.acciones.map(a => `• ${a.tipo}: ${a.descripcion}`).join('\n');
-      _alejandraAñadirMensaje(`📋 Acciones:\n${str}`, 'bot-info');
+    if (textoRespuesta) _alejandraAñadirMensaje(textoRespuesta, 'bot');
+
+    // Mostrar plan ejecutable con botón de confirmación
+    if (planDetectado) {
+      _alejandraOfrecerPlan(planDetectado);
+    }
+
+    // Mostrar guía paso a paso
+    if (guiaDetectada) {
+      _alejandraOfrecerGuia(guiaDetectada);
+    }
+
+    if (data.busqueda_web) {
+      _alejandraAñadirMensaje('🔍 (resultado con búsqueda web)', 'bot-info');
     }
 
     if (data.requiere_confirmacion) {
       _alejandraAñadirMensaje('⚠️ Esta acción requiere tu confirmación', 'bot-warning');
     }
 
-    // Hablar la respuesta si la voz está activada
     alejandraHablar(textoRespuesta);
 
   } catch (err) {
@@ -15084,6 +15115,192 @@ function _alejandraAñadirMensaje(texto, tipo = 'user', isLoading = false) {
   div.innerHTML = `<div style="max-width:85%;background:${bg};color:${fg};border-radius:${radius};padding:10px 14px;font-size:14px;line-height:1.5;word-wrap:break-word;white-space:pre-wrap">${_escHtml(texto)}</div>`;
 
   if (isLoading) div.dataset.loading = '1';
+  list.appendChild(div);
+  list.scrollTop = list.scrollHeight;
+}
+
+// ── Contexto de pantalla para Alejandra ──────────────────────────────────────
+function _alejandraGetPantalla() {
+  const active = document.querySelector('.screen.active');
+  if (!active) return null;
+  const raw = active.id.replace(/^screen/, '');
+  return raw.charAt(0).toLowerCase() + raw.slice(1);
+}
+
+function _alejandraGetDOMCompacto() {
+  const active = document.querySelector('.screen.active');
+  if (!active) return [];
+  const elements = active.querySelectorAll('button, a, input, select, textarea, [onclick]');
+  const lines = [];
+  for (const el of elements) {
+    if (el.offsetParent === null && el.style.display === 'none') continue;
+    const tag = el.tagName.toLowerCase();
+    const id = el.id ? `#${el.id}` : '';
+    const cls = el.className ? `.${String(el.className).split(/\s+/).filter(c => c && !c.startsWith('active')).slice(0,2).join('.')}` : '';
+    const text = (el.textContent || '').trim().substring(0, 30);
+    const type = el.type ? `[type=${el.type}]` : '';
+    const sel = id || (tag + cls + type);
+    if (sel) lines.push(`${sel} ${text}`);
+    if (lines.length >= 40) break;
+  }
+  return lines;
+}
+
+// ── Plan ejecutable — Alejandra toma el control ─────────────────────────────
+let _alejandraPlanActivo = null;
+
+function _alejandraOfrecerPlan(plan) {
+  if (!plan?.acciones?.length) return;
+  const list = document.getElementById('alejandraList');
+  if (!list) return;
+
+  const div = document.createElement('div');
+  div.style.cssText = 'display:flex;flex-direction:column;align-items:flex-start;margin-bottom:8px';
+
+  const accHtml = plan.acciones.map((a, i) =>
+    `<div style="padding:4px 0;font-size:13px"><b>${i+1}.</b> ${_escHtml(a.desc || a.tipo)}</div>`
+  ).join('');
+
+  div.innerHTML = `
+    <div style="max-width:90%;background:linear-gradient(135deg,#1e1b4b,#312e81);border:1px solid #8b5cf6;border-radius:16px;padding:14px;color:#e0e7ff">
+      <div style="font-weight:700;font-size:14px;margin-bottom:8px">🤖 ${_escHtml(plan.titulo || 'Alejandra quiere actuar')}</div>
+      <div style="border-top:1px solid #4c1d95;padding-top:8px;margin-bottom:10px">${accHtml}</div>
+      <div style="display:flex;gap:8px">
+        <button onclick="_alejandraCancelarPlan(this)" style="flex:1;padding:8px;border-radius:10px;border:1px solid #6b7280;background:transparent;color:#d1d5db;font-size:13px;cursor:pointer">Cancelar</button>
+        <button onclick="_alejandraConfirmarPlan(this)" style="flex:1;padding:8px;border-radius:10px;border:none;background:#8b5cf6;color:#fff;font-size:13px;font-weight:600;cursor:pointer">Adelante, hazlo</button>
+      </div>
+    </div>`;
+
+  _alejandraPlanActivo = plan;
+  list.appendChild(div);
+  list.scrollTop = list.scrollHeight;
+}
+
+function _alejandraCancelarPlan(btn) {
+  _alejandraPlanActivo = null;
+  const card = btn.closest('div[style*="linear-gradient"]');
+  if (card) card.innerHTML = '<div style="color:#9ca3af;font-size:13px;padding:6px">Plan cancelado</div>';
+}
+
+function _alejandraConfirmarPlan(btn) {
+  const plan = _alejandraPlanActivo;
+  if (!plan) return;
+  _alejandraPlanActivo = null;
+  const card = btn.closest('div[style*="linear-gradient"]');
+  if (card) card.innerHTML = '<div style="color:#a78bfa;font-size:13px;padding:6px">⚡ Ejecutando...</div>';
+  alejandraAbrir(false);
+  _alejandraEjecutarPlan(plan);
+}
+
+async function _alejandraEjecutarPlan(plan) {
+  const overlay = document.createElement('div');
+  overlay.id = 'alejandraPlanOverlay';
+  overlay.style.cssText = 'position:fixed;bottom:0;left:0;right:0;z-index:1100;background:linear-gradient(135deg,#1e1b4b,#312e81);border-top:2px solid #8b5cf6;padding:12px 16px;color:#e0e7ff;font-size:13px;transition:transform .3s';
+  overlay.innerHTML = `<div style="display:flex;align-items:center;gap:8px"><span>🤖</span><span id="alePlanStatus">Preparando...</span><button onclick="_alejandraAbortarPlan()" style="margin-left:auto;background:#ef4444;color:#fff;border:none;border-radius:8px;padding:4px 12px;font-size:12px;cursor:pointer">Cancelar</button></div>
+    <div style="height:3px;background:#4c1d95;border-radius:2px;margin-top:8px"><div id="alePlanProgress" style="height:100%;background:#8b5cf6;border-radius:2px;width:0;transition:width .3s"></div></div>`;
+  document.body.appendChild(overlay);
+
+  let abortado = false;
+  window._alejandraAbortarPlan = () => { abortado = true; };
+
+  const total = plan.acciones.length;
+  for (let i = 0; i < total; i++) {
+    if (abortado) break;
+    const acc = plan.acciones[i];
+    const status = document.getElementById('alePlanStatus');
+    const progress = document.getElementById('alePlanProgress');
+    if (status) status.textContent = `${i+1}/${total}: ${acc.desc || acc.tipo}`;
+    if (progress) progress.style.width = `${((i+1)/total)*100}%`;
+
+    try {
+      await _alejandraEjecutarAccion(acc);
+    } catch (e) {
+      toast(`❌ Error en paso ${i+1}: ${e.message}`, 'err');
+      break;
+    }
+    await new Promise(r => setTimeout(r, acc.tipo === 'esperar' ? (acc.ms || 500) : 400));
+  }
+
+  const ov = document.getElementById('alejandraPlanOverlay');
+  if (ov) {
+    const st = document.getElementById('alePlanStatus');
+    if (st) st.textContent = abortado ? 'Cancelado' : 'Plan completado';
+    setTimeout(() => ov.remove(), 2000);
+  }
+  if (!abortado) toast('🤖 Plan completado', 'ok');
+}
+
+async function _alejandraEjecutarAccion(acc) {
+  switch (acc.tipo) {
+    case 'navegar': {
+      const destino = acc.destino || acc.valor;
+      if (destino && typeof navTo === 'function') navTo(destino);
+      else if (destino && typeof showScreen === 'function') showScreen(destino);
+      break;
+    }
+    case 'click': {
+      const el = document.querySelector(acc.selector);
+      if (!el) throw new Error(`No encontré: ${acc.selector}`);
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      el.style.boxShadow = '0 0 0 3px #8b5cf6';
+      await new Promise(r => setTimeout(r, 300));
+      el.click();
+      setTimeout(() => el.style.boxShadow = '', 1000);
+      break;
+    }
+    case 'rellenar': {
+      const el = document.querySelector(acc.selector);
+      if (!el) throw new Error(`No encontré: ${acc.selector}`);
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      el.style.boxShadow = '0 0 0 3px #8b5cf6';
+      el.focus();
+      el.value = acc.valor || '';
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+      el.dispatchEvent(new Event('change', { bubbles: true }));
+      setTimeout(() => el.style.boxShadow = '', 1000);
+      break;
+    }
+    case 'seleccionar': {
+      const el = document.querySelector(acc.selector);
+      if (!el) throw new Error(`No encontré: ${acc.selector}`);
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      el.style.boxShadow = '0 0 0 3px #8b5cf6';
+      el.value = acc.valor || '';
+      el.dispatchEvent(new Event('change', { bubbles: true }));
+      setTimeout(() => el.style.boxShadow = '', 1000);
+      break;
+    }
+    case 'esperar':
+      break;
+    case 'scroll': {
+      const el = document.querySelector(acc.selector);
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      break;
+    }
+    default:
+      break;
+  }
+}
+
+// ── Guía paso a paso (visual, no ejecuta) ────────────────────────────────────
+function _alejandraOfrecerGuia(guia) {
+  if (!guia?.pasos?.length) return;
+  const list = document.getElementById('alejandraList');
+  if (!list) return;
+
+  const div = document.createElement('div');
+  div.style.cssText = 'display:flex;flex-direction:column;align-items:flex-start;margin-bottom:8px';
+
+  const pasosHtml = guia.pasos.map((p, i) =>
+    `<div style="padding:4px 0;font-size:13px"><b>${i+1}.</b> ${_escHtml(p)}</div>`
+  ).join('');
+
+  div.innerHTML = `
+    <div style="max-width:90%;background:var(--surface2);border:1px solid #22c55e;border-radius:16px;padding:14px;color:var(--text)">
+      <div style="font-weight:700;font-size:14px;margin-bottom:8px">📋 ${_escHtml(guia.titulo || 'Guía paso a paso')}</div>
+      <div style="border-top:1px solid var(--border);padding-top:8px">${pasosHtml}</div>
+    </div>`;
+
   list.appendChild(div);
   list.scrollTop = list.scrollHeight;
 }

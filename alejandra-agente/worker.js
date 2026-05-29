@@ -108,8 +108,8 @@ Si un usuario PIDE QUE LE ENSEÑES cómo hacer algo, puedes incluir al final un 
 <guia>{"titulo":"Cómo fichar entrada","pasos":["Toca el botón 'Fichar' abajo","Selecciona 'Entrada'","Confirma tu ubicación"]}</guia>
 La interfaz pedirá consentimiento y mostrará la guía paso a paso. El usuario ejecuta las acciones manualmente. Máx 5 pasos.
 
-MODO PLAN EJECUTABLE (Alejandra actúa por el usuario — SOLO en canal "Panel web"):
-Si un usuario en el PANEL te pide que HAGAS algo por él (no que le enseñes), incluye un bloque <plan>:
+MODO PLAN EJECUTABLE (Alejandra actúa por el usuario — en "Panel web" y "PWA"):
+Si un usuario en el PANEL o la PWA te pide que HAGAS algo por él (no que le enseñes), incluye un bloque <plan>:
 <plan>{"titulo":"Registrar gasto de 50€","acciones":[
   {"tipo":"navegar","destino":"gastos","desc":"Voy a la sección Gastos"},
   {"tipo":"click","selector":"#btnNuevoGasto","desc":"Abrir formulario"},
@@ -127,7 +127,7 @@ Tipos de acción soportados:
 - "scroll": desplaza hasta el elemento (selector)
 
 REGLAS DEL PLAN EJECUTABLE:
-- SOLO incluye <plan> en canal "Panel web" — en app móvil y telegram usa <guia>.
+- Incluye <plan> en canal "Panel web" o "PWA" — en telegram usa <guia>.
 - El panel pedirá consentimiento UNA VEZ al usuario antes de ejecutar el plan completo.
 - Cuando recibas un bloque [DOM de la pantalla actual: ...] al inicio del mensaje, esos son los selectores REALES disponibles ahora mismo en pantalla. ÚSALOS — no inventes IDs.
 - Si el DOM actual no contiene el elemento que necesitas, primero usa <plan> con una acción "navegar" a la sección que sí lo tendrá, o pide al usuario que cambie de sección.
@@ -432,15 +432,21 @@ const TOOL_RECUPERAR_CONVERSACION = {
   }
 };
 
+const TOOL_VER_ESQUEMA_BD = {
+  name: 'ver_esquema_bd',
+  description: 'Muestra el esquema de la base de datos: tablas y columnas con sus tipos. Úsalo ANTES de consultar_bd si no sabes qué tablas o columnas existen.',
+  input_schema: { type: 'object', properties: {} }
+};
+
 // Tools por experto
 const TOOLS_POR_EXPERTO = {
   simple:     [],
-  app:        [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD],
-  tecnico:    [TOOL_LEER_ESTADO, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_BUSCAR_WEB, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION],
+  app:        [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_VER_ESQUEMA_BD, TOOL_ANALIZAR_FOTO],
+  tecnico:    [TOOL_LEER_ESTADO, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_BUSCAR_WEB, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_VER_ESQUEMA_BD, TOOL_ANALIZAR_FOTO, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION],
   web:        [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE],
   reflexion:  [TOOL_MEMORY_SAVE, TOOL_MEMORY_READ, TOOL_PROPOSE_MEJORA, TOOL_BUSCAR_WEB, TOOL_TOMAR_DECISION, TOOL_LEER_ESTADO, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION],
-  completo:   [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_LEER_ESTADO, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION],
-  ingenieria: [TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_CONSULTAR_BD, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_ANALIZAR_FOTO, TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION]
+  completo:   [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_LEER_ESTADO, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_VER_ESQUEMA_BD, TOOL_ANALIZAR_FOTO, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION],
+  ingenieria: [TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_CONSULTAR_BD, TOOL_VER_ESQUEMA_BD, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_ANALIZAR_FOTO, TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION]
 };
 
 // ── HTTP Handler ──────────────────────────────────────────────────────────────
@@ -1037,6 +1043,11 @@ async function buildUserContentWithAdjuntos(env, mensaje, adjuntos) {
         else if (lower.endsWith('.heif')) ct = 'image/heif';
         else if (lower.endsWith('.gif')) ct = 'image/gif';
         else if (lower.endsWith('.pdf')) ct = 'application/pdf';
+        else if (lower.endsWith('.csv')) ct = 'text/csv';
+        else if (lower.endsWith('.txt')) ct = 'text/plain';
+        else if (lower.endsWith('.json')) ct = 'application/json';
+        else if (lower.endsWith('.xlsx')) ct = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+        else if (lower.endsWith('.xls')) ct = 'application/vnd.ms-excel';
       }
       if (ct.startsWith('image/')) {
         const buf = await obj.arrayBuffer();
@@ -1059,6 +1070,20 @@ async function buildUserContentWithAdjuntos(env, mensaje, adjuntos) {
             text: `[Imagen grande adjunta: ${key} (${(bytes.length/1024/1024).toFixed(1)}MB). Usa la tool analizar_foto_obra con key="${key}" para analizarla.]`
           });
         }
+      } else if (ct === 'application/pdf') {
+        const buf = await obj.arrayBuffer();
+        const bytes = new Uint8Array(buf);
+        if (bytes.length <= 4.5 * 1024 * 1024) {
+          const base64 = uint8ToBase64(bytes);
+          contentBlocks.push({
+            type: 'document',
+            source: { type: 'base64', media_type: 'application/pdf', data: base64 }
+          });
+        } else {
+          contentBlocks.push({ type: 'text', text: `[PDF muy grande: ${key} (${(bytes.length/1024/1024).toFixed(1)}MB). Pide al usuario las páginas relevantes o usa ver_archivo con key="${key}" para extraer texto.]` });
+        }
+      } else if (ct.includes('spreadsheet') || ct.includes('excel')) {
+        contentBlocks.push({ type: 'text', text: `[Archivo Excel adjunto: ${key}. No puedo leer Excel directamente en el chat. Usa la herramienta ver_archivo con key="${key}" para obtener metadatos, o sugiere al usuario exportar como CSV.]` });
       } else if (ct.startsWith('text/') || ct === 'application/json') {
         const text = await obj.text();
         contentBlocks.push({ type: 'text', text: `Archivo adjunto (${key}):\n${text.substring(0, 4000)}` });
@@ -1538,6 +1563,20 @@ ${input.codigo_sugerido ? `CÓDIGO SUGERIDO:\n${input.codigo_sugerido}` : ''}`;
         return `Archivo: ${input.key} (${sizeKB} KB, ${contentType}). Tipo no soportado para lectura directa.`;
       } catch (err) {
         return `Error leyendo archivo: ${err.message}`;
+      }
+    }
+
+    case 'ver_esquema_bd': {
+      try {
+        const tables = await env.DB.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%' ORDER BY name").all();
+        const schema = [];
+        for (const t of (tables.results || [])) {
+          const cols = await env.DB.prepare(`PRAGMA table_info(${t.name})`).all();
+          schema.push({ tabla: t.name, columnas: (cols.results||[]).map(c => `${c.name} ${c.type}${c.pk ? ' PK' : ''}${c.notnull ? ' NOT NULL' : ''}`) });
+        }
+        return JSON.stringify(schema, null, 2);
+      } catch (err) {
+        return `Error leyendo esquema: ${err.message}`;
       }
     }
 
