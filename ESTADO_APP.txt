@@ -177,7 +177,7 @@ PASO 4 — VERIFICAR WORKER (solo si se va a tocar worker.js)
   HISTORIAL DE VERSIONES — RECIENTES
 ================================================================================
 
-v6.04        |  29/05/2026  [Fix back + leer PDFs + esquema BD + Alejandra toma control en PWA]
+v6.04        |  29/05/2026  [Fix back + leer PDFs + esquema BD + Alejandra toma control en PWA + Gemini]
   - Fix bug navegación: botón atrás Android cierra el chat en vez de romper la app.
   - Worker: PDF nativo Claude (document block), detección extensiones CSV/TXT/JSON/XLSX.
   - Nueva tool ver_esquema_bd (tablas + columnas D1).
@@ -185,7 +185,12 @@ v6.04        |  29/05/2026  [Fix back + leer PDFs + esquema BD + Alejandra toma 
   - App envía rol + pantalla + DOM compacto al worker.
   - <plan> ejecutable en PWA: parser, modal confirmación, ejecución con overlay y highlight.
   - <guia> paso a paso visual.
-  - Deploy agente: fcea06f3.
+  - Integración Gemini en agente: callGemini() con rotación 3 keys + fallback modelos.
+  - Nueva tool analizar_archivo (Excel, PDF grande, HEIC, CAD vía Gemini).
+  - Nueva tool buscar_google (Google Search grounding vía Gemini).
+  - PDFs >4.5MB y Excel se leen automáticamente con Gemini en el chat.
+  - GEMINI_API_KEY_2 y _3 configuradas en worker agente.
+  - Deploy agente: 6ff77e59.
 
 v6.03        |  29/05/2026  [Fotos en obra HEIC/30MB + upload archivos PWA + agente optimizado]
   - Cambios hechos el 28/05 desde otro ordenador (worker del agente alejandra-agente),

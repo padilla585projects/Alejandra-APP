@@ -45,7 +45,7 @@
 
 ---
 
-## RESUMEN SESIÓN 29/05/2026 (2ª) — v6.04 (Fix back + PDFs + esquema BD + plan ejecutable PWA)
+## RESUMEN SESIÓN 29/05/2026 (2ª) — v6.04 (Fix back + PDFs + esquema BD + plan ejecutable PWA + Gemini)
 
 ### Qué se hizo:
 
@@ -75,20 +75,30 @@
 - Tipos de acción: navegar, click, rellenar, seleccionar, esperar, scroll.
 - <guia> paso a paso (visual, no ejecuta) para instrucciones.
 
+**Fase 5 — Integración Gemini (alejandra-agente/worker.js):**
+- callGemini() con rotación de 3 API keys y fallback de modelos (2.0-flash → 1.5-flash-002 → 1.5-flash).
+- Nueva tool analizar_archivo: lee Excel, PDF grande, HEIC, CAD vía Gemini.
+- Nueva tool buscar_google: Google Search grounding vía Gemini.
+- PDFs >4.5MB se leen automáticamente con Gemini (fallback tras límite Claude).
+- Excel se lee automáticamente con Gemini en el chat (antes solo sugería exportar CSV).
+- GEMINI_API_KEY_2 y _3 configuradas como secrets en worker agente.
+- Ambas tools añadidas a todos los expertos relevantes en TOOLS_POR_EXPERTO.
+
 ### Archivos modificados:
-- alejandra-agente/worker.js — PDF, extensiones, ver_esquema_bd, tools ampliadas, <plan> PWA
+- alejandra-agente/worker.js — PDF, extensiones, ver_esquema_bd, tools ampliadas, <plan> PWA, Gemini
 - index.html — fix back, enviar contexto, plan ejecutable, guía, bump v6.04
 - sw.js — CACHE alejandra-v6.04
 - version.json — 6.04
 
 ### Deploy:
-- GitHub: ddd993f → push main ✅
-- Worker agente: fcea06f3 ✅ (D1 + R2 bindings)
+- GitHub: 2a087b2 → push main ✅
+- Worker agente: 6ff77e59 ✅ (D1 + R2 bindings + 3 Gemini keys)
 - Worker principal: sin cambios, no requiere redeploy
 
 ### Pendiente:
 - Probar en Android real: fix back + plan ejecutable
-- Probar upload de PDF en el chat y verificar que Claude lo lee
+- Probar upload de PDF y Excel en el chat (verificar lectura Gemini)
+- Probar búsqueda Google desde Alejandra
 
 ---
 
