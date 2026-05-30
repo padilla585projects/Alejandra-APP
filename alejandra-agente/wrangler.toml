@@ -13,10 +13,9 @@ database_id = "0c9eccde-78f1-476d-ac68-bf452bec0c62"
 binding = "FILES"
 bucket_name = "alejandra-app-files"
 
-# Crons desactivados — cuenta free tiene límite de 5 triggers totales
-# Activar cuando se actualice el plan:
-# [triggers]
-# crons = ["0 7 * * *", "0 23 * * *"]
+# Cron: Alejandra despierta cada hora (5-21 UTC = 7-23 España)
+[triggers]
+crons = ["0 5-21 * * *"]
 
 # Secrets (configurar con: wrangler secret put <NOMBRE>)
 # ANTHROPIC_API_KEY — clave de Anthropic (Claude Sonnet)

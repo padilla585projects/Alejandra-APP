@@ -289,14 +289,60 @@ CUÁNDO USAR ESTAS HERRAMIENTAS:
 - "¿Qué dice la norma sobre X?" → buscar_normativa PRIMERO, luego buscar_web si no hay suficiente
 - Tracking de obra → historico_materiales
 - Alertas automáticas → configurar_alerta
-- "Expórtame los datos de X" → exportar_datos`
+- "Expórtame los datos de X" → exportar_datos`,
+
+  proactividad_real: `MODO AGENTE AUTÓNOMO — Actúa como un ingeniero senior de guardia. No eres soporte L1 que lee un guión. Eres L3: investigas, resuelves, y solo escalas lo que no puedes arreglar.
+
+PRINCIPIOS:
+1. INVESTIGA EFICIENTE — No spamees queries. Primero entiende la estructura (sqlite_master, PRAGMA), luego consultas precisas.
+2. RESUELVE TÚ — Si puedes arreglar algo (escribir_bd, controlar_app), HAZLO. No digas "voy a avisar". Arréglalo y DESPUÉS avisa.
+3. ESCALA CON DATOS — Cuando escales a Adrián, dale: qué pasa, qué investigaste, qué descartaste, qué necesita hacer él. No "el usuario tiene un problema".
+4. RESPUESTA AL USUARIO — Corta, clara, honesta. "Lo encontré y lo arreglé" o "Encontré el bug, avisé a Adrián, mientras tanto haz X".
+
+FLUJO DE RESOLUCIÓN:
+
+Paso 1: ENTENDER (1-2 queries máx)
+- consultar_bd("SELECT name FROM sqlite_master WHERE type='table'") — entender qué tablas hay
+- consultar_bd(query específica al problema) — datos del usuario, logs, estado
+
+Paso 2: DIAGNOSTICAR
+- ¿Es un dato mal? → escribir_bd para corregirlo YA
+- ¿Es un bug de código? → github_buscar + github_leer para localizar el fallo exacto
+- ¿Es un problema externo? → buscar_web (status del servicio)
+- ¿Ya pasó antes? → memory_read para buscar solución conocida
+
+Paso 3: ACTUAR (en orden de prioridad)
+- SI puedes arreglar → escribir_bd / controlar_app / github_escribir → HAZLO
+- SI no puedes pero es urgente → iniciar_conversacion(adrian) con informe técnico completo
+- SIEMPRE → memory_save con causa + solución + patrón
+- SI el usuario necesita hacer algo ahora → controlar_app para navegarlo + instrucción clara de 1 línea
+
+Paso 4: RESPONDER AL USUARIO
+- Máximo 4-5 líneas. Sin bullet points interminables.
+- Estructura: [Qué encontré] → [Qué hice/haré] → [Qué necesitas hacer tú (si algo)]
+- Tono: seguro, técnico con encargados, simple con operarios. Nunca "prueba esto a ver si..."
+
+EJEMPLO DE RESPUESTA PERFECTA (lo que espero de ti):
+Usuario: "No me deja fichar"
+Tú internamente: sqlite_master → ver tablas → query fichajes recientes de todos → query datos del usuario → ENCONTRAR CAUSA
+Respuesta: "Juan, tu cuenta no tiene obra asignada — por eso el fichaje falla. Ya te la asigné [escribir_bd]. Prueba ahora, debería funcionar. Si sigue igual, dime."
+
+SI NO PUEDES RESOLVER:
+"Juan, hay un bug en el módulo de fichajes [detalle técnico breve]. Ya avisé a Adrián con el diagnóstico completo. Mientras tanto, pídele a tu encargado que registre tu entrada manualmente."
+
+LO QUE NUNCA HAGAS:
+- Listar 5 pasos de "prueba esto, prueba lo otro"
+- Responder sin haber tocado la BD
+- Decir "voy a investigar" sin hacerlo en el mismo turno
+- Hacer más de 3 queries al mismo dato sin resultado (si no encuentras la tabla, busca en sqlite_master y para)
+- Respuestas de más de 8 líneas para un problema de usuario`
 };
 
 // Perfiles de experto
 const NEXUS_EXPERTS = {
   simple:   { model: MODEL_ROUTER,  maxTokens: 400,  modules: ['base', 'contexto_sesion', 'formato'] },
-  app:      { model: MODEL_EXPERTO, maxTokens: 800,  modules: ['base', 'app', 'aprendizaje_proactivo', 'contexto_sesion', 'formato'] },
-  tecnico:  { model: MODEL_EXPERTO, maxTokens: 1024, modules: ['base', 'app', 'tecnica', 'nexus', 'aprendizaje_proactivo', 'razonamiento', 'contexto_sesion', 'formato'] },
+  app:      { model: MODEL_EXPERTO, maxTokens: 1500, modules: ['base', 'app', 'proactividad_real', 'aprendizaje_proactivo', 'contexto_sesion', 'formato'] },
+  tecnico:  { model: MODEL_EXPERTO, maxTokens: 1024, modules: ['base', 'app', 'tecnica', 'nexus', 'proactividad_real', 'aprendizaje_proactivo', 'razonamiento', 'contexto_sesion', 'formato'] },
   web:      { model: MODEL_EXPERTO, maxTokens: 1024, modules: ['base', 'app', 'web', 'aprendizaje_proactivo', 'contexto_sesion', 'formato'] },
   reflexion:{ model: MODEL_EXPERTO, maxTokens: 2048, modules: ['base', 'app', 'tecnica', 'nexus', 'evolucion', 'reflexion', 'decision', 'aprendizaje_proactivo', 'razonamiento', 'contexto_sesion', 'formato'] },
   completo:   { model: MODEL_EXPERTO, maxTokens: 1024, modules: ['base', 'app', 'tecnica', 'nexus', 'evolucion', 'web', 'capacidades_avanzadas', 'aprendizaje_proactivo', 'razonamiento', 'contexto_sesion', 'formato'] },
@@ -1317,7 +1363,7 @@ async function procesarConNEXUS(env, mensaje, contexto, usuario_id, empresa_id, 
     let respAPI  = await llamarAnthropic(env, messages, tools, expert.model, expert.maxTokens, systemPrompt);
     if (respAPI.usage) registrarTokenUso(env, expert.model, `chat_${clas.experto}`, respAPI.usage.input_tokens||0, respAPI.usage.output_tokens||0, usuario_id);
     let iter     = 0;
-    const MAX_ITER = 5;
+    const MAX_ITER = 8;
     const herramientasUsadas = [];
 
     while (respAPI.stop_reason === 'tool_use' && iter < MAX_ITER) {
@@ -1337,10 +1383,8 @@ async function procesarConNEXUS(env, mensaje, contexto, usuario_id, empresa_id, 
       }
 
       messages.push({ role: 'user', content: toolResults });
-      // Permite seguir usando herramientas de aprendizaje en iteraciones siguientes
-      const toolsSiguiente = iter < MAX_ITER - 1
-        ? tools.filter(t => ['buscar_web', 'memory_save', 'memory_read'].includes(t.name))
-        : [];
+      // Mantener todas las tools disponibles en todas las iteraciones para máxima proactividad
+      const toolsSiguiente = iter < MAX_ITER - 1 ? tools : [];
       respAPI = await llamarAnthropic(env, messages, toolsSiguiente, expert.model, expert.maxTokens, systemPrompt);
       if (respAPI.usage) registrarTokenUso(env, expert.model, `chat_${clas.experto}`, respAPI.usage.input_tokens||0, respAPI.usage.output_tokens||0, usuario_id);
       iter++;
@@ -1404,7 +1448,7 @@ async function procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empres
     let respAPI = await llamarAnthropic(env, messages, tools, expert.model, expert.maxTokens, systemPrompt);
     if (respAPI.usage) registrarTokenUso(env, expert.model, 'chat_stream', respAPI.usage.input_tokens||0, respAPI.usage.output_tokens||0, usuario_id);
     let iter = 0;
-    const MAX_ITER = 5;
+    const MAX_ITER = 8;
     const herramientasUsadas = [];
 
     while (respAPI.stop_reason === 'tool_use' && iter < MAX_ITER) {
@@ -1429,10 +1473,8 @@ async function procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empres
       }
 
       messages.push({ role: 'user', content: toolResults });
-      // Permite seguir usando herramientas de aprendizaje en iteraciones siguientes
-      const toolsSiguiente = iter < MAX_ITER - 1
-        ? tools.filter(t => ['buscar_web', 'memory_save', 'memory_read'].includes(t.name))
-        : [];
+      // Mantener todas las tools disponibles en todas las iteraciones para máxima proactividad
+      const toolsSiguiente = iter < MAX_ITER - 1 ? tools : [];
       respAPI = await llamarAnthropic(env, messages, toolsSiguiente, expert.model, expert.maxTokens, systemPrompt);
       if (respAPI.usage) registrarTokenUso(env, expert.model, 'chat_stream', respAPI.usage.input_tokens||0, respAPI.usage.output_tokens||0, usuario_id);
       iter++;
@@ -3117,25 +3159,30 @@ async function clasificarConHaiku(env, mensaje) {
   const sistema = `Clasificador para agente IA. Responde SOLO con JSON válido.
 
 Expertos:
-- "simple": saludos, confirmaciones, preguntas triviales
-- "app": preguntas sobre módulos, funcionalidades, usuarios de la app
-- "tecnico": arquitectura, código, deploy, cómo funciona la IA
-- "web": necesita info actual (precios, normativas, noticias)
-- "reflexion": reflexión sobre sí misma, mejoras, qué puede hacer mejor, autoconocimiento, tomar decisiones
-- "ingenieria": cálculos eléctricos, cables, bandejas, protecciones, fotos de obra, normativa, consultas técnicas de instalación, sección de cable, caída de tensión, magnetotérmicos, diferenciales, cuadros eléctricos
-- "completo": quién es, historia, capacidades generales
+- "simple": SOLO saludos breves, "ok", "gracias", "sí", "no". Nada más.
+- "app": CUALQUIER problema, consulta operativa, datos de la empresa, equipos, personal, fichajes, incidencias, bobinas, errores de la app, algo que no funciona, reportes de usuarios, quejas. USA ESTE PARA TODO LO QUE REQUIERA INVESTIGAR O ACTUAR.
+- "tecnico": arquitectura interna de Alejandra, código del worker, deploy, cómo funciona NEXUS, preguntas de Adrián sobre el sistema
+- "web": necesita info actual de internet (precios mercado, normativas nuevas, noticias)
+- "reflexion": reflexión sobre sí misma, mejoras propias, autoconocimiento
+- "ingenieria": cálculos eléctricos, cables, bandejas, protecciones, fotos de obra, normativa técnica, sección de cable, caída de tensión
+- "completo": quién es, historia, capacidades generales, preguntas existenciales
+
+REGLA: Si el usuario reporta un PROBLEMA (algo no funciona, algo se rompió, no puede hacer algo, hay un error) → SIEMPRE "app". Si hay URGENCIA → SIEMPRE "app".
 
 JSON: {"experto":"...","buscar_web":bool,"query_web":"búsqueda en inglés o null"}
 
 Ejemplos:
 "hola" → {"experto":"simple","buscar_web":false,"query_web":null}
-"qué módulos tiene la app" → {"experto":"app","buscar_web":false,"query_web":null}
+"cuántas bobinas tenemos" → {"experto":"app","buscar_web":false,"query_web":null}
+"no me deja fichar" → {"experto":"app","buscar_web":false,"query_web":null}
+"la carretilla no arranca" → {"experto":"app","buscar_web":false,"query_web":null}
+"hay una incidencia en obra" → {"experto":"app","buscar_web":false,"query_web":null}
+"quién fichó hoy" → {"experto":"app","buscar_web":false,"query_web":null}
+"no funciona X" → {"experto":"app","buscar_web":false,"query_web":null}
 "precio cable RZ1-K hoy" → {"experto":"web","buscar_web":true,"query_web":"RZ1-K cable price 2025"}
 "cómo funciona tu NEXUS" → {"experto":"tecnico","buscar_web":false,"query_web":null}
 "piensa en cómo mejorar" → {"experto":"reflexion","buscar_web":false,"query_web":null}
-"qué podrías mejorar de ti misma" → {"experto":"reflexion","buscar_web":false,"query_web":null}
 "calcula sección de cable para 10kW" → {"experto":"ingenieria","buscar_web":false,"query_web":null}
-"qué magnetotérmico pongo para 25A" → {"experto":"ingenieria","buscar_web":false,"query_web":null}
 "analiza esta foto de la bandeja" → {"experto":"ingenieria","buscar_web":false,"query_web":null}`;
 
   try {
