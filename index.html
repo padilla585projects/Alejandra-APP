@@ -237,7 +237,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
 .tag-add-row button{padding:8px 14px;background:var(--accent);border:none;border-radius:8px;color:#000;font-family:'Montserrat',sans-serif;font-weight:900;font-size:14px;cursor:pointer}
 
 /* ── MODAL ── */
-.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:500;align-items:flex-end;justify-content:center}
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:1100;align-items:flex-end;justify-content:center}
 .modal-overlay.show{display:flex}
 .modal{background:var(--surface);border-radius:16px 16px 0 0;padding:20px;width:100%;max-width:500px;border-top:2px solid var(--accent);max-height:90vh;overflow-y:auto}
 .modal-title{font-family:'Montserrat',sans-serif;font-weight:900;font-size:20px;letter-spacing:1px;margin-bottom:14px}
@@ -629,7 +629,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
 </div>
 
 <!-- Panel Chat (NEW-08) -->
-<div id="chatPanel" style="display:none;position:fixed;inset:0;z-index:1050;background:var(--bg);flex-direction:column">
+<div id="chatPanel" style="display:none;position:fixed;inset:0;z-index:1100;background:var(--bg);flex-direction:column">
   <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--border);flex-shrink:0">
     <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:15px">💬 Chat del equipo</div>
     <button onclick="chatCerrar()" style="background:var(--surface2);border:none;border-radius:50%;width:32px;height:32px;font-size:18px;cursor:pointer;color:var(--text)">×</button>
@@ -651,7 +651,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
 </div>
 
 <!-- Panel Alejandra AI Chat -->
-<div id="alejandraPanel" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;z-index:1050;background:var(--bg);flex-direction:column">
+<div id="alejandraPanel" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;z-index:1100;background:var(--bg);flex-direction:column">
   <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:2px solid #8b5cf6;flex-shrink:0;background:var(--surface)">
     <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:15px">🤖 Alejandra Agente</div>
     <div style="display:flex;gap:8px;align-items:center">
@@ -1697,7 +1697,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
         <div class="empty-state">Cargando...</div>
       </div>
       <!-- Modal nuevo item -->
-      <div id="segModalNuevo" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:500;overflow-y:auto;padding:20px 14px">
+      <div id="segModalNuevo" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:1100;overflow-y:auto;padding:20px 14px">
         <div style="background:var(--surface);border-radius:16px;padding:18px;max-width:400px;margin:auto">
           <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:16px;margin-bottom:14px">📦 Nuevo material</div>
           <div class="form-group">
@@ -1748,13 +1748,13 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
         <div class="empty-state">Cargando...</div>
       </div>
       <!-- Modal detalle -->
-      <div id="segHerrModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:500;align-items:flex-end">
+      <div id="segHerrModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:1100;align-items:flex-end">
         <div style="background:var(--surface);border-radius:16px 16px 0 0;padding:20px 16px 36px;width:100%;max-height:80vh;overflow-y:auto">
           <div id="segHerrModalContent"></div>
         </div>
       </div>
       <!-- Modal nuevo item -->
-      <div id="segHerrNuevoModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:500;overflow-y:auto;padding:20px 14px">
+      <div id="segHerrNuevoModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:1100;overflow-y:auto;padding:20px 14px">
         <div style="background:var(--surface);border-radius:16px;padding:18px;max-width:400px;margin:auto">
           <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:16px;margin-bottom:14px">🔧 Nueva herramienta</div>
           <div class="form-group">
@@ -5182,6 +5182,11 @@ async function checkConnection() {
 let _navHistory = [];
 
 function _applyScreen(name) {
+  // Cerrar paneles flotantes (chat Alejandra, chat empresa) al cambiar de pantalla
+  const _aleP = document.getElementById('alejandraPanel');
+  if (_aleP && _aleP.style.display === 'flex') { if (typeof alejandraAbrir === 'function') alejandraAbrir(false); }
+  const _chatP = document.getElementById('chatPanel');
+  if (_chatP && _chatP.style.display === 'flex') _chatP.style.display = 'none';
   // Limpiar timer de sub-panel personal si salimos de personal
   if (name !== 'personal' && window._perTabTimer) {
     clearInterval(window._perTabTimer);
@@ -10280,7 +10285,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '6.11';
+const APP_VERSION = '6.12';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -14906,7 +14911,7 @@ window.turnoToggle   = turnoToggle;
     input.style.height = 'auto';
 
     const s = getSession ? getSession() : null;
-    if (!s || !s.usuario_id) { toast('❌ Debes estar autenticado', 'err'); return; }
+    if (!s || !(s.usuario_id || s.nombre)) { toast('❌ Debes estar autenticado', 'err'); return; }
 
     // Recoger adjuntos
     const adjEnv = _iaAdjuntos.slice();
@@ -14928,7 +14933,7 @@ window.turnoToggle   = turnoToggle;
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             mensaje:    msg || '(archivo adjunto sin mensaje)',
-            usuario_id: s.usuario_id,
+            usuario_id: s.usuario_id || s.nombre || 'unknown',
             empresa_id: s.empresa_id || null,
             canal:      'pwa',
             adjuntos:   adjEnv,
@@ -15169,7 +15174,7 @@ async function alejandraEnviar() {
   input.style.height = 'auto';
 
   const s = getSession();
-  if (!s || !s.usuario_id) {
+  if (!s || !(s.usuario_id || s.nombre)) {
     toast('❌ Debes estar autenticado', 'err');
     return;
   }
@@ -15190,7 +15195,7 @@ async function alejandraEnviar() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         mensaje:    msg || '(archivo adjunto sin mensaje)',
-        usuario_id: s.usuario_id,
+        usuario_id: s.usuario_id || s.nombre || 'unknown',
         empresa_id: s.empresa_id || null,
         canal:      'pwa',
         adjuntos:   adjEnv,
