@@ -432,15 +432,144 @@ const TOOL_RECUPERAR_CONVERSACION = {
   }
 };
 
+const TOOL_ESCRIBIR_BD = {
+  name: 'escribir_bd',
+  description: 'Ejecuta operaciones de escritura en la base de datos (INSERT, UPDATE, DELETE). Usa con responsabilidad — los cambios son permanentes.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      query:  { type: 'string', description: 'Consulta SQL (INSERT, UPDATE o DELETE)' },
+      params: { type: 'array', description: 'Parámetros para la consulta (opcional)', items: { type: 'string' } }
+    },
+    required: ['query']
+  }
+};
+
+const TOOL_ENVIAR_PUSH = {
+  name: 'enviar_push',
+  description: 'Envía una notificación push al móvil del usuario. Úsala para avisar de algo importante o llamar su atención.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      usuario_id: { type: 'string', description: 'ID del usuario destinatario (default: el usuario actual)' },
+      titulo:     { type: 'string', description: 'Título de la notificación' },
+      cuerpo:     { type: 'string', description: 'Texto del cuerpo de la notificación' }
+    },
+    required: ['titulo', 'cuerpo']
+  }
+};
+
+const TOOL_INICIAR_CONVERSACION = {
+  name: 'iniciar_conversacion',
+  description: 'Inicia una conversación proactiva: guarda tu mensaje en el historial y envía push al usuario para que lo vea. Úsala cuando detectes algo relevante y quieras contactar al usuario SIN que él te haya escrito primero.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      usuario_id: { type: 'string', description: 'ID del usuario al que quieres escribir' },
+      mensaje:    { type: 'string', description: 'Tu mensaje para el usuario (aparecerá como mensaje tuyo en el chat)' },
+      titulo_push:{ type: 'string', description: 'Título corto para la notificación push (ej: "Alejandra tiene algo que decirte")' }
+    },
+    required: ['usuario_id', 'mensaje']
+  }
+};
+
+const TOOL_SUBIR_ARCHIVO = {
+  name: 'subir_archivo',
+  description: 'Sube o crea un archivo en el almacenamiento R2. Útil para guardar resultados, generar reportes o escribir archivos de configuración.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      key:          { type: 'string', description: 'Ruta/nombre del archivo en R2 (ej: "reportes/fichajes_mayo.csv")' },
+      contenido:    { type: 'string', description: 'Contenido del archivo (texto)' },
+      content_type: { type: 'string', description: 'MIME type (default: text/plain)' }
+    },
+    required: ['key', 'contenido']
+  }
+};
+
+const TOOL_GITHUB_LISTAR = {
+  name: 'github_listar',
+  description: 'Lista archivos y carpetas de un repositorio en GitHub. Puedes navegar la estructura del proyecto.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      ruta: { type: 'string', description: 'Ruta dentro del repo (ej: "lib/screens" o "" para raíz)' },
+      repo: { type: 'string', description: 'Repo en formato "owner/name" (default: padilla585projects/AlejandraIA)' },
+      rama: { type: 'string', description: 'Rama (default: main)' }
+    }
+  }
+};
+
+const TOOL_GITHUB_LEER = {
+  name: 'github_leer',
+  description: 'Lee el contenido de un archivo del repositorio en GitHub.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      ruta: { type: 'string', description: 'Ruta del archivo (ej: "lib/main.dart")' },
+      repo: { type: 'string', description: 'Repo en formato "owner/name" (default: padilla585projects/AlejandraIA)' },
+      rama: { type: 'string', description: 'Rama (default: main)' }
+    },
+    required: ['ruta']
+  }
+};
+
+const TOOL_GITHUB_ESCRIBIR = {
+  name: 'github_escribir',
+  description: 'Crea o modifica un archivo en el repositorio de GitHub. Hace commit automáticamente.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      ruta:      { type: 'string', description: 'Ruta del archivo (ej: "lib/new_file.dart")' },
+      contenido: { type: 'string', description: 'Contenido completo del archivo' },
+      mensaje:   { type: 'string', description: 'Mensaje del commit' },
+      repo:      { type: 'string', description: 'Repo en formato "owner/name" (default: padilla585projects/AlejandraIA)' },
+      rama:      { type: 'string', description: 'Rama (default: main)' }
+    },
+    required: ['ruta', 'contenido', 'mensaje']
+  }
+};
+
+const TOOL_GITHUB_BUSCAR = {
+  name: 'github_buscar',
+  description: 'Busca texto o patrones en el código del repositorio (grep). Encuentra funciones, variables, imports, etc.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      patron: { type: 'string', description: 'Texto o patrón a buscar en el código' },
+      repo:   { type: 'string', description: 'Repo en formato "owner/name" (default: padilla585projects/AlejandraIA)' },
+      extension: { type: 'string', description: 'Filtrar por extensión de archivo (ej: "dart", "js")' }
+    },
+    required: ['patron']
+  }
+};
+
+const TOOL_CONTROLAR_APP = {
+  name: 'controlar_app',
+  description: 'Envía un comando remoto a la app del usuario. La app lo ejecutará automáticamente. Tipos: navegar (ir a pantalla), dialogo (mostrar mensaje), accion (ejecutar función), datos (precargar datos en pantalla).',
+  input_schema: {
+    type: 'object',
+    properties: {
+      usuario_id: { type: 'string', description: 'ID del usuario destino (default: usuario actual)' },
+      tipo: { type: 'string', enum: ['navegar', 'dialogo', 'accion', 'datos', 'notificar'], description: 'Tipo de comando' },
+      payload: {
+        type: 'object',
+        description: 'Datos del comando. Para navegar: {pantalla, params}. Para dialogo: {titulo, mensaje, botones}. Para accion: {nombre, params}. Para datos: {pantalla, datos}. Para notificar: {titulo, cuerpo}.'
+      }
+    },
+    required: ['tipo', 'payload']
+  }
+};
+
 // Tools por experto
 const TOOLS_POR_EXPERTO = {
   simple:     [],
-  app:        [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD],
-  tecnico:    [TOOL_LEER_ESTADO, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_BUSCAR_WEB, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION],
+  app:        [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_CONTROLAR_APP],
+  tecnico:    [TOOL_LEER_ESTADO, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_BUSCAR_WEB, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_CONTROLAR_APP, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION],
   web:        [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE],
-  reflexion:  [TOOL_MEMORY_SAVE, TOOL_MEMORY_READ, TOOL_PROPOSE_MEJORA, TOOL_BUSCAR_WEB, TOOL_TOMAR_DECISION, TOOL_LEER_ESTADO, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION],
-  completo:   [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_LEER_ESTADO, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION],
-  ingenieria: [TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_CONSULTAR_BD, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_ANALIZAR_FOTO, TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION]
+  reflexion:  [TOOL_MEMORY_SAVE, TOOL_MEMORY_READ, TOOL_PROPOSE_MEJORA, TOOL_BUSCAR_WEB, TOOL_TOMAR_DECISION, TOOL_LEER_ESTADO, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_CONTROLAR_APP, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION],
+  completo:   [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_LEER_ESTADO, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_CONTROLAR_APP, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION],
+  ingenieria: [TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_ANALIZAR_FOTO, TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION]
 };
 
 // ── HTTP Handler ──────────────────────────────────────────────────────────────
@@ -695,6 +824,54 @@ export default {
         if (!row) return json({ error: 'No hay token FCM para este usuario' }, 404);
         const result = await enviarFCM(env, row.contenido, titulo, cuerpo || '');
         return json({ ok: result.ok, fcm: result });
+      }
+
+      // ── Comandos remotos — la app consulta y reporta ─────────────────────
+      if (path === '/api/comandos/pendientes' && req.method === 'GET') {
+        const uid = url.searchParams.get('usuario_id');
+        if (!uid) return json({ error: 'usuario_id requerido' }, 400);
+        const rows = await env.DB.prepare(
+          `SELECT id, tipo, payload, created_at FROM alejandra_comandos
+           WHERE usuario_id = ? AND estado = 'pendiente' ORDER BY created_at ASC LIMIT 10`
+        ).bind(uid).all();
+        return json({ comandos: rows.results || [] });
+      }
+
+      if (path === '/api/comandos/resultado' && req.method === 'POST') {
+        const { id, resultado, estado } = await req.json().catch(() => ({}));
+        if (!id) return json({ error: 'id requerido' }, 400);
+        await env.DB.prepare(
+          `UPDATE alejandra_comandos SET estado = ?, resultado = ?, ejecutado_at = datetime('now') WHERE id = ?`
+        ).bind(estado || 'ejecutado', resultado || '', id).run();
+        return json({ ok: true });
+      }
+
+      // ── Webhook para eventos de la app (fichajes, fotos, acciones) ───────
+      if (path === '/webhook/evento' && req.method === 'POST') {
+        const body = await req.json().catch(() => ({}));
+        const { tipo, usuario_id: uid, datos, empresa_id: eid } = body;
+        if (!tipo) return json({ error: 'tipo requerido' }, 400);
+
+        // Guardar evento en historial como contexto
+        const resumen = `[EVENTO:${tipo}] ${JSON.stringify(datos || {}).substring(0, 500)}`;
+        await env.DB.prepare(
+          `INSERT INTO alejandra_historial (canal, rol, contenido, created_at, usuario_id)
+           VALUES ('app_android', 'system', ?, datetime('now'), ?)`
+        ).bind(resumen, uid || 'system').run();
+
+        // Procesar con NEXUS para que Alejandra decida qué hacer
+        const contexto = await obtenerContextoChat(env, uid || 'system', 'app_android', 6);
+        const prompt = `Se ha producido un evento en la app que requiere tu atención:\nTipo: ${tipo}\nUsuario: ${uid || 'desconocido'}\nEmpresa: ${eid || 'desconocida'}\nDatos: ${JSON.stringify(datos || {})}\n\nAnaliza el evento y decide si necesitas contactar al usuario, guardar algo en memoria o tomar alguna acción.`;
+
+        const timeout = new Promise(resolve =>
+          setTimeout(() => resolve({ texto: 'Timeout procesando evento.' }), 23000)
+        );
+        const respuesta = await Promise.race([
+          procesarConNEXUS(env, prompt, contexto, uid || 'system', 'app_android'),
+          timeout
+        ]);
+
+        return json({ ok: true, tipo, respuesta: respuesta.texto?.substring(0, 500) });
       }
 
       // ── GetawayAgentes — recibe tarea, responde síncronamente ────────────
@@ -1563,6 +1740,192 @@ ${input.codigo_sugerido ? `CÓDIGO SUGERIDO:\n${input.codigo_sugerido}` : ''}`;
         return `${rows.length} registro(s):\n${output.substring(0, 6000)}${truncated}`;
       } catch (err) {
         return `Error en consulta BD: ${err.message}`;
+      }
+    }
+
+    case 'escribir_bd': {
+      try {
+        const query = (input.query || '').trim();
+        if (/\b(DROP|ALTER|TRUNCATE)\b/i.test(query)) {
+          return 'Operación rechazada: DROP, ALTER y TRUNCATE no están permitidos por seguridad.';
+        }
+        if (/^SELECT\b/i.test(query)) {
+          return 'Para consultas SELECT usa la herramienta consultar_bd.';
+        }
+        if (!/^(INSERT|UPDATE|DELETE|REPLACE)\b/i.test(query)) {
+          return 'Solo se permiten INSERT, UPDATE, DELETE o REPLACE.';
+        }
+        const params = input.params || [];
+        const stmt = env.DB.prepare(query);
+        const result = params.length > 0 ? await stmt.bind(...params).run() : await stmt.run();
+        return `Operación ejecutada correctamente. Filas afectadas: ${result.meta?.changes || 0}`;
+      } catch (err) {
+        return `Error en escritura BD: ${err.message}`;
+      }
+    }
+
+    case 'enviar_push': {
+      try {
+        const targetUser = input.usuario_id || usuario_id;
+        if (!targetUser) return 'No se pudo determinar el usuario destino.';
+        const row = await env.DB.prepare(
+          `SELECT contenido FROM alejandra_memoria WHERE tipo='fcm_token' AND usuario_id=? LIMIT 1`
+        ).bind(targetUser).first();
+        if (!row) return `No hay token FCM registrado para el usuario "${targetUser}". El usuario debe abrir la app primero.`;
+        const result = await enviarFCM(env, row.contenido, input.titulo, input.cuerpo || '');
+        if (result.ok) return `Push enviado a ${targetUser}: "${input.titulo}"`;
+        return `Error enviando push: ${JSON.stringify(result)}`;
+      } catch (err) {
+        return `Error enviar_push: ${err.message}`;
+      }
+    }
+
+    case 'iniciar_conversacion': {
+      try {
+        const targetUser = input.usuario_id || usuario_id;
+        if (!targetUser) return 'Falta usuario_id.';
+        if (!input.mensaje) return 'Falta el mensaje.';
+        await env.DB.prepare(
+          `INSERT INTO alejandra_historial (canal, rol, contenido, created_at, usuario_id)
+           VALUES ('app_android', 'assistant', ?, datetime('now'), ?)`
+        ).bind(input.mensaje, targetUser).run();
+        const tituloPush = input.titulo_push || 'Alejandra tiene algo que decirte';
+        const preview = input.mensaje.length > 80 ? input.mensaje.substring(0, 80) + '...' : input.mensaje;
+        const row = await env.DB.prepare(
+          `SELECT contenido FROM alejandra_memoria WHERE tipo='fcm_token' AND usuario_id=? LIMIT 1`
+        ).bind(targetUser).first();
+        let pushResult = 'sin push (no hay token FCM)';
+        if (row) {
+          const fcm = await enviarFCM(env, row.contenido, tituloPush, preview);
+          pushResult = fcm.ok ? 'push enviado' : `push falló: ${fcm.error || fcm.status}`;
+        }
+        return `Conversación iniciada con ${targetUser}. Mensaje guardado en historial. Notificación: ${pushResult}`;
+      } catch (err) {
+        return `Error iniciar_conversacion: ${err.message}`;
+      }
+    }
+
+    case 'subir_archivo': {
+      try {
+        if (!env.FILES) return 'R2 bucket FILES no configurado.';
+        const ct = input.content_type || 'text/plain';
+        await env.FILES.put(input.key, input.contenido, { httpMetadata: { contentType: ct } });
+        return `Archivo subido: ${input.key} (${(input.contenido.length / 1024).toFixed(1)} KB, ${ct})`;
+      } catch (err) {
+        return `Error subir_archivo: ${err.message}`;
+      }
+    }
+
+    case 'controlar_app': {
+      try {
+        const targetUser = input.usuario_id || usuario_id;
+        if (!targetUser) return 'Falta usuario_id.';
+        const payload = JSON.stringify(input.payload || {});
+        await env.DB.prepare(
+          `INSERT INTO alejandra_comandos (usuario_id, tipo, payload, estado, created_at)
+           VALUES (?, ?, ?, 'pendiente', datetime('now'))`
+        ).bind(targetUser, input.tipo, payload).run();
+        // Enviar push para que la app despierte y recoja el comando
+        const row = await env.DB.prepare(
+          `SELECT contenido FROM alejandra_memoria WHERE tipo='fcm_token' AND usuario_id=? LIMIT 1`
+        ).bind(targetUser).first();
+        let pushInfo = 'sin push';
+        if (row) {
+          const fcm = await enviarFCM(env, row.contenido, 'Alejandra', `Comando: ${input.tipo}`);
+          pushInfo = fcm.ok ? 'push enviado' : 'push falló';
+        }
+        return `Comando "${input.tipo}" enviado a ${targetUser}. Payload: ${payload.substring(0, 200)}. Push: ${pushInfo}. La app lo ejecutará al recibirlo.`;
+      } catch (err) {
+        return `Error controlar_app: ${err.message}`;
+      }
+    }
+
+    case 'github_listar': {
+      try {
+        if (!env.GITHUB_TOKEN) return 'GITHUB_TOKEN no configurado.';
+        const ghToken = env.GITHUB_TOKEN.trim();
+        const repo = input.repo || 'padilla585projects/AlejandraIA';
+        const rama = input.rama || 'main';
+        const ruta = input.ruta || '';
+        const url = `https://api.github.com/repos/${repo}/contents/${ruta}?ref=${rama}`;
+        const r = await fetch(url, { headers: { 'Authorization': `token ${ghToken}`, 'User-Agent': 'Alejandra-Agent', 'Accept': 'application/vnd.github.v3+json' } });
+        if (!r.ok) return `Error GitHub (${r.status}): ${await r.text()}`;
+        const items = await r.json();
+        if (!Array.isArray(items)) return `"${ruta}" es un archivo, no una carpeta. Usa github_leer.`;
+        const out = items.map(i => `${i.type === 'dir' ? '📁' : '📄'} ${i.name}${i.size ? ` (${(i.size/1024).toFixed(1)}KB)` : ''}`);
+        return `${repo}/${ruta || '(raíz)'} — ${items.length} elementos:\n${out.join('\n')}`;
+      } catch (err) {
+        return `Error github_listar: ${err.message}`;
+      }
+    }
+
+    case 'github_leer': {
+      try {
+        if (!env.GITHUB_TOKEN) return 'GITHUB_TOKEN no configurado.';
+        const ghToken = env.GITHUB_TOKEN.trim();
+        const repo = input.repo || 'padilla585projects/AlejandraIA';
+        const rama = input.rama || 'main';
+        const url = `https://api.github.com/repos/${repo}/contents/${input.ruta}?ref=${rama}`;
+        const r = await fetch(url, { headers: { 'Authorization': `token ${ghToken}`, 'User-Agent': 'Alejandra-Agent', 'Accept': 'application/vnd.github.v3+json' } });
+        if (!r.ok) return `Error GitHub (${r.status}): ${await r.text()}`;
+        const data = await r.json();
+        if (data.type !== 'file') return `"${input.ruta}" no es un archivo (es ${data.type}).`;
+        const content = atob(data.content.replace(/\n/g, ''));
+        const preview = content.length > 12000 ? content.substring(0, 12000) + `\n\n[... truncado, ${content.length} caracteres total]` : content;
+        return `📄 ${input.ruta} (${(data.size/1024).toFixed(1)}KB, sha: ${data.sha.substring(0,7)})\n\n${preview}`;
+      } catch (err) {
+        return `Error github_leer: ${err.message}`;
+      }
+    }
+
+    case 'github_escribir': {
+      try {
+        if (!env.GITHUB_TOKEN) return 'GITHUB_TOKEN no configurado.';
+        const ghToken = env.GITHUB_TOKEN.trim();
+        const repo = input.repo || 'padilla585projects/AlejandraIA';
+        const rama = input.rama || 'main';
+        const url = `https://api.github.com/repos/${repo}/contents/${input.ruta}`;
+        let sha = undefined;
+        const check = await fetch(`${url}?ref=${rama}`, { headers: { 'Authorization': `token ${ghToken}`, 'User-Agent': 'Alejandra-Agent', 'Accept': 'application/vnd.github.v3+json' } });
+        if (check.ok) {
+          const existing = await check.json();
+          sha = existing.sha;
+        }
+        const body = {
+          message: input.mensaje || `Alejandra: actualizar ${input.ruta}`,
+          content: btoa(unescape(encodeURIComponent(input.contenido))),
+          branch: rama
+        };
+        if (sha) body.sha = sha;
+        const r = await fetch(url, {
+          method: 'PUT',
+          headers: { 'Authorization': `token ${ghToken}`, 'User-Agent': 'Alejandra-Agent', 'Content-Type': 'application/json', 'Accept': 'application/vnd.github.v3+json' },
+          body: JSON.stringify(body)
+        });
+        if (!r.ok) return `Error GitHub escribir (${r.status}): ${await r.text()}`;
+        const result = await r.json();
+        return `✅ Commit realizado en ${repo}/${input.ruta}\nMensaje: ${input.mensaje}\nSHA: ${result.commit?.sha?.substring(0,7) || '?'}\nURL: ${result.content?.html_url || ''}`;
+      } catch (err) {
+        return `Error github_escribir: ${err.message}`;
+      }
+    }
+
+    case 'github_buscar': {
+      try {
+        if (!env.GITHUB_TOKEN) return 'GITHUB_TOKEN no configurado.';
+        const ghToken = env.GITHUB_TOKEN.trim();
+        const repo = input.repo || 'padilla585projects/AlejandraIA';
+        const ext = input.extension ? `+extension:${input.extension}` : '';
+        const query = encodeURIComponent(`${input.patron}+repo:${repo}${ext}`);
+        const url = `https://api.github.com/search/code?q=${query}&per_page=20`;
+        const r = await fetch(url, { headers: { 'Authorization': `token ${ghToken}`, 'User-Agent': 'Alejandra-Agent', 'Accept': 'application/vnd.github.v3+json' } });
+        if (!r.ok) return `Error GitHub búsqueda (${r.status}): ${await r.text()}`;
+        const data = await r.json();
+        if (!data.items || data.items.length === 0) return `No se encontró "${input.patron}" en ${repo}.`;
+        const results = data.items.map(i => `- ${i.path} (${i.name})`);
+        return `${data.total_count} resultado(s) para "${input.patron}":\n${results.join('\n')}`;
+      } catch (err) {
+        return `Error github_buscar: ${err.message}`;
       }
     }
 
