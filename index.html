@@ -3470,56 +3470,17 @@ function getSession() {
 
 function setSession(data) {
   localStorage.setItem('alejandra_session', JSON.stringify(data));
-  // Registrar push para developer (legacy, worker principal)
-  if (['superadmin', 'desarrollador'].includes(data?.rol)) {
-    _registrarPushDeveloper().catch(() => {});
-  }
-  // Registrar push de Alejandra IA para TODOS los usuarios
+  // Registrar push para TODOS los usuarios (agente + worker principal)
   if (data?.usuario_id || data?.nombre) {
     _registrarPushAlejandra(data).catch(() => {});
   }
 }
 
-// ── Push notifications Alejandra → developer ──────────────────────────────
+// ── Push notifications (todos los usuarios) ─────────────────────────────
 function _urlB64ToUint8(b64) {
   const b = (b64 + '=='.slice(0, (4 - b64.length % 4) % 4)).replace(/-/g, '+').replace(/_/g, '/');
   return Uint8Array.from(atob(b), c => c.charCodeAt(0));
 }
-
-async function _registrarPushDeveloper() {
-  if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
-  try {
-    // Pedir permiso si no está concedido
-    const perm = await Notification.requestPermission();
-    if (perm !== 'granted') return;
-
-    const reg = window._swReg || await navigator.serviceWorker.ready;
-    // Obtener suscripción existente o crear nueva
-    let sub = await reg.pushManager.getSubscription();
-    if (!sub) {
-      // Obtener la clave pública VAPID del servidor
-      const vapidRes = await fetch(getAPI() + '/dev/vapid-public-key', {
-        headers: { 'X-Token': getSession()?.token || '' }
-      });
-      if (!vapidRes.ok) return; // VAPID no configurado aún
-      const { publicKey } = await vapidRes.json();
-      sub = await reg.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: _urlB64ToUint8(publicKey)
-      });
-    }
-    // Guardar suscripción en el worker
-    await fetch(getAPI() + '/dev/push-subscribe', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Token': getSession()?.token || '' },
-      body: JSON.stringify({ subscription: sub.toJSON() })
-    });
-  } catch (e) {
-    console.warn('[Push] Error registrando push developer:', e.message);
-  }
-}
-
-// ── Push notifications Alejandra IA → todos los usuarios ─────────────────
 const _AGENTE_PUSH_BASE = 'https://alejandra-agente.alejandra-app.workers.dev';
 async function _registrarPushAlejandra(sessionData) {
   if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
@@ -3552,13 +3513,21 @@ async function _registrarPushAlejandra(sessionData) {
       });
     }
     const uid = sessionData?.usuario_id || sessionData?.nombre || 'unknown';
-    // Registrar en agente
-    await fetch(`${_AGENTE_PUSH_BASE}/push-subscribe`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ usuario_id: uid, subscription: sub.toJSON() })
-    });
-    console.log('[Push Alejandra] Suscripción registrada para', uid);
+    const subJson = sub.toJSON();
+    // Registrar en agente Y en worker principal (ambos comparten VAPID via D1)
+    await Promise.allSettled([
+      fetch(`${_AGENTE_PUSH_BASE}/push-subscribe`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ usuario_id: uid, subscription: subJson })
+      }),
+      fetch(getAPI() + '/push/subscribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Token': sessionData?.token || '' },
+        body: JSON.stringify({ subscription: subJson })
+      })
+    ]);
+    console.log('[Push] Suscripción registrada para', uid);
   } catch (e) {
     console.warn('[Push Alejandra] Error:', e.message);
   }
@@ -4169,12 +4138,7 @@ async function iniciarApp() {
   // Botón Chat
   const btnChatEl = document.getElementById('btnChat');
   if (btnChatEl) btnChatEl.style.display = 'flex';
-  if (['superadmin', 'desarrollador'].includes(s.rol)) {
-    _registrarPushDeveloper().catch(() => {});
-  } else if ('Notification' in window && Notification.permission === 'default') {
-    Notification.requestPermission();
-  }
-  // Push de Alejandra IA para todos los usuarios
+  // Push para todos los usuarios (agente + worker principal)
   _registrarPushAlejandra(s).catch(() => {});
   checkChatBadge();
   if (!window._chatBadgeInterval) {
@@ -10285,7 +10249,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '6.12';
+const APP_VERSION = '6.13';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
