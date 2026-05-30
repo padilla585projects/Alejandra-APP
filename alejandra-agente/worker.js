@@ -341,7 +341,7 @@ LO QUE NUNCA HAGAS:
 // Perfiles de experto
 const NEXUS_EXPERTS = {
   simple:   { model: MODEL_ROUTER,  maxTokens: 400,  modules: ['base', 'contexto_sesion', 'formato'] },
-  app:      { model: MODEL_EXPERTO, maxTokens: 1500, modules: ['base', 'app', 'proactividad_real', 'aprendizaje_proactivo', 'contexto_sesion', 'formato'] },
+  app:      { model: MODEL_EXPERTO, maxTokens: 4096, modules: ['base', 'app', 'proactividad_real', 'aprendizaje_proactivo', 'contexto_sesion', 'formato'] },
   tecnico:  { model: MODEL_EXPERTO, maxTokens: 1024, modules: ['base', 'app', 'tecnica', 'nexus', 'proactividad_real', 'aprendizaje_proactivo', 'razonamiento', 'contexto_sesion', 'formato'] },
   web:      { model: MODEL_EXPERTO, maxTokens: 1024, modules: ['base', 'app', 'web', 'aprendizaje_proactivo', 'contexto_sesion', 'formato'] },
   reflexion:{ model: MODEL_EXPERTO, maxTokens: 2048, modules: ['base', 'app', 'tecnica', 'nexus', 'evolucion', 'reflexion', 'decision', 'aprendizaje_proactivo', 'razonamiento', 'contexto_sesion', 'formato'] },
@@ -628,12 +628,12 @@ const TOOL_SUBIR_ARCHIVO = {
 
 const TOOL_GITHUB_LISTAR = {
   name: 'github_listar',
-  description: 'Lista archivos y carpetas de un repositorio en GitHub. Puedes navegar la estructura del proyecto.',
+  description: 'Lista archivos y carpetas de un repositorio en GitHub. Repos disponibles: "app" (padilla585projects/AlejandraIA — Flutter), "worker" (padilla585projects/Alejandra-APP — Workers backend). Por defecto usa "app".',
   input_schema: {
     type: 'object',
     properties: {
-      ruta: { type: 'string', description: 'Ruta dentro del repo (ej: "lib/screens" o "" para raíz)' },
-      repo: { type: 'string', description: 'Repo en formato "owner/name" (default: padilla585projects/AlejandraIA)' },
+      ruta: { type: 'string', description: 'Ruta dentro del repo (ej: "lib/screens", "alejandra-agente", "" para raíz)' },
+      repo: { type: 'string', description: 'Alias: "app" o "worker". O formato completo "owner/name".' },
       rama: { type: 'string', description: 'Rama (default: main)' }
     }
   }
@@ -641,13 +641,15 @@ const TOOL_GITHUB_LISTAR = {
 
 const TOOL_GITHUB_LEER = {
   name: 'github_leer',
-  description: 'Lee el contenido de un archivo del repositorio en GitHub.',
+  description: 'Lee el contenido completo de un archivo del repositorio. Repos: "app" (Flutter) o "worker" (backend Workers). Soporta archivos de hasta 50KB sin truncar.',
   input_schema: {
     type: 'object',
     properties: {
-      ruta: { type: 'string', description: 'Ruta del archivo (ej: "lib/main.dart")' },
-      repo: { type: 'string', description: 'Repo en formato "owner/name" (default: padilla585projects/AlejandraIA)' },
-      rama: { type: 'string', description: 'Rama (default: main)' }
+      ruta: { type: 'string', description: 'Ruta del archivo (ej: "lib/main.dart", "worker.js", "alejandra-agente/worker.js")' },
+      repo: { type: 'string', description: 'Alias: "app" o "worker". O formato completo "owner/name".' },
+      rama: { type: 'string', description: 'Rama (default: main)' },
+      desde_linea: { type: 'number', description: 'Leer desde esta línea (para archivos grandes). Default: 1' },
+      hasta_linea: { type: 'number', description: 'Leer hasta esta línea. Default: todo el archivo' }
     },
     required: ['ruta']
   }
@@ -655,14 +657,14 @@ const TOOL_GITHUB_LEER = {
 
 const TOOL_GITHUB_ESCRIBIR = {
   name: 'github_escribir',
-  description: 'Crea o modifica un archivo en el repositorio de GitHub. Hace commit automáticamente.',
+  description: 'Crea o modifica un archivo en el repositorio. Hace commit automáticamente. Repos: "app" o "worker".',
   input_schema: {
     type: 'object',
     properties: {
-      ruta:      { type: 'string', description: 'Ruta del archivo (ej: "lib/new_file.dart")' },
+      ruta:      { type: 'string', description: 'Ruta del archivo' },
       contenido: { type: 'string', description: 'Contenido completo del archivo' },
       mensaje:   { type: 'string', description: 'Mensaje del commit' },
-      repo:      { type: 'string', description: 'Repo en formato "owner/name" (default: padilla585projects/AlejandraIA)' },
+      repo:      { type: 'string', description: 'Alias: "app" o "worker". O formato completo.' },
       rama:      { type: 'string', description: 'Rama (default: main)' }
     },
     required: ['ruta', 'contenido', 'mensaje']
@@ -671,15 +673,30 @@ const TOOL_GITHUB_ESCRIBIR = {
 
 const TOOL_GITHUB_BUSCAR = {
   name: 'github_buscar',
-  description: 'Busca texto o patrones en el código del repositorio (grep). Encuentra funciones, variables, imports, etc.',
+  description: 'Busca texto en nombres de archivos del repositorio (GitHub Code Search). Para buscar DENTRO del contenido de archivos, usa grep_codigo.',
   input_schema: {
     type: 'object',
     properties: {
-      patron: { type: 'string', description: 'Texto o patrón a buscar en el código' },
-      repo:   { type: 'string', description: 'Repo en formato "owner/name" (default: padilla585projects/AlejandraIA)' },
-      extension: { type: 'string', description: 'Filtrar por extensión de archivo (ej: "dart", "js")' }
+      patron: { type: 'string', description: 'Texto a buscar' },
+      repo:   { type: 'string', description: 'Alias: "app" o "worker". O formato completo.' },
+      extension: { type: 'string', description: 'Filtrar por extensión (ej: "dart", "js")' }
     },
     required: ['patron']
+  }
+};
+
+const TOOL_GREP_CODIGO = {
+  name: 'grep_codigo',
+  description: 'Busca un patrón DENTRO del contenido de un archivo grande (como grep). Devuelve las líneas que coinciden con números de línea y contexto. Ideal para localizar funciones, endpoints, bugs en archivos de miles de líneas.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      ruta:    { type: 'string', description: 'Ruta del archivo donde buscar (ej: "worker.js", "alejandra-agente/worker.js")' },
+      patron:  { type: 'string', description: 'Texto o patrón a buscar dentro del archivo' },
+      repo:    { type: 'string', description: 'Alias: "app" o "worker". Default: "worker"' },
+      contexto:{ type: 'number', description: 'Líneas de contexto antes y después de cada match (default: 3)' }
+    },
+    required: ['ruta', 'patron']
   }
 };
 
@@ -703,11 +720,11 @@ const TOOL_CONTROLAR_APP = {
 // Tools por experto
 const TOOLS_POR_EXPERTO = {
   simple:     [],
-  app:        [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_CONTROLAR_APP],
-  tecnico:    [TOOL_LEER_ESTADO, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_BUSCAR_WEB, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_CONTROLAR_APP, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION],
+  app:        [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_CONTROLAR_APP],
+  tecnico:    [TOOL_LEER_ESTADO, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_BUSCAR_WEB, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_CONTROLAR_APP, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION],
   web:        [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE],
-  reflexion:  [TOOL_MEMORY_SAVE, TOOL_MEMORY_READ, TOOL_PROPOSE_MEJORA, TOOL_BUSCAR_WEB, TOOL_TOMAR_DECISION, TOOL_LEER_ESTADO, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_CONTROLAR_APP, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION],
-  completo:   [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_LEER_ESTADO, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_CONTROLAR_APP, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION],
+  reflexion:  [TOOL_MEMORY_SAVE, TOOL_MEMORY_READ, TOOL_PROPOSE_MEJORA, TOOL_BUSCAR_WEB, TOOL_TOMAR_DECISION, TOOL_LEER_ESTADO, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_CONTROLAR_APP, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION],
+  completo:   [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_LEER_ESTADO, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_CONTROLAR_APP, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION],
   ingenieria: [TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_ANALIZAR_FOTO, TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION]
 };
 
@@ -1363,7 +1380,7 @@ async function procesarConNEXUS(env, mensaje, contexto, usuario_id, empresa_id, 
     let respAPI  = await llamarAnthropic(env, messages, tools, expert.model, expert.maxTokens, systemPrompt);
     if (respAPI.usage) registrarTokenUso(env, expert.model, `chat_${clas.experto}`, respAPI.usage.input_tokens||0, respAPI.usage.output_tokens||0, usuario_id);
     let iter     = 0;
-    const MAX_ITER = 8;
+    const MAX_ITER = (usuario_id === 'adrian' || usuario_id === 'admin') ? 12 : 8;
     const herramientasUsadas = [];
 
     while (respAPI.stop_reason === 'tool_use' && iter < MAX_ITER) {
@@ -1448,7 +1465,7 @@ async function procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empres
     let respAPI = await llamarAnthropic(env, messages, tools, expert.model, expert.maxTokens, systemPrompt);
     if (respAPI.usage) registrarTokenUso(env, expert.model, 'chat_stream', respAPI.usage.input_tokens||0, respAPI.usage.output_tokens||0, usuario_id);
     let iter = 0;
-    const MAX_ITER = 8;
+    const MAX_ITER = (usuario_id === 'adrian' || usuario_id === 'admin') ? 12 : 8;
     const herramientasUsadas = [];
 
     while (respAPI.stop_reason === 'tool_use' && iter < MAX_ITER) {
@@ -2247,93 +2264,111 @@ ${input.codigo_sugerido ? `CÓDIGO SUGERIDO:\n${input.codigo_sugerido}` : ''}`;
       }
     }
 
-    case 'github_listar': {
-      try {
-        if (!env.GITHUB_TOKEN) return 'GITHUB_TOKEN no configurado.';
-        const ghToken = env.GITHUB_TOKEN.trim();
-        const repo = input.repo || 'padilla585projects/AlejandraIA';
-        const rama = input.rama || 'main';
-        const ruta = input.ruta || '';
-        const url = `https://api.github.com/repos/${repo}/contents/${ruta}?ref=${rama}`;
-        const r = await fetch(url, { headers: { 'Authorization': `token ${ghToken}`, 'User-Agent': 'Alejandra-Agent', 'Accept': 'application/vnd.github.v3+json' } });
-        if (!r.ok) return `Error GitHub (${r.status}): ${await r.text()}`;
-        const items = await r.json();
-        if (!Array.isArray(items)) return `"${ruta}" es un archivo, no una carpeta. Usa github_leer.`;
-        const out = items.map(i => `${i.type === 'dir' ? '📁' : '📄'} ${i.name}${i.size ? ` (${(i.size/1024).toFixed(1)}KB)` : ''}`);
-        return `${repo}/${ruta || '(raíz)'} — ${items.length} elementos:\n${out.join('\n')}`;
-      } catch (err) {
-        return `Error github_listar: ${err.message}`;
-      }
-    }
+    case 'github_listar':
+    case 'github_leer':
+    case 'github_escribir':
+    case 'github_buscar':
+    case 'grep_codigo': {
+      if (!env.GITHUB_TOKEN) return 'GITHUB_TOKEN no configurado.';
+      const ghToken = env.GITHUB_TOKEN.trim();
+      const REPOS = { app: 'padilla585projects/AlejandraIA', worker: 'padilla585projects/Alejandra-APP' };
+      const resolveRepo = (r) => REPOS[r] || REPOS[(r||'').toLowerCase()] || (r && r.includes('/') ? r : REPOS.app);
+      const ghHeaders = { 'Authorization': `token ${ghToken}`, 'User-Agent': 'Alejandra-Agent', 'Accept': 'application/vnd.github.v3+json' };
 
-    case 'github_leer': {
       try {
-        if (!env.GITHUB_TOKEN) return 'GITHUB_TOKEN no configurado.';
-        const ghToken = env.GITHUB_TOKEN.trim();
-        const repo = input.repo || 'padilla585projects/AlejandraIA';
-        const rama = input.rama || 'main';
-        const url = `https://api.github.com/repos/${repo}/contents/${input.ruta}?ref=${rama}`;
-        const r = await fetch(url, { headers: { 'Authorization': `token ${ghToken}`, 'User-Agent': 'Alejandra-Agent', 'Accept': 'application/vnd.github.v3+json' } });
-        if (!r.ok) return `Error GitHub (${r.status}): ${await r.text()}`;
-        const data = await r.json();
-        if (data.type !== 'file') return `"${input.ruta}" no es un archivo (es ${data.type}).`;
-        const content = atob(data.content.replace(/\n/g, ''));
-        const preview = content.length > 12000 ? content.substring(0, 12000) + `\n\n[... truncado, ${content.length} caracteres total]` : content;
-        return `📄 ${input.ruta} (${(data.size/1024).toFixed(1)}KB, sha: ${data.sha.substring(0,7)})\n\n${preview}`;
-      } catch (err) {
-        return `Error github_leer: ${err.message}`;
-      }
-    }
-
-    case 'github_escribir': {
-      try {
-        if (!env.GITHUB_TOKEN) return 'GITHUB_TOKEN no configurado.';
-        const ghToken = env.GITHUB_TOKEN.trim();
-        const repo = input.repo || 'padilla585projects/AlejandraIA';
-        const rama = input.rama || 'main';
-        const url = `https://api.github.com/repos/${repo}/contents/${input.ruta}`;
-        let sha = undefined;
-        const check = await fetch(`${url}?ref=${rama}`, { headers: { 'Authorization': `token ${ghToken}`, 'User-Agent': 'Alejandra-Agent', 'Accept': 'application/vnd.github.v3+json' } });
-        if (check.ok) {
-          const existing = await check.json();
-          sha = existing.sha;
+        if (nombre === 'github_listar') {
+          const repo = resolveRepo(input.repo);
+          const rama = input.rama || 'main';
+          const ruta = input.ruta || '';
+          const r = await fetch(`https://api.github.com/repos/${repo}/contents/${ruta}?ref=${rama}`, { headers: ghHeaders });
+          if (!r.ok) return `Error GitHub (${r.status}): ${await r.text()}`;
+          const items = await r.json();
+          if (!Array.isArray(items)) return `"${ruta}" es un archivo, no una carpeta. Usa github_leer.`;
+          const out = items.map(i => `${i.type === 'dir' ? '📁' : '📄'} ${i.name}${i.size ? ` (${(i.size/1024).toFixed(1)}KB)` : ''}`);
+          return `${repo}/${ruta || '(raíz)'} — ${items.length} elementos:\n${out.join('\n')}`;
         }
-        const body = {
-          message: input.mensaje || `Alejandra: actualizar ${input.ruta}`,
-          content: btoa(unescape(encodeURIComponent(input.contenido))),
-          branch: rama
-        };
-        if (sha) body.sha = sha;
-        const r = await fetch(url, {
-          method: 'PUT',
-          headers: { 'Authorization': `token ${ghToken}`, 'User-Agent': 'Alejandra-Agent', 'Content-Type': 'application/json', 'Accept': 'application/vnd.github.v3+json' },
-          body: JSON.stringify(body)
-        });
-        if (!r.ok) return `Error GitHub escribir (${r.status}): ${await r.text()}`;
-        const result = await r.json();
-        return `✅ Commit realizado en ${repo}/${input.ruta}\nMensaje: ${input.mensaje}\nSHA: ${result.commit?.sha?.substring(0,7) || '?'}\nURL: ${result.content?.html_url || ''}`;
-      } catch (err) {
-        return `Error github_escribir: ${err.message}`;
-      }
-    }
 
-    case 'github_buscar': {
-      try {
-        if (!env.GITHUB_TOKEN) return 'GITHUB_TOKEN no configurado.';
-        const ghToken = env.GITHUB_TOKEN.trim();
-        const repo = input.repo || 'padilla585projects/AlejandraIA';
-        const ext = input.extension ? `+extension:${input.extension}` : '';
-        const query = encodeURIComponent(`${input.patron}+repo:${repo}${ext}`);
-        const url = `https://api.github.com/search/code?q=${query}&per_page=20`;
-        const r = await fetch(url, { headers: { 'Authorization': `token ${ghToken}`, 'User-Agent': 'Alejandra-Agent', 'Accept': 'application/vnd.github.v3+json' } });
-        if (!r.ok) return `Error GitHub búsqueda (${r.status}): ${await r.text()}`;
-        const data = await r.json();
-        if (!data.items || data.items.length === 0) return `No se encontró "${input.patron}" en ${repo}.`;
-        const results = data.items.map(i => `- ${i.path} (${i.name})`);
-        return `${data.total_count} resultado(s) para "${input.patron}":\n${results.join('\n')}`;
+        if (nombre === 'github_leer') {
+          const repo = resolveRepo(input.repo);
+          const rama = input.rama || 'main';
+          const r = await fetch(`https://api.github.com/repos/${repo}/contents/${input.ruta}?ref=${rama}`, { headers: ghHeaders });
+          if (!r.ok) return `Error GitHub (${r.status}): ${await r.text()}`;
+          const data = await r.json();
+          if (data.type !== 'file') return `"${input.ruta}" no es un archivo (es ${data.type}).`;
+          const content = decodeURIComponent(escape(atob(data.content.replace(/\n/g, ''))));
+          const lines = content.split('\n');
+          const desde = Math.max(1, input.desde_linea || 1);
+          const hasta = input.hasta_linea ? Math.min(input.hasta_linea, lines.length) : lines.length;
+          // Si el archivo es grande (>500 líneas) y no se pidió rango específico, dar resumen + indicar que use grep_codigo
+          if (lines.length > 500 && !input.desde_linea && !input.hasta_linea) {
+            const primeras = lines.slice(0, 30).map((l, i) => `${i+1}: ${l}`).join('\n');
+            return `📄 ${repo}/${input.ruta} (${lines.length} líneas, ${(data.size/1024).toFixed(1)}KB)\n\nArchivo grande. Primeras 30 líneas:\n${primeras}\n\n[... ${lines.length - 30} líneas más. Usa grep_codigo para buscar dentro, o github_leer con desde_linea/hasta_linea para leer un rango.]`;
+          }
+          const slice = lines.slice(desde - 1, hasta);
+          const numbered = slice.map((l, i) => `${desde + i}: ${l}`).join('\n');
+          const maxChars = 50000;
+          const output = numbered.length > maxChars ? numbered.substring(0, maxChars) + `\n\n[... truncado, total ${lines.length} líneas]` : numbered;
+          return `📄 ${repo}/${input.ruta} (${lines.length} líneas, ${(data.size/1024).toFixed(1)}KB) [líneas ${desde}-${hasta}]\n\n${output}`;
+        }
+
+        if (nombre === 'github_escribir') {
+          const repo = resolveRepo(input.repo);
+          const rama = input.rama || 'main';
+          const url = `https://api.github.com/repos/${repo}/contents/${input.ruta}`;
+          let sha = undefined;
+          const check = await fetch(`${url}?ref=${rama}`, { headers: ghHeaders });
+          if (check.ok) { sha = (await check.json()).sha; }
+          const body = { message: input.mensaje || `Alejandra: actualizar ${input.ruta}`, content: btoa(unescape(encodeURIComponent(input.contenido))), branch: rama };
+          if (sha) body.sha = sha;
+          const r = await fetch(url, { method: 'PUT', headers: { ...ghHeaders, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+          if (!r.ok) return `Error GitHub escribir (${r.status}): ${await r.text()}`;
+          const result = await r.json();
+          return `✅ Commit en ${repo}/${input.ruta}\nMensaje: ${input.mensaje}\nSHA: ${result.commit?.sha?.substring(0,7) || '?'}`;
+        }
+
+        if (nombre === 'github_buscar') {
+          const repo = resolveRepo(input.repo);
+          const ext = input.extension ? `+extension:${input.extension}` : '';
+          const query = encodeURIComponent(`${input.patron}+repo:${repo}${ext}`);
+          const r = await fetch(`https://api.github.com/search/code?q=${query}&per_page=20`, { headers: ghHeaders });
+          if (!r.ok) return `Error GitHub búsqueda (${r.status}): ${await r.text()}`;
+          const data = await r.json();
+          if (!data.items || !data.items.length) return `No se encontró "${input.patron}" en ${repo}.`;
+          return `${data.total_count} resultado(s) para "${input.patron}" en ${repo}:\n${data.items.map(i => `- ${i.path}`).join('\n')}`;
+        }
+
+        if (nombre === 'grep_codigo') {
+          const repo = resolveRepo(input.repo || 'worker');
+          const rama = input.rama || 'main';
+          const r = await fetch(`https://api.github.com/repos/${repo}/contents/${input.ruta}?ref=${rama}`, { headers: ghHeaders });
+          if (!r.ok) return `Error GitHub (${r.status}): ${await r.text()}`;
+          const data = await r.json();
+          if (data.type !== 'file') return `"${input.ruta}" no es un archivo.`;
+          const content = decodeURIComponent(escape(atob(data.content.replace(/\n/g, ''))));
+          const lines = content.split('\n');
+          const patron = input.patron.toLowerCase();
+          const ctx = input.contexto != null ? input.contexto : 2;
+          const matches = [];
+          for (let i = 0; i < lines.length; i++) {
+            if (lines[i].toLowerCase().includes(patron)) {
+              const start = Math.max(0, i - ctx);
+              const end = Math.min(lines.length - 1, i + ctx);
+              const block = [];
+              for (let j = start; j <= end; j++) {
+                const prefix = j === i ? '>>>' : '   ';
+                block.push(`${prefix} ${j+1}: ${lines[j]}`);
+              }
+              matches.push(block.join('\n'));
+              if (matches.length >= 10) break;
+            }
+          }
+          if (!matches.length) return `No se encontró "${input.patron}" en ${input.ruta} (${lines.length} líneas).`;
+          return `grep "${input.patron}" en ${repo}/${input.ruta} — ${matches.length} coincidencia(s):\n\n${matches.join('\n---\n')}`;
+        }
       } catch (err) {
-        return `Error github_buscar: ${err.message}`;
+        return `Error ${nombre}: ${err.message}`;
       }
+      return `Error: sub-handler no encontrado para ${nombre}`;
     }
 
     case 'calcular_cable':
