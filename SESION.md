@@ -7,11 +7,59 @@
 
 **Sesión:** LIBRE
 **Última sesión:** 30/05/2026
-**Versión actual:** v6.13
+**Versión actual:** v6.14 (agente)
 
 ---
 
-## RESUMEN SESIÓN 30/05/2026 — v6.12-v6.13 (Bugfixes + auto-update + push notifications toda la app)
+## RESUMEN SESIÓN 30/05/2026 (tarde) — 7 capacidades nuevas para Alejandra
+
+### Qué se hizo:
+
+Alejandra dio en su última conversación (canal app_android, IDs 593-597) una lista de cosas que necesitaba aprender. Implementadas las 7:
+
+**Nuevas herramientas en alejandra-agente/worker.js:**
+1. `buscar_precios` — precios de material en tiempo real con caché 7 días (probado con Prysmian Afumex 3,12€/m ✅)
+2. `marcar_plano` — análisis de planos/PDFs con Gemini Vision
+3. `generar_documento` — memoria_tecnica, certificado_instalacion, lista_materiales, presupuesto, informe_obra (probado: memoria técnica completa ✅)
+4. `buscar_normativa` — REBT/ITC-BT indexada local (31 artículos pre-cargados, probado ITC-BT-19 ✅)
+5. `historico_materiales` — registrar/consultar/comparar materiales por obra (probado registrar ✅)
+6. `configurar_alerta` — alertas proactivas crear/listar/eliminar/verificar (probado: detectó 2 operarios sin fichar ✅)
+7. `exportar_datos` — CSV a R2 para bobinas/personal/fichajes/materiales/gastos/custom
+
+### Tablas nuevas en D1 (alejandra-db):
+- precios_materiales (caché 7 días)
+- normativa_index (31 entradas: ITC-BT-07/11/19/20/21/22/24/25/28/44)
+- materiales_obra (tracking por obra_id)
+- alertas_config (3 alertas → ajustadas: 1 funcional `sin_fichaje`, bobina_baja arreglada al esquema real, revision_equipo eliminada por no existir tabla equipos)
+
+### Arquitectura:
+- Módulo NEXUS `capacidades_avanzadas` añadido a expertos `completo`, `ingenieria` y `tecnico`
+- Array `ADVANCED_TOOLS` con las 7 + reparto por TOOLS_POR_EXPERTO
+- Funciones `ensureNewTables`, `seedNormativa`, `seedDefaultAlerts` idempotentes (flag `_tablesEnsured`)
+- Se ejecutan al inicio de `procesarConNEXUS` y `procesarConNEXUSStream`
+
+### Archivos modificados:
+- alejandra-agente/worker.js (+707 líneas) — commit 154cd12
+
+### Deploy:
+- alejandra-agente Version ID: d4226ea1-f538-4ddf-ac81-06fbf5df507c ✅
+- GitHub: 154cd12 → push main ✅
+- Health endpoint OK
+
+### App Flutter (AlejandraIA) — sesión anterior misma fecha:
+- v1.8.0 → tema naranja Alejandra + botón TTS permanente
+- APK release compilado (56.9MB) — sin subir a Drive aún
+- Commit d65da2c en repo AlejandraIA, pusheado
+
+### Pendiente para próxima sesión:
+- Probar las 7 capacidades desde la app Android real (no solo via API)
+- Subir APK release a Google Drive si el usuario quiere
+- Opcional: crear tabla `equipos` si tiene sentido + reactivar alerta `revision_equipo`
+- Opcional: completar pre-carga de normativa con más ITC-BT
+
+---
+
+## RESUMEN SESIÓN 30/05/2026 (mañana) — v6.12-v6.13 (Bugfixes + auto-update + push notifications toda la app)
 
 ### Qué se hizo:
 
