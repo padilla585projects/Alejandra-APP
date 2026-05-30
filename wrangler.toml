@@ -14,4 +14,4 @@ binding = "FILES"
 bucket_name = "alejandra-app-files"
 
 [triggers]
-crons = ["0 7 * * *", "0 18 * * *", "0 23 * * *"]
+crons = ["0 7 * * *", "0 18 * * *"]
