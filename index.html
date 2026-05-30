@@ -10308,41 +10308,58 @@ async function forzarActualizacion() {
   const banner = document.getElementById('updateBanner');
   if (banner) banner.innerHTML = '<span>⏳ Actualizando...</span>';
   try {
-    // 1. Forzar activación del SW en espera
+    // 1. Forzar update del SW desde el servidor
     const reg = await navigator.serviceWorker?.getRegistration();
+    if (reg) { await reg.update().catch(() => {}); }
+    // 2. Activar SW en espera
     if (reg?.waiting) reg.waiting.postMessage({ tipo: 'SKIP_WAITING' });
-    // 2. Limpiar todos los caches SW
+    // 3. Limpiar todos los caches SW
     if ('caches' in window) {
       const keys = await caches.keys();
       await Promise.all(keys.map(k => caches.delete(k)));
     }
-    // 3. Limpiar session cacheada
+    // 4. Limpiar session cacheada
     localStorage.removeItem('alejandra_api');
   } catch {}
-  // 4. Recargar forzando nueva versión
+  // 5. Recargar forzando nueva versión
   location.replace(location.pathname + '?r=' + Date.now());
 }
 
 async function checkVersionAndUpdate() {
   if (_actualizando) return;
   try {
+    // Doble check: version.json local (GitHub Pages) + health del worker (sin caché CDN)
+    let remoteV = null;
+    // 1. version.json con cache-bust
     const res = await fetch('version.json?_=' + Date.now(), { cache: 'no-store' });
-    if (!res.ok) return;
-    const { v } = await res.json();
-    if (v && v !== APP_VERSION) {
-      // No interrumpir un callback de Google OAuth en curso
+    if (res.ok) { const j = await res.json(); remoteV = j.v; }
+    // 2. Si version.json no dio resultado, probar el worker API (nunca cacheado)
+    if (!remoteV) {
+      try {
+        const hRes = await fetch('https://alejandra-agente.alejandra-app.workers.dev/health');
+        if (hRes.ok) { const hj = await hRes.json(); remoteV = hj.version; }
+      } catch {}
+    }
+    if (remoteV && remoteV !== APP_VERSION) {
       if (new URLSearchParams(location.search).has('code')) return;
       _actualizando = true;
-      mostrarBannerActualizacion(v);
-      // Intentar recarga automática tras 4s (por si el usuario no ve el banner)
-      setTimeout(forzarActualizacion, 4000);
+      mostrarBannerActualizacion(remoteV);
+      setTimeout(forzarActualizacion, 3000);
     }
   } catch {}
 }
 
-// Lanza el chequeo al arrancar y cada 5 minutos (antes 30s — BUG-009 batería)
+// Lanza el chequeo al arrancar y cada 5 minutos
 checkVersionAndUpdate();
 setInterval(checkVersionAndUpdate, 5 * 60 * 1000);
+
+// Al volver a primer plano: comprobar actualización + forzar update del SW
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') {
+    checkVersionAndUpdate();
+    navigator.serviceWorker?.getRegistration().then(r => r?.update()).catch(() => {});
+  }
+});
 
 // Banner "App actualizada a vX.XX" — aparece tras recarga automática
 (function() {

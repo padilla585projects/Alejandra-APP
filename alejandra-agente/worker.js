@@ -823,7 +823,7 @@ export default {
 
     try {
       if (path === '/health') {
-        return json({ status: 'ok', version: 'v6.10', nexus: true, reflexion: true, decisiones: true, web_search: !!env.OPENAI_API_KEY, upload: true, vision: true, ingenieria: true, gemini_vision: !!env.GEMINI_API_KEY, prompt_caching: true, razonamiento: true, auto_resumen: true, push: !!env.VAPID_PUBLIC_KEY, automod: !!env.GITHUB_TOKEN });
+        return json({ status: 'ok', version: '6.12', nexus: true, reflexion: true, decisiones: true, web_search: !!env.OPENAI_API_KEY, upload: true, vision: true, ingenieria: true, gemini_vision: !!env.GEMINI_API_KEY, prompt_caching: true, razonamiento: true, auto_resumen: true, push: true, automod: !!env.GITHUB_TOKEN, tareas: true });
       }
 
       // ── Historial del chat (sync entre dispositivos) ────────────────────
