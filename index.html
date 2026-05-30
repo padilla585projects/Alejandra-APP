@@ -10325,16 +10325,15 @@ async function forzarActualizacion() {
   location.replace(location.pathname + '?r=' + Date.now());
 }
 
-async function checkVersionAndUpdate() {
+async function checkVersionAndUpdate(useWorkerFallback = false) {
   if (_actualizando) return;
   try {
-    // Doble check: version.json local (GitHub Pages) + health del worker (sin caché CDN)
     let remoteV = null;
-    // 1. version.json con cache-bust
+    // version.json con cache-bust (1 fetch ligero ~100 bytes)
     const res = await fetch('version.json?_=' + Date.now(), { cache: 'no-store' });
     if (res.ok) { const j = await res.json(); remoteV = j.v; }
-    // 2. Si version.json no dio resultado, probar el worker API (nunca cacheado)
-    if (!remoteV) {
+    // Solo al volver a primer plano: fallback al worker si version.json falló
+    if (!remoteV && useWorkerFallback) {
       try {
         const hRes = await fetch('https://alejandra-agente.alejandra-app.workers.dev/health');
         if (hRes.ok) { const hj = await hRes.json(); remoteV = hj.version; }
@@ -10349,14 +10348,14 @@ async function checkVersionAndUpdate() {
   } catch {}
 }
 
-// Lanza el chequeo al arrancar y cada 5 minutos
+// Al arrancar + cada 5 min (1 solo fetch ligero — no gasta batería)
 checkVersionAndUpdate();
 setInterval(checkVersionAndUpdate, 5 * 60 * 1000);
 
-// Al volver a primer plano: comprobar actualización + forzar update del SW
+// Al volver a primer plano: check con fallback worker + forzar update del SW
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible') {
-    checkVersionAndUpdate();
+    checkVersionAndUpdate(true);
     navigator.serviceWorker?.getRegistration().then(r => r?.update()).catch(() => {});
   }
 });
