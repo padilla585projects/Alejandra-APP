@@ -325,21 +325,113 @@ async function _vapidJWT(env, endpoint) {
   return `${sigInput}.${_b64u(sig)}`;
 }
 
+// Obtener VAPID keys: env secrets o D1 (compartidas con agente)
+async function _getVapidKeys(env) {
+  if (env.VAPID_PUBLIC_KEY && env.VAPID_PRIVATE_KEY) return { pub: env.VAPID_PUBLIC_KEY, priv: env.VAPID_PRIVATE_KEY };
+  try {
+    const [pubRow, privRow] = await Promise.all([
+      env.DB.prepare("SELECT value FROM alejandra_config WHERE key='VAPID_PUBLIC_KEY'").first(),
+      env.DB.prepare("SELECT value FROM alejandra_config WHERE key='VAPID_PRIVATE_KEY'").first()
+    ]);
+    if (pubRow?.value && privRow?.value) return { pub: pubRow.value, priv: privRow.value };
+  } catch {}
+  return null;
+}
+
+// Enviar push a UN usuario (todas sus suscripciones en push_subscriptions)
+async function sendPushToUser(env, usuario_id, title, body, url = '/index.html') {
+  const vapid = await _getVapidKeys(env);
+  if (!vapid) return { sent: 0 };
+  try {
+    const subs = await env.DB.prepare('SELECT id, endpoint, p256dh, auth FROM push_subscriptions WHERE usuario_id=?').bind(usuario_id).all();
+    const items = subs.results || [];
+    if (!items.length) return { sent: 0 };
+    const payload = JSON.stringify({ title, body, url });
+    let sent = 0;
+    for (const sub of items) {
+      try {
+        const jwt = await _vapidJWTraw(vapid.priv, sub.endpoint);
+        const encrypted = await _encryptPush(sub.p256dh, sub.auth, payload);
+        const res = await fetch(sub.endpoint, {
+          method: 'POST',
+          headers: {
+            'Authorization': `vapid t=${jwt},k=${vapid.pub}`,
+            'Content-Type': 'application/octet-stream',
+            'Content-Encoding': 'aes128gcm',
+            'TTL': '86400',
+            'Urgency': 'high'
+          },
+          body: encrypted
+        });
+        if (res.ok || res.status === 201) sent++;
+        else if (res.status === 410) {
+          await env.DB.prepare('DELETE FROM push_subscriptions WHERE id=?').bind(sub.id).run().catch(() => {});
+        }
+      } catch {}
+    }
+    return { sent, total: items.length };
+  } catch (e) { return { sent: 0, error: e.message }; }
+}
+
+// Enviar push a TODOS los usuarios de una empresa
+async function sendPushToEmpresa(env, empresa_id, title, body, url = '/index.html', excludeUserId = null) {
+  try {
+    const users = await env.DB.prepare(
+      'SELECT DISTINCT ps.usuario_id FROM push_subscriptions ps JOIN usuarios u ON ps.usuario_id = CAST(u.id AS TEXT) OR ps.usuario_id = u.nombre WHERE u.empresa_id=?'
+    ).bind(empresa_id).all();
+    const ids = (users.results || []).map(r => r.usuario_id).filter(id => id !== excludeUserId);
+    let totalSent = 0;
+    for (const uid of ids) {
+      const r = await sendPushToUser(env, uid, title, body, url);
+      totalSent += r.sent;
+    }
+    return { sent: totalSent, users: ids.length };
+  } catch { return { sent: 0 }; }
+}
+
+// Enviar push a TODOS los usuarios suscritos
+async function sendPushToAll(env, title, body, url = '/index.html') {
+  try {
+    const users = await env.DB.prepare('SELECT DISTINCT usuario_id FROM push_subscriptions').all();
+    const ids = (users.results || []).map(r => r.usuario_id);
+    let totalSent = 0;
+    for (const uid of ids) {
+      const r = await sendPushToUser(env, uid, title, body, url);
+      totalSent += r.sent;
+    }
+    return { sent: totalSent, users: ids.length };
+  } catch { return { sent: 0 }; }
+}
+
+// VAPID JWT con private key directa (sin env)
+async function _vapidJWTraw(privKeyB64u, endpoint) {
+  const { protocol, host } = new URL(endpoint);
+  const now = Math.floor(Date.now() / 1000);
+  const hdr = _b64u(new TextEncoder().encode(JSON.stringify({ typ: 'JWT', alg: 'ES256' })));
+  const pay = _b64u(new TextEncoder().encode(JSON.stringify({ aud: `${protocol}//${host}`, exp: now + 43200, sub: 'mailto:padilla585.projects@gmail.com' })));
+  const sigInput = `${hdr}.${pay}`;
+  const privKey = await crypto.subtle.importKey('pkcs8', _fromb64u(privKeyB64u), { name: 'ECDSA', namedCurve: 'P-256' }, false, ['sign']);
+  const sig = await crypto.subtle.sign({ name: 'ECDSA', hash: 'SHA-256' }, privKey, new TextEncoder().encode(sigInput));
+  return `${sigInput}.${_b64u(sig)}`;
+}
+
+// Legacy: push solo al developer (usa alejandra_config)
 async function sendWebPushToDevs(env, title, body, url = '/panel.html') {
-  if (!env.VAPID_PRIVATE_KEY || !env.VAPID_PUBLIC_KEY) return;
+  const vapid = await _getVapidKeys(env);
+  if (!vapid) return;
   try {
     const subRow = await env.DB.prepare("SELECT value FROM alejandra_config WHERE key='dev_push_subscription'").first();
     if (!subRow?.value) return;
     const sub = JSON.parse(subRow.value);
     const payload = JSON.stringify({ title, body, url });
     const [jwt, encrypted] = await Promise.all([
-      _vapidJWT(env, sub.endpoint),
+      _vapidJWTraw(vapid.priv, sub.endpoint),
       _encryptPush(sub.keys.p256dh, sub.keys.auth, payload)
     ]);
     const res = await fetch(sub.endpoint, {
       method: 'POST',
       headers: {
-        'Authorization': `vapid t=${jwt},k=${env.VAPID_PUBLIC_KEY}`,
+        'Authorization': `vapid t=${jwt},k=${vapid.pub}`,
         'Content-Type': 'application/octet-stream',
         'Content-Encoding': 'aes128gcm',
         'TTL': '86400',
@@ -348,7 +440,6 @@ async function sendWebPushToDevs(env, title, body, url = '/panel.html') {
       body: encrypted
     });
     if (!res.ok && res.status === 410) {
-      // Suscripción expirada — limpiar
       await env.DB.prepare("DELETE FROM alejandra_config WHERE key='dev_push_subscription'").run().catch(() => {});
     }
   } catch (e) {
@@ -3731,25 +3822,146 @@ async function devGenerateVapid(request, env) {
   });
 }
 
+// ── Diagnóstico Gemini (solo dev/superadmin) ───────────────────────────────
+async function devGeminiTest(request, env) {
+  const s = await getAuth(request, env);
+  if (!s || !hasRole(s, 'superadmin', 'desarrollador')) return err('Sin permiso', 403);
+  const keys = [env.GEMINI_API_KEY, env.GEMINI_API_KEY_2, env.GEMINI_API_KEY_3];
+  const keyStatus = keys.map((k, i) => ({ key: `KEY_${i+1}`, configured: !!k, length: k?.length || 0 }));
+  const models = ['gemini-2.5-flash', 'gemini-2.0-flash-001', 'gemini-2.0-flash', 'gemini-1.5-flash-002', 'gemini-1.5-flash'];
+  const results = [];
+  for (let ki = 0; ki < keys.length; ki++) {
+    if (!keys[ki]) continue;
+    for (const model of models) {
+      try {
+        const res = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${keys[ki]}`,
+          { method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ contents: [{ parts: [{ text: 'di OK' }] }], generationConfig: { maxOutputTokens: 10 } }) }
+        );
+        const data = await res.json().catch(() => ({}));
+        results.push({ key: `KEY_${ki+1}`, model, status: res.status, ok: res.ok, error: data?.error?.message?.slice(0,150) || null });
+      } catch (e) {
+        results.push({ key: `KEY_${ki+1}`, model, status: 0, ok: false, error: e.message });
+      }
+    }
+  }
+  return json({ ok: true, keys: keyStatus, tests: results });
+}
+
 // ── HELPER: llamada a Gemini con rotación de keys ──────────────────────────
 async function callGemini(env, geminiBody, endpointLabel) {
   const keys = [env.GEMINI_API_KEY, env.GEMINI_API_KEY_2, env.GEMINI_API_KEY_3].filter(Boolean);
   if (!keys.length) return { error: 'GEMINI_API_KEY no configurada', status: 500 };
-  const models = ['gemini-2.0-flash', 'gemini-1.5-flash-002', 'gemini-1.5-flash'];
-  for (const key of keys) {
+  // Modelos actualizados (mayo 2026): 2.5-flash es el más reciente, 2.0-flash-001 dated, fallback 1.5
+  const models = ['gemini-2.5-flash', 'gemini-2.0-flash-001', 'gemini-2.0-flash', 'gemini-1.5-flash-002', 'gemini-1.5-flash'];
+  let lastError = null;
+  let lastStatus = 502;
+  for (let ki = 0; ki < keys.length; ki++) {
+    const key = keys[ki];
+    let quotaExhausted = false;
     for (const model of models) {
-      const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`,
-        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(geminiBody) }
-      );
-      const data = await res.json();
-      if (res.ok) return { ok: true, data, model };
-      if (res.status === 429) break; // cuota agotada para esta key, probar siguiente key
-      if (res.status === 404) continue; // modelo no disponible, probar siguiente modelo
-      return { error: 'Error IA Gemini: ' + JSON.stringify(data).slice(0, 200), status: 502 };
+      let res, data;
+      try {
+        res = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`,
+          { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(geminiBody) }
+        );
+        data = await res.json().catch(() => ({}));
+      } catch (e) {
+        lastError = `Network error: ${e.message}`;
+        continue;
+      }
+      if (res.ok) {
+        // Verificar que la respuesta tiene contenido válido (no bloqueo de safety)
+        const finishReason = data.candidates?.[0]?.finishReason;
+        if (finishReason && finishReason !== 'STOP' && finishReason !== 'MAX_TOKENS') {
+          lastError = `Gemini bloqueó la respuesta (${finishReason})`;
+          lastStatus = 502;
+          continue;
+        }
+        if (!data.candidates?.[0]?.content?.parts?.[0]?.text) {
+          lastError = 'Gemini devolvió respuesta vacía';
+          lastStatus = 502;
+          continue;
+        }
+        return { ok: true, data, model };
+      }
+      // Capturar mensaje de error real de Gemini
+      const errMsg = data?.error?.message || JSON.stringify(data).slice(0, 300);
+      lastError = `${model} (key ${ki+1}): ${errMsg}`;
+      lastStatus = res.status;
+      if (res.status === 429) { quotaExhausted = true; break; }   // cuota agotada → siguiente key
+      if (res.status === 404 || res.status === 400) continue;     // modelo no disponible / payload → siguiente modelo
+      // Otros errores (401, 403, 500, 503): probar siguiente modelo también
+      continue;
+    }
+    if (!quotaExhausted) {
+      // Si no fue cuota, ya probamos todos los modelos con esta key; saltar a la siguiente
+      continue;
     }
   }
-  return { error: `Cuota Gemini agotada para ${endpointLabel}`, status: 429 };
+  return {
+    error: `[${endpointLabel}] Gemini falló: ${lastError || 'sin detalles'}`,
+    status: lastStatus
+  };
+}
+
+// ── Reparar JSON truncado: cerrar arrays/objetos abiertos ──────────────────
+// Útil cuando Gemini se queda sin tokens y corta la respuesta a mitad.
+// Estrategia: recorrer carácter a carácter llevando una pila de aperturas y
+// marcar el último punto "seguro" (depth=1, justo después de cerrar un objeto
+// del array de trabajadores). Si llegamos al final con la pila desbalanceada,
+// truncamos al último punto seguro y cerramos lo que quede.
+function repararJsonTruncado(raw) {
+  const s = raw.trim();
+  let inString = false;
+  let escape = false;
+  const depth = []; // pila de '{' y '['
+  let lastSafePos = -1; // posición tras último cierre de elemento de array de nivel raíz
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    if (escape) { escape = false; continue; }
+    if (c === '\\' && inString) { escape = true; continue; }
+    if (c === '"') { inString = !inString; continue; }
+    if (inString) continue;
+    if (c === '{' || c === '[') {
+      depth.push(c);
+    } else if (c === '}') {
+      if (depth[depth.length - 1] === '{') depth.pop();
+      // Si estamos justo dentro del array raíz (1 elemento en pila = '[' del array)
+      // entonces marcamos esta posición como segura
+      if (depth.length === 1 && depth[0] === '[') lastSafePos = i;
+    } else if (c === ']') {
+      if (depth[depth.length - 1] === '[') depth.pop();
+      if (depth.length === 0) lastSafePos = i;
+    }
+  }
+  // Si el JSON ya está bien balanceado, devolverlo tal cual
+  if (depth.length === 0 && !inString) return s;
+  // Truncar al último punto seguro (final de un elemento completo)
+  let cortado = lastSafePos > 0 ? s.slice(0, lastSafePos + 1) : s;
+  // Quitar coma colgante final
+  cortado = cortado.replace(/,\s*$/, '');
+  // Recalcular pila sobre el texto cortado
+  const stack = [];
+  let inStr = false, esc = false;
+  for (let i = 0; i < cortado.length; i++) {
+    const c = cortado[i];
+    if (esc) { esc = false; continue; }
+    if (c === '\\' && inStr) { esc = true; continue; }
+    if (c === '"') { inStr = !inStr; continue; }
+    if (inStr) continue;
+    if (c === '{' || c === '[') stack.push(c);
+    else if (c === '}' && stack[stack.length - 1] === '{') stack.pop();
+    else if (c === ']' && stack[stack.length - 1] === '[') stack.pop();
+  }
+  // Cerrar lo que quede abierto
+  while (stack.length > 0) {
+    const last = stack.pop();
+    cortado += (last === '{' ? '}' : ']');
+  }
+  return cortado;
 }
 
 // ── SCAN PARTE SEMANAL ──────────────────────────────────────────────────────
@@ -3834,7 +4046,7 @@ ${baseInstructions}`;
 
   const geminiBody = {
     contents: [{ parts: [...imageParts, { text: prompt }] }],
-    generationConfig: { temperature: 0.1, maxOutputTokens: 8192 },
+    generationConfig: { temperature: 0.1, maxOutputTokens: 32768, responseMimeType: 'application/json' },
   };
   const gemResult = await callGemini(env, geminiBody, 'scan-parte');
   if (!gemResult.ok) return err(gemResult.error, gemResult.status);
@@ -3842,6 +4054,7 @@ ${baseInstructions}`;
   const usedModel = gemResult.model;
 
   const texto = aiJson.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  const finishReason = aiJson.candidates?.[0]?.finishReason;
   logAIUsage(env, {
     empresa_id,
     proveedor: 'gemini',
@@ -3851,12 +4064,24 @@ ${baseInstructions}`;
     output_tokens: aiJson.usageMetadata?.candidatesTokenCount || 0,
   });
 
-  const match  = texto.match(/\{[\s\S]*\}/);
-  if (!match) return err('La IA no devolvió JSON válido', 502);
+  // Con responseMimeType=application/json el texto ya es JSON puro, sin markdown
+  const match = texto.match(/\{[\s\S]*\}/);
+  const rawJson = match ? match[0] : texto.trim();
+  if (!rawJson) return err('La IA no devolvió contenido', 502);
 
   let data;
-  try { data = JSON.parse(match[0]); }
-  catch(e) { return err('JSON inválido de la IA: ' + e.message, 502); }
+  try {
+    data = JSON.parse(rawJson);
+  } catch(e) {
+    // Reparar JSON truncado: cerrar arrays/objetos abiertos
+    const reparado = repararJsonTruncado(rawJson);
+    try {
+      data = JSON.parse(reparado);
+      console.log(`[scan-parte] JSON reparado (finishReason=${finishReason}, ${rawJson.length} chars)`);
+    } catch(e2) {
+      return err(`JSON inválido de la IA (finishReason=${finishReason || 'unknown'}): ${e.message}. Prueba con menos páginas a la vez.`, 502);
+    }
+  }
 
   // Mapear nombre_match → IDs
   const DIAS = ['lunes','martes','miercoles','jueves','viernes','sabado'];
@@ -4177,6 +4402,7 @@ export default {
       if (path === '/resetear-pass'    && method === 'POST') return await resetearPass(request, env);
       if (path === '/auth/google/url'  && method === 'GET')  return googleAuthUrl(request, env);
       if (path === '/auth/google/callback' && method === 'POST') return await googleAuthCallback(request, env);
+      if (path === '/auth/google/mobile-redirect' && method === 'GET') return googleMobileRedirect(request);
       if (path === '/usuarios/pendientes'  && method === 'GET')  return await getUsuariosPendientes(request, env);
       if (path === '/usuarios/pendientes/aprobar' && method === 'POST') return await aprobarUsuarioPendiente(request, env);
       if (path === '/usuarios/pendientes/rechazar' && method === 'POST') return await rechazarUsuarioPendiente(request, env);
@@ -4220,6 +4446,7 @@ export default {
       if (path === '/dev/sql'              && method === 'POST')  return await devSQL(request, env);
       if (path === '/dev/ai-chat'          && method === 'POST')  return await devAIChat(request, env);
       if (path === '/dev/ai-status'        && method === 'GET')   return await devAIStatus(request, env);
+      if (path === '/dev/gemini-test'      && method === 'GET')   return await devGeminiTest(request, env);
       if (path === '/dev/push-subscribe'   && method === 'POST')  return await devPushSubscribe(request, env);
       if (path === '/dev/vapid-public-key' && method === 'GET')   return await devVapidPublicKey(request, env);
       if (path === '/dev/generate-vapid'   && method === 'GET')   return await devGenerateVapid(request, env);
@@ -4595,6 +4822,11 @@ export default {
       }
 
       // â"€â"€ Otros (legacy/extras) â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+      // ── Push notifications (todos los usuarios) ───────────────────────────
+      if (path === '/push/subscribe'   && method === 'POST')  return await pushSubscribe(request, env);
+      if (path === '/push/vapid-key'   && method === 'GET')   return await pushVapidKey(request, env);
+      if (path === '/push/broadcast'   && method === 'POST')  return await pushBroadcast(request, env);
+
       if (path === '/logs'         && method === 'GET')   return await getLogs(request, env);
       if (path === '/historial'    && method === 'GET')   return await getHistorial(request, env);
       if (path === '/pemp/historial'         && method === 'GET') return await getHistorialTabla('historial_pemp', request, env);
@@ -4931,7 +5163,7 @@ async function verificarAcceso(request, env) {
   if (env.ADMIN_CODE && codigo.trim() === env.ADMIN_CODE) {
     const token = await crearSesion(env, { nombre: 'Admin', rol: 'superadmin', obra_id: null, obra_nombre: null, departamento: null, es_admin: true, empresa_id: 1 });
     env.DB.prepare('DELETE FROM login_attempts WHERE ip = ?').bind(ip).run().catch(() => {});
-    return json({ ok: true, rol: 'superadmin', nombre: 'Admin', obra_id: null, obra_nombre: null, token });
+    return json({ ok: true, rol: 'superadmin', nombre: 'Admin', obra_id: null, obra_nombre: null, token, usuario_id: 3, empresa_id: 1 });
   }
 
   // 2. Buscar en tabla usuarios
@@ -4973,6 +5205,8 @@ async function verificarAcceso(request, env) {
         obra_nombre: usuario.obra_nombre,
         departamento: usuario.departamento || 'electrico',
         token,
+        usuario_id: usuario.id,
+        empresa_id: usuario.empresa_id || 1,
       });
     }
   } catch (e) {
@@ -6441,6 +6675,16 @@ async function crearPedido(request, env, ctx) {
   ).bind(empresa_id, obra_id||null, dept, referencia||null, descripcion.trim(), cantidad||1, unidad||'ud', proveedor||null, solicitado_por||null, notas||null).run();
   ctx?.waitUntil(syncPedidos(env, tabForDept('pedido', dept), empresa_id));
   await sendTelegram(env, `📦 <b>Nuevo pedido</b> [${dept}]\n👤 ${solicitado_por||'—'}\n📝 ${descripcion.trim().slice(0,200)}`);
+
+  // Push a encargados/admins de la empresa
+  try {
+    await sendPushToEmpresa(env, empresa_id,
+      '📦 Nuevo pedido',
+      `${solicitado_por||'Alguien'}: ${descripcion.trim().slice(0,80)}`,
+      '/index.html#pedidos'
+    );
+  } catch (_) { /* push best-effort */ }
+
   return json({ ok: true, id: r.meta.last_row_id });
 }
 
@@ -6472,6 +6716,14 @@ async function actualizarPedido(id, request, env, ctx) {
     await sendTelegram(env,
       `${iconos[body.estado]||'📦'} <b>Pedido ${body.estado}</b> [${pedido?.departamento||'—'}]\n📝 ${(pedido?.descripcion||'').slice(0,200)}`
     );
+    // Push a la empresa
+    try {
+      await sendPushToEmpresa(env, empresa_id,
+        `${iconos[body.estado]||'📦'} Pedido ${body.estado}`,
+        (pedido?.descripcion||'').slice(0,80),
+        '/index.html#pedidos'
+      );
+    } catch (_) { /* push best-effort */ }
   }
   if (!pedidoDept) {
     const p = await env.DB.prepare('SELECT departamento FROM pedidos WHERE id = ?').bind(id).first();
@@ -7391,6 +7643,19 @@ async function crearFichaje(request, env, ctx) {
     hora_entrada||null, hora_salida||null, horas, horas_extra, minutos_retraso,
     estadoFinal, motivo?.trim()||null, notas?.trim()||null, encargadoNombre||rol
   ).run();
+
+  // Push al trabajador fichado (si es usuario interno)
+  if (usuario_id) {
+    try {
+      const estadoIcons = { presente: '✅', ausencia: '❌', retraso: '⏰', baja: '🏥', vacaciones: '🏖️' };
+      await sendPushToUser(env, usuario_id,
+        `${estadoIcons[estadoFinal]||'📋'} Fichaje registrado`,
+        `${fecha} — ${estadoFinal}${hora_entrada ? ' | Entrada: '+hora_entrada : ''}`,
+        '/index.html#fichajes'
+      );
+    } catch (_) { /* push best-effort */ }
+  }
+
   ctx?.waitUntil(syncRRHH(env, 'Fichajes', empresa_id));
   return json({ ok: true, id: r.meta.last_row_id }, 201);
 }
@@ -8865,6 +9130,26 @@ async function alertasDiarias(env) {
 // â•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Â
 // GOOGLE OAUTH
 // â•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Â
+// Relay para apps móviles: Google redirige aquí con ?code=, y reenviamos a custom scheme
+function googleMobileRedirect(request) {
+  const url = new URL(request.url);
+  const code  = url.searchParams.get('code');
+  const error = url.searchParams.get('error');
+  if (error) {
+    return new Response(`<h2>Login cancelado</h2><p>${error}</p>`, {
+      status: 400, headers: { 'Content-Type': 'text/html; charset=utf-8' }
+    });
+  }
+  if (!code) {
+    return new Response('<h2>Falta el código</h2>', {
+      status: 400, headers: { 'Content-Type': 'text/html; charset=utf-8' }
+    });
+  }
+  const deepLink = 'alejandriaia://callback?code=' + encodeURIComponent(code);
+  // Redirigir al custom scheme de la app Flutter
+  return new Response(null, { status: 302, headers: { Location: deepLink } });
+}
+
 function googleAuthUrl(request, env) {
   const url = new URL(request.url);
   const redirect_uri = url.searchParams.get('redirect_uri') || 'https://padilla585projects.github.io/Alejandra-APP/';
@@ -9276,6 +9561,16 @@ async function crearIncidencia(request, env, ctx) {
     const gravedadIcon = { baja: '🟢', media: '🟠', alta: '📴' };
     await sendTelegram(env, `${gravedadIcon[gravedad]} <b>Incidencia ALTA [${dept}]</b>\n📋 ${titulo.trim()}\n${descripcion ? '📝 ' + descripcion.slice(0,200) + '\n' : ''}👤 ${nombre || '—'}`);
   }
+  // Push: siempre notificar incidencias (alta=urgente, media/baja=info)
+  try {
+    const icons = { alta: '🚨', media: '🟠', baja: '🟢' };
+    await sendPushToEmpresa(env, empresa_id,
+      `${icons[gravedad]||'⚠️'} Incidencia ${gravedad}`,
+      `${titulo.trim().slice(0,80)}${nombre ? ' — ' + nombre : ''}`,
+      '/index.html#incidencias'
+    );
+  } catch (_) { /* push best-effort */ }
+
   ctx?.waitUntil(syncRRHH(env, 'Incidencias', empresa_id));
   return json({ ok: true, id: r.meta.last_row_id }, 201);
 }
@@ -9304,6 +9599,14 @@ async function actualizarIncidencia(id, request, env, ctx) {
   // Telegram al resolver
   if (body.estado === 'resuelta') {
     await sendTelegram(env, `✅ <b>Incidencia resuelta [${inc.departamento}]</b>\n📋 ${inc.titulo}\n${body.resolucion ? '📝 ' + body.resolucion.slice(0,200) : ''}`);
+    // Push a la empresa
+    try {
+      await sendPushToEmpresa(env, empresa_id,
+        '✅ Incidencia resuelta',
+        inc.titulo?.slice(0,80) || 'Sin título',
+        '/index.html#incidencias'
+      );
+    } catch (_) { /* push best-effort */ }
   }
   ctx?.waitUntil(syncRRHH(env, 'Incidencias', empresa_id));
   return json({ ok: true });
@@ -10664,6 +10967,15 @@ async function crearMantenimiento(request, env) {
     `📧 <b>Mantenimiento registrado</b>\n📖 ${matricula.trim().toUpperCase()} (${tipo_mant || 'preventivo'})\n📅 ${fecha_mant}\n👤 ${realizado_por || usuario || '—'}${descripcion ? '\n📝 ' + descripcion : ''}`
   );
 
+  // Push a la empresa
+  try {
+    await sendPushToEmpresa(env, empresa_id,
+      '🔧 Mantenimiento registrado',
+      `${matricula.trim().toUpperCase()} — ${tipo_mant || 'preventivo'} (${fecha_mant})`,
+      '/index.html#mantenimientos'
+    );
+  } catch (_) { /* push best-effort */ }
+
   return json({ ok: true, id: r.meta.last_row_id, mensaje: 'Mantenimiento registrado' }, 201);
 }
 
@@ -10898,7 +11210,54 @@ async function enviarChatMensaje(request, env) {
   await env.DB.prepare(
     'INSERT INTO chat_mensajes (empresa_id, obra_id, usuario_id, usuario_nombre, rol, mensaje) VALUES (?,?,?,?,?,?)'
   ).bind(empresa_id, obra_id, usuario_id || null, nombre || 'Usuario', rol || '', mensaje).run();
+
+  // Push notification a todos los de la empresa excepto el remitente
+  try {
+    await sendPushToEmpresa(env, empresa_id,
+      `💬 ${nombre || 'Usuario'}`,
+      mensaje.length > 100 ? mensaje.slice(0, 97) + '...' : mensaje,
+      '/index.html#chat',
+      usuario_id  // excluir al remitente
+    );
+  } catch (_) { /* push best-effort */ }
+
   return json({ ok: true });
+}
+
+// ── Push subscribe/broadcast para TODOS los usuarios ────────────────────────
+
+async function pushSubscribe(request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth?.usuario_id && !auth?.nombre) return err('No autenticado', 401);
+  const body = await request.json().catch(() => ({}));
+  const { subscription } = body;
+  if (!subscription?.endpoint || !subscription?.keys?.p256dh || !subscription?.keys?.auth)
+    return err('Suscripción inválida', 400);
+  const uid = String(auth.usuario_id || auth.nombre);
+  await env.DB.prepare(
+    `INSERT INTO push_subscriptions (usuario_id, endpoint, p256dh, auth) VALUES (?,?,?,?)
+     ON CONFLICT(usuario_id, endpoint) DO UPDATE SET p256dh=excluded.p256dh, auth=excluded.auth, created_at=CURRENT_TIMESTAMP`
+  ).bind(uid, subscription.endpoint, subscription.keys.p256dh, subscription.keys.auth).run();
+  return json({ ok: true, msg: 'Suscripción push registrada' });
+}
+
+async function pushVapidKey(request, env) {
+  // Cualquier usuario autenticado puede pedir la clave pública
+  const auth = await getAuth(request, env);
+  if (!auth) return err('No autenticado', 401);
+  const vapid = await _getVapidKeys(env);
+  if (!vapid) return err('VAPID no configurado', 503);
+  return json({ ok: true, publicKey: vapid.pub });
+}
+
+async function pushBroadcast(request, env) {
+  // Solo superadmin/desarrollador puede hacer broadcast
+  const auth = await getAuth(request, env);
+  if (!auth || !hasRole(auth, 'superadmin', 'desarrollador')) return err('Sin permiso', 403);
+  const { title, body: bodyText, url } = await request.json().catch(() => ({}));
+  if (!title) return err('Falta título', 400);
+  const result = await sendPushToAll(env, title, bodyText || '', url || '/index.html');
+  return json({ ok: true, ...result });
 }
 
 async function borrarChatMensaje(id, request, env) {

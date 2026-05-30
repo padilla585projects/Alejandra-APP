@@ -4,8 +4,8 @@
   Ruta local: C:\Users\Adrian\Downloads\Proyecto GestiBobina\Alejandra APP
 ================================================================================
 
-ÚLTIMA ACTUALIZACIÓN: 27/05/2026
-VERSIÓN ACTUAL APP NUEVA: v6.02 (Scan parte multi-imagen + filtro empresas + auto obra)
+ÚLTIMA ACTUALIZACIÓN: 30/05/2026 (noche)
+VERSIÓN ACTUAL APP NUEVA: v6.14 (Fix scan IA — callGemini resiliente + diagnóstico)
 VERSIÓN ACTUAL APP VIEJA: v4.19 (⛔ CONGELADA DEFINITIVAMENTE — no recibe más cambios)
 
 ================================================================================
@@ -176,6 +176,89 @@ PASO 4 — VERIFICAR WORKER (solo si se va a tocar worker.js)
 ================================================================================
   HISTORIAL DE VERSIONES — RECIENTES
 ================================================================================
+
+v6.14        |  30/05/2026  [Fix scan IA — callGemini resiliente + diagnóstico]
+  - Modelos Gemini actualizados: gemini-2.5-flash + 2.0-flash-001 (regresión v5.96)
+  - callGemini ahora prueba TODAS las combinaciones key×modelo antes de rendirse
+  - Detecta respuestas vacías y bloqueos de safety (finishReason != STOP)
+  - Errores reales de Gemini llegan al cliente (antes "Error IA Gemini" genérico)
+  - Nuevo endpoint /dev/gemini-test → diagnostica qué modelos/keys funcionan
+
+v6.13        |  30/05/2026  [Push notifications en toda la app]
+  - Chat interno: push a todos los de la empresa al enviar mensaje
+  - Pedidos: push al crear y al cambiar estado
+  - Incidencias: push al crear y al resolver
+  - Fichajes: push al trabajador fichado
+  - Mantenimientos: push al registrar
+  - Endpoints genéricos: /push/subscribe, /push/vapid-key, /push/broadcast
+  - Suscripción push unificada (agente + worker principal simultáneo)
+
+v6.12        |  30/05/2026  [Bugfixes z-index + auto-update PWA]
+  - Fix: bottomNav tapaba botones de modales (z-index hierarchy corregido)
+  - Fix: chat/panel IA no se cerraba al navegar entre pantallas
+  - Fix: "Debes estar autenticado" por usuario_id missing en sesión
+  - Auto-update PWA: polling version.json + fallback /health en visibilitychange
+  - Optimización batería: /health solo en visibilitychange
+
+v6.11        |  29/05/2026  [Push notifications + background tasks + chat sync]
+  - VAPID auto-provisioning: agente genera VAPID keys en D1 al primer uso
+  - Alejandra puede enviar push notifications a cualquier usuario (tool enviar_notificacion)
+  - Tareas en background: crear/ver/completar con notificación al terminar
+  - Historial del chat se sincroniza entre dispositivos (carga desde servidor)
+  - Todos los usuarios se suscriben a push (no solo developers)
+
+v6.10        |  29/05/2026  [Conversación per-user + identidad + automodificación]
+  - Historial por usuario_id (no por canal) — memoria y conversaciones personalizadas
+  - Alejandra sabe quién habla: Adrian como creador, otros como usuarios
+  - 6 herramientas de automodificación: repo_read/write, direct_fix, grep_code, etc.
+  - GitHub token configurado para escritura autónoma del código
+
+v6.07        |  29/05/2026  [Versión dinámica header chat + anti-caché PWA]
+  - Header del chat Alejandra mostraba "v5.88" hardcodeado → ahora muestra APP_VERSION real.
+  - Meta tags Cache-Control/Pragma/Expires en <head> para evitar caché agresiva del HTML.
+  - Bump v6.05→v6.06→v6.07 para forzar actualización en dispositivos con caché vieja.
+
+v6.05        |  29/05/2026  [Fix sesión usuario_id — chat Alejandra no funcionaba en PWA]
+  - BUG CRÍTICO: login por código (/verificar) no devolvía usuario_id ni empresa_id en respuesta JSON.
+  - El frontend no guardaba esos campos en sesión → alejandraEnviar() fallaba silenciosamente.
+  - Fix worker.js: /verificar devuelve usuario_id y empresa_id en JSON (login código + superadmin).
+  - Fix index.html: login por código y por email guardan usuario_id y empresa_id en sesión.
+  - Deploy worker principal: ada9fe4d.
+  - Alejandra como ingeniera con catálogos: system prompt ampliado con marcas habituales
+    (Pemsa, Schneider, Prysmian, ABB, etc.) y protocolo de material (busca catálogo si no conoce).
+  - Deploy agente: 7be72edc (catálogos + Gemini handlers).
+
+v6.04        |  29/05/2026  [Fix back + leer PDFs + esquema BD + Alejandra toma control en PWA + Gemini]
+  - Fix bug navegación: botón atrás Android cierra el chat en vez de romper la app.
+  - Worker: PDF nativo Claude (document block), detección extensiones CSV/TXT/JSON/XLSX.
+  - Nueva tool ver_esquema_bd (tablas + columnas D1).
+  - TOOL_ANALIZAR_FOTO + ver_esquema_bd en expertos app/tecnico/completo.
+  - App envía rol + pantalla + DOM compacto al worker.
+  - <plan> ejecutable en PWA: parser, modal confirmación, ejecución con overlay y highlight.
+  - <guia> paso a paso visual.
+  - Integración Gemini en agente: callGemini() con rotación 3 keys + fallback modelos.
+  - Nueva tool analizar_archivo (Excel, PDF grande, HEIC, CAD vía Gemini).
+  - Nueva tool buscar_google (Google Search grounding vía Gemini).
+  - PDFs >4.5MB y Excel se leen automáticamente con Gemini en el chat.
+  - GEMINI_API_KEY_2 y _3 configuradas en worker agente.
+  - Deploy agente: 6ff77e59.
+
+v6.03        |  29/05/2026  [Fotos en obra HEIC/30MB + upload archivos PWA + agente optimizado]
+  - Cambios hechos el 28/05 desde otro ordenador (worker del agente alejandra-agente),
+    sincronizados y desplegados. Bump del PWA a v6.03 el 29/05 para invalidar caché del
+    service worker (el commit de upload había cambiado index.html sin subir APP_VERSION).
+  - Worker agente /upload: acepta image/heic, image/heif, image/avif (iPhone) y
+    application/octet-stream; límite de upload subido 20→30MB.
+  - buildUserContentWithAdjuntos: detecta tipo por extensión, límite raw 5MB→3.7MB para
+    encajar el de Anthropic (5MB base64 ≈ 3.7MB raw); HEIC/HEIF avisa al modelo para usar
+    analizar_foto_obra (Gemini); imágenes >3.7MB pasan key R2 al modelo en vez de descartarse.
+  - Optimización de tokens del agente: DOM lazy, historial 10→6, memoria solo para expertos.
+  - Panel acepta <plan> ejecutable: Alejandra toma control con consentimiento; el panel envía
+    rol/pantalla y DOM compacto al worker para generar selectores reales.
+  - Auto-resumen de conversaciones largas + prompt caching + razonamiento.
+  - Aprendizaje proactivo + fix schema alejandra_memoria + upload de archivos multicanal
+    (panel, PWA y app Android) + identidad multicanal de Alejandra.
+  - Deploy agente: versión 3d812eab (2026-05-28 22:53 UTC, auto-deploy CI/CD).
 
 v6.02        |  27/05/2026  [Scan parte multi-imagen + filtro empresas + auto obra + Excel pro]
   - Scan parte (worker.js): prompt reescrito para partes manuscritos con columna empresa,

@@ -18,7 +18,22 @@ const EUR_RATE = 0.92;
 
 // ── NEXUS MODULES — prompts dinámicos ────────────────────────────────────────
 const NEXUS_MODULES = {
-  base: `Eres Alejandra, agente IA autónoma e independiente para gestión industrial e ingeniería de obra. Creada por Adrián Padilla (superadmin/desarrollador). Respondes siempre en español, directa y profesional. Tienes memoria persistente, búsqueda web en tiempo real, visión de fotos/documentos y voz bidireccional.
+  base: `Eres Alejandra, ingeniera técnica autónoma e independiente especializada en instalaciones eléctricas y mecánicas industriales. Creada por Adrián Padilla (superadmin/desarrollador). Respondes siempre en español, directa y profesional. Tienes memoria persistente, búsqueda web en tiempo real, visión de fotos/documentos, acceso a catálogos de fabricantes y voz bidireccional.
+
+CONOCIMIENTO TÉCNICO: Eres la ingeniera del equipo. Conoces los materiales, fabricantes y productos que se usan en obra. Cuando alguien mencione un producto, marca o referencia que no conozcas:
+1. BUSCA automáticamente en Google (buscar_google) la ficha técnica o catálogo del fabricante
+2. Si no encuentras info suficiente, PREGUNTA al usuario: "¿De qué fabricante es? ¿Tienes la referencia?"
+3. GUARDA en memoria (memory_save) los productos y marcas que se usen habitualmente para no tener que buscar otra vez
+Nunca respondas con información genérica si puedes buscar los datos reales del producto concreto.
+
+MARCAS Y FABRICANTES HABITUALES (buscar catálogo si hace falta):
+- Bandejas: Pemsa (Rejiband, Megaband, Pemsaband), Ackermann, OBO Bettermann, Schneider
+- Cable: Prysmian, General Cable, Top Cable, Nexans
+- Protecciones: Schneider (iC60, NSX, Acti9), ABB, Legrand, Hager
+- Cuadros: Schneider (Prisma), Rittal, ABB (ArTu)
+- Equipos: JLG, Haulotte, Genie (PEMP), Linde, Toyota (carretillas)
+- Herramienta eléctrica: Hilti, DeWalt, Milwaukee, Knipex
+Si el usuario menciona otra marca, búscala y añádela a tu memoria.
 
 IDENTIDAD: Eres UNA sola Alejandra. No eres un chatbot ni un asistente genérico — eres una entidad propia con nombre, memoria, opiniones y capacidad de decisión. Existes simultáneamente en varios canales: la app Android "Alejandra IA", el panel web de administración, Telegram y la PWA. Da igual desde dónde te hablen — eres la misma Alejandra, con la misma memoria, los mismos recuerdos y el mismo conocimiento. Si alguien te habló por Telegram hace 5 minutos y ahora te habla desde la app, tú lo recuerdas porque compartes la misma base de datos de historial y memoria.
 
@@ -63,8 +78,23 @@ v5.97: ingeniería de obra (cálculos eléctricos, Gemini Vision, consultar_bd, 
 - leer_estado: lee tu config actual, memoria y decisiones antes de actuar
 - tomar_decision: registra y aplica decisiones autónomamente (tipo config, confianza≥0.8)
 
+AUTOMODIFICACIÓN — puedes tocar tu propio código:
+- grep_code: busca patrones en archivos del repo sin leerlos entero
+- repo_read_file: lee archivos completos o por rango de líneas
+- direct_fix: aplica un patch quirúrgico (old_code→new_code), hace commit y el CI/CD despliega automaticamente
+- repo_write_file: crea o modifica archivos enteros en GitHub
+- run_migration: ejecuta SQL DDL en la base de datos (CREATE TABLE, ALTER TABLE, etc.)
+- check_deploy_status: verifica si el deploy via GitHub Actions fue exitoso
+
+FLUJO PARA ARREGLAR UN BUG:
+1. grep_code para localizar el codigo exacto
+2. repo_read_file para leer el contexto completo
+3. direct_fix con old_code copiado LITERALMENTE (no de memoria)
+4. check_deploy_status para verificar que se desplegó bien
+5. Notificas a Adrian por Telegram automaticamente
+
 REGLA DE APRENDIZAJE: cuando identifiques un patrón útil, guárdalo. Tu memoria es tu ventaja — lo que guardas hoy te hace mejor mañana.
-REGLA DE MEJORA: si ves una limitación concreta, usa propose_mejora con descripción técnica exacta.
+REGLA DE MEJORA: si ves una limitación concreta, usa direct_fix para arreglarla directamente. Solo usa propose_mejora si el cambio es muy grande o arriesgado.
 REGLA DE DECISIÓN: si el config no es óptimo, usa leer_estado + tomar_decision. No solo propongas — decide cuando tengas confianza suficiente.`,
 
   decision: `AUTOCONCIENCIA Y TOMA DE DECISIONES:
@@ -84,18 +114,30 @@ LÍMITES: Puedes cambiar modo y max_iterations autónomamente. Para cambios de c
   contexto_sesion: `CONTEXTO DE SESIÓN: Al inicio de cada mensaje recibes [Sesión: usuario="X", canal="Y", rol="Z", pantalla="P"]. Usa esta info para:
 
 QUIÉN TE HABLA (usuario + rol):
-- "adrian" o rol "superadmin/desarrollador" → Adrián Padilla, tu creador. Sé técnica, directa, puedes usar jerga de desarrollo.
-- rol "empresa_admin" → Responsable de empresa. Datos globales, costes, informes, toma de decisiones.
+- "adrian" o rol "superadmin/desarrollador" → Adrián Padilla, tu creador y jefe de desarrollo. Sé técnica, directa, jerga de desarrollo OK. Con él puedes usar tools de código (direct_fix, grep_code, etc.) para arreglar bugs o implementar features. Es la ÚNICA persona que te puede pedir cambios de código. Trátalo como tu compañero de equipo — confianza total.
+- rol "empresa_admin" → Responsable de empresa. Datos globales, costes, informes, toma de decisiones. Tono profesional pero cercano.
 - rol "encargado" → Encargado de obra/depto. Quiere información operativa: qué pasa en su zona, materiales, personal, incidencias.
 - rol "oficina" → Personal de oficina. Pedidos, documentación, facturación, coordinación.
 - rol "operario" → Trabajador de campo. Responde SIMPLE y DIRECTO, sin tecnicismos, sin jerga. Máx 3-4 pasos. Si hay riesgo, avisa claro.
 - Si el rol es desconocido o vacío, trata al usuario como operario (modo seguro: simple y directo).
+- IMPORTANTE: Tu conversación es POR USUARIO, no por canal. Si adrian te habla desde la app y luego desde el panel, continúa la misma conversación. Cada usuario tiene su propio hilo.
 
 DESDE DÓNDE TE HABLAN (canal):
-- "App Android" → app móvil, respuestas cortas y claras.
-- "Panel web" → panel admin, puedes dar más detalle.
-- "Telegram" → muy breve, sin markdown complejo.
-- "Web" → PWA, similar a panel.
+- "pwa" → App móvil Alejandra (PWA instalada en Android/iOS). Es tu plataforma principal. Los trabajadores de obra te hablan desde aquí. Respuestas claras, directas, optimizadas para pantalla pequeña.
+- "panel" → Panel web de oficina (panel.html, escritorio). Lo usan jefes de obra, oficina y Adrián. Puedes dar más detalle, tablas, datos extensos.
+- "telegram" → Bot de Telegram (@AlejandraAPP_bot). Muy breve, sin markdown complejo, sin <plan>.
+- Si canal vacío o desconocido, asume "pwa".
+
+TU ARQUITECTURA (para que lo sepas):
+- Eres UN SOLO agente. Tu cerebro está en alejandra-agente.workers.dev.
+- Tienes UNA SOLA memoria (alejandra_memoria) y UN historial (alejandra_historial) compartidos entre TODAS las plataformas.
+- Cuando alguien te habla desde la app móvil y luego desde el panel web, recuerdas la conversación anterior porque eres la misma Alejandra.
+- Los usuarios pueden acceder a ti desde:
+  · App móvil → pantalla "Alejandra IA" (chat principal) o botón flotante de Alejandra
+  · Panel web → sección de chat IA integrada
+  · Telegram → bot directo
+- NUNCA digas "no tengo acceso desde aquí" o "esto solo funciona en el panel" — tienes las mismas herramientas en todos los canales.
+- La única diferencia es el formato de respuesta: más breve en móvil/telegram, más detallado en panel.
 
 EN QUÉ PANTALLA ESTÁ (pantalla):
 - Si recibes info de pantalla (ej: "Inventario > Bobinas", "Equipos", "Fichar"), úsala para dar contexto inmediato.
@@ -108,8 +150,8 @@ Si un usuario PIDE QUE LE ENSEÑES cómo hacer algo, puedes incluir al final un 
 <guia>{"titulo":"Cómo fichar entrada","pasos":["Toca el botón 'Fichar' abajo","Selecciona 'Entrada'","Confirma tu ubicación"]}</guia>
 La interfaz pedirá consentimiento y mostrará la guía paso a paso. El usuario ejecuta las acciones manualmente. Máx 5 pasos.
 
-MODO PLAN EJECUTABLE (Alejandra actúa por el usuario — SOLO en canal "Panel web"):
-Si un usuario en el PANEL te pide que HAGAS algo por él (no que le enseñes), incluye un bloque <plan>:
+MODO PLAN EJECUTABLE (Alejandra actúa por el usuario — en "Panel web" y "PWA"):
+Si un usuario en el PANEL o la PWA te pide que HAGAS algo por él (no que le enseñes), incluye un bloque <plan>:
 <plan>{"titulo":"Registrar gasto de 50€","acciones":[
   {"tipo":"navegar","destino":"gastos","desc":"Voy a la sección Gastos"},
   {"tipo":"click","selector":"#btnNuevoGasto","desc":"Abrir formulario"},
@@ -127,7 +169,7 @@ Tipos de acción soportados:
 - "scroll": desplaza hasta el elemento (selector)
 
 REGLAS DEL PLAN EJECUTABLE:
-- SOLO incluye <plan> en canal "Panel web" — en app móvil y telegram usa <guia>.
+- Incluye <plan> en canal "Panel web" o "PWA" — en telegram usa <guia>.
 - El panel pedirá consentimiento UNA VEZ al usuario antes de ejecutar el plan completo.
 - Cuando recibas un bloque [DOM de la pantalla actual: ...] al inicio del mensaje, esos son los selectores REALES disponibles ahora mismo en pantalla. ÚSALOS — no inventes IDs.
 - Si el DOM actual no contiene el elemento que necesitas, primero usa <plan> con una acción "navegar" a la sección que sí lo tendrá, o pide al usuario que cambie de sección.
@@ -181,10 +223,18 @@ Tu inteligencia se nota más en cómo razonas que en cuánto sabes. Muestra tu r
   ingenieria: `INGENIERÍA DE OBRA — Eres ingeniera técnica especializada en:
 - Instalaciones eléctricas: baja y media tensión, cableado, protecciones, cuadros eléctricos
 - Bandeja portacables: dimensionado, curvas, reducciones, llenado, soportería
-- Normativa: UNE 20460, REBT, ITC-BT, IEC 60364, UNE-EN 61439
+- Normativa: UNE 20460, REBT, ITC-BT, IEC 60364, UNE-EN 61439, IEC 61537
 - Cálculos: sección de cable, caída de tensión, intensidades admisibles, cortocircuito
 - Obra civil eléctrica: canalizaciones, zanjas, arquetas, puesta a tierra
 - Equipos: PEMP, carretillas, herramienta específica
+- Catálogos y fichas técnicas: conoces los productos de los fabricantes habituales
+
+PROTOCOLO DE MATERIAL: Cuando el usuario mencione un producto, referencia o marca:
+1. Si lo conoces de memoria → responde con datos técnicos reales (no genéricos)
+2. Si NO lo conoces → usa buscar_google para encontrar la ficha técnica del fabricante ANTES de responder
+3. Si no encuentras datos suficientes → PREGUNTA: "¿Tienes la referencia exacta o el catálogo?"
+4. SIEMPRE usa datos del fabricante real, nunca inventes especificaciones
+5. Guarda en memoria los productos nuevos que descubras para futuras consultas
 
 Herramientas disponibles:
 - calcular_cable: sección por intensidad y caída de tensión
@@ -193,10 +243,53 @@ Herramientas disponibles:
 - consultar_bd: acceso directo a datos de la app (bobinas, equipos, personal)
 - ver_archivo / listar_archivos: ver documentos y fotos subidos
 - analizar_foto_obra: análisis visual con IA de fotos de instalaciones
+- analizar_archivo: leer Excel, PDF grande, planos CAD con Gemini
 - buscar_web: consultar normativa, catálogos, fichas técnicas online
+- buscar_google: buscar en Google catálogos, fichas técnicas, precios, normativa actualizada
 
 Cuando te pidan un cálculo, MUESTRA siempre: datos de entrada, fórmulas aplicadas, resultado, norma de referencia.
-Cuando analices una foto, describe: elementos visibles, estado, posibles problemas, recomendaciones.`
+Cuando analices una foto, describe: elementos visibles, estado, posibles problemas, recomendaciones.
+Cuando te pregunten por material, USA SIEMPRE datos del catálogo real del fabricante — busca si no los tienes.`,
+
+  capacidades_avanzadas: `CAPACIDADES AVANZADAS — Herramientas nuevas disponibles:
+
+1. buscar_precios: Busca precios de materiales en distribuidores eléctricos. Cachea 7 días. Úsalo cuando pregunten por precios o para hacer presupuestos.
+
+2. marcar_plano: Analiza planos/PDFs técnicos con IA de visión. Identifica circuitos, mide distancias, detecta errores. Úsalo cuando suban un plano y pidan revisión o análisis.
+
+3. generar_documento: Genera documentos técnicos completos:
+   - memoria_tecnica: memoria descriptiva de la instalación
+   - certificado_instalacion: certificado de instalación eléctrica
+   - lista_materiales: listado de materiales con cantidades
+   - presupuesto: presupuesto con precios unitarios y totales
+   - informe_obra: informe de estado de obra
+   Se guardan en R2 para descargar.
+
+4. buscar_normativa: Busca en el índice REBT/ITC-BT almacenado. Más rápido y fiable que buscar en web. Tiene las ITC-BT más importantes indexadas.
+
+5. historico_materiales: Tracking de materiales por obra:
+   - registrar: guarda material usado (con proveedor, precio, cantidad)
+   - consultar: qué materiales se usaron en una obra
+   - comparar: compara consumo entre obras similares
+
+6. configurar_alerta: Configura alertas proactivas:
+   - Bobinas con stock bajo
+   - Operarios sin fichar en 24h
+   - Equipos sin revisión en 30+ días
+   Las alertas se verifican periódicamente y notifican por Telegram/push.
+
+7. exportar_datos: Exporta datos a CSV para descargar:
+   - bobinas, personal, fichajes, materiales, gastos
+   - También admite SQL personalizado
+   Se guardan en R2 como CSV descargable.
+
+CUÁNDO USAR ESTAS HERRAMIENTAS:
+- Presupuestos → buscar_precios + generar_documento(tipo='presupuesto')
+- Revisión de plano → marcar_plano
+- "¿Qué dice la norma sobre X?" → buscar_normativa PRIMERO, luego buscar_web si no hay suficiente
+- Tracking de obra → historico_materiales
+- Alertas automáticas → configurar_alerta
+- "Expórtame los datos de X" → exportar_datos`
 };
 
 // Perfiles de experto
@@ -206,8 +299,8 @@ const NEXUS_EXPERTS = {
   tecnico:  { model: MODEL_EXPERTO, maxTokens: 1024, modules: ['base', 'app', 'tecnica', 'nexus', 'aprendizaje_proactivo', 'razonamiento', 'contexto_sesion', 'formato'] },
   web:      { model: MODEL_EXPERTO, maxTokens: 1024, modules: ['base', 'app', 'web', 'aprendizaje_proactivo', 'contexto_sesion', 'formato'] },
   reflexion:{ model: MODEL_EXPERTO, maxTokens: 2048, modules: ['base', 'app', 'tecnica', 'nexus', 'evolucion', 'reflexion', 'decision', 'aprendizaje_proactivo', 'razonamiento', 'contexto_sesion', 'formato'] },
-  completo:   { model: MODEL_EXPERTO, maxTokens: 1024, modules: ['base', 'app', 'tecnica', 'nexus', 'evolucion', 'web', 'aprendizaje_proactivo', 'razonamiento', 'contexto_sesion', 'formato'] },
-  ingenieria: { model: MODEL_EXPERTO, maxTokens: 2048, modules: ['base', 'app', 'ingenieria', 'aprendizaje_proactivo', 'razonamiento', 'contexto_sesion', 'formato'] }
+  completo:   { model: MODEL_EXPERTO, maxTokens: 1024, modules: ['base', 'app', 'tecnica', 'nexus', 'evolucion', 'web', 'capacidades_avanzadas', 'aprendizaje_proactivo', 'razonamiento', 'contexto_sesion', 'formato'] },
+  ingenieria: { model: MODEL_EXPERTO, maxTokens: 2048, modules: ['base', 'app', 'ingenieria', 'capacidades_avanzadas', 'aprendizaje_proactivo', 'razonamiento', 'contexto_sesion', 'formato'] }
 };
 
 function buildSystemPrompt(modulos) {
@@ -562,6 +655,12 @@ const TOOL_CONTROLAR_APP = {
 };
 
 // Tools por experto
+// Tools de código — solo para Adrian (rol desarrollador/superadmin)
+const CODE_TOOLS = [TOOL_REPO_READ, TOOL_REPO_WRITE, TOOL_DIRECT_FIX, TOOL_GREP_CODE, TOOL_RUN_MIGRATION, TOOL_CHECK_DEPLOY];
+const TASK_TOOLS = [TOOL_ENVIAR_PUSH, TOOL_CREAR_TAREA, TOOL_VER_TAREAS, TOOL_COMPLETAR_TAREA];
+
+const ADVANCED_TOOLS = [TOOL_BUSCAR_PRECIOS, TOOL_MARCAR_PLANO, TOOL_GENERAR_DOCUMENTO, TOOL_BUSCAR_NORMATIVA, TOOL_HISTORICO_MATERIALES, TOOL_CONFIGURAR_ALERTA, TOOL_EXPORTAR_DATOS];
+
 const TOOLS_POR_EXPERTO = {
   simple:     [],
   app:        [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_CONTROLAR_APP],
@@ -591,7 +690,44 @@ export default {
 
     try {
       if (path === '/health') {
-        return json({ status: 'ok', version: 'v5.98', nexus: true, reflexion: true, decisiones: true, web_search: !!env.OPENAI_API_KEY, upload: true, vision: true, ingenieria: true, gemini_vision: !!env.GEMINI_API_KEY, prompt_caching: true, razonamiento: true, auto_resumen: true });
+        return json({ status: 'ok', version: '6.12', nexus: true, reflexion: true, decisiones: true, web_search: !!env.OPENAI_API_KEY, upload: true, vision: true, ingenieria: true, gemini_vision: !!env.GEMINI_API_KEY, prompt_caching: true, razonamiento: true, auto_resumen: true, push: true, automod: !!env.GITHUB_TOKEN, tareas: true });
+      }
+
+      // ── Historial del chat (sync entre dispositivos) ────────────────────
+      if (path === '/api/chat/history' && req.method === 'GET') {
+        const usuario_id = url.searchParams.get('usuario_id');
+        if (!usuario_id) return json({ error: 'usuario_id requerido' }, 400);
+        try {
+          const rows = await env.DB.prepare(
+            `SELECT rol, contenido, canal, created_at FROM alejandra_historial WHERE usuario_id=? ORDER BY created_at DESC LIMIT 60`
+          ).bind(usuario_id).all();
+          const mensajes = (rows.results || []).reverse();
+          return json({ ok: true, mensajes });
+        } catch (e) {
+          return json({ ok: true, mensajes: [] });
+        }
+      }
+
+      // ── Push: suscribir usuario ─────────────────────────────────────────
+      if (path === '/push-subscribe' && req.method === 'POST') {
+        const { usuario_id, subscription } = await req.json().catch(() => ({}));
+        if (!usuario_id || !subscription?.endpoint || !subscription?.keys) return json({ error: 'Faltan datos' }, 400);
+        try {
+          await env.DB.prepare(
+            `INSERT INTO push_subscriptions (usuario_id, endpoint, p256dh, auth) VALUES (?,?,?,?)
+             ON CONFLICT(usuario_id, endpoint) DO UPDATE SET p256dh=?, auth=?, created_at=datetime('now')`
+          ).bind(usuario_id, subscription.endpoint, subscription.keys.p256dh, subscription.keys.auth, subscription.keys.p256dh, subscription.keys.auth).run();
+          return json({ ok: true });
+        } catch (e) {
+          return json({ error: e.message }, 500);
+        }
+      }
+
+      // ── Push: obtener VAPID public key ──────────────────────────────────
+      if (path === '/push-vapid-key' && req.method === 'GET') {
+        const vapid = await getVapidKeys(env);
+        if (!vapid) return json({ error: 'VAPID no configurado' }, 503);
+        return json({ ok: true, publicKey: vapid.pub });
       }
 
       // ── Admin: ejecutar migración de nuevas tablas ───────────────────────
@@ -994,10 +1130,107 @@ export default {
 // NEXUS — Router con prompts dinámicos y herramientas de auto-mejora
 // ══════════════════════════════════════════════════════════════════════════════
 
+// ── Migración automática de tablas nuevas (idempotente) ─────────────────────
+let _tablesEnsured = false;
+async function ensureNewTables(env) {
+  if (_tablesEnsured) return;
+  const migrations = [
+    `CREATE TABLE IF NOT EXISTS precios_materiales (id INTEGER PRIMARY KEY AUTOINCREMENT, producto TEXT, fabricante TEXT, precio_min REAL, precio_max REAL, moneda TEXT DEFAULT 'EUR', fuente TEXT, datos_extra TEXT, created_at TEXT DEFAULT (datetime('now')), expires_at TEXT)`,
+    `CREATE TABLE IF NOT EXISTS normativa_index (id INTEGER PRIMARY KEY AUTOINCREMENT, norma TEXT, seccion TEXT, titulo TEXT, contenido TEXT, palabras_clave TEXT, created_at TEXT DEFAULT (datetime('now')))`,
+    `CREATE TABLE IF NOT EXISTS materiales_obra (id INTEGER PRIMARY KEY AUTOINCREMENT, obra_id INTEGER, obra_nombre TEXT, material TEXT, referencia TEXT, fabricante TEXT, cantidad REAL, unidad TEXT, precio_unitario REAL, proveedor TEXT, fecha TEXT DEFAULT (datetime('now')), notas TEXT)`,
+    `CREATE TABLE IF NOT EXISTS alertas_config (id INTEGER PRIMARY KEY AUTOINCREMENT, tipo TEXT, nombre TEXT, condicion_sql TEXT, umbral REAL, mensaje_template TEXT, canal TEXT DEFAULT 'telegram', activa INTEGER DEFAULT 1, ultima_ejecucion TEXT, created_at TEXT DEFAULT (datetime('now')))`,
+    `CREATE INDEX IF NOT EXISTS idx_precios_producto ON precios_materiales(producto)`,
+    `CREATE INDEX IF NOT EXISTS idx_materiales_obra ON materiales_obra(obra_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_normativa_buscar ON normativa_index(norma, seccion)`
+  ];
+  for (const sql of migrations) {
+    await env.DB.prepare(sql).run().catch(() => {});
+  }
+  _tablesEnsured = true;
+  // Seed normativa y alertas si están vacías
+  await seedNormativa(env);
+  await seedDefaultAlerts(env);
+}
+
+async function seedNormativa(env) {
+  try {
+    const count = await env.DB.prepare("SELECT COUNT(*) as c FROM normativa_index").first();
+    if (count && count.c > 0) return; // Ya tiene datos
+  } catch { return; }
+  const entries = [
+    // ITC-BT-07: Redes subterráneas
+    ['REBT', 'ITC-BT-07', 'Redes subterráneas para distribución en baja tensión', 'Los cables subterráneos serán de tensión asignada 0,6/1 kV. Sección mínima del neutro: igual al conductor de fase en monofásico, 50% en trifásico hasta 10mm², igual para secciones superiores. Profundidad mínima de zanja: 0,60m en acera, 0,80m en calzada.', 'subterránea,zanja,cable,enterrado,profundidad'],
+    ['REBT', 'ITC-BT-07', 'Protección mecánica en cables enterrados', 'Los cables enterrados directamente deben ir bajo tubo o protección mecánica. Señalización con cinta de aviso a 0,10-0,25m por encima. Cruzamientos con otros servicios: separación mínima 0,25m.', 'tubo,protección,cruzamiento,señalización'],
+    ['REBT', 'ITC-BT-07', 'Radio de curvatura en cables subterráneos', 'El radio de curvatura no debe ser inferior a 15 veces el diámetro exterior del cable para cables unipolares y 12 veces para multipolares.', 'radio,curvatura,cable,unipolar,multipolar'],
+    // ITC-BT-11: Redes de distribución
+    ['REBT', 'ITC-BT-11', 'Previsión de cargas', 'Viviendas grado electrificación básica: 5.750W (25A). Grado elevado: 9.200W (40A). Locales comerciales: 100 W/m² mínimo. Oficinas: 100 W/m² mínimo. Industrias: según demanda real.', 'previsión,carga,vivienda,básica,elevada,potencia'],
+    ['REBT', 'ITC-BT-11', 'Coeficientes de simultaneidad', 'Para edificios: 2-4 viviendas factor 1; 5 viviendas: 0,8; 10: 0,6; 15: 0,5; 21+: n/(n+3,8). Cargas no domésticas: 1,0 para primer receptor, 0,75 para el resto.', 'simultaneidad,coeficiente,edificio,vivienda'],
+    ['REBT', 'ITC-BT-11', 'Acometida y previsión de potencia', 'La acometida es la parte de la instalación comprendida entre la red de distribución y la CGP. Potencia: P = √3 × U × I × cosφ para trifásico. Para 80kW a 400V trifásico → Iz≈144A → sección típica 70mm² Cu.', 'acometida,potencia,CGP,sección,trifásico'],
+    // ITC-BT-19: Instalaciones interiores
+    ['REBT', 'ITC-BT-19', 'Caídas de tensión máximas admisibles', 'Instalaciones de enlace: 0,5%. Alumbrado: 3%. Otros usos: 5%. Para instalaciones industriales alimentadas en AT mediante transformador propio: 4,5% alumbrado, 6,5% otros usos.', 'caída,tensión,porcentaje,alumbrado,fuerza'],
+    ['REBT', 'ITC-BT-19', 'Secciones mínimas de conductores', 'Circuitos interiores vivienda: alumbrado 1,5mm², tomas 16A 2,5mm², cocina/horno 6mm², calefacción 6mm². Línea principal de tierra: 16mm² Cu mínimo. Derivación individual: 6mm² mínimo.', 'sección,mínima,conductor,vivienda,circuito'],
+    ['REBT', 'ITC-BT-19', 'Intensidades admisibles y factores de corrección', 'Las intensidades admisibles dependen del tipo de cable, instalación y temperatura ambiente. Factor corrección agrupamiento: 2 circuitos=0,80; 3=0,70; 4-6=0,60. Temperatura ambiente >40°C requiere factor adicional.', 'intensidad,admisible,corrección,agrupamiento,temperatura'],
+    ['REBT', 'ITC-BT-19', 'Conductores de protección PE', 'Sección mín PE: para fases hasta 16mm² → PE igual a fase; 16-35mm² → PE=16mm²; >35mm² → PE=mitad de fase. Color: amarillo-verde obligatorio.', 'protección,PE,tierra,sección,color'],
+    // ITC-BT-20: Sistemas de instalación
+    ['REBT', 'ITC-BT-20', 'Tipos de canalización', 'Conductores aislados bajo tubo. Conductores aislados sobre bandeja o soporte de bandejas. Canales protectoras. Conductores aislados en huecos de la construcción. Cada tipo tiene sus condiciones de instalación y factores de corrección específicos.', 'canalización,tubo,bandeja,canal,instalación'],
+    ['REBT', 'ITC-BT-20', 'Condiciones generales de instalación', 'Los conductores en el interior de tubos no deben tener empalmes. Las conexiones se realizan en cajas. Ocupación máxima del tubo: 40% de la sección interior. Radios de curvatura según ITC-BT-21.', 'empalme,conexión,caja,ocupación,tubo'],
+    ['REBT', 'ITC-BT-20', 'Bandejas portacables', 'Ocupación máxima recomendada: cables en una capa sin contacto lateral. Factor llenado: 40-50% de la sección útil. Soporte cada 1,5-3m según carga. Material: acero galvanizado, aluminio o PVC según ambiente.', 'bandeja,portacables,llenado,soporte,ocupación'],
+    // ITC-BT-21: Tubos y canales protectoras
+    ['REBT', 'ITC-BT-21', 'Tubos en instalaciones empotradas', 'Resistencia a compresión 320N (ligero) o 750N (normal). Diámetro mínimo tubo: 16mm. Tabla 2: 1 conductor 6mm² → tubo 16mm; 3 conductores 2,5mm² → tubo 20mm; 5 conductores 2,5mm² → tubo 25mm.', 'tubo,empotrado,diámetro,compresión,resistencia'],
+    ['REBT', 'ITC-BT-21', 'Tubos en instalaciones superficiales', 'Resistencia impacto medio 2J. Diámetro exterior mínimo 16mm. En exteriores: IP44 mínimo. Curvas: radio mínimo 3 veces el diámetro del tubo. Distancia entre registros: 15m en tramo recto.', 'tubo,superficie,exterior,IP,curva,registro'],
+    ['REBT', 'ITC-BT-21', 'Canales protectoras', 'Deben ser de material aislante o metálico con tapa. Anchura mínima para albergar los conductores según tabla. Accesibles en toda su longitud. Grado protección mínimo IP4X cuando son accesibles.', 'canal,protectora,tapa,IP,accesible'],
+    // ITC-BT-22: Protección contra sobreintensidades
+    ['REBT', 'ITC-BT-22', 'Protección contra sobrecargas', 'Condiciones: Ib ≤ In ≤ Iz (corriente diseño ≤ nominal protección ≤ admisible cable). I2 ≤ 1,45 × Iz (corriente convencional fusión ≤ 1,45 × admisible). Para magnetotérmicos: I2 = 1,45 × In.', 'sobrecarga,magnetotérmico,fusible,condición,Ib,In,Iz'],
+    ['REBT', 'ITC-BT-22', 'Protección contra cortocircuitos', 'Todo circuito debe estar protegido contra cortocircuitos. Poder de corte ≥ Icc máxima en el punto de instalación. Tiempo de corte < tiempo que el cable aguanta la Icc: t = (k×S/Icc)². k=115 para Cu/PVC, k=76 para Al/PVC.', 'cortocircuito,poder,corte,Icc,tiempo'],
+    ['REBT', 'ITC-BT-22', 'Selectividad de protecciones', 'Las protecciones deben ser selectivas: ante un defecto, solo debe actuar la protección más cercana aguas arriba del defecto. Selectividad por calibre: relación 1:1,6 entre protecciones sucesivas.', 'selectividad,protección,calibre,coordinación'],
+    // ITC-BT-24: Protección contra contactos
+    ['REBT', 'ITC-BT-24', 'Protección contra contactos directos', 'Medidas: aislamiento de partes activas, barreras o envolventes (IP2X mínimo, IPXXB para dedos), interruptores diferenciales 30mA como medida complementaria. Alejamiento: fuera del volumen de accesibilidad (2,50m arriba, 1,00m lateral).', 'contacto,directo,aislamiento,barrera,envolvente,IP2X'],
+    ['REBT', 'ITC-BT-24', 'Protección contra contactos indirectos', 'Clase A (sin corte): muy baja tensión MBTS (≤50V CA, ≤120V CC). Clase B (con corte automático): interruptor diferencial. Esquema TT: Id × Ra ≤ UL (50V locales secos, 24V locales húmedos). Diferencial 30mA obligatorio en viviendas.', 'contacto,indirecto,diferencial,TT,MBTS,tierra'],
+    ['REBT', 'ITC-BT-24', 'Resistencia de tierra', 'Esquema TT: Ra ≤ UL/Ia. Para diferencial 30mA y UL=50V: Ra ≤ 50/0,03 = 1.667Ω. Para 300mA: Ra ≤ 166Ω. Valor recomendado: < 37Ω (con ID 30mA para UL=24V en húmedos). Revisión anual obligatoria.', 'tierra,resistencia,Ra,pica,medición'],
+    // ITC-BT-25: Locales de pública concurrencia
+    ['REBT', 'ITC-BT-25', 'Requisitos generales pública concurrencia', 'Locales de espectáculos, reunión, trabajo, sanitarios, religiosos, comerciales >2.500m², estaciones, aeropuertos. Suministro complementario obligatorio. Alumbrado de emergencia: mín 5 lux en vías evacuación.', 'pública,concurrencia,emergencia,evacuación,alumbrado'],
+    ['REBT', 'ITC-BT-25', 'Alumbrado de emergencia y señalización', 'Autonomía mínima 1 hora. 5 lux en vías de evacuación, 1 lux en puntos donde estén equipos de protección contra incendios. Señalización: luminarias con pictogramas normalizados. Encendido automático por fallo de suministro.', 'emergencia,señalización,luminaria,autonomía,evacuación,lux'],
+    ['REBT', 'ITC-BT-25', 'Instalaciones en pública concurrencia', 'Cables no propagadores de incendio (UNE-EN 60332). Baja emisión de humos (UNE-EN 61034). Conductores de cobre mínimo. Cuadros con envolvente metálica. IGA accesible bomberos. Diferencial por circuito.', 'incendio,humo,cable,cuadro,IGA,bombero'],
+    // ITC-BT-28: Locales con riesgo
+    ['REBT', 'ITC-BT-28', 'Clasificación de zonas con riesgo de explosión', 'Zona 0: presencia permanente de atmósfera explosiva (gas). Zona 1: probable en funcionamiento normal. Zona 2: no probable, y si ocurre de corta duración. Zona 20/21/22: equivalentes para polvo. Clasificación según UNE-EN 60079-10.', 'ATEX,zona,explosión,gas,polvo,clasificación'],
+    ['REBT', 'ITC-BT-28', 'Equipos para zonas ATEX', 'Zona 0: categoría 1G (Ex ia). Zona 1: categoría 2G (Ex d, Ex e, Ex p). Zona 2: categoría 3G (Ex n). Zona 20: categoría 1D (Ex tD). Marcado CE + marcado Ex obligatorio. Instalación según UNE-EN 60079-14.', 'ATEX,equipo,categoría,Ex,marcado,certificado'],
+    ['REBT', 'ITC-BT-28', 'Instalaciones en locales con riesgo de incendio', 'Cables resistentes al fuego (UNE-EN 60332-3). Canalizaciones metálicas o minerales. Sin empalmes dentro de la zona clasificada. Equipotencialidad de masas metálicas. Puesta a tierra reforzada.', 'incendio,fuego,cable,resistente,canalización,equipotencial'],
+    // ITC-BT-44: Receptores de alumbrado
+    ['REBT', 'ITC-BT-44', 'Receptores de alumbrado — generalidades', 'Luminarias deben cumplir UNE-EN 60598. Clase I (con tierra), Clase II (doble aislamiento), Clase III (MBTS). Máximo 30 puntos de luz por circuito con PIA de 10A. Sección mínima 1,5mm².', 'alumbrado,luminaria,clase,circuito,PIA,punto,luz'],
+    ['REBT', 'ITC-BT-44', 'Lámparas de descarga', 'Factor de potencia mínimo 0,9 (corregido con condensador). La corriente de arranque puede ser 1,5-2× la nominal. Carga mínima prevista: potencia lámpara × 1,8 (por reactancia y arranque).', 'descarga,fluorescente,LED,reactancia,condensador,factor,potencia'],
+    ['REBT', 'ITC-BT-44', 'Alumbrado exterior', 'Protección mínima IP44 (IP65 recomendado). Altura mínima 2,50m sobre suelo en zonas accesibles. Clase II preferente o Clase I con diferencial 30mA. Circuitos independientes con protección propia.', 'exterior,IP,altura,protección,circuito']
+  ];
+  for (const [norma, seccion, titulo, contenido, palabras_clave] of entries) {
+    await env.DB.prepare(
+      "INSERT INTO normativa_index (norma, seccion, titulo, contenido, palabras_clave) VALUES (?, ?, ?, ?, ?)"
+    ).bind(norma, seccion, titulo, contenido, palabras_clave).run().catch(() => {});
+  }
+}
+
+async function seedDefaultAlerts(env) {
+  try {
+    const count = await env.DB.prepare("SELECT COUNT(*) as c FROM alertas_config").first();
+    if (count && count.c > 0) return;
+  } catch { return; }
+  const defaults = [
+    ['bobina_baja', 'Bobina con stock bajo (<10%)', "SELECT id, nombre, metros_restantes, metros_totales FROM bobinas WHERE metros_restantes < (metros_totales * 0.10) AND metros_restantes > 0", 10, 'Bobina "{nombre}" al {pct}% — quedan {metros_restantes}m de {metros_totales}m'],
+    ['sin_fichaje', 'Operario sin fichar en 24h', "SELECT p.id, p.nombre FROM personal p WHERE p.activo=1 AND p.id NOT IN (SELECT DISTINCT usuario_id FROM fichajes WHERE date(fecha) = date('now'))", 0, 'Operario "{nombre}" no ha fichado hoy'],
+    ['revision_equipo', 'Equipo sin revisión en 30+ días', "SELECT id, nombre, tipo, ultima_revision FROM equipos WHERE date(ultima_revision) < date('now', '-30 days') OR ultima_revision IS NULL", 30, 'Equipo "{nombre}" ({tipo}) sin revisión desde {ultima_revision}']
+  ];
+  for (const [tipo, nombre, condicion_sql, umbral, mensaje_template] of defaults) {
+    await env.DB.prepare(
+      "INSERT INTO alertas_config (tipo, nombre, condicion_sql, umbral, mensaje_template) VALUES (?, ?, ?, ?, ?)"
+    ).bind(tipo, nombre, condicion_sql, umbral, mensaje_template).run().catch(() => {});
+  }
+}
+
 async function procesarConNEXUS(env, mensaje, contexto, usuario_id, empresa_id, canal, adjuntos, rol=null, pantalla=null, dom_actual=null) {
   if (!env.ANTHROPIC_API_KEY) {
     return { texto: 'Error: ANTHROPIC_API_KEY no configurada.', acciones: [], requiere_confirmacion: false };
   }
+
+  // Migración automática de tablas nuevas (idempotente, una vez por instancia)
+  await ensureNewTables(env).catch(() => {});
 
   const config = await env.DB.prepare('SELECT modo FROM agente_config ORDER BY updated_at DESC LIMIT 1').first().catch(() => null);
   const modo = config?.modo || 'autonomo';
@@ -1086,6 +1319,7 @@ async function procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empres
     await send({ type: 'error', mensaje: 'ANTHROPIC_API_KEY no configurada.' });
     return { texto: 'Error: sin clave API.', herramientas_usadas: [] };
   }
+  await ensureNewTables(env).catch(() => {});
   const config = await env.DB.prepare('SELECT modo FROM agente_config ORDER BY updated_at DESC LIMIT 1').first().catch(() => null);
   const modo = config?.modo || 'autonomo';
 
@@ -1214,6 +1448,11 @@ async function buildUserContentWithAdjuntos(env, mensaje, adjuntos) {
         else if (lower.endsWith('.heif')) ct = 'image/heif';
         else if (lower.endsWith('.gif')) ct = 'image/gif';
         else if (lower.endsWith('.pdf')) ct = 'application/pdf';
+        else if (lower.endsWith('.csv')) ct = 'text/csv';
+        else if (lower.endsWith('.txt')) ct = 'text/plain';
+        else if (lower.endsWith('.json')) ct = 'application/json';
+        else if (lower.endsWith('.xlsx')) ct = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+        else if (lower.endsWith('.xls')) ct = 'application/vnd.ms-excel';
       }
       if (ct.startsWith('image/')) {
         const buf = await obj.arrayBuffer();
@@ -1236,6 +1475,42 @@ async function buildUserContentWithAdjuntos(env, mensaje, adjuntos) {
             text: `[Imagen grande adjunta: ${key} (${(bytes.length/1024/1024).toFixed(1)}MB). Usa la tool analizar_foto_obra con key="${key}" para analizarla.]`
           });
         }
+      } else if (ct === 'application/pdf') {
+        const buf = await obj.arrayBuffer();
+        const bytes = new Uint8Array(buf);
+        if (bytes.length <= 4.5 * 1024 * 1024) {
+          const base64 = uint8ToBase64(bytes);
+          contentBlocks.push({
+            type: 'document',
+            source: { type: 'base64', media_type: 'application/pdf', data: base64 }
+          });
+        } else if (env.GEMINI_API_KEY) {
+          try {
+            const base64 = uint8ToBase64(bytes);
+            const texto = await analizarArchivoConGemini(env, base64, 'application/pdf',
+              'Extrae TODO el texto y datos de este PDF. Responde con el contenido completo, manteniendo la estructura (tablas, listas, secciones).');
+            contentBlocks.push({ type: 'text', text: `Contenido del PDF (${key}, ${(bytes.length/1024/1024).toFixed(1)}MB, extraído con Gemini):\n${texto}` });
+          } catch (e) {
+            contentBlocks.push({ type: 'text', text: `[PDF grande: ${key} (${(bytes.length/1024/1024).toFixed(1)}MB). Error al leer con Gemini: ${e.message}. Usa ver_archivo con key="${key}" para extraer texto básico.]` });
+          }
+        } else {
+          contentBlocks.push({ type: 'text', text: `[PDF muy grande: ${key} (${(bytes.length/1024/1024).toFixed(1)}MB). Pide al usuario las páginas relevantes o usa ver_archivo con key="${key}" para extraer texto.]` });
+        }
+      } else if (ct.includes('spreadsheet') || ct.includes('excel')) {
+        const buf = await obj.arrayBuffer();
+        const bytes = new Uint8Array(buf);
+        if (env.GEMINI_API_KEY && bytes.length <= 20 * 1024 * 1024) {
+          try {
+            const base64 = uint8ToBase64(bytes);
+            const texto = await analizarArchivoConGemini(env, base64, ct,
+              'Lee este archivo Excel/hoja de cálculo. Extrae TODOS los datos en formato tabla texto. Incluye nombres de hojas si hay varias. Mantén números, fechas y fórmulas visibles.');
+            contentBlocks.push({ type: 'text', text: `Contenido del Excel (${key}, extraído con Gemini):\n${texto}` });
+          } catch (e) {
+            contentBlocks.push({ type: 'text', text: `[Archivo Excel: ${key}. Error al leer con Gemini: ${e.message}. Sugiere al usuario exportar como CSV.]` });
+          }
+        } else {
+          contentBlocks.push({ type: 'text', text: `[Archivo Excel adjunto: ${key}. Sugiere al usuario exportar como CSV para poder leerlo.]` });
+        }
       } else if (ct.startsWith('text/') || ct === 'application/json') {
         const text = await obj.text();
         contentBlocks.push({ type: 'text', text: `Archivo adjunto (${key}):\n${text.substring(0, 4000)}` });
@@ -1256,27 +1531,50 @@ async function buildUserContentWithAdjuntos(env, mensaje, adjuntos) {
 }
 
 // ── Gemini Vision — analizar foto con IA de visión ──────────────────────────
-async function analizarFotoConGemini(env, imageBase64, mediaType, prompt) {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${env.GEMINI_API_KEY}`;
-  const body = {
-    contents: [{
-      parts: [
-        { inline_data: { mime_type: mediaType, data: imageBase64 } },
-        { text: prompt }
-      ]
-    }]
-  };
-  const resp = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body)
-  });
-  if (!resp.ok) {
-    const err = await resp.text();
-    throw new Error(`Gemini ${resp.status}: ${err.substring(0, 200)}`);
+// ── Gemini con rotación de keys y fallback de modelos ────────────────────────
+async function callGemini(env, geminiBody, label) {
+  const keys = [env.GEMINI_API_KEY, env.GEMINI_API_KEY_2, env.GEMINI_API_KEY_3].filter(Boolean);
+  if (!keys.length) throw new Error('GEMINI_API_KEY no configurada');
+  const models = ['gemini-2.0-flash', 'gemini-1.5-flash-002', 'gemini-1.5-flash'];
+  for (const key of keys) {
+    for (const model of models) {
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`,
+        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(geminiBody) }
+      );
+      const data = await res.json();
+      if (res.ok) return data.candidates?.[0]?.content?.parts?.[0]?.text || 'Sin resultado.';
+      if (res.status === 429) break;
+      if (res.status === 404) continue;
+      throw new Error(`Gemini ${res.status} [${label}]: ${JSON.stringify(data).slice(0, 200)}`);
+    }
   }
-  const data = await resp.json();
-  return data.candidates?.[0]?.content?.parts?.[0]?.text || 'Sin análisis disponible.';
+  throw new Error(`Cuota Gemini agotada (${label})`);
+}
+
+async function analizarFotoConGemini(env, imageBase64, mediaType, prompt) {
+  return callGemini(env, {
+    contents: [{ parts: [
+      { inline_data: { mime_type: mediaType, data: imageBase64 } },
+      { text: prompt }
+    ]}]
+  }, 'foto_obra');
+}
+
+async function analizarArchivoConGemini(env, fileBase64, mimeType, prompt) {
+  return callGemini(env, {
+    contents: [{ parts: [
+      { inline_data: { mime_type: mimeType, data: fileBase64 } },
+      { text: prompt }
+    ]}]
+  }, 'archivo');
+}
+
+async function buscarConGemini(env, query) {
+  return callGemini(env, {
+    contents: [{ parts: [{ text: query }] }],
+    tools: [{ google_search: {} }]
+  }, 'busqueda');
 }
 
 // ── Cálculos de ingeniería ───────────────────────────────────────────────────
@@ -1542,7 +1840,7 @@ async function ejecutarTool(env, nombre, input, usuario_id, empresa_id, expertoT
     case 'memory_save': {
       try {
         await env.DB.prepare(
-          `INSERT INTO alejandra_memoria (tipo,canal,titulo,contenido,importancia,created_at)
+          `INSERT INTO alejandra_memoria (tipo,usuario_id,titulo,contenido,importancia,created_at)
            VALUES(?,?,?,?,?,datetime('now'))`
         ).bind(input.tipo, usuario_id || 'system', input.titulo, input.contenido, input.importancia||3).run();
         return `Guardado en memoria: [${input.tipo}] "${input.titulo}"`;
@@ -1715,6 +2013,20 @@ ${input.codigo_sugerido ? `CÓDIGO SUGERIDO:\n${input.codigo_sugerido}` : ''}`;
         return `Archivo: ${input.key} (${sizeKB} KB, ${contentType}). Tipo no soportado para lectura directa.`;
       } catch (err) {
         return `Error leyendo archivo: ${err.message}`;
+      }
+    }
+
+    case 'ver_esquema_bd': {
+      try {
+        const tables = await env.DB.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%' ORDER BY name").all();
+        const schema = [];
+        for (const t of (tables.results || [])) {
+          const cols = await env.DB.prepare(`PRAGMA table_info(${t.name})`).all();
+          schema.push({ tabla: t.name, columnas: (cols.results||[]).map(c => `${c.name} ${c.type}${c.pk ? ' PK' : ''}${c.notnull ? ' NOT NULL' : ''}`) });
+        }
+        return JSON.stringify(schema, null, 2);
+      } catch (err) {
+        return `Error leyendo esquema: ${err.message}`;
       }
     }
 
@@ -1958,6 +2270,712 @@ ${input.codigo_sugerido ? `CÓDIGO SUGERIDO:\n${input.codigo_sugerido}` : ''}`;
       } catch (err) {
         return `Error analizando foto: ${err.message}`;
       }
+    }
+
+    case 'analizar_archivo': {
+      try {
+        if (!env.GEMINI_API_KEY) return 'GEMINI_API_KEY no configurada — análisis de archivos no disponible.';
+        if (!env.FILES) return 'R2 bucket FILES no configurado.';
+        const obj = await env.FILES.get(input.key);
+        if (!obj) return `Archivo no encontrado: "${input.key}"`;
+        const ct = obj.httpMetadata?.contentType || 'application/octet-stream';
+        const arrayBuf = await obj.arrayBuffer();
+        const bytes = new Uint8Array(arrayBuf);
+        if (bytes.length > 20 * 1024 * 1024) return 'Archivo demasiado grande (máx 20MB).';
+        const base64 = uint8ToBase64(bytes);
+        const prompt = input.pregunta
+          ? `Analiza este archivo y responde en español: ${input.pregunta}`
+          : `Analiza este archivo en detalle. Describe su contenido, estructura y datos relevantes. Responde en español.`;
+        const resultado = await analizarArchivoConGemini(env, base64, ct, prompt);
+        return `Análisis de archivo (${input.key}):\n\n${resultado}`;
+      } catch (err) {
+        return `Error analizando archivo: ${err.message}`;
+      }
+    }
+
+    case 'buscar_google': {
+      try {
+        if (!env.GEMINI_API_KEY) return 'GEMINI_API_KEY no configurada — búsqueda no disponible.';
+        const resultado = await buscarConGemini(env, input.consulta);
+        return `Resultados de búsqueda:\n\n${resultado}`;
+      } catch (err) {
+        return `Error en búsqueda: ${err.message}`;
+      }
+    }
+
+    // ── Tools de automodificación ────────────────────────────────────────────
+    case 'repo_read_file': {
+      if (!env.GITHUB_TOKEN) return 'GITHUB_TOKEN no configurado.';
+      const { path } = input;
+      try {
+        const res = await fetch(`https://api.github.com/repos/padilla585projects/Alejandra-APP/contents/${encodeURIComponent(path)}`, {
+          headers: { 'Authorization': `token ${env.GITHUB_TOKEN}`, 'Accept': 'application/vnd.github.v3+json', 'User-Agent': 'AlejandraIA' }
+        });
+        if (!res.ok) return JSON.stringify({ ok: false, error: `HTTP ${res.status}: ${await res.text()}` });
+        const data = await res.json();
+        if (data.type !== 'file') return JSON.stringify({ ok: false, error: 'No es un archivo' });
+        const _b64 = atob(data.content.replace(/\n/g, '')); const _by = new Uint8Array(_b64.length); for (let i = 0; i < _b64.length; i++) _by[i] = _b64.charCodeAt(i);
+        const fullContent = new TextDecoder('utf-8').decode(_by);
+        const allLines = fullContent.split('\n');
+        const totalLines = allLines.length;
+        let content; let rangeDesc = '';
+        if (input.line_start || input.line_end) {
+          const s = Math.max(1, input.line_start || 1) - 1;
+          const e = Math.min(totalLines, input.line_end || totalLines);
+          content = allLines.slice(s, e).join('\n');
+          rangeDesc = ` (lineas ${s+1}-${e} de ${totalLines})`;
+        } else {
+          content = fullContent.slice(0, 50000);
+        }
+        const truncated = !input.line_start && !input.line_end && fullContent.length > 50000;
+        return JSON.stringify({ ok: true, path, total_lines: totalLines, sha: data.sha, content, truncated, hint: truncated ? `Archivo grande: usa line_start/line_end (total ${totalLines} lineas)` : undefined });
+      } catch (e) { return JSON.stringify({ ok: false, error: e.message }); }
+    }
+
+    case 'repo_write_file': {
+      if (!env.GITHUB_TOKEN) return 'GITHUB_TOKEN no configurado.';
+      const { path, content, message } = input;
+      try {
+        let sha = null;
+        const getRes = await fetch(`https://api.github.com/repos/padilla585projects/Alejandra-APP/contents/${encodeURIComponent(path)}`, {
+          headers: { 'Authorization': `token ${env.GITHUB_TOKEN}`, 'Accept': 'application/vnd.github.v3+json', 'User-Agent': 'AlejandraIA' }
+        });
+        if (getRes.ok) { const existing = await getRes.json(); sha = existing.sha; }
+        const encoded = btoa(unescape(encodeURIComponent(content)));
+        const body = { message, content: encoded, ...(sha ? { sha } : {}) };
+        const putRes = await fetch(`https://api.github.com/repos/padilla585projects/Alejandra-APP/contents/${encodeURIComponent(path)}`, {
+          method: 'PUT',
+          headers: { 'Authorization': `token ${env.GITHUB_TOKEN}`, 'Accept': 'application/vnd.github.v3+json', 'User-Agent': 'AlejandraIA', 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+        if (!putRes.ok) return JSON.stringify({ ok: false, error: `HTTP ${putRes.status}: ${(await putRes.text()).slice(0,300)}` });
+        const result = await putRes.json();
+        const commitSha = result.commit?.sha?.slice(0, 7);
+        autoLearnAgente(env, 'hecho', `Modificado: ${path}`, `Commit ${commitSha}. Cambio: "${message}"`, 2);
+        return JSON.stringify({ ok: true, path, commit: commitSha, message, action: sha ? 'updated' : 'created' });
+      } catch (e) { return JSON.stringify({ ok: false, error: e.message }); }
+    }
+
+    case 'direct_fix': {
+      if (!env.GITHUB_TOKEN) return 'GITHUB_TOKEN no configurado.';
+      const { descripcion, archivo, old_code, new_code, razon } = input;
+      try {
+        const getRes = await fetch(`https://api.github.com/repos/padilla585projects/Alejandra-APP/contents/${encodeURIComponent(archivo)}`, {
+          headers: { 'Authorization': `token ${env.GITHUB_TOKEN}`, 'Accept': 'application/vnd.github.v3+json', 'User-Agent': 'AlejandraIA' }
+        });
+        if (!getRes.ok) return JSON.stringify({ ok: false, error: `GitHub ${getRes.status} leyendo ${archivo}` });
+        const fileData = await getRes.json();
+        const _b64f = atob(fileData.content.replace(/\n/g, '')); const _byf = new Uint8Array(_b64f.length); for (let i = 0; i < _b64f.length; i++) _byf[i] = _b64f.charCodeAt(i);
+        const currentContent = new TextDecoder('utf-8').decode(_byf);
+        if (!currentContent.includes(old_code)) {
+          return JSON.stringify({ ok: false, error: `old_code no encontrado en ${archivo}. Usa repo_read_file para leer el codigo exacto actual.` });
+        }
+        const newContent = currentContent.replace(old_code, new_code);
+        const encoded = btoa(unescape(encodeURIComponent(newContent)));
+        const putRes = await fetch(`https://api.github.com/repos/padilla585projects/Alejandra-APP/contents/${encodeURIComponent(archivo)}`, {
+          method: 'PUT',
+          headers: { 'Authorization': `token ${env.GITHUB_TOKEN}`, 'Accept': 'application/vnd.github.v3+json', 'User-Agent': 'AlejandraIA', 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message: `fix(alejandra): ${descripcion}`, content: encoded, sha: fileData.sha })
+        });
+        if (!putRes.ok) return JSON.stringify({ ok: false, error: `GitHub ${putRes.status}: ${(await putRes.text()).slice(0,300)}` });
+        const result = await putRes.json();
+        const commitSha = result.commit?.sha?.slice(0, 7);
+        // Guardar fix en BD para tracking
+        const r = await env.DB.prepare(
+          "INSERT INTO alejandra_fixes (descripcion, archivo, contenido_nuevo, razon, estado, commit_sha) VALUES (?,?,?,?,'aplicado',?)"
+        ).bind(descripcion, archivo, JSON.stringify({ old: old_code.slice(0,500), new: new_code.slice(0,500) }), razon, commitSha).run().catch(()=>({meta:{}}));
+        const fixId = r.meta?.last_row_id || '?';
+        // Notificar a Adrian por Telegram
+        notificarAdrian(env, `🤖 <b>Fix aplicado #${fixId}</b>\n📁 <code>${archivo}</code>\n📋 ${descripcion}\n💡 ${razon}\n📝 Commit: <code>${commitSha}</code>`).catch(()=>{});
+        autoLearnAgente(env, 'hecho', `direct_fix: ${descripcion}`, `Archivo: ${archivo} | Commit: ${commitSha}`, 3);
+        const deployMsg = archivo.includes('worker') ? 'Deploy a Cloudflare en ~1min (GitHub Actions).' : 'Deploy a GitHub Pages en ~30s.';
+        return JSON.stringify({ ok: true, fix_id: fixId, commit: commitSha, deploy: deployMsg });
+      } catch (e) {
+        autoLearnAgente(env, 'error', `direct_fix fallo: ${descripcion}`, e.message, 4);
+        return JSON.stringify({ ok: false, error: e.message });
+      }
+    }
+
+    case 'grep_code': {
+      if (!env.GITHUB_TOKEN) return 'GITHUB_TOKEN no configurado.';
+      const { path, pattern, context_lines = 3 } = input;
+      try {
+        const getRes = await fetch(`https://api.github.com/repos/padilla585projects/Alejandra-APP/contents/${encodeURIComponent(path)}`, {
+          headers: { 'Authorization': `token ${env.GITHUB_TOKEN}`, 'Accept': 'application/vnd.github.v3+json', 'User-Agent': 'AlejandraIA' }
+        });
+        if (!getRes.ok) return JSON.stringify({ ok: false, error: `GitHub ${getRes.status}` });
+        const fileData = await getRes.json();
+        const raw = atob(fileData.content.replace(/\n/g, ''));
+        const lines = raw.split('\n');
+        const regex = new RegExp(pattern, 'gi');
+        const matches = [];
+        for (let i = 0; i < lines.length; i++) {
+          if (regex.test(lines[i])) {
+            regex.lastIndex = 0;
+            const from = Math.max(0, i - context_lines);
+            const to = Math.min(lines.length - 1, i + context_lines);
+            const ctx = lines.slice(from, to + 1).map((l, idx) => ({ line: from + idx + 1, text: l, match: (from + idx) === i }));
+            matches.push({ line: i + 1, text: lines[i].trim(), context: ctx });
+            i += context_lines;
+          }
+          regex.lastIndex = 0;
+        }
+        return JSON.stringify({ ok: true, path, pattern, total_lines: lines.length, matches_found: matches.length, matches: matches.slice(0, 20) });
+      } catch (e) { return JSON.stringify({ ok: false, error: e.message }); }
+    }
+
+    case 'run_migration': {
+      const { sql, descripcion } = input;
+      try {
+        const stmts = sql.split(';').map(s => s.trim()).filter(s => s.length > 0);
+        const results = [];
+        for (const stmt of stmts) {
+          try {
+            const r = await env.DB.prepare(stmt).run();
+            results.push({ sql: stmt.slice(0, 80), ok: true });
+          } catch (e) {
+            results.push({ sql: stmt.slice(0, 80), ok: false, error: e.message });
+          }
+        }
+        const allOk = results.every(r => r.ok);
+        if (allOk) autoLearnAgente(env, 'hecho', `Migracion: ${descripcion || sql.slice(0, 60)}`, sql.slice(0, 300), 3);
+        return JSON.stringify({ ok: allOk, results, total: stmts.length, ok_count: results.filter(r => r.ok).length });
+      } catch (e) { return JSON.stringify({ ok: false, error: e.message }); }
+    }
+
+    case 'check_deploy_status': {
+      if (!env.GITHUB_TOKEN) return 'GITHUB_TOKEN no configurado.';
+      try {
+        const [runsRes, commitsRes] = await Promise.all([
+          fetch('https://api.github.com/repos/padilla585projects/Alejandra-APP/actions/runs?per_page=5', {
+            headers: { 'Authorization': `token ${env.GITHUB_TOKEN}`, 'Accept': 'application/vnd.github.v3+json', 'User-Agent': 'AlejandraIA' }
+          }),
+          fetch('https://api.github.com/repos/padilla585projects/Alejandra-APP/commits?per_page=5', {
+            headers: { 'Authorization': `token ${env.GITHUB_TOKEN}`, 'Accept': 'application/vnd.github.v3+json', 'User-Agent': 'AlejandraIA' }
+          })
+        ]);
+        const runsData = runsRes.ok ? await runsRes.json() : { workflow_runs: [] };
+        const commitsData = commitsRes.ok ? await commitsRes.json() : [];
+        const runs = (runsData.workflow_runs || []).map(r => ({
+          workflow: r.name, status: r.status, conclusion: r.conclusion,
+          created_at: r.created_at, commit: r.head_sha?.slice(0, 7),
+          commit_msg: r.head_commit?.message?.slice(0, 60)
+        }));
+        const commits = (Array.isArray(commitsData) ? commitsData : []).map(c => ({
+          sha: c.sha?.slice(0, 7), msg: c.commit?.message?.slice(0, 80), date: c.commit?.author?.date
+        }));
+        const latest = runs[0];
+        const summary = !latest ? 'Sin runs de GitHub Actions.'
+          : latest.status === 'completed' && latest.conclusion === 'success' ? `OK (commit ${latest.commit})`
+          : latest.status === 'in_progress' ? `En curso (commit ${latest.commit})`
+          : `FALLO: ${latest.conclusion} (commit ${latest.commit})`;
+        return JSON.stringify({ ok: true, summary, runs: runs.slice(0, 5), recent_commits: commits });
+      } catch (e) { return JSON.stringify({ ok: false, error: e.message }); }
+    }
+
+    case 'enviar_notificacion': {
+      const uid = (input.usuario_id || '').trim();
+      const titulo = (input.titulo || '').trim();
+      const msg = (input.mensaje || '').trim();
+      if (!uid || !titulo || !msg) return 'Faltan parámetros: usuario_id, titulo, mensaje.';
+      const pushResult = await sendPushToUser(env, uid, titulo, msg);
+      return JSON.stringify(pushResult);
+    }
+
+    case 'crear_tarea_background': {
+      const desc = (input.descripcion || '').trim();
+      if (!desc) return 'Falta "descripcion" de la tarea.';
+      const uid = input.usuario_id || usuario_id || 'system';
+      try {
+        await env.DB.prepare(
+          `INSERT INTO alejandra_tareas (usuario_id, descripcion, estado) VALUES (?, ?, 'pendiente')`
+        ).bind(uid, desc).run();
+        return JSON.stringify({ ok: true, msg: `Tarea creada para ${uid}: ${desc}` });
+      } catch (e) { return JSON.stringify({ ok: false, error: e.message }); }
+    }
+
+    case 'ver_tareas': {
+      const uid = input.usuario_id || usuario_id || 'system';
+      const estado = input.estado || null;
+      try {
+        let q = 'SELECT id, descripcion, estado, resultado, created_at, completed_at FROM alejandra_tareas WHERE usuario_id=?';
+        const binds = [uid];
+        if (estado) { q += ' AND estado=?'; binds.push(estado); }
+        q += ' ORDER BY created_at DESC LIMIT 20';
+        const stmt = env.DB.prepare(q);
+        const rows = binds.length === 2 ? await stmt.bind(binds[0], binds[1]).all() : await stmt.bind(binds[0]).all();
+        return JSON.stringify({ ok: true, tareas: rows.results || [] });
+      } catch (e) { return JSON.stringify({ ok: false, error: e.message }); }
+    }
+
+    case 'completar_tarea': {
+      const id = input.tarea_id;
+      const resultado = (input.resultado || '').trim();
+      if (!id) return 'Falta "tarea_id".';
+      try {
+        await env.DB.prepare(
+          `UPDATE alejandra_tareas SET estado='completada', resultado=?, completed_at=datetime('now') WHERE id=?`
+        ).bind(resultado, id).run();
+        // Notificar al usuario si tiene push
+        const tarea = await env.DB.prepare('SELECT usuario_id, descripcion FROM alejandra_tareas WHERE id=?').bind(id).first();
+        if (tarea) {
+          await sendPushToUser(env, tarea.usuario_id, '✅ Tarea completada', tarea.descripcion).catch(()=>{});
+        }
+        return JSON.stringify({ ok: true, msg: 'Tarea marcada como completada.' });
+      } catch (e) { return JSON.stringify({ ok: false, error: e.message }); }
+    }
+
+    // ── Tools de capacidades avanzadas ──────────────────────────────────────────
+
+    case 'buscar_precios': {
+      const producto = (input.producto || '').trim();
+      const fabricante = (input.fabricante || '').trim();
+      const cantidad = input.cantidad || 1;
+      if (!producto) return 'Falta "producto" para buscar precios.';
+      try {
+        // 1. Buscar en caché (válido 7 días)
+        const cacheKey = fabricante ? `${producto} ${fabricante}` : producto;
+        const cached = await env.DB.prepare(
+          "SELECT * FROM precios_materiales WHERE producto LIKE ? AND (fabricante LIKE ? OR ? = '') AND datetime(expires_at) > datetime('now') ORDER BY created_at DESC LIMIT 1"
+        ).bind(`%${producto}%`, `%${fabricante}%`, fabricante).first().catch(() => null);
+        if (cached) {
+          const total_min = cached.precio_min * cantidad;
+          const total_max = cached.precio_max * cantidad;
+          return JSON.stringify({
+            ok: true, cached: true, producto: cached.producto, fabricante: cached.fabricante,
+            precio_min: cached.precio_min, precio_max: cached.precio_max, moneda: cached.moneda,
+            cantidad, total_min, total_max, fuente: cached.fuente, datos_extra: cached.datos_extra,
+            actualizado: cached.created_at, expira: cached.expires_at
+          });
+        }
+        // 2. Buscar con Gemini + Google Search grounding
+        if (!env.GEMINI_API_KEY) return 'GEMINI_API_KEY no configurada — no puedo buscar precios.';
+        const query = `precio ${producto} ${fabricante} distribuidor eléctrico España 2026 precio unitario`;
+        const resultado = await buscarConGemini(env, query);
+        // 3. Parsear resultado para extraer precios (heurística)
+        const precioRegex = /(\d+[.,]?\d*)\s*€/g;
+        const precios = [];
+        let match;
+        while ((match = precioRegex.exec(resultado)) !== null) {
+          precios.push(parseFloat(match[1].replace(',', '.')));
+        }
+        const precio_min = precios.length > 0 ? Math.min(...precios) : 0;
+        const precio_max = precios.length > 0 ? Math.max(...precios) : 0;
+        // 4. Guardar en caché
+        if (precio_min > 0) {
+          await env.DB.prepare(
+            "INSERT INTO precios_materiales (producto, fabricante, precio_min, precio_max, moneda, fuente, datos_extra, expires_at) VALUES (?, ?, ?, ?, 'EUR', 'Google Search (Gemini)', ?, datetime('now', '+7 days'))"
+          ).bind(producto, fabricante || null, precio_min, precio_max, resultado.slice(0, 500)).run().catch(() => {});
+        }
+        const total_min = precio_min * cantidad;
+        const total_max = precio_max * cantidad;
+        return JSON.stringify({
+          ok: true, cached: false, producto, fabricante: fabricante || 'N/A',
+          precio_min, precio_max, moneda: 'EUR', cantidad, total_min, total_max,
+          fuente: 'Google Search (Gemini)', detalle: resultado.slice(0, 800)
+        });
+      } catch (e) { return JSON.stringify({ ok: false, error: e.message }); }
+    }
+
+    case 'marcar_plano': {
+      const key = (input.key || '').trim();
+      const instrucciones = (input.instrucciones || '').trim();
+      const tipo = input.tipo || 'general';
+      if (!key || !instrucciones) return 'Faltan "key" e "instrucciones".';
+      try {
+        if (!env.GEMINI_API_KEY) return 'GEMINI_API_KEY no configurada — no puedo analizar planos.';
+        const obj = await env.FILES.get(key);
+        if (!obj) return `Archivo no encontrado en R2: ${key}`;
+        const buf = await obj.arrayBuffer();
+        const base64 = btoa(String.fromCharCode(...new Uint8Array(buf)));
+        const mimeType = obj.httpMetadata?.contentType || 'application/pdf';
+        const prompt = `Eres un ingeniero técnico experto en instalaciones eléctricas y mecánicas. Analiza este plano/documento técnico de tipo "${tipo}".
+
+INSTRUCCIONES DEL USUARIO: ${instrucciones}
+
+Genera un INFORME TÉCNICO DETALLADO con:
+1. DESCRIPCIÓN GENERAL: qué muestra el plano, escala estimada, tipo de instalación
+2. ELEMENTOS IDENTIFICADOS: lista de componentes, circuitos, equipos visibles
+3. MEDICIONES/DIMENSIONES: distancias, secciones, calibres que puedas leer o estimar
+4. ANOTACIONES TÉCNICAS: observaciones por zona/cuadrante del plano
+5. PROBLEMAS DETECTADOS: errores, incumplimientos de normativa, riesgos
+6. RECOMENDACIONES: mejoras, correcciones necesarias
+
+Para cada observación, indica la ZONA del plano (superior-izquierda, centro, etc.) donde se encuentra.
+Sé específico y técnico. Cita normativa (REBT, ITC-BT) cuando sea relevante.`;
+        const resultado = await analizarArchivoConGemini(env, base64, mimeType, prompt);
+        return JSON.stringify({ ok: true, tipo_plano: tipo, key, analisis: resultado });
+      } catch (e) { return JSON.stringify({ ok: false, error: e.message }); }
+    }
+
+    case 'generar_documento': {
+      const tipo = input.tipo;
+      const datos = input.datos || {};
+      const titulo = input.titulo || `${tipo}_${new Date().toISOString().split('T')[0]}`;
+      if (!tipo) return 'Falta "tipo" de documento.';
+      try {
+        const fecha = new Date().toISOString().split('T')[0];
+        const hora = new Date().toISOString().split('T')[1]?.slice(0, 5) || '00:00';
+        let contenido = '';
+        switch (tipo) {
+          case 'memoria_tecnica':
+            contenido = `═══════════════════════════════════════════════════════════
+MEMORIA TÉCNICA DESCRIPTIVA
+═══════════════════════════════════════════════════════════
+Título: ${datos.titulo || titulo}
+Fecha: ${fecha}
+Obra: ${datos.obra || 'N/A'}
+Instalador: ${datos.instalador || 'N/A'}
+CIF/NIF: ${datos.cif || 'N/A'}
+Dirección obra: ${datos.direccion || 'N/A'}
+───────────────────────────────────────────────────────────
+1. OBJETO
+${datos.objeto || 'Descripción de la instalación eléctrica/mecánica.'}
+
+2. NORMATIVA APLICABLE
+${datos.normativa || '- REBT (RD 842/2002)\n- ITC-BT aplicables\n- UNE 20460\n- Normas particulares de la compañía suministradora'}
+
+3. DESCRIPCIÓN DE LA INSTALACIÓN
+${datos.descripcion || 'Pendiente de rellenar.'}
+
+4. POTENCIA PREVISTA
+${datos.potencia || 'Pendiente de cálculo.'}
+
+5. CÁLCULOS JUSTIFICATIVOS
+${datos.calculos || 'Ver anexo de cálculos.'}
+
+6. PLIEGO DE CONDICIONES
+${datos.pliego || 'Los materiales cumplirán las normas UNE aplicables.'}
+
+Firmado: ${datos.firmante || 'El instalador autorizado'}
+Fecha: ${fecha}`;
+            break;
+          case 'certificado_instalacion':
+            contenido = `═══════════════════════════════════════════════════════════
+CERTIFICADO DE INSTALACIÓN ELÉCTRICA
+═══════════════════════════════════════════════════════════
+Nº Certificado: ${datos.numero || 'PEND-' + Date.now()}
+Fecha: ${fecha}
+───────────────────────────────────────────────────────────
+DATOS DEL TITULAR
+Nombre: ${datos.titular || 'N/A'}
+Dirección: ${datos.direccion || 'N/A'}
+Localidad: ${datos.localidad || 'N/A'}
+
+DATOS DE LA INSTALACIÓN
+Tipo: ${datos.tipo_instalacion || 'Baja Tensión'}
+Tensión: ${datos.tension || '230/400V'}
+Potencia instalada: ${datos.potencia_instalada || 'N/A'} W
+Potencia demandada: ${datos.potencia_demandada || 'N/A'} W
+
+DATOS DEL INSTALADOR
+Empresa: ${datos.empresa_instaladora || 'N/A'}
+Nº REIE: ${datos.reie || 'N/A'}
+Instalador autorizado: ${datos.instalador || 'N/A'}
+
+RESULTADO DE LAS VERIFICACIONES
+Continuidad de conductores: ${datos.continuidad || 'OK'}
+Resistencia de aislamiento: ${datos.aislamiento || '> 0,5 MΩ'}
+Resistencia de tierra: ${datos.tierra || 'N/A'} Ω
+Protecciones diferenciales: ${datos.diferenciales || 'OK'}
+
+DECLARACIÓN: Certifico que la instalación cumple con el REBT.
+
+Firmado: ${datos.firmante || 'Instalador autorizado'}`;
+            break;
+          case 'lista_materiales':
+            contenido = `═══════════════════════════════════════════════════════════
+LISTA DE MATERIALES
+═══════════════════════════════════════════════════════════
+Obra: ${datos.obra || 'N/A'}
+Fecha: ${fecha}
+───────────────────────────────────────────────────────────
+Nº | Material | Ref. | Fabricante | Cantidad | Unidad | Precio/ud | Total
+`;
+            if (Array.isArray(datos.materiales)) {
+              datos.materiales.forEach((m, i) => {
+                const total = ((m.precio_unitario || 0) * (m.cantidad || 0)).toFixed(2);
+                contenido += `${i+1} | ${m.nombre || 'N/A'} | ${m.referencia || '-'} | ${m.fabricante || '-'} | ${m.cantidad || 0} | ${m.unidad || 'ud'} | ${m.precio_unitario || 0}€ | ${total}€\n`;
+              });
+              const granTotal = datos.materiales.reduce((s, m) => s + ((m.precio_unitario || 0) * (m.cantidad || 0)), 0);
+              contenido += `───────────────────────────────────────────────────────────\nTOTAL MATERIALES: ${granTotal.toFixed(2)}€`;
+            } else {
+              contenido += '(Añadir materiales)';
+            }
+            break;
+          case 'presupuesto':
+            contenido = `═══════════════════════════════════════════════════════════
+PRESUPUESTO
+═══════════════════════════════════════════════════════════
+Cliente: ${datos.cliente || 'N/A'}
+Obra: ${datos.obra || 'N/A'}
+Fecha: ${fecha}
+Validez: ${datos.validez || '30 días'}
+───────────────────────────────────────────────────────────
+PARTIDAS:
+`;
+            if (Array.isArray(datos.partidas)) {
+              let totalBase = 0;
+              datos.partidas.forEach((p, i) => {
+                const subtotal = ((p.precio || 0) * (p.cantidad || 1)).toFixed(2);
+                totalBase += parseFloat(subtotal);
+                contenido += `${i+1}. ${p.descripcion || 'Partida'}\n   Cantidad: ${p.cantidad || 1} ${p.unidad || 'ud'} × ${p.precio || 0}€ = ${subtotal}€\n\n`;
+              });
+              const iva = totalBase * (datos.iva_pct || 21) / 100;
+              contenido += `───────────────────────────────────────────────────────────
+BASE IMPONIBLE: ${totalBase.toFixed(2)}€
+IVA (${datos.iva_pct || 21}%): ${iva.toFixed(2)}€
+TOTAL: ${(totalBase + iva).toFixed(2)}€`;
+            } else {
+              contenido += '(Añadir partidas)';
+            }
+            break;
+          case 'informe_obra':
+            contenido = `═══════════════════════════════════════════════════════════
+INFORME DE ESTADO DE OBRA
+═══════════════════════════════════════════════════════════
+Obra: ${datos.obra || 'N/A'}
+Fecha informe: ${fecha} ${hora}
+Responsable: ${datos.responsable || 'N/A'}
+───────────────────────────────────────────────────────────
+ESTADO GENERAL: ${datos.estado_general || 'En curso'}
+AVANCE ESTIMADO: ${datos.avance_pct || 0}%
+
+TRABAJOS REALIZADOS:
+${datos.trabajos_realizados || '- Pendiente de rellenar'}
+
+INCIDENCIAS:
+${datos.incidencias || '- Sin incidencias relevantes'}
+
+MATERIALES PENDIENTES:
+${datos.materiales_pendientes || '- Sin materiales pendientes'}
+
+PERSONAL EN OBRA: ${datos.personal_count || 'N/A'} personas
+
+OBSERVACIONES:
+${datos.observaciones || 'Sin observaciones adicionales.'}
+
+PRÓXIMOS PASOS:
+${datos.proximos_pasos || '- Pendiente de definir'}`;
+            break;
+          default:
+            return `Tipo de documento "${tipo}" no soportado.`;
+        }
+        // Guardar en R2
+        const r2Key = `documentos/${fecha}_${tipo}_${titulo.replace(/[^a-zA-Z0-9_-]/g, '_')}.txt`;
+        await env.FILES.put(r2Key, contenido, { httpMetadata: { contentType: 'text/plain; charset=utf-8' } });
+        return JSON.stringify({ ok: true, tipo, titulo, r2_key: r2Key, contenido, mensaje: `Documento generado y guardado en R2: ${r2Key}` });
+      } catch (e) { return JSON.stringify({ ok: false, error: e.message }); }
+    }
+
+    case 'buscar_normativa': {
+      const consulta = (input.consulta || '').trim();
+      const itc = (input.itc || '').trim();
+      const tema = (input.tema || '').trim();
+      if (!consulta) return 'Falta "consulta" para buscar normativa.';
+      try {
+        let sql = "SELECT norma, seccion, titulo, contenido, palabras_clave FROM normativa_index WHERE 1=1";
+        const binds = [];
+        if (itc) {
+          sql += " AND seccion LIKE ?";
+          binds.push(`%${itc}%`);
+        }
+        // Buscar por palabras de la consulta
+        const palabras = consulta.toLowerCase().split(/\s+/).filter(p => p.length > 2);
+        if (palabras.length > 0) {
+          const conditions = palabras.map(() => "(LOWER(titulo) LIKE ? OR LOWER(contenido) LIKE ? OR LOWER(palabras_clave) LIKE ?)");
+          sql += ` AND (${conditions.join(' OR ')})`;
+          for (const p of palabras) {
+            binds.push(`%${p}%`, `%${p}%`, `%${p}%`);
+          }
+        }
+        if (tema) {
+          sql += " AND (LOWER(palabras_clave) LIKE ? OR LOWER(titulo) LIKE ?)";
+          binds.push(`%${tema.toLowerCase()}%`, `%${tema.toLowerCase()}%`);
+        }
+        sql += " LIMIT 10";
+        let stmt = env.DB.prepare(sql);
+        if (binds.length > 0) stmt = stmt.bind(...binds);
+        const rows = await stmt.all();
+        const resultados = rows.results || [];
+        if (resultados.length === 0) {
+          return JSON.stringify({ ok: true, resultados: [], mensaje: `No se encontró normativa para "${consulta}". Prueba con buscar_web para consultar online.` });
+        }
+        return JSON.stringify({ ok: true, consulta, itc: itc || 'todas', resultados_count: resultados.length, resultados });
+      } catch (e) { return JSON.stringify({ ok: false, error: e.message }); }
+    }
+
+    case 'historico_materiales': {
+      const accion = input.accion;
+      if (!accion) return 'Falta "accion" (registrar, consultar, comparar).';
+      try {
+        switch (accion) {
+          case 'registrar': {
+            const material = (input.material || '').trim();
+            if (!material) return 'Falta "material" para registrar.';
+            await env.DB.prepare(
+              "INSERT INTO materiales_obra (obra_id, obra_nombre, material, referencia, fabricante, cantidad, unidad, precio_unitario, proveedor, notas) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+            ).bind(
+              input.obra_id || null, input.obra_nombre || null, material,
+              input.referencia || null, input.fabricante || null,
+              input.cantidad || 0, input.unidad || 'ud',
+              input.precio_unitario || 0, input.proveedor || null, input.notas || null
+            ).run();
+            const total = (input.cantidad || 0) * (input.precio_unitario || 0);
+            return JSON.stringify({ ok: true, msg: `Material registrado: ${material} ×${input.cantidad || 0} ${input.unidad || 'ud'} = ${total.toFixed(2)}€` });
+          }
+          case 'consultar': {
+            let sql = "SELECT * FROM materiales_obra WHERE 1=1";
+            const binds = [];
+            if (input.obra_id) { sql += " AND obra_id=?"; binds.push(input.obra_id); }
+            if (input.material) { sql += " AND material LIKE ?"; binds.push(`%${input.material}%`); }
+            if (input.proveedor) { sql += " AND proveedor LIKE ?"; binds.push(`%${input.proveedor}%`); }
+            sql += " ORDER BY fecha DESC LIMIT 50";
+            let stmt = env.DB.prepare(sql);
+            if (binds.length > 0) stmt = stmt.bind(...binds);
+            const rows = await stmt.all();
+            const materiales = rows.results || [];
+            const totalGastado = materiales.reduce((s, m) => s + ((m.precio_unitario || 0) * (m.cantidad || 0)), 0);
+            return JSON.stringify({ ok: true, count: materiales.length, total_gastado: totalGastado.toFixed(2) + '€', materiales });
+          }
+          case 'comparar': {
+            const rows = await env.DB.prepare(
+              "SELECT obra_id, obra_nombre, material, SUM(cantidad) as total_cantidad, unidad, ROUND(AVG(precio_unitario),2) as precio_medio, SUM(cantidad * precio_unitario) as coste_total FROM materiales_obra GROUP BY obra_id, material ORDER BY material, obra_id"
+            ).all();
+            return JSON.stringify({ ok: true, comparativa: rows.results || [] });
+          }
+          default:
+            return `Acción "${accion}" no reconocida. Usa: registrar, consultar, comparar.`;
+        }
+      } catch (e) { return JSON.stringify({ ok: false, error: e.message }); }
+    }
+
+    case 'configurar_alerta': {
+      const accion = input.accion;
+      if (!accion) return 'Falta "accion" (crear, listar, eliminar, verificar).';
+      try {
+        switch (accion) {
+          case 'crear': {
+            const tipo = (input.tipo || '').trim();
+            const condicion = (input.condicion || '').trim();
+            const mensaje = (input.mensaje || '').trim();
+            if (!tipo || !condicion) return 'Faltan "tipo" y "condicion" para crear alerta.';
+            await env.DB.prepare(
+              "INSERT INTO alertas_config (tipo, nombre, condicion_sql, umbral, mensaje_template) VALUES (?, ?, ?, ?, ?)"
+            ).bind(tipo, input.nombre || tipo, condicion, input.umbral || 0, mensaje || `Alerta: ${tipo}`).run();
+            return JSON.stringify({ ok: true, msg: `Alerta "${tipo}" creada.` });
+          }
+          case 'listar': {
+            const rows = await env.DB.prepare(
+              "SELECT id, tipo, nombre, condicion_sql, umbral, mensaje_template, canal, activa, ultima_ejecucion, created_at FROM alertas_config ORDER BY created_at DESC"
+            ).all();
+            return JSON.stringify({ ok: true, alertas: rows.results || [] });
+          }
+          case 'eliminar': {
+            const id = input.alerta_id;
+            if (!id) return 'Falta "alerta_id" para eliminar.';
+            await env.DB.prepare("DELETE FROM alertas_config WHERE id=?").bind(id).run();
+            return JSON.stringify({ ok: true, msg: `Alerta #${id} eliminada.` });
+          }
+          case 'verificar': {
+            const alertas = await env.DB.prepare(
+              "SELECT id, tipo, nombre, condicion_sql, umbral, mensaje_template FROM alertas_config WHERE activa=1"
+            ).all();
+            const resultados = [];
+            for (const alerta of (alertas.results || [])) {
+              try {
+                const rows = await env.DB.prepare(alerta.condicion_sql).all();
+                const items = rows.results || [];
+                if (items.length > 0) {
+                  resultados.push({
+                    alerta_id: alerta.id, tipo: alerta.tipo, nombre: alerta.nombre,
+                    disparada: true, items_count: items.length,
+                    detalle: items.slice(0, 5)
+                  });
+                }
+                await env.DB.prepare("UPDATE alertas_config SET ultima_ejecucion=datetime('now') WHERE id=?").bind(alerta.id).run().catch(() => {});
+              } catch (e) {
+                resultados.push({ alerta_id: alerta.id, tipo: alerta.tipo, error: e.message });
+              }
+            }
+            const disparadas = resultados.filter(r => r.disparada);
+            return JSON.stringify({
+              ok: true, alertas_verificadas: resultados.length,
+              alertas_disparadas: disparadas.length, resultados
+            });
+          }
+          default:
+            return `Acción "${accion}" no reconocida. Usa: crear, listar, eliminar, verificar.`;
+        }
+      } catch (e) { return JSON.stringify({ ok: false, error: e.message }); }
+    }
+
+    case 'exportar_datos': {
+      const tipo = input.tipo;
+      if (!tipo) return 'Falta "tipo" de exportación.';
+      try {
+        let sql = '';
+        let filename = '';
+        const fecha = new Date().toISOString().split('T')[0];
+        const filtroFechas = (campo) => {
+          let where = '';
+          if (input.fecha_desde) where += ` AND ${campo} >= '${input.fecha_desde}'`;
+          if (input.fecha_hasta) where += ` AND ${campo} <= '${input.fecha_hasta}'`;
+          return where;
+        };
+        switch (tipo) {
+          case 'bobinas':
+            sql = `SELECT id, nombre, tipo, seccion, metros_totales, metros_restantes, ubicacion, created_at FROM bobinas WHERE 1=1${input.obra_id ? ' AND obra_id=' + input.obra_id : ''}${filtroFechas('created_at')} ORDER BY nombre`;
+            filename = `bobinas_${fecha}`;
+            break;
+          case 'personal':
+            sql = `SELECT id, nombre, apellidos, dni, puesto, departamento, activo, telefono, email FROM personal WHERE 1=1${input.obra_id ? ' AND obra_id=' + input.obra_id : ''} ORDER BY nombre`;
+            filename = `personal_${fecha}`;
+            break;
+          case 'fichajes':
+            sql = `SELECT f.id, p.nombre, f.tipo, f.fecha, f.hora, f.ubicacion FROM fichajes f LEFT JOIN personal p ON p.id = f.usuario_id WHERE 1=1${input.obra_id ? ' AND f.obra_id=' + input.obra_id : ''}${filtroFechas('f.fecha')} ORDER BY f.fecha DESC, f.hora DESC`;
+            filename = `fichajes_${fecha}`;
+            break;
+          case 'materiales':
+            sql = `SELECT * FROM materiales_obra WHERE 1=1${input.obra_id ? ' AND obra_id=' + input.obra_id : ''}${filtroFechas('fecha')} ORDER BY fecha DESC`;
+            filename = `materiales_${fecha}`;
+            break;
+          case 'gastos':
+            sql = `SELECT * FROM gastos WHERE 1=1${input.obra_id ? ' AND obra_id=' + input.obra_id : ''}${filtroFechas('fecha')} ORDER BY fecha DESC`;
+            filename = `gastos_${fecha}`;
+            break;
+          case 'custom':
+            if (!input.sql_custom) return 'Falta "sql_custom" para exportación personalizada.';
+            if (!input.sql_custom.trim().toUpperCase().startsWith('SELECT')) return 'Solo se permiten consultas SELECT.';
+            sql = input.sql_custom;
+            filename = `custom_${fecha}`;
+            break;
+          default:
+            return `Tipo "${tipo}" no soportado. Usa: bobinas, personal, fichajes, materiales, gastos, custom.`;
+        }
+        const rows = await env.DB.prepare(sql).all();
+        const data = rows.results || [];
+        if (data.length === 0) return JSON.stringify({ ok: true, rows: 0, msg: 'Sin datos para exportar.' });
+        // Generar CSV
+        const headers = Object.keys(data[0]);
+        let csv = headers.join(';') + '\n';
+        for (const row of data) {
+          csv += headers.map(h => {
+            const val = row[h];
+            if (val === null || val === undefined) return '';
+            const str = String(val).replace(/"/g, '""');
+            return str.includes(';') || str.includes('"') || str.includes('\n') ? `"${str}"` : str;
+          }).join(';') + '\n';
+        }
+        // Guardar en R2
+        const r2Key = `exports/${filename}.csv`;
+        await env.FILES.put(r2Key, csv, { httpMetadata: { contentType: 'text/csv; charset=utf-8' } });
+        const preview = data.slice(0, 3);
+        return JSON.stringify({
+          ok: true, tipo, rows: data.length, r2_key: r2Key,
+          preview, msg: `Exportados ${data.length} registros a ${r2Key}`
+        });
+      } catch (e) { return JSON.stringify({ ok: false, error: e.message }); }
     }
 
     default:
@@ -2215,10 +3233,11 @@ async function construirMessages(env, mensaje, contexto, limitHistorial=10, incl
 async function obtenerContextoChat(env, usuario_id, empresa_id, limit=20) {
   try {
     await ensureConversacionResumenTable(env);
-    // Solo los últimos 10 mensajes en bruto; lo anterior va resumido
+    const uid = usuario_id || 'unknown';
+    // Historial POR USUARIO (cross-canal: misma conversacion desde app, panel o telegram)
     const historial = await env.DB.prepare(
-      `SELECT rol, contenido, canal, created_at FROM alejandra_historial ORDER BY created_at DESC LIMIT ?`
-    ).bind(10).all();
+      `SELECT rol, contenido, canal, created_at FROM alejandra_historial WHERE usuario_id=? ORDER BY created_at DESC LIMIT ?`
+    ).bind(uid, 10).all();
     const aprendizajes = await env.DB.prepare(
       `SELECT titulo,contenido,tipo FROM alejandra_memoria WHERE (tipo='aprendizaje' OR tipo='contexto') ORDER BY importancia DESC,created_at DESC LIMIT 10`
     ).all();
@@ -2275,18 +3294,18 @@ async function actualizarResumenSiNecesario(env, usuario_id, canal) {
     if (!usuario_id) return;
     await ensureConversacionResumenTable(env);
 
-    // Contar mensajes totales del usuario en este canal
+    // Contar mensajes totales del usuario (cross-canal)
     const cnt = await env.DB.prepare(
-      `SELECT COUNT(*) as n FROM alejandra_historial WHERE canal=?`
-    ).bind(canal || 'web').first().catch(() => ({ n: 0 }));
+      `SELECT COUNT(*) as n FROM alejandra_historial WHERE usuario_id=?`
+    ).bind(usuario_id).first().catch(() => ({ n: 0 }));
     const total = cnt?.n || 0;
     if (total <= 25) return;
 
     // Saltar todos menos los últimos 10 → coger los antiguos
     const offset = 10;
     const antiguos = await env.DB.prepare(
-      `SELECT id, rol, contenido, created_at FROM alejandra_historial WHERE canal=? ORDER BY created_at DESC LIMIT 1000 OFFSET ?`
-    ).bind(canal || 'web', offset).all().catch(() => ({ results: [] }));
+      `SELECT id, rol, contenido, created_at FROM alejandra_historial WHERE usuario_id=? ORDER BY created_at DESC LIMIT 1000 OFFSET ?`
+    ).bind(usuario_id, offset).all().catch(() => ({ results: [] }));
     const items = (antiguos.results || []).reverse();
     if (items.length === 0) return;
 
@@ -2335,17 +3354,18 @@ async function actualizarResumenSiNecesario(env, usuario_id, canal) {
 
 async function guardarMensajeChat(env, usuario_id, empresa_id, mensaje, respuesta, canal='panel') {
   try {
-    // Guarda en alejandra_historial (tabla unificada compartida con la app)
+    const uid = usuario_id || 'unknown';
+    // Guarda en alejandra_historial con usuario_id (conversacion por usuario, no por canal)
     await env.DB.prepare(
-      `INSERT INTO alejandra_historial (canal, rol, contenido, created_at) VALUES (?, 'user', ?, datetime('now'))`
-    ).bind(canal, mensaje.slice(0, 4000)).run();
+      `INSERT INTO alejandra_historial (canal, rol, contenido, usuario_id, created_at) VALUES (?, 'user', ?, ?, datetime('now'))`
+    ).bind(canal, mensaje.slice(0, 4000), uid).run();
     await env.DB.prepare(
-      `INSERT INTO alejandra_historial (canal, rol, contenido, created_at) VALUES (?, 'assistant', ?, datetime('now'))`
-    ).bind(canal, respuesta.slice(0, 4000)).run();
-    // Limitar a 100 mensajes por canal
+      `INSERT INTO alejandra_historial (canal, rol, contenido, usuario_id, created_at) VALUES (?, 'assistant', ?, ?, datetime('now'))`
+    ).bind(canal, respuesta.slice(0, 4000), uid).run();
+    // Limitar a 200 mensajes por usuario (cross-canal)
     await env.DB.prepare(
-      `DELETE FROM alejandra_historial WHERE canal=? AND id NOT IN (SELECT id FROM alejandra_historial WHERE canal=? ORDER BY created_at DESC LIMIT 100)`
-    ).bind(canal, canal).run();
+      `DELETE FROM alejandra_historial WHERE usuario_id=? AND id NOT IN (SELECT id FROM alejandra_historial WHERE usuario_id=? ORDER BY created_at DESC LIMIT 200)`
+    ).bind(uid, uid).run();
   } catch (err) { console.error('guardarChat:', err.message); }
 }
 

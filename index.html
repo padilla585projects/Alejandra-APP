@@ -2,6 +2,9 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Alejandra — Inventario · Maquinaria · Control</title>
 <link rel="manifest" href="manifest.json">
@@ -64,7 +67,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
 #appContent{flex:1;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch}
 
 /* ── BOTTOM NAV ── */
-#bottomNav{background:var(--surface);border-top:1px solid var(--border);display:flex;align-items:stretch;flex-shrink:0;position:relative;z-index:100}
+#bottomNav{background:var(--surface);border-top:1px solid var(--border);display:flex;align-items:stretch;flex-shrink:0;position:relative;z-index:1060}
 .nav-btn{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;padding:8px 4px;background:none;border:none;color:var(--muted);font-family:'Montserrat',sans-serif;font-weight:700;font-size:9px;letter-spacing:.5px;text-transform:uppercase;cursor:pointer;transition:color .2s;border-top:2px solid transparent;position:relative}
 .nav-btn.active{color:var(--accent);border-top-color:var(--accent)}
 .nav-btn svg{width:20px;height:20px}
@@ -234,7 +237,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
 .tag-add-row button{padding:8px 14px;background:var(--accent);border:none;border-radius:8px;color:#000;font-family:'Montserrat',sans-serif;font-weight:900;font-size:14px;cursor:pointer}
 
 /* ── MODAL ── */
-.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:500;align-items:flex-end;justify-content:center}
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:1100;align-items:flex-end;justify-content:center}
 .modal-overlay.show{display:flex}
 .modal{background:var(--surface);border-radius:16px 16px 0 0;padding:20px;width:100%;max-width:500px;border-top:2px solid var(--accent);max-height:90vh;overflow-y:auto}
 .modal-title{font-family:'Montserrat',sans-serif;font-weight:900;font-size:20px;letter-spacing:1px;margin-bottom:14px}
@@ -626,7 +629,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
 </div>
 
 <!-- Panel Chat (NEW-08) -->
-<div id="chatPanel" style="display:none;position:fixed;inset:0;z-index:1050;background:var(--bg);flex-direction:column">
+<div id="chatPanel" style="display:none;position:fixed;inset:0;z-index:1100;background:var(--bg);flex-direction:column">
   <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--border);flex-shrink:0">
     <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:15px">💬 Chat del equipo</div>
     <button onclick="chatCerrar()" style="background:var(--surface2);border:none;border-radius:50%;width:32px;height:32px;font-size:18px;cursor:pointer;color:var(--text)">×</button>
@@ -648,13 +651,13 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
 </div>
 
 <!-- Panel Alejandra AI Chat -->
-<div id="alejandraPanel" style="display:none;position:fixed;inset:0;z-index:1050;background:var(--bg);flex-direction:column">
+<div id="alejandraPanel" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;z-index:1100;background:var(--bg);flex-direction:column">
   <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:2px solid #8b5cf6;flex-shrink:0;background:var(--surface)">
     <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:15px">🤖 Alejandra Agente</div>
     <div style="display:flex;gap:8px;align-items:center">
       <button id="alejandraHablarBtn" onclick="alejandraToggleAutoHablar()" title="Activar/desactivar voz de Alejandra"
         style="background:var(--surface2);border:1px solid var(--border);border-radius:50%;width:32px;height:32px;font-size:16px;cursor:pointer;line-height:1">🔊</button>
-      <span style="font-size:11px;color:var(--muted)">v5.88</span>
+      <span id="alejandraVer" style="font-size:11px;color:var(--muted)"></span>
       <button onclick="alejandraAbrir(false)" style="background:var(--surface2);border:none;border-radius:50%;width:32px;height:32px;font-size:18px;cursor:pointer;color:var(--text)">×</button>
     </div>
   </div>
@@ -1694,7 +1697,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
         <div class="empty-state">Cargando...</div>
       </div>
       <!-- Modal nuevo item -->
-      <div id="segModalNuevo" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:500;overflow-y:auto;padding:20px 14px">
+      <div id="segModalNuevo" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:1100;overflow-y:auto;padding:20px 14px">
         <div style="background:var(--surface);border-radius:16px;padding:18px;max-width:400px;margin:auto">
           <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:16px;margin-bottom:14px">📦 Nuevo material</div>
           <div class="form-group">
@@ -1745,13 +1748,13 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
         <div class="empty-state">Cargando...</div>
       </div>
       <!-- Modal detalle -->
-      <div id="segHerrModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:500;align-items:flex-end">
+      <div id="segHerrModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:1100;align-items:flex-end">
         <div style="background:var(--surface);border-radius:16px 16px 0 0;padding:20px 16px 36px;width:100%;max-height:80vh;overflow-y:auto">
           <div id="segHerrModalContent"></div>
         </div>
       </div>
       <!-- Modal nuevo item -->
-      <div id="segHerrNuevoModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:500;overflow-y:auto;padding:20px 14px">
+      <div id="segHerrNuevoModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:1100;overflow-y:auto;padding:20px 14px">
         <div style="background:var(--surface);border-radius:16px;padding:18px;max-width:400px;margin:auto">
           <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:16px;margin-bottom:14px">🔧 Nueva herramienta</div>
           <div class="form-group">
@@ -3190,8 +3193,11 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
   </div>
   <div id="iaVoiceStatus" class="ia-voice-status" style="text-align:center;padding:4px 0"></div>
   <div id="iaMessages"></div>
+  <div id="iaAdjuntos" style="display:none;padding:6px 12px;flex-wrap:wrap;gap:6px;border-top:1px solid var(--border)"></div>
   <div class="ia-input-row">
-    <textarea id="iaInput" placeholder="Escríbeme algo..." rows="1" onkeydown="iaKeydown(event)"></textarea>
+    <textarea id="iaInput" placeholder="Escribe, usa el micrófono o adjunta archivos..." rows="1" onkeydown="iaKeydown(event)"></textarea>
+    <button onclick="document.getElementById('iaFileInput').click()" title="Adjuntar archivo o foto" class="ia-mic-btn" style="font-size:18px">📎</button>
+    <input type="file" id="iaFileInput" multiple accept="image/*,application/pdf,.xlsx,.csv,.txt,.json,.dwg,.dxf" style="display:none" onchange="iaSubirAdjuntos(event)">
     <button class="ia-mic-btn" id="iaMicBtn" onclick="iaToggleVoice()" title="Hablar con Alejandra">🎤</button>
     <button class="ia-send-btn" id="iaSendBtn" onclick="iaSend()">↑</button>
   </div>
@@ -3464,48 +3470,66 @@ function getSession() {
 
 function setSession(data) {
   localStorage.setItem('alejandra_session', JSON.stringify(data));
-  // Registrar push si es developer/superadmin
-  if (['superadmin', 'desarrollador'].includes(data?.rol)) {
-    _registrarPushDeveloper().catch(() => {});
+  // Registrar push para TODOS los usuarios (agente + worker principal)
+  if (data?.usuario_id || data?.nombre) {
+    _registrarPushAlejandra(data).catch(() => {});
   }
 }
 
-// ── Push notifications Alejandra → developer ──────────────────────────────
+// ── Push notifications (todos los usuarios) ─────────────────────────────
 function _urlB64ToUint8(b64) {
   const b = (b64 + '=='.slice(0, (4 - b64.length % 4) % 4)).replace(/-/g, '+').replace(/_/g, '/');
   return Uint8Array.from(atob(b), c => c.charCodeAt(0));
 }
-
-async function _registrarPushDeveloper() {
+const _AGENTE_PUSH_BASE = 'https://alejandra-agente.alejandra-app.workers.dev';
+async function _registrarPushAlejandra(sessionData) {
   if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
   try {
-    // Pedir permiso si no está concedido
     const perm = await Notification.requestPermission();
     if (perm !== 'granted') return;
-
     const reg = window._swReg || await navigator.serviceWorker.ready;
-    // Obtener suscripción existente o crear nueva
+    // Obtener VAPID key del agente
+    const vapidRes = await fetch(`${_AGENTE_PUSH_BASE}/push-vapid-key`);
+    if (!vapidRes.ok) return;
+    const { publicKey } = await vapidRes.json();
+    // Comprobar suscripción existente — si es con otra key, recrear
     let sub = await reg.pushManager.getSubscription();
+    if (sub) {
+      // Verificar que la key coincide (si no, unsuscribir y recrear)
+      const existingKey = sub.options?.applicationServerKey;
+      const newKeyArr = _urlB64ToUint8(publicKey);
+      if (existingKey) {
+        const existing = new Uint8Array(existingKey);
+        if (existing.length !== newKeyArr.length || !existing.every((v,i) => v === newKeyArr[i])) {
+          await sub.unsubscribe();
+          sub = null;
+        }
+      }
+    }
     if (!sub) {
-      // Obtener la clave pública VAPID del servidor
-      const vapidRes = await fetch(getAPI() + '/dev/vapid-public-key', {
-        headers: { 'X-Token': getSession()?.token || '' }
-      });
-      if (!vapidRes.ok) return; // VAPID no configurado aún
-      const { publicKey } = await vapidRes.json();
       sub = await reg.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: _urlB64ToUint8(publicKey)
       });
     }
-    // Guardar suscripción en el worker
-    await fetch(getAPI() + '/dev/push-subscribe', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Token': getSession()?.token || '' },
-      body: JSON.stringify({ subscription: sub.toJSON() })
-    });
+    const uid = sessionData?.usuario_id || sessionData?.nombre || 'unknown';
+    const subJson = sub.toJSON();
+    // Registrar en agente Y en worker principal (ambos comparten VAPID via D1)
+    await Promise.allSettled([
+      fetch(`${_AGENTE_PUSH_BASE}/push-subscribe`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ usuario_id: uid, subscription: subJson })
+      }),
+      fetch(getAPI() + '/push/subscribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Token': sessionData?.token || '' },
+        body: JSON.stringify({ subscription: subJson })
+      })
+    ]);
+    console.log('[Push] Suscripción registrada para', uid);
   } catch (e) {
-    console.warn('[Push] Error registrando push developer:', e.message);
+    console.warn('[Push Alejandra] Error:', e.message);
   }
 }
 
@@ -3665,6 +3689,7 @@ async function doLogin() {
       const session = {
         nombre: data.nombre, rol: data.rol, obra_id: data.obra_id || null,
         obra_nombre: data.obra_nombre || null, token: data.token,
+        usuario_id: data.usuario_id || null, empresa_id: data.empresa_id || null,
         departamento: (data.rol === 'empresa_admin') ? null : (data.departamento || 'electrico')
       };
       setSession(session); iniciarApp();
@@ -3699,6 +3724,8 @@ async function doLogin() {
       obra_id: data.obra_id || null,
       obra_nombre: data.obra_nombre || null,
       token: data.token || null,
+      usuario_id: data.usuario_id || null,
+      empresa_id: data.empresa_id || null,
       // SuperAdmin elige depto en pantalla selectora; resto lo tiene fijo
       departamento: data.rol !== 'superadmin' ? (data.departamento || 'electrico') : null
     };
@@ -4111,11 +4138,8 @@ async function iniciarApp() {
   // Botón Chat
   const btnChatEl = document.getElementById('btnChat');
   if (btnChatEl) btnChatEl.style.display = 'flex';
-  if (['superadmin', 'desarrollador'].includes(s.rol)) {
-    _registrarPushDeveloper().catch(() => {});
-  } else if ('Notification' in window && Notification.permission === 'default') {
-    Notification.requestPermission();
-  }
+  // Push para todos los usuarios (agente + worker principal)
+  _registrarPushAlejandra(s).catch(() => {});
   checkChatBadge();
   if (!window._chatBadgeInterval) {
     window._chatBadgeInterval = setInterval(checkChatBadge, 60000); // cada 1 min
@@ -5122,6 +5146,11 @@ async function checkConnection() {
 let _navHistory = [];
 
 function _applyScreen(name) {
+  // Cerrar paneles flotantes (chat Alejandra, chat empresa) al cambiar de pantalla
+  const _aleP = document.getElementById('alejandraPanel');
+  if (_aleP && _aleP.style.display === 'flex') { if (typeof alejandraAbrir === 'function') alejandraAbrir(false); }
+  const _chatP = document.getElementById('chatPanel');
+  if (_chatP && _chatP.style.display === 'flex') _chatP.style.display = 'none';
   // Limpiar timer de sub-panel personal si salimos de personal
   if (name !== 'personal' && window._perTabTimer) {
     clearInterval(window._perTabTimer);
@@ -5209,6 +5238,10 @@ function irAtras() {
 }
 
 function navTo(target) {
+  // Si el chat de Alejandra está abierto, cerrarlo al navegar
+  const _aleP = document.getElementById('alejandraPanel');
+  const _aleChatAbierto = _aleP && _aleP.style.display === 'flex';
+  if (_aleChatAbierto) alejandraAbrir(false);
   if (target !== 'ajustes') { clearInterval(_ideasRefreshTimer); _ideasRefreshTimer = null; }
   closeCamera();
   segCloseCamera();
@@ -5225,6 +5258,8 @@ function navTo(target) {
   if (target === 'sugerencias') { showScreen('sugerencias'); return; }
   if (target === 'docs')        { showScreen('docs'); return; }
   if (target === 'ia') {
+    // Si el chat estaba abierto, solo cerrarlo (ya se cerró arriba), no navegar
+    if (_aleChatAbierto) return;
     if (document.getElementById('screenIA')?.classList.contains('active')) { irAtras(); return; }
     _applyScreen('ia'); document.getElementById('iaInput')?.focus(); return;
   }
@@ -10214,7 +10249,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '6.02';
+const APP_VERSION = '6.15';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -10237,41 +10272,57 @@ async function forzarActualizacion() {
   const banner = document.getElementById('updateBanner');
   if (banner) banner.innerHTML = '<span>⏳ Actualizando...</span>';
   try {
-    // 1. Forzar activación del SW en espera
+    // 1. Forzar update del SW desde el servidor
     const reg = await navigator.serviceWorker?.getRegistration();
+    if (reg) { await reg.update().catch(() => {}); }
+    // 2. Activar SW en espera
     if (reg?.waiting) reg.waiting.postMessage({ tipo: 'SKIP_WAITING' });
-    // 2. Limpiar todos los caches SW
+    // 3. Limpiar todos los caches SW
     if ('caches' in window) {
       const keys = await caches.keys();
       await Promise.all(keys.map(k => caches.delete(k)));
     }
-    // 3. Limpiar session cacheada
+    // 4. Limpiar session cacheada
     localStorage.removeItem('alejandra_api');
   } catch {}
-  // 4. Recargar forzando nueva versión
+  // 5. Recargar forzando nueva versión
   location.replace(location.pathname + '?r=' + Date.now());
 }
 
-async function checkVersionAndUpdate() {
+async function checkVersionAndUpdate(useWorkerFallback = false) {
   if (_actualizando) return;
   try {
+    let remoteV = null;
+    // version.json con cache-bust (1 fetch ligero ~100 bytes)
     const res = await fetch('version.json?_=' + Date.now(), { cache: 'no-store' });
-    if (!res.ok) return;
-    const { v } = await res.json();
-    if (v && v !== APP_VERSION) {
-      // No interrumpir un callback de Google OAuth en curso
+    if (res.ok) { const j = await res.json(); remoteV = j.v; }
+    // Solo al volver a primer plano: fallback al worker si version.json falló
+    if (!remoteV && useWorkerFallback) {
+      try {
+        const hRes = await fetch('https://alejandra-agente.alejandra-app.workers.dev/health');
+        if (hRes.ok) { const hj = await hRes.json(); remoteV = hj.version; }
+      } catch {}
+    }
+    if (remoteV && remoteV !== APP_VERSION) {
       if (new URLSearchParams(location.search).has('code')) return;
       _actualizando = true;
-      mostrarBannerActualizacion(v);
-      // Intentar recarga automática tras 4s (por si el usuario no ve el banner)
-      setTimeout(forzarActualizacion, 4000);
+      mostrarBannerActualizacion(remoteV);
+      setTimeout(forzarActualizacion, 3000);
     }
   } catch {}
 }
 
-// Lanza el chequeo al arrancar y cada 5 minutos (antes 30s — BUG-009 batería)
+// Al arrancar + cada 5 min (1 solo fetch ligero — no gasta batería)
 checkVersionAndUpdate();
 setInterval(checkVersionAndUpdate, 5 * 60 * 1000);
+
+// Al volver a primer plano: check con fallback worker + forzar update del SW
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') {
+    checkVersionAndUpdate(true);
+    navigator.serviceWorker?.getRegistration().then(r => r?.update()).catch(() => {});
+  }
+});
 
 // Banner "App actualizada a vX.XX" — aparece tras recarga automática
 (function() {
@@ -10313,6 +10364,14 @@ let _backPressTimer  = null;
 window.addEventListener('popstate', function() {
   const s = getSession();
   if (!s) return;
+
+  // Si el chat de Alejandra está abierto, el botón atrás lo cierra (no navega la app)
+  const alePanel = document.getElementById('alejandraPanel');
+  if (alePanel && alePanel.style.display === 'flex') {
+    alejandraAbrir(false);
+    history.pushState({ alejandra: 1 }, '');
+    return;
+  }
 
   // Si hay una foto de sugerencia zoomed, cerrarla primero
   const zoomedImg = document.querySelector('img[data-zoomed="1"]');
@@ -14594,13 +14653,37 @@ window.turnoToggle   = turnoToggle;
     return '<div class="ia-bubble bot">Hola Adrián 👋 Soy Alejandra. Tengo acceso total a la app. Pregúntame o pídeme que haga algo.</div>';
   }
 
-  // Cargar historial guardado
-  (function() {
+  // Cargar historial: servidor primero, fallback a localStorage
+  const AGENTE_BASE = 'https://alejandra-agente.alejandra-app.workers.dev';
+  async function iaCargarHistorial() {
+    const box = document.getElementById('iaMessages');
+    // Intentar cargar desde servidor
+    const s = typeof getSession === 'function' ? getSession() : null;
+    const uid = s?.usuario_id || s?.nombre || null;
+    if (uid) {
+      try {
+        const res = await fetch(`${AGENTE_BASE}/api/chat/history?usuario_id=${encodeURIComponent(uid)}`);
+        const data = await res.json();
+        if (data.ok && data.mensajes && data.mensajes.length > 0) {
+          iaHistory = data.mensajes.map(m => ({ role: m.rol === 'assistant' ? 'assistant' : 'user', content: m.contenido }));
+          box.innerHTML = '';
+          for (const m of iaHistory) {
+            const d = document.createElement('div');
+            d.className = 'ia-bubble ' + (m.role === 'assistant' ? 'bot' : 'user');
+            d.innerHTML = m.content.replace(/\n/g, '<br>');
+            box.appendChild(d);
+          }
+          box.scrollTop = box.scrollHeight;
+          try { localStorage.setItem(IA_HIST_KEY, JSON.stringify(iaHistory)); } catch {}
+          return;
+        }
+      } catch {}
+    }
+    // Fallback: localStorage
     try {
       const saved = JSON.parse(localStorage.getItem(IA_HIST_KEY) || '[]');
       if (saved.length > 0) {
         iaHistory = saved;
-        const box = document.getElementById('iaMessages');
         box.innerHTML = '';
         for (const m of iaHistory) {
           const d = document.createElement('div');
@@ -14612,8 +14695,11 @@ window.turnoToggle   = turnoToggle;
         return;
       }
     } catch {}
-    document.getElementById('iaMessages').innerHTML = iaSaludo();
-  })();
+    box.innerHTML = iaSaludo();
+  }
+  // Ejecutar carga — reintenta cuando session esté lista
+  iaCargarHistorial();
+  document.addEventListener('sessionReady', () => iaCargarHistorial());
 
   window.iaLimpiarChat = function() {
     if (!confirm('¿Borrar el historial del chat con Alejandra?')) return;
@@ -14758,71 +14844,132 @@ window.turnoToggle   = turnoToggle;
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); iaSend(); }
   };
 
+  // ── Adjuntos para screenIA ──────────────────────────────────────────────
+  let _iaAdjuntos = [];
+
+  window.iaSubirAdjuntos = async function(ev) {
+    const files = Array.from(ev.target.files || []);
+    ev.target.value = '';
+    const s = getSession ? getSession() : null;
+    if (!s?.usuario_id) { toast('❌ Inicia sesión', 'err'); return; }
+    const cont = document.getElementById('iaAdjuntos');
+    for (const f of files) {
+      if (f.size > 20*1024*1024) { toast('❌ ' + f.name + ' supera 20MB', 'err'); continue; }
+      const chip = document.createElement('div');
+      chip.style.cssText = 'background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:4px 10px;display:flex;align-items:center;gap:6px;font-size:12px';
+      chip.innerHTML = '<span>⏳</span><span>' + _escHtml(f.name) + '</span>';
+      cont.appendChild(chip); cont.style.display = 'flex';
+      try {
+        const fd = new FormData();
+        fd.append('file', f);
+        fd.append('usuario_id', s.usuario_id);
+        const r = await fetch('https://alejandra-agente.alejandra-app.workers.dev/upload', { method:'POST', body:fd });
+        const j = await r.json();
+        if (!j.ok) throw new Error(j.error || 'fail');
+        _iaAdjuntos.push(j.url);
+        chip.innerHTML = '<span>📎</span><span>' + _escHtml(f.name) + '</span><span style="cursor:pointer;color:var(--muted)" onclick="iaQuitarAdj(\'' + j.url + '\',this.parentElement)">×</span>';
+      } catch(e) {
+        chip.innerHTML = '<span style="color:#f55">❌ ' + _escHtml(f.name) + '</span>';
+        setTimeout(() => chip.remove(), 3000);
+      }
+    }
+  };
+
+  window.iaQuitarAdj = function(url, chip) {
+    _iaAdjuntos = _iaAdjuntos.filter(u => u !== url);
+    chip.remove();
+    const cont = document.getElementById('iaAdjuntos');
+    if (!cont.children.length) cont.style.display = 'none';
+  };
+
+  // ── Envío al agente Alejandra (con herramientas, Gemini, catálogos) ────
   window.iaSend = async function() {
     const input = document.getElementById('iaInput');
     const msg = input.value.trim();
-    if (!msg) return;
+    if (!msg && _iaAdjuntos.length === 0) return;
     input.value = '';
+    input.style.height = 'auto';
 
-    appendIAMsg('user', msg);
+    const s = getSession ? getSession() : null;
+    if (!s || !(s.usuario_id || s.nombre)) { toast('❌ Debes estar autenticado', 'err'); return; }
+
+    // Recoger adjuntos
+    const adjEnv = _iaAdjuntos.slice();
+    _iaAdjuntos = [];
+    const cont = document.getElementById('iaAdjuntos');
+    if (cont) { cont.innerHTML = ''; cont.style.display = 'none'; }
+
+    const msgDisplay = msg + (adjEnv.length ? '\n📎 ' + adjEnv.length + ' archivo(s) adjunto(s)' : '');
+    appendIAMsg('user', msgDisplay);
     let typing = appendIATyping();
     document.getElementById('iaSendBtn').disabled = true;
 
-    const s = getSession ? getSession() : null;
-    const token = s?.token || '';
-
-    const isCapacityErr = e => e && (
-      e.includes('rate_limit') || e.includes('rate limit') ||
-      e.includes('tokens per minute') || e.includes('overloaded') ||
-      e.includes('529')
-    );
-
-    const slices = [iaHistory, iaHistory.slice(-10), iaHistory.slice(-4), []];
-    let data = null;
-
     try {
-      for (let i = 0; i < slices.length; i++) {
-        try {
-          const _iaCtrl = new AbortController();
-          const _iaTid = setTimeout(() => _iaCtrl.abort(), 25000);
-          try {
-            const res = await fetch(IA_API + '/dev/ai-chat', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json', 'X-Token': token },
-              body: JSON.stringify({ message: msg, history: slices[i] }),
-              signal: _iaCtrl.signal
-            });
-            clearTimeout(_iaTid);
-            data = await res.json();
-          } finally { clearTimeout(_iaTid); }
-        } catch(fe) {
-          data = { ok: false, error: fe.name === 'AbortError' ? '⏱️ Sin respuesta en 25 segundos. Vuelve a intentarlo.' : fe.message };
-        }
-        if (data.ok) break;
-        if (!isCapacityErr(data.error) || i === slices.length - 1) break;
-        typing.remove();
-        typing = appendIATyping();
-      }
+      const _iaCtrl = new AbortController();
+      const _iaTid = setTimeout(() => _iaCtrl.abort(), 60000);
+      try {
+        const res = await fetch(ALEJANDRA_API, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            mensaje:    msg || '(archivo adjunto sin mensaje)',
+            usuario_id: s.usuario_id || s.nombre || 'unknown',
+            empresa_id: s.empresa_id || null,
+            canal:      'pwa',
+            adjuntos:   adjEnv,
+            rol:        s.rol || null,
+            pantalla:   'ia',
+            dom_actual: null
+          }),
+          signal: _iaCtrl.signal
+        });
+        clearTimeout(_iaTid);
 
-      typing.remove();
-      let reply;
-      if (data && data.ok) {
-        reply = data.reply;
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const data = await res.json();
+        typing.remove();
+
+        let reply = data.texto || 'Sin respuesta';
+
+        // Parsear <plan> y <guia> de la respuesta
+        let planDetectado = null;
+        let guiaDetectada = null;
+        const planMatch = reply.match(/<plan>([\s\S]*?)<\/plan>/);
+        if (planMatch) {
+          try { planDetectado = JSON.parse(planMatch[1]); } catch (_) {}
+          reply = reply.replace(/<plan>[\s\S]*?<\/plan>/, '').trim();
+        }
+        const guiaMatch = reply.match(/<guia>([\s\S]*?)<\/guia>/);
+        if (guiaMatch) {
+          try { guiaDetectada = JSON.parse(guiaMatch[1]); } catch (_) {}
+          reply = reply.replace(/<guia>[\s\S]*?<\/guia>/, '').trim();
+        }
+
+        if (reply) appendIAMsg('bot', reply);
+
+        if (data.busqueda_web) {
+          appendIAMsg('bot-info', '🔍 (resultado con búsqueda web)');
+        }
+
+        // Guardar en historial local
         iaHistory.push({ role: 'user', content: msg });
         iaHistory.push({ role: 'assistant', content: reply });
         if (iaHistory.length > 40) iaHistory = iaHistory.slice(-40);
         try { localStorage.setItem(IA_HIST_KEY, JSON.stringify(iaHistory)); } catch {}
-      } else {
-        const err = data?.error || '';
-        reply = isCapacityErr(err)
-          ? '⚠️ Hay demasiado tráfico en este momento. Espera unos segundos e inténtalo de nuevo.'
-          : ('❌ ' + (err || 'Error desconocido'));
-      }
-      appendIAMsg('bot', reply);
-      iaSpeak(reply);
+
+        iaSpeak(reply);
+
+        // Mostrar plan/guia si los hay (reutilizar funciones del alejandraPanel)
+        if (planDetectado && typeof _alejandraOfrecerPlan === 'function') _alejandraOfrecerPlan(planDetectado);
+        if (guiaDetectada && typeof _alejandraOfrecerGuia === 'function') _alejandraOfrecerGuia(guiaDetectada);
+
+      } finally { clearTimeout(_iaTid); }
     } catch(e) {
       typing.remove();
-      appendIAMsg('bot', '❌ Error de conexión: ' + e.message);
+      const errMsg = e.name === 'AbortError'
+        ? '⏱️ Sin respuesta en 60 segundos. Vuelve a intentarlo.'
+        : '❌ Error: ' + e.message;
+      appendIAMsg('bot', errMsg);
     }
     document.getElementById('iaSendBtn').disabled = false;
   };
@@ -14863,10 +15010,16 @@ function alejandraAbrir(show = true) {
   const panel = document.getElementById('alejandraPanel');
   if (!panel) return;
   if (show) {
+    const nav = document.getElementById('bottomNav');
+    panel.style.bottom = (nav && nav.style.display !== 'none') ? nav.offsetHeight + 'px' : '0';
     panel.style.display = 'flex';
+    const verSpan = document.getElementById('alejandraVer');
+    if (verSpan) verSpan.textContent = 'v' + APP_VERSION;
     document.getElementById('alejandraInput')?.focus();
+    if (!history.state?.alejandra) history.pushState({ alejandra: 1 }, '');
   } else {
     panel.style.display = 'none';
+    panel.style.bottom = '0';
     if (_alejandraEscuchando && _alejandraRecognition) _alejandraRecognition.stop();
     window.speechSynthesis?.cancel();
   }
@@ -15001,7 +15154,7 @@ async function alejandraEnviar() {
   input.style.height = 'auto';
 
   const s = getSession();
-  if (!s || !s.usuario_id) {
+  if (!s || !(s.usuario_id || s.nombre)) {
     toast('❌ Debes estar autenticado', 'err');
     return;
   }
@@ -15022,10 +15175,13 @@ async function alejandraEnviar() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         mensaje:    msg || '(archivo adjunto sin mensaje)',
-        usuario_id: s.usuario_id,
+        usuario_id: s.usuario_id || s.nombre || 'unknown',
         empresa_id: s.empresa_id || null,
         canal:      'pwa',
-        adjuntos:   adjEnv
+        adjuntos:   adjEnv,
+        rol:        s.rol || null,
+        pantalla:   _alejandraGetPantalla(),
+        dom_actual: _alejandraGetDOMCompacto()
       })
     });
 
@@ -15035,24 +15191,42 @@ async function alejandraEnviar() {
     const list = document.getElementById('alejandraList');
     if (list?.lastChild?.dataset?.loading) list.lastChild.remove();
 
-    const textoRespuesta = data.texto || 'Sin respuesta';
-    _alejandraAñadirMensaje(textoRespuesta, 'bot');
+    let textoRespuesta = data.texto || 'Sin respuesta';
 
-    // Indicar si usó búsqueda web
-    if (data.busqueda_web) {
-      _alejandraAñadirMensaje('🔍 (resultado con búsqueda web)', 'bot-info');
+    // Extraer <plan> y <guia> de la respuesta antes de mostrar
+    let planDetectado = null;
+    let guiaDetectada = null;
+    const planMatch = textoRespuesta.match(/<plan>([\s\S]*?)<\/plan>/);
+    if (planMatch) {
+      try { planDetectado = JSON.parse(planMatch[1]); } catch (_) {}
+      textoRespuesta = textoRespuesta.replace(/<plan>[\s\S]*?<\/plan>/, '').trim();
+    }
+    const guiaMatch = textoRespuesta.match(/<guia>([\s\S]*?)<\/guia>/);
+    if (guiaMatch) {
+      try { guiaDetectada = JSON.parse(guiaMatch[1]); } catch (_) {}
+      textoRespuesta = textoRespuesta.replace(/<guia>[\s\S]*?<\/guia>/, '').trim();
     }
 
-    if (data.acciones?.length > 0) {
-      const str = data.acciones.map(a => `• ${a.tipo}: ${a.descripcion}`).join('\n');
-      _alejandraAñadirMensaje(`📋 Acciones:\n${str}`, 'bot-info');
+    if (textoRespuesta) _alejandraAñadirMensaje(textoRespuesta, 'bot');
+
+    // Mostrar plan ejecutable con botón de confirmación
+    if (planDetectado) {
+      _alejandraOfrecerPlan(planDetectado);
+    }
+
+    // Mostrar guía paso a paso
+    if (guiaDetectada) {
+      _alejandraOfrecerGuia(guiaDetectada);
+    }
+
+    if (data.busqueda_web) {
+      _alejandraAñadirMensaje('🔍 (resultado con búsqueda web)', 'bot-info');
     }
 
     if (data.requiere_confirmacion) {
       _alejandraAñadirMensaje('⚠️ Esta acción requiere tu confirmación', 'bot-warning');
     }
 
-    // Hablar la respuesta si la voz está activada
     alejandraHablar(textoRespuesta);
 
   } catch (err) {
@@ -15084,6 +15258,192 @@ function _alejandraAñadirMensaje(texto, tipo = 'user', isLoading = false) {
   div.innerHTML = `<div style="max-width:85%;background:${bg};color:${fg};border-radius:${radius};padding:10px 14px;font-size:14px;line-height:1.5;word-wrap:break-word;white-space:pre-wrap">${_escHtml(texto)}</div>`;
 
   if (isLoading) div.dataset.loading = '1';
+  list.appendChild(div);
+  list.scrollTop = list.scrollHeight;
+}
+
+// ── Contexto de pantalla para Alejandra ──────────────────────────────────────
+function _alejandraGetPantalla() {
+  const active = document.querySelector('.screen.active');
+  if (!active) return null;
+  const raw = active.id.replace(/^screen/, '');
+  return raw.charAt(0).toLowerCase() + raw.slice(1);
+}
+
+function _alejandraGetDOMCompacto() {
+  const active = document.querySelector('.screen.active');
+  if (!active) return [];
+  const elements = active.querySelectorAll('button, a, input, select, textarea, [onclick]');
+  const lines = [];
+  for (const el of elements) {
+    if (el.offsetParent === null && el.style.display === 'none') continue;
+    const tag = el.tagName.toLowerCase();
+    const id = el.id ? `#${el.id}` : '';
+    const cls = el.className ? `.${String(el.className).split(/\s+/).filter(c => c && !c.startsWith('active')).slice(0,2).join('.')}` : '';
+    const text = (el.textContent || '').trim().substring(0, 30);
+    const type = el.type ? `[type=${el.type}]` : '';
+    const sel = id || (tag + cls + type);
+    if (sel) lines.push(`${sel} ${text}`);
+    if (lines.length >= 40) break;
+  }
+  return lines;
+}
+
+// ── Plan ejecutable — Alejandra toma el control ─────────────────────────────
+let _alejandraPlanActivo = null;
+
+function _alejandraOfrecerPlan(plan) {
+  if (!plan?.acciones?.length) return;
+  const list = document.getElementById('alejandraList');
+  if (!list) return;
+
+  const div = document.createElement('div');
+  div.style.cssText = 'display:flex;flex-direction:column;align-items:flex-start;margin-bottom:8px';
+
+  const accHtml = plan.acciones.map((a, i) =>
+    `<div style="padding:4px 0;font-size:13px"><b>${i+1}.</b> ${_escHtml(a.desc || a.tipo)}</div>`
+  ).join('');
+
+  div.innerHTML = `
+    <div style="max-width:90%;background:linear-gradient(135deg,#1e1b4b,#312e81);border:1px solid #8b5cf6;border-radius:16px;padding:14px;color:#e0e7ff">
+      <div style="font-weight:700;font-size:14px;margin-bottom:8px">🤖 ${_escHtml(plan.titulo || 'Alejandra quiere actuar')}</div>
+      <div style="border-top:1px solid #4c1d95;padding-top:8px;margin-bottom:10px">${accHtml}</div>
+      <div style="display:flex;gap:8px">
+        <button onclick="_alejandraCancelarPlan(this)" style="flex:1;padding:8px;border-radius:10px;border:1px solid #6b7280;background:transparent;color:#d1d5db;font-size:13px;cursor:pointer">Cancelar</button>
+        <button onclick="_alejandraConfirmarPlan(this)" style="flex:1;padding:8px;border-radius:10px;border:none;background:#8b5cf6;color:#fff;font-size:13px;font-weight:600;cursor:pointer">Adelante, hazlo</button>
+      </div>
+    </div>`;
+
+  _alejandraPlanActivo = plan;
+  list.appendChild(div);
+  list.scrollTop = list.scrollHeight;
+}
+
+function _alejandraCancelarPlan(btn) {
+  _alejandraPlanActivo = null;
+  const card = btn.closest('div[style*="linear-gradient"]');
+  if (card) card.innerHTML = '<div style="color:#9ca3af;font-size:13px;padding:6px">Plan cancelado</div>';
+}
+
+function _alejandraConfirmarPlan(btn) {
+  const plan = _alejandraPlanActivo;
+  if (!plan) return;
+  _alejandraPlanActivo = null;
+  const card = btn.closest('div[style*="linear-gradient"]');
+  if (card) card.innerHTML = '<div style="color:#a78bfa;font-size:13px;padding:6px">⚡ Ejecutando...</div>';
+  alejandraAbrir(false);
+  _alejandraEjecutarPlan(plan);
+}
+
+async function _alejandraEjecutarPlan(plan) {
+  const overlay = document.createElement('div');
+  overlay.id = 'alejandraPlanOverlay';
+  overlay.style.cssText = 'position:fixed;bottom:0;left:0;right:0;z-index:1100;background:linear-gradient(135deg,#1e1b4b,#312e81);border-top:2px solid #8b5cf6;padding:12px 16px;color:#e0e7ff;font-size:13px;transition:transform .3s';
+  overlay.innerHTML = `<div style="display:flex;align-items:center;gap:8px"><span>🤖</span><span id="alePlanStatus">Preparando...</span><button onclick="_alejandraAbortarPlan()" style="margin-left:auto;background:#ef4444;color:#fff;border:none;border-radius:8px;padding:4px 12px;font-size:12px;cursor:pointer">Cancelar</button></div>
+    <div style="height:3px;background:#4c1d95;border-radius:2px;margin-top:8px"><div id="alePlanProgress" style="height:100%;background:#8b5cf6;border-radius:2px;width:0;transition:width .3s"></div></div>`;
+  document.body.appendChild(overlay);
+
+  let abortado = false;
+  window._alejandraAbortarPlan = () => { abortado = true; };
+
+  const total = plan.acciones.length;
+  for (let i = 0; i < total; i++) {
+    if (abortado) break;
+    const acc = plan.acciones[i];
+    const status = document.getElementById('alePlanStatus');
+    const progress = document.getElementById('alePlanProgress');
+    if (status) status.textContent = `${i+1}/${total}: ${acc.desc || acc.tipo}`;
+    if (progress) progress.style.width = `${((i+1)/total)*100}%`;
+
+    try {
+      await _alejandraEjecutarAccion(acc);
+    } catch (e) {
+      toast(`❌ Error en paso ${i+1}: ${e.message}`, 'err');
+      break;
+    }
+    await new Promise(r => setTimeout(r, acc.tipo === 'esperar' ? (acc.ms || 500) : 400));
+  }
+
+  const ov = document.getElementById('alejandraPlanOverlay');
+  if (ov) {
+    const st = document.getElementById('alePlanStatus');
+    if (st) st.textContent = abortado ? 'Cancelado' : 'Plan completado';
+    setTimeout(() => ov.remove(), 2000);
+  }
+  if (!abortado) toast('🤖 Plan completado', 'ok');
+}
+
+async function _alejandraEjecutarAccion(acc) {
+  switch (acc.tipo) {
+    case 'navegar': {
+      const destino = acc.destino || acc.valor;
+      if (destino && typeof navTo === 'function') navTo(destino);
+      else if (destino && typeof showScreen === 'function') showScreen(destino);
+      break;
+    }
+    case 'click': {
+      const el = document.querySelector(acc.selector);
+      if (!el) throw new Error(`No encontré: ${acc.selector}`);
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      el.style.boxShadow = '0 0 0 3px #8b5cf6';
+      await new Promise(r => setTimeout(r, 300));
+      el.click();
+      setTimeout(() => el.style.boxShadow = '', 1000);
+      break;
+    }
+    case 'rellenar': {
+      const el = document.querySelector(acc.selector);
+      if (!el) throw new Error(`No encontré: ${acc.selector}`);
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      el.style.boxShadow = '0 0 0 3px #8b5cf6';
+      el.focus();
+      el.value = acc.valor || '';
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+      el.dispatchEvent(new Event('change', { bubbles: true }));
+      setTimeout(() => el.style.boxShadow = '', 1000);
+      break;
+    }
+    case 'seleccionar': {
+      const el = document.querySelector(acc.selector);
+      if (!el) throw new Error(`No encontré: ${acc.selector}`);
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      el.style.boxShadow = '0 0 0 3px #8b5cf6';
+      el.value = acc.valor || '';
+      el.dispatchEvent(new Event('change', { bubbles: true }));
+      setTimeout(() => el.style.boxShadow = '', 1000);
+      break;
+    }
+    case 'esperar':
+      break;
+    case 'scroll': {
+      const el = document.querySelector(acc.selector);
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      break;
+    }
+    default:
+      break;
+  }
+}
+
+// ── Guía paso a paso (visual, no ejecuta) ────────────────────────────────────
+function _alejandraOfrecerGuia(guia) {
+  if (!guia?.pasos?.length) return;
+  const list = document.getElementById('alejandraList');
+  if (!list) return;
+
+  const div = document.createElement('div');
+  div.style.cssText = 'display:flex;flex-direction:column;align-items:flex-start;margin-bottom:8px';
+
+  const pasosHtml = guia.pasos.map((p, i) =>
+    `<div style="padding:4px 0;font-size:13px"><b>${i+1}.</b> ${_escHtml(p)}</div>`
+  ).join('');
+
+  div.innerHTML = `
+    <div style="max-width:90%;background:var(--surface2);border:1px solid #22c55e;border-radius:16px;padding:14px;color:var(--text)">
+      <div style="font-weight:700;font-size:14px;margin-bottom:8px">📋 ${_escHtml(guia.titulo || 'Guía paso a paso')}</div>
+      <div style="border-top:1px solid var(--border);padding-top:8px">${pasosHtml}</div>
+    </div>`;
+
   list.appendChild(div);
   list.scrollTop = list.scrollHeight;
 }
