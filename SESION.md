@@ -6,8 +6,47 @@
 ## ESTADO ACTUAL
 
 **Sesión:** LIBRE
-**Última sesión:** 29/05/2026
-**Versión actual:** v6.11
+**Última sesión:** 30/05/2026
+**Versión actual:** v6.13
+
+---
+
+## RESUMEN SESIÓN 30/05/2026 — v6.12-v6.13 (Bugfixes + auto-update + push notifications toda la app)
+
+### Qué se hizo:
+
+**v6.12 — Bugfixes + auto-update PWA:**
+- Fix z-index: bottomNav (1060) tapaba botones de modales (z-index 500) → modales subidos a 1100
+- Fix chat/panel IA no se cerraba al navegar → _applyScreen cierra ambos paneles
+- Fix "Debes estar autenticado" → fallback a nombre cuando usuario_id falta en sesión
+- Auto-update PWA: polling version.json cada 5 min + fallback /health en visibilitychange
+- Optimización batería: /health solo en visibilitychange, no en polling
+
+**v6.13 — Push notifications en toda la app:**
+- Chat interno: push a todos los de la empresa al enviar mensaje (excluye remitente)
+- Pedidos: push al crear nuevo pedido y al cambiar estado (recibido/cancelado/etc.)
+- Incidencias: push al crear (cualquier gravedad) y al resolver
+- Fichajes: push al trabajador cuando se le registra un fichaje
+- Mantenimientos: push al registrar mantenimiento
+- Nuevos endpoints genéricos: /push/subscribe, /push/vapid-key, /push/broadcast
+- Frontend: suscripción push unificada — registra en agente Y worker principal simultáneamente
+- Eliminada _registrarPushDeveloper (redundante con push universal)
+- pushBroadcast solo para superadmin/desarrollador (notificar a todos manualmente)
+
+### Archivos modificados:
+- worker.js — sendPushToUser/Empresa/All + hooks en chat/pedidos/incidencias/fichajes/mantenimientos + endpoints push
+- index.html — push unificado, eliminar developer legacy, v6.13
+- sw.js — CACHE alejandra-v6.13
+- version.json — 6.13
+
+### Deploy:
+- Worker principal: d95fd80e ✅ (D1 + R2 bindings + 3 crons)
+- GitHub: 0768020 → push main ✅
+- Versiones sincronizadas: ✅
+
+### Pendiente:
+- Probar push notifications en móvil (aceptar permiso, enviar chat y verificar push)
+- Pendientes anteriores: #196 (dept toggle overlap), #195 (proveedores field), #193 (bajas en fichajes), #197 (Gemini quota), #190 (encargados panel access)
 
 ---
 

@@ -4,8 +4,8 @@
   Ruta local: C:\Users\Adrian\Downloads\Proyecto GestiBobina\Alejandra APP
 ================================================================================
 
-ÚLTIMA ACTUALIZACIÓN: 29/05/2026
-VERSIÓN ACTUAL APP NUEVA: v6.11 (Push notifications + background tasks + chat sync)
+ÚLTIMA ACTUALIZACIÓN: 30/05/2026
+VERSIÓN ACTUAL APP NUEVA: v6.13 (Push notifications toda la app + auto-update + bugfixes)
 VERSIÓN ACTUAL APP VIEJA: v4.19 (⛔ CONGELADA DEFINITIVAMENTE — no recibe más cambios)
 
 ================================================================================
@@ -176,6 +176,22 @@ PASO 4 — VERIFICAR WORKER (solo si se va a tocar worker.js)
 ================================================================================
   HISTORIAL DE VERSIONES — RECIENTES
 ================================================================================
+
+v6.13        |  30/05/2026  [Push notifications en toda la app]
+  - Chat interno: push a todos los de la empresa al enviar mensaje
+  - Pedidos: push al crear y al cambiar estado
+  - Incidencias: push al crear y al resolver
+  - Fichajes: push al trabajador fichado
+  - Mantenimientos: push al registrar
+  - Endpoints genéricos: /push/subscribe, /push/vapid-key, /push/broadcast
+  - Suscripción push unificada (agente + worker principal simultáneo)
+
+v6.12        |  30/05/2026  [Bugfixes z-index + auto-update PWA]
+  - Fix: bottomNav tapaba botones de modales (z-index hierarchy corregido)
+  - Fix: chat/panel IA no se cerraba al navegar entre pantallas
+  - Fix: "Debes estar autenticado" por usuario_id missing en sesión
+  - Auto-update PWA: polling version.json + fallback /health en visibilitychange
+  - Optimización batería: /health solo en visibilitychange
 
 v6.11        |  29/05/2026  [Push notifications + background tasks + chat sync]
   - VAPID auto-provisioning: agente genera VAPID keys en D1 al primer uso
