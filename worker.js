@@ -3907,6 +3907,63 @@ async function callGemini(env, geminiBody, endpointLabel) {
   };
 }
 
+// ── Reparar JSON truncado: cerrar arrays/objetos abiertos ──────────────────
+// Útil cuando Gemini se queda sin tokens y corta la respuesta a mitad.
+// Estrategia: recorrer carácter a carácter llevando una pila de aperturas y
+// marcar el último punto "seguro" (depth=1, justo después de cerrar un objeto
+// del array de trabajadores). Si llegamos al final con la pila desbalanceada,
+// truncamos al último punto seguro y cerramos lo que quede.
+function repararJsonTruncado(raw) {
+  const s = raw.trim();
+  let inString = false;
+  let escape = false;
+  const depth = []; // pila de '{' y '['
+  let lastSafePos = -1; // posición tras último cierre de elemento de array de nivel raíz
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    if (escape) { escape = false; continue; }
+    if (c === '\\' && inString) { escape = true; continue; }
+    if (c === '"') { inString = !inString; continue; }
+    if (inString) continue;
+    if (c === '{' || c === '[') {
+      depth.push(c);
+    } else if (c === '}') {
+      if (depth[depth.length - 1] === '{') depth.pop();
+      // Si estamos justo dentro del array raíz (1 elemento en pila = '[' del array)
+      // entonces marcamos esta posición como segura
+      if (depth.length === 1 && depth[0] === '[') lastSafePos = i;
+    } else if (c === ']') {
+      if (depth[depth.length - 1] === '[') depth.pop();
+      if (depth.length === 0) lastSafePos = i;
+    }
+  }
+  // Si el JSON ya está bien balanceado, devolverlo tal cual
+  if (depth.length === 0 && !inString) return s;
+  // Truncar al último punto seguro (final de un elemento completo)
+  let cortado = lastSafePos > 0 ? s.slice(0, lastSafePos + 1) : s;
+  // Quitar coma colgante final
+  cortado = cortado.replace(/,\s*$/, '');
+  // Recalcular pila sobre el texto cortado
+  const stack = [];
+  let inStr = false, esc = false;
+  for (let i = 0; i < cortado.length; i++) {
+    const c = cortado[i];
+    if (esc) { esc = false; continue; }
+    if (c === '\\' && inStr) { esc = true; continue; }
+    if (c === '"') { inStr = !inStr; continue; }
+    if (inStr) continue;
+    if (c === '{' || c === '[') stack.push(c);
+    else if (c === '}' && stack[stack.length - 1] === '{') stack.pop();
+    else if (c === ']' && stack[stack.length - 1] === '[') stack.pop();
+  }
+  // Cerrar lo que quede abierto
+  while (stack.length > 0) {
+    const last = stack.pop();
+    cortado += (last === '{' ? '}' : ']');
+  }
+  return cortado;
+}
+
 // ── SCAN PARTE SEMANAL ──────────────────────────────────────────────────────
 async function scanParte(request, env) {
   const { empresa_id, rol, obra_id: obraAuth } = await getAuth(request, env);
@@ -3989,7 +4046,7 @@ ${baseInstructions}`;
 
   const geminiBody = {
     contents: [{ parts: [...imageParts, { text: prompt }] }],
-    generationConfig: { temperature: 0.1, maxOutputTokens: 8192 },
+    generationConfig: { temperature: 0.1, maxOutputTokens: 32768, responseMimeType: 'application/json' },
   };
   const gemResult = await callGemini(env, geminiBody, 'scan-parte');
   if (!gemResult.ok) return err(gemResult.error, gemResult.status);
@@ -3997,6 +4054,7 @@ ${baseInstructions}`;
   const usedModel = gemResult.model;
 
   const texto = aiJson.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  const finishReason = aiJson.candidates?.[0]?.finishReason;
   logAIUsage(env, {
     empresa_id,
     proveedor: 'gemini',
@@ -4006,12 +4064,24 @@ ${baseInstructions}`;
     output_tokens: aiJson.usageMetadata?.candidatesTokenCount || 0,
   });
 
-  const match  = texto.match(/\{[\s\S]*\}/);
-  if (!match) return err('La IA no devolvió JSON válido', 502);
+  // Con responseMimeType=application/json el texto ya es JSON puro, sin markdown
+  const match = texto.match(/\{[\s\S]*\}/);
+  const rawJson = match ? match[0] : texto.trim();
+  if (!rawJson) return err('La IA no devolvió contenido', 502);
 
   let data;
-  try { data = JSON.parse(match[0]); }
-  catch(e) { return err('JSON inválido de la IA: ' + e.message, 502); }
+  try {
+    data = JSON.parse(rawJson);
+  } catch(e) {
+    // Reparar JSON truncado: cerrar arrays/objetos abiertos
+    const reparado = repararJsonTruncado(rawJson);
+    try {
+      data = JSON.parse(reparado);
+      console.log(`[scan-parte] JSON reparado (finishReason=${finishReason}, ${rawJson.length} chars)`);
+    } catch(e2) {
+      return err(`JSON inválido de la IA (finishReason=${finishReason || 'unknown'}): ${e.message}. Prueba con menos páginas a la vez.`, 502);
+    }
+  }
 
   // Mapear nombre_match → IDs
   const DIAS = ['lunes','martes','miercoles','jueves','viernes','sabado'];
