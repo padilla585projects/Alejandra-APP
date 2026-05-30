@@ -4,8 +4,8 @@
   Ruta local: C:\Users\Adrian\Downloads\Proyecto GestiBobina\Alejandra APP
 ================================================================================
 
-ÚLTIMA ACTUALIZACIÓN: 30/05/2026
-VERSIÓN ACTUAL APP NUEVA: v6.13 (Push notifications toda la app + auto-update + bugfixes)
+ÚLTIMA ACTUALIZACIÓN: 30/05/2026 (noche)
+VERSIÓN ACTUAL APP NUEVA: v6.14 (Fix scan IA — callGemini resiliente + diagnóstico)
 VERSIÓN ACTUAL APP VIEJA: v4.19 (⛔ CONGELADA DEFINITIVAMENTE — no recibe más cambios)
 
 ================================================================================
@@ -176,6 +176,13 @@ PASO 4 — VERIFICAR WORKER (solo si se va a tocar worker.js)
 ================================================================================
   HISTORIAL DE VERSIONES — RECIENTES
 ================================================================================
+
+v6.14        |  30/05/2026  [Fix scan IA — callGemini resiliente + diagnóstico]
+  - Modelos Gemini actualizados: gemini-2.5-flash + 2.0-flash-001 (regresión v5.96)
+  - callGemini ahora prueba TODAS las combinaciones key×modelo antes de rendirse
+  - Detecta respuestas vacías y bloqueos de safety (finishReason != STOP)
+  - Errores reales de Gemini llegan al cliente (antes "Error IA Gemini" genérico)
+  - Nuevo endpoint /dev/gemini-test → diagnostica qué modelos/keys funcionan
 
 v6.13        |  30/05/2026  [Push notifications en toda la app]
   - Chat interno: push a todos los de la empresa al enviar mensaje

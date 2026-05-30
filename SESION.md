@@ -6,8 +6,46 @@
 ## ESTADO ACTUAL
 
 **Sesión:** LIBRE
-**Última sesión:** 30/05/2026
-**Versión actual:** v6.14 (agente)
+**Última sesión:** 30/05/2026 (noche)
+**Versión actual:** v6.14
+
+---
+
+## RESUMEN SESIÓN 30/05/2026 (noche) — v6.14 Fix escaneo IA (scan parte/bobinas)
+
+### Problema reportado:
+Usuario: "el escaneo de fotos para fichajes y mas cosas... da error siempre"
+No tenía mensaje exacto del error, así que se atacó defensivamente.
+
+### Causas identificadas:
+1. **Regresión de modelo Gemini**: `callGemini` usaba `gemini-2.0-flash` (sin sufijo dated). El fix v5.96 había cambiado a `gemini-2.0-flash-001` pero se perdió.
+2. **`callGemini` abortaba en el primer error**: si una key fallaba con 400/500, no probaba las otras keys ni otros modelos. Solo seguía con 429 (cuota) y 404 (modelo no existe).
+3. **Errores genéricos al cliente**: "Error IA Gemini" sin pistas de qué falló realmente.
+4. **No detectaba bloqueos de safety**: si Gemini bloqueaba con `finishReason: SAFETY`, devolvía respuesta vacía → "JSON inválido".
+
+### Qué se hizo (worker.js):
+- **`callGemini` reescrita** — lista de modelos ampliada: `gemini-2.5-flash` (más reciente), `gemini-2.0-flash-001`, `gemini-2.0-flash`, `gemini-1.5-flash-002`, `gemini-1.5-flash`
+- **Prueba TODAS las combinaciones key×modelo** antes de rendirse, no aborta al primer error
+- **Detecta respuestas vacías y bloqueos de safety** (`finishReason !== STOP/MAX_TOKENS`) → reintenta con siguiente modelo
+- **Errores reales de Gemini llegan al cliente** — incluye `data.error.message` + qué key+modelo falló
+- **Nuevo endpoint `/dev/gemini-test`** (solo superadmin/dev) — prueba cada combinación key×modelo con un ping mínimo y devuelve mapa de qué funciona y qué no
+
+### Archivos modificados:
+- worker.js — callGemini + devGeminiTest + ruta /dev/gemini-test
+- index.html — APP_VERSION '6.14'
+- sw.js — CACHE 'alejandra-v6.14'
+- version.json — 6.14
+
+### Deploy:
+- Worker principal: Version ID `35f5264d-d2d7-4f12-a6f5-2973a244642d` ✅
+- GitHub: `beb4f06` → push main ✅
+- Versiones sincronizadas (json/sw/html): ✅ OK 6.14
+
+### Pendiente para próxima sesión:
+- **Usuario debe probar escaneo de partes/bobinas en la app v6.14** y pegar el error exacto si vuelve a fallar (ahora sí saldrá descriptivo)
+- Si el problema persiste, llamar a `GET /dev/gemini-test` con token superadmin para ver qué modelos/keys responden
+- Pendientes anteriores: #196 (dept toggle overlap), #195 (proveedores field), #193 (bajas en fichajes), #197 (Gemini quota), #190 (encargados panel access)
+- Push notifications v6.13 todavía sin probar en móvil real
 
 ---
 
