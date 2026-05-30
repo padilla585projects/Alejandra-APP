@@ -3822,25 +3822,89 @@ async function devGenerateVapid(request, env) {
   });
 }
 
+// ── Diagnóstico Gemini (solo dev/superadmin) ───────────────────────────────
+async function devGeminiTest(request, env) {
+  const s = await getAuth(request, env);
+  if (!s || !hasRole(s, 'superadmin', 'desarrollador')) return err('Sin permiso', 403);
+  const keys = [env.GEMINI_API_KEY, env.GEMINI_API_KEY_2, env.GEMINI_API_KEY_3];
+  const keyStatus = keys.map((k, i) => ({ key: `KEY_${i+1}`, configured: !!k, length: k?.length || 0 }));
+  const models = ['gemini-2.5-flash', 'gemini-2.0-flash-001', 'gemini-2.0-flash', 'gemini-1.5-flash-002', 'gemini-1.5-flash'];
+  const results = [];
+  for (let ki = 0; ki < keys.length; ki++) {
+    if (!keys[ki]) continue;
+    for (const model of models) {
+      try {
+        const res = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${keys[ki]}`,
+          { method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ contents: [{ parts: [{ text: 'di OK' }] }], generationConfig: { maxOutputTokens: 10 } }) }
+        );
+        const data = await res.json().catch(() => ({}));
+        results.push({ key: `KEY_${ki+1}`, model, status: res.status, ok: res.ok, error: data?.error?.message?.slice(0,150) || null });
+      } catch (e) {
+        results.push({ key: `KEY_${ki+1}`, model, status: 0, ok: false, error: e.message });
+      }
+    }
+  }
+  return json({ ok: true, keys: keyStatus, tests: results });
+}
+
 // ── HELPER: llamada a Gemini con rotación de keys ──────────────────────────
 async function callGemini(env, geminiBody, endpointLabel) {
   const keys = [env.GEMINI_API_KEY, env.GEMINI_API_KEY_2, env.GEMINI_API_KEY_3].filter(Boolean);
   if (!keys.length) return { error: 'GEMINI_API_KEY no configurada', status: 500 };
-  const models = ['gemini-2.0-flash', 'gemini-1.5-flash-002', 'gemini-1.5-flash'];
-  for (const key of keys) {
+  // Modelos actualizados (mayo 2026): 2.5-flash es el más reciente, 2.0-flash-001 dated, fallback 1.5
+  const models = ['gemini-2.5-flash', 'gemini-2.0-flash-001', 'gemini-2.0-flash', 'gemini-1.5-flash-002', 'gemini-1.5-flash'];
+  let lastError = null;
+  let lastStatus = 502;
+  for (let ki = 0; ki < keys.length; ki++) {
+    const key = keys[ki];
+    let quotaExhausted = false;
     for (const model of models) {
-      const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`,
-        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(geminiBody) }
-      );
-      const data = await res.json();
-      if (res.ok) return { ok: true, data, model };
-      if (res.status === 429) break; // cuota agotada para esta key, probar siguiente key
-      if (res.status === 404) continue; // modelo no disponible, probar siguiente modelo
-      return { error: 'Error IA Gemini: ' + JSON.stringify(data).slice(0, 200), status: 502 };
+      let res, data;
+      try {
+        res = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`,
+          { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(geminiBody) }
+        );
+        data = await res.json().catch(() => ({}));
+      } catch (e) {
+        lastError = `Network error: ${e.message}`;
+        continue;
+      }
+      if (res.ok) {
+        // Verificar que la respuesta tiene contenido válido (no bloqueo de safety)
+        const finishReason = data.candidates?.[0]?.finishReason;
+        if (finishReason && finishReason !== 'STOP' && finishReason !== 'MAX_TOKENS') {
+          lastError = `Gemini bloqueó la respuesta (${finishReason})`;
+          lastStatus = 502;
+          continue;
+        }
+        if (!data.candidates?.[0]?.content?.parts?.[0]?.text) {
+          lastError = 'Gemini devolvió respuesta vacía';
+          lastStatus = 502;
+          continue;
+        }
+        return { ok: true, data, model };
+      }
+      // Capturar mensaje de error real de Gemini
+      const errMsg = data?.error?.message || JSON.stringify(data).slice(0, 300);
+      lastError = `${model} (key ${ki+1}): ${errMsg}`;
+      lastStatus = res.status;
+      if (res.status === 429) { quotaExhausted = true; break; }   // cuota agotada → siguiente key
+      if (res.status === 404 || res.status === 400) continue;     // modelo no disponible / payload → siguiente modelo
+      // Otros errores (401, 403, 500, 503): probar siguiente modelo también
+      continue;
+    }
+    if (!quotaExhausted) {
+      // Si no fue cuota, ya probamos todos los modelos con esta key; saltar a la siguiente
+      continue;
     }
   }
-  return { error: `Cuota Gemini agotada para ${endpointLabel}`, status: 429 };
+  return {
+    error: `[${endpointLabel}] Gemini falló: ${lastError || 'sin detalles'}`,
+    status: lastStatus
+  };
 }
 
 // ── SCAN PARTE SEMANAL ──────────────────────────────────────────────────────
@@ -4312,6 +4376,7 @@ export default {
       if (path === '/dev/sql'              && method === 'POST')  return await devSQL(request, env);
       if (path === '/dev/ai-chat'          && method === 'POST')  return await devAIChat(request, env);
       if (path === '/dev/ai-status'        && method === 'GET')   return await devAIStatus(request, env);
+      if (path === '/dev/gemini-test'      && method === 'GET')   return await devGeminiTest(request, env);
       if (path === '/dev/push-subscribe'   && method === 'POST')  return await devPushSubscribe(request, env);
       if (path === '/dev/vapid-public-key' && method === 'GET')   return await devVapidPublicKey(request, env);
       if (path === '/dev/generate-vapid'   && method === 'GET')   return await devGenerateVapid(request, env);
