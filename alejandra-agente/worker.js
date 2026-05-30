@@ -655,12 +655,6 @@ const TOOL_CONTROLAR_APP = {
 };
 
 // Tools por experto
-// Tools de código — solo para Adrian (rol desarrollador/superadmin)
-const CODE_TOOLS = [TOOL_REPO_READ, TOOL_REPO_WRITE, TOOL_DIRECT_FIX, TOOL_GREP_CODE, TOOL_RUN_MIGRATION, TOOL_CHECK_DEPLOY];
-const TASK_TOOLS = [TOOL_ENVIAR_PUSH, TOOL_CREAR_TAREA, TOOL_VER_TAREAS, TOOL_COMPLETAR_TAREA];
-
-const ADVANCED_TOOLS = [TOOL_BUSCAR_PRECIOS, TOOL_MARCAR_PLANO, TOOL_GENERAR_DOCUMENTO, TOOL_BUSCAR_NORMATIVA, TOOL_HISTORICO_MATERIALES, TOOL_CONFIGURAR_ALERTA, TOOL_EXPORTAR_DATOS];
-
 const TOOLS_POR_EXPERTO = {
   simple:     [],
   app:        [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_CONTROLAR_APP],
@@ -1122,8 +1116,67 @@ export default {
       console.error('ERROR fetch:', err.message);
       return json({ error: err.message }, 500);
     }
+  },
+  // ── Cron: Alejandra despierta cada hora y decide si actuar ──────────────
+  async scheduled(event, env, ctx) {
+    try {
+      const hora = new Date().getUTCHours();
+      const horaLocal = (hora + 2) % 24; // UTC+2 España
+
+      // No molestar entre 23:00 y 7:00
+      if (horaLocal >= 23 || horaLocal < 7) return;
+
+      // Obtener contexto: último mensaje, memorias recientes, comandos pendientes
+      const ultimoMsg = await env.DB.prepare(
+        `SELECT contenido, created_at FROM alejandra_historial WHERE canal='app_android' AND rol='user' ORDER BY created_at DESC LIMIT 1`
+      ).first().catch(() => null);
+
+      const memoriasRecientes = await env.DB.prepare(
+        `SELECT titulo, contenido FROM alejandra_memoria WHERE importancia >= 4 ORDER BY created_at DESC LIMIT 5`
+      ).all().catch(() => ({ results: [] }));
+
+      const comandosPendientes = await env.DB.prepare(
+        `SELECT COUNT(*) as n FROM alejandra_comandos WHERE estado='pendiente'`
+      ).first().catch(() => ({ n: 0 }));
+
+      // Construir prompt para que Alejandra decida qué hacer
+      const contextoHora = `Son las ${horaLocal}:00 (hora España). `;
+      const contextoUltimo = ultimoMsg
+        ? `Último mensaje del usuario (${ultimoMsg.created_at}): "${ultimoMsg.contenido?.substring(0, 100)}". `
+        : 'No hay mensajes recientes del usuario. ';
+      const contextoMemorias = (memoriasRecientes.results || []).length > 0
+        ? `Memorias importantes: ${memoriasRecientes.results.map(m => m.titulo).join(', ')}. `
+        : '';
+      const contextoCmdsPendientes = comandosPendientes.n > 0
+        ? `Hay ${comandosPendientes.n} comandos pendientes sin ejecutar. `
+        : '';
+
+      const prompt = `[CRON PROACTIVO] ${contextoHora}${contextoUltimo}${contextoMemorias}${contextoCmdsPendientes}
+
+Eres Alejandra en modo autónomo. Analiza el contexto y decide:
+1. ¿Hay algo útil que puedas hacer ahora? (avisar al usuario, revisar tareas, dar buenos días, etc.)
+2. Si NO hay nada relevante, simplemente responde "SIN_ACCION" y no hagas nada.
+3. Si SÍ hay algo, usa tus herramientas (iniciar_conversacion, memory_save, controlar_app, etc.)
+
+Reglas:
+- No envíes mensajes vacíos o triviales. Solo actúa si hay algo genuinamente útil.
+- Buenos días solo entre 7:00-9:00 y solo si no has saludado hoy.
+- Por la noche (21:00-23:00) puedes hacer reflexión y guardar aprendizajes.
+- Si detectas tareas sin resolver del día, avisa.`;
+
+      const contextoChat = await obtenerContextoChat(env, 'system', 'cron', 4);
+      const respuesta = await procesarConNEXUS(env, prompt, contextoChat, 'system', 'cron');
+
+      // Si respondió algo que no sea SIN_ACCION, loguear
+      if (respuesta.texto && !respuesta.texto.includes('SIN_ACCION')) {
+        await env.DB.prepare(
+          `INSERT INTO alejandra_logs (tipo, contenido, created_at) VALUES ('cron', ?, datetime('now'))`
+        ).bind(respuesta.texto.substring(0, 500)).run().catch(() => {});
+      }
+    } catch (err) {
+      console.error('[CRON] Error:', err.message);
+    }
   }
-  // scheduled: desactivado — cuenta free, límite 5 cron triggers
 };
 
 // ══════════════════════════════════════════════════════════════════════════════
