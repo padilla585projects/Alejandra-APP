@@ -1584,6 +1584,8 @@ async function procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empres
 
     // PASO 5: Loop Anthropic + tools
     let respAPI = await llamarAnthropic(env, messages, tools, expert.model, expert.maxTokens, systemPrompt);
+    let tokensIn = respAPI.usage?.input_tokens || 0;
+    let tokensOut = respAPI.usage?.output_tokens || 0;
     if (respAPI.usage) registrarTokenUso(env, expert.model, 'chat_stream', respAPI.usage.input_tokens||0, respAPI.usage.output_tokens||0, usuario_id);
     let iter = 0;
     const MAX_ITER = (usuario_id === 'adrian' || usuario_id === 'admin') ? 12 : 8;
@@ -1614,7 +1616,11 @@ async function procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empres
       // Mantener todas las tools disponibles en todas las iteraciones para máxima proactividad
       const toolsSiguiente = iter < MAX_ITER - 1 ? tools : [];
       respAPI = await llamarAnthropic(env, messages, toolsSiguiente, expert.model, expert.maxTokens, systemPrompt);
-      if (respAPI.usage) registrarTokenUso(env, expert.model, 'chat_stream', respAPI.usage.input_tokens||0, respAPI.usage.output_tokens||0, usuario_id);
+      if (respAPI.usage) {
+        tokensIn  += respAPI.usage.input_tokens  || 0;
+        tokensOut += respAPI.usage.output_tokens || 0;
+        registrarTokenUso(env, expert.model, 'chat_stream', respAPI.usage.input_tokens||0, respAPI.usage.output_tokens||0, usuario_id);
+      }
       iter++;
     }
 
@@ -1632,6 +1638,21 @@ async function procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empres
 
     textoFinal = verificarAccionesAfirmadas(textoFinal, herramientasUsadas);
     await registrarLog(env, usuario_id, 'chat', `[${clas.experto}] ${mensaje.substring(0,80)}`, textoFinal.substring(0,200));
+
+    // ── Emitir info de modelo + tokens + coste ────────────────────────────
+    const precios = PRECIOS_USD[expert.model] || { in: 3.00, out: 15.00 };
+    const costeUSD = (tokensIn * precios.in + tokensOut * precios.out) / 1_000_000;
+    const costeEUR = costeUSD * EUR_RATE;
+    await send({
+      type: 'cost',
+      modelo: expert.model,
+      experto: clas.experto,
+      tokens_in: tokensIn,
+      tokens_out: tokensOut,
+      tokens_total: tokensIn + tokensOut,
+      eur: costeEUR,
+      tools_count: herramientasUsadas.length
+    });
 
     return { texto: textoFinal, herramientas_usadas: herramientasUsadas, modelo: expert.model, experto: clas.experto, busqueda_web: usoBusquedaWeb };
 
