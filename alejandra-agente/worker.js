@@ -419,8 +419,24 @@ const NEXUS_EXPERTS = {
   ingenieria: { model: MODEL_EXPERTO, maxTokens: 2048, modules: ['base', 'app', 'ingenieria', 'ram', 'capacidades_avanzadas', 'aprendizaje_proactivo', 'razonamiento', 'contexto_sesion', 'formato'] }
 };
 
+// Módulos estáticos (L0) — se cachean siempre, nunca cambian entre turnos
+const L0_MODULES = ['base', 'formato'];
+
 function buildSystemPrompt(modulos) {
   return modulos.map(m => NEXUS_MODULES[m] || '').filter(Boolean).join('\n\n');
+}
+
+// Construir system blocks para Anthropic con caching por capas (como Jarvis)
+// L0 (base+formato) → cache_control ephemeral (se cachea 5min)
+// L1+ (experto-específicos) → sin cache (cambian por experto/turno)
+function buildAnthropicSystemBlocks(modulos) {
+  const l0 = L0_MODULES.filter(m => modulos.includes(m)).map(m => NEXUS_MODULES[m] || '').filter(Boolean).join('\n\n');
+  const l1Plus = modulos.filter(m => !L0_MODULES.includes(m)).map(m => NEXUS_MODULES[m] || '').filter(Boolean).join('\n\n');
+
+  const blocks = [];
+  if (l0) blocks.push({ type: 'text', text: l0, cache_control: { type: 'ephemeral' } });
+  if (l1Plus) blocks.push({ type: 'text', text: l1Plus });
+  return blocks;
 }
 
 // ── Tools disponibles ─────────────────────────────────────────────────────────
@@ -1611,7 +1627,7 @@ async function procesarConNEXUS(env, mensaje, contexto, usuario_id, empresa_id, 
     }
 
     // PASO 3: System prompt con solo los módulos necesarios
-    const systemPrompt = buildSystemPrompt(expert.modules);
+    const systemPrompt = buildAnthropicSystemBlocks(expert.modules);
 
     // PASO 4: Historial dinámico
     const limitHistorial      = clas.experto === 'simple' ? 3 : 6;
@@ -3844,53 +3860,54 @@ Datos:\n${resumen}`
 }
 
 // ── Clasificador Haiku ────────────────────────────────────────────────────────
+// ── ROUTER con 2 capas: Regex (0 tokens) → Haiku (fallback) ─────────────────
+const REGEX_ROUTES = [
+  // Capa 1: Regex — clasificación instantánea sin LLM
+  { re: /^(hola|hey|buenas|buenos días|buenas tardes|buenas noches|qué tal|cómo estás|ok|vale|sí|no|gracias|perfecto|genial|entendido)[\s!?.]*$/i, expert: 'simple', web: false },
+  { re: /\b(no funciona|no puedo|error|falla|se cuelga|pantalla en blanco|no carga|no responde|se ha caído|no me deja|problema|avería|roto|bloqueado|urgente)\b/i, expert: 'app', web: false },
+  { re: /\b(bobina|equipo|carretilla|PEMP|fichaje|fichar|entrada|salida|operario|encargado|personal|incidencia|pedido|albarán|obra|almacén|stock)\b/i, expert: 'app', web: false },
+  { re: /\b(cuánt[oa]s|quién fichó|lista de|muéstrame|dame los datos|informe|resumen del|estado de)\b/i, expert: 'app', web: false },
+  { re: /\b(sección de cable|caída de tensión|magnetotérmico|diferencial|protección|bandeja|canalización|ITC-BT|REBT|UNE|instalación eléctrica|circuito|trifásico|monofásico|kW|amperio|potencia)\b/i, expert: 'ingenieria', web: false },
+  { re: /\b(calcula|dimensiona|qué sección|qué cable|qué protección|foto de obra|analiza esta foto|plano)\b/i, expert: 'ingenieria', web: false },
+  { re: /\b(NEXUS|worker|deploy|wrangler|cloudflare|código|endpoint|API|github|commit|patch|tool|prompt)\b/i, expert: 'tecnico', web: false },
+  { re: /\b(mejora|reflexion|autoconocimiento|qué puedes mejorar|piensa en|analízate|evolucionar)\b/i, expert: 'reflexion', web: false },
+  { re: /\b(quién eres|qué eres|cómo te llamas|qué sabes hacer|capacidades|tu historia|cuéntame sobre ti)\b/i, expert: 'completo', web: false },
+  { re: /\b(precio|cuánto cuesta|presupuesto|cotización|tarifa|normativa nueva|última versión|noticias|actualidad)\b/i, expert: 'web', web: true },
+];
+
 async function clasificarConHaiku(env, mensaje) {
-  const sistema = `Clasificador para agente IA. Responde SOLO con JSON válido.
+  const msg = mensaje.trim();
 
-Expertos:
-- "simple": SOLO saludos breves, "ok", "gracias", "sí", "no". Nada más.
-- "app": CUALQUIER problema, consulta operativa, datos de la empresa, equipos, personal, fichajes, incidencias, bobinas, errores de la app, algo que no funciona, reportes de usuarios, quejas. USA ESTE PARA TODO LO QUE REQUIERA INVESTIGAR O ACTUAR.
-- "tecnico": arquitectura interna de Alejandra, código del worker, deploy, cómo funciona NEXUS, preguntas de Adrián sobre el sistema
-- "web": necesita info actual de internet (precios mercado, normativas nuevas, noticias)
-- "reflexion": reflexión sobre sí misma, mejoras propias, autoconocimiento
-- "ingenieria": cálculos eléctricos, cables, bandejas, protecciones, fotos de obra, normativa técnica, sección de cable, caída de tensión
-- "completo": quién es, historia, capacidades generales, preguntas existenciales
+  // ── CAPA 1: Regex — 0 tokens, instantáneo ──────────────────────────────
+  for (const route of REGEX_ROUTES) {
+    if (route.re.test(msg)) {
+      return { experto: route.expert, buscar_web: route.web, query_web: null, source: 'regex' };
+    }
+  }
 
-REGLA: Si el usuario reporta un PROBLEMA (algo no funciona, algo se rompió, no puede hacer algo, hay un error) → SIEMPRE "app". Si hay URGENCIA → SIEMPRE "app".
-
-JSON: {"experto":"...","buscar_web":bool,"query_web":"búsqueda en inglés o null"}
-
-Ejemplos:
-"hola" → {"experto":"simple","buscar_web":false,"query_web":null}
-"cuántas bobinas tenemos" → {"experto":"app","buscar_web":false,"query_web":null}
-"no me deja fichar" → {"experto":"app","buscar_web":false,"query_web":null}
-"la carretilla no arranca" → {"experto":"app","buscar_web":false,"query_web":null}
-"hay una incidencia en obra" → {"experto":"app","buscar_web":false,"query_web":null}
-"quién fichó hoy" → {"experto":"app","buscar_web":false,"query_web":null}
-"no funciona X" → {"experto":"app","buscar_web":false,"query_web":null}
-"error en la app" → {"experto":"app","buscar_web":false,"query_web":null}
-"se ha caído algo" → {"experto":"app","buscar_web":false,"query_web":null}
-"precio cable RZ1-K hoy" → {"experto":"web","buscar_web":true,"query_web":"RZ1-K cable price 2025"}
-"cómo funciona tu NEXUS" → {"experto":"tecnico","buscar_web":false,"query_web":null}
-"piensa en cómo mejorar" → {"experto":"reflexion","buscar_web":false,"query_web":null}
-"calcula sección de cable para 10kW" → {"experto":"ingenieria","buscar_web":false,"query_web":null}
-"analiza esta foto de la bandeja" → {"experto":"ingenieria","buscar_web":false,"query_web":null}`;
-
+  // ── CAPA 2: Haiku LLM — solo si regex no matchea (~10 tokens output) ───
   try {
     const resp = await fetch(ANTHROPIC_API, {
       method: 'POST',
       headers: { 'x-api-key': env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-      body: JSON.stringify({ model: MODEL_ROUTER, max_tokens: 80, system: sistema, messages: [{ role: 'user', content: mensaje.substring(0,800) }] })
+      body: JSON.stringify({
+        model: MODEL_ROUTER,
+        max_tokens: 30,
+        system: 'Clasificador. Responde SOLO una palabra: simple, app, tecnico, web, reflexion, ingenieria, completo. Si hay problema/error/urgencia → app. Si necesita internet → web.',
+        messages: [{ role: 'user', content: msg.substring(0, 800) }]
+      })
     });
     if (!resp.ok) throw new Error(`Haiku ${resp.status}`);
-    const data  = await resp.json();
+    const data = await resp.json();
     if (data.usage) registrarTokenUso(env, MODEL_ROUTER, 'clasificacion', data.usage.input_tokens||0, data.usage.output_tokens||0, null);
-    const texto = data.content?.[0]?.text?.trim() || '{}';
-    const match = texto.match(/\{[^}]+\}/);
-    return match ? JSON.parse(match[0]) : { experto: 'app', buscar_web: false, query_web: null };
+    const texto = (data.content?.[0]?.text || '').trim().toLowerCase();
+    const validos = ['simple', 'app', 'tecnico', 'web', 'reflexion', 'ingenieria', 'completo'];
+    const experto = validos.find(v => texto.includes(v)) || 'app';
+    const needsWeb = texto.includes('web');
+    return { experto, buscar_web: needsWeb, query_web: needsWeb ? msg.substring(0, 100) : null, source: 'haiku' };
   } catch (err) {
     console.error('ERROR clasificar:', err.message);
-    return { experto: 'app', buscar_web: false, query_web: null };
+    return { experto: 'app', buscar_web: false, query_web: null, source: 'fallback' };
   }
 }
 
@@ -3943,10 +3960,12 @@ async function llamarGPT4oFallback(env, messages, systemPrompt, maxTokens) {
 }
 
 async function llamarAnthropic(env, messages, tools, model, maxTokens, systemPrompt) {
-  // System como array de bloques con cache_control en el último → prompt caching (5min TTL, 90% más barato en hits)
-  const systemBlocks = systemPrompt
-    ? [{ type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } }]
-    : undefined;
+  // System: acepta array de blocks (desde buildAnthropicSystemBlocks) o string (legacy)
+  const systemBlocks = Array.isArray(systemPrompt)
+    ? systemPrompt  // Ya son blocks con cache_control
+    : systemPrompt
+      ? [{ type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } }]
+      : undefined;
 
   const body = { model, max_tokens: maxTokens, messages };
   if (systemBlocks) body.system = systemBlocks;
@@ -4003,9 +4022,11 @@ async function llamarAnthropic(env, messages, tools, model, maxTokens, systemPro
 
 // ── Streaming real de Anthropic (última respuesta, token a token) ─────────────
 async function llamarAnthropicStream(env, messages, model, maxTokens, systemPrompt, onToken) {
-  const systemBlocks = systemPrompt
-    ? [{ type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } }]
-    : undefined;
+  const systemBlocks = Array.isArray(systemPrompt)
+    ? systemPrompt
+    : systemPrompt
+      ? [{ type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } }]
+      : undefined;
 
   const body = { model, max_tokens: maxTokens, stream: true, messages };
   if (systemBlocks) body.system = systemBlocks;
