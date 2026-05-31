@@ -4153,7 +4153,7 @@ async function enviarFCM(env, fcmToken, titulo, cuerpo) {
           token: fcmToken,
           notification: { title: titulo, body: cuerpo },
           android: { priority: 'HIGH', notification: { sound: 'default', click_action: 'FLUTTER_NOTIFICATION_CLICK' } },
-          data: { tipo: 'alejandra_mensaje' },
+          data: { tipo: 'alejandra_mensaje', screen: 'chat' },
         },
       }),
     });
