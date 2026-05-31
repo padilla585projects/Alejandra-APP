@@ -8564,9 +8564,7 @@ async function informeSemanal(empresa_id, empresa_nombre, env) {
     // 1. Fichajes semana pasada
     const { results: fichajes } = await env.DB.prepare(
       `SELECT COUNT(*) as total,
-              SUM(CASE WHEN hora_entrada IS NOT NULL AND hora_salida IS NOT NULL
-                  THEN ROUND((julianday(fecha||' '||hora_salida) - julianday(fecha||' '||hora_entrada)) * 24, 1)
-                  ELSE 0 END) as horas,
+              SUM(CASE WHEN horas_trabajadas > 0 THEN horas_trabajadas ELSE 0 END) as horas,
               SUM(CASE WHEN minutos_retraso > 0 THEN minutos_retraso ELSE 0 END) as min_retraso
        FROM fichajes WHERE empresa_id = ? AND fecha >= ? AND fecha <= ?`
     ).bind(empresa_id, desde, hasta).all();
