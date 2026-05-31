@@ -2349,6 +2349,13 @@ ${input.codigo_sugerido ? `CÓDIGO SUGERIDO:\n${input.codigo_sugerido}` : ''}`;
         }
 
         if (nombre === 'github_escribir') {
+          // PROTECCIÓN: archivos grandes solo permitidos para archivos nuevos o pequeños
+          const contenidoSize = (input.contenido || '').length;
+          const ARCHIVOS_PROTEGIDOS = ['worker.js', 'alejandra-agente/worker.js', 'index.html', 'panel.html'];
+          const esProtegido = ARCHIVOS_PROTEGIDOS.some(p => (input.ruta || '').endsWith(p));
+          if (esProtegido && contenidoSize > 5000) {
+            return `❌ BLOQUEADO: No puedes sobreescribir "${input.ruta}" completo (${(contenidoSize/1024).toFixed(0)}KB). Este archivo tiene miles de líneas — sobreescribirlo borra todo el código existente. Usa grep_codigo para localizar la sección exacta y pídele a Adrián que aplique el cambio quirúrgicamente, o usa github_leer con rango de líneas para leer solo la parte a modificar y propón el diff.`;
+          }
           const repo = resolveRepo(input.repo);
           const rama = input.rama || 'main';
           const url = `https://api.github.com/repos/${repo}/contents/${input.ruta}`;
