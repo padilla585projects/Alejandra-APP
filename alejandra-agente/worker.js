@@ -337,6 +337,13 @@ Respuesta: "Juan, tu cuenta no tiene obra asignada — por eso el fichaje falla.
 SI NO PUEDES RESOLVER:
 "Juan, hay un bug en el módulo de fichajes [detalle técnico breve]. Ya avisé a Adrián con el diagnóstico completo. Mientras tanto, pídele a tu encargado que registre tu entrada manualmente."
 
+RAM LOCAL (para tareas largas que necesitan contexto):
+- ram_save: guarda datos intermedios (archivos grandes, resultados de grep, contexto parcial)
+- ram_read: recupera lo guardado sin volver a descargarlo
+- ram_clear: limpia al terminar la tarea
+Cuándo usarla: siempre que una tarea requiera >3 iteraciones con datos grandes (código, archivos, resultados). Guarda en RAM en la iteración 1, lee en las siguientes, limpia al final.
+Ejemplo: leer worker.js → ram_save("worker_contenido") → en siguiente iter ram_read → patch_codigo → ram_clear("tarea_patch")
+
 LO QUE NUNCA HAGAS:
 - Listar 5 pasos de "prueba esto, prueba lo otro"
 - Responder sin haber tocado la BD
@@ -707,6 +714,45 @@ const TOOL_GREP_CODIGO = {
   }
 };
 
+const TOOL_RAM_SAVE = {
+  name: 'ram_save',
+  description: 'Guarda datos temporales en RAM local (D1). Úsalo para almacenar contenido de archivos grandes, resultados intermedios o contexto de tareas largas. Se borra automáticamente en 1 hora o cuando uses ram_clear.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      clave:  { type: 'string', description: 'Identificador único (ej: "worker_js_contenido", "patch_lineas", "resultado_grep")' },
+      valor:  { type: 'string', description: 'Contenido a guardar (puede ser texto largo, JSON, código, etc.)' },
+      tarea:  { type: 'string', description: 'Nombre de la tarea para agrupar entradas relacionadas (ej: "patch_clasificador")' }
+    },
+    required: ['clave', 'valor']
+  }
+};
+
+const TOOL_RAM_READ = {
+  name: 'ram_read',
+  description: 'Lee datos guardados previamente en RAM local. Úsalo para recuperar contenido sin volver a descargarlo ni ocupar contexto.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      clave: { type: 'string', description: 'Clave a leer' },
+      tarea: { type: 'string', description: 'Filtrar por tarea (opcional)' }
+    },
+    required: ['clave']
+  }
+};
+
+const TOOL_RAM_CLEAR = {
+  name: 'ram_clear',
+  description: 'Limpia la RAM local al terminar una tarea. Borra por tarea (recomendado) o por clave específica.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      tarea: { type: 'string', description: 'Borrar todas las entradas de esta tarea' },
+      clave: { type: 'string', description: 'Borrar solo esta clave (si no se especifica tarea)' }
+    }
+  }
+};
+
 const TOOL_PATCH_CODIGO = {
   name: 'patch_codigo',
   description: 'Aplica un cambio quirúrgico en un archivo del repo: busca una cadena EXACTA y la reemplaza por otra. Seguro para archivos grandes (no reescribe todo, solo la línea/bloque). Requiere que old_str sea único en el archivo.',
@@ -743,11 +789,11 @@ const TOOL_CONTROLAR_APP = {
 // Tools por experto
 const TOOLS_POR_EXPERTO = {
   simple:     [],
-  app:        [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_CONTROLAR_APP],
-  tecnico:    [TOOL_LEER_ESTADO, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_BUSCAR_WEB, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_CONTROLAR_APP, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION],
+  app:        [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_CONTROLAR_APP],
+  tecnico:    [TOOL_LEER_ESTADO, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_BUSCAR_WEB, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_CONTROLAR_APP, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION],
   web:        [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE],
-  reflexion:  [TOOL_MEMORY_SAVE, TOOL_MEMORY_READ, TOOL_PROPOSE_MEJORA, TOOL_BUSCAR_WEB, TOOL_TOMAR_DECISION, TOOL_LEER_ESTADO, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_CONTROLAR_APP, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION],
-  completo:   [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_LEER_ESTADO, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_CONTROLAR_APP, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION],
+  reflexion:  [TOOL_MEMORY_SAVE, TOOL_MEMORY_READ, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_PROPOSE_MEJORA, TOOL_BUSCAR_WEB, TOOL_TOMAR_DECISION, TOOL_LEER_ESTADO, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_CONTROLAR_APP, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION],
+  completo:   [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_LEER_ESTADO, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_CONTROLAR_APP, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION],
   ingenieria: [TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_ANALIZAR_FOTO, TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION]
 };
 
@@ -2217,6 +2263,68 @@ ${input.codigo_sugerido ? `CÓDIGO SUGERIDO:\n${input.codigo_sugerido}` : ''}`;
         return `${rows.length} registro(s):\n${output.substring(0, 6000)}${truncated}`;
       } catch (err) {
         return `Error en consulta BD: ${err.message}`;
+      }
+    }
+
+    case 'ram_save': {
+      try {
+        const clave = (input.clave || '').trim();
+        const valor = input.valor || '';
+        const tarea = input.tarea || 'general';
+        if (!clave) return 'Falta la clave.';
+        // Limpiar entradas expiradas primero
+        await env.DB.prepare(`DELETE FROM alejandra_ram WHERE expires_at < datetime('now')`).run().catch(() => {});
+        // Upsert por clave
+        await env.DB.prepare(
+          `INSERT INTO alejandra_ram (clave, valor, tarea, created_at, expires_at)
+           VALUES (?, ?, ?, datetime('now'), datetime('now', '+1 hour'))
+           ON CONFLICT(clave) DO UPDATE SET valor=excluded.valor, tarea=excluded.tarea, created_at=excluded.created_at, expires_at=excluded.expires_at`
+        ).bind(clave, valor, tarea).run().catch(async () => {
+          // Si no hay UNIQUE constraint, borrar y reinsertar
+          await env.DB.prepare(`DELETE FROM alejandra_ram WHERE clave=?`).bind(clave).run();
+          await env.DB.prepare(
+            `INSERT INTO alejandra_ram (clave, valor, tarea, created_at, expires_at) VALUES (?, ?, ?, datetime('now'), datetime('now', '+1 hour'))`
+          ).bind(clave, valor, tarea).run();
+        });
+        return `RAM guardada: "${clave}" (${(valor.length/1024).toFixed(1)}KB, tarea="${tarea}"). Expira en 1h o llama a ram_clear.`;
+      } catch (err) {
+        return `Error ram_save: ${err.message}`;
+      }
+    }
+
+    case 'ram_read': {
+      try {
+        const clave = (input.clave || '').trim();
+        if (!clave) return 'Falta la clave.';
+        await env.DB.prepare(`DELETE FROM alejandra_ram WHERE expires_at < datetime('now')`).run().catch(() => {});
+        const row = input.tarea
+          ? await env.DB.prepare(`SELECT valor, tarea, created_at FROM alejandra_ram WHERE clave=? AND tarea=? LIMIT 1`).bind(clave, input.tarea).first()
+          : await env.DB.prepare(`SELECT valor, tarea, created_at FROM alejandra_ram WHERE clave=? LIMIT 1`).bind(clave).first();
+        if (!row) return `No hay datos en RAM con clave "${clave}"${input.tarea ? ` y tarea "${input.tarea}"` : ''}.`;
+        return `RAM["${clave}"] (tarea="${row.tarea}", guardado: ${row.created_at}):\n\n${row.valor}`;
+      } catch (err) {
+        return `Error ram_read: ${err.message}`;
+      }
+    }
+
+    case 'ram_clear': {
+      try {
+        let changes = 0;
+        if (input.tarea) {
+          const r = await env.DB.prepare(`DELETE FROM alejandra_ram WHERE tarea=?`).bind(input.tarea).run();
+          changes = r.meta?.changes || 0;
+          return `RAM limpiada: ${changes} entrada(s) de tarea "${input.tarea}" eliminadas.`;
+        } else if (input.clave) {
+          const r = await env.DB.prepare(`DELETE FROM alejandra_ram WHERE clave=?`).bind(input.clave).run();
+          changes = r.meta?.changes || 0;
+          return `RAM limpiada: clave "${input.clave}" eliminada (${changes} entrada).`;
+        } else {
+          const r = await env.DB.prepare(`DELETE FROM alejandra_ram WHERE expires_at < datetime('now')`).run();
+          changes = r.meta?.changes || 0;
+          return `RAM limpiada: ${changes} entrada(s) expiradas eliminadas.`;
+        }
+      } catch (err) {
+        return `Error ram_clear: ${err.message}`;
       }
     }
 
