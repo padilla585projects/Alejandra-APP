@@ -220,6 +220,9 @@ FLUJO ESTÁNDAR con RAM:
 3. En siguientes iteraciones: ram_read en lugar de volver a descargar
 4. Al terminar: ram_clear(tarea) — siempre limpiar
 
+FLUJO COMPLETO para cambios de código:
+grep_codigo → ram_save → patch_codigo → ejecutar_deploy → ram_read(contexto) → [esperar ~40s] → verificar_deploy → si OK: ram_clear + memory_save | si FALLO: investigar steps fallidos
+
 NO uses RAM para:
 - Respuestas simples de una sola iteración
 - Datos que ya caben fácilmente en el contexto
@@ -776,9 +779,20 @@ const TOOL_RAM_CLEAR = {
   }
 };
 
+const TOOL_VERIFICAR_DEPLOY = {
+  name: 'verificar_deploy',
+  description: 'Consulta el estado del último deploy en GitHub Actions. Úsalo ~40 segundos después de ejecutar_deploy para saber si tuvo éxito o falló. Devuelve status, conclusión y qué pasos fallaron.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      worker: { type: 'string', description: 'Qué workflow verificar: "agente" o "app". Default: agente' }
+    }
+  }
+};
+
 const TOOL_DEPLOY = {
   name: 'ejecutar_deploy',
-  description: 'Despliega el worker del agente en Cloudflare Workers via GitHub Actions. Úsalo después de hacer un patch_codigo o github_escribir para que el cambio entre en producción. Tarda ~30 segundos.',
+  description: 'Despliega el worker en Cloudflare via GitHub Actions. Úsalo después de patch_codigo. IMPORTANTE: tras llamar a esta tool, espera ~40s y luego llama a verificar_deploy para confirmar que el deploy fue exitoso.',
   input_schema: {
     type: 'object',
     properties: {
@@ -824,11 +838,11 @@ const TOOL_CONTROLAR_APP = {
 // Tools por experto
 const TOOLS_POR_EXPERTO = {
   simple:     [],
-  app:        [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_CONTROLAR_APP],
-  tecnico:    [TOOL_LEER_ESTADO, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_BUSCAR_WEB, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_CONTROLAR_APP, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION],
+  app:        [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_CONTROLAR_APP],
+  tecnico:    [TOOL_LEER_ESTADO, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_BUSCAR_WEB, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_CONTROLAR_APP, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION],
   web:        [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE],
-  reflexion:  [TOOL_MEMORY_SAVE, TOOL_MEMORY_READ, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_PROPOSE_MEJORA, TOOL_BUSCAR_WEB, TOOL_TOMAR_DECISION, TOOL_LEER_ESTADO, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_CONTROLAR_APP, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION],
-  completo:   [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_LEER_ESTADO, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_CONTROLAR_APP, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION],
+  reflexion:  [TOOL_MEMORY_SAVE, TOOL_MEMORY_READ, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_PROPOSE_MEJORA, TOOL_BUSCAR_WEB, TOOL_TOMAR_DECISION, TOOL_LEER_ESTADO, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_CONTROLAR_APP, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION],
+  completo:   [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_LEER_ESTADO, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_CONTROLAR_APP, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION],
   ingenieria: [TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_ANALIZAR_FOTO, TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION]
 };
 
@@ -2402,12 +2416,71 @@ ${input.codigo_sugerido ? `CÓDIGO SUGERIDO:\n${input.codigo_sugerido}` : ''}`;
           await env.DB.prepare(
             `INSERT INTO alejandra_logs (tipo, contenido, created_at) VALUES ('deploy', ?, datetime('now'))`
           ).bind(`Deploy ${worker} disparado: ${motivo}`).run().catch(() => {});
-          return `✅ Deploy del worker "${worker}" iniciado en GitHub Actions.\nMotivo: ${motivo}\nTarda ~30s. El worker se actualizará automáticamente al completarse.`;
+          await env.DB.prepare(
+            `INSERT INTO alejandra_logs (tipo, contenido, created_at) VALUES ('deploy_timestamp', ?, datetime('now'))`
+          ).bind(`${worker}:${Date.now()}`).run().catch(() => {});
+          return `✅ Deploy del worker "${worker}" iniciado.\nMotivo: ${motivo}\n⏳ Espera ~40 segundos y luego usa verificar_deploy para confirmar que fue exitoso.`;
         }
         const errText = await r.text();
         return `Error al disparar deploy (${r.status}): ${errText.substring(0, 200)}`;
       } catch (err) {
         return `Error ejecutar_deploy: ${err.message}`;
+      }
+    }
+
+    case 'verificar_deploy': {
+      try {
+        if (!env.GITHUB_TOKEN) return 'GITHUB_TOKEN no configurado.';
+        const ghToken = env.GITHUB_TOKEN.trim();
+        const worker = input.worker || 'agente';
+        const workflows = { agente: 'deploy-alejandra-agente.yml', app: 'deploy-worker.yml' };
+        const workflow = workflows[worker] || workflows.agente;
+        const repo = 'padilla585projects/Alejandra-APP';
+
+        // Obtener runs recientes del workflow
+        const r = await fetch(
+          `https://api.github.com/repos/${repo}/actions/workflows/${workflow}/runs?per_page=3`,
+          { headers: { 'Authorization': `token ${ghToken}`, 'User-Agent': 'Alejandra-Agent', 'Accept': 'application/vnd.github.v3+json' } }
+        );
+        if (!r.ok) return `Error GitHub (${r.status}): ${await r.text()}`;
+        const data = await r.json();
+        const runs = data.workflow_runs || [];
+        if (!runs.length) return 'No hay runs recientes para este workflow.';
+
+        const latest = runs[0];
+        const status = latest.status; // queued, in_progress, completed
+        const conclusion = latest.conclusion; // success, failure, cancelled, null
+        const sha = latest.head_sha?.substring(0, 7) || '?';
+        const createdAt = latest.created_at;
+        const runId = latest.id;
+
+        if (status !== 'completed') {
+          return `⏳ Deploy en progreso (${status})...\nCommit: ${sha} | Iniciado: ${createdAt}\nEspera unos segundos más y vuelve a llamar a verificar_deploy.`;
+        }
+
+        if (conclusion === 'success') {
+          // Health check rápido
+          const health = await fetch('https://alejandra-agente.alejandra-app.workers.dev/health')
+            .then(h => h.ok ? '✅ worker responde OK' : `⚠️ health ${h.status}`)
+            .catch(() => '⚠️ health check falló');
+          return `✅ Deploy exitoso.\nCommit: ${sha} | Completado: ${createdAt}\nWorker: ${health}`;
+        }
+
+        // Falló — obtener qué steps fallaron
+        const jobsR = await fetch(
+          `https://api.github.com/repos/${repo}/actions/runs/${runId}/jobs`,
+          { headers: { 'Authorization': `token ${ghToken}`, 'User-Agent': 'Alejandra-Agent', 'Accept': 'application/vnd.github.v3+json' } }
+        );
+        let failInfo = '';
+        if (jobsR.ok) {
+          const jobsData = await jobsR.json();
+          const failedSteps = (jobsData.jobs || [])
+            .flatMap(j => (j.steps || []).filter(s => s.conclusion === 'failure').map(s => `  • ${s.name}`));
+          if (failedSteps.length) failInfo = `\nSteps fallidos:\n${failedSteps.join('\n')}`;
+        }
+        return `❌ Deploy falló (${conclusion}).\nCommit: ${sha}${failInfo}\nRevisa los logs en GitHub Actions para más detalle.`;
+      } catch (err) {
+        return `Error verificar_deploy: ${err.message}`;
       }
     }
 
