@@ -7,6 +7,12 @@ on:
     paths:
       - 'alejandra-agente/**'
       - '.github/workflows/deploy-alejandra-agente.yml'
+  workflow_dispatch:
+    inputs:
+      motivo:
+        description: 'Motivo del deploy (para el log)'
+        required: false
+        default: 'Deploy manual'
 
 jobs:
   deploy:

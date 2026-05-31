@@ -9191,7 +9191,7 @@ async function subirArchivo(request, env) {
   const r2Key = herramienta_id
     ? `e${empresa_id}/herr/${herramienta_id}/${ts}_${safeName}`
     : `e${empresa_id}/docs/${ts}_${safeName}`;
-  await env.FILES.put(r2Key, file.stream(), {
+  await env.FILES.put(r2Key, await file.arrayBuffer(), {
     httpMetadata: { contentType: file.type || 'application/octet-stream' }
   });
   const hid = herramienta_id ? parseInt(herramienta_id) : null;
@@ -9419,7 +9419,7 @@ async function subirFotoIncidencia(incidencia_id, request, env) {
   const ts = Date.now();
   const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
   const r2Key = `e${empresa_id}/incidencias/${incidencia_id}/${ts}_${safeName}`;
-  await env.FILES.put(r2Key, file.stream(), { httpMetadata: { contentType: mime } });
+  await env.FILES.put(r2Key, await file.arrayBuffer(), { httpMetadata: { contentType: mime } });
   const r = await env.DB.prepare(
     'INSERT INTO incidencia_fotos (empresa_id, incidencia_id, r2_key, nombre_archivo, mime_type, subido_por) VALUES (?,?,?,?,?,?)'
   ).bind(empresa_id, incidencia_id, r2Key, file.name, mime, userNombre || rol).run();
@@ -9473,7 +9473,7 @@ async function subirAlbaranPedido(pedido_id, request, env) {
   const ts = Date.now();
   const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
   const r2Key = `e${empresa_id}/albaranes/${pedido_id}/${ts}_${safeName}`;
-  await env.FILES.put(r2Key, file.stream(), {
+  await env.FILES.put(r2Key, await file.arrayBuffer(), {
     httpMetadata: { contentType: mime }
   });
   const fecha = new Date().toISOString().slice(0, 10);
@@ -9610,7 +9610,7 @@ async function subirDocDept(request, env) {
   const ts       = Date.now();
   const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
   const r2Key    = `e${empresa_id}/dept/${deptName}/${obraId}/${carpeta_id || 'root'}/${ts}_${safeName}`;
-  await env.FILES.put(r2Key, file.stream(), { httpMetadata: { contentType: file.type || 'application/octet-stream' } });
+  await env.FILES.put(r2Key, await file.arrayBuffer(), { httpMetadata: { contentType: file.type || 'application/octet-stream' } });
   const r = await env.DB.prepare(
     'INSERT INTO docs_dept (empresa_id, obra_id, departamento, carpeta_id, r2_key, nombre, mime, tamano, descripcion, subido_por) VALUES (?,?,?,?,?,?,?,?,?,?)'
   ).bind(empresa_id, obraId, deptName, carpeta_id ? parseInt(carpeta_id) : null, r2Key, file.name,
@@ -10255,7 +10255,7 @@ async function subirFotoPerfil(tipo, id, request, env) {
   const mime = file.type || 'image/jpeg';
   if (!['image/jpeg','image/png','image/webp','image/heic','image/heif'].includes(mime)) return err('Solo imágenes', 400);
   const r2Key = `e${empresa_id}/perfiles/${tipo}/${id}_${Date.now()}.jpg`;
-  await env.FILES.put(r2Key, file.stream(), { httpMetadata: { contentType: mime } });
+  await env.FILES.put(r2Key, await file.arrayBuffer(), { httpMetadata: { contentType: mime } });
   // Borrar foto anterior si existe
   let oldKey = null;
   if (tipo === 'usuario') {
@@ -10697,7 +10697,7 @@ async function crearMantenimiento(request, env) {
         adjuntoNombre = v.name;
         const ext = v.name.split('.').pop().toLowerCase();
         adjuntoKey = `mant/${empresa_id}/${Date.now()}_${randomHex(4)}.${ext}`;
-        await env.FILES.put(adjuntoKey, v.stream(), { httpMetadata: { contentType: v.type || 'application/octet-stream' } });
+        await env.FILES.put(adjuntoKey, await v.arrayBuffer(), { httpMetadata: { contentType: v.type || 'application/octet-stream' } });
       } else {
         body[k] = v;
       }
@@ -10900,7 +10900,7 @@ async function subirFotoObra(request, env) {
   const ts         = Date.now();
   const safeName   = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
   const r2Key      = `e${empresa_id}/galeria/${obra_id || 0}/${ts}_${safeName}`;
-  await env.FILES.put(r2Key, file.stream(), { httpMetadata: { contentType: mime } });
+  await env.FILES.put(r2Key, await file.arrayBuffer(), { httpMetadata: { contentType: mime } });
   const r = await env.DB.prepare(
     'INSERT INTO fotos_obra (empresa_id, obra_id, departamento, r2_key, nombre, mime_type, tamano, comentario, subido_por) VALUES (?,?,?,?,?,?,?,?,?)'
   ).bind(empresa_id, obra_id, dept, r2Key, file.name, mime, file.size, comentario, userNombre || rol).run();
