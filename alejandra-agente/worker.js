@@ -2553,14 +2553,18 @@ ${input.codigo_sugerido ? `CÓDIGO SUGERIDO:\n${input.codigo_sugerido}` : ''}`;
 
     case 'ejecutar_deploy': {
       try {
-        if (!env.GITHUB_TOKEN) return 'GITHUB_TOKEN no configurado — no puedo disparar el deploy.';
+        if (!env.GITHUB_TOKEN) return 'GITHUB_TOKEN no configurado.';
         const ghToken = env.GITHUB_TOKEN.trim();
         const worker = input.worker || 'agente';
         const motivo = input.motivo || 'Deploy autónomo por Alejandra';
         const ghHeaders = { 'Authorization': `token ${ghToken}`, 'User-Agent': 'Alejandra-Agent', 'Accept': 'application/vnd.github.v3+json' };
-
-        // ── AUTO-REVIEW: revisar diff del último commit antes de deployar ────
         const repo = 'padilla585projects/Alejandra-APP';
+        const accountId = 'd65ead2b2967bf68ff3848a36cd7b1b4';
+        const workerNames = { agente: 'alejandra-agente', app: 'alejandra-app-api' };
+        const workerName = workerNames[worker] || workerNames.agente;
+        const workerFile = worker === 'agente' ? 'alejandra-agente/worker.js' : 'worker.js';
+
+        // ── AUTO-REVIEW del último commit ────────────────────────────────────
         let reviewWarning = '';
         try {
           const commitR = await fetch(`https://api.github.com/repos/${repo}/commits?per_page=1`, { headers: ghHeaders });
@@ -2570,42 +2574,79 @@ ${input.codigo_sugerido ? `CÓDIGO SUGERIDO:\n${input.codigo_sugerido}` : ''}`;
             if (diffR.ok) {
               const diffData = await diffR.json();
               const totalChanges = (diffData.files || []).reduce((sum, f) => sum + (f.additions || 0) + (f.deletions || 0), 0);
-              const bigFiles = (diffData.files || []).filter(f => (f.additions || 0) + (f.deletions || 0) > 100);
-              if (totalChanges > 500) reviewWarning = `\n⚠️ AUTO-REVIEW: Commit grande (${totalChanges} líneas cambiadas). Verificar con test_endpoint después.`;
-              if (bigFiles.length > 0) reviewWarning += `\n⚠️ Archivos con muchos cambios: ${bigFiles.map(f => `${f.filename} (+${f.additions}/-${f.deletions})`).join(', ')}`;
+              if (totalChanges > 500) reviewWarning = `\n⚠️ Commit grande (${totalChanges} líneas). Verificar con test_endpoint.`;
             }
           }
         } catch (_) {}
 
-        const workflows = {
-          agente: 'deploy-alejandra-agente.yml',
-          app:    'deploy-worker.yml'
-        };
+        // ── DEPLOY DIRECTO via Cloudflare API ────────────────────────────────
+        if (env.CLOUDFLARE_API_TOKEN) {
+          // 1. Descargar worker.js desde GitHub
+          const fileR = await fetch(`https://api.github.com/repos/${repo}/contents/${workerFile}?ref=main`, { headers: ghHeaders });
+          if (!fileR.ok) return `Error descargando ${workerFile} de GitHub: ${fileR.status}`;
+          const fileData = await fileR.json();
+          const scriptContent = decodeURIComponent(escape(atob(fileData.content.replace(/\n/g, ''))));
+
+          // 2. Subir directamente a Cloudflare Workers API (ES modules format)
+          const boundary = 'AlejandraDeployBoundary' + Date.now();
+          const metadata = JSON.stringify({ main_module: 'worker.js', compatibility_date: '2024-01-01' });
+          const multipartBody = [
+            `--${boundary}`,
+            `Content-Disposition: form-data; name="metadata"; filename="metadata.json"`,
+            `Content-Type: application/json`,
+            ``,
+            metadata,
+            `--${boundary}`,
+            `Content-Disposition: form-data; name="worker.js"; filename="worker.js"`,
+            `Content-Type: application/javascript+module`,
+            ``,
+            scriptContent,
+            `--${boundary}--`
+          ].join('\r\n');
+
+          const cfR = await fetch(
+            `https://api.cloudflare.com/client/v4/accounts/${accountId}/workers/scripts/${workerName}`,
+            {
+              method: 'PUT',
+              headers: {
+                'Authorization': `Bearer ${env.CLOUDFLARE_API_TOKEN.trim()}`,
+                'Content-Type': `multipart/form-data; boundary=${boundary}`
+              },
+              body: multipartBody
+            }
+          );
+
+          if (cfR.ok) {
+            await env.DB.prepare(
+              `INSERT INTO alejandra_logs (tipo, contenido, created_at) VALUES ('deploy_directo', ?, datetime('now'))`
+            ).bind(`Deploy directo ${workerName}: ${motivo} (SHA: ${fileData.sha?.substring(0,7)})`).run().catch(() => {});
+            // Esperar 8 segundos para propagación de Cloudflare
+            await new Promise(r => setTimeout(r, 8000));
+            return `✅ Deploy directo de "${workerName}" completado.\nSHA: ${fileData.sha?.substring(0,7)}\nMotivo: ${motivo}${reviewWarning}\n→ Usa test_endpoint para verificar.`;
+          }
+
+          const cfErr = await cfR.text().catch(() => '');
+          // Si falla el deploy directo, fallback a GitHub Actions
+          console.log(`Deploy directo falló (${cfR.status}): ${cfErr.substring(0,200)}. Fallback a GitHub Actions.`);
+        }
+
+        // ── FALLBACK: GitHub Actions ─────────────────────────────────────────
+        const workflows = { agente: 'deploy-alejandra-agente.yml', app: 'deploy-worker.yml' };
         const workflow = workflows[worker] || workflows.agente;
 
         const r = await fetch(`https://api.github.com/repos/${repo}/actions/workflows/${workflow}/dispatches`, {
           method: 'POST',
-          headers: {
-            'Authorization': `token ${ghToken}`,
-            'User-Agent': 'Alejandra-Agent',
-            'Accept': 'application/vnd.github.v3+json',
-            'Content-Type': 'application/json'
-          },
+          headers: { ...ghHeaders, 'Content-Type': 'application/json' },
           body: JSON.stringify({ ref: 'main', inputs: { motivo } })
         });
 
         if (r.status === 204) {
-          // Registrar en BD
           await env.DB.prepare(
             `INSERT INTO alejandra_logs (tipo, contenido, created_at) VALUES ('deploy', ?, datetime('now'))`
-          ).bind(`Deploy ${worker} disparado: ${motivo}`).run().catch(() => {});
-          await env.DB.prepare(
-            `INSERT INTO alejandra_logs (tipo, contenido, created_at) VALUES ('deploy_timestamp', ?, datetime('now'))`
-          ).bind(`${worker}:${Date.now()}`).run().catch(() => {});
-          return `✅ Deploy del worker "${worker}" iniciado.\nMotivo: ${motivo}${reviewWarning}\n⏳ Usa verificar_deploy para confirmar. Después usa test_endpoint para verificar que funciona.`;
+          ).bind(`Deploy ${worker} via Actions: ${motivo}`).run().catch(() => {});
+          return `✅ Deploy del worker "${worker}" iniciado via GitHub Actions (deploy directo no disponible).\nMotivo: ${motivo}${reviewWarning}\n⏳ Usa verificar_deploy + test_endpoint.`;
         }
-        const errText = await r.text();
-        return `Error al disparar deploy (${r.status}): ${errText.substring(0, 200)}`;
+        return `Error al disparar deploy (${r.status}): ${(await r.text()).substring(0, 200)}`;
       } catch (err) {
         return `Error ejecutar_deploy: ${err.message}`;
       }
