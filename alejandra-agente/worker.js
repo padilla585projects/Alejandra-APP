@@ -1405,7 +1405,9 @@ async function ensureNewTables(env) {
     `CREATE TABLE IF NOT EXISTS alertas_config (id INTEGER PRIMARY KEY AUTOINCREMENT, tipo TEXT, nombre TEXT, condicion_sql TEXT, umbral REAL, mensaje_template TEXT, canal TEXT DEFAULT 'telegram', activa INTEGER DEFAULT 1, ultima_ejecucion TEXT, created_at TEXT DEFAULT (datetime('now')))`,
     `CREATE INDEX IF NOT EXISTS idx_precios_producto ON precios_materiales(producto)`,
     `CREATE INDEX IF NOT EXISTS idx_materiales_obra ON materiales_obra(obra_id)`,
-    `CREATE INDEX IF NOT EXISTS idx_normativa_buscar ON normativa_index(norma, seccion)`
+    `CREATE INDEX IF NOT EXISTS idx_normativa_buscar ON normativa_index(norma, seccion)`,
+    `CREATE TABLE IF NOT EXISTS alejandra_errores (id INTEGER PRIMARY KEY AUTOINCREMENT, error TEXT NOT NULL, causa TEXT, solucion TEXT, categoria TEXT, veces_visto INTEGER DEFAULT 1, ultimo_visto TEXT DEFAULT (datetime('now')), created_at TEXT DEFAULT (datetime('now')))`,
+    `CREATE INDEX IF NOT EXISTS idx_alejandra_errores_error ON alejandra_errores(error)`
   ];
   for (const sql of migrations) {
     await env.DB.prepare(sql).run().catch(() => {});
