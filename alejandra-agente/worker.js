@@ -1362,7 +1362,7 @@ export default {
         ? `Hay ${comandosPendientes.n} comandos pendientes sin ejecutar. `
         : '';
 
-      const prompt = `[CRON PROACTIVO] ${contextoHora}${contextoUltimo}${contextoMemorias}${contextoCmdsPendientes}
+      const prompt = `[CRON PROACTIVO] ${contextoHora}${contextoUltimo}${contextoMemorias}${contextoCmdsPendientes}${contextoRecurrente}
 
 Eres Alejandra en modo autónomo. Analiza el contexto y decide:
 1. ¿Hay algo útil que puedas hacer ahora? (avisar al usuario, revisar tareas, dar buenos días, etc.)
