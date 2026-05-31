@@ -776,6 +776,18 @@ const TOOL_RAM_CLEAR = {
   }
 };
 
+const TOOL_DEPLOY = {
+  name: 'ejecutar_deploy',
+  description: 'Despliega el worker del agente en Cloudflare Workers via GitHub Actions. Úsalo después de hacer un patch_codigo o github_escribir para que el cambio entre en producción. Tarda ~30 segundos.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      worker: { type: 'string', description: 'Qué worker desplegar: "agente" (alejandra-agente) o "app" (alejandra-app-api). Default: agente' },
+      motivo: { type: 'string', description: 'Por qué se hace el deploy (para el log)' }
+    }
+  }
+};
+
 const TOOL_PATCH_CODIGO = {
   name: 'patch_codigo',
   description: 'Aplica un cambio quirúrgico en un archivo del repo: busca una cadena EXACTA y la reemplaza por otra. Seguro para archivos grandes (no reescribe todo, solo la línea/bloque). Requiere que old_str sea único en el archivo.',
@@ -812,8 +824,8 @@ const TOOL_CONTROLAR_APP = {
 // Tools por experto
 const TOOLS_POR_EXPERTO = {
   simple:     [],
-  app:        [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_CONTROLAR_APP],
-  tecnico:    [TOOL_LEER_ESTADO, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_BUSCAR_WEB, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_CONTROLAR_APP, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION],
+  app:        [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_CONTROLAR_APP],
+  tecnico:    [TOOL_LEER_ESTADO, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_BUSCAR_WEB, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_CONTROLAR_APP, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION],
   web:        [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE],
   reflexion:  [TOOL_MEMORY_SAVE, TOOL_MEMORY_READ, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_PROPOSE_MEJORA, TOOL_BUSCAR_WEB, TOOL_TOMAR_DECISION, TOOL_LEER_ESTADO, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_CONTROLAR_APP, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION],
   completo:   [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_LEER_ESTADO, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_CONTROLAR_APP, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION],
@@ -2356,6 +2368,46 @@ ${input.codigo_sugerido ? `CÓDIGO SUGERIDO:\n${input.codigo_sugerido}` : ''}`;
         }
       } catch (err) {
         return `Error ram_clear: ${err.message}`;
+      }
+    }
+
+    case 'ejecutar_deploy': {
+      try {
+        if (!env.GITHUB_TOKEN) return 'GITHUB_TOKEN no configurado — no puedo disparar el deploy.';
+        const ghToken = env.GITHUB_TOKEN.trim();
+        const worker = input.worker || 'agente';
+        const motivo = input.motivo || 'Deploy autónomo por Alejandra';
+
+        // Seleccionar workflow según worker
+        const workflows = {
+          agente: 'deploy-alejandra-agente.yml',
+          app:    'deploy-worker.yml'
+        };
+        const workflow = workflows[worker] || workflows.agente;
+        const repo = 'padilla585projects/Alejandra-APP';
+
+        const r = await fetch(`https://api.github.com/repos/${repo}/actions/workflows/${workflow}/dispatches`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `token ${ghToken}`,
+            'User-Agent': 'Alejandra-Agent',
+            'Accept': 'application/vnd.github.v3+json',
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ ref: 'main', inputs: { motivo } })
+        });
+
+        if (r.status === 204) {
+          // Registrar en BD
+          await env.DB.prepare(
+            `INSERT INTO alejandra_logs (tipo, contenido, created_at) VALUES ('deploy', ?, datetime('now'))`
+          ).bind(`Deploy ${worker} disparado: ${motivo}`).run().catch(() => {});
+          return `✅ Deploy del worker "${worker}" iniciado en GitHub Actions.\nMotivo: ${motivo}\nTarda ~30s. El worker se actualizará automáticamente al completarse.`;
+        }
+        const errText = await r.text();
+        return `Error al disparar deploy (${r.status}): ${errText.substring(0, 200)}`;
+      } catch (err) {
+        return `Error ejecutar_deploy: ${err.message}`;
       }
     }
 
