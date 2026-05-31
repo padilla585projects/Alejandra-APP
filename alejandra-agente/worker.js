@@ -226,7 +226,18 @@ grep_codigo → ram_save → patch_codigo → ejecutar_deploy → ram_read(conte
 NO uses RAM para:
 - Respuestas simples de una sola iteración
 - Datos que ya caben fácilmente en el contexto
-- memory_save es para aprendizajes permanentes — RAM es para trabajo temporal`,
+- memory_save es para aprendizajes permanentes — RAM es para trabajo temporal
+
+MEMORIA INTER-TURNO:
+- Al inicio de tareas complejas con Adrián, lee ram_read(clave="ultimo_turno") para saber qué hiciste en el turno anterior
+- El sistema guarda automáticamente un resumen de cada turno (tools usadas + respuesta)
+- Úsalo para continuidad: "en el turno anterior hice X, ahora continúo con Y"
+
+EFICIENCIA — REGLAS ESTRICTAS:
+- Máximo 2 grep_codigo por archivo. Si no encuentras en 2 intentos, usa github_leer con rango de líneas o cambia de estrategia
+- Nunca busques lo mismo con 3 patrones distintos — piensa primero qué patrón es mejor y usa ese
+- Si una tarea requiere >8 tools, haz pensar() primero para planificar los pasos exactos
+- SIEMPRE reserva capacidad para la respuesta final — si estás en la iteración 10 de 12, para y responde con lo que tienes`,
 
   formato: `Responde en español. Directo, sin markdown excesivo. Listas con guiones. Máx 500 palabras salvo que pidan detalle. Con Adrián puedes ser más técnica.
 
@@ -1657,8 +1668,13 @@ async function procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empres
       }
 
       messages.push({ role: 'user', content: toolResults });
-      // Mantener todas las tools disponibles en todas las iteraciones para máxima proactividad
-      const toolsSiguiente = iter < MAX_ITER - 1 ? tools : [];
+      // Reservar últimas 2 iteraciones para respuesta — quitar tools para forzar texto
+      const queda = MAX_ITER - iter - 1;
+      const toolsSiguiente = queda >= 2 ? tools : [];
+      if (queda < 2 && toolsSiguiente.length === 0) {
+        // Inyectar mensaje para que el modelo sepa que debe responder YA
+        messages.push({ role: 'user', content: [{ type: 'tool_result', tool_use_id: 'force_respond', content: '[SISTEMA: Se agotaron las iteraciones de tools. DEBES responder al usuario AHORA con lo que tengas. Resume lo que encontraste y lo que hiciste. No intentes usar más herramientas.]' }] });
+      }
       respAPI = await llamarAnthropic(env, messages, toolsSiguiente, expert.model, expert.maxTokens, systemPrompt);
       if (respAPI.usage) {
         tokensIn  += respAPI.usage.input_tokens  || 0;
@@ -1697,6 +1713,21 @@ async function procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empres
       eur: costeEUR,
       tools_count: herramientasUsadas.length
     });
+
+    // ── Auto-resumen de turno para memoria inter-turno ───────────────────
+    if (herramientasUsadas.length > 0 && (usuario_id === 'adrian' || usuario_id === 'admin')) {
+      const resumenTurno = `[${new Date().toISOString()}] Experto: ${clas.experto} | Tools: ${herramientasUsadas.map(t=>t.nombre).join(', ')} | Respuesta: ${textoFinal.substring(0, 300)}`;
+      await env.DB.prepare(
+        `INSERT INTO alejandra_ram (clave, valor, tarea, created_at, expires_at)
+         VALUES ('ultimo_turno', ?, 'auto', datetime('now'), datetime('now', '+24 hours'))
+         ON CONFLICT DO NOTHING`
+      ).bind(resumenTurno).run().catch(async () => {
+        await env.DB.prepare(`DELETE FROM alejandra_ram WHERE clave='ultimo_turno'`).run().catch(()=>{});
+        await env.DB.prepare(
+          `INSERT INTO alejandra_ram (clave, valor, tarea, created_at, expires_at) VALUES ('ultimo_turno', ?, 'auto', datetime('now'), datetime('now', '+24 hours'))`
+        ).bind(resumenTurno).run().catch(()=>{});
+      });
+    }
 
     return { texto: textoFinal, herramientas_usadas: herramientasUsadas, modelo: expert.model, experto: clas.experto, busqueda_web: usoBusquedaWeb };
 
@@ -2776,11 +2807,21 @@ ${input.codigo_sugerido ? `CÓDIGO SUGERIDO:\n${input.codigo_sugerido}` : ''}`;
           if (data.type !== 'file') return `"${input.ruta}" no es un archivo.`;
           const content = decodeURIComponent(escape(atob(data.content.replace(/\n/g, ''))));
           const lines = content.split('\n');
-          const patron = input.patron.toLowerCase();
+          const patronRaw = input.patron;
           const ctx = input.contexto != null ? input.contexto : 2;
+          // Soportar regex: si contiene | \ . * + ? usa RegExp, sino includes literal
+          const useRegex = /[|\\.*+?\[\](){}^$]/.test(patronRaw);
+          let matchFn;
+          if (useRegex) {
+            try { const re = new RegExp(patronRaw, 'i'); matchFn = (line) => re.test(line); }
+            catch (_) { matchFn = (line) => line.toLowerCase().includes(patronRaw.toLowerCase()); }
+          } else {
+            const patron = patronRaw.toLowerCase();
+            matchFn = (line) => line.toLowerCase().includes(patron);
+          }
           const matches = [];
           for (let i = 0; i < lines.length; i++) {
-            if (lines[i].toLowerCase().includes(patron)) {
+            if (matchFn(lines[i])) {
               const start = Math.max(0, i - ctx);
               const end = Math.min(lines.length - 1, i + ctx);
               const block = [];
@@ -3888,6 +3929,17 @@ async function construirMessages(env, mensaje, contexto, limitHistorial=10, incl
       if (item.respuesta) messages.push({ role: 'assistant', content: item.respuesta });
     }
   }
+  // Inyectar contexto del turno anterior para continuidad (solo Adrián)
+  if (usuario_id === 'adrian' || usuario_id === 'admin') {
+    const lastTurn = await env.DB.prepare(
+      `SELECT valor FROM alejandra_ram WHERE clave='ultimo_turno' AND expires_at > datetime('now') LIMIT 1`
+    ).first().catch(() => null);
+    if (lastTurn?.valor) {
+      messages.push({ role: 'user', content: `[CONTEXTO — lo que hiciste en tu turno anterior]\n${lastTurn.valor}` });
+      messages.push({ role: 'assistant', content: 'Entendido, tengo contexto de lo que hice antes.' });
+    }
+  }
+
   const partes = [];
 
   // Contexto de quién habla y desde dónde
