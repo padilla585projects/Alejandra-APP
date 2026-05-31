@@ -11905,6 +11905,31 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
         ? await apiCall(`/incidencias/${id}`,  { method: 'PUT',  body: JSON.stringify(body) })
         : await apiCall('/incidencias',         { method: 'POST', body: JSON.stringify(body) });
       if (!res.ok) { const e = await res.json().catch(()=>({error:'Error'})); return toast('❌ ' + (e.error||'Error'), 'err'); }
+      // Si es nueva incidencia, obtener el ID y subir fotos pendientes
+      if (!id) {
+        const data = await res.json().catch(() => null);
+        const nuevaId = data?.id || data?.incidencia?.id || null;
+        if (nuevaId) {
+          const fotoFile = document.getElementById('incFotoFile');
+          const fotoCam  = document.getElementById('incFotoCam');
+          const filesPendientes = [
+            ...(fotoFile?.files?.length ? Array.from(fotoFile.files) : []),
+            ...(fotoCam?.files?.length  ? Array.from(fotoCam.files)  : []),
+          ];
+          if (filesPendientes.length) {
+            const sub = document.getElementById('incFotoSubiendo');
+            if (sub) sub.style.display = 'block';
+            for (const file of filesPendientes) {
+              try {
+                const form = new FormData();
+                form.append('file', file);
+                await apiCallRaw(`/incidencias/${nuevaId}/fotos`, { method: 'POST', body: form });
+              } catch { /* foto fallida no bloquea */ }
+            }
+            if (sub) sub.style.display = 'none';
+          }
+        }
+      }
       cerrarFormIncidencia();
       toast(id ? '✅ Incidencia actualizada' : '✅ Incidencia creada');
       cargarIncidencias();
