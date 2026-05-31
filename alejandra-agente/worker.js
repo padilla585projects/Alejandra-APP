@@ -707,6 +707,22 @@ const TOOL_GREP_CODIGO = {
   }
 };
 
+const TOOL_PATCH_CODIGO = {
+  name: 'patch_codigo',
+  description: 'Aplica un cambio quirúrgico en un archivo del repo: busca una cadena EXACTA y la reemplaza por otra. Seguro para archivos grandes (no reescribe todo, solo la línea/bloque). Requiere que old_str sea único en el archivo.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      ruta:    { type: 'string', description: 'Ruta del archivo a modificar (ej: "alejandra-agente/worker.js")' },
+      old_str: { type: 'string', description: 'Texto EXACTO a reemplazar (debe ser único en el archivo)' },
+      new_str: { type: 'string', description: 'Texto nuevo que sustituye a old_str' },
+      mensaje: { type: 'string', description: 'Mensaje del commit' },
+      repo:    { type: 'string', description: 'Alias: "app" o "worker". Default: "worker"' }
+    },
+    required: ['ruta', 'old_str', 'new_str', 'mensaje']
+  }
+};
+
 const TOOL_CONTROLAR_APP = {
   name: 'controlar_app',
   description: 'Envía un comando remoto a la app del usuario. La app lo ejecutará automáticamente. Tipos: navegar (ir a pantalla), dialogo (mostrar mensaje), accion (ejecutar función), datos (precargar datos en pantalla).',
@@ -727,11 +743,11 @@ const TOOL_CONTROLAR_APP = {
 // Tools por experto
 const TOOLS_POR_EXPERTO = {
   simple:     [],
-  app:        [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_CONTROLAR_APP],
-  tecnico:    [TOOL_LEER_ESTADO, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_BUSCAR_WEB, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_CONTROLAR_APP, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION],
+  app:        [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_CONTROLAR_APP],
+  tecnico:    [TOOL_LEER_ESTADO, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_BUSCAR_WEB, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_CONTROLAR_APP, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION],
   web:        [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE],
-  reflexion:  [TOOL_MEMORY_SAVE, TOOL_MEMORY_READ, TOOL_PROPOSE_MEJORA, TOOL_BUSCAR_WEB, TOOL_TOMAR_DECISION, TOOL_LEER_ESTADO, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_CONTROLAR_APP, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION],
-  completo:   [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_LEER_ESTADO, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_CONTROLAR_APP, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION],
+  reflexion:  [TOOL_MEMORY_SAVE, TOOL_MEMORY_READ, TOOL_PROPOSE_MEJORA, TOOL_BUSCAR_WEB, TOOL_TOMAR_DECISION, TOOL_LEER_ESTADO, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_CONTROLAR_APP, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION],
+  completo:   [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_LEER_ESTADO, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_CONTROLAR_APP, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION],
   ingenieria: [TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_ANALIZAR_FOTO, TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION]
 };
 
@@ -2305,7 +2321,8 @@ ${input.codigo_sugerido ? `CÓDIGO SUGERIDO:\n${input.codigo_sugerido}` : ''}`;
     case 'github_leer':
     case 'github_escribir':
     case 'github_buscar':
-    case 'grep_codigo': {
+    case 'grep_codigo':
+    case 'patch_codigo': {
       if (!env.GITHUB_TOKEN) return 'GITHUB_TOKEN no configurado.';
       const ghToken = env.GITHUB_TOKEN.trim();
       const REPOS = { app: 'padilla585projects/AlejandraIA', worker: 'padilla585projects/Alejandra-APP' };
@@ -2368,6 +2385,31 @@ ${input.codigo_sugerido ? `CÓDIGO SUGERIDO:\n${input.codigo_sugerido}` : ''}`;
           if (!r.ok) return `Error GitHub escribir (${r.status}): ${await r.text()}`;
           const result = await r.json();
           return `✅ Commit en ${repo}/${input.ruta}\nMensaje: ${input.mensaje}\nSHA: ${result.commit?.sha?.substring(0,7) || '?'}`;
+        }
+
+        if (nombre === 'patch_codigo') {
+          const repo = resolveRepo(input.repo || 'worker');
+          const rama = input.rama || 'main';
+          // Descargar archivo completo
+          const r = await fetch(`https://api.github.com/repos/${repo}/contents/${input.ruta}?ref=${rama}`, { headers: ghHeaders });
+          if (!r.ok) return `Error GitHub (${r.status}): ${await r.text()}`;
+          const data = await r.json();
+          if (data.type !== 'file') return `"${input.ruta}" no es un archivo.`;
+          const content = decodeURIComponent(escape(atob(data.content.replace(/\n/g, ''))));
+          // Verificar que old_str existe y es único
+          const occurrences = content.split(input.old_str).length - 1;
+          if (occurrences === 0) return `❌ No se encontró el texto a reemplazar en ${input.ruta}. Verifica que old_str sea exactamente igual al código (espacios, saltos de línea, etc.).`;
+          if (occurrences > 1) return `❌ El texto aparece ${occurrences} veces en el archivo — no es seguro reemplazar. Proporciona un old_str más específico y único.`;
+          // Aplicar el patch
+          const newContent = content.replace(input.old_str, input.new_str);
+          const encoded = btoa(unescape(encodeURIComponent(newContent)));
+          const putBody = { message: input.mensaje || `Alejandra: patch en ${input.ruta}`, content: encoded, sha: data.sha, branch: rama };
+          const putR = await fetch(`https://api.github.com/repos/${repo}/contents/${input.ruta}`, {
+            method: 'PUT', headers: { ...ghHeaders, 'Content-Type': 'application/json' }, body: JSON.stringify(putBody)
+          });
+          if (!putR.ok) return `Error GitHub patch (${putR.status}): ${await putR.text()}`;
+          const result = await putR.json();
+          return `✅ Patch aplicado en ${repo}/${input.ruta}\nCambio: "${input.old_str.substring(0,50)}..." → "${input.new_str.substring(0,50)}..."\nCommit: ${result.commit?.sha?.substring(0,7) || '?'}`;
         }
 
         if (nombre === 'github_buscar') {
