@@ -1320,6 +1320,36 @@ export default {
         `SELECT COUNT(*) as n FROM alejandra_comandos WHERE estado='pendiente'`
       ).first().catch(() => ({ n: 0 }));
 
+      // ── Detectar problemas recurrentes en alejandra_logs (últimos 3 días) ──
+      let alertasRecurrentes = [];
+      try {
+        const logsRecientes = await env.DB.prepare(
+          `SELECT tipo, contenido, COUNT(*) as veces
+           FROM alejandra_logs
+           WHERE created_at >= datetime('now', '-3 days')
+           GROUP BY tipo, substr(contenido, 1, 80)
+           HAVING COUNT(*) >= 3
+           ORDER BY veces DESC
+           LIMIT 5`
+        ).all();
+
+        if (logsRecientes.results && logsRecientes.results.length > 0) {
+          alertasRecurrentes = logsRecientes.results;
+          // Escalar cada problema recurrente a Adrián como URGENTE
+          for (const alerta of alertasRecurrentes) {
+            const resumen = `🔴 PROBLEMA RECURRENTE detectado en el cron:\n\nTipo: ${alerta.tipo}\nApariciones: ${alerta.veces} veces en los últimos 3 días\nContenido: ${(alerta.contenido || '').substring(0, 200)}\n\nEsto requiere tu atención — el sistema lo ha detectado repetidamente y no se ha resuelto.`;
+            await iniciarConversacionInterna(env, 'adrian', resumen, '🚨 Alerta recurrente detectada').catch(() => {});
+          }
+        }
+      } catch (errLogs) {
+        console.error('[CRON] Error consultando logs recurrentes:', errLogs.message);
+      }
+
+      // Añadir contexto de recurrencia al prompt si hay alertas
+      const contextoRecurrente = alertasRecurrentes.length > 0
+        ? `⚠️ ALERTAS RECURRENTES (ya escaladas a Adrián): ${alertasRecurrentes.map(a => `"${a.tipo}" (${a.veces}x en 3 días)`).join(', ')}. `
+        : '';
+
       // Construir prompt para que Alejandra decida qué hacer
       const contextoHora = `Son las ${horaLocal}:00 (hora España). `;
       const contextoUltimo = ultimoMsg
