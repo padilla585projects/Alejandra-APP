@@ -1414,7 +1414,10 @@ async function procesarConNEXUS(env, mensaje, contexto, usuario_id, empresa_id, 
       iter++;
     }
 
-    const textoFinal = respAPI.content?.filter(b => b.type === 'text').map(b => b.text).join('\n').trim() || 'Sin respuesta';
+    const textoFinal = verificarAccionesAfirmadas(
+      respAPI.content?.filter(b => b.type === 'text').map(b => b.text).join('\n').trim() || 'Sin respuesta',
+      herramientasUsadas
+    );
 
     await registrarLog(env, usuario_id, 'chat', `[${clas.experto}] ${mensaje.substring(0,80)}`, textoFinal.substring(0,200));
 
@@ -1504,7 +1507,10 @@ async function procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empres
       iter++;
     }
 
-    const textoFinal = respAPI.content?.filter(b => b.type === 'text').map(b => b.text).join('\n').trim() || 'Sin respuesta';
+    const textoFinal = verificarAccionesAfirmadas(
+      respAPI.content?.filter(b => b.type === 'text').map(b => b.text).join('\n').trim() || 'Sin respuesta',
+      herramientasUsadas
+    );
     await registrarLog(env, usuario_id, 'chat', `[${clas.experto}] ${mensaje.substring(0,80)}`, textoFinal.substring(0,200));
     await send({ type: 'text', texto: textoFinal });
 
@@ -1515,6 +1521,30 @@ async function procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empres
     await send({ type: 'error', mensaje: err.message });
     return { texto: `Error: ${err.message}`, herramientas_usadas: [] };
   }
+}
+
+// ── Verificador anti-confabulación ───────────────────────────────────────────
+// Detecta si la respuesta afirma haber hecho algo sin que exista el tool result correspondiente
+function verificarAccionesAfirmadas(textoFinal, herramientasUsadas) {
+  const toolsEscritos = new Set(herramientasUsadas.map(t => t.nombre));
+
+  // Patrones de afirmación de acción completada
+  const patronesAccion = [
+    /\b(ya lo hice|ya está hecho|ya lo cambié|ya lo modifiqué|acabo de hacer|acabo de cambiar|acabo de escribir|acabo de modificar|acabo de implementar|acabo de crear|acabo de aplicar|ya lo apliqué|ya lo arreglé|ya está arreglado|ya lo actualicé|ya lo subí|lo he hecho|lo he cambiado|lo he modificado|lo he implementado|he hecho el cambio|he aplicado|he modificado|he actualizado)\b/i,
+    /\b(el cambio está hecho|el fix está|ya está desplegado|ya está en producción|ya está en el worker|ya está en el código)\b/i,
+  ];
+
+  // Tools de escritura que deberían ejecutarse si afirma acción
+  const toolsEscritura = ['github_escribir', 'escribir_bd', 'controlar_app', 'subir_archivo', 'enviar_push', 'iniciar_conversacion'];
+  const usóEscritura = toolsEscritura.some(t => toolsEscritos.has(t));
+
+  const afirmaAccion = patronesAccion.some(p => p.test(textoFinal));
+
+  if (afirmaAccion && !usóEscritura) {
+    // Añadir disclaimer al final
+    return textoFinal + '\n\n⚠️ *Nota: Esta respuesta afirma haber realizado un cambio pero no se ejecutó ninguna tool de escritura en este turno. Si esperabas que algo se modificara, pídeme que lo haga explícitamente.*';
+  }
+  return textoFinal;
 }
 
 // ── Parsear resultado de tool para soporte de visión ─────────────────────────
