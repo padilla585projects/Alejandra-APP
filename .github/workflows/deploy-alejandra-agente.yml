@@ -83,12 +83,13 @@ jobs:
 
       - name: Verificar health
         run: |
-          sleep 5
+          sleep 20
           STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
             https://alejandra-agente.alejandra-app.workers.dev/health || echo "000")
           echo "Health check: HTTP $STATUS"
           if [ "$STATUS" = "200" ]; then
-            echo "✅ Alejandra Agente v5.93 desplegada y operativa"
+            echo "✅ Alejandra Agente v6.12 desplegada y operativa"
           else
-            echo "⚠️ Health check retornó $STATUS (puede tardar unos segundos en propagar)"
+            echo "❌ Health check retornó $STATUS — revisar deploy"
+            exit 1
           fi
