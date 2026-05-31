@@ -1592,12 +1592,20 @@ async function procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empres
       iter++;
     }
 
-    const textoFinal = verificarAccionesAfirmadas(
-      respAPI.content?.filter(b => b.type === 'text').map(b => b.text).join('\n').trim() || 'Sin respuesta',
-      herramientasUsadas
-    );
+    // ── Última respuesta: streaming real token a token ────────────────────
+    let textoFinal = '';
+    try {
+      textoFinal = await llamarAnthropicStream(env, messages, expert.model, expert.maxTokens, systemPrompt, async (token) => {
+        await send({ type: 'token', texto: token });
+      });
+    } catch (_) {
+      // Fallback: usar respuesta ya obtenida si el stream falla
+      textoFinal = respAPI.content?.filter(b => b.type === 'text').map(b => b.text).join('\n').trim() || 'Sin respuesta';
+      await send({ type: 'text', texto: textoFinal });
+    }
+
+    textoFinal = verificarAccionesAfirmadas(textoFinal, herramientasUsadas);
     await registrarLog(env, usuario_id, 'chat', `[${clas.experto}] ${mensaje.substring(0,80)}`, textoFinal.substring(0,200));
-    await send({ type: 'text', texto: textoFinal });
 
     return { texto: textoFinal, herramientas_usadas: herramientasUsadas, modelo: expert.model, experto: clas.experto, busqueda_web: usoBusquedaWeb };
 
@@ -3562,6 +3570,77 @@ async function llamarAnthropic(env, messages, tools, model, maxTokens, systemPro
     if (cc || cr) console.log(`CACHE [${model}] write=${cc} read=${cr} (read es 90% más barato)`);
   }
   return data;
+}
+
+// ── Streaming real de Anthropic (última respuesta, token a token) ─────────────
+async function llamarAnthropicStream(env, messages, model, maxTokens, systemPrompt, onToken) {
+  const systemBlocks = systemPrompt
+    ? [{ type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } }]
+    : undefined;
+
+  const body = { model, max_tokens: maxTokens, stream: true, messages };
+  if (systemBlocks) body.system = systemBlocks;
+
+  const resp = await fetch(ANTHROPIC_API, {
+    method: 'POST',
+    headers: {
+      'x-api-key': env.ANTHROPIC_API_KEY,
+      'anthropic-version': '2023-06-01',
+      'anthropic-beta': 'prompt-caching-2024-07-31',
+      'content-type': 'application/json'
+    },
+    body: JSON.stringify(body)
+  });
+
+  if (!resp.ok) {
+    const errText = await resp.text();
+    if (resp.status === 400 && errText.includes('credit balance is too low')) {
+      if (!_anthropicSinCreditos) {
+        _anthropicSinCreditos = true;
+        await notificarSinCreditos(env).catch(() => {});
+      }
+      // Fallback GPT-4o — sin streaming
+      const fallback = await llamarGPT4oFallback(env, messages, systemPrompt, maxTokens);
+      const texto = fallback.content?.[0]?.text || 'Sin respuesta';
+      await onToken(texto);
+      return texto;
+    }
+    throw new Error(`Anthropic stream ${resp.status}: ${errText.substring(0, 200)}`);
+  }
+
+  if (_anthropicSinCreditos) _anthropicSinCreditos = false;
+
+  // Leer stream SSE de Anthropic
+  let acumulado = '';
+  const reader = resp.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split('\n');
+    buffer = lines.pop() || '';
+
+    for (const line of lines) {
+      if (!line.startsWith('data: ')) continue;
+      const data = line.slice(6).trim();
+      if (data === '[DONE]') break;
+      try {
+        const evt = JSON.parse(data);
+        if (evt.type === 'content_block_delta' && evt.delta?.type === 'text_delta') {
+          const token = evt.delta.text || '';
+          if (token) {
+            acumulado += token;
+            await onToken(token);
+          }
+        }
+      } catch (_) {}
+    }
+  }
+
+  return acumulado.trim() || 'Sin respuesta';
 }
 
 // ── OpenAI búsqueda web ───────────────────────────────────────────────────────
