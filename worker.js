@@ -1760,8 +1760,8 @@ async function executeAITool(env, toolName, toolInput) {
 
         if (metric === 'fichajes' || metric === 'todo') {
           queries.fichajes = Promise.all([
-            env.DB.prepare(`SELECT COUNT(*) as n, AVG(CASE WHEN hora_salida IS NOT NULL THEN (julianday(hora_salida)-julianday(hora_entrada))*24 END) as avg_horas FROM fichajes WHERE created_at > ${current} ${empFilter}`).first(),
-            env.DB.prepare(`SELECT COUNT(*) as n, AVG(CASE WHEN hora_salida IS NOT NULL THEN (julianday(hora_salida)-julianday(hora_entrada))*24 END) as avg_horas FROM fichajes WHERE created_at > ${previous} AND created_at <= ${prevEnd} ${empFilter}`).first(),
+            env.DB.prepare(`SELECT COUNT(*) as n, AVG(CASE WHEN horas_trabajadas > 0 THEN horas_trabajadas END) as avg_horas FROM fichajes WHERE created_at > ${current} ${empFilter}`).first(),
+            env.DB.prepare(`SELECT COUNT(*) as n, AVG(CASE WHEN horas_trabajadas > 0 THEN horas_trabajadas END) as avg_horas FROM fichajes WHERE created_at > ${previous} AND created_at <= ${prevEnd} ${empFilter}`).first(),
             env.DB.prepare(`SELECT COUNT(*) as n FROM fichajes WHERE minutos_retraso > 0 AND created_at > ${current} ${empFilter}`).first(),
           ]).catch(() => [null, null, null]);
         }
