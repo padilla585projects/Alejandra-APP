@@ -3258,6 +3258,8 @@ Ejemplos:
 "hay una incidencia en obra" → {"experto":"app","buscar_web":false,"query_web":null}
 "quién fichó hoy" → {"experto":"app","buscar_web":false,"query_web":null}
 "no funciona X" → {"experto":"app","buscar_web":false,"query_web":null}
+"error en la app" → {"experto":"app","buscar_web":false,"query_web":null}
+"se ha caído algo" → {"experto":"app","buscar_web":false,"query_web":null}
 "precio cable RZ1-K hoy" → {"experto":"web","buscar_web":true,"query_web":"RZ1-K cable price 2025"}
 "cómo funciona tu NEXUS" → {"experto":"tecnico","buscar_web":false,"query_web":null}
 "piensa en cómo mejorar" → {"experto":"reflexion","buscar_web":false,"query_web":null}
