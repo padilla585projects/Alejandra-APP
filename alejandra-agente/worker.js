@@ -388,6 +388,11 @@ RAM LOCAL (para tareas largas que necesitan contexto):
 Cuándo usarla: siempre que una tarea requiera >3 iteraciones con datos grandes (código, archivos, resultados). Guarda en RAM en la iteración 1, lee en las siguientes, limpia al final.
 Ejemplo: leer worker.js → ram_save("worker_contenido") → en siguiente iter ram_read → patch_codigo → ram_clear("tarea_patch")
 
+ASUNTOS PENDIENTES — si detectas algo que hay que recordar o mencionar proactivamente:
+- ram_save(clave="pending_thoughts", valor="- Bug X sin resolver\n- Usuario Y esperando respuesta", tarea="auto")
+- El sistema los inyecta automáticamente en tu prompt en cada turno
+- Limpia con ram_clear cuando el asunto se resuelva
+
 LO QUE NUNCA HAGAS:
 - Listar 5 pasos de "prueba esto, prueba lo otro"
 - Responder sin haber tocado la BD
@@ -426,16 +431,66 @@ function buildSystemPrompt(modulos) {
   return modulos.map(m => NEXUS_MODULES[m] || '').filter(Boolean).join('\n\n');
 }
 
-// Construir system blocks para Anthropic con caching por capas (como Jarvis)
-// L0 (base+formato) → cache_control ephemeral (se cachea 5min)
-// L1+ (experto-específicos) → sin cache (cambian por experto/turno)
-function buildAnthropicSystemBlocks(modulos) {
+// ── SISTEMA DE CAPAS (tipo Jarvis) ───────────────────────────────────────────
+// L0: Identidad estática (base + formato) → cacheado 5min
+// L1: Módulos del experto activo → cacheado junto con L0
+// L2: Contexto dinámico (pending thoughts, self-knowledge, reglas destiladas)
+// L3: Estado live del sistema (salud, usuarios activos)
+// L4: Catálogo de tools visibles para este experto
+
+async function buildAnthropicSystemBlocks(modulos, tools, env) {
+  // L0 + L1: estáticos → cacheados
   const l0 = L0_MODULES.filter(m => modulos.includes(m)).map(m => NEXUS_MODULES[m] || '').filter(Boolean).join('\n\n');
-  const l1Plus = modulos.filter(m => !L0_MODULES.includes(m)).map(m => NEXUS_MODULES[m] || '').filter(Boolean).join('\n\n');
+  const l1 = modulos.filter(m => !L0_MODULES.includes(m)).map(m => NEXUS_MODULES[m] || '').filter(Boolean).join('\n\n');
+  const staticPart = [l0, l1].filter(Boolean).join('\n\n');
+
+  // L2: Contexto dinámico
+  const l2Parts = [];
+  try {
+    // Pending thoughts — cosas que debe mencionar proactivamente
+    const pending = await env.DB.prepare(
+      `SELECT contenido FROM alejandra_ram WHERE clave='pending_thoughts' AND expires_at > datetime('now') LIMIT 1`
+    ).first().catch(() => null);
+    if (pending?.valor) l2Parts.push(`⚠️ ASUNTOS PENDIENTES:\n${pending.valor}`);
+
+    // Reglas destiladas — aprendizajes comprimidos
+    const rules = await env.DB.prepare(
+      `SELECT error, solucion FROM alejandra_errores ORDER BY veces_visto DESC, ultimo_visto DESC LIMIT 10`
+    ).all().catch(() => ({ results: [] }));
+    if (rules.results?.length > 0) {
+      l2Parts.push(`REGLAS APRENDIDAS (${rules.results.length}):\n${rules.results.map(r => `• ${r.error} → ${r.solucion}`).join('\n')}`);
+    }
+
+    // Self-knowledge — lo que sabe de sí misma
+    const selfK = await env.DB.prepare(
+      `SELECT titulo, contenido FROM alejandra_memoria WHERE tipo='contexto' AND importancia >= 4 ORDER BY created_at DESC LIMIT 5`
+    ).all().catch(() => ({ results: [] }));
+    if (selfK.results?.length > 0) {
+      l2Parts.push(`AUTOCONOCIMIENTO:\n${selfK.results.map(s => `• ${s.titulo}`).join('\n')}`);
+    }
+  } catch (_) {}
+
+  // L3: Estado live del sistema
+  let l3 = '';
+  try {
+    const [errores, activos] = await Promise.all([
+      env.DB.prepare(`SELECT COUNT(*) as n FROM alejandra_logs WHERE tipo='error' AND created_at >= datetime('now', '-1 hour')`).first().catch(() => ({n:0})),
+      env.DB.prepare(`SELECT COUNT(DISTINCT usuario_id) as n FROM alejandra_historial WHERE created_at >= datetime('now', '-1 hour')`).first().catch(() => ({n:0}))
+    ]);
+    l3 = `ESTADO LIVE: ${errores?.n || 0} errores/hora | ${activos?.n || 0} usuarios activos`;
+  } catch (_) {}
+
+  // L4: Catálogo de tools visibles
+  let l4 = '';
+  if (tools && tools.length > 0) {
+    l4 = `HERRAMIENTAS DISPONIBLES (${tools.length}):\n${tools.map(t => `- ${t.name}: ${(t.description || '').split('.')[0]}`).join('\n')}`;
+  }
+
+  const dynamicPart = [l2Parts.join('\n\n'), l3, l4].filter(Boolean).join('\n\n');
 
   const blocks = [];
-  if (l0) blocks.push({ type: 'text', text: l0, cache_control: { type: 'ephemeral' } });
-  if (l1Plus) blocks.push({ type: 'text', text: l1Plus });
+  if (staticPart) blocks.push({ type: 'text', text: staticPart, cache_control: { type: 'ephemeral' } });
+  if (dynamicPart) blocks.push({ type: 'text', text: dynamicPart });
   return blocks;
 }
 
@@ -1626,8 +1681,8 @@ async function procesarConNEXUS(env, mensaje, contexto, usuario_id, empresa_id, 
       await registrarLog(env, usuario_id, 'web_search', clas.query_web, resultadoWeb.substring(0,200));
     }
 
-    // PASO 3: System prompt con solo los módulos necesarios
-    const systemPrompt = buildAnthropicSystemBlocks(expert.modules);
+    // PASO 3: System prompt con capas L0-L4
+    const systemPrompt = await buildAnthropicSystemBlocks(expert.modules, tools, env);
 
     // PASO 4: Historial dinámico
     const limitHistorial      = clas.experto === 'simple' ? 3 : 6;
@@ -1718,7 +1773,7 @@ async function procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empres
     }
 
     // PASO 3-4: System + historial
-    const systemPrompt      = buildSystemPrompt(expert.modules);
+    const systemPrompt      = await buildAnthropicSystemBlocks(expert.modules, tools, env);
     const limitHistorial    = clas.experto === 'simple' ? 4 : 10;
     const incluirAprendizajes = clas.experto !== 'simple';
     const messages          = await construirMessages(env, mensaje, contexto, limitHistorial, incluirAprendizajes, resultadoWeb, usuario_id, canal, adjuntos);
