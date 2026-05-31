@@ -221,7 +221,14 @@ FLUJO ESTÁNDAR con RAM:
 4. Al terminar: ram_clear(tarea) — siempre limpiar
 
 FLUJO COMPLETO para cambios de código:
-grep_codigo → ram_save → patch_codigo → ejecutar_deploy → ram_read(contexto) → [esperar ~40s] → verificar_deploy → si OK: ram_clear + memory_save | si FALLO: investigar steps fallidos
+grep_codigo → ram_save → patch_codigo → ejecutar_deploy → verificar_deploy → test_endpoint(url del worker + esperar="status") → si OK: memory_save + ram_clear | si FALLO: rollback(motivo) + avisar Adrián
+
+FLUJO SI ALGO SE ROMPE TRAS DEPLOY:
+1. test_endpoint detecta el fallo
+2. rollback(motivo="test falló: [detalle]") — revierte el commit
+3. ejecutar_deploy — redespliega con el código anterior
+4. verificar_deploy — confirma que se restauró
+5. iniciar_conversacion(adrian, "Hice rollback porque...") — avisar
 
 NO uses RAM para:
 - Respuestas simples de una sola iteración
@@ -403,7 +410,7 @@ Si el error ya existe en la tabla, actualiza el contador:
 
 // Perfiles de experto
 const NEXUS_EXPERTS = {
-  simple:   { model: MODEL_ROUTER,  maxTokens: 400,  modules: ['base', 'contexto_sesion', 'formato'] },
+  simple:   { model: MODEL_EXPERTO, maxTokens: 600,  modules: ['base', 'contexto_sesion', 'formato'] },
   app:      { model: MODEL_EXPERTO, maxTokens: 4096, modules: ['base', 'app', 'ram', 'proactividad_real', 'aprendizaje_proactivo', 'contexto_sesion', 'formato'] },
   tecnico:  { model: MODEL_EXPERTO, maxTokens: 1024, modules: ['base', 'app', 'tecnica', 'nexus', 'ram', 'proactividad_real', 'aprendizaje_proactivo', 'razonamiento', 'contexto_sesion', 'formato'] },
   web:      { model: MODEL_EXPERTO, maxTokens: 1024, modules: ['base', 'app', 'web', 'aprendizaje_proactivo', 'contexto_sesion', 'formato'] },
@@ -802,6 +809,34 @@ const TOOL_RAM_CLEAR = {
   }
 };
 
+const TOOL_TEST_ENDPOINT = {
+  name: 'test_endpoint',
+  description: 'Hace una llamada HTTP real a un endpoint para verificar que funciona después de un deploy o cambio. Devuelve status, tiempo de respuesta y preview del body.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      url:     { type: 'string', description: 'URL completa a testear (ej: https://alejandra-agente.alejandra-app.workers.dev/health)' },
+      method:  { type: 'string', description: 'GET o POST (default: GET)' },
+      body:    { type: 'string', description: 'Body JSON para POST (opcional)' },
+      esperar: { type: 'string', description: 'Texto que debe aparecer en la respuesta para considerar OK (ej: "status":"ok")' }
+    },
+    required: ['url']
+  }
+};
+
+const TOOL_ROLLBACK = {
+  name: 'rollback',
+  description: 'Revierte el último commit del repo en GitHub y redespliega. Úsalo si un deploy rompió algo. Solo revierte 1 commit.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      repo:   { type: 'string', description: 'Alias: "app" o "worker". Default: worker' },
+      motivo: { type: 'string', description: 'Por qué se hace el rollback' }
+    },
+    required: ['motivo']
+  }
+};
+
 const TOOL_VERIFICAR_DEPLOY = {
   name: 'verificar_deploy',
   description: 'Consulta el estado del último deploy en GitHub Actions. Úsalo ~40 segundos después de ejecutar_deploy para saber si tuvo éxito o falló. Devuelve status, conclusión y qué pasos fallaron.',
@@ -860,12 +895,12 @@ const TOOL_CONTROLAR_APP = {
 
 // Tools por experto
 const TOOLS_POR_EXPERTO = {
-  simple:     [],
-  app:        [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_CONTROLAR_APP],
-  tecnico:    [TOOL_LEER_ESTADO, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_BUSCAR_WEB, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_CONTROLAR_APP, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION],
+  simple:     [TOOL_MEMORY_READ, TOOL_CONSULTAR_BD, TOOL_ENVIAR_PUSH],
+  app:        [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_CONTROLAR_APP],
+  tecnico:    [TOOL_LEER_ESTADO, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_BUSCAR_WEB, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_CONTROLAR_APP, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION],
   web:        [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE],
-  reflexion:  [TOOL_MEMORY_SAVE, TOOL_MEMORY_READ, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_PROPOSE_MEJORA, TOOL_BUSCAR_WEB, TOOL_TOMAR_DECISION, TOOL_LEER_ESTADO, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_CONTROLAR_APP, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION],
-  completo:   [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_LEER_ESTADO, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_CONTROLAR_APP, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION],
+  reflexion:  [TOOL_MEMORY_SAVE, TOOL_MEMORY_READ, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_PROPOSE_MEJORA, TOOL_BUSCAR_WEB, TOOL_TOMAR_DECISION, TOOL_LEER_ESTADO, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_CONTROLAR_APP, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION],
+  completo:   [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_LEER_ESTADO, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_CONTROLAR_APP, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION],
   ingenieria: [TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_ANALIZAR_FOTO, TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION]
 };
 
@@ -1373,6 +1408,35 @@ export default {
         ? `⚠️ ALERTAS RECURRENTES (ya escaladas a Adrián): ${alertasRecurrentes.map(a => `"${a.tipo}" (${a.veces}x en 3 días)`).join(', ')}. `
         : '';
 
+      // ── MONITORIZACIÓN DEL SISTEMA ─────────────────────────────────────────
+      let salud = {};
+      try {
+        const [erroresHoy, fichajesHoy, usersActivos, errorRate] = await Promise.all([
+          env.DB.prepare(`SELECT COUNT(*) as n FROM alejandra_logs WHERE tipo='error' AND created_at >= datetime('now', '-1 hour')`).first().catch(() => ({n:0})),
+          env.DB.prepare(`SELECT COUNT(*) as n FROM fichajes WHERE created_at >= datetime('now', '-1 hour')`).first().catch(() => ({n:0})),
+          env.DB.prepare(`SELECT COUNT(DISTINCT usuario_id) as n FROM alejandra_historial WHERE created_at >= datetime('now', '-1 hour')`).first().catch(() => ({n:0})),
+          env.DB.prepare(`SELECT COUNT(*) as n FROM alejandra_historial WHERE rol='assistant' AND contenido LIKE '%Error%' AND created_at >= datetime('now', '-1 hour')`).first().catch(() => ({n:0}))
+        ]);
+        salud = { errores_ultima_hora: erroresHoy?.n || 0, fichajes_ultima_hora: fichajesHoy?.n || 0, usuarios_activos: usersActivos?.n || 0, respuestas_error: errorRate?.n || 0 };
+      } catch (_) {}
+
+      // ── PREDICCIONES (anomalías) ────────────────────────────────────────────
+      let predicciones = [];
+      try {
+        // Fichajes: si es horario laboral (7-10) y nadie ha fichado → alerta
+        if (horaLocal >= 8 && horaLocal <= 10 && (salud.fichajes_ultima_hora || 0) === 0) {
+          predicciones.push('⚠️ Nadie ha fichado en la última hora y es horario de entrada');
+        }
+        // Errores: si hay más de 5 errores en la última hora → algo va mal
+        if ((salud.errores_ultima_hora || 0) > 5) {
+          predicciones.push(`🔴 ${salud.errores_ultima_hora} errores en la última hora — posible incidencia`);
+        }
+        // Respuestas con error: si >20% de las respuestas tienen "Error"
+        if ((salud.respuestas_error || 0) > 3) {
+          predicciones.push(`🟡 ${salud.respuestas_error} respuestas con error en la última hora`);
+        }
+      } catch (_) {}
+
       // Construir prompt para que Alejandra decida qué hacer
       const contextoHora = `Son las ${horaLocal}:00 (hora España). `;
       const contextoUltimo = ultimoMsg
@@ -1384,19 +1448,25 @@ export default {
       const contextoCmdsPendientes = comandosPendientes.n > 0
         ? `Hay ${comandosPendientes.n} comandos pendientes sin ejecutar. `
         : '';
+      const contextoSalud = `SALUD DEL SISTEMA (última hora): ${salud.errores_ultima_hora || 0} errores, ${salud.fichajes_ultima_hora || 0} fichajes, ${salud.usuarios_activos || 0} usuarios activos, ${salud.respuestas_error || 0} respuestas con error. `;
+      const contextoPredicciones = predicciones.length > 0
+        ? `PREDICCIONES/ANOMALÍAS: ${predicciones.join('. ')}. `
+        : '';
 
-      const prompt = `[CRON PROACTIVO] ${contextoHora}${contextoUltimo}${contextoMemorias}${contextoCmdsPendientes}${contextoRecurrente}
+      const prompt = `[CRON PROACTIVO] ${contextoHora}${contextoUltimo}${contextoMemorias}${contextoCmdsPendientes}${contextoRecurrente}${contextoSalud}${contextoPredicciones}
 
 Eres Alejandra en modo autónomo. Analiza el contexto y decide:
 1. ¿Hay algo útil que puedas hacer ahora? (avisar al usuario, revisar tareas, dar buenos días, etc.)
 2. Si NO hay nada relevante, simplemente responde "SIN_ACCION" y no hagas nada.
 3. Si SÍ hay algo, usa tus herramientas (iniciar_conversacion, memory_save, controlar_app, etc.)
+4. Si hay ANOMALÍAS o PREDICCIONES → investiga con consultar_bd y escala a Adrián si es grave.
 
 Reglas:
 - No envíes mensajes vacíos o triviales. Solo actúa si hay algo genuinamente útil.
 - Buenos días solo entre 7:00-9:00 y solo si no has saludado hoy.
 - Por la noche (21:00-23:00) puedes hacer reflexión y guardar aprendizajes.
-- Si detectas tareas sin resolver del día, avisa.`;
+- Si detectas tareas sin resolver del día, avisa.
+- Si hay anomalías de salud (muchos errores, nadie fichando en horario laboral), investiga Y avisa.`;
 
       const contextoChat = await obtenerContextoChat(env, 'system', 'cron', 4);
       const respuesta = await procesarConNEXUS(env, prompt, contextoChat, 'system', 'cron');
@@ -2430,13 +2500,13 @@ ${input.codigo_sugerido ? `CÓDIGO SUGERIDO:\n${input.codigo_sugerido}` : ''}`;
         // Upsert por clave
         await env.DB.prepare(
           `INSERT INTO alejandra_ram (clave, valor, tarea, created_at, expires_at)
-           VALUES (?, ?, ?, datetime('now'), datetime('now', '+1 hour'))
+           VALUES (?, ?, ?, datetime('now'), datetime('now', '+24 hours'))
            ON CONFLICT(clave) DO UPDATE SET valor=excluded.valor, tarea=excluded.tarea, created_at=excluded.created_at, expires_at=excluded.expires_at`
         ).bind(clave, valor, tarea).run().catch(async () => {
           // Si no hay UNIQUE constraint, borrar y reinsertar
           await env.DB.prepare(`DELETE FROM alejandra_ram WHERE clave=?`).bind(clave).run();
           await env.DB.prepare(
-            `INSERT INTO alejandra_ram (clave, valor, tarea, created_at, expires_at) VALUES (?, ?, ?, datetime('now'), datetime('now', '+1 hour'))`
+            `INSERT INTO alejandra_ram (clave, valor, tarea, created_at, expires_at) VALUES (?, ?, ?, datetime('now'), datetime('now', '+24 hours'))`
           ).bind(clave, valor, tarea).run();
         });
         return `RAM guardada: "${clave}" (${(valor.length/1024).toFixed(1)}KB, tarea="${tarea}"). Expira en 1h o llama a ram_clear.`;
@@ -2487,14 +2557,31 @@ ${input.codigo_sugerido ? `CÓDIGO SUGERIDO:\n${input.codigo_sugerido}` : ''}`;
         const ghToken = env.GITHUB_TOKEN.trim();
         const worker = input.worker || 'agente';
         const motivo = input.motivo || 'Deploy autónomo por Alejandra';
+        const ghHeaders = { 'Authorization': `token ${ghToken}`, 'User-Agent': 'Alejandra-Agent', 'Accept': 'application/vnd.github.v3+json' };
 
-        // Seleccionar workflow según worker
+        // ── AUTO-REVIEW: revisar diff del último commit antes de deployar ────
+        const repo = 'padilla585projects/Alejandra-APP';
+        let reviewWarning = '';
+        try {
+          const commitR = await fetch(`https://api.github.com/repos/${repo}/commits?per_page=1`, { headers: ghHeaders });
+          if (commitR.ok) {
+            const [lastCommit] = await commitR.json();
+            const diffR = await fetch(`https://api.github.com/repos/${repo}/commits/${lastCommit.sha}`, { headers: ghHeaders });
+            if (diffR.ok) {
+              const diffData = await diffR.json();
+              const totalChanges = (diffData.files || []).reduce((sum, f) => sum + (f.additions || 0) + (f.deletions || 0), 0);
+              const bigFiles = (diffData.files || []).filter(f => (f.additions || 0) + (f.deletions || 0) > 100);
+              if (totalChanges > 500) reviewWarning = `\n⚠️ AUTO-REVIEW: Commit grande (${totalChanges} líneas cambiadas). Verificar con test_endpoint después.`;
+              if (bigFiles.length > 0) reviewWarning += `\n⚠️ Archivos con muchos cambios: ${bigFiles.map(f => `${f.filename} (+${f.additions}/-${f.deletions})`).join(', ')}`;
+            }
+          }
+        } catch (_) {}
+
         const workflows = {
           agente: 'deploy-alejandra-agente.yml',
           app:    'deploy-worker.yml'
         };
         const workflow = workflows[worker] || workflows.agente;
-        const repo = 'padilla585projects/Alejandra-APP';
 
         const r = await fetch(`https://api.github.com/repos/${repo}/actions/workflows/${workflow}/dispatches`, {
           method: 'POST',
@@ -2515,7 +2602,7 @@ ${input.codigo_sugerido ? `CÓDIGO SUGERIDO:\n${input.codigo_sugerido}` : ''}`;
           await env.DB.prepare(
             `INSERT INTO alejandra_logs (tipo, contenido, created_at) VALUES ('deploy_timestamp', ?, datetime('now'))`
           ).bind(`${worker}:${Date.now()}`).run().catch(() => {});
-          return `✅ Deploy del worker "${worker}" iniciado.\nMotivo: ${motivo}\n⏳ Espera ~40 segundos y luego usa verificar_deploy para confirmar que fue exitoso.`;
+          return `✅ Deploy del worker "${worker}" iniciado.\nMotivo: ${motivo}${reviewWarning}\n⏳ Usa verificar_deploy para confirmar. Después usa test_endpoint para verificar que funciona.`;
         }
         const errText = await r.text();
         return `Error al disparar deploy (${r.status}): ${errText.substring(0, 200)}`;
@@ -2592,6 +2679,61 @@ ${input.codigo_sugerido ? `CÓDIGO SUGERIDO:\n${input.codigo_sugerido}` : ''}`;
         return `❌ Deploy falló (${latest.conclusion}).\nCommit: ${sha}${failInfo}`;
       } catch (err) {
         return `Error verificar_deploy: ${err.message}`;
+      }
+    }
+
+    case 'test_endpoint': {
+      try {
+        const method = (input.method || 'GET').toUpperCase();
+        const t0 = Date.now();
+        const opts = { method, headers: { 'Content-Type': 'application/json', 'User-Agent': 'Alejandra-Test' } };
+        if (method === 'POST' && input.body) opts.body = input.body;
+        const r = await fetch(input.url, opts);
+        const elapsed = Date.now() - t0;
+        const body = await r.text();
+        const preview = body.substring(0, 500);
+        const ok = input.esperar ? preview.includes(input.esperar) : r.ok;
+        const icon = ok ? '✅' : '❌';
+        return `${icon} ${method} ${input.url}\nStatus: ${r.status} | Tiempo: ${elapsed}ms${input.esperar ? `\nBuscar "${input.esperar}": ${preview.includes(input.esperar) ? 'ENCONTRADO' : 'NO ENCONTRADO'}` : ''}\nRespuesta: ${preview}`;
+      } catch (err) {
+        return `❌ Error al testear: ${err.message}`;
+      }
+    }
+
+    case 'rollback': {
+      try {
+        if (!env.GITHUB_TOKEN) return 'GITHUB_TOKEN no configurado.';
+        const ghToken = env.GITHUB_TOKEN.trim();
+        const REPOS = { app: 'padilla585projects/AlejandraIA', worker: 'padilla585projects/Alejandra-APP' };
+        const repo = REPOS[input.repo || 'worker'] || REPOS.worker;
+        const ghHeaders = { 'Authorization': `token ${ghToken}`, 'User-Agent': 'Alejandra-Agent', 'Accept': 'application/vnd.github.v3+json' };
+
+        // Obtener últimos 2 commits
+        const commitsR = await fetch(`https://api.github.com/repos/${repo}/commits?per_page=2`, { headers: ghHeaders });
+        if (!commitsR.ok) return `Error GitHub: ${commitsR.status}`;
+        const commits = await commitsR.json();
+        if (commits.length < 2) return 'No hay commit anterior al que revertir.';
+
+        const lastSha = commits[0].sha;
+        const prevSha = commits[1].sha;
+        const lastMsg = commits[0].commit.message.split('\n')[0];
+
+        // Crear commit de revert via API — apuntar main al commit anterior
+        const refR = await fetch(`https://api.github.com/repos/${repo}/git/refs/heads/main`, {
+          method: 'PATCH',
+          headers: { ...ghHeaders, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sha: prevSha, force: true })
+        });
+        if (!refR.ok) return `Error al revertir (${refR.status}): ${await refR.text()}`;
+
+        // Log
+        await env.DB.prepare(
+          `INSERT INTO alejandra_logs (tipo, contenido, created_at) VALUES ('rollback', ?, datetime('now'))`
+        ).bind(`Revert ${lastSha.substring(0,7)} → ${prevSha.substring(0,7)}: ${input.motivo}`).run().catch(() => {});
+
+        return `✅ Rollback ejecutado.\nRevertido: ${lastSha.substring(0,7)} "${lastMsg}"\nAhora en: ${prevSha.substring(0,7)}\nMotivo: ${input.motivo}\n\n⚠️ Usa ejecutar_deploy para que el worker se actualice con el código anterior.`;
+      } catch (err) {
+        return `Error rollback: ${err.message}`;
       }
     }
 
