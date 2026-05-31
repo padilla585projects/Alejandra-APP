@@ -2436,41 +2436,46 @@ ${input.codigo_sugerido ? `CÓDIGO SUGERIDO:\n${input.codigo_sugerido}` : ''}`;
         const workflows = { agente: 'deploy-alejandra-agente.yml', app: 'deploy-worker.yml' };
         const workflow = workflows[worker] || workflows.agente;
         const repo = 'padilla585projects/Alejandra-APP';
+        const ghHeaders = { 'Authorization': `token ${ghToken}`, 'User-Agent': 'Alejandra-Agent', 'Accept': 'application/vnd.github.v3+json' };
 
-        // Obtener runs recientes del workflow
-        const r = await fetch(
-          `https://api.github.com/repos/${repo}/actions/workflows/${workflow}/runs?per_page=3`,
-          { headers: { 'Authorization': `token ${ghToken}`, 'User-Agent': 'Alejandra-Agent', 'Accept': 'application/vnd.github.v3+json' } }
-        );
-        if (!r.ok) return `Error GitHub (${r.status}): ${await r.text()}`;
-        const data = await r.json();
-        const runs = data.workflow_runs || [];
-        if (!runs.length) return 'No hay runs recientes para este workflow.';
+        const fetchRun = async () => {
+          const r = await fetch(`https://api.github.com/repos/${repo}/actions/workflows/${workflow}/runs?per_page=1`, { headers: ghHeaders });
+          if (!r.ok) return null;
+          const data = await r.json();
+          return (data.workflow_runs || [])[0] || null;
+        };
 
-        const latest = runs[0];
-        const status = latest.status; // queued, in_progress, completed
-        const conclusion = latest.conclusion; // success, failure, cancelled, null
+        const sleep = ms => new Promise(res => setTimeout(res, ms));
+
+        // Polling interno: hasta 75s (5 intentos × 15s)
+        let latest = await fetchRun();
+        let intentos = 0;
+        const MAX_INTENTOS = 5;
+
+        while (latest && latest.status !== 'completed' && intentos < MAX_INTENTOS) {
+          await sleep(15000);
+          latest = await fetchRun();
+          intentos++;
+        }
+
+        if (!latest) return 'No se encontró ningún run reciente.';
+
         const sha = latest.head_sha?.substring(0, 7) || '?';
-        const createdAt = latest.created_at;
         const runId = latest.id;
 
-        if (status !== 'completed') {
-          return `⏳ Deploy en progreso (${status})...\nCommit: ${sha} | Iniciado: ${createdAt}\nEspera unos segundos más y vuelve a llamar a verificar_deploy.`;
+        if (latest.status !== 'completed') {
+          return `⏳ El deploy lleva más de ${intentos * 15}s sin completar (status: ${latest.status}).\nCommit: ${sha}. Puede haber un problema — revisa GitHub Actions manualmente.`;
         }
 
-        if (conclusion === 'success') {
-          // Health check rápido
+        if (latest.conclusion === 'success') {
           const health = await fetch('https://alejandra-agente.alejandra-app.workers.dev/health')
             .then(h => h.ok ? '✅ worker responde OK' : `⚠️ health ${h.status}`)
-            .catch(() => '⚠️ health check falló');
-          return `✅ Deploy exitoso.\nCommit: ${sha} | Completado: ${createdAt}\nWorker: ${health}`;
+            .catch(() => '⚠️ sin respuesta');
+          return `✅ Deploy exitoso en ${intentos * 15 + (intentos === 0 ? 0 : 0)}s.\nCommit: ${sha} | ${latest.conclusion}\nWorker: ${health}`;
         }
 
-        // Falló — obtener qué steps fallaron
-        const jobsR = await fetch(
-          `https://api.github.com/repos/${repo}/actions/runs/${runId}/jobs`,
-          { headers: { 'Authorization': `token ${ghToken}`, 'User-Agent': 'Alejandra-Agent', 'Accept': 'application/vnd.github.v3+json' } }
-        );
+        // Falló — obtener steps fallidos
+        const jobsR = await fetch(`https://api.github.com/repos/${repo}/actions/runs/${runId}/jobs`, { headers: ghHeaders });
         let failInfo = '';
         if (jobsR.ok) {
           const jobsData = await jobsR.json();
@@ -2478,7 +2483,7 @@ ${input.codigo_sugerido ? `CÓDIGO SUGERIDO:\n${input.codigo_sugerido}` : ''}`;
             .flatMap(j => (j.steps || []).filter(s => s.conclusion === 'failure').map(s => `  • ${s.name}`));
           if (failedSteps.length) failInfo = `\nSteps fallidos:\n${failedSteps.join('\n')}`;
         }
-        return `❌ Deploy falló (${conclusion}).\nCommit: ${sha}${failInfo}\nRevisa los logs en GitHub Actions para más detalle.`;
+        return `❌ Deploy falló (${latest.conclusion}).\nCommit: ${sha}${failInfo}`;
       } catch (err) {
         return `Error verificar_deploy: ${err.message}`;
       }
