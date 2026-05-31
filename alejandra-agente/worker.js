@@ -3503,7 +3503,7 @@ Ejemplos:
     const resp = await fetch(ANTHROPIC_API, {
       method: 'POST',
       headers: { 'x-api-key': env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-      body: JSON.stringify({ model: MODEL_ROUTER, max_tokens: 80, system: sistema, messages: [{ role: 'user', content: mensaje.substring(0,200) }] })
+      body: JSON.stringify({ model: MODEL_ROUTER, max_tokens: 80, system: sistema, messages: [{ role: 'user', content: mensaje.substring(0,800) }] })
     });
     if (!resp.ok) throw new Error(`Haiku ${resp.status}`);
     const data  = await resp.json();
