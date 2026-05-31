@@ -2073,6 +2073,23 @@ function navTo(page) {
   if (window.innerWidth <= 900) document.getElementById('sidebar').classList.remove('open');
   if (PAGE_LOADERS[page]) PAGE_LOADERS[page]();
   _startSync(page);  // arrancar auto-refresh para la nueva página
+  // Notificar al webhook del cambio de sección
+  try {
+    const _sess = typeof SESSION !== 'undefined' ? SESSION : JSON.parse(localStorage.getItem('panel_session') || 'null');
+    fetch('/webhook/evento', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        tipo: 'cambio_seccion',
+        datos: {
+          seccion: page,
+          usuario_id: _sess?.id || null,
+          usuario: _sess?.nombre || null,
+          canal: 'panel'
+        }
+      })
+    }).catch(() => {});  // silencioso — no bloquear navegación
+  } catch(e) {}
 }
 
 // ── SYNC BIDIRECCIONAL ─────────────────────────────────────────
