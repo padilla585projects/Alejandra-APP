@@ -2468,10 +2468,9 @@ ${input.codigo_sugerido ? `CÓDIGO SUGERIDO:\n${input.codigo_sugerido}` : ''}`;
         }
 
         if (latest.conclusion === 'success') {
-          const health = await fetch('https://alejandra-agente.alejandra-app.workers.dev/health')
-            .then(h => h.ok ? '✅ worker responde OK' : `⚠️ health ${h.status}`)
-            .catch(() => '⚠️ sin respuesta');
-          return `✅ Deploy exitoso en ${intentos * 15 + (intentos === 0 ? 0 : 0)}s.\nCommit: ${sha} | ${latest.conclusion}\nWorker: ${health}`;
+          // Nota: el worker no puede llamarse a sí mismo (loopback CF no soportado)
+          // El éxito de GitHub Actions es suficiente confirmación del deploy
+          return `✅ Deploy exitoso en ${intentos * 15}s.\nCommit: ${sha} | ${latest.conclusion}\nWorker: ✅ activo (confirmado por GitHub Actions)`;
         }
 
         // Falló — obtener steps fallidos
