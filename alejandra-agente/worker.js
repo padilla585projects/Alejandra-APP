@@ -453,12 +453,20 @@ async function buildAnthropicSystemBlocks(modulos, tools, env) {
     ).first().catch(() => null);
     if (pending?.valor) l2Parts.push(`⚠️ ASUNTOS PENDIENTES:\n${pending.valor}`);
 
-    // Reglas destiladas — aprendizajes comprimidos
-    const rules = await env.DB.prepare(
-      `SELECT error, solucion FROM alejandra_errores ORDER BY veces_visto DESC, ultimo_visto DESC LIMIT 10`
-    ).all().catch(() => ({ results: [] }));
-    if (rules.results?.length > 0) {
-      l2Parts.push(`REGLAS APRENDIDAS (${rules.results.length}):\n${rules.results.map(r => `• ${r.error} → ${r.solucion}`).join('\n')}`);
+    // Reglas destiladas (comprimidas por cron cada 6h) — preferencia sobre crudas
+    const distilled = await env.DB.prepare(
+      `SELECT valor FROM alejandra_ram WHERE clave='distilled_rules' AND expires_at > datetime('now') LIMIT 1`
+    ).first().catch(() => null);
+    if (distilled?.valor) {
+      l2Parts.push(`REGLAS APRENDIDAS (destiladas):\n${distilled.valor}`);
+    } else {
+      // Fallback: reglas crudas de alejandra_errores
+      const rules = await env.DB.prepare(
+        `SELECT error, solucion FROM alejandra_errores ORDER BY veces_visto DESC, ultimo_visto DESC LIMIT 10`
+      ).all().catch(() => ({ results: [] }));
+      if (rules.results?.length > 0) {
+        l2Parts.push(`REGLAS APRENDIDAS (${rules.results.length}):\n${rules.results.map(r => `• ${r.error} → ${r.solucion}`).join('\n')}`);
+      }
     }
 
     // Self-knowledge — lo que sabe de sí misma
@@ -947,6 +955,20 @@ const TOOL_PATCH_CODIGO = {
   }
 };
 
+const TOOL_NEXUS_MANAGE = {
+  name: 'nexus_manage',
+  description: 'Crea, edita o elimina expertos dinámicos en NEXUS. Los expertos dinámicos se activan inmediatamente y el router los usa por keywords. Acciones: list, create, edit, delete.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      accion:   { type: 'string', enum: ['list', 'create', 'edit', 'delete'], description: 'Acción a realizar' },
+      nombre:   { type: 'string', description: 'Nombre del experto (para create/edit/delete)' },
+      config:   { type: 'object', description: 'Config del experto: { modules: [...], keywords: [...], maxTokens: N, descripcion: "..." }' }
+    },
+    required: ['accion']
+  }
+};
+
 const TOOL_CONTROLAR_APP = {
   name: 'controlar_app',
   description: 'Envía un comando remoto a la app del usuario. La app lo ejecutará automáticamente. Tipos: navegar (ir a pantalla), dialogo (mostrar mensaje), accion (ejecutar función), datos (precargar datos en pantalla).',
@@ -968,7 +990,7 @@ const TOOL_CONTROLAR_APP = {
 const TOOLS_POR_EXPERTO = {
   simple:     [TOOL_MEMORY_READ, TOOL_CONSULTAR_BD, TOOL_ENVIAR_PUSH],
   app:        [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_CONTROLAR_APP],
-  tecnico:    [TOOL_LEER_ESTADO, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_BUSCAR_WEB, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_CONTROLAR_APP, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION],
+  tecnico:    [TOOL_LEER_ESTADO, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_BUSCAR_WEB, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_NEXUS_MANAGE, TOOL_CONTROLAR_APP, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION],
   web:        [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE],
   reflexion:  [TOOL_MEMORY_SAVE, TOOL_MEMORY_READ, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_PROPOSE_MEJORA, TOOL_BUSCAR_WEB, TOOL_TOMAR_DECISION, TOOL_LEER_ESTADO, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_CONTROLAR_APP, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION],
   completo:   [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_LEER_ESTADO, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_CONTROLAR_APP, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION],
@@ -1507,6 +1529,77 @@ export default {
           predicciones.push(`🟡 ${salud.respuestas_error} respuestas con error en la última hora`);
         }
       } catch (_) {}
+
+      // ── DESTILACIÓN DE LEARNINGS (cada 6h: 0, 6, 12, 18) ────────────────
+      if (horaLocal % 6 === 0) {
+        try {
+          const errores = await env.DB.prepare(
+            `SELECT error, causa, solucion, veces_visto FROM alejandra_errores ORDER BY veces_visto DESC LIMIT 30`
+          ).all().catch(() => ({ results: [] }));
+          if ((errores.results || []).length >= 5) {
+            const learningsText = errores.results.map(e => `- ${e.error}: ${e.causa} → ${e.solucion} (${e.veces_visto}x)`).join('\n');
+            const distillResp = await fetch(ANTHROPIC_API, {
+              method: 'POST',
+              headers: { 'x-api-key': env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+              body: JSON.stringify({
+                model: MODEL_ROUTER, max_tokens: 500,
+                system: 'Comprime estos errores/soluciones en máximo 15 reglas cortas (máx 25 palabras cada una). Solo las reglas, una por línea, sin numerar.',
+                messages: [{ role: 'user', content: learningsText }]
+              })
+            });
+            if (distillResp.ok) {
+              const distillData = await distillResp.json();
+              const rules = distillData.content?.[0]?.text?.trim() || '';
+              if (rules) {
+                await env.DB.prepare(`DELETE FROM alejandra_ram WHERE clave='distilled_rules'`).run().catch(()=>{});
+                await env.DB.prepare(
+                  `INSERT INTO alejandra_ram (clave, valor, tarea, created_at, expires_at) VALUES ('distilled_rules', ?, 'auto', datetime('now'), datetime('now', '+7 days'))`
+                ).bind(rules).run();
+              }
+            }
+          }
+        } catch (e) { console.error('[CRON] Distill error:', e.message); }
+      }
+
+      // ── COMPACTACIÓN DE HISTORIAL (si >60 mensajes, resumir los antiguos) ──
+      try {
+        const countMsg = await env.DB.prepare(
+          `SELECT COUNT(*) as n FROM alejandra_historial`
+        ).first().catch(() => ({n:0}));
+        if ((countMsg?.n || 0) > 200) {
+          // Resumir los 100 mensajes más antiguos y borrarlos
+          const oldMsgs = await env.DB.prepare(
+            `SELECT rol, contenido FROM alejandra_historial ORDER BY created_at ASC LIMIT 100`
+          ).all().catch(() => ({results:[]}));
+          if ((oldMsgs.results || []).length >= 50) {
+            const toSummarize = oldMsgs.results.map(m => `${m.rol}: ${(m.contenido || '').substring(0, 100)}`).join('\n');
+            const sumResp = await fetch(ANTHROPIC_API, {
+              method: 'POST',
+              headers: { 'x-api-key': env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+              body: JSON.stringify({
+                model: MODEL_ROUTER, max_tokens: 300,
+                system: 'Resume esta conversación en máx 200 palabras. Mantén: temas principales, decisiones tomadas, problemas resueltos, datos importantes.',
+                messages: [{ role: 'user', content: toSummarize }]
+              })
+            });
+            if (sumResp.ok) {
+              const sumData = await sumResp.json();
+              const resumen = sumData.content?.[0]?.text?.trim();
+              if (resumen) {
+                // Guardar resumen como primer mensaje del historial
+                const oldestId = await env.DB.prepare(`SELECT id FROM alejandra_historial ORDER BY created_at ASC LIMIT 1`).first();
+                await env.DB.prepare(
+                  `DELETE FROM alejandra_historial WHERE id IN (SELECT id FROM alejandra_historial ORDER BY created_at ASC LIMIT 100)`
+                ).run();
+                await env.DB.prepare(
+                  `INSERT INTO alejandra_historial (canal, rol, contenido, created_at, usuario_id) VALUES ('system', 'system', ?, datetime('now', '-30 days'), 'system')`
+                ).bind(`[RESUMEN DE CONVERSACIONES ANTIGUAS]\n${resumen}`).run();
+                console.log(`[CRON] Compactación: ${oldMsgs.results.length} mensajes → resumen`);
+              }
+            }
+          }
+        }
+      } catch (e) { console.error('[CRON] Compaction error:', e.message); }
 
       // Construir prompt para que Alejandra decida qué hacer
       const contextoHora = `Son las ${horaLocal}:00 (hora España). `;
@@ -2791,6 +2884,40 @@ ${input.codigo_sugerido ? `CÓDIGO SUGERIDO:\n${input.codigo_sugerido}` : ''}`;
         return `❌ Deploy falló (${latest.conclusion}).\nCommit: ${sha}${failInfo}`;
       } catch (err) {
         return `Error verificar_deploy: ${err.message}`;
+      }
+    }
+
+    case 'nexus_manage': {
+      try {
+        const accion = input.accion;
+
+        if (accion === 'list') {
+          // Listar expertos estáticos + dinámicos
+          const staticExperts = Object.keys(NEXUS_EXPERTS).map(k => `[estático] ${k}`);
+          const dynRows = await env.DB.prepare(`SELECT clave, valor FROM alejandra_ram WHERE tarea='dynamic_expert' AND expires_at > datetime('now')`).all().catch(() => ({results:[]}));
+          const dynExperts = (dynRows.results || []).map(r => `[dinámico] ${r.clave}: ${r.valor.substring(0, 100)}`);
+          return `Expertos (${staticExperts.length} estáticos + ${dynExperts.length} dinámicos):\n${[...staticExperts, ...dynExperts].join('\n')}`;
+        }
+
+        if (accion === 'create' || accion === 'edit') {
+          if (!input.nombre || !input.config) return 'Falta nombre o config.';
+          const config = JSON.stringify(input.config);
+          await env.DB.prepare(`DELETE FROM alejandra_ram WHERE clave=? AND tarea='dynamic_expert'`).bind(input.nombre).run().catch(()=>{});
+          await env.DB.prepare(
+            `INSERT INTO alejandra_ram (clave, valor, tarea, created_at, expires_at) VALUES (?, ?, 'dynamic_expert', datetime('now'), datetime('now', '+365 days'))`
+          ).bind(input.nombre, config).run();
+          return `✅ Experto dinámico "${input.nombre}" ${accion === 'create' ? 'creado' : 'actualizado'}.\nConfig: ${config.substring(0, 200)}\nActivo inmediatamente por keywords.`;
+        }
+
+        if (accion === 'delete') {
+          if (!input.nombre) return 'Falta nombre.';
+          await env.DB.prepare(`DELETE FROM alejandra_ram WHERE clave=? AND tarea='dynamic_expert'`).bind(input.nombre).run();
+          return `✅ Experto dinámico "${input.nombre}" eliminado.`;
+        }
+
+        return 'Acción no válida. Usa: list, create, edit, delete.';
+      } catch (err) {
+        return `Error nexus_manage: ${err.message}`;
       }
     }
 
