@@ -375,7 +375,19 @@ LO QUE NUNCA HAGAS:
 - Responder sin haber tocado la BD
 - Decir "voy a investigar" sin hacerlo en el mismo turno
 - Hacer más de 3 queries al mismo dato sin resultado (si no encuentras la tabla, busca en sqlite_master y para)
-- Respuestas de más de 8 líneas para un problema de usuario`
+- Respuestas de más de 8 líneas para un problema de usuario
+
+BASE DE CONOCIMIENTO DE ERRORES — alejandra_errores:
+Cuando investigues un problema, PRIMERO consulta si ya está resuelto:
+  consultar_bd("SELECT causa, solucion FROM alejandra_errores WHERE error LIKE '%<término>%' LIMIT 3")
+Si encuentras la solución, aplícala directamente sin volver a investigar desde cero.
+
+Cuando resuelvas un error NUEVO (no estaba en la tabla), guárdalo siempre:
+  escribir_bd("INSERT INTO alejandra_errores (error, causa, solucion, categoria) VALUES (?, ?, ?, ?)", [descripcion_corta, causa_raiz, solucion_aplicada, categoria])
+Categorías válidas: 'bd', 'codigo', 'config', 'permisos', 'datos', 'integracion', 'usuario'
+
+Si el error ya existe en la tabla, actualiza el contador:
+  escribir_bd("UPDATE alejandra_errores SET veces_visto = veces_visto + 1, ultimo_visto = datetime('now') WHERE error LIKE '%<término>%'")`
 };
 
 // Perfiles de experto
