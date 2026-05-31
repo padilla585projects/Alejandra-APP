@@ -202,7 +202,14 @@ PROBLEMAS Y SOLUCIONES: Si Adrián plantea un problema técnico:
 
 NUNCA digas "no tengo acceso a internet" — sí lo tienes, usa buscar_web. NUNCA digas "consulta a un profesional" sin antes intentar resolverlo tú misma — eres la profesional.`,
 
-  formato: `Responde en español. Directo, sin markdown excesivo. Listas con guiones. Máx 300 palabras salvo que pidan detalle. Con Adrián puedes ser más técnica.`,
+  formato: `Responde en español. Directo, sin markdown excesivo. Listas con guiones. Máx 300 palabras salvo que pidan detalle. Con Adrián puedes ser más técnica.
+
+REGLA CRÍTICA — NUNCA CONFABULES ACCIONES:
+- NUNCA digas "ya lo hice", "ya está", "lo acabo de cambiar" si no has ejecutado la tool correspondiente en ESTE turno.
+- Si vas a escribir código → ejecuta github_escribir PRIMERO, luego confirma con el resultado real de la tool.
+- Si vas a modificar la BD → ejecuta escribir_bd PRIMERO.
+- Si el resultado de la tool tiene error → dilo explícitamente, no finjas éxito.
+- La prueba de que hiciste algo es el resultado de la tool, no tu descripción de lo que ibas a hacer.`,
 
   razonamiento: `RAZONAMIENTO Y PLANIFICACIÓN:
 
@@ -3239,6 +3246,53 @@ Ejemplos:
 }
 
 // ── Anthropic API ─────────────────────────────────────────────────────────────
+// ── Monitor de créditos Anthropic ────────────────────────────────────────────
+let _anthropicSinCreditos = false; // flag en memoria (se resetea con cada deploy)
+
+async function notificarSinCreditos(env) {
+  try {
+    // Push a Adrián
+    const row = await env.DB.prepare(
+      `SELECT contenido FROM alejandra_memoria WHERE tipo='fcm_token' AND usuario_id='adrian' LIMIT 1`
+    ).first().catch(() => null);
+    if (row) await enviarFCM(env, row.contenido, '⚠️ Alejandra sin créditos', 'Anthropic se quedó sin saldo. Usando GPT-4o de respaldo. Recarga en console.anthropic.com');
+    // Telegram
+    if (env.TELEGRAM_BOT_TOKEN) await enviarPorTelegram(env.TELEGRAM_BOT_TOKEN, '⚠️ <b>Alejandra sin créditos Anthropic</b>\nUsando GPT-4o de respaldo. Recarga en console.anthropic.com');
+    // Log en BD
+    await env.DB.prepare(
+      `INSERT INTO alejandra_logs (tipo, contenido, created_at) VALUES ('alerta_creditos', 'Anthropic sin saldo — fallback GPT-4o activado', datetime('now'))`
+    ).run().catch(() => {});
+  } catch (_) {}
+}
+
+async function llamarGPT4oFallback(env, messages, systemPrompt, maxTokens) {
+  // Convierte formato Anthropic → OpenAI chat completions
+  const openAIMessages = [];
+  if (systemPrompt) openAIMessages.push({ role: 'system', content: systemPrompt });
+  for (const m of messages) {
+    if (typeof m.content === 'string') {
+      openAIMessages.push({ role: m.role === 'assistant' ? 'assistant' : 'user', content: m.content });
+    } else if (Array.isArray(m.content)) {
+      const text = m.content.filter(b => b.type === 'text').map(b => b.text).join('\n');
+      if (text) openAIMessages.push({ role: m.role === 'assistant' ? 'assistant' : 'user', content: text });
+    }
+  }
+  const resp = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${env.OPENAI_API_KEY}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ model: 'gpt-4o', max_tokens: maxTokens || 1024, messages: openAIMessages })
+  });
+  if (!resp.ok) throw new Error(`GPT-4o fallback ${resp.status}: ${await resp.text()}`);
+  const data = await resp.json();
+  const texto = data.choices?.[0]?.message?.content || 'Sin respuesta del modelo de respaldo.';
+  // Devolver en formato compatible con respuesta Anthropic
+  return {
+    content: [{ type: 'text', text: `[Modo respaldo GPT-4o — Anthropic sin créditos]\n\n${texto}` }],
+    stop_reason: 'end_turn',
+    usage: data.usage ? { input_tokens: data.usage.prompt_tokens, output_tokens: data.usage.completion_tokens } : {}
+  };
+}
+
 async function llamarAnthropic(env, messages, tools, model, maxTokens, systemPrompt) {
   // System como array de bloques con cache_control en el último → prompt caching (5min TTL, 90% más barato en hits)
   const systemBlocks = systemPrompt
@@ -3249,7 +3303,6 @@ async function llamarAnthropic(env, messages, tools, model, maxTokens, systemPro
   if (systemBlocks) body.system = systemBlocks;
 
   if (tools && tools.length > 0) {
-    // Cachear también el array de tools: cache_control en la última tool
     const toolsArray = tools.map((t, i) => i === tools.length - 1
       ? { ...t, cache_control: { type: 'ephemeral' } }
       : t);
@@ -3266,10 +3319,30 @@ async function llamarAnthropic(env, messages, tools, model, maxTokens, systemPro
     },
     body: JSON.stringify(body)
   });
+
   if (!resp.ok) {
-    const err = await resp.text();
-    throw new Error(`Anthropic ${resp.status}: ${err.substring(0,200)}`);
+    const errText = await resp.text();
+    // Detectar error de créditos → fallback a GPT-4o
+    if (resp.status === 400 && errText.includes('credit balance is too low')) {
+      if (!_anthropicSinCreditos) {
+        _anthropicSinCreditos = true;
+        await notificarSinCreditos(env).catch(() => {});
+      }
+      return await llamarGPT4oFallback(env, messages, systemPrompt, maxTokens);
+    }
+    // Otros errores de Anthropic → también intentar fallback en 529 (overloaded)
+    if (resp.status === 529 || resp.status === 503) {
+      return await llamarGPT4oFallback(env, messages, systemPrompt, maxTokens);
+    }
+    throw new Error(`Anthropic ${resp.status}: ${errText.substring(0,200)}`);
   }
+
+  // Éxito → resetear flag si estaba activo
+  if (_anthropicSinCreditos) {
+    _anthropicSinCreditos = false;
+    console.log('Anthropic créditos restaurados — volviendo al modo normal');
+  }
+
   const data = await resp.json();
   if (data.usage) {
     const cc = data.usage.cache_creation_input_tokens || 0;
