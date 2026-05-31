@@ -2491,6 +2491,17 @@ ${input.codigo_sugerido ? `CÓDIGO SUGERIDO:\n${input.codigo_sugerido}` : ''}`;
         if (latest.conclusion === 'success') {
           // Nota: el worker no puede llamarse a sí mismo (loopback CF no soportado)
           // El éxito de GitHub Actions es suficiente confirmación del deploy
+          // Enviar push a Adrián con el SHA del commit
+          try {
+            const fcmRow = await env.DB.prepare(
+              `SELECT contenido FROM alejandra_memoria WHERE tipo='fcm_token' AND usuario_id='adrian' LIMIT 1`
+            ).first();
+            if (fcmRow) {
+              await enviarFCM(env, fcmRow.contenido, '🚀 Deploy OK', `Worker "${worker}" desplegado. Commit: ${sha}`);
+            }
+          } catch (fcmErr) {
+            console.warn('Push deploy OK falló (no crítico):', fcmErr.message);
+          }
           return `✅ Deploy exitoso en ${intentos * 15}s.\nCommit: ${sha} | ${latest.conclusion}\nWorker: ✅ activo (confirmado por GitHub Actions)`;
         }
 
