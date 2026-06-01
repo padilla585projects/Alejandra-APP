@@ -9049,7 +9049,7 @@ async function googleMobileRedirect(request, env) {
       try { await sendTelegram(env, `📓 <b>Solicitud acceso Google (móvil)</b>\n👤 ${gUser.name || gUser.email}\n📧 ${gUser.email}`); } catch(_) {}
     }
     const cbParams = new URLSearchParams({ error: 'pendiente', msg: 'Solicitud enviada. El administrador debe aprobarla.' });
-    return new Response(`<html><head><meta http-equiv="refresh" content="0;url=alejandriaia://callback?${cbParams}"></head><body>Redirigiendo...</body></html>`, { headers: { 'Content-Type': 'text/html' } });
+    return Response.redirect(`alejandriaia://callback?${cbParams}`, 302);
   }
 
   const tokenArr = new Uint8Array(32);
@@ -9073,7 +9073,7 @@ async function googleMobileRedirect(request, env) {
     obra_nombre: obra ? obra.nombre : '',
     usuario_id: String(u.id),
   });
-  return new Response(`<html><head><meta http-equiv="refresh" content="0;url=alejandriaia://callback?${cbParams}"></head><body>Redirigiendo a Alejandra...</body></html>`, { headers: { 'Content-Type': 'text/html' } });
+  return Response.redirect(`alejandriaia://callback?${cbParams}`, 302);
 }
 
 async function crearInvitacion(request, env) {
