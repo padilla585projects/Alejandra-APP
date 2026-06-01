@@ -987,14 +987,26 @@ const TOOL_CONTROLAR_APP = {
 };
 
 // Tools por experto
+const TOOL_CONSULTAR_CONOCIMIENTO = {
+  name: 'consultar_conocimiento',
+  description: 'Consulta el valor completo de un elemento de la base de conocimiento de Alejandra (URL de catálogo, texto de nota, ruta de imagen). Usa el id que aparece en el contexto [Conocimiento disponible], o busca por título si no tienes el id.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      id:     { type: 'number', description: 'ID del elemento (preferido si lo tienes)' },
+      titulo: { type: 'string', description: 'Título o palabra clave para buscar si no tienes el id' }
+    }
+  }
+};
+
 const TOOLS_POR_EXPERTO = {
   simple:     [TOOL_MEMORY_READ, TOOL_CONSULTAR_BD, TOOL_ENVIAR_PUSH],
-  app:        [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_CONTROLAR_APP],
-  tecnico:    [TOOL_LEER_ESTADO, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_BUSCAR_WEB, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_NEXUS_MANAGE, TOOL_CONTROLAR_APP, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION],
+  app:        [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_CONTROLAR_APP, TOOL_CONSULTAR_CONOCIMIENTO],
+  tecnico:    [TOOL_LEER_ESTADO, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_BUSCAR_WEB, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_NEXUS_MANAGE, TOOL_CONTROLAR_APP, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO],
   web:        [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE],
-  reflexion:  [TOOL_MEMORY_SAVE, TOOL_MEMORY_READ, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_PROPOSE_MEJORA, TOOL_BUSCAR_WEB, TOOL_TOMAR_DECISION, TOOL_LEER_ESTADO, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_CONTROLAR_APP, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION],
-  completo:   [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_LEER_ESTADO, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_CONTROLAR_APP, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION],
-  ingenieria: [TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_ANALIZAR_FOTO, TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION]
+  reflexion:  [TOOL_MEMORY_SAVE, TOOL_MEMORY_READ, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_PROPOSE_MEJORA, TOOL_BUSCAR_WEB, TOOL_TOMAR_DECISION, TOOL_LEER_ESTADO, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_CONTROLAR_APP, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO],
+  completo:   [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_LEER_ESTADO, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_CONTROLAR_APP, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO],
+  ingenieria: [TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_ANALIZAR_FOTO, TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO]
 };
 
 // ── HTTP Handler ──────────────────────────────────────────────────────────────
@@ -1077,6 +1089,75 @@ export default {
         } catch (e) {
           return json({ error: e.message }, 500);
         }
+      }
+
+      // ── Base de conocimiento de Alejandra ─────────────────────────────────
+      if (path.startsWith('/conocimiento')) {
+        const adminToken = req.headers.get('Authorization')?.replace('Bearer ', '');
+        if (!(await verificarAdminToken(env, adminToken))) return json({ error: 'No autorizado' }, 403);
+        await ensureNewTables(env).catch(() => {});
+
+        // GET /conocimiento — lista entradas activas
+        if (path === '/conocimiento' && req.method === 'GET') {
+          const rows = await env.DB.prepare(
+            `SELECT id, tipo, titulo, valor, descripcion, tags, creado_por, creado_at FROM alejandra_conocimiento WHERE activo=1 ORDER BY creado_at DESC`
+          ).all();
+          return json({ ok: true, entradas: rows.results || [] });
+        }
+
+        // POST /conocimiento — crear entrada (texto/url)
+        if (path === '/conocimiento' && req.method === 'POST') {
+          const { tipo, titulo, valor, descripcion, tags, creado_por } = await req.json().catch(() => ({}));
+          if (!tipo || !titulo || !valor) return json({ error: 'tipo, titulo y valor requeridos' }, 400);
+          const r = await env.DB.prepare(
+            `INSERT INTO alejandra_conocimiento (tipo, titulo, valor, descripcion, tags, creado_por) VALUES (?,?,?,?,?,?)`
+          ).bind(tipo, titulo, valor, descripcion||'', tags||'', creado_por||'admin').run();
+          return json({ ok: true, id: r.meta?.last_row_id });
+        }
+
+        // PUT /conocimiento/:id — editar
+        const mPut = path.match(/^\/conocimiento\/(\d+)$/);
+        if (mPut && req.method === 'PUT') {
+          const id = parseInt(mPut[1]);
+          const { titulo, valor, descripcion, tags, tipo } = await req.json().catch(() => ({}));
+          await env.DB.prepare(
+            `UPDATE alejandra_conocimiento SET titulo=COALESCE(?,titulo), valor=COALESCE(?,valor), descripcion=COALESCE(?,descripcion), tags=COALESCE(?,tags), tipo=COALESCE(?,tipo) WHERE id=?`
+          ).bind(titulo||null, valor||null, descripcion||null, tags||null, tipo||null, id).run();
+          return json({ ok: true });
+        }
+
+        // DELETE /conocimiento/:id — marcar inactivo
+        const mDel = path.match(/^\/conocimiento\/(\d+)$/);
+        if (mDel && req.method === 'DELETE') {
+          const id = parseInt(mDel[1]);
+          await env.DB.prepare(`UPDATE alejandra_conocimiento SET activo=0 WHERE id=?`).bind(id).run();
+          return json({ ok: true });
+        }
+
+        // POST /conocimiento/imagen — subir imagen a R2 y registrar entrada
+        if (path === '/conocimiento/imagen' && req.method === 'POST') {
+          try {
+            const form = await req.formData();
+            const file = form.get('file');
+            const titulo = form.get('titulo') || 'Imagen sin título';
+            const descripcion = form.get('descripcion') || '';
+            const tags = form.get('tags') || '';
+            const creado_por = form.get('creado_por') || 'admin';
+            if (!file) return json({ error: 'Falta el campo file' }, 400);
+            const ext = file.name?.split('.').pop() || 'jpg';
+            const key = `conocimiento/${Date.now()}_${titulo.replace(/\s+/g,'_').slice(0,30)}.${ext}`;
+            const buf = await file.arrayBuffer();
+            await env.FILES.put(key, buf, { httpMetadata: { contentType: file.type || 'image/jpeg' } });
+            const r = await env.DB.prepare(
+              `INSERT INTO alejandra_conocimiento (tipo, titulo, valor, descripcion, tags, creado_por) VALUES ('imagen',?,?,?,?,?)`
+            ).bind(titulo, key, descripcion, tags, creado_por).run();
+            return json({ ok: true, id: r.meta?.last_row_id, key });
+          } catch (e) {
+            return json({ error: e.message }, 500);
+          }
+        }
+
+        return json({ error: 'Ruta no encontrada' }, 404);
       }
 
       // ── Reflexión manual — Alejandra piensa sobre sí misma ───────────────
@@ -1664,7 +1745,9 @@ async function ensureNewTables(env) {
     `CREATE INDEX IF NOT EXISTS idx_materiales_obra ON materiales_obra(obra_id)`,
     `CREATE INDEX IF NOT EXISTS idx_normativa_buscar ON normativa_index(norma, seccion)`,
     `CREATE TABLE IF NOT EXISTS alejandra_errores (id INTEGER PRIMARY KEY AUTOINCREMENT, error TEXT NOT NULL, causa TEXT, solucion TEXT, categoria TEXT, veces_visto INTEGER DEFAULT 1, ultimo_visto TEXT DEFAULT (datetime('now')), created_at TEXT DEFAULT (datetime('now')))`,
-    `CREATE INDEX IF NOT EXISTS idx_alejandra_errores_error ON alejandra_errores(error)`
+    `CREATE INDEX IF NOT EXISTS idx_alejandra_errores_error ON alejandra_errores(error)`,
+    `CREATE TABLE IF NOT EXISTS alejandra_conocimiento (id INTEGER PRIMARY KEY AUTOINCREMENT, tipo TEXT NOT NULL, titulo TEXT NOT NULL, valor TEXT NOT NULL, descripcion TEXT, tags TEXT, creado_por TEXT, creado_at TEXT DEFAULT (datetime('now')), activo INTEGER DEFAULT 1)`,
+    `CREATE INDEX IF NOT EXISTS idx_conocimiento_activo ON alejandra_conocimiento(activo, tipo)`
   ];
   for (const sql of migrations) {
     await env.DB.prepare(sql).run().catch(() => {});
@@ -2526,6 +2609,27 @@ ${input.codigo_sugerido ? `CÓDIGO SUGERIDO:\n${input.codigo_sugerido}` : ''}`;
         return `Decisión registrada (confianza ${Math.round(confianza*100)}%). ${razon}`;
       } catch (err) {
         return `Error tomar decisión: ${err.message}`;
+      }
+    }
+
+    case 'consultar_conocimiento': {
+      try {
+        let row;
+        if (input.id) {
+          row = await env.DB.prepare(`SELECT * FROM alejandra_conocimiento WHERE id=? AND activo=1`).bind(input.id).first();
+        } else if (input.titulo) {
+          row = await env.DB.prepare(`SELECT * FROM alejandra_conocimiento WHERE titulo LIKE ? AND activo=1 LIMIT 1`).bind(`%${input.titulo}%`).first();
+        }
+        if (!row) return 'No encontrado en la base de conocimiento.';
+        // Si es imagen, devolver URL firmada o la key de R2
+        let valorFinal = row.valor;
+        if (row.tipo === 'imagen' && env.FILES) {
+          const obj = await env.FILES.get(row.valor).catch(() => null);
+          if (obj) valorFinal = `[Imagen en R2: ${row.valor}] (usa ver_archivo con key="${row.valor}" para verla)`;
+        }
+        return JSON.stringify({ id: row.id, tipo: row.tipo, titulo: row.titulo, valor: valorFinal, descripcion: row.descripcion, tags: row.tags });
+      } catch (e) {
+        return `Error consultando conocimiento: ${e.message}`;
       }
     }
 
@@ -4358,6 +4462,14 @@ async function construirMessages(env, mensaje, contexto, limitHistorial=10, incl
   if (incluirAprendizajes && contexto.aprendizajes?.length > 0) {
     partes.push(`Contexto de memoria:\n${contexto.aprendizajes.map(a=>`[${a.tipo}] ${a.titulo}: ${a.contenido}`).join('\n')}`);
   }
+  if (contexto.conocimiento?.length > 0) {
+    const lista = contexto.conocimiento.map(c => {
+      const desc = c.descripcion ? ` — ${c.descripcion}` : '';
+      const tags = c.tags ? ` [${c.tags}]` : '';
+      return `• [${c.tipo}] (id:${c.id}) ${c.titulo}${desc}${tags}`;
+    }).join('\n');
+    partes.push(`[Conocimiento disponible — usa consultar_conocimiento(id) para obtener URL o contenido completo]\n${lista}`);
+  }
   if (resultadoWeb) partes.push(`Info actual de internet:\n${resultadoWeb}`);
   partes.push(partes.length > 1 ? `Usuario: ${mensaje}` : mensaje);
 
@@ -4383,6 +4495,9 @@ async function obtenerContextoChat(env, usuario_id, empresa_id, limit=20) {
     const aprendizajes = await env.DB.prepare(
       `SELECT titulo,contenido,tipo FROM alejandra_memoria WHERE (tipo='aprendizaje' OR tipo='contexto') ORDER BY importancia DESC,created_at DESC LIMIT 10`
     ).all();
+    const conocimiento = await env.DB.prepare(
+      `SELECT id, tipo, titulo, descripcion, tags FROM alejandra_conocimiento WHERE activo=1 ORDER BY creado_at DESC LIMIT 20`
+    ).all().catch(() => ({ results: [] }));
 
     // Recuperar el resumen más reciente para este usuario (cualquier canal)
     let resumen_anterior = null;
@@ -4395,6 +4510,7 @@ async function obtenerContextoChat(env, usuario_id, empresa_id, limit=20) {
 
     return {
       historial: (historial.results||[]).reverse(),
+      conocimiento: conocimiento.results || [],
       aprendizajes: aprendizajes.results||[],
       resumen_anterior,
       usuario_id,
