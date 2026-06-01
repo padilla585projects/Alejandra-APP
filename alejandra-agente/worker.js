@@ -1093,7 +1093,8 @@ export default {
 
       // ── Base de conocimiento de Alejandra ─────────────────────────────────
       if (path.startsWith('/conocimiento')) {
-        const adminToken = req.headers.get('Authorization')?.replace('Bearer ', '');
+        const adminToken = req.headers.get('Authorization')?.replace('Bearer ', '')
+          || req.headers.get('X-Token');
         if (!(await verificarAdminToken(env, adminToken))) return json({ error: 'No autorizado' }, 403);
         await ensureNewTables(env).catch(() => {});
 
