@@ -1,0 +1,29 @@
+# Archivos temporales de sincronización (Google Drive, Nextcloud, etc.)
+.tmp.driveupload/
+.nextcloudsync.log
+*.sync-conflict-*
+
+# Backups de base de datos
+backup_db_*.sql
+
+# Servidor de desarrollo local
+serve.js
+
+# Claude Code (configuración local del IDE)
+.claude/
+
+# Node modules (por si acaso)
+node_modules/
+
+# Secretos — NUNCA commitear
+*firebase-adminsdk*.json
+client_secret_*.json
+CLAVES.txt
+NUEVA_CUENTA.txt
+*.env
+.env*
+wrangler.toml.local
+
+# Sistema operativo
+.DS_Store
+Thumbs.db
