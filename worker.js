@@ -4178,6 +4178,7 @@ export default {
       if (path === '/auth/google/url'  && method === 'GET')  return googleAuthUrl(request, env);
       if (path === '/auth/google/callback' && method === 'POST') return await googleAuthCallback(request, env);
       if (path === '/auth/google/mobile-redirect' && method === 'GET') return await googleMobileRedirect(request, env);
+      if (path === '/auth/google/check-nonce' && method === 'GET') return await googleCheckNonce(request, env);
       if (path === '/usuarios/pendientes'  && method === 'GET')  return await getUsuariosPendientes(request, env);
       if (path === '/usuarios/pendientes/aprobar' && method === 'POST') return await aprobarUsuarioPendiente(request, env);
       if (path === '/usuarios/pendientes/rechazar' && method === 'POST') return await rechazarUsuarioPendiente(request, env);
@@ -8867,7 +8868,10 @@ async function alertasDiarias(env) {
 function googleAuthUrl(request, env) {
   const url = new URL(request.url);
   const redirect_uri = url.searchParams.get('redirect_uri') || 'https://padilla585projects.github.io/Alejandra-APP/';
+  const nonce = url.searchParams.get('nonce') || '';
   if (!env.GOOGLE_OAUTH_CLIENT_ID) return err('Google OAuth no configurado', 503);
+  // Si hay nonce, lo guardamos en state para recuperarlo después del redirect
+  const state = nonce ? JSON.stringify({ nonce, redirect_uri }) : '';
   const params = new URLSearchParams({
     client_id:     env.GOOGLE_OAUTH_CLIENT_ID,
     redirect_uri,
@@ -8876,6 +8880,7 @@ function googleAuthUrl(request, env) {
     access_type:   'online',
     prompt:        'select_account',
   });
+  if (state) params.set('state', state);
   const authUrl = 'https://accounts.google.com/o/oauth2/v2/auth?' + params.toString();
   return json({ url: authUrl });
 }
@@ -9008,6 +9013,13 @@ async function googleMobileRedirect(request, env) {
   if (!code) return new Response('<h1>Error: falta código de autorización</h1>', { status: 400, headers: { 'Content-Type': 'text/html' } });
   if (!env.GOOGLE_OAUTH_CLIENT_ID || !env.GOOGLE_OAUTH_CLIENT_SECRET) return new Response('<h1>Google OAuth no configurado</h1>', { status: 503, headers: { 'Content-Type': 'text/html' } });
 
+  // Extraer nonce del state parameter (si viene de la app móvil)
+  let nonce = null;
+  const stateRaw = url.searchParams.get('state');
+  if (stateRaw) {
+    try { nonce = JSON.parse(stateRaw).nonce; } catch(_) {}
+  }
+
   const redirectUri = 'https://alejandra-app-api.alejandra-app.workers.dev/auth/google/mobile-redirect';
 
   const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
@@ -9024,6 +9036,7 @@ async function googleMobileRedirect(request, env) {
   const tokenData = await tokenRes.json();
   if (!tokenData.access_token) {
     const msg = tokenData.error_description || tokenData.error || 'token inválido';
+    if (nonce) await _saveNonceResult(env, nonce, { error: msg });
     return new Response(`<h1>Error Google: ${msg}</h1>`, { status: 401, headers: { 'Content-Type': 'text/html' } });
   }
 
@@ -9031,7 +9044,10 @@ async function googleMobileRedirect(request, env) {
     headers: { Authorization: 'Bearer ' + tokenData.access_token },
   });
   const gUser = await userRes.json();
-  if (!gUser.email) return new Response('<h1>No se pudo obtener email de Google</h1>', { status: 401, headers: { 'Content-Type': 'text/html' } });
+  if (!gUser.email) {
+    if (nonce) await _saveNonceResult(env, nonce, { error: 'No se pudo obtener email de Google' });
+    return new Response('<h1>No se pudo obtener email de Google</h1>', { status: 401, headers: { 'Content-Type': 'text/html' } });
+  }
 
   const u = await env.DB.prepare(
     'SELECT * FROM usuarios WHERE LOWER(email) = LOWER(?) AND activo = 1 LIMIT 1'
@@ -9048,8 +9064,8 @@ async function googleMobileRedirect(request, env) {
       ).bind(gUser.name || gUser.email, codigoPend, 'pendiente', gUser.email).run();
       try { await sendTelegram(env, `📓 <b>Solicitud acceso Google (móvil)</b>\n👤 ${gUser.name || gUser.email}\n📧 ${gUser.email}`); } catch(_) {}
     }
-    const cbParams = new URLSearchParams({ error: 'pendiente', msg: 'Solicitud enviada. El administrador debe aprobarla.' });
-    return Response.redirect(`alejandriaia://callback?${cbParams}`, 302);
+    if (nonce) await _saveNonceResult(env, nonce, { pendiente: true, msg: 'Solicitud enviada. El administrador debe aprobarla.' });
+    return new Response('<html><body><h2>Solicitud enviada</h2><p>El administrador debe aprobar tu cuenta. Puedes volver a la app.</p></body></html>', { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
   }
 
   const tokenArr = new Uint8Array(32);
@@ -9063,17 +9079,50 @@ async function googleMobileRedirect(request, env) {
   const empresa = u.empresa_id ? await env.DB.prepare('SELECT nombre FROM empresas WHERE id = ?').bind(u.empresa_id).first() : null;
   const obra = u.obra_id ? await env.DB.prepare('SELECT nombre FROM obras WHERE id = ?').bind(u.obra_id).first() : null;
 
-  const cbParams = new URLSearchParams({
-    token,
-    nombre: gUser.name || u.nombre,
-    rol: u.rol,
-    empresa_id: String(u.empresa_id || ''),
-    empresa_nombre: empresa ? empresa.nombre : '',
-    obra_id: String(u.obra_id || ''),
-    obra_nombre: obra ? obra.nombre : '',
-    usuario_id: String(u.id),
-  });
-  return Response.redirect(`alejandriaia://callback?${cbParams}`, 302);
+  const sessionData = {
+    ok: true, token,
+    nombre: gUser.name || u.nombre, rol: u.rol,
+    empresa_id: u.empresa_id || '', empresa_nombre: empresa ? empresa.nombre : '',
+    obra_id: u.obra_id || '', obra_nombre: obra ? obra.nombre : '',
+    usuario_id: u.id,
+  };
+
+  // Si hay nonce, guardar resultado para polling desde la app
+  if (nonce) await _saveNonceResult(env, nonce, sessionData);
+
+  return new Response('<html><body><h2>Login exitoso</h2><p>Puedes volver a la app Alejandra.</p></body></html>', { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
+}
+
+// ── Nonce store para Google login polling ──────────────────────────────────
+let _nonceTableEnsured = false;
+async function _ensureNonceTable(env) {
+  if (_nonceTableEnsured) return;
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS auth_nonces (
+    nonce TEXT PRIMARY KEY, result TEXT NOT NULL, created_at TEXT NOT NULL
+  )`).run().catch(() => {});
+  // Limpiar nonces viejos (>5 min)
+  await env.DB.prepare(`DELETE FROM auth_nonces WHERE created_at < datetime('now', '-5 minutes')`).run().catch(() => {});
+  _nonceTableEnsured = true;
+}
+
+async function _saveNonceResult(env, nonce, data) {
+  await _ensureNonceTable(env);
+  await env.DB.prepare(
+    `INSERT OR REPLACE INTO auth_nonces (nonce, result, created_at) VALUES (?, ?, datetime('now'))`
+  ).bind(nonce, JSON.stringify(data)).run().catch(() => {});
+}
+
+async function googleCheckNonce(request, env) {
+  const url = new URL(request.url);
+  const nonce = url.searchParams.get('nonce');
+  if (!nonce) return json({ error: 'Falta nonce' }, 400);
+  await _ensureNonceTable(env);
+  const row = await env.DB.prepare('SELECT result FROM auth_nonces WHERE nonce = ?').bind(nonce).first().catch(() => null);
+  if (!row) return json({ waiting: true }, 202);
+  // Borrar nonce usado (one-time)
+  await env.DB.prepare('DELETE FROM auth_nonces WHERE nonce = ?').bind(nonce).run().catch(() => {});
+  try { return json(JSON.parse(row.result)); } catch { return json({ error: 'Resultado inválido' }, 500); }
+>>>>>>> 104320d (fix: chat Anthropic 400 + Google login polling con nonce)
 }
 
 async function crearInvitacion(request, env) {

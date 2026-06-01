@@ -4416,6 +4416,7 @@ async function construirMessages(env, mensaje, contexto, limitHistorial=10, incl
   for (const item of contexto.historial.slice(-limitHistorial)) {
     // Soporta tanto {rol,contenido} (alejandra_historial) como {mensaje,respuesta} (legacy)
     if (item.rol && item.contenido) {
+      if (item.rol === 'system') continue;
       messages.push({ role: item.rol, content: item.contenido });
     } else {
       if (item.mensaje)   messages.push({ role: 'user',      content: item.mensaje });
@@ -4495,7 +4496,7 @@ async function obtenerContextoChat(env, usuario_id, empresa_id, limit=20) {
     const uid = usuario_id || 'unknown';
     // Historial POR USUARIO (cross-canal: misma conversacion desde app, panel o telegram)
     const historial = await env.DB.prepare(
-      `SELECT rol, contenido, canal, created_at FROM alejandra_historial WHERE usuario_id=? ORDER BY created_at DESC LIMIT ?`
+      `SELECT rol, contenido, canal, created_at FROM alejandra_historial WHERE usuario_id=? AND rol IN ('user','assistant') ORDER BY created_at DESC LIMIT ?`
     ).bind(uid, 10).all();
     const aprendizajes = await env.DB.prepare(
       `SELECT titulo,contenido,tipo FROM alejandra_memoria WHERE (tipo='aprendizaje' OR tipo='contexto') ORDER BY importancia DESC,created_at DESC LIMIT 10`
