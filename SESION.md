@@ -6,8 +6,42 @@
 ## ESTADO ACTUAL
 
 **Sesión:** LIBRE
-**Última sesión:** 30/05/2026 (noche)
-**Versión actual:** v6.14
+**Última sesión:** 04/06/2026
+**Versión actual:** v6.16
+
+---
+
+## RESUMEN SESIÓN 04/06/2026 — v6.16 Fix panel Alejandra en móvil
+
+### Problema reportado:
+Al abrir el chat de Alejandra IA en móvil, "crasea todo y se descoloca todo" — hueco gigante entre el input y la barra de navegación.
+
+### Causa raíz:
+`alejandraAbrir()` hacía `panel.style.bottom = nav.offsetHeight + 'px'` para dejar la barra de nav visible debajo. En Android, al abrir el teclado virtual el viewport se encoge. El panel `position:fixed` anclado a ese `bottom` se recalculaba contra el viewport reducido y quedaba descolocado al cerrarse el teclado.
+
+El Chat del equipo (no fallaba) usaba `inset:0` y no tocaba `bottom` → la diferencia era exactamente ese cálculo.
+
+### Fix aplicado (index.html:15037):
+- Eliminado `panel.style.bottom = nav.offsetHeight + 'px'`
+- Ahora siempre `panel.style.bottom = '0'` → cubre toda la pantalla igual que chatPanel
+- Mantenido el `input.focus()` automático (el usuario quería conservarlo)
+
+### Verificado en preview:
+- Panel height 812 (pantalla completa), lista flex:1 = 686px, input a 10px del borde (solo padding). Sin hueco.
+
+### Archivos modificados:
+- index.html — fix bottom panel + APP_VERSION 6.16
+- sw.js — CACHE alejandra-v6.16
+- version.json — 6.16
+
+### Deploy:
+- GitHub: 21fcd96 → push main ✅
+- Worker: sin cambios, no requiere redeploy
+
+### Pendiente para próxima sesión:
+- Confirmar que el fix del hueco funciona en móvil real tras auto-actualización a 6.16
+- Pendientes anteriores: #196 (dept toggle overlap), #195 (proveedores field), #193 (bajas en fichajes), #197 (Gemini quota), #190 (encargados panel access)
+- Push notifications v6.13 todavía sin probar en móvil real
 
 ---
 
