@@ -10249,7 +10249,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '6.15';
+const APP_VERSION = '6.16';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -15035,8 +15035,7 @@ function alejandraAbrir(show = true) {
   const panel = document.getElementById('alejandraPanel');
   if (!panel) return;
   if (show) {
-    const nav = document.getElementById('bottomNav');
-    panel.style.bottom = (nav && nav.style.display !== 'none') ? nav.offsetHeight + 'px' : '0';
+    panel.style.bottom = '0';
     panel.style.display = 'flex';
     const verSpan = document.getElementById('alejandraVer');
     if (verSpan) verSpan.textContent = 'v' + APP_VERSION;
