@@ -651,34 +651,81 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
 </div>
 
 <!-- Panel Alejandra AI Chat -->
-<div id="alejandraPanel" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;z-index:1100;background:var(--bg);flex-direction:column">
-  <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:2px solid #8b5cf6;flex-shrink:0;background:var(--surface)">
-    <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:15px">🤖 Alejandra Agente</div>
-    <div style="display:flex;gap:8px;align-items:center">
-      <button id="alejandraHablarBtn" onclick="alejandraToggleAutoHablar()" title="Activar/desactivar voz de Alejandra"
-        style="background:var(--surface2);border:1px solid var(--border);border-radius:50%;width:32px;height:32px;font-size:16px;cursor:pointer;line-height:1">🔊</button>
-      <span id="alejandraVer" style="font-size:11px;color:var(--muted)"></span>
-      <button onclick="alejandraAbrir(false)" style="background:var(--surface2);border:none;border-radius:50%;width:32px;height:32px;font-size:18px;cursor:pointer;color:var(--text)">×</button>
+<style>
+#alejandraPanel{display:none;position:fixed;top:0;left:0;right:0;bottom:0;z-index:1100;flex-direction:column;background:var(--bg)}
+.ale-header{display:flex;align-items:center;gap:12px;padding:12px 16px;flex-shrink:0;background:linear-gradient(135deg,#7c3aed 0%,#a855f7 50%,#c084fc 100%);color:#fff}
+.ale-avatar{width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;backdrop-filter:blur(10px)}
+.ale-header-info{flex:1;min-width:0}
+.ale-header-name{font-family:'Montserrat',sans-serif;font-weight:900;font-size:16px;letter-spacing:-.3px}
+.ale-header-status{font-size:11px;opacity:.85;display:flex;align-items:center;gap:5px}
+.ale-header-status::before{content:'';width:7px;height:7px;border-radius:50%;background:#4ade80;flex-shrink:0}
+.ale-header-actions{display:flex;gap:6px;align-items:center}
+.ale-header-btn{background:rgba(255,255,255,.15);border:none;border-radius:50%;width:34px;height:34px;font-size:16px;cursor:pointer;color:#fff;display:flex;align-items:center;justify-content:center;transition:background .2s}
+.ale-header-btn:active{background:rgba(255,255,255,.3)}
+#alejandraList{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:6px;scroll-behavior:smooth}
+.ale-msg{display:flex;flex-direction:column;max-width:82%;animation:aleMsgIn .3s ease}
+.ale-msg.user{align-self:flex-end}
+.ale-msg.bot,.ale-msg.bot-info,.ale-msg.bot-warning,.ale-msg.bot-error{align-self:flex-start}
+.ale-bubble{padding:10px 14px;font-size:14px;line-height:1.55;word-wrap:break-word;white-space:pre-wrap}
+.ale-msg.user .ale-bubble{background:linear-gradient(135deg,#7c3aed,#a855f7);color:#fff;border-radius:18px 18px 4px 18px;box-shadow:0 1px 3px rgba(124,58,237,.3)}
+.ale-msg.bot .ale-bubble{background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:18px 18px 18px 4px;box-shadow:0 1px 2px rgba(0,0,0,.06)}
+.ale-msg.bot-info .ale-bubble{background:rgba(34,197,94,.08);color:#16a34a;border:1px solid rgba(34,197,94,.2);border-radius:18px 18px 18px 4px}
+.ale-msg.bot-warning .ale-bubble{background:rgba(245,158,11,.08);color:#d97706;border:1px solid rgba(245,158,11,.2);border-radius:18px 18px 18px 4px}
+.ale-msg.bot-error .ale-bubble{background:rgba(239,68,68,.08);color:#dc2626;border:1px solid rgba(239,68,68,.2);border-radius:18px 18px 18px 4px}
+.ale-time{font-size:10px;color:var(--muted);margin-top:3px;padding:0 4px}
+.ale-msg.user .ale-time{text-align:right}
+@keyframes aleMsgIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+.ale-typing{display:flex;gap:5px;align-items:center;padding:12px 16px;background:var(--surface);border:1px solid var(--border);border-radius:18px 18px 18px 4px;align-self:flex-start;box-shadow:0 1px 2px rgba(0,0,0,.06)}
+.ale-typing span{width:7px;height:7px;border-radius:50%;background:#a855f7;animation:aleDot .9s infinite}
+.ale-typing span:nth-child(2){animation-delay:.2s}
+.ale-typing span:nth-child(3){animation-delay:.4s}
+@keyframes aleDot{0%,60%,100%{transform:translateY(0)}30%{transform:translateY(-6px)}}
+.ale-welcome{text-align:center;padding:40px 20px;color:var(--muted)}
+.ale-welcome-icon{font-size:48px;margin-bottom:12px}
+.ale-welcome-title{font-family:'Montserrat',sans-serif;font-weight:900;font-size:18px;color:var(--text);margin-bottom:6px}
+.ale-welcome-sub{font-size:13px;line-height:1.5}
+.ale-input-area{flex-shrink:0;padding:10px 12px 12px;background:var(--surface);border-top:1px solid var(--border)}
+.ale-input-row{display:flex;gap:8px;align-items:flex-end;background:var(--bg);border:1.5px solid var(--border);border-radius:22px;padding:4px 4px 4px 14px;transition:border-color .2s}
+.ale-input-row:focus-within{border-color:#a855f7}
+.ale-input-row textarea{flex:1;background:none;border:none;color:var(--text);font-size:14px;font-family:'Poppins',sans-serif;resize:none;max-height:100px;line-height:1.4;padding:8px 0;outline:none}
+.ale-input-row textarea::placeholder{color:var(--muted)}
+.ale-tool-btn{background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer;padding:6px;border-radius:50%;flex-shrink:0;transition:color .2s,background .2s;display:flex;align-items:center;justify-content:center;width:36px;height:36px}
+.ale-tool-btn:active{background:var(--surface2)}
+.ale-send-btn{background:linear-gradient(135deg,#7c3aed,#a855f7);border:none;border-radius:50%;width:36px;height:36px;color:#fff;font-size:18px;cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;transition:opacity .2s,transform .15s}
+.ale-send-btn:active{transform:scale(.9)}
+</style>
+<div id="alejandraPanel">
+  <div class="ale-header">
+    <div class="ale-avatar">✦</div>
+    <div class="ale-header-info">
+      <div class="ale-header-name">Alejandra</div>
+      <div class="ale-header-status"><span id="alejandraVer"></span></div>
+    </div>
+    <div class="ale-header-actions">
+      <button id="alejandraHablarBtn" onclick="alejandraToggleAutoHablar()" title="Voz" class="ale-header-btn">🔊</button>
+      <button onclick="_alejandraPanelLimpiar()" title="Borrar chat" class="ale-header-btn">🗑️</button>
+      <button onclick="alejandraAbrir(false)" title="Cerrar" class="ale-header-btn" style="font-size:20px">×</button>
     </div>
   </div>
-  <div id="alejandraList" style="flex:1;overflow-y:auto;padding:12px 16px;display:flex;flex-direction:column;gap:8px">
-    <div style="text-align:center;color:var(--muted);font-size:13px;padding:20px">🤖 Alejandra lista. Cuéntame qué necesitas...</div>
+  <div id="alejandraList">
+    <div class="ale-welcome">
+      <div class="ale-welcome-icon">✦</div>
+      <div class="ale-welcome-title">Hola, soy Alejandra</div>
+      <div class="ale-welcome-sub">Tu asistente con acceso total a la app.<br>Pregúntame lo que necesites.</div>
+    </div>
   </div>
   <div id="alejandraAdjuntos" style="display:none;padding:6px 12px;flex-wrap:wrap;gap:6px;border-top:1px solid var(--border)"></div>
-  <div style="flex-shrink:0;padding:10px 12px;border-top:1px solid var(--border)">
-    <div style="display:flex;gap:8px;align-items:flex-end">
-      <button id="alejandraVozBtn" onclick="alejandraToggleVoz()" title="Hablar con Alejandra"
-        style="width:44px;height:44px;padding:0;border-radius:12px;flex-shrink:0;font-size:20px;background:var(--surface2);border:1px solid var(--border);cursor:pointer;line-height:1">🎙️</button>
-      <button onclick="document.getElementById('alejandraFile').click()" title="Adjuntar archivo o foto"
-        style="width:44px;height:44px;padding:0;border-radius:12px;flex-shrink:0;font-size:20px;background:var(--surface2);border:1px solid var(--border);cursor:pointer;line-height:1">📎</button>
-      <input type="file" id="alejandraFile" multiple accept="image/*,application/pdf,.xlsx,.csv,.txt,.json,.dwg,.dxf" style="display:none" onchange="alejandraSubirAdjuntos(event)">
-      <textarea id="alejandraInput" placeholder="Mensaje" rows="1"
-        style="flex:1;background:var(--surface2);border:1px solid #8b5cf6;border-radius:12px;padding:10px 14px;font-size:14px;color:var(--text);resize:none;line-height:1.4;max-height:100px;outline:none"
+  <div class="ale-input-area">
+    <div class="ale-input-row">
+      <textarea id="alejandraInput" placeholder="Escribe un mensaje..." rows="1"
         onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();alejandraEnviar()}"
         oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,100)+'px'"></textarea>
-      <button onclick="alejandraEnviar()" class="login-btn" style="margin:0;width:44px;height:44px;padding:0;border-radius:12px;flex-shrink:0;font-size:18px;background:#8b5cf6">⚡</button>
+      <button onclick="document.getElementById('alejandraFile').click()" title="Adjuntar" class="ale-tool-btn">📎</button>
+      <input type="file" id="alejandraFile" multiple accept="image/*,application/pdf,.xlsx,.csv,.txt,.json,.dwg,.dxf" style="display:none" onchange="alejandraSubirAdjuntos(event)">
+      <button id="alejandraVozBtn" onclick="alejandraToggleVoz()" title="Voz" class="ale-tool-btn">🎙️</button>
+      <button onclick="alejandraEnviar()" class="ale-send-btn" title="Enviar">↑</button>
     </div>
-    <div id="alejandraVozStatus" style="display:none;font-size:11px;color:#8b5cf6;text-align:center;padding-top:6px;animation:pulse 1s infinite">
+    <div id="alejandraVozStatus" style="display:none;font-size:11px;color:#a855f7;text-align:center;padding-top:6px;animation:pulse 1s infinite">
       🎙️ Escuchando... (habla ahora)
     </div>
   </div>
@@ -10250,7 +10297,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '6.22';
+const APP_VERSION = '6.23';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -15054,7 +15101,11 @@ function _alejandraRestaurarChat() {
       _alejandraPanelHist = saved;
       list.innerHTML = '';
       for (const m of _alejandraPanelHist) {
-        _alejandraAñadirMensaje(m.texto, m.tipo, false, true);
+        const div = document.createElement('div');
+        div.className = 'ale-msg ' + m.tipo;
+        div.dataset.aleMsg = '1';
+        div.innerHTML = `<div class="ale-bubble">${_escHtml(m.texto)}</div><div class="ale-time">${m.time || ''}</div>`;
+        list.appendChild(div);
       }
       list.scrollTop = list.scrollHeight;
       return;
@@ -15226,12 +15277,15 @@ async function alejandraEnviar() {
   const msgDisplay = msg + (adjEnv.length ? `\n📎 ${adjEnv.length} archivo(s) adjunto(s)` : '');
   _alejandraAñadirMensaje(msgDisplay, 'user');
 
-  // Crear indicador de "pensando" propio para este mensaje
+  // Crear indicador de "pensando" con animación
   const loadingDiv = document.createElement('div');
-  loadingDiv.style.cssText = 'display:flex;flex-direction:column;align-items:flex-start;margin-bottom:8px';
+  loadingDiv.className = 'ale-msg bot';
   loadingDiv.dataset.loading = '1';
-  loadingDiv.innerHTML = '<div style="max-width:85%;background:var(--surface2);color:var(--text);border-radius:16px 16px 16px 4px;padding:10px 14px;font-size:14px;line-height:1.5">⏳ Analizando...</div>';
+  loadingDiv.innerHTML = '<div class="ale-typing"><span></span><span></span><span></span></div>';
   const list = document.getElementById('alejandraList');
+  // Quitar welcome si existe
+  const welcome = list?.querySelector('.ale-welcome');
+  if (welcome) welcome.remove();
   if (list) { list.appendChild(loadingDiv); list.scrollTop = list.scrollHeight; }
 
   // No bloquear — fire and forget para permitir más mensajes
@@ -15299,22 +15353,18 @@ async function alejandraEnviar() {
 function _alejandraAñadirMensaje(texto, tipo = 'user', isLoading = false, skipSave = false) {
   const list = document.getElementById('alejandraList');
   if (!list) return;
+  // Quitar welcome si existe
+  const welcome = list.querySelector('.ale-welcome');
+  if (welcome) welcome.remove();
 
   const div = document.createElement('div');
-  div.style.cssText = `display:flex;flex-direction:column;align-items:${tipo === 'user' ? 'flex-end' : 'flex-start'};margin-bottom:8px`;
+  div.className = 'ale-msg ' + tipo;
   div.dataset.aleMsg = '1';
 
-  const colores = {
-    user:        ['#8b5cf6',        '#fff'],
-    bot:         ['var(--surface2)', 'var(--text)'],
-    'bot-info':  ['var(--surface2)', '#22c55e'],
-    'bot-warning':['var(--surface2)','#f59e0b'],
-    'bot-error': ['var(--surface2)', '#ef4444']
-  };
-  const [bg, fg] = colores[tipo] || colores.bot;
-  const radius = tipo === 'user' ? '16px 16px 4px 16px' : '16px 16px 16px 4px';
+  const now = new Date();
+  const timeStr = now.getHours().toString().padStart(2,'0') + ':' + now.getMinutes().toString().padStart(2,'0');
 
-  div.innerHTML = `<div style="max-width:85%;background:${bg};color:${fg};border-radius:${radius};padding:10px 14px;font-size:14px;line-height:1.5;word-wrap:break-word;white-space:pre-wrap">${_escHtml(texto)}</div>`;
+  div.innerHTML = `<div class="ale-bubble">${_escHtml(texto)}</div><div class="ale-time">${timeStr}</div>`;
 
   if (isLoading) div.dataset.loading = '1';
   list.appendChild(div);
@@ -15322,9 +15372,17 @@ function _alejandraAñadirMensaje(texto, tipo = 'user', isLoading = false, skipS
 
   // Persistir en localStorage (no guardar loading ni errores efímeros)
   if (!isLoading && !skipSave && tipo !== 'bot-error') {
-    _alejandraPanelHist.push({ texto, tipo });
+    _alejandraPanelHist.push({ texto, tipo, time: timeStr });
     _alejandraPersistir();
   }
+}
+
+function _alejandraPanelLimpiar() {
+  if (!confirm('¿Borrar el historial del chat?')) return;
+  _alejandraPanelHist = [];
+  try { localStorage.removeItem(ALEJANDRA_PANEL_HIST_KEY); } catch {}
+  const list = document.getElementById('alejandraList');
+  if (list) list.innerHTML = '<div class="ale-welcome"><div class="ale-welcome-icon">✦</div><div class="ale-welcome-title">Hola, soy Alejandra</div><div class="ale-welcome-sub">Tu asistente con acceso total a la app.<br>Pregúntame lo que necesites.</div></div>';
 }
 
 // ── Contexto de pantalla para Alejandra ──────────────────────────────────────
