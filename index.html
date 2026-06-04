@@ -694,7 +694,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
 .ale-send-btn{background:linear-gradient(135deg,#7c3aed,#a855f7);border:none;border-radius:50%;width:26px;height:26px;color:#fff;font-size:13px;cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;transition:opacity .2s,transform .15s}
 .ale-send-btn:active{transform:scale(.9)}
 </style>
-<div id="alejandraPanel">
+<div id="alejandraPanel" style="display:none">
   <div class="ale-header">
     <div class="ale-avatar">✦</div>
     <div class="ale-header-info">
@@ -10297,7 +10297,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '6.27';
+const APP_VERSION = '6.28';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
