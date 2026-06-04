@@ -7,7 +7,7 @@
 const CORS = {
   'Access-Control-Allow-Origin': 'https://padilla585projects.github.io',
   'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, X-Admin-Code, X-Obra-Id, X-Departamento, X-Token',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Admin-Code, X-Obra-Id, X-Departamento, X-Token',
   'Vary': 'Origin',
   'X-Content-Type-Options': 'nosniff',
   'X-Frame-Options': 'DENY',
@@ -11270,13 +11270,15 @@ async function getIAChatHistory(request, env) {
   const s = await getAuth(request, env);
   if (!s) return err('Sin permiso', 401);
   const url = new URL(request.url);
-  const uid = url.searchParams.get('usuario_id') || s.nombre || s.usuario_id;
+  const uid = url.searchParams.get('usuario_id') || s.usuario_id || s.nombre;
   if (!uid) return err('Falta usuario_id', 400);
   const limit = Math.min(parseInt(url.searchParams.get('limit') || '50') || 50, 100);
   try {
+    // Buscar por usuario_id numérico O por nombre (la app guarda ambos formatos)
+    const nombre = s.nombre || '';
     const rows = await env.DB.prepare(
-      "SELECT rol, contenido, created_at FROM alejandra_historial WHERE LOWER(usuario_id) = LOWER(?) AND rol IN ('user','assistant') ORDER BY created_at DESC LIMIT ?"
-    ).bind(uid, limit).all();
+      "SELECT rol, contenido, created_at FROM alejandra_historial WHERE (LOWER(usuario_id) = LOWER(?) OR LOWER(usuario_id) = LOWER(?)) AND rol IN ('user','assistant') ORDER BY created_at DESC LIMIT ?"
+    ).bind(String(uid), nombre, limit).all();
     return json({ ok: true, mensajes: (rows.results || []).reverse() });
   } catch (e) {
     return json({ ok: false, error: e.message });

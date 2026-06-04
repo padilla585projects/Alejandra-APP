@@ -10297,7 +10297,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '6.34';
+const APP_VERSION = '6.35';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -14737,7 +14737,7 @@ window.turnoToggle   = turnoToggle;
     if (uid) {
       try {
         const res = await fetch(`https://alejandra-app-api.alejandra-app.workers.dev/ia-chat-history?usuario_id=${encodeURIComponent(uid)}`, {
-              headers: { 'Authorization': 'Bearer ' + (getSession()?.token || '') }
+              headers: { 'X-Token': getSession()?.token || '' }
             });
         const data = await res.json();
         if (data.ok && data.mensajes && data.mensajes.length > 0) {
@@ -15101,7 +15101,7 @@ async function _alejandraRestaurarChat() {
   if (uid) {
     try {
       const res = await fetch(`https://alejandra-app-api.alejandra-app.workers.dev/ia-chat-history?usuario_id=${encodeURIComponent(uid)}`, {
-            headers: { 'Authorization': 'Bearer ' + (getSession()?.token || '') }
+            headers: { 'X-Token': getSession()?.token || '' }
           });
       const data = await res.json();
       if (data.ok && data.mensajes && data.mensajes.length > 0) {

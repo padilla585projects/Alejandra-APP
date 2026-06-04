@@ -6405,7 +6405,7 @@ async function _registrarPushDeveloper() {
     if (uid && tok) {
       try {
         const res = await fetch(`https://alejandra-app-api.alejandra-app.workers.dev/ia-chat-history?usuario_id=${encodeURIComponent(uid)}`, {
-          headers: { 'Authorization': 'Bearer ' + tok }
+          headers: { 'X-Token': tok }
         });
         const data = await res.json();
         if (data.ok && data.mensajes && data.mensajes.length > 0) {
