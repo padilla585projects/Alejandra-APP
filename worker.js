@@ -19,9 +19,8 @@ const CORS = {
 const AI_PRICES = {
   'claude-sonnet-4-6':    { input: 3/1e6,     output: 15/1e6  },
   'claude-opus-4-6':      { input: 15/1e6,    output: 75/1e6  },
-  'gemini-2.0-flash':     { input: 0.10/1e6,  output: 0.40/1e6 },
-  'gemini-1.5-flash-002': { input: 0.075/1e6, output: 0.30/1e6 },
-  'gemini-1.5-flash':     { input: 0.075/1e6, output: 0.30/1e6 },
+  'gemini-2.5-flash':     { input: 0.15/1e6,  output: 0.60/1e6 },
+  'gemini-2.0-flash-lite':{ input: 0.075/1e6, output: 0.30/1e6 },
 };
 function calcAICost(modelo, inputTok, outputTok) {
   const p = AI_PRICES[modelo] || { input: 0, output: 0 };
@@ -362,7 +361,7 @@ async function transcribeAudio(env, audioBuffer) {
   try {
     const base64 = btoa(String.fromCharCode(...new Uint8Array(audioBuffer)));
     const resp = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${env.GEMINI_API_KEY}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${env.GEMINI_API_KEY}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -3735,7 +3734,7 @@ async function devGenerateVapid(request, env) {
 async function callGemini(env, geminiBody, endpointLabel) {
   const keys = [env.GEMINI_API_KEY, env.GEMINI_API_KEY_2, env.GEMINI_API_KEY_3].filter(Boolean);
   if (!keys.length) return { error: 'GEMINI_API_KEY no configurada', status: 500 };
-  const models = ['gemini-2.0-flash', 'gemini-1.5-flash-002', 'gemini-1.5-flash'];
+  const models = ['gemini-2.5-flash', 'gemini-2.0-flash-lite'];
   for (const key of keys) {
     for (const model of models) {
       const res = await fetch(
@@ -9007,6 +9006,30 @@ async function googleAuthCallback(request, env) {
   });
 }
 
+// Página que devuelve al usuario a la app móvil mediante deep link (alejandraia://auth)
+function _appReturnHtml(titulo, mensaje) {
+  const deep = 'alejandraia://auth?ok=1';
+  const intent = 'intent://auth?ok=1#Intent;scheme=alejandraia;package=com.adrianpadilla.alejandra_ia;end';
+  const html = `<!doctype html><html lang="es"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${titulo}</title>
+<style>body{font-family:-apple-system,Segoe UI,Roboto,sans-serif;background:#0f172a;color:#e2e8f0;display:flex;min-height:100vh;margin:0;align-items:center;justify-content:center;text-align:center;padding:24px}
+.card{max-width:360px}h2{margin:0 0 8px;font-size:22px}p{color:#94a3b8;margin:0 0 24px;line-height:1.5}
+a.btn{display:inline-block;background:#6366f1;color:#fff;text-decoration:none;padding:14px 28px;border-radius:12px;font-weight:600}</style>
+</head><body><div class="card">
+<h2>${titulo}</h2><p>${mensaje}</p>
+<a class="btn" id="back" href="${deep}">Volver a la app</a>
+</div>
+<script>
+var deep=${JSON.stringify(deep)};var intent=${JSON.stringify(intent)};
+function go(){try{window.location.href=intent;}catch(e){window.location.href=deep;}}
+document.getElementById('back').addEventListener('click',function(e){e.preventDefault();go();});
+setTimeout(go,500);
+</script>
+</body></html>`;
+  return new Response(html, { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
+}
+
 async function googleMobileRedirect(request, env) {
   const url = new URL(request.url);
   const code = url.searchParams.get('code');
@@ -9065,7 +9088,7 @@ async function googleMobileRedirect(request, env) {
       try { await sendTelegram(env, `📓 <b>Solicitud acceso Google (móvil)</b>\n👤 ${gUser.name || gUser.email}\n📧 ${gUser.email}`); } catch(_) {}
     }
     if (nonce) await _saveNonceResult(env, nonce, { pendiente: true, msg: 'Solicitud enviada. El administrador debe aprobarla.' });
-    return new Response('<html><body><h2>Solicitud enviada</h2><p>El administrador debe aprobar tu cuenta. Puedes volver a la app.</p></body></html>', { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
+    return _appReturnHtml('Solicitud enviada', 'El administrador debe aprobar tu cuenta. Te devolvemos a la app.');
   }
 
   const tokenArr = new Uint8Array(32);
@@ -9090,7 +9113,7 @@ async function googleMobileRedirect(request, env) {
   // Si hay nonce, guardar resultado para polling desde la app
   if (nonce) await _saveNonceResult(env, nonce, sessionData);
 
-  return new Response('<html><body><h2>Login exitoso</h2><p>Puedes volver a la app Alejandra.</p></body></html>', { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
+  return _appReturnHtml('Login exitoso', 'Te estamos devolviendo a la app Alejandra…');
 }
 
 // ── Nonce store para Google login polling ──────────────────────────────────
