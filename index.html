@@ -3242,10 +3242,10 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
   <div id="iaMessages"></div>
   <div id="iaAdjuntos" style="display:none;padding:6px 12px;flex-wrap:wrap;gap:6px;border-top:1px solid var(--border)"></div>
   <div class="ia-input-row">
-    <textarea id="iaInput" placeholder="Mensaje" rows="1" onkeydown="iaKeydown(event)"></textarea>
-    <button onclick="document.getElementById('iaFileInput').click()" title="Adjuntar archivo o foto" class="ia-mic-btn" style="font-size:18px">📎</button>
+    <button onclick="document.getElementById('iaFileInput').click()" title="Adjuntar" class="ia-mic-btn" style="font-size:16px">📎</button>
     <input type="file" id="iaFileInput" multiple accept="image/*,application/pdf,.xlsx,.csv,.txt,.json,.dwg,.dxf" style="display:none" onchange="iaSubirAdjuntos(event)">
-    <button class="ia-mic-btn" id="iaMicBtn" onclick="iaToggleVoice()" title="Hablar con Alejandra">🎤</button>
+    <button class="ia-mic-btn" id="iaMicBtn" onclick="iaToggleVoice()" title="Voz">🎤</button>
+    <textarea id="iaInput" placeholder="Mensaje" rows="1" onkeydown="iaKeydown(event)"></textarea>
     <button class="ia-send-btn" id="iaSendBtn" onclick="iaSend()">↑</button>
   </div>
 </div>
@@ -10297,7 +10297,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '6.28';
+const APP_VERSION = '6.29';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
