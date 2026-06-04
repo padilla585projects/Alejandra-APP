@@ -4587,6 +4587,9 @@ export default {
         return await eliminarTurno(tid, request, env);
       }
 
+      // ── Historial chat IA (Alejandra) — sync entre dispositivos ──────────
+      if (path === '/ia-chat-history' && method === 'GET') return await getIAChatHistory(request, env);
+
       // â"€â"€ Chat interno (NEW-08) â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
       if (path === '/chat' && method === 'GET')    return await getChatMensajes(request, env);
       if (path === '/chat' && method === 'POST')   return await enviarChatMensaje(request, env);
@@ -11259,6 +11262,24 @@ async function devAIChat(request, env) {
       sendTelegramMessage(env, '⏱️ Alejandra IA: timeout >25s. Historial web auto-limpiado para que el próximo intento sea más rápido.').catch(() => {});
     }
     return json({ ok: false, error: isTimeout ? '⏱️ Respuesta demasiada lenta (timeout 25s). Inténtalo de nuevo en unos segundos.' : e.message });
+  }
+}
+
+// ── Historial chat IA — sync entre dispositivos ─────────────────────────────
+async function getIAChatHistory(request, env) {
+  const s = await getAuth(request, env);
+  if (!s) return err('Sin permiso', 401);
+  const url = new URL(request.url);
+  const uid = url.searchParams.get('usuario_id') || s.nombre || s.usuario_id;
+  if (!uid) return err('Falta usuario_id', 400);
+  const limit = Math.min(parseInt(url.searchParams.get('limit') || '50') || 50, 100);
+  try {
+    const rows = await env.DB.prepare(
+      "SELECT rol, contenido, created_at FROM alejandra_historial WHERE LOWER(usuario_id) = LOWER(?) AND rol IN ('user','assistant') ORDER BY created_at DESC LIMIT ?"
+    ).bind(uid, limit).all();
+    return json({ ok: true, mensajes: (rows.results || []).reverse() });
+  } catch (e) {
+    return json({ ok: false, error: e.message });
   }
 }
 

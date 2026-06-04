@@ -10297,7 +10297,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '6.32';
+const APP_VERSION = '6.33';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -14736,7 +14736,9 @@ window.turnoToggle   = turnoToggle;
     const uid = s?.usuario_id || s?.nombre || null;
     if (uid) {
       try {
-        const res = await fetch(`${AGENTE_BASE}/api/chat/history?usuario_id=${encodeURIComponent(uid)}`);
+        const res = await fetch(`https://alejandra-app-api.alejandra-app.workers.dev/ia-chat-history?usuario_id=${encodeURIComponent(uid)}`, {
+              headers: { 'Authorization': 'Bearer ' + (getSession()?.token || '') }
+            });
         const data = await res.json();
         if (data.ok && data.mensajes && data.mensajes.length > 0) {
           iaHistory = data.mensajes.map(m => ({ role: m.rol === 'assistant' ? 'assistant' : 'user', content: m.contenido }));
@@ -15098,7 +15100,9 @@ async function _alejandraRestaurarChat() {
   const uid = s?.usuario_id || s?.nombre || null;
   if (uid) {
     try {
-      const res = await fetch(`https://alejandra-agente.alejandra-app.workers.dev/api/chat/history?usuario_id=${encodeURIComponent(uid)}`);
+      const res = await fetch(`https://alejandra-app-api.alejandra-app.workers.dev/ia-chat-history?usuario_id=${encodeURIComponent(uid)}`, {
+            headers: { 'Authorization': 'Bearer ' + (getSession()?.token || '') }
+          });
       const data = await res.json();
       if (data.ok && data.mensajes && data.mensajes.length > 0) {
         _alejandraPanelHist = data.mensajes.map(m => ({
