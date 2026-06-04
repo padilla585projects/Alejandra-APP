@@ -6383,24 +6383,43 @@ async function _registrarPushDeveloper() {
 
   function getToken(){ return typeof TOKEN !== 'undefined' ? TOKEN : localStorage.getItem('panel_token') || ''; }
 
-  // Cargar historial guardado
-  (function() {
+  // Cargar historial: servidor primero (sync entre dispositivos), fallback localStorage
+  function _aiRenderHistory() {
+    const box = document.getElementById('aiMessages');
+    if (!box || aiHistory.length === 0) return;
+    box.innerHTML = '';
+    for (const m of aiHistory) {
+      const d = document.createElement('div');
+      d.className = 'ai-msg ' + (m.role === 'assistant' ? 'bot' : 'user');
+      d.innerHTML = m.content.replace(/\n/g, '<br>');
+      box.appendChild(d);
+    }
+    box.scrollTop = box.scrollHeight;
+  }
+  (async function() {
+    // 1. Intentar servidor
+    const uid = (typeof SESSION !== 'undefined' ? SESSION?.usuario_id || SESSION?.nombre : null)
+             || JSON.parse(localStorage.getItem('panel_session') || 'null')?.usuario_id
+             || JSON.parse(localStorage.getItem('panel_session') || 'null')?.nombre;
+    const tok = typeof TOKEN !== 'undefined' ? TOKEN : localStorage.getItem('panel_token') || '';
+    if (uid && tok) {
+      try {
+        const res = await fetch(`https://alejandra-app-api.alejandra-app.workers.dev/ia-chat-history?usuario_id=${encodeURIComponent(uid)}`, {
+          headers: { 'Authorization': 'Bearer ' + tok }
+        });
+        const data = await res.json();
+        if (data.ok && data.mensajes && data.mensajes.length > 0) {
+          aiHistory = data.mensajes.map(m => ({ role: m.rol === 'assistant' ? 'assistant' : 'user', content: m.contenido }));
+          _aiRenderHistory();
+          try { localStorage.setItem(AI_HIST_KEY, JSON.stringify(aiHistory)); } catch {}
+          return;
+        }
+      } catch {}
+    }
+    // 2. Fallback: localStorage
     try {
       const saved = JSON.parse(localStorage.getItem(AI_HIST_KEY) || '[]');
-      if (saved.length > 0) {
-        aiHistory = saved;
-        const box = document.getElementById('aiMessages');
-        if (box) {
-          box.innerHTML = '';
-          for (const m of aiHistory) {
-            const d = document.createElement('div');
-            d.className = 'ai-msg ' + (m.role === 'assistant' ? 'bot' : 'user');
-            d.textContent = m.content;
-            box.appendChild(d);
-          }
-          box.scrollTop = box.scrollHeight;
-        }
-      }
+      if (saved.length > 0) { aiHistory = saved; _aiRenderHistory(); }
     } catch {}
   })();
 
@@ -6506,7 +6525,7 @@ async function wSend(){
   const typing=addTyping();
   document.getElementById('wSend').disabled=true;
   try{
-    const r=await fetch('https://alejandra-agente.alejandra-app.workers.dev/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mensaje:msg,usuario_id:null,empresa_id:null,canal:'panel',rol:'desarrollador',pantalla:'popup-ai',dom_actual:null})});
+    const r=await fetch('https://alejandra-agente.alejandra-app.workers.dev/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mensaje:msg,usuario_id:${JSON.stringify(SESSION?.usuario_id || SESSION?.nombre || 'Adrian')},empresa_id:${JSON.stringify(SESSION?.empresa_id || null)},canal:'panel',rol:'desarrollador',pantalla:'popup-ai',dom_actual:null})});
     const d=await r.json(); typing.remove();
     const reply=d.texto||'Sin respuesta';
     addMsg('bot',reply);
