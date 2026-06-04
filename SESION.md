@@ -6,8 +6,69 @@
 ## ESTADO ACTUAL
 
 **Sesión:** LIBRE
-**Última sesión:** 04/06/2026
-**Versión actual:** v6.16
+**Última sesión:** 04/06/2026 (tarde)
+**Versión actual:** v6.19
+
+---
+
+## RESUMEN SESIÓN 04/06/2026 (tarde) — v6.17→v6.19 Fix chat IA inline pisando pantallas
+
+### Problemas reportados:
+1. "el chat se queda a continuación o en medio de las pantallas" — al cambiar de pantallas y darle al botón IA, el chat se quedaba visible encima/dentro de otras pantallas
+2. Placeholder del input del chat cortado y desalineado
+3. Contador del icono IDEAS estancado en 7
+
+### Debug via ADB + CDP (Chrome DevTools Protocol):
+- Conectado al móvil del usuario (48cafad0) por adb
+- Forward puerto 9222 → DevTools del Chrome móvil
+- Inspección live del DOM mientras el usuario reproducía el bug
+- Captura de pantalla via `adb exec-out screencap -p`
+
+### Causa raíz #1 (v6.17):
+`<div id="screenIA">` no tenía la clase `.screen`. `_applyScreen()` hace:
+```js
+document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+```
+Como `screenIA` no era `.screen`, NUNCA se le quitaba la clase `active`. Una vez visitada, quedaba "activa" para siempre. La CSS `#screenIA.active{display:flex}` la mantenía visible en mitad de cualquier pantalla.
+
+### Fix v6.17:
+- `index.html:3184` → `<div id="screenIA" class="screen flex-screen">`
+- Verificado en device: tras visitar IA y navegar a Ajustes → `iaActiveAfterNav: false`, `iaComputedDisplayAfterNav: "none"`. Funciona.
+
+### Causa raíz #2 (v6.18):
+Placeholder "Escribe, usa el micrófono o adjunta archivos..." (38 chars) no cabía en el textarea (~140px de ancho con 3 botones al lado).
+
+### Fix v6.18:
+- `iaInput` y `alejandraInput` placeholders → "Mensaje"
+
+### Causa raíz #3 (v6.19):
+`screenIA` no tenía `style="height:100%"` como las demás flex-screens. Resultado: el chat solo ocupaba la altura de su contenido, dejando hueco vacío entre input y nav.
+
+### Fix v6.19:
+- `screenIA` → `style="padding:0;height:100%"`
+- Verificado: screenIA height=615, msgs=496, appContent=615. Llena todo.
+
+### Sobre el contador IDEAS (no es bug):
+- API `/sugerencias?estado=pendiente` devuelve 7 ideas reales (IDs 201, 204, 205…)
+- El badge sí está sincronizado con backend
+- Bajará cuando el usuario marque alguna como "✅ Resolver"
+
+### Archivos modificados:
+- index.html — clase .screen en screenIA + style height:100% + placeholders + APP_VERSION 6.19
+- sw.js — CACHE alejandra-v6.19
+- version.json — 6.19
+
+### Deploy:
+- v6.17 commit 7650702 → push main ✅
+- v6.18 commit 8b51d12 → push main ✅
+- v6.19 commit 7f005a4 → push main ✅
+- Worker: sin cambios
+
+### Pendiente próxima sesión:
+- Confirmar todo OK en uso real
+- PWA install icon supuestamente ausente — probablemente porque ya está instalada
+- Push notifications v6.13 todavía sin probar en móvil real
+- Pendientes anteriores: #196, #195, #193, #197, #190
 
 ---
 

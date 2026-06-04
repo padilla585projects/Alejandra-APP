@@ -4,8 +4,8 @@
   Ruta local: C:\Users\Adrian\Downloads\Proyecto GestiBobina\Alejandra APP
 ================================================================================
 
-ÚLTIMA ACTUALIZACIÓN: 04/06/2026
-VERSIÓN ACTUAL APP NUEVA: v6.16 (Fix panel Alejandra IA — hueco gigante en móvil)
+ÚLTIMA ACTUALIZACIÓN: 04/06/2026 (tarde)
+VERSIÓN ACTUAL APP NUEVA: v6.19 (Fix chat IA inline — clase .screen + height 100% + placeholder)
 VERSIÓN ACTUAL APP VIEJA: v4.19 (⛔ CONGELADA DEFINITIVAMENTE — no recibe más cambios)
 
 ================================================================================
