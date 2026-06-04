@@ -10297,7 +10297,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '6.30';
+const APP_VERSION = '6.31';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -10320,20 +10320,18 @@ async function forzarActualizacion() {
   const banner = document.getElementById('updateBanner');
   if (banner) banner.innerHTML = '<span>⏳ Actualizando...</span>';
   try {
-    // 1. Forzar update del SW desde el servidor
-    const reg = await navigator.serviceWorker?.getRegistration();
-    if (reg) { await reg.update().catch(() => {}); }
-    // 2. Activar SW en espera
-    if (reg?.waiting) reg.waiting.postMessage({ tipo: 'SKIP_WAITING' });
-    // 3. Limpiar todos los caches SW
+    // 1. Desregistrar SW completamente para que no sirva caché vieja
+    const regs = await navigator.serviceWorker?.getRegistrations() || [];
+    for (const r of regs) await r.unregister().catch(() => {});
+    // 2. Limpiar todos los caches
     if ('caches' in window) {
       const keys = await caches.keys();
       await Promise.all(keys.map(k => caches.delete(k)));
     }
-    // 4. Limpiar session cacheada
+    // 3. Limpiar session cacheada
     localStorage.removeItem('alejandra_api');
   } catch {}
-  // 5. Recargar forzando nueva versión
+  // 4. Recargar sin SW — el navegador va directo al servidor
   location.replace(location.pathname + '?r=' + Date.now());
 }
 
