@@ -3181,7 +3181,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
 .ia-voice-status.show{display:block}
 </style>
 
-<div id="screenIA" class="screen flex-screen">
+<div id="screenIA" class="screen flex-screen" style="padding:0;height:100%">
   <div class="ia-header">
     <button onclick="irAtras()" style="background:none;border:none;color:#a855f7;cursor:pointer;font-size:22px;line-height:1;padding:0 10px 0 0;flex-shrink:0">←</button>
     <div style="flex:1">
@@ -10249,7 +10249,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '6.18';
+const APP_VERSION = '6.19';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
