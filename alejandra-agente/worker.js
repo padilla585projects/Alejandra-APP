@@ -2237,8 +2237,7 @@ async function callGemini(env, geminiBody, label) {
       );
       const data = await res.json();
       if (res.ok) return data.candidates?.[0]?.content?.parts?.[0]?.text || 'Sin resultado.';
-      if (res.status === 429) break;
-      if (res.status === 404) continue;
+      if (res.status === 429 || res.status === 400 || res.status === 403 || res.status === 404) continue;
       throw new Error(`Gemini ${res.status} [${label}]: ${JSON.stringify(data).slice(0, 200)}`);
     }
   }
