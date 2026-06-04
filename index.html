@@ -769,7 +769,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="color:var(--muted)"><path d="m9 18 6-6-6-6"/></svg>
       </div>
       <!-- NEW-187: contenedor para departamentos extra del catálogo -->
-      <div id="extraDeptCards"></div>
+      <div id="extraDeptCards" style="display:flex;flex-direction:column;gap:14px"></div>
     </div>
     <!-- Chat del equipo — accesible desde todos los departamentos -->
     <div style="padding:0 16px 20px">
@@ -4615,6 +4615,7 @@ async function guardarDeptosEmpresa() {
     localStorage.setItem('alejandra_deptos_activos', JSON.stringify(activos));
     window._empresaData = { ...window._empresaData, departamentos: JSON.stringify(activos) };
     toast('✅ Departamentos actualizados');
+    if (typeof aplicarDeptosActivos === 'function') aplicarDeptosActivos();
   } catch { toast('❌ Error de red', 'err'); }
 }
 window.guardarDeptosEmpresa = guardarDeptosEmpresa;
@@ -10249,7 +10250,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '6.21';
+const APP_VERSION = '6.22';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -12519,8 +12520,11 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
         else if (f.estado === 'baja') t.dias_baja++;
         if (f.estado === 'retraso') t.dias_retraso++;
       }
-      t.horas_totales += parseFloat(f.horas_trabajadas || 0);
-      t.horas_extra   += parseFloat(f.horas_extra || 0);
+      // No sumar horas de bajas, vacaciones, festivos ni ausencias
+      if (!['baja','vacaciones','festivo','ausencia'].includes(f.estado)) {
+        t.horas_totales += parseFloat(f.horas_trabajadas || 0);
+        t.horas_extra   += parseFloat(f.horas_extra || 0);
+      }
     });
     container.innerHTML = graficaHTML + Object.values(map).map(t => {
       const diasTot = t.dias_presencia + t.dias_ausencia + t.dias_baja;

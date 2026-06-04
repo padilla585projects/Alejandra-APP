@@ -4965,6 +4965,7 @@ async function verificarAcceso(request, env) {
       });
       env.DB.prepare('DELETE FROM login_attempts WHERE ip = ?').bind(ip).run().catch(() => {});
       const rolesExtraCod = (() => { try { return usuario.roles_extra ? JSON.parse(usuario.roles_extra) : []; } catch { return []; } })();
+      const empRowCod = usuario.empresa_id ? await env.DB.prepare('SELECT nombre FROM empresas WHERE id = ?').bind(usuario.empresa_id).first().catch(() => null) : null;
       return json({
         ok: true,
         nombre: usuario.nombre,
@@ -4974,6 +4975,9 @@ async function verificarAcceso(request, env) {
         obra_nombre: usuario.obra_nombre,
         departamento: usuario.departamento || 'electrico',
         token,
+        empresa_id: usuario.empresa_id || 1,
+        empresa_nombre: empRowCod?.nombre || '',
+        usuario_id: usuario.id,
       });
     }
   } catch (e) {
@@ -7369,10 +7373,12 @@ async function crearFichaje(request, env, ctx) {
   ).bind(empresa_id, fecha, usuario_id||null, personal_externo_id||null).first();
   if (dup) return err('Ya existe un fichaje para este trabajador en esta fecha', 409);
 
-  const horas = calcHoras(hora_entrada, hora_salida);
+  const ESTADOS_NO_TRABAJO = ['baja', 'vacaciones', 'festivo', 'ausencia'];
+  let estadoFinal = estado || 'presente';
+  // Si es baja/vacaciones/festivo/ausencia → horas = 0
+  const horas = ESTADOS_NO_TRABAJO.includes(estadoFinal) ? 0 : calcHoras(hora_entrada, hora_salida);
   // Calcular horas extra y detectar retraso según horario de obra
   let horas_extra = 0, minutos_retraso = 0;
-  let estadoFinal = estado || 'presente';
   if (obra_id || obraAuth) {
     const horarioRow = await env.DB.prepare('SELECT * FROM horarios_obra WHERE empresa_id=? AND obra_id=?').bind(empresa_id, obra_id||obraAuth).first();
     if (horarioRow) {
@@ -7408,13 +7414,15 @@ async function actualizarFichaje(id, request, env, ctx) {
   if (body.motivo       !== undefined) { campos.push('motivo=?');       vals.push(body.motivo?.trim()||null); }
   if (body.notas        !== undefined) { campos.push('notas=?');        vals.push(body.notas?.trim()||null); }
 
-  // Recalcular horas, horas_extra y retraso si cambian las horas
-  if (body.hora_entrada !== undefined || body.hora_salida !== undefined) {
+  // Recalcular horas, horas_extra y retraso si cambian las horas o el estado
+  const ESTADOS_NO_TRABAJO = ['baja', 'vacaciones', 'festivo', 'ausencia'];
+  if (body.hora_entrada !== undefined || body.hora_salida !== undefined || body.estado !== undefined) {
     const f = await env.DB.prepare('SELECT * FROM fichajes WHERE id=? AND empresa_id=?').bind(id, empresa_id).first();
     if (f) {
       const ent = body.hora_entrada ?? f.hora_entrada;
       const sal = body.hora_salida  ?? f.hora_salida;
-      const horas = calcHoras(ent, sal);
+      const estadoEval = body.estado ?? f.estado;
+      const horas = ESTADOS_NO_TRABAJO.includes(estadoEval) ? 0 : calcHoras(ent, sal);
       campos.push('horas_trabajadas=?'); vals.push(horas);
       const horarioRow = f.obra_id ? await env.DB.prepare('SELECT * FROM horarios_obra WHERE empresa_id=? AND obra_id=?').bind(empresa_id, f.obra_id).first() : null;
       const hd = horarioRow ? getHorarioParaDia(horarioRow, f.fecha) : null;
