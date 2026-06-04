@@ -10249,7 +10249,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '6.20';
+const APP_VERSION = '6.21';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -14908,7 +14908,7 @@ window.turnoToggle   = turnoToggle;
   };
 
   // ── Envío al agente Alejandra (con herramientas, Gemini, catálogos) ────
-  window.iaSend = async function() {
+  window.iaSend = function() {
     const input = document.getElementById('iaInput');
     const msg = input.value.trim();
     if (!msg && _iaAdjuntos.length === 0) return;
@@ -14926,77 +14926,77 @@ window.turnoToggle   = turnoToggle;
 
     const msgDisplay = msg + (adjEnv.length ? '\n📎 ' + adjEnv.length + ' archivo(s) adjunto(s)' : '');
     appendIAMsg('user', msgDisplay);
-    let typing = appendIATyping();
-    document.getElementById('iaSendBtn').disabled = true;
+    const typing = appendIATyping();
 
-    try {
-      const _iaCtrl = new AbortController();
-      const _iaTid = setTimeout(() => _iaCtrl.abort(), 60000);
+    // No bloquear — fire and forget para permitir más mensajes
+    (async () => {
       try {
-        const res = await fetch(ALEJANDRA_API, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            mensaje:    msg || '(archivo adjunto sin mensaje)',
-            usuario_id: s.usuario_id || s.nombre || 'unknown',
-            empresa_id: s.empresa_id || null,
-            canal:      'pwa',
-            adjuntos:   adjEnv,
-            rol:        s.rol || null,
-            pantalla:   'ia',
-            dom_actual: null
-          }),
-          signal: _iaCtrl.signal
-        });
-        clearTimeout(_iaTid);
+        const _iaCtrl = new AbortController();
+        const _iaTid = setTimeout(() => _iaCtrl.abort(), 60000);
+        try {
+          const res = await fetch(ALEJANDRA_API, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              mensaje:    msg || '(archivo adjunto sin mensaje)',
+              usuario_id: s.usuario_id || s.nombre || 'unknown',
+              empresa_id: s.empresa_id || null,
+              canal:      'pwa',
+              adjuntos:   adjEnv,
+              rol:        s.rol || null,
+              pantalla:   'ia',
+              dom_actual: null
+            }),
+            signal: _iaCtrl.signal
+          });
+          clearTimeout(_iaTid);
 
-        if (!res.ok) throw new Error('HTTP ' + res.status);
-        const data = await res.json();
+          if (!res.ok) throw new Error('HTTP ' + res.status);
+          const data = await res.json();
+          typing.remove();
+
+          let reply = data.texto || 'Sin respuesta';
+
+          // Parsear <plan> y <guia> de la respuesta
+          let planDetectado = null;
+          let guiaDetectada = null;
+          const planMatch = reply.match(/<plan>([\s\S]*?)<\/plan>/);
+          if (planMatch) {
+            try { planDetectado = JSON.parse(planMatch[1]); } catch (_) {}
+            reply = reply.replace(/<plan>[\s\S]*?<\/plan>/, '').trim();
+          }
+          const guiaMatch = reply.match(/<guia>([\s\S]*?)<\/guia>/);
+          if (guiaMatch) {
+            try { guiaDetectada = JSON.parse(guiaMatch[1]); } catch (_) {}
+            reply = reply.replace(/<guia>[\s\S]*?<\/guia>/, '').trim();
+          }
+
+          if (reply) appendIAMsg('bot', reply);
+
+          if (data.busqueda_web) {
+            appendIAMsg('bot-info', '🔍 (resultado con búsqueda web)');
+          }
+
+          // Guardar en historial local
+          iaHistory.push({ role: 'user', content: msg });
+          iaHistory.push({ role: 'assistant', content: reply });
+          if (iaHistory.length > 40) iaHistory = iaHistory.slice(-40);
+          try { localStorage.setItem(IA_HIST_KEY, JSON.stringify(iaHistory)); } catch {}
+
+          iaSpeak(reply);
+
+          if (planDetectado && typeof _alejandraOfrecerPlan === 'function') _alejandraOfrecerPlan(planDetectado);
+          if (guiaDetectada && typeof _alejandraOfrecerGuia === 'function') _alejandraOfrecerGuia(guiaDetectada);
+
+        } finally { clearTimeout(_iaTid); }
+      } catch(e) {
         typing.remove();
-
-        let reply = data.texto || 'Sin respuesta';
-
-        // Parsear <plan> y <guia> de la respuesta
-        let planDetectado = null;
-        let guiaDetectada = null;
-        const planMatch = reply.match(/<plan>([\s\S]*?)<\/plan>/);
-        if (planMatch) {
-          try { planDetectado = JSON.parse(planMatch[1]); } catch (_) {}
-          reply = reply.replace(/<plan>[\s\S]*?<\/plan>/, '').trim();
-        }
-        const guiaMatch = reply.match(/<guia>([\s\S]*?)<\/guia>/);
-        if (guiaMatch) {
-          try { guiaDetectada = JSON.parse(guiaMatch[1]); } catch (_) {}
-          reply = reply.replace(/<guia>[\s\S]*?<\/guia>/, '').trim();
-        }
-
-        if (reply) appendIAMsg('bot', reply);
-
-        if (data.busqueda_web) {
-          appendIAMsg('bot-info', '🔍 (resultado con búsqueda web)');
-        }
-
-        // Guardar en historial local
-        iaHistory.push({ role: 'user', content: msg });
-        iaHistory.push({ role: 'assistant', content: reply });
-        if (iaHistory.length > 40) iaHistory = iaHistory.slice(-40);
-        try { localStorage.setItem(IA_HIST_KEY, JSON.stringify(iaHistory)); } catch {}
-
-        iaSpeak(reply);
-
-        // Mostrar plan/guia si los hay (reutilizar funciones del alejandraPanel)
-        if (planDetectado && typeof _alejandraOfrecerPlan === 'function') _alejandraOfrecerPlan(planDetectado);
-        if (guiaDetectada && typeof _alejandraOfrecerGuia === 'function') _alejandraOfrecerGuia(guiaDetectada);
-
-      } finally { clearTimeout(_iaTid); }
-    } catch(e) {
-      typing.remove();
-      const errMsg = e.name === 'AbortError'
-        ? '⏱️ Sin respuesta en 60 segundos. Vuelve a intentarlo.'
-        : '❌ Error: ' + e.message;
-      appendIAMsg('bot', errMsg);
-    }
-    document.getElementById('iaSendBtn').disabled = false;
+        const errMsg = e.name === 'AbortError'
+          ? '⏱️ Sin respuesta en 60 segundos. Vuelve a intentarlo.'
+          : '❌ Error: ' + e.message;
+        appendIAMsg('bot', errMsg);
+      }
+    })();
   };
 
   function appendIAMsg(role, text) {
@@ -15031,6 +15031,33 @@ let _alejandraAutoHablar  = false;
 let _alejandraRecognition = null;
 let _alejandraEscuchando  = false;
 
+const ALEJANDRA_PANEL_HIST_KEY = 'alejandra_panel_history';
+let _alejandraPanelHist = [];
+
+function _alejandraPersistir() {
+  try {
+    if (_alejandraPanelHist.length > 60) _alejandraPanelHist = _alejandraPanelHist.slice(-60);
+    localStorage.setItem(ALEJANDRA_PANEL_HIST_KEY, JSON.stringify(_alejandraPanelHist));
+  } catch {}
+}
+
+function _alejandraRestaurarChat() {
+  const list = document.getElementById('alejandraList');
+  if (!list) return;
+  try {
+    const saved = JSON.parse(localStorage.getItem(ALEJANDRA_PANEL_HIST_KEY) || '[]');
+    if (saved.length > 0) {
+      _alejandraPanelHist = saved;
+      list.innerHTML = '';
+      for (const m of _alejandraPanelHist) {
+        _alejandraAñadirMensaje(m.texto, m.tipo, false, true);
+      }
+      list.scrollTop = list.scrollHeight;
+      return;
+    }
+  } catch {}
+}
+
 function alejandraAbrir(show = true) {
   const panel = document.getElementById('alejandraPanel');
   if (!panel) return;
@@ -15039,6 +15066,10 @@ function alejandraAbrir(show = true) {
     panel.style.display = 'flex';
     const verSpan = document.getElementById('alejandraVer');
     if (verSpan) verSpan.textContent = 'v' + APP_VERSION;
+    // Restaurar historial si el chat está vacío (sin mensajes reales)
+    const list = document.getElementById('alejandraList');
+    const tieneMsg = list && list.querySelector('[data-ale-msg]');
+    if (!tieneMsg) _alejandraRestaurarChat();
     document.getElementById('alejandraInput')?.focus();
     if (!history.state?.alejandra) history.pushState({ alejandra: 1 }, '');
   } else {
@@ -15191,83 +15222,83 @@ async function alejandraEnviar() {
   const msgDisplay = msg + (adjEnv.length ? `\n📎 ${adjEnv.length} archivo(s) adjunto(s)` : '');
   _alejandraAñadirMensaje(msgDisplay, 'user');
 
-  try {
-    _alejandraAñadirMensaje('⏳ Analizando...', 'bot', true);
+  // Crear indicador de "pensando" propio para este mensaje
+  const loadingDiv = document.createElement('div');
+  loadingDiv.style.cssText = 'display:flex;flex-direction:column;align-items:flex-start;margin-bottom:8px';
+  loadingDiv.dataset.loading = '1';
+  loadingDiv.innerHTML = '<div style="max-width:85%;background:var(--surface2);color:var(--text);border-radius:16px 16px 16px 4px;padding:10px 14px;font-size:14px;line-height:1.5">⏳ Analizando...</div>';
+  const list = document.getElementById('alejandraList');
+  if (list) { list.appendChild(loadingDiv); list.scrollTop = list.scrollHeight; }
 
-    const res = await fetch(ALEJANDRA_API, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        mensaje:    msg || '(archivo adjunto sin mensaje)',
-        usuario_id: s.usuario_id || s.nombre || 'unknown',
-        empresa_id: s.empresa_id || null,
-        canal:      'pwa',
-        adjuntos:   adjEnv,
-        rol:        s.rol || null,
-        pantalla:   _alejandraGetPantalla(),
-        dom_actual: _alejandraGetDOMCompacto()
-      })
-    });
+  // No bloquear — fire and forget para permitir más mensajes
+  (async () => {
+    try {
+      const res = await fetch(ALEJANDRA_API, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mensaje:    msg || '(archivo adjunto sin mensaje)',
+          usuario_id: s.usuario_id || s.nombre || 'unknown',
+          empresa_id: s.empresa_id || null,
+          canal:      'pwa',
+          adjuntos:   adjEnv,
+          rol:        s.rol || null,
+          pantalla:   _alejandraGetPantalla(),
+          dom_actual: _alejandraGetDOMCompacto()
+        })
+      });
 
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
 
-    const list = document.getElementById('alejandraList');
-    if (list?.lastChild?.dataset?.loading) list.lastChild.remove();
+      loadingDiv.remove();
 
-    let textoRespuesta = data.texto || 'Sin respuesta';
+      let textoRespuesta = data.texto || 'Sin respuesta';
 
-    // Extraer <plan> y <guia> de la respuesta antes de mostrar
-    let planDetectado = null;
-    let guiaDetectada = null;
-    const planMatch = textoRespuesta.match(/<plan>([\s\S]*?)<\/plan>/);
-    if (planMatch) {
-      try { planDetectado = JSON.parse(planMatch[1]); } catch (_) {}
-      textoRespuesta = textoRespuesta.replace(/<plan>[\s\S]*?<\/plan>/, '').trim();
+      // Extraer <plan> y <guia> de la respuesta antes de mostrar
+      let planDetectado = null;
+      let guiaDetectada = null;
+      const planMatch = textoRespuesta.match(/<plan>([\s\S]*?)<\/plan>/);
+      if (planMatch) {
+        try { planDetectado = JSON.parse(planMatch[1]); } catch (_) {}
+        textoRespuesta = textoRespuesta.replace(/<plan>[\s\S]*?<\/plan>/, '').trim();
+      }
+      const guiaMatch = textoRespuesta.match(/<guia>([\s\S]*?)<\/guia>/);
+      if (guiaMatch) {
+        try { guiaDetectada = JSON.parse(guiaMatch[1]); } catch (_) {}
+        textoRespuesta = textoRespuesta.replace(/<guia>[\s\S]*?<\/guia>/, '').trim();
+      }
+
+      if (textoRespuesta) _alejandraAñadirMensaje(textoRespuesta, 'bot');
+
+      if (planDetectado) _alejandraOfrecerPlan(planDetectado);
+      if (guiaDetectada) _alejandraOfrecerGuia(guiaDetectada);
+
+      if (data.busqueda_web) {
+        _alejandraAñadirMensaje('🔍 (resultado con búsqueda web)', 'bot-info');
+      }
+
+      if (data.requiere_confirmacion) {
+        _alejandraAñadirMensaje('⚠️ Esta acción requiere tu confirmación', 'bot-warning');
+      }
+
+      alejandraHablar(textoRespuesta);
+
+    } catch (err) {
+      loadingDiv.remove();
+      toast('❌ Error: ' + err.message, 'err');
+      _alejandraAñadirMensaje('❌ Error al conectar con Alejandra', 'bot-error');
     }
-    const guiaMatch = textoRespuesta.match(/<guia>([\s\S]*?)<\/guia>/);
-    if (guiaMatch) {
-      try { guiaDetectada = JSON.parse(guiaMatch[1]); } catch (_) {}
-      textoRespuesta = textoRespuesta.replace(/<guia>[\s\S]*?<\/guia>/, '').trim();
-    }
-
-    if (textoRespuesta) _alejandraAñadirMensaje(textoRespuesta, 'bot');
-
-    // Mostrar plan ejecutable con botón de confirmación
-    if (planDetectado) {
-      _alejandraOfrecerPlan(planDetectado);
-    }
-
-    // Mostrar guía paso a paso
-    if (guiaDetectada) {
-      _alejandraOfrecerGuia(guiaDetectada);
-    }
-
-    if (data.busqueda_web) {
-      _alejandraAñadirMensaje('🔍 (resultado con búsqueda web)', 'bot-info');
-    }
-
-    if (data.requiere_confirmacion) {
-      _alejandraAñadirMensaje('⚠️ Esta acción requiere tu confirmación', 'bot-warning');
-    }
-
-    alejandraHablar(textoRespuesta);
-
-  } catch (err) {
-    const list = document.getElementById('alejandraList');
-    if (list?.lastChild?.dataset?.loading) list.lastChild.remove();
-    toast('❌ Error: ' + err.message, 'err');
-    _alejandraAñadirMensaje('❌ Error al conectar con Alejandra', 'bot-error');
-    if (input) input.value = msg;
-  }
+  })();
 }
 
-function _alejandraAñadirMensaje(texto, tipo = 'user', isLoading = false) {
+function _alejandraAñadirMensaje(texto, tipo = 'user', isLoading = false, skipSave = false) {
   const list = document.getElementById('alejandraList');
   if (!list) return;
 
   const div = document.createElement('div');
   div.style.cssText = `display:flex;flex-direction:column;align-items:${tipo === 'user' ? 'flex-end' : 'flex-start'};margin-bottom:8px`;
+  div.dataset.aleMsg = '1';
 
   const colores = {
     user:        ['#8b5cf6',        '#fff'],
@@ -15284,6 +15315,12 @@ function _alejandraAñadirMensaje(texto, tipo = 'user', isLoading = false) {
   if (isLoading) div.dataset.loading = '1';
   list.appendChild(div);
   list.scrollTop = list.scrollHeight;
+
+  // Persistir en localStorage (no guardar loading ni errores efímeros)
+  if (!isLoading && !skipSave && tipo !== 'bot-error') {
+    _alejandraPanelHist.push({ texto, tipo });
+    _alejandraPersistir();
+  }
 }
 
 // ── Contexto de pantalla para Alejandra ──────────────────────────────────────
