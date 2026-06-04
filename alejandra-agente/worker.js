@@ -1095,7 +1095,16 @@ export default {
       if (path.startsWith('/conocimiento')) {
         const adminToken = req.headers.get('Authorization')?.replace('Bearer ', '')
           || req.headers.get('X-Token');
-        if (!(await verificarAdminToken(env, adminToken))) return json({ error: 'No autorizado' }, 403);
+        let autorizado = await verificarAdminToken(env, adminToken);
+        if (!autorizado && adminToken) {
+          // Aceptar token de sesión de superadmin/desarrollador (DB compartida con el worker de login).
+          // Permite gestionar el conocimiento desde la app sin canjear antes el ADMIN_TOKEN.
+          const sesion = await env.DB.prepare(
+            "SELECT 1 FROM sesiones WHERE token = ? AND rol IN ('superadmin','desarrollador') LIMIT 1"
+          ).bind(adminToken).first().catch(() => null);
+          autorizado = !!sesion;
+        }
+        if (!autorizado) return json({ error: 'No autorizado' }, 403);
         await ensureNewTables(env).catch(() => {});
 
         // GET /conocimiento — lista entradas activas
