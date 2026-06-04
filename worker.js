@@ -9122,7 +9122,6 @@ async function googleCheckNonce(request, env) {
   // Borrar nonce usado (one-time)
   await env.DB.prepare('DELETE FROM auth_nonces WHERE nonce = ?').bind(nonce).run().catch(() => {});
   try { return json(JSON.parse(row.result)); } catch { return json({ error: 'Resultado inválido' }, 500); }
->>>>>>> 104320d (fix: chat Anthropic 400 + Google login polling con nonce)
 }
 
 async function crearInvitacion(request, env) {
