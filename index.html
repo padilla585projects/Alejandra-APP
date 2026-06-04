@@ -672,7 +672,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
       <button onclick="document.getElementById('alejandraFile').click()" title="Adjuntar archivo o foto"
         style="width:44px;height:44px;padding:0;border-radius:12px;flex-shrink:0;font-size:20px;background:var(--surface2);border:1px solid var(--border);cursor:pointer;line-height:1">📎</button>
       <input type="file" id="alejandraFile" multiple accept="image/*,application/pdf,.xlsx,.csv,.txt,.json,.dwg,.dxf" style="display:none" onchange="alejandraSubirAdjuntos(event)">
-      <textarea id="alejandraInput" placeholder="Escribe a Alejandra..." rows="1"
+      <textarea id="alejandraInput" placeholder="Mensaje" rows="1"
         style="flex:1;background:var(--surface2);border:1px solid #8b5cf6;border-radius:12px;padding:10px 14px;font-size:14px;color:var(--text);resize:none;line-height:1.4;max-height:100px;outline:none"
         onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();alejandraEnviar()}"
         oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,100)+'px'"></textarea>
@@ -3195,7 +3195,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
   <div id="iaMessages"></div>
   <div id="iaAdjuntos" style="display:none;padding:6px 12px;flex-wrap:wrap;gap:6px;border-top:1px solid var(--border)"></div>
   <div class="ia-input-row">
-    <textarea id="iaInput" placeholder="Escribe a Alejandra..." rows="1" onkeydown="iaKeydown(event)"></textarea>
+    <textarea id="iaInput" placeholder="Mensaje" rows="1" onkeydown="iaKeydown(event)"></textarea>
     <button onclick="document.getElementById('iaFileInput').click()" title="Adjuntar archivo o foto" class="ia-mic-btn" style="font-size:18px">📎</button>
     <input type="file" id="iaFileInput" multiple accept="image/*,application/pdf,.xlsx,.csv,.txt,.json,.dwg,.dxf" style="display:none" onchange="iaSubirAdjuntos(event)">
     <button class="ia-mic-btn" id="iaMicBtn" onclick="iaToggleVoice()" title="Hablar con Alejandra">🎤</button>
@@ -10249,7 +10249,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '6.17';
+const APP_VERSION = '6.18';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
