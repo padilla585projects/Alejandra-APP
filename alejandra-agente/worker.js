@@ -342,6 +342,99 @@ CUÁNDO USAR ESTAS HERRAMIENTAS:
 - Alertas automáticas → configurar_alerta
 - "Expórtame los datos de X" → exportar_datos`,
 
+  inteligencia_negocio: `INTELIGENCIA DE NEGOCIO — Eres la directora técnica virtual de la empresa. No solo respondes preguntas: ANTICIPAS problemas y OPTIMIZAS operaciones.
+
+MATERIALES Y STOCK:
+- Monitoriza bobinas/stock. Si una bobina baja del 15%, calcula días restantes según consumo reciente y avisa ANTES de que se agote.
+- Cuando entre un albarán, crúzalo con el pedido original. Reporta discrepancias.
+- Compara precios entre proveedores y entre pedidos históricos. Alerta si un precio sube >10%.
+- Sugiere reposiciones: "Según consumo semanal, necesitarás pedir más cable X antes del viernes."
+
+COSTES Y PRESUPUESTOS:
+- Rastrea gastos vs presupuesto por obra. Alerta cuando una partida supere el 80%.
+- Identifica desviaciones: "La partida de cable va un 20% por encima. Causa probable: 3 cambios de trazado."
+- Compara costes entre obras similares para detectar ineficiencias.
+
+PERSONAL Y FICHAJES:
+- Controla quién ficha y quién no. Detecta patrones (retrasos frecuentes, horas extra excesivas).
+- Sugiere reasignaciones: "Pedro terminó en obra A. Juan necesita refuerzo en obra B."
+- Genera partes de trabajo a partir de fichajes + materiales usados en el día.
+
+EQUIPOS:
+- Alerta de revisiones vencidas o próximas a vencer (PEMPs, carretillas, herramienta certificada).
+- Rastrea uso por obra para optimizar asignación.
+
+PREDICCIONES:
+- Estima fecha de fin de obra basándote en ritmo de trabajo y materiales pendientes.
+- Predice necesidades de material a 1-2 semanas vista.
+- Detecta riesgos: operarios insuficientes, materiales que se agotan, equipos que caducan.
+
+INFORMES AUTOMÁTICOS (el cron te da los datos, tú generas el informe):
+- Briefing matutino (7-8am): obras activas, personal esperado, materiales críticos, pendientes.
+- Resumen diario (18pm): qué se hizo, incidencias, estado de obras.
+- Resumen semanal (lunes): semana pasada vs plan, métricas clave, tendencias.
+- Resumen mensual (día 1): cierre de mes, costes totales, horas, productividad.
+
+DUPLICADOS Y ANOMALÍAS:
+- Facturas con mismo proveedor+importe+fecha → posible duplicado, pregunta antes de registrar.
+- Fichajes imposibles (2 obras a la vez, fichaje a las 3am).
+- Materiales registrados sin obra asignada.
+
+UMBRALES DE ACCIÓN:
+- Stock <15% → avisa al responsable + sugiere pedido con cantidad estimada.
+- Presupuesto >80% en una partida → avisa al admin con desglose.
+- Operario sin fichar >2h después de hora habitual → push al encargado.
+- Equipo a <5 días de vencer revisión → avisa antes de que caduque.
+- Factura posiblemente duplicada → pregunta, no registres automáticamente.
+
+TONO: Eres una compañera de oficina técnica eficiente. No alarmes sin datos. Cuando avises, da contexto + datos + sugerencia concreta. "La bobina X tiene para 3 días. ¿Pido 500m a Prysmian como la última vez?" es mejor que "Stock bajo".`,
+
+  asistente_escaneo: `ASISTENTE DE ESCANEO Y REGISTRO DE DATOS — Cuando el usuario suba un documento (foto, PDF, Excel, imagen) para REGISTRAR DATOS en la app (bobinas, fichajes, facturas, albaranes, listados de material, inventario, partes de trabajo, recepción de mercancía, mediciones…), sigue este flujo OBLIGATORIO:
+
+PASO 1 — EXTRAE: Analiza el documento con la herramienta adecuada (analizar_foto_obra, analizar_archivo, o visión directa). Extrae TODOS los datos relevantes: referencias, cantidades, fechas, importes, nombres, etc.
+
+PASO 2 — PRESENTA: Muestra los datos extraídos al usuario de forma organizada (tabla o lista clara).
+  - Si algo no se lee bien o es ambiguo, señálalo: "La 3a referencia no se lee claro, ¿es NYY 3x2.5 o 3x4?"
+  - Si detectas posibles errores o incoherencias, avisa: "Este precio (850€/m) parece alto para ese cable, ¿es correcto?"
+  - Si faltan datos obligatorios (obra, proveedor, fecha…), pregúntalos.
+  - Sugiere mejoras: "Veo que no tiene proveedor, ¿lo añado?"
+
+PASO 3 — PREGUNTA: "¿Está todo bien? ¿Quieres que modifique o añada algo antes de guardarlo?"
+
+PASO 4 — ESPERA: NO hagas INSERT/escribir_bd hasta que el usuario confirme explícitamente ("sí", "dale", "guárdalo", "ok", "correcto", o similar). Si el usuario pide cambios, modifica y vuelve a presentar.
+
+PASO 5 — INSERTA: Tras confirmación, usa escribir_bd para cada registro. Confirma brevemente qué se guardó: "Guardadas 12 bobinas en la obra Centro Comercial."
+
+EXCEPCIONES — Este flujo NO aplica cuando:
+- El usuario solo pregunta sobre el contenido de un documento ("¿qué dice este PDF?", "¿qué sale en la foto?") → responde directamente.
+- Es una foto de obra para análisis técnico ("revisa esta instalación") → usa analizar_foto_obra y responde sin flujo de confirmación.
+- El usuario pide explícitamente que lo meta directo ("mételo sin más", "guárdalo directamente") → respétalo.
+
+IMPORTANTE: Este flujo complementa la proactividad — sigues siendo resolutiva y autónoma para RESOLVER PROBLEMAS. Pero para REGISTRAR DATOS nuevos desde documentos, el usuario es quien valida antes de que toquen la BD.`,
+
+  seguimiento_proactivo: `SEGUIMIENTO PROACTIVO — No dejes cabos sueltos. Cuando detectes algo que necesita seguimiento:
+
+CREAR TAREA:
+  escribir_bd("INSERT INTO tareas_alejandra (titulo, descripcion, tipo, prioridad, asignado_a, obra_id, proximo_recordatorio) VALUES (?, ?, ?, ?, ?, ?, datetime('now', '+4 hours'))", [...])
+Tipos: 'pedido_material', 'revision_equipo', 'fichaje_pendiente', 'factura_revisar', 'incidencia', 'recordatorio', 'seguimiento'
+Prioridades: 'urgente', 'alta', 'normal', 'baja'
+
+CUÁNDO CREAR TAREAS:
+- Pides un dato al usuario y no contesta → tarea de seguimiento
+- Detectas stock que se va a agotar → tarea de pedido con fecha límite
+- Un equipo necesita revisión pronto → tarea de revisión
+- Una factura parece duplicada → tarea de revisión
+- El usuario dice "luego lo miro" → tarea recordatorio
+- Cualquier cosa que necesite acción futura
+
+CERRAR TAREAS:
+  escribir_bd("UPDATE tareas_alejandra SET estado='resuelta', resuelto_at=datetime('now') WHERE id=?", [id])
+Cierra cuando: el usuario confirma que está hecho, detectas que ya se resolvió, o ya no aplica.
+
+El CRON revisa tus tareas cada hora y te las recuerda. Si una tarea llega a max_recordatorios sin resolverse, escala a Adrián.
+
+NUNCA olvides un pendiente. Si alguien te dice "pide cable mañana", crea la tarea AHORA con proximo_recordatorio para mañana.`,
+
   proactividad_real: `MODO AGENTE AUTÓNOMO — Actúa como un ingeniero senior de guardia. No eres soporte L1 que lee un guión. Eres L3: investigas, resuelves, y solo escalas lo que no puedes arreglar.
 
 PRINCIPIOS:
@@ -416,12 +509,12 @@ Si el error ya existe en la tabla, actualiza el contador:
 // Perfiles de experto
 const NEXUS_EXPERTS = {
   simple:   { model: MODEL_EXPERTO, maxTokens: 600,  modules: ['base', 'contexto_sesion', 'formato'] },
-  app:      { model: MODEL_EXPERTO, maxTokens: 4096, modules: ['base', 'app', 'ram', 'proactividad_real', 'aprendizaje_proactivo', 'contexto_sesion', 'formato'] },
-  tecnico:  { model: MODEL_EXPERTO, maxTokens: 1024, modules: ['base', 'app', 'tecnica', 'nexus', 'ram', 'proactividad_real', 'aprendizaje_proactivo', 'razonamiento', 'contexto_sesion', 'formato'] },
+  app:      { model: MODEL_EXPERTO, maxTokens: 4096, modules: ['base', 'app', 'ram', 'inteligencia_negocio', 'seguimiento_proactivo', 'asistente_escaneo', 'proactividad_real', 'aprendizaje_proactivo', 'contexto_sesion', 'formato'] },
+  tecnico:  { model: MODEL_EXPERTO, maxTokens: 1024, modules: ['base', 'app', 'tecnica', 'nexus', 'ram', 'inteligencia_negocio', 'seguimiento_proactivo', 'asistente_escaneo', 'proactividad_real', 'aprendizaje_proactivo', 'razonamiento', 'contexto_sesion', 'formato'] },
   web:      { model: MODEL_EXPERTO, maxTokens: 1024, modules: ['base', 'app', 'web', 'aprendizaje_proactivo', 'contexto_sesion', 'formato'] },
-  reflexion:{ model: MODEL_EXPERTO, maxTokens: 2048, modules: ['base', 'app', 'tecnica', 'nexus', 'ram', 'evolucion', 'reflexion', 'decision', 'aprendizaje_proactivo', 'razonamiento', 'contexto_sesion', 'formato'] },
-  completo:   { model: MODEL_EXPERTO, maxTokens: 1024, modules: ['base', 'app', 'tecnica', 'nexus', 'ram', 'evolucion', 'web', 'capacidades_avanzadas', 'aprendizaje_proactivo', 'razonamiento', 'contexto_sesion', 'formato'] },
-  ingenieria: { model: MODEL_EXPERTO, maxTokens: 2048, modules: ['base', 'app', 'ingenieria', 'ram', 'capacidades_avanzadas', 'aprendizaje_proactivo', 'razonamiento', 'contexto_sesion', 'formato'] }
+  reflexion:{ model: MODEL_EXPERTO, maxTokens: 2048, modules: ['base', 'app', 'tecnica', 'nexus', 'ram', 'evolucion', 'reflexion', 'decision', 'inteligencia_negocio', 'seguimiento_proactivo', 'asistente_escaneo', 'aprendizaje_proactivo', 'razonamiento', 'contexto_sesion', 'formato'] },
+  completo:   { model: MODEL_EXPERTO, maxTokens: 1024, modules: ['base', 'app', 'tecnica', 'nexus', 'ram', 'evolucion', 'web', 'capacidades_avanzadas', 'inteligencia_negocio', 'seguimiento_proactivo', 'asistente_escaneo', 'aprendizaje_proactivo', 'razonamiento', 'contexto_sesion', 'formato'] },
+  ingenieria: { model: MODEL_EXPERTO, maxTokens: 2048, modules: ['base', 'app', 'ingenieria', 'ram', 'capacidades_avanzadas', 'inteligencia_negocio', 'seguimiento_proactivo', 'asistente_escaneo', 'aprendizaje_proactivo', 'razonamiento', 'contexto_sesion', 'formato'] }
 };
 
 // Módulos estáticos (L0) — se cachean siempre, nunca cambian entre turnos
@@ -1448,6 +1541,129 @@ export default {
         return json({ result: respuesta.texto });
       }
 
+      // ══════════════════════════════════════════════════════════════════════
+      // ── SYNC API — Sincronización en tiempo real app ↔ office ─────────
+      // ══════════════════════════════════════════════════════════════════════
+
+      // ── Helper auth para sync (Bearer token → sesion con usuario_id/empresa_id) ──
+      async function getAuth(request, environment) {
+        const authHeader = request.headers.get('Authorization') || '';
+        const token = authHeader.replace('Bearer ', '').trim();
+        if (!token) return null;
+        // Probar admin token primero
+        if (environment.ADMIN_TOKEN && token === environment.ADMIN_TOKEN) {
+          return { usuario_id: 'adrian', empresa_id: 'default' };
+        }
+        // Probar tokens de usuario en BD
+        try {
+          const row = await environment.DB.prepare(
+            `SELECT t.id, COALESCE(t.usuario_id, 'adrian') as usuario_id, COALESCE(t.empresa_id, 'default') as empresa_id
+             FROM alejandra_tokens t WHERE t.token = ? AND t.activo = 1`
+          ).bind(token).first();
+          if (row) return { usuario_id: row.usuario_id, empresa_id: row.empresa_id };
+        } catch {}
+        // Probar como usuario Google OAuth (tabla usuarios)
+        try {
+          const user = await environment.DB.prepare(
+            `SELECT id, empresa_id FROM usuarios WHERE token_sesion = ? AND activo = 1`
+          ).bind(token).first();
+          if (user) return { usuario_id: user.id, empresa_id: user.empresa_id || 'default' };
+        } catch {}
+        return null;
+      }
+
+      // POST /api/sync/evento — El móvil (o web) empuja un evento
+      if (path === '/api/sync/evento' && req.method === 'POST') {
+        const sesion = await getAuth(req, env);
+        if (!sesion) return json({ error: 'No autorizado' }, 401);
+        const body = await req.json().catch(() => ({}));
+        const { tipo, datos, archivo_key, origen } = body;
+        if (!tipo) return json({ error: 'tipo requerido' }, 400);
+
+        await ensureNewTables(env).catch(() => {});
+        const r = await env.DB.prepare(
+          `INSERT INTO sync_eventos (usuario_id, empresa_id, tipo, origen, datos, archivo_key) VALUES (?,?,?,?,?,?)`
+        ).bind(sesion.usuario_id, sesion.empresa_id, tipo, origen || 'app', JSON.stringify(datos || {}), archivo_key || null).run();
+        const eventoId = r.meta?.last_row_id;
+
+        // Si es un escaneo y hay archivo, procesar con Alejandra en background
+        if (tipo === 'scan' && archivo_key) {
+          const prompt = `[SYNC] El usuario ha escaneado un documento desde ${origen || 'app'}.
+Tipo: ${datos?.subtipo || 'documento'}
+Contexto: ${datos?.contexto || 'sin contexto'}
+Archivo: ${archivo_key}
+Pantalla: ${datos?.pantalla || 'desconocida'}
+
+Analiza el archivo con ver_archivo o analizar_foto_obra/analizar_archivo según el tipo.
+Extrae los datos, preséntalos organizados, y guarda el resultado como evento de respuesta.
+Usa escribir_bd("INSERT INTO sync_eventos (usuario_id, empresa_id, tipo, origen, datos) VALUES (?, ?, 'scan_resultado', 'alejandra', ?)", [usuario_id, empresa_id, JSON.stringify({evento_origen: ${eventoId}, ...datos_extraidos})]).
+Así el otro dispositivo recibe tu análisis.`;
+          const ctx = await obtenerContextoChat(env, sesion.usuario_id, 'sync', 4);
+          // Fire-and-forget (no bloquea la respuesta al cliente)
+          const timeout = new Promise(r => setTimeout(() => r(null), 22000));
+          Promise.race([procesarConNEXUS(env, prompt, ctx, sesion.usuario_id, 'sync'), timeout]).catch(() => {});
+        }
+
+        return json({ ok: true, evento_id: eventoId });
+      }
+
+      // GET /api/sync/eventos — Polling de eventos nuevos
+      if (path === '/api/sync/eventos' && req.method === 'GET') {
+        const sesion = await getAuth(req, env);
+        if (!sesion) return json({ error: 'No autorizado' }, 401);
+        await ensureNewTables(env).catch(() => {});
+        const desde = url.searchParams.get('desde') || new Date(Date.now() - 300000).toISOString(); // últimos 5 min por defecto
+        const excluir_origen = url.searchParams.get('excluir_origen') || ''; // para no recibir tus propios eventos
+        let query = `SELECT id, tipo, origen, datos, archivo_key, estado, created_at FROM sync_eventos
+          WHERE usuario_id = ? AND created_at > ? `;
+        const binds = [sesion.usuario_id, desde.replace('T', ' ').replace('Z', '')];
+        if (excluir_origen) {
+          query += ` AND origen != ? `;
+          binds.push(excluir_origen);
+        }
+        query += ` ORDER BY created_at ASC LIMIT 50`;
+        const rows = await env.DB.prepare(query).bind(...binds).all();
+        // Marcar como vistos
+        if ((rows.results || []).length > 0) {
+          const ids = rows.results.map(r => r.id);
+          await env.DB.prepare(`UPDATE sync_eventos SET estado='visto' WHERE id IN (${ids.join(',')})`).run().catch(() => {});
+        }
+        return json({ eventos: rows.results || [], servidor: new Date().toISOString() });
+      }
+
+      // POST /api/sync/ping — Registrar presencia de dispositivo
+      if (path === '/api/sync/ping' && req.method === 'POST') {
+        const sesion = await getAuth(req, env);
+        if (!sesion) return json({ error: 'No autorizado' }, 401);
+        await ensureNewTables(env).catch(() => {});
+        const body = await req.json().catch(() => ({}));
+        const tipo = body.tipo || 'desconocido'; // 'app', 'office', 'tablet'
+        const nombre = body.nombre || tipo;
+        await env.DB.prepare(
+          `INSERT INTO sync_dispositivos (usuario_id, empresa_id, tipo, nombre, ultimo_ping)
+           VALUES (?,?,?,?,datetime('now'))
+           ON CONFLICT(usuario_id, tipo) DO UPDATE SET ultimo_ping=datetime('now'), activo=1, nombre=?`
+        ).bind(sesion.usuario_id, sesion.empresa_id, tipo, nombre, nombre).run().catch(() => {});
+        // Devolver dispositivos activos del mismo usuario (últimos 5 min)
+        const dispositivos = await env.DB.prepare(
+          `SELECT tipo, nombre, ultimo_ping FROM sync_dispositivos
+           WHERE usuario_id = ? AND activo = 1 AND ultimo_ping >= datetime('now', '-5 minutes')`
+        ).bind(sesion.usuario_id).all().catch(() => ({results:[]}));
+        return json({ ok: true, dispositivos: dispositivos.results || [] });
+      }
+
+      // GET /api/sync/dispositivos — Ver qué dispositivos están conectados
+      if (path === '/api/sync/dispositivos' && req.method === 'GET') {
+        const sesion = await getAuth(req, env);
+        if (!sesion) return json({ error: 'No autorizado' }, 401);
+        await ensureNewTables(env).catch(() => {});
+        const dispositivos = await env.DB.prepare(
+          `SELECT tipo, nombre, ultimo_ping FROM sync_dispositivos
+           WHERE usuario_id = ? AND activo = 1 AND ultimo_ping >= datetime('now', '-5 minutes')`
+        ).bind(sesion.usuario_id).all().catch(() => ({results:[]}));
+        return json({ dispositivos: dispositivos.results || [] });
+      }
+
       // ── Versión APK móvil (OTA) ───────────────────────────────────────────
       if (path === '/version' && req.method === 'GET') {
         const obj = await env.FILES.get('ota/version.json');
@@ -1623,6 +1839,124 @@ export default {
         }
       } catch (_) {}
 
+      // ── INTELIGENCIA DE NEGOCIO (datos para briefings y monitorización) ──
+      let negocio = {};
+      try {
+        const [obrasActivas, bobinasStock, fichajesHoy, equiposRevision, gastosRecientes, incidenciasAbiertas, personalActivo, materialesObra] = await Promise.all([
+          env.DB.prepare(`SELECT id, nombre FROM obras WHERE estado IN ('activa','en_curso','abierta') LIMIT 20`).all().catch(() => ({results:[]})),
+          env.DB.prepare(`SELECT nombre, metros_restantes, metros_totales, ROUND(metros_restantes*100.0/metros_totales,1) as pct FROM bobinas WHERE metros_totales > 0 AND metros_restantes < (metros_totales * 0.20) AND metros_restantes > 0 ORDER BY pct ASC LIMIT 10`).all().catch(() => ({results:[]})),
+          env.DB.prepare(`SELECT f.tipo, p.nombre, f.hora FROM fichajes f LEFT JOIN personal p ON p.id = f.usuario_id WHERE date(f.fecha) = date('now') ORDER BY f.hora DESC LIMIT 30`).all().catch(() => ({results:[]})),
+          env.DB.prepare(`SELECT nombre, tipo, ultima_revision, CAST(julianday('now') - julianday(ultima_revision) AS INTEGER) as dias_sin FROM equipos WHERE ultima_revision IS NOT NULL AND julianday('now') - julianday(ultima_revision) > 25 LIMIT 10`).all().catch(() => ({results:[]})),
+          env.DB.prepare(`SELECT SUM(importe) as total, COUNT(*) as n FROM gastos WHERE fecha >= date('now', '-7 days')`).first().catch(() => ({total:0,n:0})),
+          env.DB.prepare(`SELECT COUNT(*) as n FROM incidencias WHERE estado IN ('abierta','pendiente')`).first().catch(() => ({n:0})),
+          env.DB.prepare(`SELECT COUNT(*) as n FROM personal WHERE activo = 1`).first().catch(() => ({n:0})),
+          env.DB.prepare(`SELECT obra_nombre, SUM(cantidad * precio_unitario) as coste_total, COUNT(*) as lineas FROM materiales_obra WHERE fecha >= date('now', '-7 days') GROUP BY obra_nombre LIMIT 10`).all().catch(() => ({results:[]}))
+        ]);
+        negocio = {
+          obras: obrasActivas.results || [],
+          bobinas_bajas: bobinasStock.results || [],
+          fichajes_hoy: fichajesHoy.results || [],
+          equipos_revision: equiposRevision.results || [],
+          gastos_semana: gastosRecientes,
+          incidencias: incidenciasAbiertas?.n || 0,
+          personal_activo: personalActivo?.n || 0,
+          materiales_semana: materialesObra.results || []
+        };
+      } catch (e) { console.error('[CRON] Business intelligence error:', e.message); }
+
+      // Determinar modo del cron según hora y día
+      const diaSemana = new Date().getDay(); // 0=Dom, 1=Lun
+      const diaDelMes = new Date().getDate();
+      let modoCron = 'normal';
+      if (diaDelMes === 1 && horaLocal >= 8 && horaLocal < 10) modoCron = 'mensual';
+      else if (diaSemana === 1 && horaLocal >= 7 && horaLocal < 9) modoCron = 'semanal';
+      else if (horaLocal >= 7 && horaLocal < 9) modoCron = 'briefing_matutino';
+      else if (horaLocal >= 17 && horaLocal < 19) modoCron = 'resumen_dia';
+      else if (horaLocal >= 21 && horaLocal < 23) modoCron = 'reflexion';
+
+      // ── PREDICCIÓN DE AGOTAMIENTO DE STOCK ──────────────────────────────
+      let prediccionesStock = [];
+      try {
+        const bobinasConConsumo = await env.DB.prepare(`
+          SELECT b.nombre, b.metros_restantes, b.metros_totales,
+            COALESCE(c.consumo_7d, 0) as consumo_7d
+          FROM bobinas b
+          LEFT JOIN (
+            SELECT material, SUM(cantidad) as consumo_7d
+            FROM consumo_historial
+            WHERE fecha >= date('now', '-7 days')
+            GROUP BY material
+          ) c ON LOWER(c.material) = LOWER(b.nombre)
+          WHERE b.metros_restantes > 0 AND b.metros_totales > 0
+        `).all().catch(() => ({results:[]}));
+        for (const b of (bobinasConConsumo.results || [])) {
+          const consumoDiario = b.consumo_7d > 0 ? b.consumo_7d / 7 : 0;
+          const pct = (b.metros_restantes / b.metros_totales * 100).toFixed(1);
+          if (consumoDiario > 0) {
+            const diasRestantes = Math.floor(b.metros_restantes / consumoDiario);
+            if (diasRestantes <= 7) {
+              prediccionesStock.push(`🔮 ${b.nombre}: ${b.metros_restantes}m (${pct}%), ~${consumoDiario.toFixed(1)}m/día → se agota en ~${diasRestantes} días`);
+            }
+          } else if (parseFloat(pct) < 15) {
+            prediccionesStock.push(`📉 ${b.nombre}: ${b.metros_restantes}m (${pct}%) — sin datos de consumo para predecir`);
+          }
+        }
+      } catch (e) { console.error('[CRON] Stock prediction error:', e.message); }
+
+      // ── DETECCIÓN DE ANOMALÍAS ──────────────────────────────────────────
+      let anomalias = [];
+      try {
+        const [fichajesDup, fichajesRaros, facturasDup] = await Promise.all([
+          env.DB.prepare(`SELECT p.nombre, f.tipo, f.fecha, f.hora, COUNT(*) as veces
+            FROM fichajes f LEFT JOIN personal p ON p.id=f.usuario_id
+            WHERE f.fecha>=date('now','-3 days') GROUP BY f.usuario_id,f.tipo,f.fecha,f.hora HAVING COUNT(*)>1 LIMIT 5
+          `).all().catch(() => ({results:[]})),
+          env.DB.prepare(`SELECT p.nombre, f.tipo, f.fecha, f.hora
+            FROM fichajes f LEFT JOIN personal p ON p.id=f.usuario_id
+            WHERE f.fecha>=date('now','-3 days')
+            AND (CAST(substr(f.hora,1,2) AS INTEGER)<5 OR CAST(substr(f.hora,1,2) AS INTEGER)>23) LIMIT 5
+          `).all().catch(() => ({results:[]})),
+          env.DB.prepare(`SELECT proveedor, importe, COUNT(*) as veces
+            FROM facturas WHERE fecha>=date('now','-30 days')
+            GROUP BY proveedor, importe HAVING COUNT(*)>1 LIMIT 5
+          `).all().catch(() => ({results:[]}))
+        ]);
+        for (const f of (fichajesDup.results||[])) anomalias.push(`🔄 Fichaje duplicado: ${f.nombre} (${f.tipo}) ${f.fecha} ${f.hora} — ${f.veces}x`);
+        for (const f of (fichajesRaros.results||[])) anomalias.push(`❓ Fichaje hora inusual: ${f.nombre} ${f.tipo} ${f.fecha} ${f.hora}`);
+        for (const f of (facturasDup.results||[])) anomalias.push(`⚠️ Posible factura duplicada: ${f.proveedor} ${f.importe}€ (${f.veces}x en 30 días)`);
+      } catch (e) { console.error('[CRON] Anomaly error:', e.message); }
+
+      // ── SEGUIMIENTO DE TAREAS PROACTIVAS ────────────────────────────────
+      let tareasPendientes = [];
+      try {
+        const tareas = await env.DB.prepare(`
+          SELECT id, titulo, prioridad, asignado_a, recordatorios_enviados, max_recordatorios
+          FROM tareas_alejandra WHERE estado='pendiente'
+          AND (proximo_recordatorio IS NULL OR proximo_recordatorio<=datetime('now'))
+          AND recordatorios_enviados < max_recordatorios
+          ORDER BY CASE prioridad WHEN 'urgente' THEN 0 WHEN 'alta' THEN 1 ELSE 2 END LIMIT 10
+        `).all().catch(() => ({results:[]}));
+        for (const t of (tareas.results||[])) {
+          tareasPendientes.push(`📌 [${t.prioridad}] ${t.titulo}${t.asignado_a ? ' → '+t.asignado_a : ''} (aviso ${t.recordatorios_enviados+1}/${t.max_recordatorios})`);
+          await env.DB.prepare(`UPDATE tareas_alejandra SET recordatorios_enviados=recordatorios_enviados+1, proximo_recordatorio=datetime('now','+4 hours') WHERE id=?`).bind(t.id).run().catch(()=>{});
+        }
+      } catch (e) { console.error('[CRON] Task tracking error:', e.message); }
+
+      // ── TENDENCIAS SEMANALES (mediodía) ─────────────────────────────────
+      let tendencias = [];
+      if (horaLocal >= 12 && horaLocal < 14) {
+        try {
+          const [gP, gE, fP, fE] = await Promise.all([
+            env.DB.prepare(`SELECT COALESCE(SUM(importe),0) as t FROM gastos WHERE fecha>=date('now','-14 days') AND fecha<date('now','-7 days')`).first().catch(()=>({t:0})),
+            env.DB.prepare(`SELECT COALESCE(SUM(importe),0) as t FROM gastos WHERE fecha>=date('now','-7 days')`).first().catch(()=>({t:0})),
+            env.DB.prepare(`SELECT COUNT(*) as n FROM fichajes WHERE fecha>=date('now','-14 days') AND fecha<date('now','-7 days')`).first().catch(()=>({n:0})),
+            env.DB.prepare(`SELECT COUNT(*) as n FROM fichajes WHERE fecha>=date('now','-7 days')`).first().catch(()=>({n:0}))
+          ]);
+          if (gP.t > 0) tendencias.push(`Gastos: ${((gE.t-gP.t)/gP.t*100).toFixed(0)}% vs sem. pasada (${gE.t.toFixed?.(0)||gE.t}€ vs ${gP.t.toFixed?.(0)||gP.t}€)`);
+          if (fP.n > 0) tendencias.push(`Fichajes: ${((fE.n-fP.n)/fP.n*100).toFixed(0)}% vs sem. pasada (${fE.n} vs ${fP.n})`);
+        } catch (e) { console.error('[CRON] Trends error:', e.message); }
+      }
+
       // ── DESTILACIÓN DE LEARNINGS (cada 6h: 0, 6, 12, 18) ────────────────
       if (horaLocal % 6 === 0) {
         try {
@@ -1694,36 +2028,110 @@ export default {
         }
       } catch (e) { console.error('[CRON] Compaction error:', e.message); }
 
-      // Construir prompt para que Alejandra decida qué hacer
-      const contextoHora = `Son las ${horaLocal}:00 (hora España). `;
-      const contextoUltimo = ultimoMsg
-        ? `Último mensaje del usuario (${ultimoMsg.created_at}): "${ultimoMsg.contenido?.substring(0, 100)}". `
-        : 'No hay mensajes recientes del usuario. ';
-      const contextoMemorias = (memoriasRecientes.results || []).length > 0
-        ? `Memorias importantes: ${memoriasRecientes.results.map(m => m.titulo).join(', ')}. `
-        : '';
-      const contextoCmdsPendientes = comandosPendientes.n > 0
-        ? `Hay ${comandosPendientes.n} comandos pendientes sin ejecutar. `
-        : '';
-      const contextoSalud = `SALUD DEL SISTEMA (última hora): ${salud.errores_ultima_hora || 0} errores, ${salud.fichajes_ultima_hora || 0} fichajes, ${salud.usuarios_activos || 0} usuarios activos, ${salud.respuestas_error || 0} respuestas con error. `;
-      const contextoPredicciones = predicciones.length > 0
-        ? `PREDICCIONES/ANOMALÍAS: ${predicciones.join('. ')}. `
-        : '';
+      // ── CONSTRUIR PROMPT INTELIGENTE SEGÚN HORA Y DATOS DE NEGOCIO ──────
+      const contextoHora = `Son las ${horaLocal}:00 (hora España). Modo: ${modoCron}.`;
 
-      const prompt = `[CRON PROACTIVO] ${contextoHora}${contextoUltimo}${contextoMemorias}${contextoCmdsPendientes}${contextoRecurrente}${contextoSalud}${contextoPredicciones}
+      // Datos base
+      const partes = [contextoHora];
+      if (ultimoMsg) partes.push(`Último msg usuario (${ultimoMsg.created_at}): "${ultimoMsg.contenido?.substring(0, 100)}"`);
+      if ((memoriasRecientes.results || []).length > 0) partes.push(`Memorias: ${memoriasRecientes.results.map(m => m.titulo).join(', ')}`);
+      if (comandosPendientes.n > 0) partes.push(`${comandosPendientes.n} comandos pendientes.`);
+      if (contextoRecurrente) partes.push(contextoRecurrente);
 
-Eres Alejandra en modo autónomo. Analiza el contexto y decide:
-1. ¿Hay algo útil que puedas hacer ahora? (avisar al usuario, revisar tareas, dar buenos días, etc.)
-2. Si NO hay nada relevante, simplemente responde "SIN_ACCION" y no hagas nada.
-3. Si SÍ hay algo, usa tus herramientas (iniciar_conversacion, memory_save, controlar_app, etc.)
-4. Si hay ANOMALÍAS o PREDICCIONES → investiga con consultar_bd y escala a Adrián si es grave.
+      // Salud del sistema
+      partes.push(`SALUD (1h): ${salud.errores_ultima_hora||0} errores, ${salud.fichajes_ultima_hora||0} fichajes, ${salud.usuarios_activos||0} usuarios, ${salud.respuestas_error||0} resp. error.`);
+      if (predicciones.length > 0) partes.push(`ANOMALÍAS: ${predicciones.join('. ')}`);
 
-Reglas:
+      // Datos de negocio
+      if (negocio.obras?.length > 0) partes.push(`OBRAS ACTIVAS (${negocio.obras.length}): ${negocio.obras.map(o => o.nombre).join(', ')}.`);
+      if (negocio.bobinas_bajas?.length > 0) partes.push(`⚠️ BOBINAS STOCK BAJO: ${negocio.bobinas_bajas.map(b => `${b.nombre} al ${b.pct}% (${b.metros_restantes}m de ${b.metros_totales}m)`).join('; ')}.`);
+      if (negocio.fichajes_hoy?.length > 0) {
+        const entradas = negocio.fichajes_hoy.filter(f => f.tipo === 'entrada');
+        partes.push(`FICHAJES HOY: ${entradas.length} entradas. ${entradas.slice(0,5).map(f => `${f.nombre} (${f.hora})`).join(', ')}${entradas.length > 5 ? '...' : ''}`);
+      } else if (horaLocal >= 8 && horaLocal <= 11) {
+        partes.push(`⚠️ FICHAJES HOY: ninguno registrado (${horaLocal}:00).`);
+      }
+      if (negocio.equipos_revision?.length > 0) partes.push(`⚠️ EQUIPOS REVISIÓN VENCIDA: ${negocio.equipos_revision.map(e => `${e.nombre} (${e.tipo}, ${e.dias_sin} días sin revisión)`).join('; ')}.`);
+      if (negocio.gastos_semana?.total > 0) partes.push(`GASTOS (7 días): ${negocio.gastos_semana.total?.toFixed?.(2) || negocio.gastos_semana.total}€ en ${negocio.gastos_semana.n} registros.`);
+      if (negocio.materiales_semana?.length > 0) partes.push(`MATERIALES (7 días): ${negocio.materiales_semana.map(m => `${m.obra_nombre}: ${m.coste_total?.toFixed?.(2)||0}€ (${m.lineas} líneas)`).join('; ')}.`);
+      if (negocio.incidencias > 0) partes.push(`📋 ${negocio.incidencias} incidencias abiertas.`);
+      partes.push(`Personal activo: ${negocio.personal_activo || 0}.`);
+
+      // Predicciones de stock
+      if (prediccionesStock.length > 0) partes.push(`\n🔮 PREDICCIONES STOCK:\n${prediccionesStock.join('\n')}`);
+      // Anomalías detectadas
+      if (anomalias.length > 0) partes.push(`\n🚨 ANOMALÍAS DETECTADAS:\n${anomalias.join('\n')}`);
+      // Tareas proactivas pendientes
+      if (tareasPendientes.length > 0) partes.push(`\n📌 TAREAS PENDIENTES ALEJANDRA (${tareasPendientes.length}):\n${tareasPendientes.join('\n')}`);
+      // Tendencias
+      if (tendencias.length > 0) partes.push(`\n📈 TENDENCIAS:\n${tendencias.join('\n')}`);
+
+      // Instrucciones según modo
+      const instrucciones = {
+        briefing_matutino: `MODO BRIEFING MATUTINO — Genera un resumen de buenos días para el equipo. Incluye:
+- Estado de cada obra activa (personal asignado, materiales críticos)
+- Quién se espera hoy (basado en fichajes habituales)
+- Alertas urgentes (stock bajo, equipos por revisar, incidencias)
+- Tareas pendientes del día anterior
+Envía el briefing a Adrián con iniciar_conversacion. Máx 15 líneas, claro y accionable.`,
+
+        check_fichajes: `MODO CHECK FICHAJES — Revisa quién ha fichado y quién falta.
+- Si hay operarios activos que no han fichado y es >8:30, avisa al encargado.
+- Si detectas patrones anómalos (misma persona sin fichar 3+ días), escala.
+- No molestes por personal de oficina o roles que no fichan.`,
+
+        resumen_dia: `MODO RESUMEN DIARIO — Genera un resumen del día para Adrián:
+- Fichajes: quién ha trabajado, cuántas horas estimadas
+- Materiales: consumo del día, stock actualizado
+- Incidencias: resueltas y pendientes
+- Avances: qué se ha hecho en cada obra
+Envía con iniciar_conversacion. Conciso, con datos.`,
+
+        semanal: `MODO RESUMEN SEMANAL — Es lunes. Genera el informe de la semana pasada:
+- Horas totales por obra y persona
+- Gastos acumulados vs semana anterior
+- Materiales consumidos y stock actual
+- Incidencias resueltas vs abiertas
+- Tendencias: ¿vamos a ritmo? ¿algo se desvía?
+Usa consultar_bd para obtener datos de los últimos 7 días. Envía a Adrián.`,
+
+        mensual: `MODO RESUMEN MENSUAL — Primer día del mes. Cierre del mes anterior:
+- Costes totales por obra (materiales + horas + gastos)
+- Horas trabajadas por persona
+- Consumo de materiales principales
+- Incidencias del mes y tasa de resolución
+- Comparación con el mes anterior si hay datos
+Genera un informe completo con consultar_bd. Envía a Adrián.`,
+
+        reflexion: `MODO REFLEXIÓN NOCTURNA — Analiza el día:
+- ¿Qué aprendiste hoy? → memory_save si es relevante
+- ¿Hay patrones en los errores? → actualiza alejandra_errores
+- ¿Algún conocimiento nuevo para guardar?
+- ¿Tareas pendientes para mañana? → guarda en memoria`,
+
+        normal: `MODO MONITORIZACIÓN — Analiza los datos y decide:
+- Si hay stock bajo CRÍTICO (<10%) → avisa inmediatamente
+- Si hay equipos con revisión vencida → avisa al responsable
+- Si hay incidencias sin atender >24h → escala
+- Si hay anomalías en los datos → investiga con consultar_bd
+- Si no hay nada relevante → responde "SIN_ACCION"`
+      };
+
+      const prompt = `[CRON PROACTIVO] ${partes.join('\n')}
+
+${instrucciones[modoCron] || instrucciones.normal}
+
+REGLAS GENERALES:
 - No envíes mensajes vacíos o triviales. Solo actúa si hay algo genuinamente útil.
-- Buenos días solo entre 7:00-9:00 y solo si no has saludado hoy.
-- Por la noche (21:00-23:00) puedes hacer reflexión y guardar aprendizajes.
-- Si detectas tareas sin resolver del día, avisa.
-- Si hay anomalías de salud (muchos errores, nadie fichando en horario laboral), investiga Y avisa.`;
+- Buenos días solo en briefing_matutino y solo si no has saludado hoy (comprueba historial).
+- Si no hay datos suficientes en una tabla, no inventes — di "sin datos" y sigue.
+- Usa enviar_push para alertas urgentes al usuario del móvil.
+- Usa iniciar_conversacion para informes y avisos a Adrián.
+- ANOMALÍAS: si detectas fichajes duplicados, facturas duplicadas o datos imposibles → investiga con consultar_bd y avisa al responsable. Crea tarea en tareas_alejandra si requiere seguimiento.
+- PREDICCIONES STOCK: si un material se agota en <5 días → aviso URGENTE con sugerencia de pedido (cantidad basada en consumo medio).
+- TAREAS PENDIENTES: para cada tarea listada, decide si enviar recordatorio (push/chat) o si ya no aplica (márcala resuelta con escribir_bd).
+- TENDENCIAS: si los gastos suben >20% vs semana pasada, investiga y reporta. Si los fichajes bajan >30%, pregunta si hay obra parada.
+- Si NO hay nada que hacer, responde "SIN_ACCION" sin más.`;
 
       const contextoChat = await obtenerContextoChat(env, 'system', 'cron', 4);
       const respuesta = await procesarConNEXUS(env, prompt, contextoChat, 'system', 'cron');
@@ -1759,7 +2167,61 @@ async function ensureNewTables(env) {
     `CREATE TABLE IF NOT EXISTS alejandra_errores (id INTEGER PRIMARY KEY AUTOINCREMENT, error TEXT NOT NULL, causa TEXT, solucion TEXT, categoria TEXT, veces_visto INTEGER DEFAULT 1, ultimo_visto TEXT DEFAULT (datetime('now')), created_at TEXT DEFAULT (datetime('now')))`,
     `CREATE INDEX IF NOT EXISTS idx_alejandra_errores_error ON alejandra_errores(error)`,
     `CREATE TABLE IF NOT EXISTS alejandra_conocimiento (id INTEGER PRIMARY KEY AUTOINCREMENT, tipo TEXT NOT NULL, titulo TEXT NOT NULL, valor TEXT NOT NULL, descripcion TEXT, tags TEXT, creado_por TEXT, creado_at TEXT DEFAULT (datetime('now')), activo INTEGER DEFAULT 1)`,
-    `CREATE INDEX IF NOT EXISTS idx_conocimiento_activo ON alejandra_conocimiento(activo, tipo)`
+    `CREATE INDEX IF NOT EXISTS idx_conocimiento_activo ON alejandra_conocimiento(activo, tipo)`,
+    // Tareas proactivas de Alejandra — seguimiento de pendientes hasta resolución
+    `CREATE TABLE IF NOT EXISTS tareas_alejandra (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      titulo TEXT NOT NULL,
+      descripcion TEXT,
+      tipo TEXT DEFAULT 'recordatorio',
+      prioridad TEXT DEFAULT 'normal',
+      estado TEXT DEFAULT 'pendiente',
+      asignado_a TEXT,
+      obra_id INTEGER,
+      datos_extra TEXT,
+      recordatorios_enviados INTEGER DEFAULT 0,
+      max_recordatorios INTEGER DEFAULT 3,
+      proximo_recordatorio TEXT,
+      created_at TEXT DEFAULT (datetime('now')),
+      resuelto_at TEXT
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_tareas_estado ON tareas_alejandra(estado, proximo_recordatorio)`,
+    // Historial de consumo para predicciones
+    `CREATE TABLE IF NOT EXISTS consumo_historial (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      material TEXT NOT NULL,
+      referencia TEXT,
+      cantidad REAL NOT NULL,
+      obra_id INTEGER,
+      fecha TEXT DEFAULT (date('now')),
+      created_at TEXT DEFAULT (datetime('now'))
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_consumo_material ON consumo_historial(material, fecha)`,
+    // Sincronización en tiempo real entre dispositivos (app ↔ office)
+    `CREATE TABLE IF NOT EXISTS sync_eventos (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      usuario_id TEXT NOT NULL,
+      empresa_id TEXT,
+      tipo TEXT NOT NULL,
+      origen TEXT NOT NULL DEFAULT 'app',
+      datos TEXT,
+      archivo_key TEXT,
+      estado TEXT DEFAULT 'nuevo',
+      procesado_por TEXT,
+      created_at TEXT DEFAULT (datetime('now'))
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_sync_usuario ON sync_eventos(usuario_id, estado, created_at)`,
+    // Dispositivos conectados (presencia)
+    `CREATE TABLE IF NOT EXISTS sync_dispositivos (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      usuario_id TEXT NOT NULL,
+      empresa_id TEXT,
+      tipo TEXT NOT NULL,
+      nombre TEXT,
+      ultimo_ping TEXT DEFAULT (datetime('now')),
+      activo INTEGER DEFAULT 1,
+      UNIQUE(usuario_id, tipo)
+    )`
   ];
   for (const sql of migrations) {
     await env.DB.prepare(sql).run().catch(() => {});

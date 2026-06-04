@@ -78,6 +78,56 @@ a{color:var(--acc2);text-decoration:none}
 .b-yellow{background:rgba(245,158,11,.15);color:var(--yellow)}
 .b-red{background:rgba(239,68,68,.15);color:var(--red)}
 .b-blue{background:rgba(59,130,246,.15);color:var(--blue)}
+
+/* ── SYNC / REMOTE SCAN ── */
+#syncFab{position:fixed;bottom:80px;right:20px;z-index:500;display:none;flex-direction:column;gap:8px;align-items:flex-end}
+.fab-main{background:var(--acc);color:#fff;border:none;border-radius:50%;width:52px;height:52px;font-size:22px;box-shadow:0 4px 20px rgba(139,92,246,.5);transition:transform .2s,box-shadow .2s;position:relative}
+.fab-main:hover{transform:scale(1.08);box-shadow:0 6px 28px rgba(139,92,246,.7)}
+.fab-badge{position:absolute;top:-2px;right:-2px;background:var(--green);color:#fff;border-radius:50%;width:16px;height:16px;font-size:9px;display:flex;align-items:center;justify-content:center;font-weight:700;border:2px solid var(--bg)}
+.fab-badge.offline{background:var(--muted)}
+.fab-label{background:var(--surf);border:1px solid var(--border);border-radius:8px;padding:6px 12px;font-size:11px;color:var(--muted);white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,.3)}
+
+/* Scan modal */
+.scan-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;z-index:9999;animation:fadeIn .15s}
+.scan-modal{background:var(--surf);border:1px solid var(--border);border-radius:18px;padding:28px;width:92%;max-width:440px;text-align:center}
+.scan-modal h3{font-family:'Montserrat',sans-serif;font-weight:900;font-size:16px;margin-bottom:6px}
+.scan-modal .sub{color:var(--muted);font-size:12px;margin-bottom:20px}
+.scan-type-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:18px}
+.scan-type-btn{background:var(--surf2);border:1px solid var(--border);border-radius:12px;padding:14px 10px;cursor:pointer;transition:all .15s;text-align:center}
+.scan-type-btn:hover{border-color:var(--acc);background:rgba(139,92,246,.08)}
+.scan-type-btn.sel{border-color:var(--acc);background:rgba(139,92,246,.12);box-shadow:0 0 0 2px rgba(139,92,246,.3)}
+.scan-type-btn .ico{font-size:24px;display:block;margin-bottom:4px}
+.scan-type-btn .lbl{font-size:11px;font-weight:600;color:var(--text)}
+
+/* Waiting overlay */
+.scan-waiting{text-align:center;padding:30px 20px}
+.scan-waiting .spinner{width:48px;height:48px;border:3px solid var(--border);border-top-color:var(--acc);border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 16px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.scan-waiting .msg{font-size:14px;color:var(--text);font-weight:600;margin-bottom:4px}
+.scan-waiting .sub{font-size:12px;color:var(--muted)}
+
+/* Toast notifications */
+.toast-container{position:fixed;top:16px;right:16px;z-index:10000;display:flex;flex-direction:column;gap:8px;pointer-events:none}
+.toast{background:var(--surf);border:1px solid var(--acc);border-radius:12px;padding:12px 16px;display:flex;align-items:center;gap:10px;box-shadow:0 8px 32px rgba(0,0,0,.5);animation:slideInR .3s;pointer-events:auto;max-width:360px}
+.toast .t-icon{font-size:20px;flex-shrink:0}
+.toast .t-body{flex:1;font-size:12px;color:var(--text)}
+.toast .t-title{font-weight:700;font-size:13px;margin-bottom:2px}
+.toast .t-close{background:none;border:none;color:var(--muted);font-size:16px;cursor:pointer;padding:0 0 0 8px}
+@keyframes slideInR{from{transform:translateX(100%);opacity:0}to{transform:translateX(0);opacity:1}}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+
+/* Device status bar */
+.dev-bar{display:flex;align-items:center;gap:8px;padding:8px 14px;background:var(--surf);border:1px solid var(--border);border-radius:10px;margin-bottom:12px}
+.dev-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.dev-dot.on{background:var(--green);box-shadow:0 0 6px var(--green)}
+.dev-dot.off{background:var(--muted)}
+.dev-name{font-size:12px;color:var(--text);font-weight:600}
+.dev-ping{font-size:10px;color:var(--muted);margin-left:auto}
+
+/* Scan result card */
+.scan-result{background:var(--surf);border:1px solid var(--acc);border-radius:14px;padding:16px;margin-bottom:12px;animation:fadeIn .3s}
+.scan-result img{max-width:100%;border-radius:8px;margin:8px 0}
+.scan-result .sr-meta{font-size:11px;color:var(--muted);margin-top:6px}
 .b-muted{background:var(--surf2);color:var(--muted)}
 
 /* ── CHAT ── */
@@ -208,6 +258,18 @@ a{color:var(--acc2);text-decoration:none}
 </head>
 <body>
 
+<!-- Toast notifications -->
+<div class="toast-container" id="toastContainer"></div>
+
+<!-- Floating scan button -->
+<div id="syncFab">
+  <div class="fab-label" id="syncFabLabel">📱 Sin móvil conectado</div>
+  <button class="fab-main" onclick="abrirScanModal()" title="Escanear con el móvil">
+    📷
+    <span class="fab-badge offline" id="syncFabBadge">0</span>
+  </button>
+</div>
+
 <!-- ═══════════════ LOGIN ═══════════════ -->
 <div id="loginView">
   <div class="login-card">
@@ -285,6 +347,7 @@ const SECTIONS = [
   { id:'config',    icon:'⚙️',  label:'Config' },
   { id:'reflexion', icon:'🔄', label:'Reflexión' },
   { id:'seguridad', icon:'🔐', label:'Seguridad' },
+  { id:'dispositivos', icon:'📱', label:'Dispositivos' },
 ];
 
 let currentSection = 'chat';
@@ -438,6 +501,7 @@ function showApp() {
   buildNav();
   navigate('chat');
   fetchHealth();
+  iniciarSync();
 }
 
 // ═══════════════ NAV ════════════════════════════════════════
@@ -485,6 +549,7 @@ function navigate(id) {
     config:    initConfig,
     reflexion: initReflexion,
     seguridad: initSeguridad,
+    dispositivos: initDispositivos,
   }[id];
   if (fn) fn();
 }
@@ -562,6 +627,7 @@ function initChat() {
       <div id="chatAdjuntos" style="display:none;padding:6px 12px;flex-wrap:wrap;gap:6px;border-top:1px solid var(--border);background:var(--surf)"></div>
       <div class="chat-input-bar">
         <button id="vozBtn" class="chat-btn" onclick="toggleVoz()" title="Voz">🎙️</button>
+        <button class="chat-btn" onclick="abrirScanModal()" title="Escanear con el móvil" style="position:relative">📷<span id="chatScanDot" style="display:none;position:absolute;top:2px;right:2px;width:6px;height:6px;background:var(--green);border-radius:50%"></span></button>
         <button class="chat-btn" onclick="document.getElementById('chatFile').click()" title="Adjuntar archivo">📎</button>
         <input type="file" id="chatFile" multiple accept="image/*,application/pdf,.xlsx,.csv,.txt,.json,.dwg,.dxf" style="display:none" onchange="subirAdjuntos(event)">
         <textarea id="chatInput" class="chat-ta" rows="1" placeholder="Pregunta algo a Alejandra..."
@@ -1579,6 +1645,309 @@ async function revocarToken(id, nombre) {
     await adminFetch('/api/admin/tokens', 'DELETE', { id });
     initSeguridad();
   } catch(err) { alert('Error: '+err.message); }
+}
+
+// ═══════════════ SYNC / REMOTE SCAN ════════════════════════
+let _syncInterval = null;
+let _pingInterval = null;
+let _syncDesde = new Date().toISOString();
+let _dispositivosConectados = [];
+let _scanPendiente = null; // {id, tipo, ts}
+let _scanResultados = []; // últimos resultados recibidos
+
+function iniciarSync() {
+  // Ping: registrar este dispositivo (office/web) cada 30s
+  hacerPing();
+  _pingInterval = setInterval(hacerPing, 30000);
+  // Polling: buscar eventos nuevos cada 3s
+  _syncInterval = setInterval(pollEventos, 3000);
+  // Mostrar FAB
+  document.getElementById('syncFab').style.display = 'flex';
+}
+
+function detenerSync() {
+  clearInterval(_syncInterval); clearInterval(_pingInterval);
+  _syncInterval = null; _pingInterval = null;
+}
+
+async function hacerPing() {
+  try {
+    const r = await fetch(`${API}/api/sync/ping`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
+      body: JSON.stringify({ tipo: 'office', nombre: 'Alejandra Office' })
+    });
+    const d = await r.json();
+    _dispositivosConectados = d.dispositivos || [];
+    actualizarFabEstado();
+    actualizarSeccionDispositivos();
+  } catch {}
+}
+
+function actualizarFabEstado() {
+  const badge = document.getElementById('syncFabBadge');
+  const label = document.getElementById('syncFabLabel');
+  const moviles = _dispositivosConectados.filter(d => d.tipo === 'app');
+  if (moviles.length > 0) {
+    badge.textContent = moviles.length;
+    badge.className = 'fab-badge';
+    label.textContent = `📱 ${moviles[0].nombre || 'Móvil'} conectado`;
+  } else {
+    badge.textContent = '0';
+    badge.className = 'fab-badge offline';
+    label.textContent = '📱 Sin móvil conectado';
+  }
+  // Dot verde en el botón de cámara del chat
+  const chatDot = document.getElementById('chatScanDot');
+  if (chatDot) chatDot.style.display = moviles.length > 0 ? 'block' : 'none';
+}
+
+async function pollEventos() {
+  try {
+    const r = await fetch(`${API}/api/sync/eventos?desde=${encodeURIComponent(_syncDesde)}&excluir_origen=office`, {
+      headers: { Authorization: `Bearer ${adminToken}` }
+    });
+    const d = await r.json();
+    if (d.servidor) _syncDesde = d.servidor;
+    for (const ev of (d.eventos || [])) {
+      procesarEventoSync(ev);
+    }
+  } catch {}
+}
+
+function procesarEventoSync(ev) {
+  const datos = typeof ev.datos === 'string' ? JSON.parse(ev.datos || '{}') : (ev.datos || {});
+
+  if (ev.tipo === 'scan_resultado' || ev.tipo === 'foto_resultado') {
+    // ¡Resultado de escaneo!
+    _scanResultados.unshift({ ...ev, datos });
+    // Si estábamos esperando este scan
+    if (_scanPendiente) {
+      _scanPendiente = null;
+      cerrarScanModal();
+    }
+    // Toast
+    mostrarToast('📸 Escaneo recibido', datos.descripcion || 'Se ha recibido una foto del móvil', 'scan');
+    // Actualizar sección dispositivos si está abierta
+    actualizarSeccionDispositivos();
+  } else if (ev.tipo === 'scan_cancelado') {
+    if (_scanPendiente) {
+      _scanPendiente = null;
+      cerrarScanModal();
+      mostrarToast('❌ Escaneo cancelado', 'Se canceló desde el móvil', 'warn');
+    }
+  } else if (ev.tipo === 'sync_data') {
+    mostrarToast('🔄 Datos sincronizados', datos.descripcion || 'Nuevos datos desde el móvil', 'info');
+  }
+}
+
+// ── Scan Modal ──────────────────────────────────────
+let _scanTipoSel = 'documento';
+const SCAN_TIPOS = [
+  { id: 'documento',  ico: '📄', label: 'Documento' },
+  { id: 'factura',    ico: '🧾', label: 'Factura' },
+  { id: 'albaran',    ico: '📋', label: 'Albarán' },
+  { id: 'foto_obra',  ico: '🏗️', label: 'Foto de obra' },
+  { id: 'bobina',     ico: '🔌', label: 'Bobina / Material' },
+  { id: 'plano',      ico: '📐', label: 'Plano' },
+];
+
+function abrirScanModal() {
+  const moviles = _dispositivosConectados.filter(d => d.tipo === 'app');
+  if (moviles.length === 0) {
+    mostrarToast('📱 Sin móvil', 'No hay ningún teléfono conectado. Abre la app Alejandra IA en el móvil.', 'warn');
+    return;
+  }
+
+  // Si ya hay uno esperando, mostrar el waiting
+  if (_scanPendiente) {
+    return;
+  }
+
+  _scanTipoSel = 'documento';
+  const overlay = document.createElement('div');
+  overlay.className = 'scan-overlay';
+  overlay.id = 'scanOverlay';
+  overlay.innerHTML = `
+    <div class="scan-modal">
+      <h3>📷 Escanear con el móvil</h3>
+      <div class="sub">Se abrirá la cámara en <strong>${moviles[0].nombre || 'tu móvil'}</strong> automáticamente</div>
+      <div class="scan-type-grid" id="scanTipoGrid">
+        ${SCAN_TIPOS.map(t => `
+          <div class="scan-type-btn ${t.id === 'documento' ? 'sel' : ''}" onclick="selScanTipo('${t.id}', this)">
+            <span class="ico">${t.ico}</span>
+            <span class="lbl">${t.label}</span>
+          </div>
+        `).join('')}
+      </div>
+      <div style="margin-bottom:14px">
+        <input class="inp" id="scanContexto" placeholder="Contexto opcional (ej: obra Mercadona, nave 3...)">
+      </div>
+      <div style="display:flex;gap:8px">
+        <button onclick="cerrarScanModal()" style="flex:1;padding:10px;background:var(--surf2);border:1px solid var(--border);border-radius:10px;color:var(--muted);font-size:13px;cursor:pointer">Cancelar</button>
+        <button onclick="enviarScanRequest()" class="btn-acc" style="flex:2;padding:10px;font-size:13px">📷 Escanear</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  overlay.onclick = (e) => { if (e.target === overlay) cerrarScanModal(); };
+}
+
+function selScanTipo(tipo, el) {
+  _scanTipoSel = tipo;
+  document.querySelectorAll('#scanTipoGrid .scan-type-btn').forEach(b => b.classList.remove('sel'));
+  el.classList.add('sel');
+}
+
+function cerrarScanModal() {
+  const overlay = document.getElementById('scanOverlay');
+  if (overlay) overlay.remove();
+}
+
+async function enviarScanRequest() {
+  const contexto = document.getElementById('scanContexto')?.value || '';
+  // Cambiar modal a estado "esperando"
+  const modal = document.querySelector('#scanOverlay .scan-modal');
+  if (modal) {
+    modal.innerHTML = `
+      <div class="scan-waiting">
+        <div class="spinner"></div>
+        <div class="msg">Esperando al móvil...</div>
+        <div class="sub">La cámara se abrirá en tu teléfono automáticamente</div>
+        <div style="margin-top:16px;font-size:11px;color:var(--muted)">Tipo: ${SCAN_TIPOS.find(t=>t.id===_scanTipoSel)?.label || _scanTipoSel}</div>
+        ${contexto ? `<div style="font-size:11px;color:var(--muted)">Contexto: ${esc(contexto)}</div>` : ''}
+        <button onclick="cancelarScanRequest()" style="margin-top:20px;padding:8px 20px;background:var(--surf2);border:1px solid var(--border);border-radius:8px;color:var(--muted);font-size:12px;cursor:pointer">Cancelar</button>
+      </div>`;
+  }
+
+  try {
+    const r = await fetch(`${API}/api/sync/evento`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
+      body: JSON.stringify({
+        tipo: 'scan_request',
+        origen: 'office',
+        datos: {
+          subtipo: _scanTipoSel,
+          contexto: contexto,
+          solicitado_por: 'office',
+          timestamp: new Date().toISOString()
+        }
+      })
+    });
+    const d = await r.json();
+    if (d.ok) {
+      _scanPendiente = { id: d.evento_id, tipo: _scanTipoSel, ts: Date.now() };
+      // Timeout: 120s max esperando
+      setTimeout(() => {
+        if (_scanPendiente && _scanPendiente.ts === _scanPendiente.ts) {
+          _scanPendiente = null;
+          cerrarScanModal();
+          mostrarToast('⏰ Tiempo agotado', 'El móvil no respondió al escaneo', 'warn');
+        }
+      }, 120000);
+    }
+  } catch (e) {
+    cerrarScanModal();
+    mostrarToast('❌ Error', 'No se pudo enviar la solicitud: ' + e.message, 'error');
+  }
+}
+
+function cancelarScanRequest() {
+  _scanPendiente = null;
+  cerrarScanModal();
+  // Enviar evento de cancelación para que el móvil lo sepa
+  fetch(`${API}/api/sync/evento`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
+    body: JSON.stringify({ tipo: 'scan_cancel', origen: 'office', datos: {} })
+  }).catch(() => {});
+}
+
+// ── Toast ──────────────────────────────────────────
+function mostrarToast(titulo, mensaje, tipo = 'info') {
+  const iconos = { scan: '📸', warn: '⚠️', error: '❌', info: 'ℹ️', success: '✅' };
+  const container = document.getElementById('toastContainer');
+  const toast = document.createElement('div');
+  toast.className = 'toast';
+  toast.innerHTML = `
+    <span class="t-icon">${iconos[tipo] || 'ℹ️'}</span>
+    <div class="t-body"><div class="t-title">${esc(titulo)}</div>${esc(mensaje)}</div>
+    <button class="t-close" onclick="this.closest('.toast').remove()">×</button>`;
+  container.appendChild(toast);
+  setTimeout(() => { if (toast.parentElement) toast.remove(); }, 8000);
+}
+
+// ── Sección Dispositivos ──────────────────────────────
+function initDispositivos() {
+  const c = document.getElementById('content');
+  c.innerHTML = `
+    <div style="max-width:600px">
+      <div class="sec-title">Dispositivos conectados</div>
+      <div id="devList"><div style="color:var(--muted);font-size:12px">Buscando dispositivos...</div></div>
+
+      <div class="sec-title" style="margin-top:20px">Escaneo remoto</div>
+      <div class="card" style="margin-bottom:14px">
+        <div style="font-size:13px;color:var(--muted);line-height:1.6;margin-bottom:14px">
+          Usa el móvil como escáner sin tocarlo. Pulsa el botón y la cámara se abrirá automáticamente en tu teléfono. El resultado llega aquí en segundos.
+        </div>
+        <button class="btn-acc" onclick="abrirScanModal()" style="width:100%;font-size:14px;padding:14px">
+          📷 Escanear con el móvil
+        </button>
+      </div>
+
+      <div class="sec-title" style="margin-top:20px">Últimos escaneos recibidos</div>
+      <div id="scanResultsList">
+        ${_scanResultados.length === 0
+          ? '<div style="color:var(--muted);font-size:12px;text-align:center;padding:16px">Sin escaneos aún. Usa el botón de arriba o el 📷 flotante.</div>'
+          : _scanResultados.slice(0, 10).map(renderScanResult).join('')}
+      </div>
+    </div>`;
+  actualizarSeccionDispositivos();
+}
+
+function actualizarSeccionDispositivos() {
+  // Actualizar lista de dispositivos
+  const devList = document.getElementById('devList');
+  if (devList) {
+    if (_dispositivosConectados.length === 0) {
+      devList.innerHTML = `
+        <div class="dev-bar">
+          <div class="dev-dot off"></div>
+          <div class="dev-name" style="color:var(--muted)">Sin dispositivos</div>
+          <div class="dev-ping">Abre la app en el móvil para conectar</div>
+        </div>`;
+    } else {
+      devList.innerHTML = _dispositivosConectados.map(d => `
+        <div class="dev-bar">
+          <div class="dev-dot on"></div>
+          <div class="dev-name">${esc(d.nombre || d.tipo)}</div>
+          <span class="badge ${d.tipo === 'app' ? 'b-green' : 'b-acc'}">${d.tipo}</span>
+          <div class="dev-ping">${fmtDate(d.ultimo_ping)}</div>
+        </div>`).join('');
+    }
+  }
+
+  // Actualizar lista de resultados
+  const scanList = document.getElementById('scanResultsList');
+  if (scanList && _scanResultados.length > 0) {
+    scanList.innerHTML = _scanResultados.slice(0, 10).map(renderScanResult).join('');
+  }
+}
+
+function renderScanResult(ev) {
+  const d = ev.datos || {};
+  const tipoInfo = SCAN_TIPOS.find(t => t.id === d.subtipo) || { ico: '📄', label: d.subtipo || 'Documento' };
+  return `
+    <div class="scan-result">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+        <span style="font-size:18px">${tipoInfo.ico}</span>
+        <strong style="font-size:13px">${esc(tipoInfo.label)}</strong>
+        <span class="badge b-green" style="margin-left:auto">recibido</span>
+      </div>
+      ${d.descripcion ? `<div style="font-size:13px;color:var(--text);line-height:1.5">${esc(d.descripcion)}</div>` : ''}
+      ${ev.archivo_key ? `<div style="font-size:11px;color:var(--acc2);margin-top:4px">📎 ${esc(ev.archivo_key)}</div>` : ''}
+      <div class="sr-meta">${fmtDate(ev.created_at)} · desde ${esc(ev.origen || 'app')}</div>
+    </div>`;
 }
 
 // ═══════════════ HELPERS ════════════════════════════════════
