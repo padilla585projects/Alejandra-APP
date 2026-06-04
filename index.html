@@ -10297,7 +10297,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '6.23';
+const APP_VERSION = '6.24';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -15092,9 +15092,37 @@ function _alejandraPersistir() {
   } catch {}
 }
 
-function _alejandraRestaurarChat() {
+async function _alejandraRestaurarChat() {
   const list = document.getElementById('alejandraList');
   if (!list) return;
+  // 1. Intentar cargar desde servidor (fuente de verdad)
+  const s = typeof getSession === 'function' ? getSession() : null;
+  const uid = s?.usuario_id || s?.nombre || null;
+  if (uid) {
+    try {
+      const res = await fetch(`https://alejandra-agente.alejandra-app.workers.dev/api/chat/history?usuario_id=${encodeURIComponent(uid)}`);
+      const data = await res.json();
+      if (data.ok && data.mensajes && data.mensajes.length > 0) {
+        _alejandraPanelHist = data.mensajes.map(m => ({
+          texto: m.contenido,
+          tipo: m.rol === 'assistant' ? 'bot' : 'user',
+          time: m.created_at ? new Date(m.created_at + 'Z').toLocaleTimeString('es-ES', {hour:'2-digit',minute:'2-digit'}) : ''
+        }));
+        list.innerHTML = '';
+        for (const m of _alejandraPanelHist) {
+          const div = document.createElement('div');
+          div.className = 'ale-msg ' + m.tipo;
+          div.dataset.aleMsg = '1';
+          div.innerHTML = `<div class="ale-bubble">${_escHtml(m.texto)}</div><div class="ale-time">${m.time || ''}</div>`;
+          list.appendChild(div);
+        }
+        list.scrollTop = list.scrollHeight;
+        try { localStorage.setItem(ALEJANDRA_PANEL_HIST_KEY, JSON.stringify(_alejandraPanelHist)); } catch {}
+        return;
+      }
+    } catch {}
+  }
+  // 2. Fallback: localStorage
   try {
     const saved = JSON.parse(localStorage.getItem(ALEJANDRA_PANEL_HIST_KEY) || '[]');
     if (saved.length > 0) {
