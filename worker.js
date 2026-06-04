@@ -4590,6 +4590,11 @@ export default {
       // ── Historial chat IA (Alejandra) — sync entre dispositivos ──────────
       if (path === '/ia-chat-history' && method === 'GET') return await getIAChatHistory(request, env);
 
+      // ── Sync dispositivos / escaneo remoto ──────────────────────────────
+      if (path === '/sync/ping'    && method === 'POST') return await syncPing(request, env);
+      if (path === '/sync/evento'  && method === 'POST') return await syncCrearEvento(request, env);
+      if (path === '/sync/eventos' && method === 'GET')  return await syncGetEventos(request, env);
+
       // â"€â"€ Chat interno (NEW-08) â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
       if (path === '/chat' && method === 'GET')    return await getChatMensajes(request, env);
       if (path === '/chat' && method === 'POST')   return await enviarChatMensaje(request, env);
@@ -11280,6 +11285,89 @@ async function getIAChatHistory(request, env) {
       "SELECT rol, contenido, created_at FROM alejandra_historial WHERE (LOWER(usuario_id) = LOWER(?) OR LOWER(usuario_id) = LOWER(?)) AND rol IN ('user','assistant') ORDER BY created_at DESC LIMIT ?"
     ).bind(String(uid), nombre, limit).all();
     return json({ ok: true, mensajes: (rows.results || []).reverse() });
+  } catch (e) {
+    return json({ ok: false, error: e.message });
+  }
+}
+
+// ── Sync dispositivos / escaneo remoto ────────────────────────────────────
+async function syncPing(request, env) {
+  const s = await getAuth(request, env);
+  if (!s) return err('Sin permiso', 401);
+  try {
+    const body = await request.json();
+    const tipo = body.tipo || 'app';
+    const nombre = body.nombre || s.nombre || tipo;
+    const uid = String(s.usuario_id || s.nombre);
+    const empId = String(s.empresa_id || '');
+    // Upsert dispositivo
+    await env.DB.prepare(
+      `INSERT INTO sync_dispositivos (usuario_id, empresa_id, tipo, nombre, ultimo_ping, activo)
+       VALUES (?, ?, ?, ?, datetime('now'), 1)
+       ON CONFLICT(usuario_id, tipo) DO UPDATE SET nombre=excluded.nombre, ultimo_ping=datetime('now'), activo=1`
+    ).bind(uid, empId, tipo, nombre).run().catch(async () => {
+      // Si falla el upsert (sin unique constraint), intentar update + insert
+      const existing = await env.DB.prepare(
+        "SELECT id FROM sync_dispositivos WHERE usuario_id = ? AND tipo = ?"
+      ).bind(uid, tipo).first();
+      if (existing) {
+        await env.DB.prepare("UPDATE sync_dispositivos SET nombre=?, ultimo_ping=datetime('now'), activo=1 WHERE id=?")
+          .bind(nombre, existing.id).run();
+      } else {
+        await env.DB.prepare("INSERT INTO sync_dispositivos (usuario_id, empresa_id, tipo, nombre) VALUES (?,?,?,?)")
+          .bind(uid, empId, tipo, nombre).run();
+      }
+    });
+    // Marcar inactivos los que no pingen en 60s
+    await env.DB.prepare("UPDATE sync_dispositivos SET activo=0 WHERE ultimo_ping < datetime('now', '-60 seconds')").run();
+    // Devolver todos los activos de la misma empresa
+    const devs = await env.DB.prepare(
+      "SELECT tipo, nombre, ultimo_ping FROM sync_dispositivos WHERE activo=1 AND (empresa_id = ? OR usuario_id = ?) ORDER BY ultimo_ping DESC"
+    ).bind(empId, uid).all();
+    return json({ ok: true, dispositivos: devs.results || [] });
+  } catch (e) {
+    return json({ ok: false, error: e.message });
+  }
+}
+
+async function syncCrearEvento(request, env) {
+  const s = await getAuth(request, env);
+  if (!s) return err('Sin permiso', 401);
+  try {
+    const body = await request.json();
+    const tipo = body.tipo || 'sync_data';
+    const origen = body.origen || 'app';
+    const datos = JSON.stringify(body.datos || {});
+    const uid = String(s.usuario_id || s.nombre);
+    const empId = String(s.empresa_id || '');
+    const r = await env.DB.prepare(
+      "INSERT INTO sync_eventos (usuario_id, empresa_id, tipo, origen, datos) VALUES (?,?,?,?,?)"
+    ).bind(uid, empId, tipo, origen, datos).run();
+    return json({ ok: true, evento_id: r.meta?.last_row_id || null });
+  } catch (e) {
+    return json({ ok: false, error: e.message });
+  }
+}
+
+async function syncGetEventos(request, env) {
+  const s = await getAuth(request, env);
+  if (!s) return err('Sin permiso', 401);
+  try {
+    const url = new URL(request.url);
+    const desde = url.searchParams.get('desde') || new Date(Date.now() - 300000).toISOString();
+    const excluirOrigen = url.searchParams.get('excluir_origen') || '';
+    const uid = String(s.usuario_id || s.nombre);
+    const empId = String(s.empresa_id || '');
+    let q, params;
+    if (excluirOrigen) {
+      q = "SELECT id, tipo, origen, datos, archivo_key, created_at FROM sync_eventos WHERE (empresa_id = ? OR usuario_id = ?) AND created_at > ? AND origen != ? ORDER BY created_at ASC LIMIT 50";
+      params = [empId, uid, desde, excluirOrigen];
+    } else {
+      q = "SELECT id, tipo, origen, datos, archivo_key, created_at FROM sync_eventos WHERE (empresa_id = ? OR usuario_id = ?) AND created_at > ? ORDER BY created_at ASC LIMIT 50";
+      params = [empId, uid, desde];
+    }
+    const rows = await env.DB.prepare(q).bind(...params).all();
+    return json({ ok: true, eventos: rows.results || [], servidor: new Date().toISOString() });
   } catch (e) {
     return json({ ok: false, error: e.message });
   }

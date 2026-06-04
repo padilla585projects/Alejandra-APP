@@ -222,6 +222,31 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
   #sidebar.open{left:0;box-shadow:4px 0 30px rgba(0,0,0,.5)}
   #mainArea{width:100%}
 }
+
+/* ── SYNC / REMOTE SCAN ── */
+#remoteScanFab{position:fixed;bottom:80px;right:20px;z-index:500;display:none;flex-direction:column;gap:8px;align-items:flex-end}
+.rs-fab-main{background:var(--accent);color:#fff;border:none;border-radius:50%;width:52px;height:52px;font-size:22px;box-shadow:0 4px 20px rgba(168,85,247,.5);cursor:pointer;transition:transform .2s,box-shadow .2s;position:relative}
+.rs-fab-main:hover{transform:scale(1.08);box-shadow:0 6px 28px rgba(168,85,247,.7)}
+.rs-fab-badge{position:absolute;top:-2px;right:-2px;background:var(--green);color:#fff;border-radius:50%;width:16px;height:16px;font-size:9px;display:flex;align-items:center;justify-content:center;font-weight:700;border:2px solid var(--bg)}
+.rs-fab-badge.offline{background:var(--muted)}
+.rs-fab-label{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:6px 12px;font-size:11px;color:var(--muted);white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,.3)}
+.rs-scan-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;z-index:9999;animation:toastIn .15s}
+.rs-scan-modal{background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:28px;width:92%;max-width:440px;text-align:center}
+.rs-scan-modal h3{font-family:'Montserrat',sans-serif;font-weight:900;font-size:16px;margin-bottom:6px}
+.rs-scan-modal .sub{color:var(--muted);font-size:12px;margin-bottom:20px}
+.rs-type-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:18px}
+.rs-type-btn{background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:14px 10px;cursor:pointer;transition:all .15s;text-align:center}
+.rs-type-btn:hover{border-color:var(--accent);background:rgba(168,85,247,.08)}
+.rs-type-btn.sel{border-color:var(--accent);background:rgba(168,85,247,.12);box-shadow:0 0 0 2px rgba(168,85,247,.3)}
+.rs-type-btn .ico{font-size:24px;display:block;margin-bottom:4px}
+.rs-type-btn .lbl{font-size:11px;font-weight:600;color:var(--text)}
+.rs-waiting{text-align:center;padding:30px 20px}
+.rs-waiting .rs-spinner{width:48px;height:48px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 16px}
+.rs-waiting .msg{font-size:14px;color:var(--text);font-weight:600;margin-bottom:4px}
+.rs-waiting .sub{font-size:12px;color:var(--muted)}
+.rs-result{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:10px}
+.rs-result .sr-meta{font-size:10px;color:var(--muted);margin-top:6px}
+.rs-toast{padding:12px 18px;border-radius:10px;font-family:'Montserrat',sans-serif;font-weight:700;font-size:13px;box-shadow:0 4px 20px rgba(0,0,0,.4);animation:toastIn .25s ease;pointer-events:auto;max-width:320px;background:var(--surface2);border:1px solid var(--border);color:var(--text)}
 </style>
 </head>
 <body>
@@ -2014,6 +2039,8 @@ function iniciarApp() {
   if (['superadmin', 'desarrollador'].includes(SESSION.rol)) {
     _registrarPushDeveloper().catch(() => {});
   }
+  // Escaneo remoto — sync con móvil
+  if (typeof rsIniciarSync === 'function') rsIniciarSync();
 }
 
 function toggleSidebar() {
@@ -6311,6 +6338,226 @@ async function _registrarPushDeveloper() {
     body: JSON.stringify({ subscription: sub.toJSON() })
   });
 }
+
+// ═══════════════════════════════════════════════════════════════
+// ESCANEO REMOTO — Sync dispositivos + scan desde móvil
+// ═══════════════════════════════════════════════════════════════
+(function() {
+  let _rsSyncInterval = null;
+  let _rsPingInterval = null;
+  let _rsSyncDesde = new Date().toISOString();
+  let _rsDispositivos = [];
+  let _rsScanPendiente = null;
+  let _rsScanResultados = [];
+  let _rsScanTipoSel = 'documento';
+
+  const RS_TIPOS = [
+    { id: 'documento',  ico: '📄', label: 'Documento' },
+    { id: 'factura',    ico: '🧾', label: 'Factura' },
+    { id: 'albaran',    ico: '📋', label: 'Albarán' },
+    { id: 'foto_obra',  ico: '🏗️', label: 'Foto de obra' },
+    { id: 'bobina',     ico: '🔌', label: 'Bobina / Material' },
+    { id: 'plano',      ico: '📐', label: 'Plano' },
+  ];
+
+  function _rsApiHeaders() {
+    return { 'Content-Type': 'application/json', 'X-Token': TOKEN };
+  }
+
+  // ── Iniciar sync al arrancar la app ──
+  function rsIniciarSync() {
+    if (_rsSyncInterval) return;
+    _rsHacerPing();
+    _rsPingInterval = setInterval(_rsHacerPing, 30000);
+    _rsSyncInterval = setInterval(_rsPollEventos, 3000);
+    document.getElementById('remoteScanFab').style.display = 'flex';
+  }
+
+  function rsDetenerSync() {
+    clearInterval(_rsSyncInterval); clearInterval(_rsPingInterval);
+    _rsSyncInterval = null; _rsPingInterval = null;
+  }
+
+  // ── Ping: registrar este dispositivo como "office" ──
+  async function _rsHacerPing() {
+    try {
+      const r = await fetch(API + '/sync/ping', {
+        method: 'POST',
+        headers: _rsApiHeaders(),
+        body: JSON.stringify({ tipo: 'office', nombre: 'Alejandra Office' })
+      });
+      const d = await r.json();
+      _rsDispositivos = d.dispositivos || [];
+      _rsActualizarFab();
+    } catch {}
+  }
+
+  function _rsActualizarFab() {
+    const badge = document.getElementById('rsFabBadge');
+    const label = document.getElementById('rsFabLabel');
+    const moviles = _rsDispositivos.filter(d => d.tipo === 'app');
+    if (moviles.length > 0) {
+      badge.textContent = moviles.length;
+      badge.className = 'rs-fab-badge';
+      label.textContent = '📱 ' + (moviles[0].nombre || 'Móvil') + ' conectado';
+    } else {
+      badge.textContent = '0';
+      badge.className = 'rs-fab-badge offline';
+      label.textContent = '📱 Sin móvil conectado';
+    }
+  }
+
+  // ── Polling: buscar eventos nuevos ──
+  async function _rsPollEventos() {
+    try {
+      const r = await fetch(API + '/sync/eventos?desde=' + encodeURIComponent(_rsSyncDesde) + '&excluir_origen=office', {
+        headers: _rsApiHeaders()
+      });
+      const d = await r.json();
+      if (d.servidor) _rsSyncDesde = d.servidor;
+      for (const ev of (d.eventos || [])) {
+        _rsProcesarEvento(ev);
+      }
+    } catch {}
+  }
+
+  function _rsProcesarEvento(ev) {
+    const datos = typeof ev.datos === 'string' ? JSON.parse(ev.datos || '{}') : (ev.datos || {});
+    if (ev.tipo === 'scan_resultado' || ev.tipo === 'foto_resultado') {
+      _rsScanResultados.unshift({ ...ev, datos });
+      if (_rsScanPendiente) {
+        _rsScanPendiente = null;
+        rsCerrarScanModal();
+      }
+      _rsToast('📸 Escaneo recibido', datos.descripcion || 'Se ha recibido una foto del móvil');
+    } else if (ev.tipo === 'scan_cancelado') {
+      if (_rsScanPendiente) {
+        _rsScanPendiente = null;
+        rsCerrarScanModal();
+        _rsToast('❌ Escaneo cancelado', 'Se canceló desde el móvil');
+      }
+    }
+  }
+
+  // ── Toast propio (no usa el de panel genérico para no colisionar) ──
+  function _rsToast(titulo, msg) {
+    const el = document.createElement('div');
+    el.className = 'rs-toast';
+    el.innerHTML = '<strong>' + titulo + '</strong><br><span style="font-weight:400;font-size:12px">' + (msg || '') + '</span>';
+    document.getElementById('toastContainer').appendChild(el);
+    setTimeout(() => el.remove(), 6000);
+  }
+
+  // ── Modal de escaneo ──
+  window.rsAbrirScanModal = function() {
+    const moviles = _rsDispositivos.filter(d => d.tipo === 'app');
+    if (moviles.length === 0) {
+      toast('No hay móvil conectado. Abre la app Alejandra en el teléfono.', 'err');
+      return;
+    }
+    if (_rsScanPendiente) return;
+    _rsScanTipoSel = 'documento';
+    const overlay = document.createElement('div');
+    overlay.className = 'rs-scan-overlay';
+    overlay.id = 'rsScanOverlay';
+    overlay.innerHTML = `
+      <div class="rs-scan-modal">
+        <h3>📷 Escanear con el móvil</h3>
+        <div class="sub">Se abrirá la cámara en <strong>${moviles[0].nombre || 'tu móvil'}</strong> automáticamente</div>
+        <div class="rs-type-grid" id="rsScanTipoGrid">
+          ${RS_TIPOS.map(t => `
+            <div class="rs-type-btn ${t.id === 'documento' ? 'sel' : ''}" onclick="rsSelTipo('${t.id}', this)">
+              <span class="ico">${t.ico}</span>
+              <span class="lbl">${t.label}</span>
+            </div>
+          `).join('')}
+        </div>
+        <div style="margin-bottom:14px">
+          <input class="form-input" id="rsScanContexto" placeholder="Contexto opcional (ej: obra Mercadona, nave 3...)" style="text-align:center">
+        </div>
+        <div style="display:flex;gap:8px">
+          <button onclick="rsCerrarScanModal()" class="btn btn-secondary" style="flex:1">Cancelar</button>
+          <button onclick="rsEnviarScan()" class="btn btn-primary" style="flex:2">📷 Escanear</button>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+    overlay.onclick = (e) => { if (e.target === overlay) rsCerrarScanModal(); };
+  };
+
+  window.rsSelTipo = function(tipo, el) {
+    _rsScanTipoSel = tipo;
+    document.querySelectorAll('#rsScanTipoGrid .rs-type-btn').forEach(b => b.classList.remove('sel'));
+    el.classList.add('sel');
+  };
+
+  window.rsCerrarScanModal = function() {
+    const overlay = document.getElementById('rsScanOverlay');
+    if (overlay) overlay.remove();
+  };
+
+  window.rsEnviarScan = async function() {
+    const contexto = document.getElementById('rsScanContexto')?.value || '';
+    const modal = document.querySelector('#rsScanOverlay .rs-scan-modal');
+    if (modal) {
+      const tipoLabel = RS_TIPOS.find(t => t.id === _rsScanTipoSel)?.label || _rsScanTipoSel;
+      modal.innerHTML = `
+        <div class="rs-waiting">
+          <div class="rs-spinner"></div>
+          <div class="msg">Esperando al móvil...</div>
+          <div class="sub">La cámara se abrirá en tu teléfono automáticamente</div>
+          <div style="margin-top:16px;font-size:11px;color:var(--muted)">Tipo: ${tipoLabel}</div>
+          ${contexto ? '<div style="font-size:11px;color:var(--muted)">Contexto: ' + contexto + '</div>' : ''}
+          <button onclick="rsCancelarScan()" class="btn btn-secondary" style="margin-top:20px;font-size:12px">Cancelar</button>
+        </div>`;
+    }
+    try {
+      const r = await fetch(API + '/sync/evento', {
+        method: 'POST',
+        headers: _rsApiHeaders(),
+        body: JSON.stringify({
+          tipo: 'scan_request',
+          origen: 'office',
+          datos: {
+            subtipo: _rsScanTipoSel,
+            contexto: contexto,
+            solicitado_por: 'office',
+            timestamp: new Date().toISOString()
+          }
+        })
+      });
+      const d = await r.json();
+      if (d.ok) {
+        _rsScanPendiente = { id: d.evento_id, tipo: _rsScanTipoSel, ts: Date.now() };
+        setTimeout(() => {
+          if (_rsScanPendiente) {
+            _rsScanPendiente = null;
+            rsCerrarScanModal();
+            _rsToast('⏰ Tiempo agotado', 'El móvil no respondió al escaneo');
+          }
+        }, 120000);
+      } else {
+        rsCerrarScanModal();
+        toast('Error al enviar solicitud: ' + (d.error || ''), 'err');
+      }
+    } catch (e) {
+      rsCerrarScanModal();
+      toast('Error de red: ' + e.message, 'err');
+    }
+  };
+
+  window.rsCancelarScan = function() {
+    _rsScanPendiente = null;
+    rsCerrarScanModal();
+    fetch(API + '/sync/evento', {
+      method: 'POST',
+      headers: _rsApiHeaders(),
+      body: JSON.stringify({ tipo: 'scan_cancel', origen: 'office', datos: {} })
+    }).catch(() => {});
+  };
+
+  // ── Exponer inicio de sync para llamar desde iniciarApp() ──
+  window.rsIniciarSync = rsIniciarSync;
+})();
 </script>
 
 <!-- ═══ ALEJANDRA IA — CHAT FLOTANTE (solo desarrollador) ═══ -->
@@ -7396,5 +7643,14 @@ document.getElementById('wInput').focus();
     </div>
   </div>
 </div>
+<!-- ── FAB Escaneo Remoto ── -->
+<div id="remoteScanFab">
+  <div class="rs-fab-label" id="rsFabLabel">📱 Sin móvil conectado</div>
+  <button class="rs-fab-main" onclick="rsAbrirScanModal()" title="Escanear con el móvil">
+    📷
+    <span class="rs-fab-badge offline" id="rsFabBadge">0</span>
+  </button>
+</div>
+
 </body>
 </html>
