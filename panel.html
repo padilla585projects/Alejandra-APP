@@ -6370,7 +6370,12 @@ async function _registrarPushDeveloper() {
     _rsHacerPing();
     _rsPingInterval = setInterval(_rsHacerPing, 30000);
     _rsSyncInterval = setInterval(_rsPollEventos, 3000);
-    document.getElementById('remoteScanFab').style.display = 'flex';
+    const fab = document.getElementById('remoteScanFab');
+    if (fab) fab.style.display = 'flex';
+    else document.addEventListener('DOMContentLoaded', () => {
+      const f = document.getElementById('remoteScanFab');
+      if (f) f.style.display = 'flex';
+    });
   }
 
   function rsDetenerSync() {
@@ -6395,6 +6400,7 @@ async function _registrarPushDeveloper() {
   function _rsActualizarFab() {
     const badge = document.getElementById('rsFabBadge');
     const label = document.getElementById('rsFabLabel');
+    if (!badge || !label) return;
     const moviles = _rsDispositivos.filter(d => d.tipo === 'app');
     if (moviles.length > 0) {
       badge.textContent = moviles.length;
