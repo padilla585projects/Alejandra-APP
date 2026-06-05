@@ -6,22 +6,42 @@
 ## ESTADO ACTUAL
 
 **Sesión:** LIBRE
-**Última sesión:** 05/06/2026 noche — v1.9.10 → v1.9.13 + worker múltiples versiones
-**Versión actual:** APP **v1.9.13** (code 27) · WORKER agente Version ID `411245a9`
-**Próxima:** probar albarán universal con foto real y verificar notificaciones tras 30+ min suspendido
+**Última sesión:** 06/06/2026 — test end-to-end escaneo remoto + fix bugs
+**Versión actual:** Panel web **v6.38** · WORKER API `43d2af24` · WORKER agente `474b52a1`
+**Próxima:** probar albarán universal con foto real, verificar notificaciones tras 30+ min suspendido
 
-### ⚠️ HAY PUSHES PENDIENTES (no hubo red al cerrar)
-Lo primero al retomar:
-```bash
-cd "D:\Descargas\Alejandra APP" && git push
-cd "D:\Descargas\AlejandraIA" && git push
-```
-- `Alejandra APP`: 1 commit pendiente (`4d725ff` — este SESION.md)
-- `AlejandraIA`: 4 commits pendientes (`3386420`, `31d2c9f`, `3e48c50`, `1bdc19c`)
+---
 
-Worker ya desplegado en producción (Cloudflare) — no afecta no pushear.
-APK 1.9.13 ya subido a R2 OTA — no afecta no pushear.
-GitHub Pages del panel **sí afectado** — el panel en producción muestra versión vieja hasta que se haga el push.
+## RESUMEN SESIÓN 06/06/2026 — Test end-to-end escaneo remoto + 3 bugs críticos
+
+### Bugs descubiertos y arreglados
+
+1. **FAB null reference (panel.html)** — `rsIniciarSync()` hacía `document.getElementById('remoteScanFab').style.display = 'flex'` pero el HTML del FAB está en línea 7652 y el script se ejecuta en línea 6563 → crash → polling nunca arrancaba. Fix: null-safe con fallback `DOMContentLoaded`.
+
+2. **Timestamp ISO vs SQLite (worker.js)** — `syncGetEventos` comparaba `created_at` (formato SQLite `"2026-06-05 17:43:03"` con espacio) con `desde` (formato ISO `"2026-06-05T17:43:34Z"` con T). En SQLite string comparison, espacio (0x20) < T (0x54) → `created_at > desde` **siempre falso** → polling nunca devolvía eventos. Fix: normalizar `desde` con `.replace('T',' ').replace('Z','')` antes de la query.
+
+3. **`usuario_label.trim()` crash (alejandra-agente/worker.js)** — panel.html no envía `usuario_nombre` → `usuarioLabel` tomaba valor de `usuario_id` (número 3) → `.trim()` en número → crash. Fix: `String()` en 3 puntos del código.
+
+### Test end-to-end completado ✅
+1. Office abre modal → selecciona "Foto de obra" + contexto "Nave 2 CPD Getafe"
+2. Envía `scan_request` → "Esperando al móvil..." con spinner
+3. Móvil envía `scan_resultado` con imagen de cuadro eléctrico
+4. Polling detecta resultado → cierra modal automáticamente
+5. Alejandra IA analiza la imagen → **crea 2 incidencias automáticas** en BD:
+   - Interruptores magnetotérmicos OFF (posiciones 4 y 7)
+   - Cable suelto en zona inferior derecha
+6. Incidencias borradas tras verificación (datos de prueba)
+
+### Commits
+- `3de8c2d` — fix: FAB null-safe — v6.38
+- `33a40f8` — fix: timestamp ISO vs SQLite en syncGetEventos — v6.38
+
+### Workers desplegados
+- `alejandra-app-api` → Version ID `43d2af24` (fix timestamp)
+- `alejandra-agente` → Version ID `474b52a1` (fix usuario_label)
+
+### Nota DNS
+Pi-hole (192.168.10.100) estaba caído → WiFi cambiado temporalmente a Google DNS (8.8.8.8). Volver a Pi-hole cuando esté en pie.
 
 ---
 
