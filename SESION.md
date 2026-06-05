@@ -6,8 +6,60 @@
 ## ESTADO ACTUAL
 
 **Sesión:** LIBRE
-**Última sesión:** 04/06/2026 (tarde)
-**Versión actual:** v6.19
+**Última sesión:** 05/06/2026 — v6.32→v6.37
+**Versión actual:** v6.37
+
+---
+
+## RESUMEN SESIÓN 05/06/2026 — v6.32→v6.37 Chat sync + SW fix + Escaneo remoto
+
+### Problemas reportados:
+1. "nada sigue en la 28 cada vez que la abro" — móvil atascado en v6.28
+2. "no sincroniza el chat tampoco con el de la app" — chat Office ≠ chat móvil
+3. "que estes trabajando en el office y escanear con el movil" — escaneo remoto
+
+### v6.32 — Fix Service Worker stale HTML:
+- SW `fetch` handler: `cache:'no-store'` en navigate requests
+- Browser HTTP cache ya no sirve HTML viejo
+- Cache respuesta para offline fallback
+
+### v6.35 — Chat sync entre dispositivos:
+- Endpoint `/ia-chat-history` en worker principal
+- Busca por usuario_id numérico O nombre (formato mixto en BD)
+- panel.html: carga chat desde servidor + fallback localStorage
+- index.html: ambos chats sincronizados
+- Fix CORS: `Authorization` en allowed headers
+- Fix auth: `X-Token` en vez de `Authorization: Bearer`
+
+### v6.36 — Escaneo remoto (Office → Móvil):
+- 3 endpoints nuevos: `/sync/ping`, `/sync/evento`, `/sync/eventos`
+- Tablas D1: `sync_dispositivos`, `sync_eventos`
+- panel.html: FAB flotante 📷 + badge conexión + modal tipo scan + polling
+- Worker desplegado ✅
+
+### v6.37 — Escaneo remoto (Móvil receptor):
+- Móvil se registra como `app` vía `/sync/ping` cada 30s
+- Polling `scan_request` cada 5s (solo primer plano)
+- Vibración + modal + auto-abre cámara al recibir solicitud
+- Foto comprimida → `scan_resultado` de vuelta a Office
+- Flujo completo Office↔Móvil funcionando
+
+### Archivos modificados:
+- worker.js — endpoints sync + getIAChatHistory + CORS
+- panel.html — chat sync servidor + escaneo remoto completo
+- index.html — chat sync + receptor escaneo remoto + v6.37
+- sw.js — cache:'no-store' navigate + v6.37
+- version.json — 6.37
+
+### Deploy:
+- Worker: c88ac1f0 ✅ (D1 + R2)
+- GitHub: b737843 → push main ✅
+- Versiones sincronizadas: ✅
+
+### Pendiente próxima sesión:
+- Probar escaneo remoto end-to-end (Office + móvil real)
+- Móvil del usuario puede necesitar limpiar caché PWA (atascado en v6.28)
+- Push notifications sin probar en móvil real
 
 ---
 

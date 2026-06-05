@@ -4,8 +4,8 @@
   Ruta local: C:\Users\Adrian\Downloads\Proyecto GestiBobina\Alejandra APP
 ================================================================================
 
-ÚLTIMA ACTUALIZACIÓN: 04/06/2026 (tarde)
-VERSIÓN ACTUAL APP NUEVA: v6.19 (Fix chat IA inline — clase .screen + height 100% + placeholder)
+ÚLTIMA ACTUALIZACIÓN: 05/06/2026
+VERSIÓN ACTUAL APP NUEVA: v6.37 (Escaneo remoto Office↔Móvil + chat sync + fix SW cache)
 VERSIÓN ACTUAL APP VIEJA: v4.19 (⛔ CONGELADA DEFINITIVAMENTE — no recibe más cambios)
 
 ================================================================================
@@ -176,6 +176,39 @@ PASO 4 — VERIFICAR WORKER (solo si se va a tocar worker.js)
 ================================================================================
   HISTORIAL DE VERSIONES — RECIENTES
 ================================================================================
+
+v6.37        |  05/06/2026  [Escaneo remoto: receptor en móvil]
+  - Móvil se registra como dispositivo 'app' vía /sync/ping cada 30s
+  - Polling scan_request cada 5s (solo en primer plano, ahorra batería)
+  - Al recibir solicitud: vibración + modal con tipo + auto-abre cámara
+  - Foto comprimida (max 1600px, JPEG 80%) → scan_resultado a Office
+  - Flujo completo: Office pide → móvil recibe → foto → Office recibe
+
+v6.36        |  05/06/2026  [Escaneo remoto: Office solicita scan al móvil]
+  - Endpoints /sync/ping, /sync/evento, /sync/eventos en worker.js
+  - Tablas D1: sync_dispositivos, sync_eventos (compartidas con agente)
+  - panel.html: FAB flotante con badge conexión, modal tipo scan, polling resultados
+  - Office se registra como 'office', detecta móviles conectados
+  - Sincronización por empresa_id (todos los dispositivos de la misma empresa)
+
+v6.35        |  04/06/2026  [Chat sync entre dispositivos + fix CORS]
+  - Endpoint /ia-chat-history en worker principal (no depende del agente)
+  - Busca por usuario_id numérico O nombre (formatos mixtos en BD)
+  - panel.html: carga chat desde servidor con fallback localStorage
+  - index.html: ambos chats (screenIA + alejandraPanel) sincronizados
+  - Fix CORS: Authorization en headers permitidos
+  - Fix auth: X-Token en vez de Authorization Bearer
+
+v6.32        |  04/06/2026  [Fix SW cache — stale HTML en navigate]
+  - SW fetch handler: cache:'no-store' para navigate requests
+  - Evita que browser HTTP cache sirva HTML viejo
+  - Cache respuesta para offline fallback
+  - Fix del bug "actualiza y vuelve a la versión anterior"
+
+v6.19        |  04/06/2026  [Fix chat IA inline — clase .screen + height 100%]
+  - screenIA con clase .screen para que _applyScreen lo oculte
+  - height:100% para llenar todo el espacio
+  - Placeholder "Mensaje" (el largo no cabía)
 
 v6.14        |  30/05/2026  [Fix scan IA — callGemini resiliente + diagnóstico]
   - Modelos Gemini actualizados: gemini-2.5-flash + 2.0-flash-001 (regresión v5.96)
