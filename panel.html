@@ -6557,6 +6557,11 @@ async function _registrarPushDeveloper() {
 
   // ── Exponer inicio de sync para llamar desde iniciarApp() ──
   window.rsIniciarSync = rsIniciarSync;
+
+  // Auto-iniciar si ya hay sesión (el auto-login ocurre antes de esta IIFE)
+  if (typeof TOKEN !== 'undefined' && TOKEN && typeof SESSION !== 'undefined' && SESSION) {
+    rsIniciarSync();
+  }
 })();
 </script>
 
