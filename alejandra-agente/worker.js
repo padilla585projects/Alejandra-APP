@@ -1678,6 +1678,8 @@ export default {
             resultado = await insertarHojaBobinas(env, datos, sesion, obra_id, obra_nombre, archivo_key);
           } else if (subtipo === 'bobina') {
             resultado = await insertarBobinaIndividual(env, datos, sesion, obra_id, obra_nombre, archivo_key);
+          } else if (subtipo === 'albaran_universal' || subtipo === 'albaran') {
+            resultado = await insertarAlbaranUniversal(env, datos, sesion, obra_id, obra_nombre, archivo_key);
           } else {
             return json({ error: `subtipo no soportado para inserción: ${subtipo}` }, 400);
           }
@@ -2904,6 +2906,75 @@ REGLAS:
   ]
 }`,
 
+  albaran_universal: `Estás viendo un ALBARÁN o NOTA DE ENTREGA de cualquier tipo (cable, material eléctrico, EPIs, herramienta, etc).
+
+Analiza el documento, identifica la cabecera y clasifica cada línea según su tipo.
+
+Devuelve SOLO JSON sin markdown:
+{
+  "cabecera": {
+    "proveedor": "",
+    "num_albaran": "",
+    "fecha": "YYYY-MM-DD",
+    "cliente": "",
+    "direccion_envio": "",
+    "transportista": null,
+    "bultos": null,
+    "peso_bruto_kg": null,
+    "peso_neto_kg": null
+  },
+  "lineas": [
+    {
+      "categoria": "bobina_cable",
+      "descripcion": "EXZHELLENT COMPACT RZ1-K(AS) 1kV 1x95 VD",
+      "referencia": "20302886",
+      "fabricante": "General Cable",
+      "matricula": "82AXWVZ",
+      "num_lote": "1032907484",
+      "seccion": "1x95",
+      "metros": 500,
+      "peso_neto_kg": 450.5,
+      "cantidad": 1,
+      "unidad": "bobina"
+    },
+    {
+      "categoria": "material_obra",
+      "descripcion": "Cuadro Schneider Prisma G 24 módulos",
+      "referencia": "08130",
+      "fabricante": "Schneider",
+      "cantidad": 2,
+      "unidad": "ud",
+      "precio_unitario": 145.50
+    },
+    {
+      "categoria": "epi",
+      "descripcion": "Guantes aislantes clase 0 talla 9",
+      "tipo_epi": "guantes_aislantes",
+      "talla": "9",
+      "cantidad": 5,
+      "unidad": "par",
+      "precio_unitario": 28.90
+    }
+  ]
+}
+
+CATEGORÍAS posibles (elige la que mejor encaje):
+- "bobina_cable": cable en bobinas (Prysmian, General Cable, Top Cable). Tiene matrícula/contramarca + sección (1x95, 4x16…) + metros.
+- "material_obra": material eléctrico/mecánico general (cuadros, magnetotérmicos, interruptores, tubos, cajas, terminales, accesorios, válvulas, racores, etc).
+- "epi": EPI (guantes, cascos, gafas, calzado, arneses, ropa de trabajo, mascarillas).
+- "herramienta": herramienta o equipo individual (taladros, atornilladores, polipastos, llaves dinamométricas).
+- "seguridad": material consumible de seguridad (extintores, señalización, kits primeros auxilios, sacos absorbentes, etc).
+- "otro": no encaja en las anteriores.
+
+REGLAS:
+- Cada línea/posición del albarán es un objeto en "lineas".
+- Para cable, si hay N bobinas con matrículas distintas, cada matrícula es UNA línea con categoria="bobina_cable".
+- Si un campo no aparece, usa null.
+- Las cantidades son numéricas (no strings).
+- Fechas en formato ISO YYYY-MM-DD.
+- "unidad" típica: ud, m, kg, par, caja, bobina.
+- Si la línea es claramente material eléctrico (Schneider, ABB, Legrand, Hager, OBO, Pemsa) que NO es cable bobina, usa "material_obra".`,
+
   documento: `Describe brevemente este documento (qué es, qué datos clave contiene) en JSON: {"tipo": "...", "resumen": "...", "datos_clave": {}}`,
 
   foto_obra: `Describe esta foto de obra eléctrica/mecánica. JSON: {"descripcion": "...", "equipos_visibles": [], "estado": "...", "anomalias": []}`,
@@ -3192,6 +3263,156 @@ async function insertarHojaBobinas(env, datos, sesion, obra_id, obra_nombre, arc
     actualizadas,
     errores: errores.slice(0, 5),
     resumen: `${creadas} bobinas nuevas, ${actualizadas} actualizadas en obra ${obra_nombre || datos.obra || '?'}`
+  };
+}
+
+/// Albarán universal: distribuye cada línea a su tabla según la categoría
+async function insertarAlbaranUniversal(env, datos, sesion, obra_id, obra_nombre, archivo_key) {
+  const cab = datos.cabecera || {};
+  const lineas = datos.lineas || [];
+  const stats = { bobinas: 0, materiales: 0, epis: 0, herramientas: 0, seguridad: 0, otros: 0, duplicadas: 0 };
+  const errores = [];
+  const hoy = new Date().toISOString().slice(0, 10);
+  const proveedor = cab.proveedor || null;
+  const numAlbaran = cab.num_albaran || null;
+  const fechaDoc = cab.fecha || hoy;
+
+  for (const ln of lineas) {
+    const cat = ln.categoria || 'otro';
+    if (!ln.descripcion && !ln.matricula) continue;
+
+    try {
+      if (cat === 'bobina_cable') {
+        if (!ln.matricula) { errores.push(`Bobina sin matrícula: ${(ln.descripcion||'').slice(0,40)}`); continue; }
+        const existe = await env.DB.prepare(
+          `SELECT id FROM bobinas WHERE codigo = ? AND empresa_id = ?`
+        ).bind(ln.matricula, sesion.empresa_id).first().catch(() => null);
+        if (existe) { stats.duplicadas++; continue; }
+        await env.DB.prepare(
+          `INSERT INTO bobinas (codigo, seccion, longitud, proveedor, num_albaran, estado, obra_id, obra_nombre, fecha_entrada, tipo_cable, empresa_id, registrado_por, notas)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`
+        ).bind(
+          ln.matricula,
+          ln.seccion || null,
+          ln.metros || null,
+          proveedor,
+          numAlbaran,
+          'entrada',
+          obra_id || null,
+          obra_nombre || null,
+          fechaDoc,
+          ln.descripcion || null,
+          sesion.empresa_id,
+          'alejandra_office',
+          ln.num_lote ? `Lote ${ln.num_lote}${ln.peso_neto_kg ? ' · ' + ln.peso_neto_kg + ' kg' : ''}` : null
+        ).run();
+        stats.bobinas++;
+      }
+      else if (cat === 'material_obra') {
+        await env.DB.prepare(
+          `INSERT INTO materiales_obra (obra_id, obra_nombre, material, referencia, fabricante, cantidad, unidad, precio_unitario, proveedor, fecha, notas)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?)`
+        ).bind(
+          obra_id || null,
+          obra_nombre || null,
+          ln.descripcion || 'Material',
+          ln.referencia || null,
+          ln.fabricante || null,
+          ln.cantidad || 1,
+          ln.unidad || 'ud',
+          ln.precio_unitario || null,
+          proveedor,
+          fechaDoc,
+          numAlbaran ? `Albarán ${numAlbaran}` : null
+        ).run();
+        stats.materiales++;
+      }
+      else if (cat === 'epi') {
+        await env.DB.prepare(
+          `INSERT INTO epis_asignados (empresa_id, obra_id, tipo_epi, talla, fecha_entrega, estado, observaciones, created_by)
+           VALUES (?,?,?,?,?,?,?,?)`
+        ).bind(
+          sesion.empresa_id,
+          obra_id || null,
+          ln.tipo_epi || ln.descripcion || 'EPI',
+          ln.talla || null,
+          fechaDoc,
+          'en_almacen',
+          `Cantidad: ${ln.cantidad || 1} · ${proveedor || ''} · Albarán ${numAlbaran || '?'}`,
+          'alejandra_office'
+        ).run();
+        stats.epis++;
+      }
+      else if (cat === 'herramienta') {
+        await env.DB.prepare(
+          `INSERT INTO herramientas (empresa_id, marca, modelo, obra_id, estado, fecha_alta, notas, alimentacion)
+           VALUES (?,?,?,?,?,?,?,?)`
+        ).bind(
+          sesion.empresa_id,
+          ln.fabricante || null,
+          ln.descripcion || 'Herramienta',
+          obra_id || null,
+          'en_almacen',
+          fechaDoc,
+          `Proveedor: ${proveedor || '?'} · Albarán ${numAlbaran || '?'} · Cant: ${ln.cantidad || 1}`,
+          ln.alimentacion || null
+        ).run();
+        stats.herramientas++;
+      }
+      else if (cat === 'seguridad') {
+        await env.DB.prepare(
+          `INSERT INTO inventario_seg (tipo_material, codigo, nombre, cantidad_total, cantidad_disponible, estado, fecha_entrada, empresa_id, registrado_por, notas)
+           VALUES (?,?,?,?,?,?,?,?,?,?)`
+        ).bind(
+          ln.tipo_material || 'consumible',
+          ln.referencia || null,
+          ln.descripcion || 'Material seguridad',
+          ln.cantidad || 1,
+          ln.cantidad || 1,
+          'disponible',
+          fechaDoc,
+          sesion.empresa_id,
+          'alejandra_office',
+          `Albarán ${numAlbaran || '?'} (${proveedor || '?'})`
+        ).run();
+        stats.seguridad++;
+      }
+      else {
+        stats.otros++;
+      }
+    } catch (e) {
+      errores.push(`${cat} · ${(ln.descripcion||ln.matricula||'?').slice(0,40)}: ${e.message}`);
+    }
+  }
+
+  // Guardar el albarán original como archivo de referencia
+  if (archivo_key && numAlbaran) {
+    await env.DB.prepare(
+      `INSERT OR IGNORE INTO albaranes (empresa_id, r2_key, nombre_archivo, mime_type, subido_por, fecha)
+       VALUES (?,?,?,?,?,?)`
+    ).bind(
+      sesion.empresa_id,
+      archivo_key,
+      `albaran_${numAlbaran}.jpg`,
+      'image/jpeg',
+      'alejandra_office',
+      fechaDoc
+    ).run().catch(() => {});
+  }
+
+  const partes = [];
+  if (stats.bobinas) partes.push(`${stats.bobinas} bobinas`);
+  if (stats.materiales) partes.push(`${stats.materiales} materiales`);
+  if (stats.epis) partes.push(`${stats.epis} EPIs`);
+  if (stats.herramientas) partes.push(`${stats.herramientas} herramientas`);
+  if (stats.seguridad) partes.push(`${stats.seguridad} consumibles`);
+  if (stats.duplicadas) partes.push(`${stats.duplicadas} ya existían`);
+
+  return {
+    total: stats.bobinas + stats.materiales + stats.epis + stats.herramientas + stats.seguridad,
+    stats,
+    errores: errores.slice(0, 5),
+    resumen: `Albarán ${numAlbaran || '?'} (${proveedor || '?'}): ${partes.join(', ')}`
   };
 }
 

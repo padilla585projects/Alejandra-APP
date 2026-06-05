@@ -1753,8 +1753,8 @@ function procesarEventoSync(ev) {
 // ── Scan Modal ──────────────────────────────────────
 let _scanTipoSel = 'documento';
 const SCAN_TIPOS = [
+  { id: 'albaran_universal', ico: '📋', label: 'Albarán (auto)' },
   { id: 'parte_semanal',   ico: '📅', label: 'Parte semanal' },
-  { id: 'albaran_bobinas', ico: '📋', label: 'Albarán bobinas' },
   { id: 'hoja_bobinas',    ico: '🧾', label: 'Hoja control bobinas' },
   { id: 'bobina',          ico: '🔌', label: 'Bobina individual' },
   { id: 'factura',         ico: '💶', label: 'Factura' },
@@ -1762,6 +1762,15 @@ const SCAN_TIPOS = [
   { id: 'documento',       ico: '📄', label: 'Otro documento' },
   { id: 'plano',           ico: '📐', label: 'Plano' },
 ];
+
+const CATEGORIAS_ALBARAN = {
+  bobina_cable:  { ico: '🔌', label: 'Bobinas de cable',    color: '#3b82f6', tabla: 'bobinas' },
+  material_obra: { ico: '⚙️',  label: 'Material',            color: '#22c55e', tabla: 'materiales_obra' },
+  epi:           { ico: '🦺', label: 'EPIs',                color: '#f59e0b', tabla: 'epis_asignados' },
+  herramienta:   { ico: '🔧', label: 'Herramientas',        color: '#a78bfa', tabla: 'herramientas' },
+  seguridad:     { ico: '🚨', label: 'Material seguridad',  color: '#ef4444', tabla: 'inventario_seg' },
+  otro:          { ico: '❓', label: 'Sin clasificar',      color: '#6b7280', tabla: '—' },
+};
 
 function abrirScanModal() {
   const moviles = _dispositivosConectados.filter(d => d.tipo === 'app');
@@ -2053,6 +2062,8 @@ function renderRevisionContenido(subtipo, extraido, payload) {
   }
   if (subtipo === 'parte_semanal') {
     renderRevParteSemanal(c, extraido);
+  } else if (subtipo === 'albaran_universal' || subtipo === 'albaran') {
+    renderRevAlbaranUniversal(c, extraido);
   } else if (subtipo === 'albaran_bobinas') {
     renderRevAlbaranBobinas(c, extraido);
   } else if (subtipo === 'hoja_bobinas') {
@@ -2207,6 +2218,141 @@ function recolectarAlbaranBobinas() {
   return { cabecera: cab, bobinas };
 }
 
+// ── Albarán UNIVERSAL: cabecera + líneas con categoría editable ──
+function renderRevAlbaranUniversal(c, d) {
+  const cab = d.cabecera || {};
+  const lineas = d.lineas || [];
+  // Agrupar por categoría para mostrar resumen visual arriba
+  const conteo = {};
+  for (const ln of lineas) { const cat = ln.categoria || 'otro'; conteo[cat] = (conteo[cat]||0) + 1; }
+
+  const chips = Object.entries(conteo).map(([cat, n]) => {
+    const info = CATEGORIAS_ALBARAN[cat] || CATEGORIAS_ALBARAN.otro;
+    return `<span style="display:inline-flex;align-items:center;gap:4px;background:${info.color}22;color:${info.color};padding:3px 9px;border-radius:14px;font-size:11px;font-weight:600">${info.ico} ${n} ${info.label}</span>`;
+  }).join('');
+
+  c.innerHTML = `
+    <div style="background:var(--surf2);border:1px solid var(--border);border-radius:10px;padding:10px;margin-bottom:12px">
+      <div style="font-size:11px;color:var(--muted);margin-bottom:6px">Alejandra ha detectado:</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px">${chips || '<span style="font-size:11px;color:var(--muted)">Sin líneas</span>'}</div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;font-size:11px">
+      ${[
+        ['proveedor','Proveedor',cab.proveedor],
+        ['num_albaran','Nº albarán',cab.num_albaran],
+        ['fecha','Fecha (YYYY-MM-DD)',cab.fecha],
+        ['cliente','Cliente',cab.cliente]
+      ].map(([k,l,v])=>`<div><label style="color:var(--muted);font-size:10px;display:block;margin-bottom:2px">${l}</label><input class="inp rauCab" data-k="${k}" value="${esc(v??'')}" style="width:100%;padding:6px 8px;font-size:12px"></div>`).join('')}
+    </div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:6px;display:flex;align-items:center;gap:8px">
+      Líneas (${lineas.length}) — cada una tiene su categoría editable, si Alejandra acertó déjalo así
+    </div>
+    <div style="overflow:auto;max-height:48vh;border:1px solid var(--border);border-radius:8px">
+    <table style="width:100%;border-collapse:collapse;font-size:11px">
+      <thead style="position:sticky;top:0;background:var(--surf2);z-index:1">
+        <tr>
+          <th style="padding:6px 8px;border-bottom:1px solid var(--border);text-align:left;min-width:130px">Categoría</th>
+          <th style="padding:6px 8px;border-bottom:1px solid var(--border);text-align:left">Descripción</th>
+          <th style="padding:6px 8px;border-bottom:1px solid var(--border);text-align:left">Detalle extra</th>
+          <th style="padding:6px 8px;border-bottom:1px solid var(--border);text-align:right">Cant.</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="rauTbody">
+        ${lineas.map((ln,i) => renderFilaAlbUni(ln, i)).join('')}
+      </tbody>
+    </table>
+    </div>
+    <button onclick="addFilaAlbUni()" style="margin-top:8px;padding:6px 12px;background:var(--surf2);border:1px solid var(--border);border-radius:6px;color:var(--acc2);font-size:11px;cursor:pointer">+ Añadir línea</button>
+    <div style="margin-top:10px;font-size:11px;color:var(--muted);line-height:1.5">
+      💡 Cada categoría se guarda en su tabla:<br>
+      <span style="color:#3b82f6">🔌 bobinas</span> · <span style="color:#22c55e">⚙️ materiales_obra</span> · <span style="color:#f59e0b">🦺 epis_asignados</span> · <span style="color:#a78bfa">🔧 herramientas</span> · <span style="color:#ef4444">🚨 inventario_seg</span>
+    </div>`;
+}
+
+function renderFilaAlbUni(ln, i) {
+  const cat = ln.categoria || 'otro';
+  const opcs = Object.entries(CATEGORIAS_ALBARAN).map(([k,v]) =>
+    `<option value="${k}" ${k===cat?'selected':''}>${v.ico} ${v.label}</option>`).join('');
+  // Detalle extra depende de la categoría
+  const detalleHtml = renderDetalleExtra(ln);
+  return `<tr data-idx="${i}" style="vertical-align:top">
+    <td style="padding:5px 6px;border-bottom:1px solid var(--border)">
+      <select class="inp rauCat" onchange="onCatChange(this)" style="width:100%;padding:5px;font-size:11px">${opcs}</select>
+    </td>
+    <td style="padding:5px 6px;border-bottom:1px solid var(--border)">
+      <input class="inp rauDesc" value="${esc(ln.descripcion||ln.matricula||'')}" style="width:100%;padding:5px;font-size:11px">
+    </td>
+    <td style="padding:5px 6px;border-bottom:1px solid var(--border)" class="rauExtra">${detalleHtml}</td>
+    <td style="padding:5px 6px;border-bottom:1px solid var(--border)">
+      <input class="inp rauCant" type="number" step="0.01" value="${ln.cantidad??1}" style="width:60px;padding:5px;font-size:11px;text-align:right">
+      <input class="inp rauUnidad" value="${esc(ln.unidad||'ud')}" style="width:50px;padding:5px;font-size:11px;margin-top:3px">
+    </td>
+    <td style="padding:5px 4px;border-bottom:1px solid var(--border)"><button onclick="this.closest('tr').remove()" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:16px">×</button></td>
+  </tr>`;
+}
+
+function renderDetalleExtra(ln) {
+  const cat = ln.categoria || 'otro';
+  if (cat === 'bobina_cable') {
+    return `
+      <input class="inp rauExtraK" data-k="matricula" placeholder="Matrícula" value="${esc(ln.matricula||'')}" style="width:90px;padding:4px;font-size:10px;font-family:monospace;margin-right:3px">
+      <input class="inp rauExtraK" data-k="seccion" placeholder="Sección" value="${esc(ln.seccion||'')}" style="width:60px;padding:4px;font-size:10px;margin-right:3px">
+      <input class="inp rauExtraK" data-k="metros" type="number" placeholder="Metros" value="${ln.metros??''}" style="width:65px;padding:4px;font-size:10px;margin-right:3px">
+      <input class="inp rauExtraK" data-k="num_lote" placeholder="Lote" value="${esc(ln.num_lote||'')}" style="width:90px;padding:4px;font-size:10px">`;
+  }
+  if (cat === 'epi') {
+    return `
+      <input class="inp rauExtraK" data-k="tipo_epi" placeholder="Tipo EPI" value="${esc(ln.tipo_epi||'')}" style="width:120px;padding:4px;font-size:10px;margin-right:3px">
+      <input class="inp rauExtraK" data-k="talla" placeholder="Talla" value="${esc(ln.talla||'')}" style="width:50px;padding:4px;font-size:10px">`;
+  }
+  // material_obra / herramienta / seguridad: fabricante + ref + precio
+  return `
+    <input class="inp rauExtraK" data-k="fabricante" placeholder="Fabricante" value="${esc(ln.fabricante||'')}" style="width:110px;padding:4px;font-size:10px;margin-right:3px">
+    <input class="inp rauExtraK" data-k="referencia" placeholder="Referencia" value="${esc(ln.referencia||'')}" style="width:90px;padding:4px;font-size:10px;margin-right:3px">
+    <input class="inp rauExtraK" data-k="precio_unitario" type="number" step="0.01" placeholder="€/ud" value="${ln.precio_unitario??''}" style="width:70px;padding:4px;font-size:10px">`;
+}
+
+function onCatChange(sel) {
+  const tr = sel.closest('tr');
+  // Recolectar datos actuales antes de cambiar
+  const ln = recolectarLinea(tr);
+  ln.categoria = sel.value;
+  tr.querySelector('.rauExtra').innerHTML = renderDetalleExtra(ln);
+}
+
+function addFilaAlbUni() {
+  const tbody = document.getElementById('rauTbody');
+  tbody.insertAdjacentHTML('beforeend', renderFilaAlbUni({categoria:'material_obra', cantidad:1, unidad:'ud'}, tbody.children.length));
+}
+
+function recolectarLinea(tr) {
+  const ln = {
+    categoria: tr.querySelector('.rauCat').value,
+    descripcion: tr.querySelector('.rauDesc').value.trim() || null,
+    cantidad: Number(tr.querySelector('.rauCant').value) || 1,
+    unidad: tr.querySelector('.rauUnidad').value.trim() || 'ud'
+  };
+  tr.querySelectorAll('.rauExtraK').forEach(i => {
+    const v = i.value.trim();
+    if (v !== '') {
+      ln[i.dataset.k] = (i.type === 'number') ? Number(v) : v;
+    }
+  });
+  return ln;
+}
+
+function recolectarAlbaranUniversal() {
+  const cab = {};
+  document.querySelectorAll('.rauCab').forEach(i => { cab[i.dataset.k] = i.value.trim() || null; });
+  const lineas = [];
+  document.querySelectorAll('#rauTbody tr').forEach(tr => {
+    const ln = recolectarLinea(tr);
+    if (ln.descripcion || ln.matricula) lineas.push(ln);
+  });
+  return { cabecera: cab, lineas };
+}
+
 // ── Hoja control bobinas ──────────────────────────────────────────
 function renderRevHojaBobinas(c, d) {
   const bobinas = d.bobinas || [];
@@ -2297,6 +2443,7 @@ async function guardarRevision() {
   let datos;
   try {
     if (subtipo === 'parte_semanal') datos = recolectarParteSemanal();
+    else if (subtipo === 'albaran_universal' || subtipo === 'albaran') datos = recolectarAlbaranUniversal();
     else if (subtipo === 'albaran_bobinas') datos = recolectarAlbaranBobinas();
     else if (subtipo === 'hoja_bobinas') datos = recolectarHojaBobinas();
     else if (subtipo === 'bobina') datos = recolectarBobinaIndividual();
