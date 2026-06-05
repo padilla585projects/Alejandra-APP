@@ -11354,7 +11354,10 @@ async function syncGetEventos(request, env) {
   if (!s) return err('Sin permiso', 401);
   try {
     const url = new URL(request.url);
-    const desde = url.searchParams.get('desde') || new Date(Date.now() - 300000).toISOString();
+    const desdeRaw = url.searchParams.get('desde') || new Date(Date.now() - 300000).toISOString();
+    // Normalizar: SQLite CURRENT_TIMESTAMP usa "YYYY-MM-DD HH:MM:SS" (espacio, sin Z)
+    // pero el cliente envía ISO "YYYY-MM-DDTHH:MM:SS.sssZ" (con T y Z)
+    const desde = desdeRaw.replace('T', ' ').replace('Z', '').replace(/\.\d+$/, '');
     const excluirOrigen = url.searchParams.get('excluir_origen') || '';
     const uid = String(s.usuario_id || s.nombre);
     const empId = String(s.empresa_id || '');
