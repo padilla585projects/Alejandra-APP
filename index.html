@@ -4207,6 +4207,9 @@ async function iniciarApp() {
     document.addEventListener('visibilitychange', _onAppVisible);
   }
 
+  // Escaneo remoto — sync con Office
+  if (typeof rmIniciarSync === 'function') rmIniciarSync();
+
   const esSuperAdmin   = s.rol === 'superadmin';
   const esEmpresaAdmin = s.rol === 'empresa_admin';
 
@@ -10297,7 +10300,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '6.36';
+const APP_VERSION = '6.37';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -13817,6 +13820,212 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
   window.sbAppEnviar         = sbAppEnviar;
   window.sbAppVolver         = sbAppVolver;
   window.sbAppImportar       = sbAppImportar;
+})();
+
+// ═══════════════════════════════════════════════════════════════
+// ESCANEO REMOTO — Receptor de peticiones de Office
+// ═══════════════════════════════════════════════════════════════
+(function() {
+  let _rmPingInterval = null;
+  let _rmPollInterval = null;
+  let _rmSyncDesde = new Date().toISOString();
+  let _rmPendiente = null; // scan_request activo
+
+  const RM_TIPOS = {
+    documento: '📄 Documento', factura: '🧾 Factura', albaran: '📋 Albarán',
+    foto_obra: '🏗️ Foto de obra', bobina: '🔌 Bobina / Material', plano: '📐 Plano'
+  };
+
+  function _rmHeaders() {
+    const s = getSession();
+    return { 'Content-Type': 'application/json', 'X-Token': s?.token || '' };
+  }
+
+  function rmIniciarSync() {
+    if (_rmPingInterval) return;
+    _rmHacerPing();
+    _rmPingInterval = setInterval(_rmHacerPing, 30000);
+    _rmPollInterval = setInterval(_rmPollEventos, 5000);
+  }
+
+  function rmDetenerSync() {
+    clearInterval(_rmPingInterval); clearInterval(_rmPollInterval);
+    _rmPingInterval = null; _rmPollInterval = null;
+  }
+
+  async function _rmHacerPing() {
+    try {
+      const s = getSession();
+      if (!s?.token) return;
+      await fetch(getAPI() + '/sync/ping', {
+        method: 'POST',
+        headers: _rmHeaders(),
+        body: JSON.stringify({ tipo: 'app', nombre: s.nombre || 'Móvil' })
+      });
+    } catch {}
+  }
+
+  async function _rmPollEventos() {
+    try {
+      const s = getSession();
+      if (!s?.token) return;
+      // Solo poll cuando la app está en primer plano
+      if (document.hidden) return;
+      const r = await fetch(getAPI() + '/sync/eventos?desde=' + encodeURIComponent(_rmSyncDesde) + '&excluir_origen=app', {
+        headers: _rmHeaders()
+      });
+      const d = await r.json();
+      if (d.servidor) _rmSyncDesde = d.servidor;
+      for (const ev of (d.eventos || [])) {
+        _rmProcesarEvento(ev);
+      }
+    } catch {}
+  }
+
+  function _rmProcesarEvento(ev) {
+    const datos = typeof ev.datos === 'string' ? JSON.parse(ev.datos || '{}') : (ev.datos || {});
+    if (ev.tipo === 'scan_request' && !_rmPendiente) {
+      _rmPendiente = { id: ev.id, subtipo: datos.subtipo || 'documento', contexto: datos.contexto || '' };
+      _rmMostrarSolicitud(_rmPendiente);
+    } else if (ev.tipo === 'scan_cancel') {
+      if (_rmPendiente) {
+        _rmPendiente = null;
+        _rmCerrarModal();
+        toast('Escaneo cancelado desde oficina', 'info');
+      }
+    }
+  }
+
+  function _rmMostrarSolicitud(req) {
+    if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+
+    const tipoLabel = RM_TIPOS[req.subtipo] || '📄 Documento';
+    const overlay = document.createElement('div');
+    overlay.id = 'rmScanOverlay';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.85);display:flex;align-items:center;justify-content:center;z-index:99999;animation:fadeIn .2s';
+    overlay.innerHTML = `
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:28px;width:92%;max-width:400px;text-align:center">
+        <div style="font-size:40px;margin-bottom:12px">📷</div>
+        <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:16px;margin-bottom:6px">Escaneo solicitado</div>
+        <div style="color:var(--muted);font-size:13px;margin-bottom:8px">Desde Alejandra Office</div>
+        <div style="background:var(--surface2);border-radius:10px;padding:10px 14px;margin-bottom:16px">
+          <div style="font-size:14px;font-weight:700">${tipoLabel}</div>
+          ${req.contexto ? '<div style="font-size:12px;color:var(--muted);margin-top:4px">' + req.contexto + '</div>' : ''}
+        </div>
+        <input type="file" id="rmScanFileInput" accept="image/*" capture="environment" style="display:none">
+        <button id="rmBtnCapturar" onclick="rmCapturar()" class="btn-primary" style="width:100%;padding:14px;font-size:15px;margin-bottom:8px">
+          📷 Abrir cámara
+        </button>
+        <button onclick="rmRechazar()" style="width:100%;padding:10px;background:none;border:1px solid var(--border);border-radius:10px;color:var(--muted);font-size:12px;cursor:pointer">
+          Cancelar
+        </button>
+      </div>`;
+    document.body.appendChild(overlay);
+
+    // Auto-abrir selector de cámara
+    setTimeout(() => {
+      const input = document.getElementById('rmScanFileInput');
+      if (input) {
+        input.onchange = (e) => _rmProcesarFoto(e.target.files[0]);
+        input.click();
+      }
+    }, 500);
+  }
+
+  window.rmCapturar = function() {
+    const input = document.getElementById('rmScanFileInput');
+    if (input) {
+      input.onchange = (e) => _rmProcesarFoto(e.target.files[0]);
+      input.click();
+    }
+  };
+
+  window.rmRechazar = function() {
+    _rmPendiente = null;
+    _rmCerrarModal();
+    // Notificar cancelación
+    fetch(getAPI() + '/sync/evento', {
+      method: 'POST',
+      headers: _rmHeaders(),
+      body: JSON.stringify({ tipo: 'scan_cancelado', origen: 'app', datos: {} })
+    }).catch(() => {});
+  };
+
+  function _rmCerrarModal() {
+    const overlay = document.getElementById('rmScanOverlay');
+    if (overlay) overlay.remove();
+  }
+
+  async function _rmProcesarFoto(file) {
+    if (!file || !_rmPendiente) return;
+    const btn = document.getElementById('rmBtnCapturar');
+    if (btn) { btn.disabled = true; btn.innerHTML = '<div class="spinner" style="width:18px;height:18px;display:inline-block;vertical-align:middle;margin-right:8px"></div> Enviando...'; }
+
+    try {
+      // Comprimir imagen
+      const compressed = await _rmCompressImage(file);
+      const base64 = await _rmFileToBase64(compressed);
+
+      // Enviar resultado como evento de sync
+      await fetch(getAPI() + '/sync/evento', {
+        method: 'POST',
+        headers: _rmHeaders(),
+        body: JSON.stringify({
+          tipo: 'scan_resultado',
+          origen: 'app',
+          datos: {
+            subtipo: _rmPendiente.subtipo,
+            contexto: _rmPendiente.contexto,
+            imagen_base64: base64,
+            descripcion: (RM_TIPOS[_rmPendiente.subtipo] || 'Documento') + ' escaneado desde el móvil',
+            timestamp: new Date().toISOString()
+          }
+        })
+      });
+
+      toast('📸 Escaneo enviado a Office', 'ok');
+      if (navigator.vibrate) navigator.vibrate(100);
+    } catch (e) {
+      toast('Error al enviar: ' + e.message, 'err');
+    }
+
+    _rmPendiente = null;
+    _rmCerrarModal();
+  }
+
+  function _rmCompressImage(file) {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        const maxDim = 1600;
+        let w = img.width, h = img.height;
+        if (w > maxDim || h > maxDim) {
+          const ratio = Math.min(maxDim / w, maxDim / h);
+          w = Math.round(w * ratio);
+          h = Math.round(h * ratio);
+        }
+        const c = document.createElement('canvas');
+        c.width = w; c.height = h;
+        c.getContext('2d').drawImage(img, 0, 0, w, h);
+        c.toBlob(blob => resolve(blob || file), 'image/jpeg', 0.8);
+      };
+      img.onerror = () => resolve(file);
+      img.src = URL.createObjectURL(file);
+    });
+  }
+
+  function _rmFileToBase64(blob) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result.split(',')[1]);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  }
+
+  // Exponer
+  window.rmIniciarSync = rmIniciarSync;
+  window.rmDetenerSync = rmDetenerSync;
 })();
 
 // ── CHECKLIST PRE-USO EQUIPOS (NEW-21) ───────────────────────────────────────
