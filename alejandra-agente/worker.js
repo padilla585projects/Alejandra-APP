@@ -1598,11 +1598,18 @@ export default {
         // Si es un resultado de escaneo con archivo, procesar con Gemini Vision (fire-and-forget)
         if ((tipo === 'scan_resultado' || tipo === 'foto_resultado') && archivo_key) {
           const subtipo = datos?.subtipo || 'documento';
-          // Fire-and-forget — no bloquea la respuesta al cliente
           ctx.waitUntil(
             procesarScanConGemini(env, eventoId, archivo_key, subtipo, datos?.contexto || '', sesion)
               .catch(err => console.error('[scan] error:', err.message))
           );
+        }
+
+        // Si Office envía un scan_request, despertar al móvil con FCM push
+        if (tipo === 'scan_request' && origen === 'office') {
+          const subtipo = datos?.subtipo || 'documento';
+          const contexto = datos?.contexto || '';
+          ctx.waitUntil(enviarPushScanRequest(env, sesion, subtipo, contexto, eventoId)
+            .catch(err => console.error('[push scan_request] error:', err.message)));
         }
 
         return json({ ok: true, evento_id: eventoId });
@@ -1686,6 +1693,8 @@ export default {
           return json({ error: e.message }, 500);
         }
       }
+
+
 
 
       // GET /files/<key> — Servir archivo del R2 (para mostrar foto en modal de revisión)
@@ -5643,8 +5652,10 @@ async function registrarLog(env, usuario_id, accion, parametros, resultado) {
 }
 
 async function getGoogleAccessToken(env) {
-  const clientEmail  = env.FIREBASE_CLIENT_EMAIL;
-  const privateKeyPem = env.FIREBASE_PRIVATE_KEY;
+  // Limpiar BOM (U+FEFF), zero-width space (U+200B), y whitespace al inicio/final
+  const cleanStr = s => s ? s.replace(/^[﻿​\s]+|[﻿​\s]+$/g, '') : s;
+  const clientEmail  = cleanStr(env.FIREBASE_CLIENT_EMAIL);
+  const privateKeyPem = cleanStr(env.FIREBASE_PRIVATE_KEY);
   if (!clientEmail || !privateKeyPem) throw new Error('FIREBASE_CLIENT_EMAIL / FIREBASE_PRIVATE_KEY no configuradas');
 
   const now = Math.floor(Date.now() / 1000);
@@ -5709,6 +5720,71 @@ async function enviarFCM(env, fcmToken, titulo, cuerpo) {
     return { ok: r.ok, status: r.status, ...data };
   } catch (e) {
     return { ok: false, error: e.message };
+  }
+}
+
+// Buscar token FCM del móvil del usuario y enviar notificación push de scan_request
+async function enviarPushScanRequest(env, sesion, subtipo, contexto, eventoId) {
+  // El usuario_id en sesiones puede ser string o número
+  const uid = sesion.usuario_id;
+  // Buscar FCM token con varias variantes (la app guarda con usuario_id string)
+  const row = await env.DB.prepare(
+    `SELECT contenido FROM alejandra_memoria WHERE tipo='fcm_token' AND (usuario_id=? OR usuario_id=?) ORDER BY created_at DESC LIMIT 1`
+  ).bind(String(uid), uid).first().catch(() => null);
+  if (!row?.contenido) {
+    console.log('[push scan_request] sin token FCM para usuario', uid);
+    return;
+  }
+  const fcmToken = row.contenido.trim();
+
+  const tipoLabels = {
+    parte_semanal: 'Parte semanal',
+    albaran_bobinas: 'Albarán de bobinas',
+    hoja_bobinas: 'Hoja control bobinas',
+    bobina: 'Bobina',
+    factura: 'Factura',
+    foto_obra: 'Foto de obra',
+    documento: 'Documento',
+    plano: 'Plano',
+    albaran: 'Albarán'
+  };
+  const labelTipo = tipoLabels[subtipo] || subtipo;
+  const titulo = '📷 Escaneo solicitado';
+  const cuerpo = contexto
+    ? `Office pide ${labelTipo}: ${contexto}`
+    : `Office necesita que escanees ${labelTipo}`;
+
+  try {
+    const accessToken = await getGoogleAccessToken(env);
+    const r = await fetch(`https://fcm.googleapis.com/v1/projects/alejandra-ia-app/messages:send`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        message: {
+          token: fcmToken,
+          notification: { title: titulo, body: cuerpo },
+          android: {
+            priority: 'HIGH',
+            notification: {
+              sound: 'default',
+              channel_id: 'alejandra_ia_channel',
+              click_action: 'FLUTTER_NOTIFICATION_CLICK'
+            }
+          },
+          data: {
+            tipo: 'scan_request',
+            subtipo: subtipo,
+            contexto: contexto,
+            evento_id: String(eventoId),
+            screen: 'scan'
+          }
+        }
+      })
+    });
+    const data = await r.json();
+    console.log('[push scan_request]', r.status, JSON.stringify(data).slice(0, 200));
+  } catch (e) {
+    console.error('[push scan_request] fetch error:', e.message);
   }
 }
 
