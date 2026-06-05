@@ -6,12 +6,132 @@
 ## ESTADO ACTUAL
 
 **Sesión:** LIBRE
-**Última sesión:** 05/06/2026 — v6.32→v6.37
-**Versión actual:** v6.37
+**Última sesión:** 05/06/2026 noche — v1.9.10 → v1.9.13 + worker múltiples versiones
+**Versión actual:** APP **v1.9.13** (code 27) · WORKER agente Version ID `411245a9`
+**Próxima:** probar albarán universal con foto real y verificar notificaciones tras 30+ min suspendido
+
+### ⚠️ HAY PUSHES PENDIENTES (no hubo red al cerrar)
+Lo primero al retomar:
+```bash
+cd "D:\Descargas\Alejandra APP" && git push
+cd "D:\Descargas\AlejandraIA" && git push
+```
+- `Alejandra APP`: 1 commit pendiente (`4d725ff` — este SESION.md)
+- `AlejandraIA`: 4 commits pendientes (`3386420`, `31d2c9f`, `3e48c50`, `1bdc19c`)
+
+Worker ya desplegado en producción (Cloudflare) — no afecta no pushear.
+APK 1.9.13 ya subido a R2 OTA — no afecta no pushear.
+GitHub Pages del panel **sí afectado** — el panel en producción muestra versión vieja hasta que se haga el push.
 
 ---
 
-## RESUMEN SESIÓN 05/06/2026 — v6.32→v6.37 Chat sync + SW fix + Escaneo remoto
+## RESUMEN SESIÓN 05/06/2026 noche — Escaneo remoto: del MVP al producto
+
+### Punto de partida
+La sesión anterior dejó el escaneo remoto funcionando en mecánica básica (Office pide foto → móvil la hace → llega al panel). PERO **Alejandra no procesaba la foto** (bug `if tipo === 'scan'` cuando el móvil envía `scan_resultado`) y **no había edición** de datos antes de meter en BD.
+
+### Bugs gordos descubiertos y arreglados
+1. **Worker: `if tipo === 'scan'` nunca matcheaba** → móvil envía `scan_resultado` → Alejandra **nunca procesaba ninguna foto**
+2. **Worker: `getAuth` buscaba en `usuarios.token_sesion`** (no existe). Real: tabla `sesiones.token`. Todo el sync devolvía 401 silencioso → móvil aparecía como "Sin conectar"
+3. **Worker: BOM (U+FEFF) en `GEMINI_API_KEY`, `_2`, `_3`** → 400 silencioso de Google. Limpieza con regex `/^[﻿​\s]+|[﻿​\s]+$/g` en `callGemini`
+4. **Worker: BOM en `FIREBASE_CLIENT_EMAIL` y `FIREBASE_PRIVATE_KEY`** → btoa() petaba con "Network connection lost". Misma limpieza en `getGoogleAccessToken`. FCM sigue dando `Invalid JWT Signature` — service account probablemente rotado (no resuelto, no necesario por ahora)
+5. **Worker: `gemini-2.0-flash` y `gemini-1.5-flash*` deprecados** → 404. Actualizados a `gemini-2.5-flash` / `gemini-flash-latest` / `gemini-2.5-flash-lite`
+6. **Worker: `callGemini` devuelve string directo**, pero mi código accedía a `.candidates[0]...` → texto vacío siempre
+7. **App: `SyncService` leía `uploadData['key']`** pero `/upload` devuelve `url` → `archivo_key` quedaba vacío en el evento → Gemini nunca disparaba. Cambiado a `url ?? key`
+8. **App: SyncService corría con Timer.periodic en isolate UI** → Android suspendía la app → polling moría → notificaciones desaparecían. Movido al `flutter_background_service` (foreground con `FOREGROUND_SERVICE_DATA_SYNC`)
+9. **App: scan_request llegaba al background isolate** pero el StreamController estaba en UI isolate (no cruzan isolates). Solucionado con SharedPreferences (`scan_pendiente`) + `recuperarScanPendiente()` al abrir UI
+
+### Features añadidas
+
+#### Pipeline de procesamiento de escaneos (worker)
+- `procesarScanConGemini(env, eventoOrigen, archivoKey, subtipo, contexto, sesion)`
+- Prompts especializados por subtipo en `SCAN_PROMPTS`:
+  - `parte_semanal`: extrae tabla trabajadores × días con horas y firmas
+  - `albaran_bobinas`: cabecera + 8 bobinas con matrícula, lote, metros
+  - `hoja_bobinas`: tabla manuscrita Levitec
+  - `bobina`: bobina individual
+  - `factura`: cabecera + líneas con base/iva/total
+  - `foto_obra`, `documento`, `plano`
+  - **`albaran_universal`** (★ nuevo): clasifica cada línea automáticamente
+- Limite 4 MB en bytes raw antes de Gemini
+
+#### Endpoints sync nuevos en agente worker
+- `POST /api/sync/evento` — push evento + dispara Gemini fire-and-forget
+- `GET /api/sync/eventos?desde=&excluir_origen=` — polling
+- `POST /api/sync/ping` — registrar presencia ("app"/"office"/"tablet")
+- `GET /api/sync/dispositivos` — quién está conectado
+- **`POST /api/sync/confirmar`** — recibe datos editados → inserta en BD según subtipo
+- **`GET /files/<key>`** — sirve binario del R2 con auth Bearer (para img en modal)
+
+#### Modal de revisión editable (panel)
+Cuando llega `scan_procesado` se abre overlay con:
+- Imagen R2 a la izquierda (click=zoom)
+- Formulario editable a la derecha — **tabla N filas según subtipo**
+- Por subtipo:
+  - `parte_semanal`: tabla 22×8 (empresa, nombre, L/M/X/J/V/S con horas+firma)
+  - `albaran_universal`: chips de resumen por categoría + tabla con dropdown editable + campos extra dinámicos
+  - `albaran_bobinas`, `hoja_bobinas`, `bobina`: tablas específicas
+- Botones: Descartar / 💾 Guardar en BD (POST `/api/sync/confirmar`)
+- Toasts (📸 recibido, ✅ guardado, ❌ error)
+
+#### Insertadores específicos (worker, distribuyen a tablas reales)
+- `insertarParteSemanal` — busca/crea `personal_externo`, calcula fechas L-S desde "25 al 30 de mayo de 2026", crea fila en `fichajes` por cada celda con horas
+- `insertarAlbaranBobinas` — N filas en `bobinas` con check de duplicados por matrícula
+- `insertarHojaBobinas` — UPSERT en `bobinas` (si existe del albarán, actualiza obra/recogida)
+- `insertarBobinaIndividual` — una fila
+- **`insertarAlbaranUniversal`** (★) — distribuye por categoría:
+  - `bobina_cable` → `bobinas`
+  - `material_obra` → `materiales_obra`
+  - `epi` → `epis_asignados`
+  - `herramienta` → `herramientas`
+  - `seguridad` → `inventario_seg`
+  - Guarda referencia en `albaranes` (R2 key)
+
+#### App móvil — Notificaciones en pantalla bloqueada
+- `flutter_local_notifications` en canal `alejandra_scan_channel` con:
+  - `Importance.max`, `Priority.max`
+  - `category: call`, `fullScreenIntent: true`, `visibility: public`
+  - Sonido + vibración pattern `[0, 200, 100, 200, 100, 400]`
+- **MOVIDO al `background_service`** para sobrevivir Doze (foreground service)
+- Persistencia `scan_pendiente` en SharedPreferences → UI recupera al abrir
+
+#### App móvil — Galería + Cámara
+- Diálogo "Escaneo remoto" muestra DOS botones: 🖼️ Galería + 📷 Cámara
+- `SyncService.ejecutarEscaneo(req, source: ImageSource.X)` parametrizado
+- Permisos `READ_MEDIA_IMAGES` ya estaban en manifest
+
+### Versionado APK durante la sesión
+- 1.9.10+24 — galería + cámara
+- 1.9.11+25 — notif local en pantalla bloqueada
+- 1.9.12+26 — fix `uploadData['url']` (Gemini no se disparaba)
+- 1.9.13+27 — sync en foreground service + albarán universal
+
+### Versionado worker durante la sesión
+- 7da66b47 (deep link auth)
+- 68ed0101 (sync API inicial)
+- ad7cce13 (procesar escaneos + bugs 1-3)
+- e90def93 (limpieza endpoints debug)
+- 411245a9 — **ACTUAL** — albarán universal + push FCM (no funciona)
+
+### Pendientes/Por probar próxima sesión
+
+1. **PROBAR con foto real de albarán mixto** (cable + cuadros + EPIs) — el albarán universal nunca se probó end-to-end con datos reales. El usuario tiene ejemplos en su móvil
+2. **Verificar foreground service sobrevive 30+ min** suspendido. El móvil del usuario se desconectó tras horas (test no concluyente)
+3. **FCM Push roto**: las credenciales Firebase tienen "Invalid JWT Signature" tras limpiar BOM. Probablemente service account regenerado. Solución: pedirle al usuario que descargue JSON nuevo desde Firebase Console → Project Settings → Service Accounts → Generate new private key y subirlo con `wrangler secret put FIREBASE_PRIVATE_KEY` + `FIREBASE_CLIENT_EMAIL` (sin BOM, idealmente). No bloquea nada porque las notificaciones funcionan vía polling+foreground
+4. **No se probó la inserción real** en BD desde el modal de revisión (todo el end-to-end Gemini → modal → guardar nunca llegó a completar por los bugs)
+5. **Tarea pendiente #5 sigue abierta**: "Implementar flujo B: escaneo desde pantallas de la app → Alejandra" (escaneo desde la app móvil, no remoto desde Office). No tocado esta sesión.
+
+### Archivos modificados esta sesión
+- `alejandra-agente/worker.js` (MUY tocado) — getAuth fix, procesarScanConGemini, SCAN_PROMPTS×8 incluyendo `albaran_universal`, 5 insertadores, `/api/sync/confirmar`, `/files/<key>`, limpieza BOM Gemini+Firebase, modelos Gemini 2.5, enviarPushScanRequest (FCM, no funciona)
+- `alejandra-panel.html` (MUY tocado) — SCAN_TIPOS×8 con `albaran_universal` como primera opción, CATEGORIAS_ALBARAN, FAB 📷, modal revisión + renderers `renderRevParteSemanal`, `renderRevAlbaranUniversal` (con chips + dropdown por línea), `renderRevAlbaranBobinas`, `renderRevHojaBobinas`, `renderRevBobinaIndividual`, recolectores, sección `dispositivos`
+- `AlejandraIA/lib/services/sync_service.dart` — NUEVO archivo, modelo SyncStatus, ScanRequest, ejecutarEscaneo con `source: ImageSource`, notif local, scan_pendiente persistente
+- `AlejandraIA/lib/services/background_service.dart` — REESCRITO: ping 30s + poll 5s + notif local + scan_pendiente, todo en `_onStart` del foreground service
+- `AlejandraIA/lib/main.dart` — instancia SyncService en MainShell, listener scanRequests, `_handleScanRequest` con diálogo Galería/Cámara, `recuperarScanPendiente` en post-frame
+- `AlejandraIA/pubspec.yaml` — bump 4 veces (1.9.10→1.9.13)
+
+---
+
+## SESIÓN ANTERIOR — 05/06/2026 — v6.32→v6.37 Chat sync + SW fix + Escaneo remoto (MVP)
 
 ### Problemas reportados:
 1. "nada sigue en la 28 cada vez que la abro" — móvil atascado en v6.28
