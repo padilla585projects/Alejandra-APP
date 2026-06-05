@@ -1687,6 +1687,7 @@ export default {
         }
       }
 
+
       // GET /files/<key> — Servir archivo del R2 (para mostrar foto en modal de revisión)
       if (path.startsWith('/files/') && req.method === 'GET') {
         const sesion = await getAuth(req, env);
@@ -2736,9 +2737,11 @@ async function buildUserContentWithAdjuntos(env, mensaje, adjuntos) {
 // ── Gemini Vision — analizar foto con IA de visión ──────────────────────────
 // ── Gemini con rotación de keys y fallback de modelos ────────────────────────
 async function callGemini(env, geminiBody, label) {
-  const keys = [env.GEMINI_API_KEY, env.GEMINI_API_KEY_2, env.GEMINI_API_KEY_3].filter(Boolean);
+  // Limpiar BOM/whitespace que puede colarse al guardar el secret
+  const cleanKey = k => k ? k.replace(/[﻿​\r\n\t ]+/g, '').trim() : k;
+  const keys = [cleanKey(env.GEMINI_API_KEY), cleanKey(env.GEMINI_API_KEY_2), cleanKey(env.GEMINI_API_KEY_3)].filter(Boolean);
   if (!keys.length) throw new Error('GEMINI_API_KEY no configurada');
-  const models = ['gemini-2.0-flash', 'gemini-1.5-flash-002', 'gemini-1.5-flash'];
+  const models = ['gemini-2.5-flash', 'gemini-flash-latest', 'gemini-2.5-flash-lite'];
   for (const key of keys) {
     for (const model of models) {
       const res = await fetch(
@@ -2916,23 +2919,21 @@ async function procesarScanConGemini(env, eventoOrigen, archivoKey, subtipo, con
     if (!obj) throw new Error(`Archivo no encontrado: ${archivoKey}`);
     const buf = await obj.arrayBuffer();
     const mediaType = obj.httpMetadata?.contentType || 'image/jpeg';
-
-    // Convertir a base64 (chunked para evitar stack overflow en archivos grandes)
-    let base64 = '';
     const bytes = new Uint8Array(buf);
-    const chunkSize = 8192;
-    for (let i = 0; i < bytes.length; i += chunkSize) {
-      base64 += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
+
+    // Tamaño máximo: 4 MB raw (5.3 MB base64) — Gemini acepta hasta 20MB pero Workers tiene límites
+    if (bytes.length > 4 * 1024 * 1024) {
+      throw new Error(`Imagen demasiado grande (${(bytes.length/1024/1024).toFixed(1)} MB). Max 4 MB. Reescanea con menor resolución.`);
     }
-    base64 = btoa(base64);
+
+    const base64 = uint8ToBase64(bytes);
 
     // Prompt específico según subtipo
     const promptBase = SCAN_PROMPTS[subtipo] || SCAN_PROMPTS.documento;
     const prompt = contexto ? `${promptBase}\n\nContexto del usuario: ${contexto}` : promptBase;
 
-    // Llamar Gemini Vision
-    const respuesta = await analizarFotoConGemini(env, base64, mediaType, prompt);
-    const textoIA = respuesta?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    // Llamar Gemini Vision — callGemini devuelve el texto directamente
+    const textoIA = await analizarFotoConGemini(env, base64, mediaType, prompt);
 
     // Intentar parsear como JSON (limpiando markdown si Gemini lo añade)
     let extraido = null;
