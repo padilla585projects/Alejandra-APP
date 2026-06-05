@@ -1280,7 +1280,7 @@ export default {
         const empresa   = empresa_id || 'default';
         const contexto  = await obtenerContextoChat(env, usuario_id, empresa, 10);
         const canalChat = canal || 'web';
-        const usuarioLabel = usuario_nombre && usuario_nombre.trim() ? usuario_nombre : usuario_id;
+        const usuarioLabel = (usuario_nombre && String(usuario_nombre).trim()) ? String(usuario_nombre) : String(usuario_id);
         const respuesta = await procesarConNEXUS(env, mensaje, contexto, usuario_id, empresa, canalChat, adjuntos, rol, pantalla, dom_actual, usuarioLabel);
 
         await guardarMensajeChat(env, usuario_id, empresa, mensaje, respuesta.texto, canalChat);
@@ -1299,7 +1299,7 @@ export default {
 
         const empresa  = empresa_id || 'default';
         const contexto = await obtenerContextoChat(env, usuario_id, empresa, 10);
-        const usuarioLabel = usuario_nombre && usuario_nombre.trim() ? usuario_nombre : usuario_id;
+        const usuarioLabel = (usuario_nombre && String(usuario_nombre).trim()) ? String(usuario_nombre) : String(usuario_id);
 
         const { readable, writable } = new TransformStream();
         const writer = writable.getWriter();
@@ -1554,20 +1554,29 @@ export default {
         if (environment.ADMIN_TOKEN && token === environment.ADMIN_TOKEN) {
           return { usuario_id: 'adrian', empresa_id: 'default' };
         }
-        // Probar tokens de usuario en BD
+        // Probar sesiones del login worker (tabla sesiones - es donde están los tokens reales)
+        try {
+          const sesion = await environment.DB.prepare(
+            `SELECT usuario_id, empresa_id FROM sesiones WHERE token = ?`
+          ).bind(token).first();
+          if (sesion) {
+            // Actualizar last_used (no bloquear si falla)
+            environment.DB.prepare(`UPDATE sesiones SET last_used = datetime('now') WHERE token = ?`)
+              .bind(token).run().catch(() => {});
+            return {
+              usuario_id: String(sesion.usuario_id),
+              empresa_id: String(sesion.empresa_id || 'default')
+            };
+          }
+        } catch (e) {
+          console.error('[getAuth] sesiones error:', e.message);
+        }
+        // Fallback: tokens admin antiguos en alejandra_tokens
         try {
           const row = await environment.DB.prepare(
-            `SELECT t.id, COALESCE(t.usuario_id, 'adrian') as usuario_id, COALESCE(t.empresa_id, 'default') as empresa_id
-             FROM alejandra_tokens t WHERE t.token = ? AND t.activo = 1`
+            `SELECT id FROM alejandra_tokens WHERE token = ? AND activo = 1`
           ).bind(token).first();
-          if (row) return { usuario_id: row.usuario_id, empresa_id: row.empresa_id };
-        } catch {}
-        // Probar como usuario Google OAuth (tabla usuarios)
-        try {
-          const user = await environment.DB.prepare(
-            `SELECT id, empresa_id FROM usuarios WHERE token_sesion = ? AND activo = 1`
-          ).bind(token).first();
-          if (user) return { usuario_id: user.id, empresa_id: user.empresa_id || 'default' };
+          if (row) return { usuario_id: 'adrian', empresa_id: 'default' };
         } catch {}
         return null;
       }
@@ -1586,22 +1595,14 @@ export default {
         ).bind(sesion.usuario_id, sesion.empresa_id, tipo, origen || 'app', JSON.stringify(datos || {}), archivo_key || null).run();
         const eventoId = r.meta?.last_row_id;
 
-        // Si es un escaneo y hay archivo, procesar con Alejandra en background
-        if (tipo === 'scan' && archivo_key) {
-          const prompt = `[SYNC] El usuario ha escaneado un documento desde ${origen || 'app'}.
-Tipo: ${datos?.subtipo || 'documento'}
-Contexto: ${datos?.contexto || 'sin contexto'}
-Archivo: ${archivo_key}
-Pantalla: ${datos?.pantalla || 'desconocida'}
-
-Analiza el archivo con ver_archivo o analizar_foto_obra/analizar_archivo según el tipo.
-Extrae los datos, preséntalos organizados, y guarda el resultado como evento de respuesta.
-Usa escribir_bd("INSERT INTO sync_eventos (usuario_id, empresa_id, tipo, origen, datos) VALUES (?, ?, 'scan_resultado', 'alejandra', ?)", [usuario_id, empresa_id, JSON.stringify({evento_origen: ${eventoId}, ...datos_extraidos})]).
-Así el otro dispositivo recibe tu análisis.`;
-          const ctx = await obtenerContextoChat(env, sesion.usuario_id, 'sync', 4);
-          // Fire-and-forget (no bloquea la respuesta al cliente)
-          const timeout = new Promise(r => setTimeout(() => r(null), 22000));
-          Promise.race([procesarConNEXUS(env, prompt, ctx, sesion.usuario_id, 'sync'), timeout]).catch(() => {});
+        // Si es un resultado de escaneo con archivo, procesar con Gemini Vision (fire-and-forget)
+        if ((tipo === 'scan_resultado' || tipo === 'foto_resultado') && archivo_key) {
+          const subtipo = datos?.subtipo || 'documento';
+          // Fire-and-forget — no bloquea la respuesta al cliente
+          ctx.waitUntil(
+            procesarScanConGemini(env, eventoId, archivo_key, subtipo, datos?.contexto || '', sesion)
+              .catch(err => console.error('[scan] error:', err.message))
+          );
         }
 
         return json({ ok: true, evento_id: eventoId });
@@ -1650,6 +1651,53 @@ Así el otro dispositivo recibe tu análisis.`;
            WHERE usuario_id = ? AND activo = 1 AND ultimo_ping >= datetime('now', '-5 minutes')`
         ).bind(sesion.usuario_id).all().catch(() => ({results:[]}));
         return json({ ok: true, dispositivos: dispositivos.results || [] });
+      }
+
+      // POST /api/sync/confirmar — Insertar los datos extraídos (editados por el usuario) en la BD
+      if (path === '/api/sync/confirmar' && req.method === 'POST') {
+        const sesion = await getAuth(req, env);
+        if (!sesion) return json({ error: 'No autorizado' }, 401);
+        const body = await req.json().catch(() => ({}));
+        const { subtipo, datos, archivo_key, obra_id, obra_nombre } = body;
+        if (!subtipo || !datos) return json({ error: 'subtipo y datos requeridos' }, 400);
+
+        try {
+          let resultado;
+          if (subtipo === 'parte_semanal') {
+            resultado = await insertarParteSemanal(env, datos, sesion, obra_id, archivo_key);
+          } else if (subtipo === 'albaran_bobinas') {
+            resultado = await insertarAlbaranBobinas(env, datos, sesion, obra_id, obra_nombre, archivo_key);
+          } else if (subtipo === 'hoja_bobinas') {
+            resultado = await insertarHojaBobinas(env, datos, sesion, obra_id, obra_nombre, archivo_key);
+          } else if (subtipo === 'bobina') {
+            resultado = await insertarBobinaIndividual(env, datos, sesion, obra_id, obra_nombre, archivo_key);
+          } else {
+            return json({ error: `subtipo no soportado para inserción: ${subtipo}` }, 400);
+          }
+          // Notificar éxito vía sync
+          await env.DB.prepare(
+            `INSERT INTO sync_eventos (usuario_id, empresa_id, tipo, origen, datos) VALUES (?,?,?,?,?)`
+          ).bind(sesion.usuario_id, sesion.empresa_id, 'scan_guardado', 'office',
+            JSON.stringify({ subtipo, resumen: resultado.resumen, total: resultado.total })
+          ).run().catch(() => {});
+          return json({ ok: true, ...resultado });
+        } catch (e) {
+          console.error('[confirmar] error:', e.message);
+          return json({ error: e.message }, 500);
+        }
+      }
+
+      // GET /files/<key> — Servir archivo del R2 (para mostrar foto en modal de revisión)
+      if (path.startsWith('/files/') && req.method === 'GET') {
+        const sesion = await getAuth(req, env);
+        if (!sesion) return json({ error: 'No autorizado' }, 401);
+        const key = decodeURIComponent(path.replace('/files/', ''));
+        const obj = await env.FILES.get(key);
+        if (!obj) return new Response('No encontrado', { status: 404 });
+        const headers = new Headers(corsHeaders);
+        headers.set('Content-Type', obj.httpMetadata?.contentType || 'application/octet-stream');
+        headers.set('Cache-Control', 'private, max-age=3600');
+        return new Response(obj.body, { headers });
       }
 
       // GET /api/sync/dispositivos — Ver qué dispositivos están conectados
@@ -2729,6 +2777,430 @@ async function buscarConGemini(env, query) {
     contents: [{ parts: [{ text: query }] }],
     tools: [{ google_search: {} }]
   }, 'busqueda');
+}
+
+// ── Escaneo remoto: extracción estructurada con Gemini Vision ──────────────────
+const SCAN_PROMPTS = {
+  parte_semanal: `Estás viendo un PARTE DE TRABAJO SEMANAL (tabla manuscrita).
+Estructura: filas = trabajadores (EMPRESA, NOMBRE) · columnas = días (LUNES a SÁBADO) cada uno con HORAS y FIRMAS.
+
+Devuelve SOLO un JSON con esta estructura exacta, sin texto adicional, sin markdown:
+{
+  "semana": "22",
+  "rango_fechas": "25 al 30 de mayo de 2026",
+  "anio": 2026,
+  "trabajadores": [
+    {
+      "empresa": "EDISON",
+      "nombre": "ADRIAN PADILLA",
+      "lunes": {"horas": 8, "firmo": true},
+      "martes": {"horas": 8, "firmo": true},
+      "miercoles": {"horas": 8, "firmo": true},
+      "jueves": {"horas": 8, "firmo": true},
+      "viernes": {"horas": 8, "firmo": true},
+      "sabado": {"horas": null, "firmo": false}
+    }
+  ]
+}
+
+REGLAS:
+- "horas": número entero (8, 9, 10…) o null si no hay horas escritas.
+- "firmo": true si hay garabato/firma visible en la celda, false si está vacía o tiene "X".
+- Si una celda tiene "X" en lugar de horas, pon horas=null, firmo=false.
+- Mantén el orden de las filas tal como aparecen en la hoja.`,
+
+  albaran_bobinas: `Estás viendo un ALBARÁN DE ENTREGA DE CABLE/BOBINAS (documento impreso, normalmente General Cable, Prysmian, Top Cable, etc).
+
+Devuelve SOLO un JSON, sin texto adicional, sin markdown:
+{
+  "cabecera": {
+    "proveedor": "General Cable",
+    "num_albaran": "5051217424",
+    "fecha": "2026-05-13",
+    "cliente": "TECNOHM S.A. MADRID",
+    "num_cliente": "0050105140",
+    "direccion_envio": "LEVITEC SISTEMAS, FUNDIDORES 40, GETAFE",
+    "transportista": "JOAQUIN VARON E HIJOS SL",
+    "peso_bruto_kg": 3916.0,
+    "peso_neto_kg": 3604.0,
+    "bultos": 8
+  },
+  "bobinas": [
+    {
+      "matricula": "82AXWVZ",
+      "tipo_bobina": "DWX090A",
+      "num_lote": "1032907484",
+      "tipo_cable": "EXZHELLENT COMPACT RZ1-K(AS) 1kV 1x95 VD",
+      "seccion": "1x95",
+      "metros": 500,
+      "peso_bruto_kg": 489.5,
+      "peso_neto_kg": 450.5
+    }
+  ]
+}
+
+REGLAS:
+- Cada fila de bobina (cada contramarca/matrícula distinta) es un objeto en "bobinas".
+- "matricula" = la contramarca alfanumérica (ej. 82AXWVZ, 82AXXVH).
+- "metros" = cantidad en metros (numérico).
+- Si un campo no aparece, usa null.
+- Fecha en formato ISO YYYY-MM-DD.`,
+
+  hoja_bobinas: `Estás viendo una HOJA DE CONTROL DE BOBINAS manuscrita (Levitec).
+Columnas: FECHA RECEPCIÓN, PROVEEDOR, Nº ALBARÁN, MATRÍCULA, FABRICANTE BOBINA, DIÁMETRO, CABLE, METROS, VACÍA, FECHA AVISO RECOGIDA, FECHA RECOGIDA.
+
+Devuelve SOLO un JSON, sin texto adicional, sin markdown:
+{
+  "obra": "",
+  "encargado": "",
+  "bobinas": [
+    {
+      "fecha_recepcion": "2026-05-08",
+      "proveedor": "TECNOHM",
+      "num_albaran": "5051215813",
+      "matricula": "82AC5FL",
+      "fabricante": "General Cable",
+      "diametro": null,
+      "cable": "1x185",
+      "metros": null,
+      "vacia": false,
+      "fecha_aviso_recogida": null,
+      "fecha_recogida": null,
+      "notas": "TECNOHM"
+    }
+  ]
+}
+
+REGLAS:
+- Cada fila escrita a mano es un objeto en "bobinas".
+- "matricula" = código de la bobina (ej. 82AC5FL, 829DJ3S).
+- "cable" = sección del cable como aparece (ej. "1x185", "185", "1x95").
+- "fabricante": expandir abreviaturas comunes (G.C, GC → "General Cable"; Prys → "Prysmian").
+- Fechas en formato ISO YYYY-MM-DD. Si pone DD/MM/YY interpretar 26 como 2026.
+- Si un campo está vacío, usa null. Salta filas vacías al final.`,
+
+  factura: `Estás viendo una FACTURA. Devuelve SOLO JSON sin markdown:
+{
+  "proveedor": "",
+  "num_factura": "",
+  "fecha": "YYYY-MM-DD",
+  "base_imponible": 0,
+  "iva": 0,
+  "total": 0,
+  "lineas": [
+    {"descripcion": "", "cantidad": 0, "precio_unitario": 0, "importe": 0}
+  ]
+}`,
+
+  documento: `Describe brevemente este documento (qué es, qué datos clave contiene) en JSON: {"tipo": "...", "resumen": "...", "datos_clave": {}}`,
+
+  foto_obra: `Describe esta foto de obra eléctrica/mecánica. JSON: {"descripcion": "...", "equipos_visibles": [], "estado": "...", "anomalias": []}`,
+
+  bobina: `Estás viendo una etiqueta o matrícula de una BOBINA de cable individual. JSON sin markdown:
+{
+  "matricula": "",
+  "fabricante": "",
+  "tipo_cable": "",
+  "seccion": "",
+  "metros": null,
+  "num_lote": null
+}`,
+
+  plano: `Describe brevemente este plano: {"titulo": "...", "tipo": "...", "elementos": []}`
+};
+
+async function procesarScanConGemini(env, eventoOrigen, archivoKey, subtipo, contexto, sesion) {
+  try {
+    // Cargar la foto del R2
+    const obj = await env.FILES.get(archivoKey);
+    if (!obj) throw new Error(`Archivo no encontrado: ${archivoKey}`);
+    const buf = await obj.arrayBuffer();
+    const mediaType = obj.httpMetadata?.contentType || 'image/jpeg';
+
+    // Convertir a base64 (chunked para evitar stack overflow en archivos grandes)
+    let base64 = '';
+    const bytes = new Uint8Array(buf);
+    const chunkSize = 8192;
+    for (let i = 0; i < bytes.length; i += chunkSize) {
+      base64 += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
+    }
+    base64 = btoa(base64);
+
+    // Prompt específico según subtipo
+    const promptBase = SCAN_PROMPTS[subtipo] || SCAN_PROMPTS.documento;
+    const prompt = contexto ? `${promptBase}\n\nContexto del usuario: ${contexto}` : promptBase;
+
+    // Llamar Gemini Vision
+    const respuesta = await analizarFotoConGemini(env, base64, mediaType, prompt);
+    const textoIA = respuesta?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+
+    // Intentar parsear como JSON (limpiando markdown si Gemini lo añade)
+    let extraido = null;
+    let parseError = null;
+    try {
+      const limpio = textoIA.replace(/^```json\s*/i, '').replace(/```\s*$/, '').trim();
+      extraido = JSON.parse(limpio);
+    } catch (e) {
+      parseError = e.message;
+    }
+
+    // Guardar evento scan_procesado para que el frontend lo recoja
+    const payload = {
+      evento_origen: eventoOrigen,
+      subtipo: subtipo,
+      contexto: contexto,
+      archivo_key: archivoKey,
+      extraido: extraido,
+      texto_raw: extraido ? null : textoIA,
+      parse_error: parseError,
+      timestamp: new Date().toISOString()
+    };
+
+    await env.DB.prepare(
+      `INSERT INTO sync_eventos (usuario_id, empresa_id, tipo, origen, datos, archivo_key) VALUES (?,?,?,?,?,?)`
+    ).bind(
+      sesion.usuario_id,
+      sesion.empresa_id,
+      'scan_procesado',
+      'alejandra',
+      JSON.stringify(payload),
+      archivoKey
+    ).run();
+
+    console.log(`[scan] ${subtipo} procesado, evento_origen=${eventoOrigen}, items=${extraido ? Object.keys(extraido).length : 0}`);
+  } catch (err) {
+    console.error('[scan] procesarScanConGemini:', err.message);
+    // Notificar fallo
+    await env.DB.prepare(
+      `INSERT INTO sync_eventos (usuario_id, empresa_id, tipo, origen, datos, archivo_key) VALUES (?,?,?,?,?,?)`
+    ).bind(
+      sesion.usuario_id,
+      sesion.empresa_id,
+      'scan_error',
+      'alejandra',
+      JSON.stringify({ evento_origen: eventoOrigen, subtipo, error: err.message }),
+      archivoKey
+    ).run().catch(() => {});
+  }
+}
+
+// ── Inserción de datos extraídos en la BD ────────────────────────────────────
+async function buscarOCrearPersonalExterno(env, nombre, empresa, sesion) {
+  // Normalizar nombre
+  const nombreNorm = (nombre || '').trim().toUpperCase();
+  if (!nombreNorm) return null;
+  // Buscar por nombre exacto
+  let row = await env.DB.prepare(
+    `SELECT id FROM personal_externo WHERE UPPER(nombre) = ? AND empresa_id = ? LIMIT 1`
+  ).bind(nombreNorm, sesion.empresa_id).first().catch(() => null);
+  if (row) return row.id;
+  // Crear nuevo
+  const r = await env.DB.prepare(
+    `INSERT INTO personal_externo (empresa_id, nombre, notas, activo) VALUES (?,?,?,1)`
+  ).bind(sesion.empresa_id, nombreNorm, `Subcontrata: ${empresa || 'desconocida'}`).run();
+  return r.meta?.last_row_id;
+}
+
+async function insertarParteSemanal(env, datos, sesion, obra_id, archivo_key) {
+  const trabajadores = datos.trabajadores || [];
+  const rangoFechas = datos.rango_fechas || '';
+  const anio = datos.anio || new Date().getFullYear();
+
+  // Calcular fechas de cada día desde el rango "25 al 30 de mayo de 2026"
+  const meses = { enero:0, febrero:1, marzo:2, abril:3, mayo:4, junio:5, julio:6, agosto:7, septiembre:8, octubre:9, noviembre:10, diciembre:11 };
+  let fechaLunes = null;
+  const m = rangoFechas.match(/(\d+)\s+al\s+\d+\s+de\s+(\w+)/i);
+  if (m) {
+    const dia = parseInt(m[1]);
+    const mes = meses[m[2].toLowerCase()];
+    if (mes !== undefined) fechaLunes = new Date(anio, mes, dia);
+  }
+
+  const dias = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'];
+  let insertados = 0;
+  let omitidos = 0;
+  const errores = [];
+
+  for (const t of trabajadores) {
+    const personalId = await buscarOCrearPersonalExterno(env, t.nombre, t.empresa, sesion);
+    if (!personalId) { omitidos++; continue; }
+
+    for (let i = 0; i < dias.length; i++) {
+      const dia = dias[i];
+      const celda = t[dia];
+      if (!celda || !celda.horas) continue;
+      const horas = Number(celda.horas);
+      if (!horas || horas <= 0) continue;
+
+      let fechaStr = null;
+      if (fechaLunes) {
+        const f = new Date(fechaLunes);
+        f.setDate(f.getDate() + i);
+        fechaStr = f.toISOString().slice(0, 10);
+      }
+
+      const horasExtra = horas > 8 ? horas - 8 : 0;
+      try {
+        await env.DB.prepare(
+          `INSERT INTO fichajes (empresa_id, personal_externo_id, obra_id, fecha, horas_trabajadas, horas_extra, estado, notas, registrado_por)
+           VALUES (?,?,?,?,?,?,?,?,?)`
+        ).bind(
+          sesion.empresa_id,
+          personalId,
+          obra_id || null,
+          fechaStr,
+          horas,
+          horasExtra,
+          celda.firmo ? 'firmado' : 'sin_firma',
+          `Parte semana ${datos.semana || '?'} · ${t.empresa || ''} · escaneo`,
+          'alejandra_office'
+        ).run();
+        insertados++;
+      } catch (e) {
+        errores.push(`${t.nombre} ${dia}: ${e.message}`);
+      }
+    }
+  }
+
+  return {
+    total: insertados,
+    omitidos,
+    errores: errores.slice(0, 5),
+    resumen: `${insertados} fichajes registrados de ${trabajadores.length} trabajadores (semana ${datos.semana || '?'})`
+  };
+}
+
+async function insertarAlbaranBobinas(env, datos, sesion, obra_id, obra_nombre, archivo_key) {
+  const cab = datos.cabecera || {};
+  const bobinas = datos.bobinas || [];
+  let insertadas = 0, duplicadas = 0;
+  const errores = [];
+
+  for (const b of bobinas) {
+    if (!b.matricula) continue;
+    // Comprobar si ya existe por matrícula
+    const existe = await env.DB.prepare(
+      `SELECT id FROM bobinas WHERE codigo = ? AND empresa_id = ?`
+    ).bind(b.matricula, sesion.empresa_id).first().catch(() => null);
+    if (existe) { duplicadas++; continue; }
+
+    try {
+      await env.DB.prepare(
+        `INSERT INTO bobinas (codigo, tipo, seccion, longitud, proveedor, num_albaran, estado, obra_id, obra_nombre, fecha_entrada, tipo_cable, empresa_id, registrado_por, notas)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+      ).bind(
+        b.matricula,
+        b.tipo_bobina || null,
+        b.seccion || null,
+        b.metros || null,
+        cab.proveedor || null,
+        cab.num_albaran || null,
+        'entrada',
+        obra_id || null,
+        obra_nombre || null,
+        cab.fecha || new Date().toISOString().slice(0,10),
+        b.tipo_cable || null,
+        sesion.empresa_id,
+        'alejandra_office',
+        b.num_lote ? `Lote ${b.num_lote}${b.peso_neto_kg ? ' · ' + b.peso_neto_kg + ' kg neto' : ''}` : null
+      ).run();
+      insertadas++;
+    } catch (e) { errores.push(`${b.matricula}: ${e.message}`); }
+  }
+
+  return {
+    total: insertadas,
+    duplicadas,
+    errores: errores.slice(0, 5),
+    resumen: `${insertadas} bobinas del albarán ${cab.num_albaran || '?'} (${cab.proveedor || '?'})${duplicadas ? ' · ' + duplicadas + ' ya existían' : ''}`
+  };
+}
+
+async function insertarHojaBobinas(env, datos, sesion, obra_id, obra_nombre, archivo_key) {
+  const bobinas = datos.bobinas || [];
+  let creadas = 0, actualizadas = 0;
+  const errores = [];
+
+  for (const b of bobinas) {
+    if (!b.matricula) continue;
+    const existe = await env.DB.prepare(
+      `SELECT id FROM bobinas WHERE codigo = ? AND empresa_id = ?`
+    ).bind(b.matricula, sesion.empresa_id).first().catch(() => null);
+
+    try {
+      if (existe) {
+        // Actualizar con datos de obra/recogida
+        await env.DB.prepare(
+          `UPDATE bobinas SET
+             obra_id = COALESCE(?, obra_id),
+             obra_nombre = COALESCE(?, obra_nombre),
+             num_albaran = COALESCE(?, num_albaran),
+             proveedor = COALESCE(?, proveedor),
+             seccion = COALESCE(?, seccion),
+             fecha_devolucion = COALESCE(?, fecha_devolucion),
+             estado = CASE WHEN ? IS 1 THEN 'vacia' ELSE estado END,
+             notas = COALESCE(notas, '') || ' · Hoja control: ' || ?
+           WHERE id = ?`
+        ).bind(
+          obra_id || null,
+          obra_nombre || datos.obra || null,
+          b.num_albaran || null,
+          b.proveedor || null,
+          b.cable || null,
+          b.fecha_recogida || null,
+          b.vacia ? 1 : 0,
+          b.fabricante || '',
+          existe.id
+        ).run();
+        actualizadas++;
+      } else {
+        await env.DB.prepare(
+          `INSERT INTO bobinas (codigo, seccion, proveedor, num_albaran, estado, obra_id, obra_nombre, fecha_entrada, fecha_devolucion, empresa_id, registrado_por, notas)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`
+        ).bind(
+          b.matricula,
+          b.cable || null,
+          b.proveedor || null,
+          b.num_albaran || null,
+          b.vacia ? 'vacia' : 'en_obra',
+          obra_id || null,
+          obra_nombre || datos.obra || null,
+          b.fecha_recepcion || null,
+          b.fecha_recogida || null,
+          sesion.empresa_id,
+          'alejandra_office',
+          `Hoja control · Fabricante: ${b.fabricante || '?'}`
+        ).run();
+        creadas++;
+      }
+    } catch (e) { errores.push(`${b.matricula}: ${e.message}`); }
+  }
+
+  return {
+    total: creadas + actualizadas,
+    creadas,
+    actualizadas,
+    errores: errores.slice(0, 5),
+    resumen: `${creadas} bobinas nuevas, ${actualizadas} actualizadas en obra ${obra_nombre || datos.obra || '?'}`
+  };
+}
+
+async function insertarBobinaIndividual(env, datos, sesion, obra_id, obra_nombre, archivo_key) {
+  const b = datos;
+  if (!b.matricula) throw new Error('Falta matrícula');
+  const existe = await env.DB.prepare(
+    `SELECT id FROM bobinas WHERE codigo = ? AND empresa_id = ?`
+  ).bind(b.matricula, sesion.empresa_id).first().catch(() => null);
+  if (existe) return { total: 0, resumen: `Bobina ${b.matricula} ya existía (id ${existe.id})` };
+  await env.DB.prepare(
+    `INSERT INTO bobinas (codigo, seccion, longitud, proveedor, estado, obra_id, obra_nombre, fecha_entrada, tipo_cable, empresa_id, registrado_por)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?)`
+  ).bind(
+    b.matricula, b.seccion || null, b.metros || null, b.fabricante || null, 'en_obra',
+    obra_id || null, obra_nombre || null, new Date().toISOString().slice(0,10),
+    b.tipo_cable || null, sesion.empresa_id, 'alejandra_office'
+  ).run();
+  return { total: 1, resumen: `Bobina ${b.matricula} registrada` };
 }
 
 // ── Cálculos de ingeniería ───────────────────────────────────────────────────
@@ -4916,7 +5388,8 @@ async function construirMessages(env, mensaje, contexto, limitHistorial=10, incl
   const rolNombre   = rol || 'desconocido';
   const pantallaStr = pantalla ? `, pantalla="${pantalla}"` : '';
   // Mostrar el nombre legible si está disponible, si no caer al usuario_id (puede contener UUID)
-  const usuarioMostrar = (usuario_label && usuario_label.trim()) ? usuario_label : (usuario_id || 'anónimo');
+  const uLabel = usuario_label != null ? String(usuario_label) : '';
+  const usuarioMostrar = uLabel.trim() || (usuario_id ? String(usuario_id) : 'anónimo');
   partes.push(`[Sesión: usuario="${usuarioMostrar}", canal="${canalNombre}", rol="${rolNombre}"${pantallaStr}]`);
 
   // DOM de la pantalla actual (solo panel web) — permite usar selectores reales en <plan>

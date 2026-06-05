@@ -1719,17 +1719,26 @@ function procesarEventoSync(ev) {
   const datos = typeof ev.datos === 'string' ? JSON.parse(ev.datos || '{}') : (ev.datos || {});
 
   if (ev.tipo === 'scan_resultado' || ev.tipo === 'foto_resultado') {
-    // ¡Resultado de escaneo!
+    // ¡Resultado de escaneo! La foto ha llegado, ahora Alejandra la procesa
     _scanResultados.unshift({ ...ev, datos });
-    // Si estábamos esperando este scan
     if (_scanPendiente) {
-      _scanPendiente = null;
       cerrarScanModal();
+      // Mostrar "procesando con Alejandra..."
+      mostrarProcesandoModal(datos.subtipo || 'documento');
     }
-    // Toast
-    mostrarToast('📸 Escaneo recibido', datos.descripcion || 'Se ha recibido una foto del móvil', 'scan');
-    // Actualizar sección dispositivos si está abierta
+    mostrarToast('📸 Foto recibida', 'Alejandra está extrayendo los datos...', 'scan');
     actualizarSeccionDispositivos();
+  } else if (ev.tipo === 'scan_procesado') {
+    // Alejandra terminó de extraer datos → abrir modal de revisión editable
+    if (_scanPendiente) _scanPendiente = null;
+    cerrarProcesandoModal();
+    abrirModalRevision(datos);
+  } else if (ev.tipo === 'scan_error') {
+    cerrarProcesandoModal();
+    if (_scanPendiente) _scanPendiente = null;
+    mostrarToast('❌ Error procesando', datos.error || 'No se pudo extraer datos', 'error');
+  } else if (ev.tipo === 'scan_guardado') {
+    mostrarToast('✅ Guardado en BD', datos.resumen || 'Datos insertados correctamente', 'success');
   } else if (ev.tipo === 'scan_cancelado') {
     if (_scanPendiente) {
       _scanPendiente = null;
@@ -1744,12 +1753,14 @@ function procesarEventoSync(ev) {
 // ── Scan Modal ──────────────────────────────────────
 let _scanTipoSel = 'documento';
 const SCAN_TIPOS = [
-  { id: 'documento',  ico: '📄', label: 'Documento' },
-  { id: 'factura',    ico: '🧾', label: 'Factura' },
-  { id: 'albaran',    ico: '📋', label: 'Albarán' },
-  { id: 'foto_obra',  ico: '🏗️', label: 'Foto de obra' },
-  { id: 'bobina',     ico: '🔌', label: 'Bobina / Material' },
-  { id: 'plano',      ico: '📐', label: 'Plano' },
+  { id: 'parte_semanal',   ico: '📅', label: 'Parte semanal' },
+  { id: 'albaran_bobinas', ico: '📋', label: 'Albarán bobinas' },
+  { id: 'hoja_bobinas',    ico: '🧾', label: 'Hoja control bobinas' },
+  { id: 'bobina',          ico: '🔌', label: 'Bobina individual' },
+  { id: 'factura',         ico: '💶', label: 'Factura' },
+  { id: 'foto_obra',       ico: '🏗️', label: 'Foto de obra' },
+  { id: 'documento',       ico: '📄', label: 'Otro documento' },
+  { id: 'plano',           ico: '📐', label: 'Plano' },
 ];
 
 function abrirScanModal() {
@@ -1931,6 +1942,394 @@ function actualizarSeccionDispositivos() {
   const scanList = document.getElementById('scanResultsList');
   if (scanList && _scanResultados.length > 0) {
     scanList.innerHTML = _scanResultados.slice(0, 10).map(renderScanResult).join('');
+  }
+}
+
+// ── Modal "procesando" mientras Gemini extrae ────────────────────
+function mostrarProcesandoModal(subtipo) {
+  cerrarProcesandoModal();
+  const tipoInfo = SCAN_TIPOS.find(t => t.id === subtipo) || { ico: '📄', label: subtipo };
+  const overlay = document.createElement('div');
+  overlay.className = 'scan-overlay';
+  overlay.id = 'procesandoOverlay';
+  overlay.innerHTML = `
+    <div class="scan-modal">
+      <div class="scan-waiting">
+        <div class="spinner"></div>
+        <div class="msg">Alejandra está leyendo el documento</div>
+        <div class="sub">Extrayendo datos de ${tipoInfo.label}... (15-25 s)</div>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+}
+function cerrarProcesandoModal() {
+  const el = document.getElementById('procesandoOverlay');
+  if (el) el.remove();
+}
+
+// ── Modal de revisión editable ────────────────────────────────────
+let _revisionDatos = null;
+
+function abrirModalRevision(payload) {
+  _revisionDatos = JSON.parse(JSON.stringify(payload)); // copia profunda editable
+  const subtipo = payload.subtipo || 'documento';
+  const tipoInfo = SCAN_TIPOS.find(t => t.id === subtipo) || { ico: '📄', label: subtipo };
+  const extraido = payload.extraido || {};
+
+  cerrarProcesandoModal();
+  const overlay = document.createElement('div');
+  overlay.className = 'scan-overlay';
+  overlay.id = 'revisionOverlay';
+  overlay.style.alignItems = 'flex-start';
+  overlay.style.paddingTop = '20px';
+
+  // URL autenticada para la imagen — usa fetch + blob para llevar el Bearer
+  const imgSrc = payload.archivo_key
+    ? `${API}/files/${encodeURIComponent(payload.archivo_key)}`
+    : null;
+
+  overlay.innerHTML = `
+    <div style="background:var(--surf);border:1px solid var(--border);border-radius:14px;width:96%;max-width:1200px;max-height:92vh;display:flex;flex-direction:column;overflow:hidden">
+      <div style="padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;background:var(--surf2)">
+        <span style="font-size:22px">${tipoInfo.ico}</span>
+        <div style="flex:1">
+          <div style="font-family:Montserrat,sans-serif;font-weight:900;font-size:14px">Revisar ${tipoInfo.label}</div>
+          <div style="font-size:11px;color:var(--muted)">${payload.contexto || ''} · Revisa y corrige antes de guardar</div>
+        </div>
+        <button onclick="cerrarModalRevision()" style="background:transparent;border:none;color:var(--muted);font-size:22px;cursor:pointer">×</button>
+      </div>
+      <div style="flex:1;display:flex;overflow:hidden;min-height:0">
+        <div style="flex:0 0 40%;padding:12px;border-right:1px solid var(--border);overflow:auto;background:#000">
+          <img id="revImg" style="width:100%;cursor:zoom-in" onclick="this.style.cursor=this.style.maxHeight?'zoom-in':'zoom-out';this.style.maxHeight=this.style.maxHeight?'':'none'" alt="Escaneo">
+          <div id="revImgErr" style="color:#888;font-size:11px;text-align:center;padding:20px;display:none">No se pudo cargar la imagen</div>
+        </div>
+        <div style="flex:1;padding:14px;overflow:auto;min-width:0">
+          <div id="revContenido"></div>
+        </div>
+      </div>
+      <div style="padding:12px 18px;border-top:1px solid var(--border);display:flex;gap:8px;align-items:center;background:var(--surf2)">
+        ${(subtipo==='albaran_bobinas'||subtipo==='hoja_bobinas'||subtipo==='bobina'||subtipo==='parte_semanal')
+          ? '<input id="revObraNombre" class="inp" placeholder="Obra (ej: Mercadona Getafe)" style="flex:1;max-width:280px;padding:8px 10px;font-size:12px">'
+          : ''}
+        <div style="flex:1"></div>
+        <button onclick="cerrarModalRevision()" style="padding:9px 18px;background:var(--surf);border:1px solid var(--border);border-radius:8px;color:var(--muted);cursor:pointer;font-size:13px">Descartar</button>
+        <button onclick="guardarRevision()" class="btn-acc" id="btnGuardarRev" style="padding:9px 22px;font-size:13px">💾 Guardar en BD</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+
+  // Cargar imagen con auth
+  if (imgSrc) {
+    fetch(imgSrc, { headers: { Authorization: `Bearer ${adminToken}` } })
+      .then(r => r.blob())
+      .then(b => { document.getElementById('revImg').src = URL.createObjectURL(b); })
+      .catch(() => {
+        document.getElementById('revImg').style.display='none';
+        document.getElementById('revImgErr').style.display='block';
+      });
+  } else {
+    document.getElementById('revImg').style.display='none';
+  }
+
+  // Renderizar contenido según subtipo
+  renderRevisionContenido(subtipo, extraido, payload);
+}
+
+function cerrarModalRevision() {
+  const el = document.getElementById('revisionOverlay');
+  if (el) el.remove();
+  _revisionDatos = null;
+}
+
+function renderRevisionContenido(subtipo, extraido, payload) {
+  const c = document.getElementById('revContenido');
+  if (!extraido) {
+    c.innerHTML = `<div style="color:var(--red);font-size:13px;padding:14px;background:rgba(239,68,68,0.08);border-radius:8px">
+      <strong>No se pudo extraer JSON.</strong> Texto crudo de la IA:
+      <pre style="white-space:pre-wrap;font-size:11px;margin-top:10px;max-height:300px;overflow:auto;color:var(--text);background:var(--surf2);padding:10px;border-radius:6px">${esc(payload.texto_raw || '')}</pre>
+      ${payload.parse_error ? `<div style="margin-top:8px;font-size:11px">Error: ${esc(payload.parse_error)}</div>` : ''}
+    </div>`;
+    return;
+  }
+  if (subtipo === 'parte_semanal') {
+    renderRevParteSemanal(c, extraido);
+  } else if (subtipo === 'albaran_bobinas') {
+    renderRevAlbaranBobinas(c, extraido);
+  } else if (subtipo === 'hoja_bobinas') {
+    renderRevHojaBobinas(c, extraido);
+  } else if (subtipo === 'bobina') {
+    renderRevBobinaIndividual(c, extraido);
+  } else {
+    // Generico: editor JSON
+    c.innerHTML = `<textarea id="revJson" style="width:100%;height:60vh;font-family:monospace;font-size:11px;background:var(--surf2);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:10px">${esc(JSON.stringify(extraido, null, 2))}</textarea>`;
+  }
+}
+
+// ── Parte semanal: tabla trabajadores × días ─────────────────────
+function renderRevParteSemanal(c, d) {
+  const dias = ['lunes','martes','miercoles','jueves','viernes','sabado'];
+  const diasLbl = ['L','M','X','J','V','S'];
+  c.innerHTML = `
+    <div style="display:flex;gap:8px;margin-bottom:10px;font-size:11px">
+      <div><label style="color:var(--muted)">Semana:</label> <input class="inp" id="rpSemana" value="${esc(d.semana||'')}" style="width:60px;padding:4px 8px;font-size:12px"></div>
+      <div><label style="color:var(--muted)">Rango:</label> <input class="inp" id="rpRango" value="${esc(d.rango_fechas||'')}" style="width:220px;padding:4px 8px;font-size:12px"></div>
+      <div><label style="color:var(--muted)">Año:</label> <input class="inp" id="rpAnio" value="${d.anio||new Date().getFullYear()}" style="width:70px;padding:4px 8px;font-size:12px"></div>
+    </div>
+    <div style="overflow:auto;max-height:55vh;border:1px solid var(--border);border-radius:8px">
+    <table id="rpTabla" style="width:100%;border-collapse:collapse;font-size:11px">
+      <thead style="position:sticky;top:0;background:var(--surf2);z-index:2">
+        <tr>
+          <th style="padding:6px 8px;text-align:left;border-bottom:1px solid var(--border)">Empresa</th>
+          <th style="padding:6px 8px;text-align:left;border-bottom:1px solid var(--border)">Nombre</th>
+          ${diasLbl.map(l=>`<th style="padding:6px 4px;text-align:center;border-bottom:1px solid var(--border);min-width:55px">${l}</th>`).join('')}
+          <th style="width:24px;border-bottom:1px solid var(--border)"></th>
+        </tr>
+      </thead>
+      <tbody id="rpTbody">
+        ${(d.trabajadores||[]).map((t,i) => renderFilaTrab(t, i, dias)).join('')}
+      </tbody>
+    </table>
+    </div>
+    <button onclick="addFilaTrab()" style="margin-top:8px;padding:6px 12px;background:var(--surf2);border:1px solid var(--border);border-radius:6px;color:var(--acc2);font-size:11px;cursor:pointer">+ Añadir trabajador</button>
+    <div style="margin-top:10px;font-size:11px;color:var(--muted)">💡 Edita las horas, X significa no fichó. Firma marca si hay garabato visible.</div>`;
+}
+
+function renderFilaTrab(t, i, dias) {
+  return `<tr data-idx="${i}">
+    <td style="padding:3px 6px;border-bottom:1px solid var(--border)"><input class="inp rpEmpresa" value="${esc(t.empresa||'')}" style="width:90px;padding:3px 6px;font-size:11px"></td>
+    <td style="padding:3px 6px;border-bottom:1px solid var(--border)"><input class="inp rpNombre" value="${esc(t.nombre||'')}" style="width:100%;padding:3px 6px;font-size:11px"></td>
+    ${dias.map(d => {
+      const c = t[d]||{};
+      return `<td style="padding:3px 4px;border-bottom:1px solid var(--border);text-align:center">
+        <input class="inp rpH" data-dia="${d}" type="number" min="0" max="24" value="${c.horas==null?'':c.horas}" placeholder="h" style="width:42px;padding:3px;font-size:11px;text-align:center">
+        <input class="rpF" data-dia="${d}" type="checkbox" ${c.firmo?'checked':''} title="Firmó" style="margin-left:2px">
+      </td>`;
+    }).join('')}
+    <td style="border-bottom:1px solid var(--border)"><button onclick="this.closest('tr').remove()" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:14px">×</button></td>
+  </tr>`;
+}
+function addFilaTrab() {
+  const tbody = document.getElementById('rpTbody');
+  const i = tbody.children.length;
+  const dias = ['lunes','martes','miercoles','jueves','viernes','sabado'];
+  tbody.insertAdjacentHTML('beforeend', renderFilaTrab({}, i, dias));
+}
+
+function recolectarParteSemanal() {
+  const dias = ['lunes','martes','miercoles','jueves','viernes','sabado'];
+  const trabajadores = [];
+  document.querySelectorAll('#rpTbody tr').forEach(tr => {
+    const empresa = tr.querySelector('.rpEmpresa').value.trim();
+    const nombre = tr.querySelector('.rpNombre').value.trim();
+    if (!nombre) return;
+    const t = { empresa, nombre };
+    dias.forEach(d => {
+      const h = tr.querySelector(`.rpH[data-dia="${d}"]`).value;
+      const f = tr.querySelector(`.rpF[data-dia="${d}"]`).checked;
+      t[d] = { horas: h ? Number(h) : null, firmo: f };
+    });
+    trabajadores.push(t);
+  });
+  return {
+    semana: document.getElementById('rpSemana').value.trim(),
+    rango_fechas: document.getElementById('rpRango').value.trim(),
+    anio: Number(document.getElementById('rpAnio').value) || new Date().getFullYear(),
+    trabajadores
+  };
+}
+
+// ── Albarán de bobinas ────────────────────────────────────────────
+function renderRevAlbaranBobinas(c, d) {
+  const cab = d.cabecera || {};
+  const bobinas = d.bobinas || [];
+  c.innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;font-size:11px">
+      ${[
+        ['proveedor','Proveedor',cab.proveedor],
+        ['num_albaran','Nº albarán',cab.num_albaran],
+        ['fecha','Fecha (YYYY-MM-DD)',cab.fecha],
+        ['cliente','Cliente',cab.cliente],
+        ['transportista','Transportista',cab.transportista],
+        ['bultos','Bultos',cab.bultos]
+      ].map(([k,l,v])=>`<div><label style="color:var(--muted);font-size:10px;display:block;margin-bottom:2px">${l}</label><input class="inp rabCab" data-k="${k}" value="${esc(v??'')}" style="width:100%;padding:6px 8px;font-size:12px"></div>`).join('')}
+    </div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:6px">Bobinas del albarán (${bobinas.length})</div>
+    <div style="overflow:auto;max-height:45vh;border:1px solid var(--border);border-radius:8px">
+    <table style="width:100%;border-collapse:collapse;font-size:11px">
+      <thead style="position:sticky;top:0;background:var(--surf2)">
+        <tr>
+          <th style="padding:6px;border-bottom:1px solid var(--border);text-align:left">Matrícula</th>
+          <th style="padding:6px;border-bottom:1px solid var(--border);text-align:left">Tipo cable</th>
+          <th style="padding:6px;border-bottom:1px solid var(--border);text-align:left">Sección</th>
+          <th style="padding:6px;border-bottom:1px solid var(--border);text-align:right">Metros</th>
+          <th style="padding:6px;border-bottom:1px solid var(--border);text-align:right">Peso neto</th>
+          <th style="padding:6px;border-bottom:1px solid var(--border);text-align:left">Lote</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="rabTbody">
+        ${bobinas.map((b,i)=>renderFilaBobAlb(b,i)).join('')}
+      </tbody>
+    </table>
+    </div>
+    <button onclick="addFilaBobAlb()" style="margin-top:8px;padding:6px 12px;background:var(--surf2);border:1px solid var(--border);border-radius:6px;color:var(--acc2);font-size:11px;cursor:pointer">+ Añadir bobina</button>`;
+}
+function renderFilaBobAlb(b,i) {
+  return `<tr>
+    <td style="padding:3px 6px;border-bottom:1px solid var(--border)"><input class="inp rabMat" value="${esc(b.matricula||'')}" style="width:100px;padding:3px 6px;font-size:11px;font-family:monospace"></td>
+    <td style="padding:3px 6px;border-bottom:1px solid var(--border)"><input class="inp rabTipo" value="${esc(b.tipo_cable||'')}" style="width:170px;padding:3px 6px;font-size:11px"></td>
+    <td style="padding:3px 6px;border-bottom:1px solid var(--border)"><input class="inp rabSec" value="${esc(b.seccion||'')}" style="width:60px;padding:3px 6px;font-size:11px"></td>
+    <td style="padding:3px 6px;border-bottom:1px solid var(--border)"><input class="inp rabM" type="number" step="0.01" value="${b.metros??''}" style="width:70px;padding:3px 6px;font-size:11px;text-align:right"></td>
+    <td style="padding:3px 6px;border-bottom:1px solid var(--border)"><input class="inp rabPN" type="number" step="0.01" value="${b.peso_neto_kg??''}" style="width:70px;padding:3px 6px;font-size:11px;text-align:right"></td>
+    <td style="padding:3px 6px;border-bottom:1px solid var(--border)"><input class="inp rabLote" value="${esc(b.num_lote||'')}" style="width:100px;padding:3px 6px;font-size:11px;font-family:monospace"></td>
+    <td><button onclick="this.closest('tr').remove()" style="background:none;border:none;color:var(--red);cursor:pointer">×</button></td>
+  </tr>`;
+}
+function addFilaBobAlb() {
+  document.getElementById('rabTbody').insertAdjacentHTML('beforeend', renderFilaBobAlb({},0));
+}
+function recolectarAlbaranBobinas() {
+  const cab = {};
+  document.querySelectorAll('.rabCab').forEach(i => { cab[i.dataset.k] = i.value.trim() || null; });
+  const bobinas = [];
+  document.querySelectorAll('#rabTbody tr').forEach(tr => {
+    const mat = tr.querySelector('.rabMat').value.trim();
+    if (!mat) return;
+    bobinas.push({
+      matricula: mat,
+      tipo_cable: tr.querySelector('.rabTipo').value.trim() || null,
+      seccion: tr.querySelector('.rabSec').value.trim() || null,
+      metros: Number(tr.querySelector('.rabM').value) || null,
+      peso_neto_kg: Number(tr.querySelector('.rabPN').value) || null,
+      num_lote: tr.querySelector('.rabLote').value.trim() || null
+    });
+  });
+  return { cabecera: cab, bobinas };
+}
+
+// ── Hoja control bobinas ──────────────────────────────────────────
+function renderRevHojaBobinas(c, d) {
+  const bobinas = d.bobinas || [];
+  c.innerHTML = `
+    <div style="display:flex;gap:8px;margin-bottom:12px;font-size:11px">
+      <div style="flex:1"><label style="color:var(--muted);font-size:10px;display:block">Obra</label><input class="inp" id="rhbObra" value="${esc(d.obra||'')}" style="width:100%;padding:6px 8px;font-size:12px"></div>
+      <div style="flex:1"><label style="color:var(--muted);font-size:10px;display:block">Encargado</label><input class="inp" id="rhbEnc" value="${esc(d.encargado||'')}" style="width:100%;padding:6px 8px;font-size:12px"></div>
+    </div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:6px">Bobinas (${bobinas.length})</div>
+    <div style="overflow:auto;max-height:55vh;border:1px solid var(--border);border-radius:8px">
+    <table style="width:100%;border-collapse:collapse;font-size:11px">
+      <thead style="position:sticky;top:0;background:var(--surf2)">
+        <tr>
+          <th style="padding:6px;border-bottom:1px solid var(--border)">Fecha</th>
+          <th style="padding:6px;border-bottom:1px solid var(--border)">Proveedor</th>
+          <th style="padding:6px;border-bottom:1px solid var(--border)">Nº albarán</th>
+          <th style="padding:6px;border-bottom:1px solid var(--border)">Matrícula</th>
+          <th style="padding:6px;border-bottom:1px solid var(--border)">Fabricante</th>
+          <th style="padding:6px;border-bottom:1px solid var(--border)">Cable</th>
+          <th style="padding:6px;border-bottom:1px solid var(--border)">Vacía</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="rhbTbody">${bobinas.map(b=>renderFilaHB(b)).join('')}</tbody>
+    </table>
+    </div>
+    <button onclick="addFilaHB()" style="margin-top:8px;padding:6px 12px;background:var(--surf2);border:1px solid var(--border);border-radius:6px;color:var(--acc2);font-size:11px;cursor:pointer">+ Añadir bobina</button>`;
+}
+function renderFilaHB(b) {
+  return `<tr>
+    <td style="padding:3px 6px;border-bottom:1px solid var(--border)"><input class="inp rhbF" value="${esc(b.fecha_recepcion||'')}" placeholder="YYYY-MM-DD" style="width:100px;padding:3px 6px;font-size:11px"></td>
+    <td style="padding:3px 6px;border-bottom:1px solid var(--border)"><input class="inp rhbP" value="${esc(b.proveedor||'')}" style="width:90px;padding:3px 6px;font-size:11px"></td>
+    <td style="padding:3px 6px;border-bottom:1px solid var(--border)"><input class="inp rhbA" value="${esc(b.num_albaran||'')}" style="width:100px;padding:3px 6px;font-size:11px"></td>
+    <td style="padding:3px 6px;border-bottom:1px solid var(--border)"><input class="inp rhbM" value="${esc(b.matricula||'')}" style="width:90px;padding:3px 6px;font-size:11px;font-family:monospace"></td>
+    <td style="padding:3px 6px;border-bottom:1px solid var(--border)"><input class="inp rhbFab" value="${esc(b.fabricante||'')}" style="width:120px;padding:3px 6px;font-size:11px"></td>
+    <td style="padding:3px 6px;border-bottom:1px solid var(--border)"><input class="inp rhbC" value="${esc(b.cable||'')}" style="width:70px;padding:3px 6px;font-size:11px"></td>
+    <td style="padding:3px 6px;border-bottom:1px solid var(--border);text-align:center"><input class="rhbV" type="checkbox" ${b.vacia?'checked':''}></td>
+    <td><button onclick="this.closest('tr').remove()" style="background:none;border:none;color:var(--red);cursor:pointer">×</button></td>
+  </tr>`;
+}
+function addFilaHB(){document.getElementById('rhbTbody').insertAdjacentHTML('beforeend', renderFilaHB({}));}
+function recolectarHojaBobinas() {
+  const bobinas = [];
+  document.querySelectorAll('#rhbTbody tr').forEach(tr => {
+    const mat = tr.querySelector('.rhbM').value.trim();
+    if (!mat) return;
+    bobinas.push({
+      fecha_recepcion: tr.querySelector('.rhbF').value.trim() || null,
+      proveedor: tr.querySelector('.rhbP').value.trim() || null,
+      num_albaran: tr.querySelector('.rhbA').value.trim() || null,
+      matricula: mat,
+      fabricante: tr.querySelector('.rhbFab').value.trim() || null,
+      cable: tr.querySelector('.rhbC').value.trim() || null,
+      vacia: tr.querySelector('.rhbV').checked
+    });
+  });
+  return {
+    obra: document.getElementById('rhbObra').value.trim() || null,
+    encargado: document.getElementById('rhbEnc').value.trim() || null,
+    bobinas
+  };
+}
+
+// ── Bobina individual ─────────────────────────────────────────────
+function renderRevBobinaIndividual(c, d) {
+  c.innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:12px">
+      ${[
+        ['matricula','Matrícula',d.matricula],
+        ['fabricante','Fabricante',d.fabricante],
+        ['tipo_cable','Tipo cable',d.tipo_cable],
+        ['seccion','Sección',d.seccion],
+        ['metros','Metros',d.metros],
+        ['num_lote','Nº lote',d.num_lote]
+      ].map(([k,l,v])=>`<div><label style="color:var(--muted);font-size:11px;display:block;margin-bottom:3px">${l}</label><input class="inp rbiC" data-k="${k}" value="${esc(v??'')}" style="width:100%;padding:8px;font-size:13px"></div>`).join('')}
+    </div>`;
+}
+function recolectarBobinaIndividual() {
+  const out = {};
+  document.querySelectorAll('.rbiC').forEach(i => { out[i.dataset.k] = i.value.trim() || null; });
+  return out;
+}
+
+// ── Guardar revisión (POST a /api/sync/confirmar) ─────────────────
+async function guardarRevision() {
+  if (!_revisionDatos) return;
+  const subtipo = _revisionDatos.subtipo;
+  let datos;
+  try {
+    if (subtipo === 'parte_semanal') datos = recolectarParteSemanal();
+    else if (subtipo === 'albaran_bobinas') datos = recolectarAlbaranBobinas();
+    else if (subtipo === 'hoja_bobinas') datos = recolectarHojaBobinas();
+    else if (subtipo === 'bobina') datos = recolectarBobinaIndividual();
+    else datos = JSON.parse(document.getElementById('revJson').value);
+  } catch (e) {
+    mostrarToast('❌ Error', 'Datos inválidos: ' + e.message, 'error');
+    return;
+  }
+  const obraNombre = document.getElementById('revObraNombre')?.value.trim() || null;
+  const btn = document.getElementById('btnGuardarRev');
+  btn.disabled = true; btn.textContent = '⏳ Guardando...';
+  try {
+    const r = await fetch(`${API}/api/sync/confirmar`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
+      body: JSON.stringify({
+        subtipo,
+        datos,
+        archivo_key: _revisionDatos.archivo_key,
+        obra_nombre: obraNombre
+      })
+    });
+    const j = await r.json();
+    if (j.ok) {
+      mostrarToast('✅ Guardado', j.resumen || `${j.total} registros guardados`, 'success');
+      cerrarModalRevision();
+    } else {
+      mostrarToast('❌ Error', j.error || 'No se pudo guardar', 'error');
+      btn.disabled = false; btn.textContent = '💾 Guardar en BD';
+    }
+  } catch (e) {
+    mostrarToast('❌ Error red', e.message, 'error');
+    btn.disabled = false; btn.textContent = '💾 Guardar en BD';
   }
 }
 
