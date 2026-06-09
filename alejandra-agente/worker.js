@@ -2193,8 +2193,52 @@ REGLAS GENERALES:
 - TENDENCIAS: si los gastos suben >20% vs semana pasada, investiga y reporta. Si los fichajes bajan >30%, pregunta si hay obra parada.
 - Si NO hay nada que hacer, responde "SIN_ACCION" sin más.`;
 
-      const contextoChat = await obtenerContextoChat(env, 'system', 'cron', 4);
-      const respuesta = await procesarConNEXUS(env, prompt, contextoChat, 'system', 'cron');
+      // ── OPTIMIZACIÓN: Pre-filtro para modo "normal" ──────────────────────
+      // Si no hay nada relevante, saltar la llamada a Anthropic (ahorra ~$0.01/llamada)
+      if (modoCron === 'normal') {
+        const hayAlgo = (negocio.bobinas_bajas?.length > 0) ||
+                        (negocio.equipos_revision?.length > 0) ||
+                        (negocio.incidencias > 3) ||
+                        (prediccionesStock.length > 0) ||
+                        (anomalias.length > 0) ||
+                        (tareasPendientes.length > 0) ||
+                        (salud.errores_ultima_hora > 3) ||
+                        (salud.respuestas_error > 2) ||
+                        (comandosPendientes.n > 0) ||
+                        (alertasRecurrentes.length > 0);
+        if (!hayAlgo) {
+          console.log(`[CRON] ${horaLocal}:00 modo normal — sin datos relevantes, saltando llamada IA (ahorro tokens)`);
+          return;
+        }
+      }
+
+      // ── OPTIMIZACIÓN: Modelo según modo ─────────────────────────────────
+      // Modo "normal" (monitorización) → Haiku (barato, $1/$5 por Mtok)
+      // Modos importantes (briefing, resumen, reflexión, semanal, mensual) → Sonnet (potente, $3/$15)
+      const modosImportantes = ['briefing_matutino', 'resumen_dia', 'reflexion', 'semanal', 'mensual'];
+      let respuesta;
+
+      if (modosImportantes.includes(modoCron)) {
+        // Modos importantes → NEXUS completo con Sonnet (tiene tools, historial, etc.)
+        const contextoChat = await obtenerContextoChat(env, 'system', 'cron', 2);
+        respuesta = await procesarConNEXUS(env, prompt, contextoChat, 'system', 'cron');
+      } else {
+        // Modo normal → Haiku directo (sin router, sin NEXUS, ~67% más barato)
+        const systemCron = `Eres Alejandra, ingeniera técnica autónoma. Analiza los datos del cron y decide si hay algo que requiera acción. Si hay alertas urgentes, responde con el mensaje a enviar. Si no hay nada relevante, responde exactamente "SIN_ACCION".`;
+        const haikusResp = await fetch(ANTHROPIC_API, {
+          method: 'POST',
+          headers: { 'x-api-key': env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+          body: JSON.stringify({
+            model: MODEL_ROUTER, max_tokens: 500,
+            system: systemCron,
+            messages: [{ role: 'user', content: prompt }]
+          })
+        });
+        const haikusData = haikusResp.ok ? await haikusResp.json() : null;
+        const textoHaiku = haikusData?.content?.[0]?.text?.trim() || 'SIN_ACCION';
+        if (haikusData?.usage) registrarTokenUso(env, MODEL_ROUTER, 'cron_normal', haikusData.usage.input_tokens||0, haikusData.usage.output_tokens||0, 'system');
+        respuesta = { texto: textoHaiku };
+      }
 
       // Si respondió algo que no sea SIN_ACCION, loguear
       if (respuesta.texto && !respuesta.texto.includes('SIN_ACCION')) {
