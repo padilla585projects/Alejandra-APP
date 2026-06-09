@@ -6,9 +6,38 @@
 ## ESTADO ACTUAL
 
 **Sesión:** LIBRE
-**Última sesión:** 06/06/2026 — test end-to-end escaneo remoto + fix bugs
-**Versión actual:** Panel web **v6.38** · WORKER API `43d2af24` · WORKER agente `474b52a1`
-**Próxima:** probar albarán universal con foto real, verificar notificaciones tras 30+ min suspendido
+**Última sesión:** 09/06/2026 — auditoría consumo tokens + optimización cron
+**Versión actual:** Panel web **v6.38** · WORKER API `43d2af24` · WORKER agente `0d59fa4a`
+**Próxima:** probar albarán universal con foto real, verificar notificaciones tras 30+ min suspendido, monitorear ahorro tokens tras optimización
+
+---
+
+## RESUMEN SESIÓN 09/06/2026 — Auditoría consumo tokens + optimización cron
+
+### Problema
+Adrián se quedó sin saldo de Anthropic en 4 días. Auditoría completa de `alejandra_token_uso`.
+
+### Hallazgos
+- **Total gastado:** $14.14 en 25 días (15 may → 8 jun)
+- **Top consumidores:** cron system (42%, $5.91) + adrian chat (35%, $4.95)
+- **Días pico:** 31 may $4.10 (chat intensivo), 30 may $2.93, 4 jun $1.90
+- **Cron gastaba ~$0.85/día** en background: 17 llamadas/día a Sonnet con prompts enormes de business intelligence, incluso en horas sin actividad
+
+### Optimizaciones implementadas
+1. **Cron frequency:** de cada hora (17/día) a 6 veces/día → **-65% llamadas**
+2. **Pre-filtro:** modo "normal" verifica datos antes de llamar API. Si no hay alertas/anomalías/stock bajo → skip sin gastar tokens
+3. **Modelo:** modo normal usa Haiku ($1/$5 Mtok) en vez de Sonnet ($3/$15). Modos importantes (briefing, resumen, reflexión) siguen con Sonnet
+4. **Contexto:** cron reduce historial de 4 a 2 mensajes
+
+### Ahorro estimado
+- Antes: ~$1.35/día → Después: ~$0.60/día (**ahorro ~55%**)
+- Mensual: de ~$40 a ~$18-20
+
+### Commits
+- `03f3fa3` — fix: optimizar consumo tokens Alejandra IA — ahorro ~55% diario
+
+### Workers desplegados
+- `alejandra-agente` → Version ID `0d59fa4a` (optimización tokens)
 
 ---
 
