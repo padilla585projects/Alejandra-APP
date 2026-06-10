@@ -6775,6 +6775,11 @@ const _tok=${JSON.stringify(tok)};
 let _hist=${histJson};
 // Scroll al final al abrir
 window.onload=function(){ const b=document.getElementById('wMsgs'); b.scrollTop=b.scrollHeight; };
+function _wToolFriendly(n){
+  const m={buscar_web:'🌐 Buscando en internet',consultar_bd:'🔍 Consultando datos',ejecutar_sql:'💾 Actualizando datos',leer_archivo:'📄 Leyendo archivo',escribir_archivo:'✏️ Guardando archivo',listar_archivos:'📂 Revisando archivos',analizar_imagen:'🖼️ Analizando imagen',crear_bobina:'🔧 Registrando bobina',buscar_bobinas:'🔍 Buscando bobinas',telegram_send:'📨 Enviando mensaje',reflexionar:'🧠 Pensando',crear_incidencia:'🚨 Creando incidencia',buscar_equipos:'⚙️ Buscando equipos',calendario:'📅 Revisando calendario',memory_read:'🧠 Recordando',memory_write:'🧠 Memorizando'};
+  return m[n]||('⚡ '+n.replace(/_/g,' '));
+}
+function _wEsc(t){return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 async function wSend(){
   const inp=document.getElementById('wInput');
   const msg=inp.value.trim(); if(!msg) return;
@@ -6782,15 +6787,55 @@ async function wSend(){
   addMsg('user',msg);
   const typing=addTyping();
   document.getElementById('wSend').disabled=true;
+  let textoAcum='', bubbleEl=null;
   try{
-    const r=await fetch('https://alejandra-agente.alejandra-app.workers.dev/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mensaje:msg,usuario_id:${JSON.stringify(SESSION?.usuario_id || SESSION?.nombre || 'Adrian')},empresa_id:${JSON.stringify(SESSION?.empresa_id || null)},canal:'panel',rol:'desarrollador',pantalla:'popup-ai',dom_actual:null})});
-    const d=await r.json(); typing.remove();
-    const reply=d.texto||'Sin respuesta';
-    addMsg('bot',reply);
+    const res=await fetch('https://alejandra-agente.alejandra-app.workers.dev/api/chat/stream',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mensaje:msg,usuario_id:${JSON.stringify(SESSION?.usuario_id || SESSION?.nombre || 'Adrian')},empresa_id:${JSON.stringify(SESSION?.empresa_id || null)},canal:'panel',rol:'desarrollador',pantalla:'popup-ai',dom_actual:null})});
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    const reader=res.body.getReader();
+    const dec=new TextDecoder();
+    let buf='';
+    while(true){
+      const{done,value}=await reader.read();
+      if(done)break;
+      buf+=dec.decode(value,{stream:true});
+      const lines=buf.split('\\n');
+      buf=lines.pop()||'';
+      for(const line of lines){
+        if(!line.startsWith('data: '))continue;
+        let ev; try{ev=JSON.parse(line.slice(6));}catch{continue;}
+        switch(ev.type){
+          case 'tool_start':{
+            typing.remove();
+            const b=document.getElementById('wMsgs');
+            const ch=document.createElement('div');ch.className='ai-msg bot';ch.id='wt-'+ev.nombre+'-'+Date.now();
+            ch.style.cssText='font-size:12px;opacity:0.8';
+            ch.innerHTML=_wEsc(_wToolFriendly(ev.nombre))+'... ⏳';
+            b.appendChild(ch);b.scrollTop=b.scrollHeight;
+            break;}
+          case 'tool_end':{
+            const b=document.getElementById('wMsgs');
+            const chips=b.querySelectorAll('[id^=\"wt-'+ev.nombre+'\"]');
+            if(chips.length){const last=chips[chips.length-1];last.innerHTML=last.innerHTML.replace('⏳','✓');}
+            break;}
+          case 'token':case 'text':
+            typing.remove();
+            if(!bubbleEl){bubbleEl=document.createElement('div');bubbleEl.className='ai-msg bot';document.getElementById('wMsgs').appendChild(bubbleEl);}
+            textoAcum+=ev.texto;
+            bubbleEl.innerHTML=_wEsc(textoAcum).replace(/\\n/g,'<br>');
+            document.getElementById('wMsgs').scrollTop=document.getElementById('wMsgs').scrollHeight;
+            break;
+          case 'done':typing.remove();break;
+          case 'error':typing.remove();addMsg('bot','❌ '+(ev.mensaje||'Error'));break;
+        }
+      }
+    }
+    typing.remove();
+    if(!textoAcum){addMsg('bot','Sin respuesta');textoAcum='Sin respuesta';}
+    let reply=textoAcum.replace(/<plan>[\\s\\S]*?<\\/plan>/g,'').replace(/<guia>[\\s\\S]*?<\\/guia>/g,'').trim();
+    if(bubbleEl)bubbleEl.innerHTML=_wEsc(reply).replace(/\\n/g,'<br>');
     _hist.push({role:'user',content:msg},{role:'assistant',content:reply});
     if(_hist.length>20)_hist=_hist.slice(-20);
-    // Sincronizar con ventana padre
-    try{ if(window.opener&&!window.opener.closed) window.opener._aiSyncFromChild({role:'user',content:msg},{role:'assistant',content:reply}); }catch(e){}
+    try{if(window.opener&&!window.opener.closed)window.opener._aiSyncFromChild({role:'user',content:msg},{role:'assistant',content:reply});}catch(e){}
   }catch(e){typing.remove();addMsg('bot','❌ '+e.message);}
   document.getElementById('wSend').disabled=false;
 }
@@ -6850,6 +6895,7 @@ document.getElementById('wInput').focus();
   };
 
   const AGENTE_API = 'https://alejandra-agente.alejandra-app.workers.dev/api/chat';
+  const AGENTE_STREAM_API = 'https://alejandra-agente.alejandra-app.workers.dev/api/chat/stream';
   const AGENTE_UPLOAD = 'https://alejandra-agente.alejandra-app.workers.dev/upload';
   let _aiAdjuntos = [];
 
@@ -6884,46 +6930,114 @@ document.getElementById('wInput').focus();
     document.getElementById('aiSendBtn').disabled = true;
     aiClearImage();
 
+    // Helper: descripciones amigables
+    function _aiToolFriendly(n) {
+      const m = {
+        buscar_web:'🌐 Buscando en internet', consultar_bd:'🔍 Consultando datos',
+        ejecutar_sql:'💾 Actualizando datos', leer_archivo:'📄 Leyendo archivo',
+        escribir_archivo:'✏️ Guardando archivo', listar_archivos:'📂 Revisando archivos',
+        analizar_imagen:'🖼️ Analizando imagen', crear_bobina:'🔧 Registrando bobina',
+        buscar_bobinas:'🔍 Buscando bobinas', telegram_send:'📨 Enviando mensaje',
+        reflexionar:'🧠 Pensando', crear_incidencia:'🚨 Creando incidencia',
+        buscar_equipos:'⚙️ Buscando equipos', calendario:'📅 Revisando calendario',
+        memory_read:'🧠 Recordando', memory_write:'🧠 Memorizando'
+      };
+      return m[n] || ('⚡ ' + n.replace(/_/g, ' '));
+    }
+    function _aiEsc(t) { return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+    let textoAcum = '', bubbleEl = null;
     try {
-      const _ctrl = new AbortController();
-      const _tid = setTimeout(() => _ctrl.abort(), 60000);
-      try {
-        const res = await fetch(AGENTE_API, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            mensaje:    msgText,
-            usuario_id: SESSION?.usuario_id || null,
-            empresa_id: SESSION?.empresa_id || null,
-            canal:      'panel',
-            adjuntos:   adjuntos,
-            rol:        SESSION?.rol || null,
-            pantalla:   'panel-ai',
-            dom_actual: null
-          }),
-          signal: _ctrl.signal
-        });
-        clearTimeout(_tid);
-        if (!res.ok) throw new Error('HTTP ' + res.status);
-        const data = await res.json();
+      const res = await fetch(AGENTE_STREAM_API, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mensaje:    msgText,
+          usuario_id: SESSION?.usuario_id || null,
+          empresa_id: SESSION?.empresa_id || null,
+          canal:      'panel',
+          adjuntos:   adjuntos,
+          rol:        SESSION?.rol || null,
+          pantalla:   'panel-ai',
+          dom_actual: null
+        })
+      });
 
-        typing.remove();
-        let reply = data.texto || 'Sin respuesta';
+      if (!res.ok) throw new Error('HTTP ' + res.status);
 
-        // Parsear <plan> y <guia>
-        const planMatch = reply.match(/<plan>([\s\S]*?)<\/plan>/);
-        if (planMatch) reply = reply.replace(/<plan>[\s\S]*?<\/plan>/, '').trim();
-        const guiaMatch = reply.match(/<guia>([\s\S]*?)<\/guia>/);
-        if (guiaMatch) reply = reply.replace(/<guia>[\s\S]*?<\/guia>/, '').trim();
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
 
-        if (reply) appendMsg('bot', reply);
-        if (data.busqueda_web) appendMsg('bot', '<span style="color:#22c55e;font-size:12px">🔍 Resultado con búsqueda web</span>');
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
 
-        aiHistory.push({ role: 'user', content: msgText });
-        aiHistory.push({ role: 'assistant', content: reply });
-        if (aiHistory.length > 40) aiHistory = aiHistory.slice(-40);
-        try { localStorage.setItem(AI_HIST_KEY, JSON.stringify(aiHistory)); } catch {}
-      } finally { clearTimeout(_tid); }
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          let ev;
+          try { ev = JSON.parse(line.slice(6)); } catch { continue; }
+
+          switch (ev.type) {
+            case 'tool_start': {
+              typing.remove();
+              const box = document.getElementById('aiMessages');
+              const ch = document.createElement('div');
+              ch.className = 'ai-msg bot';
+              ch.id = 'ai-tool-' + ev.nombre + '-' + Date.now();
+              ch.style.cssText = 'font-size:12px;opacity:0.8';
+              ch.innerHTML = _aiEsc(_aiToolFriendly(ev.nombre)) + '... ⏳';
+              box.appendChild(ch);
+              box.scrollTop = box.scrollHeight;
+              break;
+            }
+            case 'tool_end': {
+              const box = document.getElementById('aiMessages');
+              const chips = box.querySelectorAll('[id^="ai-tool-' + ev.nombre + '"]');
+              if (chips.length) {
+                const last = chips[chips.length - 1];
+                last.innerHTML = last.innerHTML.replace('⏳', '✓');
+              }
+              break;
+            }
+            case 'token':
+            case 'text':
+              typing.remove();
+              if (!bubbleEl) {
+                bubbleEl = document.createElement('div');
+                bubbleEl.className = 'ai-msg bot';
+                document.getElementById('aiMessages').appendChild(bubbleEl);
+              }
+              textoAcum += ev.texto;
+              bubbleEl.innerHTML = _aiEsc(textoAcum).replace(/\n/g, '<br>');
+              document.getElementById('aiMessages').scrollTop = document.getElementById('aiMessages').scrollHeight;
+              break;
+            case 'done':
+              typing.remove();
+              break;
+            case 'error':
+              typing.remove();
+              appendMsg('bot', '❌ ' + (ev.mensaje || 'Error'));
+              break;
+          }
+        }
+      }
+
+      typing.remove();
+      if (!textoAcum) { appendMsg('bot', 'Sin respuesta'); textoAcum = 'Sin respuesta'; }
+
+      // Limpiar plan/guia del texto
+      let reply = textoAcum.replace(/<plan>[\s\S]*?<\/plan>/g, '').replace(/<guia>[\s\S]*?<\/guia>/g, '').trim();
+      if (bubbleEl) bubbleEl.innerHTML = _aiEsc(reply).replace(/\n/g, '<br>');
+
+      aiHistory.push({ role: 'user', content: msgText });
+      aiHistory.push({ role: 'assistant', content: reply });
+      if (aiHistory.length > 40) aiHistory = aiHistory.slice(-40);
+      try { localStorage.setItem(AI_HIST_KEY, JSON.stringify(aiHistory)); } catch {}
+
     } catch(e) {
       typing.remove();
       const errMsg = e.name === 'AbortError'

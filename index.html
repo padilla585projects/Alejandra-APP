@@ -10315,7 +10315,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '6.42';
+const APP_VERSION = '6.43';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -15205,65 +15205,144 @@ window.turnoToggle   = turnoToggle;
 
     // No bloquear — fire and forget para permitir más mensajes
     (async () => {
+      let textoAcumulado = '';
+      let bubbleEl = null;
+
+      // Helper: descripciones amigables de herramientas
+      function _iaToolFriendly(nombre) {
+        const map = {
+          buscar_web:'🌐 Buscando en internet', consultar_bd:'🔍 Consultando datos',
+          ejecutar_sql:'💾 Actualizando datos', leer_archivo:'📄 Leyendo archivo',
+          escribir_archivo:'✏️ Guardando archivo', listar_archivos:'📂 Revisando archivos',
+          analizar_imagen:'🖼️ Analizando imagen', crear_bobina:'🔧 Registrando bobina',
+          buscar_bobinas:'🔍 Buscando bobinas', telegram_send:'📨 Enviando mensaje',
+          reflexionar:'🧠 Pensando', crear_incidencia:'🚨 Creando incidencia',
+          crear_fichaje:'⏱️ Registrando fichaje', buscar_equipos:'⚙️ Buscando equipos',
+          calendario:'📅 Revisando calendario', memory_read:'🧠 Recordando',
+          memory_write:'🧠 Memorizando', listar_bobinas:'📋 Listando bobinas',
+          crear_equipo:'⚙️ Registrando equipo', crear_pedido:'📦 Creando pedido'
+        };
+        return map[nombre] || ('⚡ ' + nombre.replace(/_/g, ' '));
+      }
+
       try {
-        const _iaCtrl = new AbortController();
-        const _iaTid = setTimeout(() => _iaCtrl.abort(), 60000);
-        try {
-          const res = await fetch(ALEJANDRA_API, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              mensaje:    msg || '(archivo adjunto sin mensaje)',
-              usuario_id: s.usuario_id || s.nombre || 'unknown',
-              empresa_id: s.empresa_id || null,
-              canal:      'pwa',
-              adjuntos:   adjEnv,
-              rol:        s.rol || null,
-              pantalla:   'ia',
-              dom_actual: null
-            }),
-            signal: _iaCtrl.signal
-          });
-          clearTimeout(_iaTid);
+        const res = await fetch(ALEJANDRA_STREAM_API, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            mensaje:    msg || '(archivo adjunto sin mensaje)',
+            usuario_id: s.usuario_id || s.nombre || 'unknown',
+            empresa_id: s.empresa_id || null,
+            canal:      'pwa',
+            adjuntos:   adjEnv,
+            rol:        s.rol || null,
+            pantalla:   'ia',
+            dom_actual: null
+          })
+        });
 
-          if (!res.ok) throw new Error('HTTP ' + res.status);
-          const data = await res.json();
-          typing.remove();
+        if (!res.ok) throw new Error('HTTP ' + res.status);
 
-          let reply = data.texto || 'Sin respuesta';
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
 
-          // Parsear <plan> y <guia> de la respuesta
-          let planDetectado = null;
-          let guiaDetectada = null;
-          const planMatch = reply.match(/<plan>([\s\S]*?)<\/plan>/);
-          if (planMatch) {
-            try { planDetectado = JSON.parse(planMatch[1]); } catch (_) {}
-            reply = reply.replace(/<plan>[\s\S]*?<\/plan>/, '').trim();
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
+
+          for (const line of lines) {
+            if (!line.startsWith('data: ')) continue;
+            let ev;
+            try { ev = JSON.parse(line.slice(6)); } catch { continue; }
+
+            switch (ev.type) {
+              case 'routing':
+                // No mostrar routing — quitar typing cuando llega algo
+                break;
+              case 'tool_start': {
+                typing.remove();
+                const desc = _iaToolFriendly(ev.nombre);
+                const chip = document.createElement('div');
+                chip.className = 'ia-bubble bot-info';
+                chip.id = 'ia-tool-' + ev.nombre + '-' + Date.now();
+                chip.style.cssText = 'font-size:13px;opacity:0.85;display:flex;align-items:center;gap:6px';
+                chip.innerHTML = _escHtml(desc) + ' <span class="ia-tool-spin">⏳</span>';
+                const box = document.getElementById('iaMessages');
+                box.appendChild(chip);
+                box.scrollTop = box.scrollHeight;
+                break;
+              }
+              case 'tool_end': {
+                const box = document.getElementById('iaMessages');
+                const chips = box.querySelectorAll('[id^="ia-tool-' + ev.nombre + '"]');
+                const target = chips.length ? chips[chips.length - 1] : null;
+                if (target) {
+                  const spin = target.querySelector('.ia-tool-spin');
+                  if (spin) { spin.textContent = '✓'; spin.style.color = '#22c55e'; }
+                }
+                break;
+              }
+              case 'token':
+              case 'text':
+                typing.remove();
+                if (!bubbleEl) {
+                  bubbleEl = document.createElement('div');
+                  bubbleEl.className = 'ia-bubble bot';
+                  const box = document.getElementById('iaMessages');
+                  box.appendChild(bubbleEl);
+                }
+                textoAcumulado += ev.texto;
+                bubbleEl.innerHTML = _escHtml(textoAcumulado).replace(/\n/g, '<br>');
+                document.getElementById('iaMessages').scrollTop = document.getElementById('iaMessages').scrollHeight;
+                break;
+              case 'cost':
+                break; // No mostrar coste
+              case 'done':
+                typing.remove();
+                break;
+              case 'error':
+                typing.remove();
+                appendIAMsg('bot', '❌ ' + (ev.mensaje || 'Error desconocido'));
+                break;
+            }
           }
-          const guiaMatch = reply.match(/<guia>([\s\S]*?)<\/guia>/);
-          if (guiaMatch) {
-            try { guiaDetectada = JSON.parse(guiaMatch[1]); } catch (_) {}
-            reply = reply.replace(/<guia>[\s\S]*?<\/guia>/, '').trim();
-          }
+        }
 
-          if (reply) appendIAMsg('bot', reply);
+        typing.remove();
+        if (!textoAcumulado) appendIAMsg('bot', 'Sin respuesta');
 
-          if (data.busqueda_web) {
-            appendIAMsg('bot-info', '🔍 (resultado con búsqueda web)');
-          }
+        // Extraer <plan> y <guia>
+        let reply = textoAcumulado;
+        let planDetectado = null;
+        let guiaDetectada = null;
+        const planMatch = reply.match(/<plan>([\s\S]*?)<\/plan>/);
+        if (planMatch) {
+          try { planDetectado = JSON.parse(planMatch[1]); } catch (_) {}
+          reply = reply.replace(/<plan>[\s\S]*?<\/plan>/, '').trim();
+          if (bubbleEl) bubbleEl.innerHTML = _escHtml(reply).replace(/\n/g, '<br>');
+        }
+        const guiaMatch = reply.match(/<guia>([\s\S]*?)<\/guia>/);
+        if (guiaMatch) {
+          try { guiaDetectada = JSON.parse(guiaMatch[1]); } catch (_) {}
+          reply = reply.replace(/<guia>[\s\S]*?<\/guia>/, '').trim();
+          if (bubbleEl) bubbleEl.innerHTML = _escHtml(reply).replace(/\n/g, '<br>');
+        }
 
-          // Guardar en historial local
-          iaHistory.push({ role: 'user', content: msg });
-          iaHistory.push({ role: 'assistant', content: reply });
-          if (iaHistory.length > 40) iaHistory = iaHistory.slice(-40);
-          try { localStorage.setItem(IA_HIST_KEY, JSON.stringify(iaHistory)); } catch {}
+        // Guardar en historial local
+        iaHistory.push({ role: 'user', content: msg });
+        iaHistory.push({ role: 'assistant', content: reply });
+        if (iaHistory.length > 40) iaHistory = iaHistory.slice(-40);
+        try { localStorage.setItem(IA_HIST_KEY, JSON.stringify(iaHistory)); } catch {}
 
-          iaSpeak(reply);
+        iaSpeak(reply);
 
-          if (planDetectado && typeof _alejandraOfrecerPlan === 'function') _alejandraOfrecerPlan(planDetectado);
-          if (guiaDetectada && typeof _alejandraOfrecerGuia === 'function') _alejandraOfrecerGuia(guiaDetectada);
+        if (planDetectado && typeof _alejandraOfrecerPlan === 'function') _alejandraOfrecerPlan(planDetectado);
+        if (guiaDetectada && typeof _alejandraOfrecerGuia === 'function') _alejandraOfrecerGuia(guiaDetectada);
 
-        } finally { clearTimeout(_iaTid); }
       } catch(e) {
         typing.remove();
         const errMsg = e.name === 'AbortError'
