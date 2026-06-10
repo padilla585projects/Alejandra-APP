@@ -10315,7 +10315,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '6.41';
+const APP_VERSION = '6.42';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -15730,14 +15730,46 @@ async function alejandraEnviar() {
       return toolsContainer;
     }
 
+    // Descripciones amigables de las herramientas
+    function _toolFriendly(nombre, input) {
+      const map = {
+        buscar_web:        ['🌐', 'Buscando en internet'],
+        consultar_bd:      ['🔍', 'Consultando datos'],
+        ejecutar_sql:      ['💾', 'Actualizando datos'],
+        leer_archivo:      ['📄', 'Leyendo archivo'],
+        escribir_archivo:  ['✏️', 'Guardando archivo'],
+        listar_archivos:   ['📂', 'Revisando archivos'],
+        analizar_imagen:   ['🖼️', 'Analizando imagen'],
+        crear_bobina:      ['🔧', 'Registrando bobina'],
+        buscar_bobinas:    ['🔍', 'Buscando bobinas'],
+        telegram_send:     ['📨', 'Enviando mensaje'],
+        reflexionar:       ['🧠', 'Pensando'],
+        proponer_correccion:['🛠️', 'Preparando corrección'],
+        crear_incidencia:  ['🚨', 'Creando incidencia'],
+        crear_fichaje:     ['⏱️', 'Registrando fichaje'],
+        buscar_equipos:    ['⚙️', 'Buscando equipos'],
+        calendario:        ['📅', 'Revisando calendario'],
+        memory_read:       ['🧠', 'Recordando'],
+        memory_write:      ['🧠', 'Memorizando'],
+        listar_bobinas:    ['📋', 'Listando bobinas'],
+        crear_equipo:      ['⚙️', 'Registrando equipo'],
+        crear_pedido:      ['📦', 'Creando pedido'],
+      };
+      const [icon, desc] = map[nombre] || ['⚡', nombre.replace(/_/g, ' ')];
+      return { icon, desc: desc + '...' };
+    }
+
     function addRouting(d) {
       routeData = d;
+      // No mostrar chip de routing — es info interna, no aporta al usuario
       thinkingEl.remove();
-      const el = document.createElement('div');
-      el.className = 'ale-tool-route';
-      const expertoNames = {simple:'Rápido',app:'App',tecnico:'Técnico',web:'Web',reflexion:'Reflexión',completo:'Completo',ingenieria:'Ingeniería'};
-      el.innerHTML = `<span class="ale-route-dot"></span><span>${expertoNames[d.experto]||d.experto}</span>${d.buscar_web?'<span style="opacity:.6">+ 🌐 web</span>':''}`;
-      respDiv.insertBefore(el, respDiv.firstChild);
+      // Solo poner un indicador sutil de "pensando" si va a buscar en web
+      if (d.buscar_web) {
+        const el = document.createElement('div');
+        el.className = 'ale-tool-route';
+        el.innerHTML = '<span class="ale-route-dot"></span><span>Buscando en internet</span>';
+        respDiv.insertBefore(el, respDiv.firstChild);
+      }
       scrollBottom();
     }
 
@@ -15747,16 +15779,13 @@ async function alejandraEnviar() {
       const el = document.createElement('div');
       el.className = 'ale-tool';
       el.id = 'ale-tool-' + d.nombre + '-' + Date.now();
-      const inputStr = d.input ? Object.values(d.input).join(', ').substring(0, 60) : '';
-      const toolIcons = {buscar_web:'🌐',consultar_bd:'🗄️',ejecutar_sql:'💾',leer_archivo:'📄',escribir_archivo:'✏️',listar_archivos:'📂',analizar_imagen:'🖼️',crear_bobina:'🔧',buscar_bobinas:'🔍',telegram_send:'📨',reflexionar:'🧠',proponer_correccion:'🛠️',crear_incidencia:'🚨',crear_fichaje:'⏱️',buscar_equipos:'⚙️',calendario:'📅'};
-      const icon = toolIcons[d.nombre] || '⚡';
-      el.innerHTML = `<div class="ale-tool-chip"><span class="ale-tool-icon">${icon}</span><span class="ale-tool-name">${alejandraEsc(d.nombre)}</span>${inputStr?`<span class="ale-tool-input">${alejandraEsc(inputStr)}</span>`:''}<div class="ale-tool-spinner"></div></div><div class="ale-tool-preview"></div>`;
+      const { icon, desc } = _toolFriendly(d.nombre, d.input);
+      el.innerHTML = `<div class="ale-tool-chip"><span class="ale-tool-icon">${icon}</span><span class="ale-tool-name">${alejandraEsc(desc)}</span><div class="ale-tool-spinner"></div></div>`;
       tc.appendChild(el);
       scrollBottom();
     }
 
     function addToolEnd(d) {
-      // Buscar el último tool_start con este nombre
       const tc = getToolsContainer();
       const chips = tc.querySelectorAll('.ale-tool');
       let target = null;
@@ -15769,25 +15798,6 @@ async function alejandraEnviar() {
       if (spinner) {
         spinner.className = 'ale-tool-check';
         spinner.textContent = '✓';
-      }
-      // Añadir tiempo
-      const chip = target.querySelector('.ale-tool-chip');
-      if (chip && d.duracion_ms != null) {
-        const timeEl = document.createElement('span');
-        timeEl.className = 'ale-tool-time';
-        timeEl.textContent = d.duracion_ms < 1000 ? d.duracion_ms + 'ms' : (d.duracion_ms/1000).toFixed(1) + 's';
-        chip.appendChild(timeEl);
-      }
-      // Preview colapsable
-      if (d.preview) {
-        const prev = target.querySelector('.ale-tool-preview');
-        if (prev) {
-          prev.textContent = d.preview;
-          prev.style.display = 'block';
-        }
-        // Click para toggle preview
-        const chipEl = target.querySelector('.ale-tool-chip');
-        if (chipEl) chipEl.onclick = () => { prev.style.display = prev.style.display === 'none' ? 'block' : 'none'; };
       }
       scrollBottom();
     }
@@ -15805,13 +15815,8 @@ async function alejandraEnviar() {
     }
 
     function addCostInfo(d) {
+      // No mostrar info de coste/tokens — no aporta al usuario
       costData = d;
-      const el = document.createElement('div');
-      el.style.cssText = 'font-size:10px;color:var(--muted);opacity:.6;padding:2px 4px;font-family:monospace';
-      const coste = d.eur != null ? d.eur.toFixed(4) + '€' : '';
-      el.textContent = `${d.experto||''} · ${(d.tokens_total||0).toLocaleString()} tok${coste?' · '+coste:''}${d.tools_count?' · '+d.tools_count+' tools':''}`;
-      respDiv.appendChild(el);
-      scrollBottom();
     }
 
     try {
