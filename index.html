@@ -10315,7 +10315,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '6.39';
+const APP_VERSION = '6.40';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -15509,6 +15509,86 @@ function alejandraQuitarAdj(url, chip) {
 
 function alejandraEsc(t) { return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
+// ── Interceptor local — respuestas sin gastar tokens ─────────────────────────
+function _alejandraLocalIntercept(msg) {
+  const m = msg.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
+  const s = getSession();
+
+  // 1. Saludos simples
+  if (/^(hola|buenas|hey|ey|buenos dias|buenas tardes|buenas noches|que tal|hi|hello)\s*[!.?]*$/.test(m)) {
+    const hora = new Date().getHours();
+    const saludo = hora < 12 ? 'Buenos días' : hora < 20 ? 'Buenas tardes' : 'Buenas noches';
+    const nombre = s?.nombre ? `, ${s.nombre.split(' ')[0]}` : '';
+    return `${saludo}${nombre} 👋 ¿En qué te ayudo?`;
+  }
+
+  // 2. Hora / fecha
+  if (/^(que hora es|hora actual|que dia es|fecha de hoy|que fecha)\s*[?]*$/.test(m)) {
+    const now = new Date();
+    const dias = ['domingo','lunes','martes','miércoles','jueves','viernes','sábado'];
+    const meses = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+    return `📅 ${dias[now.getDay()]} ${now.getDate()} de ${meses[now.getMonth()]} de ${now.getFullYear()}, ${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}`;
+  }
+
+  // 3. Quién soy / sesión
+  if (/^(quien soy|mi sesion|mi usuario|que empresa|mi rol|mis datos|mi perfil)\s*[?]*$/.test(m)) {
+    if (!s) return '❌ No hay sesión activa. Inicia sesión primero.';
+    const lines = [`👤 **${s.nombre || 'Sin nombre'}**`];
+    if (s.rol) lines.push(`🏷️ Rol: ${s.rol}`);
+    if (s.empresa_nombre) lines.push(`🏢 Empresa: ${s.empresa_nombre}`);
+    if (s.obra_nombre) lines.push(`🏗️ Obra: ${s.obra_nombre}`);
+    if (s.departamento) lines.push(`📁 Departamento: ${s.departamento}`);
+    return lines.join('\n');
+  }
+
+  // 4. Versión / estado de la app
+  if (/^(version|que version|version de la app|estado de la app|estado app)\s*[?]*$/.test(m)) {
+    return `📱 Alejandra APP v${typeof APP_VERSION !== 'undefined' ? APP_VERSION : '?'}\n🌐 Online: ${navigator.onLine ? 'sí' : 'no'}\n💾 Service Worker: ${navigator.serviceWorker?.controller ? 'activo' : 'no registrado'}`;
+  }
+
+  // 5. Navegación — "ir a X", "abre X", "muéstrame X"
+  const navMatch = m.match(/^(?:ir a|abre|abrir|abreme|muestrame|ensenname|lleva(?:me)? a|ve a|vamos a|navega a)\s+(.+?)\s*[.!?]*$/);
+  if (navMatch) {
+    const dest = navMatch[1];
+    const NAV_MAP = {
+      'inicio':       'home',    'home':       'home',    'principal':   'home',
+      'inventario':   'stock',   'stock':      'stock',   'bobinas':     'stock',   'almacen': 'stock',
+      'scan':         'scan',    'escaner':    'scan',    'escanear':    'scan',    'qr': 'scan',
+      'equipos':      'equipo',  'equipo':     'equipo',  'maquinaria':  'equipo',
+      'personal':     'personal','trabajadores':'personal','fichajes':   'personal','fichaje': 'personal',
+      'pedidos':      'pedidos', 'compras':    'pedidos',
+      'calendario':   'calendario','agenda':   'calendario',
+      'incidencias':  'incidencias','problemas':'incidencias','averias': 'incidencias',
+      'galeria':      'galeria', 'fotos':      'galeria', 'imagenes':    'galeria',
+      'partes':       'partes',  'partes de trabajo':'partes', 'albaranes':'partes',
+      'herramientas': 'herramientas','tools':  'herramientas',
+      'documentos':   'docs',    'docs':       'docs',    'archivos':    'docs',
+      'ajustes':      'ajustes', 'configuracion':'ajustes','config':     'ajustes',
+      'sugerencias':  'sugerencias','ideas':   'sugerencias',
+    };
+    const target = NAV_MAP[dest];
+    if (target) {
+      setTimeout(() => navTo(target), 300);
+      const screenNames = {home:'Inicio',stock:'Inventario',scan:'Escáner',equipo:'Equipos',personal:'Personal',pedidos:'Pedidos',calendario:'Calendario',incidencias:'Incidencias',galeria:'Galería',partes:'Partes',herramientas:'Herramientas',docs:'Documentos',ajustes:'Ajustes',sugerencias:'Sugerencias'};
+      return `📲 Navegando a **${screenNames[target] || target}**...`;
+    }
+  }
+
+  // 6. Limpiar chat
+  if (/^(limpia|limpiar|borrar|borra|clear)\s*(el\s*)?(chat|historial|mensajes)\s*$/.test(m)) {
+    setTimeout(() => _alejandraPanelLimpiar(), 300);
+    return null; // no añadir mensaje, la función de limpiar se encarga
+  }
+
+  // 7. Ayuda rápida
+  if (/^(ayuda|help|que puedes hacer|que sabes hacer|funciones|comandos)\s*[?]*$/.test(m)) {
+    return `Puedo ayudarte con:\n\n🔍 **Consultas** — buscar bobinas, equipos, personal\n📊 **Datos** — informes, estadísticas, historial\n🔧 **Acciones** — crear registros, fichajes, incidencias\n📲 **Navegación** — "ir a inventario", "abre equipos"\n🌐 **Web** — buscar información técnica online\n📸 **Imágenes** — analizar fotos de equipos/cuadros\n💬 **Conversación** — preguntas generales\n\nPrueba: "busca bobinas con stock bajo" o "ir a personal"`;
+  }
+
+  // No interceptado — enviar al servidor
+  return null;
+}
+
 // ── Chat principal (SSE streaming con feedback de tools) ─────────────────────
 async function alejandraEnviar() {
   const input = document.getElementById('alejandraInput');
@@ -15531,6 +15611,15 @@ async function alejandraEnviar() {
 
   const msgDisplay = msg + (adjEnv.length ? `\n📎 ${adjEnv.length} archivo(s) adjunto(s)` : '');
   _alejandraAñadirMensaje(msgDisplay, 'user');
+
+  // ── Interceptor local — si se puede resolver sin tokens, hacerlo ──
+  if (adjEnv.length === 0) {
+    const localResp = _alejandraLocalIntercept(msg);
+    if (localResp !== null) {
+      _alejandraAñadirMensaje(localResp, 'bot');
+      return;
+    }
+  }
 
   const list = document.getElementById('alejandraList');
   const welcome = list?.querySelector('.ale-welcome');
