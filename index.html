@@ -10315,7 +10315,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '6.40';
+const APP_VERSION = '6.41';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -15509,6 +15509,72 @@ function alejandraQuitarAdj(url, chip) {
 
 function alejandraEsc(t) { return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
+// ── Auto-caché inteligente — aprende qué preguntas se repiten ────────────────
+const ALE_CACHE_KEY = 'ale_response_cache';
+const ALE_CACHE_MAX = 80;         // máx entradas en caché
+const ALE_CACHE_HIT_MIN = 2;      // veces que se preguntó para servir desde caché
+const ALE_CACHE_TTL_H = 48;       // horas de vida de una entrada
+const ALE_CACHE_NOCACHE = /\b(hoy|ahora|actual|ultimo|ultima|reciente|nuevo|nueva|acaba|ayer|esta semana|este mes|cuantos? hay|cuantas? hay|stock|estado de)\b/;
+
+function _aleCacheNormalize(msg) {
+  return msg.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, ' ').trim();
+}
+
+function _aleCacheLoad() {
+  try { return JSON.parse(localStorage.getItem(ALE_CACHE_KEY) || '{}'); } catch { return {}; }
+}
+
+function _aleCacheSave(cache) {
+  // Purgar expiradas y limitar tamaño
+  const now = Date.now();
+  const entries = Object.entries(cache).filter(([, v]) => now - v.ts < ALE_CACHE_TTL_H * 3600000);
+  entries.sort((a, b) => b[1].hits - a[1].hits); // ordenar por hits
+  const pruned = Object.fromEntries(entries.slice(0, ALE_CACHE_MAX));
+  try { localStorage.setItem(ALE_CACHE_KEY, JSON.stringify(pruned)); } catch {}
+}
+
+function _aleCacheRecord(msgOriginal, respuesta) {
+  // No cachear respuestas con datos dinámicos, errores, o muy cortas
+  if (!respuesta || respuesta.length < 20) return;
+  if (respuesta.startsWith('❌')) return;
+  const norm = _aleCacheNormalize(msgOriginal);
+  if (!norm || norm.length < 5) return;
+  // No cachear preguntas con palabras temporales
+  if (ALE_CACHE_NOCACHE.test(norm)) return;
+
+  const cache = _aleCacheLoad();
+  const existing = cache[norm];
+  if (existing) {
+    existing.hits++;
+    existing.resp = respuesta;
+    existing.ts = Date.now();
+  } else {
+    cache[norm] = { resp: respuesta, hits: 1, ts: Date.now() };
+  }
+  _aleCacheSave(cache);
+}
+
+function _aleCacheLookup(msgOriginal) {
+  const norm = _aleCacheNormalize(msgOriginal);
+  if (!norm || norm.length < 5) return null;
+  // No servir caché para preguntas con palabras temporales
+  if (ALE_CACHE_NOCACHE.test(norm)) return null;
+
+  const cache = _aleCacheLoad();
+  const entry = cache[norm];
+  if (!entry) return null;
+  // Solo servir si tiene suficientes hits
+  if (entry.hits < ALE_CACHE_HIT_MIN) return null;
+  // Verificar TTL
+  if (Date.now() - entry.ts > ALE_CACHE_TTL_H * 3600000) return null;
+
+  // Registrar hit
+  entry.hits++;
+  entry.ts = Date.now();
+  _aleCacheSave(cache);
+  return entry.resp;
+}
+
 // ── Interceptor local — respuestas sin gastar tokens ─────────────────────────
 function _alejandraLocalIntercept(msg) {
   const m = msg.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
@@ -15584,6 +15650,10 @@ function _alejandraLocalIntercept(msg) {
   if (/^(ayuda|help|que puedes hacer|que sabes hacer|funciones|comandos)\s*[?]*$/.test(m)) {
     return `Puedo ayudarte con:\n\n🔍 **Consultas** — buscar bobinas, equipos, personal\n📊 **Datos** — informes, estadísticas, historial\n🔧 **Acciones** — crear registros, fichajes, incidencias\n📲 **Navegación** — "ir a inventario", "abre equipos"\n🌐 **Web** — buscar información técnica online\n📸 **Imágenes** — analizar fotos de equipos/cuadros\n💬 **Conversación** — preguntas generales\n\nPrueba: "busca bobinas con stock bajo" o "ir a personal"`;
   }
+
+  // 8. Auto-caché — preguntas repetidas se sirven localmente
+  const cached = _aleCacheLookup(msg);
+  if (cached) return '⚡ ' + cached;
 
   // No interceptado — enviar al servidor
   return null;
@@ -15837,6 +15907,9 @@ async function alejandraEnviar() {
       // Persistir en historial local
       _alejandraPanelHist.push({ texto: textoLimpio, tipo: 'bot', time: timeStr });
       _alejandraPersistir();
+
+      // Auto-caché: aprender esta pregunta-respuesta
+      _aleCacheRecord(msg, textoLimpio);
 
       // TTS
       alejandraHablar(textoLimpio);
