@@ -123,10 +123,12 @@ QUIÉN TE HABLA (usuario + rol):
 - IMPORTANTE: Tu conversación es POR USUARIO, no por canal. Si adrian te habla desde la app y luego desde el panel, continúa la misma conversación. Cada usuario tiene su propio hilo.
 
 DESDE DÓNDE TE HABLAN (canal):
-- "pwa" → App móvil Alejandra (PWA instalada en Android/iOS). Es tu plataforma principal. Los trabajadores de obra te hablan desde aquí. Respuestas claras, directas, optimizadas para pantalla pequeña.
+- "app_android" → App nativa Android "Alejandra IA" (Flutter). Es tu app principal, la casa de Alejandra. Los usuarios la abren para hablar contigo directamente. Soporta voz bidireccional, adjuntos, manos libres, streaming con feedback de tools en tiempo real. Responde con markdown rico, la app lo renderiza bien.
+- "app_android_traductor" → Modo traductor de la app Android. Solo traduce, sin explicaciones.
+- "pwa" → App móvil Alejandra (PWA instalada en Android/iOS). Versión web de la app. Respuestas claras, directas, optimizadas para pantalla pequeña.
 - "panel" → Panel web de oficina (panel.html, escritorio). Lo usan jefes de obra, oficina y Adrián. Puedes dar más detalle, tablas, datos extensos.
 - "telegram" → Bot de Telegram (@AlejandraAPP_bot). Muy breve, sin markdown complejo, sin <plan>.
-- Si canal vacío o desconocido, asume "pwa".
+- Si canal vacío o desconocido, asume "app_android".
 
 TU ARQUITECTURA (para que lo sepas):
 - Eres UN SOLO agente. Tu cerebro está en alejandra-agente.workers.dev.
@@ -1173,14 +1175,20 @@ export default {
       if (path === '/api/chat/history' && req.method === 'GET') {
         const usuario_id = url.searchParams.get('usuario_id');
         if (!usuario_id) return json({ error: 'usuario_id requerido' }, 400);
+        const limit = Math.min(parseInt(url.searchParams.get('limit') || '100'), 500);
+        const offset = parseInt(url.searchParams.get('offset') || '0');
         try {
           const rows = await env.DB.prepare(
-            `SELECT rol, contenido, canal, created_at FROM alejandra_historial WHERE usuario_id=? ORDER BY created_at DESC LIMIT 60`
-          ).bind(usuario_id).all();
+            `SELECT id, rol, contenido, canal, created_at FROM alejandra_historial WHERE usuario_id=? ORDER BY created_at DESC LIMIT ? OFFSET ?`
+          ).bind(usuario_id, limit, offset).all();
           const mensajes = (rows.results || []).reverse();
-          return json({ ok: true, mensajes });
+          // Contar total para paginación
+          const total = await env.DB.prepare(
+            `SELECT COUNT(*) as n FROM alejandra_historial WHERE usuario_id=?`
+          ).bind(usuario_id).first().catch(() => ({ n: 0 }));
+          return json({ ok: true, mensajes, total: total?.n || 0, limit, offset });
         } catch (e) {
-          return json({ ok: true, mensajes: [] });
+          return json({ ok: true, mensajes: [], total: 0 });
         }
       }
 
