@@ -6,9 +6,38 @@
 ## ESTADO ACTUAL
 
 **Sesión:** LIBRE
-**Última sesión:** 09/06/2026 — auditoría consumo tokens + optimización cron
-**Versión actual:** Panel web **v6.38** · WORKER API `43d2af24` · WORKER agente `0d59fa4a`
+**Última sesión:** 10/06/2026 — streaming chat + fix identidad + fix eventos + fix "sin respuesta"
+**Versión actual:** Panel web **v6.39** · WORKER API `43d2af24` · WORKER agente `7035671c`
 **Próxima:** probar albarán universal con foto real, verificar notificaciones tras 30+ min suspendido, monitorear ahorro tokens tras optimización
+
+---
+
+## RESUMEN SESIÓN 10/06/2026 — Streaming chat + fix identidad + optimización tokens
+
+### Cambios implementados
+
+1. **Chat streaming con feedback estilo Claude Code (v6.39)**
+   - `alejandraEnviar()` reescrita para usar SSE streaming (`/api/chat/stream`)
+   - Feedback visual en tiempo real: chip de routing NEXUS, tool chips con spinner/check, preview colapsable, tokens streaming
+   - Info de coste/tokens al final de cada respuesta
+   - CSS ya incluido: `.ale-tool`, `.ale-tool-chip`, `.ale-tool-route`, `.ale-stream-bubble`
+
+2. **Fix identidad fragmentada**
+   - Función `normalizarUsuarioId()` en worker: unifica "3", "Adrian", "adrian", "3.0", "Adrian (3)" → "3"
+   - Migración BD: 86+181+669 filas actualizadas en historial, logs y token_uso
+   - Chat ahora es continuo entre PWA, Android y panel web
+
+3. **Fix "Sin respuesta"**
+   - Cuando IA usaba tools pero API no devolvía bloque de texto → genera resumen de acciones ejecutadas
+
+4. **Eventos no gastan tokens**
+   - `/webhook/evento` ya no procesa con Sonnet. Solo guarda contexto. Solo eventos críticos llaman IA
+
+### Commits
+- `84e3420` — feat: chat streaming con feedback de tools estilo Claude Code — v6.39
+
+### Workers desplegados
+- `alejandra-agente` → Version ID `7035671c` (streaming + identity + events fix)
 
 ---
 
