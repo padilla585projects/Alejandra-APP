@@ -1102,6 +1102,51 @@ const TOOLS_POR_EXPERTO = {
   ingenieria: [TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_ANALIZAR_FOTO, TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO]
 };
 
+// ── Normalización de usuario_id (CRÍTICO: unifica identidad cross-canal) ─────
+// Android manda "3", PWA manda "Adrian", panel manda "3.0" → todos son el mismo usuario
+// Sin esto, Alejandra cree que habla con 6 personas distintas
+const _userIdCache = new Map();
+async function normalizarUsuarioId(env, rawId) {
+  if (!rawId) return 'unknown';
+  const key = String(rawId).trim();
+  if (_userIdCache.has(key)) return _userIdCache.get(key);
+
+  // Si es numérico (3, 3.0, "3") → buscar por id
+  const numId = parseInt(key, 10);
+  if (!isNaN(numId) && String(numId) === key.replace('.0','')) {
+    _userIdCache.set(key, String(numId));
+    return String(numId);
+  }
+
+  // Si es texto (Adrian, adrian) → buscar en usuarios por nombre
+  try {
+    const user = await env.DB.prepare(
+      `SELECT id FROM usuarios WHERE LOWER(nombre)=LOWER(?) LIMIT 1`
+    ).bind(key).first();
+    if (user?.id) {
+      const normalized = String(user.id);
+      _userIdCache.set(key, normalized);
+      return normalized;
+    }
+  } catch (_) {}
+
+  // Fallback: devolver tal cual
+  _userIdCache.set(key, key);
+  return key;
+}
+
+// Resolver nombre legible del usuario (para mostrar en prompts)
+async function resolverNombreUsuario(env, userId) {
+  try {
+    const numId = parseInt(userId, 10);
+    if (!isNaN(numId)) {
+      const user = await env.DB.prepare(`SELECT nombre FROM usuarios WHERE id=? LIMIT 1`).bind(numId).first();
+      if (user?.nombre) return user.nombre;
+    }
+  } catch (_) {}
+  return userId;
+}
+
 // ── HTTP Handler ──────────────────────────────────────────────────────────────
 export default {
   async fetch(req, env, ctx) {
@@ -1274,13 +1319,16 @@ export default {
       // ── Chat principal ────────────────────────────────────────────────────
       if (path === '/api/chat' && req.method === 'POST') {
         const body = await req.json();
-        const { mensaje, usuario_id, usuario_nombre, empresa_id, canal, token_telegram, adjuntos, rol, pantalla, dom_actual } = body;
-        if (!mensaje || !usuario_id) return json({ error: 'mensaje y usuario_id requeridos' }, 400);
+        const { mensaje, usuario_id: rawUserId, usuario_nombre, empresa_id, canal, token_telegram, adjuntos, rol, pantalla, dom_actual } = body;
+        if (!mensaje || !rawUserId) return json({ error: 'mensaje y usuario_id requeridos' }, 400);
 
+        // Normalizar usuario_id: "Adrian", "adrian", "3", "3.0" → siempre el mismo ID
+        const usuario_id = await normalizarUsuarioId(env, rawUserId);
         const empresa   = empresa_id || 'default';
         const contexto  = await obtenerContextoChat(env, usuario_id, empresa, 10);
         const canalChat = canal || 'web';
-        const usuarioLabel = (usuario_nombre && String(usuario_nombre).trim()) ? String(usuario_nombre) : String(usuario_id);
+        const nombreResuelto = await resolverNombreUsuario(env, usuario_id);
+        const usuarioLabel = (usuario_nombre && String(usuario_nombre).trim()) ? String(usuario_nombre) : nombreResuelto;
         const respuesta = await procesarConNEXUS(env, mensaje, contexto, usuario_id, empresa, canalChat, adjuntos, rol, pantalla, dom_actual, usuarioLabel);
 
         await guardarMensajeChat(env, usuario_id, empresa, mensaje, respuesta.texto, canalChat);
@@ -1294,12 +1342,14 @@ export default {
       // ── Chat streaming SSE ────────────────────────────────────────────────
       if (path === '/api/chat/stream' && req.method === 'POST') {
         const body = await req.json().catch(() => ({}));
-        const { mensaje, usuario_id, usuario_nombre, empresa_id, canal, adjuntos, rol, pantalla, dom_actual } = body;
-        if (!mensaje || !usuario_id) return json({ error: 'mensaje y usuario_id requeridos' }, 400);
+        const { mensaje, usuario_id: rawUserId, usuario_nombre, empresa_id, canal, adjuntos, rol, pantalla, dom_actual } = body;
+        if (!mensaje || !rawUserId) return json({ error: 'mensaje y usuario_id requeridos' }, 400);
 
+        const usuario_id = await normalizarUsuarioId(env, rawUserId);
         const empresa  = empresa_id || 'default';
         const contexto = await obtenerContextoChat(env, usuario_id, empresa, 10);
-        const usuarioLabel = (usuario_nombre && String(usuario_nombre).trim()) ? String(usuario_nombre) : String(usuario_id);
+        const nombreResuelto = await resolverNombreUsuario(env, usuario_id);
+        const usuarioLabel = (usuario_nombre && String(usuario_nombre).trim()) ? String(usuario_nombre) : nombreResuelto;
 
         const { readable, writable } = new TransformStream();
         const writer = writable.getWriter();
@@ -1495,31 +1545,37 @@ export default {
       }
 
       // ── Webhook para eventos de la app (fichajes, fotos, acciones) ───────
+      // OPTIMIZACIÓN: Los eventos se guardan como contexto pero NO se procesan con IA
+      // Antes cada "app_abierta" costaba ~$0.01 en tokens de Sonnet para nada
       if (path === '/webhook/evento' && req.method === 'POST') {
         const body = await req.json().catch(() => ({}));
-        const { tipo, usuario_id: uid, datos, empresa_id: eid } = body;
+        const { tipo, usuario_id: rawUid, datos, empresa_id: eid } = body;
         if (!tipo) return json({ error: 'tipo requerido' }, 400);
 
-        // Guardar evento en historial como contexto
-        const resumen = `[EVENTO:${tipo}] ${JSON.stringify(datos || {}).substring(0, 500)}`;
+        // Normalizar usuario_id
+        const uid = await normalizarUsuarioId(env, rawUid || 'system');
+
+        // Solo guardar en historial como contexto (Alejandra lo verá en la próxima conversación)
+        const resumen = `[EVENTO:${tipo}] ${JSON.stringify(datos || {}).substring(0, 300)}`;
         await env.DB.prepare(
           `INSERT INTO alejandra_historial (canal, rol, contenido, created_at, usuario_id)
            VALUES ('app_android', 'system', ?, datetime('now'), ?)`
-        ).bind(resumen, uid || 'system').run();
+        ).bind(resumen, uid).run();
 
-        // Procesar con NEXUS para que Alejandra decida qué hacer
-        const contexto = await obtenerContextoChat(env, uid || 'system', 'app_android', 6);
-        const prompt = `Se ha producido un evento en la app que requiere tu atención:\nTipo: ${tipo}\nUsuario: ${uid || 'desconocido'}\nEmpresa: ${eid || 'desconocida'}\nDatos: ${JSON.stringify(datos || {})}\n\nAnaliza el evento y decide si necesitas contactar al usuario, guardar algo en memoria o tomar alguna acción.`;
+        // Solo procesar con IA eventos críticos que requieren acción inmediata
+        const eventosCriticos = ['error_critico', 'alerta_seguridad', 'equipo_averiado'];
+        if (eventosCriticos.includes(tipo)) {
+          const contexto = await obtenerContextoChat(env, uid, eid || 'default', 4);
+          const prompt = `[EVENTO CRÍTICO] Tipo: ${tipo}, Usuario: ${uid}, Datos: ${JSON.stringify(datos || {})}. Evalúa si necesitas enviar alerta urgente.`;
+          const timeout = new Promise(resolve => setTimeout(() => resolve({ texto: 'Timeout.' }), 15000));
+          const respuesta = await Promise.race([
+            procesarConNEXUS(env, prompt, contexto, uid, eid || 'default', 'app_android'),
+            timeout
+          ]);
+          return json({ ok: true, tipo, respuesta: respuesta.texto?.substring(0, 500) });
+        }
 
-        const timeout = new Promise(resolve =>
-          setTimeout(() => resolve({ texto: 'Timeout procesando evento.' }), 23000)
-        );
-        const respuesta = await Promise.race([
-          procesarConNEXUS(env, prompt, contexto, uid || 'system', 'app_android'),
-          timeout
-        ]);
-
-        return json({ ok: true, tipo, respuesta: respuesta.texto?.substring(0, 500) });
+        return json({ ok: true, tipo, procesado: false, motivo: 'evento guardado como contexto' });
       }
 
       // ── GetawayAgentes — recibe tarea, responde síncronamente ────────────
@@ -2448,7 +2504,9 @@ async function procesarConNEXUS(env, mensaje, contexto, usuario_id, empresa_id, 
     let respAPI  = await llamarAnthropic(env, messages, tools, expert.model, expert.maxTokens, systemPrompt);
     if (respAPI.usage) registrarTokenUso(env, expert.model, `chat_${clas.experto}`, respAPI.usage.input_tokens||0, respAPI.usage.output_tokens||0, usuario_id);
     let iter     = 0;
-    const MAX_ITER = (usuario_id === 'adrian' || usuario_id === 'admin') ? 12 : 8;
+    // Adrián (id=3) y admin tienen más iteraciones para usar más tools
+    const esAdmin = ['3','adrian','admin','Adrian'].includes(usuario_id);
+    const MAX_ITER = esAdmin ? 12 : 8;
     const herramientasUsadas = [];
 
     while (respAPI.stop_reason === 'tool_use' && iter < MAX_ITER) {
@@ -2475,10 +2533,15 @@ async function procesarConNEXUS(env, mensaje, contexto, usuario_id, empresa_id, 
       iter++;
     }
 
-    const textoFinal = verificarAccionesAfirmadas(
-      respAPI.content?.filter(b => b.type === 'text').map(b => b.text).join('\n').trim() || 'Sin respuesta',
-      herramientasUsadas
-    );
+    let textoRaw = respAPI.content?.filter(b => b.type === 'text').map(b => b.text).join('\n').trim() || '';
+    // Si no hay texto pero sí usó herramientas, generar resumen de lo que hizo
+    if (!textoRaw && herramientasUsadas.length > 0) {
+      const acciones = herramientasUsadas.map(h => `• ${h.nombre}(${JSON.stringify(h.input).substring(0,80)})`).join('\n');
+      textoRaw = `He ejecutado ${herramientasUsadas.length} acción(es):\n${acciones}\n\n¿Necesitas algo más?`;
+    } else if (!textoRaw) {
+      textoRaw = 'No he podido procesar tu mensaje. ¿Puedes reformularlo?';
+    }
+    const textoFinal = verificarAccionesAfirmadas(textoRaw, herramientasUsadas);
 
     await registrarLog(env, usuario_id, 'chat', `[${clas.experto}] ${mensaje.substring(0,80)}`, textoFinal.substring(0,200));
 
@@ -2538,7 +2601,9 @@ async function procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empres
     let tokensOut = respAPI.usage?.output_tokens || 0;
     if (respAPI.usage) registrarTokenUso(env, expert.model, 'chat_stream', respAPI.usage.input_tokens||0, respAPI.usage.output_tokens||0, usuario_id);
     let iter = 0;
-    const MAX_ITER = (usuario_id === 'adrian' || usuario_id === 'admin') ? 12 : 8;
+    // Adrián (id=3) y admin tienen más iteraciones para usar más tools
+    const esAdmin = ['3','adrian','admin','Adrian'].includes(usuario_id);
+    const MAX_ITER = esAdmin ? 12 : 8;
     const herramientasUsadas = [];
 
     while (respAPI.stop_reason === 'tool_use' && iter < MAX_ITER) {
@@ -5640,8 +5705,8 @@ async function construirMessages(env, mensaje, contexto, limitHistorial=10, incl
       if (item.respuesta) messages.push({ role: 'assistant', content: item.respuesta });
     }
   }
-  // Inyectar contexto del turno anterior para continuidad (solo Adrián)
-  if (usuario_id === 'adrian' || usuario_id === 'admin') {
+  // Inyectar contexto del turno anterior para continuidad (solo Adrián, id=3)
+  if (['3','adrian','admin','Adrian'].includes(usuario_id)) {
     const lastTurn = await env.DB.prepare(
       `SELECT valor FROM alejandra_ram WHERE clave='ultimo_turno' AND expires_at > datetime('now') LIMIT 1`
     ).first().catch(() => null);

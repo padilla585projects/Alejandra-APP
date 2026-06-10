@@ -680,6 +680,21 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
 .ale-typing span:nth-child(2){animation-delay:.2s}
 .ale-typing span:nth-child(3){animation-delay:.4s}
 @keyframes aleDot{0%,60%,100%{transform:translateY(0)}30%{transform:translateY(-6px)}}
+.ale-tool{align-self:flex-start;max-width:88%;animation:aleMsgIn .2s ease;margin:2px 0}
+.ale-tool-chip{display:flex;align-items:center;gap:6px;padding:6px 12px;font-size:12px;border-radius:10px;background:rgba(124,58,237,.06);border:1px solid rgba(124,58,237,.15);color:var(--muted);font-family:'IBM Plex Mono',monospace;cursor:pointer;transition:background .2s}
+.ale-tool-chip:hover{background:rgba(124,58,237,.12)}
+.ale-tool-chip .ale-tool-icon{font-size:14px;flex-shrink:0}
+.ale-tool-chip .ale-tool-name{font-weight:600;color:var(--text)}
+.ale-tool-chip .ale-tool-input{opacity:.7;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:180px}
+.ale-tool-chip .ale-tool-spinner{width:12px;height:12px;border:2px solid rgba(124,58,237,.3);border-top-color:#a855f7;border-radius:50%;animation:aleSpin .6s linear infinite;flex-shrink:0}
+.ale-tool-chip .ale-tool-check{color:#22c55e;font-size:14px}
+.ale-tool-chip .ale-tool-time{opacity:.5;font-size:11px}
+.ale-tool-preview{display:none;padding:6px 12px;font-size:11px;color:var(--muted);border-top:1px solid rgba(124,58,237,.1);background:rgba(124,58,237,.03);border-radius:0 0 10px 10px;white-space:pre-wrap;word-break:break-word;max-height:100px;overflow-y:auto;font-family:'IBM Plex Mono',monospace}
+.ale-tool.done .ale-tool-preview{display:block}
+.ale-tool-route{display:flex;align-items:center;gap:6px;padding:4px 10px;font-size:11px;border-radius:8px;background:rgba(34,197,94,.06);border:1px solid rgba(34,197,94,.12);color:var(--muted);margin:2px 0;align-self:flex-start}
+.ale-tool-route .ale-route-dot{width:6px;height:6px;border-radius:50%;background:#22c55e}
+.ale-stream-bubble{padding:10px 14px;font-size:14px;line-height:1.55;word-wrap:break-word;white-space:pre-wrap;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:18px 18px 18px 4px;box-shadow:0 1px 2px rgba(0,0,0,.06);min-height:20px}
+@keyframes aleSpin{to{transform:rotate(360deg)}}
 .ale-welcome{text-align:center;padding:40px 20px;color:var(--muted)}
 .ale-welcome-icon{font-size:48px;margin-bottom:12px}
 .ale-welcome-title{font-family:'Montserrat',sans-serif;font-weight:900;font-size:18px;color:var(--text);margin-bottom:6px}
@@ -10300,7 +10315,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '6.38';
+const APP_VERSION = '6.39';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -15285,6 +15300,7 @@ window.turnoToggle   = turnoToggle;
 // ═══════════════════════════════════════════════════════════════════════════
 
 const ALEJANDRA_API = 'https://alejandra-agente.alejandra-app.workers.dev/api/chat';
+const ALEJANDRA_STREAM_API = 'https://alejandra-agente.alejandra-app.workers.dev/api/chat/stream';
 
 // ── Estado de voz ─────────────────────────────────────────────────────────────
 let _alejandraAutoHablar  = false;
@@ -15493,7 +15509,7 @@ function alejandraQuitarAdj(url, chip) {
 
 function alejandraEsc(t) { return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
-// ── Chat principal ────────────────────────────────────────────────────────────
+// ── Chat principal (SSE streaming con feedback de tools) ─────────────────────
 async function alejandraEnviar() {
   const input = document.getElementById('alejandraInput');
   const msg   = (input?.value || '').trim();
@@ -15516,21 +15532,131 @@ async function alejandraEnviar() {
   const msgDisplay = msg + (adjEnv.length ? `\n📎 ${adjEnv.length} archivo(s) adjunto(s)` : '');
   _alejandraAñadirMensaje(msgDisplay, 'user');
 
-  // Crear indicador de "pensando" con animación
-  const loadingDiv = document.createElement('div');
-  loadingDiv.className = 'ale-msg bot';
-  loadingDiv.dataset.loading = '1';
-  loadingDiv.innerHTML = '<div class="ale-typing"><span></span><span></span><span></span></div>';
   const list = document.getElementById('alejandraList');
-  // Quitar welcome si existe
   const welcome = list?.querySelector('.ale-welcome');
   if (welcome) welcome.remove();
-  if (list) { list.appendChild(loadingDiv); list.scrollTop = list.scrollHeight; }
 
-  // No bloquear — fire and forget para permitir más mensajes
+  // Crear contenedor de respuesta streaming
+  const respDiv = document.createElement('div');
+  respDiv.className = 'ale-msg bot';
+  respDiv.style.display = 'flex';
+  respDiv.style.flexDirection = 'column';
+  respDiv.style.gap = '4px';
+  respDiv.style.alignItems = 'flex-start';
+
+  // Indicador de pensando (se reemplaza cuando llega routing)
+  const thinkingEl = document.createElement('div');
+  thinkingEl.className = 'ale-typing';
+  thinkingEl.innerHTML = '<span></span><span></span><span></span>';
+  respDiv.appendChild(thinkingEl);
+  if (list) { list.appendChild(respDiv); list.scrollTop = list.scrollHeight; }
+
+  // Scroll helper
+  const scrollBottom = () => { if (list) list.scrollTop = list.scrollHeight; };
+
   (async () => {
+    let textoAcumulado = '';
+    let bubbleEl = null;
+    let toolsContainer = null;
+    let costData = null;
+    let routeData = null;
+
+    // ── Helpers para renderizar feedback ──
+    function getToolsContainer() {
+      if (!toolsContainer) {
+        toolsContainer = document.createElement('div');
+        toolsContainer.style.cssText = 'display:flex;flex-direction:column;gap:3px;width:100%';
+        respDiv.appendChild(toolsContainer);
+      }
+      return toolsContainer;
+    }
+
+    function addRouting(d) {
+      routeData = d;
+      thinkingEl.remove();
+      const el = document.createElement('div');
+      el.className = 'ale-tool-route';
+      const expertoNames = {simple:'Rápido',app:'App',tecnico:'Técnico',web:'Web',reflexion:'Reflexión',completo:'Completo',ingenieria:'Ingeniería'};
+      el.innerHTML = `<span class="ale-route-dot"></span><span>${expertoNames[d.experto]||d.experto}</span>${d.buscar_web?'<span style="opacity:.6">+ 🌐 web</span>':''}`;
+      respDiv.insertBefore(el, respDiv.firstChild);
+      scrollBottom();
+    }
+
+    function addToolStart(d) {
+      thinkingEl.remove();
+      const tc = getToolsContainer();
+      const el = document.createElement('div');
+      el.className = 'ale-tool';
+      el.id = 'ale-tool-' + d.nombre + '-' + Date.now();
+      const inputStr = d.input ? Object.values(d.input).join(', ').substring(0, 60) : '';
+      const toolIcons = {buscar_web:'🌐',consultar_bd:'🗄️',ejecutar_sql:'💾',leer_archivo:'📄',escribir_archivo:'✏️',listar_archivos:'📂',analizar_imagen:'🖼️',crear_bobina:'🔧',buscar_bobinas:'🔍',telegram_send:'📨',reflexionar:'🧠',proponer_correccion:'🛠️',crear_incidencia:'🚨',crear_fichaje:'⏱️',buscar_equipos:'⚙️',calendario:'📅'};
+      const icon = toolIcons[d.nombre] || '⚡';
+      el.innerHTML = `<div class="ale-tool-chip"><span class="ale-tool-icon">${icon}</span><span class="ale-tool-name">${alejandraEsc(d.nombre)}</span>${inputStr?`<span class="ale-tool-input">${alejandraEsc(inputStr)}</span>`:''}<div class="ale-tool-spinner"></div></div><div class="ale-tool-preview"></div>`;
+      tc.appendChild(el);
+      scrollBottom();
+    }
+
+    function addToolEnd(d) {
+      // Buscar el último tool_start con este nombre
+      const tc = getToolsContainer();
+      const chips = tc.querySelectorAll('.ale-tool');
+      let target = null;
+      for (let i = chips.length - 1; i >= 0; i--) {
+        if (chips[i].id.startsWith('ale-tool-' + d.nombre)) { target = chips[i]; break; }
+      }
+      if (!target) return;
+      target.classList.add('done');
+      const spinner = target.querySelector('.ale-tool-spinner');
+      if (spinner) {
+        spinner.className = 'ale-tool-check';
+        spinner.textContent = '✓';
+      }
+      // Añadir tiempo
+      const chip = target.querySelector('.ale-tool-chip');
+      if (chip && d.duracion_ms != null) {
+        const timeEl = document.createElement('span');
+        timeEl.className = 'ale-tool-time';
+        timeEl.textContent = d.duracion_ms < 1000 ? d.duracion_ms + 'ms' : (d.duracion_ms/1000).toFixed(1) + 's';
+        chip.appendChild(timeEl);
+      }
+      // Preview colapsable
+      if (d.preview) {
+        const prev = target.querySelector('.ale-tool-preview');
+        if (prev) {
+          prev.textContent = d.preview;
+          prev.style.display = 'block';
+        }
+        // Click para toggle preview
+        const chipEl = target.querySelector('.ale-tool-chip');
+        if (chipEl) chipEl.onclick = () => { prev.style.display = prev.style.display === 'none' ? 'block' : 'none'; };
+      }
+      scrollBottom();
+    }
+
+    function appendToken(texto) {
+      if (!bubbleEl) {
+        bubbleEl = document.createElement('div');
+        bubbleEl.className = 'ale-stream-bubble';
+        respDiv.appendChild(bubbleEl);
+        scrollBottom();
+      }
+      textoAcumulado += texto;
+      bubbleEl.innerHTML = _escHtml(textoAcumulado);
+      scrollBottom();
+    }
+
+    function addCostInfo(d) {
+      costData = d;
+      const el = document.createElement('div');
+      el.style.cssText = 'font-size:10px;color:var(--muted);opacity:.6;padding:2px 4px;font-family:monospace';
+      const coste = d.eur != null ? d.eur.toFixed(4) + '€' : '';
+      el.textContent = `${d.experto||''} · ${(d.tokens_total||0).toLocaleString()} tok${coste?' · '+coste:''}${d.tools_count?' · '+d.tools_count+' tools':''}`;
+      respDiv.appendChild(el);
+      scrollBottom();
+    }
+
     try {
-      const res = await fetch(ALEJANDRA_API, {
+      const res = await fetch(ALEJANDRA_STREAM_API, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -15546,45 +15672,95 @@ async function alejandraEnviar() {
       });
 
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
 
-      loadingDiv.remove();
+      // Leer SSE stream
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
 
-      let textoRespuesta = data.texto || 'Sin respuesta';
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
 
-      // Extraer <plan> y <guia> de la respuesta antes de mostrar
+        // Procesar líneas SSE completas
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || ''; // última línea incompleta queda en buffer
+
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          let ev;
+          try { ev = JSON.parse(line.slice(6)); } catch { continue; }
+
+          switch (ev.type) {
+            case 'routing':   addRouting(ev); break;
+            case 'tool_start': addToolStart(ev); break;
+            case 'tool_end':  addToolEnd(ev); break;
+            case 'token':     appendToken(ev.texto); break;
+            case 'text':      appendToken(ev.texto); break; // fallback texto completo
+            case 'cost':      addCostInfo(ev); break;
+            case 'done':
+              // Finalizar — quitar thinking si aún existe
+              thinkingEl.remove();
+              break;
+            case 'error':
+              thinkingEl.remove();
+              appendToken('❌ ' + (ev.mensaje || 'Error desconocido'));
+              break;
+          }
+        }
+      }
+
+      // Si no llegó ningún token, poner fallback
+      if (!textoAcumulado) {
+        thinkingEl.remove();
+        appendToken('Sin respuesta');
+      }
+
+      // Hora del mensaje
+      const now = new Date();
+      const timeStr = now.getHours().toString().padStart(2,'0') + ':' + now.getMinutes().toString().padStart(2,'0');
+      const timeEl = document.createElement('div');
+      timeEl.className = 'ale-time';
+      timeEl.textContent = timeStr;
+      respDiv.appendChild(timeEl);
+
+      // Extraer <plan> y <guia> de la respuesta
+      let textoLimpio = textoAcumulado;
       let planDetectado = null;
       let guiaDetectada = null;
-      const planMatch = textoRespuesta.match(/<plan>([\s\S]*?)<\/plan>/);
+      const planMatch = textoLimpio.match(/<plan>([\s\S]*?)<\/plan>/);
       if (planMatch) {
         try { planDetectado = JSON.parse(planMatch[1]); } catch (_) {}
-        textoRespuesta = textoRespuesta.replace(/<plan>[\s\S]*?<\/plan>/, '').trim();
+        textoLimpio = textoLimpio.replace(/<plan>[\s\S]*?<\/plan>/, '').trim();
+        if (bubbleEl) bubbleEl.innerHTML = _escHtml(textoLimpio);
       }
-      const guiaMatch = textoRespuesta.match(/<guia>([\s\S]*?)<\/guia>/);
+      const guiaMatch = textoLimpio.match(/<guia>([\s\S]*?)<\/guia>/);
       if (guiaMatch) {
         try { guiaDetectada = JSON.parse(guiaMatch[1]); } catch (_) {}
-        textoRespuesta = textoRespuesta.replace(/<guia>[\s\S]*?<\/guia>/, '').trim();
+        textoLimpio = textoLimpio.replace(/<guia>[\s\S]*?<\/guia>/, '').trim();
+        if (bubbleEl) bubbleEl.innerHTML = _escHtml(textoLimpio);
       }
-
-      if (textoRespuesta) _alejandraAñadirMensaje(textoRespuesta, 'bot');
 
       if (planDetectado) _alejandraOfrecerPlan(planDetectado);
       if (guiaDetectada) _alejandraOfrecerGuia(guiaDetectada);
 
-      if (data.busqueda_web) {
-        _alejandraAñadirMensaje('🔍 (resultado con búsqueda web)', 'bot-info');
-      }
+      // Persistir en historial local
+      _alejandraPanelHist.push({ texto: textoLimpio, tipo: 'bot', time: timeStr });
+      _alejandraPersistir();
 
-      if (data.requiere_confirmacion) {
-        _alejandraAñadirMensaje('⚠️ Esta acción requiere tu confirmación', 'bot-warning');
-      }
-
-      alejandraHablar(textoRespuesta);
+      // TTS
+      alejandraHablar(textoLimpio);
 
     } catch (err) {
-      loadingDiv.remove();
+      thinkingEl.remove();
+      respDiv.innerHTML = '';
+      const errBubble = document.createElement('div');
+      errBubble.className = 'ale-stream-bubble';
+      errBubble.style.borderColor = '#f55';
+      errBubble.textContent = '❌ Error al conectar con Alejandra: ' + err.message;
+      respDiv.appendChild(errBubble);
       toast('❌ Error: ' + err.message, 'err');
-      _alejandraAñadirMensaje('❌ Error al conectar con Alejandra', 'bot-error');
     }
   })();
 }
