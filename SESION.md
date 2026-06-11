@@ -6,9 +6,35 @@
 ## ESTADO ACTUAL
 
 **Sesión:** LIBRE
-**Última sesión:** 11/06/2026 — verificación sesión 10 (todo OK) + AlejandraIA v1.9.14+28 en producción
-**Versión actual:** Panel web **v6.43** · WORKER API `89db556` · WORKER agente `65b8e87e`
-**Próxima:** instalar APK v1.9.14+28 en móvil, probar historial cross-plataforma, FCM push pendiente
+**Última sesión:** 11/06/2026 — fix Gemini BOM + FCM push reparado
+**Versión actual:** Panel web **v6.44** · WORKER API `101b2f9` · WORKER agente `65b8e87e`
+**Próxima:** foreground service 30+ min, probar albarán universal con foto real
+
+---
+
+## RESUMEN SESIÓN 11/06/2026 — Fix Gemini BOM + FCM push reparado
+
+### Cambios implementados
+
+1. **fix(gemini): BOM cleaning en callGemini — worker.js v6.44**
+   - `callGemini` del worker principal no limpiaba BOM/whitespace de las keys
+   - Causaba 400 silencioso de Google → scan bobinas, partes, OCR, PDF/Excel fallaban
+   - Añadida `cleanKey()` igual que en el agente (commit `b799f11` de jun/5 que nunca se portó)
+   - Añadido `400` y `403` a la lista de `continue` (igual que agente)
+   - Deploy: `aa6d2e3a` — verificado con `/scan-bobinas` real → HTTP 200
+
+2. **fix(fcm): FIREBASE_CLIENT_EMAIL + FIREBASE_PRIVATE_KEY configurados**
+   - Los dos secrets del Service Account de Firebase no estaban en el agente worker
+   - Sin ellos `getGoogleAccessToken()` fallaba → `enviarFCM()` nunca funcionaba
+   - Secrets configurados desde `alejandra-ia-app-firebase-adminsdk-fbsvc-f8437abde1.json`
+   - Verificado E2E: Alejandra usó tool `enviar_push` → notificación recibida en el móvil ✅
+
+### Commits
+- `101b2f9` — fix(gemini): limpiar BOM en keys + manejar 400/403 — v6.44
+
+### Pendientes
+- Foreground service 30+ min
+- Probar albarán universal con foto real
 
 ---
 
