@@ -1393,13 +1393,24 @@ export default {
         const { readable, writable } = new TransformStream();
         const writer = writable.getWriter();
         const enc    = new TextEncoder();
-        // Detectar cuándo el cliente cierra la conexión SSE (se cierra app, pérdida red).
-        // Al fallar el write, marcamos el flag y al terminar enviamos un FCM con el resumen.
+        // Detectar cuándo el cliente cierra la conexión SSE (cierra app, pierde red).
+        // Cloudflare expone req.signal que se activa al cerrar el cliente.
+        // Esto es MÁS FIABLE que esperar a que writer.write falle: el TransformStream
+        // bufferea writes incluso si el readable se cerró, así que writer.write no
+        // siempre falla a tiempo. req.signal.aborted se dispara instantáneamente.
         let clienteDesconectado = false;
+        if (req.signal) {
+          if (req.signal.aborted) {
+            clienteDesconectado = true;
+          } else {
+            req.signal.addEventListener('abort', () => { clienteDesconectado = true; });
+          }
+        }
         const send   = async (data) => {
           try {
             await writer.write(enc.encode(`data: ${JSON.stringify(data)}\n\n`));
           } catch(e) {
+            // Fallback: si llegamos aquí, también consideramos cliente desconectado
             clienteDesconectado = true;
           }
         };
@@ -1423,21 +1434,29 @@ export default {
             console.error('[chat/stream] error:', e.message);
           } finally {
             try { await writer.close(); } catch(_) {}
-            // Si el cliente cerró la app mientras Alejandra procesaba, enviarle un push
-            // notificando que ya terminó (canales móviles: app_android / pwa / panel).
-            const esCanalMovil = (canal === 'app_android' || canal === 'pwa' || canal === 'panel');
-            if (clienteDesconectado && esCanalMovil && respFinal && respFinal.texto) {
+            // Enviar SIEMPRE push para canales móviles cuando hay respuesta válida.
+            // Detectar "cliente desconectado" desde el worker es poco fiable
+            // (writer.write se bufferea y req.signal no se activa).
+            // Estrategia: el cliente Flutter filtra el push en foreground si
+            //   data.tipo === 'chat_respuesta' (la app ya muestra el mensaje).
+            // Si la app está cerrada o en background, el push se muestra normal.
+            const esCanalMovil = (canal === 'app_android' || canal === 'pwa');
+            console.log(`[chat/stream] cierre: esCanalMovil=${esCanalMovil} canal=${canal} usuario_id=${usuario_id} respTexto=${respFinal?.texto ? 'sí('+respFinal.texto.length+'c)' : 'no'} clienteDesconectado=${clienteDesconectado}`);
+            if (esCanalMovil && respFinal && respFinal.texto) {
               try {
                 const fcmRow = await env.DB.prepare(
                   "SELECT contenido FROM alejandra_memoria WHERE tipo='fcm_token' AND usuario_id=? ORDER BY created_at DESC LIMIT 1"
                 ).bind(usuario_id).first();
-                if (fcmRow?.contenido) {
+                if (!fcmRow?.contenido) {
+                  console.log(`[chat/stream] sin fcm_token para usuario_id=${usuario_id}`);
+                } else {
                   const texto = String(respFinal.texto).replace(/\s+/g, ' ').trim();
                   const preview = texto.length > 140 ? texto.slice(0, 137) + '…' : texto;
-                  await enviarFCM(env, fcmRow.contenido, '💬 Alejandra ha respondido', preview);
+                  const fcmResult = await enviarFCM(env, fcmRow.contenido, '💬 Alejandra ha respondido', preview, { tipo: 'chat_respuesta' });
+                  console.log(`[chat/stream] FCM enviado a usuario_id=${usuario_id}: ${JSON.stringify(fcmResult)?.slice(0,200)}`);
                 }
               } catch(e) {
-                console.error('[chat/stream] FCM post-disconnect error:', e.message);
+                console.error('[chat/stream] FCM post-stream error:', e.message);
               }
             }
           }
@@ -6142,9 +6161,14 @@ async function getGoogleAccessToken(env) {
   return tokenData.access_token;
 }
 
-async function enviarFCM(env, fcmToken, titulo, cuerpo) {
+async function enviarFCM(env, fcmToken, titulo, cuerpo, extraData = null) {
   try {
     const accessToken = await getGoogleAccessToken(env);
+    // Merge data: defaults + extraData. FCM data debe ser todo strings.
+    const baseData = { tipo: 'alejandra_mensaje', screen: 'chat' };
+    const finalData = { ...baseData, ...(extraData || {}) };
+    // Asegurar que todos los valores son strings (requisito FCM)
+    for (const k of Object.keys(finalData)) finalData[k] = String(finalData[k]);
     const r = await fetch(`https://fcm.googleapis.com/v1/projects/alejandra-ia-app/messages:send`, {
       method: 'POST',
       headers: {
@@ -6156,7 +6180,7 @@ async function enviarFCM(env, fcmToken, titulo, cuerpo) {
           token: fcmToken,
           notification: { title: titulo, body: cuerpo },
           android: { priority: 'HIGH', notification: { sound: 'default', click_action: 'FLUTTER_NOTIFICATION_CLICK' } },
-          data: { tipo: 'alejandra_mensaje', screen: 'chat' },
+          data: finalData,
         },
       }),
     });
