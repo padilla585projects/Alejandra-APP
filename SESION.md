@@ -6,9 +6,34 @@
 ## ESTADO ACTUAL
 
 **Sesión:** LIBRE
-**Última sesión:** 10/06/2026 — streaming chat + fix identidad + fix eventos + fix "sin respuesta"
-**Versión actual:** Panel web **v6.39** · WORKER API `43d2af24` · WORKER agente `7035671c`
-**Próxima:** probar albarán universal con foto real, verificar notificaciones tras 30+ min suspendido, monitorear ahorro tokens tras optimización
+**Última sesión:** 11/06/2026 — verificación sesión 10 (todo OK) + AlejandraIA v1.9.14+28 en producción
+**Versión actual:** Panel web **v6.43** · WORKER API `89db556` · WORKER agente `65b8e87e`
+**Próxima:** instalar APK v1.9.14+28 en móvil, probar historial cross-plataforma, FCM push pendiente
+
+---
+
+## RESUMEN SESIÓN 11/06/2026 — Verificación y continuación sesión 10
+
+### Contexto
+Sesión de continuación (context limit en sesión 10). Se verificó que todas las implementaciones estaban completas y publicadas.
+
+### Estado verificado ✅
+- **AlejandraIA Flutter app** — todos los archivos ya modificados antes de compilar:
+  - `message.dart` — 36 tool labels completos
+  - `tool_event_card.dart` — expandible con input + preview
+  - `chat_provider.dart` — syncFromServer(), cola de mensajes, sin contexto local
+  - `chat_input_bar.dart` — siempre habilitado, hint dinámico, icono cola
+  - `chat_screen.dart` — syncFromServer en initState, onSend siempre habilitado
+- **APK v1.9.14+28** — compilado y en R2 / Google Drive ✅
+- **WORKER agente `65b8e87e`** — canal app_android documentado, historial paginado ✅
+- **Repos en sync** — AlejandraIA: `1f848f2`, APP: `89db556` ✅
+- **SESION.md** — restaurado desde git (tenía corrupción de encoding) y actualizado
+
+### Pendientes (de sesiones anteriores)
+- Instalar APK v1.9.14+28 en el móvil y probar historial cross-plataforma
+- FCM Push notificaciones (roto desde hace varias sesiones)
+- Foreground service 30+ min
+- Probar albarán universal con foto real
 
 ---
 
