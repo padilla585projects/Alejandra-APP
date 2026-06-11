@@ -3732,7 +3732,9 @@ async function devGenerateVapid(request, env) {
 
 // ── HELPER: llamada a Gemini con rotación de keys ──────────────────────────
 async function callGemini(env, geminiBody, endpointLabel) {
-  const keys = [env.GEMINI_API_KEY, env.GEMINI_API_KEY_2, env.GEMINI_API_KEY_3].filter(Boolean);
+  // Limpiar BOM/whitespace que puede colarse al guardar el secret con wrangler
+  const cleanKey = k => k ? k.replace(/[﻿​\r\n\t ]+/g, '').trim() : k;
+  const keys = [cleanKey(env.GEMINI_API_KEY), cleanKey(env.GEMINI_API_KEY_2), cleanKey(env.GEMINI_API_KEY_3)].filter(Boolean);
   if (!keys.length) return { error: 'GEMINI_API_KEY no configurada', status: 500 };
   const models = ['gemini-2.5-flash', 'gemini-2.0-flash-lite'];
   for (const key of keys) {
@@ -3744,7 +3746,7 @@ async function callGemini(env, geminiBody, endpointLabel) {
       const data = await res.json();
       if (res.ok) return { ok: true, data, model };
       if (res.status === 429) break; // cuota agotada para esta key, probar siguiente key
-      if (res.status === 404) continue; // modelo no disponible, probar siguiente modelo
+      if (res.status === 404 || res.status === 400 || res.status === 403) continue; // modelo/key no válido, probar siguiente
       return { error: 'Error IA Gemini: ' + JSON.stringify(data).slice(0, 200), status: 502 };
     }
   }
