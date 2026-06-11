@@ -6,9 +6,59 @@
 ## ESTADO ACTUAL
 
 **Sesión:** LIBRE
-**Última sesión:** 11/06/2026 (tarde) — Auditoría multi-tenant + hardening v6.45
-**Versión actual:** App PWA **v6.45** · WORKER API `8e09e329` · WORKER agente `c4d34bcb`
-**Próxima:** decidir destino de PEMP 40/41 y fichajes 8–15; foreground service 30+ min; probar albarán universal con foto real
+**Última sesión:** 11/06/2026 (noche) — Fix 4 bugs críticos AlejandraIA Flutter v1.9.15+29
+**Versión actual:** App PWA **v6.45** · AlejandraIA **v1.9.15+29** · WORKER API `21a9fa24` · WORKER agente `5695ef95`
+**Próxima:** instalar v1.9.15+29 vía OTA y validar que (1) historial carga, (2) no se pilla, (3) FCM avisa al cerrar app
+
+---
+
+## RESUMEN SESIÓN 11/06/2026 (noche) — Fix 4 bugs críticos AlejandraIA v1.9.15+29
+
+### Contexto
+Adrián reporta que AlejandraIA va fatal: se queda pillada pensando, no avisa al cerrar la app, da error al reabrir, no guarda historial. Diagnóstico completo + remediación.
+
+### Causa raíz del bug #1 (historial vacío) — la causó nuestro propio fix de la tarde
+La acción 3 de la sesión de la tarde reforzó `/api/chat/history` en el agente para **exigir** `getAuth`. Pero el cliente Flutter (`agent_service.dart` L181) hacía `http.get(uri)` SIN header `Authorization`. Resultado: 401 silencioso → `loadHistory()` devolvía `[]` → al reabrir la app el historial estaba vacío. Reparado abajo.
+
+### Fixes aplicados (AlejandraIA — Flutter)
+
+1. **`agent_service.dart` — Authorization en loadHistory + timeout SSE de inactividad**
+   - `loadHistory()`: añadido header `Authorization: Bearer ${_settings.token}`. Detecta 401/403 explícitamente.
+   - `sendMessage()`: el `await for` del stream SSE ahora tiene `.timeout(Duration(seconds: 90), onTimeout: sink.addError(TimeoutException))` para detectar cuelgue del servidor entre chunks. Antes el timeout de 60s solo cubría `request.send()` (conectar), no la inactividad intra-chunks → chat se pillaba para siempre.
+   - También añadido `Authorization` al request POST de chat/stream por defensa en profundidad.
+
+2. **`chat_screen.dart` — boot ordenado**
+   - `initState` ahora: (1) `loadConversations()` siempre primero (datos locales, no depende de red), (2) abrir conversación más reciente si existe, (3) `syncFromServer()` con try/catch, (4) crear nueva solo si tras todo no hay activa. Antes una excepción en sync rompía el resto.
+
+3. **`chat_provider.dart` — await en saveMessage del usuario**
+   - `_addUserMessageToUI()` ahora es async y hace `await _db.saveMessage(userMsg)`. Antes era fire-and-forget; si el usuario cerraba la app justo después de enviar, el mensaje quedaba sin persistir.
+
+### Fix lado worker (alejandra-agente)
+
+4. **`/api/chat/stream` — FCM push cuando cliente desconecta**
+   - Nueva variable `clienteDesconectado` que se pone a `true` cuando `writer.write` falla (cliente cerró app o perdió red).
+   - En el `finally`, si `clienteDesconectado === true` y el canal es móvil (`app_android`/`pwa`/`panel`) y hay respuesta final, lanza `ctx.waitUntil(enviarFCM(env, fcmToken, '💬 Alejandra ha respondido', preview))`.
+   - El `fcm_token` se lee de `alejandra_memoria` (tipo='fcm_token').
+   - Soluciona el síntoma "cierro la app y no me avisa cuando termina".
+
+### Versionado y despliegues
+- AlejandraIA: v1.9.14+28 → **v1.9.15+29**. APK 57.4 MB. SHA-256 `db5e15...62f7e6`.
+- Subido a R2 `apk/alejandra_ia_v1.9.15.apk` + `apk/alejandra_ia_latest.apk`.
+- `ota/version.json` actualizado (los móviles ya v1.9.15 se actualizarán solos).
+- Subido a Google Drive `gdrive:AlejandraIA/AlejandraIA_v1.9.15.apk`.
+- `alejandra-app-api` redeploy: `21a9fa24-b1fd-4657-a1c7-e7e02b7229ee`.
+- `alejandra-agente` deploy: `5695ef95-3e25-4efe-91a0-6e4014955474`.
+
+### Commits
+- AlejandraIA `55b5633` — fix 4 bugs críticos del chat.
+- Alejandra-APP `a91cdd8` — FCM cuando cliente SSE desconecta.
+
+### Pendientes
+- Instalar v1.9.15 en el móvil (OTA) y validar los 4 síntomas reparados.
+- Bugs medios para una v1.9.16: cancelar Timers/listeners en background_service y notifications_service, evitar acumular callbacks de TTS, throttle de `_scrollToBottom`.
+- Decidir destino de PEMP 40/41 y fichajes 8–15 (de la sesión de la tarde).
+- Foreground service 30+ min.
+- Probar albarán universal con foto real.
 
 ---
 
