@@ -1393,21 +1393,49 @@ export default {
         const { readable, writable } = new TransformStream();
         const writer = writable.getWriter();
         const enc    = new TextEncoder();
+        // Detectar cuándo el cliente cierra la conexión SSE (se cierra app, pérdida red).
+        // Al fallar el write, marcamos el flag y al terminar enviamos un FCM con el resumen.
+        let clienteDesconectado = false;
         const send   = async (data) => {
-          try { await writer.write(enc.encode(`data: ${JSON.stringify(data)}\n\n`)); } catch(e) {}
+          try {
+            await writer.write(enc.encode(`data: ${JSON.stringify(data)}\n\n`));
+          } catch(e) {
+            clienteDesconectado = true;
+          }
         };
 
         (async () => {
+          let respFinal = null;
           try {
             const canalReal = canal || 'panel';
             const resp = await procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empresa, send, canalReal, adjuntos, rol, pantalla, dom_actual, usuarioLabel);
+            respFinal = resp;
             await guardarMensajeChat(env, usuario_id, empresa, mensaje, resp.texto, canalReal);
             ctx.waitUntil(actualizarResumenSiNecesario(env, usuario_id, canalReal));
             await send({ type: 'done', experto: resp.experto, modelo: resp.modelo, busqueda_web: resp.busqueda_web });
           } catch(e) {
             await send({ type: 'error', mensaje: e.message });
           } finally {
-            await writer.close();
+            try { await writer.close(); } catch(_) {}
+            // Si el cliente cerró la app mientras Alejandra procesaba, enviarle un push
+            // notificando que ya terminó (canales móviles: app_android / pwa).
+            const esCanalMovil = (canal === 'app_android' || canal === 'pwa' || canal === 'panel');
+            if (clienteDesconectado && esCanalMovil && respFinal && respFinal.texto) {
+              ctx.waitUntil((async () => {
+                try {
+                  const fcmRow = await env.DB.prepare(
+                    "SELECT contenido FROM alejandra_memoria WHERE tipo='fcm_token' AND usuario_id=? ORDER BY created_at DESC LIMIT 1"
+                  ).bind(usuario_id).first();
+                  if (fcmRow?.contenido) {
+                    const texto = String(respFinal.texto).replace(/\s+/g, ' ').trim();
+                    const preview = texto.length > 140 ? texto.slice(0, 137) + '…' : texto;
+                    await enviarFCM(env, fcmRow.contenido, '💬 Alejandra ha respondido', preview);
+                  }
+                } catch(e) {
+                  console.error('[chat/stream] FCM post-disconnect error:', e.message);
+                }
+              })());
+            }
           }
         })();
 
