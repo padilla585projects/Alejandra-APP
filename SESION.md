@@ -6,9 +6,66 @@
 ## ESTADO ACTUAL
 
 **Sesión:** LIBRE
-**Última sesión:** 11/06/2026 — fix Gemini BOM + FCM push reparado
-**Versión actual:** Panel web **v6.44** · WORKER API `101b2f9` · WORKER agente `65b8e87e`
-**Próxima:** foreground service 30+ min, probar albarán universal con foto real
+**Última sesión:** 11/06/2026 (tarde) — Auditoría multi-tenant + hardening v6.45
+**Versión actual:** App PWA **v6.45** · WORKER API `8e09e329` · WORKER agente `c4d34bcb`
+**Próxima:** decidir destino de PEMP 40/41 y fichajes 8–15; foreground service 30+ min; probar albarán universal con foto real
+
+---
+
+## RESUMEN SESIÓN 11/06/2026 (tarde) — Auditoría multi-tenant + hardening v6.45
+
+### Contexto
+Auditoría completa del aislamiento de datos pedida por Adrián: empresa, departamento y rol. Lectura primero, después remediación de los hallazgos.
+
+### Estructura BD descubierta
+- 3 empresas: 1=Levitec, 3=Edison Montajes, 4=PruébalaAPP. 6 obras.
+- NO existe tabla `departamentos`: es campo TEXT libre repetido en 7 tablas con default `'electrico'`.
+- Tablas SIN `departamento`: `inventario_seg`, `epis_asignados`, `materiales_obra`, `fichajes`.
+- `materiales_obra` SIN `empresa_id` tampoco.
+
+### Migraciones BD aplicadas (D1 remoto)
+- `ALTER materiales_obra ADD empresa_id INTEGER` + back-fill 2 filas desde obras.
+- `ALTER inventario_seg ADD departamento TEXT DEFAULT 'seguridad'`.
+- `ALTER epis_asignados ADD departamento TEXT DEFAULT 'seguridad'`.
+- `ALTER materiales_obra ADD departamento TEXT DEFAULT 'electrico'`.
+- `ALTER fichajes ADD departamento TEXT DEFAULT 'electrico'` + back-fill 217 filas (38 desde usuarios, 179 desde personal_externo).
+- `ALTER push_subscriptions ADD empresa_id INTEGER` + back-fill 3 filas.
+- Fix encoding: 5 filas en `inventario_seg` (Arn�s→Arnés, Retr�ctil→Retráctil).
+
+### Hardening worker.js (principal)
+- `moverItemSeg`, `eliminarItemSeg`: `AND empresa_id=?` en SELECT/UPDATE/DELETE (evita cross-empresa).
+- `marcarSugerenciaLeida`, `eliminarSugerencia`: idem.
+- `crearIncidencia`: valida que `body.departamento` no escale el dept del operario.
+- INSERTs de fichajes (×2) y epis_asignados (×1): `departamento` con COALESCE desde usuarios/personal_externo.
+- `getIAChatHistory`: valida que `usuario_id` solicitado coincide con sesión (salvo superadmin/desarrollador).
+
+### Hardening alejandra-agente/worker.js
+- Nuevo helper `esDeveloperAgente()`: comprueba que el usuario es Adrian o `rol='desarrollador'`.
+- Guard al inicio de `ejecutarTool` para las 6 tools auto-mod (`repo_read_file`, `repo_write_file`, `direct_fix`, `grep_code`, `run_migration`, `check_deploy_status`).
+- `/api/chat/history`: requiere `getAuth` + `usuario_id` == sesión.
+- `/push-subscribe`: requiere auth + valida self-subscribe + resuelve `empresa_id` desde sesión/usuarios.
+- `/api/sync/eventos`: añadido filtro `AND (empresa_id=? OR empresa_id IS NULL)`.
+- `/api/sync/ping`: idem en SELECT dispositivos.
+- INSERTs `materiales_obra` (×2) con `empresa_id` desde sesión + CREATE TABLE actualizado.
+- INSERT fichajes parte semanal con `departamento` COALESCE desde personal_externo.
+
+### Hardening alejandra-panel.html
+- `login()` branch token: defensa en profundidad — verifica `r.ok`, rechaza 401, valida que la respuesta tenga forma de config (`modo`/`auto_fix`) antes de aceptar el token.
+
+### Hallazgos en datos NO arreglados (decisión pendiente)
+- **PEMP 40 y 41** (Tijeras 47107 y 135): `empresa_id=1` (Levitec) pero `obra_id=11` (CPD Getafe de Edison). dept='mecanicas'. Adrián decide qué hacer.
+- **Fichajes 8–15** (20/04/2026, registrados por Adrian): `empresa_id=3` (Edison) pero `obra_id=1` (CPD Getafe de Levitec). Personal externo todos de Edison. Probable obra duplicada (Levitec creó obra 1 y Edison creó obra 11 con el mismo nombre).
+
+### Despliegues
+- `alejandra-app-api` → Version ID `8e09e329-a51e-4af2-91f2-a743bd6ea682` ✅
+- `alejandra-agente` → Version ID `c4d34bcb-d994-4cf1-8e8a-8fafac74edaf` ✅
+- Versiones sincronizadas (json/sw/html): ✅ v6.45.
+- Encoding verificado limpio en diff: ✅.
+
+### Pendientes
+- Decidir destino de PEMP 40/41 y fichajes 8–15.
+- Foreground service 30+ min.
+- Probar albarán universal con foto real.
 
 ---
 

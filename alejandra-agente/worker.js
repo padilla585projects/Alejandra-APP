@@ -1173,19 +1173,27 @@ export default {
 
       // ── Historial del chat (sync entre dispositivos) ────────────────────
       if (path === '/api/chat/history' && req.method === 'GET') {
-        const usuario_id = url.searchParams.get('usuario_id');
-        if (!usuario_id) return json({ error: 'usuario_id requerido' }, 400);
+        // Requiere sesión autenticada
+        const sesion = await getAuth(req, env);
+        if (!sesion) return json({ error: 'No autorizado' }, 401);
+        const usuario_id_q = url.searchParams.get('usuario_id');
+        if (!usuario_id_q) return json({ error: 'usuario_id requerido' }, 400);
+        // Validar que el usuario_id solicitado coincide con la sesión, salvo desarrollador/admin
+        const esDev = await esDeveloperAgente(env, sesion.usuario_id);
+        if (!esDev && String(usuario_id_q).toLowerCase() !== String(sesion.usuario_id).toLowerCase()) {
+          return json({ error: 'No puedes ver el historial de otro usuario' }, 403);
+        }
         const limit = Math.min(parseInt(url.searchParams.get('limit') || '100'), 500);
         const offset = parseInt(url.searchParams.get('offset') || '0');
         try {
           const rows = await env.DB.prepare(
             `SELECT id, rol, contenido, canal, created_at FROM alejandra_historial WHERE usuario_id=? ORDER BY created_at DESC LIMIT ? OFFSET ?`
-          ).bind(usuario_id, limit, offset).all();
+          ).bind(usuario_id_q, limit, offset).all();
           const mensajes = (rows.results || []).reverse();
           // Contar total para paginación
           const total = await env.DB.prepare(
             `SELECT COUNT(*) as n FROM alejandra_historial WHERE usuario_id=?`
-          ).bind(usuario_id).first().catch(() => ({ n: 0 }));
+          ).bind(usuario_id_q).first().catch(() => ({ n: 0 }));
           return json({ ok: true, mensajes, total: total?.n || 0, limit, offset });
         } catch (e) {
           return json({ ok: true, mensajes: [], total: 0 });
@@ -1194,13 +1202,36 @@ export default {
 
       // ── Push: suscribir usuario ─────────────────────────────────────────
       if (path === '/push-subscribe' && req.method === 'POST') {
+        // Requiere sesión autenticada para evitar suscribir a otro usuario
+        const sesion = await getAuth(req, env);
+        if (!sesion) return json({ error: 'No autorizado' }, 401);
         const { usuario_id, subscription } = await req.json().catch(() => ({}));
         if (!usuario_id || !subscription?.endpoint || !subscription?.keys) return json({ error: 'Faltan datos' }, 400);
+        // Validar que se suscribe a sí mismo (salvo desarrollador)
+        const esDev = await esDeveloperAgente(env, sesion.usuario_id);
+        if (!esDev && String(usuario_id).toLowerCase() !== String(sesion.usuario_id).toLowerCase()) {
+          return json({ error: 'No puedes suscribir a otro usuario' }, 403);
+        }
+        // Resolver empresa_id desde la sesión (o desde usuarios si no viene)
+        let empresaIdSub = null;
+        if (sesion.empresa_id && sesion.empresa_id !== 'default') {
+          empresaIdSub = parseInt(sesion.empresa_id, 10) || null;
+        }
+        if (!empresaIdSub) {
+          try {
+            const numUid = parseInt(usuario_id, 10);
+            const row = !isNaN(numUid)
+              ? await env.DB.prepare("SELECT empresa_id FROM usuarios WHERE id=? LIMIT 1").bind(numUid).first()
+              : await env.DB.prepare("SELECT empresa_id FROM usuarios WHERE LOWER(nombre)=LOWER(?) LIMIT 1").bind(usuario_id).first();
+            empresaIdSub = row?.empresa_id || null;
+          } catch (_) {}
+        }
         try {
           await env.DB.prepare(
-            `INSERT INTO push_subscriptions (usuario_id, endpoint, p256dh, auth) VALUES (?,?,?,?)
-             ON CONFLICT(usuario_id, endpoint) DO UPDATE SET p256dh=?, auth=?, created_at=datetime('now')`
-          ).bind(usuario_id, subscription.endpoint, subscription.keys.p256dh, subscription.keys.auth, subscription.keys.p256dh, subscription.keys.auth).run();
+            `INSERT INTO push_subscriptions (usuario_id, endpoint, p256dh, auth, empresa_id) VALUES (?,?,?,?,?)
+             ON CONFLICT(usuario_id, endpoint) DO UPDATE SET p256dh=?, auth=?, empresa_id=COALESCE(?, empresa_id), created_at=datetime('now')`
+          ).bind(usuario_id, subscription.endpoint, subscription.keys.p256dh, subscription.keys.auth, empresaIdSub,
+                 subscription.keys.p256dh, subscription.keys.auth, empresaIdSub).run();
           return json({ ok: true });
         } catch (e) {
           return json({ error: e.message }, 500);
@@ -1686,9 +1717,10 @@ export default {
         await ensureNewTables(env).catch(() => {});
         const desde = url.searchParams.get('desde') || new Date(Date.now() - 300000).toISOString(); // últimos 5 min por defecto
         const excluir_origen = url.searchParams.get('excluir_origen') || ''; // para no recibir tus propios eventos
+        // Defensa en profundidad: filtrar también por empresa_id para evitar cross-empresa si dos usuarios comparten ID
         let query = `SELECT id, tipo, origen, datos, archivo_key, estado, created_at FROM sync_eventos
-          WHERE usuario_id = ? AND created_at > ? `;
-        const binds = [sesion.usuario_id, desde.replace('T', ' ').replace('Z', '')];
+          WHERE usuario_id = ? AND (empresa_id = ? OR empresa_id IS NULL) AND created_at > ? `;
+        const binds = [sesion.usuario_id, sesion.empresa_id, desde.replace('T', ' ').replace('Z', '')];
         if (excluir_origen) {
           query += ` AND origen != ? `;
           binds.push(excluir_origen);
@@ -1716,11 +1748,12 @@ export default {
            VALUES (?,?,?,?,datetime('now'))
            ON CONFLICT(usuario_id, tipo) DO UPDATE SET ultimo_ping=datetime('now'), activo=1, nombre=?`
         ).bind(sesion.usuario_id, sesion.empresa_id, tipo, nombre, nombre).run().catch(() => {});
-        // Devolver dispositivos activos del mismo usuario (últimos 5 min)
+        // Devolver dispositivos activos del mismo usuario+empresa (últimos 5 min)
         const dispositivos = await env.DB.prepare(
           `SELECT tipo, nombre, ultimo_ping FROM sync_dispositivos
-           WHERE usuario_id = ? AND activo = 1 AND ultimo_ping >= datetime('now', '-5 minutes')`
-        ).bind(sesion.usuario_id).all().catch(() => ({results:[]}));
+           WHERE usuario_id = ? AND (empresa_id = ? OR empresa_id IS NULL)
+             AND activo = 1 AND ultimo_ping >= datetime('now', '-5 minutes')`
+        ).bind(sesion.usuario_id, sesion.empresa_id).all().catch(() => ({results:[]}));
         return json({ ok: true, dispositivos: dispositivos.results || [] });
       }
 
@@ -2327,7 +2360,7 @@ async function ensureNewTables(env) {
   const migrations = [
     `CREATE TABLE IF NOT EXISTS precios_materiales (id INTEGER PRIMARY KEY AUTOINCREMENT, producto TEXT, fabricante TEXT, precio_min REAL, precio_max REAL, moneda TEXT DEFAULT 'EUR', fuente TEXT, datos_extra TEXT, created_at TEXT DEFAULT (datetime('now')), expires_at TEXT)`,
     `CREATE TABLE IF NOT EXISTS normativa_index (id INTEGER PRIMARY KEY AUTOINCREMENT, norma TEXT, seccion TEXT, titulo TEXT, contenido TEXT, palabras_clave TEXT, created_at TEXT DEFAULT (datetime('now')))`,
-    `CREATE TABLE IF NOT EXISTS materiales_obra (id INTEGER PRIMARY KEY AUTOINCREMENT, obra_id INTEGER, obra_nombre TEXT, material TEXT, referencia TEXT, fabricante TEXT, cantidad REAL, unidad TEXT, precio_unitario REAL, proveedor TEXT, fecha TEXT DEFAULT (datetime('now')), notas TEXT)`,
+    `CREATE TABLE IF NOT EXISTS materiales_obra (id INTEGER PRIMARY KEY AUTOINCREMENT, empresa_id INTEGER, obra_id INTEGER, obra_nombre TEXT, material TEXT, referencia TEXT, fabricante TEXT, cantidad REAL, unidad TEXT, precio_unitario REAL, proveedor TEXT, fecha TEXT DEFAULT (datetime('now')), notas TEXT)`,
     `CREATE TABLE IF NOT EXISTS alertas_config (id INTEGER PRIMARY KEY AUTOINCREMENT, tipo TEXT, nombre TEXT, condicion_sql TEXT, umbral REAL, mensaje_template TEXT, canal TEXT DEFAULT 'telegram', activa INTEGER DEFAULT 1, ultima_ejecucion TEXT, created_at TEXT DEFAULT (datetime('now')))`,
     `CREATE INDEX IF NOT EXISTS idx_precios_producto ON precios_materiales(producto)`,
     `CREATE INDEX IF NOT EXISTS idx_materiales_obra ON materiales_obra(obra_id)`,
@@ -3240,8 +3273,8 @@ async function insertarParteSemanal(env, datos, sesion, obra_id, archivo_key) {
       const horasExtra = horas > 8 ? horas - 8 : 0;
       try {
         await env.DB.prepare(
-          `INSERT INTO fichajes (empresa_id, personal_externo_id, obra_id, fecha, horas_trabajadas, horas_extra, estado, notas, registrado_por)
-           VALUES (?,?,?,?,?,?,?,?,?)`
+          `INSERT INTO fichajes (empresa_id, personal_externo_id, obra_id, fecha, horas_trabajadas, horas_extra, estado, notas, registrado_por, departamento)
+           VALUES (?,?,?,?,?,?,?,?,?,COALESCE((SELECT departamento FROM personal_externo WHERE id=?), 'electrico'))`
         ).bind(
           sesion.empresa_id,
           personalId,
@@ -3251,7 +3284,8 @@ async function insertarParteSemanal(env, datos, sesion, obra_id, archivo_key) {
           horasExtra,
           celda.firmo ? 'firmado' : 'sin_firma',
           `Parte semana ${datos.semana || '?'} · ${t.empresa || ''} · escaneo`,
-          'alejandra_office'
+          'alejandra_office',
+          personalId
         ).run();
         insertados++;
       } catch (e) {
@@ -3427,9 +3461,10 @@ async function insertarAlbaranUniversal(env, datos, sesion, obra_id, obra_nombre
       }
       else if (cat === 'material_obra') {
         await env.DB.prepare(
-          `INSERT INTO materiales_obra (obra_id, obra_nombre, material, referencia, fabricante, cantidad, unidad, precio_unitario, proveedor, fecha, notas)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?)`
+          `INSERT INTO materiales_obra (empresa_id, obra_id, obra_nombre, material, referencia, fabricante, cantidad, unidad, precio_unitario, proveedor, fecha, notas)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`
         ).bind(
+          sesion.empresa_id,
           obra_id || null,
           obra_nombre || null,
           ln.descripcion || 'Material',
@@ -3754,8 +3789,46 @@ function calcularProteccion(input) {
   return JSON.stringify(resultado, null, 2);
 }
 
+// ── Helper: verificar si el usuario actual puede invocar tools de auto-modificación ───
+// Solo Adrian (creador) o usuarios con rol 'desarrollador' explícito en BD.
+async function esDeveloperAgente(env, usuario_id) {
+  if (!usuario_id) return false;
+  const uid = String(usuario_id).toLowerCase().trim();
+  // Atajos para los IDs/nombres conocidos del creador
+  if (uid === 'adrian' || uid === 'adrián' || uid === '3' || uid === '35') return true;
+  if (uid.includes('adrian') || uid.includes('adrián')) return true;
+  // Comprobar en BD por id numérico o por nombre
+  try {
+    const num = parseInt(uid, 10);
+    let row = null;
+    if (!isNaN(num)) {
+      row = await env.DB.prepare(
+        "SELECT rol, roles_extra FROM usuarios WHERE id = ? LIMIT 1"
+      ).bind(num).first();
+    }
+    if (!row) {
+      row = await env.DB.prepare(
+        "SELECT rol, roles_extra FROM usuarios WHERE LOWER(nombre) = ? LIMIT 1"
+      ).bind(uid).first();
+    }
+    if (!row) return false;
+    if (row.rol === 'desarrollador' || row.rol === 'superadmin') return true;
+    const extra = (row.roles_extra || '').toLowerCase();
+    return extra.includes('desarrollador');
+  } catch (_) { return false; }
+}
+
 // ── Ejecutar tools ────────────────────────────────────────────────────────────
 async function ejecutarTool(env, nombre, input, usuario_id, empresa_id, expertoTools, sendSSE) {
+  // Tools de auto-modificación: solo accesibles a desarrollador/Adrian
+  const TOOLS_PROTEGIDAS = new Set(['repo_read_file', 'repo_write_file', 'direct_fix', 'grep_code', 'run_migration', 'check_deploy_status']);
+  if (TOOLS_PROTEGIDAS.has(nombre)) {
+    const autorizado = await esDeveloperAgente(env, usuario_id);
+    if (!autorizado) {
+      return JSON.stringify({ ok: false, error: `Tool "${nombre}" solo disponible para el desarrollador.` });
+    }
+  }
+
   switch (nombre) {
 
     case 'pensar': {
@@ -5193,8 +5266,9 @@ ${datos.proximos_pasos || '- Pendiente de definir'}`;
             const material = (input.material || '').trim();
             if (!material) return 'Falta "material" para registrar.';
             await env.DB.prepare(
-              "INSERT INTO materiales_obra (obra_id, obra_nombre, material, referencia, fabricante, cantidad, unidad, precio_unitario, proveedor, notas) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+              "INSERT INTO materiales_obra (empresa_id, obra_id, obra_nombre, material, referencia, fabricante, cantidad, unidad, precio_unitario, proveedor, notas) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
             ).bind(
+              input.empresa_id || empresa_id || null,
               input.obra_id || null, input.obra_nombre || null, material,
               input.referencia || null, input.fabricante || null,
               input.cantidad || 0, input.unidad || 'ud',

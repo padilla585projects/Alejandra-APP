@@ -4,9 +4,22 @@
   Ruta local: C:\Users\Adrian\Downloads\Proyecto GestiBobina\Alejandra APP
 ================================================================================
 
-ÚLTIMA ACTUALIZACIÓN: 05/06/2026
-VERSIÓN ACTUAL APP NUEVA: v6.37 (Escaneo remoto Office↔Móvil + chat sync + fix SW cache)
+ÚLTIMA ACTUALIZACIÓN: 11/06/2026
+VERSIÓN ACTUAL APP NUEVA: v6.45 (Hardening multi-tenant — empresa_id/dept en 5 tablas, guards de rol, fixes seguridad)
 VERSIÓN ACTUAL APP VIEJA: v4.19 (⛔ CONGELADA DEFINITIVAMENTE — no recibe más cambios)
+
+HISTORIAL DE VERSIONES (resumen reciente):
+  v6.45 — 11/06/2026 — Auditoría multi-tenant + hardening: ALTER+backfill empresa_id en materiales_obra
+                       y push_subscriptions; ALTER+backfill departamento en inventario_seg, epis_asignados,
+                       materiales_obra y fichajes (217 filas). Filtros empresa_id en moverItemSeg,
+                       eliminarItemSeg, marcarSugerenciaLeida, eliminarSugerencia. Guard rol/Adrian
+                       en 6 tools auto-mod del agente. Validación usuario_id == sesión en chat history
+                       (worker + agente). Filtro empresa_id en /api/sync/eventos y /api/sync/ping.
+                       Validación body.departamento en crearIncidencia. Auth + validación user en
+                       /push-subscribe. Defensa en profundidad en login() de alejandra-panel.html.
+                       Fix encoding inventario_seg (5 filas: Arnés, Retráctil).
+  v6.44 — 11/06/2026 — Fix Gemini BOM en keys + FCM push reparado
+  v6.43 — 10/06/2026 — Streaming SSE feedback en todos los chats
 
 ================================================================================
   PLAN ALEJANDRA INDEPENDENCIA (ROADMAP)

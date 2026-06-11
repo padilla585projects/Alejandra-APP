@@ -3912,11 +3912,13 @@ async function fichajesBatch(request, env, ctx) {
       const horaSal = String(Math.floor(salidaMins / 60)).padStart(2, '0') + ':' + String(salidaMins % 60).padStart(2, '0');
 
       await env.DB.prepare(
-        'INSERT INTO fichajes (empresa_id,usuario_id,personal_externo_id,obra_id,fecha,hora_entrada,hora_salida,horas_trabajadas,horas_extra,minutos_retraso,estado,notas,registrado_por) VALUES (?,?,?,?,?,?,?,?,0,0,?,?,?)'
+        `INSERT INTO fichajes (empresa_id,usuario_id,personal_externo_id,obra_id,fecha,hora_entrada,hora_salida,horas_trabajadas,horas_extra,minutos_retraso,estado,notas,registrado_por,departamento)
+         VALUES (?,?,?,?,?,?,?,?,0,0,?,?,?,COALESCE((SELECT departamento FROM usuarios WHERE id=?), (SELECT departamento FROM personal_externo WHERE id=?), 'electrico'))`
       ).bind(
         empresa_id, f.usuario_id || null, f.personal_externo_id || null,
         f.obra_id || null, fecha, horaEnt, horaSal, f.horas || 0,
-        'presente', 'Importado desde parte semanal escaneado', registradoPor || rol
+        'presente', 'Importado desde parte semanal escaneado', registradoPor || rol,
+        f.usuario_id || null, f.personal_externo_id || null
       ).run();
 
       resultados.push({ dia: f.dia, nombre: f.nombre, status: 'ok' });
@@ -6230,8 +6232,9 @@ async function getSugerencias(request, env) {
 }
 
 async function marcarSugerenciaLeida(id, request, env) {
-  const { isSuperadmin, isEmpresaAdmin } = await getAuth(request, env);
+  const { isSuperadmin, isEmpresaAdmin, empresa_id } = await getAuth(request, env);
   if (!isSuperadmin && !isEmpresaAdmin) return err('No autorizado', 403);
+  if (!empresa_id) return err('No autorizado', 403);
   const body    = await request.json().catch(() => ({}));
   const estado   = body.estado   || null;
   const respuesta = body.respuesta ?? null;
@@ -6239,15 +6242,23 @@ async function marcarSugerenciaLeida(id, request, env) {
   const vals   = [];
   if (estado)    { campos.push('estado = ?');    vals.push(estado); }
   if (respuesta !== null) { campos.push('respuesta = ?'); vals.push(respuesta); }
-  vals.push(id);
-  await env.DB.prepare(`UPDATE sugerencias SET ${campos.join(', ')} WHERE id = ?`).bind(...vals).run();
+  vals.push(id, empresa_id);
+  // superadmin puede tocar todas; empresa_admin solo las suyas
+  const where = isSuperadmin ? 'WHERE id = ? AND empresa_id IS NOT NULL' : 'WHERE id = ? AND empresa_id = ?';
+  const bindVals = isSuperadmin ? vals.slice(0, -1) : vals;
+  await env.DB.prepare(`UPDATE sugerencias SET ${campos.join(', ')} ${where}`).bind(...bindVals).run();
   return json({ ok: true });
 }
 
 async function eliminarSugerencia(id, request, env) {
-  const { isSuperadmin, isEmpresaAdmin } = await getAuth(request, env);
+  const { isSuperadmin, isEmpresaAdmin, empresa_id } = await getAuth(request, env);
   if (!isSuperadmin && !isEmpresaAdmin) return err('No autorizado', 403);
-  await env.DB.prepare('DELETE FROM sugerencias WHERE id = ?').bind(id).run();
+  if (!empresa_id && !isSuperadmin) return err('No autorizado', 403);
+  if (isSuperadmin) {
+    await env.DB.prepare('DELETE FROM sugerencias WHERE id = ?').bind(id).run();
+  } else {
+    await env.DB.prepare('DELETE FROM sugerencias WHERE id = ? AND empresa_id = ?').bind(id, empresa_id).run();
+  }
   return json({ ok: true });
 }
 
@@ -7247,8 +7258,11 @@ async function crearEpiAsignado(request, env, ctx) {
   const { obra_id, usuario_id, externo_id, nombre_trabajador, tipo_epi, talla, numero_serie, fecha_entrega, fecha_caducidad, proxima_revision, estado, observaciones } = b;
   if (!tipo_epi || !nombre_trabajador) return err('Faltan campos obligatorios');
   const r = await env.DB.prepare(
-    'INSERT INTO epis_asignados (empresa_id,obra_id,usuario_id,externo_id,nombre_trabajador,tipo_epi,talla,numero_serie,fecha_entrega,fecha_caducidad,proxima_revision,estado,observaciones,created_by) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)'
-  ).bind(empresa_id, obra_id||null, usuario_id||null, externo_id||null, nombre_trabajador, tipo_epi, talla||null, numero_serie||null, fecha_entrega||null, fecha_caducidad||null, proxima_revision||null, estado||'activo', observaciones||null, nombre||rol||'').run();
+    `INSERT INTO epis_asignados (empresa_id,obra_id,usuario_id,externo_id,nombre_trabajador,tipo_epi,talla,numero_serie,fecha_entrega,fecha_caducidad,proxima_revision,estado,observaciones,created_by,departamento)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,COALESCE((SELECT departamento FROM usuarios WHERE id=?), (SELECT departamento FROM personal_externo WHERE id=?), 'seguridad'))`
+  ).bind(empresa_id, obra_id||null, usuario_id||null, externo_id||null, nombre_trabajador, tipo_epi, talla||null, numero_serie||null, fecha_entrega||null, fecha_caducidad||null, proxima_revision||null, estado||'activo', observaciones||null, nombre||rol||'',
+    usuario_id||null, externo_id||null
+  ).run();
   ctx?.waitUntil(syncRRHH(env, 'EPIs', empresa_id));
   return json({ ok: true, id: r.meta.last_row_id });
 }
@@ -7403,10 +7417,12 @@ async function crearFichaje(request, env, ctx) {
   }
 
   const r = await env.DB.prepare(
-    'INSERT INTO fichajes (empresa_id,usuario_id,personal_externo_id,obra_id,fecha,hora_entrada,hora_salida,horas_trabajadas,horas_extra,minutos_retraso,estado,motivo,notas,registrado_por) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)'
+    `INSERT INTO fichajes (empresa_id,usuario_id,personal_externo_id,obra_id,fecha,hora_entrada,hora_salida,horas_trabajadas,horas_extra,minutos_retraso,estado,motivo,notas,registrado_por,departamento)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,COALESCE((SELECT departamento FROM usuarios WHERE id=?), (SELECT departamento FROM personal_externo WHERE id=?), 'electrico'))`
   ).bind(empresa_id, usuario_id||null, personal_externo_id||null, obra_id||obraAuth||null, fecha,
     hora_entrada||null, hora_salida||null, horas, horas_extra, minutos_retraso,
-    estadoFinal, motivo?.trim()||null, notas?.trim()||null, encargadoNombre||rol
+    estadoFinal, motivo?.trim()||null, notas?.trim()||null, encargadoNombre||rol,
+    usuario_id||null, personal_externo_id||null
   ).run();
   ctx?.waitUntil(syncRRHH(env, 'Fichajes', empresa_id));
   return json({ ok: true, id: r.meta.last_row_id }, 201);
@@ -8431,9 +8447,10 @@ async function crearItemSeg(request, env, ctx) {
 }
 
 async function moverItemSeg(id, request, env, ctx) {
-  const { isSuperadmin, isSeguridad, isAdmin, isEmpresaAdmin, usuario } = await getAuth(request, env);
+  const { isSuperadmin, isSeguridad, isAdmin, isEmpresaAdmin, usuario, empresa_id } = await getAuth(request, env);
   if (!isSuperadmin && !isAdmin && !isSeguridad && !isEmpresaAdmin) return err('No autorizado', 403);
-  const item = await env.DB.prepare('SELECT * FROM inventario_seg WHERE id = ?').bind(id).first();
+  if (!empresa_id) return err('No autorizado', 403);
+  const item = await env.DB.prepare('SELECT * FROM inventario_seg WHERE id = ? AND empresa_id = ?').bind(id, empresa_id).first();
   if (!item) return err('Item no encontrado', 404);
   const body = await request.json().catch(() => ({}));
   const { accion, cantidad = 1, destino, notas } = body;
@@ -8448,8 +8465,8 @@ async function moverItemSeg(id, request, env, ctx) {
     if (nuevasNotas !== undefined)    { campos.push('notas = ?');          vals.push(nuevasNotas || ''); }
     if (nuevoMin !== undefined)       { campos.push('stock_minimo = ?');   vals.push(parseInt(nuevoMin) || 0); }
     if (campos.length) {
-      vals.push(id);
-      await env.DB.prepare(`UPDATE inventario_seg SET ${campos.join(', ')} WHERE id = ?`).bind(...vals).run();
+      vals.push(id, empresa_id);
+      await env.DB.prepare(`UPDATE inventario_seg SET ${campos.join(', ')} WHERE id = ? AND empresa_id = ?`).bind(...vals).run();
       ctx?.waitUntil(syncSheets(env, 'Seg-Inventario', item.empresa_id));
     }
     return json({ ok: true, mensaje: 'Item actualizado' });
@@ -8459,12 +8476,12 @@ async function moverItemSeg(id, request, env, ctx) {
     let nuevaCantidad = null;
     if (item.modo === 'individual') {
       if (item.estado !== 'disponible') return err('El item no está disponible', 409);
-      await env.DB.prepare('UPDATE inventario_seg SET estado = ?, destino_actual = ? WHERE id = ?').bind('en_uso', destino || '', id).run();
+      await env.DB.prepare('UPDATE inventario_seg SET estado = ?, destino_actual = ? WHERE id = ? AND empresa_id = ?').bind('en_uso', destino || '', id, empresa_id).run();
     } else {
       const nueva = item.cantidad_disponible - cantidad;
       if (nueva < 0) return err(`No hay suficiente stock (disponible: ${item.cantidad_disponible})`, 409);
       nuevaCantidad = nueva;
-      await env.DB.prepare('UPDATE inventario_seg SET cantidad_disponible = ?, estado = ?, destino_actual = ? WHERE id = ?').bind(nueva, nueva === 0 ? 'en_uso' : 'disponible', destino || '', id).run();
+      await env.DB.prepare('UPDATE inventario_seg SET cantidad_disponible = ?, estado = ?, destino_actual = ? WHERE id = ? AND empresa_id = ?').bind(nueva, nueva === 0 ? 'en_uso' : 'disponible', destino || '', id, empresa_id).run();
     }
     await env.DB.prepare('INSERT INTO movimientos_seg (item_id, accion, cantidad, destino, usuario, notas, fecha) VALUES (?, ?, ?, ?, ?, ?, ?)').bind(id, 'salida', cantidad, destino || '', usuario || '', notas || '', fecha).run();
     if (destino) await sendTelegram(env, `📤 <b>Material Seguridad — Salida</b>\n📖 ${item.codigo || item.nombre}  📋 ${item.tipo_material}\n🏗 Destino: ${destino}\n👤 ${usuario || '—'}`);
@@ -8478,10 +8495,10 @@ async function moverItemSeg(id, request, env, ctx) {
 
   if (accion === 'devolucion') {
     if (item.modo === 'individual') {
-      await env.DB.prepare('UPDATE inventario_seg SET estado = ?, destino_actual = NULL WHERE id = ?').bind('disponible', id).run();
+      await env.DB.prepare('UPDATE inventario_seg SET estado = ?, destino_actual = NULL WHERE id = ? AND empresa_id = ?').bind('disponible', id, empresa_id).run();
     } else {
       const nueva = Math.min(item.cantidad_disponible + cantidad, item.cantidad_total);
-      await env.DB.prepare('UPDATE inventario_seg SET cantidad_disponible = ?, estado = ?, destino_actual = NULL WHERE id = ?').bind(nueva, 'disponible', id).run();
+      await env.DB.prepare('UPDATE inventario_seg SET cantidad_disponible = ?, estado = ?, destino_actual = NULL WHERE id = ? AND empresa_id = ?').bind(nueva, 'disponible', id, empresa_id).run();
     }
     await env.DB.prepare('INSERT INTO movimientos_seg (item_id, accion, cantidad, usuario, notas, fecha) VALUES (?, ?, ?, ?, ?, ?)').bind(id, 'devolucion', cantidad, usuario || '', notas || '', fecha).run();
     ctx?.waitUntil(syncSheets(env, 'Seg-Inventario', item.empresa_id));
@@ -8489,7 +8506,7 @@ async function moverItemSeg(id, request, env, ctx) {
   }
 
   if (accion === 'baja') {
-    await env.DB.prepare('UPDATE inventario_seg SET estado = ? WHERE id = ?').bind('baja', id).run();
+    await env.DB.prepare('UPDATE inventario_seg SET estado = ? WHERE id = ? AND empresa_id = ?').bind('baja', id, empresa_id).run();
     await env.DB.prepare('INSERT INTO movimientos_seg (item_id, accion, cantidad, usuario, notas, fecha) VALUES (?, ?, ?, ?, ?, ?)').bind(id, 'baja', cantidad, usuario || '', notas || '', fecha).run();
     await sendTelegram(env, `🗑️ <b>Material Seguridad — Baja</b>\n📖 ${item.codigo || item.nombre}  📋 ${item.tipo_material}\n👤 ${usuario || '—'}`);
     ctx?.waitUntil(syncSheets(env, 'Seg-Inventario', item.empresa_id));
@@ -8502,7 +8519,11 @@ async function moverItemSeg(id, request, env, ctx) {
 async function eliminarItemSeg(id, request, env, ctx) {
   const { isSuperadmin, isEmpresaAdmin, empresa_id } = await getAuth(request, env);
   if (!isSuperadmin && !isEmpresaAdmin) return err('Sin permisos', 403);
-  await env.DB.prepare('DELETE FROM inventario_seg WHERE id = ?').bind(id).run();
+  if (!empresa_id) return err('No autorizado', 403);
+  // Verificar que el item pertenece a la empresa antes de borrar
+  const item = await env.DB.prepare('SELECT id FROM inventario_seg WHERE id = ? AND empresa_id = ?').bind(id, empresa_id).first();
+  if (!item) return err('Item no encontrado', 404);
+  await env.DB.prepare('DELETE FROM inventario_seg WHERE id = ? AND empresa_id = ?').bind(id, empresa_id).run();
   await env.DB.prepare('DELETE FROM movimientos_seg WHERE item_id = ?').bind(id).run();
   ctx?.waitUntil(syncSheets(env, 'Seg-Inventario', empresa_id));
   return json({ ok: true, mensaje: 'Eliminado' });
@@ -9423,12 +9444,18 @@ async function getIncidencias(request, env) {
 
 async function crearIncidencia(request, env, ctx) {
   const auth = await getAuth(request, env);
-  const { empresa_id, obra_id, departamento, nombre } = auth;
+  const { empresa_id, obra_id, departamento, nombre, rol } = auth;
   if (!empresa_id) return err('No autorizado', 403);
   const body = await request.json().catch(() => ({}));
   const { titulo, descripcion, tipo = 'otro', gravedad = 'media', asignado_a, fecha } = body;
   if (!titulo?.trim()) return err('El título es obligatorio', 400);
-  const dept = body.departamento || departamento || 'electrico';
+  // Solo SA/EA/jefe_obra/oficina pueden crear incidencias en un dept distinto al propio
+  const isPrivileged = ['superadmin', 'empresa_admin', 'jefe_de_obra', 'oficina', 'desarrollador'].includes(rol);
+  let dept = body.departamento || departamento || 'electrico';
+  if (!isPrivileged && body.departamento && departamento && body.departamento !== departamento) {
+    return err('No puedes crear incidencias en otro departamento', 403);
+  }
+  if (!isPrivileged) dept = departamento || dept;
   const obraFinal = body.obra_id || obra_id || null;
   const fechaFinal = fecha || new Date().toISOString().slice(0, 10);
   const r = await env.DB.prepare(
@@ -11277,8 +11304,17 @@ async function getIAChatHistory(request, env) {
   const s = await getAuth(request, env);
   if (!s) return err('Sin permiso', 401);
   const url = new URL(request.url);
-  const uid = url.searchParams.get('usuario_id') || s.usuario_id || s.nombre;
+  const uidQ = url.searchParams.get('usuario_id');
+  const uid = uidQ || s.usuario_id || s.nombre;
   if (!uid) return err('Falta usuario_id', 400);
+  // Validar que se pide el historial propio (salvo superadmin/desarrollador)
+  const isPrivileged = s.rol === 'superadmin' || s.rol === 'desarrollador';
+  if (uidQ && !isPrivileged) {
+    const propio = [String(s.usuario_id || '').toLowerCase(), String(s.nombre || '').toLowerCase()];
+    if (!propio.includes(String(uidQ).toLowerCase())) {
+      return err('No puedes ver el historial de otro usuario', 403);
+    }
+  }
   const limit = Math.min(parseInt(url.searchParams.get('limit') || '50') || 50, 100);
   try {
     // Buscar por usuario_id numérico O por nombre (la app guarda ambos formatos)

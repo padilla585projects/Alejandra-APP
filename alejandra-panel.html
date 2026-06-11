@@ -476,7 +476,13 @@ async function login() {
   btn.disabled = true; btn.textContent = 'Verificando...';
   try {
     const r = await fetch(`${API}/api/admin/config`, { headers:{ Authorization:`Bearer ${t}` } });
-    if (r.status === 403) throw new Error('Token incorrecto');
+    if (r.status === 403 || r.status === 401) throw new Error('Token incorrecto o sin permisos');
+    if (!r.ok) throw new Error(`Error ${r.status} al verificar`);
+    // Defensa en profundidad: la respuesta debe ser config válida (no un error JSON arbitrario)
+    const data = await r.json().catch(() => ({}));
+    if (data.error || !('modo' in data || 'auto_fix' in data)) {
+      throw new Error('Respuesta inesperada del servidor');
+    }
     adminToken = t;
     localStorage.setItem('alej_token', t);
     showApp();
