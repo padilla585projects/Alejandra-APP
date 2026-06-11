@@ -6,9 +6,78 @@
 ## ESTADO ACTUAL
 
 **Sesión:** LIBRE
-**Última sesión:** 11/06/2026 (noche) — Fix 4 bugs críticos AlejandraIA Flutter v1.9.15+29
-**Versión actual:** App PWA **v6.45** · AlejandraIA **v1.9.15+29** · WORKER API `21a9fa24` · WORKER agente `5695ef95`
-**Próxima:** instalar v1.9.15+29 vía OTA y validar que (1) historial carga, (2) no se pilla, (3) FCM avisa al cerrar app
+**Última sesión:** 11/06/2026 (noche-tarde) — Test E2E FCM-cierre-app + fix push siempre v1.9.16+30
+**Versión actual:** App PWA **v6.45** · AlejandraIA **v1.9.16+30** · WORKER API `9cba5b4b` · WORKER agente `b24b75cd`
+**Próxima:** bugs medios v1.9.17 (cancelar Timers/listeners, throttle scroll, TTS callbacks); foreground service 30+ min; PEMP 40/41; albarán universal foto real
+
+---
+
+## RESUMEN SESIÓN 11/06/2026 (noche-tarde) — Test E2E FCM-cierre-app + fix push siempre v1.9.16+30
+
+### Contexto
+Tras los 4 fixes Flutter de la sesión anterior, Adrián reportó que **al cerrar la app, Alejandra dejaba de hacer lo que le mandó**. Sospecha del flujo SSE + `ctx.waitUntil`. Prueba E2E vía ADB en el móvil del usuario.
+
+### Test E2E realizado
+1. ADB inalámbrico activado en el Oppo (192.168.1.153:5555). Móvil ya tenía v1.9.15+29 instalada vía OTA.
+2. Vía `adb shell input tap/text` se envió un mensaje desde la app, se cerró con `am force-stop`, se esperó 90s, se inspeccionó BD y notificaciones.
+3. Resultado: la respuesta del asistente sí se guardó en `alejandra_historial` (id 1162) → `ctx.waitUntil` (fix #5) funciona. PERO el FCM nunca llegó al móvil.
+
+### Diagnóstico del bug del FCM
+Con `wrangler tail` en vivo:
+```
+[chat/stream] cierre: clienteDesconectado=false esCanalMovil=true canal=app_android usuario_id=3 respTexto=sí(2c)
+```
+La condición `clienteDesconectado` quedaba en `false` aunque el cliente real ya había cerrado:
+- `writer.write` NO falla cuando el `readable` lado del TransformStream se cierra (Cloudflare bufferea).
+- `req.signal.aborted` tampoco se activa fiable para SSE incoming en Workers.
+→ El fix #4 no enviaba el push porque la condición no se cumplía.
+
+### Fix aplicado (Fix #7 — push siempre + filtro foreground)
+- **Worker `/api/chat/stream`**: enviar SIEMPRE el FCM para canales móviles (`app_android`, `pwa`) cuando hay `respFinal.texto` y `fcm_token`. Sin depender de `clienteDesconectado`. Logs explícitos en console.
+- **`enviarFCM(env, token, titulo, cuerpo, extraData)`**: nuevo parámetro `extraData` que se merge con `{tipo, screen}` base. Para chat usa `tipo='chat_respuesta'`.
+- **Flutter `notifications_service.dart` `onMessage.listen`**: si `message.data['tipo'] === 'chat_respuesta'` y la app está en foreground → ignorar (la respuesta ya aparece en pantalla via SSE). En background/closed, Android usa el `notification` payload y muestra normal.
+- **Fix #6 (req.signal)**: implementado y luego descartado — confirmado que no es fiable en Workers para SSE.
+
+### Verificación final en producción
+```
+POST /api/chat/stream - Canceled @ 22:48:33
+[chat/stream] cierre: esCanalMovil=true canal=app_android usuario_id=3 respTexto=sí(4c) clienteDesconectado=false
+[chat/stream] FCM enviado a usuario_id=3: {"ok":true,"status":200,"name":"projects/alejandra-ia-app/messages/0:1781210918878089%4fc7ce384fc7ce38"}
+```
+Notificación llegó al móvil (icono Alejandra visible en lockscreen, `numPostedByApp=11` vs 10 anterior).
+
+### Versionado y despliegues
+- AlejandraIA: v1.9.15+29 → **v1.9.16+30**. APK 57.4 MB. SHA-256 `594568...8fdf98db`.
+- Subido a R2 (versionado + latest) + Google Drive + `ota/version.json`.
+- `alejandra-agente` deploys: `c942c854` (fix #6) → `b24b75cd` (fix #7 actual).
+- `alejandra-app-api` redeploy: `9cba5b4b` (vía build_release.ps1).
+
+### Commits
+- AlejandraIA `e95cef1` — feat: filtrar FCM chat_respuesta en foreground.
+- Alejandra-APP `84e9c68` — fix(agente): push FCM siempre en canales móviles al terminar chat.
+- Alejandra-APP `757e689` (anterior) — fix(agente): ctx.waitUntil en /api/chat/stream.
+
+### Cómo se comporta ahora
+| Caso | Comportamiento |
+|---|---|
+| App abierta + mensaje | SSE normal. Push se filtra en foreground (sin duplicado). |
+| Cierras app durante respuesta | Worker termina por `ctx.waitUntil`. Al acabar, push llega. Tocas → abre chat. |
+| App cerrada + nuevo mensaje | Push llega. Tocas → abre chat. |
+
+### Pendientes para una v1.9.17
+- Cancelar Timers en `background_service.dart` (L179-180): `Timer.periodic` sin guardar referencia → no se pueden parar.
+- Cancelar listeners FCM en `notifications_service.dart` (memory leak al re-init).
+- Limpiar callbacks TTS para no acumular.
+- Throttle `_scrollToBottom` en `chat_screen.dart`.
+
+### Pendientes de sesiones anteriores
+- Decidir destino de PEMP 40/41 (Levitec en obra Edison) y fichajes 8–15 (Edison en obra Levitec).
+- Foreground service 30+ min.
+- Probar albarán universal con foto real.
+
+---
+
+## RESUMEN SESIÓN 11/06/2026 (noche) — Fix 4 bugs críticos AlejandraIA Flutter v1.9.15+29
 
 ---
 
