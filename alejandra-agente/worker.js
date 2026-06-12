@@ -2693,12 +2693,28 @@ async function procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empres
     let tokensOut = respAPI.usage?.output_tokens || 0;
     if (respAPI.usage) registrarTokenUso(env, expert.model, 'chat_stream', respAPI.usage.input_tokens||0, respAPI.usage.output_tokens||0, usuario_id);
     let iter = 0;
-    // Adrián (id=3) y admin tienen más iteraciones para usar más tools
+    // Adrián (id=3) y admin tienen más iteraciones para usar más tools.
+    // En canales móviles (app_android, pwa) limitamos a 4 iter porque el waitUntil
+    // de Cloudflare Workers solo da ~30s tras la response; con tools más largos
+    // se cancela la tarea y se pierde la respuesta + FCM.
     const esAdmin = ['3','adrian','admin','Adrian'].includes(usuario_id);
-    const MAX_ITER = esAdmin ? 12 : 8;
+    const esCanalMovilProc = (canal === 'app_android' || canal === 'pwa');
+    let MAX_ITER = esAdmin ? 12 : 8;
+    if (esCanalMovilProc) MAX_ITER = Math.min(MAX_ITER, 4);
     const herramientasUsadas = [];
+    // Watchdog para detectar que nos acercamos al límite de tiempo (~25s)
+    const inicioProc = Date.now();
+    const LIMITE_PROC_MS = 22000; // 22s deja margen para guardar BD + FCM
+    let cortadoPorTimeout = false;
 
     while (respAPI.stop_reason === 'tool_use' && iter < MAX_ITER) {
+      // Si ya gastamos casi todo el tiempo disponible y estamos en móvil,
+      // forzamos respuesta inmediata para no perder la conversación.
+      if (esCanalMovilProc && (Date.now() - inicioProc) > LIMITE_PROC_MS) {
+        cortadoPorTimeout = true;
+        console.log(`[NEXUSStream] ⏰ Cortando tools tras ${iter} iter (${Date.now() - inicioProc}ms) — forzar respuesta para no exceder waitUntil`);
+        break;
+      }
       const toolBlocks = respAPI.content.filter(b => b.type === 'tool_use');
       if (!toolBlocks.length) break;
       messages.push({ role: 'assistant', content: respAPI.content });
@@ -2720,12 +2736,24 @@ async function procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empres
       }
 
       messages.push({ role: 'user', content: toolResults });
-      // Reservar últimas 2 iteraciones para respuesta — quitar tools para forzar texto
+      // Reservar últimas 2 iteraciones para respuesta — quitar tools para forzar texto.
+      // Cuando no pasamos tools, Anthropic NO puede usar más herramientas y devuelve
+      // texto directamente. No es necesario inyectar un mensaje extra (y NUNCA un
+      // tool_result con tool_use_id falso — eso provoca 400 invalid_request_error).
       const queda = MAX_ITER - iter - 1;
       const toolsSiguiente = queda >= 2 ? tools : [];
-      if (queda < 2 && toolsSiguiente.length === 0) {
-        // Inyectar mensaje para que el modelo sepa que debe responder YA
-        messages.push({ role: 'user', content: [{ type: 'tool_result', tool_use_id: 'force_respond', content: '[SISTEMA: Se agotaron las iteraciones de tools. DEBES responder al usuario AHORA con lo que tengas. Resume lo que encontraste y lo que hiciste. No intentes usar más herramientas.]' }] });
+      // Cuando se acaban las iteraciones de tools, pedimos AL MODELO de forma
+      // explícita que formule la respuesta final. Añadimos un text block dentro
+      // del último user message (que contiene tool_results) — eso es válido en
+      // Anthropic API y NO confunde el balance tool_use/tool_result.
+      if (queda < 2) {
+        const lastMsg = messages[messages.length - 1];
+        if (lastMsg && lastMsg.role === 'user' && Array.isArray(lastMsg.content)) {
+          lastMsg.content.push({
+            type: 'text',
+            text: '[INSTRUCCIÓN FINAL: Es tu turno de responder al usuario. Con los datos que ya has obtenido formula la respuesta AHORA en español, clara y directa. NO uses más herramientas.]'
+          });
+        }
       }
       respAPI = await llamarAnthropic(env, messages, toolsSiguiente, expert.model, expert.maxTokens, systemPrompt);
       if (respAPI.usage) {
@@ -2736,16 +2764,40 @@ async function procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empres
       iter++;
     }
 
-    // ── Última respuesta: streaming real token a token ────────────────────
+    // ── Última respuesta ──────────────────────────────────────────────────
     let textoFinal = '';
-    try {
-      textoFinal = await llamarAnthropicStream(env, messages, expert.model, expert.maxTokens, systemPrompt, async (token) => {
-        await send({ type: 'token', texto: token });
-      });
-    } catch (_) {
-      // Fallback: usar respuesta ya obtenida si el stream falla
-      textoFinal = respAPI.content?.filter(b => b.type === 'text').map(b => b.text).join('\n').trim() || 'Sin respuesta';
+    // En móvil, evitamos otra llamada a Anthropic Stream porque el cliente
+    // ya cerró la conexión SSE y los fetch salientes pueden cancelarse al
+    // expirar waitUntil. Usamos el último respAPI que ya tenemos en memoria.
+    if (esCanalMovilProc || cortadoPorTimeout) {
+      // Extraer texto del último respAPI (sin tools, vendría con stop_reason=end_turn y texto)
+      const textoUltimo = respAPI.content?.filter(b => b.type === 'text').map(b => b.text).join('\n').trim() || '';
+      if (textoUltimo) {
+        textoFinal = textoUltimo;
+      } else if (cortadoPorTimeout) {
+        const acciones = herramientasUsadas.length
+          ? herramientasUsadas.map(h => `• ${h.nombre}`).join('\n')
+          : '';
+        textoFinal = `Estoy tardando demasiado en esta tarea (${herramientasUsadas.length} herramienta${herramientasUsadas.length === 1 ? '' : 's'} ejecutada${herramientasUsadas.length === 1 ? '' : 's'}). Te paso el progreso parcial${acciones ? ':\n\n' + acciones : ''}.\n\nVuelve a preguntarme con algo más concreto y te respondo mejor.`;
+      } else if (herramientasUsadas.length > 0) {
+        // Generar resumen de lo que se hizo
+        const acciones = herramientasUsadas.map(h => `• ${h.nombre}`).join('\n');
+        textoFinal = `He revisado lo que pediste con ${herramientasUsadas.length} consulta${herramientasUsadas.length === 1 ? '' : 's'}:\n\n${acciones}\n\nDime si quieres que profundice en algún punto concreto.`;
+      } else {
+        textoFinal = 'No pude generar una respuesta clara. ¿Puedes reformular la pregunta?';
+      }
       await send({ type: 'text', texto: textoFinal });
+    } else {
+      // En panel/web hacemos streaming real token a token
+      try {
+        textoFinal = await llamarAnthropicStream(env, messages, expert.model, expert.maxTokens, systemPrompt, async (token) => {
+          await send({ type: 'token', texto: token });
+        });
+      } catch (_) {
+        // Fallback: usar respuesta ya obtenida si el stream falla
+        textoFinal = respAPI.content?.filter(b => b.type === 'text').map(b => b.text).join('\n').trim() || 'Sin respuesta';
+        await send({ type: 'text', texto: textoFinal });
+      }
     }
 
     textoFinal = verificarAccionesAfirmadas(textoFinal, herramientasUsadas);
@@ -6179,7 +6231,10 @@ async function enviarFCM(env, fcmToken, titulo, cuerpo, extraData = null) {
         message: {
           token: fcmToken,
           notification: { title: titulo, body: cuerpo },
-          android: { priority: 'HIGH', notification: { sound: 'default', click_action: 'FLUTTER_NOTIFICATION_CLICK' } },
+          // No usamos click_action porque requiere un intent-filter dedicado en
+          // AndroidManifest. Sin él, Android usa el launcher por defecto y abre
+          // la actividad principal (MainActivity), lo cual es lo que queremos.
+          android: { priority: 'HIGH', notification: { sound: 'default' } },
           data: finalData,
         },
       }),
