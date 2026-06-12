@@ -6,9 +6,81 @@
 ## ESTADO ACTUAL
 
 **Sesión:** LIBRE
-**Última sesión:** 11/06/2026 (noche-tarde) — Test E2E FCM-cierre-app + fix push siempre v1.9.16+30
-**Versión actual:** App PWA **v6.45** · AlejandraIA **v1.9.16+30** · WORKER API `9cba5b4b` · WORKER agente `b24b75cd`
-**Próxima:** bugs medios v1.9.17 (cancelar Timers/listeners, throttle scroll, TTS callbacks); foreground service 30+ min; PEMP 40/41; albarán universal foto real
+**Última sesión:** 12/06/2026 — Cadena fixes chat móvil (#8–#13): waitUntil timeout, force_respond, click_action
+**Versión actual:** App PWA **v6.45** · AlejandraIA **v1.9.16+30** · WORKER API `9cba5b4b` · WORKER agente `12372c61`
+**Próxima:** mejorar calidad respuesta canal móvil (a veces Alejandra gasta tools sin formular respuesta); v1.9.17 bugs medios (Timers/listeners/TTS/scroll); PEMP 40/41; albarán universal foto real
+
+---
+
+## RESUMEN SESIÓN 12/06/2026 — Cadena fixes chat móvil (#8–#13)
+
+### Contexto
+Tras el deploy de v1.9.16+30 (sesión anterior), Adrián reportó que al cerrar la app, Alejandra "deja de hacer lo que la he mandado". Test E2E real desde su móvil (conectado por ADB inalámbrico) descubrió **una cascada de 6 bugs distintos** que solo se manifestaban con la combinación cliente-cierra-app + procesamiento-largo.
+
+### Bugs descubiertos y fixes
+
+**#8 — `ctx.waitUntil` timeout en Cloudflare Workers**
+- Síntoma: BD vacía tras cerrar app. Logs: `waitUntil() tasks did not complete within the allowed time after invocation end and have been cancelled`.
+- Causa: el waitUntil tiene solo ~30s tras enviar la response. Con 6+ iteraciones de tools se excede.
+- Fix: `MAX_ITER=4` para canales móviles + watchdog interno que corta a 22s.
+
+**#9 — Salida del watchdog dejaba `messages` rotos**
+- Síntoma: si watchdog cortaba, la siguiente llamada a `llamarAnthropicStream` daba 400.
+- Fix: flag `cortadoPorTimeout`. Si activo, NO llamar a Anthropic — devolver resumen parcial.
+
+**#10 — `tool_result` con `tool_use_id='force_respond'` inválido**
+- Síntoma: `Anthropic 400: unexpected tool_use_id found in tool_result blocks: force_respond`.
+- Causa: el código original (anterior a esta sesión) inyectaba un tool_result con id falso para "forzar" respuesta cuando se acababan iteraciones. Anthropic valida y rechaza.
+- Fix: eliminar la inyección. Sin tools en la siguiente llamada, el modelo ya devuelve texto solo.
+
+**#11 — Segunda llamada a `llamarAnthropicStream` se cancelaba**
+- Síntoma: respuesta "Sin respuesta" (13c) cuando el cliente cierra.
+- Causa: tras el while de tools, se hacía otra llamada a Anthropic en streaming para enviar tokens al cliente. Si el cliente ya cerró, el fetch se cancela y cae al fallback genérico.
+- Fix: en canal móvil, NO hacer la segunda llamada. Usar `respAPI.content` del último call del while. Si vacío y hay tools → resumen útil. Nunca "Sin respuesta".
+
+**#12 — `click_action: FLUTTER_NOTIFICATION_CLICK` impedía abrir la app**
+- Síntoma: la notif FCM llegaba pero pulsarla no abría la app (la notif desaparecía sin hacer nada).
+- Causa: el payload FCM pedía un intent-filter con esa action, pero el `AndroidManifest.xml` no lo tiene.
+- Fix: quitar `click_action`. Android usa el launcher por defecto → abre MainActivity → MainShell muestra tab Chat.
+
+**#13 — Modelo gastaba todas las iteraciones consultando sin formular**
+- Síntoma: respuesta tipo "He revisado lo que pediste con 3 consultas: • consultar_bd • consultar_bd…" — los tools se ejecutaron pero el modelo no produjo respuesta final útil.
+- Fix: cuando `queda < 2`, inyectar un text block en el último `user` message (con tool_results): "[INSTRUCCIÓN FINAL: Es tu turno de responder. Con los datos que ya has obtenido formula la respuesta AHORA en español, clara y directa. NO uses más herramientas.]".
+
+### Verificación E2E con el móvil real
+Test final con la pregunta "cuántas PEMP tenemos?":
+- ✅ Sin error 400.
+- ✅ Push llega con preview real (no "Sin respuesta").
+- ✅ Pulsar la notif abre la app y entra al chat (tab 0 — Chat).
+- ✅ Adrián confirmó que la notif sí abre el chat ("Se abrió la app y fui al chat").
+
+### Despliegues del worker agente esta sesión
+- `586bdb1e` — fix #8 (watchdog).
+- `38746a6a` — fix #9 (salir limpio del watchdog).
+- `02f6810e` — fix #10 (eliminar force_respond).
+- `45ded0b5` — fix #11 (saltar stream en móvil).
+- `01db2461` — fix #12 (quitar click_action).
+- `12372c61` — fix #13 (instrucción explícita) ← **ACTUAL**.
+
+### Commits
+- Alejandra-APP `515f3a6` — fix(agente): cadena de fixes para chat en canal móvil (#8–#13).
+
+### Aprendizajes técnicos clave de la sesión
+1. **`ctx.waitUntil` no es ilimitado**: ~30s tras response en Workers. Para tareas más largas hay que usar Queues, Durable Objects o Workflows.
+2. **`req.signal` y `writer.write` no son fiables para detectar cliente desconectado en SSE**: `req.signal.aborted` no se dispara y los writes se bufferean. Mejor enviar push siempre y filtrar en el cliente.
+3. **`click_action` en FCM requiere intent-filter dedicado**: si no está, la notif no abre nada. Mejor omitirlo y dejar que Android use el launcher.
+4. **`tool_use_id` falsos en `tool_result` son rechazados por Anthropic** con 400. No hay forma de "forzar respuesta" por ese path — usar text blocks normales en su lugar.
+
+### Pendientes
+- Mejorar calidad respuesta en móvil: a veces sigue gastando MAX_ITER consultando antes de formular. Posible mitigación: subir MAX_ITER a 5–6 + endurecer la instrucción final.
+- Bugs medios v1.9.17: Timers/listeners en `background_service.dart`, TTS callbacks acumulados, throttle `_scrollToBottom`.
+- Decidir destino de PEMP 40/41 y fichajes 8–15.
+- Foreground service 30+ min.
+- Probar albarán universal con foto real.
+
+---
+
+## RESUMEN SESIÓN 11/06/2026 (noche-tarde) — Test E2E FCM-cierre-app + fix push siempre v1.9.16+30
 
 ---
 
