@@ -2658,7 +2658,7 @@ async function procesarConNEXUS(env, mensaje, contexto, usuario_id, empresa_id, 
 }
 
 // ── NEXUS con streaming SSE ───────────────────────────────────────────────────
-async function procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empresa_id, send, canal, adjuntos, rol=null, pantalla=null, dom_actual=null, usuario_label=null) {
+async function procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empresa_id, send, canal, adjuntos, rol=null, pantalla=null, dom_actual=null, usuario_label=null, getClienteDesconectado = () => false) {
   if (!env.ANTHROPIC_API_KEY) {
     await send({ type: 'error', mensaje: 'ANTHROPIC_API_KEY no configurada.' });
     return { texto: 'Error: sin clave API.', herramientas_usadas: [] };
