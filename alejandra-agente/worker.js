@@ -2773,7 +2773,7 @@ async function procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empres
     // En móvil, evitamos otra llamada a Anthropic Stream porque el cliente
     // ya cerró la conexión SSE y los fetch salientes pueden cancelarse al
     // expirar waitUntil. Usamos el último respAPI que ya tenemos en memoria.
-    if (esCanalMovilProc || cortadoPorTimeout) {
+    if (getClienteDesconectado() || cortadoPorTimeout) {
       // Extraer texto del último respAPI (sin tools, vendría con stop_reason=end_turn y texto)
       const textoUltimo = respAPI.content?.filter(b => b.type === 'text').map(b => b.text).join('\n').trim() || '';
       if (textoUltimo) {
