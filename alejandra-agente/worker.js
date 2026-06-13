@@ -2704,7 +2704,7 @@ async function procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empres
     const esAdmin = ['3','adrian','admin','Adrian'].includes(usuario_id);
     const esCanalMovilProc = (canal === 'app_android' || canal === 'pwa');
     let MAX_ITER = esAdmin ? 12 : 8;
-    if (esCanalMovilProc) MAX_ITER = Math.min(MAX_ITER, 4);
+    if (esCanalMovilProc) MAX_ITER = Math.min(MAX_ITER, esAdmin ? 8 : 4);
     const herramientasUsadas = [];
     // Watchdog para detectar que nos acercamos al límite de tiempo (~25s)
     const inicioProc = Date.now();
