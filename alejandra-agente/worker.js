@@ -5648,8 +5648,9 @@ Datos:\n${resumen}`
 // ── ROUTER con 2 capas: Regex (0 tokens) → Haiku (fallback) ─────────────────
 const REGEX_ROUTES = [
   // Capa 1: Regex — clasificación instantánea sin LLM
-  // Verbos de acción imperativa → siempre "app" (necesitan escribir_bd u otras tools)
-  { re: /\b(corrígelos|corrígelas|corríge|arréglalo|arréglala|arréglalo|aplícalo|aplícala|aplícalos|hazlo|hazlos|hazla|hazlas|bórralo|bórrala|bórralos|guárdalo|guárdala|guárdalos|actualízalo|actualízala|actualízalos|insértalo|insértalos|cámbialo|cámbiala|cámbialos|ejecuta|modifícalo|modifícalos|corrígelo|búscalos|búscalas|bórralo|créalos|créalo|asígnalo|asígnalos|mándalo|envíalo|envíalos|sí.*corrí|sí.*busca|sí.*aplí|sí.*arregl)\b/i, expert: 'app', web: false },
+  // Pronombres enclíticos pegados a verbo → imperativo de acción → siempre "app"
+  // Cubre: ponlos, mételos, déjalo, pásalas, aplícamelos, corrígeles, etc. sin enumerar verbos
+  { re: /\w+(lo|la|los|las|me|te|nos|les|selo|sela|selos|selas)\b/i, expert: 'app', web: false },
   { re: /^(hola|hey|buenas|buenos días|buenas tardes|buenas noches|qué tal|cómo estás|ok|vale|sí|no|gracias|perfecto|genial|entendido)[\s!?.]*$/i, expert: 'simple', web: false },
   { re: /\b(no funciona|no puedo|error|falla|se cuelga|pantalla en blanco|no carga|no responde|se ha caído|no me deja|problema|avería|roto|bloqueado|urgente)\b/i, expert: 'app', web: false },
   { re: /\b(bobina|equipo|carretilla|PEMP|fichaje|fichar|entrada|salida|operario|encargado|personal|incidencia|pedido|albarán|obra|almacén|stock)\b/i, expert: 'app', web: false },
