@@ -1427,7 +1427,7 @@ export default {
           let respFinal = null;
           try {
             const canalReal = canal || 'panel';
-            const resp = await procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empresa, send, canalReal, adjuntos, rol, pantalla, dom_actual, usuarioLabel);
+            const resp = await procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empresa, send, canalReal, adjuntos, rol, pantalla, dom_actual, usuarioLabel, () => clienteDesconectado);
             respFinal = resp;
             await guardarMensajeChat(env, usuario_id, empresa, mensaje, resp.texto, canalReal);
             // actualizarResumen no bloquea — fire-and-forget dentro del waitUntil
