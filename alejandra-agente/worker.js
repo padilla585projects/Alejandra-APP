@@ -2855,10 +2855,13 @@ function verificarAccionesAfirmadas(textoFinal, herramientasUsadas) {
   const patronesAccion = [
     /\b(ya lo hice|ya está hecho|ya lo cambié|ya lo modifiqué|acabo de hacer|acabo de cambiar|acabo de escribir|acabo de modificar|acabo de implementar|acabo de crear|acabo de aplicar|ya lo apliqué|ya lo arreglé|ya está arreglado|ya lo actualicé|ya lo subí|lo he hecho|lo he cambiado|lo he modificado|lo he implementado|he hecho el cambio|he aplicado|he modificado|he actualizado)\b/i,
     /\b(el cambio está hecho|el fix está|ya está desplegado|ya está en producción|ya está en el worker|ya está en el código)\b/i,
+    /patch\s+aplicado/i,
+    /commit\s+[`']?[0-9a-f]{7,40}[`']?/i,
+    /\b(he desplegado|ya desplegué|desplegado con éxito)\b/i,
   ];
 
   // Tools de escritura que deberían ejecutarse si afirma acción
-  const toolsEscritura = ['github_escribir', 'escribir_bd', 'controlar_app', 'subir_archivo', 'enviar_push', 'iniciar_conversacion'];
+  const toolsEscritura = ['github_escribir', 'escribir_bd', 'controlar_app', 'subir_archivo', 'enviar_push', 'iniciar_conversacion', 'patch_codigo', 'direct_fix'];
   const usóEscritura = toolsEscritura.some(t => toolsEscritos.has(t));
 
   const afirmaAccion = patronesAccion.some(p => p.test(textoFinal));
