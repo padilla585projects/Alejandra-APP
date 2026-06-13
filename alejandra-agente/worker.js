@@ -2714,7 +2714,7 @@ async function procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empres
     while (respAPI.stop_reason === 'tool_use' && iter < MAX_ITER) {
       // Si ya gastamos casi todo el tiempo disponible y estamos en móvil,
       // forzamos respuesta inmediata para no perder la conversación.
-      if (esCanalMovilProc && (Date.now() - inicioProc) > LIMITE_PROC_MS) {
+      if (esCanalMovilProc && !esAdmin && (Date.now() - inicioProc) > LIMITE_PROC_MS) {
         cortadoPorTimeout = true;
         console.log(`[NEXUSStream] ⏰ Cortando tools tras ${iter} iter (${Date.now() - inicioProc}ms) — forzar respuesta para no exceder waitUntil`);
         break;
