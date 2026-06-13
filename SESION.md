@@ -6,9 +6,45 @@
 ## ESTADO ACTUAL
 
 **Sesión:** LIBRE
-**Última sesión:** 13/06/2026 — Plan de enseñanza Alejandra (Fase 1+2): tablas BD, schema usuarios, crear workers Edison, resolver 42 fichajes huérfanos
-**Versión actual:** App PWA **v6.45** · AlejandraIA **v1.9.16+30** · WORKER API `9cba5b4b` · WORKER agente `44f9d9d`
-**Próxima:** Fase 3 plan enseñanza (lectura de código); v1.9.17 bugs medios (Timers/listeners/TTS/scroll); PEMP 40/41; albarán universal foto real; verificar horas_extra sábado (Task #37)
+**Última sesión:** 13/06/2026 — Plan enseñanza Fases 1-5: BD, schema, crear usuarios, leer código, fix bugs autónomo, auditoría proactiva
+**Versión actual:** App PWA **v6.45** · AlejandraIA **v1.9.16+30** · WORKER API `9cba5b4b` · WORKER agente (ver commits Alejandra en GitHub)
+**Próxima:** Recarga créditos Anthropic (agotados). Luego: fix push (FCM token lookup + case sensitivity Adrian/adrian); estados bobinas inválidos ('activa'); Alberto sin password; carretilla vencida A-476326XT; PEMP 40/41
+
+---
+
+## RESUMEN SESIÓN 13/06/2026 (tarde) — Plan enseñanza Fases 3-5 + fixes autónomos
+
+### Fase 3 — Lectura de código
+- Alejandra localizó `crearFichaje` (línea 7398) por sí sola con grep.
+- Explicó todos los parámetros, campos y lógica especial (anti-duplicado, cálculo horas, detección retraso).
+- Localizó el bug de sábados sin que se lo pidiera → diagnosticó la causa (fichajes pre-parche con horas_extra=0).
+
+### Fase 4 — Fix autónomo de código
+- Detectó que "Sí, corrígelos todos" fue enrutado a experto `simple` por NEXUS → sin `escribir_bd`.
+- Trazó el clasificador (Capa 1 regex + Capa 2 Haiku), encontró la causa raíz.
+- **Fix v1**: lista de 40 verbos imperativos → parcial (no cubría "ponlos").
+- Recibió feedback → **Fix v2**: regex de pronombre enclítico `\w+(lo|la|los|las|...)` → cubre todo el español. Además actualizó el prompt de Haiku como segunda red. Deploy verificado.
+
+### Fix de datos — horas_extra sábados/domingos
+- **44 fichajes** históricos corregidos: todos los sábados/domingos con horas_extra=0 teniendo horas_trabajadas>0 (pre-parche Task #36). Task #37 cerrado.
+
+### Fase 5 — Auditoría proactiva
+- Sin ninguna indicación, auditó 15+ tablas y encontró 11 problemas reales priorizados por impacto.
+- Hallazgos críticos: bobinas sin longitud, push roto (case-sensitive), fichaje imposible Yousuf.
+- Hallazgos altos: estados bobinas inválidos, carretilla vencida, Alberto sin login, fichaje 18h de prueba.
+
+### Push — pendiente
+- Intentó diagnosticar el push pero agotó iteraciones (14-15 tools por turno en búsqueda exploratoria).
+- Al darle los datos directamente (fcm_token en memoria y push_subscriptions), la cuenta Anthropic se quedó **sin créditos** → respondió en modo GPT-4o de respaldo.
+- Fix pendiente para próxima sesión.
+
+### Pendientes urgentes
+1. **⚠️ Recargar créditos Anthropic** (console.anthropic.com → Billing)
+2. Fix push: `push_subscriptions` tiene `usuario_id='Adrian'` (mayúscula) vs `'adrian'`. Y `enviarFCM` usa `alejandra_memoria` (token user_id=3 correcto), pero el CRON puede usar `push_subscriptions`.
+3. Estados bobinas: 46/47 con estado `'activa'` inválido → UPDATE a `'disponible'`.
+4. Alberto (código 98765): sin email ni password_hash → no puede hacer login.
+5. Carretilla A-476326XT: fecha_proxima_revision vencida.
+6. PEMP 40/41: decidir reasignación.
 
 ---
 
