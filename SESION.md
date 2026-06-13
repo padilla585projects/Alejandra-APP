@@ -6,9 +6,55 @@
 ## ESTADO ACTUAL
 
 **Sesión:** LIBRE
-**Última sesión:** 12/06/2026 — Cadena fixes chat móvil (#8–#13): waitUntil timeout, force_respond, click_action
-**Versión actual:** App PWA **v6.45** · AlejandraIA **v1.9.16+30** · WORKER API `9cba5b4b` · WORKER agente `12372c61`
-**Próxima:** mejorar calidad respuesta canal móvil (a veces Alejandra gasta tools sin formular respuesta); v1.9.17 bugs medios (Timers/listeners/TTS/scroll); PEMP 40/41; albarán universal foto real
+**Última sesión:** 13/06/2026 — Plan de enseñanza Alejandra (Fase 1+2): tablas BD, schema usuarios, crear workers Edison, resolver 42 fichajes huérfanos
+**Versión actual:** App PWA **v6.45** · AlejandraIA **v1.9.16+30** · WORKER API `9cba5b4b` · WORKER agente `44f9d9d`
+**Próxima:** Fase 3 plan enseñanza (lectura de código); v1.9.17 bugs medios (Timers/listeners/TTS/scroll); PEMP 40/41; albarán universal foto real; verificar horas_extra sábado (Task #37)
+
+---
+
+## RESUMEN SESIÓN 13/06/2026 — Plan de enseñanza Alejandra (Fases 1 y 2)
+
+### Contexto
+Alejandra fallaba al crear usuarios desde la app: no sabía que `codigo` es NOT NULL UNIQUE, y la regla del módulo `asistente_escaneo` bloqueaba INSERTs sin confirmación explícita. Se aplicó en sesión anterior (commit `44f9d9d`) una instrucción mínima de autonomía en `inteligencia_negocio`. Esta sesión inició el plan de enseñanza progresiva: Alejandra aprende explorando, no por instrucciones hardcodeadas.
+
+### Ejercicios completados
+
+**Ejercicio 1.1 — Mapa de tablas:**
+- Listó las 81 tablas de la BD con `sqlite_master`, las organizó por módulo funcional.
+- Guardó el mapa en `memory_save` (importancia 4) para consultarlo sin query.
+
+**Ejercicio 1.2 — Schema de usuarios:**
+- Usó 6 PRAGMAs (`table_info`, `index_list`, `index_info`) para descubrir constraints.
+- Aprendió: `codigo` NOT NULL UNIQUE, `nombre` y `rol` NOT NULL, `empresa_id` default 1.
+- Guardó en `memory_save` con importancia 5 (crítico).
+- Ahora sabe verificar duplicados con SELECT antes del INSERT.
+
+**Ejercicio 2.1 — Crear y borrar usuario de prueba:**
+- Creó "Trabajador Test" (id=59, empresa_id=3) verificando duplicado → INSERT → SELECT de confirmación.
+- Borró el usuario de prueba sin que se lo pidieran.
+
+**Ejercicio 2.2 — Tarea real (Edison Montajes):**
+- Ronda 1: encontró 11 fichajes huérfanos semana actual, consultó `personal_externo`, creó 10 usuarios (ids 60-69: Sergio, David, Selin, Daniel, Hermenegildo, Robert, Ricardo, Javi, Adrian, Yousuf), reasignó 8 grupos de fichajes.
+- Ronda 2: detectó que Javi/Adrian/Yousuf seguían pendientes (personal_externo_ids 11/12/13), los resolvió. **Total: 42 fichajes huérfanos resueltos, 0 restantes en obra 11.**
+
+**Ejercicio final — Repetir la tarea de la foto:**
+- Generó tabla completa viernes 12/06 (10 personas) + sábado 13/06 (5 personas).
+- Detectó sola: Daniel y Hermenegildo con 0h pese a fichar 5h, sábado horas_extra=0 (bug conocido Task #37), trabajadores ausentes el sábado.
+- Intentó recuperar la foto original del chat (`chat_files/3/1781343326178...jpg`).
+- Ofreció corregir anomalías sin que se lo pidieran.
+
+### Commits esta sesión
+- `44f9d9d` — fix(agente): autonomía personal — explorar BD y aprender ← **ACTUAL** (hecho en sesión anterior, desplegado)
+
+### Sin cambios de código esta sesión
+No se modificaron archivos del repo. Toda la actividad fue aprendizaje de Alejandra vía API (ejercicios enviados por panel).
+
+### Pendientes
+- **Fase 3 del plan de enseñanza**: Alejandra lee código del worker, explica flujos, detecta funciones.
+- **Task #37**: Verificar horas_extra en fichajes de sábado (debería ser 100% extra).
+- **Daniel y Hermenegildo**: 0 horas registradas en 12/06 (08:00-13:00 = 5h). Corregir con UPDATE.
+- **PEMP 40/41**: decidir reasignación (empresa_id=1 pero obra_id=11 de Edison).
+- **v1.9.17**: bugs medios Flutter (Timers, listeners, TTS, scroll).
 
 ---
 
