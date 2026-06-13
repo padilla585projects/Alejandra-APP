@@ -7085,12 +7085,15 @@ async function registrarHistorialKitHerr(env, empresa_id, kit_id, herramienta_id
 // â•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Ââ•Â
 
 // Devuelve {hora_entrada, hora_salida, horas_dia} para el día específico de un fichaje (MEJ-131)
+// Si el día no es laborable (sábado, domingo o no está en dias_semana) → horas_dia=0 → todo lo trabajado son extras
 function getHorarioParaDia(horario, fecha) {
+  const letras = ['D','L','M','X','J','V','S'];
+  const letra = letras[new Date(fecha + 'T00:00:00').getDay()];
+
+  // 1. Comprobar si el día tiene horario especial definido en horarios_dia
   if (horario.horarios_dia) {
     try {
       const dias = JSON.parse(horario.horarios_dia);
-      const letras = ['D','L','M','X','J','V','S'];
-      const letra = letras[new Date(fecha + 'T00:00:00').getDay()];
       if (dias[letra]?.entrada) {
         const ent = dias[letra].entrada;
         const sal = dias[letra].salida;
@@ -7098,6 +7101,15 @@ function getHorarioParaDia(horario, fecha) {
       }
     } catch {}
   }
+
+  // 2. Comprobar si el día está en los días laborables normales (dias_semana = ej: "LMXJ")
+  const diasLaborables = horario.dias_semana || '';
+  if (!diasLaborables.includes(letra)) {
+    // Sábado, domingo o festivo no configurado → jornada normal = 0 → todo es hora extra
+    return { hora_entrada: horario.hora_entrada, hora_salida: horario.hora_salida, horas_dia: 0 };
+  }
+
+  // 3. Día laborable normal → usar horario estándar
   return { hora_entrada: horario.hora_entrada, hora_salida: horario.hora_salida, horas_dia: horario.horas_dia };
 }
 
