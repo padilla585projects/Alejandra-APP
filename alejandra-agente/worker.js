@@ -1607,6 +1607,18 @@ export default {
           `INSERT INTO alejandra_memoria (usuario_id, tipo, titulo, contenido, importancia, created_at)
            VALUES (?, 'fcm_token', 'FCM Push Token', ?, 10, datetime('now'))`
         ).bind(usuario_id, token).run();
+        // Mantener alias 'adrian' sincronizado: si el usuario es id:3 o id:35 (Adrián),
+        // duplicar el token con usuario_id='adrian' para que el CRON y los deploys lo encuentren.
+        try {
+          const ADRIAN_IDS = ['3', '35', 'adrian', '4f2a499d-94a3-43b8-b79a-438f962340e4'];
+          if (ADRIAN_IDS.includes(String(usuario_id))) {
+            await env.DB.prepare(`DELETE FROM alejandra_memoria WHERE tipo='fcm_token' AND usuario_id='adrian'`).run();
+            await env.DB.prepare(
+              `INSERT INTO alejandra_memoria (usuario_id, tipo, titulo, contenido, importancia, created_at)
+               VALUES ('adrian', 'fcm_token', 'FCM Push Token', ?, 10, datetime('now'))`
+            ).bind(token).run();
+          }
+        } catch(_) {}
         return json({ ok: true });
       }
 
