@@ -5681,7 +5681,7 @@ async function clasificarConHaiku(env, mensaje) {
       body: JSON.stringify({
         model: MODEL_ROUTER,
         max_tokens: 30,
-        system: 'Clasificador. Responde SOLO una palabra: simple, app, tecnico, web, reflexion, ingenieria, completo. Si hay problema/error/urgencia → app. Si necesita internet → web.',
+        system: 'Clasificador. Responde SOLO una palabra: simple, app, tecnico, web, reflexion, ingenieria, completo. Si hay problema/error/urgencia → app. Si necesita internet → web. Si es una orden de acción (imperativo, pronombre enclítico como -lo/-la/-los/-las, "hazlo", "ponlos", "corrígelo", "aplícalos", "dale", "mételo") → app.',
         messages: [{ role: 'user', content: msg.substring(0, 800) }]
       })
     });
