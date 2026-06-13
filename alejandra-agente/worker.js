@@ -5832,7 +5832,7 @@ async function llamarAnthropicStream(env, messages, model, maxTokens, systemProm
       // Fallback GPT-4o — sin streaming
       const fallback = await llamarGPT4oFallback(env, messages, systemPrompt, maxTokens);
       const texto = fallback.content?.[0]?.text || 'Sin respuesta';
-      await onToken(texto);
+      try { await onToken(texto); } catch(_) {}
       return texto;
     }
     throw new Error(`Anthropic stream ${resp.status}: ${errText.substring(0, 200)}`);
