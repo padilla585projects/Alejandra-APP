@@ -3362,6 +3362,21 @@ async function insertarParteSemanal(env, datos, sesion, obra_id, archivo_key) {
   let omitidos = 0;
   const errores = [];
 
+  // Consultar horario real de la obra/empresa para calcular extras correctamente
+  let horasDiaNormal = 8; // fallback por defecto
+  let diasLaboralesNormales = 'LMXJV'; // fallback
+  if (obra_id && sesion.empresa_id) {
+    const horario = await env.DB.prepare(
+      `SELECT horas_dia, dias_semana FROM horarios_obra WHERE empresa_id = ? AND obra_id = ? LIMIT 1`
+    ).bind(sesion.empresa_id, obra_id).first().catch(() => null);
+    if (horario) {
+      horasDiaNormal = horario.horas_dia || 8;
+      diasLaboralesNormales = horario.dias_semana || 'LMXJV';
+    }
+  }
+  // Mapeo día → letra para comprobar si es día laboral normal
+  const letraDia = { lunes: 'L', martes: 'M', miercoles: 'X', jueves: 'J', viernes: 'V', sabado: 'S' };
+
   for (const t of trabajadores) {
     const personalId = await buscarOCrearPersonalExterno(env, t.nombre, t.empresa, sesion);
     if (!personalId) { omitidos++; continue; }
@@ -3380,7 +3395,9 @@ async function insertarParteSemanal(env, datos, sesion, obra_id, archivo_key) {
         fechaStr = f.toISOString().slice(0, 10);
       }
 
-      const horasExtra = horas > 8 ? horas - 8 : 0;
+      // Si el día no es laboral normal (ej: sábado fuera de dias_semana) → todas las horas son extras
+      const esDiaLaboral = diasLaboralesNormales.includes(letraDia[dia] || '');
+      const horasExtra = esDiaLaboral ? (horas > horasDiaNormal ? horas - horasDiaNormal : 0) : horas;
       try {
         await env.DB.prepare(
           `INSERT INTO fichajes (empresa_id, personal_externo_id, obra_id, fecha, horas_trabajadas, horas_extra, estado, notas, registrado_por, departamento)
