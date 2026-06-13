@@ -5863,7 +5863,7 @@ async function llamarAnthropicStream(env, messages, model, maxTokens, systemProm
           const token = evt.delta.text || '';
           if (token) {
             acumulado += token;
-            await onToken(token);
+            try { await onToken(token); } catch(_) {}
           }
         }
       } catch (_) {}
