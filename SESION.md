@@ -6,9 +6,9 @@
 ## ESTADO ACTUAL
 
 **Sesión:** LIBRE
-**Última sesión:** 23/06/2026 — Informes HTML + Email (Resend) + Telegram + PRL para Alejandra
-**Versión actual:** App PWA **v6.45** · AlejandraIA **v1.9.17+31** · WORKER API `230a71f8` · WORKER agente `2c2447ac`
-**Próxima:** ⚠️ Añadir `RESEND_API_KEY` al agente (ver abajo). Instalar APK v1.9.17 en móvil. Pendientes: estados bobinas inválidos ('activa'); Alberto sin password; carretilla vencida A-476326XT; PEMP 40/41
+**Última sesión:** 23/06/2026 — Módulo PRL completo + Seguridad y Salud en Obra v6.46
+**Versión actual:** App PWA **v6.46** · AlejandraIA **v1.9.17+31** · WORKER API `a8b055c7` · WORKER agente `1a1b5071`
+**Próxima:** ⚠️ Añadir `RESEND_API_KEY` al agente (ver sesión anterior). Instalar APK v1.9.17 en móvil. Pendientes: estados bobinas inválidos ('activa'); Alberto sin password; carretilla vencida A-476326XT; PEMP 40/41
 
 ---
 

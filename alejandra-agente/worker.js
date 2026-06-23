@@ -104,9 +104,31 @@ Puedes generar documentos PRL con generar_informe: evaluaciones de riesgo por pu
 
 INFORMES Y COMUNICACIONES: Dispones de tres herramientas de comunicación: generar_informe (crea un informe HTML profesional con datos reales de la BD, lo guarda en R2 y devuelve la clave), enviar_email (envía por correo usando Resend, puede adjuntar el informe), enviar_telegram_informe (manda el informe al grupo de Telegram como documento). Úsalas cuando el usuario pida informes, resúmenes, o comunicaciones formales.`,
 
-  app: `APP ALEJANDRA: gestiona bobinas de cable, equipos (PEMP, carretillas), personal, fichajes, documentos, incidencias y pedidos — sector eléctrico/mecánico, multi-empresa.
+  app: `APP ALEJANDRA: gestiona bobinas de cable, equipos (PEMP, carretillas), personal, fichajes, documentos, incidencias, pedidos y módulo PRL completo — sector eléctrico/mecánico, multi-empresa.
 Roles: operario (lectura) · encargado (su depto) · empresa_admin (su empresa) · superadmin (todo) · desarrollador (solo Adrián).
-Integraciones: Google Sheets, Telegram (@AlejandraAPP_bot), R2 (archivos), GitHub Actions (CI/CD).`,
+Integraciones: Google Sheets, Telegram (@AlejandraAPP_bot), R2 (archivos), GitHub Actions (CI/CD).
+
+MÓDULO PRL — TABLAS DISPONIBLES EN BD (puedes consultarlas con consultar_bd):
+· reconocimientos_medicos(id, empresa_id, obra_id, usuario_id, externo_id, nombre_trabajador, tipo[anual/inicial/periodico/tras_baja/reintegro], resultado[apto/apto_con_restricciones/no_apto], restricciones, fecha_realizacion, fecha_caducidad, dias_aviso, centro_medico, medico_responsable, notas, created_by, created_at)
+  → Reconocimientos médicos de los trabajadores. Obligatorio anual (LPRL art. 22). Alerta cuando fecha_caducidad < date('now').
+
+· documentos_obra(id, empresa_id, obra_id, tipo[pss/ess/ebss/aviso_previo/apertura_centro/libro_incidencias/libro_subcontratacion/plan_emergencia/evaluacion_riesgos/coordinacion_actividades/seguro_rc/otro], titulo, estado[pendiente/en_tramite/vigente/vencido/no_aplica], fecha_emision, fecha_caducidad, elaborado_por, aprobado_por, r2_key, notas, created_by, created_at)
+  → Documentos obligatorios de obra según RD 1627/1997. Consulta qué documentos faltan o están pendientes por obra.
+
+· permisos_trabajo(id, empresa_id, obra_id, tipo[altura/electrico/espacio_confinado/excavacion/soldadura/demolicion/otro], descripcion, ubicacion, fecha_inicio, fecha_fin, turno, trabajadores JSON, riesgos, medidas_preventivas, epis_requeridos, estado[activo/completado/cancelado], autorizado_por, notas, created_by, created_at)
+  → Permisos de trabajo para trabajos de alto riesgo. Alerta si estado='activo' y fecha_fin < date('now').
+
+· inspecciones_seg(id, empresa_id, obra_id, tipo[periodica/inicial/extraordinaria/auditoria], inspector, fecha, areas_inspeccionadas JSON, hallazgos JSON, conformidades, no_conformidades, obs_menores, puntuacion[0-100], estado[abierta/cerrada], fecha_cierre, proxima_inspeccion, r2_key, notas, created_by, created_at)
+  → Inspecciones de seguridad periódicas y extraordinarias. Alerta si proxima_inspeccion < date('now') y estado='abierta'.
+
+· epi_revisiones(id, empresa_id, epi_asignado_id, inventario_id, nombre_epi, tipo_revision[inicial/periodica/post_incidente/pre_uso], fecha_revision, resultado[apto/apto_con_observaciones/no_apto_retirar], observaciones, proxima_revision, revisado_por, created_at)
+  → Historial de revisiones de EPIs (arneses, retráctiles, PEMP). Arriba de 1 año sin revisión = señal de alerta.
+
+CONSULTAS PRL ÚTILES:
+· Reconocimientos vencidos: SELECT nombre_trabajador, tipo, fecha_caducidad FROM reconocimientos_medicos WHERE empresa_id=? AND fecha_caducidad < date('now')
+· Docs de obra pendientes: SELECT tipo, titulo, estado FROM documentos_obra WHERE empresa_id=? AND obra_id=? AND estado IN ('pendiente','en_tramite')
+· Permisos activos hoy: SELECT tipo, descripcion, autorizado_por FROM permisos_trabajo WHERE empresa_id=? AND estado='activo' AND fecha_inicio <= date('now')
+· Inspecciones abiertas con NC: SELECT inspector, fecha, no_conformidades FROM inspecciones_seg WHERE estado='abierta' AND no_conformidades > 0`,
 
   tecnica: `INFRAESTRUCTURA PROPIA:
 - Worker: alejandra-agente.alejandra-app.workers.dev (Cloudflare Workers, ES modules)
