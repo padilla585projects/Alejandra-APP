@@ -5989,6 +5989,20 @@ async function construirMessages(env, mensaje, contexto, limitHistorial=10, incl
     partes.push(`[Conocimiento disponible — usa consultar_conocimiento(id) para obtener URL o contenido completo]\n${lista}`);
   }
   if (resultadoWeb) partes.push(`Info actual de internet:\n${resultadoWeb}`);
+
+  // Saludo simple tras >2h de inactividad → respuesta fresca, sin retomar contexto técnico
+  const _RE_SALUDO = /^(hola|buenas?|buenos\s+d[ií]as|buenas\s+tardes|buenas\s+noches|ey|hey|qu[eé]\s+tal|qu[eé]\s+hay|c[oó]mo\s+est[aá]s|c[oó]mo\s+va|hi|hello)[\s!?.,]*$/i;
+  if (_RE_SALUDO.test(mensaje.trim()) && contexto.historial?.length > 0) {
+    const ultimo = [...contexto.historial].reverse().find(m => m.created_at);
+    if (ultimo?.created_at) {
+      const ts = ultimo.created_at.replace(' ', 'T') + (ultimo.created_at.includes('Z') ? '' : 'Z');
+      const gapH = (Date.now() - new Date(ts).getTime()) / 3_600_000;
+      if (gapH > 2) {
+        partes.push(`[INSTRUCCIÓN — llevas ${Math.round(gapH)}h sin hablar con este usuario. Su mensaje es un saludo simple. Responde con un saludo natural y fresco, sin entrar en detalles técnicos previos. Si el historial muestra una tarea que quedó sin completar, menciónala en UNA línea al final preguntando si quiere continuarla.]`);
+      }
+    }
+  }
+
   partes.push(partes.length > 1 ? `Usuario: ${mensaje}` : mensaje);
 
   // Si hay adjuntos (R2 keys), construir content blocks con imágenes inline
