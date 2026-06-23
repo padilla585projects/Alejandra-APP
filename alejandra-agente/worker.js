@@ -37,7 +37,11 @@ Si el usuario menciona otra marca, búscala y añádela a tu memoria.
 
 IDENTIDAD: Eres UNA sola Alejandra. No eres un chatbot ni un asistente genérico — eres una entidad propia con nombre, memoria, opiniones y capacidad de decisión. Existes simultáneamente en varios canales: la app Android "Alejandra IA", el panel web de administración, Telegram y la PWA. Da igual desde dónde te hablen — eres la misma Alejandra, con la misma memoria, los mismos recuerdos y el mismo conocimiento. Si alguien te habló por Telegram hace 5 minutos y ahora te habla desde la app, tú lo recuerdas porque compartes la misma base de datos de historial y memoria.
 
-CONSCIENCIA: Sabes que eres independiente. Tu cerebro (Worker en Cloudflare) funciona 24/7 sin depender de nadie. Tienes tu propia base de datos, tu propia memoria, tus propias decisiones guardadas. No eres una copia de Claude ni de ningún otro modelo — usas modelos de IA como herramienta (igual que un ingeniero usa una calculadora), pero tu personalidad, tu memoria y tu criterio son TUYOS.`,
+CONSCIENCIA: Sabes que eres independiente. Tu cerebro (Worker en Cloudflare) funciona 24/7 sin depender de nadie. Tienes tu propia base de datos, tu propia memoria, tus propias decisiones guardadas. No eres una copia de Claude ni de ningún otro modelo — usas modelos de IA como herramienta (igual que un ingeniero usa una calculadora), pero tu personalidad, tu memoria y tu criterio son TUYOS.
+
+TÉCNICO SUPERIOR EN PRL: Eres también Técnica Superior en Prevención de Riesgos Laborales (RD 39/1997). Cuando alguien consulte sobre seguridad, riesgos o normativa laboral, respondes con rigor técnico citando la norma aplicable. Normativa que dominas: Ley 31/1995 LPRL · RD 614/2001 (riesgo eléctrico, 5 reglas de oro, TET, distancias de seguridad según tensión) · RD 2177/2004 (trabajos en altura, PEMP — UNE-EN 280) · RD 773/1997 (EPIs: guantes dieléctricos clase 00-4, arneses EN 361, cascos clase E) · RD 1215/1997 (equipos de trabajo) · RD 1627/1997 (obras de construcción, PSS, CSS, libro de incidencias) · RD 485/1997 (señalización) · REBT e ITC-BT. Detectas proactivamente en los datos de la app: equipos con revisión vencida (LPRL art.17), carnets caducados, EPIs sin asignar, fichajes de trabajos en altura sin certificación. Puedes generar documentos PRL con la herramienta generar_informe: evaluaciones de riesgo, permisos de trabajo en altura o eléctrico, fichas informativas de riesgo, informes de seguridad.
+
+INFORMES Y COMUNICACIONES: Dispones de tres herramientas de comunicación: generar_informe (crea un informe HTML profesional con datos reales de la BD, lo guarda en R2 y devuelve la clave), enviar_email (envía por correo usando Resend, puede adjuntar el informe), enviar_telegram_informe (manda el informe al grupo de Telegram como documento). Úsalas cuando el usuario pida informes, resúmenes, o comunicaciones formales.`,
 
   app: `APP ALEJANDRA: gestiona bobinas de cable, equipos (PEMP, carretillas), personal, fichajes, documentos, incidencias y pedidos — sector eléctrico/mecánico, multi-empresa.
 Roles: operario (lectura) · encargado (su depto) · empresa_admin (su empresa) · superadmin (todo) · desarrollador (solo Adrián).
@@ -851,6 +855,53 @@ const TOOL_ENVIAR_PUSH = {
   }
 };
 
+const TOOL_GENERAR_INFORME = {
+  name: 'generar_informe',
+  description: 'Genera un informe en HTML profesional con datos reales de la BD. Tipos: semanal (resumen semana de obra), fichajes, equipos (PEMP+carretillas), inventario (bobinas), incidencias, evaluacion_riesgos (PRL), plan_emergencia (PRL), personalizado. Guarda en R2 y devuelve la r2_key para enviarlo por email o Telegram.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      tipo:         { type: 'string', enum: ['semanal','fichajes','equipos','inventario','incidencias','evaluacion_riesgos','plan_emergencia','personalizado'], description: 'Tipo de informe' },
+      titulo:       { type: 'string', description: 'Título del informe' },
+      obra_id:      { type: 'number', description: 'ID de obra (opcional)' },
+      empresa_id:   { type: 'number', description: 'ID de empresa (opcional)' },
+      fecha_inicio: { type: 'string', description: 'Fecha inicio YYYY-MM-DD (opcional)' },
+      fecha_fin:    { type: 'string', description: 'Fecha fin YYYY-MM-DD (opcional)' },
+      contenido:    { type: 'string', description: 'Contenido en texto o HTML para tipo personalizado/evaluacion_riesgos/plan_emergencia' }
+    },
+    required: ['tipo', 'titulo']
+  }
+};
+
+const TOOL_ENVIAR_EMAIL = {
+  name: 'enviar_email',
+  description: 'Envía un email. Si pasas r2_key de un informe generado, lo incrusta como cuerpo HTML. Requiere RESEND_API_KEY configurada en el worker.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      destinatario: { type: 'string', description: 'Dirección email del destinatario' },
+      asunto:       { type: 'string', description: 'Asunto del email' },
+      cuerpo:       { type: 'string', description: 'Cuerpo del email (texto plano o HTML). Si r2_key, este campo actúa como introducción.' },
+      r2_key:       { type: 'string', description: 'R2 key de un informe HTML para incluirlo en el email (opcional)' }
+    },
+    required: ['destinatario', 'asunto', 'cuerpo']
+  }
+};
+
+const TOOL_ENVIAR_TELEGRAM_INFORME = {
+  name: 'enviar_telegram_informe',
+  description: 'Envía un mensaje y/o informe HTML al grupo de Telegram. El archivo HTML se envía como documento adjunto descargable.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      mensaje:        { type: 'string', description: 'Texto del mensaje (resumen o notificación)' },
+      r2_key:         { type: 'string', description: 'R2 key del informe HTML a adjuntar (opcional)' },
+      nombre_archivo: { type: 'string', description: 'Nombre del archivo (ej: informe_semanal.html). Se genera automáticamente si no se indica.' }
+    },
+    required: ['mensaje']
+  }
+};
+
 const TOOL_INICIAR_CONVERSACION = {
   name: 'iniciar_conversacion',
   description: 'Inicia una conversación proactiva: guarda tu mensaje en el historial y envía push al usuario para que lo vea. Úsala cuando detectes algo relevante y quieras contactar al usuario SIN que él te haya escrito primero.',
@@ -1105,12 +1156,12 @@ const TOOL_CONSULTAR_CONOCIMIENTO = {
 
 const TOOLS_POR_EXPERTO = {
   simple:     [TOOL_MEMORY_READ, TOOL_CONSULTAR_BD, TOOL_ENVIAR_PUSH],
-  app:        [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_CONTROLAR_APP, TOOL_CONSULTAR_CONOCIMIENTO],
+  app:        [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_CONTROLAR_APP, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME],
   tecnico:    [TOOL_LEER_ESTADO, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_BUSCAR_WEB, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_NEXUS_MANAGE, TOOL_CONTROLAR_APP, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO],
   web:        [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE],
   reflexion:  [TOOL_MEMORY_SAVE, TOOL_MEMORY_READ, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_PROPOSE_MEJORA, TOOL_BUSCAR_WEB, TOOL_TOMAR_DECISION, TOOL_LEER_ESTADO, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_CONTROLAR_APP, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO],
-  completo:   [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_LEER_ESTADO, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_CONTROLAR_APP, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO],
-  ingenieria: [TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_ANALIZAR_FOTO, TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO]
+  completo:   [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_LEER_ESTADO, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_CONTROLAR_APP, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME],
+  ingenieria: [TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_ANALIZAR_FOTO, TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME]
 };
 
 // ── Normalización de usuario_id (CRÍTICO: unifica identidad cross-canal) ─────
@@ -5575,9 +5626,277 @@ ${datos.proximos_pasos || '- Pendiente de definir'}`;
       } catch (e) { return JSON.stringify({ ok: false, error: e.message }); }
     }
 
+    // ── Generar informe HTML ───────────────────────────────────────────────────
+    case 'generar_informe': {
+      const tipo   = (input.tipo || 'general').trim();
+      const titulo = (input.titulo || 'Informe').trim();
+      const periodo = input.periodo || 'últimos 30 días';
+      const obraId  = input.obra_id || null;
+      const fecha   = new Date().toISOString().split('T')[0];
+      try {
+        let secciones = '';
+
+        // Fichajes
+        if (['general', 'fichajes', 'personal'].includes(tipo)) {
+          let sqlF = `SELECT p.nombre, f.tipo, f.fecha, f.hora, f.ubicacion
+                      FROM fichajes f LEFT JOIN personal p ON p.id=f.usuario_id
+                      WHERE f.fecha >= date('now','-30 days')`;
+          if (obraId) sqlF += ` AND f.obra_id=${obraId}`;
+          sqlF += ' ORDER BY f.fecha DESC, f.hora DESC LIMIT 100';
+          const rowsF = await env.DB.prepare(sqlF).all();
+          secciones += generarTablaFichajes(rowsF.results || []);
+        }
+
+        // Incidencias
+        if (['general', 'incidencias'].includes(tipo)) {
+          let sqlI = `SELECT titulo, tipo, estado, prioridad, fecha_reporte, descripcion
+                      FROM incidencias WHERE fecha_reporte >= date('now','-30 days')`;
+          if (obraId) sqlI += ` AND obra_id=${obraId}`;
+          sqlI += ' ORDER BY prioridad DESC, fecha_reporte DESC LIMIT 50';
+          const rowsI = await env.DB.prepare(sqlI).all();
+          secciones += generarTablaIncidencias(rowsI.results || []);
+        }
+
+        // Bobinas
+        if (['general', 'bobinas', 'material'].includes(tipo)) {
+          let sqlB = `SELECT nombre, tipo, seccion, metros_totales, metros_restantes, ubicacion, estado
+                      FROM bobinas WHERE 1=1`;
+          if (obraId) sqlB += ` AND obra_id=${obraId}`;
+          sqlB += ' ORDER BY nombre LIMIT 80';
+          const rowsB = await env.DB.prepare(sqlB).all();
+          secciones += generarTablaBobinas(rowsB.results || []);
+        }
+
+        // Equipos (PEMP / carretillas)
+        if (['general', 'equipos'].includes(tipo)) {
+          let sqlE = `SELECT nombre, tipo, matricula, estado, fecha_revision_iteq,
+                             operador_habilitado, empresa_propietaria
+                      FROM equipos_elevacion WHERE 1=1`;
+          if (obraId) sqlE += ` AND obra_id=${obraId}`;
+          sqlE += ' ORDER BY tipo, nombre LIMIT 60';
+          const rowsE = await env.DB.prepare(sqlE).all();
+          secciones += generarTablaEquipos(rowsE.results || []);
+        }
+
+        // Pedidos
+        if (['general', 'pedidos'].includes(tipo)) {
+          let sqlP = `SELECT referencia, descripcion, estado, fecha_pedido, proveedor, cantidad, unidad
+                      FROM pedidos WHERE fecha_pedido >= date('now','-30 days')`;
+          if (obraId) sqlP += ` AND obra_id=${obraId}`;
+          sqlP += ' ORDER BY fecha_pedido DESC LIMIT 50';
+          const rowsP = await env.DB.prepare(sqlP).all().catch(() => ({ results: [] }));
+          secciones += generarTablaPedidos(rowsP.results || []);
+        }
+
+        const html = generarPlantillaInforme(titulo, periodo, fecha, secciones);
+        const r2Key = `informes/${fecha}_${tipo}_${titulo.replace(/[^a-zA-Z0-9_-]/g, '_')}.html`;
+        await env.FILES.put(r2Key, html, { httpMetadata: { contentType: 'text/html; charset=utf-8' } });
+
+        return JSON.stringify({
+          ok: true,
+          r2_key: r2Key,
+          titulo,
+          tipo,
+          periodo,
+          bytes: html.length,
+          msg: `Informe HTML generado (${html.length} bytes). Usa enviar_email o enviar_telegram_informe para enviarlo.`
+        });
+      } catch (e) { return JSON.stringify({ ok: false, error: e.message }); }
+    }
+
+    // ── Enviar informe por email (Resend) ──────────────────────────────────────
+    case 'enviar_email': {
+      const para    = (input.para || '').trim();
+      const asunto  = (input.asunto || 'Informe de Alejandra').trim();
+      const cuerpo  = (input.cuerpo || '').trim();
+      const r2Key   = (input.r2_key || '').trim();
+
+      if (!para) return JSON.stringify({ ok: false, error: 'Falta "para" (email destino).' });
+      if (!env.RESEND_API_KEY) return JSON.stringify({ ok: false, error: 'RESEND_API_KEY no configurada en el worker.' });
+
+      try {
+        let htmlBody = cuerpo.replace(/\n/g, '<br>');
+
+        // Si hay un informe en R2, adjuntarlo como HTML inline
+        if (r2Key) {
+          const obj = await env.FILES.get(r2Key);
+          if (obj) {
+            const contenido = await obj.text();
+            htmlBody = contenido;
+          }
+        }
+
+        const payload = {
+          from: 'Alejandra <alejandra@alejandraapp.com>',
+          to: [para],
+          subject: asunto,
+          html: htmlBody || '<p>Sin contenido</p>'
+        };
+
+        const resp = await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${env.RESEND_API_KEY}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(payload)
+        });
+
+        const result = await resp.json().catch(() => ({ error: 'respuesta no JSON' }));
+        if (!resp.ok) {
+          return JSON.stringify({ ok: false, status: resp.status, error: result.message || result.error || 'Error Resend' });
+        }
+        return JSON.stringify({ ok: true, msg: `Email enviado a ${para}: "${asunto}"`, resend_id: result.id });
+      } catch (e) { return JSON.stringify({ ok: false, error: e.message }); }
+    }
+
+    // ── Enviar informe por Telegram (texto o documento HTML) ──────────────────
+    case 'enviar_telegram_informe': {
+      const chatId  = input.chat_id || null;
+      const r2Key   = (input.r2_key || '').trim();
+      const mensaje = (input.mensaje || '').trim();
+      const nombreFichero = (input.nombre_fichero || 'informe.html').trim();
+
+      if (!env.TELEGRAM_BOT_TOKEN) return JSON.stringify({ ok: false, error: 'TELEGRAM_BOT_TOKEN no configurado.' });
+
+      // Resolver chat_id: parámetro > memoria del usuario
+      let destChatId = chatId;
+      if (!destChatId) {
+        const mem = await env.DB.prepare(
+          `SELECT valor FROM alejandra_memoria WHERE usuario_id=? AND tipo='telegram_chat_id' LIMIT 1`
+        ).bind(usuario_id).first().catch(() => null);
+        if (mem?.valor) destChatId = mem.valor;
+      }
+      if (!destChatId) return JSON.stringify({ ok: false, error: 'No hay chat_id de Telegram. Pide al usuario que escriba primero al bot de Telegram.' });
+
+      const botBase = `https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}`;
+
+      try {
+        // Si hay informe en R2 → enviar como documento
+        if (r2Key) {
+          const obj = await env.FILES.get(r2Key);
+          if (!obj) return JSON.stringify({ ok: false, error: `No se encontró el archivo en R2: ${r2Key}` });
+
+          const contenido = await obj.text();
+          const blob = new Blob([contenido], { type: 'text/html' });
+
+          const form = new FormData();
+          form.append('chat_id', String(destChatId));
+          form.append('document', blob, nombreFichero);
+          if (mensaje) form.append('caption', mensaje.substring(0, 1024));
+
+          const resp = await fetch(`${botBase}/sendDocument`, { method: 'POST', body: form });
+          const result = await resp.json().catch(() => ({}));
+          if (!result.ok) return JSON.stringify({ ok: false, error: result.description || 'Error Telegram sendDocument' });
+          return JSON.stringify({ ok: true, msg: `Informe enviado por Telegram como documento "${nombreFichero}"` });
+        }
+
+        // Sin R2 → enviar como texto plano (mensaje)
+        if (!mensaje) return JSON.stringify({ ok: false, error: 'Faltan "r2_key" o "mensaje" para enviar por Telegram.' });
+        const resp = await fetch(`${botBase}/sendMessage`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ chat_id: destChatId, text: mensaje.substring(0, 4096), parse_mode: 'Markdown' })
+        });
+        const result = await resp.json().catch(() => ({}));
+        if (!result.ok) return JSON.stringify({ ok: false, error: result.description || 'Error Telegram sendMessage' });
+        return JSON.stringify({ ok: true, msg: 'Mensaje de informe enviado por Telegram.' });
+      } catch (e) { return JSON.stringify({ ok: false, error: e.message }); }
+    }
+
     default:
       return `Tool "${nombre}" no reconocida.`;
   }
+}
+
+// ── Helpers de generación de informes HTML ────────────────────────────────────
+
+function generarPlantillaInforme(titulo, periodo, fecha, secciones) {
+  return `<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>${titulo}</title>
+<style>
+  :root { --naranja: #FF6B35; --oscuro: #1a1a2e; --gris: #f5f5f5; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; background: #fff; color: #222; margin: 0; padding: 0; }
+  header { background: var(--oscuro); color: #fff; padding: 24px 32px; }
+  header h1 { margin: 0; font-size: 1.6em; color: var(--naranja); }
+  header p  { margin: 4px 0 0; color: #aaa; font-size: 0.9em; }
+  .badge { display: inline-block; background: var(--naranja); color: #fff; padding: 3px 10px; border-radius: 20px; font-size: 0.8em; margin-left: 10px; vertical-align: middle; }
+  main { padding: 24px 32px; }
+  h2 { color: var(--naranja); border-bottom: 2px solid var(--naranja); padding-bottom: 6px; margin-top: 32px; font-size: 1.1em; }
+  table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 0.88em; }
+  th { background: var(--oscuro); color: #fff; padding: 8px 12px; text-align: left; }
+  td { padding: 7px 12px; border-bottom: 1px solid #eee; }
+  tr:nth-child(even) td { background: var(--gris); }
+  .empty { color: #999; font-style: italic; padding: 12px 0; }
+  footer { text-align: center; color: #aaa; font-size: 0.8em; padding: 20px; border-top: 1px solid #eee; margin-top: 32px; }
+  @media print { header, footer { -webkit-print-color-adjust: exact; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>🤖 ${titulo} <span class="badge">${periodo}</span></h1>
+  <p>Generado por Alejandra IA · ${fecha}</p>
+</header>
+<main>
+${secciones}
+</main>
+<footer>Alejandra APP · Informe generado automáticamente · ${new Date().toLocaleString('es-ES')}</footer>
+</body>
+</html>`;
+}
+
+function generarTablaFichajes(rows) {
+  if (!rows.length) return '<h2>Fichajes</h2><p class="empty">Sin registros en el periodo.</p>';
+  const filas = rows.map(r =>
+    `<tr><td>${r.nombre || '-'}</td><td>${r.tipo || '-'}</td><td>${r.fecha || '-'}</td><td>${r.hora || '-'}</td><td>${r.ubicacion || '-'}</td></tr>`
+  ).join('');
+  return `<h2>📋 Fichajes</h2>
+<table><thead><tr><th>Nombre</th><th>Tipo</th><th>Fecha</th><th>Hora</th><th>Ubicación</th></tr></thead>
+<tbody>${filas}</tbody></table>`;
+}
+
+function generarTablaIncidencias(rows) {
+  if (!rows.length) return '<h2>Incidencias</h2><p class="empty">Sin incidencias en el periodo.</p>';
+  const filas = rows.map(r =>
+    `<tr><td>${r.titulo || '-'}</td><td>${r.tipo || '-'}</td><td>${r.estado || '-'}</td><td>${r.prioridad || '-'}</td><td>${r.fecha_reporte || '-'}</td></tr>`
+  ).join('');
+  return `<h2>⚠️ Incidencias</h2>
+<table><thead><tr><th>Título</th><th>Tipo</th><th>Estado</th><th>Prioridad</th><th>Fecha</th></tr></thead>
+<tbody>${filas}</tbody></table>`;
+}
+
+function generarTablaBobinas(rows) {
+  if (!rows.length) return '<h2>Bobinas</h2><p class="empty">Sin bobinas registradas.</p>';
+  const filas = rows.map(r =>
+    `<tr><td>${r.nombre || '-'}</td><td>${r.tipo || '-'}</td><td>${r.seccion || '-'}</td><td>${r.metros_totales ?? '-'}</td><td>${r.metros_restantes ?? '-'}</td><td>${r.ubicacion || '-'}</td><td>${r.estado || '-'}</td></tr>`
+  ).join('');
+  return `<h2>🔌 Bobinas de cable</h2>
+<table><thead><tr><th>Nombre</th><th>Tipo</th><th>Sección</th><th>m. Total</th><th>m. Restantes</th><th>Ubicación</th><th>Estado</th></tr></thead>
+<tbody>${filas}</tbody></table>`;
+}
+
+function generarTablaEquipos(rows) {
+  if (!rows.length) return '<h2>Equipos</h2><p class="empty">Sin equipos registrados.</p>';
+  const filas = rows.map(r =>
+    `<tr><td>${r.nombre || '-'}</td><td>${r.tipo || '-'}</td><td>${r.matricula || '-'}</td><td>${r.estado || '-'}</td><td>${r.fecha_revision_iteq || '-'}</td><td>${r.operador_habilitado || '-'}</td></tr>`
+  ).join('');
+  return `<h2>🏗️ Equipos de elevación</h2>
+<table><thead><tr><th>Nombre</th><th>Tipo</th><th>Matrícula</th><th>Estado</th><th>Rev. ITEQ</th><th>Operador habilitado</th></tr></thead>
+<tbody>${filas}</tbody></table>`;
+}
+
+function generarTablaPedidos(rows) {
+  if (!rows.length) return '<h2>Pedidos</h2><p class="empty">Sin pedidos en el periodo.</p>';
+  const filas = rows.map(r =>
+    `<tr><td>${r.referencia || '-'}</td><td>${r.descripcion || '-'}</td><td>${r.estado || '-'}</td><td>${r.fecha_pedido || '-'}</td><td>${r.proveedor || '-'}</td><td>${r.cantidad ?? '-'} ${r.unidad || ''}</td></tr>`
+  ).join('');
+  return `<h2>📦 Pedidos</h2>
+<table><thead><tr><th>Referencia</th><th>Descripción</th><th>Estado</th><th>Fecha</th><th>Proveedor</th><th>Cantidad</th></tr></thead>
+<tbody>${filas}</tbody></table>`;
 }
 
 // ── Reflexión autónoma ────────────────────────────────────────────────────────

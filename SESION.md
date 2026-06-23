@@ -6,9 +6,55 @@
 ## ESTADO ACTUAL
 
 **Sesión:** LIBRE
-**Última sesión:** 23/06/2026 — Fix push notifications + saludo fresco Alejandra
-**Versión actual:** App PWA **v6.45** · AlejandraIA **v1.9.17+31** · WORKER API `230a71f8` · WORKER agente `1b92ba3b`
-**Próxima:** Instalar APK v1.9.17 en móvil (OTA auto o manual). Pendientes: estados bobinas inválidos ('activa'); Alberto sin password; carretilla vencida A-476326XT; PEMP 40/41; mejoras Alejandra (pendientes de sesión)
+**Última sesión:** 23/06/2026 — Informes HTML + Email (Resend) + Telegram + PRL para Alejandra
+**Versión actual:** App PWA **v6.45** · AlejandraIA **v1.9.17+31** · WORKER API `230a71f8` · WORKER agente `2c2447ac`
+**Próxima:** ⚠️ Añadir `RESEND_API_KEY` al agente (ver abajo). Instalar APK v1.9.17 en móvil. Pendientes: estados bobinas inválidos ('activa'); Alberto sin password; carretilla vencida A-476326XT; PEMP 40/41
+
+---
+
+## RESUMEN SESIÓN 23/06/2026 (tarde) — Informes HTML + Email + Telegram + PRL para Alejandra
+
+### Cambios implementados
+
+**alejandra-agente/worker.js** — 5 edits:
+
+1. **Sistema prompt NEXUS base** — añadidas secciones de PRL y generación de informes. Alejandra ahora es técnico superior en PRL (RD 39/1997, Ley 31/1995, REBT, EPIs, evaluaciones de riesgo, protocolos de emergencia). Sabe generar informes en HTML.
+
+2. **3 nuevas tool definitions** (añadidas tras TOOL_ENVIAR_PUSH):
+   - `TOOL_GENERAR_INFORME` — consulta BD (fichajes, incidencias, bobinas, equipos, pedidos) y genera HTML completo en R2.
+   - `TOOL_ENVIAR_EMAIL` — envía email via Resend API (soporte para cuerpo libre o informe R2 como HTML inline).
+   - `TOOL_ENVIAR_TELEGRAM_INFORME` — envía mensaje o documento HTML via Telegram Bot API (`sendDocument` con multipart).
+
+3. **TOOLS_POR_EXPERTO** — los 3 tools nuevos añadidos a `app`, `completo` e `ingenieria`.
+
+4. **ejecutarTool** — 3 nuevos `case` blocks:
+   - `generar_informe`: tipos general/fichajes/personal/incidencias/bobinas/material/equipos/pedidos. Filtrable por obra_id. HTML guardado en `informes/YYYY-MM-DD_tipo_titulo.html` en R2.
+   - `enviar_email`: usa `env.RESEND_API_KEY`, from `alejandra@alejandraapp.com`. Si hay `r2_key`, lo carga y lo manda como HTML.
+   - `enviar_telegram_informe`: resuelve `chat_id` de `alejandra_memoria` (tipo='telegram_chat_id') si no se pasa explícito. Sube documento con `FormData` multipart.
+
+5. **Funciones helper HTML** (antes de `ejecutarReflexion`):
+   - `generarPlantillaInforme()` — template HTML completo con branding naranja Alejandra, header oscuro, tabla CSS responsive, footer.
+   - `generarTablaFichajes()`, `generarTablaIncidencias()`, `generarTablaBobinas()`, `generarTablaEquipos()`, `generarTablaPedidos()` — secciones de tabla por tipo.
+
+### Despliegue
+- `alejandra-agente` → `2c2447ac` ✅ (345.64 KiB / gzip 90.67 KiB)
+
+### ⚠️ Acción pendiente — RESEND_API_KEY
+
+El secret existe en `alejandra-app-api` pero NO en `alejandra-agente`. Sin él, `enviar_email` devuelve error controlado.
+
+Para añadirlo:
+```powershell
+cd "D:\Descargas\Alejandra APP\alejandra-agente"
+npx wrangler secret put RESEND_API_KEY --name alejandra-agente
+# Pegar la clave cuando la pida (la tienes en el panel de Resend o en los secrets del worker principal)
+```
+
+### WhatsApp
+Requiere aprobación de Meta Business API (no se puede usar libremente). El código framework está en la tool pero se devuelve error informativo hasta que se configure la cuenta.
+
+### Commits pendientes
+- `alejandra-agente/worker.js` modificado, sin commit (solo el agente). Hacer git add + commit + push cuando confirmes que funciona.
 
 ---
 
