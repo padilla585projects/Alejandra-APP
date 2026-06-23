@@ -6,9 +6,54 @@
 ## ESTADO ACTUAL
 
 **Sesión:** LIBRE
-**Última sesión:** 13/06/2026 — Plan enseñanza Fases 1-5: BD, schema, crear usuarios, leer código, fix bugs autónomo, auditoría proactiva
-**Versión actual:** App PWA **v6.45** · AlejandraIA **v1.9.16+30** · WORKER API `9cba5b4b` · WORKER agente (ver commits Alejandra en GitHub)
-**Próxima:** Recarga créditos Anthropic (agotados). Luego: fix push (FCM token lookup + case sensitivity Adrian/adrian); estados bobinas inválidos ('activa'); Alberto sin password; carretilla vencida A-476326XT; PEMP 40/41
+**Última sesión:** 23/06/2026 — Fix push notifications + saludo fresco Alejandra
+**Versión actual:** App PWA **v6.45** · AlejandraIA **v1.9.17+31** · WORKER API `230a71f8` · WORKER agente `1b92ba3b`
+**Próxima:** Instalar APK v1.9.17 en móvil (OTA auto o manual). Pendientes: estados bobinas inválidos ('activa'); Alberto sin password; carretilla vencida A-476326XT; PEMP 40/41; mejoras Alejandra (pendientes de sesión)
+
+---
+
+## RESUMEN SESIÓN 23/06/2026 — Fix push notifications (3 bugs) + saludo fresco Alejandra
+
+### Diagnóstico
+
+Al decir "Hola" en la app, Alejandra respondió con contexto técnico del push de 10 días antes.
+Análisis completo del flujo push reveló 3 bugs independientes.
+
+### Bug 1 — Alias 'adrian' no existía en BD ✅ ARREGLADO
+- CRON y deploys buscan siempre `usuario_id='adrian'` en `alejandra_memoria`
+- El token de Adrián estaba guardado como `'3'` pero nunca se copió al alias `'adrian'`
+- Fix: INSERT directo en D1 (id=163) + el endpoint `/fcm-token` ya tenía el código para crearlo automáticamente en próximas aperturas de app
+
+### Bug 2 — Tap en notificación con app cerrada no navegaba al chat ✅ ARREGLADO
+- Root cause: `getInitialMessage()` se llama en `main()` antes de `runApp()` → `MainShell` no existe → `tabNotifier.value = 0` no tiene listeners → no hace nada
+- Además: cuando el usuario navega manualmente a otro tab, `tabNotifier.value` no se actualizaba → `_navigateToChat()` intentaba poner 0 (ya era 0) → sin efecto
+- Fix Flutter:
+  - `notifications_service.dart`: `getInitialMessage` guarda en `_pendingScreen` en vez de navegar. Método estático `consumePendingNavigation()`.
+  - `main.dart` `_onTabChanged`: sincroniza `tabNotifier.value = i` para mantener estado real.
+  - `main.dart` `initState` `postFrameCallback`: consume `_pendingScreen` y navega cuando MainShell ya está listo.
+
+### Bug 3 — Alejandra retomaba contexto técnico tras saludo después de días ✅ ARREGLADO
+- Root cause: historial cross-canal compartido → al decir "Hola" cargaba conversación del 13/06 sobre el push
+- Fix `alejandra-agente/worker.js` en `construirMessages()`: detecta saludo simple + gap >2h → inyecta instrucción de respuesta fresca
+
+### Despliegues
+- `alejandra-agente` → `1b92ba3b` ✅
+- `alejandra-app-api` → `230a71f8` (redeploy) ✅
+- APK v1.9.17+31 → R2 `apk/alejandra_ia_v1.9.17.apk` + `latest` ✅
+- OTA `ota/version.json` → version_code=31, version_name=1.9.17, SHA-256=`52B2C9...` ✅
+
+### Commits
+- AlejandraIA `66c5d18` — fix(notifications): tap en notif abre chat correctamente v1.9.17+31
+- Alejandra-APP `5395dcf` — fix(agente): saludo fresco tras inactividad + alias FCM adrian en BD
+
+### Pendientes
+- Instalar v1.9.17 en el móvil (OTA automático o manual desde R2)
+- Confirmar que tap en notificación ya navega al chat
+- Mejoras para Alejandra (pendientes de pedir en esta sesión)
+- Estados bobinas: 46/47 con estado 'activa' inválido → UPDATE a 'disponible'
+- Alberto (código 98765): sin email ni password_hash
+- Carretilla A-476326XT: fecha_proxima_revision vencida
+- PEMP 40/41: decidir reasignación
 
 ---
 
