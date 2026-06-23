@@ -6,9 +6,38 @@
 ## ESTADO ACTUAL
 
 **Sesión:** LIBRE
-**Última sesión:** 23/06/2026 — Módulo PRL completo + Seguridad y Salud en Obra v6.46
-**Versión actual:** App PWA **v6.46** · AlejandraIA **v1.9.17+31** · WORKER API `a8b055c7` · WORKER agente `1a1b5071`
-**Próxima:** ⚠️ Añadir `RESEND_API_KEY` al agente (ver sesión anterior). Instalar APK v1.9.17 en móvil. Pendientes: estados bobinas inválidos ('activa'); Alberto sin password; carretilla vencida A-476326XT; PEMP 40/41
+**Última sesión:** 23/06/2026 (noche) — RESEND_API_KEY agente + fixes de datos D1
+**Versión actual:** App PWA **v6.46** · AlejandraIA **v1.9.17+31** · WORKER API `a8b055c7` · WORKER agente `95519a18`
+**Próxima:** Instalar APK v1.9.17 en móvil y confirmar tap-notificación → chat. Añadir email real a Alberto cuando se recuerde. Fichajes 8–15 (Edison en obra Levitec): decidir. Foreground service 30+ min. Albarán universal con foto real.
+
+---
+
+## RESUMEN SESIÓN 23/06/2026 (noche) — RESEND_API_KEY agente + fixes datos D1
+
+### Cambios
+
+**alejandra-agente/worker.js** — sin cambios de código funcional, solo documentación PRL en NEXUS_MODULES.app.
+Deploy: `95519a18` ✅
+
+**Secrets:**
+- `RESEND_API_KEY` añadida al worker `alejandra-agente` (antes solo estaba en el principal).
+- Guardada en `NUEVA_CUENTA.txt`. Ahora `enviar_email` funciona en el agente.
+
+**Fixes de datos en D1 (sin tocar código):**
+- ✅ 46 bobinas `estado='activa'` → `estado='disponible'` (estado inválido desde auditoría jun/13)
+- ✅ Alberto (id=51, código 98765): `password_hash` generado con PBKDF2. Contraseña temporal = `98765`. Puede hacer login ya.
+- ✅ Carretilla A-476326XT (id=2): `fecha_proxima_revision` estaba como string vacío `""` → puesto a NULL. Sin falsas alertas.
+- ✅ PEMP 40 y 41 (Tijeras 47107 y 135): reasignados de `obra_id=11` (Edison) a `obra_id=1, obra_nombre='CPD Getafe'` (Levitec). Incoherencia de empresa/obra resuelta.
+
+### Pendientes resueltos
+- [x] RESEND_API_KEY en agente
+- [x] Bobinas estado 'activa' inválido
+- [x] Alberto sin contraseña
+- [x] Carretilla A-476326XT fecha vacía
+- [x] PEMP 40/41 empresa/obra incoherente
+
+### Sin cambios de versión
+No se modificaron archivos de código → versión sigue en 6.46.
 
 ---
 
