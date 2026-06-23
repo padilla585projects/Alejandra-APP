@@ -426,6 +426,18 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
     <button class="nav-item" data-page="carnets" onclick="navTo('carnets')">
       <span class="nav-icon">🪪</span> Carnets
     </button>
+    <button class="nav-item" data-page="reconocimientos" onclick="navTo('reconocimientos')">
+      <span class="nav-icon">🏥</span> Reconocimientos
+    </button>
+    <button class="nav-item" data-page="documentosObra" onclick="navTo('documentosObra')">
+      <span class="nav-icon">📋</span> Docs. Obra
+    </button>
+    <button class="nav-item" data-page="permisosTrabajo" onclick="navTo('permisosTrabajo')">
+      <span class="nav-icon">📝</span> Permisos Trabajo
+    </button>
+    <button class="nav-item" data-page="inspecciones" onclick="navTo('inspecciones')">
+      <span class="nav-icon">🔍</span> Inspecciones
+    </button>
 
     <div class="sidebar-section">Inventarios</div>
     <button class="nav-item" data-page="bobinas" onclick="navTo('bobinas')">
@@ -623,6 +635,289 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
         </div>
         <div class="tbl-wrap"><div id="tblCarnets"></div></div>
       </div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     RECONOCIMIENTOS MÉDICOS (LPRL art. 22)
+     ═══════════════════════════════════════════════════════════ -->
+<div id="pageReconocimientos" class="page" style="display:none">
+  <div class="page-header">
+    <h2>🏥 Reconocimientos Médicos</h2>
+    <div class="header-actions">
+      <select id="recFiltroRes" onchange="recCargar()" class="filter-select">
+        <option value="">Todos los resultados</option>
+        <option value="apto">Apto</option>
+        <option value="apto_con_restricciones">Con restricciones</option>
+        <option value="no_apto">No apto</option>
+      </select>
+      <select id="recFiltroObraId" onchange="recCargar()" class="filter-select">
+        <option value="">Todas las obras</option>
+      </select>
+      <button class="btn btn-primary" onclick="recNuevo()">+ Nuevo reconocimiento</button>
+      <button class="btn" onclick="recExportar()">⬇ CSV</button>
+    </div>
+  </div>
+  <div id="recAlertasCaducidad" class="alert-bar" style="display:none"></div>
+  <div class="table-container">
+    <table class="data-table" id="recTabla">
+      <thead><tr>
+        <th>Trabajador</th><th>Tipo</th><th>Resultado</th><th>Restricciones</th>
+        <th>Fecha realización</th><th>Caduca</th><th>Estado</th><th>Centro médico</th><th>Acciones</th>
+      </tr></thead>
+      <tbody id="recTbody"><tr><td colspan="9" class="loading">Cargando...</td></tr></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Modal Reconocimiento -->
+<div id="recModal" class="modal" style="display:none">
+  <div class="modal-content" style="max-width:520px">
+    <div class="modal-header"><h3 id="recModalTitulo">Reconocimiento Médico</h3><span class="modal-close" onclick="recCerrarModal()">✕</span></div>
+    <div class="modal-body">
+      <div class="form-group"><label>Trabajador *</label><input id="recNombre" type="text" placeholder="Nombre completo"></div>
+      <div class="form-row">
+        <div class="form-group"><label>Tipo</label><select id="recTipo">
+          <option value="anual">Anual</option>
+          <option value="inicial">Inicial (incorporación)</option>
+          <option value="periodico">Periódico</option>
+          <option value="tras_baja">Tras baja prolongada</option>
+          <option value="reintegro">Reintegro</option>
+        </select></div>
+        <div class="form-group"><label>Resultado</label><select id="recResultado">
+          <option value="apto">✅ Apto</option>
+          <option value="apto_con_restricciones">⚠️ Apto con restricciones</option>
+          <option value="no_apto">❌ No apto</option>
+        </select></div>
+      </div>
+      <div class="form-group"><label>Restricciones (si aplica)</label><input id="recRestricciones" type="text" placeholder="Describe las limitaciones"></div>
+      <div class="form-row">
+        <div class="form-group"><label>Fecha realización *</label><input id="recFechaRe" type="date"></div>
+        <div class="form-group"><label>Fecha caducidad *</label><input id="recFechaCad" type="date"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>Centro médico</label><input id="recCentro" type="text"></div>
+        <div class="form-group"><label>Médico responsable</label><input id="recMedico" type="text"></div>
+      </div>
+      <div class="form-group"><label>Notas</label><input id="recNotas" type="text"></div>
+      <input type="hidden" id="recEditId">
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="recCerrarModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="recGuardar()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     DOCUMENTOS DE OBRA (RD 1627/1997)
+     ═══════════════════════════════════════════════════════════ -->
+<div id="pageDocumentosObra" class="page" style="display:none">
+  <div class="page-header">
+    <h2>📋 Documentos de Obra</h2>
+    <div class="header-actions">
+      <select id="docObraFiltroId" onchange="docObraCargar()" class="filter-select"><option value="">Todas las obras</option></select>
+      <select id="docObraFiltroEstado" onchange="docObraCargar()" class="filter-select">
+        <option value="">Todos los estados</option>
+        <option value="pendiente">Pendiente</option>
+        <option value="en_tramite">En trámite</option>
+        <option value="vigente">Vigente</option>
+        <option value="vencido">Vencido</option>
+      </select>
+      <button class="btn btn-primary" onclick="docObraNuevo()">+ Nuevo documento</button>
+    </div>
+  </div>
+  <div class="info-box" style="background:#1a2a1a;border:1px solid #2d4a2d;padding:10px 16px;border-radius:8px;margin-bottom:16px;font-size:13px;color:#aaa">
+    📌 Documentos obligatorios en obra según RD 1627/1997: PSS, ESS/EBSS, Aviso Previo, Apertura Centro de Trabajo, Libro de Incidencias, Libro de Subcontratación, Plan de Emergencia, Evaluación de Riesgos, Seguro RC.
+  </div>
+  <div class="table-container">
+    <table class="data-table">
+      <thead><tr><th>Tipo</th><th>Título</th><th>Estado</th><th>Emisión</th><th>Caducidad</th><th>Elaborado por</th><th>Aprobado por</th><th>Acciones</th></tr></thead>
+      <tbody id="docObraTbody"><tr><td colspan="8" class="loading">Cargando...</td></tr></tbody>
+    </table>
+  </div>
+</div>
+
+<div id="docObraModal" class="modal" style="display:none">
+  <div class="modal-content" style="max-width:560px">
+    <div class="modal-header"><h3>Documento de Obra</h3><span class="modal-close" onclick="document.getElementById('docObraModal').style.display='none'">✕</span></div>
+    <div class="modal-body">
+      <div class="form-group"><label>Tipo de documento *</label><select id="docObraTipo">
+        <option value="pss">PSS — Plan de Seguridad y Salud</option>
+        <option value="ess">ESS — Estudio de Seguridad y Salud</option>
+        <option value="ebss">EBSS — Estudio Básico de Seguridad</option>
+        <option value="aviso_previo">Aviso Previo (autoridad laboral)</option>
+        <option value="apertura_centro">Apertura de Centro de Trabajo</option>
+        <option value="libro_incidencias">Libro de Incidencias</option>
+        <option value="libro_subcontratacion">Libro de Subcontratación</option>
+        <option value="plan_emergencia">Plan de Emergencia</option>
+        <option value="evaluacion_riesgos">Evaluación de Riesgos</option>
+        <option value="coordinacion_actividades">Coordinación Act. Empresariales</option>
+        <option value="seguro_rc">Seguro de Responsabilidad Civil</option>
+        <option value="otro">Otro</option>
+      </select></div>
+      <div class="form-group"><label>Título / descripción *</label><input id="docObraTitulo" type="text" placeholder="Descripción específica del documento"></div>
+      <div class="form-row">
+        <div class="form-group"><label>Estado</label><select id="docObraEstado">
+          <option value="pendiente">🔴 Pendiente</option>
+          <option value="en_tramite">🟡 En trámite</option>
+          <option value="vigente">🟢 Vigente</option>
+          <option value="vencido">⚫ Vencido</option>
+          <option value="no_aplica">⚪ No aplica</option>
+        </select></div>
+        <div class="form-group"><label>Obra</label><select id="docObraObraId"><option value="">Sin asignar</option></select></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>Fecha emisión</label><input id="docObraFechaE" type="date"></div>
+        <div class="form-group"><label>Fecha caducidad</label><input id="docObraFechaCad" type="date"></div>
+      </div>
+      <div class="form-group"><label>Elaborado por</label><input id="docObraElaborado" type="text" placeholder="Técnico / empresa redactora"></div>
+      <div class="form-group"><label>Aprobado por (CSS / dirección facultativa)</label><input id="docObraAprobado" type="text"></div>
+      <div class="form-group"><label>Notas</label><input id="docObraNotas" type="text"></div>
+      <input type="hidden" id="docObraEditId">
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="document.getElementById('docObraModal').style.display='none'">Cancelar</button>
+      <button class="btn btn-primary" onclick="docObraGuardar()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     PERMISOS DE TRABAJO (PTR)
+     ═══════════════════════════════════════════════════════════ -->
+<div id="pagePermisosTrabajo" class="page" style="display:none">
+  <div class="page-header">
+    <h2>📝 Permisos de Trabajo</h2>
+    <div class="header-actions">
+      <select id="ptFiltroTipo" onchange="ptCargar()" class="filter-select">
+        <option value="">Todos los tipos</option>
+        <option value="altura">Altura</option>
+        <option value="electrico">Eléctrico</option>
+        <option value="espacio_confinado">Espacio confinado</option>
+        <option value="excavacion">Excavación</option>
+        <option value="soldadura">Soldadura</option>
+        <option value="otro">Otro</option>
+      </select>
+      <select id="ptFiltroEstado" onchange="ptCargar()" class="filter-select">
+        <option value="">Todos</option>
+        <option value="activo">Activos</option>
+        <option value="completado">Completados</option>
+        <option value="cancelado">Cancelados</option>
+      </select>
+      <button class="btn btn-primary" onclick="ptNuevo()">+ Emitir permiso</button>
+      <button class="btn" onclick="ptExportar()">⬇ CSV</button>
+    </div>
+  </div>
+  <div class="table-container">
+    <table class="data-table">
+      <thead><tr><th>Tipo</th><th>Descripción</th><th>Ubicación</th><th>Fecha inicio</th><th>Fecha fin</th><th>Autorizado por</th><th>Estado</th><th>Acciones</th></tr></thead>
+      <tbody id="ptTbody"><tr><td colspan="8" class="loading">Cargando...</td></tr></tbody>
+    </table>
+  </div>
+</div>
+
+<div id="ptModal" class="modal" style="display:none">
+  <div class="modal-content" style="max-width:600px">
+    <div class="modal-header"><h3>Permiso de Trabajo</h3><span class="modal-close" onclick="document.getElementById('ptModal').style.display='none'">✕</span></div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-group"><label>Tipo *</label><select id="ptTipo">
+          <option value="altura">🏔️ Trabajo en altura (RD 2177/2004)</option>
+          <option value="electrico">⚡ Riesgo eléctrico (RD 614/2001)</option>
+          <option value="espacio_confinado">🕳️ Espacio confinado</option>
+          <option value="excavacion">⛏️ Excavación / zanja</option>
+          <option value="soldadura">🔥 Soldadura / oxicorte</option>
+          <option value="demolicion">🏗️ Demolición</option>
+          <option value="otro">📝 Otro</option>
+        </select></div>
+        <div class="form-group"><label>Estado</label><select id="ptEstado">
+          <option value="activo">Activo</option>
+          <option value="completado">Completado</option>
+          <option value="cancelado">Cancelado</option>
+        </select></div>
+      </div>
+      <div class="form-group"><label>Descripción del trabajo *</label><textarea id="ptDesc" rows="2" placeholder="Qué se hace, metodología, alcance"></textarea></div>
+      <div class="form-row">
+        <div class="form-group"><label>Ubicación</label><input id="ptUbic" type="text" placeholder="Zona / planta / referencia"></div>
+        <div class="form-group"><label>Turno</label><select id="ptTurno"><option value="">Sin especificar</option><option value="manana">Mañana</option><option value="tarde">Tarde</option><option value="noche">Noche</option></select></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>Fecha inicio *</label><input id="ptFechaI" type="date"></div>
+        <div class="form-group"><label>Fecha fin</label><input id="ptFechaF" type="date"></div>
+      </div>
+      <div class="form-group"><label>Riesgos identificados</label><textarea id="ptRiesgos" rows="2" placeholder="Caída de altura, contacto eléctrico, aplastamiento..."></textarea></div>
+      <div class="form-group"><label>Medidas preventivas</label><textarea id="ptMedidas" rows="2" placeholder="Arnés homologado, seccionamiento, bloqueo LOTO..."></textarea></div>
+      <div class="form-group"><label>EPIs requeridos</label><input id="ptEpis" type="text" placeholder="Arnés EN 361, casco clase E, guantes dieléctricos clase 00..."></div>
+      <div class="form-group"><label>Autorizado por (encargado / CSS)</label><input id="ptAutoriza" type="text"></div>
+      <div class="form-group"><label>Notas</label><input id="ptNotas" type="text"></div>
+      <input type="hidden" id="ptEditId">
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="document.getElementById('ptModal').style.display='none'">Cancelar</button>
+      <button class="btn btn-primary" onclick="ptGuardar()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     INSPECCIONES DE SEGURIDAD
+     ═══════════════════════════════════════════════════════════ -->
+<div id="pageInspecciones" class="page" style="display:none">
+  <div class="page-header">
+    <h2>🔍 Inspecciones de Seguridad</h2>
+    <div class="header-actions">
+      <select id="inspFiltroEstado" onchange="inspCargar()" class="filter-select">
+        <option value="">Todas</option>
+        <option value="abierta">Abiertas</option>
+        <option value="cerrada">Cerradas</option>
+      </select>
+      <button class="btn btn-primary" onclick="inspNuevo()">+ Nueva inspección</button>
+      <button class="btn" onclick="inspExportar()">⬇ CSV</button>
+    </div>
+  </div>
+  <div class="table-container">
+    <table class="data-table">
+      <thead><tr><th>Tipo</th><th>Inspector</th><th>Fecha</th><th>NC</th><th>Puntuación</th><th>Estado</th><th>Próxima</th><th>Acciones</th></tr></thead>
+      <tbody id="inspTbody"><tr><td colspan="8" class="loading">Cargando...</td></tr></tbody>
+    </table>
+  </div>
+</div>
+
+<div id="inspModal" class="modal" style="display:none">
+  <div class="modal-content" style="max-width:580px">
+    <div class="modal-header"><h3 id="inspModalTitulo">Inspección de Seguridad</h3><span class="modal-close" onclick="inspCerrarModal()">✕</span></div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-group"><label>Tipo</label><select id="inspTipo">
+          <option value="periodica">Periódica</option>
+          <option value="inicial">Inicial (inicio de obra)</option>
+          <option value="extraordinaria">Extraordinaria (tras incidente)</option>
+          <option value="auditoria">Auditoría interna</option>
+        </select></div>
+        <div class="form-group"><label>Estado</label><select id="inspEstado">
+          <option value="abierta">Abierta</option>
+          <option value="cerrada">Cerrada</option>
+        </select></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>Inspector *</label><input id="inspInspector" type="text"></div>
+        <div class="form-group"><label>Fecha *</label><input id="inspFecha" type="date"></div>
+      </div>
+      <div class="form-group"><label>Áreas inspeccionadas (separadas por coma)</label><input id="inspAreas" type="text" placeholder="Zona A, andamios, cuadros eléctricos, vestuarios..."></div>
+      <div class="form-group"><label>Hallazgos (una línea por hallazgo)</label><textarea id="inspHallazgos" rows="4" placeholder="Cable pelado en cuadro zona B&#10;Andamio sin barandilla en planta 2&#10;EPI caducado en taquilla 7"></textarea></div>
+      <div class="form-row">
+        <div class="form-group"><label>Puntuación (0-100)</label><input id="inspPunt" type="number" min="0" max="100" placeholder="Ej: 85"></div>
+        <div class="form-group"><label>Próxima inspección</label><input id="inspProxima" type="date"></div>
+      </div>
+      <div class="form-group"><label>Fecha de cierre</label><input id="inspFechaCierre" type="date"></div>
+      <div class="form-group"><label>Notas</label><input id="inspNotas" type="text"></div>
+      <input type="hidden" id="inspEditId">
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="inspCerrarModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="inspGuardar()">Guardar</button>
+    </div>
+  </div>
+</div>
 
       <!-- BOBINAS -->
       <div class="page" id="pageBobinas">
@@ -2054,7 +2349,11 @@ const PAGE_TITLES = {
   pemp: 'PEMP', carretillas: 'Carretillas', repostajes: 'Repostajes', herramientas: 'Herramientas',
   seguridad: 'Seguridad', obras: 'Obras', incidencias: 'Incidencias',
   pedidos: 'Pedidos', mantenimientos: 'Mantenimientos', usuarios: 'Usuarios',
-  empresa: 'Mi Empresa', logs: 'Logs', devtools: '🛠️ DevTools'
+  empresa: 'Mi Empresa', logs: 'Logs', devtools: '🛠️ DevTools',
+  reconocimientos: '🏥 Reconocimientos Médicos',
+  documentosObra: '📋 Documentos de Obra',
+  permisosTrabajo: '📝 Permisos de Trabajo',
+  inspecciones: '🔍 Inspecciones de Seguridad',
 };
 
 const PAGE_LOADERS = {
@@ -2081,6 +2380,10 @@ const PAGE_LOADERS = {
   devtools: cargarDevtools,
   graficas: cargarGraficas,
   privacidad: cargarPrivacidad,
+  reconocimientos: recCargar,
+  documentosObra: docObraCargar,
+  permisosTrabajo: ptCargar,
+  inspecciones: inspCargar,
 };
 
 let currentPage = '';
@@ -2655,6 +2958,424 @@ function filtrarCarnets() {
   if (val === 'vigente')  tblCarnets.setFilter('diasRestantes', '>=', 30);
   if (val === 'proximo')  tblCarnets.setFilter([{field:'diasRestantes',type:'>=',value:0},{field:'diasRestantes',type:'<',value:30}]);
   if (val === 'caducado') tblCarnets.setFilter('diasRestantes', '<', 0);
+}
+
+// ══════════════════════════════════════════════════
+// RECONOCIMIENTOS MÉDICOS
+// ══════════════════════════════════════════════════
+async function recCargar() {
+  const resultado = document.getElementById('recFiltroRes')?.value || '';
+  const obra_id   = document.getElementById('recFiltroObraId')?.value || '';
+  const params = new URLSearchParams({ ...(resultado && {resultado}), ...(obra_id && {obra_id}) });
+  try {
+    const r = await fetch(`${API}/reconocimientos-medicos?${params}`, { headers: { 'X-Token': TOKEN } });
+    const d = await r.json();
+    const tbody = document.getElementById('recTbody');
+    if (!tbody) return;
+    const hoy = new Date().toISOString().split('T')[0];
+    const en30 = new Date(Date.now()+30*86400000).toISOString().split('T')[0];
+    const caducados = (d.items||[]).filter(i => i.fecha_caducidad < hoy);
+    const proximos  = (d.items||[]).filter(i => i.fecha_caducidad >= hoy && i.fecha_caducidad <= en30);
+    const alertaEl = document.getElementById('recAlertasCaducidad');
+    if (alertaEl) {
+      if (caducados.length || proximos.length) {
+        alertaEl.style.display = 'block';
+        alertaEl.innerHTML = `⚠️ ${caducados.length} reconocimiento(s) caducado(s) · ${proximos.length} próximo(s) a vencer`;
+        alertaEl.style.cssText = 'display:block;background:#3a1a1a;border:1px solid #a03030;padding:8px 16px;border-radius:6px;margin-bottom:12px;color:#ff9090;font-size:13px';
+      } else { alertaEl.style.display = 'none'; }
+    }
+    tbody.innerHTML = (d.items||[]).map(i => {
+      const badge = i.fecha_caducidad < hoy ? '<span style="color:#f66">🔴 Caducado</span>'
+                  : i.fecha_caducidad <= en30 ? '<span style="color:#fa0">🟡 Próximo</span>'
+                  : '<span style="color:#6f6">🟢 Vigente</span>';
+      const resBadge = i.resultado === 'apto' ? '✅ Apto' : i.resultado === 'apto_con_restricciones' ? '⚠️ Restricciones' : '❌ No apto';
+      return `<tr>
+        <td>${i.nombre_trabajador}</td>
+        <td>${i.tipo}</td>
+        <td>${resBadge}</td>
+        <td>${i.restricciones || '—'}</td>
+        <td>${i.fecha_realizacion}</td>
+        <td>${i.fecha_caducidad}</td>
+        <td>${badge}</td>
+        <td>${i.centro_medico || '—'}</td>
+        <td>
+          <button class="btn btn-sm" onclick="recEditar(${i.id})">✏️</button>
+          <button class="btn btn-sm btn-danger" onclick="recEliminar(${i.id})">🗑</button>
+        </td>
+      </tr>`;
+    }).join('') || '<tr><td colspan="9" class="empty">Sin reconocimientos registrados</td></tr>';
+  } catch(e) { console.error(e); }
+}
+
+function recNuevo() {
+  document.getElementById('recEditId').value = '';
+  document.getElementById('recModalTitulo').textContent = 'Nuevo Reconocimiento Médico';
+  document.getElementById('recNombre').value = '';
+  document.getElementById('recTipo').value = 'anual';
+  document.getElementById('recResultado').value = 'apto';
+  document.getElementById('recRestricciones').value = '';
+  const hoy = new Date();
+  document.getElementById('recFechaRe').value = hoy.toISOString().split('T')[0];
+  hoy.setFullYear(hoy.getFullYear()+1);
+  document.getElementById('recFechaCad').value = hoy.toISOString().split('T')[0];
+  document.getElementById('recCentro').value = '';
+  document.getElementById('recMedico').value = '';
+  document.getElementById('recNotas').value = '';
+  document.getElementById('recModal').style.display = 'flex';
+}
+
+async function recEditar(id) {
+  try {
+    const r = await fetch(`${API}/reconocimientos-medicos`, { headers: { 'X-Token': TOKEN } });
+    const d = await r.json();
+    const item = (d.items||[]).find(i => i.id === id);
+    if (!item) return;
+    document.getElementById('recEditId').value = id;
+    document.getElementById('recModalTitulo').textContent = 'Editar Reconocimiento';
+    document.getElementById('recNombre').value = item.nombre_trabajador;
+    document.getElementById('recTipo').value = item.tipo;
+    document.getElementById('recResultado').value = item.resultado;
+    document.getElementById('recRestricciones').value = item.restricciones || '';
+    document.getElementById('recFechaRe').value = item.fecha_realizacion;
+    document.getElementById('recFechaCad').value = item.fecha_caducidad;
+    document.getElementById('recCentro').value = item.centro_medico || '';
+    document.getElementById('recMedico').value = item.medico_responsable || '';
+    document.getElementById('recNotas').value = item.notas || '';
+    document.getElementById('recModal').style.display = 'flex';
+  } catch(e) {}
+}
+
+async function recGuardar() {
+  const nombre = document.getElementById('recNombre').value.trim();
+  const fechaRe  = document.getElementById('recFechaRe').value;
+  const fechaCad = document.getElementById('recFechaCad').value;
+  if (!nombre || !fechaRe || !fechaCad) return alert('Rellena los campos obligatorios');
+  const id = document.getElementById('recEditId').value;
+  const body = { nombre_trabajador: nombre, tipo: document.getElementById('recTipo').value,
+    resultado: document.getElementById('recResultado').value, restricciones: document.getElementById('recRestricciones').value,
+    fecha_realizacion: fechaRe, fecha_caducidad: fechaCad, centro_medico: document.getElementById('recCentro').value,
+    medico_responsable: document.getElementById('recMedico').value, notas: document.getElementById('recNotas').value };
+  try {
+    const url = id ? `${API}/reconocimientos-medicos/${id}` : `${API}/reconocimientos-medicos`;
+    const r = await fetch(url, { method: id ? 'PUT' : 'POST', headers: { 'X-Token': TOKEN, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const data = await r.json();
+    if (data.ok) { recCerrarModal(); recCargar(); typeof mostrarToast === 'function' && mostrarToast(id ? 'Actualizado' : 'Registrado', 'ok'); }
+    else alert('Error: ' + (data.error||'desconocido'));
+  } catch(e) { alert('Error de red'); }
+}
+
+function recCerrarModal() { document.getElementById('recModal').style.display = 'none'; }
+
+async function recEliminar(id) {
+  if (!confirm('¿Eliminar este reconocimiento médico?')) return;
+  await fetch(`${API}/reconocimientos-medicos/${id}`, { method: 'DELETE', headers: { 'X-Token': TOKEN } });
+  recCargar();
+}
+
+function recExportar() {
+  const tbody = document.getElementById('recTbody');
+  if (!tbody) return;
+  const rows = [...tbody.querySelectorAll('tr')].map(r => [...r.querySelectorAll('td')].map(td => td.textContent.trim()).join(';'));
+  const csv = 'Trabajador;Tipo;Resultado;Restricciones;Fecha realización;Caduca;Estado;Centro médico\n' + rows.join('\n');
+  const a = document.createElement('a'); a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+  a.download = 'reconocimientos.csv'; a.click();
+}
+
+// ══════════════════════════════════════════════════
+// DOCUMENTOS DE OBRA
+// ══════════════════════════════════════════════════
+async function docObraCargar() {
+  const obra_id = document.getElementById('docObraFiltroId')?.value || '';
+  const estado  = document.getElementById('docObraFiltroEstado')?.value || '';
+  const params  = new URLSearchParams({ ...(obra_id && {obra_id}), ...(estado && {estado}) });
+  try {
+    const r = await fetch(`${API}/documentos-obra?${params}`, { headers: { 'X-Token': TOKEN } });
+    const d = await r.json();
+    const tbody = document.getElementById('docObraTbody');
+    if (!tbody) return;
+    const estadoBadge = { pendiente:'🔴 Pendiente', en_tramite:'🟡 En trámite', vigente:'🟢 Vigente', vencido:'⚫ Vencido', no_aplica:'⚪ N/A' };
+    const tipoLabel = { pss:'PSS', ess:'ESS', ebss:'EBSS', aviso_previo:'Aviso Previo', apertura_centro:'Apertura Centro',
+      libro_incidencias:'Libro Incid.', libro_subcontratacion:'Libro Subcont.', plan_emergencia:'Plan Emerg.',
+      evaluacion_riesgos:'Eval. Riesgos', coordinacion_actividades:'Coord. Act.', seguro_rc:'Seguro RC', otro:'Otro' };
+    tbody.innerHTML = (d.items||[]).map(i =>
+      `<tr>
+        <td><strong>${tipoLabel[i.tipo]||i.tipo}</strong></td>
+        <td>${i.titulo}</td>
+        <td>${estadoBadge[i.estado]||i.estado}</td>
+        <td>${i.fecha_emision||'—'}</td>
+        <td>${i.fecha_caducidad||'—'}</td>
+        <td>${i.elaborado_por||'—'}</td>
+        <td>${i.aprobado_por||'—'}</td>
+        <td>
+          <button class="btn btn-sm" onclick="docObraEditar(${i.id})">✏️</button>
+          <button class="btn btn-sm btn-danger" onclick="docObraEliminar(${i.id})">🗑</button>
+        </td>
+      </tr>`
+    ).join('') || '<tr><td colspan="8" class="empty">Sin documentos registrados</td></tr>';
+  } catch(e) { console.error(e); }
+}
+
+function docObraNuevo() {
+  document.getElementById('docObraEditId').value = '';
+  ['docObraTitulo','docObraFechaE','docObraFechaCad','docObraElaborado','docObraAprobado','docObraNotas'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('docObraTipo').value = 'pss';
+  document.getElementById('docObraEstado').value = 'pendiente';
+  document.getElementById('docObraModal').style.display = 'flex';
+}
+
+async function docObraEditar(id) {
+  try {
+    const r = await fetch(`${API}/documentos-obra`, { headers: { 'X-Token': TOKEN } });
+    const d = await r.json();
+    const item = (d.items||[]).find(i => i.id === id);
+    if (!item) return;
+    document.getElementById('docObraEditId').value = id;
+    document.getElementById('docObraTipo').value = item.tipo;
+    document.getElementById('docObraTitulo').value = item.titulo;
+    document.getElementById('docObraEstado').value = item.estado;
+    document.getElementById('docObraFechaE').value = item.fecha_emision || '';
+    document.getElementById('docObraFechaCad').value = item.fecha_caducidad || '';
+    document.getElementById('docObraElaborado').value = item.elaborado_por || '';
+    document.getElementById('docObraAprobado').value = item.aprobado_por || '';
+    document.getElementById('docObraNotas').value = item.notas || '';
+    document.getElementById('docObraModal').style.display = 'flex';
+  } catch(e) {}
+}
+
+async function docObraGuardar() {
+  const titulo = document.getElementById('docObraTitulo').value.trim();
+  if (!titulo) return alert('El título es obligatorio');
+  const id = document.getElementById('docObraEditId').value;
+  const obra_id = document.getElementById('docObraObraId')?.value || null;
+  const body = { tipo: document.getElementById('docObraTipo').value, titulo,
+    estado: document.getElementById('docObraEstado').value,
+    fecha_emision: document.getElementById('docObraFechaE').value || null,
+    fecha_caducidad: document.getElementById('docObraFechaCad').value || null,
+    elaborado_por: document.getElementById('docObraElaborado').value || null,
+    aprobado_por: document.getElementById('docObraAprobado').value || null,
+    notas: document.getElementById('docObraNotas').value || null,
+    ...(obra_id && { obra_id }) };
+  const r = await fetch(id ? `${API}/documentos-obra/${id}` : `${API}/documentos-obra`,
+    { method: id ? 'PUT' : 'POST', headers: { 'X-Token': TOKEN, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const data = await r.json();
+  if (data.ok) { document.getElementById('docObraModal').style.display = 'none'; docObraCargar(); }
+  else alert('Error: ' + (data.error||''));
+}
+
+async function docObraEliminar(id) {
+  if (!confirm('¿Eliminar este documento?')) return;
+  await fetch(`${API}/documentos-obra/${id}`, { method: 'DELETE', headers: { 'X-Token': TOKEN } });
+  docObraCargar();
+}
+
+// ══════════════════════════════════════════════════
+// PERMISOS DE TRABAJO
+// ══════════════════════════════════════════════════
+async function ptCargar() {
+  const tipo   = document.getElementById('ptFiltroTipo')?.value || '';
+  const estado = document.getElementById('ptFiltroEstado')?.value || '';
+  const params = new URLSearchParams({ ...(tipo && {tipo}), ...(estado && {estado}) });
+  try {
+    const r = await fetch(`${API}/permisos-trabajo?${params}`, { headers: { 'X-Token': TOKEN } });
+    const d = await r.json();
+    const tbody = document.getElementById('ptTbody');
+    if (!tbody) return;
+    const tipoBadge = { altura:'🏔️ Altura', electrico:'⚡ Eléctrico', espacio_confinado:'🕳️ Confinado', excavacion:'⛏️ Excavación', soldadura:'🔥 Soldadura', demolicion:'🏗️ Demolición', otro:'📝 Otro' };
+    const estadoColor = { activo:'🟢', completado:'⚫', cancelado:'🔴' };
+    tbody.innerHTML = (d.items||[]).map(i =>
+      `<tr>
+        <td>${tipoBadge[i.tipo]||i.tipo}</td>
+        <td title="${i.descripcion}">${(i.descripcion||'').substring(0,60)}${i.descripcion?.length>60?'…':''}</td>
+        <td>${i.ubicacion||'—'}</td>
+        <td>${i.fecha_inicio}</td>
+        <td>${i.fecha_fin||'—'}</td>
+        <td>${i.autorizado_por||'—'}</td>
+        <td>${estadoColor[i.estado]||''} ${i.estado}</td>
+        <td>
+          <button class="btn btn-sm" onclick="ptEditar(${i.id})">✏️</button>
+          <button class="btn btn-sm btn-danger" onclick="ptEliminar(${i.id})">🗑</button>
+        </td>
+      </tr>`
+    ).join('') || '<tr><td colspan="8" class="empty">Sin permisos registrados</td></tr>';
+  } catch(e) { console.error(e); }
+}
+
+function ptNuevo() {
+  document.getElementById('ptEditId').value = '';
+  ['ptDesc','ptUbic','ptRiesgos','ptMedidas','ptEpis','ptAutoriza','ptNotas'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('ptTipo').value = 'altura';
+  document.getElementById('ptEstado').value = 'activo';
+  document.getElementById('ptTurno').value = '';
+  const hoy = new Date().toISOString().split('T')[0];
+  document.getElementById('ptFechaI').value = hoy;
+  document.getElementById('ptFechaF').value = '';
+  document.getElementById('ptModal').style.display = 'flex';
+}
+
+async function ptEditar(id) {
+  try {
+    const r = await fetch(`${API}/permisos-trabajo`, { headers: { 'X-Token': TOKEN } });
+    const d = await r.json();
+    const item = (d.items||[]).find(i => i.id === id);
+    if (!item) return;
+    document.getElementById('ptEditId').value = id;
+    document.getElementById('ptTipo').value = item.tipo;
+    document.getElementById('ptEstado').value = item.estado;
+    document.getElementById('ptDesc').value = item.descripcion || '';
+    document.getElementById('ptUbic').value = item.ubicacion || '';
+    document.getElementById('ptFechaI').value = item.fecha_inicio;
+    document.getElementById('ptFechaF').value = item.fecha_fin || '';
+    document.getElementById('ptTurno').value = item.turno || '';
+    document.getElementById('ptRiesgos').value = item.riesgos || '';
+    document.getElementById('ptMedidas').value = item.medidas_preventivas || '';
+    document.getElementById('ptEpis').value = item.epis_requeridos || '';
+    document.getElementById('ptAutoriza').value = item.autorizado_por || '';
+    document.getElementById('ptNotas').value = item.notas || '';
+    document.getElementById('ptModal').style.display = 'flex';
+  } catch(e) {}
+}
+
+async function ptGuardar() {
+  const desc  = document.getElementById('ptDesc').value.trim();
+  const fecha = document.getElementById('ptFechaI').value;
+  if (!desc || !fecha) return alert('Descripción y fecha de inicio son obligatorias');
+  const id = document.getElementById('ptEditId').value;
+  const body = { tipo: document.getElementById('ptTipo').value, descripcion: desc,
+    ubicacion: document.getElementById('ptUbic').value || null,
+    fecha_inicio: fecha, fecha_fin: document.getElementById('ptFechaF').value || null,
+    turno: document.getElementById('ptTurno').value || null,
+    riesgos: document.getElementById('ptRiesgos').value || null,
+    medidas_preventivas: document.getElementById('ptMedidas').value || null,
+    epis_requeridos: document.getElementById('ptEpis').value || null,
+    autorizado_por: document.getElementById('ptAutoriza').value || null,
+    estado: document.getElementById('ptEstado').value,
+    notas: document.getElementById('ptNotas').value || null };
+  const r = await fetch(id ? `${API}/permisos-trabajo/${id}` : `${API}/permisos-trabajo`,
+    { method: id ? 'PUT' : 'POST', headers: { 'X-Token': TOKEN, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const data = await r.json();
+  if (data.ok) { document.getElementById('ptModal').style.display = 'none'; ptCargar(); }
+  else alert('Error: ' + (data.error||''));
+}
+
+async function ptEliminar(id) {
+  if (!confirm('¿Eliminar este permiso de trabajo?')) return;
+  await fetch(`${API}/permisos-trabajo/${id}`, { method: 'DELETE', headers: { 'X-Token': TOKEN } });
+  ptCargar();
+}
+
+function ptExportar() {
+  const tbody = document.getElementById('ptTbody');
+  if (!tbody) return;
+  const rows = [...tbody.querySelectorAll('tr')].map(r => [...r.querySelectorAll('td')].slice(0,7).map(td => `"${td.textContent.trim()}"`).join(';'));
+  const csv = 'Tipo;Descripcion;Ubicacion;Inicio;Fin;Autorizado por;Estado\n' + rows.join('\n');
+  const a = document.createElement('a'); a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+  a.download = 'permisos_trabajo.csv'; a.click();
+}
+
+// ══════════════════════════════════════════════════
+// INSPECCIONES DE SEGURIDAD
+// ══════════════════════════════════════════════════
+async function inspCargar() {
+  const estado = document.getElementById('inspFiltroEstado')?.value || '';
+  const params = new URLSearchParams(estado ? { estado } : {});
+  try {
+    const r = await fetch(`${API}/inspecciones-seg?${params}`, { headers: { 'X-Token': TOKEN } });
+    const d = await r.json();
+    const tbody = document.getElementById('inspTbody');
+    if (!tbody) return;
+    tbody.innerHTML = (d.items||[]).map(i => {
+      const punt = i.puntuacion != null ? `<span style="color:${i.puntuacion>=80?'#6f6':i.puntuacion>=60?'#fa0':'#f66'}">${i.puntuacion}/100</span>` : '—';
+      const nc = i.no_conformidades > 0 ? `<span style="color:#f66;font-weight:700">${i.no_conformidades}</span>` : '0';
+      return `<tr>
+        <td>${i.tipo}</td>
+        <td>${i.inspector}</td>
+        <td>${i.fecha}</td>
+        <td>${nc}</td>
+        <td>${punt}</td>
+        <td>${i.estado === 'cerrada' ? '⚫ Cerrada' : '🟢 Abierta'}</td>
+        <td>${i.proxima_inspeccion||'—'}</td>
+        <td>
+          <button class="btn btn-sm" onclick="inspEditar(${i.id})">✏️</button>
+          <button class="btn btn-sm btn-danger" onclick="inspEliminar(${i.id})">🗑</button>
+        </td>
+      </tr>`;
+    }).join('') || '<tr><td colspan="8" class="empty">Sin inspecciones registradas</td></tr>';
+  } catch(e) { console.error(e); }
+}
+
+function inspNuevo() {
+  document.getElementById('inspEditId').value = '';
+  document.getElementById('inspModalTitulo').textContent = 'Nueva Inspección';
+  ['inspInspector','inspAreas','inspHallazgos','inspPunt','inspNotas','inspFechaCierre'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('inspTipo').value = 'periodica';
+  document.getElementById('inspEstado').value = 'abierta';
+  document.getElementById('inspFecha').value = new Date().toISOString().split('T')[0];
+  document.getElementById('inspProxima').value = '';
+  document.getElementById('inspModal').style.display = 'flex';
+}
+
+async function inspEditar(id) {
+  try {
+    const r = await fetch(`${API}/inspecciones-seg`, { headers: { 'X-Token': TOKEN } });
+    const d = await r.json();
+    const item = (d.items||[]).find(i => i.id === id);
+    if (!item) return;
+    document.getElementById('inspEditId').value = id;
+    document.getElementById('inspModalTitulo').textContent = 'Editar Inspección';
+    document.getElementById('inspTipo').value = item.tipo;
+    document.getElementById('inspEstado').value = item.estado;
+    document.getElementById('inspInspector').value = item.inspector;
+    document.getElementById('inspFecha').value = item.fecha;
+    const areas = (() => { try { return JSON.parse(item.areas_inspeccionadas||'[]'); } catch { return []; } })();
+    document.getElementById('inspAreas').value = areas.join(', ');
+    const hallazgos = (() => { try { return JSON.parse(item.hallazgos||'[]'); } catch { return []; } })();
+    document.getElementById('inspHallazgos').value = hallazgos.map(h => h.descripcion||h).join('\n');
+    document.getElementById('inspPunt').value = item.puntuacion || '';
+    document.getElementById('inspProxima').value = item.proxima_inspeccion || '';
+    document.getElementById('inspFechaCierre').value = item.fecha_cierre || '';
+    document.getElementById('inspNotas').value = item.notas || '';
+    document.getElementById('inspModal').style.display = 'flex';
+  } catch(e) {}
+}
+
+async function inspGuardar() {
+  const inspector = document.getElementById('inspInspector').value.trim();
+  const fecha     = document.getElementById('inspFecha').value;
+  if (!inspector || !fecha) return alert('Inspector y fecha son obligatorios');
+  const id = document.getElementById('inspEditId').value;
+  const hallazgosRaw = document.getElementById('inspHallazgos').value.trim();
+  const hallazgos = hallazgosRaw ? hallazgosRaw.split('\n').filter(Boolean).map(h => ({ descripcion: h.trim(), gravedad: 'media' })) : [];
+  const areasRaw = document.getElementById('inspAreas').value.trim();
+  const areas = areasRaw ? areasRaw.split(',').map(a => a.trim()).filter(Boolean) : [];
+  const body = { tipo: document.getElementById('inspTipo').value, inspector, fecha,
+    estado: document.getElementById('inspEstado').value,
+    areas_inspeccionadas: areas, hallazgos,
+    puntuacion: document.getElementById('inspPunt').value ? parseInt(document.getElementById('inspPunt').value) : null,
+    proxima_inspeccion: document.getElementById('inspProxima').value || null,
+    fecha_cierre: document.getElementById('inspFechaCierre').value || null,
+    notas: document.getElementById('inspNotas').value || null };
+  const r = await fetch(id ? `${API}/inspecciones-seg/${id}` : `${API}/inspecciones-seg`,
+    { method: id ? 'PUT' : 'POST', headers: { 'X-Token': TOKEN, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const data = await r.json();
+  if (data.ok) { inspCerrarModal(); inspCargar(); }
+  else alert('Error: ' + (data.error||''));
+}
+
+function inspCerrarModal() { document.getElementById('inspModal').style.display = 'none'; }
+
+async function inspEliminar(id) {
+  if (!confirm('¿Eliminar esta inspección?')) return;
+  await fetch(`${API}/inspecciones-seg/${id}`, { method: 'DELETE', headers: { 'X-Token': TOKEN } });
+  inspCargar();
+}
+
+function inspExportar() {
+  const tbody = document.getElementById('inspTbody');
+  if (!tbody) return;
+  const rows = [...tbody.querySelectorAll('tr')].map(r => [...r.querySelectorAll('td')].slice(0,7).map(td => `"${td.textContent.trim()}"`).join(';'));
+  const csv = 'Tipo;Inspector;Fecha;NC;Puntuacion;Estado;Proxima\n' + rows.join('\n');
+  const a = document.createElement('a'); a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+  a.download = 'inspecciones.csv'; a.click();
 }
 
 // ── BOBINAS ────────────────────────────────────────────────────

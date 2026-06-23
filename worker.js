@@ -2726,6 +2726,42 @@ async function nexusWatchers(env) {
     }
   } catch(e) { watcherErrors.push('Carnets: ' + e.message); }
 
+  // 4b. ReconocimientosWatcher — reconocimientos médicos que expiran en <30 días
+  try {
+    const expRec = await env.DB.prepare(
+      "SELECT nombre_trabajador, tipo, fecha_caducidad FROM reconocimientos_medicos WHERE fecha_caducidad BETWEEN date('now') AND date('now','+30 days') LIMIT 10"
+    ).all();
+    for (const r of (expRec.results || [])) {
+      alerts.push({ watcher: 'Reconocimientos', severity: 'MEDIUM', msg: `Reconocimiento médico por vencer: ${r.nombre_trabajador} — ${r.tipo} (caduca ${r.fecha_caducidad})` });
+    }
+    const vencidos = await env.DB.prepare(
+      "SELECT COUNT(*) as n FROM reconocimientos_medicos WHERE fecha_caducidad < date('now')"
+    ).first();
+    if (vencidos?.n > 0) {
+      alerts.push({ watcher: 'Reconocimientos', severity: 'HIGH', msg: `${vencidos.n} reconocimiento(s) médico(s) VENCIDO(S) — LPRL art. 22 incumplido` });
+    }
+  } catch(e) { watcherErrors.push('Reconocimientos: ' + e.message); }
+
+  // 4c. PermisosTrabajoWatcher — permisos de trabajo activos sin fecha fin o vencidos
+  try {
+    const ptVencidos = await env.DB.prepare(
+      "SELECT COUNT(*) as n FROM permisos_trabajo WHERE estado='activo' AND fecha_fin IS NOT NULL AND fecha_fin < date('now')"
+    ).first();
+    if (ptVencidos?.n > 0) {
+      alerts.push({ watcher: 'PermisosTrabajo', severity: 'HIGH', msg: `${ptVencidos.n} permiso(s) de trabajo activo(s) con fecha fin superada — revisar estado` });
+    }
+  } catch(e) { watcherErrors.push('PermisosTrabajo: ' + e.message); }
+
+  // 4d. InspeccionesWatcher — inspecciones abiertas con proxima_inspeccion vencida
+  try {
+    const inspVenc = await env.DB.prepare(
+      "SELECT COUNT(*) as n FROM inspecciones_seg WHERE estado='abierta' AND proxima_inspeccion IS NOT NULL AND proxima_inspeccion < date('now')"
+    ).first();
+    if (inspVenc?.n > 0) {
+      alerts.push({ watcher: 'Inspecciones', severity: 'MEDIUM', msg: `${inspVenc.n} inspección(es) de seguridad pendiente(s) — fecha superada sin cerrar` });
+    }
+  } catch(e) { watcherErrors.push('Inspecciones: ' + e.message); }
+
   // 5. FixesPendientesWatcher — fixes sin revisar >48h
   try {
     const stale = await env.DB.prepare(
@@ -4581,6 +4617,50 @@ export default {
         const cid = parseInt(path.split('/carnets/')[1]);
         if (method === 'PUT')    return await actualizarCarnet(cid, request, env, ctx);
         if (method === 'DELETE') return await eliminarCarnet(cid, request, env);
+      }
+
+      // ── Reconocimientos médicos (PRL) ────────────────────────────────────────
+      if (path === '/reconocimientos-medicos' && method === 'GET')  return await getReconocimientos(request, env);
+      if (path === '/reconocimientos-medicos' && method === 'POST') return await crearReconocimiento(request, env, ctx);
+      if (path.startsWith('/reconocimientos-medicos/')) {
+        const rmid = parseInt(path.split('/reconocimientos-medicos/')[1]);
+        if (method === 'PUT')    return await actualizarReconocimiento(rmid, request, env, ctx);
+        if (method === 'DELETE') return await eliminarReconocimiento(rmid, request, env);
+      }
+
+      // ── Documentos de obra (PRL — RD 1627/1997) ─────────────────────────────
+      if (path === '/documentos-obra' && method === 'GET')  return await getDocumentosObra(request, env);
+      if (path === '/documentos-obra' && method === 'POST') return await crearDocumentoObra(request, env);
+      if (path.startsWith('/documentos-obra/')) {
+        const doid = parseInt(path.split('/documentos-obra/')[1]);
+        if (method === 'PUT')    return await actualizarDocumentoObra(doid, request, env);
+        if (method === 'DELETE') return await eliminarDocumentoObra(doid, request, env);
+      }
+
+      // ── Permisos de trabajo (PTR) ────────────────────────────────────────────
+      if (path === '/permisos-trabajo' && method === 'GET')  return await getPermisosTrabajo(request, env);
+      if (path === '/permisos-trabajo' && method === 'POST') return await crearPermisoTrabajo(request, env);
+      if (path.startsWith('/permisos-trabajo/')) {
+        const ptid = parseInt(path.split('/permisos-trabajo/')[1]);
+        if (method === 'PUT')    return await actualizarPermisoTrabajo(ptid, request, env);
+        if (method === 'DELETE') return await eliminarPermisoTrabajo(ptid, request, env);
+      }
+
+      // ── Inspecciones de seguridad ────────────────────────────────────────────
+      if (path === '/inspecciones-seg' && method === 'GET')  return await getInspecciones(request, env);
+      if (path === '/inspecciones-seg' && method === 'POST') return await crearInspeccion(request, env);
+      if (path.startsWith('/inspecciones-seg/')) {
+        const insid = parseInt(path.split('/inspecciones-seg/')[1]);
+        if (method === 'PUT')    return await actualizarInspeccion(insid, request, env);
+        if (method === 'DELETE') return await eliminarInspeccion(insid, request, env);
+      }
+
+      // ── Revisiones de EPIs ───────────────────────────────────────────────────
+      if (path === '/epi-revisiones' && method === 'GET')  return await getEpiRevisiones(request, env);
+      if (path === '/epi-revisiones' && method === 'POST') return await crearEpiRevision(request, env);
+      if (path.startsWith('/epi-revisiones/') && method === 'DELETE') {
+        const erid = parseInt(path.split('/epi-revisiones/')[1]);
+        return await eliminarEpiRevision(erid, request, env);
       }
 
       // â"€â"€ Turnos (NEW-20) â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
@@ -7352,6 +7432,303 @@ async function eliminarCarnet(id, request, env) {
   if (!empresa_id) return err('No autorizado', 403);
   if (rol === 'operario') return err('Sin permisos', 403);
   await env.DB.prepare('DELETE FROM carnets WHERE id=? AND empresa_id=?').bind(id, empresa_id).run();
+  return json({ ok: true });
+}
+
+// ── Reconocimientos médicos (PRL — LPRL art. 22) ──────────────────────────────
+async function getReconocimientos(request, env) {
+  const { empresa_id, isSuperadmin, isEmpresaAdmin, isAdmin, obra_id: obraAuth } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const url = new URL(request.url);
+  const obra_id = url.searchParams.get('obra_id');
+  const resultado = url.searchParams.get('resultado');
+  const q = url.searchParams.get('q') || '';
+
+  let sql = `SELECT * FROM reconocimientos_medicos WHERE empresa_id=?`;
+  const binds = [empresa_id];
+  if (obraAuth && !isSuperadmin && !isEmpresaAdmin && !isAdmin) { sql += ` AND (obra_id=? OR obra_id IS NULL)`; binds.push(obraAuth); }
+  if (obra_id) { sql += ` AND obra_id=?`; binds.push(obra_id); }
+  if (resultado) { sql += ` AND resultado=?`; binds.push(resultado); }
+  if (q) { sql += ` AND nombre_trabajador LIKE ?`; binds.push(`%${q}%`); }
+  sql += ` ORDER BY fecha_caducidad ASC`;
+  const rows = await env.DB.prepare(sql).bind(...binds).all();
+  const hoy = new Date().toISOString().split('T')[0];
+  const items = (rows.results || []).map(r => ({
+    ...r,
+    estado_vigencia: r.fecha_caducidad < hoy ? 'caducado' : r.fecha_caducidad <= new Date(Date.now() + 30*86400000).toISOString().split('T')[0] ? 'proximo' : 'vigente'
+  }));
+  return json({ ok: true, items });
+}
+
+async function crearReconocimiento(request, env, ctx) {
+  const { empresa_id, nombre, rol, obra_id: obraAuth } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  if (rol === 'operario') return err('Sin permisos', 403);
+  const b = await request.json();
+  if (!b.nombre_trabajador) return err('Falta nombre_trabajador', 400);
+  if (!b.fecha_realizacion) return err('Falta fecha_realizacion', 400);
+  if (!b.fecha_caducidad)   return err('Falta fecha_caducidad', 400);
+  const r = await env.DB.prepare(
+    `INSERT INTO reconocimientos_medicos (empresa_id, obra_id, usuario_id, externo_id, nombre_trabajador, tipo, resultado, restricciones, fecha_realizacion, fecha_caducidad, dias_aviso, centro_medico, medico_responsable, notas, created_by)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+  ).bind(empresa_id, b.obra_id||obraAuth||null, b.usuario_id||null, b.externo_id||null, b.nombre_trabajador,
+    b.tipo||'anual', b.resultado||'apto', b.restricciones||null, b.fecha_realizacion, b.fecha_caducidad,
+    b.dias_aviso||30, b.centro_medico||null, b.medico_responsable||null, b.notas||null, nombre).run();
+  if (ctx) ctx.waitUntil(syncRRHH(env, 'Reconocimientos', empresa_id).catch(()=>{}));
+  return json({ ok: true, id: r.meta?.last_row_id });
+}
+
+async function actualizarReconocimiento(id, request, env, ctx) {
+  const { empresa_id, rol } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  if (rol === 'operario') return err('Sin permisos', 403);
+  const b = await request.json();
+  const campos = ['resultado','restricciones','fecha_realizacion','fecha_caducidad','dias_aviso','centro_medico','medico_responsable','notas','tipo'];
+  const sets = []; const vals = [];
+  for (const c of campos) { if (b[c] !== undefined) { sets.push(`${c}=?`); vals.push(b[c]); } }
+  if (!sets.length) return err('Sin campos', 400);
+  vals.push(id, empresa_id);
+  await env.DB.prepare(`UPDATE reconocimientos_medicos SET ${sets.join(',')} WHERE id=? AND empresa_id=?`).bind(...vals).run();
+  return json({ ok: true });
+}
+
+async function eliminarReconocimiento(id, request, env) {
+  const { empresa_id, rol } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  if (rol === 'operario') return err('Sin permisos', 403);
+  await env.DB.prepare(`DELETE FROM reconocimientos_medicos WHERE id=? AND empresa_id=?`).bind(id, empresa_id).run();
+  return json({ ok: true });
+}
+
+// ── Documentos de obra (PRL — RD 1627/1997) ───────────────────────────────────
+async function getDocumentosObra(request, env) {
+  const { empresa_id, isSuperadmin, isEmpresaAdmin, isAdmin, obra_id: obraAuth } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const url = new URL(request.url);
+  const obra_id = url.searchParams.get('obra_id');
+  const tipo = url.searchParams.get('tipo');
+  const estado = url.searchParams.get('estado');
+
+  let sql = `SELECT * FROM documentos_obra WHERE empresa_id=?`;
+  const binds = [empresa_id];
+  if (obraAuth && !isSuperadmin && !isEmpresaAdmin && !isAdmin) { sql += ` AND obra_id=?`; binds.push(obraAuth); }
+  if (obra_id) { sql += ` AND obra_id=?`; binds.push(obra_id); }
+  if (tipo)    { sql += ` AND tipo=?`; binds.push(tipo); }
+  if (estado)  { sql += ` AND estado=?`; binds.push(estado); }
+  sql += ` ORDER BY tipo ASC, created_at DESC`;
+  const rows = await env.DB.prepare(sql).bind(...binds).all();
+  return json({ ok: true, items: rows.results || [] });
+}
+
+async function crearDocumentoObra(request, env) {
+  const { empresa_id, nombre, rol, obra_id: obraAuth } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  if (rol === 'operario') return err('Sin permisos', 403);
+  const b = await request.json();
+  if (!b.tipo)    return err('Falta tipo', 400);
+  if (!b.titulo)  return err('Falta titulo', 400);
+  if (!b.obra_id && !obraAuth) return err('Falta obra_id', 400);
+  const r = await env.DB.prepare(
+    `INSERT INTO documentos_obra (empresa_id, obra_id, tipo, titulo, estado, fecha_emision, fecha_caducidad, elaborado_por, aprobado_por, r2_key, notas, created_by)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`
+  ).bind(empresa_id, b.obra_id||obraAuth, b.tipo, b.titulo, b.estado||'pendiente',
+    b.fecha_emision||null, b.fecha_caducidad||null, b.elaborado_por||null, b.aprobado_por||null,
+    b.r2_key||null, b.notas||null, nombre).run();
+  return json({ ok: true, id: r.meta?.last_row_id });
+}
+
+async function actualizarDocumentoObra(id, request, env) {
+  const { empresa_id, rol } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  if (rol === 'operario') return err('Sin permisos', 403);
+  const b = await request.json();
+  const campos = ['titulo','estado','fecha_emision','fecha_caducidad','elaborado_por','aprobado_por','r2_key','notas'];
+  const sets = []; const vals = [];
+  for (const c of campos) { if (b[c] !== undefined) { sets.push(`${c}=?`); vals.push(b[c]); } }
+  if (!sets.length) return err('Sin campos', 400);
+  vals.push(id, empresa_id);
+  await env.DB.prepare(`UPDATE documentos_obra SET ${sets.join(',')} WHERE id=? AND empresa_id=?`).bind(...vals).run();
+  return json({ ok: true });
+}
+
+async function eliminarDocumentoObra(id, request, env) {
+  const { empresa_id, rol } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  if (rol === 'operario') return err('Sin permisos', 403);
+  await env.DB.prepare(`DELETE FROM documentos_obra WHERE id=? AND empresa_id=?`).bind(id, empresa_id).run();
+  return json({ ok: true });
+}
+
+// ── Permisos de trabajo (PTR) ─────────────────────────────────────────────────
+async function getPermisosTrabajo(request, env) {
+  const { empresa_id, isSuperadmin, isEmpresaAdmin, isAdmin, obra_id: obraAuth } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const url = new URL(request.url);
+  const obra_id = url.searchParams.get('obra_id');
+  const tipo = url.searchParams.get('tipo');
+  const estado = url.searchParams.get('estado');
+
+  let sql = `SELECT * FROM permisos_trabajo WHERE empresa_id=?`;
+  const binds = [empresa_id];
+  if (obraAuth && !isSuperadmin && !isEmpresaAdmin && !isAdmin) { sql += ` AND obra_id=?`; binds.push(obraAuth); }
+  if (obra_id) { sql += ` AND obra_id=?`; binds.push(obra_id); }
+  if (tipo)    { sql += ` AND tipo=?`; binds.push(tipo); }
+  if (estado)  { sql += ` AND estado=?`; binds.push(estado); }
+  sql += ` ORDER BY fecha_inicio DESC`;
+  const rows = await env.DB.prepare(sql).bind(...binds).all();
+  return json({ ok: true, items: rows.results || [] });
+}
+
+async function crearPermisoTrabajo(request, env) {
+  const { empresa_id, nombre, rol, obra_id: obraAuth } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  if (rol === 'operario') return err('Sin permisos', 403);
+  const b = await request.json();
+  if (!b.tipo)        return err('Falta tipo de permiso', 400);
+  if (!b.descripcion) return err('Falta descripcion', 400);
+  if (!b.fecha_inicio) return err('Falta fecha_inicio', 400);
+  const r = await env.DB.prepare(
+    `INSERT INTO permisos_trabajo (empresa_id, obra_id, tipo, descripcion, ubicacion, fecha_inicio, fecha_fin, turno, trabajadores, riesgos, medidas_preventivas, epis_requeridos, estado, autorizado_por, notas, created_by)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+  ).bind(empresa_id, b.obra_id||obraAuth||null, b.tipo, b.descripcion, b.ubicacion||null,
+    b.fecha_inicio, b.fecha_fin||null, b.turno||null,
+    b.trabajadores ? JSON.stringify(b.trabajadores) : null,
+    b.riesgos||null, b.medidas_preventivas||null, b.epis_requeridos||null,
+    b.estado||'activo', b.autorizado_por||nombre, b.notas||null, nombre).run();
+  return json({ ok: true, id: r.meta?.last_row_id });
+}
+
+async function actualizarPermisoTrabajo(id, request, env) {
+  const { empresa_id, rol } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  if (rol === 'operario') return err('Sin permisos', 403);
+  const b = await request.json();
+  const campos = ['descripcion','ubicacion','fecha_inicio','fecha_fin','turno','riesgos','medidas_preventivas','epis_requeridos','estado','autorizado_por','notas'];
+  const sets = []; const vals = [];
+  for (const c of campos) { if (b[c] !== undefined) { sets.push(`${c}=?`); vals.push(b[c]); } }
+  if (b.trabajadores !== undefined) { sets.push(`trabajadores=?`); vals.push(JSON.stringify(b.trabajadores)); }
+  if (!sets.length) return err('Sin campos', 400);
+  vals.push(id, empresa_id);
+  await env.DB.prepare(`UPDATE permisos_trabajo SET ${sets.join(',')} WHERE id=? AND empresa_id=?`).bind(...vals).run();
+  return json({ ok: true });
+}
+
+async function eliminarPermisoTrabajo(id, request, env) {
+  const { empresa_id, rol } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  if (rol === 'operario') return err('Sin permisos', 403);
+  await env.DB.prepare(`DELETE FROM permisos_trabajo WHERE id=? AND empresa_id=?`).bind(id, empresa_id).run();
+  return json({ ok: true });
+}
+
+// ── Inspecciones de seguridad ──────────────────────────────────────────────────
+async function getInspecciones(request, env) {
+  const { empresa_id, isSuperadmin, isEmpresaAdmin, isAdmin, obra_id: obraAuth } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const url = new URL(request.url);
+  const obra_id = url.searchParams.get('obra_id');
+  const estado  = url.searchParams.get('estado');
+  const tipo    = url.searchParams.get('tipo');
+
+  let sql = `SELECT * FROM inspecciones_seg WHERE empresa_id=?`;
+  const binds = [empresa_id];
+  if (obraAuth && !isSuperadmin && !isEmpresaAdmin && !isAdmin) { sql += ` AND obra_id=?`; binds.push(obraAuth); }
+  if (obra_id) { sql += ` AND obra_id=?`; binds.push(obra_id); }
+  if (estado)  { sql += ` AND estado=?`; binds.push(estado); }
+  if (tipo)    { sql += ` AND tipo=?`; binds.push(tipo); }
+  sql += ` ORDER BY fecha DESC`;
+  const rows = await env.DB.prepare(sql).bind(...binds).all();
+  return json({ ok: true, items: rows.results || [] });
+}
+
+async function crearInspeccion(request, env) {
+  const { empresa_id, nombre, rol, obra_id: obraAuth } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  if (rol === 'operario') return err('Sin permisos', 403);
+  const b = await request.json();
+  if (!b.fecha)     return err('Falta fecha', 400);
+  if (!b.inspector) return err('Falta inspector', 400);
+  const hallazgos = b.hallazgos || [];
+  const noConf = hallazgos.filter(h => h.gravedad === 'alta' || h.gravedad === 'media').length;
+  const obsMen = hallazgos.filter(h => h.gravedad === 'baja').length;
+  const conf   = hallazgos.filter(h => !h.gravedad || h.gravedad === 'ok').length;
+  const r = await env.DB.prepare(
+    `INSERT INTO inspecciones_seg (empresa_id, obra_id, tipo, inspector, fecha, areas_inspeccionadas, hallazgos, conformidades, no_conformidades, obs_menores, puntuacion, estado, proxima_inspeccion, notas, created_by)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+  ).bind(empresa_id, b.obra_id||obraAuth||null, b.tipo||'periodica', b.inspector, b.fecha,
+    b.areas_inspeccionadas ? JSON.stringify(b.areas_inspeccionadas) : null,
+    JSON.stringify(hallazgos), conf, noConf, obsMen,
+    b.puntuacion||null, b.estado||'abierta', b.proxima_inspeccion||null,
+    b.notas||null, nombre).run();
+  return json({ ok: true, id: r.meta?.last_row_id });
+}
+
+async function actualizarInspeccion(id, request, env) {
+  const { empresa_id, rol } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  if (rol === 'operario') return err('Sin permisos', 403);
+  const b = await request.json();
+  const sets = []; const vals = [];
+  const campos = ['tipo','inspector','fecha','puntuacion','estado','fecha_cierre','proxima_inspeccion','r2_key','notas'];
+  for (const c of campos) { if (b[c] !== undefined) { sets.push(`${c}=?`); vals.push(b[c]); } }
+  if (b.hallazgos !== undefined) { sets.push(`hallazgos=?`); vals.push(JSON.stringify(b.hallazgos)); }
+  if (b.areas_inspeccionadas !== undefined) { sets.push(`areas_inspeccionadas=?`); vals.push(JSON.stringify(b.areas_inspeccionadas)); }
+  if (!sets.length) return err('Sin campos', 400);
+  vals.push(id, empresa_id);
+  await env.DB.prepare(`UPDATE inspecciones_seg SET ${sets.join(',')} WHERE id=? AND empresa_id=?`).bind(...vals).run();
+  return json({ ok: true });
+}
+
+async function eliminarInspeccion(id, request, env) {
+  const { empresa_id, rol } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  if (rol === 'operario') return err('Sin permisos', 403);
+  await env.DB.prepare(`DELETE FROM inspecciones_seg WHERE id=? AND empresa_id=?`).bind(id, empresa_id).run();
+  return json({ ok: true });
+}
+
+// ── Revisiones de EPIs ────────────────────────────────────────────────────────
+async function getEpiRevisiones(request, env) {
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const url = new URL(request.url);
+  const epi_id = url.searchParams.get('epi_asignado_id');
+  const inv_id = url.searchParams.get('inventario_id');
+
+  let sql = `SELECT * FROM epi_revisiones WHERE empresa_id=?`;
+  const binds = [empresa_id];
+  if (epi_id) { sql += ` AND epi_asignado_id=?`; binds.push(epi_id); }
+  if (inv_id) { sql += ` AND inventario_id=?`; binds.push(inv_id); }
+  sql += ` ORDER BY fecha_revision DESC`;
+  const rows = await env.DB.prepare(sql).bind(...binds).all();
+  return json({ ok: true, items: rows.results || [] });
+}
+
+async function crearEpiRevision(request, env) {
+  const { empresa_id, nombre, rol } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  if (rol === 'operario') return err('Sin permisos', 403);
+  const b = await request.json();
+  if (!b.fecha_revision) return err('Falta fecha_revision', 400);
+  const r = await env.DB.prepare(
+    `INSERT INTO epi_revisiones (empresa_id, epi_asignado_id, inventario_id, nombre_epi, tipo_revision, fecha_revision, resultado, observaciones, proxima_revision, revisado_por)
+     VALUES (?,?,?,?,?,?,?,?,?,?)`
+  ).bind(empresa_id, b.epi_asignado_id||null, b.inventario_id||null, b.nombre_epi||null,
+    b.tipo_revision||'periodica', b.fecha_revision, b.resultado||'apto',
+    b.observaciones||null, b.proxima_revision||null, b.revisado_por||nombre).run();
+  // Actualizar proxima_revision en epis_asignados si aplica
+  if (b.epi_asignado_id && b.proxima_revision) {
+    await env.DB.prepare(`UPDATE epis_asignados SET proxima_revision=? WHERE id=? AND empresa_id=?`)
+      .bind(b.proxima_revision, b.epi_asignado_id, empresa_id).run().catch(()=>{});
+  }
+  return json({ ok: true, id: r.meta?.last_row_id });
+}
+
+async function eliminarEpiRevision(id, request, env) {
+  const { empresa_id, rol } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  if (rol === 'operario') return err('Sin permisos', 403);
+  await env.DB.prepare(`DELETE FROM epi_revisiones WHERE id=? AND empresa_id=?`).bind(id, empresa_id).run();
   return json({ ok: true });
 }
 

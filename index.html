@@ -1681,6 +1681,26 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
         <div class="module-info"><div class="module-name">Resumen</div><div class="module-desc">Estadísticas y estado de seguridad</div></div>
         <svg class="module-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
       </div>
+      <div class="module-card" data-module="seg_reconocimientos" onclick="segSelTab('reconocimientos')">
+        <div class="module-emoji">🏥</div>
+        <div class="module-info"><div class="module-name">Reconocimientos</div><div class="module-desc">Reconocimientos médicos del personal</div></div>
+        <svg class="module-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
+      </div>
+      <div class="module-card" data-module="seg_docs_obra" onclick="segSelTab('docsObra')">
+        <div class="module-emoji">📋</div>
+        <div class="module-info"><div class="module-name">Docs. Obra</div><div class="module-desc">PSS, ESS, apertura de centro y más</div></div>
+        <svg class="module-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
+      </div>
+      <div class="module-card" data-module="seg_permisos" onclick="segSelTab('permisos')">
+        <div class="module-emoji">📝</div>
+        <div class="module-info"><div class="module-name">Permisos Trabajo</div><div class="module-desc">Altura, eléctrico, espacio confinado…</div></div>
+        <svg class="module-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
+      </div>
+      <div class="module-card" data-module="seg_inspecciones" onclick="segSelTab('inspecciones')">
+        <div class="module-emoji">🔍</div>
+        <div class="module-info"><div class="module-name">Inspecciones</div><div class="module-desc">Inspecciones periódicas de seguridad</div></div>
+        <svg class="module-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
+      </div>
     </div>
 
     <!-- ── TAB ESCÁNER ── -->
@@ -1879,6 +1899,223 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
       </div>
       <div id="segDashContent" style="padding:14px;overflow-y:auto;flex:1">
         <div style="color:var(--muted);font-size:13px;text-align:center;padding:30px">Cargando…</div>
+      </div>
+    </div>
+
+    <!-- ── TAB RECONOCIMIENTOS MÉDICOS ── -->
+    <div id="segPanelReconocimientos" style="display:none;flex-direction:column;flex:1;overflow:hidden">
+      <div style="padding:10px 14px 8px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;align-items:center;gap:8px">
+        <button onclick="segSelTab('home')" style="background:var(--surface2);border:none;border-radius:50%;width:30px;height:30px;font-size:16px;cursor:pointer;color:var(--text);flex-shrink:0">←</button>
+        <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:13px;color:var(--accent);flex:1">🏥 Reconocimientos Médicos</div>
+        <button onclick="segRecNuevo()" style="background:var(--accent);color:#000;border:none;border-radius:8px;padding:6px 12px;font-family:'Montserrat',sans-serif;font-weight:900;font-size:12px;cursor:pointer;flex-shrink:0">+ Nuevo</button>
+      </div>
+      <div style="padding:8px 14px;border-bottom:1px solid var(--border);flex-shrink:0">
+        <select id="segRecFiltroResultado" onchange="segRecCargar()" style="width:100%;padding:7px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px">
+          <option value="">Todos</option>
+          <option value="apto">Apto</option>
+          <option value="apto_con_restricciones">Con restricciones</option>
+          <option value="no_apto">No apto</option>
+        </select>
+      </div>
+      <div id="segRecLista" style="flex:1;overflow-y:auto;padding:10px 14px"></div>
+      <!-- Modal nuevo reconocimiento -->
+      <div id="segRecModal" style="display:none;position:fixed;inset:0;background:#0008;z-index:9999;align-items:center;justify-content:center;padding:16px">
+        <div style="background:var(--surface);border-radius:16px;padding:20px;width:100%;max-width:420px;max-height:90vh;overflow-y:auto">
+          <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:15px;margin-bottom:16px">Nuevo Reconocimiento Médico</div>
+          <label style="display:block;font-size:12px;font-weight:700;color:var(--muted);margin-bottom:4px">Trabajador *</label>
+          <input id="segRecNombre" type="text" placeholder="Nombre completo" style="width:100%;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;margin-bottom:10px;box-sizing:border-box">
+          <label style="display:block;font-size:12px;font-weight:700;color:var(--muted);margin-bottom:4px">Tipo</label>
+          <select id="segRecTipo" style="width:100%;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;margin-bottom:10px">
+            <option value="anual">Anual</option>
+            <option value="inicial">Inicial (incorporación)</option>
+            <option value="periodico">Periódico</option>
+            <option value="tras_baja">Tras baja prolongada</option>
+            <option value="reintegro">Reintegro</option>
+          </select>
+          <label style="display:block;font-size:12px;font-weight:700;color:var(--muted);margin-bottom:4px">Resultado</label>
+          <select id="segRecResultado" style="width:100%;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;margin-bottom:10px">
+            <option value="apto">Apto</option>
+            <option value="apto_con_restricciones">Apto con restricciones</option>
+            <option value="no_apto">No apto</option>
+          </select>
+          <label style="display:block;font-size:12px;font-weight:700;color:var(--muted);margin-bottom:4px">Restricciones</label>
+          <input id="segRecRestricciones" type="text" placeholder="Si aplica" style="width:100%;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;margin-bottom:10px;box-sizing:border-box">
+          <label style="display:block;font-size:12px;font-weight:700;color:var(--muted);margin-bottom:4px">Fecha realización *</label>
+          <input id="segRecFechaRe" type="date" style="width:100%;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;margin-bottom:10px;box-sizing:border-box">
+          <label style="display:block;font-size:12px;font-weight:700;color:var(--muted);margin-bottom:4px">Fecha caducidad *</label>
+          <input id="segRecFechaCad" type="date" style="width:100%;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;margin-bottom:10px;box-sizing:border-box">
+          <label style="display:block;font-size:12px;font-weight:700;color:var(--muted);margin-bottom:4px">Centro médico</label>
+          <input id="segRecCentro" type="text" style="width:100%;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;margin-bottom:10px;box-sizing:border-box">
+          <label style="display:block;font-size:12px;font-weight:700;color:var(--muted);margin-bottom:4px">Notas</label>
+          <input id="segRecNotas" type="text" style="width:100%;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;margin-bottom:16px;box-sizing:border-box">
+          <div style="display:flex;gap:8px">
+            <button onclick="document.getElementById('segRecModal').style.display='none'" style="flex:1;padding:10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;color:var(--text)">Cancelar</button>
+            <button onclick="segRecGuardar()" style="flex:1;padding:10px;background:var(--accent);color:#000;border:none;border-radius:8px;font-size:13px;font-weight:900;font-family:'Montserrat',sans-serif;cursor:pointer">Guardar</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── TAB DOCUMENTOS DE OBRA ── -->
+    <div id="segPanelDocsObra" style="display:none;flex-direction:column;flex:1;overflow:hidden">
+      <div style="padding:10px 14px 8px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;align-items:center;gap:8px">
+        <button onclick="segSelTab('home')" style="background:var(--surface2);border:none;border-radius:50%;width:30px;height:30px;font-size:16px;cursor:pointer;color:var(--text);flex-shrink:0">←</button>
+        <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:13px;color:var(--accent);flex:1">📋 Documentos de Obra</div>
+        <button onclick="segDocNuevo()" style="background:var(--accent);color:#000;border:none;border-radius:8px;padding:6px 12px;font-family:'Montserrat',sans-serif;font-weight:900;font-size:12px;cursor:pointer;flex-shrink:0">+ Nuevo</button>
+      </div>
+      <div id="segDocLista" style="flex:1;overflow-y:auto;padding:10px 14px"></div>
+      <div id="segDocModal" style="display:none;position:fixed;inset:0;background:#0008;z-index:9999;align-items:center;justify-content:center;padding:16px">
+        <div style="background:var(--surface);border-radius:16px;padding:20px;width:100%;max-width:420px;max-height:90vh;overflow-y:auto">
+          <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:15px;margin-bottom:16px">Nuevo Documento de Obra</div>
+          <label style="display:block;font-size:12px;font-weight:700;color:var(--muted);margin-bottom:4px">Tipo *</label>
+          <select id="segDocTipo" style="width:100%;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;margin-bottom:10px">
+            <option value="pss">PSS — Plan de Seguridad y Salud</option>
+            <option value="ess">ESS — Estudio de Seguridad y Salud</option>
+            <option value="ebss">EBSS — Estudio Básico</option>
+            <option value="aviso_previo">Aviso Previo (autoridad laboral)</option>
+            <option value="apertura_centro">Apertura de Centro de Trabajo</option>
+            <option value="libro_incidencias">Libro de Incidencias</option>
+            <option value="libro_subcontratacion">Libro de Subcontratación</option>
+            <option value="plan_emergencia">Plan de Emergencia</option>
+            <option value="evaluacion_riesgos">Evaluación de Riesgos</option>
+            <option value="coordinacion_actividades">Coordinación Act. Empresariales</option>
+            <option value="seguro_rc">Seguro RC</option>
+            <option value="otro">Otro</option>
+          </select>
+          <label style="display:block;font-size:12px;font-weight:700;color:var(--muted);margin-bottom:4px">Título *</label>
+          <input id="segDocTitulo" type="text" placeholder="Descripción del documento" style="width:100%;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;margin-bottom:10px;box-sizing:border-box">
+          <label style="display:block;font-size:12px;font-weight:700;color:var(--muted);margin-bottom:4px">Estado</label>
+          <select id="segDocEstado" style="width:100%;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;margin-bottom:10px">
+            <option value="pendiente">Pendiente</option>
+            <option value="en_tramite">En trámite</option>
+            <option value="vigente">Vigente</option>
+            <option value="vencido">Vencido</option>
+            <option value="no_aplica">No aplica</option>
+          </select>
+          <label style="display:block;font-size:12px;font-weight:700;color:var(--muted);margin-bottom:4px">Fecha emisión</label>
+          <input id="segDocFechaE" type="date" style="width:100%;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;margin-bottom:10px;box-sizing:border-box">
+          <label style="display:block;font-size:12px;font-weight:700;color:var(--muted);margin-bottom:4px">Fecha caducidad</label>
+          <input id="segDocFechaCad" type="date" style="width:100%;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;margin-bottom:10px;box-sizing:border-box">
+          <label style="display:block;font-size:12px;font-weight:700;color:var(--muted);margin-bottom:4px">Elaborado por</label>
+          <input id="segDocElaborado" type="text" placeholder="Técnico / empresa" style="width:100%;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;margin-bottom:10px;box-sizing:border-box">
+          <label style="display:block;font-size:12px;font-weight:700;color:var(--muted);margin-bottom:4px">Aprobado por</label>
+          <input id="segDocAprobado" type="text" placeholder="CSS / dirección facultativa" style="width:100%;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;margin-bottom:10px;box-sizing:border-box">
+          <label style="display:block;font-size:12px;font-weight:700;color:var(--muted);margin-bottom:4px">Notas</label>
+          <input id="segDocNotas" type="text" style="width:100%;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;margin-bottom:16px;box-sizing:border-box">
+          <div style="display:flex;gap:8px">
+            <button onclick="document.getElementById('segDocModal').style.display='none'" style="flex:1;padding:10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;color:var(--text)">Cancelar</button>
+            <button onclick="segDocGuardar()" style="flex:1;padding:10px;background:var(--accent);color:#000;border:none;border-radius:8px;font-size:13px;font-weight:900;font-family:'Montserrat',sans-serif;cursor:pointer">Guardar</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── TAB PERMISOS DE TRABAJO ── -->
+    <div id="segPanelPermisos" style="display:none;flex-direction:column;flex:1;overflow:hidden">
+      <div style="padding:10px 14px 8px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;align-items:center;gap:8px">
+        <button onclick="segSelTab('home')" style="background:var(--surface2);border:none;border-radius:50%;width:30px;height:30px;font-size:16px;cursor:pointer;color:var(--text);flex-shrink:0">←</button>
+        <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:13px;color:var(--accent);flex:1">📝 Permisos de Trabajo</div>
+        <button onclick="segPermNuevo()" style="background:var(--accent);color:#000;border:none;border-radius:8px;padding:6px 12px;font-family:'Montserrat',sans-serif;font-weight:900;font-size:12px;cursor:pointer;flex-shrink:0">+ Nuevo</button>
+      </div>
+      <div style="padding:8px 14px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;gap:8px">
+        <select id="segPermFiltroTipo" onchange="segPermCargar()" style="flex:1;padding:7px 8px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:12px">
+          <option value="">Todos los tipos</option>
+          <option value="altura">Trabajo en altura</option>
+          <option value="electrico">Riesgo eléctrico</option>
+          <option value="espacio_confinado">Espacio confinado</option>
+          <option value="excavacion">Excavación</option>
+          <option value="soldadura">Soldadura</option>
+          <option value="otro">Otro</option>
+        </select>
+        <select id="segPermFiltroEstado" onchange="segPermCargar()" style="flex:1;padding:7px 8px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:12px">
+          <option value="">Todos</option>
+          <option value="activo">Activos</option>
+          <option value="completado">Completados</option>
+          <option value="cancelado">Cancelados</option>
+        </select>
+      </div>
+      <div id="segPermLista" style="flex:1;overflow-y:auto;padding:10px 14px"></div>
+      <div id="segPermModal" style="display:none;position:fixed;inset:0;background:#0008;z-index:9999;align-items:center;justify-content:center;padding:16px">
+        <div style="background:var(--surface);border-radius:16px;padding:20px;width:100%;max-width:420px;max-height:90vh;overflow-y:auto">
+          <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:15px;margin-bottom:16px">Nuevo Permiso de Trabajo</div>
+          <label style="display:block;font-size:12px;font-weight:700;color:var(--muted);margin-bottom:4px">Tipo *</label>
+          <select id="segPermTipo" style="width:100%;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;margin-bottom:10px">
+            <option value="altura">Trabajo en altura (RD 2177/2004)</option>
+            <option value="electrico">Riesgo eléctrico (RD 614/2001)</option>
+            <option value="espacio_confinado">Espacio confinado</option>
+            <option value="excavacion">Excavación / zanja</option>
+            <option value="soldadura">Soldadura / oxicorte</option>
+            <option value="demolicion">Demolición</option>
+            <option value="otro">Otro</option>
+          </select>
+          <label style="display:block;font-size:12px;font-weight:700;color:var(--muted);margin-bottom:4px">Descripción del trabajo *</label>
+          <textarea id="segPermDesc" rows="2" placeholder="Qué se va a hacer, dónde y cómo" style="width:100%;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;margin-bottom:10px;box-sizing:border-box;resize:vertical"></textarea>
+          <label style="display:block;font-size:12px;font-weight:700;color:var(--muted);margin-bottom:4px">Ubicación</label>
+          <input id="segPermUbic" type="text" placeholder="Zona / planta / referencia" style="width:100%;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;margin-bottom:10px;box-sizing:border-box">
+          <label style="display:block;font-size:12px;font-weight:700;color:var(--muted);margin-bottom:4px">Fecha inicio *</label>
+          <input id="segPermFecha" type="date" style="width:100%;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;margin-bottom:10px;box-sizing:border-box">
+          <label style="display:block;font-size:12px;font-weight:700;color:var(--muted);margin-bottom:4px">Fecha fin</label>
+          <input id="segPermFechaFin" type="date" style="width:100%;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;margin-bottom:10px;box-sizing:border-box">
+          <label style="display:block;font-size:12px;font-weight:700;color:var(--muted);margin-bottom:4px">Turno</label>
+          <select id="segPermTurno" style="width:100%;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;margin-bottom:10px">
+            <option value="">Sin especificar</option>
+            <option value="manana">Mañana</option>
+            <option value="tarde">Tarde</option>
+            <option value="noche">Noche</option>
+          </select>
+          <label style="display:block;font-size:12px;font-weight:700;color:var(--muted);margin-bottom:4px">Riesgos identificados</label>
+          <textarea id="segPermRiesgos" rows="2" placeholder="Caída de altura, contacto eléctrico..." style="width:100%;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;margin-bottom:10px;box-sizing:border-box;resize:vertical"></textarea>
+          <label style="display:block;font-size:12px;font-weight:700;color:var(--muted);margin-bottom:4px">Medidas preventivas</label>
+          <textarea id="segPermMedidas" rows="2" placeholder="Arnés, andamio, seccionamiento..." style="width:100%;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;margin-bottom:10px;box-sizing:border-box;resize:vertical"></textarea>
+          <label style="display:block;font-size:12px;font-weight:700;color:var(--muted);margin-bottom:4px">EPIs requeridos</label>
+          <input id="segPermEpis" type="text" placeholder="Arnés EN 361, casco clase E, guantes clase 00..." style="width:100%;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;margin-bottom:10px;box-sizing:border-box">
+          <label style="display:block;font-size:12px;font-weight:700;color:var(--muted);margin-bottom:4px">Autorizado por</label>
+          <input id="segPermAutoriza" type="text" placeholder="Nombre del encargado/CSS" style="width:100%;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;margin-bottom:16px;box-sizing:border-box">
+          <div style="display:flex;gap:8px">
+            <button onclick="document.getElementById('segPermModal').style.display='none'" style="flex:1;padding:10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;color:var(--text)">Cancelar</button>
+            <button onclick="segPermGuardar()" style="flex:1;padding:10px;background:var(--accent);color:#000;border:none;border-radius:8px;font-size:13px;font-weight:900;font-family:'Montserrat',sans-serif;cursor:pointer">Emitir permiso</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── TAB INSPECCIONES DE SEGURIDAD ── -->
+    <div id="segPanelInspecciones" style="display:none;flex-direction:column;flex:1;overflow:hidden">
+      <div style="padding:10px 14px 8px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;align-items:center;gap:8px">
+        <button onclick="segSelTab('home')" style="background:var(--surface2);border:none;border-radius:50%;width:30px;height:30px;font-size:16px;cursor:pointer;color:var(--text);flex-shrink:0">←</button>
+        <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:13px;color:var(--accent);flex:1">🔍 Inspecciones de Seguridad</div>
+        <button onclick="segInspNuevo()" style="background:var(--accent);color:#000;border:none;border-radius:8px;padding:6px 12px;font-family:'Montserrat',sans-serif;font-weight:900;font-size:12px;cursor:pointer;flex-shrink:0">+ Nueva</button>
+      </div>
+      <div id="segInspLista" style="flex:1;overflow-y:auto;padding:10px 14px"></div>
+      <div id="segInspModal" style="display:none;position:fixed;inset:0;background:#0008;z-index:9999;align-items:center;justify-content:center;padding:16px">
+        <div style="background:var(--surface);border-radius:16px;padding:20px;width:100%;max-width:420px;max-height:90vh;overflow-y:auto">
+          <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:15px;margin-bottom:16px">Nueva Inspección</div>
+          <label style="display:block;font-size:12px;font-weight:700;color:var(--muted);margin-bottom:4px">Tipo</label>
+          <select id="segInspTipo" style="width:100%;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;margin-bottom:10px">
+            <option value="periodica">Periódica</option>
+            <option value="inicial">Inicial (inicio de obra)</option>
+            <option value="extraordinaria">Extraordinaria (tras incidente)</option>
+            <option value="auditoria">Auditoría interna</option>
+          </select>
+          <label style="display:block;font-size:12px;font-weight:700;color:var(--muted);margin-bottom:4px">Inspector *</label>
+          <input id="segInspInspector" type="text" placeholder="Nombre del inspector" style="width:100%;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;margin-bottom:10px;box-sizing:border-box">
+          <label style="display:block;font-size:12px;font-weight:700;color:var(--muted);margin-bottom:4px">Fecha *</label>
+          <input id="segInspFecha" type="date" style="width:100%;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;margin-bottom:10px;box-sizing:border-box">
+          <label style="display:block;font-size:12px;font-weight:700;color:var(--muted);margin-bottom:4px">Áreas inspeccionadas</label>
+          <input id="segInspAreas" type="text" placeholder="Zona A, andamios, cuadros eléctricos..." style="width:100%;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;margin-bottom:10px;box-sizing:border-box">
+          <label style="display:block;font-size:12px;font-weight:700;color:var(--muted);margin-bottom:4px">Hallazgos / observaciones</label>
+          <textarea id="segInspHallazgos" rows="3" placeholder="Describa lo encontrado. Una línea por hallazgo." style="width:100%;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;margin-bottom:10px;box-sizing:border-box;resize:vertical"></textarea>
+          <label style="display:block;font-size:12px;font-weight:700;color:var(--muted);margin-bottom:4px">Puntuación (0-100)</label>
+          <input id="segInspPunt" type="number" min="0" max="100" style="width:100%;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;margin-bottom:10px;box-sizing:border-box">
+          <label style="display:block;font-size:12px;font-weight:700;color:var(--muted);margin-bottom:4px">Próxima inspección</label>
+          <input id="segInspProxima" type="date" style="width:100%;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;margin-bottom:10px;box-sizing:border-box">
+          <label style="display:block;font-size:12px;font-weight:700;color:var(--muted);margin-bottom:4px">Notas</label>
+          <input id="segInspNotas" type="text" style="width:100%;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;margin-bottom:16px;box-sizing:border-box">
+          <div style="display:flex;gap:8px">
+            <button onclick="document.getElementById('segInspModal').style.display='none'" style="flex:1;padding:10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;color:var(--text)">Cancelar</button>
+            <button onclick="segInspGuardar()" style="flex:1;padding:10px;background:var(--accent);color:#000;border:none;border-radius:8px;font-size:13px;font-weight:900;font-family:'Montserrat',sans-serif;cursor:pointer">Guardar inspección</button>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -6027,15 +6264,23 @@ async function segBuscarMaquina(mat) {
 // ══════════════════════════════════════════════════════
 
 function segSelTab(tab) {
-  document.getElementById('segPanelHome').style.display     = tab === 'home'         ? 'flex' : 'none';
-  document.getElementById('segPanelEscaner').style.display  = tab === 'escaner'      ? 'flex' : 'none';
-  document.getElementById('segPanelInv').style.display      = tab === 'inventario'   ? 'flex' : 'none';
-  document.getElementById('segPanelHerr').style.display     = tab === 'herramientas' ? 'flex' : 'none';
-  document.getElementById('segPanelResumen').style.display  = tab === 'resumen'      ? 'flex' : 'none';
-  if (tab === 'inventario')    segCargarInv();
-  if (tab === 'resumen')       segCargarResumen();
-  if (tab === 'herramientas')  segHerrCargar();
-  if (tab === 'home')          applyModulosConfig();
+  document.getElementById('segPanelHome').style.display            = tab === 'home'              ? 'flex' : 'none';
+  document.getElementById('segPanelEscaner').style.display         = tab === 'escaner'           ? 'flex' : 'none';
+  document.getElementById('segPanelInv').style.display             = tab === 'inventario'        ? 'flex' : 'none';
+  document.getElementById('segPanelHerr').style.display            = tab === 'herramientas'      ? 'flex' : 'none';
+  document.getElementById('segPanelResumen').style.display         = tab === 'resumen'           ? 'flex' : 'none';
+  document.getElementById('segPanelReconocimientos').style.display = tab === 'reconocimientos'   ? 'flex' : 'none';
+  document.getElementById('segPanelDocsObra').style.display        = tab === 'docsObra'          ? 'flex' : 'none';
+  document.getElementById('segPanelPermisos').style.display        = tab === 'permisos'          ? 'flex' : 'none';
+  document.getElementById('segPanelInspecciones').style.display    = tab === 'inspecciones'      ? 'flex' : 'none';
+  if (tab === 'inventario')       segCargarInv();
+  if (tab === 'resumen')          segCargarResumen();
+  if (tab === 'herramientas')     segHerrCargar();
+  if (tab === 'reconocimientos')  segRecCargar();
+  if (tab === 'docsObra')         segDocCargar();
+  if (tab === 'permisos')         segPermCargar();
+  if (tab === 'inspecciones')     segInspCargar();
+  if (tab === 'home')             applyModulosConfig();
 }
 
 // ── Herramientas Seguridad ────────────────────────────────────────────────────
@@ -6280,6 +6525,261 @@ async function segHerrGuardarNuevo() {
 }
 // ─────────────────────────────────────────────────────────────────────────────
 
+// ── Módulo Reconocimientos Médicos ──────────────────────────────────────────
+async function segRecCargar() {
+  const resultado = document.getElementById('segRecFiltroResultado')?.value || '';
+  const s = getSession();
+  const params = new URLSearchParams({ ...(resultado && { resultado }), ...(s?.obra_id && { obra_id: s.obra_id }) });
+  const lista = document.getElementById('segRecLista');
+  if (!lista) return;
+  lista.innerHTML = '<div style="color:var(--muted);font-size:13px;text-align:center;padding:30px">Cargando…</div>';
+  try {
+    const r = await apiCall(`/reconocimientos-medicos?${params}`);
+    const d = await r.json();
+    lista.innerHTML = (d.items || []).map(i => {
+      const badge = i.estado_vigencia === 'caducado' ? '<span style="color:#ef4444;font-weight:700">🔴 Caducado</span>'
+                  : i.estado_vigencia === 'proximo'  ? '<span style="color:#f59e0b;font-weight:700">🟡 Próximo</span>'
+                  : '<span style="color:#22c55e;font-weight:700">🟢 Vigente</span>';
+      return `<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:8px">
+        <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:14px;color:var(--text)">${i.nombre_trabajador} ${badge}</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:3px">${i.tipo} · ${i.resultado} · Caduca: ${i.fecha_caducidad}</div>
+        ${i.restricciones ? `<div style="font-size:12px;color:#f59e0b;margin-top:2px">⚠️ ${i.restricciones}</div>` : ''}
+      </div>`;
+    }).join('') || '<div style="color:var(--muted);font-size:13px;text-align:center;padding:30px">Sin reconocimientos registrados</div>';
+  } catch(e) { console.error(e); lista.innerHTML = '<div style="color:var(--muted);font-size:13px;text-align:center;padding:30px">Error al cargar</div>'; }
+}
+
+function segRecNuevo() {
+  const hoy = new Date();
+  document.getElementById('segRecFechaRe').value = hoy.toISOString().split('T')[0];
+  hoy.setFullYear(hoy.getFullYear() + 1);
+  document.getElementById('segRecFechaCad').value = hoy.toISOString().split('T')[0];
+  document.getElementById('segRecNombre').value = '';
+  document.getElementById('segRecRestricciones').value = '';
+  document.getElementById('segRecCentro').value = '';
+  document.getElementById('segRecNotas').value = '';
+  document.getElementById('segRecModal').style.display = 'flex';
+}
+
+async function segRecGuardar() {
+  const nombre   = document.getElementById('segRecNombre').value.trim();
+  const fechaRe  = document.getElementById('segRecFechaRe').value;
+  const fechaCad = document.getElementById('segRecFechaCad').value;
+  if (!nombre || !fechaRe || !fechaCad) return toast('⚠️ Rellena los campos obligatorios (*)', 'err');
+  const s = getSession();
+  const body = {
+    nombre_trabajador: nombre,
+    tipo: document.getElementById('segRecTipo').value,
+    resultado: document.getElementById('segRecResultado').value,
+    restricciones: document.getElementById('segRecRestricciones').value || null,
+    fecha_realizacion: fechaRe,
+    fecha_caducidad: fechaCad,
+    centro_medico: document.getElementById('segRecCentro').value || null,
+    notas: document.getElementById('segRecNotas').value || null,
+    ...(s?.obra_id && { obra_id: s.obra_id })
+  };
+  try {
+    const r = await apiCall('/reconocimientos-medicos', { method: 'POST', body: JSON.stringify(body) });
+    const d = await r.json();
+    if (d.ok) { document.getElementById('segRecModal').style.display = 'none'; segRecCargar(); toast('✅ Reconocimiento registrado', 'ok'); }
+    else toast('Error: ' + (d.error || 'desconocido'), 'err');
+  } catch(e) { toast('Error de red', 'err'); }
+}
+
+// ── Módulo Documentos de Obra ────────────────────────────────────────────────
+async function segDocCargar() {
+  const s = getSession();
+  const params = new URLSearchParams(s?.obra_id ? { obra_id: s.obra_id } : {});
+  const lista = document.getElementById('segDocLista');
+  if (!lista) return;
+  lista.innerHTML = '<div style="color:var(--muted);font-size:13px;text-align:center;padding:30px">Cargando…</div>';
+  try {
+    const r = await apiCall(`/documentos-obra?${params}`);
+    const d = await r.json();
+    const estadoBadge = { pendiente:'<span style="color:#ef4444;font-weight:700">🔴 Pendiente</span>', en_tramite:'<span style="color:#f59e0b;font-weight:700">🟡 En trámite</span>', vigente:'<span style="color:#22c55e;font-weight:700">🟢 Vigente</span>', vencido:'<span style="color:#64748b;font-weight:700">⚫ Vencido</span>', no_aplica:'<span style="color:#94a3b8;font-weight:700">⚪ N/A</span>' };
+    lista.innerHTML = (d.items || []).map(i =>
+      `<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:8px">
+        <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:13px;color:var(--text)">${i.tipo.replace(/_/g,' ').toUpperCase()} ${estadoBadge[i.estado]||i.estado}</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:3px">${i.titulo}</div>
+        ${i.aprobado_por ? `<div style="font-size:12px;color:var(--muted);margin-top:2px">Aprobado: ${i.aprobado_por}</div>` : ''}
+        ${i.fecha_caducidad ? `<div style="font-size:12px;color:var(--muted);margin-top:2px">Caduca: ${i.fecha_caducidad}</div>` : ''}
+      </div>`
+    ).join('') || '<div style="color:var(--muted);font-size:13px;text-align:center;padding:30px">Sin documentos registrados</div>';
+  } catch(e) { console.error(e); lista.innerHTML = '<div style="color:var(--muted);font-size:13px;text-align:center;padding:30px">Error al cargar</div>'; }
+}
+
+function segDocNuevo() {
+  document.getElementById('segDocTitulo').value = '';
+  document.getElementById('segDocFechaE').value = '';
+  document.getElementById('segDocFechaCad').value = '';
+  document.getElementById('segDocElaborado').value = '';
+  document.getElementById('segDocAprobado').value = '';
+  document.getElementById('segDocNotas').value = '';
+  document.getElementById('segDocModal').style.display = 'flex';
+}
+
+async function segDocGuardar() {
+  const titulo = document.getElementById('segDocTitulo').value.trim();
+  if (!titulo) return toast('⚠️ El título es obligatorio', 'err');
+  const s = getSession();
+  const body = {
+    tipo: document.getElementById('segDocTipo').value,
+    titulo,
+    estado: document.getElementById('segDocEstado').value,
+    fecha_emision: document.getElementById('segDocFechaE').value || null,
+    fecha_caducidad: document.getElementById('segDocFechaCad').value || null,
+    elaborado_por: document.getElementById('segDocElaborado').value || null,
+    aprobado_por: document.getElementById('segDocAprobado').value || null,
+    notas: document.getElementById('segDocNotas').value || null,
+    ...(s?.obra_id && { obra_id: s.obra_id })
+  };
+  try {
+    const r = await apiCall('/documentos-obra', { method: 'POST', body: JSON.stringify(body) });
+    const d = await r.json();
+    if (d.ok) { document.getElementById('segDocModal').style.display = 'none'; segDocCargar(); toast('✅ Documento registrado', 'ok'); }
+    else toast('Error: ' + (d.error || 'desconocido'), 'err');
+  } catch(e) { toast('Error de red', 'err'); }
+}
+
+// ── Módulo Permisos de Trabajo ────────────────────────────────────────────────
+async function segPermCargar() {
+  const tipo   = document.getElementById('segPermFiltroTipo')?.value  || '';
+  const estado = document.getElementById('segPermFiltroEstado')?.value || '';
+  const s = getSession();
+  const params = new URLSearchParams({ ...(tipo && { tipo }), ...(estado && { estado }), ...(s?.obra_id && { obra_id: s.obra_id }) });
+  const lista = document.getElementById('segPermLista');
+  if (!lista) return;
+  lista.innerHTML = '<div style="color:var(--muted);font-size:13px;text-align:center;padding:30px">Cargando…</div>';
+  try {
+    const r = await apiCall(`/permisos-trabajo?${params}`);
+    const d = await r.json();
+    const tipoBadge   = { altura:'🏔️ Altura', electrico:'⚡ Eléctrico', espacio_confinado:'🕳️ Confinado', excavacion:'⛏️ Excavación', soldadura:'🔥 Soldadura', demolicion:'🏗️ Demolición', otro:'📝 Otro' };
+    const estadoColor = { activo:'#22c55e', completado:'#64748b', cancelado:'#ef4444' };
+    lista.innerHTML = (d.items || []).map(i =>
+      `<div onclick="segPermDetalle(${i.id})" style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:8px;cursor:pointer">
+        <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:13px;color:var(--text)">${tipoBadge[i.tipo]||i.tipo} <span style="color:${estadoColor[i.estado]||'var(--muted)'}">● ${i.estado}</span></div>
+        <div style="font-size:12px;color:var(--muted);margin-top:3px">${(i.descripcion||'').substring(0,80)}</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:2px">${i.ubicacion||''} · ${i.fecha_inicio}</div>
+      </div>`
+    ).join('') || '<div style="color:var(--muted);font-size:13px;text-align:center;padding:30px">Sin permisos de trabajo registrados</div>';
+  } catch(e) { console.error(e); lista.innerHTML = '<div style="color:var(--muted);font-size:13px;text-align:center;padding:30px">Error al cargar</div>'; }
+}
+
+function segPermNuevo() {
+  const hoy = new Date().toISOString().split('T')[0];
+  document.getElementById('segPermFecha').value = hoy;
+  document.getElementById('segPermFechaFin').value = '';
+  document.getElementById('segPermDesc').value = '';
+  document.getElementById('segPermUbic').value = '';
+  document.getElementById('segPermRiesgos').value = '';
+  document.getElementById('segPermMedidas').value = '';
+  document.getElementById('segPermEpis').value = '';
+  document.getElementById('segPermAutoriza').value = '';
+  document.getElementById('segPermModal').style.display = 'flex';
+}
+
+async function segPermGuardar() {
+  const desc  = document.getElementById('segPermDesc').value.trim();
+  const fecha = document.getElementById('segPermFecha').value;
+  if (!desc || !fecha) return toast('⚠️ Descripción y fecha de inicio son obligatorias', 'err');
+  const s = getSession();
+  const body = {
+    tipo: document.getElementById('segPermTipo').value,
+    descripcion: desc,
+    ubicacion: document.getElementById('segPermUbic').value || null,
+    fecha_inicio: fecha,
+    fecha_fin: document.getElementById('segPermFechaFin').value || null,
+    turno: document.getElementById('segPermTurno').value || null,
+    riesgos: document.getElementById('segPermRiesgos').value || null,
+    medidas_preventivas: document.getElementById('segPermMedidas').value || null,
+    epis_requeridos: document.getElementById('segPermEpis').value || null,
+    autorizado_por: document.getElementById('segPermAutoriza').value || null,
+    estado: 'activo',
+    ...(s?.obra_id && { obra_id: s.obra_id })
+  };
+  try {
+    const r = await apiCall('/permisos-trabajo', { method: 'POST', body: JSON.stringify(body) });
+    const d = await r.json();
+    if (d.ok) { document.getElementById('segPermModal').style.display = 'none'; segPermCargar(); toast('✅ Permiso emitido', 'ok'); }
+    else toast('Error: ' + (d.error || 'desconocido'), 'err');
+  } catch(e) { toast('Error de red', 'err'); }
+}
+
+async function segPermDetalle(id) {
+  if (confirm('¿Marcar este permiso como COMPLETADO?')) {
+    try {
+      await apiCall(`/permisos-trabajo/${id}`, { method: 'PUT', body: JSON.stringify({ estado: 'completado' }) });
+      segPermCargar();
+      toast('✅ Permiso completado', 'ok');
+    } catch(e) { toast('Error de red', 'err'); }
+  }
+}
+
+// ── Módulo Inspecciones de Seguridad ─────────────────────────────────────────
+async function segInspCargar() {
+  const s = getSession();
+  const params = new URLSearchParams(s?.obra_id ? { obra_id: s.obra_id } : {});
+  const lista = document.getElementById('segInspLista');
+  if (!lista) return;
+  lista.innerHTML = '<div style="color:var(--muted);font-size:13px;text-align:center;padding:30px">Cargando…</div>';
+  try {
+    const r = await apiCall(`/inspecciones-seg?${params}`);
+    const d = await r.json();
+    lista.innerHTML = (d.items || []).map(i => {
+      const punt   = i.puntuacion != null ? ` · ${i.puntuacion}/100` : '';
+      const badge  = i.estado === 'cerrada' ? '<span style="color:#64748b;font-weight:700">⚫ Cerrada</span>' : '<span style="color:#22c55e;font-weight:700">🟢 Abierta</span>';
+      const noConf = i.no_conformidades > 0 ? ` · <span style="color:#ef4444;font-weight:700">🔴 ${i.no_conformidades} NC</span>` : '';
+      return `<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:8px">
+        <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:13px;color:var(--text)">${i.tipo} ${badge}${noConf}${punt}</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:3px">Inspector: ${i.inspector} · ${i.fecha}</div>
+        ${i.proxima_inspeccion ? `<div style="font-size:12px;color:var(--muted);margin-top:2px">Próxima: ${i.proxima_inspeccion}</div>` : ''}
+      </div>`;
+    }).join('') || '<div style="color:var(--muted);font-size:13px;text-align:center;padding:30px">Sin inspecciones registradas</div>';
+  } catch(e) { console.error(e); lista.innerHTML = '<div style="color:var(--muted);font-size:13px;text-align:center;padding:30px">Error al cargar</div>'; }
+}
+
+function segInspNuevo() {
+  const hoy = new Date().toISOString().split('T')[0];
+  document.getElementById('segInspFecha').value = hoy;
+  document.getElementById('segInspInspector').value = '';
+  document.getElementById('segInspAreas').value = '';
+  document.getElementById('segInspHallazgos').value = '';
+  document.getElementById('segInspPunt').value = '';
+  document.getElementById('segInspProxima').value = '';
+  document.getElementById('segInspNotas').value = '';
+  document.getElementById('segInspModal').style.display = 'flex';
+}
+
+async function segInspGuardar() {
+  const inspector = document.getElementById('segInspInspector').value.trim();
+  const fecha     = document.getElementById('segInspFecha').value;
+  if (!inspector || !fecha) return toast('⚠️ Inspector y fecha son obligatorios', 'err');
+  const s = getSession();
+  const hallazgosRaw = document.getElementById('segInspHallazgos').value.trim();
+  const hallazgos    = hallazgosRaw ? hallazgosRaw.split('\n').filter(Boolean).map(h => ({ descripcion: h.trim(), gravedad: 'media' })) : [];
+  const areasRaw     = document.getElementById('segInspAreas').value.trim();
+  const areas        = areasRaw ? areasRaw.split(',').map(a => a.trim()).filter(Boolean) : [];
+  const puntVal      = document.getElementById('segInspPunt').value;
+  const body = {
+    tipo: document.getElementById('segInspTipo').value,
+    inspector,
+    fecha,
+    areas_inspeccionadas: areas,
+    hallazgos,
+    puntuacion: puntVal ? parseInt(puntVal) : null,
+    proxima_inspeccion: document.getElementById('segInspProxima').value || null,
+    notas: document.getElementById('segInspNotas').value || null,
+    ...(s?.obra_id && { obra_id: s.obra_id })
+  };
+  try {
+    const r = await apiCall('/inspecciones-seg', { method: 'POST', body: JSON.stringify(body) });
+    const d = await r.json();
+    if (d.ok) { document.getElementById('segInspModal').style.display = 'none'; segInspCargar(); toast('✅ Inspección guardada', 'ok'); }
+    else toast('Error: ' + (d.error || 'desconocido'), 'err');
+  } catch(e) { toast('Error de red', 'err'); }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 async function segCargarResumen() {
   const c = document.getElementById('segDashContent');
   if (!c) return;
@@ -10315,7 +10815,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '6.45';
+const APP_VERSION = '6.46';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
