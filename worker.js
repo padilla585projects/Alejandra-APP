@@ -9343,6 +9343,29 @@ async function alertasDiarias(env) {
       }
     }
 
+    // ── Tareas de obra vencidas — alerta diaria por empresa ─────────────────
+    try {
+      const hoyStr = hoy.toISOString().slice(0, 10);
+      const { results: empresasConTareas } = await env.DB.prepare(
+        `SELECT DISTINCT empresa_id FROM tareas_obra WHERE fecha_limite < ? AND estado NOT IN ('completada','bloqueada')`
+      ).bind(hoyStr).all().catch(() => ({ results: [] }));
+
+      for (const { empresa_id: eid } of (empresasConTareas || [])) {
+        const { results: tareasVencidas } = await env.DB.prepare(
+          `SELECT titulo, prioridad, asignado_a, fecha_limite FROM tareas_obra WHERE empresa_id=? AND fecha_limite < ? AND estado NOT IN ('completada','bloqueada') ORDER BY CASE prioridad WHEN 'urgente' THEN 0 WHEN 'alta' THEN 1 WHEN 'normal' THEN 2 ELSE 3 END LIMIT 10`
+        ).bind(eid, hoyStr).all().catch(() => ({ results: [] }));
+
+        if (tareasVencidas && tareasVencidas.length) {
+          const priIcon = { urgente: '🔴', alta: '🟠', normal: '🟡', baja: '🟢' };
+          let msg = `⚠️ <b>Tareas de obra vencidas</b> (${tareasVencidas.length}):\n\n`;
+          for (const t of tareasVencidas) {
+            msg += `${priIcon[t.prioridad] || '⚪'} ${t.titulo}${t.asignado_a ? ' [' + t.asignado_a + ']' : ''} · vencía ${t.fecha_limite}\n`;
+          }
+          await sendTelegram(env, msg);
+        }
+      }
+    } catch(e) { console.error('tareas vencidas alert error:', e.message); }
+
     // RGPD — aplicar retención automática a todas las empresas que la tengan activa
     try {
       const { results: empresasRgpd } = await env.DB.prepare(
