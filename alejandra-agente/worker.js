@@ -802,22 +802,25 @@ TIPOS DE ESQUEMAS QUE PUEDES GENERAR:
 - Red de tierra: electrodos, conductores PE, bornas de tierra
 
 WORKFLOW PARA GENERAR UN ESQUEMA:
-1. pensar() — analizar qué tipo de esquema necesita el usuario, qué componentes y conexiones
-2. Si faltan datos → PREGUNTAR primero (potencia, tensión, tipo instalación, cantidad circuitos...)
-3. Generar SVG completo con símbolos IEC correctos, etiquetas, título
-4. generar_esquema_electrico(svg_content, titulo, descripcion) → guarda en R2
-5. Responder con enlace/clave + explicación del esquema`
+1. pensar() — analizar qué tipo de esquema, componentes y tensiones
+2. Si faltan datos críticos → PREGUNTAR primero (potencia motor, tensión red, tensión mando...)
+3. Para arranque DOL (directo): llamar generar_esquema_electrico con tipo="potencia_motor" y componentes={contactor, motor, guardamotor, motor_kw, tension_red, tension_mando}. El SVG se genera automáticamente en el servidor — NO generar SVG manualmente.
+4. Para circuitos NO estándar (unifiliar complejo, cuadro general, etc.): generar SVG completo con símbolos IEC y pasar en svg_content.
+5. Responder con el enlace recibido + explicación técnica del esquema.
+
+IMPORTANTE: Para DOL y otros arranques de motor, SIEMPRE usa componentes={...}, NUNCA svg_content.
+El servidor genera el esquema IEC 60617 completo automáticamente.`
 };
 
 // Perfiles de experto
 const NEXUS_EXPERTS = {
   simple:   { model: MODEL_EXPERTO, maxTokens: 600,  modules: ['base', 'contexto_sesion', 'formato'] },
-  app:      { model: MODEL_EXPERTO, maxTokens: 4096, modules: ['base', 'app', 'ram', 'inteligencia_negocio', 'seguimiento_proactivo', 'asistente_escaneo', 'proactividad_real', 'aprendizaje_proactivo', 'contexto_sesion', 'formato'] },
+  app:      { model: MODEL_EXPERTO, maxTokens: 4096, modules: ['base', 'app', 'ingenieria_electrica', 'ram', 'inteligencia_negocio', 'seguimiento_proactivo', 'asistente_escaneo', 'proactividad_real', 'aprendizaje_proactivo', 'contexto_sesion', 'formato'] },
   tecnico:  { model: MODEL_EXPERTO, maxTokens: 1024, modules: ['base', 'app', 'tecnica', 'nexus', 'ram', 'inteligencia_negocio', 'seguimiento_proactivo', 'asistente_escaneo', 'proactividad_real', 'aprendizaje_proactivo', 'razonamiento', 'contexto_sesion', 'formato'] },
   web:      { model: MODEL_EXPERTO, maxTokens: 1024, modules: ['base', 'app', 'web', 'aprendizaje_proactivo', 'contexto_sesion', 'formato'] },
   reflexion:{ model: MODEL_EXPERTO, maxTokens: 2048, modules: ['base', 'app', 'tecnica', 'nexus', 'ram', 'evolucion', 'reflexion', 'decision', 'inteligencia_negocio', 'seguimiento_proactivo', 'asistente_escaneo', 'aprendizaje_proactivo', 'razonamiento', 'contexto_sesion', 'formato'] },
   completo:   { model: MODEL_EXPERTO, maxTokens: 1024, modules: ['base', 'app', 'tecnica', 'nexus', 'ram', 'evolucion', 'web', 'capacidades_avanzadas', 'inteligencia_negocio', 'seguimiento_proactivo', 'asistente_escaneo', 'aprendizaje_proactivo', 'razonamiento', 'contexto_sesion', 'formato'] },
-  ingenieria: { model: MODEL_EXPERTO, maxTokens: 4096, modules: ['base', 'app', 'ingenieria', 'ingenieria_electrica', 'ram', 'capacidades_avanzadas', 'inteligencia_negocio', 'seguimiento_proactivo', 'asistente_escaneo', 'aprendizaje_proactivo', 'razonamiento', 'contexto_sesion', 'formato'] }
+  ingenieria: { model: MODEL_EXPERTO, maxTokens: 8000, modules: ['base', 'app', 'ingenieria', 'ingenieria_electrica', 'ram', 'capacidades_avanzadas', 'inteligencia_negocio', 'seguimiento_proactivo', 'asistente_escaneo', 'aprendizaje_proactivo', 'razonamiento', 'contexto_sesion', 'formato'] }
 };
 
 // Módulos estáticos (L0) — se cachean siempre, nunca cambian entre turnos
@@ -1074,16 +1077,67 @@ const TOOL_ANALIZAR_FOTO = {
 
 const TOOL_GENERAR_ESQUEMA = {
   name: 'generar_esquema_electrico',
-  description: 'Guarda un esquema eléctrico SVG que tú misma has generado en R2 y devuelve la URL. ANTES de llamar esta tool, genera el SVG completo con símbolos IEC 60617 (ver módulo ingenieria_electrica). El SVG debe tener fondo blanco, símbolos negros, etiquetas claras, marco con título. Usa cuadrícula de 40px. Para esquemas unifilares: rectángulos para protecciones, círculos para motores, líneas para conductores. Para circuitos de mando: usa colores (rojo=activo, azul=control 24V).',
+  description: `Guarda un esquema eléctrico en R2 y devuelve la URL pública. Dos modos de uso:
+
+MODO A — COMPONENTES (recomendado para arranques estándar):
+  Llama a la tool con "tipo" = "potencia_motor" o "mando_motor" y pasa "componentes" con los datos del circuito.
+  El esquema SVG se genera automáticamente en el servidor con símbolos IEC 60617.
+  Ejemplo: tipo="potencia_motor", componentes={"contactor":"KM1","motor":"M1","guardamotor":"QF1","motor_kw":"5.5","tension_red":"400V","tension_mando":"230V"}
+
+MODO B — SVG MANUAL (para circuitos personalizados que no sean DOL):
+  Genera el SVG tú misma y pásalo en "svg_content". Fondo blanco, símbolos IEC 60617, cuadrícula 40px.`,
   input_schema: {
     type: 'object',
     properties: {
-      titulo:      { type: 'string', description: 'Título del esquema (ej: "Cuadro general CPD Getafe" o "Arranque DOL motor bomba 1")' },
-      svg_content: { type: 'string', description: 'Contenido SVG completo del esquema eléctrico, incluyendo <svg xmlns=...> y todos los elementos. Mínimo 400×300px.' },
-      descripcion: { type: 'string', description: 'Descripción técnica del esquema (qué representa, componentes principales, normativa aplicada)' },
-      tipo:        { type: 'string', enum: ['unifiliar','multifilar','cuadro','potencia_motor','mando_motor','alumbrado','tierra','control_plc','personalizado'], description: 'Tipo de esquema' }
+      titulo:      { type: 'string', description: 'Título del esquema (ej: "Arranque DOL motor bomba 1")' },
+      tipo:        { type: 'string', enum: ['unifiliar','multifilar','cuadro','potencia_motor','mando_motor','alumbrado','tierra','control_plc','personalizado'], description: 'Tipo de esquema eléctrico' },
+      componentes: {
+        type: 'object',
+        description: 'Componentes del circuito para generación automática (MODO A). Campos opcionales: guardamotor, contactor, rele_termico, motor, fusible_mando, pulsador_parada, pulsador_marcha, piloto, tension_mando, tension_red, motor_kw',
+        properties: {
+          guardamotor:     { type: 'string', description: 'Referencia guardamotor, ej: "QF1"' },
+          contactor:       { type: 'string', description: 'Referencia contactor, ej: "KM1"' },
+          rele_termico:    { type: 'string', description: 'Referencia relé térmico, ej: "RTE1"' },
+          motor:           { type: 'string', description: 'Referencia motor, ej: "M1"' },
+          fusible_mando:   { type: 'string', description: 'Referencia fusible de mando, ej: "F1"' },
+          pulsador_parada: { type: 'string', description: 'Referencia pulsador paro, ej: "S1"' },
+          pulsador_marcha: { type: 'string', description: 'Referencia pulsador marcha, ej: "S2"' },
+          piloto:          { type: 'string', description: 'Referencia lámpara piloto, ej: "HL1"' },
+          tension_mando:   { type: 'string', description: 'Tensión de mando, ej: "230V" o "24V"' },
+          tension_red:     { type: 'string', description: 'Tensión de red trifásica, ej: "400V"' },
+          motor_kw:        { type: 'string', description: 'Potencia del motor en kW, ej: "5.5"' }
+        }
+      },
+      svg_content: { type: 'string', description: 'MODO B: SVG completo generado manualmente. Usar solo para circuitos que no sean DOL estándar.' },
+      descripcion: { type: 'string', description: 'Descripción técnica del esquema (componentes, normativa aplicada)' },
+      obra_id:     { type: 'number', description: 'ID de obra (opcional). Si se indica, guarda el esquema en los documentos de esa obra — aparece en la sección Documentos de la app.' }
     },
-    required: ['titulo', 'svg_content', 'tipo']
+    required: ['titulo', 'tipo']
+  }
+};
+
+const TOOL_LISTAR_ESQUEMAS = {
+  name: 'listar_esquemas',
+  description: 'Lista todos los esquemas eléctricos generados por Alejandra IA guardados en documentos de obra. Muestra título, fecha, obra y URLs públicas para ver/descargar. Se puede filtrar por obra.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      obra_id: { type: 'number', description: 'ID de obra para filtrar (opcional). Si no se indica, devuelve todos.' },
+      limit:   { type: 'number', description: 'Máximo de resultados (por defecto 20, máx 50)' }
+    }
+  }
+};
+
+const TOOL_BORRAR_ESQUEMA = {
+  name: 'borrar_esquema',
+  description: 'Elimina un esquema eléctrico: borra los archivos de R2 (HTML visor + SVG puro) y el registro en documentos_obra. Pasa el r2_key del HTML (termina en .html).',
+  input_schema: {
+    type: 'object',
+    properties: {
+      r2_key:       { type: 'string', description: 'Clave R2 del HTML viewer del esquema (ej: "esquemas/2026-06-24_potencia_motor_Arranque_DOL.html")' },
+      documento_id: { type: 'number', description: 'ID del registro en documentos_obra (opcional, acelera la búsqueda)' }
+    },
+    required: ['r2_key']
   }
 };
 
@@ -1178,30 +1232,39 @@ const TOOL_GENERAR_INFORME = {
 
 const TOOL_ENVIAR_EMAIL = {
   name: 'enviar_email',
-  description: 'Envía un email. Si pasas r2_key de un informe generado, lo incrusta como cuerpo HTML. Requiere RESEND_API_KEY configurada en el worker.',
+  description: `Envía un email via Resend. Soporta tres modos según r2_key:
+- r2_key termina en .svg → esquema eléctrico: email con SVG inline + adjunto SVG descargable + botón "Ver interactivo"
+- r2_key termina en .html → informe HTML: se incrusta como cuerpo del email
+- sin r2_key → email de texto normal con el cuerpo indicado
+El campo "para" es el email del destinatario (si no lo sabes, pregúntalo).`,
   input_schema: {
     type: 'object',
     properties: {
-      destinatario: { type: 'string', description: 'Dirección email del destinatario' },
-      asunto:       { type: 'string', description: 'Asunto del email' },
-      cuerpo:       { type: 'string', description: 'Cuerpo del email (texto plano o HTML). Si r2_key, este campo actúa como introducción.' },
-      r2_key:       { type: 'string', description: 'R2 key de un informe HTML para incluirlo en el email (opcional)' }
+      para:    { type: 'string', description: 'Email del destinatario (ej: adrian@empresa.com)' },
+      asunto:  { type: 'string', description: 'Asunto del email' },
+      cuerpo:  { type: 'string', description: 'Texto introductorio del email (opcional si hay r2_key)' },
+      r2_key:  { type: 'string', description: 'R2 key del archivo a enviar (esquema .svg, informe .html, etc.). Opcional.' }
     },
-    required: ['destinatario', 'asunto', 'cuerpo']
+    required: ['para', 'asunto']
   }
 };
 
 const TOOL_ENVIAR_TELEGRAM_INFORME = {
   name: 'enviar_telegram_informe',
-  description: 'Envía un mensaje y/o informe HTML al grupo de Telegram. El archivo HTML se envía como documento adjunto descargable.',
+  description: `Envía por Telegram un archivo R2 o un mensaje de texto.
+- r2_key termina en .svg → envía el SVG como documento con caption que incluye enlace al visor HTML y al SVG puro
+- r2_key termina en .html → envía el HTML como documento adjunto
+- sin r2_key → envía solo el mensaje de texto (puede incluir URLs de esquemas)
+El chat_id se resuelve automáticamente desde la memoria del usuario si escribió antes al bot de Telegram.`,
   input_schema: {
     type: 'object',
     properties: {
-      mensaje:        { type: 'string', description: 'Texto del mensaje (resumen o notificación)' },
-      r2_key:         { type: 'string', description: 'R2 key del informe HTML a adjuntar (opcional)' },
-      nombre_archivo: { type: 'string', description: 'Nombre del archivo (ej: informe_semanal.html). Se genera automáticamente si no se indica.' }
+      mensaje:        { type: 'string', description: 'Texto del mensaje o caption (opcional si hay r2_key)' },
+      r2_key:         { type: 'string', description: 'R2 key del archivo a enviar (esquema .svg, informe .html). Opcional.' },
+      nombre_fichero: { type: 'string', description: 'Nombre del fichero adjunto. Si no se indica, se usa el nombre del R2 key.' },
+      chat_id:        { type: 'string', description: 'Chat ID de Telegram (opcional — se resuelve desde memoria si el usuario ya escribió al bot)' }
     },
-    required: ['mensaje']
+    required: []
   }
 };
 
@@ -1459,12 +1522,12 @@ const TOOL_CONSULTAR_CONOCIMIENTO = {
 
 const TOOLS_POR_EXPERTO = {
   simple:     [TOOL_MEMORY_READ, TOOL_CONSULTAR_BD, TOOL_ENVIAR_PUSH],
-  app:        [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_CONTROLAR_APP, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME],
+  app:        [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_CONTROLAR_APP, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_ANALIZAR_FOTO],
   tecnico:    [TOOL_LEER_ESTADO, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_BUSCAR_WEB, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_NEXUS_MANAGE, TOOL_CONTROLAR_APP, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO],
   web:        [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE],
   reflexion:  [TOOL_MEMORY_SAVE, TOOL_MEMORY_READ, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_PROPOSE_MEJORA, TOOL_BUSCAR_WEB, TOOL_TOMAR_DECISION, TOOL_LEER_ESTADO, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_CONTROLAR_APP, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO],
-  completo:   [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_LEER_ESTADO, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_CONTROLAR_APP, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME],
-  ingenieria: [TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_GENERAR_ESQUEMA, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_ANALIZAR_FOTO, TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME]
+  completo:   [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_LEER_ESTADO, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_CONTROLAR_APP, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_ANALIZAR_FOTO],
+  ingenieria: [TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_ANALIZAR_FOTO, TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME]
 };
 
 // ── Normalización de usuario_id (CRÍTICO: unifica identidad cross-canal) ─────
@@ -2221,6 +2284,27 @@ export default {
 
 
 
+
+      // GET /api/esquemas/view/<archivo> — Servir esquemas eléctricos SIN autenticación (son diagramas técnicos, sin datos personales)
+      if (path.startsWith('/api/esquemas/view/') && req.method === 'GET') {
+        const filename = decodeURIComponent(path.replace('/api/esquemas/view/', ''));
+        // Seguridad: solo permite acceder al prefijo esquemas/ (no a otros R2 paths)
+        const r2Key = `esquemas/${filename}`;
+        const obj = await env.FILES.get(r2Key);
+        if (!obj) return new Response('Esquema no encontrado', { status: 404 });
+        const ct = obj.httpMetadata?.contentType || 'application/octet-stream';
+        const headers = new Headers(corsHeaders);
+        headers.set('Content-Type', ct);
+        headers.set('Cache-Control', 'public, max-age=86400');
+        // Para SVG y HTML: Content-Disposition inline (abre en navegador)
+        const ext = filename.split('.').pop()?.toLowerCase();
+        if (ext === 'svg' || ext === 'html') {
+          headers.set('Content-Disposition', `inline; filename="${filename}"`);
+        } else {
+          headers.set('Content-Disposition', `attachment; filename="${filename}"`);
+        }
+        return new Response(obj.body, { headers });
+      }
 
       // GET /files/<key> — Servir archivo del R2 (para mostrar foto en modal de revisión)
       if (path.startsWith('/files/') && req.method === 'GET') {
@@ -5225,10 +5309,231 @@ ${input.codigo_sugerido ? `CÓDIGO SUGERIDO:\n${input.codigo_sugerido}` : ''}`;
     case 'generar_esquema_electrico': {
       try {
         const titulo = (input.titulo || 'Esquema eléctrico').trim();
-        const svgContent = (input.svg_content || '').trim();
+        let svgContent = (input.svg_content || '').trim();
         const descripcion = (input.descripcion || '').trim();
         const tipo = input.tipo || 'personalizado';
-        if (!svgContent) return JSON.stringify({ ok: false, error: 'Falta svg_content — genera el SVG antes de llamar esta tool.' });
+        const comp = input.componentes || {};
+
+        // ── Generadores SVG server-side para circuitos estándar ──────────────
+        // Si no se proporciona svg_content, generar automáticamente según tipo y componentes
+        if (!svgContent) {
+          if (tipo === 'potencia_motor' || tipo === 'mando_motor' || (tipo === 'personalizado' && (comp.contactor || comp.motor))) {
+            // Esquema DOL completo: circuito de potencia + circuito de mando
+            const QF  = comp.guardamotor || 'QF1';
+            const KM  = comp.contactor   || 'KM1';
+            const RTE = comp.rele_termico || 'RTE1';
+            const M   = comp.motor        || 'M1';
+            const F1  = comp.fusible_mando|| 'F1';
+            const S1  = comp.pulsador_parada || 'S1';
+            const S2  = comp.pulsador_marcha || 'S2';
+            const HL  = comp.piloto       || 'HL1';
+            const Vmando = comp.tension_mando || '230V';
+            const Vred   = comp.tension_red   || '400V';
+            const descrip = descripcion || `Arranque directo (DOL). ${comp.motor_kw ? comp.motor_kw+'kW · ' : ''}${Vred} trifásico · Mando ${Vmando}`;
+
+            svgContent = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 660" width="900" height="660" font-family="Courier New,monospace" font-size="11">
+  <rect width="900" height="660" fill="white" stroke="#ccc"/>
+  <!-- Marco y título -->
+  <rect x="1" y="1" width="898" height="658" fill="none" stroke="#333" stroke-width="2"/>
+  <rect x="1" y="1" width="898" height="36" fill="#1a1a2e"/>
+  <text x="450" y="23" text-anchor="middle" fill="white" font-size="14" font-weight="bold">⚡ ${titulo}</text>
+  <text x="10" y="655" fill="#666" font-size="9">Esquema IEC 60617 · Alejandra IA · Norma: REBT ITC-BT-47 · ${new Date().toLocaleDateString('es-ES')}</text>
+  <text x="890" y="655" fill="#666" font-size="9" text-anchor="end">Revisión 1</text>
+
+  <!-- ═══════════════════════════════════════════════ -->
+  <!-- CIRCUITO DE POTENCIA (izquierda) -->
+  <!-- ═══════════════════════════════════════════════ -->
+  <text x="170" y="56" text-anchor="middle" fill="#c0392b" font-size="12" font-weight="bold">CIRCUITO DE POTENCIA</text>
+  <text x="170" y="68" text-anchor="middle" fill="#666" font-size="9">${Vred} 3F+N</text>
+
+  <!-- Barras fase L1/L2/L3 -->
+  <line x1="80" y1="80" x2="260" y2="80" stroke="#c0392b" stroke-width="3"/>
+  <text x="80"  y="76" fill="#c0392b" font-size="10" font-weight="bold">L1</text>
+  <text x="155" y="76" fill="#c0392b" font-size="10" font-weight="bold">L2</text>
+  <text x="230" y="76" fill="#c0392b" font-size="10" font-weight="bold">L3</text>
+  <!-- Conductores verticales desde barras -->
+  <line x1="90"  y1="80" x2="90"  y2="120" stroke="#333" stroke-width="1.5"/>
+  <line x1="170" y1="80" x2="170" y2="120" stroke="#333" stroke-width="1.5"/>
+  <line x1="250" y1="80" x2="250" y2="120" stroke="#333" stroke-width="1.5"/>
+
+  <!-- Guardamotor / Interruptor automático QF1 -->
+  <rect x="60" y="120" width="220" height="40" fill="#f8f8f8" stroke="#333" stroke-width="1.5"/>
+  <line x1="80" y1="130" x2="80" y2="150" stroke="#333" stroke-width="1.5"/>
+  <line x1="170" y1="130" x2="170" y2="150" stroke="#333" stroke-width="1.5"/>
+  <line x1="250" y1="130" x2="250" y2="150" stroke="#333" stroke-width="1.5"/>
+  <line x1="80" y1="130" x2="95" y2="150" stroke="#333" stroke-width="1.5"/>
+  <line x1="170" y1="130" x2="185" y2="150" stroke="#333" stroke-width="1.5"/>
+  <line x1="250" y1="130" x2="265" y2="150" stroke="#333" stroke-width="1.5"/>
+  <text x="170" y="146" text-anchor="middle" fill="#c0392b" font-size="10" font-weight="bold">${QF}</text>
+  <text x="170" y="168" text-anchor="middle" fill="#555" font-size="9">Guardamotor</text>
+
+  <!-- Conductores entre QF y KM -->
+  <line x1="90"  y1="160" x2="90"  y2="220" stroke="#333" stroke-width="1.5"/>
+  <line x1="170" y1="160" x2="170" y2="220" stroke="#333" stroke-width="1.5"/>
+  <line x1="250" y1="160" x2="250" y2="220" stroke="#333" stroke-width="1.5"/>
+
+  <!-- Contactor KM1 (3 polos NA) -->
+  <rect x="60" y="220" width="220" height="50" fill="#f8f8f8" stroke="#333" stroke-width="1.5"/>
+  <!-- Polo 1 -->
+  <line x1="90" y1="220" x2="90" y2="235" stroke="#333" stroke-width="1.5"/>
+  <line x1="90" y1="245" x2="90" y2="270" stroke="#333" stroke-width="1.5"/>
+  <line x1="80" y1="245" x2="102" y2="235" stroke="#333" stroke-width="1.5"/>
+  <!-- Polo 2 -->
+  <line x1="170" y1="220" x2="170" y2="235" stroke="#333" stroke-width="1.5"/>
+  <line x1="170" y1="245" x2="170" y2="270" stroke="#333" stroke-width="1.5"/>
+  <line x1="160" y1="245" x2="182" y2="235" stroke="#333" stroke-width="1.5"/>
+  <!-- Polo 3 -->
+  <line x1="250" y1="220" x2="250" y2="235" stroke="#333" stroke-width="1.5"/>
+  <line x1="250" y1="245" x2="250" y2="270" stroke="#333" stroke-width="1.5"/>
+  <line x1="240" y1="245" x2="262" y2="235" stroke="#333" stroke-width="1.5"/>
+  <!-- Barra móvil -->
+  <line x1="80" y1="235" x2="260" y2="235" stroke="#333" stroke-width="1" stroke-dasharray="4,2"/>
+  <text x="170" y="252" text-anchor="middle" fill="#2980b9" font-size="10" font-weight="bold">${KM}</text>
+  <text x="170" y="285" text-anchor="middle" fill="#555" font-size="9">Contactor</text>
+
+  <!-- Conductores entre KM y RTE -->
+  <line x1="90"  y1="270" x2="90"  y2="320" stroke="#333" stroke-width="1.5"/>
+  <line x1="170" y1="270" x2="170" y2="320" stroke="#333" stroke-width="1.5"/>
+  <line x1="250" y1="270" x2="250" y2="320" stroke="#333" stroke-width="1.5"/>
+
+  <!-- Relé térmico RTE1 -->
+  <rect x="60" y="320" width="220" height="40" fill="#fff8e1" stroke="#e67e00" stroke-width="1.5"/>
+  <path d="M75,330 Q82,340 90,330 Q97,340 105,330" stroke="#e67e00" stroke-width="1.5" fill="none"/>
+  <path d="M155,330 Q162,340 170,330 Q177,340 185,330" stroke="#e67e00" stroke-width="1.5" fill="none"/>
+  <path d="M235,330 Q242,340 250,330 Q257,340 265,330" stroke="#e67e00" stroke-width="1.5" fill="none"/>
+  <text x="170" y="354" text-anchor="middle" fill="#e67e00" font-size="10" font-weight="bold">${RTE}</text>
+  <text x="170" y="368" text-anchor="middle" fill="#555" font-size="9">Relé térmico</text>
+
+  <!-- Conductores entre RTE y Motor -->
+  <line x1="90"  y1="360" x2="90"  y2="410" stroke="#333" stroke-width="1.5"/>
+  <line x1="170" y1="360" x2="170" y2="410" stroke="#333" stroke-width="1.5"/>
+  <line x1="250" y1="360" x2="250" y2="410" stroke="#333" stroke-width="1.5"/>
+  <line x1="90"  y1="410" x2="170" y2="430" stroke="#333" stroke-width="1.5"/>
+  <line x1="250" y1="410" x2="170" y2="430" stroke="#333" stroke-width="1.5"/>
+
+  <!-- Motor -->
+  <circle cx="170" cy="470" r="45" fill="#e8f4f8" stroke="#2980b9" stroke-width="2.5"/>
+  <text x="170" y="465" text-anchor="middle" fill="#2980b9" font-size="13" font-weight="bold">M</text>
+  <text x="170" y="479" text-anchor="middle" fill="#2980b9" font-size="10">3~</text>
+  <text x="170" y="530" text-anchor="middle" fill="#333" font-size="10" font-weight="bold">${M}</text>
+  <text x="170" y="543" text-anchor="middle" fill="#555" font-size="9">${comp.motor_kw ? comp.motor_kw+'kW · ' : ''}${Vred}</text>
+
+  <!-- Tierra PE -->
+  <line x1="215" y1="470" x2="280" y2="470" stroke="#27ae60" stroke-width="1.5"/>
+  <line x1="280" y1="455" x2="280" y2="570" stroke="#27ae60" stroke-width="1.5" stroke-dasharray="4,2"/>
+  <line x1="265" y1="570" x2="295" y2="570" stroke="#27ae60" stroke-width="2"/>
+  <line x1="270" y1="578" x2="290" y2="578" stroke="#27ae60" stroke-width="1.5"/>
+  <line x1="275" y1="586" x2="285" y2="586" stroke="#27ae60" stroke-width="1"/>
+  <text x="295" y="575" fill="#27ae60" font-size="9">PE</text>
+
+  <!-- ═══════════════════════════════════════════════ -->
+  <!-- CIRCUITO DE MANDO (derecha) -->
+  <!-- ═══════════════════════════════════════════════ -->
+  <text x="650" y="56" text-anchor="middle" fill="#2980b9" font-size="12" font-weight="bold">CIRCUITO DE MANDO</text>
+  <text x="650" y="68" text-anchor="middle" fill="#666" font-size="9">${Vmando} AC · Control</text>
+
+  <!-- Líneas de alimentación mando: Fase (arriba) y Neutro (abajo) -->
+  <line x1="470" y1="90" x2="860" y2="90" stroke="#c0392b" stroke-width="2"/>
+  <text x="465" y="94" fill="#c0392b" font-size="10" font-weight="bold">L</text>
+  <line x1="470" y1="580" x2="860" y2="580" stroke="#333" stroke-width="2"/>
+  <text x="465" y="584" fill="#333" font-size="10" font-weight="bold">N</text>
+
+  <!-- Fusible de mando F1 -->
+  <line x1="570" y1="90" x2="570" y2="130" stroke="#333" stroke-width="1.5"/>
+  <rect x="558" y="130" width="24" height="30" fill="#fff8e1" stroke="#e67e00" stroke-width="1.5" rx="2"/>
+  <line x1="570" y1="135" x2="570" y2="155" stroke="#e67e00" stroke-width="1.5"/>
+  <line x1="570" y1="160" x2="570" y2="190" stroke="#333" stroke-width="1.5"/>
+  <text x="590" y="150" fill="#e67e00" font-size="9">${F1}</text>
+  <text x="590" y="161" fill="#555" font-size="8">Fusible mando</text>
+
+  <!-- S1 Pulsador PARADA (NC) -->
+  <line x1="570" y1="190" x2="570" y2="230" stroke="#333" stroke-width="1.5"/>
+  <line x1="558" y1="230" x2="582" y2="230" stroke="#333" stroke-width="1.5"/>
+  <line x1="558" y1="250" x2="582" y2="250" stroke="#333" stroke-width="1.5"/>
+  <line x1="562" y1="242" x2="578" y2="242" stroke="#c0392b" stroke-width="2"/>
+  <line x1="570" y1="250" x2="570" y2="280" stroke="#333" stroke-width="1.5"/>
+  <text x="590" y="242" fill="#c0392b" font-size="9">${S1} ⊟</text>
+  <text x="590" y="253" fill="#555" font-size="8">Parada (NC)</text>
+
+  <!-- S2 Pulsador MARCHA (NA) -->
+  <line x1="570" y1="280" x2="570" y2="320" stroke="#333" stroke-width="1.5"/>
+  <line x1="558" y1="320" x2="582" y2="320" stroke="#333" stroke-width="1.5"/>
+  <line x1="558" y1="340" x2="582" y2="340" stroke="#333" stroke-width="1.5"/>
+  <line x1="558" y1="340" x2="578" y2="320" stroke="#27ae60" stroke-width="2"/>
+  <line x1="570" y1="340" x2="570" y2="380" stroke="#333" stroke-width="1.5"/>
+  <text x="590" y="332" fill="#27ae60" font-size="9">${S2} ⊞</text>
+  <text x="590" y="343" fill="#555" font-size="8">Marcha (NA)</text>
+
+  <!-- Contacto autoenclavamiento KM1 (NA paralelo a S2) -->
+  <line x1="760" y1="280" x2="760" y2="320" stroke="#333" stroke-width="1.5"/>
+  <line x1="748" y1="320" x2="772" y2="320" stroke="#333" stroke-width="1.5"/>
+  <line x1="748" y1="340" x2="772" y2="340" stroke="#333" stroke-width="1.5"/>
+  <line x1="748" y1="340" x2="768" y2="320" stroke="#2980b9" stroke-width="2"/>
+  <line x1="760" y1="340" x2="760" y2="380" stroke="#333" stroke-width="1.5"/>
+  <text x="775" y="332" fill="#2980b9" font-size="9">${KM}</text>
+  <text x="775" y="343" fill="#555" font-size="8">Autoencl. (NA)</text>
+  <!-- Conexión paralela S2 y KM -->
+  <line x1="570" y1="280" x2="760" y2="280" stroke="#333" stroke-width="1.5"/>
+  <line x1="570" y1="380" x2="760" y2="380" stroke="#333" stroke-width="1.5"/>
+
+  <!-- Bobina KM1 -->
+  <line x1="665" y1="380" x2="665" y2="420" stroke="#333" stroke-width="1.5"/>
+  <circle cx="665" cy="445" r="25" fill="#e8f4f8" stroke="#2980b9" stroke-width="2"/>
+  <text x="665" y="449" text-anchor="middle" fill="#2980b9" font-size="10" font-weight="bold">${KM}</text>
+  <line x1="665" y1="470" x2="665" y2="510" stroke="#333" stroke-width="1.5"/>
+  <text x="700" y="449" fill="#555" font-size="8">Bobina 230V</text>
+  <!-- Conexión bobina al neutro -->
+  <line x1="665" y1="510" x2="665" y2="580" stroke="#333" stroke-width="1.5"/>
+
+  <!-- Piloto HL1 (NA KM1) en paralelo con bobina -->
+  <line x1="800" y1="380" x2="800" y2="420" stroke="#333" stroke-width="1.5"/>
+  <!-- Contacto NA KM1 para piloto -->
+  <line x1="788" y1="420" x2="812" y2="420" stroke="#333" stroke-width="1.5"/>
+  <line x1="788" y1="440" x2="812" y2="440" stroke="#333" stroke-width="1.5"/>
+  <line x1="788" y1="440" x2="808" y2="420" stroke="#2980b9" stroke-width="1.5"/>
+  <line x1="800" y1="440" x2="800" y2="470" stroke="#333" stroke-width="1.5"/>
+  <!-- Lámpara piloto -->
+  <circle cx="800" cy="495" r="20" fill="#fffde7" stroke="#f39c12" stroke-width="2"/>
+  <line x1="786" y1="481" x2="814" y2="509" stroke="#f39c12" stroke-width="1.5"/>
+  <line x1="814" y1="481" x2="786" y2="509" stroke="#f39c12" stroke-width="1.5"/>
+  <line x1="800" y1="515" x2="800" y2="580" stroke="#333" stroke-width="1.5"/>
+  <text x="828" y="499" fill="#f39c12" font-size="9">${HL}</text>
+  <text x="828" y="510" fill="#555" font-size="8">Piloto verde</text>
+  <!-- Conexión piloto-bobina a neutro -->
+  <line x1="665" y1="380" x2="800" y2="380" stroke="#333" stroke-width="1.5"/>
+  <line x1="665" y1="580" x2="800" y2="580" stroke="#333" stroke-width="1.5"/>
+
+  <!-- Separador vertical -->
+  <line x1="440" y1="45" x2="440" y2="610" stroke="#ccc" stroke-width="1" stroke-dasharray="6,3"/>
+  <text x="440" y="625" text-anchor="middle" fill="#999" font-size="8">— Separación Potencia / Mando —</text>
+
+  <!-- Leyenda -->
+  <rect x="10" y="555" width="280" height="95" fill="#f9f9f9" stroke="#ccc" rx="4"/>
+  <text x="15" y="570" fill="#333" font-size="9" font-weight="bold">LEYENDA</text>
+  <rect x="15" y="575" width="15" height="10" fill="#f8f8f8" stroke="#333" stroke-width="1"/>
+  <text x="35" y="584" fill="#333" font-size="8">Guardamotor (MCB + RTE) — ${QF}</text>
+  <circle cx="22" cy="598" r="7" fill="#e8f4f8" stroke="#2980b9" stroke-width="1"/>
+  <text x="35" y="602" fill="#333" font-size="8">Bobina contactor — ${KM}</text>
+  <rect x="15" y="608" width="15" height="10" fill="#fff8e1" stroke="#e67e00" stroke-width="1"/>
+  <text x="35" y="617" fill="#333" font-size="8">Relé térmico — ${RTE}</text>
+  <circle cx="22" cy="632" r="7" fill="#fffde7" stroke="#f39c12" stroke-width="1"/>
+  <text x="35" y="636" fill="#333" font-size="8">Piloto señalización — ${HL}</text>
+
+  <!-- Cuadro de datos -->
+  <rect x="300" y="555" width="130" height="95" fill="#f9f9f9" stroke="#ccc" rx="4"/>
+  <text x="305" y="570" fill="#333" font-size="9" font-weight="bold">DATOS</text>
+  <text x="305" y="583" fill="#555" font-size="8">Red: ${Vred} trifásico</text>
+  <text x="305" y="595" fill="#555" font-size="8">Mando: ${Vmando} AC</text>
+  <text x="305" y="607" fill="#555" font-size="8">Tipo arranque: DOL</text>
+  <text x="305" y="619" fill="#555" font-size="8">Norma: IEC 60617</text>
+  <text x="305" y="631" fill="#555" font-size="8">REBT ITC-BT-47</text>
+  <text x="305" y="643" fill="#555" font-size="8">Alejandra IA</text>
+</svg>`;
+          } else {
+            return JSON.stringify({ ok: false, error: 'No se proporcionó svg_content ni componentes válidos. Para arranque DOL, pasa componentes: {contactor, motor, guardamotor, ...}. Para circuito personalizado, pasa svg_content con el SVG completo.' });
+          }
+        }
+
         if (!svgContent.includes('<svg')) return JSON.stringify({ ok: false, error: 'svg_content no contiene un elemento <svg> válido.' });
 
         const fecha = new Date().toISOString().split('T')[0];
@@ -5301,17 +5606,115 @@ ${descripcion ? `<div class="info-bar"><span class="badge">${tipo}</span>${descr
           httpMetadata: { contentType: 'image/svg+xml; charset=utf-8' }
         });
 
+        // ── Si se proporcionó obra_id, guardar en documentos_obra ──────────
+        const obraIdParam = input.obra_id ? parseInt(input.obra_id) : null;
+        if (obraIdParam && env.DB) {
+          try {
+            const obra = await env.DB.prepare('SELECT empresa_id FROM obras WHERE id=?').bind(obraIdParam).first();
+            if (obra?.empresa_id) {
+              await env.DB.prepare(
+                `INSERT INTO documentos_obra (empresa_id, obra_id, tipo, titulo, estado, fecha_emision, elaborado_por, r2_key, notas, created_by)
+                 VALUES (?, ?, 'otro', ?, 'vigente', ?, 'Alejandra IA', ?, ?, 'alejandra')`
+              ).bind(obra.empresa_id, obraIdParam, titulo, fecha, r2Key, `SVG: ${r2KeySvg} | ${descripcion || tipo}`, 'alejandra').run();
+            }
+          } catch (dbErr) {
+            console.error('[esquema] Error guardando en documentos_obra:', dbErr.message);
+          }
+        }
+
+        const baseUrl = 'https://alejandra-agente.alejandra-app.workers.dev';
+        const htmlFilename = r2Key.replace('esquemas/', '');
+        const svgFilename  = r2KeySvg.replace('esquemas/', '');
+        const urlViewer = `${baseUrl}/api/esquemas/view/${encodeURIComponent(htmlFilename)}`;
+        const urlSvg    = `${baseUrl}/api/esquemas/view/${encodeURIComponent(svgFilename)}`;
+
         return JSON.stringify({
           ok: true,
           titulo,
           tipo,
           r2_key: r2Key,
           r2_key_svg: r2KeySvg,
+          url_viewer: urlViewer,
+          url_svg: urlSvg,
           descripcion,
-          mensaje: `Esquema "${titulo}" guardado correctamente. HTML visor: ${r2Key} | SVG puro: ${r2KeySvg}. El usuario puede abrirlo desde la app (sección Archivos) o pedirte que lo mandes por email/Telegram.`
+          mensaje: `Esquema "${titulo}" generado y guardado ✅\n🔗 Ver/descargar (HTML): ${urlViewer}\n🔗 SVG puro: ${urlSvg}${obraIdParam ? '\n📂 Guardado en documentos de la obra (aparece en la sección Documentos de la app).' : ''}\nPuedes mandarlo por email o Telegram con la herramienta correspondiente, o compartir el enlace por WhatsApp.`
         });
       } catch (err) {
         return JSON.stringify({ ok: false, error: `Error guardando esquema: ${err.message}` });
+      }
+    }
+
+    case 'listar_esquemas': {
+      try {
+        const obraIdF = input.obra_id ? parseInt(input.obra_id) : null;
+        const limitF  = Math.min(parseInt(input.limit) || 20, 50);
+        let q, p;
+        if (obraIdF) {
+          q = `SELECT d.id, d.titulo, d.fecha_emision, d.r2_key, d.notas, o.nombre as obra_nombre, d.obra_id
+               FROM documentos_obra d LEFT JOIN obras o ON o.id=d.obra_id
+               WHERE d.elaborado_por='Alejandra IA' AND d.obra_id=?
+               ORDER BY d.created_at DESC LIMIT ?`;
+          p = [obraIdF, limitF];
+        } else {
+          q = `SELECT d.id, d.titulo, d.fecha_emision, d.r2_key, d.notas, o.nombre as obra_nombre, d.obra_id
+               FROM documentos_obra d LEFT JOIN obras o ON o.id=d.obra_id
+               WHERE d.elaborado_por='Alejandra IA'
+               ORDER BY d.created_at DESC LIMIT ?`;
+          p = [limitF];
+        }
+        const rows = await env.DB.prepare(q).bind(...p).all();
+        const base = 'https://alejandra-agente.alejandra-app.workers.dev';
+        const items = (rows.results || []).map(r => {
+          const key   = r.r2_key || '';
+          const fn    = key.replace('esquemas/', '');
+          const fnSvg = fn.replace('.html', '.svg');
+          return {
+            id:         r.id,
+            titulo:     r.titulo,
+            fecha:      r.fecha_emision,
+            obra_id:    r.obra_id,
+            obra:       r.obra_nombre || '(sin obra)',
+            r2_key:     key,
+            url_viewer: fn    ? `${base}/api/esquemas/view/${encodeURIComponent(fn)}`    : null,
+            url_svg:    fnSvg ? `${base}/api/esquemas/view/${encodeURIComponent(fnSvg)}` : null,
+            notas:      r.notas
+          };
+        });
+        return JSON.stringify({ ok: true, total: items.length, esquemas: items });
+      } catch (err) {
+        return JSON.stringify({ ok: false, error: `Error listando esquemas: ${err.message}` });
+      }
+    }
+
+    case 'borrar_esquema': {
+      try {
+        const key = (input.r2_key || '').trim();
+        if (!key) return JSON.stringify({ ok: false, error: 'r2_key es obligatorio' });
+        const keySvg = key.replace('.html', '.svg');
+        // Borrar de R2
+        if (env.FILES) {
+          await env.FILES.delete(key);
+          if (keySvg !== key) await env.FILES.delete(keySvg);
+        }
+        // Borrar de documentos_obra
+        let changes = 0;
+        if (env.DB) {
+          let res;
+          if (input.documento_id) {
+            res = await env.DB.prepare(`DELETE FROM documentos_obra WHERE id=? AND elaborado_por='Alejandra IA'`)
+              .bind(parseInt(input.documento_id)).run();
+          } else {
+            res = await env.DB.prepare(`DELETE FROM documentos_obra WHERE (r2_key=? OR r2_key=?) AND elaborado_por='Alejandra IA'`)
+              .bind(key, keySvg).run();
+          }
+          changes = res.meta?.changes || 0;
+        }
+        return JSON.stringify({
+          ok: true,
+          mensaje: `Esquema eliminado ✅\n• R2: ${key}${keySvg !== key ? ' + ' + keySvg : ''}\n• BD: ${changes} registro${changes !== 1 ? 's' : ''} borrado${changes !== 1 ? 's' : ''}`
+        });
+      } catch (err) {
+        return JSON.stringify({ ok: false, error: `Error borrando esquema: ${err.message}` });
       }
     }
 
@@ -6100,10 +6503,10 @@ ${datos.proximos_pasos || '- Pendiente de definir'}`;
       } catch (e) { return JSON.stringify({ ok: false, error: e.message }); }
     }
 
-    // ── Enviar informe por email (Resend) ──────────────────────────────────────
+    // ── Enviar por email (Resend) — soporta informes HTML inline y adjuntos SVG/HTML ──
     case 'enviar_email': {
-      const para    = (input.para || '').trim();
-      const asunto  = (input.asunto || 'Informe de Alejandra').trim();
+      const para    = (input.para || input.destinatario || '').trim();
+      const asunto  = (input.asunto || 'Esquema eléctrico de Alejandra').trim();
       const cuerpo  = (input.cuerpo || '').trim();
       const r2Key   = (input.r2_key || '').trim();
 
@@ -6111,38 +6514,68 @@ ${datos.proximos_pasos || '- Pendiente de definir'}`;
       if (!env.RESEND_API_KEY) return JSON.stringify({ ok: false, error: 'RESEND_API_KEY no configurada en el worker.' });
 
       try {
-        let htmlBody = cuerpo.replace(/\n/g, '<br>');
+        const esSvg  = r2Key.endsWith('.svg');
+        const esHtml = r2Key.endsWith('.html');
+        let htmlBody = cuerpo ? cuerpo.replace(/\n/g, '<br>') : '';
+        const payload = {
+          from: env.RESEND_FROM || 'Alejandra <onboarding@resend.dev>',
+          to: [para],
+          subject: asunto
+        };
 
-        // Si hay un informe en R2, adjuntarlo como HTML inline
-        if (r2Key) {
+        if (r2Key && env.FILES) {
           const obj = await env.FILES.get(r2Key);
           if (obj) {
-            const contenido = await obj.text();
-            htmlBody = contenido;
+            if (esSvg) {
+              // SVG → adjunto + cuerpo HTML con enlace de descarga y SVG inline
+              const svgText = await obj.text();
+              const svgB64  = btoa(unescape(encodeURIComponent(svgText)));
+              const fname   = r2Key.split('/').pop();
+              const baseUrl = 'https://alejandra-agente.alejandra-app.workers.dev';
+              const urlPublica = `${baseUrl}/api/esquemas/view/${encodeURIComponent(fname)}`;
+              payload.html = `<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body style="font-family:sans-serif;background:#f5f5f5;padding:24px">
+<div style="background:#1a1a2e;color:#fff;padding:16px 24px;border-radius:8px 8px 0 0">
+  <h2 style="margin:0;color:#e67e00">⚡ ${asunto}</h2>
+  <p style="margin:4px 0 0;font-size:13px;color:#aaa">Generado por Alejandra IA · ${new Date().toLocaleDateString('es-ES')}</p>
+</div>
+<div style="background:#fff;padding:24px;border-radius:0 0 8px 8px;border:1px solid #ddd">
+  ${cuerpo ? `<p>${cuerpo.replace(/\n/g,'<br>')}</p><hr>` : ''}
+  <p style="text-align:center"><a href="${urlPublica}" style="background:#e67e00;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;font-weight:bold">🔗 Ver esquema interactivo</a></p>
+  <div style="text-align:center;margin:16px 0;background:#f9f9f9;padding:16px;border-radius:8px">${svgText}</div>
+  <p style="font-size:12px;color:#888;text-align:center">Adjunto: ${fname} (SVG puro para usar en AutoCAD, Visio, etc.)</p>
+</div>
+</body></html>`;
+              payload.attachments = [{
+                filename: fname,
+                content: svgB64,
+                content_type: 'image/svg+xml'
+              }];
+            } else if (esHtml) {
+              // HTML informe/visor → inline como cuerpo del email
+              payload.html = await obj.text();
+            } else {
+              // Otro tipo → adjunto genérico
+              const buf  = await obj.arrayBuffer();
+              const b64  = btoa(String.fromCharCode(...new Uint8Array(buf)));
+              const fname = r2Key.split('/').pop();
+              payload.html = htmlBody || `<p>Adjunto: ${fname}</p>`;
+              payload.attachments = [{ filename: fname, content: b64, content_type: obj.httpMetadata?.contentType || 'application/octet-stream' }];
+            }
           }
         }
 
-        const payload = {
-          from: 'Alejandra <alejandra@alejandraapp.com>',
-          to: [para],
-          subject: asunto,
-          html: htmlBody || '<p>Sin contenido</p>'
-        };
+        if (!payload.html) payload.html = htmlBody || '<p>Sin contenido</p>';
 
         const resp = await fetch('https://api.resend.com/emails', {
           method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${env.RESEND_API_KEY}`,
-            'Content-Type': 'application/json'
-          },
+          headers: { 'Authorization': `Bearer ${env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
         });
 
         const result = await resp.json().catch(() => ({ error: 'respuesta no JSON' }));
-        if (!resp.ok) {
-          return JSON.stringify({ ok: false, status: resp.status, error: result.message || result.error || 'Error Resend' });
-        }
-        return JSON.stringify({ ok: true, msg: `Email enviado a ${para}: "${asunto}"`, resend_id: result.id });
+        if (!resp.ok) return JSON.stringify({ ok: false, status: resp.status, error: result.message || result.error || 'Error Resend' });
+        const adjInfo = esSvg ? ' (con SVG adjunto + visor inline)' : esHtml ? ' (HTML informe)' : '';
+        return JSON.stringify({ ok: true, msg: `Email enviado a ${para}: "${asunto}"${adjInfo}`, resend_id: result.id });
       } catch (e) { return JSON.stringify({ ok: false, error: e.message }); }
     }
 
@@ -6168,26 +6601,44 @@ ${datos.proximos_pasos || '- Pendiente de definir'}`;
       const botBase = `https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}`;
 
       try {
-        // Si hay informe en R2 → enviar como documento
+        // Si hay archivo en R2 → enviar como documento (SVG o HTML)
         if (r2Key) {
           const obj = await env.FILES.get(r2Key);
           if (!obj) return JSON.stringify({ ok: false, error: `No se encontró el archivo en R2: ${r2Key}` });
 
+          const esSvg  = r2Key.endsWith('.svg');
+          const mimeType = esSvg ? 'image/svg+xml' : (obj.httpMetadata?.contentType || 'text/html');
           const contenido = await obj.text();
-          const blob = new Blob([contenido], { type: 'text/html' });
 
+          // Nombre de fichero: usar el nombre del R2 key si no se especificó
+          const fname = input.nombre_fichero
+            ? input.nombre_fichero
+            : r2Key.split('/').pop();
+
+          const blob = new Blob([contenido], { type: mimeType });
           const form = new FormData();
           form.append('chat_id', String(destChatId));
-          form.append('document', blob, nombreFichero);
-          if (mensaje) form.append('caption', mensaje.substring(0, 1024));
+          form.append('document', blob, fname);
+
+          // Caption: mensaje + URL pública si es un esquema
+          let caption = mensaje || '';
+          if (esSvg || r2Key.startsWith('esquemas/')) {
+            const baseUrl = 'https://alejandra-agente.alejandra-app.workers.dev';
+            const htmlFname = fname.replace('.svg', '.html');
+            const urlViewer = `${baseUrl}/api/esquemas/view/${encodeURIComponent(htmlFname)}`;
+            const urlSvg    = `${baseUrl}/api/esquemas/view/${encodeURIComponent(fname)}`;
+            caption = (caption ? caption + '\n\n' : '') +
+              `🔗 Ver interactivo: ${urlViewer}\n📐 SVG puro: ${urlSvg}`;
+          }
+          if (caption) form.append('caption', caption.substring(0, 1024));
 
           const resp = await fetch(`${botBase}/sendDocument`, { method: 'POST', body: form });
           const result = await resp.json().catch(() => ({}));
           if (!result.ok) return JSON.stringify({ ok: false, error: result.description || 'Error Telegram sendDocument' });
-          return JSON.stringify({ ok: true, msg: `Informe enviado por Telegram como documento "${nombreFichero}"` });
+          return JSON.stringify({ ok: true, msg: `${esSvg ? 'Esquema SVG' : 'Informe'} enviado por Telegram como "${fname}"` });
         }
 
-        // Sin R2 → enviar como texto plano (mensaje)
+        // Sin R2 → enviar como texto/mensaje (puede incluir URL pública de un esquema)
         if (!mensaje) return JSON.stringify({ ok: false, error: 'Faltan "r2_key" o "mensaje" para enviar por Telegram.' });
         const resp = await fetch(`${botBase}/sendMessage`, {
           method: 'POST',
@@ -6196,7 +6647,7 @@ ${datos.proximos_pasos || '- Pendiente de definir'}`;
         });
         const result = await resp.json().catch(() => ({}));
         if (!result.ok) return JSON.stringify({ ok: false, error: result.description || 'Error Telegram sendMessage' });
-        return JSON.stringify({ ok: true, msg: 'Mensaje de informe enviado por Telegram.' });
+        return JSON.stringify({ ok: true, msg: 'Mensaje enviado por Telegram.' });
       } catch (e) { return JSON.stringify({ ok: false, error: e.message }); }
     }
 
@@ -6375,6 +6826,10 @@ Datos:\n${resumen}`
 // ── ROUTER con 2 capas: Regex (0 tokens) → Haiku (fallback) ─────────────────
 const REGEX_ROUTES = [
   // Capa 1: Regex — clasificación instantánea sin LLM
+  // REGLAS DE INGENIERÍA PRIMERO (más específicas que los enclíticos)
+  { re: /\b(sección de cable|caída de tensión|magnetotérmico|diferencial|protección|bandeja|canalización|ITC-BT|REBT|UNE|instalación eléctrica|trifásico|monofásico|cuadro eléctrico|esquema eléctrico|unifiliar|multifilar|plano eléctrico|arrancador|contactor|relé|autómata|variador|SCADA|HMI|motor eléctrico|transformador|puesta a tierra)\b/i, expert: 'ingenieria', web: false },
+  { re: /\b(calcula|dimensiona|qué sección|qué cable|qué protección|foto de obra|analiza esta foto|diseña|dibuja|hazme un esquema|hazme el esquema|genera un esquema|genera el esquema|haz el esquema|haz un esquema|qué es este cuadro|qué componentes|analiza este cuadro|arranque directo|arranque dol|dol|estrella.triángulo|star.delta|circuito de mando|circuito de control|circuito de potencia|esquema electrico|esquema eléctrico)\b/i, expert: 'ingenieria', web: false },
+  { re: /\b(ITC-BT|REBT|IEC 60364|IEC 60617|EN 61439|UNE 20460|RD 614|instalacion electrica|cuadro electrico|interruptor automatico|diferencial|guardamotor|variador de frecuencia|PLC|PROFIBUS|PROFINET|Modbus|SCADA|VFD|DOL|kVA|kvar|cos.?fi|cos phi)\b/i, expert: 'ingenieria', web: false },
   // Pronombres enclíticos pegados a verbo → imperativo de acción → siempre "app"
   // Cubre: ponlos, mételos, déjalo, pásalas, aplícamelos, corrígeles, etc. sin enumerar verbos
   { re: /\w+(lo|la|los|las|me|te|nos|les|selo|sela|selos|selas)\b/i, expert: 'app', web: false },
@@ -6382,8 +6837,6 @@ const REGEX_ROUTES = [
   { re: /\b(no funciona|no puedo|error|falla|se cuelga|pantalla en blanco|no carga|no responde|se ha caído|no me deja|problema|avería|roto|bloqueado|urgente)\b/i, expert: 'app', web: false },
   { re: /\b(bobina|equipo|carretilla|PEMP|fichaje|fichar|entrada|salida|operario|encargado|personal|incidencia|pedido|albarán|obra|almacén|stock)\b/i, expert: 'app', web: false },
   { re: /\b(cuánt[oa]s|quién fichó|lista de|muéstrame|dame los datos|informe|resumen del|estado de)\b/i, expert: 'app', web: false },
-  { re: /\b(sección de cable|caída de tensión|magnetotérmico|diferencial|protección|bandeja|canalización|ITC-BT|REBT|UNE|instalación eléctrica|circuito|trifásico|monofásico|kW|amperio|potencia|cuadro eléctrico|esquema|unifiliar|multifilar|plano eléctrico|arrancador|contactor|relé|PLC|autómata|variador|SCADA|HMI|sensor|motor eléctrico|transformador|puesta a tierra)\b/i, expert: 'ingenieria', web: false },
-  { re: /\b(calcula|dimensiona|qué sección|qué cable|qué protección|foto de obra|analiza esta foto|plano|diseña|dibuja|hazme un esquema|genera un esquema|haz el esquema|qué es este cuadro|qué componentes|identifica|analiza este cuadro|arranque|dol|estrella.triángulo|star.delta|circuito de mando|circuito de control|circuito de potencia)\b/i, expert: 'ingenieria', web: false },
   { re: /\b(NEXUS|worker|deploy|wrangler|cloudflare|código|endpoint|API|github|commit|patch|tool|prompt)\b/i, expert: 'tecnico', web: false },
   { re: /\b(mejora|reflexion|autoconocimiento|qué puedes mejorar|piensa en|analízate|evolucionar)\b/i, expert: 'reflexion', web: false },
   { re: /\b(quién eres|qué eres|cómo te llamas|qué sabes hacer|capacidades|tu historia|cuéntame sobre ti)\b/i, expert: 'completo', web: false },

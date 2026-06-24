@@ -7634,14 +7634,23 @@ async function docsCargar(containerId) {
 
   c.innerHTML = '<div class="empty-state">Cargando...</div>';
   try {
-    const [resCarpetas, resDocs, resNotas] = await Promise.all([
+    const [resCarpetas, resDocs, resNotas, resEsquemas] = await Promise.all([
       apiCall(`/carpetas?obra_id=${obraId}&departamento=${dept}`),
       apiCall(`/docs-dept?obra_id=${obraId}&departamento=${dept}`),
       apiCall(`/docs-notas?obra_id=${obraId}&departamento=${dept}`),
+      apiCall(`/documentos-obra?obra_id=${obraId}&elaborado_por=Alejandra+IA`),
     ]);
-    const carpetas  = resCarpetas.ok ? await resCarpetas.json() : [];
-    const rootDocs  = resDocs.ok    ? await resDocs.json()    : [];
-    const rootNotas = resNotas.ok   ? await resNotas.json()   : [];
+    const carpetas   = resCarpetas.ok  ? await resCarpetas.json()  : [];
+    const rootDocs   = resDocs.ok      ? await resDocs.json()      : [];
+    const rootNotas  = resNotas.ok     ? await resNotas.json()      : [];
+    const esqData    = resEsquemas.ok  ? await resEsquemas.json()  : {};
+    const esquemas   = esqData.items || [];
+
+    const AGENTE_BASE = 'https://alejandra-agente.alejandra-app.workers.dev';
+    function esquemaUrl(r2Key) {
+      if (!r2Key) return null;
+      return `${AGENTE_BASE}/api/esquemas/view/${encodeURIComponent(r2Key.replace('esquemas/',''))}`;
+    }
 
     c.innerHTML = `
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">
@@ -7672,11 +7681,57 @@ async function docsCargar(containerId) {
         </div>`).join('')}
       ${rootNotas.map(n => docsRenderNota(n, puedeEditar, null, containerId, null)).join('')}
       ${rootDocs.map(d  => docsRenderArchivo(d, puedeEditar, null, containerId, '')).join('')}
-      ${!carpetas.length && !rootDocs.length && !rootNotas.length
-        ? '<div class="empty-state">Sin documentos. Crea una carpeta o sube un archivo.</div>' : ''}`;
+      ${!carpetas.length && !rootDocs.length && !rootNotas.length && !esquemas.length
+        ? '<div class="empty-state">Sin documentos. Crea una carpeta o sube un archivo.</div>' : ''}
+      ${esquemas.length ? `
+        <div style="margin-top:18px;margin-bottom:10px;display:flex;align-items:center;gap:8px">
+          <div style="flex:1;height:1px;background:var(--border)"></div>
+          <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:12px;color:var(--muted);white-space:nowrap">📐 ESQUEMAS IA</div>
+          <div style="flex:1;height:1px;background:var(--border)"></div>
+        </div>
+        ${esquemas.map(e => {
+          const url = esquemaUrl(e.r2_key);
+          const tit = (e.titulo||'').replace(/'/g,"\\'");
+          return `<div style="display:flex;align-items:center;gap:8px;padding:11px 12px;background:var(--surface);border:1px solid var(--border);border-radius:12px;margin-bottom:8px">
+            <span style="font-size:22px;flex-shrink:0;cursor:pointer" onclick="${url ? `window.open('${url}','_blank')` : ''}">📐</span>
+            <div style="flex:1;min-width:0;cursor:pointer" onclick="${url ? `window.open('${url}','_blank')` : ''}">
+              <div style="font-weight:600;font-size:13px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${e.titulo}</div>
+              <div style="font-size:10px;color:var(--muted)">${e.fecha_emision||''} · Alejandra IA</div>
+            </div>
+            ${url ? `<button onclick="window.open('${url}','_blank')" title="Ver esquema"
+              style="padding:6px 9px;background:var(--surface);border:1px solid var(--border);border-radius:8px;font-size:14px;cursor:pointer;flex-shrink:0">🔗</button>` : ''}
+            ${puedeEditar ? `
+            <button onclick="docsEsquemaRenombrar(${e.id},'${tit}','${containerId}')" title="Renombrar"
+              style="padding:6px 9px;background:var(--surface);border:1px solid var(--border);border-radius:8px;font-size:14px;cursor:pointer;flex-shrink:0">✏️</button>
+            <button onclick="docsEsquemaBorrar(${e.id},'${tit}','${containerId}')" title="Eliminar"
+              style="padding:6px 9px;background:#ef444415;border:1px solid #ef444430;border-radius:8px;font-size:14px;color:#ef4444;cursor:pointer;flex-shrink:0">🗑️</button>` : ''}
+          </div>`;
+        }).join('')}` : ''}`;
   } catch {
     c.innerHTML = '<div class="empty-state" style="color:var(--red)">Error al cargar</div>';
   }
+}
+
+// ── Esquemas IA: renombrar y borrar desde la pantalla Docs ───────────────────
+async function docsEsquemaRenombrar(id, tituloActual, containerId) {
+  const nuevo = prompt('Nuevo nombre para el esquema:', tituloActual);
+  if (!nuevo || !nuevo.trim() || nuevo.trim() === tituloActual) return;
+  try {
+    const r = await apiCall('/documentos-obra/' + id, { method: 'PUT', body: JSON.stringify({ titulo: nuevo.trim() }) });
+    const d = await r.json();
+    if (d.ok) { docsCargar(containerId); toast('✅ Nombre actualizado', 'ok'); }
+    else toast('Error: ' + (d.error || 'desconocido'), 'err');
+  } catch { toast('Error de red', 'err'); }
+}
+
+async function docsEsquemaBorrar(id, titulo, containerId) {
+  if (!confirm(`¿Eliminar el esquema "${titulo}"?\n\nSe borrarán los archivos SVG y HTML de R2 y el registro. Esta acción no se puede deshacer.`)) return;
+  try {
+    const r = await apiCall('/documentos-obra/' + id, { method: 'DELETE' });
+    const d = await r.json();
+    if (d.ok) { docsCargar(containerId); toast('🗑️ Esquema eliminado', 'ok'); }
+    else toast('Error: ' + (d.error || 'desconocido'), 'err');
+  } catch { toast('Error de red', 'err'); }
 }
 
 // MEJ-155: subcarpetas | MEJ-136: notas | firma actualizada (parentCarpetaId, parentNombre)
@@ -10815,7 +10870,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '6.46';
+const APP_VERSION = '6.47';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes

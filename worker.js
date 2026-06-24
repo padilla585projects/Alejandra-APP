@@ -7509,12 +7509,14 @@ async function getDocumentosObra(request, env) {
   const tipo = url.searchParams.get('tipo');
   const estado = url.searchParams.get('estado');
 
+  const elaborado_por = url.searchParams.get('elaborado_por');
   let sql = `SELECT * FROM documentos_obra WHERE empresa_id=?`;
   const binds = [empresa_id];
   if (obraAuth && !isSuperadmin && !isEmpresaAdmin && !isAdmin) { sql += ` AND obra_id=?`; binds.push(obraAuth); }
-  if (obra_id) { sql += ` AND obra_id=?`; binds.push(obra_id); }
-  if (tipo)    { sql += ` AND tipo=?`; binds.push(tipo); }
-  if (estado)  { sql += ` AND estado=?`; binds.push(estado); }
+  if (obra_id)      { sql += ` AND obra_id=?`;       binds.push(obra_id); }
+  if (tipo)         { sql += ` AND tipo=?`;           binds.push(tipo); }
+  if (estado)       { sql += ` AND estado=?`;         binds.push(estado); }
+  if (elaborado_por){ sql += ` AND elaborado_por=?`;  binds.push(elaborado_por); }
   sql += ` ORDER BY tipo ASC, created_at DESC`;
   const rows = await env.DB.prepare(sql).bind(...binds).all();
   return json({ ok: true, items: rows.results || [] });
@@ -7555,6 +7557,17 @@ async function eliminarDocumentoObra(id, request, env) {
   const { empresa_id, rol } = await getAuth(request, env);
   if (!empresa_id) return err('No autorizado', 403);
   if (rol === 'operario') return err('Sin permisos', 403);
+  // Si el doc tiene r2_key en esquemas/ (generado por IA), borrar también de R2
+  if (env.FILES) {
+    try {
+      const doc = await env.DB.prepare(`SELECT r2_key FROM documentos_obra WHERE id=? AND empresa_id=?`).bind(id, empresa_id).first();
+      if (doc?.r2_key?.startsWith('esquemas/')) {
+        await env.FILES.delete(doc.r2_key);
+        const svgKey = doc.r2_key.replace('.html', '.svg');
+        if (svgKey !== doc.r2_key) await env.FILES.delete(svgKey);
+      }
+    } catch {} // Non-fatal: borrar el registro de BD aunque R2 falle
+  }
   await env.DB.prepare(`DELETE FROM documentos_obra WHERE id=? AND empresa_id=?`).bind(id, empresa_id).run();
   return json({ ok: true });
 }
