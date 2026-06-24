@@ -10794,7 +10794,9 @@ async function buscarGlobal(request, env) {
   const like = `%${q}%`;
   const eid  = auth.empresa_id;
 
-  const [inc, pemp, carr, herr, users, pedidos, obras] = await Promise.all([
+  const obra_id = new URL(request.url).searchParams.get('obra_id') ? parseInt(new URL(request.url).searchParams.get('obra_id')) : null;
+
+  const [inc, pemp, carr, herr, users, pedidos, obras, tareas, rfisR] = await Promise.all([
     env.DB.prepare(`SELECT id,'incidencia' as tipo,titulo as nombre,tipo as subtipo,estado FROM incidencias WHERE empresa_id=? AND titulo LIKE ? LIMIT 5`).bind(eid,like).all(),
     env.DB.prepare(`SELECT id,'pemp' as tipo,matricula as nombre,tipo as subtipo,estado FROM pemp WHERE empresa_id=? AND (matricula LIKE ? OR marca LIKE ?) AND estado!='baja' LIMIT 5`).bind(eid,like,like).all(),
     env.DB.prepare(`SELECT id,'carretilla' as tipo,matricula as nombre,tipo as subtipo,estado FROM carretillas WHERE empresa_id=? AND (matricula LIKE ? OR marca LIKE ?) AND estado!='baja' LIMIT 5`).bind(eid,like,like).all(),
@@ -10802,10 +10804,15 @@ async function buscarGlobal(request, env) {
     env.DB.prepare(`SELECT id,'usuario' as tipo,nombre,rol as subtipo,NULL as estado FROM usuarios WHERE empresa_id=? AND nombre LIKE ? AND activo=1 LIMIT 5`).bind(eid,like).all(),
     env.DB.prepare(`SELECT id,'pedido' as tipo,descripcion as nombre,departamento as subtipo,estado FROM pedidos WHERE empresa_id=? AND descripcion LIKE ? LIMIT 5`).bind(eid,like).all(),
     env.DB.prepare(`SELECT id,'obra' as tipo,nombre,codigo as subtipo,CASE WHEN activa=1 THEN 'activa' ELSE 'cerrada' END as estado FROM obras WHERE empresa_id=? AND (nombre LIKE ? OR codigo LIKE ?) LIMIT 5`).bind(eid,like,like).all(),
+    // Tareas de obra
+    env.DB.prepare(`SELECT id,'tarea' as tipo,titulo as nombre,estado as subtipo,prioridad as estado FROM tareas_obra WHERE empresa_id=? AND (titulo LIKE ? OR descripcion LIKE ? OR asignado_a LIKE ?)${obra_id?' AND obra_id=?':''} LIMIT 5`).bind(...[eid,like,like,like,...(obra_id?[obra_id]:[])]).all().catch(()=>({results:[]})),
+    // RFIs
+    env.DB.prepare(`SELECT id,'rfi' as tipo,titulo as nombre,categoria as subtipo,estado FROM rfis WHERE empresa_id=? AND (titulo LIKE ? OR descripcion LIKE ? OR numero LIKE ?)${obra_id?' AND obra_id=?':''} LIMIT 5`).bind(...[eid,like,like,like,...(obra_id?[obra_id]:[])]).all().catch(()=>({results:[]})),
   ]);
   return json([
     ...inc.results, ...pemp.results, ...carr.results,
     ...herr.results, ...users.results, ...pedidos.results, ...obras.results,
+    ...tareas.results, ...rfisR.results,
   ]);
 }
 

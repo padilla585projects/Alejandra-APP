@@ -619,7 +619,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
   <div class="modal" style="width:100%;max-width:480px;max-height:80vh;display:flex;flex-direction:column">
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
       <span style="font-size:18px">🔍</span>
-      <input id="buscarInput" class="form-input" type="search" placeholder="Buscar trabajadores, equipos, pedidos…" autocomplete="off"
+      <input id="buscarInput" class="form-input" type="search" placeholder="Buscar tareas, RFIs, incidencias, equipos…" autocomplete="off"
              style="flex:1;font-size:15px" oninput="buscarDebounce(this.value)" onkeydown="if(event.key==='Escape')cerrarBusqueda()">
       <button onclick="cerrarBusqueda()" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--muted);flex-shrink:0">×</button>
     </div>
@@ -5515,12 +5515,14 @@ async function ejecutarBusqueda(q) {
   const c = document.getElementById('buscarResultados');
   if (!c) return;
   try {
-    const res = await apiCall('/buscar?q=' + encodeURIComponent(q));
+    const _sObraId = getSession()?.obra_id;
+    const buscarParams = `/buscar?q=${encodeURIComponent(q)}${_sObraId?'&obra_id='+_sObraId:''}`;
+    const res = await apiCall(buscarParams);
     if (!res.ok) { c.innerHTML = '<div class="empty-state">Error al buscar</div>'; return; }
     const items = await res.json();
     if (!items.length) { c.innerHTML = '<div style="font-size:13px;color:var(--muted);text-align:center;padding:20px">Sin resultados para «' + q + '»</div>'; return; }
-    const iconos = { incidencia:'🚨', pemp:'🏗️', carretilla:'🚜', herramienta:'🔧', usuario:'👤', pedido:'📦', obra:'🏗️' };
-    const labels = { incidencia:'Incidencia', pemp:'PEMP', carretilla:'Carretilla', herramienta:'Herramienta', usuario:'Trabajador', pedido:'Pedido', obra:'Obra' };
+    const iconos = { incidencia:'🚨', pemp:'🏗️', carretilla:'🚜', herramienta:'🔧', usuario:'👤', pedido:'📦', obra:'🏢', tarea:'✅', rfi:'📋' };
+    const labels = { incidencia:'Incidencia', pemp:'PEMP', carretilla:'Carretilla', herramienta:'Herramienta', usuario:'Trabajador', pedido:'Pedido', obra:'Obra', tarea:'Tarea', rfi:'RFI' };
     c.innerHTML = items.map(r => `
       <div onclick="buscarNavegar('${r.tipo}',${r.id})" style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .15s" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
         <span style="font-size:22px;flex-shrink:0">${iconos[r.tipo]||'📋'}</span>
@@ -5541,6 +5543,8 @@ function buscarNavegar(tipo, id) {
   else if (tipo === 'usuario') { navTo('ajustes'); setTimeout(() => selAjTab('usuarios'), 300); }
   else if (tipo === 'pedido') { navTo('pedidos'); }
   else if (tipo === 'obra')   { navTo('obras'); }
+  else if (tipo === 'tarea')  { navTo('home'); setTimeout(() => dashSelTab('tareas'), 400); }
+  else if (tipo === 'rfi')    { navTo('home'); setTimeout(() => dashSelTab('rfis'), 400); }
 }
 window.buscarNavegar = buscarNavegar;
 
@@ -11228,7 +11232,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '6.57';
+const APP_VERSION = '6.58';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
