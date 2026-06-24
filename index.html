@@ -20,6 +20,7 @@
 <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 <style>
 :root {
   --bg:#0f172a; --surface:#162032; --surface2:#1e2d40;
@@ -1280,6 +1281,127 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
     </div>
     <div id="dashContent" style="padding:14px;overflow-y:auto;flex:1">
       <div style="color:var(--muted);font-size:13px;text-align:center;padding:30px">Cargando…</div>
+    </div>
+  </div>
+
+  <!-- MODAL NUEVA/EDITAR FASE DE OBRA (NEW-30) -->
+  <div class="modal-overlay" id="modalFaseObra" onclick="if(event.target===this)faseCerrarModal()" style="display:none;align-items:flex-end;justify-content:center;padding:0">
+    <div style="background:var(--surface);border-radius:16px 16px 0 0;width:100%;max-width:520px;max-height:90vh;display:flex;flex-direction:column">
+      <div style="padding:14px 16px 12px;border-bottom:1px solid var(--border);display:flex;align-items:center;flex-shrink:0">
+        <div id="faseTitulo" style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:15px;color:var(--text);flex:1">Nueva fase</div>
+        <button onclick="faseCerrarModal()" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--muted)">×</button>
+      </div>
+      <div style="overflow-y:auto;flex:1;padding:14px 16px;display:flex;flex-direction:column;gap:10px">
+        <div>
+          <label style="font-size:11px;color:var(--muted);font-weight:600">Nombre de la fase *</label>
+          <input type="text" id="faseNombre" class="form-input" placeholder="Ej: Instalación eléctrica planta 1" style="margin-top:3px">
+        </div>
+        <div>
+          <label style="font-size:11px;color:var(--muted);font-weight:600">Descripción</label>
+          <textarea id="faseDesc" rows="2" placeholder="Descripción de los trabajos incluidos…"
+            style="margin-top:3px;width:100%;padding:8px 10px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:'Poppins',sans-serif;font-size:13px;resize:none;outline:none;box-sizing:border-box"></textarea>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <div>
+            <label style="font-size:11px;color:var(--muted);font-weight:600">Inicio planificado</label>
+            <input type="date" id="faseInicioPlan" class="form-input" style="margin-top:3px">
+          </div>
+          <div>
+            <label style="font-size:11px;color:var(--muted);font-weight:600">Fin planificado</label>
+            <input type="date" id="faseFinPlan" class="form-input" style="margin-top:3px">
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <div>
+            <label style="font-size:11px;color:var(--muted);font-weight:600">Responsable</label>
+            <input type="text" id="faseResponsable" class="form-input" placeholder="Nombre del responsable" style="margin-top:3px">
+          </div>
+          <div>
+            <label style="font-size:11px;color:var(--muted);font-weight:600">Estado</label>
+            <select id="faseEstado" class="form-select" style="margin-top:3px">
+              <option value="pendiente">Pendiente</option>
+              <option value="en_curso">En curso</option>
+              <option value="completada">Completada</option>
+              <option value="retrasada">Retrasada</option>
+              <option value="bloqueada">Bloqueada</option>
+            </select>
+          </div>
+        </div>
+        <div>
+          <label style="font-size:11px;color:var(--muted);font-weight:600">Progreso: <span id="fasePctLabel">0</span>%</label>
+          <input type="range" id="fasePct" min="0" max="100" value="0" style="width:100%;margin-top:6px;accent-color:var(--accent)"
+            oninput="document.getElementById('fasePctLabel').textContent=this.value">
+        </div>
+      </div>
+      <div style="padding:12px 16px;border-top:1px solid var(--border);flex-shrink:0">
+        <button class="btn-primary" style="width:100%" onclick="fasesGuardar()">💾 Guardar fase</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL NUEVA ENTRADA DIARIO DE OBRA (NEW-31) -->
+  <div class="modal-overlay" id="modalDiarioObra" onclick="if(event.target===this)this.style.display='none'" style="display:none;align-items:flex-end;justify-content:center;padding:0">
+    <div style="background:var(--surface);border-radius:16px 16px 0 0;width:100%;max-width:520px;max-height:92vh;display:flex;flex-direction:column">
+      <div style="padding:14px 16px 12px;border-bottom:1px solid var(--border);display:flex;align-items:center;flex-shrink:0">
+        <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:15px;color:var(--text);flex:1">📓 Nueva entrada diario</div>
+        <button onclick="this.closest('.modal-overlay').style.display='none'" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--muted)">×</button>
+      </div>
+      <div style="overflow-y:auto;flex:1;padding:14px 16px;display:flex;flex-direction:column;gap:10px">
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+          <div>
+            <label style="font-size:11px;color:var(--muted);font-weight:600">Fecha</label>
+            <input type="date" id="diarioFecha" class="form-input" style="margin-top:3px">
+          </div>
+          <div>
+            <label style="font-size:11px;color:var(--muted);font-weight:600">Clima</label>
+            <select id="diarioClima" class="form-select" style="margin-top:3px">
+              <option value="">—</option>
+              <option value="soleado">☀️ Soleado</option>
+              <option value="nublado">☁️ Nublado</option>
+              <option value="lluvioso">🌧️ Lluvioso</option>
+              <option value="tormenta">⛈️ Tormenta</option>
+              <option value="niebla">🌫️ Niebla</option>
+              <option value="viento">💨 Viento</option>
+              <option value="nieve">❄️ Nieve</option>
+            </select>
+          </div>
+          <div>
+            <label style="font-size:11px;color:var(--muted);font-weight:600">Temperatura</label>
+            <input type="text" id="diarioTemp" class="form-input" placeholder="Ej: 22°C" style="margin-top:3px">
+          </div>
+        </div>
+        <div>
+          <label style="font-size:11px;color:var(--muted);font-weight:600">Trabajos realizados *</label>
+          <textarea id="diarioTrabajos" rows="4" placeholder="Describe los trabajos ejecutados durante la jornada…"
+            style="margin-top:3px;width:100%;padding:8px 10px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:'Poppins',sans-serif;font-size:13px;resize:none;outline:none;box-sizing:border-box"></textarea>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <div>
+            <label style="font-size:11px;color:var(--muted);font-weight:600">Personal presente</label>
+            <input type="number" id="diarioPersonal" class="form-input" placeholder="Nº de trabajadores" min="0" style="margin-top:3px">
+          </div>
+          <div>
+            <label style="font-size:11px;color:var(--muted);font-weight:600">Equipos activos</label>
+            <input type="text" id="diarioEquipos" class="form-input" placeholder="Ej: PEMP-01, Carretilla" style="margin-top:3px">
+          </div>
+        </div>
+        <div>
+          <label style="font-size:11px;color:var(--muted);font-weight:600">Incidencias del día</label>
+          <input type="text" id="diarioIncidencias" class="form-input" placeholder="Incidencias o imprevistos (si los hay)" style="margin-top:3px">
+        </div>
+        <div>
+          <label style="font-size:11px;color:var(--muted);font-weight:600">Visitas recibidas</label>
+          <input type="text" id="diarioVisitantes" class="form-input" placeholder="Ej: Cliente, Dirección facultativa" style="margin-top:3px">
+        </div>
+        <div>
+          <label style="font-size:11px;color:var(--muted);font-weight:600">Observaciones</label>
+          <textarea id="diarioObs" rows="2" placeholder="Notas adicionales…"
+            style="margin-top:3px;width:100%;padding:8px 10px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:'Poppins',sans-serif;font-size:13px;resize:none;outline:none;box-sizing:border-box"></textarea>
+        </div>
+      </div>
+      <div style="padding:12px 16px;border-top:1px solid var(--border);flex-shrink:0">
+        <button class="btn-primary" style="width:100%" onclick="diarioGuardar()">📓 Guardar entrada</button>
+      </div>
     </div>
   </div>
 
@@ -10870,7 +10992,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '6.47';
+const APP_VERSION = '6.48';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -12688,95 +12810,449 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
   // OBRA DASHBOARD (NEW-27)
   // ══════════════════════════════════════════════════════
 
+  // Estado global dashboard
+  let _dashTab = 'resumen';
+  let _dashCharts = {};
+
+  function dashSelTab(tab) {
+    _dashTab = tab;
+    ['resumen','graficas','fases','diario'].forEach(t => {
+      const btn = document.getElementById('dashTab_'+t);
+      const pnl = document.getElementById('dashPanel_'+t);
+      if (btn) btn.style.cssText = t === tab
+        ? 'padding:6px 14px;background:var(--accent);color:#000;border:none;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer'
+        : 'padding:6px 14px;background:transparent;color:var(--muted);border:1px solid var(--border);border-radius:7px;font-size:12px;font-weight:600;cursor:pointer';
+      if (pnl) pnl.style.display = t === tab ? '' : 'none';
+    });
+    if (tab === 'graficas' && !_dashCharts._loaded) cargarGraficasDash();
+    if (tab === 'fases')    fasesCargar();
+    if (tab === 'diario')   diarioCargar();
+  }
+  window.dashSelTab = dashSelTab;
+
   async function cargarObraDashboard() {
     const c = document.getElementById('dashContent');
     if (!c) return;
     c.innerHTML = '<div style="color:var(--muted);font-size:13px;text-align:center;padding:30px">Cargando…</div>';
     const s = getSession();
     const obraId = s?.obra_id;
+
+    // Subtítulo
+    const sub = document.getElementById('dashObraNombre');
+    if (sub) sub.textContent = s?.obra_nombre || (obraId ? `Obra #${obraId}` : 'Todas las obras');
+
     try {
       const params = obraId ? `?obra_id=${obraId}` : '';
       const res = await apiCall(`/obra-dashboard${params}`);
       if (!res.ok) { c.innerHTML = '<div style="color:var(--muted);font-size:13px;text-align:center;padding:30px">Error al cargar</div>'; return; }
       const d = await res.json();
 
-      // Subtitle
-      const sub = document.getElementById('dashObraNombre');
-      if (sub) sub.textContent = s?.obra_nombre || (obraId ? `Obra #${obraId}` : 'Todas las obras');
-
-      // Update alert badge on home card
-      const totalAlertas = d.alertas_stock + d.equipos_mantenimiento + d.pedidos_pendientes;
+      // Badge de alertas en el card del home
+      const totalAlertas = (d.alertas_stock||0) + (d.equipos_mantenimiento||0) + (d.pedidos_pendientes||0);
       const badge = document.getElementById('cntDashAlerts');
-      if (badge) {
-        badge.style.display = totalAlertas > 0 ? '' : 'none';
-        badge.textContent = totalAlertas;
-      }
+      if (badge) { badge.style.display = totalAlertas > 0 ? '' : 'none'; badge.textContent = totalAlertas; }
+
+      // Guardar datos globales para gráficas
+      window._dashData = d;
+      _dashCharts._loaded = false;
 
       const kpis = [
-        {
-          icon: '👷', label: 'Fichajes hoy', value: d.fichajes_hoy,
-          color: d.fichajes_hoy > 0 ? '#22c55e' : '#94a3b8',
-          sub: d.fichajes_hoy > 0 ? `${d.fichajes_hoy} trabajador${d.fichajes_hoy === 1 ? '' : 'es'}` : 'Ninguno hoy',
-          onclick: "navTo('personal')",
-        },
-        {
-          icon: '🏗️', label: 'Equipos en mantenimiento', value: d.equipos_mantenimiento,
-          color: d.equipos_mantenimiento > 0 ? '#f59e0b' : '#22c55e',
-          sub: d.equipos_mantenimiento > 0 ? `${d.equipos_mantenimiento} equipo${d.equipos_mantenimiento === 1 ? '' : 's'} parado${d.equipos_mantenimiento === 1 ? '' : 's'}` : 'Todos operativos',
-          onclick: "selectModule('pemp')",
-        },
-        {
-          icon: '🔧', label: 'Herramientas fuera', value: d.herramientas_fuera,
-          color: d.herramientas_fuera > 0 ? '#f59e0b' : '#22c55e',
-          sub: d.herramientas_fuera > 0 ? `${d.herramientas_fuera} no disponible${d.herramientas_fuera === 1 ? '' : 's'}` : 'Todo disponible',
-          onclick: "navTo('herramientas')",
-        },
-        {
-          icon: '📦', label: 'Pedidos pendientes', value: d.pedidos_pendientes,
-          color: d.pedidos_pendientes > 0 ? '#8b5cf6' : '#22c55e',
-          sub: d.pedidos_pendientes > 0 ? `${d.pedidos_pendientes} pedido${d.pedidos_pendientes === 1 ? '' : 's'} sin recibir` : 'Todo recibido',
-          onclick: "navTo('pedidos')",
-        },
-        {
-          icon: '⚠️', label: 'Alertas de stock', value: d.alertas_stock,
-          color: d.alertas_stock > 0 ? '#ef4444' : '#22c55e',
-          sub: d.alertas_stock > 0 ? `${d.alertas_stock} tipo${d.alertas_stock === 1 ? '' : 's'} bajo mínimo` : 'Stock correcto',
-          onclick: "irANotif()",
-        },
-        {
-          icon: '📅', label: 'Próximo evento',
-          value: d.proximo_evento ? (d.proximo_evento.fecha||'—').slice(5).replace('-','/') : '—',
-          color: d.proximo_evento ? '#6366f1' : '#94a3b8',
-          sub: d.proximo_evento ? esc(d.proximo_evento.titulo) : 'Sin eventos próximos',
-          onclick: "navTo('calendario')",
-        },
-        {
-          icon: '🚨', label: 'Incidencias abiertas', value: d.incidencias_abiertas ?? '—',
-          color: (d.incidencias_abiertas||0) > 0 ? '#ef4444' : '#22c55e',
-          sub: (d.incidencias_abiertas||0) > 0 ? `${d.incidencias_abiertas} sin resolver` : 'Sin incidencias',
-          onclick: "navTo('incidencias')",
-        },
+        { icon:'👷', label:'Fichajes hoy', value:d.fichajes_hoy, color:d.fichajes_hoy>0?'var(--green)':'var(--muted)', sub:d.fichajes_hoy>0?`${d.fichajes_hoy} trabajador${d.fichajes_hoy===1?'':'es'}`:'Ninguno hoy', onclick:"navTo('personal')" },
+        { icon:'🏗️', label:'Equipos parados', value:d.equipos_mantenimiento, color:d.equipos_mantenimiento>0?'#f59e0b':'var(--green)', sub:d.equipos_mantenimiento>0?`${d.equipos_mantenimiento} en mantenimiento`:'Todos operativos', onclick:"selectModule('pemp')" },
+        { icon:'🔧', label:'Herramientas fuera', value:d.herramientas_fuera, color:d.herramientas_fuera>0?'#f59e0b':'var(--green)', sub:d.herramientas_fuera>0?`${d.herramientas_fuera} no disponibles`:'Todo disponible', onclick:"navTo('herramientas')" },
+        { icon:'📦', label:'Pedidos pendientes', value:d.pedidos_pendientes, color:d.pedidos_pendientes>0?'#8b5cf6':'var(--green)', sub:d.pedidos_pendientes>0?`${d.pedidos_pendientes} sin recibir`:'Al día', onclick:"navTo('pedidos')" },
+        { icon:'⚠️', label:'Alertas stock', value:d.alertas_stock, color:d.alertas_stock>0?'var(--red)':'var(--green)', sub:d.alertas_stock>0?`${d.alertas_stock} bajo mínimo`:'Stock OK', onclick:"irANotif()" },
+        { icon:'🚨', label:'Incidencias abiertas', value:d.incidencias_abiertas??0, color:(d.incidencias_abiertas||0)>0?'var(--red)':'var(--green)', sub:(d.incidencias_abiertas||0)>0?`${d.incidencias_abiertas} sin resolver`:'Sin incidencias', onclick:"navTo('incidencias')" },
+        { icon:'📅', label:'Próximo evento', value:d.proximo_evento?(d.proximo_evento.fecha||'—').slice(5).replace('-','/'):'—', color:d.proximo_evento?'#6366f1':'var(--muted)', sub:d.proximo_evento?esc(d.proximo_evento.titulo):'Sin eventos', onclick:"navTo('calendario')" },
+        { icon:'🤖', label:'Preguntar a Alejandra', value:'IA', color:'var(--accent)', sub:'Análisis inteligente de obra', onclick:"alejandraAbrir()" },
       ];
 
       c.innerHTML = `
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-          ${kpis.map(k => `
-            <div onclick="${k.onclick ? `${k.onclick};showScreen('home')` : ''}"
-                 style="background:var(--surface);border:1px solid var(--border);border-left:3px solid ${k.color};border-radius:12px;padding:14px;cursor:${k.onclick ? 'pointer' : 'default'};position:relative">
-              <div style="font-size:24px;margin-bottom:6px">${k.icon}</div>
-              <div style="font-size:28px;font-weight:900;color:${k.color};font-family:'Montserrat',sans-serif;line-height:1">${k.value}</div>
-              <div style="font-size:11px;font-weight:700;color:var(--text);margin-top:4px">${k.label}</div>
-              <div style="font-size:10px;color:var(--muted);margin-top:2px">${k.sub}</div>
-              ${k.onclick ? '<div style="position:absolute;top:10px;right:10px;color:var(--muted);font-size:14px">›</div>' : ''}
-            </div>
-          `).join('')}
+        <!-- Tabs -->
+        <div style="display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap">
+          <button id="dashTab_resumen"  onclick="dashSelTab('resumen')"  style="padding:6px 14px;background:var(--accent);color:#000;border:none;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer">📊 Resumen</button>
+          <button id="dashTab_graficas" onclick="dashSelTab('graficas')" style="padding:6px 14px;background:transparent;color:var(--muted);border:1px solid var(--border);border-radius:7px;font-size:12px;font-weight:600;cursor:pointer">📈 Gráficas</button>
+          <button id="dashTab_fases"    onclick="dashSelTab('fases')"    style="padding:6px 14px;background:transparent;color:var(--muted);border:1px solid var(--border);border-radius:7px;font-size:12px;font-weight:600;cursor:pointer">📅 Fases</button>
+          <button id="dashTab_diario"   onclick="dashSelTab('diario')"   style="padding:6px 14px;background:transparent;color:var(--muted);border:1px solid var(--border);border-radius:7px;font-size:12px;font-weight:600;cursor:pointer">📓 Diario</button>
         </div>
-        <div style="font-size:11px;color:var(--muted);text-align:center;margin-top:14px">Actualizado a las ${new Date().toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'})}</div>
+        <!-- Panel Resumen -->
+        <div id="dashPanel_resumen">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+            ${kpis.map(k=>`
+              <div onclick="${k.onclick ? k.onclick+";showScreen('home')" : ''}"
+                   style="background:var(--surface);border:1px solid var(--border);border-left:3px solid ${k.color};border-radius:12px;padding:12px;cursor:${k.onclick?'pointer':'default'};position:relative">
+                <div style="font-size:20px;margin-bottom:4px">${k.icon}</div>
+                <div style="font-size:26px;font-weight:900;color:${k.color};font-family:'Montserrat',sans-serif;line-height:1">${k.value}</div>
+                <div style="font-size:10px;font-weight:700;color:var(--text);margin-top:3px">${k.label}</div>
+                <div style="font-size:10px;color:var(--muted);margin-top:1px">${k.sub}</div>
+                ${k.onclick?'<div style="position:absolute;top:8px;right:8px;color:var(--muted);font-size:13px">›</div>':''}
+              </div>
+            `).join('')}
+          </div>
+          <div style="font-size:10px;color:var(--muted);text-align:center;margin-top:12px">Actualizado ${new Date().toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'})}</div>
+        </div>
+        <!-- Panel Gráficas -->
+        <div id="dashPanel_graficas" style="display:none">
+          <div style="color:var(--muted);text-align:center;padding:20px;font-size:13px" id="dashGrafCargando">Cargando gráficas…</div>
+          <div id="dashGrafContenido" style="display:none">
+            <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:12px">
+              <div style="font-size:12px;font-weight:700;color:var(--text);margin-bottom:10px">👷 Fichajes por semana (últimas 8 semanas)</div>
+              <canvas id="chartFichajes" style="max-height:200px"></canvas>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+              <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px">
+                <div style="font-size:11px;font-weight:700;color:var(--text);margin-bottom:8px">🚨 Incidencias por tipo</div>
+                <canvas id="chartIncidencias" style="max-height:160px"></canvas>
+              </div>
+              <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px">
+                <div style="font-size:11px;font-weight:700;color:var(--text);margin-bottom:8px">🏗️ Estado equipos</div>
+                <canvas id="chartEquipos" style="max-height:160px"></canvas>
+              </div>
+            </div>
+          </div>
+        </div>
+        <!-- Panel Fases -->
+        <div id="dashPanel_fases" style="display:none">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+            <div style="font-size:13px;font-weight:700;color:var(--text)">Planificación de obra</div>
+            <button onclick="fasesNueva()" style="padding:6px 12px;background:var(--accent);color:#000;border:none;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer">+ Nueva fase</button>
+          </div>
+          <div id="fasesList"><div style="color:var(--muted);text-align:center;padding:20px;font-size:13px">Cargando…</div></div>
+        </div>
+        <!-- Panel Diario -->
+        <div id="dashPanel_diario" style="display:none">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+            <div style="font-size:13px;font-weight:700;color:var(--text)">Diario de obra</div>
+            <button onclick="diarioNuevo()" style="padding:6px 12px;background:var(--accent);color:#000;border:none;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer">+ Nueva entrada</button>
+          </div>
+          <div id="diarioList"><div style="color:var(--muted);text-align:center;padding:20px;font-size:13px">Cargando…</div></div>
+        </div>
       `;
-    } catch {
+
+      // Seleccionar tab activa
+      dashSelTab(_dashTab);
+
+    } catch(e) {
       c.innerHTML = '<div style="color:var(--muted);font-size:13px;text-align:center;padding:30px">Error de conexión</div>';
     }
   }
+
+  async function cargarGraficasDash() {
+    const d = window._dashData;
+    if (!d) return;
+    const cargando = document.getElementById('dashGrafCargando');
+    const contenido = document.getElementById('dashGrafContenido');
+    if (cargando) cargando.style.display = 'none';
+    if (contenido) contenido.style.display = '';
+
+    // Destruir charts anteriores
+    Object.values(_dashCharts).forEach(c => { if (c && typeof c.destroy === 'function') c.destroy(); });
+    _dashCharts = { _loaded: true };
+
+    const s = getSession();
+    let fichajesSemana = d.fichajes_semana || [];
+    let incidenciasTipo = d.incidencias_tipo || [];
+
+    // Si no vinieron en el dashboard, cargar de /graficas
+    if (!fichajesSemana.length) {
+      try {
+        const gr = await apiCall(`/graficas`);
+        if (gr.ok) { const gd = await gr.json(); fichajesSemana = gd.fichajes_dia || []; }
+      } catch {}
+    }
+
+    const chartDefaults = {
+      scales: { x:{ ticks:{color:'#94a3b8',font:{size:10}}, grid:{color:'#1e2d40'} }, y:{ ticks:{color:'#94a3b8',font:{size:10}}, grid:{color:'#1e2d40'} } }
+    };
+
+    // Gráfica fichajes
+    const ctxF = document.getElementById('chartFichajes');
+    if (ctxF && fichajesSemana.length) {
+      _dashCharts.fichajes = new Chart(ctxF, {
+        type: 'bar',
+        data: {
+          labels: fichajesSemana.map(r => (r.semana||r.dia||'').slice(-5)),
+          datasets: [{ label:'Fichajes', data: fichajesSemana.map(r=>r.n||0), backgroundColor:'#f9731680', borderColor:'#f97316', borderWidth:2, borderRadius:4 }]
+        },
+        options: { responsive:true, plugins:{ legend:{display:false} }, scales:chartDefaults.scales }
+      });
+    } else if (ctxF) {
+      ctxF.parentElement.innerHTML += '<div style="color:var(--muted);font-size:11px;text-align:center;padding:10px">Sin datos de fichajes</div>';
+    }
+
+    // Gráfica incidencias por tipo
+    const ctxI = document.getElementById('chartIncidencias');
+    if (ctxI && incidenciasTipo.length) {
+      const colores = ['#ef4444','#f59e0b','#8b5cf6','#06b6d4','#22c55e','#f97316'];
+      _dashCharts.incidencias = new Chart(ctxI, {
+        type: 'doughnut',
+        data: {
+          labels: incidenciasTipo.map(r=>r.tipo||'otro'),
+          datasets: [{ data: incidenciasTipo.map(r=>r.n), backgroundColor: colores.slice(0,incidenciasTipo.length), borderColor:'#0f172a', borderWidth:2 }]
+        },
+        options: { responsive:true, plugins:{ legend:{ position:'bottom', labels:{ color:'#94a3b8', font:{size:10}, boxWidth:10 } } }, cutout:'65%' }
+      });
+    } else if (ctxI) {
+      ctxI.parentElement.innerHTML = '<div style="color:var(--muted);font-size:11px;text-align:center;padding:20px">Sin incidencias</div>';
+    }
+
+    // Gráfica equipos (PEMP + carretillas agrupados)
+    const ctxE = document.getElementById('chartEquipos');
+    if (ctxE) {
+      const disponible = (d.equipos_mantenimiento === 0) ? 1 : Math.max(1, 5 - d.equipos_mantenimiento);
+      _dashCharts.equipos = new Chart(ctxE, {
+        type: 'doughnut',
+        data: {
+          labels: ['Disponibles', 'Mantenimiento/Avería'],
+          datasets: [{ data: [disponible, d.equipos_mantenimiento||0], backgroundColor:['#22c55e80','#ef444480'], borderColor:['#22c55e','#ef4444'], borderWidth:2 }]
+        },
+        options: { responsive:true, plugins:{ legend:{ position:'bottom', labels:{ color:'#94a3b8', font:{size:10}, boxWidth:10 } } }, cutout:'65%' }
+      });
+    }
+  }
+
+  // ── FASES DE OBRA ──────────────────────────────────────────────────────────
+  let _editFaseId = null;
+
+  async function fasesCargar() {
+    const lista = document.getElementById('fasesList');
+    if (!lista) return;
+    lista.innerHTML = '<div style="color:var(--muted);text-align:center;padding:16px;font-size:13px">Cargando…</div>';
+    const s = getSession();
+    const obraId = s?.obra_id;
+    try {
+      const r = await apiCall(`/fases-obra${obraId ? '?obra_id='+obraId : ''}`);
+      const fases = await r.json();
+      if (!fases.length) {
+        lista.innerHTML = `<div style="color:var(--muted);text-align:center;padding:24px;font-size:13px">
+          <div style="font-size:32px;margin-bottom:8px">📅</div>
+          Sin fases definidas. Crea la planificación de la obra.
+        </div>`;
+        return;
+      }
+      const estadoColor = { pendiente:'#94a3b8', en_curso:'#f97316', completada:'#22c55e', retrasada:'#ef4444', bloqueada:'#8b5cf6' };
+      const estadoLabel = { pendiente:'Pendiente', en_curso:'En curso', completada:'Completada', retrasada:'Retrasada', bloqueada:'Bloqueada' };
+      lista.innerHTML = fases.map(f => `
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:8px;position:relative">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+            <div style="flex:1;font-size:13px;font-weight:700;color:var(--text)">${esc(f.nombre)}</div>
+            <span style="padding:2px 8px;background:${estadoColor[f.estado]||'#94a3b8'}20;color:${estadoColor[f.estado]||'#94a3b8'};border-radius:5px;font-size:10px;font-weight:700">${estadoLabel[f.estado]||f.estado}</span>
+            <button onclick="fasesEditar(${f.id})" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:14px;padding:2px">✏️</button>
+            <button onclick="fasesEliminar(${f.id},'${esc(f.nombre)}')" style="background:none;border:none;cursor:pointer;color:var(--red);font-size:14px;padding:2px">🗑️</button>
+          </div>
+          <!-- Barra de progreso -->
+          <div style="height:6px;background:var(--border);border-radius:3px;overflow:hidden;margin-bottom:6px">
+            <div style="height:100%;width:${f.porcentaje||0}%;background:${estadoColor[f.estado]||'#f97316'};border-radius:3px;transition:width .3s"></div>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <div style="font-size:10px;color:var(--muted)">
+              ${f.fecha_inicio_plan ? '📅 ' + f.fecha_inicio_plan.slice(5).replace('-','/') + (f.fecha_fin_plan?' → '+f.fecha_fin_plan.slice(5).replace('-','/'):'') : 'Sin fechas'}
+              ${f.responsable ? ' · 👤 '+esc(f.responsable) : ''}
+            </div>
+            <div style="font-size:12px;font-weight:700;color:${estadoColor[f.estado]||'var(--accent)'}">${f.porcentaje||0}%</div>
+          </div>
+          ${f.descripcion ? `<div style="font-size:11px;color:var(--muted);margin-top:4px">${esc(f.descripcion)}</div>` : ''}
+          <!-- Slider progreso rápido -->
+          <div style="margin-top:8px;display:flex;align-items:center;gap:8px">
+            <input type="range" min="0" max="100" value="${f.porcentaje||0}"
+              style="flex:1;accent-color:var(--accent)"
+              onchange="fasesActualizarProgreso(${f.id},this.value,this)"
+              oninput="this.nextElementSibling.textContent=this.value+'%'">
+            <span style="font-size:10px;color:var(--muted);min-width:28px">${f.porcentaje||0}%</span>
+          </div>
+        </div>
+      `).join('');
+    } catch {
+      lista.innerHTML = '<div style="color:var(--muted);text-align:center;padding:16px;font-size:13px">Error al cargar</div>';
+    }
+  }
+
+  async function fasesActualizarProgreso(id, pct, el) {
+    const pctInt = parseInt(pct)||0;
+    const estado = pctInt === 0 ? 'pendiente' : pctInt === 100 ? 'completada' : 'en_curso';
+    const r = await apiCall(`/fases-obra/${id}`, { method:'PUT', body:JSON.stringify({ porcentaje:pctInt, estado }) });
+    const d = await r.json();
+    if (!d.ok) { toast('Error al actualizar', 'err'); return; }
+    // Actualizar la barra visual inline sin recargar
+    const card = el.closest('div[style*="surface"]');
+    if (card) {
+      const barra = card.querySelector('div[style*="border-radius:3px;overflow:hidden"] div');
+      if (barra) barra.style.width = pctInt + '%';
+      const pctLabel = card.querySelectorAll('[style*="font-weight:700;color"]');
+      pctLabel.forEach(l => { if (l.textContent.includes('%')) l.textContent = pctInt + '%'; });
+    }
+  }
+  window.fasesActualizarProgreso = fasesActualizarProgreso;
+
+  function fasesNueva() {
+    _editFaseId = null;
+    document.getElementById('modalFaseObra').style.display = 'flex';
+    document.getElementById('faseTitulo').textContent = 'Nueva fase';
+    document.getElementById('faseNombre').value = '';
+    document.getElementById('faseDesc').value = '';
+    document.getElementById('faseInicioPlan').value = '';
+    document.getElementById('faseFinPlan').value = '';
+    document.getElementById('faseResponsable').value = '';
+    document.getElementById('faseEstado').value = 'pendiente';
+    document.getElementById('fasePct').value = '0';
+  }
+  window.fasesNueva = fasesNueva;
+
+  async function fasesEditar(id) {
+    const s = getSession();
+    const obraId = s?.obra_id;
+    const r = await apiCall(`/fases-obra${obraId?'?obra_id='+obraId:''}`);
+    const fases = await r.json();
+    const f = fases.find(x => x.id === id);
+    if (!f) return;
+    _editFaseId = id;
+    document.getElementById('modalFaseObra').style.display = 'flex';
+    document.getElementById('faseTitulo').textContent = 'Editar fase';
+    document.getElementById('faseNombre').value = f.nombre||'';
+    document.getElementById('faseDesc').value = f.descripcion||'';
+    document.getElementById('faseInicioPlan').value = f.fecha_inicio_plan||'';
+    document.getElementById('faseFinPlan').value = f.fecha_fin_plan||'';
+    document.getElementById('faseResponsable').value = f.responsable||'';
+    document.getElementById('faseEstado').value = f.estado||'pendiente';
+    document.getElementById('fasePct').value = String(f.porcentaje||0);
+  }
+  window.fasesEditar = fasesEditar;
+
+  async function fasesGuardar() {
+    const s = getSession();
+    const nombre = document.getElementById('faseNombre').value.trim();
+    if (!nombre) { toast('Indica un nombre para la fase', 'err'); return; }
+    const body = {
+      obra_id: s?.obra_id,
+      nombre,
+      descripcion: document.getElementById('faseDesc').value.trim()||null,
+      fecha_inicio_plan: document.getElementById('faseInicioPlan').value||null,
+      fecha_fin_plan: document.getElementById('faseFinPlan').value||null,
+      responsable: document.getElementById('faseResponsable').value.trim()||null,
+      estado: document.getElementById('faseEstado').value,
+      porcentaje: parseInt(document.getElementById('fasePct').value)||0,
+    };
+    const r = _editFaseId
+      ? await apiCall(`/fases-obra/${_editFaseId}`, { method:'PUT', body:JSON.stringify(body) })
+      : await apiCall('/fases-obra', { method:'POST', body:JSON.stringify(body) });
+    const d = await r.json();
+    if (d.ok || d.id) {
+      faseCerrarModal();
+      fasesCargar();
+      toast(_editFaseId ? '✅ Fase actualizada' : '✅ Fase creada', 'ok');
+    } else { toast('Error: '+(d.error||'desconocido'), 'err'); }
+  }
+  window.fasesGuardar = fasesGuardar;
+
+  async function fasesEliminar(id, nombre) {
+    if (!confirm(`¿Eliminar la fase "${nombre}"?`)) return;
+    const r = await apiCall(`/fases-obra/${id}`, { method:'DELETE' });
+    const d = await r.json();
+    if (d.ok) { fasesCargar(); toast('🗑️ Fase eliminada', 'ok'); }
+    else toast('Error al eliminar', 'err');
+  }
+  window.fasesEliminar = fasesEliminar;
+
+  function faseCerrarModal() {
+    document.getElementById('modalFaseObra').style.display = 'none';
+  }
+  window.faseCerrarModal = faseCerrarModal;
+
+  // ── DIARIO DE OBRA ──────────────────────────────────────────────────────────
+  let _editDiarioId = null;
+
+  async function diarioCargar() {
+    const lista = document.getElementById('diarioList');
+    if (!lista) return;
+    lista.innerHTML = '<div style="color:var(--muted);text-align:center;padding:16px;font-size:13px">Cargando…</div>';
+    const s = getSession();
+    try {
+      const r = await apiCall(`/diario-obra${s?.obra_id ? '?obra_id='+s.obra_id : ''}`);
+      const entradas = await r.json();
+      if (!entradas.length) {
+        lista.innerHTML = `<div style="color:var(--muted);text-align:center;padding:24px;font-size:13px">
+          <div style="font-size:32px;margin-bottom:8px">📓</div>
+          Sin entradas en el diario. Registra los trabajos de hoy.
+        </div>`;
+        return;
+      }
+      const climaIcon = { soleado:'☀️', nublado:'☁️', lluvioso:'🌧️', tormenta:'⛈️', niebla:'🌫️', viento:'💨', nieve:'❄️' };
+      lista.innerHTML = entradas.map(e => `
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:8px">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+            <div style="font-family:'Montserrat',sans-serif;font-weight:700;font-size:13px;color:var(--accent)">${e.fecha}</div>
+            ${e.clima ? `<span style="font-size:14px">${climaIcon[e.clima]||'🌤️'}</span>` : ''}
+            ${e.temperatura ? `<span style="font-size:11px;color:var(--muted)">${esc(e.temperatura)}</span>` : ''}
+            <div style="flex:1"></div>
+            ${e.personal_presente ? `<span style="font-size:10px;color:var(--muted)">👷 ${e.personal_presente}</span>` : ''}
+            <button onclick="diarioEliminar(${e.id})" style="background:none;border:none;cursor:pointer;color:var(--red);font-size:12px">🗑️</button>
+          </div>
+          <div style="font-size:12px;color:var(--text);line-height:1.5">${esc(e.trabajos)}</div>
+          ${e.observaciones ? `<div style="font-size:11px;color:var(--muted);margin-top:4px;font-style:italic">${esc(e.observaciones)}</div>` : ''}
+          ${e.visitantes ? `<div style="font-size:10px;color:var(--muted);margin-top:3px">👥 Visitas: ${esc(e.visitantes)}</div>` : ''}
+          <div style="font-size:10px;color:var(--muted);margin-top:4px">Por: ${esc(e.creado_por||'—')}</div>
+        </div>
+      `).join('');
+    } catch {
+      lista.innerHTML = '<div style="color:var(--muted);text-align:center;padding:16px;font-size:13px">Error al cargar</div>';
+    }
+  }
+
+  function diarioNuevo() {
+    _editDiarioId = null;
+    const hoy = new Date().toISOString().slice(0,10);
+    document.getElementById('diarioFecha').value = hoy;
+    document.getElementById('diarioClima').value = '';
+    document.getElementById('diarioTemp').value = '';
+    document.getElementById('diarioTrabajos').value = '';
+    document.getElementById('diarioPersonal').value = '';
+    document.getElementById('diarioEquipos').value = '';
+    document.getElementById('diarioIncidencias').value = '';
+    document.getElementById('diarioVisitantes').value = '';
+    document.getElementById('diarioObs').value = '';
+    // Autorellenar personal presente del fichaje de hoy
+    const s = getSession();
+    apiCall(`/obra-dashboard${s?.obra_id?'?obra_id='+s.obra_id:''}`).then(r=>r.json()).then(d => {
+      if (d.fichajes_hoy) document.getElementById('diarioPersonal').value = d.fichajes_hoy;
+    }).catch(()=>{});
+    document.getElementById('modalDiarioObra').style.display = 'flex';
+  }
+  window.diarioNuevo = diarioNuevo;
+
+  async function diarioGuardar() {
+    const s = getSession();
+    const trabajos = document.getElementById('diarioTrabajos').value.trim();
+    if (!trabajos) { toast('Describe los trabajos realizados', 'err'); return; }
+    const body = {
+      obra_id: s?.obra_id,
+      fecha: document.getElementById('diarioFecha').value,
+      clima: document.getElementById('diarioClima').value||null,
+      temperatura: document.getElementById('diarioTemp').value.trim()||null,
+      trabajos,
+      personal_presente: parseInt(document.getElementById('diarioPersonal').value)||0,
+      equipos_activos: document.getElementById('diarioEquipos').value.trim()||null,
+      incidencias_dia: document.getElementById('diarioIncidencias').value.trim()||null,
+      visitantes: document.getElementById('diarioVisitantes').value.trim()||null,
+      observaciones: document.getElementById('diarioObs').value.trim()||null,
+    };
+    const r = await apiCall('/diario-obra', { method:'POST', body:JSON.stringify(body) });
+    const d = await r.json();
+    if (d.ok || d.id) {
+      document.getElementById('modalDiarioObra').style.display = 'none';
+      diarioCargar();
+      toast('📓 Entrada guardada', 'ok');
+    } else { toast('Error: '+(d.error||'desconocido'), 'err'); }
+  }
+  window.diarioGuardar = diarioGuardar;
+
+  async function diarioEliminar(id) {
+    if (!confirm('¿Eliminar esta entrada del diario?')) return;
+    const r = await apiCall(`/diario-obra/${id}`, { method:'DELETE' });
+    const d = await r.json();
+    if (d.ok) { diarioCargar(); toast('🗑️ Entrada eliminada', 'ok'); }
+    else toast('Error al eliminar', 'err');
+  }
+  window.diarioEliminar = diarioEliminar;
 
   window.cargarObraDashboard = cargarObraDashboard;
 

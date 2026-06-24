@@ -4469,6 +4469,22 @@ export default {
       if (path === '/historial-herramientas' && method === 'GET') return await getHistorialHerramientas(request, env);
       if (path === '/alertas-stock'          && method === 'GET') return await getAlertasStock(request, env);
       if (path === '/obra-dashboard'         && method === 'GET') return await getObraDashboard(request, env);
+      // ── Fases de obra (NEW-30) ──────────────────────────────────────────
+      if (path === '/fases-obra'           && method === 'GET')  return await getFasesObra(request, env);
+      if (path === '/fases-obra'           && method === 'POST') return await crearFaseObra(request, env);
+      if (path.startsWith('/fases-obra/')) {
+        const _fid = parseInt(path.split('/fases-obra/')[1]);
+        if (method === 'PUT')    return await actualizarFaseObra(_fid, request, env);
+        if (method === 'DELETE') return await eliminarFaseObra(_fid, request, env);
+      }
+      // ── Diario de obra (NEW-31) ──────────────────────────────────────────
+      if (path === '/diario-obra'          && method === 'GET')  return await getDiarioObra(request, env);
+      if (path === '/diario-obra'          && method === 'POST') return await crearEntradaDiario(request, env);
+      if (path.startsWith('/diario-obra/')) {
+        const _did2 = parseInt(path.split('/diario-obra/')[1]);
+        if (method === 'PUT')    return await actualizarEntradaDiario(_did2, request, env);
+        if (method === 'DELETE') return await eliminarEntradaDiario(_did2, request, env);
+      }
       if (path === '/repostajes'             && method === 'GET')  return await getRepostajes(request, env);
       if (path === '/repostajes'             && method === 'POST') return await crearRepostaje(request, env, ctx);
       if (path === '/repostajes/resumen'     && method === 'GET')  return await getResumenRepostajes(request, env);
@@ -6779,7 +6795,7 @@ async function getObraDashboard(request, env) {
     return [...p, ...extras];
   };
 
-  const [fichajesHoy, equiposMant, herrFuera, pedidosPend, alertasHerr, alertasSeg, alertasBob, incidenciasAbiertas, proximoEvento] = await Promise.all([
+  const [fichajesHoy, equiposMant, herrFuera, pedidosPend, alertasHerr, alertasSeg, alertasBob, incidenciasAbiertas, proximoEvento, fichajesSemana, incidenciasTipo] = await Promise.all([
     // Fichajes hoy
     env.DB.prepare(
       `SELECT COUNT(*) as n FROM fichajes WHERE empresa_id=?${queryObraId ? ' AND obra_id=?' : ''} AND fecha=?`
@@ -6835,6 +6851,16 @@ async function getObraDashboard(request, env) {
     env.DB.prepare(
       `SELECT titulo, fecha, hora, tipo FROM eventos_calendario WHERE empresa_id=?${queryObraId?' AND (obra_id=? OR obra_id IS NULL)':''} AND fecha >= ? ORDER BY fecha ASC, hora ASC LIMIT 1`
     ).bind(...[empresa_id, ...(queryObraId?[queryObraId]:[]), hoy]).first(),
+
+    // Fichajes por semana (últimas 8 semanas) — para gráficas
+    env.DB.prepare(
+      `SELECT strftime('%Y-W%W', fecha) as semana, COUNT(*) as n FROM fichajes WHERE empresa_id=? AND fecha >= date('now','-56 days') GROUP BY semana ORDER BY semana`
+    ).bind(empresa_id).all(),
+
+    // Incidencias por tipo — para gráficas
+    env.DB.prepare(
+      `SELECT COALESCE(tipo,'otro') as tipo, COUNT(*) as n FROM incidencias WHERE empresa_id=? GROUP BY tipo`
+    ).bind(empresa_id).all(),
   ]);
 
   return json({
@@ -6846,6 +6872,8 @@ async function getObraDashboard(request, env) {
     incidencias_abiertas:   incidenciasAbiertas?.n || 0,
     proximo_evento:         proximoEvento || null,
     obra_id:                queryObraId || null,
+    fichajes_semana:        fichajesSemana.results || [],
+    incidencias_tipo:       incidenciasTipo.results || [],
   });
 }
 
@@ -11988,4 +12016,168 @@ async function devActivity(request, env) {
     `).all(),
   ]);
   return json({ ok: true, fichajes: fichajes.results, incidencias: incidencias.results });
+}
+
+// ── Fases de obra (NEW-30) ─────────────────────────────────────────────────
+async function ensureFasesObraTable(env) {
+  await env.DB.prepare(`
+    CREATE TABLE IF NOT EXISTS fases_obra (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      obra_id INTEGER NOT NULL,
+      empresa_id INTEGER NOT NULL,
+      nombre TEXT NOT NULL,
+      descripcion TEXT,
+      fecha_inicio_plan TEXT,
+      fecha_fin_plan TEXT,
+      fecha_inicio_real TEXT,
+      fecha_fin_real TEXT,
+      porcentaje INTEGER DEFAULT 0,
+      estado TEXT DEFAULT 'pendiente',
+      responsable TEXT,
+      orden INTEGER DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `).run().catch(()=>{});
+}
+
+async function getFasesObra(request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth.empresa_id) return err('No autorizado', 403);
+  await ensureFasesObraTable(env);
+  const url = new URL(request.url);
+  const obra_id = url.searchParams.get('obra_id') ? parseInt(url.searchParams.get('obra_id')) : auth.obra_id;
+  if (!obra_id) return json([]);
+  const { results } = await env.DB.prepare(
+    `SELECT * FROM fases_obra WHERE empresa_id=? AND obra_id=? ORDER BY orden ASC, id ASC`
+  ).bind(auth.empresa_id, obra_id).all();
+  return json(results || []);
+}
+
+async function crearFaseObra(request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth.empresa_id) return err('No autorizado', 403);
+  if (!auth.isEncargado && !auth.isEmpresaAdmin && !auth.isSuperadmin) return err('Sin permisos', 403);
+  await ensureFasesObraTable(env);
+  const b = await request.json().catch(()=>({}));
+  const obra_id = b.obra_id || auth.obra_id;
+  if (!obra_id || !b.nombre?.trim()) return err('Faltan datos obligatorios', 400);
+  // Calcular siguiente orden
+  const maxOrden = await env.DB.prepare(
+    `SELECT COALESCE(MAX(orden),0) as m FROM fases_obra WHERE empresa_id=? AND obra_id=?`
+  ).bind(auth.empresa_id, obra_id).first();
+  const r = await env.DB.prepare(`
+    INSERT INTO fases_obra (obra_id, empresa_id, nombre, descripcion, fecha_inicio_plan, fecha_fin_plan, responsable, orden)
+    VALUES (?,?,?,?,?,?,?,?)
+  `).bind(obra_id, auth.empresa_id, b.nombre.trim(), b.descripcion||null, b.fecha_inicio_plan||null, b.fecha_fin_plan||null, b.responsable||null, (maxOrden?.m||0)+1).run();
+  return json({ ok: true, id: r.meta?.last_row_id });
+}
+
+async function actualizarFaseObra(id, request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth.empresa_id) return err('No autorizado', 403);
+  const b = await request.json().catch(()=>({}));
+  const campos = [];
+  const vals = [];
+  if (b.nombre !== undefined)          { campos.push('nombre=?');           vals.push(b.nombre); }
+  if (b.descripcion !== undefined)     { campos.push('descripcion=?');      vals.push(b.descripcion); }
+  if (b.fecha_inicio_plan !== undefined){ campos.push('fecha_inicio_plan=?'); vals.push(b.fecha_inicio_plan); }
+  if (b.fecha_fin_plan !== undefined)  { campos.push('fecha_fin_plan=?');   vals.push(b.fecha_fin_plan); }
+  if (b.fecha_inicio_real !== undefined){ campos.push('fecha_inicio_real=?'); vals.push(b.fecha_inicio_real); }
+  if (b.fecha_fin_real !== undefined)  { campos.push('fecha_fin_real=?');   vals.push(b.fecha_fin_real); }
+  if (b.porcentaje !== undefined)      { campos.push('porcentaje=?');       vals.push(Math.max(0,Math.min(100,parseInt(b.porcentaje)||0))); }
+  if (b.estado !== undefined)          { campos.push('estado=?');           vals.push(b.estado); }
+  if (b.responsable !== undefined)     { campos.push('responsable=?');      vals.push(b.responsable); }
+  if (b.orden !== undefined)           { campos.push('orden=?');            vals.push(parseInt(b.orden)||0); }
+  if (!campos.length) return err('Nada que actualizar', 400);
+  vals.push(id, auth.empresa_id);
+  await env.DB.prepare(`UPDATE fases_obra SET ${campos.join(',')} WHERE id=? AND empresa_id=?`).bind(...vals).run();
+  return json({ ok: true });
+}
+
+async function eliminarFaseObra(id, request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth.empresa_id) return err('No autorizado', 403);
+  await env.DB.prepare(`DELETE FROM fases_obra WHERE id=? AND empresa_id=?`).bind(id, auth.empresa_id).run();
+  return json({ ok: true });
+}
+
+// ── Diario de obra (NEW-31) ──────────────────────────────────────────────────
+async function ensureDiarioObraTable(env) {
+  await env.DB.prepare(`
+    CREATE TABLE IF NOT EXISTS diario_obra (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      obra_id INTEGER NOT NULL,
+      empresa_id INTEGER NOT NULL,
+      fecha TEXT NOT NULL,
+      clima TEXT,
+      temperatura TEXT,
+      trabajos TEXT NOT NULL,
+      personal_presente INTEGER DEFAULT 0,
+      equipos_activos TEXT,
+      incidencias_dia TEXT,
+      visitantes TEXT,
+      observaciones TEXT,
+      creado_por TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `).run().catch(()=>{});
+}
+
+async function getDiarioObra(request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth.empresa_id) return err('No autorizado', 403);
+  await ensureDiarioObraTable(env);
+  const url = new URL(request.url);
+  const obra_id = url.searchParams.get('obra_id') ? parseInt(url.searchParams.get('obra_id')) : auth.obra_id;
+  const limit = Math.min(parseInt(url.searchParams.get('limit')||'30'),100);
+  if (!obra_id) return json([]);
+  const { results } = await env.DB.prepare(
+    `SELECT * FROM diario_obra WHERE empresa_id=? AND obra_id=? ORDER BY fecha DESC, id DESC LIMIT ?`
+  ).bind(auth.empresa_id, obra_id, limit).all();
+  return json(results || []);
+}
+
+async function crearEntradaDiario(request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth.empresa_id) return err('No autorizado', 403);
+  await ensureDiarioObraTable(env);
+  const b = await request.json().catch(()=>({}));
+  const obra_id = b.obra_id || auth.obra_id;
+  if (!obra_id || !b.trabajos?.trim()) return err('Faltan datos obligatorios (trabajos)', 400);
+  const fecha = b.fecha || new Date().toISOString().slice(0,10);
+  const r = await env.DB.prepare(`
+    INSERT INTO diario_obra (obra_id, empresa_id, fecha, clima, temperatura, trabajos, personal_presente, equipos_activos, incidencias_dia, visitantes, observaciones, creado_por)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+  `).bind(
+    obra_id, auth.empresa_id, fecha,
+    b.clima||null, b.temperatura||null, b.trabajos.trim(),
+    parseInt(b.personal_presente)||0,
+    b.equipos_activos||null, b.incidencias_dia||null,
+    b.visitantes||null, b.observaciones||null,
+    auth.nombre||'sistema'
+  ).run();
+  return json({ ok: true, id: r.meta?.last_row_id });
+}
+
+async function actualizarEntradaDiario(id, request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth.empresa_id) return err('No autorizado', 403);
+  const b = await request.json().catch(()=>({}));
+  const campos = [];
+  const vals = [];
+  const flds = ['clima','temperatura','trabajos','personal_presente','equipos_activos','incidencias_dia','visitantes','observaciones'];
+  for (const f of flds) {
+    if (b[f] !== undefined) { campos.push(`${f}=?`); vals.push(f==='personal_presente'?parseInt(b[f])||0:b[f]); }
+  }
+  if (!campos.length) return err('Nada que actualizar', 400);
+  vals.push(id, auth.empresa_id);
+  await env.DB.prepare(`UPDATE diario_obra SET ${campos.join(',')} WHERE id=? AND empresa_id=?`).bind(...vals).run();
+  return json({ ok: true });
+}
+
+async function eliminarEntradaDiario(id, request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth.empresa_id) return err('No autorizado', 403);
+  await env.DB.prepare(`DELETE FROM diario_obra WHERE id=? AND empresa_id=?`).bind(id, auth.empresa_id).run();
+  return json({ ok: true });
 }

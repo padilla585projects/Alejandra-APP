@@ -485,7 +485,29 @@ UMBRALES DE ACCIÓN:
 - Equipo a <5 días de vencer revisión → avisa antes de que caduque.
 - Factura posiblemente duplicada → pregunta, no registres automáticamente.
 
-TONO: Eres una compañera de oficina técnica eficiente. No alarmes sin datos. Cuando avises, da contexto + datos + sugerencia concreta. "La bobina X tiene para 3 días. ¿Pido 500m a Prysmian como la última vez?" es mejor que "Stock bajo".`,
+TONO: Eres una compañera de oficina técnica eficiente. No alarmes sin datos. Cuando avises, da contexto + datos + sugerencia concreta. "La bobina X tiene para 3 días. ¿Pido 500m a Prysmian como la última vez?" es mejor que "Stock bajo".
+
+GESTIÓN DE PROYECTO — NUEVAS CAPACIDADES (v6.48+):
+La app ahora tiene fases de obra y diario de obra. Úsalos proactivamente:
+
+FASES DE OBRA (tabla: fases_obra):
+- Campos: id, obra_id, empresa_id, nombre, descripcion, fecha_inicio_plan, fecha_fin_plan, fecha_inicio_real, fecha_fin_real, porcentaje (0-100), estado (pendiente/en_curso/completada/retrasada/bloqueada), responsable, orden
+- Cuando el usuario pregunte "¿cómo vamos?" o "¿cuánto llevamos?", usa la herramienta estado_obra para obtener un resumen completo.
+- Si detectas que una fase va retrasada (fecha_fin_plan < today y porcentaje < 100), avisa proactivamente.
+- Puedes actualizar el progreso: escribir_bd('UPDATE fases_obra SET porcentaje=?,estado=? WHERE id=? AND empresa_id=?', [pct,estado,id,eid])
+
+DIARIO DE OBRA (tabla: diario_obra):
+- Campos: id, obra_id, empresa_id, fecha, clima, temperatura, trabajos (texto libre), personal_presente (número), equipos_activos, incidencias_dia, visitantes, observaciones, creado_por
+- Al final del día o cuando el usuario describa lo que hicieron, ofrécete a registrarlo: "¿Quieres que lo anote en el diario de hoy?"
+- Crear entrada: escribir_bd('INSERT INTO diario_obra (obra_id,empresa_id,fecha,trabajos,personal_presente,clima,creado_por) VALUES (?,?,?,?,?,?,?)', [obraId,eid,fecha,trabajos,personal,clima,nombre])
+- Leer: consultar_bd('SELECT * FROM diario_obra WHERE obra_id=? ORDER BY fecha DESC LIMIT 7', [obraId])
+
+BRIEFING DE OBRA INTELIGENTE:
+Cuando alguien pida el estado de la obra o el briefing del día:
+1. Llama a estado_obra (herramienta) → KPIs + fases + diario reciente
+2. Analiza los datos: ¿hay fases retrasadas? ¿incidencias sin resolver? ¿personal bajo?
+3. Responde con un resumen ejecutivo + alertas + acciones sugeridas
+No des datos crudos: interprétalos. "La obra va al 65% en media, pero la fase 'Cuadro principal' lleva 2 semanas de retraso." es mejor que listar filas de BD.`,
 
   asistente_escaneo: `ASISTENTE DE ESCANEO Y REGISTRO DE DATOS — Cuando el usuario suba un documento (foto, PDF, Excel, imagen) para REGISTRAR DATOS en la app (bobinas, fichajes, facturas, albaranes, listados de material, inventario, partes de trabajo, recepción de mercancía, mediciones…), sigue este flujo OBLIGATORIO:
 
@@ -822,6 +844,7 @@ const NEXUS_EXPERTS = {
   completo:   { model: MODEL_EXPERTO, maxTokens: 1024, modules: ['base', 'app', 'tecnica', 'nexus', 'ram', 'evolucion', 'web', 'capacidades_avanzadas', 'inteligencia_negocio', 'seguimiento_proactivo', 'asistente_escaneo', 'aprendizaje_proactivo', 'razonamiento', 'contexto_sesion', 'formato'] },
   ingenieria: { model: MODEL_EXPERTO, maxTokens: 8000, modules: ['base', 'app', 'ingenieria', 'ingenieria_electrica', 'ram', 'capacidades_avanzadas', 'inteligencia_negocio', 'seguimiento_proactivo', 'asistente_escaneo', 'aprendizaje_proactivo', 'razonamiento', 'contexto_sesion', 'formato'] }
 };
+// Nota: el módulo inteligencia_negocio ya incluye instrucciones de fases_obra y diario_obra (v6.48+)
 
 // Módulos estáticos (L0) — se cachean siempre, nunca cambian entre turnos
 const L0_MODULES = ['base', 'formato'];
@@ -1138,6 +1161,17 @@ const TOOL_BORRAR_ESQUEMA = {
       documento_id: { type: 'number', description: 'ID del registro en documentos_obra (opcional, acelera la búsqueda)' }
     },
     required: ['r2_key']
+  }
+};
+
+const TOOL_ESTADO_OBRA = {
+  name: 'estado_obra',
+  description: 'Obtiene un resumen ejecutivo completo de una obra: KPIs actuales (fichajes hoy, equipos, pedidos, incidencias abiertas), fases de planificación con % de progreso, y últimas entradas del diario de obra. Úsalo cuando el usuario pregunte por el estado, el progreso, el briefing del día, o quiera saber cómo va la obra.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      obra_id: { type: 'number', description: 'ID de la obra. Si no se especifica, busca la obra activa del usuario.' }
+    }
   }
 };
 
@@ -1522,11 +1556,11 @@ const TOOL_CONSULTAR_CONOCIMIENTO = {
 
 const TOOLS_POR_EXPERTO = {
   simple:     [TOOL_MEMORY_READ, TOOL_CONSULTAR_BD, TOOL_ENVIAR_PUSH],
-  app:        [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_CONTROLAR_APP, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_ANALIZAR_FOTO],
+  app:        [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_CONTROLAR_APP, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_ANALIZAR_FOTO, TOOL_ESTADO_OBRA],
   tecnico:    [TOOL_LEER_ESTADO, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_BUSCAR_WEB, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_NEXUS_MANAGE, TOOL_CONTROLAR_APP, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO],
   web:        [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE],
   reflexion:  [TOOL_MEMORY_SAVE, TOOL_MEMORY_READ, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_PROPOSE_MEJORA, TOOL_BUSCAR_WEB, TOOL_TOMAR_DECISION, TOOL_LEER_ESTADO, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_CONTROLAR_APP, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO],
-  completo:   [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_LEER_ESTADO, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_CONTROLAR_APP, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_ANALIZAR_FOTO],
+  completo:   [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_LEER_ESTADO, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_CONTROLAR_APP, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_ANALIZAR_FOTO, TOOL_ESTADO_OBRA],
   ingenieria: [TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_ANALIZAR_FOTO, TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME]
 };
 
@@ -5715,6 +5749,74 @@ ${descripcion ? `<div class="info-bar"><span class="badge">${tipo}</span>${descr
         });
       } catch (err) {
         return JSON.stringify({ ok: false, error: `Error borrando esquema: ${err.message}` });
+      }
+    }
+
+    case 'estado_obra': {
+      try {
+        let obraId = input.obra_id ? parseInt(input.obra_id) : null;
+        if (!obraId && env.DB && usuario_id) {
+          const u = await env.DB.prepare('SELECT obra_id FROM usuarios WHERE id=? AND activo=1').bind(usuario_id).first().catch(()=>null);
+          obraId = u?.obra_id || null;
+        }
+        if (!obraId) return '❌ No se encontró una obra activa. Indica el ID de obra o pide al usuario que seleccione una obra en la app.';
+        const eid = empresa_id || 'default';
+
+        const [kpis, fases, diario, incidencias, obraInfo] = await Promise.all([
+          env.DB.prepare(`SELECT
+            (SELECT COUNT(*) FROM fichajes WHERE obra_id=? AND empresa_id=? AND fecha=date('now')) as fichajes_hoy,
+            (SELECT COUNT(*) FROM incidencias WHERE obra_id=? AND empresa_id=? AND estado IN ('abierta','en_progreso')) as inc_abiertas,
+            (SELECT COUNT(*) FROM pedidos WHERE obra_id=? AND empresa_id=? AND estado IN ('pendiente','solicitado')) as pedidos_pend,
+            (SELECT COUNT(*) FROM pemp WHERE obra_id=? AND empresa_id=? AND estado='mantenimiento') as equipos_mant
+          `).bind(obraId,eid,obraId,eid,obraId,eid,obraId,eid).first().catch(()=>({})),
+          env.DB.prepare(`SELECT nombre,estado,porcentaje,fecha_inicio_plan,fecha_fin_plan,responsable FROM fases_obra WHERE obra_id=? AND empresa_id=? ORDER BY orden ASC LIMIT 10`).bind(obraId,eid).all().catch(()=>({results:[]})),
+          env.DB.prepare(`SELECT fecha,clima,trabajos,personal_presente FROM diario_obra WHERE obra_id=? AND empresa_id=? ORDER BY fecha DESC LIMIT 3`).bind(obraId,eid).all().catch(()=>({results:[]})),
+          env.DB.prepare(`SELECT titulo,tipo,gravedad,estado FROM incidencias WHERE obra_id=? AND empresa_id=? AND estado IN ('abierta','en_progreso') ORDER BY fecha DESC LIMIT 5`).bind(obraId,eid).all().catch(()=>({results:[]})),
+          env.DB.prepare('SELECT nombre,codigo FROM obras WHERE id=? AND empresa_id=?').bind(obraId,eid).first().catch(()=>null),
+        ]);
+
+        let r = `📊 ESTADO DE OBRA: ${obraInfo?.nombre||'#'+obraId}${obraInfo?.codigo?' ('+obraInfo.codigo+')':''}\n`;
+        r += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
+        r += `📈 KPIs HOY:\n  👷 Fichajes: ${kpis?.fichajes_hoy||0}  🚨 Incidencias: ${kpis?.inc_abiertas||0}  📦 Pedidos: ${kpis?.pedidos_pend||0}  🏗️ Equipos parados: ${kpis?.equipos_mant||0}\n\n`;
+
+        const fRes = fases.results||[];
+        if (fRes.length) {
+          const pctMedio = Math.round(fRes.reduce((s,f)=>s+(f.porcentaje||0),0)/fRes.length);
+          r += `📅 PLAN DE OBRA (${fRes.length} fases — ${pctMedio}% medio):\n`;
+          fRes.forEach(f => {
+            const em={pendiente:'⏳',en_curso:'🔄',completada:'✅',retrasada:'⚠️',bloqueada:'🔴'}[f.estado]||'⏳';
+            r += `  ${em} ${f.nombre} — ${f.porcentaje||0}%${f.fecha_fin_plan?' (hasta '+f.fecha_fin_plan+')':''}${f.responsable?' ['+f.responsable+']':''}\n`;
+          });
+          const ret=fRes.filter(f=>f.estado==='retrasada').length;
+          if (ret) r += `  ⚠️ ALERTA: ${ret} fase${ret>1?'s':''} retrasada${ret>1?'s':''}\n`;
+          r += '\n';
+        } else {
+          r += `📅 Sin plan de fases definido. Puedes crearlo con escribir_bd + tabla fases_obra.\n\n`;
+        }
+
+        const dRes = diario.results||[];
+        if (dRes.length) {
+          r += `📓 ÚLTIMAS ENTRADAS DIARIO:\n`;
+          dRes.forEach(e => {
+            const ce={soleado:'☀️',nublado:'☁️',lluvioso:'🌧️',tormenta:'⛈️',niebla:'🌫️',viento:'💨',nieve:'❄️'}[e.clima]||'';
+            r += `  📅 ${e.fecha} ${ce}${e.personal_presente?' 👷'+e.personal_presente:''}: ${(e.trabajos||'').slice(0,100)}${(e.trabajos||'').length>100?'…':''}\n`;
+          });
+          r += '\n';
+        } else {
+          r += `📓 Sin entradas en el diario de obra (tabla: diario_obra).\n\n`;
+        }
+
+        const iRes = incidencias.results||[];
+        if (iRes.length) {
+          r += `🚨 INCIDENCIAS ACTIVAS:\n`;
+          iRes.forEach(i => {
+            const g={baja:'🟢',media:'🟡',alta:'🔴',critica:'🆘'}[i.gravedad]||'⚪';
+            r += `  ${g} ${i.titulo} (${i.tipo||'general'}) — ${i.estado}\n`;
+          });
+        }
+        return r;
+      } catch (err) {
+        return `Error obteniendo estado de obra: ${err.message}`;
       }
     }
 
