@@ -6,12 +6,58 @@
 ## ESTADO ACTUAL
 
 **Sesión:** LIBRE
-**Última sesión:** 24/06/2026 (3ª continuación) — Esquemas IA en docs de obra + explorador archivos
-**Versión actual:** App PWA **v6.47** · AlejandraIA **v1.9.17+31** · WORKER API `1ccf42f8` · WORKER agente `a77bf132`
-**Próxima:** Probar esquemas con obra_id (ver que aparecen en Docs). Análisis de fotos de cuadros eléctricos. Instalar APK v1.9.17 en móvil. Añadir email real a Alberto. Fichajes 8–15: decidir. Foreground service 30+ min. Albarán universal con foto real.
+**Última sesión:** 24/06/2026 (4ª continuación) — Dashboard con gráficas + Fases de obra + Diario de obra + Alejandra IA potenciada
+**Versión actual:** App PWA **v6.48** · AlejandraIA **v1.9.17+31** · WORKER API `0df16a74` · WORKER agente `4fc6c53b`
+**Próxima:** Probar tabs Dashboard (Resumen/Gráficas/Fases/Diario). Probar tool `estado_obra` de Alejandra. Instalar APK v1.9.17 en móvil. Añadir email real a Alberto. Fichajes 8–15: decidir. Foreground service 30+ min. Albarán universal con foto real.
 
 ---
 
+## RESUMEN SESIÓN 24/06/2026 (4ª continuación) — Dashboard con gráficas + Fases de obra + Diario de obra + Alejandra IA potenciada
+
+### Objetivo
+Análisis completo de la app y mejora hasta nivel de gestión de obra de primer nivel (Procore/Fieldwire/PlanGrid). Se identificaron 5 gaps críticos y se implementaron los 3 más impactantes. También se potencia Alejandra IA como ventaja diferencial.
+
+### Cambios — commit `b37371f` ✅
+
+**`worker.js` (principal)** · deploy `0df16a74` ✅
+
+1. **`getObraDashboard` extendido**: 2 nuevas queries paralelas — `fichajes_semana` (últimas 8 semanas agrupadas) e `incidencias_tipo` (count por tipo). Devueltos en el JSON para las gráficas.
+
+2. **Nuevas rutas Fases de obra** (`/fases-obra` GET/POST, `/fases-obra/:id` PUT/DELETE):
+   - `ensureFasesObraTable` + CRUD completo
+   - Tabla `fases_obra`: id, obra_id, empresa_id, nombre, descripcion, fecha_inicio_plan, fecha_fin_plan, fecha_inicio_real, fecha_fin_real, porcentaje, estado, responsable, orden, created_at
+
+3. **Nuevas rutas Diario de obra** (`/diario-obra` GET/POST, `/diario-obra/:id` PUT/DELETE):
+   - `ensureDiarioObraTable` + CRUD completo
+   - Tabla `diario_obra`: id, obra_id, empresa_id, fecha, clima, temperatura, trabajos, personal_presente, equipos_activos, incidencias_dia, visitantes, observaciones, creado_por, created_at
+
+**`index.html`** · v6.48 ✅
+
+1. **Chart.js CDN** añadido (`chart.js@4.4.3/dist/chart.umd.min.js`)
+2. **`modalFaseObra`** (NEW-30): campos nombre/descripcion/fechas/responsable/estado/porcentaje (slider).
+3. **`modalDiarioObra`** (NEW-31): campos fecha/clima (selector emojis)/temperatura/trabajos/personal/equipos/incidencias/visitantes/observaciones.
+4. **`cargarObraDashboard` reescrita** con 4 pestañas: Resumen · Gráficas · Fases · Diario
+5. **Chart.js**: bar chart fichajes/semana (8 sem), doughnut incidencias por tipo, doughnut equipos disponibles vs mantenimiento
+6. **Funciones CRUD Fases**: `fasesCargar`, `fasesNueva`, `fasesEditar`, `fasesGuardar`, `fasesEliminar`, `fasesActualizarProgreso` (update inline sin reload)
+7. **Funciones CRUD Diario**: `diarioCargar`, `diarioNuevo` (auto-rellena personal desde fichajes del día), `diarioGuardar`, `diarioEliminar`
+
+**`alejandra-agente/worker.js`** · deploy `4fc6c53b` ✅
+
+1. **`TOOL_ESTADO_OBRA`** (nueva): resumen ejecutivo — KPIs actuales, fases con %, últimas 3 entradas del diario, incidencias activas. Añadida a expertos `app` y `completo`.
+2. **Handler `case 'estado_obra'`**: 4 queries paralelas D1. Formato narrativo con emojis, alertas fases retrasadas, promedio personal/día.
+3. **Módulo `inteligencia_negocio` extendido**: sección v6.48+ con instrucciones para fases, diario y briefing inteligente.
+
+### Workers desplegados
+- `alejandra-app-api` → `0df16a74-3c6b-4ee9-bb45-fa9895a5cbec` ✅
+- `alejandra-agente` → `4fc6c53b-16eb-471b-853b-182eae6cb3d8` ✅
+
+### Cómo probar
+- **Dashboard**: ir a cualquier obra → pestaña Resumen/Gráficas/Fases/Diario
+- **Fases**: pestaña Fases → ➕ Nueva fase → guardar → ajustar slider % → actualizar
+- **Diario**: pestaña Diario → ➕ Nueva entrada → rellenar clima/trabajos → guardar
+- **Alejandra**: "¿Cómo va la obra 1?" → usa `estado_obra` → resumen ejecutivo con fases + diario + KPIs
+
+---
 ## RESUMEN SESIÓN 24/06/2026 (3ª continuación) — Esquemas IA en docs de obra + explorador archivos
 
 ### Cambios — commit `a0033a1` ✅

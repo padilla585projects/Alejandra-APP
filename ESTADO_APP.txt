@@ -5,11 +5,20 @@
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 24/06/2026
-VERSIÓN ACTUAL APP NUEVA: v6.47 (Esquemas IA en docs de obra + explorador archivos con renombrar/borrar)
-WORKER API: 1ccf42f8 · WORKER AGENTE: a77bf132
+VERSIÓN ACTUAL APP NUEVA: v6.48 (Dashboard gráficas + Fases de obra + Diario de obra + Alejandra IA potenciada)
+WORKER API: 0df16a74 · WORKER AGENTE: 4fc6c53b
 VERSIÓN ACTUAL APP VIEJA: v4.19 (⛔ CONGELADA DEFINITIVAMENTE — no recibe más cambios)
 
 HISTORIAL DE VERSIONES (resumen reciente):
+  v6.48 — 24/06/2026 — Dashboard gráficas + Fases de obra + Diario de obra + Alejandra IA potenciada:
+                       Chart.js@4.4.3 en index.html. cargarObraDashboard reescrita con 4 tabs
+                       (Resumen, Gráficas, Fases, Diario). 3 gráficas Chart.js (bar fichajes/semana,
+                       doughnut incidencias por tipo, doughnut equipos disponibles vs mantenimiento).
+                       Nuevas tablas fases_obra y diario_obra (CREATE IF NOT EXISTS). CRUD completo
+                       en worker.js (/fases-obra, /diario-obra). 2 nuevos modales en index.html
+                       (modalFaseObra, modalDiarioObra). TOOL_ESTADO_OBRA en agente: resumen ejecutivo
+                       obra con KPIs + fases + diario + incidencias. Módulo inteligencia_negocio
+                       extendido con instrucciones v6.48+. Workers: API 0df16a74, agente 4fc6c53b.
   v6.47 — 24/06/2026 — Esquemas IA en documentos de obra: TOOL_GENERAR_ESQUEMA con obra_id,
                        TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA en agente. Filtro elaborado_por
                        en GET /documentos-obra. DELETE /documentos-obra/{id} limpia R2 cuando
