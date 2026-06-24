@@ -502,12 +502,36 @@ DIARIO DE OBRA (tabla: diario_obra):
 - Crear entrada: escribir_bd('INSERT INTO diario_obra (obra_id,empresa_id,fecha,trabajos,personal_presente,clima,creado_por) VALUES (?,?,?,?,?,?,?)', [obraId,eid,fecha,trabajos,personal,clima,nombre])
 - Leer: consultar_bd('SELECT * FROM diario_obra WHERE obra_id=? ORDER BY fecha DESC LIMIT 7', [obraId])
 
+TAREAS DE OBRA (tabla: tareas_obra) — nivel Fieldwire:
+- Campos: id, obra_id, empresa_id, titulo, descripcion, asignado_a, fase_id, estado (pendiente/en_curso/completada/bloqueada), prioridad (urgente/alta/normal/baja), fecha_limite, ubicacion, notas, created_by, created_at
+- Usa gestionar_tarea para crear, listar, actualizar y completar tareas.
+- Si detectas tareas urgentes vencidas, avisa proactivamente al usuario.
+- Cuando alguien diga "ya terminé X" o "completé la instalación de Y", ofréce marcar la tarea como completada.
+- Cuando alguien asigne trabajo ("Pedro se encarga de las zanjas"), crea la tarea automáticamente.
+
+RFIs — CONSULTAS TÉCNICAS (tabla: rfis) — nivel Procore:
+- Campos: id, obra_id, empresa_id, numero (RFI-001), titulo, categoria (diseno/materiales/seguridad/proceso/normativa/otro), descripcion, estado (abierta/en_revision/respondida/cerrada), prioridad, creado_por, asignado_a, respuesta, respondido_por, fecha_respuesta, fecha_limite, impacto_plazo, impacto_coste
+- Usa gestionar_rfi para crear, listar, responder y gestionar RFIs.
+- Cuando alguien pregunte sobre diseño, materiales o normativa de forma que requiera respuesta formal, ofrécete a crear una RFI: "¿Quieres que lo registre como RFI formal para que quede documentado?"
+- Si hay RFIs con impacto en plazo o coste, mencíonalo en el briefing.
+- Las RFIs son trazabilidad legal — son importantes para reclamaciones y cambios de orden.
+
+CONTROL DE PRESUPUESTO (tabla: presupuesto_obra) — nivel Procore:
+- Cuando la desviación supere el 10% en una categoría, avisa proactivamente.
+- "La categoría 'Mano de obra' lleva un 23% de desviación sobre lo presupuestado. ¿Quieres revisar las partidas?"
+- Puedes desglosar por categoría, comparar previsto vs real, calcular % completado financiero.
+
 BRIEFING DE OBRA INTELIGENTE:
 Cuando alguien pida el estado de la obra o el briefing del día:
-1. Llama a estado_obra (herramienta) → KPIs + fases + diario reciente
-2. Analiza los datos: ¿hay fases retrasadas? ¿incidencias sin resolver? ¿personal bajo?
-3. Responde con un resumen ejecutivo + alertas + acciones sugeridas
-No des datos crudos: interprétalos. "La obra va al 65% en media, pero la fase 'Cuadro principal' lleva 2 semanas de retraso." es mejor que listar filas de BD.`,
+1. Llama a estado_obra (herramienta) → KPIs + fases + diario reciente + tareas + RFIs
+2. Analiza los datos: ¿hay fases retrasadas? ¿tareas urgentes vencidas? ¿RFIs que bloquean? ¿desviación de presupuesto?
+3. Responde con un resumen ejecutivo + alertas + acciones concretas sugeridas
+No des datos crudos: interprétalos. "La obra va al 65%, pero hay 2 tareas urgentes vencidas y una RFI de diseño sin respuesta que puede bloquear la siguiente fase." es mucho mejor que listar filas de BD.
+
+ANÁLISIS PREDICTIVO DE OBRA:
+- Si hay >3 tareas vencidas de la misma persona → "Pedro tiene un cuello de botella. ¿Reasignamos alguna tarea?"
+- Si hay >5 RFIs abiertas → "Hay muchas consultas sin respuesta. Esto puede indicar un problema en la documentación de proyecto."
+- Si el % real del presupuesto supera el % de avance de la obra → "Se está gastando más de lo que avanza la obra. Revisar productividad."`,
 
   asistente_escaneo: `ASISTENTE DE ESCANEO Y REGISTRO DE DATOS — Cuando el usuario suba un documento (foto, PDF, Excel, imagen) para REGISTRAR DATOS en la app (bobinas, fichajes, facturas, albaranes, listados de material, inventario, partes de trabajo, recepción de mercancía, mediciones…), sigue este flujo OBLIGATORIO:
 
@@ -5818,7 +5842,7 @@ ${descripcion ? `<div class="info-bar"><span class="badge">${tipo}</span>${descr
         if (!obraId) return '❌ No se encontró una obra activa. Indica el ID de obra o pide al usuario que seleccione una obra en la app.';
         const eid = empresa_id || 'default';
 
-        const [kpis, fases, diario, incidencias, obraInfo, tareasAbiertas] = await Promise.all([
+        const [kpis, fases, diario, incidencias, obraInfo, tareasAbiertas, rfisAbiertas, presupuesto] = await Promise.all([
           env.DB.prepare(`SELECT
             (SELECT COUNT(*) FROM fichajes WHERE obra_id=? AND empresa_id=? AND fecha=date('now')) as fichajes_hoy,
             (SELECT COUNT(*) FROM incidencias WHERE obra_id=? AND empresa_id=? AND estado IN ('abierta','en_progreso')) as inc_abiertas,
@@ -5830,6 +5854,8 @@ ${descripcion ? `<div class="info-bar"><span class="badge">${tipo}</span>${descr
           env.DB.prepare(`SELECT titulo,tipo,gravedad,estado FROM incidencias WHERE obra_id=? AND empresa_id=? AND estado IN ('abierta','en_progreso') ORDER BY fecha DESC LIMIT 5`).bind(obraId,eid).all().catch(()=>({results:[]})),
           env.DB.prepare('SELECT nombre,codigo FROM obras WHERE id=? AND empresa_id=?').bind(obraId,eid).first().catch(()=>null),
           env.DB.prepare(`SELECT titulo,estado,prioridad,asignado_a,fecha_limite FROM tareas_obra WHERE obra_id=? AND empresa_id=? AND estado != 'completada' ORDER BY CASE prioridad WHEN 'urgente' THEN 0 WHEN 'alta' THEN 1 WHEN 'normal' THEN 2 ELSE 3 END, fecha_limite ASC NULLS LAST LIMIT 8`).bind(obraId,eid).all().catch(()=>({results:[]})),
+          env.DB.prepare(`SELECT numero,titulo,estado,prioridad,asignado_a,impacto_plazo,impacto_coste FROM rfis WHERE obra_id=? AND empresa_id=? AND estado IN ('abierta','en_revision') ORDER BY CASE prioridad WHEN 'urgente' THEN 0 WHEN 'alta' THEN 1 WHEN 'normal' THEN 2 ELSE 3 END LIMIT 5`).bind(obraId,eid).all().catch(()=>({results:[]})),
+          env.DB.prepare(`SELECT COALESCE(SUM(importe_previsto),0) as prev, COALESCE(SUM(importe_real),0) as real FROM presupuesto_obra WHERE obra_id=? AND empresa_id=?`).bind(obraId,eid).first().catch(()=>null),
         ]);
 
         let r = `📊 ESTADO DE OBRA: ${obraInfo?.nombre||'#'+obraId}${obraInfo?.codigo?' ('+obraInfo.codigo+')':''}\n`;
@@ -5887,6 +5913,29 @@ ${descripcion ? `<div class="info-bar"><span class="badge">${tipo}</span>${descr
         } else {
           r += `✅ Sin tareas abiertas.\n`;
         }
+
+        // RFIs
+        const rRes = rfisAbiertas.results||[];
+        if (rRes.length) {
+          const conImpacto = rRes.filter(r2=>r2.impacto_plazo||r2.impacto_coste).length;
+          r += `\n📋 RFIs ABIERTAS (${rRes.length})${conImpacto?' — ⚠️ '+conImpacto+' con impacto':''} :\n`;
+          rRes.forEach(rfi => {
+            const pe={urgente:'🔴',alta:'🟠',normal:'🟡',baja:'🟢'}[rfi.prioridad]||'🟡';
+            const imp=(rfi.impacto_plazo?'⏱':'')+(rfi.impacto_coste?'💶':'');
+            r += `  ${pe} ${rfi.numero||'RFI'} ${rfi.titulo}${rfi.asignado_a?' → '+rfi.asignado_a:''} ${imp}\n`;
+          });
+        }
+
+        // Presupuesto
+        if (presupuesto && presupuesto.prev > 0) {
+          const desv = presupuesto.real - presupuesto.prev;
+          const desvPct = ((desv / presupuesto.prev) * 100).toFixed(1);
+          const desvSign = desv >= 0 ? '+' : '';
+          r += `\n💶 PRESUPUESTO: ${presupuesto.real.toLocaleString('es-ES')}€ / ${presupuesto.prev.toLocaleString('es-ES')}€ previsto (${desvSign}${desvPct}%)`;
+          if (desv > presupuesto.prev * 0.1) r += ` ⚠️ DESVIACIÓN ALTA`;
+          r += '\n';
+        }
+
         return r;
       } catch (err) {
         return `Error obteniendo estado de obra: ${err.message}`;

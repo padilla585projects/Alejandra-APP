@@ -9130,17 +9130,55 @@ async function informeSemanal(empresa_id, empresa_nombre, env) {
       stockBajo = (sc.results?.length || 0) + (sh.results?.length || 0) + (ss.results?.[0]?.c || 0);
     } catch {}
 
+    // 7. Tareas de obra pendientes / vencidas
+    let nTareasPend = 0; let nTareasVenc = 0;
+    try {
+      const hoyStr = hoy.toISOString().slice(0,10);
+      const [tp, tv] = await Promise.all([
+        env.DB.prepare(`SELECT COUNT(*) as n FROM tareas_obra WHERE empresa_id=? AND estado NOT IN ('completada','bloqueada')`).bind(empresa_id).first().catch(()=>({n:0})),
+        env.DB.prepare(`SELECT COUNT(*) as n FROM tareas_obra WHERE empresa_id=? AND estado NOT IN ('completada','bloqueada') AND fecha_limite < ?`).bind(empresa_id, hoyStr).first().catch(()=>({n:0})),
+      ]);
+      nTareasPend = tp?.n || 0;
+      nTareasVenc = tv?.n || 0;
+    } catch {}
+
+    // 8. RFIs pendientes de respuesta
+    let nRfisOpen = 0;
+    try {
+      const rv = await env.DB.prepare(
+        `SELECT COUNT(*) as n FROM rfis WHERE empresa_id=? AND estado IN ('abierta','en_revision')`
+      ).bind(empresa_id).first().catch(()=>({n:0}));
+      nRfisOpen = rv?.n || 0;
+    } catch {}
+
+    // 9. Presupuesto — desviación acumulada
+    let presupuestoStr = '';
+    try {
+      const pres = await env.DB.prepare(
+        `SELECT COALESCE(SUM(importe_previsto),0) as prev, COALESCE(SUM(importe_real),0) as real FROM presupuesto_obra WHERE empresa_id=?`
+      ).bind(empresa_id).first().catch(()=>null);
+      if (pres && pres.prev > 0) {
+        const desv = pres.real - pres.prev;
+        const desvPct = ((desv / pres.prev) * 100).toFixed(1);
+        const desvSign = desv > 0 ? '+' : '';
+        presupuestoStr = `💶 <b>Presupuesto:</b> ${pres.real.toLocaleString('es-ES')}€ / ${pres.prev.toLocaleString('es-ES')}€ previsto (${desvSign}${desvPct}%)\n`;
+      }
+    } catch {}
+
     // Composición del mensaje
     const semStr = `${desde} al ${hasta}`;
     let msg = `📊 <b>Informe semanal — ${empresa_nombre}</b>\n`;
     msg += `<i>Semana: ${semStr}</i>\n\n`;
     msg += `👷 <b>Fichajes:</b> ${fich.total || 0} registros · ${horasTotStr}${retrasoStr}\n`;
-    msg += `📧 <b>Equipos sin servicio:</b> ${nEquiposMant}\n`;
+    msg += `🏗️ <b>Equipos sin servicio:</b> ${nEquiposMant}\n`;
     msg += `🛠 <b>Herramientas fuera:</b> ${nHerrFuera}\n`;
     msg += `📦 <b>Pedidos pendientes:</b> ${nPedPend}\n`;
     msg += `🚨 <b>Incidencias abiertas:</b> ${nIncAb}\n`;
-    if (stockBajo > 0) msg += `⚠️ <b>Alertas de stock bajo:</b> ${stockBajo}\n`;
-    msg += `\n_Generado automáticamente por Alejandra App_`;
+    if (stockBajo > 0)    msg += `⚠️ <b>Alertas de stock:</b> ${stockBajo} bajo mínimo\n`;
+    if (nTareasPend > 0)  msg += `✅ <b>Tareas activas:</b> ${nTareasPend}${nTareasVenc > 0 ? ` (⚠️ ${nTareasVenc} VENCIDAS)` : ''}\n`;
+    if (nRfisOpen > 0)    msg += `📋 <b>RFIs sin respuesta:</b> ${nRfisOpen}\n`;
+    if (presupuestoStr)   msg += presupuestoStr;
+    msg += `\n<i>Generado automáticamente por Alejandra App</i>`;
 
     await sendTelegram(env, msg);
   } catch(e) {
