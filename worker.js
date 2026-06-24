@@ -6811,7 +6811,7 @@ async function getObraDashboard(request, env) {
     return [...p, ...extras];
   };
 
-  const [fichajesHoy, equiposMant, herrFuera, pedidosPend, alertasHerr, alertasSeg, alertasBob, incidenciasAbiertas, proximoEvento, fichajesSemana, incidenciasTipo] = await Promise.all([
+  const [fichajesHoy, equiposMant, herrFuera, pedidosPend, alertasHerr, alertasSeg, alertasBob, incidenciasAbiertas, proximoEvento, fichajesSemana, incidenciasTipo, incidenciasCriticas, tareasUrgentes] = await Promise.all([
     // Fichajes hoy
     env.DB.prepare(
       `SELECT COUNT(*) as n FROM fichajes WHERE empresa_id=?${queryObraId ? ' AND obra_id=?' : ''} AND fecha=?`
@@ -6877,6 +6877,16 @@ async function getObraDashboard(request, env) {
     env.DB.prepare(
       `SELECT COALESCE(tipo,'otro') as tipo, COUNT(*) as n FROM incidencias WHERE empresa_id=? GROUP BY tipo`
     ).bind(empresa_id).all(),
+
+    // Incidencias críticas/altas abiertas (para panel acción rápida)
+    env.DB.prepare(
+      `SELECT id, titulo, gravedad, tipo, estado, created_at, reportado_por FROM incidencias WHERE empresa_id=?${queryObraId?' AND obra_id=?':''} AND estado IN ('abierta','en_progreso') AND gravedad IN ('critica','alta') ORDER BY CASE gravedad WHEN 'critica' THEN 0 WHEN 'alta' THEN 1 ELSE 2 END, created_at ASC LIMIT 3`
+    ).bind(...[empresa_id, ...(queryObraId ? [queryObraId] : [])]).all(),
+
+    // Tareas urgentes/altas sin completar (para panel acción rápida)
+    env.DB.prepare(
+      `SELECT id, titulo, estado, prioridad, asignado_a, fecha_limite FROM tareas_obra WHERE empresa_id=?${queryObraId?' AND obra_id=?':''} AND estado NOT IN ('completada') AND prioridad IN ('urgente','alta') ORDER BY CASE prioridad WHEN 'urgente' THEN 0 ELSE 1 END, fecha_limite ASC NULLS LAST LIMIT 3`
+    ).bind(...[empresa_id, ...(queryObraId ? [queryObraId] : [])]).all().catch(()=>({results:[]})),
   ]);
 
   return json({
@@ -6890,6 +6900,8 @@ async function getObraDashboard(request, env) {
     obra_id:                queryObraId || null,
     fichajes_semana:        fichajesSemana.results || [],
     incidencias_tipo:       incidenciasTipo.results || [],
+    incidencias_criticas:   incidenciasCriticas?.results || [],
+    tareas_urgentes:        tareasUrgentes?.results || [],
   });
 }
 

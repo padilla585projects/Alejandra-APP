@@ -11120,7 +11120,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '6.50';
+const APP_VERSION = '6.51';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -13022,6 +13022,23 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
             `).join('')}
           </div>
           <div style="font-size:10px;color:var(--muted);text-align:center;margin-top:12px">Actualizado ${new Date().toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'})}</div>
+
+          ${((d.incidencias_criticas||[]).length + (d.tareas_urgentes||[]).length) > 0 ? `
+          <div style="margin-top:14px;background:var(--surface);border:1px solid #ef4444;border-radius:12px;padding:12px">
+            <div style="font-size:12px;font-weight:700;color:#ef4444;margin-bottom:8px">⚡ ACCIÓN REQUERIDA</div>
+            ${(d.incidencias_criticas||[]).map(i => {
+              const grav = {critica:'🆘',alta:'🔴'}[i.gravedad]||'⚠️';
+              const horasAbiertas = Math.floor((Date.now()-new Date(i.created_at))/3600000);
+              const slaH = {critica:4,alta:24}[i.gravedad]||48;
+              const slaSuperada = horasAbiertas > slaH;
+              return '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px;background:var(--card);border:1px solid '+(slaSuperada?'#ef4444':'var(--border)')+';border-radius:8px;margin-bottom:6px"><div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+grav+' '+esc(i.titulo)+'</div><div style="font-size:10px;color:'+(slaSuperada?'#ef4444':'var(--muted)')+'">'+( slaSuperada?'⚠️ SLA SUPERADO · ':'')+horasAbiertas+'h abierta</div></div><button onclick="incidenciaResolverRapido('+i.id+')" style="flex-shrink:0;background:#22c55e;color:#000;border:none;border-radius:6px;padding:5px 10px;font-size:10px;font-weight:700;cursor:pointer;margin-left:8px">✓ Resolver</button></div>';
+            }).join('')}
+            ${(d.tareas_urgentes||[]).map(t => {
+              const pri = {urgente:'🔴',alta:'🟠'}[t.prioridad]||'⚠️';
+              const vencida = t.fecha_limite && t.fecha_limite < new Date().toISOString().slice(0,10);
+              return '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px;background:var(--card);border:1px solid '+(vencida?'#ef4444':'var(--border)')+';border-radius:8px;margin-bottom:6px"><div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+pri+' '+esc(t.titulo)+'</div><div style="font-size:10px;color:'+(vencida?'#ef4444':'var(--muted)')+'">'+( vencida?'⚠️ VENCIDA · ':'')+(t.asignado_a?'👤 '+esc(t.asignado_a):'Sin asignar')+(t.fecha_limite?' · '+t.fecha_limite.slice(5).replace('-','/'):'')+'</div></div><button onclick="tareaCompletar('+t.id+')" style="flex-shrink:0;background:#22c55e;color:#000;border:none;border-radius:6px;padding:5px 10px;font-size:10px;font-weight:700;cursor:pointer;margin-left:8px">✓ Hecho</button></div>';
+            }).join('')}
+          </div>` : ''}
         </div>
         <!-- Panel Gráficas -->
         <div id="dashPanel_graficas" style="display:none">
@@ -13606,6 +13623,19 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     } catch(e) {}
   }
   window.tareaCompletar = tareaCompletar;
+
+  // Resolver incidencia rápido desde el panel Resumen del dashboard
+  async function incidenciaResolverRapido(id) {
+    if (!confirm('¿Marcar esta incidencia como resuelta?')) return;
+    try {
+      const res = await apiCall(`/incidencias/${id}`, 'PUT', { estado: 'resuelta', resolucion: 'Resuelta desde dashboard' });
+      if (res.ok) {
+        toast('Incidencia resuelta ✅', 'ok');
+        cargarObraDashboard(); // Recargar dashboard
+      } else toast('Error al resolver', 'err');
+    } catch(e) { toast('Error de red', 'err'); }
+  }
+  window.incidenciaResolverRapido = incidenciaResolverRapido;
 
   function tareaCerrarModal() {
     document.getElementById('modalTareaObra').style.display = 'none';
