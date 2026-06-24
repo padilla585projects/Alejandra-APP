@@ -11120,7 +11120,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '6.49';
+const APP_VERSION = '6.50';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -13218,6 +13218,8 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
           </div>
         </div>
       `).join('');
+      // Render Gantt below the list
+      fasesRenderGantt(fases);
     } catch {
       lista.innerHTML = '<div style="color:var(--muted);text-align:center;padding:16px;font-size:13px">Error al cargar</div>';
     }
@@ -13313,6 +13315,84 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     document.getElementById('modalFaseObra').style.display = 'none';
   }
   window.faseCerrarModal = faseCerrarModal;
+
+  // ── GANTT DE FASES ──────────────────────────────────────────────────────────
+  function fasesRenderGantt(fases) {
+    const el = document.getElementById('fasesGantt');
+    if (!el || !fases.length) { if (el) el.innerHTML = ''; return; }
+
+    // Calcular rango de fechas
+    const fechas = fases.flatMap(f => [f.fecha_inicio_plan, f.fecha_fin_plan, f.fecha_inicio_real, f.fecha_fin_real].filter(Boolean));
+    if (fechas.length < 2) { el.innerHTML = ''; return; }
+
+    const minD = new Date(fechas.reduce((a,b) => a < b ? a : b));
+    const maxD = new Date(fechas.reduce((a,b) => a > b ? a : b));
+    // Añadir margen
+    minD.setDate(minD.getDate() - 3);
+    maxD.setDate(maxD.getDate() + 7);
+    const totalDias = Math.max(1, Math.ceil((maxD - minD) / 86400000));
+    const hoy = new Date();
+
+    const estColor = { pendiente:'#6366f1', en_curso:'#f97316', completada:'#22c55e', retrasada:'#ef4444', bloqueada:'#94a3b8' };
+
+    // Calcular posición del "hoy" como % del ancho total
+    const hoyPct = Math.max(0, Math.min(100, ((hoy - minD) / 86400000 / totalDias) * 100));
+
+    el.innerHTML = `
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:12px;margin-top:8px">
+        <div style="font-size:12px;font-weight:700;color:var(--text);margin-bottom:10px">📊 Vista Gantt</div>
+        <div style="overflow-x:auto">
+          <div style="min-width:300px">
+            ${fases.map((f, i) => {
+              const ip = f.fecha_inicio_plan ? new Date(f.fecha_inicio_plan) : null;
+              const fp = f.fecha_fin_plan    ? new Date(f.fecha_fin_plan)    : null;
+              const ir = f.fecha_inicio_real ? new Date(f.fecha_inicio_real) : null;
+              const fr = f.fecha_fin_real    ? new Date(f.fecha_fin_real)    : null;
+              const col = estColor[f.estado] || '#6366f1';
+
+              const barPlan = (ip && fp) ? {
+                left: ((ip - minD) / 86400000 / totalDias * 100).toFixed(1),
+                width: Math.max(1, ((fp - ip) / 86400000 / totalDias * 100)).toFixed(1)
+              } : null;
+              const barReal = (ir && (fr || f.estado === 'en_curso')) ? {
+                left: ((ir - minD) / 86400000 / totalDias * 100).toFixed(1),
+                width: Math.max(1, (((fr || hoy) - ir) / 86400000 / totalDias * 100)).toFixed(1)
+              } : null;
+
+              return `
+              <div style="margin-bottom:8px">
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:2px">
+                  <div style="font-size:10px;font-weight:600;color:var(--text);min-width:0;flex:0 0 110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(f.nombre)}">${esc(f.nombre)}</div>
+                  <div style="flex:1;position:relative;height:20px">
+                    <!-- Línea de hoy -->
+                    <div style="position:absolute;left:${hoyPct}%;top:0;bottom:0;width:1px;background:rgba(255,100,0,0.7);z-index:3"></div>
+                    <!-- Barra planificada -->
+                    ${barPlan ? `<div style="position:absolute;left:${barPlan.left}%;width:${barPlan.width}%;top:2px;height:8px;background:${col};opacity:0.35;border-radius:3px;z-index:1" title="Plan: ${f.fecha_inicio_plan} → ${f.fecha_fin_plan}"></div>` : ''}
+                    <!-- Barra real (más oscura, debajo) -->
+                    ${barReal ? `<div style="position:absolute;left:${barReal.left}%;width:${barReal.width}%;top:10px;height:8px;background:${col};border-radius:3px;z-index:2" title="Real: ${f.fecha_inicio_real || '?'} → ${f.fecha_fin_real || 'hoy'}"></div>` : ''}
+                    <!-- Progreso inline si no hay fechas reales -->
+                    ${!barReal && barPlan ? `<div style="position:absolute;left:${barPlan.left}%;width:${(parseFloat(barPlan.width)*(f.porcentaje||0)/100).toFixed(1)}%;top:2px;height:8px;background:${col};border-radius:3px;z-index:2"></div>` : ''}
+                  </div>
+                  <div style="font-size:9px;color:${col};font-weight:700;min-width:28px;text-align:right">${f.porcentaje||0}%</div>
+                </div>
+              </div>`;
+            }).join('')}
+            <!-- Leyenda fechas -->
+            <div style="display:flex;justify-content:space-between;margin-top:4px;border-top:1px solid var(--border);padding-top:4px">
+              <span style="font-size:9px;color:var(--muted)">${minD.toLocaleDateString('es-ES',{day:'2-digit',month:'2-digit'})}</span>
+              <span style="font-size:9px;color:#f97316;font-weight:700">HOY ${hoy.toLocaleDateString('es-ES',{day:'2-digit',month:'2-digit'})}</span>
+              <span style="font-size:9px;color:var(--muted)">${maxD.toLocaleDateString('es-ES',{day:'2-digit',month:'2-digit'})}</span>
+            </div>
+            <div style="display:flex;gap:10px;margin-top:6px;flex-wrap:wrap">
+              <div style="display:flex;align-items:center;gap:4px"><div style="width:18px;height:5px;background:var(--muted);border-radius:2px;opacity:0.4"></div><span style="font-size:9px;color:var(--muted)">Planificado</span></div>
+              <div style="display:flex;align-items:center;gap:4px"><div style="width:18px;height:5px;background:var(--muted);border-radius:2px"></div><span style="font-size:9px;color:var(--muted)">Real</span></div>
+              <div style="display:flex;align-items:center;gap:4px"><div style="width:1px;height:10px;background:#f97316"></div><span style="font-size:9px;color:#f97316">Hoy</span></div>
+            </div>
+          </div>
+        </div>
+      </div>`;
+  }
+  window.fasesRenderGantt = fasesRenderGantt;
 
   // ── DIARIO DE OBRA ──────────────────────────────────────────────────────────
   let _editDiarioId = null;
