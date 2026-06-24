@@ -1166,12 +1166,38 @@ const TOOL_BORRAR_ESQUEMA = {
 
 const TOOL_ESTADO_OBRA = {
   name: 'estado_obra',
-  description: 'Obtiene un resumen ejecutivo completo de una obra: KPIs actuales (fichajes hoy, equipos, pedidos, incidencias abiertas), fases de planificación con % de progreso, y últimas entradas del diario de obra. Úsalo cuando el usuario pregunte por el estado, el progreso, el briefing del día, o quiera saber cómo va la obra.',
+  description: 'Obtiene un resumen ejecutivo completo de una obra: KPIs actuales (fichajes hoy, equipos, pedidos, incidencias abiertas), fases de planificación con % de progreso, últimas entradas del diario de obra, y tareas abiertas por prioridad. Úsalo cuando el usuario pregunte por el estado, el progreso, el briefing del día, o quiera saber cómo va la obra.',
   input_schema: {
     type: 'object',
     properties: {
       obra_id: { type: 'number', description: 'ID de la obra. Si no se especifica, busca la obra activa del usuario.' }
     }
+  }
+};
+
+const TOOL_GESTIONAR_TAREA = {
+  name: 'gestionar_tarea',
+  description: 'Crea, actualiza o lista tareas de obra (tipo Fieldwire). Cada tarea tiene título, estado (pendiente/en_curso/completada/bloqueada), prioridad (urgente/alta/normal/baja), responsable, fecha límite y ubicación. Úsalo cuando el usuario quiera crear una tarea, asignar trabajo, ver qué está pendiente, o marcar algo como completado.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      accion: {
+        type: 'string',
+        enum: ['crear', 'actualizar', 'listar', 'completar', 'eliminar'],
+        description: 'Acción a realizar'
+      },
+      obra_id: { type: 'number', description: 'ID de la obra (obligatorio para crear)' },
+      tarea_id: { type: 'number', description: 'ID de la tarea (obligatorio para actualizar/completar/eliminar)' },
+      titulo: { type: 'string', description: 'Título de la tarea (obligatorio para crear)' },
+      descripcion: { type: 'string', description: 'Descripción o detalle de la tarea' },
+      asignado_a: { type: 'string', description: 'Nombre del responsable de la tarea' },
+      estado: { type: 'string', enum: ['pendiente', 'en_curso', 'completada', 'bloqueada'], description: 'Estado de la tarea' },
+      prioridad: { type: 'string', enum: ['urgente', 'alta', 'normal', 'baja'], description: 'Prioridad de la tarea' },
+      fecha_limite: { type: 'string', description: 'Fecha límite en formato YYYY-MM-DD' },
+      ubicacion: { type: 'string', description: 'Zona o ubicación de la tarea (ej: Nave 2, planta baja)' },
+      filtro_estado: { type: 'string', description: 'Para listar: filtrar por estado' }
+    },
+    required: ['accion']
   }
 };
 
@@ -1556,11 +1582,11 @@ const TOOL_CONSULTAR_CONOCIMIENTO = {
 
 const TOOLS_POR_EXPERTO = {
   simple:     [TOOL_MEMORY_READ, TOOL_CONSULTAR_BD, TOOL_ENVIAR_PUSH],
-  app:        [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_CONTROLAR_APP, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_ANALIZAR_FOTO, TOOL_ESTADO_OBRA],
+  app:        [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_CONTROLAR_APP, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_ANALIZAR_FOTO, TOOL_ESTADO_OBRA, TOOL_GESTIONAR_TAREA],
   tecnico:    [TOOL_LEER_ESTADO, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_BUSCAR_WEB, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_NEXUS_MANAGE, TOOL_CONTROLAR_APP, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO],
   web:        [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE],
   reflexion:  [TOOL_MEMORY_SAVE, TOOL_MEMORY_READ, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_PROPOSE_MEJORA, TOOL_BUSCAR_WEB, TOOL_TOMAR_DECISION, TOOL_LEER_ESTADO, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_CONTROLAR_APP, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO],
-  completo:   [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_LEER_ESTADO, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_CONTROLAR_APP, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_ANALIZAR_FOTO, TOOL_ESTADO_OBRA],
+  completo:   [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_LEER_ESTADO, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_CONTROLAR_APP, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_ANALIZAR_FOTO, TOOL_ESTADO_OBRA, TOOL_GESTIONAR_TAREA],
   ingenieria: [TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_ANALIZAR_FOTO, TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME]
 };
 
@@ -5762,7 +5788,7 @@ ${descripcion ? `<div class="info-bar"><span class="badge">${tipo}</span>${descr
         if (!obraId) return '❌ No se encontró una obra activa. Indica el ID de obra o pide al usuario que seleccione una obra en la app.';
         const eid = empresa_id || 'default';
 
-        const [kpis, fases, diario, incidencias, obraInfo] = await Promise.all([
+        const [kpis, fases, diario, incidencias, obraInfo, tareasAbiertas] = await Promise.all([
           env.DB.prepare(`SELECT
             (SELECT COUNT(*) FROM fichajes WHERE obra_id=? AND empresa_id=? AND fecha=date('now')) as fichajes_hoy,
             (SELECT COUNT(*) FROM incidencias WHERE obra_id=? AND empresa_id=? AND estado IN ('abierta','en_progreso')) as inc_abiertas,
@@ -5773,6 +5799,7 @@ ${descripcion ? `<div class="info-bar"><span class="badge">${tipo}</span>${descr
           env.DB.prepare(`SELECT fecha,clima,trabajos,personal_presente FROM diario_obra WHERE obra_id=? AND empresa_id=? ORDER BY fecha DESC LIMIT 3`).bind(obraId,eid).all().catch(()=>({results:[]})),
           env.DB.prepare(`SELECT titulo,tipo,gravedad,estado FROM incidencias WHERE obra_id=? AND empresa_id=? AND estado IN ('abierta','en_progreso') ORDER BY fecha DESC LIMIT 5`).bind(obraId,eid).all().catch(()=>({results:[]})),
           env.DB.prepare('SELECT nombre,codigo FROM obras WHERE id=? AND empresa_id=?').bind(obraId,eid).first().catch(()=>null),
+          env.DB.prepare(`SELECT titulo,estado,prioridad,asignado_a,fecha_limite FROM tareas_obra WHERE obra_id=? AND empresa_id=? AND estado != 'completada' ORDER BY CASE prioridad WHEN 'urgente' THEN 0 WHEN 'alta' THEN 1 WHEN 'normal' THEN 2 ELSE 3 END, fecha_limite ASC NULLS LAST LIMIT 8`).bind(obraId,eid).all().catch(()=>({results:[]})),
         ]);
 
         let r = `📊 ESTADO DE OBRA: ${obraInfo?.nombre||'#'+obraId}${obraInfo?.codigo?' ('+obraInfo.codigo+')':''}\n`;
@@ -5813,10 +5840,102 @@ ${descripcion ? `<div class="info-bar"><span class="badge">${tipo}</span>${descr
             const g={baja:'🟢',media:'🟡',alta:'🔴',critica:'🆘'}[i.gravedad]||'⚪';
             r += `  ${g} ${i.titulo} (${i.tipo||'general'}) — ${i.estado}\n`;
           });
+          r += '\n';
+        }
+
+        const tRes = tareasAbiertas.results||[];
+        if (tRes.length) {
+          r += `✅ TAREAS PENDIENTES (${tRes.length}):\n`;
+          tRes.forEach(t => {
+            const pe={urgente:'🔴',alta:'🟠',normal:'🟡',baja:'🟢'}[t.prioridad]||'⚪';
+            const es={pendiente:'⏳',en_curso:'🔄',bloqueada:'🚫'}[t.estado]||'⏳';
+            const ven=t.fecha_limite&&t.fecha_limite<new Date().toISOString().slice(0,10)?'⚠️ VENCIDA':'';
+            r += `  ${pe}${es} ${t.titulo}${t.asignado_a?' ['+t.asignado_a+']':''}${t.fecha_limite?' →'+t.fecha_limite:''} ${ven}\n`;
+          });
+          const urg=tRes.filter(t=>t.prioridad==='urgente'||t.prioridad==='alta').length;
+          if (urg) r += `  ⚠️ ${urg} tarea${urg>1?'s':''} de prioridad alta/urgente\n`;
+        } else {
+          r += `✅ Sin tareas abiertas.\n`;
         }
         return r;
       } catch (err) {
         return `Error obteniendo estado de obra: ${err.message}`;
+      }
+    }
+
+    case 'gestionar_tarea': {
+      try {
+        if (!env.DB) return 'Base de datos no disponible';
+        const accion = input.accion;
+        const obraId = input.obra_id ? parseInt(input.obra_id) : null;
+        const tareaId = input.tarea_id ? parseInt(input.tarea_id) : null;
+
+        if (accion === 'listar') {
+          let q = 'SELECT * FROM tareas_obra WHERE empresa_id=?';
+          const p = [empresa_id||1];
+          if (obraId) { q += ' AND obra_id=?'; p.push(obraId); }
+          if (input.filtro_estado) { q += ' AND estado=?'; p.push(input.filtro_estado); }
+          q += ` ORDER BY CASE prioridad WHEN 'urgente' THEN 0 WHEN 'alta' THEN 1 WHEN 'normal' THEN 2 ELSE 3 END, fecha_limite ASC NULLS LAST LIMIT 20`;
+          const r = await env.DB.prepare(q).bind(...p).all().catch(()=>({results:[]}));
+          const t = r.results||[];
+          if (!t.length) return '✅ No hay tareas' + (input.filtro_estado ? ` en estado "${input.filtro_estado}"` : '') + '.';
+          const priIcon={urgente:'🔴',alta:'🟠',normal:'🟡',baja:'🟢'};
+          const estIcon={pendiente:'⏳',en_curso:'🔄',completada:'✅',bloqueada:'🚫'};
+          let txt = `📋 TAREAS DE OBRA (${t.length}):\n`;
+          t.forEach(x => {
+            const ven=x.fecha_limite&&x.fecha_limite<new Date().toISOString().slice(0,10)?'⚠️ VENCIDA ':'';
+            txt += `• [#${x.id}] ${priIcon[x.prioridad]||'⚪'}${estIcon[x.estado]||'⏳'} ${x.titulo}${x.asignado_a?' — '+x.asignado_a:''}${x.fecha_limite?' → '+x.fecha_limite:''} ${ven}\n`;
+          });
+          return txt;
+        }
+
+        if (accion === 'crear') {
+          if (!input.titulo) return '❌ El título es obligatorio para crear una tarea.';
+          // Ensure table exists
+          await env.DB.prepare(`CREATE TABLE IF NOT EXISTS tareas_obra (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, obra_id INTEGER, empresa_id INTEGER NOT NULL,
+            titulo TEXT NOT NULL, descripcion TEXT, asignado_a TEXT, fase_id INTEGER,
+            estado TEXT DEFAULT 'pendiente', prioridad TEXT DEFAULT 'normal',
+            fecha_limite TEXT, ubicacion TEXT, notas TEXT, created_by TEXT,
+            created_at TEXT DEFAULT (datetime('now')), updated_at TEXT DEFAULT (datetime('now'))
+          )`).run().catch(()=>{});
+          const res = await env.DB.prepare(
+            `INSERT INTO tareas_obra (obra_id,empresa_id,titulo,descripcion,asignado_a,estado,prioridad,fecha_limite,ubicacion,created_by) VALUES (?,?,?,?,?,?,?,?,?,?)`
+          ).bind(obraId,empresa_id||1,input.titulo,input.descripcion||null,input.asignado_a||null,
+            input.estado||'pendiente',input.prioridad||'normal',input.fecha_limite||null,input.ubicacion||null,
+            'Alejandra IA').run();
+          const newId = res.meta?.last_row_id;
+          return `✅ Tarea creada con ID #${newId}:\n📋 ${input.titulo}${input.asignado_a?' → asignada a '+input.asignado_a:''}${input.fecha_limite?' · límite: '+input.fecha_limite:''}`;
+        }
+
+        if (accion === 'actualizar' || accion === 'completar') {
+          if (!tareaId) return '❌ Necesito el tarea_id para actualizar.';
+          const updates = []; const params = [];
+          if (accion === 'completar') { updates.push("estado='completada'"); }
+          else {
+            if (input.estado)        { updates.push('estado=?');        params.push(input.estado); }
+            if (input.prioridad)     { updates.push('prioridad=?');     params.push(input.prioridad); }
+            if (input.asignado_a)    { updates.push('asignado_a=?');    params.push(input.asignado_a); }
+            if (input.fecha_limite)  { updates.push('fecha_limite=?');  params.push(input.fecha_limite); }
+            if (input.titulo)        { updates.push('titulo=?');        params.push(input.titulo); }
+            if (input.descripcion)   { updates.push('descripcion=?');   params.push(input.descripcion); }
+          }
+          updates.push("updated_at=datetime('now')");
+          params.push(tareaId);
+          if (!updates.length) return '❌ No se especificaron cambios.';
+          await env.DB.prepare(`UPDATE tareas_obra SET ${updates.join(',')} WHERE id=?`).bind(...params).run();
+          return `✅ Tarea #${tareaId} ${accion === 'completar' ? 'marcada como completada ✅' : 'actualizada correctamente'}.`;
+        }
+
+        if (accion === 'eliminar') {
+          if (!tareaId) return '❌ Necesito el tarea_id para eliminar.';
+          await env.DB.prepare('DELETE FROM tareas_obra WHERE id=? AND empresa_id=?').bind(tareaId, empresa_id||1).run();
+          return `🗑️ Tarea #${tareaId} eliminada.`;
+        }
+
+        return `❌ Acción "${accion}" no reconocida. Usa: crear, actualizar, completar, listar, eliminar.`;
+      } catch (err) {
+        return `Error gestionando tarea: ${err.message}`;
       }
     }
 

@@ -4485,6 +4485,22 @@ export default {
         if (method === 'PUT')    return await actualizarEntradaDiario(_did2, request, env);
         if (method === 'DELETE') return await eliminarEntradaDiario(_did2, request, env);
       }
+      // ── Tareas de obra (NEW-32) ──────────────────────────────────────────
+      if (path === '/tareas-obra'           && method === 'GET')  return await getTareasObra(request, env);
+      if (path === '/tareas-obra'           && method === 'POST') return await crearTareaObra(request, env);
+      if (path.startsWith('/tareas-obra/')) {
+        const _tid = parseInt(path.split('/tareas-obra/')[1]);
+        if (method === 'PUT')    return await actualizarTareaObra(_tid, request, env);
+        if (method === 'DELETE') return await eliminarTareaObra(_tid, request, env);
+      }
+      // ── Presupuesto de obra (NEW-33) ──────────────────────────────────────────
+      if (path === '/presupuesto-obra'      && method === 'GET')  return await getPresupuestoObra(request, env);
+      if (path === '/presupuesto-obra'      && method === 'POST') return await crearPartidaPresupuesto(request, env);
+      if (path.startsWith('/presupuesto-obra/')) {
+        const _bid = parseInt(path.split('/presupuesto-obra/')[1]);
+        if (method === 'PUT')    return await actualizarPartidaPresupuesto(_bid, request, env);
+        if (method === 'DELETE') return await eliminarPartidaPresupuesto(_bid, request, env);
+      }
       if (path === '/repostajes'             && method === 'GET')  return await getRepostajes(request, env);
       if (path === '/repostajes'             && method === 'POST') return await crearRepostaje(request, env, ctx);
       if (path === '/repostajes/resumen'     && method === 'GET')  return await getResumenRepostajes(request, env);
@@ -12179,5 +12195,179 @@ async function eliminarEntradaDiario(id, request, env) {
   const auth = await getAuth(request, env);
   if (!auth.empresa_id) return err('No autorizado', 403);
   await env.DB.prepare(`DELETE FROM diario_obra WHERE id=? AND empresa_id=?`).bind(id, auth.empresa_id).run();
+  return json({ ok: true });
+}
+
+// ── Tareas de obra (NEW-32) ──────────────────────────────────────────────────
+async function ensureTareasObraTable(env) {
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS tareas_obra (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    obra_id INTEGER,
+    empresa_id INTEGER NOT NULL,
+    titulo TEXT NOT NULL,
+    descripcion TEXT,
+    asignado_a TEXT,
+    fase_id INTEGER,
+    estado TEXT DEFAULT 'pendiente',
+    prioridad TEXT DEFAULT 'normal',
+    fecha_limite TEXT,
+    ubicacion TEXT,
+    notas TEXT,
+    created_by TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+  )`).run();
+}
+
+async function getTareasObra(request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth.empresa_id) return err('No autorizado', 403);
+  await ensureTareasObraTable(env);
+  const url = new URL(request.url);
+  const obraId = url.searchParams.get('obra_id');
+  const estado = url.searchParams.get('estado');
+  const asignado = url.searchParams.get('asignado_a');
+  let q = `SELECT * FROM tareas_obra WHERE empresa_id=?`;
+  const params = [auth.empresa_id];
+  if (obraId) { q += ` AND obra_id=?`; params.push(parseInt(obraId)); }
+  if (estado) { q += ` AND estado=?`; params.push(estado); }
+  if (asignado) { q += ` AND asignado_a=?`; params.push(asignado); }
+  q += ` ORDER BY CASE prioridad WHEN 'urgente' THEN 0 WHEN 'alta' THEN 1 WHEN 'normal' THEN 2 ELSE 3 END, fecha_limite ASC NULLS LAST, created_at DESC`;
+  const r = await env.DB.prepare(q).bind(...params).all();
+  return json(r.results || []);
+}
+
+async function crearTareaObra(request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth.empresa_id) return err('No autorizado', 403);
+  await ensureTareasObraTable(env);
+  const b = await request.json();
+  if (!b.titulo?.trim()) return err('El título es obligatorio', 400);
+  const r = await env.DB.prepare(
+    `INSERT INTO tareas_obra (obra_id, empresa_id, titulo, descripcion, asignado_a, fase_id, estado, prioridad, fecha_limite, ubicacion, notas, created_by)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`
+  ).bind(
+    b.obra_id || null, auth.empresa_id, b.titulo.trim(),
+    b.descripcion || null, b.asignado_a || null, b.fase_id || null,
+    b.estado || 'pendiente', b.prioridad || 'normal',
+    b.fecha_limite || null, b.ubicacion || null, b.notas || null,
+    auth.usuario_nombre || auth.usuario_id || 'sistema'
+  ).run();
+  return json({ ok: true, id: r.meta?.last_row_id });
+}
+
+async function actualizarTareaObra(id, request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth.empresa_id) return err('No autorizado', 403);
+  const b = await request.json();
+  const sets = []; const params = [];
+  if (b.titulo !== undefined)      { sets.push('titulo=?');      params.push(b.titulo); }
+  if (b.descripcion !== undefined)  { sets.push('descripcion=?');  params.push(b.descripcion); }
+  if (b.asignado_a !== undefined)   { sets.push('asignado_a=?');   params.push(b.asignado_a); }
+  if (b.fase_id !== undefined)      { sets.push('fase_id=?');      params.push(b.fase_id); }
+  if (b.estado !== undefined)       { sets.push('estado=?');       params.push(b.estado); }
+  if (b.prioridad !== undefined)    { sets.push('prioridad=?');    params.push(b.prioridad); }
+  if (b.fecha_limite !== undefined) { sets.push('fecha_limite=?'); params.push(b.fecha_limite); }
+  if (b.ubicacion !== undefined)    { sets.push('ubicacion=?');    params.push(b.ubicacion); }
+  if (b.notas !== undefined)        { sets.push('notas=?');        params.push(b.notas); }
+  if (!sets.length) return err('Nada que actualizar', 400);
+  sets.push("updated_at=datetime('now')");
+  params.push(id, auth.empresa_id);
+  await env.DB.prepare(`UPDATE tareas_obra SET ${sets.join(',')} WHERE id=? AND empresa_id=?`).bind(...params).run();
+  return json({ ok: true });
+}
+
+async function eliminarTareaObra(id, request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth.empresa_id) return err('No autorizado', 403);
+  await env.DB.prepare(`DELETE FROM tareas_obra WHERE id=? AND empresa_id=?`).bind(id, auth.empresa_id).run();
+  return json({ ok: true });
+}
+
+// ── Presupuesto de obra (NEW-33) ──────────────────────────────────────────────────
+async function ensurePresupuestoObraTable(env) {
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS presupuesto_obra (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    obra_id INTEGER NOT NULL,
+    empresa_id INTEGER NOT NULL,
+    categoria TEXT NOT NULL DEFAULT 'Otros',
+    descripcion TEXT NOT NULL,
+    importe_previsto REAL DEFAULT 0,
+    importe_real REAL DEFAULT 0,
+    unidades REAL DEFAULT 1,
+    unidad TEXT DEFAULT 'ud',
+    proveedor TEXT,
+    notas TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`).run();
+}
+
+async function getPresupuestoObra(request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth.empresa_id) return err('No autorizado', 403);
+  await ensurePresupuestoObraTable(env);
+  const url = new URL(request.url);
+  const obraId = url.searchParams.get('obra_id');
+  if (!obraId) return err('obra_id requerido', 400);
+  const r = await env.DB.prepare(
+    `SELECT *, (importe_previsto - importe_real) as desviacion FROM presupuesto_obra WHERE obra_id=? AND empresa_id=? ORDER BY categoria, descripcion`
+  ).bind(parseInt(obraId), auth.empresa_id).all();
+  const rows = r.results || [];
+  // Totales
+  const totalPrevisto = rows.reduce((s, x) => s + (x.importe_previsto || 0), 0);
+  const totalReal = rows.reduce((s, x) => s + (x.importe_real || 0), 0);
+  // Agrupado por categoría
+  const porCategoria = {};
+  for (const row of rows) {
+    if (!porCategoria[row.categoria]) porCategoria[row.categoria] = { previsto: 0, real: 0 };
+    porCategoria[row.categoria].previsto += row.importe_previsto || 0;
+    porCategoria[row.categoria].real += row.importe_real || 0;
+  }
+  return json({ partidas: rows, total_previsto: totalPrevisto, total_real: totalReal, por_categoria: porCategoria });
+}
+
+async function crearPartidaPresupuesto(request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth.empresa_id) return err('No autorizado', 403);
+  await ensurePresupuestoObraTable(env);
+  const b = await request.json();
+  if (!b.obra_id) return err('obra_id requerido', 400);
+  if (!b.descripcion?.trim()) return err('La descripción es obligatoria', 400);
+  const r = await env.DB.prepare(
+    `INSERT INTO presupuesto_obra (obra_id, empresa_id, categoria, descripcion, importe_previsto, importe_real, unidades, unidad, proveedor, notas)
+     VALUES (?,?,?,?,?,?,?,?,?,?)`
+  ).bind(
+    parseInt(b.obra_id), auth.empresa_id,
+    b.categoria || 'Otros', b.descripcion.trim(),
+    parseFloat(b.importe_previsto) || 0, parseFloat(b.importe_real) || 0,
+    parseFloat(b.unidades) || 1, b.unidad || 'ud',
+    b.proveedor || null, b.notas || null
+  ).run();
+  return json({ ok: true, id: r.meta?.last_row_id });
+}
+
+async function actualizarPartidaPresupuesto(id, request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth.empresa_id) return err('No autorizado', 403);
+  const b = await request.json();
+  const sets = []; const params = [];
+  if (b.categoria !== undefined)        { sets.push('categoria=?');         params.push(b.categoria); }
+  if (b.descripcion !== undefined)       { sets.push('descripcion=?');        params.push(b.descripcion); }
+  if (b.importe_previsto !== undefined)  { sets.push('importe_previsto=?');   params.push(parseFloat(b.importe_previsto)||0); }
+  if (b.importe_real !== undefined)      { sets.push('importe_real=?');        params.push(parseFloat(b.importe_real)||0); }
+  if (b.unidades !== undefined)          { sets.push('unidades=?');            params.push(parseFloat(b.unidades)||1); }
+  if (b.unidad !== undefined)            { sets.push('unidad=?');              params.push(b.unidad); }
+  if (b.proveedor !== undefined)         { sets.push('proveedor=?');           params.push(b.proveedor); }
+  if (b.notas !== undefined)             { sets.push('notas=?');               params.push(b.notas); }
+  if (!sets.length) return err('Nada que actualizar', 400);
+  params.push(id, auth.empresa_id);
+  await env.DB.prepare(`UPDATE presupuesto_obra SET ${sets.join(',')} WHERE id=? AND empresa_id=?`).bind(...params).run();
+  return json({ ok: true });
+}
+
+async function eliminarPartidaPresupuesto(id, request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth.empresa_id) return err('No autorizado', 403);
+  await env.DB.prepare(`DELETE FROM presupuesto_obra WHERE id=? AND empresa_id=?`).bind(id, auth.empresa_id).run();
   return json({ ok: true });
 }
