@@ -6820,7 +6820,7 @@ async function getObraDashboard(request, env) {
     return [...p, ...extras];
   };
 
-  const [fichajesHoy, equiposMant, herrFuera, pedidosPend, alertasHerr, alertasSeg, alertasBob, incidenciasAbiertas, proximoEvento, fichajesSemana, incidenciasTipo, incidenciasCriticas, tareasUrgentes] = await Promise.all([
+  const [fichajesHoy, equiposMant, herrFuera, pedidosPend, alertasHerr, alertasSeg, alertasBob, incidenciasAbiertas, proximoEvento, fichajesSemana, incidenciasTipo, incidenciasCriticas, tareasUrgentes, rfisAbiertas, tareasActivas] = await Promise.all([
     // Fichajes hoy
     env.DB.prepare(
       `SELECT COUNT(*) as n FROM fichajes WHERE empresa_id=?${queryObraId ? ' AND obra_id=?' : ''} AND fecha=?`
@@ -6896,6 +6896,16 @@ async function getObraDashboard(request, env) {
     env.DB.prepare(
       `SELECT id, titulo, estado, prioridad, asignado_a, fecha_limite FROM tareas_obra WHERE empresa_id=?${queryObraId?' AND obra_id=?':''} AND estado NOT IN ('completada') AND prioridad IN ('urgente','alta') ORDER BY CASE prioridad WHEN 'urgente' THEN 0 ELSE 1 END, fecha_limite ASC NULLS LAST LIMIT 3`
     ).bind(...[empresa_id, ...(queryObraId ? [queryObraId] : [])]).all().catch(()=>({results:[]})),
+
+    // RFIs abiertas o en revisión
+    env.DB.prepare(
+      `SELECT COUNT(*) as n FROM rfis WHERE empresa_id=?${queryObraId?' AND obra_id=?':''} AND estado IN ('abierta','en_revision')`
+    ).bind(...[empresa_id, ...(queryObraId ? [queryObraId] : [])]).first().catch(()=>({n:0})),
+
+    // Tareas pendientes/en curso (total)
+    env.DB.prepare(
+      `SELECT COUNT(*) as n FROM tareas_obra WHERE empresa_id=?${queryObraId?' AND obra_id=?':''} AND estado NOT IN ('completada','bloqueada')`
+    ).bind(...[empresa_id, ...(queryObraId ? [queryObraId] : [])]).first().catch(()=>({n:0})),
   ]);
 
   return json({
@@ -6911,6 +6921,8 @@ async function getObraDashboard(request, env) {
     incidencias_tipo:       incidenciasTipo.results || [],
     incidencias_criticas:   incidenciasCriticas?.results || [],
     tareas_urgentes:        tareasUrgentes?.results || [],
+    rfis_abiertas:          rfisAbiertas?.n || 0,
+    tareas_activas:         tareasActivas?.n || 0,
   });
 }
 
@@ -9374,6 +9386,29 @@ async function alertasDiarias(env) {
         }
       }
     } catch(e) { console.error('tareas vencidas alert error:', e.message); }
+
+    // ── RFIs sin respuesta con fecha límite vencida ──────────────────────────
+    try {
+      const hoyStr2 = hoy.toISOString().slice(0, 10);
+      const { results: empresasConRfis } = await env.DB.prepare(
+        `SELECT DISTINCT empresa_id FROM rfis WHERE fecha_limite < ? AND estado IN ('abierta','en_revision')`
+      ).bind(hoyStr2).all().catch(() => ({ results: [] }));
+
+      for (const { empresa_id: eid } of (empresasConRfis || [])) {
+        const { results: rfisVencidas } = await env.DB.prepare(
+          `SELECT numero, titulo, prioridad, asignado_a, fecha_limite FROM rfis WHERE empresa_id=? AND fecha_limite < ? AND estado IN ('abierta','en_revision') ORDER BY CASE prioridad WHEN 'urgente' THEN 0 WHEN 'alta' THEN 1 WHEN 'normal' THEN 2 ELSE 3 END LIMIT 8`
+        ).bind(eid, hoyStr2).all().catch(() => ({ results: [] }));
+
+        if (rfisVencidas && rfisVencidas.length) {
+          const priIcon = { urgente: '🔴', alta: '🟠', normal: '🟡', baja: '🟢' };
+          let msg = `📋 <b>RFIs sin respuesta vencidas</b> (${rfisVencidas.length}):\n\n`;
+          for (const r of rfisVencidas) {
+            msg += `${priIcon[r.prioridad] || '⚪'} ${r.numero||'RFI'} ${r.titulo}${r.asignado_a ? ' → ' + r.asignado_a : ''} · límite ${r.fecha_limite}\n`;
+          }
+          await sendTelegram(env, msg);
+        }
+      }
+    } catch(e) { console.error('rfis vencidas alert error:', e.message); }
 
     // RGPD — aplicar retención automática a todas las empresas que la tengan activa
     try {

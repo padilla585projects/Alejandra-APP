@@ -11215,7 +11215,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '6.53';
+const APP_VERSION = '6.54';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -13094,6 +13094,8 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
         { icon:'📦', label:'Pedidos pendientes', value:d.pedidos_pendientes, color:d.pedidos_pendientes>0?'#8b5cf6':'var(--green)', sub:d.pedidos_pendientes>0?`${d.pedidos_pendientes} sin recibir`:'Al día', onclick:"navTo('pedidos')" },
         { icon:'⚠️', label:'Alertas stock', value:d.alertas_stock, color:d.alertas_stock>0?'var(--red)':'var(--green)', sub:d.alertas_stock>0?`${d.alertas_stock} bajo mínimo`:'Stock OK', onclick:"irANotif()" },
         { icon:'🚨', label:'Incidencias abiertas', value:d.incidencias_abiertas??0, color:(d.incidencias_abiertas||0)>0?'var(--red)':'var(--green)', sub:(d.incidencias_abiertas||0)>0?`${d.incidencias_abiertas} sin resolver`:'Sin incidencias', onclick:"navTo('incidencias')" },
+        { icon:'✅', label:'Tareas activas', value:d.tareas_activas??0, color:(d.tareas_activas||0)>0?'#8b5cf6':'var(--green)', sub:(d.tareas_activas||0)>0?`${d.tareas_activas} pendiente${d.tareas_activas===1?'':'s'}`:'Sin tareas', onclick:"dashSelTab('tareas')" },
+        { icon:'📋', label:'RFIs abiertas', value:d.rfis_abiertas??0, color:(d.rfis_abiertas||0)>0?'#f59e0b':'var(--green)', sub:(d.rfis_abiertas||0)>0?`${d.rfis_abiertas} sin respuesta`:'Sin consultas', onclick:"dashSelTab('rfis')" },
         { icon:'📅', label:'Próximo evento', value:d.proximo_evento?(d.proximo_evento.fecha||'—').slice(5).replace('-','/'):'—', color:d.proximo_evento?'#6366f1':'var(--muted)', sub:d.proximo_evento?esc(d.proximo_evento.titulo):'Sin eventos', onclick:"navTo('calendario')" },
         { icon:'🤖', label:'Preguntar a Alejandra', value:'IA', color:'var(--accent)', sub:'Análisis inteligente de obra', onclick:"alejandraAbrir()" },
       ];
