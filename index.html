@@ -1533,6 +1533,101 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
     </div>
   </div>
 
+  <!-- MODAL RFI (NEW-34) -->
+  <div class="modal-overlay" id="modalRfi" onclick="if(event.target===this)rfiCerrarModal()" style="display:none;align-items:flex-end;justify-content:center;padding:0">
+    <div style="background:var(--surface);width:100%;max-width:480px;border-radius:18px 18px 0 0;max-height:92vh;display:flex;flex-direction:column">
+      <div style="padding:16px 16px 10px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border);flex-shrink:0">
+        <div id="rfiModalTitle" style="font-size:15px;font-weight:800;color:var(--text)">Nueva consulta técnica</div>
+        <button onclick="rfiCerrarModal()" style="background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer">✕</button>
+      </div>
+      <div style="overflow-y:auto;flex:1;padding:14px 16px">
+        <input type="hidden" id="rfiEditId">
+        <!-- Numero (solo lectura) -->
+        <div id="rfiNumeroWrap" style="display:none;margin-bottom:10px">
+          <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Número</div>
+          <div id="rfiNumeroDisplay" style="font-size:13px;font-weight:700;color:var(--accent)"></div>
+        </div>
+        <!-- Titulo -->
+        <div style="margin-bottom:10px">
+          <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Consulta / Pregunta *</div>
+          <input id="rfiTitulo" type="text" placeholder="¿Qué necesitas saber?" style="width:100%;padding:9px 11px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;box-sizing:border-box">
+        </div>
+        <!-- Categoria + Prioridad -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+          <div>
+            <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Categoría</div>
+            <select id="rfiCategoria" style="width:100%;padding:9px 11px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;box-sizing:border-box">
+              <option value="diseno">🏗 Diseño</option>
+              <option value="materiales">🧱 Materiales</option>
+              <option value="seguridad">⛑ Seguridad</option>
+              <option value="proceso">⚙️ Proceso</option>
+              <option value="normativa">📜 Normativa</option>
+              <option value="otro">📋 Otro</option>
+            </select>
+          </div>
+          <div>
+            <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Prioridad</div>
+            <select id="rfiPrioridad" style="width:100%;padding:9px 11px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;box-sizing:border-box">
+              <option value="urgente">🔴 Urgente</option>
+              <option value="alta">🟠 Alta</option>
+              <option value="normal" selected>🟡 Normal</option>
+              <option value="baja">🟢 Baja</option>
+            </select>
+          </div>
+        </div>
+        <!-- Descripcion detallada -->
+        <div style="margin-bottom:10px">
+          <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Descripción detallada</div>
+          <textarea id="rfiDescripcion" rows="3" placeholder="Contexto, ubicación en planos, referencia a especificaciones…" style="width:100%;padding:9px 11px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;box-sizing:border-box;resize:vertical"></textarea>
+        </div>
+        <!-- Asignado a + Fecha limite -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+          <div>
+            <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Asignado a</div>
+            <input id="rfiAsignadoA" type="text" placeholder="Técnico / Arquitecto" style="width:100%;padding:9px 11px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;box-sizing:border-box">
+          </div>
+          <div>
+            <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Fecha límite</div>
+            <input id="rfiFechaLimite" type="date" style="width:100%;padding:9px 11px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;box-sizing:border-box">
+          </div>
+        </div>
+        <!-- Impacto -->
+        <div style="display:flex;gap:16px;margin-bottom:12px">
+          <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text);cursor:pointer">
+            <input type="checkbox" id="rfiImpactoPlazo"> ⏱ Impacta plazo
+          </label>
+          <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text);cursor:pointer">
+            <input type="checkbox" id="rfiImpactoCoste"> 💶 Impacta coste
+          </label>
+        </div>
+        <!-- Respuesta (solo visible al editar) -->
+        <div id="rfiRespuestaWrap" style="display:none">
+          <div style="height:1px;background:var(--border);margin-bottom:12px"></div>
+          <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">✅ Respuesta</div>
+          <textarea id="rfiRespuesta" rows="3" placeholder="Escribe aquí la respuesta técnica…" style="width:100%;padding:9px 11px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;box-sizing:border-box;resize:vertical"></textarea>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px">
+            <div>
+              <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Respondido por</div>
+              <input id="rfiRespondidoPor" type="text" style="width:100%;padding:9px 11px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;box-sizing:border-box">
+            </div>
+            <div>
+              <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Estado</div>
+              <select id="rfiEstado" style="width:100%;padding:9px 11px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;box-sizing:border-box">
+                <option value="abierta">🔴 Abierta</option>
+                <option value="en_revision">🟡 En revisión</option>
+                <option value="respondida">🟢 Respondida</option>
+                <option value="cerrada">⚫ Cerrada</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div style="padding:12px 16px;border-top:1px solid var(--border);flex-shrink:0">
+        <button class="btn-primary" style="width:100%" onclick="rfiGuardar()">💾 Guardar RFI</button>
+      </div>
+    </div>
+  </div>
+
   <!-- CHECKLIST PRE-USO (NEW-21) -->
   <div class="modal-overlay" id="modalChecklist" onclick="if(event.target===this)checklistCerrar()" style="display:none;align-items:flex-end;justify-content:center;padding:0">
     <div style="background:var(--card);border-radius:16px 16px 0 0;width:100%;max-width:520px;max-height:90vh;display:flex;flex-direction:column">
@@ -11120,7 +11215,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '6.52';
+const APP_VERSION = '6.53';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -12944,12 +13039,17 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
 
   function dashSelTab(tab) {
     _dashTab = tab;
-    ['resumen','graficas','fases','diario','tareas','presupuesto'].forEach(t => {
+    ['resumen','graficas','fases','diario','tareas','presupuesto','rfis'].forEach(t => {
       const btn = document.getElementById('dashTab_'+t);
       const pnl = document.getElementById('dashPanel_'+t);
-      if (btn) btn.style.cssText = t === tab
-        ? 'padding:6px 14px;background:var(--accent);color:#000;border:none;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer'
-        : 'padding:6px 14px;background:transparent;color:var(--muted);border:1px solid var(--border);border-radius:7px;font-size:12px;font-weight:600;cursor:pointer';
+      if (btn) {
+        const isActive = t === tab;
+        // Preserve badge span if exists
+        const badge = btn.querySelector('[id$="_badge"]');
+        btn.style.cssText = isActive
+          ? 'padding:6px 14px;background:var(--accent);color:#000;border:none;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;position:relative'
+          : 'padding:6px 14px;background:transparent;color:var(--muted);border:1px solid var(--border);border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;position:relative';
+      }
       if (pnl) pnl.style.display = t === tab ? '' : 'none';
     });
     if (tab === 'graficas'    && !_dashCharts._loaded) cargarGraficasDash();
@@ -12957,6 +13057,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     if (tab === 'diario')      diarioCargar();
     if (tab === 'tareas')      tareasCargar();
     if (tab === 'presupuesto') presupuestoCargar();
+    if (tab === 'rfis')        rfisCargar();
   }
   window.dashSelTab = dashSelTab;
 
@@ -13005,6 +13106,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
           <button id="dashTab_fases"       onclick="dashSelTab('fases')"       style="padding:6px 14px;background:transparent;color:var(--muted);border:1px solid var(--border);border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap">📅 Fases</button>
           <button id="dashTab_tareas"      onclick="dashSelTab('tareas')"      style="padding:6px 14px;background:transparent;color:var(--muted);border:1px solid var(--border);border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap">✅ Tareas</button>
           <button id="dashTab_presupuesto" onclick="dashSelTab('presupuesto')" style="padding:6px 14px;background:transparent;color:var(--muted);border:1px solid var(--border);border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap">💰 Presupuesto</button>
+          <button id="dashTab_rfis"        onclick="dashSelTab('rfis')"        style="padding:6px 14px;background:transparent;color:var(--muted);border:1px solid var(--border);border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;position:relative">📋 RFIs<span id="dashTab_rfis_badge" style="display:none;position:absolute;top:-4px;right:-4px;background:#ef4444;color:#fff;border-radius:50%;font-size:9px;font-weight:900;min-width:14px;height:14px;line-height:14px;text-align:center;padding:0 2px"></span></button>
           <button id="dashTab_diario"      onclick="dashSelTab('diario')"      style="padding:6px 14px;background:transparent;color:var(--muted);border:1px solid var(--border);border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap">📓 Diario</button>
         </div>
         <!-- Panel Resumen -->
@@ -13099,6 +13201,20 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
             <button onclick="diarioNuevo()" style="padding:6px 12px;background:var(--accent);color:#000;border:none;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer">+ Nueva entrada</button>
           </div>
           <div id="diarioList"><div style="color:var(--muted);text-align:center;padding:20px;font-size:13px">Cargando…</div></div>
+        </div>
+        <!-- Panel RFIs -->
+        <div id="dashPanel_rfis" style="display:none">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+            <div style="font-size:13px;font-weight:700;color:var(--text)">📋 Consultas Técnicas (RFIs)</div>
+            <button onclick="rfiNuevo()" style="padding:6px 12px;background:var(--accent);color:#000;border:none;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer">+ Nueva RFI</button>
+          </div>
+          <div style="display:flex;gap:6px;margin-bottom:10px;overflow-x:auto;padding-bottom:2px">
+            <button onclick="rfiFiltrar('todas')"      id="rfiFiltro_todas"      style="padding:4px 10px;background:var(--accent);color:#000;border:none;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap">Todas</button>
+            <button onclick="rfiFiltrar('abierta')"    id="rfiFiltro_abierta"    style="padding:4px 10px;background:transparent;color:var(--muted);border:1px solid var(--border);border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap">🔴 Abiertas</button>
+            <button onclick="rfiFiltrar('en_revision')" id="rfiFiltro_en_revision" style="padding:4px 10px;background:transparent;color:var(--muted);border:1px solid var(--border);border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap">🟡 En revisión</button>
+            <button onclick="rfiFiltrar('respondida')" id="rfiFiltro_respondida" style="padding:4px 10px;background:transparent;color:var(--muted);border:1px solid var(--border);border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap">🟢 Respondidas</button>
+          </div>
+          <div id="rfiList"><div style="color:var(--muted);text-align:center;padding:20px;font-size:13px">Cargando…</div></div>
         </div>
       `;
 
@@ -13847,6 +13963,191 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     else toast('Error al eliminar','err');
   }
   window.presupuestoEliminar = presupuestoEliminar;
+
+  // ══════════════════════════════════════════════════════
+  // RFIs — CONSULTAS TÉCNICAS (NEW-34)
+  // ══════════════════════════════════════════════════════
+  let _rfiData = [];
+  let _rfiFiltro = 'todas';
+
+  function rfiFiltrar(filtro) {
+    _rfiFiltro = filtro;
+    ['todas','abierta','en_revision','respondida'].forEach(f => {
+      const btn = document.getElementById('rfiFiltro_'+f);
+      if (!btn) return;
+      btn.style.cssText = f === filtro
+        ? 'padding:4px 10px;background:var(--accent);color:#000;border:none;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap'
+        : 'padding:4px 10px;background:transparent;color:var(--muted);border:1px solid var(--border);border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap';
+    });
+    renderRfiList();
+  }
+  window.rfiFiltrar = rfiFiltrar;
+
+  function renderRfiList() {
+    const el = document.getElementById('rfiList');
+    if (!el) return;
+    const lista = _rfiFiltro === 'todas' ? _rfiData : _rfiData.filter(r => r.estado === _rfiFiltro);
+    if (!lista.length) {
+      el.innerHTML = `<div style="text-align:center;padding:30px;color:var(--muted);font-size:13px">
+        ${_rfiFiltro === 'todas' ? '📋 Sin consultas. Crea la primera RFI.' : 'No hay consultas con este estado.'}</div>`;
+      return;
+    }
+    const estadoInfo = {
+      abierta:     { icon:'🔴', label:'Abierta',     color:'#ef4444' },
+      en_revision: { icon:'🟡', label:'En revisión', color:'#f59e0b' },
+      respondida:  { icon:'🟢', label:'Respondida',  color:'#22c55e' },
+      cerrada:     { icon:'⚫', label:'Cerrada',      color:'#6b7280' }
+    };
+    const catIcon = { diseno:'🏗',materiales:'🧱',seguridad:'⛑',proceso:'⚙️',normativa:'📜',otro:'📋' };
+    const priIcon = { urgente:'🔴',alta:'🟠',normal:'🟡',baja:'🟢' };
+    const hoy = new Date(); hoy.setHours(0,0,0,0);
+    el.innerHTML = lista.map(r => {
+      const ei = estadoInfo[r.estado] || estadoInfo.abierta;
+      const vencida = r.fecha_limite && r.estado !== 'respondida' && r.estado !== 'cerrada'
+        && new Date(r.fecha_limite) < hoy;
+      return `<div style="background:var(--surface);border:1px solid var(--border);border-left:3px solid ${ei.color};border-radius:10px;padding:12px;margin-bottom:8px">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+          <div style="flex:1">
+            <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+              <span style="font-size:10px;font-weight:800;color:var(--accent);font-family:'Montserrat',sans-serif">${r.numero||'RFI'}</span>
+              <span style="font-size:10px;padding:2px 6px;background:${ei.color}22;color:${ei.color};border-radius:4px;font-weight:700">${ei.icon} ${ei.label}</span>
+              ${r.impacto_plazo ? '<span style="font-size:10px;padding:2px 5px;background:#f59e0b22;color:#f59e0b;border-radius:4px;font-weight:700">⏱ Plazo</span>' : ''}
+              ${r.impacto_coste ? '<span style="font-size:10px;padding:2px 5px;background:#ef444422;color:#ef4444;border-radius:4px;font-weight:700">💶 Coste</span>' : ''}
+            </div>
+            <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:3px">${r.titulo}</div>
+            <div style="font-size:11px;color:var(--muted)">${catIcon[r.categoria]||'📋'} ${r.categoria||'otro'} · ${priIcon[r.prioridad]||'🟡'} ${r.prioridad||'normal'}${r.asignado_a?' · 👤 '+r.asignado_a:''}${r.fecha_limite?` · 📅 ${r.fecha_limite}`:''}</div>
+            ${vencida ? '<div style="font-size:10px;color:#ef4444;font-weight:700;margin-top:3px">⚠️ VENCIDA</div>' : ''}
+            ${r.respuesta ? `<div style="margin-top:8px;padding:8px;background:var(--surface2);border-radius:7px;border-left:2px solid #22c55e"><div style="font-size:10px;font-weight:700;color:#22c55e;margin-bottom:3px">✅ RESPUESTA</div><div style="font-size:12px;color:var(--text)">${r.respuesta}</div></div>` : ''}
+          </div>
+          <div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0">
+            <button onclick="rfiEditar(${r.id})" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:5px 8px;cursor:pointer;font-size:11px;color:var(--text)">✏️</button>
+            ${r.estado === 'abierta' || r.estado === 'en_revision' ? `<button onclick="rfiResponder(${r.id})" style="background:#22c55e22;border:1px solid #22c55e55;border-radius:6px;padding:5px 8px;cursor:pointer;font-size:11px;color:#22c55e;font-weight:700">✅</button>` : ''}
+            <button onclick="rfiEliminar(${r.id})" style="background:none;border:none;cursor:pointer;font-size:14px;color:var(--muted)">🗑️</button>
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  async function rfisCargar() {
+    const el = document.getElementById('rfiList');
+    if (!el) return;
+    el.innerHTML = '<div style="color:var(--muted);text-align:center;padding:20px;font-size:13px">Cargando…</div>';
+    try {
+      const params = new URLSearchParams();
+      if (window._obraActual) params.set('obra_id', window._obraActual);
+      const data = await apiCall('/rfis' + (params.toString() ? '?'+params : ''));
+      _rfiData = data.rfis || [];
+      // Actualizar badge
+      const abiertas = _rfiData.filter(r => r.estado === 'abierta' || r.estado === 'en_revision').length;
+      const badge = document.getElementById('dashTab_rfis_badge');
+      if (badge) { badge.textContent = abiertas; badge.style.display = abiertas ? '' : 'none'; }
+      renderRfiList();
+    } catch(e) {
+      el.innerHTML = '<div style="color:var(--muted);text-align:center;padding:20px;font-size:13px">Error de conexión</div>';
+    }
+  }
+  window.rfisCargar = rfisCargar;
+
+  function rfiNuevo() {
+    document.getElementById('rfiEditId').value = '';
+    document.getElementById('rfiModalTitle').textContent = 'Nueva consulta técnica';
+    document.getElementById('rfiTitulo').value = '';
+    document.getElementById('rfiCategoria').value = 'otro';
+    document.getElementById('rfiPrioridad').value = 'normal';
+    document.getElementById('rfiDescripcion').value = '';
+    document.getElementById('rfiAsignadoA').value = '';
+    document.getElementById('rfiFechaLimite').value = '';
+    document.getElementById('rfiImpactoPlazo').checked = false;
+    document.getElementById('rfiImpactoCoste').checked = false;
+    document.getElementById('rfiNumeroWrap').style.display = 'none';
+    document.getElementById('rfiRespuestaWrap').style.display = 'none';
+    document.getElementById('modalRfi').style.display = 'flex';
+  }
+  window.rfiNuevo = rfiNuevo;
+
+  function rfiEditar(id) {
+    const r = _rfiData.find(x => x.id === id);
+    if (!r) return;
+    document.getElementById('rfiEditId').value = id;
+    document.getElementById('rfiModalTitle').textContent = 'Editar RFI ' + (r.numero||'');
+    document.getElementById('rfiTitulo').value = r.titulo || '';
+    document.getElementById('rfiCategoria').value = r.categoria || 'otro';
+    document.getElementById('rfiPrioridad').value = r.prioridad || 'normal';
+    document.getElementById('rfiDescripcion').value = r.descripcion || '';
+    document.getElementById('rfiAsignadoA').value = r.asignado_a || '';
+    document.getElementById('rfiFechaLimite').value = r.fecha_limite || '';
+    document.getElementById('rfiImpactoPlazo').checked = !!r.impacto_plazo;
+    document.getElementById('rfiImpactoCoste').checked = !!r.impacto_coste;
+    document.getElementById('rfiNumeroWrap').style.display = '';
+    document.getElementById('rfiNumeroDisplay').textContent = r.numero || '';
+    document.getElementById('rfiRespuestaWrap').style.display = '';
+    document.getElementById('rfiRespuesta').value = r.respuesta || '';
+    document.getElementById('rfiRespondidoPor').value = r.respondido_por || '';
+    const estSel = document.getElementById('rfiEstado');
+    if (estSel) estSel.value = r.estado || 'abierta';
+    document.getElementById('modalRfi').style.display = 'flex';
+  }
+  window.rfiEditar = rfiEditar;
+
+  function rfiResponder(id) {
+    // Abre el modal en modo edición con el foco en el campo respuesta
+    rfiEditar(id);
+    setTimeout(() => document.getElementById('rfiRespuesta').focus(), 200);
+  }
+  window.rfiResponder = rfiResponder;
+
+  function rfiCerrarModal() {
+    document.getElementById('modalRfi').style.display = 'none';
+  }
+  window.rfiCerrarModal = rfiCerrarModal;
+
+  async function rfiGuardar() {
+    const id = document.getElementById('rfiEditId').value;
+    const titulo = document.getElementById('rfiTitulo').value.trim();
+    if (!titulo) { toast('La consulta necesita un título', 'err'); return; }
+    const body = {
+      titulo,
+      categoria:       document.getElementById('rfiCategoria').value,
+      prioridad:       document.getElementById('rfiPrioridad').value,
+      descripcion:     document.getElementById('rfiDescripcion').value.trim() || null,
+      asignado_a:      document.getElementById('rfiAsignadoA').value.trim() || null,
+      fecha_limite:    document.getElementById('rfiFechaLimite').value || null,
+      impacto_plazo:   document.getElementById('rfiImpactoPlazo').checked ? 1 : 0,
+      impacto_coste:   document.getElementById('rfiImpactoCoste').checked ? 1 : 0
+    };
+    if (window._obraActual) body.obra_id = window._obraActual;
+    if (id) {
+      // Edición
+      const respTxt = document.getElementById('rfiRespuesta').value.trim();
+      if (respTxt) {
+        body.respuesta     = respTxt;
+        body.respondido_por = document.getElementById('rfiRespondidoPor').value.trim() || null;
+        body.estado        = document.getElementById('rfiEstado').value;
+      } else {
+        body.estado = document.getElementById('rfiEstado').value;
+      }
+    }
+    const res = id
+      ? await apiCall(`/rfis/${id}`, 'PUT', body)
+      : await apiCall('/rfis', 'POST', body);
+    if (res.ok || res.id) {
+      toast(id ? 'RFI actualizada ✓' : `RFI creada (${res.numero||''}) ✓`, 'ok');
+      rfiCerrarModal();
+      rfisCargar();
+    } else {
+      toast(res.error || 'Error al guardar', 'err');
+    }
+  }
+  window.rfiGuardar = rfiGuardar;
+
+  async function rfiEliminar(id) {
+    if (!confirm('¿Eliminar esta RFI?')) return;
+    const res = await apiCall(`/rfis/${id}`, 'DELETE');
+    if (res.ok) { toast('RFI eliminada', 'ok'); rfisCargar(); }
+    else toast('Error al eliminar', 'err');
+  }
+  window.rfiEliminar = rfiEliminar;
 
   window.cargarObraDashboard = cargarObraDashboard;
 

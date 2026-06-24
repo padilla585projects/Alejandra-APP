@@ -4501,6 +4501,15 @@ export default {
         if (method === 'PUT')    return await actualizarPartidaPresupuesto(_bid, request, env);
         if (method === 'DELETE') return await eliminarPartidaPresupuesto(_bid, request, env);
       }
+      // ── RFIs — Consultas Técnicas (NEW-34) ────────────────────────────────────
+      if (path === '/rfis'                  && method === 'GET')  return await getRfis(request, env);
+      if (path === '/rfis'                  && method === 'POST') return await crearRfi(request, env);
+      if (path.startsWith('/rfis/')) {
+        const _rid = parseInt(path.split('/rfis/')[1]);
+        if (method === 'GET')    return await getRfiDetalle(_rid, request, env);
+        if (method === 'PUT')    return await actualizarRfi(_rid, request, env);
+        if (method === 'DELETE') return await eliminarRfi(_rid, request, env);
+      }
       if (path === '/repostajes'             && method === 'GET')  return await getRepostajes(request, env);
       if (path === '/repostajes'             && method === 'POST') return await crearRepostaje(request, env, ctx);
       if (path === '/repostajes/resumen'     && method === 'GET')  return await getResumenRepostajes(request, env);
@@ -12404,5 +12413,133 @@ async function eliminarPartidaPresupuesto(id, request, env) {
   const auth = await getAuth(request, env);
   if (!auth.empresa_id) return err('No autorizado', 403);
   await env.DB.prepare(`DELETE FROM presupuesto_obra WHERE id=? AND empresa_id=?`).bind(id, auth.empresa_id).run();
+  return json({ ok: true });
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// RFIs — CONSULTAS TÉCNICAS (NEW-34)
+// Tabla: rfis(id, obra_id, empresa_id, numero TEXT, titulo, categoria, descripcion,
+//             estado, prioridad, creado_por, asignado_a, respuesta, respondido_por,
+//             fecha_respuesta, fecha_limite, impacto_plazo, impacto_coste, created_at)
+// ══════════════════════════════════════════════════════════════════════════════
+
+async function ensureRfisTable(env) {
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS rfis (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    obra_id         INTEGER,
+    empresa_id      INTEGER NOT NULL,
+    numero          TEXT,
+    titulo          TEXT NOT NULL,
+    categoria       TEXT DEFAULT 'otro',
+    descripcion     TEXT,
+    estado          TEXT DEFAULT 'abierta',
+    prioridad       TEXT DEFAULT 'normal',
+    creado_por      TEXT,
+    asignado_a      TEXT,
+    respuesta       TEXT,
+    respondido_por  TEXT,
+    fecha_respuesta TEXT,
+    fecha_limite    TEXT,
+    impacto_plazo   INTEGER DEFAULT 0,
+    impacto_coste   INTEGER DEFAULT 0,
+    created_at      TEXT DEFAULT (datetime('now'))
+  )`).run().catch(() => {});
+}
+
+async function getRfis(request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth.empresa_id) return err('No autorizado', 403);
+  await ensureRfisTable(env);
+  const url = new URL(request.url);
+  const obra_id = url.searchParams.get('obra_id');
+  const estado  = url.searchParams.get('estado');
+  let q = `SELECT * FROM rfis WHERE empresa_id=?`;
+  const params = [auth.empresa_id];
+  if (obra_id) { q += ` AND obra_id=?`;  params.push(parseInt(obra_id)); }
+  if (estado)  { q += ` AND estado=?`;   params.push(estado); }
+  q += ` ORDER BY CASE estado WHEN 'abierta' THEN 0 WHEN 'en_revision' THEN 1 WHEN 'respondida' THEN 2 ELSE 3 END,
+                 CASE prioridad WHEN 'urgente' THEN 0 WHEN 'alta' THEN 1 WHEN 'normal' THEN 2 ELSE 3 END,
+                 created_at DESC`;
+  const { results } = await env.DB.prepare(q).bind(...params).all();
+  return json({ rfis: results || [] });
+}
+
+async function getRfiDetalle(id, request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth.empresa_id) return err('No autorizado', 403);
+  await ensureRfisTable(env);
+  const rfi = await env.DB.prepare(`SELECT * FROM rfis WHERE id=? AND empresa_id=?`).bind(id, auth.empresa_id).first();
+  if (!rfi) return err('RFI no encontrada', 404);
+  return json({ rfi });
+}
+
+async function crearRfi(request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth.empresa_id) return err('No autorizado', 403);
+  if (!['superadmin','empresa_admin','encargado','jefe_de_obra','oficina','desarrollador'].includes(auth.rol))
+    return err('Sin permiso', 403);
+  await ensureRfisTable(env);
+  const b = await request.json();
+  if (!b.titulo) return err('titulo requerido', 400);
+  // Generar numero correlativo RFI-XXX por obra
+  const obraId = b.obra_id ? parseInt(b.obra_id) : null;
+  let numero = 'RFI-001';
+  try {
+    const last = await env.DB.prepare(
+      `SELECT numero FROM rfis WHERE empresa_id=? ${obraId ? 'AND obra_id=?' : 'AND obra_id IS NULL'} ORDER BY id DESC LIMIT 1`
+    ).bind(...(obraId ? [auth.empresa_id, obraId] : [auth.empresa_id])).first();
+    if (last && last.numero) {
+      const n = parseInt(last.numero.replace(/\D/g,'')) || 0;
+      numero = 'RFI-' + String(n + 1).padStart(3, '0');
+    }
+  } catch {}
+  const { meta } = await env.DB.prepare(
+    `INSERT INTO rfis (obra_id, empresa_id, numero, titulo, categoria, descripcion, estado, prioridad, creado_por, asignado_a, fecha_limite, impacto_plazo, impacto_coste)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`
+  ).bind(
+    obraId,
+    auth.empresa_id,
+    numero,
+    b.titulo,
+    b.categoria || 'otro',
+    b.descripcion || null,
+    b.estado || 'abierta',
+    b.prioridad || 'normal',
+    b.creado_por || auth.nombre || auth.email || null,
+    b.asignado_a || null,
+    b.fecha_limite || null,
+    b.impacto_plazo ? 1 : 0,
+    b.impacto_coste ? 1 : 0
+  ).run();
+  return json({ ok: true, id: meta.last_row_id, numero }, 201);
+}
+
+async function actualizarRfi(id, request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth.empresa_id) return err('No autorizado', 403);
+  await ensureRfisTable(env);
+  const b = await request.json();
+  const sets = []; const params = [];
+  const campos = ['titulo','categoria','descripcion','estado','prioridad','asignado_a',
+                  'respuesta','respondido_por','fecha_respuesta','fecha_limite','impacto_plazo','impacto_coste'];
+  for (const c of campos) {
+    if (b[c] !== undefined) { sets.push(`${c}=?`); params.push(b[c]); }
+  }
+  // Si se responde, auto-set fecha_respuesta y estado
+  if (b.respuesta && b.estado === undefined) {
+    sets.push('estado=?'); params.push('respondida');
+    sets.push('fecha_respuesta=?'); params.push(new Date().toISOString().slice(0,10));
+    if (!b.respondido_por) { sets.push('respondido_por=?'); params.push(auth.nombre || auth.email); }
+  }
+  if (!sets.length) return err('Nada que actualizar', 400);
+  params.push(id, auth.empresa_id);
+  await env.DB.prepare(`UPDATE rfis SET ${sets.join(',')} WHERE id=? AND empresa_id=?`).bind(...params).run();
+  return json({ ok: true });
+}
+
+async function eliminarRfi(id, request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth.empresa_id) return err('No autorizado', 403);
+  await env.DB.prepare(`DELETE FROM rfis WHERE id=? AND empresa_id=?`).bind(id, auth.empresa_id).run();
   return json({ ok: true });
 }

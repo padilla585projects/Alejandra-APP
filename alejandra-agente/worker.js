@@ -1201,6 +1201,36 @@ const TOOL_GESTIONAR_TAREA = {
   }
 };
 
+const TOOL_GESTIONAR_RFI = {
+  name: 'gestionar_rfi',
+  description: 'Gestiona Consultas Técnicas (RFIs — Requests for Information) de obra. Las RFIs son preguntas formales sobre diseño, materiales, normativa o proceso que requieren respuesta técnica. Cada RFI tiene número correlativo (RFI-001), categoría, prioridad, responsable y puede marcar impacto en plazo/coste. Úsalo cuando el usuario quiera registrar una duda técnica, ver RFIs abiertas, responder una consulta o ver el estado de las RFIs de una obra.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      accion: {
+        type: 'string',
+        enum: ['crear', 'listar', 'responder', 'actualizar', 'eliminar'],
+        description: 'Acción a realizar'
+      },
+      obra_id:        { type: 'number', description: 'ID de la obra' },
+      rfi_id:         { type: 'number', description: 'ID de la RFI (obligatorio para responder/actualizar/eliminar)' },
+      titulo:         { type: 'string', description: 'Pregunta o título de la consulta (obligatorio para crear)' },
+      categoria:      { type: 'string', enum: ['diseno','materiales','seguridad','proceso','normativa','otro'], description: 'Categoría de la consulta' },
+      descripcion:    { type: 'string', description: 'Descripción detallada del problema o duda' },
+      asignado_a:     { type: 'string', description: 'Técnico o arquitecto a quien se dirige' },
+      prioridad:      { type: 'string', enum: ['urgente','alta','normal','baja'], description: 'Prioridad' },
+      fecha_limite:   { type: 'string', description: 'Fecha límite de respuesta (YYYY-MM-DD)' },
+      impacto_plazo:  { type: 'boolean', description: 'Si la duda puede afectar al plazo de entrega' },
+      impacto_coste:  { type: 'boolean', description: 'Si la duda puede afectar al coste' },
+      respuesta:      { type: 'string', description: 'Texto de respuesta técnica (para accion=responder)' },
+      respondido_por: { type: 'string', description: 'Nombre de quien responde' },
+      estado:         { type: 'string', enum: ['abierta','en_revision','respondida','cerrada'], description: 'Estado de la RFI' },
+      filtro_estado:  { type: 'string', description: 'Para listar: filtrar por estado (abierta/respondida/etc.)' }
+    },
+    required: ['accion']
+  }
+};
+
 const TOOL_PENSAR = {
   name: 'pensar',
   description: 'Razona en voz alta sobre un problema antes de actuar. Úsalo para descomponer problemas complejos en pasos. No ejecuta nada, solo registra tu pensamiento.',
@@ -1582,11 +1612,11 @@ const TOOL_CONSULTAR_CONOCIMIENTO = {
 
 const TOOLS_POR_EXPERTO = {
   simple:     [TOOL_MEMORY_READ, TOOL_CONSULTAR_BD, TOOL_ENVIAR_PUSH],
-  app:        [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_CONTROLAR_APP, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_ANALIZAR_FOTO, TOOL_ESTADO_OBRA, TOOL_GESTIONAR_TAREA],
+  app:        [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_CONTROLAR_APP, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_ANALIZAR_FOTO, TOOL_ESTADO_OBRA, TOOL_GESTIONAR_TAREA, TOOL_GESTIONAR_RFI],
   tecnico:    [TOOL_LEER_ESTADO, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_BUSCAR_WEB, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_NEXUS_MANAGE, TOOL_CONTROLAR_APP, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO],
   web:        [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE],
   reflexion:  [TOOL_MEMORY_SAVE, TOOL_MEMORY_READ, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_PROPOSE_MEJORA, TOOL_BUSCAR_WEB, TOOL_TOMAR_DECISION, TOOL_LEER_ESTADO, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_CONTROLAR_APP, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO],
-  completo:   [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_LEER_ESTADO, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_CONTROLAR_APP, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_ANALIZAR_FOTO, TOOL_ESTADO_OBRA, TOOL_GESTIONAR_TAREA],
+  completo:   [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_LEER_ESTADO, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_CONTROLAR_APP, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_ANALIZAR_FOTO, TOOL_ESTADO_OBRA, TOOL_GESTIONAR_TAREA, TOOL_GESTIONAR_RFI],
   ingenieria: [TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_ANALIZAR_FOTO, TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME]
 };
 
@@ -5936,6 +5966,107 @@ ${descripcion ? `<div class="info-bar"><span class="badge">${tipo}</span>${descr
         return `❌ Acción "${accion}" no reconocida. Usa: crear, actualizar, completar, listar, eliminar.`;
       } catch (err) {
         return `Error gestionando tarea: ${err.message}`;
+      }
+    }
+
+    case 'gestionar_rfi': {
+      try {
+        if (!env.DB) return 'Base de datos no disponible';
+        const accion = input.accion;
+        const obraId = input.obra_id ? parseInt(input.obra_id) : null;
+        const rfiId  = input.rfi_id  ? parseInt(input.rfi_id)  : null;
+        const eid    = empresa_id || 1;
+
+        // Ensure table
+        await env.DB.prepare(`CREATE TABLE IF NOT EXISTS rfis (
+          id INTEGER PRIMARY KEY AUTOINCREMENT, obra_id INTEGER, empresa_id INTEGER NOT NULL,
+          numero TEXT, titulo TEXT NOT NULL, categoria TEXT DEFAULT 'otro',
+          descripcion TEXT, estado TEXT DEFAULT 'abierta', prioridad TEXT DEFAULT 'normal',
+          creado_por TEXT, asignado_a TEXT, respuesta TEXT, respondido_por TEXT,
+          fecha_respuesta TEXT, fecha_limite TEXT, impacto_plazo INTEGER DEFAULT 0,
+          impacto_coste INTEGER DEFAULT 0, created_at TEXT DEFAULT (datetime('now'))
+        )`).run().catch(()=>{});
+
+        if (accion === 'listar') {
+          let q = 'SELECT * FROM rfis WHERE empresa_id=?';
+          const p = [eid];
+          if (obraId) { q += ' AND obra_id=?'; p.push(obraId); }
+          if (input.filtro_estado) { q += ' AND estado=?'; p.push(input.filtro_estado); }
+          q += ` ORDER BY CASE estado WHEN 'abierta' THEN 0 WHEN 'en_revision' THEN 1 WHEN 'respondida' THEN 2 ELSE 3 END,
+                          CASE prioridad WHEN 'urgente' THEN 0 WHEN 'alta' THEN 1 WHEN 'normal' THEN 2 ELSE 3 END, created_at DESC LIMIT 20`;
+          const { results: rfis } = await env.DB.prepare(q).bind(...p).all().catch(()=>({results:[]}));
+          if (!rfis.length) return '📋 No hay RFIs' + (input.filtro_estado ? ` en estado "${input.filtro_estado}"` : '') + '.';
+          const estIcon={abierta:'🔴',en_revision:'🟡',respondida:'🟢',cerrada:'⚫'};
+          const priIcon={urgente:'🔴',alta:'🟠',normal:'🟡',baja:'🟢'};
+          let txt = `📋 RFIs (${rfis.length}):\n`;
+          rfis.forEach(r => {
+            txt += `• [${r.numero||'RFI'}] ${estIcon[r.estado]||'🔴'} ${priIcon[r.prioridad]||'🟡'} ${r.titulo}`;
+            if (r.asignado_a) txt += ` → ${r.asignado_a}`;
+            if (r.impacto_plazo) txt += ' ⏱PLAZO';
+            if (r.impacto_coste) txt += ' 💶COSTE';
+            if (r.respuesta) txt += `\n  ✅ ${r.respuesta.substring(0,80)}${r.respuesta.length>80?'…':''}`;
+            txt += '\n';
+          });
+          return txt;
+        }
+
+        if (accion === 'crear') {
+          if (!input.titulo) return '❌ El título/pregunta es obligatorio para crear una RFI.';
+          // Número correlativo
+          let numero = 'RFI-001';
+          try {
+            const last = await env.DB.prepare(
+              `SELECT numero FROM rfis WHERE empresa_id=? ${obraId ? 'AND obra_id=?' : 'AND obra_id IS NULL'} ORDER BY id DESC LIMIT 1`
+            ).bind(...(obraId ? [eid, obraId] : [eid])).first();
+            if (last?.numero) {
+              const n = parseInt(last.numero.replace(/\D/g,'')) || 0;
+              numero = 'RFI-' + String(n + 1).padStart(3, '0');
+            }
+          } catch {}
+          const res = await env.DB.prepare(
+            `INSERT INTO rfis (obra_id,empresa_id,numero,titulo,categoria,descripcion,estado,prioridad,creado_por,asignado_a,fecha_limite,impacto_plazo,impacto_coste)
+             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`
+          ).bind(obraId, eid, numero, input.titulo,
+            input.categoria||'otro', input.descripcion||null,
+            'abierta', input.prioridad||'normal',
+            'Alejandra IA', input.asignado_a||null, input.fecha_limite||null,
+            input.impacto_plazo ? 1 : 0, input.impacto_coste ? 1 : 0
+          ).run();
+          return `✅ RFI ${numero} creada:\n📋 ${input.titulo}${input.asignado_a?' → '+input.asignado_a:''}${input.impacto_plazo?' ⏱ Impacta plazo':''}${input.impacto_coste?' 💶 Impacta coste':''}`;
+        }
+
+        if (accion === 'responder') {
+          if (!rfiId)        return '❌ Necesito rfi_id para responder.';
+          if (!input.respuesta) return '❌ Necesito el texto de la respuesta.';
+          await env.DB.prepare(
+            `UPDATE rfis SET respuesta=?,respondido_por=?,fecha_respuesta=date('now'),estado='respondida' WHERE id=? AND empresa_id=?`
+          ).bind(input.respuesta, input.respondido_por||'Alejandra IA', rfiId, eid).run();
+          return `✅ RFI #${rfiId} respondida por ${input.respondido_por||'Alejandra IA'}.`;
+        }
+
+        if (accion === 'actualizar') {
+          if (!rfiId) return '❌ Necesito rfi_id para actualizar.';
+          const sets=[]; const params=[];
+          const campos=['titulo','categoria','descripcion','estado','prioridad','asignado_a',
+                        'respuesta','respondido_por','fecha_respuesta','fecha_limite','impacto_plazo','impacto_coste'];
+          for (const c of campos) {
+            if (input[c] !== undefined) { sets.push(`${c}=?`); params.push(input[c]); }
+          }
+          if (!sets.length) return '❌ No se especificaron cambios.';
+          params.push(rfiId, eid);
+          await env.DB.prepare(`UPDATE rfis SET ${sets.join(',')} WHERE id=? AND empresa_id=?`).bind(...params).run();
+          return `✅ RFI #${rfiId} actualizada.`;
+        }
+
+        if (accion === 'eliminar') {
+          if (!rfiId) return '❌ Necesito rfi_id para eliminar.';
+          await env.DB.prepare('DELETE FROM rfis WHERE id=? AND empresa_id=?').bind(rfiId, eid).run();
+          return `🗑️ RFI #${rfiId} eliminada.`;
+        }
+
+        return `❌ Acción "${accion}" no reconocida. Usa: crear, listar, responder, actualizar, eliminar.`;
+      } catch (err) {
+        return `Error gestionando RFI: ${err.message}`;
       }
     }
 
