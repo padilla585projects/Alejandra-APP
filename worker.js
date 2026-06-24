@@ -4818,6 +4818,7 @@ export default {
       // Recordatorio matutino: fixes pendientes > 12h
       ctx.waitUntil(recordatorioFixesPendientes(env));
       ctx.waitUntil(alertasDiarias(env));
+      ctx.waitUntil(briefingMatutino(env)); // Briefing de obra personalizado a encargados
       ctx.waitUntil(dailyPulse(env)); // Pulso diario inteligente ~9 queries, coste 0
       ctx.waitUntil(syncSheets(env)); // ~29 subrequests, seguro en este slot
     } else {
@@ -9245,6 +9246,84 @@ async function dailyPulse(env) {
     await sendTelegramToChat(env, devChatId, msg);
   } catch (e) {
     console.error('dailyPulse error:', e.message);
+  }
+}
+
+// ── BRIEFING MATUTINO — enviado a encargados con Telegram a las 7am ──────────
+// Genera un resumen personalizado por obra para cada encargado / jefe_de_obra
+// que tenga telegram_id configurado.
+async function briefingMatutino(env) {
+  try {
+    const hoy = new Date().toISOString().slice(0, 10);
+    // Encargados y jefes de obra con telegram_id y obra asignada
+    const { results: encargados } = await env.DB.prepare(
+      `SELECT u.id, u.nombre, u.telegram_id, u.obra_id, u.empresa_id, o.nombre as obra_nombre
+       FROM usuarios u
+       LEFT JOIN obras o ON o.id = u.obra_id
+       WHERE u.activo = 1 AND u.telegram_id IS NOT NULL AND u.telegram_id != ''
+         AND u.rol IN ('encargado','jefe_de_obra') AND u.obra_id IS NOT NULL`
+    ).all().catch(() => ({ results: [] }));
+
+    for (const enc of (encargados || [])) {
+      try {
+        const eid    = enc.empresa_id;
+        const obraId = enc.obra_id;
+
+        // Datos en paralelo
+        const [fichHoy, tareasUrg, rfisOpen, incAbiertas, proximoEv] = await Promise.all([
+          env.DB.prepare(`SELECT COUNT(*) as n FROM fichajes WHERE empresa_id=? AND obra_id=? AND fecha=?`).bind(eid,obraId,hoy).first().catch(()=>({n:0})),
+          env.DB.prepare(`SELECT titulo,prioridad,asignado_a,fecha_limite FROM tareas_obra WHERE empresa_id=? AND obra_id=? AND estado NOT IN ('completada','bloqueada') AND prioridad IN ('urgente','alta') ORDER BY CASE prioridad WHEN 'urgente' THEN 0 ELSE 1 END LIMIT 5`).bind(eid,obraId).all().catch(()=>({results:[]})),
+          env.DB.prepare(`SELECT numero,titulo,prioridad FROM rfis WHERE empresa_id=? AND obra_id=? AND estado IN ('abierta','en_revision') ORDER BY CASE prioridad WHEN 'urgente' THEN 0 WHEN 'alta' THEN 1 WHEN 'normal' THEN 2 ELSE 3 END LIMIT 3`).bind(eid,obraId).all().catch(()=>({results:[]})),
+          env.DB.prepare(`SELECT COUNT(*) as n FROM incidencias WHERE empresa_id=? AND obra_id=? AND estado IN ('abierta','en_progreso')`).bind(eid,obraId).first().catch(()=>({n:0})),
+          env.DB.prepare(`SELECT titulo,fecha,tipo FROM eventos_calendario WHERE empresa_id=? AND (obra_id=? OR obra_id IS NULL) AND fecha >= ? ORDER BY fecha ASC LIMIT 2`).bind(eid,obraId,hoy).all().catch(()=>({results:[]})),
+        ]);
+
+        const priIcon = { urgente:'🔴', alta:'🟠', normal:'🟡', baja:'🟢' };
+
+        let msg = `☀️ <b>Buenos días, ${enc.nombre}!</b>\n`;
+        msg += `🏗 <b>${enc.obra_nombre||'Tu obra'}</b> — ${hoy}\n`;
+        msg += `━━━━━━━━━━━━━━━━━━━━━\n\n`;
+
+        msg += `👷 <b>Personal hoy:</b> ${fichHoy?.n||0} fichajes hasta ahora\n`;
+        msg += `🚨 <b>Incidencias abiertas:</b> ${incAbiertas?.n||0}\n`;
+
+        const tRes = tareasUrg.results || [];
+        if (tRes.length) {
+          msg += `\n✅ <b>Tareas urgentes/altas (${tRes.length}):</b>\n`;
+          const hoyStr = hoy;
+          tRes.forEach(t => {
+            const venc = t.fecha_limite && t.fecha_limite < hoyStr ? '⚠️ VENCIDA ' : '';
+            msg += `  ${priIcon[t.prioridad]||'⚪'} ${t.titulo}${t.asignado_a?' ['+t.asignado_a+']':''}${venc?'\n     '+venc:''}\n`;
+          });
+        }
+
+        const rRes = rfisOpen.results || [];
+        if (rRes.length) {
+          msg += `\n📋 <b>RFIs sin respuesta (${rRes.length}):</b>\n`;
+          rRes.forEach(r2 => {
+            msg += `  ${priIcon[r2.prioridad]||'🟡'} ${r2.numero||'RFI'} ${r2.titulo}\n`;
+          });
+        }
+
+        const evs = proximoEv.results || [];
+        if (evs.length) {
+          msg += `\n📅 <b>Próximos eventos:</b>\n`;
+          evs.forEach(ev => msg += `  • ${ev.titulo} (${ev.fecha})\n`);
+        }
+
+        if (!tRes.length && !rRes.length && (incAbiertas?.n||0) === 0) {
+          msg += `\n✅ <b>¡Todo en orden! Sin pendientes urgentes.</b>`;
+        }
+
+        msg += `\n\n<i>— Alejandra App | Responde a este mensaje para chatear</i>`;
+        await sendTelegramToChat(env, enc.telegram_id, msg);
+
+      } catch(eInner) {
+        console.error(`briefingMatutino error para ${enc.nombre}: ${eInner.message}`);
+      }
+    }
+  } catch(e) {
+    console.error('briefingMatutino error:', e.message);
   }
 }
 
