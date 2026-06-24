@@ -6,9 +6,49 @@
 ## ESTADO ACTUAL
 
 **Sesión:** LIBRE
-**Última sesión:** 23/06/2026 (noche) — RESEND_API_KEY agente + fixes de datos D1
-**Versión actual:** App PWA **v6.46** · AlejandraIA **v1.9.17+31** · WORKER API `a8b055c7` · WORKER agente `95519a18`
-**Próxima:** Instalar APK v1.9.17 en móvil y confirmar tap-notificación → chat. Añadir email real a Alberto cuando se recuerde. Fichajes 8–15 (Edison en obra Levitec): decidir. Foreground service 30+ min. Albarán universal con foto real.
+**Última sesión:** 24/06/2026 — Alejandra ingeniera eléctrica experta: módulo NEXUS + esquemas IEC + control industrial
+**Versión actual:** App PWA **v6.46** · AlejandraIA **v1.9.17+31** · WORKER API `a8b055c7` · WORKER agente `849a450a`
+**Próxima:** Probar esquemas eléctricos + análisis de fotos de cuadros. Instalar APK v1.9.17 en móvil. Añadir email real a Alberto. Fichajes 8–15: decidir. Foreground service 30+ min. Albarán universal con foto real.
+
+---
+
+## RESUMEN SESIÓN 24/06/2026 — Alejandra ingeniera eléctrica experta
+
+### Cambios
+
+**alejandra-agente/worker.js** — commit `1a70b5c` · deploy `849a450a` ✅
+
+1. **Módulo NEXUS `ingenieria_electrica`** (+~250 líneas de conocimiento técnico):
+   - REBT completo: ITC-BT-01 a BT-51 con valores numéricos reales (secciones, calibres, distancias, límites)
+   - Cálculos: sección cable, caída tensión, cortocircuito, motores, iluminación, factor potencia
+   - Normativa MT (RD 337/2014), puesta a tierra (TT/TN-S/IT), sistemas de distribución
+   - Electrónica e ingeniería de control industrial: PLCs (Siemens/AB/Schneider/Omron), VFDs, arrancadores (DOL/Y-Δ/softstarter), sensores industriales, redes (PROFIBUS/PROFINET/Modbus/CANopen), SCADA/HMI, PID, instrumentación
+   - Cuadros EN 61439: tipos, formas de separación, grados IP
+   - Instrucciones detalladas para generar SVG con símbolos IEC 60617 (cuadrícula 40px, colores, estructura, tipos de esquema)
+
+2. **Nueva tool `generar_esquema_electrico`**:
+   - Alejandra genera el SVG completa con símbolos IEC (el LLM hace el dibujo real)
+   - La tool envuelve el SVG en visor HTML con zoom/impresión estilo Alejandra (naranja)
+   - Guarda en R2: `esquemas/YYYY-MM-DD_tipo_titulo.html` + `.svg` puro
+   - Devuelve ambas claves para compartir por email/Telegram
+
+3. **Análisis de fotos de cuadros eléctricos** — prompt mejorado:
+   - Identifica cada componente con tipo, marca, referencia, calibre y función
+   - Lista incumplimientos normativos con artículo específico
+   - Evalúa riesgos (RD 614/2001)
+   - Describe cómo sería el esquema eléctrico de lo que ve
+
+4. **Routing mejorado**:
+   - REGEX_ROUTES: añadidas palabras clave (cuadro eléctrico, esquema, PLC, variador, motor eléctrico, transformador, puesta a tierra, arranque, DOL, estrella-triángulo, circuito de mando...)
+   - Haiku classifier: instrucción explícita de ruta → `ingenieria` para electricidad/esquemas/control
+   - `maxTokens` ingeniería: 2048 → 4096
+
+### Cómo probarlo
+- "Hazme un esquema de arranque directo de un motor de 5,5kW" → esquema SVG guardado en R2
+- "Qué sección necesita un circuito de 10kW a 400V trifásico con 30m de recorrido?" → cálculo con fórmulas
+- "Analiza esta foto" [adjuntar foto de cuadro] → análisis completo de componentes + incumplimientos + esquema sugerido
+- "Explícame cómo funciona un arranque estrella-triángulo" → respuesta técnica detallada
+- "Qué dice la ITC-BT-47 sobre motores?" → normativa exacta
 
 ---
 
