@@ -1275,9 +1275,22 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
 
   <!-- OBRA DASHBOARD (NEW-27) -->
   <div id="screenObraDashboard" class="screen" style="padding:0;display:none;flex-direction:column">
-    <div style="padding:14px 16px 12px;border-bottom:1px solid var(--border);flex-shrink:0">
-      <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:17px;color:var(--text)">📊 Resumen de obra</div>
-      <div id="dashObraNombre" style="font-size:12px;color:var(--muted);margin-top:2px"></div>
+    <div style="padding:12px 16px 10px;border-bottom:1px solid var(--border);flex-shrink:0">
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <div>
+          <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:17px;color:var(--text)">📊 Resumen de obra</div>
+          <div id="dashObraNombre" style="font-size:12px;color:var(--muted);margin-top:1px"></div>
+        </div>
+        <button onclick="cargarObraDashboard()" style="background:none;border:none;color:var(--muted);font-size:18px;cursor:pointer;padding:4px" title="Actualizar">↻</button>
+      </div>
+      <!-- Quick actions bar -->
+      <div style="display:flex;gap:6px;margin-top:10px;overflow-x:auto;padding-bottom:2px;-webkit-overflow-scrolling:touch">
+        <button onclick="dashSelTab('tareas');setTimeout(tareaNueva,200)" style="display:flex;align-items:center;gap:4px;padding:6px 10px;background:#8b5cf622;color:#8b5cf6;border:1px solid #8b5cf644;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0">✅ Nueva tarea</button>
+        <button onclick="dashSelTab('rfis');setTimeout(rfiNuevo,200)" style="display:flex;align-items:center;gap:4px;padding:6px 10px;background:#f59e0b22;color:#f59e0b;border:1px solid #f59e0b44;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0">📋 Nueva RFI</button>
+        <button onclick="showScreen('incidencias');setTimeout(nuevaIncidencia,300)" style="display:flex;align-items:center;gap:4px;padding:6px 10px;background:#ef444422;color:#ef4444;border:1px solid #ef444444;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0">🚨 Incidencia</button>
+        <button onclick="dashSelTab('diario');setTimeout(diarioNuevo,200)" style="display:flex;align-items:center;gap:4px;padding:6px 10px;background:#22c55e22;color:#22c55e;border:1px solid #22c55e44;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0">📓 Diario</button>
+        <button onclick="alejandraAbrir()" style="display:flex;align-items:center;gap:4px;padding:6px 10px;background:var(--accent)22;color:var(--accent);border:1px solid var(--accent)44;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0">🤖 Alejandra</button>
+      </div>
     </div>
     <div id="dashContent" style="padding:14px;overflow-y:auto;flex:1">
       <div style="color:var(--muted);font-size:13px;text-align:center;padding:30px">Cargando…</div>
@@ -11215,7 +11228,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '6.56';
+const APP_VERSION = '6.57';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -14036,8 +14049,9 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     if (!el) return;
     el.innerHTML = '<div style="color:var(--muted);text-align:center;padding:20px;font-size:13px">Cargando…</div>';
     try {
+      const _rfiObraId = getSession()?.obra_id;
       const params = new URLSearchParams();
-      if (window._obraActual) params.set('obra_id', window._obraActual);
+      if (_rfiObraId) params.set('obra_id', _rfiObraId);
       const data = await apiCall('/rfis' + (params.toString() ? '?'+params : ''));
       _rfiData = data.rfis || [];
       // Actualizar badge
@@ -14118,7 +14132,8 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
       impacto_plazo:   document.getElementById('rfiImpactoPlazo').checked ? 1 : 0,
       impacto_coste:   document.getElementById('rfiImpactoCoste').checked ? 1 : 0
     };
-    if (window._obraActual) body.obra_id = window._obraActual;
+    const _rfiObraIdGuardar = getSession()?.obra_id;
+    if (_rfiObraIdGuardar) body.obra_id = _rfiObraIdGuardar;
     if (id) {
       // Edición
       const respTxt = document.getElementById('rfiRespuesta').value.trim();
