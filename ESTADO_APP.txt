@@ -4,11 +4,20 @@
   Ruta local: C:\Users\Adrian\Downloads\Proyecto GestiBobina\Alejandra APP
 ================================================================================
 
-ÚLTIMA ACTUALIZACIÓN: 11/06/2026
-VERSIÓN ACTUAL APP NUEVA: v6.45 (Hardening multi-tenant — empresa_id/dept en 5 tablas, guards de rol, fixes seguridad)
+ÚLTIMA ACTUALIZACIÓN: 24/06/2026
+VERSIÓN ACTUAL APP NUEVA: v6.47 (Esquemas IA en docs de obra + explorador archivos con renombrar/borrar)
+WORKER API: 1ccf42f8 · WORKER AGENTE: a77bf132
 VERSIÓN ACTUAL APP VIEJA: v4.19 (⛔ CONGELADA DEFINITIVAMENTE — no recibe más cambios)
 
 HISTORIAL DE VERSIONES (resumen reciente):
+  v6.47 — 24/06/2026 — Esquemas IA en documentos de obra: TOOL_GENERAR_ESQUEMA con obra_id,
+                       TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA en agente. Filtro elaborado_por
+                       en GET /documentos-obra. DELETE /documentos-obra/{id} limpia R2 cuando
+                       r2_key = esquemas/*. Sección "📐 ESQUEMAS IA" en screenDocs con botones
+                       Ver (URL pública), Renombrar (PUT) y Borrar (DELETE + R2).
+  v6.46 — 24/06/2026 — Compartir esquemas: endpoint público /api/esquemas/view/<archivo>,
+                       email SVG inline+adjunto+botón viewer, Telegram sendDocument SVG.
+                       RESEND_API_KEY actualizada en agente.
   v6.45 — 11/06/2026 — Auditoría multi-tenant + hardening: ALTER+backfill empresa_id en materiales_obra
                        y push_subscriptions; ALTER+backfill departamento en inventario_seg, epis_asignados,
                        materiales_obra y fichajes (217 filas). Filtros empresa_id en moverItemSeg,

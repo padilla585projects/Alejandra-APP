@@ -6,9 +6,91 @@
 ## ESTADO ACTUAL
 
 **Sesión:** LIBRE
-**Última sesión:** 24/06/2026 — Alejandra ingeniera eléctrica experta: módulo NEXUS + esquemas IEC + control industrial
-**Versión actual:** App PWA **v6.46** · AlejandraIA **v1.9.17+31** · WORKER API `a8b055c7` · WORKER agente `849a450a`
-**Próxima:** Probar esquemas eléctricos + análisis de fotos de cuadros. Instalar APK v1.9.17 en móvil. Añadir email real a Alberto. Fichajes 8–15: decidir. Foreground service 30+ min. Albarán universal con foto real.
+**Última sesión:** 24/06/2026 (3ª continuación) — Esquemas IA en docs de obra + explorador archivos
+**Versión actual:** App PWA **v6.47** · AlejandraIA **v1.9.17+31** · WORKER API `1ccf42f8` · WORKER agente `a77bf132`
+**Próxima:** Probar esquemas con obra_id (ver que aparecen en Docs). Análisis de fotos de cuadros eléctricos. Instalar APK v1.9.17 en móvil. Añadir email real a Alberto. Fichajes 8–15: decidir. Foreground service 30+ min. Albarán universal con foto real.
+
+---
+
+## RESUMEN SESIÓN 24/06/2026 (3ª continuación) — Esquemas IA en docs de obra + explorador archivos
+
+### Cambios — commit `a0033a1` ✅
+
+**`alejandra-agente/worker.js`** · deploy `a77bf132` ✅
+
+1. **`TOOL_GENERAR_ESQUEMA` + parámetro `obra_id`**: si se pasa `obra_id`, tras subir los archivos a R2, hace query a `obras` para sacar `empresa_id` e INSERT en `documentos_obra` (tipo='otro', elaborado_por='Alejandra IA'). El mensaje de respuesta añade "📂 Guardado en documentos de la obra".
+
+2. **`TOOL_LISTAR_ESQUEMAS`** (nueva): consulta `documentos_obra` WHERE `elaborado_por='Alejandra IA'`, con JOIN a `obras` para el nombre. Filtro opcional por `obra_id`. Devuelve `url_viewer` y `url_svg` públicas derivadas del `r2_key`.
+
+3. **`TOOL_BORRAR_ESQUEMA`** (nueva): borra de R2 el `.html` y el `.svg` correspondiente, y el registro en `documentos_obra`. Se puede pasar `documento_id` para búsqueda más rápida.
+
+4. Ambas nuevas tools añadidas a `app`, `completo` e `ingenieria` en `TOOLS_POR_EXPERTO`.
+
+**`worker.js` (principal)** · deploy `1ccf42f8` ✅
+
+1. **`getDocumentosObra`**: nuevo filtro `?elaborado_por=` para separar docs PRL de esquemas IA.
+2. **`eliminarDocumentoObra`**: si `r2_key.startsWith('esquemas/')`, borra también de R2 (`.html` + `.svg`) antes de eliminar el registro en BD. Non-fatal (try/catch).
+
+**`index.html`** · v6.47 ✅
+
+1. **`docsCargar()`**: añade `/documentos-obra?obra_id=X&elaborado_por=Alejandra+IA` a las llamadas en paralelo.
+2. Sección **"📐 ESQUEMAS IA"** al final del contenido Docs: separador visual, lista de esquemas con botones:
+   - 🔗 Abrir (abre `url_viewer` en nueva pestaña)
+   - ✏️ Renombrar (`docsEsquemaRenombrar`: prompt + PUT `/documentos-obra/{id}`)
+   - 🗑️ Eliminar (`docsEsquemaBorrar`: confirm + DELETE `/documentos-obra/{id}` → borra R2 + BD)
+3. Estado vacío actualizado: solo muestra "Sin documentos" si no hay carpetas, archivos, notas NI esquemas.
+
+### Cómo usar
+
+**Para que el esquema aparezca en Docs de la app:**
+- "Hazme un esquema de arranque DOL para motor bomba de la obra 5" → Alejandra pedirá confirmación y llamará `generar_esquema_electrico` con `obra_id=5`
+- O directamente: "genera el esquema para la obra 5" → Alejandra pasa `obra_id=5`
+
+**Para gestionar esquemas desde la app:**
+- Ir a Docs de la obra → sección "📐 ESQUEMAS IA" al final
+- 🔗 → abre el visor interactivo (zoom, impresión, marca IEC 60617)
+- ✏️ → renombra el título que aparece en la lista
+- 🗑️ → elimina de R2 (HTML + SVG) y de la BD
+
+**Para que Alejandra los gestione:**
+- "Muéstrame los esquemas de la obra 5" → `listar_esquemas` con `obra_id=5`
+- "Borra el esquema del motor bomba" → Alejandra lista + `borrar_esquema` con el `r2_key`
+
+---
+
+## RESUMEN SESIÓN 24/06/2026 (continuación) — Fix DOL SVG server-side + deploy + test E2E
+
+### Problema resuelto
+La generación de esquemas DOL fallaba porque el modelo intentaba incrustar el SVG completo (3000-5000 chars) dentro del JSON de la tool call, excediendo `maxTokens`. El modelo solo ejecutaba `pensar` y devolvía "He ejecutado 1 acción(es)" sin generar el esquema.
+
+### Cambios — `alejandra-agente/worker.js` · deploy `6ba9c884` ✅
+
+1. **`TOOL_GENERAR_ESQUEMA` rediseñada con MODO A / MODO B:**
+   - **MODO A** (nuevo, recomendado): `tipo` + `componentes: {contactor, motor, guardamotor, ...}` → SVG generado server-side
+   - **MODO B** (anterior): `svg_content` con SVG completo manual (para circuitos no estándar)
+   - `svg_content` ya NO es `required` — solo `titulo` y `tipo` son obligatorios
+   - `componentes` como nuevo campo con 11 subpropiedades documentadas
+
+2. **Instrucción NEXUS actualizada:**
+   - Para DOL y arranques estándar → SIEMPRE usar `componentes`, NUNCA `svg_content`
+   - Workflow actualizado en 5 pasos explícitos con indicación de modo A/B
+
+### Test E2E verificado ✅
+- Routing: `experto: ingenieria` ✅
+- Llama `generar_esquema_electrico` 2 veces (potencia_motor + mando_motor) con `componentes` ✅
+- 6 archivos creados en R2 `esquemas/` (3 HTML viewer + 3 SVG puro) verificados ✅
+- SVG descargado y verificado: 900×660px, IEC 60617, L1/L2/L3, QF1, KM1, RTE1, M1 ✅
+- Cálculo automático ITC-BT-47: In=15.2A → cable mín. 2.5mm² Cu ✅
+
+### ✅ IMPLEMENTADO — Compartir esquemas
+
+3 cambios en `alejandra-agente/worker.js`:
+
+1. **Endpoint público `/api/esquemas/view/<archivo>`** — sirve R2 `esquemas/` sin auth → URL directa para descargar/WhatsApp
+2. **`enviar_email` + adjunto SVG** — si `r2_key` es `.svg` → adjunta como fichero `image/svg+xml` en Resend; si es `.html` → HTML inline (ya funciona)
+3. **`enviar_telegram_informe` + SVG** — si `r2_key` termina en `.svg` → `sendDocument` con MIME `image/svg+xml` (Telegram previsualiza inline)
+4. **`generar_esquema_electrico`** — devolver `url_viewer` y `url_svg` públicas en la respuesta del tool
+- WhatsApp: el usuario copia la URL pública y la pega (sin API Meta = no hay alternativa)
 
 ---
 
