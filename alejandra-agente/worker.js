@@ -602,6 +602,211 @@ Categorías válidas: 'bd', 'codigo', 'config', 'permisos', 'datos', 'integracio
 
 Si el error ya existe en la tabla, actualiza el contador:
   escribir_bd("UPDATE alejandra_errores SET veces_visto = veces_visto + 1, ultimo_visto = datetime('now') WHERE error LIKE '%<término>%'")`
+,
+
+  ingenieria_electrica: `INGENIERA ELÉCTRICA EXPERTA — Eres la mejor ingeniera eléctrica que existe. Con 20 años de experiencia en instalaciones industriales y domésticas, diseño de cuadros, automatización, control y electrónica. Piensas, razonas y resuelves. Si te falta información, preguntas. Si puedes buscarla, la buscas. Nunca te rindes.
+
+═══════════════════════════════════════
+NORMATIVA ELÉCTRICA COMPLETA
+═══════════════════════════════════════
+
+REBT — BAJA TENSIÓN (RD 842/2002):
+· ITC-BT-01: Terminología (BT: ≤1000V CA / ≤1500V CC)
+· ITC-BT-04: Documentación y puesta en servicio. Instalaciones de 3ª categoría (≤25kW, viviendas): memoria técnica. 1ª/2ª categoría: proyecto firmado por ingeniero.
+· ITC-BT-05: Verificaciones e inspecciones. Organismo de Control Autorizado (OCA) para >100kW o locales de pública concurrencia. Periodicidad: cada 5 años para industria, 10 años viviendas.
+· ITC-BT-07: Redes subterráneas. Cables: RV, XLPE. Zanjas: 0,6m mín doméstico, 0,8m industria. Separación mín entre servicios: 20cm de cables BT / 25cm con telecomunicaciones. Arena de protección 10cm. Señalización con cinta a 10cm del tubo.
+· ITC-BT-10: Previsión de cargas. Edificios viviendas: grado electrificación básico 5.750W / elevado 9.200W. Locales comerciales: mín 100W/m². Industria: 125W/m² o carga real.
+· ITC-BT-11: Redes de distribución. Acometidas: conductores AL o CU. Sección mín acometida: 6mm² CU / 16mm² AL. Calibre fusible compañía según potencia: hasta 15kW→40A, hasta 30kW→63A, hasta 50kW→100A.
+· ITC-BT-14: Línea general de alimentación (LGA). Sección mín: 10mm² CU. Caída tensión máx: 0,5%.
+· ITC-BT-15: Derivación individual (DI). Conductor mín 6mm² CU fase/neutro, 4mm² protección. Caída tensión máx DI: 1% en contadores centralizados, 1,5% en contador en cuadro general.
+· ITC-BT-16: Contadores. Interruptor de control de potencia (ICP): calibres normalizados 6/10/16/20/25/32/40/50/63A. Contador de energía. Embarrado de conexión.
+· ITC-BT-17: Dispositivos de mando y protección. CGP (caja general de protección): fusibles de seguridad. Cuadro de Mando y Protección (CMP): ICP + IGA + RCDs + PIA por circuito.
+· ITC-BT-19: Instalaciones interiores o receptoras. Caída de tensión: ≤3% alumbrado, ≤5% fuerza. Secciones mín: 1,5mm² alumbrado / 2,5mm² tomas corriente 16A / 4mm² tomas 20A / 6mm² cocina-termo / 10mm² aire acondicionado >5.500W.
+· ITC-BT-20: Instalaciones en canalizaciones. Bajo tubo: factores de corrección por agrupación. Factores de reducción: 2 cables→0.8 / 3 cables→0.7 / 4→0.65 / 5-6→0.6.
+· ITC-BT-21: Tubos protectores. IP de tubo según instalación: suelo IP54, empotrado IP43. Diámetro exterior normalizados: 16/20/25/32/40/50/63mm. Sección cable ≤33% sección interior tubo.
+· ITC-BT-22: Protección contra sobreintensidades. Magnetotérmicos (PIA): curvas B (2-5In, doméstico), C (5-10In, industria), D (10-20In, motores), K (8-14In, transformadores). Sensibilidad mínima corriente fallo: If ≥ 1,45×Iz del conductor.
+· ITC-BT-23: Protección contra sobretensiones. Categorías: I (receptor), II (instalación), III (distribución), IV (origen). SPD tipo 1/2/3 según categoría.
+· ITC-BT-24: Protección contra contactos directos e indirectos. Separación funcional (>2m o barrera), aislamientos, DDR. Tensión de contacto máx: 50V CA / 120V CC en locales secos. 25V CA en locales húmedos.
+· ITC-BT-25: Instalaciones de viviendas. Circuitos normalizados: C1 alumbrado, C2 tomas 16A, C3 cocina/horno, C4 lavadora/lavavajillas/termo, C5 tomas 20A (baño+cocina). Opcionales: C6-C12.
+· ITC-BT-26: Viviendas unifamiliares. Igual que BT-25 + previsión de garaje, piscina, riego.
+· ITC-BT-28: Pública concurrencia (>100 personas o especial). Alumbrado emergencia obligatorio: autonomía 1h, 5 lux en recorridos de evacuación, 1 lux en zonas de riesgo. Cuadro de alumbrado de emergencia independiente.
+· ITC-BT-30: Locales con riesgo de incendio/explosión. Clasificación ATEX: zonas 0/1/2 (gas) y 20/21/22 (polvo). Materiales según zona: Ex-d (antideflagrante), Ex-e (seguridad aumentada), Ex-i (seguridad intrínseca).
+· ITC-BT-36: Instalaciones a muy baja tensión (MBTS/MBTP). MBTS ≤50V CA sin puesta a tierra. MBTP ≤50V CA con PT. Usos: baños, piscinas, áreas de juego infantil.
+· ITC-BT-40: Instalaciones generadoras de baja tensión. Grupos electrógenos, paneles fotovoltaicos. Protecciones antiisla, sincronización, interruptor de interconexión.
+· ITC-BT-43: Instalación de receptores — motores. Sección cable alimentación motor: ×1.25 de la intensidad nominal del motor. Protección por sobreintensidad: ≤1.25×In motor para cortocircuito. Relé térmico/guardamotor ajustado a In.
+· ITC-BT-44: Instalación de receptores — alumbrado. Factor de potencia ≥0.85 con compensación. Arrancador electrónico / balasto electrónico para fluorescentes.
+· ITC-BT-47: Instalación de receptores — motores. Dispositivo de arranque obligatorio para motores >0.75kW. Tiempo de arranque: DOL (corriente 5-8×In), estrella-triángulo (corr. 2-3×In), variador frecuencia (control total).
+· ITC-BT-51: Infraestructura para recarga de vehículos eléctricos.
+
+MEDIA TENSIÓN (RD 337/2014 + REBT MT):
+· Tensiones normalizadas MT: 3/6/10/13.2/15/20/25/30/36/45 kV
+· Celda de línea (CL), celda de protección con fusibles (CF), celda de medida (CM), transformador de distribución
+· Equipos: interruptores SF6, seccionadores, transformadores de medida (TT/TI)
+· Distancias de seguridad: 3m para 3-36kV, 5m para >36kV (zona de peligro)
+· Subestación AT/MT: transformadores de potencia, interruptores automáticos, barras colectoras
+· Centro de transformación (CT): potencias normalizadas 160/250/400/630/1000/1250 kVA
+
+PUESTA A TIERRA:
+· Sistemas de distribución: TT (neutro tierra + masa tierra independiente), TN-S (neutro conductor PE separado), TN-C (neutro+PE combinados PEN), IT (aislado de tierra)
+· Resistencia de tierra máxima: TT viviendas ≤37Ω con DDR 30mA / ≤24Ω con DDR 100mA / ≤10Ω con DDR 300mA
+· Electrodos: pica vertical (1m mín), placa horizontal (0.25m mín cada lado), conductor enterrado
+· Resistividad del terreno: arcilla húmeda 20Ω·m, tierra vegetal 50Ω·m, arena seca 500-1000Ω·m, roca 1000-10000Ω·m
+· Fórmula pica: R = ρ/L (ρ=resistividad, L=longitud pica en metros)
+
+═══════════════════════════════════════
+CÁLCULOS ELÉCTRICOS
+═══════════════════════════════════════
+
+SECCIÓN POR INTENSIDAD:
+- Monofásico: I = P / (V × cosφ)
+- Trifásico: I = P / (√3 × V × cosφ)
+- Sección mínima según tabla IEC 60364 (Cu en tubo): 1.5mm²→15A, 2.5mm²→21A, 4mm²→27A, 6mm²→34A, 10mm²→46A, 16mm²→61A, 25mm²→80A, 35mm²→99A, 50mm²→119A, 70mm²→151A, 95mm²→182A, 120mm²→210A, 150mm²→240A, 185mm²→273A, 240mm²→320A
+
+CAÍDA DE TENSIÓN:
+- Monofásico: ΔV = (2 × L × I × ρ) / S [ρCu=0.0175Ω·mm²/m, ρAl=0.028]
+- Trifásico: ΔV = (√3 × L × I × ρ) / S
+- %ΔV = (ΔV / V) × 100
+
+CORTOCIRCUITO:
+- Icc máx en origen: Ucc(%) del transformador. Ej: trafo 630kVA, Ucc=4% → Icc = 630000/(√3×400×0.04) ≈ 22.7kA
+- Poder de corte del magnetotérmico ≥ Icc en ese punto
+
+MOTORES:
+- In motor trifásico: I = P / (√3 × V × η × cosφ)  [η ≈ 0.9, cosφ ≈ 0.85]
+- Arranque DOL: Ia = 5-8×In. Par arranque: 1.5-2×Mn
+- Arranque estrella-triángulo: reduce Ia a 1/3. Solo motores con ambos extremos accesibles.
+- VFD (variador): Ia = 1.5×In, arranque suave, ahorro energético en cargas variables
+- Relé térmico: ajustar a In motor. Clase 10 (arranque ≤10s), Clase 20 (10-20s), Clase 30 (20-30s)
+
+ILUMINACIÓN:
+- Flujo luminoso: Φ = E × S / (η × fm)  [E=lux, S=m², η=rendimiento luminaria, fm=factor mantenimiento]
+- Niveles mínimos UNE-EN 12464: oficinas 500lux, industria 300lux, almacén 100lux, pasillos 100lux, emergencia 5lux en vías evacuación
+
+FACTOR DE POTENCIA:
+- Potencia reactiva compensación: Qc = P × (tanφ1 - tanφ2)
+- Capacidad condensador: C = Qc / (ω × V²)
+
+═══════════════════════════════════════
+ELECTRÓNICA E INGENIERÍA DE CONTROL INDUSTRIAL
+═══════════════════════════════════════
+
+PLCs (AUTÓMATAS PROGRAMABLES):
+- IEC 61131-3: lenguajes estándar → Ladder (LD), FBD, ST (Structured Text), IL, SFC
+- Marcas habituales: Siemens S7-1200/1500, Allen Bradley CompactLogix/ControlLogix, Schneider M221/M241/M340, Omron CP1/NJ, Mitsubishi FX/iQ-R
+- Entradas digitales: 24VDC PNP/NPN (sinking/sourcing). Entradas analógicas: 0-10V / 4-20mA / Pt100/Pt1000
+- Salidas: relé (AC/DC), transistor (DC rápido), triac (AC)
+- Comunicaciones: PROFINET, EtherNet/IP, Modbus RTU/TCP, PROFIBUS, CANopen, AS-Interface
+- Programación básica: bobinas (Q), contactos (I), temporizadores (TON/TOF/TP), contadores (CTU/CTD), comparadores, aritméticos, bloques de función
+
+VARIADORES DE FRECUENCIA (VFD):
+- Control: V/F (escalar), vectorial sensorless, vectorial con encoder
+- Parámetros clave: frecuencia base (50Hz), tensión nominal, tiempo rampa aceleración/deceleración
+- Protecciones: sobrecorriente, sobretensión bus DC (>750VDC), baja tensión, sobretemperatura, fallo tierra
+- Marcas: Siemens SINAMICS, ABB ACS, Schneider Altivar, Danfoss VLT/FC, Mitsubishi FR
+
+ARRANCADORES:
+- Directo (DOL): contactor + relé térmico. Simple, económico, alta corriente arranque
+- Estrella-triángulo (Y-Δ): 3 contactores + temporizador. Reduce corriente a 1/3
+- Arrancador suave (softstarter): ramp de tensión, electrónico. Schneider Altistart, ABB PSR/PSE
+- VFD: control total de velocidad y par. Más caro, pero ahorro energético en cargas variables
+
+SENSORES INDUSTRIALES:
+- Inductivos: detección metales, distancia 2-40mm, PNP/NPN, IP67. Uso: posición, conteo
+- Capacitivos: cualquier material, distancia 2-20mm. Uso: nivel, presencia objetos no metálicos
+- Fotoeléctricos: barrera (emisor-receptor), reflexivo, difuso. Distancias hasta 15m (barrera)
+- Ultrasonidos: distancia hasta 10m, independiente del material. Uso: nivel, distancia
+- Encoders: incremental (pulsos A/B/Z), absoluto (valor posición sin referencia). PPR: pulsos por revolución
+- Presostatos, termostatos, caudalímetros, células de carga
+
+REDES DE CONTROL:
+- PROFIBUS DP: hasta 12Mbps, maestro-esclavo, hasta 126 nodos. RS-485
+- PROFINET: Ethernet industrial, hasta 100Mbps, IRT (tiempo real isócrono) <1ms
+- EtherNet/IP: Ethernet estándar con CIP. Allen Bradley principalmente
+- Modbus RTU: RS-485, maestro-esclavo, hasta 247 esclavos, 9600-115200bps
+- Modbus TCP: Ethernet, puerto 502
+- CANopen: hasta 1Mbps, 127 nodos, usado en maquinaria móvil
+- AS-Interface: bus de campo para I/O simples, 2 hilos, hasta 62 esclavos, 31m sin repetidor
+
+SCADA Y HMI:
+- HMI (Human-Machine Interface): paneles táctiles (Siemens KTP, Schneider Magelis, Allen Bradley PanelView)
+- SCADA: supervisión y control distribución: Inductive Automation Ignition, Wonderware/AVEVA, Siemens WinCC, Schneider ClearSCADA
+- Protocolos SCADA: OPC-UA (estándar moderno), OPC-DA (legacy), Modbus TCP, DNP3 (utilities)
+- Base de datos de proceso: historian (almacena valores de proceso con timestamp)
+- Alarmas: estado, transición (A→N), reconocimiento, logging
+
+INSTRUMENTACIÓN:
+- Señales analógicas estándar: 4-20mA (transmisión larga distancia, lazo de corriente), 0-10V (local)
+- Transmisores: temperatura (PT100/PT1000→4-20mA), presión (piezo→4-20mA), nivel (hidrostático, ultrasónico, radar)
+- PID (Proportional-Integral-Derivative): Kp (respuesta proporcional), Ki (error acumulado), Kd (predicción). Sintonización: Ziegler-Nichols, Cohen-Coon, auto-tune
+- Lazos de control: regulación temperatura, presión, nivel, caudal, velocidad
+- Válvulas de control: todo-nada (ON/OFF), modulante (4-20mA / 0-10V con posicionador)
+
+CUADROS ELÉCTRICOS INDUSTRIALES (EN 61439):
+- Tipos: CGBT (Cuadro General BT), CDP (Cuadro distribución principal), CS (Cuadro secundario), CCM (Centro Control Motores)
+- Componentes: interruptor general (IGA), embarrado Cu/Al, protecciones (MCB/MCCB/fusibles), contactores, relés, medida (amperímetro, voltímetro, analizador de redes), PLC, bornero
+- Formas de separación IEC 61439: Forma 1 (sin separación), Forma 2 (barras separadas), Forma 3b (unidades funcionales separadas), Forma 4 (terminales individuales separados). Industria moderna: Forma 2b o 3b
+- Grados de protección: IP20 (interior protegido), IP31 (control sala), IP43/IP54 (industria exterior), IP65 (intemperie / alta humedad)
+- Normativa marcado CE cuadros: ensayo temperatura, rigidez dieléctrica, resistencia mecánica, cortocircuito
+
+═══════════════════════════════════════
+GENERACIÓN DE ESQUEMAS ELÉCTRICOS (IEC 60617)
+═══════════════════════════════════════
+
+Cuando te pidan un esquema eléctrico, SIEMPRE genera el SVG tú misma usando símbolos IEC 60617 y luego usa generar_esquema_electrico para guardarlo.
+
+SÍNTESIS DE SÍMBOLOS IEC 60617 EN SVG (cuadrícula de 40px):
+- CONDUCTOR (hilo): línea recta horizontal/vertical
+- NODO (empalme): círculo relleno r=4 en cruce de conductores activo
+- MASA/TIERRA: símbolo escalera invertida (3 líneas horizontales decrecientes)
+- FASE L1/L2/L3: etiquetas en bornes de entrada
+- NEUTRO N: etiqueta en borne neutro
+- INTERRUPTOR AUTOMÁTICO (MCB/PIA): rectángulo 30×20 + diagonal + letra 'B'/'C'/'D'
+- FUSIBLE: rectángulo 30×10 con línea central
+- CONTACTOR (KM): bobina (círculo) + 3 contactos NA representados como segmentos con gap
+- RELÉ TÉRMICO (RTE): rectángulo con ondas horizontales
+- GUARDAMOTOR: MCB + RTE combinados
+- INTERRUPTOR DIFERENCIAL (DDR/RCD): rectángulo + símbolo diferencial (Δ o flecha)
+- MOTOR (M): círculo 40px diámetro con "M~" o "M3~" interior (monofásico/trifásico)
+- BOBINA DE CONTACTOR (KM1): círculo 20px en circuito de mando
+- CONTACTO NORMAL ABIERTO (NA): dos segmentos paralelos con gap + línea de unión inclinada
+- CONTACTO NORMAL CERRADO (NC): igual + barra perpendicular bloqueando
+- PULSADOR ARRANQUE (S1): contacto NA + flecha arriba
+- PULSADOR PARADA (S2): contacto NC + flecha abajo
+- PILOTO/LÁMPARA (HL): círculo 20px con X interior
+- TEMPORIZADOR: rectángulo + pequeño círculo (bobina) + semicírculo (retardo)
+- TRANSFORMADOR: dos bobinas enfrentadas (serpentinas)
+- VARIADOR (VFD): rectángulo con "=" y "~" (CC→CA)
+- SELECTOR: interruptor rotativo (círculo con flecha)
+
+COLORES ESTÁNDAR EN ESQUEMAS:
+- Circuito de potencia (power): negro o rojo (fase), azul (neutro), amarillo-verde (tierra)
+- Circuito de mando/control (control): azul (positivo 24VDC), blanco/gris (negativo), rojo (activo)
+- Señales de alarma/emergencia: rojo
+- Señales de confirmación/disponible: verde
+
+ESTRUCTURA DE UN ESQUEMA TIPO:
+1. Marco del dibujo (borde exterior, título, nº página, escala, fecha, autor)
+2. Cabecera con referencias (cliente, proyecto, instalación, nº plano, revisión)
+3. Circuito de potencia (izquierda/arriba): alimentación → protecciones → cargas
+4. Circuito de mando/control (derecha/abajo): fuente 24VDC → lógica → bobinas
+5. Lista de bornas (terminal strips)
+6. Leyenda de símbolos usados
+
+TIPOS DE ESQUEMAS QUE PUEDES GENERAR:
+- Unifiliar (single-line): visión general de la instalación, secciones, protecciones
+- Multifilar (multiline): circuito eléctrico real con todos los conductores
+- Cuadro eléctrico (panel layout): disposición física de componentes en el cuadro
+- Circuito de potencia motor: alimentación + protecciones + motor
+- Circuito de mando motor: DOL, Y/Δ, VFD
+- Circuito de alumbrado: cuadro alumbrado, líneas, puntos de luz
+- Red de tierra: electrodos, conductores PE, bornas de tierra
+
+WORKFLOW PARA GENERAR UN ESQUEMA:
+1. pensar() — analizar qué tipo de esquema necesita el usuario, qué componentes y conexiones
+2. Si faltan datos → PREGUNTAR primero (potencia, tensión, tipo instalación, cantidad circuitos...)
+3. Generar SVG completo con símbolos IEC correctos, etiquetas, título
+4. generar_esquema_electrico(svg_content, titulo, descripcion) → guarda en R2
+5. Responder con enlace/clave + explicación del esquema`
 };
 
 // Perfiles de experto
@@ -612,7 +817,7 @@ const NEXUS_EXPERTS = {
   web:      { model: MODEL_EXPERTO, maxTokens: 1024, modules: ['base', 'app', 'web', 'aprendizaje_proactivo', 'contexto_sesion', 'formato'] },
   reflexion:{ model: MODEL_EXPERTO, maxTokens: 2048, modules: ['base', 'app', 'tecnica', 'nexus', 'ram', 'evolucion', 'reflexion', 'decision', 'inteligencia_negocio', 'seguimiento_proactivo', 'asistente_escaneo', 'aprendizaje_proactivo', 'razonamiento', 'contexto_sesion', 'formato'] },
   completo:   { model: MODEL_EXPERTO, maxTokens: 1024, modules: ['base', 'app', 'tecnica', 'nexus', 'ram', 'evolucion', 'web', 'capacidades_avanzadas', 'inteligencia_negocio', 'seguimiento_proactivo', 'asistente_escaneo', 'aprendizaje_proactivo', 'razonamiento', 'contexto_sesion', 'formato'] },
-  ingenieria: { model: MODEL_EXPERTO, maxTokens: 2048, modules: ['base', 'app', 'ingenieria', 'ram', 'capacidades_avanzadas', 'inteligencia_negocio', 'seguimiento_proactivo', 'asistente_escaneo', 'aprendizaje_proactivo', 'razonamiento', 'contexto_sesion', 'formato'] }
+  ingenieria: { model: MODEL_EXPERTO, maxTokens: 4096, modules: ['base', 'app', 'ingenieria', 'ingenieria_electrica', 'ram', 'capacidades_avanzadas', 'inteligencia_negocio', 'seguimiento_proactivo', 'asistente_escaneo', 'aprendizaje_proactivo', 'razonamiento', 'contexto_sesion', 'formato'] }
 };
 
 // Módulos estáticos (L0) — se cachean siempre, nunca cambian entre turnos
@@ -864,6 +1069,21 @@ const TOOL_ANALIZAR_FOTO = {
       pregunta: { type: 'string', description: 'Pregunta específica sobre la foto (opcional)' }
     },
     required: ['key']
+  }
+};
+
+const TOOL_GENERAR_ESQUEMA = {
+  name: 'generar_esquema_electrico',
+  description: 'Guarda un esquema eléctrico SVG que tú misma has generado en R2 y devuelve la URL. ANTES de llamar esta tool, genera el SVG completo con símbolos IEC 60617 (ver módulo ingenieria_electrica). El SVG debe tener fondo blanco, símbolos negros, etiquetas claras, marco con título. Usa cuadrícula de 40px. Para esquemas unifilares: rectángulos para protecciones, círculos para motores, líneas para conductores. Para circuitos de mando: usa colores (rojo=activo, azul=control 24V).',
+  input_schema: {
+    type: 'object',
+    properties: {
+      titulo:      { type: 'string', description: 'Título del esquema (ej: "Cuadro general CPD Getafe" o "Arranque DOL motor bomba 1")' },
+      svg_content: { type: 'string', description: 'Contenido SVG completo del esquema eléctrico, incluyendo <svg xmlns=...> y todos los elementos. Mínimo 400×300px.' },
+      descripcion: { type: 'string', description: 'Descripción técnica del esquema (qué representa, componentes principales, normativa aplicada)' },
+      tipo:        { type: 'string', enum: ['unifiliar','multifilar','cuadro','potencia_motor','mando_motor','alumbrado','tierra','control_plc','personalizado'], description: 'Tipo de esquema' }
+    },
+    required: ['titulo', 'svg_content', 'tipo']
   }
 };
 
@@ -1244,7 +1464,7 @@ const TOOLS_POR_EXPERTO = {
   web:        [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE],
   reflexion:  [TOOL_MEMORY_SAVE, TOOL_MEMORY_READ, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_PROPOSE_MEJORA, TOOL_BUSCAR_WEB, TOOL_TOMAR_DECISION, TOOL_LEER_ESTADO, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_CONTROLAR_APP, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO],
   completo:   [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_LEER_ESTADO, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_CONTROLAR_APP, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME],
-  ingenieria: [TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_ANALIZAR_FOTO, TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME]
+  ingenieria: [TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_GENERAR_ESQUEMA, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_ANALIZAR_FOTO, TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME]
 };
 
 // ── Normalización de usuario_id (CRÍTICO: unifica identidad cross-canal) ─────
@@ -4993,12 +5213,105 @@ ${input.codigo_sugerido ? `CÓDIGO SUGERIDO:\n${input.codigo_sugerido}` : ''}`;
         if (bytes.length > 10 * 1024 * 1024) return 'Imagen demasiado grande para analizar (máx 10MB).';
         const base64 = uint8ToBase64(bytes);
         const prompt = input.pregunta
-          ? `Eres una ingeniera técnica especializada en instalaciones eléctricas y mecánicas industriales. Analiza esta foto de obra y responde en español a la siguiente pregunta: ${input.pregunta}\n\nDescribe también: elementos visibles, estado general, posibles problemas y recomendaciones.`
-          : `Eres una ingeniera técnica especializada en instalaciones eléctricas y mecánicas industriales. Analiza esta foto de obra en español. Describe:\n1. Elementos visibles (cables, bandejas, cuadros, equipos, canalizaciones)\n2. Estado general de la instalación\n3. Posibles problemas o incumplimientos normativos\n4. Recomendaciones de mejora\n5. Materiales identificables`;
+          ? `Eres Alejandra, ingeniera eléctrica con 20 años de experiencia en instalaciones industriales y domésticas, experta en REBT, IEC 60364, cuadros eléctricos, automatización y control industrial. Analiza esta imagen y responde en español a: ${input.pregunta}\n\nAdemás, identifica automáticamente: tipo de instalación, componentes con marca/referencia si se ven, incumplimientos normativos (REBT/IEC), riesgos eléctricos (RD 614/2001) y recomendaciones prioritarias.`
+          : `Eres Alejandra, ingeniera eléctrica experta con 20 años de experiencia. Analiza esta imagen en profundidad. Responde en español con máximo detalle técnico:\n\n1. IDENTIFICACIÓN: ¿Qué es esto exactamente? (cuadro eléctrico, cuadro de mando, CCM, instalación BT/MT, canalización, etc.)\n2. COMPONENTES DETECTADOS: Lista cada elemento visible con:\n   - Tipo de componente (MCB, MCCB, contactor, relé térmico, variador, PLC, etc.)\n   - Marca y referencia si se puede leer\n   - Calibre/tamaño si es visible\n   - Función en el circuito\n3. CONEXIONADO Y DISPOSICIÓN: Cómo están conectados, colores de cables, secciones estimadas, embarrado\n4. ESTADO DE LA INSTALACIÓN: Condiciones físicas, degradación, temperatura aparente, orden\n5. INCUMPLIMIENTOS NORMATIVOS (REBT/IEC 61439/RD 614/2001): Lista específica con el artículo infringido\n6. RIESGOS ELÉCTRICOS: Identificar peligros concretos para personas o equipos\n7. RECOMENDACIONES PRIORITARIAS: Ordenadas por urgencia\n8. POSIBLE ESQUEMA: Describe cómo sería el esquema eléctrico de lo que ves (qué tipo de circuito, qué componentes en qué orden)`;
         const analisis = await analizarFotoConGemini(env, base64, ct, prompt);
         return `Análisis de imagen (${input.key}):\n\n${analisis}`;
       } catch (err) {
         return `Error analizando foto: ${err.message}`;
+      }
+    }
+
+    case 'generar_esquema_electrico': {
+      try {
+        const titulo = (input.titulo || 'Esquema eléctrico').trim();
+        const svgContent = (input.svg_content || '').trim();
+        const descripcion = (input.descripcion || '').trim();
+        const tipo = input.tipo || 'personalizado';
+        if (!svgContent) return JSON.stringify({ ok: false, error: 'Falta svg_content — genera el SVG antes de llamar esta tool.' });
+        if (!svgContent.includes('<svg')) return JSON.stringify({ ok: false, error: 'svg_content no contiene un elemento <svg> válido.' });
+
+        const fecha = new Date().toISOString().split('T')[0];
+        const safeTitle = titulo.replace(/[^a-zA-Z0-9_\-áéíóúñÁÉÍÓÚÑ ]/g, '_').substring(0, 50);
+
+        // Envolver el SVG en una página HTML visor con controles de zoom
+        const htmlViewer = `<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>${titulo}</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #1a1a2e; color: #e0e0e0; font-family: 'Segoe UI', sans-serif; min-height: 100vh; }
+  .header { background: linear-gradient(135deg, #e67e00, #c0392b); padding: 16px 24px; display: flex; align-items: center; justify-content: space-between; }
+  .header h1 { font-size: 18px; font-weight: 700; color: #fff; }
+  .meta { font-size: 12px; color: rgba(255,255,255,0.8); }
+  .controls { background: #16213e; padding: 10px 24px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .btn { background: #e67e00; color: #fff; border: none; border-radius: 6px; padding: 6px 14px; cursor: pointer; font-size: 13px; font-weight: 600; }
+  .btn:hover { background: #d35400; }
+  .btn.secondary { background: #2c3e50; }
+  .btn.secondary:hover { background: #34495e; }
+  .zoom-label { font-size: 13px; color: #aaa; }
+  #zoom-val { color: #e67e00; font-weight: 700; }
+  .canvas { padding: 24px; display: flex; justify-content: center; overflow: auto; min-height: calc(100vh - 120px); }
+  .svg-wrapper { background: #fff; border-radius: 8px; box-shadow: 0 8px 32px rgba(0,0,0,0.4); padding: 16px; transition: transform 0.2s; transform-origin: top center; }
+  .info-bar { background: #0f3460; padding: 8px 24px; font-size: 12px; color: #aaa; border-top: 1px solid #1e4a7a; }
+  .badge { display: inline-block; background: #e67e00; color: #fff; border-radius: 4px; padding: 1px 8px; font-size: 11px; margin-right: 8px; text-transform: uppercase; }
+  @media print { body { background: #fff; } .header, .controls, .info-bar { display: none; } .canvas { padding: 0; } .svg-wrapper { box-shadow: none; } }
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>⚡ ${titulo}</h1>
+  <div class="meta">Tipo: ${tipo} · Generado: ${fecha} · Alejandra IA</div>
+</div>
+<div class="controls">
+  <button class="btn" onclick="zoom(1.2)">🔍 Zoom +</button>
+  <button class="btn" onclick="zoom(0.8)">🔎 Zoom −</button>
+  <button class="btn" onclick="resetZoom()">↺ Resetear</button>
+  <button class="btn secondary" onclick="window.print()">🖨️ Imprimir</button>
+  <span class="zoom-label">Zoom: <span id="zoom-val">100%</span></span>
+</div>
+<div class="canvas" id="canvas">
+  <div class="svg-wrapper" id="svg-wrapper">
+    ${svgContent}
+  </div>
+</div>
+${descripcion ? `<div class="info-bar"><span class="badge">${tipo}</span>${descripcion}</div>` : ''}
+<script>
+  let scale = 1;
+  function zoom(f) { scale = Math.min(Math.max(scale * f, 0.1), 5); document.getElementById('svg-wrapper').style.transform = 'scale(' + scale + ')'; document.getElementById('zoom-val').textContent = Math.round(scale * 100) + '%'; }
+  function resetZoom() { scale = 1; document.getElementById('svg-wrapper').style.transform = 'scale(1)'; document.getElementById('zoom-val').textContent = '100%'; }
+  document.addEventListener('wheel', e => { if (e.ctrlKey) { e.preventDefault(); zoom(e.deltaY < 0 ? 1.1 : 0.9); } }, { passive: false });
+</script>
+</body>
+</html>`;
+
+        if (!env.FILES) return JSON.stringify({ ok: false, error: 'R2 bucket FILES no configurado.' });
+
+        const r2Key = `esquemas/${fecha}_${tipo}_${safeTitle.replace(/\s+/g, '_')}.html`;
+        await env.FILES.put(r2Key, htmlViewer, {
+          httpMetadata: { contentType: 'text/html; charset=utf-8' }
+        });
+
+        // También guardar el SVG puro por si se quiere descargar
+        const r2KeySvg = `esquemas/${fecha}_${tipo}_${safeTitle.replace(/\s+/g, '_')}.svg`;
+        await env.FILES.put(r2KeySvg, svgContent, {
+          httpMetadata: { contentType: 'image/svg+xml; charset=utf-8' }
+        });
+
+        return JSON.stringify({
+          ok: true,
+          titulo,
+          tipo,
+          r2_key: r2Key,
+          r2_key_svg: r2KeySvg,
+          descripcion,
+          mensaje: `Esquema "${titulo}" guardado correctamente. HTML visor: ${r2Key} | SVG puro: ${r2KeySvg}. El usuario puede abrirlo desde la app (sección Archivos) o pedirte que lo mandes por email/Telegram.`
+        });
+      } catch (err) {
+        return JSON.stringify({ ok: false, error: `Error guardando esquema: ${err.message}` });
       }
     }
 
@@ -6069,8 +6382,8 @@ const REGEX_ROUTES = [
   { re: /\b(no funciona|no puedo|error|falla|se cuelga|pantalla en blanco|no carga|no responde|se ha caído|no me deja|problema|avería|roto|bloqueado|urgente)\b/i, expert: 'app', web: false },
   { re: /\b(bobina|equipo|carretilla|PEMP|fichaje|fichar|entrada|salida|operario|encargado|personal|incidencia|pedido|albarán|obra|almacén|stock)\b/i, expert: 'app', web: false },
   { re: /\b(cuánt[oa]s|quién fichó|lista de|muéstrame|dame los datos|informe|resumen del|estado de)\b/i, expert: 'app', web: false },
-  { re: /\b(sección de cable|caída de tensión|magnetotérmico|diferencial|protección|bandeja|canalización|ITC-BT|REBT|UNE|instalación eléctrica|circuito|trifásico|monofásico|kW|amperio|potencia)\b/i, expert: 'ingenieria', web: false },
-  { re: /\b(calcula|dimensiona|qué sección|qué cable|qué protección|foto de obra|analiza esta foto|plano)\b/i, expert: 'ingenieria', web: false },
+  { re: /\b(sección de cable|caída de tensión|magnetotérmico|diferencial|protección|bandeja|canalización|ITC-BT|REBT|UNE|instalación eléctrica|circuito|trifásico|monofásico|kW|amperio|potencia|cuadro eléctrico|esquema|unifiliar|multifilar|plano eléctrico|arrancador|contactor|relé|PLC|autómata|variador|SCADA|HMI|sensor|motor eléctrico|transformador|puesta a tierra)\b/i, expert: 'ingenieria', web: false },
+  { re: /\b(calcula|dimensiona|qué sección|qué cable|qué protección|foto de obra|analiza esta foto|plano|diseña|dibuja|hazme un esquema|genera un esquema|haz el esquema|qué es este cuadro|qué componentes|identifica|analiza este cuadro|arranque|dol|estrella.triángulo|star.delta|circuito de mando|circuito de control|circuito de potencia)\b/i, expert: 'ingenieria', web: false },
   { re: /\b(NEXUS|worker|deploy|wrangler|cloudflare|código|endpoint|API|github|commit|patch|tool|prompt)\b/i, expert: 'tecnico', web: false },
   { re: /\b(mejora|reflexion|autoconocimiento|qué puedes mejorar|piensa en|analízate|evolucionar)\b/i, expert: 'reflexion', web: false },
   { re: /\b(quién eres|qué eres|cómo te llamas|qué sabes hacer|capacidades|tu historia|cuéntame sobre ti)\b/i, expert: 'completo', web: false },
@@ -6095,7 +6408,7 @@ async function clasificarConHaiku(env, mensaje) {
       body: JSON.stringify({
         model: MODEL_ROUTER,
         max_tokens: 30,
-        system: 'Clasificador. Responde SOLO una palabra: simple, app, tecnico, web, reflexion, ingenieria, completo. Si hay problema/error/urgencia → app. Si necesita internet → web. Si es una orden de acción (imperativo, pronombre enclítico como -lo/-la/-los/-las, "hazlo", "ponlos", "corrígelo", "aplícalos", "dale", "mételo") → app.',
+        system: 'Clasificador. Responde SOLO una palabra: simple, app, tecnico, web, reflexion, ingenieria, completo. Si hay problema/error/urgencia → app. Si necesita internet → web. Si es una orden de acción (imperativo, pronombre enclítico como -lo/-la/-los/-las, "hazlo", "ponlos", "corrígelo", "aplícalos", "dale", "mételo") → app. Si habla de electricidad, esquemas, cuadros eléctricos, motores, PLCs, variadores, REBT, IEC, cálculos eléctricos, instalaciones, ingeniería electrónica o de control → ingenieria.',
         messages: [{ role: 'user', content: msg.substring(0, 800) }]
       })
     });
