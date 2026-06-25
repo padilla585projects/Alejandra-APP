@@ -4711,6 +4711,8 @@ export default {
           if (method === 'DELETE') return await eliminarCertLinea(_certLid, request, env);
         }
       }
+      // -- Dashboard Global Multi-Obra (NEW-68) ---------------------------------
+      if (path === '/dashboard-global' && method === 'GET') return await getDashboardGlobal(request, env);
       // â”€â”€ RFIs â€” Consultas TÃ©cnicas (NEW-34) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
       if (path === '/rfis'                  && method === 'GET')  return await getRfis(request, env);
       if (path === '/rfis'                  && method === 'POST') return await crearRfi(request, env);
@@ -16424,4 +16426,89 @@ async function eliminarCertLinea(id, request, env) {
   if (!auth?.empresa_id) return err('No autorizado', 403);
   await env.DB.prepare(`DELETE FROM certificaciones_lineas WHERE id=? AND empresa_id=?`).bind(id, auth.empresa_id).run();
   return json({ ok: true });
+}
+
+// ============================================================
+// NEW-68  Dashboard Global Multi-Obra / Company Executive Dashboard
+// ============================================================
+
+async function getDashboardGlobal(request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth?.empresa_id) return err('No autorizado', 403);
+  const eid = auth.empresa_id;
+
+  // Parallel fetch of all aggregation queries
+  const [
+    obrasR, fasesR, hitosR, rfisR, incR, punchR,
+    accionR, riesgosR, ncrsR, ocsR, certR, cierreR, instR
+  ] = await Promise.all([
+    env.DB.prepare(`SELECT id, nombre, estado, fecha_fin_prevista FROM obras WHERE empresa_id=? AND estado NOT IN ('finalizada','cancelada') ORDER BY nombre`).bind(eid).all(),
+    env.DB.prepare(`SELECT obra_id, estado, porcentaje FROM fases_obra WHERE empresa_id=?`).bind(eid).all().catch(()=>({results:[]})),
+    env.DB.prepare(`SELECT obra_id, estado, fecha, retrasado FROM hitos_obra WHERE empresa_id=?`).bind(eid).all().catch(()=>({results:[]})),
+    env.DB.prepare(`SELECT obra_id, estado FROM rfis WHERE empresa_id=?`).bind(eid).all().catch(()=>({results:[]})),
+    env.DB.prepare(`SELECT obra_id, estado, tipo FROM incidencias WHERE empresa_id=?`).bind(eid).all().catch(()=>({results:[]})),
+    env.DB.prepare(`SELECT obra_id, estado, vencido FROM punch_list WHERE empresa_id=?`).bind(eid).all().catch(()=>({results:[]})),
+    env.DB.prepare(`SELECT obra_id, estado, fecha_limite FROM accion_items WHERE empresa_id=?`).bind(eid).all().catch(()=>({results:[]})),
+    env.DB.prepare(`SELECT obra_id, estado, score FROM riesgos_obra WHERE empresa_id=?`).bind(eid).all().catch(()=>({results:[]})),
+    env.DB.prepare(`SELECT obra_id, estado, gravedad FROM ncrs_obra WHERE empresa_id=?`).bind(eid).all().catch(()=>({results:[]})),
+    env.DB.prepare(`SELECT obra_id, estado, importe FROM ordenes_cambio WHERE empresa_id=?`).bind(eid).all().catch(()=>({results:[]})),
+    env.DB.prepare(`SELECT obra_id, importe_certificado, importe_liquido, estado FROM certificaciones WHERE empresa_id=?`).bind(eid).all().catch(()=>({results:[]})),
+    env.DB.prepare(`SELECT obra_id, estado FROM cierre_obra_items WHERE empresa_id=?`).bind(eid).all().catch(()=>({results:[]})),
+    env.DB.prepare(`SELECT obra_id, estado FROM instrucciones_obra WHERE empresa_id=?`).bind(eid).all().catch(()=>({results:[]})),
+  ]);
+
+  const hoy = new Date().toISOString().slice(0, 10);
+  const obras = obrasR.results || [];
+
+  // Per-obra aggregation
+  const obraStats = obras.map(o => {
+    const oid = o.id;
+    const fases    = (fasesR.results||[]).filter(x=>x.obra_id===oid);
+    const hitos    = (hitosR.results||[]).filter(x=>x.obra_id===oid);
+    const rfis     = (rfisR.results||[]).filter(x=>x.obra_id===oid);
+    const incs     = (incR.results||[]).filter(x=>x.obra_id===oid);
+    const punch    = (punchR.results||[]).filter(x=>x.obra_id===oid);
+    const acciones = (accionR.results||[]).filter(x=>x.obra_id===oid);
+    const riesgos  = (riesgosR.results||[]).filter(x=>x.obra_id===oid);
+    const ncrs     = (ncrsR.results||[]).filter(x=>x.obra_id===oid);
+    const ocs      = (ocsR.results||[]).filter(x=>x.obra_id===oid);
+    const certs    = (certR.results||[]).filter(x=>x.obra_id===oid);
+    const cierre   = (cierreR.results||[]).filter(x=>x.obra_id===oid);
+    const inst     = (instR.results||[]).filter(x=>x.obra_id===oid);
+
+    const avgAvance    = fases.length ? Math.round(fases.reduce((s,f)=>s+(f.porcentaje||0),0)/fases.length) : null;
+    const hitosRet     = hitos.filter(h=>h.retrasado||h.estado!=='completado'&&h.fecha&&h.fecha<hoy).length;
+    const rfisAbiertas = rfis.filter(r=>r.estado==='abierta'||r.estado==='en_revision').length;
+    const aiVencidas   = acciones.filter(a=>a.estado!=='cerrado'&&a.fecha_limite&&a.fecha_limite<hoy).length;
+    const riesgosAltos = riesgos.filter(r=>r.estado==='activo'&&(r.score||0)>=6).length;
+    const ncrsAbiertas = ncrs.filter(n=>n.estado!=='cerrada').length;
+    const totalCert    = certs.reduce((s,c)=>s+(c.importe_certificado||0),0);
+    const ocsValor     = ocs.filter(o=>o.estado==='aprobada').reduce((s,o)=>s+(o.importe||0),0);
+    const cierrePct    = cierre.length ? Math.round(cierre.filter(c=>c.estado==='completado'||c.estado==='no_aplica').length/cierre.length*100) : null;
+    const punchAb      = punch.filter(p=>p.estado!=='cerrado').length;
+    const instPend     = inst.filter(i=>i.estado==='emitida'||i.estado==='acuse_recibido').length;
+    const alertas      = hitosRet + rfisAbiertas + aiVencidas + riesgosAltos + ncrsAbiertas + punchAb;
+
+    return {
+      id: oid, nombre: o.nombre, estado: o.estado,
+      avgAvance, hitosRet, rfisAbiertas, aiVencidas, riesgosAltos,
+      ncrsAbiertas, totalCert, ocsValor, cierrePct, punchAb, instPend, alertas
+    };
+  });
+
+  // Company-wide totals
+  const totales = {
+    obras_activas:   obras.length,
+    total_certificado: (certR.results||[]).reduce((s,c)=>s+(c.importe_certificado||0),0),
+    total_liquido:   (certR.results||[]).reduce((s,c)=>s+(c.importe_liquido||0),0),
+    rfis_abiertas:   (rfisR.results||[]).filter(r=>r.estado==='abierta'||r.estado==='en_revision').length,
+    ncrs_abiertas:   (ncrsR.results||[]).filter(n=>n.estado!=='cerrada').length,
+    riesgos_altos:   (riesgosR.results||[]).filter(r=>r.estado==='activo'&&(r.score||0)>=6).length,
+    ai_vencidas:     (accionR.results||[]).filter(a=>a.estado!=='cerrado'&&a.fecha_limite&&a.fecha_limite<hoy).length,
+    hitos_retrasados:(hitosR.results||[]).filter(h=>h.retrasado||h.estado!=='completado'&&h.fecha&&h.fecha<hoy).length,
+    punch_abiertos:  (punchR.results||[]).filter(p=>p.estado!=='cerrado').length,
+    inst_pendientes: (instR.results||[]).filter(i=>i.estado==='emitida'||i.estado==='acuse_recibido').length,
+  };
+
+  return json({ totales, obras: obraStats });
 }

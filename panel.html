@@ -432,6 +432,9 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
     <button class="nav-item active" data-page="dashboard" onclick="navTo('dashboard')">
       <span class="nav-icon">📊</span> Dashboard
     </button>
+    <button class="nav-item" data-page="globalDashboard" onclick="navTo('globalDashboard')">
+      <span class="nav-icon">🌐</span> Dashboard Global
+    </button>
     <button class="nav-item" data-page="obraDetalle" onclick="navTo('obraDetalle')">
       <span class="nav-icon">🏗</span> Cuadro de Mando Obra
     </button>
@@ -2547,6 +2550,20 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
         </div>
       </div>
 
+      <!-- DASHBOARD GLOBAL MULTI-OBRA (NEW-68) -->
+      <div class="page" id="pageGlobalDashboard">
+        <div class="page-title">🌐 Dashboard Global Multi-Obra</div>
+        <div class="page-sub">Vision ejecutiva de todos los proyectos activos — KPIs consolidados de la empresa</div>
+        <div class="tbl-toolbar" style="margin-bottom:14px">
+          <button class="btn btn-primary" onclick="cargarGlobalDashboard()">&#x1F504; Actualizar</button>
+        </div>
+        <div id="gdKpiGlobal" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;margin-bottom:24px"></div>
+        <div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:12px;padding-bottom:6px;border-bottom:2px solid var(--border)">
+          Estado por Proyecto
+        </div>
+        <div id="gdObras"></div>
+      </div>
+
       <!-- REGISTRO DE SUBCONTRATAS (NEW-64) -->
       <div class="page" id="pageSubcontratas">
         <div class="page-title">🏗️ Registro de Subcontratas</div>
@@ -4568,7 +4585,7 @@ document.addEventListener('DOMContentLoaded', () => setTimeout(sidebarRestoreSta
 
 // ── NAVEGACIÓN ─────────────────────────────────────────────────
 const PAGE_TITLES = {
-  dashboard: 'Dashboard', personal: 'Trabajadores', fichajes: 'Fichajes',
+  dashboard: 'Dashboard', globalDashboard: '🌐 Dashboard Global Multi-Obra', personal: 'Trabajadores', fichajes: 'Fichajes',
   turnos: 'Turnos', epis: 'EPIs', carnets: 'Carnets', bobinas: 'Bobinas',
   pemp: 'PEMP', carretillas: 'Carretillas', repostajes: 'Repostajes', herramientas: 'Herramientas',
   seguridad: 'Seguridad', obras: 'Obras', incidencias: 'Incidencias',
@@ -4622,6 +4639,7 @@ const PAGE_TITLES = {
 
 const PAGE_LOADERS = {
   dashboard: cargarDashboard,
+  globalDashboard: cargarGlobalDashboard,
   personal: cargarPersonal,
   fichajes: cargarFichajes,
   turnos: cargarTurnos,
@@ -4729,6 +4747,7 @@ function navTo(page) {
 // Segundos entre auto-refresh por sección. Secciones no listadas = solo visibilitychange.
 const SYNC_INTERVALS = {
   dashboard:     30,
+  globalDashboard: 60,
   fichajes:      20,   // ficha operario → jefe ve en ≤20s
   incidencias:   30,
   pedidos:       30,
@@ -17908,6 +17927,76 @@ async function eliminarRegistroAmbiental(id) {
   const r = await api(`/registro-ambiental/${id}`, 'DELETE');
   if (r?.ok) { showToast('Entrada eliminada', 'success'); tblRegistroAmbiental=null; cargarRegistroAmbiental(); }
   else showToast('Error al eliminar', 'error');
+}
+
+// ── DASHBOARD GLOBAL MULTI-OBRA (NEW-68) ───────────────────────────
+async function cargarGlobalDashboard() {
+  const kpiEl  = document.getElementById('gdKpiGlobal');
+  const obrasEl = document.getElementById('gdObras');
+  if (kpiEl) kpiEl.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:8px">Cargando...</div>';
+  if (obrasEl) obrasEl.innerHTML = '';
+
+  const r = await api('/dashboard-global');
+  if (!r?.totales) { if(kpiEl) kpiEl.innerHTML = '<div style="color:var(--danger)">Error al cargar</div>'; return; }
+
+  const t = r.totales;
+  if (kpiEl) kpiEl.innerHTML = `
+    <div class="kpi-card"><div class="kpi-icon">🏗️</div><div class="kpi-value">${t.obras_activas}</div><div class="kpi-label">Obras activas</div></div>
+    <div class="kpi-card"><div class="kpi-icon">💶</div><div class="kpi-value" style="font-size:14px">${fmtMoney(t.total_certificado)}</div><div class="kpi-label">Total certificado</div></div>
+    <div class="kpi-card"><div class="kpi-icon">💸</div><div class="kpi-value" style="font-size:14px">${fmtMoney(t.total_liquido)}</div><div class="kpi-label">Liquido total</div></div>
+    <div class="kpi-card"><div class="kpi-icon">❓</div><div class="kpi-value" style="color:${t.rfis_abiertas>0?'var(--warning)':'var(--success)'}">${t.rfis_abiertas}</div><div class="kpi-label">RFIs abiertas</div></div>
+    <div class="kpi-card"><div class="kpi-icon">✅</div><div class="kpi-value" style="color:${t.ncrs_abiertas>0?'var(--danger)':'var(--success)'}">${t.ncrs_abiertas}</div><div class="kpi-label">NCRs abiertas</div></div>
+    <div class="kpi-card"><div class="kpi-icon">⚠️</div><div class="kpi-value" style="color:${t.riesgos_altos>0?'var(--danger)':'var(--success)'}">${t.riesgos_altos}</div><div class="kpi-label">Riesgos altos</div></div>
+    <div class="kpi-card"><div class="kpi-icon">📌</div><div class="kpi-value" style="color:${t.ai_vencidas>0?'var(--danger)':'var(--success)'}">${t.ai_vencidas}</div><div class="kpi-label">Acc. vencidas</div></div>
+    <div class="kpi-card"><div class="kpi-icon">🏁</div><div class="kpi-value" style="color:${t.hitos_retrasados>0?'var(--warning)':'var(--success)'}">${t.hitos_retrasados}</div><div class="kpi-label">Hitos retrasados</div></div>
+    <div class="kpi-card"><div class="kpi-icon">📝</div><div class="kpi-value" style="color:${t.punch_abiertos>0?'var(--warning)':'var(--success)'}">${t.punch_abiertos}</div><div class="kpi-label">Punch abiertos</div></div>
+    <div class="kpi-card"><div class="kpi-icon">📋</div><div class="kpi-value" style="color:${t.inst_pendientes>0?'var(--warning)':'var(--success)'}">${t.inst_pendientes}</div><div class="kpi-label">Instr. pendientes</div></div>`;
+
+  // Per-project cards
+  const obras = r.obras || [];
+  if (!obras.length) {
+    if (obrasEl) obrasEl.innerHTML = '<div class="empty-state"><div class="empty-icon">🏗️</div><div class="empty-text">Sin proyectos activos</div></div>';
+    return;
+  }
+
+  // Sort by alertas desc
+  obras.sort((a, b) => (b.alertas || 0) - (a.alertas || 0));
+
+  if (obrasEl) obrasEl.innerHTML = obras.map(o => {
+    const alertColor = o.alertas > 5 ? 'var(--danger)' : o.alertas > 2 ? 'var(--warning)' : 'var(--success)';
+    const avancePct = o.avgAvance !== null ? o.avgAvance : null;
+
+    const kpis = [
+      { icon:'📅', val: avancePct !== null ? avancePct+'%' : '—', lbl:'Avance', col: avancePct !== null ? (avancePct>=70?'var(--success)':avancePct>=40?'var(--warning)':'var(--danger)') : 'var(--muted)' },
+      { icon:'❓', val: o.rfisAbiertas, lbl:'RFIs', col: o.rfisAbiertas>0?'var(--warning)':'var(--muted)' },
+      { icon:'✅', val: o.ncrsAbiertas, lbl:'NCRs', col: o.ncrsAbiertas>0?'var(--danger)':'var(--muted)' },
+      { icon:'⚠️', val: o.riesgosAltos, lbl:'Riesgos', col: o.riesgosAltos>0?'var(--danger)':'var(--muted)' },
+      { icon:'📌', val: o.aiVencidas, lbl:'AI venc.', col: o.aiVencidas>0?'var(--danger)':'var(--muted)' },
+      { icon:'🏁', val: o.hitosRet, lbl:'Hitos ret.', col: o.hitosRet>0?'var(--warning)':'var(--muted)' },
+      { icon:'📝', val: o.punchAb, lbl:'Punch', col: o.punchAb>0?'var(--warning)':'var(--muted)' },
+      { icon:'📋', val: o.instPend, lbl:'Instr.', col: o.instPend>0?'var(--warning)':'var(--muted)' },
+    ].map(k => `<div style="text-align:center;padding:6px;background:var(--surface);border:1px solid var(--border);border-radius:6px">
+      <div style="font-size:14px">${k.icon}</div>
+      <div style="font-weight:800;font-size:16px;color:${k.col}">${k.val}</div>
+      <div style="font-size:10px;color:var(--muted);margin-top:1px">${k.lbl}</div>
+    </div>`).join('');
+
+    return `<div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:14px;border-left:4px solid ${alertColor}">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <div>
+          <div style="font-weight:700;font-size:15px;color:var(--text)">${o.nombre}</div>
+          ${o.totalCert > 0 ? `<div style="font-size:12px;color:var(--muted)">Certificado: <strong style="color:var(--primary)">${fmtMoney(o.totalCert)}</strong>${o.ocsValor > 0 ? ` | OCs aprobadas: <strong>${fmtMoney(o.ocsValor)}</strong>` : ''}</div>` : ''}
+          ${o.cierrePct !== null ? `<div style="font-size:12px;color:var(--muted)">Cierre: <strong>${o.cierrePct}%</strong></div>` : ''}
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:22px;font-weight:900;color:${alertColor}">${o.alertas}</div>
+          <div style="font-size:10px;color:var(--muted)">alertas</div>
+          <button class="btn btn-secondary btn-sm" onclick="navTo('obraDashboard');setTimeout(()=>{const s=document.getElementById('filterDBObra');if(s){s.value=${o.id};cargarObraDashboard();}},300)" style="padding:2px 8px;font-size:10px;margin-top:4px">Ver detalle →</button>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(8,1fr);gap:6px">${kpis}</div>
+    </div>`;
+  }).join('');
 }
 
 // ── REGISTRO DE SUBCONTRATAS (NEW-64) ─────────────────────────────
