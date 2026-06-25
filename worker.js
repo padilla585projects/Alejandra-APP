@@ -4721,6 +4721,14 @@ export default {
         if (method === 'PUT')    return await actualizarVisitaObra(_vid, request, env);
         if (method === 'DELETE') return await eliminarVisitaObra(_vid, request, env);
       }
+      // ── Cobros y Cuentas por Cobrar / Accounts Receivable (NEW-104) ─────────────
+      if (path === '/cobros-cliente' && method === 'GET')  return await getCobrosCliente(request, env);
+      if (path === '/cobros-cliente' && method === 'POST') return await crearCobroCliente(request, env);
+      if (path.startsWith('/cobros-cliente/')) {
+        const _ccId = parseInt(path.split('/cobros-cliente/')[1]);
+        if (method === 'PUT')    return await actualizarCobroCliente(_ccId, request, env);
+        if (method === 'DELETE') return await eliminarCobroCliente(_ccId, request, env);
+      }
       // ── Facturas de Proveedores / Supplier Invoice Tracking (NEW-103) ───────────
       if (path === '/facturas-proveedor' && method === 'GET')  return await getFacturasProveedor(request, env);
       if (path === '/facturas-proveedor' && method === 'POST') return await crearFacturaProveedor(request, env);
@@ -19975,5 +19983,145 @@ async function eliminarFacturaProveedor(id, request, env) {
   const { empresa_id, rol } = await getAuth(request, env);
   if (!empresa_id || rol === 'operario') return err('Sin permisos', 403);
   await env.DB.prepare('DELETE FROM facturas_proveedor WHERE id=? AND empresa_id=?').bind(id, empresa_id).run();
+  return json({ ok: true });
+}
+
+
+// ════════════════════════════════════════════════════════════════════════════════
+// NEW-104: COBROS Y CUENTAS POR COBRAR / ACCOUNTS RECEIVABLE
+// ════════════════════════════════════════════════════════════════════════════════
+async function ensureCobrosClienteTable(env) {
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS cobros_cliente (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    empresa_id        INTEGER NOT NULL,
+    obra_id           INTEGER,
+    certificacion_id  INTEGER,
+    numero            TEXT,
+    cliente_nombre    TEXT,
+    concepto          TEXT,
+    fecha_emision     TEXT    NOT NULL,
+    fecha_vencimiento TEXT,
+    importe_bruto     REAL    NOT NULL DEFAULT 0,
+    importe_retencion REAL    NOT NULL DEFAULT 0,
+    importe_liquido   REAL    NOT NULL DEFAULT 0,
+    importe_cobrado   REAL    NOT NULL DEFAULT 0,
+    estado            TEXT    NOT NULL DEFAULT 'pendiente',
+    fecha_cobro       TEXT,
+    metodo_cobro      TEXT,
+    referencia_cobro  TEXT,
+    dias_vencimiento  INTEGER,
+    notas             TEXT,
+    created_by        TEXT,
+    created_at        TEXT    NOT NULL DEFAULT (datetime('now')),
+    updated_at        TEXT    NOT NULL DEFAULT (datetime('now'))
+  )`).run();
+}
+
+async function getCobrosCliente(request, env) {
+  await ensureCobrosClienteTable(env);
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const url   = new URL(request.url);
+  const obra_id = url.searchParams.get('obra_id');
+  const estado  = url.searchParams.get('estado');
+  const desde   = url.searchParams.get('desde');
+  const hasta   = url.searchParams.get('hasta');
+  let sql = `SELECT c.*, o.nombre as obra_nombre
+    FROM cobros_cliente c
+    LEFT JOIN obras o ON c.obra_id = o.id
+    WHERE c.empresa_id = ?`;
+  const params = [empresa_id];
+  if (obra_id) { sql += ' AND c.obra_id = ?';          params.push(parseInt(obra_id)); }
+  if (estado)  { sql += ' AND c.estado = ?';           params.push(estado); }
+  if (desde)   { sql += ' AND c.fecha_emision >= ?';   params.push(desde); }
+  if (hasta)   { sql += ' AND c.fecha_emision <= ?';   params.push(hasta); }
+  sql += ' ORDER BY c.fecha_emision DESC';
+  const { results } = await env.DB.prepare(sql).bind(...params).all();
+  // Auto-mark vencidos
+  const hoy = new Date().toISOString().slice(0, 10);
+  for (const r of results) {
+    if (r.estado === 'pendiente' && r.fecha_vencimiento && r.fecha_vencimiento < hoy) {
+      await env.DB.prepare(`UPDATE cobros_cliente SET estado='vencido', updated_at=datetime('now') WHERE id=?`).bind(r.id).run();
+      r.estado = 'vencido';
+    }
+  }
+  // Aging buckets
+  const aging = { corriente:0, d30:0, d60:0, d90:0, mas90:0 };
+  results.filter(r=>r.estado!=='cobrado').forEach(r=>{
+    const dias = r.fecha_vencimiento ? Math.floor((new Date(hoy)-new Date(r.fecha_vencimiento))/(86400000)) : 0;
+    const pend = Math.max(0, (r.importe_liquido||0) - (r.importe_cobrado||0));
+    if (dias <= 0)       aging.corriente += pend;
+    else if (dias <= 30) aging.d30       += pend;
+    else if (dias <= 60) aging.d60       += pend;
+    else if (dias <= 90) aging.d90       += pend;
+    else                 aging.mas90     += pend;
+  });
+  const stats = {
+    total:           results.length,
+    pendiente:       results.filter(r=>r.estado==='pendiente').length,
+    vencido:         results.filter(r=>r.estado==='vencido').length,
+    cobrado:         results.filter(r=>r.estado==='cobrado').length,
+    parcial:         results.filter(r=>r.estado==='parcial').length,
+    saldo_pendiente: results.filter(r=>r.estado!=='cobrado').reduce((a,r)=>a+Math.max(0,(r.importe_liquido||0)-(r.importe_cobrado||0)),0),
+    total_cobrado:   results.reduce((a,r)=>a+(r.importe_cobrado||0),0),
+    total_emitido:   results.reduce((a,r)=>a+(r.importe_liquido||0),0),
+    aging
+  };
+  return json({ data: results, stats });
+}
+
+async function crearCobroCliente(request, env) {
+  await ensureCobrosClienteTable(env);
+  const { empresa_id, nombre: createdBy } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const body = await request.json().catch(() => ({}));
+  if (!body.fecha_emision) return err('La fecha de emisión es obligatoria');
+  if (body.importe_bruto === undefined) return err('El importe bruto es obligatorio');
+  const liq = (parseFloat(body.importe_bruto)||0) - (parseFloat(body.importe_retencion)||0);
+  const r = await env.DB.prepare(`
+    INSERT INTO cobros_cliente
+      (empresa_id,obra_id,certificacion_id,numero,cliente_nombre,concepto,fecha_emision,
+       fecha_vencimiento,importe_bruto,importe_retencion,importe_liquido,importe_cobrado,
+       estado,fecha_cobro,metodo_cobro,referencia_cobro,notas,created_by)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+    .bind(empresa_id, body.obra_id||null, body.certificacion_id||null, body.numero||null,
+          body.cliente_nombre||null, body.concepto||null, body.fecha_emision,
+          body.fecha_vencimiento||null, parseFloat(body.importe_bruto)||0,
+          parseFloat(body.importe_retencion)||0, liq,
+          parseFloat(body.importe_cobrado)||0, body.estado||'pendiente',
+          body.fecha_cobro||null, body.metodo_cobro||null, body.referencia_cobro||null,
+          body.notas||null, createdBy||null).run();
+  return json({ ok: true, id: r.meta.last_row_id }, 201);
+}
+
+async function actualizarCobroCliente(id, request, env) {
+  await ensureCobrosClienteTable(env);
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const body = await request.json().catch(() => ({}));
+  if (!body.fecha_emision) return err('La fecha de emisión es obligatoria');
+  const liq = (parseFloat(body.importe_bruto)||0) - (parseFloat(body.importe_retencion)||0);
+  await env.DB.prepare(`
+    UPDATE cobros_cliente SET
+      obra_id=?,certificacion_id=?,numero=?,cliente_nombre=?,concepto=?,fecha_emision=?,
+      fecha_vencimiento=?,importe_bruto=?,importe_retencion=?,importe_liquido=?,
+      importe_cobrado=?,estado=?,fecha_cobro=?,metodo_cobro=?,referencia_cobro=?,
+      notas=?,updated_at=datetime('now')
+    WHERE id=? AND empresa_id=?`)
+    .bind(body.obra_id||null, body.certificacion_id||null, body.numero||null,
+          body.cliente_nombre||null, body.concepto||null, body.fecha_emision,
+          body.fecha_vencimiento||null, parseFloat(body.importe_bruto)||0,
+          parseFloat(body.importe_retencion)||0, liq,
+          parseFloat(body.importe_cobrado)||0, body.estado||'pendiente',
+          body.fecha_cobro||null, body.metodo_cobro||null, body.referencia_cobro||null,
+          body.notas||null, id, empresa_id).run();
+  return json({ ok: true });
+}
+
+async function eliminarCobroCliente(id, request, env) {
+  await ensureCobrosClienteTable(env);
+  const { empresa_id, rol } = await getAuth(request, env);
+  if (!empresa_id || rol === 'operario') return err('Sin permisos', 403);
+  await env.DB.prepare('DELETE FROM cobros_cliente WHERE id=? AND empresa_id=?').bind(id, empresa_id).run();
   return json({ ok: true });
 }

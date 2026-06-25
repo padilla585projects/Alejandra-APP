@@ -758,6 +758,10 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
       <span class="nav-icon">🧾</span> Facturas Proveedores
       <span class="nav-badge" id="factPendBadge" style="display:none">0</span>
     </button>
+    <button class="nav-item" data-page="cobrosCliente" onclick="navTo('cobrosCliente')">
+      <span class="nav-icon">💳</span> Cobros de Clientes
+      <span class="nav-badge" id="cobrosBadge" style="display:none">0</span>
+    </button>
     <button class="nav-item" data-page="fotosObra" onclick="navTo('fotosObra')">
       <span class="nav-icon">📷</span> Galería de Fotos
     </button>
@@ -2478,6 +2482,122 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
               <button class="btn btn-secondary" onclick="cerrarModalAts()">Cancelar</button>
               <span id="atsElimBtn"></span>
               <button class="btn btn-primary" onclick="guardarAts()">💾 Guardar ATS</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- COBROS Y CUENTAS POR COBRAR / ACCOUNTS RECEIVABLE (NEW-104) -->
+      <div class="page" id="pageCobrosCliente">
+        <div class="page-title">💳 Cobros de Clientes / Accounts Receivable</div>
+        <div id="ccKpis" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:16px"></div>
+        <!-- Aging strip -->
+        <div id="ccAgingStrip" style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:16px"></div>
+        <div class="tbl-toolbar">
+          <select id="ccFiltroObra" onchange="filtrarCobrosCliente()">
+            <option value="">Todas las obras</option>
+          </select>
+          <select id="ccFiltroEstado" onchange="filtrarCobrosCliente()">
+            <option value="">Todos los estados</option>
+            <option value="pendiente">⏳ Pendiente</option>
+            <option value="vencido">🔴 Vencido</option>
+            <option value="parcial">🟡 Pago parcial</option>
+            <option value="cobrado">✅ Cobrado</option>
+            <option value="en_disputa">⚠️ En disputa</option>
+          </select>
+          <input id="ccFiltroQ" type="search" placeholder="Buscar cliente, nº, concepto..." oninput="filtrarCobrosCliente()">
+          <button class="btn btn-primary" onclick="abrirModalCc()">+ Nuevo Cobro</button>
+          <button class="btn btn-secondary" onclick="exportarTabla(tblCc,'cobros-cliente')">⬇ CSV</button>
+        </div>
+        <div id="tblCcWrap"></div>
+        <div class="modal-overlay" id="modalCc" style="display:none" onclick="if(event.target===this)cerrarModalCc()">
+          <div class="modal" style="max-width:640px">
+            <div class="modal-header"><h3 id="modalCcTitulo">Cobro de Cliente</h3><button class="modal-close" onclick="cerrarModalCc()">✕</button></div>
+            <div class="modal-body">
+              <div class="form-row">
+                <div class="form-group">
+                  <label>Nº Certificación / Referencia</label>
+                  <input type="text" id="ccModalNumero" style="width:100%" placeholder="Cert-001 / Factura 2024-001">
+                </div>
+                <div class="form-group">
+                  <label>Cliente</label>
+                  <input type="text" id="ccModalCliente" style="width:100%" placeholder="Nombre del cliente">
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-group" style="flex:2">
+                  <label>Obra</label>
+                  <select id="ccModalObra" style="width:100%">
+                    <option value="">— Sin asignar —</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label>Estado</label>
+                  <select id="ccModalEstado" style="width:100%" onchange="ccToggleCobradoRow()">
+                    <option value="pendiente">⏳ Pendiente</option>
+                    <option value="parcial">🟡 Pago parcial</option>
+                    <option value="cobrado">✅ Cobrado</option>
+                    <option value="vencido">🔴 Vencido</option>
+                    <option value="en_disputa">⚠️ En disputa</option>
+                  </select>
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label>Fecha emisión *</label>
+                  <input type="date" id="ccModalFechaEmision" required style="width:100%">
+                </div>
+                <div class="form-group">
+                  <label>Fecha vencimiento</label>
+                  <input type="date" id="ccModalFechaVencimiento" style="width:100%">
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label>Importe bruto (€) *</label>
+                  <input type="number" id="ccModalBruto" required min="0" step="0.01" style="width:100%" oninput="ccRecalcular()">
+                </div>
+                <div class="form-group">
+                  <label>Retención (€)</label>
+                  <input type="number" id="ccModalRetencion" min="0" step="0.01" value="0" style="width:100%" oninput="ccRecalcular()">
+                </div>
+                <div class="form-group">
+                  <label>Líquido (€)</label>
+                  <input type="text" id="ccModalLiquido" readonly style="width:100%;background:#f5f5f5;font-weight:700">
+                </div>
+              </div>
+              <div class="form-row" id="ccCobradoRow" style="display:none">
+                <div class="form-group">
+                  <label>Importe cobrado (€)</label>
+                  <input type="number" id="ccModalCobrado" min="0" step="0.01" style="width:100%">
+                </div>
+                <div class="form-group">
+                  <label>Fecha cobro</label>
+                  <input type="date" id="ccModalFechaCobro" style="width:100%">
+                </div>
+                <div class="form-group">
+                  <label>Método cobro</label>
+                  <select id="ccModalMetodo" style="width:100%">
+                    <option value="">—</option>
+                    <option value="transferencia">Transferencia</option>
+                    <option value="cheque">Cheque</option>
+                    <option value="efectivo">Efectivo</option>
+                    <option value="confirming">Confirming</option>
+                  </select>
+                </div>
+              </div>
+              <div class="form-group">
+                <label>Concepto</label>
+                <input type="text" id="ccModalConcepto" style="width:100%" placeholder="Descripción de la certificación o factura">
+              </div>
+              <div class="form-group">
+                <label>Notas</label>
+                <textarea id="ccModalNotas" rows="2" style="width:100%"></textarea>
+              </div>
+            </div>
+            <div class="modal-footer">
+              <button class="btn btn-secondary" onclick="cerrarModalCc()">Cancelar</button>
+              <button class="btn btn-primary" onclick="guardarCc()">💾 Guardar</button>
             </div>
           </div>
         </div>
@@ -8342,6 +8462,7 @@ const PAGE_TITLES = {
   horariosObra:       '⏰ Horarios de Obra / Site Work Schedules',
   proveedoresGestion: '🏭 Gestión de Proveedores / Supplier Management',
   facturasProveedor:  '🧾 Facturas de Proveedores / Supplier Invoices',
+  cobrosCliente:      '💳 Cobros de Clientes / Accounts Receivable',
 };
 
 const PAGE_LOADERS = {
@@ -8446,6 +8567,7 @@ const PAGE_LOADERS = {
   horariosObra:       cargarHorariosObra,
   proveedoresGestion: cargarProveedoresGestion,
   facturasProveedor:  cargarFacturasProveedor,
+  cobrosCliente:      cargarCobrosCliente,
 };
 
 let currentPage = '';
@@ -8579,6 +8701,7 @@ const SYNC_INTERVALS = {
   horariosObra:       300,
   proveedoresGestion: 180,
   facturasProveedor:  90,
+  cobrosCliente:      90,
 };
 
 let _syncTimer = null, _syncLabelTimer = null, _syncLastTs = null;
@@ -17939,6 +18062,207 @@ function exportarFinanzas() {
   if (!obraId) return showToast('Selecciona una obra primero', 'warning');
   // Abrir informe en nueva pestaña usando el endpoint de informes
   window.open(`/informe-obra/${obraId}?tipo=financiero`, '_blank');
+}
+
+// ── COBROS Y CUENTAS POR COBRAR / ACCOUNTS RECEIVABLE (NEW-104) ──────────────
+let tblCc = null, _ccData = [];
+const CC_ESTADO_COLOR = { pendiente:'var(--warning)', vencido:'var(--danger)', cobrado:'var(--success)', parcial:'#f39c12', en_disputa:'#e67e22' };
+const CC_ESTADO_ICON  = { pendiente:'⏳', vencido:'🔴', cobrado:'✅', parcial:'🟡', en_disputa:'⚠️' };
+
+async function cargarCobrosCliente() {
+  const data = await api('/cobros-cliente');
+  _ccData = data.data || [];
+  const s   = data.stats || {};
+  // Badge: pendientes + vencidos
+  const urgentes = (s.pendiente||0) + (s.vencido||0);
+  const badge = document.getElementById('cobrosBadge');
+  if (badge) { badge.textContent = urgentes; badge.style.display = urgentes ? '' : 'none'; }
+  // KPIs
+  document.getElementById('ccKpis').innerHTML = [
+    { label:'Total documentos', val: s.total||_ccData.length, icon:'📑' },
+    { label:'Pendiente cobro', val: s.pendiente||_ccData.filter(r=>r.estado==='pendiente').length, icon:'⏳', color:'var(--warning)' },
+    { label:'Vencidos', val: s.vencido||_ccData.filter(r=>r.estado==='vencido').length, icon:'🔴', color:'var(--danger)' },
+    { label:'Cobrados', val: s.cobrado||_ccData.filter(r=>r.estado==='cobrado').length, icon:'✅', color:'var(--success)' },
+    { label:'Saldo pendiente', val: fmtMoney(s.saldo_pendiente||0), icon:'💸', color:'var(--warning)' },
+    { label:'Total cobrado', val: fmtMoney(s.total_cobrado||0), icon:'💶', color:'var(--success)' }
+  ].map(k=>`<div class="kpi-mini" style="border-left:3px solid ${k.color||'var(--accent)'}">
+    <div style="font-size:1.4rem">${k.icon}</div>
+    <div style="font-size:1.1rem;font-weight:700;color:${k.color||'var(--text)'}">${k.val}</div>
+    <div style="font-size:.75rem;opacity:.7">${k.label}</div>
+  </div>`).join('');
+  // Aging strip
+  const ag = s.aging || {};
+  document.getElementById('ccAgingStrip').innerHTML = [
+    { label:'Al corriente', val: ag.corriente||0, color:'var(--success)' },
+    { label:'1–30 días', val: ag.d30||0, color:'var(--warning)' },
+    { label:'31–60 días', val: ag.d60||0, color:'#e67e22' },
+    { label:'61–90 días', val: ag.d90||0, color:'var(--danger)' },
+    { label:'+90 días', val: ag.mas90||0, color:'#8e1000' }
+  ].map(k=>`<div style="background:${k.color}15;border:1px solid ${k.color};border-radius:8px;padding:10px;text-align:center">
+    <div style="font-size:1rem;font-weight:700;color:${k.color}">${fmtMoney(k.val)}</div>
+    <div style="font-size:.75rem;color:var(--muted);margin-top:2px">${k.label}</div>
+  </div>`).join('');
+  // Populate obra filter
+  const sel = document.getElementById('ccFiltroObra');
+  if (sel) {
+    const obras = [...new Map(_ccData.filter(r=>r.obra_id).map(r=>[r.obra_id,r.obra_nombre||'Obra '+r.obra_id])).entries()];
+    sel.innerHTML = '<option value="">Todas las obras</option>' +
+      obras.map(([id,nom])=>`<option value="${id}">${nom}</option>`).join('');
+  }
+  filtrarCobrosCliente();
+}
+
+function filtrarCobrosCliente() {
+  const obraId = document.getElementById('ccFiltroObra')?.value  || '';
+  const estado = document.getElementById('ccFiltroEstado')?.value || '';
+  const q      = (document.getElementById('ccFiltroQ')?.value    || '').toLowerCase();
+  let rows = _ccData.filter(r =>
+    (!obraId || String(r.obra_id) === obraId) &&
+    (!estado || r.estado === estado)           &&
+    (!q      || (r.numero||'').toLowerCase().includes(q) ||
+                (r.cliente_nombre||'').toLowerCase().includes(q) ||
+                (r.concepto||'').toLowerCase().includes(q))
+  );
+  if (!tblCc) {
+    tblCc = new Tabulator('#tblCcWrap', {
+      data: rows, layout:'fitColumns', responsiveLayout:'collapse',
+      pagination:'local', paginationSize:20, movableColumns:true,
+      initialSort:[{column:'fecha_emision',dir:'desc'}],
+      columns:[
+        { title:'Estado', field:'estado', width:140, formatter:(c)=>{
+            const v=c.getValue();
+            return `<span style="background:${CC_ESTADO_COLOR[v]||'#999'};color:#fff;padding:2px 8px;border-radius:12px;font-size:.8rem">${CC_ESTADO_ICON[v]||''} ${(v||'').replace(/_/g,' ')}</span>`;
+          }
+        },
+        { title:'Referencia', field:'numero', width:120 },
+        { title:'Cliente', field:'cliente_nombre', minWidth:150 },
+        { title:'Obra', field:'obra_nombre', minWidth:140 },
+        { title:'F. Emisión', field:'fecha_emision', width:105 },
+        { title:'F. Vencimiento', field:'fecha_vencimiento', width:120,
+          formatter:(c)=>{
+            const v=c.getValue(); if(!v) return '—';
+            const hoy=new Date().toISOString().slice(0,10);
+            const col=v<hoy&&c.getRow().getData().estado!=='cobrado'?'var(--danger)':'inherit';
+            return `<span style="color:${col}">${v}</span>`;
+          }
+        },
+        { title:'Líquido (€)', field:'importe_liquido', width:120, hozAlign:'right', formatter:(c)=>`<strong>${fmtMoney(c.getValue())}</strong>` },
+        { title:'Cobrado (€)', field:'importe_cobrado', width:120, hozAlign:'right',
+          formatter:(c)=>{
+            const r=c.getRow().getData();
+            const pct = r.importe_liquido ? Math.round((r.importe_cobrado||0)/r.importe_liquido*100) : 0;
+            const col = pct>=100?'var(--success)':pct>0?'var(--warning)':'var(--muted)';
+            return `<span style="color:${col}">${fmtMoney(c.getValue())} <small>(${pct}%)</small></span>`;
+          }
+        },
+        { title:'Pendiente (€)', field:'importe_liquido', width:120, hozAlign:'right',
+          formatter:(c)=>{
+            const r=c.getRow().getData();
+            const pend=Math.max(0,(r.importe_liquido||0)-(r.importe_cobrado||0));
+            return pend>0?`<span style="color:var(--danger)">${fmtMoney(pend)}</span>`:'<span style="color:var(--success)">—</span>';
+          }
+        },
+        { title:'Concepto', field:'concepto', minWidth:140 },
+        { title:'Acciones', width:110, hozAlign:'center', formatter:(c)=>{
+            const id=c.getRow().getData().id;
+            return `<button class="btn btn-xs" onclick="editarCc(${id})">✏️</button>
+                    <button class="btn btn-xs btn-danger" onclick="eliminarCc(${id})">🗑️</button>`;
+          }
+        }
+      ]
+    });
+  } else {
+    tblCc.replaceData(rows);
+  }
+}
+
+function ccRecalcular() {
+  const bruto = parseFloat(document.getElementById('ccModalBruto')?.value) || 0;
+  const ret   = parseFloat(document.getElementById('ccModalRetencion')?.value) || 0;
+  document.getElementById('ccModalLiquido').value = fmtMoney(bruto - ret);
+}
+
+function ccToggleCobradoRow() {
+  const est = document.getElementById('ccModalEstado')?.value;
+  const row = document.getElementById('ccCobradoRow');
+  if (row) row.style.display = (est === 'cobrado' || est === 'parcial') ? '' : 'none';
+}
+
+function abrirModalCc(d = {}) {
+  const m = document.getElementById('modalCc');
+  m._ccId = d.id || null;
+  document.getElementById('modalCcTitulo').textContent     = d.id ? 'Editar Cobro' : 'Nuevo Cobro de Cliente';
+  document.getElementById('ccModalNumero').value            = d.numero             || '';
+  document.getElementById('ccModalCliente').value           = d.cliente_nombre     || '';
+  document.getElementById('ccModalEstado').value            = d.estado             || 'pendiente';
+  document.getElementById('ccModalFechaEmision').value      = d.fecha_emision      || new Date().toISOString().slice(0,10);
+  document.getElementById('ccModalFechaVencimiento').value  = d.fecha_vencimiento  || '';
+  document.getElementById('ccModalBruto').value             = d.importe_bruto      || '';
+  document.getElementById('ccModalRetencion').value         = d.importe_retencion  || 0;
+  document.getElementById('ccModalCobrado').value           = d.importe_cobrado    || '';
+  document.getElementById('ccModalFechaCobro').value        = d.fecha_cobro        || '';
+  document.getElementById('ccModalMetodo').value            = d.metodo_cobro       || '';
+  document.getElementById('ccModalConcepto').value          = d.concepto           || '';
+  document.getElementById('ccModalNotas').value             = d.notas              || '';
+  ccRecalcular();
+  ccToggleCobradoRow();
+  document.getElementById('ccModalEstado').onchange = ccToggleCobradoRow;
+  poblarSelectObras('ccModalObra').then(()=>{
+    document.getElementById('ccModalObra').value = d.obra_id || '';
+  });
+  m.style.display = 'flex';
+}
+
+function editarCc(id) {
+  const d = _ccData.find(r => r.id === id);
+  if (d) abrirModalCc(d);
+}
+
+async function guardarCc() {
+  const m  = document.getElementById('modalCc');
+  const id = m._ccId;
+  const body = {
+    numero:            document.getElementById('ccModalNumero').value.trim(),
+    cliente_nombre:    document.getElementById('ccModalCliente').value.trim(),
+    obra_id:           parseInt(document.getElementById('ccModalObra').value) || null,
+    estado:            document.getElementById('ccModalEstado').value,
+    fecha_emision:     document.getElementById('ccModalFechaEmision').value,
+    fecha_vencimiento: document.getElementById('ccModalFechaVencimiento').value || null,
+    importe_bruto:     parseFloat(document.getElementById('ccModalBruto').value) || 0,
+    importe_retencion: parseFloat(document.getElementById('ccModalRetencion').value) || 0,
+    importe_cobrado:   parseFloat(document.getElementById('ccModalCobrado').value) || 0,
+    fecha_cobro:       document.getElementById('ccModalFechaCobro').value || null,
+    metodo_cobro:      document.getElementById('ccModalMetodo').value,
+    concepto:          document.getElementById('ccModalConcepto').value.trim(),
+    notas:             document.getElementById('ccModalNotas').value.trim()
+  };
+  if (!body.fecha_emision) return showToast('La fecha de emisión es obligatoria', 'warning');
+  try {
+    if (id) {
+      await api(`/cobros-cliente/${id}`, { method:'PUT', body: JSON.stringify(body) });
+      showToast('Cobro actualizado', 'success');
+    } else {
+      await api('/cobros-cliente', { method:'POST', body: JSON.stringify(body) });
+      showToast('Cobro registrado', 'success');
+    }
+    cerrarModalCc();
+    tblCc = null;
+    await cargarCobrosCliente();
+  } catch(e) { showToast('Error al guardar: ' + e.message, 'danger'); }
+}
+
+async function eliminarCc(id) {
+  if (!confirm('¿Eliminar este registro de cobro?')) return;
+  try {
+    await api(`/cobros-cliente/${id}`, { method:'DELETE' });
+    showToast('Registro eliminado', 'success');
+    tblCc = null;
+    await cargarCobrosCliente();
+  } catch(e) { showToast('Error al eliminar: ' + e.message, 'danger'); }
+}
+
+function cerrarModalCc() {
+  document.getElementById('modalCc').style.display = 'none';
 }
 
 // ── FACTURAS DE PROVEEDORES / SUPPLIER INVOICE TRACKING (NEW-103) ────────────
