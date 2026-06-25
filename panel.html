@@ -544,6 +544,9 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
       <span class="nav-icon">📬</span> Aprobaciones
       <span class="nav-badge" id="submittalsBadge" style="display:none">!</span>
     </button>
+    <button class="nav-item" data-page="finanzasObra" onclick="navTo('finanzasObra')">
+      <span class="nav-icon">📊</span> Análisis Financiero
+    </button>
 
     <div class="sidebar-section" onclick="sidebarToggle(this)" data-sid="seguimiento"><span>📓 Seguimiento</span><span class="sec-chevron">▼</span></div>
     <button class="nav-item" data-page="partesPanel" onclick="navTo('partesPanel')">
@@ -1632,6 +1635,63 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
         </div>
         <div id="contratosResumen" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:18px"></div>
         <div class="tbl-wrap"><div id="tblContratos"></div></div>
+      </div>
+
+      <!-- ANÁLISIS FINANCIERO POR OBRA (NEW-51) -->
+      <div class="page" id="pageFinanzasObra">
+        <div class="page-title">📊 Análisis Financiero por Obra</div>
+        <div class="page-sub">Comparativa presupuesto vs comprometido vs gastado · KPIs financieros · Evolución mensual</div>
+        <div class="tbl-toolbar" style="flex-wrap:wrap;gap:8px;margin-bottom:18px;align-items:center">
+          <select class="tbl-search" id="finanzasObraId" style="min-width:280px;font-size:14px" onchange="cargarFinanzasObra()">
+            <option value="">🏗 Selecciona una obra...</option>
+          </select>
+          <button class="btn btn-secondary" onclick="cargarFinanzasObra()">🔄 Actualizar</button>
+          <button class="btn btn-secondary" onclick="exportarFinanzas()">⬇ Exportar</button>
+        </div>
+        <!-- KPI GRID -->
+        <div id="finanzasKpis" style="display:none">
+          <div id="finanzasAlerta" style="display:none;padding:10px 16px;border-radius:8px;margin-bottom:18px;font-weight:600;font-size:14px"></div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(175px,1fr));gap:14px;margin-bottom:22px" id="finanzasKpiGrid"></div>
+
+          <!-- GRÁFICO BARRAS: presupuesto vs comprometido vs gastado -->
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:22px">
+            <div class="card" style="padding:20px">
+              <div style="font-weight:700;font-size:15px;margin-bottom:14px">📊 Comparativa financiera</div>
+              <canvas id="chartFinanzasBar" height="220"></canvas>
+            </div>
+            <div class="card" style="padding:20px">
+              <div style="font-weight:700;font-size:15px;margin-bottom:14px">📈 Evolución mensual de costes</div>
+              <canvas id="chartFinanzasMes" height="220"></canvas>
+            </div>
+          </div>
+
+          <!-- DESGLOSE POR TIPO -->
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:22px">
+            <div class="card" style="padding:20px">
+              <div style="font-weight:700;font-size:15px;margin-bottom:12px">💰 Costes reales por categoría</div>
+              <div id="finanzasCosteTipo"></div>
+            </div>
+            <div class="card" style="padding:20px">
+              <div style="font-weight:700;font-size:15px;margin-bottom:12px">📑 Contratos por tipo</div>
+              <div id="finanzasContratoTipo"></div>
+            </div>
+          </div>
+
+          <!-- FASES DE PRESUPUESTO -->
+          <div class="card" style="padding:20px;margin-bottom:22px">
+            <div style="font-weight:700;font-size:15px;margin-bottom:14px">📋 Fases del presupuesto</div>
+            <div id="finanzasFases"></div>
+          </div>
+
+          <!-- HITOS PENDIENTES -->
+          <div class="card" style="padding:20px">
+            <div style="font-weight:700;font-size:15px;margin-bottom:12px">🏁 Próximos hitos</div>
+            <div id="finanzasHitos"></div>
+          </div>
+        </div>
+        <div id="finanzasVacio" style="text-align:center;padding:60px 0;color:var(--muted);font-size:15px">
+          Selecciona una obra para ver el análisis financiero
+        </div>
       </div>
 
       <!-- PLANOS DE OBRA -->
@@ -3154,6 +3214,7 @@ const PAGE_TITLES = {
   submittals: '📬 Aprobaciones de Materiales',
   actasReunion: '📋 Actas de Reunión',
   obraDetalle: '🏗 Cuadro de Mando por Obra',
+  finanzasObra: '📊 Análisis Financiero por Obra',
 };
 
 const PAGE_LOADERS = {
@@ -3205,6 +3266,7 @@ const PAGE_LOADERS = {
   submittals: cargarSubmittals,
   actasReunion: cargarActasReunion,
   obraDetalle: cargarObraDetalle,
+  finanzasObra: cargarFinanzasObra,
 };
 
 let currentPage = '';
@@ -3285,6 +3347,7 @@ const SYNC_INTERVALS = {
   submittals: 60,
   actasReunion: 180,
   obraDetalle: 60,
+  finanzasObra: 90,
 };
 
 let _syncTimer = null, _syncLabelTimer = null, _syncLastTs = null;
@@ -11761,6 +11824,207 @@ async function cargarObraDetalle() {
       ${m.content}
     </div>
   `).join('');
+}
+
+// ── ANÁLISIS FINANCIERO POR OBRA (NEW-51) ─────────────────────────
+let _chartFinBar = null, _chartFinMes = null;
+
+async function cargarFinanzasObra() {
+  if (document.getElementById('finanzasObraId')?.options.length <= 1) await poblarSelectObras('finanzasObraId');
+  const obraId = document.getElementById('finanzasObraId')?.value;
+  const kpiEl  = document.getElementById('finanzasKpis');
+  const vacioEl = document.getElementById('finanzasVacio');
+  if (!obraId) {
+    if (kpiEl) kpiEl.style.display = 'none';
+    if (vacioEl) vacioEl.style.display = '';
+    return;
+  }
+  if (kpiEl) kpiEl.style.display = 'none';
+  if (vacioEl) vacioEl.style.display = '';
+  vacioEl.innerHTML = '<div class="loading"><div class="spinner"></div> Cargando análisis financiero...</div>';
+
+  const d = await api(`/financiero-obra/${obraId}`);
+  if (!d || d.error) {
+    vacioEl.innerHTML = '<div class="empty-state"><div class="empty-icon">⚠️</div><div class="empty-text">Error al cargar los datos financieros</div></div>';
+    return;
+  }
+  vacioEl.style.display = 'none';
+  if (kpiEl) kpiEl.style.display = '';
+
+  const fmt = v => fmtMoney(v || 0);
+  const pct = v => `${(v||0).toFixed(1)}%`;
+  const presupuesto  = d.budget?.presupuesto_previsto || 0;
+  const comprometido = d.contratos?.total || 0;
+  const gastado      = d.costes?.total || 0;
+  const eac          = d.kpis?.eac || 0;
+  const variacion    = d.kpis?.variacion;
+  const cpi          = d.kpis?.cpi;
+  const alerta       = d.kpis?.alerta || 'verde';
+
+  // Alerta banner
+  const alertaEl = document.getElementById('finanzasAlerta');
+  if (alertaEl) {
+    if (alerta === 'rojo') {
+      alertaEl.style.display = '';
+      alertaEl.style.background = '#fee2e2';
+      alertaEl.style.color = '#dc2626';
+      alertaEl.innerHTML = `⛔ ALERTA: El EAC (${fmt(eac)}) supera el presupuesto en más de un 5%. Se requiere acción correctiva.`;
+    } else if (alerta === 'amarillo') {
+      alertaEl.style.display = '';
+      alertaEl.style.background = '#fef9c3';
+      alertaEl.style.color = '#ca8a04';
+      alertaEl.innerHTML = `⚠️ AVISO: El EAC (${fmt(eac)}) supera ligeramente el presupuesto. Monitorizar de cerca.`;
+    } else {
+      alertaEl.style.display = 'none';
+    }
+  }
+
+  // KPI grid
+  const kpiGrid = document.getElementById('finanzasKpiGrid');
+  if (kpiGrid) {
+    const varColor = variacion !== null ? (variacion >= 0 ? 'var(--success)' : 'var(--danger)') : 'var(--muted)';
+    const cpiColor = cpi !== null ? (cpi >= 1 ? 'var(--success)' : cpi >= 0.9 ? 'var(--warning)' : 'var(--danger)') : 'var(--muted)';
+    kpiGrid.innerHTML = `
+      <div class="kpi-card"><div class="kpi-icon">💶</div><div class="kpi-value">${fmt(presupuesto)}</div><div class="kpi-label">Presupuesto previsto</div></div>
+      <div class="kpi-card"><div class="kpi-icon">📑</div><div class="kpi-value" style="color:var(--primary)">${fmt(comprometido)}</div><div class="kpi-label">Comprometido (contratos)</div></div>
+      <div class="kpi-card"><div class="kpi-icon">💸</div><div class="kpi-value" style="color:var(--warning)">${fmt(gastado)}</div><div class="kpi-label">Gastado real (${pct(d.kpis?.pct_gastado)})</div></div>
+      <div class="kpi-card"><div class="kpi-icon">🎯</div><div class="kpi-value" style="color:${alerta==='verde'?'var(--success)':alerta==='amarillo'?'var(--warning)':'var(--danger)'}">${fmt(eac)}</div><div class="kpi-label">EAC (coste final estimado)</div></div>
+      <div class="kpi-card"><div class="kpi-icon">${variacion>=0?'✅':'❌'}</div><div class="kpi-value" style="color:${varColor}">${variacion!==null?fmt(Math.abs(variacion)):'—'}</div><div class="kpi-label">${variacion>=0?'Ahorro estimado':'Desviación presupuesto'}</div></div>
+      <div class="kpi-card"><div class="kpi-icon">📈</div><div class="kpi-value" style="color:${cpiColor}">${cpi!==null?cpi.toFixed(2):'—'}</div><div class="kpi-label">CPI (eficiencia coste)</div></div>
+      <div class="kpi-card"><div class="kpi-icon">⚙️</div><div class="kpi-value">${d.obra?.avance_porcentaje||0}%</div><div class="kpi-label">Avance obra</div></div>
+      <div class="kpi-card"><div class="kpi-icon">📦</div><div class="kpi-value">${pct(d.kpis?.pct_comprometido)}</div><div class="kpi-label">% Comprometido</div></div>
+    `;
+  }
+
+  // Gráfico barras: comparativa financiera
+  const ctxBar = document.getElementById('chartFinanzasBar');
+  if (ctxBar && typeof Chart !== 'undefined') {
+    if (_chartFinBar) _chartFinBar.destroy();
+    _chartFinBar = new Chart(ctxBar, {
+      type: 'bar',
+      data: {
+        labels: ['Presupuesto', 'Comprometido', 'Gastado', 'EAC'],
+        datasets: [{
+          data: [presupuesto, comprometido, gastado, eac],
+          backgroundColor: ['#6366f1', '#0ea5e9', '#f59e0b', alerta==='verde'?'#10b981':alerta==='amarillo'?'#eab308':'#ef4444'],
+          borderRadius: 6, borderSkipped: false,
+        }]
+      },
+      options: {
+        plugins: { legend: { display: false } },
+        scales: {
+          y: { ticks: { callback: v => '€' + (v>=1000000?(v/1000000).toFixed(1)+'M':v>=1000?(v/1000).toFixed(0)+'k':v) } }
+        },
+        responsive: true, maintainAspectRatio: false,
+      }
+    });
+  }
+
+  // Gráfico línea: evolución mensual de costes
+  const ctxMes = document.getElementById('chartFinanzasMes');
+  const porMes = d.por_mes || [];
+  if (ctxMes && typeof Chart !== 'undefined') {
+    if (_chartFinMes) _chartFinMes.destroy();
+    _chartFinMes = new Chart(ctxMes, {
+      type: 'line',
+      data: {
+        labels: porMes.map(m => m.mes),
+        datasets: [{
+          label: 'Coste mensual (€)',
+          data: porMes.map(m => m.total),
+          borderColor: '#6366f1', backgroundColor: 'rgba(99,102,241,0.1)',
+          fill: true, tension: 0.4, pointRadius: 4,
+        }]
+      },
+      options: {
+        plugins: { legend: { display: false } },
+        scales: { y: { ticks: { callback: v => '€' + (v>=1000?(v/1000).toFixed(0)+'k':v) } } },
+        responsive: true, maintainAspectRatio: false,
+      }
+    });
+  }
+
+  // Costes por tipo
+  const costeTipoEl = document.getElementById('finanzasCosteTipo');
+  if (costeTipoEl) {
+    const tipos = d.por_tipo_coste || [];
+    const maxVal = tipos[0]?.total || 1;
+    costeTipoEl.innerHTML = tipos.length
+      ? tipos.map(t => `
+          <div style="margin-bottom:10px">
+            <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:3px">
+              <span>${t.tipo}</span><strong>${fmt(t.total)}</strong>
+            </div>
+            <div style="background:var(--border);border-radius:4px;height:6px">
+              <div style="width:${Math.round((t.total/maxVal)*100)}%;height:100%;border-radius:4px;background:var(--warning)"></div>
+            </div>
+          </div>`).join('')
+      : '<div style="color:var(--muted);font-size:13px;text-align:center;padding:20px 0">Sin costes registrados</div>';
+  }
+
+  // Contratos por tipo
+  const contTipoEl = document.getElementById('finanzasContratoTipo');
+  if (contTipoEl) {
+    const tipos = d.por_tipo_contrato || [];
+    const maxVal2 = tipos[0]?.total || 1;
+    contTipoEl.innerHTML = tipos.length
+      ? tipos.map(t => `
+          <div style="margin-bottom:10px">
+            <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:3px">
+              <span>${CONTRATO_TIPO_ICON[t.tipo]||'📋'} ${t.tipo} (${t.num})</span><strong>${fmt(t.total)}</strong>
+            </div>
+            <div style="background:var(--border);border-radius:4px;height:6px">
+              <div style="width:${Math.round((t.total/maxVal2)*100)}%;height:100%;border-radius:4px;background:var(--primary)"></div>
+            </div>
+          </div>`).join('')
+      : '<div style="color:var(--muted);font-size:13px;text-align:center;padding:20px 0">Sin contratos registrados</div>';
+  }
+
+  // Fases del presupuesto
+  const fasesEl = document.getElementById('finanzasFases');
+  if (fasesEl) {
+    const fases = d.fases || [];
+    fasesEl.innerHTML = fases.length
+      ? `<table style="width:100%;border-collapse:collapse;font-size:13px">
+          <thead><tr style="border-bottom:2px solid var(--border)">
+            <th style="text-align:left;padding:6px 8px">Fase</th>
+            <th style="text-align:right;padding:6px 8px">Presupuesto</th>
+            <th style="text-align:right;padding:6px 8px">Coste real</th>
+            <th style="text-align:right;padding:6px 8px">Avance</th>
+          </tr></thead>
+          <tbody>${fases.map(f=>`<tr style="border-bottom:1px solid var(--border)">
+            <td style="padding:6px 8px">${f.nombre||'—'}</td>
+            <td style="padding:6px 8px;text-align:right">${fmt(f.presupuesto)}</td>
+            <td style="padding:6px 8px;text-align:right;color:${(f.coste_real||0)>(f.presupuesto||0)?'var(--danger)':'inherit'}">${fmt(f.coste_real)}</td>
+            <td style="padding:6px 8px;text-align:right;color:var(--success)">${f.porcentaje_avance||0}%</td>
+          </tr>`).join('')}</tbody>
+        </table>`
+      : '<div style="color:var(--muted);font-size:13px;text-align:center;padding:20px 0">Sin fases definidas</div>';
+  }
+
+  // Hitos pendientes
+  const hitosEl = document.getElementById('finanzasHitos');
+  if (hitosEl) {
+    const hitos = d.hitos_pendientes || [];
+    const hoy = new Date().toISOString().slice(0,10);
+    hitosEl.innerHTML = hitos.length
+      ? hitos.map(h=>{
+          const vencido = h.fecha_prevista && h.fecha_prevista < hoy;
+          return `<div style="display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid var(--border)">
+            <div style="font-size:20px">${vencido?'⛔':'🏁'}</div>
+            <div style="flex:1"><div style="font-size:13px;font-weight:600">${h.nombre||'—'}</div><div style="font-size:11px;color:var(--muted)">${h.descripcion||''}</div></div>
+            <div style="font-size:12px;color:${vencido?'var(--danger)':'var(--muted)'}">${h.fecha_prevista||'Sin fecha'}</div>
+          </div>`;
+        }).join('')
+      : '<div style="color:var(--muted);font-size:13px;text-align:center;padding:20px 0">Sin hitos pendientes 🎉</div>';
+  }
+}
+
+function exportarFinanzas() {
+  const obraId = document.getElementById('finanzasObraId')?.value;
+  if (!obraId) return showToast('Selecciona una obra primero', 'warning');
+  // Abrir informe en nueva pestaña usando el endpoint de informes
+  window.open(`/informe-obra/${obraId}?tipo=financiero`, '_blank');
 }
 
 // ── SUBMITTAL LOG / APROBACIONES DE MATERIALES ───────────────────

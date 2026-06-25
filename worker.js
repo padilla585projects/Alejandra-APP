@@ -4511,6 +4511,11 @@ export default {
         const _odid = parseInt(path.split('/obra-detail/')[1]);
         if (method === 'GET') return await getObraDetail(_odid, request, env);
       }
+      // ── Analisis Financiero por Obra (NEW-51) ────────────────────────────────
+      if (path.startsWith('/financiero-obra/')) {
+        const _foid = parseInt(path.split('/financiero-obra/')[1]);
+        if (method === 'GET') return await getFinancieroObra(_foid, request, env);
+      }
       // ── Fases de obra (NEW-30) ──────────────────────────────────────────
       if (path === '/fases-obra'           && method === 'GET')  return await getFasesObra(request, env);
       if (path === '/fases-obra'           && method === 'POST') return await crearFaseObra(request, env);
@@ -14470,3 +14475,127 @@ async function eliminarSubmittal(id, request, env) {
 }
 
 // (NEW-49 actas-reunion functions removed — already implemented in NEW-36 above)
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  NEW-51 — ANÁLISIS FINANCIERO POR OBRA (Financial Dashboard)
+// ═══════════════════════════════════════════════════════════════════════════
+async function getFinancieroObra(obraId, request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth?.empresa_id) return err('No autorizado', 403);
+
+  const empId = auth.empresa_id;
+
+  // ── Fetch en paralelo ─────────────────────────────────────────────────
+  const [
+    obraR, presupuestoR, fasesPR, costesR, contratosTotR,
+    costesMesR, costestipoR, contratosTipoR, hitosR
+  ] = await Promise.all([
+    // Datos de la obra
+    env.DB.prepare(`SELECT id, nombre, codigo, estado, fecha_inicio, fecha_fin_prevista, avance_porcentaje
+                    FROM obras WHERE id=? AND empresa_id=?`)
+      .bind(obraId, empId).first(),
+    // Presupuesto principal (previsto vs real de la obra)
+    env.DB.prepare(`SELECT presupuesto_previsto, presupuesto_real, coste_estimado
+                    FROM obras WHERE id=? AND empresa_id=?`)
+      .bind(obraId, empId).first(),
+    // Fases de presupuesto
+    env.DB.prepare(`SELECT nombre, presupuesto, coste_real, porcentaje_avance
+                    FROM fases_obra WHERE obra_id=? AND empresa_id=? ORDER BY orden`)
+      .bind(obraId, empId).all(),
+    // Total costes reales acumulados
+    env.DB.prepare(`SELECT COALESCE(SUM(importe),0) as total,
+                           COALESCE(SUM(CASE WHEN estado='aprobado' THEN importe ELSE 0 END),0) as aprobado,
+                           COALESCE(SUM(CASE WHEN estado='pendiente' THEN importe ELSE 0 END),0) as pendiente
+                    FROM costes_obra WHERE obra_id=? AND empresa_id=?`)
+      .bind(obraId, empId).first(),
+    // Total contratos comprometidos
+    env.DB.prepare(`SELECT COALESCE(SUM(importe_actual),0) as total,
+                           COUNT(*) as num_contratos
+                    FROM contratos_obra WHERE obra_id=? AND empresa_id=? AND estado NOT IN ('cancelado','borrador')`)
+      .bind(obraId, empId).first(),
+    // Costes por mes (últimos 12 meses)
+    env.DB.prepare(`SELECT strftime('%Y-%m', fecha) as mes,
+                           COALESCE(SUM(importe),0) as total
+                    FROM costes_obra WHERE obra_id=? AND empresa_id=?
+                      AND fecha >= date('now','-12 months')
+                    GROUP BY mes ORDER BY mes`)
+      .bind(obraId, empId).all(),
+    // Costes por tipo/categoría
+    env.DB.prepare(`SELECT COALESCE(tipo,'otro') as tipo,
+                           COALESCE(SUM(importe),0) as total,
+                           COUNT(*) as num
+                    FROM costes_obra WHERE obra_id=? AND empresa_id=?
+                    GROUP BY tipo ORDER BY total DESC`)
+      .bind(obraId, empId).all(),
+    // Contratos por tipo
+    env.DB.prepare(`SELECT tipo, COALESCE(SUM(importe_actual),0) as total, COUNT(*) as num
+                    FROM contratos_obra WHERE obra_id=? AND empresa_id=? AND estado NOT IN ('cancelado')
+                    GROUP BY tipo ORDER BY total DESC`)
+      .bind(obraId, empId).all(),
+    // Hitos financieros (pagos/cobros pendientes)
+    env.DB.prepare(`SELECT nombre, fecha_prevista, estado, descripcion
+                    FROM hitos_obra WHERE obra_id=? AND empresa_id=? AND estado != 'completado'
+                    ORDER BY fecha_prevista LIMIT 5`)
+      .bind(obraId, empId).all(),
+  ]);
+
+  if (!obraR) return err('Obra no encontrada', 404);
+
+  // ── KPIs financieros ─────────────────────────────────────────────────
+  const presupuesto  = obraR.presupuesto_previsto || 0;
+  const presRealObra = obraR.presupuesto_real     || 0;
+  const gastado      = costesR?.total             || 0;
+  const comprometido = contratosTotR?.total        || 0;
+  const avance       = (obraR.avance_porcentaje   || 0) / 100;
+
+  // EAC (Estimate at Completion) = gastado / CPI si avance > 0
+  const cpi        = avance > 0 && presupuesto > 0
+    ? (avance * presupuesto) / (gastado || 1)
+    : null;
+  const eac        = cpi && cpi > 0 ? gastado / cpi : (gastado + comprometido);
+  const variacion  = presupuesto > 0 ? presupuesto - eac : null;
+  const spi        = null; // Schedule Performance Index — requires earned value baseline
+  const pct_gastado  = presupuesto > 0 ? (gastado / presupuesto) * 100 : 0;
+  const pct_comprometido = presupuesto > 0 ? (comprometido / presupuesto) * 100 : 0;
+
+  return json({
+    obra: {
+      id: obraR.id,
+      nombre: obraR.nombre,
+      codigo: obraR.codigo,
+      estado: obraR.estado,
+      fecha_inicio: obraR.fecha_inicio,
+      fecha_fin_prevista: obraR.fecha_fin_prevista,
+      avance_porcentaje: obraR.avance_porcentaje || 0,
+    },
+    budget: {
+      presupuesto_previsto: presupuesto,
+      presupuesto_real: presRealObra,
+      coste_estimado: obraR.coste_estimado || 0,
+    },
+    fases: fasesPR?.results || [],
+    costes: {
+      total: gastado,
+      aprobado: costesR?.aprobado || 0,
+      pendiente: costesR?.pendiente || 0,
+    },
+    contratos: {
+      total: comprometido,
+      num_contratos: contratosTotR?.num_contratos || 0,
+    },
+    por_mes: costesMesR?.results || [],
+    por_tipo_coste: costestipoR?.results || [],
+    por_tipo_contrato: contratosTipoR?.results || [],
+    hitos_pendientes: (hitosR?.results) || [],
+    kpis: {
+      cpi: cpi ? Math.round(cpi * 100) / 100 : null,
+      eac: Math.round(eac),
+      variacion: variacion !== null ? Math.round(variacion) : null,
+      pct_gastado: Math.round(pct_gastado * 10) / 10,
+      pct_comprometido: Math.round(pct_comprometido * 10) / 10,
+      alerta: eac > presupuesto * 1.05 ? 'rojo'
+             : eac > presupuesto * 1.02 ? 'amarillo'
+             : 'verde',
+    },
+  });
+}
