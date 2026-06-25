@@ -754,6 +754,10 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
     <button class="nav-item" data-page="proveedoresGestion" onclick="navTo('proveedoresGestion')">
       <span class="nav-icon">🏭</span> Proveedores
     </button>
+    <button class="nav-item" data-page="facturasProveedor" onclick="navTo('facturasProveedor')">
+      <span class="nav-icon">🧾</span> Facturas Proveedores
+      <span class="nav-badge" id="factPendBadge" style="display:none">0</span>
+    </button>
     <button class="nav-item" data-page="fotosObra" onclick="navTo('fotosObra')">
       <span class="nav-icon">📷</span> Galería de Fotos
     </button>
@@ -2474,6 +2478,125 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
               <button class="btn btn-secondary" onclick="cerrarModalAts()">Cancelar</button>
               <span id="atsElimBtn"></span>
               <button class="btn btn-primary" onclick="guardarAts()">💾 Guardar ATS</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- FACTURAS DE PROVEEDORES / SUPPLIER INVOICE TRACKING (NEW-103) -->
+      <div class="page" id="pageFacturasProveedor">
+        <div class="page-title">🧾 Facturas de Proveedores / Supplier Invoices</div>
+        <div id="fpKpis" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(165px,1fr));gap:12px;margin-bottom:16px"></div>
+        <div class="tbl-toolbar">
+          <select id="fpFiltroObra" onchange="filtrarFacturasProveedor()">
+            <option value="">Todas las obras</option>
+          </select>
+          <select id="fpFiltroEstado" onchange="filtrarFacturasProveedor()">
+            <option value="">Todos los estados</option>
+            <option value="pendiente_pago">⏳ Pendiente pago</option>
+            <option value="vencida">🔴 Vencida</option>
+            <option value="pagada">✅ Pagada</option>
+            <option value="en_disputa">⚠️ En disputa</option>
+          </select>
+          <input type="date" id="fpFiltroDesdeFecha" onchange="filtrarFacturasProveedor()" title="Desde fecha factura">
+          <input type="date" id="fpFiltroHastaFecha" onchange="filtrarFacturasProveedor()" title="Hasta fecha factura">
+          <input id="fpFiltroQ" type="search" placeholder="Buscar proveedor, nº factura..." oninput="filtrarFacturasProveedor()">
+          <button class="btn btn-primary" onclick="abrirModalFp()">+ Nueva Factura</button>
+          <button class="btn btn-secondary" onclick="exportarTabla(tblFp,'facturas-proveedor')">⬇ CSV</button>
+        </div>
+        <div id="tblFpWrap"></div>
+        <div class="modal-overlay" id="modalFp" style="display:none" onclick="if(event.target===this)cerrarModalFp()">
+          <div class="modal" style="max-width:660px">
+            <div class="modal-header"><h3 id="modalFpTitulo">Factura de Proveedor</h3><button class="modal-close" onclick="cerrarModalFp()">✕</button></div>
+            <div class="modal-body">
+              <div class="form-row">
+                <div class="form-group">
+                  <label>Nº Factura *</label>
+                  <input type="text" id="fpModalNumero" required style="width:100%" placeholder="FAC-2024-001">
+                </div>
+                <div class="form-group">
+                  <label>Proveedor</label>
+                  <input type="text" id="fpModalProveedor" style="width:100%" placeholder="Nombre del proveedor">
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label>Obra</label>
+                  <select id="fpModalObra" style="width:100%">
+                    <option value="">— Sin asignar —</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label>Categoría</label>
+                  <input type="text" id="fpModalCategoria" style="width:100%" placeholder="Ej: Materiales, Subcontrata...">
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label>Fecha factura *</label>
+                  <input type="date" id="fpModalFechaFactura" required style="width:100%">
+                </div>
+                <div class="form-group">
+                  <label>Fecha vencimiento</label>
+                  <input type="date" id="fpModalFechaVencimiento" style="width:100%">
+                </div>
+                <div class="form-group">
+                  <label>Estado</label>
+                  <select id="fpModalEstado" style="width:100%">
+                    <option value="pendiente_pago">⏳ Pendiente pago</option>
+                    <option value="pagada">✅ Pagada</option>
+                    <option value="vencida">🔴 Vencida</option>
+                    <option value="en_disputa">⚠️ En disputa</option>
+                  </select>
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label>Base imponible (€) *</label>
+                  <input type="number" id="fpModalBase" required min="0" step="0.01" style="width:100%" oninput="fpRecalcular()">
+                </div>
+                <div class="form-group" style="flex:0.7">
+                  <label>IVA (%)</label>
+                  <input type="number" id="fpModalIva" value="21" min="0" max="100" style="width:100%" oninput="fpRecalcular()">
+                </div>
+                <div class="form-group">
+                  <label>Total (€)</label>
+                  <input type="text" id="fpModalTotal" readonly style="width:100%;background:#f5f5f5;font-weight:700">
+                </div>
+              </div>
+              <div class="form-row" id="fpPagoRow" style="display:none">
+                <div class="form-group">
+                  <label>Fecha pago</label>
+                  <input type="date" id="fpModalFechaPago" style="width:100%">
+                </div>
+                <div class="form-group">
+                  <label>Método pago</label>
+                  <select id="fpModalMetodoPago" style="width:100%">
+                    <option value="">—</option>
+                    <option value="transferencia">Transferencia</option>
+                    <option value="cheque">Cheque</option>
+                    <option value="efectivo">Efectivo</option>
+                    <option value="confirming">Confirming</option>
+                    <option value="pagare">Pagaré</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label>Referencia pago</label>
+                  <input type="text" id="fpModalRefPago" style="width:100%">
+                </div>
+              </div>
+              <div class="form-group">
+                <label>Concepto</label>
+                <input type="text" id="fpModalConcepto" style="width:100%" placeholder="Descripción de la factura">
+              </div>
+              <div class="form-group">
+                <label>Notas</label>
+                <textarea id="fpModalNotas" rows="2" style="width:100%"></textarea>
+              </div>
+            </div>
+            <div class="modal-footer">
+              <button class="btn btn-secondary" onclick="cerrarModalFp()">Cancelar</button>
+              <button class="btn btn-primary" onclick="guardarFp()">💾 Guardar</button>
             </div>
           </div>
         </div>
@@ -8218,6 +8341,7 @@ const PAGE_TITLES = {
   ausencias:          '📅 Ausencias y Permisos / Leave Management',
   horariosObra:       '⏰ Horarios de Obra / Site Work Schedules',
   proveedoresGestion: '🏭 Gestión de Proveedores / Supplier Management',
+  facturasProveedor:  '🧾 Facturas de Proveedores / Supplier Invoices',
 };
 
 const PAGE_LOADERS = {
@@ -8321,6 +8445,7 @@ const PAGE_LOADERS = {
   ausencias:          cargarAusencias,
   horariosObra:       cargarHorariosObra,
   proveedoresGestion: cargarProveedoresGestion,
+  facturasProveedor:  cargarFacturasProveedor,
 };
 
 let currentPage = '';
@@ -8453,6 +8578,7 @@ const SYNC_INTERVALS = {
   ausencias:          120,
   horariosObra:       300,
   proveedoresGestion: 180,
+  facturasProveedor:  90,
 };
 
 let _syncTimer = null, _syncLabelTimer = null, _syncLastTs = null;
@@ -17813,6 +17939,198 @@ function exportarFinanzas() {
   if (!obraId) return showToast('Selecciona una obra primero', 'warning');
   // Abrir informe en nueva pestaña usando el endpoint de informes
   window.open(`/informe-obra/${obraId}?tipo=financiero`, '_blank');
+}
+
+// ── FACTURAS DE PROVEEDORES / SUPPLIER INVOICE TRACKING (NEW-103) ────────────
+let tblFp = null, _fpData = [];
+const FP_ESTADO_COLOR = { pendiente_pago:'var(--warning)', vencida:'var(--danger)', pagada:'var(--success)', en_disputa:'#e67e22' };
+const FP_ESTADO_ICON  = { pendiente_pago:'⏳', vencida:'🔴', pagada:'✅', en_disputa:'⚠️' };
+
+async function cargarFacturasProveedor() {
+  const data = await api('/facturas-proveedor');
+  _fpData = data.data || [];
+  const s   = data.stats || {};
+  // KPIs
+  const badge = document.getElementById('factPendBadge');
+  const pend  = s.pendiente_pago || _fpData.filter(r=>r.estado==='pendiente_pago').length;
+  const venc  = s.vencidas       || _fpData.filter(r=>r.estado==='vencida').length;
+  if (badge) { badge.textContent = pend+venc; badge.style.display = (pend+venc)?'':'none'; }
+  document.getElementById('fpKpis').innerHTML = [
+    { label:'Total facturas', val: s.total||_fpData.length, icon:'🧾' },
+    { label:'Pendiente pago', val: s.pendiente_pago||pend, icon:'⏳', color:'var(--warning)' },
+    { label:'Vencidas', val: s.vencidas||venc, icon:'🔴', color:'var(--danger)' },
+    { label:'Pagadas', val: s.pagadas||_fpData.filter(r=>r.estado==='pagada').length, icon:'✅', color:'var(--success)' },
+    { label:'Importe pendiente', val: fmtMoney(s.importe_pendiente||_fpData.filter(r=>r.estado!=='pagada').reduce((a,r)=>a+(parseFloat(r.importe_base)||0)*(1+(r.iva_pct||21)/100),0)), icon:'💸', color:'var(--warning)' },
+    { label:'Importe pagado', val: fmtMoney(s.importe_pagado||_fpData.filter(r=>r.estado==='pagada').reduce((a,r)=>a+(parseFloat(r.importe_base)||0)*(1+(r.iva_pct||21)/100),0)), icon:'💶', color:'var(--success)' }
+  ].map(k=>`<div class="kpi-mini" style="border-left:3px solid ${k.color||'var(--accent)'}">
+    <div style="font-size:1.4rem">${k.icon}</div>
+    <div style="font-size:1.1rem;font-weight:700;color:${k.color||'var(--text)'}">${k.val}</div>
+    <div style="font-size:.75rem;opacity:.7">${k.label}</div>
+  </div>`).join('');
+  // Populate obra filter
+  const sel = document.getElementById('fpFiltroObra');
+  if (sel) {
+    const obras = [...new Map(_fpData.filter(r=>r.obra_id).map(r=>[r.obra_id,r.obra_nombre||'Obra '+r.obra_id])).entries()];
+    sel.innerHTML = '<option value="">Todas las obras</option>' +
+      obras.map(([id,nom])=>`<option value="${id}">${nom}</option>`).join('');
+  }
+  filtrarFacturasProveedor();
+}
+
+function filtrarFacturasProveedor() {
+  const obraId = document.getElementById('fpFiltroObra')?.value   || '';
+  const estado = document.getElementById('fpFiltroEstado')?.value  || '';
+  const desde  = document.getElementById('fpFiltroDesdeFecha')?.value || '';
+  const hasta  = document.getElementById('fpFiltroHastaFecha')?.value || '';
+  const q      = (document.getElementById('fpFiltroQ')?.value       || '').toLowerCase();
+  let rows = _fpData.filter(r =>
+    (!obraId || String(r.obra_id) === obraId) &&
+    (!estado || r.estado === estado)           &&
+    (!desde  || r.fecha_factura >= desde)      &&
+    (!hasta  || r.fecha_factura <= hasta)      &&
+    (!q      || (r.numero_factura||'').toLowerCase().includes(q) ||
+                (r.proveedor_nombre||'').toLowerCase().includes(q) ||
+                (r.concepto||'').toLowerCase().includes(q))
+  );
+  if (!tblFp) {
+    tblFp = new Tabulator('#tblFpWrap', {
+      data: rows, layout:'fitColumns', responsiveLayout:'collapse',
+      pagination:'local', paginationSize:20, movableColumns:true,
+      initialSort:[{column:'fecha_factura',dir:'desc'}],
+      columns:[
+        { title:'Estado', field:'estado', width:135, formatter:(c)=>{
+            const v=c.getValue();
+            return `<span style="background:${FP_ESTADO_COLOR[v]||'#999'};color:#fff;padding:2px 8px;border-radius:12px;font-size:.8rem">${FP_ESTADO_ICON[v]||''} ${(v||'').replace(/_/g,' ')}</span>`;
+          }
+        },
+        { title:'Nº Factura', field:'numero_factura', width:140 },
+        { title:'Proveedor', field:'proveedor_nombre', minWidth:160 },
+        { title:'Obra', field:'obra_nombre', minWidth:140 },
+        { title:'Categoría', field:'categoria', minWidth:120 },
+        { title:'F. Factura', field:'fecha_factura', width:105 },
+        { title:'F. Vencimiento', field:'fecha_vencimiento', width:125,
+          formatter:(c)=>{
+            const v=c.getValue(); if(!v) return '—';
+            const hoy=new Date().toISOString().slice(0,10);
+            const col=v<hoy&&c.getRow().getData().estado!=='pagada'?'var(--danger)':'inherit';
+            return `<span style="color:${col}">${v}</span>`;
+          }
+        },
+        { title:'Base (€)', field:'importe_base', width:110, hozAlign:'right',
+          formatter:(c)=>fmtMoney(c.getValue())
+        },
+        { title:'Total (€)', field:'importe_total', width:115, hozAlign:'right',
+          formatter:(c)=>{
+            const r=c.getRow().getData();
+            const total=(parseFloat(r.importe_base)||0)*(1+(r.iva_pct||21)/100);
+            return `<strong>${fmtMoney(total)}</strong>`;
+          }
+        },
+        { title:'Concepto', field:'concepto', minWidth:160 },
+        { title:'Acciones', width:110, hozAlign:'center', formatter:(c)=>{
+            const id=c.getRow().getData().id;
+            return `<button class="btn btn-xs" onclick="editarFp(${id})">✏️</button>
+                    <button class="btn btn-xs btn-danger" onclick="eliminarFp(${id})">🗑️</button>`;
+          }
+        }
+      ]
+    });
+  } else {
+    tblFp.replaceData(rows);
+  }
+}
+
+function fpRecalcular() {
+  const base = parseFloat(document.getElementById('fpModalBase')?.value) || 0;
+  const iva  = parseFloat(document.getElementById('fpModalIva')?.value)  || 21;
+  const total = base * (1 + iva / 100);
+  document.getElementById('fpModalTotal').value = fmtMoney(total);
+}
+
+function fpTogglePagoRow() {
+  const est  = document.getElementById('fpModalEstado')?.value;
+  const row  = document.getElementById('fpPagoRow');
+  if (row) row.style.display = (est === 'pagada') ? '' : 'none';
+}
+
+function abrirModalFp(d = {}) {
+  const m = document.getElementById('modalFp');
+  m._fpId = d.id || null;
+  document.getElementById('modalFpTitulo').textContent   = d.id ? 'Editar Factura' : 'Nueva Factura de Proveedor';
+  document.getElementById('fpModalNumero').value          = d.numero_factura     || '';
+  document.getElementById('fpModalProveedor').value       = d.proveedor_nombre   || '';
+  document.getElementById('fpModalCategoria').value       = d.categoria          || '';
+  document.getElementById('fpModalFechaFactura').value    = d.fecha_factura      || new Date().toISOString().slice(0,10);
+  document.getElementById('fpModalFechaVencimiento').value= d.fecha_vencimiento  || '';
+  document.getElementById('fpModalEstado').value          = d.estado             || 'pendiente_pago';
+  document.getElementById('fpModalBase').value            = d.importe_base       || '';
+  document.getElementById('fpModalIva').value             = d.iva_pct            ?? 21;
+  document.getElementById('fpModalFechaPago').value       = d.fecha_pago         || '';
+  document.getElementById('fpModalMetodoPago').value      = d.metodo_pago        || '';
+  document.getElementById('fpModalRefPago').value         = d.referencia_pago    || '';
+  document.getElementById('fpModalConcepto').value        = d.concepto           || '';
+  document.getElementById('fpModalNotas').value           = d.notas              || '';
+  fpRecalcular();
+  fpTogglePagoRow();
+  document.getElementById('fpModalEstado').onchange = fpTogglePagoRow;
+  poblarSelectObras('fpModalObra').then(()=>{
+    document.getElementById('fpModalObra').value = d.obra_id || '';
+  });
+  m.style.display = 'flex';
+}
+
+function editarFp(id) {
+  const d = _fpData.find(r => r.id === id);
+  if (d) abrirModalFp(d);
+}
+
+async function guardarFp() {
+  const m  = document.getElementById('modalFp');
+  const id = m._fpId;
+  const body = {
+    numero_factura:    document.getElementById('fpModalNumero').value.trim(),
+    proveedor_nombre:  document.getElementById('fpModalProveedor').value.trim(),
+    obra_id:           parseInt(document.getElementById('fpModalObra').value) || null,
+    categoria:         document.getElementById('fpModalCategoria').value.trim(),
+    fecha_factura:     document.getElementById('fpModalFechaFactura').value,
+    fecha_vencimiento: document.getElementById('fpModalFechaVencimiento').value,
+    estado:            document.getElementById('fpModalEstado').value,
+    importe_base:      parseFloat(document.getElementById('fpModalBase').value) || 0,
+    iva_pct:           parseFloat(document.getElementById('fpModalIva').value) || 21,
+    fecha_pago:        document.getElementById('fpModalFechaPago').value || null,
+    metodo_pago:       document.getElementById('fpModalMetodoPago').value,
+    referencia_pago:   document.getElementById('fpModalRefPago').value.trim(),
+    concepto:          document.getElementById('fpModalConcepto').value.trim(),
+    notas:             document.getElementById('fpModalNotas').value.trim()
+  };
+  if (!body.numero_factura) return showToast('El número de factura es obligatorio', 'warning');
+  if (!body.fecha_factura)  return showToast('La fecha de factura es obligatoria', 'warning');
+  try {
+    if (id) {
+      await api(`/facturas-proveedor/${id}`, { method:'PUT', body: JSON.stringify(body) });
+      showToast('Factura actualizada', 'success');
+    } else {
+      await api('/facturas-proveedor', { method:'POST', body: JSON.stringify(body) });
+      showToast('Factura registrada', 'success');
+    }
+    cerrarModalFp();
+    tblFp = null;
+    await cargarFacturasProveedor();
+  } catch(e) { showToast('Error al guardar: ' + e.message, 'danger'); }
+}
+
+async function eliminarFp(id) {
+  if (!confirm('¿Eliminar esta factura?')) return;
+  try {
+    await api(`/facturas-proveedor/${id}`, { method:'DELETE' });
+    showToast('Factura eliminada', 'success');
+    tblFp = null;
+    await cargarFacturasProveedor();
+  } catch(e) { showToast('Error al eliminar: ' + e.message, 'danger'); }
+}
+
+function cerrarModalFp() {
+  document.getElementById('modalFp').style.display = 'none';
 }
 
 // ── GESTIÓN DE PROVEEDORES / SUPPLIER MANAGEMENT (NEW-102) ───────────────────

@@ -4721,6 +4721,14 @@ export default {
         if (method === 'PUT')    return await actualizarVisitaObra(_vid, request, env);
         if (method === 'DELETE') return await eliminarVisitaObra(_vid, request, env);
       }
+      // ── Facturas de Proveedores / Supplier Invoice Tracking (NEW-103) ───────────
+      if (path === '/facturas-proveedor' && method === 'GET')  return await getFacturasProveedor(request, env);
+      if (path === '/facturas-proveedor' && method === 'POST') return await crearFacturaProveedor(request, env);
+      if (path.startsWith('/facturas-proveedor/')) {
+        const _fpId = parseInt(path.split('/facturas-proveedor/')[1]);
+        if (method === 'PUT')    return await actualizarFacturaProveedor(_fpId, request, env);
+        if (method === 'DELETE') return await eliminarFacturaProveedor(_fpId, request, env);
+      }
       // ── Gestión de Proveedores / Supplier Management (NEW-102) ──────────────────
       if (path === '/proveedores-gestion' && method === 'GET')  return await getProveedoresGestion(request, env);
       if (path === '/proveedores-gestion' && method === 'POST') return await crearProveedorGestion(request, env);
@@ -19840,5 +19848,132 @@ async function eliminarProveedorGestion(id, request, env) {
   const { empresa_id, rol } = await getAuth(request, env);
   if (!empresa_id || rol === 'operario') return err('Sin permisos', 403);
   await env.DB.prepare('DELETE FROM proveedores_gestion WHERE id=? AND empresa_id=?').bind(id, empresa_id).run();
+  return json({ ok: true });
+}
+
+
+// ════════════════════════════════════════════════════════════════════════════════
+// NEW-103: FACTURAS DE PROVEEDORES / SUPPLIER INVOICE TRACKING
+// ════════════════════════════════════════════════════════════════════════════════
+async function ensureFacturasProveedorTable(env) {
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS facturas_proveedor (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    empresa_id        INTEGER NOT NULL,
+    obra_id           INTEGER,
+    proveedor_id      INTEGER,
+    proveedor_nombre  TEXT,
+    orden_compra_id   INTEGER,
+    numero_factura    TEXT    NOT NULL,
+    fecha_factura     TEXT    NOT NULL,
+    fecha_vencimiento TEXT,
+    importe_base      REAL    NOT NULL DEFAULT 0,
+    iva_pct           REAL    NOT NULL DEFAULT 21,
+    importe_iva       REAL    GENERATED ALWAYS AS (ROUND(importe_base * iva_pct / 100, 2)) VIRTUAL,
+    importe_total     REAL    GENERATED ALWAYS AS (ROUND(importe_base * (1 + iva_pct / 100), 2)) VIRTUAL,
+    estado            TEXT    NOT NULL DEFAULT 'pendiente_pago',
+    fecha_pago        TEXT,
+    metodo_pago       TEXT,
+    referencia_pago   TEXT,
+    concepto          TEXT,
+    categoria         TEXT,
+    notas             TEXT,
+    archivo_url       TEXT,
+    created_by        TEXT,
+    created_at        TEXT    NOT NULL DEFAULT (datetime('now')),
+    updated_at        TEXT    NOT NULL DEFAULT (datetime('now'))
+  )`).run();
+}
+
+async function getFacturasProveedor(request, env) {
+  await ensureFacturasProveedorTable(env);
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const url    = new URL(request.url);
+  const obra_id  = url.searchParams.get('obra_id');
+  const estado   = url.searchParams.get('estado');
+  const prov     = url.searchParams.get('proveedor_id');
+  const desde    = url.searchParams.get('desde');
+  const hasta    = url.searchParams.get('hasta');
+  let sql = `SELECT f.*,
+    o.nombre as obra_nombre
+    FROM facturas_proveedor f
+    LEFT JOIN obras o ON f.obra_id = o.id
+    WHERE f.empresa_id = ?`;
+  const params = [empresa_id];
+  if (obra_id)  { sql += ' AND f.obra_id = ?';          params.push(parseInt(obra_id)); }
+  if (estado)   { sql += ' AND f.estado = ?';           params.push(estado); }
+  if (prov)     { sql += ' AND f.proveedor_id = ?';     params.push(parseInt(prov)); }
+  if (desde)    { sql += ' AND f.fecha_factura >= ?';   params.push(desde); }
+  if (hasta)    { sql += ' AND f.fecha_factura <= ?';   params.push(hasta); }
+  sql += ' ORDER BY f.fecha_factura DESC';
+  const { results } = await env.DB.prepare(sql).bind(...params).all();
+  // Auto-mark vencidas
+  const hoy = new Date().toISOString().slice(0,10);
+  const actualizar = results.filter(r => r.estado === 'pendiente_pago' && r.fecha_vencimiento && r.fecha_vencimiento < hoy);
+  for (const r of actualizar) {
+    await env.DB.prepare(`UPDATE facturas_proveedor SET estado='vencida', updated_at=datetime('now') WHERE id=?`).bind(r.id).run();
+    r.estado = 'vencida';
+  }
+  const stats = {
+    total:          results.length,
+    pendiente_pago: results.filter(r=>r.estado==='pendiente_pago').length,
+    vencidas:       results.filter(r=>r.estado==='vencida').length,
+    pagadas:        results.filter(r=>r.estado==='pagada').length,
+    importe_pendiente: results.filter(r=>r.estado!=='pagada').reduce((a,r)=>a+(parseFloat(r.importe_base)||0)*(1+(r.iva_pct||21)/100),0),
+    importe_pagado: results.filter(r=>r.estado==='pagada').reduce((a,r)=>a+(parseFloat(r.importe_base)||0)*(1+(r.iva_pct||21)/100),0)
+  };
+  return json({ data: results, stats });
+}
+
+async function crearFacturaProveedor(request, env) {
+  await ensureFacturasProveedorTable(env);
+  const { empresa_id, nombre: createdBy } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const body = await request.json().catch(() => ({}));
+  if (!body.numero_factura?.trim()) return err('El número de factura es obligatorio');
+  if (!body.fecha_factura)          return err('La fecha de factura es obligatoria');
+  if (body.importe_base === undefined || body.importe_base === null) return err('El importe base es obligatorio');
+  const r = await env.DB.prepare(`
+    INSERT INTO facturas_proveedor
+      (empresa_id,obra_id,proveedor_id,proveedor_nombre,orden_compra_id,numero_factura,
+       fecha_factura,fecha_vencimiento,importe_base,iva_pct,estado,fecha_pago,metodo_pago,
+       referencia_pago,concepto,categoria,notas,archivo_url,created_by)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+    .bind(empresa_id, body.obra_id||null, body.proveedor_id||null, body.proveedor_nombre||null,
+          body.orden_compra_id||null, body.numero_factura.trim(), body.fecha_factura,
+          body.fecha_vencimiento||null, parseFloat(body.importe_base)||0, parseFloat(body.iva_pct)||21,
+          body.estado||'pendiente_pago', body.fecha_pago||null, body.metodo_pago||null,
+          body.referencia_pago||null, body.concepto||null, body.categoria||null,
+          body.notas||null, body.archivo_url||null, createdBy||null).run();
+  return json({ ok: true, id: r.meta.last_row_id }, 201);
+}
+
+async function actualizarFacturaProveedor(id, request, env) {
+  await ensureFacturasProveedorTable(env);
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const body = await request.json().catch(() => ({}));
+  if (!body.numero_factura?.trim()) return err('El número de factura es obligatorio');
+  await env.DB.prepare(`
+    UPDATE facturas_proveedor SET
+      obra_id=?,proveedor_id=?,proveedor_nombre=?,orden_compra_id=?,numero_factura=?,
+      fecha_factura=?,fecha_vencimiento=?,importe_base=?,iva_pct=?,estado=?,fecha_pago=?,
+      metodo_pago=?,referencia_pago=?,concepto=?,categoria=?,notas=?,archivo_url=?,
+      updated_at=datetime('now')
+    WHERE id=? AND empresa_id=?`)
+    .bind(body.obra_id||null, body.proveedor_id||null, body.proveedor_nombre||null,
+          body.orden_compra_id||null, body.numero_factura.trim(), body.fecha_factura,
+          body.fecha_vencimiento||null, parseFloat(body.importe_base)||0, parseFloat(body.iva_pct)||21,
+          body.estado||'pendiente_pago', body.fecha_pago||null, body.metodo_pago||null,
+          body.referencia_pago||null, body.concepto||null, body.categoria||null,
+          body.notas||null, body.archivo_url||null, id, empresa_id).run();
+  return json({ ok: true });
+}
+
+async function eliminarFacturaProveedor(id, request, env) {
+  await ensureFacturasProveedorTable(env);
+  const { empresa_id, rol } = await getAuth(request, env);
+  if (!empresa_id || rol === 'operario') return err('Sin permisos', 403);
+  await env.DB.prepare('DELETE FROM facturas_proveedor WHERE id=? AND empresa_id=?').bind(id, empresa_id).run();
   return json({ ok: true });
 }
