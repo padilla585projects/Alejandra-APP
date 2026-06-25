@@ -4518,11 +4518,12 @@ export default {
         if (method === 'PUT')    return await actualizarDeficiencia(_did, request, env);
         if (method === 'DELETE') return await eliminarDeficiencia(_did, request, env);
       }
-      // ── Actas de Reunión (NEW-36) ─────────────────────────────────────────────
+      // ── Actas de Reunión (NEW-36 + NEW-49 enhanced) ────────────────────────────
       if (path === '/actas-reunion'          && method === 'GET')  return await getActasReunion(request, env);
       if (path === '/actas-reunion'          && method === 'POST') return await crearActaReunion(request, env);
       if (path.startsWith('/actas-reunion/')) {
         const _aid = parseInt(path.split('/actas-reunion/')[1]);
+        if (method === 'GET')    return await getActaReunionById(_aid, request, env);
         if (method === 'PUT')    return await actualizarActaReunion(_aid, request, env);
         if (method === 'DELETE') return await eliminarActaReunion(_aid, request, env);
       }
@@ -4648,15 +4649,7 @@ export default {
         if (method === 'PUT')    return await actualizarSubmittal(_sbid, request, env);
         if (method === 'DELETE') return await eliminarSubmittal(_sbid, request, env);
       }
-      // ── Actas de Reunion (NEW-49) ────────────────────────────────────────────
-      if (path === '/actas-reunion' && method === 'GET')  return await getActasReunion(request, env);
-      if (path === '/actas-reunion' && method === 'POST') return await crearActaReunion(request, env);
-      if (path.startsWith('/actas-reunion/')) {
-        const _acid = parseInt(path.split('/actas-reunion/')[1]);
-        if (method === 'GET')    return await getActaReunion(_acid, request, env);
-        if (method === 'PUT')    return await actualizarActaReunion(_acid, request, env);
-        if (method === 'DELETE') return await eliminarActaReunion(_acid, request, env);
-      }
+      // (NEW-49 actas-reunion routes merged into NEW-36 block above)
       // ── Punch List / Lista de Verificacion (NEW-44) ─────────────────────────
       if (path === '/punch-list' && method === 'GET')    return await getPunchList(request, env);
       if (path === '/punch-list' && method === 'POST')   return await crearPunchItem(request, env);
@@ -13142,6 +13135,17 @@ async function ensureActasTable(env) {
     proxima_reunion TEXT, estado TEXT DEFAULT 'borrador',
     created_at TEXT DEFAULT (datetime('now'))
   )`).run().catch(()=>{});
+  // Add extended columns if not already present (NEW-49 enhancements)
+  for (const col of [
+    'ALTER TABLE actas_reunion ADD COLUMN hora TEXT',
+    'ALTER TABLE actas_reunion ADD COLUMN lugar TEXT',
+    'ALTER TABLE actas_reunion ADD COLUMN convocados TEXT',
+    'ALTER TABLE actas_reunion ADD COLUMN orden_dia TEXT',
+    'ALTER TABLE actas_reunion ADD COLUMN puntos_tratados TEXT',
+    'ALTER TABLE actas_reunion ADD COLUMN pendientes TEXT',
+    'ALTER TABLE actas_reunion ADD COLUMN redactor TEXT',
+    'ALTER TABLE actas_reunion ADD COLUMN updated_at TEXT',
+  ]) { await env.DB.prepare(col).run().catch(()=>{}); }
 }
 
 async function getActasReunion(request, env) {
@@ -13166,24 +13170,29 @@ async function crearActaReunion(request, env) {
   await ensureActasTable(env);
   const b = await request.json().catch(()=>({}));
   if (!b.titulo) return err('Título obligatorio', 400);
-  // Número correlativo por empresa+obra
   const obraId = b.obra_id ? parseInt(b.obra_id) : null;
   let numero = 'ACTA-001';
   try {
     const last = await env.DB.prepare(
-      `SELECT numero FROM actas_reunion WHERE empresa_id=? ${obraId ? 'AND obra_id=?' : 'AND obra_id IS NULL'} ORDER BY id DESC LIMIT 1`
-    ).bind(...(obraId ? [auth.empresa_id, obraId] : [auth.empresa_id])).first();
+      `SELECT numero FROM actas_reunion WHERE empresa_id=? ORDER BY id DESC LIMIT 1`
+    ).bind(auth.empresa_id).first();
     if (last?.numero) {
       const n = parseInt(last.numero.replace(/\D/g,'')) || 0;
       numero = 'ACTA-' + String(n + 1).padStart(3, '0');
     }
   } catch {}
-  const { meta } = await env.DB.prepare(
-    `INSERT INTO actas_reunion (obra_id,empresa_id,numero,titulo,tipo,fecha,convocante,asistentes,resumen,acuerdos,proxima_reunion,estado)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`
+  const asistStr = typeof b.asistentes === 'object' ? JSON.stringify(b.asistentes) : b.asistentes||null;
+  const pendStr  = typeof b.pendientes  === 'object' ? JSON.stringify(b.pendientes)  : b.pendientes||null;
+  const { meta } = await env.DB.prepare(`
+    INSERT INTO actas_reunion (obra_id,empresa_id,numero,titulo,tipo,fecha,hora,lugar,convocante,asistentes,
+      resumen,acuerdos,proxima_reunion,estado,orden_dia,puntos_tratados,pendientes,redactor)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
   ).bind(obraId, auth.empresa_id, numero, b.titulo,
-    b.tipo||'progreso', b.fecha||null, b.convocante||null, b.asistentes||null,
-    b.resumen||null, b.acuerdos||null, b.proxima_reunion||null, b.estado||'borrador'
+    b.tipo||'coordinacion', b.fecha||null, b.hora||null, b.lugar||null,
+    b.convocante||b.redactor||null,
+    asistStr, b.resumen||b.puntos_tratados||null,
+    b.acuerdos||null, b.proxima_reunion||null, b.estado||'borrador',
+    b.orden_dia||null, b.puntos_tratados||null, pendStr, b.redactor||null
   ).run();
   return json({ ok: true, id: meta?.last_row_id, numero });
 }
@@ -13193,12 +13202,18 @@ async function actualizarActaReunion(id, request, env) {
   if (!auth.empresa_id) return err('No autorizado', 403);
   await ensureActasTable(env);
   const b = await request.json().catch(()=>({}));
-  const campos = ['titulo','tipo','fecha','convocante','asistentes','resumen','acuerdos','proxima_reunion','estado'];
+  // Normalize asistentes/pendientes
+  if (b.asistentes !== undefined && typeof b.asistentes === 'object') b.asistentes = JSON.stringify(b.asistentes);
+  if (b.pendientes  !== undefined && typeof b.pendientes  === 'object') b.pendientes  = JSON.stringify(b.pendientes);
+  if (b.puntos_tratados !== undefined && !b.resumen) b.resumen = b.puntos_tratados;
+  const campos = ['titulo','tipo','fecha','hora','lugar','convocante','asistentes','resumen','puntos_tratados',
+                  'acuerdos','proxima_reunion','estado','orden_dia','pendientes','redactor','updated_at'];
   const sets=[]; const params=[];
   for (const c of campos) {
+    if (c === 'updated_at') { sets.push(`${c}=datetime('now')`); continue; }
     if (b[c] !== undefined) { sets.push(`${c}=?`); params.push(b[c]); }
   }
-  if (!sets.length) return err('Nada que actualizar', 400);
+  if (sets.filter(s=>!s.includes("datetime(")).length === 0) return err('Nada que actualizar', 400);
   params.push(id, auth.empresa_id);
   await env.DB.prepare(`UPDATE actas_reunion SET ${sets.join(',')} WHERE id=? AND empresa_id=?`).bind(...params).run();
   return json({ ok: true });
@@ -13209,6 +13224,15 @@ async function eliminarActaReunion(id, request, env) {
   if (!auth.empresa_id) return err('No autorizado', 403);
   await env.DB.prepare(`DELETE FROM actas_reunion WHERE id=? AND empresa_id=?`).bind(id, auth.empresa_id).run();
   return json({ ok: true });
+}
+async function getActaReunionById(id, request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth?.empresa_id) return err('No autorizado', 403);
+  await ensureActasTable(env);
+  const row = await env.DB.prepare(
+    `SELECT * FROM actas_reunion WHERE id=? AND empresa_id=?`
+  ).bind(id, auth.empresa_id).first();
+  return row ? json(row) : err('No encontrada', 404);
 }
 
 // ── CONTROL DE CALIDAD / PUNCH LIST (NEW-37) ─────────────────────────────────
@@ -14345,99 +14369,4 @@ async function eliminarSubmittal(id, request, env) {
   return json({ ok: true });
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-//  NEW-49 — ACTAS DE REUNION
-// ═══════════════════════════════════════════════════════════════════════════
-async function ensureActasReunionTable(env) {
-  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS actas_reunion (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    empresa_id INTEGER,
-    obra_id INTEGER,
-    numero TEXT,
-    titulo TEXT NOT NULL,
-    tipo TEXT DEFAULT 'coordinacion',
-    fecha TEXT,
-    hora TEXT,
-    lugar TEXT,
-    convocados TEXT,
-    asistentes TEXT,
-    orden_dia TEXT,
-    puntos_tratados TEXT,
-    acuerdos TEXT,
-    pendientes TEXT,
-    proxima_reunion TEXT,
-    redactor TEXT,
-    estado TEXT DEFAULT 'borrador',
-    created_at TEXT DEFAULT (datetime('now')),
-    updated_at TEXT DEFAULT (datetime('now'))
-  )`).run();
-}
-async function getActasReunion(request, env) {
-  const auth = await getAuth(request, env);
-  if (!auth?.empresa_id) return err('No autorizado', 403);
-  await ensureActasReunionTable(env);
-  const url = new URL(request.url);
-  const obraId = url.searchParams.get('obra_id');
-  const tipo   = url.searchParams.get('tipo');
-  let q = `SELECT * FROM actas_reunion WHERE empresa_id=?`;
-  const params = [auth.empresa_id];
-  if (obraId) { q += ` AND obra_id=?`; params.push(parseInt(obraId)); }
-  if (tipo)   { q += ` AND tipo=?`;    params.push(tipo); }
-  q += ` ORDER BY fecha DESC, created_at DESC`;
-  const { results } = await env.DB.prepare(q).bind(...params).all();
-  return json({ actas: results });
-}
-async function getActaReunion(id, request, env) {
-  const auth = await getAuth(request, env);
-  if (!auth?.empresa_id) return err('No autorizado', 403);
-  await ensureActasReunionTable(env);
-  const { results } = await env.DB.prepare(
-    `SELECT * FROM actas_reunion WHERE id=? AND empresa_id=?`
-  ).bind(id, auth.empresa_id).all();
-  return results[0] ? json(results[0]) : err('No encontrada', 404);
-}
-async function crearActaReunion(request, env) {
-  const auth = await getAuth(request, env);
-  if (!auth?.empresa_id) return err('No autorizado', 403);
-  await ensureActasReunionTable(env);
-  const b = await request.json();
-  if (!b.titulo) return err('titulo requerido', 400);
-  const year = new Date().getFullYear();
-  const { results: cntR } = await env.DB.prepare(
-    `SELECT COUNT(*)+1 as n FROM actas_reunion WHERE empresa_id=? AND substr(numero,6,4)=?`
-  ).bind(auth.empresa_id, String(year)).all();
-  const num = `ACTA-${year}-${String(cntR[0]?.n||1).padStart(3,'0')}`;
-  const r = await env.DB.prepare(`
-    INSERT INTO actas_reunion (empresa_id, obra_id, numero, titulo, tipo, fecha, hora, lugar,
-      convocados, asistentes, orden_dia, puntos_tratados, acuerdos, pendientes, proxima_reunion, redactor, estado)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-  `).bind(auth.empresa_id, b.obra_id||null, num, b.titulo, b.tipo||'coordinacion',
-          b.fecha||null, b.hora||null, b.lugar||null,
-          typeof b.convocados==='object' ? JSON.stringify(b.convocados) : b.convocados||null,
-          typeof b.asistentes==='object' ? JSON.stringify(b.asistentes) : b.asistentes||null,
-          b.orden_dia||null, b.puntos_tratados||null, b.acuerdos||null, b.pendientes||null,
-          b.proxima_reunion||null, b.redactor||auth.nombre||null, b.estado||'borrador').run();
-  return json({ ok: true, id: r.meta?.last_row_id, numero: num });
-}
-async function actualizarActaReunion(id, request, env) {
-  const auth = await getAuth(request, env);
-  if (!auth?.empresa_id) return err('No autorizado', 403);
-  const b = await request.json();
-  await env.DB.prepare(`
-    UPDATE actas_reunion SET titulo=?, tipo=?, fecha=?, hora=?, lugar=?, convocados=?, asistentes=?,
-      orden_dia=?, puntos_tratados=?, acuerdos=?, pendientes=?, proxima_reunion=?, redactor=?, estado=?,
-      updated_at=datetime('now')
-    WHERE id=? AND empresa_id=?
-  `).bind(b.titulo||null, b.tipo||null, b.fecha||null, b.hora||null, b.lugar||null,
-          typeof b.convocados==='object' ? JSON.stringify(b.convocados) : b.convocados||null,
-          typeof b.asistentes==='object' ? JSON.stringify(b.asistentes) : b.asistentes||null,
-          b.orden_dia||null, b.puntos_tratados||null, b.acuerdos||null, b.pendientes||null,
-          b.proxima_reunion||null, b.redactor||null, b.estado||null, id, auth.empresa_id).run();
-  return json({ ok: true });
-}
-async function eliminarActaReunion(id, request, env) {
-  const auth = await getAuth(request, env);
-  if (!auth?.empresa_id) return err('No autorizado', 403);
-  await env.DB.prepare(`DELETE FROM actas_reunion WHERE id=? AND empresa_id=?`).bind(id, auth.empresa_id).run();
-  return json({ ok: true });
-}
+// (NEW-49 actas-reunion functions removed — already implemented in NEW-36 above)
