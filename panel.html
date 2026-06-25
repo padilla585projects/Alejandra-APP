@@ -748,6 +748,9 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
       <span class="nav-icon">🏥</span> Seguros de Obra
       <span class="nav-badge" id="segurosBadge" style="display:none">0</span>
     </button>
+    <button class="nav-item" data-page="horariosObra" onclick="navTo('horariosObra')">
+      <span class="nav-icon">⏰</span> Horarios de Obra
+    </button>
     <button class="nav-item" data-page="fotosObra" onclick="navTo('fotosObra')">
       <span class="nav-icon">📷</span> Galería de Fotos
     </button>
@@ -2468,6 +2471,77 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
               <button class="btn btn-secondary" onclick="cerrarModalAts()">Cancelar</button>
               <span id="atsElimBtn"></span>
               <button class="btn btn-primary" onclick="guardarAts()">💾 Guardar ATS</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- HORARIOS DE OBRA / SITE WORK SCHEDULES (NEW-101) -->
+      <div class="page" id="pageHorariosObra">
+        <div class="page-title">⏰ Horarios de Obra / Site Work Schedules</div>
+        <div id="hoKpis" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;margin-bottom:16px"></div>
+        <div class="tbl-toolbar">
+          <select id="hoFiltroObra" onchange="filtrarHorariosObra()">
+            <option value="">Todas las obras</option>
+          </select>
+          <input id="hoFiltroQ" type="search" placeholder="Buscar obra..." oninput="filtrarHorariosObra()">
+          <button class="btn btn-primary" onclick="abrirModalHo()">+ Nuevo Horario</button>
+          <button class="btn btn-secondary" onclick="exportarTabla(tblHo,'horarios-obra')">⬇ CSV</button>
+        </div>
+        <div id="tblHoWrap"></div>
+        <div class="modal-overlay" id="modalHo" style="display:none" onclick="if(event.target===this)cerrarModalHo()">
+          <div class="modal" style="max-width:620px">
+            <div class="modal-header"><h3 id="modalHoTitulo">Horario de Obra</h3><button class="modal-close" onclick="cerrarModalHo()">✕</button></div>
+            <div class="modal-body">
+              <div class="form-row">
+                <div class="form-group" style="flex:2">
+                  <label>Obra *</label>
+                  <select id="hoModalObra" required style="width:100%">
+                    <option value="">— Seleccionar obra —</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label>Días laborables</label>
+                  <select id="hoModalDias" style="width:100%">
+                    <option value="LMXJV">Lun–Vie</option>
+                    <option value="LMXJVS">Lun–Sáb</option>
+                    <option value="LMXJVSD">Lun–Dom</option>
+                    <option value="LMXJ">Lun–Jue</option>
+                  </select>
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label>Hora entrada *</label>
+                  <input type="time" id="hoModalEntrada" required style="width:100%" onchange="hoCalcularHorasDia()">
+                </div>
+                <div class="form-group">
+                  <label>Hora salida *</label>
+                  <input type="time" id="hoModalSalida" required style="width:100%" onchange="hoCalcularHorasDia()">
+                </div>
+                <div class="form-group">
+                  <label>Tolerancia (min)</label>
+                  <input type="number" id="hoModalTolerancia" min="0" max="60" value="10" style="width:100%">
+                </div>
+                <div class="form-group">
+                  <label>Horas/día (calc.)</label>
+                  <input type="text" id="hoModalHorasDia" readonly style="width:100%;background:#f5f5f5">
+                </div>
+              </div>
+              <div class="form-group">
+                <label>Horarios por día (opcional — para turnos variables)</label>
+                <div id="hoModalDiasGrid" style="display:grid;grid-template-columns:repeat(7,1fr);gap:8px;margin-top:6px">
+                  <!-- Filled by JS -->
+                </div>
+              </div>
+              <div class="form-group">
+                <label>Notas</label>
+                <textarea id="hoModalNotas" rows="2" style="width:100%"></textarea>
+              </div>
+            </div>
+            <div class="modal-footer">
+              <button class="btn btn-secondary" onclick="cerrarModalHo()">Cancelar</button>
+              <button class="btn btn-primary" onclick="guardarHo()">💾 Guardar</button>
             </div>
           </div>
         </div>
@@ -8012,6 +8086,7 @@ const PAGE_TITLES = {
   caeDocumentacion:   '🛡️ CAE / Documentación Subcontratas (RD 171/2004)',
   ordenesTrabajo:     '🔧 Órdenes de Trabajo / Work Orders',
   ausencias:          '📅 Ausencias y Permisos / Leave Management',
+  horariosObra:       '⏰ Horarios de Obra / Site Work Schedules',
 };
 
 const PAGE_LOADERS = {
@@ -8113,6 +8188,7 @@ const PAGE_LOADERS = {
   caeDocumentacion:   cargarCaeDocumentacion,
   ordenesTrabajo:     cargarOrdenesTrabajo,
   ausencias:          cargarAusencias,
+  horariosObra:       cargarHorariosObra,
 };
 
 let currentPage = '';
@@ -8243,6 +8319,7 @@ const SYNC_INTERVALS = {
   caeDocumentacion:   90,
   ordenesTrabajo:     60,
   ausencias:          120,
+  horariosObra:       300,
 };
 
 let _syncTimer = null, _syncLabelTimer = null, _syncLastTs = null;
@@ -17603,6 +17680,175 @@ function exportarFinanzas() {
   if (!obraId) return showToast('Selecciona una obra primero', 'warning');
   // Abrir informe en nueva pestaña usando el endpoint de informes
   window.open(`/informe-obra/${obraId}?tipo=financiero`, '_blank');
+}
+
+// ── HORARIOS DE OBRA / SITE WORK SCHEDULES (NEW-101) ─────────────────────────
+let tblHo = null, _hoData = [];
+const HO_DIAS_LABEL = { LMXJV:'Lun–Vie', LMXJVS:'Lun–Sáb', LMXJVSD:'Lun–Dom', LMXJ:'Lun–Jue' };
+const HO_DIA_NAMES  = ['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
+
+async function cargarHorariosObra() {
+  const data = await api('/horarios-obra');
+  _hoData = Array.isArray(data) ? data : (data.data || []);
+  // KPIs
+  const totalHoras = _hoData.reduce((a,r)=>a+(parseFloat(r.horas_dia)||0),0);
+  document.getElementById('hoKpis').innerHTML = [
+    { label:'Obras configuradas', val: _hoData.length, icon:'🏗️' },
+    { label:'Jornada media (h)', val: _hoData.length ? (totalHoras/_hoData.length).toFixed(1) : '—', icon:'⏱️' },
+    { label:'Con turnos variables', val: _hoData.filter(r=>r.horarios_dia&&r.horarios_dia!=='null').length, icon:'🔄' }
+  ].map(k=>`<div class="kpi-mini" style="border-left:3px solid var(--accent)">
+    <div style="font-size:1.4rem">${k.icon}</div>
+    <div style="font-size:1.5rem;font-weight:700;color:var(--text)">${k.val}</div>
+    <div style="font-size:.75rem;opacity:.7">${k.label}</div>
+  </div>`).join('');
+  // Populate obra filter
+  const sel = document.getElementById('hoFiltroObra');
+  if (sel) {
+    const obras = [...new Map(_hoData.filter(r=>r.obra_id).map(r=>[r.obra_id,r.obra_nombre||'Obra '+r.obra_id])).entries()];
+    sel.innerHTML = '<option value="">Todas las obras</option>' +
+      obras.map(([id,nom])=>`<option value="${id}">${nom}</option>`).join('');
+  }
+  filtrarHorariosObra();
+}
+
+function filtrarHorariosObra() {
+  const obraId = document.getElementById('hoFiltroObra')?.value || '';
+  const q      = (document.getElementById('hoFiltroQ')?.value || '').toLowerCase();
+  let rows = _hoData.filter(r =>
+    (!obraId || String(r.obra_id) === obraId) &&
+    (!q      || (r.obra_nombre||'').toLowerCase().includes(q))
+  );
+  if (!tblHo) {
+    tblHo = new Tabulator('#tblHoWrap', {
+      data: rows, layout:'fitColumns', responsiveLayout:'collapse',
+      pagination:'local', paginationSize:20, movableColumns:true,
+      initialSort:[{column:'obra_nombre',dir:'asc'}],
+      columns:[
+        { title:'Obra', field:'obra_nombre', minWidth:180, formatter:(c)=>c.getValue()||'<i style="opacity:.5">General</i>' },
+        { title:'Días', field:'dias_semana', width:110, formatter:(c)=>HO_DIAS_LABEL[c.getValue()]||c.getValue()||'Lun–Vie' },
+        { title:'Entrada', field:'hora_entrada', width:95, hozAlign:'center' },
+        { title:'Salida', field:'hora_salida', width:95, hozAlign:'center' },
+        { title:'h/día', field:'horas_dia', width:75, hozAlign:'center', formatter:(c)=>`${c.getValue()||'?'}h` },
+        { title:'Tolerancia', field:'tolerancia_min', width:100, hozAlign:'center', formatter:(c)=>`${c.getValue()||10} min` },
+        { title:'Turnos variables', field:'horarios_dia', width:130, formatter:(c)=>{
+            const v=c.getValue(); return (v&&v!=='null') ? '✅ Sí' : '—';
+          }
+        },
+        { title:'Notas', field:'notas', minWidth:160, formatter:'textarea' },
+        { title:'Acciones', width:110, hozAlign:'center', formatter:(c)=>{
+            const id=c.getRow().getData().id;
+            return `<button class="btn btn-xs" onclick="editarHo(${id})">✏️</button>
+                    <button class="btn btn-xs btn-danger" onclick="eliminarHo(${id})">🗑️</button>`;
+          }
+        }
+      ]
+    });
+  } else {
+    tblHo.replaceData(rows);
+  }
+}
+
+function _renderDiasGrid(horariosDia) {
+  // horariosDia: {L:{entrada,salida}, M:{...}, ...} or null
+  const grid = document.getElementById('hoModalDiasGrid');
+  if (!grid) return;
+  const keys = ['L','M','X','J','V','S','D'];
+  grid.innerHTML = keys.map((k,i)=>`
+    <div style="text-align:center">
+      <div style="font-weight:600;font-size:.8rem;margin-bottom:4px">${HO_DIA_NAMES[i]}</div>
+      <input type="time" id="hoDay_${k}_entrada" placeholder="entrada"
+        style="width:100%;font-size:.75rem;padding:2px 4px;margin-bottom:3px"
+        value="${horariosDia&&horariosDia[k]?horariosDia[k].entrada:''}">
+      <input type="time" id="hoDay_${k}_salida" placeholder="salida"
+        style="width:100%;font-size:.75rem;padding:2px 4px"
+        value="${horariosDia&&horariosDia[k]?horariosDia[k].salida:''}">
+    </div>`).join('');
+}
+
+function hoCalcularHorasDia() {
+  const e = document.getElementById('hoModalEntrada')?.value;
+  const s = document.getElementById('hoModalSalida')?.value;
+  if (!e || !s) return;
+  const [eh,em] = e.split(':').map(Number);
+  const [sh,sm] = s.split(':').map(Number);
+  const mins = (sh*60+sm) - (eh*60+em);
+  document.getElementById('hoModalHorasDia').value = mins>0 ? (mins/60).toFixed(2)+'h' : '';
+}
+
+function abrirModalHo(d = {}) {
+  const m = document.getElementById('modalHo');
+  m._hoId = d.id || null;
+  document.getElementById('modalHoTitulo').textContent = d.id ? 'Editar Horario de Obra' : 'Nuevo Horario de Obra';
+  document.getElementById('hoModalDias').value        = d.dias_semana  || 'LMXJV';
+  document.getElementById('hoModalEntrada').value     = d.hora_entrada || '07:00';
+  document.getElementById('hoModalSalida').value      = d.hora_salida  || '15:30';
+  document.getElementById('hoModalTolerancia').value  = d.tolerancia_min ?? 10;
+  document.getElementById('hoModalHorasDia').value    = d.horas_dia ? d.horas_dia+'h' : '';
+  document.getElementById('hoModalNotas').value       = d.notas || '';
+  // Populate obra select
+  poblarSelectObras('hoModalObra').then(()=>{
+    document.getElementById('hoModalObra').value = d.obra_id || '';
+  });
+  // Render per-day grid
+  let hd = null;
+  try { hd = d.horarios_dia ? JSON.parse(d.horarios_dia) : null; } catch {}
+  _renderDiasGrid(hd);
+  hoCalcularHorasDia();
+  m.style.display = 'flex';
+}
+
+function editarHo(id) {
+  const d = _hoData.find(r => r.id === id);
+  if (d) abrirModalHo(d);
+}
+
+async function guardarHo() {
+  const m   = document.getElementById('modalHo');
+  const id  = m._hoId;
+  // Collect per-day hours
+  const keys = ['L','M','X','J','V','S','D'];
+  const horariosDia = {};
+  keys.forEach(k=>{
+    const e = document.getElementById(`hoDay_${k}_entrada`)?.value;
+    const s = document.getElementById(`hoDay_${k}_salida`)?.value;
+    if (e && s) horariosDia[k] = { entrada:e, salida:s };
+  });
+  const body = {
+    obra_id:        parseInt(document.getElementById('hoModalObra').value) || null,
+    dias_semana:    document.getElementById('hoModalDias').value,
+    hora_entrada:   document.getElementById('hoModalEntrada').value,
+    hora_salida:    document.getElementById('hoModalSalida').value,
+    tolerancia_min: parseInt(document.getElementById('hoModalTolerancia').value) || 10,
+    notas:          document.getElementById('hoModalNotas').value.trim(),
+    horarios_dia:   Object.keys(horariosDia).length ? horariosDia : null
+  };
+  if (!body.hora_entrada || !body.hora_salida) return showToast('La hora de entrada y salida son obligatorias', 'warning');
+  try {
+    if (id) {
+      await api(`/horarios-obra/${id}`, { method:'PUT', body: JSON.stringify(body) });
+      showToast('Horario actualizado', 'success');
+    } else {
+      await api('/horarios-obra', { method:'POST', body: JSON.stringify(body) });
+      showToast('Horario guardado', 'success');
+    }
+    cerrarModalHo();
+    tblHo = null;
+    await cargarHorariosObra();
+  } catch(e) { showToast('Error al guardar: ' + e.message, 'danger'); }
+}
+
+async function eliminarHo(id) {
+  if (!confirm('¿Eliminar este horario?')) return;
+  try {
+    await api(`/horarios-obra/${id}`, { method:'DELETE' });
+    showToast('Horario eliminado', 'success');
+    tblHo = null;
+    await cargarHorariosObra();
+  } catch(e) { showToast('Error al eliminar: ' + e.message, 'danger'); }
+}
+
+function cerrarModalHo() {
+  document.getElementById('modalHo').style.display = 'none';
 }
 
 // ── CONTROL DE AUSENCIAS Y PERMISOS / LEAVE MANAGEMENT (NEW-100) ──────────────
