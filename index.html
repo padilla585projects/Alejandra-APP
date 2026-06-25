@@ -1317,6 +1317,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
         <button onclick="showScreen('incidencias');setTimeout(nuevaIncidencia,300)" style="display:flex;align-items:center;gap:4px;padding:6px 10px;background:#ef444422;color:#ef4444;border:1px solid #ef444444;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0">🚨 Incidencia</button>
         <button onclick="dashSelTab('diario');setTimeout(diarioNuevo,200)" style="display:flex;align-items:center;gap:4px;padding:6px 10px;background:#22c55e22;color:#22c55e;border:1px solid #22c55e44;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0">📓 Diario</button>
         <button onclick="navTo('reuniones');setTimeout(actaNueva,200)" style="display:flex;align-items:center;gap:4px;padding:6px 10px;background:#0ea5e922;color:#0ea5e9;border:1px solid #0ea5e944;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0">📝 Acta</button>
+        <button onclick="ncrMobileNuevo()" style="display:flex;align-items:center;gap:4px;padding:6px 10px;background:#ef444422;color:#ef4444;border:1px solid #ef444444;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0">🚫 NCR</button>
         <button onclick="alejandraAbrir()" style="display:flex;align-items:center;gap:4px;padding:6px 10px;background:var(--accent)22;color:var(--accent);border:1px solid var(--accent)44;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0">🤖 Alejandra</button>
       </div>
     </div>
@@ -1376,6 +1377,48 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
       </div>
       <div style="padding:12px 16px;border-top:1px solid var(--border);flex-shrink:0">
         <button class="btn-primary" style="width:100%" onclick="fasesGuardar()">💾 Guardar fase</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL NCR MOBILE (NEW-73) -->
+  <div class="modal-overlay" id="modalNcrMobile" onclick="if(event.target===this)ncrMobileCerrar()" style="display:none;align-items:flex-end;justify-content:center;padding:0">
+    <div style="background:var(--surface);border-radius:16px 16px 0 0;width:100%;max-width:520px;max-height:90vh;display:flex;flex-direction:column">
+      <div style="padding:14px 16px 12px;border-bottom:1px solid var(--border);display:flex;align-items:center;flex-shrink:0">
+        <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:15px;color:var(--text);flex:1">🚫 Nueva No Conformidad</div>
+        <button onclick="ncrMobileCerrar()" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--muted)">×</button>
+      </div>
+      <div style="overflow-y:auto;flex:1;padding:14px 16px;display:flex;flex-direction:column;gap:11px">
+        <div>
+          <label style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.5px">Descripción de la No Conformidad *</label>
+          <textarea id="ncrMobileDesc" rows="3" placeholder="¿Qué no cumple los requisitos?" style="margin-top:4px;width:100%;padding:9px 10px;background:var(--surface);border:1px solid var(--border);border-radius:9px;color:var(--text);font-family:'Poppins',sans-serif;font-size:13px;resize:none;outline:none;box-sizing:border-box"></textarea>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div>
+            <label style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.5px">Gravedad</label>
+            <select id="ncrMobileGravedad" class="form-select" style="margin-top:4px">
+              <option value="menor">🟢 Menor</option>
+              <option value="moderado" selected>🟡 Moderado</option>
+              <option value="mayor">🟠 Mayor</option>
+              <option value="critico">🔴 Crítico</option>
+            </select>
+          </div>
+          <div>
+            <label style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.5px">Responsable</label>
+            <input id="ncrMobileResp" class="form-input" placeholder="Quién debe corregirlo" style="margin-top:4px">
+          </div>
+        </div>
+        <div>
+          <label style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.5px">Fecha límite de cierre</label>
+          <input id="ncrMobileFecha" type="date" class="form-input" style="margin-top:4px">
+        </div>
+        <div>
+          <label style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.5px">Notas adicionales</label>
+          <input id="ncrMobileNotas" class="form-input" placeholder="Observaciones..." style="margin-top:4px">
+        </div>
+      </div>
+      <div style="padding:12px 16px;border-top:1px solid var(--border);flex-shrink:0">
+        <button class="btn-primary" style="width:100%" onclick="ncrMobileGuardar()">🚫 Registrar NCR</button>
       </div>
     </div>
   </div>
@@ -11619,7 +11662,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '7.05';
+const APP_VERSION = '7.06';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -15139,6 +15182,51 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     document.getElementById('modalRfi').style.display = 'flex';
   }
   window.rfiNuevo = rfiNuevo;
+
+  // ── NCR Mobile (NEW-73) ──────────────────────────────────────────────────────
+  function ncrMobileNuevo() {
+    document.getElementById('ncrMobileDesc').value = '';
+    document.getElementById('ncrMobileGravedad').value = 'moderado';
+    document.getElementById('ncrMobileResp').value = '';
+    document.getElementById('ncrMobileFecha').value = '';
+    document.getElementById('ncrMobileNotas').value = '';
+    document.getElementById('modalNcrMobile').style.display = 'flex';
+  }
+
+  function ncrMobileCerrar() {
+    document.getElementById('modalNcrMobile').style.display = 'none';
+  }
+
+  async function ncrMobileGuardar() {
+    const desc = document.getElementById('ncrMobileDesc').value.trim();
+    if (!desc) { toast('La descripción es obligatoria', 'err'); return; }
+    const s = getSession();
+    const payload = {
+      obra_id:     s?.obra_id || null,
+      gravedad:    document.getElementById('ncrMobileGravedad').value,
+      descripcion: desc,
+      responsable: document.getElementById('ncrMobileResp').value.trim() || null,
+      fecha_limite: document.getElementById('ncrMobileFecha').value || null,
+      notas:       document.getElementById('ncrMobileNotas').value.trim() || null,
+      estado:      'abierta',
+    };
+    try {
+      const res = await apiCall('/ncrs-obra', { method: 'POST', body: JSON.stringify(payload) });
+      if (res.ok) {
+        const data = await res.json().catch(() => ({}));
+        toast(`NCR registrada: ${data.numero || ''} ✓`, 'ok');
+        ncrMobileCerrar();
+      } else {
+        toast('Error al registrar NCR', 'err');
+      }
+    } catch (e) {
+      toast('Error de conexión', 'err');
+    }
+  }
+
+  window.ncrMobileNuevo  = ncrMobileNuevo;
+  window.ncrMobileCerrar = ncrMobileCerrar;
+  window.ncrMobileGuardar = ncrMobileGuardar;
 
   function rfiEditar(id) {
     const r = _rfiData.find(x => x.id === id);
