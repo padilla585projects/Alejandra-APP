@@ -4516,6 +4516,14 @@ export default {
         const _foid = parseInt(path.split('/financiero-obra/')[1]);
         if (method === 'GET') return await getFinancieroObra(_foid, request, env);
       }
+      // ── Transmittals / Transmision de Documentos (NEW-54) ───────────────────
+      if (path === '/transmittals-obra' && method === 'GET')  return await getTransmittals(request, env);
+      if (path === '/transmittals-obra' && method === 'POST') return await crearTransmittal(request, env);
+      if (path.startsWith('/transmittals-obra/')) {
+        const _tid = parseInt(path.split('/transmittals-obra/')[1]);
+        if (method === 'PUT')    return await actualizarTransmittal(_tid, request, env);
+        if (method === 'DELETE') return await eliminarTransmittal(_tid, request, env);
+      }
       // â”€â”€ Cronograma / Gantt de Obra (NEW-52) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
       if (path.startsWith('/cronograma-obra/')) {
         const _crid = parseInt(path.split('/cronograma-obra/')[1]);
@@ -14700,3 +14708,95 @@ async function getCronogramaObra(obraId, request, env) {
   });
 }
 
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  NEW-54 — TRANSMITTALS / TRANSMISION DE DOCUMENTOS
+// ═══════════════════════════════════════════════════════════════════════════
+async function ensureTransmittalsTable(env) {
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS transmittals_obra (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    empresa_id INTEGER NOT NULL,
+    obra_id INTEGER,
+    numero TEXT,
+    asunto TEXT NOT NULL,
+    de_quien TEXT,
+    para_quien TEXT,
+    fecha_envio TEXT,
+    fecha_limite TEXT,
+    tipo TEXT DEFAULT 'envio',
+    estado TEXT DEFAULT 'enviado',
+    referencia TEXT,
+    documentos TEXT,
+    notas TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+  )`).run().catch(()=>{});
+}
+async function getTransmittals(request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth?.empresa_id) return err('No autorizado', 403);
+  await ensureTransmittalsTable(env);
+  const url    = new URL(request.url);
+  const obraId = url.searchParams.get('obra_id');
+  const estado = url.searchParams.get('estado');
+  const tipo   = url.searchParams.get('tipo');
+  let q = `SELECT * FROM transmittals_obra WHERE empresa_id=?`;
+  const params = [auth.empresa_id];
+  if (obraId) { q += ` AND obra_id=?`;  params.push(parseInt(obraId)); }
+  if (estado) { q += ` AND estado=?`;   params.push(estado); }
+  if (tipo)   { q += ` AND tipo=?`;     params.push(tipo); }
+  q += ` ORDER BY created_at DESC LIMIT 200`;
+  const { results } = await env.DB.prepare(q).bind(...params).all();
+  const hoy = new Date().toISOString().slice(0,10);
+  const items = (results||[]).map(t => ({
+    ...t,
+    vencido: t.estado !== 'cerrado' && t.fecha_limite && t.fecha_limite < hoy
+  }));
+  const enviados  = items.filter(t=>t.estado==='enviado').length;
+  const pendientes = items.filter(t=>t.estado==='pendiente_respuesta').length;
+  const vencidos  = items.filter(t=>t.vencido).length;
+  const cerrados  = items.filter(t=>t.estado==='cerrado').length;
+  return json({ transmittals: items, enviados, pendientes, vencidos, cerrados });
+}
+async function crearTransmittal(request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth?.empresa_id) return err('No autorizado', 403);
+  await ensureTransmittalsTable(env);
+  const b = await request.json();
+  if (!b.asunto) return err('asunto requerido', 400);
+  const year = new Date().getFullYear();
+  const { results: cntR } = await env.DB.prepare(
+    `SELECT COUNT(*)+1 as n FROM transmittals_obra WHERE empresa_id=? AND substr(numero,7,4)=?`
+  ).bind(auth.empresa_id, String(year)).all();
+  const num = `TRANS-${year}-${String(cntR[0]?.n||1).padStart(4,'0')}`;
+  const r = await env.DB.prepare(`
+    INSERT INTO transmittals_obra (empresa_id, obra_id, numero, asunto, de_quien, para_quien,
+      fecha_envio, fecha_limite, tipo, estado, referencia, documentos, notas)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
+  `).bind(auth.empresa_id, b.obra_id||null, num, b.asunto,
+          b.de_quien||auth.nombre||null, b.para_quien||null,
+          b.fecha_envio||new Date().toISOString().slice(0,10), b.fecha_limite||null,
+          b.tipo||'envio', b.estado||'enviado',
+          b.referencia||null, b.documentos||null, b.notas||null).run();
+  return json({ ok: true, id: r.meta?.last_row_id, numero: num }, 201);
+}
+async function actualizarTransmittal(id, request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth?.empresa_id) return err('No autorizado', 403);
+  const b = await request.json();
+  await env.DB.prepare(`
+    UPDATE transmittals_obra SET asunto=?, de_quien=?, para_quien=?, fecha_envio=?, fecha_limite=?,
+      tipo=?, estado=?, referencia=?, documentos=?, notas=?, updated_at=datetime('now')
+    WHERE id=? AND empresa_id=?
+  `).bind(b.asunto||null, b.de_quien||null, b.para_quien||null, b.fecha_envio||null,
+          b.fecha_limite||null, b.tipo||null, b.estado||null,
+          b.referencia||null, b.documentos||null, b.notas||null,
+          id, auth.empresa_id).run();
+  return json({ ok: true });
+}
+async function eliminarTransmittal(id, request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth?.empresa_id) return err('No autorizado', 403);
+  await env.DB.prepare(`DELETE FROM transmittals_obra WHERE id=? AND empresa_id=?`).bind(id, auth.empresa_id).run();
+  return json({ ok: true });
+}

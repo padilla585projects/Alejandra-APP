@@ -550,6 +550,10 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
     <button class="nav-item" data-page="cronogramaObra" onclick="navTo('cronogramaObra')">
       <span class="nav-icon">📅</span> Cronograma
     </button>
+    <button class="nav-item" data-page="transmittals" onclick="navTo('transmittals')">
+      <span class="nav-icon">📨</span> Transmittals
+      <span class="nav-badge" id="transmittalsBadge" style="display:none">!</span>
+    </button>
 
     <div class="sidebar-section" onclick="sidebarToggle(this)" data-sid="seguimiento"><span>📓 Seguimiento</span><span class="sec-chevron">▼</span></div>
     <button class="nav-item" data-page="partesPanel" onclick="navTo('partesPanel')">
@@ -1798,6 +1802,35 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
             <button id="lightboxEliminar" style="background:#ef4444;color:#fff;border:none;padding:6px 16px;border-radius:6px;cursor:pointer;font-size:13px" onclick="eliminarFotoActual()">🗑 Eliminar</button>
           </div>
         </div>
+      </div>
+
+      <!-- TRANSMITTALS (NEW-54) -->
+      <div class="page" id="pageTransmittals">
+        <div class="page-title">📨 Transmittals</div>
+        <div class="page-sub">Registro de envío y recepción de documentos entre partes — seguimiento formal de correspondencia técnica</div>
+        <div class="tbl-toolbar" style="flex-wrap:wrap;gap:8px;margin-bottom:16px">
+          <select class="tbl-search" id="filterTransmittalsObra" style="min-width:220px" onchange="cargarTransmittals()">
+            <option value="">🏗 Todas las obras</option>
+          </select>
+          <select class="tbl-search" id="filterTransmittalsTipo" style="min-width:140px" onchange="cargarTransmittals()">
+            <option value="">Todos los tipos</option>
+            <option value="envio">📤 Envío</option>
+            <option value="respuesta">↩️ Respuesta</option>
+            <option value="informacion">ℹ️ Información</option>
+          </select>
+          <select class="tbl-search" id="filterTransmittalsEstado" style="min-width:140px" onchange="cargarTransmittals()">
+            <option value="">Todos los estados</option>
+            <option value="enviado">✉️ Enviado</option>
+            <option value="pendiente_respuesta">⏳ Pendiente respuesta</option>
+            <option value="recibido">✅ Recibido</option>
+            <option value="cerrado">🏁 Cerrado</option>
+          </select>
+          <button class="btn btn-primary" onclick="abrirModalTransmittal()">+ Nuevo transmittal</button>
+          <button class="btn btn-secondary" onclick="exportarTabla(tblTransmittals,'transmittals')">⬇ CSV</button>
+          <button class="btn btn-secondary" onclick="cargarTransmittals()">🔄 Actualizar</button>
+        </div>
+        <div id="transmittalsResumen" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:12px;margin-bottom:18px"></div>
+        <div class="tbl-wrap"><div id="tblTransmittals"></div></div>
       </div>
 
       <!-- PLANOS DE OBRA -->
@@ -3323,6 +3356,7 @@ const PAGE_TITLES = {
   finanzasObra: '📊 Análisis Financiero por Obra',
   cronogramaObra: '📅 Cronograma de Obra',
   fotosObra: '📷 Galería de Fotos de Obra',
+  transmittals: '📨 Transmittals',
 };
 
 const PAGE_LOADERS = {
@@ -3377,6 +3411,7 @@ const PAGE_LOADERS = {
   finanzasObra: cargarFinanzasObra,
   cronogramaObra: cargarCronogramaObra,
   fotosObra: cargarFotosObra,
+  transmittals: cargarTransmittals,
 };
 
 let currentPage = '';
@@ -3460,6 +3495,7 @@ const SYNC_INTERVALS = {
   finanzasObra: 90,
   cronogramaObra: 120,
   fotosObra: 60,
+  transmittals: 90,
 };
 
 let _syncTimer = null, _syncLabelTimer = null, _syncLastTs = null;
@@ -12561,6 +12597,168 @@ function renderGantt() {
         ${hitosRow ? `<div style="height:4px;background:var(--border)"></div>${hitosRow}` : ''}
       </div>
     </div>`;
+}
+
+// ── TRANSMITTALS / TRANSMISION DE DOCUMENTOS (NEW-54) ────────────
+let tblTransmittals = null;
+
+const TRANS_TIPO_ICON  = { envio:'📤', respuesta:'↩️', informacion:'ℹ️' };
+const TRANS_ESTADO_COLOR = {
+  enviado:'var(--primary)', pendiente_respuesta:'var(--warning)',
+  recibido:'var(--success)', cerrado:'var(--muted)'
+};
+
+async function cargarTransmittals() {
+  if (document.getElementById('filterTransmittalsObra')?.options.length <= 1) poblarSelectObras('filterTransmittalsObra');
+  const obraId = document.getElementById('filterTransmittalsObra')?.value || '';
+  const tipo   = document.getElementById('filterTransmittalsTipo')?.value  || '';
+  const estado = document.getElementById('filterTransmittalsEstado')?.value || '';
+  let url = `/transmittals-obra?`;
+  if (obraId) url += `obra_id=${obraId}&`;
+  if (tipo)   url += `tipo=${tipo}&`;
+  if (estado) url += `estado=${estado}&`;
+  const r = await api(url);
+  // Badge
+  const badge = document.getElementById('transmittalsBadge');
+  const vencidos = r?.vencidos || 0;
+  if (badge) badge.style.display = vencidos > 0 ? '' : 'none';
+  // KPI strip
+  document.getElementById('transmittalsResumen').innerHTML = `
+    <div class="kpi-card"><div class="kpi-icon">📨</div><div class="kpi-value">${(r?.transmittals||[]).length}</div><div class="kpi-label">Total</div></div>
+    <div class="kpi-card"><div class="kpi-icon">✉️</div><div class="kpi-value" style="color:var(--primary)">${r?.enviados||0}</div><div class="kpi-label">Enviados</div></div>
+    <div class="kpi-card"><div class="kpi-icon">⏳</div><div class="kpi-value" style="color:var(--warning)">${r?.pendientes||0}</div><div class="kpi-label">Pendientes resp.</div></div>
+    <div class="kpi-card"><div class="kpi-icon">⚠️</div><div class="kpi-value" style="color:${vencidos>0?'var(--danger)':'var(--muted)'}">${vencidos}</div><div class="kpi-label">Vencidos</div></div>
+    <div class="kpi-card"><div class="kpi-icon">🏁</div><div class="kpi-value" style="color:var(--muted)">${r?.cerrados||0}</div><div class="kpi-label">Cerrados</div></div>
+  `;
+  // Tabulator
+  const cols = [
+    { title:'N.º', field:'numero', width:120, formatter: cell => `<strong style="color:var(--primary)">${cell.getValue()||'—'}</strong>` },
+    { title:'Asunto', field:'asunto', widthGrow:3, formatter: cell => {
+        const d = cell.getRow().getData();
+        return `<div>${TRANS_TIPO_ICON[d.tipo]||'📨'} ${cell.getValue()||'—'}</div>`;
+    }},
+    { title:'De', field:'de_quien', widthGrow:1 },
+    { title:'Para', field:'para_quien', widthGrow:1 },
+    { title:'Fecha envío', field:'fecha_envio', width:110, formatter: cell => fmtFecha(cell.getValue()) },
+    { title:'Límite resp.', field:'fecha_limite', width:110, formatter: cell => {
+        const d = cell.getRow().getData();
+        const v = cell.getValue();
+        return v ? `<span style="color:${d.vencido?'var(--danger)':'inherit'}">${fmtFecha(v)}${d.vencido?' ⚠️':''}</span>` : '—';
+    }},
+    { title:'Estado', field:'estado', width:130, formatter: cell => {
+        const v = cell.getValue();
+        return `<span style="color:${TRANS_ESTADO_COLOR[v]||'inherit'};font-weight:600">${v||'—'}</span>`;
+    }},
+    { title:'Referencia', field:'referencia', width:120, formatter: cell => cell.getValue()||'—' },
+    { title:'', field:'id', width:90, headerSort:false, formatter: cell => {
+        const id = cell.getValue();
+        const d = cell.getRow().getData();
+        return `<div style="display:flex;gap:4px">
+          <button class="btn btn-sm" onclick="abrirModalTransmittalEditar(${id})" title="Editar">✏️</button>
+          <button class="btn btn-sm btn-danger" onclick="eliminarTransmittal(${id})" title="Eliminar">🗑</button>
+        </div>`;
+    }}
+  ];
+  if (!tblTransmittals) {
+    tblTransmittals = new Tabulator('#tblTransmittals', {
+      data: r?.transmittals || [], columns: cols,
+      layout:'fitColumns', responsiveLayout:'hide', pagination:'local', paginationSize:25,
+      langs:{ es:{ pagination:{ first:'«', first_title:'Primera', last:'»', last_title:'Última', prev:'‹', prev_title:'Anterior', next:'›', next_title:'Siguiente' } } }, locale:'es',
+    });
+  } else {
+    tblTransmittals.replaceData(r?.transmittals || []);
+  }
+}
+
+function abrirModalTransmittal(d={}) {
+  const isEdit = !!d.id;
+  const modalHtml = `
+    <div class="modal" id="modalTransmittal" style="display:flex">
+      <div class="modal-content" style="max-width:560px">
+        <div class="modal-header">
+          <span class="modal-title">${isEdit?'✏️ Editar':'+ Nuevo'} Transmittal</span>
+          <button class="modal-close" onclick="cerrarModal('modalTransmittal')">✕</button>
+        </div>
+        <div class="modal-body">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+            <div style="grid-column:span 2"><label class="form-label">Asunto *</label><input class="form-input" id="tAsunto" value="${esc(d.asunto||'')}" placeholder="Asunto del transmittal"></div>
+            <div><label class="form-label">De</label><input class="form-input" id="tDe" value="${esc(d.de_quien||'')}"></div>
+            <div><label class="form-label">Para</label><input class="form-input" id="tPara" value="${esc(d.para_quien||'')}"></div>
+            <div><label class="form-label">Tipo</label><select class="form-input" id="tTipo">
+              <option value="envio" ${d.tipo==='envio'?'selected':''}>📤 Envío</option>
+              <option value="respuesta" ${d.tipo==='respuesta'?'selected':''}>↩️ Respuesta</option>
+              <option value="informacion" ${d.tipo==='informacion'?'selected':''}>ℹ️ Información</option>
+            </select></div>
+            <div><label class="form-label">Estado</label><select class="form-input" id="tEstado">
+              <option value="enviado" ${d.estado==='enviado'||!d.estado?'selected':''}>✉️ Enviado</option>
+              <option value="pendiente_respuesta" ${d.estado==='pendiente_respuesta'?'selected':''}>⏳ Pendiente respuesta</option>
+              <option value="recibido" ${d.estado==='recibido'?'selected':''}>✅ Recibido</option>
+              <option value="cerrado" ${d.estado==='cerrado'?'selected':''}>🏁 Cerrado</option>
+            </select></div>
+            <div><label class="form-label">Fecha envío</label><input type="date" class="form-input" id="tFechaEnvio" value="${d.fecha_envio||new Date().toISOString().slice(0,10)}"></div>
+            <div><label class="form-label">Límite respuesta</label><input type="date" class="form-input" id="tFechaLimite" value="${d.fecha_limite||''}"></div>
+            <div><label class="form-label">Referencia</label><input class="form-input" id="tRef" value="${esc(d.referencia||'')}" placeholder="RFI-001, SUB-2024-0012..."></div>
+            <div><label class="form-label">Obra</label><select class="form-input" id="tObraId">${buildObraOptions(d.obra_id)}</select></div>
+            <div style="grid-column:span 2"><label class="form-label">Documentos incluidos</label><textarea class="form-input" id="tDocs" rows="2" placeholder="Lista de documentos, planos, especificaciones...">${esc(d.documentos||'')}</textarea></div>
+            <div style="grid-column:span 2"><label class="form-label">Notas</label><textarea class="form-input" id="tNotas" rows="2">${esc(d.notas||'')}</textarea></div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" onclick="cerrarModal('modalTransmittal')">Cancelar</button>
+          <button class="btn btn-primary" onclick="guardarTransmittal(${d.id||0})">💾 Guardar</button>
+        </div>
+      </div>
+    </div>`;
+  // Remove existing modal if present
+  document.getElementById('modalTransmittal')?.remove();
+  document.body.insertAdjacentHTML('beforeend', modalHtml);
+  if (document.getElementById('tObraId')?.options.length <= 1) poblarSelectObras('tObraId');
+}
+
+async function abrirModalTransmittalEditar(id) {
+  const r = await api(`/transmittals-obra?id=${id}`);
+  const d = (r?.transmittals||[]).find(t=>t.id===id) || {};
+  abrirModalTransmittal(d);
+}
+
+function buildObraOptions(selected) {
+  const opts = ['<option value="">— Obra —</option>'];
+  const sel = document.getElementById('filterTransmittalsObra');
+  if (sel) { Array.from(sel.options).forEach(o=>{ if(o.value) opts.push(`<option value="${o.value}" ${o.value==selected?'selected':''}>${o.text}</option>`); }); }
+  return opts.join('');
+}
+
+async function guardarTransmittal(id) {
+  const body = {
+    asunto:     document.getElementById('tAsunto').value.trim(),
+    de_quien:   document.getElementById('tDe').value.trim(),
+    para_quien: document.getElementById('tPara').value.trim(),
+    tipo:       document.getElementById('tTipo').value,
+    estado:     document.getElementById('tEstado').value,
+    fecha_envio:  document.getElementById('tFechaEnvio').value || null,
+    fecha_limite: document.getElementById('tFechaLimite').value || null,
+    referencia: document.getElementById('tRef').value.trim() || null,
+    obra_id:    document.getElementById('tObraId')?.value || null,
+    documentos: document.getElementById('tDocs').value.trim() || null,
+    notas:      document.getElementById('tNotas').value.trim() || null,
+  };
+  if (!body.asunto) { showToast('El asunto es obligatorio', 'warning'); return; }
+  const r = id
+    ? await api(`/transmittals-obra/${id}`, 'PUT', body)
+    : await api('/transmittals-obra', 'POST', body);
+  if (r?.ok || r?.id) {
+    cerrarModal('modalTransmittal');
+    document.getElementById('modalTransmittal')?.remove();
+    showToast(id ? 'Transmittal actualizado ✅' : `Transmittal creado ✅ (${r.numero})`, 'success');
+    cargarTransmittals();
+  } else showToast(r?.error || 'Error al guardar', 'error');
+}
+
+async function eliminarTransmittal(id) {
+  if (!confirm('¿Eliminar este transmittal?')) return;
+  const r = await api(`/transmittals-obra/${id}`, 'DELETE');
+  if (r?.ok) { showToast('Transmittal eliminado', 'success'); cargarTransmittals(); }
+  else showToast('Error al eliminar', 'error');
 }
 
 // ── SUBMITTAL LOG / APROBACIONES DE MATERIALES ───────────────────
