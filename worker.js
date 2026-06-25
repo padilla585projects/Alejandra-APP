@@ -4721,6 +4721,14 @@ export default {
         if (method === 'PUT')    return await actualizarVisitaObra(_vid, request, env);
         if (method === 'DELETE') return await eliminarVisitaObra(_vid, request, env);
       }
+      // ── Órdenes de Trabajo / Work Orders (NEW-99) ───────────────────────────────
+      if (path === '/ordenes-trabajo' && method === 'GET')  return await getOrdenesTrabajo(request, env);
+      if (path === '/ordenes-trabajo' && method === 'POST') return await crearOrdenTrabajo(request, env);
+      if (path.startsWith('/ordenes-trabajo/')) {
+        const _otId = parseInt(path.split('/ordenes-trabajo/')[1]);
+        if (method === 'PUT')    return await actualizarOrdenTrabajo(_otId, request, env);
+        if (method === 'DELETE') return await eliminarOrdenTrabajo(_otId, request, env);
+      }
       // ── Documentación CAE por Subcontrata (NEW-98) ──────────────────────────────
       if (path === '/cae-documentacion' && method === 'GET')  return await getCaeDocumentacion(request, env);
       if (path === '/cae-documentacion' && method === 'POST') return await crearCaeDoc(request, env);
@@ -19516,5 +19524,103 @@ async function actualizarCaeDoc(id, request, env) {
 async function eliminarCaeDoc(id, request, env) {
   const { empresa_id } = await getEmpresaFromRequest(request, env);
   await env.DB.prepare('DELETE FROM cae_documentacion WHERE id=? AND empresa_id=?').bind(id, empresa_id).run();
+  return jsonOk({ ok: true });
+}
+
+
+// ════════════════════════════════════════════════════════════════════════════════
+// NEW-99: ÓRDENES DE TRABAJO / WORK ORDERS
+// ════════════════════════════════════════════════════════════════════════════════
+async function ensureOrdenesTrabajo(env) {
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS ordenes_trabajo (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    empresa_id      INTEGER NOT NULL,
+    obra_id         INTEGER,
+    numero          TEXT,
+    tipo            TEXT NOT NULL DEFAULT 'correctivo',
+    titulo          TEXT NOT NULL,
+    descripcion     TEXT,
+    ubicacion       TEXT,
+    equipo          TEXT,
+    prioridad       TEXT NOT NULL DEFAULT 'normal',
+    estado          TEXT NOT NULL DEFAULT 'pendiente',
+    asignado_a      TEXT,
+    fecha_apertura  TEXT NOT NULL,
+    fecha_inicio    TEXT,
+    fecha_limite    TEXT,
+    fecha_cierre    TEXT,
+    horas_estimadas REAL,
+    horas_reales    REAL,
+    materiales      TEXT,
+    causa_raiz      TEXT,
+    solucion        TEXT,
+    verificado_por  TEXT,
+    observaciones   TEXT,
+    created_by      TEXT,
+    created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
+  )`).run();
+}
+
+async function getOrdenesTrabajo(request, env) {
+  const { empresa_id } = await getEmpresaFromRequest(request, env);
+  await ensureOrdenesTrabajo(env);
+  const u = new URL(request.url);
+  const obra_id   = u.searchParams.get('obra_id');
+  const estado    = u.searchParams.get('estado');
+  const tipo      = u.searchParams.get('tipo');
+  const prioridad = u.searchParams.get('prioridad');
+  let sql = 'SELECT * FROM ordenes_trabajo WHERE empresa_id=?';
+  const params = [empresa_id];
+  if (obra_id)   { sql += ' AND obra_id=?';   params.push(obra_id); }
+  if (estado)    { sql += ' AND estado=?';    params.push(estado); }
+  if (tipo)      { sql += ' AND tipo=?';      params.push(tipo); }
+  if (prioridad) { sql += ' AND prioridad=?'; params.push(prioridad); }
+  sql += ' ORDER BY CASE prioridad WHEN "urgente" THEN 1 WHEN "alta" THEN 2 WHEN "normal" THEN 3 ELSE 4 END, fecha_apertura DESC';
+  const rows = await env.DB.prepare(sql).bind(...params).all();
+  const total     = rows.results.length;
+  const abiertas  = rows.results.filter(r => !['completada','verificada','cancelada'].includes(r.estado)).length;
+  const urgentes  = rows.results.filter(r => r.prioridad === 'urgente' && !['completada','verificada','cancelada'].includes(r.estado)).length;
+  const vencidas  = rows.results.filter(r => r.fecha_limite && r.fecha_limite < new Date().toISOString().slice(0,10) && !['completada','verificada','cancelada'].includes(r.estado)).length;
+  const completadas = rows.results.filter(r => ['completada','verificada'].includes(r.estado)).length;
+  return jsonOk({ data: rows.results, stats: { total, abiertas, urgentes, vencidas, completadas } });
+}
+
+async function crearOrdenTrabajo(request, env) {
+  const { empresa_id, user } = await getEmpresaFromRequest(request, env);
+  await ensureOrdenesTrabajo(env);
+  const b = await request.json();
+  if (!b.titulo || !b.fecha_apertura) return jsonError('titulo y fecha_apertura son obligatorios', 400);
+  const cnt = await env.DB.prepare('SELECT COUNT(*) as n FROM ordenes_trabajo WHERE empresa_id=?').bind(empresa_id).first();
+  const num = 'OT-' + new Date().getFullYear() + '-' + String((cnt?.n||0)+1).padStart(4,'0');
+  const res = await env.DB.prepare(
+    `INSERT INTO ordenes_trabajo (empresa_id,obra_id,numero,tipo,titulo,descripcion,ubicacion,equipo,prioridad,estado,asignado_a,fecha_apertura,fecha_inicio,fecha_limite,fecha_cierre,horas_estimadas,horas_reales,materiales,causa_raiz,solucion,verificado_por,observaciones,created_by)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+  ).bind(empresa_id, b.obra_id||null, num, b.tipo||'correctivo', b.titulo,
+    b.descripcion||null, b.ubicacion||null, b.equipo||null,
+    b.prioridad||'normal', b.estado||'pendiente', b.asignado_a||null,
+    b.fecha_apertura, b.fecha_inicio||null, b.fecha_limite||null, b.fecha_cierre||null,
+    b.horas_estimadas||null, b.horas_reales||null, b.materiales||null,
+    b.causa_raiz||null, b.solucion||null, b.verificado_por||null,
+    b.observaciones||null, user?.email||null).run();
+  return jsonOk({ id: res.meta.last_row_id, numero: num }, 201);
+}
+
+async function actualizarOrdenTrabajo(id, request, env) {
+  const { empresa_id } = await getEmpresaFromRequest(request, env);
+  await ensureOrdenesTrabajo(env);
+  const b = await request.json();
+  const campos = ['obra_id','tipo','titulo','descripcion','ubicacion','equipo','prioridad','estado','asignado_a','fecha_apertura','fecha_inicio','fecha_limite','fecha_cierre','horas_estimadas','horas_reales','materiales','causa_raiz','solucion','verificado_por','observaciones'];
+  const sets = []; const vals = [];
+  campos.forEach(c => { if (b[c] !== undefined) { sets.push(c+'=?'); vals.push(b[c]); } });
+  sets.push("updated_at=datetime('now')");
+  vals.push(id, empresa_id);
+  await env.DB.prepare(`UPDATE ordenes_trabajo SET ${sets.join(',')} WHERE id=? AND empresa_id=?`).bind(...vals).run();
+  return jsonOk({ ok: true });
+}
+
+async function eliminarOrdenTrabajo(id, request, env) {
+  const { empresa_id } = await getEmpresaFromRequest(request, env);
+  await env.DB.prepare('DELETE FROM ordenes_trabajo WHERE id=? AND empresa_id=?').bind(id, empresa_id).run();
   return jsonOk({ ok: true });
 }

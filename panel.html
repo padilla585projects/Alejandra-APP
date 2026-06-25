@@ -721,6 +721,10 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
       <span class="nav-icon">📋</span> Solicitudes Material
       <span class="nav-badge" id="solMatBadge" style="display:none">0</span>
     </button>
+    <button class="nav-item" data-page="ordenesTrabajo" onclick="navTo('ordenesTrabajo')">
+      <span class="nav-icon">🔧</span> Órdenes de Trabajo
+      <span class="nav-badge" id="otBadge" style="display:none">0</span>
+    </button>
     <button class="nav-item" data-page="caeDocumentacion" onclick="navTo('caeDocumentacion')">
       <span class="nav-icon">🛡️</span> CAE / Docs Subcontratas
       <span class="nav-badge" id="caeBadge" style="display:none">0</span>
@@ -2460,6 +2464,99 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
               <button class="btn btn-secondary" onclick="cerrarModalAts()">Cancelar</button>
               <span id="atsElimBtn"></span>
               <button class="btn btn-primary" onclick="guardarAts()">💾 Guardar ATS</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ÓRDENES DE TRABAJO / WORK ORDERS (NEW-99) -->
+      <div class="page" id="pageOrdenesTrabajo">
+        <div class="page-title">🔧 Órdenes de Trabajo / Work Orders</div>
+        <div id="otKpis" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;margin-bottom:16px"></div>
+        <div class="tbl-toolbar">
+          <select id="otFiltroEstado" onchange="filtrarOrdenesTrabajo()" style="padding:6px 10px;border-radius:6px;border:1px solid #ccc">
+            <option value="">Todos los estados</option>
+            <option value="pendiente">Pendiente</option>
+            <option value="asignada">Asignada</option>
+            <option value="en_progreso">En Progreso</option>
+            <option value="pausada">Pausada</option>
+            <option value="completada">Completada</option>
+            <option value="verificada">Verificada</option>
+            <option value="cancelada">Cancelada</option>
+          </select>
+          <select id="otFiltroTipo" onchange="filtrarOrdenesTrabajo()" style="padding:6px 10px;border-radius:6px;border:1px solid #ccc">
+            <option value="">Todos los tipos</option>
+            <option value="correctivo">Correctivo</option>
+            <option value="preventivo">Preventivo</option>
+            <option value="mejora">Mejora</option>
+            <option value="emergencia">Emergencia</option>
+          </select>
+          <select id="otFiltroPrioridad" onchange="filtrarOrdenesTrabajo()" style="padding:6px 10px;border-radius:6px;border:1px solid #ccc">
+            <option value="">Todas las prioridades</option>
+            <option value="urgente">🔴 Urgente</option>
+            <option value="alta">🟠 Alta</option>
+            <option value="normal">🟡 Normal</option>
+            <option value="baja">🟢 Baja</option>
+          </select>
+          <input id="otFiltroQ" type="search" placeholder="Buscar..." oninput="filtrarOrdenesTrabajo()" style="padding:6px 10px;border-radius:6px;border:1px solid #ccc;flex:1">
+          <button class="btn btn-primary" onclick="abrirModalOt()">+ Nueva OT</button>
+          <button class="btn btn-secondary" onclick="exportarTabla(tblOt,'ordenes-trabajo')">⬇ CSV</button>
+        </div>
+        <div id="tblOtWrap"></div>
+        <!-- Modal -->
+        <div class="modal-overlay" id="modalOt" style="display:none" onclick="if(event.target===this)cerrarModalOt()">
+          <div class="modal" style="max-width:700px">
+            <div class="modal-header"><span id="modalOtTitulo">Nueva Orden de Trabajo</span><button class="modal-close" onclick="cerrarModalOt()">✕</button></div>
+            <div class="modal-body">
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+                <div class="form-group" style="grid-column:1/-1"><label>Título *</label><input id="otTitulo" type="text" placeholder="Reparación cuadro BT zona norte, cable pelado circuito 4..."></div>
+                <div class="form-group"><label>Tipo</label>
+                  <select id="otTipo">
+                    <option value="correctivo">Correctivo</option>
+                    <option value="preventivo">Preventivo</option>
+                    <option value="mejora">Mejora</option>
+                    <option value="emergencia">Emergencia</option>
+                  </select>
+                </div>
+                <div class="form-group"><label>Prioridad</label>
+                  <select id="otPrioridad">
+                    <option value="baja">🟢 Baja</option>
+                    <option value="normal" selected>🟡 Normal</option>
+                    <option value="alta">🟠 Alta</option>
+                    <option value="urgente">🔴 Urgente</option>
+                  </select>
+                </div>
+                <div class="form-group"><label>Estado</label>
+                  <select id="otEstado">
+                    <option value="pendiente">Pendiente</option>
+                    <option value="asignada">Asignada</option>
+                    <option value="en_progreso">En Progreso</option>
+                    <option value="pausada">Pausada</option>
+                    <option value="completada">Completada</option>
+                    <option value="verificada">Verificada</option>
+                    <option value="cancelada">Cancelada</option>
+                  </select>
+                </div>
+                <div class="form-group"><label>Asignado a</label><input id="otAsignado" type="text" placeholder="Técnico o cuadrilla"></div>
+                <div class="form-group"><label>Equipo / Activo</label><input id="otEquipo" type="text" placeholder="Transformador TR-01, Cuadro QGD-2..."></div>
+                <div class="form-group"><label>Ubicación</label><input id="otUbicacion" type="text" placeholder="Sala eléctrica planta 2, zona norte..."></div>
+                <div class="form-group"><label>Fecha Apertura *</label><input id="otFechaAp" type="date"></div>
+                <div class="form-group"><label>Fecha Límite</label><input id="otFechaLim" type="date"></div>
+                <div class="form-group"><label>Fecha Inicio Real</label><input id="otFechaIni" type="date"></div>
+                <div class="form-group"><label>Fecha Cierre Real</label><input id="otFechaCie" type="date"></div>
+                <div class="form-group"><label>Horas Estimadas</label><input id="otHorasEst" type="number" step="0.5" min="0" placeholder="0"></div>
+                <div class="form-group"><label>Horas Reales</label><input id="otHorasReal" type="number" step="0.5" min="0" placeholder="0"></div>
+                <div class="form-group" style="grid-column:1/-1"><label>Descripción del Trabajo</label><textarea id="otDescripcion" rows="3" placeholder="Descripción detallada del trabajo a realizar..."></textarea></div>
+                <div class="form-group" style="grid-column:1/-1"><label>Causa Raíz (para correctivos)</label><textarea id="otCausaRaiz" rows="2" placeholder="Causa del fallo o avería detectada..."></textarea></div>
+                <div class="form-group" style="grid-column:1/-1"><label>Solución / Trabajos Realizados</label><textarea id="otSolucion" rows="3" placeholder="Descripción de la solución aplicada y trabajos realizados..."></textarea></div>
+                <div class="form-group" style="grid-column:1/-1"><label>Materiales Utilizados</label><textarea id="otMateriales" rows="2" placeholder="Lista de materiales y repuestos utilizados..."></textarea></div>
+                <div class="form-group"><label>Verificado por</label><input id="otVerificado" type="text" placeholder="Nombre del supervisor"></div>
+                <div class="form-group"><label>Observaciones</label><input id="otObservaciones" type="text" placeholder="Notas adicionales"></div>
+              </div>
+            </div>
+            <div class="modal-footer">
+              <button class="btn btn-secondary" onclick="cerrarModalOt()">Cancelar</button>
+              <button class="btn btn-primary" onclick="guardarOt()">💾 Guardar</button>
             </div>
           </div>
         </div>
@@ -7839,6 +7936,7 @@ const PAGE_TITLES = {
   segurosObra:      '🏥 Seguros de Obra / Insurance Policies',
   comparativosOferta: '🔖 Comparativo de Ofertas / Bid Comparison',
   caeDocumentacion:   '🛡️ CAE / Documentación Subcontratas (RD 171/2004)',
+  ordenesTrabajo:     '🔧 Órdenes de Trabajo / Work Orders',
 };
 
 const PAGE_LOADERS = {
@@ -7938,6 +8036,7 @@ const PAGE_LOADERS = {
   segurosObra:        cargarSegurosObra,
   comparativosOferta: cargarComparativosOferta,
   caeDocumentacion:   cargarCaeDocumentacion,
+  ordenesTrabajo:     cargarOrdenesTrabajo,
 };
 
 let currentPage = '';
@@ -8066,6 +8165,7 @@ const SYNC_INTERVALS = {
   segurosObra:        180,
   comparativosOferta: 120,
   caeDocumentacion:   90,
+  ordenesTrabajo:     60,
 };
 
 let _syncTimer = null, _syncLabelTimer = null, _syncLastTs = null;
@@ -17427,6 +17527,140 @@ function exportarFinanzas() {
   // Abrir informe en nueva pestaña usando el endpoint de informes
   window.open(`/informe-obra/${obraId}?tipo=financiero`, '_blank');
 }
+
+// ── ÓRDENES DE TRABAJO / WORK ORDERS (NEW-99) ────────────────────────────────
+let tblOt = null, _otData = [];
+const OT_ESTADO_COLOR = { pendiente:'var(--warning)', asignada:'var(--accent)', en_progreso:'#2980b9', pausada:'#95a5a6', completada:'var(--success)', verificada:'#27ae60', cancelada:'var(--danger)' };
+const OT_PRIO_COLOR   = { urgente:'var(--danger)', alta:'#e67e22', normal:'var(--warning)', baja:'var(--success)' };
+
+async function cargarOrdenesTrabajo() {
+  const data = await api('/ordenes-trabajo');
+  _otData = data.data || [];
+  const s = data.stats || {};
+  document.getElementById('otKpis').innerHTML = [
+    { label:'Total OTs', val: s.total||0, icon:'🔧' },
+    { label:'Abiertas', val: s.abiertas||0, icon:'📋', color: s.abiertas ? 'var(--accent)' : '' },
+    { label:'Urgentes', val: s.urgentes||0, icon:'🔴', color: s.urgentes ? 'var(--danger)' : '' },
+    { label:'Vencidas', val: s.vencidas||0, icon:'⏰', color: s.vencidas ? 'var(--danger)' : '' },
+    { label:'Completadas', val: s.completadas||0, icon:'✅' },
+  ].map(k => `<div class="kpi-mini" style="background:#fff;border-radius:10px;padding:12px;box-shadow:0 2px 6px rgba(0,0,0,.07)">
+    <div style="font-size:20px">${k.icon}</div>
+    <div style="font-size:22px;font-weight:700;color:${k.color||'var(--accent)'}">${k.val}</div>
+    <div style="font-size:11px;color:#888">${k.label}</div></div>`).join('');
+  const alerta = (s.urgentes||0) + (s.vencidas||0);
+  const bdg = document.getElementById('otBadge');
+  if (bdg) { bdg.textContent = alerta; bdg.style.display = alerta ? 'inline-flex' : 'none'; }
+  if (!tblOt) {
+    tblOt = new Tabulator('#tblOtWrap', {
+      data: _otData, layout: 'fitColumns', responsiveLayout: 'collapse',
+      columns: [
+        { title:'Número', field:'numero', width:120 },
+        { title:'Tipo', field:'tipo', width:100, formatter: c => c.getValue() },
+        { title:'Prioridad', field:'prioridad', width:90, formatter: c => `<span style="color:${OT_PRIO_COLOR[c.getValue()]||'#333'};font-weight:600">${c.getValue()}</span>` },
+        { title:'Título', field:'titulo', minWidth:200 },
+        { title:'Equipo', field:'equipo', minWidth:120 },
+        { title:'Asignado a', field:'asignado_a', minWidth:120 },
+        { title:'Estado', field:'estado', width:110, formatter: c => `<span style="background:${OT_ESTADO_COLOR[c.getValue()]||'#ddd'};color:#fff;padding:2px 8px;border-radius:12px;font-size:11px">${c.getValue()}</span>` },
+        { title:'F. Apertura', field:'fecha_apertura', width:105 },
+        { title:'F. Límite', field:'fecha_limite', width:100, formatter: c => {
+          const v = c.getValue(); if (!v) return '-';
+          const hoy = new Date().toISOString().slice(0,10);
+          const color = v < hoy ? 'var(--danger)' : v <= new Date(Date.now()+3*86400000).toISOString().slice(0,10) ? 'var(--warning)' : '';
+          return color ? `<span style="color:${color};font-weight:600">${v}</span>` : v;
+        }},
+        { title:'Horas Est.', field:'horas_estimadas', width:90 },
+        { title:'Horas Real.', field:'horas_reales', width:90 },
+        { title:'Acciones', width:100, formatter: () => '<span style="cursor:pointer;color:var(--accent)">✏️ Editar</span>', cellClick: (e,c) => editarOt(c.getRow().getData().id) },
+      ]
+    });
+  } else { tblOt.replaceData(_otData); }
+  filtrarOrdenesTrabajo();
+}
+
+function filtrarOrdenesTrabajo() {
+  if (!tblOt) return;
+  const est  = document.getElementById('otFiltroEstado')?.value;
+  const tip  = document.getElementById('otFiltroTipo')?.value;
+  const prio = document.getElementById('otFiltroPrioridad')?.value;
+  const q    = (document.getElementById('otFiltroQ')?.value||'').toLowerCase();
+  tblOt.setFilter(r => {
+    if (est  && r.estado !== est) return false;
+    if (tip  && r.tipo !== tip) return false;
+    if (prio && r.prioridad !== prio) return false;
+    if (q && !(r.titulo?.toLowerCase().includes(q)||r.equipo?.toLowerCase().includes(q)||r.asignado_a?.toLowerCase().includes(q)||r.numero?.toLowerCase().includes(q))) return false;
+    return true;
+  });
+}
+
+function abrirModalOt(d = {}) {
+  document.getElementById('modalOtTitulo').textContent = d.id ? 'Editar Orden de Trabajo' : 'Nueva Orden de Trabajo';
+  document.getElementById('otTitulo').value       = d.titulo || '';
+  document.getElementById('otTipo').value         = d.tipo || 'correctivo';
+  document.getElementById('otPrioridad').value    = d.prioridad || 'normal';
+  document.getElementById('otEstado').value       = d.estado || 'pendiente';
+  document.getElementById('otAsignado').value     = d.asignado_a || '';
+  document.getElementById('otEquipo').value       = d.equipo || '';
+  document.getElementById('otUbicacion').value    = d.ubicacion || '';
+  document.getElementById('otFechaAp').value      = d.fecha_apertura || new Date().toISOString().slice(0,10);
+  document.getElementById('otFechaLim').value     = d.fecha_limite || '';
+  document.getElementById('otFechaIni').value     = d.fecha_inicio || '';
+  document.getElementById('otFechaCie').value     = d.fecha_cierre || '';
+  document.getElementById('otHorasEst').value     = d.horas_estimadas || '';
+  document.getElementById('otHorasReal').value    = d.horas_reales || '';
+  document.getElementById('otDescripcion').value  = d.descripcion || '';
+  document.getElementById('otCausaRaiz').value    = d.causa_raiz || '';
+  document.getElementById('otSolucion').value     = d.solucion || '';
+  document.getElementById('otMateriales').value   = d.materiales || '';
+  document.getElementById('otVerificado').value   = d.verificado_por || '';
+  document.getElementById('otObservaciones').value= d.observaciones || '';
+  document.getElementById('modalOt')._otId = d.id || null;
+  document.getElementById('modalOt').style.display = 'flex';
+}
+
+function editarOt(id) {
+  const d = _otData.find(r => r.id === id);
+  if (d) abrirModalOt(d);
+}
+
+async function guardarOt() {
+  const id = document.getElementById('modalOt')._otId;
+  const body = {
+    titulo:          document.getElementById('otTitulo').value.trim(),
+    tipo:            document.getElementById('otTipo').value,
+    prioridad:       document.getElementById('otPrioridad').value,
+    estado:          document.getElementById('otEstado').value,
+    asignado_a:      document.getElementById('otAsignado').value.trim()||null,
+    equipo:          document.getElementById('otEquipo').value.trim()||null,
+    ubicacion:       document.getElementById('otUbicacion').value.trim()||null,
+    fecha_apertura:  document.getElementById('otFechaAp').value,
+    fecha_limite:    document.getElementById('otFechaLim').value||null,
+    fecha_inicio:    document.getElementById('otFechaIni').value||null,
+    fecha_cierre:    document.getElementById('otFechaCie').value||null,
+    horas_estimadas: parseFloat(document.getElementById('otHorasEst').value)||null,
+    horas_reales:    parseFloat(document.getElementById('otHorasReal').value)||null,
+    descripcion:     document.getElementById('otDescripcion').value.trim()||null,
+    causa_raiz:      document.getElementById('otCausaRaiz').value.trim()||null,
+    solucion:        document.getElementById('otSolucion').value.trim()||null,
+    materiales:      document.getElementById('otMateriales').value.trim()||null,
+    verificado_por:  document.getElementById('otVerificado').value.trim()||null,
+    observaciones:   document.getElementById('otObservaciones').value.trim()||null,
+  };
+  if (!body.titulo || !body.fecha_apertura) { toast('Título y fecha de apertura son obligatorios','error'); return; }
+  if (id) await api(`/ordenes-trabajo/${id}`, { method:'PUT', body: JSON.stringify(body) });
+  else    await api('/ordenes-trabajo', { method:'POST', body: JSON.stringify(body) });
+  cerrarModalOt();
+  cargarOrdenesTrabajo();
+  toast(id ? 'OT actualizada' : 'OT creada — ' + (body.titulo.substring(0,30)), 'ok');
+}
+
+async function eliminarOt(id) {
+  if (!confirm('¿Eliminar esta orden de trabajo?')) return;
+  await api(`/ordenes-trabajo/${id}`, { method:'DELETE' });
+  cargarOrdenesTrabajo();
+  toast('OT eliminada', 'ok');
+}
+
+function cerrarModalOt() { document.getElementById('modalOt').style.display = 'none'; }
 
 // ── CAE / DOCUMENTACIÓN SUBCONTRATAS (NEW-98) ────────────────────────────────
 let tblCae = null, _caeData = [];
