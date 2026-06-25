@@ -611,6 +611,9 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
     <button class="nav-item" data-page="informeObra" onclick="navTo('informeObra')">
       <span class="nav-icon">📄</span> Informe de Obra
     </button>
+    <button class="nav-item" data-page="planSemanal" onclick="navTo('planSemanal')">
+      <span class="nav-icon">📅</span> Plan Semanal
+    </button>
 
     <div class="sidebar-section" onclick="sidebarToggle(this)" data-sid="seguimiento"><span>📓 Seguimiento</span><span class="sec-chevron">▼</span></div>
     <button class="nav-item" data-page="partesPanel" onclick="navTo('partesPanel')">
@@ -2108,6 +2111,99 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
         </div>
         <div id="entregasKpi" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:12px;margin-bottom:16px"></div>
         <div class="tbl-wrap"><div id="tblEntregas"></div></div>
+      </div>
+
+      <!-- PLAN SEMANAL / LOOKAHEAD SCHEDULE (NEW-62) -->
+      <div class="page" id="pagePlanSemanal">
+        <div class="page-title">📅 Plan Semanal / Lookahead</div>
+        <div class="page-sub">Planificacion semanal por gremio — ventana rodante de 3 semanas</div>
+        <div class="tbl-toolbar" style="flex-wrap:wrap;gap:8px;margin-bottom:14px">
+          <select class="tbl-search" id="filterPSObra" style="min-width:240px;font-size:14px;font-weight:600" onchange="cargarPlanSemanal()"></select>
+          <button class="btn btn-secondary" onclick="psNavSemana(-1)">&#8592; Semana ant.</button>
+          <span id="psRangoLabel" style="padding:6px 12px;background:var(--surface2);border-radius:8px;font-size:13px;font-weight:700;color:var(--text);border:1px solid var(--border)"></span>
+          <button class="btn btn-secondary" onclick="psNavSemana(1)">Semana sig. &#8594;</button>
+          <button class="btn btn-secondary" onclick="psIrHoy()">Hoy</button>
+          <button class="btn btn-primary" onclick="abrirModalPS()">+ Nueva entrada</button>
+          <button class="btn btn-secondary" onclick="cargarPlanSemanal()">🔄</button>
+        </div>
+        <div id="psPpcBar" style="margin-bottom:14px;display:none">
+          <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px">
+            <span style="font-weight:700;color:var(--text)">PPC semana actual</span>
+            <span id="psPpcPct" style="font-weight:800;color:var(--primary)">0%</span>
+          </div>
+          <div style="background:var(--border);border-radius:6px;height:10px">
+            <div id="psPpcFill" style="height:100%;border-radius:6px;background:var(--primary);transition:width .4s"></div>
+          </div>
+        </div>
+        <div id="psWeekTabs" style="display:flex;gap:4px;margin-bottom:16px;border-bottom:2px solid var(--border)"></div>
+        <div id="psContent"></div>
+      </div>
+
+      <!-- modal Plan Semanal -->
+      <div class="modal-overlay" id="modalPS">
+        <div class="modal" style="max-width:680px">
+          <div class="modal-header">
+            <span id="modalPSTitle">Nueva entrada de plan semanal</span>
+            <button class="modal-close" onclick="cerrarModal('modalPS')">&#x2715;</button>
+          </div>
+          <div class="modal-body" style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+            <div>
+              <label class="form-label">Obra</label>
+              <select class="form-input" id="psObraId"></select>
+            </div>
+            <div>
+              <label class="form-label">Semana (lunes)</label>
+              <input class="form-input" type="date" id="psSemanaInicio">
+            </div>
+            <div>
+              <label class="form-label">Gremio / Trade</label>
+              <input class="form-input" id="psGremio" placeholder="Ej: Electricistas, Fontaneros...">
+            </div>
+            <div>
+              <label class="form-label">Responsable</label>
+              <input class="form-input" id="psResponsable" placeholder="Nombre del encargado">
+            </div>
+            <div style="grid-column:1/-1">
+              <label class="form-label">Descripcion general del plan</label>
+              <textarea class="form-input" id="psDescripcion" rows="2" placeholder="Que se planifica hacer esta semana..."></textarea>
+            </div>
+            <div>
+              <label class="form-label">Trabajadores previstos</label>
+              <input class="form-input" type="number" id="psWorkersNum" min="1" value="1">
+            </div>
+            <div>
+              <label class="form-label">Horas planificadas</label>
+              <input class="form-input" type="number" id="psHorasPlan" min="0" step="0.5" value="0">
+            </div>
+            <div style="grid-column:1/-1">
+              <label class="form-label" style="margin-bottom:8px;display:block">Actividades por dia</label>
+              <div id="psActividadesGrid" style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px">
+                <div id="psActLunes"><label style="font-size:11px;font-weight:700;color:var(--muted)">LUNES</label><textarea class="form-input" id="psActL" rows="2" placeholder="Actividad..."></textarea><label style="font-size:11px;display:flex;align-items:center;gap:4px;margin-top:4px"><input type="checkbox" id="psDonL"> Completado</label></div>
+                <div id="psActMartes"><label style="font-size:11px;font-weight:700;color:var(--muted)">MARTES</label><textarea class="form-input" id="psActM" rows="2" placeholder="Actividad..."></textarea><label style="font-size:11px;display:flex;align-items:center;gap:4px;margin-top:4px"><input type="checkbox" id="psDonM"> Completado</label></div>
+                <div id="psActMier"><label style="font-size:11px;font-weight:700;color:var(--muted)">MIERCOLES</label><textarea class="form-input" id="psActMi" rows="2" placeholder="Actividad..."></textarea><label style="font-size:11px;display:flex;align-items:center;gap:4px;margin-top:4px"><input type="checkbox" id="psDonMi"> Completado</label></div>
+                <div id="psActJueves"><label style="font-size:11px;font-weight:700;color:var(--muted)">JUEVES</label><textarea class="form-input" id="psActJ" rows="2" placeholder="Actividad..."></textarea><label style="font-size:11px;display:flex;align-items:center;gap:4px;margin-top:4px"><input type="checkbox" id="psDonJ"> Completado</label></div>
+                <div id="psActViernes"><label style="font-size:11px;font-weight:700;color:var(--muted)">VIERNES</label><textarea class="form-input" id="psActV" rows="2" placeholder="Actividad..."></textarea><label style="font-size:11px;display:flex;align-items:center;gap:4px;margin-top:4px"><input type="checkbox" id="psDonV"> Completado</label></div>
+              </div>
+            </div>
+            <div>
+              <label class="form-label">Estado</label>
+              <select class="form-input" id="psEstado">
+                <option value="planificado">Planificado</option>
+                <option value="en_curso">En curso</option>
+                <option value="completado">Completado</option>
+                <option value="cancelado">Cancelado</option>
+              </select>
+            </div>
+            <div>
+              <label class="form-label">Notas</label>
+              <input class="form-input" id="psNotas" placeholder="Observaciones adicionales...">
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="cerrarModal('modalPS')">Cancelar</button>
+            <button class="btn btn-primary" onclick="guardarPlanSemanal()">Guardar</button>
+          </div>
+        </div>
       </div>
 
       <!-- INFORME DE ESTADO DE OBRA / STATUS REPORT -->
@@ -3912,6 +4008,7 @@ const PAGE_TITLES = {
   obraDashboard: '🎯 Dashboard de Obra',
   accionItems: '📌 Puntos de Accion / Action Items',
   informeObra: '📄 Informe de Estado de Obra',
+  planSemanal: '📅 Plan Semanal / Lookahead',
 };
 
 const PAGE_LOADERS = {
@@ -3976,6 +4073,7 @@ const PAGE_LOADERS = {
   obraDashboard: cargarObraDashboard,
   accionItems: cargarAccionItems,
   informeObra: cargarInformeObra,
+  planSemanal: cargarPlanSemanal,
 };
 
 let currentPage = '';
@@ -4069,6 +4167,7 @@ const SYNC_INTERVALS = {
   obraDashboard: 90,
   accionItems: 60,
   informeObra: 0,
+  planSemanal: 60,
 };
 
 let _syncTimer = null, _syncLabelTimer = null, _syncLastTs = null;
@@ -16787,6 +16886,261 @@ async function poblarSelectObras(selectId) {
     opt.textContent = o.nombre;
     sel.appendChild(opt);
   });
+}
+
+// ── PLAN SEMANAL / LOOKAHEAD SCHEDULE (NEW-62) ─────────────────────
+let _psObraId = null, _psSemanaBase = null, _psActivaSemana = 0, _psEditId = null, _psData = [];
+
+const PS_DIAS = ['lunes','martes','miercoles','jueves','viernes'];
+const PS_DIA_IDS = { lunes:'psActL', martes:'psActM', miercoles:'psActMi', jueves:'psActJ', viernes:'psActV' };
+const PS_DON_IDS = { lunes:'psDonL', martes:'psDonM', miercoles:'psDonMi', jueves:'psDonJ', viernes:'psDonV' };
+const PS_ESTADO_COLOR = { planificado:'#64748b', en_curso:'#f97316', completado:'#10b981', cancelado:'#94a3b8' };
+
+function psLunesDe(date) {
+  const d = new Date(date);
+  const day = d.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  d.setDate(d.getDate() + diff);
+  return d.toISOString().slice(0, 10);
+}
+
+function psSumarSemanas(isoDate, n) {
+  const d = new Date(isoDate + 'T00:00:00');
+  d.setDate(d.getDate() + n * 7);
+  return d.toISOString().slice(0, 10);
+}
+
+function psFmtSemana(isoLunes) {
+  const l = new Date(isoLunes + 'T00:00:00');
+  const v = new Date(l); v.setDate(l.getDate() + 4);
+  return l.toLocaleDateString('es-ES', { day:'numeric', month:'short' }) + ' – ' +
+         v.toLocaleDateString('es-ES', { day:'numeric', month:'short', year:'numeric' });
+}
+
+function psNumSemana(isoLunes) {
+  const d = new Date(isoLunes + 'T00:00:00');
+  const start = new Date(d.getFullYear(), 0, 1);
+  return Math.ceil(((d - start) / 86400000 + start.getDay() + 1) / 7);
+}
+
+async function cargarPlanSemanal() {
+  if (document.getElementById('filterPSObra')?.options.length <= 1)
+    await poblarSelectObras('filterPSObra');
+  _psObraId = document.getElementById('filterPSObra')?.value || null;
+  if (!_psSemanaBase) _psSemanaBase = psLunesDe(new Date());
+  _renderPsTabs();
+  if (!_psObraId) {
+    document.getElementById('psContent').innerHTML = '<div class="empty-state"><div class="empty-icon">📅</div><div class="empty-text">Selecciona una obra para ver el plan semanal</div></div>';
+    return;
+  }
+  const semFin = psSumarSemanas(_psSemanaBase, 2);
+  const r = await api(`/plan-semanal?obra_id=${_psObraId}&semana_inicio=${_psSemanaBase}&semana_fin=${semFin}`);
+  _psData = r?.planes || [];
+  _renderPsContent();
+}
+
+function psNavSemana(dir) {
+  if (!_psSemanaBase) _psSemanaBase = psLunesDe(new Date());
+  _psSemanaBase = psSumarSemanas(_psSemanaBase, dir);
+  _psActivaSemana = 0;
+  cargarPlanSemanal();
+}
+
+function psIrHoy() {
+  _psSemanaBase = psLunesDe(new Date());
+  _psActivaSemana = 0;
+  cargarPlanSemanal();
+}
+
+function psCambiarTab(idx) {
+  _psActivaSemana = idx;
+  _renderPsTabs();
+  _renderPsContent();
+}
+
+function _renderPsTabs() {
+  const base = _psSemanaBase || psLunesDe(new Date());
+  const hoyLunes = psLunesDe(new Date());
+  const tabs = document.getElementById('psWeekTabs');
+  if (!tabs) return;
+  const label = document.getElementById('psRangoLabel');
+  if (label) label.textContent = psFmtSemana(psSumarSemanas(base, _psActivaSemana));
+  tabs.innerHTML = [0, 1, 2].map(i => {
+    const sem = psSumarSemanas(base, i);
+    const isHoy = sem === hoyLunes;
+    const isActive = i === _psActivaSemana;
+    const planes = _psData.filter(p => p.semana_inicio === sem);
+    return `<button onclick="psCambiarTab(${i})" style="padding:8px 16px;border:none;cursor:pointer;font-size:13px;font-weight:${isActive ? 800 : 500};
+      background:${isActive ? 'var(--primary)' : 'var(--surface2)'};color:${isActive ? '#fff' : 'var(--muted)'};
+      border-radius:8px 8px 0 0;border-bottom:${isActive ? '3px solid var(--primary)' : '3px solid transparent'};transition:all .15s">
+      ${isHoy ? '⭐ ' : ''}Sem. ${psNumSemana(sem)}<br>
+      <span style="font-size:10px;font-weight:400">${psFmtSemana(sem)}</span>
+      ${planes.length ? `<span style="margin-left:6px;background:${isActive?'rgba(255,255,255,.3)':'var(--primary)'};color:${isActive?'#fff':'#fff'};border-radius:10px;padding:1px 7px;font-size:10px">${planes.length}</span>` : ''}
+    </button>`;
+  }).join('');
+}
+
+function _renderPsContent() {
+  const base = _psSemanaBase || psLunesDe(new Date());
+  const semLunes = psSumarSemanas(base, _psActivaSemana);
+  const planes = _psData.filter(p => p.semana_inicio === semLunes);
+  const content = document.getElementById('psContent');
+  if (!content) return;
+
+  // PPC bar
+  const ppcBar = document.getElementById('psPpcBar');
+  if (planes.length && _psActivaSemana === 0) {
+    const avgPpc = planes.length ? Math.round(planes.reduce((s, p) => s + (p.ppc || 0), 0) / planes.length) : 0;
+    document.getElementById('psPpcPct').textContent = avgPpc + '%';
+    document.getElementById('psPpcFill').style.width = avgPpc + '%';
+    document.getElementById('psPpcFill').style.background = avgPpc >= 80 ? 'var(--success)' : avgPpc >= 50 ? 'var(--warning)' : 'var(--danger)';
+    if (ppcBar) ppcBar.style.display = '';
+  } else if (ppcBar) ppcBar.style.display = 'none';
+
+  if (!planes.length) {
+    content.innerHTML = `<div class="empty-state"><div class="empty-icon">📅</div>
+      <div class="empty-text">No hay entradas para esta semana</div>
+      <button class="btn btn-primary" style="margin-top:12px" onclick="abrirModalPS(null,'${semLunes}')">+ Agregar plan</button></div>`;
+    return;
+  }
+
+  // Table header with day dates
+  const diasLabel = PS_DIAS.map((d, i) => {
+    const fecha = new Date(semLunes + 'T00:00:00');
+    fecha.setDate(fecha.getDate() + i);
+    const hoy = new Date().toISOString().slice(0, 10);
+    const isHoy = fecha.toISOString().slice(0, 10) === hoy;
+    return `<th style="text-align:center;min-width:110px;background:${isHoy ? '#f97316' : '#334155'};color:#fff">
+      ${d.charAt(0).toUpperCase() + d.slice(1)}<br>
+      <span style="font-size:10px;font-weight:400">${fecha.toLocaleDateString('es-ES', { day:'numeric', month:'short' })}</span>
+    </th>`;
+  }).join('');
+
+  const rows = planes.map(p => {
+    const acts = (() => { try { return JSON.parse(p.actividades || '[]'); } catch { return []; } })();
+    const diasCells = PS_DIAS.map(d => {
+      const act = acts.find(a => a.dia === d);
+      if (!act) return `<td style="background:var(--surface2);color:var(--muted);text-align:center;font-size:11px">—</td>`;
+      return `<td style="vertical-align:top;padding:6px;font-size:11px">
+        <div style="font-weight:${act.completado ? 400 : 600};color:${act.completado ? 'var(--muted)' : 'var(--text)'};text-decoration:${act.completado ? 'line-through' : 'none'}">
+          ${act.descripcion || ''}
+        </div>
+        ${act.completado ? '<div style="color:#10b981;font-size:10px;margin-top:2px">✅ Hecho</div>' : ''}
+      </td>`;
+    }).join('');
+
+    return `<tr>
+      <td style="padding:8px;min-width:150px;vertical-align:top">
+        <div style="font-weight:700;font-size:13px">${p.gremio}</div>
+        <div style="font-size:11px;color:var(--muted)">${p.responsable || ''}</div>
+        <div style="margin-top:4px">
+          <span style="background:${PS_ESTADO_COLOR[p.estado]||'#64748b'};color:#fff;padding:2px 7px;border-radius:4px;font-size:10px">${p.estado || '—'}</span>
+        </div>
+        <div style="font-size:11px;margin-top:4px;color:${p.ppc >= 80 ? '#10b981' : p.ppc >= 50 ? '#f59e0b' : '#ef4444'}">PPC: ${p.ppc || 0}%</div>
+        <div style="margin-top:6px;display:flex;gap:4px">
+          <button class="btn btn-secondary btn-sm" onclick="abrirModalPS(${p.id})" style="padding:2px 6px;font-size:10px">✏️</button>
+          <button class="btn btn-secondary btn-sm" onclick="eliminarPlanSemanalEntry(${p.id})" style="padding:2px 6px;font-size:10px;color:var(--danger)">🗑</button>
+        </div>
+      </td>
+      ${diasCells}
+    </tr>`;
+  }).join('');
+
+  content.innerHTML = `
+  <div style="overflow-x:auto">
+    <table style="border-collapse:collapse;width:100%;font-size:12px">
+      <thead><tr>
+        <th style="text-align:left;background:#1e293b;color:#fff;padding:10px;min-width:150px">Gremio</th>
+        ${diasLabel}
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+  </div>
+  <div style="margin-top:12px;text-align:right">
+    <button class="btn btn-primary" onclick="abrirModalPS(null,'${semLunes}')">+ Agregar gremio a esta semana</button>
+  </div>`;
+}
+
+async function abrirModalPS(id = null, semanaPreset = null) {
+  _psEditId = id;
+  document.getElementById('modalPSTitle').textContent = id ? 'Editar entrada' : 'Nueva entrada de plan semanal';
+  // populate obra select in modal
+  const sel = document.getElementById('psObraId');
+  if (sel && sel.options.length <= 1) await poblarSelectObras('psObraId');
+  if (_psObraId && sel) sel.value = _psObraId;
+  // default semana
+  const defSem = semanaPreset || (_psSemanaBase ? psSumarSemanas(_psSemanaBase, _psActivaSemana) : psLunesDe(new Date()));
+  document.getElementById('psSemanaInicio').value = defSem;
+  // clear fields
+  ['psGremio','psResponsable','psDescripcion','psNotas'].forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
+  document.getElementById('psWorkersNum').value = 1;
+  document.getElementById('psHorasPlan').value = 0;
+  document.getElementById('psEstado').value = 'planificado';
+  PS_DIAS.forEach(d => {
+    const ta = document.getElementById(PS_DIA_IDS[d]); if(ta) ta.value = '';
+    const cb = document.getElementById(PS_DON_IDS[d]); if(cb) cb.checked = false;
+  });
+  if (id) {
+    const r = await api(`/plan-semanal/${id}`);
+    if (r?.id) {
+      document.getElementById('psObraId').value = r.obra_id;
+      document.getElementById('psSemanaInicio').value = r.semana_inicio;
+      document.getElementById('psGremio').value = r.gremio || '';
+      document.getElementById('psResponsable').value = r.responsable || '';
+      document.getElementById('psDescripcion').value = r.descripcion || '';
+      document.getElementById('psWorkersNum').value = r.workers_num || 1;
+      document.getElementById('psHorasPlan').value = r.horas_planificadas || 0;
+      document.getElementById('psEstado').value = r.estado || 'planificado';
+      document.getElementById('psNotas').value = r.notas || '';
+      try {
+        const acts = JSON.parse(r.actividades || '[]');
+        acts.forEach(a => {
+          const ta = document.getElementById(PS_DIA_IDS[a.dia]); if(ta) ta.value = a.descripcion || '';
+          const cb = document.getElementById(PS_DON_IDS[a.dia]); if(cb) cb.checked = !!a.completado;
+        });
+      } catch {}
+    }
+  }
+  document.getElementById('modalPS').classList.add('active');
+}
+
+async function guardarPlanSemanal() {
+  const obraId = document.getElementById('psObraId')?.value;
+  const gremio = document.getElementById('psGremio')?.value?.trim();
+  const semana = document.getElementById('psSemanaInicio')?.value;
+  if (!obraId || !gremio || !semana) { showToast('Obra, gremio y semana son obligatorios', 'warning'); return; }
+  const actividades = PS_DIAS.map(d => ({
+    dia: d,
+    descripcion: document.getElementById(PS_DIA_IDS[d])?.value?.trim() || '',
+    completado: document.getElementById(PS_DON_IDS[d])?.checked || false
+  })).filter(a => a.descripcion);
+  const body = {
+    obra_id: parseInt(obraId),
+    semana_inicio: semana,
+    gremio, actividades,
+    responsable: document.getElementById('psResponsable')?.value?.trim() || null,
+    descripcion: document.getElementById('psDescripcion')?.value?.trim() || null,
+    workers_num: parseInt(document.getElementById('psWorkersNum')?.value) || 1,
+    horas_planificadas: parseFloat(document.getElementById('psHorasPlan')?.value) || 0,
+    estado: document.getElementById('psEstado')?.value || 'planificado',
+    notas: document.getElementById('psNotas')?.value?.trim() || null,
+  };
+  const r = _psEditId
+    ? await api(`/plan-semanal/${_psEditId}`, 'PUT', body)
+    : await api('/plan-semanal', 'POST', body);
+  if (r?.ok || r?.id) {
+    cerrarModal('modalPS');
+    showToast(_psEditId ? 'Plan actualizado ✅' : 'Plan creado ✅', 'success');
+    _psData = [];
+    cargarPlanSemanal();
+  } else showToast(r?.error || 'Error al guardar', 'error');
+}
+
+async function eliminarPlanSemanalEntry(id) {
+  if (!confirm('¿Eliminar esta entrada del plan semanal?')) return;
+  const r = await api(`/plan-semanal/${id}`, 'DELETE');
+  if (r?.ok) { showToast('Entrada eliminada', 'success'); _psData = []; cargarPlanSemanal(); }
+  else showToast('Error al eliminar', 'error');
 }
 
 // ── INFORME DE ESTADO DE OBRA / STATUS REPORT (NEW-61) ─────────────

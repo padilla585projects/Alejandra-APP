@@ -4655,6 +4655,15 @@ export default {
         if (method === 'PUT')    return await actualizarAccionItem(_aiid, request, env);
         if (method === 'DELETE') return await eliminarAccionItem(_aiid, request, env);
       }
+      // -- Plan Semanal / Lookahead Schedule (NEW-62) ------------------------
+      if (path === '/plan-semanal' && method === 'GET')  return await getPlanSemanal(request, env);
+      if (path === '/plan-semanal' && method === 'POST') return await crearPlanSemanal(request, env);
+      if (path.startsWith('/plan-semanal/')) {
+        const _psid = parseInt(path.split('/plan-semanal/')[1]);
+        if (method === 'GET')    return await getPlanSemanalItem(_psid, request, env);
+        if (method === 'PUT')    return await actualizarPlanSemanal(_psid, request, env);
+        if (method === 'DELETE') return await eliminarPlanSemanal(_psid, request, env);
+      }
       // â”€â”€ RFIs â€” Consultas TÃ©cnicas (NEW-34) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
       if (path === '/rfis'                  && method === 'GET')  return await getRfis(request, env);
       if (path === '/rfis'                  && method === 'POST') return await crearRfi(request, env);
@@ -15686,6 +15695,114 @@ async function eliminarAccionItem(id, request, env) {
   const auth = await getAuth(request, env);
   if (!auth?.empresa_id) return err('No autorizado', 403);
   await env.DB.prepare(`DELETE FROM accion_items WHERE id=? AND empresa_id=?`).bind(id, auth.empresa_id).run();
+  return json({ ok: true });
+}
+
+// ============================================================
+// NEW-62  Plan Semanal / Lookahead Schedule
+// ============================================================
+
+async function ensurePlanSemanalTable(env) {
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS plan_semanal (
+    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+    empresa_id          INTEGER NOT NULL,
+    obra_id             INTEGER NOT NULL,
+    semana_inicio       TEXT NOT NULL,
+    gremio              TEXT NOT NULL,
+    responsable         TEXT,
+    descripcion         TEXT,
+    actividades         TEXT DEFAULT '[]',
+    workers_num         INTEGER DEFAULT 1,
+    horas_planificadas  REAL DEFAULT 0,
+    estado              TEXT DEFAULT 'planificado',
+    ppc                 INTEGER DEFAULT 0,
+    notas               TEXT,
+    created_at          TEXT DEFAULT (datetime('now'))
+  )`).run();
+}
+
+function calcPpcFromActividades(actStr) {
+  try {
+    const acts = JSON.parse(actStr || '[]');
+    if (!acts.length) return 0;
+    const done = acts.filter(a => a.completado).length;
+    return Math.round(done / acts.length * 100);
+  } catch { return 0; }
+}
+
+async function getPlanSemanal(request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth?.empresa_id) return err('No autorizado', 403);
+  await ensurePlanSemanalTable(env);
+  const url = new URL(request.url);
+  const obraId = url.searchParams.get('obra_id');
+  const semanaInicio = url.searchParams.get('semana_inicio');
+  const semanaFin = url.searchParams.get('semana_fin');
+  let q = `SELECT * FROM plan_semanal WHERE empresa_id=?`;
+  const params = [auth.empresa_id];
+  if (obraId) { q += ` AND obra_id=?`; params.push(obraId); }
+  if (semanaInicio) { q += ` AND semana_inicio >= ?`; params.push(semanaInicio); }
+  if (semanaFin) { q += ` AND semana_inicio <= ?`; params.push(semanaFin); }
+  q += ` ORDER BY semana_inicio ASC, gremio ASC`;
+  const { results } = await env.DB.prepare(q).bind(...params).all();
+  return json({ planes: results });
+}
+
+async function getPlanSemanalItem(id, request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth?.empresa_id) return err('No autorizado', 403);
+  await ensurePlanSemanalTable(env);
+  const row = await env.DB.prepare(`SELECT * FROM plan_semanal WHERE id=? AND empresa_id=?`).bind(id, auth.empresa_id).first();
+  if (!row) return err('No encontrado', 404);
+  return json(row);
+}
+
+async function crearPlanSemanal(request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth?.empresa_id) return err('No autorizado', 403);
+  await ensurePlanSemanalTable(env);
+  const b = await request.json();
+  const actStr = JSON.stringify(b.actividades || []);
+  const ppc = calcPpcFromActividades(actStr);
+  const { meta } = await env.DB.prepare(
+    `INSERT INTO plan_semanal (empresa_id,obra_id,semana_inicio,gremio,responsable,descripcion,actividades,workers_num,horas_planificadas,estado,ppc,notas)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`
+  ).bind(
+    auth.empresa_id, b.obra_id, b.semana_inicio, b.gremio,
+    b.responsable || null, b.descripcion || null, actStr,
+    b.workers_num || 1, b.horas_planificadas || 0,
+    b.estado || 'planificado', ppc, b.notas || null
+  ).run();
+  return json({ ok: true, id: meta.last_row_id });
+}
+
+async function actualizarPlanSemanal(id, request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth?.empresa_id) return err('No autorizado', 403);
+  await ensurePlanSemanalTable(env);
+  const b = await request.json();
+  const actStr = b.actividades !== undefined ? JSON.stringify(b.actividades) : undefined;
+  const ppc = actStr !== undefined ? calcPpcFromActividades(actStr) : b.ppc;
+  await env.DB.prepare(
+    `UPDATE plan_semanal SET
+      gremio=COALESCE(?,gremio), responsable=COALESCE(?,responsable),
+      descripcion=COALESCE(?,descripcion), actividades=COALESCE(?,actividades),
+      workers_num=COALESCE(?,workers_num), horas_planificadas=COALESCE(?,horas_planificadas),
+      estado=COALESCE(?,estado), ppc=COALESCE(?,ppc), notas=COALESCE(?,notas)
+     WHERE id=? AND empresa_id=?`
+  ).bind(
+    b.gremio || null, b.responsable || null, b.descripcion || null,
+    actStr || null, b.workers_num || null, b.horas_planificadas || null,
+    b.estado || null, ppc ?? null, b.notas || null,
+    id, auth.empresa_id
+  ).run();
+  return json({ ok: true });
+}
+
+async function eliminarPlanSemanal(id, request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth?.empresa_id) return err('No autorizado', 403);
+  await env.DB.prepare(`DELETE FROM plan_semanal WHERE id=? AND empresa_id=?`).bind(id, auth.empresa_id).run();
   return json({ ok: true });
 }
 
