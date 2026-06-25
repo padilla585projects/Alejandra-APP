@@ -4672,6 +4672,14 @@ export default {
         if (method === 'PUT')    return await actualizarSubcontrata(_scid, request, env);
         if (method === 'DELETE') return await eliminarSubcontrata(_scid, request, env);
       }
+      // -- Registro Ambiental (NEW-65) ----------------------------------------
+      if (path === '/registro-ambiental' && method === 'GET')  return await getRegistroAmbiental(request, env);
+      if (path === '/registro-ambiental' && method === 'POST') return await crearRegistroAmbiental(request, env);
+      if (path.startsWith('/registro-ambiental/')) {
+        const _raid = parseInt(path.split('/registro-ambiental/')[1]);
+        if (method === 'PUT')    return await actualizarRegistroAmbiental(_raid, request, env);
+        if (method === 'DELETE') return await eliminarRegistroAmbiental(_raid, request, env);
+      }
       // â”€â”€ RFIs â€” Consultas TÃ©cnicas (NEW-34) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
       if (path === '/rfis'                  && method === 'GET')  return await getRfis(request, env);
       if (path === '/rfis'                  && method === 'POST') return await crearRfi(request, env);
@@ -15936,5 +15944,106 @@ async function eliminarSubcontrata(id, request, env) {
   const auth = await getAuth(request, env);
   if (!auth?.empresa_id) return err('No autorizado', 403);
   await env.DB.prepare(`DELETE FROM subcontratas WHERE id=? AND empresa_id=?`).bind(id, auth.empresa_id).run();
+  return json({ ok: true });
+}
+
+// ============================================================
+// NEW-65  Registro Ambiental / Environmental Log
+// ============================================================
+
+async function ensureRegistroAmbientalTable(env) {
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS registro_ambiental (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    empresa_id        INTEGER NOT NULL,
+    obra_id           INTEGER NOT NULL,
+    tipo              TEXT DEFAULT 'observacion',
+    categoria         TEXT,
+    descripcion       TEXT NOT NULL,
+    ubicacion         TEXT,
+    cantidad          REAL,
+    unidad            TEXT,
+    gestor_autorizado TEXT,
+    numero_documento  TEXT,
+    estado            TEXT DEFAULT 'abierto',
+    gravedad          TEXT DEFAULT 'baja',
+    responsable       TEXT,
+    fecha_evento      TEXT,
+    fecha_cierre      TEXT,
+    accion_tomada     TEXT,
+    notas             TEXT,
+    created_at        TEXT DEFAULT (datetime('now'))
+  )`).run();
+}
+
+async function getRegistroAmbiental(request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth?.empresa_id) return err('No autorizado', 403);
+  await ensureRegistroAmbientalTable(env);
+  const url = new URL(request.url);
+  const obraId  = url.searchParams.get('obra_id');
+  const tipo    = url.searchParams.get('tipo');
+  const estado  = url.searchParams.get('estado');
+  const gravedad = url.searchParams.get('gravedad');
+  let q = `SELECT * FROM registro_ambiental WHERE empresa_id=?`;
+  const params = [auth.empresa_id];
+  if (obraId)  { q += ` AND obra_id=?`;  params.push(obraId); }
+  if (tipo)    { q += ` AND tipo=?`;     params.push(tipo); }
+  if (estado)  { q += ` AND estado=?`;   params.push(estado); }
+  if (gravedad){ q += ` AND gravedad=?`; params.push(gravedad); }
+  q += ` ORDER BY fecha_evento DESC, created_at DESC LIMIT 500`;
+  const { results } = await env.DB.prepare(q).bind(...params).all();
+  return json({ registros: results });
+}
+
+async function crearRegistroAmbiental(request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth?.empresa_id) return err('No autorizado', 403);
+  await ensureRegistroAmbientalTable(env);
+  const b = await request.json();
+  const { meta } = await env.DB.prepare(
+    `INSERT INTO registro_ambiental (empresa_id,obra_id,tipo,categoria,descripcion,ubicacion,cantidad,unidad,gestor_autorizado,numero_documento,estado,gravedad,responsable,fecha_evento,fecha_cierre,accion_tomada,notas)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+  ).bind(
+    auth.empresa_id, b.obra_id, b.tipo || 'observacion', b.categoria || null,
+    b.descripcion, b.ubicacion || null, b.cantidad || null, b.unidad || null,
+    b.gestor_autorizado || null, b.numero_documento || null,
+    b.estado || 'abierto', b.gravedad || 'baja', b.responsable || null,
+    b.fecha_evento || new Date().toISOString().slice(0,10),
+    b.fecha_cierre || null, b.accion_tomada || null, b.notas || null
+  ).run();
+  return json({ ok: true, id: meta.last_row_id });
+}
+
+async function actualizarRegistroAmbiental(id, request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth?.empresa_id) return err('No autorizado', 403);
+  await ensureRegistroAmbientalTable(env);
+  const b = await request.json();
+  await env.DB.prepare(
+    `UPDATE registro_ambiental SET
+      tipo=COALESCE(?,tipo), categoria=COALESCE(?,categoria),
+      descripcion=COALESCE(?,descripcion), ubicacion=COALESCE(?,ubicacion),
+      cantidad=COALESCE(?,cantidad), unidad=COALESCE(?,unidad),
+      gestor_autorizado=COALESCE(?,gestor_autorizado), numero_documento=COALESCE(?,numero_documento),
+      estado=COALESCE(?,estado), gravedad=COALESCE(?,gravedad),
+      responsable=COALESCE(?,responsable), fecha_evento=COALESCE(?,fecha_evento),
+      fecha_cierre=COALESCE(?,fecha_cierre), accion_tomada=COALESCE(?,accion_tomada),
+      notas=COALESCE(?,notas)
+     WHERE id=? AND empresa_id=?`
+  ).bind(
+    b.tipo || null, b.categoria || null, b.descripcion || null, b.ubicacion || null,
+    b.cantidad ?? null, b.unidad || null, b.gestor_autorizado || null,
+    b.numero_documento || null, b.estado || null, b.gravedad || null,
+    b.responsable || null, b.fecha_evento || null,
+    b.fecha_cierre || null, b.accion_tomada || null, b.notas || null,
+    id, auth.empresa_id
+  ).run();
+  return json({ ok: true });
+}
+
+async function eliminarRegistroAmbiental(id, request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth?.empresa_id) return err('No autorizado', 403);
+  await env.DB.prepare(`DELETE FROM registro_ambiental WHERE id=? AND empresa_id=?`).bind(id, auth.empresa_id).run();
   return json({ ok: true });
 }

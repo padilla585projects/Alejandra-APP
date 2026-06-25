@@ -618,6 +618,10 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
       <span class="nav-icon">🏗️</span> Subcontratas
       <span class="nav-badge" id="scBadge" style="display:none">!</span>
     </button>
+    <button class="nav-item" data-page="registroAmbiental" onclick="navTo('registroAmbiental')">
+      <span class="nav-icon">🌿</span> Registro Ambiental
+      <span class="nav-badge" id="raBadge" style="display:none">!</span>
+    </button>
 
     <div class="sidebar-section" onclick="sidebarToggle(this)" data-sid="seguimiento"><span>📓 Seguimiento</span><span class="sec-chevron">▼</span></div>
     <button class="nav-item" data-page="partesPanel" onclick="navTo('partesPanel')">
@@ -2115,6 +2119,152 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
         </div>
         <div id="entregasKpi" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:12px;margin-bottom:16px"></div>
         <div class="tbl-wrap"><div id="tblEntregas"></div></div>
+      </div>
+
+      <!-- REGISTRO AMBIENTAL / ENVIRONMENTAL LOG (NEW-65) -->
+      <div class="page" id="pageRegistroAmbiental">
+        <div class="page-title">🌿 Registro Ambiental</div>
+        <div class="page-sub">Gestion de residuos, derrames, ruido y cumplimiento medioambiental en obra</div>
+        <div class="tbl-toolbar" style="flex-wrap:wrap;gap:8px;margin-bottom:14px">
+          <select class="tbl-search" id="filterRAObra" style="min-width:220px" onchange="cargarRegistroAmbiental()"></select>
+          <select class="tbl-search" id="filterRATipo" style="min-width:140px" onchange="cargarRegistroAmbiental()">
+            <option value="">Todos los tipos</option>
+            <option value="residuo">Residuo</option>
+            <option value="derrame">Derrame</option>
+            <option value="ruido">Ruido</option>
+            <option value="polvo">Polvo / Emision</option>
+            <option value="observacion">Observacion</option>
+            <option value="cumplimiento">Cumplimiento</option>
+          </select>
+          <select class="tbl-search" id="filterRAEstado" style="min-width:130px" onchange="cargarRegistroAmbiental()">
+            <option value="">Todos estados</option>
+            <option value="abierto">Abierto</option>
+            <option value="en_gestion">En gestion</option>
+            <option value="cerrado">Cerrado</option>
+            <option value="conforme">Conforme</option>
+          </select>
+          <select class="tbl-search" id="filterRAGravedad" style="min-width:120px" onchange="cargarRegistroAmbiental()">
+            <option value="">Toda gravedad</option>
+            <option value="critica">Critica</option>
+            <option value="alta">Alta</option>
+            <option value="media">Media</option>
+            <option value="baja">Baja</option>
+          </select>
+          <button class="btn btn-primary" onclick="abrirModalRA()">+ Nueva entrada</button>
+          <button class="btn btn-secondary" onclick="exportarTabla(tblRegistroAmbiental,'registro-ambiental')">&#8595; CSV</button>
+          <button class="btn btn-secondary" onclick="cargarRegistroAmbiental()">&#x1F504;</button>
+        </div>
+        <div id="raKpi" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;margin-bottom:16px"></div>
+        <div class="tbl-wrap"><div id="tblRegistroAmbiental"></div></div>
+      </div>
+
+      <!-- modal Registro Ambiental -->
+      <div class="modal-overlay" id="modalRA">
+        <div class="modal" style="max-width:660px">
+          <div class="modal-header">
+            <span id="modalRATitle">Nueva entrada ambiental</span>
+            <button class="modal-close" onclick="cerrarModal('modalRA')">&#x2715;</button>
+          </div>
+          <div class="modal-body" style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+            <div>
+              <label class="form-label">Obra</label>
+              <select class="form-input" id="raObraId"></select>
+            </div>
+            <div>
+              <label class="form-label">Fecha del evento</label>
+              <input class="form-input" type="date" id="raFechaEvento">
+            </div>
+            <div>
+              <label class="form-label">Tipo</label>
+              <select class="form-input" id="raTipo">
+                <option value="residuo">Residuo</option>
+                <option value="derrame">Derrame</option>
+                <option value="ruido">Ruido</option>
+                <option value="polvo">Polvo / Emision</option>
+                <option value="observacion">Observacion</option>
+                <option value="cumplimiento">Cumplimiento</option>
+              </select>
+            </div>
+            <div>
+              <label class="form-label">Categoria</label>
+              <select class="form-input" id="raCategoria">
+                <option value="">Sin categoria</option>
+                <option value="peligroso">Peligroso</option>
+                <option value="no_peligroso">No peligroso</option>
+                <option value="especial">Especial / Inerte</option>
+              </select>
+            </div>
+            <div style="grid-column:1/-1">
+              <label class="form-label">Descripcion</label>
+              <textarea class="form-input" id="raDescripcion" rows="3" placeholder="Descripcion del evento o residuo..."></textarea>
+            </div>
+            <div>
+              <label class="form-label">Ubicacion en obra</label>
+              <input class="form-input" id="raUbicacion" placeholder="Zona, planta, referencia...">
+            </div>
+            <div>
+              <label class="form-label">Responsable</label>
+              <input class="form-input" id="raResponsable" placeholder="Nombre del responsable">
+            </div>
+            <div>
+              <label class="form-label">Cantidad</label>
+              <input class="form-input" type="number" id="raCantidad" min="0" step="0.01" placeholder="0">
+            </div>
+            <div>
+              <label class="form-label">Unidad</label>
+              <select class="form-input" id="raUnidad">
+                <option value="">Sin unidad</option>
+                <option value="kg">kg</option>
+                <option value="m3">m3</option>
+                <option value="litros">litros</option>
+                <option value="uds">uds</option>
+                <option value="toneladas">toneladas</option>
+              </select>
+            </div>
+            <div>
+              <label class="form-label">Gravedad</label>
+              <select class="form-input" id="raGravedad">
+                <option value="baja">Baja</option>
+                <option value="media">Media</option>
+                <option value="alta">Alta</option>
+                <option value="critica">Critica</option>
+              </select>
+            </div>
+            <div>
+              <label class="form-label">Estado</label>
+              <select class="form-input" id="raEstado">
+                <option value="abierto">Abierto</option>
+                <option value="en_gestion">En gestion</option>
+                <option value="cerrado">Cerrado</option>
+                <option value="conforme">Conforme</option>
+              </select>
+            </div>
+            <div>
+              <label class="form-label">Gestor autorizado</label>
+              <input class="form-input" id="raGestor" placeholder="Empresa gestora de residuos">
+            </div>
+            <div>
+              <label class="form-label">Nº documento / DI</label>
+              <input class="form-input" id="raNumDoc" placeholder="Nº documento de identificacion">
+            </div>
+            <div>
+              <label class="form-label">Fecha de cierre</label>
+              <input class="form-input" type="date" id="raFechaCierre">
+            </div>
+            <div style="grid-column:1/-1">
+              <label class="form-label">Accion tomada</label>
+              <textarea class="form-input" id="raAccionTomada" rows="2" placeholder="Medidas correctoras aplicadas..."></textarea>
+            </div>
+            <div style="grid-column:1/-1">
+              <label class="form-label">Notas adicionales</label>
+              <input class="form-input" id="raNotas" placeholder="Observaciones complementarias...">
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="cerrarModal('modalRA')">Cancelar</button>
+            <button class="btn btn-primary" onclick="guardarRegistroAmbiental()">Guardar</button>
+          </div>
+        </div>
       </div>
 
       <!-- REGISTRO DE SUBCONTRATAS (NEW-64) -->
@@ -4185,6 +4335,7 @@ const PAGE_TITLES = {
   planSemanal: '📅 Plan Semanal / Lookahead',
   instruccionesObra: '📋 Instrucciones de Obra / Site Instructions',
   subcontratas: '🏗️ Registro de Subcontratas',
+  registroAmbiental: '🌿 Registro Ambiental / Environmental Log',
 };
 
 const PAGE_LOADERS = {
@@ -4251,6 +4402,7 @@ const PAGE_LOADERS = {
   planSemanal: cargarPlanSemanal,
   instruccionesObra: cargarInstruccionesObra,
   subcontratas: cargarSubcontratas,
+  registroAmbiental: cargarRegistroAmbiental,
 };
 
 let currentPage = '';
@@ -4346,6 +4498,7 @@ const SYNC_INTERVALS = {
   planSemanal: 60,
   instruccionesObra: 60,
   subcontratas: 90,
+  registroAmbiental: 90,
 };
 
 let _syncTimer = null, _syncLabelTimer = null, _syncLastTs = null;
@@ -16892,6 +17045,154 @@ async function poblarSelectObras(selectId) {
     opt.textContent = o.nombre;
     sel.appendChild(opt);
   });
+}
+
+// ── REGISTRO AMBIENTAL / ENVIRONMENTAL LOG (NEW-65) ────────────────
+let tblRegistroAmbiental = null, _raEditId = null;
+const RA_TIPO_ICON  = { residuo:'🗑️', derrame:'💧', ruido:'🔊', polvo:'💨', observacion:'👁️', cumplimiento:'✅' };
+const RA_GRAV_COLOR = { baja:'#10b981', media:'#f59e0b', alta:'#f97316', critica:'#ef4444' };
+const RA_ESTADO_COLOR = { abierto:'#64748b', en_gestion:'#f97316', cerrado:'#10b981', conforme:'#10b981' };
+const RA_CAT_COLOR  = { peligroso:'#ef4444', no_peligroso:'#10b981', especial:'#f59e0b' };
+
+async function cargarRegistroAmbiental() {
+  if (document.getElementById('filterRAObra')?.options.length <= 1)
+    poblarSelectObras('filterRAObra');
+  const obraId  = document.getElementById('filterRAObra')?.value || '';
+  const tipo    = document.getElementById('filterRATipo')?.value || '';
+  const estado  = document.getElementById('filterRAEstado')?.value || '';
+  const gravedad = document.getElementById('filterRAGravedad')?.value || '';
+  const params  = new URLSearchParams();
+  if (obraId)   params.set('obra_id', obraId);
+  if (tipo)     params.set('tipo', tipo);
+  if (estado)   params.set('estado', estado);
+  if (gravedad) params.set('gravedad', gravedad);
+  const r = await api(`/registro-ambiental?${params}`);
+  const data = r?.registros || [];
+
+  const total    = data.length;
+  const abiertos = data.filter(x => x.estado === 'abierto' || x.estado === 'en_gestion').length;
+  const criticos = data.filter(x => x.gravedad === 'critica').length;
+  const peligrosos = data.filter(x => x.categoria === 'peligroso').length;
+  const residuosTot = data.filter(x => x.tipo === 'residuo').reduce((s, x) => s + (x.cantidad || 0), 0);
+  document.getElementById('raKpi').innerHTML = `
+    <div class="kpi-card"><div class="kpi-icon">🌿</div><div class="kpi-value">${total}</div><div class="kpi-label">Total entradas</div></div>
+    <div class="kpi-card"><div class="kpi-icon">⚠️</div><div class="kpi-value" style="color:${abiertos>0?'var(--warning)':'var(--success)'}">${abiertos}</div><div class="kpi-label">Abiertas</div></div>
+    <div class="kpi-card"><div class="kpi-icon">🔴</div><div class="kpi-value" style="color:${criticos>0?'var(--danger)':'var(--success)'}">${criticos}</div><div class="kpi-label">Criticas</div></div>
+    <div class="kpi-card"><div class="kpi-icon">☣️</div><div class="kpi-value" style="color:${peligrosos>0?'var(--danger)':'var(--success)'}">${peligrosos}</div><div class="kpi-label">Peligrosas</div></div>
+    <div class="kpi-card"><div class="kpi-icon">🗑️</div><div class="kpi-value">${residuosTot > 0 ? residuosTot.toFixed(1) : '—'}</div><div class="kpi-label">Cant. residuos</div></div>`;
+
+  const badge = document.getElementById('raBadge');
+  if (badge) badge.style.display = (criticos + abiertos > 0) ? '' : 'none';
+
+  if (tblRegistroAmbiental) { tblRegistroAmbiental.replaceData(data); return; }
+  tblRegistroAmbiental = new Tabulator('#tblRegistroAmbiental', {
+    data, layout: 'fitColumns', responsiveLayout: 'collapse',
+    pagination: 'local', paginationSize: 20,
+    placeholder: '<div class="empty-state"><div class="empty-icon">🌿</div><div class="empty-text">Sin entradas ambientales</div></div>',
+    rowFormatter: row => {
+      const d = row.getData();
+      if (d.gravedad === 'critica') row.getElement().style.borderLeft = '3px solid var(--danger)';
+      else if (d.gravedad === 'alta') row.getElement().style.borderLeft = '3px solid var(--warning)';
+    },
+    columns: [
+      { title: 'Tipo', field: 'tipo', width: 90,
+        formatter: c => `<span title="${c.getValue()}">${RA_TIPO_ICON[c.getValue()]||'📋'} ${c.getValue()||'—'}</span>` },
+      { title: 'Cat.', field: 'categoria', width: 90,
+        formatter: c => c.getValue() ? `<span style="color:${RA_CAT_COLOR[c.getValue()]||'inherit'};font-size:11px">${c.getValue()}</span>` : '—' },
+      { title: 'Descripcion', field: 'descripcion', minWidth: 200 },
+      { title: 'Ubicacion', field: 'ubicacion', width: 130 },
+      { title: 'Gravedad', field: 'gravedad', width: 90,
+        formatter: c => `<span style="background:${RA_GRAV_COLOR[c.getValue()]||'#64748b'};color:#fff;padding:2px 8px;border-radius:4px;font-size:11px">${c.getValue()||'—'}</span>` },
+      { title: 'Estado', field: 'estado', width: 105,
+        formatter: c => `<span style="background:${RA_ESTADO_COLOR[c.getValue()]||'#64748b'};color:#fff;padding:2px 8px;border-radius:4px;font-size:11px">${c.getValue()||'—'}</span>` },
+      { title: 'Cantidad', field: 'cantidad', width: 85, hozAlign: 'right',
+        formatter: c => c.getValue() ? `${c.getValue()} ${c.getRow().getData().unidad||''}` : '—' },
+      { title: 'Fecha', field: 'fecha_evento', width: 95, formatter: c => fmtFecha(c.getValue()) },
+      { title: 'Responsable', field: 'responsable', width: 130 },
+      { title: '', field: 'id', width: 90, hozAlign: 'center',
+        formatter: c => `<button class="btn btn-secondary btn-sm" onclick="abrirModalRA(${c.getValue()})" style="padding:2px 7px;font-size:11px">✏️</button>
+          <button class="btn btn-secondary btn-sm" onclick="eliminarRegistroAmbiental(${c.getValue()})" style="padding:2px 7px;font-size:11px;color:var(--danger)">🗑</button>` }
+    ]
+  });
+}
+
+async function abrirModalRA(id = null) {
+  _raEditId = id;
+  document.getElementById('modalRATitle').textContent = id ? 'Editar entrada ambiental' : 'Nueva entrada ambiental';
+  const sel = document.getElementById('raObraId');
+  if (sel && sel.options.length <= 1) await poblarSelectObras('raObraId');
+  const obraFilt = document.getElementById('filterRAObra')?.value;
+  if (obraFilt && sel) sel.value = obraFilt;
+  document.getElementById('raFechaEvento').value = new Date().toISOString().slice(0,10);
+  ['raDescripcion','raUbicacion','raResponsable','raGestor','raNumDoc','raFechaCierre','raAccionTomada','raNotas'].forEach(eid => { const el=document.getElementById(eid); if(el) el.value=''; });
+  document.getElementById('raCantidad').value = '';
+  document.getElementById('raTipo').value = 'residuo';
+  document.getElementById('raCategoria').value = '';
+  document.getElementById('raGravedad').value = 'baja';
+  document.getElementById('raEstado').value = 'abierto';
+  document.getElementById('raUnidad').value = '';
+  if (id) {
+    const item = (tblRegistroAmbiental?.getData() || []).find(x => x.id === id);
+    if (item) {
+      if (sel) sel.value = item.obra_id;
+      document.getElementById('raFechaEvento').value = item.fecha_evento || '';
+      document.getElementById('raTipo').value = item.tipo || 'observacion';
+      document.getElementById('raCategoria').value = item.categoria || '';
+      document.getElementById('raDescripcion').value = item.descripcion || '';
+      document.getElementById('raUbicacion').value = item.ubicacion || '';
+      document.getElementById('raResponsable').value = item.responsable || '';
+      document.getElementById('raCantidad').value = item.cantidad || '';
+      document.getElementById('raUnidad').value = item.unidad || '';
+      document.getElementById('raGravedad').value = item.gravedad || 'baja';
+      document.getElementById('raEstado').value = item.estado || 'abierto';
+      document.getElementById('raGestor').value = item.gestor_autorizado || '';
+      document.getElementById('raNumDoc').value = item.numero_documento || '';
+      document.getElementById('raFechaCierre').value = item.fecha_cierre || '';
+      document.getElementById('raAccionTomada').value = item.accion_tomada || '';
+      document.getElementById('raNotas').value = item.notas || '';
+    }
+  }
+  document.getElementById('modalRA').classList.add('active');
+}
+
+async function guardarRegistroAmbiental() {
+  const obraId = document.getElementById('raObraId')?.value;
+  const descripcion = document.getElementById('raDescripcion')?.value?.trim();
+  if (!obraId || !descripcion) { showToast('Obra y descripcion son obligatorios', 'warning'); return; }
+  const body = {
+    obra_id: parseInt(obraId),
+    descripcion,
+    tipo: document.getElementById('raTipo')?.value || 'observacion',
+    categoria: document.getElementById('raCategoria')?.value || null,
+    ubicacion: document.getElementById('raUbicacion')?.value?.trim() || null,
+    responsable: document.getElementById('raResponsable')?.value?.trim() || null,
+    cantidad: parseFloat(document.getElementById('raCantidad')?.value) || null,
+    unidad: document.getElementById('raUnidad')?.value || null,
+    gravedad: document.getElementById('raGravedad')?.value || 'baja',
+    estado: document.getElementById('raEstado')?.value || 'abierto',
+    gestor_autorizado: document.getElementById('raGestor')?.value?.trim() || null,
+    numero_documento: document.getElementById('raNumDoc')?.value?.trim() || null,
+    fecha_evento: document.getElementById('raFechaEvento')?.value || null,
+    fecha_cierre: document.getElementById('raFechaCierre')?.value || null,
+    accion_tomada: document.getElementById('raAccionTomada')?.value?.trim() || null,
+    notas: document.getElementById('raNotas')?.value?.trim() || null,
+  };
+  const r = _raEditId
+    ? await api(`/registro-ambiental/${_raEditId}`, 'PUT', body)
+    : await api('/registro-ambiental', 'POST', body);
+  if (r?.ok || r?.id) {
+    cerrarModal('modalRA');
+    showToast(_raEditId ? 'Entrada actualizada ✅' : 'Entrada registrada ✅', 'success');
+    tblRegistroAmbiental = null;
+    cargarRegistroAmbiental();
+  } else showToast(r?.error || 'Error al guardar', 'error');
+}
+
+async function eliminarRegistroAmbiental(id) {
+  if (!confirm('¿Eliminar esta entrada ambiental?')) return;
+  const r = await api(`/registro-ambiental/${id}`, 'DELETE');
+  if (r?.ok) { showToast('Entrada eliminada', 'success'); tblRegistroAmbiental=null; cargarRegistroAmbiental(); }
+  else showToast('Error al eliminar', 'error');
 }
 
 // ── REGISTRO DE SUBCONTRATAS (NEW-64) ─────────────────────────────
