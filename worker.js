@@ -4721,6 +4721,14 @@ export default {
         if (method === 'PUT')    return await actualizarVisitaObra(_vid, request, env);
         if (method === 'DELETE') return await eliminarVisitaObra(_vid, request, env);
       }
+      // ── Flota de Vehículos de Empresa / Company Vehicle Fleet (NEW-108) ──────────
+      if (path === '/flota-vehiculos' && method === 'GET')  return await getFlotaVehiculos(request, env);
+      if (path === '/flota-vehiculos' && method === 'POST') return await crearVehiculo(request, env);
+      if (path.startsWith('/flota-vehiculos/')) {
+        const _fvId = parseInt(path.split('/flota-vehiculos/')[1]);
+        if (method === 'PUT')    return await actualizarVehiculo(_fvId, request, env);
+        if (method === 'DELETE') return await eliminarVehiculo(_fvId, request, env);
+      }
       // ── Gastos y Dietas de Personal / Worker Expense Claims (NEW-107) ───────────
       if (path === '/gastos-dietas' && method === 'GET')  return await getGastosDietas(request, env);
       if (path === '/gastos-dietas' && method === 'POST') return await crearGastoDieta(request, env);
@@ -20395,5 +20403,135 @@ async function eliminarGastoDieta(id, request, env) {
   const { empresa_id, rol } = await getAuth(request, env);
   if (!empresa_id || rol === 'operario') return err('Sin permisos', 403);
   await env.DB.prepare('DELETE FROM gastos_dietas WHERE id=? AND empresa_id=?').bind(id, empresa_id).run();
+  return json({ ok: true });
+}
+
+
+// ════════════════════════════════════════════════════════════════════════════════
+// NEW-108: FLOTA DE VEHÍCULOS DE EMPRESA / COMPANY VEHICLE FLEET
+// ════════════════════════════════════════════════════════════════════════════════
+async function ensureFlorVehiculosTable(env) {
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS flota_vehiculos (
+    id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+    empresa_id           INTEGER NOT NULL,
+    matricula            TEXT    NOT NULL,
+    tipo                 TEXT    NOT NULL DEFAULT 'furgoneta',
+    marca                TEXT,
+    modelo               TEXT,
+    color                TEXT,
+    anno_fabricacion     INTEGER,
+    bastidor             TEXT,
+    asignado_a           TEXT,
+    obra_id              INTEGER,
+    km_actual            INTEGER DEFAULT 0,
+    km_ultimo_servicio   INTEGER DEFAULT 0,
+    km_proximo_servicio  INTEGER DEFAULT 0,
+    fecha_itv            TEXT,
+    prox_itv             TEXT,
+    fecha_seguro         TEXT,
+    prox_renovacion_seguro TEXT,
+    aseguradora          TEXT,
+    poliza_seguro        TEXT,
+    fecha_revision       TEXT,
+    prox_revision        TEXT,
+    estado               TEXT    NOT NULL DEFAULT 'disponible',
+    combustible          TEXT    DEFAULT 'diesel',
+    notas                TEXT,
+    activo               INTEGER NOT NULL DEFAULT 1,
+    created_by           TEXT,
+    created_at           TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at           TEXT NOT NULL DEFAULT (datetime('now'))
+  )`).run();
+}
+
+async function getFlotaVehiculos(request, env) {
+  await ensureFlorVehiculosTable(env);
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const url    = new URL(request.url);
+  const estado = url.searchParams.get('estado');
+  const tipo   = url.searchParams.get('tipo');
+  let sql = `SELECT v.*, o.nombre as obra_nombre
+    FROM flota_vehiculos v
+    LEFT JOIN obras o ON v.obra_id = o.id
+    WHERE v.empresa_id = ?`;
+  const params = [empresa_id];
+  if (estado) { sql += ' AND v.estado = ?'; params.push(estado); }
+  if (tipo)   { sql += ' AND v.tipo = ?';   params.push(tipo); }
+  sql += ' ORDER BY v.matricula';
+  const { results } = await env.DB.prepare(sql).bind(...params).all();
+  const hoy = new Date().toISOString().slice(0,10);
+  const en30 = new Date(); en30.setDate(en30.getDate()+30); const en30s = en30.toISOString().slice(0,10);
+  const stats = {
+    total:      results.length,
+    activos:    results.filter(r=>r.activo&&r.estado==='disponible').length,
+    asignados:  results.filter(r=>r.estado==='asignado').length,
+    averia:     results.filter(r=>r.estado==='averia'||r.estado==='taller').length,
+    itv_vencida: results.filter(r=>r.prox_itv&&r.prox_itv<hoy).length,
+    itv_proxima: results.filter(r=>r.prox_itv&&r.prox_itv>=hoy&&r.prox_itv<=en30s).length,
+    seguro_vencido: results.filter(r=>r.prox_renovacion_seguro&&r.prox_renovacion_seguro<hoy).length
+  };
+  return json({ data: results, stats });
+}
+
+async function crearVehiculo(request, env) {
+  await ensureFlorVehiculosTable(env);
+  const { empresa_id, nombre: createdBy } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const body = await request.json().catch(() => ({}));
+  if (!body.matricula?.trim()) return err('La matrícula es obligatoria');
+  try {
+    const r = await env.DB.prepare(`
+      INSERT INTO flota_vehiculos
+        (empresa_id,matricula,tipo,marca,modelo,color,anno_fabricacion,bastidor,asignado_a,
+         obra_id,km_actual,km_ultimo_servicio,km_proximo_servicio,fecha_itv,prox_itv,
+         fecha_seguro,prox_renovacion_seguro,aseguradora,poliza_seguro,fecha_revision,
+         prox_revision,estado,combustible,notas,activo,created_by)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+      .bind(empresa_id, body.matricula.trim().toUpperCase(), body.tipo||'furgoneta',
+            body.marca||null, body.modelo||null, body.color||null, body.anno_fabricacion||null,
+            body.bastidor||null, body.asignado_a||null, body.obra_id||null,
+            parseInt(body.km_actual)||0, parseInt(body.km_ultimo_servicio)||0,
+            parseInt(body.km_proximo_servicio)||0, body.fecha_itv||null, body.prox_itv||null,
+            body.fecha_seguro||null, body.prox_renovacion_seguro||null, body.aseguradora||null,
+            body.poliza_seguro||null, body.fecha_revision||null, body.prox_revision||null,
+            body.estado||'disponible', body.combustible||'diesel', body.notas||null, 1, createdBy||null).run();
+    return json({ ok: true, id: r.meta.last_row_id }, 201);
+  } catch(e) {
+    if (e.message.includes('UNIQUE')) return err('Ya existe un vehículo con esa matrícula', 409);
+    throw e;
+  }
+}
+
+async function actualizarVehiculo(id, request, env) {
+  await ensureFlorVehiculosTable(env);
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const body = await request.json().catch(() => ({}));
+  if (!body.matricula?.trim()) return err('La matrícula es obligatoria');
+  await env.DB.prepare(`
+    UPDATE flota_vehiculos SET
+      matricula=?,tipo=?,marca=?,modelo=?,color=?,anno_fabricacion=?,bastidor=?,asignado_a=?,
+      obra_id=?,km_actual=?,km_ultimo_servicio=?,km_proximo_servicio=?,fecha_itv=?,prox_itv=?,
+      fecha_seguro=?,prox_renovacion_seguro=?,aseguradora=?,poliza_seguro=?,fecha_revision=?,
+      prox_revision=?,estado=?,combustible=?,notas=?,activo=?,updated_at=datetime('now')
+    WHERE id=? AND empresa_id=?`)
+    .bind(body.matricula.trim().toUpperCase(), body.tipo||'furgoneta', body.marca||null,
+          body.modelo||null, body.color||null, body.anno_fabricacion||null, body.bastidor||null,
+          body.asignado_a||null, body.obra_id||null, parseInt(body.km_actual)||0,
+          parseInt(body.km_ultimo_servicio)||0, parseInt(body.km_proximo_servicio)||0,
+          body.fecha_itv||null, body.prox_itv||null, body.fecha_seguro||null,
+          body.prox_renovacion_seguro||null, body.aseguradora||null, body.poliza_seguro||null,
+          body.fecha_revision||null, body.prox_revision||null, body.estado||'disponible',
+          body.combustible||'diesel', body.notas||null, body.activo!==false?1:0,
+          id, empresa_id).run();
+  return json({ ok: true });
+}
+
+async function eliminarVehiculo(id, request, env) {
+  await ensureFlorVehiculosTable(env);
+  const { empresa_id, rol } = await getAuth(request, env);
+  if (!empresa_id || rol === 'operario') return err('Sin permisos', 403);
+  await env.DB.prepare('DELETE FROM flota_vehiculos WHERE id=? AND empresa_id=?').bind(id, empresa_id).run();
   return json({ ok: true });
 }

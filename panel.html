@@ -770,6 +770,10 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
       <span class="nav-icon">🏆</span> Licitaciones
       <span class="nav-badge" id="licitBadge" style="display:none">0</span>
     </button>
+    <button class="nav-item" data-page="flotaVehiculos" onclick="navTo('flotaVehiculos')">
+      <span class="nav-icon">🚗</span> Flota de Vehículos
+      <span class="nav-badge" id="flotaBadge" style="display:none">0</span>
+    </button>
     <button class="nav-item" data-page="gastosDietas" onclick="navTo('gastosDietas')">
       <span class="nav-icon">🧳</span> Gastos y Dietas
       <span class="nav-badge" id="gastosBadge" style="display:none">0</span>
@@ -2494,6 +2498,173 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
               <button class="btn btn-secondary" onclick="cerrarModalAts()">Cancelar</button>
               <span id="atsElimBtn"></span>
               <button class="btn btn-primary" onclick="guardarAts()">💾 Guardar ATS</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- FLOTA DE VEHÍCULOS DE EMPRESA / COMPANY VEHICLE FLEET (NEW-108) -->
+      <div class="page" id="pageFlotaVehiculos">
+        <div class="page-title">🚗 Flota de Vehículos de Empresa / Vehicle Fleet</div>
+        <div id="fvKpis" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:12px;margin-bottom:16px"></div>
+        <div class="tbl-toolbar">
+          <select id="fvFiltroEstado" onchange="filtrarFlotaVehiculos()">
+            <option value="">— Estado —</option>
+            <option value="disponible">Disponible</option>
+            <option value="asignado">Asignado</option>
+            <option value="taller">En Taller</option>
+            <option value="averia">Avería</option>
+            <option value="baja">Baja</option>
+          </select>
+          <select id="fvFiltroTipo" onchange="filtrarFlotaVehiculos()">
+            <option value="">— Tipo —</option>
+            <option value="furgoneta">Furgoneta</option>
+            <option value="camion">Camión</option>
+            <option value="coche">Coche</option>
+            <option value="maquinaria">Maquinaria</option>
+            <option value="remolque">Remolque</option>
+            <option value="otro">Otro</option>
+          </select>
+          <input type="text" id="fvBuscar" placeholder="🔍 Buscar matrícula, marca, modelo…" oninput="filtrarFlotaVehiculos()" style="flex:1;min-width:180px">
+          <button class="btn-primary" onclick="abrirModalFv()">+ Añadir Vehículo</button>
+        </div>
+        <div id="tblFlotaVehiculos"></div>
+
+        <!-- MODAL FLOTA VEHÍCULOS -->
+        <div class="modal-overlay" id="modalFv" style="display:none" onclick="if(event.target===this)cerrarModalFv()">
+          <div class="modal" style="max-width:680px">
+            <div class="modal-header">
+              <h3 id="modalFvTitulo">Nuevo Vehículo</h3>
+              <button class="modal-close" onclick="cerrarModalFv()">✕</button>
+            </div>
+            <div class="modal-body" style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+              <div>
+                <label>Matrícula *</label>
+                <input id="fvMatricula" type="text" placeholder="0000 XXX" style="text-transform:uppercase">
+              </div>
+              <div>
+                <label>Tipo *</label>
+                <select id="fvTipo">
+                  <option value="furgoneta">Furgoneta</option>
+                  <option value="camion">Camión</option>
+                  <option value="coche">Coche</option>
+                  <option value="maquinaria">Maquinaria</option>
+                  <option value="remolque">Remolque</option>
+                  <option value="otro">Otro</option>
+                </select>
+              </div>
+              <div>
+                <label>Marca</label>
+                <input id="fvMarca" type="text" placeholder="Ford, Mercedes…">
+              </div>
+              <div>
+                <label>Modelo</label>
+                <input id="fvModelo" type="text" placeholder="Transit, Sprinter…">
+              </div>
+              <div>
+                <label>Color</label>
+                <input id="fvColor" type="text" placeholder="Blanco">
+              </div>
+              <div>
+                <label>Año Fabricación</label>
+                <input id="fvAnno" type="number" min="1990" max="2030" placeholder="2020">
+              </div>
+              <div>
+                <label>Bastidor (VIN)</label>
+                <input id="fvBastidor" type="text" placeholder="VF1…">
+              </div>
+              <div>
+                <label>Combustible</label>
+                <select id="fvCombustible">
+                  <option value="diesel">Diésel</option>
+                  <option value="gasolina">Gasolina</option>
+                  <option value="electrico">Eléctrico</option>
+                  <option value="hibrido">Híbrido</option>
+                  <option value="glp">GLP</option>
+                </select>
+              </div>
+              <div>
+                <label>Asignado a</label>
+                <input id="fvAsignadoA" type="text" placeholder="Nombre conductor">
+              </div>
+              <div>
+                <label>Obra asignada</label>
+                <select id="fvObraId"><option value="">— Sin asignar —</option></select>
+              </div>
+              <div>
+                <label>Estado</label>
+                <select id="fvEstado">
+                  <option value="disponible">Disponible</option>
+                  <option value="asignado">Asignado</option>
+                  <option value="taller">En Taller</option>
+                  <option value="averia">Avería</option>
+                  <option value="baja">Baja</option>
+                </select>
+              </div>
+              <div>
+                <label>Activo</label>
+                <select id="fvActivo">
+                  <option value="1">Sí</option>
+                  <option value="0">No</option>
+                </select>
+              </div>
+              <div style="grid-column:1/-1"><hr style="margin:4px 0;border-color:#e2e8f0"><strong style="font-size:12px;color:#64748b">KILOMETRAJE</strong></div>
+              <div>
+                <label>Km Actuales</label>
+                <input id="fvKmActual" type="number" min="0" placeholder="0">
+              </div>
+              <div>
+                <label>Km Último Servicio</label>
+                <input id="fvKmUltimoServicio" type="number" min="0" placeholder="0">
+              </div>
+              <div>
+                <label>Km Próximo Servicio</label>
+                <input id="fvKmProximoServicio" type="number" min="0" placeholder="0">
+              </div>
+              <div></div>
+              <div style="grid-column:1/-1"><hr style="margin:4px 0;border-color:#e2e8f0"><strong style="font-size:12px;color:#64748b">ITV</strong></div>
+              <div>
+                <label>Fecha ITV</label>
+                <input id="fvFechaItv" type="date">
+              </div>
+              <div>
+                <label>Próxima ITV</label>
+                <input id="fvProxItv" type="date">
+              </div>
+              <div style="grid-column:1/-1"><hr style="margin:4px 0;border-color:#e2e8f0"><strong style="font-size:12px;color:#64748b">SEGURO</strong></div>
+              <div>
+                <label>Fecha Seguro</label>
+                <input id="fvFechaSeguro" type="date">
+              </div>
+              <div>
+                <label>Renovación Seguro</label>
+                <input id="fvProxRenovSeguro" type="date">
+              </div>
+              <div>
+                <label>Aseguradora</label>
+                <input id="fvAseguradora" type="text" placeholder="Mapfre, Generali…">
+              </div>
+              <div>
+                <label>Nº Póliza</label>
+                <input id="fvPolizaSeguro" type="text" placeholder="POL-12345">
+              </div>
+              <div style="grid-column:1/-1"><hr style="margin:4px 0;border-color:#e2e8f0"><strong style="font-size:12px;color:#64748b">REVISIÓN TÉCNICA</strong></div>
+              <div>
+                <label>Fecha Revisión</label>
+                <input id="fvFechaRevision" type="date">
+              </div>
+              <div>
+                <label>Próxima Revisión</label>
+                <input id="fvProxRevision" type="date">
+              </div>
+              <div style="grid-column:1/-1">
+                <label>Notas</label>
+                <textarea id="fvNotas" rows="2" placeholder="Observaciones…"></textarea>
+              </div>
+            </div>
+            <div class="modal-footer">
+              <button class="btn-secondary" onclick="cerrarModalFv()">Cancelar</button>
+              <button class="btn-primary" onclick="guardarFv()">Guardar Vehículo</button>
             </div>
           </div>
         </div>
@@ -8767,6 +8938,7 @@ const PAGE_TITLES = {
   panelVencimientos:  '⏰ Panel de Vencimientos / Expiry Dashboard',
   licitaciones:       '🏆 Gestión de Licitaciones / Bid Pipeline',
   gastosDietas:       '🧳 Gastos y Dietas de Personal / Expense Claims',
+  flotaVehiculos:     '🚗 Flota de Vehículos de Empresa / Vehicle Fleet',
 };
 
 const PAGE_LOADERS = {
@@ -8875,6 +9047,7 @@ const PAGE_LOADERS = {
   panelVencimientos:  cargarPanelVencimientos,
   licitaciones:       cargarLicitaciones,
   gastosDietas:       cargarGastosDietas,
+  flotaVehiculos:     cargarFlotaVehiculos,
 };
 
 let currentPage = '';
@@ -9012,6 +9185,7 @@ const SYNC_INTERVALS = {
   panelVencimientos:  60,
   licitaciones:       300,
   gastosDietas:       120,
+  flotaVehiculos:     300,
 };
 
 let _syncTimer = null, _syncLabelTimer = null, _syncLastTs = null;
@@ -18372,6 +18546,197 @@ function exportarFinanzas() {
   if (!obraId) return showToast('Selecciona una obra primero', 'warning');
   // Abrir informe en nueva pestaña usando el endpoint de informes
   window.open(`/informe-obra/${obraId}?tipo=financiero`, '_blank');
+}
+
+// ── FLOTA DE VEHÍCULOS DE EMPRESA / COMPANY VEHICLE FLEET (NEW-108) ──────────
+let tblFv = null, _fvData = [];
+const FV_ESTADO_COLOR = {
+  disponible: '#22c55e', asignado: '#3b82f6',
+  taller: '#f59e0b', averia: '#ef4444', baja: '#94a3b8'
+};
+const FV_TIPO_ICON = {
+  furgoneta:'🚐', camion:'🚛', coche:'🚗', maquinaria:'🏗️', remolque:'🔗', otro:'🚙'
+};
+const FV_ITV_LABEL = { ok:'✅', proxima:'⚠️', vencida:'🔴' };
+
+async function cargarFlotaVehiculos() {
+  const data = await api('/flota-vehiculos');
+  _fvData = data.data || [];
+  const stats = data.stats || {};
+
+  // KPI strip
+  const hoy = new Date().toISOString().slice(0,10);
+  const en30 = new Date(); en30.setDate(en30.getDate()+30);
+  const en30s = en30.toISOString().slice(0,10);
+  document.getElementById('fvKpis').innerHTML = `
+    <div class="kpi-mini"><div class="kpi-val">${stats.total||0}</div><div class="kpi-lbl">Total Vehículos</div></div>
+    <div class="kpi-mini" style="border-left:3px solid #22c55e"><div class="kpi-val" style="color:#22c55e">${stats.activos||0}</div><div class="kpi-lbl">Disponibles</div></div>
+    <div class="kpi-mini" style="border-left:3px solid #3b82f6"><div class="kpi-val" style="color:#3b82f6">${stats.asignados||0}</div><div class="kpi-lbl">Asignados</div></div>
+    <div class="kpi-mini" style="border-left:3px solid #f59e0b"><div class="kpi-val" style="color:#f59e0b">${stats.averia||0}</div><div class="kpi-lbl">Taller / Avería</div></div>
+    <div class="kpi-mini" style="border-left:3px solid #ef4444"><div class="kpi-val" style="color:#ef4444">${stats.itv_vencida||0}</div><div class="kpi-lbl">🔴 ITV Vencida</div></div>
+    <div class="kpi-mini" style="border-left:3px solid #f59e0b"><div class="kpi-val" style="color:#f59e0b">${stats.itv_proxima||0}</div><div class="kpi-lbl">⚠️ ITV Próxima</div></div>
+    <div class="kpi-mini" style="border-left:3px solid #dc2626"><div class="kpi-val" style="color:#dc2626">${stats.seguro_vencido||0}</div><div class="kpi-lbl">🔴 Seguro Vencido</div></div>
+  `;
+
+  // Update nav badge (ITV vencida + seguro vencido)
+  const alertas = (stats.itv_vencida||0) + (stats.seguro_vencido||0);
+  const badge = document.getElementById('flotaBadge');
+  if (badge) { badge.textContent = alertas; badge.style.display = alertas > 0 ? '' : 'none'; }
+
+  // Populate obra dropdown
+  await poblarSelectObras('fvObraId');
+
+  if (!tblFv) {
+    tblFv = new Tabulator('#tblFlotaVehiculos', {
+      data: _fvData,
+      layout: 'fitColumns',
+      height: '520px',
+      responsiveLayout: 'collapse',
+      placeholder: 'Sin vehículos registrados',
+      initialSort: [{ column: 'matricula', dir: 'asc' }],
+      columns: [
+        { title: 'Tipo', field: 'tipo', width: 70, hozAlign: 'center',
+          formatter: c => FV_TIPO_ICON[c.getValue()] || '🚙' },
+        { title: 'Matrícula', field: 'matricula', width: 110,
+          formatter: c => `<strong>${c.getValue()}</strong>` },
+        { title: 'Marca / Modelo', field: 'marca', minWidth: 130,
+          formatter: c => { const r=c.getRow().getData(); return [r.marca,r.modelo].filter(Boolean).join(' ') || '—'; } },
+        { title: 'Estado', field: 'estado', width: 110,
+          formatter: c => { const v=c.getValue(); return `<span style="background:${FV_ESTADO_COLOR[v]||'#94a3b8'};color:#fff;padding:2px 8px;border-radius:12px;font-size:12px">${v}</span>`; } },
+        { title: 'Asignado a', field: 'asignado_a', minWidth: 120,
+          formatter: c => c.getValue() || '—' },
+        { title: 'Obra', field: 'obra_nombre', minWidth: 120,
+          formatter: c => c.getValue() || '—' },
+        { title: 'Km Actual', field: 'km_actual', width: 95, hozAlign: 'right',
+          formatter: c => (c.getValue()||0).toLocaleString('es-ES') },
+        { title: 'ITV', field: 'prox_itv', width: 110,
+          formatter: c => {
+            const v = c.getValue(); if (!v) return '—';
+            const icon = v < hoy ? '🔴' : v <= en30s ? '⚠️' : '✅';
+            return `${icon} ${v}`;
+          } },
+        { title: 'Seguro', field: 'prox_renovacion_seguro', width: 110,
+          formatter: c => {
+            const v = c.getValue(); if (!v) return '—';
+            const icon = v < hoy ? '🔴' : v <= en30s ? '⚠️' : '✅';
+            return `${icon} ${v}`;
+          } },
+        { title: 'Año', field: 'anno_fabricacion', width: 65, hozAlign: 'center',
+          formatter: c => c.getValue() || '—' },
+        { title: '⚙️', field: 'id', width: 80, hozAlign: 'center', headerSort: false,
+          formatter: c => `<button class="btn-sm" onclick="editarFv(${c.getValue()})">✏️</button>
+                           <button class="btn-sm btn-danger" onclick="eliminarFv(${c.getValue()})">🗑️</button>` }
+      ]
+    });
+  } else {
+    tblFv.replaceData(_fvData);
+  }
+}
+
+function filtrarFlotaVehiculos() {
+  if (!tblFv) return;
+  const estado = document.getElementById('fvFiltroEstado').value;
+  const tipo   = document.getElementById('fvFiltroTipo').value;
+  const buscar = (document.getElementById('fvBuscar').value || '').toLowerCase();
+  tblFv.setFilter(row => {
+    if (estado && row.estado !== estado) return false;
+    if (tipo   && row.tipo   !== tipo)   return false;
+    if (buscar && ![ row.matricula, row.marca, row.modelo, row.asignado_a ]
+          .filter(Boolean).join(' ').toLowerCase().includes(buscar)) return false;
+    return true;
+  });
+}
+
+function abrirModalFv(id) {
+  document.getElementById('modalFvTitulo').textContent = id ? 'Editar Vehículo' : 'Nuevo Vehículo';
+  document.getElementById('modalFv')._fvId = id || null;
+  ['Matricula','Tipo','Marca','Modelo','Color','Anno','Bastidor','Combustible',
+   'AsignadoA','ObraId','Estado','Activo','KmActual','KmUltimoServicio','KmProximoServicio',
+   'FechaItv','ProxItv','FechaSeguro','ProxRenovSeguro','Aseguradora','PolizaSeguro',
+   'FechaRevision','ProxRevision','Notas'].forEach(k => {
+    const el = document.getElementById('fv' + k);
+    if (el) el.value = el.tagName === 'SELECT' ? (el.options[0]?.value || '') : '';
+  });
+  if (id) {
+    const r = _fvData.find(v => v.id === id); if (!r) return;
+    document.getElementById('fvMatricula').value        = r.matricula    || '';
+    document.getElementById('fvTipo').value             = r.tipo         || 'furgoneta';
+    document.getElementById('fvMarca').value            = r.marca        || '';
+    document.getElementById('fvModelo').value           = r.modelo       || '';
+    document.getElementById('fvColor').value            = r.color        || '';
+    document.getElementById('fvAnno').value             = r.anno_fabricacion || '';
+    document.getElementById('fvBastidor').value         = r.bastidor     || '';
+    document.getElementById('fvCombustible').value      = r.combustible  || 'diesel';
+    document.getElementById('fvAsignadoA').value        = r.asignado_a   || '';
+    document.getElementById('fvObraId').value           = r.obra_id      || '';
+    document.getElementById('fvEstado').value           = r.estado       || 'disponible';
+    document.getElementById('fvActivo').value           = r.activo !== undefined ? String(r.activo) : '1';
+    document.getElementById('fvKmActual').value         = r.km_actual               || 0;
+    document.getElementById('fvKmUltimoServicio').value = r.km_ultimo_servicio       || 0;
+    document.getElementById('fvKmProximoServicio').value= r.km_proximo_servicio      || 0;
+    document.getElementById('fvFechaItv').value         = r.fecha_itv               || '';
+    document.getElementById('fvProxItv').value          = r.prox_itv                || '';
+    document.getElementById('fvFechaSeguro').value      = r.fecha_seguro            || '';
+    document.getElementById('fvProxRenovSeguro').value  = r.prox_renovacion_seguro  || '';
+    document.getElementById('fvAseguradora').value      = r.aseguradora             || '';
+    document.getElementById('fvPolizaSeguro').value     = r.poliza_seguro           || '';
+    document.getElementById('fvFechaRevision').value    = r.fecha_revision          || '';
+    document.getElementById('fvProxRevision').value     = r.prox_revision           || '';
+    document.getElementById('fvNotas').value            = r.notas                   || '';
+  }
+  document.getElementById('modalFv').style.display = 'flex';
+}
+function editarFv(id) { abrirModalFv(id); }
+
+async function guardarFv() {
+  const matricula = document.getElementById('fvMatricula').value.trim().toUpperCase();
+  if (!matricula) { alert('La matrícula es obligatoria'); return; }
+  const id = document.getElementById('modalFv')._fvId;
+  const body = {
+    matricula,
+    tipo:                    document.getElementById('fvTipo').value,
+    marca:                   document.getElementById('fvMarca').value.trim() || null,
+    modelo:                  document.getElementById('fvModelo').value.trim() || null,
+    color:                   document.getElementById('fvColor').value.trim() || null,
+    anno_fabricacion:        parseInt(document.getElementById('fvAnno').value) || null,
+    bastidor:                document.getElementById('fvBastidor').value.trim() || null,
+    combustible:             document.getElementById('fvCombustible').value,
+    asignado_a:              document.getElementById('fvAsignadoA').value.trim() || null,
+    obra_id:                 parseInt(document.getElementById('fvObraId').value) || null,
+    estado:                  document.getElementById('fvEstado').value,
+    activo:                  document.getElementById('fvActivo').value === '1',
+    km_actual:               parseInt(document.getElementById('fvKmActual').value) || 0,
+    km_ultimo_servicio:      parseInt(document.getElementById('fvKmUltimoServicio').value) || 0,
+    km_proximo_servicio:     parseInt(document.getElementById('fvKmProximoServicio').value) || 0,
+    fecha_itv:               document.getElementById('fvFechaItv').value || null,
+    prox_itv:                document.getElementById('fvProxItv').value || null,
+    fecha_seguro:            document.getElementById('fvFechaSeguro').value || null,
+    prox_renovacion_seguro:  document.getElementById('fvProxRenovSeguro').value || null,
+    aseguradora:             document.getElementById('fvAseguradora').value.trim() || null,
+    poliza_seguro:           document.getElementById('fvPolizaSeguro').value.trim() || null,
+    fecha_revision:          document.getElementById('fvFechaRevision').value || null,
+    prox_revision:           document.getElementById('fvProxRevision').value || null,
+    notas:                   document.getElementById('fvNotas').value.trim() || null
+  };
+  try {
+    if (id) {
+      await api(`/flota-vehiculos/${id}`, { method:'PUT', body: JSON.stringify(body) });
+    } else {
+      await api('/flota-vehiculos', { method:'POST', body: JSON.stringify(body) });
+    }
+    cerrarModalFv();
+    await cargarFlotaVehiculos();
+  } catch(e) { alert('Error: ' + e.message); }
+}
+
+async function eliminarFv(id) {
+  if (!confirm('¿Eliminar este vehículo?')) return;
+  await api(`/flota-vehiculos/${id}`, { method:'DELETE' });
+  await cargarFlotaVehiculos();
+}
+
+function cerrarModalFv() {
+  document.getElementById('modalFv').style.display = 'none';
 }
 
 // ── GASTOS Y DIETAS DE PERSONAL / WORKER EXPENSE CLAIMS (NEW-107) ────────────
