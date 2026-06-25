@@ -4693,6 +4693,24 @@ export default {
         if (method === 'GET') return await getCierreResumen(_corObraId, request, env);
       }
       if (path === '/cierre-obra-plantilla' && method === 'POST') return await inicializarCierrePlantilla(request, env);
+      // -- Certificaciones de Obra (NEW-67) -----------------------------------
+      if (path === '/certificaciones' && method === 'GET')  return await getCertificaciones(request, env);
+      if (path === '/certificaciones' && method === 'POST') return await crearCertificacion(request, env);
+      if (path.startsWith('/certificaciones/')) {
+        const _certParts = path.split('/certificaciones/')[1].split('/');
+        const _certId = parseInt(_certParts[0]);
+        if (_certParts[1] === 'lineas' && method === 'GET')  return await getCertLineas(_certId, request, env);
+        if (_certParts[1] === 'lineas' && method === 'POST') return await crearCertLinea(_certId, request, env);
+        if (_certParts[1] === undefined) {
+          if (method === 'PUT')    return await actualizarCertificacion(_certId, request, env);
+          if (method === 'DELETE') return await eliminarCertificacion(_certId, request, env);
+        }
+        if (_certParts[1] === 'lineas' && _certParts[2]) {
+          const _certLid = parseInt(_certParts[2]);
+          if (method === 'PUT')    return await actualizarCertLinea(_certLid, request, env);
+          if (method === 'DELETE') return await eliminarCertLinea(_certLid, request, env);
+        }
+      }
       // â”€â”€ RFIs â€” Consultas TÃ©cnicas (NEW-34) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
       if (path === '/rfis'                  && method === 'GET')  return await getRfis(request, env);
       if (path === '/rfis'                  && method === 'POST') return await crearRfi(request, env);
@@ -16215,4 +16233,195 @@ async function inicializarCierrePlantilla(request, env) {
   );
   await Promise.all(CIERRE_PLANTILLA.map(t => stmt.bind(auth.empresa_id, obra_id, t.cat, t.titulo, t.orden).run()));
   return json({ ok: true, created: CIERRE_PLANTILLA.length });
+}
+
+// ============================================================
+// NEW-67  Certificaciones de Obra / Monthly Billing
+// ============================================================
+
+async function ensureCertificacionesTable(env) {
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS certificaciones (
+    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+    empresa_id          INTEGER NOT NULL,
+    obra_id             INTEGER NOT NULL,
+    numero              TEXT,
+    titulo              TEXT,
+    periodo_mes         INTEGER,
+    periodo_anno        INTEGER,
+    fecha_emision       TEXT,
+    fecha_aprobacion    TEXT,
+    estado              TEXT DEFAULT 'borrador',
+    importe_certificado REAL DEFAULT 0,
+    importe_acumulado   REAL DEFAULT 0,
+    retencion_pct       REAL DEFAULT 5,
+    importe_retencion   REAL DEFAULT 0,
+    importe_liquido     REAL DEFAULT 0,
+    notas               TEXT,
+    created_at          TEXT DEFAULT (datetime('now'))
+  )`).run();
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS certificaciones_lineas (
+    id                        INTEGER PRIMARY KEY AUTOINCREMENT,
+    empresa_id                INTEGER NOT NULL,
+    certificacion_id          INTEGER NOT NULL,
+    obra_id                   INTEGER NOT NULL,
+    capitulo                  TEXT,
+    codigo                    TEXT,
+    descripcion               TEXT NOT NULL,
+    unidad                    TEXT,
+    cantidad_origen           REAL DEFAULT 0,
+    precio_unitario           REAL DEFAULT 0,
+    importe_origen            REAL DEFAULT 0,
+    cantidad_certificada_acum REAL DEFAULT 0,
+    importe_acumulado         REAL DEFAULT 0,
+    cantidad_certificada_mes  REAL DEFAULT 0,
+    importe_mes               REAL DEFAULT 0,
+    porcentaje_avance         REAL DEFAULT 0,
+    created_at                TEXT DEFAULT (datetime('now'))
+  )`).run();
+}
+
+async function getCertificaciones(request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth?.empresa_id) return err('No autorizado', 403);
+  await ensureCertificacionesTable(env);
+  const url = new URL(request.url);
+  const obraId = url.searchParams.get('obra_id');
+  const estado = url.searchParams.get('estado');
+  let q = `SELECT * FROM certificaciones WHERE empresa_id=?`;
+  const params = [auth.empresa_id];
+  if (obraId) { q += ` AND obra_id=?`; params.push(obraId); }
+  if (estado) { q += ` AND estado=?`;  params.push(estado); }
+  q += ` ORDER BY periodo_anno DESC, periodo_mes DESC`;
+  const { results } = await env.DB.prepare(q).bind(...params).all();
+  return json({ certificaciones: results });
+}
+
+async function crearCertificacion(request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth?.empresa_id) return err('No autorizado', 403);
+  await ensureCertificacionesTable(env);
+  const b = await request.json();
+  const yr = b.periodo_anno || new Date().getFullYear();
+  const mes = b.periodo_mes || (new Date().getMonth() + 1);
+  const { results: cnt } = await env.DB.prepare(
+    `SELECT COUNT(*) as n FROM certificaciones WHERE empresa_id=? AND obra_id=?`
+  ).bind(auth.empresa_id, b.obra_id).all();
+  const num = `CERT-${yr}-${String((cnt[0]?.n || 0) + 1).padStart(2, '0')}`;
+  const imp = b.importe_certificado || 0;
+  const ret = (imp * (b.retencion_pct || 5)) / 100;
+  const { meta } = await env.DB.prepare(
+    `INSERT INTO certificaciones (empresa_id,obra_id,numero,titulo,periodo_mes,periodo_anno,fecha_emision,estado,importe_certificado,importe_acumulado,retencion_pct,importe_retencion,importe_liquido,notas)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+  ).bind(
+    auth.empresa_id, b.obra_id, num,
+    b.titulo || `Certificacion ${mes}/${yr}`,
+    mes, yr,
+    b.fecha_emision || new Date().toISOString().slice(0,10),
+    b.estado || 'borrador',
+    imp, b.importe_acumulado || imp,
+    b.retencion_pct || 5, ret, imp - ret, b.notas || null
+  ).run();
+  return json({ ok: true, id: meta.last_row_id, numero: num });
+}
+
+async function actualizarCertificacion(id, request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth?.empresa_id) return err('No autorizado', 403);
+  await ensureCertificacionesTable(env);
+  const b = await request.json();
+  const imp = b.importe_certificado;
+  const ret = imp !== undefined ? (imp * (b.retencion_pct || 5)) / 100 : undefined;
+  await env.DB.prepare(
+    `UPDATE certificaciones SET
+      titulo=COALESCE(?,titulo), periodo_mes=COALESCE(?,periodo_mes),
+      periodo_anno=COALESCE(?,periodo_anno), fecha_emision=COALESCE(?,fecha_emision),
+      fecha_aprobacion=COALESCE(?,fecha_aprobacion), estado=COALESCE(?,estado),
+      importe_certificado=COALESCE(?,importe_certificado),
+      importe_acumulado=COALESCE(?,importe_acumulado),
+      retencion_pct=COALESCE(?,retencion_pct),
+      importe_retencion=COALESCE(?,importe_retencion),
+      importe_liquido=COALESCE(?,importe_liquido), notas=COALESCE(?,notas)
+     WHERE id=? AND empresa_id=?`
+  ).bind(
+    b.titulo || null, b.periodo_mes || null, b.periodo_anno || null,
+    b.fecha_emision || null, b.fecha_aprobacion || null, b.estado || null,
+    imp ?? null, b.importe_acumulado ?? null,
+    b.retencion_pct ?? null, ret ?? null,
+    imp !== undefined ? imp - (ret||0) : null, b.notas || null,
+    id, auth.empresa_id
+  ).run();
+  return json({ ok: true });
+}
+
+async function eliminarCertificacion(id, request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth?.empresa_id) return err('No autorizado', 403);
+  await env.DB.prepare(`DELETE FROM certificaciones_lineas WHERE certificacion_id=? AND empresa_id=?`).bind(id, auth.empresa_id).run();
+  await env.DB.prepare(`DELETE FROM certificaciones WHERE id=? AND empresa_id=?`).bind(id, auth.empresa_id).run();
+  return json({ ok: true });
+}
+
+async function getCertLineas(certId, request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth?.empresa_id) return err('No autorizado', 403);
+  await ensureCertificacionesTable(env);
+  const { results } = await env.DB.prepare(
+    `SELECT * FROM certificaciones_lineas WHERE certificacion_id=? AND empresa_id=? ORDER BY capitulo ASC, codigo ASC`
+  ).bind(certId, auth.empresa_id).all();
+  return json({ lineas: results });
+}
+
+async function crearCertLinea(certId, request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth?.empresa_id) return err('No autorizado', 403);
+  await ensureCertificacionesTable(env);
+  const b = await request.json();
+  const cert = await env.DB.prepare(`SELECT obra_id FROM certificaciones WHERE id=? AND empresa_id=?`).bind(certId, auth.empresa_id).first();
+  if (!cert) return err('Certificacion no encontrada', 404);
+  const impMes = (b.cantidad_certificada_mes || 0) * (b.precio_unitario || 0);
+  const impAcum = (b.cantidad_certificada_acum || 0) * (b.precio_unitario || 0);
+  const pct = b.importe_origen > 0 ? Math.round(impAcum / b.importe_origen * 100) : 0;
+  const { meta } = await env.DB.prepare(
+    `INSERT INTO certificaciones_lineas (empresa_id,certificacion_id,obra_id,capitulo,codigo,descripcion,unidad,cantidad_origen,precio_unitario,importe_origen,cantidad_certificada_acum,importe_acumulado,cantidad_certificada_mes,importe_mes,porcentaje_avance)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+  ).bind(
+    auth.empresa_id, certId, cert.obra_id,
+    b.capitulo || null, b.codigo || null, b.descripcion,
+    b.unidad || null, b.cantidad_origen || 0, b.precio_unitario || 0,
+    b.importe_origen || 0, b.cantidad_certificada_acum || 0, impAcum,
+    b.cantidad_certificada_mes || 0, impMes, pct
+  ).run();
+  return json({ ok: true, id: meta.last_row_id });
+}
+
+async function actualizarCertLinea(id, request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth?.empresa_id) return err('No autorizado', 403);
+  const b = await request.json();
+  const impMes  = (b.cantidad_certificada_mes || 0) * (b.precio_unitario || 0);
+  const impAcum = (b.cantidad_certificada_acum || 0) * (b.precio_unitario || 0);
+  const pct = b.importe_origen > 0 ? Math.round(impAcum / b.importe_origen * 100) : 0;
+  await env.DB.prepare(
+    `UPDATE certificaciones_lineas SET
+      capitulo=COALESCE(?,capitulo), codigo=COALESCE(?,codigo), descripcion=COALESCE(?,descripcion),
+      unidad=COALESCE(?,unidad), cantidad_origen=COALESCE(?,cantidad_origen),
+      precio_unitario=COALESCE(?,precio_unitario), importe_origen=COALESCE(?,importe_origen),
+      cantidad_certificada_acum=?,importe_acumulado=?,
+      cantidad_certificada_mes=?,importe_mes=?,porcentaje_avance=?
+     WHERE id=? AND empresa_id=?`
+  ).bind(
+    b.capitulo||null, b.codigo||null, b.descripcion||null, b.unidad||null,
+    b.cantidad_origen||null, b.precio_unitario||null, b.importe_origen||null,
+    b.cantidad_certificada_acum||0, impAcum,
+    b.cantidad_certificada_mes||0, impMes, pct,
+    id, auth.empresa_id
+  ).run();
+  return json({ ok: true });
+}
+
+async function eliminarCertLinea(id, request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth?.empresa_id) return err('No autorizado', 403);
+  await env.DB.prepare(`DELETE FROM certificaciones_lineas WHERE id=? AND empresa_id=?`).bind(id, auth.empresa_id).run();
+  return json({ ok: true });
 }

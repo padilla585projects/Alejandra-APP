@@ -626,6 +626,10 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
       <span class="nav-icon">🏁</span> Cierre de Obra
       <span class="nav-badge" id="cierreBadge" style="display:none">!</span>
     </button>
+    <button class="nav-item" data-page="certificaciones" onclick="navTo('certificaciones')">
+      <span class="nav-icon">🧾</span> Certificaciones
+      <span class="nav-badge" id="certBadge" style="display:none">!</span>
+    </button>
 
     <div class="sidebar-section" onclick="sidebarToggle(this)" data-sid="seguimiento"><span>📓 Seguimiento</span><span class="sec-chevron">▼</span></div>
     <button class="nav-item" data-page="partesPanel" onclick="navTo('partesPanel')">
@@ -2123,6 +2127,171 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
         </div>
         <div id="entregasKpi" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:12px;margin-bottom:16px"></div>
         <div class="tbl-wrap"><div id="tblEntregas"></div></div>
+      </div>
+
+      <!-- CERTIFICACIONES DE OBRA (NEW-67) -->
+      <div class="page" id="pageCertificaciones">
+        <div class="page-title">🧾 Certificaciones de Obra</div>
+        <div class="page-sub">Certificaciones mensuales de obra ejecutada — control de importes, retenciones y estado de cobro</div>
+        <div class="tbl-toolbar" style="flex-wrap:wrap;gap:8px;margin-bottom:14px">
+          <select class="tbl-search" id="filterCertObra" style="min-width:240px;font-size:14px;font-weight:600" onchange="cargarCertificaciones()"></select>
+          <select class="tbl-search" id="filterCertEstado" style="min-width:140px" onchange="cargarCertificaciones()">
+            <option value="">Todos los estados</option>
+            <option value="borrador">Borrador</option>
+            <option value="enviada">Enviada</option>
+            <option value="aprobada">Aprobada</option>
+            <option value="rechazada">Rechazada</option>
+            <option value="pagada">Pagada</option>
+          </select>
+          <button class="btn btn-primary" onclick="abrirModalCert()">+ Nueva certificacion</button>
+          <button class="btn btn-secondary" onclick="exportarTabla(tblCertificaciones,'certificaciones')">&#8595; CSV</button>
+          <button class="btn btn-secondary" onclick="cargarCertificaciones()">&#x1F504;</button>
+        </div>
+        <div id="certKpi" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:16px"></div>
+        <div class="tbl-wrap"><div id="tblCertificaciones"></div></div>
+        <!-- Detalle de lineas de la certificacion seleccionada -->
+        <div id="certLineasPanel" style="display:none;margin-top:24px">
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+            <div style="font-size:16px;font-weight:700;color:var(--text)" id="certLineasTitle">Lineas de certificacion</div>
+            <button class="btn btn-primary btn-sm" onclick="abrirModalCertLinea()" style="padding:4px 12px;font-size:12px">+ Linea</button>
+            <button class="btn btn-secondary btn-sm" onclick="document.getElementById('certLineasPanel').style.display='none'" style="padding:4px 12px;font-size:12px">&#x2715; Cerrar</button>
+          </div>
+          <div class="tbl-wrap"><div id="tblCertLineas"></div></div>
+        </div>
+      </div>
+
+      <!-- modal Certificacion -->
+      <div class="modal-overlay" id="modalCert">
+        <div class="modal" style="max-width:620px">
+          <div class="modal-header">
+            <span id="modalCertTitle">Nueva certificacion</span>
+            <button class="modal-close" onclick="cerrarModal('modalCert')">&#x2715;</button>
+          </div>
+          <div class="modal-body" style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+            <div>
+              <label class="form-label">Obra</label>
+              <select class="form-input" id="certObraId" onchange="certCalcLiquido()"></select>
+            </div>
+            <div>
+              <label class="form-label">Periodo (mes/año)</label>
+              <div style="display:flex;gap:6px">
+                <select class="form-input" id="certMes" style="flex:1" onchange="certSetTitulo()">
+                  <option value="1">Enero</option><option value="2">Febrero</option><option value="3">Marzo</option>
+                  <option value="4">Abril</option><option value="5">Mayo</option><option value="6">Junio</option>
+                  <option value="7">Julio</option><option value="8">Agosto</option><option value="9">Septiembre</option>
+                  <option value="10">Octubre</option><option value="11">Noviembre</option><option value="12">Diciembre</option>
+                </select>
+                <input class="form-input" type="number" id="certAnno" style="width:80px" min="2020" max="2035">
+              </div>
+            </div>
+            <div style="grid-column:1/-1">
+              <label class="form-label">Titulo</label>
+              <input class="form-input" id="certTitulo" placeholder="Titulo de la certificacion">
+            </div>
+            <div>
+              <label class="form-label">Importe certificado este mes (EUR)</label>
+              <input class="form-input" type="number" id="certImporte" min="0" step="0.01" placeholder="0.00" oninput="certCalcLiquido()">
+            </div>
+            <div>
+              <label class="form-label">Importe acumulado a origen (EUR)</label>
+              <input class="form-input" type="number" id="certAcumulado" min="0" step="0.01" placeholder="0.00">
+            </div>
+            <div>
+              <label class="form-label">Retencion (%)</label>
+              <input class="form-input" type="number" id="certRetencion" min="0" max="100" step="0.5" value="5" oninput="certCalcLiquido()">
+            </div>
+            <div>
+              <label class="form-label">Importe liquido (calculado)</label>
+              <input class="form-input" id="certLiquido" readonly style="background:var(--surface2);color:var(--primary);font-weight:700">
+            </div>
+            <div>
+              <label class="form-label">Fecha de emision</label>
+              <input class="form-input" type="date" id="certFechaEmision">
+            </div>
+            <div>
+              <label class="form-label">Fecha de aprobacion</label>
+              <input class="form-input" type="date" id="certFechaAprobacion">
+            </div>
+            <div>
+              <label class="form-label">Estado</label>
+              <select class="form-input" id="certEstado">
+                <option value="borrador">Borrador</option>
+                <option value="enviada">Enviada</option>
+                <option value="aprobada">Aprobada</option>
+                <option value="rechazada">Rechazada</option>
+                <option value="pagada">Pagada</option>
+              </select>
+            </div>
+            <div style="grid-column:1/-1">
+              <label class="form-label">Notas</label>
+              <textarea class="form-input" id="certNotas" rows="2" placeholder="Observaciones, condiciones de pago..."></textarea>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="cerrarModal('modalCert')">Cancelar</button>
+            <button class="btn btn-primary" onclick="guardarCertificacion()">Guardar</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- modal Linea de Certificacion -->
+      <div class="modal-overlay" id="modalCertLinea">
+        <div class="modal" style="max-width:600px">
+          <div class="modal-header">
+            <span id="modalCertLineaTitle">Nueva linea de certificacion</span>
+            <button class="modal-close" onclick="cerrarModal('modalCertLinea')">&#x2715;</button>
+          </div>
+          <div class="modal-body" style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+            <div>
+              <label class="form-label">Capitulo</label>
+              <input class="form-input" id="clCapitulo" placeholder="Ej: CIVIL, ELECTRICO...">
+            </div>
+            <div>
+              <label class="form-label">Codigo</label>
+              <input class="form-input" id="clCodigo" placeholder="01.001">
+            </div>
+            <div style="grid-column:1/-1">
+              <label class="form-label">Descripcion</label>
+              <input class="form-input" id="clDescripcion" placeholder="Descripcion de la partida...">
+            </div>
+            <div>
+              <label class="form-label">Unidad</label>
+              <input class="form-input" id="clUnidad" placeholder="m, m2, ud, h...">
+            </div>
+            <div>
+              <label class="form-label">Precio unitario</label>
+              <input class="form-input" type="number" id="clPrecio" min="0" step="0.01" placeholder="0.00" oninput="clCalcImportes()">
+            </div>
+            <div>
+              <label class="form-label">Cantidad total contrato</label>
+              <input class="form-input" type="number" id="clCantOrigen" min="0" step="0.001" placeholder="0" oninput="clCalcImportes()">
+            </div>
+            <div>
+              <label class="form-label">Importe origen</label>
+              <input class="form-input" id="clImpOrigen" readonly style="background:var(--surface2)">
+            </div>
+            <div>
+              <label class="form-label">Cantidad certificada acumulada</label>
+              <input class="form-input" type="number" id="clCantAcum" min="0" step="0.001" placeholder="0" oninput="clCalcImportes()">
+            </div>
+            <div>
+              <label class="form-label">Cantidad certificada este mes</label>
+              <input class="form-input" type="number" id="clCantMes" min="0" step="0.001" placeholder="0" oninput="clCalcImportes()">
+            </div>
+            <div>
+              <label class="form-label">Importe mes (calculado)</label>
+              <input class="form-input" id="clImpMes" readonly style="background:var(--surface2);color:var(--primary);font-weight:700">
+            </div>
+            <div>
+              <label class="form-label">% Avance</label>
+              <input class="form-input" id="clPctAvance" readonly style="background:var(--surface2)">
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="cerrarModal('modalCertLinea')">Cancelar</button>
+            <button class="btn btn-primary" onclick="guardarCertLinea()">Guardar</button>
+          </div>
+        </div>
       </div>
 
       <!-- CHECKLIST DE CIERRE DE OBRA / PROJECT CLOSEOUT (NEW-66) -->
@@ -4448,6 +4617,7 @@ const PAGE_TITLES = {
   subcontratas: '🏗️ Registro de Subcontratas',
   registroAmbiental: '🌿 Registro Ambiental / Environmental Log',
   cierreObra: '🏁 Checklist de Cierre de Obra',
+  certificaciones: '🧾 Certificaciones de Obra',
 };
 
 const PAGE_LOADERS = {
@@ -4516,6 +4686,7 @@ const PAGE_LOADERS = {
   subcontratas: cargarSubcontratas,
   registroAmbiental: cargarRegistroAmbiental,
   cierreObra: cargarCierreObra,
+  certificaciones: cargarCertificaciones,
 };
 
 let currentPage = '';
@@ -4613,6 +4784,7 @@ const SYNC_INTERVALS = {
   subcontratas: 90,
   registroAmbiental: 90,
   cierreObra: 60,
+  certificaciones: 90,
 };
 
 let _syncTimer = null, _syncLabelTimer = null, _syncLastTs = null;
@@ -17159,6 +17331,254 @@ async function poblarSelectObras(selectId) {
     opt.textContent = o.nombre;
     sel.appendChild(opt);
   });
+}
+
+// ── CERTIFICACIONES DE OBRA (NEW-67) ───────────────────────────────
+let tblCertificaciones = null, tblCertLineas = null, _certEditId = null, _certLineaEditId = null, _certActivoId = null;
+const CERT_ESTADO_COLOR = { borrador:'#64748b', enviada:'#f97316', aprobada:'#2563eb', rechazada:'#ef4444', pagada:'#10b981' };
+const MESES = ['','Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+
+async function cargarCertificaciones() {
+  if (document.getElementById('filterCertObra')?.options.length <= 1)
+    await poblarSelectObras('filterCertObra');
+  const obraId = document.getElementById('filterCertObra')?.value || '';
+  const estado = document.getElementById('filterCertEstado')?.value || '';
+  const params = new URLSearchParams();
+  if (obraId) params.set('obra_id', obraId);
+  if (estado) params.set('estado', estado);
+  const r = await api(`/certificaciones?${params}`);
+  const data = r?.certificaciones || [];
+
+  const total      = data.length;
+  const totalCert  = data.reduce((s, c) => s + (c.importe_certificado || 0), 0);
+  const totalLiq   = data.reduce((s, c) => s + (c.importe_liquido || 0), 0);
+  const totalRet   = data.reduce((s, c) => s + (c.importe_retencion || 0), 0);
+  const pagadas    = data.filter(c => c.estado === 'pagada').length;
+  const pendPago   = data.filter(c => c.estado === 'aprobada').length;
+
+  document.getElementById('certKpi').innerHTML = `
+    <div class="kpi-card"><div class="kpi-icon">🧾</div><div class="kpi-value">${total}</div><div class="kpi-label">Certificaciones</div></div>
+    <div class="kpi-card"><div class="kpi-icon">💶</div><div class="kpi-value" style="font-size:15px">${fmtMoney(totalCert)}</div><div class="kpi-label">Total certificado</div></div>
+    <div class="kpi-card"><div class="kpi-icon">💸</div><div class="kpi-value" style="font-size:15px">${fmtMoney(totalLiq)}</div><div class="kpi-label">Liquido total</div></div>
+    <div class="kpi-card"><div class="kpi-icon">🔒</div><div class="kpi-value" style="font-size:15px;color:var(--warning)">${fmtMoney(totalRet)}</div><div class="kpi-label">Retenciones</div></div>
+    <div class="kpi-card"><div class="kpi-icon">✅</div><div class="kpi-value" style="color:var(--success)">${pagadas}</div><div class="kpi-label">Pagadas</div></div>
+    <div class="kpi-card"><div class="kpi-icon">⏳</div><div class="kpi-value" style="color:${pendPago>0?'var(--warning)':'var(--muted)'}">${pendPago}</div><div class="kpi-label">Pend. cobro</div></div>`;
+
+  const badge = document.getElementById('certBadge');
+  if (badge) badge.style.display = pendPago > 0 ? '' : 'none';
+
+  if (tblCertificaciones) { tblCertificaciones.replaceData(data); return; }
+  tblCertificaciones = new Tabulator('#tblCertificaciones', {
+    data, layout: 'fitColumns', responsiveLayout: 'collapse',
+    pagination: 'local', paginationSize: 15,
+    placeholder: '<div class="empty-state"><div class="empty-icon">🧾</div><div class="empty-text">Sin certificaciones — crea la primera</div></div>',
+    columns: [
+      { title: 'N\xBA', field: 'numero', width: 110, formatter: c => `<span style="font-family:monospace;font-weight:700">${c.getValue()||'—'}</span>` },
+      { title: 'Periodo', field: 'periodo_mes', width: 110,
+        formatter: c => { const r=c.getRow().getData(); return `${MESES[r.periodo_mes]||'—'} ${r.periodo_anno||''}`; } },
+      { title: 'Titulo', field: 'titulo', minWidth: 160 },
+      { title: 'Estado', field: 'estado', width: 100,
+        formatter: c => `<span style="background:${CERT_ESTADO_COLOR[c.getValue()]||'#64748b'};color:#fff;padding:2px 8px;border-radius:4px;font-size:11px">${c.getValue()||'—'}</span>` },
+      { title: 'Certificado', field: 'importe_certificado', width: 130, hozAlign: 'right',
+        formatter: c => `<span style="font-weight:700">${fmtMoney(c.getValue())}</span>` },
+      { title: 'Retencion', field: 'importe_retencion', width: 120, hozAlign: 'right',
+        formatter: c => `<span style="color:var(--warning)">${fmtMoney(c.getValue())}</span>` },
+      { title: 'Liquido', field: 'importe_liquido', width: 130, hozAlign: 'right',
+        formatter: c => `<span style="font-weight:700;color:var(--success)">${fmtMoney(c.getValue())}</span>` },
+      { title: 'Emision', field: 'fecha_emision', width: 95, formatter: c => fmtFecha(c.getValue()) },
+      { title: '', field: 'id', width: 120, hozAlign: 'center',
+        formatter: c => `
+        <button class="btn btn-secondary btn-sm" onclick="verLineasCert(${c.getValue()})" style="padding:2px 6px;font-size:10px" title="Ver lineas">📋</button>
+        <button class="btn btn-secondary btn-sm" onclick="abrirModalCert(${c.getValue()})" style="padding:2px 6px;font-size:11px">✏️</button>
+        <button class="btn btn-secondary btn-sm" onclick="eliminarCertificacion(${c.getValue()})" style="padding:2px 6px;font-size:11px;color:var(--danger)">🗑</button>` }
+    ]
+  });
+}
+
+async function abrirModalCert(id = null) {
+  _certEditId = id;
+  document.getElementById('modalCertTitle').textContent = id ? 'Editar certificacion' : 'Nueva certificacion';
+  const sel = document.getElementById('certObraId');
+  if (sel && sel.options.length <= 1) await poblarSelectObras('certObraId');
+  const obraFilt = document.getElementById('filterCertObra')?.value;
+  if (obraFilt && sel) sel.value = obraFilt;
+  const now = new Date();
+  document.getElementById('certMes').value = now.getMonth() + 1;
+  document.getElementById('certAnno').value = now.getFullYear();
+  document.getElementById('certFechaEmision').value = now.toISOString().slice(0,10);
+  document.getElementById('certRetencion').value = 5;
+  document.getElementById('certEstado').value = 'borrador';
+  ['certTitulo','certImporte','certAcumulado','certLiquido','certFechaAprobacion','certNotas'].forEach(eid => { const el=document.getElementById(eid); if(el) el.value=''; });
+  certSetTitulo();
+  if (id) {
+    const item = (tblCertificaciones?.getData() || []).find(c => c.id === id);
+    if (item) {
+      if (sel) sel.value = item.obra_id;
+      document.getElementById('certMes').value = item.periodo_mes || 1;
+      document.getElementById('certAnno').value = item.periodo_anno || now.getFullYear();
+      document.getElementById('certTitulo').value = item.titulo || '';
+      document.getElementById('certImporte').value = item.importe_certificado || 0;
+      document.getElementById('certAcumulado').value = item.importe_acumulado || 0;
+      document.getElementById('certRetencion').value = item.retencion_pct || 5;
+      document.getElementById('certEstado').value = item.estado || 'borrador';
+      document.getElementById('certFechaEmision').value = item.fecha_emision || '';
+      document.getElementById('certFechaAprobacion').value = item.fecha_aprobacion || '';
+      document.getElementById('certNotas').value = item.notas || '';
+      certCalcLiquido();
+    }
+  }
+  document.getElementById('modalCert').classList.add('active');
+}
+
+function certSetTitulo() {
+  const mes  = document.getElementById('certMes')?.value;
+  const anno = document.getElementById('certAnno')?.value;
+  const tit  = document.getElementById('certTitulo');
+  if (tit && !tit.value) tit.value = `Certificacion ${MESES[mes]||''} ${anno}`;
+}
+
+function certCalcLiquido() {
+  const imp = parseFloat(document.getElementById('certImporte')?.value) || 0;
+  const ret = parseFloat(document.getElementById('certRetencion')?.value) || 5;
+  const liq = imp - (imp * ret / 100);
+  const el  = document.getElementById('certLiquido');
+  if (el) el.value = fmtMoney(liq);
+}
+
+async function guardarCertificacion() {
+  const obraId = document.getElementById('certObraId')?.value;
+  if (!obraId) { showToast('Selecciona una obra', 'warning'); return; }
+  const imp = parseFloat(document.getElementById('certImporte')?.value) || 0;
+  const ret = parseFloat(document.getElementById('certRetencion')?.value) || 5;
+  const body = {
+    obra_id: parseInt(obraId),
+    titulo: document.getElementById('certTitulo')?.value?.trim() || null,
+    periodo_mes: parseInt(document.getElementById('certMes')?.value) || 1,
+    periodo_anno: parseInt(document.getElementById('certAnno')?.value) || new Date().getFullYear(),
+    fecha_emision: document.getElementById('certFechaEmision')?.value || null,
+    fecha_aprobacion: document.getElementById('certFechaAprobacion')?.value || null,
+    estado: document.getElementById('certEstado')?.value || 'borrador',
+    importe_certificado: imp,
+    importe_acumulado: parseFloat(document.getElementById('certAcumulado')?.value) || imp,
+    retencion_pct: ret,
+    notas: document.getElementById('certNotas')?.value?.trim() || null,
+  };
+  const r = _certEditId
+    ? await api(`/certificaciones/${_certEditId}`, 'PUT', body)
+    : await api('/certificaciones', 'POST', body);
+  if (r?.ok || r?.id) {
+    cerrarModal('modalCert');
+    showToast(_certEditId ? 'Certificacion actualizada ✅' : `Certificacion creada ✅ (${r.numero||''})`, 'success');
+    tblCertificaciones = null;
+    cargarCertificaciones();
+  } else showToast(r?.error || 'Error al guardar', 'error');
+}
+
+async function eliminarCertificacion(id) {
+  if (!confirm('¿Eliminar esta certificacion y sus lineas?')) return;
+  const r = await api(`/certificaciones/${id}`, 'DELETE');
+  if (r?.ok) { showToast('Certificacion eliminada', 'success'); tblCertificaciones=null; tblCertLineas=null; document.getElementById('certLineasPanel').style.display='none'; cargarCertificaciones(); }
+  else showToast('Error', 'error');
+}
+
+async function verLineasCert(certId) {
+  _certActivoId = certId;
+  const cert = (tblCertificaciones?.getData() || []).find(c => c.id === certId);
+  document.getElementById('certLineasTitle').textContent = `Lineas — ${cert?.numero||'Cert '+certId}: ${cert?.titulo||''}`;
+  document.getElementById('certLineasPanel').style.display = '';
+  const r = await api(`/certificaciones/${certId}/lineas`);
+  const data = r?.lineas || [];
+  if (tblCertLineas) { tblCertLineas.replaceData(data); return; }
+  tblCertLineas = new Tabulator('#tblCertLineas', {
+    data, layout: 'fitColumns',
+    placeholder: '<div class="empty-state"><div class="empty-icon">📋</div><div class="empty-text">Sin lineas — añade partidas</div></div>',
+    columns: [
+      { title: 'Cap.', field: 'capitulo', width: 80 },
+      { title: 'Cod.', field: 'codigo', width: 80 },
+      { title: 'Descripcion', field: 'descripcion', minWidth: 180 },
+      { title: 'Ud', field: 'unidad', width: 50 },
+      { title: 'Cant. orig.', field: 'cantidad_origen', width: 90, hozAlign: 'right' },
+      { title: 'P.unit.', field: 'precio_unitario', width: 90, hozAlign: 'right', formatter: c => fmtMoney(c.getValue()) },
+      { title: 'Imp. orig.', field: 'importe_origen', width: 110, hozAlign: 'right', formatter: c => fmtMoney(c.getValue()) },
+      { title: 'Cant. mes', field: 'cantidad_certificada_mes', width: 90, hozAlign: 'right' },
+      { title: 'Imp. mes', field: 'importe_mes', width: 110, hozAlign: 'right', formatter: c => `<strong>${fmtMoney(c.getValue())}</strong>` },
+      { title: '% Av.', field: 'porcentaje_avance', width: 70, hozAlign: 'right', formatter: c => `${c.getValue()||0}%` },
+      { title: '', field: 'id', width: 80, hozAlign: 'center',
+        formatter: c => `<button class="btn btn-secondary btn-sm" onclick="abrirModalCertLinea(${c.getValue()})" style="padding:2px 6px;font-size:11px">✏️</button>
+          <button class="btn btn-secondary btn-sm" onclick="eliminarCertLinea(${c.getValue()})" style="padding:2px 6px;font-size:11px;color:var(--danger)">🗑</button>` }
+    ]
+  });
+  document.getElementById('certLineasPanel').scrollIntoView({ behavior: 'smooth' });
+}
+
+async function abrirModalCertLinea(id = null) {
+  _certLineaEditId = id;
+  document.getElementById('modalCertLineaTitle').textContent = id ? 'Editar linea' : 'Nueva linea de certificacion';
+  ['clCapitulo','clCodigo','clDescripcion','clUnidad','clImpOrigen','clImpMes','clPctAvance'].forEach(eid => { const el=document.getElementById(eid); if(el) el.value=''; });
+  ['clPrecio','clCantOrigen','clCantAcum','clCantMes'].forEach(eid => { const el=document.getElementById(eid); if(el) el.value=0; });
+  if (id) {
+    const item = (tblCertLineas?.getData() || []).find(l => l.id === id);
+    if (item) {
+      document.getElementById('clCapitulo').value = item.capitulo || '';
+      document.getElementById('clCodigo').value = item.codigo || '';
+      document.getElementById('clDescripcion').value = item.descripcion || '';
+      document.getElementById('clUnidad').value = item.unidad || '';
+      document.getElementById('clPrecio').value = item.precio_unitario || 0;
+      document.getElementById('clCantOrigen').value = item.cantidad_origen || 0;
+      document.getElementById('clCantAcum').value = item.cantidad_certificada_acum || 0;
+      document.getElementById('clCantMes').value = item.cantidad_certificada_mes || 0;
+      clCalcImportes();
+    }
+  }
+  document.getElementById('modalCertLinea').classList.add('active');
+}
+
+function clCalcImportes() {
+  const precio = parseFloat(document.getElementById('clPrecio')?.value) || 0;
+  const orig   = parseFloat(document.getElementById('clCantOrigen')?.value) || 0;
+  const acum   = parseFloat(document.getElementById('clCantAcum')?.value) || 0;
+  const mes    = parseFloat(document.getElementById('clCantMes')?.value) || 0;
+  const impOrig = precio * orig;
+  const impMes  = precio * mes;
+  const pct     = impOrig > 0 ? Math.round(precio * acum / impOrig * 100) : 0;
+  const elOrig = document.getElementById('clImpOrigen'); if(elOrig) elOrig.value = fmtMoney(impOrig);
+  const elMes  = document.getElementById('clImpMes');  if(elMes)  elMes.value  = fmtMoney(impMes);
+  const elPct  = document.getElementById('clPctAvance'); if(elPct) elPct.value = pct + '%';
+}
+
+async function guardarCertLinea() {
+  if (!_certActivoId) { showToast('Abre una certificacion primero', 'warning'); return; }
+  const desc = document.getElementById('clDescripcion')?.value?.trim();
+  if (!desc) { showToast('La descripcion es obligatoria', 'warning'); return; }
+  const body = {
+    capitulo: document.getElementById('clCapitulo')?.value?.trim() || null,
+    codigo: document.getElementById('clCodigo')?.value?.trim() || null,
+    descripcion: desc,
+    unidad: document.getElementById('clUnidad')?.value?.trim() || null,
+    precio_unitario: parseFloat(document.getElementById('clPrecio')?.value) || 0,
+    cantidad_origen: parseFloat(document.getElementById('clCantOrigen')?.value) || 0,
+    importe_origen: (parseFloat(document.getElementById('clPrecio')?.value)||0) * (parseFloat(document.getElementById('clCantOrigen')?.value)||0),
+    cantidad_certificada_acum: parseFloat(document.getElementById('clCantAcum')?.value) || 0,
+    cantidad_certificada_mes: parseFloat(document.getElementById('clCantMes')?.value) || 0,
+  };
+  const url = _certLineaEditId
+    ? `/certificaciones/${_certActivoId}/lineas/${_certLineaEditId}`
+    : `/certificaciones/${_certActivoId}/lineas`;
+  const method = _certLineaEditId ? 'PUT' : 'POST';
+  const r = await api(url, method, body);
+  if (r?.ok || r?.id) {
+    cerrarModal('modalCertLinea');
+    showToast(_certLineaEditId ? 'Linea actualizada ✅' : 'Linea creada ✅', 'success');
+    tblCertLineas = null;
+    verLineasCert(_certActivoId);
+  } else showToast(r?.error || 'Error al guardar', 'error');
+}
+
+async function eliminarCertLinea(id) {
+  if (!confirm('¿Eliminar esta linea?')) return;
+  const r = await api(`/certificaciones/${_certActivoId}/lineas/${id}`, 'DELETE');
+  if (r?.ok) { showToast('Linea eliminada', 'success'); tblCertLineas=null; verLineasCert(_certActivoId); }
+  else showToast('Error', 'error');
 }
 
 // ── CHECKLIST DE CIERRE DE OBRA / PROJECT CLOSEOUT (NEW-66) ────────
