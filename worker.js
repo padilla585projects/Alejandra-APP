@@ -4721,6 +4721,14 @@ export default {
         if (method === 'PUT')    return await actualizarVisitaObra(_vid, request, env);
         if (method === 'DELETE') return await eliminarVisitaObra(_vid, request, env);
       }
+      // ── Entregables de Proyecto / Project Deliverables (NEW-81) ─────────────────
+      if (path === '/entregables' && method === 'GET')  return await getEntregables(request, env);
+      if (path === '/entregables' && method === 'POST') return await crearEntregable(request, env);
+      if (path.startsWith('/entregables/')) {
+        const _etgId = parseInt(path.split('/entregables/')[1]);
+        if (method === 'PUT')    return await actualizarEntregable(_etgId, request, env);
+        if (method === 'DELETE') return await eliminarEntregable(_etgId, request, env);
+      }
       // ── Alquileres de Equipo / Equipment Rental (NEW-80) ─────────────────────────
       if (path === '/alquileres' && method === 'GET')  return await getAlquileres(request, env);
       if (path === '/alquileres' && method === 'POST') return await crearAlquiler(request, env);
@@ -17547,5 +17555,105 @@ async function eliminarAlquiler(id, request, env) {
   const { empresa_id } = await getAuth(request, env);
   if (!empresa_id) return err('No autorizado', 403);
   await env.DB.prepare(`DELETE FROM alquileres WHERE id=? AND empresa_id=?`).bind(id, empresa_id).run();
+  return json({ ok: true, deleted: true });
+}
+
+// ── Entregables de Proyecto / Project Deliverables Tracker (NEW-81) ──────────
+async function ensureEntregablesTable(env) {
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS entregables (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    empresa_id     INTEGER NOT NULL,
+    obra_id        INTEGER,
+    numero         TEXT,
+    titulo         TEXT NOT NULL,
+    tipo           TEXT NOT NULL DEFAULT 'documentacion',
+    descripcion    TEXT,
+    responsable    TEXT,
+    fecha_limite   TEXT,
+    fecha_entrega  TEXT,
+    estado         TEXT NOT NULL DEFAULT 'pendiente',
+    revision       TEXT,
+    notas          TEXT,
+    aprobado_por   TEXT,
+    fecha_aprobacion TEXT,
+    created_at     TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at     TEXT NOT NULL DEFAULT (datetime('now'))
+  )`).run().catch(()=>{});
+}
+
+async function getEntregables(request, env) {
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  await ensureEntregablesTable(env);
+  const url = new URL(request.url);
+  const obra_id = url.searchParams.get('obra_id');
+  const estado  = url.searchParams.get('estado');
+  const tipo    = url.searchParams.get('tipo');
+  let q = `SELECT * FROM entregables WHERE empresa_id=?`;
+  const p = [empresa_id];
+  if (obra_id) { q += ` AND obra_id=?`; p.push(parseInt(obra_id)); }
+  if (estado)  { q += ` AND estado=?`;  p.push(estado); }
+  if (tipo)    { q += ` AND tipo=?`;    p.push(tipo); }
+  q += ` ORDER BY fecha_limite ASC NULLS LAST, id ASC`;
+  const { results } = await env.DB.prepare(q).bind(...p).all();
+  return json({ entregables: results || [] });
+}
+
+async function crearEntregable(request, env) {
+  const { empresa_id, nombre } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  await ensureEntregablesTable(env);
+  const b = await request.json();
+  if (!b.titulo) return err('titulo es requerido', 400);
+  // Auto-number ETG-YYYY-NNNN
+  const anio = new Date().getFullYear();
+  const last = await env.DB.prepare(
+    `SELECT numero FROM entregables WHERE empresa_id=? AND numero LIKE ? ORDER BY id DESC LIMIT 1`
+  ).bind(empresa_id, `ETG-${anio}-%`).first();
+  let seq = 1;
+  if (last?.numero) { const n = parseInt(last.numero.split('-')[2]); if (!isNaN(n)) seq = n + 1; }
+  const numero = `ETG-${anio}-${String(seq).padStart(4,'0')}`;
+  const r = await env.DB.prepare(
+    `INSERT INTO entregables (empresa_id,obra_id,numero,titulo,tipo,descripcion,responsable,fecha_limite,fecha_entrega,estado,revision,notas)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`
+  ).bind(
+    empresa_id,
+    b.obra_id ? parseInt(b.obra_id) : null,
+    numero,
+    b.titulo,
+    b.tipo || 'documentacion',
+    b.descripcion || null,
+    b.responsable || nombre || null,
+    b.fecha_limite || null,
+    b.fecha_entrega || null,
+    b.estado || 'pendiente',
+    b.revision || null,
+    b.notas || null
+  ).run();
+  return json({ ok: true, id: r.meta.last_row_id, numero }, { status: 201 });
+}
+
+async function actualizarEntregable(id, request, env) {
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  await ensureEntregablesTable(env);
+  const b = await request.json();
+  const allowed = ['titulo','tipo','descripcion','responsable','fecha_limite','fecha_entrega',
+    'estado','revision','notas','obra_id','aprobado_por','fecha_aprobacion'];
+  const sets = [], params = [];
+  for (const k of allowed) {
+    if (k in b) { sets.push(`${k}=?`); params.push(b[k] ?? null); }
+  }
+  if (!sets.length) return err('Sin cambios', 400);
+  sets.push(`updated_at=datetime('now')`);
+  params.push(id, empresa_id);
+  await env.DB.prepare(`UPDATE entregables SET ${sets.join(',')} WHERE id=? AND empresa_id=?`).bind(...params).run();
+  return json({ ok: true });
+}
+
+async function eliminarEntregable(id, request, env) {
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  await env.DB.prepare(`DELETE FROM entregables WHERE id=? AND empresa_id=?`).bind(id, empresa_id).run();
   return json({ ok: true, deleted: true });
 }

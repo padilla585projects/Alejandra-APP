@@ -676,6 +676,10 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
       <span class="nav-icon">🏗️</span> Alquileres Equipo
       <span class="nav-badge" id="alquileresBadge" style="display:none">0</span>
     </button>
+    <button class="nav-item" data-page="entregables" onclick="navTo('entregables')">
+      <span class="nav-icon">📦</span> Entregables
+      <span class="nav-badge" id="entregablesBadge" style="display:none">0</span>
+    </button>
     <button class="nav-item" data-page="fotosObra" onclick="navTo('fotosObra')">
       <span class="nav-icon">📷</span> Galería de Fotos
     </button>
@@ -2304,6 +2308,119 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
               <button class="btn btn-danger" id="btnEliminarCalEvento" style="display:none" onclick="eliminarCalEvento()">🗑 Eliminar</button>
               <button class="btn btn-secondary" onclick="cerrarModalCalEvento()">Cancelar</button>
               <button class="btn btn-primary" onclick="guardarCalEvento()">💾 Guardar</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ENTREGABLES DE PROYECTO / PROJECT DELIVERABLES (NEW-81) -->
+      <div class="page" id="pageEntregables">
+        <div class="page-title">📦 Entregables de Proyecto</div>
+        <div id="etgKpis" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;margin-bottom:16px"></div>
+        <div class="tbl-toolbar">
+          <input class="tbl-search" id="searchEtg" placeholder="🔍 Buscar entregable, responsable..." oninput="filtrarEntregables()">
+          <select class="tbl-search" id="filterEtgObra" style="min-width:220px" onchange="tblEtg=null;cargarEntregables()">
+            <option value="">— Todas las obras —</option>
+          </select>
+          <select class="tbl-search" id="filterEtgTipo" style="min-width:140px" onchange="filtrarEntregables()">
+            <option value="">Todos los tipos</option>
+            <option value="documentacion">📄 Documentación</option>
+            <option value="planos">📐 Planos</option>
+            <option value="certificados">🏅 Certificados</option>
+            <option value="manuales">📖 Manuales O&M</option>
+            <option value="pruebas">🔬 Protocolos de prueba</option>
+            <option value="garantias">🛡️ Garantías</option>
+            <option value="formacion">🎓 Formación cliente</option>
+            <option value="otro">📋 Otro</option>
+          </select>
+          <select class="tbl-search" id="filterEtgEstado" style="min-width:140px" onchange="filtrarEntregables()">
+            <option value="">Todos los estados</option>
+            <option value="pendiente">Pendiente</option>
+            <option value="en_proceso">En proceso</option>
+            <option value="entregado">Entregado</option>
+            <option value="aprobado">Aprobado</option>
+            <option value="rechazado">Rechazado</option>
+          </select>
+          <button class="btn btn-primary" onclick="abrirModalEtg()">+ Nuevo Entregable</button>
+          <button class="btn btn-secondary" onclick="exportarTabla(tblEtg,'entregables')">⬇ CSV</button>
+          <button class="btn btn-secondary" onclick="tblEtg=null;cargarEntregables()">🔄</button>
+        </div>
+        <div class="tbl-wrap"><div id="tblEtg"></div></div>
+
+        <!-- MODAL ENTREGABLE -->
+        <div class="modal-overlay" id="modalEtg" style="display:none" onclick="if(event.target===this)cerrarModalEtg()">
+          <div class="modal" style="max-width:580px">
+            <div class="modal-head">
+              <span id="modalEtgTitulo">Nuevo Entregable</span>
+              <button class="modal-close" onclick="cerrarModalEtg()">✕</button>
+            </div>
+            <div class="modal-body">
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+                <div class="form-group" style="grid-column:1/-1">
+                  <label class="form-label">Título del Entregable *</label>
+                  <input class="form-input" id="etgTitulo" placeholder="Ej: Planos as-built instalación eléctrica, Manual O&M cuadro...">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Tipo</label>
+                  <select class="form-select" id="etgTipo">
+                    <option value="documentacion">📄 Documentación</option>
+                    <option value="planos">📐 Planos</option>
+                    <option value="certificados">🏅 Certificados</option>
+                    <option value="manuales">📖 Manuales O&M</option>
+                    <option value="pruebas">🔬 Protocolos de prueba</option>
+                    <option value="garantias">🛡️ Garantías</option>
+                    <option value="formacion">🎓 Formación cliente</option>
+                    <option value="otro">📋 Otro</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Estado</label>
+                  <select class="form-select" id="etgEstado">
+                    <option value="pendiente">⏳ Pendiente</option>
+                    <option value="en_proceso">🔄 En proceso</option>
+                    <option value="entregado">📤 Entregado</option>
+                    <option value="aprobado">✅ Aprobado</option>
+                    <option value="rechazado">❌ Rechazado</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Obra</label>
+                  <select class="form-select" id="etgObraId"><option value="">— Sin obra —</option></select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Responsable</label>
+                  <input class="form-input" id="etgResponsable" placeholder="Nombre del responsable">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Fecha Límite</label>
+                  <input class="form-input" type="date" id="etgFechaLimite">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Fecha de Entrega</label>
+                  <input class="form-input" type="date" id="etgFechaEntrega">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Revisión / Versión</label>
+                  <input class="form-input" id="etgRevision" placeholder="Ej: Rev.A, v1.0">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Aprobado por</label>
+                  <input class="form-input" id="etgAprobadoPor" placeholder="Nombre del aprobador">
+                </div>
+                <div class="form-group" style="grid-column:1/-1">
+                  <label class="form-label">Descripción / Alcance</label>
+                  <textarea class="form-input" id="etgDesc" rows="2" placeholder="Qué incluye este entregable, requisitos del contrato..."></textarea>
+                </div>
+                <div class="form-group" style="grid-column:1/-1">
+                  <label class="form-label">Notas</label>
+                  <textarea class="form-input" id="etgNotas" rows="2" placeholder="Observaciones, comentarios de revisión..."></textarea>
+                </div>
+              </div>
+            </div>
+            <div class="modal-foot">
+              <button class="btn btn-secondary" onclick="cerrarModalEtg()">Cancelar</button>
+              <span id="etgElimBtn"></span>
+              <button class="btn btn-primary" onclick="guardarEtg()">💾 Guardar</button>
             </div>
           </div>
         </div>
@@ -5780,6 +5897,7 @@ const PAGE_TITLES = {
   fieldReports: '📝 Informes de Campo / Field Reports',
   garantias: '🛡️ Gestión de Garantías / Warranty Management',
   alquileres: '🏗️ Alquileres de Equipo / Equipment Rental Log',
+  entregables: '📦 Entregables de Proyecto / Project Deliverables',
 };
 
 const PAGE_LOADERS = {
@@ -5861,6 +5979,7 @@ const PAGE_LOADERS = {
   fieldReports:    cargarFieldReports,
   garantias:       cargarGarantias,
   alquileres:      cargarAlquileres,
+  entregables:     cargarEntregables,
 };
 
 let currentPage = '';
@@ -5971,6 +6090,7 @@ const SYNC_INTERVALS = {
   fieldReports:     90,
   garantias:       120,
   alquileres:      90,
+  entregables:     120,
 };
 
 let _syncTimer = null, _syncLabelTimer = null, _syncLastTs = null;
@@ -15331,6 +15451,140 @@ function exportarFinanzas() {
   if (!obraId) return showToast('Selecciona una obra primero', 'warning');
   // Abrir informe en nueva pestaña usando el endpoint de informes
   window.open(`/informe-obra/${obraId}?tipo=financiero`, '_blank');
+}
+
+// ── ENTREGABLES DE PROYECTO / PROJECT DELIVERABLES (NEW-81) ────────
+let tblEtg = null, _etgData = [];
+const ETG_TIPO_ICON  = { documentacion:'📄', planos:'📐', certificados:'🏅', manuales:'📖', pruebas:'🔬', garantias:'🛡️', formacion:'🎓', otro:'📋' };
+const ETG_TIPO_LABEL = { documentacion:'Documentación', planos:'Planos', certificados:'Certificados', manuales:'Manuales O&M', pruebas:'Protocolos prueba', garantias:'Garantías', formacion:'Formación', otro:'Otro' };
+const ETG_ESTADO_COLOR = { pendiente:'var(--muted)', en_proceso:'var(--warning)', entregado:'var(--primary)', aprobado:'var(--success)', rechazado:'var(--danger)' };
+const ETG_ESTADO_LABEL = { pendiente:'⏳ Pendiente', en_proceso:'🔄 En proceso', entregado:'📤 Entregado', aprobado:'✅ Aprobado', rechazado:'❌ Rechazado' };
+
+async function cargarEntregables() {
+  if (document.getElementById('filterEtgObra')?.options.length <= 1) poblarSelectObras('filterEtgObra');
+  const obraId = document.getElementById('filterEtgObra')?.value || '';
+  const r = await api('/entregables' + (obraId ? `?obra_id=${obraId}` : ''));
+  _etgData = r?.entregables || [];
+
+  const hoy = new Date(); hoy.setHours(0,0,0,0);
+  const pend     = _etgData.filter(e => e.estado === 'pendiente').length;
+  const enProc   = _etgData.filter(e => e.estado === 'en_proceso').length;
+  const aprobados = _etgData.filter(e => e.estado === 'aprobado').length;
+  const vencidos = _etgData.filter(e => e.fecha_limite && new Date(e.fecha_limite) < hoy && !['aprobado','entregado'].includes(e.estado)).length;
+
+  document.getElementById('etgKpis').innerHTML = [
+    { label:'Total', val: _etgData.length, cls: '' },
+    { label:'Pendientes', val: pend, cls: pend ? 'warn' : '' },
+    { label:'En proceso', val: enProc, cls: '' },
+    { label:'Aprobados', val: aprobados, cls: aprobados ? 'ok' : '' },
+    { label:'Vencidos', val: vencidos, cls: vencidos ? 'err' : '' },
+  ].map(k => `<div class="kpi-mini ${k.cls}"><div class="kpi-mini-val">${k.val}</div><div class="kpi-mini-lbl">${k.label}</div></div>`).join('');
+
+  const badge = document.getElementById('entregablesBadge');
+  if (badge) { const n = pend + vencidos; badge.textContent = n; badge.style.display = n ? '' : 'none'; }
+
+  filtrarEntregables();
+}
+
+function filtrarEntregables() {
+  const q    = (document.getElementById('searchEtg')?.value || '').toLowerCase();
+  const tipo = document.getElementById('filterEtgTipo')?.value || '';
+  const est  = document.getElementById('filterEtgEstado')?.value || '';
+  const data = _etgData.filter(e => {
+    const matchQ = !q || [e.titulo, e.responsable, e.numero, e.descripcion].some(v => (v||'').toLowerCase().includes(q));
+    const matchT = !tipo || e.tipo === tipo;
+    const matchE = !est  || e.estado === est;
+    return matchQ && matchT && matchE;
+  });
+  if (tblEtg) { tblEtg.replaceData(data); return; }
+  tblEtg = new Tabulator('#tblEtg', {
+    data, layout: 'fitColumns', height: 'calc(100vh - 280px)',
+    placeholder: '<div class="empty-state"><div class="empty-icon">📦</div><div class="empty-text">Sin entregables registrados</div></div>',
+    columns: [
+      { title:'Número', field:'numero', width:130 },
+      { title:'Entregable', field:'titulo', minWidth:220, formatter: c => `<b>${esc(c.getValue()||'—')}</b>` },
+      { title:'Tipo', field:'tipo', width:140, formatter: c => `${ETG_TIPO_ICON[c.getValue()]||'📋'} ${ETG_TIPO_LABEL[c.getValue()]||c.getValue()}` },
+      { title:'Responsable', field:'responsable', width:140 },
+      { title:'Fecha límite', field:'fecha_limite', width:115, formatter: c => {
+        if (!c.getValue()) return '—';
+        const hoy = new Date(); hoy.setHours(0,0,0,0);
+        const fin = new Date(c.getValue());
+        const d = c.getRow().getData();
+        const color = !['aprobado','entregado'].includes(d.estado) && fin < hoy ? 'color:var(--danger);font-weight:700' : '';
+        return `<span style="${color}">${c.getValue()}</span>`;
+      }},
+      { title:'Estado', field:'estado', width:130, formatter: c => `<span style="color:${ETG_ESTADO_COLOR[c.getValue()]||'var(--muted)'};font-weight:600">${ETG_ESTADO_LABEL[c.getValue()]||c.getValue()}</span>` },
+      { title:'Rev.', field:'revision', width:70, formatter: c => c.getValue() || '—' },
+      { title:'', field:'id', width:80, hozAlign:'center',
+        formatter: c => `<button class="tbl-btn" onclick="editarEtg(${c.getValue()})">✏️</button><button class="tbl-btn danger" onclick="eliminarEtg(${c.getValue()})">🗑</button>` },
+    ]
+  });
+}
+
+function abrirModalEtg(d = {}) {
+  document.getElementById('modalEtgTitulo').textContent = d.id ? 'Editar Entregable' : 'Nuevo Entregable';
+  document.getElementById('etgTitulo').value      = d.titulo || '';
+  document.getElementById('etgTipo').value        = d.tipo || 'documentacion';
+  document.getElementById('etgEstado').value      = d.estado || 'pendiente';
+  document.getElementById('etgResponsable').value = d.responsable || '';
+  document.getElementById('etgFechaLimite').value = d.fecha_limite || '';
+  document.getElementById('etgFechaEntrega').value = d.fecha_entrega || '';
+  document.getElementById('etgRevision').value    = d.revision || '';
+  document.getElementById('etgAprobadoPor').value = d.aprobado_por || '';
+  document.getElementById('etgDesc').value        = d.descripcion || '';
+  document.getElementById('etgNotas').value       = d.notas || '';
+  poblarSelectObras('etgObraId');
+  if (d.obra_id) setTimeout(() => { document.getElementById('etgObraId').value = d.obra_id; }, 200);
+  const elimBtn = document.getElementById('etgElimBtn');
+  elimBtn.innerHTML = d.id ? `<button class="btn btn-danger btn-sm" onclick="eliminarEtg(${d.id},true)">🗑 Eliminar</button>` : '';
+  document.getElementById('modalEtg')._etgId = d.id || null;
+  document.getElementById('modalEtg').style.display = 'flex';
+}
+
+async function editarEtg(id) {
+  const d = _etgData.find(e => e.id === id);
+  if (d) abrirModalEtg(d);
+}
+
+async function guardarEtg() {
+  const id   = document.getElementById('modalEtg')._etgId;
+  const body = {
+    titulo:          document.getElementById('etgTitulo').value.trim(),
+    tipo:            document.getElementById('etgTipo').value,
+    estado:          document.getElementById('etgEstado').value,
+    obra_id:         document.getElementById('etgObraId').value || null,
+    responsable:     document.getElementById('etgResponsable').value.trim() || null,
+    fecha_limite:    document.getElementById('etgFechaLimite').value || null,
+    fecha_entrega:   document.getElementById('etgFechaEntrega').value || null,
+    revision:        document.getElementById('etgRevision').value.trim() || null,
+    aprobado_por:    document.getElementById('etgAprobadoPor').value.trim() || null,
+    descripcion:     document.getElementById('etgDesc').value.trim() || null,
+    notas:           document.getElementById('etgNotas').value.trim() || null,
+  };
+  if (!body.titulo) { toast('El título es obligatorio', 'err'); return; }
+  const r = await api(id ? `/entregables/${id}` : '/entregables', { method: id ? 'PUT' : 'POST', body: JSON.stringify(body) });
+  if (r.ok || r.id) {
+    toast(id ? 'Entregable actualizado' : `Entregable ${r.numero||''} creado`, 'ok');
+    cerrarModalEtg();
+    tblEtg = null;
+    cargarEntregables();
+  } else toast('Error al guardar', 'err');
+}
+
+async function eliminarEtg(id, desdeModal = false) {
+  if (!confirm('¿Eliminar este entregable?')) return;
+  const r = await api(`/entregables/${id}`, { method: 'DELETE' });
+  if (r.ok || r.deleted) {
+    toast('Entregable eliminado', 'ok');
+    if (desdeModal) cerrarModalEtg();
+    tblEtg = null;
+    cargarEntregables();
+  } else toast('Error al eliminar', 'err');
+}
+
+function cerrarModalEtg() {
+  document.getElementById('modalEtg').style.display = 'none';
+  document.getElementById('modalEtg')._etgId = null;
 }
 
 // ── ALQUILERES DE EQUIPO / EQUIPMENT RENTAL LOG (NEW-80) ──────────
