@@ -630,6 +630,22 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
           </div>
         </div>
 
+        <!-- NUEVA FILA — Seguridad, Punch List, Planos -->
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px;margin-top:20px" id="dashGridSeguridad">
+          <div class="section-card">
+            <div class="section-card-title"><span>🦺</span> Seguridad de Obra <button class="btn btn-secondary btn-sm" style="margin-left:auto" onclick="navTo('seguridadObra')">Ver →</button></div>
+            <div id="dashSeguridad"><div class="loading"><div class="spinner"></div> Cargando...</div></div>
+          </div>
+          <div class="section-card">
+            <div class="section-card-title"><span>📝</span> Punch List <button class="btn btn-secondary btn-sm" style="margin-left:auto" onclick="navTo('punchList')">Ver →</button></div>
+            <div id="dashPunch"><div class="loading"><div class="spinner"></div> Cargando...</div></div>
+          </div>
+          <div class="section-card">
+            <div class="section-card-title"><span>🏁</span> Hitos de Obra <button class="btn btn-secondary btn-sm" style="margin-left:auto" onclick="navTo('hitos')">Ver →</button></div>
+            <div id="dashHitosDash"><div class="loading"><div class="spinner"></div> Cargando...</div></div>
+          </div>
+        </div>
+
         <!-- ESTADO DE OBRAS — resumen ejecutivo por proyecto -->
         <div style="margin-top:20px" id="dashObrasSection">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
@@ -3156,7 +3172,7 @@ async function checkConexion() {
 // ── DASHBOARD ──────────────────────────────────────────────────
 async function cargarDashboard() {
   document.getElementById('dashSub').textContent = 'Actualizando...';
-  const [dash, incR, pedR, tareasR, rfisR, defR, obrasOvR] = await Promise.all([
+  const [dash, incR, pedR, tareasR, rfisR, defR, obrasOvR, segDR, punchDR, hitosDR] = await Promise.all([
     api('/obra-dashboard'),
     api('/incidencias?limit=5'),
     api('/pedidos?limit=5'),
@@ -3164,6 +3180,9 @@ async function cargarDashboard() {
     api('/rfis?limit=5'),
     api('/control-calidad?limit=5'),
     api('/obras-overview'),
+    api('/obs-seguridad?').catch(() => ({})),
+    api('/punch-list?').catch(() => ({})),
+    api('/hitos-obra?').catch(() => ({})),
   ]);
 
   const kpis = [
@@ -3178,6 +3197,9 @@ async function cargarDashboard() {
     { icon: '🔧', value: dash.equipos_mantenimiento ?? '—',label: 'En mantenimiento',     cls: '',                                           nav: 'mantenimientos' },
     { icon: '🔺', value: dash.herramientas_fuera ?? '—',   label: 'Herramientas fuera',   cls: '',                                           nav: 'herramientas' },
     { icon: '📉', value: dash.stock_bajo ?? '—',           label: 'Alertas de stock',     cls: dash.stock_bajo > 0 ? 'danger' : '',          nav: 'seguridad' },
+    { icon: '🔴', value: (segDR?.observaciones||[]).filter(o=>o.tipo==='peligro_inminente'&&o.estado!=='cerrada').length || 0, label: 'Peligros activos', cls: (segDR?.observaciones||[]).filter(o=>o.tipo==='peligro_inminente'&&o.estado!=='cerrada').length>0?'danger':'', nav: 'seguridadObra' },
+    { icon: '📝', value: (punchDR?.items||[]).filter(p=>p.estado!=='cerrado').length || 0, label: 'Punch list abiertos', cls: (punchDR?.items||[]).filter(p=>p.vencido).length>0?'danger':(punchDR?.items||[]).filter(p=>p.estado!=='cerrado').length>0?'warn':'', nav: 'punchList' },
+    { icon: '🏁', value: (hitosDR?.hitos||[]).filter(h=>h.retrasado).length || 0, label: 'Hitos retrasados', cls: (hitosDR?.hitos||[]).filter(h=>h.retrasado).length>0?'danger':'', nav: 'hitos' },
   ];
 
   document.getElementById('kpiGrid').innerHTML = kpis.map(k =>
@@ -3248,6 +3270,107 @@ async function cargarDashboard() {
         <span style="font-size:11px;color:var(--muted)">${d.ubicacion || ''}</span>
       </div>`
     ).join('') : '<div class="empty-state"><div class="empty-icon">✅</div><div class="empty-text">Sin deficiencias abiertas</div></div>';
+  }
+
+  // Seguridad de Obra resumen
+  const segObsItems = segDR?.observaciones || [];
+  const peligrosAct = segObsItems.filter(o => o.tipo === 'peligro_inminente' && o.estado !== 'cerrada');
+  const segAbiertas = segObsItems.filter(o => o.estado !== 'cerrada');
+  const segCerradas = segObsItems.filter(o => o.estado === 'cerrada');
+  const elSegDash = document.getElementById('dashSeguridad');
+  if (elSegDash) {
+    elSegDash.innerHTML = `
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;padding:8px 0 12px">
+        <div style="text-align:center">
+          <div style="font-size:24px;font-weight:800;color:var(--red,#ef4444)">${peligrosAct.length}</div>
+          <div style="font-size:11px;color:var(--muted)">Peligros</div>
+        </div>
+        <div style="text-align:center">
+          <div style="font-size:24px;font-weight:800;color:var(--yellow,#f59e0b)">${segAbiertas.length}</div>
+          <div style="font-size:11px;color:var(--muted)">Abiertas</div>
+        </div>
+        <div style="text-align:center">
+          <div style="font-size:24px;font-weight:800;color:var(--green,#10b981)">${segCerradas.length}</div>
+          <div style="font-size:11px;color:var(--muted)">Cerradas</div>
+        </div>
+      </div>
+      ${peligrosAct.length ? peligrosAct.slice(0,3).map(o =>
+        `<div style="padding:7px 0;border-top:1px solid var(--border);display:flex;gap:8px;align-items:center">
+          <span style="font-size:16px">🔴</span>
+          <span style="flex:1;font-size:12px;font-weight:600">${o.descripcion||'—'}</span>
+          <span style="font-size:11px;color:var(--muted)">${o.ubicacion||''}</span>
+        </div>`).join('') :
+        segAbiertas.slice(0,3).map(o =>
+        `<div style="padding:7px 0;border-top:1px solid var(--border);display:flex;gap:8px;align-items:center">
+          <span class="badge badge-${o.prioridad==='alta'?'danger':o.prioridad==='media'?'warn':'muted'}">${o.prioridad||'baja'}</span>
+          <span style="flex:1;font-size:12px">${o.descripcion||'—'}</span>
+        </div>`).join('') ||
+        '<div class="empty-state"><div class="empty-icon">🦺</div><div class="empty-text">Sin observaciones abiertas</div></div>'
+      }`;
+  }
+
+  // Punch List resumen
+  const punchItems2 = punchDR?.items || [];
+  const punchAbiertos2 = punchItems2.filter(p => p.estado !== 'cerrado');
+  const punchVenc2 = punchItems2.filter(p => p.vencido);
+  const punchCerrados2 = punchItems2.filter(p => p.estado === 'cerrado');
+  const elPunchDash = document.getElementById('dashPunch');
+  if (elPunchDash) {
+    elPunchDash.innerHTML = `
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;padding:8px 0 12px">
+        <div style="text-align:center">
+          <div style="font-size:24px;font-weight:800;color:${punchVenc2.length?'var(--red,#ef4444)':'var(--yellow,#f59e0b)'}">${punchAbiertos2.length}</div>
+          <div style="font-size:11px;color:var(--muted)">Abiertos</div>
+        </div>
+        <div style="text-align:center">
+          <div style="font-size:24px;font-weight:800;color:var(--red,#ef4444)">${punchVenc2.length}</div>
+          <div style="font-size:11px;color:var(--muted)">Vencidos</div>
+        </div>
+        <div style="text-align:center">
+          <div style="font-size:24px;font-weight:800;color:var(--green,#10b981)">${punchCerrados2.length}</div>
+          <div style="font-size:11px;color:var(--muted)">Cerrados</div>
+        </div>
+      </div>
+      ${(punchVenc2.length ? punchVenc2 : punchAbiertos2).slice(0,4).map(p =>
+        `<div style="padding:7px 0;border-top:1px solid var(--border);display:flex;gap:8px;align-items:center">
+          <span class="badge badge-${p.vencido?'danger':p.prioridad==='alta'?'warn':'muted'}">${p.numero||p.id}</span>
+          <span style="flex:1;font-size:12px">${p.descripcion||'—'}</span>
+          <span style="font-size:11px;color:var(--muted)">${p.responsable||''}</span>
+        </div>`).join('') ||
+        '<div class="empty-state"><div class="empty-icon">✅</div><div class="empty-text">Punch list al día</div></div>'
+      }`;
+  }
+
+  // Hitos resumen
+  const hitosItems2 = hitosDR?.hitos || [];
+  const hitosRetrasados2 = hitosItems2.filter(h => h.retrasado);
+  const hitosPendientes2 = hitosItems2.filter(h => h.estado !== 'completado' && !h.retrasado);
+  const hitosCompletados2 = hitosItems2.filter(h => h.estado === 'completado');
+  const elHitosDash = document.getElementById('dashHitosDash');
+  if (elHitosDash) {
+    elHitosDash.innerHTML = `
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;padding:8px 0 12px">
+        <div style="text-align:center">
+          <div style="font-size:24px;font-weight:800;color:var(--red,#ef4444)">${hitosRetrasados2.length}</div>
+          <div style="font-size:11px;color:var(--muted)">Retrasados</div>
+        </div>
+        <div style="text-align:center">
+          <div style="font-size:24px;font-weight:800;color:var(--yellow,#f59e0b)">${hitosPendientes2.length}</div>
+          <div style="font-size:11px;color:var(--muted)">Pendientes</div>
+        </div>
+        <div style="text-align:center">
+          <div style="font-size:24px;font-weight:800;color:var(--green,#10b981)">${hitosCompletados2.length}</div>
+          <div style="font-size:11px;color:var(--muted)">Completados</div>
+        </div>
+      </div>
+      ${(hitosRetrasados2.length ? hitosRetrasados2 : hitosPendientes2).slice(0,4).map(h =>
+        `<div style="padding:7px 0;border-top:1px solid var(--border);display:flex;gap:8px;align-items:center">
+          <span style="font-size:14px">${h.retrasado ? '🔴' : '🟡'}</span>
+          <span style="flex:1;font-size:12px">${h.nombre||'—'}</span>
+          <span style="font-size:11px;color:var(--muted)">${fmtFecha(h.fecha||'')}</span>
+        </div>`).join('') ||
+        '<div class="empty-state"><div class="empty-icon">🏁</div><div class="empty-text">Sin hitos próximos</div></div>'
+      }`;
   }
 
   // ── Estado de Obras (por proyecto) ──────────────────────────────────────
@@ -10107,7 +10230,7 @@ async function eliminarDeficiencia(id) {
 // ── INFORME DE OBRA ──────────────────────────────────────────────
 async function generarInformeObra(obraId, obraNombre) {
   toast('Generando informe...', 'ok');
-  const [presR, fasesR, tareasR, rfisR, ocsR, hitosR, incR, diarioR] = await Promise.all([
+  const [presR, fasesR, tareasR, rfisR, ocsR, hitosR, incR, diarioR, segObsR, punchR, costesR, planosR] = await Promise.all([
     api(`/presupuesto-obra?obra_id=${obraId}`).catch(() => ({})),
     api(`/fases-obra?obra_id=${obraId}`).catch(() => ({})),
     api(`/tareas-obra?obra_id=${obraId}&limit=100`).catch(() => ({})),
@@ -10116,23 +10239,37 @@ async function generarInformeObra(obraId, obraNombre) {
     api(`/hitos-obra?obra_id=${obraId}`).catch(() => ({})),
     api(`/incidencias?obra_id=${obraId}&limit=100`).catch(() => ({})),
     api(`/diario-obra?obra_id=${obraId}&limit=10`).catch(() => ([])),
+    api(`/obs-seguridad?obra_id=${obraId}&limit=200`).catch(() => ({})),
+    api(`/punch-list?obra_id=${obraId}&limit=200`).catch(() => ({})),
+    api(`/costes-obra?obra_id=${obraId}`).catch(() => ({})),
+    api(`/planos-obra?obra_id=${obraId}&limit=200`).catch(() => ({})),
   ]);
-  const partidas = presR?.partidas || [];
-  const fases    = Array.isArray(fasesR) ? fasesR : (fasesR?.fases || []);
-  const tareas   = toArr(tareasR, 'tareas');
-  const rfis     = toArr(rfisR, 'rfis');
-  const ocs      = toArr(ocsR, 'ordenes');
-  const hitos    = hitosR?.hitos || [];
-  const incs     = toArr(incR, 'incidencias');
-  const diario   = Array.isArray(diarioR) ? diarioR : [];
+  const partidas  = presR?.partidas || [];
+  const fases     = Array.isArray(fasesR) ? fasesR : (fasesR?.fases || []);
+  const tareas    = toArr(tareasR, 'tareas');
+  const rfis      = toArr(rfisR, 'rfis');
+  const ocs       = toArr(ocsR, 'ordenes');
+  const hitos     = hitosR?.hitos || [];
+  const incs      = toArr(incR, 'incidencias');
+  const diario    = Array.isArray(diarioR) ? diarioR : [];
+  const segObs    = segObsR?.observaciones || [];
+  const punchItems = punchR?.items || [];
+  const costes    = costesR?.costes || [];
+  const planos    = planosR?.planos || [];
 
   const totalPrev = partidas.reduce((s,p)=>s+(p.coste_previsto||0),0);
   const totalReal = partidas.reduce((s,p)=>s+(p.coste_real||0),0);
   const pctPres   = totalPrev > 0 ? Math.round(totalReal/totalPrev*100) : null;
   const avgFases  = fases.length ? Math.round(fases.reduce((s,f)=>s+(f.porcentaje||0),0)/fases.length) : null;
-  const tareasAbiertas = tareas.filter(t=>t.estado!=='completada'&&t.estado!=='cancelada').length;
-  const rfisAbiertas   = rfis.filter(r=>r.estado==='abierta'||r.estado==='en_revision').length;
-  const ocsAprobadas   = ocs.filter(o=>o.estado==='aprobada').length;
+  const tareasAbiertas  = tareas.filter(t=>t.estado!=='completada'&&t.estado!=='cancelada').length;
+  const rfisAbiertas    = rfis.filter(r=>r.estado==='abierta'||r.estado==='en_revision').length;
+  const ocsAprobadas    = ocs.filter(o=>o.estado==='aprobada').length;
+  const peligrosAct     = segObs.filter(o=>o.tipo==='peligro_inminente'&&o.estado!=='cerrada').length;
+  const segAbiertas_inf = segObs.filter(o=>o.estado!=='cerrada').length;
+  const punchAbiertos   = punchItems.filter(p=>p.estado!=='cerrado').length;
+  const punchVenc       = punchItems.filter(p=>p.vencido).length;
+  const totalCostes     = costes.reduce((s,c)=>s+(c.importe||0),0);
+  const hitosRetrasados = hitos.filter(h=>h.retrasado).length;
   const hoy = new Date().toLocaleDateString('es-ES',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
 
   const fmtM = (v) => new Intl.NumberFormat('es-ES',{style:'currency',currency:'EUR',minimumFractionDigits:0}).format(v||0);
@@ -10161,19 +10298,43 @@ async function generarInformeObra(obraId, obraNombre) {
     <td style="color:${h.retrasado?'#ef4444':h.estado==='completado'?'#10b981':'inherit'}">${h.estado||'—'}</td>
   </tr>`).join('');
 
+  const segObsRows = segObs.filter(o=>o.estado!=='cerrada').slice(0,10).map(o=>`<tr>
+    <td style="color:${o.tipo==='peligro_inminente'?'#ef4444':o.tipo==='negativa'?'#f59e0b':'#10b981'}">${o.tipo==='peligro_inminente'?'🔴 Peligro':o.tipo==='negativa'?'⚠️ Negativa':'✅ Positiva'}</td>
+    <td>${o.categoria||'—'}</td><td>${o.descripcion||'—'}</td>
+    <td>${o.ubicacion||'—'}</td><td>${o.prioridad||'—'}</td>
+    <td style="color:${o.estado==='cerrada'?'#10b981':'#f59e0b'}">${o.estado||'—'}</td>
+  </tr>`).join('');
+
+  const punchRows = punchItems.filter(p=>p.estado!=='cerrado').slice(0,10).map(p=>`<tr>
+    <td>${p.numero||p.id}</td><td>${p.descripcion||'—'}</td>
+    <td>${p.categoria||'—'}</td><td>${p.ubicacion||'—'}</td>
+    <td>${p.responsable||'—'}</td><td>${fmtFecha(p.fecha_limite||'')}</td>
+    <td style="color:${p.vencido?'#ef4444':'inherit'}">${p.estado||'—'}${p.vencido?' ⚠️':''}</td>
+  </tr>`).join('');
+
+  const costesRows = costes.slice(0,15).map(c=>`<tr>
+    <td>${c.concepto||'—'}</td><td>${c.tipo||'—'}</td>
+    <td>${fmtFecha(c.fecha||'')}</td><td>${c.proveedor||'—'}</td>
+    <td style="text-align:right;font-weight:700">${fmtM(c.importe)}</td>
+  </tr>`).join('');
+
   const html = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">
   <title>Informe de Obra — ${obraNombre}</title>
   <style>
-    *{box-sizing:border-box}body{font-family:'Segoe UI',Arial,sans-serif;color:#1e293b;padding:32px;max-width:900px;margin:0 auto;font-size:13px}
+    *{box-sizing:border-box}body{font-family:'Segoe UI',Arial,sans-serif;color:#1e293b;padding:32px;max-width:960px;margin:0 auto;font-size:13px}
     h1{color:#f97316;font-size:24px;margin:0 0 4px}h2{color:#f97316;font-size:16px;margin:24px 0 10px;padding-bottom:4px;border-bottom:2px solid #f97316}
-    .meta{color:#64748b;font-size:12px;margin-bottom:24px}.kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px}
-    .kpi{background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:12px;text-align:center}
-    .kpi-val{font-size:22px;font-weight:800;color:#f97316}.kpi-lbl{font-size:11px;color:#64748b;margin-top:2px}
-    table{border-collapse:collapse;width:100%;margin-bottom:16px}th,td{border:1px solid #e2e8f0;padding:8px;text-align:left;vertical-align:top;font-size:12px}
+    .meta{color:#64748b;font-size:12px;margin-bottom:24px}
+    .kpi-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-bottom:24px}
+    .kpi{background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:10px;text-align:center}
+    .kpi-val{font-size:20px;font-weight:800;color:#f97316}.kpi-lbl{font-size:10px;color:#64748b;margin-top:2px}
+    table{border-collapse:collapse;width:100%;margin-bottom:16px}th,td{border:1px solid #e2e8f0;padding:7px;text-align:left;vertical-align:top;font-size:11px}
     th{background:#f97316;color:#fff;font-weight:700}tr:nth-child(even){background:#f8fafc}
     .progress{background:#e2e8f0;border-radius:4px;height:10px}.progress-bar{height:100%;border-radius:4px;background:#f97316}
+    .summary-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:16px}
+    .summary-box{background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:14px}
+    .summary-box h3{margin:0 0 8px;font-size:13px;color:#f97316}
     .footer{margin-top:40px;padding-top:16px;border-top:1px solid #e2e8f0;font-size:11px;color:#94a3b8;text-align:center}
-    @media print{.no-print{display:none}body{padding:16px}}
+    @media print{.no-print{display:none}body{padding:16px}.kpi-grid{grid-template-columns:repeat(4,1fr)}}
   </style></head><body>
   <button class="no-print" onclick="window.print()" style="background:#f97316;color:#fff;border:none;padding:8px 20px;border-radius:6px;cursor:pointer;float:right;font-size:13px;font-weight:700">🖨 Imprimir / PDF</button>
   <h1>📋 Informe de Obra</h1>
@@ -10184,10 +10345,31 @@ async function generarInformeObra(obraId, obraNombre) {
     <div class="kpi"><div class="kpi-val" style="color:${pctPres>100?'#ef4444':'#f97316'}">${pctPres !== null ? pctPres+'%' : '—'}</div><div class="kpi-lbl">Presupuesto ejecutado</div></div>
     <div class="kpi"><div class="kpi-val" style="color:${tareasAbiertas>0?'#f59e0b':'#10b981'}">${tareasAbiertas}</div><div class="kpi-lbl">Tareas abiertas</div></div>
     <div class="kpi"><div class="kpi-val" style="color:${rfisAbiertas>0?'#ef4444':'#10b981'}">${rfisAbiertas}</div><div class="kpi-lbl">RFIs abiertas</div></div>
+    <div class="kpi"><div class="kpi-val" style="color:${peligrosAct>0?'#ef4444':'#10b981'}">${peligrosAct}</div><div class="kpi-lbl">Peligros activos</div></div>
+    <div class="kpi"><div class="kpi-val" style="color:${punchVenc>0?'#ef4444':punchAbiertos>0?'#f59e0b':'#10b981'}">${punchAbiertos}</div><div class="kpi-lbl">Punch list abiertos</div></div>
+  </div>
+
+  <div class="summary-grid">
+    <div class="summary-box">
+      <h3>💶 Resumen financiero</h3>
+      <div style="display:flex;justify-content:space-between;margin-bottom:4px"><span>Presupuesto previsto</span><strong>${fmtM(totalPrev)}</strong></div>
+      <div style="display:flex;justify-content:space-between;margin-bottom:4px"><span>Coste real (partidas)</span><strong>${fmtM(totalReal)}</strong></div>
+      <div style="display:flex;justify-content:space-between;margin-bottom:4px"><span>Gastos registrados</span><strong>${fmtM(totalCostes)}</strong></div>
+      <div style="display:flex;justify-content:space-between;color:${totalReal>totalPrev?'#ef4444':'#10b981'}"><span>Desviación</span><strong>${fmtM(totalReal-totalPrev)} (${pctPres||0}%)</strong></div>
+      ${totalPrev>0?`<div style="margin-top:8px;background:#e2e8f0;border-radius:4px;height:8px"><div style="width:${Math.min(pctPres||0,100)}%;height:100%;border-radius:4px;background:${(pctPres||0)>100?'#ef4444':'#f97316'}"></div></div>`:''}
+    </div>
+    <div class="summary-box">
+      <h3>🦺 Seguridad & Calidad</h3>
+      <div style="display:flex;justify-content:space-between;margin-bottom:4px"><span>Obs. seguridad abiertas</span><strong style="color:${segAbiertas_inf>0?'#f59e0b':'#10b981'}">${segAbiertas_inf}</strong></div>
+      <div style="display:flex;justify-content:space-between;margin-bottom:4px"><span>Peligros inmediatos</span><strong style="color:${peligrosAct>0?'#ef4444':'#10b981'}">${peligrosAct}</strong></div>
+      <div style="display:flex;justify-content:space-between;margin-bottom:4px"><span>Punch list abiertos</span><strong style="color:${punchAbiertos>0?'#f59e0b':'#10b981'}">${punchAbiertos}</strong></div>
+      <div style="display:flex;justify-content:space-between;margin-bottom:4px"><span>Punch list vencidos</span><strong style="color:${punchVenc>0?'#ef4444':'#10b981'}">${punchVenc}</strong></div>
+      <div style="display:flex;justify-content:space-between"><span>Planos registrados</span><strong>${planos.length}</strong></div>
+    </div>
   </div>
 
   ${partidas.length ? `<h2>💶 Presupuesto</h2>
-  <div style="margin-bottom:12px;display:flex;gap:24px">
+  <div style="margin-bottom:12px;display:flex;gap:24px;flex-wrap:wrap">
     <div><strong>Previsto:</strong> ${fmtM(totalPrev)}</div>
     <div><strong>Real:</strong> ${fmtM(totalReal)}</div>
     <div><strong>Desviación:</strong> <span style="color:${totalReal>totalPrev?'#ef4444':'#10b981'}">${fmtM(totalReal-totalPrev)}</span></div>
@@ -10202,6 +10384,14 @@ async function generarInformeObra(obraId, obraNombre) {
   <table><thead><tr><th>Hito</th><th>Tipo</th><th>Fecha</th><th>Estado</th></tr></thead>
   <tbody>${hitosRows}</tbody></table>` : ''}
 
+  ${segObs.filter(o=>o.estado!=='cerrada').length ? `<h2>🦺 Observaciones de seguridad abiertas</h2>
+  <table><thead><tr><th>Tipo</th><th>Categoría</th><th>Descripción</th><th>Ubicación</th><th>Prioridad</th><th>Estado</th></tr></thead>
+  <tbody>${segObsRows}</tbody></table>` : ''}
+
+  ${punchItems.filter(p=>p.estado!=='cerrado').length ? `<h2>📝 Punch List pendiente</h2>
+  <table><thead><tr><th>Nº</th><th>Descripción</th><th>Categoría</th><th>Ubicación</th><th>Responsable</th><th>Vence</th><th>Estado</th></tr></thead>
+  <tbody>${punchRows}</tbody></table>` : ''}
+
   ${tareas.filter(t=>t.estado!=='completada').length ? `<h2>✅ Tareas pendientes</h2>
   <table><thead><tr><th>Tarea</th><th>Prioridad</th><th>Estado</th><th>Asignado</th><th>Fecha límite</th></tr></thead>
   <tbody>${tareasRows}</tbody></table>` : ''}
@@ -10210,7 +10400,13 @@ async function generarInformeObra(obraId, obraNombre) {
   <table><thead><tr><th>Nº</th><th>Título</th><th>Estado</th><th>Fecha</th></tr></thead>
   <tbody>${rfisRows}</tbody></table>` : ''}
 
-  <div class="footer">Alejandra APP · ${new Date().toLocaleDateString('es-ES')} · alejandraapp.com</div>
+  ${costes.length ? `<h2>💸 Costes registrados (últimos ${Math.min(costes.length,15)})</h2>
+  <table><thead><tr><th>Concepto</th><th>Tipo</th><th>Fecha</th><th>Proveedor</th><th>Importe</th></tr></thead>
+  <tbody>${costesRows}</tbody>
+  <tfoot><tr><td colspan="4" style="text-align:right;font-weight:700;background:#f8fafc">TOTAL</td><td style="text-align:right;font-weight:800;background:#f8fafc">${fmtM(totalCostes)}</td></tr></tfoot>
+  </table>` : ''}
+
+  <div class="footer">Alejandra APP · ${new Date().toLocaleDateString('es-ES')} · Informe generado automáticamente</div>
   </body></html>`;
 
   const w = window.open('', '_blank');
