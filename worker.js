@@ -4721,6 +4721,14 @@ export default {
         if (method === 'PUT')    return await actualizarVisitaObra(_vid, request, env);
         if (method === 'DELETE') return await eliminarVisitaObra(_vid, request, env);
       }
+      // ── Alquileres de Equipo / Equipment Rental (NEW-80) ─────────────────────────
+      if (path === '/alquileres' && method === 'GET')  return await getAlquileres(request, env);
+      if (path === '/alquileres' && method === 'POST') return await crearAlquiler(request, env);
+      if (path.startsWith('/alquileres/')) {
+        const _alqId = parseInt(path.split('/alquileres/')[1]);
+        if (method === 'PUT')    return await actualizarAlquiler(_alqId, request, env);
+        if (method === 'DELETE') return await eliminarAlquiler(_alqId, request, env);
+      }
       // ── Garantias / Warranty Management (NEW-79) ──────────────────────────────────
       if (path === '/garantias' && method === 'GET')  return await getGarantias(request, env);
       if (path === '/garantias' && method === 'POST') return await crearGarantia(request, env);
@@ -17415,3 +17423,129 @@ async function eliminarGarantia(id, request, env) {
   return json({ ok: true, deleted: true });
 }
 
+
+// ── Alquileres de Equipo / Equipment Rental Log (NEW-80) ──────────────────────
+async function ensureAlquileresTable(env) {
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS alquileres (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    empresa_id        INTEGER NOT NULL,
+    obra_id           INTEGER,
+    numero            TEXT,
+    equipo            TEXT NOT NULL,
+    tipo              TEXT NOT NULL DEFAULT 'maquinaria',
+    proveedor         TEXT,
+    matricula         TEXT,
+    operador          TEXT,
+    fecha_entrada     TEXT NOT NULL,
+    fecha_salida_prev TEXT,
+    fecha_salida_real TEXT,
+    tarifa_dia        REAL,
+    tarifa_semana     REAL,
+    tarifa_mes        REAL,
+    modo_tarifa       TEXT NOT NULL DEFAULT 'dia',
+    coste_total       REAL,
+    estado            TEXT NOT NULL DEFAULT 'en_obra',
+    motivo_fin        TEXT,
+    observaciones     TEXT,
+    created_at        TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at        TEXT NOT NULL DEFAULT (datetime('now'))
+  )`).run().catch(()=>{});
+}
+
+async function getAlquileres(request, env) {
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  await ensureAlquileresTable(env);
+  const url = new URL(request.url);
+  const obra_id = url.searchParams.get('obra_id');
+  const estado  = url.searchParams.get('estado');
+  let q = `SELECT * FROM alquileres WHERE empresa_id=?`;
+  const p = [empresa_id];
+  if (obra_id) { q += ` AND obra_id=?`; p.push(parseInt(obra_id)); }
+  if (estado)  { q += ` AND estado=?`;  p.push(estado); }
+  q += ` ORDER BY fecha_entrada DESC, id DESC`;
+  const { results } = await env.DB.prepare(q).bind(...p).all();
+  // Calcular coste acumulado para equipos en_obra si no tienen coste_total
+  const hoy = new Date().toISOString().slice(0,10);
+  const enriquecidos = (results || []).map(a => {
+    if (a.coste_total) return a;
+    const inicio = a.fecha_entrada;
+    const fin    = a.fecha_salida_real || a.fecha_salida_prev || hoy;
+    if (!inicio || !fin) return a;
+    const dias = Math.max(1, Math.round((new Date(fin) - new Date(inicio)) / 86400000) + 1);
+    let coste = null;
+    if (a.modo_tarifa === 'dia' && a.tarifa_dia)       coste = dias * a.tarifa_dia;
+    else if (a.modo_tarifa === 'semana' && a.tarifa_semana) coste = Math.ceil(dias/7) * a.tarifa_semana;
+    else if (a.modo_tarifa === 'mes' && a.tarifa_mes)   coste = Math.ceil(dias/30) * a.tarifa_mes;
+    return { ...a, _dias: dias, _coste_calc: coste };
+  });
+  return json({ alquileres: enriquecidos });
+}
+
+async function crearAlquiler(request, env) {
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  await ensureAlquileresTable(env);
+  const b = await request.json();
+  if (!b.equipo || !b.fecha_entrada) return err('equipo y fecha_entrada son requeridos', 400);
+  // Auto-numero ALQ-YYYY-NNNN
+  const anio = new Date().getFullYear();
+  const last = await env.DB.prepare(
+    `SELECT numero FROM alquileres WHERE empresa_id=? AND numero LIKE ? ORDER BY id DESC LIMIT 1`
+  ).bind(empresa_id, `ALQ-${anio}-%`).first();
+  let seq = 1;
+  if (last?.numero) { const n = parseInt(last.numero.split('-')[2]); if (!isNaN(n)) seq = n + 1; }
+  const numero = `ALQ-${anio}-${String(seq).padStart(4,'0')}`;
+  const r = await env.DB.prepare(
+    `INSERT INTO alquileres (empresa_id,obra_id,numero,equipo,tipo,proveedor,matricula,operador,fecha_entrada,fecha_salida_prev,fecha_salida_real,tarifa_dia,tarifa_semana,tarifa_mes,modo_tarifa,coste_total,estado,motivo_fin,observaciones)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+  ).bind(
+    empresa_id,
+    b.obra_id ? parseInt(b.obra_id) : null,
+    numero,
+    b.equipo,
+    b.tipo || 'maquinaria',
+    b.proveedor || null,
+    b.matricula || null,
+    b.operador || null,
+    b.fecha_entrada,
+    b.fecha_salida_prev || null,
+    b.fecha_salida_real || null,
+    b.tarifa_dia ? parseFloat(b.tarifa_dia) : null,
+    b.tarifa_semana ? parseFloat(b.tarifa_semana) : null,
+    b.tarifa_mes ? parseFloat(b.tarifa_mes) : null,
+    b.modo_tarifa || 'dia',
+    b.coste_total ? parseFloat(b.coste_total) : null,
+    b.estado || 'en_obra',
+    b.motivo_fin || null,
+    b.observaciones || null
+  ).run();
+  return json({ ok: true, id: r.meta.last_row_id, numero }, { status: 201 });
+}
+
+async function actualizarAlquiler(id, request, env) {
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  await ensureAlquileresTable(env);
+  const b = await request.json();
+  const allowed = ['equipo','tipo','proveedor','matricula','operador','obra_id',
+    'fecha_entrada','fecha_salida_prev','fecha_salida_real',
+    'tarifa_dia','tarifa_semana','tarifa_mes','modo_tarifa','coste_total',
+    'estado','motivo_fin','observaciones'];
+  const sets = [], params = [];
+  for (const k of allowed) {
+    if (k in b) { sets.push(`${k}=?`); params.push(b[k] ?? null); }
+  }
+  if (!sets.length) return err('Sin cambios', 400);
+  sets.push(`updated_at=datetime('now')`);
+  params.push(id, empresa_id);
+  await env.DB.prepare(`UPDATE alquileres SET ${sets.join(',')} WHERE id=? AND empresa_id=?`).bind(...params).run();
+  return json({ ok: true });
+}
+
+async function eliminarAlquiler(id, request, env) {
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  await env.DB.prepare(`DELETE FROM alquileres WHERE id=? AND empresa_id=?`).bind(id, empresa_id).run();
+  return json({ ok: true, deleted: true });
+}

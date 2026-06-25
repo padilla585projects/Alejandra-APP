@@ -672,6 +672,10 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
       <span class="nav-icon">🛡️</span> Garantías
       <span class="nav-badge" id="garantiasBadge" style="display:none">0</span>
     </button>
+    <button class="nav-item" data-page="alquileres" onclick="navTo('alquileres')">
+      <span class="nav-icon">🏗️</span> Alquileres Equipo
+      <span class="nav-badge" id="alquileresBadge" style="display:none">0</span>
+    </button>
     <button class="nav-item" data-page="fotosObra" onclick="navTo('fotosObra')">
       <span class="nav-icon">📷</span> Galería de Fotos
     </button>
@@ -2300,6 +2304,132 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
               <button class="btn btn-danger" id="btnEliminarCalEvento" style="display:none" onclick="eliminarCalEvento()">🗑 Eliminar</button>
               <button class="btn btn-secondary" onclick="cerrarModalCalEvento()">Cancelar</button>
               <button class="btn btn-primary" onclick="guardarCalEvento()">💾 Guardar</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ALQUILERES DE EQUIPO / EQUIPMENT RENTAL LOG (NEW-80) -->
+      <div class="page" id="pageAlquileres">
+        <div class="page-title">🏗️ Alquileres de Equipo</div>
+        <div id="alqKpis" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;margin-bottom:16px"></div>
+        <div class="tbl-toolbar">
+          <input class="tbl-search" id="searchAlq" placeholder="🔍 Buscar equipo, proveedor..." oninput="filtrarAlquileres()">
+          <select class="tbl-search" id="filterAlqObra" style="min-width:220px" onchange="tblAlq=null;cargarAlquileres()">
+            <option value="">— Todas las obras —</option>
+          </select>
+          <select class="tbl-search" id="filterAlqEstado" style="min-width:130px" onchange="filtrarAlquileres()">
+            <option value="">Todos los estados</option>
+            <option value="en_obra">En Obra</option>
+            <option value="devuelto">Devuelto</option>
+            <option value="averiado">Averiado</option>
+            <option value="pendiente">Pendiente entrada</option>
+          </select>
+          <select class="tbl-search" id="filterAlqTipo" style="min-width:130px" onchange="filtrarAlquileres()">
+            <option value="">Todos los tipos</option>
+            <option value="maquinaria">Maquinaria pesada</option>
+            <option value="elevacion">Elevación</option>
+            <option value="compresores">Compresores / Grupos</option>
+            <option value="andamios">Andamios / Apeos</option>
+            <option value="herramienta">Herramienta</option>
+            <option value="vehiculo">Vehículo</option>
+            <option value="otro">Otro</option>
+          </select>
+          <button class="btn btn-primary" onclick="abrirModalAlq()">+ Nuevo Alquiler</button>
+          <button class="btn btn-secondary" onclick="exportarTabla(tblAlq,'alquileres')">⬇ CSV</button>
+          <button class="btn btn-secondary" onclick="tblAlq=null;cargarAlquileres()">🔄</button>
+        </div>
+        <div class="tbl-wrap"><div id="tblAlq"></div></div>
+
+        <!-- MODAL ALQUILER -->
+        <div class="modal-overlay" id="modalAlq" style="display:none" onclick="if(event.target===this)cerrarModalAlq()">
+          <div class="modal" style="max-width:620px">
+            <div class="modal-head">
+              <span id="modalAlqTitulo">Nuevo Alquiler</span>
+              <button class="modal-close" onclick="cerrarModalAlq()">✕</button>
+            </div>
+            <div class="modal-body">
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+                <div class="form-group" style="grid-column:1/-1">
+                  <label class="form-label">Equipo / Maquinaria *</label>
+                  <input class="form-input" id="alqEquipo" placeholder="Ej: Grúa torre 40t, Andamio 5 plantas, Grupo electrógeno 50kVA...">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Tipo</label>
+                  <select class="form-select" id="alqTipo">
+                    <option value="maquinaria">Maquinaria pesada</option>
+                    <option value="elevacion">Elevación</option>
+                    <option value="compresores">Compresores / Grupos</option>
+                    <option value="andamios">Andamios / Apeos</option>
+                    <option value="herramienta">Herramienta</option>
+                    <option value="vehiculo">Vehículo</option>
+                    <option value="otro">Otro</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Obra</label>
+                  <select class="form-select" id="alqObraId"><option value="">— Sin obra —</option></select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Proveedor / Empresa Alquiler</label>
+                  <input class="form-input" id="alqProveedor" placeholder="Nombre de la empresa de alquiler">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Matrícula / Identificador</label>
+                  <input class="form-input" id="alqMatricula" placeholder="Matrícula o nº de serie">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Operador Asignado</label>
+                  <input class="form-input" id="alqOperador" placeholder="Nombre del operador">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Estado</label>
+                  <select class="form-select" id="alqEstado">
+                    <option value="pendiente">⏳ Pendiente entrada</option>
+                    <option value="en_obra" selected>🟢 En Obra</option>
+                    <option value="averiado">🔴 Averiado</option>
+                    <option value="devuelto">✅ Devuelto</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Fecha de Entrada *</label>
+                  <input class="form-input" type="date" id="alqFechaEntrada">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Fecha Salida Prevista</label>
+                  <input class="form-input" type="date" id="alqFechaPrev">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Fecha Salida Real</label>
+                  <input class="form-input" type="date" id="alqFechaReal">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Modo Tarifa</label>
+                  <select class="form-select" id="alqModoTarifa" onchange="actualizarCampoTarifa()">
+                    <option value="dia">Por día</option>
+                    <option value="semana">Por semana</option>
+                    <option value="mes">Por mes</option>
+                    <option value="fijo">Precio fijo</option>
+                  </select>
+                </div>
+                <div class="form-group" id="alqTarifaWrap">
+                  <label class="form-label" id="alqTarifaLbl">Tarifa / día (€)</label>
+                  <input class="form-input" type="number" id="alqTarifa" placeholder="0.00" min="0" step="0.01">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Coste Total Real (€) <span style="color:var(--muted);font-size:11px">si diferente del calculado</span></label>
+                  <input class="form-input" type="number" id="alqCosteTotal" placeholder="Dejar vacío para calcular automáticamente" min="0" step="0.01">
+                </div>
+                <div class="form-group" style="grid-column:1/-1">
+                  <label class="form-label">Motivo fin / Observaciones</label>
+                  <textarea class="form-input" id="alqObservaciones" rows="2" placeholder="Notas, motivo de devolución, incidencias..."></textarea>
+                </div>
+              </div>
+            </div>
+            <div class="modal-foot">
+              <button class="btn btn-secondary" onclick="cerrarModalAlq()">Cancelar</button>
+              <span id="alqElimBtn"></span>
+              <button class="btn btn-primary" onclick="guardarAlq()">💾 Guardar</button>
             </div>
           </div>
         </div>
@@ -5649,6 +5779,7 @@ const PAGE_TITLES = {
   equiposMedicion: '📏 Equipos de Medición y Calibración',
   fieldReports: '📝 Informes de Campo / Field Reports',
   garantias: '🛡️ Gestión de Garantías / Warranty Management',
+  alquileres: '🏗️ Alquileres de Equipo / Equipment Rental Log',
 };
 
 const PAGE_LOADERS = {
@@ -5729,6 +5860,7 @@ const PAGE_LOADERS = {
   equiposMedicion: cargarEquiposMed,
   fieldReports:    cargarFieldReports,
   garantias:       cargarGarantias,
+  alquileres:      cargarAlquileres,
 };
 
 let currentPage = '';
@@ -5838,6 +5970,7 @@ const SYNC_INTERVALS = {
   equiposMedicion: 120,
   fieldReports:     90,
   garantias:       120,
+  alquileres:      90,
 };
 
 let _syncTimer = null, _syncLabelTimer = null, _syncLastTs = null;
@@ -15198,6 +15331,158 @@ function exportarFinanzas() {
   if (!obraId) return showToast('Selecciona una obra primero', 'warning');
   // Abrir informe en nueva pestaña usando el endpoint de informes
   window.open(`/informe-obra/${obraId}?tipo=financiero`, '_blank');
+}
+
+// ── ALQUILERES DE EQUIPO / EQUIPMENT RENTAL LOG (NEW-80) ──────────
+let tblAlq = null, _alqData = [];
+const ALQ_TIPO_ICON  = { maquinaria:'🚜', elevacion:'🏗️', compresores:'⚙️', andamios:'🔩', herramienta:'🔧', vehiculo:'🚛', otro:'📦' };
+const ALQ_TIPO_LABEL = { maquinaria:'Maquinaria', elevacion:'Elevación', compresores:'Compresores', andamios:'Andamios', herramienta:'Herramienta', vehiculo:'Vehículo', otro:'Otro' };
+const ALQ_ESTADO_COLOR = { pendiente:'var(--muted)', en_obra:'var(--success)', averiado:'var(--danger)', devuelto:'var(--primary)' };
+const ALQ_ESTADO_LABEL = { pendiente:'⏳ Pendiente', en_obra:'🟢 En Obra', averiado:'🔴 Averiado', devuelto:'✅ Devuelto' };
+
+async function cargarAlquileres() {
+  if (document.getElementById('filterAlqObra')?.options.length <= 1) poblarSelectObras('filterAlqObra');
+  const obraId = document.getElementById('filterAlqObra')?.value || '';
+  const r = await api('/alquileres' + (obraId ? `?obra_id=${obraId}` : ''));
+  _alqData = r?.alquileres || [];
+
+  const enObra    = _alqData.filter(a => a.estado === 'en_obra').length;
+  const averiados = _alqData.filter(a => a.estado === 'averiado').length;
+  const devueltos = _alqData.filter(a => a.estado === 'devuelto').length;
+  const costeActivo = _alqData
+    .filter(a => a.estado === 'en_obra')
+    .reduce((s, a) => s + (a.coste_total || a._coste_calc || 0), 0);
+
+  document.getElementById('alqKpis').innerHTML = [
+    { label:'Total', val: _alqData.length, cls: '' },
+    { label:'En Obra', val: enObra, cls: enObra ? 'ok' : '' },
+    { label:'Averiados', val: averiados, cls: averiados ? 'err' : '' },
+    { label:'Devueltos', val: devueltos, cls: '' },
+    { label:'Coste activos', val: costeActivo ? `${costeActivo.toLocaleString('es',{minimumFractionDigits:0})} €` : '—', cls: '' },
+  ].map(k => `<div class="kpi-mini ${k.cls}"><div class="kpi-mini-val">${k.val}</div><div class="kpi-mini-lbl">${k.label}</div></div>`).join('');
+
+  const badge = document.getElementById('alquileresBadge');
+  if (badge) { badge.textContent = averiados; badge.style.display = averiados ? '' : 'none'; }
+
+  filtrarAlquileres();
+}
+
+function filtrarAlquileres() {
+  const q    = (document.getElementById('searchAlq')?.value || '').toLowerCase();
+  const est  = document.getElementById('filterAlqEstado')?.value || '';
+  const tipo = document.getElementById('filterAlqTipo')?.value || '';
+  const data = _alqData.filter(a => {
+    const matchQ = !q || [a.equipo, a.proveedor, a.matricula, a.numero, a.operador].some(v => (v||'').toLowerCase().includes(q));
+    const matchE = !est  || a.estado === est;
+    const matchT = !tipo || a.tipo === tipo;
+    return matchQ && matchE && matchT;
+  });
+  if (tblAlq) { tblAlq.replaceData(data); return; }
+  tblAlq = new Tabulator('#tblAlq', {
+    data, layout: 'fitColumns', height: 'calc(100vh - 280px)',
+    placeholder: '<div class="empty-state"><div class="empty-icon">🏗️</div><div class="empty-text">Sin alquileres registrados</div></div>',
+    columns: [
+      { title:'Número', field:'numero', width:130 },
+      { title:'Equipo', field:'equipo', minWidth:200, formatter: c => `<b>${esc(c.getValue()||'—')}</b>` },
+      { title:'Tipo', field:'tipo', width:120, formatter: c => `${ALQ_TIPO_ICON[c.getValue()]||'📦'} ${ALQ_TIPO_LABEL[c.getValue()]||c.getValue()}` },
+      { title:'Proveedor', field:'proveedor', width:150 },
+      { title:'Entrada', field:'fecha_entrada', width:100 },
+      { title:'Salida prev.', field:'fecha_salida_prev', width:110, formatter: c => c.getValue() || '—' },
+      { title:'Estado', field:'estado', width:120, formatter: c => `<span style="color:${ALQ_ESTADO_COLOR[c.getValue()]||'var(--muted)'};font-weight:600">${ALQ_ESTADO_LABEL[c.getValue()]||c.getValue()}</span>` },
+      { title:'Coste (€)', field:'_coste_calc', width:110, formatter: c => {
+        const d = c.getRow().getData();
+        const v = d.coste_total || c.getValue();
+        return v ? `<b>${v.toLocaleString('es',{minimumFractionDigits:0})}</b>` : '—';
+      }},
+      { title:'', field:'id', width:80, hozAlign:'center',
+        formatter: c => `<button class="tbl-btn" onclick="editarAlq(${c.getValue()})">✏️</button><button class="tbl-btn danger" onclick="eliminarAlq(${c.getValue()})">🗑</button>` },
+    ]
+  });
+}
+
+function actualizarCampoTarifa() {
+  const modo = document.getElementById('alqModoTarifa')?.value;
+  const labels = { dia:'Tarifa / día (€)', semana:'Tarifa / semana (€)', mes:'Tarifa / mes (€)', fijo:'Precio fijo total (€)' };
+  const lbl = document.getElementById('alqTarifaLbl');
+  if (lbl) lbl.textContent = labels[modo] || 'Tarifa (€)';
+}
+
+function abrirModalAlq(d = {}) {
+  document.getElementById('modalAlqTitulo').textContent = d.id ? 'Editar Alquiler' : 'Nuevo Alquiler';
+  document.getElementById('alqEquipo').value      = d.equipo || '';
+  document.getElementById('alqTipo').value        = d.tipo || 'maquinaria';
+  document.getElementById('alqProveedor').value   = d.proveedor || '';
+  document.getElementById('alqMatricula').value   = d.matricula || '';
+  document.getElementById('alqOperador').value    = d.operador || '';
+  document.getElementById('alqEstado').value      = d.estado || 'en_obra';
+  document.getElementById('alqFechaEntrada').value = d.fecha_entrada || new Date().toISOString().slice(0,10);
+  document.getElementById('alqFechaPrev').value   = d.fecha_salida_prev || '';
+  document.getElementById('alqFechaReal').value   = d.fecha_salida_real || '';
+  document.getElementById('alqModoTarifa').value  = d.modo_tarifa || 'dia';
+  actualizarCampoTarifa();
+  const tarifaVal = d.tarifa_dia || d.tarifa_semana || d.tarifa_mes || '';
+  document.getElementById('alqTarifa').value      = tarifaVal;
+  document.getElementById('alqCosteTotal').value  = d.coste_total || '';
+  document.getElementById('alqObservaciones').value = d.observaciones || d.motivo_fin || '';
+  poblarSelectObras('alqObraId');
+  if (d.obra_id) setTimeout(() => { document.getElementById('alqObraId').value = d.obra_id; }, 200);
+  const elimBtn = document.getElementById('alqElimBtn');
+  elimBtn.innerHTML = d.id ? `<button class="btn btn-danger btn-sm" onclick="eliminarAlq(${d.id},true)">🗑 Eliminar</button>` : '';
+  document.getElementById('modalAlq')._alqId = d.id || null;
+  document.getElementById('modalAlq').style.display = 'flex';
+}
+
+async function editarAlq(id) {
+  const d = _alqData.find(a => a.id === id);
+  if (d) abrirModalAlq(d);
+}
+
+async function guardarAlq() {
+  const id   = document.getElementById('modalAlq')._alqId;
+  const modo = document.getElementById('alqModoTarifa').value;
+  const tarifa = parseFloat(document.getElementById('alqTarifa').value) || null;
+  const body = {
+    equipo:           document.getElementById('alqEquipo').value.trim(),
+    tipo:             document.getElementById('alqTipo').value,
+    obra_id:          document.getElementById('alqObraId').value || null,
+    proveedor:        document.getElementById('alqProveedor').value.trim() || null,
+    matricula:        document.getElementById('alqMatricula').value.trim() || null,
+    operador:         document.getElementById('alqOperador').value.trim() || null,
+    estado:           document.getElementById('alqEstado').value,
+    fecha_entrada:    document.getElementById('alqFechaEntrada').value,
+    fecha_salida_prev:document.getElementById('alqFechaPrev').value || null,
+    fecha_salida_real:document.getElementById('alqFechaReal').value || null,
+    modo_tarifa:      modo,
+    tarifa_dia:       modo === 'dia'    ? tarifa : null,
+    tarifa_semana:    modo === 'semana' ? tarifa : null,
+    tarifa_mes:       modo === 'mes'    ? tarifa : null,
+    coste_total:      parseFloat(document.getElementById('alqCosteTotal').value) || (modo === 'fijo' ? tarifa : null),
+    observaciones:    document.getElementById('alqObservaciones').value.trim() || null,
+  };
+  if (!body.equipo || !body.fecha_entrada) { toast('Equipo y Fecha de entrada son obligatorios', 'err'); return; }
+  const r = await api(id ? `/alquileres/${id}` : '/alquileres', { method: id ? 'PUT' : 'POST', body: JSON.stringify(body) });
+  if (r.ok || r.id) {
+    toast(id ? 'Alquiler actualizado' : `Alquiler ${r.numero||''} registrado`, 'ok');
+    cerrarModalAlq();
+    tblAlq = null;
+    cargarAlquileres();
+  } else toast('Error al guardar', 'err');
+}
+
+async function eliminarAlq(id, desdeModal = false) {
+  if (!confirm('¿Eliminar este alquiler?')) return;
+  const r = await api(`/alquileres/${id}`, { method: 'DELETE' });
+  if (r.ok || r.deleted) {
+    toast('Alquiler eliminado', 'ok');
+    if (desdeModal) cerrarModalAlq();
+    tblAlq = null;
+    cargarAlquileres();
+  } else toast('Error al eliminar', 'err');
+}
+
+function cerrarModalAlq() {
+  document.getElementById('modalAlq').style.display = 'none';
+  document.getElementById('modalAlq')._alqId = null;
 }
 
 // ── GARANTÍAS / WARRANTY MANAGEMENT (NEW-79) ──────────────────────
