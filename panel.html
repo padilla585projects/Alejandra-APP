@@ -1877,6 +1877,13 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
             </div>
           </div>
 
+          <!-- CURVA S / EVM (NEW-71) -->
+          <div class="card" style="padding:20px;margin-bottom:22px">
+            <div style="font-weight:700;font-size:15px;margin-bottom:6px">📉 Curva S — Valor Planificado vs Coste Real vs Valor Ganado</div>
+            <div style="font-size:12px;color:var(--muted);margin-bottom:14px">PV (planificado) · AC (coste real acumulado) · EV (valor ganado a hoy) — Requiere fechas de inicio y fin de obra</div>
+            <div style="height:260px"><canvas id="chartCurvaS"></canvas></div>
+          </div>
+
           <!-- DESGLOSE POR TIPO -->
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:22px">
             <div class="card" style="padding:20px">
@@ -13642,7 +13649,7 @@ async function cargarCentroAlertas() {
 }
 
 // ── ANÁLISIS FINANCIERO POR OBRA (NEW-51) ─────────────────────────
-let _chartFinBar = null, _chartFinMes = null;
+let _chartFinBar = null, _chartFinMes = null, _chartCurvaS = null;
 
 async function cargarFinanzasObra() {
   if (document.getElementById('finanzasObraId')?.options.length <= 1) await poblarSelectObras('finanzasObraId');
@@ -13699,6 +13706,9 @@ async function cargarFinanzasObra() {
   if (kpiGrid) {
     const varColor = variacion !== null ? (variacion >= 0 ? 'var(--success)' : 'var(--danger)') : 'var(--muted)';
     const cpiColor = cpi !== null ? (cpi >= 1 ? 'var(--success)' : cpi >= 0.9 ? 'var(--warning)' : 'var(--danger)') : 'var(--muted)';
+    const spi      = d.kpis?.spi;
+    const ev       = d.kpis?.ev;
+    const spiColor = spi !== null ? (spi >= 1 ? 'var(--success)' : spi >= 0.9 ? 'var(--warning)' : 'var(--danger)') : 'var(--muted)';
     kpiGrid.innerHTML = `
       <div class="kpi-card"><div class="kpi-icon">💶</div><div class="kpi-value">${fmt(presupuesto)}</div><div class="kpi-label">Presupuesto previsto</div></div>
       <div class="kpi-card"><div class="kpi-icon">📑</div><div class="kpi-value" style="color:var(--primary)">${fmt(comprometido)}</div><div class="kpi-label">Comprometido (contratos)</div></div>
@@ -13706,6 +13716,8 @@ async function cargarFinanzasObra() {
       <div class="kpi-card"><div class="kpi-icon">🎯</div><div class="kpi-value" style="color:${alerta==='verde'?'var(--success)':alerta==='amarillo'?'var(--warning)':'var(--danger)'}">${fmt(eac)}</div><div class="kpi-label">EAC (coste final estimado)</div></div>
       <div class="kpi-card"><div class="kpi-icon">${variacion>=0?'✅':'❌'}</div><div class="kpi-value" style="color:${varColor}">${variacion!==null?fmt(Math.abs(variacion)):'—'}</div><div class="kpi-label">${variacion>=0?'Ahorro estimado':'Desviación presupuesto'}</div></div>
       <div class="kpi-card"><div class="kpi-icon">📈</div><div class="kpi-value" style="color:${cpiColor}">${cpi!==null?cpi.toFixed(2):'—'}</div><div class="kpi-label">CPI (eficiencia coste)</div></div>
+      <div class="kpi-card"><div class="kpi-icon">⏱️</div><div class="kpi-value" style="color:${spiColor}">${spi!==null?spi.toFixed(2):'—'}</div><div class="kpi-label">SPI (eficiencia plazo)</div></div>
+      <div class="kpi-card"><div class="kpi-icon">💡</div><div class="kpi-value" style="color:var(--success)">${ev!=null?fmt(ev):'—'}</div><div class="kpi-label">EV (valor ganado)</div></div>
       <div class="kpi-card"><div class="kpi-icon">⚙️</div><div class="kpi-value">${d.obra?.avance_porcentaje||0}%</div><div class="kpi-label">Avance obra</div></div>
       <div class="kpi-card"><div class="kpi-icon">📦</div><div class="kpi-value">${pct(d.kpis?.pct_comprometido)}</div><div class="kpi-label">% Comprometido</div></div>
     `;
@@ -13758,6 +13770,9 @@ async function cargarFinanzasObra() {
       }
     });
   }
+
+  // Curva S / EVM
+  renderCurvaS(d);
 
   // Costes por tipo
   const costeTipoEl = document.getElementById('finanzasCosteTipo');
@@ -13833,6 +13848,61 @@ async function cargarFinanzasObra() {
         }).join('')
       : '<div style="color:var(--muted);font-size:13px;text-align:center;padding:20px 0">Sin hitos pendientes 🎉</div>';
   }
+}
+
+function renderCurvaS(d) {
+  const ctx = document.getElementById('chartCurvaS');
+  if (!ctx || typeof Chart === 'undefined') return;
+  if (_chartCurvaS) { _chartCurvaS.destroy(); _chartCurvaS = null; }
+  const presupuesto = d.budget?.presupuesto_previsto || 0;
+  const fechaIni    = d.obra?.fecha_inicio;
+  const fechaFin    = d.obra?.fecha_fin_prevista;
+  const porMes      = d.por_mes || [];
+  const ev          = d.kpis?.ev ?? null;
+  if (!presupuesto || !fechaIni || !fechaFin) return;
+  // Generar etiquetas mensuales desde inicio hasta fin previsto
+  const months = [];
+  let cur = new Date(fechaIni.slice(0,7) + '-01');
+  const finDate = new Date(fechaFin.slice(0,7) + '-01');
+  while (cur <= finDate || months.length < 2) {
+    months.push(cur.toISOString().slice(0,7));
+    cur = new Date(cur.getFullYear(), cur.getMonth() + 1, 1);
+    if (months.length > 60) break;
+  }
+  const n = months.length;
+  // PV: rampa lineal 0 → presupuesto
+  const pvData = months.map((_, i) => Math.round(presupuesto * (i + 1) / n));
+  // AC: costes acumulados reales
+  const acMap = {};
+  porMes.forEach(m => { acMap[m.mes] = Number(m.total) || 0; });
+  let cumAC = 0;
+  const acData = months.map(m => {
+    if (acMap[m] !== undefined) { cumAC += acMap[m]; return cumAC; }
+    return null;
+  });
+  // EV: punto único en el mes actual
+  const hoyMes = new Date().toISOString().slice(0,7);
+  const hoyIdx = months.indexOf(hoyMes);
+  const evData = months.map((_, i) => (i === hoyIdx && ev !== null ? ev : null));
+  _chartCurvaS = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: months,
+      datasets: [
+        { label: 'PV — Valor Planificado', data: pvData, borderColor: '#6366f1', backgroundColor: 'rgba(99,102,241,0.07)', fill: true, tension: 0, pointRadius: 0, borderWidth: 2 },
+        { label: 'AC — Coste Real Acumulado', data: acData, borderColor: '#f59e0b', backgroundColor: 'rgba(245,158,11,0.07)', fill: false, tension: 0.25, pointRadius: 2, borderWidth: 2, spanGaps: false },
+        { label: 'EV — Valor Ganado', data: evData, borderColor: '#10b981', backgroundColor: '#10b981', pointRadius: 8, pointHoverRadius: 10, pointStyle: 'star', showLine: false, borderWidth: 0 },
+      ]
+    },
+    options: {
+      plugins: {
+        legend: { position: 'top', labels: { boxWidth: 12, font: { size: 11 } } },
+        tooltip: { callbacks: { label: c => `${c.dataset.label}: €${(c.raw||0).toLocaleString('es-ES')}` } }
+      },
+      scales: { y: { ticks: { callback: v => v >= 1000000 ? '€'+(v/1000000).toFixed(1)+'M' : v >= 1000 ? '€'+(v/1000).toFixed(0)+'k' : '€'+v } } },
+      responsive: true, maintainAspectRatio: false,
+    }
+  });
 }
 
 function exportarFinanzas() {

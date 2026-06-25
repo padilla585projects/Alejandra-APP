@@ -14597,11 +14597,10 @@ async function getFinancieroObra(obraId, request, env) {
                            COUNT(*) as num_contratos
                     FROM contratos_obra WHERE obra_id=? AND empresa_id=? AND estado NOT IN ('cancelado','borrador')`)
       .bind(obraId, empId).first(),
-    // Costes por mes (Ãºltimos 12 meses)
+    // Costes por mes (historia completa para Curva S)
     env.DB.prepare(`SELECT strftime('%Y-%m', fecha) as mes,
                            COALESCE(SUM(importe),0) as total
                     FROM costes_obra WHERE obra_id=? AND empresa_id=?
-                      AND fecha >= date('now','-12 months')
                     GROUP BY mes ORDER BY mes`)
       .bind(obraId, empId).all(),
     // Costes por tipo/categorÃ­a
@@ -14638,7 +14637,19 @@ async function getFinancieroObra(obraId, request, env) {
     : null;
   const eac        = cpi && cpi > 0 ? gastado / cpi : (gastado + comprometido);
   const variacion  = presupuesto > 0 ? presupuesto - eac : null;
-  const spi        = null; // Schedule Performance Index â€” requires earned value baseline
+  const ev         = Math.round(avance * presupuesto);
+  // SPI — approximation: PV_to_date based on elapsed % of project timeline
+  let spi = null;
+  if (avance > 0 && presupuesto > 0 && obraR.fecha_inicio && obraR.fecha_fin_prevista) {
+    const ini   = new Date(obraR.fecha_inicio).getTime();
+    const fin   = new Date(obraR.fecha_fin_prevista).getTime();
+    const ahora = Date.now();
+    if (fin > ini) {
+      const pct_tiempo = Math.min(1, Math.max(0, (ahora - ini) / (fin - ini)));
+      const pv_todate  = pct_tiempo * presupuesto;
+      if (pv_todate > 0) spi = Math.round((ev / pv_todate) * 100) / 100;
+    }
+  }
   const pct_gastado  = presupuesto > 0 ? (gastado / presupuesto) * 100 : 0;
   const pct_comprometido = presupuesto > 0 ? (comprometido / presupuesto) * 100 : 0;
 
@@ -14673,6 +14684,8 @@ async function getFinancieroObra(obraId, request, env) {
     hitos_pendientes: (hitosR?.results) || [],
     kpis: {
       cpi: cpi ? Math.round(cpi * 100) / 100 : null,
+      spi: spi,
+      ev: ev,
       eac: Math.round(eac),
       variacion: variacion !== null ? Math.round(variacion) : null,
       pct_gastado: Math.round(pct_gastado * 10) / 10,
