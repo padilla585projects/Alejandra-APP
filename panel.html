@@ -598,6 +598,9 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
       <span class="nav-icon">🚫</span> NCRs / No Conformidades
       <span class="nav-badge" id="ncrObraBadge" style="display:none">!</span>
     </button>
+    <button class="nav-item" data-page="itpObra" onclick="navTo('itpObra')">
+      <span class="nav-icon">🔬</span> ITP / Plan Inspección
+    </button>
     <button class="nav-item" data-page="entregasMaterial" onclick="navTo('entregasMaterial')">
       <span class="nav-icon">🚚</span> Entregas Material
       <span class="nav-badge" id="entregasBadge" style="display:none">!</span>
@@ -2471,6 +2474,110 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
           <div class="modal-footer">
             <button class="btn btn-secondary" onclick="document.getElementById('modalNcr').style.display='none'">Cancelar</button>
             <button class="btn btn-primary" onclick="guardarNcr()">Guardar NCR</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ITP / PLAN DE INSPECCION Y ENSAYO (NEW-75) -->
+      <div class="page" id="pageItpObra">
+        <div class="page-title">🔬 ITP — Plan de Inspección y Ensayo</div>
+        <div class="page-sub">Inspection Test Plan · Puntos de Hold, Witness y Review · Seguimiento QA/QC por actividad</div>
+        <div class="tbl-toolbar" style="flex-wrap:wrap;gap:8px;margin-bottom:14px">
+          <select class="tbl-search" id="filterItpObra" style="min-width:220px" onchange="cargarItp()">
+            <option value="">🏗 Todas las obras</option>
+          </select>
+          <select class="tbl-search" id="filterItpEstado" style="min-width:150px" onchange="cargarItp()">
+            <option value="">Todos los estados</option>
+            <option value="activo">✅ Activo</option>
+            <option value="cerrado">🔒 Cerrado</option>
+          </select>
+          <button class="btn btn-primary" onclick="abrirModalItp()">+ Nuevo ITP</button>
+          <button class="btn btn-secondary" onclick="cargarItp()">🔄 Actualizar</button>
+        </div>
+        <div id="itpKpiStrip" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:12px;margin-bottom:18px"></div>
+        <div class="tbl-wrap"><div id="tblItp"></div></div>
+
+        <!-- MODAL DETALLE ITP (items) -->
+        <div class="modal-overlay" id="modalItpDetalle" onclick="if(event.target===this)cerrarModalItpDetalle()">
+          <div class="modal" style="max-width:900px;width:98%">
+            <div class="modal-header">
+              <span id="modalItpDetalleTitle">ITP</span>
+              <button class="modal-close" onclick="cerrarModalItpDetalle()">✕</button>
+            </div>
+            <div class="modal-body" style="padding:20px">
+              <div id="itpMetaHeader" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;margin-bottom:18px;background:var(--surface2);padding:12px;border-radius:8px;font-size:13px"></div>
+              <!-- Formulario añadir ítem -->
+              <div style="font-weight:700;font-size:14px;margin-bottom:8px">📋 Actividades de Inspección</div>
+              <div style="display:grid;grid-template-columns:1fr 80px 90px 90px auto;gap:8px;align-items:end;margin-bottom:14px;flex-wrap:wrap">
+                <input class="form-control" id="itpItemActividad" placeholder="Descripción de la actividad">
+                <select class="form-control" id="itpItemTipo">
+                  <option value="H">H — Hold</option>
+                  <option value="W">W — Witness</option>
+                  <option value="R" selected>R — Review</option>
+                  <option value="I">I — Info</option>
+                </select>
+                <input class="form-control" id="itpItemResponsable" placeholder="Responsable" value="Contratista">
+                <input class="form-control" id="itpItemDocRef" placeholder="Doc. ref.">
+                <button class="btn btn-primary" style="white-space:nowrap" onclick="agregarItpItem()">+ Añadir</button>
+              </div>
+              <div class="tbl-wrap"><div id="tblItpItems"></div></div>
+              <input type="hidden" id="itpDetalleId">
+            </div>
+            <div class="modal-footer">
+              <button class="btn btn-secondary" onclick="cerrarModalItpDetalle()">Cerrar</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- MODAL CREAR/EDITAR ITP -->
+        <div class="modal-overlay" id="modalItp" onclick="if(event.target===this)cerrarModalItp()">
+          <div class="modal" style="max-width:580px;width:96%">
+            <div class="modal-header">
+              <span id="modalItpTitle">Nuevo ITP</span>
+              <button class="modal-close" onclick="cerrarModalItp()">✕</button>
+            </div>
+            <div class="modal-body" style="padding:20px">
+              <input type="hidden" id="itpId">
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
+                <div style="grid-column:1/-1">
+                  <label class="form-label">Título *</label>
+                  <input class="form-control" id="itpTitulo" placeholder="Título del ITP — ej: Instalación de cimentaciones">
+                </div>
+                <div>
+                  <label class="form-label">Obra</label>
+                  <select class="form-control" id="itpObraId">
+                    <option value="">Sin obra específica</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="form-label">Disciplina</label>
+                  <input class="form-control" id="itpDisciplina" placeholder="Civil, Eléctrico, Mecánico…">
+                </div>
+                <div>
+                  <label class="form-label">Revisión</label>
+                  <input class="form-control" id="itpRevision" value="R0" placeholder="R0, R1, A…">
+                </div>
+                <div>
+                  <label class="form-label">Estado</label>
+                  <select class="form-control" id="itpEstado">
+                    <option value="activo">✅ Activo</option>
+                    <option value="cerrado">🔒 Cerrado</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="form-label">Responsable</label>
+                  <input class="form-control" id="itpResponsable" placeholder="Encargado del ITP">
+                </div>
+                <div style="grid-column:1/-1">
+                  <label class="form-label">Notas</label>
+                  <textarea class="form-control" id="itpNotas" rows="2" placeholder="Alcance, normativa de referencia, condiciones especiales…"></textarea>
+                </div>
+              </div>
+            </div>
+            <div class="modal-footer">
+              <button class="btn btn-secondary" onclick="cerrarModalItp()">Cancelar</button>
+              <button class="btn btn-primary" onclick="guardarItp()">💾 Guardar</button>
+            </div>
           </div>
         </div>
       </div>
@@ -5100,6 +5207,7 @@ const PAGE_TITLES = {
   visitasObra: '🪪 Registro de Visitas de Obra',
   alertasStock: '📉 Alertas de Stock',
   ordenesCompra: '🛒 Órdenes de Compra',
+  itpObra: '🔬 ITP / Plan de Inspección y Ensayo',
 };
 
 const PAGE_LOADERS = {
@@ -5175,6 +5283,7 @@ const PAGE_LOADERS = {
   visitasObra: cargarVisitasObra,
   alertasStock:  cargarAlertasStock,
   ordenesCompra: cargarOrdenesCompra,
+  itpObra:       cargarItp,
 };
 
 let currentPage = '';
@@ -5279,6 +5388,7 @@ const SYNC_INTERVALS = {
   visitasObra:     90,
   alertasStock:    60,
   ordenesCompra:   90,
+  itpObra:        120,
 };
 
 let _syncTimer = null, _syncLabelTimer = null, _syncLastTs = null;
@@ -15640,6 +15750,210 @@ async function eliminarNcr() {
   } else {
     showToast('Error al eliminar', 'error');
   }
+}
+
+// ── ITP / PLAN DE INSPECCION Y ENSAYO (NEW-75) ──────────────────────────────
+let tblItp      = null;
+let tblItpItems = null;
+let _itpData    = [];
+
+const ITP_TIPO_COLOR  = { H:'#ef4444', W:'#f97316', R:'#3b82f6', I:'#6b7280' };
+const ITP_TIPO_LABEL  = { H:'🔴 Hold', W:'🟠 Witness', R:'🔵 Review', I:'⚪ Info' };
+const ITP_RES_COLOR   = { pendiente:'#6b7280', conforme:'#10b981', no_conforme:'#ef4444', na:'#9ca3af' };
+const ITP_RES_LABEL   = { pendiente:'⏳ Pendiente', conforme:'✅ Conforme', no_conforme:'❌ No conforme', na:'— N/A' };
+
+async function cargarItp() {
+  if (document.getElementById('filterItpObra')?.options.length <= 1) poblarSelectObras('filterItpObra');
+  const obraId = document.getElementById('filterItpObra')?.value || '';
+  const estado = document.getElementById('filterItpEstado')?.value || '';
+  let url = '/itp-obra?';
+  if (obraId) url += `obra_id=${obraId}&`;
+  if (estado) url += `estado=${estado}&`;
+  const r = await api(url);
+  _itpData = r.items || [];
+
+  const totalItems  = _itpData.reduce((s,i) => s + (i.total_items||0), 0);
+  const conformes   = _itpData.reduce((s,i) => s + (i.conformes||0), 0);
+  const noCon       = _itpData.reduce((s,i) => s + (i.no_conformes||0), 0);
+  const pendientes  = _itpData.reduce((s,i) => s + (i.pendientes||0), 0);
+  document.getElementById('itpKpiStrip').innerHTML = [
+    { icon:'🔬', value:_itpData.length,  label:'ITPs', cls:'' },
+    { icon:'📋', value:totalItems,       label:'Actividades total', cls:'' },
+    { icon:'✅', value:conformes,        label:'Conformes', cls: conformes>0?'ok':'' },
+    { icon:'❌', value:noCon,            label:'No conformes', cls: noCon>0?'danger':'' },
+    { icon:'⏳', value:pendientes,       label:'Pendientes', cls: pendientes>0?'warn':'' },
+  ].map(k=>`<div class="kpi-card" style="padding:14px"><div class="kpi-icon" style="font-size:20px">${k.icon}</div>
+    <div class="kpi-value ${k.cls}" style="font-size:22px">${k.value}</div>
+    <div class="kpi-label">${k.label}</div></div>`).join('');
+
+  const cols = [
+    { title:'Título', field:'titulo', minWidth:220, sorter:'string' },
+    { title:'Obra', field:'obra_nombre', width:150 },
+    { title:'Disciplina', field:'disciplina', width:130 },
+    { title:'Rev.', field:'revision', width:70, hozAlign:'center' },
+    { title:'Estado', field:'estado', width:100,
+      formatter: c => c.getValue()==='activo'
+        ? '<span style="color:var(--success);font-weight:700">✅ Activo</span>'
+        : '<span style="color:var(--muted);font-weight:700">🔒 Cerrado</span>' },
+    { title:'Items', field:'total_items', width:75, hozAlign:'center',
+      formatter: c => `<b>${c.getValue()||0}</b>` },
+    { title:'Conf.', field:'conformes', width:70, hozAlign:'center',
+      formatter: c => `<span style="color:var(--success)">${c.getValue()||0}</span>` },
+    { title:'No conf.', field:'no_conformes', width:80, hozAlign:'center',
+      formatter: c => { const v=c.getValue()||0; return `<span style="color:${v>0?'var(--danger)':'inherit'}">${v}</span>`; } },
+    { title:'Responsable', field:'responsable', width:140 },
+    { title:'Acciones', field:'id', width:120, headerSort:false,
+      formatter: c => {
+        const id=c.getValue();
+        return `<button class="btn btn-primary btn-sm" onclick="verItpDetalle(${id})">📋 Ver</button>
+                <button class="btn btn-secondary btn-sm" onclick="editarItp(${id})">✏️</button>
+                <button class="btn btn-danger btn-sm" onclick="eliminarItp(${id})">🗑</button>`;
+      }
+    },
+  ];
+  if (tblItp) { tblItp.replaceData(_itpData); return; }
+  tblItp = new Tabulator('#tblItp', {
+    data:_itpData, layout:'fitColumns', pagination:'local', paginationSize:20, responsiveLayout:'collapse',
+    placeholder:'<div class="empty-state"><div class="empty-icon">🔬</div><div class="empty-text">Sin ITPs registrados</div></div>',
+    columns: cols
+  });
+}
+
+async function verItpDetalle(id) {
+  const itp = _itpData.find(i=>i.id===id);
+  if (!itp) return;
+  document.getElementById('itpDetalleId').value = id;
+  document.getElementById('modalItpDetalleTitle').textContent = `🔬 ${itp.titulo} (${itp.revision||'R0'})`;
+  document.getElementById('itpMetaHeader').innerHTML = [
+    ['🏗 Obra', itp.obra_nombre||'—'],
+    ['⚙️ Disciplina', itp.disciplina||'—'],
+    ['📌 Revisión', itp.revision||'R0'],
+    ['👤 Responsable', itp.responsable||'—'],
+    ['📊 Estado', itp.estado==='activo'?'✅ Activo':'🔒 Cerrado'],
+  ].map(([k,v])=>`<div><div style="font-size:11px;color:var(--muted);margin-bottom:2px">${k}</div><div style="font-weight:600">${v}</div></div>`).join('');
+  document.getElementById('modalItpDetalle').classList.add('show');
+  await cargarItpItems(id);
+}
+
+async function cargarItpItems(itpId) {
+  const r = await api(`/itp-obra/${itpId}/items`);
+  const items = r.items || [];
+  if (tblItpItems) { tblItpItems.replaceData(items); return; }
+  tblItpItems = new Tabulator('#tblItpItems', {
+    data:items, layout:'fitColumns', pagination:'local', paginationSize:20,
+    placeholder:'<div class="empty-state" style="padding:20px"><div class="empty-icon">📋</div><div class="empty-text">Sin actividades — añade items arriba</div></div>',
+    columns:[
+      { title:'Nº', field:'orden', width:55, hozAlign:'center' },
+      { title:'Actividad', field:'actividad', minWidth:220 },
+      { title:'Tipo', field:'tipo_insp', width:110, hozAlign:'center',
+        formatter: c => { const v=c.getValue()||'R'; return `<span style="background:${ITP_TIPO_COLOR[v]||'#888'};color:#fff;padding:2px 8px;border-radius:9999px;font-size:11px;font-weight:700">${v}</span> ${ITP_TIPO_LABEL[v]?.split(' ')[1]||''}`;} },
+      { title:'Responsable', field:'responsable', width:130 },
+      { title:'Doc. Ref.', field:'doc_ref', width:100 },
+      { title:'Resultado', field:'resultado', width:140,
+        editor:'select', editorParams:{ values:{ pendiente:'⏳ Pendiente', conforme:'✅ Conforme', no_conforme:'❌ No conforme', na:'N/A' } },
+        cellEdited: async c => {
+          const id=c.getRow().getData().id;
+          await api(`/itp-obra/${itpId}/items/${id}`, { method:'PUT', body:JSON.stringify({ resultado:c.getValue() }) });
+          toast('Resultado actualizado','ok');
+          tblItpItems=null;
+          cargarItpItems(itpId);
+          tblItp=null; cargarItp();
+        },
+        formatter: c => { const v=c.getValue()||'pendiente'; return `<span style="color:${ITP_RES_COLOR[v]};font-weight:700">${ITP_RES_LABEL[v]||v}</span>`; }
+      },
+      { title:'Insp. por', field:'inspeccionado_por', width:120 },
+      { title:'Fecha', field:'fecha_insp', width:100, formatter:c=>fmtFecha(c.getValue()||'') },
+      { title:'Observaciones', field:'observaciones', minWidth:160 },
+      { title:'', field:'id', width:60, headerSort:false,
+        formatter: c => `<button class="btn btn-danger btn-sm" style="padding:2px 6px" onclick="eliminarItpItem(${c.getValue()},${itpId})">🗑</button>` },
+    ]
+  });
+}
+
+async function agregarItpItem() {
+  const itpId   = parseInt(document.getElementById('itpDetalleId')?.value||0);
+  const actividad = document.getElementById('itpItemActividad')?.value?.trim();
+  const tipo_insp = document.getElementById('itpItemTipo')?.value || 'R';
+  const responsable = document.getElementById('itpItemResponsable')?.value?.trim() || '';
+  const doc_ref = document.getElementById('itpItemDocRef')?.value?.trim() || '';
+  if (!itpId || !actividad) { toast('Actividad obligatoria','err'); return; }
+  const r = await api(`/itp-obra/${itpId}/items`, { method:'POST', body:JSON.stringify({ actividad, tipo_insp, responsable, doc_ref }) });
+  if (r.ok||r.id) {
+    document.getElementById('itpItemActividad').value = '';
+    document.getElementById('itpItemDocRef').value = '';
+    if (tblItpItems) { tblItpItems.destroy(); tblItpItems=null; }
+    await cargarItpItems(itpId);
+    tblItp=null; cargarItp();
+  } else toast(r.error||'Error al añadir','err');
+}
+
+async function eliminarItpItem(itemId, itpId) {
+  if (!confirm('¿Eliminar esta actividad del ITP?')) return;
+  const r = await api(`/itp-obra/${itpId}/items/${itemId}`, { method:'DELETE' });
+  if (r.ok) { if (tblItpItems){tblItpItems.destroy();tblItpItems=null;} await cargarItpItems(itpId); tblItp=null; cargarItp(); }
+  else toast('Error al eliminar','err');
+}
+
+function abrirModalItp() {
+  document.getElementById('itpId').value = '';
+  document.getElementById('itpTitulo').value = '';
+  document.getElementById('itpDisciplina').value = '';
+  document.getElementById('itpRevision').value = 'R0';
+  document.getElementById('itpEstado').value = 'activo';
+  document.getElementById('itpResponsable').value = '';
+  document.getElementById('itpNotas').value = '';
+  if (document.getElementById('itpObraId')?.options.length <= 1) poblarSelectObras('itpObraId');
+  document.getElementById('modalItpTitle').textContent = 'Nuevo ITP';
+  document.getElementById('modalItp').classList.add('show');
+}
+
+async function editarItp(id) {
+  const itp = _itpData.find(i=>i.id===id);
+  if (!itp) return;
+  document.getElementById('itpId').value = id;
+  document.getElementById('itpTitulo').value = itp.titulo||'';
+  document.getElementById('itpDisciplina').value = itp.disciplina||'';
+  document.getElementById('itpRevision').value = itp.revision||'R0';
+  document.getElementById('itpEstado').value = itp.estado||'activo';
+  document.getElementById('itpResponsable').value = itp.responsable||'';
+  document.getElementById('itpNotas').value = itp.notas||'';
+  if (document.getElementById('itpObraId')?.options.length <= 1) await poblarSelectObras('itpObraId');
+  if (itp.obra_id) document.getElementById('itpObraId').value = itp.obra_id;
+  document.getElementById('modalItpTitle').textContent = `Editar ITP: ${itp.titulo}`;
+  document.getElementById('modalItp').classList.add('show');
+}
+
+async function guardarItp() {
+  const id = parseInt(document.getElementById('itpId').value||'0')||0;
+  const body = {
+    titulo:      document.getElementById('itpTitulo')?.value?.trim(),
+    disciplina:  document.getElementById('itpDisciplina')?.value?.trim()||null,
+    revision:    document.getElementById('itpRevision')?.value?.trim()||'R0',
+    estado:      document.getElementById('itpEstado')?.value||'activo',
+    responsable: document.getElementById('itpResponsable')?.value?.trim()||null,
+    notas:       document.getElementById('itpNotas')?.value?.trim()||null,
+    obra_id:     document.getElementById('itpObraId')?.value||null,
+  };
+  if (!body.titulo) { toast('Título obligatorio','err'); return; }
+  const method = id ? 'PUT' : 'POST';
+  const url    = id ? `/itp-obra/${id}` : '/itp-obra';
+  const r = await api(url, { method, body:JSON.stringify(body) });
+  if (r.ok||r.id) { toast(id?'Actualizado':`ITP creado`,'ok'); cerrarModalItp(); tblItp=null; cargarItp(); }
+  else toast(r.error||'Error','err');
+}
+
+async function eliminarItp(id) {
+  const itp = _itpData.find(i=>i.id===id);
+  if (!confirm(`¿Eliminar ITP "${itp?.titulo||id}"? Se eliminarán también todas sus actividades.`)) return;
+  const r = await api(`/itp-obra/${id}`, { method:'DELETE' });
+  if (r.ok) { toast('ITP eliminado','ok'); tblItp=null; cargarItp(); }
+  else toast('Error al eliminar','err');
+}
+
+function cerrarModalItp() { document.getElementById('modalItp').classList.remove('show'); }
+function cerrarModalItpDetalle() {
+  document.getElementById('modalItpDetalle').classList.remove('show');
+  if (tblItpItems) { tblItpItems.destroy(); tblItpItems=null; }
 }
 
 async function cargarEntregasMaterial() {

@@ -4721,6 +4721,26 @@ export default {
         if (method === 'PUT')    return await actualizarVisitaObra(_vid, request, env);
         if (method === 'DELETE') return await eliminarVisitaObra(_vid, request, env);
       }
+      // ── ITP / Plan de Inspeccion y Ensayo (NEW-75) ───────────────────────────────
+      if (path === '/itp-obra' && method === 'GET')  return await getItp(request, env);
+      if (path === '/itp-obra' && method === 'POST') return await crearItp(request, env);
+      if (path.startsWith('/itp-obra/')) {
+        const _itpParts = path.split('/itp-obra/')[1].split('/');
+        const _itpId    = parseInt(_itpParts[0]);
+        if (_itpParts[1] === 'items') {
+          if (method === 'GET')  return await getItpItems(_itpId, request, env);
+          if (method === 'POST') return await crearItpItem(_itpId, request, env);
+        }
+        if (_itpParts[1] === 'items' && _itpParts[2]) {
+          const _itemId = parseInt(_itpParts[2]);
+          if (method === 'PUT')    return await actualizarItpItem(_itemId, request, env);
+          if (method === 'DELETE') return await eliminarItpItem(_itemId, request, env);
+        }
+        if (!_itpParts[1]) {
+          if (method === 'PUT')    return await actualizarItp(_itpId, request, env);
+          if (method === 'DELETE') return await eliminarItp(_itpId, request, env);
+        }
+      }
       // ── Ordenes de Compra (NEW-74) ─────────────────────────────────────────────
       if (path === '/ordenes-compra' && method === 'GET')  return await getOrdenesCompra(request, env);
       if (path === '/ordenes-compra' && method === 'POST') return await crearOrdenCompra(request, env);
@@ -16808,6 +16828,159 @@ async function eliminarOcLinea(id, request, env) {
   await env.DB.prepare(
     `UPDATE ordenes_compra SET importe_total=(SELECT COALESCE(SUM(cantidad*precio_unit),0) FROM oc_lineas WHERE oc_id=?), updated_at=datetime('now') WHERE id=?`
   ).bind(linea.oc_id, linea.oc_id).run();
+  return json({ ok: true, deleted: true });
+}
+
+// ── ITP / Plan de Inspeccion y Ensayo (NEW-75) ────────────────────────────
+
+async function ensureItpTable(env) {
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS itp_obra (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    empresa_id  INTEGER NOT NULL,
+    obra_id     INTEGER,
+    titulo      TEXT NOT NULL,
+    revision    TEXT DEFAULT 'R0',
+    disciplina  TEXT,
+    estado      TEXT NOT NULL DEFAULT 'activo',
+    responsable TEXT,
+    notas       TEXT,
+    created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
+  )`).run();
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS itp_items (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    itp_id          INTEGER NOT NULL REFERENCES itp_obra(id) ON DELETE CASCADE,
+    orden           INTEGER DEFAULT 0,
+    actividad       TEXT NOT NULL,
+    tipo_insp       TEXT NOT NULL DEFAULT 'R',
+    responsable     TEXT,
+    doc_ref         TEXT,
+    resultado       TEXT NOT NULL DEFAULT 'pendiente',
+    inspeccionado_por TEXT,
+    fecha_insp      TEXT,
+    observaciones   TEXT,
+    created_at      TEXT NOT NULL DEFAULT (datetime('now'))
+  )`).run();
+}
+
+async function getItp(request, env) {
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  await ensureItpTable(env);
+  const url = new URL(request.url);
+  const obra_id = url.searchParams.get('obra_id');
+  const estado  = url.searchParams.get('estado');
+  let q = `SELECT itp.*,
+              o.nombre as obra_nombre,
+              COUNT(it.id) as total_items,
+              SUM(CASE WHEN it.resultado='conforme'    THEN 1 ELSE 0 END) as conformes,
+              SUM(CASE WHEN it.resultado='no_conforme' THEN 1 ELSE 0 END) as no_conformes,
+              SUM(CASE WHEN it.resultado='pendiente'   THEN 1 ELSE 0 END) as pendientes
+            FROM itp_obra itp
+            LEFT JOIN obras o ON o.id = itp.obra_id
+            LEFT JOIN itp_items it ON it.itp_id = itp.id
+            WHERE itp.empresa_id = ?`;
+  const params = [empresa_id];
+  if (obra_id) { q += ' AND itp.obra_id = ?'; params.push(parseInt(obra_id)); }
+  if (estado)  { q += ' AND itp.estado = ?';  params.push(estado); }
+  q += ' GROUP BY itp.id ORDER BY itp.created_at DESC';
+  const { results } = await env.DB.prepare(q).bind(...params).all();
+  return json({ items: results });
+}
+
+async function crearItp(request, env) {
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  await ensureItpTable(env);
+  const body = await request.json();
+  const { titulo, revision='R0', disciplina, estado='activo', responsable, notas, obra_id } = body;
+  if (!titulo) return err('Titulo requerido', 400);
+  const r = await env.DB.prepare(`
+    INSERT INTO itp_obra (empresa_id, obra_id, titulo, revision, disciplina, estado, responsable, notas)
+    VALUES (?,?,?,?,?,?,?,?)
+  `).bind(empresa_id, obra_id||null, titulo, revision, disciplina||null, estado, responsable||null, notas||null).run();
+  return json({ ok: true, id: r.meta.last_row_id }, 201);
+}
+
+async function actualizarItp(id, request, env) {
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const itp = await env.DB.prepare('SELECT id FROM itp_obra WHERE id=? AND empresa_id=?').bind(id, empresa_id).first();
+  if (!itp) return err('ITP no encontrado', 404);
+  const body = await request.json();
+  const campos = ['titulo','revision','disciplina','estado','responsable','notas','obra_id'];
+  const sets = [], vals = [];
+  campos.forEach(f => { if (f in body) { sets.push(`${f}=?`); vals.push(body[f]); } });
+  if (!sets.length) return json({ ok: true });
+  sets.push("updated_at=datetime('now')");
+  vals.push(id, empresa_id);
+  await env.DB.prepare(`UPDATE itp_obra SET ${sets.join(',')} WHERE id=? AND empresa_id=?`).bind(...vals).run();
+  return json({ ok: true });
+}
+
+async function eliminarItp(id, request, env) {
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const itp = await env.DB.prepare('SELECT id FROM itp_obra WHERE id=? AND empresa_id=?').bind(id, empresa_id).first();
+  if (!itp) return err('ITP no encontrado', 404);
+  await env.DB.prepare('DELETE FROM itp_obra WHERE id=? AND empresa_id=?').bind(id, empresa_id).run();
+  return json({ ok: true, deleted: true });
+}
+
+async function getItpItems(itpId, request, env) {
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  await ensureItpTable(env);
+  const itp = await env.DB.prepare('SELECT id FROM itp_obra WHERE id=? AND empresa_id=?').bind(itpId, empresa_id).first();
+  if (!itp) return err('ITP no encontrado', 404);
+  const { results } = await env.DB.prepare('SELECT * FROM itp_items WHERE itp_id=? ORDER BY orden, id').bind(itpId).all();
+  return json({ items: results });
+}
+
+async function crearItpItem(itpId, request, env) {
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  await ensureItpTable(env);
+  const itp = await env.DB.prepare('SELECT id FROM itp_obra WHERE id=? AND empresa_id=?').bind(itpId, empresa_id).first();
+  if (!itp) return err('ITP no encontrado', 404);
+  const body = await request.json();
+  const { actividad, tipo_insp='R', responsable, doc_ref, resultado='pendiente' } = body;
+  if (!actividad) return err('Actividad requerida', 400);
+  // Auto orden
+  const countRow = await env.DB.prepare('SELECT COUNT(*) as n FROM itp_items WHERE itp_id=?').bind(itpId).first();
+  const orden = (countRow?.n || 0) + 1;
+  const r = await env.DB.prepare(`
+    INSERT INTO itp_items (itp_id, orden, actividad, tipo_insp, responsable, doc_ref, resultado)
+    VALUES (?,?,?,?,?,?,?)
+  `).bind(itpId, orden, actividad, tipo_insp, responsable||null, doc_ref||null, resultado).run();
+  return json({ ok: true, id: r.meta.last_row_id }, 201);
+}
+
+async function actualizarItpItem(id, request, env) {
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const item = await env.DB.prepare(
+    `SELECT it.id FROM itp_items it JOIN itp_obra itp ON itp.id=it.itp_id WHERE it.id=? AND itp.empresa_id=?`
+  ).bind(id, empresa_id).first();
+  if (!item) return err('Item no encontrado', 404);
+  const body = await request.json();
+  const campos = ['actividad','tipo_insp','responsable','doc_ref','resultado','inspeccionado_por','fecha_insp','observaciones','orden'];
+  const sets = [], vals = [];
+  campos.forEach(f => { if (f in body) { sets.push(`${f}=?`); vals.push(body[f]); } });
+  if (!sets.length) return json({ ok: true });
+  vals.push(id);
+  await env.DB.prepare(`UPDATE itp_items SET ${sets.join(',')} WHERE id=?`).bind(...vals).run();
+  return json({ ok: true });
+}
+
+async function eliminarItpItem(id, request, env) {
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const item = await env.DB.prepare(
+    `SELECT it.id FROM itp_items it JOIN itp_obra itp ON itp.id=it.itp_id WHERE it.id=? AND itp.empresa_id=?`
+  ).bind(id, empresa_id).first();
+  if (!item) return err('Item no encontrado', 404);
+  await env.DB.prepare('DELETE FROM itp_items WHERE id=?').bind(id).run();
   return json({ ok: true, deleted: true });
 }
 
