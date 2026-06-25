@@ -953,6 +953,15 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
         <div class="module-count" id="cntCalendario" style="background:#6366f1;display:none">0</div>
         <span class="drag-handle">⠿</span><svg class="module-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
       </div>
+      <div class="module-card" id="cardReuniones" onclick="navTo('reuniones')" style="display:none;border-left:3px solid #0ea5e9">
+        <div class="module-emoji">📝</div>
+        <div class="module-info">
+          <div class="module-name">Actas de Reunión</div>
+          <div class="module-desc">Reuniones, acuerdos y seguimiento</div>
+        </div>
+        <div class="module-count" id="cntReuniones" style="background:#0ea5e9;display:none">0</div>
+        <span class="drag-handle">⠿</span><svg class="module-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
+      </div>
       <div class="module-card" id="cardIncidencias" onclick="navTo('incidencias')" style="display:none;border-left:3px solid #ef4444">
         <div class="module-emoji">🚨</div>
         <div class="module-info">
@@ -1289,6 +1298,7 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
         <button onclick="dashSelTab('rfis');setTimeout(rfiNuevo,200)" style="display:flex;align-items:center;gap:4px;padding:6px 10px;background:#f59e0b22;color:#f59e0b;border:1px solid #f59e0b44;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0">📋 Nueva RFI</button>
         <button onclick="showScreen('incidencias');setTimeout(nuevaIncidencia,300)" style="display:flex;align-items:center;gap:4px;padding:6px 10px;background:#ef444422;color:#ef4444;border:1px solid #ef444444;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0">🚨 Incidencia</button>
         <button onclick="dashSelTab('diario');setTimeout(diarioNuevo,200)" style="display:flex;align-items:center;gap:4px;padding:6px 10px;background:#22c55e22;color:#22c55e;border:1px solid #22c55e44;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0">📓 Diario</button>
+        <button onclick="navTo('reuniones');setTimeout(actaNueva,200)" style="display:flex;align-items:center;gap:4px;padding:6px 10px;background:#0ea5e922;color:#0ea5e9;border:1px solid #0ea5e944;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0">📝 Acta</button>
         <button onclick="alejandraAbrir()" style="display:flex;align-items:center;gap:4px;padding:6px 10px;background:var(--accent)22;color:var(--accent);border:1px solid var(--accent)44;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0">🤖 Alejandra</button>
       </div>
     </div>
@@ -1815,6 +1825,92 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
         <button onclick="galeriaCompartirFoto()" style="flex:1;padding:8px;background:#ec489920;color:#ec4899;border:1px solid #ec489940;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">📤 Compartir</button>
         <button id="galeriaLightboxBtnBorrar" onclick="galeriaBorrarFoto()" style="display:none;flex:0 0 80px;padding:8px;background:#ef444420;color:#ef4444;border:1px solid #ef444440;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">🗑 Borrar</button>
         <button onclick="galeriaCloseLightbox()" style="flex:0 0 80px;padding:8px;background:var(--surface);border:1px solid var(--border);border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;color:var(--text)">Cerrar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ACTAS DE REUNIÓN (NEW-36) -->
+  <div id="screenReuniones" class="screen" style="padding:0;display:none;flex-direction:column">
+    <div style="padding:10px 14px 8px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;align-items:center;gap:8px">
+      <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:17px;color:var(--text);flex:1">📝 Actas de Reunión</div>
+      <button onclick="actaNueva()" style="background:var(--accent);color:#fff;border:none;border-radius:9px;padding:7px 14px;font-weight:800;font-size:12px;cursor:pointer">+ Nueva</button>
+    </div>
+    <!-- Filtros -->
+    <div style="padding:8px 14px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;gap:6px;overflow-x:auto">
+      <button id="reuFil_todas"   onclick="reuFiltrar('todas')"   style="padding:4px 10px;border-radius:20px;border:1px solid var(--accent);background:var(--accent);color:#fff;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap">Todas</button>
+      <button id="reuFil_progreso"  onclick="reuFiltrar('progreso')"  style="padding:4px 10px;border-radius:20px;border:1px solid var(--border);background:transparent;color:var(--muted);font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap">Progreso</button>
+      <button id="reuFil_seguridad" onclick="reuFiltrar('seguridad')" style="padding:4px 10px;border-radius:20px;border:1px solid var(--border);background:transparent;color:var(--muted);font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap">Seguridad</button>
+      <button id="reuFil_cliente"   onclick="reuFiltrar('cliente')"   style="padding:4px 10px;border-radius:20px;border:1px solid var(--border);background:transparent;color:var(--muted);font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap">Cliente</button>
+    </div>
+    <div id="reunionesList" style="padding:12px 14px;overflow-y:auto;flex:1">
+      <div class="empty-state">Cargando...</div>
+    </div>
+  </div>
+
+  <!-- MODAL ACTA (NEW-36) -->
+  <div class="modal-overlay" id="modalActa" onclick="if(event.target===this)actaCerrarModal()" style="display:none;align-items:flex-end;justify-content:center;padding:0">
+    <div style="background:var(--surface);width:100%;max-width:520px;border-radius:18px 18px 0 0;max-height:94vh;display:flex;flex-direction:column">
+      <div style="padding:16px 16px 10px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border);flex-shrink:0">
+        <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:15px;color:var(--text)" id="actaModalTitle">Nueva Acta de Reunión</div>
+        <button onclick="actaCerrarModal()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--muted);line-height:1">×</button>
+      </div>
+      <div style="padding:14px 16px;overflow-y:auto;flex:1">
+        <input type="hidden" id="actaEditId">
+        <div style="margin-bottom:11px">
+          <label style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Título *</label>
+          <input id="actaTitulo" type="text" placeholder="Ej: Reunión de seguimiento semana 26" style="width:100%;margin-top:4px;padding:9px 10px;border:1px solid var(--border);border-radius:9px;background:var(--card);color:var(--text);font-size:13px;box-sizing:border-box">
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:11px">
+          <div>
+            <label style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Fecha</label>
+            <input id="actaFecha" type="date" style="width:100%;margin-top:4px;padding:9px 10px;border:1px solid var(--border);border-radius:9px;background:var(--card);color:var(--text);font-size:13px;box-sizing:border-box">
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Tipo</label>
+            <select id="actaTipo" style="width:100%;margin-top:4px;padding:9px 10px;border:1px solid var(--border);border-radius:9px;background:var(--card);color:var(--text);font-size:13px">
+              <option value="progreso">📊 Progreso</option>
+              <option value="seguridad">🦺 Seguridad</option>
+              <option value="coordinacion">🤝 Coordinación</option>
+              <option value="cliente">🏢 Cliente</option>
+              <option value="otro">📋 Otro</option>
+            </select>
+          </div>
+        </div>
+        <div style="margin-bottom:11px">
+          <label style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Convocante</label>
+          <input id="actaConvocante" type="text" placeholder="Nombre de quien convoca" style="width:100%;margin-top:4px;padding:9px 10px;border:1px solid var(--border);border-radius:9px;background:var(--card);color:var(--text);font-size:13px;box-sizing:border-box">
+        </div>
+        <div style="margin-bottom:11px">
+          <label style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Asistentes</label>
+          <textarea id="actaAsistentes" rows="2" placeholder="Pedro García, Ana Martínez, Carlos López…" style="width:100%;margin-top:4px;padding:9px 10px;border:1px solid var(--border);border-radius:9px;background:var(--card);color:var(--text);font-size:13px;resize:none;box-sizing:border-box"></textarea>
+        </div>
+        <div style="margin-bottom:11px">
+          <label style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Resumen / Puntos tratados</label>
+          <textarea id="actaResumen" rows="4" placeholder="Descripción de los temas tratados en la reunión…" style="width:100%;margin-top:4px;padding:9px 10px;border:1px solid var(--border);border-radius:9px;background:var(--card);color:var(--text);font-size:13px;resize:none;box-sizing:border-box"></textarea>
+        </div>
+        <div style="margin-bottom:11px">
+          <label style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Acuerdos y acciones</label>
+          <textarea id="actaAcuerdos" rows="4" placeholder="1. Pedro revisa zanjas antes del viernes&#10;2. Ana solicita presupuesto de materiales&#10;3. Llamar al cliente el lunes…" style="width:100%;margin-top:4px;padding:9px 10px;border:1px solid var(--border);border-radius:9px;background:var(--card);color:var(--text);font-size:13px;resize:none;box-sizing:border-box"></textarea>
+          <div style="font-size:10px;color:var(--muted);margin-top:3px">💡 Alejandra puede crear tareas automáticamente desde estos acuerdos</div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:4px">
+          <div>
+            <label style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Próxima reunión</label>
+            <input id="actaProxima" type="date" style="width:100%;margin-top:4px;padding:9px 10px;border:1px solid var(--border);border-radius:9px;background:var(--card);color:var(--text);font-size:13px;box-sizing:border-box">
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Estado</label>
+            <select id="actaEstado" style="width:100%;margin-top:4px;padding:9px 10px;border:1px solid var(--border);border-radius:9px;background:var(--card);color:var(--text);font-size:13px">
+              <option value="borrador">✏️ Borrador</option>
+              <option value="firmada">✅ Firmada</option>
+              <option value="distribuida">📤 Distribuida</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <div style="padding:12px 16px;border-top:1px solid var(--border);flex-shrink:0;display:flex;gap:8px">
+        <button class="btn-primary" style="flex:1" onclick="actaGuardar()">💾 Guardar Acta</button>
+        <button onclick="actaGuardarYAlejandra()" style="padding:9px 12px;background:#a855f722;color:#a855f7;border:1px solid #a855f744;border-radius:10px;font-size:12px;font-weight:700;cursor:pointer">🤖 Guardar + crear tareas</button>
       </div>
     </div>
   </div>
@@ -5023,6 +5119,7 @@ function setupHomeModules() {
   const cardCal     = document.getElementById('cardCalendario');
   const cardGal     = document.getElementById('cardGaleria');
   const cardPartes  = document.getElementById('cardPartes');
+  const cardReu     = document.getElementById('cardReuniones');
   // Seguridad: sin tarjetas de inventario, pero sí Pedidos, Docs, Dashboard, Incidencias y Galería
   if (dept === 'seguridad') {
     if (cardB) cardB.style.display = 'none';
@@ -5035,6 +5132,7 @@ function setupHomeModules() {
     if (cardInc)  cardInc.style.display  = 'flex';
     if (cardCal)  cardCal.style.display  = 'flex';
     if (cardGal)  cardGal.style.display  = 'flex';
+    if (cardReu)  cardReu.style.display  = 'flex';
     if (cardPartes) cardPartes.style.display = 'none';
     const cardHerrSeg = document.getElementById('cardHerramientas');
     if (cardHerrSeg) cardHerrSeg.style.display = 'flex';
@@ -5052,13 +5150,14 @@ function setupHomeModules() {
   // Herramientas: visible para todos excepto seguridad
   const cardHerr = document.getElementById('cardHerramientas');
   if (cardHerr) cardHerr.style.display = 'flex';
-  // Documentación, Dashboard, Incidencias, Calendario, Galería y Partes: todos los depts activos
+  // Documentación, Dashboard, Incidencias, Calendario, Galería, Partes y Reuniones: todos los depts activos
   if (cardDocs)   cardDocs.style.display   = 'flex';
   if (cardDash)   cardDash.style.display   = 'flex';
   if (cardInc)    cardInc.style.display    = 'flex';
   if (cardCal)    cardCal.style.display    = 'flex';
   if (cardGal)    cardGal.style.display    = 'flex';
   if (cardPartes) cardPartes.style.display = 'flex';
+  if (cardReu)    cardReu.style.display    = 'flex';
   // #188: aplicar config de módulos (oculta tarjetas marcadas off por la empresa)
   applyModulosConfig();
   applyHomeOrder();
@@ -6014,6 +6113,11 @@ function navTo(target) {
   }
   if (target === 'incidencias') {
     showScreen('incidencias');
+    return;
+  }
+  if (target === 'reuniones') {
+    showScreen('reuniones');
+    reunionesCargar();
     return;
   }
   if (target === 'partes') {
@@ -11294,7 +11398,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '6.59';
+const APP_VERSION = '6.60';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -14136,6 +14240,184 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     document.getElementById('modalOrdenCambio').style.display = 'none';
   }
   window.ocCerrarModal = ocCerrarModal;
+
+  // ── ACTAS DE REUNIÓN (NEW-36) ─────────────────────────────────────────────────
+  let _actasData = [];
+  let _actaFiltro = 'todas';
+
+  async function reunionesCargar() {
+    const el = document.getElementById('reunionesList');
+    if (!el) return;
+    el.innerHTML = '<div class="empty-state">Cargando...</div>';
+    try {
+      const obraId = getSession()?.obra_id;
+      const params = new URLSearchParams();
+      if (obraId) params.set('obra_id', obraId);
+      if (_actaFiltro && _actaFiltro !== 'todas') params.set('tipo', _actaFiltro);
+      const data = await apiCall('/actas-reunion?' + params);
+      _actasData = data.actas || [];
+      renderActaList();
+    } catch(e) {
+      el.innerHTML = '<div class="empty-state">Error al cargar actas</div>';
+    }
+  }
+  window.reunionesCargar = reunionesCargar;
+
+  function reuFiltrar(f) {
+    _actaFiltro = f;
+    ['todas','progreso','seguridad','cliente'].forEach(x => {
+      const b = document.getElementById('reuFil_' + x);
+      if (!b) return;
+      b.style.background = x === f ? 'var(--accent)' : 'transparent';
+      b.style.color = x === f ? '#fff' : 'var(--muted)';
+      b.style.borderColor = x === f ? 'var(--accent)' : 'var(--border)';
+    });
+    reunionesCargar();
+  }
+  window.reuFiltrar = reuFiltrar;
+
+  function renderActaList() {
+    const el = document.getElementById('reunionesList');
+    if (!el) return;
+    if (!_actasData.length) {
+      el.innerHTML = '<div class="empty-state">No hay actas registradas</div>';
+      return;
+    }
+    const tipoInfo = {
+      progreso:     { icon:'📊', color:'#6366f1', label:'Progreso' },
+      seguridad:    { icon:'🦺', color:'#f59e0b', label:'Seguridad' },
+      coordinacion: { icon:'🤝', color:'#22c55e', label:'Coordinación' },
+      cliente:      { icon:'🏢', color:'#0ea5e9', label:'Cliente' },
+      otro:         { icon:'📋', color:'#6b7280', label:'Otro' }
+    };
+    const estInfo = {
+      borrador:   { icon:'✏️', color:'#6b7280' },
+      firmada:    { icon:'✅', color:'#22c55e' },
+      distribuida:{ icon:'📤', color:'#0ea5e9' }
+    };
+    el.innerHTML = _actasData.map(a => {
+      const ti = tipoInfo[a.tipo] || tipoInfo.otro;
+      const ei = estInfo[a.estado] || estInfo.borrador;
+      return `<div style="background:var(--card);border:1px solid var(--border);border-left:3px solid ${ti.color};border-radius:10px;padding:11px 13px;margin-bottom:8px">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+          <div style="flex:1">
+            <div style="display:flex;align-items:center;gap:5px;margin-bottom:3px">
+              <span style="font-size:10px;font-weight:800;color:${ti.color}">${ti.icon} ${a.numero||'ACTA'}</span>
+              <span style="font-size:10px;padding:1px 5px;background:${ei.color}22;color:${ei.color};border-radius:4px;font-weight:700">${ei.icon} ${a.estado||'borrador'}</span>
+              ${a.fecha?`<span style="font-size:10px;color:var(--muted)">${a.fecha}</span>`:''}
+            </div>
+            <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:2px">${a.titulo}</div>
+            ${a.convocante?`<div style="font-size:11px;color:var(--muted)">👤 ${a.convocante}</div>`:''}
+            ${a.asistentes?`<div style="font-size:11px;color:var(--muted)">👥 ${a.asistentes.substring(0,60)}${a.asistentes.length>60?'…':''}</div>`:''}
+            ${a.acuerdos?`<div style="font-size:11px;color:var(--text);margin-top:5px;padding:6px 8px;background:var(--surface);border-radius:6px;white-space:pre-wrap">${a.acuerdos.substring(0,150)}${a.acuerdos.length>150?'…':''}</div>`:''}
+            ${a.proxima_reunion?`<div style="font-size:10px;color:#6366f1;margin-top:4px">📅 Próxima: ${a.proxima_reunion}</div>`:''}
+          </div>
+          <div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0">
+            <button onclick="actaEditar(${a.id})" style="background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:4px 7px;cursor:pointer;font-size:11px">✏️</button>
+            <button onclick="actaEliminar(${a.id})" style="background:none;border:none;cursor:pointer;font-size:13px;color:var(--muted)">🗑️</button>
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+  }
+  window.renderActaList = renderActaList;
+
+  function actaNueva() {
+    document.getElementById('actaEditId').value = '';
+    document.getElementById('actaModalTitle').textContent = 'Nueva Acta de Reunión';
+    document.getElementById('actaTitulo').value = '';
+    document.getElementById('actaFecha').value = new Date().toISOString().split('T')[0];
+    document.getElementById('actaTipo').value = 'progreso';
+    document.getElementById('actaConvocante').value = getSession()?.nombre || '';
+    document.getElementById('actaAsistentes').value = '';
+    document.getElementById('actaResumen').value = '';
+    document.getElementById('actaAcuerdos').value = '';
+    document.getElementById('actaProxima').value = '';
+    document.getElementById('actaEstado').value = 'borrador';
+    document.getElementById('modalActa').style.display = 'flex';
+  }
+  window.actaNueva = actaNueva;
+
+  function actaEditar(id) {
+    const a = _actasData.find(x => x.id === id);
+    if (!a) return;
+    document.getElementById('actaEditId').value = id;
+    document.getElementById('actaModalTitle').textContent = 'Editar Acta ' + (a.numero || '');
+    document.getElementById('actaTitulo').value = a.titulo || '';
+    document.getElementById('actaFecha').value = a.fecha || '';
+    document.getElementById('actaTipo').value = a.tipo || 'progreso';
+    document.getElementById('actaConvocante').value = a.convocante || '';
+    document.getElementById('actaAsistentes').value = a.asistentes || '';
+    document.getElementById('actaResumen').value = a.resumen || '';
+    document.getElementById('actaAcuerdos').value = a.acuerdos || '';
+    document.getElementById('actaProxima').value = a.proxima_reunion || '';
+    document.getElementById('actaEstado').value = a.estado || 'borrador';
+    document.getElementById('modalActa').style.display = 'flex';
+  }
+  window.actaEditar = actaEditar;
+
+  async function actaGuardar() {
+    const id = document.getElementById('actaEditId').value;
+    const titulo = document.getElementById('actaTitulo').value.trim();
+    if (!titulo) { toast('El acta necesita un título', 'err'); return; }
+    const body = {
+      titulo,
+      fecha:           document.getElementById('actaFecha').value || null,
+      tipo:            document.getElementById('actaTipo').value,
+      convocante:      document.getElementById('actaConvocante').value.trim() || null,
+      asistentes:      document.getElementById('actaAsistentes').value.trim() || null,
+      resumen:         document.getElementById('actaResumen').value.trim() || null,
+      acuerdos:        document.getElementById('actaAcuerdos').value.trim() || null,
+      proxima_reunion: document.getElementById('actaProxima').value || null,
+      estado:          document.getElementById('actaEstado').value,
+    };
+    const obraId = getSession()?.obra_id;
+    if (obraId) body.obra_id = obraId;
+    const res = id
+      ? await apiCall(`/actas-reunion/${id}`, 'PUT', body)
+      : await apiCall('/actas-reunion', 'POST', body);
+    if (res.ok || res.id) {
+      toast(id ? 'Acta actualizada ✓' : `Acta ${res.numero||''} guardada ✓`, 'ok');
+      document.getElementById('modalActa').style.display = 'none';
+      reunionesCargar();
+    } else {
+      toast(res.error || 'Error al guardar', 'err');
+    }
+  }
+  window.actaGuardar = actaGuardar;
+
+  async function actaGuardarYAlejandra() {
+    const titulo = document.getElementById('actaTitulo').value.trim();
+    if (!titulo) { toast('El acta necesita un título', 'err'); return; }
+    await actaGuardar();
+    // Open Alejandra with a prompt to create tasks from acuerdos
+    const acuerdos = document.getElementById('actaAcuerdos').value.trim();
+    if (acuerdos) {
+      document.getElementById('modalActa').style.display = 'none';
+      await new Promise(r => setTimeout(r, 400));
+      alejandraAbrir();
+      await new Promise(r => setTimeout(r, 500));
+      const inp = document.getElementById('aleInput') || document.getElementById('iaInput');
+      if (inp) {
+        inp.value = `Acabo de guardar el acta "${titulo}". Estos son los acuerdos:\n${acuerdos}\n\nCrea una tarea por cada acuerdo que implique una acción concreta.`;
+        inp.dispatchEvent(new Event('input'));
+      }
+    }
+  }
+  window.actaGuardarYAlejandra = actaGuardarYAlejandra;
+
+  function actaCerrarModal() {
+    document.getElementById('modalActa').style.display = 'none';
+  }
+  window.actaCerrarModal = actaCerrarModal;
+
+  async function actaEliminar(id) {
+    if (!confirm('¿Eliminar esta acta?')) return;
+    const res = await apiCall(`/actas-reunion/${id}`, 'DELETE');
+    if (res.ok) { toast('Acta eliminada', 'ok'); reunionesCargar(); }
+    else toast('Error al eliminar', 'err');
+  }
+  window.actaEliminar = actaEliminar;
 
   function fmtEur(v) {
     if (v === null || v === undefined) return '—';
