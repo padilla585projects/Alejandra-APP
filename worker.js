@@ -4721,6 +4721,14 @@ export default {
         if (method === 'PUT')    return await actualizarVisitaObra(_vid, request, env);
         if (method === 'DELETE') return await eliminarVisitaObra(_vid, request, env);
       }
+      // ── Gestión de Proveedores / Supplier Management (NEW-102) ──────────────────
+      if (path === '/proveedores-gestion' && method === 'GET')  return await getProveedoresGestion(request, env);
+      if (path === '/proveedores-gestion' && method === 'POST') return await crearProveedorGestion(request, env);
+      if (path.startsWith('/proveedores-gestion/')) {
+        const _pgId = parseInt(path.split('/proveedores-gestion/')[1]);
+        if (method === 'PUT')    return await actualizarProveedorGestion(_pgId, request, env);
+        if (method === 'DELETE') return await eliminarProveedorGestion(_pgId, request, env);
+      }
       // ── Control de Ausencias y Permisos / Leave Management (NEW-100) ────────────
       if (path === '/ausencias' && method === 'GET')  return await getAusencias(request, env);
       if (path === '/ausencias' && method === 'POST') return await crearAusencia(request, env);
@@ -19727,4 +19735,110 @@ async function eliminarAusencia(id, request, env) {
   const { empresa_id } = await getEmpresaFromRequest(request, env);
   await env.DB.prepare('DELETE FROM ausencias WHERE id=? AND empresa_id=?').bind(id, empresa_id).run();
   return jsonOk({ ok: true });
+}
+
+
+// ════════════════════════════════════════════════════════════════════════════════
+// NEW-102: GESTIÓN DE PROVEEDORES / SUPPLIER MANAGEMENT
+// ════════════════════════════════════════════════════════════════════════════════
+async function ensureProveedoresGestionTable(env) {
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS proveedores_gestion (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    empresa_id        INTEGER NOT NULL,
+    nombre            TEXT    NOT NULL,
+    cif               TEXT,
+    tipo              TEXT    NOT NULL DEFAULT 'proveedor',
+    categoria         TEXT,
+    contacto_nombre   TEXT,
+    contacto_cargo    TEXT,
+    telefono          TEXT,
+    email             TEXT,
+    web               TEXT,
+    direccion         TEXT,
+    ciudad            TEXT,
+    cp                TEXT,
+    pais              TEXT    DEFAULT 'España',
+    activo            INTEGER NOT NULL DEFAULT 1,
+    valoracion        INTEGER DEFAULT NULL,
+    homologado        INTEGER NOT NULL DEFAULT 0,
+    fecha_homologacion TEXT,
+    notas             TEXT,
+    created_by        TEXT,
+    created_at        TEXT    NOT NULL DEFAULT (datetime('now')),
+    updated_at        TEXT    NOT NULL DEFAULT (datetime('now'))
+  )`).run();
+}
+
+async function getProveedoresGestion(request, env) {
+  await ensureProveedoresGestionTable(env);
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const url    = new URL(request.url);
+  const tipo   = url.searchParams.get('tipo');
+  const activo = url.searchParams.get('activo');
+  const q      = url.searchParams.get('q');
+  let sql = 'SELECT * FROM proveedores_gestion WHERE empresa_id = ?';
+  const params = [empresa_id];
+  if (tipo)   { sql += ' AND tipo = ?';      params.push(tipo); }
+  if (activo !== null && activo !== '') { sql += ' AND activo = ?'; params.push(parseInt(activo)); }
+  if (q)      { sql += ' AND (nombre LIKE ? OR cif LIKE ? OR contacto_nombre LIKE ?)'; params.push('%'+q+'%','%'+q+'%','%'+q+'%'); }
+  sql += ' ORDER BY nombre';
+  const { results } = await env.DB.prepare(sql).bind(...params).all();
+  // Stats
+  const stats = {
+    total:      results.length,
+    activos:    results.filter(r => r.activo).length,
+    homologados:results.filter(r => r.homologado).length,
+    valoracion_media: results.filter(r=>r.valoracion).length
+      ? (results.reduce((a,r)=>a+(r.valoracion||0),0)/results.filter(r=>r.valoracion).length).toFixed(1)
+      : null
+  };
+  return json({ data: results, stats });
+}
+
+async function crearProveedorGestion(request, env) {
+  await ensureProveedoresGestionTable(env);
+  const { empresa_id, nombre: createdBy } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const body = await request.json().catch(() => ({}));
+  if (!body.nombre?.trim()) return err('El nombre del proveedor es obligatorio');
+  const r = await env.DB.prepare(`
+    INSERT INTO proveedores_gestion
+      (empresa_id,nombre,cif,tipo,categoria,contacto_nombre,contacto_cargo,telefono,email,web,
+       direccion,ciudad,cp,pais,activo,valoracion,homologado,fecha_homologacion,notas,created_by)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+    .bind(empresa_id, body.nombre.trim(), body.cif||null, body.tipo||'proveedor', body.categoria||null,
+          body.contacto_nombre||null, body.contacto_cargo||null, body.telefono||null, body.email||null,
+          body.web||null, body.direccion||null, body.ciudad||null, body.cp||null, body.pais||'España',
+          body.activo===false?0:1, body.valoracion||null, body.homologado?1:0,
+          body.fecha_homologacion||null, body.notas||null, createdBy||null).run();
+  return json({ ok: true, id: r.meta.last_row_id }, 201);
+}
+
+async function actualizarProveedorGestion(id, request, env) {
+  await ensureProveedoresGestionTable(env);
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const body = await request.json().catch(() => ({}));
+  if (!body.nombre?.trim()) return err('El nombre es obligatorio');
+  await env.DB.prepare(`
+    UPDATE proveedores_gestion SET
+      nombre=?,cif=?,tipo=?,categoria=?,contacto_nombre=?,contacto_cargo=?,telefono=?,email=?,web=?,
+      direccion=?,ciudad=?,cp=?,pais=?,activo=?,valoracion=?,homologado=?,fecha_homologacion=?,notas=?,
+      updated_at=datetime('now')
+    WHERE id=? AND empresa_id=?`)
+    .bind(body.nombre.trim(), body.cif||null, body.tipo||'proveedor', body.categoria||null,
+          body.contacto_nombre||null, body.contacto_cargo||null, body.telefono||null, body.email||null,
+          body.web||null, body.direccion||null, body.ciudad||null, body.cp||null, body.pais||'España',
+          body.activo===false?0:1, body.valoracion||null, body.homologado?1:0,
+          body.fecha_homologacion||null, body.notas||null, id, empresa_id).run();
+  return json({ ok: true });
+}
+
+async function eliminarProveedorGestion(id, request, env) {
+  await ensureProveedoresGestionTable(env);
+  const { empresa_id, rol } = await getAuth(request, env);
+  if (!empresa_id || rol === 'operario') return err('Sin permisos', 403);
+  await env.DB.prepare('DELETE FROM proveedores_gestion WHERE id=? AND empresa_id=?').bind(id, empresa_id).run();
+  return json({ ok: true });
 }

@@ -751,6 +751,9 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
     <button class="nav-item" data-page="horariosObra" onclick="navTo('horariosObra')">
       <span class="nav-icon">⏰</span> Horarios de Obra
     </button>
+    <button class="nav-item" data-page="proveedoresGestion" onclick="navTo('proveedoresGestion')">
+      <span class="nav-icon">🏭</span> Proveedores
+    </button>
     <button class="nav-item" data-page="fotosObra" onclick="navTo('fotosObra')">
       <span class="nav-icon">📷</span> Galería de Fotos
     </button>
@@ -2471,6 +2474,133 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
               <button class="btn btn-secondary" onclick="cerrarModalAts()">Cancelar</button>
               <span id="atsElimBtn"></span>
               <button class="btn btn-primary" onclick="guardarAts()">💾 Guardar ATS</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- GESTIÓN DE PROVEEDORES / SUPPLIER MANAGEMENT (NEW-102) -->
+      <div class="page" id="pageProveedoresGestion">
+        <div class="page-title">🏭 Gestión de Proveedores / Supplier Management</div>
+        <div id="pgKpis" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;margin-bottom:16px"></div>
+        <div class="tbl-toolbar">
+          <select id="pgFiltroTipo" onchange="filtrarProveedoresGestion()">
+            <option value="">Todos los tipos</option>
+            <option value="proveedor">🏪 Proveedor</option>
+            <option value="subcontrata">🔧 Subcontrata</option>
+            <option value="distribuidor">📦 Distribuidor</option>
+            <option value="transportista">🚚 Transportista</option>
+            <option value="consultor">💼 Consultor</option>
+            <option value="otro">📌 Otro</option>
+          </select>
+          <select id="pgFiltroActivo" onchange="filtrarProveedoresGestion()">
+            <option value="">Activos e inactivos</option>
+            <option value="1">✅ Solo activos</option>
+            <option value="0">🚫 Solo inactivos</option>
+          </select>
+          <select id="pgFiltroHomologado" onchange="filtrarProveedoresGestion()">
+            <option value="">Todos</option>
+            <option value="1">🏅 Homologados</option>
+            <option value="0">⚠️ Sin homologar</option>
+          </select>
+          <input id="pgFiltroQ" type="search" placeholder="Buscar proveedor, CIF, contacto..." oninput="filtrarProveedoresGestion()">
+          <button class="btn btn-primary" onclick="abrirModalPg()">+ Nuevo Proveedor</button>
+          <button class="btn btn-secondary" onclick="exportarTabla(tblPg,'proveedores')">⬇ CSV</button>
+        </div>
+        <div id="tblPgWrap"></div>
+        <div class="modal-overlay" id="modalPg" style="display:none" onclick="if(event.target===this)cerrarModalPg()">
+          <div class="modal" style="max-width:680px">
+            <div class="modal-header"><h3 id="modalPgTitulo">Proveedor</h3><button class="modal-close" onclick="cerrarModalPg()">✕</button></div>
+            <div class="modal-body">
+              <div class="form-row">
+                <div class="form-group" style="flex:2">
+                  <label>Nombre *</label>
+                  <input type="text" id="pgModalNombre" required style="width:100%" placeholder="Razón social o nombre comercial">
+                </div>
+                <div class="form-group">
+                  <label>CIF/NIF</label>
+                  <input type="text" id="pgModalCif" style="width:100%" placeholder="B12345678">
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label>Tipo *</label>
+                  <select id="pgModalTipo" style="width:100%">
+                    <option value="proveedor">🏪 Proveedor</option>
+                    <option value="subcontrata">🔧 Subcontrata</option>
+                    <option value="distribuidor">📦 Distribuidor</option>
+                    <option value="transportista">🚚 Transportista</option>
+                    <option value="consultor">💼 Consultor</option>
+                    <option value="otro">📌 Otro</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label>Categoría</label>
+                  <input type="text" id="pgModalCategoria" style="width:100%" placeholder="Ej: Materiales eléctricos">
+                </div>
+                <div class="form-group" style="flex:0.7">
+                  <label>Valoración (1-5)</label>
+                  <input type="number" id="pgModalValoracion" min="1" max="5" style="width:100%">
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label>Contacto</label>
+                  <input type="text" id="pgModalContacto" style="width:100%" placeholder="Nombre del contacto">
+                </div>
+                <div class="form-group">
+                  <label>Cargo</label>
+                  <input type="text" id="pgModalCargo" style="width:100%" placeholder="Cargo del contacto">
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label>Teléfono</label>
+                  <input type="tel" id="pgModalTelefono" style="width:100%">
+                </div>
+                <div class="form-group">
+                  <label>Email</label>
+                  <input type="email" id="pgModalEmail" style="width:100%">
+                </div>
+                <div class="form-group">
+                  <label>Web</label>
+                  <input type="url" id="pgModalWeb" style="width:100%" placeholder="https://...">
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-group" style="flex:2">
+                  <label>Dirección</label>
+                  <input type="text" id="pgModalDireccion" style="width:100%">
+                </div>
+                <div class="form-group">
+                  <label>Ciudad</label>
+                  <input type="text" id="pgModalCiudad" style="width:100%">
+                </div>
+                <div class="form-group" style="flex:0.6">
+                  <label>CP</label>
+                  <input type="text" id="pgModalCp" style="width:100%">
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-group" style="flex:0.5">
+                  <label><input type="checkbox" id="pgModalHomologado"> Homologado</label>
+                </div>
+                <div class="form-group">
+                  <label>Fecha homologación</label>
+                  <input type="date" id="pgModalFechaHomologacion" style="width:100%">
+                </div>
+                <div class="form-group" style="flex:0.5">
+                  <label><input type="checkbox" id="pgModalActivo" checked> Activo</label>
+                </div>
+              </div>
+              <div class="form-group">
+                <label>Notas</label>
+                <textarea id="pgModalNotas" rows="2" style="width:100%"></textarea>
+              </div>
+            </div>
+            <div class="modal-footer">
+              <button class="btn btn-secondary" onclick="cerrarModalPg()">Cancelar</button>
+              <button class="btn btn-primary" onclick="guardarPg()">💾 Guardar</button>
             </div>
           </div>
         </div>
@@ -8087,6 +8217,7 @@ const PAGE_TITLES = {
   ordenesTrabajo:     '🔧 Órdenes de Trabajo / Work Orders',
   ausencias:          '📅 Ausencias y Permisos / Leave Management',
   horariosObra:       '⏰ Horarios de Obra / Site Work Schedules',
+  proveedoresGestion: '🏭 Gestión de Proveedores / Supplier Management',
 };
 
 const PAGE_LOADERS = {
@@ -8189,6 +8320,7 @@ const PAGE_LOADERS = {
   ordenesTrabajo:     cargarOrdenesTrabajo,
   ausencias:          cargarAusencias,
   horariosObra:       cargarHorariosObra,
+  proveedoresGestion: cargarProveedoresGestion,
 };
 
 let currentPage = '';
@@ -8320,6 +8452,7 @@ const SYNC_INTERVALS = {
   ordenesTrabajo:     60,
   ausencias:          120,
   horariosObra:       300,
+  proveedoresGestion: 180,
 };
 
 let _syncTimer = null, _syncLabelTimer = null, _syncLastTs = null;
@@ -17680,6 +17813,172 @@ function exportarFinanzas() {
   if (!obraId) return showToast('Selecciona una obra primero', 'warning');
   // Abrir informe en nueva pestaña usando el endpoint de informes
   window.open(`/informe-obra/${obraId}?tipo=financiero`, '_blank');
+}
+
+// ── GESTIÓN DE PROVEEDORES / SUPPLIER MANAGEMENT (NEW-102) ───────────────────
+let tblPg = null, _pgData = [];
+const PG_TIPO_ICON = { proveedor:'🏪', subcontrata:'🔧', distribuidor:'📦', transportista:'🚚', consultor:'💼', otro:'📌' };
+const PG_TIPO_LABEL= { proveedor:'Proveedor', subcontrata:'Subcontrata', distribuidor:'Distribuidor', transportista:'Transportista', consultor:'Consultor', otro:'Otro' };
+
+async function cargarProveedoresGestion() {
+  const data = await api('/proveedores-gestion');
+  _pgData = data.data || [];
+  const s  = data.stats || {};
+  // KPIs
+  const valProm = s.valoracion_media ? parseFloat(s.valoracion_media) : null;
+  const stars   = valProm ? '⭐'.repeat(Math.round(valProm)) : '—';
+  document.getElementById('pgKpis').innerHTML = [
+    { label:'Total',       val: s.total||_pgData.length, icon:'🏭' },
+    { label:'Activos',     val: s.activos||_pgData.filter(r=>r.activo).length, icon:'✅', color:'var(--success)' },
+    { label:'Homologados', val: s.homologados||_pgData.filter(r=>r.homologado).length, icon:'🏅', color:'var(--accent)' },
+    { label:'Val. media',  val: valProm ? valProm+' '+stars : '—', icon:'⭐' },
+    { label:'Subcontratas',val: _pgData.filter(r=>r.tipo==='subcontrata').length, icon:'🔧' }
+  ].map(k=>`<div class="kpi-mini" style="border-left:3px solid ${k.color||'var(--accent)'}">
+    <div style="font-size:1.4rem">${k.icon}</div>
+    <div style="font-size:1.3rem;font-weight:700;color:${k.color||'var(--text)'}">${k.val}</div>
+    <div style="font-size:.75rem;opacity:.7">${k.label}</div>
+  </div>`).join('');
+  filtrarProveedoresGestion();
+}
+
+function filtrarProveedoresGestion() {
+  const tipo  = document.getElementById('pgFiltroTipo')?.value  || '';
+  const act   = document.getElementById('pgFiltroActivo')?.value;
+  const hom   = document.getElementById('pgFiltroHomologado')?.value;
+  const q     = (document.getElementById('pgFiltroQ')?.value    || '').toLowerCase();
+  let rows = _pgData.filter(r =>
+    (!tipo  || r.tipo === tipo) &&
+    (act===undefined||act==='' || String(r.activo) === act) &&
+    (hom===undefined||hom==='' || String(r.homologado) === hom) &&
+    (!q     || (r.nombre||'').toLowerCase().includes(q) ||
+               (r.cif||'').toLowerCase().includes(q) ||
+               (r.contacto_nombre||'').toLowerCase().includes(q))
+  );
+  if (!tblPg) {
+    tblPg = new Tabulator('#tblPgWrap', {
+      data: rows, layout:'fitColumns', responsiveLayout:'collapse',
+      pagination:'local', paginationSize:20, movableColumns:true,
+      initialSort:[{column:'nombre',dir:'asc'}],
+      groupBy: 'tipo',
+      groupHeader: (val,cnt)=>`${PG_TIPO_ICON[val]||'📌'} ${PG_TIPO_LABEL[val]||val} (${cnt})`,
+      columns:[
+        { title:'Nombre', field:'nombre', minWidth:180,
+          formatter:(c)=>{
+            const r=c.getRow().getData();
+            const badge=r.homologado?'<span style="background:var(--accent);color:#fff;font-size:.7rem;padding:1px 5px;border-radius:8px;margin-left:4px">✓ Hom</span>':'';
+            const act=r.activo?'':'<span style="opacity:.5"> [inactivo]</span>';
+            return c.getValue()+badge+act;
+          }
+        },
+        { title:'CIF', field:'cif', width:120 },
+        { title:'Categoría', field:'categoria', minWidth:130 },
+        { title:'Contacto', field:'contacto_nombre', minWidth:140,
+          formatter:(c)=>{
+            const r=c.getRow().getData();
+            return c.getValue()+(r.contacto_cargo?` <span style="opacity:.6;font-size:.8rem">(${r.contacto_cargo})</span>`:'');
+          }
+        },
+        { title:'Teléfono', field:'telefono', width:120,
+          formatter:(c)=>c.getValue()?`<a href="tel:${c.getValue()}">${c.getValue()}</a>`:''
+        },
+        { title:'Email', field:'email', minWidth:170,
+          formatter:(c)=>c.getValue()?`<a href="mailto:${c.getValue()}">${c.getValue()}</a>`:''
+        },
+        { title:'Val.', field:'valoracion', width:75, hozAlign:'center',
+          formatter:(c)=>c.getValue()?'⭐'.repeat(c.getValue()||0):''
+        },
+        { title:'Ciudad', field:'ciudad', width:110 },
+        { title:'Acciones', width:110, hozAlign:'center', formatter:(c)=>{
+            const id=c.getRow().getData().id;
+            return `<button class="btn btn-xs" onclick="editarPg(${id})">✏️</button>
+                    <button class="btn btn-xs btn-danger" onclick="eliminarPg(${id})">🗑️</button>`;
+          }
+        }
+      ]
+    });
+  } else {
+    tblPg.replaceData(rows);
+  }
+}
+
+function abrirModalPg(d = {}) {
+  const m = document.getElementById('modalPg');
+  m._pgId = d.id || null;
+  document.getElementById('modalPgTitulo').textContent = d.id ? 'Editar Proveedor' : 'Nuevo Proveedor';
+  document.getElementById('pgModalNombre').value            = d.nombre              || '';
+  document.getElementById('pgModalCif').value               = d.cif                 || '';
+  document.getElementById('pgModalTipo').value              = d.tipo                || 'proveedor';
+  document.getElementById('pgModalCategoria').value         = d.categoria           || '';
+  document.getElementById('pgModalValoracion').value        = d.valoracion          || '';
+  document.getElementById('pgModalContacto').value          = d.contacto_nombre     || '';
+  document.getElementById('pgModalCargo').value             = d.contacto_cargo      || '';
+  document.getElementById('pgModalTelefono').value          = d.telefono            || '';
+  document.getElementById('pgModalEmail').value             = d.email               || '';
+  document.getElementById('pgModalWeb').value               = d.web                 || '';
+  document.getElementById('pgModalDireccion').value         = d.direccion           || '';
+  document.getElementById('pgModalCiudad').value            = d.ciudad              || '';
+  document.getElementById('pgModalCp').value                = d.cp                  || '';
+  document.getElementById('pgModalHomologado').checked      = !!d.homologado;
+  document.getElementById('pgModalFechaHomologacion').value = d.fecha_homologacion  || '';
+  document.getElementById('pgModalActivo').checked          = d.activo !== false && d.activo !== 0;
+  document.getElementById('pgModalNotas').value             = d.notas               || '';
+  m.style.display = 'flex';
+}
+
+function editarPg(id) {
+  const d = _pgData.find(r => r.id === id);
+  if (d) abrirModalPg(d);
+}
+
+async function guardarPg() {
+  const m  = document.getElementById('modalPg');
+  const id = m._pgId;
+  const body = {
+    nombre:             document.getElementById('pgModalNombre').value.trim(),
+    cif:                document.getElementById('pgModalCif').value.trim(),
+    tipo:               document.getElementById('pgModalTipo').value,
+    categoria:          document.getElementById('pgModalCategoria').value.trim(),
+    valoracion:         parseInt(document.getElementById('pgModalValoracion').value) || null,
+    contacto_nombre:    document.getElementById('pgModalContacto').value.trim(),
+    contacto_cargo:     document.getElementById('pgModalCargo').value.trim(),
+    telefono:           document.getElementById('pgModalTelefono').value.trim(),
+    email:              document.getElementById('pgModalEmail').value.trim(),
+    web:                document.getElementById('pgModalWeb').value.trim(),
+    direccion:          document.getElementById('pgModalDireccion').value.trim(),
+    ciudad:             document.getElementById('pgModalCiudad').value.trim(),
+    cp:                 document.getElementById('pgModalCp').value.trim(),
+    homologado:         document.getElementById('pgModalHomologado').checked,
+    fecha_homologacion: document.getElementById('pgModalFechaHomologacion').value,
+    activo:             document.getElementById('pgModalActivo').checked,
+    notas:              document.getElementById('pgModalNotas').value.trim()
+  };
+  if (!body.nombre) return showToast('El nombre del proveedor es obligatorio', 'warning');
+  try {
+    if (id) {
+      await api(`/proveedores-gestion/${id}`, { method:'PUT', body: JSON.stringify(body) });
+      showToast('Proveedor actualizado', 'success');
+    } else {
+      await api('/proveedores-gestion', { method:'POST', body: JSON.stringify(body) });
+      showToast('Proveedor registrado', 'success');
+    }
+    cerrarModalPg();
+    tblPg = null;
+    await cargarProveedoresGestion();
+  } catch(e) { showToast('Error al guardar: ' + e.message, 'danger'); }
+}
+
+async function eliminarPg(id) {
+  if (!confirm('¿Eliminar este proveedor?')) return;
+  try {
+    await api(`/proveedores-gestion/${id}`, { method:'DELETE' });
+    showToast('Proveedor eliminado', 'success');
+    tblPg = null;
+    await cargarProveedoresGestion();
+  } catch(e) { showToast('Error al eliminar: ' + e.message, 'danger'); }
+}
+
+function cerrarModalPg() {
+  document.getElementById('modalPg').style.display = 'none';
 }
 
 // ── HORARIOS DE OBRA / SITE WORK SCHEDULES (NEW-101) ─────────────────────────
