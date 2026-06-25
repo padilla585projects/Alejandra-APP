@@ -13620,7 +13620,7 @@ async function cargarCentroAlertas() {
   if (grid) grid.innerHTML = '<div class="loading"><div class="spinner"></div> Cargando alertas...</div>';
 
   // Fetch all relevant data in parallel
-  const [rfisR, punchR, submittalsR, hitosR, tareasR, transmittalsR, segR, contratosR, incR] = await Promise.all([
+  const [rfisR, punchR, submittalsR, hitosR, tareasR, transmittalsR, segR, contratosR, incR, ncrsR] = await Promise.all([
     api(`/rfis?${obraQ}estado=abierta`).catch(()=>null),
     api(`/punch-list?${obraQ}`).catch(()=>null),
     api(`/submittals?${obraQ}`).catch(()=>null),
@@ -13630,6 +13630,7 @@ async function cargarCentroAlertas() {
     api(`/obs-seguridad?${obraQ}`).catch(()=>null),
     api(`/contratos-obra?${obraQ}`).catch(()=>null),
     api(`/incidencias?${obraQ}estado=abierta&limit=100`).catch(()=>null),
+    api(`/ncrs-obra?${obraQ}`).catch(()=>null),
   ]);
 
   // ── Extraer alertas por categoría ──────────────────────────────
@@ -13651,9 +13652,11 @@ async function cargarCentroAlertas() {
     return days >= 0 && days <= 30;
   });
   const incsAbiertas     = (toArr(incR,'incidencias') || []).filter(i=>i.estado==='abierta'||i.estado==='en_proceso');
+  const ncrsCriticas     = (ncrsR?.ncrs || []).filter(n=>n.estado!=='cerrada'&&n.gravedad==='critico');
+  const ncrsAbiertas     = (ncrsR?.ncrs || []).filter(n=>n.estado!=='cerrada');
 
   // Total alertas criticas
-  const totalCritico = peligros.length + punchVencidos.length + subsVencidos.length + hitosRetrasados.length + transVencidos.length;
+  const totalCritico = peligros.length + punchVencidos.length + subsVencidos.length + hitosRetrasados.length + transVencidos.length + ncrsCriticas.length;
   const totalAtencion = rfisAbiertas.length + subsPendientes.length + transPendientes.length + tareasUrgentes.length + tareasVencidas.length;
   const totalBadge = totalCritico + totalAtencion;
 
@@ -13670,10 +13673,11 @@ async function cargarCentroAlertas() {
       <div class="kpi-card"><div class="kpi-icon">📝</div><div class="kpi-value" style="color:${punchVencidos.length?'var(--danger)':'var(--muted)'}">${punchAbiertos.length}</div><div class="kpi-label">Punch list</div></div>
       <div class="kpi-card"><div class="kpi-icon">🏁</div><div class="kpi-value" style="color:${hitosRetrasados.length?'var(--danger)':'var(--muted)'}">${hitosRetrasados.length}</div><div class="kpi-label">Hitos retr.</div></div>
       <div class="kpi-card"><div class="kpi-icon">❓</div><div class="kpi-value" style="color:${rfisAbiertas.length?'var(--warning)':'var(--muted)'}">${rfisAbiertas.length}</div><div class="kpi-label">RFIs</div></div>
+      <div class="kpi-card"><div class="kpi-icon">🚫</div><div class="kpi-value" style="color:${ncrsCriticas.length?'var(--danger)':ncrsAbiertas.length?'var(--warning)':'var(--muted)'}">${ncrsAbiertas.length}</div><div class="kpi-label">NCRs</div></div>
     `;
   }
 
-  if (totalBadge === 0 && punchAbiertos.length === 0 && rfisAbiertas.length === 0 && incsAbiertas.length === 0) {
+  if (totalBadge === 0 && punchAbiertos.length === 0 && rfisAbiertas.length === 0 && incsAbiertas.length === 0 && ncrsAbiertas.length === 0) {
     if (grid) grid.innerHTML = '';
     if (okEl) okEl.style.display = '';
     return;
@@ -13739,6 +13743,14 @@ async function cargarCentroAlertas() {
   if (incsAbiertas.length) cards.push(mkCard('⚠️','Incidencias Abiertas',incsAbiertas.length,'incidencias',
     incsAbiertas.slice(0,4).map(i=>mkItem('⚠️',i.titulo||'—',`${i.tipo||'—'} · ${i.gravedad||'—'}`,'var(--warning)')),
     '','var(--warning)'));
+
+  if (ncrsAbiertas.length) cards.push(mkCard('🚫','NCRs Abiertas',ncrsAbiertas.length,'ncrsObra',
+    ncrsAbiertas.slice(0,4).map(n=>mkItem(
+      n.gravedad==='critico'?'🔴':n.gravedad==='mayor'?'🟠':'🟡',
+      n.numero||'—', `${NCR_GRAV_LABEL?.[n.gravedad]||n.gravedad} · ${n.descripcion?.slice(0,50)||'—'}`,
+      n.gravedad==='critico'?'var(--danger)':'var(--warning)'
+    )),
+    '','#ef4444'));
 
   if (contratosVencen.length) cards.push(mkCard('📑','Contratos por Vencer (30 días)',contratosVencen.length,'contratosObra',
     contratosVencen.slice(0,4).map(c=>{
