@@ -4721,6 +4721,14 @@ export default {
         if (method === 'PUT')    return await actualizarVisitaObra(_vid, request, env);
         if (method === 'DELETE') return await eliminarVisitaObra(_vid, request, env);
       }
+      // ── Comparativo de Ofertas / Bid Comparison (NEW-97) ────────────────────────
+      if (path === '/comparativos-oferta' && method === 'GET')  return await getComparativosOferta(request, env);
+      if (path === '/comparativos-oferta' && method === 'POST') return await crearComparativoOferta(request, env);
+      if (path.startsWith('/comparativos-oferta/')) {
+        const _coId = parseInt(path.split('/comparativos-oferta/')[1]);
+        if (method === 'PUT')    return await actualizarComparativoOferta(_coId, request, env);
+        if (method === 'DELETE') return await eliminarComparativoOferta(_coId, request, env);
+      }
       // ── Licencias de Obra / Permits & Licenses (NEW-94) ──────────────────────────
       if (path === '/licencias-obra' && method === 'GET')  return await getLicenciasObra(request, env);
       if (path === '/licencias-obra' && method === 'POST') return await crearLicenciaObra(request, env);
@@ -19319,5 +19327,93 @@ async function actualizarSeguroObra(id, request, env) {
 async function eliminarSeguroObra(id, request, env) {
   const { empresa_id } = await getEmpresaFromRequest(request, env);
   await env.DB.prepare('DELETE FROM seguros_obra WHERE id=? AND empresa_id=?').bind(id, empresa_id).run();
+  return jsonOk({ ok: true });
+}
+
+
+// ════════════════════════════════════════════════════════════════════════════════
+// NEW-97: COMPARATIVO DE OFERTAS / BID COMPARISON
+// ════════════════════════════════════════════════════════════════════════════════
+async function ensureComparativosOfertaTable(env) {
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS comparativos_oferta (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    empresa_id    INTEGER NOT NULL,
+    obra_id       INTEGER,
+    numero        TEXT,
+    titulo        TEXT NOT NULL,
+    descripcion   TEXT,
+    fecha         TEXT NOT NULL,
+    fecha_limite  TEXT,
+    tipo          TEXT NOT NULL DEFAULT 'suministro',
+    estado        TEXT NOT NULL DEFAULT 'abierto',
+    partidas      TEXT NOT NULL DEFAULT '[]',
+    oferentes     TEXT NOT NULL DEFAULT '[]',
+    criterio_adj  TEXT,
+    adjudicado_a  TEXT,
+    importe_adj   REAL,
+    notas         TEXT,
+    created_by    TEXT,
+    created_at    TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at    TEXT NOT NULL DEFAULT (datetime('now'))
+  )`).run();
+}
+
+async function getComparativosOferta(request, env) {
+  const { empresa_id } = await getEmpresaFromRequest(request, env);
+  await ensureComparativosOfertaTable(env);
+  const u = new URL(request.url);
+  const obra_id = u.searchParams.get('obra_id');
+  const estado  = u.searchParams.get('estado');
+  const tipo    = u.searchParams.get('tipo');
+  let sql = 'SELECT * FROM comparativos_oferta WHERE empresa_id=?';
+  const params = [empresa_id];
+  if (obra_id) { sql += ' AND obra_id=?'; params.push(obra_id); }
+  if (estado)  { sql += ' AND estado=?';  params.push(estado); }
+  if (tipo)    { sql += ' AND tipo=?';    params.push(tipo); }
+  sql += ' ORDER BY fecha DESC, created_at DESC';
+  const rows = await env.DB.prepare(sql).bind(...params).all();
+  const total       = rows.results.length;
+  const adjudicados = rows.results.filter(r=>r.estado==='adjudicado').length;
+  const abiertos    = rows.results.filter(r=>r.estado==='abierto').length;
+  const importe_adj = rows.results.filter(r=>r.estado==='adjudicado').reduce((a,r)=>a+(r.importe_adj||0),0);
+  return jsonOk({ data: rows.results, stats: { total, adjudicados, abiertos, importe_adj: importe_adj.toFixed(2) } });
+}
+
+async function crearComparativoOferta(request, env) {
+  const { empresa_id, user } = await getEmpresaFromRequest(request, env);
+  await ensureComparativosOfertaTable(env);
+  const b = await request.json();
+  if (!b.titulo || !b.fecha) return jsonError('titulo y fecha son obligatorios', 400);
+  const cnt = await env.DB.prepare('SELECT COUNT(*) as n FROM comparativos_oferta WHERE empresa_id=?').bind(empresa_id).first();
+  const num = 'COF-' + new Date().getFullYear() + '-' + String((cnt?.n||0)+1).padStart(4,'0');
+  const res = await env.DB.prepare(
+    `INSERT INTO comparativos_oferta (empresa_id,obra_id,numero,titulo,descripcion,fecha,fecha_limite,tipo,estado,partidas,oferentes,criterio_adj,adjudicado_a,importe_adj,notas,created_by)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+  ).bind(empresa_id, b.obra_id||null, num, b.titulo, b.descripcion||null, b.fecha,
+    b.fecha_limite||null, b.tipo||'suministro', b.estado||'abierto',
+    JSON.stringify(b.partidas||[]), JSON.stringify(b.oferentes||[]),
+    b.criterio_adj||null, b.adjudicado_a||null, b.importe_adj||null,
+    b.notas||null, user?.email||null).run();
+  return jsonOk({ id: res.meta.last_row_id, numero: num }, 201);
+}
+
+async function actualizarComparativoOferta(id, request, env) {
+  const { empresa_id } = await getEmpresaFromRequest(request, env);
+  await ensureComparativosOfertaTable(env);
+  const b = await request.json();
+  const campos = ['obra_id','titulo','descripcion','fecha','fecha_limite','tipo','estado','criterio_adj','adjudicado_a','importe_adj','notas'];
+  const sets = []; const vals = [];
+  campos.forEach(c => { if (b[c] !== undefined) { sets.push(c+'=?'); vals.push(b[c]); } });
+  if (b.partidas !== undefined) { sets.push('partidas=?'); vals.push(JSON.stringify(b.partidas)); }
+  if (b.oferentes !== undefined) { sets.push('oferentes=?'); vals.push(JSON.stringify(b.oferentes)); }
+  sets.push("updated_at=datetime('now')");
+  vals.push(id, empresa_id);
+  await env.DB.prepare(`UPDATE comparativos_oferta SET ${sets.join(',')} WHERE id=? AND empresa_id=?`).bind(...vals).run();
+  return jsonOk({ ok: true });
+}
+
+async function eliminarComparativoOferta(id, request, env) {
+  const { empresa_id } = await getEmpresaFromRequest(request, env);
+  await env.DB.prepare('DELETE FROM comparativos_oferta WHERE id=? AND empresa_id=?').bind(id, empresa_id).run();
   return jsonOk({ ok: true });
 }

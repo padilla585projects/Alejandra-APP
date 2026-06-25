@@ -721,6 +721,10 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
       <span class="nav-icon">📋</span> Solicitudes Material
       <span class="nav-badge" id="solMatBadge" style="display:none">0</span>
     </button>
+    <button class="nav-item" data-page="comparativosOferta" onclick="navTo('comparativosOferta')">
+      <span class="nav-icon">🔖</span> Comparativo Ofertas
+      <span class="nav-badge" id="cofBadge" style="display:none">0</span>
+    </button>
     <button class="nav-item" data-page="licenciasObra" onclick="navTo('licenciasObra')">
       <span class="nav-icon">📜</span> Permisos y Licencias
       <span class="nav-badge" id="licObraBadge" style="display:none">0</span>
@@ -2452,6 +2456,106 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
               <button class="btn btn-secondary" onclick="cerrarModalAts()">Cancelar</button>
               <span id="atsElimBtn"></span>
               <button class="btn btn-primary" onclick="guardarAts()">💾 Guardar ATS</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- COMPARATIVO DE OFERTAS / BID COMPARISON (NEW-97) -->
+      <div class="page" id="pageComparativosOferta">
+        <div class="page-title">🔖 Comparativo de Ofertas / Bid Comparison</div>
+        <div id="cofKpis" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;margin-bottom:16px"></div>
+        <div class="tbl-toolbar">
+          <select id="cofFiltroEstado" onchange="filtrarComparativosOferta()" style="padding:6px 10px;border-radius:6px;border:1px solid #ccc">
+            <option value="">Todos los estados</option>
+            <option value="abierto">Abierto</option>
+            <option value="adjudicado">Adjudicado</option>
+            <option value="desierto">Desierto</option>
+            <option value="cancelado">Cancelado</option>
+          </select>
+          <select id="cofFiltroTipo" onchange="filtrarComparativosOferta()" style="padding:6px 10px;border-radius:6px;border:1px solid #ccc">
+            <option value="">Todos los tipos</option>
+            <option value="suministro">Suministro</option>
+            <option value="subcontrata">Subcontrata</option>
+            <option value="servicio">Servicio</option>
+            <option value="alquiler">Alquiler</option>
+          </select>
+          <input id="cofFiltroQ" type="search" placeholder="Buscar..." oninput="filtrarComparativosOferta()" style="padding:6px 10px;border-radius:6px;border:1px solid #ccc;flex:1">
+          <button class="btn btn-primary" onclick="abrirModalCof()">+ Nuevo Comparativo</button>
+          <button class="btn btn-secondary" onclick="exportarTabla(tblCof,'comparativos-oferta')">⬇ CSV</button>
+        </div>
+        <div id="tblCofWrap"></div>
+        <!-- Panel detalle comparativo -->
+        <div id="cofDetalle" style="display:none;margin-top:24px;background:#fff;border-radius:12px;padding:20px;box-shadow:0 2px 8px rgba(0,0,0,.1)">
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+            <div id="cofDetalleTitulo" style="font-size:18px;font-weight:700;flex:1"></div>
+            <button class="btn btn-secondary btn-sm" onclick="document.getElementById('cofDetalle').style.display='none'">✕ Cerrar</button>
+            <button class="btn btn-primary btn-sm" onclick="editarCof(_cofDetalleId)">✏️ Editar</button>
+          </div>
+          <div id="cofDetalleTabla" style="overflow-x:auto"></div>
+        </div>
+        <!-- Modal -->
+        <div class="modal-overlay" id="modalCof" style="display:none" onclick="if(event.target===this)cerrarModalCof()">
+          <div class="modal" style="max-width:900px;width:95vw">
+            <div class="modal-header"><span id="modalCofTitulo">Nuevo Comparativo</span><button class="modal-close" onclick="cerrarModalCof()">✕</button></div>
+            <div class="modal-body">
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
+                <div class="form-group" style="grid-column:1/-1"><label>Título *</label><input id="cofTitulo" type="text" placeholder="Suministro cable BT 240mm² - Lote 1"></div>
+                <div class="form-group"><label>Tipo *</label>
+                  <select id="cofTipo">
+                    <option value="suministro">Suministro</option>
+                    <option value="subcontrata">Subcontrata</option>
+                    <option value="servicio">Servicio</option>
+                    <option value="alquiler">Alquiler</option>
+                  </select>
+                </div>
+                <div class="form-group"><label>Estado</label>
+                  <select id="cofEstado">
+                    <option value="abierto">Abierto</option>
+                    <option value="adjudicado">Adjudicado</option>
+                    <option value="desierto">Desierto</option>
+                    <option value="cancelado">Cancelado</option>
+                  </select>
+                </div>
+                <div class="form-group"><label>Fecha *</label><input id="cofFecha" type="date"></div>
+                <div class="form-group"><label>Fecha Límite Ofertas</label><input id="cofFechaLim" type="date"></div>
+                <div class="form-group"><label>Criterio Adjudicación</label><input id="cofCriterio" type="text" placeholder="Menor precio, mejor plazo..."></div>
+                <div class="form-group"><label>Adjudicado a</label><input id="cofAdj" type="text" placeholder="Proveedor ganador"></div>
+                <div class="form-group"><label>Importe Adjudicado (€)</label><input id="cofImpAdj" type="number" step="0.01" min="0"></div>
+                <div class="form-group" style="grid-column:1/-1"><label>Descripción</label><textarea id="cofDesc" rows="2" placeholder="Descripción del alcance..."></textarea></div>
+                <div class="form-group" style="grid-column:1/-1"><label>Notas</label><textarea id="cofNotas" rows="2"></textarea></div>
+              </div>
+              <!-- Partidas -->
+              <div style="margin-bottom:16px">
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+                  <strong>📦 Partidas / Ítems</strong>
+                  <button type="button" class="btn btn-secondary btn-sm" onclick="addPartidaCof()">+ Partida</button>
+                </div>
+                <div id="cofPartidasWrap">
+                  <table style="width:100%;border-collapse:collapse;font-size:13px">
+                    <thead><tr style="background:#f5f5f5">
+                      <th style="padding:6px;text-align:left">Código</th>
+                      <th style="padding:6px;text-align:left;min-width:200px">Descripción</th>
+                      <th style="padding:6px;text-align:right">Cantidad</th>
+                      <th style="padding:6px;text-align:left">Ud.</th>
+                      <th style="padding:6px;width:40px"></th>
+                    </tr></thead>
+                    <tbody id="cofPartidasBody"></tbody>
+                  </table>
+                </div>
+              </div>
+              <!-- Oferentes -->
+              <div>
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+                  <strong>🏢 Oferentes / Licitadores</strong>
+                  <button type="button" class="btn btn-secondary btn-sm" onclick="addOferenteCof()">+ Oferente</button>
+                </div>
+                <div id="cofOferentesWrap"></div>
+              </div>
+            </div>
+            <div class="modal-footer">
+              <button class="btn btn-secondary" onclick="cerrarModalCof()">Cancelar</button>
+              <button class="btn btn-primary" onclick="guardarCof()">💾 Guardar</button>
             </div>
           </div>
         </div>
@@ -7641,9 +7745,10 @@ const PAGE_TITLES = {
   accidentes: '🚨 Accidentes e Incidentes / Accident & Incident Investigation',
   flujoCaja: '💰 Flujo de Caja / Cash Flow Projection',
   solicitudesMat: '📋 Solicitudes de Material / Material Requests',
-  licenciasObra:  '📜 Permisos y Licencias de Obra / Permits & Licenses',
-  catalogoPrecios:'💵 Catálogo de Precios Unitarios / Unit Price Catalog',
-  segurosObra:    '🏥 Seguros de Obra / Insurance Policies',
+  licenciasObra:    '📜 Permisos y Licencias de Obra / Permits & Licenses',
+  catalogoPrecios:  '💵 Catálogo de Precios Unitarios / Unit Price Catalog',
+  segurosObra:      '🏥 Seguros de Obra / Insurance Policies',
+  comparativosOferta: '🔖 Comparativo de Ofertas / Bid Comparison',
 };
 
 const PAGE_LOADERS = {
@@ -7738,9 +7843,10 @@ const PAGE_LOADERS = {
   accidentes:       cargarAccidentes,
   flujoCaja:        cargarFlujoCaja,
   solicitudesMat:   cargarSolicitudesMat,
-  licenciasObra:    cargarLicenciasObra,
-  catalogoPrecios:  cargarCatalogoPrecios,
-  segurosObra:      cargarSegurosObra,
+  licenciasObra:      cargarLicenciasObra,
+  catalogoPrecios:    cargarCatalogoPrecios,
+  segurosObra:        cargarSegurosObra,
+  comparativosOferta: cargarComparativosOferta,
 };
 
 let currentPage = '';
@@ -7864,9 +7970,10 @@ const SYNC_INTERVALS = {
   accidentes:       60,
   flujoCaja:        120,
   solicitudesMat:   60,
-  licenciasObra:    120,
-  catalogoPrecios:  300,
-  segurosObra:      180,
+  licenciasObra:      120,
+  catalogoPrecios:    300,
+  segurosObra:        180,
+  comparativosOferta: 120,
 };
 
 let _syncTimer = null, _syncLabelTimer = null, _syncLastTs = null;
@@ -17228,6 +17335,267 @@ function exportarFinanzas() {
   // Abrir informe en nueva pestaña usando el endpoint de informes
   window.open(`/informe-obra/${obraId}?tipo=financiero`, '_blank');
 }
+
+// ── COMPARATIVO DE OFERTAS / BID COMPARISON (NEW-97) ─────────────────────────
+let tblCof = null, _cofData = [], _cofDetalleId = null;
+const COF_ESTADO_COLOR = { abierto:'var(--accent)', adjudicado:'var(--success)', desierto:'#777', cancelado:'var(--danger)' };
+const COF_TIPO_LABEL   = { suministro:'Suministro', subcontrata:'Subcontrata', servicio:'Servicio', alquiler:'Alquiler' };
+
+async function cargarComparativosOferta() {
+  const data = await api('/comparativos-oferta');
+  _cofData = data.data || [];
+  const s = data.stats || {};
+  document.getElementById('cofKpis').innerHTML = [
+    { label:'Total', val: s.total||0, icon:'🔖' },
+    { label:'Abiertos', val: s.abiertos||0, icon:'📋', color: s.abiertos ? 'var(--accent)' : '' },
+    { label:'Adjudicados', val: s.adjudicados||0, icon:'✅' },
+    { label:'Importe adj.', val: Number(s.importe_adj||0).toLocaleString('es-ES',{minimumFractionDigits:2}) + ' €', icon:'💶' },
+  ].map(k => `<div class="kpi-mini" style="background:#fff;border-radius:10px;padding:12px;box-shadow:0 2px 6px rgba(0,0,0,.07)">
+    <div style="font-size:20px">${k.icon}</div>
+    <div style="font-size:22px;font-weight:700;color:${k.color||'var(--accent)'}">${k.val}</div>
+    <div style="font-size:11px;color:#888">${k.label}</div></div>`).join('');
+  const bdg = document.getElementById('cofBadge');
+  if (bdg) { bdg.textContent = s.abiertos||0; bdg.style.display = (s.abiertos||0) ? 'inline-flex' : 'none'; }
+  if (!tblCof) {
+    tblCof = new Tabulator('#tblCofWrap', {
+      data: _cofData, layout: 'fitColumns', responsiveLayout: 'collapse',
+      columns: [
+        { title:'Número', field:'numero', width:130 },
+        { title:'Tipo', field:'tipo', width:110, formatter: c => COF_TIPO_LABEL[c.getValue()]||c.getValue() },
+        { title:'Título', field:'titulo', minWidth:200 },
+        { title:'Estado', field:'estado', width:110, formatter: c => `<span style="background:${COF_ESTADO_COLOR[c.getValue()]||'#ddd'};color:#fff;padding:2px 8px;border-radius:12px;font-size:11px">${c.getValue()}</span>` },
+        { title:'Fecha', field:'fecha', width:100 },
+        { title:'F. Límite', field:'fecha_limite', width:100 },
+        { title:'Adjudicado a', field:'adjudicado_a', minWidth:130 },
+        { title:'Importe adj. (€)', field:'importe_adj', width:130, formatter:'money', formatterParams:{decimal:',',thousand:'.',precision:2} },
+        { title:'Ver', width:70, formatter: () => '<span style="cursor:pointer;color:var(--accent)">🔍</span>', cellClick: (e,c) => verDetalleCof(c.getRow().getData().id) },
+        { title:'Editar', width:70, formatter: () => '<span style="cursor:pointer;color:var(--accent)">✏️</span>', cellClick: (e,c) => editarCof(c.getRow().getData().id) },
+      ]
+    });
+  } else { tblCof.replaceData(_cofData); }
+  filtrarComparativosOferta();
+}
+
+function filtrarComparativosOferta() {
+  if (!tblCof) return;
+  const est = document.getElementById('cofFiltroEstado')?.value;
+  const tip = document.getElementById('cofFiltroTipo')?.value;
+  const q   = (document.getElementById('cofFiltroQ')?.value||'').toLowerCase();
+  tblCof.setFilter(r => {
+    if (est && r.estado !== est) return false;
+    if (tip && r.tipo !== tip) return false;
+    if (q && !(r.titulo?.toLowerCase().includes(q)||r.numero?.toLowerCase().includes(q)||r.adjudicado_a?.toLowerCase().includes(q))) return false;
+    return true;
+  });
+}
+
+function verDetalleCof(id) {
+  const d = _cofData.find(r => r.id === id);
+  if (!d) return;
+  _cofDetalleId = id;
+  const partidas  = typeof d.partidas  === 'string' ? JSON.parse(d.partidas)  : (d.partidas  || []);
+  const oferentes = typeof d.oferentes === 'string' ? JSON.parse(d.oferentes) : (d.oferentes || []);
+  document.getElementById('cofDetalleTitulo').textContent = `${d.numero} — ${d.titulo}`;
+  // Build comparison matrix
+  let html = '<table style="border-collapse:collapse;width:100%;font-size:13px">';
+  html += '<thead><tr style="background:#f0f4ff">';
+  html += '<th style="padding:8px;border:1px solid #ddd;text-align:left">Partida</th>';
+  html += '<th style="padding:8px;border:1px solid #ddd;text-align:left">Descripción</th>';
+  html += '<th style="padding:8px;border:1px solid #ddd;text-align:right">Cant.</th>';
+  html += '<th style="padding:8px;border:1px solid #ddd">Ud.</th>';
+  oferentes.forEach(o => {
+    html += `<th style="padding:8px;border:1px solid #ddd;text-align:right;${o.adjudicado?'background:#d4edda;color:#155724;font-weight:700':''}">${o.nombre}</th>`;
+    html += `<th style="padding:8px;border:1px solid #ddd;text-align:right;${o.adjudicado?'background:#d4edda;color:#155724':''}">TOTAL</th>`;
+  });
+  html += '</tr></thead><tbody>';
+  const totalesPorOferente = oferentes.map(() => 0);
+  partidas.forEach((p, pi) => {
+    html += '<tr>';
+    html += `<td style="padding:8px;border:1px solid #ddd">${p.codigo||'-'}</td>`;
+    html += `<td style="padding:8px;border:1px solid #ddd">${p.descripcion||''}</td>`;
+    html += `<td style="padding:8px;border:1px solid #ddd;text-align:right">${p.cantidad||''}</td>`;
+    html += `<td style="padding:8px;border:1px solid #ddd;text-align:center">${p.unidad||'ud'}</td>`;
+    // find minimum price for this partida
+    const precios = oferentes.map(o => {
+      const entry = (o.precios||[]).find(pr => pr.partida_idx === pi);
+      return entry ? parseFloat(entry.precio_unit)||0 : null;
+    });
+    const minP = Math.min(...precios.filter(v => v !== null && v > 0));
+    oferentes.forEach((o, oi) => {
+      const entry = (o.precios||[]).find(pr => pr.partida_idx === pi);
+      const pu = entry ? parseFloat(entry.precio_unit)||0 : null;
+      const total = pu !== null && p.cantidad ? pu * parseFloat(p.cantidad) : null;
+      totalesPorOferente[oi] += total || 0;
+      const isMin = pu !== null && pu > 0 && pu === minP;
+      const bg = isMin ? 'background:#d4edda' : '';
+      html += `<td style="padding:8px;border:1px solid #ddd;text-align:right;${bg}">${pu !== null ? pu.toFixed(4) : '-'}</td>`;
+      html += `<td style="padding:8px;border:1px solid #ddd;text-align:right;${bg}">${total !== null ? total.toFixed(2) : '-'}</td>`;
+    });
+    html += '</tr>';
+  });
+  // Totals row
+  html += '<tr style="background:#f5f5f5;font-weight:700">';
+  html += `<td colspan="4" style="padding:8px;border:1px solid #ddd">TOTAL</td>`;
+  const minTotal = Math.min(...totalesPorOferente.filter(v=>v>0));
+  totalesPorOferente.forEach((t, oi) => {
+    const isMin = t > 0 && t === minTotal;
+    html += `<td colspan="2" style="padding:8px;border:1px solid #ddd;text-align:right;${isMin?'background:#d4edda;color:#155724':''}${oferentes[oi].adjudicado?';border:2px solid #28a745':''}">${t.toLocaleString('es-ES',{minimumFractionDigits:2})} €</td>`;
+  });
+  html += '</tr></tbody></table>';
+  if (d.criterio_adj) html += `<div style="margin-top:12px;color:#666;font-size:13px">⚖️ Criterio: ${d.criterio_adj}</div>`;
+  if (d.adjudicado_a) html += `<div style="margin-top:4px;color:#155724;font-size:13px;font-weight:600">✅ Adjudicado a: ${d.adjudicado_a} — ${(d.importe_adj||0).toLocaleString('es-ES',{minimumFractionDigits:2})} €</div>`;
+  document.getElementById('cofDetalleTabla').innerHTML = html;
+  document.getElementById('cofDetalle').style.display = 'block';
+  document.getElementById('cofDetalle').scrollIntoView({ behavior:'smooth' });
+}
+
+function addPartidaCof(p = {}) {
+  const tbody = document.getElementById('cofPartidasBody');
+  const idx = tbody.children.length;
+  const tr = document.createElement('tr');
+  tr.innerHTML = `
+    <td><input type="text" value="${p.codigo||''}" placeholder="P${idx+1}" style="width:60px;padding:4px;border:1px solid #ccc;border-radius:4px" data-field="codigo"></td>
+    <td><input type="text" value="${p.descripcion||''}" placeholder="Descripción..." style="width:100%;padding:4px;border:1px solid #ccc;border-radius:4px" data-field="descripcion"></td>
+    <td><input type="number" value="${p.cantidad||''}" min="0" step="0.01" style="width:80px;padding:4px;border:1px solid #ccc;border-radius:4px" data-field="cantidad"></td>
+    <td><select style="padding:4px;border:1px solid #ccc;border-radius:4px" data-field="unidad">
+      ${['ud','m','m2','m3','kg','t','h','ml','pa','l'].map(u=>`<option ${u===(p.unidad||'ud')?'selected':''}>${u}</option>`).join('')}
+    </select></td>
+    <td><button type="button" onclick="this.closest('tr').remove();recalcOferentesGrid()" style="background:var(--danger);color:#fff;border:none;border-radius:4px;padding:2px 6px;cursor:pointer">✕</button></td>`;
+  tbody.appendChild(tr);
+  recalcOferentesGrid();
+}
+
+function getPartidasCof() {
+  const rows = document.getElementById('cofPartidasBody').children;
+  return Array.from(rows).map(tr => ({
+    codigo: tr.querySelector('[data-field="codigo"]').value.trim()||null,
+    descripcion: tr.querySelector('[data-field="descripcion"]').value.trim(),
+    cantidad: parseFloat(tr.querySelector('[data-field="cantidad"]').value)||null,
+    unidad: tr.querySelector('[data-field="unidad"]').value,
+  }));
+}
+
+function addOferenteCof(o = {}) {
+  const wrap = document.getElementById('cofOferentesWrap');
+  const idx  = wrap.children.length;
+  const partidas = getPartidasCof();
+  const div  = document.createElement('div');
+  div.className = 'oferente-block';
+  div.style.cssText = 'border:1px solid #ddd;border-radius:8px;padding:12px;margin-bottom:10px';
+  let preciosHtml = '';
+  partidas.forEach((p, pi) => {
+    const prev = (o.precios||[]).find(pr=>pr.partida_idx===pi);
+    preciosHtml += `<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+      <label style="flex:1;font-size:12px;color:#555">${p.descripcion||'Partida '+(pi+1)}</label>
+      <input type="number" data-pi="${pi}" min="0" step="0.0001" value="${prev?.precio_unit||''}" placeholder="€/ud" style="width:100px;padding:4px;border:1px solid #ccc;border-radius:4px">
+      <input type="text" data-pi-obs="${pi}" value="${prev?.observaciones||''}" placeholder="Obs." style="width:140px;padding:4px;border:1px solid #ccc;border-radius:4px">
+    </div>`;
+  });
+  div.innerHTML = `
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+      <input type="text" class="oferente-nombre" value="${o.nombre||''}" placeholder="Nombre proveedor/empresa" style="flex:1;padding:6px;border:1px solid #ccc;border-radius:6px;font-weight:600">
+      <input type="text" class="oferente-contacto" value="${o.contacto||''}" placeholder="Contacto / email / tlf" style="flex:1;padding:6px;border:1px solid #ccc;border-radius:6px">
+      <label style="font-size:12px;display:flex;align-items:center;gap:4px"><input type="checkbox" class="oferente-adj" ${o.adjudicado?'checked':''}> Adjudicado</label>
+      <button type="button" onclick="this.closest('.oferente-block').remove()" style="background:var(--danger);color:#fff;border:none;border-radius:4px;padding:4px 8px;cursor:pointer">✕</button>
+    </div>
+    <div class="oferente-precios">${preciosHtml||'<span style="color:#999;font-size:12px">Añade partidas primero para ingresar precios</span>'}</div>`;
+  wrap.appendChild(div);
+}
+
+function recalcOferentesGrid() {
+  // Rebuild precios rows in existing oferentes to reflect new partidas
+  const partidas = getPartidasCof();
+  document.querySelectorAll('.oferente-block').forEach(block => {
+    const prev = {};
+    block.querySelectorAll('[data-pi]').forEach(inp => { prev[inp.dataset.pi] = inp.value; });
+    const prevObs = {};
+    block.querySelectorAll('[data-pi-obs]').forEach(inp => { prevObs[inp.dataset.piObs] = inp.value; });
+    let html = '';
+    partidas.forEach((p, pi) => {
+      html += `<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+        <label style="flex:1;font-size:12px;color:#555">${p.descripcion||'Partida '+(pi+1)}</label>
+        <input type="number" data-pi="${pi}" min="0" step="0.0001" value="${prev[pi]||''}" placeholder="€/ud" style="width:100px;padding:4px;border:1px solid #ccc;border-radius:4px">
+        <input type="text" data-pi-obs="${pi}" value="${prevObs[pi]||''}" placeholder="Obs." style="width:140px;padding:4px;border:1px solid #ccc;border-radius:4px">
+      </div>`;
+    });
+    block.querySelector('.oferente-precios').innerHTML = html || '<span style="color:#999;font-size:12px">Añade partidas primero</span>';
+  });
+}
+
+function getOferentesCof() {
+  return Array.from(document.querySelectorAll('.oferente-block')).map(block => ({
+    nombre: block.querySelector('.oferente-nombre').value.trim(),
+    contacto: block.querySelector('.oferente-contacto').value.trim()||null,
+    adjudicado: block.querySelector('.oferente-adj').checked,
+    precios: Array.from(block.querySelectorAll('[data-pi]')).map(inp => ({
+      partida_idx: parseInt(inp.dataset.pi),
+      precio_unit: parseFloat(inp.value)||null,
+      observaciones: block.querySelector(`[data-pi-obs="${inp.dataset.pi}"]`)?.value.trim()||null,
+    })).filter(p => p.precio_unit !== null),
+  }));
+}
+
+function abrirModalCof(d = {}) {
+  document.getElementById('modalCofTitulo').textContent = d.id ? 'Editar Comparativo' : 'Nuevo Comparativo';
+  document.getElementById('cofTitulo').value   = d.titulo || '';
+  document.getElementById('cofTipo').value     = d.tipo || 'suministro';
+  document.getElementById('cofEstado').value   = d.estado || 'abierto';
+  document.getElementById('cofFecha').value    = d.fecha || new Date().toISOString().slice(0,10);
+  document.getElementById('cofFechaLim').value = d.fecha_limite || '';
+  document.getElementById('cofCriterio').value = d.criterio_adj || '';
+  document.getElementById('cofAdj').value      = d.adjudicado_a || '';
+  document.getElementById('cofImpAdj').value   = d.importe_adj || '';
+  document.getElementById('cofDesc').value     = d.descripcion || '';
+  document.getElementById('cofNotas').value    = d.notas || '';
+  // Partidas
+  document.getElementById('cofPartidasBody').innerHTML = '';
+  const partidas = d.id ? (typeof d.partidas === 'string' ? JSON.parse(d.partidas) : d.partidas||[]) : [];
+  partidas.forEach(p => addPartidaCof(p));
+  // Oferentes
+  document.getElementById('cofOferentesWrap').innerHTML = '';
+  const oferentes = d.id ? (typeof d.oferentes === 'string' ? JSON.parse(d.oferentes) : d.oferentes||[]) : [];
+  oferentes.forEach(o => addOferenteCof(o));
+  document.getElementById('modalCof')._cofId = d.id || null;
+  document.getElementById('modalCof').style.display = 'flex';
+}
+
+function editarCof(id) {
+  const d = _cofData.find(r => r.id === id);
+  if (d) abrirModalCof(d);
+}
+
+async function guardarCof() {
+  const id = document.getElementById('modalCof')._cofId;
+  const body = {
+    titulo: document.getElementById('cofTitulo').value.trim(),
+    tipo: document.getElementById('cofTipo').value,
+    estado: document.getElementById('cofEstado').value,
+    fecha: document.getElementById('cofFecha').value,
+    fecha_limite: document.getElementById('cofFechaLim').value||null,
+    criterio_adj: document.getElementById('cofCriterio').value.trim()||null,
+    adjudicado_a: document.getElementById('cofAdj').value.trim()||null,
+    importe_adj: parseFloat(document.getElementById('cofImpAdj').value)||null,
+    descripcion: document.getElementById('cofDesc').value.trim()||null,
+    notas: document.getElementById('cofNotas').value.trim()||null,
+    partidas: getPartidasCof(),
+    oferentes: getOferentesCof(),
+  };
+  if (!body.titulo || !body.fecha) { toast('Título y fecha son obligatorios','error'); return; }
+  if (id) await api(`/comparativos-oferta/${id}`, { method:'PUT', body: JSON.stringify(body) });
+  else    await api('/comparativos-oferta', { method:'POST', body: JSON.stringify(body) });
+  cerrarModalCof();
+  cargarComparativosOferta();
+  toast(id ? 'Comparativo actualizado' : 'Comparativo creado', 'ok');
+}
+
+async function eliminarCof(id) {
+  if (!confirm('¿Eliminar este comparativo?')) return;
+  await api(`/comparativos-oferta/${id}`, { method:'DELETE' });
+  cargarComparativosOferta();
+  toast('Comparativo eliminado', 'ok');
+}
+
+function cerrarModalCof() { document.getElementById('modalCof').style.display = 'none'; }
 
 // ── LICENCIAS Y PERMISOS DE OBRA / PERMITS & LICENSES (NEW-94) ───────────────
 let tblLicenciasObra = null, _loData = [];
