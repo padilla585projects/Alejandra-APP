@@ -4647,6 +4647,14 @@ export default {
         if (method === 'PUT')    return await actualizarRiesgo(_rid2, request, env);
         if (method === 'DELETE') return await eliminarRiesgo(_rid2, request, env);
       }
+      // -- Puntos de Accion / Action Items (NEW-60) --------------------------
+      if (path === '/accion-items' && method === 'GET')  return await getAccionItems(request, env);
+      if (path === '/accion-items' && method === 'POST') return await crearAccionItem(request, env);
+      if (path.startsWith('/accion-items/')) {
+        const _aiid = parseInt(path.split('/accion-items/')[1]);
+        if (method === 'PUT')    return await actualizarAccionItem(_aiid, request, env);
+        if (method === 'DELETE') return await eliminarAccionItem(_aiid, request, env);
+      }
       // â”€â”€ RFIs â€” Consultas TÃ©cnicas (NEW-34) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
       if (path === '/rfis'                  && method === 'GET')  return await getRfis(request, env);
       if (path === '/rfis'                  && method === 'POST') return await crearRfi(request, env);
@@ -15570,6 +15578,114 @@ async function eliminarRiesgo(id, request, env) {
   const auth = await getAuth(request, env);
   if (!auth?.empresa_id) return err('No autorizado', 403);
   await env.DB.prepare(`DELETE FROM riesgos_obra WHERE id=? AND empresa_id=?`).bind(id, auth.empresa_id).run();
+  return json({ ok: true });
+}
+
+// ============================================================
+// NEW-60  Puntos de Accion / Action Items
+// ============================================================
+
+async function ensureAccionItemsTable(env) {
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS accion_items (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    empresa_id      INTEGER NOT NULL,
+    obra_id         INTEGER,
+    acta_id         INTEGER,
+    numero          TEXT,
+    descripcion     TEXT NOT NULL,
+    responsable     TEXT,
+    fecha_limite    TEXT,
+    prioridad       TEXT DEFAULT 'normal',
+    estado          TEXT DEFAULT 'abierto',
+    categoria       TEXT DEFAULT 'general',
+    notas           TEXT,
+    fecha_cierre    TEXT,
+    cerrado_por     TEXT,
+    created_at      TEXT DEFAULT (datetime('now')),
+    updated_at      TEXT DEFAULT (datetime('now'))
+  )`).run().catch(()=>{});
+}
+
+async function getAccionItems(request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth?.empresa_id) return err('No autorizado', 403);
+  await ensureAccionItemsTable(env);
+  const url = new URL(request.url);
+  const obraId  = url.searchParams.get('obra_id');
+  const estado  = url.searchParams.get('estado');
+  const resp    = url.searchParams.get('responsable');
+  const actaId  = url.searchParams.get('acta_id');
+  let q = `SELECT a.*, ar.titulo as acta_titulo FROM accion_items a
+           LEFT JOIN actas_reunion ar ON a.acta_id = ar.id
+           WHERE a.empresa_id=?`;
+  const params = [auth.empresa_id];
+  if (obraId) { q += ` AND a.obra_id=?`;   params.push(obraId); }
+  if (estado) { q += ` AND a.estado=?`;    params.push(estado); }
+  if (resp)   { q += ` AND a.responsable LIKE ?`; params.push(`%${resp}%`); }
+  if (actaId) { q += ` AND a.acta_id=?`;  params.push(actaId); }
+  q += ` ORDER BY CASE a.prioridad WHEN 'urgente' THEN 0 WHEN 'alta' THEN 1 WHEN 'normal' THEN 2 WHEN 'baja' THEN 3 ELSE 4 END, a.fecha_limite ASC NULLS LAST, a.id DESC LIMIT 500`;
+  const { results } = await env.DB.prepare(q).bind(...params).all();
+  const items   = results || [];
+  const hoy     = new Date().toISOString().slice(0,10);
+  const abiertos  = items.filter(i=>i.estado==='abierto').length;
+  const enCurso   = items.filter(i=>i.estado==='en_curso').length;
+  const cerrados  = items.filter(i=>i.estado==='cerrado').length;
+  const vencidos  = items.filter(i=>i.estado!=='cerrado' && i.fecha_limite && i.fecha_limite < hoy).length;
+  const urgentes  = items.filter(i=>i.prioridad==='urgente' && i.estado!=='cerrado').length;
+  return json({ items, total: items.length, abiertos, enCurso, cerrados, vencidos, urgentes });
+}
+
+async function crearAccionItem(request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth?.empresa_id) return err('No autorizado', 403);
+  await ensureAccionItemsTable(env);
+  const b = await request.json();
+  const yr = new Date().getFullYear();
+  const { results: cnt } = await env.DB.prepare(
+    `SELECT COUNT(*)+1 as n FROM accion_items WHERE empresa_id=? AND substr(numero,4,4)=?`
+  ).bind(auth.empresa_id, String(yr)).all();
+  const n = cnt?.[0]?.n || 1;
+  const numero = b.numero || `AI-${yr}-${String(n).padStart(4,'0')}`;
+  const { meta } = await env.DB.prepare(`
+    INSERT INTO accion_items
+      (empresa_id, obra_id, acta_id, numero, descripcion, responsable,
+       fecha_limite, prioridad, estado, categoria, notas)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?)
+  `).bind(
+    auth.empresa_id, b.obra_id||null, b.acta_id||null, numero,
+    b.descripcion||'Punto de accion',
+    b.responsable||null, b.fecha_limite||null,
+    b.prioridad||'normal', b.estado||'abierto',
+    b.categoria||'general', b.notas||null
+  ).run();
+  return json({ ok: true, id: meta.last_row_id, numero });
+}
+
+async function actualizarAccionItem(id, request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth?.empresa_id) return err('No autorizado', 403);
+  const b = await request.json();
+  const fechaCierre = b.estado === 'cerrado' && !b.fecha_cierre ? new Date().toISOString().slice(0,10) : (b.fecha_cierre||null);
+  await env.DB.prepare(`
+    UPDATE accion_items SET descripcion=?, responsable=?, fecha_limite=?,
+      prioridad=?, estado=?, categoria=?, notas=?,
+      fecha_cierre=?, cerrado_por=?,
+      obra_id=?, acta_id=?, updated_at=datetime('now')
+    WHERE id=? AND empresa_id=?
+  `).bind(
+    b.descripcion||null, b.responsable||null, b.fecha_limite||null,
+    b.prioridad||'normal', b.estado||'abierto', b.categoria||'general', b.notas||null,
+    fechaCierre, b.cerrado_por||null,
+    b.obra_id||null, b.acta_id||null,
+    id, auth.empresa_id
+  ).run();
+  return json({ ok: true });
+}
+
+async function eliminarAccionItem(id, request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth?.empresa_id) return err('No autorizado', 403);
+  await env.DB.prepare(`DELETE FROM accion_items WHERE id=? AND empresa_id=?`).bind(id, auth.empresa_id).run();
   return json({ ok: true });
 }
 

@@ -580,6 +580,10 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
     <button class="nav-item" data-page="obraDashboard" onclick="navTo('obraDashboard')">
       <span class="nav-icon">🎯</span> Dashboard de Obra
     </button>
+    <button class="nav-item" data-page="accionItems" onclick="navTo('accionItems')">
+      <span class="nav-icon">📌</span> Puntos de Accion
+      <span class="nav-badge" id="aiBadge" style="display:none">!</span>
+    </button>
 
     <div class="sidebar-section" onclick="sidebarToggle(this)" data-sid="seguimiento"><span>📓 Seguimiento</span><span class="sec-chevron">▼</span></div>
     <button class="nav-item" data-page="partesPanel" onclick="navTo('partesPanel')">
@@ -2077,6 +2081,34 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
         </div>
         <div id="entregasKpi" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:12px;margin-bottom:16px"></div>
         <div class="tbl-wrap"><div id="tblEntregas"></div></div>
+      </div>
+
+      <!-- PUNTOS DE ACCION / ACTION ITEMS TRACKER -->
+      <div class="page" id="pageAccionItems">
+        <div class="page-title">📌 Puntos de Accion</div>
+        <div class="page-sub">Action Items — Compromisos de reuniones y tareas de seguimiento con responsable y fecha limite</div>
+        <div class="tbl-toolbar" style="flex-wrap:wrap;gap:8px;margin-bottom:14px">
+          <select class="tbl-search" id="filterAIObra" style="min-width:220px" onchange="cargarAccionItems()"></select>
+          <select class="tbl-search" id="filterAIEstado" style="min-width:140px" onchange="cargarAccionItems()">
+            <option value="">Todos los estados</option>
+            <option value="abierto">Abierto</option>
+            <option value="en_curso">En curso</option>
+            <option value="cerrado">Cerrado</option>
+          </select>
+          <select class="tbl-search" id="filterAIPrioridad" style="min-width:140px" onchange="cargarAccionItems()">
+            <option value="">Toda prioridad</option>
+            <option value="urgente">Urgente</option>
+            <option value="alta">Alta</option>
+            <option value="normal">Normal</option>
+            <option value="baja">Baja</option>
+          </select>
+          <input class="tbl-search" id="filterAIResp" placeholder="Filtrar responsable..." style="min-width:160px" oninput="cargarAccionItems()">
+          <button class="btn btn-primary" onclick="abrirModalAI()">+ Nuevo punto</button>
+          <button class="btn btn-secondary" onclick="exportarTabla(tblAccionItems,'accion-items')">⬇ CSV</button>
+          <button class="btn btn-secondary" onclick="cargarAccionItems()">🔄</button>
+        </div>
+        <div id="aiKpi" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:12px;margin-bottom:16px"></div>
+        <div class="tbl-wrap"><div id="tblAccionItems"></div></div>
       </div>
 
       <!-- DASHBOARD DE OBRA / PROJECT COMMAND CENTER -->
@@ -3830,6 +3862,7 @@ const PAGE_TITLES = {
   ordenesCambio: '🔄 Ordenes de Cambio / Change Orders',
   riesgosObra: '⚠️ Registro de Riesgos / Risk Register',
   obraDashboard: '🎯 Dashboard de Obra',
+  accionItems: '📌 Puntos de Accion / Action Items',
 };
 
 const PAGE_LOADERS = {
@@ -3892,6 +3925,7 @@ const PAGE_LOADERS = {
   ordenesCambio: cargarOrdenesCambio,
   riesgosObra: cargarRiesgos,
   obraDashboard: cargarObraDashboard,
+  accionItems: cargarAccionItems,
 };
 
 let currentPage = '';
@@ -3983,6 +4017,7 @@ const SYNC_INTERVALS = {
   ordenesCambio: 90,
   riesgosObra: 120,
   obraDashboard: 90,
+  accionItems: 60,
 };
 
 let _syncTimer = null, _syncLabelTimer = null, _syncLastTs = null;
@@ -14022,6 +14057,171 @@ async function _getObrasOpts() {
   const obras = r?.obras || r?.results || [];
   return (selectedId) => '<option value="">-- Sin obra --</option>' +
     obras.map(o => `<option value="${o.id}"${o.id==selectedId?' selected':''}>${o.nombre||o.codigo}</option>`).join('');
+}
+
+// ── PUNTOS DE ACCION / ACTION ITEMS (NEW-60) ──────────────────────
+let tblAccionItems = null;
+let _aiEditId = null;
+
+const AI_PRIO_COLOR = { urgente:'#7c3aed', alta:'var(--danger)', normal:'var(--primary)', baja:'var(--muted)' };
+const AI_PRIO_ICON  = { urgente:'🚨', alta:'🔴', normal:'🔵', baja:'⚪' };
+const AI_ESTADO_COLOR = { abierto:'var(--warning)', en_curso:'var(--primary)', cerrado:'var(--success)' };
+
+async function cargarAccionItems() {
+  if (document.getElementById('filterAIObra')?.options.length <= 1)
+    poblarSelectObras('filterAIObra');
+  const obraId = document.getElementById('filterAIObra')?.value || '';
+  const estado = document.getElementById('filterAIEstado')?.value || '';
+  const prio   = document.getElementById('filterAIPrioridad')?.value || '';
+  const resp   = document.getElementById('filterAIResp')?.value.trim() || '';
+  let url = '/accion-items?';
+  if (obraId) url += `obra_id=${obraId}&`;
+  if (estado) url += `estado=${estado}&`;
+  if (resp)   url += `responsable=${encodeURIComponent(resp)}&`;
+  const r = await api(url);
+  let items = r?.items || [];
+  if (prio) items = items.filter(i => i.prioridad === prio);
+  // Badge
+  const badge = document.getElementById('aiBadge');
+  const v = (r?.vencidos||0) + (r?.urgentes||0);
+  if (badge) { badge.textContent = v||'!'; badge.style.display = v>0?'':'none'; }
+  // KPIs
+  const kpi = document.getElementById('aiKpi');
+  if (kpi) kpi.innerHTML = `
+    <div class="kpi-card"><div class="kpi-icon">📌</div><div class="kpi-value">${r?.total||0}</div><div class="kpi-label">Total</div></div>
+    <div class="kpi-card"><div class="kpi-icon">⏳</div><div class="kpi-value" style="color:var(--warning)">${r?.abiertos||0}</div><div class="kpi-label">Abiertos</div></div>
+    <div class="kpi-card"><div class="kpi-icon">🔄</div><div class="kpi-value" style="color:var(--primary)">${r?.enCurso||0}</div><div class="kpi-label">En curso</div></div>
+    <div class="kpi-card"><div class="kpi-icon">✅</div><div class="kpi-value" style="color:var(--success)">${r?.cerrados||0}</div><div class="kpi-label">Cerrados</div></div>
+    <div class="kpi-card"><div class="kpi-icon">⚠️</div><div class="kpi-value" style="color:var(--danger)">${r?.vencidos||0}</div><div class="kpi-label">Vencidos</div></div>
+    <div class="kpi-card"><div class="kpi-icon">🚨</div><div class="kpi-value" style="color:#7c3aed">${r?.urgentes||0}</div><div class="kpi-label">Urgentes</div></div>
+  `;
+  const hoy = new Date().toISOString().slice(0,10);
+  const cols = [
+    { title: 'N°', field: 'numero', width: 120 },
+    { title: 'Descripcion', field: 'descripcion', minWidth: 220 },
+    { title: 'Prio.', field: 'prioridad', width: 90, formatter: cell => {
+      const v=cell.getValue()||''; return `<span style="color:${AI_PRIO_COLOR[v]||'inherit'};font-weight:700">${AI_PRIO_ICON[v]||''}</span>`;
+    }},
+    { title: 'Estado', field: 'estado', width: 110, formatter: cell => {
+      const v=cell.getValue()||''; return `<span style="color:${AI_ESTADO_COLOR[v]||'inherit'};font-weight:700">${v.replace('_',' ')}</span>`;
+    }},
+    { title: 'Responsable', field: 'responsable', width: 140 },
+    { title: 'Categoria', field: 'categoria', width: 110 },
+    { title: 'Acta', field: 'acta_titulo', width: 160, formatter: cell => cell.getValue() || '-' },
+    { title: 'Fecha limite', field: 'fecha_limite', width: 115, formatter: cell => {
+      const v=cell.getValue(); if(!v) return '-';
+      const row=cell.getRow().getData();
+      return v<hoy && row.estado!=='cerrado'
+        ? `<span style="color:var(--danger);font-weight:700">${fmtFecha(v)} ⚠️</span>` : fmtFecha(v);
+    }},
+    { title: 'Acciones', field: 'id', width: 120, headerSort:false, formatter: cell => {
+      const id=cell.getValue(); const row=cell.getRow().getData();
+      const closed = row.estado==='cerrado';
+      return `<button class="btn btn-secondary btn-sm" onclick="abrirModalAI(${id})" style="margin-right:4px">✏️</button>
+              ${!closed?`<button class="btn btn-primary btn-sm" onclick="cerrarAccionItem(${id})" style="margin-right:4px">✅</button>`:''}
+              <button class="btn btn-danger btn-sm" onclick="eliminarAccionItem(${id})">🗑</button>`;
+    }},
+  ];
+  if (tblAccionItems) { tblAccionItems.replaceData(items); return; }
+  tblAccionItems = new Tabulator('#tblAccionItems', {
+    data: items, layout:'fitColumns', responsiveLayout:'collapse',
+    pagination:'local', paginationSize:30,
+    placeholder:'<div class="empty-state"><div class="empty-icon">📌</div><div class="empty-text">No hay puntos de accion pendientes.</div></div>',
+    columns: cols,
+    langs:{es:{pagination:{first:'«',first_title:'Primera',last:'»',last_title:'Ultima',prev:'‹',prev_title:'Anterior',next:'›',next_title:'Siguiente'}}}, locale:'es',
+    rowFormatter: row => {
+      const d = row.getData();
+      if (d.prioridad==='urgente' && d.estado!=='cerrado')
+        row.getElement().style.background = '#7c3aed0a';
+      else if (d.fecha_limite && d.fecha_limite < hoy && d.estado!=='cerrado')
+        row.getElement().style.background = '#ef44440a';
+    },
+  });
+}
+
+async function abrirModalAI(id = null) {
+  _aiEditId = id;
+  let d = {};
+  if (id) {
+    const r = await api(`/accion-items?`);
+    d = (r?.items || []).find(i => i.id === id) || {};
+  }
+  const isEdit = !!id;
+  const obrasOpts = await _getObrasOpts();
+  const modalHtml = `
+    <div class="modal" id="modalAI" style="display:flex">
+      <div class="modal-content" style="max-width:620px">
+        <div class="modal-header">
+          <span class="modal-title">${isEdit?'✏️ Editar':'+ Nuevo'} Punto de Accion</span>
+          <button class="modal-close" onclick="cerrarModal('modalAI')">✕</button>
+        </div>
+        <div class="modal-body" style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+          <label style="grid-column:1/-1">Descripcion *
+            <textarea class="form-input" id="aiDesc" rows="2" style="resize:vertical">${d.descripcion||''}</textarea></label>
+          <label>Obra<select class="form-input" id="aiObra">${obrasOpts(d.obra_id)}</select></label>
+          <label>Responsable<input class="form-input" id="aiResp" value="${d.responsable||''}"></label>
+          <label>Prioridad<select class="form-input" id="aiPrio">
+            <option value="baja"${d.prioridad==='baja'?' selected':''}>⚪ Baja</option>
+            <option value="normal"${d.prioridad==='normal'||!d.prioridad?' selected':''}>🔵 Normal</option>
+            <option value="alta"${d.prioridad==='alta'?' selected':''}>🔴 Alta</option>
+            <option value="urgente"${d.prioridad==='urgente'?' selected':''}>🚨 Urgente</option>
+          </select></label>
+          <label>Estado<select class="form-input" id="aiEstado">
+            <option value="abierto"${d.estado==='abierto'||!d.estado?' selected':''}>Abierto</option>
+            <option value="en_curso"${d.estado==='en_curso'?' selected':''}>En curso</option>
+            <option value="cerrado"${d.estado==='cerrado'?' selected':''}>Cerrado</option>
+          </select></label>
+          <label>Fecha limite<input class="form-input" type="date" id="aiFL" value="${d.fecha_limite||''}"></label>
+          <label>Categoria<select class="form-input" id="aiCat">
+            ${['general','diseno','seguridad','calidad','plazo','coste','proveedor','cliente','otro'].map(c=>`<option value="${c}"${d.categoria===c?' selected':''}>${c}</option>`).join('')}
+          </select></label>
+          <label style="grid-column:1/-1">Notas
+            <textarea class="form-input" id="aiNotas" rows="2" style="resize:vertical">${d.notas||''}</textarea></label>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" onclick="cerrarModal('modalAI')">Cancelar</button>
+          <button class="btn btn-primary" onclick="guardarAccionItem(${id||0})">Guardar</button>
+        </div>
+      </div>
+    </div>`;
+  abrirModal(modalHtml);
+}
+
+async function guardarAccionItem(id) {
+  const desc = document.getElementById('aiDesc')?.value.trim();
+  if (!desc) return showToast('La descripcion es obligatoria', 'error');
+  const body = {
+    descripcion: desc,
+    obra_id:     document.getElementById('aiObra')?.value    || null,
+    responsable: document.getElementById('aiResp')?.value.trim() || null,
+    prioridad:   document.getElementById('aiPrio')?.value    || 'normal',
+    estado:      document.getElementById('aiEstado')?.value  || 'abierto',
+    fecha_limite:document.getElementById('aiFL')?.value      || null,
+    categoria:   document.getElementById('aiCat')?.value     || 'general',
+    notas:       document.getElementById('aiNotas')?.value.trim() || null,
+  };
+  const url = id ? `/accion-items/${id}` : '/accion-items';
+  const method = id ? 'PUT' : 'POST';
+  const r = await api(url, method, body);
+  if (r?.ok || r?.id) {
+    cerrarModal('modalAI');
+    showToast(id ? 'Punto actualizado ✅' : `Punto creado ✅ (${r.numero||''})`, 'success');
+    tblAccionItems = null;
+    cargarAccionItems();
+  } else showToast(r?.error || 'Error al guardar', 'error');
+}
+
+async function cerrarAccionItem(id) {
+  const r = await api(`/accion-items/${id}`, 'PUT', { estado: 'cerrado', fecha_cierre: new Date().toISOString().slice(0,10) });
+  if (r?.ok) { showToast('Punto cerrado ✅', 'success'); tblAccionItems=null; cargarAccionItems(); }
+  else showToast('Error al cerrar', 'error');
+}
+
+async function eliminarAccionItem(id) {
+  if (!confirm('¿Eliminar este punto de accion?')) return;
+  const r = await api(`/accion-items/${id}`, 'DELETE');
+  if (r?.ok) { showToast('Punto eliminado', 'success'); tblAccionItems=null; cargarAccionItems(); }
+  else showToast('Error al eliminar', 'error');
 }
 
 // ── DASHBOARD DE OBRA / PROJECT COMMAND CENTER (NEW-60) ───────────
