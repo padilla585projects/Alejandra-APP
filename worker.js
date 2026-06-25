@@ -4721,6 +4721,14 @@ export default {
         if (method === 'PUT')    return await actualizarVisitaObra(_vid, request, env);
         if (method === 'DELETE') return await eliminarVisitaObra(_vid, request, env);
       }
+      // ── Field Reports / Informes de Campo (NEW-78) ────────────────────────────────
+      if (path === '/field-reports' && method === 'GET')  return await getFieldReports(request, env);
+      if (path === '/field-reports' && method === 'POST') return await crearFieldReport(request, env);
+      if (path.startsWith('/field-reports/')) {
+        const _frId = parseInt(path.split('/field-reports/')[1]);
+        if (method === 'PUT')    return await actualizarFieldReport(_frId, request, env);
+        if (method === 'DELETE') return await eliminarFieldReport(_frId, request, env);
+      }
       // ── Equipos de Medicion / Calibracion (NEW-77) ────────────────────────────────
       if (path === '/equipos-medicion' && method === 'GET')  return await getEquiposMedicion(request, env);
       if (path === '/equipos-medicion' && method === 'POST') return await crearEquipoMedicion(request, env);
@@ -17175,6 +17183,106 @@ async function eliminarEquipoMedicion(id, request, env) {
   const em = await env.DB.prepare('SELECT id FROM equipos_medicion WHERE id=? AND empresa_id=?').bind(id, empresa_id).first();
   if (!em) return err('Equipo no encontrado', 404);
   await env.DB.prepare('DELETE FROM equipos_medicion WHERE id=? AND empresa_id=?').bind(id, empresa_id).run();
+  return json({ ok: true, deleted: true });
+}
+
+// ── Field Reports / Informes de Campo (NEW-78) ────────────────────────────
+
+async function ensureFieldReportTable(env) {
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS field_reports (
+    id                     INTEGER PRIMARY KEY AUTOINCREMENT,
+    empresa_id             INTEGER NOT NULL,
+    obra_id                INTEGER,
+    numero                 TEXT,
+    fecha                  TEXT NOT NULL,
+    preparado_por          TEXT,
+    estado                 TEXT NOT NULL DEFAULT 'borrador',
+    clima_manana           TEXT,
+    clima_tarde            TEXT,
+    temperatura            REAL,
+    trabajadores_presentes INTEGER DEFAULT 0,
+    equipos_presentes      TEXT,
+    trabajo_realizado      TEXT,
+    materiales_recibidos   TEXT,
+    issues                 TEXT,
+    visitas                TEXT,
+    observaciones          TEXT,
+    created_at             TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at             TEXT NOT NULL DEFAULT (datetime('now'))
+  )`).run();
+}
+
+async function getFieldReports(request, env) {
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  await ensureFieldReportTable(env);
+  const url = new URL(request.url);
+  const obra_id = url.searchParams.get('obra_id');
+  const desde   = url.searchParams.get('desde');
+  const hasta   = url.searchParams.get('hasta');
+  const estado  = url.searchParams.get('estado');
+  let q = `SELECT fr.*, o.nombre as obra_nombre
+            FROM field_reports fr
+            LEFT JOIN obras o ON o.id = fr.obra_id
+            WHERE fr.empresa_id = ?`;
+  const params = [empresa_id];
+  if (obra_id) { q += ' AND fr.obra_id = ?'; params.push(parseInt(obra_id)); }
+  if (desde)   { q += ' AND fr.fecha >= ?';  params.push(desde); }
+  if (hasta)   { q += ' AND fr.fecha <= ?';  params.push(hasta); }
+  if (estado)  { q += ' AND fr.estado = ?';  params.push(estado); }
+  q += ' ORDER BY fr.fecha DESC, fr.created_at DESC LIMIT 200';
+  const { results } = await env.DB.prepare(q).bind(...params).all();
+  return json({ items: results });
+}
+
+async function crearFieldReport(request, env) {
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  await ensureFieldReportTable(env);
+  const body = await request.json();
+  const { obra_id, fecha, preparado_por, estado='borrador', clima_manana, clima_tarde, temperatura,
+          trabajadores_presentes=0, equipos_presentes, trabajo_realizado, materiales_recibidos, issues, visitas, observaciones } = body;
+  if (!fecha) return err('Fecha requerida', 400);
+  // Auto-number: FR-YYYY-NNNN
+  const year = new Date().getFullYear();
+  const { results: last } = await env.DB.prepare(
+    `SELECT numero FROM field_reports WHERE empresa_id=? AND numero LIKE ? ORDER BY id DESC LIMIT 1`
+  ).bind(empresa_id, `FR-${year}-%`).all();
+  let seq = 1;
+  if (last.length > 0) {
+    const parts = last[0].numero.split('-');
+    seq = parseInt(parts[parts.length-1]) + 1;
+  }
+  const numero = `FR-${year}-${String(seq).padStart(4,'0')}`;
+  const r = await env.DB.prepare(`
+    INSERT INTO field_reports (empresa_id, obra_id, numero, fecha, preparado_por, estado, clima_manana, clima_tarde, temperatura, trabajadores_presentes, equipos_presentes, trabajo_realizado, materiales_recibidos, issues, visitas, observaciones)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+  `).bind(empresa_id, obra_id||null, numero, fecha, preparado_por||null, estado, clima_manana||null, clima_tarde||null, temperatura||null, trabajadores_presentes, equipos_presentes||null, trabajo_realizado||null, materiales_recibidos||null, issues||null, visitas||null, observaciones||null).run();
+  return json({ ok: true, id: r.meta.last_row_id, numero }, 201);
+}
+
+async function actualizarFieldReport(id, request, env) {
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const fr = await env.DB.prepare('SELECT id FROM field_reports WHERE id=? AND empresa_id=?').bind(id, empresa_id).first();
+  if (!fr) return err('Informe no encontrado', 404);
+  const body = await request.json();
+  const campos = ['obra_id','fecha','preparado_por','estado','clima_manana','clima_tarde','temperatura','trabajadores_presentes','equipos_presentes','trabajo_realizado','materiales_recibidos','issues','visitas','observaciones'];
+  const sets = [], vals = [];
+  campos.forEach(f => { if (f in body) { sets.push(`${f}=?`); vals.push(body[f]); } });
+  if (!sets.length) return json({ ok: true });
+  sets.push("updated_at=datetime('now')");
+  vals.push(id, empresa_id);
+  await env.DB.prepare(`UPDATE field_reports SET ${sets.join(',')} WHERE id=? AND empresa_id=?`).bind(...vals).run();
+  return json({ ok: true });
+}
+
+async function eliminarFieldReport(id, request, env) {
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const fr = await env.DB.prepare('SELECT id FROM field_reports WHERE id=? AND empresa_id=?').bind(id, empresa_id).first();
+  if (!fr) return err('Informe no encontrado', 404);
+  await env.DB.prepare('DELETE FROM field_reports WHERE id=? AND empresa_id=?').bind(id, empresa_id).run();
   return json({ ok: true, deleted: true });
 }
 

@@ -665,6 +665,9 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
     <button class="nav-item" data-page="diarioObra" onclick="navTo('diarioObra')">
       <span class="nav-icon">📓</span> Diario de Obra
     </button>
+    <button class="nav-item" data-page="fieldReports" onclick="navTo('fieldReports')">
+      <span class="nav-icon">📝</span> Informes de Campo
+    </button>
     <button class="nav-item" data-page="fotosObra" onclick="navTo('fotosObra')">
       <span class="nav-icon">📷</span> Galería de Fotos
     </button>
@@ -2293,6 +2296,129 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
               <button class="btn btn-danger" id="btnEliminarCalEvento" style="display:none" onclick="eliminarCalEvento()">🗑 Eliminar</button>
               <button class="btn btn-secondary" onclick="cerrarModalCalEvento()">Cancelar</button>
               <button class="btn btn-primary" onclick="guardarCalEvento()">💾 Guardar</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- INFORMES DE CAMPO / FIELD REPORTS (NEW-78) -->
+      <div class="page" id="pageFieldReports">
+        <div class="page-title">📝 Informes de Campo</div>
+        <div class="page-sub">Field Reports · Registro estructurado de situación diaria — clima, personal, trabajo, materiales e incidencias</div>
+        <div class="tbl-toolbar" style="flex-wrap:wrap;gap:8px;margin-bottom:14px">
+          <select class="tbl-search" id="filterFrObra" style="min-width:220px" onchange="cargarFieldReports()">
+            <option value="">🏗 Todas las obras</option>
+          </select>
+          <input type="date" class="tbl-search" id="filterFrDesde" style="min-width:130px" onchange="cargarFieldReports()">
+          <input type="date" class="tbl-search" id="filterFrHasta" style="min-width:130px" onchange="cargarFieldReports()">
+          <select class="tbl-search" id="filterFrEstado" style="min-width:140px" onchange="cargarFieldReports()">
+            <option value="">Todos los estados</option>
+            <option value="borrador">✏️ Borrador</option>
+            <option value="enviado">📤 Enviado</option>
+            <option value="aprobado">✅ Aprobado</option>
+          </select>
+          <button class="btn btn-primary" onclick="abrirModalFr()">+ Nuevo informe</button>
+          <button class="btn btn-secondary" onclick="exportarTabla(tblFieldReports,'field_reports')">⬇ CSV</button>
+          <button class="btn btn-secondary" onclick="cargarFieldReports()">🔄 Actualizar</button>
+        </div>
+        <div id="frKpiStrip" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:12px;margin-bottom:18px"></div>
+        <div class="tbl-wrap"><div id="tblFieldReports"></div></div>
+
+        <!-- MODAL INFORME DE CAMPO -->
+        <div class="modal-overlay" id="modalFr" onclick="if(event.target===this)cerrarModalFr()">
+          <div class="modal" style="max-width:700px;width:98%">
+            <div class="modal-header">
+              <span id="modalFrTitle">Nuevo Informe de Campo</span>
+              <button class="modal-close" onclick="cerrarModalFr()">✕</button>
+            </div>
+            <div class="modal-body" style="padding:20px">
+              <input type="hidden" id="frId">
+              <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:14px">
+                <div>
+                  <label class="form-label">Obra</label>
+                  <select class="form-control" id="frObraId">
+                    <option value="">Sin obra específica</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="form-label">Fecha *</label>
+                  <input type="date" class="form-control" id="frFecha">
+                </div>
+                <div>
+                  <label class="form-label">Estado</label>
+                  <select class="form-control" id="frEstado">
+                    <option value="borrador">✏️ Borrador</option>
+                    <option value="enviado">📤 Enviado</option>
+                    <option value="aprobado">✅ Aprobado</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="form-label">Clima mañana</label>
+                  <select class="form-control" id="frClimaMañana">
+                    <option value="">—</option>
+                    <option value="soleado">☀️ Soleado</option>
+                    <option value="nublado">⛅ Nublado</option>
+                    <option value="lluvia">🌧️ Lluvia</option>
+                    <option value="tormenta">⛈️ Tormenta</option>
+                    <option value="viento">💨 Viento fuerte</option>
+                    <option value="nieve">❄️ Nieve/Hielo</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="form-label">Clima tarde</label>
+                  <select class="form-control" id="frClimaTarde">
+                    <option value="">—</option>
+                    <option value="soleado">☀️ Soleado</option>
+                    <option value="nublado">⛅ Nublado</option>
+                    <option value="lluvia">🌧️ Lluvia</option>
+                    <option value="tormenta">⛈️ Tormenta</option>
+                    <option value="viento">💨 Viento fuerte</option>
+                    <option value="nieve">❄️ Nieve/Hielo</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="form-label">Temperatura (°C)</label>
+                  <input type="number" class="form-control" id="frTemperatura" placeholder="22" step="0.5">
+                </div>
+                <div>
+                  <label class="form-label">Trabajadores presentes</label>
+                  <input type="number" class="form-control" id="frTrabajadores" min="0" value="0">
+                </div>
+                <div style="grid-column:span 2">
+                  <label class="form-label">Preparado por</label>
+                  <input class="form-control" id="frPreparadoPor" placeholder="Nombre del encargado / responsable">
+                </div>
+              </div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
+                <div style="grid-column:1/-1">
+                  <label class="form-label">Trabajo realizado</label>
+                  <textarea class="form-control" id="frTrabajoRealizado" rows="3" placeholder="Actividades ejecutadas hoy…"></textarea>
+                </div>
+                <div>
+                  <label class="form-label">Equipos presentes en obra</label>
+                  <textarea class="form-control" id="frEquipos" rows="2" placeholder="Grúa, retroexcavadora, plataforma…"></textarea>
+                </div>
+                <div>
+                  <label class="form-label">Materiales recibidos</label>
+                  <textarea class="form-control" id="frMateriales" rows="2" placeholder="Hormigón, acero, cable bandeja…"></textarea>
+                </div>
+                <div>
+                  <label class="form-label">Incidencias / Issues</label>
+                  <textarea class="form-control" id="frIssues" rows="2" placeholder="Problemas, bloqueos, retrasos…"></textarea>
+                </div>
+                <div>
+                  <label class="form-label">Visitas recibidas</label>
+                  <textarea class="form-control" id="frVisitas" rows="2" placeholder="Dirección facultativa, cliente, inspector…"></textarea>
+                </div>
+                <div style="grid-column:1/-1">
+                  <label class="form-label">Observaciones adicionales</label>
+                  <textarea class="form-control" id="frObservaciones" rows="2" placeholder="Cualquier otra anotación relevante…"></textarea>
+                </div>
+              </div>
+            </div>
+            <div class="modal-footer">
+              <button class="btn btn-secondary" onclick="cerrarModalFr()">Cancelar</button>
+              <button class="btn btn-primary" onclick="guardarFr()">💾 Guardar</button>
             </div>
           </div>
         </div>
@@ -5396,6 +5522,7 @@ const PAGE_TITLES = {
   itpObra: '🔬 ITP / Plan de Inspección y Ensayo',
   timesheets: '🕐 Hojas de Tiempo',
   equiposMedicion: '📏 Equipos de Medición y Calibración',
+  fieldReports: '📝 Informes de Campo / Field Reports',
 };
 
 const PAGE_LOADERS = {
@@ -5474,6 +5601,7 @@ const PAGE_LOADERS = {
   itpObra:       cargarItp,
   timesheets:      cargarTimesheets,
   equiposMedicion: cargarEquiposMed,
+  fieldReports:    cargarFieldReports,
 };
 
 let currentPage = '';
@@ -5581,6 +5709,7 @@ const SYNC_INTERVALS = {
   itpObra:        120,
   timesheets:       60,
   equiposMedicion: 120,
+  fieldReports:     90,
 };
 
 let _syncTimer = null, _syncLabelTimer = null, _syncLastTs = null;
@@ -14942,6 +15071,134 @@ function exportarFinanzas() {
   // Abrir informe en nueva pestaña usando el endpoint de informes
   window.open(`/informe-obra/${obraId}?tipo=financiero`, '_blank');
 }
+
+// ── INFORMES DE CAMPO / FIELD REPORTS (NEW-78) ──────────────────
+let tblFieldReports = null;
+let _frData         = [];
+const FR_CLIMA_ICON = { soleado:'☀️', nublado:'⛅', lluvia:'🌧️', tormenta:'⛈️', viento:'💨', nieve:'❄️' };
+const FR_ESTADO_COLOR = { borrador:'var(--muted)', enviado:'var(--primary)', aprobado:'var(--success)' };
+const FR_ESTADO_LABEL = { borrador:'✏️ Borrador', enviado:'📤 Enviado', aprobado:'✅ Aprobado' };
+
+async function cargarFieldReports() {
+  if (document.getElementById('filterFrObra')?.options.length <= 1) poblarSelectObras('filterFrObra');
+  const hoy = new Date();
+  const primerDiaMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1).toISOString().slice(0,10);
+  const filterDesde = document.getElementById('filterFrDesde');
+  const filterHasta = document.getElementById('filterFrHasta');
+  if (filterDesde && !filterDesde.value) filterDesde.value = primerDiaMes;
+  if (filterHasta && !filterHasta.value) filterHasta.value = hoy.toISOString().slice(0,10);
+  const obraId = document.getElementById('filterFrObra')?.value||'';
+  const desde  = document.getElementById('filterFrDesde')?.value||'';
+  const hasta  = document.getElementById('filterFrHasta')?.value||'';
+  const estado = document.getElementById('filterFrEstado')?.value||'';
+  let url = '/field-reports?';
+  if (obraId)  url += `obra_id=${obraId}&`;
+  if (desde)   url += `desde=${desde}&`;
+  if (hasta)   url += `hasta=${hasta}&`;
+  if (estado)  url += `estado=${estado}&`;
+  const r = await api(url);
+  _frData = r.items || [];
+
+  const totalTrab = _frData.reduce((s,f)=>s+(f.trabajadores_presentes||0),0);
+  const borradores = _frData.filter(f=>f.estado==='borrador').length;
+  const aprobados  = _frData.filter(f=>f.estado==='aprobado').length;
+  document.getElementById('frKpiStrip').innerHTML = [
+    { icon:'📝', value:_frData.length,   label:'Informes',         cls:'' },
+    { icon:'✅', value:aprobados,         label:'Aprobados',         cls: aprobados>0?'ok':'' },
+    { icon:'✏️', value:borradores,        label:'Borradores',        cls: borradores>0?'warn':'' },
+    { icon:'👷', value:totalTrab,         label:'Total jornadas-pers.', cls:'' },
+  ].map(k=>`<div class="kpi-card" style="padding:14px"><div class="kpi-icon" style="font-size:20px">${k.icon}</div>
+    <div class="kpi-value ${k.cls}" style="font-size:22px">${k.value}</div>
+    <div class="kpi-label">${k.label}</div></div>`).join('');
+
+  if (tblFieldReports) { tblFieldReports.replaceData(_frData); return; }
+  tblFieldReports = new Tabulator('#tblFieldReports', {
+    data:_frData, layout:'fitColumns', pagination:'local', paginationSize:20, responsiveLayout:'collapse',
+    placeholder:'<div class="empty-state"><div class="empty-icon">📝</div><div class="empty-text">Sin informes de campo en el período seleccionado</div></div>',
+    rowClick: (e, row) => editarFr(row.getData().id),
+    columns:[
+      { title:'Nº', field:'numero', width:130,
+        formatter:c=>`<code style="background:var(--surface2);padding:2px 6px;border-radius:4px;font-size:11px">${c.getValue()||'—'}</code>` },
+      { title:'Fecha', field:'fecha', width:100, sorter:'date', formatter:c=>fmtFecha(c.getValue()||'') },
+      { title:'Obra', field:'obra_nombre', minWidth:160 },
+      { title:'Preparado por', field:'preparado_por', width:150 },
+      { title:'Clima', field:'clima_manana', width:90, hozAlign:'center',
+        formatter:c=>FR_CLIMA_ICON[c.getValue()]||'—' },
+      { title:'Trabajadores', field:'trabajadores_presentes', width:110, hozAlign:'center',
+        formatter:c=>`<b>${c.getValue()||0}</b>` },
+      { title:'Estado', field:'estado', width:120,
+        formatter:c=>`<span style="color:${FR_ESTADO_COLOR[c.getValue()]||'inherit'};font-weight:700">${FR_ESTADO_LABEL[c.getValue()]||c.getValue()}</span>` },
+      { title:'Acciones', field:'id', width:90, headerSort:false,
+        formatter:c=>`<button class="btn btn-secondary btn-sm" onclick="editarFr(${c.getValue()});event.stopPropagation()">✏️</button>
+                      <button class="btn btn-danger btn-sm" onclick="eliminarFr(${c.getValue()});event.stopPropagation()">🗑</button>` },
+    ]
+  });
+}
+
+function abrirModalFr(d) {
+  d = d || {};
+  document.getElementById('frId').value = d.id || '';
+  document.getElementById('frFecha').value = d.fecha || new Date().toISOString().slice(0,10);
+  document.getElementById('frEstado').value = d.estado || 'borrador';
+  document.getElementById('frClimaMañana').value = d.clima_manana || '';
+  document.getElementById('frClimaTarde').value = d.clima_tarde || '';
+  document.getElementById('frTemperatura').value = d.temperatura || '';
+  document.getElementById('frTrabajadores').value = d.trabajadores_presentes || 0;
+  document.getElementById('frPreparadoPor').value = d.preparado_por || '';
+  document.getElementById('frTrabajoRealizado').value = d.trabajo_realizado || '';
+  document.getElementById('frEquipos').value = d.equipos_presentes || '';
+  document.getElementById('frMateriales').value = d.materiales_recibidos || '';
+  document.getElementById('frIssues').value = d.issues || '';
+  document.getElementById('frVisitas').value = d.visitas || '';
+  document.getElementById('frObservaciones').value = d.observaciones || '';
+  document.getElementById('modalFrTitle').textContent = d.id ? `Editar Informe ${d.numero||''}` : 'Nuevo Informe de Campo';
+  if (document.getElementById('frObraId')?.options.length <= 1) poblarSelectObras('frObraId');
+  setTimeout(()=>{ if (d.obra_id) document.getElementById('frObraId').value = d.obra_id; }, 200);
+  document.getElementById('modalFr').classList.add('show');
+}
+
+async function editarFr(id) {
+  const fr = _frData.find(f=>f.id===id);
+  if (!fr) return;
+  abrirModalFr(fr);
+}
+
+async function guardarFr() {
+  const id = parseInt(document.getElementById('frId').value||'0')||0;
+  const fecha = document.getElementById('frFecha')?.value;
+  if (!fecha) { toast('Fecha obligatoria','err'); return; }
+  const body = {
+    obra_id:               document.getElementById('frObraId')?.value||null,
+    fecha,
+    estado:                document.getElementById('frEstado')?.value||'borrador',
+    clima_manana:          document.getElementById('frClimaMañana')?.value||null,
+    clima_tarde:           document.getElementById('frClimaTarde')?.value||null,
+    temperatura:           document.getElementById('frTemperatura')?.value ? parseFloat(document.getElementById('frTemperatura').value) : null,
+    trabajadores_presentes: parseInt(document.getElementById('frTrabajadores')?.value||0),
+    preparado_por:         document.getElementById('frPreparadoPor')?.value?.trim()||null,
+    trabajo_realizado:     document.getElementById('frTrabajoRealizado')?.value?.trim()||null,
+    equipos_presentes:     document.getElementById('frEquipos')?.value?.trim()||null,
+    materiales_recibidos:  document.getElementById('frMateriales')?.value?.trim()||null,
+    issues:                document.getElementById('frIssues')?.value?.trim()||null,
+    visitas:               document.getElementById('frVisitas')?.value?.trim()||null,
+    observaciones:         document.getElementById('frObservaciones')?.value?.trim()||null,
+  };
+  const method = id ? 'PUT' : 'POST';
+  const url    = id ? `/field-reports/${id}` : '/field-reports';
+  const r = await api(url, { method, body:JSON.stringify(body) });
+  if (r.ok||r.id) { toast(id?'Actualizado':`Informe ${r.numero||''} creado`,'ok'); cerrarModalFr(); tblFieldReports=null; cargarFieldReports(); }
+  else toast(r.error||'Error','err');
+}
+
+async function eliminarFr(id) {
+  const fr = _frData.find(f=>f.id===id);
+  if (!confirm(`¿Eliminar informe del ${fmtFecha(fr?.fecha||'')}?`)) return;
+  const r = await api(`/field-reports/${id}`, { method:'DELETE' });
+  if (r.ok) { toast('Eliminado','ok'); tblFieldReports=null; cargarFieldReports(); }
+  else toast('Error','err');
+}
+
+function cerrarModalFr() { document.getElementById('modalFr').classList.remove('show'); }
 
 // ── GALERÍA DE FOTOS DE OBRA (NEW-53) ────────────────────────────
 let _fotosObraData = [], _fotoActualId = null, _fotoFile = null;
