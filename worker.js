@@ -4721,6 +4721,14 @@ export default {
         if (method === 'PUT')    return await actualizarVisitaObra(_vid, request, env);
         if (method === 'DELETE') return await eliminarVisitaObra(_vid, request, env);
       }
+      // ── Lecciones Aprendidas / Lessons Learned (NEW-82) ──────────────────────────
+      if (path === '/lecciones' && method === 'GET')  return await getLecciones(request, env);
+      if (path === '/lecciones' && method === 'POST') return await crearLeccion(request, env);
+      if (path.startsWith('/lecciones/')) {
+        const _lcId = parseInt(path.split('/lecciones/')[1]);
+        if (method === 'PUT')    return await actualizarLeccion(_lcId, request, env);
+        if (method === 'DELETE') return await eliminarLeccion(_lcId, request, env);
+      }
       // ── Entregables de Proyecto / Project Deliverables (NEW-81) ─────────────────
       if (path === '/entregables' && method === 'GET')  return await getEntregables(request, env);
       if (path === '/entregables' && method === 'POST') return await crearEntregable(request, env);
@@ -17655,5 +17663,104 @@ async function eliminarEntregable(id, request, env) {
   const { empresa_id } = await getAuth(request, env);
   if (!empresa_id) return err('No autorizado', 403);
   await env.DB.prepare(`DELETE FROM entregables WHERE id=? AND empresa_id=?`).bind(id, empresa_id).run();
+  return json({ ok: true, deleted: true });
+}
+
+// ── Lecciones Aprendidas / Lessons Learned (NEW-82) ──────────────────────────
+async function ensureLeccionesTable(env) {
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS lecciones_aprendidas (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    empresa_id    INTEGER NOT NULL,
+    obra_id       INTEGER,
+    numero        TEXT,
+    titulo        TEXT NOT NULL,
+    categoria     TEXT NOT NULL DEFAULT 'tecnica',
+    fase          TEXT NOT NULL DEFAULT 'ejecucion',
+    impacto       TEXT NOT NULL DEFAULT 'medio',
+    descripcion_problema TEXT,
+    causa_raiz    TEXT,
+    leccion       TEXT NOT NULL,
+    recomendacion TEXT,
+    autor         TEXT,
+    estado        TEXT NOT NULL DEFAULT 'borrador',
+    published_at  TEXT,
+    created_at    TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at    TEXT NOT NULL DEFAULT (datetime('now'))
+  )`).run().catch(()=>{});
+}
+
+async function getLecciones(request, env) {
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  await ensureLeccionesTable(env);
+  const url = new URL(request.url);
+  const obra_id   = url.searchParams.get('obra_id');
+  const categoria = url.searchParams.get('categoria');
+  const estado    = url.searchParams.get('estado');
+  let q = `SELECT * FROM lecciones_aprendidas WHERE empresa_id=?`;
+  const p = [empresa_id];
+  if (obra_id)   { q += ` AND obra_id=?`;   p.push(parseInt(obra_id)); }
+  if (categoria) { q += ` AND categoria=?`; p.push(categoria); }
+  if (estado)    { q += ` AND estado=?`;    p.push(estado); }
+  q += ` ORDER BY created_at DESC`;
+  const { results } = await env.DB.prepare(q).bind(...p).all();
+  return json({ lecciones: results || [] });
+}
+
+async function crearLeccion(request, env) {
+  const { empresa_id, nombre } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  await ensureLeccionesTable(env);
+  const b = await request.json();
+  if (!b.titulo || !b.leccion) return err('titulo y leccion son requeridos', 400);
+  const anio = new Date().getFullYear();
+  const last = await env.DB.prepare(
+    `SELECT numero FROM lecciones_aprendidas WHERE empresa_id=? AND numero LIKE ? ORDER BY id DESC LIMIT 1`
+  ).bind(empresa_id, `LL-${anio}-%`).first();
+  let seq = 1;
+  if (last?.numero) { const n = parseInt(last.numero.split('-')[2]); if (!isNaN(n)) seq = n + 1; }
+  const numero = `LL-${anio}-${String(seq).padStart(4,'0')}`;
+  const r = await env.DB.prepare(
+    `INSERT INTO lecciones_aprendidas (empresa_id,obra_id,numero,titulo,categoria,fase,impacto,descripcion_problema,causa_raiz,leccion,recomendacion,autor,estado)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`
+  ).bind(
+    empresa_id,
+    b.obra_id ? parseInt(b.obra_id) : null,
+    numero, b.titulo,
+    b.categoria || 'tecnica',
+    b.fase || 'ejecucion',
+    b.impacto || 'medio',
+    b.descripcion_problema || null,
+    b.causa_raiz || null,
+    b.leccion,
+    b.recomendacion || null,
+    b.autor || nombre || null,
+    b.estado || 'borrador'
+  ).run();
+  return json({ ok: true, id: r.meta.last_row_id, numero }, { status: 201 });
+}
+
+async function actualizarLeccion(id, request, env) {
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  await ensureLeccionesTable(env);
+  const b = await request.json();
+  const allowed = ['titulo','categoria','fase','impacto','descripcion_problema','causa_raiz',
+    'leccion','recomendacion','autor','estado','obra_id','published_at'];
+  const sets = [], params = [];
+  for (const k of allowed) {
+    if (k in b) { sets.push(`${k}=?`); params.push(b[k] ?? null); }
+  }
+  if (!sets.length) return err('Sin cambios', 400);
+  sets.push(`updated_at=datetime('now')`);
+  params.push(id, empresa_id);
+  await env.DB.prepare(`UPDATE lecciones_aprendidas SET ${sets.join(',')} WHERE id=? AND empresa_id=?`).bind(...params).run();
+  return json({ ok: true });
+}
+
+async function eliminarLeccion(id, request, env) {
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  await env.DB.prepare(`DELETE FROM lecciones_aprendidas WHERE id=? AND empresa_id=?`).bind(id, empresa_id).run();
   return json({ ok: true, deleted: true });
 }

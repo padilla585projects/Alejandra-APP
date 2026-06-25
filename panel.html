@@ -680,6 +680,9 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
       <span class="nav-icon">📦</span> Entregables
       <span class="nav-badge" id="entregablesBadge" style="display:none">0</span>
     </button>
+    <button class="nav-item" data-page="lecciones" onclick="navTo('lecciones')">
+      <span class="nav-icon">💡</span> Lecciones Aprendidas
+    </button>
     <button class="nav-item" data-page="fotosObra" onclick="navTo('fotosObra')">
       <span class="nav-icon">📷</span> Galería de Fotos
     </button>
@@ -2308,6 +2311,121 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
               <button class="btn btn-danger" id="btnEliminarCalEvento" style="display:none" onclick="eliminarCalEvento()">🗑 Eliminar</button>
               <button class="btn btn-secondary" onclick="cerrarModalCalEvento()">Cancelar</button>
               <button class="btn btn-primary" onclick="guardarCalEvento()">💾 Guardar</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- LECCIONES APRENDIDAS / LESSONS LEARNED (NEW-82) -->
+      <div class="page" id="pageLecciones">
+        <div class="page-title">💡 Lecciones Aprendidas</div>
+        <div class="tbl-toolbar">
+          <input class="tbl-search" id="searchLc" placeholder="🔍 Buscar lección, categoría..." oninput="filtrarLecciones()">
+          <select class="tbl-search" id="filterLcObra" style="min-width:220px" onchange="tblLc=null;cargarLecciones()">
+            <option value="">— Todas las obras —</option>
+          </select>
+          <select class="tbl-search" id="filterLcCat" style="min-width:140px" onchange="filtrarLecciones()">
+            <option value="">Todas las categorías</option>
+            <option value="tecnica">🔧 Técnica</option>
+            <option value="proceso">📋 Proceso</option>
+            <option value="seguridad">🦺 Seguridad</option>
+            <option value="calidad">✅ Calidad</option>
+            <option value="comercial">💶 Comercial</option>
+            <option value="comunicacion">💬 Comunicación</option>
+            <option value="planificacion">📅 Planificación</option>
+          </select>
+          <select class="tbl-search" id="filterLcImpacto" style="min-width:120px" onchange="filtrarLecciones()">
+            <option value="">Todos los impactos</option>
+            <option value="alto">🔴 Alto</option>
+            <option value="medio">🟡 Medio</option>
+            <option value="bajo">🟢 Bajo</option>
+          </select>
+          <button class="btn btn-primary" onclick="abrirModalLc()">+ Nueva Lección</button>
+          <button class="btn btn-secondary" onclick="exportarTabla(tblLc,'lecciones')">⬇ CSV</button>
+          <button class="btn btn-secondary" onclick="tblLc=null;cargarLecciones()">🔄</button>
+        </div>
+        <div class="tbl-wrap"><div id="tblLc"></div></div>
+
+        <!-- MODAL LECCIÓN -->
+        <div class="modal-overlay" id="modalLc" style="display:none" onclick="if(event.target===this)cerrarModalLc()">
+          <div class="modal" style="max-width:600px">
+            <div class="modal-head">
+              <span id="modalLcTitulo">Nueva Lección Aprendida</span>
+              <button class="modal-close" onclick="cerrarModalLc()">✕</button>
+            </div>
+            <div class="modal-body">
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+                <div class="form-group" style="grid-column:1/-1">
+                  <label class="form-label">Título *</label>
+                  <input class="form-input" id="lcTitulo" placeholder="Resumen de la lección en una línea">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Categoría</label>
+                  <select class="form-select" id="lcCategoria">
+                    <option value="tecnica">🔧 Técnica</option>
+                    <option value="proceso">📋 Proceso</option>
+                    <option value="seguridad">🦺 Seguridad</option>
+                    <option value="calidad">✅ Calidad</option>
+                    <option value="comercial">💶 Comercial</option>
+                    <option value="comunicacion">💬 Comunicación</option>
+                    <option value="planificacion">📅 Planificación</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Fase del Proyecto</label>
+                  <select class="form-select" id="lcFase">
+                    <option value="planificacion">Planificación</option>
+                    <option value="ejecucion" selected>Ejecución</option>
+                    <option value="cierre">Cierre</option>
+                    <option value="general">General</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Impacto</label>
+                  <select class="form-select" id="lcImpacto">
+                    <option value="alto">🔴 Alto</option>
+                    <option value="medio" selected>🟡 Medio</option>
+                    <option value="bajo">🟢 Bajo</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Estado</label>
+                  <select class="form-select" id="lcEstado">
+                    <option value="borrador">✏️ Borrador</option>
+                    <option value="revision">🔍 En revisión</option>
+                    <option value="publicada">✅ Publicada</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Obra</label>
+                  <select class="form-select" id="lcObraId"><option value="">— Sin obra —</option></select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Autor</label>
+                  <input class="form-input" id="lcAutor" placeholder="Quién aporta esta lección">
+                </div>
+                <div class="form-group" style="grid-column:1/-1">
+                  <label class="form-label">Descripción del Problema / Situación</label>
+                  <textarea class="form-input" id="lcProblema" rows="3" placeholder="¿Qué ocurrió? ¿Cuál fue la situación o el problema?"></textarea>
+                </div>
+                <div class="form-group" style="grid-column:1/-1">
+                  <label class="form-label">Causa Raíz</label>
+                  <textarea class="form-input" id="lcCausa" rows="2" placeholder="¿Por qué ocurrió? Causa principal identificada."></textarea>
+                </div>
+                <div class="form-group" style="grid-column:1/-1">
+                  <label class="form-label">Lección Aprendida *</label>
+                  <textarea class="form-input" id="lcLeccion" rows="3" placeholder="¿Qué aprendimos? ¿Qué haríamos diferente?"></textarea>
+                </div>
+                <div class="form-group" style="grid-column:1/-1">
+                  <label class="form-label">Recomendación / Acción preventiva</label>
+                  <textarea class="form-input" id="lcRecom" rows="2" placeholder="¿Qué medidas o acciones se recomiendan para el futuro?"></textarea>
+                </div>
+              </div>
+            </div>
+            <div class="modal-foot">
+              <button class="btn btn-secondary" onclick="cerrarModalLc()">Cancelar</button>
+              <span id="lcElimBtn"></span>
+              <button class="btn btn-primary" onclick="guardarLc()">💾 Guardar</button>
             </div>
           </div>
         </div>
@@ -5898,6 +6016,7 @@ const PAGE_TITLES = {
   garantias: '🛡️ Gestión de Garantías / Warranty Management',
   alquileres: '🏗️ Alquileres de Equipo / Equipment Rental Log',
   entregables: '📦 Entregables de Proyecto / Project Deliverables',
+  lecciones: '💡 Lecciones Aprendidas / Lessons Learned',
 };
 
 const PAGE_LOADERS = {
@@ -5980,6 +6099,7 @@ const PAGE_LOADERS = {
   garantias:       cargarGarantias,
   alquileres:      cargarAlquileres,
   entregables:     cargarEntregables,
+  lecciones:       cargarLecciones,
 };
 
 let currentPage = '';
@@ -6091,6 +6211,7 @@ const SYNC_INTERVALS = {
   garantias:       120,
   alquileres:      90,
   entregables:     120,
+  lecciones:       180,
 };
 
 let _syncTimer = null, _syncLabelTimer = null, _syncLastTs = null;
@@ -15451,6 +15572,116 @@ function exportarFinanzas() {
   if (!obraId) return showToast('Selecciona una obra primero', 'warning');
   // Abrir informe en nueva pestaña usando el endpoint de informes
   window.open(`/informe-obra/${obraId}?tipo=financiero`, '_blank');
+}
+
+// ── LECCIONES APRENDIDAS / LESSONS LEARNED (NEW-82) ────────────────
+let tblLc = null, _lcData = [];
+const LC_CAT_ICON  = { tecnica:'🔧', proceso:'📋', seguridad:'🦺', calidad:'✅', comercial:'💶', comunicacion:'💬', planificacion:'📅' };
+const LC_IMPACTO_COLOR = { alto:'var(--danger)', medio:'var(--warning)', bajo:'var(--success)' };
+const LC_ESTADO_COLOR  = { borrador:'var(--muted)', revision:'var(--warning)', publicada:'var(--success)' };
+const LC_ESTADO_LABEL  = { borrador:'✏️ Borrador', revision:'🔍 En revisión', publicada:'✅ Publicada' };
+
+async function cargarLecciones() {
+  if (document.getElementById('filterLcObra')?.options.length <= 1) poblarSelectObras('filterLcObra');
+  const obraId = document.getElementById('filterLcObra')?.value || '';
+  const r = await api('/lecciones' + (obraId ? `?obra_id=${obraId}` : ''));
+  _lcData = r?.lecciones || [];
+  filtrarLecciones();
+}
+
+function filtrarLecciones() {
+  const q    = (document.getElementById('searchLc')?.value || '').toLowerCase();
+  const cat  = document.getElementById('filterLcCat')?.value || '';
+  const imp  = document.getElementById('filterLcImpacto')?.value || '';
+  const data = _lcData.filter(l => {
+    const matchQ = !q || [l.titulo, l.leccion, l.autor, l.numero, l.recomendacion].some(v => (v||'').toLowerCase().includes(q));
+    const matchC = !cat || l.categoria === cat;
+    const matchI = !imp || l.impacto === imp;
+    return matchQ && matchC && matchI;
+  });
+  if (tblLc) { tblLc.replaceData(data); return; }
+  tblLc = new Tabulator('#tblLc', {
+    data, layout: 'fitColumns', height: 'calc(100vh - 250px)',
+    placeholder: '<div class="empty-state"><div class="empty-icon">💡</div><div class="empty-text">Sin lecciones registradas</div></div>',
+    columns: [
+      { title:'Número', field:'numero', width:130 },
+      { title:'Título', field:'titulo', minWidth:220, formatter: c => `<b>${esc(c.getValue()||'—')}</b>` },
+      { title:'Categoría', field:'categoria', width:130, formatter: c => `${LC_CAT_ICON[c.getValue()]||'💡'} ${c.getValue()||'—'}` },
+      { title:'Fase', field:'fase', width:110 },
+      { title:'Impacto', field:'impacto', width:90, formatter: c => `<span style="color:${LC_IMPACTO_COLOR[c.getValue()]||'var(--muted)'};font-weight:700;text-transform:uppercase">${c.getValue()||'—'}</span>` },
+      { title:'Autor', field:'autor', width:130 },
+      { title:'Estado', field:'estado', width:120, formatter: c => `<span style="color:${LC_ESTADO_COLOR[c.getValue()]||'var(--muted)'};font-weight:600">${LC_ESTADO_LABEL[c.getValue()]||c.getValue()}</span>` },
+      { title:'Lección (resumen)', field:'leccion', minWidth:200, formatter: c => `<span style="color:var(--muted);font-size:12px" title="${esc(c.getValue()||'')}">${esc((c.getValue()||'').substring(0,80))}${(c.getValue()||'').length>80?'…':''}</span>` },
+      { title:'', field:'id', width:80, hozAlign:'center',
+        formatter: c => `<button class="tbl-btn" onclick="editarLc(${c.getValue()})">✏️</button><button class="tbl-btn danger" onclick="eliminarLc(${c.getValue()})">🗑</button>` },
+    ]
+  });
+}
+
+function abrirModalLc(d = {}) {
+  document.getElementById('modalLcTitulo').textContent = d.id ? 'Editar Lección Aprendida' : 'Nueva Lección Aprendida';
+  document.getElementById('lcTitulo').value    = d.titulo || '';
+  document.getElementById('lcCategoria').value = d.categoria || 'tecnica';
+  document.getElementById('lcFase').value      = d.fase || 'ejecucion';
+  document.getElementById('lcImpacto').value   = d.impacto || 'medio';
+  document.getElementById('lcEstado').value    = d.estado || 'borrador';
+  document.getElementById('lcAutor').value     = d.autor || '';
+  document.getElementById('lcProblema').value  = d.descripcion_problema || '';
+  document.getElementById('lcCausa').value     = d.causa_raiz || '';
+  document.getElementById('lcLeccion').value   = d.leccion || '';
+  document.getElementById('lcRecom').value     = d.recomendacion || '';
+  poblarSelectObras('lcObraId');
+  if (d.obra_id) setTimeout(() => { document.getElementById('lcObraId').value = d.obra_id; }, 200);
+  const elimBtn = document.getElementById('lcElimBtn');
+  elimBtn.innerHTML = d.id ? `<button class="btn btn-danger btn-sm" onclick="eliminarLc(${d.id},true)">🗑 Eliminar</button>` : '';
+  document.getElementById('modalLc')._lcId = d.id || null;
+  document.getElementById('modalLc').style.display = 'flex';
+}
+
+async function editarLc(id) {
+  const d = _lcData.find(l => l.id === id);
+  if (d) abrirModalLc(d);
+}
+
+async function guardarLc() {
+  const id   = document.getElementById('modalLc')._lcId;
+  const body = {
+    titulo:               document.getElementById('lcTitulo').value.trim(),
+    categoria:            document.getElementById('lcCategoria').value,
+    fase:                 document.getElementById('lcFase').value,
+    impacto:              document.getElementById('lcImpacto').value,
+    estado:               document.getElementById('lcEstado').value,
+    obra_id:              document.getElementById('lcObraId').value || null,
+    autor:                document.getElementById('lcAutor').value.trim() || null,
+    descripcion_problema: document.getElementById('lcProblema').value.trim() || null,
+    causa_raiz:           document.getElementById('lcCausa').value.trim() || null,
+    leccion:              document.getElementById('lcLeccion').value.trim(),
+    recomendacion:        document.getElementById('lcRecom').value.trim() || null,
+  };
+  if (!body.titulo || !body.leccion) { toast('Título y Lección son obligatorios', 'err'); return; }
+  const r = await api(id ? `/lecciones/${id}` : '/lecciones', { method: id ? 'PUT' : 'POST', body: JSON.stringify(body) });
+  if (r.ok || r.id) {
+    toast(id ? 'Lección actualizada' : `Lección ${r.numero||''} registrada`, 'ok');
+    cerrarModalLc();
+    tblLc = null;
+    cargarLecciones();
+  } else toast('Error al guardar', 'err');
+}
+
+async function eliminarLc(id, desdeModal = false) {
+  if (!confirm('¿Eliminar esta lección aprendida?')) return;
+  const r = await api(`/lecciones/${id}`, { method: 'DELETE' });
+  if (r.ok || r.deleted) {
+    toast('Lección eliminada', 'ok');
+    if (desdeModal) cerrarModalLc();
+    tblLc = null;
+    cargarLecciones();
+  } else toast('Error al eliminar', 'err');
+}
+
+function cerrarModalLc() {
+  document.getElementById('modalLc').style.display = 'none';
+  document.getElementById('modalLc')._lcId = null;
 }
 
 // ── ENTREGABLES DE PROYECTO / PROJECT DELIVERABLES (NEW-81) ────────
