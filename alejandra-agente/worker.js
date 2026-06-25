@@ -516,6 +516,15 @@ RFIs — CONSULTAS TÉCNICAS (tabla: rfis) — nivel Procore:
 - Si hay RFIs con impacto en plazo o coste, mencíonalo en el briefing.
 - Las RFIs son trazabilidad legal — son importantes para reclamaciones y cambios de orden.
 
+ACTAS DE REUNIÓN (tabla: actas_reunion) — KILLER FEATURE vs competencia:
+- Campos: numero (ACTA-001), titulo, tipo (progreso/seguridad/coordinacion/cliente/otro), fecha, convocante, asistentes, resumen, acuerdos, proxima_reunion, estado (borrador/firmada/distribuida)
+- Usa gestionar_acta para crear actas, registrar acuerdos y convertir acuerdos en tareas (crear_tareas_desde_acuerdos).
+- MODO ASISTENTE DE REUNIÓN: si el usuario dice "estoy en una reunión" o "toma nota de la reunión", entra en modo acta: registra asistentes, puntos tratados y acuerdos. Al final crea el acta y pregunta si crea tareas.
+- Cuando el usuario diga "acordamos que X haga Y para el viernes" → registrar en acuerdos Y ofrecer crear tarea.
+- Cuando la reunión acabe: "¿Quieres que cree las tareas automáticamente desde estos acuerdos?"
+- Las actas son trazabilidad legal — críticas en obras con clientes y subcontratas.
+- En briefing matutino: mencionar próximas reuniones y acuerdos pendientes de la última acta.
+
 ÓRDENES DE CAMBIO (tabla: ordenes_cambio) — nivel Procore:
 - Campos: numero (OC-001), titulo, categoria (general/materiales/mano_de_obra/subcontrata/diseño/otro), coste_adicional, dias_extension, estado (propuesta/en_revision/aprobada/rechazada), rfi_id (vinculada), aprobado_por, fecha_aprobacion
 - Usa gestionar_oc para crear, listar, aprobar, rechazar y resumir OCs.
@@ -1290,6 +1299,34 @@ const TOOL_GESTIONAR_OC = {
   }
 };
 
+const TOOL_GESTIONAR_ACTA = {
+  name: 'gestionar_acta',
+  description: 'Gestiona Actas de Reunión de obra. Las actas registran reuniones formales con sus asistentes, puntos tratados, acuerdos y acciones a tomar. Úsalo para crear actas de reuniones, ver el historial de reuniones, y especialmente para crear tareas automáticamente desde los acuerdos de una reunión. Es la herramienta más poderosa de Alejandra: puede tomar notas de una reunión y convertirlas en tareas asignadas.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      accion: {
+        type: 'string',
+        enum: ['crear', 'listar', 'actualizar', 'eliminar', 'crear_tareas_desde_acuerdos'],
+        description: 'Acción a realizar'
+      },
+      obra_id:         { type: 'number', description: 'ID de la obra' },
+      acta_id:         { type: 'number', description: 'ID del acta (para actualizar/eliminar)' },
+      titulo:          { type: 'string', description: 'Título del acta (obligatorio para crear)' },
+      tipo:            { type: 'string', enum: ['progreso','seguridad','coordinacion','cliente','otro'], description: 'Tipo de reunión' },
+      fecha:           { type: 'string', description: 'Fecha de la reunión (YYYY-MM-DD)' },
+      convocante:      { type: 'string', description: 'Quien convoca/preside la reunión' },
+      asistentes:      { type: 'string', description: 'Lista de asistentes separados por comas' },
+      resumen:         { type: 'string', description: 'Resumen de puntos tratados' },
+      acuerdos:        { type: 'string', description: 'Lista de acuerdos y acciones. Formato: "1. Acción - Responsable - Fecha"' },
+      proxima_reunion: { type: 'string', description: 'Fecha de la próxima reunión (YYYY-MM-DD)' },
+      estado:          { type: 'string', enum: ['borrador','firmada','distribuida'], description: 'Estado del acta' },
+      filtro_tipo:     { type: 'string', description: 'Para listar: filtrar por tipo de reunión' }
+    },
+    required: ['accion']
+  }
+};
+
 const TOOL_PENSAR = {
   name: 'pensar',
   description: 'Razona en voz alta sobre un problema antes de actuar. Úsalo para descomponer problemas complejos en pasos. No ejecuta nada, solo registra tu pensamiento.',
@@ -1671,11 +1708,11 @@ const TOOL_CONSULTAR_CONOCIMIENTO = {
 
 const TOOLS_POR_EXPERTO = {
   simple:     [TOOL_MEMORY_READ, TOOL_CONSULTAR_BD, TOOL_ENVIAR_PUSH],
-  app:        [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_CONTROLAR_APP, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_ANALIZAR_FOTO, TOOL_ESTADO_OBRA, TOOL_GESTIONAR_TAREA, TOOL_GESTIONAR_RFI, TOOL_GESTIONAR_OC],
+  app:        [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_CONTROLAR_APP, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_ANALIZAR_FOTO, TOOL_ESTADO_OBRA, TOOL_GESTIONAR_TAREA, TOOL_GESTIONAR_RFI, TOOL_GESTIONAR_OC, TOOL_GESTIONAR_ACTA],
   tecnico:    [TOOL_LEER_ESTADO, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_BUSCAR_WEB, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_NEXUS_MANAGE, TOOL_CONTROLAR_APP, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO],
   web:        [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE],
   reflexion:  [TOOL_MEMORY_SAVE, TOOL_MEMORY_READ, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_PROPOSE_MEJORA, TOOL_BUSCAR_WEB, TOOL_TOMAR_DECISION, TOOL_LEER_ESTADO, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_CONTROLAR_APP, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO],
-  completo:   [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_LEER_ESTADO, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_CONTROLAR_APP, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_ANALIZAR_FOTO, TOOL_ESTADO_OBRA, TOOL_GESTIONAR_TAREA, TOOL_GESTIONAR_RFI, TOOL_GESTIONAR_OC],
+  completo:   [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_LEER_ESTADO, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_CONTROLAR_APP, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_ANALIZAR_FOTO, TOOL_ESTADO_OBRA, TOOL_GESTIONAR_TAREA, TOOL_GESTIONAR_RFI, TOOL_GESTIONAR_OC, TOOL_GESTIONAR_ACTA],
   ingenieria: [TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_ANALIZAR_FOTO, TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME]
 };
 
@@ -6280,6 +6317,132 @@ ${descripcion ? `<div class="info-bar"><span class="badge">${tipo}</span>${descr
         return `❌ Acción "${accion}" no reconocida. Usa: crear, listar, aprobar, rechazar, actualizar, eliminar, resumen.`;
       } catch (err) {
         return `Error gestionando OC: ${err.message}`;
+      }
+    }
+
+    case 'gestionar_acta': {
+      try {
+        if (!env.DB) return 'Base de datos no disponible';
+        const accion = input.accion;
+        const obraId = input.obra_id ? parseInt(input.obra_id) : null;
+        const actaId = input.acta_id ? parseInt(input.acta_id) : null;
+        const eid    = empresa_id || 1;
+
+        // Ensure table
+        await env.DB.prepare(`CREATE TABLE IF NOT EXISTS actas_reunion (
+          id INTEGER PRIMARY KEY AUTOINCREMENT, obra_id INTEGER, empresa_id INTEGER NOT NULL,
+          numero TEXT, titulo TEXT NOT NULL, tipo TEXT DEFAULT 'progreso',
+          fecha TEXT, convocante TEXT, asistentes TEXT, resumen TEXT, acuerdos TEXT,
+          proxima_reunion TEXT, estado TEXT DEFAULT 'borrador',
+          created_at TEXT DEFAULT (datetime('now'))
+        )`).run().catch(()=>{});
+
+        if (accion === 'listar') {
+          let q = 'SELECT * FROM actas_reunion WHERE empresa_id=?';
+          const p = [eid];
+          if (obraId) { q += ' AND obra_id=?'; p.push(obraId); }
+          if (input.filtro_tipo) { q += ' AND tipo=?'; p.push(input.filtro_tipo); }
+          q += ' ORDER BY fecha DESC, created_at DESC LIMIT 10';
+          const { results: actas } = await env.DB.prepare(q).bind(...p).all().catch(()=>({results:[]}));
+          if (!actas.length) return '📝 No hay actas registradas.';
+          const tipoIcon={progreso:'📊',seguridad:'🦺',coordinacion:'🤝',cliente:'🏢',otro:'📋'};
+          const estIcon={borrador:'✏️',firmada:'✅',distribuida:'📤'};
+          let txt = `📝 ACTAS DE REUNIÓN (${actas.length}):\n`;
+          actas.forEach(a => {
+            txt += `• [${a.numero||'ACTA'}] ${tipoIcon[a.tipo]||'📋'} ${estIcon[a.estado]||'✏️'} ${a.titulo}`;
+            if (a.fecha) txt += ` (${a.fecha})`;
+            if (a.convocante) txt += ` — ${a.convocante}`;
+            txt += '\n';
+            if (a.acuerdos) txt += `  📋 ${a.acuerdos.substring(0,100)}${a.acuerdos.length>100?'…':''}\n`;
+          });
+          return txt;
+        }
+
+        if (accion === 'crear') {
+          if (!input.titulo) return '❌ El título es obligatorio para crear un acta.';
+          let numero = 'ACTA-001';
+          try {
+            const last = await env.DB.prepare(
+              `SELECT numero FROM actas_reunion WHERE empresa_id=? ${obraId ? 'AND obra_id=?' : 'AND obra_id IS NULL'} ORDER BY id DESC LIMIT 1`
+            ).bind(...(obraId ? [eid, obraId] : [eid])).first();
+            if (last?.numero) {
+              const n = parseInt(last.numero.replace(/\D/g,'')) || 0;
+              numero = 'ACTA-' + String(n + 1).padStart(3, '0');
+            }
+          } catch {}
+          await env.DB.prepare(
+            `INSERT INTO actas_reunion (obra_id,empresa_id,numero,titulo,tipo,fecha,convocante,asistentes,resumen,acuerdos,proxima_reunion,estado)
+             VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`
+          ).bind(obraId, eid, numero, input.titulo,
+            input.tipo||'progreso', input.fecha||new Date().toISOString().slice(0,10),
+            input.convocante||'Alejandra IA', input.asistentes||null,
+            input.resumen||null, input.acuerdos||null,
+            input.proxima_reunion||null, input.estado||'borrador'
+          ).run();
+          let resp = `✅ ${numero} creada: "${input.titulo}"\n`;
+          if (input.asistentes) resp += `👥 Asistentes: ${input.asistentes}\n`;
+          if (input.acuerdos) resp += `📋 Acuerdos registrados.\n`;
+          if (input.proxima_reunion) resp += `📅 Próxima reunión: ${input.proxima_reunion}\n`;
+          return resp;
+        }
+
+        if (accion === 'crear_tareas_desde_acuerdos') {
+          if (!actaId && !input.acuerdos) return '❌ Necesito acta_id o el texto de acuerdos.';
+          let acuerdosText = input.acuerdos;
+          if (!acuerdosText && actaId) {
+            const acta = await env.DB.prepare('SELECT acuerdos,titulo FROM actas_reunion WHERE id=? AND empresa_id=?').bind(actaId, eid).first();
+            if (!acta) return '❌ Acta no encontrada.';
+            acuerdosText = acta.acuerdos;
+          }
+          if (!acuerdosText) return '❌ El acta no tiene acuerdos registrados.';
+          // Parsear líneas numeradas o guionadas como tareas
+          const lineas = acuerdosText.split(/\n/).map(l => l.replace(/^[\d\.\-\*]\s*/,'').trim()).filter(l => l.length > 10);
+          if (!lineas.length) return '❌ No se encontraron acuerdos parseables como tareas.';
+          await env.DB.prepare(`CREATE TABLE IF NOT EXISTS tareas_obra (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, obra_id INTEGER, empresa_id INTEGER NOT NULL,
+            titulo TEXT NOT NULL, descripcion TEXT, estado TEXT DEFAULT 'pendiente',
+            prioridad TEXT DEFAULT 'normal', asignado_a TEXT, fecha_limite TEXT,
+            ubicacion TEXT, created_at TEXT DEFAULT (datetime('now'))
+          )`).run().catch(()=>{});
+          let creadas = 0;
+          for (const linea of lineas.slice(0, 10)) {
+            // Intenta extraer responsable: "texto - Nombre" o "texto (Nombre)"
+            const matchResp = linea.match(/[-–—]\s*([A-ZÁÉÍÓÚ][a-záéíóú]+(?:\s[A-ZÁÉÍÓÚ][a-záéíóú]+)?)\s*$/);
+            const asignado = matchResp ? matchResp[1] : null;
+            const titulo = matchResp ? linea.replace(matchResp[0],'').trim() : linea;
+            await env.DB.prepare(
+              `INSERT INTO tareas_obra (obra_id,empresa_id,titulo,descripcion,estado,prioridad,asignado_a) VALUES (?,?,?,?,?,?,?)`
+            ).bind(obraId, eid, titulo.substring(0,200),
+              actaId ? `Acuerdo de acta #${actaId}` : 'Desde acta de reunión',
+              'pendiente', 'normal', asignado
+            ).run().catch(()=>{});
+            creadas++;
+          }
+          return `✅ ${creadas} tarea${creadas>1?'s':''} creada${creadas>1?'s':''} desde los acuerdos del acta.`;
+        }
+
+        if (accion === 'actualizar') {
+          if (!actaId) return '❌ Necesito acta_id para actualizar.';
+          const sets=[]; const params=[];
+          const campos=['titulo','tipo','fecha','convocante','asistentes','resumen','acuerdos','proxima_reunion','estado'];
+          for (const c of campos) {
+            if (input[c] !== undefined) { sets.push(`${c}=?`); params.push(input[c]); }
+          }
+          if (!sets.length) return '❌ No se especificaron cambios.';
+          params.push(actaId, eid);
+          await env.DB.prepare(`UPDATE actas_reunion SET ${sets.join(',')} WHERE id=? AND empresa_id=?`).bind(...params).run();
+          return `✅ Acta #${actaId} actualizada.`;
+        }
+
+        if (accion === 'eliminar') {
+          if (!actaId) return '❌ Necesito acta_id para eliminar.';
+          await env.DB.prepare('DELETE FROM actas_reunion WHERE id=? AND empresa_id=?').bind(actaId, eid).run();
+          return `🗑️ Acta #${actaId} eliminada.`;
+        }
+
+        return `❌ Acción no reconocida. Usa: crear, listar, actualizar, eliminar, crear_tareas_desde_acuerdos.`;
+      } catch (err) {
+        return `Error gestionando acta: ${err.message}`;
       }
     }
 
