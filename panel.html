@@ -668,6 +668,10 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
     <button class="nav-item" data-page="fieldReports" onclick="navTo('fieldReports')">
       <span class="nav-icon">📝</span> Informes de Campo
     </button>
+    <button class="nav-item" data-page="garantias" onclick="navTo('garantias')">
+      <span class="nav-icon">🛡️</span> Garantías
+      <span class="nav-badge" id="garantiasBadge" style="display:none">0</span>
+    </button>
     <button class="nav-item" data-page="fotosObra" onclick="navTo('fotosObra')">
       <span class="nav-icon">📷</span> Galería de Fotos
     </button>
@@ -2296,6 +2300,127 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
               <button class="btn btn-danger" id="btnEliminarCalEvento" style="display:none" onclick="eliminarCalEvento()">🗑 Eliminar</button>
               <button class="btn btn-secondary" onclick="cerrarModalCalEvento()">Cancelar</button>
               <button class="btn btn-primary" onclick="guardarCalEvento()">💾 Guardar</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- GARANTÍAS / WARRANTY MANAGEMENT (NEW-79) -->
+      <div class="page" id="pageGarantias">
+        <div class="page-title">🛡️ Gestión de Garantías</div>
+        <div id="garKpis" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;margin-bottom:16px"></div>
+        <div class="tbl-toolbar">
+          <input class="tbl-search" id="searchGar" placeholder="🔍 Buscar item, fabricante, proveedor..." oninput="filtrarGarantias()">
+          <select class="tbl-search" id="filterGarObra" style="min-width:220px" onchange="tblGar=null;cargarGarantias()">
+            <option value="">— Todas las obras —</option>
+          </select>
+          <select class="tbl-search" id="filterGarTipo" style="min-width:130px" onchange="filtrarGarantias()">
+            <option value="">Todos los tipos</option>
+            <option value="material">Material</option>
+            <option value="equipo">Equipo</option>
+            <option value="instalacion">Instalación</option>
+            <option value="servicio">Servicio</option>
+          </select>
+          <select class="tbl-search" id="filterGarEstado" style="min-width:130px" onchange="filtrarGarantias()">
+            <option value="">Todos los estados</option>
+            <option value="vigente">Vigente</option>
+            <option value="proxima">Por vencer</option>
+            <option value="vencida">Vencida</option>
+            <option value="reclamada">Reclamada</option>
+            <option value="resuelta">Resuelta</option>
+          </select>
+          <button class="btn btn-primary" onclick="abrirModalGar()">+ Nueva Garantía</button>
+          <button class="btn btn-secondary" onclick="exportarTabla(tblGar,'garantias')">⬇ CSV</button>
+          <button class="btn btn-secondary" onclick="tblGar=null;cargarGarantias()">🔄</button>
+        </div>
+        <div class="tbl-wrap"><div id="tblGar"></div></div>
+
+        <!-- MODAL GARANTÍA -->
+        <div class="modal-overlay" id="modalGar" style="display:none" onclick="if(event.target===this)cerrarModalGar()">
+          <div class="modal" style="max-width:600px">
+            <div class="modal-head">
+              <span id="modalGarTitulo">Nueva Garantía</span>
+              <button class="modal-close" onclick="cerrarModalGar()">✕</button>
+            </div>
+            <div class="modal-body">
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+                <div class="form-group" style="grid-column:1/-1">
+                  <label class="form-label">Item / Material / Equipo *</label>
+                  <input class="form-input" id="garItem" placeholder="Ej: Cuadro eléctrico principal, Cable RZ1-K...">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Tipo</label>
+                  <select class="form-select" id="garTipo">
+                    <option value="material">Material</option>
+                    <option value="equipo">Equipo</option>
+                    <option value="instalacion">Instalación</option>
+                    <option value="servicio">Servicio</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Obra</label>
+                  <select class="form-select" id="garObraId"><option value="">— Sin obra —</option></select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Fabricante</label>
+                  <input class="form-input" id="garFabricante" placeholder="Ej: Schneider Electric">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Proveedor / Suministrador</label>
+                  <input class="form-input" id="garProveedor" placeholder="Nombre del proveedor">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Número de Serie</label>
+                  <input class="form-input" id="garNumSerie" placeholder="S/N del equipo">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Nº Certificado / Albarán</label>
+                  <input class="form-input" id="garNumCert" placeholder="Referencia del certificado">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Fecha de Instalación</label>
+                  <input class="form-input" type="date" id="garFechaInst">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Inicio de Garantía</label>
+                  <input class="form-input" type="date" id="garFechaInicio" oninput="calcFechaFinGar()">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Duración (meses)</label>
+                  <input class="form-input" type="number" id="garDuracion" placeholder="Ej: 24" min="1" oninput="calcFechaFinGar()">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Fin de Garantía</label>
+                  <input class="form-input" type="date" id="garFechaFin">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Estado</label>
+                  <select class="form-select" id="garEstado">
+                    <option value="vigente">✅ Vigente</option>
+                    <option value="proxima">⚠️ Por vencer</option>
+                    <option value="vencida">🔴 Vencida</option>
+                    <option value="reclamada">📋 Reclamada</option>
+                    <option value="resuelta">✔️ Resuelta</option>
+                  </select>
+                </div>
+                <div class="form-group" style="grid-column:1/-1">
+                  <label class="form-label">Contacto Soporte / SAT</label>
+                  <input class="form-input" id="garContacto" placeholder="Email o teléfono del servicio técnico">
+                </div>
+                <div class="form-group" style="grid-column:1/-1">
+                  <label class="form-label">Descripción / Alcance de la Garantía</label>
+                  <textarea class="form-input" id="garDesc" rows="2" placeholder="¿Qué cubre la garantía?"></textarea>
+                </div>
+                <div class="form-group" style="grid-column:1/-1">
+                  <label class="form-label">Notas internas</label>
+                  <textarea class="form-input" id="garNotas" rows="2" placeholder="Reclamaciones previas, incidencias, etc."></textarea>
+                </div>
+              </div>
+            </div>
+            <div class="modal-foot">
+              <button class="btn btn-secondary" onclick="cerrarModalGar()">Cancelar</button>
+              <span id="garElimBtn"></span>
+              <button class="btn btn-primary" onclick="guardarGar()">💾 Guardar</button>
             </div>
           </div>
         </div>
@@ -5523,6 +5648,7 @@ const PAGE_TITLES = {
   timesheets: '🕐 Hojas de Tiempo',
   equiposMedicion: '📏 Equipos de Medición y Calibración',
   fieldReports: '📝 Informes de Campo / Field Reports',
+  garantias: '🛡️ Gestión de Garantías / Warranty Management',
 };
 
 const PAGE_LOADERS = {
@@ -5602,6 +5728,7 @@ const PAGE_LOADERS = {
   timesheets:      cargarTimesheets,
   equiposMedicion: cargarEquiposMed,
   fieldReports:    cargarFieldReports,
+  garantias:       cargarGarantias,
 };
 
 let currentPage = '';
@@ -5710,6 +5837,7 @@ const SYNC_INTERVALS = {
   timesheets:       60,
   equiposMedicion: 120,
   fieldReports:     90,
+  garantias:       120,
 };
 
 let _syncTimer = null, _syncLabelTimer = null, _syncLastTs = null;
@@ -15070,6 +15198,172 @@ function exportarFinanzas() {
   if (!obraId) return showToast('Selecciona una obra primero', 'warning');
   // Abrir informe en nueva pestaña usando el endpoint de informes
   window.open(`/informe-obra/${obraId}?tipo=financiero`, '_blank');
+}
+
+// ── GARANTÍAS / WARRANTY MANAGEMENT (NEW-79) ──────────────────────
+let tblGar = null, _garData = [];
+const GAR_TIPO_ICON  = { material:'📦', equipo:'⚙️', instalacion:'🔧', servicio:'🔑' };
+const GAR_TIPO_LABEL = { material:'Material', equipo:'Equipo', instalacion:'Instalación', servicio:'Servicio' };
+const GAR_ESTADO_COLOR = { vigente:'var(--success)', proxima:'var(--warning)', vencida:'var(--danger)', reclamada:'#8b5cf6', resuelta:'var(--muted)' };
+const GAR_ESTADO_LABEL = { vigente:'✅ Vigente', proxima:'⚠️ Por vencer', vencida:'🔴 Vencida', reclamada:'📋 Reclamada', resuelta:'✔️ Resuelta' };
+
+async function cargarGarantias() {
+  if (document.getElementById('filterGarObra')?.options.length <= 1) poblarSelectObras('filterGarObra');
+  const obraId = document.getElementById('filterGarObra')?.value || '';
+  const r = await api('/garantias' + (obraId ? `?obra_id=${obraId}` : ''));
+  _garData = (r?.garantias || []);
+
+  // Auto-calcular estado dinámico si la fecha ya venció o está próxima
+  const hoy = new Date(); hoy.setHours(0,0,0,0);
+  const lim30 = new Date(hoy); lim30.setDate(lim30.getDate() + 30);
+  _garData = _garData.map(g => {
+    if (!['vigente','proxima'].includes(g.estado)) return g;
+    if (!g.fecha_fin) return g;
+    const fin = new Date(g.fecha_fin);
+    if (fin < hoy)   return { ...g, _estado: 'vencida' };
+    if (fin <= lim30) return { ...g, _estado: 'proxima' };
+    return { ...g, _estado: 'vigente' };
+  });
+
+  const total    = _garData.length;
+  const vigentes = _garData.filter(g => (g._estado||g.estado) === 'vigente').length;
+  const proximas = _garData.filter(g => (g._estado||g.estado) === 'proxima').length;
+  const vencidas = _garData.filter(g => (g._estado||g.estado) === 'vencida').length;
+  const reclamadas = _garData.filter(g => g.estado === 'reclamada').length;
+
+  document.getElementById('garKpis').innerHTML = [
+    { label:'Total', val: total, cls: '' },
+    { label:'Vigentes', val: vigentes, cls: 'ok' },
+    { label:'Por vencer (30d)', val: proximas, cls: proximas ? 'warn' : '' },
+    { label:'Vencidas', val: vencidas, cls: vencidas ? 'err' : '' },
+    { label:'Reclamadas', val: reclamadas, cls: reclamadas ? 'warn' : '' },
+  ].map(k => `<div class="kpi-mini ${k.cls}"><div class="kpi-mini-val">${k.val}</div><div class="kpi-mini-lbl">${k.label}</div></div>`).join('');
+
+  // Badge en nav
+  const badge = document.getElementById('garantiasBadge');
+  if (badge) { const n = proximas + vencidas; badge.textContent = n; badge.style.display = n ? '' : 'none'; }
+
+  filtrarGarantias();
+}
+
+function filtrarGarantias() {
+  const q    = (document.getElementById('searchGar')?.value || '').toLowerCase();
+  const tipo = document.getElementById('filterGarTipo')?.value || '';
+  const est  = document.getElementById('filterGarEstado')?.value || '';
+  const data = _garData.filter(g => {
+    const estadoEf = g._estado || g.estado;
+    const matchQ   = !q || [g.item, g.fabricante, g.proveedor, g.numero, g.numero_serie].some(v => (v||'').toLowerCase().includes(q));
+    const matchT   = !tipo || g.tipo === tipo;
+    const matchE   = !est  || estadoEf === est;
+    return matchQ && matchT && matchE;
+  });
+  if (tblGar) { tblGar.replaceData(data); return; }
+  tblGar = new Tabulator('#tblGar', {
+    data, layout: 'fitColumns', height: 'calc(100vh - 280px)',
+    placeholder: '<div class="empty-state"><div class="empty-icon">🛡️</div><div class="empty-text">Sin garantías registradas</div></div>',
+    columns: [
+      { title:'Número', field:'numero', width:140, formatter: c => `<b>${c.getValue()||'—'}</b>` },
+      { title:'Item', field:'item', minWidth:200, formatter: c => `<span title="${esc(c.getValue()||'')}"><b>${esc(c.getValue()||'—')}</b></span>` },
+      { title:'Tipo', field:'tipo', width:110, formatter: c => `${GAR_TIPO_ICON[c.getValue()]||'📦'} ${GAR_TIPO_LABEL[c.getValue()]||c.getValue()}` },
+      { title:'Fabricante', field:'fabricante', width:150 },
+      { title:'Proveedor', field:'proveedor', width:150 },
+      { title:'Fin Garantía', field:'fecha_fin', width:120, formatter: c => c.getValue() ? c.getValue() : '—' },
+      { title:'Estado', field:'estado', width:120, formatter: c => {
+        const d = c.getRow().getData();
+        const ef = d._estado || c.getValue();
+        return `<span style="color:${GAR_ESTADO_COLOR[ef]||'var(--muted)'};font-weight:600">${GAR_ESTADO_LABEL[ef]||ef}</span>`;
+      }},
+      { title:'', field:'id', width:80, hozAlign:'center',
+        formatter: c => `<button class="tbl-btn" onclick="editarGar(${c.getValue()})">✏️</button><button class="tbl-btn danger" onclick="eliminarGar(${c.getValue()})">🗑</button>` },
+    ]
+  });
+}
+
+function calcFechaFinGar() {
+  const inicio = document.getElementById('garFechaInicio')?.value;
+  const dur    = parseInt(document.getElementById('garDuracion')?.value);
+  if (inicio && dur > 0) {
+    const d = new Date(inicio);
+    d.setMonth(d.getMonth() + dur);
+    const el = document.getElementById('garFechaFin');
+    if (el && !el._manual) el.value = d.toISOString().slice(0,10);
+  }
+}
+
+function abrirModalGar(d = {}) {
+  document.getElementById('modalGarTitulo').textContent = d.id ? 'Editar Garantía' : 'Nueva Garantía';
+  document.getElementById('garItem').value        = d.item || '';
+  document.getElementById('garTipo').value        = d.tipo || 'material';
+  document.getElementById('garFabricante').value  = d.fabricante || '';
+  document.getElementById('garProveedor').value   = d.proveedor || '';
+  document.getElementById('garNumSerie').value    = d.numero_serie || '';
+  document.getElementById('garNumCert').value     = d.numero_certificado || '';
+  document.getElementById('garFechaInst').value   = d.fecha_instalacion || '';
+  document.getElementById('garFechaInicio').value = d.fecha_inicio || '';
+  document.getElementById('garDuracion').value    = d.duracion_meses || '';
+  const ffEl = document.getElementById('garFechaFin');
+  ffEl._manual = false;
+  ffEl.value                                      = d.fecha_fin || '';
+  document.getElementById('garEstado').value      = d.estado || 'vigente';
+  document.getElementById('garContacto').value    = d.contacto_soporte || '';
+  document.getElementById('garDesc').value        = d.descripcion || '';
+  document.getElementById('garNotas').value       = d.notas || '';
+  poblarSelectObras('garObraId');
+  if (d.obra_id) setTimeout(() => { document.getElementById('garObraId').value = d.obra_id; }, 200);
+  const elimBtn = document.getElementById('garElimBtn');
+  elimBtn.innerHTML = d.id ? `<button class="btn btn-danger btn-sm" onclick="eliminarGar(${d.id},true)">🗑 Eliminar</button>` : '';
+  document.getElementById('modalGar')._garId = d.id || null;
+  document.getElementById('modalGar').style.display = 'flex';
+}
+
+async function editarGar(id) {
+  const d = _garData.find(g => g.id === id);
+  if (d) abrirModalGar(d);
+}
+
+async function guardarGar() {
+  const id   = document.getElementById('modalGar')._garId;
+  const body = {
+    item:                document.getElementById('garItem').value.trim(),
+    tipo:                document.getElementById('garTipo').value,
+    obra_id:             document.getElementById('garObraId').value || null,
+    fabricante:          document.getElementById('garFabricante').value.trim() || null,
+    proveedor:           document.getElementById('garProveedor').value.trim() || null,
+    numero_serie:        document.getElementById('garNumSerie').value.trim() || null,
+    numero_certificado:  document.getElementById('garNumCert').value.trim() || null,
+    fecha_instalacion:   document.getElementById('garFechaInst').value || null,
+    fecha_inicio:        document.getElementById('garFechaInicio').value || null,
+    fecha_fin:           document.getElementById('garFechaFin').value || null,
+    duracion_meses:      parseInt(document.getElementById('garDuracion').value) || null,
+    estado:              document.getElementById('garEstado').value,
+    contacto_soporte:    document.getElementById('garContacto').value.trim() || null,
+    descripcion:         document.getElementById('garDesc').value.trim() || null,
+    notas:               document.getElementById('garNotas').value.trim() || null,
+  };
+  if (!body.item) { toast('El campo Item es obligatorio', 'err'); return; }
+  const r = await api(id ? `/garantias/${id}` : '/garantias', { method: id ? 'PUT' : 'POST', body: JSON.stringify(body) });
+  if (r.ok || r.id) {
+    toast(id ? 'Garantía actualizada' : `Garantía ${r.numero||''} registrada`, 'ok');
+    cerrarModalGar();
+    tblGar = null;
+    cargarGarantias();
+  } else toast('Error al guardar', 'err');
+}
+
+async function eliminarGar(id, desdeModal = false) {
+  if (!confirm('¿Eliminar esta garantía?')) return;
+  const r = await api(`/garantias/${id}`, { method: 'DELETE' });
+  if (r.ok || r.deleted) {
+    toast('Garantía eliminada', 'ok');
+    if (desdeModal) cerrarModalGar();
+    tblGar = null;
+    cargarGarantias();
+  } else toast('Error al eliminar', 'err');
+}
+
+function cerrarModalGar() {
+  document.getElementById('modalGar').style.display = 'none';
+  document.getElementById('modalGar')._garId = null;
 }
 
 // ── INFORMES DE CAMPO / FIELD REPORTS (NEW-78) ──────────────────

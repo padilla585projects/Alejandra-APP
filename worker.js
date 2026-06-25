@@ -4721,6 +4721,14 @@ export default {
         if (method === 'PUT')    return await actualizarVisitaObra(_vid, request, env);
         if (method === 'DELETE') return await eliminarVisitaObra(_vid, request, env);
       }
+      // ── Garantias / Warranty Management (NEW-79) ──────────────────────────────────
+      if (path === '/garantias' && method === 'GET')  return await getGarantias(request, env);
+      if (path === '/garantias' && method === 'POST') return await crearGarantia(request, env);
+      if (path.startsWith('/garantias/')) {
+        const _gId = parseInt(path.split('/garantias/')[1]);
+        if (method === 'PUT')    return await actualizarGarantia(_gId, request, env);
+        if (method === 'DELETE') return await eliminarGarantia(_gId, request, env);
+      }
       // ── Field Reports / Informes de Campo (NEW-78) ────────────────────────────────
       if (path === '/field-reports' && method === 'GET')  return await getFieldReports(request, env);
       if (path === '/field-reports' && method === 'POST') return await crearFieldReport(request, env);
@@ -17283,6 +17291,127 @@ async function eliminarFieldReport(id, request, env) {
   const fr = await env.DB.prepare('SELECT id FROM field_reports WHERE id=? AND empresa_id=?').bind(id, empresa_id).first();
   if (!fr) return err('Informe no encontrado', 404);
   await env.DB.prepare('DELETE FROM field_reports WHERE id=? AND empresa_id=?').bind(id, empresa_id).run();
+  return json({ ok: true, deleted: true });
+}
+
+// ── Garantias / Warranty Management (NEW-79) ──────────────────────────────────
+async function ensureGarantiasTable(env) {
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS garantias (
+    id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+    empresa_id           INTEGER NOT NULL,
+    obra_id              INTEGER,
+    numero               TEXT,
+    item                 TEXT NOT NULL,
+    fabricante           TEXT,
+    proveedor            TEXT,
+    numero_serie         TEXT,
+    numero_certificado   TEXT,
+    tipo                 TEXT NOT NULL DEFAULT 'material',
+    fecha_instalacion    TEXT,
+    fecha_inicio         TEXT,
+    fecha_fin            TEXT,
+    duracion_meses       INTEGER,
+    estado               TEXT NOT NULL DEFAULT 'vigente',
+    contacto_soporte     TEXT,
+    descripcion          TEXT,
+    notas                TEXT,
+    submittal_id         INTEGER,
+    created_at           TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at           TEXT NOT NULL DEFAULT (datetime('now'))
+  )`).run().catch(()=>{});
+}
+
+async function getGarantias(request, env) {
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  await ensureGarantiasTable(env);
+  const url = new URL(request.url);
+  const obra_id = url.searchParams.get('obra_id');
+  const estado  = url.searchParams.get('estado');
+  const tipo    = url.searchParams.get('tipo');
+  let q = `SELECT * FROM garantias WHERE empresa_id=?`;
+  const p = [empresa_id];
+  if (obra_id) { q += ` AND obra_id=?`; p.push(parseInt(obra_id)); }
+  if (estado)  { q += ` AND estado=?`;  p.push(estado); }
+  if (tipo)    { q += ` AND tipo=?`;    p.push(tipo); }
+  q += ` ORDER BY fecha_fin ASC, id DESC`;
+  const { results } = await env.DB.prepare(q).bind(...p).all();
+  return json({ garantias: results || [] });
+}
+
+async function crearGarantia(request, env) {
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  await ensureGarantiasTable(env);
+  const b = await request.json();
+  if (!b.item) return err('El campo item es requerido', 400);
+
+  // Auto-numero GAR-YYYY-NNNN
+  const anio = new Date().getFullYear();
+  const last = await env.DB.prepare(
+    `SELECT numero FROM garantias WHERE empresa_id=? AND numero LIKE ? ORDER BY id DESC LIMIT 1`
+  ).bind(empresa_id, `GAR-${anio}-%`).first();
+  let seq = 1;
+  if (last?.numero) { const n = parseInt(last.numero.split('-')[2]); if (!isNaN(n)) seq = n + 1; }
+  const numero = `GAR-${anio}-${String(seq).padStart(4,'0')}`;
+
+  // Calcular fecha_fin si se da inicio + duracion
+  let fecha_fin = b.fecha_fin || null;
+  if (!fecha_fin && b.fecha_inicio && b.duracion_meses) {
+    const d = new Date(b.fecha_inicio);
+    d.setMonth(d.getMonth() + parseInt(b.duracion_meses));
+    fecha_fin = d.toISOString().slice(0,10);
+  }
+
+  const r = await env.DB.prepare(
+    `INSERT INTO garantias (empresa_id,obra_id,numero,item,fabricante,proveedor,numero_serie,numero_certificado,tipo,fecha_instalacion,fecha_inicio,fecha_fin,duracion_meses,estado,contacto_soporte,descripcion,notas,submittal_id)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+  ).bind(
+    empresa_id,
+    b.obra_id ? parseInt(b.obra_id) : null,
+    numero,
+    b.item,
+    b.fabricante || null,
+    b.proveedor  || null,
+    b.numero_serie || null,
+    b.numero_certificado || null,
+    b.tipo || 'material',
+    b.fecha_instalacion || null,
+    b.fecha_inicio || null,
+    fecha_fin,
+    b.duracion_meses ? parseInt(b.duracion_meses) : null,
+    b.estado || 'vigente',
+    b.contacto_soporte || null,
+    b.descripcion || null,
+    b.notas || null,
+    b.submittal_id ? parseInt(b.submittal_id) : null
+  ).run();
+  return json({ ok: true, id: r.meta.last_row_id, numero }, { status: 201 });
+}
+
+async function actualizarGarantia(id, request, env) {
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  await ensureGarantiasTable(env);
+  const b = await request.json();
+  const allowed = ['item','fabricante','proveedor','numero_serie','numero_certificado','tipo',
+    'fecha_instalacion','fecha_inicio','fecha_fin','duracion_meses','estado',
+    'contacto_soporte','descripcion','notas','obra_id','submittal_id'];
+  const sets = [], params = [];
+  for (const k of allowed) {
+    if (k in b) { sets.push(`${k}=?`); params.push(b[k] ?? null); }
+  }
+  if (!sets.length) return err('Sin cambios', 400);
+  sets.push(`updated_at=datetime('now')`);
+  params.push(id, empresa_id);
+  await env.DB.prepare(`UPDATE garantias SET ${sets.join(',')} WHERE id=? AND empresa_id=?`).bind(...params).run();
+  return json({ ok: true });
+}
+
+async function eliminarGarantia(id, request, env) {
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  await env.DB.prepare(`DELETE FROM garantias WHERE id=? AND empresa_id=?`).bind(id, empresa_id).run();
   return json({ ok: true, deleted: true });
 }
 
