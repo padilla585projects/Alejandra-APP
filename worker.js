@@ -4616,6 +4616,14 @@ export default {
         if (method === 'PUT')    return await actualizarToolboxTalk(_ttid, request, env);
         if (method === 'DELETE') return await eliminarToolboxTalk(_ttid, request, env);
       }
+      // ── Punch List / Lista de Verificacion (NEW-44) ─────────────────────────
+      if (path === '/punch-list' && method === 'GET')    return await getPunchList(request, env);
+      if (path === '/punch-list' && method === 'POST')   return await crearPunchItem(request, env);
+      if (path.startsWith('/punch-list/')) {
+        const _plid2 = parseInt(path.split('/punch-list/')[1]);
+        if (method === 'PUT')    return await actualizarPunchItem(_plid2, request, env);
+        if (method === 'DELETE') return await eliminarPunchItem(_plid2, request, env);
+      }
       // ── Planos de Obra (NEW-43) ──────────────────────────────────────────────
       if (path === '/planos-obra' && method === 'GET')    return await getPlanosObra(request, env);
       if (path === '/planos-obra' && method === 'POST')   return await subirPlanoObra(request, env);
@@ -13808,5 +13816,103 @@ async function eliminarPlanoObra(id, request, env) {
   const p = results?.[0];
   if (p?.archivo_key) { try { await env.FILES.delete(p.archivo_key); } catch {} }
   await env.DB.prepare(`DELETE FROM planos_obra WHERE id=? AND empresa_id=?`).bind(id, auth.empresa_id).run();
+  return json({ ok: true });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  NEW-44 — PUNCH LIST / LISTA DE VERIFICACION DE OBRA
+// ═══════════════════════════════════════════════════════════════════════════
+async function ensurePunchListTable(env) {
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS punch_list (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    empresa_id INTEGER NOT NULL,
+    obra_id INTEGER,
+    numero TEXT,
+    descripcion TEXT NOT NULL,
+    categoria TEXT DEFAULT 'acabados',
+    ubicacion TEXT,
+    responsable TEXT,
+    prioridad TEXT DEFAULT 'media',
+    estado TEXT DEFAULT 'abierto',
+    fecha_limite TEXT,
+    fecha_cierre TEXT,
+    notas_resolucion TEXT,
+    foto_key TEXT,
+    creado_por TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`).run();
+}
+async function getPunchList(request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth?.empresa_id) return err('No autorizado', 403);
+  await ensurePunchListTable(env);
+  const u = new URL(request.url);
+  const obraId   = u.searchParams.get('obra_id');
+  const estado   = u.searchParams.get('estado');
+  const categoria= u.searchParams.get('categoria');
+  let sql = `SELECT p.*, ob.nombre as obra_nombre FROM punch_list p
+    LEFT JOIN obras ob ON ob.id=p.obra_id
+    WHERE p.empresa_id=?`;
+  const params = [auth.empresa_id];
+  if (obraId)    { sql += ' AND p.obra_id=?';    params.push(obraId); }
+  if (estado)    { sql += ' AND p.estado=?';     params.push(estado); }
+  if (categoria) { sql += ' AND p.categoria=?';  params.push(categoria); }
+  sql += ' ORDER BY p.created_at DESC';
+  const hoy = new Date().toISOString().slice(0,10);
+  const { results } = await env.DB.prepare(sql).bind(...params).all();
+  return json({ items: (results||[]).map(p => ({
+    ...p,
+    vencido: p.fecha_limite && p.estado !== 'cerrado' && p.fecha_limite < hoy
+  }))});
+}
+async function crearPunchItem(request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth?.empresa_id) return err('No autorizado', 403);
+  await ensurePunchListTable(env);
+  const b = await request.json();
+  if (!b.descripcion) return err('descripcion requerida', 400);
+  // Auto-número: PL-YYYY-NNNN
+  const year = new Date().getFullYear();
+  const { results: last } = await env.DB.prepare(
+    `SELECT numero FROM punch_list WHERE empresa_id=? AND numero LIKE 'PL-${year}-%' ORDER BY id DESC LIMIT 1`
+  ).bind(auth.empresa_id).all();
+  let seq = 1;
+  if (last?.[0]?.numero) { const m = last[0].numero.match(/(\d+)$/); if (m) seq = parseInt(m[1]) + 1; }
+  const numero = `PL-${year}-${String(seq).padStart(4,'0')}`;
+  const { meta } = await env.DB.prepare(
+    `INSERT INTO punch_list (empresa_id,obra_id,numero,descripcion,categoria,ubicacion,responsable,prioridad,estado,fecha_limite,notas_resolucion,foto_key,creado_por)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`
+  ).bind(
+    auth.empresa_id, b.obra_id||null, numero, b.descripcion,
+    b.categoria||'acabados', b.ubicacion||null, b.responsable||null,
+    b.prioridad||'media', b.estado||'abierto', b.fecha_limite||null,
+    b.notas_resolucion||null, b.foto_key||null, auth.nombre||auth.email||null
+  ).run();
+  return json({ ok: true, id: meta.last_row_id, numero });
+}
+async function actualizarPunchItem(id, request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth?.empresa_id) return err('No autorizado', 403);
+  await ensurePunchListTable(env);
+  const b = await request.json();
+  const fechaCierre = b.estado === 'cerrado' ? (b.fecha_cierre || new Date().toISOString().slice(0,10)) : null;
+  await env.DB.prepare(
+    `UPDATE punch_list SET descripcion=COALESCE(?,descripcion), categoria=COALESCE(?,categoria),
+     ubicacion=COALESCE(?,ubicacion), responsable=COALESCE(?,responsable),
+     prioridad=COALESCE(?,prioridad), estado=COALESCE(?,estado),
+     fecha_limite=COALESCE(?,fecha_limite), fecha_cierre=?,
+     notas_resolucion=COALESCE(?,notas_resolucion), foto_key=COALESCE(?,foto_key)
+     WHERE id=? AND empresa_id=?`
+  ).bind(
+    b.descripcion||null, b.categoria||null, b.ubicacion||null, b.responsable||null,
+    b.prioridad||null, b.estado||null, b.fecha_limite||null, fechaCierre,
+    b.notas_resolucion||null, b.foto_key||null, id, auth.empresa_id
+  ).run();
+  return json({ ok: true });
+}
+async function eliminarPunchItem(id, request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth?.empresa_id) return err('No autorizado', 403);
+  await env.DB.prepare(`DELETE FROM punch_list WHERE id=? AND empresa_id=?`).bind(id, auth.empresa_id).run();
   return json({ ok: true });
 }

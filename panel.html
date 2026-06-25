@@ -506,6 +506,10 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
       <span class="nav-icon">🦺</span> Seguridad de Obra
       <span class="nav-badge" id="seguridadObraBadge" style="display:none">!</span>
     </button>
+    <button class="nav-item" data-page="punchList" onclick="navTo('punchList')">
+      <span class="nav-icon">📝</span> Punch List
+      <span class="nav-badge" id="punchBadge" style="display:none">!</span>
+    </button>
 
     <div class="sidebar-section" onclick="sidebarToggle(this)" data-sid="planificacion"><span>📊 Planificación</span><span class="sec-chevron">▼</span></div>
     <button class="nav-item" data-page="presupuesto" onclick="navTo('presupuesto')">
@@ -1376,6 +1380,40 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
           </div>
           <div class="tbl-wrap"><div id="tblToolboxTalks"></div></div>
         </div>
+      </div>
+
+      <!-- PUNCH LIST -->
+      <div class="page" id="pagePunchList">
+        <div class="page-title">📝 Punch List</div>
+        <div class="page-sub">Lista de verificación post-inspección — deficiencias, pendientes y resoluciones de obra</div>
+        <div id="punchResumen" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;margin-bottom:18px"></div>
+        <div class="tbl-toolbar">
+          <input class="tbl-search" id="searchPunch" placeholder="🔍 Buscar descripción, ubicación, responsable...">
+          <select class="tbl-search" id="filterPunchObraId" style="min-width:200px" onchange="cargarPunchList()">
+            <option value="">🏗 Todas las obras</option>
+          </select>
+          <select class="tbl-search" id="filterPunchCat" style="min-width:150px" onchange="cargarPunchList()">
+            <option value="">Todas las categorías</option>
+            <option value="estructural">🏗 Estructural</option>
+            <option value="acabados">🎨 Acabados</option>
+            <option value="electrico">⚡ Eléctrico</option>
+            <option value="fontaneria">💧 Fontanería</option>
+            <option value="climatizacion">❄️ Climatización</option>
+            <option value="seguridad">🦺 Seguridad</option>
+            <option value="otro">📋 Otro</option>
+          </select>
+          <select class="tbl-search" id="filterPunchEstado" style="min-width:140px" onchange="cargarPunchList()">
+            <option value="">Todos</option>
+            <option value="abierto">Abierto</option>
+            <option value="en_resolucion">En resolución</option>
+            <option value="pendiente_aprobacion">Pendiente aprobación</option>
+            <option value="cerrado">Cerrado</option>
+          </select>
+          <button class="btn btn-primary" onclick="abrirModalPunch()">+ Nuevo item</button>
+          <button class="btn btn-secondary" onclick="exportarTabla(tblPunch,'punch-list')">⬇ CSV</button>
+          <button class="btn btn-secondary" onclick="imprimirPunchList()">🖨 PDF</button>
+        </div>
+        <div class="tbl-wrap"><div id="tblPunch"></div></div>
       </div>
 
       <!-- PLANOS DE OBRA -->
@@ -2867,6 +2905,7 @@ const PAGE_TITLES = {
   correspondencia: '✉️ Correspondencia',
   seguridadObra: '🦺 Seguridad de Obra',
   planosObra: '📐 Planos de Obra',
+  punchList: '📝 Punch List',
 };
 
 const PAGE_LOADERS = {
@@ -2911,6 +2950,7 @@ const PAGE_LOADERS = {
   correspondencia: cargarCorrespondencia,
   seguridadObra: cargarSeguridadObra,
   planosObra: cargarPlanosObra,
+  punchList: cargarPunchList,
 };
 
 let currentPage = '';
@@ -2984,6 +3024,7 @@ const SYNC_INTERVALS = {
   correspondencia: 120,
   seguridadObra: 60,
   planosObra: 120,
+  punchList: 60,
 };
 
 let _syncTimer = null, _syncLabelTimer = null, _syncLastTs = null;
@@ -10573,6 +10614,167 @@ async function eliminarCorr(id) {
   const r = await api(`/correspondencia/${id}`, { method: 'DELETE' });
   if (r.ok || r.deleted) { toast('Eliminado', 'ok'); cerrarModal(); tblCorr = null; cargarCorrespondencia(); }
   else toast('Error al eliminar', 'err');
+}
+
+// ── PUNCH LIST ───────────────────────────────────────────────────
+let tblPunch = null, _punchData = [];
+const PUNCH_CAT_ICON = { estructural:'🏗', acabados:'🎨', electrico:'⚡', fontaneria:'💧', climatizacion:'❄️', seguridad:'🦺', otro:'📋' };
+const PUNCH_ESTADO_COLOR = { abierto:'var(--danger)', en_resolucion:'var(--warning)', pendiente_aprobacion:'var(--primary)', cerrado:'var(--success)' };
+
+async function cargarPunchList() {
+  if (document.getElementById('filterPunchObraId')?.options.length <= 1) poblarSelectObras('filterPunchObraId');
+  const obraId   = document.getElementById('filterPunchObraId')?.value || '';
+  const categoria= document.getElementById('filterPunchCat')?.value || '';
+  const estado   = document.getElementById('filterPunchEstado')?.value || '';
+  let url = `/punch-list?`;
+  if (obraId)    url += `obra_id=${obraId}&`;
+  if (categoria) url += `categoria=${categoria}&`;
+  if (estado)    url += `estado=${estado}&`;
+  const r = await api(url);
+  _punchData = r?.items || [];
+
+  // KPIs
+  const abiertos = _punchData.filter(p => p.estado === 'abierto').length;
+  const enRes    = _punchData.filter(p => p.estado === 'en_resolucion').length;
+  const vencidos = _punchData.filter(p => p.vencido).length;
+  const cerrados = _punchData.filter(p => p.estado === 'cerrado').length;
+  const badge = document.getElementById('punchBadge');
+  if (badge) { badge.style.display = (abiertos + vencidos > 0) ? '' : 'none'; badge.textContent = abiertos + vencidos; }
+  document.getElementById('punchResumen').innerHTML = [
+    { l:'Abiertos',    v: abiertos, c:'var(--danger)' },
+    { l:'En resolución', v: enRes,  c:'var(--warning)' },
+    { l:'Vencidos',    v: vencidos, c:'var(--danger)' },
+    { l:'Cerrados',    v: cerrados, c:'var(--success)' },
+  ].map(k => `<div class="kpi-card" style="border-left:3px solid ${k.c}">
+    <div class="kpi-val" style="color:${k.c}">${k.v}</div>
+    <div class="kpi-label">${k.l}</div></div>`).join('');
+
+  if (!tblPunch) {
+    tblPunch = new Tabulator('#tblPunch', {
+      data: _punchData, layout: 'fitColumns', responsiveLayout: 'collapse',
+      pagination: 'local', paginationSize: 30,
+      initialSort: [{ column: 'created_at', dir: 'desc' }],
+      columns: [
+        { title:'Nº',         field:'numero',       width:110, formatter: c => `<code style="font-size:11px">${c.getValue()||'—'}</code>` },
+        { title:'Cat.',       field:'categoria',    width:95,  formatter: c => (PUNCH_CAT_ICON[c.getValue()]||'📋') + ' ' + (c.getValue()||'otro') },
+        { title:'Descripción',field:'descripcion',  minWidth:200 },
+        { title:'Obra',       field:'obra_nombre',  width:150 },
+        { title:'Ubicación',  field:'ubicacion',    width:120 },
+        { title:'Responsable',field:'responsable',  width:120 },
+        { title:'Prior.',     field:'prioridad',    width:80, formatter: c => {
+          const v = c.getValue(); const col = v==='alta'?'var(--danger)':v==='media'?'var(--warning)':'var(--success)';
+          return `<span style="color:${col};font-weight:600">${v||'—'}</span>`;
+        }},
+        { title:'Estado', field:'estado', width:155, formatter: c => {
+          const d = c.getRow().getData();
+          if (d.vencido) return '<span style="color:var(--danger);font-weight:600">⚠️ Vencido</span>';
+          const col = PUNCH_ESTADO_COLOR[c.getValue()] || 'var(--text)';
+          return `<span style="color:${col}">${(c.getValue()||'abierto').replace(/_/g,' ')}</span>`;
+        }},
+        { title:'Límite', field:'fecha_limite', width:90 },
+        { title:'Cierre', field:'fecha_cierre', width:90 },
+        { title:'Acc.', field:'id', hozAlign:'center', width:70, headerSort:false,
+          formatter: c => `<button class="tbl-btn" onclick="abrirModalPunchEditar(${c.getValue()})">✏️</button><button class="tbl-btn" onclick="eliminarPunchItem(${c.getValue()})">🗑</button>` },
+      ]
+    });
+  } else {
+    tblPunch.setData(_punchData);
+  }
+  const si = document.getElementById('searchPunch');
+  if (si) si.oninput = () => tblPunch?.setFilter([
+    { field:'descripcion', type:'like', value:si.value },
+    { field:'ubicacion',   type:'like', value:si.value },
+    { field:'responsable', type:'like', value:si.value },
+  ]);
+}
+
+function abrirModalPunch(d={}) {
+  abrirModal(`
+    <h3 style="margin:0 0 16px">📝 ${d.id ? 'Editar' : 'Nuevo'} Punch Item</h3>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <label>Categoría<select id="mPunchCat" class="form-input">
+        ${Object.entries(PUNCH_CAT_ICON).map(([k,v])=>`<option value="${k}"${d.categoria===k?' selected':''}>${v} ${k.replace(/_/g,' ')}</option>`).join('')}
+      </select></label>
+      <label>Prioridad<select id="mPunchPrior" class="form-input">
+        <option value="baja"${d.prioridad==='baja'?' selected':''}>🟢 Baja</option>
+        <option value="media"${(!d.prioridad||d.prioridad==='media')?' selected':''}>🟠 Media</option>
+        <option value="alta"${d.prioridad==='alta'?' selected':''}>🔴 Alta</option>
+      </select></label>
+      <label style="grid-column:1/-1">Descripción *<textarea id="mPunchDesc" class="form-input" rows="3" placeholder="Describe el defecto o pendiente...">${d.descripcion||''}</textarea></label>
+      <label>Ubicación<input id="mPunchUbic" class="form-input" value="${d.ubicacion||''}" placeholder="Zona, planta, área..."></label>
+      <label>Responsable<input id="mPunchResp" class="form-input" value="${d.responsable||''}" placeholder="Empresa o persona responsable"></label>
+      <label>Estado<select id="mPunchEstado" class="form-input">
+        <option value="abierto"${(!d.estado||d.estado==='abierto')?' selected':''}>Abierto</option>
+        <option value="en_resolucion"${d.estado==='en_resolucion'?' selected':''}>En resolución</option>
+        <option value="pendiente_aprobacion"${d.estado==='pendiente_aprobacion'?' selected':''}>Pendiente aprobación</option>
+        <option value="cerrado"${d.estado==='cerrado'?' selected':''}>Cerrado</option>
+      </select></label>
+      <label>Fecha límite<input id="mPunchLimite" type="date" class="form-input" value="${d.fecha_limite||''}"></label>
+      <label style="grid-column:1/-1">Notas de resolución<textarea id="mPunchNotas" class="form-input" rows="2" placeholder="Cómo se resolvió o qué falta...">${d.notas_resolucion||''}</textarea></label>
+    </div>
+    <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px">
+      ${d.id ? `<button class="btn btn-danger" onclick="eliminarPunchItem(${d.id})">🗑 Eliminar</button>` : ''}
+      <button class="btn btn-secondary" onclick="cerrarModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="guardarPunchItem(${d.id||0})">💾 Guardar</button>
+    </div>
+  `);
+}
+
+async function abrirModalPunchEditar(id) {
+  const item = _punchData.find(p => p.id === id);
+  if (item) abrirModalPunch(item);
+}
+
+async function guardarPunchItem(id) {
+  const body = {
+    descripcion:       document.getElementById('mPunchDesc')?.value?.trim(),
+    categoria:         document.getElementById('mPunchCat')?.value,
+    prioridad:         document.getElementById('mPunchPrior')?.value,
+    estado:            document.getElementById('mPunchEstado')?.value,
+    ubicacion:         document.getElementById('mPunchUbic')?.value?.trim(),
+    responsable:       document.getElementById('mPunchResp')?.value?.trim(),
+    fecha_limite:      document.getElementById('mPunchLimite')?.value,
+    notas_resolucion:  document.getElementById('mPunchNotas')?.value?.trim(),
+    obra_id:           document.getElementById('filterPunchObraId')?.value || null,
+  };
+  if (!body.descripcion) { toast('Descripción requerida', 'err'); return; }
+  const method = id ? 'PUT' : 'POST';
+  const url    = id ? `/punch-list/${id}` : '/punch-list';
+  const r = await api(url, { method, body: JSON.stringify(body) });
+  if (r.ok || r.id) {
+    toast(id ? 'Actualizado' : `Item creado: ${r.numero||''}`, 'ok');
+    cerrarModal(); tblPunch = null; cargarPunchList();
+  } else toast(r.error || 'Error al guardar', 'err');
+}
+
+async function eliminarPunchItem(id) {
+  if (!confirm('¿Eliminar este item del punch list?')) return;
+  const r = await api(`/punch-list/${id}`, { method: 'DELETE' });
+  if (r.ok) { toast('Eliminado', 'ok'); cerrarModal(); tblPunch = null; cargarPunchList(); }
+  else toast('Error al eliminar', 'err');
+}
+
+function imprimirPunchList() {
+  const w = window.open('', '_blank');
+  const rows = (_punchData || []).map(p => `
+    <tr style="background:${p.vencido?'#fff3f3':p.estado==='cerrado'?'#f0fff4':''}">
+      <td><code>${p.numero||'—'}</code></td>
+      <td>${(PUNCH_CAT_ICON[p.categoria]||'') + ' ' + (p.categoria||'otro')}</td>
+      <td>${p.descripcion||''}</td>
+      <td>${p.ubicacion||'—'}</td>
+      <td>${p.responsable||'—'}</td>
+      <td>${p.prioridad||'—'}</td>
+      <td style="color:${PUNCH_ESTADO_COLOR[p.estado]||'inherit'}">${(p.estado||'abierto').replace(/_/g,' ')}${p.vencido?' ⚠️':''}</td>
+      <td>${p.fecha_limite||'—'}</td>
+    </tr>`).join('');
+  w.document.write(`<!DOCTYPE html><html><head><title>Punch List</title>
+    <style>body{font-family:Arial,sans-serif;font-size:12px;margin:20px}table{border-collapse:collapse;width:100%}
+    th,td{border:1px solid #ccc;padding:6px 8px;text-align:left}th{background:#f5f5f5;font-weight:bold}
+    h1{font-size:18px;margin-bottom:16px}@media print{body{margin:0}}</style></head>
+    <body><h1>📝 Punch List — ${new Date().toLocaleDateString('es-ES')}</h1>
+    <table><thead><tr><th>Nº</th><th>Categoría</th><th>Descripción</th><th>Ubicación</th><th>Responsable</th><th>Prior.</th><th>Estado</th><th>Límite</th></tr></thead>
+    <tbody>${rows}</tbody></table></body></html>`);
+  w.document.close(); w.print();
 }
 
 // ── PLANOS DE OBRA ───────────────────────────────────────────────
