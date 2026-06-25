@@ -4469,6 +4469,7 @@ export default {
       if (path === '/historial-herramientas' && method === 'GET') return await getHistorialHerramientas(request, env);
       if (path === '/alertas-stock'          && method === 'GET') return await getAlertasStock(request, env);
       if (path === '/obra-dashboard'         && method === 'GET') return await getObraDashboard(request, env);
+      if (path === '/obras-overview'         && method === 'GET') return await getObrasOverview(request, env);
       // ── Fases de obra (NEW-30) ──────────────────────────────────────────
       if (path === '/fases-obra'           && method === 'GET')  return await getFasesObra(request, env);
       if (path === '/fases-obra'           && method === 'POST') return await crearFaseObra(request, env);
@@ -6963,6 +6964,63 @@ async function getObraDashboard(request, env) {
     tareas_activas:         tareasActivas?.n || 0,
     deficiencias_abiertas:  deficienciasAbiertas?.n || 0,
   });
+}
+
+// ── Obras Overview — resumen ejecutivo por obra para el dashboard del panel ──────
+async function getObrasOverview(request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth?.empresa_id) return err('No autorizado', 403);
+  const { empresa_id } = auth;
+
+  const { results: obras } = await env.DB.prepare(
+    `SELECT id, nombre FROM obras WHERE empresa_id=? AND estado='activa' ORDER BY nombre LIMIT 20`
+  ).bind(empresa_id).all().catch(() => ({ results: [] }));
+
+  const overview = await Promise.all(obras.map(async (o) => {
+    const [presR, fasesR, tareasR, rfisR, ocsR, incR] = await Promise.all([
+      env.DB.prepare(
+        `SELECT COUNT(*) as cnt, COALESCE(SUM(coste_previsto),0) as prev, COALESCE(SUM(coste_real),0) as real FROM presupuesto_obra WHERE obra_id=? AND empresa_id=?`
+      ).bind(o.id, empresa_id).first().catch(() => null),
+      env.DB.prepare(
+        `SELECT COUNT(*) as total, SUM(CASE WHEN estado='completada' THEN 1 ELSE 0 END) as completadas, COALESCE(AVG(porcentaje),0) as avg_pct FROM fases_obra WHERE obra_id=? AND empresa_id=?`
+      ).bind(o.id, empresa_id).first().catch(() => null),
+      env.DB.prepare(
+        `SELECT COUNT(*) as total, SUM(CASE WHEN prioridad='urgente' THEN 1 ELSE 0 END) as urgentes FROM tareas_obra WHERE obra_id=? AND empresa_id=? AND estado NOT IN ('completada','cancelada')`
+      ).bind(o.id, empresa_id).first().catch(() => null),
+      env.DB.prepare(
+        `SELECT COUNT(*) as open FROM rfis WHERE obra_id=? AND empresa_id=? AND estado IN ('abierta','en_revision')`
+      ).bind(o.id, empresa_id).first().catch(() => null),
+      env.DB.prepare(
+        `SELECT COUNT(*) as open FROM ordenes_cambio WHERE obra_id=? AND empresa_id=? AND estado IN ('borrador','revision','aprobada')`
+      ).bind(o.id, empresa_id).first().catch(() => null),
+      env.DB.prepare(
+        `SELECT COUNT(*) as open FROM incidencias WHERE obra_id=? AND empresa_id=? AND estado IN ('abierta','en_progreso')`
+      ).bind(o.id, empresa_id).first().catch(() => null),
+    ]);
+
+    const prev = presR?.prev || 0;
+    const real = presR?.real || 0;
+    const pctPres = prev > 0 ? Math.round(real / prev * 100) : null;
+    const pctFases = Math.round(fasesR?.avg_pct || 0);
+
+    return {
+      id: o.id,
+      nombre: o.nombre,
+      presupuesto: { prev, real, pct: pctPres, partidas: presR?.cnt || 0 },
+      fases: { total: fasesR?.total || 0, completadas: fasesR?.completadas || 0, avg_pct: pctFases },
+      tareas: { pending: tareasR?.total || 0, urgentes: tareasR?.urgentes || 0 },
+      rfis_open: rfisR?.open || 0,
+      ocs_open: ocsR?.open || 0,
+      incidencias_open: incR?.open || 0,
+      alertas: {
+        budget: pctPres !== null && pctPres > 100,
+        tareas: (tareasR?.urgentes || 0) > 0,
+        rfis:   (rfisR?.open || 0) > 2,
+      },
+    };
+  }));
+
+  return json({ obras: overview });
 }
 
 async function getKits(request, env) {

@@ -595,6 +595,17 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
             <div id="dashDeficiencias"><div class="loading"><div class="spinner"></div> Cargando...</div></div>
           </div>
         </div>
+
+        <!-- ESTADO DE OBRAS — resumen ejecutivo por proyecto -->
+        <div style="margin-top:20px" id="dashObrasSection">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+            <h3 style="margin:0;font-family:'Montserrat',sans-serif;font-weight:700;font-size:15px;color:var(--text);letter-spacing:.02em">📍 ESTADO DE OBRAS</h3>
+            <button class="btn btn-secondary btn-sm" onclick="navTo('obras')">Ver todas →</button>
+          </div>
+          <div id="dashObrasGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:14px">
+            <div class="loading"><div class="spinner"></div> Cargando obras...</div>
+          </div>
+        </div>
       </div>
 
       <!-- PERSONAL -->
@@ -1233,10 +1244,16 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
             <option value="">— Selecciona una obra —</option>
           </select>
           <button class="btn btn-primary" onclick="abrirModalFase()">+ Nueva fase</button>
+          <button class="btn btn-secondary" onclick="toggleFasesVista()" id="btnFasesVista">📊 Vista Gantt</button>
           <button class="btn btn-secondary" onclick="cargarFases()">🔄 Actualizar</button>
         </div>
         <div id="fasesResumen" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:14px;margin-bottom:18px"></div>
+        <!-- Vista tarjetas -->
         <div id="fasesLista" style="display:flex;flex-direction:column;gap:12px"></div>
+        <!-- Vista Gantt -->
+        <div id="fasesGantt" style="display:none;overflow-x:auto">
+          <div id="fasesGanttInner" style="min-width:700px"></div>
+        </div>
       </div>
 
       <!-- PARTES DIARIOS (panel) -->
@@ -2801,13 +2818,14 @@ async function checkConexion() {
 // ── DASHBOARD ──────────────────────────────────────────────────
 async function cargarDashboard() {
   document.getElementById('dashSub').textContent = 'Actualizando...';
-  const [dash, incR, pedR, tareasR, rfisR, defR] = await Promise.all([
+  const [dash, incR, pedR, tareasR, rfisR, defR, obrasOvR] = await Promise.all([
     api('/obra-dashboard'),
     api('/incidencias?limit=5'),
     api('/pedidos?limit=5'),
     api('/tareas-obra?limit=5'),
     api('/rfis?limit=5'),
     api('/control-calidad?limit=5'),
+    api('/obras-overview'),
   ]);
 
   const kpis = [
@@ -2892,6 +2910,66 @@ async function cargarDashboard() {
         <span style="font-size:11px;color:var(--muted)">${d.ubicacion || ''}</span>
       </div>`
     ).join('') : '<div class="empty-state"><div class="empty-icon">✅</div><div class="empty-text">Sin deficiencias abiertas</div></div>';
+  }
+
+  // ── Estado de Obras (por proyecto) ──────────────────────────────────────
+  const obrasOv = (obrasOvR?.obras || []);
+  const elObrasGrid = document.getElementById('dashObrasGrid');
+  if (elObrasGrid) {
+    if (!obrasOv.length) {
+      elObrasGrid.innerHTML = '<div class="empty-state"><div class="empty-icon">🏗️</div><div class="empty-text">Sin obras activas</div></div>';
+    } else {
+      elObrasGrid.innerHTML = obrasOv.map(o => {
+        const pctPres  = o.presupuesto.pct;
+        const pctFases = o.fases.avg_pct;
+        const hasBudget = o.presupuesto.partidas > 0;
+        const hasFases  = o.fases.total > 0;
+        const alertColor = o.alertas.budget ? '#ef4444' : '#f59e0b';
+        const alertIcon  = o.alertas.budget ? '🔴' : o.alertas.tareas ? '🟡' : o.alertas.rfis ? '🟠' : '';
+
+        const presBar = hasBudget ? `
+          <div style="margin-bottom:10px">
+            <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-bottom:4px">
+              <span>💶 Presupuesto</span>
+              <span style="font-weight:700;color:${pctPres > 100 ? '#ef4444' : pctPres > 85 ? '#f59e0b' : '#10b981'}">${pctPres}%</span>
+            </div>
+            <div style="height:6px;background:var(--border);border-radius:3px;overflow:hidden">
+              <div style="height:100%;width:${Math.min(pctPres,100)}%;background:${pctPres > 100 ? '#ef4444' : pctPres > 85 ? '#f59e0b' : '#10b981'};border-radius:3px;transition:width .4s"></div>
+            </div>
+            <div style="font-size:10px;color:var(--muted);margin-top:3px">${fmtMoney(o.presupuesto.real)} / ${fmtMoney(o.presupuesto.prev)}</div>
+          </div>` : `<div style="font-size:11px;color:var(--muted);margin-bottom:10px">💶 Sin presupuesto cargado</div>`;
+
+        const fasesBar = hasFases ? `
+          <div style="margin-bottom:10px">
+            <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-bottom:4px">
+              <span>📅 Avance de fases</span>
+              <span style="font-weight:700;color:var(--primary)">${pctFases}%</span>
+            </div>
+            <div style="height:6px;background:var(--border);border-radius:3px;overflow:hidden">
+              <div style="height:100%;width:${pctFases}%;background:var(--primary);border-radius:3px;transition:width .4s"></div>
+            </div>
+            <div style="font-size:10px;color:var(--muted);margin-top:3px">${o.fases.completadas}/${o.fases.total} fases completadas</div>
+          </div>` : `<div style="font-size:11px;color:var(--muted);margin-bottom:10px">📅 Sin fases definidas</div>`;
+
+        const tags = [
+          o.tareas.pending   ? `<span class="badge badge-${o.tareas.urgentes > 0 ? 'danger' : 'info'}">✅ ${o.tareas.pending} tareas</span>` : '',
+          o.rfis_open        ? `<span class="badge badge-${o.rfis_open > 2 ? 'danger' : 'warn'}">❓ ${o.rfis_open} RFIs</span>` : '',
+          o.ocs_open         ? `<span class="badge badge-warn">🔄 ${o.ocs_open} OCs</span>` : '',
+          o.incidencias_open ? `<span class="badge badge-${o.incidencias_open > 0 ? 'danger' : 'ok'}">⚠️ ${o.incidencias_open} incid.</span>` : '',
+        ].filter(Boolean).join('');
+
+        return `<div class="section-card" style="cursor:pointer;border-top:3px solid var(--primary);padding:14px 16px" onclick="navTo('presupuesto')">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+            <span style="font-size:13px;font-weight:700;font-family:'Montserrat',sans-serif;flex:1;color:var(--text)">${o.nombre}</span>
+            ${alertIcon ? `<span title="Alerta">${alertIcon}</span>` : ''}
+            <button class="btn btn-secondary btn-sm" onclick="event.stopPropagation();navTo('tareas')" style="padding:2px 8px;font-size:11px">Abrir →</button>
+          </div>
+          ${presBar}
+          ${fasesBar}
+          <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">${tags || '<span style="font-size:11px;color:var(--muted)">Sin alertas activas</span>'}</div>
+        </div>`;
+      }).join('');
+    }
   }
 }
 
@@ -9801,6 +9879,107 @@ async function eliminarFase(id) {
   const r = await api(`/fases-obra/${id}`, { method: 'DELETE' });
   if (r.ok || r.deleted) { toast('Fase eliminada', 'ok'); cerrarModal(); cargarFases(); }
   else toast('Error al eliminar', 'err');
+}
+
+let _fasesVistaGantt = false;
+function toggleFasesVista() {
+  _fasesVistaGantt = !_fasesVistaGantt;
+  document.getElementById('fasesLista').style.display  = _fasesVistaGantt ? 'none' : 'flex';
+  document.getElementById('fasesGantt').style.display  = _fasesVistaGantt ? 'block' : 'none';
+  document.getElementById('btnFasesVista').textContent  = _fasesVistaGantt ? '📋 Vista tarjetas' : '📊 Vista Gantt';
+  if (_fasesVistaGantt) renderGanttFases();
+}
+function renderGanttFases() {
+  const el = document.getElementById('fasesGanttInner');
+  if (!_fasesData.length) { el.innerHTML = '<div class="empty-state"><div class="empty-icon">📅</div><div class="empty-text">Sin fases para mostrar</div></div>'; return; }
+
+  // Calculate date range
+  const today = new Date(); today.setHours(0,0,0,0);
+  const allDates = _fasesData.flatMap(f => [f.fecha_inicio_plan, f.fecha_fin_plan, f.fecha_inicio_real, f.fecha_fin_real].filter(Boolean));
+  let minDate = allDates.length ? new Date(allDates.reduce((a,b) => a<b?a:b)) : new Date(today.getTime() - 30*86400000);
+  let maxDate = allDates.length ? new Date(allDates.reduce((a,b) => a>b?a:b)) : new Date(today.getTime() + 60*86400000);
+  // Add padding
+  minDate = new Date(minDate.getTime() - 7*86400000);
+  maxDate = new Date(maxDate.getTime() + 7*86400000);
+  const totalDays = Math.max(1, (maxDate - minDate) / 86400000);
+
+  const pct = (d) => d ? Math.max(0, Math.min(100, (new Date(d) - minDate) / (maxDate - minDate) * 100)) : null;
+  const pctW = (s, e) => { const sp = pct(s); const ep = pct(e); return sp !== null && ep !== null ? Math.max(0.5, ep - sp) : 0; };
+  const todayPct = Math.max(0, Math.min(100, (today - minDate) / (maxDate - minDate) * 100));
+
+  // Month header
+  const months = [];
+  const cur = new Date(minDate); cur.setDate(1);
+  while (cur <= maxDate) {
+    const leftPct = Math.max(0, (cur - minDate) / (maxDate - minDate) * 100);
+    const nextMonth = new Date(cur.getFullYear(), cur.getMonth() + 1, 1);
+    const rightPct  = Math.min(100, (nextMonth - minDate) / (maxDate - minDate) * 100);
+    months.push({ label: cur.toLocaleDateString('es-ES', { month: 'short', year: '2-digit' }), left: leftPct, width: rightPct - leftPct });
+    cur.setMonth(cur.getMonth() + 1);
+  }
+
+  const statColor = { pendiente: '#94a3b8', en_curso: '#2563eb', completada: '#10b981', pausada: '#f59e0b' };
+  const statIcon  = { pendiente: '⏳', en_curso: '🔨', completada: '✅', pausada: '⏸' };
+
+  const rowH = 44;
+  const headerH = 36;
+  const labelW = 180;
+
+  let html = `<div style="font-family:'Montserrat',sans-serif;font-size:12px;user-select:none">
+    <!-- Header: months -->
+    <div style="display:flex;margin-left:${labelW}px;position:relative;height:${headerH}px;background:var(--surface-alt,#f8fafc);border:1px solid var(--border);border-radius:8px 8px 0 0;overflow:hidden">
+      ${months.map(m => `<div style="position:absolute;left:${m.left}%;width:${m.width}%;height:100%;display:flex;align-items:center;padding:0 6px;font-weight:700;font-size:10px;color:var(--muted);border-right:1px solid var(--border);box-sizing:border-box;overflow:hidden;white-space:nowrap">${m.label}</div>`).join('')}
+      <!-- Today line in header -->
+      <div style="position:absolute;left:${todayPct}%;top:0;bottom:0;width:2px;background:#ef4444;opacity:.5"></div>
+    </div>
+    <!-- Rows -->
+    <div style="position:relative;border:1px solid var(--border);border-top:none;border-radius:0 0 8px 8px;overflow:hidden">`;
+
+  _fasesData.forEach((f, i) => {
+    const bg = i % 2 === 0 ? 'transparent' : 'rgba(0,0,0,.015)';
+    const sPlanL = pct(f.fecha_inicio_plan);
+    const sPlanW = pctW(f.fecha_inicio_plan, f.fecha_fin_plan);
+    const sRealL = pct(f.fecha_inicio_real);
+    const sRealW = pctW(f.fecha_inicio_real, f.fecha_fin_real || new Date().toISOString().slice(0,10));
+    const clr    = statColor[f.estado] || '#94a3b8';
+
+    html += `<div style="display:flex;height:${rowH}px;background:${bg};border-bottom:1px solid var(--border);align-items:center">
+      <!-- Label -->
+      <div style="width:${labelW}px;min-width:${labelW}px;padding:0 10px;display:flex;align-items:center;gap:6px;border-right:1px solid var(--border);height:100%;cursor:pointer" onclick="abrirModalFaseEditar(${f.id})" title="Editar fase">
+        <span>${statIcon[f.estado]||'❓'}</span>
+        <div style="overflow:hidden">
+          <div style="font-weight:700;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:${labelW-50}px">${f.nombre}</div>
+          ${f.responsable ? `<div style="font-size:10px;color:var(--muted)">${f.responsable}</div>` : ''}
+        </div>
+      </div>
+      <!-- Chart area -->
+      <div style="flex:1;position:relative;height:100%">
+        <!-- Month grid lines -->
+        ${months.slice(1).map(m => `<div style="position:absolute;left:${m.left}%;top:0;bottom:0;width:1px;background:var(--border);opacity:.5"></div>`).join('')}
+        <!-- Today line -->
+        <div style="position:absolute;left:${todayPct}%;top:0;bottom:0;width:2px;background:#ef4444;opacity:.6;z-index:2"></div>
+        <!-- Plan bar (light) -->
+        ${sPlanL !== null && sPlanW > 0 ? `<div style="position:absolute;left:${sPlanL}%;width:${sPlanW}%;top:30%;height:40%;background:${clr};opacity:.25;border-radius:3px" title="Plan: ${f.fecha_inicio_plan} → ${f.fecha_fin_plan||'?'}"></div>` : ''}
+        <!-- Real bar (solid, narrow) -->
+        ${sRealL !== null && sRealW > 0 ? `<div style="position:absolute;left:${sRealL}%;width:${sRealW}%;top:35%;height:30%;background:${clr};border-radius:3px;z-index:1" title="Real: ${f.fecha_inicio_real} → ${f.fecha_fin_real||'en curso'}">
+          ${f.porcentaje > 0 ? `<div style="width:${f.porcentaje}%;height:100%;background:${clr};filter:brightness(1.15);border-radius:3px"></div>` : ''}
+        </div>` : ''}
+        <!-- Pct label -->
+        <div style="position:absolute;right:4px;top:50%;transform:translateY(-50%);font-size:10px;font-weight:700;color:${clr}">${f.porcentaje||0}%</div>
+      </div>
+    </div>`;
+  });
+
+  html += `</div>
+    <!-- Legend -->
+    <div style="display:flex;gap:16px;margin-top:10px;flex-wrap:wrap;font-size:11px;color:var(--muted)">
+      <span>■ <span style="opacity:.35">Claro</span> = Plan</span>
+      <span>■ Sólido = Real (% ejecutado)</span>
+      <span style="color:#ef4444">│ Hoy</span>
+    </div>
+  </div>`;
+
+  el.innerHTML = html;
 }
 
 // ── PARTES DIARIOS (panel) ────────────────────────────────────────
