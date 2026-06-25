@@ -566,6 +566,9 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
       <span class="nav-icon">🚚</span> Entregas Material
       <span class="nav-badge" id="entregasBadge" style="display:none">!</span>
     </button>
+    <button class="nav-item" data-page="presupuestoSov" onclick="navTo('presupuestoSov')">
+      <span class="nav-icon">📊</span> Presupuesto SOV
+    </button>
 
     <div class="sidebar-section" onclick="sidebarToggle(this)" data-sid="seguimiento"><span>📓 Seguimiento</span><span class="sec-chevron">▼</span></div>
     <button class="nav-item" data-page="partesPanel" onclick="navTo('partesPanel')">
@@ -2063,6 +2066,83 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
         </div>
         <div id="entregasKpi" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:12px;margin-bottom:16px"></div>
         <div class="tbl-wrap"><div id="tblEntregas"></div></div>
+      </div>
+
+      <!-- PRESUPUESTO DETALLADO / SCHEDULE OF VALUES -->
+      <div class="page" id="pagePresupuestoSov">
+        <div class="page-title">📊 Presupuesto Detallado / SOV</div>
+        <div class="page-sub">Schedule of Values — Partidas presupuestarias con avance de ejecucion por linea</div>
+        <div class="tbl-toolbar" style="flex-wrap:wrap;gap:8px;margin-bottom:14px">
+          <select class="tbl-search" id="filterSovObra" style="min-width:240px" onchange="cargarPresupuestoSov()"></select>
+          <select class="tbl-search" id="filterSovCap" style="min-width:160px" onchange="cargarPresupuestoSov()">
+            <option value="">Todos los capitulos</option>
+          </select>
+          <button class="btn btn-primary" onclick="abrirModalSovLinea()">+ Nueva linea</button>
+          <button class="btn btn-primary" style="background:var(--success)" onclick="abrirModalSovImport()">📂 Importar CSV</button>
+          <button class="btn btn-secondary" onclick="exportarSovCsv()">⬇ CSV</button>
+          <button class="btn btn-secondary" onclick="cargarPresupuestoSov()">🔄</button>
+        </div>
+        <!-- KPI Strip -->
+        <div id="sovKpi" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:12px;margin-bottom:16px"></div>
+        <!-- Progress bar global -->
+        <div id="sovGlobalBar" style="margin-bottom:16px;display:none">
+          <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px">
+            <span id="sovBarLabel">Avance global</span>
+            <span id="sovBarPct" style="font-weight:700"></span>
+          </div>
+          <div style="height:10px;background:var(--border);border-radius:5px">
+            <div id="sovBarFill" style="height:100%;border-radius:5px;background:var(--primary);transition:width 0.4s"></div>
+          </div>
+        </div>
+        <!-- Capitulos accordion -->
+        <div id="sovCapitulosContainer"></div>
+      </div>
+
+      <!-- MODAL: SOV Linea -->
+      <div id="modalSovLinea" class="modal-overlay" style="display:none" onclick="if(event.target===this)this.style.display='none'">
+        <div class="modal-box" style="max-width:680px">
+          <div class="modal-head"><span id="modalSovLineaTitulo">Nueva Linea Presupuestaria</span><button class="modal-close" onclick="document.getElementById('modalSovLinea').style.display='none'">✕</button></div>
+          <div class="modal-body" style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+            <div><label class="form-label">Obra *</label><select class="form-input" id="slObra" onchange="sovObraCambio()"></select></div>
+            <div><label class="form-label">Capitulo</label><input class="form-input" id="slCapitulo" placeholder="01" value="01"></div>
+            <div><label class="form-label">Codigo</label><input class="form-input" id="slCodigo" placeholder="01.01.01"></div>
+            <div><label class="form-label">Unidad</label><input class="form-input" id="slUnidad" placeholder="m2, ud, kg..." value="ud"></div>
+            <div style="grid-column:1/-1"><label class="form-label">Descripcion *</label><input class="form-input" id="slDesc" placeholder="Descripcion de la partida"></div>
+            <div><label class="form-label">Cantidad presupuestada</label><input class="form-input" type="number" min="0" step="0.001" id="slCantPres" value="0" oninput="sovCalc()"></div>
+            <div><label class="form-label">Precio unitario (€)</label><input class="form-input" type="number" min="0" step="0.01" id="slPrecio" value="0" oninput="sovCalc()"></div>
+            <div><label class="form-label">Importe presupuestado (€)</label><input class="form-input" id="slImportePres" value="0,00 €" readonly style="background:var(--bg)"></div>
+            <div><label class="form-label">Cantidad ejecutada</label><input class="form-input" type="number" min="0" step="0.001" id="slCantEjec" value="0" oninput="sovCalc()"></div>
+            <div><label class="form-label">Importe ejecutado (€)</label><input class="form-input" id="slImporteEjec" value="0,00 €" readonly style="background:var(--bg)"></div>
+            <div><label class="form-label">% Avance (calculado)</label><input class="form-input" id="slPctAv" value="0%" readonly style="background:var(--bg)"></div>
+            <div><label class="form-label">Orden</label><input class="form-input" type="number" min="0" id="slOrden" value="0"></div>
+            <div style="grid-column:1/-1"><label class="form-label">Notas</label><textarea class="form-input" id="slNotas" rows="2" style="resize:vertical"></textarea></div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="document.getElementById('modalSovLinea').style.display='none'">Cancelar</button>
+            <button class="btn btn-primary" onclick="guardarSovLinea()">Guardar</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- MODAL: Importar CSV SOV -->
+      <div id="modalSovImport" class="modal-overlay" style="display:none" onclick="if(event.target===this)this.style.display='none'">
+        <div class="modal-box" style="max-width:560px">
+          <div class="modal-head"><span>Importar Presupuesto desde CSV</span><button class="modal-close" onclick="document.getElementById('modalSovImport').style.display='none'">✕</button></div>
+          <div class="modal-body" style="display:flex;flex-direction:column;gap:14px">
+            <div><label class="form-label">Obra</label><select class="form-input" id="siObra"></select></div>
+            <div style="background:var(--bg);border-radius:8px;padding:14px;font-size:13px">
+              <div style="font-weight:700;margin-bottom:8px">Formato CSV esperado:</div>
+              <code style="font-size:11px">capitulo,codigo,descripcion,unidad,cantidad,precio</code>
+              <div style="color:var(--muted);margin-top:6px">Ejemplo: 01,01.01,Excavacion,m3,500,12.50</div>
+            </div>
+            <div><label class="form-label">Archivo CSV</label><input type="file" class="form-input" id="siFile" accept=".csv"></div>
+            <div id="siPreview" style="display:none;max-height:200px;overflow-y:auto;font-size:12px;background:var(--bg);padding:10px;border-radius:6px"></div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="document.getElementById('modalSovImport').style.display='none'">Cancelar</button>
+            <button class="btn btn-primary" onclick="importarSovCsv()">Importar</button>
+          </div>
+        </div>
       </div>
 
       <!-- PLANOS DE OBRA -->
@@ -3592,6 +3672,7 @@ const PAGE_TITLES = {
   transmittals: '📨 Transmittals',
   controlCalidad: '✅ Control de Calidad / QA-QC',
   entregasMaterial: '🚚 Entregas de Material / Albaranes',
+  presupuestoSov: '📊 Presupuesto Detallado / Schedule of Values',
 };
 
 const PAGE_LOADERS = {
@@ -3650,6 +3731,7 @@ const PAGE_LOADERS = {
   transmittals: cargarTransmittals,
   controlCalidad: cargarControlCalidad,
   entregasMaterial: cargarEntregasMaterial,
+  presupuestoSov: cargarPresupuestoSov,
 };
 
 let currentPage = '';
@@ -3737,6 +3819,7 @@ const SYNC_INTERVALS = {
   transmittals: 90,
   controlCalidad: 90,
   entregasMaterial: 90,
+  presupuestoSov: 120,
 };
 
 let _syncTimer = null, _syncLabelTimer = null, _syncLastTs = null;
@@ -13776,6 +13859,319 @@ async function _getObrasOpts() {
   const obras = r?.obras || r?.results || [];
   return (selectedId) => '<option value="">-- Sin obra --</option>' +
     obras.map(o => `<option value="${o.id}"${o.id==selectedId?' selected':''}>${o.nombre||o.codigo}</option>`).join('');
+}
+
+// ── PRESUPUESTO DETALLADO / SCHEDULE OF VALUES (NEW-57) ───────────
+let _sovObraId = null;
+let _sovLineaEditId = null;
+let _sovLineas = [];
+
+async function cargarPresupuestoSov() {
+  if (document.getElementById('filterSovObra')?.options.length <= 1)
+    poblarSelectObras('filterSovObra');
+  if (document.getElementById('slObra')?.options.length <= 1)
+    poblarSelectObras('slObra');
+  if (document.getElementById('siObra')?.options.length <= 1)
+    poblarSelectObras('siObra');
+  const obraId  = document.getElementById('filterSovObra')?.value || '';
+  const capitulo = document.getElementById('filterSovCap')?.value || '';
+  if (!obraId) {
+    document.getElementById('sovCapitulosContainer').innerHTML =
+      '<div class="empty-state"><div class="empty-icon">📊</div><div class="empty-text">Selecciona una obra para ver su presupuesto.</div></div>';
+    document.getElementById('sovGlobalBar').style.display = 'none';
+    document.getElementById('sovKpi').innerHTML = '';
+    return;
+  }
+  _sovObraId = obraId;
+  const [lineasR, resumenR] = await Promise.all([
+    api(`/presupuesto-lineas?obra_id=${obraId}${capitulo?`&capitulo=${capitulo}`:''}`),
+    api(`/presupuesto-resumen/${obraId}`),
+  ]);
+  _sovLineas = lineasR?.lineas || [];
+  const resumen = resumenR;
+  // Update capitulo filter
+  const caps = lineasR?.capitulos || [];
+  const selCap = document.getElementById('filterSovCap');
+  if (selCap) {
+    const curVal = selCap.value;
+    selCap.innerHTML = '<option value="">Todos los capitulos</option>' +
+      caps.map(c => `<option value="${c}"${c===curVal?' selected':''}>${c}</option>`).join('');
+  }
+  // KPI strip
+  const kpi = document.getElementById('sovKpi');
+  if (kpi) kpi.innerHTML = `
+    <div class="kpi-card"><div class="kpi-icon">📋</div><div class="kpi-value">${lineasR?.total||0}</div><div class="kpi-label">Lineas</div></div>
+    <div class="kpi-card"><div class="kpi-icon">💶</div><div class="kpi-value">${fmtMoney(resumen?.totalPres||0)}</div><div class="kpi-label">Presupuestado</div></div>
+    <div class="kpi-card"><div class="kpi-icon">✅</div><div class="kpi-value" style="color:var(--success)">${fmtMoney(resumen?.totalEjec||0)}</div><div class="kpi-label">Ejecutado</div></div>
+    <div class="kpi-card"><div class="kpi-icon">💰</div><div class="kpi-value" style="color:${(resumen?.totalPres||0)-(resumen?.totalEjec||0)>=0?'var(--success)':'var(--danger)'}">${fmtMoney((resumen?.totalPres||0)-(resumen?.totalEjec||0))}</div><div class="kpi-label">Pendiente</div></div>
+    <div class="kpi-card"><div class="kpi-icon">📈</div><div class="kpi-value">${resumen?.pctGlobal||0}%</div><div class="kpi-label">Avance global</div></div>
+  `;
+  // Global progress bar
+  const bar = document.getElementById('sovGlobalBar');
+  if (bar) {
+    bar.style.display = '';
+    const pct = resumen?.pctGlobal || 0;
+    document.getElementById('sovBarPct').textContent = `${pct}%`;
+    document.getElementById('sovBarFill').style.width = `${Math.min(pct,100)}%`;
+    document.getElementById('sovBarFill').style.background =
+      pct >= 90 ? 'var(--success)' : pct >= 50 ? 'var(--primary)' : 'var(--warning)';
+  }
+  // Capitulos accordion
+  const cont = document.getElementById('sovCapitulosContainer');
+  if (!cont) return;
+  if (!_sovLineas.length) {
+    cont.innerHTML = `<div class="empty-state"><div class="empty-icon">📋</div><div class="empty-text">No hay lineas presupuestarias. Agrega la primera partida o importa desde CSV.</div></div>`;
+    return;
+  }
+  // Group by capitulo
+  const capsMap = {};
+  for (const l of _sovLineas) {
+    const c = l.capitulo || '01';
+    if (!capsMap[c]) capsMap[c] = [];
+    capsMap[c].push(l);
+  }
+  cont.innerHTML = Object.entries(capsMap).sort(([a],[b])=>a.localeCompare(b)).map(([cap, lineas]) => {
+    const totalPres = lineas.reduce((s,l)=>s+(l.importe_presupuestado||0),0);
+    const totalEjec = lineas.reduce((s,l)=>s+(l.importe_ejecutado||0),0);
+    const pct = totalPres > 0 ? Math.round((totalEjec/totalPres)*100) : 0;
+    const barColor = pct>=90?'var(--success)':pct>=50?'var(--primary)':'var(--warning)';
+    return `<div class="sov-capitulo" style="margin-bottom:12px;border:1px solid var(--border);border-radius:8px;overflow:hidden">
+      <div style="background:var(--bg-card);padding:12px 16px;cursor:pointer;display:flex;justify-content:space-between;align-items:center"
+           onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'':'none'">
+        <div style="display:flex;align-items:center;gap:12px">
+          <span style="font-weight:700;font-size:15px">Capitulo ${cap}</span>
+          <span style="font-size:12px;color:var(--muted)">${lineas.length} partidas</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:16px">
+          <div style="text-align:right;font-size:12px">
+            <div>${fmtMoney(totalEjec)} / ${fmtMoney(totalPres)}</div>
+            <div style="display:flex;align-items:center;gap:6px;margin-top:4px">
+              <div style="width:80px;height:5px;background:var(--border);border-radius:3px">
+                <div style="width:${Math.min(pct,100)}%;height:100%;background:${barColor};border-radius:3px"></div>
+              </div>
+              <span style="font-weight:700;color:${barColor}">${pct}%</span>
+            </div>
+          </div>
+          <span>▼</span>
+        </div>
+      </div>
+      <div style="overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse;font-size:12px">
+          <thead><tr style="background:var(--bg);color:var(--muted);text-align:left">
+            <th style="padding:8px 12px">Codigo</th>
+            <th style="padding:8px 12px;min-width:200px">Descripcion</th>
+            <th style="padding:8px 12px;text-align:right">Unidad</th>
+            <th style="padding:8px 12px;text-align:right">Cant. Pres.</th>
+            <th style="padding:8px 12px;text-align:right">P. Unit.</th>
+            <th style="padding:8px 12px;text-align:right">Imp. Pres.</th>
+            <th style="padding:8px 12px;text-align:right">Cant. Ejec.</th>
+            <th style="padding:8px 12px;text-align:right">Imp. Ejec.</th>
+            <th style="padding:8px 12px;text-align:center;min-width:90px">Avance</th>
+            <th style="padding:8px 12px;text-align:center">Acc.</th>
+          </tr></thead>
+          <tbody>${lineas.map(l => {
+            const pctL = l.porcentaje_avance || 0;
+            const bColor = pctL>=90?'var(--success)':pctL>=50?'var(--primary)':'var(--warning)';
+            return `<tr style="border-top:1px solid var(--border)" onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background=''">
+              <td style="padding:8px 12px;font-family:monospace;color:var(--primary)">${l.codigo||'-'}</td>
+              <td style="padding:8px 12px">${l.descripcion}</td>
+              <td style="padding:8px 12px;text-align:right">${l.unidad}</td>
+              <td style="padding:8px 12px;text-align:right">${(l.cantidad_presupuestada||0).toLocaleString('es-ES',{maximumFractionDigits:3})}</td>
+              <td style="padding:8px 12px;text-align:right">${fmtMoney(l.precio_unitario)}</td>
+              <td style="padding:8px 12px;text-align:right;font-weight:600">${fmtMoney(l.importe_presupuestado)}</td>
+              <td style="padding:8px 12px;text-align:right">${(l.cantidad_ejecutada||0).toLocaleString('es-ES',{maximumFractionDigits:3})}</td>
+              <td style="padding:8px 12px;text-align:right;color:${(l.importe_ejecutado||0)>(l.importe_presupuestado||0)?'var(--danger)':'var(--success)'}">${fmtMoney(l.importe_ejecutado)}</td>
+              <td style="padding:8px 12px">
+                <div style="display:flex;align-items:center;gap:5px">
+                  <div style="flex:1;height:5px;background:var(--border);border-radius:3px;min-width:50px">
+                    <div style="width:${Math.min(pctL,100)}%;height:100%;background:${bColor};border-radius:3px"></div>
+                  </div>
+                  <span style="font-weight:700;color:${bColor};font-size:11px">${pctL}%</span>
+                </div>
+              </td>
+              <td style="padding:8px 12px;text-align:center">
+                <button class="btn btn-secondary btn-sm" onclick="editarSovLinea(${l.id})" title="Editar" style="margin-right:4px">✏️</button>
+                <button class="btn btn-danger btn-sm" onclick="eliminarSovLinea(${l.id})" title="Eliminar">🗑</button>
+              </td>
+            </tr>`;
+          }).join('')}</tbody>
+          <tfoot><tr style="background:var(--bg-card);font-weight:700;border-top:2px solid var(--border)">
+            <td colspan="5" style="padding:8px 12px;text-align:right">TOTAL CAPITULO ${cap}:</td>
+            <td style="padding:8px 12px;text-align:right">${fmtMoney(totalPres)}</td>
+            <td style="padding:8px 12px"></td>
+            <td style="padding:8px 12px;text-align:right;color:${totalEjec>totalPres?'var(--danger)':'var(--success)'}">${fmtMoney(totalEjec)}</td>
+            <td style="padding:8px 12px;text-align:center;font-weight:700;color:${barColor}">${pct}%</td>
+            <td></td>
+          </tr></tfoot>
+        </table>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function abrirModalSovLinea() {
+  _sovLineaEditId = null;
+  document.getElementById('modalSovLineaTitulo').textContent = 'Nueva Linea Presupuestaria';
+  // Pre-fill obra from current filter
+  const obraId = document.getElementById('filterSovObra')?.value || '';
+  if (document.getElementById('slObra')?.options.length <= 1) poblarSelectObras('slObra');
+  if (obraId) {
+    setTimeout(() => {
+      const s = document.getElementById('slObra');
+      if (s) s.value = obraId;
+    }, 100);
+  }
+  ['slCapitulo','slCodigo','slUnidad','slDesc','slNotas'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = id === 'slCapitulo' ? '01' : id === 'slUnidad' ? 'ud' : '';
+  });
+  ['slCantPres','slPrecio','slCantEjec','slOrden'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.value = '0';
+  });
+  ['slImportePres','slImporteEjec'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.value = '0,00 €';
+  });
+  document.getElementById('slPctAv').value = '0%';
+  document.getElementById('modalSovLinea').style.display = 'flex';
+}
+
+async function editarSovLinea(id) {
+  const l = _sovLineas.find(x => x.id === id);
+  if (!l) return showToast('Linea no encontrada', 'error');
+  _sovLineaEditId = id;
+  document.getElementById('modalSovLineaTitulo').textContent = 'Editar Linea Presupuestaria';
+  if (document.getElementById('slObra')?.options.length <= 1) poblarSelectObras('slObra');
+  setTimeout(() => { const s=document.getElementById('slObra'); if(s) s.value=l.obra_id||''; }, 100);
+  document.getElementById('slCapitulo').value  = l.capitulo || '01';
+  document.getElementById('slCodigo').value    = l.codigo || '';
+  document.getElementById('slDesc').value      = l.descripcion || '';
+  document.getElementById('slUnidad').value    = l.unidad || 'ud';
+  document.getElementById('slCantPres').value  = l.cantidad_presupuestada || 0;
+  document.getElementById('slPrecio').value    = l.precio_unitario || 0;
+  document.getElementById('slCantEjec').value  = l.cantidad_ejecutada || 0;
+  document.getElementById('slOrden').value     = l.orden || 0;
+  document.getElementById('slNotas').value     = l.notas || '';
+  sovCalc();
+  document.getElementById('modalSovLinea').style.display = 'flex';
+}
+
+function sovCalc() {
+  const cant = parseFloat(document.getElementById('slCantPres')?.value) || 0;
+  const precio = parseFloat(document.getElementById('slPrecio')?.value) || 0;
+  const ejec = parseFloat(document.getElementById('slCantEjec')?.value) || 0;
+  const impPres = cant * precio;
+  const impEjec = ejec * precio;
+  const pct = impPres > 0 ? Math.round((impEjec/impPres)*100) : 0;
+  const el1 = document.getElementById('slImportePres');
+  const el2 = document.getElementById('slImporteEjec');
+  const el3 = document.getElementById('slPctAv');
+  if (el1) el1.value = fmtMoney(impPres);
+  if (el2) el2.value = fmtMoney(impEjec);
+  if (el3) el3.value = `${pct}%`;
+}
+
+function sovObraCambio() {}
+
+async function guardarSovLinea() {
+  const desc = document.getElementById('slDesc')?.value.trim();
+  if (!desc) return showToast('La descripcion es obligatoria', 'error');
+  const obraId = document.getElementById('slObra')?.value;
+  if (!obraId) return showToast('Selecciona una obra', 'error');
+  const body = {
+    obra_id: parseInt(obraId),
+    capitulo: document.getElementById('slCapitulo')?.value.trim() || '01',
+    codigo: document.getElementById('slCodigo')?.value.trim() || null,
+    descripcion: desc,
+    unidad: document.getElementById('slUnidad')?.value.trim() || 'ud',
+    cantidad_presupuestada: parseFloat(document.getElementById('slCantPres')?.value) || 0,
+    precio_unitario: parseFloat(document.getElementById('slPrecio')?.value) || 0,
+    cantidad_ejecutada: parseFloat(document.getElementById('slCantEjec')?.value) || 0,
+    orden: parseInt(document.getElementById('slOrden')?.value) || 0,
+    notas: document.getElementById('slNotas')?.value.trim() || null,
+  };
+  const url = _sovLineaEditId ? `/presupuesto-lineas/${_sovLineaEditId}` : '/presupuesto-lineas';
+  const method = _sovLineaEditId ? 'PUT' : 'POST';
+  const r = await api(url, method, body);
+  if (r?.ok || r?.id) {
+    document.getElementById('modalSovLinea').style.display = 'none';
+    showToast(_sovLineaEditId ? 'Linea actualizada ✅' : 'Linea creada ✅', 'success');
+    cargarPresupuestoSov();
+  } else showToast(r?.error || 'Error al guardar', 'error');
+}
+
+async function eliminarSovLinea(id) {
+  if (!confirm('¿Eliminar esta linea presupuestaria?')) return;
+  const r = await api(`/presupuesto-lineas/${id}`, 'DELETE');
+  if (r?.ok) { showToast('Linea eliminada', 'success'); cargarPresupuestoSov(); }
+  else showToast('Error al eliminar', 'error');
+}
+
+function abrirModalSovImport() {
+  if (document.getElementById('siObra')?.options.length <= 1) poblarSelectObras('siObra');
+  const obraId = document.getElementById('filterSovObra')?.value || '';
+  if (obraId) setTimeout(() => { const s=document.getElementById('siObra'); if(s) s.value=obraId; }, 100);
+  document.getElementById('siFile').value = '';
+  document.getElementById('siPreview').style.display = 'none';
+  document.getElementById('modalSovImport').style.display = 'flex';
+  document.getElementById('siFile').onchange = function() {
+    const file = this.files[0]; if (!file) return;
+    const reader = new FileReader();
+    reader.onload = e => {
+      const lines = e.target.result.split('\n').filter(l=>l.trim()).slice(0,6);
+      const preview = document.getElementById('siPreview');
+      preview.style.display = '';
+      preview.innerHTML = `<div style="font-weight:700;margin-bottom:6px">Vista previa (primeras ${lines.length} filas):</div>` +
+        lines.map(l=>`<div style="font-family:monospace;padding:2px 0;border-bottom:1px solid var(--border)">${l}</div>`).join('');
+    };
+    reader.readAsText(file, 'UTF-8');
+  };
+}
+
+async function importarSovCsv() {
+  const obraId = document.getElementById('siObra')?.value;
+  if (!obraId) return showToast('Selecciona una obra', 'error');
+  const file = document.getElementById('siFile')?.files[0];
+  if (!file) return showToast('Selecciona un archivo CSV', 'error');
+  const text = await file.text();
+  const rows = text.split('\n').filter(l=>l.trim());
+  let count = 0, errors = 0;
+  showToast(`Importando ${rows.length} lineas...`, 'info');
+  for (const row of rows) {
+    const parts = row.split(',').map(s=>s.trim().replace(/^["']|["']$/g,''));
+    if (parts.length < 6) { errors++; continue; }
+    const [capitulo, codigo, descripcion, unidad, cantidad, precio] = parts;
+    if (!descripcion) { errors++; continue; }
+    const body = {
+      obra_id: parseInt(obraId),
+      capitulo: capitulo || '01',
+      codigo: codigo || null,
+      descripcion,
+      unidad: unidad || 'ud',
+      cantidad_presupuestada: parseFloat(cantidad) || 0,
+      precio_unitario: parseFloat(precio) || 0,
+    };
+    const r = await api('/presupuesto-lineas', 'POST', body);
+    if (r?.ok || r?.id) count++; else errors++;
+  }
+  document.getElementById('modalSovImport').style.display = 'none';
+  showToast(`Importacion completa: ${count} lineas creadas${errors?`, ${errors} errores`:''}`, count>0?'success':'warning');
+  if (count > 0) cargarPresupuestoSov();
+}
+
+function exportarSovCsv() {
+  if (!_sovLineas.length) return showToast('No hay lineas para exportar', 'error');
+  const header = 'Capitulo,Codigo,Descripcion,Unidad,Cant.Pres.,P.Unit.,Imp.Pres.,Cant.Ejec.,Imp.Ejec.,Avance%';
+  const rows = _sovLineas.map(l =>
+    [l.capitulo,l.codigo||'',`"${l.descripcion}"`,l.unidad,
+     l.cantidad_presupuestada,l.precio_unitario,l.importe_presupuestado,
+     l.cantidad_ejecutada,l.importe_ejecutado,l.porcentaje_avance].join(',')
+  );
+  const csv = [header,...rows].join('\n');
+  const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `presupuesto-sov-${_sovObraId||'obra'}.csv`;
+  a.click();
 }
 
 // ── SUBMITTAL LOG / APROBACIONES DE MATERIALES ───────────────────

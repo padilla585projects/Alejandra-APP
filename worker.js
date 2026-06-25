@@ -4557,6 +4557,18 @@ export default {
         if (method === 'PUT')    return await actualizarEntregaMaterial(_emid, request, env);
         if (method === 'DELETE') return await eliminarEntregaMaterial(_emid, request, env);
       }
+      // -- Presupuesto Detallado / Schedule of Values (NEW-57) ---------------
+      if (path === '/presupuesto-lineas' && method === 'GET')  return await getPresupuestoLineas(request, env);
+      if (path === '/presupuesto-lineas' && method === 'POST') return await crearPresupuestoLinea(request, env);
+      if (path.startsWith('/presupuesto-lineas/')) {
+        const _plid = parseInt(path.split('/presupuesto-lineas/')[1]);
+        if (method === 'PUT')    return await actualizarPresupuestoLinea(_plid, request, env);
+        if (method === 'DELETE') return await eliminarPresupuestoLinea(_plid, request, env);
+      }
+      if (path.startsWith('/presupuesto-resumen/')) {
+        const _prid = parseInt(path.split('/presupuesto-resumen/')[1]);
+        if (method === 'GET') return await getPresupuestoResumen(_prid, request, env);
+      }
       // â”€â”€ Cronograma / Gantt de Obra (NEW-52) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
       if (path.startsWith('/cronograma-obra/')) {
         const _crid = parseInt(path.split('/cronograma-obra/')[1]);
@@ -15285,4 +15297,138 @@ async function eliminarEntregaMaterial(id, request, env) {
   if (!auth?.empresa_id) return err('No autorizado', 403);
   await env.DB.prepare(`DELETE FROM entregas_material WHERE id=? AND empresa_id=?`).bind(id, auth.empresa_id).run();
   return json({ ok: true });
+}
+
+// ============================================================
+// NEW-57  Presupuesto Detallado / Schedule of Values (SOV)
+// ============================================================
+
+async function ensurePresupuestoTable(env) {
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS presupuesto_lineas (
+    id                    INTEGER PRIMARY KEY AUTOINCREMENT,
+    empresa_id            INTEGER NOT NULL,
+    obra_id               INTEGER NOT NULL,
+    capitulo              TEXT DEFAULT '01',
+    codigo                TEXT,
+    descripcion           TEXT NOT NULL,
+    unidad                TEXT DEFAULT 'ud',
+    cantidad_presupuestada REAL DEFAULT 0,
+    precio_unitario       REAL DEFAULT 0,
+    importe_presupuestado REAL DEFAULT 0,
+    cantidad_ejecutada    REAL DEFAULT 0,
+    importe_ejecutado     REAL DEFAULT 0,
+    porcentaje_avance     REAL DEFAULT 0,
+    fase_id               INTEGER,
+    orden                 INTEGER DEFAULT 0,
+    notas                 TEXT,
+    created_at            TEXT DEFAULT (datetime('now')),
+    updated_at            TEXT DEFAULT (datetime('now'))
+  )`).run().catch(()=>{});
+}
+
+async function getPresupuestoLineas(request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth?.empresa_id) return err('No autorizado', 403);
+  await ensurePresupuestoTable(env);
+  const url = new URL(request.url);
+  const obraId   = url.searchParams.get('obra_id');
+  const capitulo = url.searchParams.get('capitulo');
+  let q = `SELECT * FROM presupuesto_lineas WHERE empresa_id=?`;
+  const params = [auth.empresa_id];
+  if (obraId)   { q += ` AND obra_id=?`;   params.push(obraId); }
+  if (capitulo) { q += ` AND capitulo=?`;  params.push(capitulo); }
+  q += ` ORDER BY capitulo ASC, orden ASC, codigo ASC, id ASC`;
+  const { results } = await env.DB.prepare(q).bind(...params).all();
+  const lineas = results || [];
+  const importeTotal    = lineas.reduce((s,l)=>s+(l.importe_presupuestado||0),0);
+  const ejecutadoTotal  = lineas.reduce((s,l)=>s+(l.importe_ejecutado||0),0);
+  const pctAvance = importeTotal > 0 ? Math.round((ejecutadoTotal/importeTotal)*100) : 0;
+  const capitulos = [...new Set(lineas.map(l=>l.capitulo).filter(Boolean))].sort();
+  return json({ lineas, importeTotal, ejecutadoTotal, pctAvance, capitulos, total: lineas.length });
+}
+
+async function crearPresupuestoLinea(request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth?.empresa_id) return err('No autorizado', 403);
+  await ensurePresupuestoTable(env);
+  const b = await request.json();
+  if (!b.obra_id) return err('obra_id requerido', 400);
+  const cantPres  = parseFloat(b.cantidad_presupuestada) || 0;
+  const precUnit  = parseFloat(b.precio_unitario)        || 0;
+  const importePres = cantPres * precUnit;
+  const cantEjec  = parseFloat(b.cantidad_ejecutada)     || 0;
+  const importeEjec = cantEjec * precUnit;
+  const pctAv = importePres > 0 ? Math.round((importeEjec/importePres)*100) : 0;
+  const { meta } = await env.DB.prepare(`
+    INSERT INTO presupuesto_lineas
+      (empresa_id, obra_id, capitulo, codigo, descripcion, unidad,
+       cantidad_presupuestada, precio_unitario, importe_presupuestado,
+       cantidad_ejecutada, importe_ejecutado, porcentaje_avance, fase_id, orden, notas)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+  `).bind(
+    auth.empresa_id, b.obra_id, b.capitulo||'01', b.codigo||null, b.descripcion||'Partida',
+    b.unidad||'ud', cantPres, precUnit, importePres,
+    cantEjec, importeEjec, pctAv,
+    b.fase_id||null, parseInt(b.orden)||0, b.notas||null
+  ).run();
+  return json({ ok: true, id: meta.last_row_id });
+}
+
+async function actualizarPresupuestoLinea(id, request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth?.empresa_id) return err('No autorizado', 403);
+  const b = await request.json();
+  const cantPres  = parseFloat(b.cantidad_presupuestada) || 0;
+  const precUnit  = parseFloat(b.precio_unitario)        || 0;
+  const importePres = cantPres * precUnit;
+  const cantEjec  = parseFloat(b.cantidad_ejecutada)     || 0;
+  const importeEjec = cantEjec * precUnit;
+  const pctAv = importePres > 0 ? Math.round((importeEjec/importePres)*100) : (b.porcentaje_avance||0);
+  await env.DB.prepare(`
+    UPDATE presupuesto_lineas SET capitulo=?, codigo=?, descripcion=?, unidad=?,
+      cantidad_presupuestada=?, precio_unitario=?, importe_presupuestado=?,
+      cantidad_ejecutada=?, importe_ejecutado=?, porcentaje_avance=?,
+      fase_id=?, orden=?, notas=?, updated_at=datetime('now')
+    WHERE id=? AND empresa_id=?
+  `).bind(
+    b.capitulo||'01', b.codigo||null, b.descripcion||null, b.unidad||'ud',
+    cantPres, precUnit, importePres, cantEjec, importeEjec, pctAv,
+    b.fase_id||null, parseInt(b.orden)||0, b.notas||null,
+    id, auth.empresa_id
+  ).run();
+  return json({ ok: true, pctAvance: pctAv });
+}
+
+async function eliminarPresupuestoLinea(id, request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth?.empresa_id) return err('No autorizado', 403);
+  await env.DB.prepare(`DELETE FROM presupuesto_lineas WHERE id=? AND empresa_id=?`).bind(id, auth.empresa_id).run();
+  return json({ ok: true });
+}
+
+async function getPresupuestoResumen(obraId, request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth?.empresa_id) return err('No autorizado', 403);
+  await ensurePresupuestoTable(env);
+  const { results: lineas } = await env.DB.prepare(
+    `SELECT * FROM presupuesto_lineas WHERE obra_id=? AND empresa_id=? ORDER BY capitulo, orden, codigo`
+  ).bind(obraId, auth.empresa_id).all();
+  const obra = await env.DB.prepare(`SELECT id, nombre, codigo FROM obras WHERE id=? AND empresa_id=?`)
+    .bind(obraId, auth.empresa_id).first();
+  // Group by capitulo
+  const caps = {};
+  for (const l of (lineas||[])) {
+    const c = l.capitulo || '01';
+    if (!caps[c]) caps[c] = { capitulo: c, lineas: [], pres: 0, ejec: 0 };
+    caps[c].lineas.push(l);
+    caps[c].pres += l.importe_presupuestado || 0;
+    caps[c].ejec += l.importe_ejecutado || 0;
+  }
+  const capitulos = Object.values(caps).map(c => ({
+    ...c, pct: c.pres > 0 ? Math.round((c.ejec/c.pres)*100) : 0
+  }));
+  const totalPres = capitulos.reduce((s,c)=>s+c.pres,0);
+  const totalEjec = capitulos.reduce((s,c)=>s+c.ejec,0);
+  const pctGlobal = totalPres > 0 ? Math.round((totalEjec/totalPres)*100) : 0;
+  return json({ obra, capitulos, totalPres, totalEjec, pctGlobal, totalLineas: (lineas||[]).length });
 }
