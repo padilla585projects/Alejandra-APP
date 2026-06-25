@@ -491,6 +491,10 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
     <button class="nav-item" data-page="seguridad" onclick="navTo('seguridad')">
       <span class="nav-icon">🔺</span> Seguridad
     </button>
+    <button class="nav-item" data-page="alertasStock" onclick="navTo('alertasStock')">
+      <span class="nav-icon">📉</span> Alertas Stock
+      <span class="nav-badge" id="alertasStockBadge" style="display:none">!</span>
+    </button>
 
     <div class="sidebar-section" onclick="sidebarToggle(this)" data-sid="obra"><span>🏗️ Obra</span><span class="sec-chevron">▼</span></div>
     <button class="nav-item" data-page="obras" onclick="navTo('obras')">
@@ -1275,6 +1279,41 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
           <button class="btn btn-secondary" onclick="cargarSeguridad()">🔄 Actualizar</button>
         </div>
         <div class="tbl-wrap"><div id="tblSeguridad"></div></div>
+      </div>
+
+      <!-- ALERTAS DE STOCK (NEW-73) -->
+      <div class="page" id="pageAlertasStock">
+        <div class="page-title">📉 Alertas de Stock</div>
+        <div class="page-sub">Ítems por debajo del stock mínimo configurado — herramientas, seguridad y bobinas</div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px">
+          <button class="btn btn-secondary" onclick="cargarAlertasStock()">🔄 Actualizar</button>
+        </div>
+        <!-- KPI strip -->
+        <div id="stockKpiStrip" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:18px"></div>
+        <!-- Herramientas -->
+        <div class="card" style="padding:20px;margin-bottom:16px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+            <div style="font-weight:700;font-size:15px">🔧 Herramientas bajo mínimo</div>
+            <button class="btn btn-secondary" style="font-size:12px;padding:4px 10px" onclick="navTo('herramientas')">Ver inventario →</button>
+          </div>
+          <div id="stockHerrContent"><div class="empty-state"><div class="empty-icon">✅</div><div class="empty-text">Cargando…</div></div></div>
+        </div>
+        <!-- Seguridad -->
+        <div class="card" style="padding:20px;margin-bottom:16px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+            <div style="font-weight:700;font-size:15px">🦺 Material de seguridad bajo mínimo</div>
+            <button class="btn btn-secondary" style="font-size:12px;padding:4px 10px" onclick="navTo('seguridad')">Ver inventario →</button>
+          </div>
+          <div id="stockSegContent"><div class="empty-state"><div class="empty-icon">✅</div><div class="empty-text">Cargando…</div></div></div>
+        </div>
+        <!-- Bobinas -->
+        <div class="card" style="padding:20px;margin-bottom:16px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+            <div style="font-weight:700;font-size:15px">⚡ Bobinas de cable bajo mínimo</div>
+            <button class="btn btn-secondary" style="font-size:12px;padding:4px 10px" onclick="navTo('bobinas')">Ver inventario →</button>
+          </div>
+          <div id="stockBobContent"><div class="empty-state"><div class="empty-icon">✅</div><div class="empty-text">Cargando…</div></div></div>
+        </div>
       </div>
 
       <!-- OBRAS -->
@@ -4955,6 +4994,7 @@ const PAGE_TITLES = {
   certificaciones: '🧾 Certificaciones de Obra',
   calendario: '📅 Calendario de Obra',
   visitasObra: '🪪 Registro de Visitas de Obra',
+  alertasStock: '📉 Alertas de Stock',
 };
 
 const PAGE_LOADERS = {
@@ -5028,6 +5068,7 @@ const PAGE_LOADERS = {
   certificaciones: cargarCertificaciones,
   calendario: cargarCalendario,
   visitasObra: cargarVisitasObra,
+  alertasStock: cargarAlertasStock,
 };
 
 let currentPage = '';
@@ -5130,6 +5171,7 @@ const SYNC_INTERVALS = {
   certificaciones: 90,
   calendario:      60,
   visitasObra:     90,
+  alertasStock:    60,
 };
 
 let _syncTimer = null, _syncLabelTimer = null, _syncLastTs = null;
@@ -6752,6 +6794,72 @@ async function cargarSeguridad() {
 async function guardarCampoSeg(id, campo, valor) {
   const r = await api(`/inventario-seg/${id}`, { method: 'PUT', body: JSON.stringify({ [campo]: valor }) });
   if (r.ok) toast('Guardado ✓', 'ok'); else toast('Error al guardar', 'err');
+}
+
+// ── ALERTAS DE STOCK (NEW-73) ──────────────────────────────────
+async function cargarAlertasStock() {
+  const kpiStrip   = document.getElementById('stockKpiStrip');
+  const herrContent = document.getElementById('stockHerrContent');
+  const segContent  = document.getElementById('stockSegContent');
+  const bobContent  = document.getElementById('stockBobContent');
+  if (!kpiStrip) return;
+
+  const d    = await api('/alertas-stock');
+  const herr = d.herramientas || [];
+  const seg  = d.seguridad    || [];
+  const bob  = d.bobinas      || [];
+  const total = herr.length + seg.length + bob.length;
+
+  // Actualizar badge en el nav
+  const badge = document.getElementById('alertasStockBadge');
+  if (badge) {
+    badge.style.display = total > 0 ? '' : 'none';
+    badge.textContent   = total > 0 ? total : '';
+  }
+
+  // KPI strip
+  kpiStrip.innerHTML = [
+    { icon: '📉', value: total,       label: 'Total alertas',    cls: total > 0       ? 'danger' : 'ok' },
+    { icon: '🔧', value: herr.length, label: 'Herramientas',     cls: herr.length > 0 ? 'warn'   : 'ok' },
+    { icon: '🦺', value: seg.length,  label: 'Seguridad',        cls: seg.length  > 0 ? 'warn'   : 'ok' },
+    { icon: '⚡', value: bob.length,  label: 'Bobinas de cable', cls: bob.length  > 0 ? 'warn'   : 'ok' },
+  ].map(k => `<div class="kpi-card" style="padding:14px">
+    <div class="kpi-icon" style="font-size:20px">${k.icon}</div>
+    <div class="kpi-value ${k.cls}" style="font-size:24px;font-weight:800">${k.value}</div>
+    <div class="kpi-label">${k.label}</div>
+  </div>`).join('');
+
+  // Helper: render a row
+  const mkRow = (nombre, qty, min, navPage) => `
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border)">
+      <div>
+        <div style="font-weight:600;margin-bottom:2px">${nombre}</div>
+        <div style="font-size:12px;color:var(--muted)">
+          Disponible: <b style="color:var(--danger)">${qty}</b>
+          &nbsp;/&nbsp;Mínimo requerido: <b>${min}</b>
+          &nbsp;— Deficit: <b style="color:var(--danger)">${min - qty}</b>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
+        <span style="background:var(--danger);color:#fff;font-size:11px;font-weight:700;padding:2px 8px;border-radius:9999px">BAJO MÍNIMO</span>
+        <button class="btn btn-secondary" style="padding:4px 10px;font-size:12px" onclick="navTo('${navPage}')">→ Ver</button>
+      </div>
+    </div>`;
+
+  // Helper: render a list into an element
+  const renderList = (el, items, emptyIcon, emptyMsg, rowFn) => {
+    if (!el) return;
+    el.innerHTML = items.length === 0
+      ? `<div class="empty-state" style="padding:20px 0"><div class="empty-icon">${emptyIcon}</div><div class="empty-text">${emptyMsg}</div></div>`
+      : items.map(rowFn).join('');
+  };
+
+  renderList(herrContent, herr, '✅', 'Todas las herramientas en nivel correcto',
+    a => mkRow(a.nombre, a.disponibles,        a.stock_minimo, 'herramientas'));
+  renderList(segContent,  seg,  '✅', 'Todo el material de seguridad en nivel correcto',
+    a => mkRow(a.nombre, a.cantidad_disponible, a.stock_minimo, 'seguridad'));
+  renderList(bobContent,  bob,  '✅', 'Todos los tipos de cable en nivel correcto',
+    a => mkRow(a.nombre, a.total_bobinas,       a.stock_minimo, 'bobinas'));
 }
 
 // ── OBRAS ──────────────────────────────────────────────────────
