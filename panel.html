@@ -717,6 +717,10 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
     <button class="nav-item" data-page="flujoCaja" onclick="navTo('flujoCaja')">
       <span class="nav-icon">💰</span> Flujo de Caja
     </button>
+    <button class="nav-item" data-page="solicitudesMat" onclick="navTo('solicitudesMat')">
+      <span class="nav-icon">📋</span> Solicitudes Material
+      <span class="nav-badge" id="solMatBadge" style="display:none">0</span>
+    </button>
     <button class="nav-item" data-page="fotosObra" onclick="navTo('fotosObra')">
       <span class="nav-icon">📷</span> Galería de Fotos
     </button>
@@ -2437,6 +2441,87 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
               <button class="btn btn-secondary" onclick="cerrarModalAts()">Cancelar</button>
               <span id="atsElimBtn"></span>
               <button class="btn btn-primary" onclick="guardarAts()">💾 Guardar ATS</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- SOLICITUDES DE MATERIAL / MATERIAL REQUESTS (NEW-93) -->
+      <div class="page" id="pageSolicitudesMat">
+        <div class="page-title">📋 Solicitudes de Material / Material Requests</div>
+        <div id="smKpis" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;margin-bottom:16px"></div>
+        <div class="tbl-toolbar">
+          <input class="tbl-search" id="searchSm" placeholder="🔍 Buscar material, solicitante..." oninput="filtrarSolicitudesMat()">
+          <select class="tbl-search" id="filterSmObra" style="min-width:220px" onchange="tblSm=null;cargarSolicitudesMat()">
+            <option value="">Todas las obras</option>
+          </select>
+          <select class="tbl-search" id="filterSmEstado" onchange="filtrarSolicitudesMat()">
+            <option value="">Todos los estados</option>
+            <option value="pendiente">Pendiente ⏳</option>
+            <option value="aprobada">Aprobada ✅</option>
+            <option value="en_pedido">En pedido 🛒</option>
+            <option value="recibida">Recibida 📦</option>
+            <option value="rechazada">Rechazada ❌</option>
+          </select>
+          <select class="tbl-search" id="filterSmPrioridad" onchange="filtrarSolicitudesMat()">
+            <option value="">Todas las prioridades</option>
+            <option value="urgente">🔴 Urgente</option>
+            <option value="alta">🟠 Alta</option>
+            <option value="normal">🟡 Normal</option>
+            <option value="baja">🟢 Baja</option>
+          </select>
+          <button class="btn btn-primary" onclick="abrirModalSm()">+ Nueva Solicitud</button>
+        </div>
+        <div id="tblSmContainer"></div>
+        <!-- Modal solicitud material -->
+        <div class="modal-overlay" id="modalSm" style="display:none" onclick="if(event.target===this)cerrarModalSm()">
+          <div class="modal" style="max-width:680px">
+            <div class="modal-header">
+              <span id="modalSmTitulo">Nueva Solicitud de Material</span>
+              <button class="modal-close" onclick="cerrarModalSm()">✕</button>
+            </div>
+            <div class="modal-body" style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+              <div><label>Número</label><input id="smNumero" class="form-control" readonly style="background:#f5f5f5" placeholder="Auto"></div>
+              <div><label>Estado</label>
+                <select id="smEstado" class="form-control">
+                  <option value="pendiente">Pendiente ⏳</option>
+                  <option value="aprobada">Aprobada ✅</option>
+                  <option value="en_pedido">En pedido 🛒</option>
+                  <option value="recibida">Recibida 📦</option>
+                  <option value="rechazada">Rechazada ❌</option>
+                </select>
+              </div>
+              <div><label>Fecha solicitud *</label><input id="smFechaSol" class="form-control" type="date"></div>
+              <div><label>Fecha necesaria</label><input id="smFechaNec" class="form-control" type="date"></div>
+              <div><label>Solicitante</label><input id="smSolicitante" class="form-control" placeholder="Encargado / trabajador"></div>
+              <div><label>Obra</label><select id="smObra" class="form-control"><option value="">Sin obra</option></select></div>
+              <div><label>Fase / Actividad</label><input id="smFase" class="form-control" placeholder="Trabajo para el que se necesita"></div>
+              <div><label>Prioridad</label>
+                <select id="smPrioridad" class="form-control">
+                  <option value="urgente">🔴 Urgente</option>
+                  <option value="alta">🟠 Alta</option>
+                  <option value="normal" selected>🟡 Normal</option>
+                  <option value="baja">🟢 Baja</option>
+                </select>
+              </div>
+              <div style="grid-column:span 2;font-weight:600;color:var(--accent);border-bottom:1px solid #eee;padding-bottom:6px;margin-top:4px">
+                Materiales solicitados
+                <button class="btn btn-secondary btn-sm" style="float:right" onclick="addLineaSm()">+ Línea</button>
+              </div>
+              <div style="grid-column:span 2" id="smLineasContainer">
+                <!-- líneas dinámicas -->
+              </div>
+              <div style="grid-column:span 2;font-weight:600;color:var(--accent);border-bottom:1px solid #eee;padding-bottom:6px;margin-top:8px">Aprobación</div>
+              <div><label>Aprobado por</label><input id="smAprobadoPor" class="form-control" placeholder="Jefe de obra / oficina técnica"></div>
+              <div><label>Fecha aprobación</label><input id="smFechaAprob" class="form-control" type="date"></div>
+              <div style="grid-column:span 2"><label>Observaciones</label>
+                <textarea id="smObs" class="form-control" rows="2"></textarea>
+              </div>
+            </div>
+            <div class="modal-footer">
+              <button class="btn btn-secondary" onclick="cerrarModalSm()">Cancelar</button>
+              <span id="smElimBtn"></span>
+              <button class="btn btn-primary" onclick="guardarSm()">💾 Guardar Solicitud</button>
             </div>
           </div>
         </div>
@@ -7329,6 +7414,7 @@ const PAGE_TITLES = {
   consumosMaterial: '📦 Consumos de Material / Material Consumption Log',
   accidentes: '🚨 Accidentes e Incidentes / Accident & Incident Investigation',
   flujoCaja: '💰 Flujo de Caja / Cash Flow Projection',
+  solicitudesMat: '📋 Solicitudes de Material / Material Requests',
 };
 
 const PAGE_LOADERS = {
@@ -7422,6 +7508,7 @@ const PAGE_LOADERS = {
   consumosMaterial: cargarConsumosMat,
   accidentes:       cargarAccidentes,
   flujoCaja:        cargarFlujoCaja,
+  solicitudesMat:   cargarSolicitudesMat,
 };
 
 let currentPage = '';
@@ -7544,6 +7631,7 @@ const SYNC_INTERVALS = {
   consumosMaterial: 90,
   accidentes:       60,
   flujoCaja:        120,
+  solicitudesMat:   60,
 };
 
 let _syncTimer = null, _syncLabelTimer = null, _syncLastTs = null;
@@ -16905,6 +16993,164 @@ function exportarFinanzas() {
   // Abrir informe en nueva pestaña usando el endpoint de informes
   window.open(`/informe-obra/${obraId}?tipo=financiero`, '_blank');
 }
+
+// ── SOLICITUDES DE MATERIAL / MATERIAL REQUESTS (NEW-93) ─────────────────────
+let tblSm = null, _smData = [];
+const SM_ESTADO_COLOR = { pendiente:'var(--warning)', aprobada:'var(--success)', en_pedido:'var(--accent)', recibida:'#27ae60', rechazada:'var(--danger)' };
+const SM_PRIO_COLOR   = { urgente:'var(--danger)', alta:'#e67e22', normal:'var(--warning)', baja:'var(--muted)' };
+
+function addLineaSm(mat='', cant='', unidad='ud', notas='') {
+  const c = document.getElementById('smLineasContainer');
+  const idx = c.querySelectorAll('.sm-linea').length;
+  const div = document.createElement('div');
+  div.className = 'sm-linea';
+  div.style = 'display:grid;grid-template-columns:3fr 1fr 1fr auto;gap:6px;align-items:center;margin-bottom:6px';
+  div.innerHTML = `
+    <input class="form-control sm-mat" placeholder="Material / descripción" value="${mat}">
+    <input class="form-control sm-cant" type="number" step="any" min="0" placeholder="Cant." value="${cant}">
+    <select class="form-control sm-unid">
+      ${['ud','m','m2','m3','kg','t','l','rollo','bobina','caja','saco'].map(u=>`<option${u===unidad?' selected':''}>${u}</option>`).join('')}
+    </select>
+    <button class="btn btn-danger btn-sm" onclick="this.closest('.sm-linea').remove()" title="Eliminar">✕</button>
+  `;
+  c.appendChild(div);
+}
+
+function getLineasSm() {
+  return [...document.querySelectorAll('#smLineasContainer .sm-linea')].map(row => ({
+    material: row.querySelector('.sm-mat').value.trim(),
+    cantidad: parseFloat(row.querySelector('.sm-cant').value) || 0,
+    unidad:   row.querySelector('.sm-unid').value,
+  })).filter(l => l.material);
+}
+
+async function cargarSolicitudesMat() {
+  poblarSelectObras('filterSmObra');
+  poblarSelectObras('smObra');
+  const obraId = document.getElementById('filterSmObra').value;
+  const params = new URLSearchParams();
+  if (obraId) params.set('obra_id', obraId);
+  _smData = await api('/solicitudes-material?' + params);
+  if (!Array.isArray(_smData)) _smData = [];
+
+  const total     = _smData.length;
+  const pendientes = _smData.filter(s=>s.estado==='pendiente').length;
+  const aprobadas  = _smData.filter(s=>s.estado==='aprobada').length;
+  const urgentes   = _smData.filter(s=>s.prioridad==='urgente').length;
+  const recibidas  = _smData.filter(s=>s.estado==='recibida').length;
+  document.getElementById('smKpis').innerHTML = `
+    <div class="kpi-mini"><div class="kpi-val">${total}</div><div class="kpi-lbl">Total</div></div>
+    <div class="kpi-mini"><div class="kpi-val" style="color:var(--warning)">${pendientes}</div><div class="kpi-lbl">Pendientes ⏳</div></div>
+    <div class="kpi-mini"><div class="kpi-val" style="color:var(--success)">${aprobadas}</div><div class="kpi-lbl">Aprobadas ✅</div></div>
+    <div class="kpi-mini"><div class="kpi-val" style="color:var(--danger)">${urgentes}</div><div class="kpi-lbl">Urgentes 🔴</div></div>
+    <div class="kpi-mini"><div class="kpi-val" style="color:#27ae60">${recibidas}</div><div class="kpi-lbl">Recibidas 📦</div></div>
+  `;
+  const bdg = document.getElementById('solMatBadge');
+  if (bdg) { bdg.textContent = pendientes; bdg.style.display = pendientes?'':'none'; }
+  filtrarSolicitudesMat();
+}
+
+function filtrarSolicitudesMat() {
+  const q      = (document.getElementById('searchSm')?.value||'').toLowerCase();
+  const estado = document.getElementById('filterSmEstado')?.value||'';
+  const prio   = document.getElementById('filterSmPrioridad')?.value||'';
+  let data = _smData.filter(s => {
+    if (estado && s.estado    !== estado) return false;
+    if (prio   && s.prioridad !== prio)   return false;
+    try {
+      const lineas = JSON.parse(s.lineas||'[]');
+      const matStr = lineas.map(l=>l.material||'').join(' ');
+      if (q && !`${s.numero||''} ${s.solicitante||''} ${s.fase_trabajo||''} ${matStr}`.toLowerCase().includes(q)) return false;
+    } catch { if (q && !`${s.numero||''} ${s.solicitante||''}`.toLowerCase().includes(q)) return false; }
+    return true;
+  });
+  const cols = [
+    { title:'Nº',        field:'numero',          width:115, formatter: c=>c.getValue()||'—' },
+    { title:'Fecha',     field:'fecha_solicitud', width:105, formatter: c=>c.getValue()||'—' },
+    { title:'Nec.',      field:'fecha_necesaria', width:100, formatter: c=>c.getValue()||'—' },
+    { title:'Solicitante',field:'solicitante',    widthGrow:1, formatter: c=>c.getValue()||'—' },
+    { title:'Fase',      field:'fase_trabajo',    widthGrow:1, formatter: c=>c.getValue()||'—' },
+    { title:'Prioridad', field:'prioridad',       width:100, formatter: c=>{
+      const v=c.getValue();
+      return `<span style="color:${SM_PRIO_COLOR[v]||'inherit'};font-weight:700;text-transform:capitalize">${v}</span>`;
+    }},
+    { title:'Materiales',field:'lineas', widthGrow:1, formatter: c=>{
+      try { const l=JSON.parse(c.getValue()||'[]'); return l.length ? `${l.length} ítem${l.length>1?'s':''}` : '—'; } catch { return '—'; }
+    }},
+    { title:'Estado',    field:'estado',          width:110, formatter: c=>{
+      const v=c.getValue();
+      return `<span style="color:${SM_ESTADO_COLOR[v]||'inherit'};font-weight:600;text-transform:capitalize">${v.replace('_',' ')}</span>`;
+    }},
+    { title:'Acciones', width:90, hozAlign:'center', formatter: c=>
+      `<button class="btn-tbl" onclick="editarSm(${c.getRow().getData().id})">✏️</button>
+       <button class="btn-tbl btn-danger-sm" onclick="eliminarSm(${c.getRow().getData().id})">🗑️</button>`
+    }
+  ];
+  if (!tblSm) {
+    tblSm = new Tabulator('#tblSmContainer', { data, columns:cols, layout:'fitColumns', locale:'es-es', placeholder:'No hay solicitudes de material', height:'520px' });
+  } else { tblSm.replaceData(data); }
+}
+
+function abrirModalSm(d={}) {
+  document.getElementById('modalSm')._smId = d.id||null;
+  document.getElementById('smNumero').value     = d.numero||'';
+  document.getElementById('smEstado').value     = d.estado||'pendiente';
+  document.getElementById('smFechaSol').value   = d.fecha_solicitud||new Date().toISOString().slice(0,10);
+  document.getElementById('smFechaNec').value   = d.fecha_necesaria||'';
+  document.getElementById('smSolicitante').value= d.solicitante||'';
+  document.getElementById('smObra').value       = d.obra_id||'';
+  document.getElementById('smFase').value       = d.fase_trabajo||'';
+  document.getElementById('smPrioridad').value  = d.prioridad||'normal';
+  document.getElementById('smAprobadoPor').value= d.aprobado_por||'';
+  document.getElementById('smFechaAprob').value = d.fecha_aprobacion||'';
+  document.getElementById('smObs').value        = d.observaciones||'';
+  document.getElementById('smLineasContainer').innerHTML = '';
+  try {
+    const lineas = JSON.parse(d.lineas||'[]');
+    if (lineas.length) lineas.forEach(l => addLineaSm(l.material, l.cantidad, l.unidad||'ud'));
+    else addLineaSm();
+  } catch { addLineaSm(); }
+  document.getElementById('modalSmTitulo').textContent = d.id ? 'Editar Solicitud de Material' : 'Nueva Solicitud de Material';
+  document.getElementById('smElimBtn').innerHTML = d.id
+    ? `<button class="btn btn-danger" onclick="eliminarSm(${d.id},true)">🗑️ Eliminar</button>` : '';
+  document.getElementById('modalSm').style.display = 'flex';
+}
+
+async function editarSm(id) { const d=_smData.find(s=>s.id===id); if(d) abrirModalSm(d); }
+
+async function guardarSm() {
+  const fecha = document.getElementById('smFechaSol').value;
+  if (!fecha) return alert('La fecha de solicitud es obligatoria.');
+  const lineas = getLineasSm();
+  if (!lineas.length) return alert('Añade al menos un material a la solicitud.');
+  const body = {
+    fecha_solicitud:  fecha,
+    fecha_necesaria:  document.getElementById('smFechaNec').value||null,
+    solicitante:      document.getElementById('smSolicitante').value.trim()||null,
+    obra_id:          document.getElementById('smObra').value||null,
+    fase_trabajo:     document.getElementById('smFase').value.trim()||null,
+    prioridad:        document.getElementById('smPrioridad').value,
+    lineas:           JSON.stringify(lineas),
+    estado:           document.getElementById('smEstado').value,
+    aprobado_por:     document.getElementById('smAprobadoPor').value.trim()||null,
+    fecha_aprobacion: document.getElementById('smFechaAprob').value||null,
+    observaciones:    document.getElementById('smObs').value.trim()||null,
+  };
+  const id = document.getElementById('modalSm')._smId;
+  if (id) await api(`/solicitudes-material/${id}`, { method:'PUT', body:JSON.stringify(body) });
+  else    await api('/solicitudes-material', { method:'POST', body:JSON.stringify(body) });
+  cerrarModalSm();
+  await cargarSolicitudesMat();
+}
+
+async function eliminarSm(id, desdeModal=false) {
+  if (!confirm('¿Eliminar esta solicitud?')) return;
+  await api(`/solicitudes-material/${id}`, { method:'DELETE' });
+  if (desdeModal) cerrarModalSm();
+  await cargarSolicitudesMat();
+}
+
+function cerrarModalSm() { document.getElementById('modalSm').style.display='none'; }
 
 // ── FLUJO DE CAJA / CASH FLOW (NEW-92) ───────────────────────────────────────
 let tblFc = null, _fcData = [];

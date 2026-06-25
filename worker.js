@@ -4721,6 +4721,14 @@ export default {
         if (method === 'PUT')    return await actualizarVisitaObra(_vid, request, env);
         if (method === 'DELETE') return await eliminarVisitaObra(_vid, request, env);
       }
+      // ── Solicitudes de Material / Material Requests (NEW-93) ─────────────────────
+      if (path === '/solicitudes-material' && method === 'GET')  return await getSolicitudesMaterial(request, env);
+      if (path === '/solicitudes-material' && method === 'POST') return await crearSolicitudMaterial(request, env);
+      if (path.startsWith('/solicitudes-material/')) {
+        const _smId = parseInt(path.split('/solicitudes-material/')[1]);
+        if (method === 'PUT')    return await actualizarSolicitudMaterial(_smId, request, env);
+        if (method === 'DELETE') return await eliminarSolicitudMaterial(_smId, request, env);
+      }
       // ── Flujo de Caja / Cash Flow Projection (NEW-92) ────────────────────────────
       if (path === '/flujo-caja' && method === 'GET')  return await getFlujoCaja(request, env);
       if (path === '/flujo-caja' && method === 'POST') return await crearFlujoCaja(request, env);
@@ -18937,5 +18945,96 @@ async function eliminarFlujoCaja(id, request, env) {
   const { empresa_id } = await getAuthContext(request, env);
   await ensureFlujoCajaTable(env);
   await env.DB.prepare(`DELETE FROM flujo_caja WHERE id=? AND empresa_id=?`).bind(id, empresa_id).run();
+  return jsonResp({ ok: true });
+}
+
+// ── Solicitudes de Material / Material Requests (NEW-93) ─────────────────────
+async function ensureSolicitudesMaterialTable(env) {
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS solicitudes_material (
+    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+    empresa_id       INTEGER NOT NULL,
+    obra_id          INTEGER,
+    numero           TEXT,
+    fecha_solicitud  TEXT NOT NULL,
+    fecha_necesaria  TEXT,
+    solicitante      TEXT,
+    fase_trabajo     TEXT,
+    prioridad        TEXT NOT NULL DEFAULT 'normal',
+    lineas           TEXT NOT NULL DEFAULT '[]',
+    estado           TEXT NOT NULL DEFAULT 'pendiente',
+    aprobado_por     TEXT,
+    fecha_aprobacion TEXT,
+    pedido_id        INTEGER,
+    observaciones    TEXT,
+    created_at       TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at       TEXT NOT NULL DEFAULT (datetime('now'))
+  )`).run();
+}
+
+async function getSolicitudesMaterial(request, env) {
+  const { empresa_id } = await getAuthContext(request, env);
+  const url = new URL(request.url);
+  const obra_id  = url.searchParams.get('obra_id');
+  const estado   = url.searchParams.get('estado');
+  await ensureSolicitudesMaterialTable(env);
+  let q = `SELECT * FROM solicitudes_material WHERE empresa_id=?`;
+  const p = [empresa_id];
+  if (obra_id) { q += ` AND obra_id=?`; p.push(obra_id); }
+  if (estado)  { q += ` AND estado=?`;  p.push(estado); }
+  q += ` ORDER BY fecha_solicitud DESC, id DESC`;
+  const rows = await env.DB.prepare(q).bind(...p).all();
+  return jsonResp(rows.results || []);
+}
+
+async function crearSolicitudMaterial(request, env) {
+  const { empresa_id } = await getAuthContext(request, env);
+  const d = await request.json();
+  await ensureSolicitudesMaterialTable(env);
+  const anio = new Date().getFullYear();
+  const last = await env.DB.prepare(
+    `SELECT numero FROM solicitudes_material WHERE empresa_id=? AND numero LIKE ? ORDER BY id DESC LIMIT 1`
+  ).bind(empresa_id, `SM-${anio}-%`).first();
+  let seq = 1;
+  if (last?.numero) { const n = parseInt(last.numero.split('-')[2]); if (!isNaN(n)) seq = n + 1; }
+  const numero = `SM-${anio}-${String(seq).padStart(4,'0')}`;
+  const lineas = typeof d.lineas === 'string' ? d.lineas : JSON.stringify(d.lineas || []);
+  const r = await env.DB.prepare(
+    `INSERT INTO solicitudes_material
+     (empresa_id,obra_id,numero,fecha_solicitud,fecha_necesaria,solicitante,
+      fase_trabajo,prioridad,lineas,estado,aprobado_por,fecha_aprobacion,pedido_id,observaciones)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+  ).bind(
+    empresa_id, d.obra_id||null, numero, d.fecha_solicitud,
+    d.fecha_necesaria||null, d.solicitante||null, d.fase_trabajo||null,
+    d.prioridad||'normal', lineas, d.estado||'pendiente',
+    d.aprobado_por||null, d.fecha_aprobacion||null, d.pedido_id||null, d.observaciones||null
+  ).run();
+  return jsonResp({ id: r.meta.last_row_id, numero }, 201);
+}
+
+async function actualizarSolicitudMaterial(id, request, env) {
+  const { empresa_id } = await getAuthContext(request, env);
+  const d = await request.json();
+  await ensureSolicitudesMaterialTable(env);
+  const lineas = typeof d.lineas === 'string' ? d.lineas : JSON.stringify(d.lineas || []);
+  await env.DB.prepare(
+    `UPDATE solicitudes_material SET
+      fecha_solicitud=?, fecha_necesaria=?, solicitante=?, fase_trabajo=?,
+      prioridad=?, lineas=?, estado=?, aprobado_por=?, fecha_aprobacion=?,
+      pedido_id=?, observaciones=?, updated_at=datetime('now')
+     WHERE id=? AND empresa_id=?`
+  ).bind(
+    d.fecha_solicitud, d.fecha_necesaria||null, d.solicitante||null, d.fase_trabajo||null,
+    d.prioridad||'normal', lineas, d.estado||'pendiente',
+    d.aprobado_por||null, d.fecha_aprobacion||null, d.pedido_id||null, d.observaciones||null,
+    id, empresa_id
+  ).run();
+  return jsonResp({ ok: true });
+}
+
+async function eliminarSolicitudMaterial(id, request, env) {
+  const { empresa_id } = await getAuthContext(request, env);
+  await ensureSolicitudesMaterialTable(env);
+  await env.DB.prepare(`DELETE FROM solicitudes_material WHERE id=? AND empresa_id=?`).bind(id, empresa_id).run();
   return jsonResp({ ok: true });
 }
