@@ -4721,6 +4721,14 @@ export default {
         if (method === 'PUT')    return await actualizarVisitaObra(_vid, request, env);
         if (method === 'DELETE') return await eliminarVisitaObra(_vid, request, env);
       }
+      // ── Rendimientos de Produccion / Productivity Tracking (NEW-83) ─────────────
+      if (path === '/rendimientos' && method === 'GET')  return await getRendimientos(request, env);
+      if (path === '/rendimientos' && method === 'POST') return await crearRendimiento(request, env);
+      if (path.startsWith('/rendimientos/')) {
+        const _rdId = parseInt(path.split('/rendimientos/')[1]);
+        if (method === 'PUT')    return await actualizarRendimiento(_rdId, request, env);
+        if (method === 'DELETE') return await eliminarRendimiento(_rdId, request, env);
+      }
       // ── Lecciones Aprendidas / Lessons Learned (NEW-82) ──────────────────────────
       if (path === '/lecciones' && method === 'GET')  return await getLecciones(request, env);
       if (path === '/lecciones' && method === 'POST') return await crearLeccion(request, env);
@@ -17762,5 +17770,112 @@ async function eliminarLeccion(id, request, env) {
   const { empresa_id } = await getAuth(request, env);
   if (!empresa_id) return err('No autorizado', 403);
   await env.DB.prepare(`DELETE FROM lecciones_aprendidas WHERE id=? AND empresa_id=?`).bind(id, empresa_id).run();
+  return json({ ok: true, deleted: true });
+}
+
+// ── Rendimientos de Produccion / Productivity Tracking (NEW-83) ──────────────
+async function ensureRendimientosTable(env) {
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS rendimientos (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    empresa_id     INTEGER NOT NULL,
+    obra_id        INTEGER,
+    fase_id        INTEGER,
+    fecha          TEXT NOT NULL,
+    actividad      TEXT NOT NULL,
+    unidad         TEXT NOT NULL DEFAULT 'ud',
+    cantidad_plan  REAL,
+    cantidad_real  REAL NOT NULL,
+    trabajadores   INTEGER DEFAULT 1,
+    horas_hombre   REAL,
+    rendimiento    REAL,
+    turno          TEXT DEFAULT 'manana',
+    responsable    TEXT,
+    observaciones  TEXT,
+    created_at     TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at     TEXT NOT NULL DEFAULT (datetime('now'))
+  )`).run().catch(()=>{});
+}
+
+async function getRendimientos(request, env) {
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  await ensureRendimientosTable(env);
+  const url = new URL(request.url);
+  const obra_id = url.searchParams.get('obra_id');
+  const desde   = url.searchParams.get('desde');
+  const hasta   = url.searchParams.get('hasta');
+  let q = `SELECT * FROM rendimientos WHERE empresa_id=?`;
+  const p = [empresa_id];
+  if (obra_id) { q += ` AND obra_id=?`; p.push(parseInt(obra_id)); }
+  if (desde)   { q += ` AND fecha>=?`;  p.push(desde); }
+  if (hasta)   { q += ` AND fecha<=?`;  p.push(hasta); }
+  q += ` ORDER BY fecha DESC, id DESC LIMIT 500`;
+  const { results } = await env.DB.prepare(q).bind(...p).all();
+  // Calcular rendimiento real (ud/h.hombre) donde falte
+  const enriquecidos = (results||[]).map(r => {
+    if (r.rendimiento) return r;
+    if (r.horas_hombre && r.cantidad_real) {
+      return { ...r, _rend_calc: parseFloat((r.cantidad_real / r.horas_hombre).toFixed(3)) };
+    }
+    return r;
+  });
+  return json({ rendimientos: enriquecidos });
+}
+
+async function crearRendimiento(request, env) {
+  const { empresa_id, nombre } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  await ensureRendimientosTable(env);
+  const b = await request.json();
+  if (!b.actividad || !b.fecha || b.cantidad_real === undefined) return err('actividad, fecha y cantidad_real son requeridos', 400);
+  // Calcular rendimiento si hay horas hombre
+  let rend = b.rendimiento || null;
+  if (!rend && b.horas_hombre && b.cantidad_real) {
+    rend = parseFloat((b.cantidad_real / b.horas_hombre).toFixed(3));
+  }
+  const r = await env.DB.prepare(
+    `INSERT INTO rendimientos (empresa_id,obra_id,fase_id,fecha,actividad,unidad,cantidad_plan,cantidad_real,trabajadores,horas_hombre,rendimiento,turno,responsable,observaciones)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+  ).bind(
+    empresa_id,
+    b.obra_id ? parseInt(b.obra_id) : null,
+    b.fase_id ? parseInt(b.fase_id) : null,
+    b.fecha,
+    b.actividad,
+    b.unidad || 'ud',
+    b.cantidad_plan !== undefined ? parseFloat(b.cantidad_plan) : null,
+    parseFloat(b.cantidad_real),
+    b.trabajadores ? parseInt(b.trabajadores) : 1,
+    b.horas_hombre ? parseFloat(b.horas_hombre) : null,
+    rend,
+    b.turno || 'manana',
+    b.responsable || nombre || null,
+    b.observaciones || null
+  ).run();
+  return json({ ok: true, id: r.meta.last_row_id }, { status: 201 });
+}
+
+async function actualizarRendimiento(id, request, env) {
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  await ensureRendimientosTable(env);
+  const b = await request.json();
+  const allowed = ['actividad','unidad','fecha','cantidad_plan','cantidad_real','trabajadores',
+    'horas_hombre','rendimiento','turno','responsable','observaciones','obra_id','fase_id'];
+  const sets = [], params = [];
+  for (const k of allowed) {
+    if (k in b) { sets.push(`${k}=?`); params.push(b[k] ?? null); }
+  }
+  if (!sets.length) return err('Sin cambios', 400);
+  sets.push(`updated_at=datetime('now')`);
+  params.push(id, empresa_id);
+  await env.DB.prepare(`UPDATE rendimientos SET ${sets.join(',')} WHERE id=? AND empresa_id=?`).bind(...params).run();
+  return json({ ok: true });
+}
+
+async function eliminarRendimiento(id, request, env) {
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  await env.DB.prepare(`DELETE FROM rendimientos WHERE id=? AND empresa_id=?`).bind(id, empresa_id).run();
   return json({ ok: true, deleted: true });
 }

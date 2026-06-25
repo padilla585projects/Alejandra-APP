@@ -683,6 +683,9 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
     <button class="nav-item" data-page="lecciones" onclick="navTo('lecciones')">
       <span class="nav-icon">💡</span> Lecciones Aprendidas
     </button>
+    <button class="nav-item" data-page="rendimientos" onclick="navTo('rendimientos')">
+      <span class="nav-icon">📈</span> Rendimientos
+    </button>
     <button class="nav-item" data-page="fotosObra" onclick="navTo('fotosObra')">
       <span class="nav-icon">📷</span> Galería de Fotos
     </button>
@@ -2311,6 +2314,103 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
               <button class="btn btn-danger" id="btnEliminarCalEvento" style="display:none" onclick="eliminarCalEvento()">🗑 Eliminar</button>
               <button class="btn btn-secondary" onclick="cerrarModalCalEvento()">Cancelar</button>
               <button class="btn btn-primary" onclick="guardarCalEvento()">💾 Guardar</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- RENDIMIENTOS DE PRODUCCIÓN / PRODUCTIVITY TRACKING (NEW-83) -->
+      <div class="page" id="pageRendimientos">
+        <div class="page-title">📈 Rendimientos de Producción</div>
+        <div id="rdKpis" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:16px"></div>
+        <div class="tbl-toolbar">
+          <input class="tbl-search" id="searchRd" placeholder="🔍 Buscar actividad, responsable..." oninput="filtrarRendimientos()">
+          <select class="tbl-search" id="filterRdObra" style="min-width:220px" onchange="tblRd=null;cargarRendimientos()">
+            <option value="">— Todas las obras —</option>
+          </select>
+          <input class="tbl-search" type="date" id="filterRdDesde" style="min-width:130px" onchange="tblRd=null;cargarRendimientos()" title="Desde">
+          <input class="tbl-search" type="date" id="filterRdHasta" style="min-width:130px" onchange="tblRd=null;cargarRendimientos()" title="Hasta">
+          <button class="btn btn-primary" onclick="abrirModalRd()">+ Registrar</button>
+          <button class="btn btn-secondary" onclick="exportarTabla(tblRd,'rendimientos')">⬇ CSV</button>
+          <button class="btn btn-secondary" onclick="tblRd=null;cargarRendimientos()">🔄</button>
+        </div>
+        <div class="tbl-wrap"><div id="tblRd"></div></div>
+
+        <!-- MODAL RENDIMIENTO -->
+        <div class="modal-overlay" id="modalRd" style="display:none" onclick="if(event.target===this)cerrarModalRd()">
+          <div class="modal" style="max-width:560px">
+            <div class="modal-head">
+              <span id="modalRdTitulo">Registrar Rendimiento</span>
+              <button class="modal-close" onclick="cerrarModalRd()">✕</button>
+            </div>
+            <div class="modal-body">
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+                <div class="form-group" style="grid-column:1/-1">
+                  <label class="form-label">Actividad *</label>
+                  <input class="form-input" id="rdActividad" placeholder="Ej: Tendido cable RZ1-K 4x16, Instalación bandejas 200mm, Montaje cuadros...">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Fecha *</label>
+                  <input class="form-input" type="date" id="rdFecha">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Turno</label>
+                  <select class="form-select" id="rdTurno">
+                    <option value="manana">☀️ Mañana</option>
+                    <option value="tarde">🌆 Tarde</option>
+                    <option value="noche">🌙 Noche</option>
+                    <option value="completo">🔄 Jornada completa</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Obra</label>
+                  <select class="form-select" id="rdObraId"><option value="">— Sin obra —</option></select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Responsable / Cuadrilla</label>
+                  <input class="form-input" id="rdResponsable" placeholder="Nombre del encargado o cuadrilla">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Nº Trabajadores</label>
+                  <input class="form-input" type="number" id="rdTrabajadores" value="1" min="1">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Horas-Hombre Totales</label>
+                  <input class="form-input" type="number" id="rdHorasHombre" placeholder="Ej: 16 (2 pers × 8h)" min="0" step="0.5" oninput="calcRendAuto()">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Unidad de Medida</label>
+                  <select class="form-select" id="rdUnidad">
+                    <option value="m">m (metros)</option>
+                    <option value="m2">m² (metros cuadrados)</option>
+                    <option value="ud">ud (unidades)</option>
+                    <option value="kg">kg (kilogramos)</option>
+                    <option value="jornada">jornada</option>
+                    <option value="%">% (porcentaje)</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Cantidad Planificada</label>
+                  <input class="form-input" type="number" id="rdCantPlan" placeholder="Según planning" min="0" step="0.01">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Cantidad Real *</label>
+                  <input class="form-input" type="number" id="rdCantReal" placeholder="Cantidad ejecutada" min="0" step="0.01" oninput="calcRendAuto()">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Rendimiento (ud/h-h) <span id="rdRendCalcLabel" style="color:var(--muted);font-size:11px"></span></label>
+                  <input class="form-input" type="number" id="rdRendimiento" placeholder="Auto-calculado" step="0.001" min="0">
+                </div>
+                <div class="form-group" style="grid-column:1/-1">
+                  <label class="form-label">Observaciones</label>
+                  <textarea class="form-input" id="rdObs" rows="2" placeholder="Condiciones especiales, incidencias que afectaron al rendimiento..."></textarea>
+                </div>
+              </div>
+            </div>
+            <div class="modal-foot">
+              <button class="btn btn-secondary" onclick="cerrarModalRd()">Cancelar</button>
+              <span id="rdElimBtn"></span>
+              <button class="btn btn-primary" onclick="guardarRd()">💾 Guardar</button>
             </div>
           </div>
         </div>
@@ -6017,6 +6117,7 @@ const PAGE_TITLES = {
   alquileres: '🏗️ Alquileres de Equipo / Equipment Rental Log',
   entregables: '📦 Entregables de Proyecto / Project Deliverables',
   lecciones: '💡 Lecciones Aprendidas / Lessons Learned',
+  rendimientos: '📈 Rendimientos de Producción / Productivity Tracking',
 };
 
 const PAGE_LOADERS = {
@@ -6100,6 +6201,7 @@ const PAGE_LOADERS = {
   alquileres:      cargarAlquileres,
   entregables:     cargarEntregables,
   lecciones:       cargarLecciones,
+  rendimientos:    cargarRendimientos,
 };
 
 let currentPage = '';
@@ -6212,6 +6314,7 @@ const SYNC_INTERVALS = {
   alquileres:      90,
   entregables:     120,
   lecciones:       180,
+  rendimientos:    90,
 };
 
 let _syncTimer = null, _syncLabelTimer = null, _syncLastTs = null;
@@ -15572,6 +15675,159 @@ function exportarFinanzas() {
   if (!obraId) return showToast('Selecciona una obra primero', 'warning');
   // Abrir informe en nueva pestaña usando el endpoint de informes
   window.open(`/informe-obra/${obraId}?tipo=financiero`, '_blank');
+}
+
+// ── RENDIMIENTOS DE PRODUCCIÓN / PRODUCTIVITY TRACKING (NEW-83) ────
+let tblRd = null, _rdData = [];
+
+async function cargarRendimientos() {
+  if (document.getElementById('filterRdObra')?.options.length <= 1) poblarSelectObras('filterRdObra');
+  const obraId = document.getElementById('filterRdObra')?.value || '';
+  const desde  = document.getElementById('filterRdDesde')?.value || '';
+  const hasta  = document.getElementById('filterRdHasta')?.value || '';
+  let qs = '';
+  if (obraId) qs += `obra_id=${obraId}&`;
+  if (desde)  qs += `desde=${desde}&`;
+  if (hasta)  qs += `hasta=${hasta}&`;
+  const r = await api('/rendimientos' + (qs ? '?' + qs : ''));
+  _rdData = r?.rendimientos || [];
+
+  // KPIs summary
+  const totalReg = _rdData.length;
+  const actividadesUnicas = [...new Set(_rdData.map(x => x.actividad))].length;
+  const totalHH = _rdData.reduce((s,x) => s + (x.horas_hombre||0), 0);
+  const mediaRend = _rdData.filter(x => x._rend_calc || x.rendimiento).length
+    ? (_rdData.reduce((s,x) => s + (x.rendimiento || x._rend_calc || 0), 0) / _rdData.filter(x => x._rend_calc || x.rendimiento).length).toFixed(3)
+    : '—';
+  const cumplimiento = _rdData.filter(x => x.cantidad_plan).length
+    ? (_rdData.reduce((s,x) => s + (x.cantidad_plan ? Math.min(1, x.cantidad_real / x.cantidad_plan) : 0), 0) / _rdData.filter(x => x.cantidad_plan).length * 100).toFixed(0)
+    : null;
+
+  document.getElementById('rdKpis').innerHTML = [
+    { label:'Registros', val: totalReg, cls: '' },
+    { label:'Actividades', val: actividadesUnicas, cls: '' },
+    { label:'Horas-Hombre', val: totalHH ? totalHH.toFixed(1) + ' h', cls: '' },
+    { label:'Rend. medio', val: mediaRend !== '—' ? mediaRend + ' ud/hh', cls: '' },
+    cumplimiento !== null ? { label:'Cumplimiento plan', val: cumplimiento + '%', cls: parseInt(cumplimiento) >= 90 ? 'ok' : parseInt(cumplimiento) >= 70 ? 'warn' : 'err' } : null,
+  ].filter(Boolean).map(k => `<div class="kpi-mini ${k.cls}"><div class="kpi-mini-val">${k.val}</div><div class="kpi-mini-lbl">${k.label}</div></div>`).join('');
+
+  filtrarRendimientos();
+}
+
+function filtrarRendimientos() {
+  const q = (document.getElementById('searchRd')?.value || '').toLowerCase();
+  const data = !q ? _rdData : _rdData.filter(r =>
+    [r.actividad, r.responsable, r.observaciones].some(v => (v||'').toLowerCase().includes(q))
+  );
+  if (tblRd) { tblRd.replaceData(data); return; }
+  tblRd = new Tabulator('#tblRd', {
+    data, layout: 'fitColumns', height: 'calc(100vh - 280px)',
+    placeholder: '<div class="empty-state"><div class="empty-icon">📈</div><div class="empty-text">Sin rendimientos registrados</div></div>',
+    columns: [
+      { title:'Fecha', field:'fecha', width:100 },
+      { title:'Actividad', field:'actividad', minWidth:220, formatter: c => `<b>${esc(c.getValue()||'—')}</b>` },
+      { title:'Cant. Plan', field:'cantidad_plan', width:95, formatter: c => c.getValue() != null ? c.getValue() + ' ' + (c.getRow().getData().unidad||'') : '—' },
+      { title:'Cant. Real', field:'cantidad_real', width:95, formatter: c => {
+        const d = c.getRow().getData();
+        const v = c.getValue();
+        const plan = d.cantidad_plan;
+        const pct = plan ? Math.min(1, v/plan) : null;
+        const color = pct === null ? '' : pct >= 0.9 ? 'color:var(--success)' : pct >= 0.7 ? 'color:var(--warning)' : 'color:var(--danger)';
+        return `<span style="${color};font-weight:700">${v} ${d.unidad||''}</span>`;
+      }},
+      { title:'H-H', field:'horas_hombre', width:70, formatter: c => c.getValue() ? c.getValue() + 'h' : '—' },
+      { title:'Rend.', field:'rendimiento', width:90, formatter: c => {
+        const d = c.getRow().getData();
+        const v = c.getValue() || d._rend_calc;
+        return v ? `<b>${v}</b> ud/hh` : '—';
+      }},
+      { title:'Responsable', field:'responsable', width:130 },
+      { title:'', field:'id', width:80, hozAlign:'center',
+        formatter: c => `<button class="tbl-btn" onclick="editarRd(${c.getValue()})">✏️</button><button class="tbl-btn danger" onclick="eliminarRd(${c.getValue()})">🗑</button>` },
+    ]
+  });
+}
+
+function calcRendAuto() {
+  const hh   = parseFloat(document.getElementById('rdHorasHombre')?.value);
+  const cant = parseFloat(document.getElementById('rdCantReal')?.value);
+  if (hh > 0 && cant > 0) {
+    const rend = (cant / hh).toFixed(3);
+    const rdEl = document.getElementById('rdRendimiento');
+    if (rdEl && !rdEl._manual) rdEl.value = rend;
+    const lbl = document.getElementById('rdRendCalcLabel');
+    if (lbl) lbl.textContent = `(auto: ${rend} ud/hh)`;
+  }
+}
+
+function abrirModalRd(d = {}) {
+  document.getElementById('modalRdTitulo').textContent = d.id ? 'Editar Rendimiento' : 'Registrar Rendimiento';
+  document.getElementById('rdActividad').value   = d.actividad || '';
+  document.getElementById('rdFecha').value       = d.fecha || new Date().toISOString().slice(0,10);
+  document.getElementById('rdTurno').value       = d.turno || 'manana';
+  document.getElementById('rdResponsable').value = d.responsable || '';
+  document.getElementById('rdTrabajadores').value = d.trabajadores || 1;
+  document.getElementById('rdHorasHombre').value = d.horas_hombre || '';
+  document.getElementById('rdUnidad').value      = d.unidad || 'm';
+  document.getElementById('rdCantPlan').value    = d.cantidad_plan || '';
+  document.getElementById('rdCantReal').value    = d.cantidad_real || '';
+  const rdEl = document.getElementById('rdRendimiento');
+  rdEl._manual = false;
+  rdEl.value                                     = d.rendimiento || '';
+  document.getElementById('rdObs').value         = d.observaciones || '';
+  poblarSelectObras('rdObraId');
+  if (d.obra_id) setTimeout(() => { document.getElementById('rdObraId').value = d.obra_id; }, 200);
+  const elimBtn = document.getElementById('rdElimBtn');
+  elimBtn.innerHTML = d.id ? `<button class="btn btn-danger btn-sm" onclick="eliminarRd(${d.id},true)">🗑 Eliminar</button>` : '';
+  document.getElementById('modalRd')._rdId = d.id || null;
+  document.getElementById('modalRd').style.display = 'flex';
+}
+
+async function editarRd(id) {
+  const d = _rdData.find(r => r.id === id);
+  if (d) abrirModalRd(d);
+}
+
+async function guardarRd() {
+  const id   = document.getElementById('modalRd')._rdId;
+  const body = {
+    actividad:     document.getElementById('rdActividad').value.trim(),
+    fecha:         document.getElementById('rdFecha').value,
+    turno:         document.getElementById('rdTurno').value,
+    obra_id:       document.getElementById('rdObraId').value || null,
+    responsable:   document.getElementById('rdResponsable').value.trim() || null,
+    trabajadores:  parseInt(document.getElementById('rdTrabajadores').value) || 1,
+    horas_hombre:  parseFloat(document.getElementById('rdHorasHombre').value) || null,
+    unidad:        document.getElementById('rdUnidad').value,
+    cantidad_plan: parseFloat(document.getElementById('rdCantPlan').value) || null,
+    cantidad_real: parseFloat(document.getElementById('rdCantReal').value),
+    rendimiento:   parseFloat(document.getElementById('rdRendimiento').value) || null,
+    observaciones: document.getElementById('rdObs').value.trim() || null,
+  };
+  if (!body.actividad || !body.fecha || isNaN(body.cantidad_real)) { toast('Actividad, fecha y cantidad real son obligatorios', 'err'); return; }
+  const r = await api(id ? `/rendimientos/${id}` : '/rendimientos', { method: id ? 'PUT' : 'POST', body: JSON.stringify(body) });
+  if (r.ok || r.id) {
+    toast(id ? 'Actualizado' : 'Rendimiento registrado', 'ok');
+    cerrarModalRd();
+    tblRd = null;
+    cargarRendimientos();
+  } else toast('Error al guardar', 'err');
+}
+
+async function eliminarRd(id, desdeModal = false) {
+  if (!confirm('¿Eliminar este registro?')) return;
+  const r = await api(`/rendimientos/${id}`, { method: 'DELETE' });
+  if (r.ok || r.deleted) {
+    toast('Registro eliminado', 'ok');
+    if (desdeModal) cerrarModalRd();
+    tblRd = null;
+    cargarRendimientos();
+  } else toast('Error al eliminar', 'err');
+}
+
+function cerrarModalRd() {
+  document.getElementById('modalRd').style.display = 'none';
+  document.getElementById('modalRd')._rdId = null;
 }
 
 // ── LECCIONES APRENDIDAS / LESSONS LEARNED (NEW-82) ────────────────
