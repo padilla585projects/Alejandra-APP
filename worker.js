@@ -4616,6 +4616,15 @@ export default {
         if (method === 'PUT')    return await actualizarToolboxTalk(_ttid, request, env);
         if (method === 'DELETE') return await eliminarToolboxTalk(_ttid, request, env);
       }
+      // ── Planos de Obra (NEW-43) ──────────────────────────────────────────────
+      if (path === '/planos-obra' && method === 'GET')    return await getPlanosObra(request, env);
+      if (path === '/planos-obra' && method === 'POST')   return await subirPlanoObra(request, env);
+      if (path.startsWith('/planos-obra/')) {
+        const _plid = parseInt(path.split('/planos-obra/')[1]);
+        if (method === 'GET')    return await getPlanoObraFile(_plid, request, env);
+        if (method === 'PUT')    return await actualizarPlanoObra(_plid, request, env);
+        if (method === 'DELETE') return await eliminarPlanoObra(_plid, request, env);
+      }
 
       // â"€â"€ Galería de fotos por obra (NEW-17) â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
       if (path === '/fotos-obra' && method === 'GET')  return await listarFotosObra(request, env);
@@ -13675,5 +13684,129 @@ async function eliminarToolboxTalk(id, request, env) {
   const auth = await getAuth(request, env);
   if (!auth?.empresa_id) return err('No autorizado', 403);
   await env.DB.prepare(`DELETE FROM toolbox_talks WHERE id=? AND empresa_id=?`).bind(id, auth.empresa_id).run();
+  return json({ ok: true });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  NEW-43 — PLANOS DE OBRA (Blueprint / Drawing Management)
+// ═══════════════════════════════════════════════════════════════════════════
+async function ensurePlanosObraTable(env) {
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS planos_obra (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    empresa_id INTEGER NOT NULL,
+    obra_id INTEGER,
+    nombre TEXT NOT NULL,
+    disciplina TEXT DEFAULT 'general',
+    area_piso TEXT,
+    revision TEXT DEFAULT 'A',
+    estado TEXT DEFAULT 'vigente',
+    descripcion TEXT,
+    archivo_key TEXT,
+    archivo_nombre TEXT,
+    archivo_size INTEGER,
+    archivo_mime TEXT,
+    subido_por TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+  )`).run();
+}
+async function getPlanosObra(request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth?.empresa_id) return err('No autorizado', 403);
+  await ensurePlanosObraTable(env);
+  const u = new URL(request.url);
+  const obraId     = u.searchParams.get('obra_id');
+  const disciplina = u.searchParams.get('disciplina');
+  const token      = u.searchParams.get('token');
+  // Allow token-based auth for direct file downloads
+  let auth2 = auth;
+  if (!auth2?.empresa_id && token) auth2 = await getAuthByToken(token, env);
+  let sql = `SELECT p.*, ob.nombre as obra_nombre FROM planos_obra p
+    LEFT JOIN obras ob ON ob.id=p.obra_id
+    WHERE p.empresa_id=?`;
+  const params = [auth.empresa_id];
+  if (obraId)     { sql += ' AND p.obra_id=?';     params.push(obraId); }
+  if (disciplina) { sql += ' AND p.disciplina=?';  params.push(disciplina); }
+  sql += ' ORDER BY p.disciplina, p.area_piso, p.nombre, p.revision DESC';
+  const { results } = await env.DB.prepare(sql).bind(...params).all();
+  return json({ planos: results||[] });
+}
+async function subirPlanoObra(request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth?.empresa_id) return err('No autorizado', 403);
+  const roles = ['superadmin','empresa_admin','encargado','jefe_de_obra','oficina'];
+  if (!roles.includes(auth.rol)) return err('Sin permisos', 403);
+  await ensurePlanosObraTable(env);
+  const form = await request.formData();
+  const file  = form.get('file');
+  const nombre     = form.get('nombre') || file?.name || 'Plano';
+  const disciplina = form.get('disciplina') || 'general';
+  const area_piso  = form.get('area_piso') || null;
+  const revision   = form.get('revision') || 'A';
+  const estado     = form.get('estado') || 'vigente';
+  const descripcion= form.get('descripcion') || null;
+  const obra_id    = form.get('obra_id') || null;
+  let archivo_key = null, archivo_nombre = null, archivo_size = null, archivo_mime = null;
+  if (file && file.size > 0) {
+    if (file.size > 100 * 1024 * 1024) return err('Archivo demasiado grande (max 100MB)', 400);
+    archivo_nombre = file.name;
+    archivo_size   = file.size;
+    archivo_mime   = file.type || 'application/octet-stream';
+    const ts = Date.now();
+    archivo_key = `e${auth.empresa_id}/planos/${obra_id||0}/${ts}_${file.name.replace(/[^a-zA-Z0-9._-]/g,'_')}`;
+    await env.FILES.put(archivo_key, file.stream(), { httpMetadata: { contentType: archivo_mime } });
+  }
+  const { meta } = await env.DB.prepare(
+    `INSERT INTO planos_obra (empresa_id,obra_id,nombre,disciplina,area_piso,revision,estado,descripcion,archivo_key,archivo_nombre,archivo_size,archivo_mime,subido_por)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`
+  ).bind(
+    auth.empresa_id, obra_id||null, nombre, disciplina, area_piso, revision,
+    estado, descripcion, archivo_key, archivo_nombre, archivo_size||null,
+    archivo_mime, auth.nombre||auth.email||null
+  ).run();
+  return json({ ok: true, id: meta.last_row_id });
+}
+async function getPlanoObraFile(id, request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth?.empresa_id) return err('No autorizado', 403);
+  const { results } = await env.DB.prepare(`SELECT * FROM planos_obra WHERE id=? AND empresa_id=?`)
+    .bind(id, auth.empresa_id).all();
+  const p = results?.[0];
+  if (!p) return err('No encontrado', 404);
+  if (!p.archivo_key) return err('Sin archivo adjunto', 404);
+  const obj = await env.FILES.get(p.archivo_key);
+  if (!obj) return err('Archivo no encontrado en almacenamiento', 404);
+  return new Response(obj.body, {
+    headers: {
+      'Content-Type': p.archivo_mime || 'application/octet-stream',
+      'Content-Disposition': `inline; filename="${p.archivo_nombre || 'plano'}"`,
+      'Cache-Control': 'private, max-age=3600',
+      'Access-Control-Allow-Origin': '*',
+    }
+  });
+}
+async function actualizarPlanoObra(id, request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth?.empresa_id) return err('No autorizado', 403);
+  const b = await request.json();
+  await env.DB.prepare(
+    `UPDATE planos_obra SET nombre=COALESCE(?,nombre), disciplina=COALESCE(?,disciplina),
+     area_piso=COALESCE(?,area_piso), revision=COALESCE(?,revision), estado=COALESCE(?,estado),
+     descripcion=COALESCE(?,descripcion), updated_at=datetime('now')
+     WHERE id=? AND empresa_id=?`
+  ).bind(
+    b.nombre||null, b.disciplina||null, b.area_piso||null, b.revision||null,
+    b.estado||null, b.descripcion||null, id, auth.empresa_id
+  ).run();
+  return json({ ok: true });
+}
+async function eliminarPlanoObra(id, request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth?.empresa_id) return err('No autorizado', 403);
+  const { results } = await env.DB.prepare(`SELECT archivo_key FROM planos_obra WHERE id=? AND empresa_id=?`)
+    .bind(id, auth.empresa_id).all();
+  const p = results?.[0];
+  if (p?.archivo_key) { try { await env.FILES.delete(p.archivo_key); } catch {} }
+  await env.DB.prepare(`DELETE FROM planos_obra WHERE id=? AND empresa_id=?`).bind(id, auth.empresa_id).run();
   return json({ ok: true });
 }

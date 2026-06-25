@@ -518,6 +518,9 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
       <span class="nav-icon">🏁</span> Hitos de Obra
       <span class="nav-badge" id="hitosBadge" style="display:none">!</span>
     </button>
+    <button class="nav-item" data-page="planosObra" onclick="navTo('planosObra')">
+      <span class="nav-icon">📐</span> Planos de Obra
+    </button>
 
     <div class="sidebar-section" onclick="sidebarToggle(this)" data-sid="seguimiento"><span>📓 Seguimiento</span><span class="sec-chevron">▼</span></div>
     <button class="nav-item" data-page="partesPanel" onclick="navTo('partesPanel')">
@@ -1373,6 +1376,42 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
           </div>
           <div class="tbl-wrap"><div id="tblToolboxTalks"></div></div>
         </div>
+      </div>
+
+      <!-- PLANOS DE OBRA -->
+      <div class="page" id="pagePlanosObra">
+        <div class="page-title">📐 Planos de Obra</div>
+        <div class="page-sub">Gestión de planos, planos as-built y documentación técnica de obra</div>
+        <!-- Filtros -->
+        <div class="tbl-toolbar" style="flex-wrap:wrap;gap:8px;margin-bottom:16px">
+          <select class="tbl-search" id="filterPlanosObraId" style="min-width:220px" onchange="cargarPlanosObra()">
+            <option value="">🏗 Todas las obras</option>
+          </select>
+          <select class="tbl-search" id="filterPlanosDisciplina" style="min-width:160px" onchange="cargarPlanosObra()">
+            <option value="">Todas las disciplinas</option>
+            <option value="arquitectura">🏛 Arquitectura</option>
+            <option value="estructural">🏗 Estructural</option>
+            <option value="electrico">⚡ Eléctrico</option>
+            <option value="mecanico">🔧 Mecánico</option>
+            <option value="fontaneria">💧 Fontanería</option>
+            <option value="climatizacion">❄️ Climatización</option>
+            <option value="civil">🛣 Civil</option>
+            <option value="seguridad">🦺 Seguridad</option>
+            <option value="general">📋 General</option>
+          </select>
+          <select class="tbl-search" id="filterPlanosVista" style="min-width:100px" onchange="renderPlanosVista()">
+            <option value="cards">🃏 Cards</option>
+            <option value="lista">📋 Lista</option>
+          </select>
+          <button class="btn btn-primary" onclick="abrirModalSubirPlano()">⬆ Subir plano</button>
+          <button class="btn btn-secondary" onclick="cargarPlanosObra()">🔄 Actualizar</button>
+        </div>
+        <!-- KPIs -->
+        <div id="planosResumen" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;margin-bottom:18px"></div>
+        <!-- Cards view -->
+        <div id="planosGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px"></div>
+        <!-- List view (hidden by default) -->
+        <div id="planosListaWrap" style="display:none"><div id="tblPlanos"></div></div>
       </div>
 
       <!-- DIARIO DE OBRA -->
@@ -2827,6 +2866,7 @@ const PAGE_TITLES = {
   diarioObra: '📓 Diario de Obra',
   correspondencia: '✉️ Correspondencia',
   seguridadObra: '🦺 Seguridad de Obra',
+  planosObra: '📐 Planos de Obra',
 };
 
 const PAGE_LOADERS = {
@@ -2870,6 +2910,7 @@ const PAGE_LOADERS = {
   diarioObra: cargarDiarioObra,
   correspondencia: cargarCorrespondencia,
   seguridadObra: cargarSeguridadObra,
+  planosObra: cargarPlanosObra,
 };
 
 let currentPage = '';
@@ -2942,6 +2983,7 @@ const SYNC_INTERVALS = {
   diarioObra: 120,
   correspondencia: 120,
   seguridadObra: 60,
+  planosObra: 120,
 };
 
 let _syncTimer = null, _syncLabelTimer = null, _syncLastTs = null;
@@ -10530,6 +10572,261 @@ async function eliminarCorr(id) {
   if (!confirm('¿Eliminar esta correspondencia?')) return;
   const r = await api(`/correspondencia/${id}`, { method: 'DELETE' });
   if (r.ok || r.deleted) { toast('Eliminado', 'ok'); cerrarModal(); tblCorr = null; cargarCorrespondencia(); }
+  else toast('Error al eliminar', 'err');
+}
+
+// ── PLANOS DE OBRA ───────────────────────────────────────────────
+let _planosData = [], tblPlanos = null;
+const DISCIPLINA_ICON = {
+  arquitectura:'🏛', estructural:'🏗', electrico:'⚡', mecanico:'🔧',
+  fontaneria:'💧', climatizacion:'❄️', civil:'🛣', seguridad:'🦺', general:'📋'
+};
+const ESTADO_PLANO_COLOR = { vigente:'var(--success)', superado:'var(--muted)', borrador:'var(--warning)' };
+
+async function cargarPlanosObra() {
+  if (document.getElementById('filterPlanosObraId')?.options.length <= 1) poblarSelectObras('filterPlanosObraId');
+  const obraId     = document.getElementById('filterPlanosObraId')?.value || '';
+  const disciplina = document.getElementById('filterPlanosDisciplina')?.value || '';
+  let url = `/planos-obra?`;
+  if (obraId)     url += `obra_id=${obraId}&`;
+  if (disciplina) url += `disciplina=${disciplina}&`;
+  const r = await api(url);
+  _planosData = r?.planos || [];
+
+  // KPIs
+  const vigentes = _planosData.filter(p => p.estado === 'vigente').length;
+  const disciplinas = [...new Set(_planosData.map(p => p.disciplina))].length;
+  const obras = [...new Set(_planosData.map(p => p.obra_id).filter(Boolean))].length;
+  document.getElementById('planosResumen').innerHTML = [
+    { l:'Planos totales', v: _planosData.length, c:'var(--primary)' },
+    { l:'Vigentes',       v: vigentes,            c:'var(--success)' },
+    { l:'Disciplinas',    v: disciplinas,          c:'var(--warning)' },
+    { l:'Obras',          v: obras,                c:'var(--text)' },
+  ].map(k => `<div class="kpi-card" style="border-left:3px solid ${k.c}">
+    <div class="kpi-val" style="color:${k.c}">${k.v}</div>
+    <div class="kpi-label">${k.l}</div></div>`).join('');
+
+  renderPlanosVista();
+}
+
+function renderPlanosVista() {
+  const vista = document.getElementById('filterPlanosVista')?.value || 'cards';
+  document.getElementById('planosGrid').style.display         = vista === 'cards' ? '' : 'none';
+  document.getElementById('planosListaWrap').style.display    = vista === 'lista' ? '' : 'none';
+  if (vista === 'cards') renderPlanosCards();
+  else renderPlanosTabla();
+}
+
+function renderPlanosCards() {
+  const grid = document.getElementById('planosGrid');
+  if (!_planosData.length) {
+    grid.innerHTML = '<div style="color:var(--muted);font-size:13px;grid-column:1/-1;padding:20px 0">No hay planos subidos todavía.</div>';
+    return;
+  }
+  // Group by disciplina
+  const grupos = {};
+  _planosData.forEach(p => {
+    const disc = p.disciplina || 'general';
+    if (!grupos[disc]) grupos[disc] = [];
+    grupos[disc].push(p);
+  });
+  let html = '';
+  for (const [disc, planos] of Object.entries(grupos)) {
+    html += `<div style="grid-column:1/-1;font-weight:700;font-size:11px;letter-spacing:1px;color:var(--muted);text-transform:uppercase;margin-top:8px">${DISCIPLINA_ICON[disc]||'📋'} ${disc.replace(/_/g,' ')}</div>`;
+    planos.forEach(p => {
+      const esColor = ESTADO_PLANO_COLOR[p.estado] || 'var(--text)';
+      const icono   = p.archivo_mime?.includes('pdf') ? '📄' : (p.archivo_mime?.startsWith('image') ? '🖼' : '📁');
+      const sizeKB  = p.archivo_size ? Math.round(p.archivo_size/1024) : null;
+      html += `<div class="card" style="padding:14px;cursor:pointer;border-top:3px solid ${esColor};position:relative" onclick="verPlano(${p.id})">
+        <div style="font-size:28px;margin-bottom:8px;text-align:center">${icono}</div>
+        <div style="font-weight:600;font-size:13px;margin-bottom:4px;word-break:break-word">${esc(p.nombre)}</div>
+        <div style="font-size:11px;color:var(--muted)">${p.area_piso ? '📍 ' + esc(p.area_piso) + ' · ' : ''}Rev. ${esc(p.revision||'A')}</div>
+        ${p.obra_nombre ? `<div style="font-size:11px;color:var(--muted);margin-top:2px">🏗 ${esc(p.obra_nombre)}</div>` : ''}
+        ${sizeKB ? `<div style="font-size:10px;color:var(--muted);margin-top:2px">${sizeKB < 1024 ? sizeKB+'KB' : (sizeKB/1024).toFixed(1)+'MB'}</div>` : ''}
+        <div style="position:absolute;top:8px;right:8px;display:flex;gap:4px">
+          <button class="tbl-btn" title="Editar" onclick="event.stopPropagation();abrirModalEditarPlano(${p.id})">✏️</button>
+          <button class="tbl-btn" title="Eliminar" onclick="event.stopPropagation();eliminarPlano(${p.id})">🗑</button>
+        </div>
+        <div style="margin-top:8px;text-align:center">
+          <span style="font-size:10px;background:${esColor};color:#fff;padding:2px 8px;border-radius:10px">${p.estado||'vigente'}</span>
+        </div>
+      </div>`;
+    });
+  }
+  grid.innerHTML = html;
+}
+
+function renderPlanosTabla() {
+  if (!tblPlanos) {
+    tblPlanos = new Tabulator('#tblPlanos', {
+      data: _planosData, layout: 'fitColumns', responsiveLayout: 'collapse',
+      pagination: 'local', paginationSize: 30,
+      columns: [
+        { title:'Disciplina', field:'disciplina', width:110, formatter: c => (DISCIPLINA_ICON[c.getValue()]||'📋') + ' ' + (c.getValue()||'general') },
+        { title:'Nombre',     field:'nombre',     minWidth:200 },
+        { title:'Área/Piso',  field:'area_piso',  width:110 },
+        { title:'Rev.',       field:'revision',   width:60 },
+        { title:'Obra',       field:'obra_nombre',width:160 },
+        { title:'Estado',     field:'estado',     width:90, formatter: c => `<span style="color:${ESTADO_PLANO_COLOR[c.getValue()]||'inherit'}">${c.getValue()||'—'}</span>` },
+        { title:'Tamaño',     field:'archivo_size',width:85, formatter: c => {
+          const b = c.getValue(); if (!b) return '—';
+          const kb = Math.round(b/1024); return kb < 1024 ? kb+'KB' : (kb/1024).toFixed(1)+'MB';
+        }},
+        { title:'Subido',     field:'created_at', width:100, formatter: c => (c.getValue()||'').slice(0,10) },
+        { title:'Acc.', field:'id', hozAlign:'center', width:80, headerSort:false,
+          formatter: c => `<button class="tbl-btn" onclick="verPlano(${c.getValue()})">👁</button><button class="tbl-btn" onclick="abrirModalEditarPlano(${c.getValue()})">✏️</button><button class="tbl-btn" onclick="eliminarPlano(${c.getValue()})">🗑</button>` },
+      ]
+    });
+  } else {
+    tblPlanos.setData(_planosData);
+  }
+}
+
+async function verPlano(id) {
+  const p = _planosData.find(x => x.id === id);
+  if (!p || !p.archivo_key) { toast('Este plano no tiene archivo adjunto', 'err'); return; }
+  const sess = await api('/sesion');
+  const token = sess?.token || '';
+  const url = `${API_BASE}/planos-obra/${id}?token=${token}`;
+  window.open(url, '_blank');
+}
+
+function abrirModalSubirPlano() {
+  abrirModal(`
+    <h3 style="margin:0 0 16px">📐 Subir Plano de Obra</h3>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <label style="grid-column:1/-1">Archivo (PDF, imagen, DWG...) *
+        <input id="mPlanoFile" type="file" class="form-input" accept=".pdf,.png,.jpg,.jpeg,.dwg,.dxf,.tiff,.svg" required></label>
+      <label style="grid-column:1/-1">Nombre del plano *<input id="mPlanoNombre" class="form-input" placeholder="Ej: Planta baja — Instalación eléctrica" required></label>
+      <label>Disciplina<select id="mPlanoDisciplina" class="form-input">
+        <option value="arquitectura">🏛 Arquitectura</option>
+        <option value="estructural">🏗 Estructural</option>
+        <option value="electrico" selected>⚡ Eléctrico</option>
+        <option value="mecanico">🔧 Mecánico</option>
+        <option value="fontaneria">💧 Fontanería</option>
+        <option value="climatizacion">❄️ Climatización</option>
+        <option value="civil">🛣 Civil</option>
+        <option value="seguridad">🦺 Seguridad</option>
+        <option value="general">📋 General</option>
+      </select></label>
+      <label>Área / Piso<input id="mPlanoArea" class="form-input" placeholder="Ej: Planta 2, Zona A, Cubierta..."></label>
+      <label>Revisión<input id="mPlanoRev" class="form-input" value="A" placeholder="A, B, 01, 02..."></label>
+      <label>Estado<select id="mPlanoEstado" class="form-input">
+        <option value="vigente">Vigente</option>
+        <option value="borrador">Borrador</option>
+        <option value="superado">Superado</option>
+      </select></label>
+      <label style="grid-column:1/-1">Descripción<input id="mPlanoDesc" class="form-input" placeholder="Notas o referencia del plano..."></label>
+    </div>
+    <div id="mPlanoProgress" style="display:none;margin-top:12px">
+      <div style="background:var(--border);border-radius:4px;height:6px"><div id="mPlanoProgressBar" style="background:var(--primary);height:100%;width:0%;border-radius:4px;transition:width .3s"></div></div>
+      <div id="mPlanoProgressLabel" style="font-size:11px;color:var(--muted);margin-top:4px">Subiendo...</div>
+    </div>
+    <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px">
+      <button class="btn btn-secondary" onclick="cerrarModal()">Cancelar</button>
+      <button class="btn btn-primary" id="btnGuardarPlano" onclick="guardarPlano()">⬆ Subir</button>
+    </div>
+  `);
+  // Auto-fill nombre from filename
+  document.getElementById('mPlanoFile').onchange = e => {
+    const f = e.target.files[0];
+    if (f && !document.getElementById('mPlanoNombre').value)
+      document.getElementById('mPlanoNombre').value = f.name.replace(/\.[^.]+$/, '').replace(/[_-]/g,' ');
+  };
+}
+
+async function guardarPlano() {
+  const fileInput = document.getElementById('mPlanoFile');
+  const nombre    = document.getElementById('mPlanoNombre')?.value?.trim();
+  if (!nombre) { toast('Nombre requerido', 'err'); return; }
+  const btn = document.getElementById('btnGuardarPlano');
+  if (btn) btn.disabled = true;
+  const fd = new FormData();
+  if (fileInput?.files[0]) fd.append('file', fileInput.files[0]);
+  fd.append('nombre',      nombre);
+  fd.append('disciplina',  document.getElementById('mPlanoDisciplina')?.value || 'general');
+  fd.append('area_piso',   document.getElementById('mPlanoArea')?.value?.trim() || '');
+  fd.append('revision',    document.getElementById('mPlanoRev')?.value?.trim() || 'A');
+  fd.append('estado',      document.getElementById('mPlanoEstado')?.value || 'vigente');
+  fd.append('descripcion', document.getElementById('mPlanoDesc')?.value?.trim() || '');
+  const obraId = document.getElementById('filterPlanosObraId')?.value || '';
+  if (obraId) fd.append('obra_id', obraId);
+
+  // Show progress UI
+  document.getElementById('mPlanoProgress').style.display = '';
+  const bar   = document.getElementById('mPlanoProgressBar');
+  const label = document.getElementById('mPlanoProgressLabel');
+  // Simulate progress while uploading
+  let pct = 0;
+  const progInt = setInterval(() => { if (pct < 85) { pct += 5; bar.style.width = pct + '%'; } }, 400);
+
+  try {
+    const sess = await api('/sesion');
+    const token = sess?.token || '';
+    const res = await fetch(`${API_BASE}/planos-obra`, {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + token },
+      body: fd
+    });
+    clearInterval(progInt);
+    bar.style.width = '100%';
+    label.textContent = 'Completado';
+    const r = await res.json();
+    if (r.ok || r.id) { toast('Plano subido correctamente', 'ok'); cerrarModal(); tblPlanos = null; cargarPlanosObra(); }
+    else { toast(r.error || 'Error al subir', 'err'); if (btn) btn.disabled = false; }
+  } catch(e) {
+    clearInterval(progInt);
+    toast('Error de red: ' + e.message, 'err');
+    if (btn) btn.disabled = false;
+  }
+}
+
+async function abrirModalEditarPlano(id) {
+  const p = _planosData.find(x => x.id === id);
+  if (!p) return;
+  abrirModal(`
+    <h3 style="margin:0 0 16px">✏️ Editar Plano</h3>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <label style="grid-column:1/-1">Nombre *<input id="mPlanoEditNombre" class="form-input" value="${esc(p.nombre)}" required></label>
+      <label>Disciplina<select id="mPlanoEditDisciplina" class="form-input">
+        ${['arquitectura','estructural','electrico','mecanico','fontaneria','climatizacion','civil','seguridad','general'].map(d =>
+          `<option value="${d}"${p.disciplina===d?' selected':''}>${DISCIPLINA_ICON[d]||'📋'} ${d.replace(/_/g,' ')}</option>`).join('')}
+      </select></label>
+      <label>Área / Piso<input id="mPlanoEditArea" class="form-input" value="${esc(p.area_piso||'')}"></label>
+      <label>Revisión<input id="mPlanoEditRev" class="form-input" value="${esc(p.revision||'A')}"></label>
+      <label>Estado<select id="mPlanoEditEstado" class="form-input">
+        <option value="vigente"${p.estado==='vigente'?' selected':''}>Vigente</option>
+        <option value="borrador"${p.estado==='borrador'?' selected':''}>Borrador</option>
+        <option value="superado"${p.estado==='superado'?' selected':''}>Superado</option>
+      </select></label>
+      <label style="grid-column:1/-1">Descripción<input id="mPlanoEditDesc" class="form-input" value="${esc(p.descripcion||'')}"></label>
+    </div>
+    <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px">
+      <button class="btn btn-secondary" onclick="cerrarModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="actualizarPlano(${id})">💾 Guardar</button>
+    </div>
+  `);
+}
+
+async function actualizarPlano(id) {
+  const body = {
+    nombre:      document.getElementById('mPlanoEditNombre')?.value?.trim(),
+    disciplina:  document.getElementById('mPlanoEditDisciplina')?.value,
+    area_piso:   document.getElementById('mPlanoEditArea')?.value?.trim(),
+    revision:    document.getElementById('mPlanoEditRev')?.value?.trim(),
+    estado:      document.getElementById('mPlanoEditEstado')?.value,
+    descripcion: document.getElementById('mPlanoEditDesc')?.value?.trim(),
+  };
+  if (!body.nombre) { toast('Nombre requerido', 'err'); return; }
+  const r = await api(`/planos-obra/${id}`, { method: 'PUT', body: JSON.stringify(body) });
+  if (r.ok) { toast('Actualizado', 'ok'); cerrarModal(); tblPlanos = null; cargarPlanosObra(); }
+  else toast(r.error || 'Error', 'err');
+}
+
+async function eliminarPlano(id) {
+  if (!confirm('¿Eliminar este plano? Se borrará también el archivo.')) return;
+  const r = await api(`/planos-obra/${id}`, { method: 'DELETE' });
+  if (r.ok) { toast('Plano eliminado', 'ok'); tblPlanos = null; cargarPlanosObra(); }
   else toast('Error al eliminar', 'err');
 }
 
