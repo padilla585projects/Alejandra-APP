@@ -4501,6 +4501,14 @@ export default {
         if (method === 'PUT')    return await actualizarPartidaPresupuesto(_bid, request, env);
         if (method === 'DELETE') return await eliminarPartidaPresupuesto(_bid, request, env);
       }
+      // ── Subcontratas / Proveedores (NEW-38) ──────────────────────────────────
+      if (path === '/subcontratas'           && method === 'GET')  return await getSubcontratas(request, env);
+      if (path === '/subcontratas'           && method === 'POST') return await crearSubcontrata(request, env);
+      if (path.startsWith('/subcontratas/')) {
+        const _sid = parseInt(path.split('/subcontratas/')[1]);
+        if (method === 'PUT')    return await actualizarSubcontrata(_sid, request, env);
+        if (method === 'DELETE') return await eliminarSubcontrata(_sid, request, env);
+      }
       // ── Control de Calidad / Punch List (NEW-37)
       if (path === '/control-calidad' && method === 'GET')  return await getControlCalidad(request, env);
       if (path === '/control-calidad' && method === 'POST') return await crearDeficiencia(request, env);
@@ -9602,6 +9610,37 @@ async function alertasDiarias(env) {
       }
     } catch(e) { console.error('deficiencias alert error:', e.message); }
 
+    // Subcontratas — seguros y habilitaciones que vencen en 30 días
+    try {
+      const en30s = new Date(Date.now() + 30*86400000).toISOString().slice(0,10);
+      const hoyStr4 = hoy.toISOString().slice(0,10);
+      const { results: subcVencen } = await env.DB.prepare(
+        `SELECT s.empresa_id, s.nombre, s.seguro_rc_expiry, s.habilitacion_expiry
+         FROM subcontratas s
+         WHERE s.estado='activa' AND (
+           (s.seguro_rc_expiry IS NOT NULL AND s.seguro_rc_expiry BETWEEN ? AND ?) OR
+           (s.habilitacion_expiry IS NOT NULL AND s.habilitacion_expiry BETWEEN ? AND ?)
+         ) ORDER BY s.empresa_id, COALESCE(s.seguro_rc_expiry,s.habilitacion_expiry)`
+      ).bind(hoyStr4, en30s, hoyStr4, en30s).all().catch(()=>({results:[]}));
+      if (subcVencen && subcVencen.length) {
+        const porEmpSub = {};
+        for (const s of subcVencen) {
+          if (!porEmpSub[s.empresa_id]) porEmpSub[s.empresa_id] = [];
+          porEmpSub[s.empresa_id].push(s);
+        }
+        for (const [eid, subcs] of Object.entries(porEmpSub)) {
+          let msg = `🏢 <b>Certificaciones de subcontratas por vencer</b>${empLabel(parseInt(eid))} (${subcs.length}):\n\n`;
+          for (const s of subcs) {
+            if (s.seguro_rc_expiry && s.seguro_rc_expiry <= en30s)
+              msg += `⚠️ <b>${s.nombre}</b> — Seguro RC vence: ${s.seguro_rc_expiry}\n`;
+            if (s.habilitacion_expiry && s.habilitacion_expiry <= en30s)
+              msg += `⚠️ <b>${s.nombre}</b> — Habilitación vence: ${s.habilitacion_expiry}\n`;
+          }
+          await sendTelegram(env, msg);
+        }
+      }
+    } catch(e) { console.error('subcontratas cert alert error:', e.message); }
+
     // RGPD — aplicar retención automática a todas las empresas que la tengan activa
     try {
       const { results: empresasRgpd } = await env.DB.prepare(
@@ -13088,5 +13127,83 @@ async function eliminarDeficiencia(id, request, env) {
   const auth = await getAuth(request, env);
   if (!auth.empresa_id) return err('No autorizado', 403);
   await env.DB.prepare(`DELETE FROM control_calidad WHERE id=? AND empresa_id=?`).bind(id, auth.empresa_id).run();
+  return json({ ok: true });
+}
+
+// ── SUBCONTRATAS / PROVEEDORES (NEW-38) ─────────────────────────────────────
+async function ensureSubcontratosTable(env) {
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS subcontratas (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    empresa_id INTEGER NOT NULL,
+    obra_id INTEGER,
+    nombre TEXT NOT NULL,
+    cif TEXT,
+    tipo TEXT DEFAULT 'otro',
+    contacto TEXT,
+    telefono TEXT,
+    email TEXT,
+    estado TEXT DEFAULT 'activa',
+    seguro_rc_expiry TEXT,
+    habilitacion_expiry TEXT,
+    notas TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`).run().catch(()=>{});
+}
+
+async function getSubcontratas(request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth.empresa_id) return err('No autorizado', 403);
+  await ensureSubcontratosTable(env);
+  const url = new URL(request.url);
+  const obra_id = url.searchParams.get('obra_id');
+  let sql = `SELECT s.*, o.nombre as obra_nombre FROM subcontratas s LEFT JOIN obras o ON s.obra_id = o.id WHERE s.empresa_id = ?`;
+  const params = [auth.empresa_id];
+  if (obra_id) { sql += ' AND (s.obra_id = ? OR s.obra_id IS NULL)'; params.push(parseInt(obra_id)); }
+  sql += ' ORDER BY s.estado, s.nombre';
+  const { results } = await env.DB.prepare(sql).bind(...params).all();
+  const en30 = new Date(Date.now() + 30*86400000).toISOString().slice(0,10);
+  const withAlerts = (results || []).map(s => ({
+    ...s,
+    seguro_alerta:       s.seguro_rc_expiry       && s.seguro_rc_expiry       <= en30,
+    habilitacion_alerta: s.habilitacion_expiry     && s.habilitacion_expiry    <= en30,
+  }));
+  return json({ subcontratas: withAlerts });
+}
+
+async function crearSubcontrata(request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth.empresa_id) return err('No autorizado', 403);
+  await ensureSubcontratosTable(env);
+  const b = await request.json().catch(()=>({}));
+  if (!b.nombre) return err('Nombre obligatorio', 400);
+  const r = await env.DB.prepare(`
+    INSERT INTO subcontratas (empresa_id,obra_id,nombre,cif,tipo,contacto,telefono,email,estado,seguro_rc_expiry,habilitacion_expiry,notas)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+  `).bind(auth.empresa_id, b.obra_id||null, b.nombre, b.cif||null, b.tipo||'otro',
+          b.contacto||null, b.telefono||null, b.email||null, b.estado||'activa',
+          b.seguro_rc_expiry||null, b.habilitacion_expiry||null, b.notas||null).run();
+  return json({ ok: true, id: r.meta?.last_row_id });
+}
+
+async function actualizarSubcontrata(id, request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth.empresa_id) return err('No autorizado', 403);
+  const b = await request.json().catch(()=>({}));
+  const campos = ['nombre','cif','tipo','contacto','telefono','email','estado',
+                  'seguro_rc_expiry','habilitacion_expiry','notas','obra_id'];
+  const sets=[]; const params=[];
+  for (const c of campos) {
+    if (b[c] !== undefined) { sets.push(`${c}=?`); params.push(b[c]); }
+  }
+  if (!sets.length) return err('Nada que actualizar', 400);
+  params.push(id, auth.empresa_id);
+  await env.DB.prepare(`UPDATE subcontratas SET ${sets.join(',')} WHERE id=? AND empresa_id=?`).bind(...params).run();
+  return json({ ok: true });
+}
+
+async function eliminarSubcontrata(id, request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth.empresa_id) return err('No autorizado', 403);
+  await env.DB.prepare(`DELETE FROM subcontratas WHERE id=? AND empresa_id=?`).bind(id, auth.empresa_id).run();
   return json({ ok: true });
 }

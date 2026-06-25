@@ -971,6 +971,15 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
         <div class="module-count" id="cntCalidad" style="background:#f97316;display:none">0</div>
         <span class="drag-handle">⠿</span><svg class="module-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
       </div>
+      <div class="module-card" id="cardSubcontratas" onclick="navTo('subcontratas')" style="display:none;border-left:3px solid #6366f1">
+        <div class="module-emoji">🏢</div>
+        <div class="module-info">
+          <div class="module-name">Subcontratas</div>
+          <div class="module-desc">Empresas, seguros y habilitaciones</div>
+        </div>
+        <div class="module-count" id="cntSubc" style="background:#6366f1;display:none">!</div>
+        <span class="drag-handle">⠿</span><svg class="module-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
+      </div>
       <div class="module-card" id="cardIncidencias" onclick="navTo('incidencias')" style="display:none;border-left:3px solid #ef4444">
         <div class="module-emoji">🚨</div>
         <div class="module-info">
@@ -2013,6 +2022,97 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
       <div style="padding:12px 16px;border-top:1px solid var(--border);flex-shrink:0;display:flex;gap:8px">
         <button class="btn-primary" style="flex:1" onclick="actaGuardar()">💾 Guardar Acta</button>
         <button onclick="actaGuardarYAlejandra()" style="padding:9px 12px;background:#a855f722;color:#a855f7;border:1px solid #a855f744;border-radius:10px;font-size:12px;font-weight:700;cursor:pointer">🤖 Guardar + crear tareas</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- SUBCONTRATAS SCREEN (NEW-38) -->
+  <div id="screenSubcontratas" class="screen" style="padding:0;display:none;flex-direction:column">
+    <div style="padding:10px 14px 8px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;align-items:center;gap:8px">
+      <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:17px;color:var(--text);flex:1">🏢 Subcontratas</div>
+      <button onclick="subcNueva()" style="background:#6366f1;color:#fff;border:none;border-radius:9px;padding:7px 14px;font-weight:800;font-size:12px;cursor:pointer">+ Nueva</button>
+    </div>
+    <div style="padding:8px 14px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;gap:6px;overflow-x:auto">
+      <button id="subcFil_todos"    onclick="subcFiltrar('todos')"    style="padding:4px 10px;border-radius:20px;border:1px solid #6366f1;background:#6366f1;color:#fff;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap">Todas</button>
+      <button id="subcFil_activa"   onclick="subcFiltrar('activa')"   style="padding:4px 10px;border-radius:20px;border:1px solid var(--border);background:transparent;color:var(--muted);font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap">Activas</button>
+      <button id="subcFil_alerta"   onclick="subcFiltrar('alerta')"   style="padding:4px 10px;border-radius:20px;border:1px solid var(--border);background:transparent;color:var(--muted);font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap">⚠️ Alertas</button>
+    </div>
+    <div id="subcList" style="padding:12px 14px;overflow-y:auto;flex:1">
+      <div class="empty-state">Cargando...</div>
+    </div>
+  </div>
+
+  <!-- MODAL SUBCONTRATA (NEW-38) -->
+  <div class="modal-overlay" id="modalSubcontrata" onclick="if(event.target===this)subcCerrarModal()" style="display:none;align-items:flex-end;justify-content:center;padding:0">
+    <div style="background:var(--surface);width:100%;max-width:480px;border-radius:18px 18px 0 0;max-height:92vh;display:flex;flex-direction:column">
+      <div style="padding:16px 16px 10px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border);flex-shrink:0">
+        <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:15px;color:var(--text)" id="subcModalTitle">Nueva Subcontrata</div>
+        <button onclick="subcCerrarModal()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--muted);line-height:1">×</button>
+      </div>
+      <div style="padding:14px 16px;overflow-y:auto;flex:1">
+        <input type="hidden" id="subcEditId">
+        <div style="margin-bottom:11px">
+          <label style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Nombre de la empresa *</label>
+          <input id="subcNombre" type="text" placeholder="Empresa Subcontratada S.L." style="width:100%;margin-top:4px;padding:9px 10px;border:1px solid var(--border);border-radius:9px;background:var(--card);color:var(--text);font-size:13px;box-sizing:border-box">
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:11px">
+          <div>
+            <label style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">CIF / NIF</label>
+            <input id="subcCif" type="text" placeholder="B12345678" style="width:100%;margin-top:4px;padding:9px 10px;border:1px solid var(--border);border-radius:9px;background:var(--card);color:var(--text);font-size:13px;box-sizing:border-box">
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Tipo</label>
+            <select id="subcTipo" style="width:100%;margin-top:4px;padding:9px 10px;border:1px solid var(--border);border-radius:9px;background:var(--card);color:var(--text);font-size:13px">
+              <option value="electricista">⚡ Electricista</option>
+              <option value="fontanero">🔧 Fontanería</option>
+              <option value="obra_civil">🏗 Obra Civil</option>
+              <option value="albanileria">🧱 Albañilería</option>
+              <option value="pintura">🎨 Pintura</option>
+              <option value="carpinteria">🪚 Carpintería</option>
+              <option value="climatizacion">❄️ Climatización</option>
+              <option value="seguridad">🔒 Seguridad</option>
+              <option value="otro">Otro</option>
+            </select>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:11px">
+          <div>
+            <label style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Contacto</label>
+            <input id="subcContacto" type="text" placeholder="Nombre responsable" style="width:100%;margin-top:4px;padding:9px 10px;border:1px solid var(--border);border-radius:9px;background:var(--card);color:var(--text);font-size:13px;box-sizing:border-box">
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Teléfono</label>
+            <input id="subcTelefono" type="tel" placeholder="600 000 000" style="width:100%;margin-top:4px;padding:9px 10px;border:1px solid var(--border);border-radius:9px;background:var(--card);color:var(--text);font-size:13px;box-sizing:border-box">
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:11px">
+          <div>
+            <label style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Vence Seguro RC</label>
+            <input id="subcSeguro" type="date" style="width:100%;margin-top:4px;padding:9px 10px;border:1px solid var(--border);border-radius:9px;background:var(--card);color:var(--text);font-size:13px;box-sizing:border-box">
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Vence Habilitación</label>
+            <input id="subcHab" type="date" style="width:100%;margin-top:4px;padding:9px 10px;border:1px solid var(--border);border-radius:9px;background:var(--card);color:var(--text);font-size:13px;box-sizing:border-box">
+          </div>
+        </div>
+        <div style="margin-bottom:11px">
+          <label style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Estado</label>
+          <select id="subcEstado" style="width:100%;margin-top:4px;padding:9px 10px;border:1px solid var(--border);border-radius:9px;background:var(--card);color:var(--text);font-size:13px">
+            <option value="activa">✅ Activa</option>
+            <option value="pendiente">⏳ Pendiente</option>
+            <option value="inactiva">❌ Inactiva</option>
+          </select>
+        </div>
+        <div style="margin-bottom:11px">
+          <label style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Notas</label>
+          <textarea id="subcNotas" rows="2" placeholder="Especialidades, condiciones..." style="width:100%;margin-top:4px;padding:9px 10px;border:1px solid var(--border);border-radius:9px;background:var(--card);color:var(--text);font-size:13px;resize:none;box-sizing:border-box"></textarea>
+        </div>
+        <div id="subcDeleteWrap" style="display:none;margin-bottom:8px">
+          <button onclick="subcEliminar()" style="width:100%;padding:9px;background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.3);border-radius:9px;color:#ef4444;font-weight:700;font-size:13px;cursor:pointer">🗑 Eliminar subcontrata</button>
+        </div>
+      </div>
+      <div style="padding:12px 16px;border-top:1px solid var(--border);flex-shrink:0">
+        <button onclick="subcGuardar()" style="width:100%;padding:12px;background:#6366f1;border:none;border-radius:9px;color:#fff;font-weight:800;font-size:14px;cursor:pointer">Guardar</button>
       </div>
     </div>
   </div>
@@ -5223,6 +5323,7 @@ function setupHomeModules() {
   const cardPartes  = document.getElementById('cardPartes');
   const cardReu     = document.getElementById('cardReuniones');
   const cardCal2    = document.getElementById('cardCalidad');
+  const cardSubc    = document.getElementById('cardSubcontratas');
   // Seguridad: sin tarjetas de inventario, pero sí Pedidos, Docs, Dashboard, Incidencias y Galería
   if (dept === 'seguridad') {
     if (cardB) cardB.style.display = 'none';
@@ -5237,6 +5338,7 @@ function setupHomeModules() {
     if (cardGal)  cardGal.style.display  = 'flex';
     if (cardReu)  cardReu.style.display  = 'flex';
     if (cardCal2) cardCal2.style.display = 'flex';
+    if (cardSubc) cardSubc.style.display = 'flex';
     if (cardPartes) cardPartes.style.display = 'none';
     const cardHerrSeg = document.getElementById('cardHerramientas');
     if (cardHerrSeg) cardHerrSeg.style.display = 'flex';
@@ -5263,6 +5365,7 @@ function setupHomeModules() {
   if (cardPartes) cardPartes.style.display = 'flex';
   if (cardReu)    cardReu.style.display    = 'flex';
   if (cardCal2)   cardCal2.style.display   = 'flex';
+  if (cardSubc)   cardSubc.style.display   = 'flex';
   // #188: aplicar config de módulos (oculta tarjetas marcadas off por la empresa)
   applyModulosConfig();
   applyHomeOrder();
@@ -5811,8 +5914,9 @@ function buscarNavegar(tipo, id) {
   else if (tipo === 'obra')   { navTo('obras'); }
   else if (tipo === 'tarea')       { navTo('home'); setTimeout(() => dashSelTab('tareas'), 400); }
   else if (tipo === 'rfi')         { navTo('home'); setTimeout(() => dashSelTab('rfis'), 400); }
-  else if (tipo === 'deficiencia') { navTo('calidad'); }
-  else if (tipo === 'acta')        { navTo('reuniones'); }
+  else if (tipo === 'deficiencia')   { navTo('calidad'); }
+  else if (tipo === 'acta')          { navTo('reuniones'); }
+  else if (tipo === 'subcontrata')   { navTo('subcontratas'); }
 }
 window.buscarNavegar = buscarNavegar;
 
@@ -6230,6 +6334,11 @@ function navTo(target) {
   if (target === 'calidad') {
     showScreen('calidad');
     calidadCargar();
+    return;
+  }
+  if (target === 'subcontratas') {
+    showScreen('subcontratas');
+    subcCargar();
     return;
   }
   if (target === 'partes') {
@@ -11510,7 +11619,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '6.63';
+const APP_VERSION = '6.64';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -14715,6 +14824,141 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     else toast('Error al eliminar', 'err');
   }
   window.defEliminar = defEliminar;
+
+  // ── SUBCONTRATAS (NEW-38) ─────────────────────────────────────
+  let _subcData = [], _subcFiltro = 'todos';
+
+  async function subcCargar() {
+    const s = getSession();
+    const url = s?.obra_id ? `/subcontratas?obra_id=${s.obra_id}` : '/subcontratas';
+    const r = await apiCall(url, 'GET');
+    _subcData = Array.isArray(r) ? r : (r?.subcontratas || []);
+    // Badge alertas
+    const alertas = _subcData.filter(x => x.seguro_alerta || x.habilitacion_alerta).length;
+    const cntEl = document.getElementById('cntSubc');
+    if (cntEl) { cntEl.textContent = alertas > 0 ? '⚠️' : ''; cntEl.style.display = alertas > 0 ? '' : 'none'; }
+    subcFiltrar(_subcFiltro);
+  }
+  window.subcCargar = subcCargar;
+
+  function subcFiltrar(fil) {
+    _subcFiltro = fil;
+    ['todos','activa','alerta'].forEach(f => {
+      const b = document.getElementById(`subcFil_${f}`);
+      if (b) {
+        const active = f === fil;
+        b.style.background = active ? '#6366f1' : 'transparent';
+        b.style.color = active ? '#fff' : 'var(--muted)';
+        b.style.borderColor = active ? '#6366f1' : 'var(--border)';
+      }
+    });
+    let data = _subcData;
+    if (fil === 'activa') data = data.filter(x => x.estado === 'activa');
+    if (fil === 'alerta') data = data.filter(x => x.seguro_alerta || x.habilitacion_alerta);
+    renderSubcList(data);
+  }
+  window.subcFiltrar = subcFiltrar;
+
+  function renderSubcList(lista) {
+    const el = document.getElementById('subcList');
+    if (!el) return;
+    if (!lista.length) { el.innerHTML = '<div class="empty-state"><div class="empty-icon">🏢</div><div class="empty-text">Sin subcontratas</div></div>'; return; }
+    const tipoIcon = { electricista:'⚡', fontanero:'🔧', obra_civil:'🏗', albanileria:'🧱', pintura:'🎨', carpinteria:'🪚', climatizacion:'❄️', seguridad:'🔒' };
+    el.innerHTML = lista.map(s => {
+      const alerta = s.seguro_alerta || s.habilitacion_alerta;
+      const estCls = { activa:'#22c55e', inactiva:'#64748b', pendiente:'#eab308' }[s.estado] || '#64748b';
+      return `<div onclick="subcEditar(${s.id})" style="padding:12px 0;border-bottom:1px solid var(--border);cursor:pointer">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+          <span style="font-size:16px">${tipoIcon[s.tipo]||'🏢'}</span>
+          <span style="font-weight:700;flex:1">${s.nombre}</span>
+          ${alerta ? '<span style="font-size:11px;background:rgba(234,179,8,.2);color:#eab308;border-radius:10px;padding:1px 6px;font-weight:700">⚠️ Alerta</span>' : ''}
+          <span style="font-size:11px;background:${estCls}22;color:${estCls};border-radius:10px;padding:1px 6px;font-weight:700">${s.estado}</span>
+        </div>
+        <div style="font-size:11px;color:var(--muted);display:flex;gap:12px;flex-wrap:wrap">
+          ${s.cif ? `<span>CIF: ${s.cif}</span>` : ''}
+          ${s.contacto ? `<span>👤 ${s.contacto}</span>` : ''}
+          ${s.telefono ? `<span>📞 ${s.telefono}</span>` : ''}
+        </div>
+        ${s.seguro_rc_expiry ? `<div style="font-size:10px;margin-top:3px;color:${s.seguro_alerta?'#eab308':'var(--muted)'}">Seguro RC: ${s.seguro_rc_expiry}${s.seguro_alerta?' ⚠️':''}</div>` : ''}
+        ${s.habilitacion_expiry ? `<div style="font-size:10px;color:${s.habilitacion_alerta?'#eab308':'var(--muted)'}">Habilitación: ${s.habilitacion_expiry}${s.habilitacion_alerta?' ⚠️':''}</div>` : ''}
+      </div>`;
+    }).join('');
+  }
+
+  function subcNueva() {
+    document.getElementById('subcEditId').value = '';
+    document.getElementById('subcNombre').value = '';
+    document.getElementById('subcCif').value = '';
+    document.getElementById('subcTipo').value = 'electricista';
+    document.getElementById('subcContacto').value = '';
+    document.getElementById('subcTelefono').value = '';
+    document.getElementById('subcSeguro').value = '';
+    document.getElementById('subcHab').value = '';
+    document.getElementById('subcEstado').value = 'activa';
+    document.getElementById('subcNotas').value = '';
+    document.getElementById('subcDeleteWrap').style.display = 'none';
+    document.getElementById('subcModalTitle').textContent = 'Nueva Subcontrata';
+    document.getElementById('modalSubcontrata').style.display = 'flex';
+  }
+  window.subcNueva = subcNueva;
+
+  function subcEditar(id) {
+    const s = _subcData.find(x => x.id == id);
+    if (!s) return;
+    document.getElementById('subcEditId').value = s.id;
+    document.getElementById('subcNombre').value = s.nombre || '';
+    document.getElementById('subcCif').value = s.cif || '';
+    document.getElementById('subcTipo').value = s.tipo || 'otro';
+    document.getElementById('subcContacto').value = s.contacto || '';
+    document.getElementById('subcTelefono').value = s.telefono || '';
+    document.getElementById('subcSeguro').value = s.seguro_rc_expiry || '';
+    document.getElementById('subcHab').value = s.habilitacion_expiry || '';
+    document.getElementById('subcEstado').value = s.estado || 'activa';
+    document.getElementById('subcNotas').value = s.notas || '';
+    document.getElementById('subcDeleteWrap').style.display = '';
+    document.getElementById('subcModalTitle').textContent = 'Editar Subcontrata';
+    document.getElementById('modalSubcontrata').style.display = 'flex';
+  }
+  window.subcEditar = subcEditar;
+
+  async function subcGuardar() {
+    const id = document.getElementById('subcEditId').value;
+    const nombre = document.getElementById('subcNombre').value.trim();
+    if (!nombre) { toast('El nombre es obligatorio', 'err'); return; }
+    const body = {
+      nombre,
+      cif:                document.getElementById('subcCif').value.trim() || null,
+      tipo:               document.getElementById('subcTipo').value,
+      contacto:           document.getElementById('subcContacto').value.trim() || null,
+      telefono:           document.getElementById('subcTelefono').value.trim() || null,
+      seguro_rc_expiry:   document.getElementById('subcSeguro').value || null,
+      habilitacion_expiry:document.getElementById('subcHab').value || null,
+      estado:             document.getElementById('subcEstado').value,
+      notas:              document.getElementById('subcNotas').value.trim() || null,
+    };
+    const s = getSession();
+    if (s?.obra_id) body.obra_id = s.obra_id;
+    const url = id ? `/subcontratas/${id}` : '/subcontratas';
+    const met = id ? 'PUT' : 'POST';
+    const r = await apiCall(url, met, body);
+    if (r.ok || r.id) { toast(id ? 'Actualizada ✓' : 'Creada ✓', 'ok'); subcCerrarModal(); subcCargar(); }
+    else toast('Error al guardar', 'err');
+  }
+  window.subcGuardar = subcGuardar;
+
+  function subcCerrarModal() {
+    document.getElementById('modalSubcontrata').style.display = 'none';
+  }
+  window.subcCerrarModal = subcCerrarModal;
+
+  async function subcEliminar() {
+    const id = document.getElementById('subcEditId').value;
+    if (!id || !confirm('¿Eliminar esta subcontrata?')) return;
+    const r = await apiCall(`/subcontratas/${id}`, 'DELETE');
+    if (r.ok || r.deleted) { toast('Eliminada', 'ok'); subcCerrarModal(); subcCargar(); }
+    else toast('Error al eliminar', 'err');
+  }
+  window.subcEliminar = subcEliminar;
 
   function fmtEur(v) {
     if (v === null || v === undefined) return '—';
