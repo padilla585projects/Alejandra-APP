@@ -565,6 +565,9 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
     <button class="nav-item" data-page="contratosObra" onclick="navTo('contratosObra')">
       <span class="nav-icon">📑</span> Contratos
     </button>
+    <button class="nav-item" data-page="ordenesCompra" onclick="navTo('ordenesCompra')">
+      <span class="nav-icon">🛒</span> Órdenes Compra
+    </button>
     <button class="nav-item" data-page="submittals" onclick="navTo('submittals')">
       <span class="nav-icon">📬</span> Aprobaciones
       <span class="nav-badge" id="submittalsBadge" style="display:none">!</span>
@@ -1890,6 +1893,107 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
         </div>
         <div id="contratosResumen" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:18px"></div>
         <div class="tbl-wrap"><div id="tblContratos"></div></div>
+      </div>
+
+      <!-- ORDENES DE COMPRA (NEW-74) -->
+      <div class="page" id="pageOrdenesCompra">
+        <div class="page-title">🛒 Órdenes de Compra</div>
+        <div class="page-sub">Gestión formal de pedidos a proveedores — numeración automática, líneas de detalle y seguimiento</div>
+        <div class="tbl-toolbar" style="flex-wrap:wrap;gap:8px;margin-bottom:16px">
+          <select class="tbl-search" id="filterOcObra" style="min-width:220px" onchange="cargarOrdenesCompra()">
+            <option value="">🏗 Todas las obras</option>
+          </select>
+          <select class="tbl-search" id="filterOcEstado" style="min-width:160px" onchange="cargarOrdenesCompra()">
+            <option value="">Todos los estados</option>
+            <option value="borrador">✏️ Borrador</option>
+            <option value="enviada">📤 Enviada</option>
+            <option value="confirmada">✅ Confirmada</option>
+            <option value="parcial">📦 Recepción parcial</option>
+            <option value="completa">🏁 Completa</option>
+            <option value="cancelada">❌ Cancelada</option>
+          </select>
+          <input class="tbl-search" id="searchOc" placeholder="🔍 Proveedor o número..." style="min-width:200px" oninput="filtrarOc()">
+          <button class="btn btn-primary" onclick="abrirModalOc()">+ Nueva OC</button>
+          <button class="btn btn-secondary" onclick="exportarTabla(tblOrdenesCompra,'ordenes_compra')">⬇ CSV</button>
+          <button class="btn btn-secondary" onclick="cargarOrdenesCompra()">🔄 Actualizar</button>
+        </div>
+        <div id="ocKpiStrip" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:12px;margin-bottom:18px"></div>
+        <div class="tbl-wrap"><div id="tblOrdenesCompra"></div></div>
+
+        <!-- MODAL ORDEN DE COMPRA -->
+        <div class="modal-overlay" id="modalOc" onclick="if(event.target===this)cerrarModalOc()">
+          <div class="modal" style="max-width:780px;width:96%">
+            <div class="modal-header">
+              <span id="modalOcTitle">Nueva Orden de Compra</span>
+              <button class="modal-close" onclick="cerrarModalOc()">✕</button>
+            </div>
+            <div class="modal-body" style="padding:20px">
+              <input type="hidden" id="ocId">
+              <!-- Cabecera OC -->
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
+                <div>
+                  <label class="form-label">Proveedor *</label>
+                  <input class="form-control" id="ocProveedor" placeholder="Nombre del proveedor">
+                </div>
+                <div>
+                  <label class="form-label">Obra</label>
+                  <select class="form-control" id="ocObraId">
+                    <option value="">Sin obra específica</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="form-label">Descripción</label>
+                  <input class="form-control" id="ocDescripcion" placeholder="Objeto de la compra">
+                </div>
+                <div>
+                  <label class="form-label">Estado</label>
+                  <select class="form-control" id="ocEstado">
+                    <option value="borrador">✏️ Borrador</option>
+                    <option value="enviada">📤 Enviada</option>
+                    <option value="confirmada">✅ Confirmada</option>
+                    <option value="parcial">📦 Recepción parcial</option>
+                    <option value="completa">🏁 Completa</option>
+                    <option value="cancelada">❌ Cancelada</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="form-label">Fecha de emisión</label>
+                  <input type="date" class="form-control" id="ocFechaEmision">
+                </div>
+                <div>
+                  <label class="form-label">Fecha de entrega</label>
+                  <input type="date" class="form-control" id="ocFechaEntrega">
+                </div>
+              </div>
+              <div style="margin-bottom:14px">
+                <label class="form-label">Notas / condiciones</label>
+                <textarea class="form-control" id="ocNotas" rows="2" placeholder="Condiciones de pago, lugar de entrega, etc."></textarea>
+              </div>
+
+              <!-- Líneas de detalle -->
+              <div style="font-weight:700;font-size:14px;margin-bottom:8px;border-top:1px solid var(--border);padding-top:14px">
+                📋 Líneas de detalle
+              </div>
+              <div id="ocLineasContainer" style="margin-bottom:12px">
+                <div class="empty-state" style="padding:16px 0"><div class="empty-icon">📋</div><div class="empty-text">Sin líneas — guarda la OC y añade líneas</div></div>
+              </div>
+              <!-- Formulario nueva línea -->
+              <div id="ocNuevaLineaForm" style="display:grid;grid-template-columns:1fr 80px 80px 100px auto;gap:8px;align-items:end;margin-bottom:14px">
+                <input class="form-control" id="ocLineaDesc" placeholder="Descripción del artículo">
+                <input class="form-control" id="ocLineaUnidad" placeholder="Unidad" value="ud">
+                <input type="number" class="form-control" id="ocLineaCantidad" placeholder="Cant." min="0" step="0.01" value="1">
+                <input type="number" class="form-control" id="ocLineaPrecio" placeholder="Precio/ud" min="0" step="0.01" value="0">
+                <button class="btn btn-primary" style="white-space:nowrap" onclick="agregarOcLinea()">+ Añadir</button>
+              </div>
+              <!-- Total -->
+              <div id="ocTotal" style="text-align:right;font-weight:700;font-size:16px;color:var(--primary);margin-bottom:14px"></div>
+            </div>
+            <div class="modal-footer">
+              <button class="btn btn-secondary" onclick="cerrarModalOc()">Cancelar</button>
+              <button class="btn btn-primary" onclick="guardarOc()">💾 Guardar</button>
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- ANÁLISIS FINANCIERO POR OBRA (NEW-51) -->
@@ -4995,6 +5099,7 @@ const PAGE_TITLES = {
   calendario: '📅 Calendario de Obra',
   visitasObra: '🪪 Registro de Visitas de Obra',
   alertasStock: '📉 Alertas de Stock',
+  ordenesCompra: '🛒 Órdenes de Compra',
 };
 
 const PAGE_LOADERS = {
@@ -5068,7 +5173,8 @@ const PAGE_LOADERS = {
   certificaciones: cargarCertificaciones,
   calendario: cargarCalendario,
   visitasObra: cargarVisitasObra,
-  alertasStock: cargarAlertasStock,
+  alertasStock:  cargarAlertasStock,
+  ordenesCompra: cargarOrdenesCompra,
 };
 
 let currentPage = '';
@@ -5172,6 +5278,7 @@ const SYNC_INTERVALS = {
   calendario:      60,
   visitasObra:     90,
   alertasStock:    60,
+  ordenesCompra:   90,
 };
 
 let _syncTimer = null, _syncLabelTimer = null, _syncLastTs = null;
@@ -13556,6 +13663,224 @@ async function eliminarContratoObra(id) {
   const r = await api(`/contratos-obra/${id}`, { method: 'DELETE' });
   if (r.ok) { toast('Eliminado', 'ok'); tblContratos = null; cargarContratosObra(); }
   else toast('Error al eliminar', 'err');
+}
+
+// ── ORDENES DE COMPRA (NEW-74) ────────────────────────────────────────────
+let tblOrdenesCompra = null;
+let _ocData          = [];
+let _ocEditId        = 0;
+
+const OC_ESTADO_COLOR = {
+  borrador:'var(--muted)', enviada:'var(--primary)', confirmada:'var(--success)',
+  parcial:'var(--warning)', completa:'var(--success)', cancelada:'var(--danger)'
+};
+const OC_ESTADO_LABEL = {
+  borrador:'✏️ Borrador', enviada:'📤 Enviada', confirmada:'✅ Confirmada',
+  parcial:'📦 Parcial', completa:'🏁 Completa', cancelada:'❌ Cancelada'
+};
+
+async function cargarOrdenesCompra() {
+  if (document.getElementById('filterOcObra')?.options.length <= 1) poblarSelectObras('filterOcObra');
+  const obraId = document.getElementById('filterOcObra')?.value || '';
+  const estado = document.getElementById('filterOcEstado')?.value || '';
+  let url = '/ordenes-compra?';
+  if (obraId) url += `obra_id=${obraId}&`;
+  if (estado) url += `estado=${estado}&`;
+  const r = await api(url);
+  _ocData = r.items || [];
+
+  const totalImporte = _ocData.reduce((s, c) => s + (c.importe_total || 0), 0);
+  const pendientes   = _ocData.filter(c => ['borrador','enviada'].includes(c.estado)).length;
+  const completas    = _ocData.filter(c => c.estado === 'completa').length;
+  const canceladas   = _ocData.filter(c => c.estado === 'cancelada').length;
+  document.getElementById('ocKpiStrip').innerHTML = [
+    { icon: '🛒', value: _ocData.length,                       label: 'Total OCs',             cls: '' },
+    { icon: '📤', value: pendientes,                            label: 'Pendientes/en curso',   cls: pendientes > 0 ? 'warn' : '' },
+    { icon: '🏁', value: completas,                             label: 'Completadas',            cls: completas > 0 ? 'ok' : '' },
+    { icon: '💶', value: fmtMoney(totalImporte), label: 'Importe comprometido', cls: '' },
+  ].map(k => `<div class="kpi-card" style="padding:14px"><div class="kpi-icon" style="font-size:20px">${k.icon}</div>
+    <div class="kpi-value ${k.cls}" style="font-size:${typeof k.value==='string'?'16':'22'}px">${k.value}</div>
+    <div class="kpi-label">${k.label}</div></div>`).join('');
+
+  filtrarOc();
+}
+
+function filtrarOc() {
+  const q = (document.getElementById('searchOc')?.value || '').toLowerCase();
+  const filtered = q ? _ocData.filter(c =>
+    (c.numero||'').toLowerCase().includes(q) || (c.proveedor||'').toLowerCase().includes(q)
+  ) : _ocData;
+  if (tblOrdenesCompra) { tblOrdenesCompra.replaceData(filtered); return; }
+  tblOrdenesCompra = new Tabulator('#tblOrdenesCompra', {
+    data: filtered, layout: 'fitColumns', pagination: 'local', paginationSize: 25,
+    responsiveLayout: 'collapse',
+    placeholder: '<div class="empty-state"><div class="empty-icon">🛒</div><div class="empty-text">Sin órdenes de compra</div></div>',
+    columns: [
+      { title: 'Número', field: 'numero', width: 140,
+        formatter: c => `<code style="background:var(--surface2);padding:2px 6px;border-radius:4px;font-size:11px">${c.getValue()}</code>` },
+      { title: 'Proveedor', field: 'proveedor', minWidth: 160, sorter: 'string' },
+      { title: 'Descripción', field: 'descripcion', minWidth: 180 },
+      { title: 'Obra', field: 'obra_nombre', width: 130 },
+      { title: 'Estado', field: 'estado', width: 130,
+        formatter: c => {
+          const v = c.getValue() || 'borrador';
+          return `<span style="color:${OC_ESTADO_COLOR[v]};font-weight:700">${OC_ESTADO_LABEL[v]||v}</span>`;
+        }
+      },
+      { title: 'Emisión', field: 'fecha_emision', width: 100, formatter: c => fmtFecha(c.getValue()||'') },
+      { title: 'Entrega', field: 'fecha_entrega', width: 100, formatter: c => fmtFecha(c.getValue()||'') },
+      { title: 'Importe', field: 'importe_total', width: 120, hozAlign: 'right', sorter: 'number',
+        formatter: c => `<b>${fmtMoney(c.getValue()||0)}</b>` },
+      { title: 'Acciones', field: 'id', width: 100, headerSort: false,
+        formatter: c => {
+          const id = c.getValue();
+          return `<button class="btn btn-secondary btn-sm" onclick="editarOc(${id})">✏️</button>
+                  <button class="btn btn-danger btn-sm" onclick="eliminarOc(${id})">🗑</button>`;
+        }
+      },
+    ]
+  });
+}
+
+function abrirModalOc() {
+  _ocEditId = 0;
+  document.getElementById('modalOcTitle').textContent = 'Nueva Orden de Compra';
+  document.getElementById('ocId').value = '';
+  document.getElementById('ocProveedor').value = '';
+  document.getElementById('ocDescripcion').value = '';
+  document.getElementById('ocEstado').value = 'borrador';
+  document.getElementById('ocFechaEmision').value = new Date().toISOString().slice(0,10);
+  document.getElementById('ocFechaEntrega').value = '';
+  document.getElementById('ocNotas').value = '';
+  document.getElementById('ocTotal').textContent = '';
+  document.getElementById('ocLineasContainer').innerHTML =
+    '<div class="empty-state" style="padding:16px 0"><div class="empty-icon">📋</div><div class="empty-text">Sin líneas — guarda la OC primero y luego añade líneas</div></div>';
+  if (document.getElementById('ocObraId')?.options.length <= 1) poblarSelectObras('ocObraId');
+  document.getElementById('modalOc').classList.add('show');
+}
+
+async function editarOc(id) {
+  const oc = _ocData.find(c => c.id === id);
+  if (!oc) return;
+  _ocEditId = id;
+  document.getElementById('modalOcTitle').textContent = `Editar OC ${oc.numero}`;
+  document.getElementById('ocId').value = id;
+  document.getElementById('ocProveedor').value = oc.proveedor || '';
+  document.getElementById('ocDescripcion').value = oc.descripcion || '';
+  document.getElementById('ocEstado').value = oc.estado || 'borrador';
+  document.getElementById('ocFechaEmision').value = oc.fecha_emision || '';
+  document.getElementById('ocFechaEntrega').value = oc.fecha_entrega || '';
+  document.getElementById('ocNotas').value = oc.notas || '';
+  if (document.getElementById('ocObraId')?.options.length <= 1) await poblarSelectObras('ocObraId');
+  if (oc.obra_id) document.getElementById('ocObraId').value = oc.obra_id;
+  document.getElementById('modalOc').classList.add('show');
+  // Cargar lineas
+  await cargarOcLineas(id);
+}
+
+async function cargarOcLineas(ocId) {
+  const r = await api(`/ordenes-compra/${ocId}/lineas`);
+  const lineas = r.lineas || [];
+  const cont = document.getElementById('ocLineasContainer');
+  if (lineas.length === 0) {
+    cont.innerHTML = '<div class="empty-state" style="padding:12px 0"><div class="empty-icon">📋</div><div class="empty-text">Sin líneas aun</div></div>';
+    document.getElementById('ocTotal').textContent = '';
+    return;
+  }
+  const total = lineas.reduce((s,l) => s + (l.cantidad||0)*(l.precio_unit||0), 0);
+  cont.innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:13px">
+    <thead><tr style="background:var(--surface2)">
+      <th style="padding:6px 8px;text-align:left">Descripción</th>
+      <th style="padding:6px 8px;text-align:center;width:60px">Und</th>
+      <th style="padding:6px 8px;text-align:right;width:70px">Cant.</th>
+      <th style="padding:6px 8px;text-align:right;width:90px">P.Unit.</th>
+      <th style="padding:6px 8px;text-align:right;width:100px">Importe</th>
+      <th style="width:60px"></th>
+    </tr></thead>
+    <tbody>${lineas.map(l => `<tr style="border-bottom:1px solid var(--border)">
+      <td style="padding:6px 8px">${esc(l.descripcion)}</td>
+      <td style="padding:6px 8px;text-align:center">${esc(l.unidad||'ud')}</td>
+      <td style="padding:6px 8px;text-align:right">${l.cantidad}</td>
+      <td style="padding:6px 8px;text-align:right">${fmtMoney(l.precio_unit||0)}</td>
+      <td style="padding:6px 8px;text-align:right;font-weight:700">${fmtMoney((l.cantidad||0)*(l.precio_unit||0))}</td>
+      <td style="padding:4px 6px;text-align:center">
+        <button class="btn btn-danger btn-sm" style="padding:2px 6px" onclick="eliminarOcLinea(${l.id},${ocId})">🗑</button>
+      </td>
+    </tr>`).join('')}</tbody>
+  </table>`;
+  document.getElementById('ocTotal').textContent = `Total OC: ${fmtMoney(total)}`;
+}
+
+async function agregarOcLinea() {
+  const ocId = parseInt(document.getElementById('ocId').value);
+  if (!ocId) { toast('Guarda la OC primero antes de añadir líneas', 'err'); return; }
+  const desc     = document.getElementById('ocLineaDesc')?.value?.trim();
+  const unidad   = document.getElementById('ocLineaUnidad')?.value?.trim() || 'ud';
+  const cantidad = parseFloat(document.getElementById('ocLineaCantidad')?.value || 1);
+  const precio   = parseFloat(document.getElementById('ocLineaPrecio')?.value || 0);
+  if (!desc) { toast('Descripción obligatoria', 'err'); return; }
+  const r = await api(`/ordenes-compra/${ocId}/lineas`, {
+    method: 'POST', body: JSON.stringify({ descripcion: desc, unidad, cantidad, precio_unit: precio })
+  });
+  if (r.ok || r.id) {
+    document.getElementById('ocLineaDesc').value = '';
+    document.getElementById('ocLineaCantidad').value = '1';
+    document.getElementById('ocLineaPrecio').value = '0';
+    await cargarOcLineas(ocId);
+    // Refresh table to update importe_total
+    const upd = _ocData.find(c => c.id === ocId);
+    if (upd) { const rl = await api(`/ordenes-compra?`); _ocData = rl.items || []; if (tblOrdenesCompra) tblOrdenesCompra.replaceData(_ocData); }
+  } else toast(r.error || 'Error al añadir línea', 'err');
+}
+
+async function eliminarOcLinea(lineaId, ocId) {
+  if (!confirm('¿Eliminar esta línea?')) return;
+  const r = await api(`/ordenes-compra/${ocId}/lineas/${lineaId}`, { method: 'DELETE' });
+  if (r.ok) { await cargarOcLineas(ocId); }
+  else toast('Error al eliminar línea', 'err');
+}
+
+async function guardarOc() {
+  const id = parseInt(document.getElementById('ocId').value || '0') || 0;
+  const body = {
+    proveedor:     document.getElementById('ocProveedor')?.value?.trim(),
+    descripcion:   document.getElementById('ocDescripcion')?.value?.trim() || null,
+    obra_id:       document.getElementById('ocObraId')?.value || null,
+    estado:        document.getElementById('ocEstado')?.value || 'borrador',
+    fecha_emision: document.getElementById('ocFechaEmision')?.value || null,
+    fecha_entrega: document.getElementById('ocFechaEntrega')?.value || null,
+    notas:         document.getElementById('ocNotas')?.value?.trim() || null,
+  };
+  if (!body.proveedor) { toast('Proveedor obligatorio', 'err'); return; }
+  const method = id ? 'PUT' : 'POST';
+  const url    = id ? `/ordenes-compra/${id}` : '/ordenes-compra';
+  const r = await api(url, { method, body: JSON.stringify(body) });
+  if (r.ok || r.id) {
+    if (!id && r.id) {
+      // Nueva OC creada — actualizar ID en el modal para poder añadir líneas
+      document.getElementById('ocId').value = r.id;
+      _ocEditId = r.id;
+      document.getElementById('modalOcTitle').textContent = `Editar OC ${r.numero}`;
+      toast(`OC ${r.numero} creada — ahora puedes añadir líneas`, 'ok');
+    } else {
+      toast('Guardado', 'ok');
+    }
+    tblOrdenesCompra = null;
+    cargarOrdenesCompra();
+  } else toast(r.error || 'Error al guardar', 'err');
+}
+
+async function eliminarOc(id) {
+  const oc = _ocData.find(c => c.id === id);
+  if (!confirm(`¿Eliminar la OC ${oc?.numero || id}? Esta acción no se puede deshacer.`)) return;
+  const r = await api(`/ordenes-compra/${id}`, { method: 'DELETE' });
+  if (r.ok) { toast('Eliminada', 'ok'); tblOrdenesCompra = null; cargarOrdenesCompra(); }
+  else toast('Error al eliminar', 'err');
+}
+
+function cerrarModalOc() {
+  document.getElementById('modalOc').classList.remove('show');
+  _ocEditId = 0;
 }
 
 // ── CUADRO DE MANDO POR OBRA ─────────────────────────────────────

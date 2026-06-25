@@ -4721,6 +4721,26 @@ export default {
         if (method === 'PUT')    return await actualizarVisitaObra(_vid, request, env);
         if (method === 'DELETE') return await eliminarVisitaObra(_vid, request, env);
       }
+      // ── Ordenes de Compra (NEW-74) ─────────────────────────────────────────────
+      if (path === '/ordenes-compra' && method === 'GET')  return await getOrdenesCompra(request, env);
+      if (path === '/ordenes-compra' && method === 'POST') return await crearOrdenCompra(request, env);
+      if (path.startsWith('/ordenes-compra/')) {
+        const _ocParts = path.split('/ordenes-compra/')[1].split('/');
+        const _ocId    = parseInt(_ocParts[0]);
+        if (_ocParts[1] === 'lineas') {
+          if (method === 'GET')  return await getOcLineas(_ocId, request, env);
+          if (method === 'POST') return await crearOcLinea(_ocId, request, env);
+        }
+        if (_ocParts[1] === 'lineas' && _ocParts[2]) {
+          const _ocLid = parseInt(_ocParts[2]);
+          if (method === 'PUT')    return await actualizarOcLinea(_ocLid, request, env);
+          if (method === 'DELETE') return await eliminarOcLinea(_ocLid, request, env);
+        }
+        if (!_ocParts[1]) {
+          if (method === 'PUT')    return await actualizarOrdenCompra(_ocId, request, env);
+          if (method === 'DELETE') return await eliminarOrdenCompra(_ocId, request, env);
+        }
+      }
       // â”€â”€ RFIs â€” Consultas TÃ©cnicas (NEW-34) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
       if (path === '/rfis'                  && method === 'GET')  return await getRfis(request, env);
       if (path === '/rfis'                  && method === 'POST') return await crearRfi(request, env);
@@ -16626,3 +16646,168 @@ async function eliminarVisitaObra(id, request, env) {
   await env.DB.prepare('DELETE FROM visitas_obra WHERE id=? AND empresa_id=?').bind(id, empresa_id).run();
   return json({ ok: true, deleted: true });
 }
+
+// ── Ordenes de Compra / Purchase Orders (NEW-74) ──────────────────────────
+
+async function ensureOcTable(env) {
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS ordenes_compra (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    empresa_id    INTEGER NOT NULL,
+    obra_id       INTEGER,
+    numero        TEXT NOT NULL,
+    proveedor     TEXT NOT NULL,
+    descripcion   TEXT,
+    fecha_emision TEXT,
+    fecha_entrega TEXT,
+    estado        TEXT NOT NULL DEFAULT 'borrador',
+    importe_total REAL DEFAULT 0,
+    notas         TEXT,
+    aprobado_por  TEXT,
+    aprobado_at   TEXT,
+    created_at    TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at    TEXT NOT NULL DEFAULT (datetime('now'))
+  )`).run();
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS oc_lineas (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    oc_id       INTEGER NOT NULL REFERENCES ordenes_compra(id) ON DELETE CASCADE,
+    descripcion TEXT NOT NULL,
+    unidad      TEXT DEFAULT 'ud',
+    cantidad    REAL DEFAULT 1,
+    precio_unit REAL DEFAULT 0,
+    recibido    REAL DEFAULT 0,
+    created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+  )`).run();
+}
+
+async function getOrdenesCompra(request, env) {
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  await ensureOcTable(env);
+  const url = new URL(request.url);
+  const obra_id = url.searchParams.get('obra_id');
+  const estado  = url.searchParams.get('estado');
+  let q = `SELECT oc.*, o.nombre as obra_nombre
+            FROM ordenes_compra oc
+            LEFT JOIN obras o ON o.id = oc.obra_id
+            WHERE oc.empresa_id = ?`;
+  const params = [empresa_id];
+  if (obra_id) { q += ' AND oc.obra_id = ?';  params.push(parseInt(obra_id)); }
+  if (estado)  { q += ' AND oc.estado = ?';   params.push(estado); }
+  q += ' ORDER BY oc.created_at DESC';
+  const { results } = await env.DB.prepare(q).bind(...params).all();
+  return json({ items: results });
+}
+
+async function crearOrdenCompra(request, env) {
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  await ensureOcTable(env);
+  const body = await request.json();
+  const { proveedor, descripcion, obra_id, fecha_emision, fecha_entrega, estado = 'borrador', notas } = body;
+  if (!proveedor) return err('Proveedor requerido', 400);
+  const year = new Date().getFullYear();
+  const { results: last } = await env.DB.prepare(
+    `SELECT numero FROM ordenes_compra WHERE empresa_id = ? AND numero LIKE ? ORDER BY id DESC LIMIT 1`
+  ).bind(empresa_id, `OC-${year}-%`).all();
+  let seq = 1;
+  if (last.length > 0) {
+    const parts = last[0].numero.split('-');
+    seq = parseInt(parts[parts.length - 1]) + 1;
+  }
+  const numero = `OC-${year}-${String(seq).padStart(4, '0')}`;
+  const r = await env.DB.prepare(`
+    INSERT INTO ordenes_compra (empresa_id, obra_id, numero, proveedor, descripcion, fecha_emision, fecha_entrega, estado, notas)
+    VALUES (?,?,?,?,?,?,?,?,?)
+  `).bind(empresa_id, obra_id || null, numero, proveedor, descripcion || null,
+          fecha_emision || null, fecha_entrega || null, estado, notas || null).run();
+  return json({ ok: true, id: r.meta.last_row_id, numero }, 201);
+}
+
+async function actualizarOrdenCompra(id, request, env) {
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const oc = await env.DB.prepare('SELECT id FROM ordenes_compra WHERE id=? AND empresa_id=?').bind(id, empresa_id).first();
+  if (!oc) return err('Orden de compra no encontrada', 404);
+  const body = await request.json();
+  const campos = ['proveedor','descripcion','obra_id','fecha_emision','fecha_entrega','estado','notas','importe_total','aprobado_por','aprobado_at'];
+  const sets = [], vals = [];
+  campos.forEach(f => { if (f in body) { sets.push(`${f}=?`); vals.push(body[f]); } });
+  if (!sets.length) return json({ ok: true });
+  sets.push("updated_at=datetime('now')");
+  vals.push(id, empresa_id);
+  await env.DB.prepare(`UPDATE ordenes_compra SET ${sets.join(',')} WHERE id=? AND empresa_id=?`).bind(...vals).run();
+  return json({ ok: true });
+}
+
+async function eliminarOrdenCompra(id, request, env) {
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const oc = await env.DB.prepare('SELECT id FROM ordenes_compra WHERE id=? AND empresa_id=?').bind(id, empresa_id).first();
+  if (!oc) return err('Orden de compra no encontrada', 404);
+  await env.DB.prepare('DELETE FROM ordenes_compra WHERE id=? AND empresa_id=?').bind(id, empresa_id).run();
+  return json({ ok: true, deleted: true });
+}
+
+async function getOcLineas(ocId, request, env) {
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  await ensureOcTable(env);
+  const oc = await env.DB.prepare('SELECT id FROM ordenes_compra WHERE id=? AND empresa_id=?').bind(ocId, empresa_id).first();
+  if (!oc) return err('Orden no encontrada', 404);
+  const { results } = await env.DB.prepare('SELECT * FROM oc_lineas WHERE oc_id=? ORDER BY id').bind(ocId).all();
+  return json({ lineas: results });
+}
+
+async function crearOcLinea(ocId, request, env) {
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  await ensureOcTable(env);
+  const oc = await env.DB.prepare('SELECT id FROM ordenes_compra WHERE id=? AND empresa_id=?').bind(ocId, empresa_id).first();
+  if (!oc) return err('Orden no encontrada', 404);
+  const body = await request.json();
+  const { descripcion, unidad = 'ud', cantidad = 1, precio_unit = 0 } = body;
+  if (!descripcion) return err('Descripcion requerida', 400);
+  const r = await env.DB.prepare(
+    `INSERT INTO oc_lineas (oc_id, descripcion, unidad, cantidad, precio_unit) VALUES (?,?,?,?,?)`
+  ).bind(ocId, descripcion, unidad, cantidad, precio_unit).run();
+  await env.DB.prepare(
+    `UPDATE ordenes_compra SET importe_total=(SELECT COALESCE(SUM(cantidad*precio_unit),0) FROM oc_lineas WHERE oc_id=?), updated_at=datetime('now') WHERE id=?`
+  ).bind(ocId, ocId).run();
+  return json({ ok: true, id: r.meta.last_row_id }, 201);
+}
+
+async function actualizarOcLinea(id, request, env) {
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const linea = await env.DB.prepare(
+    `SELECT l.id, l.oc_id FROM oc_lineas l JOIN ordenes_compra oc ON oc.id=l.oc_id WHERE l.id=? AND oc.empresa_id=?`
+  ).bind(id, empresa_id).first();
+  if (!linea) return err('Linea no encontrada', 404);
+  const body = await request.json();
+  const campos = ['descripcion','unidad','cantidad','precio_unit','recibido'];
+  const sets = [], vals = [];
+  campos.forEach(f => { if (f in body) { sets.push(`${f}=?`); vals.push(body[f]); } });
+  if (sets.length) {
+    vals.push(id);
+    await env.DB.prepare(`UPDATE oc_lineas SET ${sets.join(',')} WHERE id=?`).bind(...vals).run();
+  }
+  await env.DB.prepare(
+    `UPDATE ordenes_compra SET importe_total=(SELECT COALESCE(SUM(cantidad*precio_unit),0) FROM oc_lineas WHERE oc_id=?), updated_at=datetime('now') WHERE id=?`
+  ).bind(linea.oc_id, linea.oc_id).run();
+  return json({ ok: true });
+}
+
+async function eliminarOcLinea(id, request, env) {
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const linea = await env.DB.prepare(
+    `SELECT l.id, l.oc_id FROM oc_lineas l JOIN ordenes_compra oc ON oc.id=l.oc_id WHERE l.id=? AND oc.empresa_id=?`
+  ).bind(id, empresa_id).first();
+  if (!linea) return err('Linea no encontrada', 404);
+  await env.DB.prepare('DELETE FROM oc_lineas WHERE id=?').bind(id).run();
+  await env.DB.prepare(
+    `UPDATE ordenes_compra SET importe_total=(SELECT COALESCE(SUM(cantidad*precio_unit),0) FROM oc_lineas WHERE oc_id=?), updated_at=datetime('now') WHERE id=?`
+  ).bind(linea.oc_id, linea.oc_id).run();
+  return json({ ok: true, deleted: true });
+}
+
