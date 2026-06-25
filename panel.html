@@ -697,6 +697,10 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
       <span class="nav-icon">🔄</span> Cambios / Change Orders
       <span class="nav-badge" id="coBadge" style="display:none">0</span>
     </button>
+    <button class="nav-item" data-page="ensayos" onclick="navTo('ensayos')">
+      <span class="nav-icon">🧪</span> Ensayos y Pruebas
+      <span class="nav-badge" id="ensayosBadge" style="display:none">0</span>
+    </button>
     <button class="nav-item" data-page="fotosObra" onclick="navTo('fotosObra')">
       <span class="nav-icon">📷</span> Galería de Fotos
     </button>
@@ -2417,6 +2421,150 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
               <button class="btn btn-secondary" onclick="cerrarModalAts()">Cancelar</button>
               <span id="atsElimBtn"></span>
               <button class="btn btn-primary" onclick="guardarAts()">💾 Guardar ATS</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ENSAYOS Y PRUEBAS DE MATERIALES / MATERIAL TESTS (NEW-87) -->
+      <div class="page" id="pageEnsayos">
+        <div class="page-title">🧪 Ensayos y Pruebas de Materiales</div>
+        <div id="ensayosKpis" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:16px"></div>
+        <div class="tbl-toolbar">
+          <input class="tbl-search" id="searchEns" placeholder="🔍 Buscar material, ubicación, norma..." oninput="filtrarEnsayos()">
+          <select class="tbl-search" id="filterEnsObra" style="min-width:220px" onchange="tblEns=null;cargarEnsayos()">
+            <option value="">Todas las obras</option>
+          </select>
+          <select class="tbl-search" id="filterEnsTipo" onchange="filtrarEnsayos()">
+            <option value="">Todos los tipos</option>
+            <option value="resistencia_aislamiento">Resistencia aislamiento</option>
+            <option value="continuidad">Continuidad</option>
+            <option value="tension">Tensión</option>
+            <option value="presion">Presión / Estanqueidad</option>
+            <option value="hormigon">Hormigón (probeta)</option>
+            <option value="soldadura">Soldadura</option>
+            <option value="traccion">Tracción</option>
+            <option value="otros">Otros</option>
+          </select>
+          <select class="tbl-search" id="filterEnsRes" onchange="filtrarEnsayos()">
+            <option value="">Todos los resultados</option>
+            <option value="conforme">Conforme ✅</option>
+            <option value="no_conforme">No conforme ❌</option>
+            <option value="pendiente">Pendiente ⏳</option>
+            <option value="condicional">Condicional ⚠️</option>
+          </select>
+          <button class="btn btn-primary" onclick="abrirModalEns()">+ Nuevo Ensayo</button>
+        </div>
+        <div id="tblEnsContainer"></div>
+        <!-- Modal ensayo -->
+        <div class="modal-overlay" id="modalEns" style="display:none" onclick="if(event.target===this)cerrarModalEns()">
+          <div class="modal" style="max-width:660px">
+            <div class="modal-header">
+              <span id="modalEnsTitulo">Nuevo Ensayo / Prueba</span>
+              <button class="modal-close" onclick="cerrarModalEns()">✕</button>
+            </div>
+            <div class="modal-body" style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+              <div style="grid-column:span 2;font-weight:600;color:var(--accent);border-bottom:1px solid #eee;padding-bottom:6px">Identificación</div>
+              <div>
+                <label>Número</label>
+                <input id="ensNumero" class="form-control" placeholder="Auto" readonly style="background:#f5f5f5">
+              </div>
+              <div>
+                <label>Tipo de ensayo *</label>
+                <select id="ensTipo" class="form-control">
+                  <option value="resistencia_aislamiento">Resistencia aislamiento</option>
+                  <option value="continuidad">Continuidad</option>
+                  <option value="tension">Tensión</option>
+                  <option value="presion">Presión / Estanqueidad</option>
+                  <option value="hormigon">Hormigón (probeta)</option>
+                  <option value="soldadura">Soldadura</option>
+                  <option value="traccion">Tracción</option>
+                  <option value="otros">Otros</option>
+                </select>
+              </div>
+              <div>
+                <label>Material / Elemento ensayado *</label>
+                <input id="ensMaterial" class="form-control" placeholder="Ej: Cable BT 240mm², Hormigón HA-25...">
+              </div>
+              <div>
+                <label>Obra</label>
+                <select id="ensObra" class="form-control"><option value="">Sin obra</option></select>
+              </div>
+              <div>
+                <label>Ubicación / Zona</label>
+                <input id="ensUbicacion" class="form-control" placeholder="Zona, planta, cuadro...">
+              </div>
+              <div>
+                <label>Lote / Muestra</label>
+                <input id="ensLote" class="form-control" placeholder="Nº de lote o muestra">
+              </div>
+              <div>
+                <label>Proveedor del material</label>
+                <input id="ensProveedor" class="form-control" placeholder="Nombre del proveedor">
+              </div>
+              <div>
+                <label>Fecha ensayo *</label>
+                <input id="ensFecha" class="form-control" type="date">
+              </div>
+              <div>
+                <label>Realizado por</label>
+                <input id="ensRealizadoPor" class="form-control" placeholder="Técnico responsable">
+              </div>
+              <div>
+                <label>Laboratorio / Empresa</label>
+                <input id="ensLaboratorio" class="form-control" placeholder="Nombre del laboratorio">
+              </div>
+              <div style="grid-column:span 2">
+                <label>Norma de referencia</label>
+                <input id="ensNorma" class="form-control" placeholder="Ej: UNE-EN 60898, REBT ITC-BT-06, EN 12390-3...">
+              </div>
+              <div style="grid-column:span 2;font-weight:600;color:var(--accent);border-bottom:1px solid #eee;padding-bottom:6px;margin-top:8px">Resultado</div>
+              <div>
+                <label>Valor medido</label>
+                <input id="ensValorMedido" class="form-control" type="number" step="any" placeholder="Ej: 1500">
+              </div>
+              <div>
+                <label>Unidad de medida</label>
+                <input id="ensUnidad" class="form-control" placeholder="Ej: MΩ, kN/cm², N/mm²...">
+              </div>
+              <div>
+                <label>Valor mínimo admisible</label>
+                <input id="ensValMin" class="form-control" type="number" step="any" placeholder="Ej: 1">
+              </div>
+              <div>
+                <label>Valor máximo admisible</label>
+                <input id="ensValMax" class="form-control" type="number" step="any" placeholder="Opcional">
+              </div>
+              <div>
+                <label>Resultado *</label>
+                <select id="ensResultado" class="form-control">
+                  <option value="pendiente">Pendiente ⏳</option>
+                  <option value="conforme">Conforme ✅</option>
+                  <option value="no_conforme">No conforme ❌</option>
+                  <option value="condicional">Condicional ⚠️</option>
+                </select>
+              </div>
+              <div>
+                <label>Referencia certificado / informe</label>
+                <input id="ensCertRef" class="form-control" placeholder="Nº de certificado o informe">
+              </div>
+              <div style="grid-column:span 2">
+                <label>Descripción del ensayo</label>
+                <textarea id="ensDescripcion" class="form-control" rows="2" placeholder="Condiciones del ensayo, notas técnicas..."></textarea>
+              </div>
+              <div style="grid-column:span 2">
+                <label>Acción correctiva (si no conforme)</label>
+                <textarea id="ensAccion" class="form-control" rows="2" placeholder="Qué se hará si el resultado no es conforme..."></textarea>
+              </div>
+              <div style="grid-column:span 2">
+                <label>Observaciones</label>
+                <textarea id="ensObs" class="form-control" rows="2"></textarea>
+              </div>
+            </div>
+            <div class="modal-footer">
+              <button class="btn btn-secondary" onclick="cerrarModalEns()">Cancelar</button>
+              <span id="ensElimBtn"></span>
+              <button class="btn btn-primary" onclick="guardarEns()">💾 Guardar Ensayo</button>
             </div>
           </div>
         </div>
@@ -6526,6 +6674,7 @@ const PAGE_TITLES = {
   ats: '🔍 Análisis de Trabajo Seguro / Job Hazard Analysis',
   evaluacionesProv: '⭐ Evaluación de Proveedores / Supplier Evaluation',
   changeOrders: '🔄 Solicitudes de Cambio / Change Orders',
+  ensayos: '🧪 Ensayos y Pruebas de Materiales / Material Tests',
 };
 
 const PAGE_LOADERS = {
@@ -6613,6 +6762,7 @@ const PAGE_LOADERS = {
   ats:             cargarAts,
   evaluacionesProv: cargarEvaluacionesProv,
   changeOrders:     cargarChangeOrders,
+  ensayos:          cargarEnsayos,
 };
 
 let currentPage = '';
@@ -6729,6 +6879,7 @@ const SYNC_INTERVALS = {
   ats:             60,
   evaluacionesProv: 120,
   changeOrders:     60,
+  ensayos:          90,
 };
 
 let _syncTimer = null, _syncLabelTimer = null, _syncLastTs = null;
@@ -16089,6 +16240,165 @@ function exportarFinanzas() {
   if (!obraId) return showToast('Selecciona una obra primero', 'warning');
   // Abrir informe en nueva pestaña usando el endpoint de informes
   window.open(`/informe-obra/${obraId}?tipo=financiero`, '_blank');
+}
+
+// ── ENSAYOS Y PRUEBAS DE MATERIALES / MATERIAL TEST RECORDS (NEW-87) ──────────
+let tblEns = null, _ensData = [];
+const ENS_TIPO_LABEL = {
+  resistencia_aislamiento:'Resist. Aislamiento', continuidad:'Continuidad',
+  tension:'Tensión', presion:'Presión/Estanq.', hormigon:'Hormigón',
+  soldadura:'Soldadura', traccion:'Tracción', otros:'Otros'
+};
+const ENS_RES_COLOR  = { conforme:'var(--success)', no_conforme:'var(--danger)', pendiente:'var(--muted)', condicional:'var(--warning)' };
+const ENS_RES_ICON   = { conforme:'✅', no_conforme:'❌', pendiente:'⏳', condicional:'⚠️' };
+
+async function cargarEnsayos() {
+  poblarSelectObras('filterEnsObra');
+  poblarSelectObras('ensObra');
+  const obraId = document.getElementById('filterEnsObra').value;
+  const params = new URLSearchParams();
+  if (obraId) params.set('obra_id', obraId);
+  _ensData = await api('/ensayos?' + params);
+  if (!Array.isArray(_ensData)) _ensData = [];
+
+  // KPIs
+  const total      = _ensData.length;
+  const conformes  = _ensData.filter(e => e.resultado === 'conforme').length;
+  const noConf     = _ensData.filter(e => e.resultado === 'no_conforme').length;
+  const pendientes = _ensData.filter(e => e.resultado === 'pendiente').length;
+  const cond       = _ensData.filter(e => e.resultado === 'condicional').length;
+  const tasaConf   = total > 0 ? Math.round((conformes/total)*100) : 0;
+  document.getElementById('ensayosKpis').innerHTML = `
+    <div class="kpi-mini"><div class="kpi-val">${total}</div><div class="kpi-lbl">Total ensayos</div></div>
+    <div class="kpi-mini"><div class="kpi-val" style="color:var(--success)">${conformes}</div><div class="kpi-lbl">Conformes ✅</div></div>
+    <div class="kpi-mini"><div class="kpi-val" style="color:var(--danger)">${noConf}</div><div class="kpi-lbl">No conformes ❌</div></div>
+    <div class="kpi-mini"><div class="kpi-val" style="color:var(--warning)">${cond}</div><div class="kpi-lbl">Condicionales ⚠️</div></div>
+    <div class="kpi-mini"><div class="kpi-val" style="color:var(--muted)">${pendientes}</div><div class="kpi-lbl">Pendientes ⏳</div></div>
+    <div class="kpi-mini"><div class="kpi-val" style="color:${tasaConf>=95?'var(--success)':tasaConf>=80?'var(--warning)':'var(--danger)'}">${tasaConf}%</div><div class="kpi-lbl">Tasa conformidad</div></div>
+  `;
+  const bdg = document.getElementById('ensayosBadge');
+  if (bdg) { bdg.textContent = noConf; bdg.style.display = noConf ? '' : 'none'; }
+
+  filtrarEnsayos();
+}
+
+function filtrarEnsayos() {
+  const q    = (document.getElementById('searchEns')?.value || '').toLowerCase();
+  const tipo = document.getElementById('filterEnsTipo')?.value || '';
+  const res  = document.getElementById('filterEnsRes')?.value  || '';
+  let data   = _ensData.filter(e => {
+    if (tipo && e.tipo_ensayo !== tipo)  return false;
+    if (res  && e.resultado   !== res)   return false;
+    if (q && !`${e.material} ${e.ubicacion||''} ${e.norma_referencia||''} ${e.numero||''} ${e.realizado_por||''} ${e.laboratorio||''}`.toLowerCase().includes(q)) return false;
+    return true;
+  });
+  const cols = [
+    { title:'Nº',       field:'numero',         width:120, formatter: c => c.getValue()||'—' },
+    { title:'Fecha',    field:'fecha_ensayo',   width:105, formatter: c => c.getValue()||'—' },
+    { title:'Tipo',     field:'tipo_ensayo',    width:160, formatter: c => ENS_TIPO_LABEL[c.getValue()]||c.getValue() },
+    { title:'Material', field:'material',       widthGrow:2 },
+    { title:'Ubicación',field:'ubicacion',      widthGrow:1, formatter: c => c.getValue()||'—' },
+    { title:'Medido',   field:'valor_medido',   width:100, hozAlign:'right', formatter: c => {
+      const v = c.getValue(); const u = c.getRow().getData().unidad_medida||'';
+      return v != null ? `${v} ${u}` : '—';
+    }},
+    { title:'Resultado', field:'resultado', width:130, hozAlign:'center', formatter: c => {
+      const v = c.getValue();
+      return `<span style="color:${ENS_RES_COLOR[v]||'inherit'};font-weight:600">${ENS_RES_ICON[v]||''} ${v||'—'}</span>`;
+    }},
+    { title:'Acciones', width:90, hozAlign:'center', formatter: c =>
+      `<button class="btn-tbl" onclick="editarEns(${c.getRow().getData().id})">✏️</button>
+       <button class="btn-tbl btn-danger-sm" onclick="eliminarEns(${c.getRow().getData().id})">🗑️</button>`
+    }
+  ];
+  if (!tblEns) {
+    tblEns = new Tabulator('#tblEnsContainer', {
+      data, columns: cols, layout:'fitColumns', locale:'es-es',
+      placeholder:'No hay ensayos registrados', height:'520px'
+    });
+  } else {
+    tblEns.replaceData(data);
+  }
+}
+
+function abrirModalEns(d = {}) {
+  document.getElementById('modalEns')._ensId = d.id || null;
+  document.getElementById('ensNumero').value      = d.numero || '';
+  document.getElementById('ensTipo').value        = d.tipo_ensayo || 'resistencia_aislamiento';
+  document.getElementById('ensMaterial').value    = d.material || '';
+  document.getElementById('ensObra').value        = d.obra_id || '';
+  document.getElementById('ensUbicacion').value   = d.ubicacion || '';
+  document.getElementById('ensLote').value        = d.lote_muestra || '';
+  document.getElementById('ensProveedor').value   = d.proveedor || '';
+  document.getElementById('ensFecha').value       = d.fecha_ensayo || new Date().toISOString().slice(0,10);
+  document.getElementById('ensRealizadoPor').value= d.realizado_por || '';
+  document.getElementById('ensLaboratorio').value = d.laboratorio || '';
+  document.getElementById('ensNorma').value       = d.norma_referencia || '';
+  document.getElementById('ensValorMedido').value = d.valor_medido ?? '';
+  document.getElementById('ensUnidad').value      = d.unidad_medida || '';
+  document.getElementById('ensValMin').value      = d.valor_minimo ?? '';
+  document.getElementById('ensValMax').value      = d.valor_maximo ?? '';
+  document.getElementById('ensResultado').value   = d.resultado || 'pendiente';
+  document.getElementById('ensCertRef').value     = d.certificado_ref || '';
+  document.getElementById('ensDescripcion').value = d.descripcion || '';
+  document.getElementById('ensAccion').value      = d.accion_correctiva || '';
+  document.getElementById('ensObs').value         = d.observaciones || '';
+  document.getElementById('modalEnsTitulo').textContent = d.id ? 'Editar Ensayo' : 'Nuevo Ensayo / Prueba';
+  document.getElementById('ensElimBtn').innerHTML = d.id
+    ? `<button class="btn btn-danger" onclick="eliminarEns(${d.id},true)">🗑️ Eliminar</button>` : '';
+  document.getElementById('modalEns').style.display = 'flex';
+}
+
+async function editarEns(id) {
+  const d = _ensData.find(e => e.id === id);
+  if (d) abrirModalEns(d);
+}
+
+async function guardarEns() {
+  const material = document.getElementById('ensMaterial').value.trim();
+  const fecha    = document.getElementById('ensFecha').value;
+  if (!material) return alert('El material ensayado es obligatorio.');
+  if (!fecha)    return alert('La fecha del ensayo es obligatoria.');
+  const body = {
+    tipo_ensayo:      document.getElementById('ensTipo').value,
+    material,
+    obra_id:          document.getElementById('ensObra').value || null,
+    ubicacion:        document.getElementById('ensUbicacion').value.trim() || null,
+    lote_muestra:     document.getElementById('ensLote').value.trim() || null,
+    proveedor:        document.getElementById('ensProveedor').value.trim() || null,
+    fecha_ensayo:     fecha,
+    realizado_por:    document.getElementById('ensRealizadoPor').value.trim() || null,
+    laboratorio:      document.getElementById('ensLaboratorio').value.trim() || null,
+    norma_referencia: document.getElementById('ensNorma').value.trim() || null,
+    valor_medido:     document.getElementById('ensValorMedido').value !== '' ? parseFloat(document.getElementById('ensValorMedido').value) : null,
+    unidad_medida:    document.getElementById('ensUnidad').value.trim() || null,
+    valor_minimo:     document.getElementById('ensValMin').value !== '' ? parseFloat(document.getElementById('ensValMin').value) : null,
+    valor_maximo:     document.getElementById('ensValMax').value !== '' ? parseFloat(document.getElementById('ensValMax').value) : null,
+    resultado:        document.getElementById('ensResultado').value,
+    certificado_ref:  document.getElementById('ensCertRef').value.trim() || null,
+    descripcion:      document.getElementById('ensDescripcion').value.trim() || null,
+    accion_correctiva:document.getElementById('ensAccion').value.trim() || null,
+    observaciones:    document.getElementById('ensObs').value.trim() || null,
+  };
+  const id = document.getElementById('modalEns')._ensId;
+  if (id) {
+    await api(`/ensayos/${id}`, { method:'PUT', body: JSON.stringify(body) });
+  } else {
+    await api('/ensayos', { method:'POST', body: JSON.stringify(body) });
+  }
+  cerrarModalEns();
+  await cargarEnsayos();
+}
+
+async function eliminarEns(id, desdeModal = false) {
+  if (!confirm('¿Eliminar este ensayo? Esta acción no se puede deshacer.')) return;
+  await api(`/ensayos/${id}`, { method:'DELETE' });
+  if (desdeModal) cerrarModalEns();
+  await cargarEnsayos();
+}
+
+function cerrarModalEns() {
+  document.getElementById('modalEns').style.display = 'none';
 }
 
 // ── SOLICITUDES DE CAMBIO / CHANGE ORDERS (NEW-86) ────────────────────────────

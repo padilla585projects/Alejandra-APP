@@ -4721,6 +4721,14 @@ export default {
         if (method === 'PUT')    return await actualizarVisitaObra(_vid, request, env);
         if (method === 'DELETE') return await eliminarVisitaObra(_vid, request, env);
       }
+      // ── Ensayos y Pruebas de Materiales / Material Test Records (NEW-87) ────────
+      if (path === '/ensayos' && method === 'GET')  return await getEnsayos(request, env);
+      if (path === '/ensayos' && method === 'POST') return await crearEnsayo(request, env);
+      if (path.startsWith('/ensayos/')) {
+        const _ens = parseInt(path.split('/ensayos/')[1]);
+        if (method === 'PUT')    return await actualizarEnsayo(_ens, request, env);
+        if (method === 'DELETE') return await eliminarEnsayo(_ens, request, env);
+      }
       // ── Solicitudes de Cambio / Change Orders (NEW-86) ───────────────────────────
       if (path === '/change-orders' && method === 'GET')  return await getChangeOrders(request, env);
       if (path === '/change-orders' && method === 'POST') return await crearChangeOrder(request, env);
@@ -18237,5 +18245,132 @@ async function eliminarChangeOrder(id, request, env) {
   const { empresa_id } = await getAuthContext(request, env);
   await ensureChangeOrdersTable(env);
   await env.DB.prepare(`DELETE FROM solicitudes_cambio WHERE id=? AND empresa_id=?`).bind(id, empresa_id).run();
+  return jsonResp({ ok: true });
+}
+
+// ── Ensayos y Pruebas de Materiales / Material Test Records (NEW-87) ──────────
+async function ensureEnsayosTable(env) {
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS ensayos_materiales (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    empresa_id        INTEGER NOT NULL,
+    obra_id           INTEGER,
+    numero            TEXT,
+    tipo_ensayo       TEXT NOT NULL DEFAULT 'resistencia_aislamiento',
+    material          TEXT NOT NULL,
+    descripcion       TEXT,
+    ubicacion         TEXT,
+    lote_muestra      TEXT,
+    proveedor         TEXT,
+    fecha_ensayo      TEXT NOT NULL,
+    realizado_por     TEXT,
+    laboratorio       TEXT,
+    norma_referencia  TEXT,
+    valor_medido      REAL,
+    unidad_medida     TEXT,
+    valor_minimo      REAL,
+    valor_maximo      REAL,
+    resultado         TEXT NOT NULL DEFAULT 'pendiente',
+    observaciones     TEXT,
+    certificado_ref   TEXT,
+    accion_correctiva TEXT,
+    created_at        TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at        TEXT NOT NULL DEFAULT (datetime('now'))
+  )`).run();
+}
+
+async function getEnsayos(request, env) {
+  const { empresa_id } = await getAuthContext(request, env);
+  const url = new URL(request.url);
+  const obra_id    = url.searchParams.get('obra_id');
+  const tipo       = url.searchParams.get('tipo');
+  const resultado  = url.searchParams.get('resultado');
+  await ensureEnsayosTable(env);
+  let q = `SELECT * FROM ensayos_materiales WHERE empresa_id=?`;
+  const p = [empresa_id];
+  if (obra_id)   { q += ` AND obra_id=?`;     p.push(obra_id); }
+  if (tipo)      { q += ` AND tipo_ensayo=?`; p.push(tipo); }
+  if (resultado) { q += ` AND resultado=?`;   p.push(resultado); }
+  q += ` ORDER BY fecha_ensayo DESC, id DESC`;
+  const rows = await env.DB.prepare(q).bind(...p).all();
+  return jsonResp(rows.results || []);
+}
+
+async function crearEnsayo(request, env) {
+  const { empresa_id } = await getAuthContext(request, env);
+  const d = await request.json();
+  await ensureEnsayosTable(env);
+  const anio = new Date().getFullYear();
+  const last = await env.DB.prepare(
+    `SELECT numero FROM ensayos_materiales WHERE empresa_id=? AND numero LIKE ? ORDER BY id DESC LIMIT 1`
+  ).bind(empresa_id, `ENS-${anio}-%`).first();
+  let seq = 1;
+  if (last?.numero) { const n = parseInt(last.numero.split('-')[2]); if (!isNaN(n)) seq = n + 1; }
+  const numero = `ENS-${anio}-${String(seq).padStart(4,'0')}`;
+  // Auto-resultado si hay valor medido y límites definidos
+  let resultado = d.resultado || 'pendiente';
+  const vm = parseFloat(d.valor_medido);
+  const vmin = parseFloat(d.valor_minimo);
+  const vmax = parseFloat(d.valor_maximo);
+  if (!isNaN(vm) && resultado === 'pendiente') {
+    if (!isNaN(vmin) && vm < vmin) resultado = 'no_conforme';
+    else if (!isNaN(vmax) && vm > vmax) resultado = 'no_conforme';
+    else if (!isNaN(vmin) || !isNaN(vmax)) resultado = 'conforme';
+  }
+  const r = await env.DB.prepare(
+    `INSERT INTO ensayos_materiales
+     (empresa_id,obra_id,numero,tipo_ensayo,material,descripcion,ubicacion,lote_muestra,
+      proveedor,fecha_ensayo,realizado_por,laboratorio,norma_referencia,
+      valor_medido,unidad_medida,valor_minimo,valor_maximo,
+      resultado,observaciones,certificado_ref,accion_correctiva)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+  ).bind(
+    empresa_id, d.obra_id||null, numero,
+    d.tipo_ensayo||'resistencia_aislamiento', d.material, d.descripcion||null,
+    d.ubicacion||null, d.lote_muestra||null, d.proveedor||null,
+    d.fecha_ensayo, d.realizado_por||null, d.laboratorio||null, d.norma_referencia||null,
+    isNaN(vm)?null:vm, d.unidad_medida||null,
+    isNaN(vmin)?null:vmin, isNaN(vmax)?null:vmax,
+    resultado, d.observaciones||null, d.certificado_ref||null, d.accion_correctiva||null
+  ).run();
+  return jsonResp({ id: r.meta.last_row_id, numero, resultado }, 201);
+}
+
+async function actualizarEnsayo(id, request, env) {
+  const { empresa_id } = await getAuthContext(request, env);
+  const d = await request.json();
+  await ensureEnsayosTable(env);
+  const vm = parseFloat(d.valor_medido);
+  const vmin = parseFloat(d.valor_minimo);
+  const vmax = parseFloat(d.valor_maximo);
+  let resultado = d.resultado || 'pendiente';
+  if (!isNaN(vm) && resultado === 'pendiente') {
+    if (!isNaN(vmin) && vm < vmin) resultado = 'no_conforme';
+    else if (!isNaN(vmax) && vm > vmax) resultado = 'no_conforme';
+    else if (!isNaN(vmin) || !isNaN(vmax)) resultado = 'conforme';
+  }
+  await env.DB.prepare(
+    `UPDATE ensayos_materiales SET
+      tipo_ensayo=?, material=?, descripcion=?, ubicacion=?, lote_muestra=?,
+      proveedor=?, fecha_ensayo=?, realizado_por=?, laboratorio=?, norma_referencia=?,
+      valor_medido=?, unidad_medida=?, valor_minimo=?, valor_maximo=?,
+      resultado=?, observaciones=?, certificado_ref=?, accion_correctiva=?,
+      updated_at=datetime('now')
+     WHERE id=? AND empresa_id=?`
+  ).bind(
+    d.tipo_ensayo||'resistencia_aislamiento', d.material, d.descripcion||null,
+    d.ubicacion||null, d.lote_muestra||null, d.proveedor||null,
+    d.fecha_ensayo, d.realizado_por||null, d.laboratorio||null, d.norma_referencia||null,
+    isNaN(vm)?null:vm, d.unidad_medida||null,
+    isNaN(vmin)?null:vmin, isNaN(vmax)?null:vmax,
+    resultado, d.observaciones||null, d.certificado_ref||null, d.accion_correctiva||null,
+    id, empresa_id
+  ).run();
+  return jsonResp({ ok: true, resultado });
+}
+
+async function eliminarEnsayo(id, request, env) {
+  const { empresa_id } = await getAuthContext(request, env);
+  await ensureEnsayosTable(env);
+  await env.DB.prepare(`DELETE FROM ensayos_materiales WHERE id=? AND empresa_id=?`).bind(id, empresa_id).run();
   return jsonResp({ ok: true });
 }
