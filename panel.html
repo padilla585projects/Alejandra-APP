@@ -408,6 +408,9 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
     <button class="nav-item active" data-page="dashboard" onclick="navTo('dashboard')">
       <span class="nav-icon">📊</span> Dashboard
     </button>
+    <button class="nav-item" data-page="obraDetalle" onclick="navTo('obraDetalle')">
+      <span class="nav-icon">🏗</span> Cuadro de Mando Obra
+    </button>
     <button class="nav-item" onclick="chatAbrir()" style="position:relative">
       <span class="nav-icon">💬</span> Chat del equipo
       <span class="nav-badge" id="chatBadgeSidebar" style="display:none">0</span>
@@ -1485,6 +1488,34 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
         <!-- Tabla de entradas de coste -->
         <div style="font-family:'Montserrat',sans-serif;font-weight:700;font-size:10px;letter-spacing:2px;color:var(--muted);text-transform:uppercase;margin-bottom:10px">📝 Detalle de gastos</div>
         <div class="tbl-wrap"><div id="tblCostes"></div></div>
+      </div>
+
+      <!-- CUADRO DE MANDO POR OBRA -->
+      <div class="page" id="pageObraDetalle">
+        <div class="page-title">🏗 Cuadro de Mando por Obra</div>
+        <div class="page-sub">Visión 360° de todos los módulos de un proyecto en una sola pantalla</div>
+        <div class="tbl-toolbar" style="margin-bottom:20px">
+          <select class="tbl-search" id="obraDetalleId" style="min-width:280px;font-size:14px" onchange="cargarObraDetalle()">
+            <option value="">— Selecciona una obra —</option>
+          </select>
+          <button class="btn btn-secondary" onclick="cargarObraDetalle()">🔄 Actualizar</button>
+        </div>
+        <div id="obraDetalleHeader" style="display:none;margin-bottom:24px">
+          <div class="section-card" style="background:linear-gradient(135deg,var(--primary) 0%,#ea580c 100%);color:#fff">
+            <div style="display:flex;align-items:center;gap:16px">
+              <div style="font-size:40px">🏗</div>
+              <div style="flex:1">
+                <div id="obraDetalleNombre" style="font-size:22px;font-weight:800;font-family:'Montserrat',sans-serif"></div>
+                <div id="obraDetalleInfo" style="font-size:13px;opacity:.8;margin-top:4px"></div>
+              </div>
+              <div id="obraDetallePct" style="text-align:center">
+                <div style="font-size:36px;font-weight:900" id="obraDetallePctVal">—</div>
+                <div style="font-size:12px;opacity:.8">Avance fases</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div id="obraDetalleGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px"></div>
       </div>
 
       <!-- SUBMITTAL LOG / APROBACIONES DE MATERIALES -->
@@ -3122,6 +3153,7 @@ const PAGE_TITLES = {
   contratosObra: '📑 Gestión de Contratos',
   submittals: '📬 Aprobaciones de Materiales',
   actasReunion: '📋 Actas de Reunión',
+  obraDetalle: '🏗 Cuadro de Mando por Obra',
 };
 
 const PAGE_LOADERS = {
@@ -3172,6 +3204,7 @@ const PAGE_LOADERS = {
   contratosObra: cargarContratosObra,
   submittals: cargarSubmittals,
   actasReunion: cargarActasReunion,
+  obraDetalle: cargarObraDetalle,
 };
 
 let currentPage = '';
@@ -3251,6 +3284,7 @@ const SYNC_INTERVALS = {
   contratosObra: 180,
   submittals: 60,
   actasReunion: 180,
+  obraDetalle: 60,
 };
 
 let _syncTimer = null, _syncLabelTimer = null, _syncLastTs = null;
@@ -11569,6 +11603,164 @@ async function eliminarContratoObra(id) {
   const r = await api(`/contratos-obra/${id}`, { method: 'DELETE' });
   if (r.ok) { toast('Eliminado', 'ok'); tblContratos = null; cargarContratosObra(); }
   else toast('Error al eliminar', 'err');
+}
+
+// ── CUADRO DE MANDO POR OBRA ─────────────────────────────────────
+async function cargarObraDetalle() {
+  if (document.getElementById('obraDetalleId')?.options.length <= 1) await poblarSelectObras('obraDetalleId');
+  const obraId = document.getElementById('obraDetalleId')?.value;
+  const header = document.getElementById('obraDetalleHeader');
+  const grid   = document.getElementById('obraDetalleGrid');
+  if (!obraId) {
+    if (header) header.style.display = 'none';
+    if (grid) grid.innerHTML = '<div class="empty-state"><div class="empty-icon">🏗</div><div class="empty-text">Selecciona una obra para ver su cuadro de mando</div></div>';
+    return;
+  }
+  if (grid) grid.innerHTML = '<div class="loading"><div class="spinner"></div> Cargando datos del proyecto...</div>';
+  const d = await api(`/obra-detail/${obraId}`);
+  if (!d || d.error) { grid.innerHTML = '<div class="empty-state"><div class="empty-icon">⚠️</div><div class="empty-text">Error al cargar los datos</div></div>'; return; }
+
+  // Header
+  if (header) {
+    header.style.display = '';
+    document.getElementById('obraDetalleNombre').textContent = d.obra?.nombre || '—';
+    const info = [d.obra?.cliente?`👔 ${d.obra.cliente}`:'', d.obra?.codigo?`📋 ${d.obra.codigo}`:'', d.obra?.estado?`Estado: ${d.obra.estado}`:''].filter(Boolean).join(' · ');
+    document.getElementById('obraDetalleInfo').textContent = info;
+    document.getElementById('obraDetallePctVal').textContent = d.fases?.avg_pct !== null ? d.fases.avg_pct + '%' : '—';
+  }
+
+  const fmtM2 = v => new Intl.NumberFormat('es-ES',{style:'currency',currency:'EUR',minimumFractionDigits:0}).format(v||0);
+  const pBar2 = (pct, danger) => `<div style="background:var(--border);border-radius:4px;height:6px;margin-top:4px"><div style="width:${Math.min(pct||0,100)}%;height:100%;border-radius:4px;background:${danger?'var(--danger)':'var(--primary)'}"></div></div>`;
+
+  const modules = [
+    {
+      icon:'📅', title:'Fases de Obra', nav:'fases', color:'#6366f1',
+      content: `
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;text-align:center;margin-bottom:8px">
+          <div><div style="font-size:22px;font-weight:800">${d.fases.total}</div><div style="font-size:11px;color:var(--muted)">Total</div></div>
+          <div><div style="font-size:22px;font-weight:800;color:var(--success)">${d.fases.completadas}</div><div style="font-size:11px;color:var(--muted)">Completadas</div></div>
+          <div><div style="font-size:22px;font-weight:800;color:var(--primary)">${d.fases.avg_pct}%</div><div style="font-size:11px;color:var(--muted)">Avance medio</div></div>
+        </div>
+        ${pBar2(d.fases.avg_pct, false)}`
+    },
+    {
+      icon:'💶', title:'Presupuesto', nav:'presupuesto', color:'#10b981',
+      content: `
+        <div style="margin-bottom:6px;display:flex;justify-content:space-between"><span style="font-size:12px">Previsto</span><strong style="font-size:12px">${fmtM2(d.presupuesto.prev)}</strong></div>
+        <div style="margin-bottom:6px;display:flex;justify-content:space-between"><span style="font-size:12px">Real</span><strong style="font-size:12px;color:${d.presupuesto.pct>100?'var(--danger)':'inherit'}">${fmtM2(d.presupuesto.real)}</strong></div>
+        ${d.presupuesto.pct !== null ? `<div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="font-size:12px">Ejecutado</span><strong style="color:${d.presupuesto.pct>100?'var(--danger)':'var(--success)'}">${d.presupuesto.pct}%</strong></div>${pBar2(d.presupuesto.pct, d.presupuesto.pct>100)}` : '<div style="color:var(--muted);font-size:12px">Sin partidas presupuestarias</div>'}`
+    },
+    {
+      icon:'💸', title:'Control de Costes', nav:'costesObra', color:'#f59e0b',
+      content: `
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;text-align:center">
+          <div><div style="font-size:20px;font-weight:800">${d.costes.total}</div><div style="font-size:11px;color:var(--muted)">Entradas</div></div>
+          <div><div style="font-size:15px;font-weight:800;color:var(--warning)">${fmtM2(d.costes.total_gastos)}</div><div style="font-size:11px;color:var(--muted)">Total gastos</div></div>
+        </div>`
+    },
+    {
+      icon:'✅', title:'Tareas', nav:'tareas', color:'#06b6d4',
+      content: `
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;text-align:center">
+          <div><div style="font-size:22px;font-weight:800">${d.tareas.pendientes}</div><div style="font-size:11px;color:var(--muted)">Pendientes</div></div>
+          <div><div style="font-size:22px;font-weight:800;color:var(--danger)">${d.tareas.urgentes}</div><div style="font-size:11px;color:var(--muted)">Urgentes</div></div>
+          <div><div style="font-size:22px;font-weight:800;color:var(--success)">${d.tareas.completadas}</div><div style="font-size:11px;color:var(--muted)">Completadas</div></div>
+        </div>`
+    },
+    {
+      icon:'🏁', title:'Hitos', nav:'hitos', color:'#8b5cf6',
+      content: `
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;text-align:center">
+          <div><div style="font-size:22px;font-weight:800">${d.hitos.total}</div><div style="font-size:11px;color:var(--muted)">Total</div></div>
+          <div><div style="font-size:22px;font-weight:800;color:var(--danger)">${d.hitos.retrasados}</div><div style="font-size:11px;color:var(--muted)">Retrasados</div></div>
+          <div><div style="font-size:22px;font-weight:800;color:var(--success)">${d.hitos.completados}</div><div style="font-size:11px;color:var(--muted)">Completados</div></div>
+        </div>`
+    },
+    {
+      icon:'❓', title:'RFIs', nav:'rfis', color:'#0ea5e9',
+      content: `
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;text-align:center">
+          <div><div style="font-size:22px;font-weight:800">${d.rfis.total}</div><div style="font-size:11px;color:var(--muted)">Total</div></div>
+          <div><div style="font-size:22px;font-weight:800;color:${d.rfis.abiertas>0?'var(--danger)':'var(--success)'}">${d.rfis.abiertas}</div><div style="font-size:11px;color:var(--muted)">Abiertas</div></div>
+        </div>`
+    },
+    {
+      icon:'🦺', title:'Seguridad', nav:'seguridadObra', color:'#ef4444',
+      content: `
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;text-align:center">
+          <div><div style="font-size:22px;font-weight:800;color:var(--danger)">${d.seguridad.peligros}</div><div style="font-size:11px;color:var(--muted)">Peligros</div></div>
+          <div><div style="font-size:22px;font-weight:800;color:var(--warning)">${d.seguridad.abiertas}</div><div style="font-size:11px;color:var(--muted)">Abiertas</div></div>
+          <div><div style="font-size:22px;font-weight:800">${d.seguridad.total}</div><div style="font-size:11px;color:var(--muted)">Total</div></div>
+        </div>`
+    },
+    {
+      icon:'📝', title:'Punch List', nav:'punchList', color:'#f97316',
+      content: `
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;text-align:center">
+          <div><div style="font-size:22px;font-weight:800;color:${d.punch_list.abiertos>0?'var(--warning)':'var(--success)'}">${d.punch_list.abiertos}</div><div style="font-size:11px;color:var(--muted)">Abiertos</div></div>
+          <div><div style="font-size:22px;font-weight:800;color:${d.punch_list.vencidos>0?'var(--danger)':'var(--muted)'}">${d.punch_list.vencidos}</div><div style="font-size:11px;color:var(--muted)">Vencidos</div></div>
+          <div><div style="font-size:22px;font-weight:800">${d.punch_list.total}</div><div style="font-size:11px;color:var(--muted)">Total</div></div>
+        </div>`
+    },
+    {
+      icon:'📬', title:'Submittals', nav:'submittals', color:'#7c3aed',
+      content: `
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;text-align:center">
+          <div><div style="font-size:22px;font-weight:800">${d.submittals.total}</div><div style="font-size:11px;color:var(--muted)">Total</div></div>
+          <div><div style="font-size:22px;font-weight:800;color:${d.submittals.pendientes>0?'var(--warning)':'var(--muted)'}">${d.submittals.pendientes}</div><div style="font-size:11px;color:var(--muted)">Pendientes</div></div>
+        </div>`
+    },
+    {
+      icon:'📑', title:'Contratos', nav:'contratosObra', color:'#0891b2',
+      content: `
+        <div style="margin-bottom:6px;display:flex;justify-content:space-between"><span style="font-size:12px">Contratos</span><strong style="font-size:12px">${d.contratos.total}</strong></div>
+        <div style="margin-bottom:6px;display:flex;justify-content:space-between"><span style="font-size:12px">Importe original</span><strong style="font-size:12px">${fmtM2(d.contratos.total_original)}</strong></div>
+        <div style="display:flex;justify-content:space-between"><span style="font-size:12px">Importe actual</span><strong style="font-size:12px;color:${d.contratos.total_actual>d.contratos.total_original?'var(--danger)':'var(--success)'}">${fmtM2(d.contratos.total_actual)}</strong></div>`
+    },
+    {
+      icon:'📐', title:'Planos', nav:'planosObra', color:'#64748b',
+      content: `
+        <div style="text-align:center;padding:12px 0">
+          <div style="font-size:36px;font-weight:900">${d.planos.total}</div>
+          <div style="font-size:12px;color:var(--muted);margin-top:4px">Planos registrados</div>
+        </div>`
+    },
+    {
+      icon:'📋', title:'Actas de Reunión', nav:'actasReunion', color:'#d97706',
+      content: `
+        <div style="text-align:center;padding:12px 0">
+          <div style="font-size:36px;font-weight:900">${d.actas.total}</div>
+          <div style="font-size:12px;color:var(--muted);margin-top:4px">Actas registradas</div>
+        </div>`
+    },
+    {
+      icon:'👥', title:'Directorio', nav:'contactosObra', color:'#4f46e5',
+      content: `
+        <div style="text-align:center;padding:12px 0">
+          <div style="font-size:36px;font-weight:900">${d.contactos.total}</div>
+          <div style="font-size:12px;color:var(--muted);margin-top:4px">Contactos del proyecto</div>
+        </div>`
+    },
+    {
+      icon:'⚠️', title:'Incidencias', nav:'incidencias', color:'#dc2626',
+      content: `
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;text-align:center">
+          <div><div style="font-size:22px;font-weight:800">${d.incidencias.total}</div><div style="font-size:11px;color:var(--muted)">Total</div></div>
+          <div><div style="font-size:22px;font-weight:800;color:${d.incidencias.abiertas>0?'var(--danger)':'var(--muted)'}">${d.incidencias.abiertas}</div><div style="font-size:11px;color:var(--muted)">Abiertas</div></div>
+        </div>`
+    },
+  ];
+
+  grid.innerHTML = modules.map(m => `
+    <div class="section-card nav-card" onclick="navTo('${m.nav}')" style="cursor:pointer;border-top:3px solid ${m.color}">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+        <div style="font-size:22px">${m.icon}</div>
+        <div style="font-weight:700;font-size:14px;flex:1">${m.title}</div>
+        <div style="font-size:11px;color:var(--primary)">Ver →</div>
+      </div>
+      ${m.content}
+    </div>
+  `).join('');
 }
 
 // ── SUBMITTAL LOG / APROBACIONES DE MATERIALES ───────────────────

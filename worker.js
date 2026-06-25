@@ -4470,6 +4470,11 @@ export default {
       if (path === '/alertas-stock'          && method === 'GET') return await getAlertasStock(request, env);
       if (path === '/obra-dashboard'         && method === 'GET') return await getObraDashboard(request, env);
       if (path === '/obras-overview'         && method === 'GET') return await getObrasOverview(request, env);
+      // ── Cuadro de Mando por Obra — detalle completo de un proyecto (NEW-50) ──
+      if (path.startsWith('/obra-detail/')) {
+        const _odid = parseInt(path.split('/obra-detail/')[1]);
+        if (method === 'GET') return await getObraDetail(_odid, request, env);
+      }
       // ── Fases de obra (NEW-30) ──────────────────────────────────────────
       if (path === '/fases-obra'           && method === 'GET')  return await getFasesObra(request, env);
       if (path === '/fases-obra'           && method === 'POST') return await crearFaseObra(request, env);
@@ -7104,6 +7109,65 @@ async function getObrasOverview(request, env) {
   }));
 
   return json({ obras: overview });
+}
+
+// ── Cuadro de Mando por Obra (NEW-50) — detalle completo de un proyecto ─────
+async function getObraDetail(obraId, request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth?.empresa_id) return err('No autorizado', 403);
+  const eid = auth.empresa_id;
+  const hoy = new Date().toISOString().slice(0,10);
+
+  // Metadata de la obra
+  const obra = await env.DB.prepare(
+    `SELECT * FROM obras WHERE id=? AND empresa_id=?`
+  ).bind(obraId, eid).first().catch(() => null);
+  if (!obra) return err('Obra no encontrada', 404);
+
+  // Fetch paralelo de todos los módulos
+  const [
+    presR, fasesR, tareasR, rfisR, hitosR, incR, diarioR,
+    segR, punchR, planosR, submR, contratosR, costesR, actasR, contactosR
+  ] = await Promise.all([
+    env.DB.prepare(`SELECT COALESCE(SUM(coste_previsto),0) as prev, COALESCE(SUM(coste_real),0) as real FROM presupuesto_obra WHERE obra_id=? AND empresa_id=?`).bind(obraId, eid).first().catch(()=>null),
+    env.DB.prepare(`SELECT COUNT(*) as total, COALESCE(AVG(porcentaje),0) as avg_pct, SUM(CASE WHEN estado='completada' THEN 1 ELSE 0 END) as completadas FROM fases_obra WHERE obra_id=? AND empresa_id=?`).bind(obraId, eid).first().catch(()=>null),
+    env.DB.prepare(`SELECT COUNT(*) as total, SUM(CASE WHEN prioridad='urgente' THEN 1 ELSE 0 END) as urgentes, SUM(CASE WHEN estado='completada' THEN 1 ELSE 0 END) as completadas FROM tareas_obra WHERE obra_id=? AND empresa_id=?`).bind(obraId, eid).first().catch(()=>null),
+    env.DB.prepare(`SELECT COUNT(*) as total, SUM(CASE WHEN estado IN ('abierta','en_revision') THEN 1 ELSE 0 END) as abiertas FROM rfis WHERE obra_id=? AND empresa_id=?`).bind(obraId, eid).first().catch(()=>null),
+    env.DB.prepare(`SELECT COUNT(*) as total, SUM(CASE WHEN estado='completado' THEN 1 ELSE 0 END) as completados, SUM(CASE WHEN retrasado=1 OR (fecha < ? AND estado!='completado') THEN 1 ELSE 0 END) as retrasados FROM hitos_obra WHERE obra_id=? AND empresa_id=?`).bind(hoy, obraId, eid).first().catch(()=>null),
+    env.DB.prepare(`SELECT COUNT(*) as total, SUM(CASE WHEN estado IN ('abierta','en_progreso') THEN 1 ELSE 0 END) as abiertas FROM incidencias WHERE obra_id=? AND empresa_id=?`).bind(obraId, eid).first().catch(()=>null),
+    env.DB.prepare(`SELECT COUNT(*) as total FROM diario_obra WHERE obra_id=? AND empresa_id=?`).bind(obraId, eid).first().catch(()=>null),
+    // New modules
+    env.DB.prepare(`SELECT COUNT(*) as total, SUM(CASE WHEN estado!='cerrada' THEN 1 ELSE 0 END) as abiertas, SUM(CASE WHEN tipo='peligro_inminente' AND estado!='cerrada' THEN 1 ELSE 0 END) as peligros FROM obs_seguridad WHERE obra_id=? AND empresa_id=?`).bind(obraId, eid).first().catch(()=>null),
+    env.DB.prepare(`SELECT COUNT(*) as total, SUM(CASE WHEN estado!='cerrado' THEN 1 ELSE 0 END) as abiertos, SUM(CASE WHEN fecha_limite < ? AND estado!='cerrado' THEN 1 ELSE 0 END) as vencidos FROM punch_list WHERE obra_id=? AND empresa_id=?`).bind(hoy, obraId, eid).first().catch(()=>null),
+    env.DB.prepare(`SELECT COUNT(*) as total FROM planos_obra WHERE obra_id=? AND empresa_id=?`).bind(obraId, eid).first().catch(()=>null),
+    env.DB.prepare(`SELECT COUNT(*) as total, SUM(CASE WHEN estado IN ('pendiente','en_revision') THEN 1 ELSE 0 END) as pendientes FROM submittals WHERE obra_id=? AND empresa_id=?`).bind(obraId, eid).first().catch(()=>null),
+    env.DB.prepare(`SELECT COUNT(*) as total, COALESCE(SUM(importe_original),0) as total_original, COALESCE(SUM(importe_actual),0) as total_actual FROM contratos_obra WHERE obra_id=? AND empresa_id=?`).bind(obraId, eid).first().catch(()=>null),
+    env.DB.prepare(`SELECT COUNT(*) as total, COALESCE(SUM(importe),0) as total_gastos FROM costes_obra WHERE obra_id=? AND empresa_id=?`).bind(obraId, eid).first().catch(()=>null),
+    env.DB.prepare(`SELECT COUNT(*) as total FROM actas_reunion WHERE obra_id=? AND empresa_id=?`).bind(obraId, eid).first().catch(()=>null),
+    env.DB.prepare(`SELECT COUNT(*) as total FROM contactos_obra WHERE obra_id=? AND empresa_id=? AND activo=1`).bind(obraId, eid).first().catch(()=>null),
+  ]);
+
+  const prev = presR?.prev || 0;
+  const real = presR?.real || 0;
+
+  return json({
+    obra,
+    presupuesto:  { prev, real, pct: prev > 0 ? Math.round(real/prev*100) : null },
+    fases:        { total: fasesR?.total||0, completadas: fasesR?.completadas||0, avg_pct: Math.round(fasesR?.avg_pct||0) },
+    tareas:       { total: tareasR?.total||0, completadas: tareasR?.completadas||0, urgentes: tareasR?.urgentes||0, pendientes: (tareasR?.total||0)-(tareasR?.completadas||0) },
+    rfis:         { total: rfisR?.total||0, abiertas: rfisR?.abiertas||0 },
+    hitos:        { total: hitosR?.total||0, completados: hitosR?.completados||0, retrasados: hitosR?.retrasados||0 },
+    incidencias:  { total: incR?.total||0, abiertas: incR?.abiertas||0 },
+    diario:       { total: diarioR?.total||0 },
+    seguridad:    { total: segR?.total||0, abiertas: segR?.abiertas||0, peligros: segR?.peligros||0 },
+    punch_list:   { total: punchR?.total||0, abiertos: punchR?.abiertos||0, vencidos: punchR?.vencidos||0 },
+    planos:       { total: planosR?.total||0 },
+    submittals:   { total: submR?.total||0, pendientes: submR?.pendientes||0 },
+    contratos:    { total: contratosR?.total||0, total_original: contratosR?.total_original||0, total_actual: contratosR?.total_actual||0 },
+    costes:       { total: costesR?.total||0, total_gastos: costesR?.total_gastos||0 },
+    actas:        { total: actasR?.total||0 },
+    contactos:    { total: contactosR?.total||0 },
+  });
 }
 
 async function getKits(request, env) {
