@@ -12183,20 +12183,20 @@ function renderFotosGrid() {
     galleryEl.innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px">
       ${fotos.map(f => `
         <div class="card" style="padding:0;overflow:hidden;cursor:pointer;transition:.15s;position:relative"
-             onclick="abrirLightbox(${f.id},'${(f.titulo||f.nombre_original||'').replace(/'/g,"\\'")}','${(f.descripcion||'').replace(/'/g,"\\'")}','${f.fecha||''}','${f.ubicacion||''}')">
+             onclick="abrirLightbox(${f.id},'${(f.titulo||f.nombre||f.comentario||'').replace(/'/g,"\\'")}','${(f.comentario||'').replace(/'/g,"\\'")}','${f.fecha_foto||f.created_at?.slice(0,10)||''}','${f.ubicacion||''}')">
           <div style="height:160px;background:var(--border);position:relative;overflow:hidden">
             <img src="/fotos-obra/${f.id}" loading="lazy" style="width:100%;height:100%;object-fit:cover"
                  onerror="this.parentElement.innerHTML='<div style=\\'display:flex;align-items:center;justify-content:center;height:100%;color:var(--muted);font-size:32px\\'>📷</div>'">
             <div style="position:absolute;bottom:0;left:0;right:0;background:linear-gradient(transparent,rgba(0,0,0,.6));padding:8px;color:#fff;font-size:11px">
-              ${f.fecha||''}
+              ${f.fecha_foto||f.created_at?.slice(0,10)||''}
             </div>
           </div>
           <div style="padding:10px">
-            <div style="font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${f.titulo||f.nombre_original||'—'}</div>
+            <div style="font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${f.titulo||f.nombre||f.comentario||'—'}</div>
             ${f.ubicacion?`<div style="font-size:11px;color:var(--muted)">📍 ${f.ubicacion}</div>`:''}
             ${f.tags?`<div style="font-size:11px;color:var(--primary);margin-top:3px">🏷 ${f.tags}</div>`:''}
             <div style="margin-top:6px;display:flex;justify-content:space-between;align-items:center">
-              <span style="font-size:11px;color:var(--muted)">${f.autor||'—'}</span>
+              <span style="font-size:11px;color:var(--muted)">${f.subido_por||'—'}</span>
               <button class="btn btn-danger" style="padding:3px 8px;font-size:11px" onclick="event.stopPropagation();eliminarFotoObra(${f.id})">🗑</button>
             </div>
           </div>
@@ -12210,13 +12210,13 @@ function renderFotosGrid() {
         <th style="text-align:left;padding:8px">Etiquetas</th><th style="text-align:left;padding:8px">Autor</th>
         <th></th>
       </tr></thead>
-      <tbody>${fotos.map(f=>`<tr style="border-bottom:1px solid var(--border);cursor:pointer" onclick="abrirLightbox(${f.id},'${(f.titulo||'').replace(/'/g,"\\'")}','${(f.descripcion||'').replace(/'/g,"\\'")}','${f.fecha||''}','${f.ubicacion||''}')">
+      <tbody>${fotos.map(f=>`<tr style="border-bottom:1px solid var(--border);cursor:pointer" onclick="abrirLightbox(${f.id},'${(f.titulo||f.nombre||f.comentario||'').replace(/'/g,"\\'")}','${(f.comentario||'').replace(/'/g,"\\'")}','${f.fecha_foto||f.created_at?.slice(0,10)||''}','${f.ubicacion||''}')">
         <td style="padding:6px 8px"><img src="/fotos-obra/${f.id}" style="width:48px;height:36px;object-fit:cover;border-radius:4px" loading="lazy" onerror="this.src=''"></td>
-        <td style="padding:6px 8px">${f.titulo||f.nombre_original||'—'}</td>
-        <td style="padding:6px 8px">${f.fecha||'—'}</td>
+        <td style="padding:6px 8px">${f.titulo||f.nombre||f.comentario||'—'}</td>
+        <td style="padding:6px 8px">${f.fecha_foto||f.created_at?.slice(0,10)||'—'}</td>
         <td style="padding:6px 8px">${f.ubicacion||'—'}</td>
         <td style="padding:6px 8px;color:var(--primary)">${f.tags||'—'}</td>
-        <td style="padding:6px 8px">${f.autor||'—'}</td>
+        <td style="padding:6px 8px">${f.subido_por||'—'}</td>
         <td style="padding:6px 8px"><button class="btn btn-danger" style="padding:3px 8px;font-size:11px" onclick="event.stopPropagation();eliminarFotoObra(${f.id})">🗑</button></td>
       </tr>`).join('')}</tbody>
     </table>`;
