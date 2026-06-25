@@ -2182,7 +2182,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
           <button class="btn btn-secondary btn-sm" onclick="cargarGraficas()">🔄 Actualizar</button>
           <button class="btn btn-primary btn-sm" onclick="exportarPDFGraficas()">📄 PDF Resumen</button>
         </div>
-        <div class="page-sub">Analítica visual — equipos, fichajes, incidencias, pedidos</div>
+        <div class="page-sub">Analítica visual — equipos, fichajes, incidencias, pedidos, construcción</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:16px">
           <div class="section-card">
             <div class="section-card-title"><span>📅</span> Fichajes últimos 7 días</div>
@@ -2199,6 +2199,30 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
           <div class="section-card">
             <div class="section-card-title"><span>🔌</span> Equipos por estado (bobinas / PEMP / carretillas)</div>
             <canvas id="chartEquipos" style="max-height:220px"></canvas>
+          </div>
+        </div>
+        <!-- Construcción analytics row -->
+        <div style="font-family:'Montserrat',sans-serif;font-weight:700;font-size:10px;letter-spacing:2px;color:var(--muted);text-transform:uppercase;margin:24px 0 12px">🏗 Analítica de Construcción</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+          <div class="section-card">
+            <div class="section-card-title"><span>📝</span> Punch List — estado</div>
+            <canvas id="chartPunch" style="max-height:200px"></canvas>
+            <div id="chartPunchEmpty" style="display:none;color:var(--muted);font-size:12px;padding:20px 0;text-align:center">Sin datos</div>
+          </div>
+          <div class="section-card">
+            <div class="section-card-title"><span>🦺</span> Observaciones de Seguridad por tipo</div>
+            <canvas id="chartSegObs" style="max-height:200px"></canvas>
+            <div id="chartSegObsEmpty" style="display:none;color:var(--muted);font-size:12px;padding:20px 0;text-align:center">Sin datos</div>
+          </div>
+          <div class="section-card">
+            <div class="section-card-title"><span>📋</span> RFIs por estado</div>
+            <canvas id="chartRfisGraf" style="max-height:200px"></canvas>
+            <div id="chartRfisGrafEmpty" style="display:none;color:var(--muted);font-size:12px;padding:20px 0;text-align:center">Sin datos</div>
+          </div>
+          <div class="section-card">
+            <div class="section-card-title"><span>🏁</span> Hitos — cumplimiento</div>
+            <canvas id="chartHitosGraf" style="max-height:200px"></canvas>
+            <div id="chartHitosGrafEmpty" style="display:none;color:var(--muted);font-size:12px;padding:20px 0;text-align:center">Sin datos</div>
           </div>
         </div>
         <div id="graficasEmpty" style="display:none" class="empty-state"><div class="empty-icon">📊</div><div class="empty-text">Sin datos suficientes para mostrar gráficas</div></div>
@@ -6053,13 +6077,15 @@ document.addEventListener('click', e => {
 });
 
 async function cargarNotificaciones() {
-  const [alertasR, pedidosR, carnetR, rfisR, subcR, hitosR] = await Promise.all([
+  const [alertasR, pedidosR, carnetR, rfisR, subcR, hitosR, punchNR, segObsNR] = await Promise.all([
     api('/alertas-stock'),
     api('/pedidos?limit=50'),
     api('/carnets?limit=200'),
     api('/rfis?limit=50').catch(() => ({})),
     api('/subcontratas').catch(() => ({})),
     api('/hitos-obra').catch(() => ({})),
+    api('/punch-list?estado=abierto').catch(() => ({})),
+    api('/obs-seguridad?estado=abierta').catch(() => ({})),
   ]);
   notificaciones = [];
 
@@ -6123,6 +6149,31 @@ async function cargarNotificaciones() {
   if (hitosProx.length) notificaciones.push({
     tipo: 'warn', icono: '🏁', titulo: `${hitosProx.length} hito${hitosProx.length > 1 ? 's' : ''} en los próximos 7 días`,
     texto: hitosProx.slice(0, 2).map(h => `${h.nombre} (${h.dias_restantes === 0 ? 'HOY' : 'en '+h.dias_restantes+'d'})`).join(', '), nav: 'hitos'
+  });
+
+  // Punch List vencidos
+  const hoyN = new Date().toISOString().slice(0,10);
+  const punchVenc = (punchNR?.items || []).filter(p => p.vencido || (p.fecha_limite && p.fecha_limite < hoyN));
+  if (punchVenc.length) notificaciones.push({
+    tipo: 'danger', icono: '📝', titulo: `${punchVenc.length} item${punchVenc.length > 1 ? 's' : ''} Punch List vencido${punchVenc.length > 1 ? 's' : ''}`,
+    texto: punchVenc.slice(0, 2).map(p => p.numero || p.descripcion?.slice(0,30)).join(', '), nav: 'punchList'
+  });
+  const punchAbiertos = (punchNR?.items || []).filter(p => !p.vencido).length;
+  if (punchAbiertos > 0 && punchVenc.length === 0) notificaciones.push({
+    tipo: 'warn', icono: '📝', titulo: `${punchAbiertos} item${punchAbiertos > 1 ? 's' : ''} Punch List abierto${punchAbiertos > 1 ? 's' : ''}`,
+    texto: 'Pendientes de resolución', nav: 'punchList'
+  });
+
+  // Observaciones de seguridad — peligros inminentes
+  const peligros = (segObsNR?.observaciones || []).filter(o => o.tipo === 'peligro_inminente');
+  const segVenc  = (segObsNR?.observaciones || []).filter(o => o.vencida);
+  if (peligros.length) notificaciones.push({
+    tipo: 'danger', icono: '🔴', titulo: `${peligros.length} PELIGRO INMINENTE${peligros.length > 1 ? 'S' : ''} sin cerrar`,
+    texto: peligros.slice(0, 2).map(o => o.descripcion?.slice(0,40)).join(', '), nav: 'seguridadObra'
+  });
+  if (segVenc.length) notificaciones.push({
+    tipo: 'warn', icono: '🦺', titulo: `${segVenc.length} observación${segVenc.length > 1 ? 'es' : ''} de seguridad vencida${segVenc.length > 1 ? 's' : ''}`,
+    texto: segVenc.slice(0, 2).map(o => o.descripcion?.slice(0,30)).join(', '), nav: 'seguridadObra'
   });
 
   // Actualizar badge
@@ -7251,6 +7302,95 @@ async function cargarGraficas() {
       options: { ..._chartDefaults() }
     });
   }
+
+  // ── Construcción analytics (parallel fetch) ──────────────────────────────
+  const [punchR, segR, rfisR, hitosR] = await Promise.all([
+    api('/punch-list?'),
+    api('/obs-seguridad?'),
+    api('/rfis?'),
+    api('/hitos-obra?'),
+  ]);
+
+  // Punch List donut
+  const punchItems = punchR?.items || [];
+  const punchEstados = {};
+  punchItems.forEach(p => { punchEstados[p.estado] = (punchEstados[p.estado]||0) + 1; });
+  _destroyChart('punch');
+  if (Object.keys(punchEstados).length) {
+    document.getElementById('chartPunchEmpty').style.display = 'none';
+    const pColors = { abierto: CHART_COLORS.red, en_resolucion: CHART_COLORS.yellow, pendiente_aprobacion: CHART_COLORS.blue, cerrado: CHART_COLORS.green };
+    _charts.punch = new Chart(document.getElementById('chartPunch'), {
+      type: 'doughnut',
+      data: {
+        labels: Object.keys(punchEstados).map(s => s.replace(/_/g,' ')),
+        datasets: [{ data: Object.values(punchEstados),
+          backgroundColor: Object.keys(punchEstados).map(s => pColors[s]||CHART_COLORS.gray),
+          borderWidth: 2, borderColor: '#162032' }]
+      },
+      options: { plugins: { legend: { labels: { color: '#e5e7eb', font: { family: 'Poppins', size: 11 } } } } }
+    });
+  } else { document.getElementById('chartPunchEmpty').style.display = ''; }
+
+  // Observaciones seguridad donut
+  const obsItems = segR?.observaciones || [];
+  const obsTipos = {};
+  obsItems.forEach(o => { obsTipos[o.tipo] = (obsTipos[o.tipo]||0) + 1; });
+  _destroyChart('segobs');
+  if (Object.keys(obsTipos).length) {
+    document.getElementById('chartSegObsEmpty').style.display = 'none';
+    const tColors = { positiva: CHART_COLORS.green, negativa: CHART_COLORS.yellow, peligro_inminente: CHART_COLORS.red };
+    _charts.segobs = new Chart(document.getElementById('chartSegObs'), {
+      type: 'doughnut',
+      data: {
+        labels: Object.keys(obsTipos).map(s => s.replace(/_/g,' ')),
+        datasets: [{ data: Object.values(obsTipos),
+          backgroundColor: Object.keys(obsTipos).map(s => tColors[s]||CHART_COLORS.gray),
+          borderWidth: 2, borderColor: '#162032' }]
+      },
+      options: { plugins: { legend: { labels: { color: '#e5e7eb', font: { family: 'Poppins', size: 11 } } } } }
+    });
+  } else { document.getElementById('chartSegObsEmpty').style.display = ''; }
+
+  // RFIs bar
+  const rfisItems = rfisR?.rfis || [];
+  const rfisEstados = {};
+  rfisItems.forEach(r => { rfisEstados[r.estado] = (rfisEstados[r.estado]||0) + 1; });
+  _destroyChart('rfisGraf');
+  if (Object.keys(rfisEstados).length) {
+    document.getElementById('chartRfisGrafEmpty').style.display = 'none';
+    const rColors = { abierto: CHART_COLORS.yellow, respondido: CHART_COLORS.blue, cerrado: CHART_COLORS.green };
+    _charts.rfisGraf = new Chart(document.getElementById('chartRfisGraf'), {
+      type: 'bar',
+      data: {
+        labels: Object.keys(rfisEstados),
+        datasets: [{ label: 'RFIs', data: Object.values(rfisEstados),
+          backgroundColor: Object.keys(rfisEstados).map(s => rColors[s]||CHART_COLORS.gray),
+          borderRadius: 6 }]
+      },
+      options: { ..._chartDefaults(), plugins: { legend: { display: false } } }
+    });
+  } else { document.getElementById('chartRfisGrafEmpty').style.display = ''; }
+
+  // Hitos cumplimiento bar
+  const hitosItems = hitosR?.hitos || [];
+  const hoy2 = new Date().toISOString().slice(0,10);
+  const hCompletos = hitosItems.filter(h => h.estado === 'completado').length;
+  const hPendientes = hitosItems.filter(h => h.estado === 'pendiente' && (!h.fecha || h.fecha >= hoy2)).length;
+  const hRetrasados = hitosItems.filter(h => h.estado !== 'completado' && h.fecha && h.fecha < hoy2).length;
+  _destroyChart('hitosGraf');
+  if (hitosItems.length) {
+    document.getElementById('chartHitosGrafEmpty').style.display = 'none';
+    _charts.hitosGraf = new Chart(document.getElementById('chartHitosGraf'), {
+      type: 'bar',
+      data: {
+        labels: ['Completados', 'Pendientes', 'Retrasados'],
+        datasets: [{ label: 'Hitos', data: [hCompletos, hPendientes, hRetrasados],
+          backgroundColor: [CHART_COLORS.green, CHART_COLORS.blue, CHART_COLORS.red],
+          borderRadius: 6 }]
+      },
+      options: { ..._chartDefaults(), plugins: { legend: { display: false } } }
+    });
+  } else { document.getElementById('chartHitosGrafEmpty').style.display = ''; }
 }
 
 // ── PDF Resumen Gráficas ──────────────────────────────────────
