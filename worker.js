@@ -4600,6 +4600,22 @@ export default {
         if (method === 'PUT')    return await actualizarCorrespondencia(_cid, request, env);
         if (method === 'DELETE') return await eliminarCorrespondencia(_cid, request, env);
       }
+      // ── Observaciones de Seguridad de Obra (NEW-41) ─────────────────────────
+      if (path === '/obs-seguridad' && method === 'GET')  return await getObsSeguridad(request, env);
+      if (path === '/obs-seguridad' && method === 'POST') return await crearObsSeguridad(request, env);
+      if (path.startsWith('/obs-seguridad/')) {
+        const _osid = parseInt(path.split('/obs-seguridad/')[1]);
+        if (method === 'PUT')    return await actualizarObsSeguridad(_osid, request, env);
+        if (method === 'DELETE') return await eliminarObsSeguridad(_osid, request, env);
+      }
+      // ── Toolbox Talks / Charlas de Seguridad (NEW-42) ───────────────────────
+      if (path === '/toolbox-talks' && method === 'GET')  return await getToolboxTalks(request, env);
+      if (path === '/toolbox-talks' && method === 'POST') return await crearToolboxTalk(request, env);
+      if (path.startsWith('/toolbox-talks/')) {
+        const _ttid = parseInt(path.split('/toolbox-talks/')[1]);
+        if (method === 'PUT')    return await actualizarToolboxTalk(_ttid, request, env);
+        if (method === 'DELETE') return await eliminarToolboxTalk(_ttid, request, env);
+      }
 
       // â"€â"€ Galería de fotos por obra (NEW-17) â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
       if (path === '/fotos-obra' && method === 'GET')  return await listarFotosObra(request, env);
@@ -13480,5 +13496,184 @@ async function eliminarCorrespondencia(id, request, env) {
   const auth = await getAuth(request, env);
   if (!auth?.empresa_id) return err('No autorizado', 403);
   await env.DB.prepare(`DELETE FROM correspondencia WHERE id=? AND empresa_id=?`).bind(id, auth.empresa_id).run();
+  return json({ ok: true });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  NEW-41 — OBSERVACIONES DE SEGURIDAD DE OBRA
+// ═══════════════════════════════════════════════════════════════════════════
+async function ensureObsSeguridadTable(env) {
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS obs_seguridad (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    empresa_id INTEGER NOT NULL,
+    obra_id INTEGER,
+    tipo TEXT NOT NULL DEFAULT 'negativa',
+    categoria TEXT DEFAULT 'otro',
+    descripcion TEXT NOT NULL,
+    ubicacion TEXT,
+    responsable TEXT,
+    estado TEXT DEFAULT 'abierta',
+    prioridad TEXT DEFAULT 'media',
+    fecha_limite TEXT,
+    fecha_cierre TEXT,
+    accion_correctiva TEXT,
+    foto_key TEXT,
+    subido_por TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`).run();
+}
+async function getObsSeguridad(request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth?.empresa_id) return err('No autorizado', 403);
+  await ensureObsSeguridadTable(env);
+  const u = new URL(request.url);
+  const obraId = u.searchParams.get('obra_id');
+  const tipo    = u.searchParams.get('tipo');
+  const estado  = u.searchParams.get('estado');
+  let sql = `SELECT o.*, ob.nombre as obra_nombre FROM obs_seguridad o
+    LEFT JOIN obras ob ON ob.id=o.obra_id
+    WHERE o.empresa_id=?`;
+  const params = [auth.empresa_id];
+  if (obraId) { sql += ' AND o.obra_id=?'; params.push(obraId); }
+  if (tipo)   { sql += ' AND o.tipo=?';    params.push(tipo); }
+  if (estado) { sql += ' AND o.estado=?';  params.push(estado); }
+  sql += ' ORDER BY o.created_at DESC';
+  const hoy = new Date().toISOString().slice(0,10);
+  const { results } = await env.DB.prepare(sql).bind(...params).all();
+  return json({ observaciones: (results||[]).map(o => ({
+    ...o,
+    vencida: o.fecha_limite && o.estado !== 'cerrada' && o.fecha_limite < hoy
+  }))});
+}
+async function crearObsSeguridad(request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth?.empresa_id) return err('No autorizado', 403);
+  await ensureObsSeguridadTable(env);
+  const b = await request.json();
+  if (!b.descripcion) return err('descripcion requerido', 400);
+  const { meta } = await env.DB.prepare(
+    `INSERT INTO obs_seguridad (empresa_id,obra_id,tipo,categoria,descripcion,ubicacion,responsable,estado,prioridad,fecha_limite,accion_correctiva,foto_key,subido_por)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`
+  ).bind(
+    auth.empresa_id, b.obra_id||null, b.tipo||'negativa', b.categoria||'otro',
+    b.descripcion, b.ubicacion||null, b.responsable||null,
+    b.estado||'abierta', b.prioridad||'media', b.fecha_limite||null,
+    b.accion_correctiva||null, b.foto_key||null, auth.nombre||auth.email||null
+  ).run();
+  // Telegram para peligro inminente
+  if (b.tipo === 'peligro_inminente') {
+    const msg = `⚠️ *PELIGRO INMINENTE*\n\n*Obra:* ${b.obra_nombre||b.obra_id||'—'}\n*Descripcion:* ${b.descripcion}\n*Ubicacion:* ${b.ubicacion||'—'}\n*Responsable:* ${b.responsable||'—'}`;
+    await sendTelegram(env, msg);
+  }
+  return json({ ok: true, id: meta.last_row_id });
+}
+async function actualizarObsSeguridad(id, request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth?.empresa_id) return err('No autorizado', 403);
+  await ensureObsSeguridadTable(env);
+  const b = await request.json();
+  const fechaCierre = b.estado === 'cerrada' ? (b.fecha_cierre || new Date().toISOString().slice(0,10)) : null;
+  await env.DB.prepare(
+    `UPDATE obs_seguridad SET tipo=COALESCE(?,tipo), categoria=COALESCE(?,categoria),
+     descripcion=COALESCE(?,descripcion), ubicacion=COALESCE(?,ubicacion),
+     responsable=COALESCE(?,responsable), estado=COALESCE(?,estado),
+     prioridad=COALESCE(?,prioridad), fecha_limite=COALESCE(?,fecha_limite),
+     fecha_cierre=?, accion_correctiva=COALESCE(?,accion_correctiva),
+     foto_key=COALESCE(?,foto_key)
+     WHERE id=? AND empresa_id=?`
+  ).bind(
+    b.tipo||null, b.categoria||null, b.descripcion||null, b.ubicacion||null,
+    b.responsable||null, b.estado||null, b.prioridad||null, b.fecha_limite||null,
+    fechaCierre, b.accion_correctiva||null, b.foto_key||null, id, auth.empresa_id
+  ).run();
+  return json({ ok: true });
+}
+async function eliminarObsSeguridad(id, request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth?.empresa_id) return err('No autorizado', 403);
+  await env.DB.prepare(`DELETE FROM obs_seguridad WHERE id=? AND empresa_id=?`).bind(id, auth.empresa_id).run();
+  return json({ ok: true });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  NEW-42 — TOOLBOX TALKS / CHARLAS DE SEGURIDAD
+// ═══════════════════════════════════════════════════════════════════════════
+async function ensureToolboxTalksTable(env) {
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS toolbox_talks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    empresa_id INTEGER NOT NULL,
+    obra_id INTEGER,
+    tema TEXT NOT NULL,
+    descripcion TEXT,
+    fecha TEXT NOT NULL,
+    hora TEXT,
+    duracion_min INTEGER DEFAULT 15,
+    facilitador TEXT,
+    asistentes TEXT,
+    firma_facilitador TEXT,
+    observaciones TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`).run();
+}
+async function getToolboxTalks(request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth?.empresa_id) return err('No autorizado', 403);
+  await ensureToolboxTalksTable(env);
+  const u = new URL(request.url);
+  const obraId = u.searchParams.get('obra_id');
+  let sql = `SELECT t.*, ob.nombre as obra_nombre FROM toolbox_talks t
+    LEFT JOIN obras ob ON ob.id=t.obra_id
+    WHERE t.empresa_id=?`;
+  const params = [auth.empresa_id];
+  if (obraId) { sql += ' AND t.obra_id=?'; params.push(obraId); }
+  sql += ' ORDER BY t.fecha DESC, t.created_at DESC';
+  const { results } = await env.DB.prepare(sql).bind(...params).all();
+  return json({ talks: (results||[]).map(t => ({
+    ...t,
+    asistentes: (() => { try { return JSON.parse(t.asistentes||'[]'); } catch { return []; } })()
+  }))});
+}
+async function crearToolboxTalk(request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth?.empresa_id) return err('No autorizado', 403);
+  await ensureToolboxTalksTable(env);
+  const b = await request.json();
+  if (!b.tema || !b.fecha) return err('tema y fecha requeridos', 400);
+  const asistentesJson = Array.isArray(b.asistentes) ? JSON.stringify(b.asistentes) : (b.asistentes||'[]');
+  const { meta } = await env.DB.prepare(
+    `INSERT INTO toolbox_talks (empresa_id,obra_id,tema,descripcion,fecha,hora,duracion_min,facilitador,asistentes,firma_facilitador,observaciones)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?)`
+  ).bind(
+    auth.empresa_id, b.obra_id||null, b.tema, b.descripcion||null, b.fecha,
+    b.hora||null, b.duracion_min||15, b.facilitador||auth.nombre||null,
+    asistentesJson, b.firma_facilitador||null, b.observaciones||null
+  ).run();
+  return json({ ok: true, id: meta.last_row_id });
+}
+async function actualizarToolboxTalk(id, request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth?.empresa_id) return err('No autorizado', 403);
+  await ensureToolboxTalksTable(env);
+  const b = await request.json();
+  const asistentesJson = b.asistentes != null
+    ? (Array.isArray(b.asistentes) ? JSON.stringify(b.asistentes) : b.asistentes)
+    : null;
+  await env.DB.prepare(
+    `UPDATE toolbox_talks SET tema=COALESCE(?,tema), descripcion=COALESCE(?,descripcion),
+     fecha=COALESCE(?,fecha), hora=COALESCE(?,hora), duracion_min=COALESCE(?,duracion_min),
+     facilitador=COALESCE(?,facilitador), asistentes=COALESCE(?,asistentes),
+     firma_facilitador=COALESCE(?,firma_facilitador), observaciones=COALESCE(?,observaciones)
+     WHERE id=? AND empresa_id=?`
+  ).bind(
+    b.tema||null, b.descripcion||null, b.fecha||null, b.hora||null, b.duracion_min||null,
+    b.facilitador||null, asistentesJson, b.firma_facilitador||null, b.observaciones||null,
+    id, auth.empresa_id
+  ).run();
+  return json({ ok: true });
+}
+async function eliminarToolboxTalk(id, request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth?.empresa_id) return err('No autorizado', 403);
+  await env.DB.prepare(`DELETE FROM toolbox_talks WHERE id=? AND empresa_id=?`).bind(id, auth.empresa_id).run();
   return json({ ok: true });
 }

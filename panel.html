@@ -502,6 +502,10 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
       <span class="nav-icon">🏢</span> Subcontratas
       <span class="nav-badge" id="subcBadge" style="display:none">!</span>
     </button>
+    <button class="nav-item" data-page="seguridadObra" onclick="navTo('seguridadObra')">
+      <span class="nav-icon">🦺</span> Seguridad de Obra
+      <span class="nav-badge" id="seguridadObraBadge" style="display:none">!</span>
+    </button>
 
     <div class="sidebar-section" onclick="sidebarToggle(this)" data-sid="planificacion"><span>📊 Planificación</span><span class="sec-chevron">▼</span></div>
     <button class="nav-item" data-page="presupuesto" onclick="navTo('presupuesto')">
@@ -1318,6 +1322,57 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
           <button class="btn btn-secondary" onclick="cargarCorrespondencia()">🔄 Actualizar</button>
         </div>
         <div class="tbl-wrap"><div id="tblCorr"></div></div>
+      </div>
+
+      <!-- SEGURIDAD DE OBRA -->
+      <div class="page" id="pageSeguridadObra">
+        <div class="page-title">🦺 Seguridad de Obra</div>
+        <div class="page-sub">Observaciones de seguridad, peligros, acciones correctivas y Toolbox Talks</div>
+        <!-- KPI resumen -->
+        <div id="segObraResumen" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;margin-bottom:18px"></div>
+        <!-- Tabs -->
+        <div style="display:flex;gap:8px;margin-bottom:16px;border-bottom:2px solid var(--border);padding-bottom:0">
+          <button id="tabSegObs" class="btn btn-primary" onclick="segObraTab('obs')" style="border-radius:6px 6px 0 0;margin-bottom:-2px">⚠️ Observaciones</button>
+          <button id="tabSegTalks" class="btn btn-secondary" onclick="segObraTab('talks')" style="border-radius:6px 6px 0 0;margin-bottom:-2px">💬 Toolbox Talks</button>
+        </div>
+
+        <!-- Observaciones panel -->
+        <div id="panelSegObs">
+          <div class="tbl-toolbar">
+            <input class="tbl-search" id="searchSegObs" placeholder="🔍 Buscar descripción, ubicación...">
+            <select class="tbl-search" id="filterSegObraId" style="min-width:200px" onchange="cargarSeguridadObra()">
+              <option value="">🏗 Todas las obras</option>
+            </select>
+            <select class="tbl-search" id="filterSegObsTipo" style="min-width:140px" onchange="cargarSeguridadObra()">
+              <option value="">Todos los tipos</option>
+              <option value="positiva">✅ Positiva</option>
+              <option value="negativa">⚠️ Negativa</option>
+              <option value="peligro_inminente">🔴 Peligro inminente</option>
+            </select>
+            <select class="tbl-search" id="filterSegObsEstado" style="min-width:130px" onchange="cargarSeguridadObra()">
+              <option value="">Todos</option>
+              <option value="abierta">Abierta</option>
+              <option value="en_progreso">En progreso</option>
+              <option value="cerrada">Cerrada</option>
+            </select>
+            <button class="btn btn-primary" onclick="abrirModalSegObs()">+ Nueva observación</button>
+            <button class="btn btn-secondary" onclick="exportarTabla(tblSegObs,'seg-observaciones')">⬇ CSV</button>
+          </div>
+          <div class="tbl-wrap"><div id="tblSegObs"></div></div>
+        </div>
+
+        <!-- Toolbox Talks panel -->
+        <div id="panelSegTalks" style="display:none">
+          <div class="tbl-toolbar">
+            <input class="tbl-search" id="searchSegTalks" placeholder="🔍 Buscar tema, facilitador...">
+            <select class="tbl-search" id="filterSegTalksObraId" style="min-width:200px" onchange="cargarToolboxTalks()">
+              <option value="">🏗 Todas las obras</option>
+            </select>
+            <button class="btn btn-primary" onclick="abrirModalToolboxTalk()">+ Nueva charla</button>
+            <button class="btn btn-secondary" onclick="exportarTabla(tblToolboxTalks,'toolbox-talks')">⬇ CSV</button>
+          </div>
+          <div class="tbl-wrap"><div id="tblToolboxTalks"></div></div>
+        </div>
       </div>
 
       <!-- DIARIO DE OBRA -->
@@ -2771,6 +2826,7 @@ const PAGE_TITLES = {
   hitos: '🏁 Hitos de Obra',
   diarioObra: '📓 Diario de Obra',
   correspondencia: '✉️ Correspondencia',
+  seguridadObra: '🦺 Seguridad de Obra',
 };
 
 const PAGE_LOADERS = {
@@ -2813,6 +2869,7 @@ const PAGE_LOADERS = {
   hitos: cargarHitos,
   diarioObra: cargarDiarioObra,
   correspondencia: cargarCorrespondencia,
+  seguridadObra: cargarSeguridadObra,
 };
 
 let currentPage = '';
@@ -2884,6 +2941,7 @@ const SYNC_INTERVALS = {
   hitos: 120,
   diarioObra: 120,
   correspondencia: 120,
+  seguridadObra: 60,
 };
 
 let _syncTimer = null, _syncLabelTimer = null, _syncLastTs = null;
@@ -10472,6 +10530,245 @@ async function eliminarCorr(id) {
   if (!confirm('¿Eliminar esta correspondencia?')) return;
   const r = await api(`/correspondencia/${id}`, { method: 'DELETE' });
   if (r.ok || r.deleted) { toast('Eliminado', 'ok'); cerrarModal(); tblCorr = null; cargarCorrespondencia(); }
+  else toast('Error al eliminar', 'err');
+}
+
+// ── SEGURIDAD DE OBRA ────────────────────────────────────────────
+let tblSegObs = null, tblToolboxTalks = null;
+let _segObraTab = 'obs';
+
+function segObraTab(tab) {
+  _segObraTab = tab;
+  document.getElementById('panelSegObs').style.display    = tab === 'obs'   ? '' : 'none';
+  document.getElementById('panelSegTalks').style.display  = tab === 'talks' ? '' : 'none';
+  document.getElementById('tabSegObs').className   = 'btn ' + (tab === 'obs'   ? 'btn-primary' : 'btn-secondary');
+  document.getElementById('tabSegTalks').className = 'btn ' + (tab === 'talks' ? 'btn-primary' : 'btn-secondary');
+  if (tab === 'talks') cargarToolboxTalks();
+}
+
+async function cargarSeguridadObra() {
+  if (document.getElementById('filterSegObraId')?.options.length <= 1)    poblarSelectObras('filterSegObraId');
+  if (document.getElementById('filterSegTalksObraId')?.options.length <= 1) poblarSelectObras('filterSegTalksObraId');
+  const obraId  = document.getElementById('filterSegObraId')?.value || '';
+  const tipo    = document.getElementById('filterSegObsTipo')?.value || '';
+  const estado  = document.getElementById('filterSegObsEstado')?.value || '';
+  let url = `/obs-seguridad?`;
+  if (obraId)  url += `obra_id=${obraId}&`;
+  if (tipo)    url += `tipo=${tipo}&`;
+  if (estado)  url += `estado=${estado}&`;
+  const r = await api(url);
+  const obs = r?.observaciones || [];
+
+  // KPIs
+  const abiertas = obs.filter(o => o.estado !== 'cerrada').length;
+  const peligros = obs.filter(o => o.tipo === 'peligro_inminente' && o.estado !== 'cerrada').length;
+  const vencidas = obs.filter(o => o.vencida).length;
+  const cerradas = obs.filter(o => o.estado === 'cerrada').length;
+  const badge = document.getElementById('seguridadObraBadge');
+  if (badge) { badge.style.display = (peligros > 0 || vencidas > 0) ? '' : 'none'; badge.textContent = peligros + vencidas; }
+  document.getElementById('segObraResumen').innerHTML = [
+    { l:'Abiertas',  v: abiertas, c:'var(--warning)' },
+    { l:'🔴 Peligro',v: peligros, c:'var(--danger)' },
+    { l:'Vencidas',  v: vencidas, c:'var(--danger)' },
+    { l:'Cerradas',  v: cerradas, c:'var(--success)' },
+  ].map(k => `<div class="kpi-card" style="border-left:3px solid ${k.c}">
+    <div class="kpi-val" style="color:${k.c}">${k.v}</div>
+    <div class="kpi-label">${k.l}</div></div>`).join('');
+
+  const TIPO_BADGE = { positiva:'✅', negativa:'⚠️', peligro_inminente:'🔴' };
+  const PRIORIDAD_COLOR = { alta:'var(--danger)', media:'var(--warning)', baja:'var(--success)' };
+  if (!tblSegObs) {
+    tblSegObs = new Tabulator('#tblSegObs', {
+      data: obs, layout: 'fitColumns', responsiveLayout: 'collapse',
+      pagination: 'local', paginationSize: 25,
+      columns: [
+        { title:'Tipo', field:'tipo', width:110, formatter: c => (TIPO_BADGE[c.getValue()]||'') + ' ' + (c.getValue()||'').replace('_',' ') },
+        { title:'Categoría', field:'categoria', width:110, formatter: c => (c.getValue()||'otro').replace(/_/g,' ') },
+        { title:'Descripción', field:'descripcion', minWidth:200, formatter: c => esc(c.getValue()) },
+        { title:'Obra', field:'obra_nombre', width:160 },
+        { title:'Ubicación', field:'ubicacion', width:130 },
+        { title:'Responsable', field:'responsable', width:120 },
+        { title:'Prioridad', field:'prioridad', width:90, formatter: c => `<span style="color:${PRIORIDAD_COLOR[c.getValue()]||'inherit'};font-weight:600">${c.getValue()||'—'}</span>` },
+        { title:'Estado', field:'estado', width:110, formatter: c => {
+          const s = c.getValue(); const r = c.getRow().getData();
+          if (r.vencida) return '<span style="color:var(--danger);font-weight:600">⚠️ Vencida</span>';
+          const col = s==='cerrada'?'var(--success)':s==='en_progreso'?'var(--warning)':'var(--text)';
+          return `<span style="color:${col}">${s||'—'}</span>`;
+        }},
+        { title:'Límite', field:'fecha_limite', width:95 },
+        { title:'Acc.', field:'id', hozAlign:'center', width:70, headerSort:false,
+          formatter: c => `<button class="tbl-btn" onclick="abrirModalSegObsEditar(${c.getValue()})">✏️</button><button class="tbl-btn" onclick="eliminarSegObs(${c.getValue()})">🗑</button>` },
+      ]
+    });
+  } else {
+    tblSegObs.setData(obs);
+  }
+  // Search filter
+  const si = document.getElementById('searchSegObs');
+  if (si) { si.oninput = () => tblSegObs?.setFilter([ {field:'descripcion',type:'like',value:si.value}, {field:'ubicacion',type:'like',value:si.value}, {field:'responsable',type:'like',value:si.value} ]); }
+}
+
+async function cargarToolboxTalks() {
+  const obraId = document.getElementById('filterSegTalksObraId')?.value || '';
+  let url = `/toolbox-talks?` + (obraId ? `obra_id=${obraId}` : '');
+  const r = await api(url);
+  const talks = r?.talks || [];
+  if (!tblToolboxTalks) {
+    tblToolboxTalks = new Tabulator('#tblToolboxTalks', {
+      data: talks, layout: 'fitColumns', responsiveLayout: 'collapse',
+      pagination: 'local', paginationSize: 20,
+      columns: [
+        { title:'Fecha', field:'fecha', width:100 },
+        { title:'Hora',  field:'hora',  width:75 },
+        { title:'Tema',  field:'tema',  minWidth:200 },
+        { title:'Obra',  field:'obra_nombre', width:160 },
+        { title:'Facilitador', field:'facilitador', width:140 },
+        { title:'Asistentes', field:'asistentes', width:90, formatter: c => {
+          const a = c.getValue(); return Array.isArray(a) ? a.length : (a||'—');
+        }},
+        { title:'Duración', field:'duracion_min', width:90, formatter: c => c.getValue() ? c.getValue()+'min' : '—' },
+        { title:'Acc.', field:'id', hozAlign:'center', width:70, headerSort:false,
+          formatter: c => `<button class="tbl-btn" onclick="abrirModalToolboxTalkEditar(${c.getValue()})">✏️</button><button class="tbl-btn" onclick="eliminarToolboxTalk(${c.getValue()})">🗑</button>` },
+      ]
+    });
+  } else {
+    tblToolboxTalks.setData(talks);
+  }
+  const si = document.getElementById('searchSegTalks');
+  if (si) si.oninput = () => tblToolboxTalks?.setFilter([{field:'tema',type:'like',value:si.value},{field:'facilitador',type:'like',value:si.value}]);
+}
+
+function abrirModalSegObs(d={}) {
+  abrirModal(`
+    <h3 style="margin:0 0 16px">⚠️ ${d.id ? 'Editar' : 'Nueva'} Observación de Seguridad</h3>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <label>Tipo *<select id="mObsTipo" class="form-input" required>
+        <option value="positiva"${d.tipo==='positiva'?' selected':''}>✅ Positiva</option>
+        <option value="negativa"${(!d.tipo||d.tipo==='negativa')?' selected':''}>⚠️ Negativa</option>
+        <option value="peligro_inminente"${d.tipo==='peligro_inminente'?' selected':''}>🔴 Peligro inminente</option>
+      </select></label>
+      <label>Categoría<select id="mObsCat" class="form-input">
+        <option value="epi"${d.categoria==='epi'?' selected':''}>🦺 EPI</option>
+        <option value="orden_limpieza"${d.categoria==='orden_limpieza'?' selected':''}>🧹 Orden y limpieza</option>
+        <option value="trabajos_altura"${d.categoria==='trabajos_altura'?' selected':''}>🏗 Trabajos en altura</option>
+        <option value="electrico"${d.categoria==='electrico'?' selected':''}>⚡ Eléctrico</option>
+        <option value="manejo_cargas"${d.categoria==='manejo_cargas'?' selected':''}>📦 Manejo de cargas</option>
+        <option value="herramientas"${d.categoria==='herramientas'?' selected':''}>🔧 Herramientas</option>
+        <option value="incendio"${d.categoria==='incendio'?' selected':''}>🔥 Incendio</option>
+        <option value="otro"${(!d.categoria||d.categoria==='otro')?' selected':''}>📋 Otro</option>
+      </select></label>
+      <label>Prioridad<select id="mObsPrior" class="form-input">
+        <option value="baja"${d.prioridad==='baja'?' selected':''}>🟢 Baja</option>
+        <option value="media"${(!d.prioridad||d.prioridad==='media')?' selected':''}>🟠 Media</option>
+        <option value="alta"${d.prioridad==='alta'?' selected':''}>🔴 Alta</option>
+      </select></label>
+      <label>Estado<select id="mObsEstado" class="form-input">
+        <option value="abierta"${(!d.estado||d.estado==='abierta')?' selected':''}>Abierta</option>
+        <option value="en_progreso"${d.estado==='en_progreso'?' selected':''}>En progreso</option>
+        <option value="cerrada"${d.estado==='cerrada'?' selected':''}>Cerrada</option>
+      </select></label>
+      <label style="grid-column:1/-1">Descripción *<textarea id="mObsDesc" class="form-input" rows="3" placeholder="Describe la observación...">${d.descripcion||''}</textarea></label>
+      <label>Ubicación<input id="mObsUbic" class="form-input" value="${d.ubicacion||''}" placeholder="Zona, planta, área..."></label>
+      <label>Responsable<input id="mObsResp" class="form-input" value="${d.responsable||''}" placeholder="Nombre del responsable"></label>
+      <label>Fecha límite corrección<input id="mObsLimite" type="date" class="form-input" value="${d.fecha_limite||''}"></label>
+      <label>Acción correctiva<input id="mObsAccion" class="form-input" value="${d.accion_correctiva||''}" placeholder="Acción a tomar..."></label>
+    </div>
+    <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px">
+      ${d.id ? `<button class="btn btn-danger" onclick="eliminarSegObs(${d.id})">🗑 Eliminar</button>` : ''}
+      <button class="btn btn-secondary" onclick="cerrarModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="guardarSegObs(${d.id||0})">💾 Guardar</button>
+    </div>
+  `);
+}
+
+async function abrirModalSegObsEditar(id) {
+  const r = await api(`/obs-seguridad?`);
+  const obs = (r?.observaciones||[]).find(o => o.id === id);
+  if (obs) abrirModalSegObs(obs);
+}
+
+async function guardarSegObs(id) {
+  const body = {
+    tipo:              document.getElementById('mObsTipo')?.value,
+    categoria:         document.getElementById('mObsCat')?.value,
+    prioridad:         document.getElementById('mObsPrior')?.value,
+    estado:            document.getElementById('mObsEstado')?.value,
+    descripcion:       document.getElementById('mObsDesc')?.value?.trim(),
+    ubicacion:         document.getElementById('mObsUbic')?.value?.trim(),
+    responsable:       document.getElementById('mObsResp')?.value?.trim(),
+    fecha_limite:      document.getElementById('mObsLimite')?.value,
+    accion_correctiva: document.getElementById('mObsAccion')?.value?.trim(),
+    obra_id:           document.getElementById('filterSegObraId')?.value || null,
+  };
+  if (!body.descripcion) { toast('Descripción requerida', 'err'); return; }
+  const method = id ? 'PUT' : 'POST';
+  const url    = id ? `/obs-seguridad/${id}` : '/obs-seguridad';
+  const r = await api(url, { method, body: JSON.stringify(body) });
+  if (r.ok || r.id) { toast(id ? 'Actualizado' : 'Observación creada', 'ok'); cerrarModal(); tblSegObs = null; cargarSeguridadObra(); }
+  else toast(r.error || 'Error al guardar', 'err');
+}
+
+async function eliminarSegObs(id) {
+  if (!confirm('¿Eliminar esta observación?')) return;
+  const r = await api(`/obs-seguridad/${id}`, { method: 'DELETE' });
+  if (r.ok || r.deleted) { toast('Eliminado', 'ok'); cerrarModal(); tblSegObs = null; cargarSeguridadObra(); }
+  else toast('Error al eliminar', 'err');
+}
+
+function abrirModalToolboxTalk(d={}) {
+  abrirModal(`
+    <h3 style="margin:0 0 16px">💬 ${d.id ? 'Editar' : 'Nueva'} Toolbox Talk</h3>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <label style="grid-column:1/-1">Tema *<input id="mTTTema" class="form-input" value="${d.tema||''}" placeholder="Tema de la charla de seguridad" required></label>
+      <label>Fecha *<input id="mTTFecha" type="date" class="form-input" value="${d.fecha||new Date().toISOString().slice(0,10)}" required></label>
+      <label>Hora<input id="mTTHora" type="time" class="form-input" value="${d.hora||'08:00'}"></label>
+      <label>Duración (min)<input id="mTTDur" type="number" class="form-input" value="${d.duracion_min||15}" min="5" max="120"></label>
+      <label>Facilitador<input id="mTTFacil" class="form-input" value="${d.facilitador||''}" placeholder="Nombre del facilitador"></label>
+      <label style="grid-column:1/-1">Descripción / Contenido<textarea id="mTTDesc" class="form-input" rows="3" placeholder="Resumen de los puntos tratados...">${d.descripcion||''}</textarea></label>
+      <label style="grid-column:1/-1">Asistentes (uno por línea)<textarea id="mTTAsistentes" class="form-input" rows="4" placeholder="Nombre 1&#10;Nombre 2...">${Array.isArray(d.asistentes)?d.asistentes.join('\n'):(d.asistentes||'')}</textarea></label>
+      <label style="grid-column:1/-1">Observaciones<input id="mTTObs" class="form-input" value="${d.observaciones||''}" placeholder="Notas adicionales..."></label>
+    </div>
+    <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px">
+      ${d.id ? `<button class="btn btn-danger" onclick="eliminarToolboxTalk(${d.id})">🗑 Eliminar</button>` : ''}
+      <button class="btn btn-secondary" onclick="cerrarModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="guardarToolboxTalk(${d.id||0})">💾 Guardar</button>
+    </div>
+  `);
+}
+
+async function abrirModalToolboxTalkEditar(id) {
+  const r = await api('/toolbox-talks?');
+  const t = (r?.talks||[]).find(t => t.id === id);
+  if (t) abrirModalToolboxTalk(t);
+}
+
+async function guardarToolboxTalk(id) {
+  const tema  = document.getElementById('mTTTema')?.value?.trim();
+  const fecha = document.getElementById('mTTFecha')?.value;
+  if (!tema || !fecha) { toast('Tema y fecha requeridos', 'err'); return; }
+  const asistentesRaw = document.getElementById('mTTAsistentes')?.value || '';
+  const asistentes = asistentesRaw.split('\n').map(s => s.trim()).filter(Boolean);
+  const body = {
+    tema, fecha,
+    hora:          document.getElementById('mTTHora')?.value,
+    duracion_min:  parseInt(document.getElementById('mTTDur')?.value)||15,
+    facilitador:   document.getElementById('mTTFacil')?.value?.trim(),
+    descripcion:   document.getElementById('mTTDesc')?.value?.trim(),
+    asistentes,
+    observaciones: document.getElementById('mTTObs')?.value?.trim(),
+    obra_id:       document.getElementById('filterSegTalksObraId')?.value || null,
+  };
+  const method = id ? 'PUT' : 'POST';
+  const url    = id ? `/toolbox-talks/${id}` : '/toolbox-talks';
+  const r = await api(url, { method, body: JSON.stringify(body) });
+  if (r.ok || r.id) { toast(id ? 'Actualizado' : 'Charla registrada', 'ok'); cerrarModal(); tblToolboxTalks = null; cargarToolboxTalks(); }
+  else toast(r.error || 'Error al guardar', 'err');
+}
+
+async function eliminarToolboxTalk(id) {
+  if (!confirm('¿Eliminar esta Toolbox Talk?')) return;
+  const r = await api(`/toolbox-talks/${id}`, { method: 'DELETE' });
+  if (r.ok || r.deleted) { toast('Eliminado', 'ok'); cerrarModal(); tblToolboxTalks = null; cargarToolboxTalks(); }
   else toast('Error al eliminar', 'err');
 }
 
