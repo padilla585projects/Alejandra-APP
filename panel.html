@@ -605,6 +605,10 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
     <button class="nav-item" data-page="itpObra" onclick="navTo('itpObra')">
       <span class="nav-icon">🔬</span> ITP / Plan Inspección
     </button>
+    <button class="nav-item" data-page="equiposMedicion" onclick="navTo('equiposMedicion')">
+      <span class="nav-icon">📏</span> Equipos Medición
+      <span class="nav-badge" id="equiposMedBadge" style="display:none">!</span>
+    </button>
     <button class="nav-item" data-page="entregasMaterial" onclick="navTo('entregasMaterial')">
       <span class="nav-icon">🚚</span> Entregas Material
       <span class="nav-badge" id="entregasBadge" style="display:none">!</span>
@@ -2667,6 +2671,98 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
             <div class="modal-footer">
               <button class="btn btn-secondary" onclick="cerrarModalItp()">Cancelar</button>
               <button class="btn btn-primary" onclick="guardarItp()">💾 Guardar</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- EQUIPOS DE MEDICION / CALIBRACION (NEW-77) -->
+      <div class="page" id="pageEquiposMedicion">
+        <div class="page-title">📏 Equipos de Medición</div>
+        <div class="page-sub">Registro de instrumentos de medición y control de calibración — alertas de vencimiento</div>
+        <div class="tbl-toolbar" style="flex-wrap:wrap;gap:8px;margin-bottom:14px">
+          <input class="tbl-search" id="searchEqMed" placeholder="🔍 Código, nombre o modelo…" style="min-width:200px" oninput="filtrarEquiposMed()">
+          <select class="tbl-search" id="filterEqMedEstado" style="min-width:160px" onchange="filtrarEquiposMed()">
+            <option value="">Todos los estados</option>
+            <option value="calibrado">✅ Calibrado</option>
+            <option value="vencido">🔴 Vencido</option>
+            <option value="baja">⬛ Baja</option>
+          </select>
+          <select class="tbl-search" id="filterEqMedObra" style="min-width:200px" onchange="cargarEquiposMed()">
+            <option value="">🏗 Todas las obras / almacén</option>
+          </select>
+          <button class="btn btn-primary" onclick="abrirModalEqMed()">+ Nuevo equipo</button>
+          <button class="btn btn-secondary" onclick="exportarTabla(tblEquiposMed,'equipos_medicion')">⬇ CSV</button>
+          <button class="btn btn-secondary" onclick="cargarEquiposMed()">🔄 Actualizar</button>
+        </div>
+        <div id="eqMedKpiStrip" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:12px;margin-bottom:18px"></div>
+        <div class="tbl-wrap"><div id="tblEquiposMed"></div></div>
+
+        <!-- MODAL EQUIPO MEDICION -->
+        <div class="modal-overlay" id="modalEqMed" onclick="if(event.target===this)cerrarModalEqMed()">
+          <div class="modal" style="max-width:620px;width:96%">
+            <div class="modal-header">
+              <span id="modalEqMedTitle">Nuevo Equipo de Medición</span>
+              <button class="modal-close" onclick="cerrarModalEqMed()">✕</button>
+            </div>
+            <div class="modal-body" style="padding:20px">
+              <input type="hidden" id="eqMedId">
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
+                <div>
+                  <label class="form-label">Código *</label>
+                  <input class="form-control" id="eqMedCodigo" placeholder="EM-001">
+                </div>
+                <div>
+                  <label class="form-label">Nombre / Tipo *</label>
+                  <input class="form-control" id="eqMedNombre" placeholder="Multímetro, Pinza amperimétrica…">
+                </div>
+                <div>
+                  <label class="form-label">Marca</label>
+                  <input class="form-control" id="eqMedMarca" placeholder="Fluke, Hioki, AEMC…">
+                </div>
+                <div>
+                  <label class="form-label">Modelo</label>
+                  <input class="form-control" id="eqMedModelo" placeholder="287, 3290…">
+                </div>
+                <div>
+                  <label class="form-label">Nº de serie</label>
+                  <input class="form-control" id="eqMedSerie" placeholder="SN-12345678">
+                </div>
+                <div>
+                  <label class="form-label">Obra / Ubicación</label>
+                  <select class="form-control" id="eqMedObraId">
+                    <option value="">Almacén general</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="form-label">Última calibración</label>
+                  <input type="date" class="form-control" id="eqMedUltimaCalib">
+                </div>
+                <div>
+                  <label class="form-label">Próxima calibración *</label>
+                  <input type="date" class="form-control" id="eqMedProxCalib">
+                </div>
+                <div>
+                  <label class="form-label">Estado</label>
+                  <select class="form-control" id="eqMedEstado">
+                    <option value="calibrado">✅ Calibrado</option>
+                    <option value="vencido">🔴 Vencido</option>
+                    <option value="baja">⬛ Baja</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="form-label">Laboratorio calibrador</label>
+                  <input class="form-control" id="eqMedLaboratorio" placeholder="ENAC, SGS, Bureau Veritas…">
+                </div>
+                <div style="grid-column:1/-1">
+                  <label class="form-label">Notas</label>
+                  <textarea class="form-control" id="eqMedNotas" rows="2" placeholder="Rango de medida, incertidumbre, restricciones de uso…"></textarea>
+                </div>
+              </div>
+            </div>
+            <div class="modal-footer">
+              <button class="btn btn-secondary" onclick="cerrarModalEqMed()">Cancelar</button>
+              <button class="btn btn-primary" onclick="guardarEqMed()">💾 Guardar</button>
             </div>
           </div>
         </div>
@@ -5299,6 +5395,7 @@ const PAGE_TITLES = {
   ordenesCompra: '🛒 Órdenes de Compra',
   itpObra: '🔬 ITP / Plan de Inspección y Ensayo',
   timesheets: '🕐 Hojas de Tiempo',
+  equiposMedicion: '📏 Equipos de Medición y Calibración',
 };
 
 const PAGE_LOADERS = {
@@ -5375,7 +5472,8 @@ const PAGE_LOADERS = {
   alertasStock:  cargarAlertasStock,
   ordenesCompra: cargarOrdenesCompra,
   itpObra:       cargarItp,
-  timesheets:    cargarTimesheets,
+  timesheets:      cargarTimesheets,
+  equiposMedicion: cargarEquiposMed,
 };
 
 let currentPage = '';
@@ -5481,7 +5579,8 @@ const SYNC_INTERVALS = {
   alertasStock:    60,
   ordenesCompra:   90,
   itpObra:        120,
-  timesheets:      60,
+  timesheets:       60,
+  equiposMedicion: 120,
 };
 
 let _syncTimer = null, _syncLabelTimer = null, _syncLastTs = null;
@@ -16230,6 +16329,154 @@ function cerrarModalItpDetalle() {
   document.getElementById('modalItpDetalle').classList.remove('show');
   if (tblItpItems) { tblItpItems.destroy(); tblItpItems=null; }
 }
+
+// ── EQUIPOS DE MEDICION Y CALIBRACION (NEW-77) ───────────────────────────
+let tblEquiposMed = null;
+let _eqMedData    = [];
+
+async function cargarEquiposMed() {
+  if (document.getElementById('filterEqMedObra')?.options.length <= 1) poblarSelectObras('filterEqMedObra');
+  const obraId = document.getElementById('filterEqMedObra')?.value || '';
+  let url = '/equipos-medicion?';
+  if (obraId) url += `obra_id=${obraId}&`;
+  const r = await api(url);
+  _eqMedData = r.items || [];
+
+  const hoy      = new Date().toISOString().slice(0,10);
+  const en30dias = new Date(Date.now() + 30*86400000).toISOString().slice(0,10);
+  const calibrados  = _eqMedData.filter(e => e.estado==='calibrado').length;
+  const vencidos    = _eqMedData.filter(e => e.estado==='vencido' || (e.fecha_prox_calib && e.fecha_prox_calib < hoy)).length;
+  const proxVencer  = _eqMedData.filter(e => e.estado==='calibrado' && e.fecha_prox_calib >= hoy && e.fecha_prox_calib <= en30dias).length;
+  const total       = _eqMedData.filter(e => e.estado !== 'baja').length;
+
+  const badge = document.getElementById('equiposMedBadge');
+  if (badge) { badge.style.display = (vencidos+proxVencer)>0?'':'none'; badge.textContent = vencidos+proxVencer||''; }
+
+  document.getElementById('eqMedKpiStrip').innerHTML = [
+    { icon:'📏', value:total,       label:'Equipos activos',   cls:'' },
+    { icon:'✅', value:calibrados,  label:'Calibrados',         cls: calibrados>0?'ok':'' },
+    { icon:'🔴', value:vencidos,    label:'Calib. vencida',     cls: vencidos>0?'danger':'' },
+    { icon:'⚠️', value:proxVencer, label:'Vencen en 30 días',  cls: proxVencer>0?'warn':'' },
+  ].map(k=>`<div class="kpi-card" style="padding:14px"><div class="kpi-icon" style="font-size:20px">${k.icon}</div>
+    <div class="kpi-value ${k.cls}" style="font-size:22px">${k.value}</div>
+    <div class="kpi-label">${k.label}</div></div>`).join('');
+
+  filtrarEquiposMed();
+}
+
+function filtrarEquiposMed() {
+  const q      = (document.getElementById('searchEqMed')?.value||'').toLowerCase();
+  const estado = document.getElementById('filterEqMedEstado')?.value||'';
+  const hoy    = new Date().toISOString().slice(0,10);
+  const filtered = _eqMedData.filter(e => {
+    const matchQ      = !q || (e.codigo||'').toLowerCase().includes(q) || (e.nombre||'').toLowerCase().includes(q) || (e.modelo||'').toLowerCase().includes(q);
+    const efectivoEst = e.estado==='calibrado' && e.fecha_prox_calib && e.fecha_prox_calib < hoy ? 'vencido' : e.estado;
+    const matchEst    = !estado || efectivoEst === estado;
+    return matchQ && matchEst;
+  });
+  if (tblEquiposMed) { tblEquiposMed.replaceData(filtered); return; }
+  tblEquiposMed = new Tabulator('#tblEquiposMed', {
+    data:filtered, layout:'fitColumns', pagination:'local', paginationSize:25,
+    placeholder:'<div class="empty-state"><div class="empty-icon">📏</div><div class="empty-text">Sin equipos registrados</div></div>',
+    columns:[
+      { title:'Código', field:'codigo', width:100,
+        formatter:c=>`<code style="background:var(--surface2);padding:2px 6px;border-radius:4px;font-size:11px">${c.getValue()||''}</code>` },
+      { title:'Nombre / Tipo', field:'nombre', minWidth:180, sorter:'string' },
+      { title:'Marca/Modelo', field:'marca', width:130,
+        formatter:c=>{ const row=c.getRow().getData(); return `${row.marca||'—'} ${row.modelo||''}`.trim(); } },
+      { title:'Nº Serie', field:'numero_serie', width:120 },
+      { title:'Obra', field:'obra_nombre', width:130 },
+      { title:'Última calib.', field:'fecha_ultima_calib', width:120, formatter:c=>fmtFecha(c.getValue()||'') },
+      { title:'Próxima calib.', field:'fecha_prox_calib', width:120,
+        formatter: c => {
+          const v=c.getValue(); if(!v) return '—';
+          const hoy=new Date().toISOString().slice(0,10);
+          const en30=new Date(Date.now()+30*86400000).toISOString().slice(0,10);
+          const color = v<hoy?'var(--danger)' : v<=en30?'var(--warning)' : 'var(--text)';
+          return `<span style="color:${color};font-weight:700">${fmtFecha(v)}</span>`;
+        }
+      },
+      { title:'Estado', field:'estado', width:120,
+        formatter: c => {
+          const row=c.getRow().getData();
+          const hoy=new Date().toISOString().slice(0,10);
+          const efectivo = c.getValue()==='calibrado' && row.fecha_prox_calib && row.fecha_prox_calib<hoy ? 'vencido' : c.getValue();
+          const color = efectivo==='calibrado'?'var(--success)':efectivo==='vencido'?'var(--danger)':'var(--muted)';
+          const label = efectivo==='calibrado'?'✅ Calibrado':efectivo==='vencido'?'🔴 Vencido':'⬛ Baja';
+          return `<span style="color:${color};font-weight:700">${label}</span>`;
+        }
+      },
+      { title:'Laboratorio', field:'laboratorio', width:140 },
+      { title:'Acciones', field:'id', width:100, headerSort:false,
+        formatter:c=>`<button class="btn btn-secondary btn-sm" onclick="editarEqMed(${c.getValue()})">✏️</button>
+                      <button class="btn btn-danger btn-sm" onclick="eliminarEqMed(${c.getValue()})">🗑</button>` },
+    ]
+  });
+}
+
+function abrirModalEqMed() {
+  document.getElementById('eqMedId').value = '';
+  ['eqMedCodigo','eqMedNombre','eqMedMarca','eqMedModelo','eqMedSerie','eqMedLaboratorio','eqMedNotas'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
+  document.getElementById('eqMedEstado').value = 'calibrado';
+  document.getElementById('eqMedUltimaCalib').value = '';
+  document.getElementById('eqMedProxCalib').value = '';
+  if (document.getElementById('eqMedObraId')?.options.length <= 1) poblarSelectObras('eqMedObraId');
+  document.getElementById('modalEqMedTitle').textContent = 'Nuevo Equipo de Medición';
+  document.getElementById('modalEqMed').classList.add('show');
+}
+
+async function editarEqMed(id) {
+  const eq = _eqMedData.find(e=>e.id===id);
+  if (!eq) return;
+  document.getElementById('eqMedId').value = id;
+  document.getElementById('eqMedCodigo').value = eq.codigo||'';
+  document.getElementById('eqMedNombre').value = eq.nombre||'';
+  document.getElementById('eqMedMarca').value = eq.marca||'';
+  document.getElementById('eqMedModelo').value = eq.modelo||'';
+  document.getElementById('eqMedSerie').value = eq.numero_serie||'';
+  document.getElementById('eqMedLaboratorio').value = eq.laboratorio||'';
+  document.getElementById('eqMedNotas').value = eq.notas||'';
+  document.getElementById('eqMedEstado').value = eq.estado||'calibrado';
+  document.getElementById('eqMedUltimaCalib').value = eq.fecha_ultima_calib||'';
+  document.getElementById('eqMedProxCalib').value = eq.fecha_prox_calib||'';
+  if (document.getElementById('eqMedObraId')?.options.length <= 1) await poblarSelectObras('eqMedObraId');
+  if (eq.obra_id) document.getElementById('eqMedObraId').value = eq.obra_id;
+  document.getElementById('modalEqMedTitle').textContent = `Editar: ${eq.nombre}`;
+  document.getElementById('modalEqMed').classList.add('show');
+}
+
+async function guardarEqMed() {
+  const id = parseInt(document.getElementById('eqMedId').value||'0')||0;
+  const body = {
+    codigo:          document.getElementById('eqMedCodigo')?.value?.trim(),
+    nombre:          document.getElementById('eqMedNombre')?.value?.trim(),
+    marca:           document.getElementById('eqMedMarca')?.value?.trim()||null,
+    modelo:          document.getElementById('eqMedModelo')?.value?.trim()||null,
+    numero_serie:    document.getElementById('eqMedSerie')?.value?.trim()||null,
+    laboratorio:     document.getElementById('eqMedLaboratorio')?.value?.trim()||null,
+    notas:           document.getElementById('eqMedNotas')?.value?.trim()||null,
+    estado:          document.getElementById('eqMedEstado')?.value||'calibrado',
+    fecha_ultima_calib: document.getElementById('eqMedUltimaCalib')?.value||null,
+    fecha_prox_calib:   document.getElementById('eqMedProxCalib')?.value||null,
+    obra_id:         document.getElementById('eqMedObraId')?.value||null,
+  };
+  if (!body.nombre) { toast('Nombre obligatorio','err'); return; }
+  const method = id ? 'PUT' : 'POST';
+  const url    = id ? `/equipos-medicion/${id}` : '/equipos-medicion';
+  const r = await api(url, { method, body:JSON.stringify(body) });
+  if (r.ok||r.id) { toast(id?'Actualizado':'Equipo registrado','ok'); cerrarModalEqMed(); tblEquiposMed=null; cargarEquiposMed(); }
+  else toast(r.error||'Error','err');
+}
+
+async function eliminarEqMed(id) {
+  const eq = _eqMedData.find(e=>e.id===id);
+  if (!confirm(`¿Eliminar "${eq?.nombre||id}"?`)) return;
+  const r = await api(`/equipos-medicion/${id}`, { method:'DELETE' });
+  if (r.ok) { toast('Eliminado','ok'); tblEquiposMed=null; cargarEquiposMed(); }
+  else toast('Error','err');
+}
+
+function cerrarModalEqMed() { document.getElementById('modalEqMed').classList.remove('show'); }
 
 async function cargarEntregasMaterial() {
   if (document.getElementById('filterEntregasObra')?.options.length <= 1)

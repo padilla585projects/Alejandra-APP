@@ -4721,6 +4721,14 @@ export default {
         if (method === 'PUT')    return await actualizarVisitaObra(_vid, request, env);
         if (method === 'DELETE') return await eliminarVisitaObra(_vid, request, env);
       }
+      // ── Equipos de Medicion / Calibracion (NEW-77) ────────────────────────────────
+      if (path === '/equipos-medicion' && method === 'GET')  return await getEquiposMedicion(request, env);
+      if (path === '/equipos-medicion' && method === 'POST') return await crearEquipoMedicion(request, env);
+      if (path.startsWith('/equipos-medicion/')) {
+        const _emId = parseInt(path.split('/equipos-medicion/')[1]);
+        if (method === 'PUT')    return await actualizarEquipoMedicion(_emId, request, env);
+        if (method === 'DELETE') return await eliminarEquipoMedicion(_emId, request, env);
+      }
       // ── Timesheets / Hojas de Tiempo (NEW-76) ─────────────────────────────────────
       if (path === '/timesheets' && method === 'GET')  return await getTimesheets(request, env);
       if (path === '/timesheets' && method === 'POST') return await crearTimesheet(request, env);
@@ -17089,6 +17097,84 @@ async function eliminarTimesheet(id, request, env) {
   const ts = await env.DB.prepare('SELECT id FROM timesheets WHERE id=? AND empresa_id=?').bind(id, empresa_id).first();
   if (!ts) return err('Parte no encontrado', 404);
   await env.DB.prepare('DELETE FROM timesheets WHERE id=? AND empresa_id=?').bind(id, empresa_id).run();
+  return json({ ok: true, deleted: true });
+}
+
+// ── Equipos de Medicion / Calibracion (NEW-77) ────────────────────────────
+
+async function ensureEqMedTable(env) {
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS equipos_medicion (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    empresa_id        INTEGER NOT NULL,
+    obra_id           INTEGER,
+    codigo            TEXT,
+    nombre            TEXT NOT NULL,
+    marca             TEXT,
+    modelo            TEXT,
+    numero_serie      TEXT,
+    laboratorio       TEXT,
+    fecha_ultima_calib TEXT,
+    fecha_prox_calib  TEXT,
+    estado            TEXT NOT NULL DEFAULT 'calibrado',
+    notas             TEXT,
+    created_at        TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at        TEXT NOT NULL DEFAULT (datetime('now'))
+  )`).run();
+}
+
+async function getEquiposMedicion(request, env) {
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  await ensureEqMedTable(env);
+  const url = new URL(request.url);
+  const obra_id = url.searchParams.get('obra_id');
+  let q = `SELECT em.*, o.nombre as obra_nombre
+            FROM equipos_medicion em
+            LEFT JOIN obras o ON o.id = em.obra_id
+            WHERE em.empresa_id = ?`;
+  const params = [empresa_id];
+  if (obra_id) { q += ' AND em.obra_id = ?'; params.push(parseInt(obra_id)); }
+  q += ' ORDER BY em.codigo, em.nombre';
+  const { results } = await env.DB.prepare(q).bind(...params).all();
+  return json({ items: results });
+}
+
+async function crearEquipoMedicion(request, env) {
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  await ensureEqMedTable(env);
+  const body = await request.json();
+  const { codigo, nombre, marca, modelo, numero_serie, laboratorio, obra_id, fecha_ultima_calib, fecha_prox_calib, estado='calibrado', notas } = body;
+  if (!nombre) return err('Nombre requerido', 400);
+  const r = await env.DB.prepare(`
+    INSERT INTO equipos_medicion (empresa_id, obra_id, codigo, nombre, marca, modelo, numero_serie, laboratorio, fecha_ultima_calib, fecha_prox_calib, estado, notas)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+  `).bind(empresa_id, obra_id||null, codigo||null, nombre, marca||null, modelo||null, numero_serie||null, laboratorio||null, fecha_ultima_calib||null, fecha_prox_calib||null, estado, notas||null).run();
+  return json({ ok: true, id: r.meta.last_row_id }, 201);
+}
+
+async function actualizarEquipoMedicion(id, request, env) {
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const em = await env.DB.prepare('SELECT id FROM equipos_medicion WHERE id=? AND empresa_id=?').bind(id, empresa_id).first();
+  if (!em) return err('Equipo no encontrado', 404);
+  const body = await request.json();
+  const campos = ['codigo','nombre','marca','modelo','numero_serie','laboratorio','obra_id','fecha_ultima_calib','fecha_prox_calib','estado','notas'];
+  const sets = [], vals = [];
+  campos.forEach(f => { if (f in body) { sets.push(`${f}=?`); vals.push(body[f]); } });
+  if (!sets.length) return json({ ok: true });
+  sets.push("updated_at=datetime('now')");
+  vals.push(id, empresa_id);
+  await env.DB.prepare(`UPDATE equipos_medicion SET ${sets.join(',')} WHERE id=? AND empresa_id=?`).bind(...vals).run();
+  return json({ ok: true });
+}
+
+async function eliminarEquipoMedicion(id, request, env) {
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const em = await env.DB.prepare('SELECT id FROM equipos_medicion WHERE id=? AND empresa_id=?').bind(id, empresa_id).first();
+  if (!em) return err('Equipo no encontrado', 404);
+  await env.DB.prepare('DELETE FROM equipos_medicion WHERE id=? AND empresa_id=?').bind(id, empresa_id).run();
   return json({ ok: true, deleted: true });
 }
 
