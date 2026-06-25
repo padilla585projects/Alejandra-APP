@@ -622,6 +622,10 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
       <span class="nav-icon">🌿</span> Registro Ambiental
       <span class="nav-badge" id="raBadge" style="display:none">!</span>
     </button>
+    <button class="nav-item" data-page="cierreObra" onclick="navTo('cierreObra')">
+      <span class="nav-icon">🏁</span> Cierre de Obra
+      <span class="nav-badge" id="cierreBadge" style="display:none">!</span>
+    </button>
 
     <div class="sidebar-section" onclick="sidebarToggle(this)" data-sid="seguimiento"><span>📓 Seguimiento</span><span class="sec-chevron">▼</span></div>
     <button class="nav-item" data-page="partesPanel" onclick="navTo('partesPanel')">
@@ -2119,6 +2123,113 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
         </div>
         <div id="entregasKpi" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:12px;margin-bottom:16px"></div>
         <div class="tbl-wrap"><div id="tblEntregas"></div></div>
+      </div>
+
+      <!-- CHECKLIST DE CIERRE DE OBRA / PROJECT CLOSEOUT (NEW-66) -->
+      <div class="page" id="pageCierreObra">
+        <div class="page-title">🏁 Checklist de Cierre de Obra</div>
+        <div class="page-sub">Lista de verificacion para el cierre formal de la obra — por categorias y responsables</div>
+        <div class="tbl-toolbar" style="flex-wrap:wrap;gap:8px;margin-bottom:14px">
+          <select class="tbl-search" id="filterCierreObra" style="min-width:240px;font-size:14px;font-weight:600" onchange="cargarCierreObra()"></select>
+          <select class="tbl-search" id="filterCiereCategoria" style="min-width:160px" onchange="cargarCierreObra()">
+            <option value="">Todas las categorias</option>
+            <option value="documentacion">Documentacion</option>
+            <option value="testing">Testing / Pruebas</option>
+            <option value="seguridad">Seguridad</option>
+            <option value="entrega">Entrega</option>
+            <option value="legal">Legal / Financiero</option>
+            <option value="subcontratas">Subcontratas</option>
+          </select>
+          <select class="tbl-search" id="filterCierreEstado" style="min-width:140px" onchange="cargarCierreObra()">
+            <option value="">Todos los estados</option>
+            <option value="pendiente">Pendiente</option>
+            <option value="en_proceso">En proceso</option>
+            <option value="completado">Completado</option>
+            <option value="no_aplica">No aplica</option>
+          </select>
+          <button class="btn btn-primary" onclick="inicializarPlantillasCierre()">🚀 Inicializar plantilla</button>
+          <button class="btn btn-secondary" onclick="abrirModalCierre()">+ Item manual</button>
+          <button class="btn btn-secondary" onclick="cargarCierreObra()">&#x1F504;</button>
+        </div>
+        <div id="cierreProgressBar" style="display:none;margin-bottom:16px">
+          <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px">
+            <span style="font-weight:700">Progreso de cierre</span>
+            <span id="cierrePctLabel" style="font-weight:800;color:var(--primary)">0%</span>
+          </div>
+          <div style="background:var(--border);border-radius:6px;height:14px">
+            <div id="cierrePctFill" style="height:100%;border-radius:6px;background:var(--success);transition:width .5s"></div>
+          </div>
+        </div>
+        <div id="cierreKpi" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;margin-bottom:16px"></div>
+        <div id="cierreContent"></div>
+      </div>
+
+      <!-- modal Cierre Item -->
+      <div class="modal-overlay" id="modalCierre">
+        <div class="modal" style="max-width:600px">
+          <div class="modal-header">
+            <span id="modalCierreTitle">Nuevo item de cierre</span>
+            <button class="modal-close" onclick="cerrarModal('modalCierre')">&#x2715;</button>
+          </div>
+          <div class="modal-body" style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+            <div>
+              <label class="form-label">Categoria</label>
+              <select class="form-input" id="cierreCategoria">
+                <option value="documentacion">Documentacion</option>
+                <option value="testing">Testing / Pruebas</option>
+                <option value="seguridad">Seguridad</option>
+                <option value="entrega">Entrega</option>
+                <option value="legal">Legal / Financiero</option>
+                <option value="subcontratas">Subcontratas</option>
+              </select>
+            </div>
+            <div>
+              <label class="form-label">Estado</label>
+              <select class="form-input" id="cierreEstado">
+                <option value="pendiente">Pendiente</option>
+                <option value="en_proceso">En proceso</option>
+                <option value="completado">Completado</option>
+                <option value="no_aplica">No aplica</option>
+              </select>
+            </div>
+            <div style="grid-column:1/-1">
+              <label class="form-label">Titulo del item</label>
+              <input class="form-input" id="cierreTitulo" placeholder="Que hay que verificar / entregar...">
+            </div>
+            <div style="grid-column:1/-1">
+              <label class="form-label">Descripcion</label>
+              <textarea class="form-input" id="cierreDescripcion" rows="2" placeholder="Detalle adicional..."></textarea>
+            </div>
+            <div>
+              <label class="form-label">Responsable</label>
+              <input class="form-input" id="cierreResponsable" placeholder="Quien lo gestiona">
+            </div>
+            <div>
+              <label class="form-label">Fecha limite</label>
+              <input class="form-input" type="date" id="cierreFechaLimite">
+            </div>
+            <div>
+              <label class="form-label">Completado por</label>
+              <input class="form-input" id="cierreCompletadoPor" placeholder="Nombre de quien firmo">
+            </div>
+            <div>
+              <label class="form-label">Fecha de cierre real</label>
+              <input class="form-input" type="date" id="cierreFechaComp">
+            </div>
+            <div style="grid-column:1/-1">
+              <label class="form-label">Evidencia / Referencia</label>
+              <input class="form-input" id="cierreEvidencia" placeholder="No documento, referencia del archivo...">
+            </div>
+            <div style="grid-column:1/-1">
+              <label class="form-label">Notas</label>
+              <input class="form-input" id="cierreNotas" placeholder="Observaciones adicionales...">
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="cerrarModal('modalCierre')">Cancelar</button>
+            <button class="btn btn-primary" onclick="guardarCierreItem()">Guardar</button>
+          </div>
+        </div>
       </div>
 
       <!-- REGISTRO AMBIENTAL / ENVIRONMENTAL LOG (NEW-65) -->
@@ -4336,6 +4447,7 @@ const PAGE_TITLES = {
   instruccionesObra: '📋 Instrucciones de Obra / Site Instructions',
   subcontratas: '🏗️ Registro de Subcontratas',
   registroAmbiental: '🌿 Registro Ambiental / Environmental Log',
+  cierreObra: '🏁 Checklist de Cierre de Obra',
 };
 
 const PAGE_LOADERS = {
@@ -4403,6 +4515,7 @@ const PAGE_LOADERS = {
   instruccionesObra: cargarInstruccionesObra,
   subcontratas: cargarSubcontratas,
   registroAmbiental: cargarRegistroAmbiental,
+  cierreObra: cargarCierreObra,
 };
 
 let currentPage = '';
@@ -4499,6 +4612,7 @@ const SYNC_INTERVALS = {
   instruccionesObra: 60,
   subcontratas: 90,
   registroAmbiental: 90,
+  cierreObra: 60,
 };
 
 let _syncTimer = null, _syncLabelTimer = null, _syncLastTs = null;
@@ -17045,6 +17159,187 @@ async function poblarSelectObras(selectId) {
     opt.textContent = o.nombre;
     sel.appendChild(opt);
   });
+}
+
+// ── CHECKLIST DE CIERRE DE OBRA / PROJECT CLOSEOUT (NEW-66) ────────
+let _cierreObraId = null, _cierreEditId = null, _cierreData = [];
+const CIERRE_CAT_ICON  = { documentacion:'📄', testing:'🔧', seguridad:'🦺', entrega:'🔑', legal:'⚖️', subcontratas:'🏗️' };
+const CIERRE_CAT_COLOR = { documentacion:'#2563eb', testing:'#7c3aed', seguridad:'#f97316', entrega:'#10b981', legal:'#f59e0b', subcontratas:'#64748b' };
+const CIERRE_ESTADO_COLOR = { pendiente:'#64748b', en_proceso:'#f97316', completado:'#10b981', no_aplica:'#94a3b8' };
+
+async function cargarCierreObra() {
+  if (document.getElementById('filterCierreObra')?.options.length <= 1)
+    await poblarSelectObras('filterCierreObra');
+  _cierreObraId = document.getElementById('filterCierreObra')?.value || null;
+  const categoria = document.getElementById('filterCiereCategoria')?.value || '';
+  const estado    = document.getElementById('filterCierreEstado')?.value || '';
+  if (!_cierreObraId) {
+    document.getElementById('cierreContent').innerHTML = '<div class="empty-state"><div class="empty-icon">🏁</div><div class="empty-text">Selecciona una obra para ver el checklist de cierre</div></div>';
+    document.getElementById('cierreProgressBar').style.display = 'none';
+    document.getElementById('cierreKpi').innerHTML = '';
+    document.getElementById('cierreBadge').style.display = 'none';
+    return;
+  }
+  const params = new URLSearchParams({ obra_id: _cierreObraId });
+  if (categoria) params.set('categoria', categoria);
+  if (estado)    params.set('estado', estado);
+  const [itemsR, resR] = await Promise.all([
+    api(`/cierre-obra-items?${params}`),
+    api(`/cierre-obra-resumen/${_cierreObraId}`)
+  ]);
+  _cierreData = itemsR?.items || [];
+
+  // Progress bar
+  const pct = resR?.pct || 0;
+  document.getElementById('cierreProgressBar').style.display = _cierreData.length ? '' : 'none';
+  document.getElementById('cierrePctLabel').textContent = pct + '%';
+  document.getElementById('cierrePctFill').style.width = pct + '%';
+  document.getElementById('cierrePctFill').style.background = pct >= 100 ? '#10b981' : pct >= 70 ? '#f97316' : '#ef4444';
+
+  // KPIs
+  const total  = resR?.total || 0;
+  const comp   = resR?.completados || 0;
+  const pend   = _cierreData.filter(x => x.estado === 'pendiente').length;
+  const enProc = _cierreData.filter(x => x.estado === 'en_proceso').length;
+  const hoy    = new Date().toISOString().slice(0,10);
+  const venc   = _cierreData.filter(x => x.estado !== 'completado' && x.estado !== 'no_aplica' && x.fecha_limite && x.fecha_limite < hoy).length;
+  document.getElementById('cierreKpi').innerHTML = `
+    <div class="kpi-card"><div class="kpi-icon">🏁</div><div class="kpi-value">${pct}%</div><div class="kpi-label">Completado</div></div>
+    <div class="kpi-card"><div class="kpi-icon">✅</div><div class="kpi-value" style="color:var(--success)">${comp}</div><div class="kpi-label">Firmados</div></div>
+    <div class="kpi-card"><div class="kpi-icon">🔄</div><div class="kpi-value" style="color:var(--primary)">${enProc}</div><div class="kpi-label">En proceso</div></div>
+    <div class="kpi-card"><div class="kpi-icon">⏳</div><div class="kpi-value" style="color:var(--muted)">${pend}</div><div class="kpi-label">Pendientes</div></div>
+    <div class="kpi-card"><div class="kpi-icon">⏰</div><div class="kpi-value" style="color:${venc>0?'var(--danger)':'var(--success)'}">${venc}</div><div class="kpi-label">Vencidos</div></div>`;
+
+  const badge = document.getElementById('cierreBadge');
+  if (badge) badge.style.display = pct < 100 && total > 0 ? '' : 'none';
+
+  // Group by category and render
+  const cats = [...new Set(_cierreData.map(x => x.categoria))].sort();
+  const content = document.getElementById('cierreContent');
+  if (!_cierreData.length) {
+    content.innerHTML = `<div class="empty-state"><div class="empty-icon">🏁</div>
+      <div class="empty-text">Sin items de cierre. Haz clic en "Inicializar plantilla" para cargar la lista estandar.</div></div>`;
+    return;
+  }
+  content.innerHTML = cats.map(cat => {
+    const items = _cierreData.filter(x => x.categoria === cat);
+    const catComp = items.filter(x => x.estado === 'completado' || x.estado === 'no_aplica').length;
+    const catPct  = Math.round(catComp / items.length * 100);
+    const rows = items.map(item => {
+      const vencido = item.estado !== 'completado' && item.estado !== 'no_aplica' && item.fecha_limite && item.fecha_limite < hoy;
+      return `<tr>
+        <td style="padding:8px">
+          <span style="background:${CIERRE_ESTADO_COLOR[item.estado]||'#64748b'};color:#fff;padding:2px 7px;border-radius:4px;font-size:10px">${item.estado||'—'}</span>
+        </td>
+        <td style="padding:8px;font-weight:600">${item.titulo}</td>
+        <td style="padding:8px;font-size:12px;color:var(--muted)">${item.responsable||'—'}</td>
+        <td style="padding:8px;font-size:12px;color:${vencido?'var(--danger)':'inherit'}">${fmtFecha(item.fecha_limite)}${vencido?' ⚠️':''}</td>
+        <td style="padding:8px;font-size:11px;color:var(--muted)">${item.evidencia||'—'}</td>
+        <td style="padding:8px;white-space:nowrap">
+          ${item.estado !== 'completado' ? `<button class="btn btn-secondary btn-sm" onclick="completarCierreItem(${item.id})" style="padding:2px 7px;font-size:10px;color:var(--success)" title="Marcar completado">✅</button>` : ''}
+          <button class="btn btn-secondary btn-sm" onclick="abrirModalCierre(${item.id})" style="padding:2px 7px;font-size:11px">✏️</button>
+          <button class="btn btn-secondary btn-sm" onclick="eliminarCierreItem(${item.id})" style="padding:2px 7px;font-size:11px;color:var(--danger)">🗑</button>
+        </td>
+      </tr>`;
+    }).join('');
+    return `<div style="margin-bottom:20px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;padding:10px 14px;background:var(--surface2);border-radius:8px;border-left:4px solid ${CIERRE_CAT_COLOR[cat]||'#64748b'}">
+        <span style="font-size:18px">${CIERRE_CAT_ICON[cat]||'📋'}</span>
+        <span style="font-weight:700;color:var(--text);flex:1">${cat.charAt(0).toUpperCase()+cat.slice(1).replace('_',' ')}</span>
+        <span style="font-size:12px;color:var(--muted)">${catComp}/${items.length}</span>
+        <span style="font-weight:800;color:${catPct===100?'var(--success)':catPct>50?'var(--primary)':'var(--danger)'}">${catPct}%</span>
+      </div>
+      <div style="overflow-x:auto">
+        <table style="border-collapse:collapse;width:100%;font-size:12px">
+          <thead><tr style="background:var(--surface2)">
+            <th style="padding:6px 8px;text-align:left;width:100px">Estado</th>
+            <th style="padding:6px 8px;text-align:left">Item</th>
+            <th style="padding:6px 8px;text-align:left;width:130px">Responsable</th>
+            <th style="padding:6px 8px;text-align:left;width:100px">Limite</th>
+            <th style="padding:6px 8px;text-align:left;width:150px">Evidencia</th>
+            <th style="padding:6px 8px;width:90px"></th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function inicializarPlantillasCierre() {
+  if (!_cierreObraId) { showToast('Selecciona una obra primero', 'warning'); return; }
+  if (!confirm('Esto cargara la plantilla estandar de cierre de obra (23 items). ¿Continuar?')) return;
+  const r = await api('/cierre-obra-plantilla', 'POST', { obra_id: parseInt(_cierreObraId) });
+  if (r?.ok) {
+    showToast(r.skipped ? 'Ya tenia items — no se duplicaron' : `Plantilla cargada: ${r.created} items ✅`, 'success');
+    cargarCierreObra();
+  } else showToast(r?.error || 'Error al inicializar', 'error');
+}
+
+async function completarCierreItem(id) {
+  const r = await api(`/cierre-obra-items/${id}`, 'PUT', {
+    estado: 'completado',
+    fecha_completado: new Date().toISOString().slice(0,10)
+  });
+  if (r?.ok) { showToast('Item completado ✅', 'success'); cargarCierreObra(); }
+  else showToast('Error', 'error');
+}
+
+async function abrirModalCierre(id = null) {
+  _cierreEditId = id;
+  document.getElementById('modalCierreTitle').textContent = id ? 'Editar item de cierre' : 'Nuevo item de cierre';
+  ['cierreTitulo','cierreDescripcion','cierreResponsable','cierreFechaLimite','cierreCompletadoPor','cierreFechaComp','cierreEvidencia','cierreNotas'].forEach(eid => { const el=document.getElementById(eid); if(el) el.value=''; });
+  document.getElementById('cierreCategoria').value = 'documentacion';
+  document.getElementById('cierreEstado').value = 'pendiente';
+  if (id) {
+    const item = _cierreData.find(x => x.id === id);
+    if (item) {
+      document.getElementById('cierreCategoria').value = item.categoria || 'documentacion';
+      document.getElementById('cierreEstado').value = item.estado || 'pendiente';
+      document.getElementById('cierreTitulo').value = item.titulo || '';
+      document.getElementById('cierreDescripcion').value = item.descripcion || '';
+      document.getElementById('cierreResponsable').value = item.responsable || '';
+      document.getElementById('cierreFechaLimite').value = item.fecha_limite || '';
+      document.getElementById('cierreCompletadoPor').value = item.completado_por || '';
+      document.getElementById('cierreFechaComp').value = item.fecha_completado || '';
+      document.getElementById('cierreEvidencia').value = item.evidencia || '';
+      document.getElementById('cierreNotas').value = item.notas || '';
+    }
+  }
+  document.getElementById('modalCierre').classList.add('active');
+}
+
+async function guardarCierreItem() {
+  const titulo = document.getElementById('cierreTitulo')?.value?.trim();
+  if (!titulo || !_cierreObraId) { showToast('Titulo y obra son obligatorios', 'warning'); return; }
+  const body = {
+    obra_id: parseInt(_cierreObraId),
+    categoria: document.getElementById('cierreCategoria')?.value || 'documentacion',
+    titulo,
+    descripcion: document.getElementById('cierreDescripcion')?.value?.trim() || null,
+    responsable: document.getElementById('cierreResponsable')?.value?.trim() || null,
+    estado: document.getElementById('cierreEstado')?.value || 'pendiente',
+    fecha_limite: document.getElementById('cierreFechaLimite')?.value || null,
+    completado_por: document.getElementById('cierreCompletadoPor')?.value?.trim() || null,
+    fecha_completado: document.getElementById('cierreFechaComp')?.value || null,
+    evidencia: document.getElementById('cierreEvidencia')?.value?.trim() || null,
+    notas: document.getElementById('cierreNotas')?.value?.trim() || null,
+  };
+  const r = _cierreEditId
+    ? await api(`/cierre-obra-items/${_cierreEditId}`, 'PUT', body)
+    : await api('/cierre-obra-items', 'POST', body);
+  if (r?.ok || r?.id) {
+    cerrarModal('modalCierre');
+    showToast(_cierreEditId ? 'Item actualizado ✅' : 'Item creado ✅', 'success');
+    cargarCierreObra();
+  } else showToast(r?.error || 'Error al guardar', 'error');
+}
+
+async function eliminarCierreItem(id) {
+  if (!confirm('¿Eliminar este item del checklist?')) return;
+  const r = await api(`/cierre-obra-items/${id}`, 'DELETE');
+  if (r?.ok) { showToast('Item eliminado', 'success'); cargarCierreObra(); }
+  else showToast('Error al eliminar', 'error');
 }
 
 // ── REGISTRO AMBIENTAL / ENVIRONMENTAL LOG (NEW-65) ────────────────

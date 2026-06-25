@@ -4680,6 +4680,19 @@ export default {
         if (method === 'PUT')    return await actualizarRegistroAmbiental(_raid, request, env);
         if (method === 'DELETE') return await eliminarRegistroAmbiental(_raid, request, env);
       }
+      // -- Checklist de Cierre de Obra (NEW-66) --------------------------------
+      if (path === '/cierre-obra-items' && method === 'GET')  return await getCierreItems(request, env);
+      if (path === '/cierre-obra-items' && method === 'POST') return await crearCierreItem(request, env);
+      if (path.startsWith('/cierre-obra-items/')) {
+        const _ciid = parseInt(path.split('/cierre-obra-items/')[1]);
+        if (method === 'PUT')    return await actualizarCierreItem(_ciid, request, env);
+        if (method === 'DELETE') return await eliminarCierreItem(_ciid, request, env);
+      }
+      if (path.startsWith('/cierre-obra-resumen/')) {
+        const _corObraId = parseInt(path.split('/cierre-obra-resumen/')[1]);
+        if (method === 'GET') return await getCierreResumen(_corObraId, request, env);
+      }
+      if (path === '/cierre-obra-plantilla' && method === 'POST') return await inicializarCierrePlantilla(request, env);
       // â”€â”€ RFIs â€” Consultas TÃ©cnicas (NEW-34) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
       if (path === '/rfis'                  && method === 'GET')  return await getRfis(request, env);
       if (path === '/rfis'                  && method === 'POST') return await crearRfi(request, env);
@@ -16046,4 +16059,160 @@ async function eliminarRegistroAmbiental(id, request, env) {
   if (!auth?.empresa_id) return err('No autorizado', 403);
   await env.DB.prepare(`DELETE FROM registro_ambiental WHERE id=? AND empresa_id=?`).bind(id, auth.empresa_id).run();
   return json({ ok: true });
+}
+
+// ============================================================
+// NEW-66  Checklist de Cierre de Obra / Project Closeout
+// ============================================================
+
+async function ensureCierreObraTable(env) {
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS cierre_obra_items (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    empresa_id      INTEGER NOT NULL,
+    obra_id         INTEGER NOT NULL,
+    categoria       TEXT DEFAULT 'documentacion',
+    titulo          TEXT NOT NULL,
+    descripcion     TEXT,
+    responsable     TEXT,
+    estado          TEXT DEFAULT 'pendiente',
+    fecha_limite    TEXT,
+    fecha_completado TEXT,
+    completado_por  TEXT,
+    evidencia       TEXT,
+    notas           TEXT,
+    orden           INTEGER DEFAULT 0,
+    created_at      TEXT DEFAULT (datetime('now'))
+  )`).run();
+}
+
+const CIERRE_PLANTILLA = [
+  // Documentacion
+  { cat:'documentacion', titulo:'As-built planos finales', orden:1 },
+  { cat:'documentacion', titulo:'Manual de uso y mantenimiento', orden:2 },
+  { cat:'documentacion', titulo:'Certificado de fin de obra (arquitecto/ingeniero)', orden:3 },
+  { cat:'documentacion', titulo:'Libro de ordenes cerrado', orden:4 },
+  { cat:'documentacion', titulo:'Certificados de materiales (CE)', orden:5 },
+  // Testing y puesta en marcha
+  { cat:'testing', titulo:'Prueba de instalacion electrica (BT)', orden:10 },
+  { cat:'testing', titulo:'Prueba instalacion contra incendios', orden:11 },
+  { cat:'testing', titulo:'Prueba instalacion fontaneria (presion)', orden:12 },
+  { cat:'testing', titulo:'Prueba ascensores (OCA)', orden:13 },
+  { cat:'testing', titulo:'Certificado instalacion electrica (OCTE)', orden:14 },
+  // Seguridad
+  { cat:'seguridad', titulo:'Cierre del Plan de Seguridad y Salud', orden:20 },
+  { cat:'seguridad', titulo:'Acta final de Coordinador de Seguridad', orden:21 },
+  { cat:'seguridad', titulo:'Liquidacion accidentes / incidentes', orden:22 },
+  // Entrega
+  { cat:'entrega', titulo:'Acta de recepcion provisional firmada', orden:30 },
+  { cat:'entrega', titulo:'Entrega de llaves al cliente', orden:31 },
+  { cat:'entrega', titulo:'Formacion al personal del cliente', orden:32 },
+  { cat:'entrega', titulo:'Punch list cerrado al 100%', orden:33 },
+  // Legal y financiero
+  { cat:'legal', titulo:'Certificacion final de obra', orden:40 },
+  { cat:'legal', titulo:'Liquidacion economica final', orden:41 },
+  { cat:'legal', titulo:'Retenciones liberadas', orden:42 },
+  { cat:'legal', titulo:'Garantias y avales entregados', orden:43 },
+  // Subcontratas
+  { cat:'subcontratas', titulo:'Liquidacion con todas las subcontratas', orden:50 },
+  { cat:'subcontratas', titulo:'Documentacion PRL subcontratas archivada', orden:51 },
+  { cat:'subcontratas', titulo:'Finiquitos firmados subcontratas', orden:52 },
+];
+
+async function getCierreItems(request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth?.empresa_id) return err('No autorizado', 403);
+  await ensureCierreObraTable(env);
+  const url = new URL(request.url);
+  const obraId   = url.searchParams.get('obra_id');
+  const categoria = url.searchParams.get('categoria');
+  const estado   = url.searchParams.get('estado');
+  let q = `SELECT * FROM cierre_obra_items WHERE empresa_id=?`;
+  const params = [auth.empresa_id];
+  if (obraId)    { q += ` AND obra_id=?`;    params.push(obraId); }
+  if (categoria) { q += ` AND categoria=?`;  params.push(categoria); }
+  if (estado)    { q += ` AND estado=?`;     params.push(estado); }
+  q += ` ORDER BY categoria ASC, orden ASC`;
+  const { results } = await env.DB.prepare(q).bind(...params).all();
+  return json({ items: results });
+}
+
+async function getCierreResumen(obraId, request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth?.empresa_id) return err('No autorizado', 403);
+  await ensureCierreObraTable(env);
+  const { results: all } = await env.DB.prepare(
+    `SELECT estado, categoria FROM cierre_obra_items WHERE empresa_id=? AND obra_id=?`
+  ).bind(auth.empresa_id, obraId).all();
+  const total = all.length;
+  const completados = all.filter(x => x.estado === 'completado' || x.estado === 'no_aplica').length;
+  const porCat = {};
+  all.forEach(x => {
+    if (!porCat[x.categoria]) porCat[x.categoria] = { total:0, completados:0 };
+    porCat[x.categoria].total++;
+    if (x.estado === 'completado' || x.estado === 'no_aplica') porCat[x.categoria].completados++;
+  });
+  return json({ total, completados, pct: total > 0 ? Math.round(completados / total * 100) : 0, por_categoria: porCat });
+}
+
+async function crearCierreItem(request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth?.empresa_id) return err('No autorizado', 403);
+  await ensureCierreObraTable(env);
+  const b = await request.json();
+  const { meta } = await env.DB.prepare(
+    `INSERT INTO cierre_obra_items (empresa_id,obra_id,categoria,titulo,descripcion,responsable,estado,fecha_limite,evidencia,notas,orden)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?)`
+  ).bind(
+    auth.empresa_id, b.obra_id, b.categoria || 'documentacion', b.titulo,
+    b.descripcion || null, b.responsable || null, b.estado || 'pendiente',
+    b.fecha_limite || null, b.evidencia || null, b.notas || null, b.orden || 0
+  ).run();
+  return json({ ok: true, id: meta.last_row_id });
+}
+
+async function actualizarCierreItem(id, request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth?.empresa_id) return err('No autorizado', 403);
+  await ensureCierreObraTable(env);
+  const b = await request.json();
+  const fechaComp = b.estado === 'completado' && !b.fecha_completado
+    ? new Date().toISOString().slice(0,10) : b.fecha_completado || null;
+  await env.DB.prepare(
+    `UPDATE cierre_obra_items SET
+      categoria=COALESCE(?,categoria), titulo=COALESCE(?,titulo),
+      descripcion=COALESCE(?,descripcion), responsable=COALESCE(?,responsable),
+      estado=COALESCE(?,estado), fecha_limite=COALESCE(?,fecha_limite),
+      fecha_completado=COALESCE(?,fecha_completado), completado_por=COALESCE(?,completado_por),
+      evidencia=COALESCE(?,evidencia), notas=COALESCE(?,notas)
+     WHERE id=? AND empresa_id=?`
+  ).bind(
+    b.categoria || null, b.titulo || null, b.descripcion || null, b.responsable || null,
+    b.estado || null, b.fecha_limite || null, fechaComp, b.completado_por || null,
+    b.evidencia || null, b.notas || null, id, auth.empresa_id
+  ).run();
+  return json({ ok: true });
+}
+
+async function eliminarCierreItem(id, request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth?.empresa_id) return err('No autorizado', 403);
+  await env.DB.prepare(`DELETE FROM cierre_obra_items WHERE id=? AND empresa_id=?`).bind(id, auth.empresa_id).run();
+  return json({ ok: true });
+}
+
+async function inicializarCierrePlantilla(request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth?.empresa_id) return err('No autorizado', 403);
+  await ensureCierreObraTable(env);
+  const { obra_id } = await request.json();
+  if (!obra_id) return err('obra_id requerido', 400);
+  const { results: exist } = await env.DB.prepare(
+    `SELECT id FROM cierre_obra_items WHERE empresa_id=? AND obra_id=? LIMIT 1`
+  ).bind(auth.empresa_id, obra_id).all();
+  if (exist.length > 0) return json({ ok: true, skipped: true, msg: 'Ya tiene items de cierre' });
+  const stmt = env.DB.prepare(
+    `INSERT INTO cierre_obra_items (empresa_id,obra_id,categoria,titulo,orden) VALUES (?,?,?,?,?)`
+  );
+  await Promise.all(CIERRE_PLANTILLA.map(t => stmt.bind(auth.empresa_id, obra_id, t.cat, t.titulo, t.orden).run()));
+  return json({ ok: true, created: CIERRE_PLANTILLA.length });
 }
