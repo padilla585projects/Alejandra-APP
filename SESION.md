@@ -1,14 +1,28 @@
-================================================================================
-  ALEJANDRA APP — CONTROL DE SESIÓN
-  LEER SIEMPRE AL INICIO. ACTUALIZAR AL INICIO Y AL FINAL DE CADA SESIÓN.
-================================================================================
-
 ## ESTADO ACTUAL
 
-**Sesión:** EN CURSO
-**Última sesión:** 25/06/2026 — Mejora masiva panel office (Procore/Fieldwire level) + Subcontratas completo
-**Versión actual:** App PWA **v6.65** · AlejandraIA **v1.9.17+31** · WORKER API `930a0847` · WORKER agente `4fc6c53b`
-**Próxima:** Continuar mejoras — visualización Gantt en panel, KPIs presupuesto en dashboard, etc.
+**Sesión:** LIBRE
+**Última sesión:** 26/06/2026 — NEW-108 Flota de Vehículos + diagnóstico exhaustivo de la app
+**Versión actual:** App PWA **v7.40** · AlejandraIA **v1.9.17+31** · WORKER API  · commit **Próxima:** NEW-109 (ver notas — elegir feature genuinamente nueva, la app ya es muy completa)
+
+---
+
+## RESUMEN SESIÓN 26/06/2026 — NEW-108 Flota de Vehículos v7.40
+
+### Hecho ✅
+- NEW-108: Flota de Vehículos (worker.js + panel.html + rutas) — deploy 8a32b1be, commit d9869c4
+- Diagnóstico completo: app tiene +100 módulos ya implementados — actas_reunion, accion_items, transmittals, cae_doc, licencias, catalogo_precios, seguros_obra, solicitudes_material, flujo_caja, certificaciones... todo ya existe
+- Se abortó NEW-109 intento actas_reunion (ya existía) — código duplicado limpiado correctamente
+- worker.js: 685 funciones, 0 dups, 20538 lineas ✅
+
+### Pendiente próxima sesión — NEW-109
+Candidatos genuinamente nuevos (verificar con grep antes de implementar):
+1. Libro de Órdenes de Obra (obligatorio Ley 38/1999 España)
+2. Análisis de Valor Ganado / Earned Value (EV, PV, AC, SPI, CPI)
+3. KPI de Productividad por Operario
+4. Muestras de Material / Material Sample Tracking
+5. Control de Certificados de Calidad por partida
+
+ANTES de NEW-109: grep -n en worker.js + panel.html para confirmar que no existe ya.
 
 ---
 
