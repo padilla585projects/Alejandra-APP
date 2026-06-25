@@ -525,6 +525,9 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
     <button class="nav-item" data-page="planosObra" onclick="navTo('planosObra')">
       <span class="nav-icon">📐</span> Planos de Obra
     </button>
+    <button class="nav-item" data-page="costesObra" onclick="navTo('costesObra')">
+      <span class="nav-icon">💰</span> Control de Costes
+    </button>
 
     <div class="sidebar-section" onclick="sidebarToggle(this)" data-sid="seguimiento"><span>📓 Seguimiento</span><span class="sec-chevron">▼</span></div>
     <button class="nav-item" data-page="partesPanel" onclick="navTo('partesPanel')">
@@ -1414,6 +1417,45 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
           <button class="btn btn-secondary" onclick="imprimirPunchList()">🖨 PDF</button>
         </div>
         <div class="tbl-wrap"><div id="tblPunch"></div></div>
+      </div>
+
+      <!-- CONTROL DE COSTES -->
+      <div class="page" id="pageCostesObra">
+        <div class="page-title">💰 Control de Costes</div>
+        <div class="page-sub">Seguimiento de costes reales vs presupuesto por fase y tipo de gasto</div>
+        <div class="tbl-toolbar" style="margin-bottom:16px">
+          <select class="tbl-search" id="costesObraId" style="min-width:240px" onchange="cargarCostesObra()">
+            <option value="">— Selecciona una obra —</option>
+          </select>
+          <select class="tbl-search" id="cosetesTipoFiltro" style="min-width:140px" onchange="cargarCostesObra()">
+            <option value="">Todos los tipos</option>
+            <option value="mano_obra">👷 Mano de obra</option>
+            <option value="material">📦 Material</option>
+            <option value="subcontrata">🏢 Subcontrata</option>
+            <option value="equipo">🔧 Equipo/maquinaria</option>
+            <option value="otros">📋 Otros</option>
+          </select>
+          <button class="btn btn-primary" onclick="abrirModalCoste()">+ Nuevo gasto</button>
+          <button class="btn btn-secondary" onclick="exportarTabla(tblCostes,'costes-obra')">⬇ CSV</button>
+          <button class="btn btn-secondary" onclick="cargarCostesObra()">🔄 Actualizar</button>
+        </div>
+        <!-- KPI resumen -->
+        <div id="costesResumen" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:18px"></div>
+        <!-- Tabla por fase -->
+        <div id="costesFasesTable" style="display:none;margin-bottom:24px">
+          <div style="font-family:'Montserrat',sans-serif;font-weight:700;font-size:10px;letter-spacing:2px;color:var(--muted);text-transform:uppercase;margin-bottom:10px">📊 Resumen por fase</div>
+          <div id="costesFasesBody" style="display:flex;flex-direction:column;gap:6px"></div>
+        </div>
+        <!-- Gráfico -->
+        <div id="costesChartWrap" style="display:none;margin-bottom:24px">
+          <div class="section-card">
+            <div class="section-card-title"><span>📊</span> Presupuesto vs Coste Real por Fase</div>
+            <canvas id="chartCostes" style="max-height:260px"></canvas>
+          </div>
+        </div>
+        <!-- Tabla de entradas de coste -->
+        <div style="font-family:'Montserrat',sans-serif;font-weight:700;font-size:10px;letter-spacing:2px;color:var(--muted);text-transform:uppercase;margin-bottom:10px">📝 Detalle de gastos</div>
+        <div class="tbl-wrap"><div id="tblCostes"></div></div>
       </div>
 
       <!-- PLANOS DE OBRA -->
@@ -2930,6 +2972,7 @@ const PAGE_TITLES = {
   seguridadObra: '🦺 Seguridad de Obra',
   planosObra: '📐 Planos de Obra',
   punchList: '📝 Punch List',
+  costesObra: '💰 Control de Costes',
 };
 
 const PAGE_LOADERS = {
@@ -2975,6 +3018,7 @@ const PAGE_LOADERS = {
   seguridadObra: cargarSeguridadObra,
   planosObra: cargarPlanosObra,
   punchList: cargarPunchList,
+  costesObra: cargarCostesObra,
 };
 
 let currentPage = '';
@@ -3049,6 +3093,7 @@ const SYNC_INTERVALS = {
   seguridadObra: 60,
   planosObra: 120,
   punchList: 60,
+  costesObra: 90,
 };
 
 let _syncTimer = null, _syncLabelTimer = null, _syncLastTs = null;
@@ -10753,6 +10798,173 @@ async function eliminarCorr(id) {
   if (!confirm('¿Eliminar esta correspondencia?')) return;
   const r = await api(`/correspondencia/${id}`, { method: 'DELETE' });
   if (r.ok || r.deleted) { toast('Eliminado', 'ok'); cerrarModal(); tblCorr = null; cargarCorrespondencia(); }
+  else toast('Error al eliminar', 'err');
+}
+
+// ── CONTROL DE COSTES DE OBRA ─────────────────────────────────────
+let tblCostes = null, _costesData = [], _costesFases = [], _costesTotales = {};
+const COSTE_TIPO_ICON = { mano_obra:'👷', material:'📦', subcontrata:'🏢', equipo:'🔧', otros:'📋' };
+
+async function cargarCostesObra() {
+  if (document.getElementById('costesObraId')?.options.length <= 1) poblarSelectObras('costesObraId');
+  const obraId = document.getElementById('costesObraId')?.value;
+  const tipo   = document.getElementById('cosetesTipoFiltro')?.value || '';
+  if (!obraId) {
+    document.getElementById('costesResumen').innerHTML = '<div style="color:var(--muted);font-size:13px;padding:8px 0">Selecciona una obra para ver los costes.</div>';
+    document.getElementById('costesFasesTable').style.display = 'none';
+    document.getElementById('costesChartWrap').style.display = 'none';
+    return;
+  }
+  let url = `/costes-obra?obra_id=${obraId}`;
+  if (tipo) url += `&tipo=${tipo}`;
+  const r = await api(url);
+  _costesData  = r?.costes || [];
+  _costesFases = r?.resumen_fases || [];
+  _costesTotales = r?.totales || {};
+
+  // KPIs
+  const { presupuesto=0, coste_real=0, variacion=0 } = _costesTotales;
+  const pct = presupuesto ? Math.round((coste_real / presupuesto) * 100) : 0;
+  const variColor = variacion >= 0 ? 'var(--success)' : 'var(--danger)';
+  document.getElementById('costesResumen').innerHTML = [
+    { l:'Presupuesto total', v: fmtMoney(presupuesto), c:'var(--primary)' },
+    { l:'Coste real',        v: fmtMoney(coste_real),  c:'var(--text)' },
+    { l:'Variación',         v: (variacion>=0?'+':'')+fmtMoney(variacion), c: variColor },
+    { l:'% Ejecutado',       v: pct+'%', c: pct>100?'var(--danger)':pct>80?'var(--warning)':'var(--success)' },
+    { l:'Nº gastos',         v: _costesData.length, c:'var(--muted)' },
+  ].map(k => `<div class="kpi-card" style="border-left:3px solid ${k.c}">
+    <div class="kpi-val" style="color:${k.c};font-size:16px">${k.v}</div>
+    <div class="kpi-label">${k.l}</div></div>`).join('');
+
+  // Tabla por fases
+  if (_costesFases.length) {
+    document.getElementById('costesFasesTable').style.display = '';
+    document.getElementById('costesFasesBody').innerHTML = _costesFases.map(f => {
+      const pctF = f.presupuesto ? Math.min(100, Math.round((f.coste_registrado / f.presupuesto) * 100)) : 0;
+      const barColor = f.pct_ejecutado > 100 ? 'var(--danger)' : f.pct_ejecutado > 85 ? 'var(--warning)' : 'var(--primary)';
+      const varF = (f.variacion>=0?'+':'')+fmtMoney(f.variacion);
+      return `<div style="background:var(--surface2);border-radius:8px;padding:10px 14px;display:grid;grid-template-columns:1fr auto auto auto;gap:12px;align-items:center">
+        <div>
+          <div style="font-weight:600;font-size:13px">${esc(f.nombre||'Sin nombre')}</div>
+          <div style="background:var(--border);border-radius:3px;height:5px;margin-top:5px">
+            <div style="background:${barColor};height:100%;width:${pctF}%;border-radius:3px;transition:width .5s"></div>
+          </div>
+        </div>
+        <div style="text-align:right;font-size:12px"><div style="color:var(--muted);font-size:10px">Presup.</div>${fmtMoney(f.presupuesto||0)}</div>
+        <div style="text-align:right;font-size:12px"><div style="color:var(--muted);font-size:10px">Real</div>${fmtMoney(f.coste_registrado||0)}</div>
+        <div style="text-align:right;font-size:12px"><div style="color:var(--muted);font-size:10px">Variación</div><span style="color:${f.variacion>=0?'var(--success)':'var(--danger)'}">${varF}</span></div>
+      </div>`;
+    }).join('');
+
+    // Chart
+    document.getElementById('costesChartWrap').style.display = '';
+    _destroyChart('costes');
+    _charts.costes = new Chart(document.getElementById('chartCostes'), {
+      type: 'bar',
+      data: {
+        labels: _costesFases.map(f => f.nombre?.slice(0,20)||'—'),
+        datasets: [
+          { label: 'Presupuesto', data: _costesFases.map(f => f.presupuesto||0), backgroundColor: CHART_COLORS.blue, borderRadius: 4 },
+          { label: 'Coste real',  data: _costesFases.map(f => f.coste_registrado||0), backgroundColor: CHART_COLORS.orange, borderRadius: 4 },
+        ]
+      },
+      options: { ..._chartDefaults() }
+    });
+  } else {
+    document.getElementById('costesFasesTable').style.display = 'none';
+    document.getElementById('costesChartWrap').style.display = 'none';
+  }
+
+  // Tabulator detalle
+  if (!tblCostes) {
+    tblCostes = new Tabulator('#tblCostes', {
+      data: _costesData, layout: 'fitColumns', responsiveLayout: 'collapse',
+      pagination: 'local', paginationSize: 30,
+      initialSort: [{ column: 'fecha', dir: 'desc' }],
+      columns: [
+        { title:'Fecha',     field:'fecha',      width:95 },
+        { title:'Tipo',      field:'tipo',       width:110, formatter: c => (COSTE_TIPO_ICON[c.getValue()]||'📋') + ' ' + (c.getValue()||'otros').replace(/_/g,' ') },
+        { title:'Concepto',  field:'concepto',   minWidth:200 },
+        { title:'Fase',      field:'fase_nombre',width:140 },
+        { title:'Proveedor', field:'proveedor',  width:130 },
+        { title:'Factura',   field:'factura_ref',width:110 },
+        { title:'Importe',   field:'importe',    width:110, hozAlign:'right', formatter: c => `<strong>${fmtMoney(c.getValue()||0)}</strong>` },
+        { title:'Acc.', field:'id', hozAlign:'center', width:70, headerSort:false,
+          formatter: c => `<button class="tbl-btn" onclick="abrirModalCosteEditar(${c.getValue()})">✏️</button><button class="tbl-btn" onclick="eliminarCosteObra(${c.getValue()})">🗑</button>` },
+      ]
+    });
+  } else {
+    tblCostes.setData(_costesData);
+  }
+}
+
+async function _cargarFasesSelectCoste(obraId) {
+  if (!obraId) return '<option value="">— Sin fase —</option>';
+  const r = await api(`/fases-obra?obra_id=${obraId}`);
+  const fases = r?.fases || [];
+  return '<option value="">— Sin fase asignada —</option>' +
+    fases.map(f => `<option value="${f.id}">${esc(f.nombre||'Fase '+f.id)}</option>`).join('');
+}
+
+async function abrirModalCoste(d={}) {
+  const obraId = document.getElementById('costesObraId')?.value || '';
+  const fasesOpts = await _cargarFasesSelectCoste(obraId);
+  abrirModal(`
+    <h3 style="margin:0 0 16px">💰 ${d.id ? 'Editar' : 'Nuevo'} Gasto de Obra</h3>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <label style="grid-column:1/-1">Concepto *<input id="mCosteConcepto" class="form-input" value="${d.concepto||''}" placeholder="Descripción del gasto" required></label>
+      <label>Tipo<select id="mCosteTipo" class="form-input">
+        ${Object.entries(COSTE_TIPO_ICON).map(([k,v])=>`<option value="${k}"${d.tipo===k?' selected':''}>${v} ${k.replace(/_/g,' ')}</option>`).join('')}
+      </select></label>
+      <label>Importe (€) *<input id="mCosteImporte" type="number" step="0.01" min="0" class="form-input" value="${d.importe||''}" placeholder="0.00" required></label>
+      <label>Fecha<input id="mCosteFecha" type="date" class="form-input" value="${d.fecha||new Date().toISOString().slice(0,10)}"></label>
+      <label>Fase<select id="mCosteFase" class="form-input">${fasesOpts}</select></label>
+      <label>Proveedor / Empresa<input id="mCosteProveedor" class="form-input" value="${d.proveedor||''}" placeholder="Nombre del proveedor"></label>
+      <label>Referencia factura<input id="mCosteFactura" class="form-input" value="${d.factura_ref||''}" placeholder="Nº factura o albarán"></label>
+      <label style="grid-column:1/-1">Notas<input id="mCosteNotas" class="form-input" value="${d.notas||''}" placeholder="Observaciones..."></label>
+    </div>
+    <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px">
+      ${d.id ? `<button class="btn btn-danger" onclick="eliminarCosteObra(${d.id})">🗑 Eliminar</button>` : ''}
+      <button class="btn btn-secondary" onclick="cerrarModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="guardarCosteObra(${d.id||0})">💾 Guardar</button>
+    </div>
+  `);
+  // Set fase selection if editing
+  if (d.fase_id) { const s = document.getElementById('mCosteFase'); if (s) s.value = d.fase_id; }
+}
+
+async function abrirModalCosteEditar(id) {
+  const item = _costesData.find(c => c.id === id);
+  if (item) abrirModalCoste(item);
+}
+
+async function guardarCosteObra(id) {
+  const concepto = document.getElementById('mCosteConcepto')?.value?.trim();
+  const importe  = parseFloat(document.getElementById('mCosteImporte')?.value);
+  if (!concepto)   { toast('Concepto requerido', 'err'); return; }
+  if (isNaN(importe)) { toast('Importe requerido', 'err'); return; }
+  const body = {
+    concepto,
+    tipo:        document.getElementById('mCosteTipo')?.value,
+    importe,
+    fecha:       document.getElementById('mCosteFecha')?.value,
+    fase_id:     document.getElementById('mCosteFase')?.value || null,
+    proveedor:   document.getElementById('mCosteProveedor')?.value?.trim(),
+    factura_ref: document.getElementById('mCosteFactura')?.value?.trim(),
+    notas:       document.getElementById('mCosteNotas')?.value?.trim(),
+    obra_id:     document.getElementById('costesObraId')?.value || null,
+  };
+  const method = id ? 'PUT' : 'POST';
+  const url    = id ? `/costes-obra/${id}` : '/costes-obra';
+  const r = await api(url, { method, body: JSON.stringify(body) });
+  if (r.ok || r.id) { toast(id ? 'Actualizado' : 'Gasto registrado', 'ok'); cerrarModal(); tblCostes = null; cargarCostesObra(); }
+  else toast(r.error || 'Error al guardar', 'err');
+}
+
+async function eliminarCosteObra(id) {
+  if (!confirm('¿Eliminar este gasto?')) return;
+  const r = await api(`/costes-obra/${id}`, { method: 'DELETE' });
+  if (r.ok) { toast('Eliminado', 'ok'); cerrarModal(); tblCostes = null; cargarCostesObra(); }
   else toast('Error al eliminar', 'err');
 }
 

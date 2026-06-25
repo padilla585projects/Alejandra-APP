@@ -4616,6 +4616,14 @@ export default {
         if (method === 'PUT')    return await actualizarToolboxTalk(_ttid, request, env);
         if (method === 'DELETE') return await eliminarToolboxTalk(_ttid, request, env);
       }
+      // ── Control de Costes de Obra (NEW-45) ──────────────────────────────────
+      if (path === '/costes-obra' && method === 'GET')    return await getCostesObra(request, env);
+      if (path === '/costes-obra' && method === 'POST')   return await crearCosteObra(request, env);
+      if (path.startsWith('/costes-obra/')) {
+        const _coid = parseInt(path.split('/costes-obra/')[1]);
+        if (method === 'PUT')    return await actualizarCosteObra(_coid, request, env);
+        if (method === 'DELETE') return await eliminarCosteObra(_coid, request, env);
+      }
       // ── Punch List / Lista de Verificacion (NEW-44) ─────────────────────────
       if (path === '/punch-list' && method === 'GET')    return await getPunchList(request, env);
       if (path === '/punch-list' && method === 'POST')   return await crearPunchItem(request, env);
@@ -13914,5 +13922,117 @@ async function eliminarPunchItem(id, request, env) {
   const auth = await getAuth(request, env);
   if (!auth?.empresa_id) return err('No autorizado', 403);
   await env.DB.prepare(`DELETE FROM punch_list WHERE id=? AND empresa_id=?`).bind(id, auth.empresa_id).run();
+  return json({ ok: true });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  NEW-45 — CONTROL DE COSTES DE OBRA
+// ═══════════════════════════════════════════════════════════════════════════
+async function ensureCostesObraTable(env) {
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS costes_obra (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    empresa_id INTEGER NOT NULL,
+    obra_id INTEGER,
+    fase_id INTEGER,
+    concepto TEXT NOT NULL,
+    tipo TEXT DEFAULT 'otros',
+    importe REAL NOT NULL DEFAULT 0,
+    fecha TEXT,
+    proveedor TEXT,
+    factura_ref TEXT,
+    notas TEXT,
+    creado_por TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`).run();
+}
+async function getCostesObra(request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth?.empresa_id) return err('No autorizado', 403);
+  await ensureCostesObraTable(env);
+  const u = new URL(request.url);
+  const obraId = u.searchParams.get('obra_id');
+  const tipo   = u.searchParams.get('tipo');
+  const faseId = u.searchParams.get('fase_id');
+  let sql = `SELECT c.*, ob.nombre as obra_nombre, f.nombre as fase_nombre
+    FROM costes_obra c
+    LEFT JOIN obras ob ON ob.id=c.obra_id
+    LEFT JOIN fases_obra f ON f.id=c.fase_id
+    WHERE c.empresa_id=?`;
+  const params = [auth.empresa_id];
+  if (obraId) { sql += ' AND c.obra_id=?'; params.push(obraId); }
+  if (tipo)   { sql += ' AND c.tipo=?';    params.push(tipo); }
+  if (faseId) { sql += ' AND c.fase_id=?'; params.push(faseId); }
+  sql += ' ORDER BY c.fecha DESC, c.created_at DESC';
+  const { results } = await env.DB.prepare(sql).bind(...params).all();
+
+  // Resumen por fase (si hay obra_id)
+  let resumenFases = [];
+  if (obraId) {
+    // Presupuesto por fase
+    const { results: fases } = await env.DB.prepare(
+      `SELECT f.id, f.nombre, f.presupuesto, f.coste_real,
+       COALESCE(SUM(c.importe),0) as coste_registrado
+       FROM fases_obra f
+       LEFT JOIN costes_obra c ON c.fase_id=f.id AND c.empresa_id=?
+       WHERE f.obra_id=? AND f.empresa_id=?
+       GROUP BY f.id`
+    ).bind(auth.empresa_id, obraId, auth.empresa_id).all();
+    resumenFases = (fases||[]).map(f => ({
+      ...f,
+      variacion: (f.presupuesto||0) - (f.coste_registrado||0),
+      pct_ejecutado: f.presupuesto ? Math.round(((f.coste_registrado||0) / f.presupuesto) * 100) : 0
+    }));
+  }
+
+  // Totales globales para la obra
+  const totalPresup = resumenFases.reduce((s,f) => s + (f.presupuesto||0), 0);
+  const totalReal   = resumenFases.reduce((s,f) => s + (f.coste_registrado||0), 0);
+
+  return json({
+    costes: results||[],
+    resumen_fases: resumenFases,
+    totales: { presupuesto: totalPresup, coste_real: totalReal, variacion: totalPresup - totalReal }
+  });
+}
+async function crearCosteObra(request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth?.empresa_id) return err('No autorizado', 403);
+  const roles = ['superadmin','empresa_admin','encargado','jefe_de_obra','oficina'];
+  if (!roles.includes(auth.rol)) return err('Sin permisos', 403);
+  await ensureCostesObraTable(env);
+  const b = await request.json();
+  if (!b.concepto || b.importe == null) return err('concepto e importe requeridos', 400);
+  const { meta } = await env.DB.prepare(
+    `INSERT INTO costes_obra (empresa_id,obra_id,fase_id,concepto,tipo,importe,fecha,proveedor,factura_ref,notas,creado_por)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?)`
+  ).bind(
+    auth.empresa_id, b.obra_id||null, b.fase_id||null, b.concepto,
+    b.tipo||'otros', parseFloat(b.importe)||0,
+    b.fecha || new Date().toISOString().slice(0,10),
+    b.proveedor||null, b.factura_ref||null, b.notas||null,
+    auth.nombre||auth.email||null
+  ).run();
+  return json({ ok: true, id: meta.last_row_id });
+}
+async function actualizarCosteObra(id, request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth?.empresa_id) return err('No autorizado', 403);
+  const b = await request.json();
+  await env.DB.prepare(
+    `UPDATE costes_obra SET concepto=COALESCE(?,concepto), tipo=COALESCE(?,tipo),
+     importe=COALESCE(?,importe), fecha=COALESCE(?,fecha), fase_id=COALESCE(?,fase_id),
+     proveedor=COALESCE(?,proveedor), factura_ref=COALESCE(?,factura_ref), notas=COALESCE(?,notas)
+     WHERE id=? AND empresa_id=?`
+  ).bind(
+    b.concepto||null, b.tipo||null, b.importe!=null?parseFloat(b.importe):null,
+    b.fecha||null, b.fase_id||null, b.proveedor||null, b.factura_ref||null,
+    b.notas||null, id, auth.empresa_id
+  ).run();
+  return json({ ok: true });
+}
+async function eliminarCosteObra(id, request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth?.empresa_id) return err('No autorizado', 403);
+  await env.DB.prepare(`DELETE FROM costes_obra WHERE id=? AND empresa_id=?`).bind(id, auth.empresa_id).run();
   return json({ ok: true });
 }
