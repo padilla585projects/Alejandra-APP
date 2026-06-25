@@ -6845,7 +6845,7 @@ async function getObraDashboard(request, env) {
     return [...p, ...extras];
   };
 
-  const [fichajesHoy, equiposMant, herrFuera, pedidosPend, alertasHerr, alertasSeg, alertasBob, incidenciasAbiertas, proximoEvento, fichajesSemana, incidenciasTipo, incidenciasCriticas, tareasUrgentes, rfisAbiertas, tareasActivas] = await Promise.all([
+  const [fichajesHoy, equiposMant, herrFuera, pedidosPend, alertasHerr, alertasSeg, alertasBob, incidenciasAbiertas, proximoEvento, fichajesSemana, incidenciasTipo, incidenciasCriticas, tareasUrgentes, rfisAbiertas, tareasActivas, deficienciasAbiertas] = await Promise.all([
     // Fichajes hoy
     env.DB.prepare(
       `SELECT COUNT(*) as n FROM fichajes WHERE empresa_id=?${queryObraId ? ' AND obra_id=?' : ''} AND fecha=?`
@@ -6931,6 +6931,11 @@ async function getObraDashboard(request, env) {
     env.DB.prepare(
       `SELECT COUNT(*) as n FROM tareas_obra WHERE empresa_id=?${queryObraId?' AND obra_id=?':''} AND estado NOT IN ('completada','bloqueada')`
     ).bind(...[empresa_id, ...(queryObraId ? [queryObraId] : [])]).first().catch(()=>({n:0})),
+
+    // Deficiencias abiertas / en reparación (punch list)
+    env.DB.prepare(
+      `SELECT COUNT(*) as n FROM control_calidad WHERE empresa_id=?${queryObraId?' AND obra_id=?':''} AND estado IN ('abierto','en_reparacion')`
+    ).bind(...[empresa_id, ...(queryObraId ? [queryObraId] : [])]).first().catch(()=>({n:0})),
   ]);
 
   return json({
@@ -6948,6 +6953,7 @@ async function getObraDashboard(request, env) {
     tareas_urgentes:        tareasUrgentes?.results || [],
     rfis_abiertas:          rfisAbiertas?.n || 0,
     tareas_activas:         tareasActivas?.n || 0,
+    deficiencias_abiertas:  deficienciasAbiertas?.n || 0,
   });
 }
 
@@ -9190,6 +9196,20 @@ async function informeSemanal(empresa_id, empresa_nombre, env) {
       }
     } catch {}
 
+    // 10. Control de calidad — deficiencias abiertas y resueltas en la semana
+    let calidadStr = '';
+    try {
+      const [defAbiertas, defResueltas] = await Promise.all([
+        env.DB.prepare(`SELECT COUNT(*) as n FROM control_calidad WHERE empresa_id=? AND estado IN ('abierto','en_reparacion')`).bind(empresa_id).first().catch(()=>({n:0})),
+        env.DB.prepare(`SELECT COUNT(*) as n FROM control_calidad WHERE empresa_id=? AND estado IN ('resuelto','verificado') AND fecha_resolucion >= ?`).bind(empresa_id, desde).first().catch(()=>({n:0})),
+      ]);
+      const nAb = defAbiertas?.n || 0;
+      const nRes = defResueltas?.n || 0;
+      if (nAb > 0 || nRes > 0) {
+        calidadStr = `🔍 <b>Control calidad:</b> ${nAb} abierta${nAb!==1?'s':''} · ${nRes} resuelta${nRes!==1?'s':''} esta semana\n`;
+      }
+    } catch {}
+
     // Composición del mensaje
     const semStr = `${desde} al ${hasta}`;
     let msg = `📊 <b>Informe semanal — ${empresa_nombre}</b>\n`;
@@ -9202,6 +9222,7 @@ async function informeSemanal(empresa_id, empresa_nombre, env) {
     if (stockBajo > 0)    msg += `⚠️ <b>Alertas de stock:</b> ${stockBajo} bajo mínimo\n`;
     if (nTareasPend > 0)  msg += `✅ <b>Tareas activas:</b> ${nTareasPend}${nTareasVenc > 0 ? ` (⚠️ ${nTareasVenc} VENCIDAS)` : ''}\n`;
     if (nRfisOpen > 0)    msg += `📋 <b>RFIs sin respuesta:</b> ${nRfisOpen}\n`;
+    if (calidadStr)       msg += calidadStr;
     if (presupuestoStr)   msg += presupuestoStr;
     msg += `\n<i>Generado automáticamente por Alejandra App</i>`;
 
@@ -9550,6 +9571,29 @@ async function alertasDiarias(env) {
         }
       }
     } catch(e) { console.error('rfis vencidas alert error:', e.message); }
+
+    // ── Deficiencias urgentes abiertas sin resolver ──────────────────────────
+    try {
+      const hoyStr3 = hoy.toISOString().slice(0, 10);
+      const { results: empresasConDef } = await env.DB.prepare(
+        `SELECT DISTINCT empresa_id FROM control_calidad WHERE estado IN ('abierto','en_reparacion') AND (prioridad='urgente' OR (fecha_limite IS NOT NULL AND fecha_limite < ?))`
+      ).bind(hoyStr3).all().catch(() => ({ results: [] }));
+
+      for (const { empresa_id: eid } of (empresasConDef || [])) {
+        const { results: defsAbiertas } = await env.DB.prepare(
+          `SELECT numero, titulo, prioridad, ubicacion, fecha_limite FROM control_calidad WHERE empresa_id=? AND estado IN ('abierto','en_reparacion') AND (prioridad='urgente' OR (fecha_limite IS NOT NULL AND fecha_limite < ?)) ORDER BY CASE prioridad WHEN 'urgente' THEN 0 WHEN 'alta' THEN 1 WHEN 'normal' THEN 2 ELSE 3 END LIMIT 8`
+        ).bind(eid, hoyStr3).all().catch(() => ({ results: [] }));
+
+        if (defsAbiertas && defsAbiertas.length) {
+          const priIcon = { urgente: '🔴', alta: '🟠', normal: '🟡', baja: '🟢' };
+          let msg = `🔍 <b>Deficiencias urgentes / vencidas sin resolver</b> (${defsAbiertas.length}):\n\n`;
+          for (const d of defsAbiertas) {
+            msg += `${priIcon[d.prioridad] || '⚪'} ${d.numero||'DEF'} ${d.titulo}${d.ubicacion ? ' 📍' + d.ubicacion : ''}${d.fecha_limite ? ' · límite ' + d.fecha_limite : ''}\n`;
+          }
+          await sendTelegram(env, msg);
+        }
+      }
+    } catch(e) { console.error('deficiencias alert error:', e.message); }
 
     // RGPD — aplicar retención automática a todas las empresas que la tengan activa
     try {
@@ -10820,7 +10864,7 @@ async function buscarGlobal(request, env) {
 
   const obra_id = new URL(request.url).searchParams.get('obra_id') ? parseInt(new URL(request.url).searchParams.get('obra_id')) : null;
 
-  const [inc, pemp, carr, herr, users, pedidos, obras, tareas, rfisR] = await Promise.all([
+  const [inc, pemp, carr, herr, users, pedidos, obras, tareas, rfisR, deficiencias, actas] = await Promise.all([
     env.DB.prepare(`SELECT id,'incidencia' as tipo,titulo as nombre,tipo as subtipo,estado FROM incidencias WHERE empresa_id=? AND titulo LIKE ? LIMIT 5`).bind(eid,like).all(),
     env.DB.prepare(`SELECT id,'pemp' as tipo,matricula as nombre,tipo as subtipo,estado FROM pemp WHERE empresa_id=? AND (matricula LIKE ? OR marca LIKE ?) AND estado!='baja' LIMIT 5`).bind(eid,like,like).all(),
     env.DB.prepare(`SELECT id,'carretilla' as tipo,matricula as nombre,tipo as subtipo,estado FROM carretillas WHERE empresa_id=? AND (matricula LIKE ? OR marca LIKE ?) AND estado!='baja' LIMIT 5`).bind(eid,like,like).all(),
@@ -10832,11 +10876,15 @@ async function buscarGlobal(request, env) {
     env.DB.prepare(`SELECT id,'tarea' as tipo,titulo as nombre,estado as subtipo,prioridad as estado FROM tareas_obra WHERE empresa_id=? AND (titulo LIKE ? OR descripcion LIKE ? OR asignado_a LIKE ?)${obra_id?' AND obra_id=?':''} LIMIT 5`).bind(...[eid,like,like,like,...(obra_id?[obra_id]:[])]).all().catch(()=>({results:[]})),
     // RFIs
     env.DB.prepare(`SELECT id,'rfi' as tipo,titulo as nombre,categoria as subtipo,estado FROM rfis WHERE empresa_id=? AND (titulo LIKE ? OR descripcion LIKE ? OR numero LIKE ?)${obra_id?' AND obra_id=?':''} LIMIT 5`).bind(...[eid,like,like,like,...(obra_id?[obra_id]:[])]).all().catch(()=>({results:[]})),
+    // Deficiencias (punch list)
+    env.DB.prepare(`SELECT id,'deficiencia' as tipo,titulo as nombre,ubicacion as subtipo,estado FROM control_calidad WHERE empresa_id=? AND (titulo LIKE ? OR ubicacion LIKE ? OR numero LIKE ?)${obra_id?' AND obra_id=?':''} LIMIT 5`).bind(...[eid,like,like,like,...(obra_id?[obra_id]:[])]).all().catch(()=>({results:[]})),
+    // Actas de reunión
+    env.DB.prepare(`SELECT id,'acta' as tipo,titulo as nombre,tipo as subtipo,estado FROM actas_reunion WHERE empresa_id=? AND (titulo LIKE ? OR asistentes LIKE ? OR acuerdos LIKE ?)${obra_id?' AND obra_id=?':''} LIMIT 5`).bind(...[eid,like,like,like,...(obra_id?[obra_id]:[])]).all().catch(()=>({results:[]})),
   ]);
   return json([
     ...inc.results, ...pemp.results, ...carr.results,
     ...herr.results, ...users.results, ...pedidos.results, ...obras.results,
-    ...tareas.results, ...rfisR.results,
+    ...tareas.results, ...rfisR.results, ...deficiencias.results, ...actas.results,
   ]);
 }
 

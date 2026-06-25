@@ -5787,8 +5787,8 @@ async function ejecutarBusqueda(q) {
     if (!res.ok) { c.innerHTML = '<div class="empty-state">Error al buscar</div>'; return; }
     const items = await res.json();
     if (!items.length) { c.innerHTML = '<div style="font-size:13px;color:var(--muted);text-align:center;padding:20px">Sin resultados para «' + q + '»</div>'; return; }
-    const iconos = { incidencia:'🚨', pemp:'🏗️', carretilla:'🚜', herramienta:'🔧', usuario:'👤', pedido:'📦', obra:'🏢', tarea:'✅', rfi:'📋' };
-    const labels = { incidencia:'Incidencia', pemp:'PEMP', carretilla:'Carretilla', herramienta:'Herramienta', usuario:'Trabajador', pedido:'Pedido', obra:'Obra', tarea:'Tarea', rfi:'RFI' };
+    const iconos = { incidencia:'🚨', pemp:'🏗️', carretilla:'🚜', herramienta:'🔧', usuario:'👤', pedido:'📦', obra:'🏢', tarea:'✅', rfi:'📋', deficiencia:'🔍', acta:'📝' };
+    const labels = { incidencia:'Incidencia', pemp:'PEMP', carretilla:'Carretilla', herramienta:'Herramienta', usuario:'Trabajador', pedido:'Pedido', obra:'Obra', tarea:'Tarea', rfi:'RFI', deficiencia:'Deficiencia', acta:'Acta reunión' };
     c.innerHTML = items.map(r => `
       <div onclick="buscarNavegar('${r.tipo}',${r.id})" style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .15s" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
         <span style="font-size:22px;flex-shrink:0">${iconos[r.tipo]||'📋'}</span>
@@ -5809,8 +5809,10 @@ function buscarNavegar(tipo, id) {
   else if (tipo === 'usuario') { navTo('ajustes'); setTimeout(() => selAjTab('usuarios'), 300); }
   else if (tipo === 'pedido') { navTo('pedidos'); }
   else if (tipo === 'obra')   { navTo('obras'); }
-  else if (tipo === 'tarea')  { navTo('home'); setTimeout(() => dashSelTab('tareas'), 400); }
-  else if (tipo === 'rfi')    { navTo('home'); setTimeout(() => dashSelTab('rfis'), 400); }
+  else if (tipo === 'tarea')       { navTo('home'); setTimeout(() => dashSelTab('tareas'), 400); }
+  else if (tipo === 'rfi')         { navTo('home'); setTimeout(() => dashSelTab('rfis'), 400); }
+  else if (tipo === 'deficiencia') { navTo('calidad'); }
+  else if (tipo === 'acta')        { navTo('reuniones'); }
 }
 window.buscarNavegar = buscarNavegar;
 
@@ -11508,7 +11510,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '6.61';
+const APP_VERSION = '6.62';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -13389,6 +13391,7 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
         { icon:'🚨', label:'Incidencias abiertas', value:d.incidencias_abiertas??0, color:(d.incidencias_abiertas||0)>0?'var(--red)':'var(--green)', sub:(d.incidencias_abiertas||0)>0?`${d.incidencias_abiertas} sin resolver`:'Sin incidencias', onclick:"navTo('incidencias')" },
         { icon:'✅', label:'Tareas activas', value:d.tareas_activas??0, color:(d.tareas_activas||0)>0?'#8b5cf6':'var(--green)', sub:(d.tareas_activas||0)>0?`${d.tareas_activas} pendiente${d.tareas_activas===1?'':'s'}`:'Sin tareas', onclick:"dashSelTab('tareas')" },
         { icon:'📋', label:'RFIs abiertas', value:d.rfis_abiertas??0, color:(d.rfis_abiertas||0)>0?'#f59e0b':'var(--green)', sub:(d.rfis_abiertas||0)>0?`${d.rfis_abiertas} sin respuesta`:'Sin consultas', onclick:"dashSelTab('rfis')" },
+        { icon:'🔍', label:'Deficiencias', value:d.deficiencias_abiertas??0, color:(d.deficiencias_abiertas||0)>0?'#f97316':'var(--green)', sub:(d.deficiencias_abiertas||0)>0?`${d.deficiencias_abiertas} sin resolver`:'Sin deficiencias', onclick:"navTo('calidad')" },
         { icon:'📅', label:'Próximo evento', value:d.proximo_evento?(d.proximo_evento.fecha||'—').slice(5).replace('-','/'):'—', color:d.proximo_evento?'#6366f1':'var(--muted)', sub:d.proximo_evento?esc(d.proximo_evento.titulo):'Sin eventos', onclick:"navTo('calendario')" },
         { icon:'🤖', label:'Preguntar a Alejandra', value:'IA', color:'var(--accent)', sub:'Análisis inteligente de obra', onclick:"alejandraAbrir()" },
       ];
