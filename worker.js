@@ -15432,3 +15432,4 @@ async function getPresupuestoResumen(obraId, request, env) {
   const pctGlobal = totalPres > 0 ? Math.round((totalEjec/totalPres)*100) : 0;
   return json({ obra, capitulos, totalPres, totalEjec, pctGlobal, totalLineas: (lineas||[]).length });
 }
+

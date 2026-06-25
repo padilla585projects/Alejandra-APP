@@ -569,6 +569,10 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
     <button class="nav-item" data-page="presupuestoSov" onclick="navTo('presupuestoSov')">
       <span class="nav-icon">📊</span> Presupuesto SOV
     </button>
+    <button class="nav-item" data-page="ordenesCambio" onclick="navTo('ordenesCambio')">
+      <span class="nav-icon">🔄</span> Ordenes de Cambio
+      <span class="nav-badge" id="ocBadge" style="display:none">!</span>
+    </button>
 
     <div class="sidebar-section" onclick="sidebarToggle(this)" data-sid="seguimiento"><span>📓 Seguimiento</span><span class="sec-chevron">▼</span></div>
     <button class="nav-item" data-page="partesPanel" onclick="navTo('partesPanel')">
@@ -2066,6 +2070,33 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
         </div>
         <div id="entregasKpi" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:12px;margin-bottom:16px"></div>
         <div class="tbl-wrap"><div id="tblEntregas"></div></div>
+      </div>
+
+      <!-- ORDENES DE CAMBIO / CHANGE ORDERS -->
+      <div class="page" id="pageOrdenesCambio">
+        <div class="page-title">🔄 Ordenes de Cambio</div>
+        <div class="page-sub">Change Orders — Cambios de alcance formales con impacto economico y de plazo</div>
+        <div class="tbl-toolbar" style="flex-wrap:wrap;gap:8px;margin-bottom:14px">
+          <select class="tbl-search" id="filterOCObra" style="min-width:220px" onchange="cargarOrdenesCambio()"></select>
+          <select class="tbl-search" id="filterOCEstado" style="min-width:150px" onchange="cargarOrdenesCambio()">
+            <option value="">Todos los estados</option>
+            <option value="borrador">Borrador</option>
+            <option value="pendiente">Pendiente</option>
+            <option value="aprobada">Aprobada</option>
+            <option value="rechazada">Rechazada</option>
+          </select>
+          <select class="tbl-search" id="filterOCTipo" style="min-width:150px" onchange="cargarOrdenesCambio()">
+            <option value="">Todos los tipos</option>
+            <option value="adicional">Adicional</option>
+            <option value="reduccion">Reduccion</option>
+            <option value="sustitucion">Sustitucion</option>
+          </select>
+          <button class="btn btn-primary" onclick="abrirModalOC()">+ Nueva OC</button>
+          <button class="btn btn-secondary" onclick="exportarTabla(tblOC,'ordenes-cambio')">⬇ CSV</button>
+          <button class="btn btn-secondary" onclick="cargarOrdenesCambio()">🔄</button>
+        </div>
+        <div id="ocKpi" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:16px"></div>
+        <div class="tbl-wrap"><div id="tblOC"></div></div>
       </div>
 
       <!-- PRESUPUESTO DETALLADO / SCHEDULE OF VALUES -->
@@ -3673,6 +3704,7 @@ const PAGE_TITLES = {
   controlCalidad: '✅ Control de Calidad / QA-QC',
   entregasMaterial: '🚚 Entregas de Material / Albaranes',
   presupuestoSov: '📊 Presupuesto Detallado / Schedule of Values',
+  ordenesCambio: '🔄 Ordenes de Cambio / Change Orders',
 };
 
 const PAGE_LOADERS = {
@@ -3732,6 +3764,7 @@ const PAGE_LOADERS = {
   controlCalidad: cargarControlCalidad,
   entregasMaterial: cargarEntregasMaterial,
   presupuestoSov: cargarPresupuestoSov,
+  ordenesCambio: cargarOrdenesCambio,
 };
 
 let currentPage = '';
@@ -3820,6 +3853,7 @@ const SYNC_INTERVALS = {
   controlCalidad: 90,
   entregasMaterial: 90,
   presupuestoSov: 120,
+  ordenesCambio: 90,
 };
 
 let _syncTimer = null, _syncLabelTimer = null, _syncLastTs = null;
@@ -13859,6 +13893,184 @@ async function _getObrasOpts() {
   const obras = r?.obras || r?.results || [];
   return (selectedId) => '<option value="">-- Sin obra --</option>' +
     obras.map(o => `<option value="${o.id}"${o.id==selectedId?' selected':''}>${o.nombre||o.codigo}</option>`).join('');
+}
+
+// ── ORDENES DE CAMBIO / CHANGE ORDERS (NEW-58) ────────────────────
+let tblOC = null;
+let _ocEditId = null;
+
+const OC_TIPO_COLOR = { adicional:'var(--primary)', reduccion:'var(--warning)', sustitucion:'var(--muted)' };
+const OC_ESTADO_COLOR = {
+  borrador:'var(--muted)', pendiente:'var(--warning)',
+  aprobada:'var(--success)', rechazada:'var(--danger)'
+};
+const OC_ESTADO_ICON = { borrador:'📝', pendiente:'⏳', aprobada:'✅', rechazada:'❌' };
+
+async function cargarOrdenesCambio() {
+  if (document.getElementById('filterOCObra')?.options.length <= 1)
+    poblarSelectObras('filterOCObra');
+  const obraId = document.getElementById('filterOCObra')?.value || '';
+  const estado = document.getElementById('filterOCEstado')?.value || '';
+  const tipo   = document.getElementById('filterOCTipo')?.value   || '';
+  let url = '/ordenes-cambio?';
+  if (obraId) url += `obra_id=${obraId}&`;
+  if (estado) url += `estado=${estado}&`;
+  if (tipo)   url += `tipo=${tipo}&`;
+  const r = await api(url);
+  const ocs = r?.ordenes || [];
+  // Badge
+  const badge = document.getElementById('ocBadge');
+  const v = r?.vencidas || 0;
+  if (badge) { badge.textContent = v||'!'; badge.style.display = v>0?'':'none'; }
+  // KPIs
+  const kpi = document.getElementById('ocKpi');
+  if (kpi) kpi.innerHTML = `
+    <div class="kpi-card"><div class="kpi-icon">🔄</div><div class="kpi-value">${r?.total||0}</div><div class="kpi-label">Total OCs</div></div>
+    <div class="kpi-card"><div class="kpi-icon">⏳</div><div class="kpi-value" style="color:var(--warning)">${r?.pendientes||0}</div><div class="kpi-label">Pendientes</div></div>
+    <div class="kpi-card"><div class="kpi-icon">✅</div><div class="kpi-value" style="color:var(--success)">${r?.aprobadas||0}</div><div class="kpi-label">Aprobadas</div></div>
+    <div class="kpi-card"><div class="kpi-icon">❌</div><div class="kpi-value" style="color:var(--danger)">${r?.rechazadas||0}</div><div class="kpi-label">Rechazadas</div></div>
+    <div class="kpi-card"><div class="kpi-icon">💶</div><div class="kpi-value" style="color:var(--success)">${fmtMoney(r?.importeAprobado||0)}</div><div class="kpi-label">Aprobado</div></div>
+    <div class="kpi-card"><div class="kpi-icon">⚠️</div><div class="kpi-value" style="color:var(--warning)">${fmtMoney(r?.importePendiente||0)}</div><div class="kpi-label">Pendiente</div></div>
+  `;
+  const cols = [
+    { title: 'N° OC', field: 'numero', width: 130 },
+    { title: 'Titulo', field: 'titulo', minWidth: 200 },
+    { title: 'Tipo', field: 'tipo', width: 110, formatter: cell => {
+      const v=cell.getValue()||''; return `<span style="color:${OC_TIPO_COLOR[v]||'inherit'};font-weight:600">${v}</span>`;
+    }},
+    { title: 'Estado', field: 'estado', width: 120, formatter: cell => {
+      const v=cell.getValue()||''; return `<span style="color:${OC_ESTADO_COLOR[v]||'inherit'};font-weight:700">${OC_ESTADO_ICON[v]||''} ${v}</span>`;
+    }},
+    { title: 'Importe', field: 'importe', width: 120, hozAlign:'right', formatter: cell => {
+      const v=cell.getValue()||0; const t=cell.getRow().getData().tipo||'';
+      const color=t==='reduccion'?'var(--danger)':'var(--success)';
+      return `<span style="color:${color};font-weight:700">${t==='reduccion'?'-':'+'} ${fmtMoney(Math.abs(v))}</span>`;
+    }},
+    { title: 'Plazo (dias)', field: 'impacto_plazo_dias', width: 110, hozAlign:'center', formatter: cell => {
+      const v=cell.getValue()||0; return v===0?'-':`<span style="color:${v>0?'var(--danger)':'var(--success)'}">${v>0?'+':''}${v} dias</span>`;
+    }},
+    { title: 'Solicitado por', field: 'solicitado_por', width: 130 },
+    { title: 'F. Solicitud', field: 'fecha_solicitud', width: 110, formatter: cell=>fmtFecha(cell.getValue()) },
+    { title: 'F. Limite', field: 'fecha_limite_respuesta', width: 110, formatter: cell => {
+      const v=cell.getValue(); if(!v) return '-';
+      const hoy=new Date().toISOString().slice(0,10);
+      const row=cell.getRow().getData();
+      return v<hoy && row.estado==='pendiente'
+        ? `<span style="color:var(--danger);font-weight:700">${fmtFecha(v)} ⚠️</span>` : fmtFecha(v);
+    }},
+    { title: 'F. Aprobacion', field: 'fecha_aprobacion', width: 120, formatter: cell=>fmtFecha(cell.getValue()) },
+    { title: 'Acciones', field: 'id', width: 110, headerSort:false, formatter: cell => {
+      const id=cell.getValue();
+      return `<button class="btn btn-secondary btn-sm" onclick="abrirModalOC(${id})">✏️</button>
+              <button class="btn btn-danger btn-sm" onclick="eliminarOC(${id})">🗑</button>`;
+    }},
+  ];
+  if (tblOC) { tblOC.replaceData(ocs); return; }
+  tblOC = new Tabulator('#tblOC', {
+    data: ocs, layout:'fitColumns', responsiveLayout:'collapse',
+    pagination:'local', paginationSize:25,
+    placeholder:'<div class="empty-state"><div class="empty-icon">🔄</div><div class="empty-text">No hay ordenes de cambio.</div></div>',
+    columns: cols,
+    langs:{es:{pagination:{first:'«',first_title:'Primera',last:'»',last_title:'Ultima',prev:'‹',prev_title:'Anterior',next:'›',next_title:'Siguiente'}}}, locale:'es',
+  });
+}
+
+async function abrirModalOC(id = null) {
+  _ocEditId = id;
+  let d = {};
+  if (id) {
+    const r = await api('/ordenes-cambio?');
+    d = (r?.ordenes || []).find(o => o.id === id) || {};
+  }
+  const isEdit = !!id;
+  const obrasOpts = await _getObrasOpts();
+  const modalHtml = `
+    <div class="modal" id="modalOC" style="display:flex">
+      <div class="modal-content" style="max-width:700px">
+        <div class="modal-header">
+          <span class="modal-title">${isEdit?'✏️ Editar':'+ Nueva'} Orden de Cambio</span>
+          <button class="modal-close" onclick="cerrarModal('modalOC')">✕</button>
+        </div>
+        <div class="modal-body" style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+          <label style="grid-column:1/-1">Titulo *
+            <input class="form-input" id="ocTitulo" value="${(d.titulo||'').replace(/"/g,'&quot;')}"></label>
+          <label>Obra<select class="form-input" id="ocObra">${obrasOpts(d.obra_id)}</select></label>
+          <label>Tipo<select class="form-input" id="ocTipo">
+            <option value="adicional"${d.tipo==='adicional'||!d.tipo?' selected':''}>Adicional</option>
+            <option value="reduccion"${d.tipo==='reduccion'?' selected':''}>Reduccion</option>
+            <option value="sustitucion"${d.tipo==='sustitucion'?' selected':''}>Sustitucion</option>
+          </select></label>
+          <label>Estado<select class="form-input" id="ocEstado">
+            <option value="borrador"${d.estado==='borrador'?' selected':''}>📝 Borrador</option>
+            <option value="pendiente"${d.estado==='pendiente'||!d.estado?' selected':''}>⏳ Pendiente</option>
+            <option value="aprobada"${d.estado==='aprobada'?' selected':''}>✅ Aprobada</option>
+            <option value="rechazada"${d.estado==='rechazada'?' selected':''}>❌ Rechazada</option>
+          </select></label>
+          <label>Importe (€)
+            <input class="form-input" type="number" step="0.01" id="ocImporte" value="${d.importe||0}"></label>
+          <label>Impacto plazo (dias)
+            <input class="form-input" type="number" id="ocPlazo" value="${d.impacto_plazo_dias||0}" placeholder="+ adicional, - reduccion"></label>
+          <label>Solicitado por
+            <input class="form-input" id="ocSolicitado" value="${d.solicitado_por||''}"></label>
+          <label>Aprobado por
+            <input class="form-input" id="ocAprobado" value="${d.aprobado_por||''}"></label>
+          <label>Fecha solicitud
+            <input class="form-input" type="date" id="ocFSolicitud" value="${d.fecha_solicitud||new Date().toISOString().slice(0,10)}"></label>
+          <label>Fecha limite respuesta
+            <input class="form-input" type="date" id="ocFLimite" value="${d.fecha_limite_respuesta||''}"></label>
+          <label>Fecha aprobacion
+            <input class="form-input" type="date" id="ocFAprobacion" value="${d.fecha_aprobacion||''}"></label>
+          <label>Referencia plano
+            <input class="form-input" id="ocPlano" value="${d.referencia_plano||''}"></label>
+          <label style="grid-column:1/-1">Descripcion
+            <textarea class="form-input" id="ocDesc" rows="3" style="resize:vertical">${d.descripcion||''}</textarea></label>
+          <label style="grid-column:1/-1">Notas
+            <textarea class="form-input" id="ocNotas" rows="2" style="resize:vertical">${d.notas||''}</textarea></label>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" onclick="cerrarModal('modalOC')">Cancelar</button>
+          <button class="btn btn-primary" onclick="guardarOC(${id||0})">Guardar</button>
+        </div>
+      </div>
+    </div>`;
+  abrirModal(modalHtml);
+}
+
+async function guardarOC(id) {
+  const titulo = document.getElementById('ocTitulo')?.value.trim();
+  if (!titulo) return showToast('El titulo es obligatorio', 'error');
+  const body = {
+    titulo,
+    obra_id:             document.getElementById('ocObra')?.value     || null,
+    tipo:                document.getElementById('ocTipo')?.value      || 'adicional',
+    estado:              document.getElementById('ocEstado')?.value    || 'pendiente',
+    importe:             parseFloat(document.getElementById('ocImporte')?.value) || 0,
+    impacto_plazo_dias:  parseInt(document.getElementById('ocPlazo')?.value)    || 0,
+    solicitado_por:      document.getElementById('ocSolicitado')?.value.trim()  || null,
+    aprobado_por:        document.getElementById('ocAprobado')?.value.trim()    || null,
+    fecha_solicitud:     document.getElementById('ocFSolicitud')?.value         || null,
+    fecha_limite_respuesta: document.getElementById('ocFLimite')?.value         || null,
+    fecha_aprobacion:    document.getElementById('ocFAprobacion')?.value        || null,
+    referencia_plano:    document.getElementById('ocPlano')?.value.trim()       || null,
+    descripcion:         document.getElementById('ocDesc')?.value.trim()        || null,
+    notas:               document.getElementById('ocNotas')?.value.trim()       || null,
+  };
+  const url = id ? `/ordenes-cambio/${id}` : '/ordenes-cambio';
+  const method = id ? 'PUT' : 'POST';
+  const r = await api(url, method, body);
+  if (r?.ok || r?.id) {
+    cerrarModal('modalOC');
+    showToast(id ? 'OC actualizada ✅' : `OC creada ✅ (${r.numero||''})`, 'success');
+    tblOC = null;
+    cargarOrdenesCambio();
+  } else showToast(r?.error || 'Error al guardar', 'error');
+}
+
+async function eliminarOC(id) {
+  if (!confirm('¿Eliminar esta orden de cambio?')) return;
+  const r = await api(`/ordenes-cambio/${id}`, 'DELETE');
+  if (r?.ok) { showToast('OC eliminada', 'success'); tblOC=null; cargarOrdenesCambio(); }
+  else showToast('Error al eliminar', 'error');
 }
 
 // ── PRESUPUESTO DETALLADO / SCHEDULE OF VALUES (NEW-57) ───────────
