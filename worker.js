@@ -4501,6 +4501,14 @@ export default {
         if (method === 'PUT')    return await actualizarPartidaPresupuesto(_bid, request, env);
         if (method === 'DELETE') return await eliminarPartidaPresupuesto(_bid, request, env);
       }
+      // ── Órdenes de Cambio (NEW-35) ────────────────────────────────────────────
+      if (path === '/ordenes-cambio'         && method === 'GET')  return await getOrdenesCambio(request, env);
+      if (path === '/ordenes-cambio'         && method === 'POST') return await crearOrdenCambio(request, env);
+      if (path.startsWith('/ordenes-cambio/')) {
+        const _ocid = parseInt(path.split('/ordenes-cambio/')[1]);
+        if (method === 'PUT')    return await actualizarOrdenCambio(_ocid, request, env);
+        if (method === 'DELETE') return await eliminarOrdenCambio(_ocid, request, env);
+      }
       // ── RFIs — Consultas Técnicas (NEW-34) ────────────────────────────────────
       if (path === '/rfis'                  && method === 'GET')  return await getRfis(request, env);
       if (path === '/rfis'                  && method === 'POST') return await crearRfi(request, env);
@@ -12700,5 +12708,132 @@ async function eliminarRfi(id, request, env) {
   const auth = await getAuth(request, env);
   if (!auth.empresa_id) return err('No autorizado', 403);
   await env.DB.prepare(`DELETE FROM rfis WHERE id=? AND empresa_id=?`).bind(id, auth.empresa_id).run();
+  return json({ ok: true });
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// ÓRDENES DE CAMBIO (Change Orders) (NEW-35)
+// Tabla: ordenes_cambio(id, obra_id, empresa_id, numero TEXT, titulo, descripcion,
+//         rfi_id, estado, categoria, coste_adicional REAL, dias_extension INTEGER,
+//         solicitado_por, aprobado_por, fecha_propuesta, fecha_aprobacion, notas,
+//         created_at)
+// Estado: propuesta → en_revision → aprobada | rechazada
+// ══════════════════════════════════════════════════════════════════════════════
+
+async function ensureOrdenesCambioTable(env) {
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS ordenes_cambio (
+    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+    obra_id          INTEGER,
+    empresa_id       INTEGER NOT NULL,
+    numero           TEXT,
+    titulo           TEXT NOT NULL,
+    descripcion      TEXT,
+    rfi_id           INTEGER,
+    estado           TEXT DEFAULT 'propuesta',
+    categoria        TEXT DEFAULT 'general',
+    coste_adicional  REAL DEFAULT 0,
+    dias_extension   INTEGER DEFAULT 0,
+    solicitado_por   TEXT,
+    aprobado_por     TEXT,
+    fecha_propuesta  TEXT,
+    fecha_aprobacion TEXT,
+    notas            TEXT,
+    created_at       TEXT DEFAULT (datetime('now'))
+  )`).run().catch(() => {});
+}
+
+async function getOrdenesCambio(request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth.empresa_id) return err('No autorizado', 403);
+  await ensureOrdenesCambioTable(env);
+  const url = new URL(request.url);
+  const obra_id = url.searchParams.get('obra_id');
+  const estado  = url.searchParams.get('estado');
+  let q = `SELECT oc.*, r.numero as rfi_numero FROM ordenes_cambio oc
+            LEFT JOIN rfis r ON r.id = oc.rfi_id
+            WHERE oc.empresa_id=?`;
+  const params = [auth.empresa_id];
+  if (obra_id) { q += ` AND oc.obra_id=?`;  params.push(parseInt(obra_id)); }
+  if (estado)  { q += ` AND oc.estado=?`;   params.push(estado); }
+  q += ` ORDER BY CASE oc.estado WHEN 'propuesta' THEN 0 WHEN 'en_revision' THEN 1 WHEN 'aprobada' THEN 2 ELSE 3 END, oc.created_at DESC`;
+  const { results } = await env.DB.prepare(q).bind(...params).all();
+  // Totales para resumen
+  const totales = (results || []).reduce((acc, oc) => {
+    if (oc.estado === 'aprobada') {
+      acc.coste_aprobado  += oc.coste_adicional || 0;
+      acc.dias_aprobados  += oc.dias_extension  || 0;
+    }
+    if (oc.estado === 'propuesta' || oc.estado === 'en_revision') {
+      acc.coste_pendiente += oc.coste_adicional || 0;
+    }
+    return acc;
+  }, { coste_aprobado: 0, dias_aprobados: 0, coste_pendiente: 0 });
+  return json({ ordenes: results || [], totales });
+}
+
+async function crearOrdenCambio(request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth.empresa_id) return err('No autorizado', 403);
+  if (!['superadmin','empresa_admin','encargado','jefe_de_obra','oficina','desarrollador'].includes(auth.rol))
+    return err('Sin permiso', 403);
+  await ensureOrdenesCambioTable(env);
+  const b = await request.json();
+  if (!b.titulo) return err('titulo requerido', 400);
+  const obraId = b.obra_id ? parseInt(b.obra_id) : null;
+  // Número correlativo OC-XXX por obra
+  let numero = 'OC-001';
+  try {
+    const last = await env.DB.prepare(
+      `SELECT numero FROM ordenes_cambio WHERE empresa_id=? ${obraId ? 'AND obra_id=?' : 'AND obra_id IS NULL'} ORDER BY id DESC LIMIT 1`
+    ).bind(...(obraId ? [auth.empresa_id, obraId] : [auth.empresa_id])).first();
+    if (last?.numero) {
+      const n = parseInt(last.numero.replace(/\D/g,'')) || 0;
+      numero = 'OC-' + String(n + 1).padStart(3, '0');
+    }
+  } catch {}
+  const { meta } = await env.DB.prepare(
+    `INSERT INTO ordenes_cambio (obra_id,empresa_id,numero,titulo,descripcion,rfi_id,estado,categoria,coste_adicional,dias_extension,solicitado_por,fecha_propuesta,notas)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`
+  ).bind(
+    obraId, auth.empresa_id, numero,
+    b.titulo, b.descripcion || null,
+    b.rfi_id ? parseInt(b.rfi_id) : null,
+    b.estado || 'propuesta',
+    b.categoria || 'general',
+    parseFloat(b.coste_adicional) || 0,
+    parseInt(b.dias_extension)    || 0,
+    b.solicitado_por || auth.nombre || auth.email || null,
+    b.fecha_propuesta || new Date().toISOString().slice(0,10),
+    b.notas || null
+  ).run();
+  return json({ ok: true, id: meta.last_row_id, numero }, 201);
+}
+
+async function actualizarOrdenCambio(id, request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth.empresa_id) return err('No autorizado', 403);
+  await ensureOrdenesCambioTable(env);
+  const b = await request.json();
+  const sets = []; const params = [];
+  const campos = ['titulo','descripcion','estado','categoria','coste_adicional','dias_extension',
+                  'solicitado_por','aprobado_por','fecha_propuesta','fecha_aprobacion','notas','rfi_id'];
+  for (const c of campos) {
+    if (b[c] !== undefined) { sets.push(`${c}=?`); params.push(b[c]); }
+  }
+  // Auto-set fecha_aprobacion si se aprueba
+  if (b.estado === 'aprobada' && b.fecha_aprobacion === undefined) {
+    sets.push('fecha_aprobacion=?'); params.push(new Date().toISOString().slice(0,10));
+    if (!b.aprobado_por) { sets.push('aprobado_por=?'); params.push(auth.nombre || auth.email); }
+  }
+  if (!sets.length) return err('Nada que actualizar', 400);
+  params.push(id, auth.empresa_id);
+  await env.DB.prepare(`UPDATE ordenes_cambio SET ${sets.join(',')} WHERE id=? AND empresa_id=?`).bind(...params).run();
+  return json({ ok: true });
+}
+
+async function eliminarOrdenCambio(id, request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth.empresa_id) return err('No autorizado', 403);
+  await env.DB.prepare(`DELETE FROM ordenes_cambio WHERE id=? AND empresa_id=?`).bind(id, auth.empresa_id).run();
   return json({ ok: true });
 }

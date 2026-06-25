@@ -1641,6 +1641,68 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
     </div>
   </div>
 
+  <!-- MODAL ORDEN DE CAMBIO (NEW-35) -->
+  <div class="modal-overlay" id="modalOrdenCambio" onclick="if(event.target===this)ocCerrarModal()" style="display:none;align-items:flex-end;justify-content:center;padding:0">
+    <div style="background:var(--surface);width:100%;max-width:480px;border-radius:18px 18px 0 0;max-height:92vh;display:flex;flex-direction:column">
+      <div style="padding:16px 16px 10px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border);flex-shrink:0">
+        <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:15px;color:var(--text)" id="ocModalTitle">Nueva Orden de Cambio</div>
+        <button onclick="ocCerrarModal()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--muted);line-height:1">×</button>
+      </div>
+      <div style="padding:14px 16px;overflow-y:auto;flex:1">
+        <input type="hidden" id="ocEditId">
+        <div style="margin-bottom:11px">
+          <label style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Título *</label>
+          <input id="ocTitulo" type="text" placeholder="Descripción breve de la orden de cambio" style="width:100%;margin-top:4px;padding:9px 10px;border:1px solid var(--border);border-radius:9px;background:var(--card);color:var(--text);font-size:13px;box-sizing:border-box">
+        </div>
+        <div style="margin-bottom:11px">
+          <label style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Categoría</label>
+          <select id="ocCategoria" style="width:100%;margin-top:4px;padding:9px 10px;border:1px solid var(--border);border-radius:9px;background:var(--card);color:var(--text);font-size:13px">
+            <option value="general">General</option>
+            <option value="materiales">Materiales</option>
+            <option value="mano_de_obra">Mano de obra</option>
+            <option value="subcontrata">Subcontrata</option>
+            <option value="diseño">Diseño</option>
+            <option value="otro">Otro</option>
+          </select>
+        </div>
+        <div style="margin-bottom:11px">
+          <label style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Descripción</label>
+          <textarea id="ocDescripcion" rows="3" placeholder="Detalla el alcance del cambio…" style="width:100%;margin-top:4px;padding:9px 10px;border:1px solid var(--border);border-radius:9px;background:var(--card);color:var(--text);font-size:13px;resize:none;box-sizing:border-box"></textarea>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:11px">
+          <div>
+            <label style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Coste adicional (€)</label>
+            <input id="ocCoste" type="number" step="0.01" placeholder="0.00" style="width:100%;margin-top:4px;padding:9px 10px;border:1px solid var(--border);border-radius:9px;background:var(--card);color:var(--text);font-size:13px;box-sizing:border-box">
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Días de extensión</label>
+            <input id="ocDias" type="number" placeholder="0" value="0" style="width:100%;margin-top:4px;padding:9px 10px;border:1px solid var(--border);border-radius:9px;background:var(--card);color:var(--text);font-size:13px;box-sizing:border-box">
+          </div>
+        </div>
+        <div style="margin-bottom:11px">
+          <label style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">RFI vinculada (ID)</label>
+          <input id="ocRfiRef" type="number" placeholder="ID de la RFI relacionada (opcional)" style="width:100%;margin-top:4px;padding:9px 10px;border:1px solid var(--border);border-radius:9px;background:var(--card);color:var(--text);font-size:13px;box-sizing:border-box">
+        </div>
+        <div style="margin-bottom:11px">
+          <label style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Estado</label>
+          <select id="ocEstado" style="width:100%;margin-top:4px;padding:9px 10px;border:1px solid var(--border);border-radius:9px;background:var(--card);color:var(--text);font-size:13px">
+            <option value="propuesta">🟡 Propuesta</option>
+            <option value="en_revision">🔵 En revisión</option>
+            <option value="aprobada">🟢 Aprobada</option>
+            <option value="rechazada">🔴 Rechazada</option>
+          </select>
+        </div>
+        <div style="margin-bottom:4px">
+          <label style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Notas internas</label>
+          <textarea id="ocNotas" rows="2" placeholder="Notas adicionales…" style="width:100%;margin-top:4px;padding:9px 10px;border:1px solid var(--border);border-radius:9px;background:var(--card);color:var(--text);font-size:13px;resize:none;box-sizing:border-box"></textarea>
+        </div>
+      </div>
+      <div style="padding:12px 16px;border-top:1px solid var(--border);flex-shrink:0">
+        <button class="btn-primary" style="width:100%" onclick="ocGuardar()">💾 Guardar Orden de Cambio</button>
+      </div>
+    </div>
+  </div>
+
   <!-- CHECKLIST PRE-USO (NEW-21) -->
   <div class="modal-overlay" id="modalChecklist" onclick="if(event.target===this)checklistCerrar()" style="display:none;align-items:flex-end;justify-content:center;padding:0">
     <div style="background:var(--card);border-radius:16px 16px 0 0;width:100%;max-width:520px;max-height:90vh;display:flex;flex-direction:column">
@@ -11232,7 +11294,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '6.58';
+const APP_VERSION = '6.59';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -13212,6 +13274,15 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
           </div>
           <div id="presupuestoResumen" style="margin-bottom:12px"></div>
           <div id="presupuestoList"><div style="color:var(--muted);text-align:center;padding:20px;font-size:13px">Cargando…</div></div>
+          <!-- Órdenes de Cambio section -->
+          <div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--border)">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+              <div style="font-size:13px;font-weight:700;color:var(--text)">🔄 Órdenes de Cambio</div>
+              <button onclick="ocNuevo()" style="padding:5px 10px;background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:7px;font-size:11px;font-weight:700;cursor:pointer">+ Nueva OC</button>
+            </div>
+            <div id="ocResumen" style="margin-bottom:8px"></div>
+            <div id="ocList"><div style="color:var(--muted);font-size:12px;text-align:center;padding:12px">Cargando órdenes de cambio…</div></div>
+          </div>
         </div>
         <!-- Panel Diario -->
         <div id="dashPanel_diario" style="display:none">
@@ -13903,8 +13974,168 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     } catch(e) {
       elList.innerHTML = '<div style="color:var(--muted);text-align:center;padding:20px;font-size:13px">Error al cargar presupuesto</div>';
     }
+    // Cargar también órdenes de cambio
+    ocCargar();
   }
   window.presupuestoCargar = presupuestoCargar;
+
+  // ── ÓRDENES DE CAMBIO (NEW-35) ──────────────────────────────────────────────
+  let _ocData = [];
+
+  async function ocCargar() {
+    const elRes  = document.getElementById('ocResumen');
+    const elList = document.getElementById('ocList');
+    if (!elList) return;
+    try {
+      const obraId = getSession()?.obra_id;
+      const params = obraId ? `?obra_id=${obraId}` : '';
+      const data = await apiCall(`/ordenes-cambio${params}`);
+      _ocData = data.ordenes || [];
+      const tot = data.totales || {};
+      // Resumen
+      if (elRes) {
+        const hayDatos = _ocData.length > 0 || tot.coste_aprobado;
+        elRes.innerHTML = hayDatos ? `
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:8px">
+            <div style="background:var(--surface2);border-radius:8px;padding:8px;text-align:center">
+              <div style="font-size:10px;color:var(--muted);font-weight:600;text-transform:uppercase">Aprobado</div>
+              <div style="font-size:14px;font-weight:800;color:#22c55e">${fmtEur(tot.coste_aprobado||0)}</div>
+              ${tot.dias_aprobados ? `<div style="font-size:10px;color:var(--muted)">+${tot.dias_aprobados}d plazo</div>` : ''}
+            </div>
+            <div style="background:var(--surface2);border-radius:8px;padding:8px;text-align:center">
+              <div style="font-size:10px;color:var(--muted);font-weight:600;text-transform:uppercase">Pendiente</div>
+              <div style="font-size:14px;font-weight:800;color:#f59e0b">${fmtEur(tot.coste_pendiente||0)}</div>
+              <div style="font-size:10px;color:var(--muted)">sin aprobar</div>
+            </div>
+            <div style="background:var(--surface2);border-radius:8px;padding:8px;text-align:center">
+              <div style="font-size:10px;color:var(--muted);font-weight:600;text-transform:uppercase">Total OCs</div>
+              <div style="font-size:14px;font-weight:800;color:var(--text)">${_ocData.length}</div>
+              <div style="font-size:10px;color:var(--muted)">órdenes</div>
+            </div>
+          </div>` : '';
+      }
+      if (!_ocData.length) {
+        elList.innerHTML = '<div style="text-align:center;padding:16px;color:var(--muted);font-size:12px">Sin órdenes de cambio. Usa "+ Nueva OC" para registrar cambios de alcance.</div>';
+        return;
+      }
+      const estInfo = {
+        propuesta:   { icon:'🟡', label:'Propuesta',   color:'#f59e0b' },
+        en_revision: { icon:'🔵', label:'En revisión', color:'#6366f1' },
+        aprobada:    { icon:'🟢', label:'Aprobada',    color:'#22c55e' },
+        rechazada:   { icon:'🔴', label:'Rechazada',   color:'#ef4444' }
+      };
+      elList.innerHTML = _ocData.map(oc => {
+        const ei = estInfo[oc.estado] || estInfo.propuesta;
+        const costeStr = oc.coste_adicional ? (oc.coste_adicional > 0 ? '+' : '') + fmtEur(oc.coste_adicional) : '—';
+        const diasStr  = oc.dias_extension ? (oc.dias_extension > 0 ? '+' : '') + oc.dias_extension + 'd' : '';
+        return `<div style="background:var(--surface);border:1px solid var(--border);border-left:3px solid ${ei.color};border-radius:10px;padding:10px 12px;margin-bottom:7px">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+            <div style="flex:1">
+              <div style="display:flex;align-items:center;gap:5px;margin-bottom:3px">
+                <span style="font-size:10px;font-weight:800;color:var(--accent)">${oc.numero||'OC'}</span>
+                <span style="font-size:10px;padding:1px 5px;background:${ei.color}22;color:${ei.color};border-radius:4px;font-weight:700">${ei.icon} ${ei.label}</span>
+                ${oc.rfi_numero ? `<span style="font-size:10px;color:var(--muted)">📋 ${oc.rfi_numero}</span>` : ''}
+              </div>
+              <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:2px">${oc.titulo}</div>
+              <div style="font-size:11px;color:var(--muted)">💶 ${costeStr}${diasStr?' · ⏱ '+diasStr:''}${oc.solicitado_por?' · '+oc.solicitado_por:''}</div>
+              ${oc.descripcion ? `<div style="font-size:11px;color:var(--muted);margin-top:3px">${oc.descripcion.substring(0,80)}${oc.descripcion.length>80?'…':''}</div>` : ''}
+              ${oc.estado === 'aprobada' && oc.aprobado_por ? `<div style="font-size:10px;color:#22c55e;margin-top:3px">✅ Aprobado por ${oc.aprobado_por}${oc.fecha_aprobacion?' ('+oc.fecha_aprobacion+')':''}</div>` : ''}
+            </div>
+            <div style="display:flex;flex-direction:column;gap:3px;flex-shrink:0">
+              <button onclick="ocEditar(${oc.id})" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:4px 7px;cursor:pointer;font-size:11px">✏️</button>
+              ${oc.estado === 'propuesta' || oc.estado === 'en_revision' ? `<button onclick="ocAprobar(${oc.id})" style="background:#22c55e22;border:1px solid #22c55e55;border-radius:6px;padding:4px 7px;cursor:pointer;font-size:11px;color:#22c55e;font-weight:700">✅</button>` : ''}
+              <button onclick="ocEliminar(${oc.id})" style="background:none;border:none;cursor:pointer;font-size:13px;color:var(--muted)">🗑️</button>
+            </div>
+          </div>
+        </div>`;
+      }).join('');
+    } catch(e) {
+      if (elList) elList.innerHTML = '<div style="color:var(--muted);font-size:12px;text-align:center;padding:12px">Error al cargar</div>';
+    }
+  }
+  window.ocCargar = ocCargar;
+
+  function ocNuevo() {
+    document.getElementById('ocEditId').value = '';
+    document.getElementById('ocModalTitle').textContent = 'Nueva Orden de Cambio';
+    document.getElementById('ocTitulo').value = '';
+    document.getElementById('ocDescripcion').value = '';
+    document.getElementById('ocCategoria').value = 'general';
+    document.getElementById('ocCoste').value = '';
+    document.getElementById('ocDias').value = '0';
+    document.getElementById('ocRfiRef').value = '';
+    document.getElementById('ocEstado').value = 'propuesta';
+    document.getElementById('ocNotas').value = '';
+    document.getElementById('modalOrdenCambio').style.display = 'flex';
+  }
+  window.ocNuevo = ocNuevo;
+
+  function ocEditar(id) {
+    const oc = _ocData.find(x => x.id === id);
+    if (!oc) return;
+    document.getElementById('ocEditId').value = id;
+    document.getElementById('ocModalTitle').textContent = 'Editar OC ' + (oc.numero||'');
+    document.getElementById('ocTitulo').value = oc.titulo || '';
+    document.getElementById('ocDescripcion').value = oc.descripcion || '';
+    document.getElementById('ocCategoria').value = oc.categoria || 'general';
+    document.getElementById('ocCoste').value = oc.coste_adicional || '';
+    document.getElementById('ocDias').value = oc.dias_extension || 0;
+    document.getElementById('ocRfiRef').value = oc.rfi_id || '';
+    document.getElementById('ocEstado').value = oc.estado || 'propuesta';
+    document.getElementById('ocNotas').value = oc.notas || '';
+    document.getElementById('modalOrdenCambio').style.display = 'flex';
+  }
+  window.ocEditar = ocEditar;
+
+  async function ocAprobar(id) {
+    if (!confirm('¿Aprobar esta Orden de Cambio?')) return;
+    const res = await apiCall(`/ordenes-cambio/${id}`, 'PUT', { estado: 'aprobada' });
+    if (res.ok) { toast('OC aprobada ✓', 'ok'); ocCargar(); }
+    else toast('Error al aprobar', 'err');
+  }
+  window.ocAprobar = ocAprobar;
+
+  async function ocGuardar() {
+    const id = document.getElementById('ocEditId').value;
+    const titulo = document.getElementById('ocTitulo').value.trim();
+    if (!titulo) { toast('La OC necesita un título', 'err'); return; }
+    const body = {
+      titulo,
+      descripcion:    document.getElementById('ocDescripcion').value.trim() || null,
+      categoria:      document.getElementById('ocCategoria').value,
+      coste_adicional: parseFloat(document.getElementById('ocCoste').value) || 0,
+      dias_extension:  parseInt(document.getElementById('ocDias').value) || 0,
+      rfi_id:         document.getElementById('ocRfiRef').value ? parseInt(document.getElementById('ocRfiRef').value) : null,
+      estado:         document.getElementById('ocEstado').value,
+      notas:          document.getElementById('ocNotas').value.trim() || null,
+    };
+    const obraId = getSession()?.obra_id;
+    if (obraId) body.obra_id = obraId;
+    const res = id
+      ? await apiCall(`/ordenes-cambio/${id}`, 'PUT', body)
+      : await apiCall('/ordenes-cambio', 'POST', body);
+    if (res.ok || res.id) {
+      toast(id ? 'OC actualizada ✓' : `OC creada (${res.numero||''}) ✓`, 'ok');
+      document.getElementById('modalOrdenCambio').style.display = 'none';
+      ocCargar();
+    } else {
+      toast(res.error || 'Error al guardar', 'err');
+    }
+  }
+  window.ocGuardar = ocGuardar;
+
+  async function ocEliminar(id) {
+    if (!confirm('¿Eliminar esta Orden de Cambio?')) return;
+    const res = await apiCall(`/ordenes-cambio/${id}`, 'DELETE');
+    if (res.ok) { toast('OC eliminada', 'ok'); ocCargar(); }
+    else toast('Error al eliminar', 'err');
+  }
+  window.ocEliminar = ocEliminar;
+
+  function ocCerrarModal() {
+    document.getElementById('modalOrdenCambio').style.display = 'none';
+  }
+  window.ocCerrarModal = ocCerrarModal;
 
   function fmtEur(v) {
     if (v === null || v === undefined) return '—';
