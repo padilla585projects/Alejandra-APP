@@ -4721,6 +4721,14 @@ export default {
         if (method === 'PUT')    return await actualizarVisitaObra(_vid, request, env);
         if (method === 'DELETE') return await eliminarVisitaObra(_vid, request, env);
       }
+      // ── Evaluacion de Proveedores / Supplier Evaluation (NEW-85) ────────────────
+      if (path === '/evaluaciones-prov' && method === 'GET')  return await getEvaluacionesProv(request, env);
+      if (path === '/evaluaciones-prov' && method === 'POST') return await crearEvaluacionProv(request, env);
+      if (path.startsWith('/evaluaciones-prov/')) {
+        const _evpId = parseInt(path.split('/evaluaciones-prov/')[1]);
+        if (method === 'PUT')    return await actualizarEvaluacionProv(_evpId, request, env);
+        if (method === 'DELETE') return await eliminarEvaluacionProv(_evpId, request, env);
+      }
       // ── Analisis de Trabajo Seguro / Job Hazard Analysis (NEW-84) ────────────────
       if (path === '/ats' && method === 'GET')  return await getAts(request, env);
       if (path === '/ats' && method === 'POST') return await crearAts(request, env);
@@ -17993,4 +18001,129 @@ async function eliminarAts(id, request, env) {
   if (!empresa_id) return err('No autorizado', 403);
   await env.DB.prepare(`DELETE FROM ats_jha WHERE id=? AND empresa_id=?`).bind(id, empresa_id).run();
   return json({ ok: true, deleted: true });
+}
+
+// ── Evaluacion de Proveedores / Supplier Evaluation (NEW-85) ─────────────────
+async function ensureEvaluacionesProvTable(env) {
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS evaluaciones_proveedores (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    empresa_id        INTEGER NOT NULL,
+    obra_id           INTEGER,
+    numero            TEXT,
+    proveedor         TEXT NOT NULL,
+    tipo_proveedor    TEXT NOT NULL DEFAULT 'subcontratista',
+    trabajo_descripcion TEXT,
+    evaluador         TEXT,
+    fecha_evaluacion  TEXT NOT NULL,
+    periodo_ini       TEXT,
+    periodo_fin       TEXT,
+    nota_calidad      INTEGER DEFAULT 3,
+    nota_plazo        INTEGER DEFAULT 3,
+    nota_coste        INTEGER DEFAULT 3,
+    nota_seguridad    INTEGER DEFAULT 3,
+    nota_comunicacion INTEGER DEFAULT 3,
+    puntuacion_total  REAL,
+    recomendado       INTEGER NOT NULL DEFAULT 1,
+    estado            TEXT NOT NULL DEFAULT 'borrador',
+    observaciones     TEXT,
+    puntos_fuertes    TEXT,
+    puntos_mejora     TEXT,
+    created_at        TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at        TEXT NOT NULL DEFAULT (datetime('now'))
+  )`).run();
+}
+
+async function getEvaluacionesProv(request, env) {
+  const { empresa_id, rol } = await getAuthContext(request, env);
+  const url = new URL(request.url);
+  const obra_id  = url.searchParams.get('obra_id');
+  const tipo     = url.searchParams.get('tipo');
+  const estado   = url.searchParams.get('estado');
+  const proveedor = url.searchParams.get('proveedor');
+  await ensureEvaluacionesProvTable(env);
+  let q = `SELECT * FROM evaluaciones_proveedores WHERE empresa_id=?`;
+  const p = [empresa_id];
+  if (obra_id)   { q += ` AND obra_id=?`;       p.push(obra_id); }
+  if (tipo)      { q += ` AND tipo_proveedor=?`; p.push(tipo); }
+  if (estado)    { q += ` AND estado=?`;         p.push(estado); }
+  if (proveedor) { q += ` AND proveedor LIKE ?`; p.push(`%${proveedor}%`); }
+  q += ` ORDER BY fecha_evaluacion DESC, id DESC`;
+  const rows = await env.DB.prepare(q).bind(...p).all();
+  return jsonResp(rows.results || []);
+}
+
+async function crearEvaluacionProv(request, env) {
+  const { empresa_id } = await getAuthContext(request, env);
+  const d = await request.json();
+  await ensureEvaluacionesProvTable(env);
+  const anio = new Date().getFullYear();
+  const last = await env.DB.prepare(
+    `SELECT numero FROM evaluaciones_proveedores WHERE empresa_id=? AND numero LIKE ? ORDER BY id DESC LIMIT 1`
+  ).bind(empresa_id, `EV-${anio}-%`).first();
+  let seq = 1;
+  if (last?.numero) { const n = parseInt(last.numero.split('-')[2]); if (!isNaN(n)) seq = n + 1; }
+  const numero = `EV-${anio}-${String(seq).padStart(4,'0')}`;
+  const q      = Number(d.nota_calidad||3);
+  const p      = Number(d.nota_plazo||3);
+  const c      = Number(d.nota_coste||3);
+  const s      = Number(d.nota_seguridad||3);
+  const com    = Number(d.nota_comunicacion||3);
+  const total  = Math.round(((q+p+c+s+com)/5)*10)/10;
+  const r = await env.DB.prepare(
+    `INSERT INTO evaluaciones_proveedores
+     (empresa_id,obra_id,numero,proveedor,tipo_proveedor,trabajo_descripcion,
+      evaluador,fecha_evaluacion,periodo_ini,periodo_fin,
+      nota_calidad,nota_plazo,nota_coste,nota_seguridad,nota_comunicacion,
+      puntuacion_total,recomendado,estado,observaciones,puntos_fuertes,puntos_mejora)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+  ).bind(
+    empresa_id, d.obra_id||null, numero,
+    d.proveedor, d.tipo_proveedor||'subcontratista', d.trabajo_descripcion||null,
+    d.evaluador||null, d.fecha_evaluacion,
+    d.periodo_ini||null, d.periodo_fin||null,
+    q, p, c, s, com, total,
+    d.recomendado===false||d.recomendado==='0'||d.recomendado===0 ? 0 : 1,
+    d.estado||'borrador',
+    d.observaciones||null, d.puntos_fuertes||null, d.puntos_mejora||null
+  ).run();
+  return jsonResp({ id: r.meta.last_row_id, numero, puntuacion_total: total }, 201);
+}
+
+async function actualizarEvaluacionProv(id, request, env) {
+  const { empresa_id } = await getAuthContext(request, env);
+  const d = await request.json();
+  await ensureEvaluacionesProvTable(env);
+  const q   = Number(d.nota_calidad||3);
+  const p   = Number(d.nota_plazo||3);
+  const c   = Number(d.nota_coste||3);
+  const s   = Number(d.nota_seguridad||3);
+  const com = Number(d.nota_comunicacion||3);
+  const total = Math.round(((q+p+c+s+com)/5)*10)/10;
+  await env.DB.prepare(
+    `UPDATE evaluaciones_proveedores SET
+      proveedor=?, tipo_proveedor=?, trabajo_descripcion=?,
+      evaluador=?, fecha_evaluacion=?, periodo_ini=?, periodo_fin=?,
+      nota_calidad=?, nota_plazo=?, nota_coste=?, nota_seguridad=?, nota_comunicacion=?,
+      puntuacion_total=?, recomendado=?, estado=?,
+      observaciones=?, puntos_fuertes=?, puntos_mejora=?,
+      updated_at=datetime('now')
+     WHERE id=? AND empresa_id=?`
+  ).bind(
+    d.proveedor, d.tipo_proveedor||'subcontratista', d.trabajo_descripcion||null,
+    d.evaluador||null, d.fecha_evaluacion,
+    d.periodo_ini||null, d.periodo_fin||null,
+    q, p, c, s, com, total,
+    d.recomendado===false||d.recomendado==='0'||d.recomendado===0 ? 0 : 1,
+    d.estado||'borrador',
+    d.observaciones||null, d.puntos_fuertes||null, d.puntos_mejora||null,
+    id, empresa_id
+  ).run();
+  return jsonResp({ ok: true, puntuacion_total: total });
+}
+
+async function eliminarEvaluacionProv(id, request, env) {
+  const { empresa_id } = await getAuthContext(request, env);
+  await ensureEvaluacionesProvTable(env);
+  await env.DB.prepare(`DELETE FROM evaluaciones_proveedores WHERE id=? AND empresa_id=?`).bind(id, empresa_id).run();
+  return jsonResp({ ok: true });
 }

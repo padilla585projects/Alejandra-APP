@@ -689,6 +689,10 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
     <button class="nav-item" data-page="ats" onclick="navTo('ats')">
       <span class="nav-icon">🔍</span> ATS / Análisis Riesgo
     </button>
+    <button class="nav-item" data-page="evaluacionesProv" onclick="navTo('evaluacionesProv')">
+      <span class="nav-icon">⭐</span> Eval. Proveedores
+      <span class="nav-badge" id="evProvBadge" style="display:none">0</span>
+    </button>
     <button class="nav-item" data-page="fotosObra" onclick="navTo('fotosObra')">
       <span class="nav-icon">📷</span> Galería de Fotos
     </button>
@@ -2409,6 +2413,174 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
               <button class="btn btn-secondary" onclick="cerrarModalAts()">Cancelar</button>
               <span id="atsElimBtn"></span>
               <button class="btn btn-primary" onclick="guardarAts()">💾 Guardar ATS</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- EVALUACION DE PROVEEDORES / SUPPLIER EVALUATION (NEW-85) -->
+      <div class="page" id="pageEvaluacionesProv">
+        <div class="page-title">⭐ Evaluación de Proveedores / Supplier Evaluation</div>
+        <div id="evProvKpis" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:12px;margin-bottom:16px"></div>
+        <div class="tbl-toolbar">
+          <input class="tbl-search" id="searchEvProv" placeholder="🔍 Buscar proveedor..." oninput="filtrarEvaluacionesProv()">
+          <select class="tbl-search" id="filterEvProvObra" style="min-width:220px" onchange="tblEvProv=null;cargarEvaluacionesProv()">
+            <option value="">Todas las obras</option>
+          </select>
+          <select class="tbl-search" id="filterEvProvTipo" onchange="filtrarEvaluacionesProv()">
+            <option value="">Todos los tipos</option>
+            <option value="subcontratista">Subcontratista</option>
+            <option value="material">Proveedor material</option>
+            <option value="servicio">Servicio</option>
+            <option value="alquiler">Alquiler equipo</option>
+          </select>
+          <select class="tbl-search" id="filterEvProvEstado" onchange="filtrarEvaluacionesProv()">
+            <option value="">Todos los estados</option>
+            <option value="borrador">Borrador</option>
+            <option value="publicada">Publicada</option>
+            <option value="archivada">Archivada</option>
+          </select>
+          <button class="btn btn-primary" onclick="abrirModalEvProv()">+ Nueva Evaluación</button>
+        </div>
+        <div id="tblEvProvContainer"></div>
+        <!-- Modal evaluacion proveedor -->
+        <div class="modal-overlay" id="modalEvProv" style="display:none" onclick="if(event.target===this)cerrarModalEvProv()">
+          <div class="modal" style="max-width:680px">
+            <div class="modal-header">
+              <span id="modalEvProvTitulo">Nueva Evaluación de Proveedor</span>
+              <button class="modal-close" onclick="cerrarModalEvProv()">✕</button>
+            </div>
+            <div class="modal-body" style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+              <div style="grid-column:span 2;font-weight:600;color:var(--accent);border-bottom:1px solid #eee;padding-bottom:6px">Datos generales</div>
+              <div>
+                <label>Número</label>
+                <input id="evProvNumero" class="form-control" placeholder="Auto" readonly style="background:#f5f5f5">
+              </div>
+              <div>
+                <label>Fecha evaluación *</label>
+                <input id="evProvFecha" class="form-control" type="date">
+              </div>
+              <div>
+                <label>Proveedor / Empresa *</label>
+                <input id="evProvProveedor" class="form-control" placeholder="Nombre del proveedor o subcontratista">
+              </div>
+              <div>
+                <label>Tipo *</label>
+                <select id="evProvTipo" class="form-control">
+                  <option value="subcontratista">Subcontratista</option>
+                  <option value="material">Proveedor material</option>
+                  <option value="servicio">Servicio</option>
+                  <option value="alquiler">Alquiler equipo</option>
+                </select>
+              </div>
+              <div style="grid-column:span 2">
+                <label>Trabajo / suministro evaluado</label>
+                <input id="evProvTrabajo" class="form-control" placeholder="Descripción del trabajo o suministro">
+              </div>
+              <div>
+                <label>Obra</label>
+                <select id="evProvObra" class="form-control"><option value="">Sin obra</option></select>
+              </div>
+              <div>
+                <label>Evaluador</label>
+                <input id="evProvEvaluador" class="form-control" placeholder="Nombre del evaluador">
+              </div>
+              <div>
+                <label>Período inicio</label>
+                <input id="evProvPeriodoIni" class="form-control" type="date">
+              </div>
+              <div>
+                <label>Período fin</label>
+                <input id="evProvPeriodoFin" class="form-control" type="date">
+              </div>
+              <div style="grid-column:span 2;font-weight:600;color:var(--accent);border-bottom:1px solid #eee;padding-bottom:6px;margin-top:8px">Puntuaciones (1 = Muy malo · 5 = Excelente)</div>
+              <div>
+                <label>⚙️ Calidad</label>
+                <select id="evProvCalidad" class="form-control" onchange="recalcEvProv()">
+                  <option value="1">1 – Muy malo</option>
+                  <option value="2">2 – Malo</option>
+                  <option value="3" selected>3 – Aceptable</option>
+                  <option value="4">4 – Bueno</option>
+                  <option value="5">5 – Excelente</option>
+                </select>
+              </div>
+              <div>
+                <label>📅 Plazo / Puntualidad</label>
+                <select id="evProvPlazo" class="form-control" onchange="recalcEvProv()">
+                  <option value="1">1 – Muy malo</option>
+                  <option value="2">2 – Malo</option>
+                  <option value="3" selected>3 – Aceptable</option>
+                  <option value="4">4 – Bueno</option>
+                  <option value="5">5 – Excelente</option>
+                </select>
+              </div>
+              <div>
+                <label>💶 Coste / Ajuste presupuesto</label>
+                <select id="evProvCoste" class="form-control" onchange="recalcEvProv()">
+                  <option value="1">1 – Muy malo</option>
+                  <option value="2">2 – Malo</option>
+                  <option value="3" selected>3 – Aceptable</option>
+                  <option value="4">4 – Bueno</option>
+                  <option value="5">5 – Excelente</option>
+                </select>
+              </div>
+              <div>
+                <label>🦺 Seguridad</label>
+                <select id="evProvSeguridad" class="form-control" onchange="recalcEvProv()">
+                  <option value="1">1 – Muy malo</option>
+                  <option value="2">2 – Malo</option>
+                  <option value="3" selected>3 – Aceptable</option>
+                  <option value="4">4 – Bueno</option>
+                  <option value="5">5 – Excelente</option>
+                </select>
+              </div>
+              <div>
+                <label>📞 Comunicación</label>
+                <select id="evProvComunicacion" class="form-control" onchange="recalcEvProv()">
+                  <option value="1">1 – Muy malo</option>
+                  <option value="2">2 – Malo</option>
+                  <option value="3" selected>3 – Aceptable</option>
+                  <option value="4">4 – Bueno</option>
+                  <option value="5">5 – Excelente</option>
+                </select>
+              </div>
+              <div style="display:flex;align-items:center;gap:12px;grid-column:span 2;margin-top:4px">
+                <div style="font-size:1.4rem;font-weight:700;color:var(--accent)" id="evProvTotal">⭐ Total: 3.0 / 5</div>
+                <div id="evProvEstrellas" style="font-size:1.5rem;letter-spacing:2px">⭐⭐⭐</div>
+              </div>
+              <div style="grid-column:span 2;font-weight:600;color:var(--accent);border-bottom:1px solid #eee;padding-bottom:6px;margin-top:8px">Conclusión</div>
+              <div>
+                <label>¿Recomendarías este proveedor?</label>
+                <select id="evProvRecomendado" class="form-control">
+                  <option value="1">✅ Sí, recomendado</option>
+                  <option value="0">❌ No recomendado</option>
+                </select>
+              </div>
+              <div>
+                <label>Estado</label>
+                <select id="evProvEstado" class="form-control">
+                  <option value="borrador">Borrador</option>
+                  <option value="publicada">Publicada</option>
+                  <option value="archivada">Archivada</option>
+                </select>
+              </div>
+              <div style="grid-column:span 2">
+                <label>Puntos fuertes</label>
+                <textarea id="evProvFuertes" class="form-control" rows="2" placeholder="¿Qué hicieron bien?"></textarea>
+              </div>
+              <div style="grid-column:span 2">
+                <label>Puntos de mejora</label>
+                <textarea id="evProvMejora" class="form-control" rows="2" placeholder="¿Qué deberían mejorar?"></textarea>
+              </div>
+              <div style="grid-column:span 2">
+                <label>Observaciones adicionales</label>
+                <textarea id="evProvObs" class="form-control" rows="2"></textarea>
+              </div>
+            </div>
+            <div class="modal-footer">
+              <button class="btn btn-secondary" onclick="cerrarModalEvProv()">Cancelar</button>
+              <span id="evProvElimBtn"></span>
+              <button class="btn btn-primary" onclick="guardarEvProv()">💾 Guardar Evaluación</button>
             </div>
           </div>
         </div>
@@ -6214,6 +6386,7 @@ const PAGE_TITLES = {
   lecciones: '💡 Lecciones Aprendidas / Lessons Learned',
   rendimientos: '📈 Rendimientos de Producción / Productivity Tracking',
   ats: '🔍 Análisis de Trabajo Seguro / Job Hazard Analysis',
+  evaluacionesProv: '⭐ Evaluación de Proveedores / Supplier Evaluation',
 };
 
 const PAGE_LOADERS = {
@@ -6299,6 +6472,7 @@ const PAGE_LOADERS = {
   lecciones:       cargarLecciones,
   rendimientos:    cargarRendimientos,
   ats:             cargarAts,
+  evaluacionesProv: cargarEvaluacionesProv,
 };
 
 let currentPage = '';
@@ -6413,6 +6587,7 @@ const SYNC_INTERVALS = {
   lecciones:       180,
   rendimientos:    90,
   ats:             60,
+  evaluacionesProv: 120,
 };
 
 let _syncTimer = null, _syncLabelTimer = null, _syncLastTs = null;
@@ -15773,6 +15948,181 @@ function exportarFinanzas() {
   if (!obraId) return showToast('Selecciona una obra primero', 'warning');
   // Abrir informe en nueva pestaña usando el endpoint de informes
   window.open(`/informe-obra/${obraId}?tipo=financiero`, '_blank');
+}
+
+// ── EVALUACION DE PROVEEDORES / SUPPLIER EVALUATION (NEW-85) ──────────────────
+let tblEvProv = null, _evProvData = [];
+const EVPROV_TIPO_LABEL  = { subcontratista:'Subcontratista', material:'Prov. material', servicio:'Servicio', alquiler:'Alquiler' };
+const EVPROV_ESTADO_COLOR = { borrador:'var(--muted)', publicada:'var(--success)', archivada:'#888' };
+
+function _starStr(nota) {
+  const f = Math.round(nota);
+  return '⭐'.repeat(Math.min(5, Math.max(0, f))) + '☆'.repeat(Math.max(0, 5 - f));
+}
+
+async function cargarEvaluacionesProv() {
+  poblarSelectObras('filterEvProvObra');
+  poblarSelectObras('evProvObra');
+  const obraId = document.getElementById('filterEvProvObra').value;
+  const params = new URLSearchParams();
+  if (obraId) params.set('obra_id', obraId);
+  _evProvData = await api('/evaluaciones-prov?' + params);
+  if (!Array.isArray(_evProvData)) _evProvData = [];
+
+  // KPIs
+  const total   = _evProvData.length;
+  const pub     = _evProvData.filter(e => e.estado === 'publicada').length;
+  const punts   = _evProvData.filter(e => e.puntuacion_total != null).map(e => Number(e.puntuacion_total));
+  const avgPunt = punts.length ? (punts.reduce((a,b)=>a+b,0)/punts.length).toFixed(1) : '—';
+  const recom   = _evProvData.filter(e => e.recomendado == 1).length;
+  const noRecom = _evProvData.filter(e => e.recomendado == 0).length;
+  document.getElementById('evProvKpis').innerHTML = `
+    <div class="kpi-mini"><div class="kpi-val">${total}</div><div class="kpi-lbl">Total evaluaciones</div></div>
+    <div class="kpi-mini"><div class="kpi-val">${pub}</div><div class="kpi-lbl">Publicadas</div></div>
+    <div class="kpi-mini"><div class="kpi-val" style="color:var(--accent)">${avgPunt}</div><div class="kpi-lbl">Puntuación media</div></div>
+    <div class="kpi-mini"><div class="kpi-val" style="color:var(--success)">${recom}</div><div class="kpi-lbl">Recomendados ✅</div></div>
+    <div class="kpi-mini"><div class="kpi-val" style="color:var(--danger)">${noRecom}</div><div class="kpi-lbl">No recomendados ❌</div></div>
+  `;
+  // Badge
+  const bdg = document.getElementById('evProvBadge');
+  if (bdg) { bdg.textContent = total; bdg.style.display = total ? '' : 'none'; }
+
+  filtrarEvaluacionesProv();
+}
+
+function filtrarEvaluacionesProv() {
+  const q     = (document.getElementById('searchEvProv')?.value || '').toLowerCase();
+  const tipo  = document.getElementById('filterEvProvTipo')?.value || '';
+  const estado= document.getElementById('filterEvProvEstado')?.value || '';
+  let data    = _evProvData.filter(e => {
+    if (tipo   && e.tipo_proveedor !== tipo)   return false;
+    if (estado && e.estado         !== estado) return false;
+    if (q && !`${e.proveedor} ${e.trabajo_descripcion||''} ${e.evaluador||''} ${e.numero||''}`.toLowerCase().includes(q)) return false;
+    return true;
+  });
+  const cols = [
+    { title:'Nº',        field:'numero',           width:110, formatter: c => c.getValue()||'—' },
+    { title:'Fecha',     field:'fecha_evaluacion', width:105, formatter: c => c.getValue()||'—' },
+    { title:'Proveedor', field:'proveedor',        widthGrow:2 },
+    { title:'Tipo',      field:'tipo_proveedor',   width:140, formatter: c => EVPROV_TIPO_LABEL[c.getValue()]||c.getValue() },
+    { title:'Puntuación',field:'puntuacion_total', width:120, hozAlign:'center', formatter: c => {
+      const v = c.getValue(); if (v == null) return '—';
+      return `<span style="font-weight:700;color:var(--accent)">${Number(v).toFixed(1)} / 5</span>`;
+    }},
+    { title:'Estrellas', field:'puntuacion_total', width:130, hozAlign:'center', formatter: c => {
+      const v = c.getValue(); if (v == null) return '—';
+      return _starStr(v);
+    }},
+    { title:'Recomendado', field:'recomendado', width:120, hozAlign:'center', formatter: c =>
+      c.getValue() == 1 ? '<span style="color:var(--success)">✅ Sí</span>' : '<span style="color:var(--danger)">❌ No</span>'
+    },
+    { title:'Estado', field:'estado', width:110, formatter: c => {
+      const v = c.getValue();
+      return `<span style="color:${EVPROV_ESTADO_COLOR[v]||'inherit'};font-weight:600;text-transform:capitalize">${v}</span>`;
+    }},
+    { title:'Acciones', width:90, hozAlign:'center', formatter: c =>
+      `<button class="btn-tbl" onclick="editarEvProv(${c.getRow().getData().id})">✏️</button>
+       <button class="btn-tbl btn-danger-sm" onclick="eliminarEvProv(${c.getRow().getData().id})">🗑️</button>`
+    }
+  ];
+  if (!tblEvProv) {
+    tblEvProv = new Tabulator('#tblEvProvContainer', {
+      data, columns: cols, layout:'fitColumns', locale:'es-es',
+      placeholder:'No hay evaluaciones registradas', height:'520px'
+    });
+  } else {
+    tblEvProv.replaceData(data);
+  }
+}
+
+function recalcEvProv() {
+  const q  = Number(document.getElementById('evProvCalidad').value||3);
+  const p  = Number(document.getElementById('evProvPlazo').value||3);
+  const c  = Number(document.getElementById('evProvCoste').value||3);
+  const s  = Number(document.getElementById('evProvSeguridad').value||3);
+  const co = Number(document.getElementById('evProvComunicacion').value||3);
+  const total = Math.round(((q+p+c+s+co)/5)*10)/10;
+  document.getElementById('evProvTotal').textContent = `⭐ Total: ${total} / 5`;
+  document.getElementById('evProvEstrellas').textContent = _starStr(total);
+}
+
+function abrirModalEvProv(d = {}) {
+  document.getElementById('modalEvProv')._evProvId = d.id || null;
+  document.getElementById('evProvNumero').value       = d.numero || '';
+  document.getElementById('evProvFecha').value        = d.fecha_evaluacion || new Date().toISOString().slice(0,10);
+  document.getElementById('evProvProveedor').value    = d.proveedor || '';
+  document.getElementById('evProvTipo').value         = d.tipo_proveedor || 'subcontratista';
+  document.getElementById('evProvTrabajo').value      = d.trabajo_descripcion || '';
+  document.getElementById('evProvObra').value         = d.obra_id || '';
+  document.getElementById('evProvEvaluador').value    = d.evaluador || '';
+  document.getElementById('evProvPeriodoIni').value   = d.periodo_ini || '';
+  document.getElementById('evProvPeriodoFin').value   = d.periodo_fin || '';
+  document.getElementById('evProvCalidad').value      = String(d.nota_calidad ?? 3);
+  document.getElementById('evProvPlazo').value        = String(d.nota_plazo ?? 3);
+  document.getElementById('evProvCoste').value        = String(d.nota_coste ?? 3);
+  document.getElementById('evProvSeguridad').value    = String(d.nota_seguridad ?? 3);
+  document.getElementById('evProvComunicacion').value = String(d.nota_comunicacion ?? 3);
+  document.getElementById('evProvRecomendado').value  = String(d.recomendado ?? 1);
+  document.getElementById('evProvEstado').value       = d.estado || 'borrador';
+  document.getElementById('evProvFuertes').value      = d.puntos_fuertes || '';
+  document.getElementById('evProvMejora').value       = d.puntos_mejora || '';
+  document.getElementById('evProvObs').value          = d.observaciones || '';
+  document.getElementById('modalEvProvTitulo').textContent = d.id ? 'Editar Evaluación de Proveedor' : 'Nueva Evaluación de Proveedor';
+  document.getElementById('evProvElimBtn').innerHTML = d.id
+    ? `<button class="btn btn-danger" onclick="eliminarEvProv(${d.id},true)">🗑️ Eliminar</button>` : '';
+  recalcEvProv();
+  document.getElementById('modalEvProv').style.display = 'flex';
+}
+
+async function editarEvProv(id) {
+  const d = _evProvData.find(e => e.id === id);
+  if (d) abrirModalEvProv(d);
+}
+
+async function guardarEvProv() {
+  const proveedor = document.getElementById('evProvProveedor').value.trim();
+  const fecha     = document.getElementById('evProvFecha').value;
+  if (!proveedor) return alert('El nombre del proveedor es obligatorio.');
+  if (!fecha)     return alert('La fecha de evaluación es obligatoria.');
+  const body = {
+    proveedor,
+    fecha_evaluacion:    fecha,
+    tipo_proveedor:      document.getElementById('evProvTipo').value,
+    trabajo_descripcion: document.getElementById('evProvTrabajo').value.trim() || null,
+    obra_id:             document.getElementById('evProvObra').value || null,
+    evaluador:           document.getElementById('evProvEvaluador').value.trim() || null,
+    periodo_ini:         document.getElementById('evProvPeriodoIni').value || null,
+    periodo_fin:         document.getElementById('evProvPeriodoFin').value || null,
+    nota_calidad:        Number(document.getElementById('evProvCalidad').value),
+    nota_plazo:          Number(document.getElementById('evProvPlazo').value),
+    nota_coste:          Number(document.getElementById('evProvCoste').value),
+    nota_seguridad:      Number(document.getElementById('evProvSeguridad').value),
+    nota_comunicacion:   Number(document.getElementById('evProvComunicacion').value),
+    recomendado:         Number(document.getElementById('evProvRecomendado').value),
+    estado:              document.getElementById('evProvEstado').value,
+    puntos_fuertes:      document.getElementById('evProvFuertes').value.trim() || null,
+    puntos_mejora:       document.getElementById('evProvMejora').value.trim() || null,
+    observaciones:       document.getElementById('evProvObs').value.trim() || null,
+  };
+  const id = document.getElementById('modalEvProv')._evProvId;
+  if (id) {
+    await api(`/evaluaciones-prov/${id}`, { method:'PUT', body: JSON.stringify(body) });
+  } else {
+    await api('/evaluaciones-prov', { method:'POST', body: JSON.stringify(body) });
+  }
+  cerrarModalEvProv();
+  await cargarEvaluacionesProv();
+}
+
+async function eliminarEvProv(id, desdeModal = false) {
+  if (!confirm('¿Eliminar esta evaluación? Esta acción no se puede deshacer.')) return;
+  await api(`/evaluaciones-prov/${id}`, { method:'DELETE' });
+  if (desdeModal) cerrarModalEvProv();
+  await cargarEvaluacionesProv();
+}
+
+function cerrarModalEvProv() {
+  document.getElementById('modalEvProv').style.display = 'none';
 }
 
 // ── ATS / JOB HAZARD ANALYSIS (NEW-84) ──────────────────────────────
