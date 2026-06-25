@@ -4721,6 +4721,14 @@ export default {
         if (method === 'PUT')    return await actualizarVisitaObra(_vid, request, env);
         if (method === 'DELETE') return await eliminarVisitaObra(_vid, request, env);
       }
+      // ── Documentación CAE por Subcontrata (NEW-98) ──────────────────────────────
+      if (path === '/cae-documentacion' && method === 'GET')  return await getCaeDocumentacion(request, env);
+      if (path === '/cae-documentacion' && method === 'POST') return await crearCaeDoc(request, env);
+      if (path.startsWith('/cae-documentacion/')) {
+        const _caeId = parseInt(path.split('/cae-documentacion/')[1]);
+        if (method === 'PUT')    return await actualizarCaeDoc(_caeId, request, env);
+        if (method === 'DELETE') return await eliminarCaeDoc(_caeId, request, env);
+      }
       // ── Comparativo de Ofertas / Bid Comparison (NEW-97) ────────────────────────
       if (path === '/comparativos-oferta' && method === 'GET')  return await getComparativosOferta(request, env);
       if (path === '/comparativos-oferta' && method === 'POST') return await crearComparativoOferta(request, env);
@@ -19415,5 +19423,98 @@ async function actualizarComparativoOferta(id, request, env) {
 async function eliminarComparativoOferta(id, request, env) {
   const { empresa_id } = await getEmpresaFromRequest(request, env);
   await env.DB.prepare('DELETE FROM comparativos_oferta WHERE id=? AND empresa_id=?').bind(id, empresa_id).run();
+  return jsonOk({ ok: true });
+}
+
+
+// ════════════════════════════════════════════════════════════════════════════════
+// NEW-98: DOCUMENTACIÓN CAE / SAFETY COMPLIANCE PER SUBCONTRACTOR (RD 171/2004)
+// ════════════════════════════════════════════════════════════════════════════════
+async function ensureCaeDocumentacionTable(env) {
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS cae_documentacion (
+    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+    empresa_id       INTEGER NOT NULL,
+    obra_id          INTEGER,
+    subcontrata      TEXT NOT NULL,
+    cif              TEXT,
+    actividad        TEXT,
+    tipo_doc         TEXT NOT NULL DEFAULT 'plan_prevencion',
+    titulo           TEXT NOT NULL,
+    numero           TEXT,
+    fecha_emision    TEXT,
+    fecha_caducidad  TEXT,
+    organismo        TEXT,
+    estado           TEXT NOT NULL DEFAULT 'pendiente',
+    adjunto_url      TEXT,
+    alertar_dias     INTEGER DEFAULT 30,
+    trabajadores     INTEGER,
+    notas            TEXT,
+    validado_por     TEXT,
+    fecha_validacion TEXT,
+    created_by       TEXT,
+    created_at       TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at       TEXT NOT NULL DEFAULT (datetime('now'))
+  )`).run();
+}
+
+async function getCaeDocumentacion(request, env) {
+  const { empresa_id } = await getEmpresaFromRequest(request, env);
+  await ensureCaeDocumentacionTable(env);
+  const u = new URL(request.url);
+  const obra_id      = u.searchParams.get('obra_id');
+  const subcontrata  = u.searchParams.get('subcontrata');
+  const estado       = u.searchParams.get('estado');
+  const tipo_doc     = u.searchParams.get('tipo_doc');
+  let sql = 'SELECT * FROM cae_documentacion WHERE empresa_id=?';
+  const params = [empresa_id];
+  if (obra_id)     { sql += ' AND obra_id=?';     params.push(obra_id); }
+  if (subcontrata) { sql += ' AND subcontrata LIKE ?'; params.push('%'+subcontrata+'%'); }
+  if (estado)      { sql += ' AND estado=?';      params.push(estado); }
+  if (tipo_doc)    { sql += ' AND tipo_doc=?';    params.push(tipo_doc); }
+  sql += ' ORDER BY subcontrata ASC, tipo_doc ASC, fecha_caducidad ASC';
+  const rows = await env.DB.prepare(sql).bind(...params).all();
+  const total    = rows.results.length;
+  const hoy      = new Date().toISOString().slice(0,10);
+  const en30     = new Date(Date.now()+30*86400000).toISOString().slice(0,10);
+  const pendientes    = rows.results.filter(r => r.estado === 'pendiente').length;
+  const vencen_pronto = rows.results.filter(r => r.fecha_caducidad && r.fecha_caducidad <= en30 && r.fecha_caducidad >= hoy && r.estado === 'validado').length;
+  const vencidos      = rows.results.filter(r => r.fecha_caducidad && r.fecha_caducidad < hoy && r.estado === 'validado').length;
+  const validados     = rows.results.filter(r => r.estado === 'validado').length;
+  const subcontratas  = [...new Set(rows.results.map(r=>r.subcontrata))].length;
+  return jsonOk({ data: rows.results, stats: { total, pendientes, vencen_pronto, vencidos, validados, subcontratas } });
+}
+
+async function crearCaeDoc(request, env) {
+  const { empresa_id, user } = await getEmpresaFromRequest(request, env);
+  await ensureCaeDocumentacionTable(env);
+  const b = await request.json();
+  if (!b.subcontrata || !b.tipo_doc || !b.titulo) return jsonError('subcontrata, tipo_doc y titulo son obligatorios', 400);
+  const res = await env.DB.prepare(
+    `INSERT INTO cae_documentacion (empresa_id,obra_id,subcontrata,cif,actividad,tipo_doc,titulo,numero,fecha_emision,fecha_caducidad,organismo,estado,adjunto_url,alertar_dias,trabajadores,notas,validado_por,fecha_validacion,created_by)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+  ).bind(empresa_id, b.obra_id||null, b.subcontrata, b.cif||null, b.actividad||null,
+    b.tipo_doc, b.titulo, b.numero||null, b.fecha_emision||null, b.fecha_caducidad||null,
+    b.organismo||null, b.estado||'pendiente', b.adjunto_url||null, b.alertar_dias||30,
+    b.trabajadores||null, b.notas||null, b.validado_por||null, b.fecha_validacion||null,
+    user?.email||null).run();
+  return jsonOk({ id: res.meta.last_row_id }, 201);
+}
+
+async function actualizarCaeDoc(id, request, env) {
+  const { empresa_id } = await getEmpresaFromRequest(request, env);
+  await ensureCaeDocumentacionTable(env);
+  const b = await request.json();
+  const campos = ['obra_id','subcontrata','cif','actividad','tipo_doc','titulo','numero','fecha_emision','fecha_caducidad','organismo','estado','adjunto_url','alertar_dias','trabajadores','notas','validado_por','fecha_validacion'];
+  const sets = []; const vals = [];
+  campos.forEach(c => { if (b[c] !== undefined) { sets.push(c+'=?'); vals.push(b[c]); } });
+  sets.push("updated_at=datetime('now')");
+  vals.push(id, empresa_id);
+  await env.DB.prepare(`UPDATE cae_documentacion SET ${sets.join(',')} WHERE id=? AND empresa_id=?`).bind(...vals).run();
+  return jsonOk({ ok: true });
+}
+
+async function eliminarCaeDoc(id, request, env) {
+  const { empresa_id } = await getEmpresaFromRequest(request, env);
+  await env.DB.prepare('DELETE FROM cae_documentacion WHERE id=? AND empresa_id=?').bind(id, empresa_id).run();
   return jsonOk({ ok: true });
 }

@@ -721,6 +721,10 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
       <span class="nav-icon">📋</span> Solicitudes Material
       <span class="nav-badge" id="solMatBadge" style="display:none">0</span>
     </button>
+    <button class="nav-item" data-page="caeDocumentacion" onclick="navTo('caeDocumentacion')">
+      <span class="nav-icon">🛡️</span> CAE / Docs Subcontratas
+      <span class="nav-badge" id="caeBadge" style="display:none">0</span>
+    </button>
     <button class="nav-item" data-page="comparativosOferta" onclick="navTo('comparativosOferta')">
       <span class="nav-icon">🔖</span> Comparativo Ofertas
       <span class="nav-badge" id="cofBadge" style="display:none">0</span>
@@ -2456,6 +2460,91 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
               <button class="btn btn-secondary" onclick="cerrarModalAts()">Cancelar</button>
               <span id="atsElimBtn"></span>
               <button class="btn btn-primary" onclick="guardarAts()">💾 Guardar ATS</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- CAE / DOCUMENTACIÓN SUBCONTRATAS (NEW-98) -->
+      <div class="page" id="pageCaeDocumentacion">
+        <div class="page-title">🛡️ CAE / Documentación Subcontratas</div>
+        <div style="background:#fff3cd;border:1px solid #ffc107;border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:13px;color:#856404">
+          ⚖️ <strong>RD 171/2004</strong> — Coordinación de Actividades Empresariales. Cada subcontrata debe aportar los documentos requeridos antes del inicio de trabajos.
+        </div>
+        <div id="caeKpis" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;margin-bottom:16px"></div>
+        <div class="tbl-toolbar">
+          <input id="caeFiltroSub" type="search" placeholder="Filtrar por subcontrata..." oninput="filtrarCaeDocumentacion()" style="padding:6px 10px;border-radius:6px;border:1px solid #ccc;min-width:180px">
+          <select id="caeFiltroEstado" onchange="filtrarCaeDocumentacion()" style="padding:6px 10px;border-radius:6px;border:1px solid #ccc">
+            <option value="">Todos los estados</option>
+            <option value="pendiente">Pendiente</option>
+            <option value="recibido">Recibido</option>
+            <option value="validado">Validado</option>
+            <option value="caducado">Caducado</option>
+            <option value="rechazado">Rechazado</option>
+          </select>
+          <select id="caeFiltroTipo" onchange="filtrarCaeDocumentacion()" style="padding:6px 10px;border-radius:6px;border:1px solid #ccc">
+            <option value="">Todos los tipos</option>
+            <option value="plan_prevencion">Plan de Prevención</option>
+            <option value="evaluacion_riesgos">Evaluación de Riesgos</option>
+            <option value="seguro_rc">Seguro RC</option>
+            <option value="apt_medica">Aptitud Médica</option>
+            <option value="formacion_prl">Formación PRL</option>
+            <option value="tc1_tc2">TC1 / TC2 (SS)</option>
+            <option value="certificado_ct">Cert. Corriente Tributaria</option>
+            <option value="maquinaria_ite">Maquinaria / ITE</option>
+            <option value="otros">Otros</option>
+          </select>
+          <button class="btn btn-primary" onclick="abrirModalCae()">+ Nuevo Documento</button>
+          <button class="btn btn-secondary" onclick="exportarTabla(tblCae,'cae-documentacion')">⬇ CSV</button>
+        </div>
+        <div id="tblCaeWrap"></div>
+        <!-- Modal -->
+        <div class="modal-overlay" id="modalCae" style="display:none" onclick="if(event.target===this)cerrarModalCae()">
+          <div class="modal" style="max-width:640px">
+            <div class="modal-header"><span id="modalCaeTitulo">Nuevo Documento CAE</span><button class="modal-close" onclick="cerrarModalCae()">✕</button></div>
+            <div class="modal-body">
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+                <div class="form-group"><label>Subcontrata *</label><input id="caeSubcontrata" type="text" placeholder="Nombre empresa subcontratada"></div>
+                <div class="form-group"><label>CIF</label><input id="caeCif" type="text" placeholder="B12345678"></div>
+                <div class="form-group" style="grid-column:1/-1"><label>Actividad</label><input id="caeActividad" type="text" placeholder="Instalaciones eléctricas, albañilería..."></div>
+                <div class="form-group"><label>Tipo Documento *</label>
+                  <select id="caeTipoDoc">
+                    <option value="plan_prevencion">Plan de Prevención</option>
+                    <option value="evaluacion_riesgos">Evaluación de Riesgos</option>
+                    <option value="seguro_rc">Seguro RC</option>
+                    <option value="apt_medica">Aptitud Médica</option>
+                    <option value="formacion_prl">Formación PRL</option>
+                    <option value="tc1_tc2">TC1 / TC2 (Seg. Social)</option>
+                    <option value="certificado_ct">Cert. Corriente Tributaria</option>
+                    <option value="maquinaria_ite">Maquinaria / ITE</option>
+                    <option value="otros">Otros</option>
+                  </select>
+                </div>
+                <div class="form-group"><label>Estado</label>
+                  <select id="caeEstado">
+                    <option value="pendiente">Pendiente</option>
+                    <option value="recibido">Recibido</option>
+                    <option value="validado">Validado</option>
+                    <option value="caducado">Caducado</option>
+                    <option value="rechazado">Rechazado</option>
+                  </select>
+                </div>
+                <div class="form-group" style="grid-column:1/-1"><label>Título / Descripción *</label><input id="caeTitulo" type="text" placeholder="Plan de Prevención 2026 — Empresa ABC"></div>
+                <div class="form-group"><label>Nº Documento</label><input id="caeNumero" type="text" placeholder="Referencia"></div>
+                <div class="form-group"><label>Organismo Emisor</label><input id="caeOrganismo" type="text" placeholder="Mutua, Ministerio..."></div>
+                <div class="form-group"><label>Fecha Emisión</label><input id="caeFechaEm" type="date"></div>
+                <div class="form-group"><label>Fecha Caducidad</label><input id="caeFechaCad" type="date"></div>
+                <div class="form-group"><label>Alertar (días antes)</label><input id="caeAlertaDias" type="number" min="1" max="180" value="30"></div>
+                <div class="form-group"><label>Nº Trabajadores</label><input id="caeTrabajadores" type="number" min="0" placeholder="Para aptitudes médicas"></div>
+                <div class="form-group"><label>Validado por</label><input id="caeValidadoPor" type="text" placeholder="Nombre del validador"></div>
+                <div class="form-group"><label>Fecha Validación</label><input id="caeFechaVal" type="date"></div>
+                <div class="form-group" style="grid-column:1/-1"><label>URL Adjunto / Documento</label><input id="caeAdjunto" type="url" placeholder="https://..."></div>
+                <div class="form-group" style="grid-column:1/-1"><label>Notas</label><textarea id="caeNotas" rows="3" placeholder="Observaciones, condiciones..."></textarea></div>
+              </div>
+            </div>
+            <div class="modal-footer">
+              <button class="btn btn-secondary" onclick="cerrarModalCae()">Cancelar</button>
+              <button class="btn btn-primary" onclick="guardarCae()">💾 Guardar</button>
             </div>
           </div>
         </div>
@@ -7749,6 +7838,7 @@ const PAGE_TITLES = {
   catalogoPrecios:  '💵 Catálogo de Precios Unitarios / Unit Price Catalog',
   segurosObra:      '🏥 Seguros de Obra / Insurance Policies',
   comparativosOferta: '🔖 Comparativo de Ofertas / Bid Comparison',
+  caeDocumentacion:   '🛡️ CAE / Documentación Subcontratas (RD 171/2004)',
 };
 
 const PAGE_LOADERS = {
@@ -7847,6 +7937,7 @@ const PAGE_LOADERS = {
   catalogoPrecios:    cargarCatalogoPrecios,
   segurosObra:        cargarSegurosObra,
   comparativosOferta: cargarComparativosOferta,
+  caeDocumentacion:   cargarCaeDocumentacion,
 };
 
 let currentPage = '';
@@ -7974,6 +8065,7 @@ const SYNC_INTERVALS = {
   catalogoPrecios:    300,
   segurosObra:        180,
   comparativosOferta: 120,
+  caeDocumentacion:   90,
 };
 
 let _syncTimer = null, _syncLabelTimer = null, _syncLastTs = null;
@@ -17335,6 +17427,134 @@ function exportarFinanzas() {
   // Abrir informe en nueva pestaña usando el endpoint de informes
   window.open(`/informe-obra/${obraId}?tipo=financiero`, '_blank');
 }
+
+// ── CAE / DOCUMENTACIÓN SUBCONTRATAS (NEW-98) ────────────────────────────────
+let tblCae = null, _caeData = [];
+const CAE_ESTADO_COLOR = { pendiente:'var(--warning)', recibido:'var(--accent)', validado:'var(--success)', caducado:'var(--danger)', rechazado:'#c0392b' };
+const CAE_TIPO_LABEL = { plan_prevencion:'Plan Prev.', evaluacion_riesgos:'Eval. Riesgos', seguro_rc:'Seguro RC', apt_medica:'Apt. Médica', formacion_prl:'Formación PRL', tc1_tc2:'TC1/TC2', certificado_ct:'Cert. Tributaria', maquinaria_ite:'Maquinaria/ITE', otros:'Otros' };
+
+async function cargarCaeDocumentacion() {
+  const data = await api('/cae-documentacion');
+  _caeData = data.data || [];
+  const s = data.stats || {};
+  document.getElementById('caeKpis').innerHTML = [
+    { label:'Total docs', val: s.total||0, icon:'🛡️' },
+    { label:'Subcontratas', val: s.subcontratas||0, icon:'🏢' },
+    { label:'Pendientes', val: s.pendientes||0, icon:'⏳', color: s.pendientes ? 'var(--warning)' : '' },
+    { label:'Vencen pronto', val: s.vencen_pronto||0, icon:'⚠️', color: s.vencen_pronto ? '#e67e22' : '' },
+    { label:'Vencidos', val: s.vencidos||0, icon:'❌', color: s.vencidos ? 'var(--danger)' : '' },
+    { label:'Validados', val: s.validados||0, icon:'✅' },
+  ].map(k => `<div class="kpi-mini" style="background:#fff;border-radius:10px;padding:12px;box-shadow:0 2px 6px rgba(0,0,0,.07)">
+    <div style="font-size:20px">${k.icon}</div>
+    <div style="font-size:22px;font-weight:700;color:${k.color||'var(--accent)'}">${k.val}</div>
+    <div style="font-size:11px;color:#888">${k.label}</div></div>`).join('');
+  const alerta = (s.pendientes||0) + (s.vencen_pronto||0) + (s.vencidos||0);
+  const bdg = document.getElementById('caeBadge');
+  if (bdg) { bdg.textContent = alerta; bdg.style.display = alerta ? 'inline-flex' : 'none'; }
+  if (!tblCae) {
+    tblCae = new Tabulator('#tblCaeWrap', {
+      data: _caeData, layout: 'fitColumns', responsiveLayout: 'collapse',
+      groupBy: 'subcontrata',
+      columns: [
+        { title:'Subcontrata', field:'subcontrata', minWidth:140 },
+        { title:'CIF', field:'cif', width:110 },
+        { title:'Tipo Doc.', field:'tipo_doc', width:130, formatter: c => CAE_TIPO_LABEL[c.getValue()]||c.getValue() },
+        { title:'Título', field:'titulo', minWidth:180 },
+        { title:'Estado', field:'estado', width:110, formatter: c => `<span style="background:${CAE_ESTADO_COLOR[c.getValue()]||'#ddd'};color:#fff;padding:2px 8px;border-radius:12px;font-size:11px">${c.getValue()}</span>` },
+        { title:'F. Emisión', field:'fecha_emision', width:105 },
+        { title:'F. Caducidad', field:'fecha_caducidad', width:110, formatter: c => {
+          const v = c.getValue(); if (!v) return '-';
+          const hoy = new Date().toISOString().slice(0,10);
+          const color = v < hoy ? 'var(--danger)' : v <= new Date(Date.now()+30*86400000).toISOString().slice(0,10) ? 'var(--warning)' : '';
+          return color ? `<span style="color:${color};font-weight:600">${v}</span>` : v;
+        }},
+        { title:'Validado por', field:'validado_por', minWidth:120 },
+        { title:'Adjunto', field:'adjunto_url', width:80, formatter: c => c.getValue() ? `<a href="${c.getValue()}" target="_blank" style="color:var(--accent)">📎</a>` : '' },
+        { title:'Acciones', width:100, formatter: () => '<span style="cursor:pointer;color:var(--accent)">✏️ Editar</span>', cellClick: (e,c) => editarCae(c.getRow().getData().id) },
+      ]
+    });
+  } else { tblCae.replaceData(_caeData); }
+  filtrarCaeDocumentacion();
+}
+
+function filtrarCaeDocumentacion() {
+  if (!tblCae) return;
+  const sub  = (document.getElementById('caeFiltroSub')?.value||'').toLowerCase();
+  const est  = document.getElementById('caeFiltroEstado')?.value;
+  const tip  = document.getElementById('caeFiltroTipo')?.value;
+  tblCae.setFilter(r => {
+    if (sub && !r.subcontrata?.toLowerCase().includes(sub)) return false;
+    if (est && r.estado !== est) return false;
+    if (tip && r.tipo_doc !== tip) return false;
+    return true;
+  });
+}
+
+function abrirModalCae(d = {}) {
+  document.getElementById('modalCaeTitulo').textContent = d.id ? 'Editar Documento CAE' : 'Nuevo Documento CAE';
+  document.getElementById('caeSubcontrata').value = d.subcontrata || '';
+  document.getElementById('caeCif').value          = d.cif || '';
+  document.getElementById('caeActividad').value    = d.actividad || '';
+  document.getElementById('caeTipoDoc').value      = d.tipo_doc || 'plan_prevencion';
+  document.getElementById('caeEstado').value       = d.estado || 'pendiente';
+  document.getElementById('caeTitulo').value       = d.titulo || '';
+  document.getElementById('caeNumero').value       = d.numero || '';
+  document.getElementById('caeOrganismo').value    = d.organismo || '';
+  document.getElementById('caeFechaEm').value      = d.fecha_emision || '';
+  document.getElementById('caeFechaCad').value     = d.fecha_caducidad || '';
+  document.getElementById('caeAlertaDias').value   = d.alertar_dias || 30;
+  document.getElementById('caeTrabajadores').value = d.trabajadores || '';
+  document.getElementById('caeValidadoPor').value  = d.validado_por || '';
+  document.getElementById('caeFechaVal').value     = d.fecha_validacion || '';
+  document.getElementById('caeAdjunto').value      = d.adjunto_url || '';
+  document.getElementById('caeNotas').value        = d.notas || '';
+  document.getElementById('modalCae')._caeId = d.id || null;
+  document.getElementById('modalCae').style.display = 'flex';
+}
+
+function editarCae(id) {
+  const d = _caeData.find(r => r.id === id);
+  if (d) abrirModalCae(d);
+}
+
+async function guardarCae() {
+  const id = document.getElementById('modalCae')._caeId;
+  const body = {
+    subcontrata:    document.getElementById('caeSubcontrata').value.trim(),
+    cif:            document.getElementById('caeCif').value.trim()||null,
+    actividad:      document.getElementById('caeActividad').value.trim()||null,
+    tipo_doc:       document.getElementById('caeTipoDoc').value,
+    estado:         document.getElementById('caeEstado').value,
+    titulo:         document.getElementById('caeTitulo').value.trim(),
+    numero:         document.getElementById('caeNumero').value.trim()||null,
+    organismo:      document.getElementById('caeOrganismo').value.trim()||null,
+    fecha_emision:  document.getElementById('caeFechaEm').value||null,
+    fecha_caducidad:document.getElementById('caeFechaCad').value||null,
+    alertar_dias:   parseInt(document.getElementById('caeAlertaDias').value)||30,
+    trabajadores:   parseInt(document.getElementById('caeTrabajadores').value)||null,
+    validado_por:   document.getElementById('caeValidadoPor').value.trim()||null,
+    fecha_validacion:document.getElementById('caeFechaVal').value||null,
+    adjunto_url:    document.getElementById('caeAdjunto').value.trim()||null,
+    notas:          document.getElementById('caeNotas').value.trim()||null,
+  };
+  if (!body.subcontrata || !body.tipo_doc || !body.titulo) {
+    toast('Subcontrata, tipo y título son obligatorios','error'); return;
+  }
+  if (id) await api(`/cae-documentacion/${id}`, { method:'PUT', body: JSON.stringify(body) });
+  else    await api('/cae-documentacion', { method:'POST', body: JSON.stringify(body) });
+  cerrarModalCae();
+  cargarCaeDocumentacion();
+  toast(id ? 'Documento actualizado' : 'Documento registrado', 'ok');
+}
+
+async function eliminarCae(id) {
+  if (!confirm('¿Eliminar este documento CAE?')) return;
+  await api(`/cae-documentacion/${id}`, { method:'DELETE' });
+  cargarCaeDocumentacion();
+  toast('Documento eliminado', 'ok');
+}
+
+function cerrarModalCae() { document.getElementById('modalCae').style.display = 'none'; }
 
 // ── COMPARATIVO DE OFERTAS / BID COMPARISON (NEW-97) ─────────────────────────
 let tblCof = null, _cofData = [], _cofDetalleId = null;
