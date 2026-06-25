@@ -475,6 +475,24 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
     <button class="nav-item" data-page="mantenimientos" onclick="navTo('mantenimientos')">
       <span class="nav-icon">🔩</span> Mantenimientos
     </button>
+    <button class="nav-item" data-page="tareas" onclick="navTo('tareas')">
+      <span class="nav-icon">✅</span> Tareas
+      <span class="nav-badge" id="tareasBadge" style="display:none">0</span>
+    </button>
+    <button class="nav-item" data-page="rfis" onclick="navTo('rfis')">
+      <span class="nav-icon">❓</span> RFIs
+      <span class="nav-badge" id="rfisBadge" style="display:none">0</span>
+    </button>
+    <button class="nav-item" data-page="ordenesCambio" onclick="navTo('ordenesCambio')">
+      <span class="nav-icon">🔄</span> Órdenes de Cambio
+    </button>
+    <button class="nav-item" data-page="reuniones" onclick="navTo('reuniones')">
+      <span class="nav-icon">📝</span> Actas de Reunión
+    </button>
+    <button class="nav-item" data-page="calidad" onclick="navTo('calidad')">
+      <span class="nav-icon">🔍</span> Control de Calidad
+      <span class="nav-badge" id="calidadBadge" style="display:none">0</span>
+    </button>
 
     <div class="sidebar-section">Analítica</div>
     <button class="nav-item" data-page="graficas" onclick="navTo('graficas')">
@@ -540,14 +558,28 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
           <div class="kpi-card"><div class="kpi-icon">⏳</div><div class="kpi-value" id="kpiLoading">—</div><div class="kpi-label">Cargando</div></div>
         </div>
 
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px" id="dashGridBottom">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px" id="dashGridBottom">
           <div class="section-card">
-            <div class="section-card-title"><span>⚠️</span> Incidencias recientes</div>
+            <div class="section-card-title"><span>⚠️</span> Incidencias recientes <button class="btn btn-secondary btn-sm" style="margin-left:auto" onclick="navTo('incidencias')">Ver todas →</button></div>
             <div id="dashIncidencias"><div class="loading"><div class="spinner"></div> Cargando...</div></div>
           </div>
           <div class="section-card">
-            <div class="section-card-title"><span>📦</span> Pedidos pendientes</div>
+            <div class="section-card-title"><span>📦</span> Pedidos pendientes <button class="btn btn-secondary btn-sm" style="margin-left:auto" onclick="navTo('pedidos')">Ver todos →</button></div>
             <div id="dashPedidos"><div class="loading"><div class="spinner"></div> Cargando...</div></div>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px" id="dashGridConstruction">
+          <div class="section-card">
+            <div class="section-card-title"><span>✅</span> Tareas activas <button class="btn btn-secondary btn-sm" style="margin-left:auto" onclick="navTo('tareas')">Ver todas →</button></div>
+            <div id="dashTareas"><div class="loading"><div class="spinner"></div> Cargando...</div></div>
+          </div>
+          <div class="section-card">
+            <div class="section-card-title"><span>❓</span> RFIs abiertas <button class="btn btn-secondary btn-sm" style="margin-left:auto" onclick="navTo('rfis')">Ver todas →</button></div>
+            <div id="dashRfis"><div class="loading"><div class="spinner"></div> Cargando...</div></div>
+          </div>
+          <div class="section-card">
+            <div class="section-card-title"><span>🔍</span> Deficiencias <button class="btn btn-secondary btn-sm" style="margin-left:auto" onclick="navTo('calidad')">Ver todas →</button></div>
+            <div id="dashDeficiencias"><div class="loading"><div class="spinner"></div> Cargando...</div></div>
           </div>
         </div>
       </div>
@@ -1155,6 +1187,145 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
           <button class="btn btn-secondary" onclick="tblMantenimientos=null;cargarMantenimientos()">🔄 Actualizar</button>
         </div>
         <div class="tbl-wrap"><div id="tblMantenimientos"></div></div>
+      </div>
+
+      <!-- TAREAS DE OBRA -->
+      <div class="page" id="pageTareas">
+        <div class="page-title">✅ Tareas de Obra</div>
+        <div class="page-sub">Planificación y seguimiento de tareas por obra</div>
+        <div id="tareasResumen" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:16px"></div>
+        <div class="tbl-toolbar">
+          <input class="tbl-search" id="searchTareas" placeholder="🔍 Buscar tarea...">
+          <select class="tbl-search" id="filterTareasEstado" style="min-width:140px" onchange="filtrarTareas()">
+            <option value="">Todos los estados</option>
+            <option value="pendiente">Pendiente</option>
+            <option value="en_progreso">En progreso</option>
+            <option value="completada">Completada</option>
+            <option value="cancelada">Cancelada</option>
+          </select>
+          <select class="tbl-search" id="filterTareasPrioridad" style="min-width:130px" onchange="filtrarTareas()">
+            <option value="">Toda prioridad</option>
+            <option value="urgente">🔴 Urgente</option>
+            <option value="alta">🟠 Alta</option>
+            <option value="normal">🟡 Normal</option>
+            <option value="baja">🟢 Baja</option>
+          </select>
+          <select class="tbl-search" id="filterTareasObra" style="min-width:160px" onchange="tblTareas=null;cargarTareas()">
+            <option value="">🏗 Todas las obras</option>
+          </select>
+          <button class="btn btn-primary" onclick="abrirModalTarea()">+ Nueva tarea</button>
+          <button class="btn btn-secondary" onclick="exportarTabla(tblTareas,'tareas')">⬇ CSV</button>
+          <button class="btn btn-secondary" onclick="tblTareas=null;cargarTareas()">🔄 Actualizar</button>
+        </div>
+        <div class="tbl-wrap"><div id="tblTareas"></div></div>
+      </div>
+
+      <!-- RFIs -->
+      <div class="page" id="pageRfis">
+        <div class="page-title">❓ RFIs — Solicitudes de Información</div>
+        <div class="page-sub">Request for Information — Consultas técnicas a dirección de obra</div>
+        <div id="rfisResumen" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:16px"></div>
+        <div class="tbl-toolbar">
+          <input class="tbl-search" id="searchRfis" placeholder="🔍 Buscar número o descripción...">
+          <select class="tbl-search" id="filterRfisEstado" style="min-width:140px" onchange="filtrarRfis()">
+            <option value="">Todos los estados</option>
+            <option value="abierta">Abierta</option>
+            <option value="en_revision">En revisión</option>
+            <option value="respondida">Respondida</option>
+            <option value="cerrada">Cerrada</option>
+          </select>
+          <select class="tbl-search" id="filterRfisPrioridad" style="min-width:130px" onchange="filtrarRfis()">
+            <option value="">Toda prioridad</option>
+            <option value="urgente">🔴 Urgente</option>
+            <option value="alta">🟠 Alta</option>
+            <option value="normal">🟡 Normal</option>
+            <option value="baja">🟢 Baja</option>
+          </select>
+          <select class="tbl-search" id="filterRfisObra" style="min-width:160px" onchange="tblRfis=null;cargarRfis()">
+            <option value="">🏗 Todas las obras</option>
+          </select>
+          <button class="btn btn-primary" onclick="abrirModalRfi()">+ Nueva RFI</button>
+          <button class="btn btn-secondary" onclick="exportarTabla(tblRfis,'rfis')">⬇ CSV</button>
+          <button class="btn btn-secondary" onclick="tblRfis=null;cargarRfis()">🔄 Actualizar</button>
+        </div>
+        <div class="tbl-wrap"><div id="tblRfis"></div></div>
+      </div>
+
+      <!-- ÓRDENES DE CAMBIO -->
+      <div class="page" id="pageOrdenesCambio">
+        <div class="page-title">🔄 Órdenes de Cambio</div>
+        <div class="page-sub">Cambios de alcance, coste y plazo aprobados o pendientes</div>
+        <div id="ocResumen" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:16px"></div>
+        <div class="tbl-toolbar">
+          <input class="tbl-search" id="searchOC" placeholder="🔍 Buscar número o descripción...">
+          <select class="tbl-search" id="filterOCEstado" style="min-width:140px" onchange="filtrarOC()">
+            <option value="">Todos los estados</option>
+            <option value="borrador">Borrador</option>
+            <option value="pendiente">Pendiente aprobación</option>
+            <option value="aprobada">Aprobada</option>
+            <option value="rechazada">Rechazada</option>
+          </select>
+          <select class="tbl-search" id="filterOCObra" style="min-width:160px" onchange="tblOC=null;cargarOrdenesCambio()">
+            <option value="">🏗 Todas las obras</option>
+          </select>
+          <button class="btn btn-primary" onclick="abrirModalOC()">+ Nueva OC</button>
+          <button class="btn btn-secondary" onclick="exportarTabla(tblOC,'ordenes_cambio')">⬇ CSV</button>
+          <button class="btn btn-secondary" onclick="tblOC=null;cargarOrdenesCambio()">🔄 Actualizar</button>
+        </div>
+        <div class="tbl-wrap"><div id="tblOC"></div></div>
+      </div>
+
+      <!-- ACTAS DE REUNIÓN -->
+      <div class="page" id="pageReuniones">
+        <div class="page-title">📝 Actas de Reunión</div>
+        <div class="page-sub">Reuniones de obra, acuerdos tomados y puntos de seguimiento</div>
+        <div class="tbl-toolbar">
+          <input class="tbl-search" id="searchReuniones" placeholder="🔍 Buscar título o asistentes...">
+          <select class="tbl-search" id="filterReunionesEstado" style="min-width:140px" onchange="filtrarReuniones()">
+            <option value="">Todos los estados</option>
+            <option value="borrador">Borrador</option>
+            <option value="firmada">Firmada</option>
+            <option value="archivada">Archivada</option>
+          </select>
+          <select class="tbl-search" id="filterReunionesObra" style="min-width:160px" onchange="tblReuniones=null;cargarReuniones()">
+            <option value="">🏗 Todas las obras</option>
+          </select>
+          <button class="btn btn-primary" onclick="abrirModalReunion()">+ Nueva acta</button>
+          <button class="btn btn-secondary" onclick="exportarTabla(tblReuniones,'actas')">⬇ CSV</button>
+          <button class="btn btn-secondary" onclick="tblReuniones=null;cargarReuniones()">🔄 Actualizar</button>
+        </div>
+        <div class="tbl-wrap"><div id="tblReuniones"></div></div>
+      </div>
+
+      <!-- CONTROL DE CALIDAD / PUNCH LIST -->
+      <div class="page" id="pageCalidad">
+        <div class="page-title">🔍 Control de Calidad</div>
+        <div class="page-sub">Punch list — Deficiencias, no conformidades y seguimiento de resolución</div>
+        <div id="calidadResumen" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:16px"></div>
+        <div class="tbl-toolbar">
+          <input class="tbl-search" id="searchCalidad" placeholder="🔍 Buscar deficiencia o ubicación...">
+          <select class="tbl-search" id="filterCalidadEstado" style="min-width:140px" onchange="filtrarCalidad()">
+            <option value="">Todos los estados</option>
+            <option value="abierto">Abierto</option>
+            <option value="en_reparacion">En reparación</option>
+            <option value="resuelto">Resuelto</option>
+            <option value="verificado">Verificado</option>
+          </select>
+          <select class="tbl-search" id="filterCalidadPrioridad" style="min-width:130px" onchange="filtrarCalidad()">
+            <option value="">Toda prioridad</option>
+            <option value="urgente">🔴 Urgente</option>
+            <option value="alta">🟠 Alta</option>
+            <option value="normal">🟡 Normal</option>
+            <option value="baja">🟢 Baja</option>
+          </select>
+          <select class="tbl-search" id="filterCalidadObra" style="min-width:160px" onchange="tblCalidad=null;cargarCalidad()">
+            <option value="">🏗 Todas las obras</option>
+          </select>
+          <button class="btn btn-primary" onclick="abrirModalCalidad()">+ Nueva deficiencia</button>
+          <button class="btn btn-secondary" onclick="exportarTabla(tblCalidad,'calidad')">⬇ CSV</button>
+          <button class="btn btn-secondary" onclick="tblCalidad=null;cargarCalidad()">🔄 Actualizar</button>
+        </div>
+        <div class="tbl-wrap"><div id="tblCalidad"></div></div>
       </div>
 
       <!-- DOCUMENTOS -->
@@ -2354,6 +2525,11 @@ const PAGE_TITLES = {
   documentosObra: '📋 Documentos de Obra',
   permisosTrabajo: '📝 Permisos de Trabajo',
   inspecciones: '🔍 Inspecciones de Seguridad',
+  tareas: '✅ Tareas de Obra',
+  rfis: '❓ RFIs',
+  ordenesCambio: '🔄 Órdenes de Cambio',
+  reuniones: '📝 Actas de Reunión',
+  calidad: '🔍 Control de Calidad',
 };
 
 const PAGE_LOADERS = {
@@ -2384,6 +2560,11 @@ const PAGE_LOADERS = {
   documentosObra: docObraCargar,
   permisosTrabajo: ptCargar,
   inspecciones: inspCargar,
+  tareas: cargarTareas,
+  rfis: cargarRfis,
+  ordenesCambio: cargarOrdenesCambio,
+  reuniones: cargarReuniones,
+  calidad: cargarCalidad,
 };
 
 let currentPage = '';
@@ -2443,6 +2624,11 @@ const SYNC_INTERVALS = {
   kits:         120,
   obras:        120,
   usuarios:     120,
+  tareas:        60,
+  rfis:          60,
+  ordenesCambio: 90,
+  reuniones:    120,
+  calidad:       60,
 };
 
 let _syncTimer = null, _syncLabelTimer = null, _syncLastTs = null;
@@ -2505,10 +2691,13 @@ async function checkConexion() {
 // ── DASHBOARD ──────────────────────────────────────────────────
 async function cargarDashboard() {
   document.getElementById('dashSub').textContent = 'Actualizando...';
-  const [dash, incR, pedR] = await Promise.all([
+  const [dash, incR, pedR, tareasR, rfisR, defR] = await Promise.all([
     api('/obra-dashboard'),
     api('/incidencias?limit=5'),
     api('/pedidos?limit=5'),
+    api('/tareas-obra?limit=5'),
+    api('/rfis?limit=5'),
+    api('/control-calidad?limit=5'),
   ]);
 
   const kpis = [
@@ -2516,6 +2705,9 @@ async function cargarDashboard() {
     { icon: '🏗️', value: dash.obras_activas ?? '—',        label: 'Obras activas',        cls: '',                                          nav: 'obras' },
     { icon: '⚠️', value: dash.incidencias_abiertas ?? '—', label: 'Incidencias abiertas', cls: dash.incidencias_abiertas > 0 ? 'warn' : '',  nav: 'incidencias' },
     { icon: '📦', value: dash.pedidos_pendientes ?? '—',   label: 'Pedidos pendientes',   cls: dash.pedidos_pendientes > 0 ? 'warn' : '',    nav: 'pedidos' },
+    { icon: '✅', value: dash.tareas_activas ?? '—',        label: 'Tareas activas',       cls: '',                                           nav: 'tareas' },
+    { icon: '❓', value: dash.rfis_abiertas ?? '—',         label: 'RFIs abiertas',        cls: dash.rfis_abiertas > 0 ? 'warn' : '',         nav: 'rfis' },
+    { icon: '🔍', value: dash.deficiencias_abiertas ?? '—',label: 'Deficiencias abiertas',cls: dash.deficiencias_abiertas > 0 ? 'danger' : '',nav: 'calidad' },
     { icon: '🔴', value: dash.equipos_averiados ?? '—',    label: 'Equipos averiados',    cls: dash.equipos_averiados > 0 ? 'danger' : '',   nav: 'pemp' },
     { icon: '🔧', value: dash.equipos_mantenimiento ?? '—',label: 'En mantenimiento',     cls: '',                                           nav: 'mantenimientos' },
     { icon: '🔺', value: dash.herramientas_fuera ?? '—',   label: 'Herramientas fuera',   cls: '',                                           nav: 'herramientas' },
@@ -2552,6 +2744,45 @@ async function cargarDashboard() {
       <span style="font-size:11px;color:var(--muted)">${fmtFecha(p.fecha || p.created_at)}</span>
     </div>`
   ).join('') : '<div class="empty-state"><div class="empty-icon">✅</div><div class="empty-text">Sin pedidos pendientes</div></div>';
+
+  // tareas activas recientes
+  const tareas = toArr(tareasR, 'tareas').filter(t => t.estado !== 'completada' && t.estado !== 'cancelada').slice(0, 5);
+  const elTareas = document.getElementById('dashTareas');
+  if (elTareas) {
+    elTareas.innerHTML = tareas.length ? tareas.map(t =>
+      `<div style="padding:10px 0;border-bottom:1px solid var(--border);display:flex;gap:10px;align-items:center">
+        <span class="badge badge-${t.prioridad === 'urgente' ? 'danger' : t.prioridad === 'alta' ? 'warn' : 'info'}">${t.prioridad || 'normal'}</span>
+        <span style="flex:1;font-size:13px">${t.titulo || '—'}</span>
+        <span style="font-size:11px;color:var(--muted)">${t.responsable || ''}</span>
+      </div>`
+    ).join('') : '<div class="empty-state"><div class="empty-icon">✅</div><div class="empty-text">Sin tareas pendientes</div></div>';
+  }
+
+  // RFIs abiertas recientes
+  const rfis = toArr(rfisR, 'rfis').filter(r => r.estado !== 'cerrada').slice(0, 5);
+  const elRfis = document.getElementById('dashRfis');
+  if (elRfis) {
+    elRfis.innerHTML = rfis.length ? rfis.map(r =>
+      `<div style="padding:10px 0;border-bottom:1px solid var(--border);display:flex;gap:10px;align-items:center">
+        <span class="badge badge-${r.estado === 'abierta' ? 'danger' : 'warn'}">${r.numero || r.id}</span>
+        <span style="flex:1;font-size:13px">${r.titulo || r.descripcion || '—'}</span>
+        <span style="font-size:11px;color:var(--muted)">${fmtFecha(r.fecha_limite || r.created_at)}</span>
+      </div>`
+    ).join('') : '<div class="empty-state"><div class="empty-icon">✅</div><div class="empty-text">Sin RFIs abiertas</div></div>';
+  }
+
+  // Deficiencias abiertas
+  const defs = toArr(defR, 'deficiencias').filter(d => d.estado === 'abierto' || d.estado === 'en_reparacion').slice(0, 5);
+  const elDefs = document.getElementById('dashDeficiencias');
+  if (elDefs) {
+    elDefs.innerHTML = defs.length ? defs.map(d =>
+      `<div style="padding:10px 0;border-bottom:1px solid var(--border);display:flex;gap:10px;align-items:center">
+        <span class="badge badge-${d.prioridad === 'urgente' ? 'danger' : d.prioridad === 'alta' ? 'warn' : 'muted'}">${d.prioridad || 'normal'}</span>
+        <span style="flex:1;font-size:13px">${d.titulo || '—'}</span>
+        <span style="font-size:11px;color:var(--muted)">${d.ubicacion || ''}</span>
+      </div>`
+    ).join('') : '<div class="empty-state"><div class="empty-icon">✅</div><div class="empty-text">Sin deficiencias abiertas</div></div>';
+  }
 }
 
 // ── PERSONAL ───────────────────────────────────────────────────
@@ -8497,6 +8728,710 @@ document.getElementById('wInput').focus();
     <span class="rs-fab-badge offline" id="rsFabBadge">0</span>
   </button>
 </div>
+
+<script>
+// ── TAREAS DE OBRA ──────────────────────────────────────────────
+let tblTareas = null, _tareasData = [];
+async function cargarTareas() {
+  if (document.getElementById('filterTareasObra')?.options.length <= 1) poblarSelectObras('filterTareasObra');
+  const obraId = document.getElementById('filterTareasObra')?.value || '';
+  const r = await api('/tareas-obra' + (obraId ? `?obra_id=${obraId}` : ''));
+  _tareasData = toArr(r, 'tareas');
+  // KPIs
+  const total = _tareasData.length;
+  const urgentes = _tareasData.filter(t => t.prioridad === 'urgente' && t.estado !== 'completada').length;
+  const completadas = _tareasData.filter(t => t.estado === 'completada').length;
+  const enProgreso = _tareasData.filter(t => t.estado === 'en_progreso').length;
+  document.getElementById('tareasResumen').innerHTML = [
+    { label: 'Total tareas', val: total, cls: '' },
+    { label: 'En progreso', val: enProgreso, cls: enProgreso > 0 ? 'warn' : 'ok' },
+    { label: 'Urgentes', val: urgentes, cls: urgentes > 0 ? 'danger' : 'ok' },
+    { label: 'Completadas', val: completadas, cls: 'ok' },
+  ].map(k => `<div class="kpi-card"><div class="kpi-value ${k.cls}">${k.val}</div><div class="kpi-label">${k.label}</div></div>`).join('');
+  // Badge sidebar
+  const badge = document.getElementById('tareasBadge');
+  const pending = _tareasData.filter(t => t.estado === 'pendiente' || t.estado === 'en_progreso').length;
+  if (badge) { badge.textContent = pending; badge.style.display = pending > 0 ? '' : 'none'; }
+  filtrarTareas();
+}
+function filtrarTareas() {
+  const q = (document.getElementById('searchTareas')?.value || '').toLowerCase();
+  const est = document.getElementById('filterTareasEstado')?.value || '';
+  const pri = document.getElementById('filterTareasPrioridad')?.value || '';
+  const data = _tareasData.filter(t =>
+    (!q || (t.titulo||'').toLowerCase().includes(q) || (t.responsable||'').toLowerCase().includes(q)) &&
+    (!est || t.estado === est) &&
+    (!pri || t.prioridad === pri)
+  );
+  if (tblTareas) { tblTareas.replaceData(data); return; }
+  tblTareas = new Tabulator('#tblTareas', {
+    data, layout: 'fitColumns', responsiveLayout: 'collapse',
+    pagination: 'local', paginationSize: 20,
+    placeholder: '<div class="empty-state"><div class="empty-icon">✅</div><div class="empty-text">Sin tareas</div></div>',
+    columns: [
+      { title: 'N°', field: 'numero', width: 80, sorter: 'string' },
+      { title: 'Título', field: 'titulo', minWidth: 200, sorter: 'string' },
+      { title: 'Estado', field: 'estado', width: 110, formatter: (cell) => {
+        const v = cell.getValue();
+        const cls = { pendiente:'warn', en_progreso:'info', completada:'ok', cancelada:'muted' }[v] || 'muted';
+        return `<span class="badge badge-${cls}">${v||'—'}</span>`;
+      }},
+      { title: 'Prioridad', field: 'prioridad', width: 100, formatter: (cell) => {
+        const v = cell.getValue();
+        const cls = { urgente:'danger', alta:'warn', normal:'info', baja:'ok' }[v] || 'muted';
+        return `<span class="badge badge-${cls}">${v||'—'}</span>`;
+      }},
+      { title: 'Responsable', field: 'responsable', width: 140 },
+      { title: 'Obra', field: 'obra_nombre', minWidth: 120 },
+      { title: 'Fecha límite', field: 'fecha_limite', width: 120, formatter: (cell) => fmtFecha(cell.getValue()) },
+      { title: 'Acciones', field: 'id', width: 80, hozAlign: 'center', formatter: () => '<button class="btn btn-secondary btn-sm">✏️</button>',
+        cellClick: (e, cell) => abrirModalTareaEditar(cell.getRow().getData()) },
+    ]
+  });
+  document.getElementById('searchTareas')?.addEventListener('input', () => { if(tblTareas) tblTareas.setFilter([{field:'titulo',type:'like',value:document.getElementById('searchTareas').value}]); });
+}
+function abrirModalTarea() {
+  abrirModal('Nueva tarea de obra', `
+    <div class="form-group"><div class="form-label">Título *</div><input class="form-input" id="mTareaTitulo" placeholder="Descripción de la tarea"></div>
+    <div class="form-row">
+      <div class="form-group"><div class="form-label">Prioridad</div>
+        <select class="form-select" id="mTareaPrioridad">
+          <option value="normal">Normal</option>
+          <option value="alta">Alta</option>
+          <option value="urgente">Urgente</option>
+          <option value="baja">Baja</option>
+        </select>
+      </div>
+      <div class="form-group"><div class="form-label">Fecha límite</div>
+        <input class="form-input" id="mTareaFecha" type="date">
+      </div>
+    </div>
+    <div class="form-group"><div class="form-label">Responsable</div><input class="form-input" id="mTareaResp" placeholder="Nombre del responsable"></div>
+    <div class="form-group"><div class="form-label">Obra</div>
+      <select class="form-select" id="mTareaObra">
+        <option value="">— Sin obra asignada —</option>
+      </select>
+    </div>
+    <div class="form-group"><div class="form-label">Notas</div><textarea class="form-input" id="mTareaNotas" rows="3" placeholder="Descripción adicional..."></textarea></div>
+  `, async () => {
+    const titulo = document.getElementById('mTareaTitulo').value.trim();
+    if (!titulo) { toast('El título es obligatorio', 'err'); return; }
+    const body = {
+      titulo,
+      prioridad: document.getElementById('mTareaPrioridad').value,
+      fecha_limite: document.getElementById('mTareaFecha').value || null,
+      responsable: document.getElementById('mTareaResp').value.trim() || null,
+      obra_id: document.getElementById('mTareaObra').value || null,
+      notas: document.getElementById('mTareaNotas').value.trim() || null,
+    };
+    const r = await api('/tareas-obra', { method: 'POST', body: JSON.stringify(body) });
+    if (r.ok || r.id) { toast('Tarea creada ✓', 'ok'); cerrarModal(); tblTareas=null; cargarTareas(); }
+    else toast('Error al crear tarea', 'err');
+  });
+  // poblar obras
+  poblarSelectObras('mTareaObra');
+}
+function abrirModalTareaEditar(t) {
+  abrirModal('Editar tarea', `
+    <div class="form-group"><div class="form-label">Título *</div><input class="form-input" id="mTareaTitulo" value="${esc(t.titulo)}" placeholder="Descripción de la tarea"></div>
+    <div class="form-row">
+      <div class="form-group"><div class="form-label">Estado</div>
+        <select class="form-select" id="mTareaEstado">
+          <option value="pendiente" ${t.estado==='pendiente'?'selected':''}>Pendiente</option>
+          <option value="en_progreso" ${t.estado==='en_progreso'?'selected':''}>En progreso</option>
+          <option value="completada" ${t.estado==='completada'?'selected':''}>Completada</option>
+          <option value="cancelada" ${t.estado==='cancelada'?'selected':''}>Cancelada</option>
+        </select>
+      </div>
+      <div class="form-group"><div class="form-label">Prioridad</div>
+        <select class="form-select" id="mTareaPrioridad">
+          <option value="normal" ${t.prioridad==='normal'?'selected':''}>Normal</option>
+          <option value="alta" ${t.prioridad==='alta'?'selected':''}>Alta</option>
+          <option value="urgente" ${t.prioridad==='urgente'?'selected':''}>Urgente</option>
+          <option value="baja" ${t.prioridad==='baja'?'selected':''}>Baja</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-group"><div class="form-label">Responsable</div><input class="form-input" id="mTareaResp" value="${esc(t.responsable||'')}"></div>
+    <div class="form-group"><div class="form-label">Fecha límite</div><input class="form-input" id="mTareaFecha" type="date" value="${t.fecha_limite||''}"></div>
+    <div class="form-group"><div class="form-label">Notas</div><textarea class="form-input" id="mTareaNotas" rows="3">${esc(t.notas||t.descripcion||'')}</textarea></div>
+    <div style="margin-top:12px;display:flex;gap:8px">
+      <button class="btn btn-danger btn-sm" onclick="eliminarTarea(${t.id})">🗑 Eliminar</button>
+    </div>
+  `, async () => {
+    const titulo = document.getElementById('mTareaTitulo').value.trim();
+    if (!titulo) { toast('El título es obligatorio', 'err'); return; }
+    const body = {
+      titulo,
+      estado: document.getElementById('mTareaEstado').value,
+      prioridad: document.getElementById('mTareaPrioridad').value,
+      responsable: document.getElementById('mTareaResp').value.trim() || null,
+      fecha_limite: document.getElementById('mTareaFecha').value || null,
+      notas: document.getElementById('mTareaNotas').value.trim() || null,
+    };
+    const r = await api(`/tareas-obra/${t.id}`, { method: 'PUT', body: JSON.stringify(body) });
+    if (r.ok || r.id) { toast('Tarea actualizada ✓', 'ok'); cerrarModal(); tblTareas=null; cargarTareas(); }
+    else toast('Error al actualizar', 'err');
+  });
+}
+async function eliminarTarea(id) {
+  if (!confirm('¿Eliminar esta tarea?')) return;
+  const r = await api(`/tareas-obra/${id}`, { method: 'DELETE' });
+  if (r.ok || r.deleted) { toast('Tarea eliminada', 'ok'); cerrarModal(); tblTareas=null; cargarTareas(); }
+  else toast('Error al eliminar', 'err');
+}
+
+// ── RFIs ────────────────────────────────────────────────────────
+let tblRfis = null, _rfisData = [];
+async function cargarRfis() {
+  if (document.getElementById('filterRfisObra')?.options.length <= 1) poblarSelectObras('filterRfisObra');
+  const obraId = document.getElementById('filterRfisObra')?.value || '';
+  const r = await api('/rfis' + (obraId ? `?obra_id=${obraId}` : ''));
+  _rfisData = toArr(r, 'rfis');
+  const total = _rfisData.length;
+  const abiertas = _rfisData.filter(x => x.estado === 'abierta').length;
+  const respondidas = _rfisData.filter(x => x.estado === 'respondida').length;
+  const urgentes = _rfisData.filter(x => x.prioridad === 'urgente' && x.estado !== 'cerrada').length;
+  document.getElementById('rfisResumen').innerHTML = [
+    { label: 'Total RFIs', val: total, cls: '' },
+    { label: 'Abiertas', val: abiertas, cls: abiertas > 0 ? 'warn' : 'ok' },
+    { label: 'Urgentes', val: urgentes, cls: urgentes > 0 ? 'danger' : 'ok' },
+    { label: 'Respondidas', val: respondidas, cls: 'ok' },
+  ].map(k => `<div class="kpi-card"><div class="kpi-value ${k.cls}">${k.val}</div><div class="kpi-label">${k.label}</div></div>`).join('');
+  const badge = document.getElementById('rfisBadge');
+  if (badge) { badge.textContent = abiertas; badge.style.display = abiertas > 0 ? '' : 'none'; }
+  filtrarRfis();
+}
+function filtrarRfis() {
+  const q = (document.getElementById('searchRfis')?.value || '').toLowerCase();
+  const est = document.getElementById('filterRfisEstado')?.value || '';
+  const pri = document.getElementById('filterRfisPrioridad')?.value || '';
+  const data = _rfisData.filter(x =>
+    (!q || (x.titulo||x.descripcion||'').toLowerCase().includes(q) || (x.numero||'').toLowerCase().includes(q)) &&
+    (!est || x.estado === est) &&
+    (!pri || x.prioridad === pri)
+  );
+  if (tblRfis) { tblRfis.replaceData(data); return; }
+  tblRfis = new Tabulator('#tblRfis', {
+    data, layout: 'fitColumns', responsiveLayout: 'collapse',
+    pagination: 'local', paginationSize: 20,
+    placeholder: '<div class="empty-state"><div class="empty-icon">✅</div><div class="empty-text">Sin RFIs</div></div>',
+    columns: [
+      { title: 'N°', field: 'numero', width: 90, sorter: 'string' },
+      { title: 'Título / Descripción', field: 'titulo', minWidth: 200, sorter: 'string', formatter: (cell) => cell.getValue() || cell.getRow().getData().descripcion || '—' },
+      { title: 'Estado', field: 'estado', width: 110, formatter: (cell) => {
+        const v = cell.getValue();
+        const cls = { abierta:'danger', en_revision:'warn', respondida:'ok', cerrada:'muted' }[v] || 'muted';
+        return `<span class="badge badge-${cls}">${v||'—'}</span>`;
+      }},
+      { title: 'Prioridad', field: 'prioridad', width: 100, formatter: (cell) => {
+        const v = cell.getValue();
+        const cls = { urgente:'danger', alta:'warn', normal:'info', baja:'ok' }[v] || 'muted';
+        return `<span class="badge badge-${cls}">${v||'—'}</span>`;
+      }},
+      { title: 'Solicitante', field: 'solicitante', width: 130 },
+      { title: 'Obra', field: 'obra_nombre', minWidth: 120 },
+      { title: 'Fecha límite', field: 'fecha_limite', width: 120, formatter: (cell) => fmtFecha(cell.getValue()) },
+      { title: 'Acciones', field: 'id', width: 80, hozAlign: 'center', formatter: () => '<button class="btn btn-secondary btn-sm">✏️</button>',
+        cellClick: (e, cell) => abrirModalRfiEditar(cell.getRow().getData()) },
+    ]
+  });
+}
+function abrirModalRfi() {
+  abrirModal('Nueva RFI', `
+    <div class="form-group"><div class="form-label">Título / Consulta *</div><input class="form-input" id="mRfiTitulo" placeholder="¿Qué se consulta?"></div>
+    <div class="form-group"><div class="form-label">Descripción detallada</div><textarea class="form-input" id="mRfiDesc" rows="3" placeholder="Descripción del problema o consulta..."></textarea></div>
+    <div class="form-row">
+      <div class="form-group"><div class="form-label">Prioridad</div>
+        <select class="form-select" id="mRfiPri">
+          <option value="normal">Normal</option>
+          <option value="alta">Alta</option>
+          <option value="urgente">Urgente</option>
+          <option value="baja">Baja</option>
+        </select>
+      </div>
+      <div class="form-group"><div class="form-label">Fecha límite respuesta</div>
+        <input class="form-input" id="mRfiFecha" type="date">
+      </div>
+    </div>
+    <div class="form-group"><div class="form-label">Solicitante</div><input class="form-input" id="mRfiSolic" placeholder="Nombre del solicitante"></div>
+    <div class="form-group"><div class="form-label">Obra</div>
+      <select class="form-select" id="mRfiObra"><option value="">— Sin obra —</option></select>
+    </div>
+  `, async () => {
+    const titulo = document.getElementById('mRfiTitulo').value.trim();
+    if (!titulo) { toast('El título es obligatorio', 'err'); return; }
+    const body = {
+      titulo,
+      descripcion: document.getElementById('mRfiDesc').value.trim() || null,
+      prioridad: document.getElementById('mRfiPri').value,
+      fecha_limite: document.getElementById('mRfiFecha').value || null,
+      solicitante: document.getElementById('mRfiSolic').value.trim() || null,
+      obra_id: document.getElementById('mRfiObra').value || null,
+    };
+    const r = await api('/rfis', { method: 'POST', body: JSON.stringify(body) });
+    if (r.ok || r.id) { toast('RFI creada ✓', 'ok'); cerrarModal(); tblRfis=null; cargarRfis(); }
+    else toast('Error al crear RFI', 'err');
+  });
+  poblarSelectObras('mRfiObra');
+}
+function abrirModalRfiEditar(rfi) {
+  abrirModal('Editar RFI', `
+    <div class="form-group"><div class="form-label">Título *</div><input class="form-input" id="mRfiTitulo" value="${esc(rfi.titulo||rfi.descripcion||'')}"></div>
+    <div class="form-group"><div class="form-label">Descripción</div><textarea class="form-input" id="mRfiDesc" rows="3">${esc(rfi.descripcion||'')}</textarea></div>
+    <div class="form-row">
+      <div class="form-group"><div class="form-label">Estado</div>
+        <select class="form-select" id="mRfiEst">
+          <option value="abierta" ${rfi.estado==='abierta'?'selected':''}>Abierta</option>
+          <option value="en_revision" ${rfi.estado==='en_revision'?'selected':''}>En revisión</option>
+          <option value="respondida" ${rfi.estado==='respondida'?'selected':''}>Respondida</option>
+          <option value="cerrada" ${rfi.estado==='cerrada'?'selected':''}>Cerrada</option>
+        </select>
+      </div>
+      <div class="form-group"><div class="form-label">Prioridad</div>
+        <select class="form-select" id="mRfiPri">
+          <option value="normal" ${rfi.prioridad==='normal'?'selected':''}>Normal</option>
+          <option value="alta" ${rfi.prioridad==='alta'?'selected':''}>Alta</option>
+          <option value="urgente" ${rfi.prioridad==='urgente'?'selected':''}>Urgente</option>
+          <option value="baja" ${rfi.prioridad==='baja'?'selected':''}>Baja</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-group"><div class="form-label">Respuesta</div><textarea class="form-input" id="mRfiResp" rows="3">${esc(rfi.respuesta||'')}</textarea></div>
+    <div style="margin-top:12px"><button class="btn btn-danger btn-sm" onclick="eliminarRfi(${rfi.id})">🗑 Eliminar</button></div>
+  `, async () => {
+    const titulo = document.getElementById('mRfiTitulo').value.trim();
+    if (!titulo) { toast('El título es obligatorio', 'err'); return; }
+    const body = {
+      titulo,
+      descripcion: document.getElementById('mRfiDesc').value.trim() || null,
+      estado: document.getElementById('mRfiEst').value,
+      prioridad: document.getElementById('mRfiPri').value,
+      respuesta: document.getElementById('mRfiResp').value.trim() || null,
+    };
+    const r = await api(`/rfis/${rfi.id}`, { method: 'PUT', body: JSON.stringify(body) });
+    if (r.ok || r.id) { toast('RFI actualizada ✓', 'ok'); cerrarModal(); tblRfis=null; cargarRfis(); }
+    else toast('Error al actualizar', 'err');
+  });
+}
+async function eliminarRfi(id) {
+  if (!confirm('¿Eliminar esta RFI?')) return;
+  const r = await api(`/rfis/${id}`, { method: 'DELETE' });
+  if (r.ok || r.deleted) { toast('RFI eliminada', 'ok'); cerrarModal(); tblRfis=null; cargarRfis(); }
+  else toast('Error al eliminar', 'err');
+}
+
+// ── ÓRDENES DE CAMBIO ───────────────────────────────────────────
+let tblOC = null, _ocData = [];
+async function cargarOrdenesCambio() {
+  if (document.getElementById('filterOCObra')?.options.length <= 1) poblarSelectObras('filterOCObra');
+  const obraId = document.getElementById('filterOCObra')?.value || '';
+  const r = await api('/ordenes-cambio' + (obraId ? `?obra_id=${obraId}` : ''));
+  _ocData = toArr(r, 'ordenes_cambio');
+  const total = _ocData.length;
+  const pendientes = _ocData.filter(x => x.estado === 'pendiente').length;
+  const aprobadas = _ocData.filter(x => x.estado === 'aprobada').length;
+  const importeTotal = _ocData.filter(x => x.estado === 'aprobada').reduce((s,x) => s + (parseFloat(x.coste_adicional)||0), 0);
+  document.getElementById('ocResumen').innerHTML = [
+    { label: 'Total OC', val: total, cls: '' },
+    { label: 'Pendientes', val: pendientes, cls: pendientes > 0 ? 'warn' : 'ok' },
+    { label: 'Aprobadas', val: aprobadas, cls: 'ok' },
+    { label: 'Importe aprobado', val: importeTotal > 0 ? `${importeTotal.toLocaleString('es-ES', {minimumFractionDigits:0})} €` : '0 €', cls: '' },
+  ].map(k => `<div class="kpi-card"><div class="kpi-value ${k.cls}" style="font-size:${k.label==='Importe aprobado'?'18px':'32px'}">${k.val}</div><div class="kpi-label">${k.label}</div></div>`).join('');
+  filtrarOC();
+}
+function filtrarOC() {
+  const q = (document.getElementById('searchOC')?.value || '').toLowerCase();
+  const est = document.getElementById('filterOCEstado')?.value || '';
+  const data = _ocData.filter(x =>
+    (!q || (x.titulo||x.descripcion||'').toLowerCase().includes(q) || (x.numero||'').toLowerCase().includes(q)) &&
+    (!est || x.estado === est)
+  );
+  if (tblOC) { tblOC.replaceData(data); return; }
+  tblOC = new Tabulator('#tblOC', {
+    data, layout: 'fitColumns', responsiveLayout: 'collapse',
+    pagination: 'local', paginationSize: 20,
+    placeholder: '<div class="empty-state"><div class="empty-icon">🔄</div><div class="empty-text">Sin órdenes de cambio</div></div>',
+    columns: [
+      { title: 'N°', field: 'numero', width: 90, sorter: 'string' },
+      { title: 'Título', field: 'titulo', minWidth: 180, sorter: 'string', formatter: (cell) => cell.getValue() || cell.getRow().getData().descripcion || '—' },
+      { title: 'Estado', field: 'estado', width: 120, formatter: (cell) => {
+        const v = cell.getValue();
+        const cls = { borrador:'muted', pendiente:'warn', aprobada:'ok', rechazada:'danger' }[v] || 'muted';
+        return `<span class="badge badge-${cls}">${v||'—'}</span>`;
+      }},
+      { title: 'Coste adicional', field: 'coste_adicional', width: 130, hozAlign: 'right',
+        formatter: (cell) => { const v = parseFloat(cell.getValue()||0); return v ? `${v.toLocaleString('es-ES',{minimumFractionDigits:2})} €` : '—'; } },
+      { title: 'Días impacto', field: 'dias_impacto', width: 100, hozAlign: 'center' },
+      { title: 'Obra', field: 'obra_nombre', minWidth: 120 },
+      { title: 'Fecha', field: 'fecha', width: 110, formatter: (cell) => fmtFecha(cell.getValue()) },
+      { title: 'Acciones', field: 'id', width: 80, hozAlign: 'center', formatter: () => '<button class="btn btn-secondary btn-sm">✏️</button>',
+        cellClick: (e, cell) => abrirModalOCEditar(cell.getRow().getData()) },
+    ]
+  });
+}
+function abrirModalOC() {
+  abrirModal('Nueva Orden de Cambio', `
+    <div class="form-group"><div class="form-label">Título *</div><input class="form-input" id="mOCTitulo" placeholder="Descripción del cambio"></div>
+    <div class="form-group"><div class="form-label">Descripción detallada</div><textarea class="form-input" id="mOCDesc" rows="2"></textarea></div>
+    <div class="form-row">
+      <div class="form-group"><div class="form-label">Coste adicional (€)</div><input class="form-input" id="mOCCoste" type="number" step="0.01" placeholder="0.00"></div>
+      <div class="form-group"><div class="form-label">Días impacto</div><input class="form-input" id="mOCDias" type="number" placeholder="0"></div>
+    </div>
+    <div class="form-group"><div class="form-label">Obra</div>
+      <select class="form-select" id="mOCObra"><option value="">— Sin obra —</option></select>
+    </div>
+    <div class="form-group"><div class="form-label">Motivo / Justificación</div><textarea class="form-input" id="mOCMotivo" rows="2"></textarea></div>
+  `, async () => {
+    const titulo = document.getElementById('mOCTitulo').value.trim();
+    if (!titulo) { toast('El título es obligatorio', 'err'); return; }
+    const body = {
+      titulo,
+      descripcion: document.getElementById('mOCDesc').value.trim() || null,
+      coste_adicional: parseFloat(document.getElementById('mOCCoste').value) || null,
+      dias_impacto: parseInt(document.getElementById('mOCDias').value) || null,
+      obra_id: document.getElementById('mOCObra').value || null,
+      motivo: document.getElementById('mOCMotivo').value.trim() || null,
+    };
+    const r = await api('/ordenes-cambio', { method: 'POST', body: JSON.stringify(body) });
+    if (r.ok || r.id) { toast('OC creada ✓', 'ok'); cerrarModal(); tblOC=null; cargarOrdenesCambio(); }
+    else toast('Error al crear OC', 'err');
+  });
+  poblarSelectObras('mOCObra');
+}
+function abrirModalOCEditar(oc) {
+  abrirModal('Editar Orden de Cambio', `
+    <div class="form-group"><div class="form-label">Título *</div><input class="form-input" id="mOCTitulo" value="${esc(oc.titulo||oc.descripcion||'')}"></div>
+    <div class="form-row">
+      <div class="form-group"><div class="form-label">Estado</div>
+        <select class="form-select" id="mOCEst">
+          <option value="borrador" ${oc.estado==='borrador'?'selected':''}>Borrador</option>
+          <option value="pendiente" ${oc.estado==='pendiente'?'selected':''}>Pendiente</option>
+          <option value="aprobada" ${oc.estado==='aprobada'?'selected':''}>Aprobada</option>
+          <option value="rechazada" ${oc.estado==='rechazada'?'selected':''}>Rechazada</option>
+        </select>
+      </div>
+      <div class="form-group"><div class="form-label">Coste adicional (€)</div>
+        <input class="form-input" id="mOCCoste" type="number" step="0.01" value="${oc.coste_adicional||''}">
+      </div>
+    </div>
+    <div class="form-group"><div class="form-label">Días impacto</div><input class="form-input" id="mOCDias" type="number" value="${oc.dias_impacto||''}"></div>
+    <div class="form-group"><div class="form-label">Motivo</div><textarea class="form-input" id="mOCMotivo" rows="2">${esc(oc.motivo||'')}</textarea></div>
+    <div style="margin-top:12px"><button class="btn btn-danger btn-sm" onclick="eliminarOC(${oc.id})">🗑 Eliminar</button></div>
+  `, async () => {
+    const titulo = document.getElementById('mOCTitulo').value.trim();
+    if (!titulo) { toast('El título es obligatorio', 'err'); return; }
+    const body = {
+      titulo,
+      estado: document.getElementById('mOCEst').value,
+      coste_adicional: parseFloat(document.getElementById('mOCCoste').value) || null,
+      dias_impacto: parseInt(document.getElementById('mOCDias').value) || null,
+      motivo: document.getElementById('mOCMotivo').value.trim() || null,
+    };
+    const r = await api(`/ordenes-cambio/${oc.id}`, { method: 'PUT', body: JSON.stringify(body) });
+    if (r.ok || r.id) { toast('OC actualizada ✓', 'ok'); cerrarModal(); tblOC=null; cargarOrdenesCambio(); }
+    else toast('Error al actualizar', 'err');
+  });
+}
+async function eliminarOC(id) {
+  if (!confirm('¿Eliminar esta orden de cambio?')) return;
+  const r = await api(`/ordenes-cambio/${id}`, { method: 'DELETE' });
+  if (r.ok || r.deleted) { toast('OC eliminada', 'ok'); cerrarModal(); tblOC=null; cargarOrdenesCambio(); }
+  else toast('Error al eliminar', 'err');
+}
+
+// ── ACTAS DE REUNIÓN ─────────────────────────────────────────────
+let tblReuniones = null, _reunionesData = [];
+async function cargarReuniones() {
+  if (document.getElementById('filterReunionesObra')?.options.length <= 1) poblarSelectObras('filterReunionesObra');
+  const obraId = document.getElementById('filterReunionesObra')?.value || '';
+  const r = await api('/actas-reunion' + (obraId ? `?obra_id=${obraId}` : ''));
+  _reunionesData = toArr(r, 'actas');
+  filtrarReuniones();
+}
+function filtrarReuniones() {
+  const q = (document.getElementById('searchReuniones')?.value || '').toLowerCase();
+  const est = document.getElementById('filterReunionesEstado')?.value || '';
+  const data = _reunionesData.filter(x =>
+    (!q || (x.titulo||'').toLowerCase().includes(q) || (x.asistentes||'').toLowerCase().includes(q)) &&
+    (!est || x.estado === est)
+  );
+  if (tblReuniones) { tblReuniones.replaceData(data); return; }
+  tblReuniones = new Tabulator('#tblReuniones', {
+    data, layout: 'fitColumns', responsiveLayout: 'collapse',
+    pagination: 'local', paginationSize: 20,
+    placeholder: '<div class="empty-state"><div class="empty-icon">📝</div><div class="empty-text">Sin actas de reunión</div></div>',
+    columns: [
+      { title: 'N°', field: 'numero', width: 90 },
+      { title: 'Título', field: 'titulo', minWidth: 200 },
+      { title: 'Tipo', field: 'tipo', width: 110, formatter: (cell) => `<span class="badge badge-info">${cell.getValue()||'—'}</span>` },
+      { title: 'Estado', field: 'estado', width: 100, formatter: (cell) => {
+        const v = cell.getValue();
+        const cls = { borrador:'warn', firmada:'ok', archivada:'muted' }[v] || 'muted';
+        return `<span class="badge badge-${cls}">${v||'—'}</span>`;
+      }},
+      { title: 'Convocante', field: 'convocante', width: 130 },
+      { title: 'Fecha', field: 'fecha', width: 110, formatter: (cell) => fmtFecha(cell.getValue()) },
+      { title: 'Asistentes', field: 'asistentes', minWidth: 150 },
+      { title: 'Acciones', field: 'id', width: 80, hozAlign: 'center', formatter: () => '<button class="btn btn-secondary btn-sm">✏️</button>',
+        cellClick: (e, cell) => abrirModalReunionEditar(cell.getRow().getData()) },
+    ]
+  });
+}
+function abrirModalReunion() {
+  const hoy = new Date().toISOString().slice(0,10);
+  abrirModal('Nueva Acta de Reunión', `
+    <div class="form-group"><div class="form-label">Título *</div><input class="form-input" id="mReuTitulo" placeholder="Reunión de seguimiento de obra"></div>
+    <div class="form-row">
+      <div class="form-group"><div class="form-label">Tipo</div>
+        <select class="form-select" id="mReuTipo">
+          <option value="progreso">Progreso</option>
+          <option value="seguridad">Seguridad</option>
+          <option value="calidad">Calidad</option>
+          <option value="planificacion">Planificación</option>
+          <option value="otro">Otro</option>
+        </select>
+      </div>
+      <div class="form-group"><div class="form-label">Fecha</div>
+        <input class="form-input" id="mReuFecha" type="date" value="${hoy}">
+      </div>
+    </div>
+    <div class="form-group"><div class="form-label">Convocante</div><input class="form-input" id="mReuConv" placeholder="Nombre del convocante"></div>
+    <div class="form-group"><div class="form-label">Asistentes (separados por coma)</div><input class="form-input" id="mReuAsist" placeholder="Juan, María, Pedro..."></div>
+    <div class="form-group"><div class="form-label">Resumen / Puntos tratados</div><textarea class="form-input" id="mReuResumen" rows="3"></textarea></div>
+    <div class="form-group"><div class="form-label">Acuerdos y acciones (una por línea)</div><textarea class="form-input" id="mReuAcuerdos" rows="4" placeholder="- Acción 1: responsable → fecha&#10;- Acción 2: responsable → fecha"></textarea></div>
+    <div class="form-group"><div class="form-label">Obra</div>
+      <select class="form-select" id="mReuObra"><option value="">— Sin obra —</option></select>
+    </div>
+  `, async () => {
+    const titulo = document.getElementById('mReuTitulo').value.trim();
+    if (!titulo) { toast('El título es obligatorio', 'err'); return; }
+    const body = {
+      titulo,
+      tipo: document.getElementById('mReuTipo').value,
+      fecha: document.getElementById('mReuFecha').value || null,
+      convocante: document.getElementById('mReuConv').value.trim() || null,
+      asistentes: document.getElementById('mReuAsist').value.trim() || null,
+      resumen: document.getElementById('mReuResumen').value.trim() || null,
+      acuerdos: document.getElementById('mReuAcuerdos').value.trim() || null,
+      obra_id: document.getElementById('mReuObra').value || null,
+    };
+    const r = await api('/actas-reunion', { method: 'POST', body: JSON.stringify(body) });
+    if (r.ok || r.id) { toast('Acta creada ✓', 'ok'); cerrarModal(); tblReuniones=null; cargarReuniones(); }
+    else toast('Error al crear acta', 'err');
+  });
+  poblarSelectObras('mReuObra');
+}
+function abrirModalReunionEditar(a) {
+  abrirModal('Editar Acta de Reunión', `
+    <div class="form-group"><div class="form-label">Título *</div><input class="form-input" id="mReuTitulo" value="${esc(a.titulo||'')}"></div>
+    <div class="form-row">
+      <div class="form-group"><div class="form-label">Estado</div>
+        <select class="form-select" id="mReuEst">
+          <option value="borrador" ${a.estado==='borrador'?'selected':''}>Borrador</option>
+          <option value="firmada" ${a.estado==='firmada'?'selected':''}>Firmada</option>
+          <option value="archivada" ${a.estado==='archivada'?'selected':''}>Archivada</option>
+        </select>
+      </div>
+      <div class="form-group"><div class="form-label">Fecha</div>
+        <input class="form-input" id="mReuFecha" type="date" value="${a.fecha||''}">
+      </div>
+    </div>
+    <div class="form-group"><div class="form-label">Asistentes</div><input class="form-input" id="mReuAsist" value="${esc(a.asistentes||'')}"></div>
+    <div class="form-group"><div class="form-label">Acuerdos</div><textarea class="form-input" id="mReuAcuerdos" rows="4">${esc(a.acuerdos||'')}</textarea></div>
+    <div style="margin-top:12px"><button class="btn btn-danger btn-sm" onclick="eliminarReunion(${a.id})">🗑 Eliminar</button></div>
+  `, async () => {
+    const titulo = document.getElementById('mReuTitulo').value.trim();
+    if (!titulo) { toast('El título es obligatorio', 'err'); return; }
+    const body = {
+      titulo,
+      estado: document.getElementById('mReuEst').value,
+      fecha: document.getElementById('mReuFecha').value || null,
+      asistentes: document.getElementById('mReuAsist').value.trim() || null,
+      acuerdos: document.getElementById('mReuAcuerdos').value.trim() || null,
+    };
+    const r = await api(`/actas-reunion/${a.id}`, { method: 'PUT', body: JSON.stringify(body) });
+    if (r.ok || r.id) { toast('Acta actualizada ✓', 'ok'); cerrarModal(); tblReuniones=null; cargarReuniones(); }
+    else toast('Error al actualizar', 'err');
+  });
+}
+async function eliminarReunion(id) {
+  if (!confirm('¿Eliminar esta acta?')) return;
+  const r = await api(`/actas-reunion/${id}`, { method: 'DELETE' });
+  if (r.ok || r.deleted) { toast('Acta eliminada', 'ok'); cerrarModal(); tblReuniones=null; cargarReuniones(); }
+  else toast('Error al eliminar', 'err');
+}
+
+// ── CONTROL DE CALIDAD / PUNCH LIST ─────────────────────────────
+let tblCalidad = null, _calidadData = [];
+async function cargarCalidad() {
+  if (document.getElementById('filterCalidadObra')?.options.length <= 1) poblarSelectObras('filterCalidadObra');
+  const obraId = document.getElementById('filterCalidadObra')?.value || '';
+  const r = await api('/control-calidad' + (obraId ? `?obra_id=${obraId}` : ''));
+  _calidadData = toArr(r, 'deficiencias');
+  const total = _calidadData.length;
+  const abiertas = _calidadData.filter(x => x.estado === 'abierto' || x.estado === 'en_reparacion').length;
+  const urgentes = _calidadData.filter(x => x.prioridad === 'urgente' && (x.estado === 'abierto' || x.estado === 'en_reparacion')).length;
+  const resueltas = _calidadData.filter(x => x.estado === 'resuelto' || x.estado === 'verificado').length;
+  document.getElementById('calidadResumen').innerHTML = [
+    { label: 'Total', val: total, cls: '' },
+    { label: 'Abiertas', val: abiertas, cls: abiertas > 0 ? 'warn' : 'ok' },
+    { label: 'Urgentes', val: urgentes, cls: urgentes > 0 ? 'danger' : 'ok' },
+    { label: 'Resueltas', val: resueltas, cls: 'ok' },
+  ].map(k => `<div class="kpi-card"><div class="kpi-value ${k.cls}">${k.val}</div><div class="kpi-label">${k.label}</div></div>`).join('');
+  const badge = document.getElementById('calidadBadge');
+  if (badge) { badge.textContent = abiertas; badge.style.display = abiertas > 0 ? '' : 'none'; }
+  filtrarCalidad();
+}
+function filtrarCalidad() {
+  const q = (document.getElementById('searchCalidad')?.value || '').toLowerCase();
+  const est = document.getElementById('filterCalidadEstado')?.value || '';
+  const pri = document.getElementById('filterCalidadPrioridad')?.value || '';
+  const data = _calidadData.filter(x =>
+    (!q || (x.titulo||'').toLowerCase().includes(q) || (x.ubicacion||'').toLowerCase().includes(q)) &&
+    (!est || x.estado === est) &&
+    (!pri || x.prioridad === pri)
+  );
+  if (tblCalidad) { tblCalidad.replaceData(data); return; }
+  tblCalidad = new Tabulator('#tblCalidad', {
+    data, layout: 'fitColumns', responsiveLayout: 'collapse',
+    pagination: 'local', paginationSize: 20,
+    placeholder: '<div class="empty-state"><div class="empty-icon">✅</div><div class="empty-text">Sin deficiencias registradas</div></div>',
+    columns: [
+      { title: 'N°', field: 'numero', width: 90 },
+      { title: 'Título', field: 'titulo', minWidth: 180 },
+      { title: 'Estado', field: 'estado', width: 120, formatter: (cell) => {
+        const v = cell.getValue();
+        const cls = { abierto:'danger', en_reparacion:'warn', resuelto:'ok', verificado:'info' }[v] || 'muted';
+        return `<span class="badge badge-${cls}">${v||'—'}</span>`;
+      }},
+      { title: 'Prioridad', field: 'prioridad', width: 100, formatter: (cell) => {
+        const v = cell.getValue();
+        const cls = { urgente:'danger', alta:'warn', normal:'info', baja:'ok' }[v] || 'muted';
+        return `<span class="badge badge-${cls}">${v||'—'}</span>`;
+      }},
+      { title: 'Ubicación', field: 'ubicacion', width: 130 },
+      { title: 'Responsable', field: 'responsable', width: 130 },
+      { title: 'Fecha límite', field: 'fecha_limite', width: 115, formatter: (cell) => fmtFecha(cell.getValue()) },
+      { title: 'Acciones', field: 'id', width: 80, hozAlign: 'center', formatter: () => '<button class="btn btn-secondary btn-sm">✏️</button>',
+        cellClick: (e, cell) => abrirModalCalidadEditar(cell.getRow().getData()) },
+    ]
+  });
+}
+function abrirModalCalidad() {
+  abrirModal('Nueva Deficiencia / Punch list', `
+    <div class="form-group"><div class="form-label">Título *</div><input class="form-input" id="mDefTitulo" placeholder="Descripción breve de la deficiencia"></div>
+    <div class="form-group"><div class="form-label">Descripción detallada</div><textarea class="form-input" id="mDefDesc" rows="2"></textarea></div>
+    <div class="form-row">
+      <div class="form-group"><div class="form-label">Prioridad</div>
+        <select class="form-select" id="mDefPri">
+          <option value="normal">Normal</option>
+          <option value="alta">Alta</option>
+          <option value="urgente">Urgente</option>
+          <option value="baja">Baja</option>
+        </select>
+      </div>
+      <div class="form-group"><div class="form-label">Categoría</div>
+        <select class="form-select" id="mDefCat">
+          <option value="acabados">Acabados</option>
+          <option value="estructural">Estructural</option>
+          <option value="instalaciones">Instalaciones</option>
+          <option value="seguridad">Seguridad</option>
+          <option value="normativa">Normativa</option>
+          <option value="otro">Otro</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-group"><div class="form-label">Ubicación</div><input class="form-input" id="mDefUbic" placeholder="Planta, zona, área..."></div>
+    <div class="form-group"><div class="form-label">Responsable resolución</div><input class="form-input" id="mDefResp" placeholder="Nombre o empresa responsable"></div>
+    <div class="form-group"><div class="form-label">Fecha límite</div><input class="form-input" id="mDefFecha" type="date"></div>
+    <div class="form-group"><div class="form-label">Obra</div>
+      <select class="form-select" id="mDefObra"><option value="">— Sin obra —</option></select>
+    </div>
+  `, async () => {
+    const titulo = document.getElementById('mDefTitulo').value.trim();
+    if (!titulo) { toast('El título es obligatorio', 'err'); return; }
+    const body = {
+      titulo,
+      descripcion: document.getElementById('mDefDesc').value.trim() || null,
+      prioridad: document.getElementById('mDefPri').value,
+      categoria: document.getElementById('mDefCat').value,
+      ubicacion: document.getElementById('mDefUbic').value.trim() || null,
+      responsable: document.getElementById('mDefResp').value.trim() || null,
+      fecha_limite: document.getElementById('mDefFecha').value || null,
+      obra_id: document.getElementById('mDefObra').value || null,
+    };
+    const r = await api('/control-calidad', { method: 'POST', body: JSON.stringify(body) });
+    if (r.ok || r.id) { toast('Deficiencia creada ✓', 'ok'); cerrarModal(); tblCalidad=null; cargarCalidad(); }
+    else toast('Error al crear deficiencia', 'err');
+  });
+  poblarSelectObras('mDefObra');
+}
+function abrirModalCalidadEditar(d) {
+  abrirModal('Editar Deficiencia', `
+    <div class="form-group"><div class="form-label">Título *</div><input class="form-input" id="mDefTitulo" value="${esc(d.titulo||'')}"></div>
+    <div class="form-row">
+      <div class="form-group"><div class="form-label">Estado</div>
+        <select class="form-select" id="mDefEst">
+          <option value="abierto" ${d.estado==='abierto'?'selected':''}>Abierto</option>
+          <option value="en_reparacion" ${d.estado==='en_reparacion'?'selected':''}>En reparación</option>
+          <option value="resuelto" ${d.estado==='resuelto'?'selected':''}>Resuelto</option>
+          <option value="verificado" ${d.estado==='verificado'?'selected':''}>Verificado</option>
+        </select>
+      </div>
+      <div class="form-group"><div class="form-label">Prioridad</div>
+        <select class="form-select" id="mDefPri">
+          <option value="normal" ${d.prioridad==='normal'?'selected':''}>Normal</option>
+          <option value="alta" ${d.prioridad==='alta'?'selected':''}>Alta</option>
+          <option value="urgente" ${d.prioridad==='urgente'?'selected':''}>Urgente</option>
+          <option value="baja" ${d.prioridad==='baja'?'selected':''}>Baja</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-group"><div class="form-label">Ubicación</div><input class="form-input" id="mDefUbic" value="${esc(d.ubicacion||'')}"></div>
+    <div class="form-group"><div class="form-label">Responsable</div><input class="form-input" id="mDefResp" value="${esc(d.responsable||'')}"></div>
+    <div class="form-group"><div class="form-label">Fecha límite</div><input class="form-input" id="mDefFecha" type="date" value="${d.fecha_limite||''}"></div>
+    <div class="form-group"><div class="form-label">Notas resolución</div><textarea class="form-input" id="mDefNotas" rows="2">${esc(d.notas_resolucion||'')}</textarea></div>
+    <div style="margin-top:12px"><button class="btn btn-danger btn-sm" onclick="eliminarDeficiencia(${d.id})">🗑 Eliminar</button></div>
+  `, async () => {
+    const titulo = document.getElementById('mDefTitulo').value.trim();
+    if (!titulo) { toast('El título es obligatorio', 'err'); return; }
+    const body = {
+      titulo,
+      estado: document.getElementById('mDefEst').value,
+      prioridad: document.getElementById('mDefPri').value,
+      ubicacion: document.getElementById('mDefUbic').value.trim() || null,
+      responsable: document.getElementById('mDefResp').value.trim() || null,
+      fecha_limite: document.getElementById('mDefFecha').value || null,
+      notas_resolucion: document.getElementById('mDefNotas').value.trim() || null,
+    };
+    const r = await api(`/control-calidad/${d.id}`, { method: 'PUT', body: JSON.stringify(body) });
+    if (r.ok || r.id) { toast('Deficiencia actualizada ✓', 'ok'); cerrarModal(); tblCalidad=null; cargarCalidad(); }
+    else toast('Error al actualizar', 'err');
+  });
+}
+async function eliminarDeficiencia(id) {
+  if (!confirm('¿Eliminar esta deficiencia?')) return;
+  const r = await api(`/control-calidad/${id}`, { method: 'DELETE' });
+  if (r.ok || r.deleted) { toast('Deficiencia eliminada', 'ok'); cerrarModal(); tblCalidad=null; cargarCalidad(); }
+  else toast('Error al eliminar', 'err');
+}
+
+// Helper: populate obra select
+async function poblarSelectObras(selectId) {
+  const sel = document.getElementById(selectId);
+  if (!sel) return;
+  if (!window._obrasPanel?.length) await cargarObrasPanel();
+  const obras = window._obrasPanel || _panelObras || [];
+  obras.forEach(o => {
+    const opt = document.createElement('option');
+    opt.value = o.id;
+    opt.textContent = o.nombre;
+    sel.appendChild(opt);
+  });
+}
+
+</script>
 
 </body>
 </html>
