@@ -65,7 +65,10 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
 .sidebar-brand{display:flex;align-items:center;gap:10px;padding:20px 16px 16px;border-bottom:1px solid var(--border);flex-shrink:0}
 .sidebar-appname{font-family:'Montserrat',sans-serif;font-weight:900;font-size:16px;color:var(--text);line-height:1.1}
 .sidebar-sub{font-family:'Montserrat',sans-serif;font-weight:700;font-size:9px;letter-spacing:2px;color:var(--accent);text-transform:uppercase}
-.sidebar-section{padding:16px 12px 4px;font-family:'Montserrat',sans-serif;font-weight:700;font-size:9px;letter-spacing:2px;color:var(--muted);text-transform:uppercase}
+.sidebar-section{padding:12px 12px 4px;font-family:'Montserrat',sans-serif;font-weight:700;font-size:9px;letter-spacing:2px;color:var(--muted);text-transform:uppercase;display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none}
+.sidebar-section:hover{color:var(--primary)}
+.sidebar-section .sec-chevron{margin-left:auto;font-size:10px;transition:transform .2s;transform-origin:center}
+.sidebar-section.sec-collapsed .sec-chevron{transform:rotate(-90deg)}
 .nav-item{display:flex;align-items:center;gap:10px;padding:9px 14px;border-radius:8px;margin:2px 8px;cursor:pointer;font-family:'Poppins',sans-serif;font-weight:500;font-size:13px;color:var(--muted);transition:all .15s;border:none;background:none;width:calc(100% - 16px);text-align:left}
 .nav-item:hover{background:var(--surface2);color:var(--text)}
 .nav-item.active{background:rgba(249,115,22,.12);color:var(--accent);font-weight:600}
@@ -401,7 +404,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
       </div>
     </div>
 
-    <div class="sidebar-section">Principal</div>
+    <div class="sidebar-section" onclick="sidebarToggle(this)" data-sid="principal"><span>🏠 Principal</span><span class="sec-chevron">▼</span></div>
     <button class="nav-item active" data-page="dashboard" onclick="navTo('dashboard')">
       <span class="nav-icon">📊</span> Dashboard
     </button>
@@ -410,7 +413,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
       <span class="nav-badge" id="chatBadgeSidebar" style="display:none">0</span>
     </button>
 
-    <div class="sidebar-section">Personal</div>
+    <div class="sidebar-section" onclick="sidebarToggle(this)" data-sid="personal"><span>👷 Personal</span><span class="sec-chevron">▼</span></div>
     <button class="nav-item" data-page="personal" onclick="navTo('personal')">
       <span class="nav-icon">👷</span> Trabajadores
     </button>
@@ -439,7 +442,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
       <span class="nav-icon">🔍</span> Inspecciones
     </button>
 
-    <div class="sidebar-section">Inventarios</div>
+    <div class="sidebar-section" onclick="sidebarToggle(this)" data-sid="inventarios"><span>📦 Inventarios</span><span class="sec-chevron">▼</span></div>
     <button class="nav-item" data-page="bobinas" onclick="navTo('bobinas')">
       <span class="nav-icon">⚡</span> Bobinas
     </button>
@@ -459,7 +462,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
       <span class="nav-icon">🔺</span> Seguridad
     </button>
 
-    <div class="sidebar-section">Obra</div>
+    <div class="sidebar-section" onclick="sidebarToggle(this)" data-sid="obra"><span>🏗️ Obra</span><span class="sec-chevron">▼</span></div>
     <button class="nav-item" data-page="obras" onclick="navTo('obras')">
       <span class="nav-icon">🏗️</span> Obras
     </button>
@@ -475,6 +478,8 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
     <button class="nav-item" data-page="mantenimientos" onclick="navTo('mantenimientos')">
       <span class="nav-icon">🔩</span> Mantenimientos
     </button>
+
+    <div class="sidebar-section" onclick="sidebarToggle(this)" data-sid="construccion"><span>🏗 Construcción</span><span class="sec-chevron">▼</span></div>
     <button class="nav-item" data-page="tareas" onclick="navTo('tareas')">
       <span class="nav-icon">✅</span> Tareas
       <span class="nav-badge" id="tareasBadge" style="display:none">0</span>
@@ -497,18 +502,22 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
       <span class="nav-icon">🏢</span> Subcontratas
       <span class="nav-badge" id="subcBadge" style="display:none">!</span>
     </button>
+
+    <div class="sidebar-section" onclick="sidebarToggle(this)" data-sid="planificacion"><span>📊 Planificación</span><span class="sec-chevron">▼</span></div>
     <button class="nav-item" data-page="presupuesto" onclick="navTo('presupuesto')">
       <span class="nav-icon">💶</span> Presupuesto
     </button>
     <button class="nav-item" data-page="fases" onclick="navTo('fases')">
-      <span class="nav-icon">📅</span> Fases de Obra
-    </button>
-    <button class="nav-item" data-page="partesPanel" onclick="navTo('partesPanel')">
-      <span class="nav-icon">📋</span> Partes Diarios
+      <span class="nav-icon">📅</span> Fases + Gantt
     </button>
     <button class="nav-item" data-page="hitos" onclick="navTo('hitos')">
       <span class="nav-icon">🏁</span> Hitos de Obra
       <span class="nav-badge" id="hitosBadge" style="display:none">!</span>
+    </button>
+
+    <div class="sidebar-section" onclick="sidebarToggle(this)" data-sid="seguimiento"><span>📓 Seguimiento</span><span class="sec-chevron">▼</span></div>
+    <button class="nav-item" data-page="partesPanel" onclick="navTo('partesPanel')">
+      <span class="nav-icon">📋</span> Partes Diarios
     </button>
     <button class="nav-item" data-page="diarioObra" onclick="navTo('diarioObra')">
       <span class="nav-icon">📓</span> Diario de Obra
@@ -518,12 +527,12 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
       <span class="nav-badge" id="corrBadge" style="display:none">!</span>
     </button>
 
-    <div class="sidebar-section">Analítica</div>
+    <div class="sidebar-section" onclick="sidebarToggle(this)" data-sid="analitica"><span>📈 Analítica</span><span class="sec-chevron">▼</span></div>
     <button class="nav-item" data-page="graficas" onclick="navTo('graficas')">
       <span class="nav-icon">📊</span> Gráficas
     </button>
 
-    <div class="sidebar-section nav-admin-section" style="display:none">Admin</div>
+    <div class="sidebar-section nav-admin-section" onclick="sidebarToggle(this)" data-sid="admin" style="display:none">Admin</div>
     <button class="nav-item nav-admin" data-page="usuarios" onclick="navTo('usuarios')" style="display:none">
       <span class="nav-icon">👤</span> Usuarios
     </button>
@@ -2706,6 +2715,37 @@ function iniciarApp() {
 function toggleSidebar() {
   document.getElementById('sidebar').classList.toggle('open');
 }
+
+// ── SIDEBAR COLLAPSIBLE SECTIONS ───────────────────────────────
+const _SIDEBAR_STATE_KEY = 'alejandra_sidebar_state';
+function sidebarToggle(el) {
+  if (!el || !el.dataset.sid) return;
+  const sid = el.dataset.sid;
+  const collapsed = el.classList.toggle('sec-collapsed');
+  // Find siblings between this section and the next .sidebar-section
+  let next = el.nextElementSibling;
+  while (next && !next.classList.contains('sidebar-section')) {
+    next.style.display = collapsed ? 'none' : '';
+    next = next.nextElementSibling;
+  }
+  // Persist state
+  try {
+    const state = JSON.parse(localStorage.getItem(_SIDEBAR_STATE_KEY) || '{}');
+    state[sid] = collapsed;
+    localStorage.setItem(_SIDEBAR_STATE_KEY, JSON.stringify(state));
+  } catch {}
+}
+function sidebarRestoreState() {
+  try {
+    const state = JSON.parse(localStorage.getItem(_SIDEBAR_STATE_KEY) || '{}');
+    document.querySelectorAll('.sidebar-section[data-sid]').forEach(el => {
+      const sid = el.dataset.sid;
+      if (state[sid]) { sidebarToggle(el); }
+    });
+  } catch {}
+}
+// Run after DOM loaded
+document.addEventListener('DOMContentLoaded', () => setTimeout(sidebarRestoreState, 100));
 
 // ── NAVEGACIÓN ─────────────────────────────────────────────────
 const PAGE_TITLES = {
