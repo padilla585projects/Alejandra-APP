@@ -4721,6 +4721,14 @@ export default {
         if (method === 'PUT')    return await actualizarVisitaObra(_vid, request, env);
         if (method === 'DELETE') return await eliminarVisitaObra(_vid, request, env);
       }
+      // ── Timesheets / Hojas de Tiempo (NEW-76) ─────────────────────────────────────
+      if (path === '/timesheets' && method === 'GET')  return await getTimesheets(request, env);
+      if (path === '/timesheets' && method === 'POST') return await crearTimesheet(request, env);
+      if (path.startsWith('/timesheets/')) {
+        const _tsId = parseInt(path.split('/timesheets/')[1]);
+        if (method === 'PUT')    return await actualizarTimesheet(_tsId, request, env);
+        if (method === 'DELETE') return await eliminarTimesheet(_tsId, request, env);
+      }
       // ── ITP / Plan de Inspeccion y Ensayo (NEW-75) ───────────────────────────────
       if (path === '/itp-obra' && method === 'GET')  return await getItp(request, env);
       if (path === '/itp-obra' && method === 'POST') return await crearItp(request, env);
@@ -16981,6 +16989,106 @@ async function eliminarItpItem(id, request, env) {
   ).bind(id, empresa_id).first();
   if (!item) return err('Item no encontrado', 404);
   await env.DB.prepare('DELETE FROM itp_items WHERE id=?').bind(id).run();
+  return json({ ok: true, deleted: true });
+}
+
+// ── Timesheets / Hojas de Tiempo (NEW-76) ─────────────────────────────────
+
+async function ensureTimesheetTable(env) {
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS timesheets (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    empresa_id        INTEGER NOT NULL,
+    obra_id           INTEGER,
+    trabajador_id     INTEGER,
+    trabajador_nombre TEXT,
+    fecha             TEXT NOT NULL,
+    actividad         TEXT,
+    horas_normales    REAL NOT NULL DEFAULT 8,
+    horas_extra       REAL NOT NULL DEFAULT 0,
+    codigo_coste      TEXT,
+    aprobado          INTEGER NOT NULL DEFAULT 0,
+    aprobado_por      TEXT,
+    aprobado_at       TEXT,
+    notas             TEXT,
+    created_at        TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at        TEXT NOT NULL DEFAULT (datetime('now'))
+  )`).run();
+}
+
+async function getTimesheets(request, env) {
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  await ensureTimesheetTable(env);
+  const url = new URL(request.url);
+  const obra_id  = url.searchParams.get('obra_id');
+  const desde    = url.searchParams.get('desde');
+  const hasta    = url.searchParams.get('hasta');
+  const aprobado = url.searchParams.get('aprobado');
+  const limit    = parseInt(url.searchParams.get('limit') || '200');
+  let q = `SELECT ts.*, o.nombre as obra_nombre
+            FROM timesheets ts
+            LEFT JOIN obras o ON o.id = ts.obra_id
+            WHERE ts.empresa_id = ?`;
+  const params = [empresa_id];
+  if (obra_id)   { q += ' AND ts.obra_id = ?'; params.push(parseInt(obra_id)); }
+  if (desde)     { q += ' AND ts.fecha >= ?';  params.push(desde); }
+  if (hasta)     { q += ' AND ts.fecha <= ?';  params.push(hasta); }
+  if (aprobado !== null && aprobado !== '') { q += ' AND ts.aprobado = ?'; params.push(parseInt(aprobado)); }
+  q += ' ORDER BY ts.fecha DESC, ts.created_at DESC LIMIT ?';
+  params.push(limit);
+  const { results } = await env.DB.prepare(q).bind(...params).all();
+  return json({ items: results });
+}
+
+async function crearTimesheet(request, env) {
+  const auth = await getAuth(request, env);
+  const { empresa_id, nombre: usuario } = auth;
+  if (!empresa_id) return err('No autorizado', 403);
+  await ensureTimesheetTable(env);
+  const body = await request.json();
+  const { trabajador_id, obra_id, fecha, actividad, horas_normales=8, horas_extra=0, codigo_coste, aprobado=0, notas } = body;
+  if (!fecha) return err('Fecha requerida', 400);
+  // Lookup trabajador name
+  let trabajador_nombre = body.trabajador_nombre || null;
+  if (trabajador_id && !trabajador_nombre) {
+    const t = await env.DB.prepare('SELECT nombre, apellidos FROM trabajadores WHERE id=? AND empresa_id=?').bind(trabajador_id, empresa_id).first().catch(()=>null);
+    if (t) trabajador_nombre = `${t.nombre||''} ${t.apellidos||''}`.trim();
+  }
+  const r = await env.DB.prepare(`
+    INSERT INTO timesheets (empresa_id, obra_id, trabajador_id, trabajador_nombre, fecha, actividad, horas_normales, horas_extra, codigo_coste, aprobado, notas)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?)
+  `).bind(empresa_id, obra_id||null, trabajador_id||null, trabajador_nombre, fecha, actividad||null, horas_normales, horas_extra, codigo_coste||null, aprobado?1:0, notas||null).run();
+  return json({ ok: true, id: r.meta.last_row_id }, 201);
+}
+
+async function actualizarTimesheet(id, request, env) {
+  const auth = await getAuth(request, env);
+  const { empresa_id, nombre: usuario } = auth;
+  if (!empresa_id) return err('No autorizado', 403);
+  const ts = await env.DB.prepare('SELECT id FROM timesheets WHERE id=? AND empresa_id=?').bind(id, empresa_id).first();
+  if (!ts) return err('Parte no encontrado', 404);
+  const body = await request.json();
+  const campos = ['trabajador_id','trabajador_nombre','obra_id','fecha','actividad','horas_normales','horas_extra','codigo_coste','aprobado','notas','aprobado_por','aprobado_at'];
+  const sets = [], vals = [];
+  campos.forEach(f => { if (f in body) { sets.push(`${f}=?`); vals.push(body[f]); } });
+  // Auto-fill aprobado_por when approving
+  if ('aprobado' in body && body.aprobado) {
+    if (!body.aprobado_por) { sets.push('aprobado_por=?'); vals.push(usuario||'panel'); }
+    sets.push('aprobado_at=?'); vals.push(new Date().toISOString().slice(0,10));
+  }
+  if (!sets.length) return json({ ok: true });
+  sets.push("updated_at=datetime('now')");
+  vals.push(id, empresa_id);
+  await env.DB.prepare(`UPDATE timesheets SET ${sets.join(',')} WHERE id=? AND empresa_id=?`).bind(...vals).run();
+  return json({ ok: true });
+}
+
+async function eliminarTimesheet(id, request, env) {
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const ts = await env.DB.prepare('SELECT id FROM timesheets WHERE id=? AND empresa_id=?').bind(id, empresa_id).first();
+  if (!ts) return err('Parte no encontrado', 404);
+  await env.DB.prepare('DELETE FROM timesheets WHERE id=? AND empresa_id=?').bind(id, empresa_id).run();
   return json({ ok: true, deleted: true });
 }
 

@@ -450,6 +450,10 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
     <button class="nav-item" data-page="fichajes" onclick="navTo('fichajes')">
       <span class="nav-icon">⏱️</span> Fichajes
     </button>
+    <button class="nav-item" data-page="timesheets" onclick="navTo('timesheets')">
+      <span class="nav-icon">🕐</span> Hojas de Tiempo
+      <span class="nav-badge" id="timesheetsBadge" style="display:none">!</span>
+    </button>
     <button class="nav-item" data-page="turnos" onclick="navTo('turnos')">
       <span class="nav-icon">📅</span> Turnos
     </button>
@@ -809,6 +813,92 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
         </div>
         <div id="fichajesResumen" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:16px"></div>
         <div class="tbl-wrap"><div id="tblFichajes"></div></div>
+      </div>
+
+      <!-- HOJAS DE TIEMPO / TIMESHEETS (NEW-76) -->
+      <div class="page" id="pageTimesheets">
+        <div class="page-title">🕐 Hojas de Tiempo</div>
+        <div class="page-sub">Registro de horas por actividad y código de coste — aprobación semanal de jornadas</div>
+        <div class="tbl-toolbar" style="flex-wrap:wrap;gap:8px;margin-bottom:14px">
+          <select class="tbl-search" id="filterTsObra" style="min-width:200px" onchange="cargarTimesheets()">
+            <option value="">🏗 Todas las obras</option>
+          </select>
+          <input type="date" class="tbl-search" id="filterTsDesde" style="min-width:130px" onchange="cargarTimesheets()">
+          <input type="date" class="tbl-search" id="filterTsHasta" style="min-width:130px" onchange="cargarTimesheets()">
+          <select class="tbl-search" id="filterTsAprobado" style="min-width:150px" onchange="cargarTimesheets()">
+            <option value="">Todos los estados</option>
+            <option value="0">⏳ Pendiente aprobación</option>
+            <option value="1">✅ Aprobado</option>
+          </select>
+          <button class="btn btn-primary" onclick="abrirModalTs()">+ Nuevo parte</button>
+          <button class="btn btn-secondary" onclick="exportarTabla(tblTimesheets,'timesheets')">⬇ CSV</button>
+          <button class="btn btn-secondary" onclick="cargarTimesheets()">🔄 Actualizar</button>
+        </div>
+        <div id="tsKpiStrip" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:12px;margin-bottom:18px"></div>
+        <div class="tbl-wrap"><div id="tblTimesheets"></div></div>
+
+        <!-- MODAL PARTE DE HORAS -->
+        <div class="modal-overlay" id="modalTs" onclick="if(event.target===this)cerrarModalTs()">
+          <div class="modal" style="max-width:580px;width:96%">
+            <div class="modal-header">
+              <span id="modalTsTitle">Nuevo Parte de Horas</span>
+              <button class="modal-close" onclick="cerrarModalTs()">✕</button>
+            </div>
+            <div class="modal-body" style="padding:20px">
+              <input type="hidden" id="tsId">
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
+                <div style="grid-column:1/-1">
+                  <label class="form-label">Trabajador *</label>
+                  <select class="form-control" id="tsTrabajadorId">
+                    <option value="">— Seleccionar trabajador —</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="form-label">Obra</label>
+                  <select class="form-control" id="tsObraId">
+                    <option value="">Sin obra específica</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="form-label">Fecha *</label>
+                  <input type="date" class="form-control" id="tsFecha">
+                </div>
+                <div style="grid-column:1/-1">
+                  <label class="form-label">Actividad / Descripción</label>
+                  <input class="form-control" id="tsActividad" placeholder="Ej: Montaje panel secundario, Tendido cable bandeja B2…">
+                </div>
+                <div>
+                  <label class="form-label">Horas normales</label>
+                  <input type="number" class="form-control" id="tsHorasNorm" min="0" step="0.5" value="8">
+                </div>
+                <div>
+                  <label class="form-label">Horas extra</label>
+                  <input type="number" class="form-control" id="tsHorasExtra" min="0" step="0.5" value="0">
+                </div>
+                <div>
+                  <label class="form-label">Código de coste</label>
+                  <input class="form-control" id="tsCodigoCoste" placeholder="Ej: C01-MANO_OBRA">
+                </div>
+                <div>
+                  <label class="form-label">Estado</label>
+                  <select class="form-control" id="tsAprobado">
+                    <option value="0">⏳ Pendiente aprobación</option>
+                    <option value="1">✅ Aprobado</option>
+                  </select>
+                </div>
+                <div style="grid-column:1/-1">
+                  <label class="form-label">Notas</label>
+                  <textarea class="form-control" id="tsNotas" rows="2" placeholder="Observaciones, materiales usados, incidencias…"></textarea>
+                </div>
+              </div>
+            </div>
+            <div class="modal-footer">
+              <button class="btn btn-secondary" onclick="cerrarModalTs()">Cancelar</button>
+              <button class="btn btn-success" id="btnAprobarTs" style="display:none" onclick="aprobarTimesheetLote()">✅ Aprobar seleccionados</button>
+              <button class="btn btn-primary" onclick="guardarTs()">💾 Guardar</button>
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- TURNOS -->
@@ -5208,6 +5298,7 @@ const PAGE_TITLES = {
   alertasStock: '📉 Alertas de Stock',
   ordenesCompra: '🛒 Órdenes de Compra',
   itpObra: '🔬 ITP / Plan de Inspección y Ensayo',
+  timesheets: '🕐 Hojas de Tiempo',
 };
 
 const PAGE_LOADERS = {
@@ -5284,6 +5375,7 @@ const PAGE_LOADERS = {
   alertasStock:  cargarAlertasStock,
   ordenesCompra: cargarOrdenesCompra,
   itpObra:       cargarItp,
+  timesheets:    cargarTimesheets,
 };
 
 let currentPage = '';
@@ -5389,6 +5481,7 @@ const SYNC_INTERVALS = {
   alertasStock:    60,
   ordenesCompra:   90,
   itpObra:        120,
+  timesheets:      60,
 };
 
 let _syncTimer = null, _syncLabelTimer = null, _syncLastTs = null;
@@ -5945,6 +6038,188 @@ async function cargarEpis() {
     ]
   });
 }
+
+// ── HOJAS DE TIEMPO / TIMESHEETS (NEW-76) ────────────────────────────────
+let tblTimesheets = null;
+let _tsData       = [];
+
+async function cargarTimesheets() {
+  if (document.getElementById('filterTsObra')?.options.length <= 1) poblarSelectObras('filterTsObra');
+  // Default date range: this week Mon-Sun
+  const hoy = new Date();
+  const lun = new Date(hoy); lun.setDate(hoy.getDate() - ((hoy.getDay()||7)-1));
+  const dom = new Date(lun); dom.setDate(lun.getDate() + 6);
+  const toISO = d => d.toISOString().slice(0,10);
+  const filterDesde = document.getElementById('filterTsDesde');
+  const filterHasta = document.getElementById('filterTsHasta');
+  if (filterDesde && !filterDesde.value) filterDesde.value = toISO(lun);
+  if (filterHasta && !filterHasta.value) filterHasta.value = toISO(dom);
+  const obraId   = document.getElementById('filterTsObra')?.value || '';
+  const desde    = document.getElementById('filterTsDesde')?.value || '';
+  const hasta    = document.getElementById('filterTsHasta')?.value || '';
+  const aprobado = document.getElementById('filterTsAprobado')?.value;
+  let url = '/timesheets?limit=500';
+  if (obraId)   url += `&obra_id=${obraId}`;
+  if (desde)    url += `&desde=${desde}`;
+  if (hasta)    url += `&hasta=${hasta}`;
+  if (aprobado !== '') url += `&aprobado=${aprobado}`;
+  const r = await api(url);
+  _tsData = r.items || [];
+
+  const totalHorasNorm  = _tsData.reduce((s,t) => s+(t.horas_normales||0), 0);
+  const totalHorasExtra = _tsData.reduce((s,t) => s+(t.horas_extra||0), 0);
+  const pendAprobacion  = _tsData.filter(t=>!t.aprobado).length;
+  const aprobados       = _tsData.filter(t=>t.aprobado).length;
+
+  // Badge nav
+  const badge = document.getElementById('timesheetsBadge');
+  if (badge) { badge.style.display = pendAprobacion>0?'':'none'; badge.textContent = pendAprobacion||''; }
+
+  document.getElementById('tsKpiStrip').innerHTML = [
+    { icon:'🕐', value:`${totalHorasNorm.toFixed(1)}h`, label:'Horas normales', cls:'' },
+    { icon:'⏰', value:`${totalHorasExtra.toFixed(1)}h`, label:'Horas extra', cls: totalHorasExtra>0?'warn':'' },
+    { icon:'⏳', value:pendAprobacion, label:'Pendiente aprobación', cls: pendAprobacion>0?'warn':'' },
+    { icon:'✅', value:aprobados, label:'Aprobados', cls: aprobados>0?'ok':'' },
+    { icon:'📋', value:_tsData.length, label:'Partes total', cls:'' },
+  ].map(k=>`<div class="kpi-card" style="padding:14px"><div class="kpi-icon" style="font-size:20px">${k.icon}</div>
+    <div class="kpi-value ${k.cls}" style="font-size:${String(k.value).includes('h')?'18':'22'}px">${k.value}</div>
+    <div class="kpi-label">${k.label}</div></div>`).join('');
+
+  const canApprove = ['empresa_admin','jefe_de_obra','encargado','superadmin','desarrollador','oficina'].includes(SESSION?.rol);
+  const cols = [
+    ...(canApprove ? [{ title:'', field:'id', width:40, hozAlign:'center', headerSort:false,
+      formatter: c => `<input type="checkbox" class="ts-check" value="${c.getValue()}" onclick="event.stopPropagation()">` }] : []),
+    { title:'Trabajador', field:'trabajador_nombre', minWidth:160, sorter:'string' },
+    { title:'Obra', field:'obra_nombre', width:130 },
+    { title:'Fecha', field:'fecha', width:100, sorter:'date', formatter: c=>fmtFecha(c.getValue()||'') },
+    { title:'Actividad', field:'actividad', minWidth:200 },
+    { title:'Horas norm.', field:'horas_normales', width:110, hozAlign:'right', sorter:'number',
+      formatter: c => `<b>${(c.getValue()||0).toFixed(1)}h</b>` },
+    { title:'H. extra', field:'horas_extra', width:90, hozAlign:'right',
+      formatter: c => { const v=c.getValue()||0; return v>0?`<span style="color:var(--warning);font-weight:700">${v.toFixed(1)}h</span>`:'—'; } },
+    { title:'Cód. coste', field:'codigo_coste', width:120 },
+    { title:'Estado', field:'aprobado', width:120,
+      formatter: c => c.getValue()
+        ? '<span style="color:var(--success);font-weight:700">✅ Aprobado</span>'
+        : '<span style="color:var(--warning);font-weight:700">⏳ Pendiente</span>' },
+    ...(canApprove ? [{ title:'', field:'id', width:160, headerSort:false,
+      formatter: c => {
+        const id=c.getValue(); const row=c.getRow().getData();
+        return `${!row.aprobado
+          ? `<button class="btn btn-success btn-sm" onclick="aprobarTs(${id})">✅</button>`
+          : `<button class="btn btn-secondary btn-sm" onclick="desaprobarTs(${id})">↩</button>`}
+          <button class="btn btn-secondary btn-sm" onclick="editarTs(${id})">✏️</button>
+          <button class="btn btn-danger btn-sm" onclick="eliminarTs(${id})">🗑</button>`;
+      }
+    }] : []),
+  ];
+  if (tblTimesheets) { tblTimesheets.replaceData(_tsData); return; }
+  tblTimesheets = new Tabulator('#tblTimesheets', {
+    data:_tsData, layout:'fitColumns', pagination:'local', paginationSize:25, responsiveLayout:'collapse',
+    placeholder:'<div class="empty-state"><div class="empty-icon">🕐</div><div class="empty-text">Sin partes de horas en el período seleccionado</div></div>',
+    columns: cols
+  });
+}
+
+async function abrirModalTs() {
+  document.getElementById('tsId').value = '';
+  document.getElementById('tsFecha').value = new Date().toISOString().slice(0,10);
+  document.getElementById('tsHorasNorm').value = '8';
+  document.getElementById('tsHorasExtra').value = '0';
+  document.getElementById('tsActividad').value = '';
+  document.getElementById('tsCodigoCoste').value = '';
+  document.getElementById('tsNotas').value = '';
+  document.getElementById('tsAprobado').value = '0';
+  document.getElementById('modalTsTitle').textContent = 'Nuevo Parte de Horas';
+  document.getElementById('btnAprobarTs').style.display = 'none';
+  if (document.getElementById('tsObraId')?.options.length <= 1) poblarSelectObras('tsObraId');
+  await poblarTrabajadoresTs();
+  document.getElementById('modalTs').classList.add('show');
+}
+
+async function poblarTrabajadoresTs() {
+  const sel = document.getElementById('tsTrabajadorId');
+  if (!sel || sel.options.length > 1) return;
+  const r = await api('/personal?limit=200');
+  const workers = r.trabajadores || r.data || [];
+  workers.forEach(w => {
+    const o = document.createElement('option');
+    o.value = w.id; o.textContent = `${w.nombre} ${w.apellidos||''}`.trim();
+    sel.appendChild(o);
+  });
+}
+
+async function editarTs(id) {
+  const ts = _tsData.find(t=>t.id===id);
+  if (!ts) return;
+  document.getElementById('tsId').value = id;
+  document.getElementById('tsFecha').value = ts.fecha||'';
+  document.getElementById('tsHorasNorm').value = ts.horas_normales||8;
+  document.getElementById('tsHorasExtra').value = ts.horas_extra||0;
+  document.getElementById('tsActividad').value = ts.actividad||'';
+  document.getElementById('tsCodigoCoste').value = ts.codigo_coste||'';
+  document.getElementById('tsNotas').value = ts.notas||'';
+  document.getElementById('tsAprobado').value = ts.aprobado?'1':'0';
+  document.getElementById('modalTsTitle').textContent = `Editar parte: ${ts.trabajador_nombre||''}`;
+  if (document.getElementById('tsObraId')?.options.length <= 1) await poblarSelectObras('tsObraId');
+  await poblarTrabajadoresTs();
+  if (ts.trabajador_id) document.getElementById('tsTrabajadorId').value = ts.trabajador_id;
+  if (ts.obra_id)       document.getElementById('tsObraId').value = ts.obra_id;
+  document.getElementById('modalTs').classList.add('show');
+}
+
+async function guardarTs() {
+  const id = parseInt(document.getElementById('tsId').value||'0')||0;
+  const trabId = document.getElementById('tsTrabajadorId')?.value;
+  if (!trabId) { toast('Selecciona un trabajador','err'); return; }
+  const fecha = document.getElementById('tsFecha')?.value;
+  if (!fecha) { toast('Fecha obligatoria','err'); return; }
+  const body = {
+    trabajador_id:  parseInt(trabId),
+    obra_id:        document.getElementById('tsObraId')?.value || null,
+    fecha,
+    actividad:      document.getElementById('tsActividad')?.value?.trim()||null,
+    horas_normales: parseFloat(document.getElementById('tsHorasNorm')?.value||8),
+    horas_extra:    parseFloat(document.getElementById('tsHorasExtra')?.value||0),
+    codigo_coste:   document.getElementById('tsCodigoCoste')?.value?.trim()||null,
+    aprobado:       document.getElementById('tsAprobado')?.value==='1' ? 1 : 0,
+    notas:          document.getElementById('tsNotas')?.value?.trim()||null,
+  };
+  const method = id ? 'PUT' : 'POST';
+  const url    = id ? `/timesheets/${id}` : '/timesheets';
+  const r = await api(url, { method, body:JSON.stringify(body) });
+  if (r.ok||r.id) { toast(id?'Actualizado':'Parte registrado','ok'); cerrarModalTs(); tblTimesheets=null; cargarTimesheets(); }
+  else toast(r.error||'Error','err');
+}
+
+async function aprobarTs(id) {
+  const r = await api(`/timesheets/${id}`, { method:'PUT', body:JSON.stringify({ aprobado:1 }) });
+  if (r.ok) { toast('Aprobado ✓','ok'); tblTimesheets=null; cargarTimesheets(); }
+  else toast('Error','err');
+}
+
+async function desaprobarTs(id) {
+  const r = await api(`/timesheets/${id}`, { method:'PUT', body:JSON.stringify({ aprobado:0 }) });
+  if (r.ok) { toast('Marcado como pendiente','ok'); tblTimesheets=null; cargarTimesheets(); }
+  else toast('Error','err');
+}
+
+async function eliminarTs(id) {
+  if (!confirm('¿Eliminar este parte de horas?')) return;
+  const r = await api(`/timesheets/${id}`, { method:'DELETE' });
+  if (r.ok) { toast('Eliminado','ok'); tblTimesheets=null; cargarTimesheets(); }
+  else toast('Error','err');
+}
+
+async function aprobarTimesheetLote() {
+  const checked = [...document.querySelectorAll('.ts-check:checked')].map(c=>parseInt(c.value));
+  if (!checked.length) { toast('Selecciona al menos un parte','err'); return; }
+  await Promise.all(checked.map(id => api(`/timesheets/${id}`, { method:'PUT', body:JSON.stringify({ aprobado:1 }) })));
+  toast(`${checked.length} partes aprobados ✓`,'ok');
+  tblTimesheets=null; cargarTimesheets();
+}
+
+function cerrarModalTs() { document.getElementById('modalTs').classList.remove('show'); }
 
 // ── TURNOS ─────────────────────────────────────────────────────
 let turnosOffset = 0;
