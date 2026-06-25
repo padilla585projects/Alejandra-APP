@@ -510,6 +510,9 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
       <span class="nav-icon">🏁</span> Hitos de Obra
       <span class="nav-badge" id="hitosBadge" style="display:none">!</span>
     </button>
+    <button class="nav-item" data-page="diarioObra" onclick="navTo('diarioObra')">
+      <span class="nav-icon">📓</span> Diario de Obra
+    </button>
 
     <div class="sidebar-section">Analítica</div>
     <button class="nav-item" data-page="graficas" onclick="navTo('graficas')">
@@ -1274,6 +1277,24 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
           <button class="btn btn-secondary" onclick="tblPartes=null;cargarPartesPanel()">🔄 Actualizar</button>
         </div>
         <div class="tbl-wrap"><div id="tblPartes"></div></div>
+      </div>
+
+      <!-- DIARIO DE OBRA -->
+      <div class="page" id="pageDiarioObra">
+        <div class="page-title">📓 Diario de Obra</div>
+        <div class="page-sub">Registro diario de actividades, personal y condiciones en obra</div>
+        <div class="tbl-toolbar" style="margin-bottom:16px">
+          <select class="tbl-search" id="diarioObraId" style="min-width:220px" onchange="cargarDiarioObra()">
+            <option value="">— Selecciona una obra —</option>
+          </select>
+          <input class="tbl-search" type="date" id="diarioDesde" onchange="cargarDiarioObra()" style="width:140px">
+          <input class="tbl-search" type="date" id="diarioHasta" onchange="cargarDiarioObra()" style="width:140px">
+          <button class="btn btn-primary" onclick="abrirModalDiario()">+ Nueva entrada</button>
+          <button class="btn btn-secondary" onclick="exportarDiario()">📄 Exportar</button>
+          <button class="btn btn-secondary" onclick="cargarDiarioObra()">🔄 Actualizar</button>
+        </div>
+        <div id="diarioResumen" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:18px"></div>
+        <div id="diarioLista" style="display:flex;flex-direction:column;gap:10px"></div>
       </div>
 
       <!-- HITOS DE OBRA -->
@@ -2676,6 +2697,7 @@ const PAGE_TITLES = {
   fases: '📅 Fases de Obra',
   partesPanel: '📋 Partes Diarios',
   hitos: '🏁 Hitos de Obra',
+  diarioObra: '📓 Diario de Obra',
 };
 
 const PAGE_LOADERS = {
@@ -2716,6 +2738,7 @@ const PAGE_LOADERS = {
   fases: cargarFases,
   partesPanel: cargarPartesPanel,
   hitos: cargarHitos,
+  diarioObra: cargarDiarioObra,
 };
 
 let currentPage = '';
@@ -2785,6 +2808,7 @@ const SYNC_INTERVALS = {
   fases: 120,
   partesPanel: 60,
   hitos: 120,
+  diarioObra: 120,
 };
 
 let _syncTimer = null, _syncLabelTimer = null, _syncLastTs = null;
@@ -2987,11 +3011,12 @@ async function cargarDashboard() {
           o.incidencias_open ? `<span class="badge badge-${o.incidencias_open > 0 ? 'danger' : 'ok'}">⚠️ ${o.incidencias_open} incid.</span>` : '',
         ].filter(Boolean).join('');
 
-        return `<div class="section-card" style="cursor:pointer;border-top:3px solid var(--primary);padding:14px 16px" onclick="navTo('presupuesto')">
+        return `<div class="section-card" style="border-top:3px solid var(--primary);padding:14px 16px">
           <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
             <span style="font-size:13px;font-weight:700;font-family:'Montserrat',sans-serif;flex:1;color:var(--text)">${o.nombre}</span>
             ${alertIcon ? `<span title="Alerta">${alertIcon}</span>` : ''}
-            <button class="btn btn-secondary btn-sm" onclick="event.stopPropagation();navTo('tareas')" style="padding:2px 8px;font-size:11px">Abrir →</button>
+            <button class="btn btn-secondary btn-sm" onclick="generarInformeObra(${o.id},'${esc(o.nombre)}')" style="padding:2px 8px;font-size:11px" title="Generar informe PDF">📄</button>
+            <button class="btn btn-secondary btn-sm" onclick="navTo('presupuesto')" style="padding:2px 8px;font-size:11px">→</button>
           </div>
           ${presBar}
           ${fasesBar}
@@ -9678,6 +9703,120 @@ async function eliminarDeficiencia(id) {
 }
 
 // Helper: populate obra select
+// ── INFORME DE OBRA ──────────────────────────────────────────────
+async function generarInformeObra(obraId, obraNombre) {
+  toast('Generando informe...', 'ok');
+  const [presR, fasesR, tareasR, rfisR, ocsR, hitosR, incR, diarioR] = await Promise.all([
+    api(`/presupuesto-obra?obra_id=${obraId}`).catch(() => ({})),
+    api(`/fases-obra?obra_id=${obraId}`).catch(() => ({})),
+    api(`/tareas-obra?obra_id=${obraId}&limit=100`).catch(() => ({})),
+    api(`/rfis?obra_id=${obraId}&limit=100`).catch(() => ({})),
+    api(`/ordenes-cambio?obra_id=${obraId}&limit=50`).catch(() => ({})),
+    api(`/hitos-obra?obra_id=${obraId}`).catch(() => ({})),
+    api(`/incidencias?obra_id=${obraId}&limit=100`).catch(() => ({})),
+    api(`/diario-obra?obra_id=${obraId}&limit=10`).catch(() => ([])),
+  ]);
+  const partidas = presR?.partidas || [];
+  const fases    = Array.isArray(fasesR) ? fasesR : (fasesR?.fases || []);
+  const tareas   = toArr(tareasR, 'tareas');
+  const rfis     = toArr(rfisR, 'rfis');
+  const ocs      = toArr(ocsR, 'ordenes');
+  const hitos    = hitosR?.hitos || [];
+  const incs     = toArr(incR, 'incidencias');
+  const diario   = Array.isArray(diarioR) ? diarioR : [];
+
+  const totalPrev = partidas.reduce((s,p)=>s+(p.coste_previsto||0),0);
+  const totalReal = partidas.reduce((s,p)=>s+(p.coste_real||0),0);
+  const pctPres   = totalPrev > 0 ? Math.round(totalReal/totalPrev*100) : null;
+  const avgFases  = fases.length ? Math.round(fases.reduce((s,f)=>s+(f.porcentaje||0),0)/fases.length) : null;
+  const tareasAbiertas = tareas.filter(t=>t.estado!=='completada'&&t.estado!=='cancelada').length;
+  const rfisAbiertas   = rfis.filter(r=>r.estado==='abierta'||r.estado==='en_revision').length;
+  const ocsAprobadas   = ocs.filter(o=>o.estado==='aprobada').length;
+  const hoy = new Date().toLocaleDateString('es-ES',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
+
+  const fmtM = (v) => new Intl.NumberFormat('es-ES',{style:'currency',currency:'EUR',minimumFractionDigits:0}).format(v||0);
+  const pBar = (pct,color='#f97316') => `<div style="background:#f0f0f0;border-radius:4px;height:12px;width:100%;max-width:300px;display:inline-block">
+    <div style="width:${Math.min(pct,100)}%;height:100%;background:${pct>100?'#ef4444':color};border-radius:4px"></div></div>`;
+
+  const fasesRows = fases.map(f=>`<tr>
+    <td>${f.nombre||'—'}</td><td>${f.estado||'—'}</td>
+    <td>${f.fecha_inicio_plan||'—'} → ${f.fecha_fin_plan||'—'}</td>
+    <td>${f.fecha_inicio_real||'—'} → ${f.fecha_fin_real||'en curso'}</td>
+    <td>${f.porcentaje||0}%</td><td>${f.responsable||'—'}</td>
+  </tr>`).join('');
+
+  const tareasRows = tareas.filter(t=>t.estado!=='completada').slice(0,10).map(t=>`<tr>
+    <td>${t.titulo||'—'}</td><td>${t.prioridad||'normal'}</td>
+    <td>${t.estado||'—'}</td><td>${t.responsable||'—'}</td><td>${fmtFecha(t.fecha_limite||'')}</td>
+  </tr>`).join('');
+
+  const rfisRows = rfis.filter(r=>r.estado!=='cerrada').slice(0,10).map(r=>`<tr>
+    <td>${r.numero||r.id}</td><td>${r.titulo||r.descripcion||'—'}</td>
+    <td>${r.estado||'—'}</td><td>${fmtFecha(r.created_at||'')}</td>
+  </tr>`).join('');
+
+  const hitosRows = hitos.slice(0,10).map(h=>`<tr>
+    <td>${h.nombre||'—'}</td><td>${h.tipo||'—'}</td><td>${fmtFecha(h.fecha)}</td>
+    <td style="color:${h.retrasado?'#ef4444':h.estado==='completado'?'#10b981':'inherit'}">${h.estado||'—'}</td>
+  </tr>`).join('');
+
+  const html = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">
+  <title>Informe de Obra — ${obraNombre}</title>
+  <style>
+    *{box-sizing:border-box}body{font-family:'Segoe UI',Arial,sans-serif;color:#1e293b;padding:32px;max-width:900px;margin:0 auto;font-size:13px}
+    h1{color:#f97316;font-size:24px;margin:0 0 4px}h2{color:#f97316;font-size:16px;margin:24px 0 10px;padding-bottom:4px;border-bottom:2px solid #f97316}
+    .meta{color:#64748b;font-size:12px;margin-bottom:24px}.kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px}
+    .kpi{background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:12px;text-align:center}
+    .kpi-val{font-size:22px;font-weight:800;color:#f97316}.kpi-lbl{font-size:11px;color:#64748b;margin-top:2px}
+    table{border-collapse:collapse;width:100%;margin-bottom:16px}th,td{border:1px solid #e2e8f0;padding:8px;text-align:left;vertical-align:top;font-size:12px}
+    th{background:#f97316;color:#fff;font-weight:700}tr:nth-child(even){background:#f8fafc}
+    .progress{background:#e2e8f0;border-radius:4px;height:10px}.progress-bar{height:100%;border-radius:4px;background:#f97316}
+    .footer{margin-top:40px;padding-top:16px;border-top:1px solid #e2e8f0;font-size:11px;color:#94a3b8;text-align:center}
+    @media print{.no-print{display:none}body{padding:16px}}
+  </style></head><body>
+  <button class="no-print" onclick="window.print()" style="background:#f97316;color:#fff;border:none;padding:8px 20px;border-radius:6px;cursor:pointer;float:right;font-size:13px;font-weight:700">🖨 Imprimir / PDF</button>
+  <h1>📋 Informe de Obra</h1>
+  <div class="meta"><strong>${obraNombre}</strong> · Generado: ${hoy}</div>
+
+  <div class="kpi-grid">
+    <div class="kpi"><div class="kpi-val">${avgFases !== null ? avgFases+'%' : '—'}</div><div class="kpi-lbl">Avance fases</div></div>
+    <div class="kpi"><div class="kpi-val" style="color:${pctPres>100?'#ef4444':'#f97316'}">${pctPres !== null ? pctPres+'%' : '—'}</div><div class="kpi-lbl">Presupuesto ejecutado</div></div>
+    <div class="kpi"><div class="kpi-val" style="color:${tareasAbiertas>0?'#f59e0b':'#10b981'}">${tareasAbiertas}</div><div class="kpi-lbl">Tareas abiertas</div></div>
+    <div class="kpi"><div class="kpi-val" style="color:${rfisAbiertas>0?'#ef4444':'#10b981'}">${rfisAbiertas}</div><div class="kpi-lbl">RFIs abiertas</div></div>
+  </div>
+
+  ${partidas.length ? `<h2>💶 Presupuesto</h2>
+  <div style="margin-bottom:12px;display:flex;gap:24px">
+    <div><strong>Previsto:</strong> ${fmtM(totalPrev)}</div>
+    <div><strong>Real:</strong> ${fmtM(totalReal)}</div>
+    <div><strong>Desviación:</strong> <span style="color:${totalReal>totalPrev?'#ef4444':'#10b981'}">${fmtM(totalReal-totalPrev)}</span></div>
+    <div>${pBar(pctPres||0)} ${pctPres||0}%</div>
+  </div>` : ''}
+
+  ${fases.length ? `<h2>📅 Fases de obra</h2>
+  <table><thead><tr><th>Fase</th><th>Estado</th><th>Plan</th><th>Real</th><th>%</th><th>Responsable</th></tr></thead>
+  <tbody>${fasesRows}</tbody></table>` : ''}
+
+  ${hitos.length ? `<h2>🏁 Hitos</h2>
+  <table><thead><tr><th>Hito</th><th>Tipo</th><th>Fecha</th><th>Estado</th></tr></thead>
+  <tbody>${hitosRows}</tbody></table>` : ''}
+
+  ${tareas.filter(t=>t.estado!=='completada').length ? `<h2>✅ Tareas pendientes</h2>
+  <table><thead><tr><th>Tarea</th><th>Prioridad</th><th>Estado</th><th>Asignado</th><th>Fecha límite</th></tr></thead>
+  <tbody>${tareasRows}</tbody></table>` : ''}
+
+  ${rfis.filter(r=>r.estado!=='cerrada').length ? `<h2>❓ RFIs abiertas</h2>
+  <table><thead><tr><th>Nº</th><th>Título</th><th>Estado</th><th>Fecha</th></tr></thead>
+  <tbody>${rfisRows}</tbody></table>` : ''}
+
+  <div class="footer">Alejandra APP · ${new Date().toLocaleDateString('es-ES')} · alejandraapp.com</div>
+  </body></html>`;
+
+  const w = window.open('', '_blank');
+  w.document.write(html);
+  w.document.close();
+}
+
 // ── PRESUPUESTO DE OBRA ─────────────────────────────────────────
 let tblPresupuesto = null, _presData = [];
 async function cargarPresupuesto() {
@@ -10076,6 +10215,178 @@ async function cargarPartesPanel() {
   document.getElementById('searchPartes')?.addEventListener('input', (e) => {
     if (tblPartes) tblPartes.setFilter([{field:'descripcion',type:'like',value:e.target.value},{field:'obra',type:'like',value:e.target.value}]);
   });
+}
+
+// ── DIARIO DE OBRA ───────────────────────────────────────────────
+let _diarioData = [];
+const CLIMA_ICONS = { soleado:'☀️', nublado:'⛅', lluvioso:'🌧️', ventoso:'💨', frio:'❄️', caluroso:'🔥', tormenta:'⛈️' };
+async function cargarDiarioObra() {
+  if (document.getElementById('diarioObraId')?.options.length <= 1) poblarSelectObras('diarioObraId');
+  const obraId = document.getElementById('diarioObraId')?.value;
+  if (!obraId) {
+    document.getElementById('diarioResumen').innerHTML = '';
+    document.getElementById('diarioLista').innerHTML = '<div style="color:var(--muted);font-size:13px;padding:12px 0">Selecciona una obra para ver el diario.</div>';
+    return;
+  }
+  const desde = document.getElementById('diarioDesde')?.value;
+  const hasta = document.getElementById('diarioHasta')?.value;
+  let url = `/diario-obra?obra_id=${obraId}&limit=90`;
+  const r = await api(url);
+  _diarioData = Array.isArray(r) ? r : (r?.entradas || []);
+  // filter client-side by dates
+  let data = _diarioData;
+  if (desde) data = data.filter(e => e.fecha >= desde);
+  if (hasta) data = data.filter(e => e.fecha <= hasta);
+
+  // KPIs
+  const totalPersonal = data.reduce((s,e) => s + (e.personal_presente||0), 0);
+  const avgPersonal   = data.length ? Math.round(totalPersonal / data.length) : 0;
+  document.getElementById('diarioResumen').innerHTML = [
+    { label: 'Entradas',    val: data.length, cls: '' },
+    { label: 'Personal total', val: totalPersonal, cls: '' },
+    { label: 'Media/día',   val: avgPersonal, cls: '' },
+  ].map(k => `<div class="kpi-card"><div class="kpi-value ${k.cls}">${k.val}</div><div class="kpi-label">${k.label}</div></div>`).join('');
+
+  // Render list
+  document.getElementById('diarioLista').innerHTML = data.length ? data.map(e => {
+    const climaIcon = CLIMA_ICONS[e.clima] || '';
+    return `<div class="section-card" style="padding:14px 16px;cursor:pointer" onclick="abrirModalDiarioEditar(${e.id})">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">
+        <div style="font-family:'Montserrat',sans-serif;font-weight:700;font-size:14px;min-width:100px">${fmtFecha(e.fecha)}</div>
+        ${climaIcon ? `<span title="${e.clima}" style="font-size:18px">${climaIcon}</span>` : ''}
+        ${e.temperatura ? `<span style="font-size:12px;color:var(--muted)">${e.temperatura}°C</span>` : ''}
+        ${e.personal_presente ? `<span class="badge badge-info">👷 ${e.personal_presente} pers.</span>` : ''}
+        <span style="font-size:11px;color:var(--muted);margin-left:auto">${e.creado_por||''}</span>
+      </div>
+      <div style="font-size:13px;color:var(--text);margin-bottom:6px">${(e.trabajos||'').slice(0,200)}${(e.trabajos||'').length>200?'...':''}</div>
+      <div style="display:flex;gap:12px;font-size:11px;color:var(--muted);flex-wrap:wrap">
+        ${e.equipos_activos  ? `<span>🚧 ${e.equipos_activos.slice(0,60)}</span>` : ''}
+        ${e.incidencias_dia  ? `<span style="color:#f59e0b">⚠️ ${e.incidencias_dia.slice(0,60)}</span>` : ''}
+        ${e.visitantes       ? `<span>👥 Visitantes: ${e.visitantes.slice(0,40)}</span>` : ''}
+      </div>
+    </div>`;
+  }).join('') : '<div class="empty-state"><div class="empty-icon">📓</div><div class="empty-text">Sin entradas en el diario — añade la primera</div></div>';
+}
+function abrirModalDiario() {
+  const obraId = document.getElementById('diarioObraId')?.value;
+  if (!obraId) { toast('Selecciona una obra primero', 'err'); return; }
+  const hoy = new Date().toISOString().slice(0,10);
+  abrirModal('Nueva entrada de diario', `
+    <div class="form-row">
+      <div class="form-group"><div class="form-label">Fecha *</div><input class="form-input" id="mDiarioFecha" type="date" value="${hoy}"></div>
+      <div class="form-group"><div class="form-label">Personal presente</div><input class="form-input" id="mDiarioPersonal" type="number" min="0" value="0"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><div class="form-label">Clima</div>
+        <select class="form-select" id="mDiarioClima">
+          <option value="">—</option>
+          ${Object.entries(CLIMA_ICONS).map(([k,v]) => `<option value="${k}">${v} ${k}</option>`).join('')}
+        </select>
+      </div>
+      <div class="form-group"><div class="form-label">Temperatura (°C)</div><input class="form-input" id="mDiarioTemp" type="number" placeholder="22"></div>
+    </div>
+    <div class="form-group"><div class="form-label">Trabajos realizados *</div><textarea class="form-input" id="mDiarioTrabajos" rows="3" placeholder="Describe los trabajos del día..."></textarea></div>
+    <div class="form-group"><div class="form-label">Equipos activos</div><textarea class="form-input" id="mDiarioEquipos" rows="2" placeholder="Retroexcavadora JCB, Grúa torre 30m..."></textarea></div>
+    <div class="form-group"><div class="form-label">Incidencias del día</div><textarea class="form-input" id="mDiarioIncid" rows="2" placeholder="Sin incidencias / Descripción si las hay"></textarea></div>
+    <div class="form-group"><div class="form-label">Visitantes</div><input class="form-input" id="mDiarioVisit" placeholder="Dirección facultativa, cliente..."></div>
+    <div class="form-group"><div class="form-label">Observaciones</div><textarea class="form-input" id="mDiarioObs" rows="2"></textarea></div>
+  `, async () => {
+    const trabajos = document.getElementById('mDiarioTrabajos').value.trim();
+    if (!trabajos) { toast('Los trabajos son obligatorios', 'err'); return; }
+    const body = {
+      obra_id: parseInt(obraId), fecha: document.getElementById('mDiarioFecha').value,
+      clima: document.getElementById('mDiarioClima').value || null,
+      temperatura: document.getElementById('mDiarioTemp').value || null,
+      trabajos,
+      personal_presente: parseInt(document.getElementById('mDiarioPersonal').value) || 0,
+      equipos_activos: document.getElementById('mDiarioEquipos').value.trim() || null,
+      incidencias_dia: document.getElementById('mDiarioIncid').value.trim() || null,
+      visitantes: document.getElementById('mDiarioVisit').value.trim() || null,
+      observaciones: document.getElementById('mDiarioObs').value.trim() || null,
+    };
+    const r = await api('/diario-obra', { method: 'POST', body: JSON.stringify(body) });
+    if (r.ok || r.id) { toast('Entrada creada ✓', 'ok'); cerrarModal(); cargarDiarioObra(); }
+    else toast('Error al crear entrada', 'err');
+  });
+}
+function abrirModalDiarioEditar(id) {
+  const e = _diarioData.find(x => x.id === id);
+  if (!e) return;
+  abrirModal('Editar entrada de diario', `
+    <div class="form-row">
+      <div class="form-group"><div class="form-label">Fecha *</div><input class="form-input" id="mDiarioFecha" type="date" value="${e.fecha||''}"></div>
+      <div class="form-group"><div class="form-label">Personal presente</div><input class="form-input" id="mDiarioPersonal" type="number" min="0" value="${e.personal_presente||0}"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><div class="form-label">Clima</div>
+        <select class="form-select" id="mDiarioClima">
+          <option value="">—</option>
+          ${Object.entries(CLIMA_ICONS).map(([k,v]) => `<option value="${k}" ${e.clima===k?'selected':''}>${v} ${k}</option>`).join('')}
+        </select>
+      </div>
+      <div class="form-group"><div class="form-label">Temperatura (°C)</div><input class="form-input" id="mDiarioTemp" type="number" value="${e.temperatura||''}"></div>
+    </div>
+    <div class="form-group"><div class="form-label">Trabajos realizados *</div><textarea class="form-input" id="mDiarioTrabajos" rows="3">${e.trabajos||''}</textarea></div>
+    <div class="form-group"><div class="form-label">Equipos activos</div><textarea class="form-input" id="mDiarioEquipos" rows="2">${e.equipos_activos||''}</textarea></div>
+    <div class="form-group"><div class="form-label">Incidencias del día</div><textarea class="form-input" id="mDiarioIncid" rows="2">${e.incidencias_dia||''}</textarea></div>
+    <div class="form-group"><div class="form-label">Visitantes</div><input class="form-input" id="mDiarioVisit" value="${esc(e.visitantes||'')}"></div>
+    <div class="form-group"><div class="form-label">Observaciones</div><textarea class="form-input" id="mDiarioObs" rows="2">${e.observaciones||''}</textarea></div>
+    <div style="margin-top:12px"><button class="btn btn-danger btn-sm" onclick="eliminarDiario(${e.id})">🗑 Eliminar entrada</button></div>
+  `, async () => {
+    const trabajos = document.getElementById('mDiarioTrabajos').value.trim();
+    if (!trabajos) { toast('Los trabajos son obligatorios', 'err'); return; }
+    const body = {
+      fecha: document.getElementById('mDiarioFecha').value,
+      clima: document.getElementById('mDiarioClima').value || null,
+      temperatura: document.getElementById('mDiarioTemp').value || null,
+      trabajos,
+      personal_presente: parseInt(document.getElementById('mDiarioPersonal').value) || 0,
+      equipos_activos: document.getElementById('mDiarioEquipos').value.trim() || null,
+      incidencias_dia: document.getElementById('mDiarioIncid').value.trim() || null,
+      visitantes: document.getElementById('mDiarioVisit').value.trim() || null,
+      observaciones: document.getElementById('mDiarioObs').value.trim() || null,
+    };
+    const r = await api(`/diario-obra/${e.id}`, { method: 'PUT', body: JSON.stringify(body) });
+    if (r.ok) { toast('Entrada actualizada ✓', 'ok'); cerrarModal(); cargarDiarioObra(); }
+    else toast('Error al actualizar', 'err');
+  });
+}
+async function eliminarDiario(id) {
+  if (!confirm('¿Eliminar esta entrada del diario?')) return;
+  const r = await api(`/diario-obra/${id}`, { method: 'DELETE' });
+  if (r.ok || r.deleted) { toast('Entrada eliminada', 'ok'); cerrarModal(); cargarDiarioObra(); }
+  else toast('Error al eliminar', 'err');
+}
+function exportarDiario() {
+  const obraId = document.getElementById('diarioObraId')?.value;
+  const obraNombre = document.getElementById('diarioObraId')?.selectedOptions?.[0]?.textContent || 'Obra';
+  if (!_diarioData.length) { toast('Sin datos para exportar', 'err'); return; }
+  const rows = _diarioData.map(e => {
+    const ci = CLIMA_ICONS[e.clima] || '';
+    return `<tr>
+      <td>${fmtFecha(e.fecha)}</td>
+      <td>${ci} ${e.clima||''} ${e.temperatura?e.temperatura+'°C':''}</td>
+      <td>${e.personal_presente||0}</td>
+      <td style="white-space:pre-wrap">${e.trabajos||''}</td>
+      <td>${e.equipos_activos||''}</td>
+      <td>${e.incidencias_dia||''}</td>
+      <td>${e.visitantes||''}</td>
+      <td>${e.observaciones||''}</td>
+    </tr>`;
+  }).join('');
+  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Diario ${obraNombre}</title>
+  <style>body{font-family:Arial,sans-serif;font-size:12px;padding:20px}h1{color:#f97316;font-size:18px}
+  table{border-collapse:collapse;width:100%}th,td{border:1px solid #ddd;padding:6px;text-align:left;vertical-align:top}
+  th{background:#f97316;color:#fff}tr:nth-child(even){background:#fafafa}
+  @media print{button{display:none}}</style></head><body>
+  <h1>📓 Diario de Obra — ${obraNombre}</h1>
+  <p>Generado: ${new Date().toLocaleString('es-ES')}</p>
+  <button onclick="window.print()" style="background:#f97316;color:#fff;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;margin-bottom:16px">🖨 Imprimir / Guardar PDF</button>
+  <table><thead><tr><th>Fecha</th><th>Clima</th><th>Personal</th><th>Trabajos</th><th>Equipos</th><th>Incidencias</th><th>Visitantes</th><th>Observaciones</th></tr></thead>
+  <tbody>${rows}</tbody></table></body></html>`;
+  const w = window.open('', '_blank');
+  w.document.write(html);
+  w.document.close();
 }
 
 // ── HITOS DE OBRA ────────────────────────────────────────────────
