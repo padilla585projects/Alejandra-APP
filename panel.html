@@ -544,6 +544,10 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
       <span class="nav-icon">📬</span> Aprobaciones
       <span class="nav-badge" id="submittalsBadge" style="display:none">!</span>
     </button>
+    <button class="nav-item" data-page="centroAlertas" onclick="navTo('centroAlertas')">
+      <span class="nav-icon">🔔</span> Centro de Alertas
+      <span class="nav-badge" id="alertasBadge" style="display:none">!</span>
+    </button>
     <button class="nav-item" data-page="finanzasObra" onclick="navTo('finanzasObra')">
       <span class="nav-icon">📊</span> Análisis Financiero
     </button>
@@ -1501,6 +1505,25 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
         <!-- Tabla de entradas de coste -->
         <div style="font-family:'Montserrat',sans-serif;font-weight:700;font-size:10px;letter-spacing:2px;color:var(--muted);text-transform:uppercase;margin-bottom:10px">📝 Detalle de gastos</div>
         <div class="tbl-wrap"><div id="tblCostes"></div></div>
+      </div>
+
+      <!-- CENTRO DE ALERTAS (NEW-55) -->
+      <div class="page" id="pageCentroAlertas">
+        <div class="page-title">🔔 Centro de Alertas</div>
+        <div class="page-sub">Todas las acciones pendientes · Prioridades del día</div>
+        <div class="tbl-toolbar" style="flex-wrap:wrap;gap:8px;margin-bottom:18px;align-items:center">
+          <select class="tbl-search" id="alertasObraId" style="min-width:260px" onchange="cargarCentroAlertas()">
+            <option value="">🏗 Todas las obras</option>
+          </select>
+          <button class="btn btn-secondary" onclick="cargarCentroAlertas()">🔄 Actualizar</button>
+        </div>
+        <!-- Summary strip -->
+        <div id="alertasSummary" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:12px;margin-bottom:22px"></div>
+        <!-- Alert cards grid -->
+        <div id="alertasGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:18px"></div>
+        <div id="alertasOk" style="display:none;text-align:center;padding:60px 0;color:var(--success);font-size:18px;font-weight:700">
+          ✅ ¡Todo al día! No hay elementos urgentes pendientes.
+        </div>
       </div>
 
       <!-- CUADRO DE MANDO POR OBRA -->
@@ -3353,6 +3376,7 @@ const PAGE_TITLES = {
   submittals: '📬 Aprobaciones de Materiales',
   actasReunion: '📋 Actas de Reunión',
   obraDetalle: '🏗 Cuadro de Mando por Obra',
+  centroAlertas: '🔔 Centro de Alertas',
   finanzasObra: '📊 Análisis Financiero por Obra',
   cronogramaObra: '📅 Cronograma de Obra',
   fotosObra: '📷 Galería de Fotos de Obra',
@@ -3408,6 +3432,7 @@ const PAGE_LOADERS = {
   submittals: cargarSubmittals,
   actasReunion: cargarActasReunion,
   obraDetalle: cargarObraDetalle,
+  centroAlertas: cargarCentroAlertas,
   finanzasObra: cargarFinanzasObra,
   cronogramaObra: cargarCronogramaObra,
   fotosObra: cargarFotosObra,
@@ -3492,6 +3517,7 @@ const SYNC_INTERVALS = {
   submittals: 60,
   actasReunion: 180,
   obraDetalle: 60,
+  centroAlertas: 60,
   finanzasObra: 90,
   cronogramaObra: 120,
   fotosObra: 60,
@@ -11972,6 +11998,148 @@ async function cargarObraDetalle() {
       ${m.content}
     </div>
   `).join('');
+}
+
+// ── CENTRO DE ALERTAS (NEW-55) ───────────────────────────────────
+async function cargarCentroAlertas() {
+  if (document.getElementById('alertasObraId')?.options.length <= 1) await poblarSelectObras('alertasObraId');
+  const obraId = document.getElementById('alertasObraId')?.value || '';
+  const hoy = new Date().toISOString().slice(0,10);
+  const obraQ = obraId ? `obra_id=${obraId}&` : '';
+  const grid = document.getElementById('alertasGrid');
+  const summaryEl = document.getElementById('alertasSummary');
+  const okEl = document.getElementById('alertasOk');
+  if (grid) grid.innerHTML = '<div class="loading"><div class="spinner"></div> Cargando alertas...</div>';
+
+  // Fetch all relevant data in parallel
+  const [rfisR, punchR, submittalsR, hitosR, tareasR, transmittalsR, segR, contratosR, incR] = await Promise.all([
+    api(`/rfis?${obraQ}estado=abierta`).catch(()=>null),
+    api(`/punch-list?${obraQ}`).catch(()=>null),
+    api(`/submittals?${obraQ}`).catch(()=>null),
+    api(`/hitos-obra?${obraQ}`).catch(()=>null),
+    api(`/tareas-obra?${obraQ}estado=urgente`).catch(()=>null),
+    api(`/transmittals-obra?${obraQ}`).catch(()=>null),
+    api(`/obs-seguridad?${obraQ}`).catch(()=>null),
+    api(`/contratos-obra?${obraQ}`).catch(()=>null),
+    api(`/incidencias?${obraQ}estado=abierta&limit=100`).catch(()=>null),
+  ]);
+
+  // ── Extraer alertas por categoría ──────────────────────────────
+  const rfisAbiertas     = (rfisR?.rfis || []).filter(r=>r.estado==='abierta'||r.estado==='en_revision');
+  const punchVencidos    = (punchR?.items || []).filter(p=>p.vencido && p.estado!=='cerrado');
+  const punchAbiertos    = (punchR?.items || []).filter(p=>p.estado!=='cerrado');
+  const subsVencidos     = (submittalsR?.submittals || []).filter(s=>s.vencido);
+  const subsPendientes   = (submittalsR?.submittals || []).filter(s=>s.estado==='pendiente'||s.estado==='en_revision');
+  const hitosRetrasados  = (hitosR?.hitos || []).filter(h=>h.retrasado && h.estado!=='completado');
+  const hitosPendientes  = (hitosR?.hitos || []).filter(h=>h.estado!=='completado');
+  const tareasUrgentes   = (toArr(tareasR,'tareas') || []).filter(t=>t.prioridad==='urgente'&&t.estado!=='completada');
+  const tareasVencidas   = (toArr(tareasR,'tareas') || []).filter(t=>t.fecha_limite&&t.fecha_limite<hoy&&t.estado!=='completada');
+  const transVencidos    = (transmittalsR?.transmittals || []).filter(t=>t.vencido);
+  const transPendientes  = (transmittalsR?.transmittals || []).filter(t=>t.estado==='pendiente_respuesta');
+  const peligros         = (segR?.observaciones || []).filter(o=>o.tipo==='peligro_inminente'&&o.estado!=='cerrada');
+  const contratosVencen  = (contratosR?.contratos || []).filter(c=>{
+    if (!c.fecha_fin || c.estado==='cancelado'||c.estado==='finalizado') return false;
+    const days = (new Date(c.fecha_fin)-new Date())/864e5;
+    return days >= 0 && days <= 30;
+  });
+  const incsAbiertas     = (toArr(incR,'incidencias') || []).filter(i=>i.estado==='abierta'||i.estado==='en_proceso');
+
+  // Total alertas criticas
+  const totalCritico = peligros.length + punchVencidos.length + subsVencidos.length + hitosRetrasados.length + transVencidos.length;
+  const totalAtencion = rfisAbiertas.length + subsPendientes.length + transPendientes.length + tareasUrgentes.length + tareasVencidas.length;
+  const totalBadge = totalCritico + totalAtencion;
+
+  // Update global badge
+  const badge = document.getElementById('alertasBadge');
+  if (badge) badge.style.display = totalBadge > 0 ? '' : 'none';
+
+  // Summary strip
+  if (summaryEl) {
+    summaryEl.innerHTML = `
+      <div class="kpi-card" style="border-top:3px solid var(--danger)"><div class="kpi-icon">🔴</div><div class="kpi-value" style="color:var(--danger)">${totalCritico}</div><div class="kpi-label">Críticos</div></div>
+      <div class="kpi-card" style="border-top:3px solid var(--warning)"><div class="kpi-icon">🟡</div><div class="kpi-value" style="color:var(--warning)">${totalAtencion}</div><div class="kpi-label">Atención</div></div>
+      <div class="kpi-card"><div class="kpi-icon">🦺</div><div class="kpi-value" style="color:${peligros.length?'var(--danger)':'var(--success)'}">${peligros.length}</div><div class="kpi-label">Peligros</div></div>
+      <div class="kpi-card"><div class="kpi-icon">📝</div><div class="kpi-value" style="color:${punchVencidos.length?'var(--danger)':'var(--muted)'}">${punchAbiertos.length}</div><div class="kpi-label">Punch list</div></div>
+      <div class="kpi-card"><div class="kpi-icon">🏁</div><div class="kpi-value" style="color:${hitosRetrasados.length?'var(--danger)':'var(--muted)'}">${hitosRetrasados.length}</div><div class="kpi-label">Hitos retr.</div></div>
+      <div class="kpi-card"><div class="kpi-icon">❓</div><div class="kpi-value" style="color:${rfisAbiertas.length?'var(--warning)':'var(--muted)'}">${rfisAbiertas.length}</div><div class="kpi-label">RFIs</div></div>
+    `;
+  }
+
+  if (totalBadge === 0 && punchAbiertos.length === 0 && rfisAbiertas.length === 0 && incsAbiertas.length === 0) {
+    if (grid) grid.innerHTML = '';
+    if (okEl) okEl.style.display = '';
+    return;
+  }
+  if (okEl) okEl.style.display = 'none';
+
+  // ── Render alert cards ─────────────────────────────────────────
+  const mkItem = (icon, text, sub, color='var(--muted)') =>
+    `<div style="display:flex;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);align-items:flex-start">
+       <div style="font-size:16px;flex-shrink:0">${icon}</div>
+       <div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${text}</div>
+       ${sub?`<div style="font-size:11px;color:${color}">${sub}</div>`:''}
+       </div>
+     </div>`;
+
+  const mkCard = (icon, title, count, nav, items, emptyTxt, borderColor='var(--danger)') => {
+    if (!count && !items.length) return '';
+    return `
+      <div class="card" style="padding:16px;border-top:3px solid ${borderColor}">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+          <div style="font-size:15px;font-weight:700">${icon} ${title}
+            <span style="background:${borderColor};color:#fff;border-radius:10px;padding:1px 8px;font-size:12px;margin-left:8px">${count}</span>
+          </div>
+          <button class="btn btn-sm" onclick="navTo('${nav}')" style="font-size:12px">Ver todos →</button>
+        </div>
+        ${items.length ? items.join('') : `<div style="color:var(--muted);font-size:12px;text-align:center;padding:12px 0">${emptyTxt}</div>`}
+      </div>`;
+  };
+
+  const cards = [];
+
+  if (peligros.length) cards.push(mkCard('🦺','Peligros de Seguridad',peligros.length,'seguridadObra',
+    peligros.slice(0,4).map(o=>mkItem('🔴',o.descripcion||'—',`📍 ${o.ubicacion||'—'} · ${o.prioridad||'—'}`,'var(--danger)')),
+    '','var(--danger)'));
+
+  if (hitosRetrasados.length) cards.push(mkCard('🏁','Hitos Retrasados',hitosRetrasados.length,'hitos',
+    hitosRetrasados.slice(0,4).map(h=>mkItem('⛔',h.nombre||'—',`Previsto: ${h.fecha||'—'}`,'var(--danger)')),
+    '','var(--danger)'));
+
+  if (punchVencidos.length) cards.push(mkCard('📝','Punch List Vencido',punchVencidos.length,'punchList',
+    punchVencidos.slice(0,4).map(p=>mkItem('⚠️',p.descripcion||'—',`${p.categoria||'—'} · ${p.responsable||'—'}`,'var(--danger)')),
+    '','#ef4444'));
+
+  if (subsVencidos.length) cards.push(mkCard('📬','Aprobaciones Vencidas',subsVencidos.length,'submittals',
+    subsVencidos.slice(0,4).map(s=>mkItem('⚠️',s.titulo||'—',`${s.numero||'—'} · Límite: ${s.fecha_limite||'—'}`,'var(--danger)')),
+    '','#ef4444'));
+
+  if (rfisAbiertas.length) cards.push(mkCard('❓','RFIs Abiertas',rfisAbiertas.length,'rfis',
+    rfisAbiertas.slice(0,4).map(r=>mkItem('❓',r.titulo||r.descripcion||'—',`${r.numero||'—'} · ${r.estado||'—'}`,'var(--warning)')),
+    '','var(--warning)'));
+
+  if (transPendientes.length) cards.push(mkCard('📨','Transmittals Pendientes',transPendientes.length,'transmittals',
+    transPendientes.slice(0,4).map(t=>mkItem('📨',t.asunto||'—',`${t.numero||'—'} · Para: ${t.para_quien||'—'}`,'var(--warning)')),
+    '','var(--warning)'));
+
+  if (tareasUrgentes.length || tareasVencidas.length) {
+    const allT = [...new Set([...tareasUrgentes,...tareasVencidas].map(t=>t.id))].map(id=>[...tareasUrgentes,...tareasVencidas].find(t=>t.id===id));
+    cards.push(mkCard('✅','Tareas Urgentes / Vencidas',allT.length,'tareas',
+      allT.slice(0,4).map(t=>mkItem(t.prioridad==='urgente'?'🔴':'⚠️',t.titulo||'—',`${t.estado||'—'} · ${t.fecha_limite||'—'}`,'var(--warning)')),
+      '','var(--warning)'));
+  }
+
+  if (incsAbiertas.length) cards.push(mkCard('⚠️','Incidencias Abiertas',incsAbiertas.length,'incidencias',
+    incsAbiertas.slice(0,4).map(i=>mkItem('⚠️',i.titulo||'—',`${i.tipo||'—'} · ${i.gravedad||'—'}`,'var(--warning)')),
+    '','var(--warning)'));
+
+  if (contratosVencen.length) cards.push(mkCard('📑','Contratos por Vencer (30 días)',contratosVencen.length,'contratosObra',
+    contratosVencen.slice(0,4).map(c=>{
+      const days = Math.round((new Date(c.fecha_fin)-new Date())/864e5);
+      return mkItem('📑',c.titulo||'—',`Vence en ${days} días · ${c.contratista||'—'}`,'var(--warning)');
+    }),'','var(--primary)'));
+
+  if (grid) grid.innerHTML = cards.filter(Boolean).join('') ||
+    '<div style="color:var(--muted);text-align:center;padding:40px">No hay alertas activas.</div>';
 }
 
 // ── ANÁLISIS FINANCIERO POR OBRA (NEW-51) ─────────────────────────
