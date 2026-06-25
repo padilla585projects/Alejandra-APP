@@ -4521,6 +4521,16 @@ export default {
         const _crid = parseInt(path.split('/cronograma-obra/')[1]);
         if (method === 'GET') return await getCronogramaObra(_crid, request, env);
       }
+      // ── Galeria de Fotos de Obra (NEW-53) ────────────────────────────────────
+      if (path === '/fotos-obra' && method === 'GET')  return await getFotosObra(request, env);
+      if (path === '/fotos-obra' && method === 'POST') return await subirFotoObra(request, env);
+      if (path.startsWith('/fotos-obra/')) {
+        const _fotoSeg = path.split('/fotos-obra/')[1];
+        const _fotoid  = parseInt(_fotoSeg);
+        if (_fotoSeg.endsWith('/ver') && method === 'GET') return await verFotoObra(parseInt(_fotoSeg), request, env);
+        if (method === 'GET')    return await verFotoObra(_fotoid, request, env);
+        if (method === 'DELETE') return await eliminarFotoObra(_fotoid, request, env);
+      }
       // ── Fases de obra (NEW-30) ──────────────────────────────────────────
       if (path === '/fases-obra'           && method === 'GET')  return await getFasesObra(request, env);
       if (path === '/fases-obra'           && method === 'POST') return await crearFaseObra(request, env);
@@ -14676,4 +14686,102 @@ async function getCronogramaObra(obraId, request, env) {
       total_tareas: tareasTotal, tareas_ok: tareasOk,
     },
   });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  NEW-53 — GALERÍA DE FOTOS DE OBRA (Photo Log)
+// ═══════════════════════════════════════════════════════════════════════════
+async function ensureFotosObraTable(env) {
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS fotos_obra (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    empresa_id INTEGER NOT NULL,
+    obra_id INTEGER,
+    fase_id INTEGER,
+    titulo TEXT,
+    descripcion TEXT,
+    tags TEXT,
+    ubicacion TEXT,
+    fecha TEXT,
+    autor TEXT,
+    r2_key TEXT NOT NULL,
+    nombre_original TEXT,
+    mime TEXT DEFAULT 'image/jpeg',
+    tamano INTEGER,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`).run().catch(()=>{});
+}
+async function getFotosObra(request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth?.empresa_id) return err('No autorizado', 403);
+  await ensureFotosObraTable(env);
+  const url    = new URL(request.url);
+  const obraId = url.searchParams.get('obra_id');
+  const faseId = url.searchParams.get('fase_id');
+  const tag    = url.searchParams.get('tag');
+  const fecha  = url.searchParams.get('fecha');
+  const limit  = Math.min(parseInt(url.searchParams.get('limit')||'100'), 200);
+  let q = `SELECT id, obra_id, fase_id, titulo, descripcion, tags, ubicacion, fecha, autor, nombre_original, mime, tamano, created_at
+           FROM fotos_obra WHERE empresa_id=?`;
+  const params = [auth.empresa_id];
+  if (obraId) { q += ` AND obra_id=?`;          params.push(parseInt(obraId)); }
+  if (faseId) { q += ` AND fase_id=?`;          params.push(parseInt(faseId)); }
+  if (tag)    { q += ` AND tags LIKE ?`;         params.push(`%${tag}%`); }
+  if (fecha)  { q += ` AND substr(fecha,1,10)=?`; params.push(fecha); }
+  q += ` ORDER BY created_at DESC LIMIT ${limit}`;
+  const { results } = await env.DB.prepare(q).bind(...params).all();
+  return json({ fotos: results || [], total: results?.length || 0 });
+}
+async function subirFotoObra(request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth?.empresa_id) return err('No autorizado', 403);
+  await ensureFotosObraTable(env);
+  const form = await request.formData().catch(() => null);
+  if (!form) return err('Falta el formulario', 400);
+  const file = form.get('file');
+  if (!file || !file.name) return err('Falta el archivo', 400);
+  if (file.size > 20971520) return err('El archivo supera 20 MB', 413);
+  const mime = file.type || 'image/jpeg';
+  const allowed = ['image/jpeg','image/png','image/webp','image/heic','image/heif','image/gif'];
+  if (!allowed.includes(mime)) return err('Solo se permiten imagenes', 400);
+  const obraId   = form.get('obra_id')    ? parseInt(form.get('obra_id'))   : null;
+  const faseId   = form.get('fase_id')    ? parseInt(form.get('fase_id'))   : null;
+  const titulo   = form.get('titulo')     || file.name;
+  const desc     = form.get('descripcion')|| null;
+  const tags     = form.get('tags')       || null;
+  const ubic     = form.get('ubicacion')  || null;
+  const fecha    = form.get('fecha')      || new Date().toISOString().slice(0,10);
+  const ts = Date.now();
+  const safe = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+  const r2Key = `e${auth.empresa_id}/fotos-obra/${obraId||'general'}/${ts}_${safe}`;
+  await env.FILES.put(r2Key, await file.arrayBuffer(), { httpMetadata: { contentType: mime } });
+  const r = await env.DB.prepare(`
+    INSERT INTO fotos_obra (empresa_id, obra_id, fase_id, titulo, descripcion, tags, ubicacion, fecha, autor, r2_key, nombre_original, mime, tamano)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
+  `).bind(auth.empresa_id, obraId, faseId, titulo, desc, tags, ubic, fecha,
+          auth.nombre || auth.rol, r2Key, file.name, mime, file.size || null).run();
+  return json({ ok: true, id: r.meta?.last_row_id }, 201);
+}
+async function verFotoObra(id, request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth?.empresa_id) return err('No autorizado', 403);
+  const meta = await env.DB.prepare(
+    `SELECT * FROM fotos_obra WHERE id=? AND empresa_id=?`
+  ).bind(id, auth.empresa_id).first();
+  if (!meta) return err('Foto no encontrada', 404);
+  const obj = await env.FILES.get(meta.r2_key);
+  if (!obj) return err('Archivo no disponible', 404);
+  return new Response(obj.body, {
+    headers: { 'Content-Type': meta.mime || 'image/jpeg', 'Content-Disposition': 'inline', 'Cache-Control': 'private, max-age=3600', ...CORS }
+  });
+}
+async function eliminarFotoObra(id, request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth?.empresa_id) return err('No autorizado', 403);
+  const meta = await env.DB.prepare(
+    `SELECT * FROM fotos_obra WHERE id=? AND empresa_id=?`
+  ).bind(id, auth.empresa_id).first();
+  if (!meta) return err('Foto no encontrada', 404);
+  await env.FILES.delete(meta.r2_key).catch(()=>{});
+  await env.DB.prepare(`DELETE FROM fotos_obra WHERE id=? AND empresa_id=?`).bind(id, auth.empresa_id).run();
+  return json({ ok: true });
 }

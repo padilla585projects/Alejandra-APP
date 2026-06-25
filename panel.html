@@ -558,6 +558,9 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
     <button class="nav-item" data-page="diarioObra" onclick="navTo('diarioObra')">
       <span class="nav-icon">📓</span> Diario de Obra
     </button>
+    <button class="nav-item" data-page="fotosObra" onclick="navTo('fotosObra')">
+      <span class="nav-icon">📷</span> Galería de Fotos
+    </button>
     <button class="nav-item" data-page="correspondencia" onclick="navTo('correspondencia')">
       <span class="nav-icon">✉️</span> Correspondencia
       <span class="nav-badge" id="corrBadge" style="display:none">!</span>
@@ -1728,6 +1731,72 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
           <span><span style="display:inline-block;width:14px;height:8px;border-radius:2px;background:#f59e0b;margin-right:4px;vertical-align:middle"></span>En curso</span>
           <span><span style="display:inline-block;width:14px;height:8px;border-radius:2px;background:#ef4444;margin-right:4px;vertical-align:middle"></span>Retrasado</span>
           <span><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:#8b5cf6;margin-right:4px;vertical-align:middle"></span>Hito</span>
+        </div>
+      </div>
+
+      <!-- GALERÍA DE FOTOS DE OBRA (NEW-53) -->
+      <div class="page" id="pageFotosObra">
+        <div class="page-title">📷 Galería de Fotos de Obra</div>
+        <div class="page-sub">Registro fotográfico del proyecto — evidencias, progreso, incidencias</div>
+        <div class="tbl-toolbar" style="flex-wrap:wrap;gap:8px;margin-bottom:18px;align-items:center">
+          <select class="tbl-search" id="filterFotosObraId" style="min-width:220px" onchange="cargarFotosObra()">
+            <option value="">🏗 Todas las obras</option>
+          </select>
+          <input type="date" class="tbl-search" id="filterFotosFecha" style="min-width:140px" onchange="cargarFotosObra()" placeholder="Fecha">
+          <input type="text" class="tbl-search" id="filterFotosTag" style="min-width:140px" onchange="cargarFotosObra()" placeholder="🏷 Etiqueta...">
+          <select class="tbl-search" id="filterFotosVista" style="min-width:100px" onchange="renderFotosGrid()">
+            <option value="grid">🖼 Grid</option>
+            <option value="lista">📋 Lista</option>
+          </select>
+          <button class="btn btn-primary" onclick="abrirModalSubirFoto()">📷 Subir foto</button>
+          <button class="btn btn-secondary" onclick="cargarFotosObra()">🔄 Actualizar</button>
+        </div>
+        <!-- KPI strip -->
+        <div id="fotosObraStats" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;margin-bottom:18px"></div>
+        <!-- Gallery -->
+        <div id="fotosObraGallery"></div>
+        <!-- Empty -->
+        <div id="fotosObraVacio" style="display:none;text-align:center;padding:60px 0;color:var(--muted);font-size:15px">
+          📷 Sin fotos registradas.<br><small>Sube la primera foto de obra con el botón de arriba.</small>
+        </div>
+
+        <!-- MODAL SUBIR FOTO -->
+        <div id="modalSubirFoto" class="modal" style="display:none">
+          <div class="modal-content" style="max-width:520px">
+            <div class="modal-header"><span class="modal-title">📷 Subir foto de obra</span><button class="modal-close" onclick="cerrarModal('modalSubirFoto')">✕</button></div>
+            <div class="modal-body">
+              <div style="border:2px dashed var(--border);border-radius:10px;padding:30px;text-align:center;margin-bottom:16px;cursor:pointer;transition:.2s" id="fotoDrop"
+                   onclick="document.getElementById('fotoFileInput').click()" ondragover="event.preventDefault();this.style.borderColor='var(--primary)'" ondragleave="this.style.borderColor='var(--border)'" ondrop="handleFotoDrop(event)">
+                <div style="font-size:36px;margin-bottom:8px">📷</div>
+                <div style="font-size:14px;color:var(--muted)">Haz clic o arrastra una imagen aquí</div>
+                <div style="font-size:12px;color:var(--muted);margin-top:4px">JPEG, PNG, WebP — máx. 20 MB</div>
+                <div id="fotoDrop Preview" style="display:none;margin-top:12px"><img id="fotoPreviewImg" style="max-width:100%;max-height:200px;border-radius:6px" /></div>
+              </div>
+              <input type="file" id="fotoFileInput" accept="image/*" style="display:none" onchange="handleFotoFileSelect(this)">
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+                <div><label class="form-label">Obra</label><select class="form-input" id="fotoObraId"><option value="">— Seleccionar —</option></select></div>
+                <div><label class="form-label">Fecha</label><input type="date" class="form-input" id="fotoFecha"></div>
+                <div style="grid-column:span 2"><label class="form-label">Título</label><input class="form-input" id="fotoTitulo" placeholder="Descripción breve de la foto"></div>
+                <div style="grid-column:span 2"><label class="form-label">Descripción</label><textarea class="form-input" id="fotoDescripcion" rows="2" placeholder="Detalles adicionales..."></textarea></div>
+                <div><label class="form-label">Etiquetas</label><input class="form-input" id="fotoTags" placeholder="progreso, estructura, armado..."></div>
+                <div><label class="form-label">Ubicación</label><input class="form-input" id="fotoUbicacion" placeholder="Planta 2, Zona A..."></div>
+              </div>
+            </div>
+            <div class="modal-footer">
+              <button class="btn btn-secondary" onclick="cerrarModal('modalSubirFoto')">Cancelar</button>
+              <button class="btn btn-primary" onclick="guardarFoto()" id="btnSubirFoto">📤 Subir</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- LIGHTBOX -->
+        <div id="fotoLightbox" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:9999;flex-direction:column;align-items:center;justify-content:center" onclick="cerrarLightbox(event)">
+          <button onclick="cerrarLightbox()" style="position:absolute;top:16px;right:20px;background:none;border:none;color:#fff;font-size:28px;cursor:pointer">✕</button>
+          <img id="lightboxImg" style="max-width:90vw;max-height:80vh;border-radius:8px;object-fit:contain" />
+          <div id="lightboxCaption" style="color:#fff;margin-top:12px;text-align:center;max-width:600px;font-size:14px"></div>
+          <div style="display:flex;gap:12px;margin-top:12px">
+            <button id="lightboxEliminar" style="background:#ef4444;color:#fff;border:none;padding:6px 16px;border-radius:6px;cursor:pointer;font-size:13px" onclick="eliminarFotoActual()">🗑 Eliminar</button>
+          </div>
         </div>
       </div>
 
@@ -3253,6 +3322,7 @@ const PAGE_TITLES = {
   obraDetalle: '🏗 Cuadro de Mando por Obra',
   finanzasObra: '📊 Análisis Financiero por Obra',
   cronogramaObra: '📅 Cronograma de Obra',
+  fotosObra: '📷 Galería de Fotos de Obra',
 };
 
 const PAGE_LOADERS = {
@@ -3306,6 +3376,7 @@ const PAGE_LOADERS = {
   obraDetalle: cargarObraDetalle,
   finanzasObra: cargarFinanzasObra,
   cronogramaObra: cargarCronogramaObra,
+  fotosObra: cargarFotosObra,
 };
 
 let currentPage = '';
@@ -3388,6 +3459,7 @@ const SYNC_INTERVALS = {
   obraDetalle: 60,
   finanzasObra: 90,
   cronogramaObra: 120,
+  fotosObra: 60,
 };
 
 let _syncTimer = null, _syncLabelTimer = null, _syncLastTs = null;
@@ -12065,6 +12137,203 @@ function exportarFinanzas() {
   if (!obraId) return showToast('Selecciona una obra primero', 'warning');
   // Abrir informe en nueva pestaña usando el endpoint de informes
   window.open(`/informe-obra/${obraId}?tipo=financiero`, '_blank');
+}
+
+// ── GALERÍA DE FOTOS DE OBRA (NEW-53) ────────────────────────────
+let _fotosObraData = [], _fotoActualId = null, _fotoFile = null;
+
+async function cargarFotosObra() {
+  if (document.getElementById('filterFotosObraId')?.options.length <= 1) poblarSelectObras('filterFotosObraId');
+  if (document.getElementById('fotoObraId')?.options.length <= 1) poblarSelectObras('fotoObraId');
+  const obraId = document.getElementById('filterFotosObraId')?.value || '';
+  const fecha  = document.getElementById('filterFotosFecha')?.value || '';
+  const tag    = document.getElementById('filterFotosTag')?.value?.trim() || '';
+  let url = `/fotos-obra?`;
+  if (obraId) url += `obra_id=${obraId}&`;
+  if (fecha)  url += `fecha=${fecha}&`;
+  if (tag)    url += `tag=${encodeURIComponent(tag)}&`;
+  const r = await api(url);
+  _fotosObraData = r?.fotos || [];
+  // Stats
+  const statsEl = document.getElementById('fotosObraStats');
+  if (statsEl) {
+    const hoy = new Date().toISOString().slice(0,10);
+    const hoy7 = new Date(Date.now()-7*864e5).toISOString().slice(0,10);
+    const thisWeek = _fotosObraData.filter(f=>f.created_at>=hoy7).length;
+    statsEl.innerHTML = `
+      <div class="kpi-card"><div class="kpi-icon">📷</div><div class="kpi-value">${_fotosObraData.length}</div><div class="kpi-label">Total fotos</div></div>
+      <div class="kpi-card"><div class="kpi-icon">🗓</div><div class="kpi-value" style="color:var(--primary)">${thisWeek}</div><div class="kpi-label">Esta semana</div></div>
+    `;
+  }
+  const vacioEl = document.getElementById('fotosObraVacio');
+  if (vacioEl) vacioEl.style.display = _fotosObraData.length === 0 ? '' : 'none';
+  renderFotosGrid();
+  // Default fecha to today if empty
+  if (!document.getElementById('fotoFecha').value) document.getElementById('fotoFecha').value = new Date().toISOString().slice(0,10);
+}
+
+function renderFotosGrid() {
+  const galleryEl = document.getElementById('fotosObraGallery');
+  if (!galleryEl) return;
+  const vista = document.getElementById('filterFotosVista')?.value || 'grid';
+  const fotos = _fotosObraData;
+  if (!fotos.length) { galleryEl.innerHTML = ''; return; }
+
+  if (vista === 'grid') {
+    galleryEl.innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px">
+      ${fotos.map(f => `
+        <div class="card" style="padding:0;overflow:hidden;cursor:pointer;transition:.15s;position:relative"
+             onclick="abrirLightbox(${f.id},'${(f.titulo||f.nombre_original||'').replace(/'/g,"\\'")}','${(f.descripcion||'').replace(/'/g,"\\'")}','${f.fecha||''}','${f.ubicacion||''}')">
+          <div style="height:160px;background:var(--border);position:relative;overflow:hidden">
+            <img src="/fotos-obra/${f.id}" loading="lazy" style="width:100%;height:100%;object-fit:cover"
+                 onerror="this.parentElement.innerHTML='<div style=\\'display:flex;align-items:center;justify-content:center;height:100%;color:var(--muted);font-size:32px\\'>📷</div>'">
+            <div style="position:absolute;bottom:0;left:0;right:0;background:linear-gradient(transparent,rgba(0,0,0,.6));padding:8px;color:#fff;font-size:11px">
+              ${f.fecha||''}
+            </div>
+          </div>
+          <div style="padding:10px">
+            <div style="font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${f.titulo||f.nombre_original||'—'}</div>
+            ${f.ubicacion?`<div style="font-size:11px;color:var(--muted)">📍 ${f.ubicacion}</div>`:''}
+            ${f.tags?`<div style="font-size:11px;color:var(--primary);margin-top:3px">🏷 ${f.tags}</div>`:''}
+            <div style="margin-top:6px;display:flex;justify-content:space-between;align-items:center">
+              <span style="font-size:11px;color:var(--muted)">${f.autor||'—'}</span>
+              <button class="btn btn-danger" style="padding:3px 8px;font-size:11px" onclick="event.stopPropagation();eliminarFotoObra(${f.id})">🗑</button>
+            </div>
+          </div>
+        </div>`).join('')}
+    </div>`;
+  } else {
+    galleryEl.innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:13px">
+      <thead><tr style="border-bottom:2px solid var(--border)">
+        <th style="text-align:left;padding:8px">Foto</th><th style="text-align:left;padding:8px">Título</th>
+        <th style="text-align:left;padding:8px">Fecha</th><th style="text-align:left;padding:8px">Ubicación</th>
+        <th style="text-align:left;padding:8px">Etiquetas</th><th style="text-align:left;padding:8px">Autor</th>
+        <th></th>
+      </tr></thead>
+      <tbody>${fotos.map(f=>`<tr style="border-bottom:1px solid var(--border);cursor:pointer" onclick="abrirLightbox(${f.id},'${(f.titulo||'').replace(/'/g,"\\'")}','${(f.descripcion||'').replace(/'/g,"\\'")}','${f.fecha||''}','${f.ubicacion||''}')">
+        <td style="padding:6px 8px"><img src="/fotos-obra/${f.id}" style="width:48px;height:36px;object-fit:cover;border-radius:4px" loading="lazy" onerror="this.src=''"></td>
+        <td style="padding:6px 8px">${f.titulo||f.nombre_original||'—'}</td>
+        <td style="padding:6px 8px">${f.fecha||'—'}</td>
+        <td style="padding:6px 8px">${f.ubicacion||'—'}</td>
+        <td style="padding:6px 8px;color:var(--primary)">${f.tags||'—'}</td>
+        <td style="padding:6px 8px">${f.autor||'—'}</td>
+        <td style="padding:6px 8px"><button class="btn btn-danger" style="padding:3px 8px;font-size:11px" onclick="event.stopPropagation();eliminarFotoObra(${f.id})">🗑</button></td>
+      </tr>`).join('')}</tbody>
+    </table>`;
+  }
+}
+
+function abrirModalSubirFoto() {
+  _fotoFile = null;
+  document.getElementById('fotoFileInput').value = '';
+  document.getElementById('fotoTitulo').value = '';
+  document.getElementById('fotoDescripcion').value = '';
+  document.getElementById('fotoTags').value = '';
+  document.getElementById('fotoUbicacion').value = '';
+  document.getElementById('fotoDrop').style.borderColor = 'var(--border)';
+  const prevDiv = document.getElementById('fotoDrop Preview');
+  if (prevDiv) prevDiv.style.display = 'none';
+  // Pre-fill obra from filter
+  const obraIdFilter = document.getElementById('filterFotosObraId')?.value;
+  if (obraIdFilter && document.getElementById('fotoObraId')) {
+    document.getElementById('fotoObraId').value = obraIdFilter;
+  }
+  abrirModal('modalSubirFoto');
+}
+
+function handleFotoFileSelect(input) {
+  if (input.files?.[0]) {
+    _fotoFile = input.files[0];
+    const prevDiv = document.getElementById('fotoDrop Preview');
+    const prevImg = document.getElementById('fotoPreviewImg');
+    if (prevDiv && prevImg) {
+      prevImg.src = URL.createObjectURL(_fotoFile);
+      prevDiv.style.display = '';
+    }
+    if (!document.getElementById('fotoTitulo').value) {
+      document.getElementById('fotoTitulo').value = _fotoFile.name.replace(/\.[^.]+$/, '').replace(/[_-]/g,' ');
+    }
+  }
+}
+
+function handleFotoDrop(event) {
+  event.preventDefault();
+  document.getElementById('fotoDrop').style.borderColor = 'var(--border)';
+  const file = event.dataTransfer?.files?.[0];
+  if (file) {
+    _fotoFile = file;
+    const prevDiv = document.getElementById('fotoDrop Preview');
+    const prevImg = document.getElementById('fotoPreviewImg');
+    if (prevDiv && prevImg) { prevImg.src = URL.createObjectURL(file); prevDiv.style.display = ''; }
+    if (!document.getElementById('fotoTitulo').value) {
+      document.getElementById('fotoTitulo').value = file.name.replace(/\.[^.]+$/, '').replace(/[_-]/g,' ');
+    }
+  }
+}
+
+async function guardarFoto() {
+  if (!_fotoFile) { showToast('Selecciona una imagen primero', 'warning'); return; }
+  const btn = document.getElementById('btnSubirFoto');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Subiendo...'; }
+  const form = new FormData();
+  form.append('file', _fotoFile);
+  const obraId = document.getElementById('fotoObraId')?.value;
+  if (obraId) form.append('obra_id', obraId);
+  const titulo = document.getElementById('fotoTitulo').value.trim();
+  if (titulo) form.append('titulo', titulo);
+  const desc = document.getElementById('fotoDescripcion').value.trim();
+  if (desc) form.append('descripcion', desc);
+  const tags = document.getElementById('fotoTags').value.trim();
+  if (tags) form.append('tags', tags);
+  const ubic = document.getElementById('fotoUbicacion').value.trim();
+  if (ubic) form.append('ubicacion', ubic);
+  const fecha = document.getElementById('fotoFecha').value;
+  if (fecha) form.append('fecha', fecha);
+  try {
+    const token = typeof SESSION !== 'undefined' ? SESSION?.token : JSON.parse(localStorage.getItem('panel_session')||'{}')?.token;
+    const res = await fetch('/fotos-obra', { method:'POST', headers:{ 'Authorization':`Bearer ${token}` }, body: form });
+    const d = await res.json();
+    if (btn) { btn.disabled = false; btn.textContent = '📤 Subir'; }
+    if (d.ok || d.id) {
+      cerrarModal('modalSubirFoto');
+      showToast('Foto subida ✅', 'success');
+      cargarFotosObra();
+    } else {
+      showToast(d.error || 'Error al subir', 'error');
+    }
+  } catch(e) {
+    if (btn) { btn.disabled = false; btn.textContent = '📤 Subir'; }
+    showToast('Error de red', 'error');
+  }
+}
+
+function abrirLightbox(id, titulo, desc, fecha, ubicacion) {
+  _fotoActualId = id;
+  const lb = document.getElementById('fotoLightbox');
+  const img = document.getElementById('lightboxImg');
+  const cap = document.getElementById('lightboxCaption');
+  if (lb) lb.style.display = 'flex';
+  if (img) img.src = `/fotos-obra/${id}`;
+  if (cap) cap.innerHTML = `<strong>${titulo||'—'}</strong>${fecha?' · '+fecha:''}${ubicacion?' · 📍'+ubicacion:''}${desc?'<br><span style="opacity:.8">'+desc+'</span>':''}`;
+}
+
+function cerrarLightbox(event) {
+  if (event && event.target !== document.getElementById('fotoLightbox') && event.type === 'click' && event.target !== event.currentTarget) return;
+  document.getElementById('fotoLightbox').style.display = 'none';
+  _fotoActualId = null;
+}
+
+async function eliminarFotoActual() {
+  if (!_fotoActualId) return;
+  await eliminarFotoObra(_fotoActualId);
+  document.getElementById('fotoLightbox').style.display = 'none';
+}
+
+async function eliminarFotoObra(id) {
+  if (!confirm('¿Eliminar esta foto? Esta acción no se puede deshacer.')) return;
+  const r = await api(`/fotos-obra/${id}`, 'DELETE');
+  if (r?.ok) { showToast('Foto eliminada', 'success'); cargarFotosObra(); }
+  else showToast('Error al eliminar', 'error');
 }
 
 // ── CRONOGRAMA / GANTT DE OBRA (NEW-52) ─────────────────────────
