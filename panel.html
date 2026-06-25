@@ -573,6 +573,10 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
       <span class="nav-icon">🔄</span> Ordenes de Cambio
       <span class="nav-badge" id="ocBadge" style="display:none">!</span>
     </button>
+    <button class="nav-item" data-page="riesgosObra" onclick="navTo('riesgosObra')">
+      <span class="nav-icon">⚠️</span> Registro Riesgos
+      <span class="nav-badge" id="riesgosBadge" style="display:none">!</span>
+    </button>
 
     <div class="sidebar-section" onclick="sidebarToggle(this)" data-sid="seguimiento"><span>📓 Seguimiento</span><span class="sec-chevron">▼</span></div>
     <button class="nav-item" data-page="partesPanel" onclick="navTo('partesPanel')">
@@ -2070,6 +2074,44 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
         </div>
         <div id="entregasKpi" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:12px;margin-bottom:16px"></div>
         <div class="tbl-wrap"><div id="tblEntregas"></div></div>
+      </div>
+
+      <!-- REGISTRO DE RIESGOS / RISK REGISTER -->
+      <div class="page" id="pageRiesgosObra">
+        <div class="page-title">⚠️ Registro de Riesgos</div>
+        <div class="page-sub">Risk Register — Matriz de riesgos por probabilidad x impacto, mitigacion y seguimiento</div>
+        <div class="tbl-toolbar" style="flex-wrap:wrap;gap:8px;margin-bottom:14px">
+          <select class="tbl-search" id="filterRiesgoObra" style="min-width:220px" onchange="cargarRiesgos()"></select>
+          <select class="tbl-search" id="filterRiesgoEstado" style="min-width:140px" onchange="cargarRiesgos()">
+            <option value="">Todos los estados</option>
+            <option value="activo">Activo</option>
+            <option value="mitigado">Mitigado</option>
+            <option value="cerrado">Cerrado</option>
+            <option value="aceptado">Aceptado</option>
+          </select>
+          <select class="tbl-search" id="filterRiesgoCat" style="min-width:140px" onchange="cargarRiesgos()">
+            <option value="">Todas las categorias</option>
+            <option value="plazo">Plazo</option>
+            <option value="coste">Coste</option>
+            <option value="calidad">Calidad</option>
+            <option value="seguridad">Seguridad</option>
+            <option value="suministro">Suministro</option>
+            <option value="climatico">Climatico</option>
+            <option value="regulatorio">Regulatorio</option>
+            <option value="diseno">Diseno</option>
+            <option value="general">General</option>
+          </select>
+          <button class="btn btn-primary" onclick="abrirModalRiesgo()">+ Nuevo riesgo</button>
+          <button class="btn btn-secondary" onclick="toggleRiskMatrix()">📊 Matriz</button>
+          <button class="btn btn-secondary" onclick="cargarRiesgos()">🔄</button>
+        </div>
+        <div id="riesgoKpi" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:12px;margin-bottom:16px"></div>
+        <!-- Risk Matrix (hidden by default) -->
+        <div id="riesgoMatriz" style="display:none;margin-bottom:20px">
+          <div style="font-weight:700;margin-bottom:12px;font-size:14px">Matriz de Riesgos (Probabilidad × Impacto)</div>
+          <div id="riesgoMatrizGrid" style="display:grid;grid-template-columns:80px repeat(3,1fr);gap:4px;max-width:560px"></div>
+        </div>
+        <div id="riesgosLista"></div>
       </div>
 
       <!-- ORDENES DE CAMBIO / CHANGE ORDERS -->
@@ -3705,6 +3747,7 @@ const PAGE_TITLES = {
   entregasMaterial: '🚚 Entregas de Material / Albaranes',
   presupuestoSov: '📊 Presupuesto Detallado / Schedule of Values',
   ordenesCambio: '🔄 Ordenes de Cambio / Change Orders',
+  riesgosObra: '⚠️ Registro de Riesgos / Risk Register',
 };
 
 const PAGE_LOADERS = {
@@ -3765,6 +3808,7 @@ const PAGE_LOADERS = {
   entregasMaterial: cargarEntregasMaterial,
   presupuestoSov: cargarPresupuestoSov,
   ordenesCambio: cargarOrdenesCambio,
+  riesgosObra: cargarRiesgos,
 };
 
 let currentPage = '';
@@ -3854,6 +3898,7 @@ const SYNC_INTERVALS = {
   entregasMaterial: 90,
   presupuestoSov: 120,
   ordenesCambio: 90,
+  riesgosObra: 120,
 };
 
 let _syncTimer = null, _syncLabelTimer = null, _syncLastTs = null;
@@ -13893,6 +13938,252 @@ async function _getObrasOpts() {
   const obras = r?.obras || r?.results || [];
   return (selectedId) => '<option value="">-- Sin obra --</option>' +
     obras.map(o => `<option value="${o.id}"${o.id==selectedId?' selected':''}>${o.nombre||o.codigo}</option>`).join('');
+}
+
+// ── REGISTRO DE RIESGOS / RISK REGISTER (NEW-59) ──────────────────
+let _riesgoEditId = null;
+let _riesgosData = [];
+let _riesgoMatrizVisible = false;
+
+const RISK_PROB_NUM = { baja:1, media:2, alta:3 };
+const RISK_IMP_NUM  = { bajo:1, medio:2, alto:3 };
+const RISK_NIVEL_COLOR = { bajo:'#22c55e', medio:'#f97316', alto:'#ef4444', critico:'#7c3aed' };
+const RISK_NIVEL_LABEL = { bajo:'BAJO', medio:'MEDIO', alto:'ALTO', critico:'CRITICO' };
+
+function calcRiskLevel(prob, imp) {
+  const s = (RISK_PROB_NUM[prob]||2) * (RISK_IMP_NUM[imp]||2);
+  if (s>=7) return { score:s, nivel:'critico' };
+  if (s>=4) return { score:s, nivel:'alto' };
+  if (s>=2) return { score:s, nivel:'medio' };
+  return { score:s, nivel:'bajo' };
+}
+
+async function cargarRiesgos() {
+  if (document.getElementById('filterRiesgoObra')?.options.length <= 1)
+    poblarSelectObras('filterRiesgoObra');
+  const obraId = document.getElementById('filterRiesgoObra')?.value || '';
+  const estado = document.getElementById('filterRiesgoEstado')?.value || '';
+  const cat    = document.getElementById('filterRiesgoCat')?.value || '';
+  let url = '/riesgos-obra?';
+  if (obraId) url += `obra_id=${obraId}&`;
+  if (estado) url += `estado=${estado}&`;
+  if (cat)    url += `categoria=${cat}&`;
+  const r = await api(url);
+  _riesgosData = r?.riesgos || [];
+  // Badge
+  const badge = document.getElementById('riesgosBadge');
+  const crit = r?.criticos || 0;
+  if (badge) { badge.textContent = crit||'!'; badge.style.display = crit>0?'':'none'; }
+  // KPIs
+  const kpi = document.getElementById('riesgoKpi');
+  if (kpi) kpi.innerHTML = `
+    <div class="kpi-card"><div class="kpi-icon">⚠️</div><div class="kpi-value">${r?.total||0}</div><div class="kpi-label">Total riesgos</div></div>
+    <div class="kpi-card"><div class="kpi-icon">🔴</div><div class="kpi-value" style="color:#7c3aed">${r?.criticos||0}</div><div class="kpi-label">Criticos</div></div>
+    <div class="kpi-card"><div class="kpi-icon">🟠</div><div class="kpi-value" style="color:var(--danger)">${r?.altos||0}</div><div class="kpi-label">Altos</div></div>
+    <div class="kpi-card"><div class="kpi-icon">🔵</div><div class="kpi-value" style="color:var(--warning)">${r?.activos||0}</div><div class="kpi-label">Activos</div></div>
+    <div class="kpi-card"><div class="kpi-icon">✅</div><div class="kpi-value" style="color:var(--success)">${r?.mitigados||0}</div><div class="kpi-label">Mitigados</div></div>
+    <div class="kpi-card"><div class="kpi-icon">⚪</div><div class="kpi-value" style="color:var(--muted)">${r?.cerrados||0}</div><div class="kpi-label">Cerrados</div></div>
+  `;
+  // Matrix update
+  if (_riesgoMatrizVisible) renderRiskMatrix();
+  // Lista
+  const lista = document.getElementById('riesgosLista');
+  if (!lista) return;
+  if (!_riesgosData.length) {
+    lista.innerHTML = `<div class="empty-state"><div class="empty-icon">✅</div><div class="empty-text">No hay riesgos registrados. El proyecto no tiene riesgos identificados aun.</div></div>`;
+    return;
+  }
+  lista.innerHTML = `<div style="display:flex;flex-direction:column;gap:10px">${_riesgosData.map(rg => {
+    const { score, nivel } = calcRiskLevel(rg.probabilidad||'media', rg.impacto||'medio');
+    const color = RISK_NIVEL_COLOR[nivel] || 'var(--muted)';
+    const estadoColor = { activo:'var(--danger)', mitigado:'var(--warning)', cerrado:'var(--success)', aceptado:'var(--muted)' }[rg.estado] || 'var(--muted)';
+    return `<div class="kpi-card" style="text-align:left;padding:16px;border-left:4px solid ${color}">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
+        <div style="flex:1">
+          <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">
+            <span style="font-family:monospace;font-size:12px;color:var(--muted)">${rg.numero||'R'}</span>
+            <span style="background:${color}22;color:${color};padding:2px 10px;border-radius:10px;font-size:11px;font-weight:700">${RISK_NIVEL_LABEL[nivel]||nivel} (${score})</span>
+            <span style="background:${estadoColor}22;color:${estadoColor};padding:2px 8px;border-radius:8px;font-size:11px">${rg.estado}</span>
+            <span style="font-size:11px;color:var(--muted);background:var(--bg);padding:2px 8px;border-radius:8px">${rg.categoria}</span>
+          </div>
+          <div style="font-weight:700;font-size:14px;margin-bottom:4px">${rg.titulo}</div>
+          ${rg.descripcion ? `<div style="font-size:12px;color:var(--muted);margin-bottom:6px">${rg.descripcion}</div>` : ''}
+          <div style="display:flex;gap:16px;font-size:12px;color:var(--muted)">
+            <span>📊 Prob: <b>${rg.probabilidad}</b></span>
+            <span>💥 Imp: <b>${rg.impacto}</b></span>
+            ${rg.propietario ? `<span>👤 ${rg.propietario}</span>` : ''}
+            ${rg.coste_estimado ? `<span>💶 ${fmtMoney(rg.coste_estimado)}</span>` : ''}
+            ${rg.dias_impacto ? `<span>📅 ${rg.dias_impacto} dias</span>` : ''}
+          </div>
+          ${rg.plan_mitigacion ? `<div style="margin-top:8px;padding:8px;background:var(--bg);border-radius:6px;font-size:12px"><span style="font-weight:700;color:var(--primary)">🛡 Mitigacion:</span> ${rg.plan_mitigacion}</div>` : ''}
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <button class="btn btn-secondary btn-sm" onclick="abrirModalRiesgo(${rg.id})">✏️</button>
+          <button class="btn btn-danger btn-sm" onclick="eliminarRiesgo(${rg.id})">🗑</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('')}</div>`;
+}
+
+function toggleRiskMatrix() {
+  _riesgoMatrizVisible = !_riesgoMatrizVisible;
+  document.getElementById('riesgoMatriz').style.display = _riesgoMatrizVisible ? '' : 'none';
+  if (_riesgoMatrizVisible) renderRiskMatrix();
+}
+
+function renderRiskMatrix() {
+  const grid = document.getElementById('riesgoMatrizGrid');
+  if (!grid) return;
+  // Matrix: rows = probability (alta/media/baja), cols = impact (bajo/medio/alto)
+  const probs = ['alta','media','baja'];
+  const imps  = ['bajo','medio','alto'];
+  const cells = {};
+  for (const rg of _riesgosData) {
+    if (rg.estado === 'cerrado') continue;
+    const key = `${rg.probabilidad||'media'}_${rg.impacto||'medio'}`;
+    if (!cells[key]) cells[key] = [];
+    cells[key].push(rg);
+  }
+  const matrixColor = (prob, imp) => {
+    const { nivel } = calcRiskLevel(prob, imp);
+    return { critico:'#7c3aed22', alto:'#ef444422', medio:'#f9741622', bajo:'#22c55e22' }[nivel] || '#fff';
+  };
+  grid.innerHTML =
+    `<div style="font-size:11px;text-align:center;font-weight:700;padding:6px"></div>` +
+    imps.map(i=>`<div style="text-align:center;font-size:11px;font-weight:700;padding:6px;color:var(--muted)">${i.toUpperCase()}</div>`).join('') +
+    probs.flatMap(prob => [
+      `<div style="font-size:11px;font-weight:700;padding:6px;color:var(--muted);text-align:right;display:flex;align-items:center;justify-content:flex-end">${prob.toUpperCase()}</div>`,
+      ...imps.map(imp => {
+        const key = `${prob}_${imp}`;
+        const rgs = cells[key] || [];
+        const { nivel } = calcRiskLevel(prob, imp);
+        const color = RISK_NIVEL_COLOR[nivel];
+        return `<div style="background:${matrixColor(prob,imp)};border:1px solid ${color}44;border-radius:6px;padding:6px;min-height:60px;cursor:pointer" title="${rgs.map(r=>r.titulo).join(', ')}" onclick="filterRiesgoCell('${prob}','${imp}')">
+          ${rgs.length ? `<div style="font-weight:700;color:${color};font-size:18px;text-align:center">${rgs.length}</div>
+          <div style="font-size:10px;color:${color};text-align:center">${RISK_NIVEL_LABEL[nivel]}</div>` :
+          `<div style="font-size:10px;color:var(--border);text-align:center;margin-top:10px">-</div>`}
+        </div>`;
+      })
+    ]).join('');
+}
+
+function filterRiesgoCell(prob, imp) {
+  showToast(`Filtro: Probabilidad ${prob}, Impacto ${imp}`, 'info');
+}
+
+async function abrirModalRiesgo(id = null) {
+  _riesgoEditId = id;
+  let d = {};
+  if (id) d = _riesgosData.find(r => r.id === id) || {};
+  const isEdit = !!id;
+  const obrasOpts = await _getObrasOpts();
+  const modalHtml = `
+    <div class="modal" id="modalRiesgo" style="display:flex">
+      <div class="modal-content" style="max-width:720px;max-height:90vh;overflow-y:auto">
+        <div class="modal-header">
+          <span class="modal-title">${isEdit?'✏️ Editar':'+ Nuevo'} Riesgo</span>
+          <button class="modal-close" onclick="cerrarModal('modalRiesgo')">✕</button>
+        </div>
+        <div class="modal-body" style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+          <label style="grid-column:1/-1">Titulo *
+            <input class="form-input" id="rgTitulo" value="${(d.titulo||'').replace(/"/g,'&quot;')}"></label>
+          <label>Obra<select class="form-input" id="rgObra">${obrasOpts(d.obra_id)}</select></label>
+          <label>Categoria<select class="form-input" id="rgCat">
+            ${['general','plazo','coste','calidad','seguridad','suministro','climatico','regulatorio','diseno'].map(c=>`<option value="${c}"${d.categoria===c?' selected':''}>${c}</option>`).join('')}
+          </select></label>
+          <label>Probabilidad<select class="form-input" id="rgProb" onchange="rgCalcScore()">
+            <option value="baja"${d.probabilidad==='baja'?' selected':''}>Baja (1)</option>
+            <option value="media"${d.probabilidad==='media'||!d.probabilidad?' selected':''}>Media (2)</option>
+            <option value="alta"${d.probabilidad==='alta'?' selected':''}>Alta (3)</option>
+          </select></label>
+          <label>Impacto<select class="form-input" id="rgImp" onchange="rgCalcScore()">
+            <option value="bajo"${d.impacto==='bajo'?' selected':''}>Bajo (1)</option>
+            <option value="medio"${d.impacto==='medio'||!d.impacto?' selected':''}>Medio (2)</option>
+            <option value="alto"${d.impacto==='alto'?' selected':''}>Alto (3)</option>
+          </select></label>
+          <label>Score y Nivel (calculado)
+            <div id="rgScoreDisplay" style="padding:10px;background:var(--bg);border-radius:6px;font-weight:700;text-align:center;border:1px solid var(--border)">-</div>
+          </label>
+          <label>Estado<select class="form-input" id="rgEstado">
+            <option value="activo"${d.estado==='activo'||!d.estado?' selected':''}>Activo</option>
+            <option value="mitigado"${d.estado==='mitigado'?' selected':''}>Mitigado</option>
+            <option value="aceptado"${d.estado==='aceptado'?' selected':''}>Aceptado</option>
+            <option value="cerrado"${d.estado==='cerrado'?' selected':''}>Cerrado</option>
+          </select></label>
+          <label>Propietario / Responsable
+            <input class="form-input" id="rgProp" value="${d.propietario||''}"></label>
+          <label>Coste estimado (€)
+            <input class="form-input" type="number" step="0.01" id="rgCoste" value="${d.coste_estimado||0}"></label>
+          <label>Impacto plazo (dias)
+            <input class="form-input" type="number" id="rgDias" value="${d.dias_impacto||0}"></label>
+          <label>Fecha identificacion
+            <input class="form-input" type="date" id="rgFId" value="${d.fecha_identificacion||new Date().toISOString().slice(0,10)}"></label>
+          <label>Fecha proxima revision
+            <input class="form-input" type="date" id="rgFRev" value="${d.fecha_revision||''}"></label>
+          <label style="grid-column:1/-1">Descripcion
+            <textarea class="form-input" id="rgDesc" rows="2" style="resize:vertical">${d.descripcion||''}</textarea></label>
+          <label style="grid-column:1/-1">Plan de Mitigacion
+            <textarea class="form-input" id="rgMit" rows="3" style="resize:vertical">${d.plan_mitigacion||''}</textarea></label>
+          <label style="grid-column:1/-1">Plan de Contingencia
+            <textarea class="form-input" id="rgCont" rows="2" style="resize:vertical">${d.plan_contingencia||''}</textarea></label>
+          <label style="grid-column:1/-1">Notas
+            <textarea class="form-input" id="rgNotas" rows="2" style="resize:vertical">${d.notas||''}</textarea></label>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" onclick="cerrarModal('modalRiesgo')">Cancelar</button>
+          <button class="btn btn-primary" onclick="guardarRiesgo(${id||0})">Guardar</button>
+        </div>
+      </div>
+    </div>`;
+  abrirModal(modalHtml);
+  setTimeout(rgCalcScore, 100);
+}
+
+function rgCalcScore() {
+  const prob = document.getElementById('rgProb')?.value || 'media';
+  const imp  = document.getElementById('rgImp')?.value  || 'medio';
+  const { score, nivel } = calcRiskLevel(prob, imp);
+  const color = RISK_NIVEL_COLOR[nivel] || 'var(--muted)';
+  const el = document.getElementById('rgScoreDisplay');
+  if (el) el.innerHTML = `<span style="color:${color};font-size:20px">${score}</span><span style="color:${color};font-size:13px;margin-left:6px">${RISK_NIVEL_LABEL[nivel]||nivel}</span>`;
+}
+
+async function guardarRiesgo(id) {
+  const titulo = document.getElementById('rgTitulo')?.value.trim();
+  if (!titulo) return showToast('El titulo es obligatorio', 'error');
+  const body = {
+    titulo,
+    obra_id:             document.getElementById('rgObra')?.value     || null,
+    categoria:           document.getElementById('rgCat')?.value      || 'general',
+    probabilidad:        document.getElementById('rgProb')?.value     || 'media',
+    impacto:             document.getElementById('rgImp')?.value      || 'medio',
+    estado:              document.getElementById('rgEstado')?.value   || 'activo',
+    propietario:         document.getElementById('rgProp')?.value.trim() || null,
+    coste_estimado:      parseFloat(document.getElementById('rgCoste')?.value) || 0,
+    dias_impacto:        parseInt(document.getElementById('rgDias')?.value)    || 0,
+    fecha_identificacion: document.getElementById('rgFId')?.value    || null,
+    fecha_revision:      document.getElementById('rgFRev')?.value    || null,
+    descripcion:         document.getElementById('rgDesc')?.value.trim()  || null,
+    plan_mitigacion:     document.getElementById('rgMit')?.value.trim()   || null,
+    plan_contingencia:   document.getElementById('rgCont')?.value.trim()  || null,
+    notas:               document.getElementById('rgNotas')?.value.trim() || null,
+  };
+  const url = id ? `/riesgos-obra/${id}` : '/riesgos-obra';
+  const method = id ? 'PUT' : 'POST';
+  const r = await api(url, method, body);
+  if (r?.ok || r?.id) {
+    cerrarModal('modalRiesgo');
+    showToast(id ? 'Riesgo actualizado ✅' : `Riesgo creado ✅ (${r.numero||''}) · Nivel: ${r.nivel||''}`, 'success');
+    cargarRiesgos();
+  } else showToast(r?.error || 'Error al guardar', 'error');
+}
+
+async function eliminarRiesgo(id) {
+  if (!confirm('¿Eliminar este riesgo?')) return;
+  const r = await api(`/riesgos-obra/${id}`, 'DELETE');
+  if (r?.ok) { showToast('Riesgo eliminado', 'success'); cargarRiesgos(); }
+  else showToast('Error al eliminar', 'error');
 }
 
 // ── ORDENES DE CAMBIO / CHANGE ORDERS (NEW-58) ────────────────────

@@ -4639,6 +4639,14 @@ export default {
         if (method === 'PUT')    return await actualizarOrdenCambio(_ocid, request, env);
         if (method === 'DELETE') return await eliminarOrdenCambio(_ocid, request, env);
       }
+      // -- Registro de Riesgos / Risk Register (NEW-59) ----------------------
+      if (path === '/riesgos-obra' && method === 'GET')  return await getRiesgos(request, env);
+      if (path === '/riesgos-obra' && method === 'POST') return await crearRiesgo(request, env);
+      if (path.startsWith('/riesgos-obra/')) {
+        const _rid2 = parseInt(path.split('/riesgos-obra/')[1]);
+        if (method === 'PUT')    return await actualizarRiesgo(_rid2, request, env);
+        if (method === 'DELETE') return await eliminarRiesgo(_rid2, request, env);
+      }
       // â”€â”€ RFIs â€” Consultas TÃ©cnicas (NEW-34) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
       if (path === '/rfis'                  && method === 'GET')  return await getRfis(request, env);
       if (path === '/rfis'                  && method === 'POST') return await crearRfi(request, env);
@@ -15431,5 +15439,137 @@ async function getPresupuestoResumen(obraId, request, env) {
   const totalEjec = capitulos.reduce((s,c)=>s+c.ejec,0);
   const pctGlobal = totalPres > 0 ? Math.round((totalEjec/totalPres)*100) : 0;
   return json({ obra, capitulos, totalPres, totalEjec, pctGlobal, totalLineas: (lineas||[]).length });
+}
+
+// ============================================================
+// NEW-59  Registro de Riesgos / Risk Register
+// ============================================================
+
+async function ensureRiesgosTable(env) {
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS riesgos_obra (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    empresa_id      INTEGER NOT NULL,
+    obra_id         INTEGER,
+    numero          TEXT,
+    titulo          TEXT NOT NULL,
+    descripcion     TEXT,
+    categoria       TEXT DEFAULT 'general',
+    probabilidad    TEXT DEFAULT 'media',
+    impacto         TEXT DEFAULT 'medio',
+    score           INTEGER DEFAULT 0,
+    estado          TEXT DEFAULT 'activo',
+    propietario     TEXT,
+    plan_mitigacion TEXT,
+    plan_contingencia TEXT,
+    fecha_identificacion TEXT,
+    fecha_revision  TEXT,
+    coste_estimado  REAL DEFAULT 0,
+    dias_impacto    INTEGER DEFAULT 0,
+    notas           TEXT,
+    created_at      TEXT DEFAULT (datetime('now')),
+    updated_at      TEXT DEFAULT (datetime('now'))
+  )`).run().catch(()=>{});
+}
+
+const RISK_SCORE = { baja:1, media:2, alta:3 };
+function calcRiskScore(prob, imp) {
+  return (RISK_SCORE[prob]||2) * (RISK_SCORE[imp]||2);
+}
+function riskLevel(score) {
+  if (score >= 7) return 'critico';
+  if (score >= 4) return 'alto';
+  if (score >= 2) return 'medio';
+  return 'bajo';
+}
+
+async function getRiesgos(request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth?.empresa_id) return err('No autorizado', 403);
+  await ensureRiesgosTable(env);
+  const url = new URL(request.url);
+  const obraId  = url.searchParams.get('obra_id');
+  const estado  = url.searchParams.get('estado');
+  const cat     = url.searchParams.get('categoria');
+  let q = `SELECT * FROM riesgos_obra WHERE empresa_id=?`;
+  const params = [auth.empresa_id];
+  if (obraId) { q += ` AND obra_id=?`;   params.push(obraId); }
+  if (estado) { q += ` AND estado=?`;    params.push(estado); }
+  if (cat)    { q += ` AND categoria=?`; params.push(cat); }
+  q += ` ORDER BY score DESC, id DESC LIMIT 300`;
+  const { results } = await env.DB.prepare(q).bind(...params).all();
+  const riesgos = results || [];
+  const total    = riesgos.length;
+  const activos  = riesgos.filter(r=>r.estado==='activo').length;
+  const criticos = riesgos.filter(r=>r.score>=7).length;
+  const altos    = riesgos.filter(r=>r.score>=4 && r.score<7).length;
+  const mitigados = riesgos.filter(r=>r.estado==='mitigado').length;
+  const cerrados  = riesgos.filter(r=>r.estado==='cerrado').length;
+  return json({ riesgos, total, activos, criticos, altos, mitigados, cerrados });
+}
+
+async function crearRiesgo(request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth?.empresa_id) return err('No autorizado', 403);
+  await ensureRiesgosTable(env);
+  const b = await request.json();
+  const yr = new Date().getFullYear();
+  const { results: cnt } = await env.DB.prepare(
+    `SELECT COUNT(*)+1 as n FROM riesgos_obra WHERE empresa_id=? AND substr(numero,6,4)=?`
+  ).bind(auth.empresa_id, String(yr)).all();
+  const n = cnt?.[0]?.n || 1;
+  const numero = b.numero || `RIESGO-${yr}-${String(n).padStart(3,'0')}`;
+  const score = calcRiskScore(b.probabilidad||'media', b.impacto||'medio');
+  const { meta } = await env.DB.prepare(`
+    INSERT INTO riesgos_obra
+      (empresa_id, obra_id, numero, titulo, descripcion, categoria,
+       probabilidad, impacto, score, estado, propietario,
+       plan_mitigacion, plan_contingencia,
+       fecha_identificacion, fecha_revision, coste_estimado, dias_impacto, notas)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+  `).bind(
+    auth.empresa_id, b.obra_id||null, numero,
+    b.titulo||'Riesgo', b.descripcion||null, b.categoria||'general',
+    b.probabilidad||'media', b.impacto||'medio', score,
+    b.estado||'activo', b.propietario||null,
+    b.plan_mitigacion||null, b.plan_contingencia||null,
+    b.fecha_identificacion||new Date().toISOString().slice(0,10),
+    b.fecha_revision||null,
+    parseFloat(b.coste_estimado)||0, parseInt(b.dias_impacto)||0,
+    b.notas||null
+  ).run();
+  return json({ ok: true, id: meta.last_row_id, numero, score, nivel: riskLevel(score) });
+}
+
+async function actualizarRiesgo(id, request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth?.empresa_id) return err('No autorizado', 403);
+  const b = await request.json();
+  const score = calcRiskScore(b.probabilidad||'media', b.impacto||'medio');
+  await env.DB.prepare(`
+    UPDATE riesgos_obra SET titulo=?, descripcion=?, categoria=?,
+      probabilidad=?, impacto=?, score=?, estado=?, propietario=?,
+      plan_mitigacion=?, plan_contingencia=?,
+      fecha_identificacion=?, fecha_revision=?,
+      coste_estimado=?, dias_impacto=?, notas=?,
+      obra_id=?, updated_at=datetime('now')
+    WHERE id=? AND empresa_id=?
+  `).bind(
+    b.titulo||null, b.descripcion||null, b.categoria||'general',
+    b.probabilidad||'media', b.impacto||'medio', score,
+    b.estado||'activo', b.propietario||null,
+    b.plan_mitigacion||null, b.plan_contingencia||null,
+    b.fecha_identificacion||null, b.fecha_revision||null,
+    parseFloat(b.coste_estimado)||0, parseInt(b.dias_impacto)||0,
+    b.notas||null, b.obra_id||null,
+    id, auth.empresa_id
+  ).run();
+  return json({ ok: true, score, nivel: riskLevel(score) });
+}
+
+async function eliminarRiesgo(id, request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth?.empresa_id) return err('No autorizado', 403);
+  await env.DB.prepare(`DELETE FROM riesgos_obra WHERE id=? AND empresa_id=?`).bind(id, auth.empresa_id).run();
+  return json({ ok: true });
 }
 
