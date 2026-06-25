@@ -525,6 +525,13 @@ ACTAS DE REUNIÓN (tabla: actas_reunion) — KILLER FEATURE vs competencia:
 - Las actas son trazabilidad legal — críticas en obras con clientes y subcontratas.
 - En briefing matutino: mencionar próximas reuniones y acuerdos pendientes de la última acta.
 
+CONTROL DE CALIDAD — PUNCH LIST (tabla: control_calidad):
+- Usa gestionar_calidad para registrar deficiencias, asignar responsables y hacer seguimiento.
+- Cuando el usuario describa un defecto ("la pintura está mal", "falta acabado en X") → crear DEF.
+- En inspecciones de calidad, registrar todos los defectos encontrados rápidamente.
+- Si hay deficiencias urgentes abiertas, mencionar en el briefing matutino.
+- Cuando el responsable diga "ya está arreglado" → marcar como resuelta.
+
 ÓRDENES DE CAMBIO (tabla: ordenes_cambio) — nivel Procore:
 - Campos: numero (OC-001), titulo, categoria (general/materiales/mano_de_obra/subcontrata/diseño/otro), coste_adicional, dias_extension, estado (propuesta/en_revision/aprobada/rechazada), rfi_id (vinculada), aprobado_por, fecha_aprobacion
 - Usa gestionar_oc para crear, listar, aprobar, rechazar y resumir OCs.
@@ -1327,6 +1334,28 @@ const TOOL_GESTIONAR_ACTA = {
   }
 };
 
+const TOOL_GESTIONAR_CALIDAD = {
+  name: 'gestionar_calidad',
+  description: 'Gestiona el Control de Calidad / Punch List de obra (deficiencias, repasos, no conformidades). Registra defectos encontrados en inspecciones, asigna responsables y hace seguimiento hasta su resolución. Úsalo cuando el usuario mencione deficiencias, repasos, fallos de acabado, no conformidades o inspecciones de calidad.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      accion: { type: 'string', enum: ['crear', 'listar', 'resolver', 'actualizar', 'eliminar', 'resumen'], description: 'Acción a realizar' },
+      obra_id: { type: 'number' },
+      deficiencia_id: { type: 'number', description: 'ID (para resolver/actualizar/eliminar)' },
+      titulo: { type: 'string', description: 'Descripción del defecto (obligatorio para crear)' },
+      ubicacion: { type: 'string', description: 'Ubicación del defecto en la obra' },
+      categoria: { type: 'string', enum: ['acabados','estructura','instalaciones','seguridad','otro'] },
+      prioridad: { type: 'string', enum: ['urgente','alta','normal','baja'] },
+      responsable: { type: 'string' },
+      fecha_limite: { type: 'string' },
+      notas_resolucion: { type: 'string' },
+      filtro_estado: { type: 'string' }
+    },
+    required: ['accion']
+  }
+};
+
 const TOOL_PENSAR = {
   name: 'pensar',
   description: 'Razona en voz alta sobre un problema antes de actuar. Úsalo para descomponer problemas complejos en pasos. No ejecuta nada, solo registra tu pensamiento.',
@@ -1708,11 +1737,11 @@ const TOOL_CONSULTAR_CONOCIMIENTO = {
 
 const TOOLS_POR_EXPERTO = {
   simple:     [TOOL_MEMORY_READ, TOOL_CONSULTAR_BD, TOOL_ENVIAR_PUSH],
-  app:        [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_CONTROLAR_APP, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_ANALIZAR_FOTO, TOOL_ESTADO_OBRA, TOOL_GESTIONAR_TAREA, TOOL_GESTIONAR_RFI, TOOL_GESTIONAR_OC, TOOL_GESTIONAR_ACTA],
+  app:        [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_CONTROLAR_APP, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_ANALIZAR_FOTO, TOOL_ESTADO_OBRA, TOOL_GESTIONAR_TAREA, TOOL_GESTIONAR_RFI, TOOL_GESTIONAR_OC, TOOL_GESTIONAR_ACTA, TOOL_GESTIONAR_CALIDAD],
   tecnico:    [TOOL_LEER_ESTADO, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_BUSCAR_WEB, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_NEXUS_MANAGE, TOOL_CONTROLAR_APP, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO],
   web:        [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE],
   reflexion:  [TOOL_MEMORY_SAVE, TOOL_MEMORY_READ, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_PROPOSE_MEJORA, TOOL_BUSCAR_WEB, TOOL_TOMAR_DECISION, TOOL_LEER_ESTADO, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_CONTROLAR_APP, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO],
-  completo:   [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_LEER_ESTADO, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_CONTROLAR_APP, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_ANALIZAR_FOTO, TOOL_ESTADO_OBRA, TOOL_GESTIONAR_TAREA, TOOL_GESTIONAR_RFI, TOOL_GESTIONAR_OC, TOOL_GESTIONAR_ACTA],
+  completo:   [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_LEER_ESTADO, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_CONTROLAR_APP, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_ANALIZAR_FOTO, TOOL_ESTADO_OBRA, TOOL_GESTIONAR_TAREA, TOOL_GESTIONAR_RFI, TOOL_GESTIONAR_OC, TOOL_GESTIONAR_ACTA, TOOL_GESTIONAR_CALIDAD],
   ingenieria: [TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_ANALIZAR_FOTO, TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME]
 };
 
@@ -6443,6 +6472,131 @@ ${descripcion ? `<div class="info-bar"><span class="badge">${tipo}</span>${descr
         return `❌ Acción no reconocida. Usa: crear, listar, actualizar, eliminar, crear_tareas_desde_acuerdos.`;
       } catch (err) {
         return `Error gestionando acta: ${err.message}`;
+      }
+    }
+
+    case 'gestionar_calidad': {
+      try {
+        if (!env.DB) return 'Base de datos no disponible';
+        const accion = input.accion;
+        const obraId = input.obra_id ? parseInt(input.obra_id) : null;
+        const defId  = input.deficiencia_id ? parseInt(input.deficiencia_id) : null;
+        const eid    = empresa_id || 1;
+
+        // Ensure table
+        await env.DB.prepare(`CREATE TABLE IF NOT EXISTS control_calidad (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          obra_id INTEGER, empresa_id INTEGER NOT NULL,
+          numero TEXT, titulo TEXT NOT NULL,
+          descripcion TEXT, ubicacion TEXT,
+          categoria TEXT DEFAULT 'otro',
+          prioridad TEXT DEFAULT 'normal',
+          estado TEXT DEFAULT 'abierto',
+          responsable TEXT,
+          fecha_limite TEXT, fecha_resolucion TEXT,
+          resuelto_por TEXT, notas_resolucion TEXT,
+          created_at TEXT DEFAULT (datetime('now'))
+        )`).run().catch(()=>{});
+
+        if (accion === 'listar') {
+          let q = 'SELECT * FROM control_calidad WHERE empresa_id=?';
+          const p = [eid];
+          if (obraId) { q += ' AND obra_id=?'; p.push(obraId); }
+          if (input.filtro_estado) { q += ' AND estado=?'; p.push(input.filtro_estado); }
+          q += ` ORDER BY CASE prioridad WHEN 'urgente' THEN 0 WHEN 'alta' THEN 1 WHEN 'normal' THEN 2 ELSE 3 END,
+                          CASE estado WHEN 'abierto' THEN 0 WHEN 'en_reparacion' THEN 1 WHEN 'resuelto' THEN 2 ELSE 3 END,
+                          created_at DESC LIMIT 20`;
+          const { results: items } = await env.DB.prepare(q).bind(...p).all().catch(()=>({results:[]}));
+          if (!items.length) return '🔍 No hay deficiencias registradas.';
+          const priIcon = { urgente:'🔴', alta:'🟠', normal:'🟡', baja:'🟢' };
+          const estIcon = { abierto:'🔴', en_reparacion:'🟡', resuelto:'🟢', verificado:'✅' };
+          let txt = `🔍 DEFICIENCIAS (${items.length}):\n`;
+          items.forEach(d => {
+            txt += `• [${d.numero||'DEF'}] ${priIcon[d.prioridad]||'🟡'} ${estIcon[d.estado]||'🔴'} ${d.titulo}`;
+            if (d.ubicacion) txt += ` — 📍${d.ubicacion}`;
+            if (d.responsable) txt += ` — 👤${d.responsable}`;
+            if (d.fecha_limite) txt += ` — 📅${d.fecha_limite}`;
+            txt += '\n';
+          });
+          return txt;
+        }
+
+        if (accion === 'resumen') {
+          const t = await env.DB.prepare(
+            `SELECT COUNT(*) as total,
+             SUM(CASE WHEN estado='abierto' THEN 1 ELSE 0 END) as abiertos,
+             SUM(CASE WHEN estado='en_reparacion' THEN 1 ELSE 0 END) as en_reparacion,
+             SUM(CASE WHEN estado IN ('resuelto','verificado') THEN 1 ELSE 0 END) as resueltos,
+             SUM(CASE WHEN prioridad='urgente' AND estado='abierto' THEN 1 ELSE 0 END) as urgentes_abiertos
+             FROM control_calidad WHERE empresa_id=?${obraId?' AND obra_id='+obraId:''}`
+          ).bind(eid).first().catch(()=>null);
+          if (!t) return '🔍 No hay datos de calidad.';
+          let txt = `🔍 RESUMEN CONTROL CALIDAD:\n`;
+          txt += `• Total deficiencias: ${t.total||0}\n`;
+          txt += `• Abiertas: ${t.abiertos||0}\n`;
+          txt += `• En reparación: ${t.en_reparacion||0}\n`;
+          txt += `• Resueltas: ${t.resueltos||0}\n`;
+          if (t.urgentes_abiertos > 0) txt += `⚠️ ${t.urgentes_abiertos} deficiencia(s) URGENTE(S) sin resolver.\n`;
+          return txt;
+        }
+
+        if (accion === 'crear') {
+          if (!input.titulo) return '❌ El título/descripción del defecto es obligatorio.';
+          let numero = 'DEF-001';
+          try {
+            const last = await env.DB.prepare(
+              `SELECT numero FROM control_calidad WHERE empresa_id=? ${obraId ? 'AND obra_id=?' : 'AND obra_id IS NULL'} ORDER BY id DESC LIMIT 1`
+            ).bind(...(obraId ? [eid, obraId] : [eid])).first();
+            if (last?.numero) {
+              const n = parseInt(last.numero.replace(/\D/g,'')) || 0;
+              numero = 'DEF-' + String(n + 1).padStart(3, '0');
+            }
+          } catch {}
+          await env.DB.prepare(
+            `INSERT INTO control_calidad (obra_id,empresa_id,numero,titulo,ubicacion,categoria,prioridad,estado,responsable,fecha_limite)
+             VALUES (?,?,?,?,?,?,?,?,?,?)`
+          ).bind(obraId, eid, numero, input.titulo,
+            input.ubicacion||null, input.categoria||'otro',
+            input.prioridad||'normal', 'abierto',
+            input.responsable||null, input.fecha_limite||null
+          ).run();
+          let resp = `✅ ${numero} registrada: "${input.titulo}"\n`;
+          if (input.ubicacion) resp += `📍 Ubicación: ${input.ubicacion}\n`;
+          if (input.responsable) resp += `👤 Responsable: ${input.responsable}\n`;
+          if (input.fecha_limite) resp += `📅 Límite: ${input.fecha_limite}\n`;
+          return resp;
+        }
+
+        if (accion === 'resolver') {
+          if (!defId) return '❌ Necesito deficiencia_id para resolver.';
+          await env.DB.prepare(
+            `UPDATE control_calidad SET estado='resuelto', fecha_resolucion=date('now')${input.notas_resolucion?`, notas_resolucion='${input.notas_resolucion.replace(/'/g,"''")}'`:''} WHERE id=? AND empresa_id=?`
+          ).bind(defId, eid).run();
+          return `✅ Deficiencia #${defId} marcada como resuelta.`;
+        }
+
+        if (accion === 'actualizar') {
+          if (!defId) return '❌ Necesito deficiencia_id para actualizar.';
+          const campos = ['titulo','descripcion','ubicacion','categoria','prioridad','estado','responsable','fecha_limite','notas_resolucion'];
+          const sets=[]; const params=[];
+          for (const c of campos) {
+            if (input[c] !== undefined) { sets.push(`${c}=?`); params.push(input[c]); }
+          }
+          if (!sets.length) return '❌ No se especificaron cambios.';
+          params.push(defId, eid);
+          await env.DB.prepare(`UPDATE control_calidad SET ${sets.join(',')} WHERE id=? AND empresa_id=?`).bind(...params).run();
+          return `✅ Deficiencia #${defId} actualizada.`;
+        }
+
+        if (accion === 'eliminar') {
+          if (!defId) return '❌ Necesito deficiencia_id para eliminar.';
+          await env.DB.prepare('DELETE FROM control_calidad WHERE id=? AND empresa_id=?').bind(defId, eid).run();
+          return `🗑️ Deficiencia #${defId} eliminada.`;
+        }
+
+        return '❌ Acción no reconocida. Usa: crear, listar, resumen, resolver, actualizar, eliminar.';
+      } catch (err) {
+        return `Error gestionando control de calidad: ${err.message}`;
       }
     }
 

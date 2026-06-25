@@ -962,6 +962,15 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
         <div class="module-count" id="cntReuniones" style="background:#0ea5e9;display:none">0</div>
         <span class="drag-handle">⠿</span><svg class="module-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
       </div>
+      <div class="module-card" id="cardCalidad" onclick="navTo('calidad')" style="display:none;border-left:3px solid #f97316">
+        <div class="module-emoji">🔍</div>
+        <div class="module-info">
+          <div class="module-name">Control de Calidad</div>
+          <div class="module-desc">Punch list de deficiencias y repasos</div>
+        </div>
+        <div class="module-count" id="cntCalidad" style="background:#f97316;display:none">0</div>
+        <span class="drag-handle">⠿</span><svg class="module-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
+      </div>
       <div class="module-card" id="cardIncidencias" onclick="navTo('incidencias')" style="display:none;border-left:3px solid #ef4444">
         <div class="module-emoji">🚨</div>
         <div class="module-info">
@@ -1825,6 +1834,99 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
         <button onclick="galeriaCompartirFoto()" style="flex:1;padding:8px;background:#ec489920;color:#ec4899;border:1px solid #ec489940;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">📤 Compartir</button>
         <button id="galeriaLightboxBtnBorrar" onclick="galeriaBorrarFoto()" style="display:none;flex:0 0 80px;padding:8px;background:#ef444420;color:#ef4444;border:1px solid #ef444440;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">🗑 Borrar</button>
         <button onclick="galeriaCloseLightbox()" style="flex:0 0 80px;padding:8px;background:var(--surface);border:1px solid var(--border);border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;color:var(--text)">Cerrar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- CONTROL DE CALIDAD / PUNCH LIST (NEW-37) -->
+  <div id="screenCalidad" class="screen" style="padding:0;display:none;flex-direction:column">
+    <div style="padding:10px 14px 8px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;align-items:center;gap:8px">
+      <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:17px;color:var(--text);flex:1">🔍 Control de Calidad</div>
+      <button onclick="defNueva()" style="background:var(--accent);color:#fff;border:none;border-radius:9px;padding:7px 14px;font-weight:800;font-size:12px;cursor:pointer">+ Nueva</button>
+    </div>
+    <!-- KPIs summary bar -->
+    <div id="calidadKpis" style="padding:8px 14px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;gap:10px;overflow-x:auto"></div>
+    <!-- Filtros -->
+    <div style="padding:8px 14px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;gap:6px;overflow-x:auto">
+      <button id="defFil_todos"         onclick="defFiltrar('todos')"         style="padding:4px 10px;border-radius:20px;border:1px solid var(--accent);background:var(--accent);color:#fff;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap">Todos</button>
+      <button id="defFil_abierto"       onclick="defFiltrar('abierto')"       style="padding:4px 10px;border-radius:20px;border:1px solid var(--border);background:transparent;color:var(--muted);font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap">Abiertos</button>
+      <button id="defFil_en_reparacion" onclick="defFiltrar('en_reparacion')" style="padding:4px 10px;border-radius:20px;border:1px solid var(--border);background:transparent;color:var(--muted);font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap">En reparación</button>
+      <button id="defFil_resuelto"      onclick="defFiltrar('resuelto')"      style="padding:4px 10px;border-radius:20px;border:1px solid var(--border);background:transparent;color:var(--muted);font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap">Resueltos</button>
+    </div>
+    <div id="calidadList" style="padding:12px 14px;overflow-y:auto;flex:1">
+      <div class="empty-state">Cargando...</div>
+    </div>
+  </div>
+
+  <!-- MODAL DEFICIENCIA (NEW-37) -->
+  <div class="modal-overlay" id="modalDeficiencia" onclick="if(event.target===this)defCerrarModal()" style="display:none;align-items:flex-end;justify-content:center;padding:0">
+    <div style="background:var(--surface);width:100%;max-width:480px;border-radius:18px 18px 0 0;max-height:92vh;display:flex;flex-direction:column">
+      <div style="padding:16px 16px 10px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border);flex-shrink:0">
+        <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:15px;color:var(--text)" id="defModalTitle">Nueva Deficiencia</div>
+        <button onclick="defCerrarModal()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--muted);line-height:1">×</button>
+      </div>
+      <div style="padding:14px 16px;overflow-y:auto;flex:1">
+        <input type="hidden" id="defEditId">
+        <div style="margin-bottom:11px">
+          <label style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Descripción del defecto *</label>
+          <input id="defTitulo" type="text" placeholder="Ej: Pintura descascarada en pared norte" style="width:100%;margin-top:4px;padding:9px 10px;border:1px solid var(--border);border-radius:9px;background:var(--card);color:var(--text);font-size:13px;box-sizing:border-box">
+        </div>
+        <div style="margin-bottom:11px">
+          <label style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Ubicación</label>
+          <input id="defUbicacion" type="text" placeholder="Planta 2, Sala reuniones, Fachada norte…" style="width:100%;margin-top:4px;padding:9px 10px;border:1px solid var(--border);border-radius:9px;background:var(--card);color:var(--text);font-size:13px;box-sizing:border-box">
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:11px">
+          <div>
+            <label style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Categoría</label>
+            <select id="defCategoria" style="width:100%;margin-top:4px;padding:9px 10px;border:1px solid var(--border);border-radius:9px;background:var(--card);color:var(--text);font-size:13px">
+              <option value="acabados">🎨 Acabados</option>
+              <option value="estructura">🏗️ Estructura</option>
+              <option value="instalaciones">⚡ Instalaciones</option>
+              <option value="seguridad">🦺 Seguridad</option>
+              <option value="otro">📋 Otro</option>
+            </select>
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Prioridad</label>
+            <select id="defPrioridad" style="width:100%;margin-top:4px;padding:9px 10px;border:1px solid var(--border);border-radius:9px;background:var(--card);color:var(--text);font-size:13px">
+              <option value="urgente">🔴 Urgente</option>
+              <option value="alta">🟠 Alta</option>
+              <option value="normal" selected>🟡 Normal</option>
+              <option value="baja">🟢 Baja</option>
+            </select>
+          </div>
+        </div>
+        <div style="margin-bottom:11px">
+          <label style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Responsable de reparación</label>
+          <input id="defResponsable" type="text" placeholder="Quién debe resolverlo" style="width:100%;margin-top:4px;padding:9px 10px;border:1px solid var(--border);border-radius:9px;background:var(--card);color:var(--text);font-size:13px;box-sizing:border-box">
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:11px">
+          <div>
+            <label style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Fecha límite</label>
+            <input id="defFechaLimite" type="date" style="width:100%;margin-top:4px;padding:9px 10px;border:1px solid var(--border);border-radius:9px;background:var(--card);color:var(--text);font-size:13px;box-sizing:border-box">
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Estado</label>
+            <select id="defEstado" style="width:100%;margin-top:4px;padding:9px 10px;border:1px solid var(--border);border-radius:9px;background:var(--card);color:var(--text);font-size:13px">
+              <option value="abierto">🔴 Abierto</option>
+              <option value="en_reparacion">🟡 En reparación</option>
+              <option value="resuelto">🟢 Resuelto</option>
+              <option value="verificado">✅ Verificado</option>
+            </select>
+          </div>
+        </div>
+        <div style="margin-bottom:11px">
+          <label style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Descripción adicional</label>
+          <textarea id="defDescripcion" rows="2" placeholder="Detalles adicionales…" style="width:100%;margin-top:4px;padding:9px 10px;border:1px solid var(--border);border-radius:9px;background:var(--card);color:var(--text);font-size:13px;resize:none;box-sizing:border-box"></textarea>
+        </div>
+        <div id="defResolucionWrap" style="display:none;margin-bottom:4px">
+          <label style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Notas de resolución</label>
+          <textarea id="defNotasResolucion" rows="2" placeholder="Cómo se resolvió…" style="width:100%;margin-top:4px;padding:9px 10px;border:1px solid var(--border);border-radius:9px;background:var(--card);color:var(--text);font-size:13px;resize:none;box-sizing:border-box"></textarea>
+          <input id="defResueltoPor" type="text" placeholder="Resuelto por…" style="width:100%;margin-top:6px;padding:9px 10px;border:1px solid var(--border);border-radius:9px;background:var(--card);color:var(--text);font-size:13px;box-sizing:border-box">
+        </div>
+      </div>
+      <div style="padding:12px 16px;border-top:1px solid var(--border);flex-shrink:0">
+        <button class="btn-primary" style="width:100%" onclick="defGuardar()">💾 Guardar</button>
       </div>
     </div>
   </div>
@@ -5120,6 +5222,7 @@ function setupHomeModules() {
   const cardGal     = document.getElementById('cardGaleria');
   const cardPartes  = document.getElementById('cardPartes');
   const cardReu     = document.getElementById('cardReuniones');
+  const cardCal2    = document.getElementById('cardCalidad');
   // Seguridad: sin tarjetas de inventario, pero sí Pedidos, Docs, Dashboard, Incidencias y Galería
   if (dept === 'seguridad') {
     if (cardB) cardB.style.display = 'none';
@@ -5133,6 +5236,7 @@ function setupHomeModules() {
     if (cardCal)  cardCal.style.display  = 'flex';
     if (cardGal)  cardGal.style.display  = 'flex';
     if (cardReu)  cardReu.style.display  = 'flex';
+    if (cardCal2) cardCal2.style.display = 'flex';
     if (cardPartes) cardPartes.style.display = 'none';
     const cardHerrSeg = document.getElementById('cardHerramientas');
     if (cardHerrSeg) cardHerrSeg.style.display = 'flex';
@@ -5150,7 +5254,7 @@ function setupHomeModules() {
   // Herramientas: visible para todos excepto seguridad
   const cardHerr = document.getElementById('cardHerramientas');
   if (cardHerr) cardHerr.style.display = 'flex';
-  // Documentación, Dashboard, Incidencias, Calendario, Galería, Partes y Reuniones: todos los depts activos
+  // Documentación, Dashboard, Incidencias, Calendario, Galería, Partes, Reuniones y Calidad: todos los depts activos
   if (cardDocs)   cardDocs.style.display   = 'flex';
   if (cardDash)   cardDash.style.display   = 'flex';
   if (cardInc)    cardInc.style.display    = 'flex';
@@ -5158,6 +5262,7 @@ function setupHomeModules() {
   if (cardGal)    cardGal.style.display    = 'flex';
   if (cardPartes) cardPartes.style.display = 'flex';
   if (cardReu)    cardReu.style.display    = 'flex';
+  if (cardCal2)   cardCal2.style.display   = 'flex';
   // #188: aplicar config de módulos (oculta tarjetas marcadas off por la empresa)
   applyModulosConfig();
   applyHomeOrder();
@@ -6118,6 +6223,11 @@ function navTo(target) {
   if (target === 'reuniones') {
     showScreen('reuniones');
     reunionesCargar();
+    return;
+  }
+  if (target === 'calidad') {
+    showScreen('calidad');
+    calidadCargar();
     return;
   }
   if (target === 'partes') {
@@ -11398,7 +11508,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '6.60';
+const APP_VERSION = '6.61';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -14418,6 +14528,190 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     else toast('Error al eliminar', 'err');
   }
   window.actaEliminar = actaEliminar;
+
+  // ── CONTROL DE CALIDAD / PUNCH LIST (NEW-37) ──────────────────────────────────
+  let _calidadData = [];
+  let _defFiltro = 'todos';
+
+  async function calidadCargar() {
+    const el = document.getElementById('calidadList');
+    if (el) el.innerHTML = '<div class="empty-state">Cargando...</div>';
+    try {
+      const obraId = getSession()?.obra_id;
+      const params = new URLSearchParams();
+      if (obraId) params.set('obra_id', obraId);
+      if (_defFiltro && _defFiltro !== 'todos') params.set('estado', _defFiltro);
+      const data = await apiCall('/control-calidad?' + params);
+      _calidadData = data.items || [];
+      // KPIs
+      const kEl = document.getElementById('calidadKpis');
+      if (kEl && data.totales) {
+        const t = data.totales;
+        kEl.innerHTML = [
+          { label:'Total', value: t.total||0, color:'#6b7280' },
+          { label:'Abiertos', value: t.abiertos||0, color:'#ef4444' },
+          { label:'Reparando', value: t.en_reparacion||0, color:'#f59e0b' },
+          { label:'Resueltos', value: t.resueltos||0, color:'#22c55e' },
+        ].map(k => `<div style="background:var(--card);border:1px solid var(--border);border-radius:8px;padding:6px 10px;text-align:center;flex-shrink:0;min-width:65px">
+          <div style="font-size:16px;font-weight:900;color:${k.color}">${k.value}</div>
+          <div style="font-size:9px;color:var(--muted);font-weight:700;text-transform:uppercase">${k.label}</div>
+        </div>`).join('');
+      }
+      renderDefList();
+    } catch(e) {
+      if (el) el.innerHTML = '<div class="empty-state">Error al cargar</div>';
+    }
+  }
+  window.calidadCargar = calidadCargar;
+
+  function defFiltrar(f) {
+    _defFiltro = f;
+    ['todos','abierto','en_reparacion','resuelto'].forEach(x => {
+      const b = document.getElementById('defFil_' + x);
+      if (!b) return;
+      b.style.background = x === f ? 'var(--accent)' : 'transparent';
+      b.style.color = x === f ? '#fff' : 'var(--muted)';
+      b.style.borderColor = x === f ? 'var(--accent)' : 'var(--border)';
+    });
+    calidadCargar();
+  }
+  window.defFiltrar = defFiltrar;
+
+  function renderDefList() {
+    const el = document.getElementById('calidadList');
+    if (!el) return;
+    if (!_calidadData.length) {
+      el.innerHTML = '<div class="empty-state">No hay deficiencias registradas 🎉</div>';
+      return;
+    }
+    const priInfo = { urgente:{icon:'🔴',color:'#ef4444'}, alta:{icon:'🟠',color:'#f97316'}, normal:{icon:'🟡',color:'#f59e0b'}, baja:{icon:'🟢',color:'#22c55e'} };
+    const estInfo = { abierto:{icon:'🔴',color:'#ef4444',label:'Abierto'}, en_reparacion:{icon:'🟡',color:'#f59e0b',label:'Reparando'}, resuelto:{icon:'🟢',color:'#22c55e',label:'Resuelto'}, verificado:{icon:'✅',color:'#0ea5e9',label:'Verificado'} };
+    const catIcon = { acabados:'🎨', estructura:'🏗️', instalaciones:'⚡', seguridad:'🦺', otro:'📋' };
+    el.innerHTML = _calidadData.map(d => {
+      const pi = priInfo[d.prioridad] || priInfo.normal;
+      const ei = estInfo[d.estado] || estInfo.abierto;
+      return `<div style="background:var(--card);border:1px solid var(--border);border-left:3px solid ${pi.color};border-radius:10px;padding:10px 12px;margin-bottom:7px">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+          <div style="flex:1;min-width:0">
+            <div style="display:flex;align-items:center;gap:5px;margin-bottom:3px;flex-wrap:wrap">
+              <span style="font-size:10px;font-weight:800;color:#f97316">${d.numero||'DEF'}</span>
+              <span style="font-size:10px;padding:1px 5px;background:${ei.color}22;color:${ei.color};border-radius:4px;font-weight:700">${ei.icon} ${ei.label}</span>
+              <span style="font-size:10px;color:var(--muted)">${catIcon[d.categoria]||'📋'} ${d.categoria||''}</span>
+            </div>
+            <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:2px">${d.titulo}</div>
+            ${d.ubicacion?`<div style="font-size:11px;color:var(--muted)">📍 ${d.ubicacion}</div>`:''}
+            ${d.responsable?`<div style="font-size:11px;color:var(--muted)">👤 ${d.responsable}</div>`:''}
+            ${d.fecha_limite?`<div style="font-size:10px;color:${new Date(d.fecha_limite)<new Date()?'#ef4444':'var(--muted)'}">📅 Límite: ${d.fecha_limite}</div>`:''}
+            ${d.notas_resolucion?`<div style="font-size:11px;color:#22c55e;margin-top:4px">✅ ${d.notas_resolucion.substring(0,80)}</div>`:''}
+          </div>
+          <div style="display:flex;flex-direction:column;gap:3px;flex-shrink:0">
+            ${d.estado !== 'resuelto' && d.estado !== 'verificado' ? `<button onclick="defResolver(${d.id})" style="background:#22c55e22;border:1px solid #22c55e44;border-radius:6px;padding:4px 7px;cursor:pointer;font-size:11px;color:#22c55e;font-weight:700">✅</button>` : ''}
+            <button onclick="defEditar(${d.id})" style="background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:4px 7px;cursor:pointer;font-size:11px">✏️</button>
+            <button onclick="defEliminar(${d.id})" style="background:none;border:none;cursor:pointer;font-size:13px;color:var(--muted)">🗑️</button>
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+  }
+  window.renderDefList = renderDefList;
+
+  function defNueva() {
+    document.getElementById('defEditId').value = '';
+    document.getElementById('defModalTitle').textContent = 'Nueva Deficiencia';
+    document.getElementById('defTitulo').value = '';
+    document.getElementById('defUbicacion').value = '';
+    document.getElementById('defCategoria').value = 'acabados';
+    document.getElementById('defPrioridad').value = 'normal';
+    document.getElementById('defResponsable').value = '';
+    document.getElementById('defFechaLimite').value = '';
+    document.getElementById('defEstado').value = 'abierto';
+    document.getElementById('defDescripcion').value = '';
+    document.getElementById('defNotasResolucion').value = '';
+    document.getElementById('defResueltoPor').value = '';
+    document.getElementById('defResolucionWrap').style.display = 'none';
+    document.getElementById('defEstado').onchange = () => {
+      const s = document.getElementById('defEstado').value;
+      document.getElementById('defResolucionWrap').style.display = (s==='resuelto'||s==='verificado') ? 'block' : 'none';
+    };
+    document.getElementById('modalDeficiencia').style.display = 'flex';
+  }
+  window.defNueva = defNueva;
+
+  function defEditar(id) {
+    const d = _calidadData.find(x => x.id === id);
+    if (!d) return;
+    document.getElementById('defEditId').value = id;
+    document.getElementById('defModalTitle').textContent = 'Editar ' + (d.numero || 'Deficiencia');
+    document.getElementById('defTitulo').value = d.titulo || '';
+    document.getElementById('defUbicacion').value = d.ubicacion || '';
+    document.getElementById('defCategoria').value = d.categoria || 'otro';
+    document.getElementById('defPrioridad').value = d.prioridad || 'normal';
+    document.getElementById('defResponsable').value = d.responsable || '';
+    document.getElementById('defFechaLimite').value = d.fecha_limite || '';
+    document.getElementById('defEstado').value = d.estado || 'abierto';
+    document.getElementById('defDescripcion').value = d.descripcion || '';
+    document.getElementById('defNotasResolucion').value = d.notas_resolucion || '';
+    document.getElementById('defResueltoPor').value = d.resuelto_por || '';
+    const showRes = d.estado === 'resuelto' || d.estado === 'verificado';
+    document.getElementById('defResolucionWrap').style.display = showRes ? 'block' : 'none';
+    document.getElementById('defEstado').onchange = () => {
+      const s = document.getElementById('defEstado').value;
+      document.getElementById('defResolucionWrap').style.display = (s==='resuelto'||s==='verificado') ? 'block' : 'none';
+    };
+    document.getElementById('modalDeficiencia').style.display = 'flex';
+  }
+  window.defEditar = defEditar;
+
+  async function defResolver(id) {
+    const res = await apiCall(`/control-calidad/${id}`, 'PUT', { estado: 'resuelto', fecha_resolucion: new Date().toISOString().slice(0,10), resuelto_por: getSession()?.nombre || '' });
+    if (res.ok) { toast('Deficiencia resuelta ✅', 'ok'); calidadCargar(); }
+    else toast('Error al resolver', 'err');
+  }
+  window.defResolver = defResolver;
+
+  async function defGuardar() {
+    const id = document.getElementById('defEditId').value;
+    const titulo = document.getElementById('defTitulo').value.trim();
+    if (!titulo) { toast('Describe la deficiencia', 'err'); return; }
+    const body = {
+      titulo,
+      ubicacion:        document.getElementById('defUbicacion').value.trim() || null,
+      categoria:        document.getElementById('defCategoria').value,
+      prioridad:        document.getElementById('defPrioridad').value,
+      responsable:      document.getElementById('defResponsable').value.trim() || null,
+      fecha_limite:     document.getElementById('defFechaLimite').value || null,
+      estado:           document.getElementById('defEstado').value,
+      descripcion:      document.getElementById('defDescripcion').value.trim() || null,
+      notas_resolucion: document.getElementById('defNotasResolucion').value.trim() || null,
+      resuelto_por:     document.getElementById('defResueltoPor').value.trim() || null,
+    };
+    const obraId = getSession()?.obra_id;
+    if (obraId) body.obra_id = obraId;
+    const res = id
+      ? await apiCall(`/control-calidad/${id}`, 'PUT', body)
+      : await apiCall('/control-calidad', 'POST', body);
+    if (res.ok || res.id) {
+      toast(id ? 'Actualizado ✓' : `${res.numero||'DEF'} registrada ✓`, 'ok');
+      document.getElementById('modalDeficiencia').style.display = 'none';
+      calidadCargar();
+    } else {
+      toast(res.error || 'Error al guardar', 'err');
+    }
+  }
+  window.defGuardar = defGuardar;
+
+  function defCerrarModal() {
+    document.getElementById('modalDeficiencia').style.display = 'none';
+  }
+  window.defCerrarModal = defCerrarModal;
+
+  async function defEliminar(id) {
+    if (!confirm('¿Eliminar esta deficiencia?')) return;
+    const res = await apiCall(`/control-calidad/${id}`, 'DELETE');
+    if (res.ok) { toast('Eliminada', 'ok'); calidadCargar(); }
+    else toast('Error al eliminar', 'err');
+  }
+  window.defEliminar = defEliminar;
 
   function fmtEur(v) {
     if (v === null || v === undefined) return '—';

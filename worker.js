@@ -4501,6 +4501,14 @@ export default {
         if (method === 'PUT')    return await actualizarPartidaPresupuesto(_bid, request, env);
         if (method === 'DELETE') return await eliminarPartidaPresupuesto(_bid, request, env);
       }
+      // ── Control de Calidad / Punch List (NEW-37)
+      if (path === '/control-calidad' && method === 'GET')  return await getControlCalidad(request, env);
+      if (path === '/control-calidad' && method === 'POST') return await crearDeficiencia(request, env);
+      if (path.startsWith('/control-calidad/')) {
+        const _did = parseInt(path.split('/control-calidad/')[1]);
+        if (method === 'PUT')    return await actualizarDeficiencia(_did, request, env);
+        if (method === 'DELETE') return await eliminarDeficiencia(_did, request, env);
+      }
       // ── Actas de Reunión (NEW-36) ─────────────────────────────────────────────
       if (path === '/actas-reunion'          && method === 'GET')  return await getActasReunion(request, env);
       if (path === '/actas-reunion'          && method === 'POST') return await crearActaReunion(request, env);
@@ -12925,5 +12933,105 @@ async function eliminarActaReunion(id, request, env) {
   const auth = await getAuth(request, env);
   if (!auth.empresa_id) return err('No autorizado', 403);
   await env.DB.prepare(`DELETE FROM actas_reunion WHERE id=? AND empresa_id=?`).bind(id, auth.empresa_id).run();
+  return json({ ok: true });
+}
+
+// ── CONTROL DE CALIDAD / PUNCH LIST (NEW-37) ─────────────────────────────────
+
+async function ensureCalidadTable(env) {
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS control_calidad (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    obra_id INTEGER, empresa_id INTEGER NOT NULL,
+    numero TEXT, titulo TEXT NOT NULL,
+    descripcion TEXT, ubicacion TEXT,
+    categoria TEXT DEFAULT 'otro',
+    prioridad TEXT DEFAULT 'normal',
+    estado TEXT DEFAULT 'abierto',
+    responsable TEXT,
+    fecha_limite TEXT, fecha_resolucion TEXT,
+    resuelto_por TEXT, notas_resolucion TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`).run().catch(()=>{});
+}
+
+async function getControlCalidad(request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth.empresa_id) return err('No autorizado', 403);
+  await ensureCalidadTable(env);
+  const url = new URL(request.url);
+  const obraId = url.searchParams.get('obra_id');
+  const estado = url.searchParams.get('estado');
+  const cat    = url.searchParams.get('categoria');
+  let q = 'SELECT * FROM control_calidad WHERE empresa_id=?';
+  const p = [auth.empresa_id];
+  if (obraId) { q += ' AND obra_id=?'; p.push(parseInt(obraId)); }
+  if (estado) { q += ' AND estado=?'; p.push(estado); }
+  if (cat)    { q += ' AND categoria=?'; p.push(cat); }
+  q += ` ORDER BY CASE prioridad WHEN 'urgente' THEN 0 WHEN 'alta' THEN 1 WHEN 'normal' THEN 2 ELSE 3 END,
+                  CASE estado WHEN 'abierto' THEN 0 WHEN 'en_reparacion' THEN 1 WHEN 'resuelto' THEN 2 ELSE 3 END,
+                  created_at DESC LIMIT 100`;
+  const { results: items } = await env.DB.prepare(q).bind(...p).all();
+  // Totales
+  const totales = await env.DB.prepare(
+    `SELECT COUNT(*) as total,
+     SUM(CASE WHEN estado='abierto' THEN 1 ELSE 0 END) as abiertos,
+     SUM(CASE WHEN estado IN ('en_reparacion') THEN 1 ELSE 0 END) as en_reparacion,
+     SUM(CASE WHEN estado IN ('resuelto','verificado') THEN 1 ELSE 0 END) as resueltos
+     FROM control_calidad WHERE empresa_id=?${obraId?' AND obra_id='+parseInt(obraId):''}`
+  ).bind(auth.empresa_id).first().catch(()=>null);
+  return json({ items: items || [], totales });
+}
+
+async function crearDeficiencia(request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth.empresa_id) return err('No autorizado', 403);
+  await ensureCalidadTable(env);
+  const b = await request.json().catch(()=>({}));
+  if (!b.titulo) return err('Título obligatorio', 400);
+  const obraId = b.obra_id ? parseInt(b.obra_id) : null;
+  let numero = 'DEF-001';
+  try {
+    const last = await env.DB.prepare(
+      `SELECT numero FROM control_calidad WHERE empresa_id=? ${obraId ? 'AND obra_id=?' : 'AND obra_id IS NULL'} ORDER BY id DESC LIMIT 1`
+    ).bind(...(obraId ? [auth.empresa_id, obraId] : [auth.empresa_id])).first();
+    if (last?.numero) {
+      const n = parseInt(last.numero.replace(/\D/g,'')) || 0;
+      numero = 'DEF-' + String(n + 1).padStart(3, '0');
+    }
+  } catch {}
+  const { meta } = await env.DB.prepare(
+    `INSERT INTO control_calidad (obra_id,empresa_id,numero,titulo,descripcion,ubicacion,categoria,prioridad,estado,responsable,fecha_limite)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?)`
+  ).bind(obraId, auth.empresa_id, numero, b.titulo,
+    b.descripcion||null, b.ubicacion||null, b.categoria||'otro',
+    b.prioridad||'normal', 'abierto', b.responsable||null, b.fecha_limite||null
+  ).run();
+  return json({ ok: true, id: meta?.last_row_id, numero });
+}
+
+async function actualizarDeficiencia(id, request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth.empresa_id) return err('No autorizado', 403);
+  await ensureCalidadTable(env);
+  const b = await request.json().catch(()=>({}));
+  const campos = ['titulo','descripcion','ubicacion','categoria','prioridad','estado',
+                  'responsable','fecha_limite','fecha_resolucion','resuelto_por','notas_resolucion'];
+  const sets=[]; const params=[];
+  for (const c of campos) {
+    if (b[c] !== undefined) { sets.push(`${c}=?`); params.push(b[c]); }
+  }
+  if (b.estado === 'resuelto' && !b.fecha_resolucion) {
+    sets.push('fecha_resolucion=?'); params.push(new Date().toISOString().slice(0,10));
+  }
+  if (!sets.length) return err('Nada que actualizar', 400);
+  params.push(id, auth.empresa_id);
+  await env.DB.prepare(`UPDATE control_calidad SET ${sets.join(',')} WHERE id=? AND empresa_id=?`).bind(...params).run();
+  return json({ ok: true });
+}
+
+async function eliminarDeficiencia(id, request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth.empresa_id) return err('No autorizado', 403);
+  await env.DB.prepare(`DELETE FROM control_calidad WHERE id=? AND empresa_id=?`).bind(id, auth.empresa_id).run();
   return json({ ok: true });
 }
