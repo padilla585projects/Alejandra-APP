@@ -562,6 +562,10 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
       <span class="nav-icon">✅</span> Control de Calidad
       <span class="nav-badge" id="ncrsBadge" style="display:none">!</span>
     </button>
+    <button class="nav-item" data-page="entregasMaterial" onclick="navTo('entregasMaterial')">
+      <span class="nav-icon">🚚</span> Entregas Material
+      <span class="nav-badge" id="entregasBadge" style="display:none">!</span>
+    </button>
 
     <div class="sidebar-section" onclick="sidebarToggle(this)" data-sid="seguimiento"><span>📓 Seguimiento</span><span class="sec-chevron">▼</span></div>
     <button class="nav-item" data-page="partesPanel" onclick="navTo('partesPanel')">
@@ -2037,6 +2041,28 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
             <button class="btn btn-primary" onclick="guardarNcr()">Guardar NCR</button>
           </div>
         </div>
+      </div>
+
+      <!-- ENTREGAS DE MATERIAL / ALBARANES -->
+      <div class="page" id="pageEntregasMaterial">
+        <div class="page-title">🚚 Entregas de Material</div>
+        <div class="page-sub">Seguimiento de pedidos, albaranes y entregas en obra — Modulo Procurement</div>
+        <div class="tbl-toolbar" style="flex-wrap:wrap;gap:8px;margin-bottom:14px">
+          <select class="tbl-search" id="filterEntregasObra" style="min-width:220px" onchange="cargarEntregasMaterial()"></select>
+          <select class="tbl-search" id="filterEntregasEstado" style="min-width:150px" onchange="cargarEntregasMaterial()">
+            <option value="">Todos los estados</option>
+            <option value="pendiente">Pendiente</option>
+            <option value="parcial">Parcial</option>
+            <option value="recibido">Recibido</option>
+            <option value="rechazado">Rechazado</option>
+          </select>
+          <input class="tbl-search" id="filterEntregasProv" placeholder="Filtrar proveedor..." style="min-width:160px" oninput="cargarEntregasMaterial()">
+          <button class="btn btn-primary" onclick="abrirModalEntrega()">+ Nueva entrega</button>
+          <button class="btn btn-secondary" onclick="exportarTabla(tblEntregas,'entregas-material')">⬇ CSV</button>
+          <button class="btn btn-secondary" onclick="cargarEntregasMaterial()">🔄</button>
+        </div>
+        <div id="entregasKpi" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:12px;margin-bottom:16px"></div>
+        <div class="tbl-wrap"><div id="tblEntregas"></div></div>
       </div>
 
       <!-- PLANOS DE OBRA -->
@@ -3565,6 +3591,7 @@ const PAGE_TITLES = {
   fotosObra: '📷 Galería de Fotos de Obra',
   transmittals: '📨 Transmittals',
   controlCalidad: '✅ Control de Calidad / QA-QC',
+  entregasMaterial: '🚚 Entregas de Material / Albaranes',
 };
 
 const PAGE_LOADERS = {
@@ -3622,6 +3649,7 @@ const PAGE_LOADERS = {
   fotosObra: cargarFotosObra,
   transmittals: cargarTransmittals,
   controlCalidad: cargarControlCalidad,
+  entregasMaterial: cargarEntregasMaterial,
 };
 
 let currentPage = '';
@@ -3708,6 +3736,7 @@ const SYNC_INTERVALS = {
   fotosObra: 60,
   transmittals: 90,
   controlCalidad: 90,
+  entregasMaterial: 90,
 };
 
 let _syncTimer = null, _syncLabelTimer = null, _syncLastTs = null;
@@ -13568,6 +13597,185 @@ async function eliminarNcr(id) {
   const r = await api(`/ncrs-obra/${id}`, 'DELETE');
   if (r?.ok) { showToast('NCR eliminada', 'success'); cargarNCRs(); }
   else showToast('Error al eliminar', 'error');
+}
+
+// ── ENTREGAS DE MATERIAL / ALBARANES (NEW-56) ─────────────────────
+let tblEntregas = null;
+let _entregaEditId = null;
+
+const ENT_ESTADO_COLOR = {
+  pendiente: 'var(--muted)', parcial: 'var(--warning)',
+  recibido: 'var(--success)', rechazado: 'var(--danger)'
+};
+const ENT_ESTADO_ICON = { pendiente:'⏳', parcial:'📦', recibido:'✅', rechazado:'❌' };
+
+async function cargarEntregasMaterial() {
+  if (document.getElementById('filterEntregasObra')?.options.length <= 1)
+    poblarSelectObras('filterEntregasObra');
+  const obraId = document.getElementById('filterEntregasObra')?.value || '';
+  const estado = document.getElementById('filterEntregasEstado')?.value || '';
+  const prov   = document.getElementById('filterEntregasProv')?.value.trim() || '';
+  let url = '/entregas-material?';
+  if (obraId) url += `obra_id=${obraId}&`;
+  if (estado) url += `estado=${estado}&`;
+  if (prov)   url += `proveedor=${encodeURIComponent(prov)}&`;
+  const r = await api(url);
+  const items = r?.entregas || [];
+  // Badge
+  const badge = document.getElementById('entregasBadge');
+  const v = r?.vencidos || 0;
+  if (badge) { badge.textContent = v||'!'; badge.style.display = v>0 ? '' : 'none'; }
+  // KPIs
+  const kpi = document.getElementById('entregasKpi');
+  if (kpi) kpi.innerHTML = `
+    <div class="kpi-card"><div class="kpi-icon">🚚</div><div class="kpi-value">${r?.total||0}</div><div class="kpi-label">Total pedidos</div></div>
+    <div class="kpi-card"><div class="kpi-icon">⏳</div><div class="kpi-value" style="color:var(--muted)">${r?.pendientes||0}</div><div class="kpi-label">Pendientes</div></div>
+    <div class="kpi-card"><div class="kpi-icon">📦</div><div class="kpi-value" style="color:var(--warning)">${r?.parciales||0}</div><div class="kpi-label">Parciales</div></div>
+    <div class="kpi-card"><div class="kpi-icon">✅</div><div class="kpi-value" style="color:var(--success)">${r?.recibidos||0}</div><div class="kpi-label">Recibidos</div></div>
+    <div class="kpi-card"><div class="kpi-icon">⚠️</div><div class="kpi-value" style="color:var(--danger)">${r?.vencidos||0}</div><div class="kpi-label">Vencidos</div></div>
+    <div class="kpi-card"><div class="kpi-icon">💶</div><div class="kpi-value">${fmtMoney(r?.importeTotal||0)}</div><div class="kpi-label">Importe total</div></div>
+  `;
+  const cols = [
+    { title: 'Pedido', field: 'numero_pedido', width: 130 },
+    { title: 'Descripcion', field: 'descripcion', minWidth: 180 },
+    { title: 'Proveedor', field: 'proveedor', minWidth: 130 },
+    { title: 'Estado', field: 'estado', width: 120, formatter: cell => {
+      const v = cell.getValue()||''; return `<span style="color:${ENT_ESTADO_COLOR[v]};font-weight:700">${ENT_ESTADO_ICON[v]||''} ${v}</span>`;
+    }},
+    { title: 'Cant. Ped.', field: 'cantidad_pedida', width: 90, hozAlign:'right', formatter: cell => {
+      const row = cell.getRow().getData(); return `${cell.getValue()||0} ${row.unidad||'ud'}`;
+    }},
+    { title: 'Cant. Rec.', field: 'cantidad_recibida', width: 90, hozAlign:'right', formatter: cell => {
+      const row = cell.getRow().getData(); const v=cell.getValue()||0; const ped=row.cantidad_pedida||1;
+      const pct=Math.round((v/ped)*100); const color=pct>=100?'var(--success)':pct>0?'var(--warning)':'var(--muted)';
+      return `<span style="color:${color}">${v} ${row.unidad||'ud'} (${pct}%)</span>`;
+    }},
+    { title: 'Importe', field: 'importe_total', width: 110, hozAlign:'right', formatter: cell => fmtMoney(cell.getValue()) },
+    { title: 'F. Entrega Prev.', field: 'fecha_entrega_prevista', width: 120, formatter: cell => {
+      const v=cell.getValue(); if(!v) return '-';
+      const hoy=new Date().toISOString().slice(0,10);
+      const row=cell.getRow().getData();
+      return v < hoy && row.estado==='pendiente' ? `<span style="color:var(--danger);font-weight:700">${fmtFecha(v)} ⚠️</span>` : fmtFecha(v);
+    }},
+    { title: 'F. Entrega Real', field: 'fecha_entrega_real', width: 115, formatter: cell => fmtFecha(cell.getValue()) },
+    { title: 'Albaran', field: 'numero_albaran', width: 110, formatter: cell => cell.getValue() ? `📄 ${cell.getValue()}` : '-' },
+    { title: 'Acciones', field: 'id', width: 110, headerSort: false, formatter: cell => {
+      const id = cell.getValue();
+      return `<button class="btn btn-secondary btn-sm" onclick="abrirModalEntrega(${id})" title="Editar">✏️</button>
+              <button class="btn btn-danger btn-sm" onclick="eliminarEntrega(${id})" title="Eliminar">🗑</button>`;
+    }},
+  ];
+  if (tblEntregas) { tblEntregas.replaceData(items); return; }
+  tblEntregas = new Tabulator('#tblEntregas', {
+    data: items, layout: 'fitColumns', responsiveLayout: 'collapse',
+    pagination: 'local', paginationSize: 30,
+    placeholder: '<div class="empty-state"><div class="empty-icon">🚚</div><div class="empty-text">No hay entregas. Registra el primer pedido.</div></div>',
+    columns: cols,
+    langs:{ es:{ pagination:{ first:'«', first_title:'Primera', last:'»', last_title:'Ultima', prev:'‹', prev_title:'Anterior', next:'›', next_title:'Siguiente' } } }, locale:'es',
+  });
+}
+
+async function abrirModalEntrega(id = null) {
+  _entregaEditId = id;
+  let d = {};
+  if (id) {
+    const r = await api(`/entregas-material/${id}`);
+    d = r?.entrega || {};
+  }
+  const isEdit = !!id;
+  const obrasOpts = await _getObrasOpts();
+  const modalHtml = `
+    <div class="modal" id="modalEntrega" style="display:flex">
+      <div class="modal-content" style="max-width:700px">
+        <div class="modal-header">
+          <span class="modal-title">${isEdit ? '✏️ Editar' : '+ Nueva'} Entrega de Material</span>
+          <button class="modal-close" onclick="cerrarModal('modalEntrega')">✕</button>
+        </div>
+        <div class="modal-body" style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+          <label style="grid-column:1/-1">Descripcion del material *
+            <textarea class="form-input" id="enDesc" rows="2" style="resize:vertical">${d.descripcion||''}</textarea></label>
+          <label>Proveedor<input class="form-input" id="enProv" value="${d.proveedor||''}"></label>
+          <label>Contacto proveedor<input class="form-input" id="enContacto" value="${d.contacto_prov||''}"></label>
+          <label>Obra<select class="form-input" id="enObra">${obrasOpts(d.obra_id)}</select></label>
+          <label>Unidad<input class="form-input" id="enUnidad" value="${d.unidad||'ud'}" placeholder="ud, m, kg, m2..."></label>
+          <label>Cantidad pedida<input class="form-input" type="number" min="0" step="0.01" id="enCantPed" value="${d.cantidad_pedida||0}" oninput="calcImporte()"></label>
+          <label>Precio unitario (€)<input class="form-input" type="number" min="0" step="0.01" id="enPrecio" value="${d.precio_unitario||0}" oninput="calcImporte()"></label>
+          <label>Cantidad recibida<input class="form-input" type="number" min="0" step="0.01" id="enCantRec" value="${d.cantidad_recibida||0}"></label>
+          <label>Importe total (€)<input class="form-input" id="enImporte" value="${fmtMoney(d.importe_total||0)}" readonly style="background:var(--bg)"></label>
+          <label>Fecha pedido<input class="form-input" type="date" id="enFPedido" value="${d.fecha_pedido||new Date().toISOString().slice(0,10)}"></label>
+          <label>Fecha entrega prevista<input class="form-input" type="date" id="enFPrevista" value="${d.fecha_entrega_prevista||''}"></label>
+          <label>Fecha entrega real<input class="form-input" type="date" id="enFReal" value="${d.fecha_entrega_real||''}"></label>
+          <label>Estado<select class="form-input" id="enEstado">
+            <option value="pendiente"${d.estado==='pendiente'||!d.estado?' selected':''}>⏳ Pendiente</option>
+            <option value="parcial"${d.estado==='parcial'?' selected':''}>📦 Parcial</option>
+            <option value="recibido"${d.estado==='recibido'?' selected':''}>✅ Recibido</option>
+            <option value="rechazado"${d.estado==='rechazado'?' selected':''}>❌ Rechazado</option>
+          </select></label>
+          <label>N° Albaran<input class="form-input" id="enAlbaran" value="${d.numero_albaran||''}"></label>
+          <label>Ubicacion en obra<input class="form-input" id="enUbicacion" value="${d.ubicacion_obra||''}"></label>
+          <label style="grid-column:1/-1">Notas<textarea class="form-input" id="enNotas" rows="2" style="resize:vertical">${d.notas||''}</textarea></label>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" onclick="cerrarModal('modalEntrega')">Cancelar</button>
+          <button class="btn btn-primary" onclick="guardarEntrega(${id||0})">Guardar</button>
+        </div>
+      </div>
+    </div>`;
+  abrirModal(modalHtml);
+}
+
+function calcImporte() {
+  const ped   = parseFloat(document.getElementById('enCantPed')?.value) || 0;
+  const precio = parseFloat(document.getElementById('enPrecio')?.value) || 0;
+  const imp = document.getElementById('enImporte');
+  if (imp) imp.value = fmtMoney(ped * precio);
+}
+
+async function guardarEntrega(id) {
+  const desc = document.getElementById('enDesc')?.value.trim();
+  if (!desc) return showToast('La descripcion es obligatoria', 'error');
+  const body = {
+    descripcion:           desc,
+    proveedor:             document.getElementById('enProv')?.value.trim()     || null,
+    contacto_prov:         document.getElementById('enContacto')?.value.trim() || null,
+    obra_id:               document.getElementById('enObra')?.value            || null,
+    unidad:                document.getElementById('enUnidad')?.value.trim()   || 'ud',
+    cantidad_pedida:       parseFloat(document.getElementById('enCantPed')?.value)  || 0,
+    precio_unitario:       parseFloat(document.getElementById('enPrecio')?.value)   || 0,
+    cantidad_recibida:     parseFloat(document.getElementById('enCantRec')?.value)  || 0,
+    fecha_pedido:          document.getElementById('enFPedido')?.value          || null,
+    fecha_entrega_prevista:document.getElementById('enFPrevista')?.value        || null,
+    fecha_entrega_real:    document.getElementById('enFReal')?.value            || null,
+    estado:                document.getElementById('enEstado')?.value           || 'pendiente',
+    numero_albaran:        document.getElementById('enAlbaran')?.value.trim()  || null,
+    ubicacion_obra:        document.getElementById('enUbicacion')?.value.trim()|| null,
+    notas:                 document.getElementById('enNotas')?.value.trim()    || null,
+    albaranado:            !!document.getElementById('enAlbaran')?.value.trim(),
+  };
+  const url    = id ? `/entregas-material/${id}` : '/entregas-material';
+  const method = id ? 'PUT' : 'POST';
+  const r = await api(url, method, body);
+  if (r?.ok || r?.id) {
+    cerrarModal('modalEntrega');
+    showToast(id ? 'Entrega actualizada ✅' : `Pedido creado ✅ (${r.numero||''})`, 'success');
+    tblEntregas = null; // force recreate
+    cargarEntregasMaterial();
+  } else showToast(r?.error || 'Error al guardar', 'error');
+}
+
+async function eliminarEntrega(id) {
+  if (!confirm('¿Eliminar esta entrega?')) return;
+  const r = await api(`/entregas-material/${id}`, 'DELETE');
+  if (r?.ok) { showToast('Entrega eliminada', 'success'); tblEntregas=null; cargarEntregasMaterial(); }
+  else showToast('Error al eliminar', 'error');
+}
+
+async function _getObrasOpts() {
+  // Return a function that generates <option> tags given a selected obra_id
+  const r = await api('/obras?limit=300');
+  const obras = r?.obras || r?.results || [];
+  return (selectedId) => '<option value="">-- Sin obra --</option>' +
+    obras.map(o => `<option value="${o.id}"${o.id==selectedId?' selected':''}>${o.nombre||o.codigo}</option>`).join('');
 }
 
 // ── SUBMITTAL LOG / APROBACIONES DE MATERIALES ───────────────────

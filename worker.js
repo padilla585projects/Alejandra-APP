@@ -4548,6 +4548,15 @@ export default {
         if (method === 'PUT')    return await actualizarNcr(_nid, request, env);
         if (method === 'DELETE') return await eliminarNcr(_nid, request, env);
       }
+      // -- Entregas de Material / Albaranes (NEW-56) -------------------------
+      if (path === '/entregas-material' && method === 'GET')  return await getEntregasMaterial(request, env);
+      if (path === '/entregas-material' && method === 'POST') return await crearEntregaMaterial(request, env);
+      if (path.startsWith('/entregas-material/')) {
+        const _emid = parseInt(path.split('/entregas-material/')[1]);
+        if (method === 'GET')    return await getEntregaMaterial(_emid, request, env);
+        if (method === 'PUT')    return await actualizarEntregaMaterial(_emid, request, env);
+        if (method === 'DELETE') return await eliminarEntregaMaterial(_emid, request, env);
+      }
       // â”€â”€ Cronograma / Gantt de Obra (NEW-52) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
       if (path.startsWith('/cronograma-obra/')) {
         const _crid = parseInt(path.split('/cronograma-obra/')[1]);
@@ -15135,4 +15144,145 @@ async function eliminarNcr(id, request, env) {
 
 function tryParse(str, def) {
   try { return JSON.parse(str); } catch { return def; }
+}
+
+// ============================================================
+// NEW-56  Entregas de Material / Albaranes (Material Deliveries)
+// ============================================================
+
+async function ensureEntregasTable(env) {
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS entregas_material (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    empresa_id        INTEGER NOT NULL,
+    obra_id           INTEGER,
+    fase_id           INTEGER,
+    numero_pedido     TEXT,
+    descripcion       TEXT NOT NULL,
+    proveedor         TEXT,
+    contacto_prov     TEXT,
+    unidad            TEXT DEFAULT 'ud',
+    cantidad_pedida   REAL DEFAULT 0,
+    cantidad_recibida REAL DEFAULT 0,
+    precio_unitario   REAL DEFAULT 0,
+    importe_total     REAL DEFAULT 0,
+    fecha_pedido      TEXT,
+    fecha_entrega_prevista TEXT,
+    fecha_entrega_real     TEXT,
+    estado            TEXT DEFAULT 'pendiente',
+    ubicacion_obra    TEXT,
+    notas             TEXT,
+    albaranado        INTEGER DEFAULT 0,
+    numero_albaran    TEXT,
+    created_at        TEXT DEFAULT (datetime('now')),
+    updated_at        TEXT DEFAULT (datetime('now'))
+  )`).run().catch(()=>{});
+}
+
+async function getEntregasMaterial(request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth?.empresa_id) return err('No autorizado', 403);
+  await ensureEntregasTable(env);
+  const url = new URL(request.url);
+  const obraId  = url.searchParams.get('obra_id');
+  const estado  = url.searchParams.get('estado');
+  const proveed = url.searchParams.get('proveedor');
+  let q = `SELECT * FROM entregas_material WHERE empresa_id=?`;
+  const params = [auth.empresa_id];
+  if (obraId)  { q += ` AND obra_id=?`;   params.push(obraId); }
+  if (estado)  { q += ` AND estado=?`;    params.push(estado); }
+  if (proveed) { q += ` AND proveedor LIKE ?`; params.push(`%${proveed}%`); }
+  q += ` ORDER BY fecha_entrega_prevista ASC, id DESC LIMIT 500`;
+  const { results } = await env.DB.prepare(q).bind(...params).all();
+  const items = results || [];
+  const total       = items.length;
+  const pendientes  = items.filter(i=>i.estado==='pendiente').length;
+  const parciales   = items.filter(i=>i.estado==='parcial').length;
+  const recibidos   = items.filter(i=>i.estado==='recibido').length;
+  const rechazados  = items.filter(i=>i.estado==='rechazado').length;
+  const hoy = new Date().toISOString().slice(0,10);
+  const vencidos    = items.filter(i=>i.estado==='pendiente' && i.fecha_entrega_prevista && i.fecha_entrega_prevista < hoy).length;
+  const importeTotal = items.reduce((s,i)=>s+(i.importe_total||0),0);
+  return json({ entregas: items, total, pendientes, parciales, recibidos, rechazados, vencidos, importeTotal });
+}
+
+async function getEntregaMaterial(id, request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth?.empresa_id) return err('No autorizado', 403);
+  const row = await env.DB.prepare(`SELECT * FROM entregas_material WHERE id=? AND empresa_id=?`)
+    .bind(id, auth.empresa_id).first();
+  if (!row) return err('No encontrado', 404);
+  return json({ entrega: row });
+}
+
+async function crearEntregaMaterial(request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth?.empresa_id) return err('No autorizado', 403);
+  await ensureEntregasTable(env);
+  const b = await request.json();
+  const cantPedida   = parseFloat(b.cantidad_pedida)   || 0;
+  const precioUnit   = parseFloat(b.precio_unitario)   || 0;
+  const importeTotal = cantPedida * precioUnit;
+  // Auto-number pedido
+  const yr = new Date().getFullYear();
+  const { results: cnt } = await env.DB.prepare(
+    `SELECT COUNT(*)+1 as n FROM entregas_material WHERE empresa_id=? AND substr(numero_pedido,4,4)=?`
+  ).bind(auth.empresa_id, String(yr)).all();
+  const n = cnt?.[0]?.n || 1;
+  const numeroPedido = b.numero_pedido || `PED-${yr}-${String(n).padStart(4,'0')}`;
+  const { meta } = await env.DB.prepare(`
+    INSERT INTO entregas_material
+      (empresa_id, obra_id, fase_id, numero_pedido, descripcion, proveedor, contacto_prov,
+       unidad, cantidad_pedida, cantidad_recibida, precio_unitario, importe_total,
+       fecha_pedido, fecha_entrega_prevista, estado, ubicacion_obra, notas)
+    VALUES (?,?,?,?,?,?,?,?,?,0,?,?,?,?,?,?,?)
+  `).bind(
+    auth.empresa_id, b.obra_id||null, b.fase_id||null, numeroPedido,
+    b.descripcion||'Material', b.proveedor||null, b.contacto_prov||null,
+    b.unidad||'ud', cantPedida, precioUnit, importeTotal,
+    b.fecha_pedido||new Date().toISOString().slice(0,10),
+    b.fecha_entrega_prevista||null, b.estado||'pendiente',
+    b.ubicacion_obra||null, b.notas||null
+  ).run();
+  return json({ ok: true, id: meta.last_row_id, numero: numeroPedido });
+}
+
+async function actualizarEntregaMaterial(id, request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth?.empresa_id) return err('No autorizado', 403);
+  const b = await request.json();
+  const cantPedida   = parseFloat(b.cantidad_pedida)   || 0;
+  const cantRecibida = parseFloat(b.cantidad_recibida) || 0;
+  const precioUnit   = parseFloat(b.precio_unitario)   || 0;
+  const importeTotal = cantPedida * precioUnit;
+  // Auto-compute estado if not provided
+  let estado = b.estado || 'pendiente';
+  if (!b.estado) {
+    if (cantRecibida <= 0)               estado = 'pendiente';
+    else if (cantRecibida < cantPedida)  estado = 'parcial';
+    else                                  estado = 'recibido';
+  }
+  await env.DB.prepare(`
+    UPDATE entregas_material SET descripcion=?, proveedor=?, contacto_prov=?, unidad=?,
+      cantidad_pedida=?, cantidad_recibida=?, precio_unitario=?, importe_total=?,
+      fecha_pedido=?, fecha_entrega_prevista=?, fecha_entrega_real=?, estado=?,
+      ubicacion_obra=?, notas=?, albaranado=?, numero_albaran=?,
+      obra_id=?, fase_id=?, updated_at=datetime('now')
+    WHERE id=? AND empresa_id=?
+  `).bind(
+    b.descripcion||null, b.proveedor||null, b.contacto_prov||null, b.unidad||'ud',
+    cantPedida, cantRecibida, precioUnit, importeTotal,
+    b.fecha_pedido||null, b.fecha_entrega_prevista||null, b.fecha_entrega_real||null, estado,
+    b.ubicacion_obra||null, b.notas||null,
+    b.albaranado ? 1 : 0, b.numero_albaran||null,
+    b.obra_id||null, b.fase_id||null,
+    id, auth.empresa_id
+  ).run();
+  return json({ ok: true, estado });
+}
+
+async function eliminarEntregaMaterial(id, request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth?.empresa_id) return err('No autorizado', 403);
+  await env.DB.prepare(`DELETE FROM entregas_material WHERE id=? AND empresa_id=?`).bind(id, auth.empresa_id).run();
+  return json({ ok: true });
 }
