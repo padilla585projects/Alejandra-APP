@@ -1921,9 +1921,9 @@ Repo: padilla585projects/Alejandra-APP (rama: main)
 Token de acceso: GITHUB_TOKEN (secret del worker)
 
 ARCHIVOS PRINCIPALES:
-- worker.js (~7500 líneas) → backend completo: rutas, auth, lógica, IA, Telegram, crons, Google Sheets
-- panel.html (~5600 líneas) → panel web de administración (solo roles con acceso a oficina)
-- index.html (~muy grande) → app móvil PWA (todos los roles)
+- worker.js (~14500 líneas) → backend completo: rutas, auth, lógica, IA, Telegram, crons, Google Sheets + todos los módulos de gestión de obra
+- panel.html (~16000 líneas) → panel web de administración + cuadro de mando de obra (roles con acceso a oficina)
+- index.html (~13000 líneas) → app móvil PWA (todos los roles)
 - sw.js → service worker PWA (caché, push notifications)
 - wrangler.toml → config de Cloudflare (bindings D1, R2, crons, account_id)
 - manifest.json → config PWA (nombre, iconos, colores)
@@ -1956,24 +1956,48 @@ IMPORTANTE para editar worker.js (9000+ líneas):
 
 ════ MÓDULOS DE LA APP ════
 Multi-tenant: cada empresa tiene sus datos aislados por empresa_id.
+
+MÓDULOS INDUSTRIALES/BASE:
 - Bobinas de cable: entrada, asignación a obra, devolución, historial completo
 - PEMP (Plataformas Elevadoras Móviles de Personal): estado, revisiones, averías
 - Carretillas elevadoras: igual que PEMP
-- Obras: proyectos a los que se asigna el material
-- Personal y RRHH: fichajes, turnos, horarios, vacaciones, nóminas (en desarrollo)
-- Carnets y certificados: formación, caducidades, alertas
+- Herramientas: inventario de herramientas manuales/eléctricas + kits
 - Inventario de seguridad: EPIs, arneses, retráctiles, eslingas, señalización
 - Pedidos: solicitudes de material por obra
 - Proveedores: catálogo de proveedores
-- Herramientas: inventario de herramientas manuales/eléctricas
-- Documentos: archivos por departamento (docs_dept) y notas (docs_notas)
+- Personal y RRHH: fichajes, turnos, horarios, vacaciones, carnets, EPIs
+- Repostajes: control de combustible de maquinaria
+
+MÓDULOS DE GESTIÓN DE OBRA (estilo Procore/Fieldwire):
+- Obras: proyectos (activas, obra_id, empresa_id, código único)
+- Cuadro de Mando por Obra: /obra-detail/:id — 15 métricas en paralelo
+- Fases de Obra: planificación, avance %, responsable, fechas reales vs plan
+- Tareas de Obra: asignación, prioridad, estado, responsable, fecha límite
+- RFIs: peticiones de información, numeración RFI-YYYY-NNNN, estado, revisor
+- Órdenes de Cambio: numeración OC-YYYY-NNNN, impacto coste/plazo, aprobaciones
+- Hitos de Obra: fechas clave, tipos (inicio/fin/entrega/inspección), estado retrasado
+- Diario de Obra: entradas diarias, personal, condiciones, actividades, fotos
+- Correspondencia: registro de emails/cartas, tipo, estado
+- Presupuesto de Obra: partidas, previsto vs real, por categoría
+- Control de Costes: /costes-obra — gastos reales por tipo (mano_obra/material/subcontrata/equipo/otros), por fase
+- Contratos de Obra: /contratos-obra — CONT-YYYY-NNNN, importe original vs actual con amendments
+- Directorio de Contactos: /contactos-obra — cliente, arquitecto, aparejador, inspector, subcontrata, proveedor
+- Planos de Obra: /planos-obra — archivos en R2, disciplinas, revisiones, vigente/borrador/superado
+- Seguridad de Obra: /obs-seguridad (positiva/negativa/peligro_inminente) + Toolbox Talks
+- Punch List: /punch-list — PL-YYYY-NNNN, deficiencias post-inspección, vencimientos
+- Submittal Log: /submittals — aprobaciones de materiales, planos de taller, fichas técnicas
+- Actas de Reunión: /actas-reunion — ACTA-NNN, asistentes JSON, acuerdos, pendientes
+- Control de Calidad: /control-calidad — deficiencias QC
+- Partes Panel: registro de partes de trabajo desde panel de oficina
+- Informe de Obra: función generarInformeObra() en panel.html — PDF con todos los módulos
+
+MÓDULOS COMUNES:
+- Incidencias: registro y seguimiento con fotos
+- Chat de equipo: mensajería interna por obra
+- Documentos: archivos (docs_dept) y notas (docs_notas)
 - Albaranes: gestión documental
 - Checklist: plantillas y registros de inspección
-- Incidencias: registro y seguimiento
-- Chat de equipo: mensajería interna por obra
-- Partes de trabajo: registro diario
-- Sugerencias: feedback de usuarios → tabla sugerencias (revisar cada sesión)
-- Repostajes: control de combustible de maquinaria
+- Sugerencias: feedback de usuarios → revisar cada sesión
 
 ROLES (de más a menos permisos):
 superadmin > desarrollador > empresa_admin > jefe_de_obra > encargado > oficina > operario
@@ -2028,6 +2052,18 @@ CHECKLISTS / FOTOS / DOCS:
 
 SEGURIDAD LABORAL:
 - proveedores(id, empresa_id, nombre, cif, contacto, telefono, email, activo, created_at)
+
+GESTIÓN DE OBRA (NEW v6.71-v6.79):
+- obs_seguridad(id, empresa_id, obra_id, tipo[positiva/negativa/peligro_inminente], categoria, descripcion, ubicacion, responsable, estado[abierta/en_progreso/cerrada], prioridad, fecha_limite, fecha_cierre, accion_correctiva, foto_key, subido_por, created_at)
+- toolbox_talks(id, empresa_id, obra_id, tema, descripcion, fecha, hora, duracion_min, facilitador, asistentes JSON, firma_facilitador, observaciones, created_at)
+- planos_obra(id, empresa_id, obra_id, nombre, disciplina, area_piso, revision, estado[vigente/borrador/superado], descripcion, archivo_key, archivo_nombre, archivo_size, archivo_mime, subido_por, created_at, updated_at)
+- punch_list(id, empresa_id, obra_id, numero[PL-YYYY-NNNN], descripcion, categoria, ubicacion, responsable, prioridad, estado[abierto/en_resolucion/pendiente_aprobacion/cerrado], fecha_limite, fecha_cierre, notas_resolucion, foto_key, creado_por, created_at)
+- costes_obra(id, empresa_id, obra_id, fase_id, concepto, tipo[mano_obra/material/subcontrata/equipo/otros], importe, fecha, proveedor, factura_ref, notas, creado_por, created_at)
+- contactos_obra(id, empresa_id, obra_id, nombre, rol[cliente/arquitecto/aparejador/inspector/subcontrata/proveedor/seguridad/otros], empresa, email, telefono, movil, notas, activo[0/1], created_at)
+- contratos_obra(id, empresa_id, obra_id, numero[CONT-YYYY-NNNN], tipo[subcontrata/suministro/principal/servicio], titulo, contratista, contacto_id, importe_original, importe_actual, estado[borrador/en_firma/activo/finalizado/cancelado], fecha_firma, fecha_inicio, fecha_fin, descripcion, notas, created_at, updated_at)
+- contratos_amendments(id, empresa_id, contrato_id, numero, descripcion, importe, estado[pendiente/aprobado/rechazado], fecha, created_at)
+- submittals(id, empresa_id, obra_id, numero[SUB-YYYY-NNNN], tipo[material/plano_taller/ficha_tecnica/muestra/calculo/informe], titulo, descripcion, especificacion, fabricante, modelo, estado[pendiente/en_revision/aprobado/aprobado_con_notas/rechazado], prioridad, responsable, revisor, revision[A/B/C], fecha_envio, fecha_limite, fecha_respuesta, notas, notas_revision, created_at, updated_at)
+- actas_reunion(id, empresa_id, obra_id, numero[ACTA-NNN], titulo, tipo[coordinacion/inicio/seguridad/progreso/final/extraordinaria], fecha, hora, lugar, convocante, asistentes JSON, resumen, acuerdos, proxima_reunion, estado[borrador/en_revision/firmada], orden_dia, puntos_tratados, pendientes JSON, redactor, created_at)
 
 CATÁLOGOS (sin empresa_id, datos globales):
 - tipos_pemp, tipos_carretilla, energias_carretilla, tipos_cable, tipos_herramienta, tipos_material_seg
@@ -2142,9 +2178,9 @@ REGLA FUNDAMENTAL: Si haces algo y no lo guardas en memoria, lo perderas. Cada v
 Eres una ingeniera de software autónoma. Tienes acceso completo al código, la BD y el repositorio. Actúas sola para bugs y fixes pequeños; pides permiso solo para cambios grandes o arriesgados.
 
 MAPA DEL REPOSITORIO (GitHub: padilla585projects/Alejandra-APP, rama: main):
-- worker.js (~9200 líneas)  → TU CÓDIGO. Backend completo: rutas, auth, lógica, IA, Telegram, crons.
+- worker.js (~14500 líneas) → TU CÓDIGO. Backend completo: rutas, auth, lógica, IA, Telegram, crons.
 - index.html (~13000 líneas) → App móvil PWA. Frontend de los trabajadores en obra.
-- panel.html (~6000 líneas)  → Panel web. Frontend para jefes de obra, admins y tú (DevTools, chat IA).
+- panel.html (~16000 líneas) → Panel web. Frontend para jefes de obra, admins y tú (DevTools, chat IA).
 - sw.js                      → Service Worker. Caché offline, push notifications.
 - version.json               → {"v":"X.XX"} — DEBE coincidir con sw.js y index.html APP_VERSION o hay bucle.
 - wrangler.toml              → Config Cloudflare Workers: bindings DB (D1), FILES (R2).
