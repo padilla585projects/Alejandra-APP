@@ -4592,6 +4592,14 @@ export default {
         if (method === 'PUT')    return await actualizarHitoObra(_hid, request, env);
         if (method === 'DELETE') return await eliminarHitoObra(_hid, request, env);
       }
+      // ── Correspondencia de obra (NEW-40) ────────────────────────────────────
+      if (path === '/correspondencia' && method === 'GET')  return await getCorrespondencia(request, env);
+      if (path === '/correspondencia' && method === 'POST') return await crearCorrespondencia(request, env);
+      if (path.startsWith('/correspondencia/')) {
+        const _cid = parseInt(path.split('/correspondencia/')[1]);
+        if (method === 'PUT')    return await actualizarCorrespondencia(_cid, request, env);
+        if (method === 'DELETE') return await eliminarCorrespondencia(_cid, request, env);
+      }
 
       // â"€â"€ Galería de fotos por obra (NEW-17) â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
       if (path === '/fotos-obra' && method === 'GET')  return await listarFotosObra(request, env);
@@ -13379,5 +13387,98 @@ async function eliminarHitoObra(id, request, env) {
   if (!auth?.empresa_id) return err('No autorizado', 403);
   await ensureHitosObraTable(env);
   await env.DB.prepare(`DELETE FROM hitos_obra WHERE id=? AND empresa_id=?`).bind(id, auth.empresa_id).run();
+  return json({ ok: true });
+}
+
+// ── CORRESPONDENCIA DE OBRA (NEW-40) ─────────────────────────────────────────
+async function ensureCorrespondenciaTable(env) {
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS correspondencia (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    empresa_id INTEGER NOT NULL,
+    obra_id INTEGER,
+    numero TEXT,
+    tipo TEXT DEFAULT 'saliente',
+    asunto TEXT NOT NULL,
+    emisor TEXT,
+    receptor TEXT,
+    fecha DATE NOT NULL,
+    referencia TEXT,
+    estado TEXT DEFAULT 'enviada',
+    respuesta_requerida INTEGER DEFAULT 0,
+    fecha_respuesta_limite DATE,
+    notas TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`).run().catch(() => {});
+}
+async function getCorrespondencia(request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth?.empresa_id) return err('No autorizado', 403);
+  await ensureCorrespondenciaTable(env);
+  const url = new URL(request.url);
+  const obraId = url.searchParams.get('obra_id');
+  const tipo   = url.searchParams.get('tipo');
+  const estado = url.searchParams.get('estado');
+  const limit  = Math.min(parseInt(url.searchParams.get('limit')||'100'),500);
+  let sql = `SELECT c.*, o.nombre as obra_nombre FROM correspondencia c
+    LEFT JOIN obras o ON c.obra_id = o.id WHERE c.empresa_id=?`;
+  const params = [auth.empresa_id];
+  if (obraId) { sql += ' AND c.obra_id=?'; params.push(parseInt(obraId)); }
+  if (tipo)   { sql += ' AND c.tipo=?';    params.push(tipo); }
+  if (estado) { sql += ' AND c.estado=?';  params.push(estado); }
+  sql += ' ORDER BY c.fecha DESC, c.id DESC LIMIT ?';
+  params.push(limit);
+  const { results } = await env.DB.prepare(sql).bind(...params).all();
+  const hoy = new Date().toISOString().slice(0, 10);
+  return json({ correspondencia: (results||[]).map(c => ({
+    ...c,
+    respuesta_vencida: c.respuesta_requerida && c.fecha_respuesta_limite && c.fecha_respuesta_limite < hoy && c.estado !== 'respondida',
+  })) });
+}
+async function crearCorrespondencia(request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth?.empresa_id) return err('No autorizado', 403);
+  await ensureCorrespondenciaTable(env);
+  const b = await request.json().catch(() => ({}));
+  if (!b.asunto || !b.fecha) return err('asunto y fecha son obligatorios');
+  // Auto-generate numero if not provided
+  let numero = b.numero;
+  if (!numero) {
+    const { results: last } = await env.DB.prepare(
+      `SELECT numero FROM correspondencia WHERE empresa_id=? AND tipo=? ORDER BY id DESC LIMIT 1`
+    ).bind(auth.empresa_id, b.tipo||'saliente').all().catch(() => ({ results: [] }));
+    const prefix = (b.tipo||'sal').slice(0,3).toUpperCase();
+    const lastNum = last?.[0]?.numero ? parseInt((last[0].numero.match(/\d+/) || ['0'])[0]) : 0;
+    numero = `${prefix}-${new Date().getFullYear()}-${String(lastNum + 1).padStart(4,'0')}`;
+  }
+  const { meta } = await env.DB.prepare(
+    `INSERT INTO correspondencia (empresa_id, obra_id, numero, tipo, asunto, emisor, receptor, fecha, referencia, estado, respuesta_requerida, fecha_respuesta_limite, notas)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`
+  ).bind(
+    auth.empresa_id, b.obra_id||null, numero, b.tipo||'saliente', b.asunto,
+    b.emisor||null, b.receptor||null, b.fecha, b.referencia||null,
+    b.estado||'enviada', b.respuesta_requerida?1:0, b.fecha_respuesta_limite||null, b.notas||null
+  ).run();
+  return json({ ok: true, id: meta.last_row_id, numero });
+}
+async function actualizarCorrespondencia(id, request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth?.empresa_id) return err('No autorizado', 403);
+  const b = await request.json().catch(() => ({}));
+  await env.DB.prepare(
+    `UPDATE correspondencia SET asunto=COALESCE(?,asunto), tipo=COALESCE(?,tipo),
+     emisor=COALESCE(?,emisor), receptor=COALESCE(?,receptor), fecha=COALESCE(?,fecha),
+     referencia=COALESCE(?,referencia), estado=COALESCE(?,estado),
+     respuesta_requerida=COALESCE(?,respuesta_requerida),
+     fecha_respuesta_limite=COALESCE(?,fecha_respuesta_limite), notas=COALESCE(?,notas)
+     WHERE id=? AND empresa_id=?`
+  ).bind(b.asunto||null, b.tipo||null, b.emisor||null, b.receptor||null, b.fecha||null,
+    b.referencia||null, b.estado||null, b.respuesta_requerida!=null?+b.respuesta_requerida:null,
+    b.fecha_respuesta_limite||null, b.notas||null, id, auth.empresa_id).run();
+  return json({ ok: true });
+}
+async function eliminarCorrespondencia(id, request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth?.empresa_id) return err('No autorizado', 403);
+  await env.DB.prepare(`DELETE FROM correspondencia WHERE id=? AND empresa_id=?`).bind(id, auth.empresa_id).run();
   return json({ ok: true });
 }

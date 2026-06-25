@@ -513,6 +513,10 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
     <button class="nav-item" data-page="diarioObra" onclick="navTo('diarioObra')">
       <span class="nav-icon">📓</span> Diario de Obra
     </button>
+    <button class="nav-item" data-page="correspondencia" onclick="navTo('correspondencia')">
+      <span class="nav-icon">✉️</span> Correspondencia
+      <span class="nav-badge" id="corrBadge" style="display:none">!</span>
+    </button>
 
     <div class="sidebar-section">Analítica</div>
     <button class="nav-item" data-page="graficas" onclick="navTo('graficas')">
@@ -1277,6 +1281,34 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
           <button class="btn btn-secondary" onclick="tblPartes=null;cargarPartesPanel()">🔄 Actualizar</button>
         </div>
         <div class="tbl-wrap"><div id="tblPartes"></div></div>
+      </div>
+
+      <!-- CORRESPONDENCIA DE OBRA -->
+      <div class="page" id="pageCorrespondencia">
+        <div class="page-title">✉️ Correspondencia</div>
+        <div class="page-sub">Registro de cartas, transmittals y comunicaciones formales de obra</div>
+        <div id="corrResumen" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:16px"></div>
+        <div class="tbl-toolbar">
+          <input class="tbl-search" id="searchCorr" placeholder="🔍 Buscar asunto, emisor, referencia...">
+          <select class="tbl-search" id="filterCorrObra" style="min-width:180px" onchange="cargarCorrespondencia()">
+            <option value="">🏗 Todas las obras</option>
+          </select>
+          <select class="tbl-search" id="filterCorrTipo" style="min-width:120px" onchange="filtrarCorr()">
+            <option value="">Todos</option>
+            <option value="saliente">📤 Saliente</option>
+            <option value="entrante">📥 Entrante</option>
+          </select>
+          <select class="tbl-search" id="filterCorrEstado" style="min-width:130px" onchange="filtrarCorr()">
+            <option value="">Todos</option>
+            <option value="enviada">Enviada</option>
+            <option value="pendiente">Pendiente</option>
+            <option value="respondida">Respondida</option>
+          </select>
+          <button class="btn btn-primary" onclick="abrirModalCorr()">+ Nueva</button>
+          <button class="btn btn-secondary" onclick="exportarTabla(tblCorr,'correspondencia')">⬇ CSV</button>
+          <button class="btn btn-secondary" onclick="cargarCorrespondencia()">🔄 Actualizar</button>
+        </div>
+        <div class="tbl-wrap"><div id="tblCorr"></div></div>
       </div>
 
       <!-- DIARIO DE OBRA -->
@@ -2698,6 +2730,7 @@ const PAGE_TITLES = {
   partesPanel: '📋 Partes Diarios',
   hitos: '🏁 Hitos de Obra',
   diarioObra: '📓 Diario de Obra',
+  correspondencia: '✉️ Correspondencia',
 };
 
 const PAGE_LOADERS = {
@@ -2739,6 +2772,7 @@ const PAGE_LOADERS = {
   partesPanel: cargarPartesPanel,
   hitos: cargarHitos,
   diarioObra: cargarDiarioObra,
+  correspondencia: cargarCorrespondencia,
 };
 
 let currentPage = '';
@@ -2809,6 +2843,7 @@ const SYNC_INTERVALS = {
   partesPanel: 60,
   hitos: 120,
   diarioObra: 120,
+  correspondencia: 120,
 };
 
 let _syncTimer = null, _syncLabelTimer = null, _syncLastTs = null;
@@ -10215,6 +10250,189 @@ async function cargarPartesPanel() {
   document.getElementById('searchPartes')?.addEventListener('input', (e) => {
     if (tblPartes) tblPartes.setFilter([{field:'descripcion',type:'like',value:e.target.value},{field:'obra',type:'like',value:e.target.value}]);
   });
+}
+
+// ── CORRESPONDENCIA DE OBRA ──────────────────────────────────────
+let tblCorr = null, _corrData = [];
+async function cargarCorrespondencia() {
+  if (document.getElementById('filterCorrObra')?.options.length <= 1) poblarSelectObras('filterCorrObra');
+  const obraId = document.getElementById('filterCorrObra')?.value || '';
+  let url = '/correspondencia' + (obraId ? `?obra_id=${obraId}` : '');
+  const r = await api(url);
+  _corrData = r.correspondencia || [];
+  const total    = _corrData.length;
+  const saliente = _corrData.filter(c => c.tipo === 'saliente').length;
+  const entrante = _corrData.filter(c => c.tipo === 'entrante').length;
+  const pendResp = _corrData.filter(c => c.respuesta_requerida && c.estado !== 'respondida').length;
+  const vencidas = _corrData.filter(c => c.respuesta_vencida).length;
+  document.getElementById('corrResumen').innerHTML = [
+    { label: 'Total',         val: total,    cls: '' },
+    { label: 'Saliente',      val: saliente, cls: '' },
+    { label: 'Entrante',      val: entrante, cls: '' },
+    { label: 'Pte. respuesta', val: pendResp, cls: pendResp > 0 ? 'warn' : '' },
+    { label: 'Respuesta vencida', val: vencidas, cls: vencidas > 0 ? 'danger' : '' },
+  ].map(k => `<div class="kpi-card"><div class="kpi-value ${k.cls}">${k.val}</div><div class="kpi-label">${k.label}</div></div>`).join('');
+  const badge = document.getElementById('corrBadge');
+  if (badge) badge.style.display = (pendResp > 0 || vencidas > 0) ? '' : 'none';
+  filtrarCorr();
+}
+function filtrarCorr() {
+  const q   = (document.getElementById('searchCorr')?.value || '').toLowerCase();
+  const tip = document.getElementById('filterCorrTipo')?.value || '';
+  const est = document.getElementById('filterCorrEstado')?.value || '';
+  const data = _corrData.filter(c =>
+    (!q   || (c.asunto||'').toLowerCase().includes(q) || (c.emisor||'').toLowerCase().includes(q) || (c.receptor||'').toLowerCase().includes(q) || (c.referencia||'').toLowerCase().includes(q) || (c.numero||'').toLowerCase().includes(q)) &&
+    (!tip || c.tipo === tip) &&
+    (!est || c.estado === est)
+  );
+  if (tblCorr) { tblCorr.replaceData(data); return; }
+  tblCorr = new Tabulator('#tblCorr', {
+    data, layout: 'fitColumns', responsiveLayout: 'collapse',
+    pagination: 'local', paginationSize: 20,
+    placeholder: '<div class="empty-state"><div class="empty-icon">✉️</div><div class="empty-text">Sin correspondencia registrada</div></div>',
+    initialSort: [{ column: 'fecha', dir: 'desc' }],
+    rowClick: (e, row) => abrirModalCorrEditar(row.getData().id),
+    columns: [
+      { title: 'Nº', field: 'numero', width: 130, formatter: (cell) => {
+        const d = cell.getData();
+        const icon = d.tipo === 'saliente' ? '📤' : '📥';
+        return `${icon} <strong>${cell.getValue()||'—'}</strong>`;
+      }},
+      { title: 'Fecha', field: 'fecha', width: 100, formatter: (cell) => fmtFecha(cell.getValue()) },
+      { title: 'Asunto', field: 'asunto', minWidth: 200 },
+      { title: 'De', field: 'emisor', width: 140 },
+      { title: 'A', field: 'receptor', width: 140 },
+      { title: 'Obra', field: 'obra_nombre', width: 130 },
+      { title: 'Estado', field: 'estado', width: 120, formatter: (cell) => {
+        const d = cell.getData();
+        const cls = d.respuesta_vencida ? 'danger' : cell.getValue() === 'respondida' ? 'ok' : cell.getValue() === 'pendiente' ? 'warn' : 'muted';
+        return `<span class="badge badge-${cls}">${d.respuesta_vencida ? '⚠️ ' : ''}${cell.getValue()||'—'}</span>`;
+      }},
+      { title: 'Acciones', width: 80, formatter: () => `<button class="btn btn-secondary btn-sm">✏ Editar</button>`, cellClick: (e, cell) => { e.stopPropagation(); abrirModalCorrEditar(cell.getData().id); } },
+    ]
+  });
+  document.getElementById('searchCorr')?.addEventListener('input', () => {
+    if (tblCorr) tblCorr.replaceData(_corrData.filter(c => {
+      const q2 = (document.getElementById('searchCorr').value || '').toLowerCase();
+      return !q2 || (c.asunto||'').toLowerCase().includes(q2) || (c.emisor||'').toLowerCase().includes(q2) || (c.receptor||'').toLowerCase().includes(q2) || (c.referencia||'').toLowerCase().includes(q2);
+    }));
+  });
+}
+function abrirModalCorr() {
+  const hoy = new Date().toISOString().slice(0, 10);
+  const en7 = new Date(Date.now()+7*86400000).toISOString().slice(0,10);
+  abrirModal('Nueva correspondencia', `
+    <div class="form-row">
+      <div class="form-group"><div class="form-label">Tipo *</div>
+        <select class="form-select" id="mCorrTipo">
+          <option value="saliente">📤 Saliente</option><option value="entrante">📥 Entrante</option>
+        </select>
+      </div>
+      <div class="form-group"><div class="form-label">Fecha *</div><input class="form-input" id="mCorrFecha" type="date" value="${hoy}"></div>
+    </div>
+    <div class="form-group"><div class="form-label">Asunto *</div><input class="form-input" id="mCorrAsunto" placeholder="Asunto de la carta o comunicación..."></div>
+    <div class="form-row">
+      <div class="form-group"><div class="form-label">Emisor (De)</div><input class="form-input" id="mCorrEmisor" placeholder="Empresa o persona"></div>
+      <div class="form-group"><div class="form-label">Receptor (A)</div><input class="form-input" id="mCorrReceptor" placeholder="Empresa o persona"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><div class="form-label">Referencia</div><input class="form-input" id="mCorrRef" placeholder="Nº de contrato, expediente..."></div>
+      <div class="form-group"><div class="form-label">Estado</div>
+        <select class="form-select" id="mCorrEstado">
+          <option value="enviada">Enviada</option><option value="pendiente">Pendiente</option><option value="respondida">Respondida</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-group">
+      <div class="form-label"><input type="checkbox" id="mCorrRespReq"> Requiere respuesta</div>
+    </div>
+    <div class="form-group" id="mCorrFechaRespGrp" style="display:none"><div class="form-label">Fecha límite respuesta</div><input class="form-input" id="mCorrFechaResp" type="date" value="${en7}"></div>
+    <div class="form-group"><div class="form-label">Obra</div>
+      <select class="form-select" id="mCorrObraId"><option value="">— Sin asignar —</option></select>
+    </div>
+    <div class="form-group"><div class="form-label">Notas</div><textarea class="form-input" id="mCorrNotas" rows="2"></textarea></div>
+  `, async () => {
+    const asunto = document.getElementById('mCorrAsunto').value.trim();
+    const fecha  = document.getElementById('mCorrFecha').value;
+    if (!asunto || !fecha) { toast('Asunto y fecha son obligatorios', 'err'); return; }
+    const rr = document.getElementById('mCorrRespReq').checked;
+    const body = {
+      tipo: document.getElementById('mCorrTipo').value,
+      fecha, asunto,
+      emisor: document.getElementById('mCorrEmisor').value.trim() || null,
+      receptor: document.getElementById('mCorrReceptor').value.trim() || null,
+      referencia: document.getElementById('mCorrRef').value.trim() || null,
+      estado: document.getElementById('mCorrEstado').value,
+      respuesta_requerida: rr,
+      fecha_respuesta_limite: rr ? (document.getElementById('mCorrFechaResp').value || null) : null,
+      obra_id: document.getElementById('mCorrObraId').value ? parseInt(document.getElementById('mCorrObraId').value) : null,
+      notas: document.getElementById('mCorrNotas').value.trim() || null,
+    };
+    const r = await api('/correspondencia', { method: 'POST', body: JSON.stringify(body) });
+    if (r.ok || r.id) { toast(`Correspondencia ${r.numero||''} creada ✓`, 'ok'); cerrarModal(); cargarCorrespondencia(); }
+    else toast('Error al crear', 'err');
+  });
+  // Checkbox toggle
+  setTimeout(() => {
+    document.getElementById('mCorrRespReq')?.addEventListener('change', e => {
+      document.getElementById('mCorrFechaRespGrp').style.display = e.target.checked ? '' : 'none';
+    });
+    poblarSelectObras('mCorrObraId');
+  }, 50);
+}
+function abrirModalCorrEditar(id) {
+  const c = _corrData.find(x => x.id === id);
+  if (!c) return;
+  abrirModal('Editar correspondencia', `
+    <div style="font-family:'Montserrat',sans-serif;font-weight:700;font-size:13px;margin-bottom:10px;color:var(--primary)">${c.numero||''} — ${c.asunto||''}</div>
+    <div class="form-row">
+      <div class="form-group"><div class="form-label">Tipo</div>
+        <select class="form-select" id="mCorrTipo">
+          <option value="saliente" ${c.tipo==='saliente'?'selected':''}>📤 Saliente</option>
+          <option value="entrante" ${c.tipo==='entrante'?'selected':''}>📥 Entrante</option>
+        </select>
+      </div>
+      <div class="form-group"><div class="form-label">Fecha</div><input class="form-input" id="mCorrFecha" type="date" value="${c.fecha||''}"></div>
+    </div>
+    <div class="form-group"><div class="form-label">Asunto *</div><input class="form-input" id="mCorrAsunto" value="${esc(c.asunto||'')}"></div>
+    <div class="form-row">
+      <div class="form-group"><div class="form-label">Emisor</div><input class="form-input" id="mCorrEmisor" value="${esc(c.emisor||'')}"></div>
+      <div class="form-group"><div class="form-label">Receptor</div><input class="form-input" id="mCorrReceptor" value="${esc(c.receptor||'')}"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><div class="form-label">Referencia</div><input class="form-input" id="mCorrRef" value="${esc(c.referencia||'')}"></div>
+      <div class="form-group"><div class="form-label">Estado</div>
+        <select class="form-select" id="mCorrEstado">
+          <option value="enviada" ${c.estado==='enviada'?'selected':''}>Enviada</option>
+          <option value="pendiente" ${c.estado==='pendiente'?'selected':''}>Pendiente</option>
+          <option value="respondida" ${c.estado==='respondida'?'selected':''}>Respondida</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-group"><div class="form-label">Notas</div><textarea class="form-input" id="mCorrNotas" rows="2">${c.notas||''}</textarea></div>
+    <div style="margin-top:12px"><button class="btn btn-danger btn-sm" onclick="eliminarCorr(${c.id})">🗑 Eliminar</button></div>
+  `, async () => {
+    const asunto = document.getElementById('mCorrAsunto').value.trim();
+    const fecha  = document.getElementById('mCorrFecha').value;
+    if (!asunto || !fecha) { toast('Asunto y fecha son obligatorios', 'err'); return; }
+    const body = {
+      tipo: document.getElementById('mCorrTipo').value, fecha, asunto,
+      emisor: document.getElementById('mCorrEmisor').value.trim() || null,
+      receptor: document.getElementById('mCorrReceptor').value.trim() || null,
+      referencia: document.getElementById('mCorrRef').value.trim() || null,
+      estado: document.getElementById('mCorrEstado').value,
+      notas: document.getElementById('mCorrNotas').value.trim() || null,
+    };
+    const r = await api(`/correspondencia/${c.id}`, { method: 'PUT', body: JSON.stringify(body) });
+    if (r.ok) { toast('Actualizado ✓', 'ok'); cerrarModal(); tblCorr = null; cargarCorrespondencia(); }
+    else toast('Error al actualizar', 'err');
+  });
+}
+async function eliminarCorr(id) {
+  if (!confirm('¿Eliminar esta correspondencia?')) return;
+  const r = await api(`/correspondencia/${id}`, { method: 'DELETE' });
+  if (r.ok || r.deleted) { toast('Eliminado', 'ok'); cerrarModal(); tblCorr = null; cargarCorrespondencia(); }
+  else toast('Error al eliminar', 'err');
 }
 
 // ── DIARIO DE OBRA ───────────────────────────────────────────────
