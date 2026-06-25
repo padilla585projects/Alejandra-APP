@@ -704,6 +704,9 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
     <button class="nav-item" data-page="residuos" onclick="navTo('residuos')">
       <span class="nav-icon">♻️</span> Gestión Residuos
     </button>
+    <button class="nav-item" data-page="partesMaquinaria" onclick="navTo('partesMaquinaria')">
+      <span class="nav-icon">🚜</span> Partes Maquinaria
+    </button>
     <button class="nav-item" data-page="fotosObra" onclick="navTo('fotosObra')">
       <span class="nav-icon">📷</span> Galería de Fotos
     </button>
@@ -2424,6 +2427,150 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
               <button class="btn btn-secondary" onclick="cerrarModalAts()">Cancelar</button>
               <span id="atsElimBtn"></span>
               <button class="btn btn-primary" onclick="guardarAts()">💾 Guardar ATS</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- PARTES DE MAQUINARIA / DAILY PLANT LOG (NEW-89) -->
+      <div class="page" id="pagePartesMaquinaria">
+        <div class="page-title">🚜 Partes de Maquinaria / Daily Plant Log</div>
+        <div id="pmKpis" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:16px"></div>
+        <div class="tbl-toolbar">
+          <input class="tbl-search" id="searchPm" placeholder="🔍 Buscar máquina, matrícula, operador..." oninput="filtrarPartesMaq()">
+          <select class="tbl-search" id="filterPmObra" style="min-width:220px" onchange="tblPm=null;cargarPartesMaq()">
+            <option value="">Todas las obras</option>
+          </select>
+          <select class="tbl-search" id="filterPmTipo" onchange="filtrarPartesMaq()">
+            <option value="">Todos los tipos</option>
+            <option value="excavadora">Excavadora</option>
+            <option value="grua">Grúa</option>
+            <option value="camion">Camión</option>
+            <option value="compresor">Compresor</option>
+            <option value="grupo_electrogeno">Grupo electrógeno</option>
+            <option value="plataforma">Plataforma elevadora</option>
+            <option value="retrocargadora">Retrocargadora</option>
+            <option value="otros">Otros</option>
+          </select>
+          <button class="btn btn-primary" onclick="abrirModalPm()">+ Nuevo Parte</button>
+        </div>
+        <div id="tblPmContainer"></div>
+        <!-- Modal parte maquinaria -->
+        <div class="modal-overlay" id="modalPm" style="display:none" onclick="if(event.target===this)cerrarModalPm()">
+          <div class="modal" style="max-width:660px">
+            <div class="modal-header">
+              <span id="modalPmTitulo">Nuevo Parte de Maquinaria</span>
+              <button class="modal-close" onclick="cerrarModalPm()">✕</button>
+            </div>
+            <div class="modal-body" style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+              <div style="grid-column:span 2;font-weight:600;color:var(--accent);border-bottom:1px solid #eee;padding-bottom:6px">Identificación</div>
+              <div>
+                <label>Número</label>
+                <input id="pmNumero" class="form-control" placeholder="Auto" readonly style="background:#f5f5f5">
+              </div>
+              <div>
+                <label>Fecha *</label>
+                <input id="pmFecha" class="form-control" type="date">
+              </div>
+              <div>
+                <label>Máquina / Equipo *</label>
+                <input id="pmMaquina" class="form-control" placeholder="Ej: Excavadora CAT 320, Grúa Liebherr 40t...">
+              </div>
+              <div>
+                <label>Tipo</label>
+                <select id="pmTipo" class="form-control">
+                  <option value="excavadora">Excavadora</option>
+                  <option value="grua">Grúa</option>
+                  <option value="camion">Camión</option>
+                  <option value="compresor">Compresor</option>
+                  <option value="grupo_electrogeno">Grupo electrógeno</option>
+                  <option value="plataforma">Plataforma elevadora</option>
+                  <option value="retrocargadora">Retrocargadora</option>
+                  <option value="otros">Otros</option>
+                </select>
+              </div>
+              <div>
+                <label>Matrícula / ID</label>
+                <input id="pmMatricula" class="form-control" placeholder="Matrícula o código interno">
+              </div>
+              <div>
+                <label>Operador</label>
+                <input id="pmOperador" class="form-control" placeholder="Nombre del operador">
+              </div>
+              <div>
+                <label>Obra</label>
+                <select id="pmObra" class="form-control"><option value="">Sin obra</option></select>
+              </div>
+              <div>
+                <label>Estado máquina</label>
+                <select id="pmEstado" class="form-control">
+                  <option value="trabajando">Trabajando</option>
+                  <option value="standby">Stand-by</option>
+                  <option value="averia">Avería</option>
+                  <option value="mantenimiento">Mantenimiento</option>
+                  <option value="traslado">Traslado</option>
+                </select>
+              </div>
+              <div style="grid-column:span 2;font-weight:600;color:var(--accent);border-bottom:1px solid #eee;padding-bottom:6px;margin-top:8px">Horómetro</div>
+              <div>
+                <label>Horas inicio (horómetro)</label>
+                <input id="pmHorasIni" class="form-control" type="number" step="0.1" placeholder="Ej: 1250.5" oninput="calcPmHoras()">
+              </div>
+              <div>
+                <label>Horas fin (horómetro)</label>
+                <input id="pmHorasFin" class="form-control" type="number" step="0.1" placeholder="Ej: 1258.5" oninput="calcPmHoras()">
+              </div>
+              <div>
+                <label>Horas trabajadas</label>
+                <input id="pmHorasTrab" class="form-control" type="number" step="0.1" placeholder="Calculado automáticamente" style="background:#f9f9f9">
+              </div>
+              <div>
+                <label>Coste/hora (€)</label>
+                <input id="pmCosteHora" class="form-control" type="number" step="0.01" placeholder="€/h" oninput="calcPmCoste()">
+              </div>
+              <div style="grid-column:span 2;font-weight:600;color:var(--accent);border-bottom:1px solid #eee;padding-bottom:6px;margin-top:8px">Combustible</div>
+              <div>
+                <label>Combustible inicio (L)</label>
+                <input id="pmCombIni" class="form-control" type="number" step="0.1" placeholder="Litros en depósito al inicio" oninput="calcPmComb()">
+              </div>
+              <div>
+                <label>Repostado (L)</label>
+                <input id="pmCombRep" class="form-control" type="number" step="0.1" placeholder="Litros repostados" oninput="calcPmComb()">
+              </div>
+              <div>
+                <label>Combustible fin (L)</label>
+                <input id="pmCombFin" class="form-control" type="number" step="0.1" placeholder="Litros en depósito al final" oninput="calcPmComb()">
+              </div>
+              <div>
+                <label>Consumo estimado (L)</label>
+                <input id="pmConsumo" class="form-control" type="number" step="0.1" placeholder="Calculado automáticamente" style="background:#f9f9f9" readonly>
+              </div>
+              <div style="grid-column:span 2;font-weight:600;color:var(--accent);border-bottom:1px solid #eee;padding-bottom:6px;margin-top:8px">Trabajo realizado</div>
+              <div>
+                <label>Ubicación / zona de trabajo</label>
+                <input id="pmUbicacion" class="form-control" placeholder="Zona, planta, área...">
+              </div>
+              <div>
+                <label>Coste total (€)</label>
+                <input id="pmCosteTotal" class="form-control" type="number" step="0.01" placeholder="Calculado automáticamente">
+              </div>
+              <div style="grid-column:span 2">
+                <label>Tareas realizadas</label>
+                <textarea id="pmTareas" class="form-control" rows="2" placeholder="Descripción de los trabajos realizados"></textarea>
+              </div>
+              <div style="grid-column:span 2">
+                <label>Incidencias / anomalías</label>
+                <textarea id="pmIncidencias" class="form-control" rows="2" placeholder="Averías, paradas, observaciones de seguridad..."></textarea>
+              </div>
+              <div style="grid-column:span 2">
+                <label>Observaciones</label>
+                <textarea id="pmObs" class="form-control" rows="1"></textarea>
+              </div>
+            </div>
+            <div class="modal-footer">
+              <button class="btn btn-secondary" onclick="cerrarModalPm()">Cancelar</button>
+              <span id="pmElimBtn"></span>
+              <button class="btn btn-primary" onclick="guardarPm()">💾 Guardar Parte</button>
             </div>
           </div>
         </div>
@@ -6812,6 +6959,7 @@ const PAGE_TITLES = {
   changeOrders: '🔄 Solicitudes de Cambio / Change Orders',
   ensayos: '🧪 Ensayos y Pruebas de Materiales / Material Tests',
   residuos: '♻️ Gestión de Residuos / Waste Management (RD 105/2008)',
+  partesMaquinaria: '🚜 Partes de Maquinaria / Daily Plant Log',
 };
 
 const PAGE_LOADERS = {
@@ -6901,6 +7049,7 @@ const PAGE_LOADERS = {
   changeOrders:     cargarChangeOrders,
   ensayos:          cargarEnsayos,
   residuos:         cargarResiduos,
+  partesMaquinaria: cargarPartesMaq,
 };
 
 let currentPage = '';
@@ -7019,6 +7168,7 @@ const SYNC_INTERVALS = {
   changeOrders:     60,
   ensayos:          90,
   residuos:         180,
+  partesMaquinaria: 60,
 };
 
 let _syncTimer = null, _syncLabelTimer = null, _syncLastTs = null;
@@ -16379,6 +16529,191 @@ function exportarFinanzas() {
   if (!obraId) return showToast('Selecciona una obra primero', 'warning');
   // Abrir informe en nueva pestaña usando el endpoint de informes
   window.open(`/informe-obra/${obraId}?tipo=financiero`, '_blank');
+}
+
+// ── PARTES DE MAQUINARIA / DAILY PLANT LOG (NEW-89) ──────────────────────────
+let tblPm = null, _pmData = [];
+const PM_TIPO_LABEL = {
+  excavadora:'Excavadora', grua:'Grúa', camion:'Camión', compresor:'Compresor',
+  grupo_electrogeno:'Gpo. Electrógeno', plataforma:'Plataforma', retrocargadora:'Retrocargadora', otros:'Otros'
+};
+const PM_ESTADO_COLOR = {
+  trabajando:'var(--success)', standby:'var(--accent)', averia:'var(--danger)',
+  mantenimiento:'var(--warning)', traslado:'var(--muted)'
+};
+
+function calcPmHoras() {
+  const ini = parseFloat(document.getElementById('pmHorasIni').value);
+  const fin = parseFloat(document.getElementById('pmHorasFin').value);
+  if (!isNaN(ini) && !isNaN(fin) && fin > ini) {
+    document.getElementById('pmHorasTrab').value = (fin - ini).toFixed(1);
+  }
+  calcPmCoste();
+}
+
+function calcPmComb() {
+  const ini = parseFloat(document.getElementById('pmCombIni').value);
+  const fin = parseFloat(document.getElementById('pmCombFin').value);
+  const rep = parseFloat(document.getElementById('pmCombRep').value)||0;
+  if (!isNaN(ini) && !isNaN(fin)) {
+    const cons = Math.max(0, ini + rep - fin);
+    document.getElementById('pmConsumo').value = cons.toFixed(1);
+  }
+}
+
+function calcPmCoste() {
+  const horas  = parseFloat(document.getElementById('pmHorasTrab').value);
+  const precio = parseFloat(document.getElementById('pmCosteHora').value);
+  if (!isNaN(horas) && !isNaN(precio)) {
+    document.getElementById('pmCosteTotal').value = (horas * precio).toFixed(2);
+  }
+}
+
+async function cargarPartesMaq() {
+  poblarSelectObras('filterPmObra');
+  poblarSelectObras('pmObra');
+  const obraId = document.getElementById('filterPmObra').value;
+  const params = new URLSearchParams();
+  if (obraId) params.set('obra_id', obraId);
+  _pmData = await api('/partes-maquinaria?' + params);
+  if (!Array.isArray(_pmData)) _pmData = [];
+
+  // KPIs
+  const total       = _pmData.length;
+  const totalHoras  = _pmData.reduce((a,p)=>a+Number(p.horas_trabajadas||0),0);
+  const totalLitros = _pmData.reduce((a,p)=>a+Number(p.consumo_litros||0),0);
+  const totalCoste  = _pmData.reduce((a,p)=>a+Number(p.coste_total||0),0);
+  const averias     = _pmData.filter(p=>p.estado_maquina==='averia').length;
+  document.getElementById('pmKpis').innerHTML = `
+    <div class="kpi-mini"><div class="kpi-val">${total}</div><div class="kpi-lbl">Total partes</div></div>
+    <div class="kpi-mini"><div class="kpi-val">${totalHoras.toFixed(1)} h</div><div class="kpi-lbl">Horas trabajadas</div></div>
+    <div class="kpi-mini"><div class="kpi-val">${totalLitros.toFixed(0)} L</div><div class="kpi-lbl">Combustible total</div></div>
+    <div class="kpi-mini"><div class="kpi-val" style="color:var(--accent)">${fmtMoney(totalCoste)}</div><div class="kpi-lbl">Coste total</div></div>
+    <div class="kpi-mini"><div class="kpi-val" style="color:var(--danger)">${averias}</div><div class="kpi-lbl">Averías</div></div>
+  `;
+  filtrarPartesMaq();
+}
+
+function filtrarPartesMaq() {
+  const q    = (document.getElementById('searchPm')?.value || '').toLowerCase();
+  const tipo = document.getElementById('filterPmTipo')?.value || '';
+  let data   = _pmData.filter(p => {
+    if (tipo && p.tipo_maquina !== tipo) return false;
+    if (q && !`${p.maquina} ${p.matricula||''} ${p.operador||''} ${p.numero||''}`.toLowerCase().includes(q)) return false;
+    return true;
+  });
+  const cols = [
+    { title:'Nº',       field:'numero',           width:115, formatter: c => c.getValue()||'—' },
+    { title:'Fecha',    field:'fecha',             width:105, formatter: c => c.getValue()||'—' },
+    { title:'Máquina',  field:'maquina',           widthGrow:2 },
+    { title:'Tipo',     field:'tipo_maquina',      width:140, formatter: c => PM_TIPO_LABEL[c.getValue()]||c.getValue() },
+    { title:'Operador', field:'operador',          width:130, formatter: c => c.getValue()||'—' },
+    { title:'Horas',    field:'horas_trabajadas',  width:85, hozAlign:'right', formatter: c => {
+      const v = c.getValue(); return v != null ? `${Number(v).toFixed(1)}h` : '—';
+    }},
+    { title:'Combustible', field:'consumo_litros', width:110, hozAlign:'right', formatter: c => {
+      const v = c.getValue(); return v != null ? `${Number(v).toFixed(0)} L` : '—';
+    }},
+    { title:'Coste',    field:'coste_total',       width:110, hozAlign:'right', formatter: c => {
+      const v = c.getValue(); return v ? fmtMoney(v) : '—';
+    }},
+    { title:'Estado',   field:'estado_maquina',    width:120, formatter: c => {
+      const v = c.getValue();
+      return `<span style="color:${PM_ESTADO_COLOR[v]||'inherit'};font-weight:600;text-transform:capitalize">${(v||'').replace('_',' ')}</span>`;
+    }},
+    { title:'Acciones', width:90, hozAlign:'center', formatter: c =>
+      `<button class="btn-tbl" onclick="editarPm(${c.getRow().getData().id})">✏️</button>
+       <button class="btn-tbl btn-danger-sm" onclick="eliminarPm(${c.getRow().getData().id})">🗑️</button>`
+    }
+  ];
+  if (!tblPm) {
+    tblPm = new Tabulator('#tblPmContainer', {
+      data, columns: cols, layout:'fitColumns', locale:'es-es',
+      placeholder:'No hay partes de maquinaria registrados', height:'520px'
+    });
+  } else {
+    tblPm.replaceData(data);
+  }
+}
+
+function abrirModalPm(d = {}) {
+  document.getElementById('modalPm')._pmId = d.id || null;
+  document.getElementById('pmNumero').value     = d.numero || '';
+  document.getElementById('pmFecha').value      = d.fecha  || new Date().toISOString().slice(0,10);
+  document.getElementById('pmMaquina').value    = d.maquina || '';
+  document.getElementById('pmTipo').value       = d.tipo_maquina || 'otros';
+  document.getElementById('pmMatricula').value  = d.matricula || '';
+  document.getElementById('pmOperador').value   = d.operador || '';
+  document.getElementById('pmObra').value       = d.obra_id || '';
+  document.getElementById('pmEstado').value     = d.estado_maquina || 'trabajando';
+  document.getElementById('pmHorasIni').value   = d.horas_inicio ?? '';
+  document.getElementById('pmHorasFin').value   = d.horas_fin ?? '';
+  document.getElementById('pmHorasTrab').value  = d.horas_trabajadas ?? '';
+  document.getElementById('pmCosteHora').value  = d.coste_hora ?? '';
+  document.getElementById('pmCosteTotal').value = d.coste_total ?? '';
+  document.getElementById('pmCombIni').value    = d.combustible_inicio ?? '';
+  document.getElementById('pmCombRep').value    = d.combustible_repostado ?? '';
+  document.getElementById('pmCombFin').value    = d.combustible_fin ?? '';
+  document.getElementById('pmConsumo').value    = d.consumo_litros ?? '';
+  document.getElementById('pmUbicacion').value  = d.ubicacion_trabajo || '';
+  document.getElementById('pmTareas').value     = d.tareas_realizadas || '';
+  document.getElementById('pmIncidencias').value= d.incidencias || '';
+  document.getElementById('pmObs').value        = d.observaciones || '';
+  document.getElementById('modalPmTitulo').textContent = d.id ? 'Editar Parte de Maquinaria' : 'Nuevo Parte de Maquinaria';
+  document.getElementById('pmElimBtn').innerHTML = d.id
+    ? `<button class="btn btn-danger" onclick="eliminarPm(${d.id},true)">🗑️ Eliminar</button>` : '';
+  document.getElementById('modalPm').style.display = 'flex';
+}
+
+async function editarPm(id) {
+  const d = _pmData.find(p => p.id === id);
+  if (d) abrirModalPm(d);
+}
+
+async function guardarPm() {
+  const maquina = document.getElementById('pmMaquina').value.trim();
+  const fecha   = document.getElementById('pmFecha').value;
+  if (!maquina) return alert('El nombre de la máquina es obligatorio.');
+  if (!fecha)   return alert('La fecha es obligatoria.');
+  const body = {
+    fecha, maquina,
+    tipo_maquina:         document.getElementById('pmTipo').value,
+    matricula:            document.getElementById('pmMatricula').value.trim() || null,
+    operador:             document.getElementById('pmOperador').value.trim() || null,
+    obra_id:              document.getElementById('pmObra').value || null,
+    estado_maquina:       document.getElementById('pmEstado').value,
+    horas_inicio:         document.getElementById('pmHorasIni').value !== '' ? parseFloat(document.getElementById('pmHorasIni').value) : null,
+    horas_fin:            document.getElementById('pmHorasFin').value !== '' ? parseFloat(document.getElementById('pmHorasFin').value) : null,
+    horas_trabajadas:     document.getElementById('pmHorasTrab').value !== '' ? parseFloat(document.getElementById('pmHorasTrab').value) : null,
+    coste_hora:           document.getElementById('pmCosteHora').value !== '' ? parseFloat(document.getElementById('pmCosteHora').value) : null,
+    coste_total:          document.getElementById('pmCosteTotal').value !== '' ? parseFloat(document.getElementById('pmCosteTotal').value) : null,
+    combustible_inicio:   document.getElementById('pmCombIni').value !== '' ? parseFloat(document.getElementById('pmCombIni').value) : null,
+    combustible_repostado:document.getElementById('pmCombRep').value !== '' ? parseFloat(document.getElementById('pmCombRep').value) : 0,
+    combustible_fin:      document.getElementById('pmCombFin').value !== '' ? parseFloat(document.getElementById('pmCombFin').value) : null,
+    ubicacion_trabajo:    document.getElementById('pmUbicacion').value.trim() || null,
+    tareas_realizadas:    document.getElementById('pmTareas').value.trim() || null,
+    incidencias:          document.getElementById('pmIncidencias').value.trim() || null,
+    observaciones:        document.getElementById('pmObs').value.trim() || null,
+  };
+  const id = document.getElementById('modalPm')._pmId;
+  if (id) {
+    await api(`/partes-maquinaria/${id}`, { method:'PUT', body: JSON.stringify(body) });
+  } else {
+    await api('/partes-maquinaria', { method:'POST', body: JSON.stringify(body) });
+  }
+  cerrarModalPm();
+  await cargarPartesMaq();
+}
+
+async function eliminarPm(id, desdeModal = false) {
+  if (!confirm('¿Eliminar este parte de maquinaria? Esta acción no se puede deshacer.')) return;
+  await api(`/partes-maquinaria/${id}`, { method:'DELETE' });
+  if (desdeModal) cerrarModalPm();
+  await cargarPartesMaq();
+}
+
+function cerrarModalPm() {
+  document.getElementById('modalPm').style.display = 'none';
 }
 
 // ── GESTION DE RESIDUOS / WASTE MANAGEMENT (NEW-88) ──────────────────────────

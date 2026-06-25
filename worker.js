@@ -4721,6 +4721,14 @@ export default {
         if (method === 'PUT')    return await actualizarVisitaObra(_vid, request, env);
         if (method === 'DELETE') return await eliminarVisitaObra(_vid, request, env);
       }
+      // ── Partes de Maquinaria / Daily Plant Log (NEW-89) ─────────────────────────
+      if (path === '/partes-maquinaria' && method === 'GET')  return await getPartesMaquinaria(request, env);
+      if (path === '/partes-maquinaria' && method === 'POST') return await crearParteMaquinaria(request, env);
+      if (path.startsWith('/partes-maquinaria/')) {
+        const _pmId = parseInt(path.split('/partes-maquinaria/')[1]);
+        if (method === 'PUT')    return await actualizarParteMaquinaria(_pmId, request, env);
+        if (method === 'DELETE') return await eliminarParteMaquinaria(_pmId, request, env);
+      }
       // ── Gestion de Residuos / Waste Management (NEW-88) ─────────────────────────
       if (path === '/residuos' && method === 'GET')  return await getResiduos(request, env);
       if (path === '/residuos' && method === 'POST') return await crearResiduo(request, env);
@@ -18477,5 +18485,128 @@ async function eliminarResiduo(id, request, env) {
   const { empresa_id } = await getAuthContext(request, env);
   await ensureResiduosTable(env);
   await env.DB.prepare(`DELETE FROM residuos_obra WHERE id=? AND empresa_id=?`).bind(id, empresa_id).run();
+  return jsonResp({ ok: true });
+}
+
+// ── Partes de Maquinaria / Daily Plant Log (NEW-89) ──────────────────────────
+async function ensurePartesMaquinariaTable(env) {
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS partes_maquinaria (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    empresa_id        INTEGER NOT NULL,
+    obra_id           INTEGER,
+    numero            TEXT,
+    fecha             TEXT NOT NULL,
+    maquina           TEXT NOT NULL,
+    tipo_maquina      TEXT NOT NULL DEFAULT 'otros',
+    matricula         TEXT,
+    operador          TEXT,
+    horas_inicio      REAL,
+    horas_fin         REAL,
+    horas_trabajadas  REAL,
+    combustible_inicio REAL,
+    combustible_fin   REAL,
+    combustible_repostado REAL DEFAULT 0,
+    consumo_litros    REAL,
+    tareas_realizadas TEXT,
+    ubicacion_trabajo TEXT,
+    incidencias       TEXT,
+    estado_maquina    TEXT NOT NULL DEFAULT 'trabajando',
+    coste_hora        REAL,
+    coste_total       REAL,
+    observaciones     TEXT,
+    created_at        TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at        TEXT NOT NULL DEFAULT (datetime('now'))
+  )`).run();
+}
+
+async function getPartesMaquinaria(request, env) {
+  const { empresa_id } = await getAuthContext(request, env);
+  const url = new URL(request.url);
+  const obra_id  = url.searchParams.get('obra_id');
+  const maquina  = url.searchParams.get('maquina');
+  const estado   = url.searchParams.get('estado');
+  await ensurePartesMaquinariaTable(env);
+  let q = `SELECT * FROM partes_maquinaria WHERE empresa_id=?`;
+  const p = [empresa_id];
+  if (obra_id) { q += ` AND obra_id=?`;           p.push(obra_id); }
+  if (maquina) { q += ` AND maquina LIKE ?`;       p.push(`%${maquina}%`); }
+  if (estado)  { q += ` AND estado_maquina=?`;     p.push(estado); }
+  q += ` ORDER BY fecha DESC, id DESC`;
+  const rows = await env.DB.prepare(q).bind(...p).all();
+  return jsonResp(rows.results || []);
+}
+
+async function crearParteMaquinaria(request, env) {
+  const { empresa_id } = await getAuthContext(request, env);
+  const d = await request.json();
+  await ensurePartesMaquinariaTable(env);
+  const anio = new Date().getFullYear();
+  const last = await env.DB.prepare(
+    `SELECT numero FROM partes_maquinaria WHERE empresa_id=? AND numero LIKE ? ORDER BY id DESC LIMIT 1`
+  ).bind(empresa_id, `PMA-${anio}-%`).first();
+  let seq = 1;
+  if (last?.numero) { const n = parseInt(last.numero.split('-')[2]); if (!isNaN(n)) seq = n + 1; }
+  const numero = `PMA-${anio}-${String(seq).padStart(4,'0')}`;
+  // Auto-calculate hours worked and fuel consumption
+  const hIni = parseFloat(d.horas_inicio); const hFin = parseFloat(d.horas_fin);
+  const hTrab = !isNaN(hIni) && !isNaN(hFin) ? Math.max(0, hFin - hIni) : (parseFloat(d.horas_trabajadas)||null);
+  const cIni  = parseFloat(d.combustible_inicio); const cFin = parseFloat(d.combustible_fin);
+  const cRep  = parseFloat(d.combustible_repostado)||0;
+  const cLit  = !isNaN(cIni) && !isNaN(cFin) ? Math.max(0, cIni + cRep - cFin) : null;
+  const costH = parseFloat(d.coste_hora)||null;
+  const costT = costH && hTrab ? Math.round(costH * hTrab * 100)/100 : (parseFloat(d.coste_total)||null);
+  const r = await env.DB.prepare(
+    `INSERT INTO partes_maquinaria
+     (empresa_id,obra_id,numero,fecha,maquina,tipo_maquina,matricula,operador,
+      horas_inicio,horas_fin,horas_trabajadas,combustible_inicio,combustible_fin,
+      combustible_repostado,consumo_litros,tareas_realizadas,ubicacion_trabajo,
+      incidencias,estado_maquina,coste_hora,coste_total,observaciones)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+  ).bind(
+    empresa_id, d.obra_id||null, numero, d.fecha,
+    d.maquina, d.tipo_maquina||'otros', d.matricula||null, d.operador||null,
+    isNaN(hIni)?null:hIni, isNaN(hFin)?null:hFin, hTrab,
+    isNaN(cIni)?null:cIni, isNaN(cFin)?null:cFin, cRep, cLit,
+    d.tareas_realizadas||null, d.ubicacion_trabajo||null, d.incidencias||null,
+    d.estado_maquina||'trabajando', costH, costT, d.observaciones||null
+  ).run();
+  return jsonResp({ id: r.meta.last_row_id, numero, horas_trabajadas: hTrab, consumo_litros: cLit, coste_total: costT }, 201);
+}
+
+async function actualizarParteMaquinaria(id, request, env) {
+  const { empresa_id } = await getAuthContext(request, env);
+  const d = await request.json();
+  await ensurePartesMaquinariaTable(env);
+  const hIni = parseFloat(d.horas_inicio); const hFin = parseFloat(d.horas_fin);
+  const hTrab = !isNaN(hIni) && !isNaN(hFin) ? Math.max(0, hFin - hIni) : (parseFloat(d.horas_trabajadas)||null);
+  const cIni  = parseFloat(d.combustible_inicio); const cFin = parseFloat(d.combustible_fin);
+  const cRep  = parseFloat(d.combustible_repostado)||0;
+  const cLit  = !isNaN(cIni) && !isNaN(cFin) ? Math.max(0, cIni + cRep - cFin) : null;
+  const costH = parseFloat(d.coste_hora)||null;
+  const costT = costH && hTrab ? Math.round(costH * hTrab * 100)/100 : (parseFloat(d.coste_total)||null);
+  await env.DB.prepare(
+    `UPDATE partes_maquinaria SET
+      fecha=?, maquina=?, tipo_maquina=?, matricula=?, operador=?,
+      horas_inicio=?, horas_fin=?, horas_trabajadas=?,
+      combustible_inicio=?, combustible_fin=?, combustible_repostado=?, consumo_litros=?,
+      tareas_realizadas=?, ubicacion_trabajo=?, incidencias=?,
+      estado_maquina=?, coste_hora=?, coste_total=?, observaciones=?,
+      updated_at=datetime('now')
+     WHERE id=? AND empresa_id=?`
+  ).bind(
+    d.fecha, d.maquina, d.tipo_maquina||'otros', d.matricula||null, d.operador||null,
+    isNaN(hIni)?null:hIni, isNaN(hFin)?null:hFin, hTrab,
+    isNaN(cIni)?null:cIni, isNaN(cFin)?null:cFin, cRep, cLit,
+    d.tareas_realizadas||null, d.ubicacion_trabajo||null, d.incidencias||null,
+    d.estado_maquina||'trabajando', costH, costT, d.observaciones||null,
+    id, empresa_id
+  ).run();
+  return jsonResp({ ok: true, horas_trabajadas: hTrab, consumo_litros: cLit, coste_total: costT });
+}
+
+async function eliminarParteMaquinaria(id, request, env) {
+  const { empresa_id } = await getAuthContext(request, env);
+  await ensurePartesMaquinariaTable(env);
+  await env.DB.prepare(`DELETE FROM partes_maquinaria WHERE id=? AND empresa_id=?`).bind(id, empresa_id).run();
   return jsonResp({ ok: true });
 }
