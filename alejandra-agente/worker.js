@@ -5943,7 +5943,7 @@ ${descripcion ? `<div class="info-bar"><span class="badge">${tipo}</span>${descr
         if (!obraId) return '❌ No se encontró una obra activa. Indica el ID de obra o pide al usuario que seleccione una obra en la app.';
         const eid = empresa_id || 'default';
 
-        const [kpis, fases, diario, incidencias, obraInfo, tareasAbiertas, rfisAbiertas, presupuesto, ocTotales] = await Promise.all([
+        const [kpis, fases, diario, incidencias, obraInfo, tareasAbiertas, rfisAbiertas, presupuesto, ocTotales, deficienciasAbiertas] = await Promise.all([
           env.DB.prepare(`SELECT
             (SELECT COUNT(*) FROM fichajes WHERE obra_id=? AND empresa_id=? AND fecha=date('now')) as fichajes_hoy,
             (SELECT COUNT(*) FROM incidencias WHERE obra_id=? AND empresa_id=? AND estado IN ('abierta','en_progreso')) as inc_abiertas,
@@ -5958,6 +5958,7 @@ ${descripcion ? `<div class="info-bar"><span class="badge">${tipo}</span>${descr
           env.DB.prepare(`SELECT numero,titulo,estado,prioridad,asignado_a,impacto_plazo,impacto_coste FROM rfis WHERE obra_id=? AND empresa_id=? AND estado IN ('abierta','en_revision') ORDER BY CASE prioridad WHEN 'urgente' THEN 0 WHEN 'alta' THEN 1 WHEN 'normal' THEN 2 ELSE 3 END LIMIT 5`).bind(obraId,eid).all().catch(()=>({results:[]})),
           env.DB.prepare(`SELECT COALESCE(SUM(importe_previsto),0) as prev, COALESCE(SUM(importe_real),0) as real FROM presupuesto_obra WHERE obra_id=? AND empresa_id=?`).bind(obraId,eid).first().catch(()=>null),
           env.DB.prepare(`SELECT COUNT(*) as total, COALESCE(SUM(CASE WHEN estado='aprobada' THEN coste_adicional ELSE 0 END),0) as aprobado, COUNT(CASE WHEN estado IN ('propuesta','en_revision') THEN 1 END) as pendientes FROM ordenes_cambio WHERE obra_id=? AND empresa_id=?`).bind(obraId,eid).first().catch(()=>null),
+          env.DB.prepare(`SELECT COUNT(*) as total, COUNT(CASE WHEN prioridad='urgente' THEN 1 END) as urgentes FROM control_calidad WHERE obra_id=? AND empresa_id=? AND estado IN ('abierto','en_reparacion')`).bind(obraId,eid).first().catch(()=>null),
         ]);
 
         let r = `📊 ESTADO DE OBRA: ${obraInfo?.nombre||'#'+obraId}${obraInfo?.codigo?' ('+obraInfo.codigo+')':''}\n`;
@@ -6043,6 +6044,13 @@ ${descripcion ? `<div class="info-bar"><span class="badge">${tipo}</span>${descr
           const fmtE = v => new Intl.NumberFormat('es-ES',{style:'currency',currency:'EUR',maximumFractionDigits:0}).format(v||0);
           r += `\n🔄 ÓRDENES DE CAMBIO: ${ocTotales.total} total — ${fmtE(ocTotales.aprobado)} aprobado`;
           if (ocTotales.pendientes > 0) r += ` — ⚠️ ${ocTotales.pendientes} pendiente${ocTotales.pendientes>1?'s':''} de aprobación`;
+          r += '\n';
+        }
+
+        // Control de Calidad (Punch List)
+        if (deficienciasAbiertas && deficienciasAbiertas.total > 0) {
+          r += `\n🔍 DEFICIENCIAS ABIERTAS: ${deficienciasAbiertas.total}`;
+          if (deficienciasAbiertas.urgentes > 0) r += ` — 🔴 ${deficienciasAbiertas.urgentes} URGENTE${deficienciasAbiertas.urgentes>1?'S':''}`;
           r += '\n';
         }
 

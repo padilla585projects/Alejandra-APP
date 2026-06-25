@@ -9315,12 +9315,13 @@ async function briefingMatutino(env) {
         const obraId = enc.obra_id;
 
         // Datos en paralelo
-        const [fichHoy, tareasUrg, rfisOpen, incAbiertas, proximoEv] = await Promise.all([
+        const [fichHoy, tareasUrg, rfisOpen, incAbiertas, proximoEv, defUrg] = await Promise.all([
           env.DB.prepare(`SELECT COUNT(*) as n FROM fichajes WHERE empresa_id=? AND obra_id=? AND fecha=?`).bind(eid,obraId,hoy).first().catch(()=>({n:0})),
           env.DB.prepare(`SELECT titulo,prioridad,asignado_a,fecha_limite FROM tareas_obra WHERE empresa_id=? AND obra_id=? AND estado NOT IN ('completada','bloqueada') AND prioridad IN ('urgente','alta') ORDER BY CASE prioridad WHEN 'urgente' THEN 0 ELSE 1 END LIMIT 5`).bind(eid,obraId).all().catch(()=>({results:[]})),
           env.DB.prepare(`SELECT numero,titulo,prioridad FROM rfis WHERE empresa_id=? AND obra_id=? AND estado IN ('abierta','en_revision') ORDER BY CASE prioridad WHEN 'urgente' THEN 0 WHEN 'alta' THEN 1 WHEN 'normal' THEN 2 ELSE 3 END LIMIT 3`).bind(eid,obraId).all().catch(()=>({results:[]})),
           env.DB.prepare(`SELECT COUNT(*) as n FROM incidencias WHERE empresa_id=? AND obra_id=? AND estado IN ('abierta','en_progreso')`).bind(eid,obraId).first().catch(()=>({n:0})),
           env.DB.prepare(`SELECT titulo,fecha,tipo FROM eventos_calendario WHERE empresa_id=? AND (obra_id=? OR obra_id IS NULL) AND fecha >= ? ORDER BY fecha ASC LIMIT 2`).bind(eid,obraId,hoy).all().catch(()=>({results:[]})),
+          env.DB.prepare(`SELECT COUNT(*) as total, COUNT(CASE WHEN prioridad='urgente' THEN 1 END) as urgentes FROM control_calidad WHERE empresa_id=? AND obra_id=? AND estado IN ('abierto','en_reparacion')`).bind(eid,obraId).first().catch(()=>({total:0,urgentes:0})),
         ]);
 
         const priIcon = { urgente:'🔴', alta:'🟠', normal:'🟡', baja:'🟢' };
@@ -9350,13 +9351,19 @@ async function briefingMatutino(env) {
           });
         }
 
+        const defTotal = defUrg?.total || 0;
+        const defUrgCount = defUrg?.urgentes || 0;
+        if (defTotal > 0) {
+          msg += `🔍 <b>Deficiencias abiertas:</b> ${defTotal}${defUrgCount > 0 ? ` — 🔴 ${defUrgCount} URGENTES` : ''}\n`;
+        }
+
         const evs = proximoEv.results || [];
         if (evs.length) {
           msg += `\n📅 <b>Próximos eventos:</b>\n`;
           evs.forEach(ev => msg += `  • ${ev.titulo} (${ev.fecha})\n`);
         }
 
-        if (!tRes.length && !rRes.length && (incAbiertas?.n||0) === 0) {
+        if (!tRes.length && !rRes.length && (incAbiertas?.n||0) === 0 && defTotal === 0) {
           msg += `\n✅ <b>¡Todo en orden! Sin pendientes urgentes.</b>`;
         }
 
