@@ -4721,6 +4721,14 @@ export default {
         if (method === 'PUT')    return await actualizarVisitaObra(_vid, request, env);
         if (method === 'DELETE') return await eliminarVisitaObra(_vid, request, env);
       }
+      // ── Gastos y Dietas de Personal / Worker Expense Claims (NEW-107) ───────────
+      if (path === '/gastos-dietas' && method === 'GET')  return await getGastosDietas(request, env);
+      if (path === '/gastos-dietas' && method === 'POST') return await crearGastoDieta(request, env);
+      if (path.startsWith('/gastos-dietas/')) {
+        const _gdId = parseInt(path.split('/gastos-dietas/')[1]);
+        if (method === 'PUT')    return await actualizarGastoDieta(_gdId, request, env);
+        if (method === 'DELETE') return await eliminarGastoDieta(_gdId, request, env);
+      }
       // ── Gestión de Licitaciones / Bid Pipeline (NEW-106) ─────────────────────────
       if (path === '/licitaciones' && method === 'GET')  return await getLicitaciones(request, env);
       if (path === '/licitaciones' && method === 'POST') return await crearLicitacion(request, env);
@@ -20248,5 +20256,144 @@ async function eliminarLicitacion(id, request, env) {
   const { empresa_id, rol } = await getAuth(request, env);
   if (!empresa_id || rol === 'operario') return err('Sin permisos', 403);
   await env.DB.prepare('DELETE FROM licitaciones WHERE id=? AND empresa_id=?').bind(id, empresa_id).run();
+  return json({ ok: true });
+}
+
+
+// ════════════════════════════════════════════════════════════════════════════════
+// NEW-107: GASTOS Y DIETAS DE PERSONAL / WORKER EXPENSE CLAIMS
+// ════════════════════════════════════════════════════════════════════════════════
+async function ensureGastosDietasTable(env) {
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS gastos_dietas (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    empresa_id        INTEGER NOT NULL,
+    usuario_id        INTEGER,
+    nombre_trabajador TEXT    NOT NULL,
+    obra_id           INTEGER,
+    fecha             TEXT    NOT NULL,
+    tipo              TEXT    NOT NULL DEFAULT 'dieta',
+    concepto          TEXT,
+    km                REAL    DEFAULT 0,
+    precio_km         REAL    DEFAULT 0.26,
+    importe_km        REAL    GENERATED ALWAYS AS (ROUND(km * precio_km, 2)) VIRTUAL,
+    dieta_media_dia   REAL    DEFAULT 0,
+    dieta_completa    REAL    DEFAULT 0,
+    alojamiento       REAL    DEFAULT 0,
+    peajes            REAL    DEFAULT 0,
+    parking           REAL    DEFAULT 0,
+    otros             REAL    DEFAULT 0,
+    total             REAL    NOT NULL DEFAULT 0,
+    estado            TEXT    NOT NULL DEFAULT 'pendiente',
+    aprobado_por      TEXT,
+    fecha_aprobacion  TEXT,
+    pagado            INTEGER DEFAULT 0,
+    fecha_pago        TEXT,
+    justificante_url  TEXT,
+    notas             TEXT,
+    created_by        TEXT,
+    created_at        TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at        TEXT NOT NULL DEFAULT (datetime('now'))
+  )`).run();
+}
+
+async function getGastosDietas(request, env) {
+  await ensureGastosDietasTable(env);
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const url     = new URL(request.url);
+  const obra_id = url.searchParams.get('obra_id');
+  const estado  = url.searchParams.get('estado');
+  const desde   = url.searchParams.get('desde');
+  const hasta   = url.searchParams.get('hasta');
+  const uid     = url.searchParams.get('usuario_id');
+  let sql = `SELECT g.*, o.nombre as obra_nombre
+    FROM gastos_dietas g
+    LEFT JOIN obras o ON g.obra_id = o.id
+    WHERE g.empresa_id = ?`;
+  const params = [empresa_id];
+  if (obra_id)  { sql += ' AND g.obra_id = ?';          params.push(parseInt(obra_id)); }
+  if (estado)   { sql += ' AND g.estado = ?';           params.push(estado); }
+  if (desde)    { sql += ' AND g.fecha >= ?';           params.push(desde); }
+  if (hasta)    { sql += ' AND g.fecha <= ?';           params.push(hasta); }
+  if (uid)      { sql += ' AND g.usuario_id = ?';       params.push(parseInt(uid)); }
+  sql += ' ORDER BY g.fecha DESC';
+  const { results } = await env.DB.prepare(sql).bind(...params).all();
+  const stats = {
+    total:     results.length,
+    pendiente: results.filter(r=>r.estado==='pendiente').length,
+    aprobado:  results.filter(r=>r.estado==='aprobado').length,
+    rechazado: results.filter(r=>r.estado==='rechazado').length,
+    pagado:    results.filter(r=>r.pagado).length,
+    importe_total: results.reduce((a,r)=>a+(r.total||0),0),
+    importe_pendiente_pago: results.filter(r=>r.estado==='aprobado'&&!r.pagado).reduce((a,r)=>a+(r.total||0),0)
+  };
+  return json({ data: results, stats });
+}
+
+async function crearGastoDieta(request, env) {
+  await ensureGastosDietasTable(env);
+  const { empresa_id, nombre: createdBy, usuario_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const body = await request.json().catch(() => ({}));
+  if (!body.nombre_trabajador?.trim()) return err('El nombre del trabajador es obligatorio');
+  if (!body.fecha)                     return err('La fecha es obligatoria');
+  // Calculate total
+  const km_import = (parseFloat(body.km)||0) * (parseFloat(body.precio_km)||0.26);
+  const total = km_import +
+    (parseFloat(body.dieta_media_dia)||0) + (parseFloat(body.dieta_completa)||0) +
+    (parseFloat(body.alojamiento)||0)     + (parseFloat(body.peajes)||0) +
+    (parseFloat(body.parking)||0)         + (parseFloat(body.otros)||0);
+  const r = await env.DB.prepare(`
+    INSERT INTO gastos_dietas
+      (empresa_id,usuario_id,nombre_trabajador,obra_id,fecha,tipo,concepto,km,precio_km,
+       dieta_media_dia,dieta_completa,alojamiento,peajes,parking,otros,total,
+       estado,aprobado_por,fecha_aprobacion,pagado,fecha_pago,notas,created_by)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+    .bind(empresa_id, body.usuario_id||usuario_id||null, body.nombre_trabajador.trim(),
+          body.obra_id||null, body.fecha, body.tipo||'dieta', body.concepto||null,
+          parseFloat(body.km)||0, parseFloat(body.precio_km)||0.26,
+          parseFloat(body.dieta_media_dia)||0, parseFloat(body.dieta_completa)||0,
+          parseFloat(body.alojamiento)||0, parseFloat(body.peajes)||0,
+          parseFloat(body.parking)||0, parseFloat(body.otros)||0,
+          parseFloat(body.total)||total, body.estado||'pendiente',
+          body.aprobado_por||null, body.fecha_aprobacion||null,
+          body.pagado?1:0, body.fecha_pago||null, body.notas||null, createdBy||null).run();
+  return json({ ok: true, id: r.meta.last_row_id }, 201);
+}
+
+async function actualizarGastoDieta(id, request, env) {
+  await ensureGastosDietasTable(env);
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const body = await request.json().catch(() => ({}));
+  if (!body.nombre_trabajador?.trim()) return err('El nombre del trabajador es obligatorio');
+  const km_import = (parseFloat(body.km)||0) * (parseFloat(body.precio_km)||0.26);
+  const total = km_import +
+    (parseFloat(body.dieta_media_dia)||0) + (parseFloat(body.dieta_completa)||0) +
+    (parseFloat(body.alojamiento)||0)     + (parseFloat(body.peajes)||0) +
+    (parseFloat(body.parking)||0)         + (parseFloat(body.otros)||0);
+  await env.DB.prepare(`
+    UPDATE gastos_dietas SET
+      nombre_trabajador=?,obra_id=?,fecha=?,tipo=?,concepto=?,km=?,precio_km=?,
+      dieta_media_dia=?,dieta_completa=?,alojamiento=?,peajes=?,parking=?,otros=?,
+      total=?,estado=?,aprobado_por=?,fecha_aprobacion=?,pagado=?,fecha_pago=?,
+      notas=?,updated_at=datetime('now')
+    WHERE id=? AND empresa_id=?`)
+    .bind(body.nombre_trabajador.trim(), body.obra_id||null, body.fecha, body.tipo||'dieta',
+          body.concepto||null, parseFloat(body.km)||0, parseFloat(body.precio_km)||0.26,
+          parseFloat(body.dieta_media_dia)||0, parseFloat(body.dieta_completa)||0,
+          parseFloat(body.alojamiento)||0, parseFloat(body.peajes)||0,
+          parseFloat(body.parking)||0, parseFloat(body.otros)||0,
+          parseFloat(body.total)||total, body.estado||'pendiente',
+          body.aprobado_por||null, body.fecha_aprobacion||null,
+          body.pagado?1:0, body.fecha_pago||null, body.notas||null, id, empresa_id).run();
+  return json({ ok: true });
+}
+
+async function eliminarGastoDieta(id, request, env) {
+  await ensureGastosDietasTable(env);
+  const { empresa_id, rol } = await getAuth(request, env);
+  if (!empresa_id || rol === 'operario') return err('Sin permisos', 403);
+  await env.DB.prepare('DELETE FROM gastos_dietas WHERE id=? AND empresa_id=?').bind(id, empresa_id).run();
   return json({ ok: true });
 }

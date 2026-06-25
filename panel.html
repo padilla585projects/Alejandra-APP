@@ -770,6 +770,10 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
       <span class="nav-icon">🏆</span> Licitaciones
       <span class="nav-badge" id="licitBadge" style="display:none">0</span>
     </button>
+    <button class="nav-item" data-page="gastosDietas" onclick="navTo('gastosDietas')">
+      <span class="nav-icon">🧳</span> Gastos y Dietas
+      <span class="nav-badge" id="gastosBadge" style="display:none">0</span>
+    </button>
     <button class="nav-item" data-page="fotosObra" onclick="navTo('fotosObra')">
       <span class="nav-icon">📷</span> Galería de Fotos
     </button>
@@ -2490,6 +2494,146 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
               <button class="btn btn-secondary" onclick="cerrarModalAts()">Cancelar</button>
               <span id="atsElimBtn"></span>
               <button class="btn btn-primary" onclick="guardarAts()">💾 Guardar ATS</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- GASTOS Y DIETAS DE PERSONAL / WORKER EXPENSE CLAIMS (NEW-107) -->
+      <div class="page" id="pageGastosDietas">
+        <div class="page-title">🧳 Gastos y Dietas de Personal / Expense Claims</div>
+        <div id="gdKpis" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:12px;margin-bottom:16px"></div>
+        <div class="tbl-toolbar">
+          <select id="gdFiltroObra" onchange="filtrarGastosDietas()">
+            <option value="">Todas las obras</option>
+          </select>
+          <select id="gdFiltroEstado" onchange="filtrarGastosDietas()">
+            <option value="">Todos los estados</option>
+            <option value="pendiente">⏳ Pendiente</option>
+            <option value="aprobado">✅ Aprobado</option>
+            <option value="rechazado">❌ Rechazado</option>
+          </select>
+          <input type="date" id="gdFiltroDesdeFecha" onchange="filtrarGastosDietas()" title="Desde fecha">
+          <input type="date" id="gdFiltroHastaFecha" onchange="filtrarGastosDietas()" title="Hasta fecha">
+          <input id="gdFiltroQ" type="search" placeholder="Buscar trabajador, obra..." oninput="filtrarGastosDietas()">
+          <button class="btn btn-primary" onclick="abrirModalGd()">+ Nuevo Gasto</button>
+          <button class="btn btn-secondary" onclick="exportarTabla(tblGd,'gastos-dietas')">⬇ CSV</button>
+        </div>
+        <div id="tblGdWrap"></div>
+        <div class="modal-overlay" id="modalGd" style="display:none" onclick="if(event.target===this)cerrarModalGd()">
+          <div class="modal" style="max-width:660px">
+            <div class="modal-header"><h3 id="modalGdTitulo">Gasto / Dieta</h3><button class="modal-close" onclick="cerrarModalGd()">✕</button></div>
+            <div class="modal-body">
+              <div class="form-row">
+                <div class="form-group" style="flex:2">
+                  <label>Trabajador *</label>
+                  <input type="text" id="gdModalTrabajador" required style="width:100%">
+                </div>
+                <div class="form-group">
+                  <label>Fecha *</label>
+                  <input type="date" id="gdModalFecha" required style="width:100%">
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label>Obra</label>
+                  <select id="gdModalObra" style="width:100%">
+                    <option value="">— Sin asignar —</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label>Tipo</label>
+                  <select id="gdModalTipo" style="width:100%">
+                    <option value="dieta">🍽️ Dieta</option>
+                    <option value="desplazamiento">🚗 Desplazamiento</option>
+                    <option value="alojamiento">🏨 Alojamiento</option>
+                    <option value="peaje">🛣️ Peaje/Parking</option>
+                    <option value="mixto">📋 Mixto (varios)</option>
+                    <option value="otro">📌 Otro</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label>Estado</label>
+                  <select id="gdModalEstado" style="width:100%">
+                    <option value="pendiente">⏳ Pendiente</option>
+                    <option value="aprobado">✅ Aprobado</option>
+                    <option value="rechazado">❌ Rechazado</option>
+                  </select>
+                </div>
+              </div>
+              <div class="form-group">
+                <label>Concepto / Descripción</label>
+                <input type="text" id="gdModalConcepto" style="width:100%" placeholder="Descripción del gasto">
+              </div>
+              <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:12px">
+                <div style="font-weight:600;margin-bottom:8px">Desglose de importes</div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label>Km recorridos</label>
+                    <input type="number" id="gdModalKm" min="0" step="1" value="0" style="width:100%" oninput="gdRecalcular()">
+                  </div>
+                  <div class="form-group" style="flex:0.7">
+                    <label>€/km</label>
+                    <input type="number" id="gdModalPrecioKm" min="0" step="0.01" value="0.26" style="width:100%" oninput="gdRecalcular()">
+                  </div>
+                  <div class="form-group">
+                    <label>Importe km (€)</label>
+                    <input type="text" id="gdModalImporteKm" readonly style="width:100%;background:#f5f5f5">
+                  </div>
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label>Dieta media jornada (€)</label>
+                    <input type="number" id="gdModalMediaDia" min="0" step="0.01" value="0" style="width:100%" oninput="gdRecalcular()">
+                  </div>
+                  <div class="form-group">
+                    <label>Dieta completa (€)</label>
+                    <input type="number" id="gdModalDietaCompleta" min="0" step="0.01" value="0" style="width:100%" oninput="gdRecalcular()">
+                  </div>
+                  <div class="form-group">
+                    <label>Alojamiento (€)</label>
+                    <input type="number" id="gdModalAlojamiento" min="0" step="0.01" value="0" style="width:100%" oninput="gdRecalcular()">
+                  </div>
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label>Peajes (€)</label>
+                    <input type="number" id="gdModalPeajes" min="0" step="0.01" value="0" style="width:100%" oninput="gdRecalcular()">
+                  </div>
+                  <div class="form-group">
+                    <label>Parking (€)</label>
+                    <input type="number" id="gdModalParking" min="0" step="0.01" value="0" style="width:100%" oninput="gdRecalcular()">
+                  </div>
+                  <div class="form-group">
+                    <label>Otros (€)</label>
+                    <input type="number" id="gdModalOtros" min="0" step="0.01" value="0" style="width:100%" oninput="gdRecalcular()">
+                  </div>
+                </div>
+                <div style="text-align:right;font-size:1.1rem;font-weight:700;margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">
+                  TOTAL: <span id="gdModalTotal" style="color:var(--accent)">0,00 €</span>
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label>Aprobado por</label>
+                  <input type="text" id="gdModalAprobadoPor" style="width:100%">
+                </div>
+                <div class="form-group">
+                  <label><input type="checkbox" id="gdModalPagado"> Pagado</label>
+                </div>
+                <div class="form-group">
+                  <label>Fecha pago</label>
+                  <input type="date" id="gdModalFechaPago" style="width:100%">
+                </div>
+              </div>
+              <div class="form-group">
+                <label>Notas</label>
+                <textarea id="gdModalNotas" rows="2" style="width:100%"></textarea>
+              </div>
+            </div>
+            <div class="modal-footer">
+              <button class="btn btn-secondary" onclick="cerrarModalGd()">Cancelar</button>
+              <button class="btn btn-primary" onclick="guardarGd()">💾 Guardar</button>
             </div>
           </div>
         </div>
@@ -8622,6 +8766,7 @@ const PAGE_TITLES = {
   cobrosCliente:      '💳 Cobros de Clientes / Accounts Receivable',
   panelVencimientos:  '⏰ Panel de Vencimientos / Expiry Dashboard',
   licitaciones:       '🏆 Gestión de Licitaciones / Bid Pipeline',
+  gastosDietas:       '🧳 Gastos y Dietas de Personal / Expense Claims',
 };
 
 const PAGE_LOADERS = {
@@ -8729,6 +8874,7 @@ const PAGE_LOADERS = {
   cobrosCliente:      cargarCobrosCliente,
   panelVencimientos:  cargarPanelVencimientos,
   licitaciones:       cargarLicitaciones,
+  gastosDietas:       cargarGastosDietas,
 };
 
 let currentPage = '';
@@ -8865,6 +9011,7 @@ const SYNC_INTERVALS = {
   cobrosCliente:      90,
   panelVencimientos:  60,
   licitaciones:       300,
+  gastosDietas:       120,
 };
 
 let _syncTimer = null, _syncLabelTimer = null, _syncLastTs = null;
@@ -18225,6 +18372,198 @@ function exportarFinanzas() {
   if (!obraId) return showToast('Selecciona una obra primero', 'warning');
   // Abrir informe en nueva pestaña usando el endpoint de informes
   window.open(`/informe-obra/${obraId}?tipo=financiero`, '_blank');
+}
+
+// ── GASTOS Y DIETAS DE PERSONAL / WORKER EXPENSE CLAIMS (NEW-107) ────────────
+let tblGd = null, _gdData = [];
+const GD_ESTADO_COLOR = { pendiente:'var(--warning)', aprobado:'var(--success)', rechazado:'var(--danger)' };
+const GD_TIPO_ICON    = { dieta:'🍽️', desplazamiento:'🚗', alojamiento:'🏨', peaje:'🛣️', mixto:'📋', otro:'📌' };
+
+async function cargarGastosDietas() {
+  const data = await api('/gastos-dietas');
+  _gdData = data.data || [];
+  const s   = data.stats || {};
+  const pend = s.pendiente || _gdData.filter(r=>r.estado==='pendiente').length;
+  const badge = document.getElementById('gastosBadge');
+  if (badge) { badge.textContent = pend; badge.style.display = pend ? '' : 'none'; }
+  document.getElementById('gdKpis').innerHTML = [
+    { label:'Total registros', val: s.total||_gdData.length, icon:'🧳' },
+    { label:'Pendientes', val: s.pendiente||pend, icon:'⏳', color:'var(--warning)' },
+    { label:'Aprobados', val: s.aprobado||_gdData.filter(r=>r.estado==='aprobado').length, icon:'✅', color:'var(--success)' },
+    { label:'Pend. de pago', val: s.pagado!==undefined ? (s.aprobado||0)-(s.pagado||0) : _gdData.filter(r=>r.estado==='aprobado'&&!r.pagado).length, icon:'💳', color:'var(--accent)' },
+    { label:'Importe total', val: fmtMoney(s.importe_total||_gdData.reduce((a,r)=>a+(r.total||0),0)), icon:'💶' },
+    { label:'Pend. de pago (€)', val: fmtMoney(s.importe_pendiente_pago||0), icon:'💸', color:'var(--warning)' }
+  ].map(k=>`<div class="kpi-mini" style="border-left:3px solid ${k.color||'var(--accent)'}">
+    <div style="font-size:1.4rem">${k.icon}</div>
+    <div style="font-size:1rem;font-weight:700;color:${k.color||'var(--text)'}">${k.val}</div>
+    <div style="font-size:.75rem;opacity:.7">${k.label}</div>
+  </div>`).join('');
+  // Populate obra filter
+  const sel = document.getElementById('gdFiltroObra');
+  if (sel) {
+    const obras = [...new Map(_gdData.filter(r=>r.obra_id).map(r=>[r.obra_id,r.obra_nombre||'Obra '+r.obra_id])).entries()];
+    sel.innerHTML = '<option value="">Todas las obras</option>' +
+      obras.map(([id,nom])=>`<option value="${id}">${nom}</option>`).join('');
+  }
+  filtrarGastosDietas();
+}
+
+function filtrarGastosDietas() {
+  const obraId = document.getElementById('gdFiltroObra')?.value    || '';
+  const estado = document.getElementById('gdFiltroEstado')?.value  || '';
+  const desde  = document.getElementById('gdFiltroDesdeFecha')?.value || '';
+  const hasta  = document.getElementById('gdFiltroHastaFecha')?.value || '';
+  const q      = (document.getElementById('gdFiltroQ')?.value       || '').toLowerCase();
+  let rows = _gdData.filter(r =>
+    (!obraId || String(r.obra_id) === obraId) &&
+    (!estado || r.estado === estado)           &&
+    (!desde  || r.fecha >= desde)              &&
+    (!hasta  || r.fecha <= hasta)              &&
+    (!q      || (r.nombre_trabajador||'').toLowerCase().includes(q) ||
+                (r.obra_nombre||'').toLowerCase().includes(q) ||
+                (r.concepto||'').toLowerCase().includes(q))
+  );
+  if (!tblGd) {
+    tblGd = new Tabulator('#tblGdWrap', {
+      data: rows, layout:'fitColumns', responsiveLayout:'collapse',
+      pagination:'local', paginationSize:25, movableColumns:true,
+      initialSort:[{column:'fecha',dir:'desc'}],
+      columns:[
+        { title:'Estado', field:'estado', width:115, formatter:(c)=>{
+            const v=c.getValue();
+            return `<span style="background:${GD_ESTADO_COLOR[v]||'#999'};color:#fff;padding:2px 6px;border-radius:12px;font-size:.8rem">${v}</span>`;
+          }
+        },
+        { title:'Tipo', field:'tipo', width:90, hozAlign:'center', formatter:(c)=>GD_TIPO_ICON[c.getValue()]||'📌' },
+        { title:'Trabajador', field:'nombre_trabajador', minWidth:150 },
+        { title:'Fecha', field:'fecha', width:100 },
+        { title:'Obra', field:'obra_nombre', minWidth:140 },
+        { title:'Concepto', field:'concepto', minWidth:150 },
+        { title:'Km', field:'km', width:70, hozAlign:'right', formatter:(c)=>c.getValue()?c.getValue()+' km':'—' },
+        { title:'Total (€)', field:'total', width:105, hozAlign:'right', formatter:(c)=>`<strong>${fmtMoney(c.getValue())}</strong>` },
+        { title:'Pagado', field:'pagado', width:80, hozAlign:'center', formatter:(c)=>c.getValue()?'✅':'—' },
+        { title:'Aprobado por', field:'aprobado_por', width:130 },
+        { title:'Acciones', width:110, hozAlign:'center', formatter:(c)=>{
+            const id=c.getRow().getData().id;
+            return `<button class="btn btn-xs" onclick="editarGd(${id})">✏️</button>
+                    <button class="btn btn-xs btn-danger" onclick="eliminarGd(${id})">🗑️</button>`;
+          }
+        }
+      ]
+    });
+  } else {
+    tblGd.replaceData(rows);
+  }
+}
+
+function gdRecalcular() {
+  const km    = parseFloat(document.getElementById('gdModalKm')?.value) || 0;
+  const pkm   = parseFloat(document.getElementById('gdModalPrecioKm')?.value) || 0.26;
+  const iKm   = km * pkm;
+  document.getElementById('gdModalImporteKm').value = fmtMoney(iKm);
+  const total = iKm +
+    (parseFloat(document.getElementById('gdModalMediaDia')?.value) || 0) +
+    (parseFloat(document.getElementById('gdModalDietaCompleta')?.value) || 0) +
+    (parseFloat(document.getElementById('gdModalAlojamiento')?.value) || 0) +
+    (parseFloat(document.getElementById('gdModalPeajes')?.value) || 0) +
+    (parseFloat(document.getElementById('gdModalParking')?.value) || 0) +
+    (parseFloat(document.getElementById('gdModalOtros')?.value) || 0);
+  document.getElementById('gdModalTotal').textContent = fmtMoney(total);
+}
+
+function abrirModalGd(d = {}) {
+  const m = document.getElementById('modalGd');
+  m._gdId = d.id || null;
+  document.getElementById('modalGdTitulo').textContent     = d.id ? 'Editar Gasto/Dieta' : 'Nuevo Gasto/Dieta';
+  document.getElementById('gdModalTrabajador').value        = d.nombre_trabajador || '';
+  document.getElementById('gdModalFecha').value             = d.fecha             || new Date().toISOString().slice(0,10);
+  document.getElementById('gdModalTipo').value              = d.tipo              || 'mixto';
+  document.getElementById('gdModalEstado').value            = d.estado            || 'pendiente';
+  document.getElementById('gdModalConcepto').value          = d.concepto          || '';
+  document.getElementById('gdModalKm').value                = d.km                || 0;
+  document.getElementById('gdModalPrecioKm').value          = d.precio_km         || 0.26;
+  document.getElementById('gdModalMediaDia').value          = d.dieta_media_dia   || 0;
+  document.getElementById('gdModalDietaCompleta').value     = d.dieta_completa    || 0;
+  document.getElementById('gdModalAlojamiento').value       = d.alojamiento       || 0;
+  document.getElementById('gdModalPeajes').value            = d.peajes            || 0;
+  document.getElementById('gdModalParking').value           = d.parking           || 0;
+  document.getElementById('gdModalOtros').value             = d.otros             || 0;
+  document.getElementById('gdModalAprobadoPor').value       = d.aprobado_por      || '';
+  document.getElementById('gdModalPagado').checked          = !!d.pagado;
+  document.getElementById('gdModalFechaPago').value         = d.fecha_pago        || '';
+  document.getElementById('gdModalNotas').value             = d.notas             || '';
+  gdRecalcular();
+  poblarSelectObras('gdModalObra').then(()=>{
+    document.getElementById('gdModalObra').value = d.obra_id || '';
+  });
+  m.style.display = 'flex';
+}
+
+function editarGd(id) {
+  const d = _gdData.find(r => r.id === id);
+  if (d) abrirModalGd(d);
+}
+
+async function guardarGd() {
+  const m  = document.getElementById('modalGd');
+  const id = m._gdId;
+  const km    = parseFloat(document.getElementById('gdModalKm').value) || 0;
+  const pkm   = parseFloat(document.getElementById('gdModalPrecioKm').value) || 0.26;
+  const total = km*pkm +
+    (parseFloat(document.getElementById('gdModalMediaDia').value)||0) +
+    (parseFloat(document.getElementById('gdModalDietaCompleta').value)||0) +
+    (parseFloat(document.getElementById('gdModalAlojamiento').value)||0) +
+    (parseFloat(document.getElementById('gdModalPeajes').value)||0) +
+    (parseFloat(document.getElementById('gdModalParking').value)||0) +
+    (parseFloat(document.getElementById('gdModalOtros').value)||0);
+  const body = {
+    nombre_trabajador: document.getElementById('gdModalTrabajador').value.trim(),
+    obra_id:           parseInt(document.getElementById('gdModalObra').value) || null,
+    fecha:             document.getElementById('gdModalFecha').value,
+    tipo:              document.getElementById('gdModalTipo').value,
+    estado:            document.getElementById('gdModalEstado').value,
+    concepto:          document.getElementById('gdModalConcepto').value.trim(),
+    km, precio_km: pkm,
+    dieta_media_dia:   parseFloat(document.getElementById('gdModalMediaDia').value)    || 0,
+    dieta_completa:    parseFloat(document.getElementById('gdModalDietaCompleta').value) || 0,
+    alojamiento:       parseFloat(document.getElementById('gdModalAlojamiento').value) || 0,
+    peajes:            parseFloat(document.getElementById('gdModalPeajes').value)      || 0,
+    parking:           parseFloat(document.getElementById('gdModalParking').value)     || 0,
+    otros:             parseFloat(document.getElementById('gdModalOtros').value)       || 0,
+    total,
+    aprobado_por:      document.getElementById('gdModalAprobadoPor').value.trim(),
+    pagado:            document.getElementById('gdModalPagado').checked,
+    fecha_pago:        document.getElementById('gdModalFechaPago').value || null,
+    notas:             document.getElementById('gdModalNotas').value.trim()
+  };
+  if (!body.nombre_trabajador) return showToast('El nombre del trabajador es obligatorio', 'warning');
+  if (!body.fecha)             return showToast('La fecha es obligatoria', 'warning');
+  try {
+    if (id) {
+      await api(`/gastos-dietas/${id}`, { method:'PUT', body: JSON.stringify(body) });
+      showToast('Gasto actualizado', 'success');
+    } else {
+      await api('/gastos-dietas', { method:'POST', body: JSON.stringify(body) });
+      showToast('Gasto registrado', 'success');
+    }
+    cerrarModalGd();
+    tblGd = null;
+    await cargarGastosDietas();
+  } catch(e) { showToast('Error al guardar: ' + e.message, 'danger'); }
+}
+
+async function eliminarGd(id) {
+  if (!confirm('¿Eliminar este registro de gasto?')) return;
+  try {
+    await api(`/gastos-dietas/${id}`, { method:'DELETE' });
+    showToast('Registro eliminado', 'success');
+    tblGd = null;
+    await cargarGastosDietas();
+  } catch(e) { showToast('Error al eliminar: ' + e.message, 'danger'); }
+}
+
+function cerrarModalGd() {
+  document.getElementById('modalGd').style.display = 'none';
 }
 
 // ── GESTIÓN DE LICITACIONES / BID PIPELINE (NEW-106) ─────────────────────────
