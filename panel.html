@@ -577,6 +577,9 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
       <span class="nav-icon">⚠️</span> Registro Riesgos
       <span class="nav-badge" id="riesgosBadge" style="display:none">!</span>
     </button>
+    <button class="nav-item" data-page="obraDashboard" onclick="navTo('obraDashboard')">
+      <span class="nav-icon">🎯</span> Dashboard de Obra
+    </button>
 
     <div class="sidebar-section" onclick="sidebarToggle(this)" data-sid="seguimiento"><span>📓 Seguimiento</span><span class="sec-chevron">▼</span></div>
     <button class="nav-item" data-page="partesPanel" onclick="navTo('partesPanel')">
@@ -2074,6 +2077,84 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
         </div>
         <div id="entregasKpi" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:12px;margin-bottom:16px"></div>
         <div class="tbl-wrap"><div id="tblEntregas"></div></div>
+      </div>
+
+      <!-- DASHBOARD DE OBRA / PROJECT COMMAND CENTER -->
+      <div class="page" id="pageObraDashboard">
+        <div class="page-title">🎯 Dashboard de Obra</div>
+        <div class="page-sub">Cuadro de mando integral por obra — vision consolidada de todos los modulos</div>
+        <div class="tbl-toolbar" style="gap:10px;margin-bottom:18px">
+          <select class="tbl-search" id="dbObraSelect" style="min-width:260px;font-size:14px;font-weight:600" onchange="cargarObraDashboard()"></select>
+          <button class="btn btn-secondary" onclick="cargarObraDashboard()">🔄 Actualizar</button>
+        </div>
+        <div id="dbObraNotSelected" class="empty-state">
+          <div class="empty-icon">🎯</div>
+          <div class="empty-text">Selecciona una obra para ver su cuadro de mando completo</div>
+        </div>
+        <div id="dbContent" style="display:none">
+          <!-- Obra header -->
+          <div id="dbObraHeader" style="background:var(--bg-card);border-radius:12px;padding:20px;margin-bottom:20px;border:1px solid var(--border)"></div>
+          <!-- KPI Strip financiero -->
+          <div id="dbKpiStrip" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:12px;margin-bottom:20px"></div>
+          <!-- Main grid -->
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+            <!-- Progreso SOV -->
+            <div class="section-card">
+              <div class="section-card-title"><span>📊</span> Presupuesto / SOV <button class="btn btn-secondary btn-sm" style="margin-left:auto" onclick="irModuloObra('presupuestoSov')">Ver →</button></div>
+              <div id="dbSov"></div>
+            </div>
+            <!-- Schedule / Fases -->
+            <div class="section-card">
+              <div class="section-card-title"><span>📅</span> Cronograma <button class="btn btn-secondary btn-sm" style="margin-left:auto" onclick="irModuloObra('cronogramaObra')">Ver →</button></div>
+              <div id="dbCronograma"></div>
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:16px">
+            <!-- QA/NCRs -->
+            <div class="section-card">
+              <div class="section-card-title"><span>✅</span> Calidad / NCRs <button class="btn btn-secondary btn-sm" style="margin-left:auto" onclick="irModuloObra('controlCalidad')">Ver →</button></div>
+              <div id="dbQA"></div>
+            </div>
+            <!-- Risks -->
+            <div class="section-card">
+              <div class="section-card-title"><span>⚠️</span> Riesgos <button class="btn btn-secondary btn-sm" style="margin-left:auto" onclick="irModuloObra('riesgosObra')">Ver →</button></div>
+              <div id="dbRiesgos"></div>
+            </div>
+            <!-- Change Orders -->
+            <div class="section-card">
+              <div class="section-card-title"><span>🔄</span> Ordenes de Cambio <button class="btn btn-secondary btn-sm" style="margin-left:auto" onclick="irModuloObra('ordenesCambio')">Ver →</button></div>
+              <div id="dbOC"></div>
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:16px">
+            <!-- Procurement -->
+            <div class="section-card">
+              <div class="section-card-title"><span>🚚</span> Entregas Material <button class="btn btn-secondary btn-sm" style="margin-left:auto" onclick="irModuloObra('entregasMaterial')">Ver →</button></div>
+              <div id="dbEntregas"></div>
+            </div>
+            <!-- RFIs -->
+            <div class="section-card">
+              <div class="section-card-title"><span>❓</span> RFIs <button class="btn btn-secondary btn-sm" style="margin-left:auto" onclick="irModuloObra('rfis')">Ver →</button></div>
+              <div id="dbRfis"></div>
+            </div>
+            <!-- Hitos -->
+            <div class="section-card">
+              <div class="section-card-title"><span>🏁</span> Hitos <button class="btn btn-secondary btn-sm" style="margin-left:auto" onclick="irModuloObra('hitos')">Ver →</button></div>
+              <div id="dbHitos"></div>
+            </div>
+          </div>
+          <!-- Punch list + Transmittals -->
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+            <div class="section-card">
+              <div class="section-card-title"><span>📋</span> Punch List <button class="btn btn-secondary btn-sm" style="margin-left:auto" onclick="irModuloObra('punchList')">Ver →</button></div>
+              <div id="dbPunch"></div>
+            </div>
+            <div class="section-card">
+              <div class="section-card-title"><span>📨</span> Transmittals <button class="btn btn-secondary btn-sm" style="margin-left:auto" onclick="irModuloObra('transmittals')">Ver →</button></div>
+              <div id="dbTransmittals"></div>
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- REGISTRO DE RIESGOS / RISK REGISTER -->
@@ -3748,6 +3829,7 @@ const PAGE_TITLES = {
   presupuestoSov: '📊 Presupuesto Detallado / Schedule of Values',
   ordenesCambio: '🔄 Ordenes de Cambio / Change Orders',
   riesgosObra: '⚠️ Registro de Riesgos / Risk Register',
+  obraDashboard: '🎯 Dashboard de Obra',
 };
 
 const PAGE_LOADERS = {
@@ -3809,6 +3891,7 @@ const PAGE_LOADERS = {
   presupuestoSov: cargarPresupuestoSov,
   ordenesCambio: cargarOrdenesCambio,
   riesgosObra: cargarRiesgos,
+  obraDashboard: cargarObraDashboard,
 };
 
 let currentPage = '';
@@ -3899,6 +3982,7 @@ const SYNC_INTERVALS = {
   presupuestoSov: 120,
   ordenesCambio: 90,
   riesgosObra: 120,
+  obraDashboard: 90,
 };
 
 let _syncTimer = null, _syncLabelTimer = null, _syncLastTs = null;
@@ -13938,6 +14022,241 @@ async function _getObrasOpts() {
   const obras = r?.obras || r?.results || [];
   return (selectedId) => '<option value="">-- Sin obra --</option>' +
     obras.map(o => `<option value="${o.id}"${o.id==selectedId?' selected':''}>${o.nombre||o.codigo}</option>`).join('');
+}
+
+// ── DASHBOARD DE OBRA / PROJECT COMMAND CENTER (NEW-60) ───────────
+let _dbObraId = null;
+
+async function cargarObraDashboard() {
+  if (document.getElementById('dbObraSelect')?.options.length <= 1)
+    poblarSelectObras('dbObraSelect');
+  const obraId = document.getElementById('dbObraSelect')?.value || '';
+  const notSel = document.getElementById('dbObraNotSelected');
+  const content = document.getElementById('dbContent');
+  if (!obraId) {
+    if (notSel) notSel.style.display = '';
+    if (content) content.style.display = 'none';
+    return;
+  }
+  _dbObraId = obraId;
+  if (notSel) notSel.style.display = 'none';
+  if (content) content.style.display = '';
+  // Fetch all data in parallel
+  const [obraR, finR, cronR, sovR, ncrsR, riesgosR, ocR, entregasR, rfisR, hitosR, punchR, transR] = await Promise.all([
+    api(`/obras/${obraId}`),
+    api(`/financiero-obra/${obraId}`),
+    api(`/cronograma-obra/${obraId}`),
+    api(`/presupuesto-resumen/${obraId}`),
+    api(`/ncrs-obra?obra_id=${obraId}`),
+    api(`/riesgos-obra?obra_id=${obraId}&estado=activo`),
+    api(`/ordenes-cambio?obra_id=${obraId}`),
+    api(`/entregas-material?obra_id=${obraId}`),
+    api(`/rfis?obra_id=${obraId}&estado=abierta`),
+    api(`/hitos-obra?obra_id=${obraId}`),
+    api(`/punch-list?obra_id=${obraId}`),
+    api(`/transmittals-obra?obra_id=${obraId}`),
+  ]);
+  const obra = obraR?.obra || obraR || {};
+  // --- OBRA HEADER ---
+  const header = document.getElementById('dbObraHeader');
+  if (header) {
+    const estado = obra.estado || 'activo';
+    const estadoColor = {activa:'var(--success)',en_curso:'var(--primary)',finalizada:'var(--muted)',paralizada:'var(--danger)'}[estado]||'var(--muted)';
+    const pct = obra.avance_porcentaje || finR?.kpis?.avance || 0;
+    header.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:20px;flex-wrap:wrap">
+        <div>
+          <div style="font-size:20px;font-weight:800;margin-bottom:4px">${obra.nombre||'Obra'}</div>
+          <div style="color:var(--muted);font-size:13px">${obra.codigo||''} · ${obra.cliente||''} · ${obra.direccion||''}</div>
+          <div style="margin-top:8px;display:flex;gap:12px;align-items:center">
+            <span style="background:${estadoColor}22;color:${estadoColor};padding:3px 12px;border-radius:10px;font-size:12px;font-weight:700">${estado.toUpperCase()}</span>
+            <span style="font-size:12px;color:var(--muted)">📅 ${fmtFecha(obra.fecha_inicio)} → ${fmtFecha(obra.fecha_fin_prevista)}</span>
+          </div>
+        </div>
+        <div style="text-align:right;min-width:200px">
+          <div style="font-size:12px;color:var(--muted);margin-bottom:6px">Avance global: <b>${pct}%</b></div>
+          <div style="height:12px;background:var(--border);border-radius:6px">
+            <div style="width:${Math.min(pct,100)}%;height:100%;border-radius:6px;background:${pct>=90?'var(--success)':pct>=50?'var(--primary)':'var(--warning)'};transition:width 0.5s"></div>
+          </div>
+        </div>
+      </div>`;
+  }
+  // --- KPI STRIP ---
+  const fin = finR || {};
+  const budget = fin.budget || {};
+  const kpi = document.getElementById('dbKpiStrip');
+  if (kpi) {
+    const presup = budget.presupuesto_previsto || 0;
+    const real   = budget.presupuesto_real || budget.coste_estimado || 0;
+    const variacion = presup - real;
+    const cpi = fin.kpis?.cpi || 1;
+    kpi.innerHTML = `
+      <div class="kpi-card"><div class="kpi-icon">💶</div><div class="kpi-value">${fmtMoney(presup)}</div><div class="kpi-label">Presupuesto</div></div>
+      <div class="kpi-card"><div class="kpi-icon">📊</div><div class="kpi-value" style="color:${variacion>=0?'var(--success)':'var(--danger)'}">${fmtMoney(real)}</div><div class="kpi-label">Coste real</div></div>
+      <div class="kpi-card"><div class="kpi-icon">📈</div><div class="kpi-value" style="color:${variacion>=0?'var(--success)':'var(--danger)'}">${fmtMoney(Math.abs(variacion))} ${variacion>=0?'✅':'❌'}</div><div class="kpi-label">Variacion</div></div>
+      <div class="kpi-card"><div class="kpi-icon">⚡</div><div class="kpi-value" style="color:${cpi>=1?'var(--success)':'var(--danger)'}">${cpi ? cpi.toFixed(2) : '-'}</div><div class="kpi-label">CPI</div></div>
+      <div class="kpi-card"><div class="kpi-icon">📋</div><div class="kpi-value">${sovR?.totalLineas||0}</div><div class="kpi-label">Partidas SOV</div></div>
+      <div class="kpi-card"><div class="kpi-icon">🔄</div><div class="kpi-value" style="color:var(--warning)">${ocR?.pendientes||0} pend.</div><div class="kpi-label">Ord. Cambio (${fmtMoney(ocR?.importeAprobado||0)})</div></div>
+    `;
+  }
+  // --- SOV ---
+  const sov = document.getElementById('dbSov');
+  if (sov) {
+    const totalPres = sovR?.totalPres || 0;
+    const totalEjec = sovR?.totalEjec || 0;
+    const pctSov    = sovR?.pctGlobal || 0;
+    const caps      = sovR?.capitulos || [];
+    if (!caps.length) {
+      sov.innerHTML = `<div style="color:var(--muted);font-size:13px;padding:8px">Sin partidas presupuestarias. <a href="#" onclick="navTo('presupuestoSov')">Agregar →</a></div>`;
+    } else {
+      sov.innerHTML = `
+        <div style="display:flex;justify-content:space-between;margin-bottom:8px;font-size:13px">
+          <span><b>${fmtMoney(totalEjec)}</b> ejecutado</span>
+          <span style="color:var(--muted)">de ${fmtMoney(totalPres)}</span>
+        </div>
+        <div style="height:8px;background:var(--border);border-radius:4px;margin-bottom:12px">
+          <div style="width:${Math.min(pctSov,100)}%;height:100%;background:${pctSov>=90?'var(--success)':pctSov>=50?'var(--primary)':'var(--warning)'};border-radius:4px"></div>
+        </div>
+        ${caps.slice(0,5).map(c=>`<div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0;border-bottom:1px solid var(--border)">
+          <span>Cap. ${c.capitulo}</span>
+          <span style="color:${c.pct>=90?'var(--success)':c.pct>=50?'var(--primary)':'var(--warning)'};font-weight:700">${c.pct}%</span>
+        </div>`).join('')}
+        ${caps.length>5?`<div style="color:var(--muted);font-size:11px;margin-top:6px">+${caps.length-5} capitulos mas</div>`:''}`;
+    }
+  }
+  // --- CRONOGRAMA ---
+  const cron = document.getElementById('dbCronograma');
+  if (cron) {
+    const fases  = cronR?.fases || [];
+    const hitos  = cronR?.hitos || [];
+    const stats  = cronR?.stats || {};
+    const hoy    = new Date().toISOString().slice(0,10);
+    const fasesVencidas = fases.filter(f=>f.estado!=='completada' && f.fecha_fin_plan && f.fecha_fin_plan<hoy).length;
+    cron.innerHTML = `
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:10px;text-align:center">
+        <div style="background:var(--bg);border-radius:6px;padding:8px"><div style="font-size:18px;font-weight:700">${fases.length}</div><div style="font-size:11px;color:var(--muted)">Fases</div></div>
+        <div style="background:var(--bg);border-radius:6px;padding:8px"><div style="font-size:18px;font-weight:700;color:var(--danger)">${fasesVencidas}</div><div style="font-size:11px;color:var(--muted)">Vencidas</div></div>
+        <div style="background:var(--bg);border-radius:6px;padding:8px"><div style="font-size:18px;font-weight:700">${hitos.length}</div><div style="font-size:11px;color:var(--muted)">Hitos</div></div>
+      </div>
+      ${fases.slice(0,4).map(f=>{
+        const pct=f.porcentaje||0;
+        const color=f.estado==='completada'?'var(--success)':f.estado==='retrasada'?'var(--danger)':'var(--primary)';
+        return `<div style="margin-bottom:6px"><div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px"><span>${f.nombre}</span><span style="color:${color};font-weight:700">${pct}%</span></div>
+          <div style="height:4px;background:var(--border);border-radius:2px"><div style="width:${Math.min(pct,100)}%;height:100%;background:${color};border-radius:2px"></div></div></div>`;
+      }).join('')}`;
+  }
+  // --- QA / NCRs ---
+  const qa = document.getElementById('dbQA');
+  if (qa) {
+    const ncrs = ncrsR || {};
+    qa.innerHTML = `
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
+        <div style="background:#ef444422;border-radius:6px;padding:10px;text-align:center"><div style="font-size:20px;font-weight:700;color:var(--danger)">${ncrs.abiertas||0}</div><div style="font-size:11px;color:var(--muted)">NCRs abiertas</div></div>
+        <div style="background:#22c55e22;border-radius:6px;padding:10px;text-align:center"><div style="font-size:20px;font-weight:700;color:var(--success)">${ncrs.cerradas||0}</div><div style="font-size:11px;color:var(--muted)">Cerradas</div></div>
+      </div>
+      <div style="font-size:12px;color:var(--muted)">Total NCRs: ${ncrs.total||0} · Criticas: <span style="color:#7c3aed;font-weight:700">${ncrs.criticas||0}</span></div>`;
+  }
+  // --- RIESGOS ---
+  const rg = document.getElementById('dbRiesgos');
+  if (rg) {
+    const r = riesgosR || {};
+    rg.innerHTML = `
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
+        <div style="background:#7c3aed22;border-radius:6px;padding:10px;text-align:center"><div style="font-size:20px;font-weight:700;color:#7c3aed">${r.criticos||0}</div><div style="font-size:11px;color:var(--muted)">Criticos</div></div>
+        <div style="background:#ef444422;border-radius:6px;padding:10px;text-align:center"><div style="font-size:20px;font-weight:700;color:var(--danger)">${r.altos||0}</div><div style="font-size:11px;color:var(--muted)">Altos</div></div>
+      </div>
+      <div style="font-size:12px;color:var(--muted)">Total activos: ${r.activos||0} · Mitigados: <span style="color:var(--success)">${r.mitigados||0}</span></div>`;
+  }
+  // --- CHANGE ORDERS ---
+  const oc = document.getElementById('dbOC');
+  if (oc) {
+    const o = ocR || {};
+    oc.innerHTML = `
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
+        <div style="background:var(--warning)22;border-radius:6px;padding:10px;text-align:center"><div style="font-size:20px;font-weight:700;color:var(--warning)">${o.pendientes||0}</div><div style="font-size:11px;color:var(--muted)">Pendientes</div></div>
+        <div style="background:var(--success)22;border-radius:6px;padding:10px;text-align:center"><div style="font-size:20px;font-weight:700;color:var(--success)">${o.aprobadas||0}</div><div style="font-size:11px;color:var(--muted)">Aprobadas</div></div>
+      </div>
+      <div style="font-size:12px;color:var(--muted)">Importe aprobado: <b style="color:var(--success)">${fmtMoney(o.importeAprobado||0)}</b></div>`;
+  }
+  // --- ENTREGAS ---
+  const ent = document.getElementById('dbEntregas');
+  if (ent) {
+    const e = entregasR || {};
+    ent.innerHTML = `
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:10px;text-align:center">
+        <div style="background:var(--bg);border-radius:6px;padding:8px"><div style="font-size:18px;font-weight:700;color:var(--muted)">${e.pendientes||0}</div><div style="font-size:11px;color:var(--muted)">Pend.</div></div>
+        <div style="background:var(--bg);border-radius:6px;padding:8px"><div style="font-size:18px;font-weight:700;color:var(--warning)">${e.parciales||0}</div><div style="font-size:11px;color:var(--muted)">Parcial</div></div>
+        <div style="background:var(--bg);border-radius:6px;padding:8px"><div style="font-size:18px;font-weight:700;color:var(--success)">${e.recibidos||0}</div><div style="font-size:11px;color:var(--muted)">Recib.</div></div>
+      </div>
+      <div style="font-size:12px;color:${(e.vencidos||0)>0?'var(--danger)':'var(--muted)'}">Vencidas: <b>${e.vencidos||0}</b> · Total: ${fmtMoney(e.importeTotal||0)}</div>`;
+  }
+  // --- RFIs ---
+  const rfiEl = document.getElementById('dbRfis');
+  if (rfiEl) {
+    const rfis = rfisR?.rfis || rfisR?.results || [];
+    rfiEl.innerHTML = `
+      <div style="text-align:center;padding:16px"><div style="font-size:32px;font-weight:800;color:${rfis.length>5?'var(--danger)':rfis.length>0?'var(--warning)':'var(--success)'}">${rfis.length}</div><div style="font-size:12px;color:var(--muted)">RFIs abiertas</div></div>
+      ${rfis.slice(0,3).map(r=>`<div style="font-size:12px;padding:4px 0;border-bottom:1px solid var(--border);color:var(--muted)">${r.numero||'RFI'} · ${r.asunto||r.titulo||'-'}</div>`).join('')}`;
+  }
+  // --- HITOS ---
+  const hitosEl = document.getElementById('dbHitos');
+  if (hitosEl) {
+    const hitos = hitosR?.hitos || hitosR?.results || [];
+    const hoy = new Date().toISOString().slice(0,10);
+    const pendientes = hitos.filter(h=>h.estado!=='completado' && h.estado!=='completada').length;
+    const vencidos = hitos.filter(h=>h.estado!=='completado' && h.estado!=='completada' && h.fecha < hoy).length;
+    hitosEl.innerHTML = `
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
+        <div style="background:var(--bg);border-radius:6px;padding:10px;text-align:center"><div style="font-size:20px;font-weight:700">${pendientes}</div><div style="font-size:11px;color:var(--muted)">Pendientes</div></div>
+        <div style="background:${vencidos>0?'#ef444422':'var(--bg)'};border-radius:6px;padding:10px;text-align:center"><div style="font-size:20px;font-weight:700;color:${vencidos>0?'var(--danger)':'var(--muted)'}">${vencidos}</div><div style="font-size:11px;color:var(--muted)">Vencidos</div></div>
+      </div>
+      ${hitos.filter(h=>h.estado!=='completado'&&h.estado!=='completada').slice(0,3).map(h=>`<div style="font-size:12px;padding:3px 0;color:${h.fecha<hoy?'var(--danger)':'var(--muted)'}">${fmtFecha(h.fecha)} · ${h.nombre||h.titulo}</div>`).join('')}`;
+  }
+  // --- PUNCH ---
+  const punchEl = document.getElementById('dbPunch');
+  if (punchEl) {
+    const punch = punchR?.puntos || punchR?.items || punchR?.results || [];
+    const abiertos = punch.filter(p=>p.estado==='abierto'||p.estado==='pendiente').length;
+    const criticos = punch.filter(p=>p.prioridad==='critica'||p.prioridad==='alta').length;
+    punchEl.innerHTML = `
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
+        <div style="background:var(--bg);border-radius:6px;padding:10px;text-align:center"><div style="font-size:20px;font-weight:700;color:var(--warning)">${abiertos}</div><div style="font-size:11px;color:var(--muted)">Abiertos</div></div>
+        <div style="background:${criticos>0?'#ef444422':'var(--bg)'};border-radius:6px;padding:10px;text-align:center"><div style="font-size:20px;font-weight:700;color:${criticos>0?'var(--danger)':'var(--muted)'}">${criticos}</div><div style="font-size:11px;color:var(--muted)">Alta prio.</div></div>
+      </div>
+      <div style="font-size:12px;color:var(--muted)">Total punch items: ${punch.length}</div>`;
+  }
+  // --- TRANSMITTALS ---
+  const transEl = document.getElementById('dbTransmittals');
+  if (transEl) {
+    const tr = transR || {};
+    transEl.innerHTML = `
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
+        <div style="background:var(--warning)22;border-radius:6px;padding:10px;text-align:center"><div style="font-size:20px;font-weight:700;color:var(--warning)">${tr.pendientes||0}</div><div style="font-size:11px;color:var(--muted)">Pendientes</div></div>
+        <div style="background:var(--success)22;border-radius:6px;padding:10px;text-align:center"><div style="font-size:20px;font-weight:700;color:var(--success)">${tr.enviados||0}</div><div style="font-size:11px;color:var(--muted)">Enviados</div></div>
+      </div>
+      <div style="font-size:12px;color:${(tr.vencidos||0)>0?'var(--danger)':'var(--muted)'}">Vencidos: <b>${tr.vencidos||0}</b></div>`;
+  }
+}
+
+function irModuloObra(modulo) {
+  // Set the obra filter in target module and navigate
+  navTo(modulo);
+  // After navigation, set obra filter if possible
+  setTimeout(() => {
+    const obraId = _dbObraId;
+    const selectors = {
+      presupuestoSov: 'filterSovObra', cronogramaObra: 'filterCronogramaObra',
+      controlCalidad: 'filterQAInspeccionObra', riesgosObra: 'filterRiesgoObra',
+      ordenesCambio: 'filterOCObra', entregasMaterial: 'filterEntregasObra',
+      rfis: 'filterRfisObra', hitos: 'filterHitosObra',
+      punchList: 'filterPunchObra', transmittals: 'filterTransmittalsObra',
+    };
+    const selId = selectors[modulo];
+    if (selId && obraId) {
+      const el = document.getElementById(selId);
+      if (el) { el.value = obraId; el.dispatchEvent(new Event('change')); }
+    }
+  }, 300);
 }
 
 // ── REGISTRO DE RIESGOS / RISK REGISTER (NEW-59) ──────────────────
