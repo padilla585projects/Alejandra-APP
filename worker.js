@@ -4584,6 +4584,14 @@ export default {
         if (method === 'GET')    return await getParteTrabajo(_ptid, request, env);
         if (method === 'DELETE') return await eliminarParteTrabajo(_ptid, request, env);
       }
+      // ── Hitos de obra (NEW-39) ──────────────────────────────────────────────
+      if (path === '/hitos-obra' && method === 'GET')  return await getHitosObra(request, env);
+      if (path === '/hitos-obra' && method === 'POST') return await crearHitoObra(request, env);
+      if (path.startsWith('/hitos-obra/')) {
+        const _hid = parseInt(path.split('/hitos-obra/')[1]);
+        if (method === 'PUT')    return await actualizarHitoObra(_hid, request, env);
+        if (method === 'DELETE') return await eliminarHitoObra(_hid, request, env);
+      }
 
       // â"€â"€ Galería de fotos por obra (NEW-17) â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
       if (path === '/fotos-obra' && method === 'GET')  return await listarFotosObra(request, env);
@@ -9699,6 +9707,39 @@ async function alertasDiarias(env) {
       }
     } catch(e) { console.error('subcontratas cert alert error:', e.message); }
 
+    // Hitos de obra — alertar sobre hitos que vencen en alertar_dias días
+    try {
+      const hoyStr5 = hoy.toISOString().slice(0, 10);
+      const { results: hitosProximos } = await env.DB.prepare(
+        `SELECT h.empresa_id, h.obra_id, h.nombre, h.fecha, h.tipo, h.responsable, h.alertar_dias,
+                o.nombre as obra_nombre
+         FROM hitos_obra h
+         LEFT JOIN obras o ON h.obra_id = o.id
+         WHERE h.estado = 'pendiente'
+           AND h.fecha BETWEEN ? AND date(?, '+' || h.alertar_dias || ' days')
+         ORDER BY h.empresa_id, h.fecha`
+      ).bind(hoyStr5, hoyStr5).all().catch(() => ({ results: [] }));
+      if (hitosProximos && hitosProximos.length) {
+        // Group by empresa
+        const byEmp = {};
+        for (const h of hitosProximos) {
+          if (!byEmp[h.empresa_id]) byEmp[h.empresa_id] = [];
+          byEmp[h.empresa_id].push(h);
+        }
+        for (const [eid, items] of Object.entries(byEmp)) {
+          const diasHasta = (fecha) => Math.ceil((new Date(fecha) - hoy) / 86400000);
+          let msg = `🏁 *Hitos próximos de obra*\n\n`;
+          for (const h of items) {
+            const d = diasHasta(h.fecha);
+            const cuando = d === 0 ? '¡HOY!' : d === 1 ? 'mañana' : `en ${d} días`;
+            msg += `• *${h.obra_nombre || `Obra ${h.obra_id}`}*: ${h.nombre} (${cuando}, ${h.fecha})\n`;
+            if (h.responsable) msg += `  👤 ${h.responsable}\n`;
+          }
+          await sendTelegram(env, msg, parseInt(eid));
+        }
+      }
+    } catch(e) { console.error('hitos obra alert error:', e.message); }
+
     // RGPD — aplicar retención automática a todas las empresas que la tengan activa
     try {
       const { results: empresasRgpd } = await env.DB.prepare(
@@ -13263,5 +13304,80 @@ async function eliminarSubcontrata(id, request, env) {
   const auth = await getAuth(request, env);
   if (!auth.empresa_id) return err('No autorizado', 403);
   await env.DB.prepare(`DELETE FROM subcontratas WHERE id=? AND empresa_id=?`).bind(id, auth.empresa_id).run();
+  return json({ ok: true });
+}
+
+// ── HITOS DE OBRA (NEW-39) ────────────────────────────────────────────────────
+async function ensureHitosObraTable(env) {
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS hitos_obra (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    empresa_id INTEGER NOT NULL,
+    obra_id INTEGER NOT NULL,
+    nombre TEXT NOT NULL,
+    descripcion TEXT,
+    fecha DATE NOT NULL,
+    estado TEXT DEFAULT 'pendiente',
+    tipo TEXT DEFAULT 'general',
+    responsable TEXT,
+    alertar_dias INTEGER DEFAULT 7,
+    notas TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`).run().catch(() => {});
+}
+async function getHitosObra(request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth?.empresa_id) return err('No autorizado', 403);
+  await ensureHitosObraTable(env);
+  const url = new URL(request.url);
+  const obraId = url.searchParams.get('obra_id');
+  const estado = url.searchParams.get('estado');
+  const desde  = url.searchParams.get('desde');
+  let sql = `SELECT h.*, o.nombre as obra_nombre FROM hitos_obra h
+    LEFT JOIN obras o ON h.obra_id = o.id
+    WHERE h.empresa_id=?`;
+  const params = [auth.empresa_id];
+  if (obraId) { sql += ' AND h.obra_id=?'; params.push(parseInt(obraId)); }
+  if (estado) { sql += ' AND h.estado=?'; params.push(estado); }
+  if (desde)  { sql += ' AND h.fecha >= ?'; params.push(desde); }
+  sql += ' ORDER BY h.fecha ASC';
+  const { results } = await env.DB.prepare(sql).bind(...params).all();
+  const hoy = new Date().toISOString().slice(0, 10);
+  return json({ hitos: results.map(h => ({
+    ...h,
+    retrasado: h.estado === 'pendiente' && h.fecha < hoy,
+    dias_restantes: Math.ceil((new Date(h.fecha) - new Date()) / 86400000),
+  })) });
+}
+async function crearHitoObra(request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth?.empresa_id) return err('No autorizado', 403);
+  await ensureHitosObraTable(env);
+  const b = await request.json();
+  if (!b.nombre || !b.fecha || !b.obra_id) return err('nombre, fecha y obra_id son obligatorios');
+  const { meta } = await env.DB.prepare(
+    `INSERT INTO hitos_obra (empresa_id, obra_id, nombre, descripcion, fecha, estado, tipo, responsable, alertar_dias, notas)
+     VALUES (?,?,?,?,?,?,?,?,?,?)`
+  ).bind(auth.empresa_id, b.obra_id, b.nombre, b.descripcion||null, b.fecha,
+    b.estado||'pendiente', b.tipo||'general', b.responsable||null, b.alertar_dias??7, b.notas||null).run();
+  return json({ ok: true, id: meta.last_row_id });
+}
+async function actualizarHitoObra(id, request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth?.empresa_id) return err('No autorizado', 403);
+  const b = await request.json();
+  await env.DB.prepare(
+    `UPDATE hitos_obra SET nombre=COALESCE(?,nombre), descripcion=COALESCE(?,descripcion),
+     fecha=COALESCE(?,fecha), estado=COALESCE(?,estado), tipo=COALESCE(?,tipo),
+     responsable=COALESCE(?,responsable), alertar_dias=COALESCE(?,alertar_dias), notas=COALESCE(?,notas)
+     WHERE id=? AND empresa_id=?`
+  ).bind(b.nombre||null, b.descripcion||null, b.fecha||null, b.estado||null, b.tipo||null,
+    b.responsable||null, b.alertar_dias??null, b.notas||null, id, auth.empresa_id).run();
+  return json({ ok: true });
+}
+async function eliminarHitoObra(id, request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth?.empresa_id) return err('No autorizado', 403);
+  await ensureHitosObraTable(env);
+  await env.DB.prepare(`DELETE FROM hitos_obra WHERE id=? AND empresa_id=?`).bind(id, auth.empresa_id).run();
   return json({ ok: true });
 }

@@ -506,6 +506,10 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
     <button class="nav-item" data-page="partesPanel" onclick="navTo('partesPanel')">
       <span class="nav-icon">📋</span> Partes Diarios
     </button>
+    <button class="nav-item" data-page="hitos" onclick="navTo('hitos')">
+      <span class="nav-icon">🏁</span> Hitos de Obra
+      <span class="nav-badge" id="hitosBadge" style="display:none">!</span>
+    </button>
 
     <div class="sidebar-section">Analítica</div>
     <button class="nav-item" data-page="graficas" onclick="navTo('graficas')">
@@ -1270,6 +1274,28 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
           <button class="btn btn-secondary" onclick="tblPartes=null;cargarPartesPanel()">🔄 Actualizar</button>
         </div>
         <div class="tbl-wrap"><div id="tblPartes"></div></div>
+      </div>
+
+      <!-- HITOS DE OBRA -->
+      <div class="page" id="pageHitos">
+        <div class="page-title">🏁 Hitos de Obra</div>
+        <div class="page-sub">Seguimiento de fechas clave, entregas e inspecciones por proyecto</div>
+        <div class="tbl-toolbar" style="margin-bottom:16px">
+          <select class="tbl-search" id="hitosObraId" style="min-width:220px" onchange="cargarHitos()">
+            <option value="">🏗 Todas las obras</option>
+          </select>
+          <select class="tbl-search" id="hitosEstadoFiltro" style="min-width:130px" onchange="cargarHitos()">
+            <option value="">Todos</option>
+            <option value="pendiente">Pendiente</option>
+            <option value="completado">Completado</option>
+            <option value="retrasado">Retrasado</option>
+          </select>
+          <button class="btn btn-primary" onclick="abrirModalHito()">+ Nuevo hito</button>
+          <button class="btn btn-secondary" onclick="cargarHitos()">🔄 Actualizar</button>
+        </div>
+        <div id="hitosResumen" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:18px"></div>
+        <!-- Timeline visual -->
+        <div id="hitosTimeline" style="display:flex;flex-direction:column;gap:0"></div>
       </div>
 
       <!-- SUBCONTRATAS / PROVEEDORES -->
@@ -2649,6 +2675,7 @@ const PAGE_TITLES = {
   presupuesto: '💶 Presupuesto de Obra',
   fases: '📅 Fases de Obra',
   partesPanel: '📋 Partes Diarios',
+  hitos: '🏁 Hitos de Obra',
 };
 
 const PAGE_LOADERS = {
@@ -2688,6 +2715,7 @@ const PAGE_LOADERS = {
   presupuesto: cargarPresupuesto,
   fases: cargarFases,
   partesPanel: cargarPartesPanel,
+  hitos: cargarHitos,
 };
 
 let currentPage = '';
@@ -2756,6 +2784,7 @@ const SYNC_INTERVALS = {
   presupuesto: 120,
   fases: 120,
   partesPanel: 60,
+  hitos: 120,
 };
 
 let _syncTimer = null, _syncLabelTimer = null, _syncLastTs = null;
@@ -5783,10 +5812,13 @@ document.addEventListener('click', e => {
 });
 
 async function cargarNotificaciones() {
-  const [alertasR, pedidosR, carnetR] = await Promise.all([
+  const [alertasR, pedidosR, carnetR, rfisR, subcR, hitosR] = await Promise.all([
     api('/alertas-stock'),
     api('/pedidos?limit=50'),
     api('/carnets?limit=200'),
+    api('/rfis?limit=50').catch(() => ({})),
+    api('/subcontratas').catch(() => ({})),
+    api('/hitos-obra').catch(() => ({})),
   ]);
   notificaciones = [];
 
@@ -5818,6 +5850,38 @@ async function cargarNotificaciones() {
   if (proximos.length) notificaciones.push({
     tipo: 'warn', icono: '🪪', titulo: `${proximos.length} carnet${proximos.length > 1 ? 's' : ''} próximo${proximos.length > 1 ? 's' : ''} a caducar`,
     texto: proximos.slice(0, 3).map(c => c.trabajador || c.tipo).join(', '), nav: 'carnets'
+  });
+
+  // RFIs abiertas sin respuesta > 7 días
+  const rfisArr = toArr(rfisR, 'rfis').filter(r => r.estado === 'abierta');
+  const rfisViejas = rfisArr.filter(r => {
+    const dias = Math.ceil((new Date() - new Date(r.created_at || r.fecha)) / 86400000);
+    return dias > 7;
+  });
+  if (rfisViejas.length) notificaciones.push({
+    tipo: 'warn', icono: '❓', titulo: `${rfisViejas.length} RFI${rfisViejas.length > 1 ? 's' : ''} sin respuesta > 7 días`,
+    texto: rfisViejas.slice(0, 2).map(r => r.titulo || r.numero || `RFI #${r.id}`).join(', '), nav: 'rfis'
+  });
+
+  // Subcontratas con seguros/habilitaciones por vencer
+  const subcArr = toArr(subcR, 'subcontratas');
+  const subcAlertas = subcArr.filter(s => s.seguro_alerta || s.habilitacion_alerta);
+  if (subcAlertas.length) notificaciones.push({
+    tipo: 'warn', icono: '🏢', titulo: `${subcAlertas.length} subcontrata${subcAlertas.length > 1 ? 's' : ''} con documentación por vencer`,
+    texto: subcAlertas.slice(0, 2).map(s => s.nombre).join(', '), nav: 'subcontratas'
+  });
+
+  // Hitos próximos (≤7 días) o retrasados
+  const hitosArr = (hitosR?.hitos || []);
+  const hitosProx = hitosArr.filter(h => h.estado === 'pendiente' && h.dias_restantes >= 0 && h.dias_restantes <= 7);
+  const hitosRet  = hitosArr.filter(h => h.retrasado);
+  if (hitosRet.length) notificaciones.push({
+    tipo: 'danger', icono: '🏁', titulo: `${hitosRet.length} hito${hitosRet.length > 1 ? 's' : ''} de obra retrasado${hitosRet.length > 1 ? 's' : ''}`,
+    texto: hitosRet.slice(0, 2).map(h => h.nombre).join(', '), nav: 'hitos'
+  });
+  if (hitosProx.length) notificaciones.push({
+    tipo: 'warn', icono: '🏁', titulo: `${hitosProx.length} hito${hitosProx.length > 1 ? 's' : ''} en los próximos 7 días`,
+    texto: hitosProx.slice(0, 2).map(h => `${h.nombre} (${h.dias_restantes === 0 ? 'HOY' : 'en '+h.dias_restantes+'d'})`).join(', '), nav: 'hitos'
   });
 
   // Actualizar badge
@@ -10012,6 +10076,195 @@ async function cargarPartesPanel() {
   document.getElementById('searchPartes')?.addEventListener('input', (e) => {
     if (tblPartes) tblPartes.setFilter([{field:'descripcion',type:'like',value:e.target.value},{field:'obra',type:'like',value:e.target.value}]);
   });
+}
+
+// ── HITOS DE OBRA ────────────────────────────────────────────────
+let _hitosData = [];
+async function cargarHitos() {
+  if (document.getElementById('hitosObraId')?.options.length <= 1) poblarSelectObras('hitosObraId');
+  const obraId  = document.getElementById('hitosObraId')?.value || '';
+  const estado  = document.getElementById('hitosEstadoFiltro')?.value || '';
+  let url = '/hitos-obra';
+  const params = [];
+  if (obraId)  params.push(`obra_id=${obraId}`);
+  if (estado)  params.push(`estado=${estado}`);
+  if (params.length) url += '?' + params.join('&');
+  const r = await api(url);
+  _hitosData = r.hitos || [];
+  // KPIs
+  const hoy = new Date().toISOString().slice(0, 10);
+  const proximos  = _hitosData.filter(h => h.estado === 'pendiente' && h.fecha >= hoy && h.dias_restantes <= 7).length;
+  const retrasados = _hitosData.filter(h => h.retrasado).length;
+  const completos  = _hitosData.filter(h => h.estado === 'completado').length;
+  document.getElementById('hitosResumen').innerHTML = [
+    { label: 'Total hitos', val: _hitosData.length, cls: '' },
+    { label: 'Próximos (7d)', val: proximos,  cls: proximos > 0 ? 'warn' : '' },
+    { label: 'Retrasados',    val: retrasados, cls: retrasados > 0 ? 'danger' : '' },
+    { label: 'Completados',   val: completos,  cls: 'ok' },
+  ].map(k => `<div class="kpi-card"><div class="kpi-value ${k.cls}">${k.val}</div><div class="kpi-label">${k.label}</div></div>`).join('');
+  // Badge
+  const badge = document.getElementById('hitosBadge');
+  if (badge) { badge.style.display = (proximos + retrasados) > 0 ? '' : 'none'; }
+  // Render timeline
+  renderHitosTimeline();
+}
+function renderHitosTimeline() {
+  const el = document.getElementById('hitosTimeline');
+  if (!_hitosData.length) {
+    el.innerHTML = '<div class="empty-state"><div class="empty-icon">🏁</div><div class="empty-text">Sin hitos — añade el primero</div></div>';
+    return;
+  }
+  const hoy = new Date().toISOString().slice(0, 10);
+  // Group by month
+  const groups = {};
+  for (const h of _hitosData) {
+    const mes = h.fecha ? h.fecha.slice(0, 7) : '—';
+    if (!groups[mes]) groups[mes] = [];
+    groups[mes].push(h);
+  }
+  const tipoIcons = { general:'📌', entrega:'📦', inspeccion:'🔎', pago:'💰', inicio:'🚀', fin:'🏆', reunion:'📝', permiso:'📋' };
+  const estadoCls = { pendiente: 'warn', completado: 'ok', retrasado: 'danger' };
+  const mesLabel  = (m) => { if (!m || m === '—') return '—'; const [y,mm] = m.split('-'); return new Date(y,mm-1,1).toLocaleDateString('es-ES',{month:'long',year:'numeric'}); };
+
+  let html = '';
+  for (const [mes, hitos] of Object.entries(groups)) {
+    const esActual = mes === hoy.slice(0, 7);
+    html += `<div style="margin-bottom:4px">
+      <div style="display:flex;align-items:center;gap:8px;padding:8px 0;position:sticky;top:0;background:var(--bg);z-index:1">
+        <div style="flex:1;height:1px;background:var(--border)"></div>
+        <span style="font-family:'Montserrat',sans-serif;font-weight:700;font-size:11px;color:${esActual?'var(--primary)':'var(--muted)'};white-space:nowrap;padding:3px 10px;background:${esActual?'rgba(249,115,22,.1)':'var(--surface-alt,#f8fafc)'};border-radius:20px;border:1px solid var(--border)">
+          ${esActual?'📍 ':''}${mesLabel(mes)}
+        </span>
+        <div style="flex:1;height:1px;background:var(--border)"></div>
+      </div>`;
+    for (const h of hitos) {
+      const esHoy   = h.fecha === hoy;
+      const retrasado = h.estado === 'pendiente' && h.fecha < hoy;
+      const estadoEf = retrasado ? 'retrasado' : h.estado;
+      const badgeCls = estadoCls[estadoEf] || 'muted';
+      const diasText = h.dias_restantes < 0 ? `hace ${Math.abs(h.dias_restantes)} días` :
+                       h.dias_restantes === 0 ? '¡HOY!' :
+                       h.dias_restantes === 1 ? 'mañana' : `en ${h.dias_restantes} días`;
+      const color = retrasado ? '#ef4444' : esHoy ? 'var(--primary)' : h.estado === 'completado' ? '#10b981' : 'var(--text)';
+      html += `<div style="display:flex;gap:0;padding:0 4px;cursor:pointer" onclick="abrirModalHitoEditar(${h.id})">
+        <!-- connector + dot -->
+        <div style="display:flex;flex-direction:column;align-items:center;width:28px;min-width:28px">
+          <div style="width:2px;background:var(--border);flex:1;min-height:8px"></div>
+          <div style="width:12px;height:12px;border-radius:50%;background:${color};border:2px solid var(--bg);box-shadow:0 0 0 2px ${color};flex-shrink:0"></div>
+          <div style="width:2px;background:var(--border);flex:1;min-height:8px"></div>
+        </div>
+        <!-- content -->
+        <div style="flex:1;padding:8px 10px 8px 10px;margin:2px 0;background:${esHoy?'rgba(249,115,22,.06)':retrasado?'rgba(239,68,68,.04)':'transparent'};border-radius:8px;border-left:${esHoy||retrasado?'3px solid '+color:'3px solid transparent'}">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+            <span>${tipoIcons[h.tipo]||'📌'}</span>
+            <span style="flex:1;font-weight:700;font-size:13px;color:${color}">${h.nombre}</span>
+            <span class="badge badge-${badgeCls}" style="font-size:10px">${estadoEf}</span>
+            ${h.estado !== 'completado' ? `<span style="font-size:10px;color:${retrasado?'#ef4444':'var(--muted)'};font-family:'Montserrat',sans-serif;font-weight:700">${diasText}</span>` : ''}
+          </div>
+          <div style="font-size:11px;color:var(--muted);display:flex;gap:12px;flex-wrap:wrap">
+            <span>📅 ${fmtFecha(h.fecha)}</span>
+            ${h.responsable ? `<span>👤 ${h.responsable}</span>` : ''}
+            ${h.obra_nombre  ? `<span>🏗 ${h.obra_nombre}</span>` : ''}
+            ${h.descripcion  ? `<span style="flex:1">${h.descripcion}</span>` : ''}
+          </div>
+        </div>
+      </div>`;
+    }
+    html += `</div>`;
+  }
+  el.innerHTML = html;
+}
+function abrirModalHito() {
+  if (document.getElementById('hitosObraId')?.options.length <= 1) poblarSelectObras('hitosObraId');
+  const obraId = document.getElementById('hitosObraId')?.value || '';
+  const hoy = new Date().toISOString().slice(0, 10);
+  abrirModal('Nuevo hito de obra', `
+    <div class="form-group"><div class="form-label">Nombre del hito *</div><input class="form-input" id="mHitoNombre" placeholder="Ej: Fin de estructura, Inspección RITE..."></div>
+    <div class="form-row">
+      <div class="form-group"><div class="form-label">Fecha *</div><input class="form-input" id="mHitoFecha" type="date" value="${hoy}"></div>
+      <div class="form-group"><div class="form-label">Tipo</div>
+        <select class="form-select" id="mHitoTipo">
+          <option value="general">📌 General</option><option value="entrega">📦 Entrega</option>
+          <option value="inspeccion">🔎 Inspección</option><option value="pago">💰 Pago</option>
+          <option value="inicio">🚀 Inicio</option><option value="fin">🏆 Fin de obra</option>
+          <option value="reunion">📝 Reunión</option><option value="permiso">📋 Permiso/Licencia</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-group"><div class="form-label">Obra</div>
+      <select class="form-select" id="mHitoObraId"><option value="${obraId}">${obraId ? '(Obra seleccionada)' : '— Selecciona una obra —'}</option></select>
+    </div>
+    <div class="form-group"><div class="form-label">Responsable</div><input class="form-input" id="mHitoResp" placeholder="Nombre o cargo"></div>
+    <div class="form-group"><div class="form-label">Descripción</div><textarea class="form-input" id="mHitoDesc" rows="2"></textarea></div>
+    <div class="form-group"><div class="form-label">Alertar X días antes</div><input class="form-input" id="mHitoAlertDias" type="number" min="0" value="7"></div>
+  `, async () => {
+    const nombre = document.getElementById('mHitoNombre').value.trim();
+    const fecha  = document.getElementById('mHitoFecha').value;
+    const oid    = document.getElementById('mHitoObraId').value || obraId;
+    if (!nombre || !fecha || !oid) { toast('Nombre, fecha y obra son obligatorios', 'err'); return; }
+    const body = { obra_id: parseInt(oid), nombre, fecha,
+      tipo: document.getElementById('mHitoTipo').value,
+      responsable: document.getElementById('mHitoResp').value.trim() || null,
+      descripcion: document.getElementById('mHitoDesc').value.trim() || null,
+      alertar_dias: parseInt(document.getElementById('mHitoAlertDias').value) || 7,
+    };
+    const r = await api('/hitos-obra', { method: 'POST', body: JSON.stringify(body) });
+    if (r.ok || r.id) { toast('Hito creado ✓', 'ok'); cerrarModal(); cargarHitos(); }
+    else toast('Error al crear hito', 'err');
+  });
+  // Populate obra select in modal
+  setTimeout(() => poblarSelectObras('mHitoObraId'), 50);
+}
+function abrirModalHitoEditar(id) {
+  const h = _hitosData.find(x => x.id === id);
+  if (!h) return;
+  abrirModal('Editar hito', `
+    <div class="form-group"><div class="form-label">Nombre *</div><input class="form-input" id="mHitoNombre" value="${esc(h.nombre||'')}"></div>
+    <div class="form-row">
+      <div class="form-group"><div class="form-label">Fecha *</div><input class="form-input" id="mHitoFecha" type="date" value="${h.fecha||''}"></div>
+      <div class="form-group"><div class="form-label">Estado</div>
+        <select class="form-select" id="mHitoEst">
+          <option value="pendiente" ${h.estado==='pendiente'?'selected':''}>⏳ Pendiente</option>
+          <option value="completado" ${h.estado==='completado'?'selected':''}>✅ Completado</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><div class="form-label">Tipo</div>
+        <select class="form-select" id="mHitoTipo">
+          ${['general','entrega','inspeccion','pago','inicio','fin','reunion','permiso'].map(t=>`<option value="${t}" ${h.tipo===t?'selected':''}>${t}</option>`).join('')}
+        </select>
+      </div>
+      <div class="form-group"><div class="form-label">Alertar X días antes</div><input class="form-input" id="mHitoAlertDias" type="number" min="0" value="${h.alertar_dias??7}"></div>
+    </div>
+    <div class="form-group"><div class="form-label">Responsable</div><input class="form-input" id="mHitoResp" value="${esc(h.responsable||'')}"></div>
+    <div class="form-group"><div class="form-label">Descripción</div><textarea class="form-input" id="mHitoDesc" rows="2">${h.descripcion||''}</textarea></div>
+    <div class="form-group"><div class="form-label">Notas</div><textarea class="form-input" id="mHitoNotas" rows="2">${h.notas||''}</textarea></div>
+    <div style="margin-top:12px"><button class="btn btn-danger btn-sm" onclick="eliminarHito(${h.id})">🗑 Eliminar hito</button></div>
+  `, async () => {
+    const nombre = document.getElementById('mHitoNombre').value.trim();
+    const fecha  = document.getElementById('mHitoFecha').value;
+    if (!nombre || !fecha) { toast('Nombre y fecha son obligatorios', 'err'); return; }
+    const body = {
+      nombre,
+      fecha,
+      estado:       document.getElementById('mHitoEst').value,
+      tipo:         document.getElementById('mHitoTipo').value,
+      responsable:  document.getElementById('mHitoResp').value.trim() || null,
+      descripcion:  document.getElementById('mHitoDesc').value.trim() || null,
+      notas:        document.getElementById('mHitoNotas').value.trim() || null,
+      alertar_dias: parseInt(document.getElementById('mHitoAlertDias').value) || 7,
+    };
+    const r = await api(`/hitos-obra/${h.id}`, { method: 'PUT', body: JSON.stringify(body) });
+    if (r.ok) { toast('Hito actualizado ✓', 'ok'); cerrarModal(); cargarHitos(); }
+    else toast('Error al actualizar hito', 'err');
+  });
+}
+async function eliminarHito(id) {
+  if (!confirm('¿Eliminar este hito?')) return;
+  const r = await api(`/hitos-obra/${id}`, { method: 'DELETE' });
+  if (r.ok || r.deleted) { toast('Hito eliminado', 'ok'); cerrarModal(); cargarHitos(); }
+  else toast('Error al eliminar', 'err');
 }
 
 // ── SUBCONTRATAS / PROVEEDORES ──────────────────────────────────
