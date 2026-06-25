@@ -558,6 +558,10 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
       <span class="nav-icon">📨</span> Transmittals
       <span class="nav-badge" id="transmittalsBadge" style="display:none">!</span>
     </button>
+    <button class="nav-item" data-page="controlCalidad" onclick="navTo('controlCalidad')">
+      <span class="nav-icon">✅</span> Control de Calidad
+      <span class="nav-badge" id="ncrsBadge" style="display:none">!</span>
+    </button>
 
     <div class="sidebar-section" onclick="sidebarToggle(this)" data-sid="seguimiento"><span>📓 Seguimiento</span><span class="sec-chevron">▼</span></div>
     <button class="nav-item" data-page="partesPanel" onclick="navTo('partesPanel')">
@@ -1854,6 +1858,185 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
         </div>
         <div id="transmittalsResumen" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:12px;margin-bottom:18px"></div>
         <div class="tbl-wrap"><div id="tblTransmittals"></div></div>
+      </div>
+
+      <!-- CONTROL DE CALIDAD / QA-QC -->
+      <div class="page" id="pageControlCalidad">
+        <div class="page-title">✅ Control de Calidad / QA-QC</div>
+        <div class="page-sub">Checklists de inspeccion, ejecuciones y No Conformidades (NCR)</div>
+        <!-- Tabs -->
+        <div style="display:flex;gap:4px;margin-bottom:18px;border-bottom:2px solid var(--border)">
+          <button class="btn" id="qaTab-plantillas" onclick="qaSetTab('plantillas')" style="border-radius:6px 6px 0 0;border-bottom:2px solid var(--primary);color:var(--primary);background:var(--bg-card)">📋 Plantillas</button>
+          <button class="btn btn-secondary" id="qaTab-inspecciones" onclick="qaSetTab('inspecciones')" style="border-radius:6px 6px 0 0;background:transparent">🔍 Inspecciones</button>
+          <button class="btn btn-secondary" id="qaTab-ncrs" onclick="qaSetTab('ncrs')" style="border-radius:6px 6px 0 0;background:transparent">⚠️ NCRs</button>
+        </div>
+
+        <!-- TAB: PLANTILLAS -->
+        <div id="qaPanel-plantillas">
+          <div class="tbl-toolbar" style="flex-wrap:wrap;gap:8px;margin-bottom:14px">
+            <select class="tbl-search" id="filterQACat" style="min-width:160px" onchange="cargarQAPlantillas()">
+              <option value="">Todas las categorias</option>
+              <option value="estructura">Estructura</option>
+              <option value="acabados">Acabados</option>
+              <option value="instalaciones">Instalaciones</option>
+              <option value="seguridad">Seguridad</option>
+              <option value="general">General</option>
+            </select>
+            <button class="btn btn-primary" onclick="abrirModalPlantilla()">+ Nueva plantilla</button>
+            <button class="btn btn-secondary" onclick="cargarQAPlantillas()">🔄</button>
+          </div>
+          <div id="qaPlantillasGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px"></div>
+        </div>
+
+        <!-- TAB: INSPECCIONES -->
+        <div id="qaPanel-inspecciones" style="display:none">
+          <div class="tbl-toolbar" style="flex-wrap:wrap;gap:8px;margin-bottom:14px">
+            <select class="tbl-search" id="filterQAInspeccionObra" style="min-width:220px" onchange="cargarQAInspecciones()"></select>
+            <select class="tbl-search" id="filterQAInspeccionEstado" style="min-width:160px" onchange="cargarQAInspecciones()">
+              <option value="">Todos los estados</option>
+              <option value="en_curso">En curso</option>
+              <option value="completado">Completado</option>
+              <option value="con_no_conformidades">Con NCR</option>
+            </select>
+            <button class="btn btn-primary" onclick="abrirModalInspeccion()">+ Nueva inspeccion</button>
+            <button class="btn btn-secondary" onclick="cargarQAInspecciones()">🔄</button>
+          </div>
+          <div id="qaInspeccionesKpi" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:12px;margin-bottom:16px"></div>
+          <div id="qaInspeccionesLista"></div>
+        </div>
+
+        <!-- TAB: NCRs -->
+        <div id="qaPanel-ncrs" style="display:none">
+          <div class="tbl-toolbar" style="flex-wrap:wrap;gap:8px;margin-bottom:14px">
+            <select class="tbl-search" id="filterNCRObraId" style="min-width:220px" onchange="cargarNCRs()"></select>
+            <select class="tbl-search" id="filterNCRGravedad" style="min-width:150px" onchange="cargarNCRs()">
+              <option value="">Toda gravedad</option>
+              <option value="critico">Critico</option>
+              <option value="grave">Grave</option>
+              <option value="moderado">Moderado</option>
+              <option value="leve">Leve</option>
+            </select>
+            <select class="tbl-search" id="filterNCREstado" style="min-width:150px" onchange="cargarNCRs()">
+              <option value="">Todos los estados</option>
+              <option value="abierta">Abierta</option>
+              <option value="en_proceso">En proceso</option>
+              <option value="cerrada">Cerrada</option>
+            </select>
+            <button class="btn btn-primary" onclick="abrirModalNcr()">+ Nueva NCR</button>
+            <button class="btn btn-secondary" onclick="cargarNCRs()">🔄</button>
+          </div>
+          <div id="ncrKpi" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:12px;margin-bottom:16px"></div>
+          <div id="ncrLista"></div>
+        </div>
+      </div>
+
+      <!-- MODAL: Plantilla Checklist -->
+      <div id="modalPlantilla" class="modal-overlay" style="display:none" onclick="if(event.target===this)this.style.display='none'">
+        <div class="modal-box" style="max-width:700px;max-height:90vh;overflow-y:auto">
+          <div class="modal-head"><span id="modalPlantillaTitulo">Nueva Plantilla</span><button class="modal-close" onclick="document.getElementById('modalPlantilla').style.display='none'">✕</button></div>
+          <div class="modal-body" style="display:flex;flex-direction:column;gap:14px">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+              <div><label class="form-label">Nombre *</label><input class="form-input" id="fpNombre" placeholder="Nombre de la plantilla"></div>
+              <div><label class="form-label">Categoria</label>
+                <select class="form-input" id="fpCategoria">
+                  <option value="general">General</option>
+                  <option value="estructura">Estructura</option>
+                  <option value="acabados">Acabados</option>
+                  <option value="instalaciones">Instalaciones</option>
+                  <option value="seguridad">Seguridad</option>
+                </select>
+              </div>
+            </div>
+            <div><label class="form-label">Descripcion</label><textarea class="form-input" id="fpDescripcion" rows="2" style="resize:vertical"></textarea></div>
+            <div>
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+                <label class="form-label" style="margin:0">Items del checklist</label>
+                <button class="btn btn-secondary" onclick="qaAddItem()" style="padding:4px 10px;font-size:12px">+ Agregar item</button>
+              </div>
+              <div id="fpItemsList" style="display:flex;flex-direction:column;gap:8px;max-height:300px;overflow-y:auto"></div>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="document.getElementById('modalPlantilla').style.display='none'">Cancelar</button>
+            <button class="btn btn-primary" onclick="guardarPlantilla()">Guardar</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- MODAL: Nueva Inspeccion -->
+      <div id="modalInspeccion" class="modal-overlay" style="display:none" onclick="if(event.target===this)this.style.display='none'">
+        <div class="modal-box" style="max-width:600px">
+          <div class="modal-head"><span>Nueva Inspeccion</span><button class="modal-close" onclick="document.getElementById('modalInspeccion').style.display='none'">✕</button></div>
+          <div class="modal-body" style="display:flex;flex-direction:column;gap:14px">
+            <div><label class="form-label">Plantilla *</label>
+              <select class="form-input" id="fiPlantilla" onchange="fiPlantillaCambio()">
+                <option value="">-- Selecciona plantilla --</option>
+              </select>
+            </div>
+            <div><label class="form-label">Titulo</label><input class="form-input" id="fiTitulo" placeholder="Titulo de la inspeccion"></div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+              <div><label class="form-label">Obra</label><select class="form-input" id="fiObra"></select></div>
+              <div><label class="form-label">Fecha</label><input class="form-input" type="date" id="fiFecha"></div>
+            </div>
+            <div><label class="form-label">Inspector</label><input class="form-input" id="fiInspector" placeholder="Nombre del inspector"></div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="document.getElementById('modalInspeccion').style.display='none'">Cancelar</button>
+            <button class="btn btn-primary" onclick="guardarInspeccion()">Crear inspeccion</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- MODAL: Ejecutar Checklist -->
+      <div id="modalEjecutar" class="modal-overlay" style="display:none" onclick="if(event.target===this)this.style.display='none'">
+        <div class="modal-box" style="max-width:700px;max-height:90vh;overflow-y:auto">
+          <div class="modal-head"><span id="modalEjecutarTitulo">Ejecutar Checklist</span><button class="modal-close" onclick="document.getElementById('modalEjecutar').style.display='none'">✕</button></div>
+          <div class="modal-body">
+            <div id="ejecutarItems" style="display:flex;flex-direction:column;gap:10px"></div>
+            <div style="margin-top:14px"><label class="form-label">Notas generales</label><textarea class="form-input" id="ejecutarNotas" rows="3" style="resize:vertical"></textarea></div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="document.getElementById('modalEjecutar').style.display='none'">Cancelar</button>
+            <button class="btn btn-primary" onclick="guardarEjecucion()">Guardar resultados</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- MODAL: NCR -->
+      <div id="modalNcr" class="modal-overlay" style="display:none" onclick="if(event.target===this)this.style.display='none'">
+        <div class="modal-box" style="max-width:620px">
+          <div class="modal-head"><span id="modalNcrTitulo">Nueva NCR</span><button class="modal-close" onclick="document.getElementById('modalNcr').style.display='none'">✕</button></div>
+          <div class="modal-body" style="display:flex;flex-direction:column;gap:14px">
+            <div><label class="form-label">Descripcion *</label><textarea class="form-input" id="fnDescripcion" rows="3" style="resize:vertical"></textarea></div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+              <div><label class="form-label">Obra</label><select class="form-input" id="fnObra"></select></div>
+              <div><label class="form-label">Gravedad</label>
+                <select class="form-input" id="fnGravedad">
+                  <option value="leve">Leve</option>
+                  <option value="moderado" selected>Moderado</option>
+                  <option value="grave">Grave</option>
+                  <option value="critico">Critico</option>
+                </select>
+              </div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+              <div><label class="form-label">Responsable</label><input class="form-input" id="fnResponsable"></div>
+              <div><label class="form-label">Fecha limite</label><input class="form-input" type="date" id="fnFechaLimite"></div>
+            </div>
+            <div><label class="form-label">Accion correctiva</label><textarea class="form-input" id="fnAccion" rows="2" style="resize:vertical"></textarea></div>
+            <div><label class="form-label">Estado</label>
+              <select class="form-input" id="fnEstado">
+                <option value="abierta">Abierta</option>
+                <option value="en_proceso">En proceso</option>
+                <option value="cerrada">Cerrada</option>
+              </select>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="document.getElementById('modalNcr').style.display='none'">Cancelar</button>
+            <button class="btn btn-primary" onclick="guardarNcr()">Guardar NCR</button>
+          </div>
+        </div>
       </div>
 
       <!-- PLANOS DE OBRA -->
@@ -3381,6 +3564,7 @@ const PAGE_TITLES = {
   cronogramaObra: '📅 Cronograma de Obra',
   fotosObra: '📷 Galería de Fotos de Obra',
   transmittals: '📨 Transmittals',
+  controlCalidad: '✅ Control de Calidad / QA-QC',
 };
 
 const PAGE_LOADERS = {
@@ -3437,6 +3621,7 @@ const PAGE_LOADERS = {
   cronogramaObra: cargarCronogramaObra,
   fotosObra: cargarFotosObra,
   transmittals: cargarTransmittals,
+  controlCalidad: cargarControlCalidad,
 };
 
 let currentPage = '';
@@ -3522,6 +3707,7 @@ const SYNC_INTERVALS = {
   cronogramaObra: 120,
   fotosObra: 60,
   transmittals: 90,
+  controlCalidad: 90,
 };
 
 let _syncTimer = null, _syncLabelTimer = null, _syncLastTs = null;
@@ -12926,6 +13112,461 @@ async function eliminarTransmittal(id) {
   if (!confirm('¿Eliminar este transmittal?')) return;
   const r = await api(`/transmittals-obra/${id}`, 'DELETE');
   if (r?.ok) { showToast('Transmittal eliminado', 'success'); cargarTransmittals(); }
+  else showToast('Error al eliminar', 'error');
+}
+
+// ── CONTROL DE CALIDAD / QA-QC (NEW-55) ───────────────────────────
+let _qaTab = 'plantillas';
+let _qaPlantillas = [];
+let _qaEjecucionActual = null; // id being edited in ejecutar modal
+let _ncrEditId = null;
+let _plantillaEditId = null;
+
+const QA_CAT_COLOR = {
+  general: '#6366f1', estructura: '#0ea5e9', acabados: '#f97316',
+  instalaciones: '#22c55e', seguridad: '#ef4444'
+};
+const NCR_GRAV_COLOR = {
+  leve: '#22c55e', moderado: '#f97316', grave: '#ef4444', critico: '#7c3aed'
+};
+const NCR_ESTADO_ICON = { abierta: '🔴', en_proceso: '🟡', cerrada: '✅', rechazada: '⚫' };
+
+function qaSetTab(tab) {
+  _qaTab = tab;
+  ['plantillas','inspecciones','ncrs'].forEach(t => {
+    const panel = document.getElementById(`qaPanel-${t}`);
+    const btn   = document.getElementById(`qaTab-${t}`);
+    if (!panel || !btn) return;
+    const active = t === tab;
+    panel.style.display = active ? '' : 'none';
+    btn.style.borderBottom = active ? '2px solid var(--primary)' : 'none';
+    btn.style.color = active ? 'var(--primary)' : '';
+    btn.style.background = active ? 'var(--bg-card)' : 'transparent';
+  });
+  if (tab === 'plantillas')   cargarQAPlantillas();
+  if (tab === 'inspecciones') cargarQAInspecciones();
+  if (tab === 'ncrs')         cargarNCRs();
+}
+
+async function cargarControlCalidad() {
+  // Populate obra selects
+  poblarSelectObras('filterQAInspeccionObra');
+  poblarSelectObras('filterNCRObraId');
+  poblarSelectObras('fiObra');
+  poblarSelectObras('fnObra');
+  qaSetTab('plantillas');
+}
+
+// --- PLANTILLAS ---------------------------------------------------
+async function cargarQAPlantillas() {
+  const cat = document.getElementById('filterQACat')?.value || '';
+  let url = '/checklists-plantillas?';
+  if (cat) url += `categoria=${cat}&`;
+  const r = await api(url);
+  _qaPlantillas = r?.plantillas || [];
+  const grid = document.getElementById('qaPlantillasGrid');
+  if (!grid) return;
+  if (!_qaPlantillas.length) {
+    grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><div class="empty-icon">📋</div><div class="empty-text">No hay plantillas. Crea la primera plantilla de checklist.</div></div>`;
+    return;
+  }
+  grid.innerHTML = _qaPlantillas.map(p => {
+    const color = QA_CAT_COLOR[p.categoria] || '#6366f1';
+    const items = Array.isArray(p.items) ? p.items : [];
+    return `<div class="kpi-card" style="text-align:left;padding:16px;border-left:4px solid ${color}">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+        <div>
+          <div style="font-weight:700;font-size:15px;margin-bottom:4px">${p.nombre}</div>
+          <span style="background:${color}22;color:${color};border-radius:10px;padding:2px 8px;font-size:11px;font-weight:600">${p.categoria}</span>
+        </div>
+        <div style="display:flex;gap:6px">
+          <button class="btn btn-secondary btn-sm" onclick="editarPlantilla(${p.id})" title="Editar">✏️</button>
+          <button class="btn btn-danger btn-sm" onclick="eliminarPlantilla(${p.id})" title="Eliminar">🗑</button>
+        </div>
+      </div>
+      ${p.descripcion ? `<div style="color:var(--muted);font-size:12px;margin-top:8px">${p.descripcion}</div>` : ''}
+      <div style="margin-top:12px;font-size:12px;color:var(--muted)">${items.length} items en el checklist</div>
+    </div>`;
+  }).join('');
+}
+
+function abrirModalPlantilla() {
+  _plantillaEditId = null;
+  document.getElementById('modalPlantillaTitulo').textContent = 'Nueva Plantilla';
+  document.getElementById('fpNombre').value = '';
+  document.getElementById('fpCategoria').value = 'general';
+  document.getElementById('fpDescripcion').value = '';
+  document.getElementById('fpItemsList').innerHTML = '';
+  document.getElementById('modalPlantilla').style.display = 'flex';
+}
+
+async function editarPlantilla(id) {
+  const r = await api(`/checklists-plantillas/${id}`);
+  if (!r?.plantilla) return showToast('Error al cargar plantilla', 'error');
+  const p = r.plantilla;
+  _plantillaEditId = id;
+  document.getElementById('modalPlantillaTitulo').textContent = 'Editar Plantilla';
+  document.getElementById('fpNombre').value = p.nombre || '';
+  document.getElementById('fpCategoria').value = p.categoria || 'general';
+  document.getElementById('fpDescripcion').value = p.descripcion || '';
+  const items = Array.isArray(p.items) ? p.items : [];
+  document.getElementById('fpItemsList').innerHTML = items.map((it, i) => qaItemRow(it, i)).join('');
+  document.getElementById('modalPlantilla').style.display = 'flex';
+}
+
+function qaItemRow(it = {}, idx = Date.now()) {
+  return `<div class="qa-item-row" data-idx="${idx}" style="display:grid;grid-template-columns:1fr auto auto;gap:8px;align-items:center;background:var(--bg);padding:8px;border-radius:6px">
+    <input class="form-input" style="margin:0" placeholder="Descripcion del item" value="${(it.descripcion||'').replace(/"/g,'&quot;')}" oninput="this.dataset.desc=this.value">
+    <select class="form-input" style="margin:0;min-width:100px">
+      <option value="ok_nok"${it.tipo==='ok_nok'||!it.tipo?' selected':''}>OK / NOK</option>
+      <option value="si_no"${it.tipo==='si_no'?' selected':''}>SI / NO</option>
+    </select>
+    <button class="btn btn-danger btn-sm" onclick="this.closest('.qa-item-row').remove()" style="padding:4px 8px">✕</button>
+  </div>`;
+}
+
+function qaAddItem() {
+  const list = document.getElementById('fpItemsList');
+  const div = document.createElement('div');
+  div.innerHTML = qaItemRow({}, Date.now());
+  list.appendChild(div.firstElementChild);
+}
+
+async function guardarPlantilla() {
+  const nombre = document.getElementById('fpNombre').value.trim();
+  if (!nombre) return showToast('El nombre es obligatorio', 'error');
+  const rows = document.querySelectorAll('#fpItemsList .qa-item-row');
+  const items = Array.from(rows).map((row, i) => ({
+    id: i + 1,
+    descripcion: row.querySelector('input').value.trim(),
+    tipo: row.querySelector('select').value,
+    obligatorio: true
+  })).filter(it => it.descripcion);
+  const body = {
+    nombre,
+    descripcion: document.getElementById('fpDescripcion').value.trim() || null,
+    categoria: document.getElementById('fpCategoria').value || 'general',
+    items
+  };
+  const url = _plantillaEditId ? `/checklists-plantillas/${_plantillaEditId}` : '/checklists-plantillas';
+  const method = _plantillaEditId ? 'PUT' : 'POST';
+  const r = await api(url, method, body);
+  if (r?.ok || r?.id) {
+    document.getElementById('modalPlantilla').style.display = 'none';
+    showToast(_plantillaEditId ? 'Plantilla actualizada ✅' : 'Plantilla creada ✅', 'success');
+    cargarQAPlantillas();
+  } else showToast(r?.error || 'Error al guardar', 'error');
+}
+
+async function eliminarPlantilla(id) {
+  if (!confirm('¿Eliminar esta plantilla?')) return;
+  const r = await api(`/checklists-plantillas/${id}`, 'DELETE');
+  if (r?.ok) { showToast('Plantilla eliminada', 'success'); cargarQAPlantillas(); }
+  else showToast('Error al eliminar', 'error');
+}
+
+// --- INSPECCIONES --------------------------------------------------
+async function cargarQAInspecciones() {
+  if (document.getElementById('filterQAInspeccionObra')?.options.length <= 1)
+    poblarSelectObras('filterQAInspeccionObra');
+  const obraId = document.getElementById('filterQAInspeccionObra')?.value || '';
+  const estado = document.getElementById('filterQAInspeccionEstado')?.value || '';
+  let url = '/checklist-ejecuciones?';
+  if (obraId) url += `obra_id=${obraId}&`;
+  if (estado) url += `estado=${estado}&`;
+  const r = await api(url);
+  const ejes = r?.ejecuciones || [];
+  // KPI strip
+  const kpiEl = document.getElementById('qaInspeccionesKpi');
+  if (kpiEl) kpiEl.innerHTML = `
+    <div class="kpi-card"><div class="kpi-icon">🔍</div><div class="kpi-value">${r?.totales||0}</div><div class="kpi-label">Total</div></div>
+    <div class="kpi-card"><div class="kpi-icon">✅</div><div class="kpi-value" style="color:var(--success)">${r?.completadas||0}</div><div class="kpi-label">Completadas</div></div>
+    <div class="kpi-card"><div class="kpi-icon">⚠️</div><div class="kpi-value" style="color:var(--danger)">${r?.conNcr||0}</div><div class="kpi-label">Con NCR</div></div>
+    <div class="kpi-card"><div class="kpi-icon">🔄</div><div class="kpi-value" style="color:var(--warning)">${r?.enCurso||0}</div><div class="kpi-label">En curso</div></div>
+    <div class="kpi-card"><div class="kpi-icon">📊</div><div class="kpi-value">${r?.avgConf||0}%</div><div class="kpi-label">Conformidad media</div></div>
+  `;
+  const lista = document.getElementById('qaInspeccionesLista');
+  if (!lista) return;
+  if (!ejes.length) {
+    lista.innerHTML = `<div class="empty-state"><div class="empty-icon">🔍</div><div class="empty-text">No hay inspecciones. Crea una nueva inspeccion a partir de una plantilla.</div></div>`;
+    return;
+  }
+  const QA_EST_COLOR = { en_curso: 'var(--warning)', completado: 'var(--success)', con_no_conformidades: 'var(--danger)' };
+  lista.innerHTML = `<div style="display:flex;flex-direction:column;gap:10px">${ejes.map(e => {
+    const pct = e.porcentaje_conformidad || 0;
+    const color = QA_EST_COLOR[e.estado] || 'var(--muted)';
+    const resultados = Array.isArray(e.resultados) ? e.resultados : [];
+    return `<div class="kpi-card" style="text-align:left;padding:16px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start">
+        <div>
+          <div style="font-weight:700;font-size:14px">${e.titulo}</div>
+          <div style="font-size:12px;color:var(--muted);margin-top:2px">${e.plantilla_nombre||''} · ${e.inspector||'Sin inspector'} · ${fmtFecha(e.fecha)}</div>
+        </div>
+        <div style="display:flex;gap:6px;align-items:center">
+          <span style="color:${color};font-weight:700;font-size:12px">${e.estado.replace(/_/g,' ')}</span>
+          <button class="btn btn-secondary btn-sm" onclick="ejecutarChecklist(${e.id})" title="Rellenar/Ver">📝</button>
+          <button class="btn btn-danger btn-sm" onclick="eliminarInspeccion(${e.id})" title="Eliminar">🗑</button>
+        </div>
+      </div>
+      <div style="margin-top:10px;display:flex;align-items:center;gap:10px">
+        <div style="flex:1;height:6px;background:var(--border);border-radius:3px">
+          <div style="width:${pct}%;height:100%;background:${pct>=80?'var(--success)':pct>=50?'var(--warning)':'var(--danger)'};border-radius:3px"></div>
+        </div>
+        <span style="font-size:12px;font-weight:700;min-width:36px">${pct}%</span>
+        <span style="font-size:12px;color:var(--muted)">✅${e.num_ok||0} ❌${e.num_nok||0} ➖${e.num_na||0}</span>
+      </div>
+    </div>`;
+  }).join('')}</div>`;
+}
+
+async function abrirModalInspeccion() {
+  // Populate plantillas
+  const r = await api('/checklists-plantillas?');
+  _qaPlantillas = r?.plantillas || [];
+  const sel = document.getElementById('fiPlantilla');
+  if (sel) {
+    sel.innerHTML = '<option value="">-- Selecciona plantilla --</option>' +
+      _qaPlantillas.map(p => `<option value="${p.id}">${p.nombre} (${p.categoria})</option>`).join('');
+  }
+  if (document.getElementById('fiObra')?.options.length <= 1) poblarSelectObras('fiObra');
+  document.getElementById('fiTitulo').value = '';
+  document.getElementById('fiFecha').value = new Date().toISOString().slice(0,10);
+  document.getElementById('fiInspector').value = '';
+  document.getElementById('modalInspeccion').style.display = 'flex';
+}
+
+function fiPlantillaCambio() {
+  const selId = document.getElementById('fiPlantilla')?.value;
+  const pl = _qaPlantillas.find(p => p.id == selId);
+  if (pl && !document.getElementById('fiTitulo').value)
+    document.getElementById('fiTitulo').value = `Inspeccion - ${pl.nombre} - ${new Date().toISOString().slice(0,10)}`;
+}
+
+async function guardarInspeccion() {
+  const plantillaId = document.getElementById('fiPlantilla')?.value;
+  if (!plantillaId) return showToast('Selecciona una plantilla', 'error');
+  const body = {
+    plantilla_id: parseInt(plantillaId),
+    titulo: document.getElementById('fiTitulo').value.trim() || null,
+    obra_id: document.getElementById('fiObra')?.value || null,
+    fecha: document.getElementById('fiFecha').value || null,
+    inspector: document.getElementById('fiInspector').value.trim() || null,
+  };
+  const r = await api('/checklist-ejecuciones', 'POST', body);
+  if (r?.ok || r?.id) {
+    document.getElementById('modalInspeccion').style.display = 'none';
+    showToast('Inspeccion creada ✅', 'success');
+    await cargarQAInspecciones();
+    // Open execute modal immediately
+    ejecutarChecklist(r.id);
+  } else showToast(r?.error || 'Error al crear', 'error');
+}
+
+async function ejecutarChecklist(id) {
+  const r = await api(`/checklist-ejecuciones/${id}`);
+  if (!r?.ejecucion) return showToast('Error al cargar', 'error');
+  const e = r.ejecucion;
+  _qaEjecucionActual = id;
+  document.getElementById('modalEjecutarTitulo').textContent = e.titulo;
+  document.getElementById('ejecutarNotas').value = e.notas_generales || '';
+  const resultados = Array.isArray(e.resultados) ? e.resultados : [];
+  const container = document.getElementById('ejecutarItems');
+  if (!resultados.length) {
+    container.innerHTML = `<div class="empty-state"><div class="empty-text">Esta inspeccion no tiene items. Recrea desde una plantilla.</div></div>`;
+  } else {
+    container.innerHTML = resultados.map((it, i) => {
+      const tipo = it.tipo || 'ok_nok';
+      const opts = tipo === 'si_no'
+        ? [['si','✅ SI','var(--success)'],['no','❌ NO','var(--danger)'],['na','➖ N/A','var(--muted)']]
+        : [['ok','✅ OK','var(--success)'],['nok','❌ NOK','var(--danger)'],['na','➖ N/A','var(--muted)']];
+      return `<div style="background:var(--bg);padding:12px;border-radius:8px;border:1px solid var(--border)">
+        <div style="font-weight:600;margin-bottom:8px">${i+1}. ${it.descripcion||'Item sin descripcion'}</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+          ${opts.map(([v,l,c]) => `<button class="btn ${it.resultado===v?'btn-primary':'btn-secondary'} btn-sm" style="${it.resultado===v?`background:${c};border-color:${c};color:#fff`:''}" onclick="qaSetResultado(${i},'${v}',this)">${l}</button>`).join('')}
+        </div>
+        <input class="form-input" style="font-size:12px;padding:6px 10px" placeholder="Nota (opcional)" value="${(it.nota||'').replace(/"/g,'&quot;')}" data-idx="${i}" data-field="nota" oninput="_qaUpdateNota(${i},this.value)">
+        ${it.resultado==='nok'||it.resultado==='no' ? `<div style="font-size:11px;color:var(--danger);margin-top:4px">⚠️ Se generara NCR automaticamente al guardar</div>` : ''}
+      </div>`;
+    }).join('');
+  }
+  document.getElementById('modalEjecutar').style.display = 'flex';
+}
+
+let _qaResultados = [];
+function qaSetResultado(idx, val, btn) {
+  // Update visual
+  btn.closest('div[style]').querySelectorAll('.btn').forEach(b => {
+    b.classList.remove('btn-primary');
+    b.classList.add('btn-secondary');
+    b.style.background = '';
+    b.style.borderColor = '';
+    b.style.color = '';
+  });
+  btn.classList.remove('btn-secondary');
+  btn.classList.add('btn-primary');
+  // Store in a temp array keyed by idx
+  if (!window._qaResultadosTemp) window._qaResultadosTemp = {};
+  if (!window._qaResultadosTemp[_qaEjecucionActual]) window._qaResultadosTemp[_qaEjecucionActual] = {};
+  window._qaResultadosTemp[_qaEjecucionActual][idx] = val;
+}
+function _qaUpdateNota(idx, val) {
+  if (!window._qaNotasTemp) window._qaNotasTemp = {};
+  if (!window._qaNotasTemp[_qaEjecucionActual]) window._qaNotasTemp[_qaEjecucionActual] = {};
+  window._qaNotasTemp[_qaEjecucionActual][idx] = val;
+}
+
+async function guardarEjecucion() {
+  const ejeId = _qaEjecucionActual;
+  if (!ejeId) return;
+  const r0 = await api(`/checklist-ejecuciones/${ejeId}`);
+  if (!r0?.ejecucion) return showToast('Error al leer inspeccion', 'error');
+  let resultados = Array.isArray(r0.ejecucion.resultados) ? [...r0.ejecucion.resultados] : [];
+  const tempRes = window._qaResultadosTemp?.[ejeId] || {};
+  const tempNot = window._qaNotasTemp?.[ejeId] || {};
+  resultados = resultados.map((it, i) => ({
+    ...it,
+    resultado: tempRes[i] !== undefined ? tempRes[i] : it.resultado,
+    nota: tempNot[i] !== undefined ? tempNot[i] : (it.nota || ''),
+  }));
+  const notas = document.getElementById('ejecutarNotas')?.value || '';
+  const res = await api(`/checklist-ejecuciones/${ejeId}`, 'PUT', { resultados, notas_generales: notas });
+  if (res?.ok) {
+    document.getElementById('modalEjecutar').style.display = 'none';
+    // Clear temp
+    if (window._qaResultadosTemp) delete window._qaResultadosTemp[ejeId];
+    if (window._qaNotasTemp) delete window._qaNotasTemp[ejeId];
+    const pct = res.stats?.porcentaje_conformidad || 0;
+    const nok = res.stats?.num_nok || 0;
+    showToast(`Inspeccion guardada ✅ | Conformidad: ${pct}% | ${nok > 0 ? `⚠️ ${nok} NCR(s) generados` : 'Sin no conformidades'}`, nok > 0 ? 'warning' : 'success');
+    cargarQAInspecciones();
+    // Update ncrs badge
+    cargarNCRsBadge();
+  } else showToast(res?.error || 'Error al guardar', 'error');
+}
+
+async function eliminarInspeccion(id) {
+  if (!confirm('¿Eliminar esta inspeccion y sus NCRs?')) return;
+  const r = await api(`/checklist-ejecuciones/${id}`, 'DELETE');
+  if (r?.ok) { showToast('Inspeccion eliminada', 'success'); cargarQAInspecciones(); }
+  else showToast('Error al eliminar', 'error');
+}
+
+// --- NCRs ----------------------------------------------------------
+async function cargarNCRsBadge() {
+  const r = await api('/ncrs-obra?estado=abierta');
+  const n = r?.abiertas || 0;
+  const badge = document.getElementById('ncrsBadge');
+  if (badge) { badge.textContent = n || '!'; badge.style.display = n > 0 ? '' : 'none'; }
+}
+
+async function cargarNCRs() {
+  if (document.getElementById('filterNCRObraId')?.options.length <= 1) poblarSelectObras('filterNCRObraId');
+  const obraId  = document.getElementById('filterNCRObraId')?.value || '';
+  const grav    = document.getElementById('filterNCRGravedad')?.value || '';
+  const estado  = document.getElementById('filterNCREstado')?.value || '';
+  let url = '/ncrs-obra?';
+  if (obraId) url += `obra_id=${obraId}&`;
+  if (grav)   url += `gravedad=${grav}&`;
+  if (estado) url += `estado=${estado}&`;
+  const r = await api(url);
+  const ncrs = r?.ncrs || [];
+  // Badge
+  const badge = document.getElementById('ncrsBadge');
+  const ab = r?.abiertas || 0;
+  if (badge) { badge.textContent = ab||'!'; badge.style.display = ab > 0 ? '' : 'none'; }
+  // KPI
+  const kpiEl = document.getElementById('ncrKpi');
+  if (kpiEl) kpiEl.innerHTML = `
+    <div class="kpi-card"><div class="kpi-icon">⚠️</div><div class="kpi-value">${r?.total||0}</div><div class="kpi-label">Total NCRs</div></div>
+    <div class="kpi-card"><div class="kpi-icon">🔴</div><div class="kpi-value" style="color:var(--danger)">${r?.abiertas||0}</div><div class="kpi-label">Abiertas</div></div>
+    <div class="kpi-card"><div class="kpi-icon">🟡</div><div class="kpi-value" style="color:var(--warning)">${r?.enProceso||0}</div><div class="kpi-label">En proceso</div></div>
+    <div class="kpi-card"><div class="kpi-icon">✅</div><div class="kpi-value" style="color:var(--success)">${r?.cerradas||0}</div><div class="kpi-label">Cerradas</div></div>
+    <div class="kpi-card"><div class="kpi-icon">🚨</div><div class="kpi-value" style="color:#7c3aed">${r?.criticas||0}</div><div class="kpi-label">Criticas</div></div>
+  `;
+  const lista = document.getElementById('ncrLista');
+  if (!lista) return;
+  if (!ncrs.length) {
+    lista.innerHTML = `<div class="empty-state"><div class="empty-icon">✅</div><div class="empty-text">No hay no conformidades. Todo en orden.</div></div>`;
+    return;
+  }
+  lista.innerHTML = `<div style="display:flex;flex-direction:column;gap:10px">${ncrs.map(n => {
+    const gColor = NCR_GRAV_COLOR[n.gravedad] || 'var(--muted)';
+    return `<div class="kpi-card" style="text-align:left;padding:16px;border-left:4px solid ${gColor}">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
+        <div style="flex:1">
+          <div style="display:flex;gap:8px;align-items:center;margin-bottom:4px">
+            <span style="font-weight:700;font-size:13px;color:var(--muted)">${n.numero||'NCR'}</span>
+            <span style="background:${gColor}22;color:${gColor};padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700">${n.gravedad?.toUpperCase()}</span>
+            <span>${NCR_ESTADO_ICON[n.estado]||''} <span style="font-size:12px">${n.estado?.replace(/_/g,' ')}</span></span>
+          </div>
+          <div style="font-weight:600;margin-bottom:4px">${n.descripcion}</div>
+          ${n.responsable ? `<div style="font-size:12px;color:var(--muted)">👤 ${n.responsable} ${n.fecha_limite?`· Limite: ${fmtFecha(n.fecha_limite)}`:''}</div>` : ''}
+          ${n.accion_correctiva ? `<div style="font-size:12px;color:var(--primary);margin-top:4px">🔧 ${n.accion_correctiva}</div>` : ''}
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <button class="btn btn-secondary btn-sm" onclick="editarNcr(${n.id})">✏️</button>
+          <button class="btn btn-danger btn-sm" onclick="eliminarNcr(${n.id})">🗑</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('')}</div>`;
+}
+
+function abrirModalNcr() {
+  _ncrEditId = null;
+  document.getElementById('modalNcrTitulo').textContent = 'Nueva NCR';
+  document.getElementById('fnDescripcion').value = '';
+  document.getElementById('fnGravedad').value = 'moderado';
+  document.getElementById('fnResponsable').value = '';
+  document.getElementById('fnFechaLimite').value = '';
+  document.getElementById('fnAccion').value = '';
+  document.getElementById('fnEstado').value = 'abierta';
+  if (document.getElementById('fnObra')?.options.length <= 1) poblarSelectObras('fnObra');
+  document.getElementById('modalNcr').style.display = 'flex';
+}
+
+async function editarNcr(id) {
+  const r = await api(`/ncrs-obra?`); // get all, find by id
+  const ncr = (r?.ncrs || []).find(n => n.id === id);
+  if (!ncr) return showToast('NCR no encontrada', 'error');
+  _ncrEditId = id;
+  document.getElementById('modalNcrTitulo').textContent = `Editar ${ncr.numero||'NCR'}`;
+  document.getElementById('fnDescripcion').value = ncr.descripcion || '';
+  document.getElementById('fnGravedad').value = ncr.gravedad || 'moderado';
+  document.getElementById('fnResponsable').value = ncr.responsable || '';
+  document.getElementById('fnFechaLimite').value = ncr.fecha_limite || '';
+  document.getElementById('fnAccion').value = ncr.accion_correctiva || '';
+  document.getElementById('fnEstado').value = ncr.estado || 'abierta';
+  if (document.getElementById('fnObra')?.options.length <= 1) poblarSelectObras('fnObra');
+  document.getElementById('modalNcr').style.display = 'flex';
+}
+
+async function guardarNcr() {
+  const desc = document.getElementById('fnDescripcion').value.trim();
+  if (!desc) return showToast('La descripcion es obligatoria', 'error');
+  const body = {
+    descripcion: desc,
+    obra_id: document.getElementById('fnObra')?.value || null,
+    gravedad: document.getElementById('fnGravedad').value || 'moderado',
+    responsable: document.getElementById('fnResponsable').value.trim() || null,
+    fecha_limite: document.getElementById('fnFechaLimite').value || null,
+    accion_correctiva: document.getElementById('fnAccion').value.trim() || null,
+    estado: document.getElementById('fnEstado').value || 'abierta',
+  };
+  const url = _ncrEditId ? `/ncrs-obra/${_ncrEditId}` : '/ncrs-obra';
+  const method = _ncrEditId ? 'PUT' : 'POST';
+  const r = await api(url, method, body);
+  if (r?.ok || r?.id) {
+    document.getElementById('modalNcr').style.display = 'none';
+    showToast(_ncrEditId ? 'NCR actualizada ✅' : `NCR creada ✅${r.numero ? ` (${r.numero})` : ''}`, 'success');
+    cargarNCRs();
+  } else showToast(r?.error || 'Error al guardar', 'error');
+}
+
+async function eliminarNcr(id) {
+  if (!confirm('¿Eliminar esta NCR?')) return;
+  const r = await api(`/ncrs-obra/${id}`, 'DELETE');
+  if (r?.ok) { showToast('NCR eliminada', 'success'); cargarNCRs(); }
   else showToast('Error al eliminar', 'error');
 }
 

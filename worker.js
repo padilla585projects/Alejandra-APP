@@ -4524,6 +4524,30 @@ export default {
         if (method === 'PUT')    return await actualizarTransmittal(_tid, request, env);
         if (method === 'DELETE') return await eliminarTransmittal(_tid, request, env);
       }
+      // -- Control de Calidad / QA-QC Checklists (NEW-55) ---------------------
+      if (path === '/checklists-plantillas' && method === 'GET')  return await getChecklistPlantillas(request, env);
+      if (path === '/checklists-plantillas' && method === 'POST') return await crearChecklistPlantilla(request, env);
+      if (path.startsWith('/checklists-plantillas/')) {
+        const _cpid = parseInt(path.split('/checklists-plantillas/')[1]);
+        if (method === 'GET')    return await getChecklistPlantilla(_cpid, request, env);
+        if (method === 'PUT')    return await actualizarChecklistPlantilla(_cpid, request, env);
+        if (method === 'DELETE') return await eliminarChecklistPlantilla(_cpid, request, env);
+      }
+      if (path === '/checklist-ejecuciones' && method === 'GET')  return await getChecklistEjecuciones(request, env);
+      if (path === '/checklist-ejecuciones' && method === 'POST') return await crearChecklistEjecucion(request, env);
+      if (path.startsWith('/checklist-ejecuciones/')) {
+        const _ceid = parseInt(path.split('/checklist-ejecuciones/')[1]);
+        if (method === 'GET')    return await getChecklistEjecucion(_ceid, request, env);
+        if (method === 'PUT')    return await actualizarChecklistEjecucion(_ceid, request, env);
+        if (method === 'DELETE') return await eliminarChecklistEjecucion(_ceid, request, env);
+      }
+      if (path === '/ncrs-obra' && method === 'GET')  return await getNcrs(request, env);
+      if (path === '/ncrs-obra' && method === 'POST') return await crearNcr(request, env);
+      if (path.startsWith('/ncrs-obra/')) {
+        const _nid = parseInt(path.split('/ncrs-obra/')[1]);
+        if (method === 'PUT')    return await actualizarNcr(_nid, request, env);
+        if (method === 'DELETE') return await eliminarNcr(_nid, request, env);
+      }
       // â”€â”€ Cronograma / Gantt de Obra (NEW-52) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
       if (path.startsWith('/cronograma-obra/')) {
         const _crid = parseInt(path.split('/cronograma-obra/')[1]);
@@ -14799,4 +14823,316 @@ async function eliminarTransmittal(id, request, env) {
   if (!auth?.empresa_id) return err('No autorizado', 403);
   await env.DB.prepare(`DELETE FROM transmittals_obra WHERE id=? AND empresa_id=?`).bind(id, auth.empresa_id).run();
   return json({ ok: true });
+}
+
+// ============================================================
+// NEW-55  Control de Calidad / QA-QC Checklists
+// ============================================================
+
+async function ensureQATablas(env) {
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS checklists_plantillas (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    empresa_id      INTEGER NOT NULL,
+    nombre          TEXT NOT NULL,
+    descripcion     TEXT,
+    categoria       TEXT DEFAULT 'general',
+    items           TEXT DEFAULT '[]',
+    activa          INTEGER DEFAULT 1,
+    created_at      TEXT DEFAULT (datetime('now')),
+    updated_at      TEXT DEFAULT (datetime('now'))
+  )`).run().catch(()=>{});
+
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS checklist_ejecuciones (
+    id                    INTEGER PRIMARY KEY AUTOINCREMENT,
+    empresa_id            INTEGER NOT NULL,
+    obra_id               INTEGER,
+    plantilla_id          INTEGER,
+    plantilla_nombre      TEXT,
+    titulo                TEXT NOT NULL,
+    fecha                 TEXT,
+    inspector             TEXT,
+    estado                TEXT DEFAULT 'en_curso',
+    resultados            TEXT DEFAULT '[]',
+    notas_generales       TEXT,
+    num_ok                INTEGER DEFAULT 0,
+    num_nok               INTEGER DEFAULT 0,
+    num_na                INTEGER DEFAULT 0,
+    porcentaje_conformidad REAL DEFAULT 0,
+    created_at            TEXT DEFAULT (datetime('now')),
+    updated_at            TEXT DEFAULT (datetime('now'))
+  )`).run().catch(()=>{});
+
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS ncrs_obra (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    empresa_id        INTEGER NOT NULL,
+    obra_id           INTEGER,
+    ejecucion_id      INTEGER,
+    numero            TEXT,
+    descripcion       TEXT NOT NULL,
+    gravedad          TEXT DEFAULT 'moderado',
+    estado            TEXT DEFAULT 'abierta',
+    responsable       TEXT,
+    fecha_limite      TEXT,
+    accion_correctiva TEXT,
+    notas             TEXT,
+    created_at        TEXT DEFAULT (datetime('now')),
+    updated_at        TEXT DEFAULT (datetime('now')),
+    cerrada_at        TEXT
+  )`).run().catch(()=>{});
+}
+
+// -- Plantillas -------------------------------------------------------
+async function getChecklistPlantillas(request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth?.empresa_id) return err('No autorizado', 403);
+  await ensureQATablas(env);
+  const url = new URL(request.url);
+  const cat = url.searchParams.get('categoria') || '';
+  let q = `SELECT * FROM checklists_plantillas WHERE empresa_id=?`;
+  const params = [auth.empresa_id];
+  if (cat) { q += ` AND categoria=?`; params.push(cat); }
+  q += ` ORDER BY nombre ASC`;
+  const { results } = await env.DB.prepare(q).bind(...params).all();
+  const plantillas = (results||[]).map(p=>({ ...p, items: tryParse(p.items, []) }));
+  return json({ plantillas, total: plantillas.length });
+}
+
+async function getChecklistPlantilla(id, request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth?.empresa_id) return err('No autorizado', 403);
+  await ensureQATablas(env);
+  const row = await env.DB.prepare(`SELECT * FROM checklists_plantillas WHERE id=? AND empresa_id=?`)
+    .bind(id, auth.empresa_id).first();
+  if (!row) return err('No encontrado', 404);
+  return json({ plantilla: { ...row, items: tryParse(row.items, []) } });
+}
+
+async function crearChecklistPlantilla(request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth?.empresa_id) return err('No autorizado', 403);
+  await ensureQATablas(env);
+  const b = await request.json();
+  const items = Array.isArray(b.items) ? JSON.stringify(b.items) : '[]';
+  const { meta } = await env.DB.prepare(`
+    INSERT INTO checklists_plantillas (empresa_id, nombre, descripcion, categoria, items, activa)
+    VALUES (?,?,?,?,?,1)
+  `).bind(auth.empresa_id, b.nombre||'Plantilla', b.descripcion||null, b.categoria||'general', items).run();
+  return json({ ok: true, id: meta.last_row_id });
+}
+
+async function actualizarChecklistPlantilla(id, request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth?.empresa_id) return err('No autorizado', 403);
+  const b = await request.json();
+  const items = Array.isArray(b.items) ? JSON.stringify(b.items) : undefined;
+  await env.DB.prepare(`
+    UPDATE checklists_plantillas SET nombre=?, descripcion=?, categoria=?, items=?,
+    activa=?, updated_at=datetime('now') WHERE id=? AND empresa_id=?
+  `).bind(b.nombre||null, b.descripcion||null, b.categoria||null,
+          items !== undefined ? items : '[]',
+          b.activa!==undefined ? (b.activa?1:0) : 1,
+          id, auth.empresa_id).run();
+  return json({ ok: true });
+}
+
+async function eliminarChecklistPlantilla(id, request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth?.empresa_id) return err('No autorizado', 403);
+  await env.DB.prepare(`DELETE FROM checklists_plantillas WHERE id=? AND empresa_id=?`)
+    .bind(id, auth.empresa_id).run();
+  return json({ ok: true });
+}
+
+// -- Ejecuciones de checklist -----------------------------------------
+async function getChecklistEjecuciones(request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth?.empresa_id) return err('No autorizado', 403);
+  await ensureQATablas(env);
+  const url = new URL(request.url);
+  const obraId = url.searchParams.get('obra_id');
+  const estado = url.searchParams.get('estado');
+  let q = `SELECT * FROM checklist_ejecuciones WHERE empresa_id=?`;
+  const params = [auth.empresa_id];
+  if (obraId) { q += ` AND obra_id=?`; params.push(obraId); }
+  if (estado)  { q += ` AND estado=?`;   params.push(estado); }
+  q += ` ORDER BY fecha DESC, id DESC LIMIT 200`;
+  const { results } = await env.DB.prepare(q).bind(...params).all();
+  const ejecuciones = (results||[]).map(e=>({ ...e, resultados: tryParse(e.resultados, []) }));
+  const totales = ejecuciones.length;
+  const completadas = ejecuciones.filter(e=>e.estado==='completado').length;
+  const conNcr = ejecuciones.filter(e=>e.estado==='con_no_conformidades').length;
+  const enCurso = ejecuciones.filter(e=>e.estado==='en_curso').length;
+  const avgConf = totales ? Math.round(ejecuciones.reduce((s,e)=>s+(e.porcentaje_conformidad||0),0)/totales) : 0;
+  return json({ ejecuciones, totales, completadas, conNcr, enCurso, avgConf });
+}
+
+async function getChecklistEjecucion(id, request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth?.empresa_id) return err('No autorizado', 403);
+  const row = await env.DB.prepare(`SELECT * FROM checklist_ejecuciones WHERE id=? AND empresa_id=?`)
+    .bind(id, auth.empresa_id).first();
+  if (!row) return err('No encontrado', 404);
+  return json({ ejecucion: { ...row, resultados: tryParse(row.resultados, []) } });
+}
+
+async function crearChecklistEjecucion(request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth?.empresa_id) return err('No autorizado', 403);
+  await ensureQATablas(env);
+  const b = await request.json();
+  // Load plantilla items if plantilla_id given
+  let plantillaNombre = b.plantilla_nombre || null;
+  let itemsInicial = '[]';
+  if (b.plantilla_id) {
+    const pl = await env.DB.prepare(`SELECT nombre, items FROM checklists_plantillas WHERE id=? AND empresa_id=?`)
+      .bind(b.plantilla_id, auth.empresa_id).first();
+    if (pl) {
+      plantillaNombre = pl.nombre;
+      const items = tryParse(pl.items, []);
+      itemsInicial = JSON.stringify(items.map(it=>({ ...it, resultado: null, nota: '' })));
+    }
+  }
+  const { meta } = await env.DB.prepare(`
+    INSERT INTO checklist_ejecuciones
+      (empresa_id, obra_id, plantilla_id, plantilla_nombre, titulo, fecha, inspector, estado, resultados)
+    VALUES (?,?,?,?,?,?,?,'en_curso',?)
+  `).bind(auth.empresa_id, b.obra_id||null, b.plantilla_id||null,
+          plantillaNombre, b.titulo||plantillaNombre||'Inspeccion',
+          b.fecha||new Date().toISOString().slice(0,10),
+          b.inspector||auth.nombre||null, itemsInicial).run();
+  return json({ ok: true, id: meta.last_row_id });
+}
+
+function calcStats(resultados) {
+  const items = Array.isArray(resultados) ? resultados : [];
+  const num_ok  = items.filter(i=>i.resultado==='ok'  || i.resultado==='si').length;
+  const num_nok = items.filter(i=>i.resultado==='nok' || i.resultado==='no').length;
+  const num_na  = items.filter(i=>i.resultado==='na').length;
+  const respondidos = num_ok + num_nok;
+  const pct = respondidos > 0 ? Math.round((num_ok / respondidos) * 100) : 0;
+  return { num_ok, num_nok, num_na, porcentaje_conformidad: pct };
+}
+
+async function actualizarChecklistEjecucion(id, request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth?.empresa_id) return err('No autorizado', 403);
+  await ensureQATablas(env);
+  const b = await request.json();
+  const resultados = Array.isArray(b.resultados) ? b.resultados : [];
+  const stats = calcStats(resultados);
+  const estadoFinal = b.estado || (stats.num_nok > 0 ? 'con_no_conformidades' : 'completado');
+  await env.DB.prepare(`
+    UPDATE checklist_ejecuciones SET titulo=?, fecha=?, inspector=?, estado=?,
+      resultados=?, notas_generales=?,
+      num_ok=?, num_nok=?, num_na=?, porcentaje_conformidad=?,
+      updated_at=datetime('now') WHERE id=? AND empresa_id=?
+  `).bind(b.titulo||null, b.fecha||null, b.inspector||null, estadoFinal,
+          JSON.stringify(resultados), b.notas_generales||null,
+          stats.num_ok, stats.num_nok, stats.num_na, stats.porcentaje_conformidad,
+          id, auth.empresa_id).run();
+
+  // Auto-generate NCRs for items marked nok that don't have an NCR yet
+  const ncrItems = resultados.filter(i => i.resultado === 'nok' || i.resultado === 'no');
+  const execRow = await env.DB.prepare(`SELECT obra_id FROM checklist_ejecuciones WHERE id=?`).bind(id).first();
+  const obraId = execRow?.obra_id || null;
+  for (const item of ncrItems) {
+    // Check if NCR already exists for this item in this ejecucion
+    const exists = await env.DB.prepare(
+      `SELECT id FROM ncrs_obra WHERE ejecucion_id=? AND empresa_id=? AND descripcion=?`
+    ).bind(id, auth.empresa_id, item.descripcion||item.id||'Item').first();
+    if (!exists) {
+      const yr = new Date().getFullYear();
+      const { results: countR } = await env.DB.prepare(
+        `SELECT COUNT(*)+1 as n FROM ncrs_obra WHERE empresa_id=? AND substr(numero,5,4)=?`
+      ).bind(auth.empresa_id, String(yr)).all();
+      const n = countR?.[0]?.n || 1;
+      const numero = `NCR-${yr}-${String(n).padStart(4,'0')}`;
+      const gravedad = item.gravedad || 'moderado';
+      await env.DB.prepare(`
+        INSERT INTO ncrs_obra (empresa_id, obra_id, ejecucion_id, numero, descripcion, gravedad, estado)
+        VALUES (?,?,?,?,?,?,'abierta')
+      `).bind(auth.empresa_id, obraId, id, numero,
+              item.descripcion || ('Item '+item.id), gravedad).run();
+    }
+  }
+  return json({ ok: true, stats, estado: estadoFinal });
+}
+
+async function eliminarChecklistEjecucion(id, request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth?.empresa_id) return err('No autorizado', 403);
+  await env.DB.prepare(`DELETE FROM checklist_ejecuciones WHERE id=? AND empresa_id=?`).bind(id, auth.empresa_id).run();
+  await env.DB.prepare(`DELETE FROM ncrs_obra WHERE ejecucion_id=? AND empresa_id=?`).bind(id, auth.empresa_id).run();
+  return json({ ok: true });
+}
+
+// -- NCRs (Non-Conformance Reports) -----------------------------------
+async function getNcrs(request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth?.empresa_id) return err('No autorizado', 403);
+  await ensureQATablas(env);
+  const url = new URL(request.url);
+  const obraId  = url.searchParams.get('obra_id');
+  const estado  = url.searchParams.get('estado');
+  const grav    = url.searchParams.get('gravedad');
+  let q = `SELECT * FROM ncrs_obra WHERE empresa_id=?`;
+  const params = [auth.empresa_id];
+  if (obraId) { q += ` AND obra_id=?`;    params.push(obraId); }
+  if (estado)  { q += ` AND estado=?`;     params.push(estado); }
+  if (grav)    { q += ` AND gravedad=?`;   params.push(grav); }
+  q += ` ORDER BY created_at DESC LIMIT 300`;
+  const { results } = await env.DB.prepare(q).bind(...params).all();
+  const ncrs = results || [];
+  const abiertas   = ncrs.filter(n=>n.estado==='abierta').length;
+  const enProceso  = ncrs.filter(n=>n.estado==='en_proceso').length;
+  const cerradas   = ncrs.filter(n=>n.estado==='cerrada').length;
+  const criticas   = ncrs.filter(n=>n.gravedad==='critico').length;
+  return json({ ncrs, abiertas, enProceso, cerradas, criticas, total: ncrs.length });
+}
+
+async function crearNcr(request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth?.empresa_id) return err('No autorizado', 403);
+  await ensureQATablas(env);
+  const b = await request.json();
+  const yr = new Date().getFullYear();
+  const { results: countR } = await env.DB.prepare(
+    `SELECT COUNT(*)+1 as n FROM ncrs_obra WHERE empresa_id=? AND substr(numero,5,4)=?`
+  ).bind(auth.empresa_id, String(yr)).all();
+  const n = countR?.[0]?.n || 1;
+  const numero = `NCR-${yr}-${String(n).padStart(4,'0')}`;
+  const { meta } = await env.DB.prepare(`
+    INSERT INTO ncrs_obra (empresa_id, obra_id, ejecucion_id, numero, descripcion, gravedad, estado, responsable, fecha_limite, notas)
+    VALUES (?,?,?,?,?,?,?,?,?,?)
+  `).bind(auth.empresa_id, b.obra_id||null, b.ejecucion_id||null, numero,
+          b.descripcion||'Sin descripcion', b.gravedad||'moderado', b.estado||'abierta',
+          b.responsable||null, b.fecha_limite||null, b.notas||null).run();
+  return json({ ok: true, id: meta.last_row_id, numero });
+}
+
+async function actualizarNcr(id, request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth?.empresa_id) return err('No autorizado', 403);
+  const b = await request.json();
+  const cerradaAt = b.estado === 'cerrada' ? `datetime('now')` : null;
+  await env.DB.prepare(`
+    UPDATE ncrs_obra SET descripcion=?, gravedad=?, estado=?,
+      responsable=?, fecha_limite=?, accion_correctiva=?, notas=?,
+      cerrada_at=CASE WHEN ?='cerrada' THEN datetime('now') ELSE cerrada_at END,
+      updated_at=datetime('now') WHERE id=? AND empresa_id=?
+  `).bind(b.descripcion||null, b.gravedad||null, b.estado||null,
+          b.responsable||null, b.fecha_limite||null, b.accion_correctiva||null,
+          b.notas||null, b.estado||'', id, auth.empresa_id).run();
+  return json({ ok: true });
+}
+
+async function eliminarNcr(id, request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth?.empresa_id) return err('No autorizado', 403);
+  await env.DB.prepare(`DELETE FROM ncrs_obra WHERE id=? AND empresa_id=?`).bind(id, auth.empresa_id).run();
+  return json({ ok: true });
+}
+
+function tryParse(str, def) {
+  try { return JSON.parse(str); } catch { return def; }
 }
