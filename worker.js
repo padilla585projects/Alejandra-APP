@@ -4664,6 +4664,14 @@ export default {
         if (method === 'PUT')    return await actualizarPlanSemanal(_psid, request, env);
         if (method === 'DELETE') return await eliminarPlanSemanal(_psid, request, env);
       }
+      // -- Instrucciones de Obra / Site Instructions (NEW-63) ---------------
+      if (path === '/instrucciones-obra' && method === 'GET')  return await getInstruccionesObra(request, env);
+      if (path === '/instrucciones-obra' && method === 'POST') return await crearInstruccionObra(request, env);
+      if (path.startsWith('/instrucciones-obra/')) {
+        const _ioid = parseInt(path.split('/instrucciones-obra/')[1]);
+        if (method === 'PUT')    return await actualizarInstruccionObra(_ioid, request, env);
+        if (method === 'DELETE') return await eliminarInstruccionObra(_ioid, request, env);
+      }
       // â”€â”€ RFIs â€” Consultas TÃ©cnicas (NEW-34) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
       if (path === '/rfis'                  && method === 'GET')  return await getRfis(request, env);
       if (path === '/rfis'                  && method === 'POST') return await crearRfi(request, env);
@@ -15803,6 +15811,103 @@ async function eliminarPlanSemanal(id, request, env) {
   const auth = await getAuth(request, env);
   if (!auth?.empresa_id) return err('No autorizado', 403);
   await env.DB.prepare(`DELETE FROM plan_semanal WHERE id=? AND empresa_id=?`).bind(id, auth.empresa_id).run();
+  return json({ ok: true });
+}
+
+// ============================================================
+// NEW-63  Instrucciones de Obra / Site Instructions
+// ============================================================
+
+async function ensureInstruccionesTable(env) {
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS instrucciones_obra (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    empresa_id        INTEGER NOT NULL,
+    obra_id           INTEGER NOT NULL,
+    numero            TEXT,
+    titulo            TEXT NOT NULL,
+    descripcion       TEXT,
+    destinatario      TEXT,
+    emitido_por       TEXT,
+    prioridad         TEXT DEFAULT 'normal',
+    estado            TEXT DEFAULT 'emitida',
+    fecha_emision     TEXT,
+    fecha_respuesta_limite TEXT,
+    notas_respuesta   TEXT,
+    rfi_id            INTEGER,
+    created_at        TEXT DEFAULT (datetime('now'))
+  )`).run();
+}
+
+async function getInstruccionesObra(request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth?.empresa_id) return err('No autorizado', 403);
+  await ensureInstruccionesTable(env);
+  const url = new URL(request.url);
+  const obraId  = url.searchParams.get('obra_id');
+  const estado  = url.searchParams.get('estado');
+  const prio    = url.searchParams.get('prioridad');
+  let q = `SELECT * FROM instrucciones_obra WHERE empresa_id=?`;
+  const params = [auth.empresa_id];
+  if (obraId) { q += ` AND obra_id=?`; params.push(obraId); }
+  if (estado) { q += ` AND estado=?`; params.push(estado); }
+  if (prio)   { q += ` AND prioridad=?`; params.push(prio); }
+  q += ` ORDER BY created_at DESC LIMIT 500`;
+  const { results } = await env.DB.prepare(q).bind(...params).all();
+  return json({ instrucciones: results });
+}
+
+async function crearInstruccionObra(request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth?.empresa_id) return err('No autorizado', 403);
+  await ensureInstruccionesTable(env);
+  const b = await request.json();
+  const yr = new Date().getFullYear();
+  const { results: cnt } = await env.DB.prepare(
+    `SELECT COUNT(*) as n FROM instrucciones_obra WHERE empresa_id=? AND obra_id=? AND numero LIKE 'IST-${yr}-%'`
+  ).bind(auth.empresa_id, b.obra_id).all();
+  const num = `IST-${yr}-${String((cnt[0]?.n || 0) + 1).padStart(3, '0')}`;
+  const { meta } = await env.DB.prepare(
+    `INSERT INTO instrucciones_obra (empresa_id,obra_id,numero,titulo,descripcion,destinatario,emitido_por,prioridad,estado,fecha_emision,fecha_respuesta_limite,notas_respuesta,rfi_id)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`
+  ).bind(
+    auth.empresa_id, b.obra_id, num, b.titulo,
+    b.descripcion || null, b.destinatario || null, b.emitido_por || null,
+    b.prioridad || 'normal', b.estado || 'emitida',
+    b.fecha_emision || new Date().toISOString().slice(0,10),
+    b.fecha_respuesta_limite || null, b.notas_respuesta || null,
+    b.rfi_id || null
+  ).run();
+  return json({ ok: true, id: meta.last_row_id, numero: num });
+}
+
+async function actualizarInstruccionObra(id, request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth?.empresa_id) return err('No autorizado', 403);
+  await ensureInstruccionesTable(env);
+  const b = await request.json();
+  await env.DB.prepare(
+    `UPDATE instrucciones_obra SET
+      titulo=COALESCE(?,titulo), descripcion=COALESCE(?,descripcion),
+      destinatario=COALESCE(?,destinatario), emitido_por=COALESCE(?,emitido_por),
+      prioridad=COALESCE(?,prioridad), estado=COALESCE(?,estado),
+      fecha_emision=COALESCE(?,fecha_emision),
+      fecha_respuesta_limite=COALESCE(?,fecha_respuesta_limite),
+      notas_respuesta=COALESCE(?,notas_respuesta), rfi_id=COALESCE(?,rfi_id)
+     WHERE id=? AND empresa_id=?`
+  ).bind(
+    b.titulo || null, b.descripcion || null, b.destinatario || null,
+    b.emitido_por || null, b.prioridad || null, b.estado || null,
+    b.fecha_emision || null, b.fecha_respuesta_limite || null,
+    b.notas_respuesta || null, b.rfi_id || null,
+    id, auth.empresa_id
+  ).run();
+  return json({ ok: true });
+}
+
+async function eliminarInstruccionObra(id, request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth?.empresa_id) return err('No autorizado', 403);
+  await env.DB.prepare(`DELETE FROM instrucciones_obra WHERE id=? AND empresa_id=?`).bind(id, auth.empresa_id).run();
   return json({ ok: true });
 }
 

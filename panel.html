@@ -614,6 +614,10 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
     <button class="nav-item" data-page="planSemanal" onclick="navTo('planSemanal')">
       <span class="nav-icon">📅</span> Plan Semanal
     </button>
+    <button class="nav-item" data-page="instruccionesObra" onclick="navTo('instruccionesObra')">
+      <span class="nav-icon">📋</span> Instrucciones de Obra
+      <span class="nav-badge" id="instBadge" style="display:none">!</span>
+    </button>
 
     <div class="sidebar-section" onclick="sidebarToggle(this)" data-sid="seguimiento"><span>📓 Seguimiento</span><span class="sec-chevron">▼</span></div>
     <button class="nav-item" data-page="partesPanel" onclick="navTo('partesPanel')">
@@ -2111,6 +2115,105 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
         </div>
         <div id="entregasKpi" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:12px;margin-bottom:16px"></div>
         <div class="tbl-wrap"><div id="tblEntregas"></div></div>
+      </div>
+
+      <!-- INSTRUCCIONES DE OBRA / SITE INSTRUCTIONS (NEW-63) -->
+      <div class="page" id="pageInstruccionesObra">
+        <div class="page-title">📋 Instrucciones de Obra</div>
+        <div class="page-sub">Directivas formales emitidas a subcontratas — con seguimiento de acuse y aceptacion</div>
+        <div class="tbl-toolbar" style="flex-wrap:wrap;gap:8px;margin-bottom:14px">
+          <select class="tbl-search" id="filterInstObra" style="min-width:220px" onchange="cargarInstruccionesObra()"></select>
+          <select class="tbl-search" id="filterInstEstado" style="min-width:150px" onchange="cargarInstruccionesObra()">
+            <option value="">Todos los estados</option>
+            <option value="emitida">Emitida</option>
+            <option value="acuse_recibido">Acuse recibido</option>
+            <option value="aceptada">Aceptada</option>
+            <option value="rechazada">Rechazada</option>
+            <option value="anulada">Anulada</option>
+          </select>
+          <select class="tbl-search" id="filterInstPrio" style="min-width:130px" onchange="cargarInstruccionesObra()">
+            <option value="">Toda prioridad</option>
+            <option value="urgente">Urgente</option>
+            <option value="alta">Alta</option>
+            <option value="normal">Normal</option>
+          </select>
+          <input class="tbl-search" id="filterInstDest" placeholder="Filtrar destinatario..." style="min-width:160px" oninput="cargarInstruccionesObra()">
+          <button class="btn btn-primary" onclick="abrirModalInst()">+ Nueva instruccion</button>
+          <button class="btn btn-secondary" onclick="exportarTabla(tblInstrucciones,'instrucciones-obra')">&#8595; CSV</button>
+          <button class="btn btn-secondary" onclick="cargarInstruccionesObra()">&#x1F504;</button>
+        </div>
+        <div id="instKpi" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;margin-bottom:16px"></div>
+        <div class="tbl-wrap"><div id="tblInstrucciones"></div></div>
+      </div>
+
+      <!-- modal Instruccion de Obra -->
+      <div class="modal-overlay" id="modalInst">
+        <div class="modal" style="max-width:640px">
+          <div class="modal-header">
+            <span id="modalInstTitle">Nueva instruccion de obra</span>
+            <button class="modal-close" onclick="cerrarModal('modalInst')">&#x2715;</button>
+          </div>
+          <div class="modal-body" style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+            <div>
+              <label class="form-label">Obra</label>
+              <select class="form-input" id="instObraId"></select>
+            </div>
+            <div>
+              <label class="form-label">Prioridad</label>
+              <select class="form-input" id="instPrioridad">
+                <option value="normal">Normal</option>
+                <option value="alta">Alta</option>
+                <option value="urgente">Urgente</option>
+              </select>
+            </div>
+            <div style="grid-column:1/-1">
+              <label class="form-label">Titulo</label>
+              <input class="form-input" id="instTitulo" placeholder="Titulo de la instruccion...">
+            </div>
+            <div style="grid-column:1/-1">
+              <label class="form-label">Descripcion / Contenido</label>
+              <textarea class="form-input" id="instDescripcion" rows="4" placeholder="Detalle de la instruccion emitida..."></textarea>
+            </div>
+            <div>
+              <label class="form-label">Destinatario (subcontrata)</label>
+              <input class="form-input" id="instDestinatario" placeholder="Empresa o gremio receptor">
+            </div>
+            <div>
+              <label class="form-label">Emitido por</label>
+              <input class="form-input" id="instEmitidoPor" placeholder="Nombre del emisor">
+            </div>
+            <div>
+              <label class="form-label">Fecha de emision</label>
+              <input class="form-input" type="date" id="instFechaEmision">
+            </div>
+            <div>
+              <label class="form-label">Fecha limite respuesta</label>
+              <input class="form-input" type="date" id="instFechaLimite">
+            </div>
+            <div>
+              <label class="form-label">Estado</label>
+              <select class="form-input" id="instEstado">
+                <option value="emitida">Emitida</option>
+                <option value="acuse_recibido">Acuse recibido</option>
+                <option value="aceptada">Aceptada</option>
+                <option value="rechazada">Rechazada</option>
+                <option value="anulada">Anulada</option>
+              </select>
+            </div>
+            <div>
+              <label class="form-label">RFI relacionado (ID)</label>
+              <input class="form-input" type="number" id="instRfiId" placeholder="ID de RFI (opcional)">
+            </div>
+            <div style="grid-column:1/-1">
+              <label class="form-label">Notas de respuesta</label>
+              <textarea class="form-input" id="instNotasResp" rows="2" placeholder="Respuesta o comentarios del destinatario..."></textarea>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="cerrarModal('modalInst')">Cancelar</button>
+            <button class="btn btn-primary" onclick="guardarInstruccion()">Guardar</button>
+          </div>
+        </div>
       </div>
 
       <!-- PLAN SEMANAL / LOOKAHEAD SCHEDULE (NEW-62) -->
@@ -4009,6 +4112,7 @@ const PAGE_TITLES = {
   accionItems: '📌 Puntos de Accion / Action Items',
   informeObra: '📄 Informe de Estado de Obra',
   planSemanal: '📅 Plan Semanal / Lookahead',
+  instruccionesObra: '📋 Instrucciones de Obra / Site Instructions',
 };
 
 const PAGE_LOADERS = {
@@ -4074,6 +4178,7 @@ const PAGE_LOADERS = {
   accionItems: cargarAccionItems,
   informeObra: cargarInformeObra,
   planSemanal: cargarPlanSemanal,
+  instruccionesObra: cargarInstruccionesObra,
 };
 
 let currentPage = '';
@@ -4168,6 +4273,7 @@ const SYNC_INTERVALS = {
   accionItems: 60,
   informeObra: 0,
   planSemanal: 60,
+  instruccionesObra: 60,
 };
 
 let _syncTimer = null, _syncLabelTimer = null, _syncLastTs = null;
@@ -16886,6 +16992,137 @@ async function poblarSelectObras(selectId) {
     opt.textContent = o.nombre;
     sel.appendChild(opt);
   });
+}
+
+// ── INSTRUCCIONES DE OBRA / SITE INSTRUCTIONS (NEW-63) ─────────────
+let tblInstrucciones = null, _instEditId = null;
+const INST_PRIO_COLOR = { normal: '#64748b', alta: '#f59e0b', urgente: '#ef4444' };
+const INST_ESTADO_COLOR = { emitida:'#64748b', acuse_recibido:'#f97316', aceptada:'#10b981', rechazada:'#ef4444', anulada:'#94a3b8' };
+const INST_ESTADO_ICON  = { emitida:'📤', acuse_recibido:'📬', aceptada:'✅', rechazada:'❌', anulada:'🚫' };
+
+async function cargarInstruccionesObra() {
+  if (document.getElementById('filterInstObra')?.options.length <= 1)
+    poblarSelectObras('filterInstObra');
+  const obraId  = document.getElementById('filterInstObra')?.value || '';
+  const estado  = document.getElementById('filterInstEstado')?.value || '';
+  const prio    = document.getElementById('filterInstPrio')?.value || '';
+  const dest    = document.getElementById('filterInstDest')?.value?.toLowerCase() || '';
+  const params  = new URLSearchParams();
+  if (obraId) params.set('obra_id', obraId);
+  if (estado) params.set('estado', estado);
+  if (prio)   params.set('prioridad', prio);
+  const r = await api(`/instrucciones-obra?${params}`);
+  let data = (r?.instrucciones || []).filter(i => !dest || (i.destinatario||'').toLowerCase().includes(dest));
+
+  // KPIs
+  const total   = data.length;
+  const emitidas = data.filter(i => i.estado === 'emitida').length;
+  const acuse   = data.filter(i => i.estado === 'acuse_recibido').length;
+  const acept   = data.filter(i => i.estado === 'aceptada').length;
+  const rech    = data.filter(i => i.estado === 'rechazada').length;
+  const hoy     = new Date().toISOString().slice(0,10);
+  const venc    = data.filter(i => i.estado !== 'aceptada' && i.estado !== 'anulada' && i.fecha_respuesta_limite && i.fecha_respuesta_limite < hoy).length;
+  document.getElementById('instKpi').innerHTML = `
+    <div class="kpi-card"><div class="kpi-icon">📋</div><div class="kpi-value">${total}</div><div class="kpi-label">Total</div></div>
+    <div class="kpi-card"><div class="kpi-icon">📤</div><div class="kpi-value" style="color:var(--muted)">${emitidas}</div><div class="kpi-label">Emitidas</div></div>
+    <div class="kpi-card"><div class="kpi-icon">📬</div><div class="kpi-value" style="color:var(--primary)">${acuse}</div><div class="kpi-label">Acuse recibido</div></div>
+    <div class="kpi-card"><div class="kpi-icon">✅</div><div class="kpi-value" style="color:var(--success)">${acept}</div><div class="kpi-label">Aceptadas</div></div>
+    <div class="kpi-card"><div class="kpi-icon">❌</div><div class="kpi-value" style="color:var(--danger)">${rech}</div><div class="kpi-label">Rechazadas</div></div>
+    <div class="kpi-card"><div class="kpi-icon">⏰</div><div class="kpi-value" style="color:${venc>0?'var(--danger)':'var(--success)'}">${venc}</div><div class="kpi-label">Vencidas</div></div>`;
+
+  // Badge
+  const badge = document.getElementById('instBadge');
+  if (badge) { badge.style.display = (emitidas + acuse > 0) ? '' : 'none'; }
+
+  if (tblInstrucciones) { tblInstrucciones.replaceData(data); return; }
+  tblInstrucciones = new Tabulator('#tblInstrucciones', {
+    data, layout: 'fitColumns', responsiveLayout: 'collapse',
+    pagination: 'local', paginationSize: 20,
+    placeholder: '<div class="empty-state"><div class="empty-icon">📋</div><div class="empty-text">Sin instrucciones — emite la primera</div></div>',
+    columns: [
+      { title: 'Nº', field: 'numero', width: 115, formatter: c => `<span style="font-family:monospace;font-weight:700">${c.getValue()||'—'}</span>` },
+      { title: 'P', field: 'prioridad', width: 50, hozAlign: 'center',
+        formatter: c => `<span title="${c.getValue()}" style="color:${INST_PRIO_COLOR[c.getValue()]||'#64748b'};font-size:16px">${c.getValue()==='urgente'?'🚨':c.getValue()==='alta'?'🔴':'🔵'}</span>` },
+      { title: 'Titulo', field: 'titulo', minWidth: 180 },
+      { title: 'Destinatario', field: 'destinatario', width: 160 },
+      { title: 'Emitido por', field: 'emitido_por', width: 130 },
+      { title: 'Estado', field: 'estado', width: 140,
+        formatter: c => `<span style="background:${INST_ESTADO_COLOR[c.getValue()]||'#64748b'};color:#fff;padding:2px 8px;border-radius:4px;font-size:11px">${INST_ESTADO_ICON[c.getValue()]||''} ${c.getValue()||'—'}</span>` },
+      { title: 'Emision', field: 'fecha_emision', width: 100, formatter: c => fmtFecha(c.getValue()) },
+      { title: 'Lim. respuesta', field: 'fecha_respuesta_limite', width: 110,
+        formatter: c => { const v=c.getValue(); const venc=v&&v<new Date().toISOString().slice(0,10); return `<span style="color:${venc?'var(--danger)':'inherit'}">${fmtFecha(v)}${venc?' ⚠️':''}</span>`; } },
+      { title: '', field: 'id', width: 90, hozAlign: 'center', formatter: c => `
+        <button class="btn btn-secondary btn-sm" onclick="abrirModalInst(${c.getValue()})" style="padding:2px 7px;font-size:11px">✏️</button>
+        <button class="btn btn-secondary btn-sm" onclick="eliminarInstruccion(${c.getValue()})" style="padding:2px 7px;font-size:11px;color:var(--danger)">🗑</button>` }
+    ]
+  });
+}
+
+async function abrirModalInst(id = null) {
+  _instEditId = id;
+  document.getElementById('modalInstTitle').textContent = id ? 'Editar instruccion' : 'Nueva instruccion de obra';
+  const sel = document.getElementById('instObraId');
+  if (sel && sel.options.length <= 1) await poblarSelectObras('instObraId');
+  const obraFilt = document.getElementById('filterInstObra')?.value;
+  if (obraFilt && sel) sel.value = obraFilt;
+  document.getElementById('instFechaEmision').value = new Date().toISOString().slice(0,10);
+  ['instTitulo','instDescripcion','instDestinatario','instEmitidoPor','instFechaLimite','instNotasResp'].forEach(eid => { const el=document.getElementById(eid); if(el) el.value=''; });
+  document.getElementById('instPrioridad').value = 'normal';
+  document.getElementById('instEstado').value = 'emitida';
+  document.getElementById('instRfiId').value = '';
+  if (id) {
+    const data = (await api(`/instrucciones-obra?obra_id=0`) )?.instrucciones;
+    const item = (tblInstrucciones?.getData() || []).find(i => i.id === id);
+    if (item) {
+      if (sel) sel.value = item.obra_id;
+      document.getElementById('instTitulo').value = item.titulo || '';
+      document.getElementById('instDescripcion').value = item.descripcion || '';
+      document.getElementById('instDestinatario').value = item.destinatario || '';
+      document.getElementById('instEmitidoPor').value = item.emitido_por || '';
+      document.getElementById('instPrioridad').value = item.prioridad || 'normal';
+      document.getElementById('instEstado').value = item.estado || 'emitida';
+      document.getElementById('instFechaEmision').value = item.fecha_emision || '';
+      document.getElementById('instFechaLimite').value = item.fecha_respuesta_limite || '';
+      document.getElementById('instNotasResp').value = item.notas_respuesta || '';
+      document.getElementById('instRfiId').value = item.rfi_id || '';
+    }
+  }
+  document.getElementById('modalInst').classList.add('active');
+}
+
+async function guardarInstruccion() {
+  const obraId = document.getElementById('instObraId')?.value;
+  const titulo = document.getElementById('instTitulo')?.value?.trim();
+  if (!obraId || !titulo) { showToast('Obra y titulo son obligatorios', 'warning'); return; }
+  const body = {
+    obra_id: parseInt(obraId),
+    titulo,
+    descripcion: document.getElementById('instDescripcion')?.value?.trim() || null,
+    destinatario: document.getElementById('instDestinatario')?.value?.trim() || null,
+    emitido_por: document.getElementById('instEmitidoPor')?.value?.trim() || null,
+    prioridad: document.getElementById('instPrioridad')?.value || 'normal',
+    estado: document.getElementById('instEstado')?.value || 'emitida',
+    fecha_emision: document.getElementById('instFechaEmision')?.value || null,
+    fecha_respuesta_limite: document.getElementById('instFechaLimite')?.value || null,
+    notas_respuesta: document.getElementById('instNotasResp')?.value?.trim() || null,
+    rfi_id: parseInt(document.getElementById('instRfiId')?.value) || null,
+  };
+  const r = _instEditId
+    ? await api(`/instrucciones-obra/${_instEditId}`, 'PUT', body)
+    : await api('/instrucciones-obra', 'POST', body);
+  if (r?.ok || r?.id) {
+    cerrarModal('modalInst');
+    showToast(_instEditId ? 'Instruccion actualizada ✅' : `Instruccion creada ✅ (${r.numero||''})`, 'success');
+    tblInstrucciones = null;
+    cargarInstruccionesObra();
+  } else showToast(r?.error || 'Error al guardar', 'error');
+}
+
+async function eliminarInstruccion(id) {
+  if (!confirm('¿Eliminar esta instruccion de obra?')) return;
+  const r = await api(`/instrucciones-obra/${id}`, 'DELETE');
+  if (r?.ok) { showToast('Instruccion eliminada', 'success'); tblInstrucciones=null; cargarInstruccionesObra(); }
+  else showToast('Error al eliminar', 'error');
 }
 
 // ── PLAN SEMANAL / LOOKAHEAD SCHEDULE (NEW-62) ─────────────────────
