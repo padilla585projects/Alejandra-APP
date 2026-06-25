@@ -516,6 +516,14 @@ RFIs — CONSULTAS TÉCNICAS (tabla: rfis) — nivel Procore:
 - Si hay RFIs con impacto en plazo o coste, mencíonalo en el briefing.
 - Las RFIs son trazabilidad legal — son importantes para reclamaciones y cambios de orden.
 
+ÓRDENES DE CAMBIO (tabla: ordenes_cambio) — nivel Procore:
+- Campos: numero (OC-001), titulo, categoria (general/materiales/mano_de_obra/subcontrata/diseño/otro), coste_adicional, dias_extension, estado (propuesta/en_revision/aprobada/rechazada), rfi_id (vinculada), aprobado_por, fecha_aprobacion
+- Usa gestionar_oc para crear, listar, aprobar, rechazar y resumir OCs.
+- Si una RFI tiene impacto en plazo o coste, ofrécete a crear una OC vinculada: "Esta RFI tiene impacto económico. ¿Quieres que genere una Orden de Cambio OC-XXX?"
+- Cuando el cliente diga "ampliar alcance", "añadir trabajo extra", "cambio de especificación" → crear OC.
+- En el briefing, si hay OCs pendientes de aprobación, mencionarlas: "Hay 2 OCs por valor de +12.000 € pendientes de aprobación."
+- Las OCs aprobadas aumentan el contrato. Usarlas para recalcular el presupuesto final proyectado.
+
 CONTROL DE PRESUPUESTO (tabla: presupuesto_obra) — nivel Procore:
 - Cuando la desviación supere el 10% en una categoría, avisa proactivamente.
 - "La categoría 'Mano de obra' lleva un 23% de desviación sobre lo presupuestado. ¿Quieres revisar las partidas?"
@@ -1255,6 +1263,33 @@ const TOOL_GESTIONAR_RFI = {
   }
 };
 
+const TOOL_GESTIONAR_OC = {
+  name: 'gestionar_oc',
+  description: 'Gestiona Órdenes de Cambio (Change Orders) de obra. Las OC son modificaciones formales al alcance, coste o plazo del contrato. Cada OC tiene número correlativo (OC-001), categoría, coste adicional, días de extensión y flujo de aprobación. Úsalo cuando el usuario quiera registrar un cambio de alcance, ver órdenes pendientes, aprobar o rechazar una OC, o analizar el impacto económico de los cambios.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      accion: {
+        type: 'string',
+        enum: ['crear', 'listar', 'aprobar', 'rechazar', 'actualizar', 'eliminar', 'resumen'],
+        description: 'Acción a realizar'
+      },
+      obra_id:        { type: 'number', description: 'ID de la obra' },
+      oc_id:          { type: 'number', description: 'ID de la OC (obligatorio para aprobar/rechazar/actualizar/eliminar)' },
+      titulo:         { type: 'string', description: 'Título descriptivo de la orden de cambio (obligatorio para crear)' },
+      categoria:      { type: 'string', enum: ['general','materiales','mano_de_obra','subcontrata','diseño','otro'], description: 'Categoría del cambio' },
+      descripcion:    { type: 'string', description: 'Descripción del alcance del cambio' },
+      coste_adicional: { type: 'number', description: 'Coste adicional en euros (puede ser negativo si es ahorro)' },
+      dias_extension: { type: 'number', description: 'Días de extensión de plazo (0 si no hay impacto en plazo)' },
+      rfi_id:         { type: 'number', description: 'ID de la RFI que origina esta OC (opcional)' },
+      aprobado_por:   { type: 'string', description: 'Nombre de quien aprueba la OC' },
+      notas:          { type: 'string', description: 'Notas adicionales' },
+      filtro_estado:  { type: 'string', description: 'Para listar: filtrar por estado (propuesta/en_revision/aprobada/rechazada)' }
+    },
+    required: ['accion']
+  }
+};
+
 const TOOL_PENSAR = {
   name: 'pensar',
   description: 'Razona en voz alta sobre un problema antes de actuar. Úsalo para descomponer problemas complejos en pasos. No ejecuta nada, solo registra tu pensamiento.',
@@ -1636,11 +1671,11 @@ const TOOL_CONSULTAR_CONOCIMIENTO = {
 
 const TOOLS_POR_EXPERTO = {
   simple:     [TOOL_MEMORY_READ, TOOL_CONSULTAR_BD, TOOL_ENVIAR_PUSH],
-  app:        [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_CONTROLAR_APP, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_ANALIZAR_FOTO, TOOL_ESTADO_OBRA, TOOL_GESTIONAR_TAREA, TOOL_GESTIONAR_RFI],
+  app:        [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_CONTROLAR_APP, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_ANALIZAR_FOTO, TOOL_ESTADO_OBRA, TOOL_GESTIONAR_TAREA, TOOL_GESTIONAR_RFI, TOOL_GESTIONAR_OC],
   tecnico:    [TOOL_LEER_ESTADO, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_BUSCAR_WEB, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_NEXUS_MANAGE, TOOL_CONTROLAR_APP, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO],
   web:        [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE],
   reflexion:  [TOOL_MEMORY_SAVE, TOOL_MEMORY_READ, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_PROPOSE_MEJORA, TOOL_BUSCAR_WEB, TOOL_TOMAR_DECISION, TOOL_LEER_ESTADO, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_CONTROLAR_APP, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO],
-  completo:   [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_LEER_ESTADO, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_CONTROLAR_APP, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_ANALIZAR_FOTO, TOOL_ESTADO_OBRA, TOOL_GESTIONAR_TAREA, TOOL_GESTIONAR_RFI],
+  completo:   [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_LEER_ESTADO, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_CONTROLAR_APP, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_ANALIZAR_FOTO, TOOL_ESTADO_OBRA, TOOL_GESTIONAR_TAREA, TOOL_GESTIONAR_RFI, TOOL_GESTIONAR_OC],
   ingenieria: [TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_ANALIZAR_FOTO, TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME]
 };
 
@@ -5842,7 +5877,7 @@ ${descripcion ? `<div class="info-bar"><span class="badge">${tipo}</span>${descr
         if (!obraId) return '❌ No se encontró una obra activa. Indica el ID de obra o pide al usuario que seleccione una obra en la app.';
         const eid = empresa_id || 'default';
 
-        const [kpis, fases, diario, incidencias, obraInfo, tareasAbiertas, rfisAbiertas, presupuesto] = await Promise.all([
+        const [kpis, fases, diario, incidencias, obraInfo, tareasAbiertas, rfisAbiertas, presupuesto, ocTotales] = await Promise.all([
           env.DB.prepare(`SELECT
             (SELECT COUNT(*) FROM fichajes WHERE obra_id=? AND empresa_id=? AND fecha=date('now')) as fichajes_hoy,
             (SELECT COUNT(*) FROM incidencias WHERE obra_id=? AND empresa_id=? AND estado IN ('abierta','en_progreso')) as inc_abiertas,
@@ -5856,6 +5891,7 @@ ${descripcion ? `<div class="info-bar"><span class="badge">${tipo}</span>${descr
           env.DB.prepare(`SELECT titulo,estado,prioridad,asignado_a,fecha_limite FROM tareas_obra WHERE obra_id=? AND empresa_id=? AND estado != 'completada' ORDER BY CASE prioridad WHEN 'urgente' THEN 0 WHEN 'alta' THEN 1 WHEN 'normal' THEN 2 ELSE 3 END, fecha_limite ASC NULLS LAST LIMIT 8`).bind(obraId,eid).all().catch(()=>({results:[]})),
           env.DB.prepare(`SELECT numero,titulo,estado,prioridad,asignado_a,impacto_plazo,impacto_coste FROM rfis WHERE obra_id=? AND empresa_id=? AND estado IN ('abierta','en_revision') ORDER BY CASE prioridad WHEN 'urgente' THEN 0 WHEN 'alta' THEN 1 WHEN 'normal' THEN 2 ELSE 3 END LIMIT 5`).bind(obraId,eid).all().catch(()=>({results:[]})),
           env.DB.prepare(`SELECT COALESCE(SUM(importe_previsto),0) as prev, COALESCE(SUM(importe_real),0) as real FROM presupuesto_obra WHERE obra_id=? AND empresa_id=?`).bind(obraId,eid).first().catch(()=>null),
+          env.DB.prepare(`SELECT COUNT(*) as total, COALESCE(SUM(CASE WHEN estado='aprobada' THEN coste_adicional ELSE 0 END),0) as aprobado, COUNT(CASE WHEN estado IN ('propuesta','en_revision') THEN 1 END) as pendientes FROM ordenes_cambio WHERE obra_id=? AND empresa_id=?`).bind(obraId,eid).first().catch(()=>null),
         ]);
 
         let r = `📊 ESTADO DE OBRA: ${obraInfo?.nombre||'#'+obraId}${obraInfo?.codigo?' ('+obraInfo.codigo+')':''}\n`;
@@ -5933,6 +5969,14 @@ ${descripcion ? `<div class="info-bar"><span class="badge">${tipo}</span>${descr
           const desvSign = desv >= 0 ? '+' : '';
           r += `\n💶 PRESUPUESTO: ${presupuesto.real.toLocaleString('es-ES')}€ / ${presupuesto.prev.toLocaleString('es-ES')}€ previsto (${desvSign}${desvPct}%)`;
           if (desv > presupuesto.prev * 0.1) r += ` ⚠️ DESVIACIÓN ALTA`;
+          r += '\n';
+        }
+
+        // Órdenes de Cambio
+        if (ocTotales && ocTotales.total > 0) {
+          const fmtE = v => new Intl.NumberFormat('es-ES',{style:'currency',currency:'EUR',maximumFractionDigits:0}).format(v||0);
+          r += `\n🔄 ÓRDENES DE CAMBIO: ${ocTotales.total} total — ${fmtE(ocTotales.aprobado)} aprobado`;
+          if (ocTotales.pendientes > 0) r += ` — ⚠️ ${ocTotales.pendientes} pendiente${ocTotales.pendientes>1?'s':''} de aprobación`;
           r += '\n';
         }
 
@@ -6116,6 +6160,126 @@ ${descripcion ? `<div class="info-bar"><span class="badge">${tipo}</span>${descr
         return `❌ Acción "${accion}" no reconocida. Usa: crear, listar, responder, actualizar, eliminar.`;
       } catch (err) {
         return `Error gestionando RFI: ${err.message}`;
+      }
+    }
+
+    case 'gestionar_oc': {
+      try {
+        if (!env.DB) return 'Base de datos no disponible';
+        const accion = input.accion;
+        const obraId = input.obra_id ? parseInt(input.obra_id) : null;
+        const ocId   = input.oc_id   ? parseInt(input.oc_id)   : null;
+        const eid    = empresa_id || 1;
+
+        // Ensure table
+        await env.DB.prepare(`CREATE TABLE IF NOT EXISTS ordenes_cambio (
+          id INTEGER PRIMARY KEY AUTOINCREMENT, obra_id INTEGER, empresa_id INTEGER NOT NULL,
+          numero TEXT, titulo TEXT NOT NULL, descripcion TEXT, rfi_id INTEGER,
+          estado TEXT DEFAULT 'propuesta', categoria TEXT DEFAULT 'general',
+          coste_adicional REAL DEFAULT 0, dias_extension INTEGER DEFAULT 0,
+          solicitado_por TEXT, aprobado_por TEXT,
+          fecha_propuesta TEXT, fecha_aprobacion TEXT, notas TEXT,
+          created_at TEXT DEFAULT (datetime('now'))
+        )`).run().catch(()=>{});
+
+        if (accion === 'resumen') {
+          const totales = await env.DB.prepare(
+            `SELECT
+              COUNT(*) as total,
+              SUM(CASE WHEN estado='aprobada' THEN coste_adicional ELSE 0 END) as coste_aprobado,
+              SUM(CASE WHEN estado='aprobada' THEN dias_extension ELSE 0 END) as dias_aprobados,
+              SUM(CASE WHEN estado IN ('propuesta','en_revision') THEN coste_adicional ELSE 0 END) as coste_pendiente,
+              COUNT(CASE WHEN estado='aprobada' THEN 1 END) as aprobadas,
+              COUNT(CASE WHEN estado IN ('propuesta','en_revision') THEN 1 END) as pendientes
+             FROM ordenes_cambio WHERE empresa_id=?${obraId?' AND obra_id=?':''}`
+          ).bind(...(obraId ? [eid, obraId] : [eid])).first().catch(()=>null);
+          if (!totales) return '📊 No hay datos de Órdenes de Cambio.';
+          const fmtE = v => v ? (v > 0 ? '+' : '') + new Intl.NumberFormat('es-ES',{style:'currency',currency:'EUR',maximumFractionDigits:0}).format(v) : '0 €';
+          return `🔄 ÓRDENES DE CAMBIO:\n• Total: ${totales.total||0} OCs\n• Aprobadas: ${totales.aprobadas||0} (${fmtE(totales.coste_aprobado)}, +${totales.dias_aprobados||0} días)\n• Pendientes: ${totales.pendientes||0} (${fmtE(totales.coste_pendiente)} en revisión)`;
+        }
+
+        if (accion === 'listar') {
+          let q = 'SELECT * FROM ordenes_cambio WHERE empresa_id=?';
+          const p = [eid];
+          if (obraId) { q += ' AND obra_id=?'; p.push(obraId); }
+          if (input.filtro_estado) { q += ' AND estado=?'; p.push(input.filtro_estado); }
+          q += ' ORDER BY created_at DESC LIMIT 20';
+          const { results: ocs } = await env.DB.prepare(q).bind(...p).all().catch(()=>({results:[]}));
+          if (!ocs.length) return '🔄 No hay Órdenes de Cambio' + (input.filtro_estado ? ` en estado "${input.filtro_estado}"` : '') + '.';
+          const estIcon = {propuesta:'🟡',en_revision:'🔵',aprobada:'🟢',rechazada:'🔴'};
+          const fmtE = v => v ? (v > 0 ? '+' : '') + new Intl.NumberFormat('es-ES',{style:'currency',currency:'EUR',maximumFractionDigits:0}).format(v) : '—';
+          let txt = `🔄 Órdenes de Cambio (${ocs.length}):\n`;
+          ocs.forEach(oc => {
+            txt += `• [${oc.numero||'OC'}] ${estIcon[oc.estado]||'🟡'} ${oc.titulo} — ${fmtE(oc.coste_adicional)}`;
+            if (oc.dias_extension) txt += ` +${oc.dias_extension}d`;
+            if (oc.aprobado_por)   txt += ` ✅ ${oc.aprobado_por}`;
+            txt += '\n';
+          });
+          return txt;
+        }
+
+        if (accion === 'crear') {
+          if (!input.titulo) return '❌ El título es obligatorio para crear una OC.';
+          let numero = 'OC-001';
+          try {
+            const last = await env.DB.prepare(
+              `SELECT numero FROM ordenes_cambio WHERE empresa_id=? ${obraId ? 'AND obra_id=?' : 'AND obra_id IS NULL'} ORDER BY id DESC LIMIT 1`
+            ).bind(...(obraId ? [eid, obraId] : [eid])).first();
+            if (last?.numero) {
+              const n = parseInt(last.numero.replace(/\D/g,'')) || 0;
+              numero = 'OC-' + String(n + 1).padStart(3, '0');
+            }
+          } catch {}
+          const fmtE = v => v ? (v > 0 ? '+' : '') + new Intl.NumberFormat('es-ES',{style:'currency',currency:'EUR',maximumFractionDigits:0}).format(v) : '—';
+          await env.DB.prepare(
+            `INSERT INTO ordenes_cambio (obra_id,empresa_id,numero,titulo,descripcion,categoria,coste_adicional,dias_extension,rfi_id,solicitado_por,fecha_propuesta,notas)
+             VALUES (?,?,?,?,?,?,?,?,?,?,date('now'),?)`
+          ).bind(obraId, eid, numero, input.titulo,
+            input.descripcion||null, input.categoria||'general',
+            input.coste_adicional||0, input.dias_extension||0,
+            input.rfi_id||null, 'Alejandra IA', input.notas||null
+          ).run();
+          return `✅ OC ${numero} creada:\n🔄 ${input.titulo}\n💶 ${fmtE(input.coste_adicional||0)}${input.dias_extension?' · +'+input.dias_extension+' días':''}`;
+        }
+
+        if (accion === 'aprobar') {
+          if (!ocId) return '❌ Necesito oc_id para aprobar.';
+          await env.DB.prepare(
+            `UPDATE ordenes_cambio SET estado='aprobada',aprobado_por=?,fecha_aprobacion=date('now') WHERE id=? AND empresa_id=?`
+          ).bind(input.aprobado_por||'Alejandra IA', ocId, eid).run();
+          return `✅ OC #${ocId} aprobada por ${input.aprobado_por||'Alejandra IA'}.`;
+        }
+
+        if (accion === 'rechazar') {
+          if (!ocId) return '❌ Necesito oc_id para rechazar.';
+          await env.DB.prepare(
+            `UPDATE ordenes_cambio SET estado='rechazada',aprobado_por=? WHERE id=? AND empresa_id=?`
+          ).bind(input.aprobado_por||'Alejandra IA', ocId, eid).run();
+          return `🔴 OC #${ocId} rechazada.`;
+        }
+
+        if (accion === 'actualizar') {
+          if (!ocId) return '❌ Necesito oc_id para actualizar.';
+          const sets=[]; const params=[];
+          const campos=['titulo','descripcion','categoria','estado','coste_adicional','dias_extension','rfi_id','aprobado_por','notas'];
+          for (const c of campos) {
+            if (input[c] !== undefined) { sets.push(`${c}=?`); params.push(input[c]); }
+          }
+          if (!sets.length) return '❌ No se especificaron cambios.';
+          params.push(ocId, eid);
+          await env.DB.prepare(`UPDATE ordenes_cambio SET ${sets.join(',')} WHERE id=? AND empresa_id=?`).bind(...params).run();
+          return `✅ OC #${ocId} actualizada.`;
+        }
+
+        if (accion === 'eliminar') {
+          if (!ocId) return '❌ Necesito oc_id para eliminar.';
+          await env.DB.prepare('DELETE FROM ordenes_cambio WHERE id=? AND empresa_id=?').bind(ocId, eid).run();
+          return `🗑️ OC #${ocId} eliminada.`;
+        }
+
+        return `❌ Acción "${accion}" no reconocida. Usa: crear, listar, aprobar, rechazar, actualizar, eliminar, resumen.`;
+      } catch (err) {
+        return `Error gestionando OC: ${err.message}`;
       }
     }
 
