@@ -4721,6 +4721,30 @@ export default {
         if (method === 'PUT')    return await actualizarVisitaObra(_vid, request, env);
         if (method === 'DELETE') return await eliminarVisitaObra(_vid, request, env);
       }
+      // ── Licencias de Obra / Permits & Licenses (NEW-94) ──────────────────────────
+      if (path === '/licencias-obra' && method === 'GET')  return await getLicenciasObra(request, env);
+      if (path === '/licencias-obra' && method === 'POST') return await crearLicenciaObra(request, env);
+      if (path.startsWith('/licencias-obra/')) {
+        const _loId = parseInt(path.split('/licencias-obra/')[1]);
+        if (method === 'PUT')    return await actualizarLicenciaObra(_loId, request, env);
+        if (method === 'DELETE') return await eliminarLicenciaObra(_loId, request, env);
+      }
+      // ── Catálogo de Precios Unitarios / Unit Price Catalog (NEW-95) ──────────────
+      if (path === '/catalogo-precios' && method === 'GET')  return await getCatalogoPrecios(request, env);
+      if (path === '/catalogo-precios' && method === 'POST') return await crearPrecioUnitario(request, env);
+      if (path.startsWith('/catalogo-precios/')) {
+        const _cpId = parseInt(path.split('/catalogo-precios/')[1]);
+        if (method === 'PUT')    return await actualizarPrecioUnitario(_cpId, request, env);
+        if (method === 'DELETE') return await eliminarPrecioUnitario(_cpId, request, env);
+      }
+      // ── Seguros de Obra / Insurance Policies (NEW-96) ────────────────────────────
+      if (path === '/seguros-obra' && method === 'GET')  return await getSegurosObra(request, env);
+      if (path === '/seguros-obra' && method === 'POST') return await crearSeguroObra(request, env);
+      if (path.startsWith('/seguros-obra/')) {
+        const _soId = parseInt(path.split('/seguros-obra/')[1]);
+        if (method === 'PUT')    return await actualizarSeguroObra(_soId, request, env);
+        if (method === 'DELETE') return await eliminarSeguroObra(_soId, request, env);
+      }
       // ── Solicitudes de Material / Material Requests (NEW-93) ─────────────────────
       if (path === '/solicitudes-material' && method === 'GET')  return await getSolicitudesMaterial(request, env);
       if (path === '/solicitudes-material' && method === 'POST') return await crearSolicitudMaterial(request, env);
@@ -19037,4 +19061,263 @@ async function eliminarSolicitudMaterial(id, request, env) {
   await ensureSolicitudesMaterialTable(env);
   await env.DB.prepare(`DELETE FROM solicitudes_material WHERE id=? AND empresa_id=?`).bind(id, empresa_id).run();
   return jsonResp({ ok: true });
+}
+
+
+// ════════════════════════════════════════════════════════════════════════════════
+// NEW-94: LICENCIAS Y PERMISOS DE OBRA / PERMITS & LICENSES
+// ════════════════════════════════════════════════════════════════════════════════
+async function ensureLicenciasObraTable(env) {
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS licencias_obra (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    empresa_id        INTEGER NOT NULL,
+    obra_id           INTEGER,
+    numero            TEXT,
+    tipo              TEXT NOT NULL DEFAULT 'licencia_obras',
+    titulo            TEXT NOT NULL,
+    organismo         TEXT,
+    numero_expediente TEXT,
+    fecha_solicitud   TEXT,
+    fecha_concesion   TEXT,
+    fecha_caducidad   TEXT,
+    estado            TEXT NOT NULL DEFAULT 'en_tramite',
+    importe_tasa      REAL,
+    adjunto_url       TEXT,
+    contacto          TEXT,
+    notas             TEXT,
+    alertar_dias      INTEGER DEFAULT 30,
+    created_by        TEXT,
+    created_at        TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at        TEXT NOT NULL DEFAULT (datetime('now'))
+  )`).run();
+}
+
+async function getLicenciasObra(request, env) {
+  const { empresa_id } = await getEmpresaFromRequest(request, env);
+  await ensureLicenciasObraTable(env);
+  const u = new URL(request.url);
+  const obra_id = u.searchParams.get('obra_id');
+  const tipo    = u.searchParams.get('tipo');
+  const estado  = u.searchParams.get('estado');
+  let sql = 'SELECT * FROM licencias_obra WHERE empresa_id=?';
+  const params = [empresa_id];
+  if (obra_id) { sql += ' AND obra_id=?'; params.push(obra_id); }
+  if (tipo)    { sql += ' AND tipo=?';    params.push(tipo); }
+  if (estado)  { sql += ' AND estado=?';  params.push(estado); }
+  sql += ' ORDER BY fecha_caducidad ASC, created_at DESC';
+  const rows = await env.DB.prepare(sql).bind(...params).all();
+  const total = rows.results.length;
+  const hoy = new Date().toISOString().slice(0,10);
+  const en30 = new Date(Date.now()+30*86400000).toISOString().slice(0,10);
+  const vencen_pronto = rows.results.filter(r => r.fecha_caducidad && r.fecha_caducidad <= en30 && r.fecha_caducidad >= hoy && r.estado === 'concedida').length;
+  const vencidas      = rows.results.filter(r => r.fecha_caducidad && r.fecha_caducidad < hoy && r.estado === 'concedida').length;
+  const en_tramite    = rows.results.filter(r => r.estado === 'en_tramite').length;
+  return jsonOk({ data: rows.results, stats: { total, vencen_pronto, vencidas, en_tramite } });
+}
+
+async function crearLicenciaObra(request, env) {
+  const { empresa_id, user } = await getEmpresaFromRequest(request, env);
+  await ensureLicenciasObraTable(env);
+  const b = await request.json();
+  if (!b.tipo || !b.titulo) return jsonError('tipo y titulo son obligatorios', 400);
+  const cnt = await env.DB.prepare('SELECT COUNT(*) as n FROM licencias_obra WHERE empresa_id=?').bind(empresa_id).first();
+  const num = 'LIC-' + new Date().getFullYear() + '-' + String((cnt?.n||0)+1).padStart(4,'0');
+  const res = await env.DB.prepare(
+    `INSERT INTO licencias_obra (empresa_id,obra_id,numero,tipo,titulo,organismo,numero_expediente,fecha_solicitud,fecha_concesion,fecha_caducidad,estado,importe_tasa,adjunto_url,contacto,notas,alertar_dias,created_by)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+  ).bind(empresa_id, b.obra_id||null, num, b.tipo, b.titulo, b.organismo||null,
+    b.numero_expediente||null, b.fecha_solicitud||null, b.fecha_concesion||null,
+    b.fecha_caducidad||null, b.estado||'en_tramite', b.importe_tasa||null,
+    b.adjunto_url||null, b.contacto||null, b.notas||null, b.alertar_dias||30,
+    user?.email||null).run();
+  return jsonOk({ id: res.meta.last_row_id, numero: num }, 201);
+}
+
+async function actualizarLicenciaObra(id, request, env) {
+  const { empresa_id } = await getEmpresaFromRequest(request, env);
+  await ensureLicenciasObraTable(env);
+  const b = await request.json();
+  const campos = ['obra_id','tipo','titulo','organismo','numero_expediente','fecha_solicitud','fecha_concesion','fecha_caducidad','estado','importe_tasa','adjunto_url','contacto','notas','alertar_dias'];
+  const sets = []; const vals = [];
+  campos.forEach(c => { if (b[c] !== undefined) { sets.push(c+'=?'); vals.push(b[c]); } });
+  sets.push("updated_at=datetime('now')");
+  vals.push(id, empresa_id);
+  await env.DB.prepare(`UPDATE licencias_obra SET ${sets.join(',')} WHERE id=? AND empresa_id=?`).bind(...vals).run();
+  return jsonOk({ ok: true });
+}
+
+async function eliminarLicenciaObra(id, request, env) {
+  const { empresa_id } = await getEmpresaFromRequest(request, env);
+  await env.DB.prepare('DELETE FROM licencias_obra WHERE id=? AND empresa_id=?').bind(id, empresa_id).run();
+  return jsonOk({ ok: true });
+}
+
+// ════════════════════════════════════════════════════════════════════════════════
+// NEW-95: CATÁLOGO DE PRECIOS UNITARIOS / UNIT PRICE CATALOG
+// ════════════════════════════════════════════════════════════════════════════════
+async function ensureCatalogoPreciosTable(env) {
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS catalogo_precios (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    empresa_id      INTEGER NOT NULL,
+    codigo          TEXT,
+    capitulo        TEXT,
+    descripcion     TEXT NOT NULL,
+    unidad          TEXT NOT NULL DEFAULT 'ud',
+    precio_unitario REAL NOT NULL DEFAULT 0,
+    rendimiento     REAL,
+    mano_obra       REAL DEFAULT 0,
+    materiales      REAL DEFAULT 0,
+    maquinaria      REAL DEFAULT 0,
+    activo          INTEGER NOT NULL DEFAULT 1,
+    notas           TEXT,
+    created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
+  )`).run();
+}
+
+async function getCatalogoPrecios(request, env) {
+  const { empresa_id } = await getEmpresaFromRequest(request, env);
+  await ensureCatalogoPreciosTable(env);
+  const u = new URL(request.url);
+  const capitulo   = u.searchParams.get('capitulo');
+  const q          = u.searchParams.get('q');
+  const soloActivos = u.searchParams.get('activo') !== '0';
+  let sql = 'SELECT * FROM catalogo_precios WHERE empresa_id=?';
+  const params = [empresa_id];
+  if (soloActivos) { sql += ' AND activo=1'; }
+  if (capitulo)    { sql += ' AND capitulo=?'; params.push(capitulo); }
+  if (q)           { sql += ' AND (descripcion LIKE ? OR codigo LIKE ?)'; params.push('%'+q+'%','%'+q+'%'); }
+  sql += ' ORDER BY capitulo ASC, codigo ASC, descripcion ASC';
+  const rows = await env.DB.prepare(sql).bind(...params).all();
+  const total = rows.results.length;
+  const caps  = [...new Set(rows.results.map(r => r.capitulo).filter(Boolean))];
+  const precio_medio = total ? (rows.results.reduce((a,r)=>a+r.precio_unitario,0)/total).toFixed(2) : 0;
+  return jsonOk({ data: rows.results, stats: { total, capitulos: caps.length, precio_medio } });
+}
+
+async function crearPrecioUnitario(request, env) {
+  const { empresa_id } = await getEmpresaFromRequest(request, env);
+  await ensureCatalogoPreciosTable(env);
+  const b = await request.json();
+  if (!b.descripcion || b.precio_unitario === undefined) return jsonError('descripcion y precio_unitario son obligatorios', 400);
+  let codigo = b.codigo || null;
+  if (!codigo) {
+    const cnt = await env.DB.prepare('SELECT COUNT(*) as n FROM catalogo_precios WHERE empresa_id=?').bind(empresa_id).first();
+    codigo = 'P' + String((cnt?.n||0)+1).padStart(5,'0');
+  }
+  const res = await env.DB.prepare(
+    `INSERT INTO catalogo_precios (empresa_id,codigo,capitulo,descripcion,unidad,precio_unitario,rendimiento,mano_obra,materiales,maquinaria,activo,notas)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`
+  ).bind(empresa_id, codigo, b.capitulo||null, b.descripcion, b.unidad||'ud',
+    parseFloat(b.precio_unitario)||0, b.rendimiento||null,
+    parseFloat(b.mano_obra)||0, parseFloat(b.materiales)||0, parseFloat(b.maquinaria)||0,
+    b.activo !== false ? 1 : 0, b.notas||null).run();
+  return jsonOk({ id: res.meta.last_row_id, codigo }, 201);
+}
+
+async function actualizarPrecioUnitario(id, request, env) {
+  const { empresa_id } = await getEmpresaFromRequest(request, env);
+  await ensureCatalogoPreciosTable(env);
+  const b = await request.json();
+  const campos = ['codigo','capitulo','descripcion','unidad','precio_unitario','rendimiento','mano_obra','materiales','maquinaria','activo','notas'];
+  const sets = []; const vals = [];
+  campos.forEach(c => { if (b[c] !== undefined) { sets.push(c+'=?'); vals.push(b[c]); } });
+  sets.push("updated_at=datetime('now')");
+  vals.push(id, empresa_id);
+  await env.DB.prepare(`UPDATE catalogo_precios SET ${sets.join(',')} WHERE id=? AND empresa_id=?`).bind(...vals).run();
+  return jsonOk({ ok: true });
+}
+
+async function eliminarPrecioUnitario(id, request, env) {
+  const { empresa_id } = await getEmpresaFromRequest(request, env);
+  await env.DB.prepare('DELETE FROM catalogo_precios WHERE id=? AND empresa_id=?').bind(id, empresa_id).run();
+  return jsonOk({ ok: true });
+}
+
+// ════════════════════════════════════════════════════════════════════════════════
+// NEW-96: SEGUROS DE OBRA / INSURANCE POLICIES
+// ════════════════════════════════════════════════════════════════════════════════
+async function ensureSegurosObraTable(env) {
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS seguros_obra (
+    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+    empresa_id          INTEGER NOT NULL,
+    obra_id             INTEGER,
+    tipo                TEXT NOT NULL DEFAULT 'responsabilidad_civil',
+    compania            TEXT NOT NULL,
+    numero_poliza       TEXT NOT NULL,
+    tomador             TEXT,
+    asegurado           TEXT,
+    capital_asegurado   REAL,
+    prima_anual         REAL,
+    fecha_inicio        TEXT NOT NULL,
+    fecha_vencimiento   TEXT NOT NULL,
+    forma_pago          TEXT DEFAULT 'anual',
+    estado              TEXT NOT NULL DEFAULT 'activo',
+    alertar_dias        INTEGER DEFAULT 30,
+    contacto_agente     TEXT,
+    adjunto_url         TEXT,
+    notas               TEXT,
+    created_by          TEXT,
+    created_at          TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at          TEXT NOT NULL DEFAULT (datetime('now'))
+  )`).run();
+}
+
+async function getSegurosObra(request, env) {
+  const { empresa_id } = await getEmpresaFromRequest(request, env);
+  await ensureSegurosObraTable(env);
+  const u = new URL(request.url);
+  const obra_id = u.searchParams.get('obra_id');
+  const tipo    = u.searchParams.get('tipo');
+  const estado  = u.searchParams.get('estado');
+  let sql = 'SELECT * FROM seguros_obra WHERE empresa_id=?';
+  const params = [empresa_id];
+  if (obra_id) { sql += ' AND obra_id=?'; params.push(obra_id); }
+  if (tipo)    { sql += ' AND tipo=?';    params.push(tipo); }
+  if (estado)  { sql += ' AND estado=?';  params.push(estado); }
+  sql += ' ORDER BY fecha_vencimiento ASC, created_at DESC';
+  const rows = await env.DB.prepare(sql).bind(...params).all();
+  const hoy  = new Date().toISOString().slice(0,10);
+  const en30 = new Date(Date.now()+30*86400000).toISOString().slice(0,10);
+  const total         = rows.results.length;
+  const vencen_pronto = rows.results.filter(r => r.fecha_vencimiento && r.fecha_vencimiento <= en30 && r.fecha_vencimiento >= hoy && r.estado === 'activo').length;
+  const vencidos      = rows.results.filter(r => r.fecha_vencimiento && r.fecha_vencimiento < hoy && r.estado === 'activo').length;
+  const prima_total   = rows.results.filter(r=>r.estado==='activo').reduce((a,r)=>a+(r.prima_anual||0),0);
+  return jsonOk({ data: rows.results, stats: { total, vencen_pronto, vencidos, prima_total: prima_total.toFixed(2) } });
+}
+
+async function crearSeguroObra(request, env) {
+  const { empresa_id, user } = await getEmpresaFromRequest(request, env);
+  await ensureSegurosObraTable(env);
+  const b = await request.json();
+  if (!b.tipo || !b.compania || !b.numero_poliza || !b.fecha_inicio || !b.fecha_vencimiento)
+    return jsonError('tipo, compania, numero_poliza, fecha_inicio y fecha_vencimiento son obligatorios', 400);
+  const res = await env.DB.prepare(
+    `INSERT INTO seguros_obra (empresa_id,obra_id,tipo,compania,numero_poliza,tomador,asegurado,capital_asegurado,prima_anual,fecha_inicio,fecha_vencimiento,forma_pago,estado,alertar_dias,contacto_agente,adjunto_url,notas,created_by)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+  ).bind(empresa_id, b.obra_id||null, b.tipo, b.compania, b.numero_poliza,
+    b.tomador||null, b.asegurado||null, b.capital_asegurado||null, b.prima_anual||null,
+    b.fecha_inicio, b.fecha_vencimiento, b.forma_pago||'anual', b.estado||'activo',
+    b.alertar_dias||30, b.contacto_agente||null, b.adjunto_url||null,
+    b.notas||null, user?.email||null).run();
+  return jsonOk({ id: res.meta.last_row_id }, 201);
+}
+
+async function actualizarSeguroObra(id, request, env) {
+  const { empresa_id } = await getEmpresaFromRequest(request, env);
+  await ensureSegurosObraTable(env);
+  const b = await request.json();
+  const campos = ['obra_id','tipo','compania','numero_poliza','tomador','asegurado','capital_asegurado','prima_anual','fecha_inicio','fecha_vencimiento','forma_pago','estado','alertar_dias','contacto_agente','adjunto_url','notas'];
+  const sets = []; const vals = [];
+  campos.forEach(c => { if (b[c] !== undefined) { sets.push(c+'=?'); vals.push(b[c]); } });
+  sets.push("updated_at=datetime('now')");
+  vals.push(id, empresa_id);
+  await env.DB.prepare(`UPDATE seguros_obra SET ${sets.join(',')} WHERE id=? AND empresa_id=?`).bind(...vals).run();
+  return jsonOk({ ok: true });
+}
+
+async function eliminarSeguroObra(id, request, env) {
+  const { empresa_id } = await getEmpresaFromRequest(request, env);
+  await env.DB.prepare('DELETE FROM seguros_obra WHERE id=? AND empresa_id=?').bind(id, empresa_id).run();
+  return jsonOk({ ok: true });
 }

@@ -721,6 +721,17 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
       <span class="nav-icon">📋</span> Solicitudes Material
       <span class="nav-badge" id="solMatBadge" style="display:none">0</span>
     </button>
+    <button class="nav-item" data-page="licenciasObra" onclick="navTo('licenciasObra')">
+      <span class="nav-icon">📜</span> Permisos y Licencias
+      <span class="nav-badge" id="licObraBadge" style="display:none">0</span>
+    </button>
+    <button class="nav-item" data-page="catalogoPrecios" onclick="navTo('catalogoPrecios')">
+      <span class="nav-icon">💵</span> Catálogo de Precios
+    </button>
+    <button class="nav-item" data-page="segurosObra" onclick="navTo('segurosObra')">
+      <span class="nav-icon">🏥</span> Seguros de Obra
+      <span class="nav-badge" id="segurosBadge" style="display:none">0</span>
+    </button>
     <button class="nav-item" data-page="fotosObra" onclick="navTo('fotosObra')">
       <span class="nav-icon">📷</span> Galería de Fotos
     </button>
@@ -2441,6 +2452,221 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
               <button class="btn btn-secondary" onclick="cerrarModalAts()">Cancelar</button>
               <span id="atsElimBtn"></span>
               <button class="btn btn-primary" onclick="guardarAts()">💾 Guardar ATS</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- LICENCIAS Y PERMISOS DE OBRA / PERMITS & LICENSES (NEW-94) -->
+      <div class="page" id="pageLicenciasObra">
+        <div class="page-title">📜 Permisos y Licencias de Obra</div>
+        <div id="loKpis" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;margin-bottom:16px"></div>
+        <div class="tbl-toolbar">
+          <select id="loFiltroEstado" onchange="filtrarLicenciasObra()" style="padding:6px 10px;border-radius:6px;border:1px solid #ccc">
+            <option value="">Todos los estados</option>
+            <option value="en_tramite">En trámite</option>
+            <option value="concedida">Concedida</option>
+            <option value="denegada">Denegada</option>
+            <option value="caducada">Caducada</option>
+            <option value="renovacion">Renovación</option>
+          </select>
+          <select id="loFiltroTipo" onchange="filtrarLicenciasObra()" style="padding:6px 10px;border-radius:6px;border:1px solid #ccc">
+            <option value="">Todos los tipos</option>
+            <option value="licencia_obras">Licencia de Obras</option>
+            <option value="ocupacion_via">Ocupación Vía Pública</option>
+            <option value="acometida_agua">Acometida Agua</option>
+            <option value="acometida_electricidad">Acometida Electricidad</option>
+            <option value="baja_tension">Baja Tensión (LSBT)</option>
+            <option value="alta_tension">Alta Tensión (LAT)</option>
+            <option value="gas">Gas</option>
+            <option value="telecomunicaciones">Telecomunicaciones</option>
+            <option value="medioambiental">Medio Ambiental</option>
+            <option value="residuos">Gestión Residuos</option>
+            <option value="otros">Otros</option>
+          </select>
+          <input id="loFiltroQ" type="search" placeholder="Buscar..." oninput="filtrarLicenciasObra()" style="padding:6px 10px;border-radius:6px;border:1px solid #ccc;flex:1">
+          <button class="btn btn-primary" onclick="abrirModalLo()">+ Nueva Licencia</button>
+          <button class="btn btn-secondary" onclick="exportarTabla(tblLicenciasObra,'licencias-obra')">⬇ CSV</button>
+        </div>
+        <div id="tblLicenciasObraWrap"></div>
+        <!-- Modal -->
+        <div class="modal-overlay" id="modalLo" style="display:none" onclick="if(event.target===this)cerrarModalLo()">
+          <div class="modal" style="max-width:640px">
+            <div class="modal-header"><span id="modalLoTitulo">Nueva Licencia</span><button class="modal-close" onclick="cerrarModalLo()">✕</button></div>
+            <div class="modal-body">
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+                <div class="form-group" style="grid-column:1/-1"><label>Título / Descripción *</label><input id="loTitulo" type="text" placeholder="Licencia de Obras Edificio C..."></div>
+                <div class="form-group"><label>Tipo *</label>
+                  <select id="loTipo">
+                    <option value="licencia_obras">Licencia de Obras</option>
+                    <option value="ocupacion_via">Ocupación Vía Pública</option>
+                    <option value="acometida_agua">Acometida Agua</option>
+                    <option value="acometida_electricidad">Acometida Electricidad</option>
+                    <option value="baja_tension">Baja Tensión (LSBT)</option>
+                    <option value="alta_tension">Alta Tensión (LAT)</option>
+                    <option value="gas">Gas</option>
+                    <option value="telecomunicaciones">Telecomunicaciones</option>
+                    <option value="medioambiental">Medio Ambiental</option>
+                    <option value="residuos">Gestión Residuos</option>
+                    <option value="otros">Otros</option>
+                  </select>
+                </div>
+                <div class="form-group"><label>Estado</label>
+                  <select id="loEstado">
+                    <option value="en_tramite">En trámite</option>
+                    <option value="concedida">Concedida</option>
+                    <option value="denegada">Denegada</option>
+                    <option value="caducada">Caducada</option>
+                    <option value="renovacion">Renovación</option>
+                  </select>
+                </div>
+                <div class="form-group"><label>Organismo</label><input id="loOrganismo" type="text" placeholder="Ayuntamiento de..."></div>
+                <div class="form-group"><label>Nº Expediente</label><input id="loExpediente" type="text" placeholder="EXP-2026-00123"></div>
+                <div class="form-group"><label>Fecha Solicitud</label><input id="loFechaSol" type="date"></div>
+                <div class="form-group"><label>Fecha Concesión</label><input id="loFechaCon" type="date"></div>
+                <div class="form-group"><label>Fecha Caducidad</label><input id="loFechaCad" type="date"></div>
+                <div class="form-group"><label>Importe Tasa (€)</label><input id="loImporte" type="number" step="0.01" min="0" placeholder="0.00"></div>
+                <div class="form-group"><label>Alertar (días antes)</label><input id="loAlertaDias" type="number" min="1" max="180" value="30"></div>
+                <div class="form-group"><label>Contacto / Técnico</label><input id="loContacto" type="text" placeholder="Nombre y teléfono"></div>
+                <div class="form-group" style="grid-column:1/-1"><label>URL Adjunto / Documento</label><input id="loAdjunto" type="url" placeholder="https://..."></div>
+                <div class="form-group" style="grid-column:1/-1"><label>Notas</label><textarea id="loNotas" rows="3" placeholder="Condiciones, restricciones..."></textarea></div>
+              </div>
+            </div>
+            <div class="modal-footer">
+              <button class="btn btn-secondary" onclick="cerrarModalLo()">Cancelar</button>
+              <button class="btn btn-primary" onclick="guardarLo()">💾 Guardar</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- CATÁLOGO DE PRECIOS UNITARIOS / UNIT PRICE CATALOG (NEW-95) -->
+      <div class="page" id="pageCatalogoPrecios">
+        <div class="page-title">💵 Catálogo de Precios Unitarios</div>
+        <div id="cpKpis" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;margin-bottom:16px"></div>
+        <div class="tbl-toolbar">
+          <input id="cpFiltroQ" type="search" placeholder="Buscar descripción o código..." oninput="filtrarCatalogoPrecios()" style="padding:6px 10px;border-radius:6px;border:1px solid #ccc;flex:1">
+          <select id="cpFiltroCapitulo" onchange="filtrarCatalogoPrecios()" style="padding:6px 10px;border-radius:6px;border:1px solid #ccc">
+            <option value="">Todos los capítulos</option>
+          </select>
+          <label style="display:flex;align-items:center;gap:6px;font-size:13px">
+            <input type="checkbox" id="cpSoloActivos" checked onchange="cargarCatalogoPrecios()"> Solo activos
+          </label>
+          <button class="btn btn-primary" onclick="abrirModalCp()">+ Nuevo Precio</button>
+          <button class="btn btn-secondary" onclick="exportarTabla(tblCatalogoPrecios,'catalogo-precios')">⬇ CSV</button>
+        </div>
+        <div id="tblCatalogoPreciosWrap"></div>
+        <!-- Modal -->
+        <div class="modal-overlay" id="modalCp" style="display:none" onclick="if(event.target===this)cerrarModalCp()">
+          <div class="modal" style="max-width:700px">
+            <div class="modal-header"><span id="modalCpTitulo">Nuevo Precio Unitario</span><button class="modal-close" onclick="cerrarModalCp()">✕</button></div>
+            <div class="modal-body">
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+                <div class="form-group" style="grid-column:1/-1"><label>Descripción *</label><input id="cpDesc" type="text" placeholder="Excavación mecánica en zanjas para acometidas..."></div>
+                <div class="form-group"><label>Código</label><input id="cpCodigo" type="text" placeholder="E01001 (auto si vacío)"></div>
+                <div class="form-group"><label>Capítulo</label><input id="cpCapitulo" type="text" placeholder="Movimiento de Tierras"></div>
+                <div class="form-group"><label>Unidad *</label>
+                  <select id="cpUnidad">
+                    <option value="ud">ud</option><option value="m">m</option><option value="m2">m²</option>
+                    <option value="m3">m³</option><option value="kg">kg</option><option value="t">t</option>
+                    <option value="h">h</option><option value="d">día</option><option value="ml">ml</option>
+                    <option value="pa">pa</option><option value="l">l</option>
+                  </select>
+                </div>
+                <div class="form-group"><label>Precio Unitario (€) *</label><input id="cpPrecio" type="number" step="0.0001" min="0" placeholder="0.00"></div>
+                <div class="form-group"><label>Mano de Obra (€/ud)</label><input id="cpMO" type="number" step="0.0001" min="0" placeholder="0.00"></div>
+                <div class="form-group"><label>Materiales (€/ud)</label><input id="cpMat" type="number" step="0.0001" min="0" placeholder="0.00"></div>
+                <div class="form-group"><label>Maquinaria (€/ud)</label><input id="cpMaq" type="number" step="0.0001" min="0" placeholder="0.00"></div>
+                <div class="form-group"><label>Rendimiento (ud/h)</label><input id="cpRendimiento" type="number" step="0.01" min="0" placeholder=""></div>
+                <div class="form-group"><label>Activo</label><select id="cpActivo"><option value="1">Sí</option><option value="0">No</option></select></div>
+                <div class="form-group" style="grid-column:1/-1"><label>Notas</label><textarea id="cpNotas" rows="2" placeholder="Incluye parte proporcional de medios auxiliares..."></textarea></div>
+              </div>
+            </div>
+            <div class="modal-footer">
+              <button class="btn btn-secondary" onclick="cerrarModalCp()">Cancelar</button>
+              <button class="btn btn-primary" onclick="guardarCp()">💾 Guardar</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- SEGUROS DE OBRA / INSURANCE POLICIES (NEW-96) -->
+      <div class="page" id="pageSegurosObra">
+        <div class="page-title">🏥 Seguros de Obra</div>
+        <div id="soKpis" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;margin-bottom:16px"></div>
+        <div class="tbl-toolbar">
+          <select id="soFiltroEstado" onchange="filtrarSegurosObra()" style="padding:6px 10px;border-radius:6px;border:1px solid #ccc">
+            <option value="">Todos los estados</option>
+            <option value="activo">Activo</option>
+            <option value="vencido">Vencido</option>
+            <option value="cancelado">Cancelado</option>
+            <option value="pendiente">Pendiente</option>
+          </select>
+          <select id="soFiltroTipo" onchange="filtrarSegurosObra()" style="padding:6px 10px;border-radius:6px;border:1px solid #ccc">
+            <option value="">Todos los tipos</option>
+            <option value="responsabilidad_civil">RC Patronal</option>
+            <option value="accidentes">Accidentes</option>
+            <option value="cae">CAE / Coordinación</option>
+            <option value="todo_riesgo_construccion">Todo Riesgo Construcción</option>
+            <option value="vida">Vida / Fallecimiento</option>
+            <option value="vehiculos">Vehículos</option>
+            <option value="otros">Otros</option>
+          </select>
+          <input id="soFiltroQ" type="search" placeholder="Buscar póliza, compañía..." oninput="filtrarSegurosObra()" style="padding:6px 10px;border-radius:6px;border:1px solid #ccc;flex:1">
+          <button class="btn btn-primary" onclick="abrirModalSo()">+ Nuevo Seguro</button>
+          <button class="btn btn-secondary" onclick="exportarTabla(tblSegurosObra,'seguros-obra')">⬇ CSV</button>
+        </div>
+        <div id="tblSegurosObraWrap"></div>
+        <!-- Modal -->
+        <div class="modal-overlay" id="modalSo" style="display:none" onclick="if(event.target===this)cerrarModalSo()">
+          <div class="modal" style="max-width:660px">
+            <div class="modal-header"><span id="modalSoTitulo">Nuevo Seguro</span><button class="modal-close" onclick="cerrarModalSo()">✕</button></div>
+            <div class="modal-body">
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+                <div class="form-group"><label>Tipo *</label>
+                  <select id="soTipo">
+                    <option value="responsabilidad_civil">RC Patronal</option>
+                    <option value="accidentes">Accidentes</option>
+                    <option value="cae">CAE / Coordinación</option>
+                    <option value="todo_riesgo_construccion">Todo Riesgo Construcción</option>
+                    <option value="vida">Vida / Fallecimiento</option>
+                    <option value="vehiculos">Vehículos</option>
+                    <option value="otros">Otros</option>
+                  </select>
+                </div>
+                <div class="form-group"><label>Estado</label>
+                  <select id="soEstado">
+                    <option value="activo">Activo</option>
+                    <option value="vencido">Vencido</option>
+                    <option value="cancelado">Cancelado</option>
+                    <option value="pendiente">Pendiente</option>
+                  </select>
+                </div>
+                <div class="form-group"><label>Compañía Aseguradora *</label><input id="soCompania" type="text" placeholder="Mapfre, Generali, AXA..."></div>
+                <div class="form-group"><label>Nº Póliza *</label><input id="soPoliza" type="text" placeholder="RC-2026-123456"></div>
+                <div class="form-group"><label>Tomador</label><input id="soTomador" type="text" placeholder="Empresa tomadora"></div>
+                <div class="form-group"><label>Asegurado</label><input id="soAsegurado" type="text" placeholder="Nombre asegurado"></div>
+                <div class="form-group"><label>Capital Asegurado (€)</label><input id="soCapital" type="number" step="0.01" min="0" placeholder="1000000"></div>
+                <div class="form-group"><label>Prima Anual (€)</label><input id="soPrima" type="number" step="0.01" min="0" placeholder="0.00"></div>
+                <div class="form-group"><label>Fecha Inicio *</label><input id="soFechaIni" type="date"></div>
+                <div class="form-group"><label>Fecha Vencimiento *</label><input id="soFechaVen" type="date"></div>
+                <div class="form-group"><label>Forma de Pago</label>
+                  <select id="soFormaPago">
+                    <option value="anual">Anual</option>
+                    <option value="semestral">Semestral</option>
+                    <option value="trimestral">Trimestral</option>
+                    <option value="mensual">Mensual</option>
+                  </select>
+                </div>
+                <div class="form-group"><label>Alertar (días antes)</label><input id="soAlertaDias" type="number" min="1" max="180" value="30"></div>
+                <div class="form-group" style="grid-column:1/-1"><label>Contacto Agente</label><input id="soContacto" type="text" placeholder="Nombre, teléfono, email del agente"></div>
+                <div class="form-group" style="grid-column:1/-1"><label>URL Adjunto / Póliza</label><input id="soAdjunto" type="url" placeholder="https://..."></div>
+                <div class="form-group" style="grid-column:1/-1"><label>Notas</label><textarea id="soNotas" rows="3" placeholder="Cobertura, exclusiones, franquicia..."></textarea></div>
+              </div>
+            </div>
+            <div class="modal-footer">
+              <button class="btn btn-secondary" onclick="cerrarModalSo()">Cancelar</button>
+              <button class="btn btn-primary" onclick="guardarSo()">💾 Guardar</button>
             </div>
           </div>
         </div>
@@ -7415,6 +7641,9 @@ const PAGE_TITLES = {
   accidentes: '🚨 Accidentes e Incidentes / Accident & Incident Investigation',
   flujoCaja: '💰 Flujo de Caja / Cash Flow Projection',
   solicitudesMat: '📋 Solicitudes de Material / Material Requests',
+  licenciasObra:  '📜 Permisos y Licencias de Obra / Permits & Licenses',
+  catalogoPrecios:'💵 Catálogo de Precios Unitarios / Unit Price Catalog',
+  segurosObra:    '🏥 Seguros de Obra / Insurance Policies',
 };
 
 const PAGE_LOADERS = {
@@ -7509,6 +7738,9 @@ const PAGE_LOADERS = {
   accidentes:       cargarAccidentes,
   flujoCaja:        cargarFlujoCaja,
   solicitudesMat:   cargarSolicitudesMat,
+  licenciasObra:    cargarLicenciasObra,
+  catalogoPrecios:  cargarCatalogoPrecios,
+  segurosObra:      cargarSegurosObra,
 };
 
 let currentPage = '';
@@ -7632,6 +7864,9 @@ const SYNC_INTERVALS = {
   accidentes:       60,
   flujoCaja:        120,
   solicitudesMat:   60,
+  licenciasObra:    120,
+  catalogoPrecios:  300,
+  segurosObra:      180,
 };
 
 let _syncTimer = null, _syncLabelTimer = null, _syncLastTs = null;
@@ -16993,6 +17228,366 @@ function exportarFinanzas() {
   // Abrir informe en nueva pestaña usando el endpoint de informes
   window.open(`/informe-obra/${obraId}?tipo=financiero`, '_blank');
 }
+
+// ── LICENCIAS Y PERMISOS DE OBRA / PERMITS & LICENSES (NEW-94) ───────────────
+let tblLicenciasObra = null, _loData = [];
+const LO_ESTADO_COLOR = { en_tramite:'var(--warning)', concedida:'var(--success)', denegada:'var(--danger)', caducada:'#777', renovacion:'var(--accent)' };
+const LO_ESTADO_LABEL = { en_tramite:'En trámite', concedida:'Concedida', denegada:'Denegada', caducada:'Caducada', renovacion:'Renovación' };
+const LO_TIPO_LABEL = { licencia_obras:'Lic. Obras', ocupacion_via:'Ocup. Vía', acometida_agua:'Acom. Agua', acometida_electricidad:'Acom. Elec.', baja_tension:'BT', alta_tension:'AT', gas:'Gas', telecomunicaciones:'Teleco', medioambiental:'Medioamb.', residuos:'Residuos', otros:'Otros' };
+
+async function cargarLicenciasObra() {
+  const data = await api('/licencias-obra');
+  _loData = data.data || [];
+  // KPIs
+  const s = data.stats || {};
+  document.getElementById('loKpis').innerHTML = [
+    { label:'Total', val: s.total||0, icon:'📜' },
+    { label:'Vencen pronto', val: s.vencen_pronto||0, icon:'⚠️', color: s.vencen_pronto ? 'var(--warning)' : '' },
+    { label:'Vencidas', val: s.vencidas||0, icon:'❌', color: s.vencidas ? 'var(--danger)' : '' },
+    { label:'En trámite', val: s.en_tramite||0, icon:'🔄' },
+  ].map(k => `<div class="kpi-mini" style="background:#fff;border-radius:10px;padding:12px;box-shadow:0 2px 6px rgba(0,0,0,.07)">
+    <div style="font-size:20px">${k.icon}</div>
+    <div style="font-size:22px;font-weight:700;color:${k.color||'var(--accent)'}">${k.val}</div>
+    <div style="font-size:11px;color:#888">${k.label}</div></div>`).join('');
+  // Badge
+  const venc = (s.vencen_pronto||0) + (s.vencidas||0) + (s.en_tramite||0);
+  const bdg = document.getElementById('licObraBadge');
+  if (bdg) { bdg.textContent = venc; bdg.style.display = venc ? 'inline-flex' : 'none'; }
+  // Tabla
+  if (!tblLicenciasObra) {
+    tblLicenciasObra = new Tabulator('#tblLicenciasObraWrap', {
+      data: _loData, layout: 'fitColumns', responsiveLayout: 'collapse',
+      columns: [
+        { title:'Número', field:'numero', width:130 },
+        { title:'Tipo', field:'tipo', width:130, formatter: c => LO_TIPO_LABEL[c.getValue()]||c.getValue() },
+        { title:'Título', field:'titulo', minWidth:180 },
+        { title:'Organismo', field:'organismo', minWidth:140 },
+        { title:'Expediente', field:'numero_expediente', width:130 },
+        { title:'Estado', field:'estado', width:110, formatter: c => `<span style="background:${LO_ESTADO_COLOR[c.getValue()]||'#ddd'};color:#fff;padding:2px 8px;border-radius:12px;font-size:11px">${LO_ESTADO_LABEL[c.getValue()]||c.getValue()}</span>` },
+        { title:'F. Solicitud', field:'fecha_solicitud', width:110 },
+        { title:'F. Concesión', field:'fecha_concesion', width:110 },
+        { title:'F. Caducidad', field:'fecha_caducidad', width:110, formatter: c => {
+          const v = c.getValue(); if (!v) return '-';
+          const hoy = new Date().toISOString().slice(0,10);
+          const color = v < hoy ? 'var(--danger)' : v <= new Date(Date.now()+30*86400000).toISOString().slice(0,10) ? 'var(--warning)' : '';
+          return color ? `<span style="color:${color};font-weight:600">${v}</span>` : v;
+        }},
+        { title:'Tasa (€)', field:'importe_tasa', width:100, formatter:'money', formatterParams:{decimal:',',thousand:'.',precision:2} },
+        { title:'Acciones', width:100, formatter: () => '<span style="cursor:pointer;color:var(--accent)">✏️ Editar</span>', cellClick: (e,c) => editarLo(c.getRow().getData().id) },
+      ]
+    });
+  } else { tblLicenciasObra.replaceData(_loData); }
+  filtrarLicenciasObra();
+}
+
+function filtrarLicenciasObra() {
+  if (!tblLicenciasObra) return;
+  const est = document.getElementById('loFiltroEstado')?.value;
+  const tip = document.getElementById('loFiltroTipo')?.value;
+  const q   = (document.getElementById('loFiltroQ')?.value||'').toLowerCase();
+  tblLicenciasObra.setFilter(r => {
+    if (est && r.estado !== est) return false;
+    if (tip && r.tipo !== tip) return false;
+    if (q && !(r.titulo?.toLowerCase().includes(q)||r.organismo?.toLowerCase().includes(q)||r.numero?.toLowerCase().includes(q)||r.numero_expediente?.toLowerCase().includes(q))) return false;
+    return true;
+  });
+}
+
+function abrirModalLo(d = {}) {
+  document.getElementById('modalLoTitulo').textContent = d.id ? 'Editar Licencia' : 'Nueva Licencia';
+  document.getElementById('loTitulo').value     = d.titulo || '';
+  document.getElementById('loTipo').value       = d.tipo || 'licencia_obras';
+  document.getElementById('loEstado').value     = d.estado || 'en_tramite';
+  document.getElementById('loOrganismo').value  = d.organismo || '';
+  document.getElementById('loExpediente').value = d.numero_expediente || '';
+  document.getElementById('loFechaSol').value   = d.fecha_solicitud || '';
+  document.getElementById('loFechaCon').value   = d.fecha_concesion || '';
+  document.getElementById('loFechaCad').value   = d.fecha_caducidad || '';
+  document.getElementById('loImporte').value    = d.importe_tasa || '';
+  document.getElementById('loAlertaDias').value = d.alertar_dias || 30;
+  document.getElementById('loContacto').value   = d.contacto || '';
+  document.getElementById('loAdjunto').value    = d.adjunto_url || '';
+  document.getElementById('loNotas').value      = d.notas || '';
+  document.getElementById('modalLo')._loId = d.id || null;
+  document.getElementById('modalLo').style.display = 'flex';
+}
+
+function editarLo(id) {
+  const d = _loData.find(r => r.id === id);
+  if (d) abrirModalLo(d);
+}
+
+async function guardarLo() {
+  const id = document.getElementById('modalLo')._loId;
+  const body = {
+    titulo: document.getElementById('loTitulo').value.trim(),
+    tipo: document.getElementById('loTipo').value,
+    estado: document.getElementById('loEstado').value,
+    organismo: document.getElementById('loOrganismo').value.trim()||null,
+    numero_expediente: document.getElementById('loExpediente').value.trim()||null,
+    fecha_solicitud: document.getElementById('loFechaSol').value||null,
+    fecha_concesion: document.getElementById('loFechaCon').value||null,
+    fecha_caducidad: document.getElementById('loFechaCad').value||null,
+    importe_tasa: parseFloat(document.getElementById('loImporte').value)||null,
+    alertar_dias: parseInt(document.getElementById('loAlertaDias').value)||30,
+    contacto: document.getElementById('loContacto').value.trim()||null,
+    adjunto_url: document.getElementById('loAdjunto').value.trim()||null,
+    notas: document.getElementById('loNotas').value.trim()||null,
+  };
+  if (!body.titulo || !body.tipo) { toast('Título y tipo son obligatorios','error'); return; }
+  if (id) await api(`/licencias-obra/${id}`, { method:'PUT', body: JSON.stringify(body) });
+  else    await api('/licencias-obra', { method:'POST', body: JSON.stringify(body) });
+  cerrarModalLo();
+  cargarLicenciasObra();
+  toast(id ? 'Licencia actualizada' : 'Licencia creada', 'ok');
+}
+
+async function eliminarLo(id) {
+  if (!confirm('¿Eliminar esta licencia?')) return;
+  await api(`/licencias-obra/${id}`, { method:'DELETE' });
+  cargarLicenciasObra();
+  toast('Licencia eliminada', 'ok');
+}
+
+function cerrarModalLo() { document.getElementById('modalLo').style.display = 'none'; }
+
+// ── CATÁLOGO DE PRECIOS UNITARIOS / UNIT PRICE CATALOG (NEW-95) ──────────────
+let tblCatalogoPrecios = null, _cpData = [];
+
+async function cargarCatalogoPrecios() {
+  const soloActivos = document.getElementById('cpSoloActivos')?.checked !== false;
+  const url = '/catalogo-precios' + (soloActivos ? '' : '?activo=0');
+  const data = await api(url);
+  _cpData = data.data || [];
+  // KPIs
+  const s = data.stats || {};
+  document.getElementById('cpKpis').innerHTML = [
+    { label:'Total ítems', val: s.total||0, icon:'💵' },
+    { label:'Capítulos', val: s.capitulos||0, icon:'📂' },
+    { label:'Precio medio', val: (s.precio_medio||0) + ' €', icon:'📊' },
+  ].map(k => `<div class="kpi-mini" style="background:#fff;border-radius:10px;padding:12px;box-shadow:0 2px 6px rgba(0,0,0,.07)">
+    <div style="font-size:20px">${k.icon}</div>
+    <div style="font-size:22px;font-weight:700;color:var(--accent)">${k.val}</div>
+    <div style="font-size:11px;color:#888">${k.label}</div></div>`).join('');
+  // Poblar select capítulos
+  const caps = [...new Set(_cpData.map(r=>r.capitulo).filter(Boolean))].sort();
+  const sel = document.getElementById('cpFiltroCapitulo');
+  if (sel) {
+    const cur = sel.value;
+    sel.innerHTML = '<option value="">Todos los capítulos</option>' + caps.map(c=>`<option value="${c}">${c}</option>`).join('');
+    if (cur) sel.value = cur;
+  }
+  // Tabla
+  if (!tblCatalogoPrecios) {
+    tblCatalogoPrecios = new Tabulator('#tblCatalogoPreciosWrap', {
+      data: _cpData, layout: 'fitColumns', responsiveLayout: 'collapse',
+      columns: [
+        { title:'Código', field:'codigo', width:100 },
+        { title:'Capítulo', field:'capitulo', width:160 },
+        { title:'Descripción', field:'descripcion', minWidth:220 },
+        { title:'Ud.', field:'unidad', width:60 },
+        { title:'Precio Unit. (€)', field:'precio_unitario', width:130, formatter:'money', formatterParams:{decimal:',',thousand:'.',precision:4} },
+        { title:'M.O. (€)', field:'mano_obra', width:90, formatter:'money', formatterParams:{decimal:',',thousand:'.',precision:2} },
+        { title:'Mat. (€)', field:'materiales', width:90, formatter:'money', formatterParams:{decimal:',',thousand:'.',precision:2} },
+        { title:'Maq. (€)', field:'maquinaria', width:90, formatter:'money', formatterParams:{decimal:',',thousand:'.',precision:2} },
+        { title:'Activo', field:'activo', width:70, formatter: c => c.getValue() ? '✅' : '❌' },
+        { title:'Acciones', width:100, formatter: () => '<span style="cursor:pointer;color:var(--accent)">✏️ Editar</span>', cellClick: (e,c) => editarCp(c.getRow().getData().id) },
+      ]
+    });
+  } else { tblCatalogoPrecios.replaceData(_cpData); }
+  filtrarCatalogoPrecios();
+}
+
+function filtrarCatalogoPrecios() {
+  if (!tblCatalogoPrecios) return;
+  const cap = document.getElementById('cpFiltroCapitulo')?.value;
+  const q   = (document.getElementById('cpFiltroQ')?.value||'').toLowerCase();
+  tblCatalogoPrecios.setFilter(r => {
+    if (cap && r.capitulo !== cap) return false;
+    if (q && !(r.descripcion?.toLowerCase().includes(q)||r.codigo?.toLowerCase().includes(q))) return false;
+    return true;
+  });
+}
+
+function abrirModalCp(d = {}) {
+  document.getElementById('modalCpTitulo').textContent = d.id ? 'Editar Precio Unitario' : 'Nuevo Precio Unitario';
+  document.getElementById('cpDesc').value      = d.descripcion || '';
+  document.getElementById('cpCodigo').value    = d.codigo || '';
+  document.getElementById('cpCapitulo').value  = d.capitulo || '';
+  document.getElementById('cpUnidad').value    = d.unidad || 'ud';
+  document.getElementById('cpPrecio').value    = d.precio_unitario || '';
+  document.getElementById('cpMO').value        = d.mano_obra || '';
+  document.getElementById('cpMat').value       = d.materiales || '';
+  document.getElementById('cpMaq').value       = d.maquinaria || '';
+  document.getElementById('cpRendimiento').value = d.rendimiento || '';
+  document.getElementById('cpActivo').value    = d.activo !== undefined ? String(d.activo) : '1';
+  document.getElementById('cpNotas').value     = d.notas || '';
+  document.getElementById('modalCp')._cpId = d.id || null;
+  document.getElementById('modalCp').style.display = 'flex';
+}
+
+function editarCp(id) {
+  const d = _cpData.find(r => r.id === id);
+  if (d) abrirModalCp(d);
+}
+
+async function guardarCp() {
+  const id = document.getElementById('modalCp')._cpId;
+  const body = {
+    descripcion: document.getElementById('cpDesc').value.trim(),
+    codigo: document.getElementById('cpCodigo').value.trim()||null,
+    capitulo: document.getElementById('cpCapitulo').value.trim()||null,
+    unidad: document.getElementById('cpUnidad').value,
+    precio_unitario: parseFloat(document.getElementById('cpPrecio').value)||0,
+    mano_obra: parseFloat(document.getElementById('cpMO').value)||0,
+    materiales: parseFloat(document.getElementById('cpMat').value)||0,
+    maquinaria: parseFloat(document.getElementById('cpMaq').value)||0,
+    rendimiento: parseFloat(document.getElementById('cpRendimiento').value)||null,
+    activo: parseInt(document.getElementById('cpActivo').value),
+    notas: document.getElementById('cpNotas').value.trim()||null,
+  };
+  if (!body.descripcion) { toast('Descripción obligatoria','error'); return; }
+  if (id) await api(`/catalogo-precios/${id}`, { method:'PUT', body: JSON.stringify(body) });
+  else    await api('/catalogo-precios', { method:'POST', body: JSON.stringify(body) });
+  cerrarModalCp();
+  cargarCatalogoPrecios();
+  toast(id ? 'Precio actualizado' : 'Precio creado', 'ok');
+}
+
+async function eliminarCp(id) {
+  if (!confirm('¿Eliminar este precio unitario?')) return;
+  await api(`/catalogo-precios/${id}`, { method:'DELETE' });
+  cargarCatalogoPrecios();
+  toast('Precio eliminado', 'ok');
+}
+
+function cerrarModalCp() { document.getElementById('modalCp').style.display = 'none'; }
+
+// ── SEGUROS DE OBRA / INSURANCE POLICIES (NEW-96) ────────────────────────────
+let tblSegurosObra = null, _soData = [];
+const SO_ESTADO_COLOR = { activo:'var(--success)', vencido:'var(--danger)', cancelado:'#777', pendiente:'var(--warning)' };
+const SO_TIPO_LABEL = { responsabilidad_civil:'RC Patronal', accidentes:'Accidentes', cae:'CAE', todo_riesgo_construccion:'TRC', vida:'Vida', vehiculos:'Vehículos', otros:'Otros' };
+
+async function cargarSegurosObra() {
+  const data = await api('/seguros-obra');
+  _soData = data.data || [];
+  // KPIs
+  const s = data.stats || {};
+  document.getElementById('soKpis').innerHTML = [
+    { label:'Total pólizas', val: s.total||0, icon:'🏥' },
+    { label:'Vencen pronto', val: s.vencen_pronto||0, icon:'⚠️', color: s.vencen_pronto ? 'var(--warning)' : '' },
+    { label:'Vencidas', val: s.vencidos||0, icon:'❌', color: s.vencidos ? 'var(--danger)' : '' },
+    { label:'Prima total/año', val: (s.prima_total||0) + ' €', icon:'💶' },
+  ].map(k => `<div class="kpi-mini" style="background:#fff;border-radius:10px;padding:12px;box-shadow:0 2px 6px rgba(0,0,0,.07)">
+    <div style="font-size:20px">${k.icon}</div>
+    <div style="font-size:22px;font-weight:700;color:${k.color||'var(--accent)'}">${k.val}</div>
+    <div style="font-size:11px;color:#888">${k.label}</div></div>`).join('');
+  // Badge
+  const alerta = (s.vencen_pronto||0) + (s.vencidos||0);
+  const bdg = document.getElementById('segurosBadge');
+  if (bdg) { bdg.textContent = alerta; bdg.style.display = alerta ? 'inline-flex' : 'none'; }
+  // Tabla
+  if (!tblSegurosObra) {
+    tblSegurosObra = new Tabulator('#tblSegurosObraWrap', {
+      data: _soData, layout: 'fitColumns', responsiveLayout: 'collapse',
+      columns: [
+        { title:'Tipo', field:'tipo', width:120, formatter: c => SO_TIPO_LABEL[c.getValue()]||c.getValue() },
+        { title:'Compañía', field:'compania', minWidth:130 },
+        { title:'Nº Póliza', field:'numero_poliza', width:140 },
+        { title:'Tomador', field:'tomador', minWidth:120 },
+        { title:'Capital (€)', field:'capital_asegurado', width:120, formatter:'money', formatterParams:{decimal:',',thousand:'.',precision:2} },
+        { title:'Prima/año (€)', field:'prima_anual', width:120, formatter:'money', formatterParams:{decimal:',',thousand:'.',precision:2} },
+        { title:'F. Inicio', field:'fecha_inicio', width:100 },
+        { title:'F. Vencimiento', field:'fecha_vencimiento', width:120, formatter: c => {
+          const v = c.getValue(); if (!v) return '-';
+          const hoy = new Date().toISOString().slice(0,10);
+          const color = v < hoy ? 'var(--danger)' : v <= new Date(Date.now()+30*86400000).toISOString().slice(0,10) ? 'var(--warning)' : '';
+          return color ? `<span style="color:${color};font-weight:600">${v}</span>` : v;
+        }},
+        { title:'Estado', field:'estado', width:100, formatter: c => `<span style="background:${SO_ESTADO_COLOR[c.getValue()]||'#ddd'};color:#fff;padding:2px 8px;border-radius:12px;font-size:11px">${c.getValue()}</span>` },
+        { title:'Acciones', width:100, formatter: () => '<span style="cursor:pointer;color:var(--accent)">✏️ Editar</span>', cellClick: (e,c) => editarSo(c.getRow().getData().id) },
+      ]
+    });
+  } else { tblSegurosObra.replaceData(_soData); }
+  filtrarSegurosObra();
+}
+
+function filtrarSegurosObra() {
+  if (!tblSegurosObra) return;
+  const est = document.getElementById('soFiltroEstado')?.value;
+  const tip = document.getElementById('soFiltroTipo')?.value;
+  const q   = (document.getElementById('soFiltroQ')?.value||'').toLowerCase();
+  tblSegurosObra.setFilter(r => {
+    if (est && r.estado !== est) return false;
+    if (tip && r.tipo !== tip) return false;
+    if (q && !(r.compania?.toLowerCase().includes(q)||r.numero_poliza?.toLowerCase().includes(q)||r.tomador?.toLowerCase().includes(q))) return false;
+    return true;
+  });
+}
+
+function abrirModalSo(d = {}) {
+  document.getElementById('modalSoTitulo').textContent = d.id ? 'Editar Seguro' : 'Nuevo Seguro';
+  document.getElementById('soTipo').value        = d.tipo || 'responsabilidad_civil';
+  document.getElementById('soEstado').value      = d.estado || 'activo';
+  document.getElementById('soCompania').value    = d.compania || '';
+  document.getElementById('soPoliza').value      = d.numero_poliza || '';
+  document.getElementById('soTomador').value     = d.tomador || '';
+  document.getElementById('soAsegurado').value   = d.asegurado || '';
+  document.getElementById('soCapital').value     = d.capital_asegurado || '';
+  document.getElementById('soPrima').value       = d.prima_anual || '';
+  document.getElementById('soFechaIni').value    = d.fecha_inicio || '';
+  document.getElementById('soFechaVen').value    = d.fecha_vencimiento || '';
+  document.getElementById('soFormaPago').value   = d.forma_pago || 'anual';
+  document.getElementById('soAlertaDias').value  = d.alertar_dias || 30;
+  document.getElementById('soContacto').value    = d.contacto_agente || '';
+  document.getElementById('soAdjunto').value     = d.adjunto_url || '';
+  document.getElementById('soNotas').value       = d.notas || '';
+  document.getElementById('modalSo')._soId = d.id || null;
+  document.getElementById('modalSo').style.display = 'flex';
+}
+
+function editarSo(id) {
+  const d = _soData.find(r => r.id === id);
+  if (d) abrirModalSo(d);
+}
+
+async function guardarSo() {
+  const id = document.getElementById('modalSo')._soId;
+  const body = {
+    tipo: document.getElementById('soTipo').value,
+    estado: document.getElementById('soEstado').value,
+    compania: document.getElementById('soCompania').value.trim(),
+    numero_poliza: document.getElementById('soPoliza').value.trim(),
+    tomador: document.getElementById('soTomador').value.trim()||null,
+    asegurado: document.getElementById('soAsegurado').value.trim()||null,
+    capital_asegurado: parseFloat(document.getElementById('soCapital').value)||null,
+    prima_anual: parseFloat(document.getElementById('soPrima').value)||null,
+    fecha_inicio: document.getElementById('soFechaIni').value,
+    fecha_vencimiento: document.getElementById('soFechaVen').value,
+    forma_pago: document.getElementById('soFormaPago').value,
+    alertar_dias: parseInt(document.getElementById('soAlertaDias').value)||30,
+    contacto_agente: document.getElementById('soContacto').value.trim()||null,
+    adjunto_url: document.getElementById('soAdjunto').value.trim()||null,
+    notas: document.getElementById('soNotas').value.trim()||null,
+  };
+  if (!body.compania || !body.numero_poliza || !body.fecha_inicio || !body.fecha_vencimiento) {
+    toast('Compañía, nº póliza, fecha inicio y vencimiento son obligatorios','error'); return;
+  }
+  if (id) await api(`/seguros-obra/${id}`, { method:'PUT', body: JSON.stringify(body) });
+  else    await api('/seguros-obra', { method:'POST', body: JSON.stringify(body) });
+  cerrarModalSo();
+  cargarSegurosObra();
+  toast(id ? 'Seguro actualizado' : 'Seguro creado', 'ok');
+}
+
+async function eliminarSo(id) {
+  if (!confirm('¿Eliminar esta póliza?')) return;
+  await api(`/seguros-obra/${id}`, { method:'DELETE' });
+  cargarSegurosObra();
+  toast('Seguro eliminado', 'ok');
+}
+
+function cerrarModalSo() { document.getElementById('modalSo').style.display = 'none'; }
 
 // ── SOLICITUDES DE MATERIAL / MATERIAL REQUESTS (NEW-93) ─────────────────────
 let tblSm = null, _smData = [];
