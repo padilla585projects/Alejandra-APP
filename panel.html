@@ -525,10 +525,6 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
       <span class="nav-icon">🔍</span> Control de Calidad
       <span class="nav-badge" id="calidadBadge" style="display:none">0</span>
     </button>
-    <button class="nav-item" data-page="subcontratas" onclick="navTo('subcontratas')">
-      <span class="nav-icon">🏢</span> Subcontratas
-      <span class="nav-badge" id="subcBadge" style="display:none">!</span>
-    </button>
     <button class="nav-item" data-page="seguridadObra" onclick="navTo('seguridadObra')">
       <span class="nav-icon">🦺</span> Seguridad de Obra
       <span class="nav-badge" id="seguridadObraBadge" style="display:none">!</span>
@@ -617,6 +613,10 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
     <button class="nav-item" data-page="instruccionesObra" onclick="navTo('instruccionesObra')">
       <span class="nav-icon">📋</span> Instrucciones de Obra
       <span class="nav-badge" id="instBadge" style="display:none">!</span>
+    </button>
+    <button class="nav-item" data-page="subcontratas" onclick="navTo('subcontratas')">
+      <span class="nav-icon">🏗️</span> Subcontratas
+      <span class="nav-badge" id="scBadge" style="display:none">!</span>
     </button>
 
     <div class="sidebar-section" onclick="sidebarToggle(this)" data-sid="seguimiento"><span>📓 Seguimiento</span><span class="sec-chevron">▼</span></div>
@@ -2117,6 +2117,109 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
         <div class="tbl-wrap"><div id="tblEntregas"></div></div>
       </div>
 
+      <!-- REGISTRO DE SUBCONTRATAS (NEW-64) -->
+      <div class="page" id="pageSubcontratas">
+        <div class="page-title">🏗️ Registro de Subcontratas</div>
+        <div class="page-sub">Directorio de subcontratistas por obra — contratos, seguros y CAE en un solo lugar</div>
+        <div class="tbl-toolbar" style="flex-wrap:wrap;gap:8px;margin-bottom:14px">
+          <select class="tbl-search" id="filterScObra" style="min-width:220px" onchange="cargarSubcontratas()"></select>
+          <select class="tbl-search" id="filterScEstado" style="min-width:130px" onchange="cargarSubcontratas()">
+            <option value="">Todos</option>
+            <option value="activa">Activa</option>
+            <option value="inactiva">Inactiva</option>
+            <option value="suspendida">Suspendida</option>
+          </select>
+          <input class="tbl-search" id="filterScNombre" placeholder="Buscar empresa..." style="min-width:180px" oninput="cargarSubcontratas()">
+          <button class="btn btn-primary" onclick="abrirModalSc()">+ Nueva subcontrata</button>
+          <button class="btn btn-secondary" onclick="exportarTabla(tblSubcontratas,'subcontratas')">&#8595; CSV</button>
+          <button class="btn btn-secondary" onclick="cargarSubcontratas()">&#x1F504;</button>
+        </div>
+        <div id="scKpi" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(145px,1fr));gap:12px;margin-bottom:16px"></div>
+        <div class="tbl-wrap"><div id="tblSubcontratas"></div></div>
+      </div>
+
+      <!-- modal Subcontrata -->
+      <div class="modal-overlay" id="modalSc">
+        <div class="modal" style="max-width:700px">
+          <div class="modal-header">
+            <span id="modalScTitle">Nueva subcontrata</span>
+            <button class="modal-close" onclick="cerrarModal('modalSc')">&#x2715;</button>
+          </div>
+          <div class="modal-body" style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+            <div style="grid-column:1/-1">
+              <label class="form-label">Nombre de la empresa</label>
+              <input class="form-input" id="scNombre" placeholder="Empresa subcontratista...">
+            </div>
+            <div>
+              <label class="form-label">CIF</label>
+              <input class="form-input" id="scCif" placeholder="B-XXXXXXXX">
+            </div>
+            <div>
+              <label class="form-label">Gremio / Trade</label>
+              <input class="form-input" id="scGremio" placeholder="Electricistas, Fontaneros...">
+            </div>
+            <div>
+              <label class="form-label">Contacto (nombre)</label>
+              <input class="form-input" id="scContactoNombre" placeholder="Nombre del responsable">
+            </div>
+            <div>
+              <label class="form-label">Telefono</label>
+              <input class="form-input" id="scContactoTel" placeholder="+34 600 000 000">
+            </div>
+            <div>
+              <label class="form-label">Email</label>
+              <input class="form-input" type="email" id="scContactoEmail" placeholder="email@empresa.com">
+            </div>
+            <div>
+              <label class="form-label">Obra asignada (opcional)</label>
+              <select class="form-input" id="scObraId"><option value="">Sin obra especifica</option></select>
+            </div>
+            <div>
+              <label class="form-label">Estado</label>
+              <select class="form-input" id="scEstado">
+                <option value="activa">Activa</option>
+                <option value="inactiva">Inactiva</option>
+                <option value="suspendida">Suspendida</option>
+              </select>
+            </div>
+            <div>
+              <label class="form-label">Nº de contrato</label>
+              <input class="form-input" id="scContratoNum" placeholder="CONT-2026-XXX">
+            </div>
+            <div>
+              <label class="form-label">Importe contrato (EUR)</label>
+              <input class="form-input" type="number" id="scContratoImporte" min="0" step="0.01" placeholder="0.00">
+            </div>
+            <div>
+              <label class="form-label">Fecha de contrato</label>
+              <input class="form-input" type="date" id="scContratoFecha">
+            </div>
+            <div></div>
+            <div>
+              <label class="form-label">Seguro RC — expira</label>
+              <input class="form-input" type="date" id="scSeguroRc">
+            </div>
+            <div>
+              <label class="form-label">Seguro laboral — expira</label>
+              <input class="form-input" type="date" id="scSeguroLaboral">
+            </div>
+            <div>
+              <label class="form-label">CAE — expira</label>
+              <input class="form-input" type="date" id="scCaeExpira">
+            </div>
+            <div></div>
+            <div style="grid-column:1/-1">
+              <label class="form-label">Notas</label>
+              <textarea class="form-input" id="scNotas" rows="2" placeholder="Observaciones, condiciones especiales..."></textarea>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="cerrarModal('modalSc')">Cancelar</button>
+            <button class="btn btn-primary" onclick="guardarSubcontrata()">Guardar</button>
+          </div>
+        </div>
+      </div>
+
       <!-- INSTRUCCIONES DE OBRA / SITE INSTRUCTIONS (NEW-63) -->
       <div class="page" id="pageInstruccionesObra">
         <div class="page-title">📋 Instrucciones de Obra</div>
@@ -2652,38 +2755,6 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
         <div id="hitosResumen" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:18px"></div>
         <!-- Timeline visual -->
         <div id="hitosTimeline" style="display:flex;flex-direction:column;gap:0"></div>
-      </div>
-
-      <!-- SUBCONTRATAS / PROVEEDORES -->
-      <div class="page" id="pageSubcontratas">
-        <div class="page-title">🏢 Subcontratas y Proveedores</div>
-        <div class="page-sub">Gestión de empresas subcontratadas — certificaciones, seguros y habilitaciones</div>
-        <div id="subcResumen" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:16px"></div>
-        <div class="tbl-toolbar">
-          <input class="tbl-search" id="searchSubc" placeholder="🔍 Buscar nombre o CIF...">
-          <select class="tbl-search" id="filterSubcEstado" style="min-width:130px" onchange="filtrarSubc()">
-            <option value="">Todos</option>
-            <option value="activa">Activa</option>
-            <option value="inactiva">Inactiva</option>
-            <option value="pendiente">Pendiente</option>
-          </select>
-          <select class="tbl-search" id="filterSubcTipo" style="min-width:150px" onchange="filtrarSubc()">
-            <option value="">Todos los tipos</option>
-            <option value="electricista">⚡ Electricista</option>
-            <option value="fontanero">🔧 Fontanería</option>
-            <option value="obra_civil">🏗 Obra Civil</option>
-            <option value="albanileria">🧱 Albañilería</option>
-            <option value="pintura">🎨 Pintura</option>
-            <option value="carpinteria">🪚 Carpintería</option>
-            <option value="climatizacion">❄️ Climatización</option>
-            <option value="seguridad">🔒 Seguridad</option>
-            <option value="otro">Otro</option>
-          </select>
-          <button class="btn btn-primary" onclick="abrirModalSubc()">+ Nueva subcontrata</button>
-          <button class="btn btn-secondary" onclick="exportarTabla(tblSubc,'subcontratas')">⬇ CSV</button>
-          <button class="btn btn-secondary" onclick="tblSubc=null;cargarSubcontratas()">🔄 Actualizar</button>
-        </div>
-        <div class="tbl-wrap"><div id="tblSubc"></div></div>
       </div>
 
       <!-- TAREAS DE OBRA -->
@@ -4113,6 +4184,7 @@ const PAGE_TITLES = {
   informeObra: '📄 Informe de Estado de Obra',
   planSemanal: '📅 Plan Semanal / Lookahead',
   instruccionesObra: '📋 Instrucciones de Obra / Site Instructions',
+  subcontratas: '🏗️ Registro de Subcontratas',
 };
 
 const PAGE_LOADERS = {
@@ -4148,7 +4220,6 @@ const PAGE_LOADERS = {
   ordenesCambio: cargarOrdenesCambio,
   reuniones: cargarReuniones,
   calidad: cargarCalidad,
-  subcontratas: cargarSubcontratas,
   presupuesto: cargarPresupuesto,
   fases: cargarFases,
   partesPanel: cargarPartesPanel,
@@ -4179,6 +4250,7 @@ const PAGE_LOADERS = {
   informeObra: cargarInformeObra,
   planSemanal: cargarPlanSemanal,
   instruccionesObra: cargarInstruccionesObra,
+  subcontratas: cargarSubcontratas,
 };
 
 let currentPage = '';
@@ -4243,7 +4315,6 @@ const SYNC_INTERVALS = {
   ordenesCambio: 90,
   reuniones:    120,
   calidad:       60,
-  subcontratas: 120,
   presupuesto: 120,
   fases: 120,
   partesPanel: 60,
@@ -4274,6 +4345,7 @@ const SYNC_INTERVALS = {
   informeObra: 0,
   planSemanal: 60,
   instruccionesObra: 60,
+  subcontratas: 90,
 };
 
 let _syncTimer = null, _syncLabelTimer = null, _syncLastTs = null;
@@ -16809,178 +16881,6 @@ async function eliminarHito(id) {
   else toast('Error al eliminar', 'err');
 }
 
-// ── SUBCONTRATAS / PROVEEDORES ──────────────────────────────────
-let tblSubc = null, _subcData = [];
-async function cargarSubcontratas() {
-  const r = await api('/subcontratas');
-  _subcData = toArr(r, 'subcontratas');
-  const total   = _subcData.length;
-  const activas = _subcData.filter(x => x.estado === 'activa').length;
-  const alertas = _subcData.filter(x => x.seguro_alerta || x.habilitacion_alerta).length;
-  const vencidas = _subcData.filter(x => {
-    const hoy = new Date().toISOString().slice(0,10);
-    return (x.seguro_rc_expiry && x.seguro_rc_expiry < hoy) || (x.habilitacion_expiry && x.habilitacion_expiry < hoy);
-  }).length;
-  document.getElementById('subcResumen').innerHTML = [
-    { label: 'Total',    val: total,   cls: '' },
-    { label: 'Activas',  val: activas, cls: 'ok' },
-    { label: 'Alertas',  val: alertas, cls: alertas > 0 ? 'warn' : 'ok' },
-    { label: 'Vencidas', val: vencidas, cls: vencidas > 0 ? 'danger' : 'ok' },
-  ].map(k => `<div class="kpi-card"><div class="kpi-value ${k.cls}">${k.val}</div><div class="kpi-label">${k.label}</div></div>`).join('');
-  const badge = document.getElementById('subcBadge');
-  if (badge) { badge.style.display = alertas > 0 ? '' : 'none'; }
-  filtrarSubc();
-}
-function filtrarSubc() {
-  const q   = (document.getElementById('searchSubc')?.value || '').toLowerCase();
-  const est = document.getElementById('filterSubcEstado')?.value || '';
-  const tip = document.getElementById('filterSubcTipo')?.value || '';
-  const data = _subcData.filter(x =>
-    (!q   || (x.nombre||'').toLowerCase().includes(q) || (x.cif||'').toLowerCase().includes(q) || (x.contacto||'').toLowerCase().includes(q)) &&
-    (!est || x.estado === est) &&
-    (!tip || x.tipo === tip)
-  );
-  if (tblSubc) { tblSubc.replaceData(data); return; }
-  tblSubc = new Tabulator('#tblSubc', {
-    data, layout: 'fitColumns', responsiveLayout: 'collapse',
-    pagination: 'local', paginationSize: 20,
-    placeholder: '<div class="empty-state"><div class="empty-icon">🏢</div><div class="empty-text">Sin subcontratas registradas</div></div>',
-    columns: [
-      { title: 'Nombre', field: 'nombre', minWidth: 160, sorter: 'string' },
-      { title: 'Tipo', field: 'tipo', width: 120, formatter: (cell) => {
-        const icons = { electricista:'⚡', fontanero:'🔧', obra_civil:'🏗', albanileria:'🧱', pintura:'🎨', carpinteria:'🪚', climatizacion:'❄️', seguridad:'🔒' };
-        return (icons[cell.getValue()]||'') + ' ' + (cell.getValue()||'—');
-      }},
-      { title: 'Estado', field: 'estado', width: 100, formatter: (cell) => {
-        const v = cell.getValue();
-        const cls = { activa:'ok', inactiva:'muted', pendiente:'warn' }[v] || 'muted';
-        return `<span class="badge badge-${cls}">${v||'—'}</span>`;
-      }},
-      { title: 'CIF', field: 'cif', width: 110 },
-      { title: 'Contacto', field: 'contacto', width: 130 },
-      { title: 'Teléfono', field: 'telefono', width: 120 },
-      { title: 'Seguro RC', field: 'seguro_rc_expiry', width: 115, formatter: (cell) => {
-        const v = cell.getValue();
-        const alerta = cell.getRow().getData().seguro_alerta;
-        if (!v) return '<span style="color:var(--muted)">—</span>';
-        return `<span style="color:${alerta?'var(--yellow)':'inherit'}">${alerta?'⚠️ ':''}${v}</span>`;
-      }},
-      { title: 'Habilitación', field: 'habilitacion_expiry', width: 115, formatter: (cell) => {
-        const v = cell.getValue();
-        const alerta = cell.getRow().getData().habilitacion_alerta;
-        if (!v) return '<span style="color:var(--muted)">—</span>';
-        return `<span style="color:${alerta?'var(--yellow)':'inherit'}">${alerta?'⚠️ ':''}${v}</span>`;
-      }},
-      { title: 'Obra', field: 'obra_nombre', minWidth: 110 },
-      { title: 'Acciones', field: 'id', width: 80, hozAlign: 'center', formatter: () => '<button class="btn btn-secondary btn-sm">✏️</button>',
-        cellClick: (e, cell) => abrirModalSubcEditar(cell.getRow().getData()) },
-    ]
-  });
-  document.getElementById('searchSubc')?.addEventListener('input', () => { if(tblSubc) tblSubc.setFilter([{field:'nombre',type:'like',value:document.getElementById('searchSubc').value}]); });
-}
-function abrirModalSubc() {
-  abrirModal('Nueva Subcontrata / Proveedor', `
-    <div class="form-group"><div class="form-label">Nombre *</div><input class="form-input" id="mSubcNombre" placeholder="Nombre de la empresa"></div>
-    <div class="form-row">
-      <div class="form-group"><div class="form-label">CIF / NIF</div><input class="form-input" id="mSubcCif" placeholder="B12345678"></div>
-      <div class="form-group"><div class="form-label">Tipo</div>
-        <select class="form-select" id="mSubcTipo">
-          <option value="electricista">⚡ Electricista</option>
-          <option value="fontanero">🔧 Fontanería</option>
-          <option value="obra_civil">🏗 Obra Civil</option>
-          <option value="albanileria">🧱 Albañilería</option>
-          <option value="pintura">🎨 Pintura</option>
-          <option value="carpinteria">🪚 Carpintería</option>
-          <option value="climatizacion">❄️ Climatización</option>
-          <option value="seguridad">🔒 Seguridad</option>
-          <option value="otro">Otro</option>
-        </select>
-      </div>
-    </div>
-    <div class="form-row">
-      <div class="form-group"><div class="form-label">Contacto</div><input class="form-input" id="mSubcContacto" placeholder="Nombre del responsable"></div>
-      <div class="form-group"><div class="form-label">Teléfono</div><input class="form-input" id="mSubcTel" placeholder="600 000 000"></div>
-    </div>
-    <div class="form-group"><div class="form-label">Email</div><input class="form-input" id="mSubcEmail" type="email" placeholder="empresa@mail.com"></div>
-    <div class="form-row">
-      <div class="form-group"><div class="form-label">Vencimiento Seguro RC</div><input class="form-input" id="mSubcSeguro" type="date"></div>
-      <div class="form-group"><div class="form-label">Vencimiento Habilitación</div><input class="form-input" id="mSubcHab" type="date"></div>
-    </div>
-    <div class="form-group"><div class="form-label">Obra asignada</div>
-      <select class="form-select" id="mSubcObra"><option value="">— Global (todas las obras) —</option></select>
-    </div>
-    <div class="form-group"><div class="form-label">Notas</div><textarea class="form-input" id="mSubcNotas" rows="2" placeholder="Especialidades, condiciones, observaciones..."></textarea></div>
-  `, async () => {
-    const nombre = document.getElementById('mSubcNombre').value.trim();
-    if (!nombre) { toast('El nombre es obligatorio', 'err'); return; }
-    const body = {
-      nombre,
-      cif:                document.getElementById('mSubcCif').value.trim() || null,
-      tipo:               document.getElementById('mSubcTipo').value,
-      contacto:           document.getElementById('mSubcContacto').value.trim() || null,
-      telefono:           document.getElementById('mSubcTel').value.trim() || null,
-      email:              document.getElementById('mSubcEmail').value.trim() || null,
-      seguro_rc_expiry:   document.getElementById('mSubcSeguro').value || null,
-      habilitacion_expiry:document.getElementById('mSubcHab').value || null,
-      obra_id:            document.getElementById('mSubcObra').value || null,
-      notas:              document.getElementById('mSubcNotas').value.trim() || null,
-    };
-    const r = await api('/subcontratas', { method: 'POST', body: JSON.stringify(body) });
-    if (r.ok || r.id) { toast('Subcontrata creada ✓', 'ok'); cerrarModal(); tblSubc=null; cargarSubcontratas(); }
-    else toast('Error al crear', 'err');
-  });
-  poblarSelectObras('mSubcObra');
-}
-function abrirModalSubcEditar(s) {
-  abrirModal('Editar Subcontrata', `
-    <div class="form-group"><div class="form-label">Nombre *</div><input class="form-input" id="mSubcNombre" value="${esc(s.nombre||'')}"></div>
-    <div class="form-row">
-      <div class="form-group"><div class="form-label">CIF</div><input class="form-input" id="mSubcCif" value="${esc(s.cif||'')}"></div>
-      <div class="form-group"><div class="form-label">Estado</div>
-        <select class="form-select" id="mSubcEst">
-          <option value="activa" ${s.estado==='activa'?'selected':''}>Activa</option>
-          <option value="inactiva" ${s.estado==='inactiva'?'selected':''}>Inactiva</option>
-          <option value="pendiente" ${s.estado==='pendiente'?'selected':''}>Pendiente</option>
-        </select>
-      </div>
-    </div>
-    <div class="form-row">
-      <div class="form-group"><div class="form-label">Contacto</div><input class="form-input" id="mSubcContacto" value="${esc(s.contacto||'')}"></div>
-      <div class="form-group"><div class="form-label">Teléfono</div><input class="form-input" id="mSubcTel" value="${esc(s.telefono||'')}"></div>
-    </div>
-    <div class="form-group"><div class="form-label">Email</div><input class="form-input" id="mSubcEmail" value="${esc(s.email||'')}"></div>
-    <div class="form-row">
-      <div class="form-group"><div class="form-label">Seguro RC vence</div><input class="form-input" id="mSubcSeguro" type="date" value="${s.seguro_rc_expiry||''}"></div>
-      <div class="form-group"><div class="form-label">Habilitación vence</div><input class="form-input" id="mSubcHab" type="date" value="${s.habilitacion_expiry||''}"></div>
-    </div>
-    <div class="form-group"><div class="form-label">Notas</div><textarea class="form-input" id="mSubcNotas" rows="2">${esc(s.notas||'')}</textarea></div>
-    <div style="margin-top:12px"><button class="btn btn-danger btn-sm" onclick="eliminarSubcontrata(${s.id})">🗑 Eliminar</button></div>
-  `, async () => {
-    const nombre = document.getElementById('mSubcNombre').value.trim();
-    if (!nombre) { toast('El nombre es obligatorio', 'err'); return; }
-    const body = {
-      nombre,
-      cif:                document.getElementById('mSubcCif').value.trim() || null,
-      estado:             document.getElementById('mSubcEst').value,
-      contacto:           document.getElementById('mSubcContacto').value.trim() || null,
-      telefono:           document.getElementById('mSubcTel').value.trim() || null,
-      email:              document.getElementById('mSubcEmail').value.trim() || null,
-      seguro_rc_expiry:   document.getElementById('mSubcSeguro').value || null,
-      habilitacion_expiry:document.getElementById('mSubcHab').value || null,
-      notas:              document.getElementById('mSubcNotas').value.trim() || null,
-    };
-    const r = await api(`/subcontratas/${s.id}`, { method: 'PUT', body: JSON.stringify(body) });
-    if (r.ok || r.id) { toast('Subcontrata actualizada ✓', 'ok'); cerrarModal(); tblSubc=null; cargarSubcontratas(); }
-    else toast('Error al actualizar', 'err');
-  });
-}
-async function eliminarSubcontrata(id) {
-  if (!confirm('¿Eliminar esta subcontrata?')) return;
-  const r = await api(`/subcontratas/${id}`, { method: 'DELETE' });
-  if (r.ok || r.deleted) { toast('Eliminada', 'ok'); cerrarModal(); tblSubc=null; cargarSubcontratas(); }
-  else toast('Error al eliminar', 'err');
-}
-
 async function poblarSelectObras(selectId) {
   const sel = document.getElementById(selectId);
   if (!sel) return;
@@ -16992,6 +16892,137 @@ async function poblarSelectObras(selectId) {
     opt.textContent = o.nombre;
     sel.appendChild(opt);
   });
+}
+
+// ── REGISTRO DE SUBCONTRATAS (NEW-64) ─────────────────────────────
+let tblSubcontratas = null, _scEditId = null;
+const SC_ESTADO_COLOR = { activa:'#10b981', inactiva:'#64748b', suspendida:'#ef4444' };
+
+async function cargarSubcontratas() {
+  if (document.getElementById('filterScObra')?.options.length <= 1)
+    poblarSelectObras('filterScObra');
+  const obraId  = document.getElementById('filterScObra')?.value || '';
+  const estado  = document.getElementById('filterScEstado')?.value || '';
+  const nombre  = document.getElementById('filterScNombre')?.value?.toLowerCase() || '';
+  const params  = new URLSearchParams();
+  if (obraId) params.set('obra_id', obraId);
+  if (estado) params.set('estado', estado);
+  const r = await api(`/subcontratas?${params}`);
+  let data = (r?.subcontratas || []).filter(s => !nombre || s.nombre.toLowerCase().includes(nombre));
+
+  const total    = data.length;
+  const activas  = data.filter(s => s.estado === 'activa').length;
+  const vencidas = data.filter(s => s.alerta_vencida).length;
+  const alertas  = data.filter(s => s.alerta_rc || s.alerta_laboral || s.alerta_cae).length;
+  const valorTotal = data.reduce((s, x) => s + (x.contrato_importe || 0), 0);
+  document.getElementById('scKpi').innerHTML = `
+    <div class="kpi-card"><div class="kpi-icon">🏗️</div><div class="kpi-value">${total}</div><div class="kpi-label">Total</div></div>
+    <div class="kpi-card"><div class="kpi-icon">✅</div><div class="kpi-value" style="color:var(--success)">${activas}</div><div class="kpi-label">Activas</div></div>
+    <div class="kpi-card"><div class="kpi-icon">💶</div><div class="kpi-value" style="font-size:16px">${fmtMoney(valorTotal)}</div><div class="kpi-label">Valor contratos</div></div>
+    <div class="kpi-card"><div class="kpi-icon">⚠️</div><div class="kpi-value" style="color:${alertas>0?'var(--warning)':'var(--success)'}">${alertas}</div><div class="kpi-label">Docs por vencer</div></div>
+    <div class="kpi-card"><div class="kpi-icon">🔴</div><div class="kpi-value" style="color:${vencidas>0?'var(--danger)':'var(--success)'}">${vencidas}</div><div class="kpi-label">Docs vencidos</div></div>`;
+
+  const badge = document.getElementById('scBadge');
+  if (badge) badge.style.display = (vencidas + alertas > 0) ? '' : 'none';
+
+  const hoy = new Date().toISOString().slice(0, 10);
+  if (tblSubcontratas) { tblSubcontratas.replaceData(data); return; }
+  tblSubcontratas = new Tabulator('#tblSubcontratas', {
+    data, layout: 'fitColumns', responsiveLayout: 'collapse',
+    pagination: 'local', paginationSize: 20,
+    placeholder: '<div class="empty-state"><div class="empty-icon">🏗️</div><div class="empty-text">Sin subcontratas — registra la primera</div></div>',
+    rowFormatter: row => { if (row.getData().alerta_vencida) row.getElement().style.borderLeft = '3px solid var(--danger)'; else if (row.getData().alerta_rc || row.getData().alerta_laboral || row.getData().alerta_cae) row.getElement().style.borderLeft = '3px solid var(--warning)'; },
+    columns: [
+      { title: 'Empresa', field: 'nombre', minWidth: 180, formatter: c => `<strong>${c.getValue()}</strong>` },
+      { title: 'Gremio', field: 'gremio', width: 130 },
+      { title: 'Contacto', field: 'contacto_nombre', width: 130 },
+      { title: 'Tel.', field: 'contacto_telefono', width: 120 },
+      { title: 'Estado', field: 'estado', width: 100,
+        formatter: c => `<span style="background:${SC_ESTADO_COLOR[c.getValue()]||'#64748b'};color:#fff;padding:2px 8px;border-radius:4px;font-size:11px">${c.getValue()||'—'}</span>` },
+      { title: 'Contrato', field: 'contrato_importe', width: 115, hozAlign: 'right',
+        formatter: c => `<span style="font-weight:700">${c.getValue() ? fmtMoney(c.getValue()) : '—'}</span>` },
+      { title: 'RC expira', field: 'seguro_rc_expira', width: 100,
+        formatter: c => { const v=c.getValue(); const exp=v&&v<hoy; return `<span style="color:${exp?'var(--danger)':v&&v<new Date(Date.now()+30*86400000).toISOString().slice(0,10)?'var(--warning)':'inherit'}">${fmtFecha(v)}${exp?' 🔴':''}</span>`; } },
+      { title: 'Laboral expira', field: 'seguro_laboral_expira', width: 110,
+        formatter: c => { const v=c.getValue(); const exp=v&&v<hoy; return `<span style="color:${exp?'var(--danger)':v&&v<new Date(Date.now()+30*86400000).toISOString().slice(0,10)?'var(--warning)':'inherit'}">${fmtFecha(v)}${exp?' 🔴':''}</span>`; } },
+      { title: 'CAE expira', field: 'cae_expira', width: 100,
+        formatter: c => { const v=c.getValue(); const exp=v&&v<hoy; return `<span style="color:${exp?'var(--danger)':v&&v<new Date(Date.now()+30*86400000).toISOString().slice(0,10)?'var(--warning)':'inherit'}">${fmtFecha(v)}${exp?' 🔴':''}</span>`; } },
+      { title: '', field: 'id', width: 90, hozAlign: 'center',
+        formatter: c => `<button class="btn btn-secondary btn-sm" onclick="abrirModalSc(${c.getValue()})" style="padding:2px 7px;font-size:11px">✏️</button>
+          <button class="btn btn-secondary btn-sm" onclick="eliminarSubcontrata(${c.getValue()})" style="padding:2px 7px;font-size:11px;color:var(--danger)">🗑</button>` }
+    ]
+  });
+}
+
+async function abrirModalSc(id = null) {
+  _scEditId = id;
+  document.getElementById('modalScTitle').textContent = id ? 'Editar subcontrata' : 'Nueva subcontrata';
+  const sel = document.getElementById('scObraId');
+  if (sel && sel.options.length <= 1) await poblarSelectObras('scObraId');
+  ['scNombre','scCif','scGremio','scContactoNombre','scContactoTel','scContactoEmail','scContratoNum','scContratoFecha','scSeguroRc','scSeguroLaboral','scCaeExpira','scNotas'].forEach(eid => { const el=document.getElementById(eid); if(el) el.value=''; });
+  document.getElementById('scContratoImporte').value = 0;
+  document.getElementById('scEstado').value = 'activa';
+  if (sel) sel.value = '';
+  if (id) {
+    const item = (tblSubcontratas?.getData() || []).find(s => s.id === id);
+    if (item) {
+      document.getElementById('scNombre').value = item.nombre || '';
+      document.getElementById('scCif').value = item.cif || '';
+      document.getElementById('scGremio').value = item.gremio || '';
+      document.getElementById('scContactoNombre').value = item.contacto_nombre || '';
+      document.getElementById('scContactoTel').value = item.contacto_telefono || '';
+      document.getElementById('scContactoEmail').value = item.contacto_email || '';
+      if (sel) sel.value = item.obra_id || '';
+      document.getElementById('scEstado').value = item.estado || 'activa';
+      document.getElementById('scContratoNum').value = item.contrato_numero || '';
+      document.getElementById('scContratoImporte').value = item.contrato_importe || 0;
+      document.getElementById('scContratoFecha').value = item.contrato_fecha || '';
+      document.getElementById('scSeguroRc').value = item.seguro_rc_expira || '';
+      document.getElementById('scSeguroLaboral').value = item.seguro_laboral_expira || '';
+      document.getElementById('scCaeExpira').value = item.cae_expira || '';
+      document.getElementById('scNotas').value = item.notas || '';
+    }
+  }
+  document.getElementById('modalSc').classList.add('active');
+}
+
+async function guardarSubcontrata() {
+  const nombre = document.getElementById('scNombre')?.value?.trim();
+  if (!nombre) { showToast('El nombre es obligatorio', 'warning'); return; }
+  const obraId = document.getElementById('scObraId')?.value;
+  const body = {
+    nombre,
+    cif: document.getElementById('scCif')?.value?.trim() || null,
+    gremio: document.getElementById('scGremio')?.value?.trim() || null,
+    contacto_nombre: document.getElementById('scContactoNombre')?.value?.trim() || null,
+    contacto_telefono: document.getElementById('scContactoTel')?.value?.trim() || null,
+    contacto_email: document.getElementById('scContactoEmail')?.value?.trim() || null,
+    obra_id: obraId ? parseInt(obraId) : null,
+    estado: document.getElementById('scEstado')?.value || 'activa',
+    contrato_numero: document.getElementById('scContratoNum')?.value?.trim() || null,
+    contrato_importe: parseFloat(document.getElementById('scContratoImporte')?.value) || 0,
+    contrato_fecha: document.getElementById('scContratoFecha')?.value || null,
+    seguro_rc_expira: document.getElementById('scSeguroRc')?.value || null,
+    seguro_laboral_expira: document.getElementById('scSeguroLaboral')?.value || null,
+    cae_expira: document.getElementById('scCaeExpira')?.value || null,
+    notas: document.getElementById('scNotas')?.value?.trim() || null,
+  };
+  const r = _scEditId
+    ? await api(`/subcontratas/${_scEditId}`, 'PUT', body)
+    : await api('/subcontratas', 'POST', body);
+  if (r?.ok || r?.id) {
+    cerrarModal('modalSc');
+    showToast(_scEditId ? 'Subcontrata actualizada ✅' : 'Subcontrata registrada ✅', 'success');
+    tblSubcontratas = null;
+    cargarSubcontratas();
+  } else showToast(r?.error || 'Error al guardar', 'error');
+}
+
+async function eliminarSubcontrata(id) {
+  if (!confirm('¿Eliminar esta subcontrata?')) return;
+  const r = await api(`/subcontratas/${id}`, 'DELETE');
+  if (r?.ok) { showToast('Subcontrata eliminada', 'success'); tblSubcontratas=null; cargarSubcontratas(); }
+  else showToast('Error al eliminar', 'error');
 }
 
 // ── INSTRUCCIONES DE OBRA / SITE INSTRUCTIONS (NEW-63) ─────────────
