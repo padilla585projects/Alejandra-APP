@@ -547,6 +547,9 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
     <button class="nav-item" data-page="finanzasObra" onclick="navTo('finanzasObra')">
       <span class="nav-icon">📊</span> Análisis Financiero
     </button>
+    <button class="nav-item" data-page="cronogramaObra" onclick="navTo('cronogramaObra')">
+      <span class="nav-icon">📅</span> Cronograma
+    </button>
 
     <div class="sidebar-section" onclick="sidebarToggle(this)" data-sid="seguimiento"><span>📓 Seguimiento</span><span class="sec-chevron">▼</span></div>
     <button class="nav-item" data-page="partesPanel" onclick="navTo('partesPanel')">
@@ -1691,6 +1694,40 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
         </div>
         <div id="finanzasVacio" style="text-align:center;padding:60px 0;color:var(--muted);font-size:15px">
           Selecciona una obra para ver el análisis financiero
+        </div>
+      </div>
+
+      <!-- CRONOGRAMA / GANTT DE OBRA (NEW-52) -->
+      <div class="page" id="pageCronogramaObra">
+        <div class="page-title">📅 Cronograma de Obra</div>
+        <div class="page-sub">Gantt de fases, hitos y tareas — vista temporal del proyecto</div>
+        <div class="tbl-toolbar" style="flex-wrap:wrap;gap:8px;margin-bottom:18px;align-items:center">
+          <select class="tbl-search" id="cronogramaObraId" style="min-width:280px;font-size:14px" onchange="cargarCronogramaObra()">
+            <option value="">🏗 Selecciona una obra...</option>
+          </select>
+          <select class="tbl-search" id="cronogramaVista" style="min-width:120px" onchange="renderGantt()">
+            <option value="mes">Vista mensual</option>
+            <option value="semana">Vista semanal</option>
+            <option value="trimestre">Vista trimestral</option>
+          </select>
+          <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer">
+            <input type="checkbox" id="cronogramaMostrarTareas" onchange="renderGantt()"> Mostrar tareas
+          </label>
+          <button class="btn btn-secondary" onclick="cargarCronogramaObra()">🔄 Actualizar</button>
+        </div>
+        <!-- KPI strip -->
+        <div id="cronogramaStats" style="display:none;display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;margin-bottom:18px" id="cronogramaStats"></div>
+        <!-- Gantt container -->
+        <div id="cronogramaGantt" style="overflow-x:auto;min-height:120px">
+          <div class="empty-state"><div class="empty-icon">📅</div><div class="empty-text">Selecciona una obra para ver el cronograma</div></div>
+        </div>
+        <!-- Leyenda -->
+        <div id="cronogramaLeyenda" style="display:none;margin-top:12px;display:flex;flex-wrap:wrap;gap:16px;font-size:12px;color:var(--muted)">
+          <span><span style="display:inline-block;width:14px;height:8px;border-radius:2px;background:#6366f1;margin-right:4px;vertical-align:middle"></span>Planificado</span>
+          <span><span style="display:inline-block;width:14px;height:8px;border-radius:2px;background:#10b981;margin-right:4px;vertical-align:middle"></span>Completado</span>
+          <span><span style="display:inline-block;width:14px;height:8px;border-radius:2px;background:#f59e0b;margin-right:4px;vertical-align:middle"></span>En curso</span>
+          <span><span style="display:inline-block;width:14px;height:8px;border-radius:2px;background:#ef4444;margin-right:4px;vertical-align:middle"></span>Retrasado</span>
+          <span><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:#8b5cf6;margin-right:4px;vertical-align:middle"></span>Hito</span>
         </div>
       </div>
 
@@ -3215,6 +3252,7 @@ const PAGE_TITLES = {
   actasReunion: '📋 Actas de Reunión',
   obraDetalle: '🏗 Cuadro de Mando por Obra',
   finanzasObra: '📊 Análisis Financiero por Obra',
+  cronogramaObra: '📅 Cronograma de Obra',
 };
 
 const PAGE_LOADERS = {
@@ -3267,6 +3305,7 @@ const PAGE_LOADERS = {
   actasReunion: cargarActasReunion,
   obraDetalle: cargarObraDetalle,
   finanzasObra: cargarFinanzasObra,
+  cronogramaObra: cargarCronogramaObra,
 };
 
 let currentPage = '';
@@ -3348,6 +3387,7 @@ const SYNC_INTERVALS = {
   actasReunion: 180,
   obraDetalle: 60,
   finanzasObra: 90,
+  cronogramaObra: 120,
 };
 
 let _syncTimer = null, _syncLabelTimer = null, _syncLastTs = null;
@@ -12025,6 +12065,233 @@ function exportarFinanzas() {
   if (!obraId) return showToast('Selecciona una obra primero', 'warning');
   // Abrir informe en nueva pestaña usando el endpoint de informes
   window.open(`/informe-obra/${obraId}?tipo=financiero`, '_blank');
+}
+
+// ── CRONOGRAMA / GANTT DE OBRA (NEW-52) ─────────────────────────
+let _cronogramaData = null;
+
+async function cargarCronogramaObra() {
+  if (document.getElementById('cronogramaObraId')?.options.length <= 1) await poblarSelectObras('cronogramaObraId');
+  const obraId = document.getElementById('cronogramaObraId')?.value;
+  const ganttEl = document.getElementById('cronogramaGantt');
+  if (!obraId) {
+    if (ganttEl) ganttEl.innerHTML = '<div class="empty-state"><div class="empty-icon">📅</div><div class="empty-text">Selecciona una obra para ver el cronograma</div></div>';
+    document.getElementById('cronogramaStats').style.display = 'none';
+    document.getElementById('cronogramaLeyenda').style.display = 'none';
+    return;
+  }
+  if (ganttEl) ganttEl.innerHTML = '<div class="loading"><div class="spinner"></div> Cargando cronograma...</div>';
+  const d = await api(`/cronograma-obra/${obraId}`);
+  if (!d || d.error) {
+    ganttEl.innerHTML = '<div class="empty-state"><div class="empty-icon">⚠️</div><div class="empty-text">Error al cargar el cronograma</div></div>';
+    return;
+  }
+  _cronogramaData = d;
+  // KPI strip
+  const statsEl = document.getElementById('cronogramaStats');
+  if (statsEl && d.stats) {
+    statsEl.style.display = 'grid';
+    statsEl.innerHTML = `
+      <div class="kpi-card"><div class="kpi-icon">📅</div><div class="kpi-value">${d.stats.total_fases}</div><div class="kpi-label">Fases</div></div>
+      <div class="kpi-card"><div class="kpi-icon">✅</div><div class="kpi-value" style="color:var(--success)">${d.stats.fases_ok}</div><div class="kpi-label">Completadas</div></div>
+      <div class="kpi-card"><div class="kpi-icon">⚙️</div><div class="kpi-value" style="color:var(--primary)">${d.stats.fases_en_curso}</div><div class="kpi-label">En curso</div></div>
+      <div class="kpi-card"><div class="kpi-icon">🏁</div><div class="kpi-value">${d.stats.total_hitos}</div><div class="kpi-label">Hitos</div></div>
+      <div class="kpi-card"><div class="kpi-icon">⛔</div><div class="kpi-value" style="color:${d.stats.hitos_vencidos>0?'var(--danger)':'var(--muted)'}">${d.stats.hitos_vencidos}</div><div class="kpi-label">Hitos vencidos</div></div>
+      <div class="kpi-card"><div class="kpi-icon">📋</div><div class="kpi-value">${d.stats.tareas_ok}/${d.stats.total_tareas}</div><div class="kpi-label">Tareas hechas</div></div>
+    `;
+  }
+  document.getElementById('cronogramaLeyenda').style.display = 'flex';
+  renderGantt();
+}
+
+function renderGantt() {
+  if (!_cronogramaData) return;
+  const d = _cronogramaData;
+  const ganttEl = document.getElementById('cronogramaGantt');
+  if (!ganttEl) return;
+
+  const vista = document.getElementById('cronogramaVista')?.value || 'mes';
+  const mostrarTareas = document.getElementById('cronogramaMostrarTareas')?.checked || false;
+  const hoy = new Date().toISOString().slice(0,10);
+
+  // ── Rango de tiempo ──────────────────────────────────────────────
+  const toD  = s => s ? new Date(s) : null;
+  const toMs = s => s ? new Date(s).getTime() : null;
+  const allMs = [
+    ...d.fases.map(f=>[toMs(f.fecha_inicio_plan)||toMs(f.fecha_inicio_real), toMs(f.fecha_fin_plan)||toMs(f.fecha_fin_real)]).flat(),
+    ...d.hitos.map(h=>toMs(h.fecha)),
+    toMs(d.obra?.fecha_inicio), toMs(d.obra?.fecha_fin_prevista),
+  ].filter(Boolean);
+  if (!allMs.length) {
+    ganttEl.innerHTML = '<div class="empty-state"><div class="empty-icon">📅</div><div class="empty-text">Sin fechas definidas en este proyecto</div></div>';
+    return;
+  }
+
+  let rStart = new Date(Math.min(...allMs));
+  let rEnd   = new Date(Math.max(...allMs));
+  // Padding: 5% en cada lado
+  const totalMs = rEnd - rStart || 1;
+  rStart = new Date(rStart.getTime() - totalMs * 0.05);
+  rEnd   = new Date(rEnd.getTime()   + totalMs * 0.05);
+
+  const pct = ms => Math.max(0, Math.min(100, ((ms - rStart.getTime()) / (rEnd.getTime() - rStart.getTime())) * 100));
+
+  // ── Cabecera de meses/semanas ──────────────────────────────────────
+  const getHeaders = () => {
+    const headers = [];
+    const cur = new Date(rStart);
+    cur.setDate(1); cur.setHours(0,0,0,0);
+    while (cur <= rEnd) {
+      const start = cur.getTime();
+      const label = vista === 'semana'
+        ? `Sem ${Math.ceil(cur.getDate()/7)} ${cur.toLocaleDateString('es-ES',{month:'short'})}`
+        : cur.toLocaleDateString('es-ES', { month:'short', year:'2-digit' });
+      if (vista === 'semana') cur.setDate(cur.getDate() + 7);
+      else if (vista === 'trimestre') cur.setMonth(cur.getMonth() + 3);
+      else cur.setMonth(cur.getMonth() + 1);
+      const end = cur.getTime();
+      const left = pct(start);
+      const width = pct(end) - left;
+      if (width > 0) headers.push({ label, left, width });
+    }
+    return headers;
+  };
+
+  const headers = getHeaders();
+  const colBg = (i) => i%2===0 ? 'rgba(99,102,241,0.03)' : 'transparent';
+
+  // ── Estado → color ─────────────────────────────────────────────────
+  const estadoColor = estado => {
+    if (estado === 'completada' || estado === 'completado') return '#10b981';
+    if (estado === 'en_curso')    return '#6366f1';
+    if (estado === 'en_pausa')    return '#f59e0b';
+    const fechaFin = _cronogramaData?.fases?.find?.(f=>f.estado===estado)?.fecha_fin_plan;
+    if (fechaFin && fechaFin < hoy) return '#ef4444';
+    return '#6366f1';
+  };
+
+  // ── Crear tareas por fase (map) ────────────────────────────────────
+  const tareasPorFase = {};
+  (d.tareas||[]).forEach(t => {
+    const fid = t.fase_id || '__sin_fase__';
+    if (!tareasPorFase[fid]) tareasPorFase[fid] = [];
+    tareasPorFase[fid].push(t);
+  });
+
+  // ── Construir filas HTML ──────────────────────────────────────────
+  const rowH = 40;  // px per row
+  const hdrH = 32;
+  const rows = [];
+
+  // Fases
+  for (const f of d.fases) {
+    const s = toMs(f.fecha_inicio_plan) || toMs(f.fecha_inicio_real);
+    const e = toMs(f.fecha_fin_plan)    || toMs(f.fecha_fin_real);
+    const color = estadoColor(f.estado);
+    const retrasada = f.estado !== 'completada' && f.fecha_fin_plan && f.fecha_fin_plan < hoy;
+    const barColor = retrasada ? '#ef4444' : color;
+
+    let barHtml = '';
+    if (s && e) {
+      const left  = pct(s);
+      const width = Math.max(0.5, pct(e) - left);
+      const prog  = Math.min(100, f.porcentaje || 0);
+      barHtml = `
+        <div style="position:absolute;left:${left}%;width:${width}%;height:20px;top:10px;border-radius:4px;
+                    background:${barColor}20;border:1.5px solid ${barColor};overflow:hidden;cursor:default"
+             title="${f.nombre} · ${f.estado} · ${prog}%">
+          <div style="height:100%;width:${prog}%;background:${barColor};opacity:0.7;border-radius:2px"></div>
+          <span style="position:absolute;left:6px;top:2px;font-size:10px;white-space:nowrap;
+                       overflow:hidden;color:${barColor};font-weight:600">${prog}%</span>
+        </div>`;
+    }
+    rows.push(`
+      <div style="display:flex;height:${rowH}px;border-bottom:1px solid var(--border);background:${retrasada?'rgba(239,68,68,0.03)':'transparent'}">
+        <div style="width:220px;min-width:220px;padding:0 12px;display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;flex-shrink:0;border-right:1px solid var(--border)">
+          <span style="color:${barColor}">◼</span>
+          <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${f.nombre}">${f.nombre}</span>
+        </div>
+        <div style="flex:1;position:relative;">${barHtml}</div>
+      </div>`);
+
+    // Tareas bajo esta fase
+    if (mostrarTareas && tareasPorFase[f.id]) {
+      for (const t of tareasPorFase[f.id]) {
+        const te = toMs(t.fecha_limite);
+        const tc = t.estado === 'completada' ? '#10b981' : (te && t.fecha_limite < hoy) ? '#ef4444' : '#94a3b8';
+        let tBar = '';
+        if (te) {
+          const tLeft = pct(te - 2*24*3600*1000);
+          const tW = Math.max(0.5, pct(te) - tLeft);
+          tBar = `<div style="position:absolute;left:${tLeft}%;width:${tW}%;height:10px;top:15px;
+                               border-radius:3px;background:${tc};opacity:0.7;cursor:default"
+                       title="${t.titulo} · ${t.estado}"></div>`;
+        }
+        rows.push(`
+          <div style="display:flex;height:${rowH}px;border-bottom:1px solid var(--border);background:#fafafa;opacity:.85">
+            <div style="width:220px;min-width:220px;padding:0 12px 0 32px;display:flex;align-items:center;font-size:12px;flex-shrink:0;border-right:1px solid var(--border);color:var(--muted)">
+              <span style="color:${tc};margin-right:6px">›</span>
+              <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${t.titulo}</span>
+            </div>
+            <div style="flex:1;position:relative;">${tBar}</div>
+          </div>`);
+      }
+    }
+  }
+
+  // Hitos (fila separada por hito)
+  const hitosRow = (d.hitos||[]).map(h => {
+    const hMs = toMs(h.fecha);
+    const hc = h.estado==='completado' ? '#10b981' : h.fecha < hoy ? '#ef4444' : '#8b5cf6';
+    const diamond = hMs ? `<div style="position:absolute;left:calc(${pct(hMs)}% - 7px);top:13px;
+                                       width:14px;height:14px;background:${hc};
+                                       transform:rotate(45deg);cursor:default;border-radius:2px"
+                                title="${h.nombre} · ${h.fecha}"></div>` : '';
+    return `
+      <div style="display:flex;height:${rowH}px;border-bottom:1px solid var(--border)">
+        <div style="width:220px;min-width:220px;padding:0 12px;display:flex;align-items:center;gap:8px;font-size:12px;flex-shrink:0;border-right:1px solid var(--border)">
+          <span style="color:${hc}">◆</span>
+          <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:${hc};font-weight:600">${h.nombre}</span>
+        </div>
+        <div style="flex:1;position:relative;">${diamond}</div>
+      </div>`;
+  }).join('');
+
+  // ── Línea de HOY ──────────────────────────────────────────────────
+  const todayMs = new Date(hoy).getTime();
+  const todayPct = pct(todayMs);
+  const todayLine = todayMs >= rStart.getTime() && todayMs <= rEnd.getTime()
+    ? `<div style="position:absolute;left:${todayPct}%;top:0;bottom:0;width:2px;background:#ef4444;opacity:0.5;pointer-events:none;z-index:1">
+         <div style="position:absolute;top:0;left:-16px;background:#ef4444;color:#fff;font-size:9px;padding:1px 4px;border-radius:2px;white-space:nowrap">HOY</div>
+       </div>`
+    : '';
+
+  // ── Columnas de header background ─────────────────────────────────
+  const colBgs = headers.map((h,i) =>
+    `<div style="position:absolute;left:${h.left}%;width:${h.width}%;top:0;bottom:0;background:${colBg(i)};pointer-events:none"></div>`
+  ).join('');
+
+  // ── HTML final ────────────────────────────────────────────────────
+  const headerRow = `
+    <div style="display:flex;height:${hdrH}px;border-bottom:2px solid var(--border);background:var(--card)">
+      <div style="width:220px;min-width:220px;flex-shrink:0;border-right:1px solid var(--border);display:flex;align-items:center;padding:0 12px;font-size:12px;font-weight:700;color:var(--muted)">
+        TAREA / FASE
+      </div>
+      <div style="flex:1;position:relative;overflow:hidden">
+        ${headers.map(h=>`<div style="position:absolute;left:${h.left}%;width:${h.width}%;text-align:center;font-size:10px;color:var(--muted);font-weight:600;top:10px;overflow:hidden">${h.label}</div>`).join('')}
+      </div>
+    </div>`;
+
+  const totalH = (rows.length + (d.hitos||[]).length) * rowH;
+  ganttEl.innerHTML = `
+    <div style="min-width:700px;font-family:inherit">
+      ${headerRow}
+      <div style="position:relative">
+        <div style="position:absolute;inset:0;pointer-events:none">${colBgs}${todayLine}</div>
+        ${rows.join('')}
+        ${hitosRow ? `<div style="height:4px;background:var(--border)"></div>${hitosRow}` : ''}
+      </div>
+    </div>`;
 }
 
 // ── SUBMITTAL LOG / APROBACIONES DE MATERIALES ───────────────────

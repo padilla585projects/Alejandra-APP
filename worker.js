@@ -4516,6 +4516,11 @@ export default {
         const _foid = parseInt(path.split('/financiero-obra/')[1]);
         if (method === 'GET') return await getFinancieroObra(_foid, request, env);
       }
+      // ── Cronograma / Gantt de Obra (NEW-52) ──────────────────────────────────
+      if (path.startsWith('/cronograma-obra/')) {
+        const _crid = parseInt(path.split('/cronograma-obra/')[1]);
+        if (method === 'GET') return await getCronogramaObra(_crid, request, env);
+      }
       // ── Fases de obra (NEW-30) ──────────────────────────────────────────
       if (path === '/fases-obra'           && method === 'GET')  return await getFasesObra(request, env);
       if (path === '/fases-obra'           && method === 'POST') return await crearFaseObra(request, env);
@@ -14596,6 +14601,79 @@ async function getFinancieroObra(obraId, request, env) {
       alerta: eac > presupuesto * 1.05 ? 'rojo'
              : eac > presupuesto * 1.02 ? 'amarillo'
              : 'verde',
+    },
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  NEW-52 — CRONOGRAMA / GANTT DE OBRA
+// ═══════════════════════════════════════════════════════════════════════════
+async function getCronogramaObra(obraId, request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth?.empresa_id) return err('No autorizado', 403);
+  const eid = auth.empresa_id;
+
+  const [obraR, fasesR, hitosR, tareasR] = await Promise.all([
+    env.DB.prepare(
+      `SELECT id, nombre, codigo, fecha_inicio, fecha_fin_prevista, avance_porcentaje, estado, cliente
+       FROM obras WHERE id=? AND empresa_id=?`
+    ).bind(obraId, eid).first(),
+    env.DB.prepare(
+      `SELECT id, nombre, descripcion, fecha_inicio_plan, fecha_fin_plan,
+              fecha_inicio_real, fecha_fin_real, porcentaje, estado, responsable, orden
+       FROM fases_obra WHERE obra_id=? AND empresa_id=? ORDER BY orden ASC, id ASC`
+    ).bind(obraId, eid).all(),
+    env.DB.prepare(
+      `SELECT id, nombre, fecha, estado, tipo, responsable, notas
+       FROM hitos_obra WHERE obra_id=? AND empresa_id=? ORDER BY fecha ASC`
+    ).bind(obraId, eid).all(),
+    env.DB.prepare(
+      `SELECT id, titulo, estado, prioridad, fase_id, fecha_limite, asignado_a
+       FROM tareas_obra WHERE obra_id=? AND empresa_id=? ORDER BY fase_id ASC, id ASC`
+    ).bind(obraId, eid).all(),
+  ]);
+
+  if (!obraR) return err('Obra no encontrada', 404);
+
+  const fases  = fasesR?.results  || [];
+  const hitos  = hitosR?.results  || [];
+  const tareas = tareasR?.results || [];
+
+  // Calcular rango de fechas total (para el eje X del Gantt)
+  const toMs = s => s ? new Date(s).getTime() : null;
+  const allDates = [
+    ...fases.map(f => [toMs(f.fecha_inicio_plan), toMs(f.fecha_fin_plan)]).flat(),
+    ...hitos.map(h => toMs(h.fecha)),
+    toMs(obraR.fecha_inicio), toMs(obraR.fecha_fin_prevista),
+  ].filter(Boolean);
+  const rangeStart = allDates.length ? Math.min(...allDates) : Date.now();
+  const rangeEnd   = allDates.length ? Math.max(...allDates) : Date.now() + 30*24*3600*1000;
+
+  // Estadísticas
+  const totalFases    = fases.length;
+  const fasesOk       = fases.filter(f => f.estado === 'completada').length;
+  const fasesEnCurso  = fases.filter(f => f.estado === 'en_curso').length;
+  const hitosOk       = hitos.filter(h => h.estado === 'completado').length;
+  const hitosVencidos = hitos.filter(h => {
+    const hoy = new Date().toISOString().slice(0,10);
+    return h.estado !== 'completado' && h.fecha && h.fecha < hoy;
+  }).length;
+  const tareasOk  = tareas.filter(t => t.estado === 'completada').length;
+  const tareasTotal = tareas.length;
+
+  return json({
+    obra: obraR,
+    fases,
+    hitos,
+    tareas,
+    rango: {
+      inicio: new Date(rangeStart).toISOString().slice(0,10),
+      fin:    new Date(rangeEnd).toISOString().slice(0,10),
+    },
+    stats: {
+      total_fases: totalFases, fases_ok: fasesOk, fases_en_curso: fasesEnCurso,
+      total_hitos: hitos.length, hitos_ok: hitosOk, hitos_vencidos: hitosVencidos,
+      total_tareas: tareasTotal, tareas_ok: tareasOk,
     },
   });
 }
