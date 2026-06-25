@@ -5,10 +5,54 @@
 
 ## ESTADO ACTUAL
 
-**Sesión:** LIBRE
-**Última sesión:** 24/06/2026 (4ª continuación) — Dashboard con gráficas + Fases de obra + Diario de obra + Alejandra IA potenciada
-**Versión actual:** App PWA **v6.48** · AlejandraIA **v1.9.17+31** · WORKER API `0df16a74` · WORKER agente `4fc6c53b`
-**Próxima:** Probar tabs Dashboard (Resumen/Gráficas/Fases/Diario). Probar tool `estado_obra` de Alejandra. Instalar APK v1.9.17 en móvil. Añadir email real a Alberto. Fichajes 8–15: decidir. Foreground service 30+ min. Albarán universal con foto real.
+**Sesión:** EN CURSO
+**Última sesión:** 25/06/2026 — Mejora masiva panel office (Procore/Fieldwire level) + Subcontratas completo
+**Versión actual:** App PWA **v6.65** · AlejandraIA **v1.9.17+31** · WORKER API `930a0847` · WORKER agente `4fc6c53b`
+**Próxima:** Continuar mejoras — visualización Gantt en panel, KPIs presupuesto en dashboard, etc.
+
+---
+
+## RESUMEN SESIÓN 25/06/2026 — Panel office nivel Procore/Fieldwire (v6.63→v6.65)
+
+### Objetivo
+Analizar la app completa y mejorarla hasta nivel de gestión de obra de primer nivel (Procore/Fieldwire/PlanGrid).
+
+### v6.63 — Overhaul panel office (commit 49b0362) ✅
+- **5 nuevos módulos en sidebar**: Tareas ✅, RFIs ❓, Órdenes de Cambio 🔄, Actas de Reunión 📝, Control de Calidad 🔍
+- Cada módulo: KPI bar + filtros por obra/estado + Tabulator full + modal CRUD completo con select de obra
+- `poblarSelectObras(selectId)` async helper (fallback a `window._obrasPanel` || `_panelObras`)
+- Dashboard panel extendido: 11 KPIs totales + `dashGridConstruction` (Tareas activas, RFIs abiertas, Deficiencias)
+- PAGE_TITLES / PAGE_LOADERS / SYNC_INTERVALS actualizados para los 5 módulos nuevos
+
+### v6.64 — Subcontratas completo (commit 1515605) ✅
+- **worker.js**: rutas GET/POST/PUT/DELETE `/subcontratas`, `ensureSubcontratosTable`, alerta cron 30 días seguros+habilitaciones (Telegram por empresa). Deploy 930a0847.
+- **panel.html**: página Subcontratas con 3 KPI tiles (total, activas, con alertas), filtro por tipo, Tabulator + modal CRUD
+- **index.html**: card módulo `cardSubcontratas` en home, `screenSubcontratas` con 3 filtros, `modalSubcontrata` con todos los campos, funciones `subcCargar/subcFiltrar/renderSubcList/subcNueva/subcEditar/subcGuardar/subcEliminar`
+- `cargarObrasPanel` (primera, línea ~3732) actualizada para poblar selects de obras en Presupuesto, Fases y Partes también
+
+### v6.65 — Presupuesto, Fases y Partes Diarios en panel (commit 170ad54) ✅
+- **panel.html**: 3 páginas nuevas usando APIs ya existentes en worker.js
+  - Presupuesto de Obra: KPIs previsto/real/desviación + gráfico por categoría + Tabulator groupBy categoría
+  - Fases de Obra: KPI cards (total/en curso/completadas/avgPct) + phase cards con progress bar + fechas
+  - Partes Diarios: Tabulator con fecha/obra/encargado/descripción/nº personal
+- No requirió deploy de worker (APIs `/presupuesto-obra`, `/fases-obra`, `/partes-trabajo` ya existían)
+
+### Archivos modificados
+- `panel.html` — +1.500 líneas aproximadamente (v6.63→v6.65)
+- `index.html` — card + screen + modal + funciones subcontratas (v6.64)
+- `worker.js` — CRUD subcontratas + alerta cron (v6.64), deploy 930a0847
+- `sw.js` — v6.63→v6.65
+- `version.json` — v6.63→v6.65
+
+### Pendientes de esta sesión
+- [ ] Continuar mejoras: KPI presupuesto en dashboard principal panel
+- [ ] Mejor Gantt visual en panel (timeline CSS con barras apiladas)
+- [ ] Correspondencia / cartas formales tracking
+- [ ] Hitos de obra con alertas automáticas
+- [ ] KPIs diarios de productividad (m2 instalados, unidades, etc.)
+- [ ] Informes PDF automáticos
+- [ ] Instalar APK v1.9.17 en móvil
+- [ ] Añadir email real a Alberto
 
 ---
 

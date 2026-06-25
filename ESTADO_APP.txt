@@ -4,12 +4,47 @@
   Ruta local: C:\Users\Adrian\Downloads\Proyecto GestiBobina\Alejandra APP
 ================================================================================
 
-ÚLTIMA ACTUALIZACIÓN: 24/06/2026
-VERSIÓN ACTUAL APP NUEVA: v6.48 (Dashboard gráficas + Fases de obra + Diario de obra + Alejandra IA potenciada)
-WORKER API: 0df16a74 · WORKER AGENTE: 4fc6c53b
+ÚLTIMA ACTUALIZACIÓN: 25/06/2026
+VERSIÓN ACTUAL APP NUEVA: v6.65 (Presupuesto, Fases y Partes Diarios en panel office)
+WORKER API: 930a0847 · WORKER AGENTE: 4fc6c53b
 VERSIÓN ACTUAL APP VIEJA: v4.19 (⛔ CONGELADA DEFINITIVAMENTE — no recibe más cambios)
 
 HISTORIAL DE VERSIONES (resumen reciente):
+  v6.65 — 25/06/2026 — Presupuesto de Obra, Fases de Obra y Partes Diarios en panel office:
+                       panel.html: 3 nuevas páginas accesibles desde sidebar. Presupuesto
+                       con KPIs (previsto/real/desviación) + gráfico por categorías + Tabulator.
+                       Fases con cards visuales de progreso + fechas plan vs real. Partes
+                       Diarios con tabla filtrable por obra. Sin deploy worker (APIs ya existían).
+                       Commit 170ad54.
+  v6.64 — 25/06/2026 — Módulo Subcontratas completo (backend + panel + móvil):
+                       worker.js: CRUD /subcontratas + alerta cron 30 días seguros/habilitaciones.
+                       panel.html: página con KPIs, filtros por tipo, Tabulator + CRUD modal.
+                       index.html: card módulo + screenSubcontratas + modalSubcontrata + CRUD JS.
+                       Deploy worker: 930a0847. Commit 1515605.
+  v6.63 — 25/06/2026 — Overhaul panel office: 5 módulos de construcción nuevos:
+                       Tareas, RFIs, Órdenes de Cambio, Actas de Reunión, Control de Calidad.
+                       Cada módulo con filtros, Tabulator, KPI bar y CRUD modal con select obra.
+                       Dashboard panel con 11 KPIs y sección dashGridConstruction (3 métricas).
+                       PAGE_TITLES/LOADERS/SYNC_INTERVALS actualizados. Commit 49b0362.
+  v6.51 — 24/06/2026 — Dashboard Today view con SLA y acciones rápidas:
+                       Panel "ACCIÓN REQUERIDA" en Resumen: incidencias críticas con SLA
+                       calculado (critica=4h, alta=24h) + badge superación, tareas urgentes
+                       vencidas. Botones resolver/completar sin navegar. Worker API 22d00d86.
+  v6.50 — 24/06/2026 — Vista Gantt en pestaña Fases: barras plan vs real superpuestas,
+                       línea "Hoy", colores por estado, leyenda de fechas. Zero deps extra.
+  v6.49 — 24/06/2026 — Tareas de obra (Fieldwire-style) + Control de presupuesto:
+                       NEW-32: tareas_obra CRUD, tab "Tareas" con filtros y modal.
+                       NEW-33: presupuesto_obra CRUD, tab "Presupuesto" con resumen ejecutivo.
+                       Dashboard: 6 tabs. Alejandra: TOOL_GESTIONAR_TAREA.
+                       Workers: API 95cc66b6, agente c62a1b2d.
+  v6.48 — 24/06/2026 — Dashboard gráficas + Fases de obra + Diario de obra + Alejandra IA potenciada:
+                       NEW-32: tareas_obra CRUD (/tareas-obra), tab "Tareas" en dashboard
+                       con filtros por estado, modal con prioridad/responsable/fecha límite.
+                       NEW-33: presupuesto_obra CRUD (/presupuesto-obra), tab "Presupuesto"
+                       con resumen ejecutivo (prev/real/desviación/% ejecución), agrupación
+                       por categoría. Dashboard: 6 tabs con scroll horizontal en móvil.
+                       Alejandra: TOOL_GESTIONAR_TAREA + TOOL_ESTADO_OBRA incluye tareas.
+                       Workers: API 95cc66b6, agente c62a1b2d.
   v6.48 — 24/06/2026 — Dashboard gráficas + Fases de obra + Diario de obra + Alejandra IA potenciada:
                        Chart.js@4.4.3 en index.html. cargarObraDashboard reescrita con 4 tabs
                        (Resumen, Gráficas, Fases, Diario). 3 gráficas Chart.js (bar fichajes/semana,
