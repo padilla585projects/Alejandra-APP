@@ -518,12 +518,6 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
       <span class="nav-icon">❓</span> RFIs
       <span class="nav-badge" id="rfisBadge" style="display:none">0</span>
     </button>
-    <button class="nav-item" data-page="ordenesCambio" onclick="navTo('ordenesCambio')">
-      <span class="nav-icon">🔄</span> Órdenes de Cambio
-    </button>
-    <button class="nav-item" data-page="reuniones" onclick="navTo('reuniones')">
-      <span class="nav-icon">📝</span> Actas de Reunión
-    </button>
     <button class="nav-item" data-page="calidad" onclick="navTo('calidad')">
       <span class="nav-icon">🔍</span> Control de Calidad
       <span class="nav-badge" id="calidadBadge" style="display:none">0</span>
@@ -576,6 +570,10 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
     </button>
     <button class="nav-item" data-page="cronogramaObra" onclick="navTo('cronogramaObra')">
       <span class="nav-icon">📅</span> Cronograma
+    </button>
+    <button class="nav-item" data-page="calendario" onclick="navTo('calendario')">
+      <span class="nav-icon">🗓️</span> Calendario de Obra
+      <span class="nav-badge" id="calBadge" style="display:none">!</span>
     </button>
     <button class="nav-item" data-page="transmittals" onclick="navTo('transmittals')">
       <span class="nav-icon">📨</span> Transmittals
@@ -1833,6 +1831,113 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
           <span><span style="display:inline-block;width:14px;height:8px;border-radius:2px;background:#f59e0b;margin-right:4px;vertical-align:middle"></span>En curso</span>
           <span><span style="display:inline-block;width:14px;height:8px;border-radius:2px;background:#ef4444;margin-right:4px;vertical-align:middle"></span>Retrasado</span>
           <span><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:#8b5cf6;margin-right:4px;vertical-align:middle"></span>Hito</span>
+        </div>
+      </div>
+
+      <!-- CALENDARIO DE OBRA (NEW-69) -->
+      <div class="page" id="pageCalendario">
+        <div class="page-title">📅 Calendario de Obra</div>
+        <div class="page-sub">Eventos, entregas, reuniones e hitos — vista mensual multi-obra</div>
+        <div class="tbl-toolbar" style="flex-wrap:wrap;gap:8px;margin-bottom:16px;align-items:center">
+          <select class="tbl-search" id="filterCalObra" style="min-width:220px" onchange="calPanelCargar()">
+            <option value="">🏗 Todas las obras</option>
+          </select>
+          <select class="tbl-search" id="filterCalTipo" style="min-width:160px" onchange="calPanelCargar()">
+            <option value="">Todos los tipos</option>
+            <option value="entrega">📦 Entrega</option>
+            <option value="reunion">👥 Reunión</option>
+            <option value="revision">🔧 Revisión</option>
+            <option value="inspeccion">🔍 Inspección</option>
+            <option value="vencimiento">⚠️ Vencimiento</option>
+            <option value="otro">📅 Otro</option>
+          </select>
+          <div style="display:flex;align-items:center;gap:8px;margin-left:auto">
+            <button onclick="calPanelNavMes(-1)" class="btn btn-secondary" style="padding:6px 14px;font-size:18px;line-height:1">‹</button>
+            <span id="calPanelMesLabel" style="font-weight:700;font-size:15px;min-width:160px;text-align:center">—</span>
+            <button onclick="calPanelNavMes(+1)" class="btn btn-secondary" style="padding:6px 14px;font-size:18px;line-height:1">›</button>
+            <button onclick="calPanelNavMes(0)" class="btn btn-secondary" style="font-size:12px">Hoy</button>
+          </div>
+          <button class="btn btn-primary" onclick="abrirModalCalEvento()">+ Nuevo evento</button>
+          <button class="btn btn-secondary" onclick="calPanelCargar()">🔄</button>
+        </div>
+        <!-- KPI strip -->
+        <div id="calPanelKpi" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;margin-bottom:16px"></div>
+        <!-- Calendar grid -->
+        <div id="calPanelGrid" style="background:var(--bg-card);border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:18px">
+          <div class="empty-state"><div class="empty-icon">📅</div><div class="empty-text">Cargando calendario...</div></div>
+        </div>
+        <!-- Events list -->
+        <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:11px;letter-spacing:1.5px;color:var(--muted);text-transform:uppercase;margin-bottom:8px">Eventos del mes</div>
+        <div id="calPanelList"></div>
+
+        <!-- MODAL EVENTO CALENDARIO -->
+        <div class="modal-overlay" id="modalCalEvento" style="display:none" onclick="if(event.target===this)cerrarModalCalEvento()">
+          <div class="modal-content" style="max-width:500px">
+            <div class="modal-header">
+              <span class="modal-title" id="tituloModalCalEvento">Nuevo evento</span>
+              <button class="modal-close" onclick="cerrarModalCalEvento()">✕</button>
+            </div>
+            <div class="modal-body">
+              <input type="hidden" id="calEventoId">
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+                <div style="grid-column:span 2">
+                  <label class="form-label">Título *</label>
+                  <input class="form-input" id="calEvTitulo" placeholder="Ej: Entrega de material, Reunión de obra...">
+                </div>
+                <div>
+                  <label class="form-label">Tipo</label>
+                  <select class="form-input" id="calEvTipo">
+                    <option value="entrega">📦 Entrega</option>
+                    <option value="reunion">👥 Reunión</option>
+                    <option value="revision">🔧 Revisión</option>
+                    <option value="inspeccion">🔍 Inspección</option>
+                    <option value="vencimiento">⚠️ Vencimiento</option>
+                    <option value="otro">📅 Otro</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="form-label">Recordatorio</label>
+                  <select class="form-input" id="calEvRecordatorio">
+                    <option value="0">Sin recordatorio</option>
+                    <option value="1" selected>1 día antes</option>
+                    <option value="3">3 días antes</option>
+                    <option value="7">1 semana antes</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="form-label">Fecha *</label>
+                  <input class="form-input" type="date" id="calEvFecha">
+                </div>
+                <div>
+                  <label class="form-label">Hora (opcional)</label>
+                  <input class="form-input" type="time" id="calEvHora">
+                </div>
+                <div>
+                  <label class="form-label">Obra</label>
+                  <select class="form-input" id="calEvObraId"><option value="">— Sin obra específica —</option></select>
+                </div>
+                <div>
+                  <label class="form-label">Departamento</label>
+                  <select class="form-input" id="calEvDept">
+                    <option value="">— Todos —</option>
+                    <option value="electrico">Eléctrico</option>
+                    <option value="mecanico">Mecánico</option>
+                    <option value="civil">Civil</option>
+                    <option value="oficina">Oficina</option>
+                  </select>
+                </div>
+                <div style="grid-column:span 2">
+                  <label class="form-label">Descripción</label>
+                  <textarea class="form-input" id="calEvDesc" rows="2" placeholder="Detalles del evento..."></textarea>
+                </div>
+              </div>
+            </div>
+            <div class="modal-footer">
+              <button class="btn btn-danger" id="btnEliminarCalEvento" style="display:none" onclick="eliminarCalEvento()">🗑 Eliminar</button>
+              <button class="btn btn-secondary" onclick="cerrarModalCalEvento()">Cancelar</button>
+              <button class="btn btn-primary" onclick="guardarCalEvento()">💾 Guardar</button>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -4635,6 +4740,7 @@ const PAGE_TITLES = {
   registroAmbiental: '🌿 Registro Ambiental / Environmental Log',
   cierreObra: '🏁 Checklist de Cierre de Obra',
   certificaciones: '🧾 Certificaciones de Obra',
+  calendario: '📅 Calendario de Obra',
 };
 
 const PAGE_LOADERS = {
@@ -4705,6 +4811,7 @@ const PAGE_LOADERS = {
   registroAmbiental: cargarRegistroAmbiental,
   cierreObra: cargarCierreObra,
   certificaciones: cargarCertificaciones,
+  calendario: cargarCalendario,
 };
 
 let currentPage = '';
@@ -4804,6 +4911,7 @@ const SYNC_INTERVALS = {
   registroAmbiental: 90,
   cierreObra: 60,
   certificaciones: 90,
+  calendario:      60,
 };
 
 let _syncTimer = null, _syncLabelTimer = null, _syncLastTs = null;
@@ -18785,6 +18893,182 @@ async function generarInformeInline() {
   document.getElementById('informeNotReady').style.display = 'none';
   document.getElementById('informeContent').style.display = '';
   showToast('Informe generado ✅', 'success');
+}
+
+// ── CALENDARIO DE OBRA (NEW-69) ──────────────────────────────────────────────
+let _calPanelY = new Date().getFullYear(), _calPanelM = new Date().getMonth();
+let _calPanelEventos = [];
+const CAL_MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+const CAL_DIAS  = ['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
+const CAL_COLOR = { entrega:'#f59e0b', reunion:'#6366f1', revision:'#10b981', inspeccion:'#0ea5e9', vencimiento:'#ef4444', otro:'#8b5cf6' };
+const CAL_ICON  = { entrega:'📦', reunion:'👥', revision:'🔧', inspeccion:'🔍', vencimiento:'⚠️', otro:'📅' };
+
+async function cargarCalendario() {
+  if (document.getElementById('filterCalObra')?.options.length <= 1)
+    await poblarSelectObras('filterCalObra');
+  const obra = document.getElementById('filterCalObra')?.value || '';
+  const tipo = document.getElementById('filterCalTipo')?.value || '';
+  const desde = new Date(_calPanelY, _calPanelM, 1).toISOString().slice(0,10);
+  const hasta  = new Date(_calPanelY, _calPanelM + 1, 0).toISOString().slice(0,10);
+  let url = `/calendario?desde=${desde}&hasta=${hasta}`;
+  if (obra) url += `&obra_id=${obra}`;
+  const r = await apiCall(url).catch(() => []);
+  _calPanelEventos = Array.isArray(r) ? r : (r?.results || []);
+  if (tipo) _calPanelEventos = _calPanelEventos.filter(e => e.tipo === tipo);
+  calPanelRenderKpi();
+  calPanelRenderGrid();
+  calPanelRenderList();
+}
+
+function calPanelNavMes(delta) {
+  if (delta === 0) { _calPanelY = new Date().getFullYear(); _calPanelM = new Date().getMonth(); }
+  else {
+    _calPanelM += delta;
+    if (_calPanelM < 0) { _calPanelM = 11; _calPanelY--; }
+    if (_calPanelM > 11) { _calPanelM = 0; _calPanelY++; }
+  }
+  calPanelCargar();
+}
+
+async function calPanelCargar() { await cargarCalendario(); }
+
+function calPanelRenderKpi() {
+  const lbl = document.getElementById('calPanelMesLabel');
+  if (lbl) lbl.textContent = CAL_MESES[_calPanelM] + ' ' + _calPanelY;
+  const hoy = new Date(); hoy.setHours(0,0,0,0);
+  const proximos = _calPanelEventos.filter(e => new Date(e.fecha + 'T00:00:00') >= hoy).length;
+  const porTipo = {};
+  _calPanelEventos.forEach(e => { porTipo[e.tipo] = (porTipo[e.tipo]||0)+1; });
+  const top = Object.entries(porTipo).sort((a,b)=>b[1]-a[1]).slice(0,2);
+  const kpi = document.getElementById('calPanelKpi'); if (!kpi) return;
+  kpi.innerHTML = `
+    <div class="kpi-card"><div class="kpi-icon">📅</div><div class="kpi-value">${_calPanelEventos.length}</div><div class="kpi-label">Total mes</div></div>
+    <div class="kpi-card"><div class="kpi-icon">⏳</div><div class="kpi-value" style="color:#10b981">${proximos}</div><div class="kpi-label">Pendientes</div></div>
+    ${top.map(([t,n])=>`<div class="kpi-card"><div class="kpi-icon">${CAL_ICON[t]||'📅'}</div><div class="kpi-value" style="color:${CAL_COLOR[t]||'var(--primary)'}">${n}</div><div class="kpi-label">${t}</div></div>`).join('')}
+  `;
+}
+
+function calPanelRenderGrid() {
+  const container = document.getElementById('calPanelGrid'); if (!container) return;
+  const primerDia = new Date(_calPanelY, _calPanelM, 1);
+  const ultimoDia = new Date(_calPanelY, _calPanelM + 1, 0).getDate();
+  let inicioSem = primerDia.getDay() - 1; if (inicioSem < 0) inicioSem = 6;
+  const hoy = new Date(); hoy.setHours(0,0,0,0);
+  const evByDay = {};
+  _calPanelEventos.forEach(e => {
+    const d = parseInt((e.fecha||'').slice(8,10));
+    if (!evByDay[d]) evByDay[d] = [];
+    evByDay[d].push(e);
+  });
+  let html = `<div style="display:grid;grid-template-columns:repeat(7,1fr);border-bottom:1px solid var(--border)">`;
+  CAL_DIAS.forEach(d => html += `<div style="text-align:center;font-size:11px;font-weight:700;color:var(--muted);padding:8px 0;text-transform:uppercase">${d}</div>`);
+  html += '</div><div style="display:grid;grid-template-columns:repeat(7,1fr)">';
+  for (let i=0; i<inicioSem; i++) html += `<div style="min-height:78px;border-right:1px solid var(--border);border-bottom:1px solid var(--border);background:var(--bg);opacity:.35"></div>`;
+  for (let d=1; d<=ultimoDia; d++) {
+    const esHoy = new Date(_calPanelY,_calPanelM,d).getTime() === hoy.getTime();
+    const evs = evByDay[d] || [];
+    const col = (inicioSem + d - 1) % 7;
+    const bdrR = col === 6 ? 'none' : '1px solid var(--border)';
+    const fechaStr = `${_calPanelY}-${String(_calPanelM+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    html += `<div style="min-height:78px;border-right:${bdrR};border-bottom:1px solid var(--border);padding:4px 3px;cursor:pointer" onclick="abrirModalCalEvento(null,'${fechaStr}')">
+      <div style="font-size:12px;font-weight:700;width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;margin-bottom:2px;${esHoy?'background:var(--primary);color:#fff':'color:var(--muted)'}">${d}</div>
+      ${evs.slice(0,3).map(e=>`<div style="font-size:10px;background:${CAL_COLOR[e.tipo]||'#6366f1'}22;color:${CAL_COLOR[e.tipo]||'#6366f1'};border-left:2px solid ${CAL_COLOR[e.tipo]||'#6366f1'};padding:1px 4px;border-radius:3px;margin-bottom:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer" onclick="event.stopPropagation();editarCalEvento(${e.id})" title="${esc(e.titulo)}">${esc(e.titulo.substring(0,20))}</div>`).join('')}
+      ${evs.length>3?`<div style="font-size:10px;color:var(--muted);padding-left:2px">+${evs.length-3}</div>`:''}
+    </div>`;
+  }
+  const totalC = inicioSem + ultimoDia;
+  const resto = totalC % 7 === 0 ? 0 : 7 - (totalC % 7);
+  for (let i=0; i<resto; i++) html += `<div style="min-height:78px;border-right:1px solid var(--border);border-bottom:1px solid var(--border);background:var(--bg);opacity:.35"></div>`;
+  html += '</div>';
+  container.innerHTML = html;
+}
+
+function calPanelRenderList() {
+  const container = document.getElementById('calPanelList'); if (!container) return;
+  const hoy = new Date(); hoy.setHours(0,0,0,0);
+  const ordenados = [..._calPanelEventos].sort((a,b)=>a.fecha.localeCompare(b.fecha));
+  if (!ordenados.length) {
+    container.innerHTML = `<div class="empty-state"><div class="empty-icon">📅</div><div class="empty-text">Sin eventos este mes</div></div>`;
+    return;
+  }
+  container.innerHTML = ordenados.map(e => {
+    const fecha = new Date(e.fecha + 'T00:00:00');
+    const pasado = fecha < hoy;
+    const color = CAL_COLOR[e.tipo] || '#6366f1';
+    const icon  = CAL_ICON[e.tipo]  || '📅';
+    return `<div style="display:flex;align-items:flex-start;gap:12px;padding:12px;background:var(--bg-card);border:1px solid var(--border);border-left:3px solid ${color};border-radius:8px;margin-bottom:8px;${pasado?'opacity:.6':''}">
+      <div style="font-size:22px;width:34px;text-align:center;flex-shrink:0">${icon}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:700;font-size:14px;color:var(--text)">${esc(e.titulo)}</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:2px">
+          📅 ${fecha.toLocaleDateString('es-ES',{weekday:'short',day:'numeric',month:'short'})}${e.hora?' · 🕐 '+e.hora:''}${e.obra_nombre?' · 🏗 '+esc(e.obra_nombre):''}
+        </div>
+        ${e.descripcion?`<div style="font-size:12px;color:var(--muted);margin-top:4px">${esc(e.descripcion)}</div>`:''}
+      </div>
+      <button onclick="editarCalEvento(${e.id})" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:16px;flex-shrink:0;padding:0" title="Editar">✏️</button>
+    </div>`;
+  }).join('');
+}
+
+function abrirModalCalEvento(ev, fechaDefault) {
+  document.getElementById('calEventoId').value = ev?.id || '';
+  document.getElementById('tituloModalCalEvento').textContent = ev ? 'Editar evento' : 'Nuevo evento';
+  document.getElementById('calEvTitulo').value = ev?.titulo || '';
+  document.getElementById('calEvTipo').value = ev?.tipo || 'otro';
+  document.getElementById('calEvRecordatorio').value = ev?.recordatorio_dias ?? 1;
+  document.getElementById('calEvFecha').value = ev?.fecha || fechaDefault || new Date().toISOString().slice(0,10);
+  document.getElementById('calEvHora').value = ev?.hora || '';
+  document.getElementById('calEvDept').value = ev?.departamento || '';
+  document.getElementById('calEvDesc').value = ev?.descripcion || '';
+  document.getElementById('btnEliminarCalEvento').style.display = ev ? '' : 'none';
+  const selObra = document.getElementById('calEvObraId');
+  if (selObra.options.length <= 1) poblarSelectObras('calEvObraId').then(() => { if (ev?.obra_id) selObra.value = ev.obra_id; });
+  else if (ev?.obra_id) selObra.value = ev.obra_id; else selObra.value = '';
+  document.getElementById('modalCalEvento').style.display = 'flex';
+}
+
+function cerrarModalCalEvento() { document.getElementById('modalCalEvento').style.display = 'none'; }
+
+function editarCalEvento(id) {
+  const ev = _calPanelEventos.find(e => e.id === id);
+  if (ev) abrirModalCalEvento(ev);
+}
+
+async function guardarCalEvento() {
+  const id = document.getElementById('calEventoId').value;
+  const titulo = document.getElementById('calEvTitulo').value.trim();
+  if (!titulo) { toast('El título es obligatorio','err'); return; }
+  const fecha = document.getElementById('calEvFecha').value;
+  if (!fecha) { toast('La fecha es obligatoria','err'); return; }
+  const body = {
+    titulo,
+    tipo: document.getElementById('calEvTipo').value,
+    fecha,
+    hora: document.getElementById('calEvHora').value || null,
+    recordatorio_dias: parseInt(document.getElementById('calEvRecordatorio').value)||0,
+    obra_id: document.getElementById('calEvObraId').value || null,
+    departamento: document.getElementById('calEvDept').value || null,
+    descripcion: document.getElementById('calEvDesc').value || null
+  };
+  const r = id
+    ? await apiCall(`/calendario/${id}`, { method:'PUT', body:JSON.stringify(body) }).catch(()=>({}))
+    : await apiCall('/calendario', { method:'POST', body:JSON.stringify(body) }).catch(()=>({}));
+  if (r?.ok || r?.id) {
+    toast(id ? 'Evento actualizado ✓' : 'Evento creado ✓', 'ok');
+    cerrarModalCalEvento();
+    calPanelCargar();
+  } else { toast('Error al guardar evento','err'); }
+}
+
+async function eliminarCalEvento() {
+  const id = document.getElementById('calEventoId').value;
+  if (!id || !confirm('¿Eliminar este evento?')) return;
+  const r = await apiCall(`/calendario/${id}`, { method:'DELETE' }).catch(()=>({}));
+  if (r?.ok || r?.deleted) {
+    toast('Evento eliminado','ok');
+    cerrarModalCalEvento();
+    calPanelCargar();
+  } else { toast('Error al eliminar','err'); }
 }
 
 </script>
