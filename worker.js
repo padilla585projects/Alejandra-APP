@@ -4721,6 +4721,14 @@ export default {
         if (method === 'PUT')    return await actualizarVisitaObra(_vid, request, env);
         if (method === 'DELETE') return await eliminarVisitaObra(_vid, request, env);
       }
+      // ── Analisis de Trabajo Seguro / Job Hazard Analysis (NEW-84) ────────────────
+      if (path === '/ats' && method === 'GET')  return await getAts(request, env);
+      if (path === '/ats' && method === 'POST') return await crearAts(request, env);
+      if (path.startsWith('/ats/')) {
+        const _atsId = parseInt(path.split('/ats/')[1]);
+        if (method === 'PUT')    return await actualizarAts(_atsId, request, env);
+        if (method === 'DELETE') return await eliminarAts(_atsId, request, env);
+      }
       // ── Rendimientos de Produccion / Productivity Tracking (NEW-83) ─────────────
       if (path === '/rendimientos' && method === 'GET')  return await getRendimientos(request, env);
       if (path === '/rendimientos' && method === 'POST') return await crearRendimiento(request, env);
@@ -17877,5 +17885,112 @@ async function eliminarRendimiento(id, request, env) {
   const { empresa_id } = await getAuth(request, env);
   if (!empresa_id) return err('No autorizado', 403);
   await env.DB.prepare(`DELETE FROM rendimientos WHERE id=? AND empresa_id=?`).bind(id, empresa_id).run();
+  return json({ ok: true, deleted: true });
+}
+
+// ── Analisis de Trabajo Seguro / Job Hazard Analysis ATS (NEW-84) ────────────
+async function ensureAtsTable(env) {
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS ats_jha (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    empresa_id      INTEGER NOT NULL,
+    obra_id         INTEGER,
+    numero          TEXT,
+    fecha           TEXT NOT NULL,
+    hora_inicio     TEXT,
+    tarea           TEXT NOT NULL,
+    ubicacion       TEXT,
+    responsable     TEXT,
+    trabajadores    TEXT,
+    peligros        TEXT,
+    controles       TEXT,
+    epis            TEXT,
+    estado          TEXT NOT NULL DEFAULT 'activo',
+    observaciones   TEXT,
+    firmado_por     TEXT,
+    hora_firma      TEXT,
+    created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
+  )`).run().catch(()=>{});
+}
+
+async function getAts(request, env) {
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  await ensureAtsTable(env);
+  const url = new URL(request.url);
+  const obra_id = url.searchParams.get('obra_id');
+  const desde   = url.searchParams.get('desde');
+  const hasta   = url.searchParams.get('hasta');
+  let q = `SELECT * FROM ats_jha WHERE empresa_id=?`;
+  const p = [empresa_id];
+  if (obra_id) { q += ` AND obra_id=?`; p.push(parseInt(obra_id)); }
+  if (desde)   { q += ` AND fecha>=?`;  p.push(desde); }
+  if (hasta)   { q += ` AND fecha<=?`;  p.push(hasta); }
+  q += ` ORDER BY fecha DESC, id DESC LIMIT 300`;
+  const { results } = await env.DB.prepare(q).bind(...p).all();
+  return json({ ats: results || [] });
+}
+
+async function crearAts(request, env) {
+  const { empresa_id, nombre } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  await ensureAtsTable(env);
+  const b = await request.json();
+  if (!b.tarea || !b.fecha) return err('tarea y fecha son requeridos', 400);
+  const anio = new Date().getFullYear();
+  const last = await env.DB.prepare(
+    `SELECT numero FROM ats_jha WHERE empresa_id=? AND numero LIKE ? ORDER BY id DESC LIMIT 1`
+  ).bind(empresa_id, `ATS-${anio}-%`).first();
+  let seq = 1;
+  if (last?.numero) { const n = parseInt(last.numero.split('-')[2]); if (!isNaN(n)) seq = n + 1; }
+  const numero = `ATS-${anio}-${String(seq).padStart(4,'0')}`;
+  const r = await env.DB.prepare(
+    `INSERT INTO ats_jha (empresa_id,obra_id,numero,fecha,hora_inicio,tarea,ubicacion,responsable,trabajadores,peligros,controles,epis,estado,observaciones,firmado_por)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+  ).bind(
+    empresa_id,
+    b.obra_id ? parseInt(b.obra_id) : null,
+    numero, b.fecha,
+    b.hora_inicio || null,
+    b.tarea,
+    b.ubicacion || null,
+    b.responsable || nombre || null,
+    b.trabajadores ? JSON.stringify(b.trabajadores) : null,
+    b.peligros ? JSON.stringify(b.peligros) : null,
+    b.controles ? JSON.stringify(b.controles) : null,
+    b.epis ? JSON.stringify(b.epis) : null,
+    b.estado || 'activo',
+    b.observaciones || null,
+    b.firmado_por || nombre || null
+  ).run();
+  return json({ ok: true, id: r.meta.last_row_id, numero }, { status: 201 });
+}
+
+async function actualizarAts(id, request, env) {
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  await ensureAtsTable(env);
+  const b = await request.json();
+  const allowed = ['fecha','hora_inicio','tarea','ubicacion','responsable','trabajadores',
+    'peligros','controles','epis','estado','observaciones','firmado_por','hora_firma','obra_id'];
+  const sets = [], params = [];
+  for (const k of allowed) {
+    if (k in b) {
+      const v = ['trabajadores','peligros','controles','epis'].includes(k) && typeof b[k] === 'object'
+        ? JSON.stringify(b[k]) : (b[k] ?? null);
+      sets.push(`${k}=?`); params.push(v);
+    }
+  }
+  if (!sets.length) return err('Sin cambios', 400);
+  sets.push(`updated_at=datetime('now')`);
+  params.push(id, empresa_id);
+  await env.DB.prepare(`UPDATE ats_jha SET ${sets.join(',')} WHERE id=? AND empresa_id=?`).bind(...params).run();
+  return json({ ok: true });
+}
+
+async function eliminarAts(id, request, env) {
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  await env.DB.prepare(`DELETE FROM ats_jha WHERE id=? AND empresa_id=?`).bind(id, empresa_id).run();
   return json({ ok: true, deleted: true });
 }

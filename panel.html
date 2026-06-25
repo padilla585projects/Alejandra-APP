@@ -686,6 +686,9 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
     <button class="nav-item" data-page="rendimientos" onclick="navTo('rendimientos')">
       <span class="nav-icon">📈</span> Rendimientos
     </button>
+    <button class="nav-item" data-page="ats" onclick="navTo('ats')">
+      <span class="nav-icon">🔍</span> ATS / Análisis Riesgo
+    </button>
     <button class="nav-item" data-page="fotosObra" onclick="navTo('fotosObra')">
       <span class="nav-icon">📷</span> Galería de Fotos
     </button>
@@ -2314,6 +2317,98 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
               <button class="btn btn-danger" id="btnEliminarCalEvento" style="display:none" onclick="eliminarCalEvento()">🗑 Eliminar</button>
               <button class="btn btn-secondary" onclick="cerrarModalCalEvento()">Cancelar</button>
               <button class="btn btn-primary" onclick="guardarCalEvento()">💾 Guardar</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ATS / JOB HAZARD ANALYSIS (NEW-84) -->
+      <div class="page" id="pageAts">
+        <div class="page-title">🔍 Análisis de Trabajo Seguro (ATS/JHA)</div>
+        <div class="tbl-toolbar">
+          <input class="tbl-search" id="searchAts" placeholder="🔍 Buscar tarea, responsable..." oninput="filtrarAts()">
+          <select class="tbl-search" id="filterAtsObra" style="min-width:220px" onchange="tblAts=null;cargarAts()">
+            <option value="">— Todas las obras —</option>
+          </select>
+          <input class="tbl-search" type="date" id="filterAtsDesde" style="min-width:130px" onchange="tblAts=null;cargarAts()" title="Desde">
+          <input class="tbl-search" type="date" id="filterAtsHasta" style="min-width:130px" onchange="tblAts=null;cargarAts()" title="Hasta">
+          <button class="btn btn-primary" onclick="abrirModalAts()">+ Nuevo ATS</button>
+          <button class="btn btn-secondary" onclick="exportarTabla(tblAts,'ats')">⬇ CSV</button>
+          <button class="btn btn-secondary" onclick="tblAts=null;cargarAts()">🔄</button>
+        </div>
+        <div class="tbl-wrap"><div id="tblAts"></div></div>
+
+        <!-- MODAL ATS -->
+        <div class="modal-overlay" id="modalAts" style="display:none" onclick="if(event.target===this)cerrarModalAts()">
+          <div class="modal" style="max-width:640px">
+            <div class="modal-head">
+              <span id="modalAtsTitulo">Nuevo ATS / Análisis de Riesgo</span>
+              <button class="modal-close" onclick="cerrarModalAts()">✕</button>
+            </div>
+            <div class="modal-body">
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+                <div class="form-group" style="grid-column:1/-1">
+                  <label class="form-label">Tarea / Trabajo a Realizar *</label>
+                  <input class="form-input" id="atsTarea" placeholder="Ej: Tendido de cable en bandeja, Montaje cuadro BT...">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Fecha *</label>
+                  <input class="form-input" type="date" id="atsFecha">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Hora de inicio</label>
+                  <input class="form-input" type="time" id="atsHoraInicio">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Obra</label>
+                  <select class="form-select" id="atsObraId"><option value="">— Sin obra —</option></select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Ubicación / Área</label>
+                  <input class="form-input" id="atsUbicacion" placeholder="Ej: Planta 2, Sala eléctrica B...">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Responsable / Encargado</label>
+                  <input class="form-input" id="atsResponsable" placeholder="Nombre del responsable">
+                </div>
+                <div class="form-group" style="grid-column:1/-1">
+                  <label class="form-label">Trabajadores Involucrados</label>
+                  <input class="form-input" id="atsTrabajadores" placeholder="Ej: Juan García, Pedro López (separados por coma)">
+                </div>
+                <div class="form-group" style="grid-column:1/-1">
+                  <label class="form-label">🚨 Peligros Identificados</label>
+                  <textarea class="form-input" id="atsPeligros" rows="3" placeholder="Lista de peligros/riesgos identificados (uno por línea):&#10;- Caída de altura&#10;- Contacto eléctrico&#10;- Aplastamiento por material..."></textarea>
+                </div>
+                <div class="form-group" style="grid-column:1/-1">
+                  <label class="form-label">🛡️ Medidas de Control / Preventivas</label>
+                  <textarea class="form-input" id="atsControles" rows="3" placeholder="Medidas preventivas para cada peligro (uno por línea):&#10;- Usar arnés y línea de vida&#10;- Bloqueo LOTO antes del trabajo&#10;- Mantener zona despejada..."></textarea>
+                </div>
+                <div class="form-group" style="grid-column:1/-1">
+                  <label class="form-label">🦺 EPIs Requeridos</label>
+                  <input class="form-input" id="atsEpis" placeholder="Ej: Casco, guantes dieléctricos, gafas, arnés, calzado de seguridad...">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Estado</label>
+                  <select class="form-select" id="atsEstado">
+                    <option value="activo">✅ Activo</option>
+                    <option value="cerrado">🔒 Cerrado</option>
+                    <option value="cancelado">❌ Cancelado</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Firmado por</label>
+                  <input class="form-input" id="atsFirmado" placeholder="Nombre del supervisor">
+                </div>
+                <div class="form-group" style="grid-column:1/-1">
+                  <label class="form-label">Observaciones</label>
+                  <textarea class="form-input" id="atsObs" rows="2" placeholder="Notas adicionales, incidencias durante el trabajo..."></textarea>
+                </div>
+              </div>
+            </div>
+            <div class="modal-foot">
+              <button class="btn btn-secondary" onclick="cerrarModalAts()">Cancelar</button>
+              <span id="atsElimBtn"></span>
+              <button class="btn btn-primary" onclick="guardarAts()">💾 Guardar ATS</button>
             </div>
           </div>
         </div>
@@ -6118,6 +6213,7 @@ const PAGE_TITLES = {
   entregables: '📦 Entregables de Proyecto / Project Deliverables',
   lecciones: '💡 Lecciones Aprendidas / Lessons Learned',
   rendimientos: '📈 Rendimientos de Producción / Productivity Tracking',
+  ats: '🔍 Análisis de Trabajo Seguro / Job Hazard Analysis',
 };
 
 const PAGE_LOADERS = {
@@ -6202,6 +6298,7 @@ const PAGE_LOADERS = {
   entregables:     cargarEntregables,
   lecciones:       cargarLecciones,
   rendimientos:    cargarRendimientos,
+  ats:             cargarAts,
 };
 
 let currentPage = '';
@@ -6315,6 +6412,7 @@ const SYNC_INTERVALS = {
   entregables:     120,
   lecciones:       180,
   rendimientos:    90,
+  ats:             60,
 };
 
 let _syncTimer = null, _syncLabelTimer = null, _syncLastTs = null;
@@ -15675,6 +15773,132 @@ function exportarFinanzas() {
   if (!obraId) return showToast('Selecciona una obra primero', 'warning');
   // Abrir informe en nueva pestaña usando el endpoint de informes
   window.open(`/informe-obra/${obraId}?tipo=financiero`, '_blank');
+}
+
+// ── ATS / JOB HAZARD ANALYSIS (NEW-84) ──────────────────────────────
+let tblAts = null, _atsData = [];
+const ATS_ESTADO_COLOR = { activo:'var(--success)', cerrado:'var(--muted)', cancelado:'var(--danger)' };
+const ATS_ESTADO_LABEL = { activo:'✅ Activo', cerrado:'🔒 Cerrado', cancelado:'❌ Cancelado' };
+
+// Helper: parse JSON or split comma-separated string
+function _parseArr(v) {
+  if (!v) return [];
+  try { return JSON.parse(v); } catch { return v.split(',').map(x=>x.trim()).filter(Boolean); }
+}
+
+async function cargarAts() {
+  if (document.getElementById('filterAtsObra')?.options.length <= 1) poblarSelectObras('filterAtsObra');
+  const obraId = document.getElementById('filterAtsObra')?.value || '';
+  const desde  = document.getElementById('filterAtsDesde')?.value || '';
+  const hasta  = document.getElementById('filterAtsHasta')?.value || '';
+  let qs = '';
+  if (obraId) qs += `obra_id=${obraId}&`;
+  if (desde)  qs += `desde=${desde}&`;
+  if (hasta)  qs += `hasta=${hasta}&`;
+  const r = await api('/ats' + (qs ? '?' + qs : ''));
+  _atsData = r?.ats || [];
+  filtrarAts();
+}
+
+function filtrarAts() {
+  const q = (document.getElementById('searchAts')?.value || '').toLowerCase();
+  const data = !q ? _atsData : _atsData.filter(a =>
+    [a.tarea, a.responsable, a.ubicacion, a.numero].some(v => (v||'').toLowerCase().includes(q))
+  );
+  if (tblAts) { tblAts.replaceData(data); return; }
+  tblAts = new Tabulator('#tblAts', {
+    data, layout: 'fitColumns', height: 'calc(100vh - 240px)',
+    placeholder: '<div class="empty-state"><div class="empty-icon">🔍</div><div class="empty-text">Sin análisis de trabajo registrados</div></div>',
+    columns: [
+      { title:'Número', field:'numero', width:130 },
+      { title:'Fecha', field:'fecha', width:100 },
+      { title:'Tarea', field:'tarea', minWidth:230, formatter: c => `<b>${esc(c.getValue()||'—')}</b>` },
+      { title:'Ubicación', field:'ubicacion', width:140 },
+      { title:'Responsable', field:'responsable', width:130 },
+      { title:'Peligros', field:'peligros', width:90, hozAlign:'center', formatter: c => {
+        const arr = _parseArr(c.getValue());
+        return arr.length ? `<span class="badge badge-warn">${arr.length} peligros</span>` : '—';
+      }},
+      { title:'Estado', field:'estado', width:110, formatter: c => `<span style="color:${ATS_ESTADO_COLOR[c.getValue()]||'var(--muted)'};font-weight:600">${ATS_ESTADO_LABEL[c.getValue()]||c.getValue()}</span>` },
+      { title:'', field:'id', width:80, hozAlign:'center',
+        formatter: c => `<button class="tbl-btn" onclick="editarAts(${c.getValue()})">✏️</button><button class="tbl-btn danger" onclick="eliminarAts(${c.getValue()})">🗑</button>` },
+    ]
+  });
+}
+
+function abrirModalAts(d = {}) {
+  document.getElementById('modalAtsTitulo').textContent = d.id ? 'Editar ATS' : 'Nuevo ATS / Análisis de Riesgo';
+  document.getElementById('atsTarea').value       = d.tarea || '';
+  document.getElementById('atsFecha').value       = d.fecha || new Date().toISOString().slice(0,10);
+  document.getElementById('atsHoraInicio').value  = d.hora_inicio || '';
+  document.getElementById('atsResponsable').value = d.responsable || '';
+  document.getElementById('atsUbicacion').value   = d.ubicacion || '';
+  document.getElementById('atsTrabajadores').value = _parseArr(d.trabajadores).join(', ');
+  document.getElementById('atsPeligros').value    = _parseArr(d.peligros).join('\n');
+  document.getElementById('atsControles').value   = _parseArr(d.controles).join('\n');
+  document.getElementById('atsEpis').value        = _parseArr(d.epis).join(', ');
+  document.getElementById('atsEstado').value      = d.estado || 'activo';
+  document.getElementById('atsFirmado').value     = d.firmado_por || '';
+  document.getElementById('atsObs').value         = d.observaciones || '';
+  poblarSelectObras('atsObraId');
+  if (d.obra_id) setTimeout(() => { document.getElementById('atsObraId').value = d.obra_id; }, 200);
+  const elimBtn = document.getElementById('atsElimBtn');
+  elimBtn.innerHTML = d.id ? `<button class="btn btn-danger btn-sm" onclick="eliminarAts(${d.id},true)">🗑 Eliminar</button>` : '';
+  document.getElementById('modalAts')._atsId = d.id || null;
+  document.getElementById('modalAts').style.display = 'flex';
+}
+
+async function editarAts(id) {
+  const d = _atsData.find(a => a.id === id);
+  if (d) abrirModalAts(d);
+}
+
+async function guardarAts() {
+  const id   = document.getElementById('modalAts')._atsId;
+  // Parse textarea lines to arrays
+  const peligros  = document.getElementById('atsPeligros').value.split('\n').map(x=>x.trim().replace(/^[-•]\s*/,'')).filter(Boolean);
+  const controles = document.getElementById('atsControles').value.split('\n').map(x=>x.trim().replace(/^[-•]\s*/,'')).filter(Boolean);
+  const epis      = document.getElementById('atsEpis').value.split(',').map(x=>x.trim()).filter(Boolean);
+  const trabs     = document.getElementById('atsTrabajadores').value.split(',').map(x=>x.trim()).filter(Boolean);
+  const body = {
+    tarea:        document.getElementById('atsTarea').value.trim(),
+    fecha:        document.getElementById('atsFecha').value,
+    hora_inicio:  document.getElementById('atsHoraInicio').value || null,
+    obra_id:      document.getElementById('atsObraId').value || null,
+    responsable:  document.getElementById('atsResponsable').value.trim() || null,
+    ubicacion:    document.getElementById('atsUbicacion').value.trim() || null,
+    trabajadores: trabs,
+    peligros,
+    controles,
+    epis,
+    estado:       document.getElementById('atsEstado').value,
+    firmado_por:  document.getElementById('atsFirmado').value.trim() || null,
+    observaciones: document.getElementById('atsObs').value.trim() || null,
+  };
+  if (!body.tarea || !body.fecha) { toast('Tarea y fecha son obligatorias', 'err'); return; }
+  const r = await api(id ? `/ats/${id}` : '/ats', { method: id ? 'PUT' : 'POST', body: JSON.stringify(body) });
+  if (r.ok || r.id) {
+    toast(id ? 'ATS actualizado' : `ATS ${r.numero||''} creado`, 'ok');
+    cerrarModalAts();
+    tblAts = null;
+    cargarAts();
+  } else toast('Error al guardar', 'err');
+}
+
+async function eliminarAts(id, desdeModal = false) {
+  if (!confirm('¿Eliminar este ATS?')) return;
+  const r = await api(`/ats/${id}`, { method: 'DELETE' });
+  if (r.ok || r.deleted) {
+    toast('ATS eliminado', 'ok');
+    if (desdeModal) cerrarModalAts();
+    tblAts = null;
+    cargarAts();
+  } else toast('Error al eliminar', 'err');
+}
+
+function cerrarModalAts() {
+  document.getElementById('modalAts').style.display = 'none';
+  document.getElementById('modalAts')._atsId = null;
 }
 
 // ── RENDIMIENTOS DE PRODUCCIÓN / PRODUCTIVITY TRACKING (NEW-83) ────
