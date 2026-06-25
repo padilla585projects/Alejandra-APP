@@ -510,6 +510,9 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
       <span class="nav-icon">📝</span> Punch List
       <span class="nav-badge" id="punchBadge" style="display:none">!</span>
     </button>
+    <button class="nav-item" data-page="contactosObra" onclick="navTo('contactosObra')">
+      <span class="nav-icon">👥</span> Directorio de Contactos
+    </button>
 
     <div class="sidebar-section" onclick="sidebarToggle(this)" data-sid="planificacion"><span>📊 Planificación</span><span class="sec-chevron">▼</span></div>
     <button class="nav-item" data-page="presupuesto" onclick="navTo('presupuesto')">
@@ -527,6 +530,9 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
     </button>
     <button class="nav-item" data-page="costesObra" onclick="navTo('costesObra')">
       <span class="nav-icon">💰</span> Control de Costes
+    </button>
+    <button class="nav-item" data-page="contratosObra" onclick="navTo('contratosObra')">
+      <span class="nav-icon">📑</span> Contratos
     </button>
 
     <div class="sidebar-section" onclick="sidebarToggle(this)" data-sid="seguimiento"><span>📓 Seguimiento</span><span class="sec-chevron">▼</span></div>
@@ -1472,6 +1478,64 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
         <!-- Tabla de entradas de coste -->
         <div style="font-family:'Montserrat',sans-serif;font-weight:700;font-size:10px;letter-spacing:2px;color:var(--muted);text-transform:uppercase;margin-bottom:10px">📝 Detalle de gastos</div>
         <div class="tbl-wrap"><div id="tblCostes"></div></div>
+      </div>
+
+      <!-- DIRECTORIO DE CONTACTOS DE OBRA -->
+      <div class="page" id="pageContactosObra">
+        <div class="page-title">👥 Directorio de Contactos</div>
+        <div class="page-sub">Arquitectos, inspectores, clientes, subcontratas y proveedores por obra</div>
+        <div class="tbl-toolbar" style="flex-wrap:wrap;gap:8px;margin-bottom:16px">
+          <input class="tbl-search" id="searchContactos" placeholder="🔍 Buscar nombre, empresa, email..." oninput="filtrarContactos()">
+          <select class="tbl-search" id="filterContactosObra" style="min-width:200px" onchange="cargarContactosObra()">
+            <option value="">🏗 Todas las obras</option>
+          </select>
+          <select class="tbl-search" id="filterContactosRol" style="min-width:160px" onchange="cargarContactosObra()">
+            <option value="">Todos los roles</option>
+            <option value="cliente">👔 Cliente</option>
+            <option value="arquitecto">🏛 Arquitecto / Proyectista</option>
+            <option value="aparejador">📐 Aparejador / D.E.</option>
+            <option value="inspector">🔍 Inspector / Supervisor</option>
+            <option value="subcontrata">🏢 Subcontrata</option>
+            <option value="proveedor">📦 Proveedor</option>
+            <option value="seguridad">🦺 Coordinador de Seguridad</option>
+            <option value="otros">📋 Otros</option>
+          </select>
+          <button class="btn btn-primary" onclick="abrirModalContacto()">+ Nuevo contacto</button>
+          <button class="btn btn-secondary" onclick="cargarContactosObra()">🔄 Actualizar</button>
+        </div>
+        <div id="contactosResumen" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;margin-bottom:18px"></div>
+        <div id="contactosGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px"></div>
+      </div>
+
+      <!-- GESTION DE CONTRATOS DE OBRA -->
+      <div class="page" id="pageContratosObra">
+        <div class="page-title">📑 Gestión de Contratos</div>
+        <div class="page-sub">Contratos de subcontrata y suministro — importes, estados y modificaciones</div>
+        <div class="tbl-toolbar" style="flex-wrap:wrap;gap:8px;margin-bottom:16px">
+          <select class="tbl-search" id="filterContratosObra" style="min-width:220px" onchange="cargarContratosObra()">
+            <option value="">🏗 Todas las obras</option>
+          </select>
+          <select class="tbl-search" id="filterContratosTipo" style="min-width:150px" onchange="cargarContratosObra()">
+            <option value="">Todos los tipos</option>
+            <option value="subcontrata">🏢 Subcontrata</option>
+            <option value="suministro">📦 Suministro</option>
+            <option value="principal">🏗 Contrato principal</option>
+            <option value="servicio">🔧 Servicio</option>
+          </select>
+          <select class="tbl-search" id="filterContratosEstado" style="min-width:140px" onchange="cargarContratosObra()">
+            <option value="">Todos los estados</option>
+            <option value="borrador">✏️ Borrador</option>
+            <option value="en_firma">📝 En firma</option>
+            <option value="activo">✅ Activo</option>
+            <option value="finalizado">🏁 Finalizado</option>
+            <option value="cancelado">❌ Cancelado</option>
+          </select>
+          <button class="btn btn-primary" onclick="abrirModalContrato()">+ Nuevo contrato</button>
+          <button class="btn btn-secondary" onclick="exportarTabla(tblContratos,'contratos')">⬇ CSV</button>
+          <button class="btn btn-secondary" onclick="cargarContratosObra()">🔄 Actualizar</button>
+        </div>
+        <div id="contratosResumen" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:18px"></div>
+        <div class="tbl-wrap"><div id="tblContratos"></div></div>
       </div>
 
       <!-- PLANOS DE OBRA -->
@@ -2989,6 +3053,8 @@ const PAGE_TITLES = {
   planosObra: '📐 Planos de Obra',
   punchList: '📝 Punch List',
   costesObra: '💰 Control de Costes',
+  contactosObra: '👥 Directorio de Contactos',
+  contratosObra: '📑 Gestión de Contratos',
 };
 
 const PAGE_LOADERS = {
@@ -3035,6 +3101,8 @@ const PAGE_LOADERS = {
   planosObra: cargarPlanosObra,
   punchList: cargarPunchList,
   costesObra: cargarCostesObra,
+  contactosObra: cargarContactosObra,
+  contratosObra: cargarContratosObra,
 };
 
 let currentPage = '';
@@ -3110,6 +3178,8 @@ const SYNC_INTERVALS = {
   planosObra: 120,
   punchList: 60,
   costesObra: 90,
+  contactosObra: 300,
+  contratosObra: 180,
 };
 
 let _syncTimer = null, _syncLabelTimer = null, _syncLastTs = null;
@@ -11161,6 +11231,272 @@ async function eliminarCosteObra(id) {
   if (!confirm('¿Eliminar este gasto?')) return;
   const r = await api(`/costes-obra/${id}`, { method: 'DELETE' });
   if (r.ok) { toast('Eliminado', 'ok'); cerrarModal(); tblCostes = null; cargarCostesObra(); }
+  else toast('Error al eliminar', 'err');
+}
+
+// ── DIRECTORIO DE CONTACTOS DE OBRA ──────────────────────────────
+let _contactosData = [];
+const ROL_INFO = {
+  cliente:     { icon: '👔', color: '#6366f1', label: 'Cliente' },
+  arquitecto:  { icon: '🏛', color: '#0ea5e9', label: 'Arquitecto' },
+  aparejador:  { icon: '📐', color: '#06b6d4', label: 'Aparejador' },
+  inspector:   { icon: '🔍', color: '#f59e0b', label: 'Inspector' },
+  subcontrata: { icon: '🏢', color: '#8b5cf6', label: 'Subcontrata' },
+  proveedor:   { icon: '📦', color: '#10b981', label: 'Proveedor' },
+  seguridad:   { icon: '🦺', color: '#ef4444', label: 'Coord. Seguridad' },
+  otros:       { icon: '📋', color: '#94a3b8', label: 'Otros' },
+};
+
+async function cargarContactosObra() {
+  if (document.getElementById('filterContactosObra')?.options.length <= 1) poblarSelectObras('filterContactosObra');
+  const obraId = document.getElementById('filterContactosObra')?.value || '';
+  const rol    = document.getElementById('filterContactosRol')?.value || '';
+  let url = `/contactos-obra?`;
+  if (obraId) url += `obra_id=${obraId}&`;
+  if (rol)    url += `rol=${rol}&`;
+  const r = await api(url);
+  _contactosData = r?.contactos || [];
+  const roles = {};
+  _contactosData.forEach(c => { roles[c.rol||'otros'] = (roles[c.rol||'otros']||0)+1; });
+  document.getElementById('contactosResumen').innerHTML =
+    `<div class="kpi-card"><div class="kpi-icon">👥</div><div class="kpi-value">${_contactosData.length}</div><div class="kpi-label">Total contactos</div></div>` +
+    Object.entries(roles).map(([rr,n]) => {
+      const info = ROL_INFO[rr] || ROL_INFO.otros;
+      return `<div class="kpi-card"><div class="kpi-icon">${info.icon}</div><div class="kpi-value">${n}</div><div class="kpi-label">${info.label}</div></div>`;
+    }).join('');
+  filtrarContactos();
+}
+
+function filtrarContactos() {
+  const q = (document.getElementById('searchContactos')?.value||'').toLowerCase();
+  const filtered = q ? _contactosData.filter(c =>
+    (c.nombre||'').toLowerCase().includes(q) ||
+    (c.empresa||'').toLowerCase().includes(q) ||
+    (c.email||'').toLowerCase().includes(q) ||
+    (c.telefono||'').toLowerCase().includes(q)
+  ) : _contactosData;
+  renderContactosGrid(filtered);
+}
+
+function renderContactosGrid(items) {
+  const el = document.getElementById('contactosGrid');
+  if (!items.length) {
+    el.innerHTML = '<div class="empty-state" style="grid-column:1/-1"><div class="empty-icon">👥</div><div class="empty-text">Sin contactos registrados</div></div>';
+    return;
+  }
+  el.innerHTML = items.map(c => {
+    const info = ROL_INFO[c.rol||'otros'] || ROL_INFO.otros;
+    const iniciales = (c.nombre||'?').split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase();
+    return `<div class="section-card" style="cursor:pointer">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">
+        <div style="width:44px;height:44px;border-radius:50%;background:${info.color}22;border:2px solid ${info.color};display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:800;color:${info.color};flex-shrink:0">${iniciales}</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:700;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(c.nombre||'')}</div>
+          <div style="font-size:12px;color:var(--muted);display:flex;align-items:center;gap:4px"><span>${info.icon}</span> ${info.label}</div>
+        </div>
+      </div>
+      ${c.empresa ? `<div style="font-size:12px;margin-bottom:6px">🏢 <strong>${esc(c.empresa)}</strong></div>` : ''}
+      ${c.email   ? `<div style="font-size:12px;color:var(--primary);margin-bottom:4px">✉️ <a href="mailto:${esc(c.email)}" style="color:inherit">${esc(c.email)}</a></div>` : ''}
+      ${c.telefono||c.movil ? `<div style="font-size:12px;margin-bottom:4px">📞 ${esc(c.telefono||'')}${c.telefono&&c.movil?' · ':''}${c.movil?'📱 '+esc(c.movil):''}</div>` : ''}
+      ${c.notas   ? `<div style="font-size:11px;color:var(--muted);margin-top:6px;border-top:1px solid var(--border);padding-top:6px">${esc(c.notas)}</div>` : ''}
+      <div style="display:flex;gap:6px;margin-top:10px;justify-content:flex-end">
+        <button class="btn btn-secondary btn-sm" onclick="abrirModalContactoEditar(${c.id})">✏️ Editar</button>
+        <button class="btn btn-danger btn-sm" onclick="eliminarContactoObra(${c.id})">🗑</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function abrirModalContacto(d) {
+  d = d || {};
+  const id = d.id || 0;
+  abrirModal(`
+    <h3 style="margin:0 0 18px">${id ? '✏️ Editar' : '+ Nuevo'} Contacto</h3>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <label style="grid-column:1/-1">Nombre *<input class="form-input" id="ctNombre" value="${esc(d.nombre||'')}" placeholder="Nombre completo"></label>
+      <label>Rol<select class="form-input" id="ctRol">
+        ${Object.entries(ROL_INFO).map(([v,i])=>`<option value="${v}"${d.rol===v?' selected':''}>${i.icon} ${i.label}</option>`).join('')}
+      </select></label>
+      <label>Empresa / Organización<input class="form-input" id="ctEmpresa" value="${esc(d.empresa||'')}" placeholder="Nombre empresa"></label>
+      <label>Email<input class="form-input" id="ctEmail" type="email" value="${esc(d.email||'')}" placeholder="correo@empresa.com"></label>
+      <label>Teléfono<input class="form-input" id="ctTelefono" value="${esc(d.telefono||'')}" placeholder="+34 000 000 000"></label>
+      <label>Móvil<input class="form-input" id="ctMovil" value="${esc(d.movil||'')}" placeholder="+34 600 000 000"></label>
+      <label style="grid-column:1/-1">Obra asociada<select class="form-input" id="ctObraId"><option value="">— Global / sin obra —</option></select></label>
+      <label style="grid-column:1/-1">Notas<textarea class="form-input" id="ctNotas" rows="3" placeholder="Notas adicionales...">${esc(d.notas||'')}</textarea></label>
+    </div>
+    <div style="display:flex;gap:10px;margin-top:18px;justify-content:flex-end">
+      <button class="btn btn-secondary" onclick="cerrarModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="guardarContactoObra(${id})">💾 Guardar</button>
+    </div>
+  `);
+  poblarSelectObras('ctObraId').then(() => {
+    if (d.obra_id) { const s = document.getElementById('ctObraId'); if (s) s.value = d.obra_id; }
+  });
+}
+
+async function abrirModalContactoEditar(id) {
+  const r = await api(`/contactos-obra?`);
+  const c = (r?.contactos||[]).find(x=>x.id===id) || {};
+  abrirModalContacto(c);
+}
+
+async function guardarContactoObra(id) {
+  const body = {
+    nombre:   document.getElementById('ctNombre')?.value?.trim(),
+    rol:      document.getElementById('ctRol')?.value,
+    empresa:  document.getElementById('ctEmpresa')?.value?.trim(),
+    email:    document.getElementById('ctEmail')?.value?.trim(),
+    telefono: document.getElementById('ctTelefono')?.value?.trim(),
+    movil:    document.getElementById('ctMovil')?.value?.trim(),
+    obra_id:  document.getElementById('ctObraId')?.value || null,
+    notas:    document.getElementById('ctNotas')?.value?.trim(),
+  };
+  if (!body.nombre) { toast('Nombre obligatorio', 'err'); return; }
+  const method = id ? 'PUT' : 'POST';
+  const url    = id ? `/contactos-obra/${id}` : '/contactos-obra';
+  const r = await api(url, { method, body: JSON.stringify(body) });
+  if (r.ok || r.id) { toast(id ? 'Actualizado' : 'Contacto creado', 'ok'); cerrarModal(); cargarContactosObra(); }
+  else toast(r.error || 'Error', 'err');
+}
+
+async function eliminarContactoObra(id) {
+  if (!confirm('¿Eliminar este contacto?')) return;
+  const r = await api(`/contactos-obra/${id}`, { method: 'DELETE' });
+  if (r.ok) { toast('Eliminado', 'ok'); cargarContactosObra(); }
+  else toast('Error al eliminar', 'err');
+}
+
+// ── GESTION DE CONTRATOS DE OBRA ─────────────────────────────────
+let tblContratos = null, _contratosData = [];
+const CONTRATO_TIPO_ICON = { subcontrata:'🏢', suministro:'📦', principal:'🏗', servicio:'🔧' };
+const CONTRATO_ESTADO_COLOR = { borrador:'var(--muted)', en_firma:'var(--warning)', activo:'var(--success)', finalizado:'var(--primary)', cancelado:'var(--danger)' };
+
+async function cargarContratosObra() {
+  if (document.getElementById('filterContratosObra')?.options.length <= 1) poblarSelectObras('filterContratosObra');
+  const obraId = document.getElementById('filterContratosObra')?.value || '';
+  const tipo   = document.getElementById('filterContratosTipo')?.value || '';
+  const estado = document.getElementById('filterContratosEstado')?.value || '';
+  let url = `/contratos-obra?`;
+  if (obraId) url += `obra_id=${obraId}&`;
+  if (tipo)   url += `tipo=${tipo}&`;
+  const r = await api(url);
+  _contratosData = (r?.contratos||[]).filter(c => !estado || c.estado === estado);
+
+  const totalOriginal = _contratosData.reduce((s,c)=>s+(c.importe_original||0),0);
+  const totalActual   = _contratosData.reduce((s,c)=>s+(c.importe_actual||0),0);
+  const activos   = _contratosData.filter(c=>c.estado==='activo').length;
+  const pendFirma = _contratosData.filter(c=>c.estado==='en_firma').length;
+  const desv = totalOriginal > 0 ? ((totalActual-totalOriginal)/totalOriginal*100).toFixed(1) : 0;
+  document.getElementById('contratosResumen').innerHTML = `
+    <div class="kpi-card"><div class="kpi-icon">📑</div><div class="kpi-value">${_contratosData.length}</div><div class="kpi-label">Contratos</div></div>
+    <div class="kpi-card"><div class="kpi-icon">✅</div><div class="kpi-value" style="color:var(--success)">${activos}</div><div class="kpi-label">Activos</div></div>
+    <div class="kpi-card"><div class="kpi-icon">📝</div><div class="kpi-value" style="color:${pendFirma>0?'var(--warning)':'var(--muted)'}">${pendFirma}</div><div class="kpi-label">En firma</div></div>
+    <div class="kpi-card"><div class="kpi-icon">💶</div><div class="kpi-value" style="font-size:18px">${fmtMoney(totalOriginal)}</div><div class="kpi-label">Importe original</div></div>
+    <div class="kpi-card"><div class="kpi-icon">💰</div><div class="kpi-value" style="font-size:18px;color:${totalActual>totalOriginal?'var(--danger)':'var(--success)'}">${fmtMoney(totalActual)}</div><div class="kpi-label">Importe actual</div></div>
+    <div class="kpi-card"><div class="kpi-icon">${parseFloat(desv)>0?'🔴':'🟢'}</div><div class="kpi-value" style="color:${parseFloat(desv)>0?'var(--danger)':'var(--success)'}">${desv>0?'+':''}${desv}%</div><div class="kpi-label">Desviación</div></div>
+  `;
+  const cols = [
+    { title: 'Nº', field: 'numero', width: 130 },
+    { title: 'Contratista', field: 'contratista', minWidth: 160 },
+    { title: 'Título / Alcance', field: 'titulo', minWidth: 200 },
+    { title: 'Tipo', field: 'tipo', width: 110, formatter: (cell) => {
+      const v = cell.getValue()||''; return `${CONTRATO_TIPO_ICON[v]||'📋'} ${v}`;
+    }},
+    { title: 'Estado', field: 'estado', width: 110, formatter: (cell) => {
+      const v = cell.getValue()||''; return `<span style="color:${CONTRATO_ESTADO_COLOR[v]||'inherit'};font-weight:700">${v}</span>`;
+    }},
+    { title: 'Importe original', field: 'importe_original', width: 140, formatter: (cell) => fmtMoney(cell.getValue()||0), hozAlign:'right' },
+    { title: 'Importe actual', field: 'importe_actual', width: 130, formatter: (cell) => {
+      const row = cell.getRow().getData();
+      const v = cell.getValue()||0; const orig = row.importe_original||0;
+      const color = v > orig ? 'var(--danger)' : v < orig ? 'var(--success)' : 'inherit';
+      return `<span style="color:${color};font-weight:700">${fmtMoney(v)}</span>`;
+    }, hozAlign:'right'},
+    { title: 'Firma', field: 'fecha_firma', width: 100, formatter: (cell) => fmtFecha(cell.getValue()||'') },
+    { title: 'Acciones', field: 'id', width: 110, formatter: (cell) => {
+      const id = cell.getValue();
+      return `<button class="btn btn-secondary btn-sm" onclick="abrirModalContratoEditar(${id})">✏️</button>
+              <button class="btn btn-danger btn-sm" onclick="eliminarContratoObra(${id})">🗑</button>`;
+    }, headerSort: false },
+  ];
+  if (tblContratos) { tblContratos.replaceData(_contratosData); return; }
+  tblContratos = new Tabulator('#tblContratos', {
+    data: _contratosData, layout: 'fitColumns', responsiveLayout: 'collapse',
+    pagination: 'local', paginationSize: 25,
+    placeholder: '<div class="empty-state"><div class="empty-icon">📑</div><div class="empty-text">Sin contratos registrados</div></div>',
+    columns: cols,
+  });
+}
+
+function abrirModalContrato(d) {
+  d = d || {};
+  const id = d.id || 0;
+  abrirModal(`
+    <h3 style="margin:0 0 18px">${id ? '✏️ Editar' : '+ Nuevo'} Contrato</h3>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <label>Título / Alcance *<input class="form-input" id="cnTitulo" value="${esc(d.titulo||'')}" placeholder="Descripción del contrato"></label>
+      <label>Contratista<input class="form-input" id="cnContratista" value="${esc(d.contratista||'')}" placeholder="Empresa contratista"></label>
+      <label>Tipo<select class="form-input" id="cnTipo">
+        <option value="subcontrata"${d.tipo==='subcontrata'?' selected':''}>🏢 Subcontrata</option>
+        <option value="suministro"${d.tipo==='suministro'?' selected':''}>📦 Suministro</option>
+        <option value="principal"${d.tipo==='principal'?' selected':''}>🏗 Contrato principal</option>
+        <option value="servicio"${d.tipo==='servicio'?' selected':''}>🔧 Servicio</option>
+      </select></label>
+      <label>Estado<select class="form-input" id="cnEstado">
+        <option value="borrador"${d.estado==='borrador'||!d.estado?' selected':''}>✏️ Borrador</option>
+        <option value="en_firma"${d.estado==='en_firma'?' selected':''}>📝 En firma</option>
+        <option value="activo"${d.estado==='activo'?' selected':''}>✅ Activo</option>
+        <option value="finalizado"${d.estado==='finalizado'?' selected':''}>🏁 Finalizado</option>
+        <option value="cancelado"${d.estado==='cancelado'?' selected':''}>❌ Cancelado</option>
+      </select></label>
+      <label>Importe original (€)<input class="form-input" id="cnImporte" type="number" step="0.01" value="${d.importe_original||0}"></label>
+      <label>Fecha de firma<input class="form-input" id="cnFechaFirma" type="date" value="${d.fecha_firma||''}"></label>
+      <label>Fecha inicio<input class="form-input" id="cnFechaInicio" type="date" value="${d.fecha_inicio||''}"></label>
+      <label>Fecha fin<input class="form-input" id="cnFechaFin" type="date" value="${d.fecha_fin||''}"></label>
+      <label style="grid-column:1/-1">Obra<select class="form-input" id="cnObraId"><option value="">— Sin obra —</option></select></label>
+      <label style="grid-column:1/-1">Descripción / Alcance<textarea class="form-input" id="cnDesc" rows="3" placeholder="Descripción del alcance del contrato...">${esc(d.descripcion||'')}</textarea></label>
+    </div>
+    <div style="display:flex;gap:10px;margin-top:18px;justify-content:flex-end">
+      <button class="btn btn-secondary" onclick="cerrarModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="guardarContratoObra(${id})">💾 Guardar</button>
+    </div>
+  `);
+  poblarSelectObras('cnObraId').then(() => {
+    if (d.obra_id) { const s = document.getElementById('cnObraId'); if (s) s.value = d.obra_id; }
+  });
+}
+
+async function abrirModalContratoEditar(id) {
+  const r = await api(`/contratos-obra?`);
+  const c = (r?.contratos||[]).find(x=>x.id===id) || {};
+  abrirModalContrato(c);
+}
+
+async function guardarContratoObra(id) {
+  const body = {
+    titulo:           document.getElementById('cnTitulo')?.value?.trim(),
+    contratista:      document.getElementById('cnContratista')?.value?.trim(),
+    tipo:             document.getElementById('cnTipo')?.value,
+    estado:           document.getElementById('cnEstado')?.value,
+    importe_original: parseFloat(document.getElementById('cnImporte')?.value||0),
+    fecha_firma:      document.getElementById('cnFechaFirma')?.value || null,
+    fecha_inicio:     document.getElementById('cnFechaInicio')?.value || null,
+    fecha_fin:        document.getElementById('cnFechaFin')?.value || null,
+    obra_id:          document.getElementById('cnObraId')?.value || null,
+    descripcion:      document.getElementById('cnDesc')?.value?.trim(),
+  };
+  if (!body.titulo) { toast('Título obligatorio', 'err'); return; }
+  const method = id ? 'PUT' : 'POST';
+  const url    = id ? `/contratos-obra/${id}` : '/contratos-obra';
+  const r = await api(url, { method, body: JSON.stringify(body) });
+  if (r.ok || r.id) { toast(id ? 'Actualizado' : `Contrato ${r.numero||''} creado`, 'ok'); cerrarModal(); tblContratos = null; cargarContratosObra(); }
+  else toast(r.error || 'Error', 'err');
+}
+
+async function eliminarContratoObra(id) {
+  if (!confirm('¿Eliminar este contrato? Se eliminarán también sus modificaciones.')) return;
+  const r = await api(`/contratos-obra/${id}`, { method: 'DELETE' });
+  if (r.ok) { toast('Eliminado', 'ok'); tblContratos = null; cargarContratosObra(); }
   else toast('Error al eliminar', 'err');
 }
 

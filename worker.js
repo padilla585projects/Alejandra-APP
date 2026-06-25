@@ -4624,6 +4624,22 @@ export default {
         if (method === 'PUT')    return await actualizarCosteObra(_coid, request, env);
         if (method === 'DELETE') return await eliminarCosteObra(_coid, request, env);
       }
+      // ── Directorio de Contactos de Obra (NEW-46) ─────────────────────────────
+      if (path === '/contactos-obra' && method === 'GET')  return await getContactosObra(request, env);
+      if (path === '/contactos-obra' && method === 'POST') return await crearContactoObra(request, env);
+      if (path.startsWith('/contactos-obra/')) {
+        const _ctid = parseInt(path.split('/contactos-obra/')[1]);
+        if (method === 'PUT')    return await actualizarContactoObra(_ctid, request, env);
+        if (method === 'DELETE') return await eliminarContactoObra(_ctid, request, env);
+      }
+      // ── Gestion de Contratos (NEW-47) ────────────────────────────────────────
+      if (path === '/contratos-obra' && method === 'GET')  return await getContratosObra(request, env);
+      if (path === '/contratos-obra' && method === 'POST') return await crearContratoObra(request, env);
+      if (path.startsWith('/contratos-obra/')) {
+        const _cnid = parseInt(path.split('/contratos-obra/')[1]);
+        if (method === 'PUT')    return await actualizarContratoObra(_cnid, request, env);
+        if (method === 'DELETE') return await eliminarContratoObra(_cnid, request, env);
+      }
       // ── Punch List / Lista de Verificacion (NEW-44) ─────────────────────────
       if (path === '/punch-list' && method === 'GET')    return await getPunchList(request, env);
       if (path === '/punch-list' && method === 'POST')   return await crearPunchItem(request, env);
@@ -14034,5 +14050,178 @@ async function eliminarCosteObra(id, request, env) {
   const auth = await getAuth(request, env);
   if (!auth?.empresa_id) return err('No autorizado', 403);
   await env.DB.prepare(`DELETE FROM costes_obra WHERE id=? AND empresa_id=?`).bind(id, auth.empresa_id).run();
+  return json({ ok: true });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  NEW-46 — DIRECTORIO DE CONTACTOS DE OBRA
+// ═══════════════════════════════════════════════════════════════════════════
+async function ensureContactosObraTable(env) {
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS contactos_obra (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    empresa_id INTEGER,
+    obra_id INTEGER,
+    nombre TEXT NOT NULL,
+    rol TEXT,
+    empresa TEXT,
+    email TEXT,
+    telefono TEXT,
+    movil TEXT,
+    notas TEXT,
+    activo INTEGER DEFAULT 1,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`).run();
+}
+async function getContactosObra(request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth?.empresa_id) return err('No autorizado', 403);
+  await ensureContactosObraTable(env);
+  const url = new URL(request.url);
+  const obraId = url.searchParams.get('obra_id');
+  const rol    = url.searchParams.get('rol');
+  let q = `SELECT * FROM contactos_obra WHERE empresa_id=? AND activo=1`;
+  const params = [auth.empresa_id];
+  if (obraId) { q += ` AND obra_id=?`; params.push(parseInt(obraId)); }
+  if (rol)    { q += ` AND rol=?`;     params.push(rol); }
+  q += ` ORDER BY rol, nombre`;
+  const { results } = await env.DB.prepare(q).bind(...params).all();
+  return json({ contactos: results });
+}
+async function crearContactoObra(request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth?.empresa_id) return err('No autorizado', 403);
+  await ensureContactosObraTable(env);
+  const b = await request.json();
+  if (!b.nombre) return err('nombre requerido', 400);
+  const r = await env.DB.prepare(`
+    INSERT INTO contactos_obra (empresa_id, obra_id, nombre, rol, empresa, email, telefono, movil, notas, activo)
+    VALUES (?,?,?,?,?,?,?,?,?,1)
+  `).bind(auth.empresa_id, b.obra_id||null, b.nombre, b.rol||null, b.empresa||null,
+          b.email||null, b.telefono||null, b.movil||null, b.notas||null).run();
+  return json({ ok: true, id: r.meta?.last_row_id });
+}
+async function actualizarContactoObra(id, request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth?.empresa_id) return err('No autorizado', 403);
+  const b = await request.json();
+  await env.DB.prepare(`
+    UPDATE contactos_obra SET nombre=?, rol=?, empresa=?, email=?, telefono=?, movil=?, notas=?, obra_id=?
+    WHERE id=? AND empresa_id=?
+  `).bind(b.nombre||null, b.rol||null, b.empresa||null, b.email||null,
+          b.telefono||null, b.movil||null, b.notas||null, b.obra_id||null,
+          id, auth.empresa_id).run();
+  return json({ ok: true });
+}
+async function eliminarContactoObra(id, request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth?.empresa_id) return err('No autorizado', 403);
+  // Soft delete
+  await env.DB.prepare(`UPDATE contactos_obra SET activo=0 WHERE id=? AND empresa_id=?`).bind(id, auth.empresa_id).run();
+  return json({ ok: true });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  NEW-47 — GESTION DE CONTRATOS DE OBRA
+// ═══════════════════════════════════════════════════════════════════════════
+async function ensureContratosObraTable(env) {
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS contratos_obra (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    empresa_id INTEGER,
+    obra_id INTEGER,
+    numero TEXT,
+    tipo TEXT DEFAULT 'subcontrata',
+    titulo TEXT NOT NULL,
+    contratista TEXT,
+    contacto_id INTEGER,
+    importe_original REAL DEFAULT 0,
+    importe_actual REAL DEFAULT 0,
+    estado TEXT DEFAULT 'borrador',
+    fecha_firma TEXT,
+    fecha_inicio TEXT,
+    fecha_fin TEXT,
+    descripcion TEXT,
+    notas TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+  )`).run();
+  // Tabla de ordenes de modificacion de contrato (amendments)
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS contratos_amendments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    empresa_id INTEGER,
+    contrato_id INTEGER,
+    numero TEXT,
+    descripcion TEXT,
+    importe REAL DEFAULT 0,
+    estado TEXT DEFAULT 'pendiente',
+    fecha TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`).run();
+}
+async function getContratosObra(request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth?.empresa_id) return err('No autorizado', 403);
+  await ensureContratosObraTable(env);
+  const url = new URL(request.url);
+  const obraId = url.searchParams.get('obra_id');
+  const tipo   = url.searchParams.get('tipo');
+  let q = `SELECT c.*, (SELECT COALESCE(SUM(a.importe),0) FROM contratos_amendments a WHERE a.contrato_id=c.id AND a.estado='aprobado') as total_amendments
+            FROM contratos_obra c WHERE c.empresa_id=?`;
+  const params = [auth.empresa_id];
+  if (obraId) { q += ` AND c.obra_id=?`; params.push(parseInt(obraId)); }
+  if (tipo)   { q += ` AND c.tipo=?`;    params.push(tipo); }
+  q += ` ORDER BY c.created_at DESC`;
+  const { results } = await env.DB.prepare(q).bind(...params).all();
+  // Totales
+  const totalOriginal = results.reduce((s,c)=>s+(c.importe_original||0),0);
+  const totalActual   = results.reduce((s,c)=>s+(c.importe_actual||0),0);
+  return json({ contratos: results, total_original: totalOriginal, total_actual: totalActual });
+}
+async function crearContratoObra(request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth?.empresa_id) return err('No autorizado', 403);
+  await ensureContratosObraTable(env);
+  const b = await request.json();
+  if (!b.titulo) return err('titulo requerido', 400);
+  // Auto-numero: CONT-YYYY-NNNN
+  const year = new Date().getFullYear();
+  const { results: cntR } = await env.DB.prepare(
+    `SELECT COUNT(*)+1 as n FROM contratos_obra WHERE empresa_id=? AND substr(numero,6,4)=?`
+  ).bind(auth.empresa_id, String(year)).all();
+  const num = `CONT-${year}-${String(cntR[0]?.n||1).padStart(4,'0')}`;
+  const r = await env.DB.prepare(`
+    INSERT INTO contratos_obra (empresa_id, obra_id, numero, tipo, titulo, contratista, contacto_id,
+      importe_original, importe_actual, estado, fecha_firma, fecha_inicio, fecha_fin, descripcion, notas)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+  `).bind(auth.empresa_id, b.obra_id||null, num, b.tipo||'subcontrata', b.titulo,
+          b.contratista||null, b.contacto_id||null,
+          b.importe_original||0, b.importe_original||0,
+          b.estado||'borrador', b.fecha_firma||null, b.fecha_inicio||null, b.fecha_fin||null,
+          b.descripcion||null, b.notas||null).run();
+  return json({ ok: true, id: r.meta?.last_row_id, numero: num });
+}
+async function actualizarContratoObra(id, request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth?.empresa_id) return err('No autorizado', 403);
+  const b = await request.json();
+  // Recalc importe_actual = original + amendments aprobados
+  const { results: ams } = await env.DB.prepare(
+    `SELECT COALESCE(SUM(importe),0) as tot FROM contratos_amendments WHERE contrato_id=? AND estado='aprobado'`
+  ).bind(id).all();
+  const importeActual = (b.importe_original||0) + (ams[0]?.tot||0);
+  await env.DB.prepare(`
+    UPDATE contratos_obra SET tipo=?, titulo=?, contratista=?, contacto_id=?, importe_original=?, importe_actual=?,
+      estado=?, fecha_firma=?, fecha_inicio=?, fecha_fin=?, descripcion=?, notas=?, updated_at=datetime('now')
+    WHERE id=? AND empresa_id=?
+  `).bind(b.tipo||null, b.titulo||null, b.contratista||null, b.contacto_id||null,
+          b.importe_original||0, importeActual,
+          b.estado||null, b.fecha_firma||null, b.fecha_inicio||null, b.fecha_fin||null,
+          b.descripcion||null, b.notas||null, id, auth.empresa_id).run();
+  return json({ ok: true });
+}
+async function eliminarContratoObra(id, request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth?.empresa_id) return err('No autorizado', 403);
+  await env.DB.prepare(`DELETE FROM contratos_obra WHERE id=? AND empresa_id=?`).bind(id, auth.empresa_id).run();
+  await env.DB.prepare(`DELETE FROM contratos_amendments WHERE contrato_id=?`).bind(id).run();
   return json({ ok: true });
 }
