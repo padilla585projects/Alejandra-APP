@@ -587,6 +587,10 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
       <span class="nav-icon">✅</span> Control de Calidad
       <span class="nav-badge" id="ncrsBadge" style="display:none">!</span>
     </button>
+    <button class="nav-item" data-page="ncrsObra" onclick="navTo('ncrsObra')">
+      <span class="nav-icon">🚫</span> NCRs / No Conformidades
+      <span class="nav-badge" id="ncrObraBadge" style="display:none">!</span>
+    </button>
     <button class="nav-item" data-page="entregasMaterial" onclick="navTo('entregasMaterial')">
       <span class="nav-icon">🚚</span> Entregas Material
       <span class="nav-badge" id="entregasBadge" style="display:none">!</span>
@@ -3561,6 +3565,101 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
         <div class="tbl-wrap"><div id="tblCalidad"></div></div>
       </div>
 
+      <!-- NCRs / No Conformidades (NEW-72) -->
+      <div class="page" id="pageNcrsObra">
+        <div class="page-title">🚫 NCRs — No Conformidades de Obra</div>
+        <div class="page-sub">Registro formal de no conformidades · NCR-YYYY-NNNN · Acción correctiva y cierre</div>
+        <div class="tbl-toolbar" style="flex-wrap:wrap;gap:8px;margin-bottom:14px">
+          <select class="tbl-search" id="filterNcrObra" style="min-width:220px" onchange="cargarNcrs()">
+            <option value="">🏗 Todas las obras</option>
+          </select>
+          <select class="tbl-search" id="filterNcrEstado" style="min-width:140px" onchange="cargarNcrs()">
+            <option value="">Todos los estados</option>
+            <option value="abierta">🔴 Abierta</option>
+            <option value="en_proceso">🟡 En proceso</option>
+            <option value="cerrada">🟢 Cerrada</option>
+          </select>
+          <select class="tbl-search" id="filterNcrGravedad" style="min-width:140px" onchange="cargarNcrs()">
+            <option value="">Toda gravedad</option>
+            <option value="critico">🔴 Crítico</option>
+            <option value="mayor">🟠 Mayor</option>
+            <option value="moderado">🟡 Moderado</option>
+            <option value="menor">🟢 Menor</option>
+          </select>
+          <button class="btn btn-primary" onclick="abrirModalNcr()">+ Nueva NCR</button>
+          <button class="btn btn-secondary" onclick="exportarTabla(tblNcrs,'ncrs')">⬇ CSV</button>
+          <button class="btn btn-secondary" onclick="cargarNcrs()">🔄 Actualizar</button>
+        </div>
+        <!-- KPI strip -->
+        <div id="ncrKpiStrip" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;margin-bottom:16px"></div>
+        <div class="tbl-wrap"><div id="tblNcrs"></div></div>
+
+        <!-- Modal NCR -->
+        <div class="modal-overlay" id="modalNcr">
+          <div class="modal" style="max-width:600px">
+            <div class="modal-header">
+              <span id="modalNcrTitle">Nueva No Conformidad</span>
+              <button class="modal-close" onclick="cerrarModalNcr()">✕</button>
+            </div>
+            <div class="modal-body">
+              <input type="hidden" id="ncrId">
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+                <div>
+                  <label class="form-label">Obra</label>
+                  <select class="form-control" id="ncrObraId" style="width:100%"></select>
+                </div>
+                <div>
+                  <label class="form-label">Gravedad</label>
+                  <select class="form-control" id="ncrGravedad">
+                    <option value="menor">🟢 Menor</option>
+                    <option value="moderado" selected>🟡 Moderado</option>
+                    <option value="mayor">🟠 Mayor</option>
+                    <option value="critico">🔴 Crítico</option>
+                  </select>
+                </div>
+              </div>
+              <div style="margin-bottom:12px">
+                <label class="form-label">Descripción de la No Conformidad <span style="color:var(--danger)">*</span></label>
+                <textarea class="form-control" id="ncrDescripcion" rows="3" style="resize:vertical" placeholder="Describir la desviación respecto a requisitos..."></textarea>
+              </div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+                <div>
+                  <label class="form-label">Responsable</label>
+                  <input class="form-control" id="ncrResponsable" placeholder="Persona/empresa responsable">
+                </div>
+                <div>
+                  <label class="form-label">Fecha límite cierre</label>
+                  <input class="form-control" type="date" id="ncrFechaLimite">
+                </div>
+              </div>
+              <div style="margin-bottom:12px">
+                <label class="form-label">Acción correctiva</label>
+                <textarea class="form-control" id="ncrAccionCorrectiva" rows="2" style="resize:vertical" placeholder="Medidas tomadas para corregir la no conformidad..."></textarea>
+              </div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+                <div>
+                  <label class="form-label">Estado</label>
+                  <select class="form-control" id="ncrEstado">
+                    <option value="abierta">🔴 Abierta</option>
+                    <option value="en_proceso">🟡 En proceso</option>
+                    <option value="cerrada">🟢 Cerrada</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="form-label">Notas adicionales</label>
+                  <input class="form-control" id="ncrNotas" placeholder="Observaciones...">
+                </div>
+              </div>
+            </div>
+            <div class="modal-footer">
+              <button class="btn btn-secondary" onclick="cerrarModalNcr()">Cancelar</button>
+              <button class="btn btn-danger" id="btnElimNcr" style="display:none" onclick="eliminarNcr()">🗑 Eliminar</button>
+              <button class="btn btn-primary" onclick="guardarNcr()">Guardar NCR</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- DOCUMENTOS -->
       <div class="page" id="pageDocumentos">
         <div class="page-title">📁 Documentos</div>
@@ -4840,6 +4939,7 @@ const PAGE_TITLES = {
   fotosObra: '📷 Galería de Fotos de Obra',
   transmittals: '📨 Transmittals',
   controlCalidad: '✅ Control de Calidad / QA-QC',
+  ncrsObra: '🚫 NCRs / No Conformidades',
   entregasMaterial: '🚚 Entregas de Material / Albaranes',
   presupuestoSov: '📊 Presupuesto Detallado / Schedule of Values',
   ordenesCambio: '🔄 Ordenes de Cambio / Change Orders',
@@ -4912,6 +5012,7 @@ const PAGE_LOADERS = {
   fotosObra: cargarFotosObra,
   transmittals: cargarTransmittals,
   controlCalidad: cargarControlCalidad,
+  ncrsObra: cargarNcrs,
   entregasMaterial: cargarEntregasMaterial,
   presupuestoSov: cargarPresupuestoSov,
   ordenesCambio: cargarOrdenesCambio,
@@ -5013,6 +5114,7 @@ const SYNC_INTERVALS = {
   fotosObra: 60,
   transmittals: 90,
   controlCalidad: 90,
+  ncrsObra: 90,
   entregasMaterial: 90,
   presupuestoSov: 120,
   ordenesCambio: 90,
@@ -14962,6 +15064,138 @@ const ENT_ESTADO_COLOR = {
   recibido: 'var(--success)', rechazado: 'var(--danger)'
 };
 const ENT_ESTADO_ICON = { pendiente:'⏳', parcial:'📦', recibido:'✅', rechazado:'❌' };
+
+// ── NCRs / No Conformidades (NEW-72) ─────────────────────────────────────────
+const NCR_GRAV_COLOR  = { critico:'#ef4444', mayor:'#f97316', moderado:'#f59e0b', menor:'#10b981' };
+const NCR_GRAV_LABEL  = { critico:'🔴 Crítico', mayor:'🟠 Mayor', moderado:'🟡 Moderado', menor:'🟢 Menor' };
+const NCR_ESTADO_COLOR = { abierta:'#ef4444', en_proceso:'#f59e0b', cerrada:'#10b981' };
+let tblNcrs = null;
+
+async function cargarNcrs() {
+  if (document.getElementById('filterNcrObra')?.options.length <= 1) await poblarSelectObras('filterNcrObra');
+  if (document.getElementById('ncrObraId')?.options.length <= 1) await poblarSelectObras('ncrObraId');
+  const obraId  = document.getElementById('filterNcrObra')?.value || '';
+  const estado  = document.getElementById('filterNcrEstado')?.value || '';
+  const gravedad = document.getElementById('filterNcrGravedad')?.value || '';
+  let url = '/ncrs-obra?limit=300';
+  if (obraId)   url += `&obra_id=${obraId}`;
+  if (estado)   url += `&estado=${estado}`;
+  if (gravedad) url += `&gravedad=${gravedad}`;
+  const d = await api(url);
+  if (!d) return;
+  // KPI strip
+  const kpiEl = document.getElementById('ncrKpiStrip');
+  if (kpiEl) {
+    kpiEl.innerHTML = `
+      <div class="kpi-card"><div class="kpi-icon">🚫</div><div class="kpi-value">${d.total||0}</div><div class="kpi-label">Total NCRs</div></div>
+      <div class="kpi-card"><div class="kpi-icon">🔴</div><div class="kpi-value" style="color:var(--danger)">${d.abiertas||0}</div><div class="kpi-label">Abiertas</div></div>
+      <div class="kpi-card"><div class="kpi-icon">🟡</div><div class="kpi-value" style="color:var(--warning)">${d.enProceso||0}</div><div class="kpi-label">En proceso</div></div>
+      <div class="kpi-card"><div class="kpi-icon">🟢</div><div class="kpi-value" style="color:var(--success)">${d.cerradas||0}</div><div class="kpi-label">Cerradas</div></div>
+      <div class="kpi-card"><div class="kpi-icon">⛔</div><div class="kpi-value" style="color:var(--danger)">${d.criticas||0}</div><div class="kpi-label">Críticas</div></div>
+    `;
+    // Update badge
+    const badge = document.getElementById('ncrObraBadge');
+    if (badge) { badge.textContent = d.abiertas || 0; badge.style.display = d.abiertas > 0 ? '' : 'none'; }
+  }
+  // Table
+  const rows = d.ncrs || [];
+  const container = document.getElementById('tblNcrs');
+  if (!container) return;
+  if (!rows.length) {
+    container.innerHTML = '<div class="empty-state"><div class="empty-icon">🚫</div><div class="empty-text">No hay NCRs registradas para los filtros seleccionados</div></div>';
+    tblNcrs = null; return;
+  }
+  if (tblNcrs) { tblNcrs.replaceData(rows); return; }
+  if (typeof Tabulator === 'undefined') {
+    container.innerHTML = rows.map(r => `<div style="padding:10px;border-bottom:1px solid var(--border);display:flex;gap:12px;align-items:flex-start">
+      <span style="font-size:11px;font-weight:700;color:var(--muted);white-space:nowrap">${r.numero||'—'}</span>
+      <span style="flex:1;font-size:13px">${r.descripcion||'—'}</span>
+      <span style="font-size:11px;background:${NCR_GRAV_COLOR[r.gravedad]||'#999'}22;color:${NCR_GRAV_COLOR[r.gravedad]||'#999'};padding:2px 8px;border-radius:10px;white-space:nowrap">${NCR_GRAV_LABEL[r.gravedad]||r.gravedad}</span>
+      <span style="font-size:11px;background:${NCR_ESTADO_COLOR[r.estado]||'#999'}22;color:${NCR_ESTADO_COLOR[r.estado]||'#999'};padding:2px 8px;border-radius:10px;white-space:nowrap">${r.estado||'—'}</span>
+      <button class="btn btn-secondary btn-sm" onclick='editarNcr(${JSON.stringify(r)})'>✏️</button>
+    </div>`).join('');
+    return;
+  }
+  tblNcrs = new Tabulator(container, {
+    data: rows,
+    layout: 'fitColumns',
+    responsiveLayout: 'collapse',
+    pagination: true, paginationSize: 20,
+    initialSort: [{ column: 'created_at', dir: 'desc' }],
+    columns: [
+      { title: 'Número',      field: 'numero',      width: 130, hozAlign: 'center', formatter: c => `<span style="font-family:monospace;font-size:12px;font-weight:700">${c.getValue()||'—'}</span>` },
+      { title: 'Obra',        field: 'obra_id',     width: 80,  hozAlign: 'center', formatter: c => c.getValue() ? `#${c.getValue()}` : '—' },
+      { title: 'Descripción', field: 'descripcion', minWidth: 200 },
+      { title: 'Gravedad',    field: 'gravedad',    width: 110, hozAlign: 'center', formatter: c => { const g=c.getValue()||'moderado'; return `<span style="background:${NCR_GRAV_COLOR[g]}22;color:${NCR_GRAV_COLOR[g]};padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600">${NCR_GRAV_LABEL[g]||g}</span>`; } },
+      { title: 'Estado',      field: 'estado',      width: 110, hozAlign: 'center', formatter: c => { const s=c.getValue()||'abierta'; const col=NCR_ESTADO_COLOR[s]||'#999'; return `<span style="background:${col}22;color:${col};padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600">${s.replace('_',' ')}</span>`; } },
+      { title: 'Responsable', field: 'responsable', width: 140 },
+      { title: 'Fecha límite',field: 'fecha_limite', width: 110, hozAlign: 'center', formatter: c => { const v=c.getValue(); if(!v) return '—'; const hoy=new Date().toISOString().slice(0,10); return `<span style="color:${v<hoy&&c.getRow().getData().estado!=='cerrada'?'var(--danger)':'inherit'}">${v}</span>`; } },
+      { title: 'Acción correctiva', field: 'accion_correctiva', minWidth: 150 },
+      { title: 'Creada', field: 'created_at', width: 100, hozAlign: 'center', formatter: c => (c.getValue()||'').slice(0,10) },
+      { title: '', width: 60, hozAlign: 'center', formatter: c => `<button class="btn btn-secondary btn-sm" onclick='editarNcr(${JSON.stringify(c.getRow().getData())})'>✏️</button>` },
+    ],
+  });
+}
+
+function abrirModalNcr(ncr = null) {
+  document.getElementById('ncrId').value = ncr?.id || '';
+  document.getElementById('modalNcrTitle').textContent = ncr ? `Editar NCR — ${ncr.numero}` : 'Nueva No Conformidad';
+  document.getElementById('ncrObraId').value = ncr?.obra_id || document.getElementById('filterNcrObra')?.value || '';
+  document.getElementById('ncrGravedad').value = ncr?.gravedad || 'moderado';
+  document.getElementById('ncrDescripcion').value = ncr?.descripcion || '';
+  document.getElementById('ncrResponsable').value = ncr?.responsable || '';
+  document.getElementById('ncrFechaLimite').value = ncr?.fecha_limite || '';
+  document.getElementById('ncrAccionCorrectiva').value = ncr?.accion_correctiva || '';
+  document.getElementById('ncrEstado').value = ncr?.estado || 'abierta';
+  document.getElementById('ncrNotas').value = ncr?.notas || '';
+  document.getElementById('btnElimNcr').style.display = ncr ? '' : 'none';
+  document.getElementById('modalNcr').classList.add('show');
+}
+
+function editarNcr(ncr) { abrirModalNcr(typeof ncr === 'string' ? JSON.parse(ncr) : ncr); }
+
+function cerrarModalNcr() { document.getElementById('modalNcr').classList.remove('show'); }
+
+async function guardarNcr() {
+  const id  = document.getElementById('ncrId').value;
+  const desc = document.getElementById('ncrDescripcion').value.trim();
+  if (!desc) return showToast('La descripción es obligatoria', 'warning');
+  const payload = {
+    obra_id:           document.getElementById('ncrObraId').value || null,
+    gravedad:          document.getElementById('ncrGravedad').value,
+    descripcion:       desc,
+    responsable:       document.getElementById('ncrResponsable').value.trim() || null,
+    fecha_limite:      document.getElementById('ncrFechaLimite').value || null,
+    accion_correctiva: document.getElementById('ncrAccionCorrectiva').value.trim() || null,
+    estado:            document.getElementById('ncrEstado').value,
+    notas:             document.getElementById('ncrNotas').value.trim() || null,
+  };
+  const r = id
+    ? await api(`/ncrs-obra/${id}`, { method: 'PUT', body: JSON.stringify(payload) })
+    : await api('/ncrs-obra', { method: 'POST', body: JSON.stringify(payload) });
+  if (r?.ok || r?.id) {
+    showToast(id ? 'NCR actualizada' : `NCR creada: ${r.numero}`, 'success');
+    cerrarModalNcr();
+    tblNcrs = null;
+    cargarNcrs();
+  } else {
+    showToast('Error al guardar NCR', 'error');
+  }
+}
+
+async function eliminarNcr() {
+  const id = document.getElementById('ncrId').value;
+  if (!id || !confirm('¿Eliminar esta NCR? Esta acción no se puede deshacer.')) return;
+  const r = await api(`/ncrs-obra/${id}`, { method: 'DELETE' });
+  if (r?.ok) {
+    showToast('NCR eliminada', 'success');
+    cerrarModalNcr();
+    tblNcrs = null;
+    cargarNcrs();
+  } else {
+    showToast('Error al eliminar', 'error');
+  }
+}
 
 async function cargarEntregasMaterial() {
   if (document.getElementById('filterEntregasObra')?.options.length <= 1)

@@ -1,5 +1,5 @@
 // Cambia este número cada vez que actualices la app
-const CACHE = 'alejandra-v7.03';
+const CACHE = 'alejandra-v7.04';
 
 self.addEventListener('install', e => {
   self.skipWaiting();
