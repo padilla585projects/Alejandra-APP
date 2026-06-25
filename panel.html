@@ -701,6 +701,9 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
       <span class="nav-icon">🧪</span> Ensayos y Pruebas
       <span class="nav-badge" id="ensayosBadge" style="display:none">0</span>
     </button>
+    <button class="nav-item" data-page="residuos" onclick="navTo('residuos')">
+      <span class="nav-icon">♻️</span> Gestión Residuos
+    </button>
     <button class="nav-item" data-page="fotosObra" onclick="navTo('fotosObra')">
       <span class="nav-icon">📷</span> Galería de Fotos
     </button>
@@ -2421,6 +2424,139 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
               <button class="btn btn-secondary" onclick="cerrarModalAts()">Cancelar</button>
               <span id="atsElimBtn"></span>
               <button class="btn btn-primary" onclick="guardarAts()">💾 Guardar ATS</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- GESTION DE RESIDUOS / WASTE MANAGEMENT (NEW-88) -->
+      <div class="page" id="pageResiduos">
+        <div class="page-title">♻️ Gestión de Residuos de Obra <span style="font-size:13px;color:var(--muted);font-weight:400">(RD 105/2008)</span></div>
+        <div id="residuosKpis" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:12px;margin-bottom:16px"></div>
+        <div class="tbl-toolbar">
+          <input class="tbl-search" id="searchRes" placeholder="🔍 Buscar residuo, gestor, albarán..." oninput="filtrarResiduos()">
+          <select class="tbl-search" id="filterResObra" style="min-width:220px" onchange="tblRes=null;cargarResiduos()">
+            <option value="">Todas las obras</option>
+          </select>
+          <select class="tbl-search" id="filterResDestino" onchange="filtrarResiduos()">
+            <option value="">Todos los destinos</option>
+            <option value="reciclaje">Reciclaje</option>
+            <option value="recuperacion">Recuperación/valorización</option>
+            <option value="reutilizacion">Reutilización</option>
+            <option value="vertedero">Vertedero controlado</option>
+            <option value="gestor_autorizado">Gestor autorizado</option>
+          </select>
+          <select class="tbl-search" id="filterResEstado" onchange="filtrarResiduos()">
+            <option value="">Todos los estados</option>
+            <option value="registrado">Registrado</option>
+            <option value="entregado">Entregado a gestor</option>
+            <option value="certificado">Certificado</option>
+          </select>
+          <button class="btn btn-primary" onclick="abrirModalRes()">+ Nuevo Residuo</button>
+        </div>
+        <div id="tblResContainer"></div>
+        <!-- Modal residuo -->
+        <div class="modal-overlay" id="modalRes" style="display:none" onclick="if(event.target===this)cerrarModalRes()">
+          <div class="modal" style="max-width:640px">
+            <div class="modal-header">
+              <span id="modalResTitulo">Nuevo Registro de Residuo</span>
+              <button class="modal-close" onclick="cerrarModalRes()">✕</button>
+            </div>
+            <div class="modal-body" style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+              <div style="grid-column:span 2;font-weight:600;color:var(--accent);border-bottom:1px solid #eee;padding-bottom:6px">Identificación del residuo</div>
+              <div>
+                <label>Número</label>
+                <input id="resNumero" class="form-control" placeholder="Auto" readonly style="background:#f5f5f5">
+              </div>
+              <div>
+                <label>Fecha *</label>
+                <input id="resFecha" class="form-control" type="date">
+              </div>
+              <div>
+                <label>Código LER <span style="color:var(--muted);font-size:11px">(Lista Europea de Residuos)</span></label>
+                <input id="resCodigoLer" class="form-control" placeholder="Ej: 17 04 01 (cobre), 17 04 05 (hierro), 17 06 04...">
+              </div>
+              <div>
+                <label>Obra</label>
+                <select id="resObra" class="form-control"><option value="">Sin obra</option></select>
+              </div>
+              <div style="grid-column:span 2">
+                <label>Descripción del residuo *</label>
+                <input id="resDescripcion" class="form-control" placeholder="Ej: Cable de cobre, embalaje plástico, escombros mixtos...">
+              </div>
+              <div>
+                <label>Estado físico</label>
+                <select id="resEstadoFisico" class="form-control">
+                  <option value="solido">Sólido</option>
+                  <option value="liquido">Líquido</option>
+                  <option value="pastoso">Pastoso</option>
+                </select>
+              </div>
+              <div>
+                <label>Origen del residuo</label>
+                <select id="resOrigen" class="form-control">
+                  <option value="instalacion">Instalación / montaje</option>
+                  <option value="embalaje">Embalaje / packaging</option>
+                  <option value="demolicion">Demolición</option>
+                  <option value="excavacion">Excavación / tierras</option>
+                  <option value="mantenimiento">Mantenimiento</option>
+                  <option value="otros">Otros</option>
+                </select>
+              </div>
+              <div>
+                <label>Cantidad *</label>
+                <input id="resCantidad" class="form-control" type="number" step="any" min="0" placeholder="0">
+              </div>
+              <div>
+                <label>Unidad</label>
+                <select id="resUnidad" class="form-control">
+                  <option value="kg">kg</option>
+                  <option value="t">toneladas (t)</option>
+                  <option value="m3">m³</option>
+                  <option value="l">litros (l)</option>
+                  <option value="ud">unidades</option>
+                </select>
+              </div>
+              <div style="grid-column:span 2;font-weight:600;color:var(--accent);border-bottom:1px solid #eee;padding-bottom:6px;margin-top:8px">Gestión</div>
+              <div>
+                <label>Destino / Valorización</label>
+                <select id="resDestino" class="form-control">
+                  <option value="reciclaje">Reciclaje</option>
+                  <option value="recuperacion">Recuperación / valorización</option>
+                  <option value="reutilizacion">Reutilización</option>
+                  <option value="vertedero">Vertedero controlado</option>
+                  <option value="gestor_autorizado">Gestor autorizado (peligroso)</option>
+                </select>
+              </div>
+              <div>
+                <label>Estado</label>
+                <select id="resEstado" class="form-control">
+                  <option value="registrado">Registrado</option>
+                  <option value="entregado">Entregado a gestor</option>
+                  <option value="certificado">Certificado</option>
+                </select>
+              </div>
+              <div>
+                <label>Gestor autorizado</label>
+                <input id="resGestor" class="form-control" placeholder="Nombre del gestor de residuos">
+              </div>
+              <div>
+                <label>Nº autorización gestor</label>
+                <input id="resNumAutorizacion" class="form-control" placeholder="Nº de autorización de gestor">
+              </div>
+              <div>
+                <label>Nº albarán</label>
+                <input id="resAlbaran" class="form-control" placeholder="Nº de albarán de entrega">
+              </div>
+              <div style="grid-column:span 2">
+                <label>Observaciones</label>
+                <textarea id="resObs" class="form-control" rows="2"></textarea>
+              </div>
+            </div>
+            <div class="modal-footer">
+              <button class="btn btn-secondary" onclick="cerrarModalRes()">Cancelar</button>
+              <span id="resElimBtn"></span>
+              <button class="btn btn-primary" onclick="guardarRes()">💾 Guardar Residuo</button>
             </div>
           </div>
         </div>
@@ -6675,6 +6811,7 @@ const PAGE_TITLES = {
   evaluacionesProv: '⭐ Evaluación de Proveedores / Supplier Evaluation',
   changeOrders: '🔄 Solicitudes de Cambio / Change Orders',
   ensayos: '🧪 Ensayos y Pruebas de Materiales / Material Tests',
+  residuos: '♻️ Gestión de Residuos / Waste Management (RD 105/2008)',
 };
 
 const PAGE_LOADERS = {
@@ -6763,6 +6900,7 @@ const PAGE_LOADERS = {
   evaluacionesProv: cargarEvaluacionesProv,
   changeOrders:     cargarChangeOrders,
   ensayos:          cargarEnsayos,
+  residuos:         cargarResiduos,
 };
 
 let currentPage = '';
@@ -6880,6 +7018,7 @@ const SYNC_INTERVALS = {
   evaluacionesProv: 120,
   changeOrders:     60,
   ensayos:          90,
+  residuos:         180,
 };
 
 let _syncTimer = null, _syncLabelTimer = null, _syncLastTs = null;
@@ -16240,6 +16379,162 @@ function exportarFinanzas() {
   if (!obraId) return showToast('Selecciona una obra primero', 'warning');
   // Abrir informe en nueva pestaña usando el endpoint de informes
   window.open(`/informe-obra/${obraId}?tipo=financiero`, '_blank');
+}
+
+// ── GESTION DE RESIDUOS / WASTE MANAGEMENT (NEW-88) ──────────────────────────
+let tblRes = null, _resData = [];
+const RES_DESTINO_LABEL = {
+  reciclaje:'Reciclaje', recuperacion:'Recuperación', reutilizacion:'Reutilización',
+  vertedero:'Vertedero', gestor_autorizado:'Gestor aut.'
+};
+const RES_DESTINO_COLOR = {
+  reciclaje:'var(--success)', recuperacion:'var(--success)', reutilizacion:'var(--success)',
+  vertedero:'var(--warning)', gestor_autorizado:'var(--danger)'
+};
+const RES_ESTADO_COLOR = { registrado:'var(--muted)', entregado:'var(--accent)', certificado:'var(--success)' };
+
+async function cargarResiduos() {
+  poblarSelectObras('filterResObra');
+  poblarSelectObras('resObra');
+  const obraId = document.getElementById('filterResObra').value;
+  const params = new URLSearchParams();
+  if (obraId) params.set('obra_id', obraId);
+  _resData = await api('/residuos?' + params);
+  if (!Array.isArray(_resData)) _resData = [];
+
+  // KPIs
+  const total     = _resData.length;
+  const totalKg   = _resData.reduce((a,r)=>{
+    let q = Number(r.cantidad||0);
+    if (r.unidad==='t') q*=1000;
+    else if (r.unidad==='m3') q*=500; // approx density
+    return a+q;
+  },0);
+  const reciclados = _resData.filter(r=>['reciclaje','recuperacion','reutilizacion'].includes(r.destino)).length;
+  const certif     = _resData.filter(r=>r.estado==='certificado').length;
+  const pctRecicl  = total > 0 ? Math.round((reciclados/total)*100) : 0;
+  document.getElementById('residuosKpis').innerHTML = `
+    <div class="kpi-mini"><div class="kpi-val">${total}</div><div class="kpi-lbl">Registros totales</div></div>
+    <div class="kpi-mini"><div class="kpi-val">${(totalKg/1000).toFixed(2)} t</div><div class="kpi-lbl">Total aprox. (kg→t)</div></div>
+    <div class="kpi-mini"><div class="kpi-val" style="color:var(--success)">${reciclados}</div><div class="kpi-lbl">Valorizados ♻️</div></div>
+    <div class="kpi-mini"><div class="kpi-val" style="color:${pctRecicl>=75?'var(--success)':pctRecicl>=50?'var(--warning)':'var(--danger)'}">${pctRecicl}%</div><div class="kpi-lbl">Tasa valorización</div></div>
+    <div class="kpi-mini"><div class="kpi-val" style="color:var(--accent)">${certif}</div><div class="kpi-lbl">Certificados ✅</div></div>
+  `;
+  filtrarResiduos();
+}
+
+function filtrarResiduos() {
+  const q       = (document.getElementById('searchRes')?.value || '').toLowerCase();
+  const destino = document.getElementById('filterResDestino')?.value || '';
+  const estado  = document.getElementById('filterResEstado')?.value  || '';
+  let data = _resData.filter(r => {
+    if (destino && r.destino !== destino) return false;
+    if (estado  && r.estado  !== estado)  return false;
+    if (q && !`${r.descripcion_residuo} ${r.codigo_ler||''} ${r.gestor_autorizado||''} ${r.albaran_numero||''} ${r.numero||''}`.toLowerCase().includes(q)) return false;
+    return true;
+  });
+  const cols = [
+    { title:'Nº',         field:'numero',               width:115, formatter: c => c.getValue()||'—' },
+    { title:'Fecha',      field:'fecha',                width:105, formatter: c => c.getValue()||'—' },
+    { title:'Cód. LER',   field:'codigo_ler',           width:100, formatter: c => c.getValue()||'—' },
+    { title:'Residuo',    field:'descripcion_residuo',  widthGrow:2 },
+    { title:'Cantidad',   field:'cantidad',             width:100, hozAlign:'right', formatter: c => {
+      const v = c.getValue(); const u = c.getRow().getData().unidad||'';
+      return v != null ? `${v} ${u}` : '—';
+    }},
+    { title:'Destino', field:'destino', width:115, formatter: c => {
+      const v = c.getValue();
+      return `<span style="color:${RES_DESTINO_COLOR[v]||'inherit'};font-size:12px">${RES_DESTINO_LABEL[v]||v}</span>`;
+    }},
+    { title:'Estado', field:'estado', width:120, formatter: c => {
+      const v = c.getValue();
+      return `<span style="color:${RES_ESTADO_COLOR[v]||'inherit'};font-weight:600;text-transform:capitalize">${v.replace('_',' ')}</span>`;
+    }},
+    { title:'Acciones', width:90, hozAlign:'center', formatter: c =>
+      `<button class="btn-tbl" onclick="editarRes(${c.getRow().getData().id})">✏️</button>
+       <button class="btn-tbl btn-danger-sm" onclick="eliminarRes(${c.getRow().getData().id})">🗑️</button>`
+    }
+  ];
+  if (!tblRes) {
+    tblRes = new Tabulator('#tblResContainer', {
+      data, columns: cols, layout:'fitColumns', locale:'es-es',
+      placeholder:'No hay registros de residuos', height:'520px'
+    });
+  } else {
+    tblRes.replaceData(data);
+  }
+}
+
+function abrirModalRes(d = {}) {
+  document.getElementById('modalRes')._resId = d.id || null;
+  document.getElementById('resNumero').value         = d.numero || '';
+  document.getElementById('resFecha').value          = d.fecha  || new Date().toISOString().slice(0,10);
+  document.getElementById('resCodigoLer').value      = d.codigo_ler || '';
+  document.getElementById('resObra').value           = d.obra_id || '';
+  document.getElementById('resDescripcion').value    = d.descripcion_residuo || '';
+  document.getElementById('resEstadoFisico').value   = d.estado_fisico || 'solido';
+  document.getElementById('resOrigen').value         = d.origen || 'instalacion';
+  document.getElementById('resCantidad').value       = d.cantidad || '';
+  document.getElementById('resUnidad').value         = d.unidad || 'kg';
+  document.getElementById('resDestino').value        = d.destino || 'reciclaje';
+  document.getElementById('resEstado').value         = d.estado  || 'registrado';
+  document.getElementById('resGestor').value         = d.gestor_autorizado || '';
+  document.getElementById('resNumAutorizacion').value= d.numero_autorizacion || '';
+  document.getElementById('resAlbaran').value        = d.albaran_numero || '';
+  document.getElementById('resObs').value            = d.observaciones || '';
+  document.getElementById('modalResTitulo').textContent = d.id ? 'Editar Registro de Residuo' : 'Nuevo Registro de Residuo';
+  document.getElementById('resElimBtn').innerHTML = d.id
+    ? `<button class="btn btn-danger" onclick="eliminarRes(${d.id},true)">🗑️ Eliminar</button>` : '';
+  document.getElementById('modalRes').style.display = 'flex';
+}
+
+async function editarRes(id) {
+  const d = _resData.find(r => r.id === id);
+  if (d) abrirModalRes(d);
+}
+
+async function guardarRes() {
+  const descripcion = document.getElementById('resDescripcion').value.trim();
+  const fecha       = document.getElementById('resFecha').value;
+  const cantidad    = parseFloat(document.getElementById('resCantidad').value);
+  if (!descripcion) return alert('La descripción del residuo es obligatoria.');
+  if (!fecha)       return alert('La fecha es obligatoria.');
+  if (isNaN(cantidad) || cantidad < 0) return alert('La cantidad debe ser un número válido.');
+  const body = {
+    fecha,
+    codigo_ler:         document.getElementById('resCodigoLer').value.trim() || null,
+    descripcion_residuo: descripcion,
+    estado_fisico:      document.getElementById('resEstadoFisico').value,
+    obra_id:            document.getElementById('resObra').value || null,
+    origen:             document.getElementById('resOrigen').value,
+    cantidad,
+    unidad:             document.getElementById('resUnidad').value,
+    destino:            document.getElementById('resDestino').value,
+    estado:             document.getElementById('resEstado').value,
+    gestor_autorizado:  document.getElementById('resGestor').value.trim() || null,
+    numero_autorizacion:document.getElementById('resNumAutorizacion').value.trim() || null,
+    albaran_numero:     document.getElementById('resAlbaran').value.trim() || null,
+    observaciones:      document.getElementById('resObs').value.trim() || null,
+  };
+  const id = document.getElementById('modalRes')._resId;
+  if (id) {
+    await api(`/residuos/${id}`, { method:'PUT', body: JSON.stringify(body) });
+  } else {
+    await api('/residuos', { method:'POST', body: JSON.stringify(body) });
+  }
+  cerrarModalRes();
+  await cargarResiduos();
+}
+
+async function eliminarRes(id, desdeModal = false) {
+  if (!confirm('¿Eliminar este registro de residuo? Esta acción no se puede deshacer.')) return;
+  await api(`/residuos/${id}`, { method:'DELETE' });
+  if (desdeModal) cerrarModalRes();
+  await cargarResiduos();
+}
+
+function cerrarModalRes() {
+  document.getElementById('modalRes').style.display = 'none';
 }
 
 // ── ENSAYOS Y PRUEBAS DE MATERIALES / MATERIAL TEST RECORDS (NEW-87) ──────────
