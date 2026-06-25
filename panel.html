@@ -250,6 +250,30 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
 .rs-result{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:10px}
 .rs-result .sr-meta{font-size:10px;color:var(--muted);margin-top:6px}
 .rs-toast{padding:12px 18px;border-radius:10px;font-family:'Montserrat',sans-serif;font-weight:700;font-size:13px;box-shadow:0 4px 20px rgba(0,0,0,.4);animation:toastIn .25s ease;pointer-events:auto;max-width:320px;background:var(--surface2);border:1px solid var(--border);color:var(--text)}
+/* ── INFORME ESTADO DE OBRA — print styles ────────────────────── */
+.informe-print{font-family:'Segoe UI',Arial,sans-serif;font-size:13px;color:#1e293b;padding:24px 32px;background:#fff;border-radius:12px;border:1px solid var(--border)}
+.informe-print h1{color:#f97316;font-size:22px;margin:0 0 4px}
+.informe-print h2{color:#f97316;font-size:15px;margin:24px 0 10px;padding-bottom:4px;border-bottom:2px solid #f97316}
+.informe-print .inf-meta{color:#64748b;font-size:12px;margin-bottom:20px}
+.informe-print .inf-kpi-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;margin-bottom:20px}
+.informe-print .inf-kpi{background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:10px;text-align:center}
+.informe-print .inf-kpi-val{font-size:20px;font-weight:800;color:#f97316}
+.informe-print .inf-kpi-lbl{font-size:10px;color:#64748b;margin-top:2px}
+.informe-print .inf-sum-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px}
+.informe-print .inf-sum-box{background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:14px}
+.informe-print .inf-sum-box h3{margin:0 0 8px;font-size:13px;color:#f97316}
+.informe-print .inf-row{display:flex;justify-content:space-between;margin-bottom:4px;font-size:12px}
+.informe-print table{border-collapse:collapse;width:100%;margin-bottom:16px}
+.informe-print th,.informe-print td{border:1px solid #e2e8f0;padding:6px 8px;text-align:left;vertical-align:top;font-size:11px}
+.informe-print th{background:#f97316;color:#fff;font-weight:700}
+.informe-print tr:nth-child(even){background:#f8fafc}
+.informe-print .inf-footer{margin-top:32px;padding-top:12px;border-top:1px solid #e2e8f0;font-size:10px;color:#94a3b8;text-align:center}
+@media print{
+  .sidebar,.topbar,.page-title,.page-sub,.tbl-toolbar,.nav-item,.modal-overlay,.informe-print-actions{display:none!important}
+  .main-content{margin-left:0!important;padding:0!important}
+  .page.active{display:block!important}
+  .informe-print{border:none!important;padding:0!important}
+}
 </style>
 </head>
 <body>
@@ -583,6 +607,9 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
     <button class="nav-item" data-page="accionItems" onclick="navTo('accionItems')">
       <span class="nav-icon">📌</span> Puntos de Accion
       <span class="nav-badge" id="aiBadge" style="display:none">!</span>
+    </button>
+    <button class="nav-item" data-page="informeObra" onclick="navTo('informeObra')">
+      <span class="nav-icon">📄</span> Informe de Obra
     </button>
 
     <div class="sidebar-section" onclick="sidebarToggle(this)" data-sid="seguimiento"><span>📓 Seguimiento</span><span class="sec-chevron">▼</span></div>
@@ -2081,6 +2108,27 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
         </div>
         <div id="entregasKpi" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:12px;margin-bottom:16px"></div>
         <div class="tbl-wrap"><div id="tblEntregas"></div></div>
+      </div>
+
+      <!-- INFORME DE ESTADO DE OBRA / STATUS REPORT -->
+      <div class="page" id="pageInformeObra">
+        <div class="page-title">📄 Informe de Estado de Obra</div>
+        <div class="page-sub">Genera un informe completo de progreso de obra — listo para imprimir o compartir con clientes</div>
+        <div class="tbl-toolbar" style="flex-wrap:wrap;gap:8px;margin-bottom:14px">
+          <select class="tbl-search" id="filterInformeObra" style="min-width:240px;font-size:14px;font-weight:600" onchange="limpiarInforme()"></select>
+          <input class="tbl-search" type="date" id="filterInformeFecha" style="min-width:160px">
+          <button class="btn btn-primary" onclick="generarInformeInline()" style="font-size:14px">📊 Generar Informe</button>
+          <button class="btn btn-secondary informe-print-actions" onclick="imprimirInforme()">🖨️ Imprimir</button>
+          <button class="btn btn-secondary" onclick="limpiarInforme()">✕ Limpiar</button>
+          <button class="btn btn-secondary" onclick="cargarInformeObra()">🔄</button>
+        </div>
+        <div id="informeNotReady" class="empty-state">
+          <div class="empty-icon">📄</div>
+          <div class="empty-text">Selecciona una obra y haz clic en "Generar Informe"</div>
+        </div>
+        <div id="informeContent" style="display:none">
+          <div id="informeReporte" class="informe-print"></div>
+        </div>
       </div>
 
       <!-- PUNTOS DE ACCION / ACTION ITEMS TRACKER -->
@@ -3863,6 +3911,7 @@ const PAGE_TITLES = {
   riesgosObra: '⚠️ Registro de Riesgos / Risk Register',
   obraDashboard: '🎯 Dashboard de Obra',
   accionItems: '📌 Puntos de Accion / Action Items',
+  informeObra: '📄 Informe de Estado de Obra',
 };
 
 const PAGE_LOADERS = {
@@ -3926,6 +3975,7 @@ const PAGE_LOADERS = {
   riesgosObra: cargarRiesgos,
   obraDashboard: cargarObraDashboard,
   accionItems: cargarAccionItems,
+  informeObra: cargarInformeObra,
 };
 
 let currentPage = '';
@@ -4018,6 +4068,7 @@ const SYNC_INTERVALS = {
   riesgosObra: 120,
   obraDashboard: 90,
   accionItems: 60,
+  informeObra: 0,
 };
 
 let _syncTimer = null, _syncLabelTimer = null, _syncLastTs = null;
@@ -16736,6 +16787,277 @@ async function poblarSelectObras(selectId) {
     opt.textContent = o.nombre;
     sel.appendChild(opt);
   });
+}
+
+// ── INFORME DE ESTADO DE OBRA / STATUS REPORT (NEW-61) ─────────────
+async function cargarInformeObra() {
+  const sel = document.getElementById('filterInformeObra');
+  if (!sel) return;
+  if (sel.options.length <= 1) await poblarSelectObras('filterInformeObra');
+  // Set today's date as default if empty
+  const fd = document.getElementById('filterInformeFecha');
+  if (fd && !fd.value) fd.value = new Date().toISOString().slice(0, 10);
+}
+
+function limpiarInforme() {
+  document.getElementById('informeNotReady').style.display = '';
+  document.getElementById('informeContent').style.display = 'none';
+  document.getElementById('informeReporte').innerHTML = '';
+}
+
+function imprimirInforme() {
+  const content = document.getElementById('informeContent');
+  if (!content || content.style.display === 'none') {
+    showToast('Genera el informe primero', 'warning'); return;
+  }
+  window.print();
+}
+
+async function generarInformeInline() {
+  const obraId = document.getElementById('filterInformeObra')?.value;
+  if (!obraId) { showToast('Selecciona una obra', 'warning'); return; }
+  const obraNombre = document.getElementById('filterInformeObra')?.options[document.getElementById('filterInformeObra').selectedIndex]?.text || '';
+  const fechaRep = document.getElementById('filterInformeFecha')?.value || new Date().toISOString().slice(0, 10);
+
+  showToast('Generando informe...', 'info');
+
+  const [fasesR, sovR, ncrsR, riesgosR, ocsR, aiR, rfisR, hitosR, entregasR, punchR, diarioR, segObsR] = await Promise.all([
+    api(`/fases-obra?obra_id=${obraId}`).catch(() => ({})),
+    api(`/presupuesto-lineas?obra_id=${obraId}&limit=500`).catch(() => ({})),
+    api(`/ncrs-obra?obra_id=${obraId}&limit=200`).catch(() => ({})),
+    api(`/riesgos-obra?obra_id=${obraId}&limit=200`).catch(() => ({})),
+    api(`/ordenes-cambio?obra_id=${obraId}&limit=100`).catch(() => ({})),
+    api(`/accion-items?obra_id=${obraId}&limit=200`).catch(() => ({})),
+    api(`/rfis?obra_id=${obraId}&limit=100`).catch(() => ({})),
+    api(`/hitos-obra?obra_id=${obraId}`).catch(() => ({})),
+    api(`/entregas-material?obra_id=${obraId}&limit=100`).catch(() => ({})),
+    api(`/punch-list?obra_id=${obraId}&limit=200`).catch(() => ({})),
+    api(`/diario-obra?obra_id=${obraId}&limit=5`).catch(() => ([])),
+    api(`/obs-seguridad?obra_id=${obraId}&limit=200`).catch(() => ({})),
+  ]);
+
+  const fases      = Array.isArray(fasesR) ? fasesR : (fasesR?.fases || []);
+  const sovLineas  = toArr(sovR, 'lineas');
+  const ncrs       = toArr(ncrsR, 'ncrs');
+  const riesgos    = toArr(riesgosR, 'riesgos');
+  const ocs        = toArr(ocsR, 'ordenes');
+  const aiItems    = toArr(aiR, 'items');
+  const rfis       = toArr(rfisR, 'rfis');
+  const hitos      = hitosR?.hitos || [];
+  const entregas   = toArr(entregasR, 'entregas');
+  const punch      = punchR?.items || [];
+  const diario     = Array.isArray(diarioR) ? diarioR : [];
+  const segObs     = segObsR?.observaciones || [];
+
+  // ── KPIs ──────────────────────────────────────────────────────
+  const avgFases     = fases.length ? Math.round(fases.reduce((s, f) => s + (f.porcentaje || 0), 0) / fases.length) : null;
+  const sovTotal     = sovLineas.reduce((s, l) => s + (l.importe_presupuestado || 0), 0);
+  const sovEjec      = sovLineas.reduce((s, l) => s + (l.importe_ejecutado || 0), 0);
+  const sovPct       = sovTotal > 0 ? Math.round(sovEjec / sovTotal * 100) : null;
+  const ncrsAbiertas = ncrs.filter(n => n.estado !== 'cerrada').length;
+  const riesgosAltos = riesgos.filter(r => r.estado === 'activo' && (r.score >= 6)).length;
+  const ocsValor     = ocs.filter(o => o.estado === 'aprobada').reduce((s, o) => s + (o.importe || 0), 0);
+  const aiVencidas   = aiItems.filter(a => a.estado !== 'cerrado' && a.fecha_limite && a.fecha_limite < fechaRep).length;
+  const rfisAbiertas = rfis.filter(r => r.estado === 'abierta' || r.estado === 'en_revision').length;
+  const hitosRet     = hitos.filter(h => h.retrasado).length;
+  const entPend      = entregas.filter(e => e.estado === 'pedido' || e.estado === 'parcial').length;
+  const punchAb      = punch.filter(p => p.estado !== 'cerrado').length;
+  const peligros     = segObs.filter(o => o.tipo === 'peligro_inminente' && o.estado !== 'cerrada').length;
+
+  const fmtM = v => new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', minimumFractionDigits: 0 }).format(v || 0);
+  const pBar = (pct, color = '#f97316') => `<div style="background:#e2e8f0;border-radius:4px;height:10px;margin-top:4px"><div style="width:${Math.min(pct, 100)}%;height:100%;background:${pct > 100 ? '#ef4444' : color};border-radius:4px"></div></div>`;
+  const fmtD = v => v ? new Date(v + 'T00:00:00').toLocaleDateString('es-ES') : '—';
+
+  // ── Build HTML sections ────────────────────────────────────────
+  const kpis = `
+  <div class="inf-kpi-grid">
+    <div class="inf-kpi"><div class="inf-kpi-val">${avgFases !== null ? avgFases + '%' : '—'}</div><div class="inf-kpi-lbl">Avance fases</div></div>
+    <div class="inf-kpi"><div class="inf-kpi-val" style="color:${(sovPct || 0) > 100 ? '#ef4444' : '#f97316'}">${sovPct !== null ? sovPct + '%' : '—'}</div><div class="inf-kpi-lbl">SOV ejecutado</div></div>
+    <div class="inf-kpi"><div class="inf-kpi-val" style="color:${ncrsAbiertas > 0 ? '#ef4444' : '#10b981'}">${ncrsAbiertas}</div><div class="inf-kpi-lbl">NCRs abiertas</div></div>
+    <div class="inf-kpi"><div class="inf-kpi-val" style="color:${riesgosAltos > 0 ? '#ef4444' : '#10b981'}">${riesgosAltos}</div><div class="inf-kpi-lbl">Riesgos altos</div></div>
+    <div class="inf-kpi"><div class="inf-kpi-val" style="color:${rfisAbiertas > 0 ? '#f59e0b' : '#10b981'}">${rfisAbiertas}</div><div class="inf-kpi-lbl">RFIs abiertas</div></div>
+    <div class="inf-kpi"><div class="inf-kpi-val" style="color:${aiVencidas > 0 ? '#ef4444' : '#10b981'}">${aiVencidas}</div><div class="inf-kpi-lbl">Acc. vencidas</div></div>
+    <div class="inf-kpi"><div class="inf-kpi-val" style="color:${hitosRet > 0 ? '#ef4444' : '#10b981'}">${hitosRet}</div><div class="inf-kpi-lbl">Hitos retrasados</div></div>
+    <div class="inf-kpi"><div class="inf-kpi-val" style="color:${peligros > 0 ? '#ef4444' : '#10b981'}">${peligros}</div><div class="inf-kpi-lbl">Peligros activos</div></div>
+  </div>`;
+
+  const sumBoxes = `
+  <div class="inf-sum-grid">
+    <div class="inf-sum-box">
+      <h3>💶 Schedule of Values</h3>
+      <div class="inf-row"><span>Presupuesto total</span><strong>${fmtM(sovTotal)}</strong></div>
+      <div class="inf-row"><span>Ejecutado</span><strong style="color:${(sovPct || 0) > 100 ? '#ef4444' : '#10b981'}">${fmtM(sovEjec)}</strong></div>
+      <div class="inf-row"><span>Pendiente</span><strong>${fmtM(sovTotal - sovEjec)}</strong></div>
+      ${sovTotal > 0 ? pBar(sovPct || 0) : ''}
+      <div class="inf-row" style="margin-top:6px"><span>OCs aprobadas</span><strong style="color:#f97316">${fmtM(ocsValor)}</strong></div>
+    </div>
+    <div class="inf-sum-box">
+      <h3>⚙️ Estado general</h3>
+      <div class="inf-row"><span>Fases activas</span><strong>${fases.filter(f => f.estado === 'en_curso').length} / ${fases.length}</strong></div>
+      <div class="inf-row"><span>Hitos totales / retrasados</span><strong style="color:${hitosRet > 0 ? '#ef4444' : 'inherit'}">${hitos.length} / ${hitosRet}</strong></div>
+      <div class="inf-row"><span>Entregas pendientes</span><strong style="color:${entPend > 0 ? '#f59e0b' : '#10b981'}">${entPend}</strong></div>
+      <div class="inf-row"><span>Punch list abiertos</span><strong style="color:${punchAb > 0 ? '#f59e0b' : '#10b981'}">${punchAb}</strong></div>
+      <div class="inf-row"><span>OCs pendientes</span><strong>${ocs.filter(o => o.estado === 'pendiente' || o.estado === 'borrador').length}</strong></div>
+    </div>
+  </div>`;
+
+  // Fases
+  const fasesRows = fases.map(f => `<tr>
+    <td>${f.nombre || '—'}</td>
+    <td><span style="background:${f.estado === 'completada' ? '#10b981' : f.estado === 'en_curso' ? '#f97316' : '#64748b'};color:#fff;padding:2px 6px;border-radius:4px;font-size:10px">${f.estado || '—'}</span></td>
+    <td>${fmtD(f.fecha_inicio_plan)} → ${fmtD(f.fecha_fin_plan)}</td>
+    <td>${f.porcentaje || 0}% ${pBar(f.porcentaje || 0, '#2563eb')}</td>
+    <td>${f.responsable || '—'}</td>
+  </tr>`).join('');
+
+  // SOV por capítulo
+  const sovCaps = {};
+  sovLineas.forEach(l => {
+    const c = l.capitulo || 'General';
+    if (!sovCaps[c]) sovCaps[c] = { pres: 0, ejec: 0 };
+    sovCaps[c].pres += l.importe_presupuestado || 0;
+    sovCaps[c].ejec += l.importe_ejecutado || 0;
+  });
+  const sovRows = Object.entries(sovCaps).map(([cap, v]) => {
+    const pct = v.pres > 0 ? Math.round(v.ejec / v.pres * 100) : 0;
+    return `<tr><td>${cap}</td><td style="text-align:right">${fmtM(v.pres)}</td><td style="text-align:right">${fmtM(v.ejec)}</td><td>${pct}% ${pBar(pct)}</td></tr>`;
+  }).join('');
+
+  // NCRs
+  const ncrsRows = ncrs.filter(n => n.estado !== 'cerrada').slice(0, 10).map(n => `<tr>
+    <td>${n.numero || n.id}</td>
+    <td>${n.descripcion?.slice(0, 60) || '—'}</td>
+    <td><span style="color:${n.gravedad === 'critica' ? '#ef4444' : n.gravedad === 'mayor' ? '#f59e0b' : '#10b981'}">${n.gravedad || '—'}</span></td>
+    <td>${n.responsable || '—'}</td>
+    <td>${fmtD(n.fecha_limite)}</td>
+    <td>${n.estado || '—'}</td>
+  </tr>`).join('');
+
+  // Riesgos
+  const riesgosRows = riesgos.filter(r => r.estado === 'activo').slice(0, 10).map(r => `<tr>
+    <td>${r.numero || r.id}</td>
+    <td>${r.titulo || '—'}</td>
+    <td>${r.categoria || '—'}</td>
+    <td style="color:${r.score >= 7 ? '#ef4444' : r.score >= 4 ? '#f59e0b' : '#10b981'};font-weight:700">${r.score || '—'} (${r.score >= 7 ? 'critico' : r.score >= 4 ? 'alto' : r.score >= 2 ? 'medio' : 'bajo'})</td>
+    <td>${r.propietario || '—'}</td>
+    <td>${fmtD(r.fecha_revision)}</td>
+  </tr>`).join('');
+
+  // OCs
+  const ocsRows = ocs.slice(0, 10).map(o => `<tr>
+    <td>${o.numero || o.id}</td>
+    <td>${o.titulo || '—'}</td>
+    <td>${o.tipo || '—'}</td>
+    <td><span style="color:${o.estado === 'aprobada' ? '#10b981' : o.estado === 'rechazada' ? '#ef4444' : '#f59e0b'}">${o.estado || '—'}</span></td>
+    <td style="text-align:right">${fmtM(o.importe)}</td>
+    <td>${fmtD(o.fecha_solicitud)}</td>
+  </tr>`).join('');
+
+  // RFIs
+  const rfisRows = rfis.filter(r => r.estado !== 'cerrada').slice(0, 8).map(r => `<tr>
+    <td>${r.numero || r.id}</td>
+    <td>${r.titulo || r.asunto || '—'}</td>
+    <td>${r.responsable || r.enviado_a || '—'}</td>
+    <td>${fmtD(r.fecha_limite || r.created_at)}</td>
+    <td>${r.estado || '—'}</td>
+  </tr>`).join('');
+
+  // Hitos
+  const hitosRows = hitos.slice(0, 8).map(h => `<tr>
+    <td>${h.nombre || '—'}</td>
+    <td>${h.tipo || '—'}</td>
+    <td>${fmtD(h.fecha)}</td>
+    <td style="color:${h.retrasado ? '#ef4444' : h.estado === 'completado' ? '#10b981' : 'inherit'}">${h.estado || '—'}${h.retrasado ? ' ⚠️' : ''}</td>
+  </tr>`).join('');
+
+  // Action Items
+  const aiRows = aiItems.filter(a => a.estado !== 'cerrado').slice(0, 10).map(a => {
+    const venc = a.fecha_limite && a.fecha_limite < fechaRep;
+    return `<tr>
+    <td>${a.numero || a.id}</td>
+    <td>${a.descripcion?.slice(0, 60) || '—'}</td>
+    <td>${a.responsable || '—'}</td>
+    <td style="color:${venc ? '#ef4444' : 'inherit'}">${fmtD(a.fecha_limite)}${venc ? ' ⚠️' : ''}</td>
+    <td><span style="color:${a.prioridad === 'urgente' ? '#7c3aed' : a.prioridad === 'alta' ? '#ef4444' : '#f59e0b'}">${a.prioridad || 'normal'}</span></td>
+    <td>${a.estado || '—'}</td>
+  </tr>`;
+  }).join('');
+
+  // Entregas pendientes
+  const entRows = entregas.filter(e => e.estado !== 'recibido' && e.estado !== 'cancelado').slice(0, 8).map(e => `<tr>
+    <td>${e.numero_pedido || e.id}</td>
+    <td>${e.descripcion?.slice(0, 50) || '—'}</td>
+    <td>${e.proveedor || '—'}</td>
+    <td>${fmtD(e.fecha_entrega_prevista)}</td>
+    <td>${e.estado || '—'}</td>
+  </tr>`).join('');
+
+  // Diario — last 5 entries
+  const diarioRows = diario.slice(0, 5).map(d => `<tr>
+    <td>${fmtD(d.fecha)}</td>
+    <td>${d.resumen || d.descripcion || '—'}</td>
+    <td>${d.autor || d.created_by || '—'}</td>
+  </tr>`).join('');
+
+  const today = new Date().toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+
+  const html = `
+  <h1>📋 Informe de Estado de Obra</h1>
+  <div class="inf-meta">
+    <strong>${obraNombre}</strong> &nbsp;·&nbsp; Fecha de corte: <strong>${fmtD(fechaRep)}</strong> &nbsp;·&nbsp; Generado: ${today}
+  </div>
+
+  ${kpis}
+  ${sumBoxes}
+
+  ${fases.length ? `<h2>📅 Fases de Obra</h2>
+  <table><thead><tr><th>Fase</th><th>Estado</th><th>Planificado</th><th>Avance</th><th>Responsable</th></tr></thead>
+  <tbody>${fasesRows}</tbody></table>` : ''}
+
+  ${hitos.length ? `<h2>🏁 Hitos</h2>
+  <table><thead><tr><th>Hito</th><th>Tipo</th><th>Fecha</th><th>Estado</th></tr></thead>
+  <tbody>${hitosRows}</tbody></table>` : ''}
+
+  ${sovLineas.length ? `<h2>💶 Schedule of Values — Resumen por Capítulo</h2>
+  <table><thead><tr><th>Capítulo</th><th>Presupuestado</th><th>Ejecutado</th><th>Avance</th></tr></thead>
+  <tbody>${sovRows}</tbody>
+  <tfoot><tr style="font-weight:800;background:#f8fafc"><td>TOTAL</td><td style="text-align:right">${fmtM(sovTotal)}</td><td style="text-align:right">${fmtM(sovEjec)}</td><td>${sovPct || 0}%</td></tr></tfoot></table>` : ''}
+
+  ${ocs.length ? `<h2>🔄 Órdenes de Cambio (últimas ${Math.min(ocs.length, 10)})</h2>
+  <table><thead><tr><th>Nº</th><th>Título</th><th>Tipo</th><th>Estado</th><th>Importe</th><th>Fecha</th></tr></thead>
+  <tbody>${ocsRows}</tbody></table>` : ''}
+
+  ${ncrs.filter(n => n.estado !== 'cerrada').length ? `<h2>✅ NCRs Abiertas (No Conformidades)</h2>
+  <table><thead><tr><th>Nº</th><th>Descripción</th><th>Gravedad</th><th>Responsable</th><th>Límite</th><th>Estado</th></tr></thead>
+  <tbody>${ncrsRows}</tbody></table>` : ''}
+
+  ${riesgos.filter(r => r.estado === 'activo').length ? `<h2>⚠️ Riesgos Activos</h2>
+  <table><thead><tr><th>Nº</th><th>Título</th><th>Categoría</th><th>Puntuación</th><th>Propietario</th><th>Rev.</th></tr></thead>
+  <tbody>${riesgosRows}</tbody></table>` : ''}
+
+  ${rfis.filter(r => r.estado !== 'cerrada').length ? `<h2>❓ RFIs Abiertas</h2>
+  <table><thead><tr><th>Nº</th><th>Asunto</th><th>Dirigida a</th><th>Límite</th><th>Estado</th></tr></thead>
+  <tbody>${rfisRows}</tbody></table>` : ''}
+
+  ${aiItems.filter(a => a.estado !== 'cerrado').length ? `<h2>📌 Puntos de Acción Pendientes</h2>
+  <table><thead><tr><th>Nº</th><th>Descripción</th><th>Responsable</th><th>Límite</th><th>Prioridad</th><th>Estado</th></tr></thead>
+  <tbody>${aiRows}</tbody></table>` : ''}
+
+  ${entregas.filter(e => e.estado !== 'recibido').length ? `<h2>🚚 Entregas Pendientes</h2>
+  <table><thead><tr><th>Pedido</th><th>Descripción</th><th>Proveedor</th><th>Entrega prevista</th><th>Estado</th></tr></thead>
+  <tbody>${entRows}</tbody></table>` : ''}
+
+  ${diario.length ? `<h2>📓 Últimas Entradas del Diario</h2>
+  <table><thead><tr><th>Fecha</th><th>Resumen</th><th>Autor</th></tr></thead>
+  <tbody>${diarioRows}</tbody></table>` : ''}
+
+  <div class="inf-footer">Alejandra APP · ${new Date().toLocaleDateString('es-ES')} · Informe generado automáticamente — Confidencial</div>
+  `;
+
+  document.getElementById('informeReporte').innerHTML = html;
+  document.getElementById('informeNotReady').style.display = 'none';
+  document.getElementById('informeContent').style.display = '';
+  showToast('Informe generado ✅', 'success');
 }
 
 </script>
