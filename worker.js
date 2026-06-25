@@ -4721,6 +4721,14 @@ export default {
         if (method === 'PUT')    return await actualizarVisitaObra(_vid, request, env);
         if (method === 'DELETE') return await eliminarVisitaObra(_vid, request, env);
       }
+      // ── Solicitudes de Cambio / Change Orders (NEW-86) ───────────────────────────
+      if (path === '/change-orders' && method === 'GET')  return await getChangeOrders(request, env);
+      if (path === '/change-orders' && method === 'POST') return await crearChangeOrder(request, env);
+      if (path.startsWith('/change-orders/')) {
+        const _coId = parseInt(path.split('/change-orders/')[1]);
+        if (method === 'PUT')    return await actualizarChangeOrder(_coId, request, env);
+        if (method === 'DELETE') return await eliminarChangeOrder(_coId, request, env);
+      }
       // ── Evaluacion de Proveedores / Supplier Evaluation (NEW-85) ────────────────
       if (path === '/evaluaciones-prov' && method === 'GET')  return await getEvaluacionesProv(request, env);
       if (path === '/evaluaciones-prov' && method === 'POST') return await crearEvaluacionProv(request, env);
@@ -18125,5 +18133,109 @@ async function eliminarEvaluacionProv(id, request, env) {
   const { empresa_id } = await getAuthContext(request, env);
   await ensureEvaluacionesProvTable(env);
   await env.DB.prepare(`DELETE FROM evaluaciones_proveedores WHERE id=? AND empresa_id=?`).bind(id, empresa_id).run();
+  return jsonResp({ ok: true });
+}
+
+// ── Solicitudes de Cambio / Change Orders (NEW-86) ────────────────────────────
+async function ensureChangeOrdersTable(env) {
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS solicitudes_cambio (
+    id                    INTEGER PRIMARY KEY AUTOINCREMENT,
+    empresa_id            INTEGER NOT NULL,
+    obra_id               INTEGER,
+    numero                TEXT,
+    titulo                TEXT NOT NULL,
+    tipo                  TEXT NOT NULL DEFAULT 'mixta',
+    origen                TEXT NOT NULL DEFAULT 'cliente',
+    solicitado_por        TEXT,
+    fecha_solicitud       TEXT NOT NULL,
+    fecha_respuesta_limite TEXT,
+    fecha_aprobacion      TEXT,
+    descripcion           TEXT,
+    justificacion         TEXT,
+    impacto_coste         REAL DEFAULT 0,
+    impacto_plazo_dias    INTEGER DEFAULT 0,
+    estado                TEXT NOT NULL DEFAULT 'pendiente',
+    aprobado_por          TEXT,
+    referencias           TEXT,
+    notas                 TEXT,
+    created_at            TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at            TEXT NOT NULL DEFAULT (datetime('now'))
+  )`).run();
+}
+
+async function getChangeOrders(request, env) {
+  const { empresa_id } = await getAuthContext(request, env);
+  const url    = new URL(request.url);
+  const obra_id = url.searchParams.get('obra_id');
+  const estado  = url.searchParams.get('estado');
+  const tipo    = url.searchParams.get('tipo');
+  await ensureChangeOrdersTable(env);
+  let q = `SELECT * FROM solicitudes_cambio WHERE empresa_id=?`;
+  const p = [empresa_id];
+  if (obra_id) { q += ` AND obra_id=?`;  p.push(obra_id); }
+  if (estado)  { q += ` AND estado=?`;   p.push(estado); }
+  if (tipo)    { q += ` AND tipo=?`;     p.push(tipo); }
+  q += ` ORDER BY fecha_solicitud DESC, id DESC`;
+  const rows = await env.DB.prepare(q).bind(...p).all();
+  return jsonResp(rows.results || []);
+}
+
+async function crearChangeOrder(request, env) {
+  const { empresa_id } = await getAuthContext(request, env);
+  const d = await request.json();
+  await ensureChangeOrdersTable(env);
+  const anio = new Date().getFullYear();
+  const last = await env.DB.prepare(
+    `SELECT numero FROM solicitudes_cambio WHERE empresa_id=? AND numero LIKE ? ORDER BY id DESC LIMIT 1`
+  ).bind(empresa_id, `CO-${anio}-%`).first();
+  let seq = 1;
+  if (last?.numero) { const n = parseInt(last.numero.split('-')[2]); if (!isNaN(n)) seq = n + 1; }
+  const numero = `CO-${anio}-${String(seq).padStart(4,'0')}`;
+  const r = await env.DB.prepare(
+    `INSERT INTO solicitudes_cambio
+     (empresa_id,obra_id,numero,titulo,tipo,origen,solicitado_por,
+      fecha_solicitud,fecha_respuesta_limite,fecha_aprobacion,
+      descripcion,justificacion,impacto_coste,impacto_plazo_dias,
+      estado,aprobado_por,referencias,notas)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+  ).bind(
+    empresa_id, d.obra_id||null, numero,
+    d.titulo, d.tipo||'mixta', d.origen||'cliente', d.solicitado_por||null,
+    d.fecha_solicitud, d.fecha_respuesta_limite||null, d.fecha_aprobacion||null,
+    d.descripcion||null, d.justificacion||null,
+    Number(d.impacto_coste||0), Number(d.impacto_plazo_dias||0),
+    d.estado||'pendiente', d.aprobado_por||null, d.referencias||null, d.notas||null
+  ).run();
+  return jsonResp({ id: r.meta.last_row_id, numero }, 201);
+}
+
+async function actualizarChangeOrder(id, request, env) {
+  const { empresa_id } = await getAuthContext(request, env);
+  const d = await request.json();
+  await ensureChangeOrdersTable(env);
+  await env.DB.prepare(
+    `UPDATE solicitudes_cambio SET
+      titulo=?, tipo=?, origen=?, solicitado_por=?,
+      fecha_solicitud=?, fecha_respuesta_limite=?, fecha_aprobacion=?,
+      descripcion=?, justificacion=?,
+      impacto_coste=?, impacto_plazo_dias=?,
+      estado=?, aprobado_por=?, referencias=?, notas=?,
+      updated_at=datetime('now')
+     WHERE id=? AND empresa_id=?`
+  ).bind(
+    d.titulo, d.tipo||'mixta', d.origen||'cliente', d.solicitado_por||null,
+    d.fecha_solicitud, d.fecha_respuesta_limite||null, d.fecha_aprobacion||null,
+    d.descripcion||null, d.justificacion||null,
+    Number(d.impacto_coste||0), Number(d.impacto_plazo_dias||0),
+    d.estado||'pendiente', d.aprobado_por||null, d.referencias||null, d.notas||null,
+    id, empresa_id
+  ).run();
+  return jsonResp({ ok: true });
+}
+
+async function eliminarChangeOrder(id, request, env) {
+  const { empresa_id } = await getAuthContext(request, env);
+  await ensureChangeOrdersTable(env);
+  await env.DB.prepare(`DELETE FROM solicitudes_cambio WHERE id=? AND empresa_id=?`).bind(id, empresa_id).run();
   return jsonResp({ ok: true });
 }

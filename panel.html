@@ -693,6 +693,10 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
       <span class="nav-icon">⭐</span> Eval. Proveedores
       <span class="nav-badge" id="evProvBadge" style="display:none">0</span>
     </button>
+    <button class="nav-item" data-page="changeOrders" onclick="navTo('changeOrders')">
+      <span class="nav-icon">🔄</span> Cambios / Change Orders
+      <span class="nav-badge" id="coBadge" style="display:none">0</span>
+    </button>
     <button class="nav-item" data-page="fotosObra" onclick="navTo('fotosObra')">
       <span class="nav-icon">📷</span> Galería de Fotos
     </button>
@@ -2413,6 +2417,140 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
               <button class="btn btn-secondary" onclick="cerrarModalAts()">Cancelar</button>
               <span id="atsElimBtn"></span>
               <button class="btn btn-primary" onclick="guardarAts()">💾 Guardar ATS</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- SOLICITUDES DE CAMBIO / CHANGE ORDERS (NEW-86) -->
+      <div class="page" id="pageChangeOrders">
+        <div class="page-title">🔄 Solicitudes de Cambio / Change Orders</div>
+        <div id="coKpis" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:12px;margin-bottom:16px"></div>
+        <div class="tbl-toolbar">
+          <input class="tbl-search" id="searchCo" placeholder="🔍 Buscar título, solicitante..." oninput="filtrarChangeOrders()">
+          <select class="tbl-search" id="filterCoObra" style="min-width:220px" onchange="tblCo=null;cargarChangeOrders()">
+            <option value="">Todas las obras</option>
+          </select>
+          <select class="tbl-search" id="filterCoEstado" onchange="filtrarChangeOrders()">
+            <option value="">Todos los estados</option>
+            <option value="pendiente">Pendiente</option>
+            <option value="en_revision">En revisión</option>
+            <option value="aprobada">Aprobada</option>
+            <option value="rechazada">Rechazada</option>
+            <option value="cancelada">Cancelada</option>
+          </select>
+          <select class="tbl-search" id="filterCoTipo" onchange="filtrarChangeOrders()">
+            <option value="">Todos los tipos</option>
+            <option value="alcance">Alcance</option>
+            <option value="presupuesto">Presupuesto</option>
+            <option value="plazo">Plazo</option>
+            <option value="mixta">Mixta</option>
+          </select>
+          <button class="btn btn-primary" onclick="abrirModalCo()">+ Nuevo Cambio</button>
+        </div>
+        <div id="tblCoContainer"></div>
+        <!-- Modal change order -->
+        <div class="modal-overlay" id="modalCo" style="display:none" onclick="if(event.target===this)cerrarModalCo()">
+          <div class="modal" style="max-width:680px">
+            <div class="modal-header">
+              <span id="modalCoTitulo">Nueva Solicitud de Cambio</span>
+              <button class="modal-close" onclick="cerrarModalCo()">✕</button>
+            </div>
+            <div class="modal-body" style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+              <div style="grid-column:span 2;font-weight:600;color:var(--accent);border-bottom:1px solid #eee;padding-bottom:6px">Identificación</div>
+              <div>
+                <label>Número</label>
+                <input id="coNumero" class="form-control" placeholder="Auto" readonly style="background:#f5f5f5">
+              </div>
+              <div>
+                <label>Estado</label>
+                <select id="coEstado" class="form-control">
+                  <option value="pendiente">Pendiente</option>
+                  <option value="en_revision">En revisión</option>
+                  <option value="aprobada">Aprobada</option>
+                  <option value="rechazada">Rechazada</option>
+                  <option value="cancelada">Cancelada</option>
+                </select>
+              </div>
+              <div style="grid-column:span 2">
+                <label>Título del cambio *</label>
+                <input id="coTitulo" class="form-control" placeholder="Describe brevemente el cambio solicitado">
+              </div>
+              <div>
+                <label>Tipo *</label>
+                <select id="coTipo" class="form-control">
+                  <option value="mixta">Mixta (coste + plazo)</option>
+                  <option value="alcance">Alcance</option>
+                  <option value="presupuesto">Presupuesto</option>
+                  <option value="plazo">Plazo</option>
+                </select>
+              </div>
+              <div>
+                <label>Origen</label>
+                <select id="coOrigen" class="form-control">
+                  <option value="cliente">Cliente</option>
+                  <option value="contratista">Contratista</option>
+                  <option value="subcontratista">Subcontratista</option>
+                  <option value="condiciones_terreno">Condiciones terreno</option>
+                  <option value="normativa">Normativa / regulación</option>
+                  <option value="otros">Otros</option>
+                </select>
+              </div>
+              <div>
+                <label>Solicitado por</label>
+                <input id="coSolicitadoPor" class="form-control" placeholder="Nombre o empresa">
+              </div>
+              <div>
+                <label>Obra</label>
+                <select id="coObra" class="form-control"><option value="">Sin obra</option></select>
+              </div>
+              <div>
+                <label>Fecha solicitud *</label>
+                <input id="coFechaSolicitud" class="form-control" type="date">
+              </div>
+              <div>
+                <label>Fecha límite respuesta</label>
+                <input id="coFechaLimite" class="form-control" type="date">
+              </div>
+              <div style="grid-column:span 2;font-weight:600;color:var(--accent);border-bottom:1px solid #eee;padding-bottom:6px;margin-top:8px">Impacto estimado</div>
+              <div>
+                <label>Impacto en coste (€) <span style="color:var(--muted);font-size:11px">negativo = ahorro</span></label>
+                <input id="coImpactoCoste" class="form-control" type="number" step="0.01" placeholder="0.00">
+              </div>
+              <div>
+                <label>Impacto en plazo (días) <span style="color:var(--muted);font-size:11px">negativo = adelanto</span></label>
+                <input id="coImpactoPlazo" class="form-control" type="number" placeholder="0">
+              </div>
+              <div style="grid-column:span 2">
+                <label>Descripción del cambio</label>
+                <textarea id="coDescripcion" class="form-control" rows="3" placeholder="Descripción detallada del cambio solicitado"></textarea>
+              </div>
+              <div style="grid-column:span 2">
+                <label>Justificación / Motivo</label>
+                <textarea id="coJustificacion" class="form-control" rows="2" placeholder="¿Por qué es necesario este cambio?"></textarea>
+              </div>
+              <div style="grid-column:span 2;font-weight:600;color:var(--accent);border-bottom:1px solid #eee;padding-bottom:6px;margin-top:8px">Resolución</div>
+              <div>
+                <label>Aprobado / Rechazado por</label>
+                <input id="coAprobadoPor" class="form-control" placeholder="Nombre del responsable">
+              </div>
+              <div>
+                <label>Fecha aprobación / rechazo</label>
+                <input id="coFechaAprobacion" class="form-control" type="date">
+              </div>
+              <div style="grid-column:span 2">
+                <label>Referencias (RFIs, submittals, planos…)</label>
+                <input id="coReferencias" class="form-control" placeholder="Ej: RFI-2026-0012, SUBM-2026-0005">
+              </div>
+              <div style="grid-column:span 2">
+                <label>Notas internas</label>
+                <textarea id="coNotas" class="form-control" rows="2"></textarea>
+              </div>
+            </div>
+            <div class="modal-footer">
+              <button class="btn btn-secondary" onclick="cerrarModalCo()">Cancelar</button>
+              <span id="coElimBtn"></span>
+              <button class="btn btn-primary" onclick="guardarCo()">💾 Guardar Cambio</button>
             </div>
           </div>
         </div>
@@ -6387,6 +6525,7 @@ const PAGE_TITLES = {
   rendimientos: '📈 Rendimientos de Producción / Productivity Tracking',
   ats: '🔍 Análisis de Trabajo Seguro / Job Hazard Analysis',
   evaluacionesProv: '⭐ Evaluación de Proveedores / Supplier Evaluation',
+  changeOrders: '🔄 Solicitudes de Cambio / Change Orders',
 };
 
 const PAGE_LOADERS = {
@@ -6473,6 +6612,7 @@ const PAGE_LOADERS = {
   rendimientos:    cargarRendimientos,
   ats:             cargarAts,
   evaluacionesProv: cargarEvaluacionesProv,
+  changeOrders:     cargarChangeOrders,
 };
 
 let currentPage = '';
@@ -6588,6 +6728,7 @@ const SYNC_INTERVALS = {
   rendimientos:    90,
   ats:             60,
   evaluacionesProv: 120,
+  changeOrders:     60,
 };
 
 let _syncTimer = null, _syncLabelTimer = null, _syncLastTs = null;
@@ -15948,6 +16089,169 @@ function exportarFinanzas() {
   if (!obraId) return showToast('Selecciona una obra primero', 'warning');
   // Abrir informe en nueva pestaña usando el endpoint de informes
   window.open(`/informe-obra/${obraId}?tipo=financiero`, '_blank');
+}
+
+// ── SOLICITUDES DE CAMBIO / CHANGE ORDERS (NEW-86) ────────────────────────────
+let tblCo = null, _coData = [];
+const CO_ESTADO_COLOR = {
+  pendiente:'var(--warning)', en_revision:'var(--accent)',
+  aprobada:'var(--success)', rechazada:'var(--danger)', cancelada:'#888'
+};
+const CO_TIPO_LABEL = { alcance:'Alcance', presupuesto:'Presupuesto', plazo:'Plazo', mixta:'Mixta' };
+const CO_ORIGEN_LABEL = {
+  cliente:'Cliente', contratista:'Contratista', subcontratista:'Subcontratista',
+  condiciones_terreno:'Terreno', normativa:'Normativa', otros:'Otros'
+};
+
+function fmtCosteImpacto(v) {
+  if (v == null || v === 0) return '—';
+  const sign = v > 0 ? '+' : '';
+  return `<span style="color:${v > 0 ? 'var(--danger)' : 'var(--success)'};font-weight:600">${sign}${fmtMoney(v)}</span>`;
+}
+
+async function cargarChangeOrders() {
+  poblarSelectObras('filterCoObra');
+  poblarSelectObras('coObra');
+  const obraId = document.getElementById('filterCoObra').value;
+  const params = new URLSearchParams();
+  if (obraId) params.set('obra_id', obraId);
+  _coData = await api('/change-orders?' + params);
+  if (!Array.isArray(_coData)) _coData = [];
+
+  // KPIs
+  const total      = _coData.length;
+  const pendientes = _coData.filter(c => c.estado === 'pendiente').length;
+  const aprobadas  = _coData.filter(c => c.estado === 'aprobada').length;
+  const rechazadas = _coData.filter(c => c.estado === 'rechazada').length;
+  const impactoTotal = _coData.filter(c=>c.estado==='aprobada').reduce((a,b)=>a+Number(b.impacto_coste||0),0);
+  const diasTotal    = _coData.filter(c=>c.estado==='aprobada').reduce((a,b)=>a+Number(b.impacto_plazo_dias||0),0);
+  document.getElementById('coKpis').innerHTML = `
+    <div class="kpi-mini"><div class="kpi-val">${total}</div><div class="kpi-lbl">Total cambios</div></div>
+    <div class="kpi-mini"><div class="kpi-val" style="color:var(--warning)">${pendientes}</div><div class="kpi-lbl">Pendientes</div></div>
+    <div class="kpi-mini"><div class="kpi-val" style="color:var(--success)">${aprobadas}</div><div class="kpi-lbl">Aprobados</div></div>
+    <div class="kpi-mini"><div class="kpi-val" style="color:var(--danger)">${rechazadas}</div><div class="kpi-lbl">Rechazados</div></div>
+    <div class="kpi-mini"><div class="kpi-val" style="color:${impactoTotal>0?'var(--danger)':'var(--success)'}">${impactoTotal!==0?(impactoTotal>0?'+':'')+fmtMoney(impactoTotal):'—'}</div><div class="kpi-lbl">Impacto coste aprobado</div></div>
+    <div class="kpi-mini"><div class="kpi-val" style="color:${diasTotal>0?'var(--danger)':'var(--success)'}">${diasTotal!==0?(diasTotal>0?'+':'')+diasTotal+' d':'—'}</div><div class="kpi-lbl">Impacto plazo aprobado</div></div>
+  `;
+  const bdg = document.getElementById('coBadge');
+  if (bdg) { bdg.textContent = pendientes; bdg.style.display = pendientes ? '' : 'none'; }
+
+  filtrarChangeOrders();
+}
+
+function filtrarChangeOrders() {
+  const q      = (document.getElementById('searchCo')?.value || '').toLowerCase();
+  const estado = document.getElementById('filterCoEstado')?.value || '';
+  const tipo   = document.getElementById('filterCoTipo')?.value || '';
+  let data = _coData.filter(c => {
+    if (estado && c.estado !== estado) return false;
+    if (tipo   && c.tipo   !== tipo)   return false;
+    if (q && !`${c.titulo} ${c.solicitado_por||''} ${c.numero||''} ${c.descripcion||''}`.toLowerCase().includes(q)) return false;
+    return true;
+  });
+  const cols = [
+    { title:'Nº',        field:'numero',           width:115, formatter: c => c.getValue()||'—' },
+    { title:'Fecha',     field:'fecha_solicitud',  width:105, formatter: c => c.getValue()||'—' },
+    { title:'Título',    field:'titulo',           widthGrow:3 },
+    { title:'Tipo',      field:'tipo',             width:105, formatter: c => CO_TIPO_LABEL[c.getValue()]||c.getValue() },
+    { title:'Origen',    field:'origen',           width:115, formatter: c => CO_ORIGEN_LABEL[c.getValue()]||c.getValue() },
+    { title:'Impacto €', field:'impacto_coste',    width:115, hozAlign:'right', formatter: c => fmtCosteImpacto(c.getValue()) },
+    { title:'+/- Días',  field:'impacto_plazo_dias', width:90, hozAlign:'center', formatter: c => {
+      const v = Number(c.getValue()||0);
+      if (!v) return '—';
+      return `<span style="color:${v>0?'var(--danger)':'var(--success)'};font-weight:600">${v>0?'+':''}${v}d</span>`;
+    }},
+    { title:'Estado', field:'estado', width:120, formatter: c => {
+      const v = c.getValue();
+      return `<span style="color:${CO_ESTADO_COLOR[v]||'inherit'};font-weight:600;text-transform:capitalize">${v.replace('_',' ')}</span>`;
+    }},
+    { title:'Acciones', width:90, hozAlign:'center', formatter: c =>
+      `<button class="btn-tbl" onclick="editarCo(${c.getRow().getData().id})">✏️</button>
+       <button class="btn-tbl btn-danger-sm" onclick="eliminarCo(${c.getRow().getData().id})">🗑️</button>`
+    }
+  ];
+  if (!tblCo) {
+    tblCo = new Tabulator('#tblCoContainer', {
+      data, columns: cols, layout:'fitColumns', locale:'es-es',
+      placeholder:'No hay solicitudes de cambio', height:'520px'
+    });
+  } else {
+    tblCo.replaceData(data);
+  }
+}
+
+function abrirModalCo(d = {}) {
+  document.getElementById('modalCo')._coId = d.id || null;
+  document.getElementById('coNumero').value         = d.numero || '';
+  document.getElementById('coEstado').value         = d.estado || 'pendiente';
+  document.getElementById('coTitulo').value         = d.titulo || '';
+  document.getElementById('coTipo').value           = d.tipo   || 'mixta';
+  document.getElementById('coOrigen').value         = d.origen || 'cliente';
+  document.getElementById('coSolicitadoPor').value  = d.solicitado_por || '';
+  document.getElementById('coObra').value           = d.obra_id || '';
+  document.getElementById('coFechaSolicitud').value = d.fecha_solicitud || new Date().toISOString().slice(0,10);
+  document.getElementById('coFechaLimite').value    = d.fecha_respuesta_limite || '';
+  document.getElementById('coImpactoCoste').value   = d.impacto_coste || '';
+  document.getElementById('coImpactoPlazo').value   = d.impacto_plazo_dias || '';
+  document.getElementById('coDescripcion').value    = d.descripcion || '';
+  document.getElementById('coJustificacion').value  = d.justificacion || '';
+  document.getElementById('coAprobadoPor').value    = d.aprobado_por || '';
+  document.getElementById('coFechaAprobacion').value = d.fecha_aprobacion || '';
+  document.getElementById('coReferencias').value    = d.referencias || '';
+  document.getElementById('coNotas').value          = d.notas || '';
+  document.getElementById('modalCoTitulo').textContent = d.id ? 'Editar Solicitud de Cambio' : 'Nueva Solicitud de Cambio';
+  document.getElementById('coElimBtn').innerHTML = d.id
+    ? `<button class="btn btn-danger" onclick="eliminarCo(${d.id},true)">🗑️ Eliminar</button>` : '';
+  document.getElementById('modalCo').style.display = 'flex';
+}
+
+async function editarCo(id) {
+  const d = _coData.find(c => c.id === id);
+  if (d) abrirModalCo(d);
+}
+
+async function guardarCo() {
+  const titulo = document.getElementById('coTitulo').value.trim();
+  const fecha  = document.getElementById('coFechaSolicitud').value;
+  if (!titulo) return alert('El título del cambio es obligatorio.');
+  if (!fecha)  return alert('La fecha de solicitud es obligatoria.');
+  const body = {
+    titulo,
+    estado:                  document.getElementById('coEstado').value,
+    tipo:                    document.getElementById('coTipo').value,
+    origen:                  document.getElementById('coOrigen').value,
+    solicitado_por:          document.getElementById('coSolicitadoPor').value.trim() || null,
+    obra_id:                 document.getElementById('coObra').value || null,
+    fecha_solicitud:         fecha,
+    fecha_respuesta_limite:  document.getElementById('coFechaLimite').value || null,
+    impacto_coste:           parseFloat(document.getElementById('coImpactoCoste').value) || 0,
+    impacto_plazo_dias:      parseInt(document.getElementById('coImpactoPlazo').value) || 0,
+    descripcion:             document.getElementById('coDescripcion').value.trim() || null,
+    justificacion:           document.getElementById('coJustificacion').value.trim() || null,
+    aprobado_por:            document.getElementById('coAprobadoPor').value.trim() || null,
+    fecha_aprobacion:        document.getElementById('coFechaAprobacion').value || null,
+    referencias:             document.getElementById('coReferencias').value.trim() || null,
+    notas:                   document.getElementById('coNotas').value.trim() || null,
+  };
+  const id = document.getElementById('modalCo')._coId;
+  if (id) {
+    await api(`/change-orders/${id}`, { method:'PUT', body: JSON.stringify(body) });
+  } else {
+    await api('/change-orders', { method:'POST', body: JSON.stringify(body) });
+  }
+  cerrarModalCo();
+  await cargarChangeOrders();
+}
+
+async function eliminarCo(id, desdeModal = false) {
+  if (!confirm('¿Eliminar esta solicitud de cambio? Esta acción no se puede deshacer.')) return;
+  await api(`/change-orders/${id}`, { method:'DELETE' });
+  if (desdeModal) cerrarModalCo();
+  await cargarChangeOrders();
+}
+
+function cerrarModalCo() {
+  document.getElementById('modalCo').style.display = 'none';
 }
 
 // ── EVALUACION DE PROVEEDORES / SUPPLIER EVALUATION (NEW-85) ──────────────────
