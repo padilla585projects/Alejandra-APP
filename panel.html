@@ -513,6 +513,9 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
     <button class="nav-item" data-page="contactosObra" onclick="navTo('contactosObra')">
       <span class="nav-icon">👥</span> Directorio de Contactos
     </button>
+    <button class="nav-item" data-page="actasReunion" onclick="navTo('actasReunion')">
+      <span class="nav-icon">📋</span> Actas de Reunión
+    </button>
 
     <div class="sidebar-section" onclick="sidebarToggle(this)" data-sid="planificacion"><span>📊 Planificación</span><span class="sec-chevron">▼</span></div>
     <button class="nav-item" data-page="presupuesto" onclick="navTo('presupuesto')">
@@ -533,6 +536,10 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
     </button>
     <button class="nav-item" data-page="contratosObra" onclick="navTo('contratosObra')">
       <span class="nav-icon">📑</span> Contratos
+    </button>
+    <button class="nav-item" data-page="submittals" onclick="navTo('submittals')">
+      <span class="nav-icon">📬</span> Aprobaciones
+      <span class="nav-badge" id="submittalsBadge" style="display:none">!</span>
     </button>
 
     <div class="sidebar-section" onclick="sidebarToggle(this)" data-sid="seguimiento"><span>📓 Seguimiento</span><span class="sec-chevron">▼</span></div>
@@ -1478,6 +1485,64 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
         <!-- Tabla de entradas de coste -->
         <div style="font-family:'Montserrat',sans-serif;font-weight:700;font-size:10px;letter-spacing:2px;color:var(--muted);text-transform:uppercase;margin-bottom:10px">📝 Detalle de gastos</div>
         <div class="tbl-wrap"><div id="tblCostes"></div></div>
+      </div>
+
+      <!-- SUBMITTAL LOG / APROBACIONES DE MATERIALES -->
+      <div class="page" id="pageSubmittals">
+        <div class="page-title">📬 Aprobaciones de Materiales</div>
+        <div class="page-sub">Gestión de submittals — muestras, planos de taller, fichas técnicas y aprobaciones</div>
+        <div class="tbl-toolbar" style="flex-wrap:wrap;gap:8px;margin-bottom:16px">
+          <input class="tbl-search" id="searchSubmittals" placeholder="🔍 Buscar título, fabricante, especificación...">
+          <select class="tbl-search" id="filterSubmittalsObra" style="min-width:200px" onchange="cargarSubmittals()">
+            <option value="">🏗 Todas las obras</option>
+          </select>
+          <select class="tbl-search" id="filterSubmittalsTipo" style="min-width:140px" onchange="cargarSubmittals()">
+            <option value="">Todos los tipos</option>
+            <option value="material">📦 Material</option>
+            <option value="plano_taller">📐 Plano de taller</option>
+            <option value="ficha_tecnica">📄 Ficha técnica</option>
+            <option value="muestra">🔬 Muestra</option>
+            <option value="calculo">🔢 Cálculo</option>
+            <option value="informe">📋 Informe</option>
+          </select>
+          <select class="tbl-search" id="filterSubmittalsEstado" style="min-width:140px" onchange="cargarSubmittals()">
+            <option value="">Todos los estados</option>
+            <option value="pendiente">⏳ Pendiente</option>
+            <option value="en_revision">🔍 En revisión</option>
+            <option value="aprobado">✅ Aprobado</option>
+            <option value="aprobado_con_notas">✅⚠️ Aprobado con notas</option>
+            <option value="rechazado">❌ Rechazado</option>
+          </select>
+          <button class="btn btn-primary" onclick="abrirModalSubmittal()">+ Nuevo submittal</button>
+          <button class="btn btn-secondary" onclick="exportarTabla(tblSubmittals,'submittals')">⬇ CSV</button>
+          <button class="btn btn-secondary" onclick="cargarSubmittals()">🔄 Actualizar</button>
+        </div>
+        <div id="submittalsResumen" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;margin-bottom:18px"></div>
+        <div class="tbl-wrap"><div id="tblSubmittals"></div></div>
+      </div>
+
+      <!-- ACTAS DE REUNION -->
+      <div class="page" id="pageActasReunion">
+        <div class="page-title">📋 Actas de Reunión</div>
+        <div class="page-sub">Registro de reuniones de coordinación, seguridad e inicio de obra</div>
+        <div class="tbl-toolbar" style="flex-wrap:wrap;gap:8px;margin-bottom:16px">
+          <select class="tbl-search" id="filterActasObra" style="min-width:220px" onchange="cargarActasReunion()">
+            <option value="">🏗 Todas las obras</option>
+          </select>
+          <select class="tbl-search" id="filterActasTipo" style="min-width:160px" onchange="cargarActasReunion()">
+            <option value="">Todos los tipos</option>
+            <option value="inicio">🚀 Inicio de obra</option>
+            <option value="coordinacion">🤝 Coordinación</option>
+            <option value="seguridad">🦺 Seguridad</option>
+            <option value="progreso">📊 Seguimiento</option>
+            <option value="final">🏁 Final de obra</option>
+            <option value="extraordinaria">⚡ Extraordinaria</option>
+          </select>
+          <button class="btn btn-primary" onclick="abrirModalActa()">+ Nueva acta</button>
+          <button class="btn btn-secondary" onclick="cargarActasReunion()">🔄 Actualizar</button>
+        </div>
+        <div id="actasResumen" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;margin-bottom:18px"></div>
+        <div id="actasLista" style="display:flex;flex-direction:column;gap:12px"></div>
       </div>
 
       <!-- DIRECTORIO DE CONTACTOS DE OBRA -->
@@ -3055,6 +3120,8 @@ const PAGE_TITLES = {
   costesObra: '💰 Control de Costes',
   contactosObra: '👥 Directorio de Contactos',
   contratosObra: '📑 Gestión de Contratos',
+  submittals: '📬 Aprobaciones de Materiales',
+  actasReunion: '📋 Actas de Reunión',
 };
 
 const PAGE_LOADERS = {
@@ -3103,6 +3170,8 @@ const PAGE_LOADERS = {
   costesObra: cargarCostesObra,
   contactosObra: cargarContactosObra,
   contratosObra: cargarContratosObra,
+  submittals: cargarSubmittals,
+  actasReunion: cargarActasReunion,
 };
 
 let currentPage = '';
@@ -3180,6 +3249,8 @@ const SYNC_INTERVALS = {
   costesObra: 90,
   contactosObra: 300,
   contratosObra: 180,
+  submittals: 60,
+  actasReunion: 180,
 };
 
 let _syncTimer = null, _syncLabelTimer = null, _syncLastTs = null;
@@ -11497,6 +11568,347 @@ async function eliminarContratoObra(id) {
   if (!confirm('¿Eliminar este contrato? Se eliminarán también sus modificaciones.')) return;
   const r = await api(`/contratos-obra/${id}`, { method: 'DELETE' });
   if (r.ok) { toast('Eliminado', 'ok'); tblContratos = null; cargarContratosObra(); }
+  else toast('Error al eliminar', 'err');
+}
+
+// ── SUBMITTAL LOG / APROBACIONES DE MATERIALES ───────────────────
+let tblSubmittals = null, _submittalsData = [];
+const SUB_TIPO_ICON = { material:'📦', plano_taller:'📐', ficha_tecnica:'📄', muestra:'🔬', calculo:'🔢', informe:'📋' };
+const SUB_ESTADO_COLOR = {
+  pendiente: 'var(--muted)', en_revision: 'var(--warning)', aprobado: 'var(--success)',
+  aprobado_con_notas: '#f97316', rechazado: 'var(--danger)'
+};
+
+async function cargarSubmittals() {
+  if (document.getElementById('filterSubmittalsObra')?.options.length <= 1) poblarSelectObras('filterSubmittalsObra');
+  const obraId = document.getElementById('filterSubmittalsObra')?.value || '';
+  const tipo   = document.getElementById('filterSubmittalsTipo')?.value || '';
+  const estado = document.getElementById('filterSubmittalsEstado')?.value || '';
+  let url = `/submittals?`;
+  if (obraId) url += `obra_id=${obraId}&`;
+  if (tipo)   url += `tipo=${tipo}&`;
+  if (estado) url += `estado=${estado}&`;
+  const r = await api(url);
+  _submittalsData = r?.submittals || [];
+  // Badge
+  const vencidos = r?.vencidos || 0;
+  const pendBadge = document.getElementById('submittalsBadge');
+  if (pendBadge) { pendBadge.style.display = vencidos > 0 ? '' : 'none'; }
+  // KPIs
+  document.getElementById('submittalsResumen').innerHTML = `
+    <div class="kpi-card"><div class="kpi-icon">📬</div><div class="kpi-value">${_submittalsData.length}</div><div class="kpi-label">Total</div></div>
+    <div class="kpi-card"><div class="kpi-icon">⏳</div><div class="kpi-value" style="color:var(--muted)">${r?.pendientes||0}</div><div class="kpi-label">Pendientes</div></div>
+    <div class="kpi-card"><div class="kpi-icon">🔍</div><div class="kpi-value" style="color:var(--warning)">${r?.en_revision||0}</div><div class="kpi-label">En revisión</div></div>
+    <div class="kpi-card"><div class="kpi-icon">✅</div><div class="kpi-value" style="color:var(--success)">${r?.aprobados||0}</div><div class="kpi-label">Aprobados</div></div>
+    <div class="kpi-card"><div class="kpi-icon">❌</div><div class="kpi-value" style="color:var(--danger)">${r?.rechazados||0}</div><div class="kpi-label">Rechazados</div></div>
+    <div class="kpi-card"><div class="kpi-icon">⚠️</div><div class="kpi-value" style="color:${vencidos>0?'var(--danger)':'var(--muted)'}">${vencidos}</div><div class="kpi-label">Vencidos</div></div>
+  `;
+  // Search filter
+  const q = (document.getElementById('searchSubmittals')?.value||'').toLowerCase();
+  const filtered = q ? _submittalsData.filter(s =>
+    (s.titulo||'').toLowerCase().includes(q) ||
+    (s.fabricante||'').toLowerCase().includes(q) ||
+    (s.especificacion||'').toLowerCase().includes(q)
+  ) : _submittalsData;
+  const cols = [
+    { title: 'Nº', field: 'numero', width: 130 },
+    { title: 'Tipo', field: 'tipo', width: 100, formatter: (cell) => {
+      const v = cell.getValue()||''; return `${SUB_TIPO_ICON[v]||'📋'} ${v.replace('_',' ')}`;
+    }},
+    { title: 'Título', field: 'titulo', minWidth: 200 },
+    { title: 'Fabricante', field: 'fabricante', minWidth: 130 },
+    { title: 'Especificación', field: 'especificacion', width: 120 },
+    { title: 'Rev', field: 'revision', width: 60, hozAlign:'center' },
+    { title: 'Estado', field: 'estado', width: 140, formatter: (cell) => {
+      const v = cell.getValue()||''; const row = cell.getRow().getData();
+      return `<span style="color:${SUB_ESTADO_COLOR[v]||'inherit'};font-weight:700">${v.replace(/_/g,' ')}${row.vencido?' ⚠️':''}</span>`;
+    }},
+    { title: 'Responsable', field: 'responsable', width: 120 },
+    { title: 'Fecha límite', field: 'fecha_limite', width: 110, formatter: (cell) => fmtFecha(cell.getValue()||'') },
+    { title: 'Acciones', field: 'id', width: 110, formatter: (cell) => {
+      const id = cell.getValue();
+      return `<button class="btn btn-secondary btn-sm" onclick="abrirModalSubmittalEditar(${id})">✏️</button>
+              <button class="btn btn-danger btn-sm" onclick="eliminarSubmittal(${id})">🗑</button>`;
+    }, headerSort: false },
+  ];
+  if (tblSubmittals) { tblSubmittals.replaceData(filtered); return; }
+  tblSubmittals = new Tabulator('#tblSubmittals', {
+    data: filtered, layout: 'fitColumns', responsiveLayout: 'collapse',
+    pagination: 'local', paginationSize: 25,
+    placeholder: '<div class="empty-state"><div class="empty-icon">📬</div><div class="empty-text">Sin submittals registrados</div></div>',
+    columns: cols,
+  });
+}
+
+function abrirModalSubmittal(d) {
+  d = d || {};
+  const id = d.id || 0;
+  abrirModal(`
+    <h3 style="margin:0 0 18px">${id ? '✏️ Editar' : '+ Nuevo'} Submittal</h3>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <label style="grid-column:1/-1">Título / Descripción *<input class="form-input" id="sbTitulo" value="${esc(d.titulo||'')}" placeholder="Ej: Ventanas aluminio PL-01"></label>
+      <label>Tipo<select class="form-input" id="sbTipo">
+        <option value="material"${d.tipo==='material'||!d.tipo?' selected':''}>📦 Material</option>
+        <option value="plano_taller"${d.tipo==='plano_taller'?' selected':''}>📐 Plano de taller</option>
+        <option value="ficha_tecnica"${d.tipo==='ficha_tecnica'?' selected':''}>📄 Ficha técnica</option>
+        <option value="muestra"${d.tipo==='muestra'?' selected':''}>🔬 Muestra</option>
+        <option value="calculo"${d.tipo==='calculo'?' selected':''}>🔢 Cálculo</option>
+        <option value="informe"${d.tipo==='informe'?' selected':''}>📋 Informe</option>
+      </select></label>
+      <label>Estado<select class="form-input" id="sbEstado">
+        <option value="pendiente"${d.estado==='pendiente'||!d.estado?' selected':''}>⏳ Pendiente</option>
+        <option value="en_revision"${d.estado==='en_revision'?' selected':''}>🔍 En revisión</option>
+        <option value="aprobado"${d.estado==='aprobado'?' selected':''}>✅ Aprobado</option>
+        <option value="aprobado_con_notas"${d.estado==='aprobado_con_notas'?' selected':''}>✅⚠️ Aprobado con notas</option>
+        <option value="rechazado"${d.estado==='rechazado'?' selected':''}>❌ Rechazado</option>
+      </select></label>
+      <label>Especificación / Ref.<input class="form-input" id="sbEspec" value="${esc(d.especificacion||'')}" placeholder="Ej: 08800, Art. 3.2"></label>
+      <label>Revisión<input class="form-input" id="sbRev" value="${esc(d.revision||'A')}" style="max-width:80px"></label>
+      <label>Fabricante<input class="form-input" id="sbFabricante" value="${esc(d.fabricante||'')}" placeholder="Fabricante o proveedor"></label>
+      <label>Modelo / Referencia<input class="form-input" id="sbModelo" value="${esc(d.modelo||'')}" placeholder="Modelo o referencia"></label>
+      <label>Responsable envío<input class="form-input" id="sbResponsable" value="${esc(d.responsable||'')}"></label>
+      <label>Revisor / Aprobador<input class="form-input" id="sbRevisor" value="${esc(d.revisor||'')}"></label>
+      <label>Fecha envío<input class="form-input" id="sbFechaEnvio" type="date" value="${d.fecha_envio||''}"></label>
+      <label>Fecha límite respuesta<input class="form-input" id="sbFechaLimite" type="date" value="${d.fecha_limite||''}"></label>
+      <label style="grid-column:1/-1">Obra<select class="form-input" id="sbObraId"><option value="">— Sin obra —</option></select></label>
+      <label style="grid-column:1/-1">Notas / Alcance<textarea class="form-input" id="sbNotas" rows="2" placeholder="Notas de envío...">${esc(d.notas||'')}</textarea></label>
+      ${id ? `<label style="grid-column:1/-1">Notas de revisión<textarea class="form-input" id="sbNotasRev" rows="2" placeholder="Comentarios del revisor...">${esc(d.notas_revision||'')}</textarea></label>` : ''}
+    </div>
+    <div style="display:flex;gap:10px;margin-top:18px;justify-content:flex-end">
+      <button class="btn btn-secondary" onclick="cerrarModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="guardarSubmittal(${id})">💾 Guardar</button>
+    </div>
+  `);
+  poblarSelectObras('sbObraId').then(() => {
+    if (d.obra_id) { const s = document.getElementById('sbObraId'); if (s) s.value = d.obra_id; }
+  });
+}
+
+async function abrirModalSubmittalEditar(id) {
+  const r = await api(`/submittals?`);
+  const s = (r?.submittals||[]).find(x=>x.id===id) || {};
+  abrirModalSubmittal(s);
+}
+
+async function guardarSubmittal(id) {
+  const body = {
+    titulo:       document.getElementById('sbTitulo')?.value?.trim(),
+    tipo:         document.getElementById('sbTipo')?.value,
+    estado:       document.getElementById('sbEstado')?.value,
+    especificacion: document.getElementById('sbEspec')?.value?.trim(),
+    revision:     document.getElementById('sbRev')?.value?.trim() || 'A',
+    fabricante:   document.getElementById('sbFabricante')?.value?.trim(),
+    modelo:       document.getElementById('sbModelo')?.value?.trim(),
+    responsable:  document.getElementById('sbResponsable')?.value?.trim(),
+    revisor:      document.getElementById('sbRevisor')?.value?.trim(),
+    fecha_envio:  document.getElementById('sbFechaEnvio')?.value || null,
+    fecha_limite: document.getElementById('sbFechaLimite')?.value || null,
+    obra_id:      document.getElementById('sbObraId')?.value || null,
+    notas:        document.getElementById('sbNotas')?.value?.trim(),
+    notas_revision: document.getElementById('sbNotasRev')?.value?.trim(),
+  };
+  if (!body.titulo) { toast('Título obligatorio', 'err'); return; }
+  const method = id ? 'PUT' : 'POST';
+  const url    = id ? `/submittals/${id}` : '/submittals';
+  const r = await api(url, { method, body: JSON.stringify(body) });
+  if (r.ok || r.id) { toast(id ? 'Actualizado' : `Submittal ${r.numero||''} creado`, 'ok'); cerrarModal(); tblSubmittals = null; cargarSubmittals(); }
+  else toast(r.error || 'Error', 'err');
+}
+
+async function eliminarSubmittal(id) {
+  if (!confirm('¿Eliminar este submittal?')) return;
+  const r = await api(`/submittals/${id}`, { method: 'DELETE' });
+  if (r.ok) { toast('Eliminado', 'ok'); tblSubmittals = null; cargarSubmittals(); }
+  else toast('Error al eliminar', 'err');
+}
+
+// ── ACTAS DE REUNION ─────────────────────────────────────────────
+let _actasData = [];
+const ACTA_TIPO_ICON = { inicio:'🚀', coordinacion:'🤝', seguridad:'🦺', progreso:'📊', final:'🏁', extraordinaria:'⚡' };
+
+async function cargarActasReunion() {
+  if (document.getElementById('filterActasObra')?.options.length <= 1) poblarSelectObras('filterActasObra');
+  const obraId = document.getElementById('filterActasObra')?.value || '';
+  const tipo   = document.getElementById('filterActasTipo')?.value || '';
+  let url = `/actas-reunion?`;
+  if (obraId) url += `obra_id=${obraId}&`;
+  if (tipo)   url += `tipo=${tipo}&`;
+  const r = await api(url);
+  _actasData = r?.actas || [];
+  const borradores = _actasData.filter(a=>a.estado==='borrador').length;
+  const firmadas   = _actasData.filter(a=>a.estado==='firmada').length;
+  document.getElementById('actasResumen').innerHTML = `
+    <div class="kpi-card"><div class="kpi-icon">📋</div><div class="kpi-value">${_actasData.length}</div><div class="kpi-label">Total actas</div></div>
+    <div class="kpi-card"><div class="kpi-icon">✏️</div><div class="kpi-value" style="color:var(--muted)">${borradores}</div><div class="kpi-label">Borradores</div></div>
+    <div class="kpi-card"><div class="kpi-icon">✅</div><div class="kpi-value" style="color:var(--success)">${firmadas}</div><div class="kpi-label">Firmadas</div></div>
+    ${Object.entries(ACTA_TIPO_ICON).map(([tipo,icon]) => {
+      const n = _actasData.filter(a=>a.tipo===tipo).length;
+      return n ? `<div class="kpi-card"><div class="kpi-icon">${icon}</div><div class="kpi-value">${n}</div><div class="kpi-label">${tipo}</div></div>` : '';
+    }).join('')}
+  `;
+  const el = document.getElementById('actasLista');
+  if (!_actasData.length) {
+    el.innerHTML = '<div class="empty-state"><div class="empty-icon">📋</div><div class="empty-text">Sin actas registradas</div></div>';
+    return;
+  }
+  el.innerHTML = _actasData.map(a => {
+    const icon = ACTA_TIPO_ICON[a.tipo||'coordinacion'] || '📋';
+    let asistentes = [];
+    try { asistentes = typeof a.asistentes === 'string' ? JSON.parse(a.asistentes||'[]') : (a.asistentes||[]); } catch {}
+    let pendientes = [];
+    try { pendientes = typeof a.pendientes === 'string' ? JSON.parse(a.pendientes||'[]') : (a.pendientes||[]); } catch {}
+    return `<div class="section-card">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">
+        <div style="font-size:28px">${icon}</div>
+        <div style="flex:1">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <span style="font-size:11px;color:var(--muted);font-family:'Montserrat',sans-serif;font-weight:700">${esc(a.numero||'')}</span>
+            <span class="badge badge-${a.estado==='firmada'?'ok':a.estado==='borrador'?'muted':'warn'}">${a.estado||'borrador'}</span>
+          </div>
+          <div style="font-weight:700;font-size:15px;margin-top:2px">${esc(a.titulo||'')}</div>
+          <div style="font-size:12px;color:var(--muted);margin-top:2px">${fmtFecha(a.fecha||'')} ${a.hora?'· '+esc(a.hora):''} ${a.lugar?'· 📍'+esc(a.lugar):''}</div>
+        </div>
+        <div style="display:flex;gap:6px;flex-shrink:0">
+          <button class="btn btn-secondary btn-sm" onclick="verActaReunion(${a.id})">👁 Ver</button>
+          <button class="btn btn-secondary btn-sm" onclick="abrirModalActaEditar(${a.id})">✏️</button>
+          <button class="btn btn-danger btn-sm" onclick="eliminarActaReunion(${a.id})">🗑</button>
+        </div>
+      </div>
+      ${asistentes.length ? `<div style="font-size:12px;color:var(--muted);margin-bottom:6px">👥 Asistentes: ${asistentes.join(', ')}</div>` : ''}
+      ${a.acuerdos ? `<div style="font-size:12px;border-top:1px solid var(--border);padding-top:8px;margin-top:4px"><strong>Acuerdos:</strong> ${esc(a.acuerdos).slice(0,200)}${a.acuerdos.length>200?'...':''}</div>` : ''}
+      ${Array.isArray(pendientes) && pendientes.length ? `<div style="font-size:12px;margin-top:6px"><strong>Pendientes:</strong> ${pendientes.length} punto(s)</div>` : ''}
+    </div>`;
+  }).join('');
+}
+
+function abrirModalActa(d) {
+  d = d || {};
+  const id = d.id || 0;
+  let asistArr = [];
+  try { asistArr = typeof d.asistentes==='string' ? JSON.parse(d.asistentes||'[]') : (d.asistentes||[]); } catch {}
+  abrirModal(`
+    <h3 style="margin:0 0 18px">${id ? '✏️ Editar' : '+ Nueva'} Acta de Reunión</h3>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <label style="grid-column:1/-1">Título *<input class="form-input" id="arTitulo" value="${esc(d.titulo||'')}" placeholder="Ej: Reunión semanal de coordinación"></label>
+      <label>Tipo<select class="form-input" id="arTipo">
+        <option value="coordinacion"${d.tipo==='coordinacion'||!d.tipo?' selected':''}>🤝 Coordinación</option>
+        <option value="inicio"${d.tipo==='inicio'?' selected':''}>🚀 Inicio de obra</option>
+        <option value="seguridad"${d.tipo==='seguridad'?' selected':''}>🦺 Seguridad</option>
+        <option value="progreso"${d.tipo==='progreso'?' selected':''}>📊 Seguimiento</option>
+        <option value="final"${d.tipo==='final'?' selected':''}>🏁 Final de obra</option>
+        <option value="extraordinaria"${d.tipo==='extraordinaria'?' selected':''}>⚡ Extraordinaria</option>
+      </select></label>
+      <label>Estado<select class="form-input" id="arEstado">
+        <option value="borrador"${d.estado==='borrador'||!d.estado?' selected':''}>✏️ Borrador</option>
+        <option value="en_revision"${d.estado==='en_revision'?' selected':''}>🔍 En revisión</option>
+        <option value="firmada"${d.estado==='firmada'?' selected':''}>✅ Firmada</option>
+      </select></label>
+      <label>Fecha<input class="form-input" id="arFecha" type="date" value="${d.fecha||''}"></label>
+      <label>Hora<input class="form-input" id="arHora" type="time" value="${d.hora||''}"></label>
+      <label style="grid-column:1/-1">Lugar<input class="form-input" id="arLugar" value="${esc(d.lugar||'')}" placeholder="Oficina de obra, sala de reuniones..."></label>
+      <label style="grid-column:1/-1">Obra<select class="form-input" id="arObraId"><option value="">— Sin obra —</option></select></label>
+      <label style="grid-column:1/-1">Asistentes (separados por coma)<input class="form-input" id="arAsistentes" value="${esc(asistArr.join(', '))}" placeholder="Juan García, María López..."></label>
+      <label style="grid-column:1/-1">Orden del día<textarea class="form-input" id="arOrdenDia" rows="3" placeholder="1. Revisión seguridad\n2. Estado avance\n3. Varios...">${esc(d.orden_dia||'')}</textarea></label>
+      <label style="grid-column:1/-1">Puntos tratados<textarea class="form-input" id="arPuntos" rows="4" placeholder="Resumen de los puntos debatidos...">${esc(d.puntos_tratados||'')}</textarea></label>
+      <label style="grid-column:1/-1">Acuerdos<textarea class="form-input" id="arAcuerdos" rows="3" placeholder="Acuerdos tomados en la reunión...">${esc(d.acuerdos||'')}</textarea></label>
+      <label style="grid-column:1/-1">Puntos pendientes (JSON o texto)<textarea class="form-input" id="arPendientes" rows="2" placeholder='["Revisar plano A-02","Enviar informe"]'>${esc(typeof d.pendientes==='string'?d.pendientes:JSON.stringify(d.pendientes||[]))}</textarea></label>
+      <label>Redactor<input class="form-input" id="arRedactor" value="${esc(d.redactor||'')}"></label>
+      <label>Próxima reunión<input class="form-input" id="arProxima" type="date" value="${d.proxima_reunion||''}"></label>
+    </div>
+    <div style="display:flex;gap:10px;margin-top:18px;justify-content:flex-end">
+      <button class="btn btn-secondary" onclick="cerrarModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="guardarActaReunion(${id})">💾 Guardar</button>
+    </div>
+  `, 'lg');
+  poblarSelectObras('arObraId').then(() => {
+    if (d.obra_id) { const s = document.getElementById('arObraId'); if (s) s.value = d.obra_id; }
+  });
+}
+
+async function abrirModalActaEditar(id) {
+  const r = await api(`/actas-reunion/${id}`);
+  abrirModalActa(r || {});
+}
+
+async function verActaReunion(id) {
+  const a = await api(`/actas-reunion/${id}`);
+  if (!a || a.error) { toast('No encontrada', 'err'); return; }
+  const icon = ACTA_TIPO_ICON[a.tipo||'coordinacion'] || '📋';
+  let asistArr = [];
+  try { asistArr = typeof a.asistentes==='string' ? JSON.parse(a.asistentes||'[]') : (a.asistentes||[]); } catch {}
+  let pendArr = [];
+  try { pendArr = typeof a.pendientes==='string' ? JSON.parse(a.pendientes||'[]') : (a.pendientes||[]); } catch {}
+  // Generar PDF/print
+  const hoy = new Date().toLocaleDateString('es-ES',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
+  const html = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">
+  <title>Acta ${a.numero} — ${a.titulo}</title>
+  <style>
+    *{box-sizing:border-box}body{font-family:'Segoe UI',Arial,sans-serif;color:#1e293b;padding:32px;max-width:800px;margin:0 auto;font-size:13px}
+    h1{color:#f97316;font-size:22px;margin:0 0 4px}h2{color:#f97316;font-size:14px;margin:20px 0 8px;padding-bottom:4px;border-bottom:2px solid #f97316}
+    .meta{color:#64748b;font-size:11px;margin-bottom:20px;display:grid;grid-template-columns:1fr 1fr;gap:4px}
+    .meta strong{color:#1e293b}.badge{background:#f97316;color:#fff;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700}
+    .asist{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
+    .asist span{background:#f1f5f9;padding:3px 10px;border-radius:12px;font-size:11px}
+    .pend-item{padding:6px 0;border-bottom:1px solid #e2e8f0;display:flex;gap:8px;align-items:flex-start}
+    .pend-item::before{content:'☐';color:#f59e0b;flex-shrink:0}
+    .footer{margin-top:40px;padding-top:12px;border-top:1px solid #e2e8f0;font-size:10px;color:#94a3b8;text-align:center}
+    @media print{.no-print{display:none}body{padding:16px}}
+  </style></head><body>
+  <button class="no-print" onclick="window.print()" style="background:#f97316;color:#fff;border:none;padding:8px 20px;border-radius:6px;cursor:pointer;float:right;font-size:13px;font-weight:700">🖨 Imprimir / PDF</button>
+  <div style="font-size:28px;margin-bottom:8px">${icon}</div>
+  <h1>${a.numero} — ${a.titulo}</h1>
+  <div class="meta">
+    <div><strong>Tipo:</strong> <span class="badge">${a.tipo||'coordinacion'}</span></div>
+    <div><strong>Estado:</strong> ${a.estado||'borrador'}</div>
+    <div><strong>Fecha:</strong> ${a.fecha ? new Date(a.fecha+'T00:00:00').toLocaleDateString('es-ES',{weekday:'long',year:'numeric',month:'long',day:'numeric'}) : '—'} ${a.hora?'a las '+a.hora:''}</div>
+    <div><strong>Lugar:</strong> ${a.lugar||'—'}</div>
+    <div><strong>Redactor:</strong> ${a.redactor||'—'}</div>
+    <div><strong>Próxima reunión:</strong> ${a.proxima_reunion?new Date(a.proxima_reunion+'T00:00:00').toLocaleDateString('es-ES'):'—'}</div>
+  </div>
+  ${asistArr.length ? `<h2>👥 Asistentes</h2><div class="asist">${asistArr.map(p=>`<span>${p}</span>`).join('')}</div>` : ''}
+  ${a.orden_dia ? `<h2>📌 Orden del día</h2><pre style="white-space:pre-wrap;font-size:12px;background:#f8fafc;padding:12px;border-radius:6px">${a.orden_dia}</pre>` : ''}
+  ${a.puntos_tratados ? `<h2>💬 Puntos tratados</h2><p style="white-space:pre-wrap">${a.puntos_tratados}</p>` : ''}
+  ${a.acuerdos ? `<h2>✅ Acuerdos</h2><p style="white-space:pre-wrap;font-weight:600">${a.acuerdos}</p>` : ''}
+  ${pendArr.length ? `<h2>⏳ Puntos pendientes</h2>${pendArr.map(p=>`<div class="pend-item">${p}</div>`).join('')}` : ''}
+  <div class="footer">Alejandra APP · Generado: ${hoy}</div>
+  </body></html>`;
+  const w = window.open('', '_blank');
+  w.document.write(html);
+  w.document.close();
+}
+
+async function guardarActaReunion(id) {
+  const asistRaw = (document.getElementById('arAsistentes')?.value||'').split(',').map(s=>s.trim()).filter(Boolean);
+  let pendRaw = document.getElementById('arPendientes')?.value?.trim() || '[]';
+  try { JSON.parse(pendRaw); } catch { pendRaw = JSON.stringify(pendRaw.split('\n').filter(Boolean)); }
+  const body = {
+    titulo:       document.getElementById('arTitulo')?.value?.trim(),
+    tipo:         document.getElementById('arTipo')?.value,
+    estado:       document.getElementById('arEstado')?.value,
+    fecha:        document.getElementById('arFecha')?.value || null,
+    hora:         document.getElementById('arHora')?.value || null,
+    lugar:        document.getElementById('arLugar')?.value?.trim(),
+    obra_id:      document.getElementById('arObraId')?.value || null,
+    asistentes:   JSON.stringify(asistRaw),
+    orden_dia:    document.getElementById('arOrdenDia')?.value?.trim(),
+    puntos_tratados: document.getElementById('arPuntos')?.value?.trim(),
+    acuerdos:     document.getElementById('arAcuerdos')?.value?.trim(),
+    pendientes:   pendRaw,
+    redactor:     document.getElementById('arRedactor')?.value?.trim(),
+    proxima_reunion: document.getElementById('arProxima')?.value || null,
+  };
+  if (!body.titulo) { toast('Título obligatorio', 'err'); return; }
+  const method = id ? 'PUT' : 'POST';
+  const url    = id ? `/actas-reunion/${id}` : '/actas-reunion';
+  const r = await api(url, { method, body: JSON.stringify(body) });
+  if (r.ok || r.id) { toast(id ? 'Actualizado' : `Acta ${r.numero||''} creada`, 'ok'); cerrarModal(); cargarActasReunion(); }
+  else toast(r.error || 'Error', 'err');
+}
+
+async function eliminarActaReunion(id) {
+  if (!confirm('¿Eliminar esta acta?')) return;
+  const r = await api(`/actas-reunion/${id}`, { method: 'DELETE' });
+  if (r.ok) { toast('Eliminada', 'ok'); cargarActasReunion(); }
   else toast('Error al eliminar', 'err');
 }
 
