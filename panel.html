@@ -721,6 +721,10 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
       <span class="nav-icon">📋</span> Solicitudes Material
       <span class="nav-badge" id="solMatBadge" style="display:none">0</span>
     </button>
+    <button class="nav-item" data-page="ausencias" onclick="navTo('ausencias')">
+      <span class="nav-icon">📅</span> Ausencias y Permisos
+      <span class="nav-badge" id="ausenciasBadge" style="display:none">0</span>
+    </button>
     <button class="nav-item" data-page="ordenesTrabajo" onclick="navTo('ordenesTrabajo')">
       <span class="nav-icon">🔧</span> Órdenes de Trabajo
       <span class="nav-badge" id="otBadge" style="display:none">0</span>
@@ -2464,6 +2468,76 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
               <button class="btn btn-secondary" onclick="cerrarModalAts()">Cancelar</button>
               <span id="atsElimBtn"></span>
               <button class="btn btn-primary" onclick="guardarAts()">💾 Guardar ATS</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- AUSENCIAS Y PERMISOS / LEAVE MANAGEMENT (NEW-100) -->
+      <div class="page" id="pageAusencias">
+        <div class="page-title">📅 Ausencias y Permisos / Leave Management</div>
+        <div id="ausKpis" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;margin-bottom:16px"></div>
+        <div class="tbl-toolbar">
+          <select id="ausFiltroTipo" onchange="filtrarAusencias()" style="padding:6px 10px;border-radius:6px;border:1px solid #ccc">
+            <option value="">Todos los tipos</option>
+            <option value="vacaciones">Vacaciones</option>
+            <option value="baja_medica">Baja Médica</option>
+            <option value="permiso_retribuido">Permiso Retribuido</option>
+            <option value="asuntos_propios">Asuntos Propios</option>
+            <option value="formacion">Formación</option>
+            <option value="maternidad_paternidad">Maternidad/Paternidad</option>
+            <option value="otros">Otros</option>
+          </select>
+          <select id="ausFiltroEstado" onchange="filtrarAusencias()" style="padding:6px 10px;border-radius:6px;border:1px solid #ccc">
+            <option value="">Todos los estados</option>
+            <option value="pendiente">Pendiente</option>
+            <option value="aprobada">Aprobada</option>
+            <option value="rechazada">Rechazada</option>
+            <option value="cancelada">Cancelada</option>
+          </select>
+          <input id="ausFiltroQ" type="search" placeholder="Buscar trabajador..." oninput="filtrarAusencias()" style="padding:6px 10px;border-radius:6px;border:1px solid #ccc;flex:1">
+          <button class="btn btn-primary" onclick="abrirModalAus()">+ Nueva Ausencia</button>
+          <button class="btn btn-secondary" onclick="exportarTabla(tblAus,'ausencias')">⬇ CSV</button>
+        </div>
+        <div id="tblAusWrap"></div>
+        <!-- Modal -->
+        <div class="modal-overlay" id="modalAus" style="display:none" onclick="if(event.target===this)cerrarModalAus()">
+          <div class="modal" style="max-width:580px">
+            <div class="modal-header"><span id="modalAusTitulo">Nueva Ausencia</span><button class="modal-close" onclick="cerrarModalAus()">✕</button></div>
+            <div class="modal-body">
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+                <div class="form-group" style="grid-column:1/-1"><label>Trabajador *</label><input id="ausNombre" type="text" placeholder="Nombre completo del trabajador"></div>
+                <div class="form-group"><label>Tipo de Ausencia *</label>
+                  <select id="ausTipo">
+                    <option value="vacaciones">🏖️ Vacaciones</option>
+                    <option value="baja_medica">🏥 Baja Médica</option>
+                    <option value="permiso_retribuido">📋 Permiso Retribuido</option>
+                    <option value="asuntos_propios">👤 Asuntos Propios</option>
+                    <option value="formacion">🎓 Formación</option>
+                    <option value="maternidad_paternidad">👶 Maternidad/Paternidad</option>
+                    <option value="otros">📌 Otros</option>
+                  </select>
+                </div>
+                <div class="form-group"><label>Estado</label>
+                  <select id="ausEstado">
+                    <option value="pendiente">Pendiente</option>
+                    <option value="aprobada">Aprobada</option>
+                    <option value="rechazada">Rechazada</option>
+                    <option value="cancelada">Cancelada</option>
+                  </select>
+                </div>
+                <div class="form-group"><label>Fecha Inicio *</label><input id="ausFechaIni" type="date" onchange="calcularDiasHabiles()"></div>
+                <div class="form-group"><label>Fecha Fin *</label><input id="ausFechaFin" type="date" onchange="calcularDiasHabiles()"></div>
+                <div class="form-group"><label>Días Hábiles</label><input id="ausDiasHab" type="number" min="0" max="365" placeholder="Auto-calculado"></div>
+                <div class="form-group"><label>Aprobado por</label><input id="ausAprobador" type="text" placeholder="Encargado / Responsable"></div>
+                <div class="form-group"><label>Fecha Aprobación</label><input id="ausFechaApro" type="date"></div>
+                <div class="form-group" style="grid-column:1/-1"><label>Motivo</label><input id="ausMotivo" type="text" placeholder="Motivo de la ausencia o permiso"></div>
+                <div class="form-group" style="grid-column:1/-1"><label>Notas</label><textarea id="ausNotas" rows="3" placeholder="Documentación requerida, condiciones..."></textarea></div>
+              </div>
+            </div>
+            <div class="modal-footer">
+              <button class="btn btn-secondary" onclick="cerrarModalAus()">Cancelar</button>
+              <button class="btn btn-primary" onclick="guardarAus()">💾 Guardar</button>
             </div>
           </div>
         </div>
@@ -7937,6 +8011,7 @@ const PAGE_TITLES = {
   comparativosOferta: '🔖 Comparativo de Ofertas / Bid Comparison',
   caeDocumentacion:   '🛡️ CAE / Documentación Subcontratas (RD 171/2004)',
   ordenesTrabajo:     '🔧 Órdenes de Trabajo / Work Orders',
+  ausencias:          '📅 Ausencias y Permisos / Leave Management',
 };
 
 const PAGE_LOADERS = {
@@ -8037,6 +8112,7 @@ const PAGE_LOADERS = {
   comparativosOferta: cargarComparativosOferta,
   caeDocumentacion:   cargarCaeDocumentacion,
   ordenesTrabajo:     cargarOrdenesTrabajo,
+  ausencias:          cargarAusencias,
 };
 
 let currentPage = '';
@@ -8166,6 +8242,7 @@ const SYNC_INTERVALS = {
   comparativosOferta: 120,
   caeDocumentacion:   90,
   ordenesTrabajo:     60,
+  ausencias:          120,
 };
 
 let _syncTimer = null, _syncLabelTimer = null, _syncLastTs = null;
@@ -17526,6 +17603,159 @@ function exportarFinanzas() {
   if (!obraId) return showToast('Selecciona una obra primero', 'warning');
   // Abrir informe en nueva pestaña usando el endpoint de informes
   window.open(`/informe-obra/${obraId}?tipo=financiero`, '_blank');
+}
+
+// ── CONTROL DE AUSENCIAS Y PERMISOS / LEAVE MANAGEMENT (NEW-100) ──────────────
+let tblAus = null, _ausData = [];
+const AUS_ESTADO_COLOR = { pendiente:'var(--warning)', aprobada:'var(--success)', rechazada:'var(--danger)', cancelada:'#777' };
+const AUS_TIPO_ICON    = { vacaciones:'🏖️', baja_medica:'🏥', permiso_retribuido:'📋', asuntos_propios:'👤', formacion:'🎓', maternidad_paternidad:'👶', otros:'📌' };
+
+async function cargarAusencias() {
+  const data = await api('/ausencias');
+  _ausData = data.data || [];
+  const s = data.stats || {};
+  // KPIs
+  document.getElementById('ausKpis').innerHTML = [
+    { label:'Total', val: s.total || _ausData.length, icon:'📅' },
+    { label:'Pendientes', val: s.pendientes || _ausData.filter(r=>r.estado==='pendiente').length, icon:'⏳', color:'var(--warning)' },
+    { label:'Aprobadas', val: s.aprobadas || _ausData.filter(r=>r.estado==='aprobada').length, icon:'✅', color:'var(--success)' },
+    { label:'Rechazadas', val: s.rechazadas || _ausData.filter(r=>r.estado==='rechazada').length, icon:'❌', color:'var(--danger)' },
+    { label:'Días totales', val: _ausData.reduce((a,r)=>a+(r.dias_habiles||0),0), icon:'📊' }
+  ].map(k=>`<div class="kpi-mini" style="border-left:3px solid ${k.color||'var(--accent)'}">
+    <div style="font-size:1.4rem">${k.icon}</div>
+    <div style="font-size:1.5rem;font-weight:700;color:${k.color||'var(--text)'}">${k.val}</div>
+    <div style="font-size:.75rem;opacity:.7">${k.label}</div>
+  </div>`).join('');
+  // Badge
+  const pend = _ausData.filter(r=>r.estado==='pendiente').length;
+  const badge = document.getElementById('ausenciasBadge');
+  if (badge) { badge.textContent = pend; badge.style.display = pend ? '' : 'none'; }
+  // Tabulator
+  filtrarAusencias();
+}
+
+function filtrarAusencias() {
+  const tipo   = document.getElementById('ausFiltroTipo')?.value   || '';
+  const estado = document.getElementById('ausFiltroEstado')?.value || '';
+  const q      = (document.getElementById('ausFiltroQ')?.value     || '').toLowerCase();
+  let rows = _ausData.filter(r =>
+    (!tipo   || r.tipo   === tipo)   &&
+    (!estado || r.estado === estado) &&
+    (!q      || (r.nombre_trabajador||'').toLowerCase().includes(q))
+  );
+  if (!tblAus) {
+    tblAus = new Tabulator('#tblAusWrap', {
+      data: rows, layout:'fitColumns', responsiveLayout:'collapse',
+      pagination:'local', paginationSize:20, movableColumns:true,
+      initialSort:[{column:'fecha_inicio',dir:'desc'}],
+      columns:[
+        { title:'Trabajador', field:'nombre_trabajador', minWidth:160 },
+        { title:'Tipo', field:'tipo', width:170, formatter: (c)=>{
+            const t=c.getValue(); const icon=AUS_TIPO_ICON[t]||'📌';
+            const lbl=t.replace(/_/g,' ').replace(/\b\w/g,x=>x.toUpperCase());
+            return `${icon} ${lbl}`;
+          }
+        },
+        { title:'Estado', field:'estado', width:130, formatter:(c)=>{
+            const v=c.getValue();
+            return `<span style="background:${AUS_ESTADO_COLOR[v]||'#999'};color:#fff;padding:2px 8px;border-radius:12px;font-size:.8rem">${v}</span>`;
+          }
+        },
+        { title:'Inicio', field:'fecha_inicio', width:110 },
+        { title:'Fin', field:'fecha_fin', width:110 },
+        { title:'Días', field:'dias_habiles', width:75, hozAlign:'center' },
+        { title:'Aprobado por', field:'aprobado_por', minWidth:130 },
+        { title:'Motivo', field:'motivo', minWidth:160, formatter:'textarea' },
+        { title:'Acciones', width:110, hozAlign:'center', formatter:()=>'', cellClick:(e,cell)=>{}, formatter:(c)=>{
+            const id=c.getRow().getData().id;
+            return `<button class="btn btn-xs" onclick="editarAus(${id})">✏️</button>
+                    <button class="btn btn-xs btn-danger" onclick="eliminarAus(${id})">🗑️</button>`;
+          }
+        }
+      ]
+    });
+  } else {
+    tblAus.replaceData(rows);
+  }
+}
+
+function calcularDiasHabiles() {
+  const fi = document.getElementById('ausModalFechaInicio')?.value;
+  const ff = document.getElementById('ausModalFechaFin')?.value;
+  if (!fi || !ff) return;
+  const d1 = new Date(fi), d2 = new Date(ff);
+  if (d2 < d1) { document.getElementById('ausModalDiasHabiles').value = 0; return; }
+  let dias = 0, cur = new Date(d1);
+  while (cur <= d2) {
+    const dow = cur.getDay();
+    if (dow !== 0 && dow !== 6) dias++;
+    cur.setDate(cur.getDate() + 1);
+  }
+  document.getElementById('ausModalDiasHabiles').value = dias;
+}
+
+function abrirModalAus(d = {}) {
+  const m = document.getElementById('modalAus');
+  m._ausId = d.id || null;
+  document.getElementById('ausModalTrabajador').value       = d.nombre_trabajador || '';
+  document.getElementById('ausModalTipo').value             = d.tipo              || 'vacaciones';
+  document.getElementById('ausModalEstado').value           = d.estado            || 'pendiente';
+  document.getElementById('ausModalFechaInicio').value      = d.fecha_inicio      || '';
+  document.getElementById('ausModalFechaFin').value         = d.fecha_fin         || '';
+  document.getElementById('ausModalDiasHabiles').value      = d.dias_habiles      || '';
+  document.getElementById('ausModalAprobadoPor').value      = d.aprobado_por      || '';
+  document.getElementById('ausModalFechaAprobacion').value  = d.fecha_aprobacion  || '';
+  document.getElementById('ausModalMotivo').value           = d.motivo            || '';
+  document.getElementById('ausModalNotas').value            = d.notas             || '';
+  m.style.display = 'flex';
+}
+
+function editarAus(id) {
+  const d = _ausData.find(r => r.id === id);
+  if (d) abrirModalAus(d);
+}
+
+async function guardarAus() {
+  const m   = document.getElementById('modalAus');
+  const id  = m._ausId;
+  const body = {
+    nombre_trabajador:  document.getElementById('ausModalTrabajador').value.trim(),
+    tipo:               document.getElementById('ausModalTipo').value,
+    estado:             document.getElementById('ausModalEstado').value,
+    fecha_inicio:       document.getElementById('ausModalFechaInicio').value,
+    fecha_fin:          document.getElementById('ausModalFechaFin').value,
+    dias_habiles:       parseInt(document.getElementById('ausModalDiasHabiles').value) || null,
+    aprobado_por:       document.getElementById('ausModalAprobadoPor').value.trim(),
+    fecha_aprobacion:   document.getElementById('ausModalFechaAprobacion').value,
+    motivo:             document.getElementById('ausModalMotivo').value.trim(),
+    notas:              document.getElementById('ausModalNotas').value.trim()
+  };
+  if (!body.nombre_trabajador) return showToast('El nombre del trabajador es obligatorio', 'warning');
+  if (!body.fecha_inicio || !body.fecha_fin) return showToast('Las fechas son obligatorias', 'warning');
+  try {
+    if (id) {
+      await api(`/ausencias/${id}`, { method:'PUT', body: JSON.stringify(body) });
+      showToast('Ausencia actualizada', 'success');
+    } else {
+      await api('/ausencias', { method:'POST', body: JSON.stringify(body) });
+      showToast('Ausencia registrada', 'success');
+    }
+    cerrarModalAus();
+    await cargarAusencias();
+  } catch(e) { showToast('Error al guardar: ' + e.message, 'danger'); }
+}
+
+async function eliminarAus(id) {
+  if (!confirm('¿Eliminar esta ausencia?')) return;
+  try {
+    await api(`/ausencias/${id}`, { method:'DELETE' });
+    showToast('Ausencia eliminada', 'success');
+    await cargarAusencias();
+  } catch(e) { showToast('Error al eliminar: ' + e.message, 'danger'); }
+}
+
+function cerrarModalAus() {
+  document.getElementById('modalAus').style.display = 'none';
 }
 
 // ── ÓRDENES DE TRABAJO / WORK ORDERS (NEW-99) ────────────────────────────────

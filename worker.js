@@ -4721,6 +4721,14 @@ export default {
         if (method === 'PUT')    return await actualizarVisitaObra(_vid, request, env);
         if (method === 'DELETE') return await eliminarVisitaObra(_vid, request, env);
       }
+      // ── Control de Ausencias y Permisos / Leave Management (NEW-100) ────────────
+      if (path === '/ausencias' && method === 'GET')  return await getAusencias(request, env);
+      if (path === '/ausencias' && method === 'POST') return await crearAusencia(request, env);
+      if (path.startsWith('/ausencias/')) {
+        const _ausId = parseInt(path.split('/ausencias/')[1]);
+        if (method === 'PUT')    return await actualizarAusencia(_ausId, request, env);
+        if (method === 'DELETE') return await eliminarAusencia(_ausId, request, env);
+      }
       // ── Órdenes de Trabajo / Work Orders (NEW-99) ───────────────────────────────
       if (path === '/ordenes-trabajo' && method === 'GET')  return await getOrdenesTrabajo(request, env);
       if (path === '/ordenes-trabajo' && method === 'POST') return await crearOrdenTrabajo(request, env);
@@ -19622,5 +19630,101 @@ async function actualizarOrdenTrabajo(id, request, env) {
 async function eliminarOrdenTrabajo(id, request, env) {
   const { empresa_id } = await getEmpresaFromRequest(request, env);
   await env.DB.prepare('DELETE FROM ordenes_trabajo WHERE id=? AND empresa_id=?').bind(id, empresa_id).run();
+  return jsonOk({ ok: true });
+}
+
+
+// ════════════════════════════════════════════════════════════════════════════════
+// NEW-100: CONTROL DE AUSENCIAS Y PERMISOS / LEAVE MANAGEMENT
+// ════════════════════════════════════════════════════════════════════════════════
+async function ensureAusenciasTable(env) {
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS ausencias (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    empresa_id        INTEGER NOT NULL,
+    usuario_id        INTEGER,
+    externo_id        INTEGER,
+    nombre_trabajador TEXT NOT NULL,
+    tipo              TEXT NOT NULL DEFAULT 'vacaciones',
+    fecha_inicio      TEXT NOT NULL,
+    fecha_fin         TEXT NOT NULL,
+    dias_habiles      INTEGER,
+    estado            TEXT NOT NULL DEFAULT 'pendiente',
+    aprobado_por      TEXT,
+    fecha_aprobacion  TEXT,
+    motivo            TEXT,
+    notas             TEXT,
+    created_by        TEXT,
+    created_at        TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at        TEXT NOT NULL DEFAULT (datetime('now'))
+  )`).run();
+}
+
+async function getAusencias(request, env) {
+  const { empresa_id } = await getEmpresaFromRequest(request, env);
+  await ensureAusenciasTable(env);
+  const u = new URL(request.url);
+  const usuario_id = u.searchParams.get('usuario_id');
+  const tipo       = u.searchParams.get('tipo');
+  const estado     = u.searchParams.get('estado');
+  const mes        = u.searchParams.get('mes');  // YYYY-MM
+  let sql = 'SELECT * FROM ausencias WHERE empresa_id=?';
+  const params = [empresa_id];
+  if (usuario_id) { sql += ' AND usuario_id=?'; params.push(usuario_id); }
+  if (tipo)       { sql += ' AND tipo=?';        params.push(tipo); }
+  if (estado)     { sql += ' AND estado=?';      params.push(estado); }
+  if (mes)        { sql += ' AND (fecha_inicio LIKE ? OR fecha_fin LIKE ?)'; params.push(mes+'%', mes+'%'); }
+  sql += ' ORDER BY fecha_inicio DESC';
+  const rows = await env.DB.prepare(sql).bind(...params).all();
+  const total      = rows.results.length;
+  const pendientes = rows.results.filter(r => r.estado === 'pendiente').length;
+  const aprobadas  = rows.results.filter(r => r.estado === 'aprobada').length;
+  const dias_total = rows.results.filter(r=>r.estado==='aprobada').reduce((a,r)=>a+(r.dias_habiles||0),0);
+  const hoy = new Date().toISOString().slice(0,10);
+  const activas = rows.results.filter(r => r.estado==='aprobada' && r.fecha_inicio<=hoy && r.fecha_fin>=hoy).length;
+  return jsonOk({ data: rows.results, stats: { total, pendientes, aprobadas, dias_total, activas } });
+}
+
+async function crearAusencia(request, env) {
+  const { empresa_id, user } = await getEmpresaFromRequest(request, env);
+  await ensureAusenciasTable(env);
+  const b = await request.json();
+  if (!b.nombre_trabajador || !b.tipo || !b.fecha_inicio || !b.fecha_fin)
+    return jsonError('nombre_trabajador, tipo, fecha_inicio y fecha_fin son obligatorios', 400);
+  // Calcular dias_habiles si no se provee
+  let dias_habiles = b.dias_habiles;
+  if (!dias_habiles && b.fecha_inicio && b.fecha_fin) {
+    const ini = new Date(b.fecha_inicio), fin = new Date(b.fecha_fin);
+    let dias = 0;
+    for (let d = new Date(ini); d <= fin; d.setDate(d.getDate()+1)) {
+      if (d.getDay() !== 0 && d.getDay() !== 6) dias++;
+    }
+    dias_habiles = dias;
+  }
+  const res = await env.DB.prepare(
+    `INSERT INTO ausencias (empresa_id,usuario_id,externo_id,nombre_trabajador,tipo,fecha_inicio,fecha_fin,dias_habiles,estado,aprobado_por,fecha_aprobacion,motivo,notas,created_by)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+  ).bind(empresa_id, b.usuario_id||null, b.externo_id||null, b.nombre_trabajador,
+    b.tipo, b.fecha_inicio, b.fecha_fin, dias_habiles||null,
+    b.estado||'pendiente', b.aprobado_por||null, b.fecha_aprobacion||null,
+    b.motivo||null, b.notas||null, user?.email||null).run();
+  return jsonOk({ id: res.meta.last_row_id, dias_habiles }, 201);
+}
+
+async function actualizarAusencia(id, request, env) {
+  const { empresa_id } = await getEmpresaFromRequest(request, env);
+  await ensureAusenciasTable(env);
+  const b = await request.json();
+  const campos = ['usuario_id','externo_id','nombre_trabajador','tipo','fecha_inicio','fecha_fin','dias_habiles','estado','aprobado_por','fecha_aprobacion','motivo','notas'];
+  const sets = []; const vals = [];
+  campos.forEach(c => { if (b[c] !== undefined) { sets.push(c+'=?'); vals.push(b[c]); } });
+  sets.push("updated_at=datetime('now')");
+  vals.push(id, empresa_id);
+  await env.DB.prepare(`UPDATE ausencias SET ${sets.join(',')} WHERE id=? AND empresa_id=?`).bind(...vals).run();
+  return jsonOk({ ok: true });
+}
+
+async function eliminarAusencia(id, request, env) {
+  const { empresa_id } = await getEmpresaFromRequest(request, env);
+  await env.DB.prepare('DELETE FROM ausencias WHERE id=? AND empresa_id=?').bind(id, empresa_id).run();
   return jsonOk({ ok: true });
 }
