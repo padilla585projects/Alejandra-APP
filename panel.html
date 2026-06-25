@@ -766,6 +766,10 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
       <span class="nav-icon">⏰</span> Panel de Vencimientos
       <span class="nav-badge" id="vencBadge" style="display:none">0</span>
     </button>
+    <button class="nav-item" data-page="licitaciones" onclick="navTo('licitaciones')">
+      <span class="nav-icon">🏆</span> Licitaciones
+      <span class="nav-badge" id="licitBadge" style="display:none">0</span>
+    </button>
     <button class="nav-item" data-page="fotosObra" onclick="navTo('fotosObra')">
       <span class="nav-icon">📷</span> Galería de Fotos
     </button>
@@ -2486,6 +2490,127 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
               <button class="btn btn-secondary" onclick="cerrarModalAts()">Cancelar</button>
               <span id="atsElimBtn"></span>
               <button class="btn btn-primary" onclick="guardarAts()">💾 Guardar ATS</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- GESTIÓN DE LICITACIONES / BID PIPELINE (NEW-106) -->
+      <div class="page" id="pageLicitaciones">
+        <div class="page-title">🏆 Gestión de Licitaciones / Bid Pipeline</div>
+        <div id="licitKpis" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:12px;margin-bottom:16px"></div>
+        <!-- Pipeline funnel -->
+        <div id="licitPipeline" style="display:flex;gap:8px;margin-bottom:16px;overflow-x:auto;padding-bottom:4px"></div>
+        <div class="tbl-toolbar">
+          <select id="licitFiltroEstado" onchange="filtrarLicitaciones()">
+            <option value="">Todos los estados</option>
+            <option value="prospectando">🔍 Prospectando</option>
+            <option value="oferta_presentada">📋 Oferta presentada</option>
+            <option value="en_negociacion">🤝 En negociación</option>
+            <option value="adjudicado">🏆 Adjudicado</option>
+            <option value="perdido">❌ Perdido</option>
+            <option value="desierto">🚫 Desierto</option>
+            <option value="retirado">↩️ Retirado</option>
+          </select>
+          <input id="licitFiltroQ" type="search" placeholder="Buscar licitación, cliente, expediente..." oninput="filtrarLicitaciones()">
+          <button class="btn btn-primary" onclick="abrirModalLicit()">+ Nueva Licitación</button>
+          <button class="btn btn-secondary" onclick="exportarTabla(tblLicit,'licitaciones')">⬇ CSV</button>
+        </div>
+        <div id="tblLicitWrap"></div>
+        <div class="modal-overlay" id="modalLicit" style="display:none" onclick="if(event.target===this)cerrarModalLicit()">
+          <div class="modal" style="max-width:700px">
+            <div class="modal-header"><h3 id="modalLicitTitulo">Licitación</h3><button class="modal-close" onclick="cerrarModalLicit()">✕</button></div>
+            <div class="modal-body">
+              <div class="form-row">
+                <div class="form-group" style="flex:2">
+                  <label>Nombre / Descripción *</label>
+                  <input type="text" id="licitModalNombre" required style="width:100%">
+                </div>
+                <div class="form-group">
+                  <label>Estado</label>
+                  <select id="licitModalEstado" style="width:100%">
+                    <option value="prospectando">🔍 Prospectando</option>
+                    <option value="oferta_presentada">📋 Oferta presentada</option>
+                    <option value="en_negociacion">🤝 En negociación</option>
+                    <option value="adjudicado">🏆 Adjudicado</option>
+                    <option value="perdido">❌ Perdido</option>
+                    <option value="desierto">🚫 Desierto</option>
+                    <option value="retirado">↩️ Retirado</option>
+                  </select>
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-group" style="flex:2">
+                  <label>Cliente / Promotor</label>
+                  <input type="text" id="licitModalCliente" style="width:100%">
+                </div>
+                <div class="form-group">
+                  <label>Nº Expediente</label>
+                  <input type="text" id="licitModalExpediente" style="width:100%">
+                </div>
+                <div class="form-group">
+                  <label>Tipo de obra</label>
+                  <input type="text" id="licitModalTipoObra" style="width:100%" placeholder="Ej: Industrial, Residencial...">
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label>Provincia</label>
+                  <input type="text" id="licitModalProvincia" style="width:100%">
+                </div>
+                <div class="form-group">
+                  <label>Responsable</label>
+                  <input type="text" id="licitModalResponsable" style="width:100%">
+                </div>
+                <div class="form-group">
+                  <label>Probabilidad (%)</label>
+                  <input type="number" id="licitModalProb" min="0" max="100" value="50" style="width:100%">
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label>Presupuesto base (€)</label>
+                  <input type="number" id="licitModalBase" min="0" step="0.01" style="width:100%" oninput="licitCalcMargen()">
+                </div>
+                <div class="form-group">
+                  <label>Nuestra oferta (€)</label>
+                  <input type="number" id="licitModalOferta" min="0" step="0.01" style="width:100%" oninput="licitCalcMargen()">
+                </div>
+                <div class="form-group">
+                  <label>Margen estimado (%)</label>
+                  <input type="number" id="licitModalMargen" min="-100" max="100" step="0.1" style="width:100%">
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label>F. presentación</label>
+                  <input type="date" id="licitModalFechaPres" style="width:100%">
+                </div>
+                <div class="form-group">
+                  <label>F. apertura</label>
+                  <input type="date" id="licitModalFechaAp" style="width:100%">
+                </div>
+                <div class="form-group">
+                  <label>F. adjudicación</label>
+                  <input type="date" id="licitModalFechaAdj" style="width:100%">
+                </div>
+              </div>
+              <div class="form-group">
+                <label>Competidores</label>
+                <input type="text" id="licitModalCompetidores" style="width:100%" placeholder="Otras empresas presentadas">
+              </div>
+              <div class="form-group">
+                <label>Criterios de adjudicación</label>
+                <input type="text" id="licitModalCriterios" style="width:100%" placeholder="Ej: 60% económico, 40% técnico">
+              </div>
+              <div class="form-group">
+                <label>Notas</label>
+                <textarea id="licitModalNotas" rows="2" style="width:100%"></textarea>
+              </div>
+            </div>
+            <div class="modal-footer">
+              <button class="btn btn-secondary" onclick="cerrarModalLicit()">Cancelar</button>
+              <button class="btn btn-primary" onclick="guardarLicit()">💾 Guardar</button>
             </div>
           </div>
         </div>
@@ -8496,6 +8621,7 @@ const PAGE_TITLES = {
   facturasProveedor:  '🧾 Facturas de Proveedores / Supplier Invoices',
   cobrosCliente:      '💳 Cobros de Clientes / Accounts Receivable',
   panelVencimientos:  '⏰ Panel de Vencimientos / Expiry Dashboard',
+  licitaciones:       '🏆 Gestión de Licitaciones / Bid Pipeline',
 };
 
 const PAGE_LOADERS = {
@@ -8602,6 +8728,7 @@ const PAGE_LOADERS = {
   facturasProveedor:  cargarFacturasProveedor,
   cobrosCliente:      cargarCobrosCliente,
   panelVencimientos:  cargarPanelVencimientos,
+  licitaciones:       cargarLicitaciones,
 };
 
 let currentPage = '';
@@ -8737,6 +8864,7 @@ const SYNC_INTERVALS = {
   facturasProveedor:  90,
   cobrosCliente:      90,
   panelVencimientos:  60,
+  licitaciones:       300,
 };
 
 let _syncTimer = null, _syncLabelTimer = null, _syncLastTs = null;
@@ -18097,6 +18225,201 @@ function exportarFinanzas() {
   if (!obraId) return showToast('Selecciona una obra primero', 'warning');
   // Abrir informe en nueva pestaña usando el endpoint de informes
   window.open(`/informe-obra/${obraId}?tipo=financiero`, '_blank');
+}
+
+// ── GESTIÓN DE LICITACIONES / BID PIPELINE (NEW-106) ─────────────────────────
+let tblLicit = null, _licitData = [];
+const LICIT_ESTADO_COLOR = {
+  prospectando:'#9b59b6', oferta_presentada:'var(--warning)', en_negociacion:'var(--accent)',
+  adjudicado:'var(--success)', perdido:'var(--danger)', desierto:'#95a5a6', retirado:'#7f8c8d'
+};
+const LICIT_ESTADO_ICON  = {
+  prospectando:'🔍', oferta_presentada:'📋', en_negociacion:'🤝',
+  adjudicado:'🏆', perdido:'❌', desierto:'🚫', retirado:'↩️'
+};
+const LICIT_PIPELINE_ORDER = ['prospectando','oferta_presentada','en_negociacion','adjudicado','perdido','desierto','retirado'];
+
+async function cargarLicitaciones() {
+  const data = await api('/licitaciones');
+  _licitData = data.data || [];
+  const s    = data.stats || {};
+  // Badge: active pipeline (not won/lost)
+  const activas = _licitData.filter(r=>!['perdido','desierto','retirado'].includes(r.estado)).length;
+  const badge = document.getElementById('licitBadge');
+  if (badge) { badge.textContent = activas; badge.style.display = activas?'':'none'; }
+  // KPIs
+  document.getElementById('licitKpis').innerHTML = [
+    { label:'Total',          val: s.total||_licitData.length, icon:'📋' },
+    { label:'Pipeline activo', val: activas, icon:'🔄', color:'var(--accent)' },
+    { label:'Adjudicadas',    val: s.pipeline?.adjudicado||_licitData.filter(r=>r.estado==='adjudicado').length, icon:'🏆', color:'var(--success)' },
+    { label:'Valor pipeline', val: fmtMoney(s.valor_pipeline||0), icon:'💶' },
+    { label:'Valor adjudicado', val: fmtMoney(s.valor_adjudicado||0), icon:'💰', color:'var(--success)' },
+    { label:'Valor esperado', val: fmtMoney(s.valor_esperado||0), icon:'📊', color:'var(--warning)' }
+  ].map(k=>`<div class="kpi-mini" style="border-left:3px solid ${k.color||'var(--accent)'}">
+    <div style="font-size:1.4rem">${k.icon}</div>
+    <div style="font-size:1rem;font-weight:700;color:${k.color||'var(--text)'}">${k.val}</div>
+    <div style="font-size:.75rem;opacity:.7">${k.label}</div>
+  </div>`).join('');
+  // Pipeline funnel
+  const pp = s.pipeline || {};
+  document.getElementById('licitPipeline').innerHTML = LICIT_PIPELINE_ORDER.map(e=>{
+    const cnt = pp[e]||_licitData.filter(r=>r.estado===e).length;
+    const labels = {prospectando:'Prospectando',oferta_presentada:'Oferta',en_negociacion:'Negociación',adjudicado:'Adjudicado',perdido:'Perdido',desierto:'Desierto',retirado:'Retirado'};
+    return `<div style="flex:1;min-width:90px;text-align:center;padding:10px 6px;background:${LICIT_ESTADO_COLOR[e]}20;border:1px solid ${LICIT_ESTADO_COLOR[e]};border-radius:8px;cursor:pointer" onclick="document.getElementById('licitFiltroEstado').value='${e}';filtrarLicitaciones()">
+      <div style="font-size:1.2rem">${LICIT_ESTADO_ICON[e]}</div>
+      <div style="font-size:1.4rem;font-weight:700;color:${LICIT_ESTADO_COLOR[e]}">${cnt}</div>
+      <div style="font-size:.7rem;color:var(--muted)">${labels[e]||e}</div>
+    </div>`;
+  }).join('');
+  filtrarLicitaciones();
+}
+
+function filtrarLicitaciones() {
+  const estado = document.getElementById('licitFiltroEstado')?.value || '';
+  const q      = (document.getElementById('licitFiltroQ')?.value    || '').toLowerCase();
+  let rows = _licitData.filter(r =>
+    (!estado || r.estado === estado) &&
+    (!q      || (r.nombre||'').toLowerCase().includes(q) ||
+                (r.cliente||'').toLowerCase().includes(q) ||
+                (r.expediente||'').toLowerCase().includes(q))
+  );
+  if (!tblLicit) {
+    tblLicit = new Tabulator('#tblLicitWrap', {
+      data: rows, layout:'fitColumns', responsiveLayout:'collapse',
+      pagination:'local', paginationSize:20, movableColumns:true,
+      initialSort:[{column:'fecha_presentacion',dir:'desc'}],
+      columns:[
+        { title:'Estado', field:'estado', width:150, formatter:(c)=>{
+            const v=c.getValue();
+            return `<span style="background:${LICIT_ESTADO_COLOR[v]||'#999'};color:#fff;padding:2px 6px;border-radius:12px;font-size:.8rem">${LICIT_ESTADO_ICON[v]||''} ${(v||'').replace(/_/g,' ')}</span>`;
+          }
+        },
+        { title:'Licitación', field:'nombre', minWidth:200 },
+        { title:'Cliente', field:'cliente', minWidth:150 },
+        { title:'Expediente', field:'expediente', width:130 },
+        { title:'Tipo obra', field:'tipo_obra', width:130 },
+        { title:'Provincia', field:'provincia', width:110 },
+        { title:'F. Presentación', field:'fecha_presentacion', width:125 },
+        { title:'Presupuesto base', field:'presupuesto_base', width:140, hozAlign:'right', formatter:(c)=>fmtMoney(c.getValue()) },
+        { title:'Nuestra oferta', field:'nuestra_oferta', width:130, hozAlign:'right',
+          formatter:(c)=>`<strong>${fmtMoney(c.getValue())}</strong>`
+        },
+        { title:'Prob.', field:'probabilidad', width:75, hozAlign:'center',
+          formatter:(c)=>{
+            const v=c.getValue()||0;
+            const col=v>=70?'var(--success)':v>=40?'var(--warning)':'var(--danger)';
+            return `<span style="color:${col};font-weight:600">${v}%</span>`;
+          }
+        },
+        { title:'Margen', field:'margen_pct', width:90, hozAlign:'center',
+          formatter:(c)=>{
+            const v=c.getValue();
+            if(v===null||v===undefined) return '—';
+            const col=v>=15?'var(--success)':v>=5?'var(--warning)':'var(--danger)';
+            return `<span style="color:${col}">${parseFloat(v).toFixed(1)}%</span>`;
+          }
+        },
+        { title:'Responsable', field:'responsable', width:120 },
+        { title:'Acciones', width:110, hozAlign:'center', formatter:(c)=>{
+            const id=c.getRow().getData().id;
+            return `<button class="btn btn-xs" onclick="editarLicit(${id})">✏️</button>
+                    <button class="btn btn-xs btn-danger" onclick="eliminarLicit(${id})">🗑️</button>`;
+          }
+        }
+      ]
+    });
+  } else {
+    tblLicit.replaceData(rows);
+  }
+}
+
+function licitCalcMargen() {
+  const base   = parseFloat(document.getElementById('licitModalBase')?.value) || 0;
+  const oferta = parseFloat(document.getElementById('licitModalOferta')?.value) || 0;
+  if (base > 0 && oferta > 0) {
+    const margen = ((oferta - base) / base * 100).toFixed(1);
+    document.getElementById('licitModalMargen').value = margen;
+  }
+}
+
+function abrirModalLicit(d = {}) {
+  const m = document.getElementById('modalLicit');
+  m._licitId = d.id || null;
+  document.getElementById('modalLicitTitulo').textContent      = d.id ? 'Editar Licitación' : 'Nueva Licitación';
+  document.getElementById('licitModalNombre').value             = d.nombre              || '';
+  document.getElementById('licitModalEstado').value             = d.estado              || 'prospectando';
+  document.getElementById('licitModalCliente').value            = d.cliente             || '';
+  document.getElementById('licitModalExpediente').value         = d.expediente          || '';
+  document.getElementById('licitModalTipoObra').value           = d.tipo_obra           || '';
+  document.getElementById('licitModalProvincia').value          = d.provincia           || '';
+  document.getElementById('licitModalResponsable').value        = d.responsable         || '';
+  document.getElementById('licitModalProb').value               = d.probabilidad        ?? 50;
+  document.getElementById('licitModalBase').value               = d.presupuesto_base    || '';
+  document.getElementById('licitModalOferta').value             = d.nuestra_oferta      || '';
+  document.getElementById('licitModalMargen').value             = d.margen_pct          || '';
+  document.getElementById('licitModalFechaPres').value          = d.fecha_presentacion  || '';
+  document.getElementById('licitModalFechaAp').value            = d.fecha_apertura      || '';
+  document.getElementById('licitModalFechaAdj').value           = d.fecha_adjudicacion  || '';
+  document.getElementById('licitModalCompetidores').value       = d.competidores        || '';
+  document.getElementById('licitModalCriterios').value          = d.criterios_adj       || '';
+  document.getElementById('licitModalNotas').value              = d.notas               || '';
+  m.style.display = 'flex';
+}
+
+function editarLicit(id) {
+  const d = _licitData.find(r => r.id === id);
+  if (d) abrirModalLicit(d);
+}
+
+async function guardarLicit() {
+  const m  = document.getElementById('modalLicit');
+  const id = m._licitId;
+  const body = {
+    nombre:            document.getElementById('licitModalNombre').value.trim(),
+    estado:            document.getElementById('licitModalEstado').value,
+    cliente:           document.getElementById('licitModalCliente').value.trim(),
+    expediente:        document.getElementById('licitModalExpediente').value.trim(),
+    tipo_obra:         document.getElementById('licitModalTipoObra').value.trim(),
+    provincia:         document.getElementById('licitModalProvincia').value.trim(),
+    responsable:       document.getElementById('licitModalResponsable').value.trim(),
+    probabilidad:      parseInt(document.getElementById('licitModalProb').value) || 50,
+    presupuesto_base:  parseFloat(document.getElementById('licitModalBase').value) || 0,
+    nuestra_oferta:    parseFloat(document.getElementById('licitModalOferta').value) || 0,
+    margen_pct:        parseFloat(document.getElementById('licitModalMargen').value) || null,
+    fecha_presentacion:document.getElementById('licitModalFechaPres').value || null,
+    fecha_apertura:    document.getElementById('licitModalFechaAp').value || null,
+    fecha_adjudicacion:document.getElementById('licitModalFechaAdj').value || null,
+    competidores:      document.getElementById('licitModalCompetidores').value.trim(),
+    criterios_adj:     document.getElementById('licitModalCriterios').value.trim(),
+    notas:             document.getElementById('licitModalNotas').value.trim()
+  };
+  if (!body.nombre) return showToast('El nombre de la licitación es obligatorio', 'warning');
+  try {
+    if (id) {
+      await api(`/licitaciones/${id}`, { method:'PUT', body: JSON.stringify(body) });
+      showToast('Licitación actualizada', 'success');
+    } else {
+      await api('/licitaciones', { method:'POST', body: JSON.stringify(body) });
+      showToast('Licitación registrada', 'success');
+    }
+    cerrarModalLicit();
+    tblLicit = null;
+    await cargarLicitaciones();
+  } catch(e) { showToast('Error al guardar: ' + e.message, 'danger'); }
+}
+
+async function eliminarLicit(id) {
+  if (!confirm('¿Eliminar esta licitación?')) return;
+  try {
+    await api(`/licitaciones/${id}`, { method:'DELETE' });
+    showToast('Licitación eliminada', 'success');
+    tblLicit = null;
+    await cargarLicitaciones();
+  } catch(e) { showToast('Error al eliminar: ' + e.message, 'danger'); }
+}
+
+function cerrarModalLicit() {
+  document.getElementById('modalLicit').style.display = 'none';
 }
 
 // ── PANEL DE VENCIMIENTOS / EXPIRY DASHBOARD (NEW-105) ───────────────────────

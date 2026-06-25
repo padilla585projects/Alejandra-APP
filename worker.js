@@ -4721,6 +4721,14 @@ export default {
         if (method === 'PUT')    return await actualizarVisitaObra(_vid, request, env);
         if (method === 'DELETE') return await eliminarVisitaObra(_vid, request, env);
       }
+      // ── Gestión de Licitaciones / Bid Pipeline (NEW-106) ─────────────────────────
+      if (path === '/licitaciones' && method === 'GET')  return await getLicitaciones(request, env);
+      if (path === '/licitaciones' && method === 'POST') return await crearLicitacion(request, env);
+      if (path.startsWith('/licitaciones/')) {
+        const _licId = parseInt(path.split('/licitaciones/')[1]);
+        if (method === 'PUT')    return await actualizarLicitacion(_licId, request, env);
+        if (method === 'DELETE') return await eliminarLicitacion(_licId, request, env);
+      }
       // ── Cobros y Cuentas por Cobrar / Accounts Receivable (NEW-104) ─────────────
       if (path === '/cobros-cliente' && method === 'GET')  return await getCobrosCliente(request, env);
       if (path === '/cobros-cliente' && method === 'POST') return await crearCobroCliente(request, env);
@@ -20123,5 +20131,122 @@ async function eliminarCobroCliente(id, request, env) {
   const { empresa_id, rol } = await getAuth(request, env);
   if (!empresa_id || rol === 'operario') return err('Sin permisos', 403);
   await env.DB.prepare('DELETE FROM cobros_cliente WHERE id=? AND empresa_id=?').bind(id, empresa_id).run();
+  return json({ ok: true });
+}
+
+
+// ════════════════════════════════════════════════════════════════════════════════
+// NEW-106: GESTIÓN DE LICITACIONES / BID PIPELINE MANAGEMENT
+// ════════════════════════════════════════════════════════════════════════════════
+async function ensureLicitacionesTable(env) {
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS licitaciones (
+    id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+    empresa_id           INTEGER NOT NULL,
+    nombre               TEXT    NOT NULL,
+    cliente              TEXT,
+    expediente           TEXT,
+    tipo_obra            TEXT,
+    provincia            TEXT,
+    presupuesto_base     REAL    DEFAULT 0,
+    nuestra_oferta       REAL    DEFAULT 0,
+    margen_pct           REAL,
+    estado               TEXT    NOT NULL DEFAULT 'prospectando',
+    probabilidad         INTEGER DEFAULT 50,
+    fecha_presentacion   TEXT,
+    fecha_apertura       TEXT,
+    fecha_adjudicacion   TEXT,
+    responsable          TEXT,
+    competidores         TEXT,
+    criterios_adj        TEXT,
+    puntuacion_tecnica   REAL,
+    puntuacion_economica REAL,
+    motivo_perdida       TEXT,
+    notas                TEXT,
+    obra_id              INTEGER,
+    created_by           TEXT,
+    created_at           TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at           TEXT NOT NULL DEFAULT (datetime('now'))
+  )`).run();
+}
+
+async function getLicitaciones(request, env) {
+  await ensureLicitacionesTable(env);
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const url    = new URL(request.url);
+  const estado = url.searchParams.get('estado');
+  const q      = url.searchParams.get('q');
+  let sql = 'SELECT * FROM licitaciones WHERE empresa_id = ?';
+  const params = [empresa_id];
+  if (estado) { sql += ' AND estado = ?'; params.push(estado); }
+  if (q)      { sql += ' AND (nombre LIKE ? OR cliente LIKE ? OR expediente LIKE ?)'; params.push('%'+q+'%','%'+q+'%','%'+q+'%'); }
+  sql += ' ORDER BY fecha_presentacion DESC NULLS LAST, created_at DESC';
+  const { results } = await env.DB.prepare(sql).bind(...params).all();
+  const pipeline = [
+    'prospectando','oferta_presentada','en_negociacion','adjudicado','perdido','desierto','retirado'
+  ].reduce((acc,e)=>({...acc,[e]:0}),{});
+  results.forEach(r => { if (pipeline[r.estado]!==undefined) pipeline[r.estado]++; });
+  const stats = {
+    total: results.length,
+    pipeline,
+    valor_pipeline: results.filter(r=>!['perdido','desierto','retirado'].includes(r.estado)).reduce((a,r)=>a+(r.nuestra_oferta||0),0),
+    valor_adjudicado: results.filter(r=>r.estado==='adjudicado').reduce((a,r)=>a+(r.nuestra_oferta||0),0),
+    valor_esperado: results.filter(r=>!['perdido','desierto','retirado'].includes(r.estado)).reduce((a,r)=>a+(r.nuestra_oferta||0)*(r.probabilidad||50)/100,0)
+  };
+  return json({ data: results, stats });
+}
+
+async function crearLicitacion(request, env) {
+  await ensureLicitacionesTable(env);
+  const { empresa_id, nombre: createdBy } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const body = await request.json().catch(() => ({}));
+  if (!body.nombre?.trim()) return err('El nombre de la licitación es obligatorio');
+  const r = await env.DB.prepare(`
+    INSERT INTO licitaciones
+      (empresa_id,nombre,cliente,expediente,tipo_obra,provincia,presupuesto_base,nuestra_oferta,
+       margen_pct,estado,probabilidad,fecha_presentacion,fecha_apertura,fecha_adjudicacion,
+       responsable,competidores,criterios_adj,puntuacion_tecnica,puntuacion_economica,
+       motivo_perdida,notas,obra_id,created_by)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+    .bind(empresa_id, body.nombre.trim(), body.cliente||null, body.expediente||null,
+          body.tipo_obra||null, body.provincia||null, parseFloat(body.presupuesto_base)||0,
+          parseFloat(body.nuestra_oferta)||0, parseFloat(body.margen_pct)||null,
+          body.estado||'prospectando', parseInt(body.probabilidad)||50,
+          body.fecha_presentacion||null, body.fecha_apertura||null, body.fecha_adjudicacion||null,
+          body.responsable||null, body.competidores||null, body.criterios_adj||null,
+          parseFloat(body.puntuacion_tecnica)||null, parseFloat(body.puntuacion_economica)||null,
+          body.motivo_perdida||null, body.notas||null, body.obra_id||null, createdBy||null).run();
+  return json({ ok: true, id: r.meta.last_row_id }, 201);
+}
+
+async function actualizarLicitacion(id, request, env) {
+  await ensureLicitacionesTable(env);
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const body = await request.json().catch(() => ({}));
+  if (!body.nombre?.trim()) return err('El nombre es obligatorio');
+  await env.DB.prepare(`
+    UPDATE licitaciones SET
+      nombre=?,cliente=?,expediente=?,tipo_obra=?,provincia=?,presupuesto_base=?,nuestra_oferta=?,
+      margen_pct=?,estado=?,probabilidad=?,fecha_presentacion=?,fecha_apertura=?,
+      fecha_adjudicacion=?,responsable=?,competidores=?,criterios_adj=?,puntuacion_tecnica=?,
+      puntuacion_economica=?,motivo_perdida=?,notas=?,obra_id=?,updated_at=datetime('now')
+    WHERE id=? AND empresa_id=?`)
+    .bind(body.nombre.trim(), body.cliente||null, body.expediente||null, body.tipo_obra||null,
+          body.provincia||null, parseFloat(body.presupuesto_base)||0, parseFloat(body.nuestra_oferta)||0,
+          parseFloat(body.margen_pct)||null, body.estado||'prospectando', parseInt(body.probabilidad)||50,
+          body.fecha_presentacion||null, body.fecha_apertura||null, body.fecha_adjudicacion||null,
+          body.responsable||null, body.competidores||null, body.criterios_adj||null,
+          parseFloat(body.puntuacion_tecnica)||null, parseFloat(body.puntuacion_economica)||null,
+          body.motivo_perdida||null, body.notas||null, body.obra_id||null, id, empresa_id).run();
+  return json({ ok: true });
+}
+
+async function eliminarLicitacion(id, request, env) {
+  await ensureLicitacionesTable(env);
+  const { empresa_id, rol } = await getAuth(request, env);
+  if (!empresa_id || rol === 'operario') return err('Sin permisos', 403);
+  await env.DB.prepare('DELETE FROM licitaciones WHERE id=? AND empresa_id=?').bind(id, empresa_id).run();
   return json({ ok: true });
 }
