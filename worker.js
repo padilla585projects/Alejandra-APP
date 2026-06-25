@@ -4721,6 +4721,14 @@ export default {
         if (method === 'PUT')    return await actualizarVisitaObra(_vid, request, env);
         if (method === 'DELETE') return await eliminarVisitaObra(_vid, request, env);
       }
+      // ── Flujo de Caja / Cash Flow Projection (NEW-92) ────────────────────────────
+      if (path === '/flujo-caja' && method === 'GET')  return await getFlujoCaja(request, env);
+      if (path === '/flujo-caja' && method === 'POST') return await crearFlujoCaja(request, env);
+      if (path.startsWith('/flujo-caja/')) {
+        const _fcId = parseInt(path.split('/flujo-caja/')[1]);
+        if (method === 'PUT')    return await actualizarFlujoCaja(_fcId, request, env);
+        if (method === 'DELETE') return await eliminarFlujoCaja(_fcId, request, env);
+      }
       // ── Accidentes e Incidentes / Accident Investigation (NEW-91) ───────────────
       if (path === '/accidentes' && method === 'GET')  return await getAccidentes(request, env);
       if (path === '/accidentes' && method === 'POST') return await crearAccidente(request, env);
@@ -18835,5 +18843,99 @@ async function eliminarAccidente(id, request, env) {
   const { empresa_id } = await getAuthContext(request, env);
   await ensureAccidentesTable(env);
   await env.DB.prepare(`DELETE FROM accidentes_incidentes WHERE id=? AND empresa_id=?`).bind(id, empresa_id).run();
+  return jsonResp({ ok: true });
+}
+
+// ── Flujo de Caja / Cash Flow Projection (NEW-92) ────────────────────────────
+async function ensureFlujoCajaTable(env) {
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS flujo_caja (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    empresa_id      INTEGER NOT NULL,
+    obra_id         INTEGER,
+    numero          TEXT,
+    fecha           TEXT NOT NULL,
+    periodo         TEXT,
+    tipo            TEXT NOT NULL DEFAULT 'cobro',
+    concepto        TEXT NOT NULL,
+    categoria       TEXT NOT NULL DEFAULT 'certificacion',
+    importe_previsto REAL NOT NULL DEFAULT 0,
+    importe_real    REAL,
+    estado          TEXT NOT NULL DEFAULT 'previsto',
+    cliente_proveedor TEXT,
+    referencia      TEXT,
+    observaciones   TEXT,
+    created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
+  )`).run();
+}
+
+async function getFlujoCaja(request, env) {
+  const { empresa_id } = await getAuthContext(request, env);
+  const url = new URL(request.url);
+  const obra_id = url.searchParams.get('obra_id');
+  const tipo    = url.searchParams.get('tipo');
+  const estado  = url.searchParams.get('estado');
+  await ensureFlujoCajaTable(env);
+  let q = `SELECT * FROM flujo_caja WHERE empresa_id=?`;
+  const p = [empresa_id];
+  if (obra_id) { q += ` AND obra_id=?`; p.push(obra_id); }
+  if (tipo)    { q += ` AND tipo=?`;    p.push(tipo); }
+  if (estado)  { q += ` AND estado=?`;  p.push(estado); }
+  q += ` ORDER BY fecha ASC, id ASC`;
+  const rows = await env.DB.prepare(q).bind(...p).all();
+  return jsonResp(rows.results || []);
+}
+
+async function crearFlujoCaja(request, env) {
+  const { empresa_id } = await getAuthContext(request, env);
+  const d = await request.json();
+  await ensureFlujoCajaTable(env);
+  const anio = new Date().getFullYear();
+  const last = await env.DB.prepare(
+    `SELECT numero FROM flujo_caja WHERE empresa_id=? AND numero LIKE ? ORDER BY id DESC LIMIT 1`
+  ).bind(empresa_id, `FC-${anio}-%`).first();
+  let seq = 1;
+  if (last?.numero) { const n = parseInt(last.numero.split('-')[2]); if (!isNaN(n)) seq = n + 1; }
+  const numero = `FC-${anio}-${String(seq).padStart(4,'0')}`;
+  const r = await env.DB.prepare(
+    `INSERT INTO flujo_caja
+     (empresa_id,obra_id,numero,fecha,periodo,tipo,concepto,categoria,
+      importe_previsto,importe_real,estado,cliente_proveedor,referencia,observaciones)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+  ).bind(
+    empresa_id, d.obra_id||null, numero, d.fecha,
+    d.periodo||null, d.tipo||'cobro', d.concepto, d.categoria||'certificacion',
+    Number(d.importe_previsto||0),
+    d.importe_real!=null ? Number(d.importe_real) : null,
+    d.estado||'previsto', d.cliente_proveedor||null, d.referencia||null, d.observaciones||null
+  ).run();
+  return jsonResp({ id: r.meta.last_row_id, numero }, 201);
+}
+
+async function actualizarFlujoCaja(id, request, env) {
+  const { empresa_id } = await getAuthContext(request, env);
+  const d = await request.json();
+  await ensureFlujoCajaTable(env);
+  await env.DB.prepare(
+    `UPDATE flujo_caja SET
+      fecha=?, periodo=?, tipo=?, concepto=?, categoria=?,
+      importe_previsto=?, importe_real=?, estado=?,
+      cliente_proveedor=?, referencia=?, observaciones=?,
+      updated_at=datetime('now')
+     WHERE id=? AND empresa_id=?`
+  ).bind(
+    d.fecha, d.periodo||null, d.tipo||'cobro', d.concepto, d.categoria||'certificacion',
+    Number(d.importe_previsto||0),
+    d.importe_real!=null ? Number(d.importe_real) : null,
+    d.estado||'previsto', d.cliente_proveedor||null, d.referencia||null, d.observaciones||null,
+    id, empresa_id
+  ).run();
+  return jsonResp({ ok: true });
+}
+
+async function eliminarFlujoCaja(id, request, env) {
+  const { empresa_id } = await getAuthContext(request, env);
+  await ensureFlujoCajaTable(env);
+  await env.DB.prepare(`DELETE FROM flujo_caja WHERE id=? AND empresa_id=?`).bind(id, empresa_id).run();
   return jsonResp({ ok: true });
 }

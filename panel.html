@@ -714,6 +714,9 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
       <span class="nav-icon">🚨</span> Accidentes / Incidentes
       <span class="nav-badge" id="accidentesBadge" style="display:none">0</span>
     </button>
+    <button class="nav-item" data-page="flujoCaja" onclick="navTo('flujoCaja')">
+      <span class="nav-icon">💰</span> Flujo de Caja
+    </button>
     <button class="nav-item" data-page="fotosObra" onclick="navTo('fotosObra')">
       <span class="nav-icon">📷</span> Galería de Fotos
     </button>
@@ -2434,6 +2437,91 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
               <button class="btn btn-secondary" onclick="cerrarModalAts()">Cancelar</button>
               <span id="atsElimBtn"></span>
               <button class="btn btn-primary" onclick="guardarAts()">💾 Guardar ATS</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- FLUJO DE CAJA / CASH FLOW (NEW-92) -->
+      <div class="page" id="pageFlujoCaja">
+        <div class="page-title">💰 Flujo de Caja / Cash Flow Projection</div>
+        <div id="fcKpis" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:12px;margin-bottom:16px"></div>
+        <div class="tbl-toolbar">
+          <input class="tbl-search" id="searchFc" placeholder="🔍 Buscar concepto, cliente, referencia..." oninput="filtrarFlujoCaja()">
+          <select class="tbl-search" id="filterFcObra" style="min-width:220px" onchange="tblFc=null;cargarFlujoCaja()">
+            <option value="">Todas las obras</option>
+          </select>
+          <select class="tbl-search" id="filterFcTipo" onchange="filtrarFlujoCaja()">
+            <option value="">Cobros y pagos</option>
+            <option value="cobro">💚 Cobros</option>
+            <option value="pago">🔴 Pagos</option>
+          </select>
+          <select class="tbl-search" id="filterFcEstado" onchange="filtrarFlujoCaja()">
+            <option value="">Todos los estados</option>
+            <option value="previsto">Previsto</option>
+            <option value="confirmado">Confirmado</option>
+            <option value="realizado">Realizado</option>
+            <option value="retrasado">Retrasado</option>
+          </select>
+          <button class="btn btn-primary" onclick="abrirModalFc()">+ Nuevo Apunte</button>
+        </div>
+        <div id="tblFcContainer"></div>
+        <!-- Modal flujo caja -->
+        <div class="modal-overlay" id="modalFc" style="display:none" onclick="if(event.target===this)cerrarModalFc()">
+          <div class="modal" style="max-width:620px">
+            <div class="modal-header">
+              <span id="modalFcTitulo">Nuevo Apunte de Caja</span>
+              <button class="modal-close" onclick="cerrarModalFc()">✕</button>
+            </div>
+            <div class="modal-body" style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+              <div><label>Número</label><input id="fcNumero" class="form-control" readonly style="background:#f5f5f5" placeholder="Auto"></div>
+              <div><label>Estado</label>
+                <select id="fcEstado" class="form-control">
+                  <option value="previsto">Previsto</option>
+                  <option value="confirmado">Confirmado</option>
+                  <option value="realizado">Realizado</option>
+                  <option value="retrasado">Retrasado</option>
+                </select>
+              </div>
+              <div><label>Tipo *</label>
+                <select id="fcTipo" class="form-control">
+                  <option value="cobro">💚 Cobro (entrada)</option>
+                  <option value="pago">🔴 Pago (salida)</option>
+                </select>
+              </div>
+              <div><label>Categoría</label>
+                <select id="fcCategoria" class="form-control">
+                  <option value="certificacion">Certificación obra</option>
+                  <option value="anticipo">Anticipo / Aval</option>
+                  <option value="retencion">Retención</option>
+                  <option value="subcontrata">Subcontrata</option>
+                  <option value="proveedor">Proveedor material</option>
+                  <option value="alquiler">Alquiler equipo</option>
+                  <option value="nomina">Nóminas / Seguridad Social</option>
+                  <option value="impuesto">Impuestos / IVA</option>
+                  <option value="otros">Otros</option>
+                </select>
+              </div>
+              <div style="grid-column:span 2"><label>Concepto *</label>
+                <input id="fcConcepto" class="form-control" placeholder="Descripción del cobro o pago">
+              </div>
+              <div><label>Fecha prevista *</label><input id="fcFecha" class="form-control" type="date"></div>
+              <div><label>Período (mes)</label><input id="fcPeriodo" class="form-control" type="month" placeholder="Ej: 2026-06"></div>
+              <div><label>Obra</label><select id="fcObra" class="form-control"><option value="">General / sin obra</option></select></div>
+              <div><label>Cliente / Proveedor</label><input id="fcClienteProv" class="form-control" placeholder="Nombre"></div>
+              <div><label>Importe previsto (€) *</label><input id="fcImpPrev" class="form-control" type="number" step="0.01" placeholder="0.00"></div>
+              <div><label>Importe real (€)</label><input id="fcImpReal" class="form-control" type="number" step="0.01" placeholder="Al realizarse"></div>
+              <div style="grid-column:span 2"><label>Referencia (factura, certificación…)</label>
+                <input id="fcRef" class="form-control" placeholder="Nº factura, certificación, contrato...">
+              </div>
+              <div style="grid-column:span 2"><label>Observaciones</label>
+                <textarea id="fcObs" class="form-control" rows="2"></textarea>
+              </div>
+            </div>
+            <div class="modal-footer">
+              <button class="btn btn-secondary" onclick="cerrarModalFc()">Cancelar</button>
+              <span id="fcElimBtn"></span>
+              <button class="btn btn-primary" onclick="guardarFc()">💾 Guardar</button>
             </div>
           </div>
         </div>
@@ -7240,6 +7328,7 @@ const PAGE_TITLES = {
   partesMaquinaria: '🚜 Partes de Maquinaria / Daily Plant Log',
   consumosMaterial: '📦 Consumos de Material / Material Consumption Log',
   accidentes: '🚨 Accidentes e Incidentes / Accident & Incident Investigation',
+  flujoCaja: '💰 Flujo de Caja / Cash Flow Projection',
 };
 
 const PAGE_LOADERS = {
@@ -7332,6 +7421,7 @@ const PAGE_LOADERS = {
   partesMaquinaria: cargarPartesMaq,
   consumosMaterial: cargarConsumosMat,
   accidentes:       cargarAccidentes,
+  flujoCaja:        cargarFlujoCaja,
 };
 
 let currentPage = '';
@@ -7453,6 +7543,7 @@ const SYNC_INTERVALS = {
   partesMaquinaria: 60,
   consumosMaterial: 90,
   accidentes:       60,
+  flujoCaja:        120,
 };
 
 let _syncTimer = null, _syncLabelTimer = null, _syncLastTs = null;
@@ -16814,6 +16905,148 @@ function exportarFinanzas() {
   // Abrir informe en nueva pestaña usando el endpoint de informes
   window.open(`/informe-obra/${obraId}?tipo=financiero`, '_blank');
 }
+
+// ── FLUJO DE CAJA / CASH FLOW (NEW-92) ───────────────────────────────────────
+let tblFc = null, _fcData = [];
+const FC_CAT_LABEL = {
+  certificacion:'Certificación', anticipo:'Anticipo', retencion:'Retención',
+  subcontrata:'Subcontrata', proveedor:'Proveedor', alquiler:'Alquiler',
+  nomina:'Nóminas', impuesto:'Impuestos', otros:'Otros'
+};
+const FC_ESTADO_COLOR = { previsto:'var(--muted)', confirmado:'var(--accent)', realizado:'var(--success)', retrasado:'var(--danger)' };
+
+async function cargarFlujoCaja() {
+  poblarSelectObras('filterFcObra');
+  poblarSelectObras('fcObra');
+  const obraId = document.getElementById('filterFcObra').value;
+  const params = new URLSearchParams();
+  if (obraId) params.set('obra_id', obraId);
+  _fcData = await api('/flujo-caja?' + params);
+  if (!Array.isArray(_fcData)) _fcData = [];
+
+  const cobros   = _fcData.filter(f => f.tipo === 'cobro');
+  const pagos    = _fcData.filter(f => f.tipo === 'pago');
+  const prevCob  = cobros.reduce((a,f) => a + Number(f.importe_previsto||0), 0);
+  const prevPag  = pagos.reduce((a,f)  => a + Number(f.importe_previsto||0), 0);
+  const realCob  = cobros.filter(f=>f.estado==='realizado').reduce((a,f) => a + Number(f.importe_real||f.importe_previsto||0), 0);
+  const realPag  = pagos.filter(f=>f.estado==='realizado').reduce((a,f)  => a + Number(f.importe_real||f.importe_previsto||0), 0);
+  const saldoPrev = prevCob - prevPag;
+  const saldoReal = realCob - realPag;
+  const retrasados = _fcData.filter(f => f.estado === 'retrasado').length;
+
+  document.getElementById('fcKpis').innerHTML = `
+    <div class="kpi-mini"><div class="kpi-val" style="color:var(--success)">${fmtMoney(prevCob)}</div><div class="kpi-lbl">Cobros previstos</div></div>
+    <div class="kpi-mini"><div class="kpi-val" style="color:var(--danger)">${fmtMoney(prevPag)}</div><div class="kpi-lbl">Pagos previstos</div></div>
+    <div class="kpi-mini"><div class="kpi-val" style="color:${saldoPrev>=0?'var(--success)':'var(--danger)'}">${fmtMoney(saldoPrev)}</div><div class="kpi-lbl">Saldo neto previsto</div></div>
+    <div class="kpi-mini"><div class="kpi-val" style="color:var(--success)">${fmtMoney(realCob)}</div><div class="kpi-lbl">Cobros realizados</div></div>
+    <div class="kpi-mini"><div class="kpi-val" style="color:${saldoReal>=0?'var(--success)':'var(--danger)'}">${fmtMoney(saldoReal)}</div><div class="kpi-lbl">Saldo neto real</div></div>
+    <div class="kpi-mini"><div class="kpi-val" style="color:var(--danger)">${retrasados}</div><div class="kpi-lbl">Retrasados ⚠️</div></div>
+  `;
+  filtrarFlujoCaja();
+}
+
+function filtrarFlujoCaja() {
+  const q      = (document.getElementById('searchFc')?.value || '').toLowerCase();
+  const tipo   = document.getElementById('filterFcTipo')?.value || '';
+  const estado = document.getElementById('filterFcEstado')?.value || '';
+  let data = _fcData.filter(f => {
+    if (tipo   && f.tipo   !== tipo)   return false;
+    if (estado && f.estado !== estado) return false;
+    if (q && !`${f.concepto} ${f.cliente_proveedor||''} ${f.referencia||''} ${f.numero||''}`.toLowerCase().includes(q)) return false;
+    return true;
+  });
+  const cols = [
+    { title:'Nº',      field:'numero',           width:115, formatter: c => c.getValue()||'—' },
+    { title:'Fecha',   field:'fecha',            width:105, formatter: c => c.getValue()||'—' },
+    { title:'Tipo',    field:'tipo',             width:90,  hozAlign:'center', formatter: c =>
+      c.getValue()==='cobro' ? '<span style="color:var(--success);font-weight:700">💚 Cobro</span>'
+                             : '<span style="color:var(--danger);font-weight:700">🔴 Pago</span>'
+    },
+    { title:'Categoría', field:'categoria',      width:120, formatter: c => FC_CAT_LABEL[c.getValue()]||c.getValue() },
+    { title:'Concepto',  field:'concepto',       widthGrow:2 },
+    { title:'Previsto',  field:'importe_previsto',width:120, hozAlign:'right', formatter: c => {
+      const v = c.getValue(); const t = c.getRow().getData().tipo;
+      return `<span style="color:${t==='cobro'?'var(--success)':'var(--danger)'}">${fmtMoney(v)}</span>`;
+    }},
+    { title:'Real',      field:'importe_real',   width:110, hozAlign:'right', formatter: c => {
+      const v = c.getValue(); return v!=null ? fmtMoney(v) : '<span style="color:var(--muted)">—</span>';
+    }},
+    { title:'Estado',  field:'estado',           width:110, formatter: c => {
+      const v = c.getValue();
+      return `<span style="color:${FC_ESTADO_COLOR[v]||'inherit'};font-weight:600;text-transform:capitalize">${v}</span>`;
+    }},
+    { title:'Acciones', width:90, hozAlign:'center', formatter: c =>
+      `<button class="btn-tbl" onclick="editarFc(${c.getRow().getData().id})">✏️</button>
+       <button class="btn-tbl btn-danger-sm" onclick="eliminarFc(${c.getRow().getData().id})">🗑️</button>`
+    }
+  ];
+  if (!tblFc) {
+    tblFc = new Tabulator('#tblFcContainer', {
+      data, columns: cols, layout:'fitColumns', locale:'es-es',
+      placeholder:'No hay apuntes de flujo de caja', height:'520px'
+    });
+  } else { tblFc.replaceData(data); }
+}
+
+function abrirModalFc(d = {}) {
+  document.getElementById('modalFc')._fcId = d.id || null;
+  document.getElementById('fcNumero').value      = d.numero || '';
+  document.getElementById('fcEstado').value      = d.estado || 'previsto';
+  document.getElementById('fcTipo').value        = d.tipo   || 'cobro';
+  document.getElementById('fcCategoria').value   = d.categoria || 'certificacion';
+  document.getElementById('fcConcepto').value    = d.concepto || '';
+  document.getElementById('fcFecha').value       = d.fecha   || new Date().toISOString().slice(0,10);
+  document.getElementById('fcPeriodo').value     = d.periodo || '';
+  document.getElementById('fcObra').value        = d.obra_id || '';
+  document.getElementById('fcClienteProv').value = d.cliente_proveedor || '';
+  document.getElementById('fcImpPrev').value     = d.importe_previsto ?? '';
+  document.getElementById('fcImpReal').value     = d.importe_real ?? '';
+  document.getElementById('fcRef').value         = d.referencia || '';
+  document.getElementById('fcObs').value         = d.observaciones || '';
+  document.getElementById('modalFcTitulo').textContent = d.id ? 'Editar Apunte de Caja' : 'Nuevo Apunte de Caja';
+  document.getElementById('fcElimBtn').innerHTML = d.id
+    ? `<button class="btn btn-danger" onclick="eliminarFc(${d.id},true)">🗑️ Eliminar</button>` : '';
+  document.getElementById('modalFc').style.display = 'flex';
+}
+
+async function editarFc(id) { const d = _fcData.find(f => f.id===id); if (d) abrirModalFc(d); }
+
+async function guardarFc() {
+  const concepto = document.getElementById('fcConcepto').value.trim();
+  const fecha    = document.getElementById('fcFecha').value;
+  const impPrev  = parseFloat(document.getElementById('fcImpPrev').value);
+  if (!concepto)         return alert('El concepto es obligatorio.');
+  if (!fecha)            return alert('La fecha es obligatoria.');
+  if (isNaN(impPrev))    return alert('El importe previsto es obligatorio.');
+  const impReal = document.getElementById('fcImpReal').value;
+  const body = {
+    estado: document.getElementById('fcEstado').value,
+    tipo:   document.getElementById('fcTipo').value,
+    categoria: document.getElementById('fcCategoria').value,
+    concepto, fecha,
+    periodo:           document.getElementById('fcPeriodo').value || null,
+    obra_id:           document.getElementById('fcObra').value || null,
+    cliente_proveedor: document.getElementById('fcClienteProv').value.trim() || null,
+    importe_previsto:  impPrev,
+    importe_real:      impReal !== '' ? parseFloat(impReal) : null,
+    referencia:        document.getElementById('fcRef').value.trim() || null,
+    observaciones:     document.getElementById('fcObs').value.trim() || null,
+  };
+  const id = document.getElementById('modalFc')._fcId;
+  if (id) await api(`/flujo-caja/${id}`, { method:'PUT', body: JSON.stringify(body) });
+  else    await api('/flujo-caja', { method:'POST', body: JSON.stringify(body) });
+  cerrarModalFc();
+  await cargarFlujoCaja();
+}
+
+async function eliminarFc(id, desdeModal=false) {
+  if (!confirm('¿Eliminar este apunte?')) return;
+  await api(`/flujo-caja/${id}`, { method:'DELETE' });
+  if (desdeModal) cerrarModalFc();
+  await cargarFlujoCaja();
+}
+
+function cerrarModalFc() { document.getElementById('modalFc').style.display = 'none'; }
 
 // ── ACCIDENTES E INCIDENTES / ACCIDENT INVESTIGATION (NEW-91) ────────────────
 let tblAcc = null, _accData = [];
