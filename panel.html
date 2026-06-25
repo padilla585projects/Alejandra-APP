@@ -762,6 +762,10 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
       <span class="nav-icon">💳</span> Cobros de Clientes
       <span class="nav-badge" id="cobrosBadge" style="display:none">0</span>
     </button>
+    <button class="nav-item" data-page="panelVencimientos" onclick="navTo('panelVencimientos')">
+      <span class="nav-icon">⏰</span> Panel de Vencimientos
+      <span class="nav-badge" id="vencBadge" style="display:none">0</span>
+    </button>
     <button class="nav-item" data-page="fotosObra" onclick="navTo('fotosObra')">
       <span class="nav-icon">📷</span> Galería de Fotos
     </button>
@@ -2485,6 +2489,34 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
             </div>
           </div>
         </div>
+      </div>
+
+      <!-- PANEL DE VENCIMIENTOS / EXPIRY DASHBOARD (NEW-105) -->
+      <div class="page" id="pagePanelVencimientos">
+        <div class="page-title">⏰ Panel de Vencimientos / Expiry Dashboard</div>
+        <div id="pvKpis" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;margin-bottom:16px"></div>
+        <div class="tbl-toolbar">
+          <select id="pvFiltroDias" onchange="cargarPanelVencimientos()">
+            <option value="30">Próximos 30 días</option>
+            <option value="60">Próximos 60 días</option>
+            <option value="90" selected>Próximos 90 días</option>
+            <option value="180">Próximos 180 días</option>
+            <option value="0">Solo vencidos</option>
+          </select>
+          <select id="pvFiltroCategoria" onchange="filtrarPv()">
+            <option value="">Todas las categorías</option>
+            <option value="seguro">🛡️ Seguros</option>
+            <option value="licencia">📜 Licencias/Permisos</option>
+            <option value="cae">🏗️ CAE/Documentos Subcontrata</option>
+            <option value="factura">🧾 Facturas Proveedores</option>
+            <option value="cobro">💳 Cobros Pendientes</option>
+            <option value="contrato">📑 Contratos</option>
+          </select>
+          <input id="pvFiltroQ" type="search" placeholder="Buscar..." oninput="filtrarPv()">
+          <button class="btn btn-secondary" onclick="cargarPanelVencimientos()">🔄 Actualizar</button>
+          <button class="btn btn-secondary" onclick="exportarTabla(tblPv,'vencimientos')">⬇ CSV</button>
+        </div>
+        <div id="tblPvWrap"></div>
       </div>
 
       <!-- COBROS Y CUENTAS POR COBRAR / ACCOUNTS RECEIVABLE (NEW-104) -->
@@ -8463,6 +8495,7 @@ const PAGE_TITLES = {
   proveedoresGestion: '🏭 Gestión de Proveedores / Supplier Management',
   facturasProveedor:  '🧾 Facturas de Proveedores / Supplier Invoices',
   cobrosCliente:      '💳 Cobros de Clientes / Accounts Receivable',
+  panelVencimientos:  '⏰ Panel de Vencimientos / Expiry Dashboard',
 };
 
 const PAGE_LOADERS = {
@@ -8568,6 +8601,7 @@ const PAGE_LOADERS = {
   proveedoresGestion: cargarProveedoresGestion,
   facturasProveedor:  cargarFacturasProveedor,
   cobrosCliente:      cargarCobrosCliente,
+  panelVencimientos:  cargarPanelVencimientos,
 };
 
 let currentPage = '';
@@ -8702,6 +8736,7 @@ const SYNC_INTERVALS = {
   proveedoresGestion: 180,
   facturasProveedor:  90,
   cobrosCliente:      90,
+  panelVencimientos:  60,
 };
 
 let _syncTimer = null, _syncLabelTimer = null, _syncLastTs = null;
@@ -18062,6 +18097,169 @@ function exportarFinanzas() {
   if (!obraId) return showToast('Selecciona una obra primero', 'warning');
   // Abrir informe en nueva pestaña usando el endpoint de informes
   window.open(`/informe-obra/${obraId}?tipo=financiero`, '_blank');
+}
+
+// ── PANEL DE VENCIMIENTOS / EXPIRY DASHBOARD (NEW-105) ───────────────────────
+let tblPv = null, _pvData = [];
+
+async function cargarPanelVencimientos() {
+  const dias = parseInt(document.getElementById('pvFiltroDias')?.value) || 90;
+  const hoy  = new Date();
+  const hoyStr = hoy.toISOString().slice(0,10);
+  const limite = new Date(hoy); limite.setDate(hoy.getDate() + dias);
+  const limStr = limite.toISOString().slice(0,10);
+  const soloVencidos = dias === 0;
+
+  document.getElementById('tblPvWrap').innerHTML = '<div class="loading"><div class="spinner"></div> Cargando vencimientos...</div>';
+
+  // Parallel fetch from all relevant modules
+  const [segR, licR, caeR, fpR, ccR, contR] = await Promise.all([
+    api('/seguros-obra').catch(()=>{}),
+    api('/licencias-obra').catch(()=>{}),
+    api('/cae-documentacion').catch(()=>{}),
+    api('/facturas-proveedor').catch(()=>{}),
+    api('/cobros-cliente').catch(()=>{}),
+    api('/contratos-obra').catch(()=>{}),
+  ]);
+
+  const items = [];
+
+  // Seguros de Obra
+  const seguros = segR?.data || [];
+  seguros.forEach(r => {
+    if (!r.fecha_vencimiento) return;
+    if (soloVencidos ? r.fecha_vencimiento >= hoyStr : (r.fecha_vencimiento >= hoyStr && r.fecha_vencimiento <= limStr) || r.fecha_vencimiento < hoyStr) {
+      const diasRest = Math.ceil((new Date(r.fecha_vencimiento) - hoy) / 86400000);
+      items.push({ categoria:'seguro', icono:'🛡️', entidad: r.obra_nombre||'General', titulo: r.tipo_seguro||r.aseguradora||'Seguro', ref: r.numero_poliza||'—', fecha_vencimiento: r.fecha_vencimiento, dias_restantes: diasRest, estado: diasRest<0?'vencido':diasRest<=30?'urgente':'próximo', obra: r.obra_nombre||'', id:r.id, navPage:'segurosObra' });
+    }
+  });
+
+  // Licencias de Obra
+  const licencias = licR?.data || [];
+  licencias.forEach(r => {
+    if (!r.fecha_vencimiento && !r.fecha_caducidad) return;
+    const fv = r.fecha_vencimiento || r.fecha_caducidad;
+    if (soloVencidos ? fv >= hoyStr : (fv >= hoyStr && fv <= limStr) || fv < hoyStr) {
+      const diasRest = Math.ceil((new Date(fv) - hoy) / 86400000);
+      items.push({ categoria:'licencia', icono:'📜', entidad: r.obra_nombre||'—', titulo: r.tipo||'Licencia', ref: r.numero||'—', fecha_vencimiento: fv, dias_restantes: diasRest, estado: diasRest<0?'vencido':diasRest<=30?'urgente':'próximo', obra: r.obra_nombre||'', id:r.id, navPage:'licenciasObra' });
+    }
+  });
+
+  // CAE Documentación
+  const cae = caeR?.data || [];
+  cae.forEach(r => {
+    if (!r.fecha_vencimiento) return;
+    if (soloVencidos ? r.fecha_vencimiento >= hoyStr : (r.fecha_vencimiento >= hoyStr && r.fecha_vencimiento <= limStr) || r.fecha_vencimiento < hoyStr) {
+      const diasRest = Math.ceil((new Date(r.fecha_vencimiento) - hoy) / 86400000);
+      items.push({ categoria:'cae', icono:'🏗️', entidad: r.subcontrata||'—', titulo: r.tipo_documento||'Doc CAE', ref: r.numero||'—', fecha_vencimiento: r.fecha_vencimiento, dias_restantes: diasRest, estado: diasRest<0?'vencido':diasRest<=30?'urgente':'próximo', obra: r.obra_nombre||'', id:r.id, navPage:'caeDocumentacion' });
+    }
+  });
+
+  // Facturas Proveedor (vencidas/próximas)
+  const fps = fpR?.data || [];
+  fps.forEach(r => {
+    if (!r.fecha_vencimiento || r.estado === 'pagada') return;
+    if (soloVencidos ? r.fecha_vencimiento >= hoyStr : (r.fecha_vencimiento >= hoyStr && r.fecha_vencimiento <= limStr) || r.fecha_vencimiento < hoyStr) {
+      const diasRest = Math.ceil((new Date(r.fecha_vencimiento) - hoy) / 86400000);
+      const total = (parseFloat(r.importe_base)||0)*(1+(r.iva_pct||21)/100);
+      items.push({ categoria:'factura', icono:'🧾', entidad: r.proveedor_nombre||'—', titulo: r.numero_factura||'Factura', ref: fmtMoney(total), fecha_vencimiento: r.fecha_vencimiento, dias_restantes: diasRest, estado: diasRest<0?'vencido':diasRest<=15?'urgente':'próximo', obra: r.obra_nombre||'', id:r.id, navPage:'facturasProveedor' });
+    }
+  });
+
+  // Cobros Cliente (pendientes/vencidos)
+  const ccs = ccR?.data || [];
+  ccs.forEach(r => {
+    if (!r.fecha_vencimiento || r.estado === 'cobrado') return;
+    if (soloVencidos ? r.fecha_vencimiento >= hoyStr : (r.fecha_vencimiento >= hoyStr && r.fecha_vencimiento <= limStr) || r.fecha_vencimiento < hoyStr) {
+      const diasRest = Math.ceil((new Date(r.fecha_vencimiento) - hoy) / 86400000);
+      const pend = Math.max(0,(r.importe_liquido||0)-(r.importe_cobrado||0));
+      items.push({ categoria:'cobro', icono:'💳', entidad: r.cliente_nombre||'—', titulo: r.numero||'Cobro', ref: fmtMoney(pend), fecha_vencimiento: r.fecha_vencimiento, dias_restantes: diasRest, estado: diasRest<0?'vencido':diasRest<=15?'urgente':'próximo', obra: r.obra_nombre||'', id:r.id, navPage:'cobrosCliente' });
+    }
+  });
+
+  // Contratos
+  const conts = Array.isArray(contR) ? contR : (contR?.data||contR?.contratos||[]);
+  conts.forEach(r => {
+    if (!r.fecha_fin) return;
+    if (soloVencidos ? r.fecha_fin >= hoyStr : (r.fecha_fin >= hoyStr && r.fecha_fin <= limStr) || r.fecha_fin < hoyStr) {
+      const diasRest = Math.ceil((new Date(r.fecha_fin) - hoy) / 86400000);
+      items.push({ categoria:'contrato', icono:'📑', entidad: r.contratista||r.empresa||'—', titulo: r.titulo||r.tipo||'Contrato', ref: r.numero||'—', fecha_vencimiento: r.fecha_fin, dias_restantes: diasRest, estado: diasRest<0?'vencido':diasRest<=30?'urgente':'próximo', obra: r.obra_nombre||'', id:r.id, navPage:'contratosObra' });
+    }
+  });
+
+  // Sort: vencidos first, then by days remaining
+  items.sort((a,b) => a.dias_restantes - b.dias_restantes);
+  _pvData = items;
+
+  // KPIs
+  const vencidos = items.filter(x=>x.dias_restantes<0).length;
+  const urgentes = items.filter(x=>x.dias_restantes>=0&&x.dias_restantes<=30).length;
+  const proximos = items.filter(x=>x.dias_restantes>30).length;
+  const badge = document.getElementById('vencBadge');
+  if (badge) { badge.textContent = vencidos+urgentes; badge.style.display=(vencidos+urgentes)?'':'none'; }
+  document.getElementById('pvKpis').innerHTML = [
+    { label:'Vencidos', val:vencidos, icon:'🔴', color:'var(--danger)' },
+    { label:'Urgentes (<30d)', val:urgentes, icon:'⚠️', color:'var(--warning)' },
+    { label:'Próximos', val:proximos, icon:'📅', color:'var(--accent)' },
+    { label:'Total revisión', val:items.length, icon:'📋' }
+  ].map(k=>`<div class="kpi-mini" style="border-left:3px solid ${k.color||'var(--accent)'}">
+    <div style="font-size:1.4rem">${k.icon}</div>
+    <div style="font-size:1.6rem;font-weight:700;color:${k.color||'var(--text)'}">${k.val}</div>
+    <div style="font-size:.75rem;opacity:.7">${k.label}</div>
+  </div>`).join('');
+
+  filtrarPv();
+}
+
+function filtrarPv() {
+  const cat = document.getElementById('pvFiltroCategoria')?.value || '';
+  const q   = (document.getElementById('pvFiltroQ')?.value || '').toLowerCase();
+  const rows = _pvData.filter(r =>
+    (!cat || r.categoria === cat) &&
+    (!q   || (r.titulo||'').toLowerCase().includes(q) ||
+              (r.entidad||'').toLowerCase().includes(q) ||
+              (r.obra||'').toLowerCase().includes(q))
+  );
+  const ESTADO_COLOR = { vencido:'var(--danger)', urgente:'var(--warning)', 'próximo':'var(--accent)' };
+  if (!tblPv) {
+    tblPv = new Tabulator('#tblPvWrap', {
+      data: rows, layout:'fitColumns', responsiveLayout:'collapse',
+      pagination:'local', paginationSize:25, movableColumns:true,
+      initialSort:[{column:'dias_restantes',dir:'asc'}],
+      columns:[
+        { title:'', field:'icono', width:45, hozAlign:'center', formatter:(c)=>c.getValue() },
+        { title:'Categoría', field:'categoria', width:120, formatter:(c)=>{
+            const cat=c.getValue();
+            const labels={seguro:'Seguro',licencia:'Licencia',cae:'CAE',factura:'Factura',cobro:'Cobro',contrato:'Contrato'};
+            return labels[cat]||cat;
+          }
+        },
+        { title:'Estado', field:'estado', width:105, formatter:(c)=>{
+            const v=c.getValue();
+            return `<span style="background:${ESTADO_COLOR[v]||'#999'};color:#fff;padding:2px 8px;border-radius:12px;font-size:.8rem">${v}</span>`;
+          }
+        },
+        { title:'Días', field:'dias_restantes', width:85, hozAlign:'center', formatter:(c)=>{
+            const v=c.getValue();
+            const col=v<0?'var(--danger)':v<=30?'var(--warning)':'var(--success)';
+            return `<strong style="color:${col}">${v<0?v+' d':'+'+v+' d'}</strong>`;
+          }
+        },
+        { title:'Título / Tipo', field:'titulo', minWidth:170 },
+        { title:'Entidad / Proveedor', field:'entidad', minWidth:160 },
+        { title:'Referencia', field:'ref', width:120 },
+        { title:'F. Vencimiento', field:'fecha_vencimiento', width:125 },
+        { title:'Obra', field:'obra', minWidth:130 },
+        { title:'Ir a módulo', width:110, hozAlign:'center', formatter:(c)=>{
+            const page=c.getRow().getData().navPage;
+            return page?`<button class="btn btn-xs" onclick="navTo('${page}')">→ Ver</button>`:'';
+          }
+        }
+      ]
+    });
+  } else {
+    tblPv.replaceData(rows);
+  }
 }
 
 // ── COBROS Y CUENTAS POR COBRAR / ACCOUNTS RECEIVABLE (NEW-104) ──────────────
