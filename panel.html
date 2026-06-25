@@ -710,6 +710,10 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
     <button class="nav-item" data-page="consumosMaterial" onclick="navTo('consumosMaterial')">
       <span class="nav-icon">📦</span> Consumos Material
     </button>
+    <button class="nav-item" data-page="accidentes" onclick="navTo('accidentes')">
+      <span class="nav-icon">🚨</span> Accidentes / Incidentes
+      <span class="nav-badge" id="accidentesBadge" style="display:none">0</span>
+    </button>
     <button class="nav-item" data-page="fotosObra" onclick="navTo('fotosObra')">
       <span class="nav-icon">📷</span> Galería de Fotos
     </button>
@@ -2430,6 +2434,167 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
               <button class="btn btn-secondary" onclick="cerrarModalAts()">Cancelar</button>
               <span id="atsElimBtn"></span>
               <button class="btn btn-primary" onclick="guardarAts()">💾 Guardar ATS</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ACCIDENTES E INCIDENTES / ACCIDENT INVESTIGATION (NEW-91) -->
+      <div class="page" id="pageAccidentes">
+        <div class="page-title">🚨 Accidentes e Incidentes / Accident &amp; Incident Investigation</div>
+        <div id="accKpis" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:16px"></div>
+        <div class="tbl-toolbar">
+          <input class="tbl-search" id="searchAcc" placeholder="🔍 Buscar afectado, descripción..." oninput="filtrarAccidentes()">
+          <select class="tbl-search" id="filterAccObra" style="min-width:220px" onchange="tblAcc=null;cargarAccidentes()">
+            <option value="">Todas las obras</option>
+          </select>
+          <select class="tbl-search" id="filterAccTipo" onchange="filtrarAccidentes()">
+            <option value="">Todos los tipos</option>
+            <option value="near_miss">Casi accidente</option>
+            <option value="primeros_auxilios">Primeros auxilios</option>
+            <option value="accidente_leve">Accidente leve</option>
+            <option value="accidente_grave">Accidente grave</option>
+            <option value="accidente_mortal">Accidente mortal</option>
+            <option value="incendio">Incendio / explosión</option>
+            <option value="derrame">Derrame</option>
+            <option value="dano_material">Daño material</option>
+          </select>
+          <select class="tbl-search" id="filterAccEstado" onchange="filtrarAccidentes()">
+            <option value="">Todos los estados</option>
+            <option value="abierto">Abierto</option>
+            <option value="investigando">Investigando</option>
+            <option value="cerrado">Cerrado</option>
+          </select>
+          <button class="btn btn-primary" onclick="abrirModalAcc()">+ Nuevo Incidente</button>
+        </div>
+        <div id="tblAccContainer"></div>
+        <!-- Modal accidente/incidente -->
+        <div class="modal-overlay" id="modalAcc" style="display:none" onclick="if(event.target===this)cerrarModalAcc()">
+          <div class="modal" style="max-width:680px">
+            <div class="modal-header">
+              <span id="modalAccTitulo">Nuevo Accidente / Incidente</span>
+              <button class="modal-close" onclick="cerrarModalAcc()">✕</button>
+            </div>
+            <div class="modal-body" style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+              <div style="grid-column:span 2;font-weight:600;color:var(--accent);border-bottom:1px solid #eee;padding-bottom:6px">Identificación</div>
+              <div>
+                <label>Número</label>
+                <input id="accNumero" class="form-control" placeholder="Auto" readonly style="background:#f5f5f5">
+              </div>
+              <div>
+                <label>Estado</label>
+                <select id="accEstado" class="form-control">
+                  <option value="abierto">Abierto</option>
+                  <option value="investigando">Investigando</option>
+                  <option value="cerrado">Cerrado</option>
+                </select>
+              </div>
+              <div>
+                <label>Tipo de evento *</label>
+                <select id="accTipo" class="form-control">
+                  <option value="near_miss">Casi accidente (Near Miss)</option>
+                  <option value="primeros_auxilios">Primeros auxilios</option>
+                  <option value="accidente_leve">Accidente leve</option>
+                  <option value="accidente_grave">Accidente grave</option>
+                  <option value="accidente_mortal">Accidente mortal</option>
+                  <option value="incendio">Incendio / explosión</option>
+                  <option value="derrame">Derrame / contaminación</option>
+                  <option value="dano_material">Daño material</option>
+                </select>
+              </div>
+              <div>
+                <label>Gravedad</label>
+                <select id="accGravedad" class="form-control">
+                  <option value="near_miss">Near Miss / Sin consecuencias</option>
+                  <option value="sin_baja">Sin baja laboral</option>
+                  <option value="con_baja">Con baja laboral</option>
+                  <option value="grave">Grave</option>
+                  <option value="mortal">Mortal</option>
+                </select>
+              </div>
+              <div>
+                <label>Fecha *</label>
+                <input id="accFecha" class="form-control" type="date">
+              </div>
+              <div>
+                <label>Hora</label>
+                <input id="accHora" class="form-control" type="time">
+              </div>
+              <div>
+                <label>Obra</label>
+                <select id="accObra" class="form-control"><option value="">Sin obra</option></select>
+              </div>
+              <div>
+                <label>Ubicación / zona</label>
+                <input id="accUbicacion" class="form-control" placeholder="Zona, planta, área donde ocurrió">
+              </div>
+              <div style="grid-column:span 2;font-weight:600;color:var(--accent);border-bottom:1px solid #eee;padding-bottom:6px;margin-top:8px">Afectado</div>
+              <div>
+                <label>Nombre del afectado</label>
+                <input id="accAfectado" class="form-control" placeholder="Nombre y apellidos">
+              </div>
+              <div>
+                <label>Empresa del afectado</label>
+                <input id="accEmpresaAf" class="form-control" placeholder="Empresa empleadora">
+              </div>
+              <div>
+                <label>Actividad que realizaba</label>
+                <input id="accActividad" class="form-control" placeholder="Qué trabajo estaba haciendo">
+              </div>
+              <div>
+                <label>Testigos</label>
+                <input id="accTestigos" class="form-control" placeholder="Nombres de testigos presenciales">
+              </div>
+              <div>
+                <label>Tipo de lesión</label>
+                <input id="accLesiones" class="form-control" placeholder="Ej: corte, fractura, quemadura, contusión...">
+              </div>
+              <div>
+                <label>Parte del cuerpo</label>
+                <input id="accParteCuerpo" class="form-control" placeholder="Ej: mano derecha, pie izquierdo, espalda...">
+              </div>
+              <div>
+                <label>Días de baja</label>
+                <input id="accDiasBaja" class="form-control" type="number" min="0" placeholder="0">
+              </div>
+              <div style="grid-column:span 2;font-weight:600;color:var(--accent);border-bottom:1px solid #eee;padding-bottom:6px;margin-top:8px">Descripción e investigación</div>
+              <div style="grid-column:span 2">
+                <label>Descripción de lo ocurrido *</label>
+                <textarea id="accDescripcion" class="form-control" rows="3" placeholder="Descripción detallada de cómo ocurrió el evento"></textarea>
+              </div>
+              <div style="grid-column:span 2">
+                <label>Causas inmediatas</label>
+                <textarea id="accCausasInm" class="form-control" rows="2" placeholder="Actos y condiciones inseguras directas"></textarea>
+              </div>
+              <div style="grid-column:span 2">
+                <label>Causas raíz</label>
+                <textarea id="accCausasRaiz" class="form-control" rows="2" placeholder="Causas de fondo: falta de formación, diseño, gestión..."></textarea>
+              </div>
+              <div style="grid-column:span 2">
+                <label>Acciones correctivas / preventivas</label>
+                <textarea id="accAcciones" class="form-control" rows="2" placeholder="Medidas adoptadas para evitar recurrencia"></textarea>
+              </div>
+              <div>
+                <label>Investigador responsable</label>
+                <input id="accInvestigador" class="form-control" placeholder="Nombre del responsable de la investigación">
+              </div>
+              <div>
+                <label>Notificado a</label>
+                <input id="accNotificado" class="form-control" placeholder="Autoridad laboral, mutua, cliente...">
+              </div>
+              <div>
+                <label>Fecha de cierre</label>
+                <input id="accFechaCierre" class="form-control" type="date">
+              </div>
+              <div style="grid-column:span 2">
+                <label>Observaciones</label>
+                <textarea id="accObs" class="form-control" rows="1"></textarea>
+              </div>
+            </div>
+            <div class="modal-footer">
+              <button class="btn btn-secondary" onclick="cerrarModalAcc()">Cancelar</button>
+              <span id="accElimBtn"></span>
+              <button class="btn btn-primary" onclick="guardarAcc()">💾 Guardar Incidente</button>
             </div>
           </div>
         </div>
@@ -7074,6 +7239,7 @@ const PAGE_TITLES = {
   residuos: '♻️ Gestión de Residuos / Waste Management (RD 105/2008)',
   partesMaquinaria: '🚜 Partes de Maquinaria / Daily Plant Log',
   consumosMaterial: '📦 Consumos de Material / Material Consumption Log',
+  accidentes: '🚨 Accidentes e Incidentes / Accident & Incident Investigation',
 };
 
 const PAGE_LOADERS = {
@@ -7165,6 +7331,7 @@ const PAGE_LOADERS = {
   residuos:         cargarResiduos,
   partesMaquinaria: cargarPartesMaq,
   consumosMaterial: cargarConsumosMat,
+  accidentes:       cargarAccidentes,
 };
 
 let currentPage = '';
@@ -7285,6 +7452,7 @@ const SYNC_INTERVALS = {
   residuos:         180,
   partesMaquinaria: 60,
   consumosMaterial: 90,
+  accidentes:       60,
 };
 
 let _syncTimer = null, _syncLabelTimer = null, _syncLastTs = null;
@@ -16645,6 +16813,172 @@ function exportarFinanzas() {
   if (!obraId) return showToast('Selecciona una obra primero', 'warning');
   // Abrir informe en nueva pestaña usando el endpoint de informes
   window.open(`/informe-obra/${obraId}?tipo=financiero`, '_blank');
+}
+
+// ── ACCIDENTES E INCIDENTES / ACCIDENT INVESTIGATION (NEW-91) ────────────────
+let tblAcc = null, _accData = [];
+const ACC_TIPO_LABEL = {
+  near_miss:'Near Miss', primeros_auxilios:'Primeros auxilios', accidente_leve:'Acc. leve',
+  accidente_grave:'Acc. grave', accidente_mortal:'MORTAL', incendio:'Incendio',
+  derrame:'Derrame', dano_material:'Daño material'
+};
+const ACC_GRAV_COLOR = {
+  near_miss:'var(--accent)', sin_baja:'var(--warning)', con_baja:'#e67e22',
+  grave:'var(--danger)', mortal:'#000'
+};
+const ACC_ESTADO_COLOR = { abierto:'var(--danger)', investigando:'var(--warning)', cerrado:'var(--success)' };
+
+async function cargarAccidentes() {
+  poblarSelectObras('filterAccObra');
+  poblarSelectObras('accObra');
+  const obraId = document.getElementById('filterAccObra').value;
+  const params = new URLSearchParams();
+  if (obraId) params.set('obra_id', obraId);
+  _accData = await api('/accidentes?' + params);
+  if (!Array.isArray(_accData)) _accData = [];
+
+  // KPIs
+  const total    = _accData.length;
+  const nearMiss = _accData.filter(a=>a.tipo==='near_miss').length;
+  const conBaja  = _accData.filter(a=>a.gravedad==='con_baja').length;
+  const graves   = _accData.filter(a=>a.gravedad==='grave').length;
+  const abiertos = _accData.filter(a=>a.estado==='abierto').length;
+  const totalDias = _accData.reduce((s,a)=>s+Number(a.dias_baja||0),0);
+  document.getElementById('accKpis').innerHTML = `
+    <div class="kpi-mini"><div class="kpi-val">${total}</div><div class="kpi-lbl">Total registros</div></div>
+    <div class="kpi-mini"><div class="kpi-val" style="color:var(--accent)">${nearMiss}</div><div class="kpi-lbl">Near Miss ⚡</div></div>
+    <div class="kpi-mini"><div class="kpi-val" style="color:#e67e22">${conBaja}</div><div class="kpi-lbl">Con baja 🤕</div></div>
+    <div class="kpi-mini"><div class="kpi-val" style="color:var(--danger)">${graves}</div><div class="kpi-lbl">Graves ⛑️</div></div>
+    <div class="kpi-mini"><div class="kpi-val" style="color:var(--danger)">${abiertos}</div><div class="kpi-lbl">Sin cerrar 🚨</div></div>
+    <div class="kpi-mini"><div class="kpi-val" style="color:var(--muted)">${totalDias}</div><div class="kpi-lbl">Días de baja totales</div></div>
+  `;
+  const bdg = document.getElementById('accidentesBadge');
+  if (bdg) { bdg.textContent = abiertos; bdg.style.display = abiertos ? '' : 'none'; }
+  filtrarAccidentes();
+}
+
+function filtrarAccidentes() {
+  const q      = (document.getElementById('searchAcc')?.value || '').toLowerCase();
+  const tipo   = document.getElementById('filterAccTipo')?.value || '';
+  const estado = document.getElementById('filterAccEstado')?.value || '';
+  let data = _accData.filter(a => {
+    if (tipo   && a.tipo   !== tipo)   return false;
+    if (estado && a.estado !== estado) return false;
+    if (q && !`${a.afectado||''} ${a.descripcion||''} ${a.numero||''} ${a.ubicacion||''}`.toLowerCase().includes(q)) return false;
+    return true;
+  });
+  const cols = [
+    { title:'Nº',       field:'numero',   width:115, formatter: c => c.getValue()||'—' },
+    { title:'Fecha',    field:'fecha',    width:105, formatter: c => c.getValue()||'—' },
+    { title:'Tipo',     field:'tipo',     width:140, formatter: c => ACC_TIPO_LABEL[c.getValue()]||c.getValue() },
+    { title:'Gravedad', field:'gravedad', width:130, formatter: c => {
+      const v = c.getValue();
+      return `<span style="color:${ACC_GRAV_COLOR[v]||'inherit'};font-weight:600">${(v||'').replace('_',' ')}</span>`;
+    }},
+    { title:'Afectado', field:'afectado', widthGrow:1, formatter: c => c.getValue()||'—' },
+    { title:'Días baja',field:'dias_baja',width:90, hozAlign:'center', formatter: c => c.getValue()||'0' },
+    { title:'Estado', field:'estado', width:110, formatter: c => {
+      const v = c.getValue();
+      return `<span style="color:${ACC_ESTADO_COLOR[v]||'inherit'};font-weight:600;text-transform:capitalize">${v}</span>`;
+    }},
+    { title:'Acciones', width:90, hozAlign:'center', formatter: c =>
+      `<button class="btn-tbl" onclick="editarAcc(${c.getRow().getData().id})">✏️</button>
+       <button class="btn-tbl btn-danger-sm" onclick="eliminarAcc(${c.getRow().getData().id})">🗑️</button>`
+    }
+  ];
+  if (!tblAcc) {
+    tblAcc = new Tabulator('#tblAccContainer', {
+      data, columns: cols, layout:'fitColumns', locale:'es-es',
+      placeholder:'No hay accidentes/incidentes registrados', height:'520px'
+    });
+  } else {
+    tblAcc.replaceData(data);
+  }
+}
+
+function abrirModalAcc(d = {}) {
+  document.getElementById('modalAcc')._accId = d.id || null;
+  document.getElementById('accNumero').value      = d.numero || '';
+  document.getElementById('accEstado').value      = d.estado || 'abierto';
+  document.getElementById('accTipo').value        = d.tipo   || 'near_miss';
+  document.getElementById('accGravedad').value    = d.gravedad || 'near_miss';
+  document.getElementById('accFecha').value       = d.fecha  || new Date().toISOString().slice(0,10);
+  document.getElementById('accHora').value        = d.hora   || '';
+  document.getElementById('accObra').value        = d.obra_id|| '';
+  document.getElementById('accUbicacion').value   = d.ubicacion || '';
+  document.getElementById('accAfectado').value    = d.afectado || '';
+  document.getElementById('accEmpresaAf').value   = d.empresa_afectado || '';
+  document.getElementById('accActividad').value   = d.actividad_realizada || '';
+  document.getElementById('accTestigos').value    = d.testigos || '';
+  document.getElementById('accLesiones').value    = d.lesiones || '';
+  document.getElementById('accParteCuerpo').value = d.parte_cuerpo || '';
+  document.getElementById('accDiasBaja').value    = d.dias_baja || '0';
+  document.getElementById('accDescripcion').value = d.descripcion || '';
+  document.getElementById('accCausasInm').value   = d.causas_inmediatas || '';
+  document.getElementById('accCausasRaiz').value  = d.causas_raiz || '';
+  document.getElementById('accAcciones').value    = d.acciones_correctivas || '';
+  document.getElementById('accInvestigador').value= d.investigador || '';
+  document.getElementById('accNotificado').value  = d.notificado_a || '';
+  document.getElementById('accFechaCierre').value = d.fecha_cierre || '';
+  document.getElementById('accObs').value         = d.observaciones || '';
+  document.getElementById('modalAccTitulo').textContent = d.id ? 'Editar Accidente / Incidente' : 'Nuevo Accidente / Incidente';
+  document.getElementById('accElimBtn').innerHTML = d.id
+    ? `<button class="btn btn-danger" onclick="eliminarAcc(${d.id},true)">🗑️ Eliminar</button>` : '';
+  document.getElementById('modalAcc').style.display = 'flex';
+}
+
+async function editarAcc(id) {
+  const d = _accData.find(a => a.id === id);
+  if (d) abrirModalAcc(d);
+}
+
+async function guardarAcc() {
+  const descripcion = document.getElementById('accDescripcion').value.trim();
+  const fecha       = document.getElementById('accFecha').value;
+  if (!descripcion) return alert('La descripción del evento es obligatoria.');
+  if (!fecha)       return alert('La fecha es obligatoria.');
+  const body = {
+    estado:               document.getElementById('accEstado').value,
+    tipo:                 document.getElementById('accTipo').value,
+    gravedad:             document.getElementById('accGravedad').value,
+    fecha, hora:          document.getElementById('accHora').value || null,
+    obra_id:              document.getElementById('accObra').value || null,
+    ubicacion:            document.getElementById('accUbicacion').value.trim() || null,
+    afectado:             document.getElementById('accAfectado').value.trim() || null,
+    empresa_afectado:     document.getElementById('accEmpresaAf').value.trim() || null,
+    actividad_realizada:  document.getElementById('accActividad').value.trim() || null,
+    testigos:             document.getElementById('accTestigos').value.trim() || null,
+    lesiones:             document.getElementById('accLesiones').value.trim() || null,
+    parte_cuerpo:         document.getElementById('accParteCuerpo').value.trim() || null,
+    dias_baja:            parseInt(document.getElementById('accDiasBaja').value)||0,
+    descripcion,
+    causas_inmediatas:    document.getElementById('accCausasInm').value.trim() || null,
+    causas_raiz:          document.getElementById('accCausasRaiz').value.trim() || null,
+    acciones_correctivas: document.getElementById('accAcciones').value.trim() || null,
+    investigador:         document.getElementById('accInvestigador').value.trim() || null,
+    notificado_a:         document.getElementById('accNotificado').value.trim() || null,
+    fecha_cierre:         document.getElementById('accFechaCierre').value || null,
+    observaciones:        document.getElementById('accObs').value.trim() || null,
+  };
+  const id = document.getElementById('modalAcc')._accId;
+  if (id) {
+    await api(`/accidentes/${id}`, { method:'PUT', body: JSON.stringify(body) });
+  } else {
+    await api('/accidentes', { method:'POST', body: JSON.stringify(body) });
+  }
+  cerrarModalAcc();
+  await cargarAccidentes();
+}
+
+async function eliminarAcc(id, desdeModal = false) {
+  if (!confirm('¿Eliminar este registro de accidente/incidente? Esta acción no se puede deshacer.')) return;
+  await api(`/accidentes/${id}`, { method:'DELETE' });
+  if (desdeModal) cerrarModalAcc();
+  await cargarAccidentes();
+}
+
+function cerrarModalAcc() {
+  document.getElementById('modalAcc').style.display = 'none';
 }
 
 // ── CONSUMOS DE MATERIAL / MATERIAL CONSUMPTION LOG (NEW-90) ─────────────────

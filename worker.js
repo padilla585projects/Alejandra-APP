@@ -4721,6 +4721,14 @@ export default {
         if (method === 'PUT')    return await actualizarVisitaObra(_vid, request, env);
         if (method === 'DELETE') return await eliminarVisitaObra(_vid, request, env);
       }
+      // ── Accidentes e Incidentes / Accident Investigation (NEW-91) ───────────────
+      if (path === '/accidentes' && method === 'GET')  return await getAccidentes(request, env);
+      if (path === '/accidentes' && method === 'POST') return await crearAccidente(request, env);
+      if (path.startsWith('/accidentes/')) {
+        const _acId = parseInt(path.split('/accidentes/')[1]);
+        if (method === 'PUT')    return await actualizarAccidente(_acId, request, env);
+        if (method === 'DELETE') return await eliminarAccidente(_acId, request, env);
+      }
       // ── Consumos de Material / Material Consumption Log (NEW-90) ────────────────
       if (path === '/consumos-material' && method === 'GET')  return await getConsumosMaterial(request, env);
       if (path === '/consumos-material' && method === 'POST') return await crearConsumoMaterial(request, env);
@@ -18714,5 +18722,118 @@ async function eliminarConsumoMaterial(id, request, env) {
   const { empresa_id } = await getAuthContext(request, env);
   await ensureConsumosMaterialTable(env);
   await env.DB.prepare(`DELETE FROM consumos_material WHERE id=? AND empresa_id=?`).bind(id, empresa_id).run();
+  return jsonResp({ ok: true });
+}
+
+// ── Accidentes e Incidentes / Accident & Incident Investigation (NEW-91) ──────
+async function ensureAccidentesTable(env) {
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS accidentes_incidentes (
+    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+    empresa_id          INTEGER NOT NULL,
+    obra_id             INTEGER,
+    numero              TEXT,
+    fecha               TEXT NOT NULL,
+    hora                TEXT,
+    tipo                TEXT NOT NULL DEFAULT 'near_miss',
+    gravedad            TEXT NOT NULL DEFAULT 'near_miss',
+    afectado            TEXT,
+    empresa_afectado    TEXT,
+    actividad_realizada TEXT,
+    ubicacion           TEXT,
+    descripcion         TEXT NOT NULL,
+    testigos            TEXT,
+    lesiones            TEXT,
+    parte_cuerpo        TEXT,
+    dias_baja           INTEGER DEFAULT 0,
+    causas_inmediatas   TEXT,
+    causas_raiz         TEXT,
+    acciones_correctivas TEXT,
+    investigador        TEXT,
+    notificado_a        TEXT,
+    fecha_cierre        TEXT,
+    estado              TEXT NOT NULL DEFAULT 'abierto',
+    observaciones       TEXT,
+    created_at          TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at          TEXT NOT NULL DEFAULT (datetime('now'))
+  )`).run();
+}
+
+async function getAccidentes(request, env) {
+  const { empresa_id } = await getAuthContext(request, env);
+  const url = new URL(request.url);
+  const obra_id  = url.searchParams.get('obra_id');
+  const tipo     = url.searchParams.get('tipo');
+  const estado   = url.searchParams.get('estado');
+  await ensureAccidentesTable(env);
+  let q = `SELECT * FROM accidentes_incidentes WHERE empresa_id=?`;
+  const p = [empresa_id];
+  if (obra_id) { q += ` AND obra_id=?`;  p.push(obra_id); }
+  if (tipo)    { q += ` AND tipo=?`;     p.push(tipo); }
+  if (estado)  { q += ` AND estado=?`;   p.push(estado); }
+  q += ` ORDER BY fecha DESC, id DESC`;
+  const rows = await env.DB.prepare(q).bind(...p).all();
+  return jsonResp(rows.results || []);
+}
+
+async function crearAccidente(request, env) {
+  const { empresa_id } = await getAuthContext(request, env);
+  const d = await request.json();
+  await ensureAccidentesTable(env);
+  const anio = new Date().getFullYear();
+  const last = await env.DB.prepare(
+    `SELECT numero FROM accidentes_incidentes WHERE empresa_id=? AND numero LIKE ? ORDER BY id DESC LIMIT 1`
+  ).bind(empresa_id, `AI-${anio}-%`).first();
+  let seq = 1;
+  if (last?.numero) { const n = parseInt(last.numero.split('-')[2]); if (!isNaN(n)) seq = n + 1; }
+  const numero = `AI-${anio}-${String(seq).padStart(4,'0')}`;
+  const r = await env.DB.prepare(
+    `INSERT INTO accidentes_incidentes
+     (empresa_id,obra_id,numero,fecha,hora,tipo,gravedad,afectado,empresa_afectado,
+      actividad_realizada,ubicacion,descripcion,testigos,lesiones,parte_cuerpo,dias_baja,
+      causas_inmediatas,causas_raiz,acciones_correctivas,investigador,notificado_a,
+      fecha_cierre,estado,observaciones)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+  ).bind(
+    empresa_id, d.obra_id||null, numero, d.fecha, d.hora||null,
+    d.tipo||'near_miss', d.gravedad||'near_miss',
+    d.afectado||null, d.empresa_afectado||null, d.actividad_realizada||null,
+    d.ubicacion||null, d.descripcion, d.testigos||null, d.lesiones||null,
+    d.parte_cuerpo||null, parseInt(d.dias_baja)||0,
+    d.causas_inmediatas||null, d.causas_raiz||null, d.acciones_correctivas||null,
+    d.investigador||null, d.notificado_a||null, d.fecha_cierre||null,
+    d.estado||'abierto', d.observaciones||null
+  ).run();
+  return jsonResp({ id: r.meta.last_row_id, numero }, 201);
+}
+
+async function actualizarAccidente(id, request, env) {
+  const { empresa_id } = await getAuthContext(request, env);
+  const d = await request.json();
+  await ensureAccidentesTable(env);
+  await env.DB.prepare(
+    `UPDATE accidentes_incidentes SET
+      fecha=?, hora=?, tipo=?, gravedad=?, afectado=?, empresa_afectado=?,
+      actividad_realizada=?, ubicacion=?, descripcion=?, testigos=?, lesiones=?,
+      parte_cuerpo=?, dias_baja=?, causas_inmediatas=?, causas_raiz=?,
+      acciones_correctivas=?, investigador=?, notificado_a=?,
+      fecha_cierre=?, estado=?, observaciones=?, updated_at=datetime('now')
+     WHERE id=? AND empresa_id=?`
+  ).bind(
+    d.fecha, d.hora||null, d.tipo||'near_miss', d.gravedad||'near_miss',
+    d.afectado||null, d.empresa_afectado||null, d.actividad_realizada||null,
+    d.ubicacion||null, d.descripcion, d.testigos||null, d.lesiones||null,
+    d.parte_cuerpo||null, parseInt(d.dias_baja)||0,
+    d.causas_inmediatas||null, d.causas_raiz||null, d.acciones_correctivas||null,
+    d.investigador||null, d.notificado_a||null, d.fecha_cierre||null,
+    d.estado||'abierto', d.observaciones||null,
+    id, empresa_id
+  ).run();
+  return jsonResp({ ok: true });
+}
+
+async function eliminarAccidente(id, request, env) {
+  const { empresa_id } = await getAuthContext(request, env);
+  await ensureAccidentesTable(env);
+  await env.DB.prepare(`DELETE FROM accidentes_incidentes WHERE id=? AND empresa_id=?`).bind(id, empresa_id).run();
   return jsonResp({ ok: true });
 }
