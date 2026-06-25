@@ -4721,6 +4721,14 @@ export default {
         if (method === 'PUT')    return await actualizarVisitaObra(_vid, request, env);
         if (method === 'DELETE') return await eliminarVisitaObra(_vid, request, env);
       }
+      // ── Consumos de Material / Material Consumption Log (NEW-90) ────────────────
+      if (path === '/consumos-material' && method === 'GET')  return await getConsumosMaterial(request, env);
+      if (path === '/consumos-material' && method === 'POST') return await crearConsumoMaterial(request, env);
+      if (path.startsWith('/consumos-material/')) {
+        const _cmId = parseInt(path.split('/consumos-material/')[1]);
+        if (method === 'PUT')    return await actualizarConsumoMaterial(_cmId, request, env);
+        if (method === 'DELETE') return await eliminarConsumoMaterial(_cmId, request, env);
+      }
       // ── Partes de Maquinaria / Daily Plant Log (NEW-89) ─────────────────────────
       if (path === '/partes-maquinaria' && method === 'GET')  return await getPartesMaquinaria(request, env);
       if (path === '/partes-maquinaria' && method === 'POST') return await crearParteMaquinaria(request, env);
@@ -18608,5 +18616,103 @@ async function eliminarParteMaquinaria(id, request, env) {
   const { empresa_id } = await getAuthContext(request, env);
   await ensurePartesMaquinariaTable(env);
   await env.DB.prepare(`DELETE FROM partes_maquinaria WHERE id=? AND empresa_id=?`).bind(id, empresa_id).run();
+  return jsonResp({ ok: true });
+}
+
+// ── Consumos de Material / Material Consumption Log (NEW-90) ─────────────────
+async function ensureConsumosMaterialTable(env) {
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS consumos_material (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    empresa_id        INTEGER NOT NULL,
+    obra_id           INTEGER,
+    numero            TEXT,
+    fecha             TEXT NOT NULL,
+    tipo_movimiento   TEXT NOT NULL DEFAULT 'salida',
+    material          TEXT NOT NULL,
+    referencia        TEXT,
+    cantidad          REAL NOT NULL,
+    unidad            TEXT NOT NULL DEFAULT 'ud',
+    almacen           TEXT,
+    solicitado_por    TEXT,
+    fase_trabajo      TEXT,
+    coste_unitario    REAL,
+    coste_total       REAL,
+    observaciones     TEXT,
+    created_at        TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at        TEXT NOT NULL DEFAULT (datetime('now'))
+  )`).run();
+}
+
+async function getConsumosMaterial(request, env) {
+  const { empresa_id } = await getAuthContext(request, env);
+  const url = new URL(request.url);
+  const obra_id = url.searchParams.get('obra_id');
+  const tipo    = url.searchParams.get('tipo');
+  await ensureConsumosMaterialTable(env);
+  let q = `SELECT * FROM consumos_material WHERE empresa_id=?`;
+  const p = [empresa_id];
+  if (obra_id) { q += ` AND obra_id=?`;         p.push(obra_id); }
+  if (tipo)    { q += ` AND tipo_movimiento=?`; p.push(tipo); }
+  q += ` ORDER BY fecha DESC, id DESC`;
+  const rows = await env.DB.prepare(q).bind(...p).all();
+  return jsonResp(rows.results || []);
+}
+
+async function crearConsumoMaterial(request, env) {
+  const { empresa_id } = await getAuthContext(request, env);
+  const d = await request.json();
+  await ensureConsumosMaterialTable(env);
+  const anio = new Date().getFullYear();
+  const last = await env.DB.prepare(
+    `SELECT numero FROM consumos_material WHERE empresa_id=? AND numero LIKE ? ORDER BY id DESC LIMIT 1`
+  ).bind(empresa_id, `CM-${anio}-%`).first();
+  let seq = 1;
+  if (last?.numero) { const n = parseInt(last.numero.split('-')[2]); if (!isNaN(n)) seq = n + 1; }
+  const numero = `CM-${anio}-${String(seq).padStart(4,'0')}`;
+  const cant   = Number(d.cantidad||0);
+  const costU  = parseFloat(d.coste_unitario)||null;
+  const costT  = costU ? Math.round(cant * costU * 100)/100 : (parseFloat(d.coste_total)||null);
+  const r = await env.DB.prepare(
+    `INSERT INTO consumos_material
+     (empresa_id,obra_id,numero,fecha,tipo_movimiento,material,referencia,
+      cantidad,unidad,almacen,solicitado_por,fase_trabajo,
+      coste_unitario,coste_total,observaciones)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+  ).bind(
+    empresa_id, d.obra_id||null, numero, d.fecha,
+    d.tipo_movimiento||'salida', d.material, d.referencia||null,
+    cant, d.unidad||'ud', d.almacen||null, d.solicitado_por||null, d.fase_trabajo||null,
+    costU, costT, d.observaciones||null
+  ).run();
+  return jsonResp({ id: r.meta.last_row_id, numero, coste_total: costT }, 201);
+}
+
+async function actualizarConsumoMaterial(id, request, env) {
+  const { empresa_id } = await getAuthContext(request, env);
+  const d = await request.json();
+  await ensureConsumosMaterialTable(env);
+  const cant  = Number(d.cantidad||0);
+  const costU = parseFloat(d.coste_unitario)||null;
+  const costT = costU ? Math.round(cant * costU * 100)/100 : (parseFloat(d.coste_total)||null);
+  await env.DB.prepare(
+    `UPDATE consumos_material SET
+      fecha=?, tipo_movimiento=?, material=?, referencia=?,
+      cantidad=?, unidad=?, almacen=?, solicitado_por=?, fase_trabajo=?,
+      coste_unitario=?, coste_total=?, observaciones=?,
+      updated_at=datetime('now')
+     WHERE id=? AND empresa_id=?`
+  ).bind(
+    d.fecha, d.tipo_movimiento||'salida', d.material, d.referencia||null,
+    cant, d.unidad||'ud', d.almacen||null, d.solicitado_por||null, d.fase_trabajo||null,
+    costU, costT, d.observaciones||null,
+    id, empresa_id
+  ).run();
+  return jsonResp({ ok: true, coste_total: costT });
+}
+
+async function eliminarConsumoMaterial(id, request, env) {
+  const { empresa_id } = await getAuthContext(request, env);
+  await ensureConsumosMaterialTable(env);
+  await env.DB.prepare(`DELETE FROM consumos_material WHERE id=? AND empresa_id=?`).bind(id, empresa_id).run();
   return jsonResp({ ok: true });
 }

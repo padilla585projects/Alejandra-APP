@@ -707,6 +707,9 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
     <button class="nav-item" data-page="partesMaquinaria" onclick="navTo('partesMaquinaria')">
       <span class="nav-icon">🚜</span> Partes Maquinaria
     </button>
+    <button class="nav-item" data-page="consumosMaterial" onclick="navTo('consumosMaterial')">
+      <span class="nav-icon">📦</span> Consumos Material
+    </button>
     <button class="nav-item" data-page="fotosObra" onclick="navTo('fotosObra')">
       <span class="nav-icon">📷</span> Galería de Fotos
     </button>
@@ -2427,6 +2430,116 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
               <button class="btn btn-secondary" onclick="cerrarModalAts()">Cancelar</button>
               <span id="atsElimBtn"></span>
               <button class="btn btn-primary" onclick="guardarAts()">💾 Guardar ATS</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- CONSUMOS DE MATERIAL / MATERIAL CONSUMPTION LOG (NEW-90) -->
+      <div class="page" id="pageConsumosMaterial">
+        <div class="page-title">📦 Consumos de Material / Kardex de Obra</div>
+        <div id="cmKpis" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:16px"></div>
+        <div class="tbl-toolbar">
+          <input class="tbl-search" id="searchCm" placeholder="🔍 Buscar material, referencia, solicitante..." oninput="filtrarConsumosMat()">
+          <select class="tbl-search" id="filterCmObra" style="min-width:220px" onchange="tblCm=null;cargarConsumosMat()">
+            <option value="">Todas las obras</option>
+          </select>
+          <select class="tbl-search" id="filterCmTipo" onchange="filtrarConsumosMat()">
+            <option value="">Todos los movimientos</option>
+            <option value="salida">Salida de almacén</option>
+            <option value="devolucion">Devolución a almacén</option>
+            <option value="ajuste">Ajuste de inventario</option>
+            <option value="merma">Merma / pérdida</option>
+          </select>
+          <button class="btn btn-primary" onclick="abrirModalCm()">+ Registrar Consumo</button>
+        </div>
+        <div id="tblCmContainer"></div>
+        <!-- Modal consumo -->
+        <div class="modal-overlay" id="modalCm" style="display:none" onclick="if(event.target===this)cerrarModalCm()">
+          <div class="modal" style="max-width:620px">
+            <div class="modal-header">
+              <span id="modalCmTitulo">Nuevo Consumo de Material</span>
+              <button class="modal-close" onclick="cerrarModalCm()">✕</button>
+            </div>
+            <div class="modal-body" style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+              <div>
+                <label>Número</label>
+                <input id="cmNumero" class="form-control" placeholder="Auto" readonly style="background:#f5f5f5">
+              </div>
+              <div>
+                <label>Fecha *</label>
+                <input id="cmFecha" class="form-control" type="date">
+              </div>
+              <div>
+                <label>Tipo de movimiento *</label>
+                <select id="cmTipo" class="form-control">
+                  <option value="salida">Salida de almacén</option>
+                  <option value="devolucion">Devolución a almacén</option>
+                  <option value="ajuste">Ajuste de inventario</option>
+                  <option value="merma">Merma / pérdida</option>
+                </select>
+              </div>
+              <div>
+                <label>Obra</label>
+                <select id="cmObra" class="form-control"><option value="">Sin obra</option></select>
+              </div>
+              <div style="grid-column:span 2">
+                <label>Material / Descripción *</label>
+                <input id="cmMaterial" class="form-control" placeholder="Nombre del material o producto">
+              </div>
+              <div>
+                <label>Referencia / Código</label>
+                <input id="cmReferencia" class="form-control" placeholder="Código de producto, referencia...">
+              </div>
+              <div>
+                <label>Almacén / Ubicación origen</label>
+                <input id="cmAlmacen" class="form-control" placeholder="Almacén central, furgoneta, camión...">
+              </div>
+              <div>
+                <label>Cantidad *</label>
+                <input id="cmCantidad" class="form-control" type="number" step="any" min="0" placeholder="0" oninput="calcCmCoste()">
+              </div>
+              <div>
+                <label>Unidad</label>
+                <select id="cmUnidad" class="form-control">
+                  <option value="ud">unidades (ud)</option>
+                  <option value="m">metros (m)</option>
+                  <option value="m2">m²</option>
+                  <option value="m3">m³</option>
+                  <option value="kg">kg</option>
+                  <option value="t">toneladas (t)</option>
+                  <option value="l">litros (l)</option>
+                  <option value="rollo">rollos</option>
+                  <option value="bobina">bobinas</option>
+                  <option value="caja">cajas</option>
+                  <option value="saco">sacos</option>
+                </select>
+              </div>
+              <div>
+                <label>Coste unitario (€)</label>
+                <input id="cmCostUnit" class="form-control" type="number" step="0.01" placeholder="€/unidad" oninput="calcCmCoste()">
+              </div>
+              <div>
+                <label>Coste total (€)</label>
+                <input id="cmCostTotal" class="form-control" type="number" step="0.01" placeholder="Calculado automáticamente">
+              </div>
+              <div>
+                <label>Solicitado / Retirado por</label>
+                <input id="cmSolicitante" class="form-control" placeholder="Nombre del trabajador / encargado">
+              </div>
+              <div>
+                <label>Fase / Actividad de trabajo</label>
+                <input id="cmFase" class="form-control" placeholder="Ej: Canalización BT, Alumbrado planta 2...">
+              </div>
+              <div style="grid-column:span 2">
+                <label>Observaciones</label>
+                <textarea id="cmObs" class="form-control" rows="2"></textarea>
+              </div>
+            </div>
+            <div class="modal-footer">
+              <button class="btn btn-secondary" onclick="cerrarModalCm()">Cancelar</button>
+              <span id="cmElimBtn"></span>
+              <button class="btn btn-primary" onclick="guardarCm()">💾 Registrar</button>
             </div>
           </div>
         </div>
@@ -6960,6 +7073,7 @@ const PAGE_TITLES = {
   ensayos: '🧪 Ensayos y Pruebas de Materiales / Material Tests',
   residuos: '♻️ Gestión de Residuos / Waste Management (RD 105/2008)',
   partesMaquinaria: '🚜 Partes de Maquinaria / Daily Plant Log',
+  consumosMaterial: '📦 Consumos de Material / Material Consumption Log',
 };
 
 const PAGE_LOADERS = {
@@ -7050,6 +7164,7 @@ const PAGE_LOADERS = {
   ensayos:          cargarEnsayos,
   residuos:         cargarResiduos,
   partesMaquinaria: cargarPartesMaq,
+  consumosMaterial: cargarConsumosMat,
 };
 
 let currentPage = '';
@@ -7169,6 +7284,7 @@ const SYNC_INTERVALS = {
   ensayos:          90,
   residuos:         180,
   partesMaquinaria: 60,
+  consumosMaterial: 90,
 };
 
 let _syncTimer = null, _syncLabelTimer = null, _syncLastTs = null;
@@ -16529,6 +16645,161 @@ function exportarFinanzas() {
   if (!obraId) return showToast('Selecciona una obra primero', 'warning');
   // Abrir informe en nueva pestaña usando el endpoint de informes
   window.open(`/informe-obra/${obraId}?tipo=financiero`, '_blank');
+}
+
+// ── CONSUMOS DE MATERIAL / MATERIAL CONSUMPTION LOG (NEW-90) ─────────────────
+let tblCm = null, _cmData = [];
+const CM_TIPO_COLOR = {
+  salida:'var(--danger)', devolucion:'var(--success)',
+  ajuste:'var(--accent)', merma:'var(--warning)'
+};
+const CM_TIPO_ICON = { salida:'📤', devolucion:'📥', ajuste:'⚖️', merma:'🗑️' };
+
+function calcCmCoste() {
+  const cant = parseFloat(document.getElementById('cmCantidad').value);
+  const pu   = parseFloat(document.getElementById('cmCostUnit').value);
+  if (!isNaN(cant) && !isNaN(pu)) {
+    document.getElementById('cmCostTotal').value = (cant * pu).toFixed(2);
+  }
+}
+
+async function cargarConsumosMat() {
+  poblarSelectObras('filterCmObra');
+  poblarSelectObras('cmObra');
+  const obraId = document.getElementById('filterCmObra').value;
+  const params = new URLSearchParams();
+  if (obraId) params.set('obra_id', obraId);
+  _cmData = await api('/consumos-material?' + params);
+  if (!Array.isArray(_cmData)) _cmData = [];
+
+  // KPIs
+  const total    = _cmData.length;
+  const salidas  = _cmData.filter(c=>c.tipo_movimiento==='salida').length;
+  const devol    = _cmData.filter(c=>c.tipo_movimiento==='devolucion').length;
+  const costeSal = _cmData.filter(c=>c.tipo_movimiento==='salida').reduce((a,c)=>a+Number(c.coste_total||0),0);
+  const costeNet = _cmData.reduce((a,c)=>{
+    if (c.tipo_movimiento==='devolucion') return a - Number(c.coste_total||0);
+    if (c.tipo_movimiento==='salida' || c.tipo_movimiento==='merma') return a + Number(c.coste_total||0);
+    return a;
+  },0);
+  document.getElementById('cmKpis').innerHTML = `
+    <div class="kpi-mini"><div class="kpi-val">${total}</div><div class="kpi-lbl">Total movimientos</div></div>
+    <div class="kpi-mini"><div class="kpi-val" style="color:var(--danger)">${salidas}</div><div class="kpi-lbl">Salidas 📤</div></div>
+    <div class="kpi-mini"><div class="kpi-val" style="color:var(--success)">${devol}</div><div class="kpi-lbl">Devoluciones 📥</div></div>
+    <div class="kpi-mini"><div class="kpi-val" style="color:var(--danger)">${fmtMoney(costeSal)}</div><div class="kpi-lbl">Coste salidas</div></div>
+    <div class="kpi-mini"><div class="kpi-val" style="color:var(--accent)">${fmtMoney(costeNet)}</div><div class="kpi-lbl">Coste neto obra</div></div>
+  `;
+  filtrarConsumosMat();
+}
+
+function filtrarConsumosMat() {
+  const q    = (document.getElementById('searchCm')?.value || '').toLowerCase();
+  const tipo = document.getElementById('filterCmTipo')?.value || '';
+  let data   = _cmData.filter(c => {
+    if (tipo && c.tipo_movimiento !== tipo) return false;
+    if (q && !`${c.material} ${c.referencia||''} ${c.solicitado_por||''} ${c.numero||''} ${c.fase_trabajo||''}`.toLowerCase().includes(q)) return false;
+    return true;
+  });
+  const cols = [
+    { title:'Nº',       field:'numero',           width:115, formatter: c => c.getValue()||'—' },
+    { title:'Fecha',    field:'fecha',             width:105, formatter: c => c.getValue()||'—' },
+    { title:'Tipo',     field:'tipo_movimiento',  width:130, formatter: c => {
+      const v = c.getValue();
+      return `<span style="color:${CM_TIPO_COLOR[v]||'inherit'}">${CM_TIPO_ICON[v]||''} ${(v||'').replace('_',' ')}</span>`;
+    }},
+    { title:'Material', field:'material',         widthGrow:2 },
+    { title:'Ref.',     field:'referencia',       width:110, formatter: c => c.getValue()||'—' },
+    { title:'Cantidad', field:'cantidad',         width:100, hozAlign:'right', formatter: c => {
+      const v = c.getValue(); const u = c.getRow().getData().unidad||'';
+      return v != null ? `${v} ${u}` : '—';
+    }},
+    { title:'Coste',    field:'coste_total',      width:105, hozAlign:'right', formatter: c => {
+      const v = c.getValue(); return v ? fmtMoney(v) : '—';
+    }},
+    { title:'Solicitante', field:'solicitado_por', width:130, formatter: c => c.getValue()||'—' },
+    { title:'Acciones', width:90, hozAlign:'center', formatter: c =>
+      `<button class="btn-tbl" onclick="editarCm(${c.getRow().getData().id})">✏️</button>
+       <button class="btn-tbl btn-danger-sm" onclick="eliminarCm(${c.getRow().getData().id})">🗑️</button>`
+    }
+  ];
+  if (!tblCm) {
+    tblCm = new Tabulator('#tblCmContainer', {
+      data, columns: cols, layout:'fitColumns', locale:'es-es',
+      placeholder:'No hay consumos registrados', height:'520px'
+    });
+  } else {
+    tblCm.replaceData(data);
+  }
+}
+
+function abrirModalCm(d = {}) {
+  document.getElementById('modalCm')._cmId = d.id || null;
+  document.getElementById('cmNumero').value    = d.numero || '';
+  document.getElementById('cmFecha').value     = d.fecha  || new Date().toISOString().slice(0,10);
+  document.getElementById('cmTipo').value      = d.tipo_movimiento || 'salida';
+  document.getElementById('cmObra').value      = d.obra_id || '';
+  document.getElementById('cmMaterial').value  = d.material || '';
+  document.getElementById('cmReferencia').value= d.referencia || '';
+  document.getElementById('cmAlmacen').value   = d.almacen || '';
+  document.getElementById('cmCantidad').value  = d.cantidad || '';
+  document.getElementById('cmUnidad').value    = d.unidad || 'ud';
+  document.getElementById('cmCostUnit').value  = d.coste_unitario ?? '';
+  document.getElementById('cmCostTotal').value = d.coste_total ?? '';
+  document.getElementById('cmSolicitante').value= d.solicitado_por || '';
+  document.getElementById('cmFase').value      = d.fase_trabajo || '';
+  document.getElementById('cmObs').value       = d.observaciones || '';
+  document.getElementById('modalCmTitulo').textContent = d.id ? 'Editar Consumo de Material' : 'Nuevo Consumo de Material';
+  document.getElementById('cmElimBtn').innerHTML = d.id
+    ? `<button class="btn btn-danger" onclick="eliminarCm(${d.id},true)">🗑️ Eliminar</button>` : '';
+  document.getElementById('modalCm').style.display = 'flex';
+}
+
+async function editarCm(id) {
+  const d = _cmData.find(c => c.id === id);
+  if (d) abrirModalCm(d);
+}
+
+async function guardarCm() {
+  const material = document.getElementById('cmMaterial').value.trim();
+  const fecha    = document.getElementById('cmFecha').value;
+  const cantidad = parseFloat(document.getElementById('cmCantidad').value);
+  if (!material)          return alert('El material es obligatorio.');
+  if (!fecha)             return alert('La fecha es obligatoria.');
+  if (isNaN(cantidad)||cantidad<0) return alert('La cantidad debe ser un número válido.');
+  const body = {
+    fecha,
+    tipo_movimiento: document.getElementById('cmTipo').value,
+    material,
+    obra_id:         document.getElementById('cmObra').value || null,
+    referencia:      document.getElementById('cmReferencia').value.trim() || null,
+    almacen:         document.getElementById('cmAlmacen').value.trim() || null,
+    cantidad,
+    unidad:          document.getElementById('cmUnidad').value,
+    coste_unitario:  document.getElementById('cmCostUnit').value !== '' ? parseFloat(document.getElementById('cmCostUnit').value) : null,
+    coste_total:     document.getElementById('cmCostTotal').value !== '' ? parseFloat(document.getElementById('cmCostTotal').value) : null,
+    solicitado_por:  document.getElementById('cmSolicitante').value.trim() || null,
+    fase_trabajo:    document.getElementById('cmFase').value.trim() || null,
+    observaciones:   document.getElementById('cmObs').value.trim() || null,
+  };
+  const id = document.getElementById('modalCm')._cmId;
+  if (id) {
+    await api(`/consumos-material/${id}`, { method:'PUT', body: JSON.stringify(body) });
+  } else {
+    await api('/consumos-material', { method:'POST', body: JSON.stringify(body) });
+  }
+  cerrarModalCm();
+  await cargarConsumosMat();
+}
+
+async function eliminarCm(id, desdeModal = false) {
+  if (!confirm('¿Eliminar este consumo? Esta acción no se puede deshacer.')) return;
+  await api(`/consumos-material/${id}`, { method:'DELETE' });
+  if (desdeModal) cerrarModalCm();
+  await cargarConsumosMat();
+}
+
+function cerrarModalCm() {
+  document.getElementById('modalCm').style.display = 'none';
 }
 
 // ── PARTES DE MAQUINARIA / DAILY PLANT LOG (NEW-89) ──────────────────────────
