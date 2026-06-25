@@ -497,6 +497,15 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
       <span class="nav-icon">🏢</span> Subcontratas
       <span class="nav-badge" id="subcBadge" style="display:none">!</span>
     </button>
+    <button class="nav-item" data-page="presupuesto" onclick="navTo('presupuesto')">
+      <span class="nav-icon">💶</span> Presupuesto
+    </button>
+    <button class="nav-item" data-page="fases" onclick="navTo('fases')">
+      <span class="nav-icon">📅</span> Fases de Obra
+    </button>
+    <button class="nav-item" data-page="partesPanel" onclick="navTo('partesPanel')">
+      <span class="nav-icon">📋</span> Partes Diarios
+    </button>
 
     <div class="sidebar-section">Analítica</div>
     <button class="nav-item" data-page="graficas" onclick="navTo('graficas')">
@@ -1191,6 +1200,59 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
           <button class="btn btn-secondary" onclick="tblMantenimientos=null;cargarMantenimientos()">🔄 Actualizar</button>
         </div>
         <div class="tbl-wrap"><div id="tblMantenimientos"></div></div>
+      </div>
+
+      <!-- PRESUPUESTO DE OBRA -->
+      <div class="page" id="pagePresupuesto">
+        <div class="page-title">💶 Presupuesto de Obra</div>
+        <div class="page-sub">Control de coste previsto vs real por obra y categoría</div>
+        <div class="tbl-toolbar" style="margin-bottom:16px">
+          <select class="tbl-search" id="presObraId" style="min-width:220px" onchange="tblPresupuesto=null;cargarPresupuesto()">
+            <option value="">— Selecciona una obra —</option>
+          </select>
+          <button class="btn btn-primary" onclick="abrirModalPartida()">+ Nueva partida</button>
+          <button class="btn btn-secondary" onclick="exportarTabla(tblPresupuesto,'presupuesto')">⬇ CSV</button>
+          <button class="btn btn-secondary" onclick="tblPresupuesto=null;cargarPresupuesto()">🔄 Actualizar</button>
+        </div>
+        <div id="presKpis" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:14px;margin-bottom:18px"></div>
+        <div id="presGrafBar" style="display:none;margin-bottom:18px">
+          <div class="section-card" style="padding:16px">
+            <div class="section-card-title"><span>📊</span> Desglose por categoría</div>
+            <div id="presCatChart" style="max-height:200px;overflow-y:auto"></div>
+          </div>
+        </div>
+        <div class="tbl-wrap"><div id="tblPresupuesto"></div></div>
+      </div>
+
+      <!-- FASES DE OBRA / GANTT -->
+      <div class="page" id="pageFases">
+        <div class="page-title">📅 Fases de Obra</div>
+        <div class="page-sub">Planificación y seguimiento de etapas — fechas reales vs planificadas</div>
+        <div class="tbl-toolbar" style="margin-bottom:16px">
+          <select class="tbl-search" id="fasesObraId" style="min-width:220px" onchange="cargarFases()">
+            <option value="">— Selecciona una obra —</option>
+          </select>
+          <button class="btn btn-primary" onclick="abrirModalFase()">+ Nueva fase</button>
+          <button class="btn btn-secondary" onclick="cargarFases()">🔄 Actualizar</button>
+        </div>
+        <div id="fasesResumen" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:14px;margin-bottom:18px"></div>
+        <div id="fasesLista" style="display:flex;flex-direction:column;gap:12px"></div>
+      </div>
+
+      <!-- PARTES DIARIOS (panel) -->
+      <div class="page" id="pagePartesPanel">
+        <div class="page-title">📋 Partes Diarios de Obra</div>
+        <div class="page-sub">Registro diario de actividades, personal y materiales en obra</div>
+        <div id="partesResumen" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:16px"></div>
+        <div class="tbl-toolbar">
+          <input class="tbl-search" id="searchPartes" placeholder="🔍 Buscar fecha, obra o descripción...">
+          <select class="tbl-search" id="filterPartesObra" style="min-width:180px" onchange="tblPartes=null;cargarPartesPanel()">
+            <option value="">🏗 Todas las obras</option>
+          </select>
+          <button class="btn btn-secondary" onclick="exportarTabla(tblPartes,'partes')">⬇ CSV</button>
+          <button class="btn btn-secondary" onclick="tblPartes=null;cargarPartesPanel()">🔄 Actualizar</button>
+        </div>
+        <div class="tbl-wrap"><div id="tblPartes"></div></div>
       </div>
 
       <!-- SUBCONTRATAS / PROVEEDORES -->
@@ -2567,6 +2629,9 @@ const PAGE_TITLES = {
   reuniones: '📝 Actas de Reunión',
   calidad: '🔍 Control de Calidad',
   subcontratas: '🏢 Subcontratas',
+  presupuesto: '💶 Presupuesto de Obra',
+  fases: '📅 Fases de Obra',
+  partesPanel: '📋 Partes Diarios',
 };
 
 const PAGE_LOADERS = {
@@ -2603,6 +2668,9 @@ const PAGE_LOADERS = {
   reuniones: cargarReuniones,
   calidad: cargarCalidad,
   subcontratas: cargarSubcontratas,
+  presupuesto: cargarPresupuesto,
+  fases: cargarFases,
+  partesPanel: cargarPartesPanel,
 };
 
 let currentPage = '';
@@ -2668,6 +2736,9 @@ const SYNC_INTERVALS = {
   reuniones:    120,
   calidad:       60,
   subcontratas: 120,
+  presupuesto: 120,
+  fases: 120,
+  partesPanel: 60,
 };
 
 let _syncTimer = null, _syncLabelTimer = null, _syncLastTs = null;
@@ -3666,6 +3737,14 @@ async function cargarObrasPanel() {
     ['filtroObraBobinas','filtroObraPemp','filtroObraCarretillas','filtroObraPedidos'].forEach(id => {
       const el = document.getElementById(id);
       if (el) el.innerHTML = '<option value="">🏗 Todas las obras</option>' + opt;
+    });
+    // Selects de obra para nuevos módulos (presupuesto, fases, partes)
+    ['presObraId','fasesObraId','filterPartesObra'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) {
+        const prefix = id === 'filterPartesObra' ? '<option value="">🏗 Todas las obras</option>' : '<option value="">— Selecciona una obra —</option>';
+        el.innerHTML = prefix + opt;
+      }
     });
   } catch(_) {}
 }
@@ -9457,6 +9536,305 @@ async function eliminarDeficiencia(id) {
 }
 
 // Helper: populate obra select
+// ── PRESUPUESTO DE OBRA ─────────────────────────────────────────
+let tblPresupuesto = null, _presData = [];
+async function cargarPresupuesto() {
+  const obraId = document.getElementById('presObraId')?.value;
+  if (!obraId) {
+    document.getElementById('presKpis').innerHTML = '<div style="color:var(--muted);font-size:13px;padding:12px 0">Selecciona una obra para ver el presupuesto.</div>';
+    return;
+  }
+  if (document.getElementById('presObraId')?.options.length <= 1) poblarSelectObras('presObraId');
+  const r = await api(`/presupuesto-obra?obra_id=${obraId}`);
+  _presData = r.partidas || [];
+  const totalPrev = r.total_previsto || 0;
+  const totalReal = r.total_real || 0;
+  const desv = totalPrev ? ((totalReal - totalPrev) / totalPrev * 100).toFixed(1) : 0;
+  const pct  = totalPrev ? Math.min(100, Math.round(totalReal / totalPrev * 100)) : 0;
+  document.getElementById('presKpis').innerHTML = `
+    <div class="kpi-card"><div class="kpi-icon">💶</div><div class="kpi-value" style="font-size:22px">${fmtMoney(totalPrev)}</div><div class="kpi-label">Presupuesto total</div></div>
+    <div class="kpi-card"><div class="kpi-icon">💸</div><div class="kpi-value ${totalReal > totalPrev ? 'danger' : ''}" style="font-size:22px">${fmtMoney(totalReal)}</div><div class="kpi-label">Gasto real</div></div>
+    <div class="kpi-card"><div class="kpi-icon">${parseFloat(desv) > 10 ? '🔴' : parseFloat(desv) > 0 ? '🟡' : '🟢'}</div><div class="kpi-value ${parseFloat(desv) > 0 ? 'danger' : 'ok'}" style="font-size:22px">${desv > 0 ? '+' : ''}${desv}%</div><div class="kpi-label">Desviación</div></div>
+    <div class="kpi-card"><div class="kpi-icon">📊</div><div class="kpi-value" style="font-size:22px">${pct}%</div><div class="kpi-label">Ejecutado<div style="margin-top:6px;background:var(--border);border-radius:4px;height:6px"><div style="background:${pct > 100 ? 'var(--red)' : pct > 80 ? 'var(--yellow)' : 'var(--green)'};height:100%;border-radius:4px;width:${Math.min(pct,100)}%"></div></div></div></div>
+  `;
+  // Desglose por categoría
+  const cat = r.por_categoria || {};
+  const catHtml = Object.entries(cat).map(([c, v]) => {
+    const p = v.previsto || 0;
+    const re = v.real || 0;
+    const cp = p ? Math.min(100, Math.round(re/p*100)) : 0;
+    return `<div style="margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px">
+        <span style="font-weight:700">${c}</span>
+        <span style="color:var(--muted)">${fmtMoney(re)} / ${fmtMoney(p)}</span>
+      </div>
+      <div style="background:var(--border);border-radius:4px;height:8px">
+        <div style="background:${cp > 100 ? 'var(--red)' : cp > 80 ? 'var(--yellow)' : '#2563eb'};height:100%;border-radius:4px;width:${Math.min(cp,100)}%"></div>
+      </div>
+    </div>`;
+  }).join('');
+  document.getElementById('presGrafBar').style.display = Object.keys(cat).length ? '' : 'none';
+  document.getElementById('presCatChart').innerHTML = catHtml;
+  // Tabla
+  if (tblPresupuesto) { tblPresupuesto.replaceData(_presData); return; }
+  tblPresupuesto = new Tabulator('#tblPresupuesto', {
+    data: _presData, layout: 'fitColumns', responsiveLayout: 'collapse',
+    pagination: 'local', paginationSize: 25,
+    placeholder: '<div class="empty-state"><div class="empty-icon">💶</div><div class="empty-text">Sin partidas — añade la primera</div></div>',
+    groupBy: 'categoria',
+    columns: [
+      { title: 'Descripción', field: 'descripcion', minWidth: 200 },
+      { title: 'Uds.', field: 'unidades', width: 65, hozAlign: 'center' },
+      { title: 'Unidad', field: 'unidad', width: 70 },
+      { title: 'Previsto', field: 'importe_previsto', width: 130, hozAlign: 'right', formatter: (cell) => fmtMoney(cell.getValue()) },
+      { title: 'Real', field: 'importe_real', width: 130, hozAlign: 'right', formatter: (cell) => {
+        const v = cell.getValue();
+        const prev = cell.getRow().getData().importe_previsto;
+        const cls = v > prev ? 'color:var(--red)' : v > 0 ? 'color:var(--text)' : 'color:var(--muted)';
+        return `<span style="${cls}">${fmtMoney(v)}</span>`;
+      }},
+      { title: 'Desviación', field: 'desviacion', width: 110, hozAlign: 'right', formatter: (cell) => {
+        const v = cell.getValue() || 0;
+        const cls = v < 0 ? 'color:var(--red)' : v > 0 ? 'color:var(--green)' : 'color:var(--muted)';
+        return `<span style="${cls}">${v > 0 ? '+' : ''}${fmtMoney(v)}</span>`;
+      }},
+      { title: 'Proveedor', field: 'proveedor', width: 130 },
+      { title: 'Acciones', field: 'id', width: 80, hozAlign: 'center', formatter: () => '<button class="btn btn-secondary btn-sm">✏️</button>',
+        cellClick: (e, cell) => abrirModalPartidaEditar(cell.getRow().getData()) },
+    ]
+  });
+}
+function fmtMoney(v) {
+  return new Intl.NumberFormat('es-ES', { style:'currency', currency:'EUR', minimumFractionDigits:0, maximumFractionDigits:0 }).format(v || 0);
+}
+function abrirModalPartida() {
+  const obraId = document.getElementById('presObraId')?.value;
+  if (!obraId) { toast('Selecciona una obra primero', 'err'); return; }
+  abrirModal('Nueva partida de presupuesto', `
+    <div class="form-group"><div class="form-label">Descripción *</div><input class="form-input" id="mPartDesc" placeholder="Material, trabajo o servicio..."></div>
+    <div class="form-row">
+      <div class="form-group"><div class="form-label">Categoría</div>
+        <select class="form-select" id="mPartCat">
+          <option>Material eléctrico</option><option>Material mecánico</option>
+          <option>Mano de obra</option><option>Alquiler equipos</option>
+          <option>Subcontrata</option><option>Transportes</option><option>Otros</option>
+        </select>
+      </div>
+      <div class="form-group"><div class="form-label">Proveedor</div><input class="form-input" id="mPartProv" placeholder="Proveedor (opcional)"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><div class="form-label">Uds.</div><input class="form-input" id="mPartUds" type="number" step="0.01" value="1"></div>
+      <div class="form-group"><div class="form-label">Unidad</div>
+        <select class="form-select" id="mPartUd"><option>ud</option><option>m</option><option>m²</option><option>m³</option><option>kg</option><option>h</option><option>día</option></select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><div class="form-label">Importe previsto (€)</div><input class="form-input" id="mPartPrev" type="number" step="0.01" placeholder="0.00"></div>
+      <div class="form-group"><div class="form-label">Importe real (€)</div><input class="form-input" id="mPartReal" type="number" step="0.01" placeholder="0.00"></div>
+    </div>
+    <div class="form-group"><div class="form-label">Notas</div><textarea class="form-input" id="mPartNotas" rows="2"></textarea></div>
+  `, async () => {
+    const desc = document.getElementById('mPartDesc').value.trim();
+    if (!desc) { toast('La descripción es obligatoria', 'err'); return; }
+    const body = {
+      obra_id: parseInt(obraId),
+      descripcion: desc,
+      categoria: document.getElementById('mPartCat').value,
+      proveedor: document.getElementById('mPartProv').value.trim() || null,
+      unidades: parseFloat(document.getElementById('mPartUds').value) || 1,
+      unidad: document.getElementById('mPartUd').value,
+      importe_previsto: parseFloat(document.getElementById('mPartPrev').value) || 0,
+      importe_real: parseFloat(document.getElementById('mPartReal').value) || 0,
+      notas: document.getElementById('mPartNotas').value.trim() || null,
+    };
+    const r = await api('/presupuesto-obra', { method: 'POST', body: JSON.stringify(body) });
+    if (r.ok || r.id) { toast('Partida creada ✓', 'ok'); cerrarModal(); tblPresupuesto=null; cargarPresupuesto(); }
+    else toast('Error al crear partida', 'err');
+  });
+}
+function abrirModalPartidaEditar(p) {
+  abrirModal('Editar partida', `
+    <div class="form-group"><div class="form-label">Descripción *</div><input class="form-input" id="mPartDesc" value="${esc(p.descripcion||'')}"></div>
+    <div class="form-row">
+      <div class="form-group"><div class="form-label">Importe previsto (€)</div><input class="form-input" id="mPartPrev" type="number" step="0.01" value="${p.importe_previsto||0}"></div>
+      <div class="form-group"><div class="form-label">Importe real (€)</div><input class="form-input" id="mPartReal" type="number" step="0.01" value="${p.importe_real||0}"></div>
+    </div>
+    <div class="form-group"><div class="form-label">Proveedor</div><input class="form-input" id="mPartProv" value="${esc(p.proveedor||'')}"></div>
+    <div class="form-group"><div class="form-label">Notas</div><textarea class="form-input" id="mPartNotas" rows="2">${esc(p.notas||'')}</textarea></div>
+    <div style="margin-top:12px"><button class="btn btn-danger btn-sm" onclick="eliminarPartida(${p.id})">🗑 Eliminar partida</button></div>
+  `, async () => {
+    const desc = document.getElementById('mPartDesc').value.trim();
+    if (!desc) { toast('La descripción es obligatoria', 'err'); return; }
+    const body = {
+      descripcion: desc,
+      importe_previsto: parseFloat(document.getElementById('mPartPrev').value) || 0,
+      importe_real: parseFloat(document.getElementById('mPartReal').value) || 0,
+      proveedor: document.getElementById('mPartProv').value.trim() || null,
+      notas: document.getElementById('mPartNotas').value.trim() || null,
+    };
+    const r = await api(`/presupuesto-obra/${p.id}`, { method: 'PUT', body: JSON.stringify(body) });
+    if (r.ok) { toast('Actualizada ✓', 'ok'); cerrarModal(); tblPresupuesto=null; cargarPresupuesto(); }
+    else toast('Error al actualizar', 'err');
+  });
+}
+async function eliminarPartida(id) {
+  if (!confirm('¿Eliminar esta partida del presupuesto?')) return;
+  const r = await api(`/presupuesto-obra/${id}`, { method: 'DELETE' });
+  if (r.ok || r.deleted) { toast('Eliminada', 'ok'); cerrarModal(); tblPresupuesto=null; cargarPresupuesto(); }
+  else toast('Error al eliminar', 'err');
+}
+
+// ── FASES DE OBRA ────────────────────────────────────────────────
+let _fasesData = [];
+async function cargarFases() {
+  const obraId = document.getElementById('fasesObraId')?.value;
+  if (!obraId) {
+    document.getElementById('fasesResumen').innerHTML = '<div style="color:var(--muted);font-size:13px;padding:12px 0">Selecciona una obra para ver las fases.</div>';
+    document.getElementById('fasesLista').innerHTML = '';
+    return;
+  }
+  const r = await api(`/fases-obra?obra_id=${obraId}`);
+  _fasesData = Array.isArray(r) ? r : (r.fases || []);
+  const total = _fasesData.length;
+  const completadas = _fasesData.filter(f => f.estado === 'completada').length;
+  const enCurso = _fasesData.filter(f => f.estado === 'en_curso').length;
+  const avgPct = total ? Math.round(_fasesData.reduce((s,f) => s + (f.porcentaje||0), 0) / total) : 0;
+  document.getElementById('fasesResumen').innerHTML = [
+    { label: 'Total fases', val: total, cls: '' },
+    { label: 'En curso', val: enCurso, cls: enCurso > 0 ? 'warn' : '' },
+    { label: 'Completadas', val: completadas, cls: 'ok' },
+    { label: 'Progreso medio', val: `${avgPct}%`, cls: avgPct >= 80 ? 'ok' : '' },
+  ].map(k => `<div class="kpi-card"><div class="kpi-value ${k.cls}">${k.val}</div><div class="kpi-label">${k.label}</div></div>`).join('');
+  const estadoCls = { pendiente: 'warn', en_curso: 'info', completada: 'ok', pausada: 'muted' };
+  document.getElementById('fasesLista').innerHTML = _fasesData.length ? _fasesData.map(f => {
+    const pct = f.porcentaje || 0;
+    const plIcon = { pendiente:'⏳', en_curso:'🔨', completada:'✅', pausada:'⏸' }[f.estado] || '❓';
+    return `<div class="section-card" style="padding:16px;cursor:pointer" onclick="abrirModalFaseEditar(${f.id})">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+        <span style="font-size:18px">${plIcon}</span>
+        <div style="flex:1">
+          <div style="font-family:'Montserrat',sans-serif;font-weight:700;font-size:14px">${f.nombre}</div>
+          ${f.responsable ? `<div style="font-size:11px;color:var(--muted)">${f.responsable}</div>` : ''}
+        </div>
+        <span class="badge badge-${estadoCls[f.estado] || 'muted'}">${f.estado||'—'}</span>
+        <span style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:18px;color:${pct>=100?'var(--green)':pct>=50?'var(--yellow)':'var(--muted)'}">${pct}%</span>
+      </div>
+      <div style="background:var(--border);border-radius:4px;height:8px;margin-bottom:8px">
+        <div style="background:${pct>=100?'var(--green)':pct>=50?'#2563eb':'var(--muted)'};height:100%;border-radius:4px;width:${pct}%;transition:width .3s"></div>
+      </div>
+      <div style="display:flex;gap:16px;font-size:11px;color:var(--muted)">
+        ${f.fecha_inicio_plan ? `<span>Plan: ${f.fecha_inicio_plan} → ${f.fecha_fin_plan||'?'}</span>` : ''}
+        ${f.fecha_inicio_real ? `<span>Real: ${f.fecha_inicio_real} → ${f.fecha_fin_real||'en curso'}</span>` : ''}
+      </div>
+      ${f.descripcion ? `<div style="margin-top:6px;font-size:12px;color:var(--muted)">${f.descripcion}</div>` : ''}
+    </div>`;
+  }).join('') : '<div class="empty-state"><div class="empty-icon">📅</div><div class="empty-text">Sin fases — añade la primera</div></div>';
+}
+function abrirModalFase() {
+  const obraId = document.getElementById('fasesObraId')?.value;
+  if (!obraId) { toast('Selecciona una obra primero', 'err'); return; }
+  const hoy = new Date().toISOString().slice(0,10);
+  abrirModal('Nueva fase de obra', `
+    <div class="form-group"><div class="form-label">Nombre de la fase *</div><input class="form-input" id="mFaseNombre" placeholder="Ej: Estructura, Instalaciones eléctricas..."></div>
+    <div class="form-group"><div class="form-label">Descripción</div><textarea class="form-input" id="mFaseDesc" rows="2"></textarea></div>
+    <div class="form-row">
+      <div class="form-group"><div class="form-label">Inicio planificado</div><input class="form-input" id="mFaseIniPlan" type="date" value="${hoy}"></div>
+      <div class="form-group"><div class="form-label">Fin planificado</div><input class="form-input" id="mFaseFinPlan" type="date"></div>
+    </div>
+    <div class="form-group"><div class="form-label">Responsable</div><input class="form-input" id="mFaseResp" placeholder="Nombre del responsable de fase"></div>
+  `, async () => {
+    const nombre = document.getElementById('mFaseNombre').value.trim();
+    if (!nombre) { toast('El nombre es obligatorio', 'err'); return; }
+    const body = {
+      obra_id: parseInt(obraId),
+      nombre,
+      descripcion: document.getElementById('mFaseDesc').value.trim() || null,
+      fecha_inicio_plan: document.getElementById('mFaseIniPlan').value || null,
+      fecha_fin_plan: document.getElementById('mFaseFinPlan').value || null,
+      responsable: document.getElementById('mFaseResp').value.trim() || null,
+    };
+    const r = await api('/fases-obra', { method: 'POST', body: JSON.stringify(body) });
+    if (r.ok || r.id) { toast('Fase creada ✓', 'ok'); cerrarModal(); cargarFases(); }
+    else toast('Error al crear fase', 'err');
+  });
+}
+function abrirModalFaseEditar(id) {
+  const f = _fasesData.find(x => x.id === id);
+  if (!f) return;
+  abrirModal('Editar fase', `
+    <div class="form-group"><div class="form-label">Nombre *</div><input class="form-input" id="mFaseNombre" value="${esc(f.nombre||'')}"></div>
+    <div class="form-group"><div class="form-label">Estado</div>
+      <select class="form-select" id="mFaseEst">
+        <option value="pendiente" ${f.estado==='pendiente'?'selected':''}>⏳ Pendiente</option>
+        <option value="en_curso" ${f.estado==='en_curso'?'selected':''}>🔨 En curso</option>
+        <option value="completada" ${f.estado==='completada'?'selected':''}>✅ Completada</option>
+        <option value="pausada" ${f.estado==='pausada'?'selected':''}>⏸ Pausada</option>
+      </select>
+    </div>
+    <div class="form-group"><div class="form-label">Porcentaje completado</div>
+      <input class="form-input" id="mFasePct" type="number" min="0" max="100" value="${f.porcentaje||0}">
+    </div>
+    <div class="form-row">
+      <div class="form-group"><div class="form-label">Inicio real</div><input class="form-input" id="mFaseIniReal" type="date" value="${f.fecha_inicio_real||''}"></div>
+      <div class="form-group"><div class="form-label">Fin real</div><input class="form-input" id="mFaseFinReal" type="date" value="${f.fecha_fin_real||''}"></div>
+    </div>
+    <div class="form-group"><div class="form-label">Responsable</div><input class="form-input" id="mFaseResp" value="${esc(f.responsable||'')}"></div>
+    <div style="margin-top:12px"><button class="btn btn-danger btn-sm" onclick="eliminarFase(${f.id})">🗑 Eliminar fase</button></div>
+  `, async () => {
+    const nombre = document.getElementById('mFaseNombre').value.trim();
+    if (!nombre) { toast('El nombre es obligatorio', 'err'); return; }
+    const body = {
+      nombre,
+      estado: document.getElementById('mFaseEst').value,
+      porcentaje: parseInt(document.getElementById('mFasePct').value) || 0,
+      fecha_inicio_real: document.getElementById('mFaseIniReal').value || null,
+      fecha_fin_real: document.getElementById('mFaseFinReal').value || null,
+      responsable: document.getElementById('mFaseResp').value.trim() || null,
+    };
+    const r = await api(`/fases-obra/${f.id}`, { method: 'PUT', body: JSON.stringify(body) });
+    if (r.ok) { toast('Fase actualizada ✓', 'ok'); cerrarModal(); cargarFases(); }
+    else toast('Error al actualizar', 'err');
+  });
+}
+async function eliminarFase(id) {
+  if (!confirm('¿Eliminar esta fase?')) return;
+  const r = await api(`/fases-obra/${id}`, { method: 'DELETE' });
+  if (r.ok || r.deleted) { toast('Fase eliminada', 'ok'); cerrarModal(); cargarFases(); }
+  else toast('Error al eliminar', 'err');
+}
+
+// ── PARTES DIARIOS (panel) ────────────────────────────────────────
+let tblPartes = null, _partesData = [];
+async function cargarPartesPanel() {
+  if (document.getElementById('filterPartesObra')?.options.length <= 1) poblarSelectObras('filterPartesObra');
+  const obraId = document.getElementById('filterPartesObra')?.value || '';
+  const r = await api('/partes-trabajo' + (obraId ? `?obra_id=${obraId}` : ''));
+  _partesData = Array.isArray(r) ? r : (r?.partes || r?.data || []);
+  const total = _partesData.length;
+  document.getElementById('partesResumen').innerHTML = [
+    { label: 'Total partes', val: total, cls: '' },
+  ].map(k => `<div class="kpi-card"><div class="kpi-value ${k.cls}">${k.val}</div><div class="kpi-label">${k.label}</div></div>`).join('');
+  if (tblPartes) { tblPartes.replaceData(_partesData); return; }
+  tblPartes = new Tabulator('#tblPartes', {
+    data: _partesData, layout: 'fitColumns', responsiveLayout: 'collapse',
+    pagination: 'local', paginationSize: 20,
+    placeholder: '<div class="empty-state"><div class="empty-icon">📋</div><div class="empty-text">Sin partes diarios</div></div>',
+    initialSort: [{ column: 'fecha', dir: 'desc' }],
+    columns: [
+      { title: 'Fecha', field: 'fecha', width: 110, formatter: (cell) => fmtFecha(cell.getValue()) },
+      { title: 'Obra', field: 'obra', minWidth: 140 },
+      { title: 'Encargado', field: 'nombre_encargado', width: 140 },
+      { title: 'Descripción', field: 'descripcion', minWidth: 200, formatter: (cell) => (cell.getValue()||'').slice(0,80) },
+      { title: 'Personal', field: 'personal', width: 100, hozAlign: 'center', formatter: (cell) => {
+        try { return (JSON.parse(cell.getValue()||'[]').filter(x=>x.nombre).length) + ' pers.'; } catch { return '—'; }
+      }},
+    ]
+  });
+  document.getElementById('searchPartes')?.addEventListener('input', (e) => {
+    if (tblPartes) tblPartes.setFilter([{field:'descripcion',type:'like',value:e.target.value},{field:'obra',type:'like',value:e.target.value}]);
+  });
+}
+
 // ── SUBCONTRATAS / PROVEEDORES ──────────────────────────────────
 let tblSubc = null, _subcData = [];
 async function cargarSubcontratas() {
