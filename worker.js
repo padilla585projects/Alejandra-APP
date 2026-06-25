@@ -4713,6 +4713,14 @@ export default {
       }
       // -- Dashboard Global Multi-Obra (NEW-68) ---------------------------------
       if (path === '/dashboard-global' && method === 'GET') return await getDashboardGlobal(request, env);
+      // ── Visitas de Obra (NEW-70) ───────────────────────────────────────────────
+      if (path === '/visitas-obra' && method === 'GET')  return await getVisitasObra(request, env);
+      if (path === '/visitas-obra' && method === 'POST') return await crearVisitaObra(request, env);
+      if (path.startsWith('/visitas-obra/')) {
+        const _vid = parseInt(path.split('/visitas-obra/')[1]);
+        if (method === 'PUT')    return await actualizarVisitaObra(_vid, request, env);
+        if (method === 'DELETE') return await eliminarVisitaObra(_vid, request, env);
+      }
       // â”€â”€ RFIs â€” Consultas TÃ©cnicas (NEW-34) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
       if (path === '/rfis'                  && method === 'GET')  return await getRfis(request, env);
       if (path === '/rfis'                  && method === 'POST') return await crearRfi(request, env);
@@ -16511,4 +16519,97 @@ async function getDashboardGlobal(request, env) {
   };
 
   return json({ totales, obras: obraStats });
+}
+
+// ── VISITAS DE OBRA (NEW-70) ──────────────────────────────────────────────────
+async function ensureVisitasObraTable(env) {
+  await env.DB.prepare(`
+    CREATE TABLE IF NOT EXISTS visitas_obra (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      empresa_id INTEGER NOT NULL,
+      obra_id INTEGER,
+      fecha TEXT NOT NULL,
+      hora_entrada TEXT,
+      hora_salida TEXT,
+      nombre TEXT NOT NULL,
+      empresa_visitante TEXT,
+      rol TEXT DEFAULT 'otro',
+      proposito TEXT,
+      areas_visitadas TEXT,
+      observaciones TEXT,
+      autorizado_por TEXT,
+      creado_por TEXT,
+      created_at TEXT DEFAULT (datetime('now'))
+    )
+  `).run();
+}
+
+async function getVisitasObra(request, env) {
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  await ensureVisitasObraTable(env);
+  const url = new URL(request.url);
+  let sql = `SELECT v.*, o.nombre as obra_nombre FROM visitas_obra v
+    LEFT JOIN obras o ON v.obra_id = o.id WHERE v.empresa_id = ?`;
+  const params = [empresa_id];
+  const obraId = url.searchParams.get('obra_id');
+  if (obraId) { sql += ' AND v.obra_id = ?'; params.push(parseInt(obraId)); }
+  const rol = url.searchParams.get('rol');
+  if (rol) { sql += ' AND v.rol = ?'; params.push(rol); }
+  const desde = url.searchParams.get('desde');
+  if (desde) { sql += ' AND v.fecha >= ?'; params.push(desde); }
+  const hasta = url.searchParams.get('hasta');
+  if (hasta) { sql += ' AND v.fecha <= ?'; params.push(hasta); }
+  sql += ' ORDER BY v.fecha DESC, v.hora_entrada DESC LIMIT 300';
+  const { results } = await env.DB.prepare(sql).bind(...params).all();
+  return json(results);
+}
+
+async function crearVisitaObra(request, env) {
+  const { empresa_id, obra_id, nombre } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  await ensureVisitasObraTable(env);
+  const body = await request.json().catch(() => ({}));
+  const { nombre: nombreV, fecha, hora_entrada, hora_salida, empresa_visitante, rol = 'otro', proposito, areas_visitadas, observaciones, autorizado_por } = body;
+  if (!nombreV?.trim()) return err('El nombre del visitante es obligatorio', 400);
+  if (!fecha) return err('La fecha es obligatoria', 400);
+  const obraFinal = body.obra_id ?? obra_id ?? null;
+  const r = await env.DB.prepare(
+    `INSERT INTO visitas_obra (empresa_id, obra_id, fecha, hora_entrada, hora_salida, nombre, empresa_visitante, rol, proposito, areas_visitadas, observaciones, autorizado_por, creado_por)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`
+  ).bind(empresa_id, obraFinal, fecha, hora_entrada || null, hora_salida || null, nombreV.trim(), empresa_visitante || null, rol, proposito || null, areas_visitadas || null, observaciones || null, autorizado_por || nombre || null, nombre || null).run();
+  return json({ ok: true, id: r.meta.last_row_id }, 201);
+}
+
+async function actualizarVisitaObra(id, request, env) {
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const body = await request.json().catch(() => ({}));
+  const v = await env.DB.prepare('SELECT * FROM visitas_obra WHERE id=? AND empresa_id=?').bind(id, empresa_id).first();
+  if (!v) return err('Visita no encontrada', 404);
+  const campos = [], vals = [];
+  if (body.nombre !== undefined)           { campos.push('nombre=?');            vals.push(body.nombre?.trim()||v.nombre); }
+  if (body.fecha !== undefined)            { campos.push('fecha=?');             vals.push(body.fecha||v.fecha); }
+  if (body.hora_entrada !== undefined)     { campos.push('hora_entrada=?');      vals.push(body.hora_entrada||null); }
+  if (body.hora_salida !== undefined)      { campos.push('hora_salida=?');       vals.push(body.hora_salida||null); }
+  if (body.empresa_visitante !== undefined){ campos.push('empresa_visitante=?'); vals.push(body.empresa_visitante||null); }
+  if (body.rol !== undefined)              { campos.push('rol=?');               vals.push(body.rol||'otro'); }
+  if (body.proposito !== undefined)        { campos.push('proposito=?');         vals.push(body.proposito||null); }
+  if (body.areas_visitadas !== undefined)  { campos.push('areas_visitadas=?');   vals.push(body.areas_visitadas||null); }
+  if (body.observaciones !== undefined)    { campos.push('observaciones=?');     vals.push(body.observaciones||null); }
+  if (body.autorizado_por !== undefined)   { campos.push('autorizado_por=?');    vals.push(body.autorizado_por||null); }
+  if (body.obra_id !== undefined)          { campos.push('obra_id=?');           vals.push(body.obra_id||null); }
+  if (!campos.length) return json({ ok: true });
+  vals.push(id, empresa_id);
+  await env.DB.prepare(`UPDATE visitas_obra SET ${campos.join(',')} WHERE id=? AND empresa_id=?`).bind(...vals).run();
+  return json({ ok: true });
+}
+
+async function eliminarVisitaObra(id, request, env) {
+  const { empresa_id, rol } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const v = await env.DB.prepare('SELECT id FROM visitas_obra WHERE id=? AND empresa_id=?').bind(id, empresa_id).first();
+  if (!v) return err('Visita no encontrada', 404);
+  await env.DB.prepare('DELETE FROM visitas_obra WHERE id=? AND empresa_id=?').bind(id, empresa_id).run();
+  return json({ ok: true, deleted: true });
 }

@@ -533,6 +533,10 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
     <button class="nav-item" data-page="contactosObra" onclick="navTo('contactosObra')">
       <span class="nav-icon">👥</span> Directorio de Contactos
     </button>
+    <button class="nav-item" data-page="visitasObra" onclick="navTo('visitasObra')">
+      <span class="nav-icon">🪪</span> Registro de Visitas
+      <span class="nav-badge" id="visitasBadge" style="display:none">!</span>
+    </button>
     <button class="nav-item" data-page="actasReunion" onclick="navTo('actasReunion')">
       <span class="nav-icon">📋</span> Actas de Reunión
     </button>
@@ -1504,6 +1508,108 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
             <button class="btn btn-secondary" onclick="exportarTabla(tblToolboxTalks,'toolbox-talks')">⬇ CSV</button>
           </div>
           <div class="tbl-wrap"><div id="tblToolboxTalks"></div></div>
+        </div>
+      </div>
+
+      <!-- VISITAS DE OBRA (NEW-70) -->
+      <div class="page" id="pageVisitasObra">
+        <div class="page-title">🪪 Registro de Visitas de Obra</div>
+        <div class="page-sub">Control de acceso — clientes, inspectores, arquitectos y visitas técnicas</div>
+        <div class="tbl-toolbar" style="flex-wrap:wrap;gap:8px;margin-bottom:16px">
+          <input class="tbl-search" id="searchVisitas" placeholder="🔍 Buscar nombre, empresa...">
+          <select class="tbl-search" id="filterVisitasObra" style="min-width:220px" onchange="cargarVisitasObra()">
+            <option value="">🏗 Todas las obras</option>
+          </select>
+          <select class="tbl-search" id="filterVisitasRol" style="min-width:160px" onchange="cargarVisitasObra()">
+            <option value="">Todos los tipos</option>
+            <option value="cliente">👔 Cliente</option>
+            <option value="arquitecto">🏛 Arquitecto</option>
+            <option value="inspector">🔍 Inspector</option>
+            <option value="proveedor">📦 Proveedor</option>
+            <option value="subcontrata">🏗 Subcontrata</option>
+            <option value="visita_tecnica">⚙️ Visita técnica</option>
+            <option value="otro">📋 Otro</option>
+          </select>
+          <input type="date" class="tbl-search" id="filterVisitasDesde" onchange="cargarVisitasObra()" title="Desde">
+          <input type="date" class="tbl-search" id="filterVisitasHasta" onchange="cargarVisitasObra()" title="Hasta">
+          <button class="btn btn-primary" onclick="abrirModalVisita()">+ Nueva visita</button>
+          <button class="btn btn-secondary" onclick="exportarTabla(tblVisitas,'visitas-obra')">⬇ CSV</button>
+          <button class="btn btn-secondary" onclick="cargarVisitasObra()">🔄</button>
+        </div>
+        <!-- KPI strip -->
+        <div id="visitasKpi" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;margin-bottom:16px"></div>
+        <div class="tbl-wrap"><div id="tblVisitas"></div></div>
+
+        <!-- MODAL VISITA -->
+        <div class="modal-overlay" id="modalVisita" style="display:none" onclick="if(event.target===this)cerrarModalVisita()">
+          <div class="modal-content" style="max-width:540px">
+            <div class="modal-header">
+              <span class="modal-title" id="tituloModalVisita">Nueva visita</span>
+              <button class="modal-close" onclick="cerrarModalVisita()">✕</button>
+            </div>
+            <div class="modal-body">
+              <input type="hidden" id="visitaId">
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+                <div style="grid-column:span 2">
+                  <label class="form-label">Nombre del visitante *</label>
+                  <input class="form-input" id="vNombre" placeholder="Nombre y apellidos">
+                </div>
+                <div>
+                  <label class="form-label">Empresa visitante</label>
+                  <input class="form-input" id="vEmpresa" placeholder="Empresa u organismo">
+                </div>
+                <div>
+                  <label class="form-label">Tipo de visita</label>
+                  <select class="form-input" id="vRol">
+                    <option value="cliente">👔 Cliente</option>
+                    <option value="arquitecto">🏛 Arquitecto</option>
+                    <option value="inspector">🔍 Inspector / Autoridad</option>
+                    <option value="proveedor">📦 Proveedor</option>
+                    <option value="subcontrata">🏗 Subcontrata</option>
+                    <option value="visita_tecnica">⚙️ Visita técnica</option>
+                    <option value="otro">📋 Otro</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="form-label">Fecha *</label>
+                  <input class="form-input" type="date" id="vFecha">
+                </div>
+                <div>
+                  <label class="form-label">Hora entrada</label>
+                  <input class="form-input" type="time" id="vHoraEntrada">
+                </div>
+                <div>
+                  <label class="form-label">Hora salida</label>
+                  <input class="form-input" type="time" id="vHoraSalida">
+                </div>
+                <div>
+                  <label class="form-label">Obra</label>
+                  <select class="form-input" id="vObraId"><option value="">— Sin obra específica —</option></select>
+                </div>
+                <div style="grid-column:span 2">
+                  <label class="form-label">Propósito de la visita</label>
+                  <input class="form-input" id="vProposito" placeholder="Ej: Inspección de seguridad, Revisión de calidad...">
+                </div>
+                <div style="grid-column:span 2">
+                  <label class="form-label">Áreas visitadas</label>
+                  <input class="form-input" id="vAreas" placeholder="Ej: Planta 2, Zona A, Nave principal...">
+                </div>
+                <div style="grid-column:span 2">
+                  <label class="form-label">Autorizado por</label>
+                  <input class="form-input" id="vAutorizadoPor" placeholder="Encargado o responsable que autorizó">
+                </div>
+                <div style="grid-column:span 2">
+                  <label class="form-label">Observaciones</label>
+                  <textarea class="form-input" id="vObservaciones" rows="2" placeholder="Notas adicionales sobre la visita..."></textarea>
+                </div>
+              </div>
+            </div>
+            <div class="modal-footer">
+              <button class="btn btn-danger" id="btnEliminarVisita" style="display:none" onclick="eliminarVisita()">🗑 Eliminar</button>
+              <button class="btn btn-secondary" onclick="cerrarModalVisita()">Cancelar</button>
+              <button class="btn btn-primary" onclick="guardarVisita()">💾 Guardar</button>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -4741,6 +4847,7 @@ const PAGE_TITLES = {
   cierreObra: '🏁 Checklist de Cierre de Obra',
   certificaciones: '🧾 Certificaciones de Obra',
   calendario: '📅 Calendario de Obra',
+  visitasObra: '🪪 Registro de Visitas de Obra',
 };
 
 const PAGE_LOADERS = {
@@ -4812,6 +4919,7 @@ const PAGE_LOADERS = {
   cierreObra: cargarCierreObra,
   certificaciones: cargarCertificaciones,
   calendario: cargarCalendario,
+  visitasObra: cargarVisitasObra,
 };
 
 let currentPage = '';
@@ -4912,6 +5020,7 @@ const SYNC_INTERVALS = {
   cierreObra: 60,
   certificaciones: 90,
   calendario:      60,
+  visitasObra:     90,
 };
 
 let _syncTimer = null, _syncLabelTimer = null, _syncLastTs = null;
@@ -19068,6 +19177,150 @@ async function eliminarCalEvento() {
     toast('Evento eliminado','ok');
     cerrarModalCalEvento();
     calPanelCargar();
+  } else { toast('Error al eliminar','err'); }
+}
+
+// ── VISITAS DE OBRA (NEW-70) ──────────────────────────────────────────────────
+let tblVisitas = null, _visitasData = [];
+const VISITA_ROL_COLOR = { cliente:'#6366f1', arquitecto:'#8b5cf6', inspector:'#ef4444', proveedor:'#f59e0b', subcontrata:'#0ea5e9', visita_tecnica:'#10b981', otro:'#64748b' };
+const VISITA_ROL_ICON  = { cliente:'👔', arquitecto:'🏛', inspector:'🔍', proveedor:'📦', subcontrata:'🏗', visita_tecnica:'⚙️', otro:'📋' };
+
+async function cargarVisitasObra() {
+  if (document.getElementById('filterVisitasObra')?.options.length <= 1)
+    await poblarSelectObras('filterVisitasObra');
+  const obra   = document.getElementById('filterVisitasObra')?.value || '';
+  const rol    = document.getElementById('filterVisitasRol')?.value || '';
+  const desde  = document.getElementById('filterVisitasDesde')?.value || '';
+  const hasta  = document.getElementById('filterVisitasHasta')?.value || '';
+  let url = '/visitas-obra?';
+  if (obra)  url += `obra_id=${obra}&`;
+  if (rol)   url += `rol=${rol}&`;
+  if (desde) url += `desde=${desde}&`;
+  if (hasta) url += `hasta=${hasta}&`;
+  const r = await apiCall(url).catch(() => []);
+  _visitasData = Array.isArray(r) ? r : (r?.results || []);
+  visitasRenderKpi();
+  visitasRenderTabla();
+}
+
+function visitasRenderKpi() {
+  const kpi = document.getElementById('visitasKpi'); if (!kpi) return;
+  const hoy = new Date().toISOString().slice(0,10);
+  const ayer = new Date(Date.now()-86400000).toISOString().slice(0,10);
+  const semana = new Date(Date.now()-7*86400000).toISOString().slice(0,10);
+  const mes = new Date().toISOString().slice(0,7);
+  const hoy7  = _visitasData.filter(v => v.fecha >= semana).length;
+  const hoyD  = _visitasData.filter(v => v.fecha === hoy).length;
+  const mesD  = _visitasData.filter(v => (v.fecha||'').startsWith(mes)).length;
+  const insp  = _visitasData.filter(v => v.rol === 'inspector').length;
+  kpi.innerHTML = `
+    <div class="kpi-card"><div class="kpi-icon">🪪</div><div class="kpi-value">${_visitasData.length}</div><div class="kpi-label">Total visitas</div></div>
+    <div class="kpi-card"><div class="kpi-icon">📅</div><div class="kpi-value" style="color:#6366f1">${mesD}</div><div class="kpi-label">Este mes</div></div>
+    <div class="kpi-card"><div class="kpi-icon">🗓️</div><div class="kpi-value" style="color:#10b981">${hoy7}</div><div class="kpi-label">Últimos 7 días</div></div>
+    <div class="kpi-card"><div class="kpi-icon">🔍</div><div class="kpi-value" style="color:#ef4444">${insp}</div><div class="kpi-label">Inspecciones</div></div>
+  `;
+}
+
+function visitasRenderTabla() {
+  const si = document.getElementById('searchVisitas');
+  if (!tblVisitas) {
+    tblVisitas = new Tabulator('#tblVisitas', {
+      data: _visitasData, layout: 'fitColumns', responsiveLayout: 'collapse',
+      pagination: 'local', paginationSize: 25,
+      columns: [
+        { title:'Fecha',    field:'fecha',    width:100, sorter:'date' },
+        { title:'Entrada',  field:'hora_entrada', width:80 },
+        { title:'Salida',   field:'hora_salida',  width:80 },
+        { title:'Nombre',   field:'nombre',   minWidth:160 },
+        { title:'Empresa',  field:'empresa_visitante', minWidth:130 },
+        { title:'Tipo',     field:'rol',      width:130, formatter: c => {
+          const v = c.getValue()||'otro';
+          const color = VISITA_ROL_COLOR[v]||'#64748b';
+          const icon  = VISITA_ROL_ICON[v]||'📋';
+          return `<span style="background:${color}22;color:${color};border:1px solid ${color}44;border-radius:20px;padding:2px 8px;font-size:11px;font-weight:700">${icon} ${v}</span>`;
+        }},
+        { title:'Obra',     field:'obra_nombre', width:160 },
+        { title:'Propósito', field:'proposito', minWidth:150 },
+        { title:'Autorizado por', field:'autorizado_por', width:130 },
+        { title:'Acc.', field:'id', hozAlign:'center', width:65, headerSort:false,
+          formatter: c => `<button class="tbl-btn" onclick="editarVisita(${c.getValue()})">✏️</button>` },
+      ]
+    });
+    if (si) si.oninput = () => tblVisitas?.setFilter([
+      {field:'nombre', type:'like', value:si.value},
+      {field:'empresa_visitante', type:'like', value:si.value},
+    ]);
+  } else {
+    tblVisitas.setData(_visitasData);
+  }
+}
+
+function abrirModalVisita(v) {
+  document.getElementById('visitaId').value = v?.id || '';
+  document.getElementById('tituloModalVisita').textContent = v ? 'Editar visita' : 'Nueva visita';
+  document.getElementById('vNombre').value = v?.nombre || '';
+  document.getElementById('vEmpresa').value = v?.empresa_visitante || '';
+  document.getElementById('vRol').value = v?.rol || 'otro';
+  document.getElementById('vFecha').value = v?.fecha || new Date().toISOString().slice(0,10);
+  document.getElementById('vHoraEntrada').value = v?.hora_entrada || '';
+  document.getElementById('vHoraSalida').value = v?.hora_salida || '';
+  document.getElementById('vProposito').value = v?.proposito || '';
+  document.getElementById('vAreas').value = v?.areas_visitadas || '';
+  document.getElementById('vAutorizadoPor').value = v?.autorizado_por || '';
+  document.getElementById('vObservaciones').value = v?.observaciones || '';
+  document.getElementById('btnEliminarVisita').style.display = v ? '' : 'none';
+  const selObra = document.getElementById('vObraId');
+  if (selObra.options.length <= 1) poblarSelectObras('vObraId').then(() => { if (v?.obra_id) selObra.value = v.obra_id; });
+  else if (v?.obra_id) selObra.value = v.obra_id; else selObra.value = '';
+  document.getElementById('modalVisita').style.display = 'flex';
+}
+
+function cerrarModalVisita() { document.getElementById('modalVisita').style.display = 'none'; }
+
+function editarVisita(id) {
+  const v = _visitasData.find(x => x.id === id);
+  if (v) abrirModalVisita(v);
+}
+
+async function guardarVisita() {
+  const id     = document.getElementById('visitaId').value;
+  const nombre = document.getElementById('vNombre').value.trim();
+  if (!nombre) { toast('El nombre es obligatorio','err'); return; }
+  const fecha  = document.getElementById('vFecha').value;
+  if (!fecha)  { toast('La fecha es obligatoria','err'); return; }
+  const body = {
+    nombre,
+    empresa_visitante: document.getElementById('vEmpresa').value || null,
+    rol:               document.getElementById('vRol').value,
+    fecha,
+    hora_entrada:  document.getElementById('vHoraEntrada').value || null,
+    hora_salida:   document.getElementById('vHoraSalida').value || null,
+    obra_id:       document.getElementById('vObraId').value || null,
+    proposito:     document.getElementById('vProposito').value || null,
+    areas_visitadas: document.getElementById('vAreas').value || null,
+    autorizado_por:  document.getElementById('vAutorizadoPor').value || null,
+    observaciones:   document.getElementById('vObservaciones').value || null,
+  };
+  const r = id
+    ? await apiCall(`/visitas-obra/${id}`, { method:'PUT', body:JSON.stringify(body) }).catch(()=>({}))
+    : await apiCall('/visitas-obra', { method:'POST', body:JSON.stringify(body) }).catch(()=>({}));
+  if (r?.ok || r?.id) {
+    toast(id ? 'Visita actualizada ✓' : 'Visita registrada ✓', 'ok');
+    cerrarModalVisita();
+    tblVisitas = null;
+    cargarVisitasObra();
+  } else { toast('Error al guardar','err'); }
+}
+
+async function eliminarVisita() {
+  const id = document.getElementById('visitaId').value;
+  if (!id || !confirm('¿Eliminar esta visita?')) return;
+  const r = await apiCall(`/visitas-obra/${id}`, { method:'DELETE' }).catch(()=>({}));
+  if (r?.ok || r?.deleted) {
+    toast('Visita eliminada','ok');
+    cerrarModalVisita();
+    tblVisitas = null;
+    cargarVisitasObra();
   } else { toast('Error al eliminar','err'); }
 }
 
