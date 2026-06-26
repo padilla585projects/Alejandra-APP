@@ -6033,7 +6033,8 @@ async function getBobinas(request, env) {
   const obraFilter = isUnrestrictedAdmin ? obraParam : (obraId || null);
   // Admins: dept filter solo si se pasa explÃ­citamente (?departamento=X); operarios: siempre su dept
   const deptParam = url.searchParams.get('departamento');
-  const deptFilter = deptParam || (!isAdminRole ? departamento : null);
+  // Non-admin roles always see only their own department (ignore query param override)
+  const deptFilter = !isAdminRole ? departamento : (deptParam || null);
 
   let sql = 'SELECT b.*, o.nombre as obra_nombre FROM bobinas b LEFT JOIN obras o ON b.obra_id = o.id WHERE b.empresa_id = ?';
   const params = [empresa_id];
@@ -6173,7 +6174,8 @@ async function getPemp(request, env) {
   const isAdminRole = isUnrestrictedAdmin || isJefeObra;
   const obraFilter = isUnrestrictedAdmin ? obraParam : (obraId || null);
   const deptParam = url.searchParams.get('departamento');
-  const deptFilter = deptParam || (!isAdminRole ? departamento : null);
+  // Non-admin roles always see only their own department (ignore query param override)
+  const deptFilter = !isAdminRole ? departamento : (deptParam || null);
 
   let sql = 'SELECT p.*, o.nombre as obra_nombre FROM pemp p LEFT JOIN obras o ON p.obra_id = o.id WHERE p.empresa_id = ?';
   const params = [empresa_id];
@@ -7821,7 +7823,8 @@ async function getHerramientas(request, env) {
   const isAdminRole = isSuperadmin || isEmpresaAdmin || isJefeObra;
   const todos = url.searchParams.get('todos') === '1' && (isSuperadmin || isEmpresaAdmin);
   const deptParam = url.searchParams.get('departamento');
-  const deptFilter = deptParam || (!todos ? departamento : null);
+  // Non-admin roles always see only their own department (ignore query param override)
+  const deptFilter = !isAdminRole ? departamento : (deptParam || (todos ? null : departamento));
   let sql = `SELECT h.*, t.nombre as tipo_nombre, o.nombre as obra_nombre, k.numero_kit
              FROM herramientas h
              LEFT JOIN tipos_herramienta t ON h.tipo_id = t.id
@@ -10982,7 +10985,9 @@ async function getIncidencias(request, env) {
   // sin_dept=1 Ã¢â€ â€™ admins/jefes pueden ver todas las incidencias sin filtrar por dept
   const sinDept = url.searchParams.get('sin_dept') === '1' && (isSuperadmin || isEmpresaAdmin || isJefeObra || isDesarrollador);
   if (!sinDept) {
-    const dept = url.searchParams.get('departamento') || departamento;
+    // Non-admin roles forced to their own dept; admins can filter via param
+    const isAdminIncidencias = isSuperadmin || isEmpresaAdmin || isJefeObra || isDesarrollador;
+    const dept = isAdminIncidencias ? (url.searchParams.get('departamento') || departamento) : departamento;
     if (dept) { sql += ' AND i.departamento = ?'; params.push(dept); }
   }
   const estado = url.searchParams.get('estado');
