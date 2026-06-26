@@ -6574,9 +6574,13 @@ async function crearUsuario(request, env) {
 }
 
 async function eliminarUsuario(id, request, env) {
-  const { isSuperadmin, isAdmin, isEmpresaAdmin, isEncargado, obraId } = await getAuth(request, env);
+  const { isSuperadmin, isAdmin, isEmpresaAdmin, isEncargado, obraId, empresa_id } = await getAuth(request, env);
+  if (!empresa_id && !isSuperadmin) return err('No autorizado', 403);
 
-  const usuario = await env.DB.prepare('SELECT * FROM usuarios WHERE id = ?').bind(id).first();
+  // Scope SELECT to empresa_id (superadmin can access any)
+  const usuario = isSuperadmin
+    ? await env.DB.prepare('SELECT * FROM usuarios WHERE id = ?').bind(id).first()
+    : await env.DB.prepare('SELECT * FROM usuarios WHERE id = ? AND empresa_id = ?').bind(id, empresa_id).first();
   if (!usuario) return err('Usuario no encontrado', 404);
 
   if (!isSuperadmin && !isAdmin && !isEmpresaAdmin) {
@@ -6584,17 +6588,27 @@ async function eliminarUsuario(id, request, env) {
     if (!isEncargado) return err('No autorizado', 403);
   }
 
-  // Liberar credenciales Ãºnicas para que puedan reutilizarse en otro usuario
-  await env.DB.prepare(
-    'UPDATE usuarios SET activo = 0, email = NULL, password_hash = NULL, codigo = \'_del_\' || id WHERE id = ?'
-  ).bind(id).run();
+  // Liberar credenciales unicas — siempre scoped a empresa_id
+  if (isSuperadmin) {
+    await env.DB.prepare(
+      'UPDATE usuarios SET activo = 0, email = NULL, password_hash = NULL, codigo = \'_del_\' || id WHERE id = ?'
+    ).bind(id).run();
+  } else {
+    await env.DB.prepare(
+      'UPDATE usuarios SET activo = 0, email = NULL, password_hash = NULL, codigo = \'_del_\' || id WHERE id = ? AND empresa_id = ?'
+    ).bind(id, empresa_id).run();
+  }
   return json({ ok: true, mensaje: 'Usuario eliminado' });
 }
 
 async function editarUsuario(id, request, env) {
-  const { isSuperadmin, isAdmin, isEmpresaAdmin, isEncargado, obraId } = await getAuth(request, env);
+  const { isSuperadmin, isAdmin, isEmpresaAdmin, isEncargado, obraId, empresa_id } = await getAuth(request, env);
+  if (!empresa_id && !isSuperadmin) return err('No autorizado', 403);
 
-  const usuario = await env.DB.prepare('SELECT * FROM usuarios WHERE id = ?').bind(id).first();
+  // Scope SELECT to empresa_id (superadmin can access any)
+  const usuario = isSuperadmin
+    ? await env.DB.prepare('SELECT * FROM usuarios WHERE id = ?').bind(id).first()
+    : await env.DB.prepare('SELECT * FROM usuarios WHERE id = ? AND empresa_id = ?').bind(id, empresa_id).first();
   if (!usuario) return err('Usuario no encontrado', 404);
 
   const body = await request.json().catch(() => ({}));
@@ -6606,17 +6620,26 @@ async function editarUsuario(id, request, env) {
     // Encargado solo puede asignar su propia obra (no la de otro encargado)
     if (body.obra_id !== undefined && body.obra_id !== null && parseInt(body.obra_id) !== obraId) return err('No autorizado', 403);
   }
-  const campos = ['nombre', 'codigo', 'rol', 'obra_id', 'departamento', 'roles_extra'];
+  // roles_extra solo editable por superadmin/admin — evitar escalada de privilegios
+  const campos = (isSuperadmin || isAdmin)
+    ? ['nombre', 'codigo', 'rol', 'obra_id', 'departamento', 'roles_extra']
+    : ['nombre', 'codigo', 'rol', 'obra_id', 'departamento'];
   const sets = [];
   const vals = [];
   for (const c of campos) {
     if (body[c] !== undefined) { sets.push(`${c} = ?`); vals.push(body[c]); }
   }
   if (sets.length === 0) return err('No hay campos para actualizar');
-  vals.push(id);
+  if (isSuperadmin) {
+    vals.push(id);
+  } else {
+    vals.push(id);
+    vals.push(empresa_id);
+  }
 
   try {
-    await env.DB.prepare(`UPDATE usuarios SET ${sets.join(', ')} WHERE id = ?`).bind(...vals).run();
+    const whereClause = isSuperadmin ? 'WHERE id = ?' : 'WHERE id = ? AND empresa_id = ?';
+    await env.DB.prepare(`UPDATE usuarios SET ${sets.join(', ')} ${whereClause}`).bind(...vals).run();
 
     // Si cambiÃ³ obra_id, sincronizar todas las sesiones activas del usuario
     if (body.obra_id !== undefined) {
@@ -6716,9 +6739,15 @@ async function addCatalogo(tabla, request, env) {
 
 async function deleteCatalogo(tabla, id, request, env) {
   if (!CATALOG_WHITELIST.has(tabla)) return err('Tabla no permitida', 400);
-  const { rol } = await getAuth(request, env);
-  if (rol === 'operario') return err('Sin permisos', 403);
-  await env.DB.prepare(`DELETE FROM ${tabla} WHERE id = ?`).bind(id).run();
+  const auth = await getAuth(request, env);
+  if (!auth.empresa_id) return err('No autorizado', 403);
+  if (auth.rol === 'operario') return err('Sin permisos', 403);
+  // Scope delete to empresa_id to prevent cross-company deletions
+  if (auth.isSuperadmin) {
+    await env.DB.prepare(`DELETE FROM ${tabla} WHERE id = ?`).bind(id).run();
+  } else {
+    await env.DB.prepare(`DELETE FROM ${tabla} WHERE id = ? AND empresa_id = ?`).bind(id, auth.empresa_id).run();
+  }
   return json({ ok: true });
 }
 
@@ -7105,6 +7134,8 @@ async function guardarLog(request, env) {
 }
 
 async function getLogs(request, env) {
+  const auth = await getAuth(request, env);
+  if (!auth || (!auth.isSuperadmin && !auth.isDesarrollador)) return err('Sin acceso a logs', 403);
   const url   = new URL(request.url);
   const limit = parseInt(url.searchParams.get('limit') || '50');
   const nivel = url.searchParams.get('nivel');
@@ -10737,17 +10768,31 @@ async function verificarInvitacion(request, env) {
 async function getUsuariosPendientes(request, env) {
   const s = await getAuth(request, env);
   if (!s || !hasRole(s, 'superadmin', 'empresa_admin')) return err('Sin permiso', 403);
-  const { results } = await env.DB.prepare(
-    'SELECT id, nombre, email, created_at FROM usuarios WHERE google_pending = 1 AND activo = 0 ORDER BY created_at DESC'
-  ).all();
+  // Superadmin ve todos; empresa_admin solo ve los de su empresa
+  let results;
+  if (s.isSuperadmin) {
+    ({ results } = await env.DB.prepare(
+      'SELECT id, nombre, email, created_at FROM usuarios WHERE google_pending = 1 AND activo = 0 ORDER BY created_at DESC'
+    ).all());
+  } else {
+    ({ results } = await env.DB.prepare(
+      'SELECT id, nombre, email, created_at FROM usuarios WHERE google_pending = 1 AND activo = 0 AND empresa_id = ? ORDER BY created_at DESC'
+    ).bind(s.empresa_id).all());
+  }
   return json({ ok: true, pendientes: results || [] });
 }
 
 async function aprobarUsuarioPendiente(request, env) {
   const s = await getAuth(request, env);
   if (!s || !hasRole(s, 'superadmin', 'empresa_admin')) return err('Sin permiso', 403);
-  const { id, empresa_id, rol, departamento, obra_id } = await request.json().catch(() => ({}));
+  const body = await request.json().catch(() => ({}));
+  const { id, rol, departamento, obra_id } = body;
+  // Security: empresa_admin solo puede aprobar usuarios en su propia empresa
+  const empresa_id = s.isSuperadmin ? (body.empresa_id || s.empresa_id) : s.empresa_id;
   if (!id || !empresa_id || !rol) return err('Faltan datos', 400);
+  // Verify the pending user exists (extra safety)
+  const pending = await env.DB.prepare('SELECT id FROM usuarios WHERE id=? AND google_pending=1').bind(id).first();
+  if (!pending) return err('Solicitud no encontrada', 404);
   await env.DB.prepare(
     'UPDATE usuarios SET activo=1, google_pending=0, empresa_id=?, rol=?, departamento=?, obra_id=? WHERE id=? AND google_pending=1'
   ).bind(empresa_id, rol, departamento || null, obra_id || null, id).run();
