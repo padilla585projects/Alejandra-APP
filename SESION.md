@@ -1,8 +1,43 @@
 ## ESTADO ACTUAL
 
 **Sesión:** LIBRE
-**Última sesión:** 26/06/2026 (continuación) — NEW-109 a NEW-113 (5 módulos nuevos)
-**Versión actual:** App PWA **v7.45** · worker  · commit 
+**Última sesión:** 26/06/2026 (auditoría seguridad + consolidación) — 13 vulnerabilidades corregidas
+**Versión actual:** App PWA **v7.49** · worker  (v7.48) · commit 
+---
+
+## RESUMEN SESIÓN 26/06/2026 (continuación 2) — Auditoría seguridad y consolidación v7.45→v7.49
+
+### Hecho ✅
+
+#### v7.46 — 7 vulnerabilidades críticas corregidas (worker.js)
+- getLogs: requiere auth superadmin/desarrollador (antes público)
+- eliminarUsuario: SELECT+UPDATE escopado a empresa_id (IDOR)
+- editarUsuario: idem + campo roles_extra restringido a superadmin/admin (escalada privilegios)
+- deleteCatalogo: DELETE escopado a empresa_id (cross-company deletion)
+- getUsuariosPendientes: empresa_admin solo ve pendientes de su empresa
+- aprobarUsuarioPendiente: empresa_id forzado desde sesión (no override desde body)
+
+#### v7.47 — Fixes medium + role gating en panel (worker.js + panel.html)
+- buscarItemSeg: guard empresa_id añadido
+- getEventos: encargado/operario no puede hacer bypass del filtro departamento via query param
+- 8 páginas financieras ocultas para rol operario: presupuesto, costesObra, finanzasObra, flujoCaja, facturasProveedor, cobrosCliente, comparativosOferta, globalDashboard
+
+#### v7.48 — Aislamiento departamentos en inventarios (worker.js + panel.html)
+- getBobinas, getCarretillas, getHerramientas: roles no-admin no pueden ver otra dept via ?departamento=X
+- getIncidencias: mismo fix (isAdminIncidencias)
+- KPI icon sizing: placeholder card ajustado a 20px (consistente con el resto)
+
+#### v7.49 — Fix UX modales (panel.html)
+- cerrarModal* de los 5 módulos nuevos (Cu/Ar/Fo/Rh/Ls) ahora llaman form.reset() al cerrar
+- Evita que re-abrir un modal tras cancelar una edición muestre campos sucios
+
+### Worker.js: 710 funciones, 0 dups | panel.html: 30.906 líneas
+### Commits: a16498e (v7.46) → ea69908 (v7.47) → 062776d (v7.48) → f19765c (v7.49)
+
+### Pendiente proxima sesion
+1. getPedidos: mismo bypass de departamento via query param (bajo impacto)
+2. NEW-114: candidatos → Escandallo de Precios, Libro Rdp, CAPA, Cronograma Pagos, Ensayos END
+
 ---
 
 ## RESUMEN SESIÓN 26/06/2026 (continuación) — NEW-109 a NEW-113 v7.41→v7.45
