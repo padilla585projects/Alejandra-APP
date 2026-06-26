@@ -770,6 +770,10 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
       <span class="nav-icon">🏆</span> Licitaciones
       <span class="nav-badge" id="licitBadge" style="display:none">0</span>
     </button>
+    <button class="nav-item" data-page="registroHormigonado" onclick="navTo('registroHormigonado')">
+      <span class="nav-icon">🏗️</span> Registro Hormigonado
+      <span class="nav-badge" id="hormigBadge" style="display:none">0</span>
+    </button>
     <button class="nav-item" data-page="libroSubcontratacion" onclick="navTo('libroSubcontratacion')">
       <span class="nav-icon">📖</span> Libro Subcontratación
       <span class="nav-badge" id="libroSubBadge" style="display:none">0</span>
@@ -2503,6 +2507,146 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
               <span id="atsElimBtn"></span>
               <button class="btn btn-primary" onclick="guardarAts()">💾 Guardar ATS</button>
             </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- REGISTRO DE HORMIGONADO / CONCRETE POUR LOG (NEW-110) -->
+      <div class="page" id="pageRegistroHormigonado">
+        <div class="page-title">🏗️ Registro de Hormigonado / Concrete Pour Log</div>
+        <div style="background:#e8f4fd;border:1px solid #3b82f6;border-radius:8px;padding:12px 16px;margin-bottom:12px;font-size:13px;color:#1e3a5f;">
+          <b>📋 EHE-08 — Instrucción Española del Hormigón Estructural</b> — Obligatorio registrar todos los vertidos de hormigón estructural.
+          Incluye tipo, consistencia, temperatura, probetas de control y presencia de técnico de laboratorio.
+        </div>
+        <div id="hormigKpis" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px;margin-bottom:12px;"></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;align-items:center;">
+          <select id="rhFiltrObra" onchange="cargarRegistroHormigonado()" style="padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;">
+            <option value="">— Todas las obras —</option>
+          </select>
+          <select id="rhFiltrEstado" onchange="filtrarRegistroHormigonado()" style="padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;">
+            <option value="">Todos los estados</option>
+            <option value="completado">Completado</option>
+            <option value="pendiente">Pendiente</option>
+            <option value="rechazado">Rechazado</option>
+          </select>
+          <button onclick="abrirModalRh()" style="margin-left:auto;background:#1e3a5f;color:#fff;border:none;border-radius:6px;padding:7px 16px;font-size:13px;cursor:pointer;">
+            ➕ Nuevo Parte
+          </button>
+        </div>
+        <div id="tblHormigonado"></div>
+        <div class="modal-overlay" id="modalRegistroHormig" style="display:none" onclick="if(event.target===this)cerrarModalRh()">
+          <div class="modal-box" style="max-width:680px;max-height:90vh;overflow-y:auto;">
+            <div class="modal-header">
+              <h3 id="modalRhTitulo">Nuevo Parte de Hormigonado</h3>
+              <button class="modal-close" onclick="cerrarModalRh()">✕</button>
+            </div>
+            <form id="formRegistroHormig" onsubmit="guardarRh(event)">
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                <div style="grid-column:1/-1">
+                  <label style="font-size:12px;color:#666;display:block;margin-bottom:3px;">Obra *</label>
+                  <select id="rhObra" required style="width:100%;padding:7px;border:1px solid #ddd;border-radius:5px;font-size:13px;">
+                    <option value="">— Seleccionar obra —</option>
+                  </select>
+                </div>
+                <div>
+                  <label style="font-size:12px;color:#666;display:block;margin-bottom:3px;">Fecha de hormigonado *</label>
+                  <input type="date" id="rhFecha" required style="width:100%;padding:7px;border:1px solid #ddd;border-radius:5px;font-size:13px;box-sizing:border-box;">
+                </div>
+                <div>
+                  <label style="font-size:12px;color:#666;display:block;margin-bottom:3px;">Estado</label>
+                  <select id="rhEstado" style="width:100%;padding:7px;border:1px solid #ddd;border-radius:5px;font-size:13px;">
+                    <option value="completado">Completado</option>
+                    <option value="pendiente">Pendiente</option>
+                    <option value="rechazado">Rechazado</option>
+                  </select>
+                </div>
+                <div style="grid-column:1/-1">
+                  <label style="font-size:12px;color:#666;display:block;margin-bottom:3px;">Elemento hormigonado *</label>
+                  <input type="text" id="rhElemento" required placeholder="Ej: Losa planta 2, Pilar eje A3, Muro pantalla..." style="width:100%;padding:7px;border:1px solid #ddd;border-radius:5px;font-size:13px;box-sizing:border-box;">
+                </div>
+                <div>
+                  <label style="font-size:12px;color:#666;display:block;margin-bottom:3px;">Tipo de hormigón *</label>
+                  <input type="text" id="rhTipo" required placeholder="Ej: HA-25/B/20/IIa" list="rhTipoList" style="width:100%;padding:7px;border:1px solid #ddd;border-radius:5px;font-size:13px;box-sizing:border-box;">
+                  <datalist id="rhTipoList">
+                    <option value="HA-25/B/20/IIa"><option value="HA-30/B/20/IIa"><option value="HA-35/B/20/IIb">
+                    <option value="HM-20/B/20/I"><option value="HA-25/F/20/IIa"><option value="HA-30/F/12/IIa">
+                  </datalist>
+                </div>
+                <div>
+                  <label style="font-size:12px;color:#666;display:block;margin-bottom:3px;">Consistencia</label>
+                  <select id="rhConsistencia" style="width:100%;padding:7px;border:1px solid #ddd;border-radius:5px;font-size:13px;">
+                    <option value="">—</option>
+                    <option value="seco">Seco (0-2 cm)</option>
+                    <option value="plastico">Plástico (3-5 cm)</option>
+                    <option value="blando">Blando (6-9 cm)</option>
+                    <option value="fluido">Fluido (10-15 cm)</option>
+                    <option value="liquido">Líquido (&gt;16 cm)</option>
+                  </select>
+                </div>
+                <div>
+                  <label style="font-size:12px;color:#666;display:block;margin-bottom:3px;">Tamaño máx. árido (mm)</label>
+                  <input type="text" id="rhArido" placeholder="20" style="width:100%;padding:7px;border:1px solid #ddd;border-radius:5px;font-size:13px;box-sizing:border-box;">
+                </div>
+                <div>
+                  <label style="font-size:12px;color:#666;display:block;margin-bottom:3px;">Volumen (m³)</label>
+                  <input type="number" id="rhVolumen" min="0" step="0.1" value="0" style="width:100%;padding:7px;border:1px solid #ddd;border-radius:5px;font-size:13px;box-sizing:border-box;">
+                </div>
+                <div>
+                  <label style="font-size:12px;color:#666;display:block;margin-bottom:3px;">Suministrador</label>
+                  <input type="text" id="rhSuministrador" placeholder="Empresa suministradora" style="width:100%;padding:7px;border:1px solid #ddd;border-radius:5px;font-size:13px;box-sizing:border-box;">
+                </div>
+                <div>
+                  <label style="font-size:12px;color:#666;display:block;margin-bottom:3px;">Nº albarán</label>
+                  <input type="text" id="rhAlbaran" placeholder="Número de albarán" style="width:100%;padding:7px;border:1px solid #ddd;border-radius:5px;font-size:13px;box-sizing:border-box;">
+                </div>
+                <div>
+                  <label style="font-size:12px;color:#666;display:block;margin-bottom:3px;">Hora inicio vertido</label>
+                  <input type="time" id="rhHoraInicio" style="width:100%;padding:7px;border:1px solid #ddd;border-radius:5px;font-size:13px;box-sizing:border-box;">
+                </div>
+                <div>
+                  <label style="font-size:12px;color:#666;display:block;margin-bottom:3px;">Hora fin vertido</label>
+                  <input type="time" id="rhHoraFin" style="width:100%;padding:7px;border:1px solid #ddd;border-radius:5px;font-size:13px;box-sizing:border-box;">
+                </div>
+                <div>
+                  <label style="font-size:12px;color:#666;display:block;margin-bottom:3px;">Temp. ambiente (°C)</label>
+                  <input type="number" id="rhTempAmbiente" step="0.1" placeholder="15.0" style="width:100%;padding:7px;border:1px solid #ddd;border-radius:5px;font-size:13px;box-sizing:border-box;">
+                </div>
+                <div>
+                  <label style="font-size:12px;color:#666;display:block;margin-bottom:3px;">Temp. hormigón (°C)</label>
+                  <input type="number" id="rhTempHormigon" step="0.1" placeholder="18.0" style="width:100%;padding:7px;border:1px solid #ddd;border-radius:5px;font-size:13px;box-sizing:border-box;">
+                </div>
+                <div>
+                  <label style="font-size:12px;color:#666;display:block;margin-bottom:3px;">Condiciones climáticas</label>
+                  <input type="text" id="rhCondClima" placeholder="Soleado, nublado, lluvia leve..." style="width:100%;padding:7px;border:1px solid #ddd;border-radius:5px;font-size:13px;box-sizing:border-box;">
+                </div>
+                <div>
+                  <label style="font-size:12px;color:#666;display:block;margin-bottom:3px;">Aditivos utilizados</label>
+                  <input type="text" id="rhAditivos" placeholder="Plastificante, retardador..." style="width:100%;padding:7px;border:1px solid #ddd;border-radius:5px;font-size:13px;box-sizing:border-box;">
+                </div>
+                <div>
+                  <label style="font-size:12px;color:#666;display:block;margin-bottom:3px;">Nº probetas tomadas</label>
+                  <input type="number" id="rhProbetas" min="0" value="0" style="width:100%;padding:7px;border:1px solid #ddd;border-radius:5px;font-size:13px;box-sizing:border-box;">
+                </div>
+                <div style="grid-column:1/-1">
+                  <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;margin-bottom:6px;">
+                    <input type="checkbox" id="rhPresenciaLab" style="width:16px;height:16px;">
+                    <span>Presencia de técnico de laboratorio durante el vertido</span>
+                  </label>
+                </div>
+                <div style="grid-column:1/-1">
+                  <label style="font-size:12px;color:#666;display:block;margin-bottom:3px;">Resultado de probetas</label>
+                  <input type="text" id="rhResultadoProbetas" placeholder="Ej: 28.5 MPa a 28 días — OK" style="width:100%;padding:7px;border:1px solid #ddd;border-radius:5px;font-size:13px;box-sizing:border-box;">
+                </div>
+                <div style="grid-column:1/-1">
+                  <label style="font-size:12px;color:#666;display:block;margin-bottom:3px;">Observaciones</label>
+                  <textarea id="rhObservaciones" rows="2" placeholder="Incidencias durante el vertido, medidas adoptadas..." style="width:100%;padding:7px;border:1px solid #ddd;border-radius:5px;font-size:13px;box-sizing:border-box;resize:vertical;"></textarea>
+                </div>
+              </div>
+              <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px;">
+                <button type="button" onclick="cerrarModalRh()" style="padding:8px 18px;border:1px solid #ddd;border-radius:6px;background:#f5f5f5;cursor:pointer;font-size:13px;">Cancelar</button>
+                <button type="submit" style="padding:8px 18px;background:#1e3a5f;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px;">💾 Guardar Parte</button>
+              </div>
+            </form>
           </div>
         </div>
       </div>
@@ -9059,6 +9203,7 @@ const PAGE_TITLES = {
   licitaciones:       '🏆 Gestión de Licitaciones / Bid Pipeline',
   gastosDietas:       '🧳 Gastos y Dietas de Personal / Expense Claims',
   flotaVehiculos:     '🚗 Flota de Vehículos de Empresa / Vehicle Fleet',
+  registroHormigonado:  '🏗️ Registro de Hormigonado / Concrete Pour Log (EHE-08)',
   libroSubcontratacion: '📖 Libro de Subcontratación / Subcontractor Register (Ley 32/2006)',
 };
 
@@ -9169,6 +9314,7 @@ const PAGE_LOADERS = {
   licitaciones:       cargarLicitaciones,
   gastosDietas:       cargarGastosDietas,
   flotaVehiculos:     cargarFlotaVehiculos,
+  registroHormigonado:  cargarRegistroHormigonado,
   libroSubcontratacion: cargarLibroSubcontratacion,
 };
 
@@ -9308,6 +9454,7 @@ const SYNC_INTERVALS = {
   licitaciones:       300,
   gastosDietas:       120,
   flotaVehiculos:     300,
+  registroHormigonado:  300,
   libroSubcontratacion: 300,
 };
 
@@ -18672,6 +18819,154 @@ function exportarFinanzas() {
 }
 
 // ── FLOTA DE VEHÍCULOS DE EMPRESA / COMPANY VEHICLE FLEET (NEW-108) ──────────
+// ════════════════════════════════════════════════════════════════════════
+// NEW-110: REGISTRO DE HORMIGONADO (EHE-08)
+// ════════════════════════════════════════════════════════════════════════
+let tblRh = null, _rhData = [];
+const RH_ESTADO_COLOR = { completado: '#22c55e', pendiente: '#f59e0b', rechazado: '#ef4444' };
+const RH_CONSISTENCIA_LABEL = { seco:'Seco',plastico:'Plástico',blando:'Blando',fluido:'Fluido',liquido:'Líquido' };
+
+async function cargarRegistroHormigonado() {
+  await poblarSelectObras('rhFiltrObra');
+  await poblarSelectObras('rhObra');
+  const obra = document.getElementById('rhFiltrObra')?.value || '';
+  const url = '/registro-hormigonado' + (obra ? '?obra_id=' + obra : '');
+  const data = await api(url);
+  _rhData = data.data || [];
+  const stats = data.stats || {};
+  const kpiEl = document.getElementById('hormigKpis');
+  if (kpiEl) kpiEl.innerHTML = [
+    { label: 'Total partes', val: stats.total || 0, color: '#1e3a5f' },
+    { label: 'Volumen total (m³)', val: stats.volumen_total || '0.0', color: '#3b82f6' },
+    { label: 'Probetas tomadas', val: stats.probetas_total || 0, color: '#8b5cf6' },
+    { label: 'Con laboratorio', val: stats.con_laboratorio || 0, color: '#22c55e' },
+    { label: 'Obras', val: stats.obras_activas || 0, color: '#f59e0b' },
+  ].map(k => '<div class="kpi-mini" style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:10px 12px;text-align:center;">'
+    + '<div style="font-size:22px;font-weight:700;color:' + k.color + ';">' + k.val + '</div>'
+    + '<div style="font-size:11px;color:#64748b;margin-top:2px;">' + k.label + '</div></div>').join('');
+  const badge = document.getElementById('hormigBadge');
+  if (badge) { badge.textContent = _rhData.length; badge.style.display = _rhData.length ? '' : 'none'; }
+  tblRh = null;
+  filtrarRegistroHormigonado();
+}
+
+function filtrarRegistroHormigonado() {
+  const estado = document.getElementById('rhFiltrEstado')?.value || '';
+  let rows = [..._rhData];
+  if (estado) rows = rows.filter(r => r.estado === estado);
+  if (tblRh) { tblRh.replaceData(rows); return; }
+  tblRh = new Tabulator('#tblHormigonado', {
+    data: rows,
+    layout: 'fitColumns',
+    height: '460px',
+    placeholder: 'No hay partes de hormigonado registrados',
+    columns: [
+      { title: 'Nº', field: 'numero_parte', width: 55, hozAlign: 'center' },
+      { title: 'Fecha', field: 'fecha_hormigonado', width: 100 },
+      { title: 'Elemento', field: 'elemento_hormigonado', minWidth: 150 },
+      { title: 'Tipo hormigón', field: 'tipo_hormigon', width: 130 },
+      { title: 'Consistencia', field: 'consistencia', width: 100, formatter: function(cell) {
+          return RH_CONSISTENCIA_LABEL[cell.getValue()] || (cell.getValue() || '—');
+        }
+      },
+      { title: 'm³', field: 'volumen_m3', width: 65, hozAlign: 'center' },
+      { title: 'Obra', field: 'obra_nombre', minWidth: 110 },
+      { title: 'Probetas', field: 'num_probetas_tomadas', width: 80, hozAlign: 'center' },
+      { title: 'Lab', field: 'presencia_tecnico_laboratorio', width: 55, hozAlign: 'center',
+        formatter: function(cell) { return cell.getValue() ? '✅' : '—'; }
+      },
+      { title: 'Estado', field: 'estado', width: 100, formatter: function(cell) {
+          const v = cell.getValue();
+          return '<span style="background:' + (RH_ESTADO_COLOR[v]||'#aaa') + ';color:#fff;padding:2px 8px;border-radius:10px;font-size:11px;">' + (v||'—') + '</span>';
+        }
+      },
+      { title: 'Acciones', formatter: function(cell) {
+          const row = cell.getRow().getData();
+          return '<button onclick="editarRh(' + row.id + ')" style="background:#3b82f6;color:#fff;border:none;border-radius:4px;padding:3px 8px;font-size:11px;cursor:pointer;margin-right:4px;">✏️</button>'
+               + '<button onclick="eliminarRh(' + row.id + ')" style="background:#ef4444;color:#fff;border:none;border-radius:4px;padding:3px 8px;font-size:11px;cursor:pointer;">🗑️</button>';
+        }, width: 100, hozAlign: 'center', headerSort: false
+      },
+    ]
+  });
+}
+
+function abrirModalRh() {
+  document.getElementById('modalRhTitulo').textContent = 'Nuevo Parte de Hormigonado';
+  document.getElementById('formRegistroHormig').reset();
+  document.getElementById('modalRegistroHormig')._rhId = null;
+  poblarSelectObras('rhObra');
+  document.getElementById('modalRegistroHormig').style.display = 'flex';
+}
+
+function editarRh(id) {
+  const row = _rhData.find(r => r.id === id);
+  if (!row) return;
+  document.getElementById('modalRhTitulo').textContent = 'Editar Parte #' + row.numero_parte;
+  document.getElementById('modalRegistroHormig')._rhId = id;
+  poblarSelectObras('rhObra').then(() => { document.getElementById('rhObra').value = row.obra_id; });
+  document.getElementById('rhFecha').value = row.fecha_hormigonado || '';
+  document.getElementById('rhEstado').value = row.estado || 'completado';
+  document.getElementById('rhElemento').value = row.elemento_hormigonado || '';
+  document.getElementById('rhTipo').value = row.tipo_hormigon || '';
+  document.getElementById('rhConsistencia').value = row.consistencia || '';
+  document.getElementById('rhArido').value = row.tamanio_maximo_arido || '';
+  document.getElementById('rhVolumen').value = row.volumen_m3 || 0;
+  document.getElementById('rhSuministrador').value = row.suministrador || '';
+  document.getElementById('rhAlbaran').value = row.albaran_numero || '';
+  document.getElementById('rhHoraInicio').value = row.hora_inicio_vertido || '';
+  document.getElementById('rhHoraFin').value = row.hora_fin_vertido || '';
+  document.getElementById('rhTempAmbiente').value = row.temperatura_ambiente ?? '';
+  document.getElementById('rhTempHormigon').value = row.temperatura_hormigon ?? '';
+  document.getElementById('rhCondClima').value = row.condiciones_climaticas || '';
+  document.getElementById('rhAditivos').value = row.aditivos || '';
+  document.getElementById('rhProbetas').value = row.num_probetas_tomadas || 0;
+  document.getElementById('rhPresenciaLab').checked = !!row.presencia_tecnico_laboratorio;
+  document.getElementById('rhResultadoProbetas').value = row.resultado_probetas || '';
+  document.getElementById('rhObservaciones').value = row.observaciones || '';
+  document.getElementById('modalRegistroHormig').style.display = 'flex';
+}
+
+async function guardarRh(e) {
+  e.preventDefault();
+  const id = document.getElementById('modalRegistroHormig')._rhId;
+  const body = {
+    obra_id:                       parseInt(document.getElementById('rhObra').value),
+    fecha_hormigonado:             document.getElementById('rhFecha').value,
+    estado:                        document.getElementById('rhEstado').value,
+    elemento_hormigonado:          document.getElementById('rhElemento').value.trim(),
+    tipo_hormigon:                 document.getElementById('rhTipo').value.trim(),
+    consistencia:                  document.getElementById('rhConsistencia').value || null,
+    tamanio_maximo_arido:          document.getElementById('rhArido').value.trim() || null,
+    volumen_m3:                    parseFloat(document.getElementById('rhVolumen').value) || 0,
+    suministrador:                 document.getElementById('rhSuministrador').value.trim() || null,
+    albaran_numero:                document.getElementById('rhAlbaran').value.trim() || null,
+    hora_inicio_vertido:           document.getElementById('rhHoraInicio').value || null,
+    hora_fin_vertido:              document.getElementById('rhHoraFin').value || null,
+    temperatura_ambiente:          document.getElementById('rhTempAmbiente').value !== '' ? parseFloat(document.getElementById('rhTempAmbiente').value) : null,
+    temperatura_hormigon:          document.getElementById('rhTempHormigon').value !== '' ? parseFloat(document.getElementById('rhTempHormigon').value) : null,
+    condiciones_climaticas:        document.getElementById('rhCondClima').value.trim() || null,
+    aditivos:                      document.getElementById('rhAditivos').value.trim() || null,
+    num_probetas_tomadas:          parseInt(document.getElementById('rhProbetas').value) || 0,
+    presencia_tecnico_laboratorio: document.getElementById('rhPresenciaLab').checked,
+    resultado_probetas:            document.getElementById('rhResultadoProbetas').value.trim() || null,
+    observaciones:                 document.getElementById('rhObservaciones').value.trim() || null,
+  };
+  const method = id ? 'PUT' : 'POST';
+  const url    = id ? '/registro-hormigonado/' + id : '/registro-hormigonado';
+  const res = await api(url, { method, body: JSON.stringify(body) });
+  if (res.ok) { cerrarModalRh(); cargarRegistroHormigonado(); }
+}
+
+async function eliminarRh(id) {
+  if (!confirm('¿Eliminar este parte de hormigonado?')) return;
+  const res = await api('/registro-hormigonado/' + id, { method: 'DELETE' });
+  if (res.ok) cargarRegistroHormigonado();
+}
+
+function cerrarModalRh() {
+  document.getElementById('modalRegistroHormig').style.display = 'none';
+}
+
 // ════════════════════════════════════════════════════════════════════════
 // NEW-109: LIBRO DE SUBCONTRATACIÓN (Ley 32/2006)
 // ════════════════════════════════════════════════════════════════════════

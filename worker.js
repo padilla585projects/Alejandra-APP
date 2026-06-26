@@ -4721,6 +4721,14 @@ export default {
         if (method === 'PUT')    return await actualizarVisitaObra(_vid, request, env);
         if (method === 'DELETE') return await eliminarVisitaObra(_vid, request, env);
       }
+      // ── Registro de Hormigonado / Concrete Pour Log (NEW-110) ───────────────────
+      if (path === '/registro-hormigonado' && method === 'GET')  return await getRegistroHormigonado(request, env);
+      if (path === '/registro-hormigonado' && method === 'POST') return await crearPartHormigonado(request, env);
+      if (path.startsWith('/registro-hormigonado/')) {
+        const _rhId = parseInt(path.split('/registro-hormigonado/')[1]);
+        if (method === 'PUT')    return await actualizarPartHormigonado(_rhId, request, env);
+        if (method === 'DELETE') return await eliminarPartHormigonado(_rhId, request, env);
+      }
       // ── Libro de Subcontratación / Subcontractor Register Book (NEW-109) ──────────
       if (path === '/libro-subcontratacion' && method === 'GET')  return await getLibroSubcontratacion(request, env);
       if (path === '/libro-subcontratacion' && method === 'POST') return await crearEntradaLibro(request, env);
@@ -20662,5 +20670,143 @@ async function eliminarEntradaLibro(id, request, env) {
   const { empresa_id, rol } = await getAuth(request, env);
   if (!empresa_id || rol === 'operario') return err('Sin permisos', 403);
   await env.DB.prepare('DELETE FROM libro_subcontratacion WHERE id=? AND empresa_id=?').bind(id, empresa_id).run();
+  return json({ ok: true });
+}
+
+
+// ════════════════════════════════════════════════════════════════════════════════
+// NEW-110: REGISTRO DE HORMIGONADO / CONCRETE POUR LOG
+// Obligatorio por EHE-08 (Instrucción Española del Hormigón Estructural)
+// ════════════════════════════════════════════════════════════════════════════════
+async function ensureRegistroHormigonTable(env) {
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS registro_hormigonado (
+    id                          INTEGER PRIMARY KEY AUTOINCREMENT,
+    empresa_id                  INTEGER NOT NULL,
+    obra_id                     INTEGER NOT NULL,
+    numero_parte                INTEGER NOT NULL,
+    fecha_hormigonado           TEXT    NOT NULL,
+    elemento_hormigonado        TEXT    NOT NULL,
+    tipo_hormigon               TEXT    NOT NULL,
+    consistencia                TEXT,
+    tamanio_maximo_arido        TEXT,
+    aditivos                    TEXT,
+    suministrador               TEXT,
+    albaran_numero              TEXT,
+    hora_inicio_vertido         TEXT,
+    hora_fin_vertido            TEXT,
+    volumen_m3                  REAL    DEFAULT 0,
+    temperatura_ambiente        REAL,
+    temperatura_hormigon        REAL,
+    condiciones_climaticas      TEXT,
+    presencia_tecnico_laboratorio INTEGER DEFAULT 0,
+    num_probetas_tomadas        INTEGER DEFAULT 0,
+    resultado_probetas          TEXT,
+    observaciones               TEXT,
+    estado                      TEXT    NOT NULL DEFAULT 'completado',
+    created_by                  TEXT,
+    created_at                  TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at                  TEXT NOT NULL DEFAULT (datetime('now'))
+  )`).run();
+}
+
+async function getRegistroHormigonado(request, env) {
+  await ensureRegistroHormigonTable(env);
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const url    = new URL(request.url);
+  const obra   = url.searchParams.get('obra_id');
+  const estado = url.searchParams.get('estado');
+  let sql = `SELECT r.*, o.nombre as obra_nombre, o.codigo as obra_codigo
+    FROM registro_hormigonado r
+    LEFT JOIN obras o ON r.obra_id = o.id
+    WHERE r.empresa_id = ?`;
+  const params = [empresa_id];
+  if (obra)   { sql += ' AND r.obra_id = ?';  params.push(obra); }
+  if (estado) { sql += ' AND r.estado = ?';   params.push(estado); }
+  sql += ' ORDER BY r.fecha_hormigonado DESC, r.numero_parte DESC';
+  const { results } = await env.DB.prepare(sql).bind(...params).all();
+  const stats = {
+    total:           results.length,
+    volumen_total:   results.reduce((s,r)=>s+(r.volumen_m3||0),0).toFixed(1),
+    probetas_total:  results.reduce((s,r)=>s+(r.num_probetas_tomadas||0),0),
+    con_laboratorio: results.filter(r=>r.presencia_tecnico_laboratorio).length,
+    obras_activas:   [...new Set(results.map(r=>r.obra_id))].length
+  };
+  return json({ data: results, stats });
+}
+
+async function crearPartHormigonado(request, env) {
+  await ensureRegistroHormigonTable(env);
+  const { empresa_id, nombre: createdBy } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const body = await request.json().catch(() => ({}));
+  if (!body.elemento_hormigonado?.trim()) return err('El elemento hormigonado es obligatorio');
+  if (!body.tipo_hormigon?.trim())        return err('El tipo de hormigón es obligatorio');
+  if (!body.fecha_hormigonado)            return err('La fecha de hormigonado es obligatoria');
+  if (!body.obra_id)                      return err('La obra es obligatoria');
+  const last = await env.DB.prepare(
+    `SELECT MAX(numero_parte) as mx FROM registro_hormigonado WHERE empresa_id=? AND obra_id=?`
+  ).bind(empresa_id, body.obra_id).first();
+  const numero = (last?.mx || 0) + 1;
+  const r = await env.DB.prepare(`
+    INSERT INTO registro_hormigonado
+      (empresa_id,obra_id,numero_parte,fecha_hormigonado,elemento_hormigonado,tipo_hormigon,
+       consistencia,tamanio_maximo_arido,aditivos,suministrador,albaran_numero,
+       hora_inicio_vertido,hora_fin_vertido,volumen_m3,temperatura_ambiente,temperatura_hormigon,
+       condiciones_climaticas,presencia_tecnico_laboratorio,num_probetas_tomadas,
+       resultado_probetas,observaciones,estado,created_by)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+    .bind(empresa_id, body.obra_id, numero, body.fecha_hormigonado,
+          body.elemento_hormigonado.trim(), body.tipo_hormigon.trim(),
+          body.consistencia||null, body.tamanio_maximo_arido||null,
+          body.aditivos||null, body.suministrador||null, body.albaran_numero||null,
+          body.hora_inicio_vertido||null, body.hora_fin_vertido||null,
+          parseFloat(body.volumen_m3)||0,
+          body.temperatura_ambiente!=null?parseFloat(body.temperatura_ambiente):null,
+          body.temperatura_hormigon!=null?parseFloat(body.temperatura_hormigon):null,
+          body.condiciones_climaticas||null,
+          body.presencia_tecnico_laboratorio?1:0,
+          parseInt(body.num_probetas_tomadas)||0,
+          body.resultado_probetas||null, body.observaciones||null,
+          body.estado||'completado', createdBy||null).run();
+  return json({ ok: true, id: r.meta.last_row_id, numero }, 201);
+}
+
+async function actualizarPartHormigonado(id, request, env) {
+  await ensureRegistroHormigonTable(env);
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const body = await request.json().catch(() => ({}));
+  if (!body.elemento_hormigonado?.trim()) return err('El elemento hormigonado es obligatorio');
+  if (!body.tipo_hormigon?.trim())        return err('El tipo de hormigón es obligatorio');
+  await env.DB.prepare(`
+    UPDATE registro_hormigonado SET
+      fecha_hormigonado=?,elemento_hormigonado=?,tipo_hormigon=?,consistencia=?,
+      tamanio_maximo_arido=?,aditivos=?,suministrador=?,albaran_numero=?,
+      hora_inicio_vertido=?,hora_fin_vertido=?,volumen_m3=?,temperatura_ambiente=?,
+      temperatura_hormigon=?,condiciones_climaticas=?,presencia_tecnico_laboratorio=?,
+      num_probetas_tomadas=?,resultado_probetas=?,observaciones=?,estado=?,
+      updated_at=datetime('now')
+    WHERE id=? AND empresa_id=?`)
+    .bind(body.fecha_hormigonado, body.elemento_hormigonado.trim(), body.tipo_hormigon.trim(),
+          body.consistencia||null, body.tamanio_maximo_arido||null,
+          body.aditivos||null, body.suministrador||null, body.albaran_numero||null,
+          body.hora_inicio_vertido||null, body.hora_fin_vertido||null,
+          parseFloat(body.volumen_m3)||0,
+          body.temperatura_ambiente!=null?parseFloat(body.temperatura_ambiente):null,
+          body.temperatura_hormigon!=null?parseFloat(body.temperatura_hormigon):null,
+          body.condiciones_climaticas||null,
+          body.presencia_tecnico_laboratorio?1:0,
+          parseInt(body.num_probetas_tomadas)||0,
+          body.resultado_probetas||null, body.observaciones||null,
+          body.estado||'completado', id, empresa_id).run();
+  return json({ ok: true });
+}
+
+async function eliminarPartHormigonado(id, request, env) {
+  await ensureRegistroHormigonTable(env);
+  const { empresa_id, rol } = await getAuth(request, env);
+  if (!empresa_id || rol === 'operario') return err('Sin permisos', 403);
+  await env.DB.prepare('DELETE FROM registro_hormigonado WHERE id=? AND empresa_id=?').bind(id, empresa_id).run();
   return json({ ok: true });
 }
