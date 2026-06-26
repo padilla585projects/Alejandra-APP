@@ -770,6 +770,10 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
       <span class="nav-icon">🏆</span> Licitaciones
       <span class="nav-badge" id="licitBadge" style="display:none">0</span>
     </button>
+    <button class="nav-item" data-page="formacionObra" onclick="navTo('formacionObra')">
+      <span class="nav-icon">🎓</span> Formación de Obra
+      <span class="nav-badge" id="formacionBadge" style="display:none">0</span>
+    </button>
     <button class="nav-item" data-page="registroHormigonado" onclick="navTo('registroHormigonado')">
       <span class="nav-icon">🏗️</span> Registro Hormigonado
       <span class="nav-badge" id="hormigBadge" style="display:none">0</span>
@@ -2507,6 +2511,129 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
               <span id="atsElimBtn"></span>
               <button class="btn btn-primary" onclick="guardarAts()">💾 Guardar ATS</button>
             </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- FORMACIÓN DE OBRA / SITE TRAINING RECORDS (NEW-111) -->
+      <div class="page" id="pageFormacionObra">
+        <div class="page-title">🎓 Formación de Obra / Site Training Records</div>
+        <div style="background:#f0fdf4;border:1px solid #22c55e;border-radius:8px;padding:12px 16px;margin-bottom:12px;font-size:13px;color:#166534;">
+          <b>⚖️ Ley 31/1995 de Prevención de Riesgos Laborales + RD 1627/1997</b> — Registro obligatorio de toda formación
+          impartida en obra: inducciones, charlas de seguridad (toolbox talks), cursos específicos y simulacros.
+        </div>
+        <div id="formacionKpis" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px;margin-bottom:12px;"></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;align-items:center;">
+          <select id="foFiltrObra" onchange="cargarFormacionObra()" style="padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;">
+            <option value="">— Todas las obras —</option>
+          </select>
+          <select id="foFiltrTipo" onchange="filtrarFormacionObra()" style="padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;">
+            <option value="">Todos los tipos</option>
+            <option value="induccion">Inducción</option>
+            <option value="toolbox-talk">Toolbox Talk</option>
+            <option value="curso-especifico">Curso específico</option>
+            <option value="simulacro">Simulacro</option>
+            <option value="formacion-online">Formación online</option>
+            <option value="otro">Otro</option>
+          </select>
+          <select id="foFiltrEstado" onchange="filtrarFormacionObra()" style="padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;">
+            <option value="">Todos los estados</option>
+            <option value="realizado">Realizado</option>
+            <option value="planificado">Planificado</option>
+            <option value="cancelado">Cancelado</option>
+          </select>
+          <button onclick="abrirModalFo()" style="margin-left:auto;background:#1e3a5f;color:#fff;border:none;border-radius:6px;padding:7px 16px;font-size:13px;cursor:pointer;">
+            ➕ Nueva Formación
+          </button>
+        </div>
+        <div id="tblFormacionObra"></div>
+        <div class="modal-overlay" id="modalFormacionObra" style="display:none" onclick="if(event.target===this)cerrarModalFo()">
+          <div class="modal-box" style="max-width:620px;max-height:90vh;overflow-y:auto;">
+            <div class="modal-header">
+              <h3 id="modalFoTitulo">Nueva Formación</h3>
+              <button class="modal-close" onclick="cerrarModalFo()">✕</button>
+            </div>
+            <form id="formFormacionObra" onsubmit="guardarFo(event)">
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                <div style="grid-column:1/-1">
+                  <label style="font-size:12px;color:#666;display:block;margin-bottom:3px;">Título de la formación *</label>
+                  <input type="text" id="foTitulo" required placeholder="Ej: Charla PRL semanal, Inducción nuevos trabajadores..." style="width:100%;padding:7px;border:1px solid #ddd;border-radius:5px;font-size:13px;box-sizing:border-box;">
+                </div>
+                <div>
+                  <label style="font-size:12px;color:#666;display:block;margin-bottom:3px;">Tipo de formación *</label>
+                  <select id="foTipo" required style="width:100%;padding:7px;border:1px solid #ddd;border-radius:5px;font-size:13px;">
+                    <option value="toolbox-talk">Toolbox Talk / Charla diaria</option>
+                    <option value="induccion">Inducción en obra</option>
+                    <option value="curso-especifico">Curso específico</option>
+                    <option value="simulacro">Simulacro de emergencia</option>
+                    <option value="formacion-online">Formación online</option>
+                    <option value="otro">Otro</option>
+                  </select>
+                </div>
+                <div>
+                  <label style="font-size:12px;color:#666;display:block;margin-bottom:3px;">Estado</label>
+                  <select id="foEstado" style="width:100%;padding:7px;border:1px solid #ddd;border-radius:5px;font-size:13px;">
+                    <option value="realizado">Realizado</option>
+                    <option value="planificado">Planificado</option>
+                    <option value="cancelado">Cancelado</option>
+                  </select>
+                </div>
+                <div>
+                  <label style="font-size:12px;color:#666;display:block;margin-bottom:3px;">Fecha *</label>
+                  <input type="date" id="foFecha" required style="width:100%;padding:7px;border:1px solid #ddd;border-radius:5px;font-size:13px;box-sizing:border-box;">
+                </div>
+                <div>
+                  <label style="font-size:12px;color:#666;display:block;margin-bottom:3px;">Duración (horas)</label>
+                  <input type="number" id="foDuracion" min="0.25" step="0.25" value="1" style="width:100%;padding:7px;border:1px solid #ddd;border-radius:5px;font-size:13px;box-sizing:border-box;">
+                </div>
+                <div>
+                  <label style="font-size:12px;color:#666;display:block;margin-bottom:3px;">Obra (opcional)</label>
+                  <select id="foObra" style="width:100%;padding:7px;border:1px solid #ddd;border-radius:5px;font-size:13px;">
+                    <option value="">— Empresa general —</option>
+                  </select>
+                </div>
+                <div>
+                  <label style="font-size:12px;color:#666;display:block;margin-bottom:3px;">Lugar / Ubicación</label>
+                  <input type="text" id="foLugar" placeholder="Sala de formación, obra, online..." style="width:100%;padding:7px;border:1px solid #ddd;border-radius:5px;font-size:13px;box-sizing:border-box;">
+                </div>
+                <div>
+                  <label style="font-size:12px;color:#666;display:block;margin-bottom:3px;">Instructor / Formador</label>
+                  <input type="text" id="foInstructor" placeholder="Nombre del formador" style="width:100%;padding:7px;border:1px solid #ddd;border-radius:5px;font-size:13px;box-sizing:border-box;">
+                </div>
+                <div>
+                  <label style="font-size:12px;color:#666;display:block;margin-bottom:3px;">Empresa formadora</label>
+                  <input type="text" id="foEmpresaForm" placeholder="Si es externa" style="width:100%;padding:7px;border:1px solid #ddd;border-radius:5px;font-size:13px;box-sizing:border-box;">
+                </div>
+                <div>
+                  <label style="font-size:12px;color:#666;display:block;margin-bottom:3px;">Nº participantes</label>
+                  <input type="number" id="foParticipantes" min="0" value="0" style="width:100%;padding:7px;border:1px solid #ddd;border-radius:5px;font-size:13px;box-sizing:border-box;">
+                </div>
+                <div>
+                  <label style="font-size:12px;color:#666;display:block;margin-bottom:3px;">Nº certificado</label>
+                  <input type="text" id="foCertificado" placeholder="Número o referencia del certificado" style="width:100%;padding:7px;border:1px solid #ddd;border-radius:5px;font-size:13px;box-sizing:border-box;">
+                </div>
+                <div>
+                  <label style="font-size:12px;color:#666;display:block;margin-bottom:3px;">Fecha vencimiento</label>
+                  <input type="date" id="foVencimiento" style="width:100%;padding:7px;border:1px solid #ddd;border-radius:5px;font-size:13px;box-sizing:border-box;">
+                </div>
+                <div style="grid-column:1/-1">
+                  <label style="font-size:12px;color:#666;display:block;margin-bottom:3px;">Descripción / Contenido</label>
+                  <textarea id="foDescripcion" rows="2" placeholder="Temario, puntos tratados..." style="width:100%;padding:7px;border:1px solid #ddd;border-radius:5px;font-size:13px;box-sizing:border-box;resize:vertical;"></textarea>
+                </div>
+                <div style="grid-column:1/-1">
+                  <label style="font-size:12px;color:#666;display:block;margin-bottom:3px;">Lista de participantes</label>
+                  <textarea id="foListaParticipantes" rows="2" placeholder="Nombres de los asistentes (uno por línea o separados por coma)..." style="width:100%;padding:7px;border:1px solid #ddd;border-radius:5px;font-size:13px;box-sizing:border-box;resize:vertical;"></textarea>
+                </div>
+                <div style="grid-column:1/-1">
+                  <label style="font-size:12px;color:#666;display:block;margin-bottom:3px;">Observaciones</label>
+                  <textarea id="foObservaciones" rows="2" placeholder="Incidencias, comentarios..." style="width:100%;padding:7px;border:1px solid #ddd;border-radius:5px;font-size:13px;box-sizing:border-box;resize:vertical;"></textarea>
+                </div>
+              </div>
+              <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px;">
+                <button type="button" onclick="cerrarModalFo()" style="padding:8px 18px;border:1px solid #ddd;border-radius:6px;background:#f5f5f5;cursor:pointer;font-size:13px;">Cancelar</button>
+                <button type="submit" style="padding:8px 18px;background:#1e3a5f;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px;">💾 Guardar</button>
+              </div>
+            </form>
           </div>
         </div>
       </div>
@@ -9203,6 +9330,7 @@ const PAGE_TITLES = {
   licitaciones:       '🏆 Gestión de Licitaciones / Bid Pipeline',
   gastosDietas:       '🧳 Gastos y Dietas de Personal / Expense Claims',
   flotaVehiculos:     '🚗 Flota de Vehículos de Empresa / Vehicle Fleet',
+  formacionObra:        '🎓 Formación de Obra / Site Training Records (PRL)',
   registroHormigonado:  '🏗️ Registro de Hormigonado / Concrete Pour Log (EHE-08)',
   libroSubcontratacion: '📖 Libro de Subcontratación / Subcontractor Register (Ley 32/2006)',
 };
@@ -9314,6 +9442,7 @@ const PAGE_LOADERS = {
   licitaciones:       cargarLicitaciones,
   gastosDietas:       cargarGastosDietas,
   flotaVehiculos:     cargarFlotaVehiculos,
+  formacionObra:        cargarFormacionObra,
   registroHormigonado:  cargarRegistroHormigonado,
   libroSubcontratacion: cargarLibroSubcontratacion,
 };
@@ -9454,6 +9583,7 @@ const SYNC_INTERVALS = {
   licitaciones:       300,
   gastosDietas:       120,
   flotaVehiculos:     300,
+  formacionObra:        300,
   registroHormigonado:  300,
   libroSubcontratacion: 300,
 };
@@ -18819,6 +18949,154 @@ function exportarFinanzas() {
 }
 
 // ── FLOTA DE VEHÍCULOS DE EMPRESA / COMPANY VEHICLE FLEET (NEW-108) ──────────
+// ════════════════════════════════════════════════════════════════════════
+// NEW-111: FORMACIÓN DE OBRA / SITE TRAINING RECORDS (PRL)
+// ════════════════════════════════════════════════════════════════════════
+let tblFo = null, _foData = [];
+const FO_TIPO_LABEL = {
+  'induccion':'Inducción','toolbox-talk':'Toolbox Talk','curso-especifico':'Curso específico',
+  'simulacro':'Simulacro','formacion-online':'Online','otro':'Otro'
+};
+const FO_TIPO_COLOR = {
+  'induccion':'#1e3a5f','toolbox-talk':'#3b82f6','curso-especifico':'#8b5cf6',
+  'simulacro':'#ef4444','formacion-online':'#06b6d4','otro':'#94a3b8'
+};
+const FO_ESTADO_COLOR = { realizado:'#22c55e', planificado:'#f59e0b', cancelado:'#94a3b8' };
+
+async function cargarFormacionObra() {
+  await poblarSelectObras('foFiltrObra');
+  await poblarSelectObras('foObra', true);
+  const obra = document.getElementById('foFiltrObra')?.value || '';
+  const url = '/formacion-obra' + (obra ? '?obra_id=' + obra : '');
+  const data = await api(url);
+  _foData = data.data || [];
+  const stats = data.stats || {};
+  const kpiEl = document.getElementById('formacionKpis');
+  if (kpiEl) kpiEl.innerHTML = [
+    { label: 'Total sesiones', val: stats.total || 0, color: '#1e3a5f' },
+    { label: 'Horas impartidas', val: stats.total_horas || '0.0', color: '#3b82f6' },
+    { label: 'Participantes', val: stats.total_participantes || 0, color: '#22c55e' },
+    { label: 'Planificados', val: stats.planificados || 0, color: '#f59e0b' },
+    { label: 'Próx. vencer (30d)', val: stats.proximos_vencer || 0, color: '#f97316' },
+    { label: 'Vencidos', val: stats.vencidos || 0, color: '#ef4444' },
+  ].map(k => '<div class="kpi-mini" style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:10px 12px;text-align:center;">'
+    + '<div style="font-size:22px;font-weight:700;color:' + k.color + ';">' + k.val + '</div>'
+    + '<div style="font-size:11px;color:#64748b;margin-top:2px;">' + k.label + '</div></div>').join('');
+  const badge = document.getElementById('formacionBadge');
+  if (badge) { badge.textContent = _foData.length; badge.style.display = _foData.length ? '' : 'none'; }
+  tblFo = null;
+  filtrarFormacionObra();
+}
+
+function filtrarFormacionObra() {
+  const tipo   = document.getElementById('foFiltrTipo')?.value || '';
+  const estado = document.getElementById('foFiltrEstado')?.value || '';
+  let rows = [..._foData];
+  if (tipo)   rows = rows.filter(r => r.tipo_formacion === tipo);
+  if (estado) rows = rows.filter(r => r.estado === estado);
+  if (tblFo) { tblFo.replaceData(rows); return; }
+  tblFo = new Tabulator('#tblFormacionObra', {
+    data: rows,
+    layout: 'fitColumns',
+    height: '460px',
+    placeholder: 'No hay registros de formación',
+    columns: [
+      { title: 'Nº', field: 'numero', width: 55, hozAlign: 'center' },
+      { title: 'Fecha', field: 'fecha_formacion', width: 100 },
+      { title: 'Tipo', field: 'tipo_formacion', width: 130, formatter: function(cell) {
+          const v = cell.getValue();
+          return '<span style="background:' + (FO_TIPO_COLOR[v]||'#aaa') + ';color:#fff;padding:2px 7px;border-radius:10px;font-size:11px;">' + (FO_TIPO_LABEL[v]||v) + '</span>';
+        }
+      },
+      { title: 'Título', field: 'titulo', minWidth: 180 },
+      { title: 'Obra', field: 'obra_nombre', minWidth: 110, formatter: function(cell) { return cell.getValue() || '— General —'; } },
+      { title: 'h', field: 'duracion_horas', width: 55, hozAlign: 'center' },
+      { title: 'Part.', field: 'participantes_count', width: 60, hozAlign: 'center' },
+      { title: 'Instructor', field: 'instructor', minWidth: 110 },
+      { title: 'Estado', field: 'estado', width: 95, formatter: function(cell) {
+          const v = cell.getValue();
+          return '<span style="background:' + (FO_ESTADO_COLOR[v]||'#aaa') + ';color:#fff;padding:2px 8px;border-radius:10px;font-size:11px;">' + (v||'—') + '</span>';
+        }
+      },
+      { title: 'Acciones', formatter: function(cell) {
+          const row = cell.getRow().getData();
+          return '<button onclick="editarFo(' + row.id + ')" style="background:#3b82f6;color:#fff;border:none;border-radius:4px;padding:3px 8px;font-size:11px;cursor:pointer;margin-right:4px;">✏️</button>'
+               + '<button onclick="eliminarFo(' + row.id + ')" style="background:#ef4444;color:#fff;border:none;border-radius:4px;padding:3px 8px;font-size:11px;cursor:pointer;">🗑️</button>';
+        }, width: 100, hozAlign: 'center', headerSort: false
+      },
+    ]
+  });
+}
+
+function abrirModalFo() {
+  document.getElementById('modalFoTitulo').textContent = 'Nueva Formación';
+  document.getElementById('formFormacionObra').reset();
+  document.getElementById('modalFormacionObra')._foId = null;
+  poblarSelectObras('foObra', true);
+  document.getElementById('modalFormacionObra').style.display = 'flex';
+}
+
+function editarFo(id) {
+  const row = _foData.find(r => r.id === id);
+  if (!row) return;
+  document.getElementById('modalFoTitulo').textContent = 'Editar Formación #' + row.numero;
+  document.getElementById('modalFormacionObra')._foId = id;
+  poblarSelectObras('foObra', true).then(() => {
+    document.getElementById('foObra').value = row.obra_id || '';
+  });
+  document.getElementById('foTitulo').value = row.titulo || '';
+  document.getElementById('foTipo').value = row.tipo_formacion || 'toolbox-talk';
+  document.getElementById('foEstado').value = row.estado || 'realizado';
+  document.getElementById('foFecha').value = row.fecha_formacion || '';
+  document.getElementById('foDuracion').value = row.duracion_horas || 1;
+  document.getElementById('foLugar').value = row.lugar || '';
+  document.getElementById('foInstructor').value = row.instructor || '';
+  document.getElementById('foEmpresaForm').value = row.empresa_formadora || '';
+  document.getElementById('foParticipantes').value = row.participantes_count || 0;
+  document.getElementById('foCertificado').value = row.certificado_numero || '';
+  document.getElementById('foVencimiento').value = row.fecha_vencimiento || '';
+  document.getElementById('foDescripcion').value = row.descripcion || '';
+  document.getElementById('foListaParticipantes').value = row.participantes_lista || '';
+  document.getElementById('foObservaciones').value = row.observaciones || '';
+  document.getElementById('modalFormacionObra').style.display = 'flex';
+}
+
+async function guardarFo(e) {
+  e.preventDefault();
+  const id = document.getElementById('modalFormacionObra')._foId;
+  const body = {
+    obra_id:              document.getElementById('foObra').value ? parseInt(document.getElementById('foObra').value) : null,
+    titulo:               document.getElementById('foTitulo').value.trim(),
+    tipo_formacion:       document.getElementById('foTipo').value,
+    estado:               document.getElementById('foEstado').value,
+    fecha_formacion:      document.getElementById('foFecha').value,
+    duracion_horas:       parseFloat(document.getElementById('foDuracion').value) || 1,
+    lugar:                document.getElementById('foLugar').value.trim() || null,
+    instructor:           document.getElementById('foInstructor').value.trim() || null,
+    empresa_formadora:    document.getElementById('foEmpresaForm').value.trim() || null,
+    participantes_count:  parseInt(document.getElementById('foParticipantes').value) || 0,
+    certificado_numero:   document.getElementById('foCertificado').value.trim() || null,
+    fecha_vencimiento:    document.getElementById('foVencimiento').value || null,
+    descripcion:          document.getElementById('foDescripcion').value.trim() || null,
+    participantes_lista:  document.getElementById('foListaParticipantes').value.trim() || null,
+    observaciones:        document.getElementById('foObservaciones').value.trim() || null,
+  };
+  const method = id ? 'PUT' : 'POST';
+  const url    = id ? '/formacion-obra/' + id : '/formacion-obra';
+  const res = await api(url, { method, body: JSON.stringify(body) });
+  if (res.ok) { cerrarModalFo(); cargarFormacionObra(); }
+}
+
+async function eliminarFo(id) {
+  if (!confirm('¿Eliminar este registro de formación?')) return;
+  const res = await api('/formacion-obra/' + id, { method: 'DELETE' });
+  if (res.ok) cargarFormacionObra();
+}
+
+function cerrarModalFo() {
+  document.getElementById('modalFormacionObra').style.display = 'none';
+}
+
 // ════════════════════════════════════════════════════════════════════════
 // NEW-110: REGISTRO DE HORMIGONADO (EHE-08)
 // ════════════════════════════════════════════════════════════════════════

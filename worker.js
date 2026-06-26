@@ -4721,6 +4721,14 @@ export default {
         if (method === 'PUT')    return await actualizarVisitaObra(_vid, request, env);
         if (method === 'DELETE') return await eliminarVisitaObra(_vid, request, env);
       }
+      // ── Formación de Obra / Site Training Records (NEW-111) ───────────────────
+      if (path === '/formacion-obra' && method === 'GET')  return await getFormacionObra(request, env);
+      if (path === '/formacion-obra' && method === 'POST') return await crearFormacionObra(request, env);
+      if (path.startsWith('/formacion-obra/')) {
+        const _foId = parseInt(path.split('/formacion-obra/')[1]);
+        if (method === 'PUT')    return await actualizarFormacionObra(_foId, request, env);
+        if (method === 'DELETE') return await eliminarFormacionObra(_foId, request, env);
+      }
       // ── Registro de Hormigonado / Concrete Pour Log (NEW-110) ───────────────────
       if (path === '/registro-hormigonado' && method === 'GET')  return await getRegistroHormigonado(request, env);
       if (path === '/registro-hormigonado' && method === 'POST') return await crearPartHormigonado(request, env);
@@ -20808,5 +20816,130 @@ async function eliminarPartHormigonado(id, request, env) {
   const { empresa_id, rol } = await getAuth(request, env);
   if (!empresa_id || rol === 'operario') return err('Sin permisos', 403);
   await env.DB.prepare('DELETE FROM registro_hormigonado WHERE id=? AND empresa_id=?').bind(id, empresa_id).run();
+  return json({ ok: true });
+}
+
+
+// ════════════════════════════════════════════════════════════════════════════════
+// NEW-111: FORMACIÓN DE OBRA / SITE TRAINING RECORDS
+// Obligatorio por Ley 31/1995 de PRL y RD 1627/1997 en construcción
+// ════════════════════════════════════════════════════════════════════════════════
+async function ensureFormacionObraTable(env) {
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS formacion_obra (
+    id                    INTEGER PRIMARY KEY AUTOINCREMENT,
+    empresa_id            INTEGER NOT NULL,
+    obra_id               INTEGER,
+    numero                INTEGER NOT NULL,
+    fecha_formacion       TEXT    NOT NULL,
+    tipo_formacion        TEXT    NOT NULL DEFAULT 'toolbox-talk',
+    titulo                TEXT    NOT NULL,
+    descripcion           TEXT,
+    instructor            TEXT,
+    empresa_formadora     TEXT,
+    duracion_horas        REAL    DEFAULT 1,
+    lugar                 TEXT,
+    participantes_count   INTEGER DEFAULT 0,
+    participantes_lista   TEXT,
+    certificado_numero    TEXT,
+    fecha_vencimiento     TEXT,
+    estado                TEXT    NOT NULL DEFAULT 'realizado',
+    observaciones         TEXT,
+    created_by            TEXT,
+    created_at            TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at            TEXT NOT NULL DEFAULT (datetime('now'))
+  )`).run();
+}
+
+async function getFormacionObra(request, env) {
+  await ensureFormacionObraTable(env);
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const url    = new URL(request.url);
+  const obra   = url.searchParams.get('obra_id');
+  const tipo   = url.searchParams.get('tipo');
+  const estado = url.searchParams.get('estado');
+  let sql = `SELECT f.*, o.nombre as obra_nombre, o.codigo as obra_codigo
+    FROM formacion_obra f
+    LEFT JOIN obras o ON f.obra_id = o.id
+    WHERE f.empresa_id = ?`;
+  const params = [empresa_id];
+  if (obra)   { sql += ' AND f.obra_id = ?';         params.push(obra); }
+  if (tipo)   { sql += ' AND f.tipo_formacion = ?';  params.push(tipo); }
+  if (estado) { sql += ' AND f.estado = ?';          params.push(estado); }
+  sql += ' ORDER BY f.fecha_formacion DESC, f.numero DESC';
+  const { results } = await env.DB.prepare(sql).bind(...params).all();
+  const now = new Date().toISOString().slice(0,10);
+  const stats = {
+    total:              results.length,
+    total_horas:        results.reduce((s,r)=>s+(r.duracion_horas||0),0).toFixed(1),
+    total_participantes:results.reduce((s,r)=>s+(r.participantes_count||0),0),
+    planificados:       results.filter(r=>r.estado==='planificado').length,
+    vencidos:           results.filter(r=>r.fecha_vencimiento && r.fecha_vencimiento < now).length,
+    proximos_vencer:    results.filter(r=>{
+      if(!r.fecha_vencimiento) return false;
+      const d = new Date(r.fecha_vencimiento);
+      const diff = (d - new Date(now)) / (1000*60*60*24);
+      return diff >= 0 && diff <= 30;
+    }).length
+  };
+  return json({ data: results, stats });
+}
+
+async function crearFormacionObra(request, env) {
+  await ensureFormacionObraTable(env);
+  const { empresa_id, nombre: createdBy } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const body = await request.json().catch(() => ({}));
+  if (!body.titulo?.trim())          return err('El título de la formación es obligatorio');
+  if (!body.fecha_formacion)         return err('La fecha es obligatoria');
+  if (!body.tipo_formacion?.trim())  return err('El tipo de formación es obligatorio');
+  const last = await env.DB.prepare(
+    `SELECT MAX(numero) as mx FROM formacion_obra WHERE empresa_id=?`
+  ).bind(empresa_id).first();
+  const numero = (last?.mx || 0) + 1;
+  const r = await env.DB.prepare(`
+    INSERT INTO formacion_obra
+      (empresa_id,obra_id,numero,fecha_formacion,tipo_formacion,titulo,descripcion,
+       instructor,empresa_formadora,duracion_horas,lugar,participantes_count,
+       participantes_lista,certificado_numero,fecha_vencimiento,estado,observaciones,created_by)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+    .bind(empresa_id, body.obra_id||null, numero, body.fecha_formacion,
+          body.tipo_formacion||'toolbox-talk', body.titulo.trim(),
+          body.descripcion||null, body.instructor||null, body.empresa_formadora||null,
+          parseFloat(body.duracion_horas)||1, body.lugar||null,
+          parseInt(body.participantes_count)||0, body.participantes_lista||null,
+          body.certificado_numero||null, body.fecha_vencimiento||null,
+          body.estado||'realizado', body.observaciones||null, createdBy||null).run();
+  return json({ ok: true, id: r.meta.last_row_id, numero }, 201);
+}
+
+async function actualizarFormacionObra(id, request, env) {
+  await ensureFormacionObraTable(env);
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const body = await request.json().catch(() => ({}));
+  if (!body.titulo?.trim())  return err('El título es obligatorio');
+  await env.DB.prepare(`
+    UPDATE formacion_obra SET
+      obra_id=?,fecha_formacion=?,tipo_formacion=?,titulo=?,descripcion=?,
+      instructor=?,empresa_formadora=?,duracion_horas=?,lugar=?,participantes_count=?,
+      participantes_lista=?,certificado_numero=?,fecha_vencimiento=?,estado=?,
+      observaciones=?,updated_at=datetime('now')
+    WHERE id=? AND empresa_id=?`)
+    .bind(body.obra_id||null, body.fecha_formacion, body.tipo_formacion||'toolbox-talk',
+          body.titulo.trim(), body.descripcion||null, body.instructor||null,
+          body.empresa_formadora||null, parseFloat(body.duracion_horas)||1,
+          body.lugar||null, parseInt(body.participantes_count)||0,
+          body.participantes_lista||null, body.certificado_numero||null,
+          body.fecha_vencimiento||null, body.estado||'realizado',
+          body.observaciones||null, id, empresa_id).run();
+  return json({ ok: true });
+}
+
+async function eliminarFormacionObra(id, request, env) {
+  await ensureFormacionObraTable(env);
+  const { empresa_id, rol } = await getAuth(request, env);
+  if (!empresa_id || rol === 'operario') return err('Sin permisos', 403);
+  await env.DB.prepare('DELETE FROM formacion_obra WHERE id=? AND empresa_id=?').bind(id, empresa_id).run();
   return json({ ok: true });
 }
