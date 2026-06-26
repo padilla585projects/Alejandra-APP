@@ -1,8 +1,23 @@
 ## ESTADO ACTUAL
 
 **Sesión:** LIBRE
-**Última sesión:** 26/06/2026 — NEW-108 Flota de Vehículos + diagnóstico exhaustivo de la app
-**Versión actual:** App PWA **v7.40** · AlejandraIA **v1.9.17+31** · WORKER API  · commit **Próxima:** NEW-109 (ver notas — elegir feature genuinamente nueva, la app ya es muy completa)
+**Última sesión:** 26/06/2026 (continuación) — NEW-109 a NEW-113 (5 módulos nuevos)
+**Versión actual:** App PWA **v7.45** · worker  · commit 
+---
+
+## RESUMEN SESIÓN 26/06/2026 (continuación) — NEW-109 a NEW-113 v7.41→v7.45
+
+### Hecho ✅
+
+- **NEW-109**: Libro de Subcontratación Digital (Ley 32/2006) — v7.41 · commit  · worker - **NEW-110**: Registro de Hormigonado / Concrete Pour Log (EHE-08) — v7.42 · commit  · worker - **NEW-111**: Formación de Obra / Site Training Records (Ley 31/1995 PRL) — v7.43 · commit  · worker - **NEW-112**: Acta de Replanteo / Construction Stakeout (LOE art. 8) — v7.44 · commit  · worker - **NEW-113**: Cubicaciones de Obra / Quantity Takeoff — v7.45 · commit  · worker 
+### Worker: 710 funciones, 0 dups ✅ | panel.html: 30.896 líneas ✅
+
+### Próxima sesión — candidatos NEW-114+
+1. Escandallo de Precios (desglose material+mano obra+equipo por unidad)
+2. Libro de Rdp (Registro Diario de Prevención — distinto de diario de obra)
+3. Control de Acciones Correctivas / CAPA
+4. Cronograma de Pagos (hitos contractuales — distinto de flujo de caja)
+5. Control Calidad Soldadura / Ensayos END específicos
 
 ---
 
