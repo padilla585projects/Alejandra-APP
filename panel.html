@@ -432,7 +432,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
     <button class="nav-item active" data-page="dashboard" onclick="navTo('dashboard')">
       <span class="nav-icon">📊</span> Dashboard
     </button>
-    <button class="nav-item" data-page="globalDashboard" onclick="navTo('globalDashboard')">
+    <button class="nav-item nav-finance" data-page="globalDashboard" onclick="navTo('globalDashboard')" style="display:none">
       <span class="nav-icon">🌐</span> Dashboard Global
     </button>
     <button class="nav-item" data-page="obraDetalle" onclick="navTo('obraDetalle')">
@@ -550,7 +550,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
     </button>
 
     <div class="sidebar-section" onclick="sidebarToggle(this)" data-sid="planificacion"><span>📊 Planificación</span><span class="sec-chevron">▼</span></div>
-    <button class="nav-item" data-page="presupuesto" onclick="navTo('presupuesto')">
+    <button class="nav-item nav-finance" data-page="presupuesto" onclick="navTo('presupuesto')" style="display:none">
       <span class="nav-icon">💶</span> Presupuesto
     </button>
     <button class="nav-item" data-page="fases" onclick="navTo('fases')">
@@ -563,7 +563,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
     <button class="nav-item" data-page="planosObra" onclick="navTo('planosObra')">
       <span class="nav-icon">📐</span> Planos de Obra
     </button>
-    <button class="nav-item" data-page="costesObra" onclick="navTo('costesObra')">
+    <button class="nav-item nav-finance" data-page="costesObra" onclick="navTo('costesObra')" style="display:none">
       <span class="nav-icon">💰</span> Control de Costes
     </button>
     <button class="nav-item" data-page="contratosObra" onclick="navTo('contratosObra')">
@@ -580,7 +580,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
       <span class="nav-icon">🔔</span> Centro de Alertas
       <span class="nav-badge" id="alertasBadge" style="display:none">!</span>
     </button>
-    <button class="nav-item" data-page="finanzasObra" onclick="navTo('finanzasObra')">
+    <button class="nav-item nav-finance" data-page="finanzasObra" onclick="navTo('finanzasObra')" style="display:none">
       <span class="nav-icon">📊</span> Análisis Financiero
     </button>
     <button class="nav-item" data-page="cronogramaObra" onclick="navTo('cronogramaObra')">
@@ -714,7 +714,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
       <span class="nav-icon">🚨</span> Accidentes / Incidentes
       <span class="nav-badge" id="accidentesBadge" style="display:none">0</span>
     </button>
-    <button class="nav-item" data-page="flujoCaja" onclick="navTo('flujoCaja')">
+    <button class="nav-item nav-finance" data-page="flujoCaja" onclick="navTo('flujoCaja')" style="display:none">
       <span class="nav-icon">💰</span> Flujo de Caja
     </button>
     <button class="nav-item" data-page="solicitudesMat" onclick="navTo('solicitudesMat')">
@@ -733,7 +733,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
       <span class="nav-icon">🛡️</span> CAE / Docs Subcontratas
       <span class="nav-badge" id="caeBadge" style="display:none">0</span>
     </button>
-    <button class="nav-item" data-page="comparativosOferta" onclick="navTo('comparativosOferta')">
+    <button class="nav-item nav-finance" data-page="comparativosOferta" onclick="navTo('comparativosOferta')" style="display:none">
       <span class="nav-icon">🔖</span> Comparativo Ofertas
       <span class="nav-badge" id="cofBadge" style="display:none">0</span>
     </button>
@@ -754,11 +754,11 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
     <button class="nav-item" data-page="proveedoresGestion" onclick="navTo('proveedoresGestion')">
       <span class="nav-icon">🏭</span> Proveedores
     </button>
-    <button class="nav-item" data-page="facturasProveedor" onclick="navTo('facturasProveedor')">
+    <button class="nav-item nav-finance" data-page="facturasProveedor" style="display:none" onclick="navTo('facturasProveedor')">
       <span class="nav-icon">🧾</span> Facturas Proveedores
       <span class="nav-badge" id="factPendBadge" style="display:none">0</span>
     </button>
-    <button class="nav-item" data-page="cobrosCliente" onclick="navTo('cobrosCliente')">
+    <button class="nav-item nav-finance" data-page="cobrosCliente" style="display:none" onclick="navTo('cobrosCliente')">
       <span class="nav-icon">💳</span> Cobros de Clientes
       <span class="nav-badge" id="cobrosBadge" style="display:none">0</span>
     </button>
@@ -9432,6 +9432,11 @@ function iniciarApp() {
   // mostrar sección dev para superadmin y desarrollador
   if (hasSessionRole('superadmin', 'desarrollador')) {
     document.querySelectorAll('.nav-dev, .nav-dev-section').forEach(el => el.style.display = '');
+  }
+
+  // mostrar páginas financieras: todos excepto operario
+  if (!hasSessionRole('operario')) {
+    document.querySelectorAll('.nav-finance').forEach(el => el.style.display = '');
   }
 
   // mostrar secciones superadmin en página empresa

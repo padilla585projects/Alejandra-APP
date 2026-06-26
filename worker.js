@@ -9675,6 +9675,7 @@ async function getInventarioSeg(request, env) {
 
 async function buscarItemSeg(codigo, request, env) {
   const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
   const item = await env.DB.prepare('SELECT * FROM inventario_seg WHERE codigo = ? AND empresa_id = ?').bind(codigo.trim().toUpperCase(), empresa_id).first();
   if (!item) return json({ ok: false, error: 'No encontrado' }, 404);
   const hist = await env.DB.prepare('SELECT * FROM movimientos_seg WHERE item_id = ? ORDER BY fecha DESC LIMIT 10').bind(item.id).all();
@@ -10901,12 +10902,15 @@ async function getFestivos(request, env) {
 }
 
 async function getEventos(request, env) {
-  const { empresa_id, departamento, obra_id } = await getAuth(request, env);
+  const auth = await getAuth(request, env);
+  const { empresa_id, departamento, obra_id } = auth;
   if (!empresa_id) return err('No autorizado', 403);
   const url = new URL(request.url);
   let sql = 'SELECT e.*, o.nombre as obra_nombre FROM eventos_calendario e LEFT JOIN obras o ON e.obra_id = o.id WHERE e.empresa_id = ?';
   const params = [empresa_id];
-  const dept = url.searchParams.get('departamento') || departamento;
+  // Encargado y operario solo pueden ver su propio departamento (no bypass via query param)
+  const isRestricted = !auth.isSuperadmin && !auth.isAdmin && !auth.isEmpresaAdmin;
+  const dept = isRestricted ? departamento : (url.searchParams.get('departamento') || departamento);
   if (dept) { sql += ' AND e.departamento = ?'; params.push(dept); }
   const qObraId = url.searchParams.get('obra_id') || obra_id;
   if (qObraId) { sql += ' AND (e.obra_id = ? OR e.obra_id IS NULL)'; params.push(parseInt(qObraId)); }
