@@ -770,6 +770,10 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
       <span class="nav-icon">🏆</span> Licitaciones
       <span class="nav-badge" id="licitBadge" style="display:none">0</span>
     </button>
+    <button class="nav-item" data-page="libroSubcontratacion" onclick="navTo('libroSubcontratacion')">
+      <span class="nav-icon">📖</span> Libro Subcontratación
+      <span class="nav-badge" id="libroSubBadge" style="display:none">0</span>
+    </button>
     <button class="nav-item" data-page="flotaVehiculos" onclick="navTo('flotaVehiculos')">
       <span class="nav-icon">🚗</span> Flota de Vehículos
       <span class="nav-badge" id="flotaBadge" style="display:none">0</span>
@@ -2499,6 +2503,122 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
               <span id="atsElimBtn"></span>
               <button class="btn btn-primary" onclick="guardarAts()">💾 Guardar ATS</button>
             </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- LIBRO DE SUBCONTRATACIÓN DIGITAL / SUBCONTRACTOR REGISTER BOOK (NEW-109) -->
+      <div class="page" id="pageLibroSubcontratacion">
+        <div class="page-title">📖 Libro de Subcontratación / Subcontractor Register</div>
+        <div style="background:#fff3cd;border:1px solid #ffc107;border-radius:8px;padding:12px 16px;margin-bottom:12px;font-size:13px;color:#856404;">
+          <b>⚖️ Ley 32/2006 de Subcontratación en Construcción</b> — Obligatorio mantener este registro por obra.
+          Máximo 3 niveles de subcontratación. Nivel 3 requiere autorización expresa y justificación técnica.
+          Los datos deben conservarse 5 años tras finalizar la obra.
+        </div>
+        <!-- KPIs -->
+        <div id="libroSubKpis" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin-bottom:12px;"></div>
+        <!-- Filtros -->
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;align-items:center;">
+          <select id="lsFiltrObra" onchange="cargarLibroSubcontratacion()" style="padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;">
+            <option value="">— Todas las obras —</option>
+          </select>
+          <select id="lsFiltrNivel" onchange="filtrarLibroSubcontratacion()" style="padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;">
+            <option value="">Todos los niveles</option>
+            <option value="1">Nivel 1 (contratista principal)</option>
+            <option value="2">Nivel 2 (subcontrata de subcontrata)</option>
+            <option value="3">Nivel 3 (límite legal)</option>
+          </select>
+          <select id="lsFiltrEstado" onchange="filtrarLibroSubcontratacion()" style="padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;">
+            <option value="">Todos los estados</option>
+            <option value="activo">Activos</option>
+            <option value="finalizado">Finalizados</option>
+          </select>
+          <button onclick="abrirModalLs()" style="margin-left:auto;background:#1e3a5f;color:#fff;border:none;border-radius:6px;padding:7px 16px;font-size:13px;cursor:pointer;">
+            ➕ Nueva Entrada
+          </button>
+        </div>
+        <div id="tblLibroSub"></div>
+        <!-- Modal -->
+        <div class="modal-overlay" id="modalLibroSub" style="display:none" onclick="if(event.target===this)cerrarModalLs()">
+          <div class="modal-box" style="max-width:620px;max-height:90vh;overflow-y:auto;">
+            <div class="modal-header">
+              <h3 id="modalLsTitulo">Nueva Entrada en Libro</h3>
+              <button class="modal-close" onclick="cerrarModalLs()">✕</button>
+            </div>
+            <form id="formLibroSub" onsubmit="guardarLs(event)">
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                <div style="grid-column:1/-1">
+                  <label style="font-size:12px;color:#666;display:block;margin-bottom:3px;">Obra *</label>
+                  <select id="lsObra" required style="width:100%;padding:7px;border:1px solid #ddd;border-radius:5px;font-size:13px;">
+                    <option value="">— Seleccionar obra —</option>
+                  </select>
+                </div>
+                <div>
+                  <label style="font-size:12px;color:#666;display:block;margin-bottom:3px;">Nivel de subcontratación *</label>
+                  <select id="lsNivel" required onchange="checkNivelLs()" style="width:100%;padding:7px;border:1px solid #ddd;border-radius:5px;font-size:13px;">
+                    <option value="1">Nivel 1 — Primer subcontratista</option>
+                    <option value="2">Nivel 2 — Subcontrata de subcontrata</option>
+                    <option value="3">Nivel 3 — Límite legal (Ley 32/2006)</option>
+                  </select>
+                  <div id="lsAlertaNivel3" style="display:none;background:#f8d7da;border:1px solid #f5c6cb;border-radius:4px;padding:6px 8px;margin-top:4px;font-size:12px;color:#721c24;">
+                    ⚠️ <b>Nivel 3:</b> Requiere autorización expresa del promotor y justificación técnica. Registrar en observaciones.
+                  </div>
+                </div>
+                <div>
+                  <label style="font-size:12px;color:#666;display:block;margin-bottom:3px;">Estado</label>
+                  <select id="lsEstado" style="width:100%;padding:7px;border:1px solid #ddd;border-radius:5px;font-size:13px;">
+                    <option value="activo">Activo</option>
+                    <option value="finalizado">Finalizado</option>
+                  </select>
+                </div>
+                <div style="grid-column:1/-1">
+                  <label style="font-size:12px;color:#666;display:block;margin-bottom:3px;">Nombre de la subcontrata *</label>
+                  <input type="text" id="lsSubcontratista" required placeholder="Razón social o nombre comercial" style="width:100%;padding:7px;border:1px solid #ddd;border-radius:5px;font-size:13px;box-sizing:border-box;">
+                </div>
+                <div>
+                  <label style="font-size:12px;color:#666;display:block;margin-bottom:3px;">NIF / CIF</label>
+                  <input type="text" id="lsNif" placeholder="B12345678" style="width:100%;padding:7px;border:1px solid #ddd;border-radius:5px;font-size:13px;box-sizing:border-box;">
+                </div>
+                <div>
+                  <label style="font-size:12px;color:#666;display:block;margin-bottom:3px;">Nº trabajadores</label>
+                  <input type="number" id="lsNumTrabajadores" min="0" value="0" style="width:100%;padding:7px;border:1px solid #ddd;border-radius:5px;font-size:13px;box-sizing:border-box;">
+                </div>
+                <div style="grid-column:1/-1">
+                  <label style="font-size:12px;color:#666;display:block;margin-bottom:3px;">Actividad / Trabajos a realizar *</label>
+                  <textarea id="lsActividad" required rows="2" placeholder="Describir los trabajos que realizará la subcontrata..." style="width:100%;padding:7px;border:1px solid #ddd;border-radius:5px;font-size:13px;box-sizing:border-box;resize:vertical;"></textarea>
+                </div>
+                <div>
+                  <label style="font-size:12px;color:#666;display:block;margin-bottom:3px;">Fecha de inicio *</label>
+                  <input type="date" id="lsFechaInicio" required style="width:100%;padding:7px;border:1px solid #ddd;border-radius:5px;font-size:13px;box-sizing:border-box;">
+                </div>
+                <div>
+                  <label style="font-size:12px;color:#666;display:block;margin-bottom:3px;">Fecha de fin (prevista)</label>
+                  <input type="date" id="lsFechaFin" style="width:100%;padding:7px;border:1px solid #ddd;border-radius:5px;font-size:13px;box-sizing:border-box;">
+                </div>
+                <div>
+                  <label style="font-size:12px;color:#666;display:block;margin-bottom:3px;">Responsable de seguridad</label>
+                  <input type="text" id="lsRespSeguridad" placeholder="Nombre y apellidos" style="width:100%;padding:7px;border:1px solid #ddd;border-radius:5px;font-size:13px;box-sizing:border-box;">
+                </div>
+                <div>
+                  <label style="font-size:12px;color:#666;display:block;margin-bottom:3px;">Autorizado por</label>
+                  <input type="text" id="lsAutorizadoPor" placeholder="Nombre del responsable" style="width:100%;padding:7px;border:1px solid #ddd;border-radius:5px;font-size:13px;box-sizing:border-box;">
+                </div>
+                <div style="grid-column:1/-1">
+                  <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;">
+                    <input type="checkbox" id="lsRegimenEspecial" style="width:16px;height:16px;">
+                    <span>Régimen especial de subcontratación (autorizado por promotor/DF)</span>
+                  </label>
+                </div>
+                <div style="grid-column:1/-1">
+                  <label style="font-size:12px;color:#666;display:block;margin-bottom:3px;">Observaciones</label>
+                  <textarea id="lsObservaciones" rows="2" placeholder="Notas adicionales, justificaciones, condiciones especiales..." style="width:100%;padding:7px;border:1px solid #ddd;border-radius:5px;font-size:13px;box-sizing:border-box;resize:vertical;"></textarea>
+                </div>
+              </div>
+              <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px;">
+                <button type="button" onclick="cerrarModalLs()" style="padding:8px 18px;border:1px solid #ddd;border-radius:6px;background:#f5f5f5;cursor:pointer;font-size:13px;">Cancelar</button>
+                <button type="submit" style="padding:8px 18px;background:#1e3a5f;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px;">💾 Guardar</button>
+              </div>
+            </form>
           </div>
         </div>
       </div>
@@ -8939,6 +9059,7 @@ const PAGE_TITLES = {
   licitaciones:       '🏆 Gestión de Licitaciones / Bid Pipeline',
   gastosDietas:       '🧳 Gastos y Dietas de Personal / Expense Claims',
   flotaVehiculos:     '🚗 Flota de Vehículos de Empresa / Vehicle Fleet',
+  libroSubcontratacion: '📖 Libro de Subcontratación / Subcontractor Register (Ley 32/2006)',
 };
 
 const PAGE_LOADERS = {
@@ -9048,6 +9169,7 @@ const PAGE_LOADERS = {
   licitaciones:       cargarLicitaciones,
   gastosDietas:       cargarGastosDietas,
   flotaVehiculos:     cargarFlotaVehiculos,
+  libroSubcontratacion: cargarLibroSubcontratacion,
 };
 
 let currentPage = '';
@@ -9186,6 +9308,7 @@ const SYNC_INTERVALS = {
   licitaciones:       300,
   gastosDietas:       120,
   flotaVehiculos:     300,
+  libroSubcontratacion: 300,
 };
 
 let _syncTimer = null, _syncLabelTimer = null, _syncLastTs = null;
@@ -18549,6 +18672,166 @@ function exportarFinanzas() {
 }
 
 // ── FLOTA DE VEHÍCULOS DE EMPRESA / COMPANY VEHICLE FLEET (NEW-108) ──────────
+// ════════════════════════════════════════════════════════════════════════
+// NEW-109: LIBRO DE SUBCONTRATACIÓN (Ley 32/2006)
+// ════════════════════════════════════════════════════════════════════════
+let tblLs = null, _lsData = [];
+const LS_NIVEL_COLOR = { 1: '#22c55e', 2: '#f59e0b', 3: '#ef4444' };
+const LS_NIVEL_LABEL = { 1: '1º Nivel', 2: '2º Nivel', 3: '3º Nivel ⚠️' };
+
+async function cargarLibroSubcontratacion() {
+  await poblarSelectObras('lsFiltrObra');
+  await poblarSelectObras('lsObra');
+  const obra = document.getElementById('lsFiltrObra')?.value || '';
+  const url = '/libro-subcontratacion' + (obra ? '?obra_id=' + obra : '');
+  const data = await api(url);
+  _lsData = data.data || [];
+  const stats = data.stats || {};
+  // KPIs
+  const kpiEl = document.getElementById('libroSubKpis');
+  if (kpiEl) kpiEl.innerHTML = [
+    { label: 'Total entradas', val: stats.total || 0, color: '#1e3a5f' },
+    { label: 'Nivel 1', val: stats.nivel1 || 0, color: '#22c55e' },
+    { label: 'Nivel 2', val: stats.nivel2 || 0, color: '#f59e0b' },
+    { label: 'Nivel 3', val: stats.nivel3 || 0, color: '#ef4444' },
+    { label: 'Activos', val: stats.activos || 0, color: '#3b82f6' },
+    { label: 'Trabajadores activos', val: stats.total_trabajadores || 0, color: '#8b5cf6' },
+  ].map(k => '<div class="kpi-mini" style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:10px 12px;text-align:center;">'
+    + '<div style="font-size:22px;font-weight:700;color:' + k.color + ';">' + k.val + '</div>'
+    + '<div style="font-size:11px;color:#64748b;margin-top:2px;">' + k.label + '</div></div>').join('');
+  // alerta nivel 3
+  if (stats.alerta_nivel3) {
+    const kpiContainer = document.getElementById('libroSubKpis');
+    if (kpiContainer) {
+      const alert = document.createElement('div');
+      alert.style.cssText = 'grid-column:1/-1;background:#f8d7da;border:1px solid #f5c6cb;border-radius:6px;padding:8px 12px;font-size:12px;color:#721c24;';
+      alert.innerHTML = '⚠️ <b>ALERTA:</b> Existen subcontratas de nivel 3. Verificar autorización del promotor y justificación técnica en el libro.';
+      kpiContainer.appendChild(alert);
+    }
+  }
+  // Badge
+  const badge = document.getElementById('libroSubBadge');
+  if (badge) { badge.textContent = _lsData.length; badge.style.display = _lsData.length ? '' : 'none'; }
+  filtrarLibroSubcontratacion();
+}
+
+function filtrarLibroSubcontratacion() {
+  const nivel  = document.getElementById('lsFiltrNivel')?.value || '';
+  const estado = document.getElementById('lsFiltrEstado')?.value || '';
+  let rows = [..._lsData];
+  if (nivel)  rows = rows.filter(r => String(r.nivel) === nivel);
+  if (estado) rows = rows.filter(r => r.estado === estado);
+  if (tblLs) { tblLs.replaceData(rows); return; }
+  tblLs = new Tabulator('#tblLibroSub', {
+    data: rows,
+    layout: 'fitColumns',
+    height: '460px',
+    placeholder: 'No hay entradas en el libro de subcontratación',
+    columns: [
+      { title: 'Nº', field: 'numero_entrada', width: 55, hozAlign: 'center' },
+      { title: 'Nivel', field: 'nivel', width: 105, formatter: function(cell) {
+          const v = cell.getValue();
+          return '<span style="background:' + (LS_NIVEL_COLOR[v]||'#aaa') + ';color:#fff;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;">' + (LS_NIVEL_LABEL[v]||v) + '</span>';
+        }
+      },
+      { title: 'Subcontrata', field: 'subcontratista', minWidth: 160 },
+      { title: 'NIF', field: 'nif_subcontratista', width: 110 },
+      { title: 'Actividad', field: 'actividad', minWidth: 160 },
+      { title: 'Obra', field: 'obra_nombre', minWidth: 130 },
+      { title: 'Inicio', field: 'fecha_inicio', width: 95 },
+      { title: 'Fin', field: 'fecha_fin', width: 95 },
+      { title: 'Trab.', field: 'num_trabajadores', width: 65, hozAlign: 'center' },
+      { title: 'Estado', field: 'estado', width: 95, formatter: function(cell) {
+          const v = cell.getValue();
+          const color = v === 'activo' ? '#22c55e' : '#94a3b8';
+          return '<span style="background:' + color + ';color:#fff;padding:2px 8px;border-radius:10px;font-size:11px;">' + v + '</span>';
+        }
+      },
+      { title: 'Acciones', formatter: function(cell) {
+          const row = cell.getRow().getData();
+          return '<button onclick="editarLs(' + row.id + ')" style="background:#3b82f6;color:#fff;border:none;border-radius:4px;padding:3px 8px;font-size:11px;cursor:pointer;margin-right:4px;">✏️</button>'
+               + '<button onclick="eliminarLs(' + row.id + ')" style="background:#ef4444;color:#fff;border:none;border-radius:4px;padding:3px 8px;font-size:11px;cursor:pointer;">🗑️</button>';
+        }, width: 100, hozAlign: 'center', headerSort: false
+      },
+    ]
+  });
+}
+
+function abrirModalLs() {
+  document.getElementById('modalLsTitulo').textContent = 'Nueva Entrada en Libro';
+  document.getElementById('formLibroSub').reset();
+  document.getElementById('modalLibroSub')._lsId = null;
+  document.getElementById('lsAlertaNivel3').style.display = 'none';
+  poblarSelectObras('lsObra');
+  document.getElementById('modalLibroSub').style.display = 'flex';
+}
+
+function editarLs(id) {
+  const row = _lsData.find(r => r.id === id);
+  if (!row) return;
+  document.getElementById('modalLsTitulo').textContent = 'Editar Entrada #' + row.numero_entrada;
+  document.getElementById('modalLibroSub')._lsId = id;
+  poblarSelectObras('lsObra').then(() => {
+    document.getElementById('lsObra').value = row.obra_id;
+  });
+  document.getElementById('lsNivel').value = row.nivel;
+  document.getElementById('lsEstado').value = row.estado;
+  document.getElementById('lsSubcontratista').value = row.subcontratista || '';
+  document.getElementById('lsNif').value = row.nif_subcontratista || '';
+  document.getElementById('lsActividad').value = row.actividad || '';
+  document.getElementById('lsFechaInicio').value = row.fecha_inicio || '';
+  document.getElementById('lsFechaFin').value = row.fecha_fin || '';
+  document.getElementById('lsNumTrabajadores').value = row.num_trabajadores || 0;
+  document.getElementById('lsRespSeguridad').value = row.responsable_seguridad || '';
+  document.getElementById('lsAutorizadoPor').value = row.autorizado_por || '';
+  document.getElementById('lsRegimenEspecial').checked = !!row.regimen_especial;
+  document.getElementById('lsObservaciones').value = row.observaciones || '';
+  checkNivelLs();
+  document.getElementById('modalLibroSub').style.display = 'flex';
+}
+
+function checkNivelLs() {
+  const nivel = parseInt(document.getElementById('lsNivel').value);
+  document.getElementById('lsAlertaNivel3').style.display = nivel >= 3 ? '' : 'none';
+}
+
+async function guardarLs(e) {
+  e.preventDefault();
+  const id = document.getElementById('modalLibroSub')._lsId;
+  const body = {
+    obra_id:               parseInt(document.getElementById('lsObra').value),
+    nivel:                 parseInt(document.getElementById('lsNivel').value),
+    estado:                document.getElementById('lsEstado').value,
+    subcontratista:        document.getElementById('lsSubcontratista').value.trim(),
+    nif_subcontratista:    document.getElementById('lsNif').value.trim() || null,
+    actividad:             document.getElementById('lsActividad').value.trim(),
+    fecha_inicio:          document.getElementById('lsFechaInicio').value,
+    fecha_fin:             document.getElementById('lsFechaFin').value || null,
+    num_trabajadores:      parseInt(document.getElementById('lsNumTrabajadores').value) || 0,
+    responsable_seguridad: document.getElementById('lsRespSeguridad').value.trim() || null,
+    autorizado_por:        document.getElementById('lsAutorizadoPor').value.trim() || null,
+    regimen_especial:      document.getElementById('lsRegimenEspecial').checked,
+    observaciones:         document.getElementById('lsObservaciones').value.trim() || null,
+  };
+  const method = id ? 'PUT' : 'POST';
+  const url    = id ? '/libro-subcontratacion/' + id : '/libro-subcontratacion';
+  const res = await api(url, { method, body: JSON.stringify(body) });
+  if (res.ok) {
+    cerrarModalLs();
+    cargarLibroSubcontratacion();
+  }
+}
+
+async function eliminarLs(id) {
+  if (!confirm('¿Eliminar esta entrada del libro de subcontratación?')) return;
+  const res = await api('/libro-subcontratacion/' + id, { method: 'DELETE' });
+  if (res.ok) cargarLibroSubcontratacion();
+}
+
+function cerrarModalLs() {
+  document.getElementById('modalLibroSub').style.display = 'none';
+}
+
 let tblFv = null, _fvData = [];
 const FV_ESTADO_COLOR = {
   disponible: '#22c55e', asignado: '#3b82f6',

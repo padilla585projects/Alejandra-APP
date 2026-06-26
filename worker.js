@@ -4721,6 +4721,14 @@ export default {
         if (method === 'PUT')    return await actualizarVisitaObra(_vid, request, env);
         if (method === 'DELETE') return await eliminarVisitaObra(_vid, request, env);
       }
+      // ── Libro de Subcontratación / Subcontractor Register Book (NEW-109) ──────────
+      if (path === '/libro-subcontratacion' && method === 'GET')  return await getLibroSubcontratacion(request, env);
+      if (path === '/libro-subcontratacion' && method === 'POST') return await crearEntradaLibro(request, env);
+      if (path.startsWith('/libro-subcontratacion/')) {
+        const _lsId = parseInt(path.split('/libro-subcontratacion/')[1]);
+        if (method === 'PUT')    return await actualizarEntradaLibro(_lsId, request, env);
+        if (method === 'DELETE') return await eliminarEntradaLibro(_lsId, request, env);
+      }
       // ── Flota de Vehículos de Empresa / Company Vehicle Fleet (NEW-108) ──────────
       if (path === '/flota-vehiculos' && method === 'GET')  return await getFlotaVehiculos(request, env);
       if (path === '/flota-vehiculos' && method === 'POST') return await crearVehiculo(request, env);
@@ -20533,5 +20541,126 @@ async function eliminarVehiculo(id, request, env) {
   const { empresa_id, rol } = await getAuth(request, env);
   if (!empresa_id || rol === 'operario') return err('Sin permisos', 403);
   await env.DB.prepare('DELETE FROM flota_vehiculos WHERE id=? AND empresa_id=?').bind(id, empresa_id).run();
+  return json({ ok: true });
+}
+
+
+// ════════════════════════════════════════════════════════════════════════════════
+// NEW-109: LIBRO DE SUBCONTRATACIÓN DIGITAL / SUBCONTRACTOR REGISTER BOOK
+// Obligatorio por Ley 32/2006 de subcontratación en el sector de la construcción
+// ════════════════════════════════════════════════════════════════════════════════
+async function ensureLibroSubcontratacionTable(env) {
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS libro_subcontratacion (
+    id                    INTEGER PRIMARY KEY AUTOINCREMENT,
+    empresa_id            INTEGER NOT NULL,
+    obra_id               INTEGER NOT NULL,
+    numero_entrada        INTEGER NOT NULL,
+    nivel                 INTEGER NOT NULL DEFAULT 1,
+    subcontratista        TEXT    NOT NULL,
+    nif_subcontratista    TEXT,
+    actividad             TEXT    NOT NULL,
+    fecha_inicio          TEXT    NOT NULL,
+    fecha_fin             TEXT,
+    num_trabajadores      INTEGER DEFAULT 0,
+    responsable_seguridad TEXT,
+    autorizado_por        TEXT,
+    regimen_especial      INTEGER DEFAULT 0,
+    observaciones         TEXT,
+    estado                TEXT    NOT NULL DEFAULT 'activo',
+    created_by            TEXT,
+    created_at            TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at            TEXT NOT NULL DEFAULT (datetime('now'))
+  )`).run();
+}
+
+async function getLibroSubcontratacion(request, env) {
+  await ensureLibroSubcontratacionTable(env);
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const url    = new URL(request.url);
+  const obra   = url.searchParams.get('obra_id');
+  const estado = url.searchParams.get('estado');
+  const nivel  = url.searchParams.get('nivel');
+  let sql = `SELECT l.*, o.nombre as obra_nombre, o.codigo as obra_codigo
+    FROM libro_subcontratacion l
+    LEFT JOIN obras o ON l.obra_id = o.id
+    WHERE l.empresa_id = ?`;
+  const params = [empresa_id];
+  if (obra)   { sql += ' AND l.obra_id = ?';  params.push(obra); }
+  if (estado) { sql += ' AND l.estado = ?';   params.push(estado); }
+  if (nivel)  { sql += ' AND l.nivel = ?';    params.push(parseInt(nivel)); }
+  sql += ' ORDER BY l.obra_id, l.numero_entrada';
+  const { results } = await env.DB.prepare(sql).bind(...params).all();
+  const stats = {
+    total:   results.length,
+    nivel1:  results.filter(r=>r.nivel===1).length,
+    nivel2:  results.filter(r=>r.nivel===2).length,
+    nivel3:  results.filter(r=>r.nivel===3).length,
+    activos: results.filter(r=>r.estado==='activo').length,
+    alerta_nivel3: results.filter(r=>r.nivel>=3).length > 0,
+    total_trabajadores: results.filter(r=>r.estado==='activo').reduce((s,r)=>s+(r.num_trabajadores||0),0)
+  };
+  return json({ data: results, stats });
+}
+
+async function crearEntradaLibro(request, env) {
+  await ensureLibroSubcontratacionTable(env);
+  const { empresa_id, nombre: createdBy } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const body = await request.json().catch(() => ({}));
+  if (!body.subcontratista?.trim()) return err('El nombre de la subcontrata es obligatorio');
+  if (!body.actividad?.trim())      return err('La actividad es obligatoria');
+  if (!body.fecha_inicio)           return err('La fecha de inicio es obligatoria');
+  if (!body.obra_id)                return err('La obra es obligatoria');
+  const nivel = parseInt(body.nivel) || 1;
+  if (nivel > 3) return err('La Ley 32/2006 prohíbe más de 3 niveles de subcontratación', 422);
+  // Auto-number within obra
+  const last = await env.DB.prepare(
+    `SELECT MAX(numero_entrada) as mx FROM libro_subcontratacion WHERE empresa_id=? AND obra_id=?`
+  ).bind(empresa_id, body.obra_id).first();
+  const numero = (last?.mx || 0) + 1;
+  const r = await env.DB.prepare(`
+    INSERT INTO libro_subcontratacion
+      (empresa_id,obra_id,numero_entrada,nivel,subcontratista,nif_subcontratista,actividad,
+       fecha_inicio,fecha_fin,num_trabajadores,responsable_seguridad,autorizado_por,
+       regimen_especial,observaciones,estado,created_by)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+    .bind(empresa_id, body.obra_id, numero, nivel, body.subcontratista.trim(),
+          body.nif_subcontratista||null, body.actividad.trim(),
+          body.fecha_inicio, body.fecha_fin||null, parseInt(body.num_trabajadores)||0,
+          body.responsable_seguridad||null, body.autorizado_por||null,
+          body.regimen_especial?1:0, body.observaciones||null,
+          body.estado||'activo', createdBy||null).run();
+  return json({ ok: true, id: r.meta.last_row_id, numero }, 201);
+}
+
+async function actualizarEntradaLibro(id, request, env) {
+  await ensureLibroSubcontratacionTable(env);
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const body = await request.json().catch(() => ({}));
+  if (!body.subcontratista?.trim()) return err('El nombre de la subcontrata es obligatorio');
+  if (!body.actividad?.trim())      return err('La actividad es obligatoria');
+  const nivel = parseInt(body.nivel) || 1;
+  if (nivel > 3) return err('La Ley 32/2006 prohíbe más de 3 niveles de subcontratación', 422);
+  await env.DB.prepare(`
+    UPDATE libro_subcontratacion SET
+      nivel=?,subcontratista=?,nif_subcontratista=?,actividad=?,fecha_inicio=?,fecha_fin=?,
+      num_trabajadores=?,responsable_seguridad=?,autorizado_por=?,regimen_especial=?,
+      observaciones=?,estado=?,updated_at=datetime('now')
+    WHERE id=? AND empresa_id=?`)
+    .bind(nivel, body.subcontratista.trim(), body.nif_subcontratista||null, body.actividad.trim(),
+          body.fecha_inicio, body.fecha_fin||null, parseInt(body.num_trabajadores)||0,
+          body.responsable_seguridad||null, body.autorizado_por||null,
+          body.regimen_especial?1:0, body.observaciones||null, body.estado||'activo',
+          id, empresa_id).run();
+  return json({ ok: true });
+}
+
+async function eliminarEntradaLibro(id, request, env) {
+  await ensureLibroSubcontratacionTable(env);
+  const { empresa_id, rol } = await getAuth(request, env);
+  if (!empresa_id || rol === 'operario') return err('Sin permisos', 403);
+  await env.DB.prepare('DELETE FROM libro_subcontratacion WHERE id=? AND empresa_id=?').bind(id, empresa_id).run();
   return json({ ok: true });
 }
