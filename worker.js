@@ -4721,6 +4721,14 @@ export default {
         if (method === 'PUT')    return await actualizarVisitaObra(_vid, request, env);
         if (method === 'DELETE') return await eliminarVisitaObra(_vid, request, env);
       }
+      // ── Acta de Replanteo / Construction Stakeout Record (NEW-112) ──────────
+      if (path === '/actas-replanteo' && method === 'GET')  return await getActasReplanteo(request, env);
+      if (path === '/actas-replanteo' && method === 'POST') return await crearActaReplanteo(request, env);
+      if (path.startsWith('/actas-replanteo/')) {
+        const _arId = parseInt(path.split('/actas-replanteo/')[1]);
+        if (method === 'PUT')    return await actualizarActaReplanteo(_arId, request, env);
+        if (method === 'DELETE') return await eliminarActaReplanteo(_arId, request, env);
+      }
       // ── Formación de Obra / Site Training Records (NEW-111) ───────────────────
       if (path === '/formacion-obra' && method === 'GET')  return await getFormacionObra(request, env);
       if (path === '/formacion-obra' && method === 'POST') return await crearFormacionObra(request, env);
@@ -20941,5 +20949,141 @@ async function eliminarFormacionObra(id, request, env) {
   const { empresa_id, rol } = await getAuth(request, env);
   if (!empresa_id || rol === 'operario') return err('Sin permisos', 403);
   await env.DB.prepare('DELETE FROM formacion_obra WHERE id=? AND empresa_id=?').bind(id, empresa_id).run();
+  return json({ ok: true });
+}
+
+
+// ════════════════════════════════════════════════════════════════════════════════
+// NEW-112: ACTA DE REPLANTEO / CONSTRUCTION STAKEOUT RECORD
+// Obligatorio por Ley 38/1999 LOE (art. 8) antes del inicio de las obras
+// ════════════════════════════════════════════════════════════════════════════════
+async function ensureActasReplanteoTable(env) {
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS actas_replanteo (
+    id                        INTEGER PRIMARY KEY AUTOINCREMENT,
+    empresa_id                INTEGER NOT NULL,
+    obra_id                   INTEGER NOT NULL,
+    numero                    INTEGER NOT NULL,
+    fecha_replanteo           TEXT    NOT NULL,
+    estado                    TEXT    NOT NULL DEFAULT 'conforme',
+    alineaciones_verificadas  INTEGER DEFAULT 0,
+    cotas_verificadas         INTEGER DEFAULT 0,
+    acceso_obra_disponible    INTEGER DEFAULT 0,
+    suministros_disponibles   INTEGER DEFAULT 0,
+    descripcion_terreno       TEXT,
+    condiciones_terreno       TEXT,
+    firmante_promotor         TEXT,
+    firmante_df               TEXT,
+    firmante_constructor      TEXT,
+    fecha_inicio_plazo        TEXT,
+    plazo_ejecucion_dias      INTEGER,
+    fecha_fin_prevista        TEXT,
+    reservas                  TEXT,
+    observaciones             TEXT,
+    estado_firma              TEXT    NOT NULL DEFAULT 'pendiente',
+    created_by                TEXT,
+    created_at                TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at                TEXT NOT NULL DEFAULT (datetime('now'))
+  )`).run();
+}
+
+async function getActasReplanteo(request, env) {
+  await ensureActasReplanteoTable(env);
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const url  = new URL(request.url);
+  const obra = url.searchParams.get('obra_id');
+  let sql = `SELECT a.*, o.nombre as obra_nombre, o.codigo as obra_codigo
+    FROM actas_replanteo a
+    LEFT JOIN obras o ON a.obra_id = o.id
+    WHERE a.empresa_id = ?`;
+  const params = [empresa_id];
+  if (obra) { sql += ' AND a.obra_id = ?'; params.push(obra); }
+  sql += ' ORDER BY a.fecha_replanteo DESC';
+  const { results } = await env.DB.prepare(sql).bind(...params).all();
+  const stats = {
+    total:           results.length,
+    conformes:       results.filter(r=>r.estado==='conforme').length,
+    con_reservas:    results.filter(r=>r.estado==='con_reservas').length,
+    no_conformes:    results.filter(r=>r.estado==='no_conforme').length,
+    sin_firmar:      results.filter(r=>r.estado_firma==='pendiente').length,
+    obras_iniciadas: [...new Set(results.map(r=>r.obra_id))].length
+  };
+  return json({ data: results, stats });
+}
+
+async function crearActaReplanteo(request, env) {
+  await ensureActasReplanteoTable(env);
+  const { empresa_id, nombre: createdBy } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const body = await request.json().catch(() => ({}));
+  if (!body.fecha_replanteo) return err('La fecha de replanteo es obligatoria');
+  if (!body.obra_id)         return err('La obra es obligatoria');
+  const last = await env.DB.prepare(
+    `SELECT MAX(numero) as mx FROM actas_replanteo WHERE empresa_id=?`
+  ).bind(empresa_id).first();
+  const numero = (last?.mx || 0) + 1;
+  // Calcular fecha fin prevista si tenemos inicio y plazo
+  let fechaFin = body.fecha_fin_prevista || null;
+  if (!fechaFin && body.fecha_inicio_plazo && body.plazo_ejecucion_dias) {
+    const d = new Date(body.fecha_inicio_plazo);
+    d.setDate(d.getDate() + parseInt(body.plazo_ejecucion_dias));
+    fechaFin = d.toISOString().slice(0, 10);
+  }
+  const r = await env.DB.prepare(`
+    INSERT INTO actas_replanteo
+      (empresa_id,obra_id,numero,fecha_replanteo,estado,
+       alineaciones_verificadas,cotas_verificadas,acceso_obra_disponible,suministros_disponibles,
+       descripcion_terreno,condiciones_terreno,firmante_promotor,firmante_df,firmante_constructor,
+       fecha_inicio_plazo,plazo_ejecucion_dias,fecha_fin_prevista,reservas,observaciones,
+       estado_firma,created_by)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+    .bind(empresa_id, body.obra_id, numero, body.fecha_replanteo,
+          body.estado||'conforme',
+          body.alineaciones_verificadas?1:0, body.cotas_verificadas?1:0,
+          body.acceso_obra_disponible?1:0, body.suministros_disponibles?1:0,
+          body.descripcion_terreno||null, body.condiciones_terreno||null,
+          body.firmante_promotor||null, body.firmante_df||null, body.firmante_constructor||null,
+          body.fecha_inicio_plazo||null, parseInt(body.plazo_ejecucion_dias)||null,
+          fechaFin, body.reservas||null, body.observaciones||null,
+          body.estado_firma||'pendiente', createdBy||null).run();
+  return json({ ok: true, id: r.meta.last_row_id, numero }, 201);
+}
+
+async function actualizarActaReplanteo(id, request, env) {
+  await ensureActasReplanteoTable(env);
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const body = await request.json().catch(() => ({}));
+  if (!body.fecha_replanteo) return err('La fecha de replanteo es obligatoria');
+  let fechaFin = body.fecha_fin_prevista || null;
+  if (!fechaFin && body.fecha_inicio_plazo && body.plazo_ejecucion_dias) {
+    const d = new Date(body.fecha_inicio_plazo);
+    d.setDate(d.getDate() + parseInt(body.plazo_ejecucion_dias));
+    fechaFin = d.toISOString().slice(0, 10);
+  }
+  await env.DB.prepare(`
+    UPDATE actas_replanteo SET
+      fecha_replanteo=?,estado=?,alineaciones_verificadas=?,cotas_verificadas=?,
+      acceso_obra_disponible=?,suministros_disponibles=?,descripcion_terreno=?,
+      condiciones_terreno=?,firmante_promotor=?,firmante_df=?,firmante_constructor=?,
+      fecha_inicio_plazo=?,plazo_ejecucion_dias=?,fecha_fin_prevista=?,
+      reservas=?,observaciones=?,estado_firma=?,updated_at=datetime('now')
+    WHERE id=? AND empresa_id=?`)
+    .bind(body.fecha_replanteo, body.estado||'conforme',
+          body.alineaciones_verificadas?1:0, body.cotas_verificadas?1:0,
+          body.acceso_obra_disponible?1:0, body.suministros_disponibles?1:0,
+          body.descripcion_terreno||null, body.condiciones_terreno||null,
+          body.firmante_promotor||null, body.firmante_df||null, body.firmante_constructor||null,
+          body.fecha_inicio_plazo||null, parseInt(body.plazo_ejecucion_dias)||null,
+          fechaFin, body.reservas||null, body.observaciones||null,
+          body.estado_firma||'pendiente', id, empresa_id).run();
+  return json({ ok: true });
+}
+
+async function eliminarActaReplanteo(id, request, env) {
+  await ensureActasReplanteoTable(env);
+  const { empresa_id, rol } = await getAuth(request, env);
+  if (!empresa_id || rol === 'operario') return err('Sin permisos', 403);
+  await env.DB.prepare('DELETE FROM actas_replanteo WHERE id=? AND empresa_id=?').bind(id, empresa_id).run();
   return json({ ok: true });
 }

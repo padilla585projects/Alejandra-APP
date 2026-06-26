@@ -770,6 +770,10 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
       <span class="nav-icon">🏆</span> Licitaciones
       <span class="nav-badge" id="licitBadge" style="display:none">0</span>
     </button>
+    <button class="nav-item" data-page="actasReplanteo" onclick="navTo('actasReplanteo')">
+      <span class="nav-icon">📐</span> Acta de Replanteo
+      <span class="nav-badge" id="repBadge" style="display:none">0</span>
+    </button>
     <button class="nav-item" data-page="formacionObra" onclick="navTo('formacionObra')">
       <span class="nav-icon">🎓</span> Formación de Obra
       <span class="nav-badge" id="formacionBadge" style="display:none">0</span>
@@ -2511,6 +2515,138 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
               <span id="atsElimBtn"></span>
               <button class="btn btn-primary" onclick="guardarAts()">💾 Guardar ATS</button>
             </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ACTA DE REPLANTEO / CONSTRUCTION STAKEOUT RECORD (NEW-112) -->
+      <div class="page" id="pageActasReplanteo">
+        <div class="page-title">📐 Acta de Replanteo / Construction Stakeout Record</div>
+        <div style="background:#fdf4ff;border:1px solid #a855f7;border-radius:8px;padding:12px 16px;margin-bottom:12px;font-size:13px;color:#581c87;">
+          <b>⚖️ Ley 38/1999 de Ordenación de la Edificación (LOE, art. 8)</b> — El Acta de Replanteo es el documento que da inicio oficial a la ejecución de la obra.
+          Debe ser firmada por el Promotor, la Dirección Facultativa y el Constructor antes del inicio de los trabajos.
+        </div>
+        <div id="replanteoKpis" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px;margin-bottom:12px;"></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;align-items:center;">
+          <select id="arFiltrObra" onchange="cargarActasReplanteo()" style="padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;">
+            <option value="">— Todas las obras —</option>
+          </select>
+          <select id="arFiltrEstado" onchange="filtrarActasReplanteo()" style="padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;">
+            <option value="">Todos los estados</option>
+            <option value="conforme">Conforme</option>
+            <option value="con_reservas">Con reservas</option>
+            <option value="no_conforme">No conforme</option>
+          </select>
+          <button onclick="abrirModalAr()" style="margin-left:auto;background:#1e3a5f;color:#fff;border:none;border-radius:6px;padding:7px 16px;font-size:13px;cursor:pointer;">
+            ➕ Nueva Acta
+          </button>
+        </div>
+        <div id="tblActasReplanteo"></div>
+        <div class="modal-overlay" id="modalActaReplanteo" style="display:none" onclick="if(event.target===this)cerrarModalAr()">
+          <div class="modal-box" style="max-width:680px;max-height:90vh;overflow-y:auto;">
+            <div class="modal-header">
+              <h3 id="modalArTitulo">Nueva Acta de Replanteo</h3>
+              <button class="modal-close" onclick="cerrarModalAr()">✕</button>
+            </div>
+            <form id="formActaReplanteo" onsubmit="guardarAr(event)">
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                <div style="grid-column:1/-1">
+                  <label style="font-size:12px;color:#666;display:block;margin-bottom:3px;">Obra *</label>
+                  <select id="arObra" required style="width:100%;padding:7px;border:1px solid #ddd;border-radius:5px;font-size:13px;">
+                    <option value="">— Seleccionar obra —</option>
+                  </select>
+                </div>
+                <div>
+                  <label style="font-size:12px;color:#666;display:block;margin-bottom:3px;">Fecha de replanteo *</label>
+                  <input type="date" id="arFecha" required style="width:100%;padding:7px;border:1px solid #ddd;border-radius:5px;font-size:13px;box-sizing:border-box;">
+                </div>
+                <div>
+                  <label style="font-size:12px;color:#666;display:block;margin-bottom:3px;">Estado del replanteo</label>
+                  <select id="arEstado" style="width:100%;padding:7px;border:1px solid #ddd;border-radius:5px;font-size:13px;">
+                    <option value="conforme">✅ Conforme</option>
+                    <option value="con_reservas">⚠️ Conforme con reservas</option>
+                    <option value="no_conforme">🔴 No conforme</option>
+                  </select>
+                </div>
+                <div>
+                  <label style="font-size:12px;color:#666;display:block;margin-bottom:3px;">Estado de firma</label>
+                  <select id="arEstadoFirma" style="width:100%;padding:7px;border:1px solid #ddd;border-radius:5px;font-size:13px;">
+                    <option value="pendiente">Pendiente de firma</option>
+                    <option value="firmado">Firmado</option>
+                    <option value="archivado">Archivado</option>
+                  </select>
+                </div>
+                <!-- Verificaciones -->
+                <div style="grid-column:1/-1;background:#f8fafc;border-radius:6px;padding:10px 12px;">
+                  <div style="font-size:12px;font-weight:600;color:#475569;margin-bottom:8px;">Verificaciones realizadas en obra</div>
+                  <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
+                    <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;">
+                      <input type="checkbox" id="arAlineaciones" style="width:15px;height:15px;">
+                      <span>Alineaciones verificadas</span>
+                    </label>
+                    <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;">
+                      <input type="checkbox" id="arCotas" style="width:15px;height:15px;">
+                      <span>Cotas topográficas verificadas</span>
+                    </label>
+                    <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;">
+                      <input type="checkbox" id="arAcceso" style="width:15px;height:15px;">
+                      <span>Acceso a obra disponible</span>
+                    </label>
+                    <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;">
+                      <input type="checkbox" id="arSuministros" style="width:15px;height:15px;">
+                      <span>Acometidas / suministros disponibles</span>
+                    </label>
+                  </div>
+                </div>
+                <!-- Firmantes -->
+                <div style="grid-column:1/-1;background:#f8fafc;border-radius:6px;padding:10px 12px;">
+                  <div style="font-size:12px;font-weight:600;color:#475569;margin-bottom:8px;">Firmantes del acta</div>
+                  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
+                    <div>
+                      <label style="font-size:11px;color:#666;display:block;margin-bottom:2px;">Promotor</label>
+                      <input type="text" id="arFirmaPromotor" placeholder="Nombre" style="width:100%;padding:6px;border:1px solid #ddd;border-radius:4px;font-size:12px;box-sizing:border-box;">
+                    </div>
+                    <div>
+                      <label style="font-size:11px;color:#666;display:block;margin-bottom:2px;">Dirección Facultativa</label>
+                      <input type="text" id="arFirmaDF" placeholder="Arquitecto / Ingeniero" style="width:100%;padding:6px;border:1px solid #ddd;border-radius:4px;font-size:12px;box-sizing:border-box;">
+                    </div>
+                    <div>
+                      <label style="font-size:11px;color:#666;display:block;margin-bottom:2px;">Constructor</label>
+                      <input type="text" id="arFirmaConstructor" placeholder="Jefe de obra" style="width:100%;padding:6px;border:1px solid #ddd;border-radius:4px;font-size:12px;box-sizing:border-box;">
+                    </div>
+                  </div>
+                </div>
+                <!-- Plazo -->
+                <div>
+                  <label style="font-size:12px;color:#666;display:block;margin-bottom:3px;">Fecha inicio plazo ejecución</label>
+                  <input type="date" id="arFechaInicio" onchange="calcularFechaFinAr()" style="width:100%;padding:7px;border:1px solid #ddd;border-radius:5px;font-size:13px;box-sizing:border-box;">
+                </div>
+                <div>
+                  <label style="font-size:12px;color:#666;display:block;margin-bottom:3px;">Plazo de ejecución (días)</label>
+                  <input type="number" id="arPlazo" min="1" placeholder="365" onchange="calcularFechaFinAr()" style="width:100%;padding:7px;border:1px solid #ddd;border-radius:5px;font-size:13px;box-sizing:border-box;">
+                </div>
+                <div style="grid-column:1/-1">
+                  <label style="font-size:12px;color:#666;display:block;margin-bottom:3px;">Fecha fin prevista (calculada automáticamente)</label>
+                  <input type="date" id="arFechaFin" style="width:100%;padding:7px;border:1px solid #ddd;border-radius:5px;font-size:13px;box-sizing:border-box;background:#f8fafc;" readonly>
+                </div>
+                <div style="grid-column:1/-1">
+                  <label style="font-size:12px;color:#666;display:block;margin-bottom:3px;">Descripción del estado del terreno</label>
+                  <textarea id="arDescTerreno" rows="2" placeholder="Estado general del terreno, características observadas..." style="width:100%;padding:7px;border:1px solid #ddd;border-radius:5px;font-size:13px;box-sizing:border-box;resize:vertical;"></textarea>
+                </div>
+                <div style="grid-column:1/-1">
+                  <label style="font-size:12px;color:#666;display:block;margin-bottom:3px;">Reservas (si el estado es con reservas)</label>
+                  <textarea id="arReservas" rows="2" placeholder="Describir las reservas o condicionantes identificados..." style="width:100%;padding:7px;border:1px solid #ddd;border-radius:5px;font-size:13px;box-sizing:border-box;resize:vertical;"></textarea>
+                </div>
+                <div style="grid-column:1/-1">
+                  <label style="font-size:12px;color:#666;display:block;margin-bottom:3px;">Observaciones</label>
+                  <textarea id="arObservaciones" rows="2" placeholder="Observaciones adicionales..." style="width:100%;padding:7px;border:1px solid #ddd;border-radius:5px;font-size:13px;box-sizing:border-box;resize:vertical;"></textarea>
+                </div>
+              </div>
+              <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px;">
+                <button type="button" onclick="cerrarModalAr()" style="padding:8px 18px;border:1px solid #ddd;border-radius:6px;background:#f5f5f5;cursor:pointer;font-size:13px;">Cancelar</button>
+                <button type="submit" style="padding:8px 18px;background:#1e3a5f;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px;">💾 Guardar Acta</button>
+              </div>
+            </form>
           </div>
         </div>
       </div>
@@ -9330,6 +9466,7 @@ const PAGE_TITLES = {
   licitaciones:       '🏆 Gestión de Licitaciones / Bid Pipeline',
   gastosDietas:       '🧳 Gastos y Dietas de Personal / Expense Claims',
   flotaVehiculos:     '🚗 Flota de Vehículos de Empresa / Vehicle Fleet',
+  actasReplanteo:       '📐 Acta de Replanteo / Construction Stakeout Record (LOE art. 8)',
   formacionObra:        '🎓 Formación de Obra / Site Training Records (PRL)',
   registroHormigonado:  '🏗️ Registro de Hormigonado / Concrete Pour Log (EHE-08)',
   libroSubcontratacion: '📖 Libro de Subcontratación / Subcontractor Register (Ley 32/2006)',
@@ -9442,6 +9579,7 @@ const PAGE_LOADERS = {
   licitaciones:       cargarLicitaciones,
   gastosDietas:       cargarGastosDietas,
   flotaVehiculos:     cargarFlotaVehiculos,
+  actasReplanteo:       cargarActasReplanteo,
   formacionObra:        cargarFormacionObra,
   registroHormigonado:  cargarRegistroHormigonado,
   libroSubcontratacion: cargarLibroSubcontratacion,
@@ -9583,6 +9721,7 @@ const SYNC_INTERVALS = {
   licitaciones:       300,
   gastosDietas:       120,
   flotaVehiculos:     300,
+  actasReplanteo:       300,
   formacionObra:        300,
   registroHormigonado:  300,
   libroSubcontratacion: 300,
@@ -18949,6 +19088,160 @@ function exportarFinanzas() {
 }
 
 // ── FLOTA DE VEHÍCULOS DE EMPRESA / COMPANY VEHICLE FLEET (NEW-108) ──────────
+// ════════════════════════════════════════════════════════════════════════
+// NEW-112: ACTA DE REPLANTEO / CONSTRUCTION STAKEOUT RECORD (LOE art. 8)
+// ════════════════════════════════════════════════════════════════════════
+let tblAr = null, _arData = [];
+const AR_ESTADO_COLOR  = { conforme:'#22c55e', con_reservas:'#f59e0b', no_conforme:'#ef4444' };
+const AR_ESTADO_LABEL  = { conforme:'Conforme', con_reservas:'Con reservas', no_conforme:'No conforme' };
+const AR_FIRMA_COLOR   = { pendiente:'#94a3b8', firmado:'#22c55e', archivado:'#6366f1' };
+
+async function cargarActasReplanteo() {
+  await poblarSelectObras('arFiltrObra');
+  await poblarSelectObras('arObra');
+  const obra = document.getElementById('arFiltrObra')?.value || '';
+  const url = '/actas-replanteo' + (obra ? '?obra_id=' + obra : '');
+  const data = await api(url);
+  _arData = data.data || [];
+  const stats = data.stats || {};
+  const kpiEl = document.getElementById('replanteoKpis');
+  if (kpiEl) kpiEl.innerHTML = [
+    { label: 'Total actas', val: stats.total || 0, color: '#1e3a5f' },
+    { label: 'Conformes', val: stats.conformes || 0, color: '#22c55e' },
+    { label: 'Con reservas', val: stats.con_reservas || 0, color: '#f59e0b' },
+    { label: 'No conformes', val: stats.no_conformes || 0, color: '#ef4444' },
+    { label: 'Sin firmar', val: stats.sin_firmar || 0, color: '#94a3b8' },
+    { label: 'Obras iniciadas', val: stats.obras_iniciadas || 0, color: '#3b82f6' },
+  ].map(k => '<div class="kpi-mini" style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:10px 12px;text-align:center;">'
+    + '<div style="font-size:22px;font-weight:700;color:' + k.color + ';">' + k.val + '</div>'
+    + '<div style="font-size:11px;color:#64748b;margin-top:2px;">' + k.label + '</div></div>').join('');
+  const badge = document.getElementById('repBadge');
+  if (badge) { badge.textContent = _arData.length; badge.style.display = _arData.length ? '' : 'none'; }
+  tblAr = null;
+  filtrarActasReplanteo();
+}
+
+function filtrarActasReplanteo() {
+  const estado = document.getElementById('arFiltrEstado')?.value || '';
+  let rows = [..._arData];
+  if (estado) rows = rows.filter(r => r.estado === estado);
+  if (tblAr) { tblAr.replaceData(rows); return; }
+  tblAr = new Tabulator('#tblActasReplanteo', {
+    data: rows,
+    layout: 'fitColumns',
+    height: '460px',
+    placeholder: 'No hay actas de replanteo registradas',
+    columns: [
+      { title: 'Nº', field: 'numero', width: 55, hozAlign: 'center' },
+      { title: 'Fecha', field: 'fecha_replanteo', width: 105 },
+      { title: 'Obra', field: 'obra_nombre', minWidth: 160 },
+      { title: 'Estado', field: 'estado', width: 120, formatter: function(cell) {
+          const v = cell.getValue();
+          return '<span style="background:' + (AR_ESTADO_COLOR[v]||'#aaa') + ';color:#fff;padding:2px 8px;border-radius:10px;font-size:11px;">' + (AR_ESTADO_LABEL[v]||v) + '</span>';
+        }
+      },
+      { title: 'Firma', field: 'estado_firma', width: 100, formatter: function(cell) {
+          const v = cell.getValue();
+          return '<span style="background:' + (AR_FIRMA_COLOR[v]||'#aaa') + ';color:#fff;padding:2px 8px;border-radius:10px;font-size:11px;">' + v + '</span>';
+        }
+      },
+      { title: 'Promotor', field: 'firmante_promotor', width: 120 },
+      { title: 'DF', field: 'firmante_df', width: 120 },
+      { title: 'Constructor', field: 'firmante_constructor', width: 120 },
+      { title: 'Inicio plazo', field: 'fecha_inicio_plazo', width: 100 },
+      { title: 'Fin prevista', field: 'fecha_fin_prevista', width: 100 },
+      { title: 'Acciones', formatter: function(cell) {
+          const row = cell.getRow().getData();
+          return '<button onclick="editarAr(' + row.id + ')" style="background:#3b82f6;color:#fff;border:none;border-radius:4px;padding:3px 8px;font-size:11px;cursor:pointer;margin-right:4px;">✏️</button>'
+               + '<button onclick="eliminarAr(' + row.id + ')" style="background:#ef4444;color:#fff;border:none;border-radius:4px;padding:3px 8px;font-size:11px;cursor:pointer;">🗑️</button>';
+        }, width: 100, hozAlign: 'center', headerSort: false
+      },
+    ]
+  });
+}
+
+function calcularFechaFinAr() {
+  const inicio = document.getElementById('arFechaInicio')?.value;
+  const dias   = parseInt(document.getElementById('arPlazo')?.value);
+  if (inicio && dias) {
+    const d = new Date(inicio);
+    d.setDate(d.getDate() + dias);
+    document.getElementById('arFechaFin').value = d.toISOString().slice(0, 10);
+  }
+}
+
+function abrirModalAr() {
+  document.getElementById('modalArTitulo').textContent = 'Nueva Acta de Replanteo';
+  document.getElementById('formActaReplanteo').reset();
+  document.getElementById('arFechaFin').value = '';
+  document.getElementById('modalActaReplanteo')._arId = null;
+  poblarSelectObras('arObra');
+  document.getElementById('modalActaReplanteo').style.display = 'flex';
+}
+
+function editarAr(id) {
+  const row = _arData.find(r => r.id === id);
+  if (!row) return;
+  document.getElementById('modalArTitulo').textContent = 'Editar Acta #' + row.numero;
+  document.getElementById('modalActaReplanteo')._arId = id;
+  poblarSelectObras('arObra').then(() => { document.getElementById('arObra').value = row.obra_id; });
+  document.getElementById('arFecha').value = row.fecha_replanteo || '';
+  document.getElementById('arEstado').value = row.estado || 'conforme';
+  document.getElementById('arEstadoFirma').value = row.estado_firma || 'pendiente';
+  document.getElementById('arAlineaciones').checked = !!row.alineaciones_verificadas;
+  document.getElementById('arCotas').checked = !!row.cotas_verificadas;
+  document.getElementById('arAcceso').checked = !!row.acceso_obra_disponible;
+  document.getElementById('arSuministros').checked = !!row.suministros_disponibles;
+  document.getElementById('arFirmaPromotor').value = row.firmante_promotor || '';
+  document.getElementById('arFirmaDF').value = row.firmante_df || '';
+  document.getElementById('arFirmaConstructor').value = row.firmante_constructor || '';
+  document.getElementById('arFechaInicio').value = row.fecha_inicio_plazo || '';
+  document.getElementById('arPlazo').value = row.plazo_ejecucion_dias || '';
+  document.getElementById('arFechaFin').value = row.fecha_fin_prevista || '';
+  document.getElementById('arDescTerreno').value = row.descripcion_terreno || '';
+  document.getElementById('arReservas').value = row.reservas || '';
+  document.getElementById('arObservaciones').value = row.observaciones || '';
+  document.getElementById('modalActaReplanteo').style.display = 'flex';
+}
+
+async function guardarAr(e) {
+  e.preventDefault();
+  const id = document.getElementById('modalActaReplanteo')._arId;
+  const body = {
+    obra_id:                  parseInt(document.getElementById('arObra').value),
+    fecha_replanteo:          document.getElementById('arFecha').value,
+    estado:                   document.getElementById('arEstado').value,
+    estado_firma:             document.getElementById('arEstadoFirma').value,
+    alineaciones_verificadas: document.getElementById('arAlineaciones').checked,
+    cotas_verificadas:        document.getElementById('arCotas').checked,
+    acceso_obra_disponible:   document.getElementById('arAcceso').checked,
+    suministros_disponibles:  document.getElementById('arSuministros').checked,
+    firmante_promotor:        document.getElementById('arFirmaPromotor').value.trim() || null,
+    firmante_df:              document.getElementById('arFirmaDF').value.trim() || null,
+    firmante_constructor:     document.getElementById('arFirmaConstructor').value.trim() || null,
+    fecha_inicio_plazo:       document.getElementById('arFechaInicio').value || null,
+    plazo_ejecucion_dias:     document.getElementById('arPlazo').value ? parseInt(document.getElementById('arPlazo').value) : null,
+    fecha_fin_prevista:       document.getElementById('arFechaFin').value || null,
+    descripcion_terreno:      document.getElementById('arDescTerreno').value.trim() || null,
+    reservas:                 document.getElementById('arReservas').value.trim() || null,
+    observaciones:            document.getElementById('arObservaciones').value.trim() || null,
+  };
+  const method = id ? 'PUT' : 'POST';
+  const url    = id ? '/actas-replanteo/' + id : '/actas-replanteo';
+  const res = await api(url, { method, body: JSON.stringify(body) });
+  if (res.ok) { cerrarModalAr(); cargarActasReplanteo(); }
+}
+
+async function eliminarAr(id) {
+  if (!confirm('¿Eliminar esta acta de replanteo?')) return;
+  const res = await api('/actas-replanteo/' + id, { method: 'DELETE' });
+  if (res.ok) cargarActasReplanteo();
+}
+
+function cerrarModalAr() {
+  document.getElementById('modalActaReplanteo').style.display = 'none';
+}
+
 // ════════════════════════════════════════════════════════════════════════
 // NEW-111: FORMACIÓN DE OBRA / SITE TRAINING RECORDS (PRL)
 // ════════════════════════════════════════════════════════════════════════
