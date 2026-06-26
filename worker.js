@@ -4721,6 +4721,14 @@ export default {
         if (method === 'PUT')    return await actualizarVisitaObra(_vid, request, env);
         if (method === 'DELETE') return await eliminarVisitaObra(_vid, request, env);
       }
+      // ── Cubicaciones de Obra / Quantity Takeoff (NEW-113) ──────────────────
+      if (path === '/cubicaciones-obra' && method === 'GET')  return await getCubicaciones(request, env);
+      if (path === '/cubicaciones-obra' && method === 'POST') return await crearCubicacion(request, env);
+      if (path.startsWith('/cubicaciones-obra/')) {
+        const _cuId = parseInt(path.split('/cubicaciones-obra/')[1]);
+        if (method === 'PUT')    return await actualizarCubicacion(_cuId, request, env);
+        if (method === 'DELETE') return await eliminarCubicacion(_cuId, request, env);
+      }
       // ── Acta de Replanteo / Construction Stakeout Record (NEW-112) ──────────
       if (path === '/actas-replanteo' && method === 'GET')  return await getActasReplanteo(request, env);
       if (path === '/actas-replanteo' && method === 'POST') return await crearActaReplanteo(request, env);
@@ -21085,5 +21093,143 @@ async function eliminarActaReplanteo(id, request, env) {
   const { empresa_id, rol } = await getAuth(request, env);
   if (!empresa_id || rol === 'operario') return err('Sin permisos', 403);
   await env.DB.prepare('DELETE FROM actas_replanteo WHERE id=? AND empresa_id=?').bind(id, empresa_id).run();
+  return json({ ok: true });
+}
+
+
+// ════════════════════════════════════════════════════════════════════════════════
+// NEW-113: CUBICACIONES DE OBRA / QUANTITY TAKEOFF & MEASUREMENT
+// Medición de unidades ejecutadas vs contratadas por partida de obra
+// ════════════════════════════════════════════════════════════════════════════════
+async function ensureCubicacionesTable(env) {
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS cubicaciones_obra (
+    id                    INTEGER PRIMARY KEY AUTOINCREMENT,
+    empresa_id            INTEGER NOT NULL,
+    obra_id               INTEGER NOT NULL,
+    numero                INTEGER NOT NULL,
+    fecha_medicion        TEXT    NOT NULL,
+    descripcion           TEXT    NOT NULL,
+    capitulo              TEXT,
+    partida               TEXT,
+    unidad                TEXT    NOT NULL DEFAULT 'ud',
+    cantidad_contratada   REAL    DEFAULT 0,
+    cantidad_ejecutada    REAL    DEFAULT 0,
+    precio_unitario       REAL    DEFAULT 0,
+    importe_contratado    REAL    GENERATED ALWAYS AS (cantidad_contratada * precio_unitario) VIRTUAL,
+    importe_ejecutado     REAL    GENERATED ALWAYS AS (cantidad_ejecutada * precio_unitario) VIRTUAL,
+    porcentaje_ejecucion  REAL,
+    medidor               TEXT,
+    estado                TEXT    NOT NULL DEFAULT 'borrador',
+    observaciones         TEXT,
+    created_by            TEXT,
+    created_at            TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at            TEXT NOT NULL DEFAULT (datetime('now'))
+  )`).run();
+}
+
+async function getCubicaciones(request, env) {
+  await ensureCubicacionesTable(env);
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const url      = new URL(request.url);
+  const obra     = url.searchParams.get('obra_id');
+  const capitulo = url.searchParams.get('capitulo');
+  const estado   = url.searchParams.get('estado');
+  let sql = `SELECT c.*, o.nombre as obra_nombre, o.codigo as obra_codigo
+    FROM cubicaciones_obra c
+    LEFT JOIN obras o ON c.obra_id = o.id
+    WHERE c.empresa_id = ?`;
+  const params = [empresa_id];
+  if (obra)     { sql += ' AND c.obra_id = ?';   params.push(obra); }
+  if (capitulo) { sql += ' AND c.capitulo = ?';  params.push(capitulo); }
+  if (estado)   { sql += ' AND c.estado = ?';    params.push(estado); }
+  sql += ' ORDER BY c.capitulo, c.numero';
+  const { results } = await env.DB.prepare(sql).bind(...params).all();
+  // Recalculate percentages where needed
+  results.forEach(r => {
+    if (!r.porcentaje_ejecucion && r.cantidad_contratada > 0) {
+      r.porcentaje_ejecucion = ((r.cantidad_ejecutada / r.cantidad_contratada) * 100).toFixed(1);
+    }
+    r.importe_contratado = ((r.cantidad_contratada || 0) * (r.precio_unitario || 0)).toFixed(2);
+    r.importe_ejecutado  = ((r.cantidad_ejecutada || 0)  * (r.precio_unitario || 0)).toFixed(2);
+  });
+  const stats = {
+    total_partidas:        results.length,
+    importe_total_contrato: results.reduce((s,r)=>s+parseFloat(r.importe_contratado||0),0).toFixed(2),
+    importe_total_ejecutado:results.reduce((s,r)=>s+parseFloat(r.importe_ejecutado||0),0).toFixed(2),
+    capitulos:             [...new Set(results.map(r=>r.capitulo).filter(Boolean))].length,
+    aprobadas:             results.filter(r=>r.estado==='aprobada').length,
+    pendientes:            results.filter(r=>r.estado==='borrador'||r.estado==='revision').length,
+    pct_global:            (() => {
+      const tc = results.reduce((s,r)=>s+parseFloat(r.importe_contratado||0),0);
+      const te = results.reduce((s,r)=>s+parseFloat(r.importe_ejecutado||0),0);
+      return tc > 0 ? ((te/tc)*100).toFixed(1) : '0.0';
+    })()
+  };
+  return json({ data: results, stats });
+}
+
+async function crearCubicacion(request, env) {
+  await ensureCubicacionesTable(env);
+  const { empresa_id, nombre: createdBy } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const body = await request.json().catch(() => ({}));
+  if (!body.descripcion?.trim()) return err('La descripción de la partida es obligatoria');
+  if (!body.fecha_medicion)      return err('La fecha de medición es obligatoria');
+  if (!body.obra_id)             return err('La obra es obligatoria');
+  const last = await env.DB.prepare(
+    `SELECT MAX(numero) as mx FROM cubicaciones_obra WHERE empresa_id=? AND obra_id=?`
+  ).bind(empresa_id, body.obra_id).first();
+  const numero = (last?.mx || 0) + 1;
+  const qc = parseFloat(body.cantidad_contratada) || 0;
+  const qe = parseFloat(body.cantidad_ejecutada)  || 0;
+  const pct = qc > 0 ? ((qe / qc) * 100).toFixed(2) : null;
+  const r = await env.DB.prepare(`
+    INSERT INTO cubicaciones_obra
+      (empresa_id,obra_id,numero,fecha_medicion,descripcion,capitulo,partida,unidad,
+       cantidad_contratada,cantidad_ejecutada,precio_unitario,porcentaje_ejecucion,
+       medidor,estado,observaciones,created_by)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+    .bind(empresa_id, body.obra_id, numero, body.fecha_medicion,
+          body.descripcion.trim(), body.capitulo||null, body.partida||null,
+          body.unidad||'ud', qc, qe,
+          parseFloat(body.precio_unitario)||0,
+          body.porcentaje_ejecucion!=null ? parseFloat(body.porcentaje_ejecucion) : pct,
+          body.medidor||null, body.estado||'borrador',
+          body.observaciones||null, createdBy||null).run();
+  return json({ ok: true, id: r.meta.last_row_id, numero }, 201);
+}
+
+async function actualizarCubicacion(id, request, env) {
+  await ensureCubicacionesTable(env);
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const body = await request.json().catch(() => ({}));
+  if (!body.descripcion?.trim()) return err('La descripción es obligatoria');
+  const qc = parseFloat(body.cantidad_contratada) || 0;
+  const qe = parseFloat(body.cantidad_ejecutada)  || 0;
+  const pct = body.porcentaje_ejecucion != null
+    ? parseFloat(body.porcentaje_ejecucion)
+    : (qc > 0 ? ((qe / qc) * 100) : null);
+  await env.DB.prepare(`
+    UPDATE cubicaciones_obra SET
+      fecha_medicion=?,descripcion=?,capitulo=?,partida=?,unidad=?,
+      cantidad_contratada=?,cantidad_ejecutada=?,precio_unitario=?,
+      porcentaje_ejecucion=?,medidor=?,estado=?,observaciones=?,
+      updated_at=datetime('now')
+    WHERE id=? AND empresa_id=?`)
+    .bind(body.fecha_medicion, body.descripcion.trim(), body.capitulo||null,
+          body.partida||null, body.unidad||'ud', qc, qe,
+          parseFloat(body.precio_unitario)||0, pct,
+          body.medidor||null, body.estado||'borrador',
+          body.observaciones||null, id, empresa_id).run();
+  return json({ ok: true });
+}
+
+async function eliminarCubicacion(id, request, env) {
+  await ensureCubicacionesTable(env);
+  const { empresa_id, rol } = await getAuth(request, env);
+  if (!empresa_id || rol === 'operario') return err('Sin permisos', 403);
+  await env.DB.prepare('DELETE FROM cubicaciones_obra WHERE id=? AND empresa_id=?').bind(id, empresa_id).run();
   return json({ ok: true });
 }

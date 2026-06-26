@@ -770,6 +770,10 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
       <span class="nav-icon">🏆</span> Licitaciones
       <span class="nav-badge" id="licitBadge" style="display:none">0</span>
     </button>
+    <button class="nav-item" data-page="cubicacionesObra" onclick="navTo('cubicacionesObra')">
+      <span class="nav-icon">📏</span> Cubicaciones
+      <span class="nav-badge" id="cubicBadge" style="display:none">0</span>
+    </button>
     <button class="nav-item" data-page="actasReplanteo" onclick="navTo('actasReplanteo')">
       <span class="nav-icon">📐</span> Acta de Replanteo
       <span class="nav-badge" id="repBadge" style="display:none">0</span>
@@ -2515,6 +2519,122 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
               <span id="atsElimBtn"></span>
               <button class="btn btn-primary" onclick="guardarAts()">💾 Guardar ATS</button>
             </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- CUBICACIONES DE OBRA / QUANTITY TAKEOFF (NEW-113) -->
+      <div class="page" id="pageCubicacionesObra">
+        <div class="page-title">📏 Cubicaciones de Obra / Quantity Takeoff</div>
+        <div style="background:#f0fdf4;border:1px solid #22c55e;border-radius:8px;padding:12px 16px;margin-bottom:12px;font-size:13px;color:#166534;">
+          <b>📐 Medición de unidades ejecutadas</b> — Registro de cantidades medidas en obra vs. cantidades contratadas por partida.
+          Base para certificaciones, control de costes y comparación presupuesto/ejecución.
+        </div>
+        <div id="cubicKpis" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px;margin-bottom:12px;"></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;align-items:center;">
+          <select id="cuFiltrObra" onchange="cargarCubicaciones()" style="padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;">
+            <option value="">— Todas las obras —</option>
+          </select>
+          <select id="cuFiltrEstado" onchange="filtrarCubicaciones()" style="padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;">
+            <option value="">Todos los estados</option>
+            <option value="borrador">Borrador</option>
+            <option value="revision">En revisión</option>
+            <option value="aprobada">Aprobada</option>
+          </select>
+          <input type="text" id="cuFiltrCapitulo" oninput="filtrarCubicaciones()" placeholder="Filtrar por capítulo..." style="padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;width:180px;">
+          <button onclick="abrirModalCu()" style="margin-left:auto;background:#1e3a5f;color:#fff;border:none;border-radius:6px;padding:7px 16px;font-size:13px;cursor:pointer;">
+            ➕ Nueva Medición
+          </button>
+        </div>
+        <div id="tblCubicaciones"></div>
+        <div class="modal-overlay" id="modalCubicacion" style="display:none" onclick="if(event.target===this)cerrarModalCu()">
+          <div class="modal-box" style="max-width:640px;max-height:90vh;overflow-y:auto;">
+            <div class="modal-header">
+              <h3 id="modalCuTitulo">Nueva Medición</h3>
+              <button class="modal-close" onclick="cerrarModalCu()">✕</button>
+            </div>
+            <form id="formCubicacion" onsubmit="guardarCu(event)">
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                <div style="grid-column:1/-1">
+                  <label style="font-size:12px;color:#666;display:block;margin-bottom:3px;">Obra *</label>
+                  <select id="cuObra" required style="width:100%;padding:7px;border:1px solid #ddd;border-radius:5px;font-size:13px;">
+                    <option value="">— Seleccionar obra —</option>
+                  </select>
+                </div>
+                <div>
+                  <label style="font-size:12px;color:#666;display:block;margin-bottom:3px;">Fecha de medición *</label>
+                  <input type="date" id="cuFecha" required style="width:100%;padding:7px;border:1px solid #ddd;border-radius:5px;font-size:13px;box-sizing:border-box;">
+                </div>
+                <div>
+                  <label style="font-size:12px;color:#666;display:block;margin-bottom:3px;">Estado</label>
+                  <select id="cuEstado" style="width:100%;padding:7px;border:1px solid #ddd;border-radius:5px;font-size:13px;">
+                    <option value="borrador">Borrador</option>
+                    <option value="revision">En revisión</option>
+                    <option value="aprobada">Aprobada</option>
+                  </select>
+                </div>
+                <div style="grid-column:1/-1">
+                  <label style="font-size:12px;color:#666;display:block;margin-bottom:3px;">Descripción de la partida *</label>
+                  <input type="text" id="cuDescripcion" required placeholder="Ej: Hormigón HA-25 en losa, Solera de hormigón..." style="width:100%;padding:7px;border:1px solid #ddd;border-radius:5px;font-size:13px;box-sizing:border-box;">
+                </div>
+                <div>
+                  <label style="font-size:12px;color:#666;display:block;margin-bottom:3px;">Capítulo</label>
+                  <input type="text" id="cuCapitulo" placeholder="Ej: 01 - Movimiento de tierras" style="width:100%;padding:7px;border:1px solid #ddd;border-radius:5px;font-size:13px;box-sizing:border-box;">
+                </div>
+                <div>
+                  <label style="font-size:12px;color:#666;display:block;margin-bottom:3px;">Código de partida</label>
+                  <input type="text" id="cuPartida" placeholder="Ej: 01.01.001" style="width:100%;padding:7px;border:1px solid #ddd;border-radius:5px;font-size:13px;box-sizing:border-box;">
+                </div>
+                <div>
+                  <label style="font-size:12px;color:#666;display:block;margin-bottom:3px;">Unidad de medida</label>
+                  <input type="text" id="cuUnidad" value="m²" list="cuUnidadList" style="width:100%;padding:7px;border:1px solid #ddd;border-radius:5px;font-size:13px;box-sizing:border-box;">
+                  <datalist id="cuUnidadList">
+                    <option value="m²"><option value="m³"><option value="ml"><option value="ud">
+                    <option value="kg"><option value="t"><option value="pa"><option value="h">
+                  </datalist>
+                </div>
+                <div>
+                  <label style="font-size:12px;color:#666;display:block;margin-bottom:3px;">Precio unitario (€)</label>
+                  <input type="number" id="cuPrecio" min="0" step="0.01" value="0" onchange="recalcCu()" style="width:100%;padding:7px;border:1px solid #ddd;border-radius:5px;font-size:13px;box-sizing:border-box;">
+                </div>
+                <div>
+                  <label style="font-size:12px;color:#666;display:block;margin-bottom:3px;">Cantidad contratada</label>
+                  <input type="number" id="cuCantContratada" min="0" step="0.001" value="0" onchange="recalcCu()" style="width:100%;padding:7px;border:1px solid #ddd;border-radius:5px;font-size:13px;box-sizing:border-box;">
+                </div>
+                <div>
+                  <label style="font-size:12px;color:#666;display:block;margin-bottom:3px;">Cantidad ejecutada</label>
+                  <input type="number" id="cuCantEjecutada" min="0" step="0.001" value="0" onchange="recalcCu()" style="width:100%;padding:7px;border:1px solid #ddd;border-radius:5px;font-size:13px;box-sizing:border-box;">
+                </div>
+                <!-- Resumen calculado -->
+                <div style="grid-column:1/-1;background:#f8fafc;border-radius:6px;padding:10px 14px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
+                  <div style="text-align:center;">
+                    <div style="font-size:11px;color:#64748b;">Importe contratado</div>
+                    <div id="cuImporteContratado" style="font-size:16px;font-weight:700;color:#1e3a5f;">0.00 €</div>
+                  </div>
+                  <div style="text-align:center;">
+                    <div style="font-size:11px;color:#64748b;">Importe ejecutado</div>
+                    <div id="cuImporteEjecutado" style="font-size:16px;font-weight:700;color:#22c55e;">0.00 €</div>
+                  </div>
+                  <div style="text-align:center;">
+                    <div style="font-size:11px;color:#64748b;">% Ejecución</div>
+                    <div id="cuPctEjecucion" style="font-size:16px;font-weight:700;color:#3b82f6;">0.0%</div>
+                  </div>
+                </div>
+                <div>
+                  <label style="font-size:12px;color:#666;display:block;margin-bottom:3px;">Medidor / Responsable</label>
+                  <input type="text" id="cuMedidor" placeholder="Quién realizó la medición" style="width:100%;padding:7px;border:1px solid #ddd;border-radius:5px;font-size:13px;box-sizing:border-box;">
+                </div>
+                <div></div>
+                <div style="grid-column:1/-1">
+                  <label style="font-size:12px;color:#666;display:block;margin-bottom:3px;">Observaciones</label>
+                  <textarea id="cuObservaciones" rows="2" placeholder="Diferencias, justificación de desviaciones..." style="width:100%;padding:7px;border:1px solid #ddd;border-radius:5px;font-size:13px;box-sizing:border-box;resize:vertical;"></textarea>
+                </div>
+              </div>
+              <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px;">
+                <button type="button" onclick="cerrarModalCu()" style="padding:8px 18px;border:1px solid #ddd;border-radius:6px;background:#f5f5f5;cursor:pointer;font-size:13px;">Cancelar</button>
+                <button type="submit" style="padding:8px 18px;background:#1e3a5f;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px;">💾 Guardar</button>
+              </div>
+            </form>
           </div>
         </div>
       </div>
@@ -9466,6 +9586,7 @@ const PAGE_TITLES = {
   licitaciones:       '🏆 Gestión de Licitaciones / Bid Pipeline',
   gastosDietas:       '🧳 Gastos y Dietas de Personal / Expense Claims',
   flotaVehiculos:     '🚗 Flota de Vehículos de Empresa / Vehicle Fleet',
+  cubicacionesObra:     '📏 Cubicaciones de Obra / Quantity Takeoff & Measurement',
   actasReplanteo:       '📐 Acta de Replanteo / Construction Stakeout Record (LOE art. 8)',
   formacionObra:        '🎓 Formación de Obra / Site Training Records (PRL)',
   registroHormigonado:  '🏗️ Registro de Hormigonado / Concrete Pour Log (EHE-08)',
@@ -9579,6 +9700,7 @@ const PAGE_LOADERS = {
   licitaciones:       cargarLicitaciones,
   gastosDietas:       cargarGastosDietas,
   flotaVehiculos:     cargarFlotaVehiculos,
+  cubicacionesObra:     cargarCubicaciones,
   actasReplanteo:       cargarActasReplanteo,
   formacionObra:        cargarFormacionObra,
   registroHormigonado:  cargarRegistroHormigonado,
@@ -9721,6 +9843,7 @@ const SYNC_INTERVALS = {
   licitaciones:       300,
   gastosDietas:       120,
   flotaVehiculos:     300,
+  cubicacionesObra:     300,
   actasReplanteo:       300,
   formacionObra:        300,
   registroHormigonado:  300,
@@ -19088,6 +19211,176 @@ function exportarFinanzas() {
 }
 
 // ── FLOTA DE VEHÍCULOS DE EMPRESA / COMPANY VEHICLE FLEET (NEW-108) ──────────
+// ════════════════════════════════════════════════════════════════════════
+// NEW-113: CUBICACIONES DE OBRA / QUANTITY TAKEOFF
+// ════════════════════════════════════════════════════════════════════════
+let tblCu = null, _cuData = [];
+const CU_ESTADO_COLOR = { borrador:'#94a3b8', revision:'#f59e0b', aprobada:'#22c55e' };
+
+function recalcCu() {
+  const qc = parseFloat(document.getElementById('cuCantContratada')?.value) || 0;
+  const qe = parseFloat(document.getElementById('cuCantEjecutada')?.value)  || 0;
+  const pu = parseFloat(document.getElementById('cuPrecio')?.value) || 0;
+  const ic = (qc * pu).toFixed(2);
+  const ie = (qe * pu).toFixed(2);
+  const pct = qc > 0 ? ((qe / qc) * 100).toFixed(1) : '0.0';
+  const pctColor = parseFloat(pct) > 100 ? '#ef4444' : parseFloat(pct) >= 90 ? '#f59e0b' : '#22c55e';
+  if (document.getElementById('cuImporteContratado')) document.getElementById('cuImporteContratado').textContent = ic + ' €';
+  if (document.getElementById('cuImporteEjecutado'))  document.getElementById('cuImporteEjecutado').textContent  = ie + ' €';
+  if (document.getElementById('cuPctEjecucion')) {
+    document.getElementById('cuPctEjecucion').textContent = pct + '%';
+    document.getElementById('cuPctEjecucion').style.color = pctColor;
+  }
+}
+
+async function cargarCubicaciones() {
+  await poblarSelectObras('cuFiltrObra');
+  await poblarSelectObras('cuObra');
+  const obra = document.getElementById('cuFiltrObra')?.value || '';
+  const url = '/cubicaciones-obra' + (obra ? '?obra_id=' + obra : '');
+  const data = await api(url);
+  _cuData = data.data || [];
+  const stats = data.stats || {};
+  const kpiEl = document.getElementById('cubicKpis');
+  if (kpiEl) kpiEl.innerHTML = [
+    { label: 'Partidas', val: stats.total_partidas || 0, color: '#1e3a5f' },
+    { label: 'Importe contrato', val: parseFloat(stats.importe_total_contrato||0).toLocaleString('es-ES',{style:'currency',currency:'EUR',maximumFractionDigits:0}), color: '#3b82f6' },
+    { label: 'Ejecutado', val: parseFloat(stats.importe_total_ejecutado||0).toLocaleString('es-ES',{style:'currency',currency:'EUR',maximumFractionDigits:0}), color: '#22c55e' },
+    { label: '% Ejecución global', val: (stats.pct_global || '0.0') + '%', color: '#8b5cf6' },
+    { label: 'Aprobadas', val: stats.aprobadas || 0, color: '#06b6d4' },
+    { label: 'Pendientes', val: stats.pendientes || 0, color: '#f59e0b' },
+  ].map(k => '<div class="kpi-mini" style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:10px 12px;text-align:center;">'
+    + '<div style="font-size:18px;font-weight:700;color:' + k.color + ';word-break:break-all;">' + k.val + '</div>'
+    + '<div style="font-size:11px;color:#64748b;margin-top:2px;">' + k.label + '</div></div>').join('');
+  const badge = document.getElementById('cubicBadge');
+  if (badge) { badge.textContent = _cuData.length; badge.style.display = _cuData.length ? '' : 'none'; }
+  tblCu = null;
+  filtrarCubicaciones();
+}
+
+function filtrarCubicaciones() {
+  const estado   = document.getElementById('cuFiltrEstado')?.value || '';
+  const capitulo = (document.getElementById('cuFiltrCapitulo')?.value || '').toLowerCase();
+  let rows = [..._cuData];
+  if (estado)   rows = rows.filter(r => r.estado === estado);
+  if (capitulo) rows = rows.filter(r => (r.capitulo||'').toLowerCase().includes(capitulo));
+  if (tblCu) { tblCu.replaceData(rows); return; }
+  tblCu = new Tabulator('#tblCubicaciones', {
+    data: rows,
+    layout: 'fitColumns',
+    height: '460px',
+    groupBy: 'capitulo',
+    groupHeader: function(val, count) {
+      return (val || 'Sin capítulo') + ' <span style="color:#64748b;font-size:12px;">(' + count + ' partidas)</span>';
+    },
+    placeholder: 'No hay mediciones registradas',
+    columns: [
+      { title: 'Partida', field: 'partida', width: 95 },
+      { title: 'Descripción', field: 'descripcion', minWidth: 180 },
+      { title: 'Ud', field: 'unidad', width: 50, hozAlign: 'center' },
+      { title: 'Cant. Contrat.', field: 'cantidad_contratada', width: 100, hozAlign: 'right',
+        formatter: function(cell) { return parseFloat(cell.getValue()||0).toFixed(3); }
+      },
+      { title: 'Cant. Ejec.', field: 'cantidad_ejecutada', width: 95, hozAlign: 'right',
+        formatter: function(cell) { return parseFloat(cell.getValue()||0).toFixed(3); }
+      },
+      { title: 'P.U. (€)', field: 'precio_unitario', width: 85, hozAlign: 'right',
+        formatter: function(cell) { return parseFloat(cell.getValue()||0).toFixed(2); }
+      },
+      { title: 'Imp. Contrato', field: 'importe_contratado', width: 110, hozAlign: 'right',
+        formatter: function(cell) { return parseFloat(cell.getValue()||0).toLocaleString('es-ES',{minimumFractionDigits:2,maximumFractionDigits:2}) + ' €'; }
+      },
+      { title: 'Imp. Ejec.', field: 'importe_ejecutado', width: 100, hozAlign: 'right',
+        formatter: function(cell) { return parseFloat(cell.getValue()||0).toLocaleString('es-ES',{minimumFractionDigits:2,maximumFractionDigits:2}) + ' €'; }
+      },
+      { title: '% Ejec.', field: 'porcentaje_ejecucion', width: 75, hozAlign: 'center',
+        formatter: function(cell) {
+          const v = parseFloat(cell.getValue()||0);
+          const color = v > 100 ? '#ef4444' : v >= 90 ? '#f59e0b' : '#22c55e';
+          return '<span style="color:' + color + ';font-weight:600;">' + v.toFixed(1) + '%</span>';
+        }
+      },
+      { title: 'Estado', field: 'estado', width: 90, formatter: function(cell) {
+          const v = cell.getValue();
+          return '<span style="background:' + (CU_ESTADO_COLOR[v]||'#aaa') + ';color:#fff;padding:2px 7px;border-radius:10px;font-size:11px;">' + v + '</span>';
+        }
+      },
+      { title: '', formatter: function(cell) {
+          const row = cell.getRow().getData();
+          return '<button onclick="editarCu(' + row.id + ')" style="background:#3b82f6;color:#fff;border:none;border-radius:4px;padding:3px 7px;font-size:11px;cursor:pointer;margin-right:3px;">✏️</button>'
+               + '<button onclick="eliminarCu(' + row.id + ')" style="background:#ef4444;color:#fff;border:none;border-radius:4px;padding:3px 7px;font-size:11px;cursor:pointer;">🗑️</button>';
+        }, width: 90, hozAlign: 'center', headerSort: false
+      },
+    ]
+  });
+}
+
+function abrirModalCu() {
+  document.getElementById('modalCuTitulo').textContent = 'Nueva Medición';
+  document.getElementById('formCubicacion').reset();
+  document.getElementById('modalCubicacion')._cuId = null;
+  document.getElementById('cuUnidad').value = 'm²';
+  document.getElementById('cuImporteContratado').textContent = '0.00 €';
+  document.getElementById('cuImporteEjecutado').textContent  = '0.00 €';
+  document.getElementById('cuPctEjecucion').textContent = '0.0%';
+  poblarSelectObras('cuObra');
+  document.getElementById('modalCubicacion').style.display = 'flex';
+}
+
+function editarCu(id) {
+  const row = _cuData.find(r => r.id === id);
+  if (!row) return;
+  document.getElementById('modalCuTitulo').textContent = 'Editar Partida #' + row.numero;
+  document.getElementById('modalCubicacion')._cuId = id;
+  poblarSelectObras('cuObra').then(() => { document.getElementById('cuObra').value = row.obra_id; });
+  document.getElementById('cuFecha').value = row.fecha_medicion || '';
+  document.getElementById('cuEstado').value = row.estado || 'borrador';
+  document.getElementById('cuDescripcion').value = row.descripcion || '';
+  document.getElementById('cuCapitulo').value = row.capitulo || '';
+  document.getElementById('cuPartida').value = row.partida || '';
+  document.getElementById('cuUnidad').value = row.unidad || 'm²';
+  document.getElementById('cuPrecio').value = row.precio_unitario || 0;
+  document.getElementById('cuCantContratada').value = row.cantidad_contratada || 0;
+  document.getElementById('cuCantEjecutada').value = row.cantidad_ejecutada || 0;
+  document.getElementById('cuMedidor').value = row.medidor || '';
+  document.getElementById('cuObservaciones').value = row.observaciones || '';
+  recalcCu();
+  document.getElementById('modalCubicacion').style.display = 'flex';
+}
+
+async function guardarCu(e) {
+  e.preventDefault();
+  const id = document.getElementById('modalCubicacion')._cuId;
+  const body = {
+    obra_id:             parseInt(document.getElementById('cuObra').value),
+    fecha_medicion:      document.getElementById('cuFecha').value,
+    estado:              document.getElementById('cuEstado').value,
+    descripcion:         document.getElementById('cuDescripcion').value.trim(),
+    capitulo:            document.getElementById('cuCapitulo').value.trim() || null,
+    partida:             document.getElementById('cuPartida').value.trim() || null,
+    unidad:              document.getElementById('cuUnidad').value.trim() || 'm²',
+    precio_unitario:     parseFloat(document.getElementById('cuPrecio').value) || 0,
+    cantidad_contratada: parseFloat(document.getElementById('cuCantContratada').value) || 0,
+    cantidad_ejecutada:  parseFloat(document.getElementById('cuCantEjecutada').value) || 0,
+    medidor:             document.getElementById('cuMedidor').value.trim() || null,
+    observaciones:       document.getElementById('cuObservaciones').value.trim() || null,
+  };
+  const method = id ? 'PUT' : 'POST';
+  const url    = id ? '/cubicaciones-obra/' + id : '/cubicaciones-obra';
+  const res = await api(url, { method, body: JSON.stringify(body) });
+  if (res.ok) { cerrarModalCu(); cargarCubicaciones(); }
+}
+
+async function eliminarCu(id) {
+  if (!confirm('¿Eliminar esta medición?')) return;
+  const res = await api('/cubicaciones-obra/' + id, { method: 'DELETE' });
+  if (res.ok) cargarCubicaciones();
+}
+
+function cerrarModalCu() {
+  document.getElementById('modalCubicacion').style.display = 'none';
+}
+
 // ════════════════════════════════════════════════════════════════════════
 // NEW-112: ACTA DE REPLANTEO / CONSTRUCTION STAKEOUT RECORD (LOE art. 8)
 // ════════════════════════════════════════════════════════════════════════
