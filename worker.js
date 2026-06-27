@@ -2434,12 +2434,24 @@ ai_usage(id, empresa_id, proveedor, modelo, endpoint, input_tokens, output_token
 config(clave PRIMARY KEY, valor) | sugerencias(id, texto, categoria, usuario, obra, estado, empresa_id, foto)
 reset_tokens | vincular_tokens | login_attempts`,
 
+  schema_obra_avanzada: `SCHEMA BD - MODULOS AVANZADOS OBRA (NEW-109 a NEW-116):
+libro_subcontratacion(id, empresa_id, obra_id, nivel[1/2/3], nombre_empresa, cif, objeto_contrato, fecha_contrato, importe, estado[activo/finalizado/cancelado], created_at)
+registro_hormigonado(id, empresa_id, obra_id, fecha, elemento_estructural, volumen_m3, resistencia[HA-25/HA-30/HA-35/HM-20], consistencia[seca/plastica/blanda/fluida/liquida], suministrador, albaran, n_camiones, temperatura, observaciones, estado, created_at)
+formacion_obra(id, empresa_id, obra_id, titulo, tipo[charla_seguridad/formacion_especifica/simulacro/reunion_coordinacion/otro], fecha, horas, instructor, participantes, material_utilizado, estado, created_at)
+actas_replanteo(id, empresa_id, obra_id, numero, fecha, tipo[inicio/parcial/final/modificado], descripcion, asistentes TEXT, coordenadas, observaciones, estado[borrador/firmada/archivada], created_at)
+cubicaciones_obra(id, empresa_id, obra_id, numero, fecha_medicion, descripcion, capitulo, partida, unidad, cantidad_contratada, cantidad_ejecutada, precio_unitario, importe_contratado, importe_ejecutado, porcentaje_avance, estado[borrador/validada/certificada], created_at)
+escandallo_precios(id, empresa_id, obra_id, codigo UNIQUE, descripcion, unidad, capitulo, tipo_partida[mano_obra/material/maquinaria/mixta/subcontrata], rendimiento, coef_empresa, precio_material, precio_mano_obra, precio_maquinaria, gastos_generales, beneficio_indust, precio_unitario, estado[activo/inactivo/borrador], created_at)
+cronograma_pagos(id, empresa_id, obra_id, numero_hito, descripcion, tipo[certificacion/anticipo/liquidacion/retencion/otro], fecha_prevista, fecha_cobro, importe_previsto, importe_cobrado, estado[pendiente/cobrado/parcial/vencido], forma_pago, observaciones, created_at)
+rdp_registros(id, empresa_id, obra_id, fecha, numero_dia, trabajadores_presentes, condiciones_meteo[buenas/nublado/lluvia/viento/frio/calor/nieve], actividades, riesgos_detectados, medidas_preventivas, equipos_utilizados, incidencias, visitas_externas, responsable_nombre, responsable_cargo, firmado[0/1], estado[borrador/firmado], observaciones, created_at)
+NOTAS: rdp_registros.firmado=1 es registro legal inmutable (Ley 31/1995 PRL). cronograma_pagos detecta vencidos por fecha_prevista vs hoy. escandallo precio_unitario=(material+mano_obra+maquinaria)*(1+gg)*(1+bi).`,
+
   app_modulos: `MÃ“DULOS DE LA APP (multi-tenant por empresa_id):
 Bobinas cable Â· PEMP (plataformas elevadoras) Â· Carretillas elevadoras Â· Obras/proyectos
 Personal y fichajes Â· Turnos Â· Carnets/certificados Â· EPIs asignados
 Inventario seguridad Â· Pedidos Â· Proveedores Â· Herramientas Â· Kits herramientas
 Documentos (carpetas + docs_dept + docs_notas) Â· Albaranes Â· Checklists inspecciÃ³n
-Incidencias Â· Chat de equipo Â· Partes de trabajo Â· GalerÃ­a fotos Â· Repostajes Â· Calendario`,
+Incidencias Â· Chat de equipo Â· Partes de trabajo Â· GalerÃ­a fotos Â· Repostajes Â· Calendario
+MODULOS AVANZADOS OBRA (NEW-109 a NEW-116): Libro Subcontratacion (NEW-109) | Registro Hormigonado (NEW-110) | Formacion en Obra (NEW-111) | Actas de Replanteo (NEW-112) | Cubicaciones de Obra (NEW-113) | Escandallo de Precios (NEW-114) | Cronograma de Pagos (NEW-115) | Registro Diario de Prevencion/RdP (NEW-116)`,
 
   tools_datos: `TOOLS â€” DATOS:
 sql_query(sql): SQL libre (SELECT/INSERT/UPDATE/DELETE/CREATE/ALTER/DROP)
@@ -2537,7 +2549,7 @@ const NEXUS_EXPERTS = {
   analista: {
     model: 'claude-sonnet-4-6',
     max_tokens: 2048,
-    modules: ['base', 'schema_core', 'schema_inventario', 'schema_operaciones', 'schema_sistema', 'tools_datos', 'tools_memoria', 'aprendizaje'],
+    modules: ['base', 'schema_core', 'schema_inventario', 'schema_operaciones', 'schema_sistema', 'schema_obra_avanzada', 'tools_datos', 'tools_memoria', 'aprendizaje'],
     tool_names: ['sql_query', 'list_tables', 'app_status', 'memory_save', 'memory_read', 'r2_list', 'send_notification', 'web_search', 'patrol_logs']
   },
   desarrollador: {
@@ -2549,7 +2561,7 @@ const NEXUS_EXPERTS = {
   autonomo: {
     model: 'claude-sonnet-4-6',
     max_tokens: 4096,
-    modules: ['base', 'infraestructura', 'cicd', 'app_modulos', 'schema_core', 'schema_inventario', 'schema_operaciones', 'schema_sistema', 'tools_codigo', 'tools_datos', 'tools_usuarios', 'tools_memoria', 'tools_red', 'aprendizaje', 'flujo_ingeniero', 'autonomia', 'vigilancia'],
+    modules: ['base', 'infraestructura', 'cicd', 'app_modulos', 'schema_core', 'schema_inventario', 'schema_operaciones', 'schema_sistema', 'schema_obra_avanzada', 'tools_codigo', 'tools_datos', 'tools_usuarios', 'tools_memoria', 'tools_red', 'aprendizaje', 'flujo_ingeniero', 'autonomia', 'vigilancia'],
     tool_names: null
   }
 };

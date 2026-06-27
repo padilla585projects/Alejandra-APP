@@ -1030,6 +1030,31 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
         </div>
         <span class="drag-handle">⠿</span><svg class="module-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
       </div>
+      <div class="module-card" id="cardRdp" onclick="navTo('rdp')" style="display:none;border-left:3px solid #1e3a5f">
+        <div class="module-emoji">📋</div>
+        <div class="module-info">
+          <div class="module-name">RdP — Prevención</div>
+          <div class="module-desc">Registro Diario de Prevención PRL</div>
+        </div>
+        <div class="module-count" id="cntRdp" style="background:#1e3a5f;display:none">!</div>
+        <span class="drag-handle">⠿</span><svg class="module-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
+      </div>
+      <div class="module-card" id="cardHormigonado" onclick="navTo('hormigonado')" style="display:none;border-left:3px solid #78350f">
+        <div class="module-emoji">🏗️</div>
+        <div class="module-info">
+          <div class="module-name">Hormigonado</div>
+          <div class="module-desc">Registro de hormigonado (EHE-08)</div>
+        </div>
+        <span class="drag-handle">⠿</span><svg class="module-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
+      </div>
+      <div class="module-card" id="cardFormacion" onclick="navTo('formacion')" style="display:none;border-left:3px solid #0369a1">
+        <div class="module-emoji">📚</div>
+        <div class="module-info">
+          <div class="module-name">Formación</div>
+          <div class="module-desc">Formación y certificaciones en obra</div>
+        </div>
+        <span class="drag-handle">⠿</span><svg class="module-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
+      </div>
       <div class="module-card" id="cardObraDashboard" onclick="showScreen('obraDashboard')" style="display:none;border-left:3px solid #6366f1">
         <div class="module-emoji">📊</div>
         <div class="module-info">
@@ -4241,6 +4266,136 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
 .ia-voice-status.show{display:block}
 </style>
 
+<!-- SCREEN: RdP — Registro Diario de Prevención (NEW-116) -->
+<div id="screenRdp" class="screen" style="padding:0;display:none;flex-direction:column">
+  <div style="padding:10px 14px 8px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;align-items:center;gap:8px">
+    <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:17px;color:var(--text);flex:1">📋 Registro Diario PRL</div>
+    <button id="btnNuevoRdp" onclick="rdpNuevo()" style="background:#1e3a5f;color:#fff;border:none;border-radius:9px;padding:7px 14px;font-weight:800;font-size:12px;cursor:pointer;display:none">+ Nuevo</button>
+  </div>
+  <div id="rdpListaMobile" style="padding:12px 14px;overflow-y:auto;flex:1"><div class="empty-state">Cargando...</div></div>
+</div>
+
+<!-- SCREEN: Hormigonado (NEW-110) -->
+<div id="screenHormigonado" class="screen" style="padding:0;display:none;flex-direction:column">
+  <div style="padding:10px 14px 8px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;align-items:center;gap:8px">
+    <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:17px;color:var(--text);flex:1">🏗️ Registro Hormigonado</div>
+    <button id="btnNuevoHorm" onclick="hormNuevo()" style="background:#78350f;color:#fff;border:none;border-radius:9px;padding:7px 14px;font-weight:800;font-size:12px;cursor:pointer;display:none">+ Nuevo</button>
+  </div>
+  <div id="hormListaMobile" style="padding:12px 14px;overflow-y:auto;flex:1"><div class="empty-state">Cargando...</div></div>
+</div>
+
+<!-- SCREEN: Formación en Obra (NEW-111) -->
+<div id="screenFormacion" class="screen" style="padding:0;display:none;flex-direction:column">
+  <div style="padding:10px 14px 8px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;align-items:center;gap:8px">
+    <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:17px;color:var(--text);flex:1">📚 Formación en Obra</div>
+  </div>
+  <div id="formacionListaMobile" style="padding:12px 14px;overflow-y:auto;flex:1"><div class="empty-state">Cargando...</div></div>
+</div>
+
+<!-- MODAL: RdP (bottom sheet) -->
+<div id="modalRdpMobile" class="modal-overlay" style="display:none;align-items:flex-end;justify-content:center;padding:0" onclick="if(event.target===this)rdpCerrarModal()">
+  <div style="background:var(--surface);width:100%;max-width:520px;border-radius:18px 18px 0 0;max-height:94vh;display:flex;flex-direction:column">
+    <div style="padding:16px 16px 10px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border);flex-shrink:0">
+      <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:15px;color:var(--text)" id="rdpMobileTitle">Nuevo Registro RdP</div>
+      <button onclick="rdpCerrarModal()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--muted);line-height:1">×</button>
+    </div>
+    <div style="padding:14px 16px;overflow-y:auto;flex:1;display:flex;flex-direction:column;gap:10px">
+      <input type="hidden" id="rdpMobileId">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div>
+          <label style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Fecha *</label>
+          <input id="rdpMFecha" type="date" style="width:100%;margin-top:4px;padding:9px 10px;border:1px solid var(--border);border-radius:9px;background:var(--card);color:var(--text);font-size:13px;box-sizing:border-box">
+        </div>
+        <div>
+          <label style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Trabajadores</label>
+          <input id="rdpMTrab" type="number" min="0" value="0" style="width:100%;margin-top:4px;padding:9px 10px;border:1px solid var(--border);border-radius:9px;background:var(--card);color:var(--text);font-size:13px;box-sizing:border-box">
+        </div>
+      </div>
+      <div>
+        <label style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Condiciones meteorológicas</label>
+        <select id="rdpMMeteo" style="width:100%;margin-top:4px;padding:9px 10px;border:1px solid var(--border);border-radius:9px;background:var(--card);color:var(--text);font-size:13px">
+          <option value="buenas">☀️ Buenas</option><option value="nublado">☁️ Nublado</option>
+          <option value="lluvia">🌧️ Lluvia</option><option value="viento">💨 Viento fuerte</option>
+          <option value="frio">🥶 Frío extremo</option><option value="calor">🌡️ Calor extremo</option><option value="nieve">❄️ Nieve/hielo</option>
+        </select>
+      </div>
+      <div>
+        <label style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Actividades realizadas *</label>
+        <textarea id="rdpMActividades" rows="3" placeholder="Describir los trabajos realizados…" style="width:100%;margin-top:4px;padding:9px 10px;border:1px solid var(--border);border-radius:9px;background:var(--card);color:var(--text);font-size:13px;box-sizing:border-box;resize:vertical"></textarea>
+      </div>
+      <div>
+        <label style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Riesgos / Medidas</label>
+        <textarea id="rdpMRiesgos" rows="2" placeholder="Riesgos detectados y medidas adoptadas…" style="width:100%;margin-top:4px;padding:9px 10px;border:1px solid var(--border);border-radius:9px;background:var(--card);color:var(--text);font-size:13px;box-sizing:border-box;resize:vertical"></textarea>
+      </div>
+      <div>
+        <label style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Incidencias</label>
+        <input id="rdpMIncidencias" placeholder="Ninguna / descripción" style="width:100%;margin-top:4px;padding:9px 10px;border:1px solid var(--border);border-radius:9px;background:var(--card);color:var(--text);font-size:13px;box-sizing:border-box">
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;padding:8px 0">
+        <input type="checkbox" id="rdpMFirmar" style="width:18px;height:18px">
+        <label for="rdpMFirmar" style="font-size:13px;font-weight:600">✍️ Firmar y cerrar (no podrá eliminarse)</label>
+      </div>
+    </div>
+    <div style="padding:12px 16px;border-top:1px solid var(--border);display:flex;gap:8px;flex-shrink:0">
+      <button onclick="rdpCerrarModal()" style="flex:1;padding:12px;border:1px solid var(--border);border-radius:10px;background:transparent;color:var(--text);font-weight:700;font-size:14px;cursor:pointer">Cancelar</button>
+      <button onclick="rdpGuardar()" style="flex:2;padding:12px;border:none;border-radius:10px;background:#1e3a5f;color:#fff;font-weight:800;font-size:14px;cursor:pointer">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Hormigonado (bottom sheet) -->
+<div id="modalHormMobile" class="modal-overlay" style="display:none;align-items:flex-end;justify-content:center;padding:0" onclick="if(event.target===this)hormCerrarModal()">
+  <div style="background:var(--surface);width:100%;max-width:520px;border-radius:18px 18px 0 0;max-height:90vh;display:flex;flex-direction:column">
+    <div style="padding:16px 16px 10px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border);flex-shrink:0">
+      <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:15px;color:var(--text)" id="hormMobileTitle">Nuevo Registro de Hormigonado</div>
+      <button onclick="hormCerrarModal()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--muted);line-height:1">×</button>
+    </div>
+    <div style="padding:14px 16px;overflow-y:auto;flex:1;display:flex;flex-direction:column;gap:10px">
+      <input type="hidden" id="hormMobileId">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div>
+          <label style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Fecha *</label>
+          <input id="hormMFecha" type="date" style="width:100%;margin-top:4px;padding:9px 10px;border:1px solid var(--border);border-radius:9px;background:var(--card);color:var(--text);font-size:13px;box-sizing:border-box">
+        </div>
+        <div>
+          <label style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Volumen (m³)</label>
+          <input id="hormMVolumen" type="number" step="0.1" min="0" value="0" style="width:100%;margin-top:4px;padding:9px 10px;border:1px solid var(--border);border-radius:9px;background:var(--card);color:var(--text);font-size:13px;box-sizing:border-box">
+        </div>
+      </div>
+      <div>
+        <label style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Elemento estructural *</label>
+        <input id="hormMElemento" placeholder="Ej: Losa planta 2, Pilar P-12…" style="width:100%;margin-top:4px;padding:9px 10px;border:1px solid var(--border);border-radius:9px;background:var(--card);color:var(--text);font-size:13px;box-sizing:border-box">
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div>
+          <label style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Resistencia</label>
+          <select id="hormMResistencia" style="width:100%;margin-top:4px;padding:9px 10px;border:1px solid var(--border);border-radius:9px;background:var(--card);color:var(--text);font-size:13px">
+            <option>HA-25</option><option>HA-30</option><option>HA-35</option><option>HA-40</option><option>HM-20</option>
+          </select>
+        </div>
+        <div>
+          <label style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Consistencia</label>
+          <select id="hormMConsistencia" style="width:100%;margin-top:4px;padding:9px 10px;border:1px solid var(--border);border-radius:9px;background:var(--card);color:var(--text);font-size:13px">
+            <option value="fluida">Fluida</option><option value="blanda">Blanda</option><option value="plastica">Plástica</option><option value="seca">Seca</option>
+          </select>
+        </div>
+      </div>
+      <div>
+        <label style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Suministrador</label>
+        <input id="hormMSuministrador" placeholder="Empresa suministradora" style="width:100%;margin-top:4px;padding:9px 10px;border:1px solid var(--border);border-radius:9px;background:var(--card);color:var(--text);font-size:13px;box-sizing:border-box">
+      </div>
+      <div>
+        <label style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Observaciones</label>
+        <textarea id="hormMObs" rows="2" placeholder="Condiciones, incidencias…" style="width:100%;margin-top:4px;padding:9px 10px;border:1px solid var(--border);border-radius:9px;background:var(--card);color:var(--text);font-size:13px;box-sizing:border-box;resize:vertical"></textarea>
+      </div>
+    </div>
+    <div style="padding:12px 16px;border-top:1px solid var(--border);display:flex;gap:8px;flex-shrink:0">
+      <button onclick="hormCerrarModal()" style="flex:1;padding:12px;border:1px solid var(--border);border-radius:10px;background:transparent;color:var(--text);font-weight:700;font-size:14px;cursor:pointer">Cancelar</button>
+      <button onclick="hormGuardar()" style="flex:2;padding:12px;border:none;border-radius:10px;background:#78350f;color:#fff;font-weight:800;font-size:14px;cursor:pointer">Guardar</button>
+    </div>
+  </div>
+</div>
+
 <div id="screenIA" class="screen flex-screen" style="padding:0;height:100%">
   <div class="ia-header">
     <button onclick="irAtras()" style="background:none;border:none;color:#a855f7;cursor:pointer;font-size:22px;line-height:1;padding:0 10px 0 0;flex-shrink:0">←</button>
@@ -5409,6 +5564,15 @@ function setupHomeModules() {
   if (cardReu)    cardReu.style.display    = 'flex';
   if (cardCal2)   cardCal2.style.display   = 'flex';
   if (cardSubc)   cardSubc.style.display   = 'flex';
+  // Nuevos módulos PRL/calidad: visible a encargado y superiores (no operario)
+  const s4 = getSession();
+  const esEncargadoPlus = s4 && s4.rol !== 'operario';
+  const cardRdp2      = document.getElementById('cardRdp');
+  const cardHorm      = document.getElementById('cardHormigonado');
+  const cardFormac    = document.getElementById('cardFormacion');
+  if (cardRdp2)   cardRdp2.style.display   = esEncargadoPlus ? 'flex' : 'none';
+  if (cardHorm)   cardHorm.style.display   = esEncargadoPlus ? 'flex' : 'none';
+  if (cardFormac) cardFormac.style.display = 'flex'; // formacion: todos pueden ver
   // #188: aplicar config de módulos (oculta tarjetas marcadas off por la empresa)
   applyModulosConfig();
   applyHomeOrder();
@@ -6382,6 +6546,21 @@ function navTo(target) {
   if (target === 'subcontratas') {
     showScreen('subcontratas');
     subcCargar();
+    return;
+  }
+  if (target === 'rdp') {
+    showScreen('rdp');
+    rdpCargarMobile();
+    return;
+  }
+  if (target === 'hormigonado') {
+    showScreen('hormigonado');
+    hormCargarMobile();
+    return;
+  }
+  if (target === 'formacion') {
+    showScreen('formacion');
+    formacionCargarMobile();
     return;
   }
   if (target === 'partes') {
@@ -11662,7 +11841,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '7.50';
+const APP_VERSION = '7.51';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -19320,6 +19499,229 @@ function _alejandraOfrecerGuia(guia) {
   list.appendChild(div);
   list.scrollTop = list.scrollHeight;
 }
+
+
+// ═══════════════════════════════════════════════════════
+// MOBILE: RdP — Registro Diario de Prevención
+// ═══════════════════════════════════════════════════════
+const RDP_M_METEO = { buenas:'☀️', nublado:'☁️', lluvia:'🌧️', viento:'💨', frio:'🥶', calor:'🌡️', nieve:'❄️' };
+let _rdpMobileData = [];
+
+async function rdpCargarMobile() {
+  const s = getSession();
+  const lista = document.getElementById('rdpListaMobile');
+  // Mostrar botón nuevo solo a encargado+
+  const btnNuevo = document.getElementById('btnNuevoRdp');
+  if (btnNuevo) btnNuevo.style.display = (s && s.rol !== 'operario') ? '' : 'none';
+  lista.innerHTML = '<div class="empty-state"><div class="spinner"></div></div>';
+  try {
+    const params = new URLSearchParams();
+    if (s?.obraId) params.set('obra_id', s.obraId);
+    const res = await apiFetch('/rdp-registros?' + params.toString());
+    const { data } = await res.json();
+    _rdpMobileData = data || [];
+    if (!data.length) { lista.innerHTML = '<div class="empty-state">Sin registros RdP</div>'; return; }
+    lista.innerHTML = data.map(r => {
+      const firmado = r.firmado === 1;
+      return '<div style="background:var(--card);border-radius:12px;padding:13px 14px;margin-bottom:10px;border:1px solid var(--border);border-left:3px solid ' + (firmado?'#16a34a':'#1e3a5f') + '">'
+        + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">'
+        + '<div style="font-weight:700;font-size:14px;color:var(--text)">Día ' + (r.numero_dia||'—') + ' · ' + r.fecha + '</div>'
+        + '<div style="font-size:13px">' + (RDP_M_METEO[r.condiciones_meteo]||'') + ' ' + (firmado?'<span style="background:#16a34a;color:#fff;padding:2px 8px;border-radius:8px;font-size:11px;font-weight:700">✍️ Firmado</span>':'<span style="background:#6b7280;color:#fff;padding:2px 8px;border-radius:8px;font-size:11px;font-weight:700">Borrador</span>') + '</div>'
+        + '</div>'
+        + '<div style="font-size:12px;color:var(--muted);margin-bottom:4px">👷 ' + r.trabajadores_presentes + ' trabajadores</div>'
+        + '<div style="font-size:13px;color:var(--text);line-height:1.4">' + (r.actividades||'').slice(0,120) + (r.actividades?.length>120?'…':'') + '</div>'
+        + (r.incidencias ? '<div style="margin-top:6px;font-size:12px;color:#dc2626;font-weight:600">⚠️ ' + r.incidencias + '</div>' : '')
+        + (!firmado && s?.rol !== 'operario' ? '<div style="margin-top:8px;display:flex;gap:6px">'
+          + '<button onclick="rdpEditarMobile(' + r.id + ')" style="padding:5px 10px;border:1px solid var(--border);border-radius:8px;background:transparent;color:var(--text);font-size:11px;font-weight:700;cursor:pointer">✏️ Editar</button>'
+          + '<button onclick="rdpFirmarMobile(' + r.id + ')" style="padding:5px 10px;border:none;border-radius:8px;background:#16a34a;color:#fff;font-size:11px;font-weight:700;cursor:pointer">✍️ Firmar</button>'
+          + '</div>' : '')
+        + '</div>';
+    }).join('');
+  } catch(e) { lista.innerHTML = '<div class="empty-state">Error al cargar</div>'; }
+}
+
+function rdpNuevo() {
+  document.getElementById('rdpMobileId').value = '';
+  document.getElementById('rdpMFecha').value = new Date().toISOString().slice(0,10);
+  document.getElementById('rdpMTrab').value = '0';
+  document.getElementById('rdpMMeteo').value = 'buenas';
+  document.getElementById('rdpMActividades').value = '';
+  document.getElementById('rdpMRiesgos').value = '';
+  document.getElementById('rdpMIncidencias').value = '';
+  document.getElementById('rdpMFirmar').checked = false;
+  document.getElementById('rdpMobileTitle').textContent = 'Nuevo Registro RdP';
+  document.getElementById('modalRdpMobile').style.display = 'flex';
+}
+
+function rdpEditarMobile(id) {
+  const r = _rdpMobileData.find(x=>x.id===id); if(!r) return;
+  document.getElementById('rdpMobileId').value    = id;
+  document.getElementById('rdpMFecha').value      = r.fecha;
+  document.getElementById('rdpMTrab').value       = r.trabajadores_presentes;
+  document.getElementById('rdpMMeteo').value      = r.condiciones_meteo;
+  document.getElementById('rdpMActividades').value= r.actividades||'';
+  document.getElementById('rdpMRiesgos').value    = (r.riesgos_detectados||'') + (r.medidas_preventivas ? ' / ' + r.medidas_preventivas : '');
+  document.getElementById('rdpMIncidencias').value= r.incidencias||'';
+  document.getElementById('rdpMFirmar').checked   = false;
+  document.getElementById('rdpMobileTitle').textContent = 'Editar Registro RdP';
+  document.getElementById('modalRdpMobile').style.display = 'flex';
+}
+
+async function rdpFirmarMobile(id) {
+  if (!confirm('¿Firmar y cerrar este registro? No podrá eliminarse después.')) return;
+  const res = await apiFetch('/rdp-registros/'+id+'/firmar',{ method:'POST', body:'{}' });
+  const d = await res.json();
+  if (res.ok) { toast('Registro firmado','ok'); rdpCargarMobile(); }
+  else toast(d.error||'Error','error');
+}
+
+async function rdpGuardar() {
+  const id = document.getElementById('rdpMobileId').value;
+  const s  = getSession();
+  const body = {
+    obra_id:               s?.obraId,
+    fecha:                 document.getElementById('rdpMFecha').value,
+    trabajadores_presentes:parseInt(document.getElementById('rdpMTrab').value)||0,
+    condiciones_meteo:     document.getElementById('rdpMMeteo').value,
+    actividades:           document.getElementById('rdpMActividades').value,
+    riesgos_detectados:    document.getElementById('rdpMRiesgos').value||null,
+    incidencias:           document.getElementById('rdpMIncidencias').value||null,
+    responsable_nombre:    s?.nombre||null,
+    responsable_cargo:     s?.rol||'Encargado',
+    firmado:               document.getElementById('rdpMFirmar').checked,
+    estado:                document.getElementById('rdpMFirmar').checked ? 'firmado' : 'borrador'
+  };
+  if (!body.fecha) return toast('La fecha es obligatoria','error');
+  if (!body.obra_id) return toast('Sin obra asignada','error');
+  if (!body.actividades) return toast('Las actividades son obligatorias','error');
+  try {
+    const res = id
+      ? await apiFetch('/rdp-registros/'+id,{ method:'PUT', body:JSON.stringify(body) })
+      : await apiFetch('/rdp-registros',     { method:'POST',body:JSON.stringify(body) });
+    const d = await res.json();
+    if (!res.ok) return toast(d.error||'Error','error');
+    toast(id?'Registro actualizado':'Registro creado','ok');
+    rdpCerrarModal();
+    rdpCargarMobile();
+  } catch(e){ toast('Error de red','error'); }
+}
+
+function rdpCerrarModal() { document.getElementById('modalRdpMobile').style.display='none'; }
+
+// ═══════════════════════════════════════════════════════
+// MOBILE: Hormigonado — Registro de Hormigonado
+// ═══════════════════════════════════════════════════════
+let _hormMobileData = [];
+
+async function hormCargarMobile() {
+  const s = getSession();
+  const lista = document.getElementById('hormListaMobile');
+  const btnNuevo = document.getElementById('btnNuevoHorm');
+  if (btnNuevo) btnNuevo.style.display = (s && s.rol !== 'operario') ? '' : 'none';
+  lista.innerHTML = '<div class="empty-state"><div class="spinner"></div></div>';
+  try {
+    const params = new URLSearchParams();
+    if (s?.obraId) params.set('obra_id', s.obraId);
+    const res = await apiFetch('/registro-hormigonado?' + params.toString());
+    const { data } = await res.json();
+    _hormMobileData = data || [];
+    if (!data.length) { lista.innerHTML = '<div class="empty-state">Sin registros de hormigonado</div>'; return; }
+    lista.innerHTML = data.map(r =>
+      '<div style="background:var(--card);border-radius:12px;padding:13px 14px;margin-bottom:10px;border:1px solid var(--border);border-left:3px solid #78350f">'
+      + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">'
+      + '<div style="font-weight:700;font-size:14px">' + r.fecha + '</div>'
+      + '<div style="font-size:12px;color:var(--muted)">' + (r.resistencia||'') + '</div>'
+      + '</div>'
+      + '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:4px">🏗️ ' + (r.elemento_estructural||'—') + '</div>'
+      + '<div style="font-size:12px;color:var(--muted)">📦 ' + (r.volumen_m3||0) + ' m³  ·  ' + (r.suministrador||'—') + '</div>'
+      + (r.observaciones ? '<div style="font-size:12px;color:var(--muted);margin-top:4px">' + r.observaciones.slice(0,80) + '</div>' : '')
+      + (s?.rol!=='operario' ? '<div style="margin-top:8px"><button onclick="hormEditarMobile('+r.id+')" style="padding:5px 10px;border:1px solid var(--border);border-radius:8px;background:transparent;color:var(--text);font-size:11px;font-weight:700;cursor:pointer">✏️ Editar</button></div>' : '')
+      + '</div>'
+    ).join('');
+  } catch(e) { lista.innerHTML = '<div class="empty-state">Error al cargar</div>'; }
+}
+
+function hormNuevo() {
+  document.getElementById('hormMobileId').value = '';
+  document.getElementById('hormMFecha').value   = new Date().toISOString().slice(0,10);
+  document.getElementById('hormMVolumen').value = '0';
+  document.getElementById('hormMElemento').value = '';
+  document.getElementById('hormMSuministrador').value = '';
+  document.getElementById('hormMObs').value = '';
+  document.getElementById('hormMResistencia').value = 'HA-25';
+  document.getElementById('hormMConsistencia').value = 'fluida';
+  document.getElementById('hormMobileTitle').textContent = 'Nuevo Registro de Hormigonado';
+  document.getElementById('modalHormMobile').style.display = 'flex';
+}
+
+function hormEditarMobile(id) {
+  const r = _hormMobileData.find(x=>x.id===id); if(!r) return;
+  document.getElementById('hormMobileId').value      = id;
+  document.getElementById('hormMFecha').value        = r.fecha;
+  document.getElementById('hormMVolumen').value      = r.volumen_m3||0;
+  document.getElementById('hormMElemento').value     = r.elemento_estructural||'';
+  document.getElementById('hormMSuministrador').value= r.suministrador||'';
+  document.getElementById('hormMObs').value          = r.observaciones||'';
+  document.getElementById('hormMResistencia').value  = r.resistencia||'HA-25';
+  document.getElementById('hormMConsistencia').value = r.consistencia||'fluida';
+  document.getElementById('hormMobileTitle').textContent = 'Editar Registro Hormigonado';
+  document.getElementById('modalHormMobile').style.display = 'flex';
+}
+
+async function hormGuardar() {
+  const id = document.getElementById('hormMobileId').value;
+  const s  = getSession();
+  const body = {
+    obra_id:             s?.obraId,
+    fecha:               document.getElementById('hormMFecha').value,
+    elemento_estructural:document.getElementById('hormMElemento').value,
+    volumen_m3:          parseFloat(document.getElementById('hormMVolumen').value)||0,
+    resistencia:         document.getElementById('hormMResistencia').value,
+    consistencia:        document.getElementById('hormMConsistencia').value,
+    suministrador:       document.getElementById('hormMSuministrador').value||null,
+    observaciones:       document.getElementById('hormMObs').value||null
+  };
+  if (!body.fecha) return toast('La fecha es obligatoria','error');
+  if (!body.obra_id) return toast('Sin obra asignada','error');
+  if (!body.elemento_estructural) return toast('El elemento estructural es obligatorio','error');
+  try {
+    const res = id
+      ? await apiFetch('/registro-hormigonado/'+id,{ method:'PUT', body:JSON.stringify(body) })
+      : await apiFetch('/registro-hormigonado',     { method:'POST',body:JSON.stringify(body) });
+    const d = await res.json();
+    if (!res.ok) return toast(d.error||'Error','error');
+    toast(id?'Registro actualizado':'Registro creado','ok');
+    hormCerrarModal();
+    hormCargarMobile();
+  } catch(e){ toast('Error de red','error'); }
+}
+
+function hormCerrarModal() { document.getElementById('modalHormMobile').style.display='none'; }
+
+// ═══════════════════════════════════════════════════════
+// MOBILE: Formación en Obra (read-only list)
+// ═══════════════════════════════════════════════════════
+async function formacionCargarMobile() {
+  const s = getSession();
+  const lista = document.getElementById('formacionListaMobile');
+  lista.innerHTML = '<div class="empty-state"><div class="spinner"></div></div>';
+  try {
+    const params = new URLSearchParams();
+    if (s?.obraId) params.set('obra_id', s.obraId);
+    const res = await apiFetch('/formacion-obra?' + params.toString());
+    const { data } = await res.json();
+    if (!data || !data.length) { lista.innerHTML = '<div class="empty-state">Sin registros de formación</div>'; return; }
+    lista.innerHTML = data.map(r =>
+      '<div style="background:var(--card);border-radius:12px;padding:13px 14px;margin-bottom:10px;border:1px solid var(--border);border-left:3px solid #0369a1">'
+      + '<div style="font-weight:700;font-size:14px;margin-bottom:4px">📚 ' + (r.titulo||'—') + '</div>'
+      + '<div style="font-size:12px;color:var(--muted);margin-bottom:4px">' + (r.tipo||'') + ' · ' + (r.fecha||'—') + ' · ' + (r.horas||0) + 'h</div>'
+      + '<div style="font-size:12px;color:var(--muted)">👤 ' + (r.instructor||'—') + '</div>'
+      + (r.participantes ? '<div style="font-size:12px;color:var(--muted);margin-top:4px">👷 ' + r.participantes + ' participantes</div>' : '')
+      + '</div>'
+    ).join('');
+  } catch(e) { lista.innerHTML = '<div class="empty-state">Error al cargar</div>'; }
+}
+
 </script>
 </body>
 </html>
