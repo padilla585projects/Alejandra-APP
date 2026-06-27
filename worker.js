@@ -4721,6 +4721,31 @@ export default {
         if (method === 'PUT')    return await actualizarVisitaObra(_vid, request, env);
         if (method === 'DELETE') return await eliminarVisitaObra(_vid, request, env);
       }
+      // ── Escandallo de Precios / Price Breakdown (NEW-114) ──────────────────────
+      if (path === '/escandallo-precios' && method === 'GET')  return await getEscandallo(request, env);
+      if (path === '/escandallo-precios' && method === 'POST') return await crearEscandallo(request, env);
+      if (path.startsWith('/escandallo-precios/')) {
+        const _epId = parseInt(path.split('/escandallo-precios/')[1]);
+        if (method === 'PUT')    return await actualizarEscandallo(_epId, request, env);
+        if (method === 'DELETE') return await eliminarEscandallo(_epId, request, env);
+      }
+      // ── Cronograma de Pagos / Payment Schedule (NEW-115) ────────────────────
+      if (path === '/cronograma-pagos' && method === 'GET')  return await getCronogramaPagos(request, env);
+      if (path === '/cronograma-pagos' && method === 'POST') return await crearHitoPago(request, env);
+      if (path.startsWith('/cronograma-pagos/')) {
+        const _cpId = parseInt(path.split('/cronograma-pagos/')[1]);
+        if (method === 'PUT')    return await actualizarHitoPago(_cpId, request, env);
+        if (method === 'DELETE') return await eliminarHitoPago(_cpId, request, env);
+      }
+      // ── Registro Diario de Prevención (NEW-116) ──────────────────────────────
+      if (path === '/rdp-registros' && method === 'GET')  return await getRdpRegistros(request, env);
+      if (path === '/rdp-registros' && method === 'POST') return await crearRdpRegistro(request, env);
+      if (path.startsWith('/rdp-registros/')) {
+        const _rdpId = parseInt(path.split('/rdp-registros/')[1]);
+        if (path.endsWith('/firmar') && method === 'POST') return await firmarRdpRegistro(_rdpId, request, env);
+        if (method === 'PUT')    return await actualizarRdpRegistro(_rdpId, request, env);
+        if (method === 'DELETE') return await eliminarRdpRegistro(_rdpId, request, env);
+      }
       // ── Cubicaciones de Obra / Quantity Takeoff (NEW-113) ──────────────────
       if (path === '/cubicaciones-obra' && method === 'GET')  return await getCubicaciones(request, env);
       if (path === '/cubicaciones-obra' && method === 'POST') return await crearCubicacion(request, env);
@@ -21285,5 +21310,396 @@ async function eliminarCubicacion(id, request, env) {
   const { empresa_id, rol } = await getAuth(request, env);
   if (!empresa_id || rol === 'operario') return err('Sin permisos', 403);
   await env.DB.prepare('DELETE FROM cubicaciones_obra WHERE id=? AND empresa_id=?').bind(id, empresa_id).run();
+  return json({ ok: true });
+}
+
+
+// ════════════════════════════════════════════════════════════════════════════
+// NEW-114: ESCANDALLO DE PRECIOS / PRICE BREAKDOWN
+// Desglose de unidades: material + mano de obra + maquinaria por partida
+// ════════════════════════════════════════════════════════════════════════════
+async function ensureEscandalloTable(env) {
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS escandallo_precios (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    empresa_id        INTEGER NOT NULL,
+    obra_id           INTEGER,
+    codigo            TEXT    NOT NULL,
+    descripcion       TEXT    NOT NULL,
+    unidad            TEXT    NOT NULL DEFAULT 'ud',
+    capitulo          TEXT,
+    tipo_partida      TEXT    NOT NULL DEFAULT 'compuesta',
+    rendimiento       REAL    NOT NULL DEFAULT 1,
+    coef_empresa      REAL    NOT NULL DEFAULT 1.0,
+    precio_material   REAL    NOT NULL DEFAULT 0,
+    precio_mano_obra  REAL    NOT NULL DEFAULT 0,
+    precio_maquinaria REAL    NOT NULL DEFAULT 0,
+    gastos_generales  REAL    NOT NULL DEFAULT 0.13,
+    beneficio_indust  REAL    NOT NULL DEFAULT 0.06,
+    estado            TEXT    NOT NULL DEFAULT 'borrador',
+    notas             TEXT,
+    created_by        TEXT,
+    created_at        TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at        TEXT NOT NULL DEFAULT (datetime('now'))
+  )`).run();
+}
+
+async function getEscandallo(request, env) {
+  await ensureEscandalloTable(env);
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const url    = new URL(request.url);
+  const obra   = url.searchParams.get('obra_id');
+  const cap    = url.searchParams.get('capitulo');
+  const estado = url.searchParams.get('estado');
+  let sql = `SELECT e.*, o.nombre as obra_nombre
+    FROM escandallo_precios e
+    LEFT JOIN obras o ON e.obra_id = o.id
+    WHERE e.empresa_id = ?`;
+  const params = [empresa_id];
+  if (obra)   { sql += ' AND e.obra_id = ?';   params.push(obra); }
+  if (cap)    { sql += ' AND e.capitulo = ?';  params.push(cap); }
+  if (estado) { sql += ' AND e.estado = ?';    params.push(estado); }
+  sql += ' ORDER BY e.capitulo, e.codigo';
+  const { results } = await env.DB.prepare(sql).bind(...params).all();
+  results.forEach(r => {
+    const cd  = (r.precio_material + r.precio_mano_obra + r.precio_maquinaria) * r.rendimiento * r.coef_empresa;
+    const gg  = cd * r.gastos_generales;
+    const bi  = cd * r.beneficio_indust;
+    r.coste_directo   = cd.toFixed(4);
+    r.precio_unitario = (cd + gg + bi).toFixed(4);
+    r.precio_venta    = ((cd + gg + bi) * 1).toFixed(2);
+  });
+  const stats = {
+    total: results.length,
+    capitulos: [...new Set(results.map(r => r.capitulo).filter(Boolean))].length,
+    precio_medio: results.length ? (results.reduce((s,r)=>s+parseFloat(r.precio_unitario||0),0)/results.length).toFixed(2) : '0.00',
+    borradores: results.filter(r => r.estado==='borrador').length,
+    aprobados:  results.filter(r => r.estado==='aprobado').length
+  };
+  return json({ data: results, stats });
+}
+
+async function crearEscandallo(request, env) {
+  await ensureEscandalloTable(env);
+  const { empresa_id, nombre: createdBy } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const body = await request.json().catch(() => ({}));
+  if (!body.codigo?.trim())      return err('El código es obligatorio');
+  if (!body.descripcion?.trim()) return err('La descripción es obligatoria');
+  const dup = await env.DB.prepare('SELECT id FROM escandallo_precios WHERE empresa_id=? AND codigo=?').bind(empresa_id, body.codigo.trim().toUpperCase()).first();
+  if (dup) return err('Ya existe un escandallo con ese código', 409);
+  const r = await env.DB.prepare(`
+    INSERT INTO escandallo_precios
+      (empresa_id,obra_id,codigo,descripcion,unidad,capitulo,tipo_partida,rendimiento,coef_empresa,
+       precio_material,precio_mano_obra,precio_maquinaria,gastos_generales,beneficio_indust,estado,notas,created_by)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+    .bind(empresa_id, body.obra_id||null, body.codigo.trim().toUpperCase(), body.descripcion.trim(),
+          body.unidad||'ud', body.capitulo||null, body.tipo_partida||'compuesta',
+          parseFloat(body.rendimiento)||1, parseFloat(body.coef_empresa)||1,
+          parseFloat(body.precio_material)||0, parseFloat(body.precio_mano_obra)||0,
+          parseFloat(body.precio_maquinaria)||0, parseFloat(body.gastos_generales)||0.13,
+          parseFloat(body.beneficio_indust)||0.06, body.estado||'borrador',
+          body.notas||null, createdBy||null).run();
+  return json({ ok: true, id: r.meta.last_row_id }, 201);
+}
+
+async function actualizarEscandallo(id, request, env) {
+  await ensureEscandalloTable(env);
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const body = await request.json().catch(() => ({}));
+  if (!body.descripcion?.trim()) return err('La descripción es obligatoria');
+  await env.DB.prepare(`
+    UPDATE escandallo_precios SET
+      obra_id=?,descripcion=?,unidad=?,capitulo=?,tipo_partida=?,rendimiento=?,coef_empresa=?,
+      precio_material=?,precio_mano_obra=?,precio_maquinaria=?,gastos_generales=?,beneficio_indust=?,
+      estado=?,notas=?,updated_at=datetime('now')
+    WHERE id=? AND empresa_id=?`)
+    .bind(body.obra_id||null, body.descripcion.trim(), body.unidad||'ud', body.capitulo||null,
+          body.tipo_partida||'compuesta', parseFloat(body.rendimiento)||1, parseFloat(body.coef_empresa)||1,
+          parseFloat(body.precio_material)||0, parseFloat(body.precio_mano_obra)||0,
+          parseFloat(body.precio_maquinaria)||0, parseFloat(body.gastos_generales)||0.13,
+          parseFloat(body.beneficio_indust)||0.06, body.estado||'borrador',
+          body.notas||null, id, empresa_id).run();
+  return json({ ok: true });
+}
+
+async function eliminarEscandallo(id, request, env) {
+  await ensureEscandalloTable(env);
+  const { empresa_id, rol } = await getAuth(request, env);
+  if (!empresa_id || rol === 'operario') return err('Sin permisos', 403);
+  await env.DB.prepare('DELETE FROM escandallo_precios WHERE id=? AND empresa_id=?').bind(id, empresa_id).run();
+  return json({ ok: true });
+}
+
+
+// ════════════════════════════════════════════════════════════════════════════
+// NEW-115: CRONOGRAMA DE PAGOS / PAYMENT SCHEDULE
+// Hitos contractuales con fecha, importe y estado de cobro
+// ════════════════════════════════════════════════════════════════════════════
+async function ensureCronogramaPagosTable(env) {
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS cronograma_pagos (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    empresa_id        INTEGER NOT NULL,
+    obra_id           INTEGER NOT NULL,
+    numero_hito       INTEGER NOT NULL,
+    descripcion       TEXT    NOT NULL,
+    tipo              TEXT    NOT NULL DEFAULT 'certificacion',
+    fecha_prevista    TEXT    NOT NULL,
+    fecha_cobro       TEXT,
+    importe_previsto  REAL    NOT NULL DEFAULT 0,
+    importe_cobrado   REAL    NOT NULL DEFAULT 0,
+    estado            TEXT    NOT NULL DEFAULT 'pendiente',
+    forma_pago        TEXT,
+    referencia        TEXT,
+    cliente_nombre    TEXT,
+    notas             TEXT,
+    created_by        TEXT,
+    created_at        TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at        TEXT NOT NULL DEFAULT (datetime('now'))
+  )`).run();
+}
+
+async function getCronogramaPagos(request, env) {
+  await ensureCronogramaPagosTable(env);
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const url    = new URL(request.url);
+  const obra   = url.searchParams.get('obra_id');
+  const estado = url.searchParams.get('estado');
+  const tipo   = url.searchParams.get('tipo');
+  let sql = `SELECT cp.*, o.nombre as obra_nombre
+    FROM cronograma_pagos cp
+    LEFT JOIN obras o ON cp.obra_id = o.id
+    WHERE cp.empresa_id = ?`;
+  const params = [empresa_id];
+  if (obra)   { sql += ' AND cp.obra_id = ?';  params.push(obra); }
+  if (estado) { sql += ' AND cp.estado = ?';   params.push(estado); }
+  if (tipo)   { sql += ' AND cp.tipo = ?';     params.push(tipo); }
+  sql += ' ORDER BY cp.obra_id, cp.fecha_prevista, cp.numero_hito';
+  const { results } = await env.DB.prepare(sql).bind(...params).all();
+  const hoy  = new Date().toISOString().slice(0,10);
+  results.forEach(r => {
+    r.dias_restantes = r.fecha_prevista ? Math.round((new Date(r.fecha_prevista)-new Date(hoy))/(86400000)) : null;
+    r.pendiente      = (r.importe_previsto - r.importe_cobrado).toFixed(2);
+    r.pct_cobrado    = r.importe_previsto > 0 ? ((r.importe_cobrado/r.importe_previsto)*100).toFixed(1) : '0.0';
+    if (r.estado === 'pendiente' && r.dias_restantes !== null && r.dias_restantes < 0) r.alerta = 'vencido';
+    else if (r.estado === 'pendiente' && r.dias_restantes !== null && r.dias_restantes <= 15) r.alerta = 'proximo';
+  });
+  const stats = {
+    total_hitos:      results.length,
+    importe_total:    results.reduce((s,r) => s+r.importe_previsto, 0).toFixed(2),
+    cobrado_total:    results.reduce((s,r) => s+r.importe_cobrado,  0).toFixed(2),
+    pendiente_total:  results.reduce((s,r) => s+parseFloat(r.pendiente), 0).toFixed(2),
+    vencidos:         results.filter(r => r.alerta==='vencido').length,
+    proximos:         results.filter(r => r.alerta==='proximo').length,
+    cobrados:         results.filter(r => r.estado==='cobrado').length
+  };
+  return json({ data: results, stats });
+}
+
+async function crearHitoPago(request, env) {
+  await ensureCronogramaPagosTable(env);
+  const { empresa_id, nombre: createdBy } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const body = await request.json().catch(() => ({}));
+  if (!body.descripcion?.trim()) return err('La descripción del hito es obligatoria');
+  if (!body.fecha_prevista)      return err('La fecha prevista es obligatoria');
+  if (!body.obra_id)             return err('La obra es obligatoria');
+  const last = await env.DB.prepare('SELECT MAX(numero_hito) as mx FROM cronograma_pagos WHERE empresa_id=? AND obra_id=?').bind(empresa_id, body.obra_id).first();
+  const numero_hito = (last?.mx || 0) + 1;
+  const r = await env.DB.prepare(`
+    INSERT INTO cronograma_pagos
+      (empresa_id,obra_id,numero_hito,descripcion,tipo,fecha_prevista,fecha_cobro,
+       importe_previsto,importe_cobrado,estado,forma_pago,referencia,cliente_nombre,notas,created_by)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+    .bind(empresa_id, body.obra_id, numero_hito, body.descripcion.trim(),
+          body.tipo||'certificacion', body.fecha_prevista, body.fecha_cobro||null,
+          parseFloat(body.importe_previsto)||0, parseFloat(body.importe_cobrado)||0,
+          body.estado||'pendiente', body.forma_pago||null, body.referencia||null,
+          body.cliente_nombre||null, body.notas||null, createdBy||null).run();
+  return json({ ok: true, id: r.meta.last_row_id, numero_hito }, 201);
+}
+
+async function actualizarHitoPago(id, request, env) {
+  await ensureCronogramaPagosTable(env);
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const body = await request.json().catch(() => ({}));
+  if (!body.descripcion?.trim()) return err('La descripción es obligatoria');
+  // Auto-set fecha_cobro when marking as cobrado
+  const fechaCobro = body.estado === 'cobrado' && !body.fecha_cobro
+    ? new Date().toISOString().slice(0,10)
+    : (body.fecha_cobro || null);
+  await env.DB.prepare(`
+    UPDATE cronograma_pagos SET
+      descripcion=?,tipo=?,fecha_prevista=?,fecha_cobro=?,
+      importe_previsto=?,importe_cobrado=?,estado=?,
+      forma_pago=?,referencia=?,cliente_nombre=?,notas=?,
+      updated_at=datetime('now')
+    WHERE id=? AND empresa_id=?`)
+    .bind(body.descripcion.trim(), body.tipo||'certificacion', body.fecha_prevista,
+          fechaCobro, parseFloat(body.importe_previsto)||0, parseFloat(body.importe_cobrado)||0,
+          body.estado||'pendiente', body.forma_pago||null, body.referencia||null,
+          body.cliente_nombre||null, body.notas||null, id, empresa_id).run();
+  return json({ ok: true });
+}
+
+async function eliminarHitoPago(id, request, env) {
+  await ensureCronogramaPagosTable(env);
+  const { empresa_id, isSuperadmin, isEmpresaAdmin, isAdmin } = await getAuth(request, env);
+  if (!empresa_id || (!isSuperadmin && !isAdmin && !isEmpresaAdmin)) return err('Sin permisos', 403);
+  await env.DB.prepare('DELETE FROM cronograma_pagos WHERE id=? AND empresa_id=?').bind(id, empresa_id).run();
+  return json({ ok: true });
+}
+
+
+// ════════════════════════════════════════════════════════════════════════════
+// NEW-116: REGISTRO DIARIO DE PREVENCIÓN (RdP) — Ley 31/1995 PRL
+// Libro obligatorio de actividades preventivas en obra
+// ════════════════════════════════════════════════════════════════════════════
+async function ensureRdpTable(env) {
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS rdp_registros (
+    id                    INTEGER PRIMARY KEY AUTOINCREMENT,
+    empresa_id            INTEGER NOT NULL,
+    obra_id               INTEGER NOT NULL,
+    fecha                 TEXT    NOT NULL,
+    numero_dia            INTEGER,
+    trabajadores_presentes INTEGER NOT NULL DEFAULT 0,
+    condiciones_meteo     TEXT    NOT NULL DEFAULT 'buenas',
+    actividades           TEXT    NOT NULL,
+    riesgos_detectados    TEXT,
+    medidas_preventivas   TEXT,
+    equipos_utilizados    TEXT,
+    incidencias           TEXT,
+    visitas_externas      TEXT,
+    responsable_nombre    TEXT,
+    responsable_cargo     TEXT    NOT NULL DEFAULT 'Encargado',
+    firmado               INTEGER NOT NULL DEFAULT 0,
+    estado                TEXT    NOT NULL DEFAULT 'borrador',
+    observaciones         TEXT,
+    created_by            TEXT,
+    created_at            TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at            TEXT NOT NULL DEFAULT (datetime('now'))
+  )`).run();
+}
+
+async function getRdpRegistros(request, env) {
+  await ensureRdpTable(env);
+  const auth = await getAuth(request, env);
+  const { empresa_id } = auth;
+  if (!empresa_id) return err('No autorizado', 403);
+  const url    = new URL(request.url);
+  const obra   = url.searchParams.get('obra_id');
+  const desde  = url.searchParams.get('desde');
+  const hasta  = url.searchParams.get('hasta');
+  const estado = url.searchParams.get('estado');
+  let sql = `SELECT r.*, o.nombre as obra_nombre
+    FROM rdp_registros r
+    LEFT JOIN obras o ON r.obra_id = o.id
+    WHERE r.empresa_id = ?`;
+  const params = [empresa_id];
+  if (obra)   { sql += ' AND r.obra_id = ?';     params.push(obra); }
+  if (desde)  { sql += ' AND r.fecha >= ?';       params.push(desde); }
+  if (hasta)  { sql += ' AND r.fecha <= ?';       params.push(hasta); }
+  if (estado) { sql += ' AND r.estado = ?';       params.push(estado); }
+  sql += ' ORDER BY r.fecha DESC, r.id DESC';
+  const { results } = await env.DB.prepare(sql).bind(...params).all();
+  const stats = {
+    total:          results.length,
+    firmados:       results.filter(r => r.firmado === 1).length,
+    borradores:     results.filter(r => r.estado === 'borrador').length,
+    con_incidencia: results.filter(r => r.incidencias?.trim()).length,
+    trabajadores_hoy: results[0]?.trabajadores_presentes || 0
+  };
+  return json({ data: results, stats });
+}
+
+async function crearRdpRegistro(request, env) {
+  await ensureRdpTable(env);
+  const { empresa_id, nombre: createdBy } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const body = await request.json().catch(() => ({}));
+  if (!body.fecha)        return err('La fecha es obligatoria');
+  if (!body.obra_id)      return err('La obra es obligatoria');
+  if (!body.actividades?.trim()) return err('Las actividades del día son obligatorias');
+  // Auto-numero_dia dentro de la obra
+  const last = await env.DB.prepare('SELECT MAX(numero_dia) as mx FROM rdp_registros WHERE empresa_id=? AND obra_id=?').bind(empresa_id, body.obra_id).first();
+  const numero_dia = (last?.mx || 0) + 1;
+  // Check no hay registro para esa fecha en esa obra
+  const existe = await env.DB.prepare('SELECT id FROM rdp_registros WHERE empresa_id=? AND obra_id=? AND fecha=?').bind(empresa_id, body.obra_id, body.fecha).first();
+  if (existe) return err('Ya existe un registro RdP para esa fecha en esta obra', 409);
+  const r = await env.DB.prepare(`
+    INSERT INTO rdp_registros
+      (empresa_id,obra_id,fecha,numero_dia,trabajadores_presentes,condiciones_meteo,
+       actividades,riesgos_detectados,medidas_preventivas,equipos_utilizados,
+       incidencias,visitas_externas,responsable_nombre,responsable_cargo,
+       firmado,estado,observaciones,created_by)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+    .bind(empresa_id, body.obra_id, body.fecha, numero_dia,
+          parseInt(body.trabajadores_presentes)||0,
+          body.condiciones_meteo||'buenas',
+          body.actividades.trim(),
+          body.riesgos_detectados||null,
+          body.medidas_preventivas||null,
+          body.equipos_utilizados||null,
+          body.incidencias||null,
+          body.visitas_externas||null,
+          body.responsable_nombre||createdBy||null,
+          body.responsable_cargo||'Encargado',
+          body.firmado ? 1 : 0,
+          body.estado||'borrador',
+          body.observaciones||null,
+          createdBy||null).run();
+  return json({ ok: true, id: r.meta.last_row_id, numero_dia }, 201);
+}
+
+async function actualizarRdpRegistro(id, request, env) {
+  await ensureRdpTable(env);
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  const body = await request.json().catch(() => ({}));
+  if (!body.actividades?.trim()) return err('Las actividades del día son obligatorias');
+  await env.DB.prepare(`
+    UPDATE rdp_registros SET
+      fecha=?,trabajadores_presentes=?,condiciones_meteo=?,
+      actividades=?,riesgos_detectados=?,medidas_preventivas=?,
+      equipos_utilizados=?,incidencias=?,visitas_externas=?,
+      responsable_nombre=?,responsable_cargo=?,firmado=?,
+      estado=?,observaciones=?,updated_at=datetime('now')
+    WHERE id=? AND empresa_id=?`)
+    .bind(body.fecha, parseInt(body.trabajadores_presentes)||0,
+          body.condiciones_meteo||'buenas', body.actividades.trim(),
+          body.riesgos_detectados||null, body.medidas_preventivas||null,
+          body.equipos_utilizados||null, body.incidencias||null,
+          body.visitas_externas||null, body.responsable_nombre||null,
+          body.responsable_cargo||'Encargado', body.firmado ? 1 : 0,
+          body.estado||'borrador', body.observaciones||null, id, empresa_id).run();
+  return json({ ok: true });
+}
+
+async function firmarRdpRegistro(id, request, env) {
+  await ensureRdpTable(env);
+  const { empresa_id, nombre } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 403);
+  await env.DB.prepare(`
+    UPDATE rdp_registros SET
+      firmado=1, estado='firmado',
+      responsable_nombre=COALESCE(responsable_nombre, ?),
+      updated_at=datetime('now')
+    WHERE id=? AND empresa_id=?`)
+    .bind(nombre||null, id, empresa_id).run();
+  return json({ ok: true, mensaje: 'Registro firmado' });
+}
+
+async function eliminarRdpRegistro(id, request, env) {
+  await ensureRdpTable(env);
+  const { empresa_id, rol } = await getAuth(request, env);
+  if (!empresa_id || rol === 'operario') return err('Sin permisos', 403);
+  // No eliminar si está firmado (integridad PRL)
+  const reg = await env.DB.prepare('SELECT firmado FROM rdp_registros WHERE id=? AND empresa_id=?').bind(id, empresa_id).first();
+  if (!reg) return err('No encontrado', 404);
+  if (reg.firmado) return err('No se puede eliminar un registro firmado', 409);
+  await env.DB.prepare('DELETE FROM rdp_registros WHERE id=? AND empresa_id=?').bind(id, empresa_id).run();
   return json({ ok: true });
 }

@@ -811,6 +811,16 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
       <span class="nav-icon">📊</span> Gráficas
     </button>
 
+    <button class="nav-item nav-finance" data-page="escandalloPrecios" onclick="navTo('escandalloPrecios')" style="display:none">
+      <span class="nav-icon">🧮</span> Escandallo de Precios
+    </button>
+    <button class="nav-item nav-finance" data-page="cronogramaPagos" onclick="navTo('cronogramaPagos')" style="display:none">
+      <span class="nav-icon">💳</span> Cronograma de Pagos
+      <span class="nav-badge" id="pagosVencBadge" style="display:none">!</span>
+    </button>
+    <button class="nav-item" data-page="rdpRegistros" onclick="navTo('rdpRegistros')">
+      <span class="nav-icon">📋</span> Registro Diario PRL
+    </button>
     <div class="sidebar-section nav-admin-section" onclick="sidebarToggle(this)" data-sid="admin" style="display:none">Admin</div>
     <button class="nav-item nav-admin" data-page="usuarios" onclick="navTo('usuarios')" style="display:none">
       <span class="nav-icon">👤</span> Usuarios
@@ -9595,7 +9605,10 @@ const PAGE_TITLES = {
   actasReplanteo:       '📐 Acta de Replanteo / Construction Stakeout Record (LOE art. 8)',
   formacionObra:        '🎓 Formación de Obra / Site Training Records (PRL)',
   registroHormigonado:  '🏗️ Registro de Hormigonado / Concrete Pour Log (EHE-08)',
-  libroSubcontratacion: '📖 Libro de Subcontratación / Subcontractor Register (Ley 32/2006)',
+  escandalloPrecios:  '🧮 Escandallo de Precios / Price Breakdown',
+    cronogramaPagos:    '💳 Cronograma de Pagos / Payment Schedule',
+    rdpRegistros:       '📋 Registro Diario de Prevención (RdP) — Ley 31/1995',
+    libroSubcontratacion: '📖 Libro de Subcontratación / Subcontractor Register (Ley 32/2006)',
 };
 
 const PAGE_LOADERS = {
@@ -9709,7 +9722,10 @@ const PAGE_LOADERS = {
   actasReplanteo:       cargarActasReplanteo,
   formacionObra:        cargarFormacionObra,
   registroHormigonado:  cargarRegistroHormigonado,
-  libroSubcontratacion: cargarLibroSubcontratacion,
+  escandalloPrecios:  cargarEscandalloPrecios,
+    cronogramaPagos:    cargarCronogramaPagos,
+    rdpRegistros:       cargarRdpRegistros,
+    libroSubcontratacion: cargarLibroSubcontratacion,
 };
 
 let currentPage = '';
@@ -9852,7 +9868,10 @@ const SYNC_INTERVALS = {
   actasReplanteo:       300,
   formacionObra:        300,
   registroHormigonado:  300,
-  libroSubcontratacion: 300,
+  escandalloPrecios:  600,
+    cronogramaPagos:    120,
+    rdpRegistros:       180,
+    libroSubcontratacion: 300,
 };
 
 let _syncTimer = null, _syncLabelTimer = null, _syncLastTs = null;
@@ -30898,6 +30917,506 @@ async function eliminarVisita() {
     cargarVisitasObra();
   } else { toast('Error al eliminar','err'); }
 }
+
+
+// ═══════════════════════════════════════════════════════
+// NEW-114: ESCANDALLO DE PRECIOS
+// ═══════════════════════════════════════════════════════
+let _epData = [];
+let tblEp   = null;
+
+const EP_ESTADO_COLOR = { borrador:'#6b7280', aprobado:'#16a34a', obsoleto:'#dc2626' };
+
+async function cargarEscandalloPrecios() {
+  try {
+    const res = await apiFetch('/escandallo-precios');
+    const { data, stats } = await res.json();
+    _epData = data || [];
+
+    // KPI strip
+    document.getElementById('epKpiStrip').innerHTML = [
+      { icon:'🧮', value: stats.total,       label:'Total partidas',   cls:'' },
+      { icon:'📁', value: stats.capitulos,   label:'Capítulos',        cls:'' },
+      { icon:'✅', value: stats.aprobados,   label:'Aprobadas',        cls: stats.aprobados>0?'ok':'' },
+      { icon:'📝', value: stats.borradores,  label:'Borradores',       cls: stats.borradores>0?'warn':'' },
+      { icon:'💶', value: stats.precio_medio+'€', label:'Precio medio', cls:'' }
+    ].map(k => '<div class="kpi-card" style="padding:14px"><div class="kpi-icon" style="font-size:20px">'+k.icon+'</div>'
+             + '<div class="kpi-value '+(k.cls||'')+'" style="font-size:22px">'+k.value+'</div>'
+             + '<div class="kpi-label">'+k.label+'</div></div>').join('');
+
+    // Populate capitulo filter
+    const caps = [...new Set(data.map(r => r.capitulo).filter(Boolean))].sort();
+    const sel = document.getElementById('epFiltroCap');
+    sel.innerHTML = '<option value="">Todos capítulos</option>'
+      + caps.map(c => '<option value="'+c+'">'+c+'</option>').join('');
+
+    // Populate obra filter
+    poblarSelectObras('epFiltroObra');
+
+    filtrarEscandallo();
+  } catch(e) { console.error(e); toast('Error cargando escandallo', 'error'); }
+}
+
+function filtrarEscandallo() {
+  const obra   = document.getElementById('epFiltroObra').value;
+  const cap    = document.getElementById('epFiltroCap').value;
+  const estado = document.getElementById('epFiltroEstado').value;
+  const q      = (document.getElementById('epBuscar').value || '').toLowerCase();
+  const rows   = _epData.filter(r =>
+    (!obra   || String(r.obra_id) === obra) &&
+    (!cap    || r.capitulo === cap) &&
+    (!estado || r.estado === estado) &&
+    (!q      || r.codigo.toLowerCase().includes(q) || r.descripcion.toLowerCase().includes(q))
+  );
+
+  const cols = [
+    { title:'Código',       field:'codigo',           width:100, formatter: c => '<b>'+c.getValue()+'</b>' },
+    { title:'Descripción',  field:'descripcion',       widthGrow:3 },
+    { title:'Capítulo',     field:'capitulo',          width:140 },
+    { title:'Unidad',       field:'unidad',            width:70, hozAlign:'center' },
+    { title:'Material €',   field:'precio_material',   width:100, hozAlign:'right', formatter:'money', formatterParams:{precision:2} },
+    { title:'MO €',         field:'precio_mano_obra',  width:90,  hozAlign:'right', formatter:'money', formatterParams:{precision:2} },
+    { title:'Maquinaria €', field:'precio_maquinaria', width:110, hozAlign:'right', formatter:'money', formatterParams:{precision:2} },
+    { title:'P. Unitario €',field:'precio_unitario',   width:120, hozAlign:'right',
+      formatter: c => '<b style="color:var(--primary)">' + parseFloat(c.getValue()||0).toFixed(4) + '</b>' },
+    { title:'Estado',       field:'estado',            width:100, hozAlign:'center',
+      formatter: c => '<span style="background:'+EP_ESTADO_COLOR[c.getValue()]+';color:#fff;padding:2px 8px;border-radius:10px;font-size:11px">' + c.getValue() + '</span>' },
+    { title:'',             field:'id',                width:90,  hozAlign:'center', headerSort:false,
+      formatter: c => '<button class="btn btn-sm btn-secondary" onclick="editarEp('+c.getValue()+')">✏️</button> '
+                    + '<button class="btn btn-sm btn-secondary" style="color:#dc2626" onclick="eliminarEp('+c.getValue()+')">🗑️</button>' }
+  ];
+
+  if (tblEp) { tblEp.replaceData(rows); }
+  else {
+    tblEp = new Tabulator('#epTabla', {
+      data: rows, layout:'fitColumns', height:'500px',
+      groupBy: r => r.capitulo || 'Sin capítulo',
+      columns: cols
+    });
+  }
+}
+
+function abrirModalEp(id) {
+  document.getElementById('epCodigo').value      = '';
+  document.getElementById('epDesc').value        = '';
+  document.getElementById('epCapitulo').value    = '';
+  document.getElementById('epRendimiento').value = '1';
+  document.getElementById('epMaterial').value    = '0';
+  document.getElementById('epManoObra').value    = '0';
+  document.getElementById('epMaquinaria').value  = '0';
+  document.getElementById('epGG').value          = '13';
+  document.getElementById('epBI').value          = '6';
+  document.getElementById('epNotas').value       = '';
+  document.getElementById('epEstado').value      = 'borrador';
+  document.getElementById('epUnidad').value      = 'ud';
+  document.getElementById('epTipo').value        = 'compuesta';
+  poblarSelectObras('epObra');
+  calcEp();
+  document.getElementById('modalEpTitle').textContent = id ? 'Editar partida' : 'Nueva partida de escandallo';
+  document.getElementById('modalEp').dataset.id = id || '';
+  document.getElementById('modalEp').style.display = 'flex';
+}
+
+function editarEp(id) {
+  const r = _epData.find(x => x.id === id); if (!r) return;
+  abrirModalEp(id);
+  setTimeout(() => {
+    document.getElementById('epCodigo').value      = r.codigo;
+    document.getElementById('epCodigo').disabled   = true;
+    document.getElementById('epDesc').value        = r.descripcion;
+    document.getElementById('epCapitulo').value    = r.capitulo || '';
+    document.getElementById('epRendimiento').value = r.rendimiento;
+    document.getElementById('epMaterial').value    = r.precio_material;
+    document.getElementById('epManoObra').value    = r.precio_mano_obra;
+    document.getElementById('epMaquinaria').value  = r.precio_maquinaria;
+    document.getElementById('epGG').value          = (r.gastos_generales * 100).toFixed(1);
+    document.getElementById('epBI').value          = (r.beneficio_indust * 100).toFixed(1);
+    document.getElementById('epNotas').value       = r.notas || '';
+    document.getElementById('epEstado').value      = r.estado;
+    document.getElementById('epUnidad').value      = r.unidad;
+    document.getElementById('epTipo').value        = r.tipo_partida;
+    if (r.obra_id) document.getElementById('epObra').value = r.obra_id;
+    calcEp();
+  }, 50);
+}
+
+function calcEp() {
+  const pm = parseFloat(document.getElementById('epMaterial').value) || 0;
+  const pmo= parseFloat(document.getElementById('epManoObra').value) || 0;
+  const pmq= parseFloat(document.getElementById('epMaquinaria').value) || 0;
+  const r  = parseFloat(document.getElementById('epRendimiento').value) || 1;
+  const gg = (parseFloat(document.getElementById('epGG').value) || 13) / 100;
+  const bi = (parseFloat(document.getElementById('epBI').value) || 6)  / 100;
+  const cd = (pm + pmo + pmq) * r;
+  const pu = cd * (1 + gg + bi);
+  document.getElementById('epCalcResult').innerHTML =
+    'Coste directo: <b>' + cd.toFixed(4) + ' €</b>  |  '
+    + 'GG+BI: <b>' + (cd*(gg+bi)).toFixed(4) + ' €</b>  |  '
+    + 'Precio unitario: <b style="color:var(--primary)">' + pu.toFixed(4) + ' €</b>';
+}
+
+async function guardarEp() {
+  const id = document.getElementById('modalEp').dataset.id;
+  const body = {
+    codigo:            document.getElementById('epCodigo').value.toUpperCase(),
+    descripcion:       document.getElementById('epDesc').value,
+    unidad:            document.getElementById('epUnidad').value,
+    capitulo:          document.getElementById('epCapitulo').value,
+    tipo_partida:      document.getElementById('epTipo').value,
+    rendimiento:       parseFloat(document.getElementById('epRendimiento').value)||1,
+    precio_material:   parseFloat(document.getElementById('epMaterial').value)||0,
+    precio_mano_obra:  parseFloat(document.getElementById('epManoObra').value)||0,
+    precio_maquinaria: parseFloat(document.getElementById('epMaquinaria').value)||0,
+    gastos_generales:  (parseFloat(document.getElementById('epGG').value)||13)/100,
+    beneficio_indust:  (parseFloat(document.getElementById('epBI').value)||6)/100,
+    estado:            document.getElementById('epEstado').value,
+    notas:             document.getElementById('epNotas').value,
+    obra_id:           document.getElementById('epObra').value || null
+  };
+  if (!body.codigo) return toast('El código es obligatorio','error');
+  if (!body.descripcion) return toast('La descripción es obligatoria','error');
+  try {
+    const res = id
+      ? await apiFetch('/escandallo-precios/'+id, { method:'PUT', body: JSON.stringify(body) })
+      : await apiFetch('/escandallo-precios',      { method:'POST',body: JSON.stringify(body) });
+    const d = await res.json();
+    if (!res.ok) return toast(d.error||'Error','error');
+    toast(id ? 'Partida actualizada' : 'Partida creada','ok');
+    cerrarModalEp();
+    cargarEscandalloPrecios();
+  } catch(e) { toast('Error de red','error'); }
+}
+
+async function eliminarEp(id) {
+  if (!confirm('¿Eliminar esta partida de escandallo?')) return;
+  const res = await apiFetch('/escandallo-precios/'+id, { method:'DELETE' });
+  const d   = await res.json();
+  if (res.ok) { toast('Partida eliminada','ok'); cargarEscandalloPrecios(); }
+  else toast(d.error||'Error','error');
+}
+
+function cerrarModalEp() {
+  document.getElementById('modalEp').style.display = 'none';
+  document.getElementById('epCodigo').disabled = false;
+}
+
+// ═══════════════════════════════════════════════════════
+// NEW-115: CRONOGRAMA DE PAGOS
+// ═══════════════════════════════════════════════════════
+let _cpData = [];
+let tblCp   = null;
+
+const CP_ESTADO_COLOR = {
+  pendiente:'#ca8a04', cobrado:'#16a34a', parcial:'#2563eb', impagado:'#dc2626'
+};
+const CP_TIPO_ICON = {
+  certificacion:'📜', anticipo:'⬆️', liquidacion:'🏁', garantia:'🔒', otro:'📌'
+};
+
+async function cargarCronogramaPagos() {
+  try {
+    const res = await apiFetch('/cronograma-pagos');
+    const { data, stats } = await res.json();
+    _cpData = data || [];
+
+    document.getElementById('cpKpiStrip').innerHTML = [
+      { icon:'💶', value: parseFloat(stats.importe_total).toLocaleString('es-ES',{minimumFractionDigits:0})+'€', label:'Total previsto', cls:'' },
+      { icon:'✅', value: parseFloat(stats.cobrado_total).toLocaleString('es-ES',{minimumFractionDigits:0})+'€', label:'Cobrado',         cls:'ok' },
+      { icon:'⏳', value: parseFloat(stats.pendiente_total).toLocaleString('es-ES',{minimumFractionDigits:0})+'€', label:'Pendiente',     cls: parseFloat(stats.pendiente_total)>0?'warn':'' },
+      { icon:'🚨', value: stats.vencidos,  label:'Vencidos',  cls: stats.vencidos>0?'danger':'' },
+      { icon:'⚠️', value: stats.proximos,  label:'Próximos',  cls: stats.proximos>0?'warn':'' },
+      { icon:'🏦', value: stats.cobrados,  label:'Cobrados',  cls:'ok' }
+    ].map(k => '<div class="kpi-card" style="padding:14px"><div class="kpi-icon" style="font-size:20px">'+k.icon+'</div>'
+             + '<div class="kpi-value '+(k.cls||'')+'" style="font-size:20px">'+k.value+'</div>'
+             + '<div class="kpi-label">'+k.label+'</div></div>').join('');
+
+    // Badge alertas
+    const badge = document.getElementById('pagosVencBadge');
+    if (badge) { badge.textContent = stats.vencidos; badge.style.display = stats.vencidos>0?'':'none'; }
+
+    poblarSelectObras('cpFiltroObra');
+    filtrarCronogramaPagos();
+  } catch(e) { console.error(e); toast('Error cargando cronograma de pagos','error'); }
+}
+
+function filtrarCronogramaPagos() {
+  const obra   = document.getElementById('cpFiltroObra').value;
+  const tipo   = document.getElementById('cpFiltroTipo').value;
+  const estado = document.getElementById('cpFiltroEstado').value;
+  const rows   = _cpData.filter(r =>
+    (!obra   || String(r.obra_id)===obra) &&
+    (!tipo   || r.tipo===tipo) &&
+    (!estado || r.estado===estado)
+  );
+
+  const cols = [
+    { title:'Hito', field:'numero_hito', width:60, hozAlign:'center' },
+    { title:'Obra', field:'obra_nombre', width:140 },
+    { title:'Descripción', field:'descripcion', widthGrow:2 },
+    { title:'Tipo', field:'tipo', width:110, formatter: c =>
+      (CP_TIPO_ICON[c.getValue()]||'') + ' ' + c.getValue() },
+    { title:'Fecha prevista', field:'fecha_prevista', width:120, hozAlign:'center' },
+    { title:'Previsto €', field:'importe_previsto', width:120, hozAlign:'right', formatter:'money', formatterParams:{precision:2} },
+    { title:'Cobrado €',  field:'importe_cobrado',  width:110, hozAlign:'right', formatter:'money', formatterParams:{precision:2} },
+    { title:'Pendiente €',field:'pendiente',         width:110, hozAlign:'right',
+      formatter: c => { const v=parseFloat(c.getValue()); return '<span style="color:'+(v>0?'#ca8a04':'#16a34a')+'">'+v.toLocaleString('es-ES',{minimumFractionDigits:2})+'</span>'; }},
+    { title:'Estado', field:'estado', width:100, hozAlign:'center',
+      formatter: c => '<span style="background:'+(CP_ESTADO_COLOR[c.getValue()]||'#6b7280')+';color:#fff;padding:2px 8px;border-radius:10px;font-size:11px">'+c.getValue()+'</span>' },
+    { title:'', field:'id', width:90, hozAlign:'center', headerSort:false,
+      formatter: c => '<button class="btn btn-sm btn-secondary" onclick="editarCp('+c.getValue()+')">✏️</button> '
+                    + '<button class="btn btn-sm btn-secondary" style="color:#dc2626" onclick="eliminarCp('+c.getValue()+')">🗑️</button>' }
+  ];
+
+  if (tblCp) { tblCp.replaceData(rows); }
+  else {
+    tblCp = new Tabulator('#cpTabla', {
+      data: rows, layout:'fitColumns', height:'480px',
+      rowFormatter: row => {
+        const d = row.getData();
+        if (d.alerta==='vencido') row.getElement().style.background='#fef2f2';
+        else if (d.alerta==='proximo') row.getElement().style.background='#fffbeb';
+      },
+      columns: cols
+    });
+  }
+}
+
+function abrirModalCp(id) {
+  ['cpDesc','cpRef','cpCliente','cpNotas'].forEach(f => document.getElementById(f).value = '');
+  document.getElementById('cpImportePrev').value = '0';
+  document.getElementById('cpImporteCob').value  = '0';
+  document.getElementById('cpFechaCobro').value  = '';
+  document.getElementById('cpEstado').value      = 'pendiente';
+  document.getElementById('cpTipo').value        = 'certificacion';
+  document.getElementById('cpFormaPago').value   = '';
+  document.getElementById('cpFechaPrev').value   = new Date().toISOString().slice(0,10);
+  poblarSelectObras('cpObra');
+  document.getElementById('modalCpTitle').textContent = id ? 'Editar hito de pago' : 'Nuevo hito de pago';
+  document.getElementById('modalCp').dataset.id = id || '';
+  document.getElementById('modalCp').style.display = 'flex';
+}
+
+function editarCp(id) {
+  const r = _cpData.find(x => x.id===id); if (!r) return;
+  abrirModalCp(id);
+  setTimeout(() => {
+    document.getElementById('cpDesc').value        = r.descripcion;
+    document.getElementById('cpTipo').value        = r.tipo;
+    document.getElementById('cpFechaPrev').value   = r.fecha_prevista;
+    document.getElementById('cpFechaCobro').value  = r.fecha_cobro||'';
+    document.getElementById('cpImportePrev').value = r.importe_previsto;
+    document.getElementById('cpImporteCob').value  = r.importe_cobrado;
+    document.getElementById('cpEstado').value      = r.estado;
+    document.getElementById('cpFormaPago').value   = r.forma_pago||'';
+    document.getElementById('cpRef').value         = r.referencia||'';
+    document.getElementById('cpCliente').value     = r.cliente_nombre||'';
+    document.getElementById('cpNotas').value       = r.notas||'';
+    document.getElementById('cpObra').value        = r.obra_id;
+  }, 50);
+}
+
+async function guardarCp() {
+  const id   = document.getElementById('modalCp').dataset.id;
+  const body = {
+    descripcion:       document.getElementById('cpDesc').value,
+    obra_id:           document.getElementById('cpObra').value,
+    tipo:              document.getElementById('cpTipo').value,
+    fecha_prevista:    document.getElementById('cpFechaPrev').value,
+    fecha_cobro:       document.getElementById('cpFechaCobro').value||null,
+    importe_previsto:  parseFloat(document.getElementById('cpImportePrev').value)||0,
+    importe_cobrado:   parseFloat(document.getElementById('cpImporteCob').value)||0,
+    estado:            document.getElementById('cpEstado').value,
+    forma_pago:        document.getElementById('cpFormaPago').value||null,
+    referencia:        document.getElementById('cpRef').value||null,
+    cliente_nombre:    document.getElementById('cpCliente').value||null,
+    notas:             document.getElementById('cpNotas').value||null
+  };
+  if (!body.descripcion) return toast('La descripción es obligatoria','error');
+  if (!body.obra_id)     return toast('Selecciona una obra','error');
+  if (!body.fecha_prevista) return toast('La fecha prevista es obligatoria','error');
+  try {
+    const res = id
+      ? await apiFetch('/cronograma-pagos/'+id, { method:'PUT', body:JSON.stringify(body) })
+      : await apiFetch('/cronograma-pagos',      { method:'POST',body:JSON.stringify(body) });
+    const d = await res.json();
+    if (!res.ok) return toast(d.error||'Error','error');
+    toast(id ? 'Hito actualizado' : 'Hito creado','ok');
+    cerrarModalCp();
+    cargarCronogramaPagos();
+  } catch(e) { toast('Error de red','error'); }
+}
+
+async function eliminarCp(id) {
+  if (!confirm('¿Eliminar este hito de pago?')) return;
+  const res = await apiFetch('/cronograma-pagos/'+id,{ method:'DELETE' });
+  const d   = await res.json();
+  if (res.ok) { toast('Hito eliminado','ok'); cargarCronogramaPagos(); }
+  else toast(d.error||'Error','error');
+}
+
+function cerrarModalCp() { document.getElementById('modalCp').style.display='none'; }
+
+// ═══════════════════════════════════════════════════════
+// NEW-116: REGISTRO DIARIO DE PREVENCIÓN (RdP)
+// ═══════════════════════════════════════════════════════
+let _rdpData = [];
+let tblRdp   = null;
+
+const RDP_METEO_ICON = {
+  buenas:'☀️', nublado:'☁️', lluvia:'🌧️', viento:'💨', frio:'🥶', calor:'🌡️', nieve:'❄️'
+};
+
+async function cargarRdpRegistros() {
+  try {
+    const res = await apiFetch('/rdp-registros');
+    const { data, stats } = await res.json();
+    _rdpData = data || [];
+
+    document.getElementById('rdpKpiStrip').innerHTML = [
+      { icon:'📋', value: stats.total,          label:'Total registros',  cls:'' },
+      { icon:'✍️', value: stats.firmados,        label:'Firmados',         cls: stats.firmados>0?'ok':'' },
+      { icon:'📝', value: stats.borradores,      label:'Borradores',       cls: stats.borradores>0?'warn':'' },
+      { icon:'⚠️', value: stats.con_incidencia, label:'Con incidencia',   cls: stats.con_incidencia>0?'warn':'' },
+      { icon:'👷', value: stats.trabajadores_hoy,label:'Trab. hoy',        cls:'' }
+    ].map(k => '<div class="kpi-card" style="padding:14px"><div class="kpi-icon" style="font-size:20px">'+k.icon+'</div>'
+             + '<div class="kpi-value '+(k.cls||'')+'" style="font-size:22px">'+k.value+'</div>'
+             + '<div class="kpi-label">'+k.label+'</div></div>').join('');
+
+    poblarSelectObras('rdpFiltroObra');
+    poblarSelectObras('rdpObra');
+    filtrarRdp();
+  } catch(e) { console.error(e); toast('Error cargando RdP','error'); }
+}
+
+function filtrarRdp() {
+  const obra   = document.getElementById('rdpFiltroObra').value;
+  const desde  = document.getElementById('rdpDesde').value;
+  const hasta  = document.getElementById('rdpHasta').value;
+  const estado = document.getElementById('rdpFiltroEstado').value;
+  const rows   = _rdpData.filter(r =>
+    (!obra   || String(r.obra_id)===obra) &&
+    (!desde  || r.fecha>=desde) &&
+    (!hasta  || r.fecha<=hasta) &&
+    (!estado || r.estado===estado)
+  );
+
+  const cols = [
+    { title:'Día', field:'numero_dia', width:55, hozAlign:'center' },
+    { title:'Fecha', field:'fecha', width:110, hozAlign:'center' },
+    { title:'Obra', field:'obra_nombre', width:160 },
+    { title:'Meteo', field:'condiciones_meteo', width:80, hozAlign:'center',
+      formatter: c => RDP_METEO_ICON[c.getValue()] || c.getValue() },
+    { title:'Trabajadores', field:'trabajadores_presentes', width:110, hozAlign:'center' },
+    { title:'Actividades', field:'actividades', widthGrow:3, formatter: c => {
+      const v = c.getValue()||''; return v.length>80 ? v.slice(0,80)+'…' : v; }},
+    { title:'Incidencias', field:'incidencias', width:130, formatter: c => {
+      const v = c.getValue(); return v ? '<span style="color:#dc2626">⚠️ '+v.slice(0,40)+'</span>' : '<span style="color:#16a34a">Ninguna</span>'; }},
+    { title:'Estado', field:'estado', width:90, hozAlign:'center',
+      formatter: c => c.getValue()==='firmado'
+        ? '<span style="background:#16a34a;color:#fff;padding:2px 8px;border-radius:10px;font-size:11px">✍️ Firmado</span>'
+        : '<span style="background:#6b7280;color:#fff;padding:2px 8px;border-radius:10px;font-size:11px">Borrador</span>' },
+    { title:'', field:'id', width:110, hozAlign:'center', headerSort:false,
+      formatter: c => {
+        const r = _rdpData.find(x=>x.id===c.getValue()); const firmado = r?.firmado;
+        return '<button class="btn btn-sm btn-secondary" onclick="editarRdp('+c.getValue()+')">✏️</button> '
+             + (!firmado ? '<button class="btn btn-sm btn-secondary" onclick="firmarRdp('+c.getValue()+')">✍️</button> '
+                         + '<button class="btn btn-sm btn-secondary" style="color:#dc2626" onclick="eliminarRdp('+c.getValue()+')">🗑️</button>'
+                         : ''); }}
+  ];
+
+  if (tblRdp) { tblRdp.replaceData(rows); }
+  else {
+    tblRdp = new Tabulator('#rdpTabla', {
+      data: rows, layout:'fitColumns', height:'500px', columns: cols
+    });
+  }
+}
+
+function abrirModalRdp(id) {
+  ['rdpActividades','rdpRiesgos','rdpMedidas','rdpEquipos','rdpIncidencias','rdpVisitas','rdpObs'].forEach(f => document.getElementById(f).value='');
+  document.getElementById('rdpTrab').value       = '0';
+  document.getElementById('rdpMeteo').value      = 'buenas';
+  document.getElementById('rdpCargo').value      = 'Encargado';
+  document.getElementById('rdpResponsable').value= '';
+  document.getElementById('rdpFirmado').checked  = false;
+  document.getElementById('rdpFecha').value      = new Date().toISOString().slice(0,10);
+  document.getElementById('modalRdpTitle').textContent = id ? 'Editar Registro RdP' : 'Nuevo Registro Diario de Prevención';
+  document.getElementById('modalRdp').dataset.id = id || '';
+  document.getElementById('modalRdp').style.display = 'flex';
+}
+
+function editarRdp(id) {
+  const r = _rdpData.find(x=>x.id===id); if (!r) return;
+  abrirModalRdp(id);
+  setTimeout(() => {
+    document.getElementById('rdpObra').value         = r.obra_id;
+    document.getElementById('rdpFecha').value        = r.fecha;
+    document.getElementById('rdpTrab').value         = r.trabajadores_presentes;
+    document.getElementById('rdpMeteo').value        = r.condiciones_meteo;
+    document.getElementById('rdpActividades').value  = r.actividades;
+    document.getElementById('rdpRiesgos').value      = r.riesgos_detectados||'';
+    document.getElementById('rdpMedidas').value      = r.medidas_preventivas||'';
+    document.getElementById('rdpEquipos').value      = r.equipos_utilizados||'';
+    document.getElementById('rdpIncidencias').value  = r.incidencias||'';
+    document.getElementById('rdpVisitas').value      = r.visitas_externas||'';
+    document.getElementById('rdpResponsable').value  = r.responsable_nombre||'';
+    document.getElementById('rdpCargo').value        = r.responsable_cargo||'Encargado';
+    document.getElementById('rdpFirmado').checked    = r.firmado===1;
+    document.getElementById('rdpObs').value          = r.observaciones||'';
+  }, 50);
+}
+
+async function firmarRdp(id) {
+  if (!confirm('¿Firmar y cerrar este registro? No podrá eliminarse después.')) return;
+  const res = await apiFetch('/rdp-registros/'+id+'/firmar', { method:'POST', body:'{}' });
+  const d   = await res.json();
+  if (res.ok) { toast('Registro firmado','ok'); cargarRdpRegistros(); }
+  else toast(d.error||'Error','error');
+}
+
+async function guardarRdp() {
+  const id   = document.getElementById('modalRdp').dataset.id;
+  const body = {
+    obra_id:                  document.getElementById('rdpObra').value,
+    fecha:                    document.getElementById('rdpFecha').value,
+    trabajadores_presentes:   parseInt(document.getElementById('rdpTrab').value)||0,
+    condiciones_meteo:        document.getElementById('rdpMeteo').value,
+    actividades:              document.getElementById('rdpActividades').value,
+    riesgos_detectados:       document.getElementById('rdpRiesgos').value||null,
+    medidas_preventivas:      document.getElementById('rdpMedidas').value||null,
+    equipos_utilizados:       document.getElementById('rdpEquipos').value||null,
+    incidencias:              document.getElementById('rdpIncidencias').value||null,
+    visitas_externas:         document.getElementById('rdpVisitas').value||null,
+    responsable_nombre:       document.getElementById('rdpResponsable').value||null,
+    responsable_cargo:        document.getElementById('rdpCargo').value||'Encargado',
+    firmado:                  document.getElementById('rdpFirmado').checked,
+    estado:                   document.getElementById('rdpFirmado').checked ? 'firmado' : 'borrador',
+    observaciones:            document.getElementById('rdpObs').value||null
+  };
+  if (!body.obra_id)    return toast('Selecciona una obra','error');
+  if (!body.fecha)      return toast('La fecha es obligatoria','error');
+  if (!body.actividades) return toast('Las actividades del día son obligatorias','error');
+  try {
+    const res = id
+      ? await apiFetch('/rdp-registros/'+id, { method:'PUT', body:JSON.stringify(body) })
+      : await apiFetch('/rdp-registros',      { method:'POST',body:JSON.stringify(body) });
+    const d = await res.json();
+    if (!res.ok) return toast(d.error||'Error','error');
+    toast(id ? 'Registro actualizado' : 'Registro creado','ok');
+    cerrarModalRdp();
+    cargarRdpRegistros();
+  } catch(e) { toast('Error de red','error'); }
+}
+
+async function eliminarRdp(id) {
+  if (!confirm('¿Eliminar este registro RdP?')) return;
+  const res = await apiFetch('/rdp-registros/'+id,{ method:'DELETE' });
+  const d   = await res.json();
+  if (res.ok) { toast('Registro eliminado','ok'); cargarRdpRegistros(); }
+  else toast(d.error||'Error','error');
+}
+
+function cerrarModalRdp() { document.getElementById('modalRdp').style.display='none'; }
 
 </script>
 
