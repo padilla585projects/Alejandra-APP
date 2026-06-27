@@ -1,8 +1,48 @@
 ## ESTADO ACTUAL
 
 **Sesión:** LIBRE
-**Última sesión:** 26/06/2026 (auditoría seguridad + consolidación) — 13 vulnerabilidades corregidas
-**Versión actual:** App PWA **v7.49** · worker  (v7.48) · commit 
+**Última sesión:** 27/06/2026 — NEW-114/115/116 + móvil RdP/Hormigonado/Formacion + Alejandra IA v7.51
+**Versión actual:** App PWA **v7.51** · worker (v7.51) · commit b81b6d3
+---
+
+## RESUMEN SESIÓN 27/06/2026 — NEW-114/115/116 + Móvil + Alejandra IA — v7.50→v7.51
+
+### Hecho ✅
+
+#### Backend worker.js (NEW-114, NEW-115, NEW-116)
+- **NEW-114 Escandallo de Precios**: `ensureEscandalloTable` + CRUD (`getEscandallo`, `crearEscandallo`, `actualizarEscandallo`, `eliminarEscandallo`) + rutas `/escandallo-precios`
+- **NEW-115 Cronograma de Pagos**: `ensureCronogramaPagosTable` + CRUD (`getCronogramaPagos`, `crearHitoPago`, `actualizarHitoPago`, `eliminarHitoPago`) + rutas `/cronograma-pagos`
+- **NEW-116 RdP Registro Diario de Prevención**: `ensureRdpTable` + CRUD + `firmarRdpRegistro` (inmutable por Ley 31/1995) + rutas `/rdp-registros`
+- Rutas insertadas antes del bloque NEW-113 Cubicaciones
+
+#### Panel web panel.html (NEW-114/115/116)
+- Nav buttons: `escandalloPrecios`, `cronogramaPagos` (nav-finance, ocultos a operario), `rdpRegistros` (todos los roles)
+- Páginas con KPI strips + tablas Tabulator: `pageEscandalloPrecios`, `pageCronogramaPagos`, `pageRdpRegistros`
+- Modales CRUD completos: `modalEp`, `modalCp`, `modalRdp`
+- JS: funciones cargar/nuevo/editar/guardar/eliminar/firmar para los 3 módulos
+
+#### App móvil index.html (RdP, Hormigonado, Formacion)
+- Cards de acceso rápido en home: RdP 🛡️, Hormigonado 🏗️, Formación 📚
+- Pantallas: `screenRdp`, `screenHormigonado`, `screenFormacion`
+- Modales bottom-sheet: `modalRdpMobile` (crear/editar/firmar), `modalHormMobile` (CRUD)
+- JS: `rdpCargarMobile`, `rdpGuardar`, `rdpFirmarMobile`, `hormCargarMobile`, `hormGuardar`, `formacionCargarMobile`
+- `navTo` y `setupHomeModules` actualizados
+
+#### Alejandra IA (NEXUS_MODULES)
+- Nuevo módulo `schema_obra_avanzada` con las 8 tablas NEW-109..116 (schemas + notas legales)
+- `app_modulos` actualizado con listado de todos los módulos avanzados de obra
+- Expertos `analista` y `autonomo`: incluyen `schema_obra_avanzada` en sus módulos
+
+### Estado final
+- worker.js: 726 funciones, 0 dups ✅ | 21,718 líneas ✅
+- Versiones sincronizadas: json=7.51, sw=7.51, html=7.51 ✅
+- Commit: b81b6d3 | Worker deploy: f6a2f7af ✅
+
+### Pendientes próxima sesión
+- Verificar en producción las 3 pantallas móviles (RdP, Hormigonado, Formacion) con datos reales
+- Verificar en panel las 3 páginas nuevas (Escandallo, Cronograma, RdP)
+- Candidatos NEW-117+: CAPA (Control de Acciones Correctivas), Ensayos END, Informes PDF automáticos
+
 ---
 
 ## RESUMEN SESIÓN 26/06/2026 (continuación 2) — Auditoría seguridad y consolidación v7.45→v7.49
