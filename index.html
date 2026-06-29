@@ -11841,7 +11841,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '7.51';
+const APP_VERSION = '7.52';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -18423,31 +18423,67 @@ window.turnoToggle   = turnoToggle;
     const cont = document.getElementById('iaAdjuntos');
     for (const f of files) {
       if (f.size > 20*1024*1024) { toast('❌ ' + f.name + ' supera 20MB', 'err'); continue; }
+
+      // ── Fix MIME type — Android cámara a veces da application/octet-stream ──
+      let fileToUpload = f;
+      if (!f.type || f.type === 'application/octet-stream') {
+        const ext = (f.name.split('.').pop() || '').toLowerCase();
+        const mimeMap = {jpg:'image/jpeg',jpeg:'image/jpeg',png:'image/png',gif:'image/gif',webp:'image/webp',heic:'image/heic',heif:'image/heif',pdf:'application/pdf',csv:'text/csv',txt:'text/plain',json:'application/json'};
+        const detectedMime = mimeMap[ext];
+        if (detectedMime) {
+          fileToUpload = new File([f], f.name, {type: detectedMime});
+        } else {
+          // Extensión desconocida de cámara (ej: .tmp, .bin) → asumir JPEG y renombrar
+          const baseName = f.name.replace(/.[^.]*$/, '') || ('foto_' + Date.now());
+          fileToUpload = new File([f], baseName + '.jpg', {type: 'image/jpeg'});
+        }
+      }
+      const isImage = fileToUpload.type.startsWith('image/');
+
+      // ── Crear preview local antes de subir ──────────────────────────────────
+      const previewUrl = isImage ? URL.createObjectURL(f) : null;
+
       const chip = document.createElement('div');
-      chip.style.cssText = 'background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:4px 10px;display:flex;align-items:center;gap:6px;font-size:12px';
-      chip.innerHTML = '<span>⏳</span><span>' + _escHtml(f.name) + '</span>';
+      chip.style.cssText = 'background:var(--surface2);border:1px solid var(--border);border-radius:10px;overflow:hidden;position:relative;flex-shrink:0;' + (isImage ? 'width:64px;height:64px' : 'padding:4px 10px;display:flex;align-items:center;gap:6px;font-size:12px');
+      chip.innerHTML = isImage
+        ? '<img src="' + previewUrl + '" style="width:64px;height:64px;object-fit:cover;opacity:.6"><div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:18px">⏳</div>'
+        : '<span>⏳</span><span>' + _escHtml(fileToUpload.name) + '</span>';
       cont.appendChild(chip); cont.style.display = 'flex';
+
+      // Cambiar placeholder para indicar que puede enviar sin texto
+      const inpEl = document.getElementById('iaInput');
+      if (inpEl && !inpEl.value) inpEl.placeholder = 'Añade un mensaje o pulsa ↑ para enviar';
+
       try {
         const fd = new FormData();
-        fd.append('file', f);
+        fd.append('file', fileToUpload);
         fd.append('usuario_id', s.usuario_id);
         const r = await fetch('https://alejandra-agente.alejandra-app.workers.dev/upload', { method:'POST', body:fd });
         const j = await r.json();
         if (!j.ok) throw new Error(j.error || 'fail');
-        _iaAdjuntos.push(j.url);
-        chip.innerHTML = '<span>📎</span><span>' + _escHtml(f.name) + '</span><span style="cursor:pointer;color:var(--muted)" onclick="iaQuitarAdj(\'' + j.url + '\',this.parentElement)">×</span>';
+        _iaAdjuntos.push({ key: j.url, previewUrl, name: fileToUpload.name, isImage });
+        chip.innerHTML = isImage
+          ? '<img src="' + previewUrl + '" style="width:64px;height:64px;object-fit:cover"><span onclick="iaQuitarAdj(\'' + j.url + '\',this.parentElement)" style="position:absolute;top:2px;right:2px;background:rgba(0,0,0,.6);color:#fff;border-radius:50%;width:18px;height:18px;font-size:11px;line-height:18px;text-align:center;cursor:pointer">×</span>'
+          : '<span>📎</span><span>' + _escHtml(fileToUpload.name) + '</span><span style="cursor:pointer;color:var(--muted)" onclick="iaQuitarAdj(\'' + j.url + '\',this.parentElement)">×</span>';
       } catch(e) {
-        chip.innerHTML = '<span style="color:#f55">❌ ' + _escHtml(f.name) + '</span>';
+        if (previewUrl) URL.revokeObjectURL(previewUrl);
+        chip.innerHTML = '<span style="color:#f55">❌ ' + _escHtml(fileToUpload.name) + '</span>';
         setTimeout(() => chip.remove(), 3000);
       }
     }
   };
 
-  window.iaQuitarAdj = function(url, chip) {
-    _iaAdjuntos = _iaAdjuntos.filter(u => u !== url);
+  window.iaQuitarAdj = function(key, chip) {
+    const adj = _iaAdjuntos.find(a => (a.key||a) === key);
+    if (adj?.previewUrl?.startsWith('blob:')) URL.revokeObjectURL(adj.previewUrl);
+    _iaAdjuntos = _iaAdjuntos.filter(a => (a.key||a) !== key);
     chip.remove();
     const cont = document.getElementById('iaAdjuntos');
-    if (!cont.children.length) cont.style.display = 'none';
+    if (!cont.children.length) {
+      cont.style.display = 'none';
+      const inpEl = document.getElementById('iaInput');
+      if (inpEl) inpEl.placeholder = 'Mensaje';
+    }
   };
 
   // ── Envío al agente Alejandra (con herramientas, Gemini, catálogos) ────
@@ -18466,9 +18502,17 @@ window.turnoToggle   = turnoToggle;
     _iaAdjuntos = [];
     const cont = document.getElementById('iaAdjuntos');
     if (cont) { cont.innerHTML = ''; cont.style.display = 'none'; }
+    const inpPlaceholder = document.getElementById('iaInput');
+    if (inpPlaceholder) inpPlaceholder.placeholder = 'Mensaje';
 
-    const msgDisplay = msg + (adjEnv.length ? '\n📎 ' + adjEnv.length + ' archivo(s) adjunto(s)' : '');
-    appendIAMsg('user', msgDisplay);
+    // Extraer keys para enviar al worker
+    const adjKeys = adjEnv.map(a => a.key || a);
+    const adjImgsPreview = adjEnv.filter(a => a.isImage && a.previewUrl).map(a => a.previewUrl);
+    const adjOtros = adjEnv.filter(a => !a.isImage);
+    const msgText = (msg || '') + (adjOtros.length ? '\n📎 ' + adjOtros.length + ' archivo(s)' : '');
+    appendIAMsgRich('user', msgText || null, adjImgsPreview);
+    // Revocar object URLs tras mostrarlas (el DOM ya las tiene cacheadas)
+    setTimeout(() => adjEnv.forEach(a => { if (a.previewUrl?.startsWith('blob:')) URL.revokeObjectURL(a.previewUrl); }), 5000);
     const typing = appendIATyping();
 
     // No bloquear — fire and forget para permitir más mensajes
@@ -18498,11 +18542,11 @@ window.turnoToggle   = turnoToggle;
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            mensaje:    msg || '(archivo adjunto sin mensaje)',
+            mensaje:    msg || '(adjunto)',
             usuario_id: s.usuario_id || s.nombre || 'unknown',
             empresa_id: s.empresa_id || null,
-            canal:      'pwa',
-            adjuntos:   adjEnv,
+            canal:      'app_android',
+            adjuntos:   adjKeys,
             rol:        s.rol || null,
             pantalla:   'ia',
             dom_actual: null
@@ -18625,7 +18669,26 @@ window.turnoToggle   = turnoToggle;
     const box = document.getElementById('iaMessages');
     const d = document.createElement('div');
     d.className = 'ia-bubble ' + role;
-    d.innerHTML = text.replace(/\n/g, '<br>');
+    d.innerHTML = text ? text.replace(/\n/g, '<br>') : '';
+    box.appendChild(d);
+    box.scrollTop = box.scrollHeight;
+    return d;
+  }
+
+  function appendIAMsgRich(role, text, imageUrls) {
+    const box = document.getElementById('iaMessages');
+    const d = document.createElement('div');
+    d.className = 'ia-bubble ' + role;
+    let html = '';
+    if (imageUrls && imageUrls.length) {
+      html += '<div style="display:flex;flex-wrap:wrap;gap:4px;' + (text ? 'margin-bottom:6px' : '') + '">';
+      for (const url of imageUrls) {
+        html += '<img src="' + url + '" style="max-width:180px;max-height:180px;border-radius:8px;object-fit:cover;cursor:pointer;display:block" onclick="window.open(this.src,\'_blank\')" onerror="this.style.display=\'none\'">';
+      }
+      html += '</div>';
+    }
+    if (text && text.trim()) html += text.replace(/\n/g, '<br>');
+    d.innerHTML = html;
     box.appendChild(d);
     box.scrollTop = box.scrollHeight;
     return d;

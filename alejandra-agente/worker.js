@@ -2011,7 +2011,7 @@ export default {
         const usuarioLabel = (usuario_nombre && String(usuario_nombre).trim()) ? String(usuario_nombre) : nombreResuelto;
         const respuesta = await procesarConNEXUS(env, mensaje, contexto, usuario_id, empresa, canalChat, adjuntos, rol, pantalla, dom_actual, usuarioLabel);
 
-        await guardarMensajeChat(env, usuario_id, empresa, mensaje, respuesta.texto, canalChat);
+        await guardarMensajeChat(env, usuario_id, empresa, mensaje, respuesta.texto, canalChat, adjuntos);
         if (respuesta.acciones?.length > 0) ctx.waitUntil(autoLearnChat(env, usuario_id, empresa, respuesta));
         if (canal === 'telegram' && token_telegram) ctx.waitUntil(enviarPorTelegram(token_telegram, respuesta.texto));
         ctx.waitUntil(actualizarResumenSiNecesario(env, usuario_id, canalChat));
@@ -2066,7 +2066,7 @@ export default {
             const canalReal = canal || 'panel';
             const resp = await procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empresa, send, canalReal, adjuntos, rol, pantalla, dom_actual, usuarioLabel, () => clienteDesconectado);
             respFinal = resp;
-            await guardarMensajeChat(env, usuario_id, empresa, mensaje, resp.texto, canalReal);
+            await guardarMensajeChat(env, usuario_id, empresa, mensaje, resp.texto, canalReal, adjuntos);
             // actualizarResumen no bloquea — fire-and-forget dentro del waitUntil
             actualizarResumenSiNecesario(env, usuario_id, canalReal).catch(()=>{});
             await send({ type: 'done', experto: resp.experto, modelo: resp.modelo, busqueda_web: resp.busqueda_web });
@@ -8200,13 +8200,18 @@ async function actualizarResumenSiNecesario(env, usuario_id, canal) {
   }
 }
 
-async function guardarMensajeChat(env, usuario_id, empresa_id, mensaje, respuesta, canal='panel') {
+async function guardarMensajeChat(env, usuario_id, empresa_id, mensaje, respuesta, canal='panel', adjuntos=null) {
   try {
     const uid = usuario_id || 'unknown';
+    // Si hay adjuntos, incluir sus keys en el contenido para que futuros mensajes los puedan referenciar
+    let contenidoUser = mensaje;
+    if (adjuntos && adjuntos.length > 0) {
+      contenidoUser += '\n[adjuntos: ' + adjuntos.join(', ') + ']';
+    }
     // Guarda en alejandra_historial con usuario_id (conversacion por usuario, no por canal)
     await env.DB.prepare(
       `INSERT INTO alejandra_historial (canal, rol, contenido, usuario_id, created_at) VALUES (?, 'user', ?, ?, datetime('now'))`
-    ).bind(canal, mensaje.slice(0, 4000), uid).run();
+    ).bind(canal, contenidoUser.slice(0, 4000), uid).run();
     await env.DB.prepare(
       `INSERT INTO alejandra_historial (canal, rol, contenido, usuario_id, created_at) VALUES (?, 'assistant', ?, ?, datetime('now'))`
     ).bind(canal, respuesta.slice(0, 4000), uid).run();
