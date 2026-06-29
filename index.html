@@ -1055,6 +1055,14 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
         </div>
         <span class="drag-handle">⠿</span><svg class="module-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
       </div>
+      <div class="module-card" id="cardAlejandraIA" onclick="navTo('ia')" style="display:none;border-left:3px solid #a855f7">
+        <div class="module-emoji">🤖</div>
+        <div class="module-info">
+          <div class="module-name">Alejandra IA</div>
+          <div class="module-desc">Identifica equipos, resuelve dudas</div>
+        </div>
+        <span class="drag-handle">⠿</span><svg class="module-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
+      </div>
       <div class="module-card" id="cardObraDashboard" onclick="showScreen('obraDashboard')" style="display:none;border-left:3px solid #6366f1">
         <div class="module-emoji">📊</div>
         <div class="module-info">
@@ -5573,6 +5581,9 @@ function setupHomeModules() {
   if (cardRdp2)   cardRdp2.style.display   = esEncargadoPlus ? 'flex' : 'none';
   if (cardHorm)   cardHorm.style.display   = esEncargadoPlus ? 'flex' : 'none';
   if (cardFormac) cardFormac.style.display = 'flex'; // formacion: todos pueden ver
+  // Card Alejandra IA: visible para todos los usuarios logados
+  const cardAlejIA = document.getElementById('cardAlejandraIA');
+  if (cardAlejIA) cardAlejIA.style.display = 'flex';
   // #188: aplicar config de módulos (oculta tarjetas marcadas off por la empresa)
   applyModulosConfig();
   applyHomeOrder();
@@ -5899,6 +5910,7 @@ const _HOME_TRADE_MODS = [
   { card: 'cardCarretillas',      label: '🚜 Carretillas' },
   { card: 'cardPedidos',          label: '📥 Pedidos' },
   { card: 'cardHerramientas',     label: '🔧 Herramientas' },
+  { card: 'cardAlejandraIA',      label: '🤖 Alejandra IA' },
   { card: 'cardObraDashboard',    label: '📊 Resumen de obra' },
   { card: 'cardCalendario',       label: '📅 Calendario' },
   { card: 'cardIncidencias',      label: '🚨 Incidencias' },
@@ -11841,7 +11853,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '7.52';
+const APP_VERSION = '7.53';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -18280,11 +18292,12 @@ window.turnoToggle   = turnoToggle;
   function checkIABtn() {
     const s = typeof getSession === 'function' ? getSession() : null;
     if (!s) return;
-    const esAdmin = ['desarrollador','superadmin'].includes(s.rol);
+    // Botón IA en el centro del nav: visible para TODOS los usuarios logados
+    // El scan de bobinas/partes sigue accesible desde las pantallas de inventario y personal
     const scanBtn = document.getElementById('navScanBtn');
     const iaBtn   = document.getElementById('navIABtn');
-    if (scanBtn) scanBtn.style.display = esAdmin ? 'none' : '';
-    if (iaBtn)   iaBtn.style.display   = esAdmin ? '' : 'none';
+    if (scanBtn) scanBtn.style.display = 'none';
+    if (iaBtn)   iaBtn.style.display   = '';
   }
   document.addEventListener('sessionReady', checkIABtn);
   setTimeout(checkIABtn, 500);
