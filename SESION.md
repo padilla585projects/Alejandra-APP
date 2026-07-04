@@ -1,9 +1,48 @@
 ## ESTADO ACTUAL
 
 **Sesión:** LIBRE
-**Última sesión:** 04/07/2026 — Fix agente: reapertura del hueco en webhooks + aislamiento empresa_id en consultar_bd/escribir_bd
+**Última sesión:** 04/07/2026 — Fix agente: aislamiento empresa_id en archivos R2 (/files, listar_archivos, ver_archivo)
 **Versión actual:** App PWA **v7.54** · worker principal deploy ec049cf8 · commit 81f8f1d
-**Agente (alejandra-agente):** commit 6d92ce7 desplegado (deploy CI 28708003217, health OK)
+**Agente (alejandra-agente):** commit 870b703 desplegado (deploy CI 28708265441, health OK)
+---
+
+## RESUMEN SESIÓN 04/07/2026 (continuación 4) — Fix /files/<key> cross-tenant (archivos R2)
+
+Siguiente pendiente de la lista, con "hacemos todas por orden, pero primero audita el
+/files/<key>". Auditoría (subagente) confirmó el hueco como real y tan grave como el de
+`consultar_bd`: cualquier sesión autenticada de CUALQUIER empresa podía descargar CUALQUIER
+archivo de R2 de CUALQUIER otra empresa con solo conocer/adivinar el key (`GET /files/<key>`
+solo comprobaba que hubiera sesión válida, no que el archivo fuera suyo). Además:
+- `/upload` no tenía ninguna autenticación (usuario_id venía del body sin token) y generaba
+  keys predecibles (`chat_files/<usuario_id>/<timestamp>_<filename>`, no UUID aleatorio).
+- Las tools de chat `listar_archivos`/`ver_archivo` tenían el mismo problema (sin filtro de
+  empresa) y ni siquiera exigían sesión válida — alcanzables incluso sin autenticar.
+
+### ✅ Corregido (commit `870b703`, CI `28708265441`, health OK)
+- Nuevo `empresaDeArchivo()`/`puedeAccederArchivo()`: los objetos R2 no llevan empresa_id en
+  el key (se generaron sin sesión verificada), solo `customMetadata.usuario_id`. Se resuelve
+  ese usuario_id contra la tabla `usuarios` (mismo criterio que `normalizarUsuarioId`) para
+  saber la empresa dueña; si no se puede determinar con certeza, se trata como NO accesible
+  (fail closed, no abierto).
+- `/files/<key>` ahora devuelve 404 (no 403, para no confirmar que el archivo existe) si no
+  coincide con la empresa de la sesión.
+- `listar_archivos` filtra los resultados por empresa antes de devolverlos; `ver_archivo`
+  rechaza el archivo si no es de la empresa del llamante. Ambas añadidas a
+  `TOOLS_REQUIEREN_SESION` (antes no exigían ni sesión válida).
+- `esDevVerificado` se salta esta capa, igual que en los fixes anteriores.
+- De paso, `/upload` normaliza `usuario_id` con `normalizarUsuarioId()` antes de guardarlo en
+  `customMetadata`, para que el id guardado sea el real de `usuarios` siempre que se pueda
+  resolver (de eso depende el chequeo de arriba) — **no requiere ningún cambio en la app**,
+  que sigue sin mandar `Authorization` en ese endpoint.
+
+### Gap residual documentado (no cerrado hoy, riesgo menor)
+`/upload` sigue sin autenticación real: el `usuario_id` que llega en el body sigue siendo
+spoofable por el cliente, así que alguien podría en teoría subir un archivo "como si fuera"
+otro usuario (problema de integridad en la subida, no de fuga en la descarga, que es lo que
+se cerró hoy). Cerrarlo del todo requeriría que la app mande `Authorization: Bearer <token>`
+en `/upload` (como ya hace en `/api/chat/stream`) — cambio de app + release, no solo de
+backend. Se deja para una decisión futura si se considera necesario.
+
 ---
 
 ## RESUMEN SESIÓN 04/07/2026 (continuación 3) — Fix webhook/evento + '/' sin autenticar, aislamiento empresa_id en BD
