@@ -1,12 +1,63 @@
 ## ESTADO ACTUAL
 
 **Sesión:** LIBRE
-**Última sesión:** 04/07/2026 — Fix SSRF en `test_endpoint` DESPLEGADO (commit `bbdb644`).
+**Última sesión:** 05/07/2026 — Fix rate limiting + tope de gasto diario DESPLEGADO (commit `8613740`).
 **Versión actual:** App PWA **v7.54** · worker principal deploy ec049cf8 · commit 81f8f1d
 **App móvil AlejandraIA:** v1.9.19+33 (OTA publicada, commit `b2c7828` en repo alejandra-ia)
-**Agente (alejandra-agente):** commit `bbdb644` desplegado en main (deploy CI `28716533042`,
+**Agente (alejandra-agente):** commit `8613740` desplegado en main (deploy CI `28722511276`,
 health OK). Incluye: fix IDOR fcm-token/comandos (`acc186a`, verificado en vivo con 401 sin
-sesión) + fix SSRF en `test_endpoint` (`bbdb644`, ahora solo dev verificado + whitelist de host).
+sesión) + fix SSRF en `test_endpoint` (`bbdb644`, ahora solo dev verificado + whitelist de host)
++ rate limiting 15 req/min y tope de gasto 10$/día en `/api/chat` y `/api/chat/stream`
+(`8613740`, verificado en vivo: 429 a partir de la petición 16 dentro del mismo minuto).
+---
+
+## RESUMEN SESIÓN 05/07/2026 (continuación 7) — Rate limiting + tope de gasto diario — DESPLEGADO
+
+Siguiente punto de la lista tras cerrar el SSRF de `test_endpoint`. Auditoría (subagente):
+`/api/chat` y `/api/chat/stream` — las dos rutas que de verdad llaman a Anthropic/OpenAI y
+generan coste — **no tenían ninguna protección de volumen ni de gasto**. Peor aún: cuando
+`getAuth()` devuelve `null` (sin sesión), las rutas NO cortan la petición — solo restringen
+qué *tools* puede usar el modelo (`filtrarToolsPorAuth`), pero la llamada al modelo en sí
+(la que cuesta dinero) se ejecuta igual usando el `usuario_id`/`empresa_id` que venga en el
+body. Es decir: cualquiera en internet, sin sesión ni token, podía generar gasto real de API
+sin ningún límite de frecuencia ni de gasto total — un riesgo de "runaway cost" tanto por
+abuso deliberado como por un bug/loop accidental en algún cliente.
+
+Se consultó el gasto real histórico (`alejandra_token_uso` vía `wrangler d1 execute --remote`):
+la mayoría de días por debajo de 0.40$ de gasto total entre todos los usuarios, con un pico
+histórico de 1.81$/día (95 llamadas) el 29/06/2026. Con Adrián se decidió (recomendado en
+ambos casos): **15 peticiones/minuto por identidad** y **10$/día de tope global** (~5.5x el
+pico histórico observado, margen amplio para no molestar uso legítimo).
+
+### ✅ Corregido (commit `8613740`, CI `28722511276`, health OK)
+Nuevo KV namespace `RATE_LIMIT_KV` (creado vía MCP de Cloudflare, id
+`4c9ebd2899d74bb7961786b70f25519c`, bindeado en `wrangler.toml`). Dos comprobaciones nuevas,
+ejecutadas justo después de resolver la identidad (`usuario_id`/`authOk`) en ambas rutas:
+
+1. `validarRateLimit()`: ventana fija de 1 minuto, clave `rl:<identidad>:<bucket>` en KV,
+   identidad = `u:<usuario_id>` si hay sesión, si no `ip:<CF-Connecting-IP>`. Por encima de 15
+   peticiones en la ventana → `429` con el nº de segundos a esperar en el body (`reintentarEnSeg`).
+2. `validarTopeGastoDiario()`: suma `coste_usd` de `alejandra_token_uso` del día en curso,
+   cacheada 60s en KV para no golpear D1 en cada petición. Si el gasto acumulado ya llega a
+   10$ → `429` (servicio "temporalmente saturado").
+
+Ambas son **fail-open**: si KV o D1 fallan, no se bloquea el servicio — se prioriza
+disponibilidad sobre bloqueo estricto (un fallo de infraestructura no debe tumbar el chat).
+No se añadió header `Retry-After` porque el helper `json()` compartido no soporta headers
+custom sin tocar código compartido; se optó por incluir el segundo de espera como campo en el
+body del error, apoyándose en el retry con backoff que ya tiene `agent_service.dart` en la
+app Flutter (hasta 2 reintentos con 2s/4s de espera ante cualquier respuesta no-200).
+
+**Gap conocido, deferred**: el tope de gasto es **global**, no por `empresa_id` — la tabla
+`alejandra_token_uso` no tiene esa columna hoy, así que no se puede atribuir gasto por
+tenant sin una migración. Queda como mejora futura si el gasto por empresa se vuelve relevante.
+
+Verificación en vivo tras el deploy: llamada normal a `/api/chat` → `200` OK; 18 peticiones
+seguidas desde la misma identidad (IP) en <60s → las 15 primeras `200`, a partir de la 16ª
+`429` — comportamiento esperado del rate limit.
+
+Siguiente punto de la lista de seguridad: **retry/backoff ante 429 de Anthropic/OpenAI**.
+
 ---
 
 ## RESUMEN SESIÓN 04/07/2026 (continuación 6) — Fix SSRF en test_endpoint — DESPLEGADO
