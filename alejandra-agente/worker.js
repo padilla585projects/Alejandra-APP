@@ -886,7 +886,7 @@ El servidor genera el esquema IEC 60617 completo automáticamente.`
 const NEXUS_EXPERTS = {
   simple:   { model: MODEL_EXPERTO, maxTokens: 600,  modules: ['base', 'contexto_sesion', 'formato'] },
   app:      { model: MODEL_EXPERTO, maxTokens: 4096, modules: ['base', 'app', 'ingenieria_electrica', 'ram', 'inteligencia_negocio', 'seguimiento_proactivo', 'asistente_escaneo', 'proactividad_real', 'aprendizaje_proactivo', 'contexto_sesion', 'formato'] },
-  tecnico:  { model: MODEL_EXPERTO, maxTokens: 1024, modules: ['base', 'app', 'tecnica', 'nexus', 'ram', 'inteligencia_negocio', 'seguimiento_proactivo', 'asistente_escaneo', 'proactividad_real', 'aprendizaje_proactivo', 'razonamiento', 'contexto_sesion', 'formato'] },
+  tecnico:  { model: MODEL_EXPERTO, maxTokens: 1024, modules: ['base', 'app', 'tecnica', 'nexus', 'ram', 'capacidades_avanzadas', 'inteligencia_negocio', 'seguimiento_proactivo', 'asistente_escaneo', 'proactividad_real', 'aprendizaje_proactivo', 'razonamiento', 'contexto_sesion', 'formato'] },
   web:      { model: MODEL_EXPERTO, maxTokens: 1024, modules: ['base', 'app', 'web', 'aprendizaje_proactivo', 'contexto_sesion', 'formato'] },
   reflexion:{ model: MODEL_EXPERTO, maxTokens: 2048, modules: ['base', 'app', 'tecnica', 'nexus', 'ram', 'evolucion', 'reflexion', 'decision', 'inteligencia_negocio', 'seguimiento_proactivo', 'asistente_escaneo', 'aprendizaje_proactivo', 'razonamiento', 'contexto_sesion', 'formato'] },
   completo:   { model: MODEL_EXPERTO, maxTokens: 1024, modules: ['base', 'app', 'tecnica', 'nexus', 'ram', 'evolucion', 'web', 'capacidades_avanzadas', 'inteligencia_negocio', 'seguimiento_proactivo', 'asistente_escaneo', 'aprendizaje_proactivo', 'razonamiento', 'contexto_sesion', 'formato'] },
@@ -1735,14 +1735,132 @@ const TOOL_CONSULTAR_CONOCIMIENTO = {
   }
 };
 
+// Tools de "capacidades avanzadas" (ver módulo de prompt `capacidades_avanzadas`).
+// Estas 7 herramientas ya tenían su `case` implementado en el switch de ejecución
+// pero no existía el schema TOOL_* correspondiente ni estaban cableadas en
+// TOOLS_POR_EXPERTO — Claude nunca podía invocarlas aunque el prompt le decía
+// que existían. Fix: declarar los schemas y añadirlos a los expertos cuyo
+// prompt incluye el módulo `capacidades_avanzadas` (completo, ingenieria).
+const TOOL_BUSCAR_PRECIOS = {
+  name: 'buscar_precios',
+  description: 'Busca precios de materiales eléctricos en distribuidores. Cachea el resultado 7 días. Úsalo cuando pregunten por precios o para armar un presupuesto.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      producto:   { type: 'string', description: 'Nombre/descripción del producto o material a buscar' },
+      fabricante: { type: 'string', description: 'Fabricante (opcional, mejora la precisión)' },
+      cantidad:   { type: 'number', description: 'Cantidad a presupuestar (default 1)' }
+    },
+    required: ['producto']
+  }
+};
+
+const TOOL_MARCAR_PLANO = {
+  name: 'marcar_plano',
+  description: 'Analiza un plano o PDF técnico ya subido a R2 con IA de visión: identifica circuitos, mide distancias, detecta errores y problemas de normativa. Úsalo cuando el usuario suba un plano y pida revisión o análisis.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      key:            { type: 'string', description: 'Clave del archivo en R2 (ej: "chat_files/usuario/plano.pdf")' },
+      instrucciones:  { type: 'string', description: 'Qué debe revisar o analizar concretamente el usuario' },
+      tipo:           { type: 'string', description: 'Tipo de plano/instalación (opcional, default "general")' }
+    },
+    required: ['key', 'instrucciones']
+  }
+};
+
+const TOOL_GENERAR_DOCUMENTO = {
+  name: 'generar_documento',
+  description: 'Genera un documento técnico completo (memoria técnica, certificado de instalación, lista de materiales, presupuesto o informe de obra) y lo guarda en R2 para descargar.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      tipo:   { type: 'string', enum: ['memoria_tecnica', 'certificado_instalacion', 'lista_materiales', 'presupuesto', 'informe_obra'], description: 'Tipo de documento a generar' },
+      titulo: { type: 'string', description: 'Título del documento (opcional, se autogenera si se omite)' },
+      datos:  { type: 'object', description: 'Datos del documento según tipo: memoria_tecnica {titulo,obra,instalador,cif,direccion,objeto,normativa,descripcion,potencia,calculos,pliego,firmante}; certificado_instalacion {numero,titular,direccion,localidad,tipo_instalacion,tension,potencia_instalada,potencia_demandada,empresa_instaladora,reie,instalador,continuidad,aislamiento,tierra,diferenciales,firmante}; lista_materiales {obra,materiales:[{nombre,referencia,fabricante,cantidad,unidad,precio_unitario}]}; presupuesto {cliente,obra,validez,iva_pct,partidas:[{descripcion,cantidad,unidad,precio}]}; informe_obra {obra,responsable,estado_general,avance_pct,trabajos_realizados,incidencias,materiales_pendientes,personal_count,observaciones,proximos_pasos}' }
+    },
+    required: ['tipo']
+  }
+};
+
+const TOOL_BUSCAR_NORMATIVA = {
+  name: 'buscar_normativa',
+  description: 'Busca en el índice REBT/ITC-BT ya indexado en la base de datos. Más rápido y fiable que buscar en web para normativa eléctrica española. Úsalo ANTES de buscar_web cuando pregunten "¿qué dice la norma sobre X?".',
+  input_schema: {
+    type: 'object',
+    properties: {
+      consulta: { type: 'string', description: 'Consulta o tema a buscar en la normativa' },
+      itc:      { type: 'string', description: 'Filtrar por sección/ITC-BT concreta (opcional, ej: "ITC-BT-19")' },
+      tema:     { type: 'string', description: 'Filtrar por palabra clave/tema adicional (opcional)' }
+    },
+    required: ['consulta']
+  }
+};
+
+const TOOL_HISTORICO_MATERIALES = {
+  name: 'historico_materiales',
+  description: 'Tracking de materiales usados por obra: registra consumos, consulta el histórico de una obra o compara consumo entre obras similares.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      accion:          { type: 'string', enum: ['registrar', 'consultar', 'comparar'], description: 'Acción a realizar' },
+      material:        { type: 'string', description: 'Nombre del material (requerido para registrar)' },
+      obra_id:         { type: 'number', description: 'ID de la obra' },
+      obra_nombre:     { type: 'string', description: 'Nombre de la obra (para registrar)' },
+      referencia:      { type: 'string', description: 'Referencia del material (opcional)' },
+      fabricante:      { type: 'string', description: 'Fabricante (opcional)' },
+      cantidad:        { type: 'number', description: 'Cantidad usada (para registrar)' },
+      unidad:          { type: 'string', description: 'Unidad de medida (default "ud")' },
+      precio_unitario: { type: 'number', description: 'Precio unitario (para registrar)' },
+      proveedor:       { type: 'string', description: 'Proveedor (opcional, filtrable en consultar)' },
+      notas:           { type: 'string', description: 'Notas adicionales (opcional)' }
+    },
+    required: ['accion']
+  }
+};
+
+const TOOL_CONFIGURAR_ALERTA = {
+  name: 'configurar_alerta',
+  description: 'Configura alertas proactivas que se verifican periódicamente y notifican por Telegram/push (ej: bobinas con stock bajo, operarios sin fichar en 24h, equipos sin revisión en 30+ días).',
+  input_schema: {
+    type: 'object',
+    properties: {
+      accion:     { type: 'string', enum: ['crear', 'listar', 'eliminar', 'verificar'], description: 'Acción a realizar' },
+      tipo:       { type: 'string', description: 'Tipo de alerta (requerido para crear)' },
+      nombre:     { type: 'string', description: 'Nombre descriptivo de la alerta (opcional para crear)' },
+      condicion:  { type: 'string', description: 'Condición SQL que dispara la alerta cuando devuelve filas (requerido para crear)' },
+      umbral:     { type: 'number', description: 'Umbral numérico asociado a la condición (opcional)' },
+      mensaje:    { type: 'string', description: 'Plantilla de mensaje a enviar cuando se dispara (opcional)' },
+      alerta_id:  { type: 'number', description: 'ID de la alerta (requerido para eliminar)' }
+    },
+    required: ['accion']
+  }
+};
+
+const TOOL_EXPORTAR_DATOS = {
+  name: 'exportar_datos',
+  description: 'Exporta datos (bobinas, personal, fichajes, materiales, gastos, o una consulta SQL SELECT personalizada) a un CSV descargable guardado en R2.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      tipo:         { type: 'string', enum: ['bobinas', 'personal', 'fichajes', 'materiales', 'gastos', 'custom'], description: 'Qué exportar' },
+      obra_id:      { type: 'number', description: 'Filtrar por obra (opcional, no aplica a "custom")' },
+      fecha_desde:  { type: 'string', description: 'Filtrar desde esta fecha (YYYY-MM-DD, opcional)' },
+      fecha_hasta:  { type: 'string', description: 'Filtrar hasta esta fecha (YYYY-MM-DD, opcional)' },
+      sql_custom:   { type: 'string', description: 'Consulta SELECT personalizada (requerida solo si tipo="custom"; debe empezar por SELECT)' }
+    },
+    required: ['tipo']
+  }
+};
+
 const TOOLS_POR_EXPERTO = {
   simple:     [TOOL_MEMORY_READ, TOOL_CONSULTAR_BD, TOOL_ENVIAR_PUSH],
   app:        [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_CONTROLAR_APP, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_ANALIZAR_FOTO, TOOL_ESTADO_OBRA, TOOL_GESTIONAR_TAREA, TOOL_GESTIONAR_RFI, TOOL_GESTIONAR_OC, TOOL_GESTIONAR_ACTA, TOOL_GESTIONAR_CALIDAD],
-  tecnico:    [TOOL_LEER_ESTADO, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_BUSCAR_WEB, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_NEXUS_MANAGE, TOOL_CONTROLAR_APP, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO],
+  tecnico:    [TOOL_LEER_ESTADO, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_BUSCAR_WEB, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_NEXUS_MANAGE, TOOL_CONTROLAR_APP, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_BUSCAR_PRECIOS, TOOL_MARCAR_PLANO, TOOL_GENERAR_DOCUMENTO, TOOL_BUSCAR_NORMATIVA, TOOL_HISTORICO_MATERIALES, TOOL_CONFIGURAR_ALERTA, TOOL_EXPORTAR_DATOS],
   web:        [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE],
   reflexion:  [TOOL_MEMORY_SAVE, TOOL_MEMORY_READ, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_PROPOSE_MEJORA, TOOL_BUSCAR_WEB, TOOL_TOMAR_DECISION, TOOL_LEER_ESTADO, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_CONTROLAR_APP, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO],
-  completo:   [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_LEER_ESTADO, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_CONTROLAR_APP, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_ANALIZAR_FOTO, TOOL_ESTADO_OBRA, TOOL_GESTIONAR_TAREA, TOOL_GESTIONAR_RFI, TOOL_GESTIONAR_OC, TOOL_GESTIONAR_ACTA, TOOL_GESTIONAR_CALIDAD],
-  ingenieria: [TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_ANALIZAR_FOTO, TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME]
+  completo:   [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_LEER_ESTADO, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_CONTROLAR_APP, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_ANALIZAR_FOTO, TOOL_ESTADO_OBRA, TOOL_GESTIONAR_TAREA, TOOL_GESTIONAR_RFI, TOOL_GESTIONAR_OC, TOOL_GESTIONAR_ACTA, TOOL_GESTIONAR_CALIDAD, TOOL_BUSCAR_PRECIOS, TOOL_MARCAR_PLANO, TOOL_GENERAR_DOCUMENTO, TOOL_BUSCAR_NORMATIVA, TOOL_HISTORICO_MATERIALES, TOOL_CONFIGURAR_ALERTA, TOOL_EXPORTAR_DATOS],
+  ingenieria: [TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_ANALIZAR_FOTO, TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME, TOOL_BUSCAR_PRECIOS, TOOL_MARCAR_PLANO, TOOL_GENERAR_DOCUMENTO, TOOL_BUSCAR_NORMATIVA, TOOL_HISTORICO_MATERIALES, TOOL_CONFIGURAR_ALERTA, TOOL_EXPORTAR_DATOS]
 };
 
 // ── Normalización de usuario_id (CRÍTICO: unifica identidad cross-canal) ─────
