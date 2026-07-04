@@ -2004,6 +2004,57 @@ function urlPermitidaTestEndpoint(rawUrl) {
   }
 }
 
+// ── Rate limiting y tope de gasto diario (protección anti runaway-cost) ─────
+// Antes /api/chat y /api/chat/stream (las dos rutas que llaman a Anthropic/
+// OpenAI de verdad) no tenían NINGUNA protección de volumen ni de gasto —
+// ni siquiera exigían sesión (el body podía traer cualquier usuario_id), así
+// que cualquiera en internet podía generar gasto real de API sin límite.
+// Decidido con Adrián: 15 peticiones/minuto por identidad (usuario_id si hay
+// sesión, si no la IP) vía KV, y un tope global de 10$/día (todavía no hay
+// empresa_id en alejandra_token_uso, así que el tope es global y no por
+// empresa — separar por empresa queda como mejora futura).
+const RATE_LIMIT_POR_MINUTO = 15;
+const TOPE_GASTO_DIARIO_USD = 10;
+
+async function validarRateLimit(env, identidad) {
+  if (!env.RATE_LIMIT_KV) return { ok: true }; // fail-open si el binding no está disponible
+  try {
+    const ventana = Math.floor(Date.now() / 60000); // bucket de 1 minuto
+    const key = `rl:${identidad}:${ventana}`;
+    const actual = parseInt((await env.RATE_LIMIT_KV.get(key)) || '0', 10);
+    if (actual >= RATE_LIMIT_POR_MINUTO) {
+      return { ok: false, reintentarEnSeg: 60 - Math.floor((Date.now() % 60000) / 1000) };
+    }
+    await env.RATE_LIMIT_KV.put(key, String(actual + 1), { expirationTtl: 120 });
+    return { ok: true };
+  } catch (_) {
+    return { ok: true }; // ante error de KV, no bloquear el servicio (fail-open)
+  }
+}
+
+async function validarTopeGastoDiario(env) {
+  try {
+    const cacheKey = 'gasto:hoy';
+    let gasto = null;
+    if (env.RATE_LIMIT_KV) {
+      const cacheado = await env.RATE_LIMIT_KV.get(cacheKey);
+      if (cacheado !== null) gasto = parseFloat(cacheado);
+    }
+    if (gasto === null) {
+      const row = await env.DB.prepare(
+        `SELECT SUM(coste_usd) as total FROM alejandra_token_uso WHERE date(created_at) = date('now')`
+      ).first();
+      gasto = row?.total || 0;
+      if (env.RATE_LIMIT_KV) {
+        await env.RATE_LIMIT_KV.put(cacheKey, String(gasto), { expirationTtl: 60 }).catch(() => {});
+      }
+    }
+    return gasto < TOPE_GASTO_DIARIO_USD;
+  } catch (_) {
+    return true; // fail-open: si falla la comprobación, no tumbamos el servicio
+  }
+}
+
 // ── Normalización de usuario_id (CRÍTICO: unifica identidad cross-canal) ─────
 // Android manda "3", PWA manda "Adrian", panel manda "3.0" → todos son el mismo usuario
 // Sin esto, Alejandra cree que habla con 6 personas distintas
@@ -2271,6 +2322,15 @@ export default {
         // Normalizar usuario_id: "Adrian", "adrian", "3", "3.0" → siempre el mismo ID
         const usuario_id = sesionAuth ? sesionAuth.usuario_id : await normalizarUsuarioId(env, rawUserId);
         const esDevVerificado = authOk && await esDeveloperAgente(env, usuario_id);
+
+        // Protección anti runaway-cost: rate limit por identidad + tope de gasto diario.
+        const identidadRL = authOk ? `u:${usuario_id}` : `ip:${req.headers.get('CF-Connecting-IP') || 'unknown'}`;
+        const rl = await validarRateLimit(env, identidadRL);
+        if (!rl.ok) return json({ error: `Demasiadas peticiones. Espera ${rl.reintentarEnSeg}s e inténtalo de nuevo.` }, 429);
+        if (!(await validarTopeGastoDiario(env))) {
+          return json({ error: 'Servicio temporalmente saturado (tope de gasto diario alcanzado). Vuelve a intentarlo más tarde.' }, 429);
+        }
+
         const empresa   = sesionAuth ? sesionAuth.empresa_id : (empresa_id || 'default');
         const contexto  = await obtenerContextoChat(env, usuario_id, empresa, 10);
         const canalChat = canal || 'web';
@@ -2297,6 +2357,16 @@ export default {
         const authOk = !!sesionAuth;
         const usuario_id = sesionAuth ? sesionAuth.usuario_id : await normalizarUsuarioId(env, rawUserId);
         const esDevVerificado = authOk && await esDeveloperAgente(env, usuario_id);
+
+        // Protección anti runaway-cost: rate limit por identidad + tope de gasto diario
+        // (ver comentario detallado junto a validarRateLimit/validarTopeGastoDiario).
+        const identidadRL = authOk ? `u:${usuario_id}` : `ip:${req.headers.get('CF-Connecting-IP') || 'unknown'}`;
+        const rl = await validarRateLimit(env, identidadRL);
+        if (!rl.ok) return json({ error: `Demasiadas peticiones. Espera ${rl.reintentarEnSeg}s e inténtalo de nuevo.` }, 429);
+        if (!(await validarTopeGastoDiario(env))) {
+          return json({ error: 'Servicio temporalmente saturado (tope de gasto diario alcanzado). Vuelve a intentarlo más tarde.' }, 429);
+        }
+
         const empresa  = sesionAuth ? sesionAuth.empresa_id : (empresa_id || 'default');
         const contexto = await obtenerContextoChat(env, usuario_id, empresa, 10);
         const nombreResuelto = await resolverNombreUsuario(env, usuario_id);
