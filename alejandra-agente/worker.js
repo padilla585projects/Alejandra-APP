@@ -1877,7 +1877,7 @@ const TOOLS_POR_EXPERTO = {
 //                  (ver getAuth()) — NUNCA del usuario_id que manda el body.
 // esDevVerificado = true solo si además esa identidad verificada es developer/admin.
 const TOOLS_SOLO_DEV_VERIFICADO = new Set(['patch_codigo', 'github_escribir', 'ejecutar_deploy', 'rollback']);
-const TOOLS_REQUIEREN_SESION    = new Set(['consultar_bd', 'escribir_bd']);
+const TOOLS_REQUIEREN_SESION    = new Set(['consultar_bd', 'escribir_bd', 'listar_archivos', 'ver_archivo']);
 function filtrarToolsPorAuth(tools, authOk, esDevVerificado) {
   return (tools || []).filter(t => {
     if (TOOLS_SOLO_DEV_VERIFICADO.has(t.name) && !esDevVerificado) return false;
@@ -1958,6 +1958,32 @@ function validarScopeEmpresaBD(query, params, empresaId, esDevVerificado) {
     return null;
   }
   return 'Consulta rechazada: debes filtrar explícitamente por empresa_id (ej. AND empresa_id = ?).';
+}
+
+// ── Aislamiento por empresa_id para archivos servidos desde R2 ───────────────
+// /files/<key>, y las tools listar_archivos/ver_archivo, servían CUALQUIER key
+// de R2 a CUALQUIER sesión autenticada, sin comprobar que el archivo pertenece
+// a su empresa (fotos de obra, documentos, etc. de otra empresa eran accesibles
+// solo con conocer/adivinar el key). Los objetos no llevan empresa_id en el key
+// (se generó en /upload, sin sesión verificada) — solo `customMetadata.usuario_id`.
+// Resolvemos ese usuario_id contra la tabla `usuarios` (mismo criterio que
+// normalizarUsuarioId) para saber la empresa dueña. Si no se puede determinar
+// con certeza → se trata como NO accesible (fallar cerrado, no abierto).
+async function empresaDeArchivo(env, customMetadata) {
+  const rawUid = customMetadata?.usuario_id;
+  if (!rawUid) return null;
+  try {
+    const uid = await normalizarUsuarioId(env, rawUid);
+    const row = await env.DB.prepare(`SELECT empresa_id FROM usuarios WHERE id = ?`).bind(uid).first();
+    return row?.empresa_id != null ? String(row.empresa_id) : null;
+  } catch (_) {
+    return null;
+  }
+}
+async function puedeAccederArchivo(env, customMetadata, empresaId, esDevVerificado) {
+  if (esDevVerificado) return true;
+  const dueña = await empresaDeArchivo(env, customMetadata);
+  return dueña !== null && dueña === String(empresaId);
 }
 
 // ── Normalización de usuario_id (CRÍTICO: unifica identidad cross-canal) ─────
@@ -2761,6 +2787,12 @@ export default {
         const key = decodeURIComponent(path.replace('/files/', ''));
         const obj = await env.FILES.get(key);
         if (!obj) return new Response('No encontrado', { status: 404 });
+        // Aislamiento por empresa (ver puedeAccederArchivo más arriba). 404 en vez
+        // de 403 para no confirmar la existencia del archivo a quien no puede verlo.
+        const esDevArchivo = await esDeveloperAgente(env, sesion.usuario_id).catch(() => false);
+        if (!(await puedeAccederArchivo(env, obj.customMetadata, sesion.empresa_id, esDevArchivo))) {
+          return new Response('No encontrado', { status: 404 });
+        }
         const headers = new Headers(corsHeaders);
         headers.set('Content-Type', obj.httpMetadata?.contentType || 'application/octet-stream');
         headers.set('Cache-Control', 'private, max-age=3600');
@@ -2810,7 +2842,12 @@ export default {
 
           const formData = await req.formData();
           const file = formData.get('file');
-          const usuario_id = formData.get('usuario_id') || 'anon';
+          // Normalizamos ya aquí (mismo criterio que normalizarUsuarioId en el resto
+          // del código) para que el usuario_id guardado en customMetadata sea el id
+          // REAL de `usuarios` siempre que se pueda resolver — de eso depende que
+          // puedeAccederArchivo() en /files/<key> pueda determinar la empresa dueña.
+          // No requiere ningún cambio en la app (sigue sin mandar Authorization aquí).
+          const usuario_id = await normalizarUsuarioId(env, formData.get('usuario_id') || 'anon');
 
           if (!file || !(file instanceof File)) {
             return json({ error: 'Campo "file" requerido' }, 400);
@@ -5046,16 +5083,23 @@ ${input.codigo_sugerido ? `CÓDIGO SUGERIDO:\n${input.codigo_sugerido}` : ''}`;
       try {
         if (!env.FILES) return 'R2 bucket FILES no configurado.';
         const prefix = input.prefix || 'chat_files/';
-        const listed = await env.FILES.list({ prefix, limit: 50 });
+        const listed = await env.FILES.list({ prefix, limit: 50, include: ['customMetadata'] });
         if (!listed.objects || listed.objects.length === 0) {
           return `No se encontraron archivos con prefijo "${prefix}".`;
         }
-        const items = listed.objects.map(obj => {
+        // Aislamiento por empresa (ver puedeAccederArchivo más arriba) — antes se
+        // listaba TODO el bucket cross-empresa con solo cambiar el prefix.
+        const visibles = [];
+        for (const obj of listed.objects) {
+          if (await puedeAccederArchivo(env, obj.customMetadata, empresa_id, esDevVerificado)) visibles.push(obj);
+        }
+        if (visibles.length === 0) return `No se encontraron archivos accesibles con prefijo "${prefix}".`;
+        const items = visibles.map(obj => {
           const sizeKB = (obj.size / 1024).toFixed(1);
           const date = obj.uploaded ? new Date(obj.uploaded).toISOString().split('T')[0] : 'desconocida';
           return `- ${obj.key} (${sizeKB} KB, ${date})`;
         });
-        return `${listed.objects.length} archivo(s) encontrados:\n${items.join('\n')}`;
+        return `${visibles.length} archivo(s) encontrados:\n${items.join('\n')}`;
       } catch (err) {
         return `Error listando archivos: ${err.message}`;
       }
@@ -5066,6 +5110,10 @@ ${input.codigo_sugerido ? `CÓDIGO SUGERIDO:\n${input.codigo_sugerido}` : ''}`;
         if (!env.FILES) return 'R2 bucket FILES no configurado.';
         const obj = await env.FILES.get(input.key);
         if (!obj) return `Archivo no encontrado: "${input.key}"`;
+        // Aislamiento por empresa (ver puedeAccederArchivo más arriba).
+        if (!(await puedeAccederArchivo(env, obj.customMetadata, empresa_id, esDevVerificado))) {
+          return `Archivo no encontrado: "${input.key}"`;
+        }
 
         const contentType = obj.httpMetadata?.contentType || 'application/octet-stream';
         const sizeKB = (obj.size / 1024).toFixed(1);
