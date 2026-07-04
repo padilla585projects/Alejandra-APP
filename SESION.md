@@ -1,17 +1,16 @@
 ## ESTADO ACTUAL
 
 **Sesión:** LIBRE
-**Última sesión:** 04/07/2026 — Fix /fcm-token y /api/comandos/* (IDOR): app v1.9.19+33 publicada por OTA,
-fix de backend en rama `fix/fcm-comandos-auth-pending-adopcion` **pendiente de fusionar a main**
-(esperando adopción de la nueva versión de la app — ver sección de abajo antes de desplegar).
+**Última sesión:** 04/07/2026 — Fix /fcm-token y /api/comandos/* (IDOR) DESPLEGADO. Adrián dio luz
+verde ("hazlo") para fusionar sin esperar más, dando por buena la adopción de v1.9.19+33.
 **Versión actual:** App PWA **v7.54** · worker principal deploy ec049cf8 · commit 81f8f1d
 **App móvil AlejandraIA:** v1.9.19+33 (OTA publicada, commit `b2c7828` en repo alejandra-ia)
-**Agente (alejandra-agente):** commit `870b703` desplegado en main (deploy CI 28708265441, health OK).
-Commit `1fc8341` (fix IDOR fcm-token/comandos) está en la rama `fix/fcm-comandos-auth-pending-adopcion`,
-**NO fusionado a main todavía, NO desplegado**.
+**Agente (alejandra-agente):** commit `acc186a` (merge de `1fc8341`) desplegado en main
+(deploy CI `28715488724`, health OK). Verificado en vivo: `/fcm-token`, `/api/comandos/pendientes`
+y `/api/comandos/resultado` devuelven 401 sin sesión.
 ---
 
-## RESUMEN SESIÓN 04/07/2026 (continuación 5) — Fix /fcm-token y /api/comandos/* (IDOR) — DESPLIEGUE PENDIENTE
+## RESUMEN SESIÓN 04/07/2026 (continuación 5) — Fix /fcm-token y /api/comandos/* (IDOR) — DESPLEGADO
 
 Siguiente de la lista tras cerrar `/files/<key>`, con "hacemos todas por orden". Auditoría
 (subagente) confirmó un IDOR (Insecure Direct Object Reference) real en 3 endpoints, ninguno
@@ -68,13 +67,21 @@ backend después / periodo de gracia sin sesión). Eligió **"compilar y liberar
    main, precisamente para que el CI (que auto-despliega en push a main tocando
    `alejandra-agente/**`) NO lo despliegue todavía.
 
-### 🔜 Acción pendiente (la próxima vez que se retome esta sesión)
-Cuando se considere que la adopción de v1.9.19+33 es razonable (dar unos días, o comprobar
-en el panel/DB cuántas sesiones activas siguen en `version_code` < 33 si hay manera de verlo),
-fusionar `fix/fcm-comandos-auth-pending-adopcion` a `main` y dejar que el CI despliegue
-(`gh pr merge` o merge directo + `git push origin main`), luego confirmar con
-`gh run watch --exit-status` y health check, y solo entonces continuar con el siguiente punto
-de la lista (SSRF en `test_endpoint`).
+### ✅ Desplegado (Adrián: "hazlo")
+Adrián decidió no esperar más y fusionar ya (dando por buena la adopción de v1.9.19+33 desde
+su publicación). Se fusionó `fix/fcm-comandos-auth-pending-adopcion` → `main` (merge commit
+`acc186a`), el CI desplegó automáticamente (run `28715488724`, todos los steps OK incluido
+health check). Verificación manual en vivo tras el deploy — los 3 endpoints devuelven 401 sin
+sesión:
+```
+POST /fcm-token                    → 401
+GET  /api/comandos/pendientes      → 401
+POST /api/comandos/resultado       → 401
+```
+Rama `fix/fcm-comandos-auth-pending-adopcion` ya fusionada, puede borrarse cuando se quiera
+(no se borró todavía, sin urgencia).
+
+Siguiente punto de la lista de seguridad: **SSRF en la tool de chat `test_endpoint`**.
 
 ---
 
