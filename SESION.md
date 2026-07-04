@@ -1,9 +1,81 @@
 ## ESTADO ACTUAL
 
 **Sesión:** LIBRE
-**Última sesión:** 04/07/2026 — Fix agente: aislamiento empresa_id en archivos R2 (/files, listar_archivos, ver_archivo)
+**Última sesión:** 04/07/2026 — Fix /fcm-token y /api/comandos/* (IDOR): app v1.9.19+33 publicada por OTA,
+fix de backend en rama `fix/fcm-comandos-auth-pending-adopcion` **pendiente de fusionar a main**
+(esperando adopción de la nueva versión de la app — ver sección de abajo antes de desplegar).
 **Versión actual:** App PWA **v7.54** · worker principal deploy ec049cf8 · commit 81f8f1d
-**Agente (alejandra-agente):** commit 870b703 desplegado (deploy CI 28708265441, health OK)
+**App móvil AlejandraIA:** v1.9.19+33 (OTA publicada, commit `b2c7828` en repo alejandra-ia)
+**Agente (alejandra-agente):** commit `870b703` desplegado en main (deploy CI 28708265441, health OK).
+Commit `1fc8341` (fix IDOR fcm-token/comandos) está en la rama `fix/fcm-comandos-auth-pending-adopcion`,
+**NO fusionado a main todavía, NO desplegado**.
+---
+
+## RESUMEN SESIÓN 04/07/2026 (continuación 5) — Fix /fcm-token y /api/comandos/* (IDOR) — DESPLIEGUE PENDIENTE
+
+Siguiente de la lista tras cerrar `/files/<key>`, con "hacemos todas por orden". Auditoría
+(subagente) confirmó un IDOR (Insecure Direct Object Reference) real en 3 endpoints, ninguno
+de los 3 llamaba a `getAuth()`:
+
+- `POST /fcm-token`: guardaba el token FCM del body bajo el `usuario_id` del body, sin
+  verificar sesión. Cualquiera podía registrar SU dispositivo bajo el `usuario_id` de otra
+  persona → secuestro del canal push (notificaciones futuras de la víctima llegarían al
+  atacante). Más grave que los otros dos: bajo esfuerzo, alto impacto, inmediato.
+- `GET /api/comandos/pendientes`: leía `usuario_id` de la query string sin verificar sesión.
+  Cualquiera podía leer los comandos remotos pendientes (navegación, diálogos, acciones) de
+  otro usuario con solo cambiar el parámetro.
+- `POST /api/comandos/resultado`: igual, sin sesión. Cualquiera podía marcar comandos ajenos
+  como `ejecutado` con un `resultado` forjado, solo adivinando el `id` (autoincremental).
+
+Contraste: `/push-subscribe` (el endpoint hermano) ya exigía `getAuth()` correctamente — el
+patrón a seguir ya existía en el propio código.
+
+### ✅ Corregido (commit `1fc8341` en rama `fix/fcm-comandos-auth-pending-adopcion`, ver abajo)
+Los 3 endpoints ahora exigen `getAuth()` (401 si no hay sesión) y comprueban que el
+`usuario_id`/dueño real coincide con `sesion.usuario_id` (403 si no), salvo
+`esDeveloperAgente()` — mismo patrón que `/push-subscribe`. Para `/api/comandos/resultado` se
+añadió además una consulta previa para resolver el dueño real del comando (`SELECT usuario_id
+FROM alejandra_comandos WHERE id=?`) antes de permitir la modificación, ya que esa tabla no
+tiene `empresa_id` (se resuelve por dueño directo, no por tenant).
+
+### ⚠️ Por qué este fix NO se desplegó igual que los 3 anteriores
+A diferencia de los fixes de `/files`, `consultar_bd`/`escribir_bd` y el webhook — todos
+transparentes para el cliente porque nunca mandaba nada que dejara de ser válido — este fix
+SÍ puede romper algo visible: la app Flutter (`agent_service.dart`/`notifications_service.dart`/
+`remote_commands_service.dart`) **no mandaba el header `Authorization` en estas 3 llamadas**.
+Si se desplegaba el backend ya exigiendo sesión, las apps instaladas (todas las versiones
+anteriores a la de este fix) habrían empezado a fallar en silencio (try/catch) en el registro
+de token push y en los comandos remotos hasta que el usuario actualizara — no rompe el chat
+ni nada crítico, pero sí notificaciones y control remoto.
+
+Se preguntó a Adrián cómo desplegarlo (3 opciones: ya + degradación temporal / app primero +
+backend después / periodo de gracia sin sesión). Eligió **"compilar y liberar la app primero"**.
+
+### Hecho en consecuencia (esta sesión)
+1. Se añadió el header `Authorization: Bearer <token>` (usando `SettingsService().token`, ya
+   existente en el dispositivo desde el login) en las 3 llamadas del lado Flutter:
+   `notifications_service.dart` (`_saveFcmToken`) y `remote_commands_service.dart` (`_poll` y
+   `_reportarResultado`). Commit `b2c7828` en el repo `alejandra-ia`.
+2. Se subió versión **1.9.19+33** (bump desde 1.9.18+32) con `build_release.ps1`: compilada,
+   firmada con la keystore de release, subida a R2 (`apk/alejandra_ia_v1.9.19.apk` +
+   `alejandra_ia_latest.apk`), `ota/version.json` actualizado (version_code 33) y copia en
+   Google Drive. **Publicada por OTA** — pero el mecanismo de OTA de la app
+   (`ota_service.dart`) NO es silencioso: el usuario tiene que abrir la app, ver el diálogo de
+   actualización y aceptar instalar el APK descargado. La adopción tardará según cuánto tarden
+   los usuarios en abrir la app y aceptar.
+3. El fix de backend (worker.js) se dejó **committeado en una rama aparte**
+   (`fix/fcm-comandos-auth-pending-adopcion`, commit `1fc8341`, pusheada a origin) en lugar de
+   main, precisamente para que el CI (que auto-despliega en push a main tocando
+   `alejandra-agente/**`) NO lo despliegue todavía.
+
+### 🔜 Acción pendiente (la próxima vez que se retome esta sesión)
+Cuando se considere que la adopción de v1.9.19+33 es razonable (dar unos días, o comprobar
+en el panel/DB cuántas sesiones activas siguen en `version_code` < 33 si hay manera de verlo),
+fusionar `fix/fcm-comandos-auth-pending-adopcion` a `main` y dejar que el CI despliegue
+(`gh pr merge` o merge directo + `git push origin main`), luego confirmar con
+`gh run watch --exit-status` y health check, y solo entonces continuar con el siguiente punto
+de la lista (SSRF en `test_endpoint`).
+
 ---
 
 ## RESUMEN SESIÓN 04/07/2026 (continuación 4) — Fix /files/<key> cross-tenant (archivos R2)
