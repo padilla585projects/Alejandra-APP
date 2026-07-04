@@ -1,8 +1,55 @@
 ## ESTADO ACTUAL
 
 **Sesión:** LIBRE
-**Última sesión:** 04/07/2026 — Fix Google OAuth panel.html (redirect-based), v7.54 (eliminar card IA redundante)
-**Versión actual:** App PWA **v7.54** · worker deploy ec049cf8 · commit 81f8f1d
+**Última sesión:** 04/07/2026 — Fix agente: 7 tools de capacidades_avanzadas inalcanzables cableadas
+**Versión actual:** App PWA **v7.54** · worker principal deploy ec049cf8 · commit 81f8f1d
+**Agente (alejandra-agente):** commit b8f26ba desplegado (deploy CI 28707002747, health OK)
+---
+
+## RESUMEN SESIÓN 04/07/2026 (continuación) — Auditoría del agente + fix tools inalcanzables
+
+Petición: "busca mejoras que hacer en el Agente" → se refería a Alejandra IA (el chat/NEXUS),
+no a la app Flutter. Auditoría en profundidad de `alejandra-agente/worker.js` (8452 líneas)
+vía subagente de investigación, cubriendo seguridad/multi-tenancy, arquitectura de tools,
+resiliencia, coste, observabilidad, salud del código, tests y desfase de la documentación.
+
+### Hallazgos (documentados, NO corregidos aún salvo el marcado como hecho abajo)
+- 🔴 **Crítico**: `/api/chat`/`/api/chat/stream` sin auth confían en `usuario_id` del cliente;
+  `consultar_bd`/`escribir_bd` ejecutan SQL arbitrario sin scope de empresa, alcanzables desde
+  ahí sin login; `ejecutar_deploy`/`rollback`/`github_escribir`/`patch_codigo` permiten que
+  cualquiera reescriba y despliegue el propio Worker — `esDeveloperAgente()`/`esAdmin` son
+  checks por string spoofeables, y `modo:'confirmacion'` es cosmético (no bloquea nada).
+- 🟠 Además el workflow de CI (`deploy-alejandra-agente.yml`) **resetea `ADMIN_TOKEN` al valor
+  hardcodeado `"alejandra2026"` en cada deploy**, deshaciendo el fix de migrate_003 que lo había
+  quitado "por seguridad". Pendiente de decidir con Adrián.
+- 🟠 Sin rate limiting/tope de gasto, sin tests, `/files/<key>` cross-tenant, SSRF en
+  `test_endpoint`, `/fcm-token` y `/api/comandos/pendientes` sin auth.
+- 🟡 `llamarGPT4oFallback` no registra coste; sin retry/backoff en 429; ~19 handlers de tools
+  muertos; `ALEJANDRA_AGENTE.txt` desactualizado (tools, expertos, migraciones, crons).
+
+### ✅ Corregido esta sesión: bug funcional — 7 tools de `capacidades_avanzadas` inalcanzables
+- `buscar_precios`, `marcar_plano`, `generar_documento`, `buscar_normativa`,
+  `historico_materiales`, `configurar_alerta`, `exportar_datos` estaban documentadas en el
+  módulo de prompt `capacidades_avanzadas` y tenían su `case` implementado en el switch de
+  ejecución, pero **no existía el schema `TOOL_*`** correspondiente ni estaban en
+  `TOOLS_POR_EXPERTO` — Claude nunca podía invocarlas de verdad aunque el prompt le decía que
+  existían.
+- Añadidos los 7 schemas `TOOL_*` (worker.js ~1738) y cableados en `completo` e `ingenieria`
+  (ya cargaban el módulo). También se detectó que el experto `tecnico` debía tener
+  `capacidades_avanzadas` según una nota anterior de este mismo archivo pero no lo tenía en
+  código — añadido módulo + 7 tools también a `tecnico`.
+- Verificado que las tablas D1 usadas (`precios_materiales`, `normativa_index`,
+  `materiales_obra`, `alertas_config`) ya existen en producción (creadas en sesión anterior).
+- `node --check` OK, commit `b8f26ba`, push → CI `deploy-alejandra-agente.yml` (run
+  28707002747) desplegó y pasó health check.
+
+### Pendientes
+- Decidir con Adrián si/cuándo abordar la cadena crítica de seguridad sin autenticar
+  (`/api/chat`, `consultar_bd`/`escribir_bd`, deploy/rollback/github_escribir) y el reset de
+  `ADMIN_TOKEN` hardcodeado en CI.
+- Reescribir `ALEJANDRA_AGENTE.txt` (desactualizado en casi todos los ejes).
+- Limpiar ~19 handlers de tools muertos / duplicados de una arquitectura anterior.
+
 ---
 
 ## RESUMEN SESIÓN 04/07/2026 — Fix Google OAuth panel.html + v7.54
