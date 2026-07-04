@@ -10484,7 +10484,8 @@ function googleAuthUrl(request, env) {
   const nonce = url.searchParams.get('nonce') || '';
   if (!env.GOOGLE_OAUTH_CLIENT_ID) return err('Google OAuth no configurado', 503);
   // Si hay nonce, lo guardamos en state para recuperarlo despuÃ©s del redirect
-  const state = nonce ? JSON.stringify({ nonce, redirect_uri }) : '';
+  const panelReturn = url.searchParams.get('panel_return') || '';
+  const state = nonce ? JSON.stringify({ nonce, redirect_uri, ...(panelReturn ? { panel_return: panelReturn } : {}) }) : '';
   const params = new URLSearchParams({
     client_id:     env.GOOGLE_OAUTH_CLIENT_ID,
     redirect_uri,
@@ -10650,11 +10651,12 @@ async function googleMobileRedirect(request, env) {
   if (!code) return new Response('<h1>Error: falta cÃ³digo de autorizaciÃ³n</h1>', { status: 400, headers: { 'Content-Type': 'text/html' } });
   if (!env.GOOGLE_OAUTH_CLIENT_ID || !env.GOOGLE_OAUTH_CLIENT_SECRET) return new Response('<h1>Google OAuth no configurado</h1>', { status: 503, headers: { 'Content-Type': 'text/html' } });
 
-  // Extraer nonce del state parameter (si viene de la app mÃ³vil)
+  // Extraer nonce y panel_return del state parameter
   let nonce = null;
+  let panelReturn = null;
   const stateRaw = url.searchParams.get('state');
   if (stateRaw) {
-    try { nonce = JSON.parse(stateRaw).nonce; } catch(_) {}
+    try { const st = JSON.parse(stateRaw); nonce = st.nonce; panelReturn = st.panel_return || null; } catch(_) {}
   }
 
   const redirectUri = 'https://alejandra-app-api.alejandra-app.workers.dev/auth/google/mobile-redirect';
@@ -10726,6 +10728,11 @@ async function googleMobileRedirect(request, env) {
 
   // Si hay nonce, guardar resultado para polling desde la app
   if (nonce) await _saveNonceResult(env, nonce, sessionData);
+
+  // Si viene desde el panel web, redirigir de vuelta con el nonce en la URL
+  if (panelReturn && nonce) {
+    return Response.redirect(panelReturn + '?panel_nonce=' + encodeURIComponent(nonce), 302);
+  }
 
   return _appReturnHtml('Login exitoso', 'Te estamos devolviendo a la app Alejandraâ€¦');
 }
