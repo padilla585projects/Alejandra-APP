@@ -9336,49 +9336,63 @@ async function doLoginGoogle() {
   const btn = document.getElementById('loginGoogleBtn');
   const errEl = document.getElementById('loginErr');
   errEl.textContent = '';
-  btn.disabled = true; btn.textContent = 'Conectando...';
+  btn.disabled = true; btn.textContent = 'Abriendo Google...';
   try {
-    const redirectUri = window.location.origin + window.location.pathname;
-    const res = await fetch(API + '/auth/google/url?redirect_uri=' + encodeURIComponent(redirectUri));
+    // Usamos el redirect_uri del worker (ya registrado en Google Console)
+    // y un nonce para hacer polling del resultado sin depender de ?code= en la URL del panel.
+    const MOBILE_REDIRECT = 'https://alejandra-app-api.alejandra-app.workers.dev/auth/google/mobile-redirect';
+    const nonce = crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2) + Date.now();
+    const res = await fetch(
+      API + '/auth/google/url?redirect_uri=' + encodeURIComponent(MOBILE_REDIRECT) + '&nonce=' + encodeURIComponent(nonce)
+    );
     const data = await res.json();
     if (!res.ok || !data.url) { errEl.textContent = data.error || 'Error al conectar con Google'; btn.disabled = false; return; }
-    window.location.href = data.url;
-  } catch { errEl.textContent = 'Error de conexión'; btn.disabled = false; }
-}
 
-async function handleGoogleCallback(code) {
-  document.getElementById('loginScreen').style.display = 'flex';
-  const errEl = document.getElementById('loginErr');
-  const btn = document.getElementById('loginGoogleBtn');
-  if (btn) { btn.disabled = true; btn.textContent = 'Verificando...'; }
-  try {
-    const redirectUri = window.location.origin + window.location.pathname;
-    const res = await fetch(API + '/auth/google/callback', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ code, redirect_uri: redirectUri }),
-    });
-    const data = await res.json();
-    // Limpiar el ?code= de la URL sin recargar
-    window.history.replaceState({}, '', window.location.pathname);
-    if (!res.ok || !data.ok) {
-      errEl.textContent = data.pendiente ? 'Tu cuenta está pendiente de aprobación.' : (data.error || 'Error al verificar con Google');
-      if (btn) { btn.disabled = false; }
-      return;
+    // Abrir popup de Google (no redirect completo — el panel sigue vivo para hacer polling)
+    const popup = window.open(data.url, 'google_oauth', 'width=520,height=620,scrollbars=yes,resizable=yes');
+    if (!popup) {
+      errEl.textContent = 'El navegador bloqueó el popup. Permite ventanas emergentes para este sitio.';
+      btn.disabled = false; return;
     }
-    const rolesPermitidos = ['empresa_admin', 'encargado', 'jefe_de_obra', 'oficina', 'superadmin', 'desarrollador'];
-    const todosRolesGoogle = [data.rol, ...(data.roles_extra || [])];
-    if (!todosRolesGoogle.some(rol => rolesPermitidos.includes(rol))) {
-      errEl.textContent = 'Tu rol no tiene acceso al panel de oficina';
-      if (btn) { btn.disabled = false; }
-      return;
-    }
-    TOKEN = data.token;
-    SESSION = { nombre: data.nombre, rol: data.rol, roles_extra: data.roles_extra || [], empresa_id: data.empresa_id, empresa_nombre: data.empresa_nombre, usuario_id: data.usuario_id || null };
-    localStorage.setItem('panel_token', TOKEN);
-    localStorage.setItem('panel_session', JSON.stringify(SESSION));
-    iniciarApp();
-  } catch { errEl.textContent = 'Error de conexión'; if (btn) btn.disabled = false; }
+
+    btn.textContent = 'Esperando Google...';
+    errEl.textContent = '';
+
+    // Polling del nonce cada 2 segundos hasta 3 minutos
+    let attempts = 0;
+    const MAX = 90;
+    const poll = setInterval(async () => {
+      attempts++;
+      if (popup.closed && attempts < 5) return; // popup cerrado prematuramente — dar 10s más
+      if (attempts > MAX) {
+        clearInterval(poll);
+        errEl.textContent = 'Tiempo de espera agotado. Inténtalo de nuevo.';
+        btn.disabled = false; btn.textContent = 'ENTRAR CON GOOGLE';
+        return;
+      }
+      try {
+        const r = await fetch(API + '/auth/google/check-nonce?nonce=' + encodeURIComponent(nonce));
+        if (r.status === 202) return; // aún esperando
+        const d = await r.json();
+        clearInterval(poll);
+        if (popup && !popup.closed) popup.close();
+        if (d.error) { errEl.textContent = d.error; btn.disabled = false; btn.textContent = 'ENTRAR CON GOOGLE'; return; }
+        if (d.pendiente) { errEl.textContent = 'Tu cuenta está pendiente de aprobación.'; btn.disabled = false; btn.textContent = 'ENTRAR CON GOOGLE'; return; }
+        if (!d.ok || !d.token) { errEl.textContent = d.msg || 'Error al verificar con Google'; btn.disabled = false; btn.textContent = 'ENTRAR CON GOOGLE'; return; }
+        const rolesPermitidos = ['empresa_admin', 'encargado', 'jefe_de_obra', 'oficina', 'superadmin', 'desarrollador'];
+        const todosRoles = [d.rol, ...(d.roles_extra || [])];
+        if (!todosRoles.some(rol => rolesPermitidos.includes(rol))) {
+          errEl.textContent = 'Tu rol no tiene acceso al panel de oficina';
+          btn.disabled = false; btn.textContent = 'ENTRAR CON GOOGLE'; return;
+        }
+        TOKEN = d.token;
+        SESSION = { nombre: d.nombre, rol: d.rol, roles_extra: d.roles_extra || [], empresa_id: d.empresa_id, empresa_nombre: d.empresa_nombre, usuario_id: d.usuario_id || null };
+        localStorage.setItem('panel_token', TOKEN);
+        localStorage.setItem('panel_session', JSON.stringify(SESSION));
+        iniciarApp();
+      } catch { /* red — reintentar */ }
+    }, 2000);
+  } catch { errEl.textContent = 'Error de conexión'; btn.disabled = false; btn.textContent = 'ENTRAR CON GOOGLE'; }
 }
 
 async function doLogin() {
@@ -15034,9 +15048,7 @@ if ('serviceWorker' in navigator) {
   // Detectar ?reset_token= (viene del enlace de email)
   const resetToken = urlParams.get('reset_token');
   if (resetToken) { mostrarResetPass(resetToken); return; }
-  // Detectar callback OAuth de Google (?code=)
-  const code = urlParams.get('code');
-  if (code) { handleGoogleCallback(code); return; }
+  // Google OAuth ya usa popup + nonce polling — no se detecta ?code= aquí
   if (TOKEN && SESSION) { iniciarApp(); }
 })();
 
