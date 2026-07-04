@@ -2482,8 +2482,17 @@ export default {
 
       // ── FCM token — guarda token de notificaciones del móvil ─────────────
       if (path === '/fcm-token' && req.method === 'POST') {
+        // Requiere sesión autenticada para evitar registrar el token de otro usuario
+        // (secuestro del canal push: sin esto, cualquiera podía redirigir las
+        // notificaciones de otro usuario a su propio dispositivo).
+        const sesionFcm = await getAuth(req, env);
+        if (!sesionFcm) return json({ error: 'No autorizado' }, 401);
         const { usuario_id, token } = await req.json().catch(() => ({}));
         if (!usuario_id || !token) return json({ error: 'usuario_id y token requeridos' }, 400);
+        const esDevFcm = await esDeveloperAgente(env, sesionFcm.usuario_id);
+        if (!esDevFcm && String(usuario_id).toLowerCase() !== String(sesionFcm.usuario_id).toLowerCase()) {
+          return json({ error: 'No puedes registrar el token de otro usuario' }, 403);
+        }
         // Upsert en alejandra_memoria con tipo='fcm_token' y usuario_id
         await env.DB.prepare(
           `DELETE FROM alejandra_memoria WHERE tipo='fcm_token' AND usuario_id=?`
@@ -2522,8 +2531,16 @@ export default {
 
       // ── Comandos remotos — la app consulta y reporta ─────────────────────
       if (path === '/api/comandos/pendientes' && req.method === 'GET') {
+        // Requiere sesión autenticada: antes cualquiera podía leer los comandos
+        // remotos pendientes de otro usuario con solo cambiar el query param.
+        const sesionCmd = await getAuth(req, env);
+        if (!sesionCmd) return json({ error: 'No autorizado' }, 401);
         const uid = url.searchParams.get('usuario_id');
         if (!uid) return json({ error: 'usuario_id requerido' }, 400);
+        const esDevCmd = await esDeveloperAgente(env, sesionCmd.usuario_id);
+        if (!esDevCmd && String(uid).toLowerCase() !== String(sesionCmd.usuario_id).toLowerCase()) {
+          return json({ error: 'No puedes leer los comandos de otro usuario' }, 403);
+        }
         const rows = await env.DB.prepare(
           `SELECT id, tipo, payload, created_at FROM alejandra_comandos
            WHERE usuario_id = ? AND estado = 'pendiente' ORDER BY created_at ASC LIMIT 10`
@@ -2532,8 +2549,21 @@ export default {
       }
 
       if (path === '/api/comandos/resultado' && req.method === 'POST') {
+        // Requiere sesión autenticada y ser el dueño del comando (o desarrollador):
+        // antes cualquiera podía marcar comandos ajenos como ejecutados con un
+        // resultado falsificado con solo conocer/adivinar el id.
+        const sesionRes = await getAuth(req, env);
+        if (!sesionRes) return json({ error: 'No autorizado' }, 401);
         const { id, resultado, estado } = await req.json().catch(() => ({}));
         if (!id) return json({ error: 'id requerido' }, 400);
+        const comando = await env.DB.prepare(
+          `SELECT usuario_id FROM alejandra_comandos WHERE id = ? LIMIT 1`
+        ).bind(id).first();
+        if (!comando) return json({ error: 'Comando no encontrado' }, 404);
+        const esDevRes = await esDeveloperAgente(env, sesionRes.usuario_id);
+        if (!esDevRes && String(comando.usuario_id).toLowerCase() !== String(sesionRes.usuario_id).toLowerCase()) {
+          return json({ error: 'No puedes modificar comandos de otro usuario' }, 403);
+        }
         await env.DB.prepare(
           `UPDATE alejandra_comandos SET estado = ?, resultado = ?, ejecutado_at = datetime('now') WHERE id = ?`
         ).bind(estado || 'ejecutado', resultado || '', id).run();
