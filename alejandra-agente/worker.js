@@ -1876,7 +1876,7 @@ const TOOLS_POR_EXPERTO = {
 //                  <token> verificado contra la tabla `sesiones` o ADMIN_TOKEN
 //                  (ver getAuth()) — NUNCA del usuario_id que manda el body.
 // esDevVerificado = true solo si además esa identidad verificada es developer/admin.
-const TOOLS_SOLO_DEV_VERIFICADO = new Set(['patch_codigo', 'github_escribir', 'ejecutar_deploy', 'rollback']);
+const TOOLS_SOLO_DEV_VERIFICADO = new Set(['patch_codigo', 'github_escribir', 'ejecutar_deploy', 'rollback', 'test_endpoint']);
 const TOOLS_REQUIEREN_SESION    = new Set(['consultar_bd', 'escribir_bd', 'listar_archivos', 'ver_archivo']);
 function filtrarToolsPorAuth(tools, authOk, esDevVerificado) {
   return (tools || []).filter(t => {
@@ -1984,6 +1984,24 @@ async function puedeAccederArchivo(env, customMetadata, empresaId, esDevVerifica
   if (esDevVerificado) return true;
   const dueña = await empresaDeArchivo(env, customMetadata);
   return dueña !== null && dueña === String(empresaId);
+}
+
+// ── Allowlist de hosts para test_endpoint (defensa en profundidad anti-SSRF) ─
+// Su único uso legítimo es verificar un deploy de un worker propio del
+// proyecto. Solo https, y solo hosts que sean o terminen en estos dominios.
+const HOSTS_PERMITIDOS_TEST_ENDPOINT = ['alejandra-app.workers.dev'];
+function urlPermitidaTestEndpoint(rawUrl) {
+  if (!rawUrl || typeof rawUrl !== 'string') return false;
+  try {
+    const u = new URL(rawUrl);
+    if (u.protocol !== 'https:') return false;
+    const host = u.hostname.toLowerCase();
+    return HOSTS_PERMITIDOS_TEST_ENDPOINT.some(
+      (dominio) => host === dominio || host.endsWith(`.${dominio}`)
+    );
+  } catch (_) {
+    return false;
+  }
 }
 
 // ── Normalización de usuario_id (CRÍTICO: unifica identidad cross-canal) ─────
@@ -5517,6 +5535,17 @@ ${input.codigo_sugerido ? `CÓDIGO SUGERIDO:\n${input.codigo_sugerido}` : ''}`;
 
     case 'test_endpoint': {
       try {
+        // SSRF: esta tool hacía fetch(input.url) a CUALQUIER URL sin validar,
+        // desde el propio Worker (con su IP/reputación de Cloudflare) — permitía
+        // usarlo como proxy HTTP arbitrario (escaneo de red, exfiltración de datos
+        // vía POST con body controlado por el atacante a través de un tool_use
+        // inducido por prompt injection, abuso contra terceros). Ya se restringió
+        // a esDevVerificado (TOOLS_SOLO_DEV_VERIFICADO); además, en profundidad,
+        // solo se permite https y solo hosts propios del proyecto — su único uso
+        // legítimo es verificar un deploy propio, nunca un host arbitrario.
+        if (!urlPermitidaTestEndpoint(input.url)) {
+          return `❌ URL no permitida. test_endpoint solo puede usarse contra los workers propios del proyecto (https://*.alejandra-app.workers.dev).`;
+        }
         const method = (input.method || 'GET').toUpperCase();
         const t0 = Date.now();
         const opts = { method, headers: { 'Content-Type': 'application/json', 'User-Agent': 'Alejandra-Test' } };
