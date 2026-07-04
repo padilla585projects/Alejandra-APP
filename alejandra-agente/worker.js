@@ -1863,6 +1863,29 @@ const TOOLS_POR_EXPERTO = {
   ingenieria: [TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_ANALIZAR_FOTO, TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME, TOOL_BUSCAR_PRECIOS, TOOL_MARCAR_PLANO, TOOL_GENERAR_DOCUMENTO, TOOL_BUSCAR_NORMATIVA, TOOL_HISTORICO_MATERIALES, TOOL_CONFIGURAR_ALERTA, TOOL_EXPORTAR_DATOS]
 };
 
+// ── Gating de tools peligrosas por identidad VERIFICADA ──────────────────────
+// Antes de este fix, /api/chat y /api/chat/stream confiaban ciegamente en el
+// usuario_id que mandaba el cliente en el body (sin ninguna verificación), y
+// esa identidad decidía qué tools podía usar Claude (vía esDeveloperAgente/esAdmin,
+// que solo miraban el string). Cualquiera podía mandar {usuario_id:"adrian"} sin
+// token y desbloquear patch_codigo/github_escribir/ejecutar_deploy/rollback
+// (escritura de código + deploy) o consultar_bd/escribir_bd (lectura/escritura
+// arbitraria de la BD compartida de todas las empresas).
+//
+// authOk         = true solo si la identidad viene de un Authorization: Bearer
+//                  <token> verificado contra la tabla `sesiones` o ADMIN_TOKEN
+//                  (ver getAuth()) — NUNCA del usuario_id que manda el body.
+// esDevVerificado = true solo si además esa identidad verificada es developer/admin.
+const TOOLS_SOLO_DEV_VERIFICADO = new Set(['patch_codigo', 'github_escribir', 'ejecutar_deploy', 'rollback']);
+const TOOLS_REQUIEREN_SESION    = new Set(['consultar_bd', 'escribir_bd']);
+function filtrarToolsPorAuth(tools, authOk, esDevVerificado) {
+  return (tools || []).filter(t => {
+    if (TOOLS_SOLO_DEV_VERIFICADO.has(t.name) && !esDevVerificado) return false;
+    if (TOOLS_REQUIEREN_SESION.has(t.name) && !authOk) return false;
+    return true;
+  });
+}
+
 // ── Normalización de usuario_id (CRÍTICO: unifica identidad cross-canal) ─────
 // Android manda "3", PWA manda "Adrian", panel manda "3.0" → todos son el mismo usuario
 // Sin esto, Alejandra cree que habla con 6 personas distintas
@@ -2120,14 +2143,22 @@ export default {
         const { mensaje, usuario_id: rawUserId, usuario_nombre, empresa_id, canal, token_telegram, adjuntos, rol, pantalla, dom_actual } = body;
         if (!mensaje || !rawUserId) return json({ error: 'mensaje y usuario_id requeridos' }, 400);
 
+        // Identidad VERIFICADA vía Authorization: Bearer <token> (sesiones/ADMIN_TOKEN).
+        // Si hay sesión válida, prima sobre el usuario_id del body (que cualquiera
+        // puede falsificar) — evita que un mensaje anónimo se haga pasar por "adrian"
+        // para desbloquear tools de desarrollador o de BD. Sin token, se mantiene el
+        // comportamiento anterior (usuario_id del body) pero SIN tools sensibles.
+        const sesionAuth = await getAuth(req, env);
+        const authOk = !!sesionAuth;
         // Normalizar usuario_id: "Adrian", "adrian", "3", "3.0" → siempre el mismo ID
-        const usuario_id = await normalizarUsuarioId(env, rawUserId);
-        const empresa   = empresa_id || 'default';
+        const usuario_id = sesionAuth ? sesionAuth.usuario_id : await normalizarUsuarioId(env, rawUserId);
+        const esDevVerificado = authOk && await esDeveloperAgente(env, usuario_id);
+        const empresa   = sesionAuth ? sesionAuth.empresa_id : (empresa_id || 'default');
         const contexto  = await obtenerContextoChat(env, usuario_id, empresa, 10);
         const canalChat = canal || 'web';
         const nombreResuelto = await resolverNombreUsuario(env, usuario_id);
         const usuarioLabel = (usuario_nombre && String(usuario_nombre).trim()) ? String(usuario_nombre) : nombreResuelto;
-        const respuesta = await procesarConNEXUS(env, mensaje, contexto, usuario_id, empresa, canalChat, adjuntos, rol, pantalla, dom_actual, usuarioLabel);
+        const respuesta = await procesarConNEXUS(env, mensaje, contexto, usuario_id, empresa, canalChat, adjuntos, rol, pantalla, dom_actual, usuarioLabel, authOk, esDevVerificado);
 
         await guardarMensajeChat(env, usuario_id, empresa, mensaje, respuesta.texto, canalChat, adjuntos);
         if (respuesta.acciones?.length > 0) ctx.waitUntil(autoLearnChat(env, usuario_id, empresa, respuesta));
@@ -2143,8 +2174,12 @@ export default {
         const { mensaje, usuario_id: rawUserId, usuario_nombre, empresa_id, canal, adjuntos, rol, pantalla, dom_actual } = body;
         if (!mensaje || !rawUserId) return json({ error: 'mensaje y usuario_id requeridos' }, 400);
 
-        const usuario_id = await normalizarUsuarioId(env, rawUserId);
-        const empresa  = empresa_id || 'default';
+        // Ver comentario en /api/chat: identidad verificada por token, no por el body.
+        const sesionAuth = await getAuth(req, env);
+        const authOk = !!sesionAuth;
+        const usuario_id = sesionAuth ? sesionAuth.usuario_id : await normalizarUsuarioId(env, rawUserId);
+        const esDevVerificado = authOk && await esDeveloperAgente(env, usuario_id);
+        const empresa  = sesionAuth ? sesionAuth.empresa_id : (empresa_id || 'default');
         const contexto = await obtenerContextoChat(env, usuario_id, empresa, 10);
         const nombreResuelto = await resolverNombreUsuario(env, usuario_id);
         const usuarioLabel = (usuario_nombre && String(usuario_nombre).trim()) ? String(usuario_nombre) : nombreResuelto;
@@ -2182,7 +2217,7 @@ export default {
           let respFinal = null;
           try {
             const canalReal = canal || 'panel';
-            const resp = await procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empresa, send, canalReal, adjuntos, rol, pantalla, dom_actual, usuarioLabel, () => clienteDesconectado);
+            const resp = await procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empresa, send, canalReal, adjuntos, rol, pantalla, dom_actual, usuarioLabel, authOk, esDevVerificado, () => clienteDesconectado);
             respFinal = resp;
             await guardarMensajeChat(env, usuario_id, empresa, mensaje, resp.texto, canalReal, adjuntos);
             // actualizarResumen no bloquea — fire-and-forget dentro del waitUntil
@@ -3161,7 +3196,9 @@ REGLAS GENERALES:
       if (modosImportantes.includes(modoCron)) {
         // Modos importantes → NEXUS completo con Sonnet (tiene tools, historial, etc.)
         const contextoChat = await obtenerContextoChat(env, 'system', 'cron', 2);
-        respuesta = await procesarConNEXUS(env, prompt, contextoChat, 'system', 'cron');
+        // Disparado por el Cron Trigger interno de Cloudflare (scheduled()), no por
+        // una request HTTP con datos de cliente — identidad ya confiada por diseño.
+        respuesta = await procesarConNEXUS(env, prompt, contextoChat, 'system', 'cron', undefined, undefined, undefined, undefined, undefined, undefined, true, true);
       } else {
         // Modo normal → Haiku directo (sin router, sin NEXUS, ~67% más barato)
         const systemCron = `Eres Alejandra, ingeniera técnica autónoma. Analiza los datos del cron y decide si hay algo que requiera acción. Si hay alertas urgentes, responde con el mensaje a enviar. Si no hay nada relevante, responde exactamente "SIN_ACCION".`;
@@ -3348,7 +3385,7 @@ async function seedDefaultAlerts(env) {
   }
 }
 
-async function procesarConNEXUS(env, mensaje, contexto, usuario_id, empresa_id, canal, adjuntos, rol=null, pantalla=null, dom_actual=null, usuario_label=null) {
+async function procesarConNEXUS(env, mensaje, contexto, usuario_id, empresa_id, canal, adjuntos, rol=null, pantalla=null, dom_actual=null, usuario_label=null, authOk=true, esDevVerificado=false) {
   if (!env.ANTHROPIC_API_KEY) {
     return { texto: 'Error: ANTHROPIC_API_KEY no configurada.', acciones: [], requiere_confirmacion: false };
   }
@@ -3363,7 +3400,7 @@ async function procesarConNEXUS(env, mensaje, contexto, usuario_id, empresa_id, 
     // PASO 1: Haiku clasifica el mensaje
     const clas   = await clasificarConHaiku(env, mensaje);
     const expert = NEXUS_EXPERTS[clas.experto] || NEXUS_EXPERTS.app;
-    const tools  = TOOLS_POR_EXPERTO[clas.experto] || [];
+    const tools  = filtrarToolsPorAuth(TOOLS_POR_EXPERTO[clas.experto] || [], authOk, esDevVerificado);
     console.log(`NEXUS: experto=${clas.experto} web=${clas.buscar_web} tools=${tools.map(t=>t.name).join(',')}`);
 
     // PASO 2: Búsqueda web previa si Haiku lo decidió (evita una iteración extra)
@@ -3402,7 +3439,7 @@ async function procesarConNEXUS(env, mensaje, contexto, usuario_id, empresa_id, 
 
       for (const tb of toolBlocks) {
         herramientasUsadas.push({ nombre: tb.name, input: tb.input });
-        const resultado = await ejecutarTool(env, tb.name, tb.input, usuario_id, empresa_id, tools);
+        const resultado = await ejecutarTool(env, tb.name, tb.input, usuario_id, empresa_id, tools, undefined, authOk, esDevVerificado);
         if (tb.name === 'buscar_web') usoBusquedaWeb = true;
         // ver_archivo con imágenes devuelve JSON con content blocks para visión
         const content = parseToolResultContent(resultado);
@@ -3446,7 +3483,7 @@ async function procesarConNEXUS(env, mensaje, contexto, usuario_id, empresa_id, 
 }
 
 // ── NEXUS con streaming SSE ───────────────────────────────────────────────────
-async function procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empresa_id, send, canal, adjuntos, rol=null, pantalla=null, dom_actual=null, usuario_label=null, getClienteDesconectado = () => false) {
+async function procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empresa_id, send, canal, adjuntos, rol=null, pantalla=null, dom_actual=null, usuario_label=null, authOk=true, esDevVerificado=false, getClienteDesconectado = () => false) {
   if (!env.ANTHROPIC_API_KEY) {
     await send({ type: 'error', mensaje: 'ANTHROPIC_API_KEY no configurada.' });
     return { texto: 'Error: sin clave API.', herramientas_usadas: [] };
@@ -3459,7 +3496,7 @@ async function procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empres
     // PASO 1: Clasificar
     const clas   = await clasificarConHaiku(env, mensaje);
     const expert = NEXUS_EXPERTS[clas.experto] || NEXUS_EXPERTS.app;
-    const tools  = TOOLS_POR_EXPERTO[clas.experto] || [];
+    const tools  = filtrarToolsPorAuth(TOOLS_POR_EXPERTO[clas.experto] || [], authOk, esDevVerificado);
     await send({ type: 'routing', experto: clas.experto, buscar_web: clas.buscar_web, modelo: expert.model });
 
     // PASO 2: Búsqueda web previa
@@ -3516,7 +3553,7 @@ async function procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empres
         const t0 = Date.now();
         herramientasUsadas.push({ nombre: tb.name, input: tb.input });
         await send({ type: 'tool_start', nombre: tb.name, input: tb.input });
-        const resultado = await ejecutarTool(env, tb.name, tb.input, usuario_id, empresa_id, tools, send);
+        const resultado = await ejecutarTool(env, tb.name, tb.input, usuario_id, empresa_id, tools, send, authOk, esDevVerificado);
         if (tb.name === 'buscar_web') usoBusquedaWeb = true;
         // Para SSE preview, extraer solo texto (no base64 de imágenes)
         const previewText = typeof resultado === 'string' && resultado.startsWith('[{')
@@ -4734,14 +4771,25 @@ async function esDeveloperAgente(env, usuario_id) {
 }
 
 // ── Ejecutar tools ────────────────────────────────────────────────────────────
-async function ejecutarTool(env, nombre, input, usuario_id, empresa_id, expertoTools, sendSSE) {
-  // Tools de auto-modificación: solo accesibles a desarrollador/Adrian
+async function ejecutarTool(env, nombre, input, usuario_id, empresa_id, expertoTools, sendSSE, authOk = true, esDevVerificado = false) {
+  // Tools de auto-modificación (generación anterior de nombres): solo accesibles
+  // a desarrollador/Adrian, verificado contra la BD a partir de usuario_id.
   const TOOLS_PROTEGIDAS = new Set(['repo_read_file', 'repo_write_file', 'direct_fix', 'grep_code', 'run_migration', 'check_deploy_status']);
   if (TOOLS_PROTEGIDAS.has(nombre)) {
     const autorizado = await esDeveloperAgente(env, usuario_id);
     if (!autorizado) {
       return JSON.stringify({ ok: false, error: `Tool "${nombre}" solo disponible para el desarrollador.` });
     }
+  }
+
+  // Defensa en profundidad: repetir aquí el gating por identidad VERIFICADA
+  // (no solo confiar en que el tool no estuviera en la lista ofrecida a Claude).
+  // Ver TOOLS_SOLO_DEV_VERIFICADO / TOOLS_REQUIEREN_SESION más arriba.
+  if (TOOLS_SOLO_DEV_VERIFICADO.has(nombre) && !esDevVerificado) {
+    return JSON.stringify({ ok: false, error: `Tool "${nombre}" requiere sesión verificada de desarrollador (Authorization: Bearer <token>).` });
+  }
+  if (TOOLS_REQUIEREN_SESION.has(nombre) && !authOk) {
+    return JSON.stringify({ ok: false, error: `Tool "${nombre}" requiere una sesión autenticada válida.` });
   }
 
   switch (nombre) {

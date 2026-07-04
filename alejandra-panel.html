@@ -748,7 +748,13 @@ async function enviarChat() {
 
     const resp = await fetch(`${API}/api/chat/stream`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        // El panel ya exige adminToken verificado para llegar aquí (showApp()).
+        // Lo mandamos también en el chat para que el worker derive la identidad
+        // real desde la sesión en vez de confiar en chatUserId (texto libre).
+        ...(adminToken ? { 'Authorization': `Bearer ${adminToken}` } : {})
+      },
       body: JSON.stringify({
         mensaje: msg,
         usuario_id: chatUserId,
