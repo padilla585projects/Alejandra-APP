@@ -1,9 +1,75 @@
 ## ESTADO ACTUAL
 
 **Sesión:** LIBRE
-**Última sesión:** 04/07/2026 — Fix agente: cadena crítica sin autenticar en /api/chat cerrada
+**Última sesión:** 04/07/2026 — Fix agente: reapertura del hueco en webhooks + aislamiento empresa_id en consultar_bd/escribir_bd
 **Versión actual:** App PWA **v7.54** · worker principal deploy ec049cf8 · commit 81f8f1d
-**Agente (alejandra-agente):** commit d357aa7 desplegado (deploy CI 28707537198, health OK)
+**Agente (alejandra-agente):** commit 6d92ce7 desplegado (deploy CI 28708003217, health OK)
+---
+
+## RESUMEN SESIÓN 04/07/2026 (continuación 3) — Fix webhook/evento + '/' sin autenticar, aislamiento empresa_id en BD
+
+Tras cerrar la cadena crítica de /api/chat (commit `d357aa7`), Adrián pidió seguir con los dos
+pendientes que quedaron documentados abajo. Investigación confirmó ambos como reales y se
+arreglaron los dos en el mismo commit (`6d92ce7`, CI `28708003217`, health OK):
+
+### ✅ Corregido: `/webhook/evento` y `/` (getaway) reabrían el hueco de auth
+Ambas rutas son alcanzables desde internet sin ningún token/verificación, pero llamaban a
+`procesarConNEXUS(...)` omitiendo los argumentos `authOk`/`esDevVerificado` — que por defecto
+valían `authOk=true`. Resultado: cualquiera podía hacer POST a `/webhook/evento` con un
+`datos` manipulado (inyección de prompt) y, en teoría, el modelo podía invocar
+`consultar_bd`/`escribir_bd` como si viniera de una sesión verificada — exactamente el bug
+que se acababa de cerrar en `/api/chat`, reabierto por dos rutas que no pasaban por el mismo
+filtro. Fix: se pasa explícito `false, false` en ambos call sites, **y además** se cambió el
+default de `authOk` en `procesarConNEXUS`/`procesarConNEXUSStream` de `true` a `false`
+(fail-safe: cualquier ruta futura que olvide pasarlo queda bloqueada por defecto, no abierta).
+Los dos call sites legítimos (`/api/chat`, `/api/chat/stream`, que ya pasaban valores reales
+explícitos) y el cron interno de autoreflexión (que ya pasaba `true, true` explícito) no se
+ven afectados por el cambio de default.
+
+### ✅ Corregido: `consultar_bd`/`escribir_bd` sin aislamiento por `empresa_id`
+Estas dos tools ya exigían sesión válida (`TOOLS_REQUIEREN_SESION`), pero ejecutan SQL libre
+generado por el modelo con solo filtros de keywords (SELECT-only / bloqueo de DROP-ALTER-etc);
+nada en el código obligaba a que la query estuviera filtrada por la empresa del que llama —
+solo una convención en el prompt del sistema, no verificada. Un usuario autenticado de la
+empresa A podía, en teoría, pedir una consulta/escritura contra datos de la empresa B.
+
+Fix: nueva función `validarScopeEmpresaBD(query, params, empresaId, esDevVerificado)`:
+- Se consultó el esquema real de producción (`wrangler d1 execute ... sqlite_master`) y se
+  construyó `TABLAS_EMPRESA_PERMITIDAS`, la lista de las 58 tablas de negocio que sí tienen
+  columna `empresa_id` real — **excluyendo a propósito** `sesiones` y `vincular_tokens`
+  (tienen `empresa_id` pero contienen tokens de sesión/vinculación: leerlos permitiría
+  suplantar a otro usuario de la misma empresa, incluido un admin).
+- Cualquier tabla fuera de esa lista (tablas de sistema del propio agente: `alejandra_tokens`,
+  `config`, `agente_config`, `reset_tokens`, `auth_nonces`, etc.) queda bloqueada para
+  `consultar_bd`/`escribir_bd` salvo `esDevVerificado`.
+- Para las tablas permitidas, la query debe filtrar explícitamente por `empresa_id`: si usa un
+  literal (`empresa_id = 2`), debe coincidir con la empresa real de la sesión; si usa
+  placeholder (`empresa_id = ?`), se calcula su posición y se verifica que el valor bindeado
+  en `params[]` coincida; si no filtra por `empresa_id` en absoluto, se rechaza.
+- Se bloquea además la columna `password_hash` (tabla `usuarios`) para cualquier no-developer.
+- `esDevVerificado` se salta esta capa completa (mismo criterio que `TOOLS_SOLO_DEV_VERIFICADO`).
+- El rechazo devuelve un string de error (igual que los demás checks existentes de estas tools),
+  visible para el modelo, que puede corregir su query en el siguiente intento.
+
+Verificado con `node --check worker.js` (OK) y diff acotado (90 inserciones, 4 líneas
+tocadas, sin cambios fuera de lo descrito). Commit `6d92ce7`, push a `main`, CI
+`28708003217` completó con éxito (migración D1, deploy worker, secrets, health check OK).
+
+### Pendiente (no abordado esta sesión, documentado para el futuro)
+- El resto de hallazgos 🟠/🟡 de la auditoría original: rate limiting/topes de gasto, retry/backoff
+  en 429, SSRF en `test_endpoint`, `/files/<key>` cross-tenant, `/fcm-token` y
+  `/api/comandos/pendientes` sin auth, falta de tests, `llamarGPT4oFallback` sin tracking de
+  coste, `ALEJANDRA_AGENTE.txt` desactualizado, ~19 tool handlers muertos/duplicados de una
+  arquitectura anterior, falta de correlation/trace IDs.
+- El aislamiento por `empresa_id` en `consultar_bd`/`escribir_bd` es defensa basada en regex
+  (detecta el primer filtro `empresa_id=`/`empresa_id=?` en la query) — no es un parser SQL
+  completo. Cubre el caso realista (spoofing de id literal o de placeholder, ausencia total de
+  filtro), pero una query muy retorcida con múltiples joins y múltiples filtros `empresa_id`
+  en distintas posiciones solo se valida en la primera ocurrencia. Suficiente como defensa en
+  profundidad combinada con el resto de capas (gating de sesión + convención de prompt), pero
+  no es una garantía matemática — si se quiere blindar del todo, la alternativa sería sustituir
+  SQL libre por un query builder estructurado (más trabajo de rediseño).
+
 ---
 
 ## RESUMEN SESIÓN 04/07/2026 (continuación 2) — Fix ADMIN_TOKEN hardcodeado + cadena crítica sin autenticar
