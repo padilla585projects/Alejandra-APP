@@ -1,8 +1,69 @@
 ## ESTADO ACTUAL
 
 **Sesión:** LIBRE
-**Última sesión:** 27/06/2026 — NEW-114/115/116 + móvil RdP/Hormigonado/Formacion + Alejandra IA v7.51
-**Versión actual:** App PWA **v7.51** · worker (v7.51) · commit b81b6d3
+**Última sesión:** 04/07/2026 — Fix Google OAuth panel.html (redirect-based), v7.54 (eliminar card IA redundante)
+**Versión actual:** App PWA **v7.54** · worker deploy ec049cf8 · commit 81f8f1d
+---
+
+## RESUMEN SESIÓN 04/07/2026 — Fix Google OAuth panel.html + v7.54
+
+### Hecho ✅
+
+#### v7.54 — Eliminar card IA redundante del home
+- Eliminado `cardAlejandraIA` del home (redundante con botón central del nav)
+- `checkIABtn` sigue mostrando botón IA a TODOS los usuarios
+- Versiones sincronizadas: json=7.54, sw=7.54, html=7.54 ✅
+
+#### Fix Google OAuth panel.html — redirect completo en lugar de popup
+- **Problema**: `doLoginGoogle()` usaba `window.open()` (popup) — muchos navegadores lo bloquean
+- **Síntoma**: "cuando hago login me devuelve a la pagina de nuevo sin hacer nada"
+- **Solución**: flujo redirect completo Google → worker → panel
+  - `panel.html doLoginGoogle()`: hace `window.location.href = data.url` (redirect, no popup)
+  - `panel.html init()`: detecta `?panel_nonce=` al volver de Google → llama `check-nonce` una vez → loga
+  - `worker.js googleAuthUrl()`: incluye `panel_return` en el state de OAuth
+  - `worker.js googleMobileRedirect()`: tras auth exitoso, redirige a `panel_return?panel_nonce=NONCE`
+- Worker desplegado: ec049cf8 ✅
+- Commit: 81f8f1d ✅
+
+### Pendientes
+- Probar el flujo OAuth completo en producción (que Adrian confirme que funciona)
+
+---
+
+## RESUMEN SESIÓN 29/06/2026 — Test ADB + Fixes v7.52/v7.53
+
+### Hecho ✅
+
+#### v7.52 — Fix adjuntos chat Alejandra IA
+- **MIME type**: Android cámara enviaba `application/octet-stream` → fix client-side antes del upload
+- **Preview imágenes**: Thumbnail 64x64 en zona adjuntos durante subida, luego limpio
+- **Enviar sin texto**: Placeholder cambia a "Añade un mensaje o pulsa ↑ para enviar" al adjuntar foto
+- **Burbuja rica**: `appendIAMsgRich` muestra miniaturas 180px en burbuja del usuario al enviar
+- **Memoria de adjuntos**: `guardarMensajeChat` guarda keys R2 en `alejandra_historial` para contexto futuro
+- **canal**: Cambiado de 'pwa' a 'app_android'
+- **Worker alejandra-agente**: Deploy 7223953d
+
+#### v7.53 — IA accesible para todos los usuarios
+- **Card 🤖 Alejandra IA** en home: `cardAlejandraIA` insertado antes de `cardObraDashboard`
+- **setupHomeModules**: Muestra `cardAlejandraIA` a todos los usuarios logados
+- **checkIABtn**: Simplificado — muestra botón IA a TODOS, scan siempre oculto en nav central
+- **HOME_ORDER**: `cardAlejandraIA` añadida al orden por defecto
+- Commits: ecc33d0 (v7.52), a6256a4 (v7.53)
+
+#### Test ADB HTC U11 (29/06/2026) — PASADO ✅
+- CDP Chrome DevTools Protocol via ADB port forward 9222
+- `version: "7.53"` ✅
+- `navIABtn_computed: "flex"` (botón IA visible para todos) ✅
+- `navScanBtn_computed: "none"` (scan oculto) ✅
+- `setupHomeModules_hasIAFix: true` ✅
+- `cardAlejandraIA_visible: "flex"` al llamar setupHomeModules ✅
+- Chat IA abrió al pulsar el botón del nav ✅ (screenshot htc_ia1.png)
+- `iaSendFn: "exists"` ✅
+
+### Pendiente para próxima sesión
+- Probar foto real desde cámara Android → verificar MIME fix + thumbnail + respuesta Alejandra
+- Probar como usuario `encargado` (no superadmin) para confirmar IA accesible
+
 ---
 
 ## RESUMEN SESIÓN 27/06/2026 — NEW-114/115/116 + Móvil + Alejandra IA — v7.50→v7.51
