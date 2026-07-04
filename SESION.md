@@ -1,9 +1,67 @@
 ## ESTADO ACTUAL
 
 **Sesión:** LIBRE
-**Última sesión:** 04/07/2026 — Fix agente: 7 tools de capacidades_avanzadas inalcanzables cableadas
+**Última sesión:** 04/07/2026 — Fix agente: cadena crítica sin autenticar en /api/chat cerrada
 **Versión actual:** App PWA **v7.54** · worker principal deploy ec049cf8 · commit 81f8f1d
-**Agente (alejandra-agente):** commit b8f26ba desplegado (deploy CI 28707002747, health OK)
+**Agente (alejandra-agente):** commit d357aa7 desplegado (deploy CI 28707537198, health OK)
+---
+
+## RESUMEN SESIÓN 04/07/2026 (continuación 2) — Fix ADMIN_TOKEN hardcodeado + cadena crítica sin autenticar
+
+Tras el fix funcional de la sesión anterior, "arreglala" → aclarado con Adrián en dos pasos
+("Ambas cosas"): arreglar el `ADMIN_TOKEN` hardcodeado en CI, y además cerrar la cadena crítica
+de seguridad sin autenticar documentada como 🔴 abajo.
+
+### ✅ Corregido: `ADMIN_TOKEN` hardcodeado en CI (commit `3622935`)
+- `.github/workflows/deploy-alejandra-agente.yml` hacía `echo "alejandra2026" | wrangler secret
+  put ADMIN_TOKEN` en cada deploy — deshacía el fix de `migrate_003_fix_schema.sql` que lo había
+  quitado "por seguridad" (token público en el historial del repo).
+- Generado nuevo token con `openssl rand -hex 32`, guardado en GitHub Actions secrets
+  (`gh secret set ADMIN_TOKEN`), el step ahora usa `${{ secrets.ADMIN_TOKEN }}` en vez del literal.
+- Seguro de rotar: `/auth/verify-session` ya devolvía `env.ADMIN_TOKEN` dinámicamente — ningún
+  cliente tenía el valor viejo hardcodeado.
+- Deploy CI `28707154226` ✅ health OK.
+
+### ✅ Corregido: cadena crítica sin autenticar en `/api/chat`/`/api/chat/stream` (commit `d357aa7`)
+- **Alcance real, confirmado antes de tocar código**: el routing de experto
+  (`clasificarConHaiku`) decide qué tools recibe Claude solo por el *texto* del mensaje, sin
+  ninguna comprobación de identidad. Casi todos los expertos (`app`, `tecnico`, `reflexion`,
+  `completo`, `ingenieria`) ya incluían `patch_codigo`, `github_escribir`, `ejecutar_deploy`,
+  `rollback`, `escribir_bd`, `consultar_bd`. Y ninguno de esos 6 handlers en `ejecutarTool()`
+  comprobaba identidad — el único gate existente (`TOOLS_PROTEGIDAS`/`esDeveloperAgente`) protegía
+  una generación antigua de nombres de tool (`repo_read_file`, `direct_fix`, `run_migration`...),
+  huérfana respecto a los tools peligrosos actuales. Resultado: cualquiera en internet podía
+  mandar `POST /api/chat {usuario_id:"adrian", mensaje:"..."}` sin token y, si Claude decidía
+  usarlas, conseguir que el agente escribiera/desplegara código o leyera/escribiera la BD
+  compartida de todas las empresas.
+- **Fix**: `/api/chat` y `/api/chat/stream` ahora llaman a `getAuth()` (ya existía, sin usar por
+  el chat — valida `Authorization: Bearer <token>` contra `sesiones`/`ADMIN_TOKEN`) y esa
+  identidad **prima** sobre el `usuario_id` del body. Nuevo helper `filtrarToolsPorAuth()`
+  (worker.js, tras `TOOLS_POR_EXPERTO`) quita `patch_codigo`/`github_escribir`/`ejecutar_deploy`/
+  `rollback` de la lista de tools salvo `esDevVerificado` (identidad real + `esDeveloperAgente`),
+  y quita `consultar_bd`/`escribir_bd` salvo `authOk` (cualquier sesión válida). Gating repetido
+  también dentro de `ejecutarTool()` (defensa en profundidad, por si algún otro flujo llama la
+  tool sin pasar por el filtro de lista).
+- El pipeline autónomo de auto-mejora (cron `reflexion`, disparado por `scheduled()` interno, no
+  por HTTP) mantiene acceso explícito (`authOk=true, esDevVerificado=true` hardcodeado en esa
+  única llamada) porque no es alcanzable por un cliente externo.
+- **Compatibilidad**: la app Flutter ya mandaba `Authorization: Bearer <session_token>` — sin
+  cambios. El panel PWA (`alejandra-panel.html`) tenía el `adminToken` verificado en memoria
+  (requerido para llegar al chat) pero no lo mandaba en `enviarChat()` — parcheado para adjuntarlo.
+- `node --check` OK, diff acotado (worker.js: 70 inserciones/16 borrados; panel: 6 líneas).
+  Commit `d357aa7`, push → CI `28707537198` desplegó y pasó health check.
+
+### Pendientes (bonus detectado durante la investigación, no corregido aún)
+- `/webhook/evento` tiene el mismo patrón de `usuario_id` sin verificar (aunque solo se procesa
+  con IA para `eventosCriticos`) — queda naturalmente mitigado por este fix (`esDevVerificado`
+  por defecto `false` para cualquier llamada que no pase explícitamente por `/api/chat` con
+  token válido), pero no se ha revisado a fondo ese endpoint en sí.
+- Scope de empresa en `consultar_bd`/`escribir_bd` (SQL sigue sin filtrar por `empresa_id` del
+  llamante) — ahora exige sesión válida, pero un usuario autenticado de la empresa A todavía
+  podría consultar/escribir datos de la empresa B si conoce el esquema. No abordado esta sesión.
+- Resto de hallazgos 🟠/🟡 de la auditoría original (rate limiting, SSRF en `test_endpoint`,
+  `/files/<key>` cross-tenant, tests, `ALEJANDRA_AGENTE.txt` desactualizado, ~19 handlers muertos).
+
 ---
 
 ## RESUMEN SESIÓN 04/07/2026 (continuación) — Auditoría del agente + fix tools inalcanzables
