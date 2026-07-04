@@ -1,13 +1,48 @@
 ## ESTADO ACTUAL
 
 **Sesión:** LIBRE
-**Última sesión:** 04/07/2026 — Fix /fcm-token y /api/comandos/* (IDOR) DESPLEGADO. Adrián dio luz
-verde ("hazlo") para fusionar sin esperar más, dando por buena la adopción de v1.9.19+33.
+**Última sesión:** 04/07/2026 — Fix SSRF en `test_endpoint` DESPLEGADO (commit `bbdb644`).
 **Versión actual:** App PWA **v7.54** · worker principal deploy ec049cf8 · commit 81f8f1d
 **App móvil AlejandraIA:** v1.9.19+33 (OTA publicada, commit `b2c7828` en repo alejandra-ia)
-**Agente (alejandra-agente):** commit `acc186a` (merge de `1fc8341`) desplegado en main
-(deploy CI `28715488724`, health OK). Verificado en vivo: `/fcm-token`, `/api/comandos/pendientes`
-y `/api/comandos/resultado` devuelven 401 sin sesión.
+**Agente (alejandra-agente):** commit `bbdb644` desplegado en main (deploy CI `28716533042`,
+health OK). Incluye: fix IDOR fcm-token/comandos (`acc186a`, verificado en vivo con 401 sin
+sesión) + fix SSRF en `test_endpoint` (`bbdb644`, ahora solo dev verificado + whitelist de host).
+---
+
+## RESUMEN SESIÓN 04/07/2026 (continuación 6) — Fix SSRF en test_endpoint — DESPLEGADO
+
+Siguiente punto de la lista tras cerrar el IDOR de fcm-token/comandos. Auditoría: la tool de
+chat `test_endpoint` hacía `fetch(input.url, opts)` con la URL, método y body tal cual los
+mandara el modelo, **sin validar el host ni exigir ningún nivel de sesión** — no estaba en
+`TOOLS_SOLO_DEV_VERIFICADO` ni en `TOOLS_REQUIEREN_SESION`.
+
+Impacto real, no solo teórico: `/webhook/evento` (alcanzable sin autenticar) inyecta el campo
+`datos` del body tal cual dentro del prompt que ve el modelo para los tipos de evento
+"críticos" (`error_critico`, `alerta_seguridad`, `equipo_averiado`). Un atacante podía mandar
+un `datos` con una instrucción de prompt injection pidiendo al modelo que llamara a
+`test_endpoint` con una URL propia y el `body` que quisiera exfiltrar — convirtiendo el Worker
+en un proxy HTTP arbitrario (exfiltración de contexto/conversación, escaneo/abuso contra
+terceros usando la IP y reputación de Cloudflare). Y aunque no hubiera prompt injection,
+cualquier sesión normal (ni siquiera de developer) podía ya pedirle al modelo un test_endpoint
+hacia cualquier sitio.
+
+### ✅ Corregido (commit `bbdb644`, CI `28716533042`, health OK)
+Dos capas:
+1. `test_endpoint` añadida a `TOOLS_SOLO_DEV_VERIFICADO` — ahora requiere sesión verificada de
+   desarrollador, igual que `ejecutar_deploy`/`rollback` (con quienes comparte el flujo de
+   verificación de deploys, ver diagrama al principio del archivo).
+2. Defensa en profundidad, por si una sesión de developer verificado sufre un prompt
+   injection (documento/adjunto malicioso, etc.): nueva `urlPermitidaTestEndpoint()` exige
+   `https:` y que el host sea o termine en `alejandra-app.workers.dev` — su único uso
+   legítimo (comprobar un deploy propio). Cualquier otra URL se rechaza con un mensaje que el
+   modelo puede ver y no reintentar.
+
+El cron de auto-mejora (`worker.js:3366`, única llamada legítima no interactiva que usa esta
+tool) ya pasaba `esDevVerificado=true`, así que no se ha visto afectado.
+
+Siguiente punto de la lista de seguridad: **rate limiting / topes de gasto** (sin protección
+frente a un runaway de coste de API).
+
 ---
 
 ## RESUMEN SESIÓN 04/07/2026 (continuación 5) — Fix /fcm-token y /api/comandos/* (IDOR) — DESPLEGADO
