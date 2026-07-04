@@ -1886,6 +1886,80 @@ function filtrarToolsPorAuth(tools, authOk, esDevVerificado) {
   });
 }
 
+// ── Aislamiento por empresa_id para consultar_bd / escribir_bd ──────────────
+// TOOLS_REQUIEREN_SESION exige una sesión autenticada, pero NO evita que un
+// usuario de la empresa A consulte/escriba datos de la empresa B (la query SQL
+// es texto libre generado por el modelo; solo una convención del prompt pedía
+// filtrar por empresa_id, sin ninguna verificación en código). Este bloque
+// añade una segunda capa: solo permite tablas de negocio conocidas (con
+// empresa_id real en el esquema de producción, auditado 04/07/2026) y exige
+// que la query filtre explícitamente por el empresa_id REAL del que llama
+// (derivado de la sesión, nunca del texto de la query). Se excluyen a propósito
+// `sesiones` y `vincular_tokens` aunque tengan empresa_id: contienen tokens de
+// sesión/vinculación, y leerlos permitiría suplantar a otro usuario de la
+// misma empresa (incluido un admin). esDevVerificado se salta esta capa
+// (mismo criterio que TOOLS_SOLO_DEV_VERIFICADO).
+const TABLAS_EMPRESA_PERMITIDAS = new Set([
+  'ai_usage', 'albaranes', 'alejandra_logs', 'archivos', 'bobinas', 'carnets', 'carpetas',
+  'carretillas', 'chat_alejandra', 'chat_mensajes', 'checklist_plantillas', 'checklist_registros',
+  'docs_dept', 'docs_notas', 'documentos_obra', 'energias_carretilla', 'epi_revisiones',
+  'epis_asignados', 'eventos_calendario', 'fichajes', 'fotos_obra', 'herramientas', 'historial',
+  'historial_carretillas', 'historial_herramientas', 'historial_mantenimientos', 'historial_pemp',
+  'horarios_obra', 'incidencia_fotos', 'incidencias', 'inspecciones_seg', 'inventario_seg',
+  'invitaciones', 'kits_herramientas', 'logs', 'materiales_obra', 'movimientos_seg', 'obras',
+  'partes_trabajo', 'pedidos', 'pemp', 'permisos_trabajo', 'personal_externo',
+  'procedimientos_obra', 'proveedores', 'push_subscriptions', 'reconocimientos_medicos',
+  'repostajes', 'sugerencias', 'sync_dispositivos', 'sync_eventos', 'tipos_cable',
+  'tipos_carretilla', 'tipos_herramienta', 'tipos_material_seg', 'tipos_pemp', 'turnos', 'usuarios',
+]);
+const COLUMNA_BLOQUEADA_BD = /\bpassword_hash\b/i;
+
+function extraerTablasQuery(query) {
+  const tablas = new Set();
+  const patrones = [/\bFROM\s+([a-zA-Z_][a-zA-Z0-9_]*)/gi, /\bJOIN\s+([a-zA-Z_][a-zA-Z0-9_]*)/gi, /\bINTO\s+([a-zA-Z_][a-zA-Z0-9_]*)/gi, /\bUPDATE\s+([a-zA-Z_][a-zA-Z0-9_]*)/gi];
+  for (const re of patrones) {
+    let m;
+    while ((m = re.exec(query)) !== null) tablas.add(m[1].toLowerCase());
+  }
+  return [...tablas];
+}
+
+// Devuelve null si la query es válida para un usuario no-developer, o un string
+// con el motivo de rechazo (que el modelo verá como resultado de la tool y puede
+// usar para corregir su siguiente intento, igual que los demás errores de consultar_bd/escribir_bd).
+function validarScopeEmpresaBD(query, params, empresaId, esDevVerificado) {
+  if (esDevVerificado) return null;
+  if (COLUMNA_BLOQUEADA_BD.test(query)) {
+    return 'Consulta rechazada: no se permite acceder a columnas sensibles (password_hash) sin sesión de desarrollador verificada.';
+  }
+  const tablas = extraerTablasQuery(query);
+  if (tablas.length === 0) {
+    return 'Consulta rechazada: no se pudo determinar la tabla de la consulta.';
+  }
+  for (const t of tablas) {
+    if (!TABLAS_EMPRESA_PERMITIDAS.has(t)) {
+      return `Consulta rechazada: la tabla "${t}" no está permitida sin sesión de desarrollador verificada.`;
+    }
+  }
+  const literal = query.match(/\bempresa_id\s*=\s*'?(\d+)'?/i);
+  if (literal) {
+    if (String(parseInt(literal[1], 10)) !== String(parseInt(empresaId, 10))) {
+      return 'Consulta rechazada: el filtro empresa_id no coincide con tu empresa.';
+    }
+    return null;
+  }
+  const posPlaceholder = query.search(/\bempresa_id\s*=\s*\?/i);
+  if (posPlaceholder !== -1) {
+    const idx = (query.slice(0, posPlaceholder).match(/\?/g) || []).length;
+    const valor = (params || [])[idx];
+    if (valor === undefined || String(parseInt(valor, 10)) !== String(parseInt(empresaId, 10))) {
+      return 'Consulta rechazada: el valor pasado en params para empresa_id no coincide con tu empresa (o falta).';
+    }
+    return null;
+  }
+  return 'Consulta rechazada: debes filtrar explícitamente por empresa_id (ej. AND empresa_id = ?).';
+}
+
 // ── Normalización de usuario_id (CRÍTICO: unifica identidad cross-canal) ─────
 // Android manda "3", PWA manda "Adrian", panel manda "3.0" → todos son el mismo usuario
 // Sin esto, Alejandra cree que habla con 6 personas distintas
@@ -2464,8 +2538,12 @@ export default {
           const contexto = await obtenerContextoChat(env, uid, eid || 'default', 4);
           const prompt = `[EVENTO CRÍTICO] Tipo: ${tipo}, Usuario: ${uid}, Datos: ${JSON.stringify(datos || {})}. Evalúa si necesitas enviar alerta urgente.`;
           const timeout = new Promise(resolve => setTimeout(() => resolve({ texto: 'Timeout.' }), 15000));
+          // Este webhook no tiene ninguna verificación de identidad (usuario_id/empresa_id
+          // vienen del body sin token) — es alcanzable desde internet sin autenticar.
+          // authOk/esDevVerificado explícitos en false para que filtrarToolsPorAuth()
+          // no ofrezca consultar_bd/escribir_bd ni las tools de dev en este flujo.
           const respuesta = await Promise.race([
-            procesarConNEXUS(env, prompt, contexto, uid, eid || 'default', 'app_android'),
+            procesarConNEXUS(env, prompt, contexto, uid, eid || 'default', 'app_android', undefined, undefined, undefined, undefined, undefined, false, false),
             timeout
           ]);
           return json({ ok: true, tipo, respuesta: respuesta.texto?.substring(0, 500) });
@@ -2485,8 +2563,10 @@ export default {
         const timeout = new Promise(resolve =>
           setTimeout(() => resolve({ texto: 'Tiempo de procesamiento agotado.' }), 23000)
         );
+        // Igual que /webhook/evento: ruta sin autenticación, alcanzable desde
+        // internet — nunca dar por buena la identidad, authOk/esDevVerificado en false.
         const respuesta = await Promise.race([
-          procesarConNEXUS(env, mensaje, contexto, 'getaway', 'getaway'),
+          procesarConNEXUS(env, mensaje, contexto, 'getaway', 'getaway', undefined, undefined, undefined, undefined, undefined, undefined, false, false),
           timeout
         ]);
 
@@ -3385,7 +3465,7 @@ async function seedDefaultAlerts(env) {
   }
 }
 
-async function procesarConNEXUS(env, mensaje, contexto, usuario_id, empresa_id, canal, adjuntos, rol=null, pantalla=null, dom_actual=null, usuario_label=null, authOk=true, esDevVerificado=false) {
+async function procesarConNEXUS(env, mensaje, contexto, usuario_id, empresa_id, canal, adjuntos, rol=null, pantalla=null, dom_actual=null, usuario_label=null, authOk=false, esDevVerificado=false) {
   if (!env.ANTHROPIC_API_KEY) {
     return { texto: 'Error: ANTHROPIC_API_KEY no configurada.', acciones: [], requiere_confirmacion: false };
   }
@@ -3483,7 +3563,7 @@ async function procesarConNEXUS(env, mensaje, contexto, usuario_id, empresa_id, 
 }
 
 // ── NEXUS con streaming SSE ───────────────────────────────────────────────────
-async function procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empresa_id, send, canal, adjuntos, rol=null, pantalla=null, dom_actual=null, usuario_label=null, authOk=true, esDevVerificado=false, getClienteDesconectado = () => false) {
+async function procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empresa_id, send, canal, adjuntos, rol=null, pantalla=null, dom_actual=null, usuario_label=null, authOk=false, esDevVerificado=false, getClienteDesconectado = () => false) {
   if (!env.ANTHROPIC_API_KEY) {
     await send({ type: 'error', mensaje: 'ANTHROPIC_API_KEY no configurada.' });
     return { texto: 'Error: sin clave API.', herramientas_usadas: [] };
@@ -5073,6 +5153,9 @@ ${input.codigo_sugerido ? `CÓDIGO SUGERIDO:\n${input.codigo_sugerido}` : ''}`;
           return 'Consulta rechazada: contiene operaciones de escritura no permitidas.';
         }
         const params = input.params || [];
+        // Aislamiento multi-empresa (ver TABLAS_EMPRESA_PERMITIDAS más arriba).
+        const rechazo = validarScopeEmpresaBD(query, params, empresa_id, esDevVerificado);
+        if (rechazo) return rechazo;
         const stmt = env.DB.prepare(query);
         const result = params.length > 0 ? await stmt.bind(...params).all() : await stmt.all();
         const rows = result.results || [];
@@ -5422,6 +5505,9 @@ ${input.codigo_sugerido ? `CÓDIGO SUGERIDO:\n${input.codigo_sugerido}` : ''}`;
           return 'Solo se permiten INSERT, UPDATE, DELETE o REPLACE.';
         }
         const params = input.params || [];
+        // Aislamiento multi-empresa (ver TABLAS_EMPRESA_PERMITIDAS más arriba).
+        const rechazo = validarScopeEmpresaBD(query, params, empresa_id, esDevVerificado);
+        if (rechazo) return rechazo;
         const stmt = env.DB.prepare(query);
         const result = params.length > 0 ? await stmt.bind(...params).run() : await stmt.run();
         return `Operación ejecutada correctamente. Filas afectadas: ${result.meta?.changes || 0}`;
