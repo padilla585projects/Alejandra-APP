@@ -1,12 +1,8 @@
 ## ESTADO ACTUAL
 
 **Sesion:** LIBRE
-**Ultima sesion:** 05/07/2026 -- Fix version desincronizada del agente (v6.03 cabecera vs
-6.12 /health -> ambas ahora v6.13, commit a27d650 + doc a27d650/74f686e). Antes: reescritura
-completa de ALEJANDRA_AGENTE.txt (commit 60ae56e, doc-only, sin deploy). Antes de eso: primera
-cobertura de tests para alejandra-agente (lib.js + vitest, commit 93d0d3a). PWA panel: fix
-errores consola + Google OAuth restaurado (commit 942bde3, ver seccion de abajo).
-**Version actual:** App PWA **v7.55** -- commit 942bde3
+**Ultima sesion:** 05/07/2026 -- Modulo de Planos Tecnicos (v7.56, commit 5f2b226).
+**Version actual:** App PWA **v7.56** -- commit 5f2b226
 **Agente (alejandra-agente):** commit a27d650 desplegado en main (deploy CI 28739993149,
 health OK, /health ahora devuelve "6.13" -- version propia del agente, ver seccion de abajo).
 Incluye tests automatizados (37 tests, vitest) que corren en el workflow
@@ -163,6 +159,48 @@ futura usar `@cloudflare/vitest-pool-workers` para tests de integracion via SELF
 si se decide ampliar cobertura mas adelante.
 
 Siguiente punto de la lista: **documentacion desactualizada de ALEJANDRA_AGENTE.txt**.
+
+---
+
+## RESUMEN SESION 05/07/2026 (continuacion 14) -- Modulo Planos Tecnicos SVG v7.56
+
+### Lo que se hizo
+Implementacion completa del modulo de generacion de planos tecnicos SVG via Claude Sonnet.
+
+#### Backend (worker.js) -- commit 5f2b226
+- 2 nuevas tools IA en AI_TOOLS: `generar_plano` y `listar_planos`
+- 2 nuevos cases en executeAITool switch
+- 5 nuevas rutas REST:
+  - GET /planos (lista)
+  - POST /planos/generar (genera via IA)
+  - GET /planos/:id (detalle JSON)
+  - GET /planos/:id/svg (SVG raw para visor/descarga)
+  - DELETE /planos/:id
+- 7 nuevas funciones: _ensurePlanosTable, _PLANO_PROMPTS, _generarPlanoInterno,
+  listarPlanosREST, generarPlanoREST, getPlano, getPlanoSvg, eliminarPlano
+- Registro automatico de uso de IA en tabla ai_usage
+- Prompts de sistema especializados por tipo de plano:
+  * planta: arquitectura con paredes, puertas, ventanas, cotas, norte, titulo
+  * electrico: esquema IEC con simbolos SVG, colores de fase, bornes numerados
+  * mecanico: vistas ortograficas, lineas de centro/ocultas, cotas DIN, BOM
+  * gantt: diagrama de barras con fases coloreadas, progreso, hitos, linea HOY
+
+#### Base de datos
+- migrate_planos.sql creado y aplicado en produccion con --remote
+- Tabla planos: id, empresa_id, usuario_id, tipo, titulo, descripcion, svg_data, metadatos, timestamps
+- Indices por empresa_id y (empresa_id, tipo)
+
+#### Versiones
+- 7.55 -> 7.56 en version.json, sw.js, index.html
+
+#### Deploy
+- Worker desplegado: Version ID 2b46ccec-3fe2-42f7-899a-761bfd8390e5
+- D1 migrado: 3 queries, 4 rows written, DB size 2.72 MB
+
+### Pendiente (Parte B y C del modulo)
+- panel.html: pagina "Planos" con visor SVG + filtros + boton generar + descarga PDF
+- Editor de planos en el navegador (capa de edicion interactiva sobre el SVG)
+- Exploracion de API DXF/CAD gratuita para exportacion vectorial avanzada
 
 ---
 
