@@ -821,6 +821,9 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
     <button class="nav-item" data-page="rdpRegistros" onclick="navTo('rdpRegistros')">
       <span class="nav-icon">📋</span> Registro Diario PRL
     </button>
+    <button class="nav-item" data-page="planos" onclick="navTo('planos')">
+      <span class="nav-icon">📐</span> Planos IA
+    </button>
     <div class="sidebar-section nav-admin-section" onclick="sidebarToggle(this)" data-sid="admin" style="display:none">Admin</div>
     <button class="nav-item nav-admin" data-page="usuarios" onclick="navTo('usuarios')" style="display:none">
       <span class="nav-icon">👤</span> Usuarios
@@ -8831,6 +8834,114 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
         <div id="graficasEmpty" style="display:none" class="empty-state"><div class="empty-icon">📊</div><div class="empty-text">Sin datos suficientes para mostrar gráficas</div></div>
       </div>
 
+      <!-- ═══════════════════════════════════════════════════════════
+           PLANOS TECNICOS IA
+           ═══════════════════════════════════════════════════════════ -->
+      <div class="page" id="pagePlanos">
+        <div style="display:flex;align-items:center;gap:14px;margin-bottom:6px;flex-wrap:wrap">
+          <div class="page-title" style="margin-bottom:0">📐 Planos Técnicos IA</div>
+          <button class="btn btn-primary" onclick="abrirModalGenerarPlano()">✨ Generar plano</button>
+          <button class="btn btn-secondary" onclick="cargarPlanos()">🔄 Actualizar</button>
+        </div>
+        <div class="page-sub">Planos técnicos SVG generados por Alejandra IA — editables y descargables</div>
+
+        <!-- Filtros -->
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin:14px 0 18px;align-items:center">
+          <select id="planosFiltroTipo" onchange="cargarPlanos()"
+                  style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;background:var(--surface2);color:var(--text)">
+            <option value="">📐 Todos los tipos</option>
+            <option value="planta">🏗 Plano de planta/obra</option>
+            <option value="electrico">⚡ Esquema eléctrico</option>
+            <option value="mecanico">⚙️ Plano mecánico</option>
+            <option value="gantt">📅 Diagrama de Gantt</option>
+          </select>
+          <input id="planosBuscar" type="text" placeholder="🔍 Buscar por título..."
+                 oninput="filtrarPlanosLocal()"
+                 style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;background:var(--surface2);color:var(--text);min-width:200px;flex:1">
+          <span id="planosCount" style="font-size:12px;color:var(--muted);white-space:nowrap"></span>
+        </div>
+
+        <!-- Grid de planos -->
+        <div id="planosGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px"></div>
+        <div id="planosEmpty" style="display:none" class="empty-state">
+          <div class="empty-icon">📐</div>
+          <div class="empty-text">No hay planos generados todavía.</div>
+          <div style="margin-top:10px">
+            <button class="btn btn-primary" onclick="abrirModalGenerarPlano()">✨ Generar el primer plano</button>
+          </div>
+        </div>
+
+        <!-- ── MODAL GENERAR PLANO ────────────────────────────────── -->
+        <div class="modal-overlay" id="modalGenerarPlano" style="display:none" onclick="if(event.target===this)cerrarModalGenerarPlano()">
+          <div class="modal-box" style="max-width:620px;max-height:92vh;overflow-y:auto">
+            <div class="modal-header">
+              <h3>✨ Generar Plano Técnico</h3>
+              <button class="modal-close" onclick="cerrarModalGenerarPlano()">✕</button>
+            </div>
+            <div class="modal-body" style="display:flex;flex-direction:column;gap:14px;padding:20px">
+
+              <div>
+                <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px">Tipo de plano *</label>
+                <select id="genPlanoTipo" onchange="actualizarEjemploPlano()"
+                        style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;background:var(--surface2);color:var(--text)">
+                  <option value="planta">🏗 Plano de planta / obra</option>
+                  <option value="electrico">⚡ Esquema eléctrico</option>
+                  <option value="mecanico">⚙️ Plano mecánico / industrial</option>
+                  <option value="gantt">📅 Diagrama de Gantt / fases</option>
+                </select>
+              </div>
+
+              <div>
+                <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px">Título del plano *</label>
+                <input id="genPlanoTitulo" type="text" placeholder="Ej: Plano Planta Baja Nave A"
+                       style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;background:var(--surface2);color:var(--text);box-sizing:border-box">
+              </div>
+
+              <div>
+                <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px">Descripción detallada *</label>
+                <div id="genPlanoEjemplo" style="font-size:11px;color:var(--muted);background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;margin-bottom:6px;line-height:1.5"></div>
+                <textarea id="genPlanoDesc" rows="6" placeholder="Describe el contenido del plano..."
+                          style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;background:var(--surface2);color:var(--text);resize:vertical;box-sizing:border-box;font-family:inherit"></textarea>
+              </div>
+
+              <div id="genPlanoStatus" style="display:none;text-align:center;padding:16px">
+                <div style="font-size:28px;margin-bottom:8px">⚙️</div>
+                <div style="font-size:14px;color:var(--text);font-weight:600">Alejandra está generando el plano...</div>
+                <div style="font-size:12px;color:var(--muted);margin-top:6px">Esto puede tardar 20-40 segundos</div>
+                <div class="spinner" style="margin:14px auto;width:32px;height:32px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin 1s linear infinite"></div>
+              </div>
+
+              <div id="genPlanoResult" style="display:none">
+                <div style="background:#0f2a1a;border:1px solid #1d6a3a;border-radius:8px;padding:12px 16px;color:#4ade80;font-size:13px"></div>
+              </div>
+
+              <div id="genPlanoActions" style="display:flex;gap:8px;justify-content:flex-end">
+                <button class="btn btn-secondary" onclick="cerrarModalGenerarPlano()">Cancelar</button>
+                <button class="btn btn-primary" id="btnGenerar" onclick="ejecutarGenerarPlano()">✨ Generar</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── MODAL VISOR SVG ───────────────────────────────────── -->
+        <div class="modal-overlay" id="modalVisorPlano" style="display:none" onclick="if(event.target===this)cerrarVisorPlano()">
+          <div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;width:95vw;max-width:1200px;height:92vh;display:flex;flex-direction:column;overflow:hidden">
+            <div class="modal-header" style="padding:14px 18px;flex-shrink:0">
+              <h3 id="visorPlanoTitulo" style="font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:60%">Visor de Plano</h3>
+              <div style="display:flex;gap:8px;align-items:center;flex-shrink:0">
+                <button class="btn btn-secondary btn-sm" onclick="descargarSvgPlano()">⬇ SVG</button>
+                <button class="btn btn-secondary btn-sm" onclick="imprimirPlano()">🖨️ PDF/Imprimir</button>
+                <button class="modal-close" onclick="cerrarVisorPlano()">✕</button>
+              </div>
+            </div>
+            <div id="visorPlanoContenido" style="flex:1;overflow:auto;padding:12px;background:#1a1a2e;display:flex;align-items:flex-start;justify-content:center">
+              <!-- SVG se inyecta aquí -->
+            </div>
+          </div>
+        </div>
+
+      </div><!-- /pagePlanos -->
+
     </div><!-- /content -->
   </div><!-- /mainArea -->
 </div><!-- /appShell -->
@@ -8986,6 +9097,7 @@ function apiRaw(path, opts = {}) {
   if (TOKEN) headers['X-Token'] = TOKEN;
   return fetch(API + path, { ...opts, headers });
 }
+const apiFetch = apiRaw; // alias — varios módulos usan este nombre
 
 function panelLog(nivel, mensaje, detalle = '') {
   const entry = { ts: new Date().toISOString(), nivel, mensaje, detalle };
@@ -9585,6 +9697,7 @@ const PAGE_TITLES = {
     cronogramaPagos:    '💳 Cronograma de Pagos / Payment Schedule',
     rdpRegistros:       '📋 Registro Diario de Prevención (RdP) — Ley 31/1995',
     libroSubcontratacion: '📖 Libro de Subcontratación / Subcontractor Register (Ley 32/2006)',
+    planos: '📐 Planos Técnicos IA',
 };
 
 const PAGE_LOADERS = {
@@ -9702,6 +9815,7 @@ const PAGE_LOADERS = {
     cronogramaPagos:    (...a) => cargarCronogramaPagos(...a),
     rdpRegistros:       (...a) => cargarRdpRegistros(...a),
     libroSubcontratacion: (...a) => cargarLibroSubcontratacion(...a),
+    planos: (...a) => cargarPlanos(...a),
 };
 
 let currentPage = '';
@@ -31430,6 +31544,268 @@ async function eliminarRdp(id) {
 }
 
 function cerrarModalRdp() { document.getElementById('modalRdp').style.display='none'; }
+
+// ═══════════════════════════════════════════════════════════════════
+// PLANOS TECNICOS IA
+// ═══════════════════════════════════════════════════════════════════
+
+let _planosData = [];
+let _visorPlanoId = null;
+let _visorSvgData = '';
+
+const _PLANO_TIPO_META = {
+  planta:    { emoji:'🏗', label:'Plano de planta', color:'#1e88e5' },
+  electrico: { emoji:'⚡', label:'Esquema eléctrico', color:'#e53935' },
+  mecanico:  { emoji:'⚙️', label:'Plano mecánico', color:'#43a047' },
+  gantt:     { emoji:'📅', label:'Diagrama Gantt', color:'#8e24aa' },
+};
+
+const _PLANO_EJEMPLOS = {
+  planta: 'Ejemplo: "Nave industrial de 40x20m con zona de recepción (5x10), taller principal (25x20), almacén (10x20), vestuarios (5x5) y oficina (5x5). Dos puertas de acceso de 4m. Pilares cada 5m. Escala 1:200."',
+  electrico: 'Ejemplo: "Cuadro general nave: acometida trifásica 400V, IGA 125A, 3 circuitos: motor compresor 15kW (Q1+F1+K1+M1), alumbrado nave 2x18kW (Q2+F2), enchufes trifásicos (Q3+F3). Tierra PE. Leyenda de componentes."',
+  mecanico: 'Ejemplo: "Soporte de rodamiento: vistas alzado frontal, planta y perfil derecho. Cuerpo rectangular 120x80x60mm, taladro pasante Ø40 en centro, 4 agujeros M8 esquinas. Material: acero F-114. Tolerancia general ±0.1."',
+  gantt: 'Ejemplo: "Obra Nave Industrial - 12 semanas: Fase 1 Cimentación (sem 1-3, 100%), Fase 2 Estructura (sem 2-6, 60%), Fase 3 Cubierta (sem 5-8, 0%), Fase 4 Instalaciones (sem 7-11, 0%), Fase 5 Acabados (sem 10-12, 0%). Hito: Acta de recepción sem 12."'
+};
+
+async function cargarPlanos() {
+  const grid  = document.getElementById('planosGrid');
+  const empty = document.getElementById('planosEmpty');
+  const count = document.getElementById('planosCount');
+  if (!grid) return;
+  const tipo = document.getElementById('planosFiltroTipo')?.value || '';
+  grid.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:20px">Cargando...</div>';
+  empty.style.display = 'none';
+  try {
+    let path = '/planos';
+    if (tipo) path += '?tipo=' + tipo;
+    const res = await apiRaw(path);
+    const d   = await res.json();
+    if (!res.ok) throw new Error(d.error || 'Error');
+    _planosData = d.planos || [];
+    renderPlanosGrid(_planosData);
+    count.textContent = _planosData.length + ' plano' + (_planosData.length !== 1 ? 's' : '');
+  } catch(e) {
+    grid.innerHTML = '<div style="color:#f87171;font-size:13px;padding:20px">Error: ' + e.message + '</div>';
+  }
+}
+
+function filtrarPlanosLocal() {
+  const q = (document.getElementById('planosBuscar')?.value || '').toLowerCase().trim();
+  const filtered = q ? _planosData.filter(p => (p.titulo||'').toLowerCase().includes(q) || (p.descripcion||'').toLowerCase().includes(q)) : _planosData;
+  renderPlanosGrid(filtered);
+  const count = document.getElementById('planosCount');
+  if (count) count.textContent = filtered.length + ' plano' + (filtered.length !== 1 ? 's' : '');
+}
+
+function renderPlanosGrid(lista) {
+  const grid  = document.getElementById('planosGrid');
+  const empty = document.getElementById('planosEmpty');
+  if (!grid) return;
+  if (!lista.length) {
+    grid.innerHTML = '';
+    empty.style.display = 'flex';
+    return;
+  }
+  empty.style.display = 'none';
+  grid.innerHTML = lista.map(p => {
+    const m    = _PLANO_TIPO_META[p.tipo] || { emoji:'📐', label:p.tipo, color:'#64748b' };
+    const fecha = p.creado_en ? new Date(p.creado_en + (p.creado_en.includes('Z')?'':'Z')).toLocaleDateString('es-ES') : '—';
+    const desc = (p.descripcion || '').slice(0, 120) + ((p.descripcion||'').length > 120 ? '…' : '');
+    return `
+      <div class="section-card" style="display:flex;flex-direction:column;gap:10px;position:relative;cursor:default">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="background:${m.color};color:#fff;border-radius:6px;padding:3px 9px;font-size:11px;font-weight:700;white-space:nowrap">${m.emoji} ${m.label}</span>
+          <span style="font-size:11px;color:var(--muted);margin-left:auto;white-space:nowrap">${fecha}</span>
+        </div>
+        <div style="font-weight:700;font-size:14px;color:var(--text);line-height:1.3">${escHtml(p.titulo)}</div>
+        ${desc ? `<div style="font-size:12px;color:var(--muted);line-height:1.5">${escHtml(desc)}</div>` : ''}
+        <div style="display:flex;gap:6px;margin-top:auto;flex-wrap:wrap">
+          <button class="btn btn-primary btn-sm" onclick="verPlano(${p.id})">👁 Ver</button>
+          <button class="btn btn-secondary btn-sm" onclick="descargarSvgPlanoId(${p.id})">⬇ SVG</button>
+          <button class="btn btn-secondary btn-sm" onclick="verImprimirPlanoId(${p.id})">🖨️ PDF</button>
+          <button class="btn btn-secondary btn-sm" style="margin-left:auto;color:#f87171;border-color:#f87171" onclick="eliminarPlanoId(${p.id},'${escHtml(p.titulo).replace(/'/g,"\\'")}')">🗑</button>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function escHtml(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function abrirModalGenerarPlano() {
+  document.getElementById('genPlanoTipo').value = 'planta';
+  document.getElementById('genPlanoTitulo').value = '';
+  document.getElementById('genPlanoDesc').value = '';
+  document.getElementById('genPlanoStatus').style.display = 'none';
+  document.getElementById('genPlanoResult').style.display = 'none';
+  document.getElementById('genPlanoActions').style.display = 'flex';
+  document.getElementById('btnGenerar').disabled = false;
+  actualizarEjemploPlano();
+  document.getElementById('modalGenerarPlano').style.display = 'flex';
+}
+
+function cerrarModalGenerarPlano() {
+  document.getElementById('modalGenerarPlano').style.display = 'none';
+}
+
+function actualizarEjemploPlano() {
+  const tipo = document.getElementById('genPlanoTipo')?.value || 'planta';
+  const ej   = document.getElementById('genPlanoEjemplo');
+  if (ej) ej.textContent = _PLANO_EJEMPLOS[tipo] || '';
+}
+
+async function ejecutarGenerarPlano() {
+  const tipo  = document.getElementById('genPlanoTipo').value;
+  const titulo = document.getElementById('genPlanoTitulo').value.trim();
+  const desc   = document.getElementById('genPlanoDesc').value.trim();
+  if (!titulo) { toast('Introduce un título para el plano', 'error'); return; }
+  if (!desc)   { toast('Describe el contenido del plano', 'error'); return; }
+
+  document.getElementById('genPlanoStatus').style.display = 'block';
+  document.getElementById('genPlanoResult').style.display = 'none';
+  document.getElementById('genPlanoActions').style.display = 'none';
+
+  try {
+    const res = await apiRaw('/planos/generar', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tipo, titulo, descripcion: desc })
+    });
+    const d = await res.json();
+    document.getElementById('genPlanoStatus').style.display = 'none';
+    if (!res.ok) throw new Error(d.error || 'Error');
+
+    const resultDiv = document.getElementById('genPlanoResult');
+    resultDiv.style.display = 'block';
+    resultDiv.querySelector('div').innerHTML =
+      '<b>✅ ¡Plano generado!</b><br>' + escHtml(d.mensaje || 'Plano creado con ID ' + d.id);
+
+    // Botones post-generación
+    document.getElementById('genPlanoActions').innerHTML =
+      `<button class="btn btn-primary" onclick="verPlano(${d.id});cerrarModalGenerarPlano()">👁 Ver plano</button>` +
+      `<button class="btn btn-secondary" onclick="cerrarModalGenerarPlano()">Cerrar</button>`;
+    document.getElementById('genPlanoActions').style.display = 'flex';
+    cargarPlanos();
+  } catch(e) {
+    document.getElementById('genPlanoStatus').style.display = 'none';
+    document.getElementById('genPlanoActions').innerHTML =
+      `<button class="btn btn-secondary" onclick="cerrarModalGenerarPlano()">Cerrar</button>` +
+      `<button class="btn btn-primary" id="btnGenerar" onclick="ejecutarGenerarPlano()">🔁 Reintentar</button>`;
+    document.getElementById('genPlanoActions').style.display = 'flex';
+    const resultDiv = document.getElementById('genPlanoResult');
+    resultDiv.style.display = 'block';
+    resultDiv.querySelector('div').style.background = '#2a0f0f';
+    resultDiv.querySelector('div').style.borderColor = '#7f1d1d';
+    resultDiv.querySelector('div').style.color = '#f87171';
+    resultDiv.querySelector('div').textContent = '❌ Error: ' + e.message;
+  }
+}
+
+async function verPlano(id) {
+  const visor = document.getElementById('modalVisorPlano');
+  const cont  = document.getElementById('visorPlanoContenido');
+  const titulo = document.getElementById('visorPlanoTitulo');
+  visor.style.display = 'flex';
+  cont.innerHTML = '<div style="color:var(--muted);padding:40px;font-size:14px">Cargando SVG...</div>';
+  _visorPlanoId = id;
+  _visorSvgData = '';
+  try {
+    const res = await apiRaw('/planos/' + id + '/svg');
+    if (!res.ok) throw new Error('No encontrado');
+    const svg = await res.text();
+    _visorSvgData = svg;
+    // Buscar título en _planosData
+    const p = _planosData.find(x => x.id === id);
+    if (titulo) titulo.textContent = (p ? p.titulo : 'Plano #' + id);
+    // Inyectar SVG con max-width para que quepa en la ventana
+    const wrapper = document.createElement('div');
+    wrapper.style.cssText = 'max-width:100%;overflow:auto';
+    wrapper.innerHTML = svg;
+    // Ajustar SVG para que sea responsive
+    const svgEl = wrapper.querySelector('svg');
+    if (svgEl) {
+      svgEl.style.maxWidth = '100%';
+      svgEl.style.height = 'auto';
+      if (!svgEl.getAttribute('viewBox') && svgEl.getAttribute('width') && svgEl.getAttribute('height')) {
+        svgEl.setAttribute('viewBox', '0 0 ' + svgEl.getAttribute('width') + ' ' + svgEl.getAttribute('height'));
+      }
+    }
+    cont.innerHTML = '';
+    cont.appendChild(wrapper);
+  } catch(e) {
+    cont.innerHTML = '<div style="color:#f87171;padding:40px;font-size:13px">Error al cargar el plano: ' + e.message + '</div>';
+  }
+}
+
+function cerrarVisorPlano() {
+  document.getElementById('modalVisorPlano').style.display = 'none';
+  _visorPlanoId = null;
+  _visorSvgData = '';
+}
+
+function descargarSvgPlano() {
+  if (!_visorSvgData) { toast('No hay SVG cargado', 'error'); return; }
+  const p = _planosData.find(x => x.id === _visorPlanoId);
+  const nombre = (p ? p.titulo : 'plano') + '.svg';
+  const blob = new Blob([_visorSvgData], { type: 'image/svg+xml' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url; a.download = nombre; a.click();
+  URL.revokeObjectURL(url);
+}
+
+async function descargarSvgPlanoId(id) {
+  try {
+    const res = await apiRaw('/planos/' + id + '/svg');
+    if (!res.ok) throw new Error('Error');
+    const svg   = await res.text();
+    const p     = _planosData.find(x => x.id === id);
+    const nombre = (p ? p.titulo : 'plano-' + id) + '.svg';
+    const blob  = new Blob([svg], { type: 'image/svg+xml' });
+    const url   = URL.createObjectURL(blob);
+    const a     = document.createElement('a');
+    a.href = url; a.download = nombre; a.click();
+    URL.revokeObjectURL(url);
+  } catch(e) { toast('Error descargando SVG: ' + e.message, 'error'); }
+}
+
+function imprimirPlano() {
+  if (!_visorSvgData) { toast('No hay SVG cargado', 'error'); return; }
+  const win = window.open('', '_blank');
+  if (!win) { toast('Activa las ventanas emergentes para imprimir', 'error'); return; }
+  win.document.write(`<!DOCTYPE html><html><head><title>Plano</title>
+    <style>body{margin:0;padding:0}svg{max-width:100%;height:auto;display:block}</style></head>
+    <body>${_visorSvgData}</body></html>`);
+  win.document.close();
+  win.onload = () => { win.focus(); win.print(); };
+}
+
+async function verImprimirPlanoId(id) {
+  try {
+    const res = await apiRaw('/planos/' + id + '/svg');
+    if (!res.ok) throw new Error('Error');
+    const svg = await res.text();
+    const win = window.open('', '_blank');
+    if (!win) { toast('Activa las ventanas emergentes para imprimir', 'error'); return; }
+    win.document.write(`<!DOCTYPE html><html><head><title>Plano</title>
+      <style>body{margin:0;padding:0}svg{max-width:100%;height:auto;display:block}</style></head>
+      <body>${svg}</body></html>`);
+    win.document.close();
+    win.onload = () => { win.focus(); win.print(); };
+  } catch(e) { toast('Error: ' + e.message, 'error'); }
+}
+
+async function eliminarPlanoId(id, titulo) {
+  if (!confirm('¿Eliminar el plano "' + titulo + '"? Esta acción no se puede deshacer.')) return;
+  try {
+    const res = await apiRaw('/planos/' + id, { method: 'DELETE' });
+    const d   = await res.json();
+    if (!res.ok) throw new Error(d.error || 'Error');
+    toast('Plano eliminado', 'ok');
+    cargarPlanos();
+  } catch(e) { toast('Error: ' + e.message, 'error'); }
+}
 
 </script>
 

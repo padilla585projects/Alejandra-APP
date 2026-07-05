@@ -2138,7 +2138,7 @@ export default {
       // ── Admin: ejecutar migración de nuevas tablas ───────────────────────
       if (path === '/admin/migrate' && req.method === 'POST') {
         const { token } = await req.json().catch(() => ({}));
-        if (!(await verificarAdminToken(env, token))) return json({ error: 'No autorizado' }, 403);
+        if (!(await verificarAdminToken(env, token, req))) return json({ error: 'No autorizado' }, 403);
         try {
           await env.DB.prepare(`CREATE TABLE IF NOT EXISTS conversacion_resumen (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -2162,7 +2162,7 @@ export default {
       if (path.startsWith('/conocimiento')) {
         const adminToken = req.headers.get('Authorization')?.replace('Bearer ', '')
           || req.headers.get('X-Token');
-        let autorizado = await verificarAdminToken(env, adminToken);
+        let autorizado = await verificarAdminToken(env, adminToken, req);
         if (!autorizado && adminToken) {
           // Aceptar token de sesión de superadmin/desarrollador (DB compartida con el worker de login).
           // Permite gestionar el conocimiento desde la app sin canjear antes el ADMIN_TOKEN.
@@ -2240,7 +2240,7 @@ export default {
       // ── Reflexión manual — Alejandra piensa sobre sí misma ───────────────
       if (path === '/api/reflexion' && req.method === 'POST') {
         const { token } = await req.json();
-        if (!(await verificarAdminToken(env, token))) return json({ error: 'No autorizado' }, 403);
+        if (!(await verificarAdminToken(env, token, req))) return json({ error: 'No autorizado' }, 403);
         ctx.waitUntil(ejecutarReflexion(env));
         return json({ ok: true, mensaje: 'Reflexión iniciada en background' });
       }
@@ -2403,7 +2403,22 @@ export default {
             "SELECT s.rol, u.nombre FROM sesiones s LEFT JOIN usuarios u ON u.id = s.usuario_id WHERE s.token = ? AND s.rol IN ('superadmin','desarrollador') LIMIT 1"
           ).bind(session_token).first();
           if (!sesion) return json({ error: 'Sesión no válida o sin permisos' }, 403);
-          return json({ ok: true, token: env.ADMIN_TOKEN, nombre: sesion.nombre || 'Admin' });
+          // Fix continuación 14 (hallazgo #2): antes se devolvía env.ADMIN_TOKEN en texto
+          // plano aquí -- si esta respuesta se filtraba (XSS, log, sesión interceptada),
+          // el atacante se quedaba con el secreto ADMIN_TOKEN, estático y sin expirar,
+          // mucho más duradero que la propia sesión robada que lo obtuvo. Ahora se emite
+          // un token efímero propio en alejandra_tokens (tipo='admin', expira a las 12h)
+          // en vez del secreto maestro -- verificarAdminToken() ya sabe validar tokens de
+          // esa tabla igual que el ADMIN_TOKEN estático (y ahora sí respeta expires_at,
+          // ver fix del hallazgo #3 junto a verificarAdminToken), así que el panel no
+          // necesita ningún cambio: sigue tratando "token" como un bearer opaco.
+          const tokenEfimero = 'eph_' + Array.from(crypto.getRandomValues(new Uint8Array(24)))
+            .map(b => b.toString(16).padStart(2, '0')).join('');
+          await env.DB.prepare(
+            `INSERT INTO alejandra_tokens (token, tipo, descripcion, activo, created_at, expires_at)
+             VALUES (?, 'admin', ?, 1, datetime('now'), datetime('now', '+12 hours'))`
+          ).bind(tokenEfimero, `Sesión efímera (auto, /auth/verify-session): ${sesion.nombre || 'admin'}`).run();
+          return json({ ok: true, token: tokenEfimero, nombre: sesion.nombre || 'Admin' });
         } catch(e) {
           return json({ error: 'Error verificando sesión: ' + e.message }, 500);
         }
@@ -2412,7 +2427,7 @@ export default {
       // ── Admin API ─────────────────────────────────────────────────────────
       if (path.startsWith('/api/admin/')) {
         const adminToken = req.headers.get('Authorization')?.replace('Bearer ', '');
-        if (!(await verificarAdminToken(env, adminToken))) return json({ error: 'No autorizado' }, 403);
+        if (!(await verificarAdminToken(env, adminToken, req))) return json({ error: 'No autorizado' }, 403);
 
         if (path === '/api/admin/config' && req.method === 'GET') {
           const c = await env.DB.prepare('SELECT * FROM agente_config ORDER BY updated_at DESC LIMIT 1').first();
@@ -2546,7 +2561,7 @@ export default {
       // ── Enviar push notification a un usuario ─────────────────────────────
       if (path === '/push' && req.method === 'POST') {
         const { usuario_id, titulo, cuerpo, token: adminToken } = await req.json().catch(() => ({}));
-        if (!(await verificarAdminToken(env, adminToken))) return json({ error: 'No autorizado' }, 403);
+        if (!(await verificarAdminToken(env, adminToken, req))) return json({ error: 'No autorizado' }, 403);
         if (!usuario_id || !titulo) return json({ error: 'usuario_id y titulo requeridos' }, 400);
         const row = await env.DB.prepare(
           `SELECT contenido FROM alejandra_memoria WHERE tipo='fcm_token' AND usuario_id=? LIMIT 1`
@@ -8868,11 +8883,29 @@ async function enviarPushScanRequest(env, sesion, subtipo, contexto, eventoId) {
   }
 }
 
-async function verificarAdminToken(env, token) {
+// req es opcional (solo para poder pasar la IP y aplicar rate limiting -- fix
+// continuación 14, hallazgo #3: antes esta función no tenía ningún límite de
+// intentos propio, permitiendo probar tokens repetidamente contra /admin/migrate,
+// /api/admin/*, /push, /api/reflexion, /conocimiento sin ningún throttling.
+// Reutiliza el mismo validarRateLimit() de /api/chat -- KV, ventana de 1 minuto,
+// fail-open si KV falla -- pero con su propio bucket ("admin-auth:ip:...") para
+// no compartir cupo con el rate limit del chat.
+async function verificarAdminToken(env, token, req) {
   if (!token) return false;
+  if (req) {
+    const ip = req.headers.get('CF-Connecting-IP') || 'unknown';
+    const rl = await validarRateLimit(env, `admin-auth:ip:${ip}`);
+    if (!rl.ok) return false;
+  }
   if (env.ADMIN_TOKEN && token === env.ADMIN_TOKEN) return true;
   try {
-    const r = await env.DB.prepare('SELECT id FROM alejandra_tokens WHERE token=? AND tipo="admin" AND activo=1').bind(token).first();
+    // Fix continuación 14 (hallazgo #2, relacionado): expires_at existe en el schema
+    // desde el principio pero nunca se comprobaba aquí -- cualquier token con fecha de
+    // expiración pasada seguía siendo válido para siempre. Necesario para que los
+    // tokens efímeros que emite /auth/verify-session caduquen de verdad.
+    const r = await env.DB.prepare(
+      "SELECT id FROM alejandra_tokens WHERE token=? AND tipo='admin' AND activo=1 AND (expires_at IS NULL OR expires_at > datetime('now'))"
+    ).bind(token).first();
     return !!r;
   } catch { return false; }
 }
