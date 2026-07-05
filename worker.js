@@ -21841,6 +21841,168 @@ async function _ensurePlanosTable(env) {
   `).run();
 }
 
+// ── Biblioteca de símbolos IEC 60617 — inyectada en cada SVG eléctrico ─────────────────
+// Los símbolos usan currentColor → heredan el color del atributo color="" del <use>
+// Terminales estándar: viewBox "0 0 30 100", terminal top (15,0), bottom (15,100)
+const IEC_SYMBOLS_DEFS = `<defs id="iec60617-lib">
+  <!-- Q ─ Interruptor automático magnetotérmico (IEC 60617-7) -->
+  <symbol id="sym-magnetotermico" viewBox="0 0 30 100" overflow="visible">
+    <line x1="15" y1="0" x2="15" y2="20" stroke="currentColor" stroke-width="2" fill="none"/>
+    <rect x="3" y="20" width="24" height="60" fill="white" stroke="currentColor" stroke-width="2" rx="1"/>
+    <!-- Bimetal térmico -->
+    <path d="M10 34 Q8 45 16 45" fill="none" stroke="currentColor" stroke-width="1.8"/>
+    <!-- Mecanismo de disparo -->
+    <line x1="8" y1="66" x2="22" y2="45" stroke="currentColor" stroke-width="1.8"/>
+    <!-- Disparador magnético -->
+    <rect x="8" y="66" width="14" height="7" fill="none" stroke="currentColor" stroke-width="1.4"/>
+    <line x1="15" y1="80" x2="15" y2="100" stroke="currentColor" stroke-width="2" fill="none"/>
+  </symbol>
+
+  <!-- ID ─ Interruptor diferencial / RCD (IEC 60617-7) -->
+  <symbol id="sym-diferencial" viewBox="0 0 30 100" overflow="visible">
+    <line x1="15" y1="0" x2="15" y2="20" stroke="currentColor" stroke-width="2" fill="none"/>
+    <rect x="3" y="20" width="24" height="60" fill="white" stroke="currentColor" stroke-width="2" rx="1"/>
+    <!-- Mecanismo de disparo -->
+    <line x1="8" y1="62" x2="22" y2="44" stroke="currentColor" stroke-width="1.8"/>
+    <!-- Botón de test T -->
+    <circle cx="22" cy="28" r="4" fill="white" stroke="currentColor" stroke-width="1.5"/>
+    <text x="22" y="31" text-anchor="middle" font-size="5" font-family="Arial,sans-serif" fill="currentColor">T</text>
+    <!-- Símbolo diferencial ΔI -->
+    <text x="12" y="74" text-anchor="middle" font-size="8" font-family="Arial,sans-serif" fill="currentColor" font-style="italic">ΔI</text>
+    <line x1="15" y1="80" x2="15" y2="100" stroke="currentColor" stroke-width="2" fill="none"/>
+  </symbol>
+
+  <!-- F ─ Fusible IEC 60269 / IEC 60617-7 -->
+  <symbol id="sym-fusible" viewBox="0 0 30 100" overflow="visible">
+    <line x1="15" y1="0" x2="15" y2="26" stroke="currentColor" stroke-width="2" fill="none"/>
+    <rect x="8" y="26" width="14" height="48" fill="white" stroke="currentColor" stroke-width="2" rx="2"/>
+    <!-- Elemento fusible (discontinuo) -->
+    <line x1="15" y1="26" x2="15" y2="74" stroke="currentColor" stroke-width="1.2" stroke-dasharray="4,3"/>
+    <line x1="15" y1="74" x2="15" y2="100" stroke="currentColor" stroke-width="2" fill="none"/>
+  </symbol>
+
+  <!-- KM ─ Contactor, contactos principales NA (IEC 60617-7) -->
+  <symbol id="sym-contactor" viewBox="0 0 30 100" overflow="visible">
+    <line x1="15" y1="0" x2="15" y2="30" stroke="currentColor" stroke-width="2" fill="none"/>
+    <!-- Contacto fijo -->
+    <line x1="5" y1="30" x2="25" y2="30" stroke="currentColor" stroke-width="2"/>
+    <!-- Arco de apertura electromagnética -->
+    <path d="M5 54 Q15 43 25 54" fill="none" stroke="currentColor" stroke-width="2"/>
+    <!-- Contacto móvil -->
+    <line x1="5" y1="54" x2="25" y2="54" stroke="currentColor" stroke-width="2"/>
+    <!-- Línea de accionamiento (discontinua) -->
+    <line x1="15" y1="42" x2="27" y2="42" stroke="currentColor" stroke-width="1.4" stroke-dasharray="2,2"/>
+    <line x1="15" y1="54" x2="15" y2="100" stroke="currentColor" stroke-width="2" fill="none"/>
+  </symbol>
+
+  <!-- A1-A2 ─ Bobina de contactor / relé (IEC 60617-7) -->
+  <symbol id="sym-bobina" viewBox="0 0 30 100" overflow="visible">
+    <line x1="15" y1="0" x2="15" y2="26" stroke="currentColor" stroke-width="2" fill="none"/>
+    <rect x="5" y="26" width="20" height="48" fill="white" stroke="currentColor" stroke-width="2"/>
+    <!-- Ondas de bobina -->
+    <path d="M8 40 Q11 34 15 40 Q19 46 22 40" fill="none" stroke="currentColor" stroke-width="1.6"/>
+    <path d="M8 54 Q11 48 15 54 Q19 60 22 54" fill="none" stroke="currentColor" stroke-width="1.6"/>
+    <line x1="15" y1="74" x2="15" y2="100" stroke="currentColor" stroke-width="2" fill="none"/>
+  </symbol>
+
+  <!-- FR ─ Relé térmico de sobrecarga (IEC 60617-7) -->
+  <symbol id="sym-termico" viewBox="0 0 30 100" overflow="visible">
+    <line x1="15" y1="0" x2="15" y2="18" stroke="currentColor" stroke-width="2" fill="none"/>
+    <!-- Tres bimetales en S -->
+    <path d="M9 18 Q6 30 9 42 Q6 54 9 66 Q7 74 9 80" fill="none" stroke="currentColor" stroke-width="1.8"/>
+    <path d="M15 18 Q12 30 15 42 Q12 54 15 66 Q13 74 15 80" fill="none" stroke="currentColor" stroke-width="1.8"/>
+    <path d="M21 18 Q18 30 21 42 Q18 54 21 66 Q19 74 21 80" fill="none" stroke="currentColor" stroke-width="1.8"/>
+    <line x1="15" y1="80" x2="15" y2="100" stroke="currentColor" stroke-width="2" fill="none"/>
+  </symbol>
+
+  <!-- M 3~ ─ Motor asíncrono trifásico (IEC 60617-10) — viewBox 70x70 -->
+  <symbol id="sym-motor-3f" viewBox="0 0 70 70" overflow="visible">
+    <circle cx="35" cy="35" r="32" fill="white" stroke="currentColor" stroke-width="2.5"/>
+    <text x="35" y="30" text-anchor="middle" font-size="18" font-weight="bold" font-family="Arial,sans-serif" fill="currentColor">M</text>
+    <text x="35" y="47" text-anchor="middle" font-size="11" font-family="Arial,sans-serif" fill="currentColor">3~</text>
+  </symbol>
+
+  <!-- M 1~ ─ Motor monofásico (IEC 60617-10) — viewBox 70x70 -->
+  <symbol id="sym-motor-1f" viewBox="0 0 70 70" overflow="visible">
+    <circle cx="35" cy="35" r="32" fill="white" stroke="currentColor" stroke-width="2.5"/>
+    <text x="35" y="30" text-anchor="middle" font-size="18" font-weight="bold" font-family="Arial,sans-serif" fill="currentColor">M</text>
+    <text x="35" y="47" text-anchor="middle" font-size="11" font-family="Arial,sans-serif" fill="currentColor">1~</text>
+  </symbol>
+
+  <!-- TR ─ Transformador (IEC 60617-9) — viewBox 50x100 -->
+  <symbol id="sym-transformador" viewBox="0 0 50 100" overflow="visible">
+    <line x1="25" y1="0" x2="25" y2="14" stroke="currentColor" stroke-width="2" fill="none"/>
+    <!-- Primario: arcos inductivos -->
+    <path d="M25 14 Q18 14 18 20 Q18 26 25 26 Q32 26 32 32 Q32 38 25 38 Q18 38 18 44" fill="none" stroke="currentColor" stroke-width="2"/>
+    <!-- Núcleo magnético -->
+    <line x1="23" y1="44" x2="23" y2="56" stroke="currentColor" stroke-width="4"/>
+    <line x1="27" y1="44" x2="27" y2="56" stroke="currentColor" stroke-width="4"/>
+    <!-- Secundario: arcos inductivos -->
+    <path d="M25 56 Q32 56 32 62 Q32 68 25 68 Q18 68 18 74 Q18 80 25 80 Q32 80 32 86" fill="none" stroke="currentColor" stroke-width="2"/>
+    <line x1="25" y1="86" x2="25" y2="100" stroke="currentColor" stroke-width="2" fill="none"/>
+  </symbol>
+
+  <!-- PE ─ Tierra de protección (IEC 60617-2) — viewBox 36x24 -->
+  <symbol id="sym-tierra" viewBox="0 0 36 24" overflow="visible">
+    <line x1="18" y1="0" x2="18" y2="6" stroke="currentColor" stroke-width="2" fill="none"/>
+    <line x1="3"  y1="6"  x2="33" y2="6"  stroke="currentColor" stroke-width="2.5"/>
+    <line x1="7"  y1="12" x2="29" y2="12" stroke="currentColor" stroke-width="2"/>
+    <line x1="12" y1="18" x2="24" y2="18" stroke="currentColor" stroke-width="2"/>
+    <line x1="16" y1="23" x2="20" y2="23" stroke="currentColor" stroke-width="1.5"/>
+  </symbol>
+
+  <!-- H ─ Lámpara / piloto indicador (IEC 60617-11) — viewBox 26x26 -->
+  <symbol id="sym-lampara" viewBox="0 0 26 26" overflow="visible">
+    <circle cx="13" cy="13" r="11" fill="white" stroke="currentColor" stroke-width="2"/>
+    <line x1="6"  y1="6"  x2="20" y2="20" stroke="currentColor" stroke-width="1.8"/>
+    <line x1="20" y1="6"  x2="6"  y2="20" stroke="currentColor" stroke-width="1.8"/>
+  </symbol>
+
+  <!-- NA ─ Contacto auxiliar normalmente abierto (IEC 60617-7) — viewBox 30x60 -->
+  <symbol id="sym-contacto-na" viewBox="0 0 30 60" overflow="visible">
+    <line x1="15" y1="0"  x2="15" y2="18" stroke="currentColor" stroke-width="1.8" fill="none"/>
+    <line x1="5"  y1="18" x2="25" y2="18" stroke="currentColor" stroke-width="1.8"/>
+    <path d="M5 33 Q15 23 25 33" fill="none" stroke="currentColor" stroke-width="1.8"/>
+    <line x1="5"  y1="33" x2="25" y2="33" stroke="currentColor" stroke-width="1.8"/>
+    <line x1="15" y1="33" x2="15" y2="60" stroke="currentColor" stroke-width="1.8" fill="none"/>
+  </symbol>
+
+  <!-- NC ─ Contacto auxiliar normalmente cerrado (IEC 60617-7) — viewBox 30x60 -->
+  <symbol id="sym-contacto-nc" viewBox="0 0 30 60" overflow="visible">
+    <line x1="15" y1="0"  x2="15" y2="18" stroke="currentColor" stroke-width="1.8" fill="none"/>
+    <line x1="5"  y1="18" x2="25" y2="18" stroke="currentColor" stroke-width="1.8"/>
+    <line x1="5"  y1="33" x2="25" y2="33" stroke="currentColor" stroke-width="1.8"/>
+    <!-- Barra diagonal (estado cerrado) -->
+    <line x1="25" y1="18" x2="5"  y2="33" stroke="currentColor" stroke-width="1.8"/>
+    <line x1="15" y1="33" x2="15" y2="60" stroke="currentColor" stroke-width="1.8" fill="none"/>
+  </symbol>
+
+  <!-- S-NA ─ Pulsador normalmente abierto (IEC 60617-7) — viewBox 30x70 -->
+  <symbol id="sym-pulsador-na" viewBox="0 0 30 70" overflow="visible">
+    <line x1="15" y1="0"  x2="15" y2="20" stroke="currentColor" stroke-width="1.8" fill="none"/>
+    <line x1="5"  y1="20" x2="25" y2="20" stroke="currentColor" stroke-width="1.8"/>
+    <!-- Actuador mecánico -->
+    <line x1="15" y1="30" x2="15" y2="20" stroke="currentColor" stroke-width="1.4" stroke-dasharray="2,2"/>
+    <line x1="8"  y1="30" x2="22" y2="30" stroke="currentColor" stroke-width="2"/>
+    <path d="M5 43 Q15 33 25 43" fill="none" stroke="currentColor" stroke-width="1.8"/>
+    <line x1="5"  y1="43" x2="25" y2="43" stroke="currentColor" stroke-width="1.8"/>
+    <line x1="15" y1="43" x2="15" y2="70" stroke="currentColor" stroke-width="1.8" fill="none"/>
+  </symbol>
+
+  <!-- S-NC ─ Pulsador normalmente cerrado (IEC 60617-7) — viewBox 30x70 -->
+  <symbol id="sym-pulsador-nc" viewBox="0 0 30 70" overflow="visible">
+    <line x1="15" y1="0"  x2="15" y2="18" stroke="currentColor" stroke-width="1.8" fill="none"/>
+    <line x1="5"  y1="18" x2="25" y2="18" stroke="currentColor" stroke-width="1.8"/>
+    <!-- Actuador mecánico -->
+    <line x1="15" y1="30" x2="15" y2="20" stroke="currentColor" stroke-width="1.4" stroke-dasharray="2,2"/>
+    <line x1="8"  y1="30" x2="22" y2="30" stroke="currentColor" stroke-width="2"/>
+    <line x1="5"  y1="43" x2="25" y2="43" stroke="currentColor" stroke-width="1.8"/>
+    <!-- Barra diagonal NC -->
+    <line x1="25" y1="28" x2="5"  y2="43" stroke="currentColor" stroke-width="1.8"/>
+    <line x1="15" y1="43" x2="15" y2="70" stroke="currentColor" stroke-width="1.8" fill="none"/>
+  </symbol>
+</defs>`;
+
 // Prompts de sistema por tipo de plano
 const _PLANO_PROMPTS = {
   planta: `Eres un arquitecto tecnico y delineante experto en planos de construccion e ingenieria civil. Tu tarea es generar un plano de planta/obra en formato SVG profesional y editable.
@@ -21862,30 +22024,59 @@ REQUISITOS TECNICOS:
 
 DEVUELVE: solo el codigo SVG valido completo, sin texto adicional fuera del SVG.`,
 
-  electrico: `Eres un ingeniero electrico experto en esquemas electricos industriales segun normas IEC/EN. Tu tarea es generar un esquema electrico en formato SVG profesional y editable.
+  electrico: `Eres un ingeniero electrico experto en esquemas electricos industriales segun normas IEC 60617 / UNE-EN. Tu tarea es generar un esquema electrico SVG profesional con simbolos certificados.
 
 REQUISITOS TECNICOS:
-- viewBox="0 0 1200 800", xmlns="http://www.w3.org/2000/svg", id="plano-principal"
-- Fondo: fill="#ffffff", cuadricula opcional muy tenue (#f0f0f0)
-- Cables y conexiones: lineas ortogonales (solo horizontal/vertical) stroke="#000000" stroke-width="1.5"
-- Nodos de conexion: circulos rellenos r="3" fill="#000000"
-- Colores de fase: L1=#cc0000, L2=#cc6600, L3=#000099, N=#0066cc, PE=#006600
-- Simbolos IEC simplificados como paths SVG:
-  * Resistencia/Carga: rect 30x12 stroke="#000" fill="none"
-  * Motor M: circle r="18" + texto "M" centrado
-  * Interruptor: linea diagonal 45deg entre dos contactos
-  * Fusible: rect 20x8 + linea central diagonal
-  * Contactor/Rele: bobina cuadrada + contactos
-  * Transformador: dos semicirculos opuestos
-  * Tierra PE: 3 lineas horizontales decrecientes (clasico)
-  * Lampara/LED: circulo + cruz diagonal
-- Bornes numerados con rect + numero (font-size="8")
-- Referencias de componentes (Q1, F1, M1, K1...) junto a cada simbolo
-- Bloque de titulo estandar en esquina inferior derecha
-- Leyenda de componentes y colores de fase
+- viewBox="0 0 1200 900", xmlns="http://www.w3.org/2000/svg", id="plano-principal"
+- Fondo: fill="#fafafa", cuadricula tenue de fondo (lines cada 20px, stroke="#e8e8e8" stroke-width="0.4")
+- Cables de potencia: SOLO lineas ortogonales (horizontal/vertical). stroke-width="2.5", color segun fase
+- Cables de control/maniobra: stroke-width="1.2" stroke="#333333", lineas ortogonales
+- Nodos de conexion (empalmes): circle r="4" fill=color-fase (SOLO donde hay derivacion real)
+- COLORES DE FASE (OBLIGATORIO): L1=#cc0000  L2=#cc6600  L3=#000099  N=#0066cc  PE=#006600
+
+SIMBOLOS IEC 60617 — USO OBLIGATORIO:
+El SVG ya contiene una seccion <defs> con los simbolos certificados IEC 60617.
+DEBES usar <use href="#sym-X"/> para TODOS los componentes. NO dibujes shapes ad-hoc.
+Sintaxis: <use href="#sym-X" x="X" y="Y" width="W" height="H" color="COLOR"/>
+El atributo color="" define el color del simbolo (hereda via currentColor).
+
+Simbolos disponibles y sus dimensiones estandar:
+  #sym-magnetotermico  width="30" height="100"  → IGA/PIA magnetotermico (Q1, Q2...)
+  #sym-diferencial     width="30" height="100"  → Interruptor diferencial/RCD (ID1...)
+  #sym-fusible         width="30" height="100"  → Fusible (F1, F2...)
+  #sym-contactor       width="30" height="100"  → Contactor potencia NA (KM1, KM2...)
+  #sym-bobina          width="30" height="100"  → Bobina contactor/rele (A1-A2)
+  #sym-termico         width="30" height="100"  → Rele termico sobrecarga (FR1...)
+  #sym-motor-3f        width="70" height="70"   → Motor trifasico 3~ (M1, M2...)
+  #sym-motor-1f        width="70" height="70"   → Motor monofasico 1~ (M1...)
+  #sym-transformador   width="50" height="100"  → Transformador (TR1...)
+  #sym-tierra          width="36" height="24"   → Tierra PE (color="#006600" siempre)
+  #sym-lampara         width="26" height="26"   → Lampara/piloto (H1, H2...)
+  #sym-contacto-na     width="30" height="60"   → Contacto auxiliar NA (13-14)
+  #sym-contacto-nc     width="30" height="60"   → Contacto auxiliar NC (21-22)
+  #sym-pulsador-na     width="30" height="70"   → Pulsador NA/marcha (S1, START)
+  #sym-pulsador-nc     width="30" height="70"   → Pulsador NC/paro (S2, STOP)
+
+Nota: el terminal TOP del simbolo es (x+15, y) y el BOTTOM es (x+15, y+height).
+Conecta cables a estos puntos exactos con lineas ortogonales.
+
+ESTRUCTURA DEL ESQUEMA:
+- Esquema unifilar para cuadros de distribucion, o multifilar para circuitos de maniobra
+- Acometida superior: tres fases L1/L2/L3 + Neutro N entrando por arriba
+- IGA/Seccionador general primero (Q0) con referencia y calibre (ej. 3x63A)
+- Barras de distribucion horizontales coloreadas por fase (rect fill=color-fase, height=6)
+- Cada rama: magnetotermico Q + diferencial ID (si es circuito con personas) + carga
+- Circuito de motor: Q+ID → KM (contactor) → FR (termico) → M3~ + tierra PE al motor
+- Maniobra motor (si procede): pulsador NC paro → pulsador NA marcha → bobina KM + contacto NA KM (autoretencion)
+- Bornes de conexion: rect 14x14 fill="white" stroke="#333" rx="1" + numero font-size="8" centrado
+- Etiquetas de referencia junto a cada simbolo: font-family="Arial,sans-serif" font-size="11" font-weight="bold" fill="#222"
+- Calibres y caracteristicas junto a protecciones: font-size="9" fill="#555" (ej. "16A / 10kA", "30mA")
+- Potencias junto a motores: font-size="9" fill="#555" (ej. "7.5 kW / 400V")
+- Bloque de titulo estandar en esquina inferior derecha (empresa, titulo, ref-plano, escala, fecha, rev)
+- Leyenda de colores de fase + lista de materiales simplificada en esquina inferior izquierda
 - Agrupa por circuito: <g id="circuito-X" class="circuito">
 
-DEVUELVE: solo el codigo SVG valido completo, sin texto adicional fuera del SVG.`,
+DEVUELVE: solo el codigo SVG valido completo (desde <svg hasta </svg>), sin texto adicional ni markdown.`,
 
   mecanico: `Eres un delineante tecnico industrial experto en planos mecanicos segun normas ISO/DIN. Tu tarea es generar un plano mecanico en formato SVG profesional y editable.
 
@@ -21980,6 +22171,13 @@ INSTRUCCIONES FINALES:
   const svgMatch = svgRaw.match(/<svg[\s\S]*<\/svg>/i);
   if (svgMatch) svgRaw = svgMatch[0];
   if (!svgRaw.includes('<svg')) throw new Error('La IA no genero un SVG valido');
+
+  // Para esquemas eléctricos: inyectar biblioteca de símbolos IEC 60617
+  // Se inserta justo tras la etiqueta <svg ...> de apertura para que los <use href="#sym-X">
+  // del cuerpo del esquema puedan referenciar las definiciones correctamente.
+  if (tipo === 'electrico') {
+    svgRaw = svgRaw.replace(/(<svg[^>]*>)/i, `$1\n${IEC_SYMBOLS_DEFS}`);
+  }
 
   // Registrar uso de IA
   logAIUsage(env, {
