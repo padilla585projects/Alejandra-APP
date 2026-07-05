@@ -5057,7 +5057,15 @@ async function esDeveloperAgente(env, usuario_id) {
 }
 
 // ── Ejecutar tools ────────────────────────────────────────────────────────────
-async function ejecutarTool(env, nombre, input, usuario_id, empresa_id, expertoTools, sendSSE, authOk = true, esDevVerificado = false) {
+// Fix continuación 20: el default de authOk era `true` (fail-open). El único
+// call site que dependía de estos defaults era ejecutarReflexion() (no pasaba
+// authOk/esDevVerificado), lo que hacía que CUALQUIER tool gateada por
+// TOOLS_REQUIEREN_SESION se tratara como autenticada dentro de ese loop de
+// auto-reflexión -- un gap de defensa en profundidad ante prompt injection
+// indirecta vía el historial de chat que se le pasa como contexto al modelo.
+// Ahora el default es fail-closed (false); ejecutarReflexion() además pasa
+// los valores explícitos para dejar la intención clara en el código.
+async function ejecutarTool(env, nombre, input, usuario_id, empresa_id, expertoTools, sendSSE, authOk = false, esDevVerificado = false) {
   // Tools de auto-modificación (generación anterior de nombres): solo accesibles
   // a desarrollador/Adrian, verificado contra la BD a partir de usuario_id.
   const TOOLS_PROTEGIDAS = new Set(['repo_read_file', 'repo_write_file', 'direct_fix', 'grep_code', 'run_migration', 'check_deploy_status']);
@@ -5794,8 +5802,21 @@ ${input.codigo_sugerido ? `CÓDIGO SUGERIDO:\n${input.codigo_sugerido}` : ''}`;
     case 'subir_archivo': {
       try {
         if (!env.FILES) return 'R2 bucket FILES no configurado.';
+        if (!input.key) return 'Falta key (ruta del archivo).';
         const ct = input.content_type || 'text/plain';
-        await env.FILES.put(input.key, input.contenido, { httpMetadata: { contentType: ct } });
+        // Fix continuación 20 (IDOR/sobrescritura cross-empresa): esta tool escribía
+        // en CUALQUIER key de R2 sin guardar customMetadata.usuario_id (por lo que
+        // puedeAccederArchivo() nunca podía determinar el dueño luego) y sin
+        // comprobar si esa key ya pertenecía a OTRA empresa antes de sobrescribirla.
+        // Igual que el resto: se bypassa para dev verificado.
+        const existente = await env.FILES.get(input.key);
+        if (existente && !(await puedeAccederArchivo(env, existente.customMetadata, empresa_id, esDevVerificado))) {
+          return `No se puede escribir en "${input.key}": ya existe y pertenece a otra empresa.`;
+        }
+        await env.FILES.put(input.key, input.contenido, {
+          httpMetadata: { contentType: ct },
+          customMetadata: { usuario_id: String(usuario_id || ''), uploaded_at: new Date().toISOString() },
+        });
         return `Archivo subido: ${input.key} (${(input.contenido.length / 1024).toFixed(1)} KB, ${ct})`;
       } catch (err) {
         return `Error subir_archivo: ${err.message}`;
@@ -7326,6 +7347,13 @@ ${descripcion ? `<div class="info-bar"><span class="badge">${tipo}</span>${descr
       const titulo = (input.titulo || '').trim();
       const msg = (input.mensaje || '').trim();
       if (!uid || !titulo || !msg) return 'Faltan parámetros: usuario_id, titulo, mensaje.';
+      // Fix continuación 20 (IDOR): esta tool (código huérfano, no se ofrece a
+      // ningún experto hoy, pero el case sigue siendo alcanzable si algún día se
+      // reconecta o vía algún otro camino) enviaba push a CUALQUIER usuario_id sin
+      // comprobar empresa, igual que enviar_push antes de continuación 19.
+      if (!(await puedeNotificarUsuario(env, uid, usuario_id, empresa_id, esDevVerificado))) {
+        return 'No se pudo determinar el usuario destino.';
+      }
       const pushResult = await sendPushToUser(env, uid, titulo, msg);
       return JSON.stringify(pushResult);
     }
@@ -8324,7 +8352,9 @@ Datos:\n${resumen}`
       messages.push({ role: 'assistant', content: respAPI.content });
       const results = [];
       for (const tb of toolBlocks) {
-        const r = await ejecutarTool(env, tb.name, tb.input, 'reflexion', 'system');
+        // authOk=false, esDevVerificado=false explícitos (fix continuación 20):
+        // esta reflexión no tiene sesión real de ningún usuario.
+        const r = await ejecutarTool(env, tb.name, tb.input, 'reflexion', 'system', undefined, undefined, false, false);
         results.push({ type: 'tool_result', tool_use_id: tb.id, content: r });
       }
       messages.push({ role: 'user', content: results });

@@ -54,10 +54,19 @@ const TOOLS_SOLO_DEV_VERIFICADO = new Set(['patch_codigo', 'github_escribir', 'e
 // empresa. El scope real (empresa_id/usuario_id/propiedad de archivo, con bypass
 // para dev verificado -- necesario para el cron cross-empresa) se aplica en
 // worker.js; aquí se exige sesión como mínimo, igual que el resto de fixes.
+// Fix continuación 20: subir_archivo escribía en CUALQUIER key de R2 sin
+// customMetadata.usuario_id (por lo que puedeAccederArchivo() nunca podía
+// determinar el dueño después) y sin comprobar si esa key ya pertenecía a otra
+// empresa antes de sobrescribirla -- alcanzable por cualquier usuario
+// autenticado de cualquier empresa (está en TOOLS_POR_EXPERTO de app/tecnico/
+// completo/ingenieria). enviar_notificacion es código huérfano (no se ofrece
+// en ningún TOOLS_POR_EXPERTO hoy) con el mismo patrón IDOR que enviar_push
+// antes de continuación 19 -- se gatea igual por defensa en profundidad.
 const TOOLS_REQUIEREN_SESION    = new Set([
   'consultar_bd', 'escribir_bd', 'listar_archivos', 'ver_archivo', 'exportar_datos', 'listar_esquemas', 'borrar_esquema',
   'historico_materiales', 'generar_informe', 'analizar_archivo', 'marcar_plano', 'enviar_email', 'enviar_telegram_informe',
-  'crear_tarea_background', 'ver_tareas', 'completar_tarea', 'enviar_push', 'iniciar_conversacion', 'controlar_app'
+  'crear_tarea_background', 'ver_tareas', 'completar_tarea', 'enviar_push', 'iniciar_conversacion', 'controlar_app',
+  'subir_archivo', 'enviar_notificacion'
 ]);
 function filtrarToolsPorAuth(tools, authOk, esDevVerificado) {
   return (tools || []).filter(t => {

@@ -173,6 +173,28 @@ describe('filtrarToolsPorAuth', () => {
     const r = filtrarToolsPorAuth(toolsFix19, true, true);
     expect(r.length).toBe(toolsFix19.length);
   });
+
+  // fix continuación 20: subir_archivo escribía en cualquier key de R2 sin
+  // customMetadata.usuario_id ni comprobar si esa key ya pertenecía a otra
+  // empresa, y no exigía sesión -- alcanzable por cualquier usuario autenticado
+  // de cualquier empresa. enviar_notificacion es código huérfano (no se ofrece
+  // en ningún TOOLS_POR_EXPERTO hoy) con el mismo patrón IDOR que enviar_push
+  // antes de continuación 19. Ambas exigen sesión ahora como mínimo.
+  const toolsFix20 = [
+    { name: 'subir_archivo' },
+    { name: 'enviar_notificacion' },
+    { name: 'buscar_web' },
+  ];
+
+  it('subir_archivo/enviar_notificacion requieren sesión, no pasan sin auth', () => {
+    const r = filtrarToolsPorAuth(toolsFix20, false, false);
+    expect(r.map(t => t.name)).toEqual(['buscar_web']);
+  });
+
+  it('subir_archivo/enviar_notificacion pasan con sesión (sin necesitar dev verificado)', () => {
+    const r = filtrarToolsPorAuth(toolsFix20, true, false);
+    expect(r.map(t => t.name)).toEqual(['subir_archivo', 'enviar_notificacion', 'buscar_web']);
+  });
 });
 
 // ── puedeNotificarUsuario (fix continuación 19: IDOR en enviar_push/
@@ -181,6 +203,18 @@ describe('filtrarToolsPorAuth', () => {
 // propio Set de gating; el comportamiento con D1 real se cubre con las pruebas
 // manuales descritas en SESION.md/ALEJANDRA_AGENTE.txt (no se puede mockear D1
 // sin duplicar demasiada infraestructura en este archivo de tests puros).
+
+// ── Fix continuación 20 (no cubierto aquí, necesita env.DB/env.FILES reales,
+// ver pruebas manuales en SESION.md/ALEJANDRA_AGENTE.txt) ────────────────────
+// 1) subir_archivo ahora reutiliza puedeAccederArchivo() para bloquear la
+//    sobrescritura de una key que ya pertenece a otra empresa, y guarda
+//    customMetadata.usuario_id real al escribir (antes no guardaba ninguno).
+// 2) enviar_notificacion ahora reutiliza puedeNotificarUsuario() igual que
+//    enviar_push/iniciar_conversacion/controlar_app.
+// 3) ejecutarTool() cambia su default de authOk=true (fail-open) a
+//    authOk=false (fail-closed); ejecutarReflexion() -- el único call site que
+//    no pasaba authOk/esDevVerificado explícitos -- ahora los pasa como
+//    `false, false` para que quede documentado en el propio código.
 
 // ── validarSoloSelectBD (fix continuación 14, reutilizada en configurar_alerta
 // y exportar_datos, antes solo vivía inline dentro de consultar_bd) ──────────
