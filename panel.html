@@ -31622,7 +31622,7 @@ function cerrarModalRdp() { document.getElementById('modalRdp').style.display='n
 // PLANOS TECNICOS IA
 // ═══════════════════════════════════════════════════════════════════
 
-let _planosData = [];
+let _planosIAData = [];
 let _visorPlanoId = null;
 let _visorSvgData = '';
 
@@ -31654,9 +31654,9 @@ async function cargarPlanos() {
     const res = await apiRaw(path);
     const d   = await res.json();
     if (!res.ok) throw new Error(d.error || 'Error');
-    _planosData = d.planos || [];
-    renderPlanosGrid(_planosData);
-    count.textContent = _planosData.length + ' plano' + (_planosData.length !== 1 ? 's' : '');
+    _planosIAData = d.planos || [];
+    renderPlanosGrid(_planosIAData);
+    count.textContent = _planosIAData.length + ' plano' + (_planosIAData.length !== 1 ? 's' : '');
   } catch(e) {
     grid.innerHTML = '<div style="color:#f87171;font-size:13px;padding:20px">Error: ' + e.message + '</div>';
   }
@@ -31664,7 +31664,7 @@ async function cargarPlanos() {
 
 function filtrarPlanosLocal() {
   const q = (document.getElementById('planosBuscar')?.value || '').toLowerCase().trim();
-  const filtered = q ? _planosData.filter(p => (p.titulo||'').toLowerCase().includes(q) || (p.descripcion||'').toLowerCase().includes(q)) : _planosData;
+  const filtered = q ? _planosIAData.filter(p => (p.titulo||'').toLowerCase().includes(q) || (p.descripcion||'').toLowerCase().includes(q)) : _planosIAData;
   renderPlanosGrid(filtered);
   const count = document.getElementById('planosCount');
   if (count) count.textContent = filtered.length + ' plano' + (filtered.length !== 1 ? 's' : '');
@@ -31788,8 +31788,8 @@ async function verPlano(id) {
     if (!res.ok) throw new Error('No encontrado');
     const svg = await res.text();
     _visorSvgData = svg;
-    // Buscar título en _planosData
-    const p = _planosData.find(x => x.id === id);
+    // Buscar título en _planosIAData
+    const p = _planosIAData.find(x => x.id === id);
     if (titulo) titulo.textContent = (p ? p.titulo : 'Plano #' + id);
     // Inyectar SVG con max-width para que quepa en la ventana
     const wrapper = document.createElement('div');
@@ -31819,7 +31819,7 @@ function cerrarVisorPlano() {
 
 function descargarSvgPlano() {
   if (!_visorSvgData) { toast('No hay SVG cargado', 'error'); return; }
-  const p = _planosData.find(x => x.id === _visorPlanoId);
+  const p = _planosIAData.find(x => x.id === _visorPlanoId);
   const nombre = (p ? p.titulo : 'plano') + '.svg';
   const blob = new Blob([_visorSvgData], { type: 'image/svg+xml' });
   const url  = URL.createObjectURL(blob);
@@ -31833,7 +31833,7 @@ async function descargarSvgPlanoId(id) {
     const res = await apiRaw('/planos/' + id + '/svg');
     if (!res.ok) throw new Error('Error');
     const svg   = await res.text();
-    const p     = _planosData.find(x => x.id === id);
+    const p     = _planosIAData.find(x => x.id === id);
     const nombre = (p ? p.titulo : 'plano-' + id) + '.svg';
     const blob  = new Blob([svg], { type: 'image/svg+xml' });
     const url   = URL.createObjectURL(blob);
