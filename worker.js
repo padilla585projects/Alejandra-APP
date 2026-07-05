@@ -686,7 +686,7 @@ const AI_TOOLS = [
     input_schema: {
       type: 'object',
       properties: {
-        tipo: { type: 'string', enum: ['planta', 'electrico', 'mecanico', 'gantt'], description: 'Tipo de plano: planta (plano de planta/obra), electrico (esquema electrico), mecanico (plano mecanico/industrial), gantt (diagrama de Gantt/fases)' },
+        tipo: { type: 'string', enum: ['planta', 'electrico', 'bandejas', 'mecanico', 'gantt'], description: 'Tipo de plano: planta (plano de planta/obra), electrico (esquema electrico), bandejas (instalacion de bandejas electricas en nave), mecanico (plano mecanico/industrial), gantt (diagrama de Gantt/fases)' },
         titulo: { type: 'string', description: 'Titulo del plano (ej: "Plano Planta Baja Nave A", "Esquema Electrico Cuadro Principal", "Gantt Fase 2")' },
         descripcion: { type: 'string', description: 'Descripcion detallada de lo que debe incluir el plano: zonas, componentes, fases, medidas, leyenda, etc.' },
         empresa_id: { type: 'integer', description: 'ID de la empresa a la que pertenece el plano' },
@@ -702,7 +702,7 @@ const AI_TOOLS = [
       type: 'object',
       properties: {
         empresa_id: { type: 'integer', description: 'ID de la empresa' },
-        tipo: { type: 'string', enum: ['planta', 'electrico', 'mecanico', 'gantt'], description: 'Filtrar por tipo (opcional)' }
+        tipo: { type: 'string', enum: ['planta', 'electrico', 'bandejas', 'mecanico', 'gantt'], description: 'Filtrar por tipo (opcional)' }
       },
       required: ['empresa_id']
     }
@@ -22396,7 +22396,7 @@ async function generarPlanoREST(request, env) {
   const body = await request.json().catch(() => ({}));
   const { tipo, titulo, descripcion } = body;
   if (!tipo || !titulo || !descripcion) return err('tipo, titulo y descripcion son obligatorios', 400);
-  const tiposValidos = ['planta', 'electrico', 'mecanico', 'gantt'];
+  const tiposValidos = ['planta', 'electrico', 'bandejas', 'mecanico', 'gantt'];
   if (!tiposValidos.includes(tipo)) return err('tipo invalido. Valores permitidos: ' + tiposValidos.join(', '), 400);
   try {
     const result = await _generarPlanoInterno(env, { tipo, titulo, descripcion, empresa_id, usuario_id });
