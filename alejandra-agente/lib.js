@@ -30,14 +30,36 @@ function calcularCosteYProveedor(modelo, tokensEntrada, tokensSalida) {
 }
 
 // ── Filtrado de tools por nivel de auth (dev verificado / sesión) ───────────
-const TOOLS_SOLO_DEV_VERIFICADO = new Set(['patch_codigo', 'github_escribir', 'ejecutar_deploy', 'rollback', 'test_endpoint']);
-const TOOLS_REQUIEREN_SESION    = new Set(['consultar_bd', 'escribir_bd', 'listar_archivos', 'ver_archivo']);
+// configurar_alerta (fix continuación 14, IDOR/SQLi): la acción "crear" guarda un
+// SQL arbitrario (condicion_sql) que "verificar" ejecuta directamente sin scope de
+// empresa_id -- se restringe a dev verificado, igual que patch_codigo/rollback, en
+// vez de dejarla abierta a cualquier sesión (ver validaciones extra en worker.js).
+const TOOLS_SOLO_DEV_VERIFICADO = new Set(['patch_codigo', 'github_escribir', 'ejecutar_deploy', 'rollback', 'test_endpoint', 'configurar_alerta']);
+// exportar_datos (fix continuación 14, IDOR/SQLi): exportaba datos de TODAS las
+// empresas sin filtro y con obra_id/fechas concatenados sin parametrizar -- ahora
+// exige sesión como mínimo (el scope real por empresa_id se aplica en worker.js).
+const TOOLS_REQUIEREN_SESION    = new Set(['consultar_bd', 'escribir_bd', 'listar_archivos', 'ver_archivo', 'exportar_datos']);
 function filtrarToolsPorAuth(tools, authOk, esDevVerificado) {
   return (tools || []).filter(t => {
     if (TOOLS_SOLO_DEV_VERIFICADO.has(t.name) && !esDevVerificado) return false;
     if (TOOLS_REQUIEREN_SESION.has(t.name) && !authOk) return false;
     return true;
   });
+}
+
+// Valida que una query sea SOLO SELECT (sin verbos de escritura). Extraída de la
+// lógica ya usada en consultar_bd para poder reutilizarla también en
+// configurar_alerta (condicion_sql) y exportar_datos (sql_custom) -- fix
+// continuación 14, ambas tenían SQL arbitrario sin ninguna de estas dos
+// comprobaciones. Devuelve null si es válida, o el motivo de rechazo.
+function validarSoloSelectBD(query) {
+  if (!/^SELECT\b/i.test(query || '')) {
+    return 'Solo se permiten consultas SELECT (lectura). No se admite INSERT, UPDATE, DELETE, DROP ni otras operaciones de escritura.';
+  }
+  if (/\b(INSERT|UPDATE|DELETE|DROP|ALTER|CREATE|TRUNCATE|REPLACE)\b/i.test(query)) {
+    return 'Consulta rechazada: contiene operaciones de escritura no permitidas.';
+  }
+  return null;
 }
 
 // ── Aislamiento por empresa_id para consultar_bd / escribir_bd (fix IDOR) ───
@@ -148,6 +170,7 @@ export {
   COLUMNA_BLOQUEADA_BD,
   extraerTablasQuery,
   validarScopeEmpresaBD,
+  validarSoloSelectBD,
   HOSTS_PERMITIDOS_TEST_ENDPOINT,
   urlPermitidaTestEndpoint,
   esStatusReintentableAnthropic,

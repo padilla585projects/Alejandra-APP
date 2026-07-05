@@ -5,6 +5,7 @@ import {
   filtrarToolsPorAuth,
   extraerTablasQuery,
   validarScopeEmpresaBD,
+  validarSoloSelectBD,
   urlPermitidaTestEndpoint,
   esStatusReintentableAnthropic,
   calcularEsperaReintentoMs,
@@ -76,6 +77,70 @@ describe('filtrarToolsPorAuth', () => {
   it('lista vacía o null no rompe', () => {
     expect(filtrarToolsPorAuth(null, true, true)).toEqual([]);
     expect(filtrarToolsPorAuth([], true, true)).toEqual([]);
+  });
+
+  // fix continuación 14 (IDOR/SQLi en configurar_alerta y exportar_datos):
+  // configurar_alerta pasa a exigir dev verificado (igual que patch_codigo,
+  // guardaba SQL arbitrario ejecutado sin scope); exportar_datos pasa a exigir
+  // sesión como mínimo (exportaba datos de todas las empresas sin filtro).
+  const toolsFix14 = [
+    { name: 'configurar_alerta' },
+    { name: 'exportar_datos' },
+    { name: 'buscar_web' },
+  ];
+
+  it('configurar_alerta requiere dev verificado, no basta con sesión', () => {
+    const r = filtrarToolsPorAuth(toolsFix14, true, false);
+    expect(r.map(t => t.name)).toEqual(['exportar_datos', 'buscar_web']);
+  });
+
+  it('exportar_datos requiere sesión, no pasa sin auth aunque sea dev', () => {
+    const r = filtrarToolsPorAuth(toolsFix14, false, true);
+    expect(r.map(t => t.name)).toEqual(['configurar_alerta', 'buscar_web']);
+  });
+
+  it('con sesión y dev verificado pasan ambas', () => {
+    const r = filtrarToolsPorAuth(toolsFix14, true, true);
+    expect(r.map(t => t.name)).toEqual(['configurar_alerta', 'exportar_datos', 'buscar_web']);
+  });
+
+  it('sin sesión ni dev verificado, ninguna de las dos pasa', () => {
+    const r = filtrarToolsPorAuth(toolsFix14, false, false);
+    expect(r.map(t => t.name)).toEqual(['buscar_web']);
+  });
+});
+
+// ── validarSoloSelectBD (fix continuación 14, reutilizada en configurar_alerta
+// y exportar_datos, antes solo vivía inline dentro de consultar_bd) ──────────
+describe('validarSoloSelectBD', () => {
+  it('acepta un SELECT simple', () => {
+    expect(validarSoloSelectBD('SELECT * FROM obras WHERE empresa_id = 1')).toBeNull();
+  });
+
+  it('es case-insensitive para el prefijo SELECT', () => {
+    expect(validarSoloSelectBD('select * from obras')).toBeNull();
+  });
+
+  it('rechaza queries que no empiezan por SELECT', () => {
+    expect(validarSoloSelectBD("UPDATE usuarios SET nombre='x'")).toMatch(/Solo se permiten consultas SELECT/);
+    expect(validarSoloSelectBD('DELETE FROM obras')).toMatch(/Solo se permiten consultas SELECT/);
+    expect(validarSoloSelectBD('DROP TABLE obras')).toMatch(/Solo se permiten consultas SELECT/);
+  });
+
+  it('rechaza un SELECT que contiene un verbo de escritura colado (ej. subquery o CTE con INSERT)', () => {
+    const r = validarSoloSelectBD('SELECT * FROM obras; INSERT INTO logs (a) VALUES (1)');
+    expect(r).toMatch(/operaciones de escritura no permitidas/);
+  });
+
+  it('detecta verbos de escritura sin importar mayúsculas/minúsculas', () => {
+    const r = validarSoloSelectBD('SELECT * FROM obras where 1=1 update usuarios set x=1');
+    expect(r).toMatch(/operaciones de escritura no permitidas/);
+  });
+
+  it('rechaza query vacía, null o undefined sin lanzar excepción', () => {
+    expect(validarSoloSelectBD('')).toMatch(/Solo se permiten consultas SELECT/);
+    expect(validarSoloSelectBD(null)).toMatch(/Solo se permiten consultas SELECT/);
+    expect(validarSoloSelectBD(undefined)).toMatch(/Solo se permiten consultas SELECT/);
   });
 });
 

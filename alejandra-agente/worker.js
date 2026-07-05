@@ -26,6 +26,7 @@ import {
   TOOLS_REQUIEREN_SESION,
   extraerTablasQuery,
   validarScopeEmpresaBD,
+  validarSoloSelectBD,
   urlPermitidaTestEndpoint,
   esStatusReintentableAnthropic,
   calcularEsperaReintentoMs,
@@ -5248,14 +5249,9 @@ ${input.codigo_sugerido ? `CÓDIGO SUGERIDO:\n${input.codigo_sugerido}` : ''}`;
     case 'consultar_bd': {
       try {
         const query = (input.query || '').trim();
-        // Solo permitir SELECT
-        if (!/^SELECT\b/i.test(query)) {
-          return 'Solo se permiten consultas SELECT (lectura). No se admite INSERT, UPDATE, DELETE, DROP ni otras operaciones de escritura.';
-        }
-        // Bloquear palabras peligrosas incluso dentro de un SELECT
-        if (/\b(INSERT|UPDATE|DELETE|DROP|ALTER|CREATE|TRUNCATE|REPLACE)\b/i.test(query)) {
-          return 'Consulta rechazada: contiene operaciones de escritura no permitidas.';
-        }
+        // Solo permitir SELECT (validarSoloSelectBD, compartida con configurar_alerta/exportar_datos)
+        const rechazoSelect = validarSoloSelectBD(query);
+        if (rechazoSelect) return rechazoSelect;
         const params = input.params || [];
         // Aislamiento multi-empresa (ver TABLAS_EMPRESA_PERMITIDAS más arriba).
         const rechazo = validarScopeEmpresaBD(query, params, empresa_id, esDevVerificado);
@@ -7555,6 +7551,12 @@ ${datos.proximos_pasos || '- Pendiente de definir'}`;
     }
 
     case 'configurar_alerta': {
+      // Fix continuación 14 (IDOR/SQLi): esta tool ya está restringida a dev
+      // verificado vía TOOLS_SOLO_DEV_VERIFICADO (lib.js), pero se repite la
+      // comprobación aquí como defensa en profundidad -- si algún día se filtra
+      // esta tool a un experto/ruta que no pase por filtrarToolsPorAuth, esto
+      // sigue bloqueando el uso indebido en vez de confiar solo en el gating externo.
+      if (!esDevVerificado) return 'Esta herramienta requiere sesión de desarrollador verificada.';
       const accion = input.accion;
       if (!accion) return 'Falta "accion" (crear, listar, eliminar, verificar).';
       try {
@@ -7564,6 +7566,11 @@ ${datos.proximos_pasos || '- Pendiente de definir'}`;
             const condicion = (input.condicion || '').trim();
             const mensaje = (input.mensaje || '').trim();
             if (!tipo || !condicion) return 'Faltan "tipo" y "condicion" para crear alerta.';
+            // condicion_sql se ejecuta tal cual más tarde en "verificar" -- exigir que
+            // sea un SELECT de solo lectura (fix continuación 14: antes se guardaba y
+            // ejecutaba cualquier SQL, incluyendo UPDATE/DELETE, sin esta comprobación).
+            const rechazo = validarSoloSelectBD(condicion);
+            if (rechazo) return rechazo;
             await env.DB.prepare(
               "INSERT INTO alertas_config (tipo, nombre, condicion_sql, umbral, mensaje_template) VALUES (?, ?, ?, ?, ?)"
             ).bind(tipo, input.nombre || tipo, condicion, input.umbral || 0, mensaje || `Alerta: ${tipo}`).run();
@@ -7588,6 +7595,13 @@ ${datos.proximos_pasos || '- Pendiente de definir'}`;
             const resultados = [];
             for (const alerta of (alertas.results || [])) {
               try {
+                // Revalidar en el momento de ejecutar (no solo al crear), por si la fila
+                // viene de antes del fix continuación 14 o de una edición manual en D1.
+                const rechazoAlerta = validarSoloSelectBD(alerta.condicion_sql || '');
+                if (rechazoAlerta) {
+                  resultados.push({ alerta_id: alerta.id, tipo: alerta.tipo, error: `Alerta rechazada: ${rechazoAlerta}` });
+                  continue;
+                }
                 const rows = await env.DB.prepare(alerta.condicion_sql).all();
                 const items = rows.results || [];
                 if (items.length > 0) {
@@ -7619,45 +7633,65 @@ ${datos.proximos_pasos || '- Pendiente de definir'}`;
       if (!tipo) return 'Falta "tipo" de exportación.';
       try {
         let sql = '';
+        let params = [];
         let filename = '';
         const fecha = new Date().toISOString().split('T')[0];
-        const filtroFechas = (campo) => {
-          let where = '';
-          if (input.fecha_desde) where += ` AND ${campo} >= '${input.fecha_desde}'`;
-          if (input.fecha_hasta) where += ` AND ${campo} <= '${input.fecha_hasta}'`;
-          return where;
+        // Fix continuación 14 (IDOR/SQLi): antes obra_id/fecha_desde/fecha_hasta se
+        // concatenaban como string sin parametrizar (inyección SQL directa vía esos
+        // 3 campos) y NINGÚN tipo filtraba por empresa_id (cualquier usuario exportaba
+        // bobinas/fichajes/materiales de TODAS las empresas). Ahora todo va por bind(),
+        // y se exige empresa_id real de la sesión salvo dev verificado (mismo criterio
+        // que consultar_bd/escribir_bd/validarScopeEmpresaBD).
+        const construirWhere = (alias, campoFecha) => {
+          const clauses = ['1=1'];
+          if (input.obra_id) { clauses.push(`${alias}obra_id = ?`); params.push(input.obra_id); }
+          if (!esDevVerificado) { clauses.push(`${alias}empresa_id = ?`); params.push(empresa_id); }
+          if (campoFecha) {
+            if (input.fecha_desde) { clauses.push(`${campoFecha} >= ?`); params.push(input.fecha_desde); }
+            if (input.fecha_hasta) { clauses.push(`${campoFecha} <= ?`); params.push(input.fecha_hasta); }
+          }
+          return clauses.join(' AND ');
         };
         switch (tipo) {
           case 'bobinas':
-            sql = `SELECT id, nombre, tipo, seccion, metros_totales, metros_restantes, ubicacion, created_at FROM bobinas WHERE 1=1${input.obra_id ? ' AND obra_id=' + input.obra_id : ''}${filtroFechas('created_at')} ORDER BY nombre`;
+            sql = `SELECT id, nombre, tipo, seccion, metros_totales, metros_restantes, ubicacion, created_at FROM bobinas WHERE ${construirWhere('', 'created_at')} ORDER BY nombre`;
             filename = `bobinas_${fecha}`;
             break;
           case 'personal':
-            sql = `SELECT id, nombre, apellidos, dni, puesto, departamento, activo, telefono, email FROM personal WHERE 1=1${input.obra_id ? ' AND obra_id=' + input.obra_id : ''} ORDER BY nombre`;
+            sql = `SELECT id, nombre, apellidos, dni, puesto, departamento, activo, telefono, email FROM personal WHERE ${construirWhere('', null)} ORDER BY nombre`;
             filename = `personal_${fecha}`;
             break;
           case 'fichajes':
-            sql = `SELECT f.id, p.nombre, f.tipo, f.fecha, f.hora, f.ubicacion FROM fichajes f LEFT JOIN personal p ON p.id = f.usuario_id WHERE 1=1${input.obra_id ? ' AND f.obra_id=' + input.obra_id : ''}${filtroFechas('f.fecha')} ORDER BY f.fecha DESC, f.hora DESC`;
+            sql = `SELECT f.id, p.nombre, f.tipo, f.fecha, f.hora, f.ubicacion FROM fichajes f LEFT JOIN personal p ON p.id = f.usuario_id WHERE ${construirWhere('f.', 'f.fecha')} ORDER BY f.fecha DESC, f.hora DESC`;
             filename = `fichajes_${fecha}`;
             break;
           case 'materiales':
-            sql = `SELECT * FROM materiales_obra WHERE 1=1${input.obra_id ? ' AND obra_id=' + input.obra_id : ''}${filtroFechas('fecha')} ORDER BY fecha DESC`;
+            sql = `SELECT * FROM materiales_obra WHERE ${construirWhere('', 'fecha')} ORDER BY fecha DESC`;
             filename = `materiales_${fecha}`;
             break;
           case 'gastos':
-            sql = `SELECT * FROM gastos WHERE 1=1${input.obra_id ? ' AND obra_id=' + input.obra_id : ''}${filtroFechas('fecha')} ORDER BY fecha DESC`;
+            sql = `SELECT * FROM gastos WHERE ${construirWhere('', 'fecha')} ORDER BY fecha DESC`;
             filename = `gastos_${fecha}`;
             break;
-          case 'custom':
+          case 'custom': {
             if (!input.sql_custom) return 'Falta "sql_custom" para exportación personalizada.';
-            if (!input.sql_custom.trim().toUpperCase().startsWith('SELECT')) return 'Solo se permiten consultas SELECT.';
-            sql = input.sql_custom;
+            const sqlCustom = input.sql_custom.trim();
+            const rechazoSelect = validarSoloSelectBD(sqlCustom);
+            if (rechazoSelect) return rechazoSelect;
+            // Antes solo se exigía que empezara por "SELECT" (case-insensitive, sin
+            // bloquear tablas/columnas sensibles ni exigir empresa_id) -- ahora pasa
+            // por el mismo aislamiento multi-empresa que consultar_bd.
+            const rechazoScope = validarScopeEmpresaBD(sqlCustom, [], empresa_id, esDevVerificado);
+            if (rechazoScope) return rechazoScope;
+            sql = sqlCustom;
             filename = `custom_${fecha}`;
             break;
+          }
           default:
             return `Tipo "${tipo}" no soportado. Usa: bobinas, personal, fichajes, materiales, gastos, custom.`;
         }
-        const rows = await env.DB.prepare(sql).all();
+        const stmt = env.DB.prepare(sql);
+        const rows = params.length > 0 ? await stmt.bind(...params).all() : await stmt.all();
         const data = rows.results || [];
         if (data.length === 0) return JSON.stringify({ ok: true, rows: 0, msg: 'Sin datos para exportar.' });
         // Generar CSV
