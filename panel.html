@@ -854,6 +854,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
     <!-- TOPBAR -->
     <div id="topbar">
       <button class="topbar-btn" id="btnMenuToggle" style="display:none" onclick="toggleSidebar()">☰</button>
+      <button class="topbar-btn" id="btnNavBack" onclick="navBack()" title="Volver a la página anterior" style="display:none;font-size:12px;gap:4px;align-items:center;padding:4px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--muted);white-space:nowrap">← <span id="navBackLabel">Volver</span></button>
       <div class="topbar-title" id="topbarTitle">Dashboard</div>
       <div class="topbar-empresa" id="topbarEmpresa"></div>
       <div class="topbar-user" id="topbarUser">
@@ -9704,8 +9705,34 @@ const PAGE_LOADERS = {
 };
 
 let currentPage = '';
+let _navStack = [];  // historial de navegación para el botón ← Volver
+
+function _updateBackBtn() {
+  const backBtn   = document.getElementById('btnNavBack');
+  const backLabel = document.getElementById('navBackLabel');
+  if (!backBtn) return;
+  if (_navStack.length > 0) {
+    const prev = _navStack[_navStack.length - 1];
+    if (backLabel) backLabel.textContent = PAGE_TITLES[prev] || prev;
+    backBtn.style.display = 'flex';
+  } else {
+    backBtn.style.display = 'none';
+  }
+}
+
+function navBack() {
+  if (_navStack.length === 0) return;
+  const target = _navStack.pop();
+  _doNavTo(target);  // navegar sin añadir al stack
+}
+
 function navTo(page) {
   if (currentPage === page) return;
+  if (currentPage) _navStack.push(currentPage);  // guardar en historial
+  _doNavTo(page);
+}
+
+function _doNavTo(page) {
   // Parar live logs si salimos de devtools
   if (currentPage === 'devtools' && _liveActive) devToggleLive();
   _stopSync();  // cancelar auto-refresh de la página anterior
@@ -9718,6 +9745,7 @@ function navTo(page) {
   if (btn) btn.classList.add('active');
   document.getElementById('topbarTitle').textContent = PAGE_TITLES[page] || page;
   if (window.innerWidth <= 900) document.getElementById('sidebar').classList.remove('open');
+  _updateBackBtn();
   if (PAGE_LOADERS[page]) PAGE_LOADERS[page]();
   _startSync(page);  // arrancar auto-refresh para la nueva página
 }
