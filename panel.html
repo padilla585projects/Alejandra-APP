@@ -9588,7 +9588,7 @@ const PAGE_TITLES = {
 
 const PAGE_LOADERS = {
   dashboard: cargarDashboard,
-  globalDashboard: cargarGlobalDashboard,
+  globalDashboard: (...args) => cargarGlobalDashboard(...args),
   personal: cargarPersonal,
   fichajes: cargarFichajes,
   turnos: cargarTurnos,
@@ -18445,14 +18445,14 @@ async function eliminarContratoObra(id) {
 
 // ── ORDENES DE COMPRA (NEW-74) ────────────────────────────────────────────
 let tblOrdenesCompra = null;
-let _ocData          = [];
-let _ocEditId        = 0;
+let _ocpData         = [];
+let _ocpEditId       = 0;
 
-const OC_ESTADO_COLOR = {
+const OCP_ESTADO_COLOR = {
   borrador:'var(--muted)', enviada:'var(--primary)', confirmada:'var(--success)',
   parcial:'var(--warning)', completa:'var(--success)', cancelada:'var(--danger)'
 };
-const OC_ESTADO_LABEL = {
+const OCP_ESTADO_LABEL = {
   borrador:'✏️ Borrador', enviada:'📤 Enviada', confirmada:'✅ Confirmada',
   parcial:'📦 Parcial', completa:'🏁 Completa', cancelada:'❌ Cancelada'
 };
@@ -18465,14 +18465,14 @@ async function cargarOrdenesCompra() {
   if (obraId) url += `obra_id=${obraId}&`;
   if (estado) url += `estado=${estado}&`;
   const r = await api(url);
-  _ocData = r.items || [];
+  _ocpData = r.items || [];
 
-  const totalImporte = _ocData.reduce((s, c) => s + (c.importe_total || 0), 0);
-  const pendientes   = _ocData.filter(c => ['borrador','enviada'].includes(c.estado)).length;
-  const completas    = _ocData.filter(c => c.estado === 'completa').length;
-  const canceladas   = _ocData.filter(c => c.estado === 'cancelada').length;
+  const totalImporte = _ocpData.reduce((s, c) => s + (c.importe_total || 0), 0);
+  const pendientes   = _ocpData.filter(c => ['borrador','enviada'].includes(c.estado)).length;
+  const completas    = _ocpData.filter(c => c.estado === 'completa').length;
+  const canceladas   = _ocpData.filter(c => c.estado === 'cancelada').length;
   document.getElementById('ocKpiStrip').innerHTML = [
-    { icon: '🛒', value: _ocData.length,                       label: 'Total OCs',             cls: '' },
+    { icon: '🛒', value: _ocpData.length,                       label: 'Total OCs',             cls: '' },
     { icon: '📤', value: pendientes,                            label: 'Pendientes/en curso',   cls: pendientes > 0 ? 'warn' : '' },
     { icon: '🏁', value: completas,                             label: 'Completadas',            cls: completas > 0 ? 'ok' : '' },
     { icon: '💶', value: fmtMoney(totalImporte), label: 'Importe comprometido', cls: '' },
@@ -18485,9 +18485,9 @@ async function cargarOrdenesCompra() {
 
 function filtrarOc() {
   const q = (document.getElementById('searchOc')?.value || '').toLowerCase();
-  const filtered = q ? _ocData.filter(c =>
+  const filtered = q ? _ocpData.filter(c =>
     (c.numero||'').toLowerCase().includes(q) || (c.proveedor||'').toLowerCase().includes(q)
-  ) : _ocData;
+  ) : _ocpData;
   if (tblOrdenesCompra) { tblOrdenesCompra.replaceData(filtered); return; }
   tblOrdenesCompra = new Tabulator('#tblOrdenesCompra', {
     data: filtered, layout: 'fitColumns', pagination: 'local', paginationSize: 25,
@@ -18502,7 +18502,7 @@ function filtrarOc() {
       { title: 'Estado', field: 'estado', width: 130,
         formatter: c => {
           const v = c.getValue() || 'borrador';
-          return `<span style="color:${OC_ESTADO_COLOR[v]};font-weight:700">${OC_ESTADO_LABEL[v]||v}</span>`;
+          return `<span style="color:${OCP_ESTADO_COLOR[v]};font-weight:700">${OCP_ESTADO_LABEL[v]||v}</span>`;
         }
       },
       { title: 'Emisión', field: 'fecha_emision', width: 100, formatter: c => fmtFecha(c.getValue()||'') },
@@ -18521,7 +18521,7 @@ function filtrarOc() {
 }
 
 function abrirModalOc() {
-  _ocEditId = 0;
+  _ocpEditId = 0;
   document.getElementById('modalOcTitle').textContent = 'Nueva Orden de Compra';
   document.getElementById('ocId').value = '';
   document.getElementById('ocProveedor').value = '';
@@ -18538,9 +18538,9 @@ function abrirModalOc() {
 }
 
 async function editarOc(id) {
-  const oc = _ocData.find(c => c.id === id);
+  const oc = _ocpData.find(c => c.id === id);
   if (!oc) return;
-  _ocEditId = id;
+  _ocpEditId = id;
   document.getElementById('modalOcTitle').textContent = `Editar OC ${oc.numero}`;
   document.getElementById('ocId').value = id;
   document.getElementById('ocProveedor').value = oc.proveedor || '';
@@ -18606,8 +18606,8 @@ async function agregarOcLinea() {
     document.getElementById('ocLineaPrecio').value = '0';
     await cargarOcLineas(ocId);
     // Refresh table to update importe_total
-    const upd = _ocData.find(c => c.id === ocId);
-    if (upd) { const rl = await api(`/ordenes-compra?`); _ocData = rl.items || []; if (tblOrdenesCompra) tblOrdenesCompra.replaceData(_ocData); }
+    const upd = _ocpData.find(c => c.id === ocId);
+    if (upd) { const rl = await api(`/ordenes-compra?`); _ocpData = rl.items || []; if (tblOrdenesCompra) tblOrdenesCompra.replaceData(_ocpData); }
   } else toast(r.error || 'Error al añadir línea', 'err');
 }
 
@@ -18637,7 +18637,7 @@ async function guardarOc() {
     if (!id && r.id) {
       // Nueva OC creada — actualizar ID en el modal para poder añadir líneas
       document.getElementById('ocId').value = r.id;
-      _ocEditId = r.id;
+      _ocpEditId = r.id;
       document.getElementById('modalOcTitle').textContent = `Editar OC ${r.numero}`;
       toast(`OC ${r.numero} creada — ahora puedes añadir líneas`, 'ok');
     } else {
@@ -18649,7 +18649,7 @@ async function guardarOc() {
 }
 
 async function eliminarOc(id) {
-  const oc = _ocData.find(c => c.id === id);
+  const oc = _ocpData.find(c => c.id === id);
   if (!confirm(`¿Eliminar la OC ${oc?.numero || id}? Esta acción no se puede deshacer.`)) return;
   const r = await api(`/ordenes-compra/${id}`, { method: 'DELETE' });
   if (r.ok) { toast('Eliminada', 'ok'); tblOrdenesCompra = null; cargarOrdenesCompra(); }
@@ -18658,7 +18658,7 @@ async function eliminarOc(id) {
 
 function cerrarModalOc() {
   document.getElementById('modalOc').classList.remove('show');
-  _ocEditId = 0;
+  _ocpEditId = 0;
 }
 
 // ── CUADRO DE MANDO POR OBRA ─────────────────────────────────────
@@ -25552,7 +25552,7 @@ const QA_CAT_COLOR = {
   general: '#6366f1', estructura: '#0ea5e9', acabados: '#f97316',
   instalaciones: '#22c55e', seguridad: '#ef4444'
 };
-const NCR_GRAV_COLOR = {
+const NCR_GRAV_COLOR_QA = {
   leve: '#22c55e', moderado: '#f97316', grave: '#ef4444', critico: '#7c3aed'
 };
 const NCR_ESTADO_ICON = { abierta: '🔴', en_proceso: '🟡', cerrada: '✅', rechazada: '⚫' };
@@ -25916,7 +25916,7 @@ async function cargarNCRs() {
     return;
   }
   lista.innerHTML = `<div style="display:flex;flex-direction:column;gap:10px">${ncrs.map(n => {
-    const gColor = NCR_GRAV_COLOR[n.gravedad] || 'var(--muted)';
+    const gColor = NCR_GRAV_COLOR_QA[n.gravedad] || 'var(--muted)';
     return `<div class="kpi-card" style="text-align:left;padding:16px;border-left:4px solid ${gColor}">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
         <div style="flex:1">
@@ -27306,7 +27306,6 @@ async function eliminarRiesgo(id) {
 }
 
 // ── ORDENES DE CAMBIO / CHANGE ORDERS (NEW-58) ────────────────────
-let tblOC = null;
 let _ocEditId = null;
 
 const OC_TIPO_COLOR = { adicional:'var(--primary)', reduccion:'var(--warning)', sustitucion:'var(--muted)' };
