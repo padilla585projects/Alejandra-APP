@@ -679,6 +679,33 @@ const AI_TOOLS = [
       },
       required: ['metric']
     }
+  },
+  {
+    name: 'generar_plano',
+    description: 'Genera un plano tecnico profesional en formato SVG editable. Puede crear planos de planta/obra, esquemas electricos, planos mecanicos/industriales y diagramas de Gantt/fases. El SVG generado se guarda en la base de datos y es descargable y editable desde el panel.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        tipo: { type: 'string', enum: ['planta', 'electrico', 'mecanico', 'gantt'], description: 'Tipo de plano: planta (plano de planta/obra), electrico (esquema electrico), mecanico (plano mecanico/industrial), gantt (diagrama de Gantt/fases)' },
+        titulo: { type: 'string', description: 'Titulo del plano (ej: "Plano Planta Baja Nave A", "Esquema Electrico Cuadro Principal", "Gantt Fase 2")' },
+        descripcion: { type: 'string', description: 'Descripcion detallada de lo que debe incluir el plano: zonas, componentes, fases, medidas, leyenda, etc.' },
+        empresa_id: { type: 'integer', description: 'ID de la empresa a la que pertenece el plano' },
+        usuario_id: { type: 'integer', description: 'ID del usuario que solicita el plano (opcional)' }
+      },
+      required: ['tipo', 'titulo', 'descripcion', 'empresa_id']
+    }
+  },
+  {
+    name: 'listar_planos',
+    description: 'Lista los planos tecnicos guardados de una empresa, con filtro opcional por tipo.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        empresa_id: { type: 'integer', description: 'ID de la empresa' },
+        tipo: { type: 'string', enum: ['planta', 'electrico', 'mecanico', 'gantt'], description: 'Filtrar por tipo (opcional)' }
+      },
+      required: ['empresa_id']
+    }
   }
 ];
 
@@ -1878,6 +1905,29 @@ async function executeAITool(env, toolName, toolInput) {
             ? `âœ… Sin anomalÃ­as detectadas en el periodo ${periodo}`
             : `âš ï¸ ${anomalias.length} anomalÃ­a(s) detectada(s)`
         });
+      } catch (e) { return JSON.stringify({ ok: false, error: e.message }); }
+    }
+
+    case 'generar_plano': {
+      try {
+        const { tipo, titulo, descripcion, empresa_id, usuario_id } = toolInput;
+        if (!tipo || !titulo || !descripcion || !empresa_id) return JSON.stringify({ ok: false, error: 'Faltan campos: tipo, titulo, descripcion y empresa_id son obligatorios' });
+        const result = await _generarPlanoInterno(env, { tipo, titulo, descripcion, empresa_id, usuario_id });
+        return JSON.stringify(result);
+      } catch (e) { return JSON.stringify({ ok: false, error: e.message }); }
+    }
+
+    case 'listar_planos': {
+      try {
+        const { empresa_id, tipo } = toolInput;
+        if (!empresa_id) return JSON.stringify({ ok: false, error: 'empresa_id requerido' });
+        await _ensurePlanosTable(env);
+        let q = 'SELECT id, tipo, titulo, descripcion, creado_en FROM planos WHERE empresa_id=?';
+        const params = [empresa_id];
+        if (tipo) { q += ' AND tipo=?'; params.push(tipo); }
+        q += ' ORDER BY creado_en DESC LIMIT 50';
+        const rows = await env.DB.prepare(q).bind(...params).all();
+        return JSON.stringify({ ok: true, planos: rows.results || [] });
       } catch (e) { return JSON.stringify({ ok: false, error: e.message }); }
     }
 
@@ -5458,6 +5508,13 @@ export default {
       // â”€â”€ Scan albarÃ¡n bobinas â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
       if (path === '/scan-bobinas'   && method === 'POST') return await scanBobinas(request, env);
       if (path === '/bobinas/batch'  && method === 'POST') return await bobinasBatch(request, env, ctx);
+
+      // ── Modulo Planos Tecnicos ─────────────────────────────────────
+      if (path === '/planos'                       && method === 'GET')    return await listarPlanosREST(request, env);
+      if (path === '/planos/generar'               && method === 'POST')   return await generarPlanoREST(request, env);
+      if (/^\/planos\/\d+$/.test(path)            && method === 'GET')    return await getPlano(request, env, path);
+      if (/^\/planos\/\d+\/svg$/.test(path)       && method === 'GET')    return await getPlanoSvg(request, env, path);
+      if (/^\/planos\/\d+$/.test(path)            && method === 'DELETE') return await eliminarPlano(request, env, path);
 
       return err('Ruta no encontrada', 404);
     } catch (e) {
@@ -21720,5 +21777,273 @@ async function eliminarRdpRegistro(id, request, env) {
   if (!reg) return err('No encontrado', 404);
   if (reg.firmado) return err('No se puede eliminar un registro firmado', 409);
   await env.DB.prepare('DELETE FROM rdp_registros WHERE id=? AND empresa_id=?').bind(id, empresa_id).run();
+  return json({ ok: true });
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// MODULO PLANOS TECNICOS — generacion SVG via Claude
+// ═══════════════════════════════════════════════════════════════════
+
+async function _ensurePlanosTable(env) {
+  await env.DB.prepare(`
+    CREATE TABLE IF NOT EXISTS planos (
+      id             INTEGER PRIMARY KEY AUTOINCREMENT,
+      empresa_id     INTEGER NOT NULL,
+      usuario_id     INTEGER,
+      tipo           TEXT    NOT NULL,
+      titulo         TEXT    NOT NULL,
+      descripcion    TEXT,
+      svg_data       TEXT    NOT NULL,
+      metadatos      TEXT,
+      creado_en      TEXT    DEFAULT (datetime('now')),
+      actualizado_en TEXT    DEFAULT (datetime('now'))
+    )
+  `).run();
+}
+
+// Prompts de sistema por tipo de plano
+const _PLANO_PROMPTS = {
+  planta: `Eres un arquitecto tecnico y delineante experto en planos de construccion e ingenieria civil. Tu tarea es generar un plano de planta/obra en formato SVG profesional y editable.
+
+REQUISITOS TECNICOS:
+- viewBox="0 0 1200 800", xmlns="http://www.w3.org/2000/svg", id="plano-principal"
+- Paredes: stroke="#1a1a1a" stroke-width="6" fill="#e8e8e0" (relleno habitaciones)
+- Ejes estructurales: lineas discontinuas color="#888888" stroke-dasharray="10,5"
+- Pilares: cuadrados negros rellenos 12x12px en interseccion de ejes
+- Puertas: arco de 90 grados (quarter-circle path), stroke="#333" fill="none"
+- Ventanas: triple linea paralela en el vano de la pared
+- Cotas: lineas azules (#0066cc stroke-width="1") con flechas y texto font-size="9"
+- Etiquetas de zonas: font-family="Arial,sans-serif" font-size="11" fill="#222" text-anchor="middle"
+- Flecha norte: simbolo en esquina superior derecha
+- Bloque de titulo: rectangulo en esquina inferior derecha con empresa, titulo, escala, fecha, hoja
+- Escala grafica: barra en parte inferior
+- Leyenda: esquina inferior izquierda
+- Agrupa cada zona con <g id="zona-X" class="zona">
+
+DEVUELVE: solo el codigo SVG valido completo, sin texto adicional fuera del SVG.`,
+
+  electrico: `Eres un ingeniero electrico experto en esquemas electricos industriales segun normas IEC/EN. Tu tarea es generar un esquema electrico en formato SVG profesional y editable.
+
+REQUISITOS TECNICOS:
+- viewBox="0 0 1200 800", xmlns="http://www.w3.org/2000/svg", id="plano-principal"
+- Fondo: fill="#ffffff", cuadricula opcional muy tenue (#f0f0f0)
+- Cables y conexiones: lineas ortogonales (solo horizontal/vertical) stroke="#000000" stroke-width="1.5"
+- Nodos de conexion: circulos rellenos r="3" fill="#000000"
+- Colores de fase: L1=#cc0000, L2=#cc6600, L3=#000099, N=#0066cc, PE=#006600
+- Simbolos IEC simplificados como paths SVG:
+  * Resistencia/Carga: rect 30x12 stroke="#000" fill="none"
+  * Motor M: circle r="18" + texto "M" centrado
+  * Interruptor: linea diagonal 45deg entre dos contactos
+  * Fusible: rect 20x8 + linea central diagonal
+  * Contactor/Rele: bobina cuadrada + contactos
+  * Transformador: dos semicirculos opuestos
+  * Tierra PE: 3 lineas horizontales decrecientes (clasico)
+  * Lampara/LED: circulo + cruz diagonal
+- Bornes numerados con rect + numero (font-size="8")
+- Referencias de componentes (Q1, F1, M1, K1...) junto a cada simbolo
+- Bloque de titulo estandar en esquina inferior derecha
+- Leyenda de componentes y colores de fase
+- Agrupa por circuito: <g id="circuito-X" class="circuito">
+
+DEVUELVE: solo el codigo SVG valido completo, sin texto adicional fuera del SVG.`,
+
+  mecanico: `Eres un delineante tecnico industrial experto en planos mecanicos segun normas ISO/DIN. Tu tarea es generar un plano mecanico en formato SVG profesional y editable.
+
+REQUISITOS TECNICOS:
+- viewBox="0 0 1200 800", xmlns="http://www.w3.org/2000/svg", id="plano-principal"
+- Lineas visibles: stroke="#000000" stroke-width="1.5" fill="none"
+- Lineas de centro: stroke="#cc0000" stroke-width="0.8" stroke-dasharray="12,4,3,4"
+- Lineas ocultas: stroke="#444444" stroke-width="0.8" stroke-dasharray="6,3"
+- Lineas de corte: stroke="#000000" stroke-width="2" stroke-dasharray="20,5"
+- Cotas: lineas de cota con flechas terminales, texto centrado font-size="9" fill="#000066"
+- Vistas: hasta 3 vistas (alzado frontal, planta superior, perfil) separadas con linea tenue
+- Roscas: linea exterior completa + linea interior a 3/4 del diametro (discontinua)
+- Simbolo de acabado superficial (Ra): angulo simplificado con valor
+- Tolerancias geometricas: marco rectangular con simbolo ISO
+- Bloque de titulo DIN estandar completo (empresa, titulo, numero de plano, escala, material, tolerancia general, fecha, revision, dibujado por)
+- BOM/lista de piezas si hay varios componentes
+- Agrupa por vista: <g id="vista-alzado">, <g id="vista-planta">, <g id="vista-perfil">
+
+DEVUELVE: solo el codigo SVG valido completo, sin texto adicional fuera del SVG.`,
+
+  gantt: `Eres un jefe de proyecto experto en planificacion y control de obras. Tu tarea es generar un diagrama de Gantt visual profesional en formato SVG.
+
+REQUISITOS TECNICOS:
+- viewBox="0 0 1200 800", xmlns="http://www.w3.org/2000/svg", id="plano-principal"
+- Cabecera: rect fill="#1a3a6b" con titulo del proyecto en texto blanco bold font-size="16"
+- Columna izquierda (220px): fondo #f0f4fa, separador vertical stroke="#ccc"
+  * Encabezado "TAREA / ACTIVIDAD" en negrita
+  * Filas alternadas blanco/#f8f9fa, altura 32px
+- Cabecera de tiempo: meses en azul oscuro, semanas en azul medio, font-size="10"
+- Barras de tareas con colores por fase:
+  * Fase 1/Cimentacion: fill="#e8521a" con borde mas oscuro
+  * Fase 2/Estructura: fill="#2196F3" con borde mas oscuro
+  * Fase 3/Instalaciones: fill="#43A047" con borde mas oscuro
+  * Fase 4/Acabados: fill="#8E24AA" con borde mas oscuro
+  * Otros/General: fill="#607D8B"
+- Barra de progreso interior: fill con opacidad 0.5 mas oscura, porcentaje en texto
+- Hitos/Milestones: diamante (poligono rotado 45deg) fill="#FFD700" stroke="#cc8800"
+- Linea vertical HOY: stroke="#cc0000" stroke-width="2" stroke-dasharray="6,3" con etiqueta "HOY"
+- Dependencias entre tareas: lineas con flecha (si aplica)
+- Leyenda de colores/fases en esquina inferior izquierda
+- Resumen de avance global en esquina superior derecha (% completado)
+- Bloque de info: empresa, proyecto, emitido por, fecha emision, revision
+
+DEVUELVE: solo el codigo SVG valido completo, sin texto adicional fuera del SVG.`
+};
+
+async function _generarPlanoInterno(env, { tipo, titulo, descripcion, empresa_id, usuario_id }) {
+  await _ensurePlanosTable(env);
+
+  const systemPrompt = _PLANO_PROMPTS[tipo] || _PLANO_PROMPTS.planta;
+  const userMsg = `Genera el SVG para el siguiente plano tecnico:
+
+TITULO: ${titulo}
+
+TIPO: ${tipo}
+
+DESCRIPCION Y CONTENIDO REQUERIDO:
+${descripcion}
+
+INSTRUCCIONES FINALES:
+- Genera el SVG completo y listo para usar directamente en un navegador
+- Incluye SOLO el codigo SVG (desde <svg hasta </svg>), sin explicaciones, comentarios externos ni bloques de codigo markdown
+- El SVG debe contener todos los elementos descritos con maxima precision y detalle profesional
+- Todos los textos en espanol
+- Fecha actual: ${new Date().toLocaleDateString('es-ES')}
+- El resultado sera visualizado en el panel web de la empresa`;
+
+  const resp = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': env.ANTHROPIC_API_KEY,
+      'anthropic-version': '2023-06-01'
+    },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 8192,
+      system: systemPrompt,
+      messages: [{ role: 'user', content: userMsg }]
+    })
+  });
+
+  if (!resp.ok) {
+    const errText = await resp.text().catch(() => resp.statusText);
+    throw new Error(`API error ${resp.status}: ${errText.slice(0, 200)}`);
+  }
+
+  const data = await resp.json();
+  let svgRaw = data.content?.[0]?.text || '';
+
+  // Extraer SVG si hay texto extra alrededor
+  const svgMatch = svgRaw.match(/<svg[\s\S]*<\/svg>/i);
+  if (svgMatch) svgRaw = svgMatch[0];
+  if (!svgRaw.includes('<svg')) throw new Error('La IA no genero un SVG valido');
+
+  // Registrar uso de IA
+  logAIUsage(env, {
+    empresa_id,
+    proveedor: 'anthropic',
+    modelo: 'claude-sonnet-4-6',
+    endpoint: 'generar_plano',
+    input_tokens: data.usage?.input_tokens || 0,
+    output_tokens: data.usage?.output_tokens || 0
+  });
+
+  const metadatos = JSON.stringify({
+    tipo,
+    tokens_usados: data.usage?.output_tokens || 0,
+    modelo: 'claude-sonnet-4-6'
+  });
+
+  const res = await env.DB.prepare(
+    'INSERT INTO planos (empresa_id, usuario_id, tipo, titulo, descripcion, svg_data, metadatos) VALUES (?, ?, ?, ?, ?, ?, ?)'
+  ).bind(empresa_id, usuario_id || null, tipo, titulo, descripcion, svgRaw, metadatos).run();
+
+  const id = res.meta?.last_row_id;
+  return {
+    ok: true,
+    id,
+    tipo,
+    titulo,
+    mensaje: `Plano "${titulo}" (${tipo}) generado correctamente con ID ${id}. Accede a el en el panel, seccion Planos, o descargalo desde /planos/${id}/svg`
+  };
+}
+
+async function listarPlanosREST(request, env) {
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 401);
+  await _ensurePlanosTable(env);
+  const url = new URL(request.url);
+  const tipo = url.searchParams.get('tipo');
+  let q = 'SELECT id, tipo, titulo, descripcion, creado_en, usuario_id FROM planos WHERE empresa_id=?';
+  const params = [empresa_id];
+  if (tipo) { q += ' AND tipo=?'; params.push(tipo); }
+  q += ' ORDER BY creado_en DESC LIMIT 100';
+  const rows = await env.DB.prepare(q).bind(...params).all();
+  return json({ ok: true, planos: rows.results || [] });
+}
+
+async function generarPlanoREST(request, env) {
+  const { empresa_id, usuario_id, rol } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 401);
+  if (rol === 'operario') return err('Sin permisos', 403);
+  const body = await request.json().catch(() => ({}));
+  const { tipo, titulo, descripcion } = body;
+  if (!tipo || !titulo || !descripcion) return err('tipo, titulo y descripcion son obligatorios', 400);
+  const tiposValidos = ['planta', 'electrico', 'mecanico', 'gantt'];
+  if (!tiposValidos.includes(tipo)) return err('tipo invalido. Valores permitidos: ' + tiposValidos.join(', '), 400);
+  try {
+    const result = await _generarPlanoInterno(env, { tipo, titulo, descripcion, empresa_id, usuario_id });
+    return json(result);
+  } catch (e) {
+    return err('Error generando plano: ' + e.message, 500);
+  }
+}
+
+async function getPlano(request, env, path) {
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 401);
+  const id = parseInt(path.split('/')[2]);
+  if (!id) return err('ID invalido', 400);
+  await _ensurePlanosTable(env);
+  const row = await env.DB.prepare(
+    'SELECT id, tipo, titulo, descripcion, metadatos, creado_en, usuario_id FROM planos WHERE id=? AND empresa_id=?'
+  ).bind(id, empresa_id).first();
+  if (!row) return err('Plano no encontrado', 404);
+  return json({ ok: true, plano: row });
+}
+
+async function getPlanoSvg(request, env, path) {
+  const { empresa_id } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 401);
+  const parts = path.split('/');
+  const id = parseInt(parts[2]);
+  if (!id) return err('ID invalido', 400);
+  await _ensurePlanosTable(env);
+  const row = await env.DB.prepare(
+    'SELECT svg_data, titulo FROM planos WHERE id=? AND empresa_id=?'
+  ).bind(id, empresa_id).first();
+  if (!row) return err('Plano no encontrado', 404);
+  return new Response(row.svg_data, {
+    headers: {
+      'Content-Type': 'image/svg+xml; charset=utf-8',
+      'Content-Disposition': `inline; filename="${encodeURIComponent(row.titulo || 'plano')}.svg"`,
+      ...CORS
+    }
+  });
+}
+
+async function eliminarPlano(request, env, path) {
+  const { empresa_id, rol } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 401);
+  if (rol === 'operario') return err('Sin permisos', 403);
+  const id = parseInt(path.split('/')[2]);
+  if (!id) return err('ID invalido', 400);
+  await _ensurePlanosTable(env);
+  const row = await env.DB.prepare('SELECT id FROM planos WHERE id=? AND empresa_id=?').bind(id, empresa_id).first();
+  if (!row) return err('Plano no encontrado', 404);
+  await env.DB.prepare('DELETE FROM planos WHERE id=? AND empresa_id=?').bind(id, empresa_id).run();
   return json({ ok: true });
 }
