@@ -5553,6 +5553,7 @@ export default {
       if (path === '/planos/generar'               && method === 'POST')   return await generarPlanoREST(request, env);
       if (/^\/planos\/\d+$/.test(path)            && method === 'GET')    return await getPlano(request, env, path);
       if (/^\/planos\/\d+\/svg$/.test(path)       && method === 'GET')    return await getPlanoSvg(request, env, path);
+      if (/^\/planos\/\d+$/.test(path)            && method === 'PUT')    return await actualizarPlanoSvg(request, env, path);
       if (/^\/planos\/\d+$/.test(path)            && method === 'DELETE') return await eliminarPlano(request, env, path);
 
       return err('Ruta no encontrada', 404);
@@ -22072,6 +22073,26 @@ async function getPlanoSvg(request, env, path) {
       ...CORS
     }
   });
+}
+
+async function actualizarPlanoSvg(request, env, path) {
+  const { empresa_id, rol } = await getAuth(request, env);
+  if (!empresa_id) return err('No autorizado', 401);
+  if (rol === 'operario') return err('Sin permisos', 403);
+  const id = parseInt(path.split('/')[2]);
+  if (!id) return err('ID invalido', 400);
+  let body;
+  try { body = await request.json(); } catch { return err('JSON invalido', 400); }
+  const { svg_data } = body;
+  if (!svg_data || typeof svg_data !== 'string') return err('svg_data requerido', 400);
+  if (!svg_data.trim().startsWith('<svg') && !svg_data.trim().startsWith('<?xml')) return err('svg_data no es un SVG valido', 400);
+  await _ensurePlanosTable(env);
+  const row = await env.DB.prepare('SELECT id FROM planos WHERE id=? AND empresa_id=?').bind(id, empresa_id).first();
+  if (!row) return err('Plano no encontrado', 404);
+  await env.DB.prepare(
+    "UPDATE planos SET svg_data=?, actualizado_en=datetime('now') WHERE id=? AND empresa_id=?"
+  ).bind(svg_data, id, empresa_id).run();
+  return json({ ok: true, id });
 }
 
 async function eliminarPlano(request, env, path) {

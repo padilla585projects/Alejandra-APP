@@ -13,6 +13,7 @@
 <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/interactjs@1.10.27/dist/interact.min.js"></script>
 <style>
 :root {
   --bg:#0f172a; --surface:#162032; --surface2:#1e2d40;
@@ -156,6 +157,13 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
 .btn-danger{background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.3);color:var(--red)}
 .btn-danger:hover{background:rgba(239,68,68,.25)}
 .btn-sm{padding:5px 10px;font-size:11px}
+
+/* EDITOR PLANOS */
+.editor-tool-btn{background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:5px;padding:4px 10px;font-size:11px;cursor:pointer;transition:all .15s;white-space:nowrap}
+.editor-tool-btn:hover{background:var(--accent);color:#fff;border-color:var(--accent)}
+.editor-tool-btn.active-tool{background:var(--accent);color:#fff;border-color:var(--accent)}
+.svg-selected{outline:2px dashed #60a5fa !important;outline-offset:2px;cursor:move}
+.svg-hover{outline:1px solid #60a5fa88 !important;outline-offset:1px}
 
 /* BADGES */
 .badge{display:inline-block;padding:2px 8px;border-radius:20px;font-family:'Montserrat',sans-serif;font-weight:700;font-size:10px;letter-spacing:.3px}
@@ -8948,16 +8956,47 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
         </div>
 
         <!-- ── MODAL VISOR SVG ───────────────────────────────────── -->
-        <div class="modal-overlay" id="modalVisorPlano" style="display:none" onclick="if(event.target===this)cerrarVisorPlano()">
-          <div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;width:95vw;max-width:1200px;height:92vh;display:flex;flex-direction:column;overflow:hidden">
-            <div class="modal-header" style="padding:14px 18px;flex-shrink:0">
-              <h3 id="visorPlanoTitulo" style="font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:60%">Visor de Plano</h3>
-              <div style="display:flex;gap:8px;align-items:center;flex-shrink:0">
+        <div class="modal-overlay" id="modalVisorPlano" style="display:none" onclick="if(event.target===this&&!_editorActivo)cerrarVisorPlano()">
+          <div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;width:95vw;max-width:1300px;height:94vh;display:flex;flex-direction:column;overflow:hidden">
+            <!-- Cabecera visor -->
+            <div class="modal-header" style="padding:12px 16px;flex-shrink:0">
+              <h3 id="visorPlanoTitulo" style="font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:50%">Visor de Plano</h3>
+              <div style="display:flex;gap:6px;align-items:center;flex-shrink:0;flex-wrap:wrap">
+                <button class="btn btn-secondary btn-sm" id="btnEditarPlano" onclick="activarEditorPlano()">✏️ Editar</button>
+                <button class="btn btn-secondary btn-sm" id="btnGuardarPlano" onclick="guardarPlanoEditado()" style="display:none">💾 Guardar</button>
+                <button class="btn btn-secondary btn-sm" id="btnCancelarEdicion" onclick="cancelarEdicionPlano()" style="display:none">✕ Cancelar</button>
                 <button class="btn btn-secondary btn-sm" onclick="descargarSvgPlano()">⬇ SVG</button>
-                <button class="btn btn-secondary btn-sm" onclick="imprimirPlano()">🖨️ PDF/Imprimir</button>
+                <button class="btn btn-secondary btn-sm" onclick="descargarDxfPlano()">⬇ DXF</button>
+                <button class="btn btn-secondary btn-sm" onclick="imprimirPlano()">🖨️ Imprimir</button>
                 <button class="modal-close" onclick="cerrarVisorPlano()">✕</button>
               </div>
             </div>
+            <!-- Toolbar editor (oculta por defecto) -->
+            <div id="editorToolbar" style="display:none;flex-shrink:0;background:#0f1729;border-bottom:1px solid var(--border);padding:8px 14px;gap:6px;flex-wrap:wrap;align-items:center">
+              <span style="font-size:11px;color:var(--muted);font-weight:600;margin-right:4px">HERRAMIENTA:</span>
+              <button id="toolSeleccionar" class="editor-tool-btn active-tool" onclick="setEditorTool('seleccionar')" title="Seleccionar y mover elementos">↖ Seleccionar</button>
+              <button id="toolTexto" class="editor-tool-btn" onclick="setEditorTool('texto')" title="Editar o crear texto">T Texto</button>
+              <button id="toolLinea" class="editor-tool-btn" onclick="setEditorTool('linea')" title="Dibujar línea">╱ Línea</button>
+              <button id="toolRect" class="editor-tool-btn" onclick="setEditorTool('rect')" title="Dibujar rectángulo">▭ Rect</button>
+              <button id="toolCirculo" class="editor-tool-btn" onclick="setEditorTool('circulo')" title="Dibujar círculo">◯ Círculo</button>
+              <button id="toolEliminar" class="editor-tool-btn" onclick="setEditorTool('eliminar')" title="Eliminar elemento (click)">🗑 Eliminar</button>
+              <span style="width:1px;background:var(--border);height:20px;margin:0 6px"></span>
+              <span style="font-size:11px;color:var(--muted);font-weight:600">COLOR:</span>
+              <input type="color" id="editorColor" value="#000000" title="Color del trazo/relleno"
+                     style="width:30px;height:26px;border:none;border-radius:4px;cursor:pointer;padding:2px;background:transparent">
+              <span style="font-size:11px;color:var(--muted);font-weight:600;margin-left:4px">GROSOR:</span>
+              <select id="editorGrosor" style="padding:3px 6px;border:1px solid var(--border);border-radius:4px;font-size:11px;background:var(--surface2);color:var(--text)">
+                <option value="1">1px</option>
+                <option value="2" selected>2px</option>
+                <option value="3">3px</option>
+                <option value="5">5px</option>
+              </select>
+              <span style="width:1px;background:var(--border);height:20px;margin:0 6px"></span>
+              <button class="editor-tool-btn" onclick="editorUndo()" title="Deshacer (Ctrl+Z)">↩ Deshacer</button>
+              <button class="editor-tool-btn" onclick="editorRedo()" title="Rehacer (Ctrl+Y)">↪ Rehacer</button>
+              <span id="editorStatus" style="margin-left:auto;font-size:11px;color:var(--muted)">Haz clic en un elemento para seleccionarlo</span>
+            </div>
+            <!-- Contenido SVG -->
             <div id="visorPlanoContenido" style="flex:1;overflow:auto;padding:12px;background:#1a1a2e;display:flex;align-items:flex-start;justify-content:center">
               <!-- SVG se inyecta aquí -->
             </div>
@@ -31775,64 +31814,87 @@ async function ejecutarGenerarPlano() {
   }
 }
 
+// ── Estado del editor ─────────────────────────────────────────────────────
+let _editorActivo    = false;
+let _editorTool      = 'seleccionar';
+let _editorUndo      = [];   // stack de strings SVG para undo
+let _editorRedo      = [];   // stack de strings SVG para redo
+let _editorSelEl     = null; // elemento SVG seleccionado
+let _dibujoActivo    = false;
+let _dibujoStart     = null;
+let _dibujoEl        = null;
+let _textInput       = null; // input flotante para edición de texto
+let _interactInst    = null; // instancia de interact.js
+
+// ── Cargar y mostrar un plano en el visor ────────────────────────────────
 async function verPlano(id) {
-  const visor = document.getElementById('modalVisorPlano');
-  const cont  = document.getElementById('visorPlanoContenido');
+  const visor  = document.getElementById('modalVisorPlano');
+  const cont   = document.getElementById('visorPlanoContenido');
   const titulo = document.getElementById('visorPlanoTitulo');
   visor.style.display = 'flex';
   cont.innerHTML = '<div style="color:var(--muted);padding:40px;font-size:14px">Cargando SVG...</div>';
   _visorPlanoId = id;
   _visorSvgData = '';
+  cancelarEdicionPlano(true);
   try {
     const res = await apiRaw('/planos/' + id + '/svg');
     if (!res.ok) throw new Error('No encontrado');
     const svg = await res.text();
     _visorSvgData = svg;
-    // Buscar título en _planosData
-    const p = _planosData.find(x => x.id === id);
-    if (titulo) titulo.textContent = (p ? p.titulo : 'Plano #' + id);
-    // Inyectar SVG en wrapper con scroll horizontal si es necesario
-    const wrapper = document.createElement('div');
-    wrapper.style.cssText = 'width:100%;overflow:auto;';
-    wrapper.innerHTML = svg;
-    // Ajustar SVG para que sea responsive
-    const svgEl = wrapper.querySelector('svg');
-    if (svgEl) {
-      // Si tiene viewBox pero no width/height → darle width 100%
-      const vb = svgEl.getAttribute('viewBox');
-      if (vb && !svgEl.getAttribute('width')) {
-        svgEl.setAttribute('width', '100%');
-        svgEl.style.height = 'auto';
-      } else if (svgEl.getAttribute('width') && svgEl.getAttribute('height') && !vb) {
-        // Tiene width/height pero no viewBox → añadir viewBox para que sea escalable
-        svgEl.setAttribute('viewBox', '0 0 ' + svgEl.getAttribute('width') + ' ' + svgEl.getAttribute('height'));
-        svgEl.setAttribute('width', '100%');
-        svgEl.style.height = 'auto';
-      }
-      svgEl.style.display = 'block';
-      svgEl.style.maxWidth = '100%';
-    }
-    cont.innerHTML = '';
-    cont.appendChild(wrapper);
+    const p = _planosIAData.find(x => x.id === id);
+    if (titulo) titulo.textContent = p ? p.titulo : 'Plano #' + id;
+    _inyectarSvgEnVisor(svg);
   } catch(e) {
-    cont.innerHTML = '<div style="color:#f87171;padding:40px;font-size:13px">Error al cargar el plano: ' + e.message + '</div>';
+    cont.innerHTML = '<div style="color:#f87171;padding:40px;font-size:13px">Error: ' + e.message + '</div>';
   }
 }
 
+function _inyectarSvgEnVisor(svg) {
+  const cont = document.getElementById('visorPlanoContenido');
+  const wrapper = document.createElement('div');
+  wrapper.id = 'svgWrapper';
+  wrapper.style.cssText = 'width:100%;overflow:auto;position:relative;';
+  wrapper.innerHTML = svg;
+  const svgEl = wrapper.querySelector('svg');
+  if (svgEl) {
+    const vb = svgEl.getAttribute('viewBox');
+    if (vb && !svgEl.getAttribute('width')) {
+      svgEl.setAttribute('width', '100%');
+      svgEl.style.height = 'auto';
+    } else if (!vb && svgEl.getAttribute('width') && svgEl.getAttribute('height')) {
+      svgEl.setAttribute('viewBox', '0 0 ' + svgEl.getAttribute('width') + ' ' + svgEl.getAttribute('height'));
+      svgEl.setAttribute('width', '100%');
+      svgEl.style.height = 'auto';
+    }
+    svgEl.style.display = 'block';
+    svgEl.style.maxWidth = '100%';
+    svgEl.id = 'svgEditable';
+  }
+  cont.innerHTML = '';
+  cont.appendChild(wrapper);
+}
+
+function _getSvgActual() {
+  const svgEl = document.getElementById('svgEditable');
+  return svgEl ? svgEl.outerHTML : _visorSvgData;
+}
+
 function cerrarVisorPlano() {
+  cancelarEdicionPlano(true);
   document.getElementById('modalVisorPlano').style.display = 'none';
   _visorPlanoId = null;
   _visorSvgData = '';
 }
 
+// ── Descarga SVG ─────────────────────────────────────────────────────────
 function descargarSvgPlano() {
-  if (!_visorSvgData) { toast('No hay SVG cargado', 'error'); return; }
+  const svg = _getSvgActual() || _visorSvgData;
+  if (!svg) { toast('No hay SVG cargado', 'error'); return; }
   const p = _planosIAData.find(x => x.id === _visorPlanoId);
   const nombre = (p ? p.titulo : 'plano') + '.svg';
-  const blob = new Blob([_visorSvgData], { type: 'image/svg+xml' });
+  const blob = new Blob([svg], { type: 'image/svg+xml' });
   const url  = URL.createObjectURL(blob);
-  const a    = document.createElement('a');
-  a.href = url; a.download = nombre; a.click();
+  const a    = document.createElement('a'); a.href = url; a.download = nombre; a.click();
   URL.revokeObjectURL(url);
 }
 
@@ -31840,26 +31902,74 @@ async function descargarSvgPlanoId(id) {
   try {
     const res = await apiRaw('/planos/' + id + '/svg');
     if (!res.ok) throw new Error('Error');
-    const svg   = await res.text();
-    const p     = _planosIAData.find(x => x.id === id);
+    const svg = await res.text();
+    const p   = _planosIAData.find(x => x.id === id);
     const nombre = (p ? p.titulo : 'plano-' + id) + '.svg';
-    const blob  = new Blob([svg], { type: 'image/svg+xml' });
-    const url   = URL.createObjectURL(blob);
-    const a     = document.createElement('a');
-    a.href = url; a.download = nombre; a.click();
+    const blob = new Blob([svg], { type: 'image/svg+xml' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a'); a.href = url; a.download = nombre; a.click();
     URL.revokeObjectURL(url);
-  } catch(e) { toast('Error descargando SVG: ' + e.message, 'error'); }
+  } catch(e) { toast('Error: ' + e.message, 'error'); }
+}
+
+// ── Imprimir (ventana limpia con SVG a página completa) ──────────────────
+function _abrirVentanaImpresion(svgStr, tituloPlano, tipoPlano) {
+  const win = window.open('', '_blank', 'width=900,height=700');
+  if (!win) { toast('Activa las ventanas emergentes para imprimir', 'error'); return; }
+  // Detectar orientación: si viewBox es más ancho que alto → landscape
+  const vbMatch = svgStr.match(/viewBox=["']([^"']+)["']/);
+  let orientacion = 'landscape';
+  if (vbMatch) {
+    const parts = vbMatch[1].split(/\s+/);
+    if (parts.length === 4 && parseFloat(parts[3]) > parseFloat(parts[2])) orientacion = 'portrait';
+  }
+  const fecha = new Date().toLocaleDateString('es-ES', { year:'numeric', month:'long', day:'numeric' });
+  const empresa = (typeof SESSION !== 'undefined' && SESSION?.empresa) ? SESSION.empresa : '';
+  win.document.write(`<!DOCTYPE html>
+<html lang="es"><head><meta charset="UTF-8"><title>${tituloPlano || 'Plano técnico'}</title>
+<style>
+  @page { size: A3 ${orientacion}; margin: 8mm; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: Arial, Helvetica, sans-serif; background: #fff; color: #222; }
+  .cabecera { display: flex; justify-content: space-between; align-items: flex-end;
+    padding: 0 0 6px 0; border-bottom: 2px solid #333; margin-bottom: 10px; }
+  .cab-titulo { font-size: 16px; font-weight: bold; }
+  .cab-meta { font-size: 10px; color: #555; text-align: right; line-height: 1.6; }
+  .cab-empresa { font-size: 12px; font-weight: 600; }
+  .svg-wrap { width: 100%; }
+  .svg-wrap svg { width: 100% !important; height: auto !important; display: block; }
+  @media print {
+    .no-print { display: none !important; }
+    body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  }
+  .btn-imprimir { display: block; margin: 16px auto 0; padding: 10px 28px;
+    font-size: 14px; cursor: pointer; background: #1e3a5f; color: #fff;
+    border: none; border-radius: 6px; }
+</style></head>
+<body>
+<div class="cabecera">
+  <div>
+    <div class="cab-titulo">${tituloPlano || 'Plano técnico'}</div>
+    ${tipoPlano ? `<div style="font-size:11px;color:#666;margin-top:2px">${tipoPlano}</div>` : ''}
+  </div>
+  <div class="cab-meta">
+    ${empresa ? `<div class="cab-empresa">${empresa}</div>` : ''}
+    <div>Fecha: ${fecha}</div>
+    <div>Generado con Alejandra IA</div>
+  </div>
+</div>
+<div class="svg-wrap">${svgStr}</div>
+<button class="btn-imprimir no-print" onclick="window.print();this.style.display='none'">🖨️ Imprimir / Guardar PDF</button>
+</body></html>`);
+  win.document.close();
 }
 
 function imprimirPlano() {
-  if (!_visorSvgData) { toast('No hay SVG cargado', 'error'); return; }
-  const win = window.open('', '_blank');
-  if (!win) { toast('Activa las ventanas emergentes para imprimir', 'error'); return; }
-  win.document.write(`<!DOCTYPE html><html><head><title>Plano</title>
-    <style>body{margin:0;padding:0}svg{max-width:100%;height:auto;display:block}</style></head>
-    <body>${_visorSvgData}</body></html>`);
-  win.document.close();
-  win.onload = () => { win.focus(); win.print(); };
+  const svg = _getSvgActual() || _visorSvgData;
+  if (!svg) { toast('No hay SVG cargado', 'error'); return; }
+  const p = _planosIAData.find(x => x.id === _visorPlanoId);
+  const m = _PLANO_TIPO_META[p?.tipo];
+  _abrirVentanaImpresion(svg, p?.titulo || 'Plano', m ? (m.emoji + ' ' + m.label) : '');
 }
 
 async function verImprimirPlanoId(id) {
@@ -31867,16 +31977,474 @@ async function verImprimirPlanoId(id) {
     const res = await apiRaw('/planos/' + id + '/svg');
     if (!res.ok) throw new Error('Error');
     const svg = await res.text();
-    const win = window.open('', '_blank');
-    if (!win) { toast('Activa las ventanas emergentes para imprimir', 'error'); return; }
-    win.document.write(`<!DOCTYPE html><html><head><title>Plano</title>
-      <style>body{margin:0;padding:0}svg{max-width:100%;height:auto;display:block}</style></head>
-      <body>${svg}</body></html>`);
-    win.document.close();
-    win.onload = () => { win.focus(); win.print(); };
+    const p   = _planosIAData.find(x => x.id === id);
+    const m   = _PLANO_TIPO_META[p?.tipo];
+    _abrirVentanaImpresion(svg, p?.titulo || 'Plano #' + id, m ? (m.emoji + ' ' + m.label) : '');
   } catch(e) { toast('Error: ' + e.message, 'error'); }
 }
 
+// ── Editor SVG ────────────────────────────────────────────────────────────
+function activarEditorPlano() {
+  if (!_visorPlanoId) return;
+  _editorActivo = true;
+  _editorUndo   = [_getSvgActual()];
+  _editorRedo   = [];
+  document.getElementById('editorToolbar').style.display = 'flex';
+  document.getElementById('btnEditarPlano').style.display   = 'none';
+  document.getElementById('btnGuardarPlano').style.display  = 'inline-flex';
+  document.getElementById('btnCancelarEdicion').style.display = 'inline-flex';
+  setEditorTool('seleccionar');
+  _activarInteracciones();
+  toast('Modo edición activado — selecciona un elemento para moverlo', 'ok');
+}
+
+function cancelarEdicionPlano(silencioso) {
+  _editorActivo = false;
+  _limpiarInteracciones();
+  _cerrarInputTexto();
+  _deseleccionarEl();
+  document.getElementById('editorToolbar').style.display      = 'none';
+  document.getElementById('btnEditarPlano').style.display     = 'inline-flex';
+  document.getElementById('btnGuardarPlano').style.display    = 'none';
+  document.getElementById('btnCancelarEdicion').style.display = 'none';
+  // Restaurar SVG original si hay undo
+  if (!silencioso && _editorUndo.length > 0) {
+    _inyectarSvgEnVisor(_editorUndo[0]);
+  }
+}
+
+async function guardarPlanoEditado() {
+  if (!_visorPlanoId) return;
+  const svg = _getSvgActual();
+  if (!svg) { toast('No hay SVG para guardar', 'error'); return; }
+  try {
+    const btn = document.getElementById('btnGuardarPlano');
+    btn.textContent = '⏳ Guardando...'; btn.disabled = true;
+    const res = await apiRaw('/planos/' + _visorPlanoId, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ svg_data: svg })
+    });
+    const d = await res.json();
+    btn.textContent = '💾 Guardar'; btn.disabled = false;
+    if (!res.ok) throw new Error(d.error || 'Error');
+    _visorSvgData = svg;
+    toast('Plano guardado correctamente', 'ok');
+    cancelarEdicionPlano(true);
+    cargarPlanos();
+  } catch(e) { toast('Error guardando: ' + e.message, 'error'); document.getElementById('btnGuardarPlano').textContent = '💾 Guardar'; document.getElementById('btnGuardarPlano').disabled = false; }
+}
+
+function setEditorTool(tool) {
+  _editorTool = tool;
+  document.querySelectorAll('.editor-tool-btn').forEach(b => b.classList.remove('active-tool'));
+  const btn = document.getElementById('tool' + tool.charAt(0).toUpperCase() + tool.slice(1));
+  if (btn) btn.classList.add('active-tool');
+  _cerrarInputTexto();
+  _deseleccionarEl();
+  const svgEl = document.getElementById('svgEditable');
+  if (svgEl) {
+    svgEl.style.cursor = tool === 'seleccionar' ? 'default'
+      : tool === 'eliminar' ? 'crosshair'
+      : ['linea','rect','circulo'].includes(tool) ? 'crosshair' : 'text';
+  }
+  const status = document.getElementById('editorStatus');
+  if (status) status.textContent = {
+    seleccionar: 'Haz clic en un elemento para seleccionarlo',
+    texto: 'Haz clic en un texto para editarlo, o en zona vacía para crear uno nuevo',
+    linea: 'Click y arrastra para dibujar una línea',
+    rect: 'Click y arrastra para dibujar un rectángulo',
+    circulo: 'Click y arrastra para dibujar un círculo',
+    eliminar: 'Haz clic en cualquier elemento para eliminarlo'
+  }[tool] || '';
+}
+
+function _guardarEstadoUndo() {
+  _editorUndo.push(_getSvgActual());
+  if (_editorUndo.length > 50) _editorUndo.shift();
+  _editorRedo = [];
+}
+
+function editorUndo() {
+  if (_editorUndo.length <= 1) { toast('Nada que deshacer', 'error'); return; }
+  _editorRedo.push(_editorUndo.pop());
+  _inyectarSvgEnVisor(_editorUndo[_editorUndo.length - 1]);
+  _activarInteracciones();
+}
+
+function editorRedo() {
+  if (!_editorRedo.length) { toast('Nada que rehacer', 'error'); return; }
+  const svg = _editorRedo.pop();
+  _editorUndo.push(svg);
+  _inyectarSvgEnVisor(svg);
+  _activarInteracciones();
+}
+
+// ── Interacciones con interact.js ─────────────────────────────────────────
+function _activarInteracciones() {
+  const svgEl = document.getElementById('svgEditable');
+  if (!svgEl) return;
+  // Eliminar listeners previos
+  _limpiarInteracciones();
+
+  // Hacer elementos internos del SVG arrastrables (solo en modo seleccionar)
+  const elems = svgEl.querySelectorAll('rect, circle, ellipse, line, path, text, tspan, polygon, polyline, g');
+  elems.forEach(el => {
+    if (el.tagName === 'svg') return;
+    el.addEventListener('mouseenter', _onElHover);
+    el.addEventListener('mouseleave', _onElLeave);
+    el.addEventListener('click', _onElClick);
+  });
+
+  // Dibujo y texto en el SVG raíz
+  svgEl.addEventListener('mousedown', _onSvgMousedown);
+  svgEl.addEventListener('mousemove', _onSvgMousemove);
+  svgEl.addEventListener('mouseup',   _onSvgMouseup);
+
+  // Teclado: Delete/Backspace elimina seleccionado; Escape cancela
+  document.addEventListener('keydown', _onEditorKey);
+
+  // interact.js: drag en el elemento seleccionado
+  if (typeof interact !== 'undefined') {
+    _interactInst = interact('#svgEditable .svg-selected').draggable({
+      listeners: {
+        start() { _guardarEstadoUndo(); },
+        move(ev) {
+          const el  = ev.target;
+          const tag = el.tagName.toLowerCase();
+          const dx = ev.dx, dy = ev.dy;
+          if (tag === 'rect' || tag === 'image' || tag === 'foreignobject') {
+            el.setAttribute('x', (parseFloat(el.getAttribute('x') || 0) + dx));
+            el.setAttribute('y', (parseFloat(el.getAttribute('y') || 0) + dy));
+          } else if (tag === 'circle' || tag === 'ellipse') {
+            el.setAttribute('cx', (parseFloat(el.getAttribute('cx') || 0) + dx));
+            el.setAttribute('cy', (parseFloat(el.getAttribute('cy') || 0) + dy));
+          } else if (tag === 'line') {
+            ['x1','x2'].forEach(a => el.setAttribute(a, parseFloat(el.getAttribute(a)||0)+dx));
+            ['y1','y2'].forEach(a => el.setAttribute(a, parseFloat(el.getAttribute(a)||0)+dy));
+          } else if (tag === 'text' || tag === 'tspan') {
+            el.setAttribute('x', (parseFloat(el.getAttribute('x') || 0) + dx));
+            el.setAttribute('y', (parseFloat(el.getAttribute('y') || 0) + dy));
+          } else {
+            // g, path, polygon → usar transform translate
+            const cur = el.getAttribute('transform') || '';
+            const m = cur.match(/translate\(([^,)]+),?\s*([^)]*)\)/);
+            const tx = m ? parseFloat(m[1]) : 0;
+            const ty = m ? parseFloat(m[2] || 0) : 0;
+            el.setAttribute('transform', cur.replace(/translate\([^)]*\)/,'') + ` translate(${tx+dx},${ty+dy})`);
+          }
+        }
+      }
+    });
+  }
+}
+
+function _limpiarInteracciones() {
+  const svgEl = document.getElementById('svgEditable');
+  if (svgEl) {
+    const elems = svgEl.querySelectorAll('rect,circle,ellipse,line,path,text,tspan,polygon,polyline,g');
+    elems.forEach(el => {
+      el.removeEventListener('mouseenter', _onElHover);
+      el.removeEventListener('mouseleave', _onElLeave);
+      el.removeEventListener('click', _onElClick);
+    });
+    svgEl.removeEventListener('mousedown', _onSvgMousedown);
+    svgEl.removeEventListener('mousemove', _onSvgMousemove);
+    svgEl.removeEventListener('mouseup',   _onSvgMouseup);
+  }
+  document.removeEventListener('keydown', _onEditorKey);
+  if (_interactInst) { try { _interactInst.unset(); } catch(_){} _interactInst = null; }
+}
+
+function _onElHover(ev) { if (_editorActivo) ev.currentTarget.classList.add('svg-hover'); }
+function _onElLeave(ev) { if (_editorActivo) ev.currentTarget.classList.remove('svg-hover'); }
+
+function _onElClick(ev) {
+  if (!_editorActivo) return;
+  ev.stopPropagation();
+  const el = ev.currentTarget;
+  if (_editorTool === 'eliminar') {
+    _guardarEstadoUndo();
+    el.remove();
+    _deseleccionarEl();
+    _activarInteracciones();
+    return;
+  }
+  if (_editorTool === 'texto') {
+    // Editar texto si el elemento es text/tspan, o si contiene text
+    const textEl = (el.tagName === 'text' || el.tagName === 'tspan') ? el
+      : el.querySelector('text') || (el.closest('text'));
+    if (textEl) { _abrirInputTexto(textEl); return; }
+  }
+  if (_editorTool === 'seleccionar') {
+    _deseleccionarEl();
+    _editorSelEl = el;
+    el.classList.add('svg-selected');
+    el.classList.remove('svg-hover');
+    _activarInteracciones(); // refresca interact.js con el nuevo seleccionado
+  }
+}
+
+function _deseleccionarEl() {
+  if (_editorSelEl) { _editorSelEl.classList.remove('svg-selected'); _editorSelEl = null; }
+  const svgEl = document.getElementById('svgEditable');
+  if (svgEl) svgEl.querySelectorAll('.svg-selected').forEach(el => el.classList.remove('svg-selected'));
+}
+
+function _getSvgPoint(svgEl, ev) {
+  const pt = svgEl.createSVGPoint();
+  const rect = svgEl.getBoundingClientRect();
+  pt.x = ev.clientX - rect.left;
+  pt.y = ev.clientY - rect.top;
+  // Escalar a coordenadas SVG si hay viewBox
+  const vb = svgEl.viewBox.baseVal;
+  if (vb && vb.width > 0) {
+    pt.x = pt.x * vb.width  / rect.width;
+    pt.y = pt.y * vb.height / rect.height;
+  }
+  return pt;
+}
+
+function _onSvgMousedown(ev) {
+  if (!_editorActivo) return;
+  const tool = _editorTool;
+  if (!['linea','rect','circulo','texto'].includes(tool)) return;
+  if (ev.target !== ev.currentTarget && tool !== 'texto') return; // solo en fondo
+  const svgEl = document.getElementById('svgEditable');
+  if (!svgEl) return;
+  const pt = _getSvgPoint(svgEl, ev);
+  _dibujoActivo = true;
+  _dibujoStart  = pt;
+
+  if (tool === 'texto') {
+    if (ev.target === ev.currentTarget) {
+      // Click en zona vacía → crear nuevo texto
+      _guardarEstadoUndo();
+      const color = document.getElementById('editorColor')?.value || '#000000';
+      const tEl = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      tEl.setAttribute('x', pt.x); tEl.setAttribute('y', pt.y);
+      tEl.setAttribute('fill', color); tEl.setAttribute('font-size', '14');
+      tEl.setAttribute('font-family', 'Arial, sans-serif');
+      tEl.textContent = 'Texto nuevo';
+      svgEl.appendChild(tEl);
+      _activarInteracciones();
+      setTimeout(() => _abrirInputTexto(tEl), 50);
+    }
+    _dibujoActivo = false;
+    return;
+  }
+
+  const color  = document.getElementById('editorColor')?.value || '#000000';
+  const grosor = document.getElementById('editorGrosor')?.value || '2';
+  const ns = 'http://www.w3.org/2000/svg';
+
+  if (tool === 'linea') {
+    _dibujoEl = document.createElementNS(ns, 'line');
+    _dibujoEl.setAttribute('x1', pt.x); _dibujoEl.setAttribute('y1', pt.y);
+    _dibujoEl.setAttribute('x2', pt.x); _dibujoEl.setAttribute('y2', pt.y);
+    _dibujoEl.setAttribute('stroke', color); _dibujoEl.setAttribute('stroke-width', grosor);
+  } else if (tool === 'rect') {
+    _dibujoEl = document.createElementNS(ns, 'rect');
+    _dibujoEl.setAttribute('x', pt.x); _dibujoEl.setAttribute('y', pt.y);
+    _dibujoEl.setAttribute('width', 0); _dibujoEl.setAttribute('height', 0);
+    _dibujoEl.setAttribute('stroke', color); _dibujoEl.setAttribute('stroke-width', grosor);
+    _dibujoEl.setAttribute('fill', 'none');
+  } else if (tool === 'circulo') {
+    _dibujoEl = document.createElementNS(ns, 'circle');
+    _dibujoEl.setAttribute('cx', pt.x); _dibujoEl.setAttribute('cy', pt.y);
+    _dibujoEl.setAttribute('r', 0);
+    _dibujoEl.setAttribute('stroke', color); _dibujoEl.setAttribute('stroke-width', grosor);
+    _dibujoEl.setAttribute('fill', 'none');
+  }
+  if (_dibujoEl) svgEl.appendChild(_dibujoEl);
+  ev.preventDefault();
+}
+
+function _onSvgMousemove(ev) {
+  if (!_editorActivo || !_dibujoActivo || !_dibujoEl) return;
+  const svgEl = document.getElementById('svgEditable');
+  const pt = _getSvgPoint(svgEl, ev);
+  const tool = _editorTool;
+  if (tool === 'linea') {
+    _dibujoEl.setAttribute('x2', pt.x); _dibujoEl.setAttribute('y2', pt.y);
+  } else if (tool === 'rect') {
+    const x = Math.min(pt.x, _dibujoStart.x), y = Math.min(pt.y, _dibujoStart.y);
+    const w = Math.abs(pt.x - _dibujoStart.x), h = Math.abs(pt.y - _dibujoStart.y);
+    _dibujoEl.setAttribute('x', x); _dibujoEl.setAttribute('y', y);
+    _dibujoEl.setAttribute('width', w); _dibujoEl.setAttribute('height', h);
+  } else if (tool === 'circulo') {
+    const r = Math.hypot(pt.x - _dibujoStart.x, pt.y - _dibujoStart.y);
+    _dibujoEl.setAttribute('r', r);
+  }
+}
+
+function _onSvgMouseup(ev) {
+  if (!_editorActivo || !_dibujoActivo) return;
+  _dibujoActivo = false;
+  if (_dibujoEl) {
+    _guardarEstadoUndo();
+    _activarInteracciones();
+    _dibujoEl = null;
+  }
+}
+
+function _onEditorKey(ev) {
+  if (!_editorActivo) return;
+  if (ev.key === 'Escape') { cancelarEdicionPlano(); return; }
+  if ((ev.key === 'Delete' || ev.key === 'Backspace') && _editorSelEl && document.activeElement === document.body) {
+    ev.preventDefault();
+    _guardarEstadoUndo();
+    _editorSelEl.remove();
+    _editorSelEl = null;
+    _activarInteracciones();
+  }
+  if (ev.ctrlKey && ev.key === 'z') { ev.preventDefault(); editorUndo(); }
+  if (ev.ctrlKey && (ev.key === 'y' || ev.key === 'Y')) { ev.preventDefault(); editorRedo(); }
+  if (ev.ctrlKey && ev.key === 's') { ev.preventDefault(); guardarPlanoEditado(); }
+}
+
+// ── Edición de texto inline ────────────────────────────────────────────────
+function _abrirInputTexto(textEl) {
+  _cerrarInputTexto();
+  _guardarEstadoUndo();
+  const rect = textEl.getBoundingClientRect();
+  const inp  = document.createElement('input');
+  inp.value  = textEl.textContent || '';
+  inp.style.cssText = `position:fixed;left:${rect.left}px;top:${rect.top - 4}px;
+    min-width:${Math.max(rect.width + 20, 120)}px;font-size:14px;padding:4px 8px;
+    border:2px solid #60a5fa;border-radius:4px;background:#fff;color:#222;z-index:99999;
+    font-family:${textEl.getAttribute('font-family') || 'Arial'},sans-serif;`;
+  inp.dataset.textElTag = textEl.tagName;
+  document.body.appendChild(inp);
+  _textInput = inp;
+  inp.focus(); inp.select();
+  inp.addEventListener('keydown', ev => {
+    if (ev.key === 'Enter')  { ev.preventDefault(); _confirmarInputTexto(textEl, inp); }
+    if (ev.key === 'Escape') { _cerrarInputTexto(); }
+    ev.stopPropagation();
+  });
+  inp.addEventListener('blur', () => setTimeout(() => _confirmarInputTexto(textEl, inp), 100));
+}
+
+function _confirmarInputTexto(textEl, inp) {
+  if (!inp || !inp.parentNode) return;
+  const val = inp.value;
+  if (val !== null) textEl.textContent = val;
+  _cerrarInputTexto();
+  _activarInteracciones();
+}
+
+function _cerrarInputTexto() {
+  if (_textInput && _textInput.parentNode) _textInput.parentNode.removeChild(_textInput);
+  _textInput = null;
+}
+
+// ── Exportación DXF ────────────────────────────────────────────────────────
+function descargarDxfPlano() {
+  const svg = _getSvgActual() || _visorSvgData;
+  if (!svg) { toast('No hay SVG cargado', 'error'); return; }
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(svg, 'image/svg+xml');
+  const svgEl = doc.querySelector('svg');
+  if (!svgEl) { toast('SVG inválido', 'error'); return; }
+
+  // Leer viewBox para saber la escala
+  const vb = svgEl.getAttribute('viewBox');
+  const vbParts = vb ? vb.split(/\s+/).map(Number) : [0, 0, 1000, 800];
+  const H = vbParts[3] || 800; // altura para invertir eje Y (SVG Y↓ DXF Y↑)
+
+  const entities = [];
+
+  function rgb2dxf(colorStr) {
+    // Convierte color CSS a índice de color ACI de AutoCAD (simplificado)
+    if (!colorStr || colorStr === 'none') return 7; // blanco
+    if (colorStr === '#000000' || colorStr === 'black') return 0;
+    if (colorStr.includes('red') || colorStr.match(/#[ef][0-3]/i)) return 1;
+    if (colorStr.includes('yellow')) return 2;
+    if (colorStr.includes('green')) return 3;
+    if (colorStr.includes('cyan')) return 4;
+    if (colorStr.includes('blue') || colorStr.match(/#[0-2][0-9a-f][5-9a-f]/i)) return 5;
+    if (colorStr.includes('magenta') || colorStr.includes('purple')) return 6;
+    return 7;
+  }
+
+  function getAttr(el, ...names) {
+    for (const n of names) { const v = el.getAttribute(n); if (v != null && v !== '') return parseFloat(v) || 0; }
+    return 0;
+  }
+
+  function entity(type, color, lines) {
+    return ['0', type, '8', '0', '62', String(color), ...lines].join('\n');
+  }
+
+  function processEl(el) {
+    const tag = el.tagName.toLowerCase();
+    const stroke = el.getAttribute('stroke') || 'none';
+    const fill   = el.getAttribute('fill') || 'none';
+    const color  = rgb2dxf(stroke !== 'none' ? stroke : fill !== 'none' ? fill : '#000');
+
+    if (tag === 'line') {
+      const x1 = getAttr(el,'x1'), y1 = H - getAttr(el,'y1');
+      const x2 = getAttr(el,'x2'), y2 = H - getAttr(el,'y2');
+      entities.push(entity('LINE', color, ['10',x1,'20',y1,'30','0','11',x2,'21',y2,'31','0']));
+    } else if (tag === 'rect') {
+      const x = getAttr(el,'x'), y = getAttr(el,'y'), w = getAttr(el,'width'), h = getAttr(el,'height');
+      // LWPOLYLINE cerrado (4 vértices)
+      const pts = [[x,H-y],[x+w,H-y],[x+w,H-y-h],[x,H-y-h]];
+      const pLines = pts.flatMap(([px,py]) => ['10',px.toFixed(2),'20',py.toFixed(2)]);
+      entities.push(['0','LWPOLYLINE','8','0','62',String(color),'90','4','70','1',...pLines].join('\n'));
+    } else if (tag === 'circle') {
+      const cx = getAttr(el,'cx'), cy = H - getAttr(el,'cy'), r = getAttr(el,'r');
+      entities.push(entity('CIRCLE', color, ['10',cx.toFixed(2),'20',cy.toFixed(2),'30','0','40',r.toFixed(2)]));
+    } else if (tag === 'ellipse') {
+      const cx = getAttr(el,'cx'), cy = H - getAttr(el,'cy');
+      const rx = getAttr(el,'rx'), ry = getAttr(el,'ry');
+      // Aproximar elipse como círculo (radio mayor)
+      entities.push(entity('CIRCLE', color, ['10',cx.toFixed(2),'20',cy.toFixed(2),'30','0','40',Math.max(rx,ry).toFixed(2)]));
+    } else if (tag === 'text' || tag === 'tspan') {
+      const x  = getAttr(el,'x'), y = H - getAttr(el,'y');
+      const fs = parseFloat(el.getAttribute('font-size') || '12');
+      const txt = (el.textContent || '').trim().replace(/"/g,"''");
+      if (txt) entities.push(entity('TEXT', color, ['10',x.toFixed(2),'20',y.toFixed(2),'30','0','40',fs.toFixed(1),'1',txt]));
+    } else if (tag === 'polygon' || tag === 'polyline') {
+      const pts = (el.getAttribute('points') || '').trim().split(/[\s,]+/).reduce((acc,v,i,arr) => {
+        if (i%2===0 && arr[i+1]!==undefined) acc.push([parseFloat(v), H - parseFloat(arr[i+1])]);
+        return acc;
+      }, []);
+      if (pts.length > 1) {
+        const pLines = pts.flatMap(([px,py]) => ['10',px.toFixed(2),'20',py.toFixed(2)]);
+        const closed = tag === 'polygon' ? '1' : '0';
+        entities.push(['0','LWPOLYLINE','8','0','62',String(color),'90',String(pts.length),'70',closed,...pLines].join('\n'));
+      }
+    } else if (tag === 'g') {
+      Array.from(el.children).forEach(processEl);
+    }
+  }
+
+  Array.from(svgEl.querySelectorAll('line,rect,circle,ellipse,text,polygon,polyline,g')).forEach(processEl);
+  // También extraer tspan dentro de text
+  Array.from(svgEl.querySelectorAll('text > tspan')).forEach(el => processEl(el));
+
+  const p = _planosIAData.find(x => x.id === _visorPlanoId);
+  const dxf = [
+    '0','SECTION','2','HEADER',
+    '9','$ACADVER','1','AC1015',
+    '0','ENDSECTION',
+    '0','SECTION','2','ENTITIES',
+    ...entities,
+    '0','ENDSECTION',
+    '0','EOF'
+  ].join('\n');
+
+  const nombre = (p ? p.titulo : 'plano') + '.dxf';
+  const blob = new Blob([dxf], { type: 'application/dxf' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a'); a.href = url; a.download = nombre; a.click();
+  URL.revokeObjectURL(url);
+  toast('DXF descargado: ' + nombre, 'ok');
+}
+
+// ── Eliminar plano desde grid ─────────────────────────────────────────────
 async function eliminarPlanoId(id, titulo) {
   if (!confirm('¿Eliminar el plano "' + titulo + '"? Esta acción no se puede deshacer.')) return;
   try {
