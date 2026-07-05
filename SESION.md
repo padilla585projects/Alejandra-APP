@@ -1,14 +1,56 @@
 ## ESTADO ACTUAL
 
 **Sesión:** LIBRE
-**Última sesión:** 05/07/2026 — Fix rate limiting + tope de gasto diario DESPLEGADO (commit `8613740`).
+**Última sesión:** 05/07/2026 — Fix retry/backoff ante 429/5xx de Anthropic DESPLEGADO (commit `8492890`).
 **Versión actual:** App PWA **v7.54** · worker principal deploy ec049cf8 · commit 81f8f1d
 **App móvil AlejandraIA:** v1.9.19+33 (OTA publicada, commit `b2c7828` en repo alejandra-ia)
-**Agente (alejandra-agente):** commit `8613740` desplegado en main (deploy CI `28722511276`,
+**Agente (alejandra-agente):** commit `8492890` desplegado en main (deploy CI `28735875216`,
 health OK). Incluye: fix IDOR fcm-token/comandos (`acc186a`, verificado en vivo con 401 sin
 sesión) + fix SSRF en `test_endpoint` (`bbdb644`, ahora solo dev verificado + whitelist de host)
 + rate limiting 15 req/min y tope de gasto 10$/día en `/api/chat` y `/api/chat/stream`
-(`8613740`, verificado en vivo: 429 a partir de la petición 16 dentro del mismo minuto).
+(`8613740`, verificado en vivo: 429 a partir de la petición 16 dentro del mismo minuto)
++ retry con backoff ante 429/5xx de Anthropic y fallback GPT-4o ampliado (`8492890`).
+
+---
+
+## RESUMEN SESIÓN 05/07/2026 (continuación 8) — Retry/backoff ante 429/5xx de Anthropic — DESPLEGADO
+
+Siguiente punto de la lista tras cerrar rate limiting/tope de gasto. Auditoría (subagente):
+ninguna de las 8 llamadas del worker a Anthropic/OpenAI reintentaba nunca ante fallos
+transitorios. Lo más grave, en las dos rutas de chat reales:
+
+- `llamarAnthropic` sí tenía un fallback a GPT-4o, pero solo para `400` (crédito agotado) y
+  `529`/`503` (sobrecarga) — el **`429` (rate limit, el fallo transitorio más probable) no
+  estaba cubierto** y se propagaba tal cual como `Error: Anthropic 429: ...` directamente en
+  la burbuja del chat.
+- `llamarAnthropicStream` (streaming/SSE) era peor: **no tenía ningún fallback salvo el de
+  créditos agotados** — ni siquiera para 529/503 — así que un 429 o una sobrecarga rompía el
+  stream a mitad de respuesta con el error crudo.
+- No existía ningún helper de retry reutilizable en el archivo.
+
+### ✅ Corregido (commit `8492890`, CI `28735875216`, health OK)
+Nueva `fetchAnthropicConReintentos()`: máx 2 reintentos con backoff corto (400ms/1200ms) ante
+`429/500/502/503/529`, respetando el header `Retry-After` si Anthropic lo manda (capado a 2s
+para no alargar demasiado la respuesta — Cloudflare Workers tiene presupuesto de tiempo, y el
+streaming ya tiene un watchdog de 22s que no se quería arriesgar). Usada en `llamarAnthropic`
+y `llamarAnthropicStream`.
+
+Si tras los reintentos Anthropic sigue fallando por rate limit o sobrecarga (`429/529/503`),
+ambas funciones caen ahora al fallback GPT-4o ya existente en vez de propagar el error — se
+amplió la condición en `llamarAnthropic` (antes solo 529/503) y se añadió por primera vez en
+`llamarAnthropicStream` (antes solo tenía fallback para créditos agotados). El usuario recibe
+una respuesta funcional (con el aviso "[Modo respaldo GPT-4o]") en vez de un error técnico.
+
+Nota de scope, ya conocida: `llamarGPT4oFallback` sigue sin llamar a `registrarTokenUso` y su
+uso se contabiliza bajo el nombre del modelo Claude original cuando se usa como fallback — es
+el bug de cost-tracking ya identificado (punto #6 de la lista), no se toca en este fix.
+
+Verificación en vivo tras el deploy: llamada normal a `/api/chat` → `200` OK (el cambio solo
+afecta a la ruta de error, así que el camino feliz es idéntico).
+
+Siguiente punto de la lista: **fix cost-tracking del fallback GPT-4o** (`llamarGPT4oFallback`
+no registra uso y lo que sí registra el llamador queda mal etiquetado bajo el modelo Claude).
+
 ---
 
 ## RESUMEN SESIÓN 05/07/2026 (continuación 7) — Rate limiting + tope de gasto diario — DESPLEGADO
