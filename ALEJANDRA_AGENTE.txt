@@ -1,6 +1,6 @@
 ================================================================================
   ALEJANDRA AGENTE — GUÍA COMPLETA PARA NUEVOS CHATS
-  Última actualización: 05/07/2026 (continuación 14, tras commit 8d7ef65)
+  Última actualización: 05/07/2026 (continuación 14, tras commits 8d7ef65 y ce6e7d9)
 ================================================================================
 
 Este archivo explica todo lo necesario para trabajar en el agente Alejandra.
@@ -337,13 +337,43 @@ comprueba, para las rutas que la usan:
   1. Authorization: Bearer <token> contra la tabla `sesiones` (identidad real
      de usuario logueado en la app/panel) — es la fuente de verdad para authOk/
      esDevVerificado (ver sección de gating).
-  2. Para el panel admin específicamente: si env.ADMIN_TOKEN existe y coincide
-     → autorizado (env var como respaldo); si no, consulta alejandra_tokens
-     WHERE token=? AND tipo='admin' AND activo=1.
+  2. Para el panel admin específicamente: verificarAdminToken(env, token, req)
+     -- si env.ADMIN_TOKEN existe y coincide → autorizado (env var como
+     respaldo); si no, consulta alejandra_tokens WHERE token=? AND tipo='admin'
+     AND activo=1 AND (expires_at IS NULL OR expires_at > datetime('now')).
 
 TOKEN ACTUAL: el configurado por wrangler secret ADMIN_TOKEN (ver "SECRETS" en
 la sección de deploy) o el que haya configurado el usuario en el panel — NO
 asumir un valor fijo, puede haberse rotado.
+
+FIX 05/07/2026 (continuación 14, hallazgos #2 y #3 del mismo audit que
+configurar_alerta/exportar_datos — código incluido, sin querer, en el commit
+ce6e7d9 de otro agente trabajando en paralelo sobre el mismo repo, cuyo
+mensaje solo habla de "pagina Planos IA en panel.html"; ver SESION.md
+continuación 14/15 para la aclaración completa):
+  - Hallazgo #3: verificarAdminToken() no tenía NINGÚN límite de intentos
+    propio -- se podía probar tokens repetidamente contra /admin/migrate,
+    /api/admin/*, /push, /api/reflexion, /conocimiento sin throttling. Ahora
+    recibe `req` (opcional) y aplica el mismo validarRateLimit() de /api/chat
+    por IP, bucket propio "admin-auth:ip:...", fail-open si KV falla.
+  - Relacionado: la columna `expires_at` de alejandra_tokens existe desde el
+    schema original pero JAMÁS se comprobaba en la query de verificación --
+    un token con fecha de expiración pasada seguía siendo válido para
+    siempre. Se añadió la comprobación `(expires_at IS NULL OR expires_at >
+    datetime('now'))`.
+  - Hallazgo #2: POST /auth/verify-session devolvía env.ADMIN_TOKEN en texto
+    plano en la respuesta a cualquier sesión superadmin/desarrollador válida
+    -- si esa respuesta se filtraba (XSS, log, sesión interceptada), el
+    atacante se quedaba con el secreto maestro, estático y sin expirar, más
+    duradero que la propia sesión robada. Ahora emite un token efímero nuevo
+    en alejandra_tokens (tipo='admin', expira a las 12h) en vez del secreto
+    -- el panel (alejandra-panel.html) no necesita cambios porque ya trataba
+    "token" como un bearer opaco guardado en localStorage.
+  - Limitación conocida, no bloqueante: los tokens efímeros no se limpian
+    automáticamente al expirar (solo dejan de ser válidos vía la comprobación
+    de expires_at) -- se van acumulando como filas inactivas-por-fecha en
+    alejandra_tokens. Limpieza periódica queda como mejora futura si el
+    volumen llega a ser un problema.
 
 HISTORIA DEL BUG (por qué hay dos mecanismos de admin):
   - migrate_001 usaba INDEX inline en CREATE TABLE (inválido en SQLite/D1) →
