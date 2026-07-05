@@ -1,6 +1,7 @@
 ================================================================================
   ALEJANDRA AGENTE — GUÍA COMPLETA PARA NUEVOS CHATS
-  Última actualización: 05/07/2026 (continuación 14, tras commits 8d7ef65 y ce6e7d9)
+  Última actualización: 05/07/2026 (continuación 16, tras commits 8aad793,
+  c81c59d y 014508b — interruptor dev-bypass rate-limit/empresa_id)
 ================================================================================
 
 Este archivo explica todo lo necesario para trabajar en el agente Alejandra.
@@ -187,6 +188,57 @@ compartida de TODAS las empresas). Se corrigió con 3 capas, todas en vigor:
    `usuarios` para saber la empresa dueña; si no se puede determinar con
    certeza → se trata como NO accesible (fallar cerrado, no abierto).
 
+INTERRUPTOR DEV-BYPASS (continuación 15/16, 05/07/2026) — Adrian pidió poder
+activar/desactivar, SOLO para sí mismo como desarrollador verificado
+(esDevVerificado / auth.isDesarrollador — NUNCA para otro usuario o empresa),
+dos de las protecciones de arriba: el rate limiting de /api/chat y el
+aislamiento por empresa_id de la capa (2). Diseño acordado con Adrian vía
+AskUserQuestion: alcance "solo a mí", limitaciones exactas "rate limiting +
+aislamiento empresa_id" (NO el gating de tools ni el solo-SELECT/anti-SSRF,
+esos no tienen bypass), y "sí, con log detallado" para cada cambio.
+  - Persistencia: tabla `agente_config` (fila única id=1, D1 compartida entre
+    ambos workers) gana dos columnas nuevas vía migrate_005_dev_bypass.sql:
+    `dev_bypass_rate_limit` (default 0 — antes NUNCA había bypass de rate
+    limit, así que el default no cambia nada) y `dev_bypass_empresa_scope`
+    (default 1 — el aislamiento YA se saltaba siempre e incondicionalmente
+    para esDevVerificado desde antes de este cambio; el default preserva ese
+    comportamiento pero ahora de forma explícita, visible y auditada).
+  - lib.js: `validarScopeEmpresaBD(query, params, empresaId, esDevVerificado,
+    bypassEmpresaActivo = true)` gana el 5º parámetro (el default `true`
+    preserva el comportamiento previo para cualquier call site que no lo pase
+    todavía). `debeOmitirRateLimitDev(esDevVerificado, bypassActivo)` es la
+    función pura equivalente para el rate limit. Ambas cubiertas en
+    lib.test.js.
+  - alejandra-agente/worker.js: `leerConfigDevBypass(env)` lee la fila de
+    `agente_config` (con defaults seguros si las columnas no existen aún).
+    Se usa en /api/chat, /api/chat/stream (antes de aplicar validarRateLimit)
+    y en ejecutarTool() (antes de validarScopeEmpresaBD en consultar_bd/
+    escribir_bd/exportar_datos custom) — SOLO se consulta cuando
+    esDevVerificado, nunca para otros usuarios. Nuevo endpoint
+    GET/POST /api/admin/dev-bypass (bajo el prefijo /api/admin/, mismo
+    verificarAdminToken de siempre) para leer/cambiar el interruptor por API;
+    cada cambio se audita en alejandra_logs (accion='toggle_dev_bypass', con
+    actor resuelto y anterior/nuevo valor).
+  - UI para accionar el interruptor SIN llamar al endpoint a mano (ambas
+    llaman a un endpoint NUEVO Y DISTINTO en el worker RAÍZ,
+    `/alejandra-agente-dev-bypass` GET/POST, gateado por `auth.isDesarrollador`
+    de getAuth() — no por auth.isSuperadmin, para que NINGÚN otro superadmin
+    de empresa pueda verlo/tocarlo — que escribe directo en la misma fila de
+    `agente_config` compartida, igual que ya hacía /alejandra-agente-toggle):
+      · panel.html ("Alejandra Office", sección DevTools, tarjeta "Interruptor
+        Dev-Bypass") — visible solo si SESSION.rol === 'desarrollador'.
+      · App Flutter (Ajustes → "Dev-Bypass (solo tú)") — AdminService.
+        getDevBypass()/setDevBypass(), sección incluida en el árbol de
+        widgets solo si SettingsService.userRol == 'desarrollador'.
+    OJO: esto es DISTINTO de alejandra-panel.html (el panel específico del
+    agente, ver sección "PANEL DE CONTROL" más abajo), que sigue usando
+    Authorization: Bearer <token> contra el propio worker del agente — no se
+    tocó ese panel en esta continuación.
+  - Activar cualquiera de los dos toggles (tanto en panel.html como en la app)
+    pide confirmación explícita antes de mandar la petición, precisamente
+    porque desactiva una protección de seguridad real, aunque sea solo para
+    el propio desarrollador.
+
 Anti-SSRF en test_endpoint: urlPermitidaTestEndpoint() (lib.js) — allowlist de
 host (solo *.alejandra-app.workers.dev sobre https, con comprobación real de
 subdominio, no substring) para evitar que la tool test_endpoint se use para
@@ -236,7 +288,7 @@ todavía (verificación manual vía curl tras cada deploy). Ampliar esto con
 decide invertir en tests de integración de rutas reales.
 
 Cómo correr los tests:
-  cd alejandra-agente && npm ci && npm test        (vitest run, 47 tests)
+  cd alejandra-agente && npm ci && npm test        (vitest run, 57 tests)
 
 El workflow de deploy (deploy-alejandra-agente.yml) instala dependencias y
 corre `npm test` ANTES de aplicar migraciones D1 y desplegar — si los tests
@@ -324,7 +376,11 @@ PÚBLICOS (sin auth):
 ADMIN (requieren Authorization: Bearer <token>, bajo /api/admin/):
   GET/POST /api/admin/config, GET /api/admin/logs, GET /api/admin/memoria,
   GET /api/admin/chat, GET /api/admin/gastos (?dias=7|30|90),
-  GET/POST/DELETE /api/admin/tokens, POST /api/admin/tokens/change.
+  GET/POST/DELETE /api/admin/tokens, POST /api/admin/tokens/change,
+  GET/POST /api/admin/dev-bypass (interruptor rate_limit/empresa_scope —
+  ver "INTERRUPTOR DEV-BYPASS" más arriba; misma tabla agente_config que el
+  endpoint /alejandra-agente-dev-bypass del worker raíz, pero este vive en el
+  propio worker del agente y usa ADMIN_TOKEN en vez de sesión isDesarrollador).
 
   POST /api/reflexion           → {token} → lanza reflexión autónoma manual
 
@@ -388,13 +444,27 @@ HISTORIA DEL BUG (por qué hay dos mecanismos de admin):
 
 Los archivos están en alejandra-agente/ y se ejecutan vía GitHub Actions:
 
-  migrate_001_init_schema.sql  — Schema inicial (TIENE BUG: INDEX inline, usar
-                                  003 para fix)
-  migrate_002_token_uso.sql    — Tabla alejandra_token_uso
-  migrate_003_fix_schema.sql   — Corrige tablas, añade alejandra_historial,
-                                  renueva token
+  migrate_001_init_schema.sql       — Schema inicial (TIENE BUG: INDEX inline,
+                                       usar 003 para fix)
+  migrate_002_token_uso.sql         — Tabla alejandra_token_uso
+  migrate_003_fix_schema.sql        — Corrige tablas, añade alejandra_historial,
+                                       renueva token
+  migrate_004_rename_agente_config.sql — Renombra la tabla de config del
+                                       agente a agente_config (compartida con
+                                       el worker raíz). Nota histórica: esta
+                                       migración se quedó fuera del workflow
+                                       de CI durante un tiempo (gap detectado
+                                       y corregido en la continuación previa a
+                                       esta) — comprobar siempre que cualquier
+                                       migración nueva quede realmente listada
+                                       en deploy-alejandra-agente.yml, no solo
+                                       creada como archivo.
+  migrate_005_dev_bypass.sql        — Añade columnas dev_bypass_rate_limit y
+                                       dev_bypass_empresa_scope (INTEGER,
+                                       default 0 y 1) a agente_config. Ver
+                                       "INTERRUPTOR DEV-BYPASS" más arriba.
 
-El workflow deploy-alejandra-agente.yml aplica las 3 migraciones (con
+El workflow deploy-alejandra-agente.yml aplica las 5 migraciones (con
 `|| echo ...` para no fallar si ya están aplicadas) ANTES de correr los tests
 y desplegar. Si se añaden migraciones nuevas, seguir el mismo patrón numerado
 y añadirlas al workflow.
@@ -539,7 +609,7 @@ alejandra-agente/
                                   I/O real con D1/KV/R2/fetch)
   lib.js                       — Funciones puras extraídas de worker.js,
                                   testeadas con vitest (ver "TESTS")
-  lib.test.js                  — 47 tests de lib.js
+  lib.test.js                  — 57 tests de lib.js
   package.json / package-lock.json — devDependency vitest (excepción explícita
                                   en .gitignore raíz para trackear estos dos)
   wrangler.toml                 — Config Cloudflare del agente (DB/FILES/
@@ -548,8 +618,16 @@ alejandra-agente/
   migrate_002_token_uso.sql    — Tabla tracking tokens/coste
   migrate_003_fix_schema.sql   — Fix schema + alejandra_historial + token
                                   renovado
+  migrate_004_rename_agente_config.sql — Renombra tabla config → agente_config
+  migrate_005_dev_bypass.sql   — Columnas dev_bypass_rate_limit/
+                                  dev_bypass_empresa_scope en agente_config
 
-panel.html / alejandra-panel.html  — Panel de control web (servido por Pages)
+panel.html / alejandra-panel.html  — Panel de control web (servido por Pages).
+  panel.html = "Alejandra Office" (panel principal de la app, sesión propia
+  vía SESSION/X-Token contra el worker raíz; aquí viven los toggles de
+  dev-bypass en DevTools). alejandra-panel.html = panel de control SEPARADO,
+  específico del agente, autenticado con Authorization: Bearer <token> contra
+  /api/admin/* del propio worker del agente — no confundir los dos.
 
 .github/workflows/
   deploy-alejandra-agente.yml  — CI/CD del agente (tests → migraciones →

@@ -3,14 +3,18 @@
 **Sesion:** LIBRE
 **Ultima sesion:** 05/07/2026 -- Modulo de Planos Tecnicos (v7.56, commit 5f2b226).
 **Version actual:** App PWA **v7.56** -- commit 5f2b226
-**Agente (alejandra-agente):** commit 8d7ef65 desplegado en main (deploy CI 28742618524,
-health OK, /health sigue devolviendo "6.13" -- fix de esta sesion no tocaba version).
-Fix IDOR/SQLi critico en configurar_alerta y exportar_datos (ver continuacion 14 abajo).
-Incluye tests automatizados (47 tests, vitest) que corren en el workflow
-de deploy ANTES de aplicar migraciones/desplegar -- si fallan, no se despliega.
+**Agente (alejandra-agente):** commit 8aad793 desplegado en main (interruptor dev-bypass
+rate-limit/empresa_id, solo desarrollador -- ver continuacion 16 abajo). Incluye tests
+automatizados (57 tests, vitest) que corren en el workflow de deploy ANTES de aplicar
+migraciones/desplegar -- si fallan, no se despliega.
+**Worker raiz + panel.html ("Alejandra Office"):** commit c81c59d -- endpoint
+`/alejandra-agente-dev-bypass` y UI de toggles en DevTools (ver continuacion 16).
+**App Flutter (alejandra-ia):** commit 014508b -- UI de dev-bypass en Ajustes, visible
+solo con rol `desarrollador` (ver continuacion 16).
 **Documentacion del agente (ALEJANDRA_AGENTE.txt):** reescrita commit 60ae56e, regla #3
 actualizada en 74f686e tras el fix de version, seccion de gating actualizada en e7134e3
-tras el fix de configurar_alerta/exportar_datos. Ver seccion de abajo.
+tras el fix de configurar_alerta/exportar_datos, y nueva subseccion "INTERRUPTOR
+DEV-BYPASS" anadida en continuacion 16. Ver seccion de abajo.
 
 ---
 
@@ -271,6 +275,112 @@ editado concurrentemente por al menos otro agente autonomo. A partir de ahora, r
 
 Siguiente punto de la lista: seguir con la instruccion "seguimos auditando" para el resto
 del sistema -- ningun hallazgo especifico identificado todavia mas alla de este punto.
+
+---
+
+## RESUMEN SESION 05/07/2026 (continuacion 16) -- Interruptor dev-bypass (rate limit / aislamiento empresa_id) solo para el desarrollador
+
+Peticion original de Adrian, al margen de la auditoria de seguridad en curso: "de todas
+formas hemos puesto limitaciones a alejandra IA, eso esta bien pero quiero poder activar o
+desactivar las limitaciones desde ajustes en algun lado de alejandra office y la app, solo
+visible para dev (yo)". Antes de tocar codigo se le pregunto explicitamente el alcance via
+tres preguntas (AskUserQuestion), y contesto:
+- Alcance: **"Solo a mi (dev verificado) (Recomendado)"** -- nunca debe afectar a otros
+  usuarios/empresas.
+- Que limitaciones: **"Rate limiting (15 peticiones/min), Aislamiento por empresa_id"** --
+  solo estas dos, ninguna otra proteccion (ni las de #13/#15/#16 de la auditoria, ni
+  ninguna futura) queda cubierta por este interruptor salvo que se pida explicitamente.
+- Auditoria: **"Si, con log detallado (Recomendado)"** -- cada cambio de interruptor debe
+  quedar registrado (quien, cuando, que cambio).
+
+### Diseno
+Todo el estado vive en una unica fila compartida de D1, tabla `agente_config` (id=1),
+usada tanto por el worker raiz (`worker.js`, el que sirve la app movil y panel.html) como
+por el worker del agente (`alejandra-agente/worker.js`). Dos columnas nuevas:
+`dev_bypass_rate_limit` (INTEGER, default 0 = protegido) y `dev_bypass_empresa_scope`
+(INTEGER, default 1 = aislamiento activo -- OJO, el "activado" logico de este interruptor
+en concreto es poner la columna a 0, ver `bypassEmpresaActivo` en lib.js). Migracion:
+`alejandra-agente/migrate_005_dev_bypass.sql`.
+
+El interruptor SOLO tiene efecto para peticiones donde `auth.isDesarrollador` es `true` --
+no `isSuperadmin` (que es mas amplio e incluye admins de empresa) ni `isAdmin`. Via las
+cabeceras legacy `X-Admin-Code`, `isDesarrollador` siempre da `false` (solo se concede via
+sesion D1 real), asi que no hay forma de colarse por una via antigua. Para cualquier otro
+rol/usuario el interruptor es completamente invisible y no cambia su comportamiento.
+
+### Backend -- agente (`alejandra-agente/`)
+- `lib.js`: nuevas funciones puras `bypassEmpresaActivo(cfg)` y
+  `debeOmitirRateLimitDev(cfg, auth)`, ambas ya cubiertas con tests de regresion en
+  `lib.test.js` (10 tests nuevos: 47 -> 57 en total).
+- `worker.js` (agente): nueva funcion `leerConfigDevBypass(env)` (lee la fila de
+  `agente_config`), aplicada en los puntos donde ya se hacia rate limiting y scoping por
+  empresa_id, mas nuevo endpoint `GET/POST /api/admin/dev-bypass` (bajo el sistema
+  ADMIN_TOKEN existente del agente, para uso desde `alejandra-panel.html` si hiciera
+  falta).
+- Verificado: `npm test` (57/57 en verde), `node --check worker.js`, deploy CI
+  (`gh run watch ... --exit-status`) en verde, `/health` respondiendo OK tras el deploy.
+
+### Backend -- worker raiz (`worker.js`, commit `c81c59d`)
+Nuevo endpoint `GET/POST /alejandra-agente-dev-bypass`, siguiendo el mismo patron ya
+existente en `/alejandra-agente-toggle` / `/alejandra-agente-restart`: escribe
+DIRECTAMENTE en la D1 compartida (`agente_config`) en vez de hacer un proxy HTTP al worker
+del agente. Gateado con `auth.isDesarrollador` (no `isSuperadmin`) devolviendo 403 si no
+se cumple. El POST body admite `{campo: 'rate_limit'|'empresa_scope', activo: bool}` y cada
+cambio queda registrado via `logActividad(env, {nivel: 'warn', origen:
+'panel_dev_bypass', ...})` con el nombre/usuario_id de quien lo cambio, el valor anterior y
+el nuevo -- cumple el requisito de "log detallado" pedido por Adrian.
+
+### UI -- panel.html ("Alejandra Office", commit `c81c59d`)
+Nueva tarjeta "🔓 Interruptor Dev-Bypass" dentro de la pagina DevTools (`pageDevtools`),
+oculta por defecto (`style="display:none"`) y solo mostrada cuando
+`SESSION.rol === 'desarrollador'`. Dos filas de toggle (rate limiting, aislamiento
+empresa_id) con confirmacion (`confirm()`) antes de activar cualquier bypass, para evitar
+un click accidental. JS: `cargarDevBypass()` (anadida al `Promise.all` de
+`cargarDevtools()`), `pintarDevBypassBtn()`, `toggleDevBypass(campo)`.
+
+Verificacion de sintaxis: concatenar los `<script>` de panel.html y correr `node --check`
+de una vez da un falso positivo (`Identifier '_planosData' has already been declared`) --
+`let`/`const` de nivel superior en tags `<script>` separados no colisionan en un navegador
+real, solo al concatenarlos artificialmente. Extrayendo y comprobando cada bloque por
+separado: los bloques 0 y 1 (donde esta mi codigo) pasan limpios; el bloque 2 SI tiene un
+`let _planosData` duplicado real dentro de si mismo, pero es un bug preexistente de la
+feature "Planos IA" (commit `ce6e7d9`, nada que ver con este cambio) -- se dejo constancia
+via `spawn_task` en vez de arreglarlo aqui, por estar fuera de alcance.
+
+Importante: existen DOS paneles distintos servidos desde este repo -- `panel.html`
+("Alejandra Office", el panel principal de la app, autenticado via `SESSION`/`X-Token`
+contra el worker raiz) y `alejandra-panel.html` (panel de control especifico del agente,
+autenticado via `Authorization: Bearer <token>` contra `/api/admin/*` del propio worker del
+agente). La peticion de Adrian ("alejandra office") mapea sin ambiguedad al primero -- el
+segundo se dejo intacto.
+
+### UI -- app Flutter (`alejandra-ia`, commit `014508b`)
+- `lib/services/admin_service.dart`: nuevos metodos `getDevBypass()` y
+  `setDevBypass(String campo, bool activo)`, llamando a los mismos endpoints del worker
+  raiz de arriba.
+- `lib/screens/settings_screen.dart`: nueva seccion expandible "Dev-Bypass (solo tu)"
+  (icono candado abierto), mostrada solo si `_s.userRol == 'desarrollador'`
+  (`SettingsService.userRol`, poblado en `auth_service.dart` directamente desde
+  `sesion.rol` del backend -- mismo valor que `auth.isDesarrollador` en el worker).
+  Confirmacion via `AlertDialog` antes de activar cualquier bypass. Deliberadamente NO se
+  toco la seccion "Avanzado" preexistente (URL del backend / borrar cache), porque esa la
+  usan tambien testers no-dev y no formaba parte de lo pedido.
+- Verificado con `dart analyze`: 0 issues nuevos (1 lint preexistente sin relacion, linea
+  598, ya existia antes de este cambio). Este repo no tiene GitHub Actions (los APK se
+  compilan a mano con `build_release.ps1`), asi que no hay deploy CI que verificar para
+  estos dos archivos.
+
+### Documentacion
+`ALEJANDRA_AGENTE.txt` actualizado (commit pendiente en el momento de escribir esto):
+cabecera a "continuacion 16", nueva subseccion "INTERRUPTOR DEV-BYPASS" dentro de "GATING
+DE TOOLS...", conteo de tests 47->57 en dos sitios, `/api/admin/dev-bypass` anadido a la
+lista de endpoints ADMIN, y `migrate_004_rename_agente_config.sql` /
+`migrate_005_dev_bypass.sql` anadidos tanto a "MIGRACIONES D1" como a "ESTRUCTURA DE
+ARCHIVOS RELEVANTES" (con nota sobre el hueco historico de migrate_004 en el workflow de
+CI, ya corregido).
+
+Siguiente punto de la lista: retomar "seguimos auditando" para el resto del sistema (esta
+feature fue una peticion intercalada, no parte de la lista de auditoria).
 
 ---
 
