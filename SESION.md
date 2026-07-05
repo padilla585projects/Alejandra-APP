@@ -1,8 +1,8 @@
 ## ESTADO ACTUAL
 
 **Sesion:** LIBRE
-**Ultima sesion:** 05/07/2026 -- Modulo de Planos IA Parte B completada y testeada en vivo (commits ce6e7d9, ec0b5e3).
-**Version actual:** App PWA **v7.56** -- commit ec0b5e3
+**Ultima sesion:** 05/07/2026 -- Planos IA Parte C: editor SVG + imprimir + DXF (v7.57, commit c97dc67).
+**Version actual:** App PWA **v7.57** -- commit c97dc67
 **Agente (alejandra-agente):** commit fc1fe7b desplegado en main (fix IDOR en
 listar_esquemas/borrar_esquema y gestionar_tarea -- ver continuacion 17 abajo). Incluye
 tests automatizados (59 tests, vitest) que corren en el workflow de deploy ANTES de
@@ -385,6 +385,66 @@ CI, ya corregido).
 
 Siguiente punto de la lista: retomar "seguimos auditando" para el resto del sistema (esta
 feature fue una peticion intercalada, no parte de la lista de auditoria).
+
+---
+
+## RESUMEN SESION 05/07/2026 (continuacion 19) -- Modulo Planos IA Parte C: editor SVG + imprimir + DXF (v7.57)
+
+Peticion de Adrian tras confirmar la Parte B: "parte C del modulo de planos".
+Confirmado plan tecnico con el usuario antes de codificar.
+
+### Backend (worker.js) -- commit c97dc67
+- Nueva ruta `PUT /planos/:id/svg` + funcion `actualizarPlanoSvg()`:
+  valida que el body tiene `svg_data`, que empieza por `<svg` o `<?xml`,
+  y que el plano pertenece a la empresa del usuario antes de actualizar D1.
+  Requiere rol != operario.
+
+### Frontend (panel.html) -- commit c97dc67
+- CDN interact.js 1.10.27 anadido al bloque de scripts del head.
+- CSS `.editor-tool-btn`, `.svg-selected`, `.svg-hover` anadidos.
+- Modal visor de plano rediseñado: cabecera mas ancha con boton "Editar",
+  "Guardar", "Cancelar edicion", "SVG", "DXF", "Imprimir" y toolbar
+  de edicion (oculta por defecto).
+
+#### Editor SVG interactivo
+- `activarEditorPlano()` -- activa modo edicion, guarda estado inicial en stack undo
+- `cancelarEdicionPlano(silencioso)` -- desactiva y restaura SVG original si no se guardo
+- `guardarPlanoEditado()` -- PUT /planos/:id/svg con el SVG actual del DOM
+- `setEditorTool(tool)` -- seleccionar/texto/linea/rect/circulo/eliminar
+- `_activarInteracciones()` -- registra event listeners en elementos SVG + interact.js drag
+  - Seleccionar/Mover: interact.js translada coordenadas segun tag (rect→x/y, circle→cx/cy,
+    line→x1/y1/x2/y2, text→x/y, g/path→transform translate)
+  - Texto: click en `<text>`/`<tspan>` → input flotante con position:fixed sobre el elemento;
+    Enter confirma, Escape cancela, blur confirma con 100ms delay
+  - Texto nuevo: click en zona vacia con herramienta Texto → crea `<text>` y abre input
+  - Dibujo: mousedown+mousemove+mouseup en el SVG → crea line/rect/circle en tiempo real
+  - Eliminar: click en elemento → remove() inmediato
+- `editorUndo()` / `editorRedo()` -- stack de hasta 50 snapshots del outerHTML del SVG
+- `_onEditorKey()` -- Delete/Backspace elimina seleccionado; Ctrl+Z/Y undo/redo; Ctrl+S guarda
+- Color y grosor configurables via inputs en la toolbar
+
+#### Impresion mejorada
+- `_abrirVentanaImpresion(svgStr, titulo, tipo)` -- abre ventana limpia con:
+  - Cabecera: titulo del plano, tipo (emoji+label), nombre empresa, fecha actual
+  - SVG ocupa el 100% del area imprimible
+  - Orientacion automatica: detecta si viewBox es mas ancho→landscape, mas alto→portrait
+  - CSS @media print: `print-color-adjust:exact` para colores, sin elementos .no-print
+  - Boton "Imprimir / Guardar PDF" que se oculta al pulsar (no aparece en el PDF)
+- Funciona tanto desde el visor (con ediciones incluidas si las hay) como desde las
+  tarjetas del grid (botones "PDF" individuales por plano)
+
+#### Exportacion DXF
+- `descargarDxfPlano()` -- conversor SVG→DXF sin librerias externas (~120 lineas):
+  - Parsea el SVG con DOMParser (no modifica el DOM real)
+  - Lee viewBox para convertir coordenadas (SVG Y↓ → DXF Y↑, inversion H-y)
+  - Entidades DXF generadas: LINE (svg line), LWPOLYLINE (rect+polygon+polyline),
+    CIRCLE (circle+ellipse≈radio mayor), TEXT (text+tspan)
+  - Color: funcion rgb2dxf() mapea colores CSS a indices ACI de AutoCAD (1-7)
+  - Formato: header DXF AC1015 + seccion ENTITIES + EOF, descargado como .dxf
+
+### Version
+7.56 → 7.57 en version.json + sw.js + index.html
+Worker desplegado: Version ID becc34c9-7e35-4098-9929-28ee98a364f2
 
 ---
 
