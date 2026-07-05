@@ -8782,9 +8782,11 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
 
         <!-- COSTES IA -->
         <div class="section-card" id="seccionAICosts" style="margin-bottom:20px">
-          <div class="section-card-title"><span>💰</span> Costes IA</div>
-          <div id="aiCostsContent"><div style="color:var(--muted);font-size:13px">Cargando...</div></div>
-          <button class="btn btn-secondary" style="margin-top:12px" onclick="cargarAICosts()">🔄 Actualizar</button>
+          <div class="section-card-title" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+            <span><span>💸</span> Costes IA — Consumo de modelos</span>
+            <button class="btn btn-secondary btn-sm" onclick="cargarAICosts()">🔄 Actualizar</button>
+          </div>
+          <div id="aiCostsContent"><div class="loading"><div class="spinner"></div> Cargando...</div></div>
         </div>
 
         <!-- LOGS DEL SERVIDOR -->
@@ -13832,79 +13834,136 @@ async function toggleDevBypass(campo) {
 async function cargarAICosts() {
   const el = document.getElementById('aiCostsContent');
   if (!el) return;
+  el.innerHTML = '<div class="loading"><div class="spinner"></div> Cargando...</div>';
   try {
-    const d = await api('/admin/ai-costs');
+    // Intentar primero el endpoint enriquecido (dev), fallback al antiguo
+    let d = await api('/dev/ai-costes').catch(() => null);
+    let modo = 'dev';
+    if (!d || !d.ok) {
+      d = await api('/admin/ai-costs');
+      modo = 'admin';
+    }
     if (!d || !d.ok) { el.innerHTML = '<div style="color:var(--red);font-size:12px">Error cargando costes IA</div>'; return; }
 
-    const fmt = v => '$' + (v || 0).toFixed(4);
-    const fmtN = v => (v || 0).toLocaleString('es-ES');
+    const fmt  = v => '$' + (+(v || 0)).toFixed(4);
+    const fmt2 = v => '$' + (+(v || 0)).toFixed(2);
+    const fmtN = v => (+(v || 0)).toLocaleString('es-ES');
+    const provColor = p => p === 'anthropic' ? '#e07b39' : p === 'openrouter' ? '#7c3aed' : p === 'gemini' ? '#1a73e8' : '#6b7280';
 
-    let html = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin-bottom:16px">
-      <div class="kpi-card" style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:12px 14px">
-        <div style="font-size:10px;color:var(--muted);font-family:'Montserrat',sans-serif;font-weight:700;letter-spacing:1px;margin-bottom:4px">HOY</div>
-        <div style="font-size:22px;font-weight:900;color:#22c55e">${fmt(d.hoy?.total)}</div>
-        <div style="font-size:11px;color:var(--muted)">${fmtN(d.hoy?.llamadas)} llamadas</div>
+    // KPI top row
+    const totalCoste = modo === 'dev' ? d.total?.coste_total : d.total?.total;
+    const mesCoste   = modo === 'dev' ? d.mesActual?.coste_mes : d.mes?.total;
+    const mesLlams   = modo === 'dev' ? d.mesActual?.llamadas_mes : d.mes?.llamadas;
+    const totalLlams = modo === 'dev' ? d.total?.total_llamadas : d.total?.llamadas;
+    const proyAnual  = modo === 'dev' ? (+(mesCoste || 0) / 30 * 365) : d.anual_proyectado;
+
+    let html = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-bottom:16px">
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:12px 14px">
+        <div style="font-size:10px;color:var(--muted);font-family:'Montserrat',sans-serif;font-weight:700;letter-spacing:1px;margin-bottom:4px">TOTAL ACUM.</div>
+        <div style="font-size:22px;font-weight:900;color:#22c55e">${fmt(totalCoste)}</div>
+        <div style="font-size:11px;color:var(--muted)">${fmtN(totalLlams)} llamadas</div>
       </div>
-      <div class="kpi-card" style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:12px 14px">
-        <div style="font-size:10px;color:var(--muted);font-family:'Montserrat',sans-serif;font-weight:700;letter-spacing:1px;margin-bottom:4px">SEMANA</div>
-        <div style="font-size:22px;font-weight:900;color:#3b82f6">${fmt(d.semana?.total)}</div>
-        <div style="font-size:11px;color:var(--muted)">${fmtN(d.semana?.llamadas)} llamadas</div>
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:12px 14px">
+        <div style="font-size:10px;color:var(--muted);font-family:'Montserrat',sans-serif;font-weight:700;letter-spacing:1px;margin-bottom:4px">MES ACTUAL</div>
+        <div style="font-size:22px;font-weight:900;color:#a855f7">${fmt(mesCoste)}</div>
+        <div style="font-size:11px;color:var(--muted)">${fmtN(mesLlams)} llamadas</div>
       </div>
-      <div class="kpi-card" style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:12px 14px">
-        <div style="font-size:10px;color:var(--muted);font-family:'Montserrat',sans-serif;font-weight:700;letter-spacing:1px;margin-bottom:4px">MES (30d)</div>
-        <div style="font-size:22px;font-weight:900;color:#a855f7">${fmt(d.mes?.total)}</div>
-        <div style="font-size:11px;color:var(--muted)">${fmtN(d.mes?.llamadas)} llamadas</div>
-      </div>
-      <div class="kpi-card" style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:12px 14px">
-        <div style="font-size:10px;color:var(--muted);font-family:'Montserrat',sans-serif;font-weight:700;letter-spacing:1px;margin-bottom:4px">ANUAL PROYECTADO</div>
-        <div style="font-size:22px;font-weight:900;color:#eab308">${fmt(d.anual_proyectado)}</div>
-        <div style="font-size:11px;color:var(--muted)">Total acum: ${fmt(d.total?.total)}</div>
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:12px 14px">
+        <div style="font-size:10px;color:var(--muted);font-family:'Montserrat',sans-serif;font-weight:700;letter-spacing:1px;margin-bottom:4px">PROYECTADO AÑO</div>
+        <div style="font-size:22px;font-weight:900;color:#eab308">${fmt2(proyAnual)}</div>
+        <div style="font-size:11px;color:var(--muted)">estimado anual</div>
       </div>
     </div>`;
 
-    if (d.por_modelo && d.por_modelo.length) {
-      html += `<div style="font-size:11px;color:var(--muted);font-family:'Montserrat',sans-serif;font-weight:700;letter-spacing:1px;margin-bottom:6px">POR MODELO</div>
-        <div style="overflow-x:auto;margin-bottom:14px"><table style="width:100%;border-collapse:collapse;font-size:12px">
-        <thead><tr style="border-bottom:1px solid var(--border);color:var(--muted);text-align:left">
-          <th style="padding:5px 8px">Modelo</th>
-          <th style="padding:5px 8px">Proveedor</th>
-          <th style="padding:5px 8px;text-align:right">Llamadas</th>
-          <th style="padding:5px 8px;text-align:right">Tokens entrada</th>
-          <th style="padding:5px 8px;text-align:right">Tokens salida</th>
-          <th style="padding:5px 8px;text-align:right">Coste</th>
-        </tr></thead><tbody>`;
-      for (const r of d.por_modelo) {
-        html += `<tr style="border-bottom:1px solid var(--border)">
-          <td style="padding:5px 8px;font-family:monospace;font-size:11px;color:#a855f7">${r.modelo}</td>
-          <td style="padding:5px 8px;color:var(--muted)">${r.proveedor}</td>
-          <td style="padding:5px 8px;text-align:right">${fmtN(r.llamadas)}</td>
-          <td style="padding:5px 8px;text-align:right;color:var(--muted)">${fmtN(r.input_tok)}</td>
-          <td style="padding:5px 8px;text-align:right;color:var(--muted)">${fmtN(r.output_tok)}</td>
-          <td style="padding:5px 8px;text-align:right;color:#22c55e;font-weight:700">${fmt(r.coste)}</td>
-        </tr>`;
+    // Por proveedor (solo en modo dev)
+    const proveedores = modo === 'dev' ? (d.porProveedor || []) : [];
+    if (proveedores.length) {
+      html += `<div style="font-size:10px;color:var(--muted);font-family:'Montserrat',sans-serif;font-weight:700;letter-spacing:1px;margin-bottom:8px">POR PROVEEDOR</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">`;
+      for (const p of proveedores) {
+        const color = provColor(p.proveedor);
+        html += `<div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 14px;min-width:130px">
+          <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:11px;color:${color};margin-bottom:4px;text-transform:uppercase">${p.proveedor}</div>
+          <div style="font-size:18px;font-weight:900;color:var(--text)">${fmt(p.coste)}</div>
+          <div style="font-size:11px;color:var(--muted)">${fmtN(p.llamadas)} llamadas</div>
+          <div style="font-size:10px;color:var(--muted)">${fmtN(p.tok_in)}+${fmtN(p.tok_out)} tok</div>
+        </div>`;
       }
-      html += '</tbody></table></div>';
+      html += '</div>';
     }
 
-    if (d.por_endpoint && d.por_endpoint.length) {
-      html += `<div style="font-size:11px;color:var(--muted);font-family:'Montserrat',sans-serif;font-weight:700;letter-spacing:1px;margin-bottom:6px">POR ENDPOINT</div>
-        <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">
+    // Por endpoint
+    const endpoints = modo === 'dev' ? (d.porEndpoint || []) : (d.por_endpoint || []);
+    if (endpoints.length) {
+      html += `<div style="font-size:10px;color:var(--muted);font-family:'Montserrat',sans-serif;font-weight:700;letter-spacing:1px;margin-bottom:6px">POR ENDPOINT (top 10)</div>
+        <div style="overflow-x:auto;margin-bottom:16px"><table style="width:100%;border-collapse:collapse;font-size:12px">
         <thead><tr style="border-bottom:1px solid var(--border);color:var(--muted);text-align:left">
           <th style="padding:5px 8px">Endpoint</th>
+          <th style="padding:5px 8px">Proveedor</th>
           <th style="padding:5px 8px;text-align:right">Llamadas</th>
+          <th style="padding:5px 8px;text-align:right">Tokens</th>
           <th style="padding:5px 8px;text-align:right">Coste</th>
         </tr></thead><tbody>`;
-      for (const r of d.por_endpoint) {
+      for (const r of endpoints) {
+        const color = provColor(r.proveedor);
+        const tok = modo === 'dev' ? fmtN((r.tok_in||0)+(r.tok_out||0)) : '—';
         html += `<tr style="border-bottom:1px solid var(--border)">
           <td style="padding:5px 8px;font-family:monospace;font-size:11px">${r.endpoint || '—'}</td>
+          <td style="padding:5px 8px"><span style="font-size:10px;font-weight:700;color:${color}">${r.proveedor || '—'}</span></td>
           <td style="padding:5px 8px;text-align:right">${fmtN(r.llamadas)}</td>
+          <td style="padding:5px 8px;text-align:right;color:var(--muted)">${tok}</td>
           <td style="padding:5px 8px;text-align:right;color:#22c55e;font-weight:700">${fmt(r.coste)}</td>
         </tr>`;
       }
       html += '</tbody></table></div>';
     }
 
-    if ((!d.por_modelo || !d.por_modelo.length) && (!d.por_endpoint || !d.por_endpoint.length)) {
+    // Tendencia mensual (solo en modo dev)
+    const tendencia = modo === 'dev' ? (d.tendencia || []) : [];
+    if (tendencia.length) {
+      html += `<div style="font-size:10px;color:var(--muted);font-family:'Montserrat',sans-serif;font-weight:700;letter-spacing:1px;margin-bottom:6px">TENDENCIA MENSUAL</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">`;
+      for (const t of tendencia) {
+        html += `<div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px 12px;text-align:center;min-width:80px">
+          <div style="font-size:10px;color:var(--muted);margin-bottom:2px">${t.mes}</div>
+          <div style="font-weight:900;color:var(--text)">${fmt(t.coste)}</div>
+          <div style="font-size:10px;color:var(--muted)">${fmtN(t.llamadas)} calls</div>
+        </div>`;
+      }
+      html += '</div>';
+    }
+
+    // Ultimas llamadas (solo en modo dev)
+    const ultimas = modo === 'dev' ? (d.ultimasLlamadas || []) : [];
+    if (ultimas.length) {
+      html += `<details style="margin-top:4px"><summary style="font-size:11px;color:var(--muted);cursor:pointer;font-family:'Montserrat',sans-serif;font-weight:700;letter-spacing:1px">ÚLTIMAS 20 LLAMADAS ▾</summary>
+        <div style="overflow-x:auto;margin-top:8px"><table style="width:100%;border-collapse:collapse;font-size:11px">
+        <thead><tr style="border-bottom:1px solid var(--border);color:var(--muted);text-align:left">
+          <th style="padding:4px 6px">Fecha</th>
+          <th style="padding:4px 6px">Proveedor</th>
+          <th style="padding:4px 6px">Modelo</th>
+          <th style="padding:4px 6px">Endpoint</th>
+          <th style="padding:4px 6px;text-align:right">Tok E</th>
+          <th style="padding:4px 6px;text-align:right">Tok S</th>
+          <th style="padding:4px 6px;text-align:right">Coste</th>
+        </tr></thead><tbody>`;
+      for (const r of ultimas) {
+        const color = provColor(r.proveedor);
+        const fecha = r.created_at ? r.created_at.slice(0,16).replace('T',' ') : '—';
+        html += `<tr style="border-bottom:1px solid var(--border)">
+          <td style="padding:4px 6px;color:var(--muted)">${fecha}</td>
+          <td style="padding:4px 6px;font-weight:700;color:${color}">${r.proveedor}</td>
+          <td style="padding:4px 6px;font-family:monospace;font-size:10px;color:#a855f7">${(r.modelo||'').slice(0,30)}</td>
+          <td style="padding:4px 6px;font-family:monospace;font-size:10px">${r.endpoint || '—'}</td>
+          <td style="padding:4px 6px;text-align:right;color:var(--muted)">${fmtN(r.input_tokens)}</td>
+          <td style="padding:4px 6px;text-align:right;color:var(--muted)">${fmtN(r.output_tokens)}</td>
+          <td style="padding:4px 6px;text-align:right;color:#22c55e;font-weight:700">${fmt(r.coste_usd)}</td>
+        </tr>`;
+      }
+      html += '</tbody></table></div></details>';
+    }
+
+    if (!proveedores.length && !endpoints.length && !tendencia.length) {
       html += '<div style="color:var(--muted);font-size:13px;margin-top:8px">Sin datos de uso IA todavía.</div>';
     }
 

@@ -4371,6 +4371,7 @@ export default {
       if (path === '/dev/r2'            && method === 'DELETE') return await devR2Delete(request, env);
       if (path === '/dev/cambiar-rol'   && method === 'PUT')    return await devCambiarRol(request, env);
       if (path === '/dev/activity'      && method === 'GET')    return await devActivity(request, env);
+      if (path === '/dev/ai-costes'     && method === 'GET')    return await devAICostes(request, env);
 
       // Ã¢"â‚¬Ã¢"â‚¬ Log viewer (DevTools) Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬
       if (path === '/log'            && method === 'GET')  return await getLogsAdmin(request, env);
@@ -13338,6 +13339,84 @@ async function devActivity(request, env) {
 }
 
 // â”€â”€ Fases de obra (NEW-30) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+async function devAICostes(request, env) {
+  const s = await getAuth(request, env);
+  if (!s || !hasRole(s, 'superadmin', 'desarrollador')) return err('Sin permiso', 403);
+  try {
+    const [total, mesActual, porProveedor, porEndpoint, tendencia, ultimasLlamadas] = await Promise.all([
+      env.DB.prepare(`
+        SELECT
+          ROUND(SUM(coste_usd), 4) as coste_total,
+          COUNT(*) as total_llamadas,
+          SUM(input_tokens) as tok_in_total,
+          SUM(output_tokens) as tok_out_total
+        FROM ai_usage
+      `).all(),
+      env.DB.prepare(`
+        SELECT
+          ROUND(SUM(coste_usd), 4) as coste_mes,
+          COUNT(*) as llamadas_mes
+        FROM ai_usage
+        WHERE strftime('%Y-%m', created_at) = strftime('%Y-%m', 'now')
+      `).all(),
+      env.DB.prepare(`
+        SELECT
+          proveedor,
+          ROUND(SUM(coste_usd), 4) as coste,
+          COUNT(*) as llamadas,
+          SUM(input_tokens) as tok_in,
+          SUM(output_tokens) as tok_out
+        FROM ai_usage
+        GROUP BY proveedor
+        ORDER BY coste DESC
+      `).all(),
+      env.DB.prepare(`
+        SELECT
+          endpoint,
+          proveedor,
+          ROUND(SUM(coste_usd), 4) as coste,
+          COUNT(*) as llamadas,
+          SUM(input_tokens) as tok_in,
+          SUM(output_tokens) as tok_out
+        FROM ai_usage
+        GROUP BY endpoint
+        ORDER BY coste DESC
+        LIMIT 10
+      `).all(),
+      env.DB.prepare(`
+        SELECT
+          strftime('%Y-%m', created_at) as mes,
+          ROUND(SUM(coste_usd), 4) as coste,
+          COUNT(*) as llamadas
+        FROM ai_usage
+        GROUP BY mes
+        ORDER BY mes DESC
+        LIMIT 6
+      `).all(),
+      env.DB.prepare(`
+        SELECT proveedor, modelo, endpoint,
+               input_tokens, output_tokens,
+               ROUND(coste_usd, 6) as coste_usd,
+               created_at
+        FROM ai_usage
+        ORDER BY created_at DESC
+        LIMIT 20
+      `).all()
+    ]);
+    return json({
+      ok: true,
+      total: total.results[0] || {},
+      mesActual: mesActual.results[0] || {},
+      porProveedor: porProveedor.results || [],
+      porEndpoint: porEndpoint.results || [],
+      tendencia: tendencia.results || [],
+      ultimasLlamadas: ultimasLlamadas.results || []
+    });
+  } catch (e) {
+    return json({ ok: false, error: String(e.message) }, { status: 500 });
+  }
+}
+
 async function ensureFasesObraTable(env) {
   await env.DB.prepare(`
     CREATE TABLE IF NOT EXISTS fases_obra (
