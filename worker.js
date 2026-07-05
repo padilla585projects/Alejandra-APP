@@ -22597,16 +22597,18 @@ INSTRUCCIONES FINALES:
   let _planoProveedor = 'anthropic';
   let _planoModelo = 'claude-sonnet-4-6';
 
-  // 1º Intentar OpenRouter con modelos rápidos de generación de código
-  // Solo 1 modelo con timeout agresivo (7s) para no consumir el tiempo del Worker
+  // 1º Intentar OpenRouter — UN solo modelo con timeout generoso
+  // El Worker tiene 30s de límite total. Damos 22s a OR para generar el SVG.
+  // Si falla, los ~8s restantes NO son suficientes para Anthropic con 16K tokens,
+  // así que el fallback de Anthropic solo sirve cuando OR completa rápido.
   if (env.OPENROUTER_API_KEY) {
     const planoModelos = [
-      'qwen/qwen3-14b:free',  // 14B — rápido, bueno en código/SVG, bajo latencia
+      'qwen/qwen3-14b:free',  // 14B — rápido en código/SVG, baja latencia en OpenRouter
     ];
     for (const model of planoModelos) {
       try {
         const r = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-          signal: AbortSignal.timeout(7000),  // 7s timeout — si no responde, cae a Anthropic
+          signal: AbortSignal.timeout(22000),  // 22s — presupuesto máximo para OR
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${env.OPENROUTER_API_KEY}`,
@@ -22616,18 +22618,18 @@ INSTRUCCIONES FINALES:
           },
           body: JSON.stringify({
             model,
-            max_tokens: 16000,
+            max_tokens: 10000,  // Más tokens = más tiempo. 10K ≈ 40KB SVG — suficiente con auto-close
             messages: [
               { role: 'system', content: systemPrompt },
               { role: 'user', content: userMsg }
             ]
           })
         });
-        if (!r.ok) continue;
+        if (!r.ok) { const errBody = await r.json().catch(() => ({})); continue; }
         const d = await r.json();
         if (d.error || !d.choices?.[0]?.message?.content) continue;
         const rawText = d.choices[0].message.content;
-        // Validar que hay SVG real (no solo texto explicativo)
+        // Validar que hay SVG real (no solo texto explicativo del modelo)
         if (!rawText.includes('<svg')) continue;
         data = {
           content: [{ type: 'text', text: rawText }],
@@ -22640,7 +22642,7 @@ INSTRUCCIONES FINALES:
     }
   }
 
-  // 2º Fallback: Anthropic
+  // 2º Fallback: Anthropic (cuando OpenRouter no está disponible o no tiene OPENROUTER_API_KEY)
   if (!data) {
     const resp = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -22658,7 +22660,11 @@ INSTRUCCIONES FINALES:
     });
     if (!resp.ok) {
       const errText = await resp.text().catch(() => resp.statusText);
-      throw new Error(`API error ${resp.status}: ${errText.slice(0, 200)}`);
+      // Dar un mensaje amigable para errores de saldo
+      if (resp.status === 400 && errText.includes('credit')) {
+        throw new Error('Saldo de IA insuficiente. Recarga créditos en console.anthropic.com o usa OpenRouter.');
+      }
+      throw new Error(`Error generando plano (${resp.status}). Inténtalo de nuevo en unos segundos.`);
     }
     data = await resp.json();
   }
