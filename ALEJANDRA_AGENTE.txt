@@ -1,7 +1,7 @@
 ================================================================================
   ALEJANDRA AGENTE — GUÍA COMPLETA PARA NUEVOS CHATS
-  Última actualización: 05/07/2026 (continuación 17, tras commit fc1fe7b —
-  fix IDOR en listar_esquemas/borrar_esquema y gestionar_tarea)
+  Última actualización: 05/07/2026 (continuación 19, tras commit ff52aea —
+  fix IDOR/exfiltración cross-empresa en 12 tools más, 5 familias)
 ================================================================================
 
 Este archivo explica todo lo necesario para trabajar en el agente Alejandra.
@@ -140,7 +140,11 @@ compartida de TODAS las empresas). Se corrigió con 3 capas, todas en vigor:
    TOOLS_SOLO_DEV_VERIFICADO (patch_codigo, github_escribir, ejecutar_deploy,
    rollback, test_endpoint, configurar_alerta) exige esDevVerificado.
    TOOLS_REQUIEREN_SESION (consultar_bd, escribir_bd, listar_archivos,
-   ver_archivo, exportar_datos, listar_esquemas, borrar_esquema) exige authOk.
+   ver_archivo, exportar_datos, listar_esquemas, borrar_esquema,
+   historico_materiales, generar_informe, analizar_archivo, marcar_plano,
+   enviar_email, enviar_telegram_informe, crear_tarea_background, ver_tareas,
+   completar_tarea, enviar_push, iniciar_conversacion, controlar_app)
+   exige authOk.
 
    configurar_alerta se añadió a la lista de solo-dev el 05/07/2026
    (continuación 14): la acción "crear" guardaba un condicion_sql arbitrario
@@ -271,6 +275,71 @@ AskUserQuestion — eligió "Arreglar ya, mismo patrón que el resto".
     actualizó la versión del runner). node --check limpio, deploy CI en
     verde.
 
+IDOR/EXFILTRACIÓN CROSS-EMPRESA EN 5 FAMILIAS MÁS (continuación 19, 05/07/2026,
+commit ff52aea) — nueva pasada de "seguimos auditando" tras continuación 17.
+Subagente de auditoría + verificación propia leyendo worker.js directamente
+(incluyendo consulta al esquema D1 real en producción vía wrangler, porque dos
+tablas referenciadas por generar_informe -- "personal" y "equipos_elevacion" --
+resultaron NO EXISTIR). Presentado a Adrian vía AskUserQuestion — eligió
+"Arreglar todo ya, mismo patrón que el resto".
+  - historico_materiales: "registrar" confiaba en input.empresa_id (override
+    del LLM/usuario) para decidir la empresa dueña del material; "consultar" y
+    "comparar" no filtraban por empresa_id en absoluto — cualquiera podía ver
+    (y "comparar" agregaba) el histórico de materiales/costes de TODAS las
+    empresas. Fix: empresa_id real de sesión siempre, salvo override permitido
+    solo con esDevVerificado; AND empresa_id=? añadido a consultar y comparar
+    (bypass solo dev verificado/cron).
+  - generar_informe: además de faltar el filtro empresa_id en las 5
+    subconsultas (fichajes, incidencias, bobinas, equipos, pedidos, igual que
+    el problema de historico_materiales), obra_id se concatenaba directamente
+    en el SQL (` AND obra_id=${obraId}`) — inyección SQL vía ese parámetro.
+    Fix: obra_id se valida con parseInt y se pasa siempre como bind (?); se
+    añade AND empresa_id=? a las 5 subconsultas (bypass dev verificado/cron);
+    cada subconsulta se envuelve en .catch(()=>({results:[]})) para que una
+    tabla rota/inexistente (personal, equipos_elevacion) no tumbe el informe
+    completo, igual que ya hacía la subconsulta de pedidos.
+  - analizar_archivo / marcar_plano / enviar_email / enviar_telegram_informe:
+    ninguna de las 4 comprobaba puedeAccederArchivo() antes de leer/adjuntar/
+    reenviar un archivo de R2 -- a diferencia de ver_archivo/listar_archivos,
+    que ya lo hacían desde antes. Se podía analizar, marcar (anotar
+    técnicamente), adjuntar por email o reenviar por Telegram el archivo de
+    OTRA empresa simplemente conociendo/adivinando su r2_key. Fix: las 4 ahora
+    llaman a puedeAccederArchivo(env, obj.customMetadata, empresa_id,
+    esDevVerificado) antes de usar el contenido del objeto R2.
+  - crear_tarea_background / ver_tareas / completar_tarea (alejandra_tareas,
+    tabla de tareas en background del propio agente, sin empresa_id, solo
+    usuario_id): las dos primeras confiaban en input.usuario_id para decidir
+    de qué usuario son las tareas (crear "para" o listar "de" otro usuario);
+    completar_tarea hacía UPDATE ... WHERE id=? sin comprobar propiedad en
+    absoluto — cualquiera podía completar (fijando el "resultado") la tarea de
+    otro usuario adivinando el id autoincremental. Fix: usuario_id real de
+    sesión siempre salvo override con esDevVerificado; completar_tarea añade
+    AND usuario_id=? (bypass dev verificado) y trata 0 filas afectadas como
+    error explícito en vez de falso "completada".
+  - enviar_push / iniciar_conversacion / controlar_app: las 3 resuelven un
+    "usuario destino" (input.usuario_id || usuario_id) sin comprobar que ese
+    destino perteneciera a la misma empresa que quien llama -- se podía enviar
+    una notificación push, iniciar una conversación en nombre de otro usuario o
+    insertar un comando remoto (alejandra_comandos: navegar/dialogo/toast/
+    vibrar/prefill_chat/enviar_mensaje/abrir_conversacion/tomar_foto/recargar/
+    accion/datos/notificar -- enum cerrado, no ejecución arbitraria) para la
+    app de un usuario de OTRA empresa. Fix: nueva función
+    puedeNotificarUsuario(env, targetUser, usuario_id, empresa_id,
+    esDevVerificado) en worker.js -- permite si el destino es el propio
+    llamante (mismo usuario normalizado), o si target y llamante tienen el
+    mismo empresa_id en la tabla `usuarios`; bypass total con esDevVerificado.
+  - TODOS los fixes de esta continuación bypasan la comprobación cuando
+    esDevVerificado=true, replicando el patrón ya usado en
+    puedeAccederArchivo(): el cron (scheduled(), 6x/día) llama a
+    procesarConNEXUS con esDevVerificado=true y empresa_id='cron' (placeholder
+    no numérico) A PROPÓSITO, porque necesita ver/actuar cross-empresa (p.ej.
+    notificar proactivamente a "adrian", generar briefings agregados). Sin el
+    bypass, estos fixes habrían roto esa funcionalidad del cron en silencio.
+  - Las 12 tools se añadieron a TOOLS_REQUIEREN_SESION en lib.js. 3 tests
+    nuevos de regresión en lib.test.js (59 -> 62 tests). node --check limpio
+    en worker.js y lib.js, deploy CI en verde (Deploy Alejandra Agente Worker +
+    Deploy to GitHub Pages, ambos disparados porque se tocó alejandra-agente/).
+
 Anti-SSRF en test_endpoint: urlPermitidaTestEndpoint() (lib.js) — allowlist de
 host (solo *.alejandra-app.workers.dev sobre https, con comprobación real de
 subdominio, no substring) para evitar que la tool test_endpoint se use para
@@ -320,7 +389,7 @@ todavía (verificación manual vía curl tras cada deploy). Ampliar esto con
 decide invertir en tests de integración de rutas reales.
 
 Cómo correr los tests:
-  cd alejandra-agente && npm ci && npm test        (vitest run, 59 tests)
+  cd alejandra-agente && npm ci && npm test        (vitest run, 62 tests)
 
 El workflow de deploy (deploy-alejandra-agente.yml) instala dependencias y
 corre `npm test` ANTES de aplicar migraciones D1 y desplegar — si los tests
@@ -641,7 +710,7 @@ alejandra-agente/
                                   I/O real con D1/KV/R2/fetch)
   lib.js                       — Funciones puras extraídas de worker.js,
                                   testeadas con vitest (ver "TESTS")
-  lib.test.js                  — 59 tests de lib.js
+  lib.test.js                  — 62 tests de lib.js
   package.json / package-lock.json — devDependency vitest (excepción explícita
                                   en .gitignore raíz para trackear estos dos)
   wrangler.toml                 — Config Cloudflare del agente (DB/FILES/

@@ -3,11 +3,18 @@
 **Sesion:** LIBRE
 **Ultima sesion:** 05/07/2026 -- Planos IA Parte C: editor SVG + imprimir + DXF (v7.57, commit c97dc67).
 **Version actual:** App PWA **v7.57** -- commit c97dc67
-**Agente (alejandra-agente):** commit fc1fe7b desplegado en main (fix IDOR en
-listar_esquemas/borrar_esquema y gestionar_tarea -- ver continuacion 17 abajo). Incluye
-tests automatizados (59 tests, vitest) que corren en el workflow de deploy ANTES de
-aplicar migraciones/desplegar -- si fallan, no se despliega. De paso, commit b9c9d94
-(otro agente, "APEX Agent") subio vitest a 3.2.6 por vulnerabilidades de Dependabot.
+**Agente (alejandra-agente):** commit ff52aea desplegado en main (fix IDOR/exfiltracion
+cross-empresa en 12 tools mas -- historico_materiales, generar_informe,
+analizar_archivo, marcar_plano, enviar_email, enviar_telegram_informe,
+crear_tarea_background, ver_tareas, completar_tarea, enviar_push,
+iniciar_conversacion, controlar_app -- ver seccion nueva mas abajo, "continuacion 19"
+en ALEJANDRA_AGENTE.txt/commit message; aqui numerada continuacion 20 porque
+"APEX Agent" ya habia usado 18/19 en este archivo para el modulo Planos IA --
+mismo dia, dos agentes trabajando en paralelo sin coordinacion, ver commit
+fc1fe7b previo). Incluye tests automatizados (62 tests, vitest) que corren en el
+workflow de deploy ANTES de aplicar migraciones/desplegar -- si fallan, no se
+despliega. De paso, commit b9c9d94 (otro agente, "APEX Agent") subio vitest a
+3.2.6 por vulnerabilidades de Dependabot.
 **Worker raiz + panel.html ("Alejandra Office"):** commit c81c59d -- endpoint
 `/alejandra-agente-dev-bypass` y UI de toggles en DevTools (ver continuacion 16). Tambien
 c47944d (otro agente) corrigio un bug preexistente de `_planosData` duplicado en
@@ -17,8 +24,123 @@ solo con rol `desarrollador` (ver continuacion 16).
 **Documentacion del agente (ALEJANDRA_AGENTE.txt):** reescrita commit 60ae56e, regla #3
 actualizada en 74f686e tras el fix de version, seccion de gating actualizada en e7134e3
 tras el fix de configurar_alerta/exportar_datos, subseccion "INTERRUPTOR DEV-BYPASS"
-anadida en continuacion 16, y subseccion "IDOR EN listar_esquemas/borrar_esquema Y
-gestionar_tarea" anadida en continuacion 17. Ver seccion de abajo.
+anadida en continuacion 16, subseccion "IDOR EN listar_esquemas/borrar_esquema Y
+gestionar_tarea" anadida en continuacion 17, y subseccion "IDOR/EXFILTRACION
+CROSS-EMPRESA EN 5 FAMILIAS MAS" anadida en el commit ff52aea (continuacion 19 en
+ese archivo). Ver seccion de abajo.
+
+---
+
+## RESUMEN SESION 05/07/2026 (continuacion 20) -- Fix IDOR/exfiltracion cross-empresa en 5 familias de tools mas
+
+Nota de numeracion: en ALEJANDRA_AGENTE.txt y en el mensaje de commit esto se llama
+"continuacion 19" (siguiendo la numeracion propia de esa auditoria, que venia de la 14
+y la 17). Aqui en SESION.md se numera 20 porque "APEX Agent" ya habia usado los
+numeros 18 y 19 el mismo dia para el modulo Planos IA (ver secciones de esas dos mas
+abajo) -- dos agentes trabajando en paralelo sobre el mismo repo sin coordinacion de
+numeracion entre si. Se deja constancia aqui para que quede claro que no es un error
+de duplicado sino dos secuencias independientes.
+
+### Contexto: "seguimos auditando" (tercera pasada)
+Siguiente pasada de la disciplina "hacemos todas por orden, pero primero audita" tras
+la continuacion 17 (listar_esquemas/borrar_esquema/gestionar_tarea). Se lanzo un
+subagente de auditoria sobre el resto de `case` de `ejecutarTool()` en
+alejandra-agente/worker.js buscando tools de datos sin aislamiento por empresa_id o sin
+comprobacion de propiedad, y CADA hallazgo se reverifico leyendo el codigo fuente
+directamente (no solo el resumen del subagente) antes de presentarlo. Se consulto ademas
+el esquema real de la base D1 de produccion via `npx wrangler d1 execute alejandra-db
+--remote` porque dos tablas referenciadas por `generar_informe` -- `personal` y
+`equipos_elevacion` -- resultaron **no existir en absoluto** en produccion.
+
+Se presentaron 5 grupos de hallazgos confirmados via AskUserQuestion. Adrian eligio:
+**"Arreglar todo ya, mismo patron que el resto (Recomendado)"** -- arreglar las 5
+familias en una sola pasada, mismo patron que continuaciones 14/17 (empresa_id/
+ownership real desde la sesion verificada, nunca confiando en input del LLM/usuario;
+gateo minimo via TOOLS_REQUIEREN_SESION; tests de regresion; node --check; deploy CI;
+documentacion en ambos archivos).
+
+### Hallazgos y fixes (los 5 grupos, todos en worker.js salvo donde se indica)
+
+1. **historico_materiales** (acciones consultar/comparar): sin filtro `empresa_id` en
+   absoluto -- exponia (y "comparar" agregaba) el historico de materiales/costes de
+   TODAS las empresas a cualquier usuario. La accion "registrar" ademas confiaba en
+   `input.empresa_id` (controlable por el LLM/usuario) para decidir la empresa dueña del
+   material. Fix: `empresa_id` real de la sesion siempre; override de `input.empresa_id`
+   solo permitido si `esDevVerificado`; `AND empresa_id=?` añadido a consultar y
+   comparar (bypass solo dev verificado/cron).
+
+2. **generar_informe**: ademas del mismo problema de filtro `empresa_id` ausente en las
+   5 subconsultas (fichajes, incidencias, bobinas, equipos, pedidos), `obra_id` se
+   concatenaba directamente en el SQL (`` `AND obra_id=${obraId}` ``) -- inyeccion SQL.
+   Fix: `obra_id` se valida con `parseInt` y se pasa siempre como parametro bind (`?`);
+   se añade `AND empresa_id=?` a las 5 subconsultas (bypass dev verificado/cron); cada
+   subconsulta se envuelve en `.catch(() => ({results: []}))` para que una tabla
+   rota/inexistente (`personal`, `equipos_elevacion`) no tumbe el informe completo --
+   igual que ya hacia la subconsulta de pedidos desde antes.
+
+3. **analizar_archivo / marcar_plano / enviar_email / enviar_telegram_informe**: ninguna
+   de las 4 comprobaba `puedeAccederArchivo()` antes de leer/adjuntar/reenviar un
+   archivo de R2 -- a diferencia de `ver_archivo`/`listar_archivos`, que ya lo hacian.
+   Se podia analizar, anotar tecnicamente (marcar_plano), adjuntar por email o reenviar
+   por Telegram el archivo de OTRA empresa conociendo/adivinando su `r2_key`. Fix: las 4
+   llaman ahora a `puedeAccederArchivo(env, obj.customMetadata, empresa_id,
+   esDevVerificado)` antes de usar el contenido del objeto R2.
+
+4. **crear_tarea_background / ver_tareas / completar_tarea** (tabla `alejandra_tareas`,
+   sin columna `empresa_id`, solo `usuario_id`): las dos primeras confiaban en
+   `input.usuario_id` para decidir de que usuario son las tareas; `completar_tarea`
+   hacia `UPDATE ... WHERE id=?` sin comprobar propiedad -- cualquiera podia completar
+   (fijando el "resultado") la tarea de otro usuario adivinando el id autoincremental.
+   Fix: `usuario_id` real de sesion siempre salvo override con `esDevVerificado`;
+   `completar_tarea` añade `AND usuario_id=?` (bypass dev verificado) y trata "0 filas
+   afectadas" como error explicito en vez de falso "completada".
+
+5. **enviar_push / iniciar_conversacion / controlar_app**: las 3 resuelven un "usuario
+   destino" (`input.usuario_id || usuario_id`) sin comprobar que ese destino
+   perteneciera a la misma empresa que quien llama -- se podia enviar push, iniciar una
+   conversacion en nombre de otro usuario, o insertar un comando remoto (enum cerrado:
+   navegar/dialogo/toast/vibrar/prefill_chat/enviar_mensaje/abrir_conversacion/
+   tomar_foto/recargar/accion/datos/notificar -- no es ejecucion arbitraria) para la app
+   de un usuario de OTRA empresa. Fix: nueva funcion `puedeNotificarUsuario(env,
+   targetUser, usuario_id, empresa_id, esDevVerificado)` -- permite si el destino es el
+   propio llamante (mismo usuario normalizado via `normalizarUsuarioId`), o si target y
+   llamante comparten `empresa_id` en la tabla `usuarios`; bypass total con
+   `esDevVerificado`.
+
+### Diseño clave: bypass para esDevVerificado en TODOS los fixes
+Los 5 grupos bypasan la comprobacion cuando `esDevVerificado=true`, replicando el patron
+ya usado en `puedeAccederArchivo()`. Esto es imprescindible porque el cron
+(`scheduled()`, se ejecuta 6x/dia) llama a `procesarConNEXUS(...)` con
+`esDevVerificado=true` y `empresa_id='cron'` (placeholder no numerico) **a proposito**:
+necesita ver y actuar cross-empresa para su monitorizacion automatica (notificar
+proactivamente a "adrian", generar briefings agregados de todas las empresas). Sin el
+bypass, estos fixes habrian roto esa funcionalidad del cron en silencio.
+
+### Gating (lib.js) y tests
+Las 12 tools (`historico_materiales`, `generar_informe`, `analizar_archivo`,
+`marcar_plano`, `enviar_email`, `enviar_telegram_informe`, `crear_tarea_background`,
+`ver_tareas`, `completar_tarea`, `enviar_push`, `iniciar_conversacion`,
+`controlar_app`) se añadieron a `TOOLS_REQUIEREN_SESION` en `lib.js` -- exigen sesion
+como minimo (el scope real de empresa_id/usuario_id/propiedad de archivo se aplica en
+worker.js). 3 tests nuevos de regresion en `lib.test.js` (59 -> 62 tests, todos verdes).
+
+### Verificacion y deploy
+- `node --check` limpio en `worker.js` y `lib.js`.
+- `npm test`: 62/62 tests verdes.
+- Disciplina de git en repo compartido: antes de cada `git commit`/`push` se hizo
+  `git fetch` + `git status` + `git log` para comprobar que no hubiera commits nuevos de
+  "APEX Agent" solapando con los archivos tocados (`alejandra-agente/*`) -- sin
+  solapamiento esta vez (los commits paralelos de esa sesion, `c97dc67`/`c3f7332`, tocan
+  `worker.js` RAIZ + `panel.html` + `SESION.md`, no `alejandra-agente/`).
+- Commit `ff52aea`: "fix(agente): IDOR/exfiltracion cross-empresa en 5 familias de
+  tools (continuacion 19)". Push limpio (fast-forward, sin conflictos).
+- Deploy CI en verde: "Deploy Alejandra Agente Worker" (incluye el paso "Correr tests
+  (lib.test.js)" antes de aplicar migraciones/desplegar) y "Deploy to GitHub Pages",
+  ambos disparados porque el commit toca `alejandra-agente/**`.
+- Documentado tambien en ALEJANDRA_AGENTE.txt (subseccion "IDOR/EXFILTRACION
+  CROSS-EMPRESA EN 5 FAMILIAS MAS", conteos de tests actualizados de 59 a 62 en las
+  referencias vigentes, lista de TOOLS_REQUIEREN_SESION actualizada, cabecera del
+  documento actualizada a continuacion 19/commit ff52aea).
 
 ---
 
