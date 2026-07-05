@@ -1,11 +1,77 @@
 ## ESTADO ACTUAL
 
 **Sesion:** LIBRE
-**Ultima sesion:** 05/07/2026 -- Primera cobertura de tests para alejandra-agente (lib.js + vitest, commit 93d0d3a). PWA panel: fix errores consola + Google OAuth restaurado (commit 942bde3, ver seccion de abajo).
+**Ultima sesion:** 05/07/2026 -- Reescritura completa de ALEJANDRA_AGENTE.txt (commit 60ae56e, doc-only, sin deploy). Antes: primera cobertura de tests para alejandra-agente (lib.js + vitest, commit 93d0d3a). PWA panel: fix errores consola + Google OAuth restaurado (commit 942bde3, ver seccion de abajo).
 **Version actual:** App PWA **v7.55** -- commit 942bde3
 **Agente (alejandra-agente):** commit 93d0d3a desplegado en main (deploy CI 28739178252, health OK).
 Incluye ahora tests automatizados (37 tests, vitest) que corren en el workflow
 de deploy ANTES de aplicar migraciones/desplegar -- si fallan, no se despliega.
+**Documentacion del agente (ALEJANDRA_AGENTE.txt):** reescrita commit 60ae56e -- ya no
+tenia que ver con la realidad del codigo (v5.93 vs v6.12 real). Ver seccion de abajo.
+
+---
+
+## RESUMEN SESION 05/07/2026 (continuacion 12) -- Reescritura de ALEJANDRA_AGENTE.txt
+
+Siguiente punto de la lista tras la cobertura de tests (continuacion 11). Este archivo
+("Leelo SIEMPRE antes de tocar codigo del agente") llevaba desde el 15/05/2026 (v5.93)
+sin tocarse.
+
+### Auditoria (re-verificada leyendo worker.js/lib.js/wrangler.toml directamente, no solo
+### de memoria de la auditoria anterior)
+- Version: cabecera de worker.js dice "v6.03", pero GET /health devuelve "6.12" --
+  desincronizados entre si, y ambos muy por delante del "v5.93" del doc.
+- NEXUS_MODULES: doc listaba 9 modulos: **20 modulos reales** (`grep -n "^  [a-z_]*:"
+  alejandra-agente/worker.js | awk -F: '$1<897'` para la lista vigente).
+- NEXUS_EXPERTS: doc listaba 6 expertos, falta el experto `ingenieria` (maxTokens 8000,
+  calculos electricos/mecanicos de obra) -- son **7**.
+- Tools: doc listaba ~6 ("TODAS LAS HERRAMIENTAS"): **56 tools reales** repartidas de
+  forma muy desigual entre expertos (`grep -oP "name: '\K[a-z_0-9]+(?=')"
+  alejandra-agente/worker.js | sort -u`).
+- Endpoints: doc listaba ~15 rutas: **~38 reales** (conteo exacto via grep, ver el doc
+  nuevo). Faltaban por completo /api/sync/*, /api/comandos/*, /webhook/evento,
+  /conocimiento*, /files/<key>, /upload, /fcm-token, /push, /auth/verify-session,
+  /admin/migrate, etc.
+- Precios: tabla no incluia `gpt-4o` (el bug de coste/etiquetado arreglado en 6f5dd3c).
+- wrangler.toml: doc decia "Crons: DESACTIVADOS (cuenta free, limite 5 triggers)" --
+  llevan meses ACTIVOS (6 disparos/dia, con handler `scheduled()` real en worker.js).
+  Tambien faltaba mencionar el KV `RATE_LIMIT_KV` (rate limiting + tope de gasto).
+- Arquitectura de DOS workers (app principal `worker.js` raiz con devAIChat/handleDevAI
+  vs agente independiente `alejandra-agente/worker.js`): existia en la v5.93 original,
+  pero se habia perdido en un borrador intermedio de este mismo trabajo -- se
+  restauro y se verifico que el worker.js raiz sigue existiendo y sigue siendo un
+  Cloudflare Worker distinto ("alejandra-app-api"), desplegado por
+  `deploy-worker.yml`, no por `deploy-alejandra-agente.yml`.
+- Cero mencion a los 3 fixes IDOR (tools por auth, scope empresa_id en consultar_bd/
+  escribir_bd, aislamiento de archivos R2 por empresa), al anti-SSRF de test_endpoint,
+  al rate limiting/tope de gasto diario, ni a la cobertura de tests de la continuacion 11.
+- Sistema de prompt en capas L0-L4 (`buildAnthropicSystemBlocks`, cacheado de Anthropic
+  para L0/L1) no existia en el doc en absoluto.
+
+### Corregido (commit 60ae56e, doc-only -- NO toca alejandra-agente/**, no dispara el
+### workflow de deploy, no requiere health check)
+- Reescrito de cabo a rabo manteniendo la estructura de secciones original pero con
+  contenido verificado linea por linea contra worker.js/lib.js/wrangler.toml actuales
+  (no transcrito de memoria).
+- Nueva seccion "GATING DE TOOLS POR AUTENTICACION Y AISLAMIENTO MULTI-EMPRESA":
+  documenta las 3 capas de fix IDOR + anti-SSRF + rate limiting, con el porque de
+  cada una (para que el proximo chat no repita el mismo bug).
+- Nueva seccion "TESTS": explica lib.js/lib.test.js, que vive ahi y por que, y que
+  el workflow de deploy corre `npm test` antes de desplegar.
+- Nueva seccion "PROMPT EN CAPAS L0-L4": explica el prompt caching de Anthropic
+  (L0/L1 estaticos y cacheados vs L2-L4 dinamicos por turno).
+- Anti-staleness deliberado: las listas volatiles (modulos, tools, endpoints, tablas)
+  ya NO se transcriben integras a mano -- se da un conteo aproximado "a fecha de hoy"
+  mas el comando `grep` exacto para obtener la lista real en el momento de la lectura,
+  con una nota explicita al principio del archivo pidiendo confiar en el grep si no
+  coincide con el conteo escrito.
+- Anotado (no corregido, fuera de alcance de este punto de la lista): la
+  desincronizacion de version "v6.03" (cabecera) vs "6.12" (/health) -- queda como
+  recordatorio en la seccion de reglas para que se corrija la proxima vez que se
+  toque cualquiera de los dos.
+
+Siguiente punto de la lista: pendiente de definir con Adrian (no hay mas items
+explicitos en la lista original de esta ronda de auditoria/fixes).
 
 ---
 
