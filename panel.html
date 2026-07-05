@@ -8645,6 +8645,30 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
           </div>
         </div>
 
+        <!-- INTERRUPTOR DEV-BYPASS (solo visible para el desarrollador, no cualquier superadmin) -->
+        <div class="section-card" id="devBypassCard" style="margin-bottom:20px;display:none">
+          <div class="section-card-title"><span>🔓</span> Interruptor Dev-Bypass <span style="font-size:10px;color:var(--muted);font-weight:400;margin-left:6px">(solo afecta a tus propias peticiones al agente IA)</span></div>
+          <div style="font-size:12px;color:var(--muted);margin:6px 0 12px">
+            Activa/desactiva, SOLO para ti como desarrollador verificado, dos protecciones del agente IA. Nunca afecta a otros usuarios ni empresas. Cada cambio queda registrado en los logs.
+          </div>
+          <div style="display:flex;flex-direction:column;gap:10px">
+            <div style="display:flex;align-items:center;justify-content:space-between;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 14px">
+              <div>
+                <div style="font-family:'Montserrat',sans-serif;font-weight:700;font-size:12px">Rate limiting (15 peticiones/min)</div>
+                <div style="font-size:11px;color:var(--muted)">Por defecto SÍ se aplica también a ti. Actívalo para saltártelo (ej. pruebas de carga).</div>
+              </div>
+              <button class="btn btn-sm" id="devBypassRateBtn" onclick="toggleDevBypass('rate_limit')" style="font-size:12px">⏳</button>
+            </div>
+            <div style="display:flex;align-items:center;justify-content:space-between;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 14px">
+              <div>
+                <div style="font-family:'Montserrat',sans-serif;font-weight:700;font-size:12px">Aislamiento por empresa_id</div>
+                <div style="font-size:11px;color:var(--muted)">Por defecto SÍ saltado para ti (comportamiento histórico). Desactívalo para forzar el mismo aislamiento que el resto de usuarios.</div>
+              </div>
+              <button class="btn btn-sm" id="devBypassEmpresaBtn" onclick="toggleDevBypass('empresa_scope')" style="font-size:12px">⏳</button>
+            </div>
+          </div>
+        </div>
+
         <!-- DB STATS + CONTEO TABLAS -->
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px">
           <div class="section-card">
@@ -13713,7 +13737,56 @@ async function cargarDevtools() {
     cargarServerLogs(),
     cargarAgente(),
     cargarAICosts(),
+    cargarDevBypass(),
   ]);
+}
+
+// Interruptor dev-bypass (continuación 15) -- SOLO visible/operable para SESSION.rol === 'desarrollador',
+// nunca para otros superadmins de empresa. Llama a /alejandra-agente-dev-bypass en el worker raíz, que
+// escribe directo en la tabla D1 compartida agente_config (mismo patrón que /alejandra-agente-toggle).
+async function cargarDevBypass() {
+  const card = document.getElementById('devBypassCard');
+  if (!card) return;
+  if (!SESSION || SESSION.rol !== 'desarrollador') { card.style.display = 'none'; return; }
+  card.style.display = '';
+  try {
+    const r = await api('/alejandra-agente-dev-bypass');
+    if (!r.ok) return;
+    pintarDevBypassBtn('devBypassRateBtn', r.dev_bypass_rate_limit);
+    pintarDevBypassBtn('devBypassEmpresaBtn', r.dev_bypass_empresa_scope);
+  } catch (e) { showToast('Error cargando dev-bypass: ' + e.message, 'error'); }
+}
+
+function pintarDevBypassBtn(id, activo) {
+  const btn = document.getElementById(id);
+  if (!btn) return;
+  btn.dataset.activo = activo ? '1' : '0';
+  if (activo) {
+    btn.textContent = '🔓 Bypass ACTIVO';
+    btn.style.background = 'rgba(239,68,68,.15)'; btn.style.color = '#ef4444'; btn.style.border = '1px solid rgba(239,68,68,.3)';
+  } else {
+    btn.textContent = '🔒 Bypass desactivado';
+    btn.style.background = 'rgba(34,197,94,.15)'; btn.style.color = '#22c55e'; btn.style.border = '1px solid rgba(34,197,94,.3)';
+  }
+}
+
+async function toggleDevBypass(campo) {
+  const idMap = { rate_limit: 'devBypassRateBtn', empresa_scope: 'devBypassEmpresaBtn' };
+  const btn = document.getElementById(idMap[campo]);
+  if (!btn) return;
+  const nuevoActivo = btn.dataset.activo !== '1';
+  if (nuevoActivo) {
+    const nombre = campo === 'rate_limit' ? 'rate limiting' : 'aislamiento por empresa_id';
+    if (!confirm(`¿Seguro? Vas a activar el bypass de "${nombre}" SOLO para tus propias peticiones al agente IA. Quedará registrado en los logs.`)) return;
+  }
+  btn.disabled = true;
+  try {
+    const r = await api('/alejandra-agente-dev-bypass', { method: 'POST', body: JSON.stringify({ campo, activo: nuevoActivo }) });
+    if (!r.ok) { showToast('Error: ' + (r.error || '?'), 'error'); return; }
+    pintarDevBypassBtn(idMap[campo], r.activo);
+    showToast(r.activo ? '🔓 Bypass activado' : '🔒 Bypass desactivado', r.activo ? 'info' : 'success');
+  } catch (e) { showToast('Error: ' + e.message, 'error'); }
+  finally { btn.disabled = false; }
 }
 
 async function cargarAICosts() {

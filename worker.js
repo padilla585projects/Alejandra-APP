@@ -5496,6 +5496,45 @@ export default {
         return json({ ok: true });
       }
 
+      // Interruptor dev-bypass (continuaciÃ³n 15): permite SOLO al desarrollador (isDesarrollador,
+      // NO cualquier superadmin de empresa) activar/desactivar, para sus propias peticiones al
+      // agente IA, el rate limiting y el aislamiento por empresa_id. La tabla agente_config vive en
+      // la misma D1 compartida con el worker alejandra-agente (ver validarScopeEmpresaBD/
+      // debeOmitirRateLimitDev en alejandra-agente/lib.js) -- mismo patrÃ³n que /alejandra-agente-toggle
+      // de arriba, que ya escribe directo en D1 compartida en vez de llamar al otro worker por HTTP.
+      if (path === '/alejandra-agente-dev-bypass' && method === 'GET') {
+        const auth = await getAuth(request, env);
+        if (!auth.isDesarrollador) return err('No autorizado', 403);
+        const cfg = await env.DB.prepare(
+          "SELECT dev_bypass_rate_limit, dev_bypass_empresa_scope FROM agente_config WHERE id = 1"
+        ).first();
+        return json({
+          ok: true,
+          dev_bypass_rate_limit: cfg?.dev_bypass_rate_limit === 1,
+          dev_bypass_empresa_scope: cfg?.dev_bypass_empresa_scope === 1,
+        });
+      }
+      if (path === '/alejandra-agente-dev-bypass' && method === 'POST') {
+        const auth = await getAuth(request, env);
+        if (!auth.isDesarrollador) return err('No autorizado', 403);
+        const body = await request.json().catch(() => ({}));
+        const COLUMNAS = { rate_limit: 'dev_bypass_rate_limit', empresa_scope: 'dev_bypass_empresa_scope' };
+        const columna = COLUMNAS[body.campo];
+        if (!columna) return err('Campo invÃ¡lido (usa "rate_limit" o "empresa_scope")', 400);
+        const activo = !!body.activo;
+        const antes = await env.DB.prepare(`SELECT ${columna} AS v FROM agente_config WHERE id = 1`).first();
+        await env.DB.prepare(`UPDATE agente_config SET ${columna} = ?, updated_at = CURRENT_TIMESTAMP WHERE id = 1`)
+          .bind(activo ? 1 : 0).run();
+        await logActividad(env, {
+          nivel: 'warn',
+          origen: 'panel_dev_bypass',
+          mensaje: `Dev-bypass "${body.campo}" cambiado a ${activo ? 'ACTIVADO' : 'desactivado'} por ${auth.nombre || auth.usuario_id || '?'}`,
+          detalle: JSON.stringify({ campo: body.campo, anterior: antes?.v === 1, nuevo: activo, usuario_id: auth.usuario_id }),
+          empresa_id: auth.empresa_id,
+        });
+        return json({ ok: true, campo: body.campo, activo });
+      }
+
       if (path === '/backup/inventario'    && method === 'GET')  return await backupInventario(request, env);
       if (path === '/backup/empresa'       && method === 'GET')  return await backupEmpresa(request, env);
       if (path === '/restaurar/inventario' && method === 'POST') return await restaurarInventario(request, env);
