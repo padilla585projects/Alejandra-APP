@@ -22597,16 +22597,16 @@ INSTRUCCIONES FINALES:
   let _planoProveedor = 'anthropic';
   let _planoModelo = 'claude-sonnet-4-6';
 
-  // 1º Intentar OpenRouter con modelos capaces de generar SVG (contexto largo)
+  // 1º Intentar OpenRouter con modelos rápidos de generación de código
+  // Solo 1 modelo con timeout agresivo (7s) para no consumir el tiempo del Worker
   if (env.OPENROUTER_API_KEY) {
     const planoModelos = [
-      'nvidia/nemotron-3-ultra-550b-a55b:free',  // 1M ctx, razonamiento potente
-      'openai/gpt-oss-120b:free',                // OpenAI OSS 120B
-      'qwen/qwen3-coder:free',                   // 1M ctx, especializado en codigo
+      'qwen/qwen3-14b:free',  // 14B — rápido, bueno en código/SVG, bajo latencia
     ];
     for (const model of planoModelos) {
       try {
         const r = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+          signal: AbortSignal.timeout(7000),  // 7s timeout — si no responde, cae a Anthropic
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${env.OPENROUTER_API_KEY}`,
@@ -22616,7 +22616,7 @@ INSTRUCCIONES FINALES:
           },
           body: JSON.stringify({
             model,
-            max_tokens: 8192,
+            max_tokens: 16000,
             messages: [
               { role: 'system', content: systemPrompt },
               { role: 'user', content: userMsg }
@@ -22626,14 +22626,17 @@ INSTRUCCIONES FINALES:
         if (!r.ok) continue;
         const d = await r.json();
         if (d.error || !d.choices?.[0]?.message?.content) continue;
+        const rawText = d.choices[0].message.content;
+        // Validar que hay SVG real (no solo texto explicativo)
+        if (!rawText.includes('<svg')) continue;
         data = {
-          content: [{ type: 'text', text: d.choices[0].message.content }],
+          content: [{ type: 'text', text: rawText }],
           usage: { input_tokens: d.usage?.prompt_tokens || 0, output_tokens: d.usage?.completion_tokens || 0 }
         };
         _planoProveedor = 'openrouter';
         _planoModelo = d.model || model;
         break;
-      } catch (_) { /* probar siguiente */ }
+      } catch (_) { /* timeout u error — caer a Anthropic */ }
     }
   }
 
@@ -22648,7 +22651,7 @@ INSTRUCCIONES FINALES:
       },
       body: JSON.stringify({
         model: 'claude-sonnet-4-6',
-        max_tokens: 8192,
+        max_tokens: 16000,
         system: systemPrompt,
         messages: _planoMsgs
       })
@@ -22662,9 +22665,18 @@ INSTRUCCIONES FINALES:
 
   let svgRaw = data.content?.[0]?.text || '';
 
-  // Extraer SVG si hay texto extra alrededor
+  // Extraer SVG si hay texto extra alrededor (markdown, explicaciones, etc.)
   const svgMatch = svgRaw.match(/<svg[\s\S]*<\/svg>/i);
-  if (svgMatch) svgRaw = svgMatch[0];
+  if (svgMatch) {
+    svgRaw = svgMatch[0];
+  } else {
+    // SVG posiblemente truncado (max_tokens alcanzado) — extraer y cerrar
+    const svgStart = /<svg[\s\S]*/i.exec(svgRaw);
+    if (svgStart) {
+      svgRaw = svgStart[0];
+      if (!svgRaw.trimEnd().endsWith('</svg>')) svgRaw = svgRaw + '\n</svg>';
+    }
+  }
   if (!svgRaw.includes('<svg')) throw new Error('La IA no genero un SVG valido');
 
   // Para esquemas eléctricos: inyectar biblioteca de símbolos IEC 60617
@@ -22691,7 +22703,8 @@ INSTRUCCIONES FINALES:
   const metadatos = JSON.stringify({
     tipo,
     tokens_usados: data.usage?.output_tokens || 0,
-    modelo: 'claude-sonnet-4-6'
+    modelo: _planoModelo,
+    proveedor: _planoProveedor
   });
 
   const res = await env.DB.prepare(
