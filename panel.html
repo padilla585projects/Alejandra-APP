@@ -8886,7 +8886,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
         </div>
 
         <!-- Grid de planos -->
-        <div id="planosGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px"></div>
+        <div id="planosIAGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px"></div>
         <div id="planosEmpty" style="display:none" class="empty-state">
           <div class="empty-icon">📐</div>
           <div class="empty-text">No hay planos generados todavía.</div>
@@ -31641,7 +31641,7 @@ const _PLANO_EJEMPLOS = {
 };
 
 async function cargarPlanos() {
-  const grid  = document.getElementById('planosGrid');
+  const grid  = document.getElementById('planosIAGrid');
   const empty = document.getElementById('planosEmpty');
   const count = document.getElementById('planosCount');
   if (!grid) return;
@@ -31671,7 +31671,7 @@ function filtrarPlanosLocal() {
 }
 
 function renderPlanosGrid(lista) {
-  const grid  = document.getElementById('planosGrid');
+  const grid  = document.getElementById('planosIAGrid');
   const empty = document.getElementById('planosEmpty');
   if (!grid) return;
   if (!lista.length) {
@@ -31788,21 +31788,29 @@ async function verPlano(id) {
     if (!res.ok) throw new Error('No encontrado');
     const svg = await res.text();
     _visorSvgData = svg;
-    // Buscar título en _planosIAData
-    const p = _planosIAData.find(x => x.id === id);
+    // Buscar título en _planosData
+    const p = _planosData.find(x => x.id === id);
     if (titulo) titulo.textContent = (p ? p.titulo : 'Plano #' + id);
-    // Inyectar SVG con max-width para que quepa en la ventana
+    // Inyectar SVG en wrapper con scroll horizontal si es necesario
     const wrapper = document.createElement('div');
-    wrapper.style.cssText = 'max-width:100%;overflow:auto';
+    wrapper.style.cssText = 'width:100%;overflow:auto;';
     wrapper.innerHTML = svg;
     // Ajustar SVG para que sea responsive
     const svgEl = wrapper.querySelector('svg');
     if (svgEl) {
-      svgEl.style.maxWidth = '100%';
-      svgEl.style.height = 'auto';
-      if (!svgEl.getAttribute('viewBox') && svgEl.getAttribute('width') && svgEl.getAttribute('height')) {
+      // Si tiene viewBox pero no width/height → darle width 100%
+      const vb = svgEl.getAttribute('viewBox');
+      if (vb && !svgEl.getAttribute('width')) {
+        svgEl.setAttribute('width', '100%');
+        svgEl.style.height = 'auto';
+      } else if (svgEl.getAttribute('width') && svgEl.getAttribute('height') && !vb) {
+        // Tiene width/height pero no viewBox → añadir viewBox para que sea escalable
         svgEl.setAttribute('viewBox', '0 0 ' + svgEl.getAttribute('width') + ' ' + svgEl.getAttribute('height'));
+        svgEl.setAttribute('width', '100%');
+        svgEl.style.height = 'auto';
       }
+      svgEl.style.display = 'block';
+      svgEl.style.maxWidth = '100%';
     }
     cont.innerHTML = '';
     cont.appendChild(wrapper);
