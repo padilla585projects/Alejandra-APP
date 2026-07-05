@@ -22201,7 +22201,7 @@ REQUISITOS TECNICOS:
 
 DEVUELVE: solo el codigo SVG valido completo, sin texto adicional fuera del SVG.`,
 
-  bandejas: `Eres un instalador electricista jefe y delineante tecnico experto en instalaciones de bandejas electricas industriales segun norma IEC 61537 / UNE-EN 61537. Tu tarea es generar un PLANO DE PLANTA de instalacion de bandejas electricas en una nave industrial en formato SVG profesional.
+  bandejas: `Eres un instalador electricista jefe y delineante tecnico experto en instalaciones de bandejas electricas industriales segun norma IEC 61537 / UNE-EN 61537. Tu tarea es generar un PLANO DE PLANTA de instalacion de bandejas electricas en una nave industrial en formato SVG profesional. Este plano es un DOCUMENTO DE OBRA — lo usaran los instaladores en campo para saber por donde llevar la instalacion: recorrido de bandejas, alturas de montaje, derivaciones, bajantes a cuadros y maquinas. Cuando el usuario proporcione un CATALOGO REAL de la empresa, usa SIEMPRE las referencias exactas del catalogo (marca, modelo, dimensiones) en etiquetas y leyenda.
 
 REQUISITOS TECNICOS:
 - viewBox="0 0 1400 900", xmlns="http://www.w3.org/2000/svg", id="plano-principal"
@@ -22289,6 +22289,43 @@ async function _generarPlanoInterno(env, { tipo, titulo, descripcion, empresa_id
   await _ensurePlanosTable(env);
 
   const systemPrompt = _PLANO_PROMPTS[tipo] || _PLANO_PROMPTS.planta;
+
+  // ── Para planos de bandejas: enriquecer con catálogo real de la empresa ─────
+  // Consulta alejandra_memoria y alejandra_conocimiento buscando entradas de
+  // bandejas/canalización. Así el plano referencia productos reales (Pemsa
+  // Megaband MGB, Unex, etc.) en vez de nomenclatura genérica.
+  let catalogoSection = '';
+  if (tipo === 'bandejas') {
+    try {
+      const [memRows, conRows] = await Promise.all([
+        env.DB.prepare(`
+          SELECT titulo, contenido FROM alejandra_memoria
+          WHERE (contenido LIKE '%bandeja%' OR contenido LIKE '%Pemsa%'
+                 OR contenido LIKE '%Megaband%' OR contenido LIKE '%Rejiband%'
+                 OR contenido LIKE '%canaleta%' OR contenido LIKE '%portacables%')
+          AND tipo IN ('hecho', 'aprendizaje', 'contexto')
+          ORDER BY importancia DESC LIMIT 6
+        `).all(),
+        env.DB.prepare(`
+          SELECT titulo, descripcion FROM alejandra_conocimiento
+          WHERE (tags LIKE '%bandeja%' OR tags LIKE '%canalizacion%')
+          AND activo = 1 LIMIT 4
+        `).all()
+      ]);
+      const items = [];
+      for (const r of memRows.results || []) items.push(`• ${r.titulo}: ${r.contenido}`);
+      for (const r of conRows.results || []) items.push(`• ${r.titulo}: ${r.descripcion}`);
+      if (items.length > 0) {
+        catalogoSection = `
+
+CATALOGO REAL DE BANDEJAS Y CANALIZACION DE LA EMPRESA:
+${items.join('\n')}
+
+IMPORTANTE: Usa SIEMPRE estos productos reales en el plano. Referencia marca, modelo y dimensiones exactas del catalogo anterior (ej. "Pemsa Megaband MGB 600×100 GC" en vez de "BAN 200×100"). Si el catalogo indica dimensiones especificas, usarlas.`;
+      }
+    } catch (_) { /* continuar sin catalogo si falla la query */ }
+  }
+
   const userMsg = `Genera el SVG para el siguiente plano tecnico:
 
 TITULO: ${titulo}
@@ -22296,7 +22333,7 @@ TITULO: ${titulo}
 TIPO: ${tipo}
 
 DESCRIPCION Y CONTENIDO REQUERIDO:
-${descripcion}
+${descripcion}${catalogoSection}
 
 INSTRUCCIONES FINALES:
 - Genera el SVG completo y listo para usar directamente en un navegador
