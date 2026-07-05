@@ -12964,12 +12964,13 @@ async function devAIChat(request, env) {
 
   const _isCapacity = msg => msg && (msg.includes('rate_limit') || msg.includes('tokens per minute') || msg.includes('overloaded'));
 
-  // Cascada: OpenRouter (Gemma 4 31B gratis, con vision) → Anthropic (fallback)
+  // Cascada inteligente: OpenRouter (multi-modelo, gratis) → Anthropic (ultimo recurso)
+  // Detecta imagen → elige modelos con vision primero. Si falla todo → Anthropic.
   const _callAI = async (messages) => {
-    // 1. Intentar OpenRouter (gratis, vision incluida)
+    // 1. Intentar cascada OpenRouter (Nemotron 550B → GPT-OSS 120B → Llama 70B → Gemma vision)
     if (env.OPENROUTER_API_KEY) {
       try {
-        const result = await _callOpenRouterAPI(env, {
+        const result = await _callOpenRouterCascade(env, {
           systemBlocks: webSystemBlocks,
           messages,
           tools: webToolsConCache,
@@ -12977,11 +12978,12 @@ async function devAIChat(request, env) {
         });
         return { ok: true, json: async () => result, _or: true };
       } catch (e) {
-        // OpenRouter fallo → silencioso, caer a Anthropic
-        autoLearn(env, 'error', 'OpenRouter fallo — fallback Anthropic', String(e.message).slice(0, 200), 2).catch(() => {});
+        // Todos los modelos OpenRouter fallaron → caer a Anthropic
+        autoLearn(env, 'error', 'OpenRouter cascada fallida — fallback Anthropic',
+          String(e.message).slice(0, 200), 2).catch(() => {});
       }
     }
-    // 2. Fallback: Anthropic
+    // 2. Ultimo recurso: Anthropic (de pago)
     const _ctrl = new AbortController();
     const _tId = setTimeout(() => _ctrl.abort(), 25000);
     return fetch('https://api.anthropic.com/v1/messages', {
@@ -22250,15 +22252,34 @@ function _respOpenAIToAnthropic(data) {
   };
 }
 
-// Llamada a OpenRouter con conversion automatica de formato
-async function _callOpenRouterAPI(env, { systemBlocks, messages, tools, maxTokens }) {
+// Cascada de modelos OpenRouter — primario, fallbacks y vision
+const _OR_MODELS_TEXT   = [
+  'nvidia/nemotron-3-ultra-550b-a55b:free',  // 550B params, 1M ctx — el mas potente
+  'openai/gpt-oss-120b:free',                // OpenAI OSS 120B, tools
+  'meta-llama/llama-3.3-70b-instruct:free',  // Llama 3.3 70B — muy solido
+];
+const _OR_MODELS_VISION = [
+  'google/gemma-4-31b-it:free',              // 262K ctx, vision + tools
+  'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free', // vision + razonamiento
+];
+
+// Detecta si hay imagenes en la lista de mensajes (formato Anthropic)
+function _hasImages(messages) {
+  return messages.some(m => {
+    const parts = Array.isArray(m.content) ? m.content : [];
+    return parts.some(p => p.type === 'image' || p.type === 'image_url');
+  });
+}
+
+async function _callOpenRouterAPI(env, { systemBlocks, messages, tools, maxTokens, model }) {
   if (!env.OPENROUTER_API_KEY) throw new Error('Sin OPENROUTER_API_KEY');
   const systemText = (systemBlocks || []).filter(b => b.text).map(b => b.text).join('\n\n');
   const openAIMsgs = [];
   if (systemText) openAIMsgs.push({ role: 'system', content: systemText });
   openAIMsgs.push(..._msgsAnthropicToOpenAI(messages));
 
-  const body = { model: 'google/gemma-4-31b-it:free', messages: openAIMsgs, max_tokens: maxTokens || 4096 };
+  const modelId = model || 'google/gemma-4-31b-it:free';
+  const body = { model: modelId, messages: openAIMsgs, max_tokens: maxTokens || 4096 };
   const openAITools = _toolsAnthropicToOpenAI(tools);
   if (openAITools.length > 0) { body.tools = openAITools; body.tool_choice = 'auto'; }
 
@@ -22273,8 +22294,40 @@ async function _callOpenRouterAPI(env, { systemBlocks, messages, tools, maxToken
     body: JSON.stringify(body)
   });
   const data = await resp.json();
-  if (!resp.ok || data.error) throw new Error(`OpenRouter ${resp.status}: ${data.error?.message || resp.statusText}`);
+  if (!resp.ok || data.error) throw new Error(`OpenRouter[${modelId}] ${resp.status}: ${data.error?.message || resp.statusText}`);
   return _respOpenAIToAnthropic(data);
+}
+
+// Intenta modelos OpenRouter en cascada. hasVision=true usa modelos con vision primero.
+async function _callOpenRouterCascade(env, { systemBlocks, messages, tools, maxTokens }) {
+  if (!env.OPENROUTER_API_KEY) throw new Error('Sin OPENROUTER_API_KEY');
+  const hasVision = _hasImages(messages);
+  // Si hay imagen: primero los modelos con vision, luego texto (sin imagen para ellos)
+  // Si no hay imagen: orden text → vision (tambien aceptan texto sin imagen)
+  const orden = hasVision
+    ? [..._OR_MODELS_VISION, ..._OR_MODELS_TEXT]
+    : [..._OR_MODELS_TEXT, ..._OR_MODELS_VISION];
+
+  let lastError = null;
+  for (const model of orden) {
+    try {
+      // Si el modelo no tiene vision y hay imagenes, strips imagenes para evitar error
+      const msgsParaModelo = (!_OR_MODELS_VISION.includes(model) && hasVision)
+        ? messages.map(m => ({
+            ...m,
+            content: Array.isArray(m.content)
+              ? m.content.filter(p => p.type !== 'image' && p.type !== 'image_url').map(p => p.text || p).join('\n') || '[imagen adjunta]'
+              : m.content
+          }))
+        : messages;
+      const result = await _callOpenRouterAPI(env, { systemBlocks, messages: msgsParaModelo, tools, maxTokens, model });
+      return result; // exito — devuelve ya con _proveedor y _modelo seteados
+    } catch (e) {
+      lastError = e;
+      // Continuar al siguiente modelo
+    }
+  }
+  throw lastError || new Error('Todos los modelos OpenRouter fallaron');
 }
 
 // Prompts de sistema por tipo de plano
