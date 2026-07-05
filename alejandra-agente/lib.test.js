@@ -129,7 +129,58 @@ describe('filtrarToolsPorAuth', () => {
     const r = filtrarToolsPorAuth(toolsFix17, true, false);
     expect(r.map(t => t.name)).toEqual(['listar_esquemas', 'borrar_esquema', 'buscar_web']);
   });
+
+  // fix continuación 19 (IDOR/exfiltración cross-empresa, 5 familias): ninguna de
+  // estas 12 tools exigía sesión -- historico_materiales y generar_informe
+  // exponían datos de todas las empresas; analizar_archivo/marcar_plano/
+  // enviar_email/enviar_telegram_informe permitían leer/reenviar archivos R2 de
+  // otra empresa; crear_tarea_background/ver_tareas/completar_tarea permitían
+  // tocar tareas de otro usuario; enviar_push/iniciar_conversacion/controlar_app
+  // permitían notificar/actuar sobre la app de un usuario de otra empresa. Ahora
+  // las 12 exigen sesión como mínimo (el scope real por empresa_id/usuario_id/
+  // propiedad de archivo se aplica en worker.js, con bypass para dev verificado).
+  const toolsFix19 = [
+    { name: 'historico_materiales' },
+    { name: 'generar_informe' },
+    { name: 'analizar_archivo' },
+    { name: 'marcar_plano' },
+    { name: 'enviar_email' },
+    { name: 'enviar_telegram_informe' },
+    { name: 'crear_tarea_background' },
+    { name: 'ver_tareas' },
+    { name: 'completar_tarea' },
+    { name: 'enviar_push' },
+    { name: 'iniciar_conversacion' },
+    { name: 'controlar_app' },
+    { name: 'buscar_web' },
+  ];
+
+  it('las 12 tools de continuación 19 requieren sesión, no pasan sin auth', () => {
+    const r = filtrarToolsPorAuth(toolsFix19, false, false);
+    expect(r.map(t => t.name)).toEqual(['buscar_web']);
+  });
+
+  it('las 12 tools de continuación 19 pasan con sesión (sin necesitar dev verificado)', () => {
+    const r = filtrarToolsPorAuth(toolsFix19, true, false);
+    expect(r.map(t => t.name)).toEqual([
+      'historico_materiales', 'generar_informe', 'analizar_archivo', 'marcar_plano',
+      'enviar_email', 'enviar_telegram_informe', 'crear_tarea_background', 'ver_tareas',
+      'completar_tarea', 'enviar_push', 'iniciar_conversacion', 'controlar_app', 'buscar_web'
+    ]);
+  });
+
+  it('las 12 tools de continuación 19 no requieren dev verificado si hay sesión', () => {
+    const r = filtrarToolsPorAuth(toolsFix19, true, true);
+    expect(r.length).toBe(toolsFix19.length);
+  });
 });
+
+// ── puedeNotificarUsuario (fix continuación 19: IDOR en enviar_push/
+// iniciar_conversacion/controlar_app) -- esta función vive en worker.js (necesita
+// env.DB real), así que aquí solo se documenta el contrato esperado a través del
+// propio Set de gating; el comportamiento con D1 real se cubre con las pruebas
+// manuales descritas en SESION.md/ALEJANDRA_AGENTE.txt (no se puede mockear D1
+// sin duplicar demasiada infraestructura en este archivo de tests puros).
 
 // ── validarSoloSelectBD (fix continuación 14, reutilizada en configurar_alerta
 // y exportar_datos, antes solo vivía inline dentro de consultar_bd) ──────────

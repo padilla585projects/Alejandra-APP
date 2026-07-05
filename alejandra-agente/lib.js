@@ -43,7 +43,22 @@ const TOOLS_SOLO_DEV_VERIFICADO = new Set(['patch_codigo', 'github_escribir', 'e
 // y borrar esquemas (y su archivo R2) de otra empresa. Ahora exigen sesión como
 // mínimo (el scope real por empresa_id se aplica en worker.js, igual que
 // exportar_datos).
-const TOOLS_REQUIEREN_SESION    = new Set(['consultar_bd', 'escribir_bd', 'listar_archivos', 'ver_archivo', 'exportar_datos', 'listar_esquemas', 'borrar_esquema']);
+// Fix continuación 19 (IDOR/exfiltración cross-empresa, 5 familias): ninguna de
+// estas 12 tools exigía sesión y varias no filtraban por empresa_id/propiedad en
+// absoluto -- historico_materiales y generar_informe exponían datos de TODAS las
+// empresas; analizar_archivo/marcar_plano/enviar_email/enviar_telegram_informe
+// permitían leer/reenviar archivos R2 de otra empresa conociendo su r2_key;
+// crear_tarea_background/ver_tareas/completar_tarea permitían crear/leer/completar
+// tareas en background de OTRO usuario; enviar_push/iniciar_conversacion/
+// controlar_app permitían notificar/actuar sobre la app de un usuario de otra
+// empresa. El scope real (empresa_id/usuario_id/propiedad de archivo, con bypass
+// para dev verificado -- necesario para el cron cross-empresa) se aplica en
+// worker.js; aquí se exige sesión como mínimo, igual que el resto de fixes.
+const TOOLS_REQUIEREN_SESION    = new Set([
+  'consultar_bd', 'escribir_bd', 'listar_archivos', 'ver_archivo', 'exportar_datos', 'listar_esquemas', 'borrar_esquema',
+  'historico_materiales', 'generar_informe', 'analizar_archivo', 'marcar_plano', 'enviar_email', 'enviar_telegram_informe',
+  'crear_tarea_background', 'ver_tareas', 'completar_tarea', 'enviar_push', 'iniciar_conversacion', 'controlar_app'
+]);
 function filtrarToolsPorAuth(tools, authOk, esDevVerificado) {
   return (tools || []).filter(t => {
     if (TOOLS_SOLO_DEV_VERIFICADO.has(t.name) && !esDevVerificado) return false;

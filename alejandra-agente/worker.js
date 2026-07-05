@@ -1941,6 +1941,30 @@ async function puedeAccederArchivo(env, customMetadata, empresaId, esDevVerifica
   return dueña !== null && dueña === String(empresaId);
 }
 
+// Fix continuación 19 (IDOR cross-empresa en enviar_push/iniciar_conversacion/
+// controlar_app): estas tools permitían apuntar a CUALQUIER usuario_id sin
+// comprobar que perteneciera a la misma empresa que el llamante -- se podía
+// enviar notificaciones push, iniciar una conversación en su nombre o
+// insertar comandos remotos para la app de un usuario de OTRA empresa.
+// Igual que puedeAccederArchivo(), se bypassa para dev verificado (el cron
+// usa esDevVerificado=true con empresa_id='cron' y SÍ necesita poder avisar
+// a cualquier usuario, p.ej. notificar a "adrian").
+async function puedeNotificarUsuario(env, targetUserRaw, callerUsuarioId, callerEmpresaId, esDevVerificado) {
+  if (esDevVerificado) return true;
+  if (!targetUserRaw) return false;
+  try {
+    const targetNorm = await normalizarUsuarioId(env, targetUserRaw);
+    const callerNorm = await normalizarUsuarioId(env, callerUsuarioId);
+    if (targetNorm === callerNorm) return true; // el usuario se apunta a sí mismo
+    const numId = parseInt(targetNorm, 10);
+    if (isNaN(numId)) return false;
+    const row = await env.DB.prepare(`SELECT empresa_id FROM usuarios WHERE id=?`).bind(numId).first();
+    return row?.empresa_id != null && String(row.empresa_id) === String(callerEmpresaId);
+  } catch (_) {
+    return false;
+  }
+}
+
 // HOSTS_PERMITIDOS_TEST_ENDPOINT y urlPermitidaTestEndpoint() (allowlist
 // anti-SSRF) viven ahora en lib.js (importadas arriba) — ver lib.test.js.
 
@@ -5724,6 +5748,9 @@ ${input.codigo_sugerido ? `CÓDIGO SUGERIDO:\n${input.codigo_sugerido}` : ''}`;
       try {
         const targetUser = input.usuario_id || usuario_id;
         if (!targetUser) return 'No se pudo determinar el usuario destino.';
+        if (!(await puedeNotificarUsuario(env, targetUser, usuario_id, empresa_id, esDevVerificado))) {
+          return `No se pudo determinar el usuario destino.`;
+        }
         const row = await env.DB.prepare(
           `SELECT contenido FROM alejandra_memoria WHERE tipo='fcm_token' AND usuario_id=? LIMIT 1`
         ).bind(targetUser).first();
@@ -5740,6 +5767,9 @@ ${input.codigo_sugerido ? `CÓDIGO SUGERIDO:\n${input.codigo_sugerido}` : ''}`;
       try {
         const targetUser = input.usuario_id || usuario_id;
         if (!targetUser) return 'Falta usuario_id.';
+        if (!(await puedeNotificarUsuario(env, targetUser, usuario_id, empresa_id, esDevVerificado))) {
+          return 'Falta usuario_id.';
+        }
         if (!input.mensaje) return 'Falta el mensaje.';
         await env.DB.prepare(
           `INSERT INTO alejandra_historial (canal, rol, contenido, created_at, usuario_id)
@@ -5776,6 +5806,9 @@ ${input.codigo_sugerido ? `CÓDIGO SUGERIDO:\n${input.codigo_sugerido}` : ''}`;
       try {
         const targetUser = input.usuario_id || usuario_id;
         if (!targetUser) return 'Falta usuario_id.';
+        if (!(await puedeNotificarUsuario(env, targetUser, usuario_id, empresa_id, esDevVerificado))) {
+          return 'Falta usuario_id.';
+        }
         const payload = JSON.stringify(input.payload || {});
         await env.DB.prepare(
           `INSERT INTO alejandra_comandos (usuario_id, tipo, payload, estado, created_at)
@@ -7086,6 +7119,13 @@ ${descripcion ? `<div class="info-bar"><span class="badge">${tipo}</span>${descr
         if (!env.FILES) return 'R2 bucket FILES no configurado.';
         const obj = await env.FILES.get(input.key);
         if (!obj) return `Archivo no encontrado: "${input.key}"`;
+        // Fix continuación 19 (IDOR): faltaba el mismo aislamiento por empresa
+        // que ya tienen listar_archivos/ver_archivo -- cualquier usuario podía
+        // analizar (y así leer el contenido de) un archivo de otra empresa
+        // adivinando/probando su r2_key.
+        if (!(await puedeAccederArchivo(env, obj.customMetadata, empresa_id, esDevVerificado))) {
+          return `Archivo no encontrado: "${input.key}"`;
+        }
         const ct = obj.httpMetadata?.contentType || 'application/octet-stream';
         const arrayBuf = await obj.arrayBuffer();
         const bytes = new Uint8Array(arrayBuf);
@@ -7293,7 +7333,10 @@ ${descripcion ? `<div class="info-bar"><span class="badge">${tipo}</span>${descr
     case 'crear_tarea_background': {
       const desc = (input.descripcion || '').trim();
       if (!desc) return 'Falta "descripcion" de la tarea.';
-      const uid = input.usuario_id || usuario_id || 'system';
+      // Fix continuación 19 (IDOR): antes se confiaba en input.usuario_id para
+      // decidir para quién se crea la tarea -- cualquiera podía crear tareas
+      // "para" otro usuario. Solo se permite el override si es dev verificado.
+      const uid = esDevVerificado ? (input.usuario_id || usuario_id || 'system') : (usuario_id || 'system');
       try {
         await env.DB.prepare(
           `INSERT INTO alejandra_tareas (usuario_id, descripcion, estado) VALUES (?, ?, 'pendiente')`
@@ -7303,7 +7346,10 @@ ${descripcion ? `<div class="info-bar"><span class="badge">${tipo}</span>${descr
     }
 
     case 'ver_tareas': {
-      const uid = input.usuario_id || usuario_id || 'system';
+      // Fix continuación 19 (IDOR): mismo problema que crear_tarea_background
+      // -- input.usuario_id permitía leer las tareas (y sus resultados) de
+      // OTRO usuario. Solo se permite el override si es dev verificado.
+      const uid = esDevVerificado ? (input.usuario_id || usuario_id || 'system') : (usuario_id || 'system');
       const estado = input.estado || null;
       try {
         let q = 'SELECT id, descripcion, estado, resultado, created_at, completed_at FROM alejandra_tareas WHERE usuario_id=?';
@@ -7321,9 +7367,18 @@ ${descripcion ? `<div class="info-bar"><span class="badge">${tipo}</span>${descr
       const resultado = (input.resultado || '').trim();
       if (!id) return 'Falta "tarea_id".';
       try {
-        await env.DB.prepare(
-          `UPDATE alejandra_tareas SET estado='completada', resultado=?, completed_at=datetime('now') WHERE id=?`
-        ).bind(resultado, id).run();
+        // Fix continuación 19 (IDOR): antes cualquier usuario podía completar
+        // (y fijar el "resultado" de) la tarea en background de OTRO usuario
+        // adivinando su tarea_id, sin ninguna comprobación de propiedad.
+        // Se añade "AND usuario_id=?" (bypass solo para dev verificado) y se
+        // trata "0 filas afectadas" como error en vez de falso éxito.
+        let sql = `UPDATE alejandra_tareas SET estado='completada', resultado=?, completed_at=datetime('now') WHERE id=?`;
+        const binds = [resultado, id];
+        if (!esDevVerificado) { sql += ' AND usuario_id=?'; binds.push(String(usuario_id)); }
+        const res = await env.DB.prepare(sql).bind(...binds).run();
+        if ((res.meta?.changes || 0) === 0) {
+          return JSON.stringify({ ok: false, error: 'Tarea no encontrada o no pertenece a este usuario.' });
+        }
         // Notificar al usuario si tiene push
         const tarea = await env.DB.prepare('SELECT usuario_id, descripcion FROM alejandra_tareas WHERE id=?').bind(id).first();
         if (tarea) {
@@ -7394,6 +7449,12 @@ ${descripcion ? `<div class="info-bar"><span class="badge">${tipo}</span>${descr
         if (!env.GEMINI_API_KEY) return 'GEMINI_API_KEY no configurada — no puedo analizar planos.';
         const obj = await env.FILES.get(key);
         if (!obj) return `Archivo no encontrado en R2: ${key}`;
+        // Fix continuación 19 (IDOR): mismo aislamiento por empresa que
+        // ver_archivo/analizar_archivo -- sin esto se podía analizar el plano
+        // de otra empresa conociendo/adivinando su r2_key.
+        if (!(await puedeAccederArchivo(env, obj.customMetadata, empresa_id, esDevVerificado))) {
+          return `Archivo no encontrado en R2: ${key}`;
+        }
         const buf = await obj.arrayBuffer();
         const base64 = btoa(String.fromCharCode(...new Uint8Array(buf)));
         const mimeType = obj.httpMetadata?.contentType || 'application/pdf';
@@ -7621,10 +7682,16 @@ ${datos.proximos_pasos || '- Pendiente de definir'}`;
           case 'registrar': {
             const material = (input.material || '').trim();
             if (!material) return 'Falta "material" para registrar.';
+            // Fix continuación 19 (IDOR): antes se confiaba en input.empresa_id
+            // (controlable por el usuario/LLM) para decidir a qué empresa se
+            // asigna el material. Ahora solo se permite ese override si la
+            // sesión es de dev verificado (igual que el resto de fixes); en
+            // caso contrario se usa siempre el empresa_id real de la sesión.
+            const empresaReal = esDevVerificado ? (input.empresa_id || empresa_id || null) : (empresa_id || null);
             await env.DB.prepare(
               "INSERT INTO materiales_obra (empresa_id, obra_id, obra_nombre, material, referencia, fabricante, cantidad, unidad, precio_unitario, proveedor, notas) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
             ).bind(
-              input.empresa_id || empresa_id || null,
+              empresaReal,
               input.obra_id || null, input.obra_nombre || null, material,
               input.referencia || null, input.fabricante || null,
               input.cantidad || 0, input.unidad || 'ud',
@@ -7636,6 +7703,12 @@ ${datos.proximos_pasos || '- Pendiente de definir'}`;
           case 'consultar': {
             let sql = "SELECT * FROM materiales_obra WHERE 1=1";
             const binds = [];
+            // Fix continuación 19 (leak entre empresas): antes esta consulta no
+            // filtraba por empresa_id, exponiendo materiales de todas las
+            // empresas a cualquier usuario. Se bypassa solo para dev verificado
+            // (el cron usa esDevVerificado=true con empresa_id='cron' y necesita
+            // ver todas las empresas para sus informes/alertas cruzadas).
+            if (!esDevVerificado) { sql += " AND empresa_id=?"; binds.push(empresa_id); }
             if (input.obra_id) { sql += " AND obra_id=?"; binds.push(input.obra_id); }
             if (input.material) { sql += " AND material LIKE ?"; binds.push(`%${input.material}%`); }
             if (input.proveedor) { sql += " AND proveedor LIKE ?"; binds.push(`%${input.proveedor}%`); }
@@ -7648,9 +7721,16 @@ ${datos.proximos_pasos || '- Pendiente de definir'}`;
             return JSON.stringify({ ok: true, count: materiales.length, total_gastado: totalGastado.toFixed(2) + '€', materiales });
           }
           case 'comparar': {
-            const rows = await env.DB.prepare(
-              "SELECT obra_id, obra_nombre, material, SUM(cantidad) as total_cantidad, unidad, ROUND(AVG(precio_unitario),2) as precio_medio, SUM(cantidad * precio_unitario) as coste_total FROM materiales_obra GROUP BY obra_id, material ORDER BY material, obra_id"
-            ).all();
+            // Fix continuación 19: mismo problema que "consultar" -- agregaba
+            // cantidades/costes de TODAS las empresas mezclados. Se añade el
+            // mismo filtro (bypass solo para dev verificado/cron).
+            let sqlComparar = "SELECT obra_id, obra_nombre, material, SUM(cantidad) as total_cantidad, unidad, ROUND(AVG(precio_unitario),2) as precio_medio, SUM(cantidad * precio_unitario) as coste_total FROM materiales_obra";
+            const bindsComparar = [];
+            if (!esDevVerificado) { sqlComparar += " WHERE empresa_id=?"; bindsComparar.push(empresa_id); }
+            sqlComparar += " GROUP BY obra_id, material ORDER BY material, obra_id";
+            let stmtComparar = env.DB.prepare(sqlComparar);
+            if (bindsComparar.length > 0) stmtComparar = stmtComparar.bind(...bindsComparar);
+            const rows = await stmtComparar.all();
             return JSON.stringify({ ok: true, comparativa: rows.results || [] });
           }
           default:
@@ -7830,19 +7910,35 @@ ${datos.proximos_pasos || '- Pendiente de definir'}`;
       const tipo   = (input.tipo || 'general').trim();
       const titulo = (input.titulo || 'Informe').trim();
       const periodo = input.periodo || 'últimos 30 días';
-      const obraId  = input.obra_id || null;
+      // Fix continuación 19 (SQLi): obraId se concatenaba directamente en el SQL
+      // de las 5 subconsultas de abajo (` AND obra_id=${obraId}`). Se valida y
+      // convierte a entero para usarlo únicamente como parámetro bind (?).
+      const obraIdParsed = input.obra_id !== undefined && input.obra_id !== null ? parseInt(input.obra_id, 10) : NaN;
+      const obraId = Number.isNaN(obraIdParsed) ? null : obraIdParsed;
       const fecha   = new Date().toISOString().split('T')[0];
       try {
         let secciones = '';
 
         // Fichajes
+        // Fix continuación 19 (leak entre empresas + SQLi): esta y las 4
+        // subconsultas siguientes no filtraban por empresa_id (exponían datos
+        // de todas las empresas en el informe) y concatenaban obraId sin
+        // parametrizar. Se añade filtro empresa_id (bypass solo para dev
+        // verificado/cron, que necesita informes cruzados) y bind para obraId.
+        // Se envuelve cada una en .catch() porque algunas tablas referenciadas
+        // (p.ej. "personal", "equipos_elevacion") no existen en producción --
+        // así una subconsulta rota no tira abajo el informe completo.
         if (['general', 'fichajes', 'personal'].includes(tipo)) {
           let sqlF = `SELECT p.nombre, f.tipo, f.fecha, f.hora, f.ubicacion
                       FROM fichajes f LEFT JOIN personal p ON p.id=f.usuario_id
                       WHERE f.fecha >= date('now','-30 days')`;
-          if (obraId) sqlF += ` AND f.obra_id=${obraId}`;
+          const bindsF = [];
+          if (!esDevVerificado) { sqlF += ' AND f.empresa_id=?'; bindsF.push(empresa_id); }
+          if (obraId) { sqlF += ' AND f.obra_id=?'; bindsF.push(obraId); }
           sqlF += ' ORDER BY f.fecha DESC, f.hora DESC LIMIT 100';
-          const rowsF = await env.DB.prepare(sqlF).all();
+          let stmtF = env.DB.prepare(sqlF);
+          if (bindsF.length) stmtF = stmtF.bind(...bindsF);
+          const rowsF = await stmtF.all().catch(() => ({ results: [] }));
           secciones += generarTablaFichajes(rowsF.results || []);
         }
 
@@ -7850,9 +7946,13 @@ ${datos.proximos_pasos || '- Pendiente de definir'}`;
         if (['general', 'incidencias'].includes(tipo)) {
           let sqlI = `SELECT titulo, tipo, estado, prioridad, fecha_reporte, descripcion
                       FROM incidencias WHERE fecha_reporte >= date('now','-30 days')`;
-          if (obraId) sqlI += ` AND obra_id=${obraId}`;
+          const bindsI = [];
+          if (!esDevVerificado) { sqlI += ' AND empresa_id=?'; bindsI.push(empresa_id); }
+          if (obraId) { sqlI += ' AND obra_id=?'; bindsI.push(obraId); }
           sqlI += ' ORDER BY prioridad DESC, fecha_reporte DESC LIMIT 50';
-          const rowsI = await env.DB.prepare(sqlI).all();
+          let stmtI = env.DB.prepare(sqlI);
+          if (bindsI.length) stmtI = stmtI.bind(...bindsI);
+          const rowsI = await stmtI.all().catch(() => ({ results: [] }));
           secciones += generarTablaIncidencias(rowsI.results || []);
         }
 
@@ -7860,9 +7960,13 @@ ${datos.proximos_pasos || '- Pendiente de definir'}`;
         if (['general', 'bobinas', 'material'].includes(tipo)) {
           let sqlB = `SELECT nombre, tipo, seccion, metros_totales, metros_restantes, ubicacion, estado
                       FROM bobinas WHERE 1=1`;
-          if (obraId) sqlB += ` AND obra_id=${obraId}`;
+          const bindsB = [];
+          if (!esDevVerificado) { sqlB += ' AND empresa_id=?'; bindsB.push(empresa_id); }
+          if (obraId) { sqlB += ' AND obra_id=?'; bindsB.push(obraId); }
           sqlB += ' ORDER BY nombre LIMIT 80';
-          const rowsB = await env.DB.prepare(sqlB).all();
+          let stmtB = env.DB.prepare(sqlB);
+          if (bindsB.length) stmtB = stmtB.bind(...bindsB);
+          const rowsB = await stmtB.all().catch(() => ({ results: [] }));
           secciones += generarTablaBobinas(rowsB.results || []);
         }
 
@@ -7871,9 +7975,13 @@ ${datos.proximos_pasos || '- Pendiente de definir'}`;
           let sqlE = `SELECT nombre, tipo, matricula, estado, fecha_revision_iteq,
                              operador_habilitado, empresa_propietaria
                       FROM equipos_elevacion WHERE 1=1`;
-          if (obraId) sqlE += ` AND obra_id=${obraId}`;
+          const bindsE = [];
+          if (!esDevVerificado) { sqlE += ' AND empresa_id=?'; bindsE.push(empresa_id); }
+          if (obraId) { sqlE += ' AND obra_id=?'; bindsE.push(obraId); }
           sqlE += ' ORDER BY tipo, nombre LIMIT 60';
-          const rowsE = await env.DB.prepare(sqlE).all();
+          let stmtE = env.DB.prepare(sqlE);
+          if (bindsE.length) stmtE = stmtE.bind(...bindsE);
+          const rowsE = await stmtE.all().catch(() => ({ results: [] }));
           secciones += generarTablaEquipos(rowsE.results || []);
         }
 
@@ -7881,9 +7989,13 @@ ${datos.proximos_pasos || '- Pendiente de definir'}`;
         if (['general', 'pedidos'].includes(tipo)) {
           let sqlP = `SELECT referencia, descripcion, estado, fecha_pedido, proveedor, cantidad, unidad
                       FROM pedidos WHERE fecha_pedido >= date('now','-30 days')`;
-          if (obraId) sqlP += ` AND obra_id=${obraId}`;
+          const bindsP = [];
+          if (!esDevVerificado) { sqlP += ' AND empresa_id=?'; bindsP.push(empresa_id); }
+          if (obraId) { sqlP += ' AND obra_id=?'; bindsP.push(obraId); }
           sqlP += ' ORDER BY fecha_pedido DESC LIMIT 50';
-          const rowsP = await env.DB.prepare(sqlP).all().catch(() => ({ results: [] }));
+          let stmtP = env.DB.prepare(sqlP);
+          if (bindsP.length) stmtP = stmtP.bind(...bindsP);
+          const rowsP = await stmtP.all().catch(() => ({ results: [] }));
           secciones += generarTablaPedidos(rowsP.results || []);
         }
 
@@ -7925,6 +8037,12 @@ ${datos.proximos_pasos || '- Pendiente de definir'}`;
 
         if (r2Key && env.FILES) {
           const obj = await env.FILES.get(r2Key);
+          // Fix continuación 19 (IDOR/exfiltración): sin esta comprobación se
+          // podía adjuntar/reenviar por email el archivo de OTRA empresa
+          // simplemente pasando su r2_key -- mismo aislamiento que ver_archivo.
+          if (obj && !(await puedeAccederArchivo(env, obj.customMetadata, empresa_id, esDevVerificado))) {
+            return JSON.stringify({ ok: false, error: `Archivo no encontrado: "${r2Key}"` });
+          }
           if (obj) {
             if (esSvg) {
               // SVG → adjunto + cuerpo HTML con enlace de descarga y SVG inline
@@ -8005,6 +8123,12 @@ ${datos.proximos_pasos || '- Pendiente de definir'}`;
         if (r2Key) {
           const obj = await env.FILES.get(r2Key);
           if (!obj) return JSON.stringify({ ok: false, error: `No se encontró el archivo en R2: ${r2Key}` });
+          // Fix continuación 19 (IDOR/exfiltración): mismo aislamiento por
+          // empresa que enviar_email/ver_archivo -- sin esto se podía reenviar
+          // por Telegram el archivo de otra empresa pasando su r2_key.
+          if (!(await puedeAccederArchivo(env, obj.customMetadata, empresa_id, esDevVerificado))) {
+            return JSON.stringify({ ok: false, error: `No se encontró el archivo en R2: ${r2Key}` });
+          }
 
           const esSvg  = r2Key.endsWith('.svg');
           const mimeType = esSvg ? 'image/svg+xml' : (obj.httpMetadata?.contentType || 'text/html');
