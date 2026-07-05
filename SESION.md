@@ -1,15 +1,55 @@
 ## ESTADO ACTUAL
 
 **Sesión:** LIBRE
-**Última sesión:** 05/07/2026 — Fix errores JS en panel.html (SyntaxError/ReferenceError) que impedían arrancar init() y con ello el login Google OAuth (commit `4f087c1`).
+**Última sesión:** 05/07/2026 — Fix etiquetado de coste/tokens del fallback GPT-4o DESPLEGADO (commit `6f5dd3c`). (Nota: en paralelo otra sesión corrigió errores JS en panel.html que impedían el login Google OAuth, commit `4f087c1` — ver ESTADO ACTUAL previo en el historial de este archivo.)
 **Versión actual:** App PWA **v7.54** · worker principal deploy ec049cf8 · commit 4f087c1
 **App móvil AlejandraIA:** v1.9.19+33 (OTA publicada, commit `b2c7828` en repo alejandra-ia)
-**Agente (alejandra-agente):** commit `8492890` desplegado en main (deploy CI `28735875216`,
+**Agente (alejandra-agente):** commit `6f5dd3c` desplegado en main (deploy CI `28737537706`,
 health OK). Incluye: fix IDOR fcm-token/comandos (`acc186a`, verificado en vivo con 401 sin
 sesión) + fix SSRF en `test_endpoint` (`bbdb644`, ahora solo dev verificado + whitelist de host)
 + rate limiting 15 req/min y tope de gasto 10$/día en `/api/chat` y `/api/chat/stream`
 (`8613740`, verificado en vivo: 429 a partir de la petición 16 dentro del mismo minuto)
-+ retry con backoff ante 429/5xx de Anthropic y fallback GPT-4o ampliado (`8492890`).
++ retry con backoff ante 429/5xx de Anthropic y fallback GPT-4o ampliado (`8492890`)
++ fix etiquetado coste/tokens del fallback GPT-4o (`6f5dd3c`).
+
+---
+
+## RESUMEN SESIÓN 05/07/2026 (continuación 9) — Fix etiquetado coste/tokens del fallback GPT-4o — DESPLEGADO
+
+Siguiente punto de la lista tras cerrar el retry/backoff de Anthropic (donde ya se había
+detectado el bug de pasada). Auditoría (subagente): cuando `llamarAnthropic()` o
+`llamarAnthropicStream()` caían al fallback GPT-4o (créditos agotados, rate limit o
+sobrecarga de Anthropic), el gasto real de OpenAI quedaba mal contabilizado en
+`alejandra_token_uso`:
+
+- El `proveedor` se derivaba de `modelo.startsWith('gpt')`, pero los 4 sitios que llaman a
+  `registrarTokenUso()` en `procesarConNEXUS`/`procesarConNEXUSStream` pasaban siempre
+  `expert.model` (el modelo Claude original) — así que una llamada de fallback a OpenAI se
+  registraba como `proveedor='anthropic'`, `modelo='claude-sonnet-4-6'` (o el que tocara).
+- Encima, `'gpt-4o'` **ni siquiera tenía entrada** en `PRECIOS_USD` — aunque se hubiera
+  etiquetado bien, el coste se habría calculado con el precio por defecto (1$/5$ por millón,
+  el mismo que Haiku, por coincidencia) en vez del precio real de GPT-4o.
+- En el streaming el problema era peor: el fallback de `llamarAnthropicStream` **no registraba
+  coste/tokens en absoluto**, ni bien ni mal — ese gasto ni siquiera contaba para las
+  estadísticas ni para el tope de gasto diario recién desplegado (continuación 7).
+
+### ✅ Corregido (commit `6f5dd3c`, CI `28737537706`, health OK)
+- Añadido `PRECIOS_USD['gpt-4o'] = { in: 2.50, out: 10.00 }` (precio real de OpenAI).
+- `llamarGPT4oFallback()` ahora devuelve `modelo_real: 'gpt-4o'` en su respuesta.
+- Los 4 sitios que registran uso en `procesarConNEXUS`/`procesarConNEXUSStream` usan ahora
+  `respAPI.modelo_real || expert.model` en vez de asumir siempre el modelo Claude original —
+  con esto el `proveedor` también sale bien derivado automáticamente (`'openai'`).
+- `llamarAnthropicStream()` acepta ahora un parámetro `usuario_id` (pasado desde su único
+  call site) y registra coste/tokens cuando cae al fallback — antes no registraba nada en
+  ese camino, cerrando el gap con el tope de gasto diario.
+- De paso: el texto `"[Modo respaldo GPT-4o — Anthropic sin créditos]"` que veía el usuario
+  salía incluso cuando el motivo real era rate limit/sobrecarga (no falta de crédito) — se
+  cambió a `"Anthropic no disponible momentáneamente"`, más preciso para los 3 motivos.
+
+Verificación en vivo tras el deploy: llamada normal a `/api/chat` → `200` OK (el cambio solo
+afecta a la ruta de fallback, así que el camino feliz es idéntico).
+
+Siguiente punto de la lista: **falta de test coverage para el worker**.
 
 ---
 
