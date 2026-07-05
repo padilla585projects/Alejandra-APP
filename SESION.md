@@ -498,6 +498,23 @@ de los 3 archivos propios de este fix, se commiteo encima, y el `git push` publi
 commits ajenos junto con el propio sin problema (ya estaban commiteados localmente, solo
 faltaba el push).
 
+**Addendum (mismo dia, tras commitear y pushear el commit de documentacion d48d285):** al
+hacer `git fetch` + `git log` de verificacion post-push aparecio un TERCER commit ajeno de
+"APEX Agent" que no estaba presente al momento del `git status` anterior: `ec0b5e3` ("fix:
+planosGrid id conflicto con pagePlanosObra -- renombrar a planosIAGrid, fix visor SVG
+width y _planosData alias"), sobre `panel.html`. Y, tras ese, un cuarto commit propio de
+ese agente documentando su propio trabajo: `a6c3494` ("docs: SESION.md -- continuacion 18,
+Planos IA Parte B completada y testeada"), que edito este mismo archivo (SESION.md) en
+paralelo -- incluyo su propia seccion "continuacion 18" (ver arriba) y actualizo el bloque
+"ESTADO ACTUAL" al inicio de este archivo. Se confirmo que `ec0b5e3` no tocaba ninguno de
+los archivos de este fix (`alejandra-agente/*`) y que el deploy CI de ambos commits ajenos
+(`ec0b5e3` y `a6c3494`, ambos "Deploy to GitHub Pages") ya habia corrido en verde antes de
+mi propio push, sin conflicto. Es la tercera vez confirmada en esta sesion que "APEX Agent"
+edita el mismo directorio de trabajo en paralelo (continuacion 15 fue la primera). No se
+trata de un hallazgo de seguridad -- es trabajo de feature/UI de ese otro agente -- se deja
+registrado aqui unicamente por disciplina operativa (mismo repo/working directory
+compartido, sin coordinacion explicita entre agentes).
+
 Siguiente punto de la lista: seguir con "seguimos auditando" para el resto del sistema --
 ningun hallazgo especifico identificado todavia mas alla de este punto.
 
