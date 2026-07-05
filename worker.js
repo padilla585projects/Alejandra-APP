@@ -12962,7 +12962,25 @@ async function devAIChat(request, env) {
   }
 
   const _isCapacity = msg => msg && (msg.includes('rate_limit') || msg.includes('tokens per minute') || msg.includes('overloaded'));
-  const _callAI = (messages) => {
+
+  // Cascada: OpenRouter (Gemma 4 31B gratis, con vision) → Anthropic (fallback)
+  const _callAI = async (messages) => {
+    // 1. Intentar OpenRouter (gratis, vision incluida)
+    if (env.OPENROUTER_API_KEY) {
+      try {
+        const result = await _callOpenRouterAPI(env, {
+          systemBlocks: webSystemBlocks,
+          messages,
+          tools: webToolsConCache,
+          maxTokens: expert.max_tokens
+        });
+        return { ok: true, json: async () => result, _or: true };
+      } catch (e) {
+        // OpenRouter fallo → silencioso, caer a Anthropic
+        autoLearn(env, 'error', 'OpenRouter fallo — fallback Anthropic', String(e.message).slice(0, 200), 2).catch(() => {});
+      }
+    }
+    // 2. Fallback: Anthropic
     const _ctrl = new AbortController();
     const _tId = setTimeout(() => _ctrl.abort(), 25000);
     return fetch('https://api.anthropic.com/v1/messages', {
@@ -13003,11 +13021,11 @@ async function devAIChat(request, env) {
       result = await response.json();
     }
 
-    const text = (result.content || []).filter(b => b.type === 'text').map(b => b.text).join('\n') || 'â€¦';
+    const text = (result.content || []).filter(b => b.type === 'text').map(b => b.text).join('\n') || '...';
     logAIUsage(env, {
       empresa_id: null,
-      proveedor: 'anthropic',
-      modelo: expert.model,
+      proveedor: result._proveedor || 'anthropic',
+      modelo: result._modelo || expert.model,
       endpoint: `agente_chat:${expertName}`,
       input_tokens: result.usage?.input_tokens || 0,
       output_tokens: result.usage?.output_tokens || 0,
@@ -22081,6 +22099,104 @@ const IEC_BANDEJA_DEFS = `<defs id="bandeja-lib">
     <line x1="14" y1="5" x2="14" y2="9" stroke="currentColor" stroke-width="1.5"/>
   </symbol>
 </defs>`;
+
+// ── Cascada de proveedores IA: OpenRouter → Gemini → Anthropic ──────────────
+// Convierte mensajes formato Anthropic → OpenAI/OpenRouter
+function _msgsAnthropicToOpenAI(msgs) {
+  const out = [];
+  for (const m of msgs) {
+    if (typeof m.content === 'string') {
+      out.push({ role: m.role, content: m.content });
+    } else if (Array.isArray(m.content)) {
+      const texts    = m.content.filter(c => c.type === 'text');
+      const toolUses = m.content.filter(c => c.type === 'tool_use');
+      const toolRes  = m.content.filter(c => c.type === 'tool_result');
+      const images   = m.content.filter(c => c.type === 'image');
+
+      if (m.role === 'assistant' && toolUses.length > 0) {
+        out.push({
+          role: 'assistant',
+          content: texts.map(t => t.text).join('\n') || null,
+          tool_calls: toolUses.map(t => ({
+            id: t.id, type: 'function',
+            function: { name: t.name, arguments: JSON.stringify(t.input || {}) }
+          }))
+        });
+      } else if (m.role === 'user' && toolRes.length > 0) {
+        for (const tr of toolRes) {
+          out.push({
+            role: 'tool', tool_call_id: tr.tool_use_id,
+            content: typeof tr.content === 'string' ? tr.content : JSON.stringify(tr.content)
+          });
+        }
+      } else {
+        // Mensaje de usuario con texto e imagenes opcionales
+        const parts = [];
+        for (const c of m.content) {
+          if (c.type === 'text')  parts.push({ type: 'text', text: c.text });
+          if (c.type === 'image') parts.push({ type: 'image_url', image_url: { url: `data:${c.source.media_type};base64,${c.source.data}` } });
+        }
+        out.push({ role: m.role, content: parts.length === 1 && parts[0].type === 'text' ? parts[0].text : parts });
+      }
+    }
+  }
+  return out;
+}
+
+// Convierte tools formato Anthropic → OpenAI
+function _toolsAnthropicToOpenAI(tools) {
+  return (tools || []).map(t => ({
+    type: 'function',
+    function: { name: t.name, description: t.description, parameters: t.input_schema || { type: 'object', properties: {} } }
+  }));
+}
+
+// Convierte respuesta OpenAI → formato Anthropic
+function _respOpenAIToAnthropic(data) {
+  const choice = data.choices?.[0];
+  if (!choice) throw new Error('OpenRouter: sin choices');
+  const msg = choice.message || {};
+  const content = [];
+  if (msg.content) content.push({ type: 'text', text: msg.content });
+  for (const tc of (msg.tool_calls || [])) {
+    let input = {};
+    try { input = JSON.parse(tc.function.arguments || '{}'); } catch {}
+    content.push({ type: 'tool_use', id: tc.id || `or_${Date.now()}`, name: tc.function.name, input });
+  }
+  return {
+    content,
+    stop_reason: choice.finish_reason === 'tool_calls' ? 'tool_use' : 'end_turn',
+    usage: { input_tokens: data.usage?.prompt_tokens || 0, output_tokens: data.usage?.completion_tokens || 0 },
+    _proveedor: 'openrouter', _modelo: data.model || 'google/gemma-4-31b-it:free'
+  };
+}
+
+// Llamada a OpenRouter con conversion automatica de formato
+async function _callOpenRouterAPI(env, { systemBlocks, messages, tools, maxTokens }) {
+  if (!env.OPENROUTER_API_KEY) throw new Error('Sin OPENROUTER_API_KEY');
+  const systemText = (systemBlocks || []).filter(b => b.text).map(b => b.text).join('\n\n');
+  const openAIMsgs = [];
+  if (systemText) openAIMsgs.push({ role: 'system', content: systemText });
+  openAIMsgs.push(..._msgsAnthropicToOpenAI(messages));
+
+  const body = { model: 'google/gemma-4-31b-it:free', messages: openAIMsgs, max_tokens: maxTokens || 4096 };
+  const openAITools = _toolsAnthropicToOpenAI(tools);
+  if (openAITools.length > 0) { body.tools = openAITools; body.tool_choice = 'auto'; }
+
+  const resp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${env.OPENROUTER_API_KEY}`,
+      'Content-Type': 'application/json',
+      'HTTP-Referer': 'https://alejandra-app.workers.dev',
+      'X-Title': 'Alejandra'
+    },
+    body: JSON.stringify(body)
+  });
+  const data = await resp.json();
+  if (!resp.ok || data.error) throw new Error(`OpenRouter ${resp.status}: ${data.error?.message || resp.statusText}`);
+  return _respOpenAIToAnthropic(data);
+}
 
 // Prompts de sistema por tipo de plano
 const _PLANO_PROMPTS = {
