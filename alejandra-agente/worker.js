@@ -1,7 +1,12 @@
 // ══════════════════════════════════════════════════════════════════════════════
 // ALEJANDRA AGENTE — Worker autónomo, NEXUS router, prompts dinámicos, auto-mejora
 // URL: alejandra-agente.alejandra-app.workers.dev
-// Versión: v6.03 (Fotos en obra: HEIC, 30MB, límite Claude corregido a 3.7MB raw, fallback a analizar_foto_obra)
+// Versión: v6.13 (fix: versión desincronizada entre esta cabecera y GET /health -- v6.03
+//           aquí vs "6.12" en /health, ambos números "prestados" en su día del changelog
+//           de la PWA en ESTADO_APP.txt, nunca fue un contador propio del agente. A partir
+//           de esta versión, el número de versión del agente es independiente del de la
+//           PWA/ESTADO_APP.txt/version.json -- no volver a copiarlo de ahí. Súbelo aquí Y
+//           en el "version" de GET /health a la vez, y solo cuando cambie este worker.)
 // ══════════════════════════════════════════════════════════════════════════════
 
 const ANTHROPIC_API = 'https://api.anthropic.com/v1/messages';
@@ -2052,7 +2057,7 @@ export default {
 
     try {
       if (path === '/health') {
-        return json({ status: 'ok', version: '6.12', nexus: true, reflexion: true, decisiones: true, web_search: !!env.OPENAI_API_KEY, upload: true, vision: true, ingenieria: true, gemini_vision: !!env.GEMINI_API_KEY, prompt_caching: true, razonamiento: true, auto_resumen: true, push: true, automod: !!env.GITHUB_TOKEN, tareas: true });
+        return json({ status: 'ok', version: '6.13', nexus: true, reflexion: true, decisiones: true, web_search: !!env.OPENAI_API_KEY, upload: true, vision: true, ingenieria: true, gemini_vision: !!env.GEMINI_API_KEY, prompt_caching: true, razonamiento: true, auto_resumen: true, push: true, automod: !!env.GITHUB_TOKEN, tareas: true });
       }
 
       // ── Historial del chat (sync entre dispositivos) ────────────────────

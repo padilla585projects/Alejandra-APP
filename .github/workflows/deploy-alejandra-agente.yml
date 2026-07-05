@@ -99,7 +99,7 @@ jobs:
             https://alejandra-agente.alejandra-app.workers.dev/health || echo "000")
           echo "Health check: HTTP $STATUS"
           if [ "$STATUS" = "200" ]; then
-            echo "✅ Alejandra Agente v6.12 desplegada y operativa"
+            echo "✅ Alejandra Agente desplegada y operativa (ver /health para la versión real)"
           else
             echo "❌ Health check retornó $STATUS — revisar deploy"
             exit 1
