@@ -1,8 +1,8 @@
 ## ESTADO ACTUAL
 
 **Sesion:** LIBRE
-**Ultima sesion:** 05/07/2026 -- Planos IA Parte C: editor SVG + imprimir + DXF (v7.57, commit c97dc67).
-**Version actual:** App PWA **v7.57** -- commit c97dc67
+**Ultima sesion:** 06/07/2026 -- Cascada Gemini para planos + test vision + fix agente web-search crash (v7.72, commits 101aa9c / 07657d3).
+**Version actual:** App PWA **v7.72** -- commit 101aa9c
 **Agente (alejandra-agente):** commit 2a18d5b desplegado en main (fix IDOR en
 subir_archivo -- escribia/sobrescribia cualquier key de R2 sin registrar dueno ni
 comprobar empresa -- y enviar_notificacion -- codigo huerfano con el mismo patron
@@ -221,6 +221,47 @@ el resto (Recomendado)"**.
   actualizados de 62 a 64 en las referencias vigentes, lista de
   TOOLS_REQUIEREN_SESION actualizada, cabecera del documento actualizada a
   continuacion 20/commit 2a18d5b).
+
+---
+
+## RESUMEN SESION 06/07/2026 -- Cascada Gemini planos + vision + fix web-search crash (v7.72)
+
+Retomada la sesion del dia anterior (v7.64 era el ultimo commit en GitHub). Se habian acumulado cambios locales (v7.65-v7.71) sin commitear.
+
+### Cambios implementados (worker.js raiz -- commits 101aa9c)
+- **Cascada Gemini→OpenRouter→Anthropic en generacion de planos**: Gemini 2.5 Flash como primario (gratis, ~$0.0008/plano vs $0.128 con Anthropic). OpenRouter Llama-70B como segundo intento (10s timeout). Anthropic como ultimo recurso de pago.
+- **Fix constraint D1**: tabla `planos` ahora incluye `'bandejas'` en el CHECK de tipo (migracion aplicada manualmente: CREATE nueva→INSERT SELECT→DROP vieja→RENAME). Planos con tipo bandejas almacenados correctamente.
+- **Prompts mejorados**: `bandejas` y `electrico` -- instruccion explicita de NO definir `<defs>` ni `<symbol>` propios (el renderizador los inyecta). Antes el modelo definia sus propias librerias de simbolos.
+- **Auto-close SVGs truncados**: si el SVG no termina en `</svg>`, se le anade para que sea parseable.
+- **max_tokens 16000 para Anthropic**: antes cortaba a 8192 (exactamente el limite), ahora hay margen.
+- **Metadatos correctos**: `proveedor` y `modelo` real guardados en BD (antes siempre decia 'claude-sonnet-4-6').
+- **Limpieza thinkingConfig**: eliminado el `thinkingConfig: {thinkingBudget: 0}` que causaba hanging de 25s en Gemini.
+- **_cleanGKey**: funcion que limpia BOM/espacios de las claves API de Gemini (via regex con los bytes BOM literales -- falso positivo en el check de encoding pero es codigo intencional).
+
+### Cambios implementados (alejandra-agente -- commit 07657d3)
+- **Fix web search crash**: `buscarWebOpenAI()` ahora esta envuelta en try/catch tanto en `procesarConNEXUS` como en `procesarConNEXUSStream`. Antes, si GPT-4o devolvia 429 durante la busqueda web previa, el error propagaba como crash con `{texto: "Error: GPT-4o fallback 429:..."}` y `modelo`/`experto` vacios en la respuesta.
+
+### Tests realizados
+- **Plano bandejas**: generado correctamente (ID 9), proveedor=gemini, $0.0008, 47s (Gemini 2.5 Flash con thinking mode activo aunque no se configuro -- comportamiento nativo del modelo free tier). SVG auto-cerrado cuando truncado.
+- **Vision (imagen de paisaje)**: funciona correctamente. Flujo: imagen JPEG subida via `/upload` al agente → R2 key pasada como `adjuntos[]` en `/api/chat` → `buildUserContentWithAdjuntos()` la carga de R2 y la convierte a bloque base64 inline → Claude la ve y describe correctamente.
+  - Mensaje "Analiza esta imagen...": EXITO -- description completa del paisaje
+  - Mensaje "describe detalladamente lo que ves" sin contexto de app: Alejandra rechaza (GPT-4o fallback, respuesta conservadora sin contexto de app industrial)
+  - Mensaje con contexto de obra: EXITO tras el fix de web-search
+- **Anthropic sin creditos**: Anthropic actualmente sin saldo → fallback automatico a OpenRouter (clave revocada, necesita renovacion) → GPT-4o (funciona pero con rate limits por uso intensivo en las pruebas).
+
+### Estado de infraestructura
+- Anthropic: SIN CREDITOS -- recargar en console.anthropic.com
+- OpenRouter: CLAVE REVOCADA -- regenerar en openrouter.ai y ejecutar `npx wrangler secret put OPENROUTER_API_KEY` (y `npx wrangler secret put OPENROUTER_API_KEY --name alejandra-agente`)
+- Gemini: funcionando para planos (3 claves rotando)
+- GPT-4o: funcionando como fallback de vision/chat (rate limits en tests intensivos)
+
+### Commits
+- `101aa9c`: feat: Gemini cascade para planos + fix D1 bandejas + prompts mejorados -- v7.72
+- `07657d3`: fix: agente -- web search errors no longer crash chat + vision tests confirmed
+
+### Deploy
+- Worker raiz: `alejandra-app-api` -- Version ID cd7c8c68
+- Agente: `alejandra-agente` -- Version ID 12071624
 
 ---
 

@@ -4,12 +4,23 @@
   Ruta local: C:\Users\Adrian\Downloads\Proyecto GestiBobina\Alejandra APP
 ================================================================================
 
-ÚLTIMA ACTUALIZACIÓN: 25/06/2026
-VERSIÓN ACTUAL APP NUEVA: v6.65 (Presupuesto, Fases y Partes Diarios en panel office)
-WORKER API: 930a0847 · WORKER AGENTE: 4fc6c53b
+ÚLTIMA ACTUALIZACIÓN: 06/07/2026
+VERSIÓN ACTUAL APP NUEVA: v7.72 (Cascada Gemini planos + fix agente web-search + vision confirmada)
+WORKER API: cd7c8c68 · WORKER AGENTE: 12071624
 VERSIÓN ACTUAL APP VIEJA: v4.19 (⛔ CONGELADA DEFINITIVAMENTE — no recibe más cambios)
 
 HISTORIAL DE VERSIONES (resumen reciente):
+  v7.72 — 06/07/2026 — Cascada Gemini para planos + fix web-search crash agente + vision confirmada:
+                       worker.js: cascada Gemini→OpenRouter→Anthropic en _generarPlanoInterno.
+                       Gemini 2.5 Flash como primario ($0.0008/plano). Fix constraint D1 bandejas.
+                       Prompts electrico/bandejas: NO definas <defs> propios. Auto-close SVGs
+                       truncados. max_tokens 16000 para Anthropic. Metadatos proveedor/modelo
+                       correctos. Limpieza thinkingConfig (causaba hanging 25s).
+                       agente: buscarWebOpenAI() envuelta en try/catch -- ya no crashea el chat
+                       si GPT-4o devuelve 429 durante la busqueda web previa.
+                       Vision confirmada funcionando: /upload → R2 key → adjuntos[] → base64 inline.
+                       Commits: 101aa9c (worker raiz) + 07657d3 (agente). Workers API cd7c8c68 + agente 12071624.
+  v7.57 — 05/07/2026 — Planos IA Parte C: editor SVG + imprimir + DXF (commit c97dc67):
   v6.65 — 25/06/2026 — Presupuesto de Obra, Fases de Obra y Partes Diarios en panel office:
                        panel.html: 3 nuevas páginas accesibles desde sidebar. Presupuesto
                        con KPIs (previsto/real/desviación) + gráfico por categorías + Tabulator.
