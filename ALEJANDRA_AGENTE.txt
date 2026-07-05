@@ -1,6 +1,6 @@
 ================================================================================
   ALEJANDRA AGENTE — GUÍA COMPLETA PARA NUEVOS CHATS
-  Última actualización: 05/07/2026 (continuación 12, tras commit 93d0d3a)
+  Última actualización: 05/07/2026 (continuación 14, tras commit 8d7ef65)
 ================================================================================
 
 Este archivo explica todo lo necesario para trabajar en el agente Alejandra.
@@ -137,8 +137,19 @@ compartida de TODAS las empresas). Se corrigió con 3 capas, todas en vigor:
                         usuario_id que manda el body.
      esDevVerificado = true SOLO si esa identidad verificada es developer/admin.
    TOOLS_SOLO_DEV_VERIFICADO (patch_codigo, github_escribir, ejecutar_deploy,
-   rollback, test_endpoint) exige esDevVerificado. TOOLS_REQUIEREN_SESION
-   (consultar_bd, escribir_bd, listar_archivos, ver_archivo) exige authOk.
+   rollback, test_endpoint, configurar_alerta) exige esDevVerificado.
+   TOOLS_REQUIEREN_SESION (consultar_bd, escribir_bd, listar_archivos,
+   ver_archivo, exportar_datos) exige authOk.
+
+   configurar_alerta se añadió a la lista de solo-dev el 05/07/2026
+   (continuación 14): la acción "crear" guardaba un condicion_sql arbitrario
+   que "verificar" ejecutaba tal cual más tarde sin ninguna validación —
+   cualquier sesión podía persistir un UPDATE/DELETE/DROP disfrazado de
+   "alerta". exportar_datos se añadió a solo-sesión el mismo día: exportaba
+   bobinas/personal/fichajes/materiales/gastos de TODAS las empresas sin
+   filtrar por empresa_id, y concatenaba obra_id/fecha_desde/fecha_hasta como
+   string sin parametrizar (inyección SQL directa). Ver capa 2 (más abajo)
+   para el resto del fix de exportar_datos.
 
 2. validarScopeEmpresaBD() (lib.js) — aislamiento por empresa_id para
    consultar_bd/escribir_bd: el gating de (1) exige sesión, pero no evita que
@@ -152,7 +163,19 @@ compartida de TODAS las empresas). Se corrigió con 3 capas, todas en vigor:
    empresa_id: contienen tokens de sesión/vinculación, y leerlos permitiría
    suplantar a otro usuario de la misma empresa (incluido un admin). También
    bloquea columnas sensibles (password_hash). esDevVerificado se salta esta
-   capa.
+   capa. El modo "custom" de exportar_datos (sql_custom) reutiliza esta misma
+   función desde el 05/07/2026 (continuación 14), en vez de solo comprobar que
+   empezara por "SELECT" como antes.
+
+   validarSoloSelectBD() (lib.js) — comprobación "solo SELECT, sin verbos de
+   escritura" extraída de consultar_bd para compartirla también con
+   configurar_alerta (condicion_sql, validado al crear Y en cada ejecución de
+   "verificar" como defensa en profundidad) y con el modo custom de
+   exportar_datos (sql_custom). Las 5 exportaciones fijas de exportar_datos
+   (bobinas/personal/fichajes/materiales/gastos) además pasaron de construir
+   el WHERE por concatenación de string a placeholders + bind() (helper
+   construirWhere en worker.js), con empresa_id obligatorio salvo dev
+   verificado.
 
 3. empresaDeArchivo() / puedeAccederArchivo() (worker.js, junto a
    /files/<key>) — aislamiento por empresa_id para archivos servidos desde R2:
@@ -200,6 +223,8 @@ env.RATE_LIMIT_KV, env.FILES ni hace fetch() real:
   - filtrarToolsPorAuth (+ TOOLS_SOLO_DEV_VERIFICADO/TOOLS_REQUIEREN_SESION)
   - extraerTablasQuery / validarScopeEmpresaBD (+ TABLAS_EMPRESA_PERMITIDAS/
     COLUMNA_BLOQUEADA_BD)                    — fix IDOR de consultar_bd/escribir_bd
+  - validarSoloSelectBD                      — "solo SELECT", compartida entre
+    consultar_bd, configurar_alerta y exportar_datos (fix continuación 14)
   - urlPermitidaTestEndpoint (+ HOSTS_PERMITIDOS_TEST_ENDPOINT) — anti-SSRF
   - esStatusReintentableAnthropic / calcularEsperaReintentoMs — backoff/retry
     de fetchAnthropicConReintentos
@@ -211,7 +236,7 @@ todavía (verificación manual vía curl tras cada deploy). Ampliar esto con
 decide invertir en tests de integración de rutas reales.
 
 Cómo correr los tests:
-  cd alejandra-agente && npm ci && npm test        (vitest run, 37 tests)
+  cd alejandra-agente && npm ci && npm test        (vitest run, 47 tests)
 
 El workflow de deploy (deploy-alejandra-agente.yml) instala dependencias y
 corre `npm test` ANTES de aplicar migraciones D1 y desplegar — si los tests
@@ -484,7 +509,7 @@ alejandra-agente/
                                   I/O real con D1/KV/R2/fetch)
   lib.js                       — Funciones puras extraídas de worker.js,
                                   testeadas con vitest (ver "TESTS")
-  lib.test.js                  — 37 tests de lib.js
+  lib.test.js                  — 47 tests de lib.js
   package.json / package-lock.json — devDependency vitest (excepción explícita
                                   en .gitignore raíz para trackear estos dos)
   wrangler.toml                 — Config Cloudflare del agente (DB/FILES/
