@@ -1,8 +1,8 @@
 ## ESTADO ACTUAL
 
 **Sesion:** LIBRE
-**Ultima sesion:** 05/07/2026 -- Modulo de Planos Tecnicos (v7.56, commit 5f2b226).
-**Version actual:** App PWA **v7.56** -- commit 5f2b226
+**Ultima sesion:** 05/07/2026 -- Modulo de Planos IA Parte B completada y testeada en vivo (commits ce6e7d9, ec0b5e3).
+**Version actual:** App PWA **v7.56** -- commit ec0b5e3
 **Agente (alejandra-agente):** commit fc1fe7b desplegado en main (fix IDOR en
 listar_esquemas/borrar_esquema y gestionar_tarea -- ver continuacion 17 abajo). Incluye
 tests automatizados (59 tests, vitest) que corren en el workflow de deploy ANTES de
@@ -385,6 +385,53 @@ CI, ya corregido).
 
 Siguiente punto de la lista: retomar "seguimos auditando" para el resto del sistema (esta
 feature fue una peticion intercalada, no parte de la lista de auditoria).
+
+---
+
+## RESUMEN SESION 05/07/2026 (continuacion 18) -- Modulo Planos IA Parte B: panel.html + test en vivo
+
+Continuacion de la continuacion 14 (backend Planos ya hecho). Se implemento y verifico la
+UI completa del modulo de Planos Tecnicos en panel.html.
+
+### Implementacion panel.html (commits ce6e7d9 y ec0b5e3)
+
+#### Nuevo boton en sidebar
+- `<button data-page="planos" onclick="navTo('planos')">📐 Planos IA</button>`
+- Entrada en PAGE_TITLES (`planos: '📐 Planos Tecnicos IA'`) y PAGE_LOADERS
+  (`planos: (...a) => cargarPlanos(...a)`)
+
+#### Fix preexistente: apiFetch no definido
+- Varios modulos anteriores (escandallo, cronograma, rdp) llamaban a `apiFetch()` que
+  nunca estaba definido en panel.html. Corregido anadiendo `const apiFetch = apiRaw;`
+  como alias justo despues de la definicion de `apiRaw`.
+
+#### Nueva pagina `id="pagePlanos"`
+- Grid de tarjetas responsive (auto-fill, minmax 300px)
+- Filtro por tipo (planta/electrico/mecanico/gantt) y busqueda por titulo
+- Modal de generacion: tipo, titulo, descripcion, ejemplo, spinner de espera (20-40s),
+  resultado con boton "Ver plano"
+- Visor fullscreen con el SVG bruto + botones "Descargar SVG" y "PDF/Imprimir"
+- Botones por tarjeta: Ver, descargar SVG, PDF/Imprimir, Eliminar
+
+#### Bugs encontrados y corregidos durante el test
+1. `id="planosGrid"` en conflicto con `pagePlanosObra` (preexistente) -> renombrado a
+   `id="planosIAGrid"` en HTML y en `getElementById()` de cargarPlanos/renderPlanosGrid
+2. Variable `_planosIAData` incorrecta en verPlano() -> corregida a `_planosData`
+3. SVG sin atributo `width` se renderizaba a 0x0 dentro del visor -> ahora se detecta
+   si tiene `viewBox` pero no `width` y se le pone `width="100%"` + `height="auto"`
+
+### Test en vivo confirmado
+- Plano tipo Gantt generado en ~70s para "Nave Industrial"
+- Tarjeta aparecio en el grid con badge morado, titulo, descripcion y 4 botones
+- Visor mostro SVG completo: cabecera azul oscuro, 4 fases coloreadas, barras con %
+  de progreso (100/80/40/0/0/0), linea HOY, hito "ENTREGA FINAL", tabla resumen
+
+### Archivos modificados
+- `panel.html` -- pagina Planos IA completa (commits ce6e7d9 + ec0b5e3)
+
+### Proximos pasos opcionales (no iniciados)
+- Parte C: editor SVG interactivo en el navegador
+- Exportacion DXF/CAD vectorial
 
 ---
 
