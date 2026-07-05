@@ -22362,7 +22362,7 @@ REQUISITOS TECNICOS:
 - COLORES DE FASE (OBLIGATORIO): L1=#cc0000  L2=#cc6600  L3=#000099  N=#0066cc  PE=#006600
 
 SIMBOLOS IEC 60617 — USO OBLIGATORIO:
-El SVG ya contiene una seccion <defs> con los simbolos certificados IEC 60617.
+NO definas <defs> ni <symbol> propios. El renderizador inyecta la libreria IEC 60617 automaticamente.
 DEBES usar <use href="#sym-X"/> para TODOS los componentes. NO dibujes shapes ad-hoc.
 Sintaxis: <use href="#sym-X" x="X" y="Y" width="W" height="H" color="COLOR"/>
 El atributo color="" define el color del simbolo (hereda via currentColor).
@@ -22473,7 +22473,7 @@ CONVENCIONES DE BANDEJAS (siempre recorrido ORTOGONAL — horizontal o vertical)
     Etiqueta: font-size="7" fill="#0055cc"
 - Tubo / conduit libre: linea discontinua unica stroke="#888888" stroke-width="1.5" stroke-dasharray="6,3"
 
-SIMBOLOS — El SVG contiene <defs id="bandeja-lib"> con simbolos certificados. Usar <use href="#sym-X"/>:
+SIMBOLOS — NO definas <defs> ni <symbol> propios. El renderizador inyecta automaticamente la libreria de simbolos. Solo usa <use href="#sym-X"/> con estos IDs:
   #sym-cgp              width="40" height="50" → Caja General de Proteccion
   #sym-cs               width="30" height="40" → Cuadro Secundario de distribucion
   #sym-scss             width="22" height="30" → Sub-cuadro / cuadro local de maquina
@@ -22591,55 +22591,100 @@ INSTRUCCIONES FINALES:
 - Fecha actual: ${new Date().toLocaleDateString('es-ES')}
 - El resultado sera visualizado en el panel web de la empresa`;
 
-  // Cascada: OpenRouter (gratis) → Anthropic (de pago)
+  // Cascada: Gemini (gratis, ya en prod) → OpenRouter (gratis, fallback) → Anthropic (de pago)
   const _planoMsgs = [{ role: 'user', content: userMsg }];
   let data = null;
   let _planoProveedor = 'anthropic';
   let _planoModelo = 'claude-sonnet-4-6';
 
-  // 1º Intentar OpenRouter — UN solo modelo con timeout generoso
-  // El Worker tiene 30s de límite total. Damos 22s a OR para generar el SVG.
-  // Si falla, los ~8s restantes NO son suficientes para Anthropic con 16K tokens,
-  // así que el fallback de Anthropic solo sirve cuando OR completa rápido.
-  if (env.OPENROUTER_API_KEY) {
-    const planoModelos = [
-      'qwen/qwen3-14b:free',  // 14B — rápido en código/SVG, baja latencia en OpenRouter
-    ];
-    for (const model of planoModelos) {
-      try {
-        const r = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-          signal: AbortSignal.timeout(22000),  // 22s — presupuesto máximo para OR
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${env.OPENROUTER_API_KEY}`,
-            'Content-Type': 'application/json',
-            'HTTP-Referer': 'https://alejandra-app-api.alejandra-app.workers.dev',
-            'X-Title': 'Alejandra'
-          },
-          body: JSON.stringify({
-            model,
-            max_tokens: 10000,  // Más tokens = más tiempo. 10K ≈ 40KB SVG — suficiente con auto-close
-            messages: [
-              { role: 'system', content: systemPrompt },
-              { role: 'user', content: userMsg }
-            ]
-          })
-        });
-        if (!r.ok) { const errBody = await r.json().catch(() => ({})); continue; }
-        const d = await r.json();
-        if (d.error || !d.choices?.[0]?.message?.content) continue;
-        const rawText = d.choices[0].message.content;
-        // Validar que hay SVG real (no solo texto explicativo del modelo)
-        if (!rawText.includes('<svg')) continue;
-        data = {
-          content: [{ type: 'text', text: rawText }],
-          usage: { input_tokens: d.usage?.prompt_tokens || 0, output_tokens: d.usage?.completion_tokens || 0 }
-        };
-        _planoProveedor = 'openrouter';
-        _planoModelo = d.model || model;
-        break;
-      } catch (_) { /* timeout u error — caer a Anthropic */ }
+  // 1º Intentar Gemini Flash (gratis, sin thinking mode para planos — usa 2.0-flash-lite primero)
+  // gemini-2.5-flash tiene thinking mode que consume ~48s y genera solo 479 tokens de SVG.
+  // gemini-2.0-flash-lite no tiene thinking, es rápido y produce 12K tokens de SVG correcto.
+  if (env.GEMINI_API_KEY) {
+    const _cleanGKey = k => k ? k.replace(/[ï»¿​\r\n\t ]+/g, '').trim() : k;
+    const _gemKeys = [
+      _cleanGKey(env.GEMINI_API_KEY),
+      _cleanGKey(env.GEMINI_API_KEY_2),
+      _cleanGKey(env.GEMINI_API_KEY_3)
+    ].filter(Boolean);
+    // gemini-2.5-flash via callGemini (rota keys, maneja 429, falla a 2.0-flash-lite)
+    // Nota: thinking mode es dinámico — a veces genera 7K tokens (5s), a veces 480 (50s).
+    //       auto-close maneja SVGs parciales. El Worker aguanta hasta ~55s de I/O.
+    const _gemModels = ['gemini-2.5-flash'];
+    gemLoop:
+    for (const _gModel of _gemModels) {
+      for (const _gKey of _gemKeys) {
+        try {
+          const _gr = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/${_gModel}:generateContent?key=${_gKey}`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                contents: [{ parts: [{ text: systemPrompt + '\n\n' + userMsg }] }],
+                generationConfig: { temperature: 0.2, maxOutputTokens: 12000 }
+              })
+            }
+          );
+          if (!_gr.ok) {
+            if (_gr.status === 429) continue;   // cuota de esta key agotada
+            break;                              // error de modelo, pasar al siguiente
+          }
+          const _gd = await _gr.json();
+          const _gParts = _gd.candidates?.[0]?.content?.parts || [];
+          const _gText = _gParts.find(p => p.text?.includes('<svg'))?.text
+                       || _gParts.map(p => p.text || '').join('');
+          if (_gText.includes('<svg')) {
+            data = {
+              content: [{ type: 'text', text: _gText }],
+              usage: {
+                input_tokens:  _gd.usageMetadata?.promptTokenCount     || 0,
+                output_tokens: _gd.usageMetadata?.candidatesTokenCount || 0
+              }
+            };
+            _planoProveedor = 'gemini';
+            _planoModelo = _gModel;
+            break gemLoop;
+          }
+        } catch (_) { break; }
+      }
     }
+  }
+
+  // 2º Intentar OpenRouter si Gemini falló (con timeout agresivo)
+  if (!data && env.OPENROUTER_API_KEY) {
+    try {
+      const r = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        signal: AbortSignal.timeout(10000),  // 10s — OR como segundo intento rápido
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${env.OPENROUTER_API_KEY}`,
+          'Content-Type': 'application/json',
+          'HTTP-Referer': 'https://alejandra-app-api.alejandra-app.workers.dev',
+          'X-Title': 'Alejandra'
+        },
+        body: JSON.stringify({
+          model: 'meta-llama/llama-3.3-70b-instruct:free',
+          max_tokens: 8000,
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userMsg }
+          ]
+        })
+      });
+      if (r.ok) {
+        const d = await r.json();
+        const rawText = d.choices?.[0]?.message?.content || '';
+        if (!d.error && rawText.includes('<svg')) {
+          data = {
+            content: [{ type: 'text', text: rawText }],
+            usage: { input_tokens: d.usage?.prompt_tokens || 0, output_tokens: d.usage?.completion_tokens || 0 }
+          };
+          _planoProveedor = 'openrouter';
+          _planoModelo = d.model || 'meta-llama/llama-3.3-70b-instruct:free';
+        }
+      }
+    } catch (_) { /* timeout u error de red */ }
   }
 
   // 2º Fallback: Anthropic (cuando OpenRouter no está disponible o no tiene OPENROUTER_API_KEY)
