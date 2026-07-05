@@ -8472,18 +8472,76 @@ async function fetchAnthropicConReintentos(url, options, maxReintentos = 2) {
   return resp;
 }
 
-async function llamarGPT4oFallback(env, messages, systemPrompt, maxTokens) {
-  // Convierte formato Anthropic → OpenAI chat completions
-  const openAIMessages = [];
-  if (systemPrompt) openAIMessages.push({ role: 'system', content: systemPrompt });
+// Convierte mensajes Anthropic → OpenAI (sin imagenes, solo texto)
+function _agenteMsgsToOpenAI(messages, systemPrompt) {
+  const out = [];
+  if (systemPrompt) {
+    const sysText = Array.isArray(systemPrompt)
+      ? systemPrompt.filter(b => b.text).map(b => b.text).join('\n\n')
+      : String(systemPrompt);
+    if (sysText) out.push({ role: 'system', content: sysText });
+  }
   for (const m of messages) {
+    const role = m.role === 'assistant' ? 'assistant' : 'user';
     if (typeof m.content === 'string') {
-      openAIMessages.push({ role: m.role === 'assistant' ? 'assistant' : 'user', content: m.content });
+      out.push({ role, content: m.content });
     } else if (Array.isArray(m.content)) {
-      const text = m.content.filter(b => b.type === 'text').map(b => b.text).join('\n');
-      if (text) openAIMessages.push({ role: m.role === 'assistant' ? 'assistant' : 'user', content: text });
+      // Extraer solo texto — eliminar imagenes (no todos los modelos aceptan vision)
+      const text = m.content
+        .filter(b => b.type === 'text' || b.type === 'tool_result')
+        .map(b => b.type === 'text' ? b.text : (Array.isArray(b.content) ? b.content.filter(x => x.type==='text').map(x=>x.text).join('\n') : String(b.content||'')))
+        .join('\n').trim();
+      if (text) out.push({ role, content: text });
     }
   }
+  return out;
+}
+
+// Cascada de fallback cuando Anthropic no está disponible:
+// 1º OpenRouter gratis (Nemotron 550B → GPT-OSS 120B → Llama 70B → Gemma 4 31B)
+// 2º OpenAI gpt-4o (de pago, si hay OPENAI_API_KEY)
+async function llamarGPT4oFallback(env, messages, systemPrompt, maxTokens) {
+  const openAIMessages = _agenteMsgsToOpenAI(messages, systemPrompt);
+
+  // ── 1º INTENTO: cascada OpenRouter (modelos gratuitos) ──────────────────────
+  if (env.OPENROUTER_API_KEY) {
+    const modelos = [
+      'nvidia/nemotron-3-ultra-550b-a55b:free',
+      'openai/gpt-oss-120b:free',
+      'meta-llama/llama-3.3-70b-instruct:free',
+      'google/gemma-4-31b-it:free',
+    ];
+    for (const model of modelos) {
+      try {
+        const resp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${env.OPENROUTER_API_KEY}`,
+            'Content-Type': 'application/json',
+            'HTTP-Referer': 'https://alejandra-agente.alejandra-app.workers.dev',
+            'X-Title': 'Alejandra'
+          },
+          body: JSON.stringify({ model, messages: openAIMessages, max_tokens: maxTokens || 1024 })
+        });
+        if (!resp.ok) continue;
+        const data = await resp.json();
+        if (data.error) continue;
+        const texto = data.choices?.[0]?.message?.content || '';
+        if (!texto) continue;
+        console.log(`[Fallback] OpenRouter OK: ${data.model || model}`);
+        return {
+          content: [{ type: 'text', text: texto }],
+          stop_reason: 'end_turn',
+          usage: data.usage ? { input_tokens: data.usage.prompt_tokens || 0, output_tokens: data.usage.completion_tokens || 0 } : {},
+          modelo_real: data.model || model,
+          proveedor_real: 'openrouter'
+        };
+      } catch (_) { /* probar siguiente */ }
+    }
+  }
+
+  // ── 2º INTENTO: OpenAI gpt-4o (de pago, último recurso) ────────────────────
+  if (!env.OPENAI_API_KEY) throw new Error('Sin modelos disponibles — OPENROUTER_API_KEY y OPENAI_API_KEY no configuradas');
   const resp = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     headers: { 'Authorization': `Bearer ${env.OPENAI_API_KEY}`, 'Content-Type': 'application/json' },
@@ -8491,18 +8549,13 @@ async function llamarGPT4oFallback(env, messages, systemPrompt, maxTokens) {
   });
   if (!resp.ok) throw new Error(`GPT-4o fallback ${resp.status}: ${await resp.text()}`);
   const data = await resp.json();
-  const texto = data.choices?.[0]?.message?.content || 'Sin respuesta del modelo de respaldo.';
-  // Devolver en formato compatible con respuesta Anthropic.
-  // modelo_real: el modelo Claude original queda registrado en coste/tokens si el
-  // llamador no comprueba este campo — los callers deben usar `respAPI.modelo_real ||
-  // expert.model` al llamar a registrarTokenUso() para no etiquetar mal el gasto
-  // (antes se registraba como si fuera Claude, con el precio de Claude, aunque el
-  // proveedor real fuera OpenAI).
+  const texto = data.choices?.[0]?.message?.content || 'Sin respuesta.';
   return {
-    content: [{ type: 'text', text: `[Modo respaldo GPT-4o — Anthropic no disponible momentáneamente]\n\n${texto}` }],
+    content: [{ type: 'text', text: texto }],
     stop_reason: 'end_turn',
     usage: data.usage ? { input_tokens: data.usage.prompt_tokens, output_tokens: data.usage.completion_tokens } : {},
-    modelo_real: 'gpt-4o'
+    modelo_real: 'gpt-4o',
+    proveedor_real: 'openai'
   };
 }
 
