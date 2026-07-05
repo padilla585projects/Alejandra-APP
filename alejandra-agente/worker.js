@@ -12,7 +12,11 @@ const MODEL_EXPERTO = 'claude-sonnet-4-6';
 const PRECIOS_USD = {
   'claude-haiku-4-5':  { in: 1.00,  out: 5.00  },
   'claude-sonnet-4-6': { in: 3.00,  out: 15.00 },
-  'gpt-4o-mini':       { in: 0.15,  out: 0.60  }
+  'gpt-4o-mini':       { in: 0.15,  out: 0.60  },
+  // Antes faltaba: cuando llamarGPT4oFallback() entraba en juego, registrarTokenUso()
+  // recibía el nombre del modelo Claude original (no 'gpt-4o'), así que este precio
+  // nunca se llegaba a usar y el coste se calculaba mal con el precio de Claude.
+  'gpt-4o':            { in: 2.50,  out: 10.00 }
 };
 const EUR_RATE = 0.92;
 
@@ -3658,7 +3662,7 @@ async function procesarConNEXUS(env, mensaje, contexto, usuario_id, empresa_id, 
 
     // PASO 5: Llamar al modelo en loop hasta respuesta final (máx 5 iteraciones)
     let respAPI  = await llamarAnthropic(env, messages, tools, expert.model, expert.maxTokens, systemPrompt);
-    if (respAPI.usage) registrarTokenUso(env, expert.model, `chat_${clas.experto}`, respAPI.usage.input_tokens||0, respAPI.usage.output_tokens||0, usuario_id);
+    if (respAPI.usage) registrarTokenUso(env, (respAPI.modelo_real || expert.model), `chat_${clas.experto}`, respAPI.usage.input_tokens||0, respAPI.usage.output_tokens||0, usuario_id);
     let iter     = 0;
     // Adrián (id=3) y admin tienen más iteraciones para usar más tools
     const esAdmin = ['3','adrian','admin','Adrian'].includes(usuario_id);
@@ -3685,7 +3689,7 @@ async function procesarConNEXUS(env, mensaje, contexto, usuario_id, empresa_id, 
       // Mantener todas las tools disponibles en todas las iteraciones para máxima proactividad
       const toolsSiguiente = iter < MAX_ITER - 1 ? tools : [];
       respAPI = await llamarAnthropic(env, messages, toolsSiguiente, expert.model, expert.maxTokens, systemPrompt);
-      if (respAPI.usage) registrarTokenUso(env, expert.model, `chat_${clas.experto}`, respAPI.usage.input_tokens||0, respAPI.usage.output_tokens||0, usuario_id);
+      if (respAPI.usage) registrarTokenUso(env, (respAPI.modelo_real || expert.model), `chat_${clas.experto}`, respAPI.usage.input_tokens||0, respAPI.usage.output_tokens||0, usuario_id);
       iter++;
     }
 
@@ -3755,7 +3759,7 @@ async function procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empres
     let respAPI = await llamarAnthropic(env, messages, tools, expert.model, expert.maxTokens, systemPrompt);
     let tokensIn = respAPI.usage?.input_tokens || 0;
     let tokensOut = respAPI.usage?.output_tokens || 0;
-    if (respAPI.usage) registrarTokenUso(env, expert.model, 'chat_stream', respAPI.usage.input_tokens||0, respAPI.usage.output_tokens||0, usuario_id);
+    if (respAPI.usage) registrarTokenUso(env, (respAPI.modelo_real || expert.model), 'chat_stream', respAPI.usage.input_tokens||0, respAPI.usage.output_tokens||0, usuario_id);
     let iter = 0;
     // Adrián (id=3) y admin tienen más iteraciones para usar más tools.
     // En canales móviles (app_android, pwa) limitamos a 4 iter porque el waitUntil
@@ -3823,7 +3827,7 @@ async function procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empres
       if (respAPI.usage) {
         tokensIn  += respAPI.usage.input_tokens  || 0;
         tokensOut += respAPI.usage.output_tokens || 0;
-        registrarTokenUso(env, expert.model, 'chat_stream', respAPI.usage.input_tokens||0, respAPI.usage.output_tokens||0, usuario_id);
+        registrarTokenUso(env, (respAPI.modelo_real || expert.model), 'chat_stream', respAPI.usage.input_tokens||0, respAPI.usage.output_tokens||0, usuario_id);
       }
       iter++;
     }
@@ -3856,7 +3860,7 @@ async function procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empres
       try {
         textoFinal = await llamarAnthropicStream(env, messages, expert.model, expert.maxTokens, systemPrompt, async (token) => {
           await send({ type: 'token', texto: token });
-        });
+        }, usuario_id);
       } catch (_) {
         // Fallback: usar respuesta ya obtenida si el stream falla
         textoFinal = respAPI.content?.filter(b => b.type === 'text').map(b => b.text).join('\n').trim() || 'Sin respuesta';
@@ -8263,11 +8267,17 @@ async function llamarGPT4oFallback(env, messages, systemPrompt, maxTokens) {
   if (!resp.ok) throw new Error(`GPT-4o fallback ${resp.status}: ${await resp.text()}`);
   const data = await resp.json();
   const texto = data.choices?.[0]?.message?.content || 'Sin respuesta del modelo de respaldo.';
-  // Devolver en formato compatible con respuesta Anthropic
+  // Devolver en formato compatible con respuesta Anthropic.
+  // modelo_real: el modelo Claude original queda registrado en coste/tokens si el
+  // llamador no comprueba este campo — los callers deben usar `respAPI.modelo_real ||
+  // expert.model` al llamar a registrarTokenUso() para no etiquetar mal el gasto
+  // (antes se registraba como si fuera Claude, con el precio de Claude, aunque el
+  // proveedor real fuera OpenAI).
   return {
-    content: [{ type: 'text', text: `[Modo respaldo GPT-4o — Anthropic sin créditos]\n\n${texto}` }],
+    content: [{ type: 'text', text: `[Modo respaldo GPT-4o — Anthropic no disponible momentáneamente]\n\n${texto}` }],
     stop_reason: 'end_turn',
-    usage: data.usage ? { input_tokens: data.usage.prompt_tokens, output_tokens: data.usage.completion_tokens } : {}
+    usage: data.usage ? { input_tokens: data.usage.prompt_tokens, output_tokens: data.usage.completion_tokens } : {},
+    modelo_real: 'gpt-4o'
   };
 }
 
@@ -8334,7 +8344,7 @@ async function llamarAnthropic(env, messages, tools, model, maxTokens, systemPro
 }
 
 // ── Streaming real de Anthropic (última respuesta, token a token) ─────────────
-async function llamarAnthropicStream(env, messages, model, maxTokens, systemPrompt, onToken) {
+async function llamarAnthropicStream(env, messages, model, maxTokens, systemPrompt, onToken, usuario_id = 'system') {
   const systemBlocks = Array.isArray(systemPrompt)
     ? systemPrompt
     : systemPrompt
@@ -8370,6 +8380,12 @@ async function llamarAnthropicStream(env, messages, model, maxTokens, systemProm
       // Fallback GPT-4o — sin streaming
       const fallback = await llamarGPT4oFallback(env, messages, systemPrompt, maxTokens);
       const texto = fallback.content?.[0]?.text || 'Sin respuesta';
+      // Antes este fallback no registraba coste/tokens en absoluto (ni bien ni
+      // mal etiquetado) — ese gasto real no contaba ni para las estadísticas ni
+      // para el tope de gasto diario. modelo_real='gpt-4o' viene del fallback.
+      if (fallback.usage) {
+        registrarTokenUso(env, fallback.modelo_real || 'gpt-4o', 'chat_stream_fallback', fallback.usage.input_tokens||0, fallback.usage.output_tokens||0, usuario_id);
+      }
       try { await onToken(texto); } catch(_) {}
       return texto;
     }
