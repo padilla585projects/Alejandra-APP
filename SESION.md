@@ -1,8 +1,8 @@
 ## ESTADO ACTUAL
 
 **Sesión:** LIBRE
-**Última sesión:** 05/07/2026 — Fix retry/backoff ante 429/5xx de Anthropic DESPLEGADO (commit `8492890`).
-**Versión actual:** App PWA **v7.54** · worker principal deploy ec049cf8 · commit 81f8f1d
+**Última sesión:** 05/07/2026 — Fix errores JS en panel.html (SyntaxError/ReferenceError) que impedían arrancar init() y con ello el login Google OAuth (commit `4f087c1`).
+**Versión actual:** App PWA **v7.54** · worker principal deploy ec049cf8 · commit 4f087c1
 **App móvil AlejandraIA:** v1.9.19+33 (OTA publicada, commit `b2c7828` en repo alejandra-ia)
 **Agente (alejandra-agente):** commit `8492890` desplegado en main (deploy CI `28735875216`,
 health OK). Incluye: fix IDOR fcm-token/comandos (`acc186a`, verificado en vivo con 401 sin
@@ -10,6 +10,46 @@ sesión) + fix SSRF en `test_endpoint` (`bbdb644`, ahora solo dev verificado + w
 + rate limiting 15 req/min y tope de gasto 10$/día en `/api/chat` y `/api/chat/stream`
 (`8613740`, verificado en vivo: 429 a partir de la petición 16 dentro del mismo minuto)
 + retry con backoff ante 429/5xx de Anthropic y fallback GPT-4o ampliado (`8492890`).
+
+---
+
+## RESUMEN SESIÓN 05/07/2026 (continuación 9) — Fix JS errors panel.html → login Google OAuth
+
+### Problema
+Login Google OAuth en panel.html seguía sin funcionar tras el fix de redirect de la sesión anterior (commit 81f8f1d). El flujo redirect estaba bien implementado, pero `init()` nunca llegaba a ejecutarse porque errores JavaScript anteriores lo impedían.
+
+### Causa raíz
+Cascade de 2 errores en Block 4 de panel.html (script grande, líneas ~16554-31424):
+
+1. **SyntaxError: `_ocData` already declared** (línea ~18448)
+   - Dos módulos en el mismo bloque script declaraban `let _ocData = []`: Órdenes de Cambio (OLD, línea 16847) y Órdenes de Compra (NEW-74, línea 18448). Block 4 no podía parsear.
+
+2. **SyntaxError: `NCR_GRAV_COLOR` already declared** (línea ~26010)
+   - Dos módulos en el mismo bloque script declaraban `const NCR_GRAV_COLOR`: QA-QC (NEW-55, línea 25555) y NCRs (NEW-72, línea 26010). Block 4 no podía parsear.
+
+Porque Block 4 no podía parsear, la función `cargarGlobalDashboard` (definida dentro de él) nunca existía. Al llegar Block 1 a evaluar `PAGE_LOADERS = { globalDashboard: cargarGlobalDashboard }` (línea 9591), lanzaba **ReferenceError** que detenía Block 1 justo antes del IIFE `init()` en línea 15046.
+
+### Fixes aplicados (commit `4f087c1`)
+
+1. **PAGE_LOADERS lazy wrapper** (línea 9591):
+   - `globalDashboard: cargarGlobalDashboard,` → `globalDashboard: (...args) => cargarGlobalDashboard(...args),`
+   - La referencia se resuelve en tiempo de llamada, no al crear el objeto → no ReferenceError.
+
+2. **Órdenes de Compra (NEW-74)** — renombrado todo el scope:
+   - `_ocData` → `_ocpData` (13 refs), `_ocEditId` → `_ocpEditId` (5 refs)
+   - `OC_ESTADO_COLOR` → `OCP_ESTADO_COLOR`, `OC_ESTADO_LABEL` → `OCP_ESTADO_LABEL`
+
+3. **Órdenes de Cambio NEW-58** — eliminado `let tblOC = null` duplicado (ya declarado en OLD Órdenes de Cambio línea 16847).
+
+4. **NCRs QA-OLD** — renombrado `NCR_GRAV_COLOR` → `NCR_GRAV_COLOR_QA` (declaración + 1 uso en línea ~25919). NEW-72 conserva el nombre original `NCR_GRAV_COLOR`.
+
+### Verificaciones
+- Scan completo de top-level duplicates en Block 4: **0 duplicados**
+- Encoding check: sin caracteres corruptos
+- Commit `4f087c1`, push a main → GitHub Pages desplegará automáticamente
+
+### Pendiente
+- Probar en browser que el login Google OAuth funciona (que Adrian confirme)
 
 ---
 
