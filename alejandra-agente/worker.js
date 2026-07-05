@@ -9,15 +9,22 @@ const OPENAI_API    = 'https://api.openai.com/v1/responses';
 const MODEL_ROUTER  = 'claude-haiku-4-5';
 const MODEL_EXPERTO = 'claude-sonnet-4-6';
 
-const PRECIOS_USD = {
-  'claude-haiku-4-5':  { in: 1.00,  out: 5.00  },
-  'claude-sonnet-4-6': { in: 3.00,  out: 15.00 },
-  'gpt-4o-mini':       { in: 0.15,  out: 0.60  },
-  // Antes faltaba: cuando llamarGPT4oFallback() entraba en juego, registrarTokenUso()
-  // recibía el nombre del modelo Claude original (no 'gpt-4o'), así que este precio
-  // nunca se llegaba a usar y el coste se calculaba mal con el precio de Claude.
-  'gpt-4o':            { in: 2.50,  out: 10.00 }
-};
+// Funciones/constantes puras (sin I/O) extraídas a lib.js para poder testearlas
+// de forma aislada con vitest (ver lib.test.js). NO duplicar lógica aquí: si hay
+// que cambiar precios, allowlists, o las validaciones IDOR/SSRF, se cambia en
+// lib.js y worker.js lo recibe vía este import.
+import {
+  PRECIOS_USD,
+  calcularCosteYProveedor,
+  filtrarToolsPorAuth,
+  TOOLS_SOLO_DEV_VERIFICADO,
+  TOOLS_REQUIEREN_SESION,
+  extraerTablasQuery,
+  validarScopeEmpresaBD,
+  urlPermitidaTestEndpoint,
+  esStatusReintentableAnthropic,
+  calcularEsperaReintentoMs,
+} from './lib.js';
 const EUR_RATE = 0.92;
 
 // ── NEXUS MODULES — prompts dinámicos ────────────────────────────────────────
@@ -1880,15 +1887,8 @@ const TOOLS_POR_EXPERTO = {
 //                  <token> verificado contra la tabla `sesiones` o ADMIN_TOKEN
 //                  (ver getAuth()) — NUNCA del usuario_id que manda el body.
 // esDevVerificado = true solo si además esa identidad verificada es developer/admin.
-const TOOLS_SOLO_DEV_VERIFICADO = new Set(['patch_codigo', 'github_escribir', 'ejecutar_deploy', 'rollback', 'test_endpoint']);
-const TOOLS_REQUIEREN_SESION    = new Set(['consultar_bd', 'escribir_bd', 'listar_archivos', 'ver_archivo']);
-function filtrarToolsPorAuth(tools, authOk, esDevVerificado) {
-  return (tools || []).filter(t => {
-    if (TOOLS_SOLO_DEV_VERIFICADO.has(t.name) && !esDevVerificado) return false;
-    if (TOOLS_REQUIEREN_SESION.has(t.name) && !authOk) return false;
-    return true;
-  });
-}
+// TOOLS_SOLO_DEV_VERIFICADO, TOOLS_REQUIEREN_SESION y filtrarToolsPorAuth()
+// viven ahora en lib.js (importadas arriba) — ver lib.test.js para su cobertura.
 
 // ── Aislamiento por empresa_id para consultar_bd / escribir_bd ──────────────
 // TOOLS_REQUIEREN_SESION exige una sesión autenticada, pero NO evita que un
@@ -1903,66 +1903,10 @@ function filtrarToolsPorAuth(tools, authOk, esDevVerificado) {
 // sesión/vinculación, y leerlos permitiría suplantar a otro usuario de la
 // misma empresa (incluido un admin). esDevVerificado se salta esta capa
 // (mismo criterio que TOOLS_SOLO_DEV_VERIFICADO).
-const TABLAS_EMPRESA_PERMITIDAS = new Set([
-  'ai_usage', 'albaranes', 'alejandra_logs', 'archivos', 'bobinas', 'carnets', 'carpetas',
-  'carretillas', 'chat_alejandra', 'chat_mensajes', 'checklist_plantillas', 'checklist_registros',
-  'docs_dept', 'docs_notas', 'documentos_obra', 'energias_carretilla', 'epi_revisiones',
-  'epis_asignados', 'eventos_calendario', 'fichajes', 'fotos_obra', 'herramientas', 'historial',
-  'historial_carretillas', 'historial_herramientas', 'historial_mantenimientos', 'historial_pemp',
-  'horarios_obra', 'incidencia_fotos', 'incidencias', 'inspecciones_seg', 'inventario_seg',
-  'invitaciones', 'kits_herramientas', 'logs', 'materiales_obra', 'movimientos_seg', 'obras',
-  'partes_trabajo', 'pedidos', 'pemp', 'permisos_trabajo', 'personal_externo',
-  'procedimientos_obra', 'proveedores', 'push_subscriptions', 'reconocimientos_medicos',
-  'repostajes', 'sugerencias', 'sync_dispositivos', 'sync_eventos', 'tipos_cable',
-  'tipos_carretilla', 'tipos_herramienta', 'tipos_material_seg', 'tipos_pemp', 'turnos', 'usuarios',
-]);
-const COLUMNA_BLOQUEADA_BD = /\bpassword_hash\b/i;
-
-function extraerTablasQuery(query) {
-  const tablas = new Set();
-  const patrones = [/\bFROM\s+([a-zA-Z_][a-zA-Z0-9_]*)/gi, /\bJOIN\s+([a-zA-Z_][a-zA-Z0-9_]*)/gi, /\bINTO\s+([a-zA-Z_][a-zA-Z0-9_]*)/gi, /\bUPDATE\s+([a-zA-Z_][a-zA-Z0-9_]*)/gi];
-  for (const re of patrones) {
-    let m;
-    while ((m = re.exec(query)) !== null) tablas.add(m[1].toLowerCase());
-  }
-  return [...tablas];
-}
-
-// Devuelve null si la query es válida para un usuario no-developer, o un string
-// con el motivo de rechazo (que el modelo verá como resultado de la tool y puede
-// usar para corregir su siguiente intento, igual que los demás errores de consultar_bd/escribir_bd).
-function validarScopeEmpresaBD(query, params, empresaId, esDevVerificado) {
-  if (esDevVerificado) return null;
-  if (COLUMNA_BLOQUEADA_BD.test(query)) {
-    return 'Consulta rechazada: no se permite acceder a columnas sensibles (password_hash) sin sesión de desarrollador verificada.';
-  }
-  const tablas = extraerTablasQuery(query);
-  if (tablas.length === 0) {
-    return 'Consulta rechazada: no se pudo determinar la tabla de la consulta.';
-  }
-  for (const t of tablas) {
-    if (!TABLAS_EMPRESA_PERMITIDAS.has(t)) {
-      return `Consulta rechazada: la tabla "${t}" no está permitida sin sesión de desarrollador verificada.`;
-    }
-  }
-  const literal = query.match(/\bempresa_id\s*=\s*'?(\d+)'?/i);
-  if (literal) {
-    if (String(parseInt(literal[1], 10)) !== String(parseInt(empresaId, 10))) {
-      return 'Consulta rechazada: el filtro empresa_id no coincide con tu empresa.';
-    }
-    return null;
-  }
-  const posPlaceholder = query.search(/\bempresa_id\s*=\s*\?/i);
-  if (posPlaceholder !== -1) {
-    const idx = (query.slice(0, posPlaceholder).match(/\?/g) || []).length;
-    const valor = (params || [])[idx];
-    if (valor === undefined || String(parseInt(valor, 10)) !== String(parseInt(empresaId, 10))) {
-      return 'Consulta rechazada: el valor pasado en params para empresa_id no coincide con tu empresa (o falta).';
-    }
-    return null;
-  }
-  return 'Consulta rechazada: debes filtrar explícitamente por empresa_id (ej. AND empresa_id = ?).';
-}
+//
+// TABLAS_EMPRESA_PERMITIDAS, COLUMNA_BLOQUEADA_BD, extraerTablasQuery() y
+// validarScopeEmpresaBD() viven ahora en lib.js (importadas arriba) — ver
+// lib.test.js para su cobertura (incl. casos de mismatch de empresa_id).
 
 // ── Aislamiento por empresa_id para archivos servidos desde R2 ───────────────
 // /files/<key>, y las tools listar_archivos/ver_archivo, servían CUALQUIER key
@@ -1990,23 +1934,8 @@ async function puedeAccederArchivo(env, customMetadata, empresaId, esDevVerifica
   return dueña !== null && dueña === String(empresaId);
 }
 
-// ── Allowlist de hosts para test_endpoint (defensa en profundidad anti-SSRF) ─
-// Su único uso legítimo es verificar un deploy de un worker propio del
-// proyecto. Solo https, y solo hosts que sean o terminen en estos dominios.
-const HOSTS_PERMITIDOS_TEST_ENDPOINT = ['alejandra-app.workers.dev'];
-function urlPermitidaTestEndpoint(rawUrl) {
-  if (!rawUrl || typeof rawUrl !== 'string') return false;
-  try {
-    const u = new URL(rawUrl);
-    if (u.protocol !== 'https:') return false;
-    const host = u.hostname.toLowerCase();
-    return HOSTS_PERMITIDOS_TEST_ENDPOINT.some(
-      (dominio) => host === dominio || host.endsWith(`.${dominio}`)
-    );
-  } catch (_) {
-    return false;
-  }
-}
+// HOSTS_PERMITIDOS_TEST_ENDPOINT y urlPermitidaTestEndpoint() (allowlist
+// anti-SSRF) viven ahora en lib.js (importadas arriba) — ver lib.test.js.
 
 // ── Rate limiting y tope de gasto diario (protección anti runaway-cost) ─────
 // Antes /api/chat y /api/chat/stream (las dos rutas que llaman a Anthropic/
@@ -8231,17 +8160,11 @@ async function notificarSinCreditos(env) {
 // demasiado la respuesta.
 async function fetchAnthropicConReintentos(url, options, maxReintentos = 2) {
   const backoffMs = [400, 1200];
-  const reintentable = (status) => status === 429 || status === 500 || status === 502 || status === 503 || status === 529;
   let resp;
   for (let intento = 0; intento <= maxReintentos; intento++) {
     resp = await fetch(url, options);
-    if (resp.ok || !reintentable(resp.status) || intento === maxReintentos) return resp;
-    let espera = backoffMs[intento] ?? 1200;
-    const retryAfter = resp.headers.get('retry-after');
-    if (retryAfter) {
-      const seg = parseFloat(retryAfter);
-      if (!isNaN(seg) && seg > 0) espera = Math.min(seg * 1000, 2000);
-    }
+    if (resp.ok || !esStatusReintentableAnthropic(resp.status) || intento === maxReintentos) return resp;
+    const espera = calcularEsperaReintentoMs(intento, backoffMs, resp.headers.get('retry-after'));
     await new Promise((r) => setTimeout(r, espera));
   }
   return resp;
@@ -8745,9 +8668,7 @@ async function autoLearnChat(env, usuario_id, empresa_id, respuesta) {
 
 async function registrarTokenUso(env, modelo, tipo, entrada, salida, usuario_id) {
   try {
-    const p       = PRECIOS_USD[modelo] || { in: 1.00, out: 5.00 };
-    const coste   = (entrada * p.in + salida * p.out) / 1_000_000;
-    const proveedor = modelo.startsWith('gpt') ? 'openai' : 'anthropic';
+    const { proveedor, coste } = calcularCosteYProveedor(modelo, entrada, salida);
     await env.DB.prepare(
       `INSERT INTO alejandra_token_uso (proveedor,modelo,tipo,tokens_entrada,tokens_salida,coste_usd,usuario_id,created_at)
        VALUES(?,?,?,?,?,?,?,datetime('now'))`

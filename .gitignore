@@ -17,6 +17,11 @@ Thumbs.db
 node_modules/
 package.json
 package-lock.json
+# Excepción: alejandra-agente sí necesita package.json/lockfile trackeados
+# (devDependency vitest para lib.test.js, instalado por el workflow de deploy
+# antes de desplegar — ver .github/workflows/deploy-alejandra-agente.yml).
+!alejandra-agente/package.json
+!alejandra-agente/package-lock.json
 
 # Claves y secretos — NUNCA commitear
 CLAVES.txt

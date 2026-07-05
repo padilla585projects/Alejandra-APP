@@ -31,6 +31,16 @@ jobs:
       - name: Instalar wrangler
         run: npm install -g wrangler@latest
 
+      - name: Instalar dependencias de test
+        run: |
+          cd alejandra-agente
+          npm ci
+
+      - name: Correr tests (lib.test.js)
+        run: |
+          cd alejandra-agente
+          npm test
+
       - name: Aplicar migración D1
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
