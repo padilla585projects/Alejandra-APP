@@ -8218,6 +8218,31 @@ async function notificarSinCreditos(env) {
   } catch (_) {}
 }
 
+// ── Retry con backoff corto ante 429/5xx transitorios de Anthropic ──────────
+// Antes cualquier 429 (rate limit) o 5xx propagaba el error tal cual al usuario
+// ("Error: Anthropic 429: ...") sin ni siquiera intentarlo de nuevo. Máx 2
+// reintentos con backoff corto (400ms/1200ms) — bastante para absorber un pico
+// breve, sin arriesgar el watchdog de 22s que ya tiene el streaming. Respeta
+// el header Retry-After si Anthropic lo manda, capado a 2s para no alargar
+// demasiado la respuesta.
+async function fetchAnthropicConReintentos(url, options, maxReintentos = 2) {
+  const backoffMs = [400, 1200];
+  const reintentable = (status) => status === 429 || status === 500 || status === 502 || status === 503 || status === 529;
+  let resp;
+  for (let intento = 0; intento <= maxReintentos; intento++) {
+    resp = await fetch(url, options);
+    if (resp.ok || !reintentable(resp.status) || intento === maxReintentos) return resp;
+    let espera = backoffMs[intento] ?? 1200;
+    const retryAfter = resp.headers.get('retry-after');
+    if (retryAfter) {
+      const seg = parseFloat(retryAfter);
+      if (!isNaN(seg) && seg > 0) espera = Math.min(seg * 1000, 2000);
+    }
+    await new Promise((r) => setTimeout(r, espera));
+  }
+  return resp;
+}
+
 async function llamarGPT4oFallback(env, messages, systemPrompt, maxTokens) {
   // Convierte formato Anthropic → OpenAI chat completions
   const openAIMessages = [];
@@ -8264,7 +8289,7 @@ async function llamarAnthropic(env, messages, tools, model, maxTokens, systemPro
     body.tools = toolsArray;
   }
 
-  const resp = await fetch(ANTHROPIC_API, {
+  const resp = await fetchAnthropicConReintentos(ANTHROPIC_API, {
     method: 'POST',
     headers: {
       'x-api-key': env.ANTHROPIC_API_KEY,
@@ -8285,8 +8310,9 @@ async function llamarAnthropic(env, messages, tools, model, maxTokens, systemPro
       }
       return await llamarGPT4oFallback(env, messages, systemPrompt, maxTokens);
     }
-    // Otros errores de Anthropic → también intentar fallback en 529 (overloaded)
-    if (resp.status === 529 || resp.status === 503) {
+    // Reintentado (ver fetchAnthropicConReintentos) y sigue fallando: rate limit
+    // (429) o sobrecarga (529/503) → fallback a GPT-4o en vez de propagar el error
+    if (resp.status === 429 || resp.status === 529 || resp.status === 503) {
       return await llamarGPT4oFallback(env, messages, systemPrompt, maxTokens);
     }
     throw new Error(`Anthropic ${resp.status}: ${errText.substring(0,200)}`);
@@ -8318,7 +8344,7 @@ async function llamarAnthropicStream(env, messages, model, maxTokens, systemProm
   const body = { model, max_tokens: maxTokens, stream: true, messages };
   if (systemBlocks) body.system = systemBlocks;
 
-  const resp = await fetch(ANTHROPIC_API, {
+  const resp = await fetchAnthropicConReintentos(ANTHROPIC_API, {
     method: 'POST',
     headers: {
       'x-api-key': env.ANTHROPIC_API_KEY,
@@ -8331,8 +8357,13 @@ async function llamarAnthropicStream(env, messages, model, maxTokens, systemProm
 
   if (!resp.ok) {
     const errText = await resp.text();
-    if (resp.status === 400 && errText.includes('credit balance is too low')) {
-      if (!_anthropicSinCreditos) {
+    const sinCreditos = resp.status === 400 && errText.includes('credit balance is too low');
+    // Reintentado (ver fetchAnthropicConReintentos) y sigue fallando: rate limit
+    // (429) o sobrecarga (529/503) → antes esto no tenía fallback en el streaming
+    // y el usuario veía el error crudo a mitad de la respuesta.
+    const rateLimitOSobrecarga = resp.status === 429 || resp.status === 529 || resp.status === 503;
+    if (sinCreditos || rateLimitOSobrecarga) {
+      if (sinCreditos && !_anthropicSinCreditos) {
         _anthropicSinCreditos = true;
         await notificarSinCreditos(env).catch(() => {});
       }
