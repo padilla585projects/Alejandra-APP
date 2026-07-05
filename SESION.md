@@ -3,18 +3,15 @@
 **Sesion:** LIBRE
 **Ultima sesion:** 05/07/2026 -- Planos IA Parte C: editor SVG + imprimir + DXF (v7.57, commit c97dc67).
 **Version actual:** App PWA **v7.57** -- commit c97dc67
-**Agente (alejandra-agente):** commit ff52aea desplegado en main (fix IDOR/exfiltracion
-cross-empresa en 12 tools mas -- historico_materiales, generar_informe,
-analizar_archivo, marcar_plano, enviar_email, enviar_telegram_informe,
-crear_tarea_background, ver_tareas, completar_tarea, enviar_push,
-iniciar_conversacion, controlar_app -- ver seccion nueva mas abajo, "continuacion 19"
-en ALEJANDRA_AGENTE.txt/commit message; aqui numerada continuacion 20 porque
-"APEX Agent" ya habia usado 18/19 en este archivo para el modulo Planos IA --
-mismo dia, dos agentes trabajando en paralelo sin coordinacion, ver commit
-fc1fe7b previo). Incluye tests automatizados (62 tests, vitest) que corren en el
-workflow de deploy ANTES de aplicar migraciones/desplegar -- si fallan, no se
-despliega. De paso, commit b9c9d94 (otro agente, "APEX Agent") subio vitest a
-3.2.6 por vulnerabilidades de Dependabot.
+**Agente (alejandra-agente):** commit 2a18d5b desplegado en main (fix IDOR en
+subir_archivo -- escribia/sobrescribia cualquier key de R2 sin registrar dueno ni
+comprobar empresa -- y enviar_notificacion -- codigo huerfano con el mismo patron
+IDOR que enviar_push antes de la continuacion 19/20 --, mas el default fail-open
+de `authOk` en `ejecutarTool()` cambiado a fail-closed; ver seccion nueva mas abajo,
+"continuacion 20" en ALEJANDRA_AGENTE.txt/commit message; aqui numerada continuacion
+21 porque el numero 20 ya estaba usado en este archivo para el fix anterior, mismo
+dia). Incluye tests automatizados (64 tests, vitest) que corren en el workflow de
+deploy ANTES de aplicar migraciones/desplegar -- si fallan, no se despliega.
 **Worker raiz + panel.html ("Alejandra Office"):** commit c81c59d -- endpoint
 `/alejandra-agente-dev-bypass` y UI de toggles en DevTools (ver continuacion 16). Tambien
 c47944d (otro agente) corrigio un bug preexistente de `_planosData` duplicado en
@@ -25,9 +22,11 @@ solo con rol `desarrollador` (ver continuacion 16).
 actualizada en 74f686e tras el fix de version, seccion de gating actualizada en e7134e3
 tras el fix de configurar_alerta/exportar_datos, subseccion "INTERRUPTOR DEV-BYPASS"
 anadida en continuacion 16, subseccion "IDOR EN listar_esquemas/borrar_esquema Y
-gestionar_tarea" anadida en continuacion 17, y subseccion "IDOR/EXFILTRACION
+gestionar_tarea" anadida en continuacion 17, subseccion "IDOR/EXFILTRACION
 CROSS-EMPRESA EN 5 FAMILIAS MAS" anadida en el commit ff52aea (continuacion 19 en
-ese archivo). Ver seccion de abajo.
+ese archivo), y subseccion "IDOR EN subir_archivo/enviar_notificacion + authOk
+FAIL-CLOSED" anadida en el commit 2a18d5b (continuacion 20 en ese archivo). Ver
+seccion de abajo.
 
 ---
 
@@ -141,6 +140,87 @@ worker.js). 3 tests nuevos de regresion en `lib.test.js` (59 -> 62 tests, todos 
   CROSS-EMPRESA EN 5 FAMILIAS MAS", conteos de tests actualizados de 59 a 62 en las
   referencias vigentes, lista de TOOLS_REQUIEREN_SESION actualizada, cabecera del
   documento actualizada a continuacion 19/commit ff52aea).
+
+---
+
+## RESUMEN SESION 05/07/2026 (continuacion 21) -- Fix IDOR en subir_archivo/enviar_notificacion + authOk fail-closed
+
+Nota de numeracion: en ALEJANDRA_AGENTE.txt y en el mensaje de commit esto se llama
+"continuacion 20" (siguiendo la numeracion propia de esa auditoria, que venia de la 14,
+17 y 19). Aqui en SESION.md se numera 21 porque el numero 20 ya estaba usado en la
+seccion inmediatamente anterior. Mismo motivo que la nota de la seccion "continuacion 20"
+de arriba: dos secuencias de numeracion independientes, sin error de duplicado.
+
+### Contexto: "seguimos auditando" (cuarta pasada)
+Mensaje del usuario: "seguimas" (typo de "seguimos"), interpretado segun la disciplina
+vigente ("hacemos todas por orden, pero primero audita") como autorizacion para seguir
+la auditoria de `ejecutarTool()` en `alejandra-agente/worker.js` mas alla de lo cubierto
+en la continuacion 19/20 (arriba). Se lanzo un subagente de auditoria + verificacion
+propia leyendo el codigo fuente directamente antes de presentar nada. El subagente
+reporto 5 hallazgos; 2 se descartaron como falso positivo (memory_save/memory_read/
+propose_mejora sobre `alejandra_memoria`: el propio codigo trae un comentario que
+confirma que es, por diseno, una base de conocimiento COMPARTIDA entre todas las
+empresas -- no debe llevar `empresa_id`). Los 3 restantes se confirmaron reales y se
+presentaron via AskUserQuestion. Adrian eligio: **"Arreglar los 3 ya, mismo patron que
+el resto (Recomendado)"**.
+
+### Hallazgos y fixes (los 3, todos en worker.js salvo donde se indica)
+
+1. **subir_archivo**: escribia en CUALQUIER key de R2 (`input.key`, string libre
+   influenciable por el usuario/LLM, sin prefijo obligatorio) sin guardar
+   `customMetadata.usuario_id` -- por lo que `puedeAccederArchivo()` nunca podia
+   determinar el dueno despues -- y sin comprobar si esa key ya pertenecia a OTRA
+   empresa antes de SOBRESCRIBIRLA. Alcanzable por cualquier usuario autenticado de
+   cualquier empresa (tool ofrecida a los expertos app, tecnico, completo e
+   ingenieria). Fix: si la key ya existe, se reutiliza `puedeAccederArchivo(env,
+   existente.customMetadata, empresa_id, esDevVerificado)` para bloquear la
+   sobrescritura cross-empresa; al escribir se guarda `customMetadata.usuario_id`
+   real (antes no se guardaba ninguno).
+
+2. **enviar_notificacion**: codigo huerfano (no tiene definicion de tool ni aparece en
+   ningun `TOOLS_POR_EXPERTO` hoy -- no se ofrece a ningun experto), pero el `case`
+   seguia siendo alcanzable si algun dia se reconecta o via otro camino; enviaba push a
+   CUALQUIER `usuario_id` sin comprobar empresa, mismo patron que `enviar_push` antes
+   de la continuacion 19/20. Fix: reutiliza `puedeNotificarUsuario()` igual que
+   `enviar_push`/`iniciar_conversacion`/`controlar_app`.
+
+3. **ejecutarTool()**: el parametro `authOk` tenia valor por defecto `true`
+   (fail-open). El unico call site que dependia de ese default era
+   `ejecutarReflexion()` (no pasaba `authOk`/`esDevVerificado`), lo que trataba
+   CUALQUIER tool gateada por `TOOLS_REQUIEREN_SESION` como autenticada dentro de ese
+   loop de auto-reflexion -- un gap de defensa en profundidad relevante para prompt
+   injection indirecta via el historial de chat que se pasa como contexto al modelo en
+   ese loop. Fix: default cambiado a `authOk = false` (fail-closed);
+   `ejecutarReflexion()` ahora pasa `false, false` explicitos. Los otros 2 call sites
+   de `ejecutarTool` (flujo normal de chat) ya pasaban valores reales explicitos, no se
+   ven afectados por el cambio de default.
+
+`subir_archivo` y `enviar_notificacion` se anadieron a `TOOLS_REQUIEREN_SESION` en
+`lib.js`. 2 tests nuevos de regresion en `lib.test.js` (62 -> 64 tests, todos verdes).
+
+### Verificacion y deploy
+- `node --check` limpio en `worker.js`, `lib.js` y `lib.test.js`.
+- `npm test`: 64/64 tests verdes.
+- Disciplina de git en repo compartido: `git fetch` + `git status` + `git log` antes
+  del commit y de nuevo antes del push, sin commits nuevos de "APEX Agent" solapando.
+- Commit `2a18d5b`: "fix(agente): IDOR en subir_archivo/enviar_notificacion +
+  fail-closed authOk (continuacion 20)". Push limpio (fast-forward, sin conflictos).
+- Deploy CI: "Deploy Alejandra Agente Worker" en verde a la primera. "Deploy to GitHub
+  Pages" fallo 2 veces con `Deployment failed, try again later` -- blip transitorio de
+  infraestructura de GitHub Pages, nada relacionado con el commit (que solo toca
+  `alejandra-agente/**`, ni panel.html ni la PWA). El primer intento de recuperacion
+  (`gh run rerun <id> --failed`) fue un error propio: al re-ejecutar solo los pasos
+  fallidos, tambien repitio "Upload artifact", produciendo un artifact `github-pages`
+  duplicado en el mismo run y un nuevo fallo distinto ("Multiple artifacts... count is
+  2"). Correccion: `gh run rerun <id>` SIN `--failed` (rerun completo de todos los
+  pasos) -- funciono al segundo intento de rerun completo. Leccion: en un workflow de
+  un solo job que sube el artifact Y despliega en el mismo job, usar siempre rerun
+  completo, nunca `--failed`, para evitar el artifact duplicado.
+- Documentado tambien en ALEJANDRA_AGENTE.txt (subseccion "IDOR EN
+  subir_archivo/enviar_notificacion + authOk FAIL-CLOSED", conteos de tests
+  actualizados de 62 a 64 en las referencias vigentes, lista de
+  TOOLS_REQUIEREN_SESION actualizada, cabecera del documento actualizada a
+  continuacion 20/commit 2a18d5b).
 
 ---
 

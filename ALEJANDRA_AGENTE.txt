@@ -1,7 +1,7 @@
 ================================================================================
   ALEJANDRA AGENTE — GUÍA COMPLETA PARA NUEVOS CHATS
-  Última actualización: 05/07/2026 (continuación 19, tras commit ff52aea —
-  fix IDOR/exfiltración cross-empresa en 12 tools más, 5 familias)
+  Última actualización: 05/07/2026 (continuación 20, tras commit 2a18d5b —
+  fix IDOR en subir_archivo/enviar_notificacion + authOk fail-closed)
 ================================================================================
 
 Este archivo explica todo lo necesario para trabajar en el agente Alejandra.
@@ -340,6 +340,54 @@ resultaron NO EXISTIR). Presentado a Adrian vía AskUserQuestion — eligió
     en worker.js y lib.js, deploy CI en verde (Deploy Alejandra Agente Worker +
     Deploy to GitHub Pages, ambos disparados porque se tocó alejandra-agente/).
 
+IDOR EN subir_archivo/enviar_notificacion + authOk FAIL-CLOSED (continuación 20,
+05/07/2026, commit 2a18d5b) — tercera pasada de auditoría ("seguimos
+auditando") tras continuación 19, cubriendo el resto de cases de ejecutarTool
+no revisados todavía. Subagente de auditoría + verificación propia leyendo
+worker.js directamente (5 hallazgos reportados por el subagente, 3 confirmados
+reales, 2 descartados como falso positivo tras comprobar que alejandra_memoria
+es, por diseño, una base de conocimiento COMPARTIDA entre todas las empresas —
+memory_save/memory_read/propose_mejora no deben llevar empresa_id). Presentado
+a Adrian vía AskUserQuestion — eligió "Arreglar los 3 ya, mismo patrón que el
+resto".
+  - subir_archivo: escribía en CUALQUIER key de R2 (input.key, string libre
+    influenciable por el usuario/LLM, sin prefijo obligatorio) sin guardar
+    customMetadata.usuario_id -- por lo que puedeAccederArchivo() nunca podía
+    determinar el dueño después -- y sin comprobar si esa key ya pertenecía a
+    OTRA empresa antes de SOBRESCRIBIRLA. Alcanzable por cualquier usuario
+    autenticado de cualquier empresa (tool ofrecida a los expertos app,
+    tecnico, completo e ingenieria). Fix: si la key ya existe, se reutiliza
+    puedeAccederArchivo(env, existente.customMetadata, empresa_id,
+    esDevVerificado) para bloquear la sobrescritura cross-empresa; al escribir
+    se guarda customMetadata.usuario_id real (antes no se guardaba ninguno).
+  - enviar_notificacion: código huérfano (no tiene definición de tool ni
+    aparece en ningún TOOLS_POR_EXPERTO hoy -- no se ofrece a ningún experto),
+    pero el case seguía siendo alcanzable si algún día se reconecta o vía otro
+    camino; enviaba push a CUALQUIER usuario_id sin comprobar empresa, mismo
+    patrón que enviar_push antes de la continuación 19. Fix: reutiliza
+    puedeNotificarUsuario() igual que enviar_push/iniciar_conversacion/
+    controlar_app.
+  - ejecutarTool(): el parámetro authOk tenía valor por defecto `true`
+    (fail-open). El único call site que dependía de ese default era
+    ejecutarReflexion() (no pasaba authOk/esDevVerificado), lo que trataba
+    CUALQUIER tool gateada por TOOLS_REQUIEREN_SESION como autenticada dentro
+    de ese loop de auto-reflexión -- un gap de defensa en profundidad
+    relevante para prompt injection indirecta vía el historial de chat que se
+    pasa como contexto al modelo en ese loop. Fix: default cambiado a
+    authOk = false (fail-closed); ejecutarReflexion() ahora pasa `false,
+    false` explícitos para dejar la intención clara en el propio código. Los
+    otros 2 call sites de ejecutarTool (flujo normal de chat, líneas ~3728 y
+    ~3842) ya pasaban authOk/esDevVerificado reales explícitos, no se ven
+    afectados por el cambio de default.
+  - subir_archivo y enviar_notificacion se añadieron a TOOLS_REQUIEREN_SESION
+    en lib.js. 2 tests nuevos de regresión en lib.test.js (62 -> 64 tests).
+    node --check limpio en worker.js y lib.js, deploy CI en verde (Deploy
+    Alejandra Agente Worker + Deploy to GitHub Pages, ambos disparados porque
+    se tocó alejandra-agente/; el run de Pages falló 2 veces por un blip
+    transitorio de infraestructura de GitHub -- "Deployment failed, try again
+    later", nada relacionado con el commit -- y se resolvió con
+    `gh run rerun <id>` sin --failed).
+
 Anti-SSRF en test_endpoint: urlPermitidaTestEndpoint() (lib.js) — allowlist de
 host (solo *.alejandra-app.workers.dev sobre https, con comprobación real de
 subdominio, no substring) para evitar que la tool test_endpoint se use para
@@ -389,7 +437,7 @@ todavía (verificación manual vía curl tras cada deploy). Ampliar esto con
 decide invertir en tests de integración de rutas reales.
 
 Cómo correr los tests:
-  cd alejandra-agente && npm ci && npm test        (vitest run, 62 tests)
+  cd alejandra-agente && npm ci && npm test        (vitest run, 64 tests)
 
 El workflow de deploy (deploy-alejandra-agente.yml) instala dependencias y
 corre `npm test` ANTES de aplicar migraciones D1 y desplegar — si los tests
@@ -710,7 +758,7 @@ alejandra-agente/
                                   I/O real con D1/KV/R2/fetch)
   lib.js                       — Funciones puras extraídas de worker.js,
                                   testeadas con vitest (ver "TESTS")
-  lib.test.js                  — 62 tests de lib.js
+  lib.test.js                  — 64 tests de lib.js
   package.json / package-lock.json — devDependency vitest (excepción explícita
                                   en .gitignore raíz para trackear estos dos)
   wrangler.toml                 — Config Cloudflare del agente (DB/FILES/
