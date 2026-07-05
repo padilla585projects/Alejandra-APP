@@ -27,6 +27,7 @@ import {
   extraerTablasQuery,
   validarScopeEmpresaBD,
   validarSoloSelectBD,
+  debeOmitirRateLimitDev,
   urlPermitidaTestEndpoint,
   esStatusReintentableAnthropic,
   calcularEsperaReintentoMs,
@@ -1971,6 +1972,36 @@ async function validarRateLimit(env, identidad) {
   }
 }
 
+// ── Interruptor dev-bypass (fix continuación 15) ────────────────────────────
+// Adrian pidió poder activar/desactivar, SOLO para sí mismo (dev verificado vía
+// esDeveloperAgente), el rate limiting del chat y el aislamiento por empresa_id
+// en consultar_bd/escribir_bd/exportar_datos -- desde panel.html (Alejandra
+// Office, sección DevTools) y desde la app. Persistido en dos columnas nuevas
+// de agente_config (migrate_005_dev_bypass.sql). Nunca afecta a otros usuarios:
+// la decisión real de saltarse algo o no la toman debeOmitirRateLimitDev() y
+// validarScopeEmpresaBD() en lib.js, que SIEMPRE exigen esDevVerificado=true
+// además del valor de esta config -- ver /api/admin/dev-bypass para el
+// endpoint que lee/escribe estos valores (con auditoría en alejandra_logs).
+async function leerConfigDevBypass(env) {
+  try {
+    const c = await env.DB.prepare(
+      'SELECT dev_bypass_rate_limit, dev_bypass_empresa_scope FROM agente_config ORDER BY updated_at DESC LIMIT 1'
+    ).first();
+    // Defaults si la fila/columnas todavía no existen (p.ej. justo antes de que
+    // corra la migración 005 en algún entorno): igualan el comportamiento previo
+    // a este fix (rate limit siempre activo, empresa_id siempre bypassed para dev).
+    if (!c) return { rateLimit: false, empresaScope: true };
+    return {
+      rateLimit: !!c.dev_bypass_rate_limit,
+      empresaScope: c.dev_bypass_empresa_scope === null || c.dev_bypass_empresa_scope === undefined
+        ? true
+        : !!c.dev_bypass_empresa_scope,
+    };
+  } catch (_) {
+    return { rateLimit: false, empresaScope: true };
+  }
+}
+
 async function validarTopeGastoDiario(env) {
   try {
     const cacheKey = 'gasto:hoy';
@@ -2263,8 +2294,13 @@ export default {
         const esDevVerificado = authOk && await esDeveloperAgente(env, usuario_id);
 
         // Protección anti runaway-cost: rate limit por identidad + tope de gasto diario.
+        // Fix continuación 15: si es dev verificado y tiene el bypass propio activado en
+        // /api/admin/dev-bypass, se salta el rate limit -- solo para él, nunca para nadie más.
         const identidadRL = authOk ? `u:${usuario_id}` : `ip:${req.headers.get('CF-Connecting-IP') || 'unknown'}`;
-        const rl = await validarRateLimit(env, identidadRL);
+        const configDevBypass = esDevVerificado ? await leerConfigDevBypass(env) : null;
+        const rl = debeOmitirRateLimitDev(esDevVerificado, configDevBypass?.rateLimit)
+          ? { ok: true }
+          : await validarRateLimit(env, identidadRL);
         if (!rl.ok) return json({ error: `Demasiadas peticiones. Espera ${rl.reintentarEnSeg}s e inténtalo de nuevo.` }, 429);
         if (!(await validarTopeGastoDiario(env))) {
           return json({ error: 'Servicio temporalmente saturado (tope de gasto diario alcanzado). Vuelve a intentarlo más tarde.' }, 429);
@@ -2299,8 +2335,12 @@ export default {
 
         // Protección anti runaway-cost: rate limit por identidad + tope de gasto diario
         // (ver comentario detallado junto a validarRateLimit/validarTopeGastoDiario).
+        // Fix continuación 15: bypass propio del dev, ver comentario en /api/chat.
         const identidadRL = authOk ? `u:${usuario_id}` : `ip:${req.headers.get('CF-Connecting-IP') || 'unknown'}`;
-        const rl = await validarRateLimit(env, identidadRL);
+        const configDevBypass = esDevVerificado ? await leerConfigDevBypass(env) : null;
+        const rl = debeOmitirRateLimitDev(esDevVerificado, configDevBypass?.rateLimit)
+          ? { ok: true }
+          : await validarRateLimit(env, identidadRL);
         if (!rl.ok) return json({ error: `Demasiadas peticiones. Espera ${rl.reintentarEnSeg}s e inténtalo de nuevo.` }, 429);
         if (!(await validarTopeGastoDiario(env))) {
           return json({ error: 'Servicio temporalmente saturado (tope de gasto diario alcanzado). Vuelve a intentarlo más tarde.' }, 429);
@@ -2441,6 +2481,39 @@ export default {
           ).bind(modo,auto_fix??1,max_iterations??15,modo,auto_fix??1,max_iterations??15).run();
           return json({ ok: true, modo });
         }
+        // Fix continuación 15: interruptor dev-bypass (rate limit / aislamiento
+        // empresa_id), solo visible/editable desde sesión de dev verificada -- ya
+        // gateado arriba por verificarAdminToken() como el resto de /api/admin/*.
+        if (path === '/api/admin/dev-bypass' && req.method === 'GET') {
+          const cfg = await leerConfigDevBypass(env);
+          return json({ dev_bypass_rate_limit: cfg.rateLimit, dev_bypass_empresa_scope: cfg.empresaScope });
+        }
+        if (path === '/api/admin/dev-bypass' && req.method === 'POST') {
+          const body = await req.json().catch(() => ({}));
+          const anterior = await leerConfigDevBypass(env);
+          const nuevoRate  = body.dev_bypass_rate_limit    !== undefined ? !!body.dev_bypass_rate_limit    : anterior.rateLimit;
+          const nuevoScope = body.dev_bypass_empresa_scope !== undefined ? !!body.dev_bypass_empresa_scope : anterior.empresaScope;
+          await env.DB.prepare(
+            `INSERT INTO agente_config (id, modo, auto_fix, max_iterations, dev_bypass_rate_limit, dev_bypass_empresa_scope, updated_at)
+             VALUES (1, 'autonomo', 1, 15, ?, ?, datetime('now'))
+             ON CONFLICT(id) DO UPDATE SET dev_bypass_rate_limit=excluded.dev_bypass_rate_limit, dev_bypass_empresa_scope=excluded.dev_bypass_empresa_scope, updated_at=datetime('now')`
+          ).bind(nuevoRate ? 1 : 0, nuevoScope ? 1 : 0).run();
+
+          // Auditoría (pedido explícito de Adrian: "log detallado" de cada cambio --
+          // quién, cuándo, qué se tocó). Identifica al actor a partir del token: si es
+          // un token efímero de sesión (fix continuación 15, hallazgo #2), usa su
+          // descripción (incluye el nombre del dev); si es el ADMIN_TOKEN estático, lo
+          // deja explícito en vez de guardar el secreto.
+          let actor = 'admin_token_estatico';
+          if (!(env.ADMIN_TOKEN && adminToken === env.ADMIN_TOKEN)) {
+            const tokenRow = await env.DB.prepare('SELECT descripcion FROM alejandra_tokens WHERE token = ?').bind(adminToken).first().catch(() => null);
+            if (tokenRow?.descripcion) actor = tokenRow.descripcion;
+          }
+          await registrarLog(env, actor, 'toggle_dev_bypass', JSON.stringify({ anterior, nuevo: { rateLimit: nuevoRate, empresaScope: nuevoScope } }), 'ok');
+
+          return json({ ok: true, dev_bypass_rate_limit: nuevoRate, dev_bypass_empresa_scope: nuevoScope });
+        }
+
         if (path === '/api/admin/logs' && req.method === 'GET') {
           const limit = parseInt(url.searchParams.get('limit') || '100');
           const rows = await env.DB.prepare('SELECT * FROM alejandra_logs ORDER BY created_at DESC LIMIT ?').bind(limit).all();
@@ -4981,6 +5054,11 @@ async function ejecutarTool(env, nombre, input, usuario_id, empresa_id, expertoT
     return JSON.stringify({ ok: false, error: `Tool "${nombre}" requiere una sesión autenticada válida.` });
   }
 
+  // Fix continuación 15 (interruptor dev-bypass): solo se consulta esta config si
+  // quien actúa es dev verificado -- para cualquier otro usuario el aislamiento por
+  // empresa_id se aplica siempre, sin excepción, sin ni siquiera leer esta tabla.
+  const bypassEmpresaActivo = esDevVerificado ? (await leerConfigDevBypass(env)).empresaScope : false;
+
   switch (nombre) {
 
     case 'pensar': {
@@ -5269,7 +5347,7 @@ ${input.codigo_sugerido ? `CÓDIGO SUGERIDO:\n${input.codigo_sugerido}` : ''}`;
         if (rechazoSelect) return rechazoSelect;
         const params = input.params || [];
         // Aislamiento multi-empresa (ver TABLAS_EMPRESA_PERMITIDAS más arriba).
-        const rechazo = validarScopeEmpresaBD(query, params, empresa_id, esDevVerificado);
+        const rechazo = validarScopeEmpresaBD(query, params, empresa_id, esDevVerificado, bypassEmpresaActivo);
         if (rechazo) return rechazo;
         const stmt = env.DB.prepare(query);
         const result = params.length > 0 ? await stmt.bind(...params).all() : await stmt.all();
@@ -5632,7 +5710,7 @@ ${input.codigo_sugerido ? `CÓDIGO SUGERIDO:\n${input.codigo_sugerido}` : ''}`;
         }
         const params = input.params || [];
         // Aislamiento multi-empresa (ver TABLAS_EMPRESA_PERMITIDAS más arriba).
-        const rechazo = validarScopeEmpresaBD(query, params, empresa_id, esDevVerificado);
+        const rechazo = validarScopeEmpresaBD(query, params, empresa_id, esDevVerificado, bypassEmpresaActivo);
         if (rechazo) return rechazo;
         const stmt = env.DB.prepare(query);
         const result = params.length > 0 ? await stmt.bind(...params).run() : await stmt.run();
@@ -7696,7 +7774,7 @@ ${datos.proximos_pasos || '- Pendiente de definir'}`;
             // Antes solo se exigía que empezara por "SELECT" (case-insensitive, sin
             // bloquear tablas/columnas sensibles ni exigir empresa_id) -- ahora pasa
             // por el mismo aislamiento multi-empresa que consultar_bd.
-            const rechazoScope = validarScopeEmpresaBD(sqlCustom, [], empresa_id, esDevVerificado);
+            const rechazoScope = validarScopeEmpresaBD(sqlCustom, [], empresa_id, esDevVerificado, bypassEmpresaActivo);
             if (rechazoScope) return rechazoScope;
             sql = sqlCustom;
             filename = `custom_${fecha}`;

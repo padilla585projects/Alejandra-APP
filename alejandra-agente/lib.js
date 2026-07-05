@@ -91,8 +91,17 @@ function extraerTablasQuery(query) {
 // Devuelve null si la query es válida para un usuario no-developer, o un string
 // con el motivo de rechazo (que el modelo verá como resultado de la tool y puede
 // usar para corregir su siguiente intento, igual que los demás errores de consultar_bd/escribir_bd).
-function validarScopeEmpresaBD(query, params, empresaId, esDevVerificado) {
-  if (esDevVerificado) return null;
+//
+// bypassEmpresaActivo (fix continuación 15): antes esta función saltaba el
+// aislamiento de forma incondicional para cualquier dev verificado, sin que
+// hubiera ningún interruptor ni registro de cuándo se usaba. Ahora Adrian puede
+// activar/desactivar ese bypass explícitamente desde panel.html/app (persistido
+// en agente_config.dev_bypass_empresa_scope, ver worker.js), y cada cambio queda
+// auditado en alejandra_logs. Default = true para no cambiar el comportamiento
+// de quien no pase este argumento (todos los call sites existentes lo pasan ya,
+// pero mantenemos el default por si se añade alguno nuevo sin pensarlo).
+function validarScopeEmpresaBD(query, params, empresaId, esDevVerificado, bypassEmpresaActivo = true) {
+  if (esDevVerificado && bypassEmpresaActivo) return null;
   if (COLUMNA_BLOQUEADA_BD.test(query)) {
     return 'Consulta rechazada: no se permite acceder a columnas sensibles (password_hash) sin sesión de desarrollador verificada.';
   }
@@ -122,6 +131,18 @@ function validarScopeEmpresaBD(query, params, empresaId, esDevVerificado) {
     return null;
   }
   return 'Consulta rechazada: debes filtrar explícitamente por empresa_id (ej. AND empresa_id = ?).';
+}
+
+// ── Interruptor dev-bypass (fix continuación 15) ────────────────────────────
+// Adrian pidió poder desactivar, SOLO para sí mismo (dev verificado), el rate
+// limiting del chat y el aislamiento por empresa_id -- sin afectar a ningún
+// otro usuario/empresa. Este helper decide la parte de rate limit; la parte de
+// empresa_id vive en validarScopeEmpresaBD (arriba), reutilizando el mismo
+// parámetro bypassActivo por consistencia. Pura para poder testear la decisión
+// sin mockear KV/D1 -- worker.js lee el valor persistido en
+// agente_config.dev_bypass_rate_limit y se lo pasa aquí.
+function debeOmitirRateLimitDev(esDevVerificado, bypassActivo) {
+  return !!esDevVerificado && !!bypassActivo;
 }
 
 // ── Allowlist de hosts para test_endpoint (defensa en profundidad anti-SSRF) ─
@@ -171,6 +192,7 @@ export {
   extraerTablasQuery,
   validarScopeEmpresaBD,
   validarSoloSelectBD,
+  debeOmitirRateLimitDev,
   HOSTS_PERMITIDOS_TEST_ENDPOINT,
   urlPermitidaTestEndpoint,
   esStatusReintentableAnthropic,

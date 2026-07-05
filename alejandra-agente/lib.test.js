@@ -6,6 +6,7 @@ import {
   extraerTablasQuery,
   validarScopeEmpresaBD,
   validarSoloSelectBD,
+  debeOmitirRateLimitDev,
   urlPermitidaTestEndpoint,
   esStatusReintentableAnthropic,
   calcularEsperaReintentoMs,
@@ -221,6 +222,56 @@ describe('validarScopeEmpresaBD', () => {
       false
     );
     expect(r).toBeNull();
+  });
+
+  // ── bypassEmpresaActivo (fix continuación 15: interruptor dev-bypass) ──────
+  it('dev verificado CON bypassEmpresaActivo=true se salta la validación (comportamiento histórico)', () => {
+    expect(validarScopeEmpresaBD('SELECT * FROM obras', [], 1, true, true)).toBeNull();
+  });
+
+  it('dev verificado CON bypassEmpresaActivo omitido (default) se sigue saltando la validación', () => {
+    // Backward-compat: los call sites que aún no pasen el 5º argumento no deben
+    // cambiar de comportamiento.
+    expect(validarScopeEmpresaBD('SELECT * FROM obras', [], 1, true)).toBeNull();
+  });
+
+  it('dev verificado CON bypassEmpresaActivo=false NO se salta la validación (se auto-restringe)', () => {
+    const r = validarScopeEmpresaBD('SELECT * FROM obras', [], 1, true, false);
+    expect(r).toMatch(/debes filtrar explícitamente/);
+  });
+
+  it('dev verificado con bypassEmpresaActivo=false pero query correctamente filtrada por su empresa: se acepta', () => {
+    expect(validarScopeEmpresaBD('SELECT * FROM obras WHERE empresa_id = 1', [], 1, true, false)).toBeNull();
+  });
+
+  it('no-dev con bypassEmpresaActivo=true sigue sin poder saltarse la validación (el bypass es solo para dev)', () => {
+    const r = validarScopeEmpresaBD('SELECT * FROM obras', [], 1, false, true);
+    expect(r).toMatch(/debes filtrar explícitamente/);
+  });
+});
+
+// ── debeOmitirRateLimitDev (fix continuación 15: interruptor dev-bypass) ────
+describe('debeOmitirRateLimitDev', () => {
+  it('dev verificado + bypass activo -> omite el rate limit', () => {
+    expect(debeOmitirRateLimitDev(true, true)).toBe(true);
+  });
+
+  it('dev verificado + bypass inactivo -> NO omite el rate limit (comportamiento actual)', () => {
+    expect(debeOmitirRateLimitDev(true, false)).toBe(false);
+  });
+
+  it('no-dev + bypass "activo" (valor de config irrelevante) -> NUNCA omite el rate limit', () => {
+    // Aunque alguien manipulara el valor de config, sin esDevVerificado=true no hay bypass.
+    expect(debeOmitirRateLimitDev(false, true)).toBe(false);
+  });
+
+  it('no-dev + bypass inactivo -> no omite', () => {
+    expect(debeOmitirRateLimitDev(false, false)).toBe(false);
+  });
+
+  it('valores falsy no booleanos (undefined/null) se tratan como false', () => {
+    expect(debeOmitirRateLimitDev(undefined, undefined)).toBe(false);
+    expect(debeOmitirRateLimitDev(true, null)).toBe(false);
   });
 });
 
