@@ -1,7 +1,7 @@
 ================================================================================
   ALEJANDRA AGENTE — GUÍA COMPLETA PARA NUEVOS CHATS
-  Última actualización: 05/07/2026 (continuación 16, tras commits 8aad793,
-  c81c59d y 014508b — interruptor dev-bypass rate-limit/empresa_id)
+  Última actualización: 05/07/2026 (continuación 17, tras commit fc1fe7b —
+  fix IDOR en listar_esquemas/borrar_esquema y gestionar_tarea)
 ================================================================================
 
 Este archivo explica todo lo necesario para trabajar en el agente Alejandra.
@@ -140,7 +140,7 @@ compartida de TODAS las empresas). Se corrigió con 3 capas, todas en vigor:
    TOOLS_SOLO_DEV_VERIFICADO (patch_codigo, github_escribir, ejecutar_deploy,
    rollback, test_endpoint, configurar_alerta) exige esDevVerificado.
    TOOLS_REQUIEREN_SESION (consultar_bd, escribir_bd, listar_archivos,
-   ver_archivo, exportar_datos) exige authOk.
+   ver_archivo, exportar_datos, listar_esquemas, borrar_esquema) exige authOk.
 
    configurar_alerta se añadió a la lista de solo-dev el 05/07/2026
    (continuación 14): la acción "crear" guardaba un condicion_sql arbitrario
@@ -239,6 +239,38 @@ esos no tienen bypass), y "sí, con log detallado" para cada cambio.
     porque desactiva una protección de seguridad real, aunque sea solo para
     el propio desarrollador.
 
+IDOR EN listar_esquemas/borrar_esquema Y gestionar_tarea (continuación 17,
+05/07/2026) — siguiente pasada de "seguimos auditando" tras el interruptor
+dev-bypass. Subagente de auditoría revisó todos los `case` de ejecutarTool()
+buscando tools de datos sin aislamiento por empresa_id; confirmado leyendo el
+código directamente (no solo el resumen). Presentado a Adrian vía
+AskUserQuestion — eligió "Arreglar ya, mismo patrón que el resto".
+  - listar_esquemas/borrar_esquema (documentos_obra): NINGUNA de las dos
+    filtraba por empresa_id, y ninguna estaba siquiera en
+    TOOLS_REQUIEREN_SESION — cualquier usuario (con o sin sesión válida)
+    podía listar esquemas eléctricos de OTRA empresa (título, notas, r2_key)
+    y, encadenando el r2_key obtenido, borrar ese documento + su archivo en
+    R2. Fix: listar_esquemas añade `AND d.empresa_id=?` a ambas ramas de la
+    query (con/sin obra_id); borrar_esquema ahora hace primero un SELECT que
+    comprueba `empresa_id=?` — si no hay match, devuelve error SIN tocar R2
+    ni la BD; solo si el documento es de la empresa que llama, borra R2 y
+    luego el registro (`DELETE ... WHERE id=? AND empresa_id=?`). Ambas
+    tools se añadieron a TOOLS_REQUIEREN_SESION en lib.js (exigen sesión como
+    mínimo, igual que exportar_datos).
+  - gestionar_tarea (acciones "actualizar"/"completar"): el UPDATE de
+    tareas_obra solo comprobaba `WHERE id=?`, a diferencia de "crear"
+    (bindea empresa_id) y "eliminar" (`WHERE id=? AND empresa_id=?`) en la
+    MISMA tool — un usuario podía completar/reasignar/repriorizar una tarea
+    de otra empresa adivinando el id autoincremental (1,2,3…). Fix: el
+    UPDATE ahora exige también `AND empresa_id=?`; si no hay filas afectadas
+    (tarea no existe o es de otra empresa) se devuelve un mensaje de error
+    en vez de un falso "actualizada correctamente".
+  - lib.test.js: 2 tests nuevos de regresión para las nuevas pertenencias de
+    TOOLS_REQUIEREN_SESION (57 -> 59 tests; el bump de vitest a 3.2.6 del
+    commit b9c9d94, sin relación con este fix, no añadió tests nuevos, solo
+    actualizó la versión del runner). node --check limpio, deploy CI en
+    verde.
+
 Anti-SSRF en test_endpoint: urlPermitidaTestEndpoint() (lib.js) — allowlist de
 host (solo *.alejandra-app.workers.dev sobre https, con comprobación real de
 subdominio, no substring) para evitar que la tool test_endpoint se use para
@@ -288,7 +320,7 @@ todavía (verificación manual vía curl tras cada deploy). Ampliar esto con
 decide invertir en tests de integración de rutas reales.
 
 Cómo correr los tests:
-  cd alejandra-agente && npm ci && npm test        (vitest run, 57 tests)
+  cd alejandra-agente && npm ci && npm test        (vitest run, 59 tests)
 
 El workflow de deploy (deploy-alejandra-agente.yml) instala dependencias y
 corre `npm test` ANTES de aplicar migraciones D1 y desplegar — si los tests
@@ -609,7 +641,7 @@ alejandra-agente/
                                   I/O real con D1/KV/R2/fetch)
   lib.js                       — Funciones puras extraídas de worker.js,
                                   testeadas con vitest (ver "TESTS")
-  lib.test.js                  — 57 tests de lib.js
+  lib.test.js                  — 59 tests de lib.js
   package.json / package-lock.json — devDependency vitest (excepción explícita
                                   en .gitignore raíz para trackear estos dos)
   wrangler.toml                 — Config Cloudflare del agente (DB/FILES/

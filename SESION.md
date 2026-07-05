@@ -3,18 +3,22 @@
 **Sesion:** LIBRE
 **Ultima sesion:** 05/07/2026 -- Modulo de Planos Tecnicos (v7.56, commit 5f2b226).
 **Version actual:** App PWA **v7.56** -- commit 5f2b226
-**Agente (alejandra-agente):** commit 8aad793 desplegado en main (interruptor dev-bypass
-rate-limit/empresa_id, solo desarrollador -- ver continuacion 16 abajo). Incluye tests
-automatizados (57 tests, vitest) que corren en el workflow de deploy ANTES de aplicar
-migraciones/desplegar -- si fallan, no se despliega.
+**Agente (alejandra-agente):** commit fc1fe7b desplegado en main (fix IDOR en
+listar_esquemas/borrar_esquema y gestionar_tarea -- ver continuacion 17 abajo). Incluye
+tests automatizados (59 tests, vitest) que corren en el workflow de deploy ANTES de
+aplicar migraciones/desplegar -- si fallan, no se despliega. De paso, commit b9c9d94
+(otro agente, "APEX Agent") subio vitest a 3.2.6 por vulnerabilidades de Dependabot.
 **Worker raiz + panel.html ("Alejandra Office"):** commit c81c59d -- endpoint
-`/alejandra-agente-dev-bypass` y UI de toggles en DevTools (ver continuacion 16).
+`/alejandra-agente-dev-bypass` y UI de toggles en DevTools (ver continuacion 16). Tambien
+c47944d (otro agente) corrigio un bug preexistente de `_planosData` duplicado en
+panel.html, detectado durante la QA de esta sesion.
 **App Flutter (alejandra-ia):** commit 014508b -- UI de dev-bypass en Ajustes, visible
 solo con rol `desarrollador` (ver continuacion 16).
 **Documentacion del agente (ALEJANDRA_AGENTE.txt):** reescrita commit 60ae56e, regla #3
 actualizada en 74f686e tras el fix de version, seccion de gating actualizada en e7134e3
-tras el fix de configurar_alerta/exportar_datos, y nueva subseccion "INTERRUPTOR
-DEV-BYPASS" anadida en continuacion 16. Ver seccion de abajo.
+tras el fix de configurar_alerta/exportar_datos, subseccion "INTERRUPTOR DEV-BYPASS"
+anadida en continuacion 16, y subseccion "IDOR EN listar_esquemas/borrar_esquema Y
+gestionar_tarea" anadida en continuacion 17. Ver seccion de abajo.
 
 ---
 
@@ -381,6 +385,74 @@ CI, ya corregido).
 
 Siguiente punto de la lista: retomar "seguimos auditando" para el resto del sistema (esta
 feature fue una peticion intercalada, no parte de la lista de auditoria).
+
+---
+
+## RESUMEN SESION 05/07/2026 (continuacion 17) -- Fix IDOR: listar_esquemas/borrar_esquema y gestionar_tarea
+
+Retomada la instruccion "seguimos auditando" tras la feature intercalada del dev-bypass
+(continuacion 16). Subagente de auditoria reviso todos los `case` de `ejecutarTool()` en
+`alejandra-agente/worker.js` buscando tools de datos SIN aislamiento por empresa_id (las
+areas ya auditadas -- consultar_bd/escribir_bd/exportar_datos/configurar_alerta,
+/auth/verify-session, verificarAdminToken, el interruptor dev-bypass -- se excluyeron
+explicitamente de la busqueda). Cada hallazgo se confirmo leyendo el codigo fuente
+directamente (no solo el resumen del subagente), y tambien se confirmo contra el D1 de
+produccion que existen 3 empresas activas (Levitec id=1, Edison Montajes id=3, PruebalaAPP
+id=4) para verificar que el multi-tenant es real y explotable. Presentado a Adrian via
+AskUserQuestion (regla "auditar antes de arreglar") -- eligio explicitamente: **"Arreglar
+ya, mismo patron que el resto (Recomendado)"**.
+
+### Auditoria
+- `listar_esquemas`/`borrar_esquema` (`alejandra-agente/worker.js`, documentos_obra):
+  NINGUNA de las dos queries filtraba por `empresa_id`, y ninguna de las dos tools estaba
+  siquiera en `TOOLS_REQUIEREN_SESION` (`lib.js`) -- ni sesion exigian. `listar_esquemas`
+  sin `obra_id` devolvia esquemas electricos (titulo, notas, r2_key, obra) de TODAS las
+  empresas del sistema. Encadenando el `r2_key`/`documento_id` asi obtenido,
+  `borrar_esquema` ejecutaba el DELETE (y el borrado del archivo real en R2) sin
+  comprobar en ningun momento que el documento perteneciera a la empresa de quien
+  llamaba -- fuga de lectura + borrado destructivo cross-tenant.
+- `gestionar_tarea` (accion "actualizar"/"completar"): el `UPDATE tareas_obra SET ...
+  WHERE id=?` no incluia `empresa_id`, a diferencia de "crear" (bindea empresa_id) y
+  "eliminar" (`WHERE id=? AND empresa_id=?`) en la MISMA tool. Los ids de `tareas_obra`
+  son autoincrementales y triviales de recorrer (1, 2, 3...) -- cualquier usuario con
+  sesion podia completar, reasignar o repriorizar una tarea de otra empresa sin ninguna
+  relacion con ella.
+
+### Corregido (commit fc1fe7b, deploy CI 28748539701, tests+health OK)
+- `alejandra-agente/worker.js` / `listar_esquemas`: ambas ramas de la query (con y sin
+  `obra_id`) anaden `AND d.empresa_id=?`, bindeado siempre con el `empresa_id` real de
+  quien llama.
+- `alejandra-agente/worker.js` / `borrar_esquema`: reescrito para hacer primero un
+  `SELECT ... WHERE (id=? o r2_key=?) AND empresa_id=?` -- si no hay match, devuelve error
+  SIN tocar ni R2 ni la BD. Solo si el documento es realmente de la empresa que llama, se
+  borra el archivo de R2 y luego el registro (`DELETE ... WHERE id=? AND empresa_id=?`).
+- `alejandra-agente/worker.js` / `gestionar_tarea`: el UPDATE de "actualizar"/"completar"
+  ahora exige tambien `AND empresa_id=?`; si `changes` sale en 0 (tarea inexistente o de
+  otra empresa) se devuelve un mensaje de error en vez de un falso "actualizada
+  correctamente".
+- `alejandra-agente/lib.js`: `listar_esquemas` y `borrar_esquema` anadidas a
+  `TOOLS_REQUIEREN_SESION` (exigen sesion como minimo, igual que `exportar_datos`).
+- `alejandra-agente/lib.test.js`: 2 tests nuevos de regresion para las nuevas
+  pertenencias de `TOOLS_REQUIEREN_SESION` (57 -> 59 tests). `node --check` limpio en los
+  3 archivos, diff revisado linea a linea, deploy CI en verde (tests -> migracion ->
+  deploy -> health check).
+
+### Incidente operativo (de nuevo, edicion concurrente): commits ajenos ya en main
+Antes de commitear este fix, `git fetch` + `git status` mostro que "APEX Agent" (el mismo
+agente autonomo de la continuacion 15) habia seguido trabajando en paralelo sobre el mismo
+directorio: commit `c47944d` corrigio exactamente el bug de `_planosData` duplicado en
+`panel.html` que se habia dejado sealado via `spawn_task` en la continuacion 16 (en vez de
+arreglarlo entonces, por estar fuera de alcance); y commit `b9c9d94` subio vitest de
+`^2.1.9` a `^3.2.6` (junto con vite/esbuild) para cerrar 5 alertas de Dependabot (1
+critica, 1 alta, 3 moderadas), sin anadir tests nuevos. Se comprobo que ninguno de los dos
+tocaba los archivos de este fix (`alejandra-agente/worker.js`, `lib.js`, `lib.test.js`) y
+que `npm test` seguia en 57/57 verde antes de mis 2 tests nuevos -- se hizo `git add` solo
+de los 3 archivos propios de este fix, se commiteo encima, y el `git push` publico ambos
+commits ajenos junto con el propio sin problema (ya estaban commiteados localmente, solo
+faltaba el push).
+
+Siguiente punto de la lista: seguir con "seguimos auditando" para el resto del sistema --
+ningun hallazgo especifico identificado todavia mas alla de este punto.
 
 ---
 
