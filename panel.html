@@ -9720,23 +9720,6 @@ function navTo(page) {
   if (window.innerWidth <= 900) document.getElementById('sidebar').classList.remove('open');
   if (PAGE_LOADERS[page]) PAGE_LOADERS[page]();
   _startSync(page);  // arrancar auto-refresh para la nueva página
-  // Notificar al webhook del cambio de sección
-  try {
-    const _sess = typeof SESSION !== 'undefined' ? SESSION : JSON.parse(localStorage.getItem('panel_session') || 'null');
-    fetch('/webhook/evento', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        tipo: 'cambio_seccion',
-        datos: {
-          seccion: page,
-          usuario_id: _sess?.id || null,
-          usuario: _sess?.nombre || null,
-          canal: 'panel'
-        }
-      })
-    }).catch(() => {});  // silencioso — no bloquear navegación
-  } catch(e) {}
 }
 
 // ── SYNC BIDIRECCIONAL ─────────────────────────────────────────
@@ -9901,8 +9884,8 @@ function _initSync() {
 async function checkConexion() {
   const dot = document.getElementById('connDot');
   try {
-    const r = await fetch(API + '/verificar', { method: 'HEAD' }).catch(() => null);
-    dot.className = 'conn-dot ' + (r ? 'ok' : 'err');
+    const r = await fetch(API + '/health').catch(() => null);
+    dot.className = 'conn-dot ' + (r?.ok ? 'ok' : 'err');
   } catch { dot.className = 'conn-dot err'; }
 }
 
@@ -13540,7 +13523,7 @@ async function cargarRepostajes() {
 
 // Lista de endpoints a testear: [método, ruta, descripción]
 const DEV_ENDPOINTS = [
-  ['HEAD', '/verificar',            'Auth — verificar'],
+  ['GET',  '/health',               'Health check'],
   ['GET',  '/obra-dashboard',       'Dashboard KPIs'],
   ['GET',  '/personal/trabajadores','Personal — trabajadores'],
   ['GET',  '/fichajes?limit=1',     'Fichajes'],
