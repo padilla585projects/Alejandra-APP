@@ -3693,9 +3693,13 @@ async function procesarConNEXUS(env, mensaje, contexto, usuario_id, empresa_id, 
     let resultadoWeb = null;
     let usoBusquedaWeb = false;
     if (clas.buscar_web && env.OPENAI_API_KEY) {
-      resultadoWeb   = await buscarWebOpenAI(env, clas.query_web || mensaje);
-      usoBusquedaWeb = true;
-      await registrarLog(env, usuario_id, 'web_search', clas.query_web, resultadoWeb.substring(0,200));
+      try {
+        resultadoWeb   = await buscarWebOpenAI(env, clas.query_web || mensaje);
+        usoBusquedaWeb = true;
+        await registrarLog(env, usuario_id, 'web_search', clas.query_web, resultadoWeb.substring(0,200));
+      } catch (webErr) {
+        console.warn('Web search failed (rate limit o error), continuando sin ella:', webErr.message);
+      }
     }
 
     // PASO 3: System prompt con capas L0-L4
@@ -3789,11 +3793,15 @@ async function procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empres
     let resultadoWeb = null, usoBusquedaWeb = false;
     if (clas.buscar_web && env.OPENAI_API_KEY) {
       const t0 = Date.now();
-      await send({ type: 'tool_start', nombre: 'buscar_web', input: { query: clas.query_web || mensaje } });
-      resultadoWeb   = await buscarWebOpenAI(env, clas.query_web || mensaje);
-      usoBusquedaWeb = true;
-      await send({ type: 'tool_end', nombre: 'buscar_web', preview: resultadoWeb.substring(0, 200), duracion_ms: Date.now() - t0 });
-      await registrarLog(env, usuario_id, 'web_search', clas.query_web, resultadoWeb.substring(0, 200));
+      try {
+        await send({ type: 'tool_start', nombre: 'buscar_web', input: { query: clas.query_web || mensaje } });
+        resultadoWeb   = await buscarWebOpenAI(env, clas.query_web || mensaje);
+        usoBusquedaWeb = true;
+        await send({ type: 'tool_end', nombre: 'buscar_web', preview: resultadoWeb.substring(0, 200), duracion_ms: Date.now() - t0 });
+        await registrarLog(env, usuario_id, 'web_search', clas.query_web, resultadoWeb.substring(0, 200));
+      } catch (webErr) {
+        console.warn('Web search failed (rate limit o error), continuando sin ella:', webErr.message);
+      }
     }
 
     // PASO 3-4: System + historial
