@@ -8918,6 +8918,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
                         style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;background:var(--surface2);color:var(--text)">
                   <option value="planta">🏗 Plano de planta / obra</option>
                   <option value="electrico">⚡ Esquema eléctrico</option>
+                  <option value="bandejas">🚧 Instalación de bandejas eléctricas</option>
                   <option value="mecanico">⚙️ Plano mecánico / industrial</option>
                   <option value="gantt">📅 Diagrama de Gantt / fases</option>
                 </select>
@@ -31668,6 +31669,7 @@ let _visorSvgData = '';
 const _PLANO_TIPO_META = {
   planta:    { emoji:'🏗', label:'Plano de planta', color:'#1e88e5' },
   electrico: { emoji:'⚡', label:'Esquema eléctrico', color:'#e53935' },
+  bandejas:  { emoji:'🚧', label:'Bandejas eléctricas', color:'#0a0a5a' },
   mecanico:  { emoji:'⚙️', label:'Plano mecánico', color:'#43a047' },
   gantt:     { emoji:'📅', label:'Diagrama Gantt', color:'#8e24aa' },
 };
@@ -31675,6 +31677,7 @@ const _PLANO_TIPO_META = {
 const _PLANO_EJEMPLOS = {
   planta: 'Ejemplo: "Nave industrial de 40x20m con zona de recepción (5x10), taller principal (25x20), almacén (10x20), vestuarios (5x5) y oficina (5x5). Dos puertas de acceso de 4m. Pilares cada 5m. Escala 1:200."',
   electrico: 'Ejemplo: "Cuadro general nave: acometida trifásica 400V, IGA 125A, 3 circuitos: motor compresor 15kW (Q1+F1+K1+M1), alumbrado nave 2x18kW (Q2+F2), enchufes trifásicos (Q3+F3). Tierra PE. Leyenda de componentes."',
+  bandejas: 'Ejemplo: "Nave taller metálico 60x25m, estructura HEB metálica, pilares cada 6m. CGP en fachada norte. CS principal zona centro. Bandeja principal BAN 200x100 a +4,5m recorrido perimetral. Bandeja secundaria BAN 100x60 a +3m hacia zonas de máquinas. Derivaciones BAN 60x60 a cada puesto. 3 subcuadros SCSS para zona soldadura, zona fresado y zona prensa. Luminarias LED en bandeja principal."',
   mecanico: 'Ejemplo: "Soporte de rodamiento: vistas alzado frontal, planta y perfil derecho. Cuerpo rectangular 120x80x60mm, taladro pasante Ø40 en centro, 4 agujeros M8 esquinas. Material: acero F-114. Tolerancia general ±0.1."',
   gantt: 'Ejemplo: "Obra Nave Industrial - 12 semanas: Fase 1 Cimentación (sem 1-3, 100%), Fase 2 Estructura (sem 2-6, 60%), Fase 3 Cubierta (sem 5-8, 0%), Fase 4 Instalaciones (sem 7-11, 0%), Fase 5 Acabados (sem 10-12, 0%). Hito: Acta de recepción sem 12."'
 };

@@ -22003,6 +22003,85 @@ const IEC_SYMBOLS_DEFS = `<defs id="iec60617-lib">
   </symbol>
 </defs>`;
 
+// ── Biblioteca de simbolos para planos de instalacion de bandejas electricas ────────────────
+// Norma de referencia: IEC 61537 (cable tray systems). Todos usan currentColor.
+const IEC_BANDEJA_DEFS = `<defs id="bandeja-lib">
+  <!-- CGP — Caja General de Proteccion (vista planta, 40x50) -->
+  <symbol id="sym-cgp" viewBox="0 0 40 50" overflow="visible">
+    <rect x="0" y="0" width="40" height="50" fill="white" stroke="currentColor" stroke-width="2.5" rx="2"/>
+    <line x1="3" y1="3" x2="37" y2="47" stroke="currentColor" stroke-width="1.5"/>
+    <line x1="37" y1="3" x2="3" y2="47" stroke="currentColor" stroke-width="1.5"/>
+    <rect x="0" y="0" width="40" height="50" fill="none" stroke="currentColor" stroke-width="2.5" rx="2"/>
+    <text x="20" y="-6" text-anchor="middle" font-size="9" font-weight="bold" font-family="Arial,sans-serif" fill="currentColor">CGP</text>
+  </symbol>
+  <!-- CS — Cuadro Secundario (vista planta, 30x40) -->
+  <symbol id="sym-cs" viewBox="0 0 30 40" overflow="visible">
+    <rect x="0" y="0" width="30" height="40" fill="white" stroke="currentColor" stroke-width="2" rx="1"/>
+    <line x1="2" y1="2" x2="28" y2="38" stroke="currentColor" stroke-width="1.2"/>
+    <line x1="28" y1="2" x2="2" y2="38" stroke="currentColor" stroke-width="1.2"/>
+    <rect x="0" y="0" width="30" height="40" fill="none" stroke="currentColor" stroke-width="2" rx="1"/>
+    <text x="15" y="-5" text-anchor="middle" font-size="8" font-weight="bold" font-family="Arial,sans-serif" fill="currentColor">CS</text>
+  </symbol>
+  <!-- SCSS — Sub-cuadro local (vista planta, 22x30) -->
+  <symbol id="sym-scss" viewBox="0 0 22 30" overflow="visible">
+    <rect x="0" y="0" width="22" height="30" fill="white" stroke="currentColor" stroke-width="1.5" rx="1"/>
+    <line x1="2" y1="2" x2="20" y2="28" stroke="currentColor" stroke-width="1"/>
+    <line x1="20" y1="2" x2="2" y2="28" stroke="currentColor" stroke-width="1"/>
+    <rect x="0" y="0" width="22" height="30" fill="none" stroke="currentColor" stroke-width="1.5" rx="1"/>
+    <text x="11" y="-4" text-anchor="middle" font-size="7" font-family="Arial,sans-serif" fill="currentColor">SCSS</text>
+  </symbol>
+  <!-- Columna metalica HEB/IPE (seccion transversal, 16x16) -->
+  <symbol id="sym-columna-h" viewBox="0 0 16 16" overflow="visible">
+    <rect x="0" y="0" width="16" height="3" fill="currentColor"/>
+    <rect x="6" y="3" width="4" height="10" fill="currentColor"/>
+    <rect x="0" y="13" width="16" height="3" fill="currentColor"/>
+  </symbol>
+  <!-- Columna de hormigon (seccion cuadrada, 16x16) -->
+  <symbol id="sym-columna-c" viewBox="0 0 16 16" overflow="visible">
+    <rect x="0" y="0" width="16" height="16" fill="#aaaaaa" stroke="currentColor" stroke-width="1.5"/>
+    <line x1="0" y1="0" x2="16" y2="16" stroke="currentColor" stroke-width="0.8"/>
+    <line x1="16" y1="0" x2="0" y2="16" stroke="currentColor" stroke-width="0.8"/>
+  </symbol>
+  <!-- Bajante / descenso vertical de bandeja (circulo con flecha, 20x20) -->
+  <symbol id="sym-bajante" viewBox="0 0 20 20" overflow="visible">
+    <circle cx="10" cy="10" r="9" fill="white" stroke="currentColor" stroke-width="1.5"/>
+    <line x1="10" y1="4" x2="10" y2="14" stroke="currentColor" stroke-width="1.5"/>
+    <polygon points="10,17 6,11 14,11" fill="currentColor"/>
+  </symbol>
+  <!-- Toma de fuerza / maquina / carga final (16x16) -->
+  <symbol id="sym-toma" viewBox="0 0 16 16" overflow="visible">
+    <circle cx="8" cy="8" r="7" fill="white" stroke="currentColor" stroke-width="1.5"/>
+    <line x1="5" y1="8" x2="11" y2="8" stroke="currentColor" stroke-width="1.2"/>
+    <line x1="8" y1="5" x2="8" y2="11" stroke="currentColor" stroke-width="1.2"/>
+  </symbol>
+  <!-- Luminaria industrial de nave (20x8) -->
+  <symbol id="sym-luminaria" viewBox="0 0 20 8" overflow="visible">
+    <rect x="0" y="0" width="20" height="8" fill="white" stroke="currentColor" stroke-width="1.2" rx="1"/>
+    <line x1="0" y1="4" x2="20" y2="4" stroke="currentColor" stroke-width="0.8" stroke-dasharray="2,2"/>
+  </symbol>
+  <!-- Codo de bandeja horizontal 90deg (30x30) -->
+  <symbol id="sym-bandeja-codo" viewBox="0 0 30 30" overflow="visible">
+    <path d="M0,0 L0,18 Q0,30 12,30 L30,30" fill="none" stroke="currentColor" stroke-width="2.5"/>
+    <path d="M0,8 L0,18 Q0,22 8,22 L30,22" fill="none" stroke="currentColor" stroke-width="2.5"/>
+  </symbol>
+  <!-- Derivacion en T de bandeja (40x30) -->
+  <symbol id="sym-bandeja-te" viewBox="0 0 40 30" overflow="visible">
+    <line x1="0" y1="0" x2="40" y2="0" stroke="currentColor" stroke-width="2.5"/>
+    <line x1="0" y1="10" x2="14" y2="10" stroke="currentColor" stroke-width="2.5"/>
+    <line x1="26" y1="10" x2="40" y2="10" stroke="currentColor" stroke-width="2.5"/>
+    <line x1="14" y1="10" x2="14" y2="30" stroke="currentColor" stroke-width="2.5"/>
+    <line x1="26" y1="10" x2="26" y2="30" stroke="currentColor" stroke-width="2.5"/>
+  </symbol>
+  <!-- Reduccion de bandeja (30x20) -->
+  <symbol id="sym-bandeja-reduccion" viewBox="0 0 30 20" overflow="visible">
+    <line x1="0" y1="0" x2="14" y2="5" stroke="currentColor" stroke-width="2.5"/>
+    <line x1="0" y1="14" x2="14" y2="9" stroke="currentColor" stroke-width="2.5"/>
+    <line x1="14" y1="5" x2="30" y2="5" stroke="currentColor" stroke-width="2.5"/>
+    <line x1="14" y1="9" x2="30" y2="9" stroke="currentColor" stroke-width="2.5"/>
+    <line x1="14" y1="5" x2="14" y2="9" stroke="currentColor" stroke-width="1.5"/>
+  </symbol>
+</defs>`;
+
 // Prompts de sistema por tipo de plano
 const _PLANO_PROMPTS = {
   planta: `Eres un arquitecto tecnico y delineante experto en planos de construccion e ingenieria civil. Tu tarea es generar un plano de planta/obra en formato SVG profesional y editable.
@@ -22120,7 +22199,90 @@ REQUISITOS TECNICOS:
 - Resumen de avance global en esquina superior derecha (% completado)
 - Bloque de info: empresa, proyecto, emitido por, fecha emision, revision
 
-DEVUELVE: solo el codigo SVG valido completo, sin texto adicional fuera del SVG.`
+DEVUELVE: solo el codigo SVG valido completo, sin texto adicional fuera del SVG.`,
+
+  bandejas: `Eres un instalador electricista jefe y delineante tecnico experto en instalaciones de bandejas electricas industriales segun norma IEC 61537 / UNE-EN 61537. Tu tarea es generar un PLANO DE PLANTA de instalacion de bandejas electricas en una nave industrial en formato SVG profesional.
+
+REQUISITOS TECNICOS:
+- viewBox="0 0 1400 900", xmlns="http://www.w3.org/2000/svg", id="plano-principal"
+- Fondo blanco fill="#ffffff"
+- Cuadricula tenue de referencia (lineas cada 50px, stroke="#eeeeee" stroke-width="0.3")
+- Nave: contorno exterior stroke="#1a1a1a" stroke-width="5" fill="none", muros perimetrales fill="#d8d8d0" ancho 8px
+- Ejes estructurales: lineas discontinuas largas stroke="#999999" stroke-width="0.7" stroke-dasharray="20,6,3,6"
+- Referencias de ejes alfanumericas: columnas A,B,C... filas 1,2,3... font-size="11" fill="#888888"
+
+CONVENCIONES DE BANDEJAS (siempre recorrido ORTOGONAL — horizontal o vertical):
+- Bandeja principal (BAN 200x100 o mayor):
+    Dibujar como DOS lineas paralelas separadas 16px, stroke="#0a0a5a" stroke-width="2.5"
+    Refuerzos transversales cada 80px: line stroke="#0a0a5a" stroke-width="0.8" opacity="0.5"
+    Etiqueta centrada sobre el tramo: font-size="9" font-weight="bold" fill="#0a0a5a" (ej. "BAN 200x100")
+    Altura de montaje junto al tramo: font-size="8" fill="#0a0a5a" (ej. "h=+4,50 m")
+- Bandeja secundaria (BAN 100x60):
+    DOS lineas paralelas separadas 10px, stroke="#003399" stroke-width="2"
+    Etiqueta: font-size="8" fill="#003399" (ej. "BAN 100x60 h=+3,00 m")
+- Bandeja de derivacion local (BAN 60x60 o menor):
+    DOS lineas paralelas separadas 6px, stroke="#0055cc" stroke-width="1.5"
+    Etiqueta: font-size="7" fill="#0055cc"
+- Tubo / conduit libre: linea discontinua unica stroke="#888888" stroke-width="1.5" stroke-dasharray="6,3"
+
+SIMBOLOS — El SVG contiene <defs id="bandeja-lib"> con simbolos certificados. Usar <use href="#sym-X"/>:
+  #sym-cgp              width="40" height="50" → Caja General de Proteccion
+  #sym-cs               width="30" height="40" → Cuadro Secundario de distribucion
+  #sym-scss             width="22" height="30" → Sub-cuadro / cuadro local de maquina
+  #sym-columna-h        width="16" height="16" → Columna metalica HEB/IPE (seccion)
+  #sym-columna-c        width="16" height="16" → Columna de hormigon (seccion cuadrada)
+  #sym-bajante          width="20" height="20" → Bajante / descenso vertical de bandeja
+  #sym-toma             width="16" height="16" → Toma de fuerza / maquina / carga final
+  #sym-luminaria        width="20" height="8"  → Luminaria industrial de nave
+  #sym-bandeja-codo     width="30" height="30" → Codo horizontal 90 grados
+  #sym-bandeja-te       width="40" height="30" → Derivacion en T horizontal
+  #sym-bandeja-reduccion width="30" height="20" → Reduccion de seccion de bandeja
+
+Atributo color="" en el <use> define el color del simbolo (hereda via currentColor):
+  CGP: color="#8B0000"  CS: color="#003399"  SCSS: color="#0055cc"
+  Columnas metalicas: color="#444444"  Columnas hormigon: color="#666666"
+  Bajantes: color="#cc6600"  Tomas: color="#006633"  Luminarias: color="#cc9900"
+  Codos/tes/reducciones: igual que el tipo de bandeja a que pertenecen
+
+COTAS Y REFERENCIAS:
+- Cotas exteriores (largo y ancho de nave): stroke="#0055aa" stroke-width="1", flechas terminales, font-size="10" fill="#0055aa"
+- Paso estructural entre columnas acotado sobre los ejes (ej. "6,00 m" o "8,00 m")
+- Etiqueta de bandeja junto a cada tramo largo con tipo, dimension y altura
+- Referencia de cuadro junto a cada simbolo: nombre + potencia (ej. "CS1 — 63A / 40 kW")
+
+ZONAS Y CONTENIDO:
+- Zonificar claramente la nave: TALLER PRINCIPAL, ZONA DE MAQUINAS, ALMACEN, OFICINAS, VESTUARIOS, etc.
+- Etiquetas de zona: font-family="Arial,sans-serif" font-size="13" font-weight="bold" fill="#333333" con rect de fondo sutil
+- Maquinas principales indicadas con rect fill="#f5f5f5" stroke="#888" + etiqueta (nombre y potencia)
+- Luminarias distribuidas a lo largo de la nave bajo la bandeja principal
+- Bajantes marcados en los puntos donde la bandeja baja a cuadros o maquinas
+
+LEYENDA (esquina inferior izquierda):
+- Titulo "LEYENDA" en negrita
+- Muestra: linea de bandeja principal con color y descripcion
+- Muestra: linea de bandeja secundaria con color y descripcion
+- Muestra: linea de derivacion local con color y descripcion
+- Muestra: tubo/conduit con color y descripcion
+- Muestra: cada simbolo (CGP, CS, SCSS, columna, bajante, toma, luminaria) con etiqueta
+
+NORTE Y ESCALA:
+- Flecha norte en esquina superior derecha (triangulo + "N"), stroke="#333" fill="#222"
+- Escala grafica (barra) en parte inferior central con texto (ej. "0 — 10 — 20 m")
+
+BLOQUE DE TITULO (esquina inferior derecha, rect fill="#1a3a6b"):
+- Empresa / proyecto / titulo del plano en texto blanco bold
+- Numero de plano, escala, fecha, revision, dibujado por — en texto blanco o crema font-size="9"
+
+NOTAS TECNICAS (zona inferior, fuera del bloque de titulo):
+- "Instalacion segun IEC 61537 / UNE-EN 61537"
+- "Separacion minima 50 mm entre bandejas de distinta tension"
+- "Alturas referidas a FFL (nivel de suelo terminado)"
+- "Bandeja con tapa en zonas con riesgo de caida de objetos"
+
+AGRUPA por zona: <g id="zona-taller">, <g id="zona-almacen">, etc.
+AGRUPA bandejas: <g id="bandejas-principales">, <g id="bandejas-secundarias">
+
+DEVUELVE: solo el codigo SVG valido completo (desde <svg hasta </svg>), sin texto adicional ni markdown.`
 };
 
 async function _generarPlanoInterno(env, { tipo, titulo, descripcion, empresa_id, usuario_id }) {
@@ -22177,6 +22339,10 @@ INSTRUCCIONES FINALES:
   // del cuerpo del esquema puedan referenciar las definiciones correctamente.
   if (tipo === 'electrico') {
     svgRaw = svgRaw.replace(/(<svg[^>]*>)/i, `$1\n${IEC_SYMBOLS_DEFS}`);
+  }
+  // Para planos de bandejas: inyectar biblioteca de símbolos IEC 61537
+  if (tipo === 'bandejas') {
+    svgRaw = svgRaw.replace(/(<svg[^>]*>)/i, `$1\n${IEC_BANDEJA_DEFS}`);
   }
 
   // Registrar uso de IA
