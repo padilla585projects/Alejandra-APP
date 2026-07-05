@@ -1,75 +1,225 @@
 ================================================================================
   ALEJANDRA AGENTE — GUÍA COMPLETA PARA NUEVOS CHATS
-  Última actualización: 15/05/2026 — v5.93
+  Última actualización: 05/07/2026 (continuación 12, tras commit 93d0d3a)
 ================================================================================
 
 Este archivo explica todo lo necesario para trabajar en el agente Alejandra.
 Léelo SIEMPRE antes de tocar código del agente.
 
+NOTA SOBRE ESTE DOCUMENTO: las listas grandes (módulos, expertos, tools,
+endpoints, tablas) cambian con frecuencia y este archivo se queda desactualizado
+si se transcriben a mano. Por eso, para cada lista volátil se da el conteo
+aproximado A FECHA DE HOY más el comando grep exacto para obtener la lista real
+en el momento en que la leas. Si un conteo no coincide con lo que ves al correr
+el grep, confía en el grep, no en este texto — y de paso actualiza la fecha de
+"última actualización" de arriba.
+
 ================================================================================
   QUÉ ES EL AGENTE ALEJANDRA
 ================================================================================
 
-Alejandra es un agente IA (Claude Sonnet via Anthropic API) integrado en la
-app Alejandra APP. Tiene dos partes:
+Alejandra es un agente IA (Claude Sonnet vía Anthropic API, con Haiku de router
+y GPT-4o/GPT-4o-mini como apoyo) integrado en la app Alejandra APP. Sigue
+teniendo DOS workers Cloudflare distintos (esto no ha cambiado, verificado hoy
+que ambos worker.js siguen existiendo):
 
-1. LA APP PRINCIPAL (worker.js)
-   - URL: https://alejandra-app-api.alejandra-app.workers.dev
-   - Alejandra vive aquí desde las versiones antiguas (devAIChat, handleDevAI)
-   - Chat accesible desde la app móvil (index.html) — botón 🤖
+1. LA APP PRINCIPAL — worker.js (raíz del repo), wrangler.toml (raíz)
+   - name/URL: "alejandra-app-api" →
+     https://alejandra-app-api.alejandra-app.workers.dev
+   - Deploy: .github/workflows/deploy-worker.yml (paths: worker.js,
+     wrangler.toml — el de la raíz, NO alejandra-agente/wrangler.toml)
+   - Alejandra vive aquí desde las versiones antiguas vía devAIChat()/
+     handleDevAI() (worker.js raíz, líneas ~2638 y ~12810) — canal Telegram y
+     endpoint /dev/ai-chat. Chat accesible desde la app móvil (index.html).
+   - Este archivo (ALEJANDRA_AGENTE.txt) NO cubre este worker.js en detalle —
+     su enfoque es alejandra-agente/worker.js (punto 2). Si tocas devAIChat/
+     handleDevAI, audita ese archivo aparte antes de asumir que las reglas de
+     aquí aplican igual.
 
-2. EL AGENTE INDEPENDIENTE (alejandra-agente/worker.js)
-   - URL: https://alejandra-agente.alejandra-app.workers.dev
-   - Worker Cloudflare separado con lógica NEXUS avanzada
-   - Panel de control: https://padilla585projects.github.io/Alejandra-APP/alejandra-panel.html
-   - Token acceso: ver sección "AUTENTICACIÓN" más abajo
+2. EL AGENTE INDEPENDIENTE — alejandra-agente/worker.js (con lógica NEXUS
+   avanzada, L0-L4, tools, gating de auth) — es el foco de TODO el resto de
+   este documento.
+   URL:   https://alejandra-agente.alejandra-app.workers.dev
+   Panel: https://padilla585projects.github.io/Alejandra-APP/alejandra-panel.html
+          (también panel.html, servido por GitHub Pages)
+   Auth panel: ver sección "AUTENTICACIÓN" más abajo
 
-IMPORTANTE: Ambos comparten el MISMO D1 (alejandra-db). Son la misma Alejandra.
+IMPORTANTE: ambos workers comparten el MISMO D1 (alejandra-db, mismo
+database_id en los dos wrangler.toml) y el mismo R2 (alejandra-app-files) —
+son la misma Alejandra, una sola base de datos multi-empresa (aislada por
+empresa_id), servida por dos Workers Cloudflare separados con su propio
+wrangler.toml y su propio pipeline de deploy.
 
 ================================================================================
   ARQUITECTURA DEL AGENTE (alejandra-agente/worker.js)
 ================================================================================
 
 NEXUS ROUTER:
-  1. Haiku clasifica el mensaje → determina experto (simple/app/tecnico/web/reflexion/completo)
-  2. Se carga el prompt dinámico (NEXUS_MODULES) para ese experto
-  3. Se llama a Sonnet con las herramientas del experto
-  4. Bucle de hasta MAX_ITERATIONS si hay tool calls
+  1. Haiku (MODEL_ROUTER = claude-haiku-4-5) clasifica el mensaje → determina
+     qué experto de NEXUS_EXPERTS atiende (simple/app/tecnico/web/reflexion/
+     completo/ingenieria).
+  2. Se construye el system prompt de ese experto combinando sus módulos de
+     NEXUS_MODULES (ver "PROMPT EN CAPAS L0-L4" abajo).
+  3. Se llama a Sonnet (MODEL_EXPERTO = claude-sonnet-4-6) con las tools de
+     TOOLS_POR_EXPERTO filtradas además por auth (ver "GATING DE TOOLS").
+  4. Bucle de iteraciones si hay tool calls, hasta un máximo.
 
-NEXUS_MODULES (fragmentos de prompt):
-  base       — identidad Alejandra, reglas generales
-  app        — contexto de la app industrial (bobinas, equipos, etc.)
-  tecnica    — stack técnico, tablas D1, worker.js
-  nexus      — cómo funciona el router NEXUS
-  evolucion  — autonomía, self-audit
-  web        — búsqueda web con OpenAI
-  reflexion  — auto-mejora y memoria
-  decision   — autoconciencia y toma de decisiones autónoma
-  formato    — cómo formatear respuestas
+NEXUS_MODULES (fragmentos de prompt, 20 módulos a fecha de hoy):
+  Para la lista completa y actualizada de nombres de módulo (ajusta el rango
+  de líneas si NEXUS_MODULES/NEXUS_EXPERTS se han movido):
+    grep -n "^  [a-z_]*:" alejandra-agente/worker.js | awk -F: '$1<897'
+  (o simplemente abrir worker.js y mirar el objeto NEXUS_MODULES, línea ~31).
+  Incluye, entre otros: base, app, tecnica, nexus, evolucion, web, reflexion,
+  decision, contexto_sesion, aprendizaje_proactivo, ram, formato, razonamiento,
+  ingenieria, ingenieria_electrica, capacidades_avanzadas, inteligencia_negocio,
+  asistente_escaneo, seguimiento_proactivo, proactividad_real.
 
-NEXUS_EXPERTS (perfiles):
-  simple    → Haiku, max 512 tokens, módulos [base, formato]
-  app       → Sonnet, max 1024, módulos [base, app, formato]
-  tecnico   → Sonnet, max 2048, módulos [base, app, tecnica, nexus, evolucion, formato]
-  web       → Sonnet, max 1536, módulos [base, web, formato]
-  reflexion → Sonnet, max 2048, módulos [base, app, tecnica, nexus, evolucion, reflexion, decision, formato]
-  completo  → Sonnet, max 3072, todos los módulos
+NEXUS_EXPERTS (perfiles, definidos en worker.js línea ~897):
+  simple     → módulos mínimos, respuestas rápidas/cortas
+  app        → uso cotidiano de la app (bobinas, fichajes, PRL, obras...)
+  tecnico    → preguntas sobre la infraestructura/código del propio sistema
+  web        → búsqueda web (usa GPT-4o-mini + web_search_preview de OpenAI)
+  reflexion  → auto-mejora, memoria, decisiones autónomas
+  completo   → combina casi todos los módulos, para consultas amplias
+  ingenieria → cálculos eléctricos/mecánicos de obra (cable, bandeja, protección,
+               esquemas)
+  Todos usan MODEL_EXPERTO salvo el router (MODEL_ROUTER para clasificar).
+  maxTokens y la lista exacta de módulos por experto: ver worker.js línea ~897
+  (NEXUS_EXPERTS) — varían con frecuencia, no se transcriben aquí.
 
-HERRAMIENTAS DISPONIBLES (por experto):
-  simple:    []
-  app:       [memory_read]
-  tecnico:   [leer_estado, memory_read]
-  web:       [buscar_web]
-  reflexion: [memory_save, memory_read, propose_mejora, buscar_web, tomar_decision, leer_estado]
-  completo:  [buscar_web, memory_read, leer_estado]
+PROMPT EN CAPAS L0-L4 (buildAnthropicSystemBlocks, worker.js línea ~916):
+  L0 — Identidad estática (módulos 'base' + 'formato') → cacheada (prompt
+       caching de Anthropic, TTL 5 min), igual para todos los expertos.
+  L1 — Módulos propios del experto activo → cacheados junto con L0.
+  L2 — Contexto dinámico: pending thoughts, reglas destiladas, self-knowledge.
+  L3 — Estado live del sistema (salud, usuarios activos, etc.).
+  L4 — Catálogo de tools visibles para ESTE experto (tras el gating de auth).
+  Motivo de la separación: L0/L1 no cambian entre turnos de la misma sesión ni
+  entre usuarios → se benefician del prompt caching de Anthropic (ahorro real
+  de coste/latencia). L2-L4 sí cambian por turno/usuario y van fuera del bloque
+  cacheado.
 
-TODAS LAS HERRAMIENTAS:
-  memory_save       — guarda en alejandra_memoria
-  memory_read       — lee alejandra_memoria
-  propose_mejora    — propone cambios de código (para revisión humana)
-  buscar_web        — búsqueda con OpenAI gpt-4o-mini + web_search_preview
-  leer_estado       — lee config, conteo memorias, últimas decisiones, logs
-  tomar_decision    — registra decisión; si tipo=config + confianza≥0.8 → aplica automáticamente
+HERRAMIENTAS (TOOLS_POR_EXPERTO, worker.js línea ~1867):
+  A fecha de hoy hay 56 tools distintas definidas, repartidas de forma no
+  uniforme entre los 7 expertos (el experto "app", por ejemplo, tiene acceso a
+  la mayoría; "web" solo a 3; "simple" a 3 básicas). Lista completa y ordenada:
+    grep -n "name: '" alejandra-agente/worker.js | grep -oP "name: '\K[a-z_0-9]+(?=')" | sort -u
+  Categorías representativas (no exhaustivo): memoria (memory_save/read,
+  ram_save/read/clear), archivos (listar/ver/subir_archivo, files R2), BD
+  (consultar_bd/escribir_bd — ver gating IDOR abajo), código/deploy
+  (github_leer/escribir/buscar, grep_codigo, patch_codigo, ejecutar_deploy,
+  verificar_deploy, rollback, test_endpoint, nexus_manage), ingeniería
+  (calcular_cable/bandeja/proteccion, generar_esquema_electrico,
+  listar/borrar_esquema, analizar_foto_obra), gestión de obra (estado_obra,
+  gestionar_tarea/rfi/oc/acta/calidad), comunicación (enviar_email,
+  enviar_push, enviar_telegram_informe, iniciar_conversacion), planificación
+  (pensar, planificar, descubrir_herramientas, recuperar_conversacion),
+  autonomía (propose_mejora, tomar_decision, leer_estado).
+
+================================================================================
+  GATING DE TOOLS POR AUTENTICACIÓN Y AISLAMIENTO MULTI-EMPRESA
+  (fixes de seguridad de la sesión 04-05/07/2026 — leer esto antes de tocar
+  auth, tools de BD, archivos, o el endpoint de test)
+================================================================================
+
+Historial del problema: hasta la sesión del 04/07/2026, /api/chat y
+/api/chat/stream confiaban ciegamente en el `usuario_id` que mandaba el CLIENTE
+en el body (sin verificar token), y esa identidad decidía qué tools podía usar
+Claude. Cualquiera podía mandar {usuario_id:"adrian"} sin token y desbloquear
+patch_codigo/github_escribir/ejecutar_deploy/rollback (escritura de código +
+deploy) o consultar_bd/escribir_bd (lectura/escritura arbitraria de la BD
+compartida de TODAS las empresas). Se corrigió con 3 capas, todas en vigor:
+
+1. filtrarToolsPorAuth() (lib.js) — gating por identidad VERIFICADA:
+     authOk          = true SOLO si la identidad viene de un Authorization:
+                        Bearer <token> verificado contra la tabla `sesiones` o
+                        ADMIN_TOKEN (ver getAuth() en worker.js) — NUNCA del
+                        usuario_id que manda el body.
+     esDevVerificado = true SOLO si esa identidad verificada es developer/admin.
+   TOOLS_SOLO_DEV_VERIFICADO (patch_codigo, github_escribir, ejecutar_deploy,
+   rollback, test_endpoint) exige esDevVerificado. TOOLS_REQUIEREN_SESION
+   (consultar_bd, escribir_bd, listar_archivos, ver_archivo) exige authOk.
+
+2. validarScopeEmpresaBD() (lib.js) — aislamiento por empresa_id para
+   consultar_bd/escribir_bd: el gating de (1) exige sesión, pero no evita que
+   un usuario de la empresa A consulte/escriba datos de la empresa B (la query
+   SQL es texto libre generado por el modelo). Esta capa solo permite tablas de
+   negocio conocidas con empresa_id real en el esquema de producción
+   (TABLAS_EMPRESA_PERMITIDAS, 58 tablas a fecha de hoy — lista completa en
+   lib.js línea ~44) y exige que la query filtre explícitamente por el
+   empresa_id REAL del que llama (derivado de la sesión, nunca del texto de la
+   query). Se excluyen a propósito `sesiones` y `vincular_tokens` aunque tengan
+   empresa_id: contienen tokens de sesión/vinculación, y leerlos permitiría
+   suplantar a otro usuario de la misma empresa (incluido un admin). También
+   bloquea columnas sensibles (password_hash). esDevVerificado se salta esta
+   capa.
+
+3. empresaDeArchivo() / puedeAccederArchivo() (worker.js, junto a
+   /files/<key>) — aislamiento por empresa_id para archivos servidos desde R2:
+   antes, /files/<key> y las tools listar_archivos/ver_archivo servían
+   CUALQUIER key de R2 a CUALQUIER sesión autenticada, sin comprobar que el
+   archivo pertenece a su empresa. Los objetos no llevan empresa_id en el key
+   (se generó en /upload, sin sesión verificada) — solo
+   `customMetadata.usuario_id`. Se resuelve ese usuario_id contra la tabla
+   `usuarios` para saber la empresa dueña; si no se puede determinar con
+   certeza → se trata como NO accesible (fallar cerrado, no abierto).
+
+Anti-SSRF en test_endpoint: urlPermitidaTestEndpoint() (lib.js) — allowlist de
+host (solo *.alejandra-app.workers.dev sobre https, con comprobación real de
+subdominio, no substring) para evitar que la tool test_endpoint se use para
+sondear red interna o servicios arbitrarios.
+
+Rate limiting y tope de gasto diario (protección anti runaway-cost): antes
+/api/chat y /api/chat/stream no tenían NINGUNA protección de volumen ni de
+gasto. Ahora (worker.js, validarRateLimit/validarTopeGastoDiario):
+  - 15 peticiones/minuto por identidad (usuario_id si hay sesión, si no la IP),
+    vía RATE_LIMIT_KV, ventana deslizante de 1 minuto.
+  - Tope global de 10 $/día (todavía no hay empresa_id en
+    alejandra_token_uso, así que el tope es global, no por empresa — separar
+    por empresa queda como mejora futura).
+  - Fail-open ante error de KV/D1 (no bloquear el servicio si el propio
+    rate limiter falla).
+
+Todas las funciones puras de este bloque (filtrarToolsPorAuth,
+extraerTablasQuery, validarScopeEmpresaBD, urlPermitidaTestEndpoint,
+esStatusReintentableAnthropic, calcularEsperaReintentoMs,
+calcularCosteYProveedor) viven en alejandra-agente/lib.js — ver siguiente
+sección.
+
+================================================================================
+  TESTS (alejandra-agente/lib.js + lib.test.js) — desde commit 93d0d3a
+================================================================================
+
+worker.js es un único archivo de ~9.000 líneas sin router ni framework de test.
+Para poder testear al menos la lógica de más riesgo sin reescribir todo el
+worker, se extrajeron las funciones PURAS (sin D1/KV/fetch reales) a un módulo
+sibling `lib.js`, que worker.js importa. Solo vive ahí lo que NO toca env.DB,
+env.RATE_LIMIT_KV, env.FILES ni hace fetch() real:
+
+  - PRECIOS_USD + calcularCosteYProveedor  — pricing/coste por modelo+proveedor
+  - filtrarToolsPorAuth (+ TOOLS_SOLO_DEV_VERIFICADO/TOOLS_REQUIEREN_SESION)
+  - extraerTablasQuery / validarScopeEmpresaBD (+ TABLAS_EMPRESA_PERMITIDAS/
+    COLUMNA_BLOQUEADA_BD)                    — fix IDOR de consultar_bd/escribir_bd
+  - urlPermitidaTestEndpoint (+ HOSTS_PERMITIDOS_TEST_ENDPOINT) — anti-SSRF
+  - esStatusReintentableAnthropic / calcularEsperaReintentoMs — backoff/retry
+    de fetchAnthropicConReintentos
+
+Todo lo que necesita I/O real (registrarTokenUso, validarRateLimit, getAuth,
+empresaDeArchivo, etc.) se queda en worker.js, sin cobertura automatizada
+todavía (verificación manual vía curl tras cada deploy). Ampliar esto con
+`@cloudflare/vitest-pool-workers` (Miniflare) queda como mejora futura si se
+decide invertir en tests de integración de rutas reales.
+
+Cómo correr los tests:
+  cd alejandra-agente && npm ci && npm test        (vitest run, 37 tests)
+
+El workflow de deploy (deploy-alejandra-agente.yml) instala dependencias y
+corre `npm test` ANTES de aplicar migraciones D1 y desplegar — si los tests
+fallan, el deploy no continúa (ver sección "DEPLOY Y CI/CD").
+
+`alejandra-agente/package.json` y `package-lock.json` SÍ están trackeados en
+git aunque el .gitignore raíz ignora package.json/package-lock.json en todo el
+repo — hay una excepción explícita para alejandra-agente/ en .gitignore.
 
 ================================================================================
   BASE DE DATOS D1 (alejandra-db)
@@ -78,137 +228,201 @@ TODAS LAS HERRAMIENTAS:
 ID: 0c9eccde-78f1-476d-ac68-bf452bec0c62
 Account ID: d65ead2b2967bf68ff3848a36cd7b1b4
 
-TABLAS COMPARTIDAS CON LA APP PRINCIPAL:
+TABLAS COMPARTIDAS CON EL RESTO DEL ECOSISTEMA (app móvil + panel):
   alejandra_historial    — historial chat unificado (app+panel+telegram)
                            columnas: id, canal, rol, contenido, created_at
                            canal: 'web' | 'telegram' | 'panel'
                            rol: 'user' | 'assistant'
   alejandra_memoria      — memoria persistente de Alejandra
-                           columnas: id, usuario_id, empresa_id, tipo, titulo, contenido, importancia, created_at
-                           tipo: aprendizaje | contexto | error | hecho | decision | patron
-  alejandra_fixes        — propuestas de fix de código
+                           columnas: id, usuario_id, empresa_id, tipo, titulo,
+                           contenido, importancia, created_at
+                           tipo: aprendizaje | contexto | error | hecho |
+                           decision | patron
+  alejandra_fixes        — propuestas de fix de código (propose_mejora)
+  usuarios, obras, bobinas, fichajes, ... (58 tablas de negocio con
+                           empresa_id real) — ver TABLAS_EMPRESA_PERMITIDAS en
+                           lib.js línea ~44 para la lista completa y vigente.
 
 TABLAS PROPIAS DEL AGENTE:
   alejandra_config       — config de autonomía: modo, auto_fix, max_iterations
   alejandra_tokens       — tokens de acceso al panel admin
-                           columnas: id, token, tipo, descripcion, activo, created_at, expires_at
+                           columnas: id, token, tipo, descripcion, activo,
+                           created_at, expires_at
   alejandra_logs         — log de acciones del agente
   alejandra_alert_cache  — caché de alertas con TTL
   alejandra_token_uso    — tracking de uso y coste de tokens API
-                           columnas: id, proveedor, modelo, tipo, tokens_entrada, tokens_salida, coste_usd, usuario_id, created_at
+                           columnas: id, proveedor, modelo, tipo,
+                           tokens_entrada, tokens_salida, coste_usd,
+                           usuario_id, created_at
+                           (NO tiene empresa_id todavía — el tope de gasto
+                           diario es global, no por empresa)
 
-PRECIOS (USD/millón tokens):
+PRECIOS (USD/millón tokens) — fuente de verdad: PRECIOS_USD en lib.js:
   claude-haiku-4-5:  $1.00 entrada / $5.00 salida
   claude-sonnet-4-6: $3.00 entrada / $15.00 salida
   gpt-4o-mini:       $0.15 entrada / $0.60 salida
+  gpt-4o:            $2.50 entrada / $10.00 salida
   EUR_RATE = 0.92
+  Modelo desconocido → cae al precio por defecto (1$/5$, el de Haiku) sin
+  romper — pero SIEMPRE hay que añadir aquí cualquier modelo nuevo que se use
+  de verdad (bug histórico: gpt-4o no estaba en esta tabla y se facturaba/
+  etiquetaba mal — fix commit 6f5dd3c, con test de regresión en lib.test.js).
 
 ================================================================================
   ENDPOINTS DEL AGENTE
 ================================================================================
 
-PÚBLICOS (sin auth):
-  GET  /health                  → {status, version, nexus, reflexion, decisiones, web_search}
-  POST /api/chat                → {mensaje, usuario_id, [empresa_id, canal]} → {respuesta, experto, iteraciones}
+A fecha de hoy hay ~38 rutas distintas. Lista completa y vigente:
+  grep -n "path === '\|path.startsWith('" alejandra-agente/worker.js
+(usar esto, no la lista de abajo, para confirmar rutas exactas — cambia con
+frecuencia). Grupos principales, a modo de orientación:
 
-ADMIN (requieren Authorization: Bearer <token>):
-  GET  /api/admin/config        → {modo, auto_fix, max_iterations}
-  POST /api/admin/config        → {modo, auto_fix, max_iterations} → {ok}
-  GET  /api/admin/logs          → [{id, accion, parametros, resultado, status, created_at}]
-  GET  /api/admin/memoria       → [{id, tipo, titulo, contenido, importancia, created_at}]
-                                  ?tipo=aprendizaje|decision|etc  ?limit=50
-  GET  /api/admin/chat          → [{canal, rol, contenido, created_at}]
-                                  ?canal=web|telegram|panel  ?limit=100
-  GET  /api/admin/gastos        → {periodo_dias, total_usd, total_eur, por_modelo, por_dia}
-                                  ?dias=7|30|90
-  GET  /api/admin/tokens        → [{id, descripcion, tipo, activo, created_at}]
-  POST /api/admin/tokens        → {nombre, token_valor} → {ok}  (crear usuario)
-  DELETE /api/admin/tokens      → {id} → {ok}  (revocar acceso)
-  POST /api/admin/tokens/change → {token_nuevo} → {ok}  (cambiar propia contraseña)
-  POST /api/reflexion           → {token} → {ok}  (lanzar reflexión autónoma)
+PÚBLICOS (sin auth):
+  GET  /health                  → {status, version, nexus, reflexion,
+                                   decisiones, web_search, vision, ingenieria,
+                                   gemini_vision, prompt_caching, razonamiento,
+                                   auto_resumen, push, automod, tareas, ...}
+  POST /api/chat                → chat sin streaming
+  POST /api/chat/stream         → chat con streaming (SSE)
+  GET  /api/chat/history        → historial de chat
+  GET  /version, GET /apk/download, POST /upload, GET /files/<key>,
+  POST /push-subscribe, GET /push-vapid-key, POST /fcm-token, POST /push,
+  POST /webhook/evento, endpoints /api/sync/* (evento/eventos/ping/confirmar/
+  dispositivos), /api/comandos/pendientes|resultado, /conocimiento*,
+  /api/esquemas/view/<file>, POST /auth/verify-session, POST /admin/migrate.
+
+  IMPORTANTE: "sin auth" arriba se refiere al framework de rutas — varios de
+  estos SÍ validan sesión/empresa_id/rate-limit dentro del propio handler (ver
+  sección de gating más arriba). No asumir que "público" == "sin ninguna
+  validación".
+
+ADMIN (requieren Authorization: Bearer <token>, bajo /api/admin/):
+  GET/POST /api/admin/config, GET /api/admin/logs, GET /api/admin/memoria,
+  GET /api/admin/chat, GET /api/admin/gastos (?dias=7|30|90),
+  GET/POST/DELETE /api/admin/tokens, POST /api/admin/tokens/change.
+
+  POST /api/reflexion           → {token} → lanza reflexión autónoma manual
 
 ================================================================================
   AUTENTICACIÓN
 ================================================================================
 
-El panel usa tokens almacenados en alejandra_tokens (D1).
-La función verificarAdminToken comprueba:
-  1. Si env.ADMIN_TOKEN existe y coincide → autorizado (env var como respaldo)
-  2. Si no → consulta alejandra_tokens WHERE token=? AND tipo='admin' AND activo=1
+El panel usa tokens almacenados en alejandra_tokens (D1). getAuth() (worker.js)
+comprueba, para las rutas que la usan:
+  1. Authorization: Bearer <token> contra la tabla `sesiones` (identidad real
+     de usuario logueado en la app/panel) — es la fuente de verdad para authOk/
+     esDevVerificado (ver sección de gating).
+  2. Para el panel admin específicamente: si env.ADMIN_TOKEN existe y coincide
+     → autorizado (env var como respaldo); si no, consulta alejandra_tokens
+     WHERE token=? AND tipo='admin' AND activo=1.
 
-TOKEN ACTUAL: 'alejandra2026' (o el que haya configurado el usuario en el panel)
+TOKEN ACTUAL: el configurado por wrangler secret ADMIN_TOKEN (ver "SECRETS" en
+la sección de deploy) o el que haya configurado el usuario en el panel — NO
+asumir un valor fijo, puede haberse rotado.
 
-HISTORIA DEL BUG (para entender por qué hay dos mecanismos):
-  - migrate_001 usaba INDEX inline en CREATE TABLE (inválido en SQLite/D1)
-  - Eso hacía fallar la migración silenciosamente → alejandra_tokens vacía
-  - migrate_003 lo corrige: crea tablas con sintaxis correcta + INSERT OR REPLACE del token
-  - env.ADMIN_TOKEN (wrangler secret) se setea en el workflow como respaldo
+HISTORIA DEL BUG (por qué hay dos mecanismos de admin):
+  - migrate_001 usaba INDEX inline en CREATE TABLE (inválido en SQLite/D1) →
+    fallaba silenciosamente → alejandra_tokens vacía.
+  - migrate_003 lo corrige: crea tablas con sintaxis correcta + INSERT OR
+    REPLACE del token.
+  - env.ADMIN_TOKEN (wrangler secret) se setea en el workflow como respaldo.
 
 ================================================================================
   MIGRACIONES D1
 ================================================================================
 
-Los archivos están en alejandra-agente/ y se ejecutan via GitHub Actions:
+Los archivos están en alejandra-agente/ y se ejecutan vía GitHub Actions:
 
-  migrate_001_init_schema.sql  — Schema inicial (TIENE BUG: INDEX inline, usar 003 para fix)
+  migrate_001_init_schema.sql  — Schema inicial (TIENE BUG: INDEX inline, usar
+                                  003 para fix)
   migrate_002_token_uso.sql    — Tabla alejandra_token_uso
-  migrate_003_fix_schema.sql   — Corrige tablas, añade alejandra_historial, renueva token
+  migrate_003_fix_schema.sql   — Corrige tablas, añade alejandra_historial,
+                                  renueva token
 
-El workflow deploy-alejandra-agente.yml aplica las 3 migraciones antes de desplegar.
+El workflow deploy-alejandra-agente.yml aplica las 3 migraciones (con
+`|| echo ...` para no fallar si ya están aplicadas) ANTES de correr los tests
+y desplegar. Si se añaden migraciones nuevas, seguir el mismo patrón numerado
+y añadirlas al workflow.
 
 Para ejecutar manualmente:
   npx wrangler d1 execute alejandra-db --file=alejandra-agente/migrate_003_fix_schema.sql --remote
 
 ================================================================================
-  PANEL DE CONTROL (alejandra-panel.html)
+  PANEL DE CONTROL (panel.html / alejandra-panel.html)
 ================================================================================
 
 URL: https://padilla585projects.github.io/Alejandra-APP/alejandra-panel.html
-Acceso: token de la tabla alejandra_tokens
+Acceso: token de la tabla alejandra_tokens (o ADMIN_TOKEN de respaldo).
 
-SECCIONES:
-  💬 Chat      — Chat directo con Alejandra (voz, STT/TTS, experto visible)
-  📊 Dashboard — Estado del sistema, stats, últimas conversaciones
-  💰 Gastos    — Coste en EUR por modelo y por día (Anthropic + OpenAI)
-  🧠 Memoria   — Ver y filtrar alejandra_memoria por tipo
-  📋 Logs      — Historial unificado de conversaciones (app+panel+telegram)
-                  Filtrable por canal
-  ⚙️ Config    — Modo (autónomo/confirmación), max_iterations
-  🔄 Reflexión — Lanzar reflexión autónoma manual
-  🔐 Seguridad — Cambiar contraseña, añadir/revocar usuarios
+Secciones habituales: Chat directo, Dashboard/estado del sistema, Gastos
+(coste en EUR por modelo/día, Anthropic + OpenAI), Memoria (filtrable por
+tipo), Logs (historial unificado app+panel+telegram, filtrable por canal),
+Config (modo autónomo/confirmación, max_iterations), Reflexión (lanzar
+reflexión autónoma manual), Seguridad (cambiar contraseña, añadir/revocar
+usuarios).
 
-El panel usa tema púrpura oscuro:
-  --bg: #0d0b1a  --surf: #17132b  --surf2: #221d3d  --acc: #8b5cf6
+API base del agente en el panel: const API =
+'https://alejandra-agente.alejandra-app.workers.dev'
 
-API base definida en: const API = 'https://alejandra-agente.alejandra-app.workers.dev'
+Nota: panel.html tuvo varios fixes de consola recientes (checkConexion,
+navTo, Service Worker cacheando solo GET, Google OAuth por redirect) — ver
+SESION.md, sección "continuacion 10", para el detalle; no repetido aquí porque
+no es específico del agente sino del frontend del panel.
 
 ================================================================================
   DEPLOY Y CI/CD
 ================================================================================
 
-GITHUB ACTIONS:
-  .github/workflows/deploy-alejandra-agente.yml
-    - Trigger: push a main en paths alejandra-agente/** o el workflow
-    - Aplica migrate_001, 002, 003 (con || echo para no fallar si ya existe)
-    - npx wrangler deploy
-    - Setea secrets: ANTHROPIC_API_KEY, OPENAI_API_KEY, ADMIN_TOKEN='alejandra2026'
-    - Health check al final
+GITHUB ACTIONS: .github/workflows/deploy-alejandra-agente.yml
+  Trigger: push a main en paths alejandra-agente/** o el propio workflow (o
+  workflow_dispatch manual).
+  Orden de pasos:
+    1. Checkout + setup Node 22 + instalar wrangler.
+    2. cd alejandra-agente && npm ci   (instala vitest, ver "TESTS" arriba)
+    3. cd alejandra-agente && npm test (vitest run) — SI FALLA, el deploy NO
+       continúa (ver siguiente paso, viene después en el workflow).
+    4. Aplicar migrate_001/002/003 (con || echo para no fallar si ya existen).
+    5. npx wrangler deploy.
+    6. Setear secrets: ANTHROPIC_API_KEY, OPENAI_API_KEY, ADMIN_TOKEN (solo en
+       push, no en workflow_dispatch).
+    7. Health check final (GET /health, espera HTTP 200 tras sleep 20s).
 
-  .github/workflows/pages.yml
-    - Trigger: push a main
-    - Copia index.html, panel.html, alejandra-panel.html, sw.js, etc. a _site
-    - Deploy a GitHub Pages
+  .github/workflows/pages.yml — Trigger: push a main. Copia index.html,
+  panel.html, alejandra-panel.html, sw.js, etc. a _site y despliega a
+  GitHub Pages.
 
-SECRETS NECESARIOS EN GITHUB:
+SECRETS configurados vía el workflow (GitHub Actions secrets → wrangler secret
+put, NUNCA committeados):
   CLOUDFLARE_API_TOKEN  — token con permisos Workers + D1
-  ANTHROPIC_API_KEY     — para Claude Sonnet/Haiku
-  OPENAI_API_KEY        — para búsqueda web (gpt-4o-mini)
+  ANTHROPIC_API_KEY     — Claude Sonnet/Haiku
+  OPENAI_API_KEY        — búsqueda web (gpt-4o-mini) y fallback de coste
+  ADMIN_TOKEN           — contraseña del panel (respaldo de alejandra_tokens)
 
-WRANGLER.TOML (alejandra-agente/):
-  name: "alejandra-agente"
-  DB binding: alejandra-db (ID: 0c9eccde-78f1-476d-ac68-bf452bec0c62)
-  FILES binding: alejandra-app-files (R2)
-  Crons: DESACTIVADOS (cuenta free, límite 5 triggers)
+SECRETS opcionales, usados por el código pero NO seteados por el workflow
+(hay que setearlos a mano con `wrangler secret put <NOMBRE> --name
+alejandra-agente` si se quiere activar esa funcionalidad):
+  GEMINI_API_KEY (+ _2/_3 como fallback rotatorio) — visión de fotos/PDF vía
+                          Gemini, alternativa/complemento a Claude para
+                          analizar_foto_obra cuando el archivo es grande.
+  GITHUB_TOKEN            — necesario para github_leer/escribir/buscar,
+                          grep_codigo, patch_codigo (tools de auto-modificación
+                          de código); sin él, esas tools devuelven "no
+                          configurado" en vez de fallar en seco.
+
+WRANGLER.TOML (alejandra-agente/wrangler.toml):
+  name: "alejandra-agente" · main: worker.js
+  [[d1_databases]]   DB              → alejandra-db (0c9eccde-78f1-476d-ac68-bf452bec0c62)
+  [[r2_buckets]]     FILES           → alejandra-app-files
+  [[kv_namespaces]]  RATE_LIMIT_KV   → rate limiting (ventana deslizante) +
+                     caché del tope de gasto diario (validarRateLimit/
+                     validarTopeGastoDiario en worker.js)
+  [triggers] crons = ["0 5,8,11,14,17,19 * * *"]  — Alejandra "despierta" 6
+                     veces al día (UTC 5/8/11/14/17/19 = 7/10/13/16/19/21h
+                     España), NO están desactivados (el doc anterior lo decía
+                     mal — hay un handler scheduled() real en worker.js línea
+                     ~2965 y consume triggers de la cuenta free, límite 5/día
+                     ya superado deliberadamente a 6, verificar cuota si se
+                     añaden más).
 
 ================================================================================
   MODELOS IA USADOS
@@ -217,58 +431,81 @@ WRANGLER.TOML (alejandra-agente/):
   Clasificación (NEXUS router): claude-haiku-4-5
   Respuesta principal:          claude-sonnet-4-6
   Búsqueda web:                 gpt-4o-mini (con web_search_preview de OpenAI)
+  Fallback/otros usos OpenAI:   gpt-4o (ver PRECIOS_USD — etiquetado y
+                                 tarificado por separado desde el fix del
+                                 commit 6f5dd3c)
+  Visión de fotos (opcional):   Gemini (GEMINI_API_KEY), si está configurado
 
-  Todos los llamadas a API registran tokens/coste en alejandra_token_uso.
-
-================================================================================
-  VERSIONES RELEVANTES
-================================================================================
-
-  v5.86 — PHASE 1: Scaffolding agente + panel admin inicial
-  v5.87 — Fix CORS y deploy CI/CD
-  v5.88 — Integración botón 🤖 en app móvil
-  v5.89 — NEXUS Router con Haiku+Sonnet expertos
-  v5.90 — Herramientas: buscar_web, memory_save/read, propose_mejora
-  v5.91 — Autoconciencia: leer_estado + tomar_decision (autonomía real)
-  v5.92 — Panel de control completo (alejandra-panel.html) + tracking gastos
-         - Fix bug registrarLog (nombres columnas incorrectos en D1)
-  v5.93 — Alejandra unificada: misma memoria y historial en app+panel
-         - alejandra_historial como tabla compartida (todas las convs)
-         - Panel: historial filtrable por canal
-         - Fix autenticación: migrate_003 + env.ADMIN_TOKEN como respaldo
-         - Gestión de usuarios: añadir/revocar/cambiar contraseña desde panel
+  Todas las llamadas a API registran tokens/coste en alejandra_token_uso vía
+  calcularCosteYProveedor() (lib.js).
 
 ================================================================================
   REGLAS PARA MODIFICAR EL AGENTE
 ================================================================================
 
-1. El agente está en alejandra-agente/worker.js (NO en worker.js raíz)
-2. Siempre subir versión en health endpoint y comentario de cabecera
-3. Si cambias tablas D1 → crear migrate_00X_*.sql y añadirlo al workflow
-4. Verificar que version.json / sw.js / index.html están en sync antes de push
-5. El agente usa ES modules (export default { fetch() })
-6. No usar `wrangler.toml` del raíz para el agente — usar alejandra-agente/wrangler.toml
-7. Para desplegar solo el agente manualmente:
-     cd alejandra-agente && npx wrangler deploy
-8. Para ver logs en tiempo real:
+1. El agente está en alejandra-agente/worker.js (NO en el worker.js raíz, si
+   existe uno para la app principal — confirmar cuál es cuál antes de editar).
+2. Las funciones PURAS (sin D1/KV/fetch) van en lib.js, no en worker.js — y
+   si las tocas, actualiza/añade tests en lib.test.js (ver "TESTS" arriba).
+   El workflow de deploy falla el build si los tests no pasan: úsalo a tu
+   favor, no lo veas como un obstáculo.
+3. Siempre subir versión en el comentario de cabecera de worker.js Y en la
+   respuesta de GET /health — a fecha de esta actualización el comentario de
+   cabecera decía "v6.03" mientras /health devolvía "6.12": están
+   desincronizados, corregir la próxima vez que se toque cualquiera de los
+   dos (no se ha tocado en esta pasada porque no formaba parte del punto de
+   la lista, solo se deja anotado aquí para que no se repita el mismo error).
+4. Si cambias tablas D1 → crear migrate_00X_*.sql y añadirlo al workflow.
+5. Si tocas consultar_bd/escribir_bd o cualquier cosa de aislamiento por
+   empresa_id → lee primero la sección "GATING DE TOOLS..." de este archivo,
+   y añade/ajusta tests en lib.test.js. Este es el área con más historial de
+   bugs de seguridad (IDOR) del sistema — máxima cautela.
+6. El agente usa ES modules (import/export, `export default { fetch() }`).
+7. No usar el `wrangler.toml` del raíz para el agente — usar
+   alejandra-agente/wrangler.toml.
+8. Para desplegar solo el agente manualmente:
+     cd alejandra-agente && npm ci && npm test && npx wrangler deploy
+9. Para ver logs en tiempo real:
      npx wrangler tail --name alejandra-agente
+10. Nunca commitear secretos (API keys, tokens) en ningún archivo — solo vía
+    GitHub Actions secrets / `wrangler secret put`.
 
 ================================================================================
   ESTRUCTURA DE ARCHIVOS RELEVANTES
 ================================================================================
 
 alejandra-agente/
-  worker.js                    — Worker del agente (NEXUS, endpoints, herramientas)
-  wrangler.toml                — Config Cloudflare del agente
+  worker.js                    — Worker del agente (NEXUS, endpoints, tools,
+                                  I/O real con D1/KV/R2/fetch)
+  lib.js                       — Funciones puras extraídas de worker.js,
+                                  testeadas con vitest (ver "TESTS")
+  lib.test.js                  — 37 tests de lib.js
+  package.json / package-lock.json — devDependency vitest (excepción explícita
+                                  en .gitignore raíz para trackear estos dos)
+  wrangler.toml                 — Config Cloudflare del agente (DB/FILES/
+                                  RATE_LIMIT_KV/crons)
   migrate_001_init_schema.sql  — Schema inicial (tiene bug INDEX inline)
   migrate_002_token_uso.sql    — Tabla tracking tokens/coste
-  migrate_003_fix_schema.sql   — Fix schema + alejandra_historial + token renovado
+  migrate_003_fix_schema.sql   — Fix schema + alejandra_historial + token
+                                  renovado
 
-alejandra-panel.html           — Panel de control web (en raíz, servido por Pages)
+panel.html / alejandra-panel.html  — Panel de control web (servido por Pages)
 
 .github/workflows/
-  deploy-alejandra-agente.yml  — CI/CD del agente
+  deploy-alejandra-agente.yml  — CI/CD del agente (tests → migraciones →
+                                  deploy → secrets → health check)
+  deploy-worker.yml            — CI/CD del worker principal (app móvil, NO el
+                                  agente — es un worker distinto, ver sección
+                                  "QUÉ ES EL AGENTE ALEJANDRA")
   pages.yml                    — CI/CD de GitHub Pages (app móvil + panel)
-  deploy-worker.yml            — CI/CD del worker principal
+  setup-secrets.yml            — workflow auxiliar de configuración de secrets
+                                  (ver contenido del archivo antes de asumir
+                                  qué secrets setea; no se detalla aquí porque
+                                  no es específico del agente)
+
+SESION.md (raíz del repo) — bitácora de sesiones de trabajo, más detallada y
+más al día que este archivo para el histórico reciente de cambios; este
+archivo (ALEJANDRA_AGENTE.txt) es la foto fija de la arquitectura, SESION.md
+es el diario. Consulta ambos.
 
 ================================================================================
