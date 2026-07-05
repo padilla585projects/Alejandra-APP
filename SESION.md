@@ -1,13 +1,18 @@
 ## ESTADO ACTUAL
 
 **Sesion:** LIBRE
-**Ultima sesion:** 05/07/2026 -- Reescritura completa de ALEJANDRA_AGENTE.txt (commit 60ae56e, doc-only, sin deploy). Antes: primera cobertura de tests para alejandra-agente (lib.js + vitest, commit 93d0d3a). PWA panel: fix errores consola + Google OAuth restaurado (commit 942bde3, ver seccion de abajo).
+**Ultima sesion:** 05/07/2026 -- Fix version desincronizada del agente (v6.03 cabecera vs
+6.12 /health -> ambas ahora v6.13, commit a27d650 + doc a27d650/74f686e). Antes: reescritura
+completa de ALEJANDRA_AGENTE.txt (commit 60ae56e, doc-only, sin deploy). Antes de eso: primera
+cobertura de tests para alejandra-agente (lib.js + vitest, commit 93d0d3a). PWA panel: fix
+errores consola + Google OAuth restaurado (commit 942bde3, ver seccion de abajo).
 **Version actual:** App PWA **v7.55** -- commit 942bde3
-**Agente (alejandra-agente):** commit 93d0d3a desplegado en main (deploy CI 28739178252, health OK).
-Incluye ahora tests automatizados (37 tests, vitest) que corren en el workflow
+**Agente (alejandra-agente):** commit a27d650 desplegado en main (deploy CI 28739993149,
+health OK, /health ahora devuelve "6.13" -- version propia del agente, ver seccion de abajo).
+Incluye tests automatizados (37 tests, vitest) que corren en el workflow
 de deploy ANTES de aplicar migraciones/desplegar -- si fallan, no se despliega.
-**Documentacion del agente (ALEJANDRA_AGENTE.txt):** reescrita commit 60ae56e -- ya no
-tenia que ver con la realidad del codigo (v5.93 vs v6.12 real). Ver seccion de abajo.
+**Documentacion del agente (ALEJANDRA_AGENTE.txt):** reescrita commit 60ae56e, regla #3
+actualizada en 74f686e tras el fix de version. Ver seccion de abajo.
 
 ---
 
@@ -70,8 +75,50 @@ sin tocarse.
   recordatorio en la seccion de reglas para que se corrija la proxima vez que se
   toque cualquiera de los dos.
 
-Siguiente punto de la lista: pendiente de definir con Adrian (no hay mas items
-explicitos en la lista original de esta ronda de auditoria/fixes).
+Siguiente punto de la lista (superado, ver continuacion 13 mas arriba/abajo): Adrian pidio
+arreglar la desincronizacion de version anotada arriba, y seguir auditando.
+
+---
+
+## RESUMEN SESION 05/07/2026 (continuacion 13) -- Fix version desincronizada (v6.03 vs 6.12)
+
+Adrian pidio explicitamente arreglar el punto que la continuacion 12 habia dejado solo
+anotado (no corregido): la cabecera de `alejandra-agente/worker.js` decia "v6.03" mientras
+que `GET /health` devolvia `version: "6.12"`.
+
+### Auditoria de la causa raiz
+`git log -p --follow` sobre la cabecera de worker.js muestra una progresion real
+v6.00->v6.01->v6.02->v6.03 a lo largo de varios commits genuinos, pero el string
+`version: '6.12'` de `/health` no habia cambiado nunca desde que se introdujo. Un grep
+del repo completo (`v6.12`, `v6.03`) los encontro tambien en `ESTADO_APP.txt` -- el
+changelog **de la PWA**, no del agente -- con una entrada explicita que dice que el bump
+de la PWA a v6.03 coincidio con un cambio hecho ese dia "desde otro ordenador (worker del
+agente alejandra-agente)". Es decir: ninguno de los dos numeros (ni "v6.03" ni "6.12") fue
+nunca un contador propio del agente -- ambos se tomaron prestados en su momento de la
+numeracion de la PWA (que ahora va por v7.55, sin ninguna relacion con el agente).
+
+### Corregido (commit a27d650, deploy CI 28739993149, health OK -- confirmado con curl que
+### /health ya devuelve "6.13")
+- `alejandra-agente/worker.js`: cabecera y `/health` sincronizados a `v6.13` (siguiente
+  entero tras el mayor de los dos valores desincronizados). El comentario de cabecera
+  ahora explica la causa raiz y deja la regla por escrito: subir el numero en la cabecera
+  Y en `/health` a la vez, solo cuando cambie este worker, nunca copiado de la PWA.
+- `deploy-alejandra-agente.yml`: se quito el "v6.12" hardcodeado del mensaje de log del
+  paso "Verificar health" (quedaria desactualizado en cada bump futuro) -- ahora remite a
+  `/health` como fuente de verdad en vez de repetir un numero fijo.
+- Cero cambio de comportamiento: solo strings de version y un comentario. Verificado con
+  `node --check`, diff revisado (2 archivos, 8 inserciones/3 borrados), deploy CI en verde
+  (tests -> migraciones -> deploy -> health check), y confirmado por curl manual tras el
+  deploy que `/health` ya reporta `"6.13"`.
+
+### Documentacion (commit 74f686e, doc-only, sin deploy)
+- `ALEJANDRA_AGENTE.txt` regla #3 reescrita: ya no describe el problema como pendiente,
+  documenta la causa raiz real (numeros prestados de ESTADO_APP.txt) y la regla de
+  versionado propio del agente a partir de ahora.
+
+Siguiente punto de la lista: seguir auditando (instruccion "seguimos auditando" de
+Adrian, sin un item concreto todavia identificado -- pendiente de una nueva pasada de
+auditoria sobre el codigo del agente/PWA para encontrar el siguiente problema real).
 
 ---
 
