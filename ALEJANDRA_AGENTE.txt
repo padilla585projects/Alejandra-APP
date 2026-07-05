@@ -449,12 +449,17 @@ WRANGLER.TOML (alejandra-agente/wrangler.toml):
    si las tocas, actualiza/añade tests en lib.test.js (ver "TESTS" arriba).
    El workflow de deploy falla el build si los tests no pasan: úsalo a tu
    favor, no lo veas como un obstáculo.
-3. Siempre subir versión en el comentario de cabecera de worker.js Y en la
-   respuesta de GET /health — a fecha de esta actualización el comentario de
-   cabecera decía "v6.03" mientras /health devolvía "6.12": están
-   desincronizados, corregir la próxima vez que se toque cualquiera de los
-   dos (no se ha tocado en esta pasada porque no formaba parte del punto de
-   la lista, solo se deja anotado aquí para que no se repita el mismo error).
+3. Versión propia del agente, desacoplada de la PWA (fix commit a27d650):
+   el comentario de cabecera de worker.js decía "v6.03" mientras /health
+   devolvía "6.12" — desincronizados. Causa raíz: ninguno de los dos era un
+   contador propio del agente, ambos se "prestaron" en su día del changelog
+   de la PWA (ESTADO_APP.txt), que lleva su propia numeración totalmente
+   independiente (la PWA va ya por v7.55, sin relación con el agente).
+   Corregido: ahora el agente tiene su propio contador (v6.13 en adelante).
+   Regla a partir de ahora: sube el número en la cabecera Y en la respuesta
+   de GET /health A LA VEZ, solo cuando cambie ESTE worker (alejandra-agente/
+   worker.js), y NUNCA lo copies de ESTADO_APP.txt/version.json de la PWA —
+   son changelogs de proyectos distintos aunque compartan D1/R2.
 4. Si cambias tablas D1 → crear migrate_00X_*.sql y añadirlo al workflow.
 5. Si tocas consultar_bd/escribir_bd o cualquier cosa de aislamiento por
    empresa_id → lee primero la sección "GATING DE TOOLS..." de este archivo,
