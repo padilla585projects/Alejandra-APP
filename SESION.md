@@ -3,12 +3,14 @@
 **Sesion:** LIBRE
 **Ultima sesion:** 05/07/2026 -- Modulo de Planos Tecnicos (v7.56, commit 5f2b226).
 **Version actual:** App PWA **v7.56** -- commit 5f2b226
-**Agente (alejandra-agente):** commit a27d650 desplegado en main (deploy CI 28739993149,
-health OK, /health ahora devuelve "6.13" -- version propia del agente, ver seccion de abajo).
-Incluye tests automatizados (37 tests, vitest) que corren en el workflow
+**Agente (alejandra-agente):** commit 8d7ef65 desplegado en main (deploy CI 28742618524,
+health OK, /health sigue devolviendo "6.13" -- fix de esta sesion no tocaba version).
+Fix IDOR/SQLi critico en configurar_alerta y exportar_datos (ver continuacion 14 abajo).
+Incluye tests automatizados (47 tests, vitest) que corren en el workflow
 de deploy ANTES de aplicar migraciones/desplegar -- si fallan, no se despliega.
 **Documentacion del agente (ALEJANDRA_AGENTE.txt):** reescrita commit 60ae56e, regla #3
-actualizada en 74f686e tras el fix de version. Ver seccion de abajo.
+actualizada en 74f686e tras el fix de version, seccion de gating actualizada en e7134e3
+tras el fix de configurar_alerta/exportar_datos. Ver seccion de abajo.
 
 ---
 
@@ -115,6 +117,83 @@ numeracion de la PWA (que ahora va por v7.55, sin ninguna relacion con el agente
 Siguiente punto de la lista: seguir auditando (instruccion "seguimos auditando" de
 Adrian, sin un item concreto todavia identificado -- pendiente de una nueva pasada de
 auditoria sobre el codigo del agente/PWA para encontrar el siguiente problema real).
+
+---
+
+## RESUMEN SESION 05/07/2026 (continuacion 14) -- Fix IDOR/SQLi critico: configurar_alerta y exportar_datos
+
+Siguiente pasada de auditoria tras la continuacion 13 ("seguimos auditando"). Subagente
+de auditoria encontro un hallazgo CRITICO: dos tools quedaban fuera de las 3 capas de
+aislamiento multi-empresa ya aplicadas a consultar_bd/escribir_bd. Presentado a Adrian via
+AskUserQuestion (regla "auditar antes de arreglar") -- eligio explicitamente: "Arreglar ya,
+mismo patron que consultar_bd (Recomendado)".
+
+### Auditoria (confirmada leyendo worker.js directamente, no solo el resumen del subagente)
+- `configurar_alerta`: la accion "crear" guardaba un `condicion_sql` arbitrario en
+  `alertas_config` SIN validar que fuera un SELECT de solo lectura. La accion "verificar"
+  ejecutaba ese SQL guardado tal cual, mas tarde, via `env.DB.prepare(alerta.condicion_sql).all()`
+  -- sin ninguna comprobacion en ese momento tampoco. Cualquier sesion (no solo dev) con
+  acceso a esta tool podia persistir un UPDATE/DELETE/DROP disfrazado de "condicion de
+  alerta" y conseguir que se ejecutara solo, en background, la proxima vez que "verificar"
+  corriera (via cron o via el propio modelo).
+- `exportar_datos`: NINGUN tipo de exportacion (bobinas/personal/fichajes/materiales/gastos)
+  filtraba por `empresa_id` -- cualquier usuario con sesion podia exportar datos de TODAS
+  las empresas del sistema, no solo la suya (IDOR puro). Ademas, `obra_id`, `fecha_desde` y
+  `fecha_hasta` se concatenaban directamente como string dentro del SQL (sin `bind()`),
+  abriendo inyeccion SQL directa por esos 3 campos. El modo "custom" (`sql_custom`) solo
+  comprobaba que la query empezara por la palabra "SELECT" (case-insensitive), sin bloquear
+  tablas fuera de la allowlist ni columnas sensibles como `password_hash`.
+- Verificado contra el D1 de produccion (`wrangler d1 execute --remote`): las tablas
+  `personal` y `gastos` referenciadas por `exportar_datos` **no existen** en produccion hoy
+  -- esas dos ramas son codigo muerto/roto ahora mismo (fallan con "no such table", no
+  explotables actualmente), pero se corrigio igualmente el patron de inyeccion por
+  consistencia y por si se crean esas tablas en el futuro. `bobinas`, `fichajes` y
+  `materiales_obra` si existen y si tienen columna `empresa_id` real -- estas si eran
+  explotables.
+
+### Corregido (commit 8d7ef65, deploy CI 28742618524, health OK)
+- `lib.js`: `configurar_alerta` anadida a `TOOLS_SOLO_DEV_VERIFICADO` (igual que
+  patch_codigo/rollback/ejecutar_deploy) -- guarda y ejecuta SQL arbitrario, exige el
+  mismo nivel de confianza que las tools de codigo/deploy. `exportar_datos` anadida a
+  `TOOLS_REQUIEREN_SESION` (el scope real de empresa_id se aplica en worker.js).
+- `lib.js`: nueva funcion pura `validarSoloSelectBD(query)`, extraida de la logica que
+  ya vivia inline dentro de `consultar_bd` (mismo comportamiento, cero cambio para esa
+  tool), para poder compartirla tambien con `configurar_alerta` y `exportar_datos`.
+- `worker.js` / `configurar_alerta`: guarda "requiere sesion de desarrollador verificada"
+  como defensa en profundidad al inicio del case (por si algun dia se filtra a una ruta
+  que no pase por `filtrarToolsPorAuth`). `condicion_sql` se valida con
+  `validarSoloSelectBD` tanto en "crear" como, de nuevo, en cada fila al ejecutar
+  "verificar" (por si la fila viene de antes de este fix o de una edicion manual en D1).
+- `worker.js` / `exportar_datos`: reescrito por completo. Nuevo helper `construirWhere()`
+  construye el WHERE de las 5 exportaciones fijas con placeholders + array `params`
+  (obra_id, luego `empresa_id` obligatorio salvo `esDevVerificado`, luego fecha_desde/
+  fecha_hasta), ejecutado con `stmt.bind(...params).all()`. El modo "custom" ahora pasa
+  por `validarSoloSelectBD` + `validarScopeEmpresaBD` (el mismo aislamiento multi-empresa
+  que ya protegia a `consultar_bd`), en vez de solo comprobar el prefijo "SELECT".
+- `lib.test.js`: 10 tests nuevos (37 -> 47) -- `validarSoloSelectBD` (SELECT valido,
+  rechazo sin prefijo SELECT, rechazo con verbo de escritura colado, case-insensitivity,
+  input vacio/null/undefined) y nuevas pertenencias de `filtrarToolsPorAuth` para
+  `configurar_alerta`/`exportar_datos`. `node --check` limpio en los 3 archivos, diff
+  revisado linea a linea, deploy CI en verde (tests -> migracion -> deploy -> health
+  check), confirmado por curl manual que `/health` sigue respondiendo (version sin
+  cambios, este fix no tocaba el numero de version).
+
+### Documentacion (commit e7134e3, doc-only, sin deploy)
+- `ALEJANDRA_AGENTE.txt`: seccion "GATING DE TOOLS..." actualizada con las nuevas
+  pertenencias de `configurar_alerta`/`exportar_datos` y con `validarSoloSelectBD` como
+  nueva capa compartida; recuento de tests actualizado (37 -> 47) en sus dos referencias;
+  cabecera "ultima actualizacion" actualizada a continuacion 14 / commit 8d7ef65.
+
+### Fuera de alcance (anotado para decidir con Adrian, no corregido en esta sesion)
+El mismo subagente de auditoria reporto otros dos hallazgos que no se han actuado todavia
+(no fueron parte de la pregunta que Adrian respondio -- solo eran contexto):
+- Hallazgo #2: `/auth/verify-session` filtra `ADMIN_TOKEN` en texto plano en la respuesta.
+- Hallazgo #3: `verificarAdminToken` no tiene ningun rate limiting propio.
+Pendiente de presentarselos a Adrian como punto de decision antes de tocarlos (regla
+"auditar antes de arreglar").
+
+Siguiente punto de la lista: decidir con Adrian que hacer con los hallazgos #2 y #3 de
+arriba, y seguir con la instruccion "seguimos auditando" para el resto del sistema.
 
 ---
 
