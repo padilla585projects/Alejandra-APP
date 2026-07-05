@@ -6319,19 +6319,22 @@ ${descripcion ? `<div class="info-bar"><span class="badge">${tipo}</span>${descr
       try {
         const obraIdF = input.obra_id ? parseInt(input.obra_id) : null;
         const limitF  = Math.min(parseInt(input.limit) || 20, 50);
+        // Fix continuación 17 (IDOR): antes no filtraba por empresa_id -- cualquier
+        // usuario podía listar esquemas de OTRAS empresas. Ahora siempre se exige
+        // empresa_id, igual que el resto de tools de datos.
         let q, p;
         if (obraIdF) {
           q = `SELECT d.id, d.titulo, d.fecha_emision, d.r2_key, d.notas, o.nombre as obra_nombre, d.obra_id
                FROM documentos_obra d LEFT JOIN obras o ON o.id=d.obra_id
-               WHERE d.elaborado_por='Alejandra IA' AND d.obra_id=?
+               WHERE d.elaborado_por='Alejandra IA' AND d.empresa_id=? AND d.obra_id=?
                ORDER BY d.created_at DESC LIMIT ?`;
-          p = [obraIdF, limitF];
+          p = [empresa_id||1, obraIdF, limitF];
         } else {
           q = `SELECT d.id, d.titulo, d.fecha_emision, d.r2_key, d.notas, o.nombre as obra_nombre, d.obra_id
                FROM documentos_obra d LEFT JOIN obras o ON o.id=d.obra_id
-               WHERE d.elaborado_por='Alejandra IA'
+               WHERE d.elaborado_por='Alejandra IA' AND d.empresa_id=?
                ORDER BY d.created_at DESC LIMIT ?`;
-          p = [limitF];
+          p = [empresa_id||1, limitF];
         }
         const rows = await env.DB.prepare(q).bind(...p).all();
         const base = 'https://alejandra-agente.alejandra-app.workers.dev';
@@ -6362,23 +6365,32 @@ ${descripcion ? `<div class="info-bar"><span class="badge">${tipo}</span>${descr
         const key = (input.r2_key || '').trim();
         if (!key) return JSON.stringify({ ok: false, error: 'r2_key es obligatorio' });
         const keySvg = key.replace('.html', '.svg');
-        // Borrar de R2
+        // Fix continuación 17 (IDOR): antes se borraba el registro de documentos_obra
+        // (y su archivo en R2) de CUALQUIER empresa con solo saber/adivinar el r2_key
+        // o documento_id. Ahora se comprueba PRIMERO que el documento pertenece a la
+        // empresa de quien llama -- si no, no se toca ni R2 ni la BD.
+        const empresaIdF = empresa_id||1;
+        let changes = 0;
+        if (env.DB) {
+          let propio;
+          if (input.documento_id) {
+            propio = await env.DB.prepare(`SELECT id, r2_key FROM documentos_obra WHERE id=? AND empresa_id=? AND elaborado_por='Alejandra IA'`)
+              .bind(parseInt(input.documento_id), empresaIdF).first();
+          } else {
+            propio = await env.DB.prepare(`SELECT id, r2_key FROM documentos_obra WHERE (r2_key=? OR r2_key=?) AND empresa_id=? AND elaborado_por='Alejandra IA'`)
+              .bind(key, keySvg, empresaIdF).first();
+          }
+          if (!propio) {
+            return JSON.stringify({ ok: false, error: 'Esquema no encontrado (o no pertenece a tu empresa)' });
+          }
+          const res = await env.DB.prepare(`DELETE FROM documentos_obra WHERE id=? AND empresa_id=?`)
+            .bind(propio.id, empresaIdF).run();
+          changes = res.meta?.changes || 0;
+        }
+        // Borrar de R2 (solo tras confirmar que el documento era de esta empresa)
         if (env.FILES) {
           await env.FILES.delete(key);
           if (keySvg !== key) await env.FILES.delete(keySvg);
-        }
-        // Borrar de documentos_obra
-        let changes = 0;
-        if (env.DB) {
-          let res;
-          if (input.documento_id) {
-            res = await env.DB.prepare(`DELETE FROM documentos_obra WHERE id=? AND elaborado_por='Alejandra IA'`)
-              .bind(parseInt(input.documento_id)).run();
-          } else {
-            res = await env.DB.prepare(`DELETE FROM documentos_obra WHERE (r2_key=? OR r2_key=?) AND elaborado_por='Alejandra IA'`)
-              .bind(key, keySvg).run();
-          }
-          changes = res.meta?.changes || 0;
         }
         return JSON.stringify({
           ok: true,
@@ -6574,9 +6586,13 @@ ${descripcion ? `<div class="info-bar"><span class="badge">${tipo}</span>${descr
             if (input.descripcion)   { updates.push('descripcion=?');   params.push(input.descripcion); }
           }
           updates.push("updated_at=datetime('now')");
-          params.push(tareaId);
+          params.push(tareaId, empresa_id||1);
           if (!updates.length) return '❌ No se especificaron cambios.';
-          await env.DB.prepare(`UPDATE tareas_obra SET ${updates.join(',')} WHERE id=?`).bind(...params).run();
+          // Fix continuación 17 (IDOR): antes el WHERE solo comprobaba id -- cualquier
+          // usuario podía completar/modificar una tarea de OTRA empresa adivinando el
+          // ID (autoincremental). Ahora exige también empresa_id, igual que eliminar.
+          const upd = await env.DB.prepare(`UPDATE tareas_obra SET ${updates.join(',')} WHERE id=? AND empresa_id=?`).bind(...params).run();
+          if (!upd.meta?.changes) return `❌ Tarea #${tareaId} no encontrada (o no pertenece a tu empresa).`;
           return `✅ Tarea #${tareaId} ${accion === 'completar' ? 'marcada como completada ✅' : 'actualizada correctamente'}.`;
         }
 

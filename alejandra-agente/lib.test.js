@@ -109,6 +109,26 @@ describe('filtrarToolsPorAuth', () => {
     const r = filtrarToolsPorAuth(toolsFix14, false, false);
     expect(r.map(t => t.name)).toEqual(['buscar_web']);
   });
+
+  // fix continuación 17 (IDOR en listar_esquemas/borrar_esquema): antes ninguna
+  // de las dos exigía siquiera sesión, y en worker.js no filtraban por
+  // empresa_id -- ahora exigen sesión como mínimo (el scope real de empresa_id
+  // se aplica en worker.js, igual que exportar_datos).
+  const toolsFix17 = [
+    { name: 'listar_esquemas' },
+    { name: 'borrar_esquema' },
+    { name: 'buscar_web' },
+  ];
+
+  it('listar_esquemas/borrar_esquema requieren sesión, no pasan sin auth', () => {
+    const r = filtrarToolsPorAuth(toolsFix17, false, false);
+    expect(r.map(t => t.name)).toEqual(['buscar_web']);
+  });
+
+  it('listar_esquemas/borrar_esquema pasan con sesión (sin necesitar dev verificado)', () => {
+    const r = filtrarToolsPorAuth(toolsFix17, true, false);
+    expect(r.map(t => t.name)).toEqual(['listar_esquemas', 'borrar_esquema', 'buscar_web']);
+  });
 });
 
 // ── validarSoloSelectBD (fix continuación 14, reutilizada en configurar_alerta

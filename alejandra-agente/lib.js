@@ -38,7 +38,12 @@ const TOOLS_SOLO_DEV_VERIFICADO = new Set(['patch_codigo', 'github_escribir', 'e
 // exportar_datos (fix continuación 14, IDOR/SQLi): exportaba datos de TODAS las
 // empresas sin filtro y con obra_id/fechas concatenados sin parametrizar -- ahora
 // exige sesión como mínimo (el scope real por empresa_id se aplica en worker.js).
-const TOOLS_REQUIEREN_SESION    = new Set(['consultar_bd', 'escribir_bd', 'listar_archivos', 'ver_archivo', 'exportar_datos']);
+// listar_esquemas/borrar_esquema (fix continuación 17, IDOR): no filtraban por
+// empresa_id en worker.js y ni siquiera exigían sesión -- cualquiera podía listar
+// y borrar esquemas (y su archivo R2) de otra empresa. Ahora exigen sesión como
+// mínimo (el scope real por empresa_id se aplica en worker.js, igual que
+// exportar_datos).
+const TOOLS_REQUIEREN_SESION    = new Set(['consultar_bd', 'escribir_bd', 'listar_archivos', 'ver_archivo', 'exportar_datos', 'listar_esquemas', 'borrar_esquema']);
 function filtrarToolsPorAuth(tools, authOk, esDevVerificado) {
   return (tools || []).filter(t => {
     if (TOOLS_SOLO_DEV_VERIFICADO.has(t.name) && !esDevVerificado) return false;
