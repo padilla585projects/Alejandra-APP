@@ -22591,27 +22591,75 @@ INSTRUCCIONES FINALES:
 - Fecha actual: ${new Date().toLocaleDateString('es-ES')}
 - El resultado sera visualizado en el panel web de la empresa`;
 
-  const resp = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': env.ANTHROPIC_API_KEY,
-      'anthropic-version': '2023-06-01'
-    },
-    body: JSON.stringify({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 8192,
-      system: systemPrompt,
-      messages: [{ role: 'user', content: userMsg }]
-    })
-  });
+  // Cascada: OpenRouter (gratis) → Anthropic (de pago)
+  const _planoMsgs = [{ role: 'user', content: userMsg }];
+  let data = null;
+  let _planoProveedor = 'anthropic';
+  let _planoModelo = 'claude-sonnet-4-6';
 
-  if (!resp.ok) {
-    const errText = await resp.text().catch(() => resp.statusText);
-    throw new Error(`API error ${resp.status}: ${errText.slice(0, 200)}`);
+  // 1º Intentar OpenRouter con modelos capaces de generar SVG (contexto largo)
+  if (env.OPENROUTER_API_KEY) {
+    const planoModelos = [
+      'nvidia/nemotron-3-ultra-550b-a55b:free',  // 1M ctx, razonamiento potente
+      'openai/gpt-oss-120b:free',                // OpenAI OSS 120B
+      'qwen/qwen3-coder:free',                   // 1M ctx, especializado en codigo
+    ];
+    for (const model of planoModelos) {
+      try {
+        const r = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${env.OPENROUTER_API_KEY}`,
+            'Content-Type': 'application/json',
+            'HTTP-Referer': 'https://alejandra-app-api.alejandra-app.workers.dev',
+            'X-Title': 'Alejandra'
+          },
+          body: JSON.stringify({
+            model,
+            max_tokens: 8192,
+            messages: [
+              { role: 'system', content: systemPrompt },
+              { role: 'user', content: userMsg }
+            ]
+          })
+        });
+        if (!r.ok) continue;
+        const d = await r.json();
+        if (d.error || !d.choices?.[0]?.message?.content) continue;
+        data = {
+          content: [{ type: 'text', text: d.choices[0].message.content }],
+          usage: { input_tokens: d.usage?.prompt_tokens || 0, output_tokens: d.usage?.completion_tokens || 0 }
+        };
+        _planoProveedor = 'openrouter';
+        _planoModelo = d.model || model;
+        break;
+      } catch (_) { /* probar siguiente */ }
+    }
   }
 
-  const data = await resp.json();
+  // 2º Fallback: Anthropic
+  if (!data) {
+    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': env.ANTHROPIC_API_KEY,
+        'anthropic-version': '2023-06-01'
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 8192,
+        system: systemPrompt,
+        messages: _planoMsgs
+      })
+    });
+    if (!resp.ok) {
+      const errText = await resp.text().catch(() => resp.statusText);
+      throw new Error(`API error ${resp.status}: ${errText.slice(0, 200)}`);
+    }
+    data = await resp.json();
+  }
+
   let svgRaw = data.content?.[0]?.text || '';
 
   // Extraer SVG si hay texto extra alrededor
@@ -22630,11 +22678,11 @@ INSTRUCCIONES FINALES:
     svgRaw = svgRaw.replace(/(<svg[^>]*>)/i, `$1\n${IEC_BANDEJA_DEFS}`);
   }
 
-  // Registrar uso de IA
+  // Registrar uso de IA (proveedor y modelo reales)
   logAIUsage(env, {
     empresa_id,
-    proveedor: 'anthropic',
-    modelo: 'claude-sonnet-4-6',
+    proveedor: _planoProveedor,
+    modelo: _planoModelo,
     endpoint: 'generar_plano',
     input_tokens: data.usage?.input_tokens || 0,
     output_tokens: data.usage?.output_tokens || 0

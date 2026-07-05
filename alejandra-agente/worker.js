@@ -8472,8 +8472,18 @@ async function fetchAnthropicConReintentos(url, options, maxReintentos = 2) {
   return resp;
 }
 
-// Convierte mensajes Anthropic → OpenAI (sin imagenes, solo texto)
-function _agenteMsgsToOpenAI(messages, systemPrompt) {
+// Modelos OpenRouter con soporte de visión (imágenes)
+const _OR_VISION_MODELS = new Set([
+  'google/gemma-4-31b-it:free',
+  'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free',
+  'nvidia/nemotron-nano-12b-v2-vl:free',
+  'openrouter/free',
+]);
+
+// Convierte mensajes Anthropic → OpenAI
+// keepImages=true: mantiene imágenes en formato OpenAI (para modelos con visión)
+// keepImages=false: solo texto (para modelos sin visión)
+function _agenteMsgsToOpenAI(messages, systemPrompt, keepImages = false) {
   const out = [];
   if (systemPrompt) {
     const sysText = Array.isArray(systemPrompt)
@@ -8486,12 +8496,27 @@ function _agenteMsgsToOpenAI(messages, systemPrompt) {
     if (typeof m.content === 'string') {
       out.push({ role, content: m.content });
     } else if (Array.isArray(m.content)) {
-      // Extraer solo texto — eliminar imagenes (no todos los modelos aceptan vision)
-      const text = m.content
-        .filter(b => b.type === 'text' || b.type === 'tool_result')
-        .map(b => b.type === 'text' ? b.text : (Array.isArray(b.content) ? b.content.filter(x => x.type==='text').map(x=>x.text).join('\n') : String(b.content||'')))
-        .join('\n').trim();
-      if (text) out.push({ role, content: text });
+      if (keepImages) {
+        // Mantener texto e imágenes en formato OpenAI multimodal
+        const parts = m.content
+          .filter(b => b.type === 'text' || b.type === 'image')
+          .map(b => {
+            if (b.type === 'text') return { type: 'text', text: b.text };
+            if (b.type === 'image' && b.source?.type === 'base64') {
+              return { type: 'image_url', image_url: { url: `data:${b.source.media_type};base64,${b.source.data}` } };
+            }
+            return null;
+          })
+          .filter(Boolean);
+        if (parts.length) out.push({ role, content: parts });
+      } else {
+        // Solo texto — eliminar imágenes
+        const text = m.content
+          .filter(b => b.type === 'text' || b.type === 'tool_result')
+          .map(b => b.type === 'text' ? b.text : (Array.isArray(b.content) ? b.content.filter(x => x.type==='text').map(x=>x.text).join('\n') : String(b.content||'')))
+          .join('\n').trim();
+        if (text) out.push({ role, content: text });
+      }
     }
   }
   return out;
@@ -8501,18 +8526,23 @@ function _agenteMsgsToOpenAI(messages, systemPrompt) {
 // 1º OpenRouter gratis (Nemotron 550B → GPT-OSS 120B → Llama 70B → Gemma 4 31B)
 // 2º OpenAI gpt-4o (de pago, si hay OPENAI_API_KEY)
 async function llamarGPT4oFallback(env, messages, systemPrompt, maxTokens) {
-  const openAIMessages = _agenteMsgsToOpenAI(messages, systemPrompt);
-
   // ── 1º INTENTO: cascada OpenRouter (modelos gratuitos) ──────────────────────
   if (env.OPENROUTER_API_KEY) {
-    const modelos = [
-      'nvidia/nemotron-3-ultra-550b-a55b:free',
-      'openai/gpt-oss-120b:free',
-      'meta-llama/llama-3.3-70b-instruct:free',
-      'google/gemma-4-31b-it:free',
-    ];
+    // Detectar si hay imágenes en los mensajes
+    const tieneImagenes = messages.some(m =>
+      Array.isArray(m.content) && m.content.some(b => b.type === 'image')
+    );
+    // Modelos con visión primero si hay imágenes; si no, potencia de razonamiento primero
+    const modelos = tieneImagenes
+      ? ['google/gemma-4-31b-it:free', 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free',
+         'nvidia/nemotron-3-ultra-550b-a55b:free', 'openai/gpt-oss-120b:free']
+      : ['nvidia/nemotron-3-ultra-550b-a55b:free', 'openai/gpt-oss-120b:free',
+         'meta-llama/llama-3.3-70b-instruct:free', 'google/gemma-4-31b-it:free'];
+
     for (const model of modelos) {
       try {
+        const esVision = _OR_VISION_MODELS.has(model);
+        const msgs = _agenteMsgsToOpenAI(messages, systemPrompt, esVision && tieneImagenes);
         const resp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
           method: 'POST',
           headers: {
@@ -8521,14 +8551,14 @@ async function llamarGPT4oFallback(env, messages, systemPrompt, maxTokens) {
             'HTTP-Referer': 'https://alejandra-agente.alejandra-app.workers.dev',
             'X-Title': 'Alejandra'
           },
-          body: JSON.stringify({ model, messages: openAIMessages, max_tokens: maxTokens || 1024 })
+          body: JSON.stringify({ model, messages: msgs, max_tokens: maxTokens || 1024 })
         });
         if (!resp.ok) continue;
         const data = await resp.json();
         if (data.error) continue;
         const texto = data.choices?.[0]?.message?.content || '';
         if (!texto) continue;
-        console.log(`[Fallback] OpenRouter OK: ${data.model || model}`);
+        console.log(`[Fallback] OpenRouter OK: ${data.model || model}${tieneImagenes ? ' (vision)' : ''}`);
         return {
           content: [{ type: 'text', text: texto }],
           stop_reason: 'end_turn',
@@ -8540,8 +8570,10 @@ async function llamarGPT4oFallback(env, messages, systemPrompt, maxTokens) {
     }
   }
 
-  // ── 2º INTENTO: OpenAI gpt-4o (de pago, último recurso) ────────────────────
+  // ── 2º INTENTO: OpenAI gpt-4o (de pago, último recurso — soporta visión) ───
   if (!env.OPENAI_API_KEY) throw new Error('Sin modelos disponibles — OPENROUTER_API_KEY y OPENAI_API_KEY no configuradas');
+  const tieneImgsGpt = messages.some(m => Array.isArray(m.content) && m.content.some(b => b.type === 'image'));
+  const openAIMessages = _agenteMsgsToOpenAI(messages, systemPrompt, tieneImgsGpt); // gpt-4o sí soporta vision
   const resp = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     headers: { 'Authorization': `Bearer ${env.OPENAI_API_KEY}`, 'Content-Type': 'application/json' },
