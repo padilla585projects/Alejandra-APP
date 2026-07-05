@@ -184,16 +184,93 @@ mismo patron que consultar_bd (Recomendado)".
   nueva capa compartida; recuento de tests actualizado (37 -> 47) en sus dos referencias;
   cabecera "ultima actualizacion" actualizada a continuacion 14 / commit 8d7ef65.
 
-### Fuera de alcance (anotado para decidir con Adrian, no corregido en esta sesion)
-El mismo subagente de auditoria reporto otros dos hallazgos que no se han actuado todavia
-(no fueron parte de la pregunta que Adrian respondio -- solo eran contexto):
-- Hallazgo #2: `/auth/verify-session` filtra `ADMIN_TOKEN` en texto plano en la respuesta.
-- Hallazgo #3: `verificarAdminToken` no tiene ningun rate limiting propio.
-Pendiente de presentarselos a Adrian como punto de decision antes de tocarlos (regla
-"auditar antes de arreglar").
+### Hallazgos #2 y #3 (mismo subagente de auditoria) -- ver continuacion 15 mas abajo
+El mismo subagente reporto ademas: hallazgo #2 (`/auth/verify-session` filtra `ADMIN_TOKEN`
+en texto plano) y hallazgo #3 (`verificarAdminToken` sin rate limiting propio). Se
+presentaron a Adrian por separado (regla "auditar antes de arreglar") y **ya estan
+corregidos** -- ver seccion "continuacion 15" justo debajo para el detalle completo.
 
-Siguiente punto de la lista: decidir con Adrian que hacer con los hallazgos #2 y #3 de
-arriba, y seguir con la instruccion "seguimos auditando" para el resto del sistema.
+---
+
+## RESUMEN SESION 05/07/2026 (continuacion 15) -- Fix hallazgos #2/#3: token ADMIN_TOKEN en claro y sin rate limit
+
+Continuacion directa de la continuacion 14 de arriba. Los hallazgos #2 y #3 (mismo
+subagente de auditoria, mismo pase sobre `configurar_alerta`/`exportar_datos`) se
+presentaron a Adrian via AskUserQuestion. Primera respuesta: "que me recomiendas?" --
+se le dio una recomendacion concreta via una segunda pregunta, y eligio explicitamente:
+**"Los dos: #3 ya, #2 con token efimero (Recomendado)"**.
+
+### Auditoria
+- Hallazgo #2: `POST /auth/verify-session` devolvia `env.ADMIN_TOKEN` (el secreto maestro,
+  estatico, sin expirar) en texto plano dentro del JSON de respuesta cada vez que una
+  sesion de dev se verificaba correctamente. Si esa respuesta se filtraba (XSS, log,
+  sesion interceptada), el atacante se quedaba con un secreto mucho mas duradero que la
+  propia sesion robada que lo obtuvo.
+- Hallazgo #3: `verificarAdminToken(env, token)` no aplicaba ningun rate limiting propio,
+  pese a proteger rutas sensibles (`/admin/migrate`, `/api/admin/*`, `/push`,
+  `/api/reflexion`, `/conocimiento`) -- se podia probar tokens repetidamente sin
+  throttling.
+- Relacionado (descubierto al corregir #2): la columna `expires_at` de `alejandra_tokens`
+  existe en el schema desde el principio (migrate_001_init_schema.sql) pero
+  `verificarAdminToken` nunca la comprobaba en su query -- un token con fecha de
+  expiracion pasada seguia siendo valido para siempre. Habia que arreglarlo primero para
+  que los tokens efimeros del fix de #2 caducaran de verdad.
+
+### Corregido
+- `worker.js` / `verificarAdminToken(env, token, req)`: ahora recibe `req` (opcional, solo
+  para poder leer la IP) y aplica `validarRateLimit()` -- el mismo KV-backed rate limiter
+  ya usado en `/api/chat` -- con un bucket propio (`admin-auth:ip:${ip}`) para no
+  compartir cupo con el rate limit del chat. Fail-open si KV falla (mismo comportamiento
+  que el resto del sistema). Los 5 call sites (`/admin/migrate`, `/conocimiento`,
+  `/api/reflexion`, prefijo `/api/admin/`, `/push`) actualizados para pasar `req`.
+- `verificarAdminToken`: la query SQL ahora exige
+  `(expires_at IS NULL OR expires_at > datetime('now'))` ademas de `activo=1`.
+- `worker.js` / `POST /auth/verify-session`: en vez de devolver `env.ADMIN_TOKEN`, genera
+  un token efimero propio (`crypto.getRandomValues` + hex, prefijo `eph_`) y lo inserta en
+  `alejandra_tokens` (tipo='admin', `expires_at` = ahora + 12 horas), devolviendo ese token
+  al llamador. No requiere ningun cambio en `alejandra-panel.html`: el panel ya trataba el
+  campo `token` de la respuesta como un bearer opaco (`localStorage.setItem('alej_token',
+  d2.token)`), verificado leyendo el HTML directamente antes de tocar nada.
+- Limitacion conocida (aceptada, no bloqueante): los tokens efimeros expirados no se
+  purgan automaticamente de `alejandra_tokens` -- simplemente dejan de ser validos por el
+  chequeo de `expires_at`. Limpieza periodica queda pendiente para el futuro si la tabla
+  crece demasiado.
+
+### Incidente operativo: edicion concurrente del mismo repo por otro agente
+Al ir a comitear este fix, `git add alejandra-agente/worker.js` dejo tambien
+`panel.html` (376 lineas) en el stage sin haberlo tocado. Investigando (`git restore
+--staged panel.html`, luego `git status` no mostraba NINGUN cambio pendiente en ningun
+archivo) se descubrio que un commit nuevo, `ce6e7d9` ("feat: pagina Planos IA en
+panel.html...", autor "APEX Agent <apex@padilla585.dev>", Co-Authored-By Claude Sonnet
+4.6), ya estaba en `main` y ya empujado a `origin/main` -- otro agente autonomo trabajando
+en paralelo sobre este mismo directorio de trabajo, haciendo una feature no relacionada
+(pagina "Planos IA"), habia absorbido sin querer mis cambios de `worker.js` (49 lineas,
+confirmadas via `git show ce6e7d9 --stat` y grep de mis propias cadenas de codigo:
+`verificarAdminToken(env, token, req)`, `tokenEfimero`) dentro de su propio commit,
+probablemente via un `git add -A` o equivalente en su propio proceso de commit.
+
+Como `ce6e7d9` ya estaba pusheado a `origin/main`, reescribirlo violaria la regla de "no
+reescribir historial ya pusheado" -- en vez de eso: (1) se verifico que el deploy de ese
+commit paso limpio (`gh run watch 28744128734 --exit-status`: tests 47/47, migraciones y
+deploy en verde, health check OK), (2) se verifico via curl manual que `/health` responde
+correctamente y que `/auth/verify-session` rechaza tokens invalidos sin filtrar
+`ADMIN_TOKEN` en el error, y (3) se documento explicitamente en `ALEJANDRA_AGENTE.txt`
+(commit `ca8adfe`, doc-only) que el codigo de estos hallazgos vive dentro de `ce6e7d9`
+pese a que su mensaje de commit no lo menciona, para que sesiones futuras leyendo `git
+log` no se confundan.
+
+**Leccion operativa para el resto de esta sesion y futuras**: este repo esta siendo
+editado concurrentemente por al menos otro agente autonomo. A partir de ahora, revisar
+`git status` / `git diff --cached` con cuidado extra antes de cada commit, y preferir
+`git add <archivo especifico>` en vez de variantes que puedan arrastrar cambios ajenos.
+
+### Documentacion (commit ca8adfe, doc-only, sin deploy)
+- `ALEJANDRA_AGENTE.txt`: seccion de autenticacion actualizada para describir
+  `verificarAdminToken(env, token, req)` y el chequeo de `expires_at`; nuevo bloque
+  explicando ambos fixes y el incidente de commit mezclado con `ce6e7d9`.
+
+Siguiente punto de la lista: seguir con la instruccion "seguimos auditando" para el resto
+del sistema -- ningun hallazgo especifico identificado todavia mas alla de este punto.
 
 ---
 
