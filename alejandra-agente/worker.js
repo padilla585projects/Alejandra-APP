@@ -6492,7 +6492,18 @@ ${descripcion ? `<div class="info-bar"><span class="badge">${tipo}</span>${descr
         if (!tipo || !titulo || !descripcion) return JSON.stringify({ error: 'tipo, titulo y descripcion son obligatorios' });
         const tiposValidos = ['planta', 'electrico', 'bandejas', 'mecanico', 'gantt'];
         if (!tiposValidos.includes(tipo)) return JSON.stringify({ error: 'tipo invalido' });
-        const result = await _generarPlanoAgente(env, { tipo, titulo, descripcion, empresa_id: eid_plano || empresa_id || 1, usuario_id: uid_input || usuario_id || null });
+        // Heartbeat SSE cada 5s para mantener la conexion viva durante la generacion SVG (puede tardar 60-90s)
+        let _hbTimer = null;
+        if (sendSSE) {
+          let _hbN = 0;
+          _hbTimer = setInterval(() => { _hbN++; sendSSE({ type: 'progreso', mensaje: `Generando plano SVG... (${_hbN * 5}s)` }).catch(() => {}); }, 5000);
+        }
+        let result;
+        try {
+          result = await _generarPlanoAgente(env, { tipo, titulo, descripcion, empresa_id: eid_plano || empresa_id || 1, usuario_id: uid_input || usuario_id || null });
+        } finally {
+          if (_hbTimer) clearInterval(_hbTimer);
+        }
         return JSON.stringify(result);
       } catch (e) {
         return JSON.stringify({ error: 'Error generando plano: ' + e.message });
@@ -8998,65 +9009,16 @@ INSTRUCCIONES FINALES:
   let _proveedor = 'anthropic';
   let _modelo = 'claude-sonnet-4-6';
 
-  // 1. Gemini cascade (gratis)
-  if (env.GEMINI_API_KEY) {
-    const _gKeys = [_cleanK(env.GEMINI_API_KEY), _cleanK(env.GEMINI_API_KEY_2), _cleanK(env.GEMINI_API_KEY_3)].filter(Boolean);
-    const _gModels = ['gemini-2.5-flash'];
-    gemLoop:
-    for (const _gMod of _gModels) {
-      for (const _gKey of _gKeys) {
-        try {
-          const _gr = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/${_gMod}:generateContent?key=${_gKey}`,
-            {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                contents: [{ parts: [{ text: systemPrompt + '\n\n' + userMsg }] }],
-                generationConfig: { temperature: 0.2, maxOutputTokens: 12000 }
-              })
-            }
-          );
-          if (!_gr.ok) { if (_gr.status === 429) continue; break; }
-          const _gd = await _gr.json();
-          const _gParts = _gd.candidates?.[0]?.content?.parts || [];
-          const _gText = _gParts.find(p => p.text?.includes('<svg'))?.text || _gParts.map(p => p.text || '').join('');
-          if (_gText.includes('<svg')) {
-            data = { content: [{ type: 'text', text: _gText }], usage: { input_tokens: _gd.usageMetadata?.promptTokenCount || 0, output_tokens: _gd.usageMetadata?.candidatesTokenCount || 0 } };
-            _proveedor = 'gemini'; _modelo = _gMod;
-            break gemLoop;
-          }
-        } catch (_) { break; }
-      }
-    }
-  }
-
-  // 2. OpenRouter fallback (10s timeout)
-  if (!data && env.OPENROUTER_API_KEY) {
-    try {
-      const r = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-        signal: AbortSignal.timeout(10000),
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${env.OPENROUTER_API_KEY}`, 'Content-Type': 'application/json', 'HTTP-Referer': 'https://alejandra-agente.alejandra-app.workers.dev', 'X-Title': 'Alejandra' },
-        body: JSON.stringify({ model: 'meta-llama/llama-3.3-70b-instruct:free', max_tokens: 8000, messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: userMsg }] })
-      });
-      if (r.ok) {
-        const d = await r.json();
-        const rawText = d.choices?.[0]?.message?.content || '';
-        if (!d.error && rawText.includes('<svg')) {
-          data = { content: [{ type: 'text', text: rawText }], usage: { input_tokens: d.usage?.prompt_tokens || 0, output_tokens: d.usage?.completion_tokens || 0 } };
-          _proveedor = 'openrouter'; _modelo = d.model || 'llama-3.3-70b';
-        }
-      }
-    } catch (_) {}
-  }
-
-  // 3. Anthropic fallback (de pago)
+  // Agente usa Anthropic directamente (rapido, fiable, ~20-25s).
+  // Gemini tiene thinking mode que consume el budget de tokens y tarda 55s+
+  // — queda en el worker principal donde el panel puede esperar mas tiempo.
+  // Anthropic
   if (!data) {
     const resp = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-api-key': env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
-      body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 16000, system: systemPrompt, messages: [{ role: 'user', content: userMsg }] })
+      body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 8000, system: systemPrompt, messages: [{ role: 'user', content: userMsg }] }),
+      signal: AbortSignal.timeout(90000)
     });
     if (!resp.ok) {
       const errText = await resp.text().catch(() => resp.statusText);
@@ -9073,6 +9035,24 @@ INSTRUCCIONES FINALES:
     if (svgStart) { svgRaw = svgStart[0]; if (!svgRaw.trimEnd().endsWith('</svg>')) svgRaw += '\n</svg>'; }
   }
   if (!svgRaw.includes('<svg')) throw new Error('La IA no genero un SVG valido');
+  // Sanear SVG truncado por limite de tokens: eliminar elementos incompletos y cerrar <g> abiertos.
+  {
+    const _closeIdx = svgRaw.lastIndexOf('</svg>');
+    if (_closeIdx > 0) {
+      let _body = svgRaw.substring(0, _closeIdx);
+      // 1. Eliminar elemento incompleto al final (tag sin '>' de cierre)
+      const _lastGt = _body.lastIndexOf('>');
+      if (_lastGt >= 0 && _body.substring(_lastGt + 1).includes('<')) {
+        _body = _body.substring(0, _lastGt + 1);
+      }
+      // 2. Cerrar grupos <g> no cerrados (los mas comunes al truncar)
+      const _openGs  = (_body.match(/<g[\s>]/g) || []).length;
+      const _closeGs = (_body.match(/<\/g>/g) || []).length;
+      const _missingGs = Math.max(0, _openGs - _closeGs);
+      if (_missingGs > 0) _body += '\n' + '</g>'.repeat(_missingGs);
+      svgRaw = _body + '\n</svg>';
+    }
+  }
 
   const metadatos = JSON.stringify({ tipo, tokens: data.usage?.output_tokens || 0, modelo: _modelo, proveedor: _proveedor });
   const res = await env.DB.prepare(
@@ -9107,8 +9087,10 @@ async function construirMessages(env, mensaje, contexto, limitHistorial=10, incl
           const keys = adjMatch[1].split(',').map(k => k.trim()).filter(Boolean);
           const texto = item.contenido.replace(/\[adjuntos:[^\]]+\]/, '').trim();
           try {
-            const blocks = await buildUserContentWithAdjuntos(env, texto, keys);
-            messages.push({ role: 'user', content: blocks });
+            // Timeout de 5s para reconstruir imagen del historial — si R2 tarda mas, texto plano
+            const _timeout = new Promise(r => setTimeout(() => r(null), 5000));
+            const blocks = await Promise.race([buildUserContentWithAdjuntos(env, texto, keys), _timeout]);
+            messages.push({ role: 'user', content: blocks || item.contenido });
           } catch (_) {
             messages.push({ role: item.rol, content: item.contenido });
           }

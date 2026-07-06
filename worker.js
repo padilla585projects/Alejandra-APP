@@ -22597,9 +22597,10 @@ INSTRUCCIONES FINALES:
   let _planoProveedor = 'anthropic';
   let _planoModelo = 'claude-sonnet-4-6';
 
-  // 1º Intentar Gemini Flash (gratis, sin thinking mode para planos — usa 2.0-flash-lite primero)
-  // gemini-2.5-flash tiene thinking mode que consume ~48s y genera solo 479 tokens de SVG.
-  // gemini-2.0-flash-lite no tiene thinking, es rápido y produce 12K tokens de SVG correcto.
+  // 1º Gemini (gratis) — 2.0-flash-lite primero (sin thinking, rapido, SVGs completos de 8-12K chars)
+  //                    — 2.5-flash segundo (thinking mode: a veces 480 tokens SVG, a veces 7K)
+  // Minimo 3000 chars SVG para descartar respuestas truncadas por thinking budget agotado.
+  const _SVG_MIN_CHARS = 3000;
   if (env.GEMINI_API_KEY) {
     const _cleanGKey = k => k ? k.replace(/[ï»¿​\r\n\t ]+/g, '').trim() : k;
     const _gemKeys = [
@@ -22607,10 +22608,7 @@ INSTRUCCIONES FINALES:
       _cleanGKey(env.GEMINI_API_KEY_2),
       _cleanGKey(env.GEMINI_API_KEY_3)
     ].filter(Boolean);
-    // gemini-2.5-flash via callGemini (rota keys, maneja 429, falla a 2.0-flash-lite)
-    // Nota: thinking mode es dinámico — a veces genera 7K tokens (5s), a veces 480 (50s).
-    //       auto-close maneja SVGs parciales. El Worker aguanta hasta ~55s de I/O.
-    const _gemModels = ['gemini-2.5-flash'];
+    const _gemModels = ['gemini-2.0-flash-lite', 'gemini-2.5-flash'];
     gemLoop:
     for (const _gModel of _gemModels) {
       for (const _gKey of _gemKeys) {
@@ -22618,11 +22616,12 @@ INSTRUCCIONES FINALES:
           const _gr = await fetch(
             `https://generativelanguage.googleapis.com/v1beta/models/${_gModel}:generateContent?key=${_gKey}`,
             {
+              signal: AbortSignal.timeout(55000), // 55s — 2.0-flash-lite ~5s, 2.5-flash hasta ~50s
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 contents: [{ parts: [{ text: systemPrompt + '\n\n' + userMsg }] }],
-                generationConfig: { temperature: 0.2, maxOutputTokens: 12000 }
+                generationConfig: { temperature: 0.2, maxOutputTokens: 16000 }
               })
             }
           );
@@ -22634,7 +22633,8 @@ INSTRUCCIONES FINALES:
           const _gParts = _gd.candidates?.[0]?.content?.parts || [];
           const _gText = _gParts.find(p => p.text?.includes('<svg'))?.text
                        || _gParts.map(p => p.text || '').join('');
-          if (_gText.includes('<svg')) {
+          // Rechazar SVGs truncados (thinking consume demasiado del budget de tokens)
+          if (_gText.includes('<svg') && _gText.length >= _SVG_MIN_CHARS) {
             data = {
               content: [{ type: 'text', text: _gText }],
               usage: {
@@ -22646,7 +22646,7 @@ INSTRUCCIONES FINALES:
             _planoModelo = _gModel;
             break gemLoop;
           }
-        } catch (_) { break; }
+        } catch (_) { /* timeout o error de red — probar siguiente */ }
       }
     }
   }
