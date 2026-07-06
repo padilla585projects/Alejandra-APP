@@ -5,11 +5,44 @@
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 06/07/2026
-VERSIÓN ACTUAL APP NUEVA: v7.72 (Cascada Gemini planos + fix agente web-search + vision confirmada)
-WORKER API: cd7c8c68 · WORKER AGENTE: 12071624
+VERSIÓN ACTUAL APP NUEVA: v7.72 (sin bump de PWA — este cambio es solo alejandra-agente/worker.js)
+WORKER API: cd7c8c68 · WORKER AGENTE: 6f50c3ed
 VERSIÓN ACTUAL APP VIEJA: v4.19 (⛔ CONGELADA DEFINITIVAMENTE — no recibe más cambios)
 
 HISTORIAL DE VERSIONES (resumen reciente):
+  (agente, sin bump PWA) — 06/07/2026 — generar_plano profesional (IEC) + fix critico
+                       vaciado de SVGs (commits 8ad4732 / 5ac8f41):
+                       Peticion: "que mejorar a alejandra para que los haga [planos] bien
+                       como una ingeniera profesional / planos que valgan en obra". Plan
+                       confirmado con Adrian ("si").
+                       1) Portados IEC_SYMBOLS_DEFS / IEC_BANDEJA_DEFS (libreria de simbolos
+                       normalizados) desde worker.js raiz a alejandra-agente/worker.js,
+                       inyectados en el SVG generado para tipo electrico/bandejas.
+                       2) Prompts electrico/bandejas actualizados: prohiben <defs>/<symbol>
+                       propios, exigen <use href="#sym-X"/> con lista completa de IDs.
+                       3) max_tokens 8000 -> 16000.
+                       4) _generarPlanoAgente() migrado de fetch crudo a llamarAnthropicStream()
+                       (ya existente) -- evitaba un 524 de Cloudflare por timeout en
+                       generaciones largas no-streaming (>100-125s).
+                       5) BUG introducido y corregido en la misma sesion: el saneador generico
+                       de SVGs truncados (_sanearSvgTruncado, sustituyendo un contador ad-hoc
+                       de <g> por un scanner generico de pila de tags) trataba la raiz <svg>
+                       (que siempre queda "abierta" tras recortar el </svg> final) como el
+                       elemento incompleto a descartar -- vaciaba CUALQUIER plano generado sin
+                       truncamiento real. Detectado en produccion: planos 19 y 20 (D1) salieron
+                       vacios (svg_data = "\n</svg>"). Corregido: solo se descarta un tag a
+                       medio abrir de verdad (sin '>' de cierre) al final del string; cualquier
+                       tag con apertura completa (incluida la raiz svg) se cierra sin perder
+                       contenido. Verificado con test local (SVG completo vs SVG truncado a
+                       medio <text>) y con test en vivo via curl (plano ID 21: 48KB, XML bien
+                       formado, 21 <use> / 15 <symbol> correctamente referenciados, verificado
+                       visualmente en Chrome). Planos de prueba 19/20/21 borrados de D1 tras
+                       verificar. Limitacion conocida no bloqueante: Claude no siempre adopta
+                       <use> pese a la instruccion del prompt (ocurrio en un test anterior,
+                       plano 18) -- el contenido sigue siendo visualmente correcto igualmente.
+                       Commits: 8ad4732 (feature) + 5ac8f41 (fix critico). Worker agente
+                       Version ID 6f50c3ed-2ae2-4478-af72-43a68fd57b49. Sin cambio de PWA
+                       (index.html/sw.js/version.json intactos, no aplica).
   v7.72 — 06/07/2026 — Cascada Gemini para planos + fix web-search crash agente + vision confirmada:
                        worker.js: cascada Gemini→OpenRouter→Anthropic en _generarPlanoInterno.
                        Gemini 2.5 Flash como primario ($0.0008/plano). Fix constraint D1 bandejas.

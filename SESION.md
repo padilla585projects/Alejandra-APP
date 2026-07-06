@@ -1,9 +1,14 @@
 ## ESTADO ACTUAL
 
 **Sesion:** LIBRE
-**Ultima sesion:** 06/07/2026 -- Cascada Gemini para planos + test vision + fix agente web-search crash (v7.72, commits 101aa9c / 07657d3).
-**Version actual:** App PWA **v7.72** -- commit 101aa9c
-**Agente (alejandra-agente):** commit 2a18d5b desplegado en main (fix IDOR en
+**Ultima sesion:** 06/07/2026 -- generar_plano profesional con simbologia IEC + fix critico de
+vaciado de SVGs en `_sanearSvgTruncado` (solo alejandra-agente, commits 8ad4732 / 5ac8f41,
+Worker agente Version ID 6f50c3ed-2ae2-4478-af72-43a68fd57b49). Ver seccion nueva "RESUMEN
+SESION 06/07/2026 (planos IEC + fix sanitizer)" mas abajo. Sesion anterior a esta: Cascada
+Gemini para planos + test vision + fix agente web-search crash (v7.72, commits 101aa9c / 07657d3).
+**Version actual:** App PWA **v7.72** -- commit 101aa9c (sin cambios de PWA esta sesion, solo agente)
+**Agente (alejandra-agente):** commit **5ac8f41** desplegado en main -- ver seccion nueva mas
+abajo. Antes de eso, commit 2a18d5b desplegado en main (fix IDOR en
 subir_archivo -- escribia/sobrescribia cualquier key de R2 sin registrar dueno ni
 comprobar empresa -- y enviar_notificacion -- codigo huerfano con el mismo patron
 IDOR que enviar_push antes de la continuacion 19/20 --, mas el default fail-open
@@ -27,6 +32,88 @@ CROSS-EMPRESA EN 5 FAMILIAS MAS" anadida en el commit ff52aea (continuacion 19 e
 ese archivo), y subseccion "IDOR EN subir_archivo/enviar_notificacion + authOk
 FAIL-CLOSED" anadida en el commit 2a18d5b (continuacion 20 en ese archivo). Ver
 seccion de abajo.
+
+---
+
+## RESUMEN SESION 06/07/2026 (planos IEC + fix sanitizer) -- generar_plano profesional + fix critico de vaciado de SVGs
+
+### Peticion de Adrian
+"pues ahi que mejorar a alejandra para que los haga bien como una ingeniera profesional /
+planos que valgan en obra, que valgan de verdad" (sobre la tool `generar_plano` del chat
+movil, alejandra-agente/worker.js). Plan tecnico presentado y confirmado ("si") antes de
+tocar codigo: portar la libreria de simbolos IEC ya existente en el worker raiz, inyectarla
+en los SVG generados para tipo electrico/bandejas, actualizar esos 2 prompts para prohibir
+`<defs>`/`<symbol>` propios y exigir `<use href="#sym-X"/>`, subir max_tokens 8000->16000.
+Sin tocar planta/mecanico/gantt. Solo Anthropic (sin cascada Gemini/OpenRouter, a diferencia
+del worker raiz).
+
+### Cambios (commit 8ad4732)
+- `IEC_SYMBOLS_DEFS` / `IEC_BANDEJA_DEFS`: constantes portadas del worker raiz, insertadas
+  antes de `_PLANO_PROMPTS`.
+- `_PLANO_PROMPTS.electrico` / `.bandejas`: prohiben `<defs>`/`<symbol>` propios, exigen
+  `<use href="#sym-X"/>` con la lista completa de IDs disponibles.
+- `_generarPlanoAgente(...)`: migrado de `fetch` crudo (no-streaming) a
+  `llamarAnthropicStream(env, [...], 'claude-sonnet-4-6', 16000, systemPrompt, () => {},
+  usuario_id)` -- evitaba un 524 de Cloudflare (timeout ~100-125s en generaciones largas
+  no-streaming). Inyecta los defs de simbolos en el SVG resultante via regex sobre
+  `<svg ...>` para tipo electrico/bandejas. `metadatos` ahora estima tokens con
+  `Math.round(svgRaw.length/4)`.
+- Sanitizador de SVGs truncados reescrito de un contador ad-hoc de `<g>` a un scanner
+  generico de pila de tags (`_sanearSvgTruncado`), para cerrar correctamente cualquier tag
+  sin cerrar (no solo `<g>`) cuando Claude corta el SVG a medio generar (ej. plano 18: un
+  `<text>` cortado a mitad de contenido causaba XML invalido).
+
+### BUG critico introducido y corregido en la misma sesion (commit 5ac8f41)
+El primer `_sanearSvgTruncado` (commit 8ad4732) tenia un fallo de diseno: la raiz `<svg>`
+SIEMPRE queda "abierta" en la pila de tags tras recortar el `</svg>` final del string (es
+el comportamiento esperado, no una senal de truncamiento) -- pero el codigo trataba
+"queda algo en la pila" como sinonimo de "hay un elemento incompleto que descartar",
+asi que borraba TODO el contenido del body en cualquier generacion completa/limpia (el
+caso normal, no solo el truncado). Descubierto en produccion al hacer el test en vivo:
+los planos 19 y 20 (D1) salieron con `svg_data = "\n</svg>"` (7 caracteres, vacios).
+
+Corregido: ahora solo se descarta un tag realmente a medio abrir al final del string (un
+`<` sin su `>` de cierre correspondiente); cualquier tag cuya apertura SI completo
+(incluida la propia raiz `svg`) nunca se descarta, solo se cierra con su tag de cierre
+correspondiente en la pila -- preservando todo el contenido valido, incluido texto
+truncado a medio camino (se cierra el `<text>` en el punto de corte en vez de perder ese
+fragmento entero).
+
+### Verificacion
+- Test local (script Node desechable, no commiteado): caso SVG completo/bien formado ->
+  preservado integro sin cambios; caso SVG truncado a medio `<text>` (replicando la
+  estructura del plano 18) -> cerrado correctamente sin perder contenido previo.
+- `node --check` limpio, grep de corrupcion de encoding limpio antes de cada commit/push.
+- Test en vivo via curl contra `/api/chat/stream` (prompt explicito "Usa la tool
+  generar_plano (no generar_esquema_electrico)" para evitar que Sonnet eligiera la tool
+  competidora `generar_esquema_electrico`): plano ID 21 generado en ~164s sin 524,
+  verificado por consulta directa a D1 (`svg_data` = 48131 caracteres, empieza en `<svg
+  ...>` y termina en `</svg>` limpio), balance de tags 100% correcto (script Node de
+  verificacion), 21 `<use>` referenciando 15 `<symbol>` (a diferencia de un test anterior
+  al fix del streaming, plano 18, donde Claude no habia adoptado `<use>` pese a la
+  instruccion del prompt -- limitacion conocida, no bloqueante, el contenido seguia siendo
+  correcto igualmente). Verificado tambien visualmente: SVG descargado de D1, servido con
+  `python -m http.server` local y renderizado en Chrome via MCP -- sin banner de error XML,
+  diagrama de cuadro electrico trifasico completo y profesional (IEC 60617, colores
+  normalizados IEC 60446, tabla de leyenda/materiales).
+- Planos de prueba 19, 20 y 21 (D1 produccion) borrados tras la verificacion (confirmado
+  con Adrian via AskUserQuestion antes de borrar) -- eran solo pruebas mias, no datos de
+  usuario real.
+
+### Deploy
+- `npx wrangler deploy` desde `alejandra-agente/` (unico worker tocado). Version ID
+  6f50c3ed-2ae2-4478-af72-43a68fd57b49.
+- Commits: `8ad4732` (feature -- simbolos IEC + streaming + sanitizer v1) y `5ac8f41`
+  (fix critico -- sanitizer v2, corrige el vaciado). Ambos pusheados a `origin/main`.
+
+### Pendiente / limitacion conocida (no bloqueante)
+Claude no siempre adopta `<use href="#sym-X"/>` pese a la instruccion explicita del
+prompt (ocurrio en el plano 18, antes de este fix; en el plano 21, ya con el fix, si lo
+adopto correctamente). Si vuelve a ocurrir en el futuro, el contenido sigue siendo
+visualmente correcto (Claude dibuja los simbolos "a mano" en vez de referenciar la
+libreria), asi que no es un fallo funcional, solo una perdida menor de consistencia
+visual/tamaño de archivo. No se ha intentado forzarlo mas alla de la instruccion actual
+del prompt.
 
 ---
 
