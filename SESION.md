@@ -4,6 +4,37 @@
 **Ultima sesion:** 06/07/2026 -- nuevos tipos de plano `unifilar` y `planta_electrica` en
 `generar_plano` (solo alejandra-agente, commit 53edc25, deploy CI 28815636221 en verde). Ver
 seccion nueva "RESUMEN SESION 06/07/2026 (planos unifilar + planta_electrica)" mas abajo.
+
+**PROXIMA TAREA (confirmada con Adrian, pendiente de implementar):** nuevo tipo de plano
+`planta_industrial` en `generar_plano` (alejandra-agente/worker.js) para naves industriales,
+CPD/datacenter y obras de gran envergadura -- distinto de `planta_electrica` (que se queda
+tal cual, para vivienda/oficina/local pequeño). Peticion de Adrian: "centrate en planos
+industriales no viviendas, Naves, CPD etc" / "hacemos nuevo plano para industrial y cpd o
+obras grandes. utiliza los simbolos adecuados a estas obras y en normativa. tiene que ser
+planos bien hechos como si fueran hechos por ingenieros utilizando programas... como CAD".
+Plan tecnico ya presentado y confirmado ("si, pero lo hacemos mañana"):
+1) Nuevo tipo `planta_industrial`: cubre nave industrial (CT, CGBT, generador de respaldo,
+   canalizacion por BANDEJAS -- no tubo empotrado --, tomas de fuerza, luminaria industrial,
+   estructura a gran luz) y CPD/datacenter (racks, PDU, SAI/UPS, CRAC/CRAH, doble ruta A/B
+   redundante, ATS) segun lo que describa el usuario.
+2) Normativa: REBT ITC-BT-12 (centros de transformacion/redes de distribucion), ITC-BT-18
+   (puestas a tierra), IEC 61537 (bandejas, ya usado), UNE-EN 50600 (infraestructura CPD) +
+   clasificacion TIER (Uptime Institute) y UNE 100156 (climatizacion salas de proceso de
+   datos) cuando aplique a CPD.
+3) Nueva libreria de simbolos `IEC_INDUSTRIAL_DEFS` (mismo estilo `currentColor`):
+   `#sym-ct`, `#sym-generador`, `#sym-ats`, `#sym-cgbt`, `#sym-rack`, `#sym-pdu`, `#sym-ups`,
+   `#sym-crac`. Reutiliza ademas los simbolos ya existentes de `IEC_BANDEJA_DEFS` (cuadros,
+   columnas, bandejas, tomas, luminaria).
+4) Cambios mecanicos: `TOOL_GENERAR_PLANO` (enum+descripcion), `tiposValidos`, CHECK de
+   `_ensurePlanosTableAgente`, inyeccion de simbolos en `_generarPlanoAgente`, migracion
+   `007` (mismo patron idempotente de reconstruccion de tabla ya usado en 001-006), paso
+   nuevo en `.github/workflows/deploy-alejandra-agente.yml`.
+5) `planta` (tipo generico): anadir ejemplos explicitos de zonificacion de nave industrial
+   (NAVE PRODUCCION, ALMACEN, MUELLE DE CARGA, TALLER, SALA ELECTRICA/CPD, OFICINAS
+   TECNICAS) dejando claro que es el contexto por defecto salvo que el usuario pida otra
+   cosa (vivienda/local pequeño sigue siendo `planta_electrica`).
+No se ha tocado codigo todavia -- empezar por aqui la proxima sesion.
+
 Sesion anterior a esta: generar_plano profesional con simbologia IEC + fix critico de
 vaciado de SVGs en `_sanearSvgTruncado` (commits 8ad4732 / 5ac8f41, Worker agente Version ID
 6f50c3ed-2ae2-4478-af72-43a68fd57b49). Ver seccion "RESUMEN SESION 06/07/2026 (planos IEC +
