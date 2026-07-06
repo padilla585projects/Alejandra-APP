@@ -9180,7 +9180,7 @@ function _sanearSvgTruncado(svgRaw) {
   if (closeIdx <= 0) return svgRaw;
   let body = svgRaw.substring(0, closeIdx);
 
-  const stack = []; // { tag, start }
+  const stack = []; // { tag }
   const tagRe = /<(\/?)([a-zA-Z][\w:-]*)([^>]*)>/g;
   let m;
   let lastFullMatchEnd = 0;
@@ -9194,28 +9194,24 @@ function _sanearSvgTruncado(svgRaw) {
         if (stack[i].tag === tagName) { stack.splice(i); break; }
       }
     } else if (!selfClosing) {
-      stack.push({ tag: tagName, start: m.index });
+      stack.push({ tag: tagName });
     }
     lastFullMatchEnd = tagRe.lastIndex;
   }
 
+  // Descartar SOLO un tag a medio abrir al final (nunca llego a un '>' de
+  // cierre), conservando cualquier texto/contenido anterior que perteneciera
+  // a un elemento ya abierto correctamente (p.ej. un <text> truncado a medio
+  // contenido, pero cuya apertura '<text ...>' si completo).
   const trailing = body.substring(lastFullMatchEnd);
-  if (stack.length > 0) {
-    // Elemento(s) sin cerrar: cortamos justo antes de que empezara el mas
-    // profundo (el incompleto real) y descartamos ese fragmento entero.
-    const incompleto = stack[stack.length - 1];
-    body = body.substring(0, incompleto.start);
-    stack.pop();
-  } else if (trailing.trim().length > 0) {
-    // No hay tag sin cerrar pero sobra texto/atributo suelto tras el ultimo
-    // tag valido (p.ej. un '<' de apertura que ni siquiera llego a cerrar '>').
-    body = body.substring(0, lastFullMatchEnd);
+  const strayLt = trailing.lastIndexOf('<');
+  if (strayLt !== -1) {
+    body = body.substring(0, lastFullMatchEnd + strayLt);
   }
 
-  // Cerrar cualquier ancestro que quedara abierto (p.ej. <g>) en orden inverso.
-  // OJO: la propia raiz <svg> SIEMPRE queda "sin cerrar" dentro de `body`
-  // (la recortamos junto con el </svg> original mas arriba), asi que el
-  // propio bucle ya la cierra — no hay que anadir un </svg> extra aparte.
+  // Cerrar cualquier elemento que quedara abierto (el mas profundo primero),
+  // incluida la propia raiz <svg> — nunca se descarta contenido ya bien
+  // formado, solo se cierran los tags pendientes.
   let huboSvgEnPila = false;
   for (let i = stack.length - 1; i >= 0; i--) {
     if (stack[i].tag === 'svg') huboSvgEnPila = true;
