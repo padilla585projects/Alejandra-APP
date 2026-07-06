@@ -6,10 +6,54 @@
 
 ÚLTIMA ACTUALIZACIÓN: 06/07/2026
 VERSIÓN ACTUAL APP NUEVA: v7.72 (sin bump de PWA — este cambio es solo alejandra-agente/worker.js)
-WORKER API: cd7c8c68 · WORKER AGENTE: 6f50c3ed
+WORKER API: cd7c8c68 · WORKER AGENTE: 96a577dd
 VERSIÓN ACTUAL APP VIEJA: v4.19 (⛔ CONGELADA DEFINITIVAMENTE — no recibe más cambios)
 
 HISTORIAL DE VERSIONES (resumen reciente):
+  (agente, sin bump PWA) — 06/07/2026 — generar_plano: tipos unifilar + planta_electrica
+                       (commit 53edc25, CI 28815636221 en verde):
+                       Peticion de Adrian tras probar en vivo el tipo `electrico`: "esa
+                       prueba esta bien pero no es el que se usa en obra normalmente,
+                       tenemos que mejorar" -> "se utiliza es esquema unifilar par
+                       conectar cuadros(1) y para planta el 2". Es decir: para
+                       interconectar cuadros se usa un ESQUEMA UNIFILAR (no el detalle
+                       interno de un cuadro, que ya cubria `electrico`), y para planta se
+                       necesita el plano con canalizaciones/tomas/luminarias/
+                       interruptores (no el `planta` generico/arquitectonico existente).
+                       Plan confirmado con Adrian ("Si, adelante") antes de tocar codigo.
+                       1) Nueva libreria de simbolos IEC_INSTALACION_DEFS (punto de luz,
+                       aplique, toma de corriente, interruptor simple/conmutado, caja de
+                       derivacion, CGMP en vista planta) segun REBT ITC-BT-19/25.
+                       2) _PLANO_PROMPTS.unifilar: esquema Acometida -> CGP -> Cuadro
+                       General -> sub-cuadros, topologia ortogonal, cada tramo etiquetado
+                       con proteccion de cabecera (magnetotermico+diferencial), tipo/
+                       seccion de cable y longitud. Reutiliza simbolos ya existentes de
+                       IEC_BANDEJA_DEFS/IEC_SYMBOLS_DEFS, sin simbolos nuevos.
+                       3) _PLANO_PROMPTS.planta_electrica: plano de planta con
+                       canalizaciones ortogonales punteadas, cuadro, cajas de derivacion,
+                       puntos de luz/tomas/interruptores, con conexionado obligatorio
+                       interruptor->luz (linea curva discontinua, distinta de la
+                       canalizacion de potencia).
+                       4) TOOL_GENERAR_PLANO ampliado a 7 tipos con descripcion que
+                       distingue claramente electrico (circuito interno de UN cuadro) vs
+                       unifilar (interconexion ENTRE cuadros) vs planta_electrica
+                       (instalacion de planta) vs planta (generico sin instalacion).
+                       5) migrate_006_planos_unifilar_planta_electrica.sql: amplia el
+                       CHECK de `tipo` en la tabla `planos` (reconstruccion de tabla,
+                       patron idempotente ya usado en migraciones anteriores). Verificada
+                       local (--local, dos ejecuciones) antes de aplicar a produccion
+                       (--remote); 17 filas previas conservadas intactas.
+                       6) Workflow CI actualizado con el paso de la migracion 006.
+                       Verificado en vivo via curl /api/chat/stream para ambos tipos
+                       nuevos (planos de prueba ID 19 -unifilar, ~160s- y ID 20
+                       -planta_electrica, ~167s-), confirmado visualmente en Chrome
+                       (documentos correctos, con limitaciones cosmeticas menores ya
+                       conocidas de la IA -solape de texto / omision ocasional de
+                       cajetin y flecha norte-, no bloqueantes). Ambos planos de prueba
+                       borrados de D1 produccion tras verificar (confirmado con Adrian).
+                       Deploy manual + CI: Worker agente Version ID
+                       96a577dd-ae80-4332-8489-9e887c7866fc. Sin cambio de PWA
+                       (index.html/sw.js/version.json intactos, no aplica).
   (agente, sin bump PWA) — 06/07/2026 — generar_plano profesional (IEC) + fix critico
                        vaciado de SVGs (commits 8ad4732 / 5ac8f41):
                        Peticion: "que mejorar a alejandra para que los haga [planos] bien

@@ -1,14 +1,18 @@
 ## ESTADO ACTUAL
 
 **Sesion:** LIBRE
-**Ultima sesion:** 06/07/2026 -- generar_plano profesional con simbologia IEC + fix critico de
-vaciado de SVGs en `_sanearSvgTruncado` (solo alejandra-agente, commits 8ad4732 / 5ac8f41,
-Worker agente Version ID 6f50c3ed-2ae2-4478-af72-43a68fd57b49). Ver seccion nueva "RESUMEN
-SESION 06/07/2026 (planos IEC + fix sanitizer)" mas abajo. Sesion anterior a esta: Cascada
-Gemini para planos + test vision + fix agente web-search crash (v7.72, commits 101aa9c / 07657d3).
+**Ultima sesion:** 06/07/2026 -- nuevos tipos de plano `unifilar` y `planta_electrica` en
+`generar_plano` (solo alejandra-agente, commit 53edc25, deploy CI 28815636221 en verde). Ver
+seccion nueva "RESUMEN SESION 06/07/2026 (planos unifilar + planta_electrica)" mas abajo.
+Sesion anterior a esta: generar_plano profesional con simbologia IEC + fix critico de
+vaciado de SVGs en `_sanearSvgTruncado` (commits 8ad4732 / 5ac8f41, Worker agente Version ID
+6f50c3ed-2ae2-4478-af72-43a68fd57b49). Ver seccion "RESUMEN SESION 06/07/2026 (planos IEC +
+fix sanitizer)" mas abajo. Sesion anterior a esa: Cascada Gemini para planos + test vision +
+fix agente web-search crash (v7.72, commits 101aa9c / 07657d3).
 **Version actual:** App PWA **v7.72** -- commit 101aa9c (sin cambios de PWA esta sesion, solo agente)
-**Agente (alejandra-agente):** commit **5ac8f41** desplegado en main -- ver seccion nueva mas
-abajo. Antes de eso, commit 2a18d5b desplegado en main (fix IDOR en
+**Agente (alejandra-agente):** commit **53edc25** desplegado en main -- ver seccion nueva mas
+abajo. Antes de eso, commit 5ac8f41 (fix critico sanitizer). Antes de eso, commit 2a18d5b
+desplegado en main (fix IDOR en
 subir_archivo -- escribia/sobrescribia cualquier key de R2 sin registrar dueno ni
 comprobar empresa -- y enviar_notificacion -- codigo huerfano con el mismo patron
 IDOR que enviar_push antes de la continuacion 19/20 --, mas el default fail-open
@@ -114,6 +118,90 @@ visualmente correcto (Claude dibuja los simbolos "a mano" en vez de referenciar 
 libreria), asi que no es un fallo funcional, solo una perdida menor de consistencia
 visual/tamaño de archivo. No se ha intentado forzarlo mas alla de la instruccion actual
 del prompt.
+
+---
+
+## RESUMEN SESION 06/07/2026 (planos unifilar + planta_electrica) -- nuevos tipos de plano en generar_plano
+
+### Peticion de Adrian
+Tras probar en vivo el tipo `electrico` (sesion anterior, plano 21): "pero la prueba que
+decias tu, ese plano esta bien pero no es el que se usa en obra normalmente. tenemos que
+mejorar". Se le pregunto que tipo de documento se usa realmente en obra; respuesta:
+"se utiliza es esquema unifilar par conectar cuadros(1) y para planta el 2" -- es decir:
+(1) para interconectar cuadros se usa un ESQUEMA UNIFILAR (no el detalle interno de un
+cuadro, que es lo que ya hacia `electrico`), y (2) para planta se necesita el plano con
+canalizaciones/tomas/luminarias/interruptores (no un plano arquitectonico generico como el
+`planta` existente). Plan tecnico completo presentado y confirmado ("Si, adelante") antes
+de tocar codigo: dos tipos nuevos, `unifilar` y `planta_electrica`, deliberadamente
+distintos de `electrico`/`planta`/`bandejas` para no romper sus usos existentes.
+
+### Cambios (commit 53edc25)
+- Nueva libreria de simbolos `IEC_INSTALACION_DEFS` (antes de `_PLANO_PROMPTS`): punto de
+  luz de techo, aplique de pared, toma de corriente/Schuko, interruptor simple,
+  interruptor conmutado/cruce, caja de derivacion, CGMP (cuadro en vista de planta) --
+  todos con `currentColor`, convencion REBT ITC-BT-19/25.
+- `_PLANO_PROMPTS.unifilar`: esquema de interconexion Acometida -> CGP -> Cuadro General
+  de Distribucion -> sub-cuadros, topologia siempre vertical/horizontal ortogonal, cada
+  tramo etiquetado con proteccion de cabecera (magnetotermico+diferencial), tipo/seccion
+  de cable y longitud. Reutiliza simbolos ya existentes (`#sym-cgp`/`#sym-cs`/`#sym-scss`
+  de `IEC_BANDEJA_DEFS`, `#sym-magnetotermico`/`#sym-diferencial`/`#sym-tierra` de
+  `IEC_SYMBOLS_DEFS`) -- no necesitaba simbolos nuevos.
+- `_PLANO_PROMPTS.planta_electrica`: plano de planta (mismo estilo de muros que `planta`)
+  con canalizaciones ortogonales punteadas, cuadro (`#sym-cgmp`), cajas de derivacion,
+  puntos de luz/apliques, tomas de corriente, interruptores -- con conexionado
+  obligatorio interruptor->luz (linea curva discontinua fina, distinta de la
+  canalizacion de potencia) para que se vea la relacion mando/carga.
+- `TOOL_GENERAR_PLANO`: enum ampliado a 7 tipos (`bandejas`, `electrico`, `unifilar`,
+  `planta_electrica`, `planta`, `mecanico`, `gantt`), descripcion reescrita explicando la
+  diferencia entre `electrico` (circuito interno de UN cuadro), `unifilar` (interconexion
+  ENTRE cuadros) y `planta_electrica` (instalacion electrica de planta) vs `planta`
+  (generico, sin instalacion).
+- `tiposValidos` (case `generar_plano`) y el CHECK de `_ensurePlanosTableAgente` (solo
+  cosmetico para instalaciones nuevas, prod ya tiene el CHECK real via migracion)
+  actualizados con los 2 tipos nuevos.
+- `_generarPlanoAgente`: nuevas ramas de inyeccion de simbolos --
+  `unifilar` -> `IEC_SYMBOLS_DEFS` + `IEC_BANDEJA_DEFS`; `planta_electrica` ->
+  `IEC_BANDEJA_DEFS` + `IEC_INSTALACION_DEFS`.
+- `migrate_006_planos_unifilar_planta_electrica.sql`: amplia el CHECK de `tipo` en la
+  tabla `planos` (SQLite no permite ALTER de CHECK directo -- reconstruccion de tabla
+  `CREATE TABLE IF NOT EXISTS ... tmp` -> `INSERT ... WHERE id NOT IN (...)` -> `DROP`/
+  `RENAME`). Disenada para ser re-ejecutable sin perdida de datos ni duplicados (el
+  workflow de deploy relanza TODAS las migraciones en cada push con
+  `|| echo "ya aplicada, continuando..."`). Verificada localmente (`--local`, dos
+  ejecuciones seguidas) antes de aplicarla a produccion (`--remote`); confirmado que las
+  17 filas previas se conservaron intactas.
+- `.github/workflows/deploy-alejandra-agente.yml`: nuevo paso que aplica la migracion 006
+  (mismo patron que las 5 anteriores).
+
+### Verificacion
+- `node --check worker.js` limpio, grep de corrupcion de encoding limpio antes del commit.
+- Test en vivo via curl contra `/api/chat/stream` para AMBOS tipos nuevos:
+  - `unifilar` (plano de prueba ID 19, ~160s de generacion, sin 524 gracias al streaming
+    ya existente): esquema real Acometida -> CGP -> CG -> SC-1, cada tramo con cable
+    (tipo/seccion/longitud), protecciones Q1/ID1 con sus specs normativas, panel de
+    resumen tecnico numerado, leyenda, cajetin completo (empresa/proyecto/escala/fecha/
+    norma/revision). Verificado visualmente (SVG servido con `python -m http.server`
+    local + Chrome via MCP): documento correcto y legible, con algun solape cosmetico
+    menor de texto (layout de la IA, no un fallo estructural).
+  - `planta_electrica` (plano de prueba ID 20, ~167s de generacion): plano de vivienda
+    completo (recibidor/salon-comedor/cocina/bano/3 dormitorios/pasillo/trastero/hall)
+    con CGD en el recibidor, circuitos de canalizacion en colores distintos por circuito,
+    simbolos de punto de luz/toma/interruptor/conmutador/caja de derivacion, leyenda
+    completa, cotas exteriores. Exactamente el tipo de documento pedido. Limitacion
+    observada (no bloqueante): esta generacion en concreto omitio el bloque de titulo
+    (empresa/proyecto) y la flecha norte pese a pedirse en el prompt -- variabilidad
+    normal de generacion libre de la IA, mismo tipo de limitacion ya conocida y aceptada
+    para `electrico`/`bandejas`.
+- Ambos planos de prueba (19 y 20) borrados de D1 produccion tras la verificacion
+  (confirmado con Adrian via AskUserQuestion antes de borrar).
+
+### Deploy
+- `npx wrangler deploy` manual desde `alejandra-agente/` para probar antes del commit,
+  y de nuevo via CI tras el push (mismo resultado, migracion 006 idempotente re-aplicada
+  sin error).
+- Commit `53edc25`: "feat(agente): nuevos tipos de plano unifilar y planta_electrica en
+  generar_plano". Push limpio (fast-forward). Deploy CI `28815636221` en verde (tests ->
+  migraciones -> deploy -> health check).
 
 ---
 
