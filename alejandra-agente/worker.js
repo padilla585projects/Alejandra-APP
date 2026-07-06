@@ -8780,6 +8780,21 @@ async function construirMessages(env, mensaje, contexto, limitHistorial=10, incl
     // Soporta tanto {rol,contenido} (alejandra_historial) como {mensaje,respuesta} (legacy)
     if (item.rol && item.contenido) {
       if (item.rol === 'system') continue;
+      // Si el mensaje de usuario tiene [adjuntos: key] en texto, reconstruir content blocks reales
+      if (item.rol === 'user' && item.contenido.includes('[adjuntos:') && env.FILES) {
+        const adjMatch = item.contenido.match(/\[adjuntos:\s*([^\]]+)\]/);
+        if (adjMatch) {
+          const keys = adjMatch[1].split(',').map(k => k.trim()).filter(Boolean);
+          const texto = item.contenido.replace(/\[adjuntos:[^\]]+\]/, '').trim();
+          try {
+            const blocks = await buildUserContentWithAdjuntos(env, texto, keys);
+            messages.push({ role: 'user', content: blocks });
+          } catch (_) {
+            messages.push({ role: item.rol, content: item.contenido });
+          }
+          continue;
+        }
+      }
       messages.push({ role: item.rol, content: item.contenido });
     } else {
       if (item.mensaje)   messages.push({ role: 'user',      content: item.mensaje });
