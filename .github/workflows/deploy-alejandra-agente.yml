@@ -62,6 +62,9 @@ jobs:
           npx wrangler d1 execute alejandra-db \
             --file=migrate_005_dev_bypass.sql \
             --remote || echo "Migración 005 ya aplicada, continuando..."
+          npx wrangler d1 execute alejandra-db \
+            --file=migrate_006_planos_unifilar_planta_electrica.sql \
+            --remote || echo "Migración 006 ya aplicada, continuando..."
 
       - name: Desplegar worker
         env:

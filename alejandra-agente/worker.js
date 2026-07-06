@@ -1235,15 +1235,17 @@ const TOOL_GENERAR_PLANO = {
   name: 'generar_plano',
   description: `Genera un plano tecnico profesional SVG con IA (Gemini/Claude). Tipos disponibles:
 - bandejas: Plano de planta de instalacion de bandejas electricas en nave industrial (recorrido, alturas, derivaciones, soportes, cuadros). USAR cuando el usuario pida un plano de soportacion, recorrido de bandejas, Rejiband, bandeja electrica, etc.
-- electrico: Esquema electrico con simbolos IEC 60617 (cuadros, arranques DOL, unifilares). Alternativa a generar_esquema_electrico para circuitos complejos.
-- planta: Plano de planta/obra (distribuccion espacios, estructura, cotas).
+- electrico: Esquema electrico INTERNO de un cuadro (arranques DOL, maniobra, circuitos de un solo cuadro). Alternativa a generar_esquema_electrico para circuitos complejos.
+- unifilar: Esquema UNIFILAR de interconexion ENTRE CUADROS (acometida -> CGP -> cuadro general -> sub-cuadros), con seccion/tipo de cable y proteccion de cada tramo. USAR cuando el usuario pida "esquema unifilar", conectar/interconectar cuadros, o distribucion electrica general del edificio/obra.
+- planta_electrica: Plano de planta con la instalacion electrica de una vivienda/oficina/local: canalizaciones, ubicacion del cuadro, cajas de derivacion, puntos de luz, tomas de corriente e interruptores con su conexionado. USAR cuando el usuario pida un plano de electricidad de planta, distribucion de tomas/luces/interruptores, o instalacion electrica de un local.
+- planta: Plano de planta/obra generico (distribuccion espacios, estructura, cotas) SIN instalacion electrica.
 - mecanico: Plano mecanico industrial (vistas, cotas, materiales).
 - gantt: Diagrama de Gantt de fases de obra.
 El SVG generado se guarda en la BD y es visible en el panel web (seccion Planos).`,
   input_schema: {
     type: 'object',
     properties: {
-      tipo:        { type: 'string', enum: ['bandejas', 'electrico', 'planta', 'mecanico', 'gantt'], description: 'Tipo de plano' },
+      tipo:        { type: 'string', enum: ['bandejas', 'electrico', 'unifilar', 'planta_electrica', 'planta', 'mecanico', 'gantt'], description: 'Tipo de plano' },
       titulo:      { type: 'string', description: 'Titulo del plano (ej: "Soportacion Rejiband 300 CPD Getafe")' },
       descripcion: { type: 'string', description: 'Descripcion DETALLADA de lo que debe incluir el plano: medidas, marcas, modelos, zonas, soportes, alturas, referencias de cuadros, etc. Cuanta mas informacion, mas preciso el resultado.' },
       empresa_id:  { type: 'integer', description: 'ID de empresa (si no se conoce, usar 1)' },
@@ -6490,7 +6492,7 @@ ${descripcion ? `<div class="info-bar"><span class="badge">${tipo}</span>${descr
       try {
         const { tipo, titulo, descripcion, empresa_id: eid_plano, usuario_id: uid_input } = input;
         if (!tipo || !titulo || !descripcion) return JSON.stringify({ error: 'tipo, titulo y descripcion son obligatorios' });
-        const tiposValidos = ['planta', 'electrico', 'bandejas', 'mecanico', 'gantt'];
+        const tiposValidos = ['planta', 'electrico', 'bandejas', 'mecanico', 'gantt', 'unifilar', 'planta_electrica'];
         if (!tiposValidos.includes(tipo)) return JSON.stringify({ error: 'tipo invalido' });
         // Heartbeat SSE cada 5s para mantener la conexion viva durante la generacion SVG (puede tardar 60-90s)
         let _hbTimer = null;
@@ -9018,6 +9020,54 @@ const IEC_BANDEJA_DEFS = `<defs id="bandeja-lib">
   </symbol>
 </defs>`;
 
+// ── Biblioteca de simbolos para planos de planta de instalacion electrica ──
+// (vivienda/oficina/nave pequeña: puntos de luz, tomas, interruptores, cajas
+// de derivacion). Convencion habitual en planos de instalacion electrica
+// domestica/terciaria en España (REBT / ITC-BT-19 y ss.). Todos usan currentColor.
+const IEC_INSTALACION_DEFS = `<defs id="instalacion-lib">
+  <!-- Punto de luz de techo (circulo con cruz, 20x20) -->
+  <symbol id="sym-punto-luz" viewBox="0 0 20 20" overflow="visible">
+    <circle cx="10" cy="10" r="8" fill="white" stroke="currentColor" stroke-width="1.6"/>
+    <line x1="10" y1="2" x2="10" y2="18" stroke="currentColor" stroke-width="1.2"/>
+    <line x1="2" y1="10" x2="18" y2="10" stroke="currentColor" stroke-width="1.2"/>
+  </symbol>
+  <!-- Aplique de pared (semicirculo, 16x10) -->
+  <symbol id="sym-aplique" viewBox="0 0 16 10" overflow="visible">
+    <path d="M0,10 A8,8 0 0 1 16,10" fill="white" stroke="currentColor" stroke-width="1.5"/>
+    <line x1="4" y1="10" x2="12" y2="10" stroke="currentColor" stroke-width="1.2"/>
+  </symbol>
+  <!-- Toma de corriente / base de enchufe Schuko (circulo + medio arco tierra, 18x18) -->
+  <symbol id="sym-toma-corriente" viewBox="0 0 18 18" overflow="visible">
+    <circle cx="9" cy="9" r="7" fill="white" stroke="currentColor" stroke-width="1.5"/>
+    <path d="M4,9 A5,5 0 0 1 14,9" fill="none" stroke="currentColor" stroke-width="1.4"/>
+  </symbol>
+  <!-- Interruptor simple (letra "a" + trazo diagonal de mando, 16x16) -->
+  <symbol id="sym-interruptor-simple" viewBox="0 0 16 16" overflow="visible">
+    <line x1="2" y1="14" x2="12" y2="4" stroke="currentColor" stroke-width="1.6"/>
+    <text x="13" y="7" font-size="9" font-family="Arial,sans-serif" fill="currentColor">a</text>
+  </symbol>
+  <!-- Interruptor conmutado / de cruce (letra "a2" + doble trazo, 18x16) -->
+  <symbol id="sym-interruptor-conmutado" viewBox="0 0 18 16" overflow="visible">
+    <line x1="2" y1="14" x2="12" y2="4" stroke="currentColor" stroke-width="1.6"/>
+    <line x1="5" y1="14" x2="15" y2="4" stroke="currentColor" stroke-width="1.6"/>
+    <text x="14" y="7" font-size="7" font-family="Arial,sans-serif" fill="currentColor">a2</text>
+  </symbol>
+  <!-- Caja de derivacion/registro (cuadrado con diagonales, 14x14) -->
+  <symbol id="sym-caja-derivacion" viewBox="0 0 14 14" overflow="visible">
+    <rect x="0" y="0" width="14" height="14" fill="white" stroke="currentColor" stroke-width="1.4"/>
+    <line x1="1" y1="1" x2="13" y2="13" stroke="currentColor" stroke-width="1"/>
+    <line x1="13" y1="1" x2="1" y2="13" stroke="currentColor" stroke-width="1"/>
+  </symbol>
+  <!-- Cuadro general de mando y proteccion CGMP (vista planta, 28x36) -->
+  <symbol id="sym-cgmp" viewBox="0 0 28 36" overflow="visible">
+    <rect x="0" y="0" width="28" height="36" fill="white" stroke="currentColor" stroke-width="2" rx="1"/>
+    <line x1="2" y1="2" x2="26" y2="34" stroke="currentColor" stroke-width="1.2"/>
+    <line x1="26" y1="2" x2="2" y2="34" stroke="currentColor" stroke-width="1.2"/>
+    <rect x="0" y="0" width="28" height="36" fill="none" stroke="currentColor" stroke-width="2" rx="1"/>
+    <text x="14" y="-5" text-anchor="middle" font-size="7" font-weight="bold" font-family="Arial,sans-serif" fill="currentColor">CGMP</text>
+  </symbol>
+</defs>`;
+
 const _PLANO_PROMPTS = {
   planta: `Eres un arquitecto tecnico y delineante experto en planos de construccion e ingenieria civil. Tu tarea es generar un plano de planta/obra en formato SVG profesional y editable.
 
@@ -9150,6 +9200,76 @@ NOTAS TECNICAS:
 
 AGRUPA: <g id="zona-taller">, <g id="bandejas-principales">, <g id="bandejas-secundarias">
 
+DEVUELVE: solo el codigo SVG valido completo (desde <svg hasta </svg>), sin texto adicional ni markdown.`,
+
+  unifilar: `Eres un ingeniero electrico experto en instalaciones de baja tension segun REBT (ITC-BT-17) y normas IEC 60617. Tu tarea es generar un ESQUEMA UNIFILAR profesional en formato SVG. Este esquema NO es el detalle interno de un cuadro (eso es "electrico") — es el esquema de INTERCONEXION ENTRE CUADROS: como la acometida alimenta la Caja General de Proteccion, esta al Cuadro General de Distribucion, y este a los distintos sub-cuadros/cuadros secundarios del edificio o instalacion, mostrando cada tramo de linea con su seccion, tipo de cable y proteccion de cabecera. Es un DOCUMENTO DE OBRA que usan instaladores y la propia empresa distribuidora para verificar la instalacion. Cuando el usuario proporcione datos reales (cuadros, potencias, secciones), usa SIEMPRE esas referencias exactas.
+
+REQUISITOS TECNICOS:
+- viewBox="0 0 1300 850", xmlns="http://www.w3.org/2000/svg", id="plano-principal"
+- Fondo blanco fill="#ffffff"
+- Representacion UNIFILAR: cada tramo es UNA SOLA LINEA (no 3 lineas de fase separadas) que representa el conjunto de conductores del circuito. stroke="#1a1a1a" stroke-width="2.5" para tramos principales, stroke-width="1.8" para derivaciones a sub-cuadros
+- Topologia SIEMPRE de arriba hacia abajo o de izquierda a derecha: Acometida -> CGP -> Cuadro General (CGMP) -> Sub-cuadros -> (opcional) cuadros terciarios
+- Cada cuadro se dibuja como un rectangulo (usa los simbolos indicados abajo) con su nombre/referencia debajo (ej. "CS-1 Planta Baja", "SCSS Taller")
+
+SIMBOLOS — NO definas <defs> ni <symbol> propios. El renderizador inyecta automaticamente las librerias de simbolos. Solo usa <use href="#sym-X"/> con estos IDs:
+  #sym-cgp              width="40" height="50" — Caja General de Proteccion (color="#8B0000")
+  #sym-cs               width="30" height="40" — Cuadro Secundario / Cuadro General de Distribucion (color="#8B0000")
+  #sym-scss             width="22" height="30" — Sub-cuadro local (color="#8B0000")
+  #sym-magnetotermico   width="30" height="100" — IGA/PIA magnetotermico de cabecera de cada tramo (Q1, Q2...)
+  #sym-diferencial      width="30" height="100" — Interruptor diferencial/RCD de cabecera de cada tramo (ID1...)
+  #sym-tierra           width="36" height="24"  — Puesta a tierra (color="#006600" siempre)
+
+ETIQUETADO DE CADA TRAMO (OBLIGATORIO, junto a la linea, font-size="8.5" fill="#1a1a1a"):
+- Referencia de proteccion de cabecera: ej. "Q2 40A" y "ID2 40A/30mA"
+- Tipo y seccion del cable: ej. "RZ1-K (AS) 5x16 mm2" o "RV-K 4x25+TTx16 mm2"
+- Longitud del tramo: ej. "L=35m"
+- Potencia prevista del sub-cuadro si se conoce: ej. "P=15 kW"
+
+COTAS Y NOTAS: no requiere cotas de obra civil. Incluir nota tecnica: "Esquema unifilar segun REBT ITC-BT-17. Secciones calculadas para caida de tension y calentamiento segun normativa vigente."
+
+LEYENDA (esquina inferior izquierda): titulo "LEYENDA" + simbolos usados + significado de colores.
+
+BLOQUE DE TITULO (esquina inferior derecha, rect fill="#1a3a6b"): empresa/proyecto, titulo "ESQUEMA UNIFILAR", escala si aplica, fecha, hoja.
+
+AGRUPA: <g id="acometida">, <g id="cuadro-general">, <g id="subcuadros">
+
+DEVUELVE: solo el codigo SVG valido completo (desde <svg hasta </svg>), sin texto adicional ni markdown.`,
+
+  planta_electrica: `Eres un instalador electricista jefe y delineante tecnico experto en instalaciones electricas de vivienda/oficina/local segun REBT (ITC-BT-19, ITC-BT-25 y ss.). Tu tarea es generar un PLANO DE PLANTA DE INSTALACION ELECTRICA en formato SVG profesional. Este plano muestra la distribucion en planta de: canalizaciones (recorrido de tubo empotrado o superficie), ubicacion del cuadro electrico, cajas de derivacion, puntos de luz, tomas de corriente e interruptores con su conexionado a los puntos de luz que gobiernan. Es un DOCUMENTO DE OBRA que usan los instaladores en campo. Cuando el usuario proporcione datos reales (estancias, cuadro, circuitos), usa SIEMPRE esas referencias exactas.
+
+REQUISITOS TECNICOS:
+- viewBox="0 0 1300 850", xmlns="http://www.w3.org/2000/svg", id="plano-principal"
+- Fondo blanco fill="#ffffff"
+- Paredes/estancias: stroke="#1a1a1a" stroke-width="5" fill="#f2f2ec" (mismo estilo que un plano de planta arquitectonico), etiqueta de cada estancia font-size="11" font-weight="bold" fill="#222" (ej. "SALON", "COCINA", "DORMITORIO 1")
+- Puertas: arco de 90 grados (quarter-circle path) en el vano de la pared
+- Canalizaciones (recorrido de circuitos): SOLO lineas ortogonales (horizontal/vertical), stroke="#cc6600" stroke-width="1.4" stroke-dasharray="4,2" (tubo empotrado en tabique/techo). Cada circuito de un color distinto opcionalmente para diferenciarlos, indicado en leyenda
+
+SIMBOLOS — NO definas <defs> ni <symbol> propios. El renderizador inyecta automaticamente las librerias de simbolos. Solo usa <use href="#sym-X"/> con estos IDs:
+  #sym-cgmp             width="28" height="36" — Cuadro General de Mando y Proteccion (ubicacion del cuadro en planta)
+  #sym-cs               width="30" height="40" — Cuadro secundario si lo hay
+  #sym-caja-derivacion  width="14" height="14" — Caja de derivacion/registro
+  #sym-punto-luz        width="20" height="20" — Punto de luz de techo
+  #sym-aplique          width="16" height="10" — Aplique de pared
+  #sym-toma-corriente   width="18" height="18" — Toma de corriente / base de enchufe
+  #sym-interruptor-simple    width="16" height="16" — Interruptor simple de una via
+  #sym-interruptor-conmutado width="18" height="16" — Interruptor conmutado/de cruce
+
+CONEXIONADO INTERRUPTOR -> LUZ (OBLIGATORIO): cada interruptor debe unirse mediante una linea curva o discontinua fina (stroke="#666666" stroke-width="0.8" stroke-dasharray="3,2", fill="none", path curvo tipo arco) al/los punto(s) de luz que gobierna, para que se vea claramente la relacion mando-carga sin confundirse con la canalizacion de potencia.
+
+ETIQUETADO: cada circuito con su referencia (ej. "C1 Alumbrado Planta Baja", "C3 Tomas Cocina") junto al cuadro. Cada punto de luz/toma puede llevar numero de circuito pequeño junto al simbolo (font-size="7").
+
+COTAS: cotas generales del perimetro exterior, stroke="#0066cc" stroke-width="1", flechas terminales, font-size="9" (igual que un plano de planta estandar).
+
+LEYENDA (esquina inferior izquierda): titulo "LEYENDA" + cada simbolo usado con su nombre + colores de circuito si se diferenciaron.
+
+NORTE: flecha norte en esquina superior derecha.
+
+BLOQUE DE TITULO (esquina inferior derecha, rect fill="#1a3a6b"): empresa/proyecto, titulo "PLANTA INSTALACION ELECTRICA", escala, fecha, hoja.
+
+NOTAS TECNICAS: "Instalacion segun REBT ITC-BT-19 / ITC-BT-25. Circuitos independientes segun grado de electrificacion."
+
+AGRUPA: <g id="estancias">, <g id="canalizaciones">, <g id="puntos-luz">, <g id="tomas">, <g id="interruptores">
+
 DEVUELVE: solo el codigo SVG valido completo (desde <svg hasta </svg>), sin texto adicional ni markdown.`
 };
 
@@ -9159,7 +9279,7 @@ async function _ensurePlanosTableAgente(env) {
       id             INTEGER PRIMARY KEY AUTOINCREMENT,
       empresa_id     INTEGER NOT NULL,
       usuario_id     INTEGER,
-      tipo           TEXT    NOT NULL CHECK(tipo IN ('planta','electrico','mecanico','gantt','bandejas')),
+      tipo           TEXT    NOT NULL CHECK(tipo IN ('planta','electrico','mecanico','gantt','bandejas','unifilar','planta_electrica')),
       titulo         TEXT    NOT NULL,
       descripcion    TEXT,
       svg_data       TEXT    NOT NULL,
@@ -9302,6 +9422,12 @@ let _proveedor = 'anthropic';
   }
   if (tipo === 'bandejas') {
     svgRaw = svgRaw.replace(/(<svg[^>]*>)/i, `$1\n${IEC_BANDEJA_DEFS}`);
+  }
+  if (tipo === 'unifilar') {
+    svgRaw = svgRaw.replace(/(<svg[^>]*>)/i, `$1\n${IEC_SYMBOLS_DEFS}\n${IEC_BANDEJA_DEFS}`);
+  }
+  if (tipo === 'planta_electrica') {
+    svgRaw = svgRaw.replace(/(<svg[^>]*>)/i, `$1\n${IEC_BANDEJA_DEFS}\n${IEC_INSTALACION_DEFS}`);
   }
 
   const metadatos = JSON.stringify({ tipo, tokens: Math.round(svgRaw.length / 4), modelo: _modelo, proveedor: _proveedor });
