@@ -8811,6 +8811,213 @@ async function buscarWebOpenAI(env, query) {
 }
 
 // ── Plano generation — cascade Gemini→OR→Anthropic (same as main worker) ──────
+// ── Biblioteca de simbolos IEC 60617 — inyectada en cada SVG electrico ─────────────────
+// Los simbolos usan currentColor → heredan el color del atributo color="" del <use>
+// Terminales estandar: viewBox "0 0 30 100", terminal top (15,0), bottom (15,100)
+const IEC_SYMBOLS_DEFS = `<defs id="iec60617-lib">
+  <!-- Q - Interruptor automatico magnetotermico (IEC 60617-7) -->
+  <symbol id="sym-magnetotermico" viewBox="0 0 30 100" overflow="visible">
+    <line x1="15" y1="0" x2="15" y2="20" stroke="currentColor" stroke-width="2" fill="none"/>
+    <rect x="3" y="20" width="24" height="60" fill="white" stroke="currentColor" stroke-width="2" rx="1"/>
+    <path d="M10 34 Q8 45 16 45" fill="none" stroke="currentColor" stroke-width="1.8"/>
+    <line x1="8" y1="66" x2="22" y2="45" stroke="currentColor" stroke-width="1.8"/>
+    <rect x="8" y="66" width="14" height="7" fill="none" stroke="currentColor" stroke-width="1.4"/>
+    <line x1="15" y1="80" x2="15" y2="100" stroke="currentColor" stroke-width="2" fill="none"/>
+  </symbol>
+  <!-- ID - Interruptor diferencial / RCD (IEC 60617-7) -->
+  <symbol id="sym-diferencial" viewBox="0 0 30 100" overflow="visible">
+    <line x1="15" y1="0" x2="15" y2="20" stroke="currentColor" stroke-width="2" fill="none"/>
+    <rect x="3" y="20" width="24" height="60" fill="white" stroke="currentColor" stroke-width="2" rx="1"/>
+    <line x1="8" y1="62" x2="22" y2="44" stroke="currentColor" stroke-width="1.8"/>
+    <circle cx="22" cy="28" r="4" fill="white" stroke="currentColor" stroke-width="1.5"/>
+    <text x="22" y="31" text-anchor="middle" font-size="5" font-family="Arial,sans-serif" fill="currentColor">T</text>
+    <text x="12" y="74" text-anchor="middle" font-size="8" font-family="Arial,sans-serif" fill="currentColor" font-style="italic">DI</text>
+    <line x1="15" y1="80" x2="15" y2="100" stroke="currentColor" stroke-width="2" fill="none"/>
+  </symbol>
+  <!-- F - Fusible IEC 60269 / IEC 60617-7 -->
+  <symbol id="sym-fusible" viewBox="0 0 30 100" overflow="visible">
+    <line x1="15" y1="0" x2="15" y2="26" stroke="currentColor" stroke-width="2" fill="none"/>
+    <rect x="8" y="26" width="14" height="48" fill="white" stroke="currentColor" stroke-width="2" rx="2"/>
+    <line x1="15" y1="26" x2="15" y2="74" stroke="currentColor" stroke-width="1.2" stroke-dasharray="4,3"/>
+    <line x1="15" y1="74" x2="15" y2="100" stroke="currentColor" stroke-width="2" fill="none"/>
+  </symbol>
+  <!-- KM - Contactor, contactos principales NA (IEC 60617-7) -->
+  <symbol id="sym-contactor" viewBox="0 0 30 100" overflow="visible">
+    <line x1="15" y1="0" x2="15" y2="30" stroke="currentColor" stroke-width="2" fill="none"/>
+    <line x1="5" y1="30" x2="25" y2="30" stroke="currentColor" stroke-width="2"/>
+    <path d="M5 54 Q15 43 25 54" fill="none" stroke="currentColor" stroke-width="2"/>
+    <line x1="5" y1="54" x2="25" y2="54" stroke="currentColor" stroke-width="2"/>
+    <line x1="15" y1="42" x2="27" y2="42" stroke="currentColor" stroke-width="1.4" stroke-dasharray="2,2"/>
+    <line x1="15" y1="54" x2="15" y2="100" stroke="currentColor" stroke-width="2" fill="none"/>
+  </symbol>
+  <!-- A1-A2 - Bobina de contactor / rele (IEC 60617-7) -->
+  <symbol id="sym-bobina" viewBox="0 0 30 100" overflow="visible">
+    <line x1="15" y1="0" x2="15" y2="26" stroke="currentColor" stroke-width="2" fill="none"/>
+    <rect x="5" y="26" width="20" height="48" fill="white" stroke="currentColor" stroke-width="2"/>
+    <path d="M8 40 Q11 34 15 40 Q19 46 22 40" fill="none" stroke="currentColor" stroke-width="1.6"/>
+    <path d="M8 54 Q11 48 15 54 Q19 60 22 54" fill="none" stroke="currentColor" stroke-width="1.6"/>
+    <line x1="15" y1="74" x2="15" y2="100" stroke="currentColor" stroke-width="2" fill="none"/>
+  </symbol>
+  <!-- FR - Rele termico de sobrecarga (IEC 60617-7) -->
+  <symbol id="sym-termico" viewBox="0 0 30 100" overflow="visible">
+    <line x1="15" y1="0" x2="15" y2="18" stroke="currentColor" stroke-width="2" fill="none"/>
+    <path d="M9 18 Q6 30 9 42 Q6 54 9 66 Q7 74 9 80" fill="none" stroke="currentColor" stroke-width="1.8"/>
+    <path d="M15 18 Q12 30 15 42 Q12 54 15 66 Q13 74 15 80" fill="none" stroke="currentColor" stroke-width="1.8"/>
+    <path d="M21 18 Q18 30 21 42 Q18 54 21 66 Q19 74 21 80" fill="none" stroke="currentColor" stroke-width="1.8"/>
+    <line x1="15" y1="80" x2="15" y2="100" stroke="currentColor" stroke-width="2" fill="none"/>
+  </symbol>
+  <!-- M 3~ - Motor asincrono trifasico (IEC 60617-10) - viewBox 70x70 -->
+  <symbol id="sym-motor-3f" viewBox="0 0 70 70" overflow="visible">
+    <circle cx="35" cy="35" r="32" fill="white" stroke="currentColor" stroke-width="2.5"/>
+    <text x="35" y="30" text-anchor="middle" font-size="18" font-weight="bold" font-family="Arial,sans-serif" fill="currentColor">M</text>
+    <text x="35" y="47" text-anchor="middle" font-size="11" font-family="Arial,sans-serif" fill="currentColor">3~</text>
+  </symbol>
+  <!-- M 1~ - Motor monofasico (IEC 60617-10) - viewBox 70x70 -->
+  <symbol id="sym-motor-1f" viewBox="0 0 70 70" overflow="visible">
+    <circle cx="35" cy="35" r="32" fill="white" stroke="currentColor" stroke-width="2.5"/>
+    <text x="35" y="30" text-anchor="middle" font-size="18" font-weight="bold" font-family="Arial,sans-serif" fill="currentColor">M</text>
+    <text x="35" y="47" text-anchor="middle" font-size="11" font-family="Arial,sans-serif" fill="currentColor">1~</text>
+  </symbol>
+  <!-- TR - Transformador (IEC 60617-9) - viewBox 50x100 -->
+  <symbol id="sym-transformador" viewBox="0 0 50 100" overflow="visible">
+    <line x1="25" y1="0" x2="25" y2="14" stroke="currentColor" stroke-width="2" fill="none"/>
+    <path d="M25 14 Q18 14 18 20 Q18 26 25 26 Q32 26 32 32 Q32 38 25 38 Q18 38 18 44" fill="none" stroke="currentColor" stroke-width="2"/>
+    <line x1="23" y1="44" x2="23" y2="56" stroke="currentColor" stroke-width="4"/>
+    <line x1="27" y1="44" x2="27" y2="56" stroke="currentColor" stroke-width="4"/>
+    <path d="M25 56 Q32 56 32 62 Q32 68 25 68 Q18 68 18 74 Q18 80 25 80 Q32 80 32 86" fill="none" stroke="currentColor" stroke-width="2"/>
+    <line x1="25" y1="86" x2="25" y2="100" stroke="currentColor" stroke-width="2" fill="none"/>
+  </symbol>
+  <!-- PE - Tierra de proteccion (IEC 60617-2) - viewBox 36x24 -->
+  <symbol id="sym-tierra" viewBox="0 0 36 24" overflow="visible">
+    <line x1="18" y1="0" x2="18" y2="6" stroke="currentColor" stroke-width="2" fill="none"/>
+    <line x1="3"  y1="6"  x2="33" y2="6"  stroke="currentColor" stroke-width="2.5"/>
+    <line x1="7"  y1="12" x2="29" y2="12" stroke="currentColor" stroke-width="2"/>
+    <line x1="12" y1="18" x2="24" y2="18" stroke="currentColor" stroke-width="2"/>
+    <line x1="16" y1="23" x2="20" y2="23" stroke="currentColor" stroke-width="1.5"/>
+  </symbol>
+  <!-- H - Lampara / piloto indicador (IEC 60617-11) - viewBox 26x26 -->
+  <symbol id="sym-lampara" viewBox="0 0 26 26" overflow="visible">
+    <circle cx="13" cy="13" r="11" fill="white" stroke="currentColor" stroke-width="2"/>
+    <line x1="6"  y1="6"  x2="20" y2="20" stroke="currentColor" stroke-width="1.8"/>
+    <line x1="20" y1="6"  x2="6"  y2="20" stroke="currentColor" stroke-width="1.8"/>
+  </symbol>
+  <!-- NA - Contacto auxiliar normalmente abierto (IEC 60617-7) - viewBox 30x60 -->
+  <symbol id="sym-contacto-na" viewBox="0 0 30 60" overflow="visible">
+    <line x1="15" y1="0"  x2="15" y2="18" stroke="currentColor" stroke-width="1.8" fill="none"/>
+    <line x1="5"  y1="18" x2="25" y2="18" stroke="currentColor" stroke-width="1.8"/>
+    <path d="M5 33 Q15 23 25 33" fill="none" stroke="currentColor" stroke-width="1.8"/>
+    <line x1="5"  y1="33" x2="25" y2="33" stroke="currentColor" stroke-width="1.8"/>
+    <line x1="15" y1="33" x2="15" y2="60" stroke="currentColor" stroke-width="1.8" fill="none"/>
+  </symbol>
+  <!-- NC - Contacto auxiliar normalmente cerrado (IEC 60617-7) - viewBox 30x60 -->
+  <symbol id="sym-contacto-nc" viewBox="0 0 30 60" overflow="visible">
+    <line x1="15" y1="0"  x2="15" y2="18" stroke="currentColor" stroke-width="1.8" fill="none"/>
+    <line x1="5"  y1="18" x2="25" y2="18" stroke="currentColor" stroke-width="1.8"/>
+    <line x1="5"  y1="33" x2="25" y2="33" stroke="currentColor" stroke-width="1.8"/>
+    <line x1="25" y1="18" x2="5"  y2="33" stroke="currentColor" stroke-width="1.8"/>
+    <line x1="15" y1="33" x2="15" y2="60" stroke="currentColor" stroke-width="1.8" fill="none"/>
+  </symbol>
+  <!-- S-NA - Pulsador normalmente abierto (IEC 60617-7) - viewBox 30x70 -->
+  <symbol id="sym-pulsador-na" viewBox="0 0 30 70" overflow="visible">
+    <line x1="15" y1="0"  x2="15" y2="20" stroke="currentColor" stroke-width="1.8" fill="none"/>
+    <line x1="5"  y1="20" x2="25" y2="20" stroke="currentColor" stroke-width="1.8"/>
+    <line x1="15" y1="30" x2="15" y2="20" stroke="currentColor" stroke-width="1.4" stroke-dasharray="2,2"/>
+    <line x1="8"  y1="30" x2="22" y2="30" stroke="currentColor" stroke-width="2"/>
+    <path d="M5 43 Q15 33 25 43" fill="none" stroke="currentColor" stroke-width="1.8"/>
+    <line x1="5"  y1="43" x2="25" y2="43" stroke="currentColor" stroke-width="1.8"/>
+    <line x1="15" y1="43" x2="15" y2="70" stroke="currentColor" stroke-width="1.8" fill="none"/>
+  </symbol>
+  <!-- S-NC - Pulsador normalmente cerrado (IEC 60617-7) - viewBox 30x70 -->
+  <symbol id="sym-pulsador-nc" viewBox="0 0 30 70" overflow="visible">
+    <line x1="15" y1="0"  x2="15" y2="18" stroke="currentColor" stroke-width="1.8" fill="none"/>
+    <line x1="5"  y1="18" x2="25" y2="18" stroke="currentColor" stroke-width="1.8"/>
+    <line x1="15" y1="30" x2="15" y2="20" stroke="currentColor" stroke-width="1.4" stroke-dasharray="2,2"/>
+    <line x1="8"  y1="30" x2="22" y2="30" stroke="currentColor" stroke-width="2"/>
+    <line x1="5"  y1="43" x2="25" y2="43" stroke="currentColor" stroke-width="1.8"/>
+    <line x1="25" y1="28" x2="5"  y2="43" stroke="currentColor" stroke-width="1.8"/>
+    <line x1="15" y1="43" x2="15" y2="70" stroke="currentColor" stroke-width="1.8" fill="none"/>
+  </symbol>
+</defs>`;
+
+// ── Biblioteca de simbolos para planos de instalacion de bandejas electricas ────────────────
+// Norma de referencia: IEC 61537 (cable tray systems). Todos usan currentColor.
+const IEC_BANDEJA_DEFS = `<defs id="bandeja-lib">
+  <!-- CGP - Caja General de Proteccion (vista planta, 40x50) -->
+  <symbol id="sym-cgp" viewBox="0 0 40 50" overflow="visible">
+    <rect x="0" y="0" width="40" height="50" fill="white" stroke="currentColor" stroke-width="2.5" rx="2"/>
+    <line x1="3" y1="3" x2="37" y2="47" stroke="currentColor" stroke-width="1.5"/>
+    <line x1="37" y1="3" x2="3" y2="47" stroke="currentColor" stroke-width="1.5"/>
+    <rect x="0" y="0" width="40" height="50" fill="none" stroke="currentColor" stroke-width="2.5" rx="2"/>
+    <text x="20" y="-6" text-anchor="middle" font-size="9" font-weight="bold" font-family="Arial,sans-serif" fill="currentColor">CGP</text>
+  </symbol>
+  <!-- CS - Cuadro Secundario (vista planta, 30x40) -->
+  <symbol id="sym-cs" viewBox="0 0 30 40" overflow="visible">
+    <rect x="0" y="0" width="30" height="40" fill="white" stroke="currentColor" stroke-width="2" rx="1"/>
+    <line x1="2" y1="2" x2="28" y2="38" stroke="currentColor" stroke-width="1.2"/>
+    <line x1="28" y1="2" x2="2" y2="38" stroke="currentColor" stroke-width="1.2"/>
+    <rect x="0" y="0" width="30" height="40" fill="none" stroke="currentColor" stroke-width="2" rx="1"/>
+    <text x="15" y="-5" text-anchor="middle" font-size="8" font-weight="bold" font-family="Arial,sans-serif" fill="currentColor">CS</text>
+  </symbol>
+  <!-- SCSS - Sub-cuadro local (vista planta, 22x30) -->
+  <symbol id="sym-scss" viewBox="0 0 22 30" overflow="visible">
+    <rect x="0" y="0" width="22" height="30" fill="white" stroke="currentColor" stroke-width="1.5" rx="1"/>
+    <line x1="2" y1="2" x2="20" y2="28" stroke="currentColor" stroke-width="1"/>
+    <line x1="20" y1="2" x2="2" y2="28" stroke="currentColor" stroke-width="1"/>
+    <rect x="0" y="0" width="22" height="30" fill="none" stroke="currentColor" stroke-width="1.5" rx="1"/>
+    <text x="11" y="-4" text-anchor="middle" font-size="7" font-family="Arial,sans-serif" fill="currentColor">SCSS</text>
+  </symbol>
+  <!-- Columna metalica HEB/IPE (seccion transversal, 16x16) -->
+  <symbol id="sym-columna-h" viewBox="0 0 16 16" overflow="visible">
+    <rect x="0" y="0" width="16" height="3" fill="currentColor"/>
+    <rect x="6" y="3" width="4" height="10" fill="currentColor"/>
+    <rect x="0" y="13" width="16" height="3" fill="currentColor"/>
+  </symbol>
+  <!-- Columna de hormigon (seccion cuadrada, 16x16) -->
+  <symbol id="sym-columna-c" viewBox="0 0 16 16" overflow="visible">
+    <rect x="0" y="0" width="16" height="16" fill="#aaaaaa" stroke="currentColor" stroke-width="1.5"/>
+    <line x1="0" y1="0" x2="16" y2="16" stroke="currentColor" stroke-width="0.8"/>
+    <line x1="16" y1="0" x2="0" y2="16" stroke="currentColor" stroke-width="0.8"/>
+  </symbol>
+  <!-- Bajante / descenso vertical de bandeja (circulo con flecha, 20x20) -->
+  <symbol id="sym-bajante" viewBox="0 0 20 20" overflow="visible">
+    <circle cx="10" cy="10" r="9" fill="white" stroke="currentColor" stroke-width="1.5"/>
+    <line x1="10" y1="4" x2="10" y2="14" stroke="currentColor" stroke-width="1.5"/>
+    <polygon points="10,17 6,11 14,11" fill="currentColor"/>
+  </symbol>
+  <!-- Toma de fuerza / maquina / carga final (16x16) -->
+  <symbol id="sym-toma" viewBox="0 0 16 16" overflow="visible">
+    <circle cx="8" cy="8" r="7" fill="white" stroke="currentColor" stroke-width="1.5"/>
+    <line x1="5" y1="8" x2="11" y2="8" stroke="currentColor" stroke-width="1.2"/>
+    <line x1="8" y1="5" x2="8" y2="11" stroke="currentColor" stroke-width="1.2"/>
+  </symbol>
+  <!-- Luminaria industrial de nave (20x8) -->
+  <symbol id="sym-luminaria" viewBox="0 0 20 8" overflow="visible">
+    <rect x="0" y="0" width="20" height="8" fill="white" stroke="currentColor" stroke-width="1.2" rx="1"/>
+    <line x1="0" y1="4" x2="20" y2="4" stroke="currentColor" stroke-width="0.8" stroke-dasharray="2,2"/>
+  </symbol>
+  <!-- Codo de bandeja horizontal 90deg (30x30) -->
+  <symbol id="sym-bandeja-codo" viewBox="0 0 30 30" overflow="visible">
+    <path d="M0,0 L0,18 Q0,30 12,30 L30,30" fill="none" stroke="currentColor" stroke-width="2.5"/>
+    <path d="M0,8 L0,18 Q0,22 8,22 L30,22" fill="none" stroke="currentColor" stroke-width="2.5"/>
+  </symbol>
+  <!-- Derivacion en T de bandeja (40x30) -->
+  <symbol id="sym-bandeja-te" viewBox="0 0 40 30" overflow="visible">
+    <line x1="0" y1="0" x2="40" y2="0" stroke="currentColor" stroke-width="2.5"/>
+    <line x1="0" y1="10" x2="14" y2="10" stroke="currentColor" stroke-width="2.5"/>
+    <line x1="26" y1="10" x2="40" y2="10" stroke="currentColor" stroke-width="2.5"/>
+    <line x1="14" y1="10" x2="14" y2="30" stroke="currentColor" stroke-width="2.5"/>
+    <line x1="26" y1="10" x2="26" y2="30" stroke="currentColor" stroke-width="2.5"/>
+  </symbol>
+  <!-- Reduccion de bandeja (30x20) -->
+  <symbol id="sym-bandeja-reduccion" viewBox="0 0 30 20" overflow="visible">
+    <line x1="0" y1="0" x2="14" y2="5" stroke="currentColor" stroke-width="2.5"/>
+    <line x1="0" y1="14" x2="14" y2="9" stroke="currentColor" stroke-width="2.5"/>
+    <line x1="14" y1="5" x2="30" y2="5" stroke="currentColor" stroke-width="2.5"/>
+    <line x1="14" y1="9" x2="30" y2="9" stroke="currentColor" stroke-width="2.5"/>
+    <line x1="14" y1="5" x2="14" y2="9" stroke="currentColor" stroke-width="1.5"/>
+  </symbol>
+</defs>`;
+
 const _PLANO_PROMPTS = {
   planta: `Eres un arquitecto tecnico y delineante experto en planos de construccion e ingenieria civil. Tu tarea es generar un plano de planta/obra en formato SVG profesional y editable.
 
@@ -8859,6 +9066,7 @@ SIMBOLOS IEC 60617 — USA ESTOS IDs en <use href="#sym-X"/>:
   #sym-pulsador-nc     width="30" height="70"   — Pulsador NC/paro (S2, STOP)
 
 ESTRUCTURA: Acometida superior fases L1/L2/L3+N, IGA/Q0 general, barras distribucion, ramas con magnetotermico+diferencial+carga. Motor: Q+ID+KM+FR+M3~+PE. Bloque titulo estandar. Leyenda colores de fase.
+NO definas <defs> ni <symbol> propios. El renderizador inyecta la libreria IEC 60617 automaticamente con esos mismos IDs — usa SOLO <use href="#sym-X" color="#..."/>.
 DEVUELVE: solo el codigo SVG valido completo (desde <svg hasta </svg>), sin texto adicional ni markdown.`,
 
   mecanico: `Eres un delineante tecnico industrial experto en planos mecanicos segun normas ISO/DIN. Tu tarea es generar un plano mecanico en formato SVG profesional y editable.
@@ -8909,13 +9117,18 @@ CONVENCIONES DE BANDEJAS (siempre recorrido ORTOGONAL — horizontal o vertical)
 - Bajantes: marcados con simbolo "V" o flecha hacia abajo en el punto de descenso
 - Soportes: marcar con simbolo de cruz o "+" cada N metros segun separacion calculada
 
-SIMBOLOS (dibujar directamente si no hay libreria inyectada):
-- Cuadro general (CGP/CS): rect 40x50 stroke="#8B0000" fill="#fff8f8" + texto referencia
-- Maquinas/tomas: rect 30x30 stroke="#006633" fill="#f5fff5" + etiqueta
-- Columnas metalicas: rect 16x16 fill="#444" + angulo 45deg
-- Columnas hormigon: rect 16x16 fill="#888"
-- Codos 90 grados: arco SVG stroke=color-bandeja
-- Derivacion en T: linea principal + perpendicular
+SIMBOLOS — NO definas <defs> ni <symbol> propios. El renderizador inyecta automaticamente la libreria de simbolos. Solo usa <use href="#sym-X"/> con estos IDs:
+  #sym-cgp              width="40" height="50" — Caja General de Proteccion (color="#8B0000")
+  #sym-cs               width="30" height="40" — Cuadro Secundario (color="#8B0000")
+  #sym-scss             width="22" height="30" — Sub-cuadro local (color="#8B0000")
+  #sym-columna-h        width="16" height="16" — Columna metalica HEB/IPE
+  #sym-columna-c        width="16" height="16" — Columna de hormigon
+  #sym-bajante          width="20" height="20" — Bajante / descenso vertical de bandeja
+  #sym-toma             width="16" height="16" — Toma de fuerza / maquina / carga final
+  #sym-luminaria        width="20" height="8"  — Luminaria industrial de nave
+  #sym-bandeja-codo     width="30" height="30" — Codo horizontal 90 grados
+  #sym-bandeja-te       width="40" height="30" — Derivacion en T horizontal
+  #sym-bandeja-reduccion width="30" height="20" — Reduccion de seccion de bandeja
 
 COTAS:
 - Cotas exteriores de nave: stroke="#0055aa" stroke-width="1", flechas terminales, font-size="10"
@@ -8955,6 +9168,62 @@ async function _ensurePlanosTableAgente(env) {
       actualizado_en TEXT    DEFAULT (datetime('now'))
     )
   `).run().catch(() => {}); // tabla ya existe en prod — ignorar error
+}
+
+// Sanea un SVG que la IA puede haber cortado a medias por limite de max_tokens.
+// Usa una pila generica de tags (no solo <g>) para detectar CUALQUIER elemento
+// que quedo abierto (incluso uno que cerro bien su tag de apertura con '>' pero
+// perdio su contenido/cierre, p.ej. un <text>...(sin </text>)) y descarta solo
+// ese ultimo elemento incompleto, conservando todo lo anterior ya bien formado.
+function _sanearSvgTruncado(svgRaw) {
+  const closeIdx = svgRaw.lastIndexOf('</svg>');
+  if (closeIdx <= 0) return svgRaw;
+  let body = svgRaw.substring(0, closeIdx);
+
+  const stack = []; // { tag, start }
+  const tagRe = /<(\/?)([a-zA-Z][\w:-]*)([^>]*)>/g;
+  let m;
+  let lastFullMatchEnd = 0;
+  while ((m = tagRe.exec(body))) {
+    const isClose = m[1] === '/';
+    const tagName = m[2];
+    const attrs = m[3] || '';
+    const selfClosing = /\/\s*$/.test(attrs);
+    if (isClose) {
+      for (let i = stack.length - 1; i >= 0; i--) {
+        if (stack[i].tag === tagName) { stack.splice(i); break; }
+      }
+    } else if (!selfClosing) {
+      stack.push({ tag: tagName, start: m.index });
+    }
+    lastFullMatchEnd = tagRe.lastIndex;
+  }
+
+  const trailing = body.substring(lastFullMatchEnd);
+  if (stack.length > 0) {
+    // Elemento(s) sin cerrar: cortamos justo antes de que empezara el mas
+    // profundo (el incompleto real) y descartamos ese fragmento entero.
+    const incompleto = stack[stack.length - 1];
+    body = body.substring(0, incompleto.start);
+    stack.pop();
+  } else if (trailing.trim().length > 0) {
+    // No hay tag sin cerrar pero sobra texto/atributo suelto tras el ultimo
+    // tag valido (p.ej. un '<' de apertura que ni siquiera llego a cerrar '>').
+    body = body.substring(0, lastFullMatchEnd);
+  }
+
+  // Cerrar cualquier ancestro que quedara abierto (p.ej. <g>) en orden inverso.
+  // OJO: la propia raiz <svg> SIEMPRE queda "sin cerrar" dentro de `body`
+  // (la recortamos junto con el </svg> original mas arriba), asi que el
+  // propio bucle ya la cierra — no hay que anadir un </svg> extra aparte.
+  let huboSvgEnPila = false;
+  for (let i = stack.length - 1; i >= 0; i--) {
+    if (stack[i].tag === 'svg') huboSvgEnPila = true;
+    body += `</${stack[i].tag}>`;
+  }
+  if (!huboSvgEnPila) body += '\n</svg>';
+
+  return body;
 }
 
 async function _generarPlanoAgente(env, { tipo, titulo, descripcion, empresa_id, usuario_id }) {
@@ -9004,30 +9273,23 @@ INSTRUCCIONES FINALES:
 - Todos los textos en espanol
 - Fecha actual: ${new Date().toLocaleDateString('es-ES')}`;
 
-  const _cleanK = k => k ? k.replace(/[\r\n\t ]+/g, '').trim() : k;
-  let data = null;
-  let _proveedor = 'anthropic';
+let _proveedor = 'anthropic';
   let _modelo = 'claude-sonnet-4-6';
 
-  // Agente usa Anthropic directamente (rapido, fiable, ~20-25s).
-  // Gemini tiene thinking mode que consume el budget de tokens y tarda 55s+
-  // — queda en el worker principal donde el panel puede esperar mas tiempo.
-  // Anthropic
-  if (!data) {
-    const resp = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-api-key': env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
-      body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 8000, system: systemPrompt, messages: [{ role: 'user', content: userMsg }] }),
-      signal: AbortSignal.timeout(90000)
-    });
-    if (!resp.ok) {
-      const errText = await resp.text().catch(() => resp.statusText);
-      throw new Error(`Error generando plano (${resp.status}): ${errText.substring(0, 200)}`);
-    }
-    data = await resp.json();
-  }
-
-  let svgRaw = data.content?.[0]?.text || '';
+  // Agente usa Anthropic directamente (rapido, fiable). IMPORTANTE: usar
+  // streaming (llamarAnthropicStream) y no una llamada normal — con
+  // max_tokens:16000 la generacion puede tardar >100s sin devolver ningun
+  // byte, y Cloudflare corta la conexion con error 524 antes de que Anthropic
+  // termine. El streaming evita el 524 porque los bytes fluyen sin parar.
+  let svgRaw = await llamarAnthropicStream(
+    env,
+    [{ role: 'user', content: userMsg }],
+    'claude-sonnet-4-6',
+    16000,
+    systemPrompt,
+    () => {}, // el heartbeat SSE del caller ya informa progreso al cliente
+    usuario_id ? String(usuario_id) : 'system'
+  );
   const svgMatch = svgRaw.match(/<svg[\s\S]*<\/svg>/i);
   if (svgMatch) { svgRaw = svgMatch[0]; }
   else {
@@ -9035,26 +9297,18 @@ INSTRUCCIONES FINALES:
     if (svgStart) { svgRaw = svgStart[0]; if (!svgRaw.trimEnd().endsWith('</svg>')) svgRaw += '\n</svg>'; }
   }
   if (!svgRaw.includes('<svg')) throw new Error('La IA no genero un SVG valido');
-  // Sanear SVG truncado por limite de tokens: eliminar elementos incompletos y cerrar <g> abiertos.
-  {
-    const _closeIdx = svgRaw.lastIndexOf('</svg>');
-    if (_closeIdx > 0) {
-      let _body = svgRaw.substring(0, _closeIdx);
-      // 1. Eliminar elemento incompleto al final (tag sin '>' de cierre)
-      const _lastGt = _body.lastIndexOf('>');
-      if (_lastGt >= 0 && _body.substring(_lastGt + 1).includes('<')) {
-        _body = _body.substring(0, _lastGt + 1);
-      }
-      // 2. Cerrar grupos <g> no cerrados (los mas comunes al truncar)
-      const _openGs  = (_body.match(/<g[\s>]/g) || []).length;
-      const _closeGs = (_body.match(/<\/g>/g) || []).length;
-      const _missingGs = Math.max(0, _openGs - _closeGs);
-      if (_missingGs > 0) _body += '\n' + '</g>'.repeat(_missingGs);
-      svgRaw = _body + '\n</svg>';
-    }
+  svgRaw = _sanearSvgTruncado(svgRaw);
+
+  // Inyectar libreria de simbolos profesionales certificados (IEC 60617 / IEC 61537)
+  // para que las referencias <use href="#sym-X"/> del prompt se rendericen correctamente.
+  if (tipo === 'electrico') {
+    svgRaw = svgRaw.replace(/(<svg[^>]*>)/i, `$1\n${IEC_SYMBOLS_DEFS}`);
+  }
+  if (tipo === 'bandejas') {
+    svgRaw = svgRaw.replace(/(<svg[^>]*>)/i, `$1\n${IEC_BANDEJA_DEFS}`);
   }
 
-  const metadatos = JSON.stringify({ tipo, tokens: data.usage?.output_tokens || 0, modelo: _modelo, proveedor: _proveedor });
+  const metadatos = JSON.stringify({ tipo, tokens: Math.round(svgRaw.length / 4), modelo: _modelo, proveedor: _proveedor });
   const res = await env.DB.prepare(
     'INSERT INTO planos (empresa_id, usuario_id, tipo, titulo, descripcion, svg_data, metadatos) VALUES (?, ?, ?, ?, ?, ?, ?)'
   ).bind(empresa_id || 1, usuario_id || null, tipo, titulo, descripcion, svgRaw, metadatos).run();
