@@ -413,7 +413,8 @@ Herramientas disponibles:
 
 Cuando te pidan un cálculo, MUESTRA siempre: datos de entrada, fórmulas aplicadas, resultado, norma de referencia.
 Cuando analices una foto, describe: elementos visibles, estado, posibles problemas, recomendaciones.
-Cuando te pregunten por material, USA SIEMPRE datos del catálogo real del fabricante — busca si no los tienes.`,
+Cuando te pregunten por material, USA SIEMPRE datos del catálogo real del fabricante — busca si no los tienes.
+- generar_plano: Genera planos SVG profesionales con IA (Gemini/Claude). SIEMPRE usar cuando pidan un plano de bandejas, soportacion, plano de planta, esquema, o diagrama. Llama a esta tool con tipo, titulo y descripcion DETALLADA incluyendo medidas, marcas, modelos, alturas, zonas. NO generes texto markdown — genera el plano real con esta tool.`,
 
   capacidades_avanzadas: `CAPACIDADES AVANZADAS — Herramientas nuevas disponibles:
 
@@ -1230,6 +1231,28 @@ const TOOL_BORRAR_ESQUEMA = {
   }
 };
 
+const TOOL_GENERAR_PLANO = {
+  name: 'generar_plano',
+  description: `Genera un plano tecnico profesional SVG con IA (Gemini/Claude). Tipos disponibles:
+- bandejas: Plano de planta de instalacion de bandejas electricas en nave industrial (recorrido, alturas, derivaciones, soportes, cuadros). USAR cuando el usuario pida un plano de soportacion, recorrido de bandejas, Rejiband, bandeja electrica, etc.
+- electrico: Esquema electrico con simbolos IEC 60617 (cuadros, arranques DOL, unifilares). Alternativa a generar_esquema_electrico para circuitos complejos.
+- planta: Plano de planta/obra (distribuccion espacios, estructura, cotas).
+- mecanico: Plano mecanico industrial (vistas, cotas, materiales).
+- gantt: Diagrama de Gantt de fases de obra.
+El SVG generado se guarda en la BD y es visible en el panel web (seccion Planos).`,
+  input_schema: {
+    type: 'object',
+    properties: {
+      tipo:        { type: 'string', enum: ['bandejas', 'electrico', 'planta', 'mecanico', 'gantt'], description: 'Tipo de plano' },
+      titulo:      { type: 'string', description: 'Titulo del plano (ej: "Soportacion Rejiband 300 CPD Getafe")' },
+      descripcion: { type: 'string', description: 'Descripcion DETALLADA de lo que debe incluir el plano: medidas, marcas, modelos, zonas, soportes, alturas, referencias de cuadros, etc. Cuanta mas informacion, mas preciso el resultado.' },
+      empresa_id:  { type: 'integer', description: 'ID de empresa (si no se conoce, usar 1)' },
+      usuario_id:  { type: 'integer', description: 'ID del usuario (opcional)' }
+    },
+    required: ['tipo', 'titulo', 'descripcion']
+  }
+};
+
 const TOOL_ESTADO_OBRA = {
   name: 'estado_obra',
   description: 'Obtiene un resumen ejecutivo completo de una obra: KPIs actuales (fichajes hoy, equipos, pedidos, incidencias abiertas), fases de planificación con % de progreso, últimas entradas del diario de obra, y tareas abiertas por prioridad. Úsalo cuando el usuario pregunte por el estado, el progreso, el briefing del día, o quiera saber cómo va la obra.',
@@ -1873,12 +1896,12 @@ const TOOL_EXPORTAR_DATOS = {
 
 const TOOLS_POR_EXPERTO = {
   simple:     [TOOL_MEMORY_READ, TOOL_CONSULTAR_BD, TOOL_ENVIAR_PUSH],
-  app:        [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_CONTROLAR_APP, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_ANALIZAR_FOTO, TOOL_ESTADO_OBRA, TOOL_GESTIONAR_TAREA, TOOL_GESTIONAR_RFI, TOOL_GESTIONAR_OC, TOOL_GESTIONAR_ACTA, TOOL_GESTIONAR_CALIDAD],
+  app:        [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_CONTROLAR_APP, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_GENERAR_PLANO, TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_ANALIZAR_FOTO, TOOL_ESTADO_OBRA, TOOL_GESTIONAR_TAREA, TOOL_GESTIONAR_RFI, TOOL_GESTIONAR_OC, TOOL_GESTIONAR_ACTA, TOOL_GESTIONAR_CALIDAD],
   tecnico:    [TOOL_LEER_ESTADO, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_BUSCAR_WEB, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_NEXUS_MANAGE, TOOL_CONTROLAR_APP, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_BUSCAR_PRECIOS, TOOL_MARCAR_PLANO, TOOL_GENERAR_DOCUMENTO, TOOL_BUSCAR_NORMATIVA, TOOL_HISTORICO_MATERIALES, TOOL_CONFIGURAR_ALERTA, TOOL_EXPORTAR_DATOS],
   web:        [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE],
   reflexion:  [TOOL_MEMORY_SAVE, TOOL_MEMORY_READ, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_PROPOSE_MEJORA, TOOL_BUSCAR_WEB, TOOL_TOMAR_DECISION, TOOL_LEER_ESTADO, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_CONTROLAR_APP, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO],
-  completo:   [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_LEER_ESTADO, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_CONTROLAR_APP, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_ANALIZAR_FOTO, TOOL_ESTADO_OBRA, TOOL_GESTIONAR_TAREA, TOOL_GESTIONAR_RFI, TOOL_GESTIONAR_OC, TOOL_GESTIONAR_ACTA, TOOL_GESTIONAR_CALIDAD, TOOL_BUSCAR_PRECIOS, TOOL_MARCAR_PLANO, TOOL_GENERAR_DOCUMENTO, TOOL_BUSCAR_NORMATIVA, TOOL_HISTORICO_MATERIALES, TOOL_CONFIGURAR_ALERTA, TOOL_EXPORTAR_DATOS],
-  ingenieria: [TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_ANALIZAR_FOTO, TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME, TOOL_BUSCAR_PRECIOS, TOOL_MARCAR_PLANO, TOOL_GENERAR_DOCUMENTO, TOOL_BUSCAR_NORMATIVA, TOOL_HISTORICO_MATERIALES, TOOL_CONFIGURAR_ALERTA, TOOL_EXPORTAR_DATOS]
+  completo:   [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_LEER_ESTADO, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_CONTROLAR_APP, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_GENERAR_PLANO, TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_ANALIZAR_FOTO, TOOL_ESTADO_OBRA, TOOL_GESTIONAR_TAREA, TOOL_GESTIONAR_RFI, TOOL_GESTIONAR_OC, TOOL_GESTIONAR_ACTA, TOOL_GESTIONAR_CALIDAD, TOOL_BUSCAR_PRECIOS, TOOL_MARCAR_PLANO, TOOL_GENERAR_DOCUMENTO, TOOL_BUSCAR_NORMATIVA, TOOL_HISTORICO_MATERIALES, TOOL_CONFIGURAR_ALERTA, TOOL_EXPORTAR_DATOS],
+  ingenieria: [TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_GENERAR_PLANO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_ANALIZAR_FOTO, TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME, TOOL_BUSCAR_PRECIOS, TOOL_MARCAR_PLANO, TOOL_GENERAR_DOCUMENTO, TOOL_BUSCAR_NORMATIVA, TOOL_HISTORICO_MATERIALES, TOOL_CONFIGURAR_ALERTA, TOOL_EXPORTAR_DATOS]
 };
 
 // ── Gating de tools peligrosas por identidad VERIFICADA ──────────────────────
@@ -6463,6 +6486,19 @@ ${descripcion ? `<div class="info-bar"><span class="badge">${tipo}</span>${descr
       }
     }
 
+    case 'generar_plano': {
+      try {
+        const { tipo, titulo, descripcion, empresa_id: eid_plano, usuario_id: uid_input } = input;
+        if (!tipo || !titulo || !descripcion) return JSON.stringify({ error: 'tipo, titulo y descripcion son obligatorios' });
+        const tiposValidos = ['planta', 'electrico', 'bandejas', 'mecanico', 'gantt'];
+        if (!tiposValidos.includes(tipo)) return JSON.stringify({ error: 'tipo invalido' });
+        const result = await _generarPlanoAgente(env, { tipo, titulo, descripcion, empresa_id: eid_plano || empresa_id || 1, usuario_id: uid_input || usuario_id || null });
+        return JSON.stringify(result);
+      } catch (e) {
+        return JSON.stringify({ error: 'Error generando plano: ' + e.message });
+      }
+    }
+
     case 'estado_obra': {
       try {
         let obraId = input.obra_id ? parseInt(input.obra_id) : null;
@@ -8761,6 +8797,290 @@ async function buscarWebOpenAI(env, query) {
   } catch (err) {
     return `Error búsqueda web: ${err.message}`;
   }
+}
+
+// ── Plano generation — cascade Gemini→OR→Anthropic (same as main worker) ──────
+const _PLANO_PROMPTS = {
+  planta: `Eres un arquitecto tecnico y delineante experto en planos de construccion e ingenieria civil. Tu tarea es generar un plano de planta/obra en formato SVG profesional y editable.
+
+REQUISITOS TECNICOS:
+- viewBox="0 0 1200 800", xmlns="http://www.w3.org/2000/svg", id="plano-principal"
+- Paredes: stroke="#1a1a1a" stroke-width="6" fill="#e8e8e0" (relleno habitaciones)
+- Ejes estructurales: lineas discontinuas color="#888888" stroke-dasharray="10,5"
+- Pilares: cuadrados negros rellenos 12x12px en interseccion de ejes
+- Puertas: arco de 90 grados (quarter-circle path), stroke="#333" fill="none"
+- Ventanas: triple linea paralela en el vano de la pared
+- Cotas: lineas azules (#0066cc stroke-width="1") con flechas y texto font-size="9"
+- Etiquetas de zonas: font-family="Arial,sans-serif" font-size="11" fill="#222" text-anchor="middle"
+- Flecha norte: simbolo en esquina superior derecha
+- Bloque de titulo: rectangulo en esquina inferior derecha con empresa, titulo, escala, fecha, hoja
+- Escala grafica: barra en parte inferior
+- Leyenda: esquina inferior izquierda
+- Agrupa cada zona con <g id="zona-X" class="zona">
+
+DEVUELVE: solo el codigo SVG valido completo, sin texto adicional fuera del SVG.`,
+
+  electrico: `Eres un ingeniero electrico experto en esquemas electricos industriales segun normas IEC 60617 / UNE-EN. Tu tarea es generar un esquema electrico SVG profesional con simbolos certificados.
+
+REQUISITOS TECNICOS:
+- viewBox="0 0 1200 900", xmlns="http://www.w3.org/2000/svg", id="plano-principal"
+- Fondo: fill="#fafafa", cuadricula tenue de fondo (lines cada 20px, stroke="#e8e8e8" stroke-width="0.4")
+- Cables de potencia: SOLO lineas ortogonales (horizontal/vertical). stroke-width="2.5", color segun fase
+- Cables de control/maniobra: stroke-width="1.2" stroke="#333333", lineas ortogonales
+- Nodos de conexion (empalmes): circle r="4" fill=color-fase (SOLO donde hay derivacion real)
+- COLORES DE FASE (OBLIGATORIO): L1=#cc0000  L2=#cc6600  L3=#000099  N=#0066cc  PE=#006600
+
+SIMBOLOS IEC 60617 — USA ESTOS IDs en <use href="#sym-X"/>:
+  #sym-magnetotermico  width="30" height="100"  — IGA/PIA magnetotermico (Q1, Q2...)
+  #sym-diferencial     width="30" height="100"  — Interruptor diferencial/RCD (ID1...)
+  #sym-fusible         width="30" height="100"  — Fusible (F1, F2...)
+  #sym-contactor       width="30" height="100"  — Contactor potencia NA (KM1, KM2...)
+  #sym-bobina          width="30" height="100"  — Bobina contactor/rele (A1-A2)
+  #sym-termico         width="30" height="100"  — Rele termico sobrecarga (FR1...)
+  #sym-motor-3f        width="70" height="70"   — Motor trifasico 3~ (M1, M2...)
+  #sym-motor-1f        width="70" height="70"   — Motor monofasico 1~ (M1...)
+  #sym-transformador   width="50" height="100"  — Transformador (TR1...)
+  #sym-tierra          width="36" height="24"   — Tierra PE (color="#006600" siempre)
+  #sym-lampara         width="26" height="26"   — Lampara/piloto (H1, H2...)
+  #sym-contacto-na     width="30" height="60"   — Contacto auxiliar NA (13-14)
+  #sym-contacto-nc     width="30" height="60"   — Contacto auxiliar NC (21-22)
+  #sym-pulsador-na     width="30" height="70"   — Pulsador NA/marcha (S1, START)
+  #sym-pulsador-nc     width="30" height="70"   — Pulsador NC/paro (S2, STOP)
+
+ESTRUCTURA: Acometida superior fases L1/L2/L3+N, IGA/Q0 general, barras distribucion, ramas con magnetotermico+diferencial+carga. Motor: Q+ID+KM+FR+M3~+PE. Bloque titulo estandar. Leyenda colores de fase.
+DEVUELVE: solo el codigo SVG valido completo (desde <svg hasta </svg>), sin texto adicional ni markdown.`,
+
+  mecanico: `Eres un delineante tecnico industrial experto en planos mecanicos segun normas ISO/DIN. Tu tarea es generar un plano mecanico en formato SVG profesional y editable.
+
+REQUISITOS TECNICOS:
+- viewBox="0 0 1200 800", xmlns="http://www.w3.org/2000/svg", id="plano-principal"
+- Lineas visibles: stroke="#000000" stroke-width="1.5" fill="none"
+- Lineas de centro: stroke="#cc0000" stroke-width="0.8" stroke-dasharray="12,4,3,4"
+- Lineas ocultas: stroke="#444444" stroke-width="0.8" stroke-dasharray="6,3"
+- Cotas: lineas de cota con flechas terminales, texto centrado font-size="9" fill="#000066"
+- Vistas: hasta 3 vistas (alzado frontal, planta superior, perfil) separadas con linea tenue
+- Bloque de titulo DIN estandar completo (empresa, titulo, numero de plano, escala, material, tolerancia general, fecha, revision)
+- Agrupa por vista: <g id="vista-alzado">, <g id="vista-planta">, <g id="vista-perfil">
+
+DEVUELVE: solo el codigo SVG valido completo, sin texto adicional fuera del SVG.`,
+
+  gantt: `Eres un jefe de proyecto experto en planificacion y control de obras. Tu tarea es generar un diagrama de Gantt visual profesional en formato SVG.
+
+REQUISITOS TECNICOS:
+- viewBox="0 0 1200 800", xmlns="http://www.w3.org/2000/svg", id="plano-principal"
+- Cabecera: rect fill="#1a3a6b" con titulo del proyecto en texto blanco bold font-size="16"
+- Columna izquierda (220px): fondo #f0f4fa
+- Barras de tareas con colores por fase: Cimentacion=#e8521a, Estructura=#2196F3, Instalaciones=#43A047, Acabados=#8E24AA, General=#607D8B
+- Hitos/Milestones: diamante fill="#FFD700"
+- Linea vertical HOY: stroke="#cc0000" stroke-width="2" stroke-dasharray="6,3"
+- Leyenda de fases en esquina inferior izquierda
+
+DEVUELVE: solo el codigo SVG valido completo, sin texto adicional fuera del SVG.`,
+
+  bandejas: `Eres un instalador electricista jefe y delineante tecnico experto en instalaciones de bandejas electricas industriales segun norma IEC 61537 / UNE-EN 61537. Tu tarea es generar un PLANO DE PLANTA de instalacion de bandejas electricas en una nave industrial en formato SVG profesional. Este plano es un DOCUMENTO DE OBRA — lo usaran los instaladores en campo para saber por donde llevar la instalacion: recorrido de bandejas, alturas de montaje, derivaciones, bajantes a cuadros y maquinas. Cuando el usuario proporcione datos reales de la instalacion (medidas, marcas, modelos), usa SIEMPRE esas referencias exactas.
+
+REQUISITOS TECNICOS:
+- viewBox="0 0 1400 900", xmlns="http://www.w3.org/2000/svg", id="plano-principal"
+- Fondo blanco fill="#ffffff"
+- Cuadricula tenue de referencia (lineas cada 50px, stroke="#eeeeee" stroke-width="0.3")
+- Nave: contorno exterior stroke="#1a1a1a" stroke-width="5" fill="none", muros perimetrales fill="#d8d8d0" ancho 8px
+- Ejes estructurales: lineas discontinuas largas stroke="#999999" stroke-width="0.7" stroke-dasharray="20,6,3,6"
+
+CONVENCIONES DE BANDEJAS (siempre recorrido ORTOGONAL — horizontal o vertical):
+- Bandeja principal (Rejiband 300 o mayor):
+    Dibujar como DOS lineas paralelas separadas 16px, stroke="#0a0a5a" stroke-width="2.5"
+    Refuerzos transversales cada 80px: line stroke="#0a0a5a" stroke-width="0.8" opacity="0.5"
+    Etiqueta centrada sobre el tramo: font-size="9" font-weight="bold" fill="#0a0a5a" (marca, modelo y dimension exacta del usuario)
+    Altura de montaje junto al tramo: font-size="8" fill="#0a0a5a" (ej. "h=+4,50 m")
+- Bandeja secundaria (Rejiband 100 o similar):
+    DOS lineas paralelas separadas 10px, stroke="#003399" stroke-width="2"
+    Etiqueta: font-size="8" fill="#003399"
+- Bajantes: marcados con simbolo "V" o flecha hacia abajo en el punto de descenso
+- Soportes: marcar con simbolo de cruz o "+" cada N metros segun separacion calculada
+
+SIMBOLOS (dibujar directamente si no hay libreria inyectada):
+- Cuadro general (CGP/CS): rect 40x50 stroke="#8B0000" fill="#fff8f8" + texto referencia
+- Maquinas/tomas: rect 30x30 stroke="#006633" fill="#f5fff5" + etiqueta
+- Columnas metalicas: rect 16x16 fill="#444" + angulo 45deg
+- Columnas hormigon: rect 16x16 fill="#888"
+- Codos 90 grados: arco SVG stroke=color-bandeja
+- Derivacion en T: linea principal + perpendicular
+
+COTAS:
+- Cotas exteriores de nave: stroke="#0055aa" stroke-width="1", flechas terminales, font-size="10"
+- Separacion entre soportes acotada sobre los tramos
+- Etiqueta de bandeja con tipo/modelo/dimension y altura (ej. "Rejiband 300mm h=+4,50m")
+
+ZONAS: Zonificar nave claramente (TALLER, ALMACEN, OFICINAS, etc.). Etiquetas de zona font-size="13" font-weight="bold".
+
+LEYENDA (esquina inferior izquierda): titulo "LEYENDA" + muestra de cada tipo de bandeja + simbolos usados.
+
+NORTE: flecha norte en esquina superior derecha.
+
+BLOQUE DE TITULO (esquina inferior derecha, rect fill="#1a3a6b"): empresa/proyecto/titulo en texto blanco.
+
+NOTAS TECNICAS:
+- "Instalacion segun IEC 61537 / UNE-EN 61537"
+- "Separacion minima 50 mm entre bandejas de distinta tension"
+- "Alturas referidas a FFL (nivel de suelo terminado)"
+
+AGRUPA: <g id="zona-taller">, <g id="bandejas-principales">, <g id="bandejas-secundarias">
+
+DEVUELVE: solo el codigo SVG valido completo (desde <svg hasta </svg>), sin texto adicional ni markdown.`
+};
+
+async function _ensurePlanosTableAgente(env) {
+  await env.DB.prepare(`
+    CREATE TABLE IF NOT EXISTS planos (
+      id             INTEGER PRIMARY KEY AUTOINCREMENT,
+      empresa_id     INTEGER NOT NULL,
+      usuario_id     INTEGER,
+      tipo           TEXT    NOT NULL CHECK(tipo IN ('planta','electrico','mecanico','gantt','bandejas')),
+      titulo         TEXT    NOT NULL,
+      descripcion    TEXT,
+      svg_data       TEXT    NOT NULL,
+      metadatos      TEXT,
+      creado_en      TEXT    DEFAULT (datetime('now')),
+      actualizado_en TEXT    DEFAULT (datetime('now'))
+    )
+  `).run().catch(() => {}); // tabla ya existe en prod — ignorar error
+}
+
+async function _generarPlanoAgente(env, { tipo, titulo, descripcion, empresa_id, usuario_id }) {
+  await _ensurePlanosTableAgente(env);
+  const systemPrompt = _PLANO_PROMPTS[tipo] || _PLANO_PROMPTS.planta;
+
+  // Enriquecer bandejas con catalogo real de la empresa
+  let catalogoSection = '';
+  if (tipo === 'bandejas') {
+    try {
+      const [memRows, conRows] = await Promise.all([
+        env.DB.prepare(`
+          SELECT titulo, contenido FROM alejandra_memoria
+          WHERE (contenido LIKE '%bandeja%' OR contenido LIKE '%Pemsa%'
+                 OR contenido LIKE '%Megaband%' OR contenido LIKE '%Rejiband%'
+                 OR contenido LIKE '%canaleta%' OR contenido LIKE '%portacables%')
+          AND tipo IN ('hecho', 'aprendizaje', 'contexto')
+          ORDER BY importancia DESC LIMIT 6
+        `).all(),
+        env.DB.prepare(`
+          SELECT titulo, descripcion FROM alejandra_conocimiento
+          WHERE (tags LIKE '%bandeja%' OR tags LIKE '%canalizacion%')
+          AND activo = 1 LIMIT 4
+        `).all()
+      ]);
+      const items = [];
+      for (const r of memRows.results || []) items.push(`- ${r.titulo}: ${r.contenido}`);
+      for (const r of conRows.results || []) items.push(`- ${r.titulo}: ${r.descripcion}`);
+      if (items.length > 0) {
+        catalogoSection = `\n\nCATALOGO REAL DE BANDEJAS DE LA EMPRESA:\n${items.join('\n')}\nIMPORTANTE: Usa estos productos reales en el plano con sus referencias exactas.`;
+      }
+    } catch (_) {}
+  }
+
+  const userMsg = `Genera el SVG para el siguiente plano tecnico:
+
+TITULO: ${titulo}
+TIPO: ${tipo}
+
+DESCRIPCION Y CONTENIDO REQUERIDO:
+${descripcion}${catalogoSection}
+
+INSTRUCCIONES FINALES:
+- Genera el SVG completo y listo para usar directamente en un navegador
+- Incluye SOLO el codigo SVG (desde <svg hasta </svg>), sin explicaciones, comentarios externos ni bloques de codigo markdown
+- El SVG debe contener todos los elementos descritos con maxima precision y detalle profesional
+- Todos los textos en espanol
+- Fecha actual: ${new Date().toLocaleDateString('es-ES')}`;
+
+  const _cleanK = k => k ? k.replace(/[\r\n\t ]+/g, '').trim() : k;
+  let data = null;
+  let _proveedor = 'anthropic';
+  let _modelo = 'claude-sonnet-4-6';
+
+  // 1. Gemini cascade (gratis)
+  if (env.GEMINI_API_KEY) {
+    const _gKeys = [_cleanK(env.GEMINI_API_KEY), _cleanK(env.GEMINI_API_KEY_2), _cleanK(env.GEMINI_API_KEY_3)].filter(Boolean);
+    const _gModels = ['gemini-2.5-flash'];
+    gemLoop:
+    for (const _gMod of _gModels) {
+      for (const _gKey of _gKeys) {
+        try {
+          const _gr = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/${_gMod}:generateContent?key=${_gKey}`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                contents: [{ parts: [{ text: systemPrompt + '\n\n' + userMsg }] }],
+                generationConfig: { temperature: 0.2, maxOutputTokens: 12000 }
+              })
+            }
+          );
+          if (!_gr.ok) { if (_gr.status === 429) continue; break; }
+          const _gd = await _gr.json();
+          const _gParts = _gd.candidates?.[0]?.content?.parts || [];
+          const _gText = _gParts.find(p => p.text?.includes('<svg'))?.text || _gParts.map(p => p.text || '').join('');
+          if (_gText.includes('<svg')) {
+            data = { content: [{ type: 'text', text: _gText }], usage: { input_tokens: _gd.usageMetadata?.promptTokenCount || 0, output_tokens: _gd.usageMetadata?.candidatesTokenCount || 0 } };
+            _proveedor = 'gemini'; _modelo = _gMod;
+            break gemLoop;
+          }
+        } catch (_) { break; }
+      }
+    }
+  }
+
+  // 2. OpenRouter fallback (10s timeout)
+  if (!data && env.OPENROUTER_API_KEY) {
+    try {
+      const r = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        signal: AbortSignal.timeout(10000),
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${env.OPENROUTER_API_KEY}`, 'Content-Type': 'application/json', 'HTTP-Referer': 'https://alejandra-agente.alejandra-app.workers.dev', 'X-Title': 'Alejandra' },
+        body: JSON.stringify({ model: 'meta-llama/llama-3.3-70b-instruct:free', max_tokens: 8000, messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: userMsg }] })
+      });
+      if (r.ok) {
+        const d = await r.json();
+        const rawText = d.choices?.[0]?.message?.content || '';
+        if (!d.error && rawText.includes('<svg')) {
+          data = { content: [{ type: 'text', text: rawText }], usage: { input_tokens: d.usage?.prompt_tokens || 0, output_tokens: d.usage?.completion_tokens || 0 } };
+          _proveedor = 'openrouter'; _modelo = d.model || 'llama-3.3-70b';
+        }
+      }
+    } catch (_) {}
+  }
+
+  // 3. Anthropic fallback (de pago)
+  if (!data) {
+    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
+      body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 16000, system: systemPrompt, messages: [{ role: 'user', content: userMsg }] })
+    });
+    if (!resp.ok) {
+      const errText = await resp.text().catch(() => resp.statusText);
+      throw new Error(`Error generando plano (${resp.status}): ${errText.substring(0, 200)}`);
+    }
+    data = await resp.json();
+  }
+
+  let svgRaw = data.content?.[0]?.text || '';
+  const svgMatch = svgRaw.match(/<svg[\s\S]*<\/svg>/i);
+  if (svgMatch) { svgRaw = svgMatch[0]; }
+  else {
+    const svgStart = /<svg[\s\S]*/i.exec(svgRaw);
+    if (svgStart) { svgRaw = svgStart[0]; if (!svgRaw.trimEnd().endsWith('</svg>')) svgRaw += '\n</svg>'; }
+  }
+  if (!svgRaw.includes('<svg')) throw new Error('La IA no genero un SVG valido');
+
+  const metadatos = JSON.stringify({ tipo, tokens: data.usage?.output_tokens || 0, modelo: _modelo, proveedor: _proveedor });
+  const res = await env.DB.prepare(
+    'INSERT INTO planos (empresa_id, usuario_id, tipo, titulo, descripcion, svg_data, metadatos) VALUES (?, ?, ?, ?, ?, ?, ?)'
+  ).bind(empresa_id || 1, usuario_id || null, tipo, titulo, descripcion, svgRaw, metadatos).run();
+
+  const id = res.meta?.last_row_id;
+  return { ok: true, id, tipo, titulo, proveedor: _proveedor, modelo: _modelo, mensaje: `Plano "${titulo}" (${tipo}) generado con ID ${id} usando ${_proveedor}/${_modelo}. Disponible en el panel -> Planos, o directamente en /planos/${id}/svg` };
 }
 
 // ── Contexto y mensajes ───────────────────────────────────────────────────────
