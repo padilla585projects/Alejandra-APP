@@ -45,6 +45,30 @@ describe('calcularCosteYProveedor', () => {
     expect(soloEntrada.coste).toBeCloseTo(2.00, 6);
     expect(soloSalida.coste).toBeCloseTo(10.00, 6);
   });
+
+  // Fix: modelos "vendor/modelo" o ":free" se etiquetaban "anthropic" a ciegas
+  // (cualquier cosa que no empezara por "gpt"), corrompiendo las estadísticas de
+  // coste/proveedor de alejandra_token_uso cuando entraba en juego la cascada de
+  // OpenRouter de llamarGPT4oFallback() en worker.js.
+  it('modelo OpenRouter con formato "vendor/modelo:free" se deriva como "openrouter" y coste 0 (gratis de verdad)', () => {
+    const r = calcularCosteYProveedor('nvidia/nemotron-3-ultra-550b-a55b:free', 1_000_000, 1_000_000);
+    expect(r.proveedor).toBe('openrouter');
+    expect(r.coste).toBe(0);
+  });
+
+  it('modelo OpenRouter "openai/..." NO se confunde con "openai" solo por el prefijo del vendor', () => {
+    const r = calcularCosteYProveedor('openai/gpt-oss-120b:free', 1_000_000, 1_000_000);
+    expect(r.proveedor).toBe('openrouter');
+    expect(r.coste).toBe(0);
+  });
+
+  it('modelo OpenRouter de pago (sin ":free") se tarifica en € y se convierte a $ para coste_usd', () => {
+    // Sin entrada explícita en PRECIOS_EUR_OPENROUTER, cae al defecto 1€ in / 5€ out
+    // por millón de tokens, convertido a $ con el tipo de cambio fijo EUR_A_USD (1.08).
+    const r = calcularCosteYProveedor('vendor/modelo-de-pago', 1_000_000, 0);
+    expect(r.proveedor).toBe('openrouter');
+    expect(r.coste).toBeCloseTo(1.08, 6);
+  });
 });
 
 // ── filtrarToolsPorAuth ──────────────────────────────────────────────────────

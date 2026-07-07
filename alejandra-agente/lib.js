@@ -20,6 +20,27 @@ const PRECIOS_USD = {
   'gpt-4o':            { in: 2.50,  out: 10.00 }
 };
 
+// Precios en €/millón de tokens para modelos OpenRouter DE PAGO (sin sufijo ":free").
+// Los modelos ":free" (los que usa hoy la cascada de llamarGPT4oFallback() y
+// refrescarCascadaModelosGratis() en worker.js) cuestan 0 de verdad -- eso es lo que
+// significa ":free" en OpenRouter -- así que no necesitan entrada aquí, se tarifican
+// a 0 directamente en calcularCosteYProveedor(). Añadir aquí solo si en el futuro se
+// usa un modelo OpenRouter de pago (formato "vendor/modelo" sin ":free").
+const PRECIOS_EUR_OPENROUTER = {};
+
+// Precio por defecto en €/millón para un modelo OpenRouter de pago sin entrada
+// explícita en PRECIOS_EUR_OPENROUTER -- mismo criterio conservador que el defecto
+// de PRECIOS_USD (mejor sobreestimar el gasto que perderlo de vista).
+const PRECIO_EUR_OPENROUTER_DEFECTO = { in: 1.00, out: 5.00 };
+
+// Tipo de cambio EUR→USD fijo para convertir los precios en € de OpenRouter (arriba)
+// a los $ que exige la columna coste_usd de alejandra_token_uso -- esa columna se
+// SUMa junto con las filas de Anthropic/OpenAI (que sí facturan en $ de verdad, ver
+// worker.js:2065 y 2597/2604, /dev/ai-costes), así que coste_usd debe quedarse
+// siempre en $ aunque la tabla de precios de origen esté en €. Ajustar aquí si el
+// cambio real se mueve mucho.
+const EUR_A_USD = 1.08;
+
 // Calcula proveedor + coste USD para un uso de tokens. Pura: no toca D1.
 // registrarTokenUso() en worker.js hace el INSERT con lo que esto devuelve.
 // Fix: modelos con formato "vendor/modelo" (ej. "nvidia/nemotron-3-ultra-550b-a55b-20260604:free",
@@ -27,13 +48,24 @@ const PRECIOS_USD = {
 // antes cualquier modelo que no empezara por "gpt" se etiquetaba "anthropic" a ciegas, corrompiendo
 // las estadísticas de coste/proveedor en alejandra_token_uso.
 function calcularCosteYProveedor(modelo, tokensEntrada, tokensSalida) {
-  const p = PRECIOS_USD[modelo] || { in: 1.00, out: 5.00 };
-  const coste = (tokensEntrada * p.in + tokensSalida * p.out) / 1_000_000;
   let proveedor;
   if (modelo.startsWith('claude')) proveedor = 'anthropic';
   else if (modelo.includes('/') || modelo.endsWith(':free')) proveedor = 'openrouter';
   else if (modelo.startsWith('gpt')) proveedor = 'openai';
   else proveedor = 'anthropic';
+
+  let coste;
+  if (proveedor === 'openrouter') {
+    if (modelo.endsWith(':free')) {
+      coste = 0;
+    } else {
+      const pEur = PRECIOS_EUR_OPENROUTER[modelo] || PRECIO_EUR_OPENROUTER_DEFECTO;
+      coste = ((tokensEntrada * pEur.in + tokensSalida * pEur.out) / 1_000_000) * EUR_A_USD;
+    }
+  } else {
+    const p = PRECIOS_USD[modelo] || { in: 1.00, out: 5.00 };
+    coste = (tokensEntrada * p.in + tokensSalida * p.out) / 1_000_000;
+  }
   return { proveedor, coste };
 }
 
