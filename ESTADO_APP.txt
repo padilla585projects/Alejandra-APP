@@ -6,10 +6,94 @@
 
 ÚLTIMA ACTUALIZACIÓN: 07/07/2026
 VERSIÓN ACTUAL APP NUEVA: v7.72 (sin bump de PWA — este cambio es solo alejandra-agente/worker.js)
-WORKER API: cd7c8c68 · WORKER AGENTE: 59d50a02 (commit 1f7bd50)
+WORKER API: cd7c8c68 · WORKER AGENTE: ae0ae5da (commit 5067b5b)
 VERSIÓN ACTUAL APP VIEJA: v4.19 (⛔ CONGELADA DEFINITIVAMENTE — no recibe más cambios)
 
 HISTORIAL DE VERSIONES (resumen reciente):
+  (agente, sin bump PWA) — 07/07/2026 — fix bug generar_plano (tool_use perdido en
+                       fase de cierre) + auditoria de coste (modelos gratis) + cascada
+                       de modelos gratis auto-actualizable (commit 5067b5b, Worker
+                       agente Version ID final ae0ae5da-cf3b-434e-ab8a-c2cff8a0162d,
+                       deploys intermedios a3786224/25d59e38/d0373ff3):
+                       1) BUG ORIGINAL (motivo de la sesion): al usar la tool
+                       generar_plano con el experto `ingenieria`, en canal web/panel el
+                       `stop_reason: tool_use` se perdia en la llamada final de streaming
+                       (llamarAnthropicStream), dejando la tool sin ejecutar / fugando
+                       tokens de function-calling como texto visible. Fix: recuperacion
+                       de tool_use en "fase de cierre" dentro de llamarAnthropicStream +
+                       paso de `tools` a las ramas OpenAI/OpenRouter del fallback (antes
+                       solo pasaba systemPrompt+messages, nunca tools) + saneado de BOM en
+                       OPENROUTER_API_KEY. Desplegado y re-testeado con curl en vivo
+                       (generar_plano tipo bandejas, ingenieria): tool_use se ejecuta
+                       correctamente, sin cortes anomalos hasta el limite propio del test
+                       (350s). Version ID a3786224-38d6-4b80-b2e3-399b582dd558.
+                       2) AUDITORIA DE COSTE (peticion de Adrian: "auditar todo el
+                       cerebro de Alejandra para ver donde podemos implementar modelos
+                       gratis para abaratar costes"): migradas a intentar primero
+                       cascada gratis de OpenRouter (Nemotron/GPT-OSS/Llama/Gemma) antes
+                       de Anthropic de pago: (a) destilacion de aprendizajes y
+                       compactacion de historial (crons internos, texto sin tools) via
+                       nuevo helper `llamarTextoGratisConFallbackHaiku` -- fallback final
+                       Haiku, nunca modelo de pago mayor; (b) experto "simple" (saludos/
+                       confirmaciones cortas) via nuevo flag `expert.gratisPrimero` +
+                       wrapper `llamarExperto` -- fallback Haiku en vez de Sonnet
+                       (`NEXUS_EXPERTS.simple.model` bajado de claude-sonnet-4-6 a
+                       claude-haiku-4-5). Cron nocturno "modos importantes"
+                       (briefing/resumen/reflexion/semanal/mensual) DELIBERADAMENTE sin
+                       tocar: la clasificacion puede enrutar a expertos con tools
+                       (tecnico/ingenieria/completo) y migrarlo abre la puerta al mismo
+                       tipo de bug del punto 1. El modo "normal" del cron ya usaba Haiku
+                       (no Sonnet), no necesitaba cambio.
+                       BUG COLATERAL encontrado y corregido durante las pruebas: el
+                       router regex (`REGEX_ROUTES`) tenia la regla de "simple" (saludos)
+                       DESPUES de la regla de "pronombres encliticos"
+                       (`\w+(lo|la|los|las|...)`) -- y "hola" termina en "la", asi que
+                       "hola" (el saludo mas comun) SIEMPRE se clasificaba como "app"
+                       (Sonnet) en vez de "simple" (Haiku), desde que existe esa regla.
+                       Reordenado: saludos/confirmaciones (match exacto ^...$) ahora se
+                       evaluan antes que los encliticos. Verificado con curl en vivo:
+                       "hola" -> experto simple, claude-haiku-4-5, coste 0.0062€ (antes
+                       0.096€ con Sonnet via "app", ~15x mas barato).
+                       Fix adicional en lib.js: `calcularCosteYProveedor` etiquetaba
+                       cualquier modelo que no empezara por "gpt" como "anthropic" a
+                       ciegas -- corrompia proveedor/coste de los modelos OpenRouter
+                       (formato "vendor/modelo:free" o "vendor/modelo-fecha:free").
+                       Corregido para detectar "claude*" (anthropic), "*/*" o "*:free"
+                       (openrouter), "gpt*" (openai). 64 tests de lib.test.js en verde.
+                       3) AUTO-ACTUALIZACION DE MODELOS GRATIS (peticion de Adrian:
+                       "cada vez que salga un modelo gratuito mejor lo implementemos...
+                       para no perder eficacia"): nuevo `refrescarCascadaModelosGratis()`
+                       consulta el catalogo publico `GET openrouter.ai/api/v1/models`,
+                       filtra modelos ":free", separa los que declaran soporte de
+                       "tools" (imprescindible, si no lo declaran acaban alucinando el
+                       tool-call como texto plano) y ademas de vision, ordena por
+                       context_length (proxy de capacidad) y guarda el top-4 de cada
+                       lista en KV (`RATE_LIMIT_KV`, key `cascada_modelos_gratis_v1`,
+                       TTL 35 dias). Si la lista cambia respecto a la guardada, avisa a
+                       Adrian por Telegram. Corre una vez al dia dentro del cron
+                       existente (`scheduled()`, hora UTC 5, via ctx.waitUntil, no
+                       bloqueante). `_intentarCascadaOpenRouterGratis` y
+                       `llamarTextoGratisConFallbackHaiku` ahora leen esta cascada
+                       dinamica via `obtenerCascadaModelosGratis()`, cayendo a los
+                       arrays fijos de siempre solo si KV esta vacio/corrupto. Verificado
+                       en vivo: (a) el fetch+filtro contra la API real de OpenRouter
+                       encontro 24 modelos gratis, 19 con tools, 4 con tools+vision, y ya
+                       detecto candidatos mejores que los hardcodeados (qwen3-coder:free,
+                       nemotron-3-super-120b, ambos no estaban en la lista vieja); (b) KV
+                       sembrado manualmente con ese resultado (sin esperar al cron de las
+                       5h); (c) peticion real de prueba al experto "simple" confirmo por
+                       wrangler tail que la cascada probo qwen3-coder:free PRIMERO (fallo
+                       con 429 rate-limit del proveedor gratis, esperable) y cayo
+                       correctamente a nemotron-3-ultra-550b -- la lectura dinamica desde
+                       KV funciona end-to-end en produccion.
+                       NOTA PENDIENTE para Adrian: ordenar solo por context_length puede
+                       en algun momento priorizar un modelo especializado (ej. un modelo
+                       de codigo como qwen3-coder) sobre uno mas generalista para tareas
+                       de conversacion/resumen -- vigilar calidad de respuestas del
+                       experto "simple" y de los crons de destilacion/compactacion las
+                       proximas semanas; si se nota bajada de calidad, se puede afinar el
+                       criterio de ranking (excluir modelos claramente etiquetados como
+                       "coder"/especializados de la cascada de texto general).
   (agente, sin bump PWA) — 07/07/2026 — generar_plano: nuevo tipo planta_industrial
                        (commit 1f7bd50, Worker agente Version ID
                        59d50a02-6175-419a-8c76-3f627447e91e):

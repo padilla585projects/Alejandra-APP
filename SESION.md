@@ -1,12 +1,21 @@
 ## ESTADO ACTUAL
 
 **Sesion:** LIBRE
-**Ultima sesion:** 07/07/2026 -- nuevo tipo de plano `planta_industrial` (naves/CPD/obras
+**Ultima sesion:** 07/07/2026 -- fix bug generar_plano (tool_use perdido en fase de cierre,
+experto ingenieria en canal web/panel) + auditoria de coste con migracion a modelos gratis
+(destilacion, compactacion, experto "simple") + mecanismo de auto-actualizacion de la cascada
+de modelos gratis via KV (solo alejandra-agente, commit 5067b5b, Worker agente Version ID
+ae0ae5da-cf3b-434e-ab8a-c2cff8a0162d). De paso, bug colateral corregido: "hola" se
+clasificaba como "app"/Sonnet en vez de "simple"/Haiku por orden de reglas regex. Ver seccion
+nueva "RESUMEN SESION 07/07/2026 (fix tool_use + coste + cascada gratis auto-actualizable)"
+mas abajo.
+
+Sesion anterior a esta: nuevo tipo de plano `planta_industrial` (naves/CPD/obras
 grandes) en `generar_plano` (solo alejandra-agente, commit 1f7bd50, Worker agente Version ID
-59d50a02-6175-419a-8c76-3f627447e91e). Ver seccion nueva "RESUMEN SESION 07/07/2026 (plano
+59d50a02-6175-419a-8c76-3f627447e91e). Ver seccion "RESUMEN SESION 07/07/2026 (plano
 planta_industrial)" mas abajo.
 
-Sesion anterior a esta: nuevos tipos de plano `unifilar` y `planta_electrica` en
+Sesion anterior a esa: nuevos tipos de plano `unifilar` y `planta_electrica` en
 `generar_plano` (commit 53edc25, deploy CI 28815636221 en verde). Ver seccion "RESUMEN SESION
 06/07/2026 (planos unifilar + planta_electrica)" mas abajo. Sesion anterior a esa: generar_plano
 profesional con simbologia IEC + fix critico de vaciado de SVGs en `_sanearSvgTruncado`
@@ -15,8 +24,9 @@ Ver seccion "RESUMEN SESION 06/07/2026 (planos IEC + fix sanitizer)" mas abajo. 
 anterior a esa: Cascada Gemini para planos + test vision + fix agente web-search crash
 (v7.72, commits 101aa9c / 07657d3).
 **Version actual:** App PWA **v7.72** -- commit 101aa9c (sin cambios de PWA esta sesion, solo agente)
-**Agente (alejandra-agente):** commit **1f7bd50** desplegado en main (Version ID
-59d50a02-6175-419a-8c76-3f627447e91e) -- ver seccion nueva mas abajo. Antes de eso, commit
+**Agente (alejandra-agente):** commit **5067b5b** desplegado en main (Version ID
+ae0ae5da-cf3b-434e-ab8a-c2cff8a0162d) -- ver seccion nueva mas abajo. Antes de eso, commit
+1f7bd50 (plano planta_industrial). Antes de eso, commit
 53edc25 (unifilar + planta_electrica). Antes de eso, commit 5ac8f41 (fix critico sanitizer).
 Antes de eso, commit 2a18d5b
 desplegado en main (fix IDOR en
@@ -43,6 +53,97 @@ CROSS-EMPRESA EN 5 FAMILIAS MAS" anadida en el commit ff52aea (continuacion 19 e
 ese archivo), y subseccion "IDOR EN subir_archivo/enviar_notificacion + authOk
 FAIL-CLOSED" anadida en el commit 2a18d5b (continuacion 20 en ese archivo). Ver
 seccion de abajo.
+
+---
+
+## RESUMEN SESION 07/07/2026 (fix tool_use + coste + cascada gratis auto-actualizable) -- solo alejandra-agente
+
+**Commit:** 5067b5b. **Worker agente Version ID final:** ae0ae5da-cf3b-434e-ab8a-c2cff8a0162d
+(deploys intermedios de esta misma sesion: a3786224, 25d59e38, d0373ff3).
+
+**1) Bug original (motivo de la sesion):** al invocar `generar_plano` con el experto
+`ingenieria` en canal web/panel, el `stop_reason: tool_use` se perdia en la llamada final de
+streaming (`llamarAnthropicStream`) -- la tool quedaba sin ejecutar y/o se fugaban tokens de
+function-calling como texto visible. Fix: recuperacion de tool_use en "fase de cierre" +
+paso de `tools` a las ramas OpenAI/OpenRouter del fallback (antes solo recibian
+systemPrompt+messages, nunca tools) + saneado de BOM en `OPENROUTER_API_KEY`. Desplegado y
+re-testeado con curl en vivo (bandejas, ingenieria): sin cortes anomalos hasta el limite
+propio del test (350s). El corte de 5s de un test anterior en la misma sesion se diagnostico
+como artefacto de tooling (backgrounding de curl), no un fallo real.
+
+**2) Auditoria de coste** (peticion de Adrian: *"quiero que analicemos el poner un modelo
+gratuito solo para hacer este tipo de tareas... auditar todo el cerebro de Alejandra para ver
+donde podemos implementar modelos gratis para abaratar costes"*). Migrado a intentar primero
+la cascada gratis de OpenRouter antes de Anthropic de pago:
+- Destilacion de aprendizajes + compactacion de historial (crons internos, texto sin tools)
+  -> nuevo helper `llamarTextoGratisConFallbackHaiku` (fallback final: Haiku, nunca un modelo
+  de pago mayor).
+- Experto `simple` (saludos/confirmaciones cortas) -> nuevo flag `expert.gratisPrimero` +
+  wrapper `llamarExperto`; `NEXUS_EXPERTS.simple.model` baja de `claude-sonnet-4-6` a
+  `claude-haiku-4-5` como fallback (ademas de servir de etiqueta correcta de coste).
+- Cron nocturno "modos importantes" (briefing/resumen/reflexion/semanal/mensual)
+  **deliberadamente sin tocar**: la clasificacion Haiku puede enrutar a expertos con tools
+  (tecnico/ingenieria/completo) y migrar esto abriria la puerta al mismo tipo de bug del
+  punto 1. El modo "normal" del cron ya usaba Haiku, no necesitaba cambio.
+- Matiz para Adrian: en canales web/panel la respuesta final visible sigue generandose con
+  una llamada real de streaming (`llamarAnthropicStream`) por motivos de UX en tiempo real --
+  con el cambio de arriba esa llamada es ahora Haiku en vez de Sonnet para "simple" (ahorro
+  real), pero no es 100% gratis end-to-end. Se considero intencionadamente mejor no forzar
+  esa parte a la cascada gratis (riesgo de latencia/calidad en streaming en vivo).
+
+**Bug colateral encontrado y corregido:** el router regex (`REGEX_ROUTES`) evaluaba la regla
+de "pronombres encliticos" (`\w+(lo|la|los|las|...)`) ANTES que la regla de saludos/
+confirmaciones cortas de "simple" -- y "hola" termina en "la", asi que **"hola" (el saludo
+mas comun) siempre se clasificaba como "app"/Sonnet**, nunca llegaba a "simple"/Haiku.
+Reordenado (los saludos son match exacto `^...$`, seguro evaluarlos primero). Verificado con
+curl en vivo: "hola" -> experto simple, claude-haiku-4-5, 0.0062€ (antes 0.096€ via "app"
+con Sonnet, ~15x mas barato).
+
+**Fix en `lib.js`:** `calcularCosteYProveedor` etiquetaba a ciegas como "anthropic" cualquier
+modelo que no empezara por "gpt" -- corrompia proveedor/coste de los modelos de OpenRouter
+(formato `vendor/modelo:free` o `vendor/modelo-fecha:free`). Corregido: `claude*` ->
+anthropic, `*/*` o `*:free` -> openrouter, `gpt*` -> openai. 64 tests de `lib.test.js` en
+verde.
+
+**3) Mecanismo de auto-actualizacion de modelos gratis** (peticion de Adrian: *"quiero hacer
+algo para que cada vez que salga un modelo gratuito mejor lo implementemos... para no perder
+eficacia"*). Nuevo `refrescarCascadaModelosGratis(env)`:
+- Consulta `GET https://openrouter.ai/api/v1/models`, filtra `id` que termina en `:free`.
+- Se queda con los que declaran soporte de `tools` en `supported_parameters` (imprescindible:
+  sin esto acaban "alucinando" el tool-call como texto plano) y, aparte, los que ademas
+  soportan imagenes (`architecture.input_modalities` incluye `image`).
+- Ordena por `context_length` (proxy simple de capacidad) y guarda el top-4 de cada lista en
+  KV (`RATE_LIMIT_KV`, key `cascada_modelos_gratis_v1`, TTL 35 dias).
+- Si la lista cambia respecto a la guardada, avisa a Adrian por Telegram
+  (`enviarPorTelegram`).
+- Corre una vez al dia dentro del cron existente (`scheduled()`, hora UTC 5, via
+  `ctx.waitUntil`, no bloqueante para el resto del cron).
+- `_intentarCascadaOpenRouterGratis` y `llamarTextoGratisConFallbackHaiku` ahora leen esta
+  cascada dinamica via `obtenerCascadaModelosGratis(env)`; si KV esta vacio o corrupto, caen
+  a los arrays fijos de siempre (`MODELOS_GRATIS_TEXTO_FALLBACK` /
+  `MODELOS_GRATIS_VISION_FALLBACK`) -- la cascada nunca se queda vacia.
+
+Verificado en vivo, end-to-end: (a) el fetch+filtro contra la API real de OpenRouter
+encontro 24 modelos `:free`, 19 con `tools`, 4 con `tools`+vision, y ya detecto candidatos
+mejores que los hardcodeados (`qwen/qwen3-coder:free`, `nvidia/nemotron-3-super-120b-a12b:free`
+-- ninguno estaba en la lista vieja); (b) KV sembrado manualmente con ese resultado (sin
+esperar al cron de las 5h, para no dejar el mecanismo sin probar hasta el dia siguiente);
+(c) peticion real al experto "simple" confirmo por `wrangler tail` que la cascada probo
+`qwen/qwen3-coder:free` PRIMERO (fallo con HTTP 429 rate-limit del proveedor gratis,
+esperable) y cayo correctamente a `nvidia/nemotron-3-ultra-550b-a55b:free` -- la lectura
+dinamica desde KV funciona en produccion.
+
+**Nota pendiente para Adrian:** ordenar solo por `context_length` puede en algun momento
+priorizar un modelo especializado (ej. un modelo de codigo como `qwen3-coder`) por delante de
+uno mas generalista para tareas de conversacion/resumen. Vigilar calidad de las respuestas
+del experto "simple" y de los crons de destilacion/compactacion en las proximas semanas; si
+se nota bajada de calidad, se puede afinar el criterio de ranking (p.ej. excluir modelos
+etiquetados como "coder"/especializados de la cascada de texto general).
+
+**Pendiente de una sesion futura (no bloqueante):** el plano de `ingenieria` (bandejas) del
+test de esta sesion tardo mas de 265s en generarse sin terminar dentro del limite de 350s del
+test -- no es el bug original, pero si el tiempo de generacion de SVGs complejos sigue
+creciendo, revisar si hace falta optimizar el prompt/tamaño de esos planos.
 
 ---
 
