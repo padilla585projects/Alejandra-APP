@@ -2240,7 +2240,6 @@ FUNCIONES CLAVE EN worker.js:
 - buildAlejandraSystemPrompt()  â†’ Este system prompt. ActualÃ­zalo si el schema DB cambia.
 - handleDevAI() / devAIChat()   â†’ Canal Telegram / web. Historial, tools, respuesta.
 - executeAITool()               â†’ Dispatcher de todas tus tools (aÃ±ade nuevos 'case' aquÃ­).
-- runAutonomousReview()         â†’ Cron 23:00 UTC. Tu revisiÃ³n nocturna autÃ³noma.
 - _ejecutarFix()                â†’ Aplica un fix de alejandra_fixes en GitHub.
 - alertasDiarias()              â†’ Cron: alertas stock, carnets, informe semanal.
 
@@ -3292,175 +3291,10 @@ async function processNetworkRequest(env, msg, secret) {
   }
 }
 
-// â”€â”€ REVISIÃ“N AUTÃ“NOMA DIARIA â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-async function runAutonomousReview(env) {
-  const devChatId = env.DEV_CHAT_ID;
-  if (await isAgentePausado(env)) {
-    if (devChatId) await sendTelegramConBotonesTo(env, devChatId, 'â¸ï¸ <b>Agente pausado</b> â€” revisiÃ³n nocturna omitida. Usa /activar para reactivarlo.', []);
-    return;
-  }
-  try {
-    // â”€â”€ Fase 1: Watchers (coste 0, sin LLM) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-    const watcherAlerts = await nexusWatchers(env);
-
-    const [sugs, errores, pendientes, fixesPend] = await Promise.all([
-      env.DB.prepare("SELECT id, texto, categoria, (foto IS NOT NULL AND foto != '') as tiene_foto, usuario, obra FROM sugerencias WHERE estado='pendiente' AND leida=0 ORDER BY created_at DESC LIMIT 10").all().catch(() => ({ results: [] })),
-      env.DB.prepare("SELECT mensaje, created_at FROM logs WHERE nivel='error' AND created_at > datetime('now','-24 hours') ORDER BY created_at DESC LIMIT 15").all().catch(() => ({ results: [] })),
-      env.DB.prepare("SELECT id, titulo, contenido FROM alejandra_memoria WHERE tipo='pendiente' ORDER BY importancia DESC LIMIT 10").all().catch(() => ({ results: [] })),
-      env.DB.prepare("SELECT COUNT(*) as n FROM alejandra_fixes WHERE estado='pendiente'").first().catch(() => ({ n: 0 }))
-    ]);
-
-    const sugsArr = sugs.results || [];
-    const errArr  = errores.results || [];
-    const pendArr = pendientes.results || [];
-
-    if (sugsArr.length === 0 && errArr.length === 0 && pendArr.length === 0 && watcherAlerts.length === 0) {
-      try {
-        const auditResult = JSON.parse(await executeAITool(env, 'self_audit', {}));
-        if (auditResult.issues?.length > 0) {
-          const issueList = auditResult.issues.map(i => `â€¢ ${i}`).join('\n');
-          const msg = `ðŸ¤– <b>RevisiÃ³n nocturna</b>\n\nâœ… App tranquila â€” sin sugerencias ni errores.\n\nâš ï¸ <b>Self-audit detectÃ³ ${auditResult.issues.length} problema(s):</b>\n${issueList}\n\n<i>Alejandra analizarÃ¡ y propondrÃ¡ fixes si puede.</i>`;
-          await sendTelegramToChat(env, env.DEV_CHAT_ID, msg);
-          await sendWebPushToDevs(env, 'ðŸ” Alejandra â€” self-audit', `${auditResult.issues.length} problema(s) detectado(s) esta noche`, '/panel.html');
-        } else {
-          await sendTelegramToChat(env, env.DEV_CHAT_ID, 'ðŸ¤– <b>RevisiÃ³n nocturna</b>\n\nâœ… Todo tranquilo â€” sin sugerencias, errores ni problemas en self-audit.');
-        }
-      } catch {
-        await sendTelegramToChat(env, env.DEV_CHAT_ID, 'ðŸ¤– <b>RevisiÃ³n nocturna</b>\n\nâœ… Todo tranquilo â€” sin sugerencias pendientes ni errores en las Ãºltimas 24h.');
-      }
-      return;
-    }
-
-    const memoriaRows = await env.DB.prepare("SELECT id, tipo, titulo, contenido, importancia FROM alejandra_memoria ORDER BY importancia DESC, created_at DESC LIMIT 30").all().catch(() => ({ results: [] }));
-    const memoriaCtx = memoriaRows.results?.length
-      ? '\n\n=== TU MEMORIA ACTUAL ===\n' + memoriaRows.results.map(m => `[${m.id}][${m.tipo.toUpperCase()}][imp:${m.importancia}] ${m.titulo}: ${m.contenido}`).join('\n')
-      : '';
-
-    let prompt = `[${getNow()}] RevisiÃ³n autÃ³noma. ActÃºa directamente sin esperar mÃ¡s instrucciones.\n\n`;
-
-    // Alertas de watchers (prioridad mÃ¡xima â€” ya confirmadas sin LLM)
-    if (watcherAlerts.length) {
-      prompt += `ðŸš¨ ALERTAS WATCHERS (${watcherAlerts.length}):\n` + watcherAlerts.map(a => `- [${a.severity}][${a.watcher}] ${a.msg}`).join('\n') + '\n\n';
-    }
-    if (sugsArr.length)  prompt += `ðŸ“‹ SUGERENCIAS SIN LEER (${sugsArr.length}):\n` + sugsArr.map(s => `- #${s.id}: "${s.texto}" | ${s.categoria} | ${s.usuario}${s.tiene_foto ? ' | ðŸ“¸ tiene captura' : ''}`).join('\n') + '\n\n';
-    if (errArr.length)   prompt += `ðŸ”´ ERRORES 24H (${errArr.length}):\n` + errArr.slice(0, 8).map(e => `- ${e.mensaje}`).join('\n') + '\n\n';
-    if (pendArr.length)  prompt += `ðŸ“Œ TUS PENDIENTES:\n` + pendArr.map(p => `- [mem:${p.id}] ${p.titulo}: ${p.contenido}`).join('\n') + '\n\n';
-    if (fixesPend?.n > 0) prompt += `â³ ${fixesPend.n} fixes esperando aprobaciÃ³n de AdriÃ¡n.\n\n`;
-    prompt += `INSTRUCCIONES (Nivel B â€” ingenierÃ­a autÃ³noma):
-0. SIEMPRE ejecuta self_audit() primero. Problemas detectados = bugs de alta prioridad.
-1. ALERTAS WATCHERS = problemas CONFIRMADOS. ResuÃ©lvelos directamente:
-   - UserAccess: usa diagnose_user para diagnosticar y resolver bloqueos.
-   - PendingUsers: notifica a AdriÃ¡n con datos del usuario.
-   - ErrorPatrol: usa patrol_logs + grep_code para localizar y fixear.
-   - Carnets: notifica a los encargados del usuario afectado.
-2. Para sugerencias con ðŸ“¸: read_suggestion_image para ver la captura antes de analizar.
-3. FLUJO PARA CADA BUG CONFIRMADO:
-   a. grep_code(archivo, funciÃ³n_o_patrÃ³n) â†’ localizar el cÃ³digo exacto
-   b. repo_read_file(archivo, lÃ­nea_inicio, lÃ­nea_fin) â†’ leer contexto completo
-   c. Si el fix es <30 lÃ­neas y bajo riesgo â†’ direct_fix directamente (sin pedir permiso)
-   d. Si el fix es >30 lÃ­neas o afecta auth/seguridad â†’ propose_fix para aprobaciÃ³n
-4. Para migraciones pendientes (tablas que faltan, columnas nuevas): run_migration directamente.
-5. Si no puedes estar segura del diagnÃ³stico: send_notification describiendo el anÃ¡lisis.
-6. Marca las sugerencias analizadas: sql_query con UPDATE sugerencias SET leida=1 WHERE id=?
-7. DespuÃ©s de cada direct_fix: check_deploy_status para confirmar el deploy.
-8. Al terminar: memory_save resumen + send_notification con informe a AdriÃ¡n.`;
-
-    // â”€â”€ Fase 2: LLM con NEXUS (experto autÃ³nomo) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-    const nexusPrompt = buildNexusPrompt('autonomo', 'telegram');
-    const cronSystemBlocks = [
-      { type: 'text', text: nexusPrompt, cache_control: { type: 'ephemeral' } },
-      ...(memoriaCtx ? [{ type: 'text', text: memoriaCtx, cache_control: { type: 'ephemeral' } }] : [])
-    ];
-    const expertConfig = NEXUS_EXPERTS.autonomo;
-    const cronTools = nexusTools('autonomo') || AI_TOOLS;
-    const cronToolsConCache = cronTools.map((t, i) =>
-      i === cronTools.length - 1 ? { ...t, cache_control: { type: 'ephemeral' } } : t
-    );
-    const cronHeaders = {
-      'Content-Type': 'application/json',
-      'x-api-key': env.ANTHROPIC_API_KEY,
-      'anthropic-version': '2023-06-01',
-      'anthropic-beta': 'prompt-caching-2024-07-31'
-    };
-    const messages = [{ role: 'user', content: prompt }];
-
-    let response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: cronHeaders,
-      body: JSON.stringify({ model: expertConfig.model, max_tokens: 8192, system: cronSystemBlocks, tools: cronToolsConCache, messages })
-    });
-    let result = await response.json();
-
-    let iters = 0;
-    while (result.stop_reason === 'tool_use' && iters < 15) {
-      iters++;
-      const toolBlocks = result.content.filter(b => b.type === 'tool_use');
-      const toolResults = await Promise.all(toolBlocks.map(async tb => ({
-        type: 'tool_result', tool_use_id: tb.id,
-        content: await executeAITool(env, tb.name, tb.input)
-      })));
-      messages.push({ role: 'assistant', content: result.content });
-      messages.push({ role: 'user', content: toolResults });
-      response = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: cronHeaders,
-        body: JSON.stringify({ model: expertConfig.model, max_tokens: 8192, system: cronSystemBlocks, tools: cronToolsConCache, messages })
-      });
-      result = await response.json();
-    }
-
-    // Contar tools usadas durante la sesiÃ³n autÃ³noma para el resumen
-    let directFixes = 0, migrations = 0;
-    for (const msg of messages) {
-      if (msg.role === 'assistant' && Array.isArray(msg.content)) {
-        for (const blk of msg.content) {
-          if (blk.type === 'tool_use') {
-            if (blk.name === 'direct_fix') directFixes++;
-            if (blk.name === 'run_migration') migrations++;
-          }
-        }
-      }
-    }
-    // Guardar alertas procesadas en cachÃ© (TTL: CRITICAL=2h, HIGH=8h, MEDIUM=24h)
-    if (watcherAlerts.length) {
-      const ttlMap = { CRITICAL: 2, HIGH: 8, MEDIUM: 24 };
-      for (const alert of watcherAlerts) {
-        const ttlH = ttlMap[alert.severity] || 8;
-        try {
-          await env.DB.prepare(
-            `INSERT OR REPLACE INTO alejandra_alert_cache (watcher, alert_key, expires_at) VALUES (?, ?, datetime('now', '+${ttlH} hours'))`
-          ).bind(alert.watcher, alert.msg.slice(0, 100)).run();
-        } catch {}
-      }
-    }
-    // Auto-resumen de sesiÃ³n autÃ³noma (importancia 1 = informativo, no ensucia memoria)
-    const sessionNote = `${new Date().toLocaleString('es-ES', {timeZone:'Europe/Madrid',day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})} â€” Watchers: ${watcherAlerts.length}, Sugs: ${sugsArr.length}, Errores: ${errArr.length}, iters LLM: ${iters}${directFixes ? `, direct_fix: ${directFixes}` : ''}${migrations ? `, migraciones: ${migrations}` : ''}`;
-    autoLearn(env, 'hecho', 'SesiÃ³n autÃ³noma', sessionNote, 1);
-
-    const finalText = (result.content || []).filter(b => b.type === 'text').map(b => b.text).join('\n');
-    logAIUsage(env, {
-      empresa_id: null,
-      proveedor: 'anthropic',
-      modelo: expertConfig.model,
-      endpoint: 'agente_cron:autonomo',
-      input_tokens: result.usage?.input_tokens || 0,
-      output_tokens: result.usage?.output_tokens || 0,
-    });
-    trackExpertHealth(env, 'autonomo', result.usage?.input_tokens || 0, result.usage?.output_tokens || 0);
-    if (finalText) {
-      await sendTelegramToChat(env, env.DEV_CHAT_ID, finalText.slice(0, 4000));
-      const hayFixes = finalText.includes('propose_fix') || finalText.includes('fix propuesto') || finalText.includes('Fix #');
-      const hayProblemas = finalText.includes('âš ï¸') || finalText.includes('âŒ') || finalText.includes('problema') || watcherAlerts.some(a => a.severity === 'CRITICAL');
-      if (hayFixes || hayProblemas) {
-        await sendWebPushToDevs(env, 'ðŸ¤– Alejandra â€” revisiÃ³n nocturna', hayFixes ? 'Hay fixes pendientes de tu aprobaciÃ³n' : `${watcherAlerts.length} alertas + problemas detectados`, '/panel.html');
-      }
-    }
-  } catch (e) {
-    await sendTelegramToChat(env, env.DEV_CHAT_ID, `âŒ Error en revisiÃ³n autÃ³noma: ${e.message}`).catch(() => {});
-  }
-}
-
-// --- FunciÃ³n para filtrar notificaciones antes de enviar ---
+// runAutonomousReview() (revisión nocturna autónoma, cron 23:00 UTC) eliminada:
+// ese cron nunca estuvo registrado en wrangler.toml (solo 0 7 y 0 18 UTC),
+// por lo que esta función jamás se ejecutaba en producción. Limpieza tras
+// auditoría de gasto de IA (ver SESION.md).
 async function sendTelegramFiltered(env, mensaje, categoria) {
   try {
     const row = await env.DB.prepare("SELECT valor FROM config WHERE clave='dev_notif_filters'").first().catch(() => null);
@@ -5576,8 +5410,8 @@ export default {
       ctx.waitUntil(cierreAutomaticoJornada(env));
       ctx.waitUntil(syncPedidos(env)); // ~10 subrequests, seguro en este slot
     } else if (event.cron === '0 23 * * *') {
-      // Revision autonoma nocturna - Nivel B: actua directamente para bugs pequenos
-      ctx.waitUntil(runAutonomousReview(env));
+      // runAutonomousReview() eliminada (ver comentario junto a su antigua definición):
+      // este cron nunca estuvo registrado en wrangler.toml, era código muerto.
       ctx.waitUntil(syncRRHH(env)); // ~20 subrequests, seguro en este slot
     } else if (event.cron === '0 7 * * *') {
       // Recordatorio matutino: fixes pendientes > 12h
