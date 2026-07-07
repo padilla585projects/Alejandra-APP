@@ -13851,16 +13851,19 @@ async function cargarAICosts() {
     const fmtN = v => (+(v || 0)).toLocaleString('es-ES');
     const provColor = p => p === 'anthropic' ? '#e07b39' : p === 'openrouter' ? '#7c3aed' : p === 'gemini' ? '#1a73e8' : '#6b7280';
 
-    // KPI top row
-    const totalCoste = modo === 'dev' ? d.total?.coste_total : d.total?.total;
-    const mesCoste   = modo === 'dev' ? d.mesActual?.coste_mes : d.mes?.total;
-    const mesLlams   = modo === 'dev' ? d.mesActual?.llamadas_mes : d.mes?.llamadas;
-    const totalLlams = modo === 'dev' ? d.total?.total_llamadas : d.total?.llamadas;
+    // KPI top row -- en modo 'dev', d.unificado ya suma Alejandra Office (ai_usage)
+    // + Agente NEXUS (alejandra_token_uso, misma BD). En modo 'admin' (fallback
+    // antiguo) no existe ese campo y se muestra solo el total de Office.
+    const unif = modo === 'dev' ? d.unificado : null;
+    const totalCoste = unif ? unif.coste_total : (modo === 'dev' ? d.total?.coste_total : d.total?.total);
+    const mesCoste   = unif ? unif.coste_mes   : (modo === 'dev' ? d.mesActual?.coste_mes : d.mes?.total);
+    const mesLlams   = unif ? unif.llamadas_mes : (modo === 'dev' ? d.mesActual?.llamadas_mes : d.mes?.llamadas);
+    const totalLlams = unif ? unif.total_llamadas : (modo === 'dev' ? d.total?.total_llamadas : d.total?.llamadas);
     const proyAnual  = modo === 'dev' ? (+(mesCoste || 0) / 30 * 365) : d.anual_proyectado;
 
     let html = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-bottom:16px">
       <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:12px 14px">
-        <div style="font-size:10px;color:var(--muted);font-family:'Montserrat',sans-serif;font-weight:700;letter-spacing:1px;margin-bottom:4px">TOTAL ACUM.</div>
+        <div style="font-size:10px;color:var(--muted);font-family:'Montserrat',sans-serif;font-weight:700;letter-spacing:1px;margin-bottom:4px">TOTAL ACUM.${unif ? ' (UNIFICADO)' : ''}</div>
         <div style="font-size:22px;font-weight:900;color:#22c55e">${fmt(totalCoste)}</div>
         <div style="font-size:11px;color:var(--muted)">${fmtN(totalLlams)} llamadas</div>
       </div>
@@ -13875,6 +13878,24 @@ async function cargarAICosts() {
         <div style="font-size:11px;color:var(--muted)">estimado anual</div>
       </div>
     </div>`;
+
+    // Por origen: Alejandra Office (ai_usage) vs Agente NEXUS (alejandra_token_uso).
+    // Ambas tablas viven en la misma BD D1; el total de arriba ya es la suma de las dos.
+    if (unif && d.agente) {
+      html += `<div style="font-size:10px;color:var(--muted);font-family:'Montserrat',sans-serif;font-weight:700;letter-spacing:1px;margin-bottom:8px">POR ORIGEN</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">
+        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 14px;min-width:150px">
+          <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:11px;color:#38bdf8;margin-bottom:4px">ALEJANDRA OFFICE</div>
+          <div style="font-size:18px;font-weight:900;color:var(--text)">${fmt(d.total?.coste_total)}</div>
+          <div style="font-size:11px;color:var(--muted)">${fmtN(d.total?.total_llamadas)} llamadas · OCR/Gemini/Planos IA</div>
+        </div>
+        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 14px;min-width:150px">
+          <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:11px;color:#f472b6;margin-bottom:4px">AGENTE NEXUS</div>
+          <div style="font-size:18px;font-weight:900;color:var(--text)">${fmt(d.agente.total?.coste_total)}</div>
+          <div style="font-size:11px;color:var(--muted)">${fmtN(d.agente.total?.total_llamadas)} llamadas · chat/cron/clasificación</div>
+        </div>
+      </div>`;
+    }
 
     // Por proveedor (solo en modo dev)
     const proveedores = modo === 'dev' ? (d.porProveedor || []) : [];

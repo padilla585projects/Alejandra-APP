@@ -13345,7 +13345,7 @@ async function devAICostes(request, env) {
   const s = await getAuth(request, env);
   if (!s || !hasRole(s, 'superadmin', 'desarrollador')) return err('Sin permiso', 403);
   try {
-    const [total, mesActual, porProveedor, porEndpoint, tendencia, ultimasLlamadas] = await Promise.all([
+    const [total, mesActual, porProveedor, porEndpoint, tendencia, ultimasLlamadas, agenteTotal, agenteMesActual, agentePorProveedor] = await Promise.all([
       env.DB.prepare(`
         SELECT
           ROUND(SUM(coste_usd), 4) as coste_total,
@@ -13403,8 +13403,52 @@ async function devAICostes(request, env) {
         FROM ai_usage
         ORDER BY created_at DESC
         LIMIT 20
-      `).all()
+      `).all(),
+      // â”€â”€ Agente NEXUS (alejandra-agente worker, misma BD, tabla alejandra_token_uso) â”€â”€
+      env.DB.prepare(`
+        SELECT
+          ROUND(SUM(coste_usd), 4) as coste_total,
+          COUNT(*) as total_llamadas,
+          SUM(tokens_entrada) as tok_in_total,
+          SUM(tokens_salida) as tok_out_total
+        FROM alejandra_token_uso
+      `).all(),
+      env.DB.prepare(`
+        SELECT
+          ROUND(SUM(coste_usd), 4) as coste_mes,
+          COUNT(*) as llamadas_mes
+        FROM alejandra_token_uso
+        WHERE strftime('%Y-%m', created_at) = strftime('%Y-%m', 'now')
+      `).all(),
+      env.DB.prepare(`
+        SELECT
+          proveedor,
+          ROUND(SUM(coste_usd), 4) as coste,
+          COUNT(*) as llamadas,
+          SUM(tokens_entrada) as tok_in,
+          SUM(tokens_salida) as tok_out
+        FROM alejandra_token_uso
+        GROUP BY proveedor
+        ORDER BY coste DESC
+      `).all(),
     ]);
+
+    const agente = {
+      total: agenteTotal.results[0] || {},
+      mesActual: agenteMesActual.results[0] || {},
+      porProveedor: agentePorProveedor.results || []
+    };
+
+    // Total unificado = Alejandra Office (ai_usage) + Agente NEXUS (alejandra_token_uso).
+    // Solo lectura: no se toca el esquema ni el path de escritura de ninguno de los
+    // dos workers (cada uno sigue registrando en su propia tabla como hasta ahora).
+    const unificado = {
+      coste_total: Math.round(((total.results[0]?.coste_total || 0) + (agente.total.coste_total || 0)) * 10000) / 10000,
+      total_llamadas: (total.results[0]?.total_llamadas || 0) + (agente.total.total_llamadas || 0),
+      coste_mes: Math.round(((mesActual.results[0]?.coste_mes || 0) + (agente.mesActual.coste_mes || 0)) * 10000) / 10000,
+      llamadas_mes: (mesActual.results[0]?.llamadas_mes || 0) + (agente.mesActual.llamadas_mes || 0)
+    };
+
     return json({
       ok: true,
       total: total.results[0] || {},
@@ -13412,7 +13456,9 @@ async function devAICostes(request, env) {
       porProveedor: porProveedor.results || [],
       porEndpoint: porEndpoint.results || [],
       tendencia: tendencia.results || [],
-      ultimasLlamadas: ultimasLlamadas.results || []
+      ultimasLlamadas: ultimasLlamadas.results || [],
+      agente,
+      unificado
     });
   } catch (e) {
     return json({ ok: false, error: String(e.message) }, { status: 500 });
