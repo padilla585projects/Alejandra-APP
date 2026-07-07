@@ -1,48 +1,24 @@
 ## ESTADO ACTUAL
 
 **Sesion:** LIBRE
-**Ultima sesion:** 06/07/2026 -- nuevos tipos de plano `unifilar` y `planta_electrica` en
-`generar_plano` (solo alejandra-agente, commit 53edc25, deploy CI 28815636221 en verde). Ver
-seccion nueva "RESUMEN SESION 06/07/2026 (planos unifilar + planta_electrica)" mas abajo.
+**Ultima sesion:** 07/07/2026 -- nuevo tipo de plano `planta_industrial` (naves/CPD/obras
+grandes) en `generar_plano` (solo alejandra-agente, commit 1f7bd50, Worker agente Version ID
+59d50a02-6175-419a-8c76-3f627447e91e). Ver seccion nueva "RESUMEN SESION 07/07/2026 (plano
+planta_industrial)" mas abajo.
 
-**PROXIMA TAREA (confirmada con Adrian, pendiente de implementar):** nuevo tipo de plano
-`planta_industrial` en `generar_plano` (alejandra-agente/worker.js) para naves industriales,
-CPD/datacenter y obras de gran envergadura -- distinto de `planta_electrica` (que se queda
-tal cual, para vivienda/oficina/local pequeño). Peticion de Adrian: "centrate en planos
-industriales no viviendas, Naves, CPD etc" / "hacemos nuevo plano para industrial y cpd o
-obras grandes. utiliza los simbolos adecuados a estas obras y en normativa. tiene que ser
-planos bien hechos como si fueran hechos por ingenieros utilizando programas... como CAD".
-Plan tecnico ya presentado y confirmado ("si, pero lo hacemos mañana"):
-1) Nuevo tipo `planta_industrial`: cubre nave industrial (CT, CGBT, generador de respaldo,
-   canalizacion por BANDEJAS -- no tubo empotrado --, tomas de fuerza, luminaria industrial,
-   estructura a gran luz) y CPD/datacenter (racks, PDU, SAI/UPS, CRAC/CRAH, doble ruta A/B
-   redundante, ATS) segun lo que describa el usuario.
-2) Normativa: REBT ITC-BT-12 (centros de transformacion/redes de distribucion), ITC-BT-18
-   (puestas a tierra), IEC 61537 (bandejas, ya usado), UNE-EN 50600 (infraestructura CPD) +
-   clasificacion TIER (Uptime Institute) y UNE 100156 (climatizacion salas de proceso de
-   datos) cuando aplique a CPD.
-3) Nueva libreria de simbolos `IEC_INDUSTRIAL_DEFS` (mismo estilo `currentColor`):
-   `#sym-ct`, `#sym-generador`, `#sym-ats`, `#sym-cgbt`, `#sym-rack`, `#sym-pdu`, `#sym-ups`,
-   `#sym-crac`. Reutiliza ademas los simbolos ya existentes de `IEC_BANDEJA_DEFS` (cuadros,
-   columnas, bandejas, tomas, luminaria).
-4) Cambios mecanicos: `TOOL_GENERAR_PLANO` (enum+descripcion), `tiposValidos`, CHECK de
-   `_ensurePlanosTableAgente`, inyeccion de simbolos en `_generarPlanoAgente`, migracion
-   `007` (mismo patron idempotente de reconstruccion de tabla ya usado en 001-006), paso
-   nuevo en `.github/workflows/deploy-alejandra-agente.yml`.
-5) `planta` (tipo generico): anadir ejemplos explicitos de zonificacion de nave industrial
-   (NAVE PRODUCCION, ALMACEN, MUELLE DE CARGA, TALLER, SALA ELECTRICA/CPD, OFICINAS
-   TECNICAS) dejando claro que es el contexto por defecto salvo que el usuario pida otra
-   cosa (vivienda/local pequeño sigue siendo `planta_electrica`).
-No se ha tocado codigo todavia -- empezar por aqui la proxima sesion.
-
-Sesion anterior a esta: generar_plano profesional con simbologia IEC + fix critico de
-vaciado de SVGs en `_sanearSvgTruncado` (commits 8ad4732 / 5ac8f41, Worker agente Version ID
-6f50c3ed-2ae2-4478-af72-43a68fd57b49). Ver seccion "RESUMEN SESION 06/07/2026 (planos IEC +
-fix sanitizer)" mas abajo. Sesion anterior a esa: Cascada Gemini para planos + test vision +
-fix agente web-search crash (v7.72, commits 101aa9c / 07657d3).
+Sesion anterior a esta: nuevos tipos de plano `unifilar` y `planta_electrica` en
+`generar_plano` (commit 53edc25, deploy CI 28815636221 en verde). Ver seccion "RESUMEN SESION
+06/07/2026 (planos unifilar + planta_electrica)" mas abajo. Sesion anterior a esa: generar_plano
+profesional con simbologia IEC + fix critico de vaciado de SVGs en `_sanearSvgTruncado`
+(commits 8ad4732 / 5ac8f41, Worker agente Version ID 6f50c3ed-2ae2-4478-af72-43a68fd57b49).
+Ver seccion "RESUMEN SESION 06/07/2026 (planos IEC + fix sanitizer)" mas abajo. Sesion
+anterior a esa: Cascada Gemini para planos + test vision + fix agente web-search crash
+(v7.72, commits 101aa9c / 07657d3).
 **Version actual:** App PWA **v7.72** -- commit 101aa9c (sin cambios de PWA esta sesion, solo agente)
-**Agente (alejandra-agente):** commit **53edc25** desplegado en main -- ver seccion nueva mas
-abajo. Antes de eso, commit 5ac8f41 (fix critico sanitizer). Antes de eso, commit 2a18d5b
+**Agente (alejandra-agente):** commit **1f7bd50** desplegado en main (Version ID
+59d50a02-6175-419a-8c76-3f627447e91e) -- ver seccion nueva mas abajo. Antes de eso, commit
+53edc25 (unifilar + planta_electrica). Antes de eso, commit 5ac8f41 (fix critico sanitizer).
+Antes de eso, commit 2a18d5b
 desplegado en main (fix IDOR en
 subir_archivo -- escribia/sobrescribia cualquier key de R2 sin registrar dueno ni
 comprobar empresa -- y enviar_notificacion -- codigo huerfano con el mismo patron
@@ -67,6 +43,81 @@ CROSS-EMPRESA EN 5 FAMILIAS MAS" anadida en el commit ff52aea (continuacion 19 e
 ese archivo), y subseccion "IDOR EN subir_archivo/enviar_notificacion + authOk
 FAIL-CLOSED" anadida en el commit 2a18d5b (continuacion 20 en ese archivo). Ver
 seccion de abajo.
+
+---
+
+## RESUMEN SESION 07/07/2026 (plano planta_industrial) -- nuevo tipo de plano para naves/CPD/obras grandes en generar_plano
+
+### Peticion de Adrian
+Confirmado en sesion anterior: "centrate en planos industriales no viviendas, Naves, CPD
+etc" / "ese dejalo para lo que esta, hacemos nuevo plano para industrial y cpd o obras
+grandes. utiliza los simbolos adecuados a estas obras y en normativa. tiene que ser planos
+bien hechos como si fueran hechos por ingenieros utilizando programas que se dedican a eso
+como CAD." Es decir: (a) `planta_electrica` se queda tal cual (vivienda/oficina/local
+pequeño), (b) nuevo tipo de plano exclusivo para nave industrial/CPD-datacenter/obra de gran
+envergadura, (c) simbologia y normativa propia de ese ambito, (d) calidad CAD/ingenieria.
+Plan tecnico ya presentado en la sesion anterior y confirmado ("dale") al inicio de esta.
+
+### Cambios (commit 1f7bd50)
+- Nueva libreria de simbolos `IEC_INDUSTRIAL_DEFS` (mismo estilo `currentColor` que el
+  resto): `#sym-ct`, `#sym-generador`, `#sym-ats`, `#sym-cgbt`, `#sym-rack`, `#sym-pdu`,
+  `#sym-ups`, `#sym-crac`. Reutiliza ademas `IEC_BANDEJA_DEFS` (cuadros, columnas, bandejas,
+  tomas, luminaria).
+- `_PLANO_PROMPTS.planta_industrial`: cubre nave industrial (CT, generador de respaldo+ATS,
+  CGBT, sub-cuadros, canalizacion por BANDEJAS, luminaria industrial) y CPD/datacenter
+  (racks en filas pasillo frio/caliente, PDU, SAI/UPS, CRAC, doble ruta A/B redundante)
+  segun lo que describa el usuario. Normativa: REBT ITC-BT-12/18, IEC 61537, UNE-EN 50600,
+  clasificacion TIER (Uptime Institute), UNE 100156.
+- `TOOL_GENERAR_PLANO`, `tiposValidos` y el CHECK de `_ensurePlanosTableAgente` ampliados con
+  el tipo nuevo. `planta` (generico) actualizado con ejemplos de zonificacion de nave
+  industrial (NAVE PRODUCCION, ALMACEN, MUELLE DE CARGA, TALLER, SALA ELECTRICA/CPD,
+  OFICINAS TECNICAS).
+- `migrate_007_planos_planta_industrial.sql` (mismo patron idempotente de reconstruccion de
+  tabla ya usado en 001-006) + paso nuevo en `.github/workflows/deploy-alejandra-agente.yml`.
+  Aplicada a produccion sin perdida de datos.
+
+### BUG critico encontrado y corregido en la misma sesion (max_tokens insuficiente)
+Verificacion en vivo (2 pruebas independientes: una descripcion enorme y otra de alcance
+moderado/razonable) mostro que con `max_tokens:16000` (el mismo valor usado para el resto de
+tipos) el SVG se truncaba SIEMPRE justo antes de completar la leyenda/cajetin final y la
+flecha norte -- no era una casualidad ligada a un prompt desmedido, ocurria igual con una
+peticion normal. Motivo: `planta_industrial` combina muchos mas elementos que el resto de
+tipos (CT+generador/ATS+CGBT+sub-cuadros+racks en filas+PDU+SAI+CRAC+doble ruta A/B+leyenda+
+cajetin+notas normativas), y ese presupuesto de salida no alcanzaba para terminar.
+
+Corregido: `max_tokens` ahora es condicional -- 28000 solo para `tipo === 'planta_industrial'`,
+se mantiene 16000 para el resto de tipos (sin cambiar su latencia/comportamiento). El
+streaming (`llamarAnthropicStream`, ya existente de la sesion IEC) sigue evitando el 524 de
+Cloudflare aunque la generacion tarde ahora hasta ~292s en este tipo.
+
+### Verificacion
+- `node --check worker.js` limpio, grep de corrupcion de encoding limpio antes de cada commit.
+- Test en vivo via curl contra `/api/chat/stream`, 4 ejecuciones:
+  1) Prompt enorme (nave+CPD combinados), cortado por `--max-time 200` insuficiente (sin
+     conclusion, solo diagnostico de tiempos).
+  2) Mismo prompt enorme, pre-fix: plano ID 20 generado en 176907ms, SVG truncado antes de
+     la leyenda.
+  3) Prompt moderado (solo CPD, sala de servidores TIER III, 2 filas de racks, doble ruta
+     A/B, 2 CRAC, LEVITEC/UNE-EN 50600), pre-fix: plano ID 21 en 162503ms, truncado en el
+     mismo punto (confirma que no era el tamaño del prompt, sino el tipo de contenido).
+  4) Mismo prompt moderado, ya con el fix desplegado: plano ID 22 en 291592ms, SVG completo
+     y bien formado (71751 caracteres vs ~51000 de los truncados; `LEVITEC`, `LEYENDA`,
+     `NORTE` y `50600` presentes; tags svg balanceados 1/1, termina limpio en `</svg>`).
+- Limitacion conocida y ya documentada (sesiones anteriores): Claude no siempre adopta
+  `<use href="#sym-X"/>` pese a la instruccion explicita del prompt -- dibuja los simbolos "a
+  mano" en su lugar, visualmente correcto pero sin reutilizar la libreria inyectada.
+  Confirmado de nuevo en los planos 20/21/22 (0 `<use>` en los tres, y sin `<symbol>` propios
+  rogue tampoco -- solo los defs inyectados correctamente). No bloqueante, no se ha
+  intentado forzarlo mas alla de la instruccion actual.
+- Los 3 planos de prueba (20, 21, 22) borrados de D1 produccion tras la verificacion.
+
+### Deploy
+- `npx wrangler deploy` manual desde `alejandra-agente/` para probar el fix antes del commit
+  (Version ID de prueba `49bd3e1d-2428-4905-8083-114c276e4c97`), y de nuevo tras el commit
+  para que produccion coincida exactamente con el codigo commiteado -- Version ID final
+  **59d50a02-6175-419a-8c76-3f627447e91e**.
+- Commit `1f7bd50`: "feat(agente): nuevo tipo de plano planta_industrial (naves/CPD/obras
+  grandes) en generar_plano".
 
 ---
 

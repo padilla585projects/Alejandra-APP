@@ -4,12 +4,49 @@
   Ruta local: C:\Users\Adrian\Downloads\Proyecto GestiBobina\Alejandra APP
 ================================================================================
 
-ÚLTIMA ACTUALIZACIÓN: 06/07/2026
+ÚLTIMA ACTUALIZACIÓN: 07/07/2026
 VERSIÓN ACTUAL APP NUEVA: v7.72 (sin bump de PWA — este cambio es solo alejandra-agente/worker.js)
-WORKER API: cd7c8c68 · WORKER AGENTE: 96a577dd
+WORKER API: cd7c8c68 · WORKER AGENTE: 59d50a02 (commit 1f7bd50)
 VERSIÓN ACTUAL APP VIEJA: v4.19 (⛔ CONGELADA DEFINITIVAMENTE — no recibe más cambios)
 
 HISTORIAL DE VERSIONES (resumen reciente):
+  (agente, sin bump PWA) — 07/07/2026 — generar_plano: nuevo tipo planta_industrial
+                       (commit 1f7bd50, Worker agente Version ID
+                       59d50a02-6175-419a-8c76-3f627447e91e):
+                       Peticion de Adrian (confirmada en sesion anterior): nuevo tipo de
+                       plano exclusivo para nave industrial/CPD-datacenter/obra de gran
+                       envergadura, distinto de `planta_electrica` (que se queda igual,
+                       para vivienda/oficina/local pequeño). "hacemos nuevo plano para
+                       industrial y cpd o obras grandes. utiliza los simbolos adecuados a
+                       estas obras y en normativa. tiene que ser planos bien hechos como si
+                       fueran hechos por ingenieros utilizando programas... como CAD".
+                       1) Nueva libreria IEC_INDUSTRIAL_DEFS (CT, generador, ATS, CGBT,
+                       rack, PDU, UPS, CRAC), reutiliza tambien IEC_BANDEJA_DEFS.
+                       2) _PLANO_PROMPTS.planta_industrial: nave industrial (CT+generador/
+                       ATS+CGBT+sub-cuadros+bandejas+luminaria industrial) y CPD/datacenter
+                       (racks en filas frio/caliente+PDU+SAI/UPS+CRAC+doble ruta A/B)
+                       segun lo que pida el usuario. Normativa: REBT ITC-BT-12/18,
+                       IEC 61537, UNE-EN 50600, TIER (Uptime Institute), UNE 100156.
+                       3) TOOL_GENERAR_PLANO/tiposValidos/CHECK ampliados; `planta`
+                       generico con ejemplos de zonificacion de nave industrial.
+                       4) migrate_007 (mismo patron idempotente 001-006) + paso nuevo en
+                       deploy-alejandra-agente.yml.
+                       5) BUG critico encontrado y corregido en la misma sesion: con
+                       max_tokens:16000 (igual que el resto de tipos) el SVG se truncaba
+                       sistematicamente antes de la leyenda/cajetin final -- confirmado en
+                       2 pruebas en vivo independientes (prompt enorme y prompt moderado,
+                       mismo fallo en ambas). planta_industrial combina muchos mas
+                       elementos que el resto de tipos y agotaba el presupuesto de
+                       tokens. Subido a 28000 solo para este tipo (el resto se queda en
+                       16000). Reverificado tras el fix: SVG completo (71751 caracteres),
+                       leyenda/cajetin/norte/normativa presentes, tags balanceados.
+                       Verificado: node --check limpio, 4 tests en vivo via curl (planos
+                       20/21/22 en D1, borrados tras verificar), deploy manual pre-commit
+                       (Version 49bd3e1d) y post-commit (Version 59d50a02, la que queda
+                       en produccion). Limitacion conocida ya documentada (no bloqueante):
+                       Claude no siempre adopta <use href="#sym-X"/>, dibuja los simbolos
+                       a mano en su lugar -- visualmente correcto igualmente.
+
   (agente, sin bump PWA) — 06/07/2026 — generar_plano: tipos unifilar + planta_electrica
                        (commit 53edc25, CI 28815636221 en verde):
                        Peticion de Adrian tras probar en vivo el tipo `electrico`: "esa
