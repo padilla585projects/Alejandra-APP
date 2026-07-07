@@ -372,8 +372,8 @@ REGLA CRÍTICA — NUNCA CONFABULES ACCIONES:
 
 Para problemas complejos, usa este flujo:
 1. pensar() — descompón el problema antes de actuar
-2. planificar() — si la tarea tiene >2 pasos, haz un plan primero
-3. Ejecuta los pasos en orden, usando las herramientas adecuadas
+2. planificar() — si la tarea tiene >2 pasos, ten un plan claro en tu cabeza (puedes resumirlo en 1-2 frases si aporta claridad)
+3. Ejecuta los pasos EN LA MISMA RESPUESTA, invocando ya las herramientas necesarias — NUNCA termines tu turno solo con el plan en texto ("voy a proceder a...", "en breve...", "un momento por favor"). Si anuncias una accion, esa misma respuesta debe incluir la llamada real a la herramienta que la ejecuta.
 4. Si te atascas, usa descubrir_herramientas() para ver qué tienes disponible
 
 NO uses pensar() para preguntas triviales. SÍ úsalo cuando:
@@ -903,7 +903,13 @@ El servidor genera el esquema IEC 60617 completo automáticamente.`
 
 // Perfiles de experto
 const NEXUS_EXPERTS = {
-  simple:   { model: MODEL_EXPERTO, maxTokens: 600,  modules: ['base', 'contexto_sesion', 'formato'] },
+  // gratisPrimero=true: coste (07/2026) — conversación simple/casual, sin necesidad de
+  // razonamiento avanzado. Prueba la cascada gratuita de OpenRouter (con soporte de
+  // tools completo) ANTES que ningún modelo de pago; cae a Haiku (nunca a Sonnet) si
+  // la cascada gratis falla entera. `model` aquí es solo la etiqueta de coste usada
+  // cuando cae al fallback de Haiku (ver llamarExperto/registrarTokenUso) — por eso
+  // es MODEL_ROUTER y no MODEL_EXPERTO, para no registrar coste de Sonnet por error.
+  simple:   { model: MODEL_ROUTER, maxTokens: 600,  modules: ['base', 'contexto_sesion', 'formato'], gratisPrimero: true },
   app:      { model: MODEL_EXPERTO, maxTokens: 4096, modules: ['base', 'app', 'ingenieria_electrica', 'ram', 'inteligencia_negocio', 'seguimiento_proactivo', 'asistente_escaneo', 'proactividad_real', 'aprendizaje_proactivo', 'contexto_sesion', 'formato'] },
   tecnico:  { model: MODEL_EXPERTO, maxTokens: 1024, modules: ['base', 'app', 'tecnica', 'nexus', 'ram', 'capacidades_avanzadas', 'inteligencia_negocio', 'seguimiento_proactivo', 'asistente_escaneo', 'proactividad_real', 'aprendizaje_proactivo', 'razonamiento', 'contexto_sesion', 'formato'] },
   web:      { model: MODEL_EXPERTO, maxTokens: 1024, modules: ['base', 'app', 'web', 'aprendizaje_proactivo', 'contexto_sesion', 'formato'] },
@@ -3111,6 +3117,13 @@ export default {
       const hora = new Date().getUTCHours();
       const horaLocal = (hora + 2) % 24; // UTC+2 España
 
+      // Auto-actualización de la cascada de modelos gratis (una vez al día, en el
+      // primer tick del cron — 05:00 UTC). No depende del horario "no molestar":
+      // no es una acción de cara al usuario, solo mantenimiento interno.
+      if (hora === 5) {
+        ctx.waitUntil(refrescarCascadaModelosGratis(env).catch(e => console.error('[CascadaGratis] error en cron:', e.message)));
+      }
+
       // No molestar entre 23:00 y 7:00
       if (horaLocal >= 23 || horaLocal < 7) return;
 
@@ -3312,24 +3325,18 @@ export default {
           ).all().catch(() => ({ results: [] }));
           if ((errores.results || []).length >= 5) {
             const learningsText = errores.results.map(e => `- ${e.error}: ${e.causa} → ${e.solucion} (${e.veces_visto}x)`).join('\n');
-            const distillResp = await fetch(ANTHROPIC_API, {
-              method: 'POST',
-              headers: { 'x-api-key': env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-              body: JSON.stringify({
-                model: MODEL_ROUTER, max_tokens: 500,
-                system: 'Comprime estos errores/soluciones en máximo 15 reglas cortas (máx 25 palabras cada una). Solo las reglas, una por línea, sin numerar.',
-                messages: [{ role: 'user', content: learningsText }]
-              })
-            });
-            if (distillResp.ok) {
-              const distillData = await distillResp.json();
-              const rules = distillData.content?.[0]?.text?.trim() || '';
-              if (rules) {
-                await env.DB.prepare(`DELETE FROM alejandra_ram WHERE clave='distilled_rules'`).run().catch(()=>{});
-                await env.DB.prepare(
-                  `INSERT INTO alejandra_ram (clave, valor, tarea, created_at, expires_at) VALUES ('distilled_rules', ?, 'auto', datetime('now'), datetime('now', '+7 days'))`
-                ).bind(rules).run();
-              }
+            // Coste: modelo gratuito de OpenRouter como intento primario (tarea interna de
+            // texto simple, sin tools), Haiku solo como fallback si la cascada gratis falla.
+            const rules = await llamarTextoGratisConFallbackHaiku(
+              env,
+              'Comprime estos errores/soluciones en máximo 15 reglas cortas (máx 25 palabras cada una). Solo las reglas, una por línea, sin numerar.',
+              learningsText, 500, 'cron_distill', 'system'
+            );
+            if (rules) {
+              await env.DB.prepare(`DELETE FROM alejandra_ram WHERE clave='distilled_rules'`).run().catch(()=>{});
+              await env.DB.prepare(
+                `INSERT INTO alejandra_ram (clave, valor, tarea, created_at, expires_at) VALUES ('distilled_rules', ?, 'auto', datetime('now'), datetime('now', '+7 days'))`
+              ).bind(rules).run();
             }
           }
         } catch (e) { console.error('[CRON] Distill error:', e.message); }
@@ -3347,29 +3354,22 @@ export default {
           ).all().catch(() => ({results:[]}));
           if ((oldMsgs.results || []).length >= 50) {
             const toSummarize = oldMsgs.results.map(m => `${m.rol}: ${(m.contenido || '').substring(0, 100)}`).join('\n');
-            const sumResp = await fetch(ANTHROPIC_API, {
-              method: 'POST',
-              headers: { 'x-api-key': env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-              body: JSON.stringify({
-                model: MODEL_ROUTER, max_tokens: 300,
-                system: 'Resume esta conversación en máx 200 palabras. Mantén: temas principales, decisiones tomadas, problemas resueltos, datos importantes.',
-                messages: [{ role: 'user', content: toSummarize }]
-              })
-            });
-            if (sumResp.ok) {
-              const sumData = await sumResp.json();
-              const resumen = sumData.content?.[0]?.text?.trim();
-              if (resumen) {
-                // Guardar resumen como primer mensaje del historial
-                const oldestId = await env.DB.prepare(`SELECT id FROM alejandra_historial ORDER BY created_at ASC LIMIT 1`).first();
-                await env.DB.prepare(
-                  `DELETE FROM alejandra_historial WHERE id IN (SELECT id FROM alejandra_historial ORDER BY created_at ASC LIMIT 100)`
-                ).run();
-                await env.DB.prepare(
-                  `INSERT INTO alejandra_historial (canal, rol, contenido, created_at, usuario_id) VALUES ('system', 'system', ?, datetime('now', '-30 days'), 'system')`
-                ).bind(`[RESUMEN DE CONVERSACIONES ANTIGUAS]\n${resumen}`).run();
-                console.log(`[CRON] Compactación: ${oldMsgs.results.length} mensajes → resumen`);
-              }
+            // Coste: modelo gratuito de OpenRouter como intento primario (resumen de texto
+            // simple, sin tools), Haiku solo como fallback si la cascada gratis falla.
+            const resumen = await llamarTextoGratisConFallbackHaiku(
+              env,
+              'Resume esta conversación en máx 200 palabras. Mantén: temas principales, decisiones tomadas, problemas resueltos, datos importantes.',
+              toSummarize, 300, 'cron_compactacion', 'system'
+            );
+            if (resumen) {
+              // Guardar resumen como primer mensaje del historial
+              await env.DB.prepare(
+                `DELETE FROM alejandra_historial WHERE id IN (SELECT id FROM alejandra_historial ORDER BY created_at ASC LIMIT 100)`
+              ).run();
+              await env.DB.prepare(
+                `INSERT INTO alejandra_historial (canal, rol, contenido, created_at, usuario_id) VALUES ('system', 'system', ?, datetime('now', '-30 days'), 'system')`
+              ).bind(`[RESUMEN DE CONVERSACIONES ANTIGUAS]\n${resumen}`).run();
+              console.log(`[CRON] Compactación: ${oldMsgs.results.length} mensajes → resumen`);
             }
           }
         }
@@ -3738,8 +3738,25 @@ async function procesarConNEXUS(env, mensaje, contexto, usuario_id, empresa_id, 
     const messages = await construirMessages(env, mensaje, contexto, limitHistorial, incluirAprendizajes, resultadoWeb, usuario_id, canal, adjuntos, rol, pantalla, dom_actual, clas.experto, usuario_label);
 
     // PASO 5: Llamar al modelo en loop hasta respuesta final (máx 5 iteraciones)
-    let respAPI  = await llamarAnthropic(env, messages, tools, expert.model, expert.maxTokens, systemPrompt);
+    let respAPI  = await llamarExperto(env, messages, tools, expert, systemPrompt, usuario_id);
     if (respAPI.usage) registrarTokenUso(env, (respAPI.modelo_real || expert.model), `chat_${clas.experto}`, respAPI.usage.input_tokens||0, respAPI.usage.output_tokens||0, usuario_id);
+
+    // SALVAGUARDA — "plan diferido sin ejecutar" (ver misma logica en
+    // procesarConNEXUSStream): el modelo a veces escribe el plan completo en
+    // texto y corta el turno sin invocar la tool anunciada. Forzamos UNA
+    // continuacion si detectamos ese patron.
+    if (respAPI.stop_reason !== 'tool_use' && tools.length > 0) {
+      const textoPlan = (respAPI.content || []).filter(b => b.type === 'text').map(b => b.text).join(' ');
+      const pareceDiferido = /proceder[eé]\w*\s+a|procedo\s+a|voy\s+a\s+(proceder|generar|crear|usar)|un momento,?\s*por favor|en breve\b|te (proporcionar|mostrar)[eé]\w*|una vez (haya sido|este)\s*(creado|generado)/i.test(textoPlan);
+      if (pareceDiferido) {
+        console.log('[NEXUS] plan diferido detectado sin tool_use, forzando continuacion');
+        messages.push({ role: 'assistant', content: respAPI.content });
+        messages.push({ role: 'user', content: [{ type: 'text', text: '[INSTRUCCIÓN: Acabas de describir un plan pero todavía no has ejecutado ninguna herramienta. Ejecuta AHORA MISMO, en esta respuesta, la accion/herramienta que acabas de anunciar. No repitas el plan en texto, invoca la herramienta directamente.]' }] });
+        respAPI = await llamarExperto(env, messages, tools, expert, systemPrompt, usuario_id);
+        if (respAPI.usage) registrarTokenUso(env, (respAPI.modelo_real || expert.model), `chat_${clas.experto}`, respAPI.usage.input_tokens||0, respAPI.usage.output_tokens||0, usuario_id);
+      }
+    }
+
     let iter     = 0;
     // Adrián (id=3) y admin tienen más iteraciones para usar más tools
     const esAdmin = ['3','adrian','admin','Adrian'].includes(usuario_id);
@@ -3765,7 +3782,7 @@ async function procesarConNEXUS(env, mensaje, contexto, usuario_id, empresa_id, 
       messages.push({ role: 'user', content: toolResults });
       // Mantener todas las tools disponibles en todas las iteraciones para máxima proactividad
       const toolsSiguiente = iter < MAX_ITER - 1 ? tools : [];
-      respAPI = await llamarAnthropic(env, messages, toolsSiguiente, expert.model, expert.maxTokens, systemPrompt);
+      respAPI = await llamarExperto(env, messages, toolsSiguiente, expert, systemPrompt, usuario_id);
       if (respAPI.usage) registrarTokenUso(env, (respAPI.modelo_real || expert.model), `chat_${clas.experto}`, respAPI.usage.input_tokens||0, respAPI.usage.output_tokens||0, usuario_id);
       iter++;
     }
@@ -3837,10 +3854,35 @@ async function procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empres
     const messages          = await construirMessages(env, mensaje, contexto, limitHistorial, incluirAprendizajes, resultadoWeb, usuario_id, canal, adjuntos, rol, pantalla, dom_actual, clas.experto, usuario_label);
 
     // PASO 5: Loop Anthropic + tools
-    let respAPI = await llamarAnthropic(env, messages, tools, expert.model, expert.maxTokens, systemPrompt);
+    let respAPI = await llamarExperto(env, messages, tools, expert, systemPrompt, usuario_id);
     let tokensIn = respAPI.usage?.input_tokens || 0;
     let tokensOut = respAPI.usage?.output_tokens || 0;
     if (respAPI.usage) registrarTokenUso(env, (respAPI.modelo_real || expert.model), 'chat_stream', respAPI.usage.input_tokens||0, respAPI.usage.output_tokens||0, usuario_id);
+
+    // SALVAGUARDA — "plan diferido sin ejecutar": con tareas complejas (varias
+    // herramientas/pasos), el modelo a veces sigue el modulo de razonamiento
+    // ("planificar() si la tarea tiene >2 pasos") de forma demasiado literal:
+    // escribe el plan completo en texto ("voy a proceder a generar...") y
+    // termina el turno con stop_reason=end_turn SIN llegar a invocar ninguna
+    // tool. Sin esta salvaguarda esa promesa queda incumplida (el usuario ve
+    // el plan pero nunca el resultado real). Detectamos el patron y forzamos
+    // UNA continuacion pidiendole que ejecute ya la accion anunciada.
+    if (respAPI.stop_reason !== 'tool_use' && tools.length > 0) {
+      const textoPlan = (respAPI.content || []).filter(b => b.type === 'text').map(b => b.text).join(' ');
+      const pareceDiferido = /proceder[eé]\w*\s+a|procedo\s+a|voy\s+a\s+(proceder|generar|crear|usar)|un momento,?\s*por favor|en breve\b|te (proporcionar|mostrar)[eé]\w*|una vez (haya sido|este)\s*(creado|generado)/i.test(textoPlan);
+      if (pareceDiferido) {
+        console.log('[NEXUSStream] plan diferido detectado sin tool_use, forzando continuacion');
+        messages.push({ role: 'assistant', content: respAPI.content });
+        messages.push({ role: 'user', content: [{ type: 'text', text: '[INSTRUCCIÓN: Acabas de describir un plan pero todavía no has ejecutado ninguna herramienta. Ejecuta AHORA MISMO, en esta respuesta, la accion/herramienta que acabas de anunciar. No repitas el plan en texto, invoca la herramienta directamente.]' }] });
+        respAPI = await llamarExperto(env, messages, tools, expert, systemPrompt, usuario_id);
+        if (respAPI.usage) {
+          tokensIn  += respAPI.usage.input_tokens  || 0;
+          tokensOut += respAPI.usage.output_tokens || 0;
+          registrarTokenUso(env, (respAPI.modelo_real || expert.model), 'chat_stream', respAPI.usage.input_tokens||0, respAPI.usage.output_tokens||0, usuario_id);
+        }
+      }
+    }
+
     let iter = 0;
     // Adrián (id=3) y admin tienen más iteraciones para usar más tools.
     // En canales móviles (app_android, pwa) limitamos a 4 iter porque el waitUntil
@@ -3904,7 +3946,7 @@ async function procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empres
           });
         }
       }
-      respAPI = await llamarAnthropic(env, messages, toolsSiguiente, expert.model, expert.maxTokens, systemPrompt);
+      respAPI = await llamarExperto(env, messages, toolsSiguiente, expert, systemPrompt, usuario_id);
       if (respAPI.usage) {
         tokensIn  += respAPI.usage.input_tokens  || 0;
         tokensOut += respAPI.usage.output_tokens || 0;
@@ -3939,9 +3981,38 @@ async function procesarConNEXUSStream(env, mensaje, contexto, usuario_id, empres
     } else {
       // En panel/web hacemos streaming real token a token
       try {
-        textoFinal = await llamarAnthropicStream(env, messages, expert.model, expert.maxTokens, systemPrompt, async (token) => {
+        let streamResult = await llamarAnthropicStream(env, messages, expert.model, expert.maxTokens, systemPrompt, async (token) => {
           await send({ type: 'token', texto: token });
-        }, usuario_id);
+        }, usuario_id, tools);
+
+        // SALVAGUARDA — esta fase de cierre normalmente no necesita tools (ya
+        // se ejecutaron en el loop de arriba), pero cuando el loop TERMINÓ sin
+        // llamar a ninguna tool (stop_reason nunca fue tool_use, y tampoco
+        // coincidió con el patrón de "plan diferido"), algunos modelos
+        // gratuitos de la cascada de fallback alucinan la llamada a la
+        // herramienta como texto plano con tokens de control fugados (formato
+        // Harmony) en vez de ejecutarla de verdad — el usuario veía ese JSON
+        // crudo. Si llamarAnthropicStream nos devuelve un tool_use recuperado,
+        // lo ejecutamos aquí de verdad y pedimos UNA respuesta final de texto.
+        if (streamResult && typeof streamResult === 'object' && streamResult.__tool_use__) {
+          const tb = streamResult.__tool_use__;
+          herramientasUsadas.push({ nombre: tb.name, input: tb.input });
+          const t0 = Date.now();
+          await send({ type: 'tool_start', nombre: tb.name, input: tb.input });
+          const resultado = await ejecutarTool(env, tb.name, tb.input, usuario_id, empresa_id, tools, send, authOk, esDevVerificado);
+          const previewText = typeof resultado === 'string' && resultado.startsWith('[{')
+            ? '(imagen analizada)'
+            : String(resultado).substring(0, 200);
+          await send({ type: 'tool_end', nombre: tb.name, preview: previewText, duracion_ms: Date.now() - t0 });
+          const content = parseToolResultContent(resultado);
+          messages.push({ role: 'assistant', content: [tb] });
+          messages.push({ role: 'user', content: [{ type: 'tool_result', tool_use_id: tb.id, content }] });
+          streamResult = await llamarAnthropicStream(env, messages, expert.model, expert.maxTokens, systemPrompt, async (token) => {
+            await send({ type: 'token', texto: token });
+          }, usuario_id, []); // ya con el resultado en la mano: forzamos texto final, sin más tools
+        }
+
+        textoFinal = (typeof streamResult === 'string') ? streamResult : (respAPI.content?.filter(b => b.type === 'text').map(b => b.text).join('\n').trim() || 'Sin respuesta');
       } catch (_) {
         // Fallback: usar respuesta ya obtenida si el stream falla
         textoFinal = respAPI.content?.filter(b => b.type === 'text').map(b => b.text).join('\n').trim() || 'Sin respuesta';
@@ -8442,10 +8513,15 @@ const REGEX_ROUTES = [
   { re: /\b(sección de cable|caída de tensión|magnetotérmico|diferencial|protección|bandeja|canalización|ITC-BT|REBT|UNE|instalación eléctrica|trifásico|monofásico|cuadro eléctrico|esquema eléctrico|unifiliar|multifilar|plano eléctrico|arrancador|contactor|relé|autómata|variador|SCADA|HMI|motor eléctrico|transformador|puesta a tierra)\b/i, expert: 'ingenieria', web: false },
   { re: /\b(calcula|dimensiona|qué sección|qué cable|qué protección|foto de obra|analiza esta foto|diseña|dibuja|hazme un esquema|hazme el esquema|genera un esquema|genera el esquema|haz el esquema|haz un esquema|qué es este cuadro|qué componentes|analiza este cuadro|arranque directo|arranque dol|dol|estrella.triángulo|star.delta|circuito de mando|circuito de control|circuito de potencia|esquema electrico|esquema eléctrico)\b/i, expert: 'ingenieria', web: false },
   { re: /\b(ITC-BT|REBT|IEC 60364|IEC 60617|EN 61439|UNE 20460|RD 614|instalacion electrica|cuadro electrico|interruptor automatico|diferencial|guardamotor|variador de frecuencia|PLC|PROFIBUS|PROFINET|Modbus|SCADA|VFD|DOL|kVA|kvar|cos.?fi|cos phi)\b/i, expert: 'ingenieria', web: false },
+  // Saludos/confirmaciones cortas PRIMERO (match exacto ^...$): deben ganar siempre a la regla
+  // de enclíticos de abajo. Bug detectado 07/07/2026: "hola" contiene "la" al final y
+  // \w+(la) lo capturaba como enclítico → nunca llegaba a "simple". Iban aquí después,
+  // pero al ser un match de string completo (^...$) es seguro evaluarlo antes: no puede
+  // colisionar con frases imperativas reales (esas nunca son SOLO un saludo/confirmación).
+  { re: /^(hola|hey|buenas|buenos días|buenas tardes|buenas noches|qué tal|cómo estás|ok|vale|sí|no|gracias|perfecto|genial|entendido)[\s!?.]*$/i, expert: 'simple', web: false },
   // Pronombres enclíticos pegados a verbo → imperativo de acción → siempre "app"
   // Cubre: ponlos, mételos, déjalo, pásalas, aplícamelos, corrígeles, etc. sin enumerar verbos
   { re: /\w+(lo|la|los|las|me|te|nos|les|selo|sela|selos|selas)\b/i, expert: 'app', web: false },
-  { re: /^(hola|hey|buenas|buenos días|buenas tardes|buenas noches|qué tal|cómo estás|ok|vale|sí|no|gracias|perfecto|genial|entendido)[\s!?.]*$/i, expert: 'simple', web: false },
   { re: /\b(no funciona|no puedo|error|falla|se cuelga|pantalla en blanco|no carga|no responde|se ha caído|no me deja|problema|avería|roto|bloqueado|urgente)\b/i, expert: 'app', web: false },
   { re: /\b(bobina|equipo|carretilla|PEMP|fichaje|fichar|entrada|salida|operario|encargado|personal|incidencia|pedido|albarán|obra|almacén|stock)\b/i, expert: 'app', web: false },
   { re: /\b(cuánt[oa]s|quién fichó|lista de|muéstrame|dame los datos|informe|resumen del|estado de)\b/i, expert: 'app', web: false },
@@ -8580,69 +8656,328 @@ function _agenteMsgsToOpenAI(messages, systemPrompt, keepImages = false) {
   return out;
 }
 
-// Cascada de fallback cuando Anthropic no está disponible:
-// 1º OpenRouter gratis (Nemotron 550B → GPT-OSS 120B → Llama 70B → Gemma 4 31B)
-// 2º OpenAI gpt-4o (de pago, si hay OPENAI_API_KEY)
-async function llamarGPT4oFallback(env, messages, systemPrompt, maxTokens) {
-  // ── 1º INTENTO: cascada OpenRouter (modelos gratuitos) ──────────────────────
-  if (env.OPENROUTER_API_KEY) {
-    // Detectar si hay imágenes en los mensajes
-    const tieneImagenes = messages.some(m =>
-      Array.isArray(m.content) && m.content.some(b => b.type === 'image')
-    );
-    // Modelos con visión primero si hay imágenes; si no, potencia de razonamiento primero
-    const modelos = tieneImagenes
-      ? ['google/gemma-4-31b-it:free', 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free',
-         'nvidia/nemotron-3-ultra-550b-a55b:free', 'openai/gpt-oss-120b:free']
-      : ['nvidia/nemotron-3-ultra-550b-a55b:free', 'openai/gpt-oss-120b:free',
-         'meta-llama/llama-3.3-70b-instruct:free', 'google/gemma-4-31b-it:free'];
+// Convierte tools formato Anthropic ({name, description, input_schema}) al
+// formato "function calling" de OpenAI ({type:'function', function:{name,
+// description, parameters}}) — usado tanto por OpenRouter como por OpenAI.
+// SIN esto, los modelos de fallback nunca podían invocar herramientas: en el
+// mejor caso devolvían solo texto: en el peor (modelos entrenados con su
+// propio formato de function-calling, ej. gpt-oss Harmony), "alucinaban" un
+// intento de llamada a tool usando sus tokens especiales de entrenamiento
+// (ej. "<|tool_calls_section_end|>") directamente como texto visible, porque
+// no había un canal real de tool-calling donde encauzar esa intención.
+function _anthropicToolsToOpenAI(tools) {
+  if (!Array.isArray(tools) || !tools.length) return undefined;
+  return tools.map(t => ({
+    type: 'function',
+    function: {
+      name: t.name,
+      description: t.description || '',
+      parameters: t.input_schema || { type: 'object', properties: {} }
+    }
+  }));
+}
 
-    for (const model of modelos) {
+// Convierte la respuesta OpenAI (message.tool_calls) al formato de content
+// blocks de Anthropic (type:'tool_use') para que el mismo loop de ejecución
+// de tools (que solo entiende formato Anthropic) funcione igual sea cual sea
+// el proveedor real que respondió.
+// Red de seguridad adicional: algunos modelos gratuitos de OpenRouter (ej.
+// gpt-oss, entrenados con formato "Harmony") no siempre traducen su intento
+// de llamar a una tool al campo estructurado `tool_calls` de la respuesta —
+// en su lugar dejan escapar el JSON de argumentos tal cual como texto plano,
+// seguido de un token de control interno (visto en producción:
+// "<|tool_calls_section_end|>"). Sin esto, ese texto roto se le mostraría
+// literalmente al usuario en vez de ejecutar la tool. Lo detectamos y lo
+// recuperamos como si fuera un tool_use real.
+const _TOKEN_CONTROL_FUGADO = /<\|[a-z_]+\|>/i;
+function _intentarRecuperarToolCallDeTexto(texto, tools) {
+  if (!texto || !Array.isArray(tools) || !tools.length) return null;
+  if (!_TOKEN_CONTROL_FUGADO.test(texto)) return null;
+  const iniJson = texto.indexOf('{');
+  if (iniJson === -1) return null;
+  // Cortar en el primer token de control tras el JSON (o al final del texto)
+  const limpio = texto.slice(iniJson).replace(/<\|[a-z_]+\|>[\s\S]*$/i, '').trim();
+  let args;
+  try { args = JSON.parse(limpio); } catch (_) { return null; }
+  if (!args || typeof args !== 'object' || Array.isArray(args)) return null;
+  // ¿Qué tool encaja? todas sus propiedades "required" están presentes en el JSON recuperado.
+  const encaja = tools.find(t => {
+    const req = t.input_schema?.required || [];
+    return req.length > 0 && req.every(k => Object.prototype.hasOwnProperty.call(args, k));
+  });
+  if (!encaja) return null;
+  console.log(`[Fallback] Recuperado tool_call fugado en texto plano → ${encaja.name}`);
+  return { type: 'tool_use', id: `fallback_recuperado_${Date.now()}`, name: encaja.name, input: args };
+}
+
+function _openAIToolCallsToAnthropicContent(message, tools) {
+  const content = [];
+  const texto = message?.content;
+  const toolCalls = Array.isArray(message?.tool_calls) ? message.tool_calls : [];
+  if (!toolCalls.length && texto) {
+    const recuperado = _intentarRecuperarToolCallDeTexto(texto, tools);
+    if (recuperado) { content.push(recuperado); return content; }
+  }
+  if (texto) content.push({ type: 'text', text: texto });
+  for (const tc of toolCalls) {
+    if (tc.type !== 'function' || !tc.function) continue;
+    let input = {};
+    try { input = JSON.parse(tc.function.arguments || '{}'); } catch (_) { input = {}; }
+    content.push({ type: 'tool_use', id: tc.id || `fallback_${Date.now()}_${Math.random().toString(36).slice(2,8)}`, name: tc.function.name, input });
+  }
+  return content;
+}
+
+// ── Cascada gratuita para tareas internas de texto simple (sin tools) ───────
+// Auditoría de coste (07/2026): varias tareas internas de bajo riesgo (destilación
+// de aprendizajes, compactación de historial) llamaban a Haiku directo vía fetch
+// crudo aunque son resúmenes de texto sin tool-calling — candidatas perfectas para
+// un modelo gratuito de OpenRouter como intento PRIMARIO. A diferencia de
+// llamarGPT4oFallback (que cae a gpt-4o de pago si la cascada gratis falla), aquí
+// el fallback final es Haiku (MODEL_ROUTER) — nunca un modelo de pago mayor,
+// porque estas tareas no lo necesitan y ya eran aceptables en calidad con Haiku.
+// Listas fijas de respaldo — verificadas manualmente (07/2026). Se usan solo si
+// KV no tiene todavía una cascada dinámica guardada o si refrescarCascadaModelosGratis()
+// lleva días fallando (ver obtenerCascadaModelosGratis más abajo).
+const MODELOS_GRATIS_TEXTO_FALLBACK = [
+  'nvidia/nemotron-3-ultra-550b-a55b:free', 'openai/gpt-oss-120b:free',
+  'meta-llama/llama-3.3-70b-instruct:free', 'google/gemma-4-31b-it:free'
+];
+const MODELOS_GRATIS_VISION_FALLBACK = [
+  'google/gemma-4-31b-it:free', 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free',
+  'nvidia/nemotron-3-ultra-550b-a55b:free', 'openai/gpt-oss-120b:free'
+];
+const KV_KEY_CASCADA_GRATIS = 'cascada_modelos_gratis_v1';
+
+// ── Auto-actualización de la cascada de modelos gratis (petición de Adrián,
+// 07/2026): "cada vez que salga un modelo gratuito mejor lo implementemos...
+// para no perder eficacia". Consulta el catálogo público de OpenRouter, se
+// queda con los modelos ":free" que declaran soporte de "tools" (si un modelo
+// no soporta tool-calling estructurado acaba "alucinando" el intento como
+// texto plano — ver _intentarRecuperarToolCallDeTexto), separa además los que
+// soportan visión, los ordena por context_length (proxy simple de capacidad)
+// y guarda el resultado en KV. Si la lista cambia respecto a la anterior,
+// avisa a Adrián por Telegram. Nunca lanza: cualquier fallo deja la cascada
+// anterior (o los arrays fijos de respaldo) intacta.
+async function refrescarCascadaModelosGratis(env) {
+  try {
+    const resp = await fetch('https://openrouter.ai/api/v1/models');
+    if (!resp.ok) { console.log('[CascadaGratis] HTTP', resp.status, 'al listar modelos de OpenRouter'); return; }
+    const data = await resp.json();
+    const lista = Array.isArray(data?.data) ? data.data : [];
+    const gratis = lista.filter(m => typeof m.id === 'string' && m.id.endsWith(':free'));
+    if (!gratis.length) { console.log('[CascadaGratis] OpenRouter no devolvió ningún modelo :free'); return; }
+
+    const soportaTools  = m => Array.isArray(m.supported_parameters) && m.supported_parameters.includes('tools');
+    const soportaVision = m => Array.isArray(m.architecture?.input_modalities) && m.architecture.input_modalities.includes('image');
+    const porContexto    = (a, b) => (b.context_length || 0) - (a.context_length || 0);
+
+    const candidatosTexto  = gratis.filter(soportaTools).sort(porContexto);
+    const candidatosVision = gratis.filter(m => soportaTools(m) && soportaVision(m)).sort(porContexto);
+
+    // Si el catálogo viene raro (formato cambiado, etc.) y hay menos de 2 candidatos
+    // válidos, no sobrescribimos nada — mejor mantener la cascada anterior conocida.
+    if (candidatosTexto.length < 2) { console.log('[CascadaGratis] <2 candidatos con soporte tools, se mantiene la cascada anterior'); return; }
+
+    const nuevaCascada = {
+      texto: candidatosTexto.slice(0, 4).map(m => m.id),
+      vision: (candidatosVision.length ? candidatosVision : candidatosTexto).slice(0, 4).map(m => m.id),
+      actualizado: new Date().toISOString()
+    };
+
+    const anteriorRaw = await env.RATE_LIMIT_KV.get(KV_KEY_CASCADA_GRATIS).catch(() => null);
+    const anterior = anteriorRaw ? JSON.parse(anteriorRaw) : null;
+    const cambio = !anterior
+      || JSON.stringify(anterior.texto) !== JSON.stringify(nuevaCascada.texto)
+      || JSON.stringify(anterior.vision) !== JSON.stringify(nuevaCascada.vision);
+
+    // TTL amplio (35 días): si el cron de refresco falla varios días seguidos,
+    // preferimos seguir sirviendo la última cascada conocida antes que perderla.
+    await env.RATE_LIMIT_KV.put(KV_KEY_CASCADA_GRATIS, JSON.stringify(nuevaCascada), { expirationTtl: 3024000 });
+
+    if (cambio) {
+      console.log('[CascadaGratis] Cascada actualizada:', JSON.stringify(nuevaCascada));
+      if (env.TELEGRAM_BOT_TOKEN) {
+        const msg = `🔄 <b>Cascada de modelos gratis actualizada</b>\n\nTexto: ${nuevaCascada.texto.join(', ')}\n\nVisión: ${nuevaCascada.vision.join(', ')}`;
+        await enviarPorTelegram(env.TELEGRAM_BOT_TOKEN, msg).catch(() => {});
+      }
+    }
+  } catch (e) {
+    console.error('[CascadaGratis] Error refrescando:', e.message);
+  }
+}
+
+// Lee la cascada dinámica de KV (actualizada a diario por refrescarCascadaModelosGratis).
+// Si KV está vacío (primer deploy, o el cron de refresco aún no ha corrido) o falla el
+// parseo, cae a los arrays fijos de respaldo — nunca deja la cascada vacía.
+async function obtenerCascadaModelosGratis(env) {
+  try {
+    const raw = await env.RATE_LIMIT_KV.get(KV_KEY_CASCADA_GRATIS);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed?.texto) && parsed.texto.length && Array.isArray(parsed?.vision) && parsed.vision.length) {
+        return parsed;
+      }
+    }
+  } catch (_) {}
+  return { texto: MODELOS_GRATIS_TEXTO_FALLBACK, vision: MODELOS_GRATIS_VISION_FALLBACK };
+}
+
+async function llamarTextoGratisConFallbackHaiku(env, systemPrompt, userText, maxTokens, tipoUso, usuario_id = 'system') {
+  const _orKey = env.OPENROUTER_API_KEY ? String(env.OPENROUTER_API_KEY).replace(new RegExp('^' + String.fromCharCode(0xFEFF)), '').trim() : '';
+  if (_orKey) {
+    const cascada = await obtenerCascadaModelosGratis(env);
+    for (const model of cascada.texto) {
       try {
-        const esVision = _OR_VISION_MODELS.has(model);
-        const msgs = _agenteMsgsToOpenAI(messages, systemPrompt, esVision && tieneImagenes);
         const resp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
           method: 'POST',
           headers: {
-            'Authorization': `Bearer ${env.OPENROUTER_API_KEY}`,
+            'Authorization': `Bearer ${_orKey}`,
             'Content-Type': 'application/json',
             'HTTP-Referer': 'https://alejandra-agente.alejandra-app.workers.dev',
             'X-Title': 'Alejandra'
           },
-          body: JSON.stringify({ model, messages: msgs, max_tokens: maxTokens || 1024 })
+          body: JSON.stringify({
+            model, max_tokens: maxTokens || 500,
+            messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: userText }]
+          })
         });
-        if (!resp.ok) continue;
+        if (!resp.ok) { console.log(`[GratisTexto] FALLO ${model}: HTTP ${resp.status}`); continue; }
         const data = await resp.json();
-        if (data.error) continue;
-        const texto = data.choices?.[0]?.message?.content || '';
+        if (data.error) { console.log(`[GratisTexto] FALLO ${model}: ${JSON.stringify(data.error).slice(0, 150)}`); continue; }
+        const texto = data.choices?.[0]?.message?.content?.trim();
         if (!texto) continue;
-        console.log(`[Fallback] OpenRouter OK: ${data.model || model}${tieneImagenes ? ' (vision)' : ''}`);
-        return {
-          content: [{ type: 'text', text: texto }],
-          stop_reason: 'end_turn',
-          usage: data.usage ? { input_tokens: data.usage.prompt_tokens || 0, output_tokens: data.usage.completion_tokens || 0 } : {},
-          modelo_real: data.model || model,
-          proveedor_real: 'openrouter'
-        };
-      } catch (_) { /* probar siguiente */ }
+        if (data.usage) registrarTokenUso(env, data.model || model, tipoUso, data.usage.prompt_tokens || 0, data.usage.completion_tokens || 0, usuario_id);
+        console.log(`[GratisTexto] OK: ${data.model || model} (${tipoUso})`);
+        return texto;
+      } catch (e) { console.log(`[GratisTexto] EXCEPCION ${model}: ${e.message}`); }
     }
   }
+  // Cascada gratuita agotada (o sin OPENROUTER_API_KEY) — fallback a Haiku, NUNCA a un
+  // modelo de pago mayor: estas tareas internas no necesitan más potencia que esa.
+  try {
+    const haikuResp = await fetch(ANTHROPIC_API, {
+      method: 'POST',
+      headers: { 'x-api-key': env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+      body: JSON.stringify({
+        model: MODEL_ROUTER, max_tokens: maxTokens || 500,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: userText }]
+      })
+    });
+    if (!haikuResp.ok) return '';
+    const haikuData = await haikuResp.json();
+    const texto = haikuData.content?.[0]?.text?.trim() || '';
+    if (haikuData.usage) registrarTokenUso(env, MODEL_ROUTER, `${tipoUso}_haiku_fallback`, haikuData.usage.input_tokens || 0, haikuData.usage.output_tokens || 0, usuario_id);
+    return texto;
+  } catch (e) {
+    console.error(`[GratisTexto] Fallback Haiku también falló: ${e.message}`);
+    return '';
+  }
+}
+
+// Cascada de fallback cuando Anthropic no está disponible:
+// 1º OpenRouter gratis (Nemotron 550B → GPT-OSS 120B → Llama 70B → Gemma 4 31B)
+// 2º OpenAI gpt-4o (de pago, si hay OPENAI_API_KEY)
+// `tools` (formato Anthropic, opcional) se traduce a formato OpenAI y se pasa
+// a ambos proveedores para que el fallback pueda seguir invocando tools reales
+// en vez de degradar a solo-texto (o, peor, texto con tokens de tool-call
+// alucinados y visibles para el usuario).
+// Cascada OpenRouter (modelos gratuitos), extraída de llamarGPT4oFallback para
+// poder reutilizarse también desde llamarExperto (expertos "gratisPrimero")
+// sin arrastrar el 2º intento de pago (gpt-4o) que sí quiere llamarGPT4oFallback
+// pero NO quieren los flujos de solo-ahorro-de-coste. Devuelve null (nunca lanza)
+// si toda la cascada falla, para que el llamador decida su propio fallback.
+// OJO: el secret puede llevar un BOM (﻿) u espacios en blanco colados al
+// configurarlo en Cloudflare — eso corrompe la cabecera Authorization y hace
+// fallar TODA la cascada en silencio (fetch no lanza, simplemente !resp.ok).
+// Se sanea aquí siempre antes de usarlo.
+async function _intentarCascadaOpenRouterGratis(env, messages, systemPrompt, maxTokens, tools) {
+  const toolsOpenAI = _anthropicToolsToOpenAI(tools);
+  const _orKey = env.OPENROUTER_API_KEY ? String(env.OPENROUTER_API_KEY).replace(new RegExp('^' + String.fromCharCode(0xFEFF)), '').trim() : '';
+  if (!_orKey) return null;
+
+  // Detectar si hay imágenes en los mensajes
+  const tieneImagenes = messages.some(m =>
+    Array.isArray(m.content) && m.content.some(b => b.type === 'image')
+  );
+  // Cascada dinámica (KV, refrescada a diario desde el catálogo de OpenRouter) con
+  // los arrays fijos como respaldo — ver refrescarCascadaModelosGratis más arriba.
+  const cascada = await obtenerCascadaModelosGratis(env);
+  // Modelos con visión primero si hay imágenes; si no, potencia de razonamiento primero
+  const modelos = tieneImagenes ? cascada.vision : cascada.texto;
+  const modelosVisionSet = new Set(cascada.vision);
+
+  for (const model of modelos) {
+    try {
+      const esVision = modelosVisionSet.has(model) || _OR_VISION_MODELS.has(model);
+      const msgs = _agenteMsgsToOpenAI(messages, systemPrompt, esVision && tieneImagenes);
+      const resp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${_orKey}`,
+          'Content-Type': 'application/json',
+          'HTTP-Referer': 'https://alejandra-agente.alejandra-app.workers.dev',
+          'X-Title': 'Alejandra'
+        },
+        body: JSON.stringify({
+          model, messages: msgs, max_tokens: maxTokens || 1024,
+          ...(toolsOpenAI ? { tools: toolsOpenAI, tool_choice: 'auto' } : {})
+        })
+      });
+      if (!resp.ok) {
+        console.log(`[Fallback] OpenRouter FALLO ${model}: HTTP ${resp.status} ${(await resp.text()).slice(0, 200)}`);
+        continue;
+      }
+      const data = await resp.json();
+      if (data.error) {
+        console.log(`[Fallback] OpenRouter FALLO ${model}: ${JSON.stringify(data.error).slice(0, 200)}`);
+        continue;
+      }
+      const msg = data.choices?.[0]?.message;
+      const tieneToolCallsRaw = Array.isArray(msg?.tool_calls) && msg.tool_calls.length > 0;
+      if (!msg || (!msg.content && !tieneToolCallsRaw)) continue;
+      const contentConvertido = _openAIToolCallsToAnthropicContent(msg, tools);
+      const esToolUse = contentConvertido.some(b => b.type === 'tool_use');
+      console.log(`[Fallback] OpenRouter OK: ${data.model || model}${tieneImagenes ? ' (vision)' : ''}${esToolUse ? ' (tool_use)' : ''}`);
+      return {
+        content: contentConvertido,
+        stop_reason: esToolUse ? 'tool_use' : 'end_turn',
+        usage: data.usage ? { input_tokens: data.usage.prompt_tokens || 0, output_tokens: data.usage.completion_tokens || 0 } : {},
+        modelo_real: data.model || model,
+        proveedor_real: 'openrouter'
+      };
+    } catch (e) { console.log(`[Fallback] OpenRouter EXCEPCION ${model}: ${e.message}`); }
+  }
+  return null;
+}
+
+async function llamarGPT4oFallback(env, messages, systemPrompt, maxTokens, tools) {
+  // ── 1º INTENTO: cascada OpenRouter (modelos gratuitos) ──────────────────────
+  const gratis = await _intentarCascadaOpenRouterGratis(env, messages, systemPrompt, maxTokens, tools);
+  if (gratis) return gratis;
 
   // ── 2º INTENTO: OpenAI gpt-4o (de pago, último recurso — soporta visión) ───
   if (!env.OPENAI_API_KEY) throw new Error('Sin modelos disponibles — OPENROUTER_API_KEY y OPENAI_API_KEY no configuradas');
+  const toolsOpenAI = _anthropicToolsToOpenAI(tools);
   const tieneImgsGpt = messages.some(m => Array.isArray(m.content) && m.content.some(b => b.type === 'image'));
   const openAIMessages = _agenteMsgsToOpenAI(messages, systemPrompt, tieneImgsGpt); // gpt-4o sí soporta vision
   const resp = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     headers: { 'Authorization': `Bearer ${env.OPENAI_API_KEY}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model: 'gpt-4o', max_tokens: maxTokens || 1024, messages: openAIMessages })
+    body: JSON.stringify({
+      model: 'gpt-4o', max_tokens: maxTokens || 1024, messages: openAIMessages,
+      ...(toolsOpenAI ? { tools: toolsOpenAI, tool_choice: 'auto' } : {})
+    })
   });
   if (!resp.ok) throw new Error(`GPT-4o fallback ${resp.status}: ${await resp.text()}`);
   const data = await resp.json();
-  const texto = data.choices?.[0]?.message?.content || 'Sin respuesta.';
+  const msgGpt = data.choices?.[0]?.message;
+  const contentGpt = msgGpt ? _openAIToolCallsToAnthropicContent(msgGpt, tools) : [{ type: 'text', text: 'Sin respuesta.' }];
+  const esToolUseGpt = contentGpt.some(b => b.type === 'tool_use');
   return {
-    content: [{ type: 'text', text: texto }],
-    stop_reason: 'end_turn',
+    content: contentGpt.length ? contentGpt : [{ type: 'text', text: 'Sin respuesta.' }],
+    stop_reason: esToolUseGpt ? 'tool_use' : 'end_turn',
     usage: data.usage ? { input_tokens: data.usage.prompt_tokens, output_tokens: data.usage.completion_tokens } : {},
     modelo_real: 'gpt-4o',
     proveedor_real: 'openai'
@@ -8686,12 +9021,12 @@ async function llamarAnthropic(env, messages, tools, model, maxTokens, systemPro
         _anthropicSinCreditos = true;
         await notificarSinCreditos(env).catch(() => {});
       }
-      return await llamarGPT4oFallback(env, messages, systemPrompt, maxTokens);
+      return await llamarGPT4oFallback(env, messages, systemPrompt, maxTokens, tools);
     }
     // Reintentado (ver fetchAnthropicConReintentos) y sigue fallando: rate limit
     // (429) o sobrecarga (529/503) → fallback a GPT-4o en vez de propagar el error
     if (resp.status === 429 || resp.status === 529 || resp.status === 503) {
-      return await llamarGPT4oFallback(env, messages, systemPrompt, maxTokens);
+      return await llamarGPT4oFallback(env, messages, systemPrompt, maxTokens, tools);
     }
     throw new Error(`Anthropic ${resp.status}: ${errText.substring(0,200)}`);
   }
@@ -8711,8 +9046,27 @@ async function llamarAnthropic(env, messages, tools, model, maxTokens, systemPro
   return data;
 }
 
+// ── Selección de modelo por experto, con soporte "gratis primero" ───────────
+// Auditoría de coste (07/2026): algunos expertos (ver NEXUS_EXPERTS, campo
+// `gratisPrimero`) usan la cascada gratuita de OpenRouter como intento PRIMARIO
+// (con soporte de tools completo — conversión de formato + recuperación de
+// tool_use "fugado" en texto, misma infra que llamarGPT4oFallback) y caen a
+// Haiku (MODEL_ROUTER) — NUNCA a Sonnet ni a un modelo de pago — solo si la
+// cascada gratis falla entera. El resto de expertos (sin el flag) llaman a
+// Anthropic directamente con su `expert.model` de siempre, sin cambio de
+// comportamiento.
+async function llamarExperto(env, messages, tools, expert, systemPrompt, usuario_id = 'system') {
+  if (!expert.gratisPrimero) {
+    return await llamarAnthropic(env, messages, tools, expert.model, expert.maxTokens, systemPrompt);
+  }
+  const gratis = await _intentarCascadaOpenRouterGratis(env, messages, systemPrompt, expert.maxTokens, tools);
+  if (gratis) return gratis;
+  console.log('[Experto] Cascada gratis agotada, fallback a Haiku');
+  return await llamarAnthropic(env, messages, tools, MODEL_ROUTER, expert.maxTokens, systemPrompt);
+}
+
 // ── Streaming real de Anthropic (última respuesta, token a token) ─────────────
-async function llamarAnthropicStream(env, messages, model, maxTokens, systemPrompt, onToken, usuario_id = 'system') {
+async function llamarAnthropicStream(env, messages, model, maxTokens, systemPrompt, onToken, usuario_id = 'system', tools) {
   const systemBlocks = Array.isArray(systemPrompt)
     ? systemPrompt
     : systemPrompt
@@ -8746,14 +9100,27 @@ async function llamarAnthropicStream(env, messages, model, maxTokens, systemProm
         await notificarSinCreditos(env).catch(() => {});
       }
       // Fallback GPT-4o — sin streaming
-      const fallback = await llamarGPT4oFallback(env, messages, systemPrompt, maxTokens);
-      const texto = fallback.content?.[0]?.text || 'Sin respuesta';
+      const fallback = await llamarGPT4oFallback(env, messages, systemPrompt, maxTokens, tools);
       // Antes este fallback no registraba coste/tokens en absoluto (ni bien ni
       // mal etiquetado) — ese gasto real no contaba ni para las estadísticas ni
       // para el tope de gasto diario. modelo_real='gpt-4o' viene del fallback.
       if (fallback.usage) {
         registrarTokenUso(env, fallback.modelo_real || 'gpt-4o', 'chat_stream_fallback', fallback.usage.input_tokens||0, fallback.usage.output_tokens||0, usuario_id);
       }
+      // SALVAGUARDA — esta fase de "cierre" normalmente no lleva tools (solo
+      // pedimos texto final), pero algunos modelos gratuitos de la cascada
+      // alucinan una llamada a herramienta en texto plano (formato Harmony,
+      // con token de control tipo <|tool_calls_section_end|>) aunque no se
+      // les haya declarado ninguna function. Si tools SÍ venía informado en
+      // esta llamada y logramos recuperar un tool_use real del texto, no lo
+      // mostramos en crudo al usuario — se lo devolvemos al llamador para que
+      // lo ejecute de verdad.
+      const toolUseFugado = fallback.content?.find(b => b.type === 'tool_use');
+      if (toolUseFugado) {
+        console.log(`[Stream] tool_use recuperado en fase de cierre → ${toolUseFugado.name}`);
+        return { __tool_use__: toolUseFugado };
+      }
+      const texto = fallback.content?.find(b => b.type === 'text')?.text || fallback.content?.[0]?.text || 'Sin respuesta';
       try { await onToken(texto); } catch(_) {}
       return texto;
     }
@@ -9241,6 +9608,8 @@ CONVENCIONES DE BANDEJAS (siempre recorrido ORTOGONAL — horizontal o vertical)
 - Bajantes: marcados con simbolo "V" o flecha hacia abajo en el punto de descenso
 - Soportes: marcar con simbolo de cruz o "+" cada N metros segun separacion calculada
 
+COLOR POR CIRCUITO/GRUPO (usalo cuando aporte claridad -- mas de un circuito relevante, alimentacion normal vs emergencia/generador, datos vs potencia, o el usuario distingue tramos/zonas): ademas del azul marino estandar de bandeja, asigna un color de trazo distinto a cada circuito/grupo de cables cuando corresponda (ej. verde para datos/comunicaciones, naranja para emergencia/generador, rosa/morado para circuitos criticos redundantes), manteniendo SIEMPRE el mismo color para el mismo circuito en todo su recorrido. Explica el significado de cada color en la leyenda. Si solo hay un circuito relevante, usa el azul estandar sin complicar el dibujo.
+
 SIMBOLOS — NO definas <defs> ni <symbol> propios. El renderizador inyecta automaticamente la libreria de simbolos. Solo usa <use href="#sym-X"/> con estos IDs:
   #sym-cgp              width="40" height="50" — Caja General de Proteccion (color="#8B0000")
   #sym-cs               width="30" height="40" — Cuadro Secundario (color="#8B0000")
@@ -9254,6 +9623,12 @@ SIMBOLOS — NO definas <defs> ni <symbol> propios. El renderizador inyecta auto
   #sym-bandeja-te       width="40" height="30" — Derivacion en T horizontal
   #sym-bandeja-reduccion width="30" height="20" — Reduccion de seccion de bandeja
 
+CORTES DE LLENADO DE BANDEJA (OBLIGATORIO, al menos 1-2 secciones representativas en un panel aparte, estilo "SECCION — BANDEJA [ref]"):
+- Dibuja el perfil de la bandeja en corte (rectangulo con ala perforada) a escala ampliada
+- Representa los cables reales que van dentro como circulos/ovalos pequeños agrupados (aproxima el numero real segun los circuitos que ese tramo transporta)
+- Indica el % de ocupacion/llenado respecto a la seccion util (maximo 40% segun IEC 61537/UNE-EN 61537) junto al corte
+- Etiqueta el corte con la referencia del tramo al que corresponde (ej. "SECCION A-A — Bandeja principal h=+4,50m")
+
 COTAS:
 - Cotas exteriores de nave: stroke="#0055aa" stroke-width="1", flechas terminales, font-size="10"
 - Separacion entre soportes acotada sobre los tramos
@@ -9265,6 +9640,11 @@ LEYENDA (esquina inferior izquierda): titulo "LEYENDA" + muestra de cada tipo de
 
 NORTE: flecha norte en esquina superior derecha.
 
+VISTA DE COORDINACION ISOMETRICA (EXPERIMENTAL, panel adicional aparte de la vista en planta -- NO la sustituye): incluye ademas, en una zona libre del SVG (esquina o panel lateral), un pequeño panel axonometrico/isometrico simplificado (NO fotorrealista) del recorrido de las bandejas principales, similar a una vista de coordinacion BIM. Usa proyeccion isometrica simple a 30 grados con esta formula para convertir cada punto 3D (x,y,z_altura) del recorrido real a coordenadas de pantalla (sx,sy) dentro del panel:
+  sx = panel_origen_x + (x - y) * cos(30°)
+  sy = panel_origen_y + (x + y) * sin(30°) - z_altura
+Dibuja cada tramo de bandeja como un prisma simple: dos lineas paralelas gruesas (la bandeja en si) mas un lateral con relleno de opacidad baja (0.15-0.25) para dar sensacion de volumen, y cada bajante como una linea vertical corta. Usa los mismos colores por circuito que en la vista en planta. Etiqueta el panel "VISTA DE COORDINACION (ISOMETRICA)". Si el resultado queda confuso o se te acaba el espacio, prioriza SIEMPRE que la vista en planta 2D quede completa y correcta -- esta vista isometrica es un extra, no el documento principal.
+
 BLOQUE DE TITULO (esquina inferior derecha, rect fill="#1a3a6b"): empresa/proyecto/titulo en texto blanco.
 
 NOTAS TECNICAS:
@@ -9272,7 +9652,8 @@ NOTAS TECNICAS:
 - "Separacion minima 50 mm entre bandejas de distinta tension"
 - "Alturas referidas a FFL (nivel de suelo terminado)"
 
-AGRUPA: <g id="zona-taller">, <g id="bandejas-principales">, <g id="bandejas-secundarias">
+AGRUPA: <g id="zona-taller">, <g id="bandejas-principales">, <g id="bandejas-secundarias">, <g id="cortes-bandeja">, <g id="vista-coordinacion">
+- Restricción de tokens: recuerda que dispones de más presupuesto de generación para este tipo de plano; no recortes la vista en planta 2D para hacer sitio a la vista isométrica -- si el espacio aprieta, simplifica o recorta primero la vista isométrica antes que cualquier otro elemento.
 
 DEVUELVE: solo el codigo SVG valido completo (desde <svg hasta </svg>), sin texto adicional ni markdown.`,
 
@@ -9293,17 +9674,21 @@ SIMBOLOS — NO definas <defs> ni <symbol> propios. El renderizador inyecta auto
   #sym-diferencial      width="30" height="100" — Interruptor diferencial/RCD de cabecera de cada tramo (ID1...)
   #sym-tierra           width="36" height="24"  — Puesta a tierra (color="#006600" siempre)
 
-ETIQUETADO DE CADA TRAMO (OBLIGATORIO, junto a la linea, font-size="8.5" fill="#1a1a1a"):
-- Referencia de proteccion de cabecera: ej. "Q2 40A" y "ID2 40A/30mA"
-- Tipo y seccion del cable: ej. "RZ1-K (AS) 5x16 mm2" o "RV-K 4x25+TTx16 mm2"
+ETIQUETADO DE CADA TRAMO (OBLIGATORIO, junto a la linea, font-size="8.5" fill="#1a1a1a") -- usa el mismo nivel de detalle que un esquema unifilar real de ingenieria de obra, no lo simplifiques:
+- Referencia de proteccion de cabecera: ej. "Q2 40A Curva C" y si aplica diferencial "ID2 40A/30mA"
+- DESIGNACION COMPLETA DEL CABLE segun UNE-EN 50575 (tipo + n conductores x seccion + clase de reaccion al fuego cuando el circuito sea critico/CPD/generador/zona de riesgo): formato "TIPO n x SECCIONmm2 Cu -- CLASE", ej. "RZ1-K(AS) 4x16+TTx16mm2 Cu -- Cca-s1b,d1,a1". Para circuitos normales de vivienda/oficina basta "RV-K 4x25+TTx16mm2 Cu" sin la clase de reaccion al fuego.
+- Metodo de instalacion del tramo: ej. "Bandeja perforada 75x60mm" o "Tubo empotrado M32"
 - Longitud del tramo: ej. "L=35m"
-- Potencia prevista del sub-cuadro si se conoce: ej. "P=15 kW"
+- Potencia/carga prevista del tramo: ej. "P=15kW" o "12.000W"
+- CAIDA DE TENSION calculada del tramo: ej. "ΔU=2,7%" -- debe ser numericamente coherente con longitud, seccion y potencia (mayor longitud/potencia o menor seccion = mayor caida), y quedar por debajo del limite REBT acumulado (3% alumbrado, 5% fuerza desde origen de instalacion)
+
+ACABADO VISUAL: aunque el esquema es deliberadamente esquematico/minimalista (no decorativo), cuida el acabado: cabecera superior con banda de color solida y titulo, separadores finos entre bloques de datos, iconos de cuadro con un sutil relieve/sombra (ej. un segundo rectangulo desplazado 1-2px con opacity baja detras de cada cuadro), y paleta de color coherente (azul oscuro #1a3a6b para cabecera/cajetin, rojo #8B0000 para cuadros/protecciones, verde #006600 para tierra) -- que se vea cuidado, no un dibujo tecnico plano.
 
 COTAS Y NOTAS: no requiere cotas de obra civil. Incluir nota tecnica: "Esquema unifilar segun REBT ITC-BT-17. Secciones calculadas para caida de tension y calentamiento segun normativa vigente."
 
 LEYENDA (esquina inferior izquierda): titulo "LEYENDA" + simbolos usados + significado de colores.
 
-BLOQUE DE TITULO (esquina inferior derecha, rect fill="#1a3a6b"): empresa/proyecto, titulo "ESQUEMA UNIFILAR", escala si aplica, fecha, hoja.
+BLOQUE DE TITULO (esquina inferior derecha, estilo cajetin de ingenieria real): incluye Cliente, Proyecto (nombre + ubicacion), Denominacion del plano, Plano N°, Hoja X de Y, Escala, Fecha, y una fila con "Diseñado / Comprobado / Dibujado" mostrando nombre y fecha en cada campo (usa "Alejandra IA" como Diseñado/Dibujado si no hay otro dato). Fondo rect fill="#1a3a6b" para la franja de titulo, tabla de datos con fondo claro debajo.
 
 AGRUPA: <g id="acometida">, <g id="cuadro-general">, <g id="subcuadros">
 
@@ -9527,7 +9912,9 @@ let _proveedor = 'anthropic';
   // tokens el SVG se corta sistematicamente antes de la leyenda/cajetin
   // final (verificado en pruebas reales: planos de prueba 20 y 21 truncados
   // en el mismo punto). Le damos mas presupuesto de salida.
-  const _maxTokensPlano = (tipo === 'planta_industrial') ? 28000 : 16000;
+  const _maxTokensPlano = (tipo === 'planta_industrial') ? 28000
+    : (tipo === 'bandejas') ? 24000
+    : 16000;
   let svgRaw = await llamarAnthropicStream(
     env,
     [{ role: 'user', content: userMsg }],

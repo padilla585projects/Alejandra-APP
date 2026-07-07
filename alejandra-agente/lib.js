@@ -22,10 +22,18 @@ const PRECIOS_USD = {
 
 // Calcula proveedor + coste USD para un uso de tokens. Pura: no toca D1.
 // registrarTokenUso() en worker.js hace el INSERT con lo que esto devuelve.
+// Fix: modelos con formato "vendor/modelo" (ej. "nvidia/nemotron-3-ultra-550b-a55b-20260604:free",
+// "openai/gpt-oss-120b:free") o que terminan en ":free" vienen de OpenRouter, no de Anthropic --
+// antes cualquier modelo que no empezara por "gpt" se etiquetaba "anthropic" a ciegas, corrompiendo
+// las estadísticas de coste/proveedor en alejandra_token_uso.
 function calcularCosteYProveedor(modelo, tokensEntrada, tokensSalida) {
   const p = PRECIOS_USD[modelo] || { in: 1.00, out: 5.00 };
   const coste = (tokensEntrada * p.in + tokensSalida * p.out) / 1_000_000;
-  const proveedor = modelo.startsWith('gpt') ? 'openai' : 'anthropic';
+  let proveedor;
+  if (modelo.startsWith('claude')) proveedor = 'anthropic';
+  else if (modelo.includes('/') || modelo.endsWith(':free')) proveedor = 'openrouter';
+  else if (modelo.startsWith('gpt')) proveedor = 'openai';
+  else proveedor = 'anthropic';
   return { proveedor, coste };
 }
 
