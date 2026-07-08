@@ -22880,7 +22880,13 @@ INSTRUCCIONES FINALES:
           const _gText = _gParts.find(p => p.text?.includes('<svg'))?.text
                        || _gParts.map(p => p.text || '').join('');
           // Rechazar SVGs truncados (thinking consume demasiado del budget de tokens)
-          if (_gText.includes('<svg') && _gText.length >= _SVG_MIN_CHARS) {
+          // y rechazar tambien SVGs sin <use> cuando el tipo depende de la libreria de simbolos
+          // (bug detectado 08/07/2026: gemini-2.5-flash a veces gasta el budget en "thinking"
+          // y solo llega a dibujar la rejilla/marco, sin ningun simbolo real — igual supera
+          // los 3000 chars minimos pero el diagrama queda en blanco).
+          const _tieneUso = /<use\b/i.test(_gText);
+          const _requiereSimbolos = ['electrico','bandejas','unifilar','planta_electrica','planta_industrial'].includes(tipo);
+          if (_gText.includes('<svg') && _gText.length >= _SVG_MIN_CHARS && (!_requiereSimbolos || _tieneUso)) {
             data = {
               content: [{ type: 'text', text: _gText }],
               usage: {

@@ -28,18 +28,48 @@ claro) en el `<body>`; como los trazos del SVG usan `stroke="currentColor"`, her
 gris claro casi invisible sobre el fondo claro (`#f8fafc`) del visor. Fix: `color:#0f172a`
 anadido al estilo inline de `#planoDetSvgWrap` (index.html linea ~1361). Confirmado en vivo
 que soluciona el problema (probado con plano id 4 "Cuadro Secundario Taller Soldadura",
-zoom +/- y boton Volver, todo correcto). **Bug distinto encontrado y NO corregido en esta
-sesion** (fuera de alcance de la fase UI, es un problema de generacion de datos en el
-backend, no de esta UI): al auditar los SVG de los 12 planos reales via
-`GET /planos/:id/svg`, 6 de ellos (ids 5,6,7,8,9,10 -- varios "bandejas" de pruebas
-anteriores y el electrico "Cuadro General Nave Industrial") tienen simbolos definidos en
-`<defs><symbol>` pero **cero elementos `<use>`** que los referencien, por lo que el dibujo
-real (interruptores, motores, etiquetas) nunca se renderiza -- solo se ve la rejilla de
-fondo. Los planos id 4 y 20 si tienen `<use>` y se ven perfectos. Pendiente investigar en
-`worker.js` que condicion causa que el generador de SVG a veces omita los `<use>` (parece
-ligado a una version anterior de la logica de generacion, antes de la migracion al worker
-raiz). No se ha tocado produccion ni intentado regenerar esos SVG sin confirmacion de
-Adrian.
+zoom +/- y boton Volver, todo correcto). **Bug distinto encontrado, investigado y
+corregido en esta misma sesion** (fuera de alcance original de la fase UI, era un
+problema de generacion de datos en el backend): al auditar los SVG de los 12 planos
+reales via `GET /planos/:id/svg`, 6 de ellos (ids 5,6,7,8,9,10 -- varios "bandejas" de
+pruebas anteriores y el electrico "Cuadro General Nave Industrial") tenian simbolos
+definidos en `<defs><symbol>` pero **cero elementos `<use>`** que los referenciaran, por
+lo que el dibujo real (interruptores, motores, etiquetas) nunca se renderizaba -- solo se
+veia la rejilla de fondo. Los planos id 4 y 20 si tenian `<use>` y se veian perfectos.
+
+**Investigacion (a peticion explicita de Adrian, "invetiga"):** se correlaciono el campo
+`metadatos` (JSON con `modelo`/`proveedor`/`tokens_usados`) de los 12 planos en D1. Los 6
+planos rotos tenian TODOS `proveedor:"gemini"`, `modelo:"gemini-2.5-flash"` y
+`tokens_usados` de salida de solo 479-480 tokens; los planos correctos (incluyendo otros
+generados con `gemini-2.0-flash-lite`) tenian 8192+ tokens de salida. Causa raiz:
+`gemini-2.5-flash` es un modelo con "thinking" interno, y a veces consume casi todo su
+`maxOutputTokens` en el razonamiento interno antes de emitir el SVG visible, dejando solo
+~480 tokens de presupuesto real -- suficiente para dibujar la rejilla/marco (que usa
+`<line>`/`<rect>` sueltos) pero no para llegar a la parte donde emitiria los `<use
+href="#sym-X">` de los componentes reales. El guardián existente `_SVG_MIN_CHARS = 3000`
+(longitud minima del SVG) NO detectaba este fallo porque los 6 SVG rotos median entre
+6130 y 11383 caracteres (por encima del minimo) pese a no tener contenido real de
+diagrama.
+
+**Fix aplicado y desplegado (`worker.js`, con aprobacion explicita de Adrian):** en el
+bloque de aceptacion de la respuesta de Gemini (cascada de `generar_plano`), se anadio
+una comprobacion adicional: si el `tipo` de plano depende de la libreria de simbolos
+(`electrico`, `bandejas`, `unifilar`, `planta_electrica`, `planta_industrial`), la
+respuesta solo se acepta si ademas de superar `_SVG_MIN_CHARS` contiene al menos un
+elemento `<use`. Si no lo tiene, se descarta y la cascada sigue con OpenRouter o el
+fallback final de Anthropic (Claude Sonnet), igual que ya hacia para SVGs truncados.
+Verificado: `node --check worker.js` sin errores, grep de encoding en el diff limpio,
+`npx wrangler deploy` exitoso (bindings DB y FILES correctos, Version ID
+`4a71e823-7781-4072-9b14-4d675ece27d3`). Nota: no es viable forzar en el momento un caso
+real de "thinking" agotado de Gemini para reproducir el bug end-to-end (es no
+determinista), asi que la verificacion es por revision de codigo + la correlacion de
+datos que confirmo la causa raiz, no por repeticion en vivo del fallo original.
+
+**Limpieza de datos de prueba (con aprobacion explicita de Adrian, "Borrarlos, son de
+prueba"):** se borraron de D1 produccion los 6 planos rotos ids 5,6,7,8,9,10 (`DELETE FROM
+planos WHERE id IN (5,6,7,8,9,10)`, confirmado `changes:6`). El plano id 11 ("Test
+Cascada v7.73"), tambien de prueba pero no incluido en la aprobacion de Adrian, **no se ha
+tocado**.
 
 **Sesion anterior (mismo dia, antes de esta):** 08/07/2026 (continuacion 2) -- migracion de la logica canonica de
 generacion/edicion de planos (`generar_plano`/`editar_plano`) al worker web raiz

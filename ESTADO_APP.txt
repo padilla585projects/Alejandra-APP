@@ -10,6 +10,34 @@ WORKER API: 3575baf3-7645-4214-bf35-c47f0682778f (planos/generar + planos/:id/ci
 VERSIÓN ACTUAL APP VIEJA: v4.19 (⛔ CONGELADA DEFINITIVAMENTE — no recibe más cambios)
 
 HISTORIAL DE VERSIONES (resumen reciente):
+  (worker.js) |  08/07/2026  [Fix backend: SVGs de planos sin <use> (Gemini thinking budget)]
+                       Investigacion del hallazgo separado reportado en la entrada v7.76
+                       de abajo, a peticion explicita de Adrian ("invetiga"). Se
+                       correlaciono el campo metadatos (modelo/proveedor/tokens_usados) de
+                       los 12 planos en D1: los 6 rotos (ids 5,6,7,8,9,10) tenian TODOS
+                       proveedor=gemini, modelo=gemini-2.5-flash y solo 479-480 tokens de
+                       salida, frente a 8192+ en los planos correctos. Causa raiz:
+                       gemini-2.5-flash (modelo con "thinking" interno) a veces consume
+                       casi todo maxOutputTokens en razonamiento interno antes de emitir el
+                       SVG visible, dejando ~480 tokens reales -- suficientes para la
+                       rejilla/marco (<line>/<rect> sueltos) pero no para llegar a los
+                       <use href="#sym-X"> de los componentes reales. El guardian existente
+                       _SVG_MIN_CHARS=3000 no lo detectaba porque esos 6 SVG rotos median
+                       6130-11383 caracteres (por encima del minimo) sin contenido real.
+                       Fix aplicado (aprobado por Adrian): en la cascada de generar_plano,
+                       la respuesta de Gemini solo se acepta si ademas de superar
+                       _SVG_MIN_CHARS contiene al menos un <use> cuando el tipo depende de
+                       la libreria de simbolos (electrico, bandejas, unifilar,
+                       planta_electrica, planta_industrial); si no, la cascada sigue con
+                       OpenRouter o el fallback final de Anthropic. Verificado: node --check
+                       worker.js sin errores, grep de encoding limpio, npx wrangler deploy
+                       exitoso (bindings DB y FILES OK, Version ID
+                       4a71e823-7781-4072-9b14-4d675ece27d3). Limpieza (aprobada por
+                       Adrian, "son de prueba"): DELETE FROM planos WHERE id IN
+                       (5,6,7,8,9,10) en D1 produccion, changes:6 confirmado. El plano id
+                       11 ("Test Cascada v7.73"), tambien de prueba pero no aprobado para
+                       borrar, no se toco. Ver SESION.md para el detalle completo.
+
   v7.76        |  08/07/2026  [Fix contraste SVG planos en app movil + hallazgo bug backend]
                        Probando en vivo screenPlanoDetalle (app movil) tras integrar la
                        fase UI v7.75: el SVG se veia casi en blanco en varios planos
@@ -20,14 +48,15 @@ HISTORIAL DE VERSIONES (resumen reciente):
                        color:#0f172a anadido al estilo inline de #planoDetSvgWrap
                        (index.html ~linea 1361). Confirmado en vivo con plano real (id 4,
                        "Cuadro Secundario Taller Soldadura"): dibujo, zoom +/- y volver
-                       funcionan correctamente. HALLAZGO SEPARADO (no corregido, fuera de
-                       alcance): al auditar GET /planos/:id/svg de los 12 planos reales,
-                       6 (ids 5,6,7,8,9,10) tienen <symbol> en <defs> pero CERO <use> que
-                       los referencien -> el dibujo real nunca se pinta, solo la rejilla
-                       de fondo. Ids 4 y 20 si tienen <use> y se ven bien. Parece un bug
-                       de una version anterior del generador de SVG (antes de la
-                       migracion al worker raiz). Pendiente de investigar en worker.js,
-                       requiere su propio plan/confirmacion de Adrian. Ver SESION.md.
+                       funcionan correctamente. HALLAZGO SEPARADO (investigado y
+                       corregido en la misma sesion, ver entrada "(worker.js)" arriba):
+                       al auditar GET /planos/:id/svg de los 12 planos reales, 6 (ids
+                       5,6,7,8,9,10) tenian <symbol> en <defs> pero CERO <use> que los
+                       referenciaran -> el dibujo real nunca se pintaba, solo la rejilla
+                       de fondo. Ids 4 y 20 si tenian <use> y se veian bien. Causa: bug de
+                       gemini-2.5-flash (thinking budget agotado). Corregido en worker.js
+                       y desplegado; los 6 planos rotos se borraron de D1 (eran de
+                       prueba). Ver SESION.md.
 
   v7.75        |  08/07/2026  [Fase UI planos editables: panel.html + app movil]
                        Fase UI de planos editables (tarea pendiente #13), a peticion
