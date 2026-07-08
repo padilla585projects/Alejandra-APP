@@ -1,7 +1,53 @@
 ## ESTADO ACTUAL
 
 **Sesion:** LIBRE
-**Ultima sesion:** 08/07/2026 (continuacion 3) -- Fase UI de planos editables
+**Ultima sesion:** 09/07/2026 -- Fix legibilidad de planos (negrita + contraste), a peticion
+explicita de Adrian tras quejarse de que los planos generados por la IA salian con
+"negritas que no se ven bien" y colores poco visibles. Aprobado por Adrian via
+AskUserQuestion con 2 decisiones fijadas: (1) alcance = aplicar el fix a TODOS los tipos de
+plano electricos que comparten libreria de simbolos (`unifilar`, `electrico`, `bandejas`,
+`planta_electrica`, `planta_industrial`), no solo al que se probo; (2) paleta = mantener el
+esquema de colores de fase existente (L1/L2/L3/N/PE), NO rediseñar al estilo monocromo de
+la foto de referencia que enseño.
+
+**Ronda 1 (`worker.js`, ya desplegada, Version ID `bbffdf2b-91c3-4ebe-bcc0-2098ac4a5bcc`):**
+se quito `font-weight="bold"` de las etiquetas pequeñas ya horneadas en la libreria de
+simbolos compartida (`IEC_SYMBOLS_DEFS`: etiquetas "M" de motor-3f/motor-1f;
+`IEC_BANDEJA_DEFS`: etiquetas CGP/CS/CGMP; `IEC_INDUSTRIAL_DEFS`: etiquetas CT/G/ATS/CGBT/SAI)
+y se oscurecieron varios colores de poco contraste en los 5 prompts de `_PLANO_PROMPTS`. Se
+mantuvo la negrita solo en: etiquetas de zona/estancia de tamaño grande (font-size 11-13), el
+titulo "LEYENDA" y el bloque de titulo/cajetin sobre fondo solido oscuro.
+
+**Ronda 2 (mismo dia, misma sesion) -- verificacion en vivo revelo que la Ronda 1 no bastaba:**
+usando el chat de Alejandra IA dentro del panel.html autenticado (tool `generar_plano`, que es
+la via real de generacion, no un boton de UI), se genero un plano `unifilar` de prueba (id 23)
+y se inspecciono el SVG resultante: **54 elementos `<text>` en negrita de 144 totales**, a
+tamaños de hasta 7px, pese a que Ronda 1 ya habia quitado toda negrita explicita de los 5
+prompts y de la libreria de simbolos (confirmado por grep: solo quedaban 2 usos legitimos e
+intencionados de `font-weight="bold"` en todo el bloque `_PLANO_PROMPTS`). Causa raiz: el
+modelo de IA (Claude Sonnet) añadia negrita por iniciativa propia "porque queda mejor", ya que
+ningun prompt se lo prohibia explicitamente -- quitar menciones de negrita no es lo mismo que
+prohibirla. **Fix:** se añadio a los 5 prompts (`electrico`, `bandejas`, `unifilar`,
+`planta_electrica`, `planta_industrial`) una regla explicita "REGLA DE TIPOGRAFIA
+(OBLIGATORIO): NUNCA uses font-weight='bold'..." con las excepciones permitidas listadas
+(zona/estancia, LEYENDA, cajetin). Verificado: `node --check worker.js` sin errores, grep de
+encoding en el diff limpio, `npx wrangler deploy` exitoso (bindings DB y FILES correctos,
+Version ID `f7ee0b49-8c96-4529-8528-46c49481103d`). **Verificacion en vivo del fix:** se
+genero un segundo plano `unifilar` de prueba (id 23, regenerado tras el deploy) y se
+inspecciono su SVG: **0 elementos en negrita de 89 totales**. Confirma que el fix funciona.
+
+**Bug distinto encontrado durante la misma verificacion en vivo, NO corregido (fuera de
+alcance, delegado):** en algunos planos generados los elementos `<use href="#sym-X">` no
+llevan el atributo `color`, por lo que el simbolo sale sin colorear (gris palido) en vez del
+color correcto -- comportamiento no determinista del modelo (el plano id 22 lo tenia bien, el
+id 23 no). Se ha delegado como tarea independiente via `spawn_task` (no forma parte del
+alcance aprobado de esta sesion, que era solo negrita/contraste).
+
+**Limpieza de datos de prueba:** se borraron de D1 produccion los planos de prueba `unifilar`
+ids 22 y 23 usados en la verificacion en vivo (`DELETE FROM planos WHERE id IN (22,23)`,
+confirmado `changes:2`).
+
+**Sesion anterior a esta:** 08/07/2026 (continuacion 3) -- Fase UI de planos editables
 (panel.html + app movil), a peticion explicita de Adrian ("Panel + app movil a la vez"
 / "dos agentes a la vez"). 2 agentes en paralelo (worktrees aislados, sin solapamiento de
 archivos): **Agente A** (`panel.html`) anadio tipo `unifilar` a los selects de tipo,

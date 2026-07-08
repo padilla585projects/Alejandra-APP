@@ -21922,14 +21922,14 @@ const IEC_SYMBOLS_DEFS = `<defs id="iec60617-lib">
   <!-- M 3~ ─ Motor asíncrono trifásico (IEC 60617-10) — viewBox 70x70 -->
   <symbol id="sym-motor-3f" viewBox="0 0 70 70" overflow="visible">
     <circle cx="35" cy="35" r="32" fill="white" stroke="currentColor" stroke-width="2.5"/>
-    <text x="35" y="30" text-anchor="middle" font-size="18" font-weight="bold" font-family="Arial,sans-serif" fill="currentColor">M</text>
+    <text x="35" y="30" text-anchor="middle" font-size="18" font-family="Arial,sans-serif" fill="currentColor">M</text>
     <text x="35" y="47" text-anchor="middle" font-size="11" font-family="Arial,sans-serif" fill="currentColor">3~</text>
   </symbol>
 
   <!-- M 1~ ─ Motor monofásico (IEC 60617-10) — viewBox 70x70 -->
   <symbol id="sym-motor-1f" viewBox="0 0 70 70" overflow="visible">
     <circle cx="35" cy="35" r="32" fill="white" stroke="currentColor" stroke-width="2.5"/>
-    <text x="35" y="30" text-anchor="middle" font-size="18" font-weight="bold" font-family="Arial,sans-serif" fill="currentColor">M</text>
+    <text x="35" y="30" text-anchor="middle" font-size="18" font-family="Arial,sans-serif" fill="currentColor">M</text>
     <text x="35" y="47" text-anchor="middle" font-size="11" font-family="Arial,sans-serif" fill="currentColor">1~</text>
   </symbol>
 
@@ -22016,7 +22016,7 @@ const IEC_BANDEJA_DEFS = `<defs id="bandeja-lib">
     <line x1="3" y1="3" x2="37" y2="47" stroke="currentColor" stroke-width="1.5"/>
     <line x1="37" y1="3" x2="3" y2="47" stroke="currentColor" stroke-width="1.5"/>
     <rect x="0" y="0" width="40" height="50" fill="none" stroke="currentColor" stroke-width="2.5" rx="2"/>
-    <text x="20" y="-6" text-anchor="middle" font-size="9" font-weight="bold" font-family="Arial,sans-serif" fill="currentColor">CGP</text>
+    <text x="20" y="-6" text-anchor="middle" font-size="9" font-family="Arial,sans-serif" fill="currentColor">CGP</text>
   </symbol>
   <!-- CS — Cuadro Secundario (vista planta, 30x40) -->
   <symbol id="sym-cs" viewBox="0 0 30 40" overflow="visible">
@@ -22024,7 +22024,7 @@ const IEC_BANDEJA_DEFS = `<defs id="bandeja-lib">
     <line x1="2" y1="2" x2="28" y2="38" stroke="currentColor" stroke-width="1.2"/>
     <line x1="28" y1="2" x2="2" y2="38" stroke="currentColor" stroke-width="1.2"/>
     <rect x="0" y="0" width="30" height="40" fill="none" stroke="currentColor" stroke-width="2" rx="1"/>
-    <text x="15" y="-5" text-anchor="middle" font-size="8" font-weight="bold" font-family="Arial,sans-serif" fill="currentColor">CS</text>
+    <text x="15" y="-5" text-anchor="middle" font-size="8" font-family="Arial,sans-serif" fill="currentColor">CS</text>
   </symbol>
   <!-- SCSS — Sub-cuadro local (vista planta, 22x30) -->
   <symbol id="sym-scss" viewBox="0 0 22 30" overflow="visible">
@@ -22130,7 +22130,7 @@ const IEC_INSTALACION_DEFS = `<defs id="instalacion-lib">
     <line x1="2" y1="2" x2="26" y2="34" stroke="currentColor" stroke-width="1.2"/>
     <line x1="26" y1="2" x2="2" y2="34" stroke="currentColor" stroke-width="1.2"/>
     <rect x="0" y="0" width="28" height="36" fill="none" stroke="currentColor" stroke-width="2" rx="1"/>
-    <text x="14" y="-5" text-anchor="middle" font-size="7" font-weight="bold" font-family="Arial,sans-serif" fill="currentColor">CGMP</text>
+    <text x="14" y="-5" text-anchor="middle" font-size="7" font-family="Arial,sans-serif" fill="currentColor">CGMP</text>
   </symbol>
 </defs>`;
 
@@ -22145,13 +22145,13 @@ const IEC_INDUSTRIAL_DEFS = `<defs id="industrial-lib">
     <rect x="0" y="0" width="46" height="56" fill="white" stroke="currentColor" stroke-width="2.5" rx="2"/>
     <line x1="3" y1="3" x2="43" y2="53" stroke="currentColor" stroke-width="1.5"/>
     <line x1="43" y1="3" x2="3" y2="53" stroke="currentColor" stroke-width="1.5"/>
-    <text x="23" y="-6" text-anchor="middle" font-size="9" font-weight="bold" font-family="Arial,sans-serif" fill="currentColor">CT</text>
+    <text x="23" y="-6" text-anchor="middle" font-size="9" font-family="Arial,sans-serif" fill="currentColor">CT</text>
   </symbol>
   <!-- GE - Grupo electrogeno / generador de respaldo (vista planta con skid, 60x60) -->
   <symbol id="sym-generador" viewBox="0 0 60 60" overflow="visible">
     <rect x="0" y="0" width="60" height="60" fill="white" stroke="currentColor" stroke-width="2.5" rx="4"/>
     <circle cx="30" cy="26" r="15" fill="none" stroke="currentColor" stroke-width="2"/>
-    <text x="30" y="31" text-anchor="middle" font-size="14" font-weight="bold" font-family="Arial,sans-serif" fill="currentColor">G</text>
+    <text x="30" y="31" text-anchor="middle" font-size="14" font-family="Arial,sans-serif" fill="currentColor">G</text>
     <text x="30" y="50" text-anchor="middle" font-size="7.5" font-family="Arial,sans-serif" fill="currentColor">GE</text>
   </symbol>
   <!-- ATS - Conmutador automatico de transferencia (doble ruta A/B, 34x44) -->
@@ -22161,14 +22161,14 @@ const IEC_INDUSTRIAL_DEFS = `<defs id="industrial-lib">
     <circle cx="26" cy="30" r="2" fill="currentColor"/>
     <path d="M8,30 L17,14 L26,30" fill="none" stroke="currentColor" stroke-width="1.6"/>
     <line x1="17" y1="14" x2="17" y2="6" stroke="currentColor" stroke-width="1.6"/>
-    <text x="17" y="-5" text-anchor="middle" font-size="7" font-weight="bold" font-family="Arial,sans-serif" fill="currentColor">ATS</text>
+    <text x="17" y="-5" text-anchor="middle" font-size="7" font-family="Arial,sans-serif" fill="currentColor">ATS</text>
   </symbol>
   <!-- CGBT - Cuadro General de Baja Tension (vista planta, 36x46) -->
   <symbol id="sym-cgbt" viewBox="0 0 36 46" overflow="visible">
     <rect x="0" y="0" width="36" height="46" fill="white" stroke="currentColor" stroke-width="2.2" rx="1"/>
     <line x1="3" y1="3" x2="33" y2="43" stroke="currentColor" stroke-width="1.3"/>
     <line x1="33" y1="3" x2="3" y2="43" stroke="currentColor" stroke-width="1.3"/>
-    <text x="18" y="-5" text-anchor="middle" font-size="7.5" font-weight="bold" font-family="Arial,sans-serif" fill="currentColor">CGBT</text>
+    <text x="18" y="-5" text-anchor="middle" font-size="7.5" font-family="Arial,sans-serif" fill="currentColor">CGBT</text>
   </symbol>
   <!-- RACK - Armario de servidores/comunicaciones en planta (huella 600x1200, 20x36), triangulo indica frente (pasillo frio) -->
   <symbol id="sym-rack" viewBox="0 0 20 36" overflow="visible">
@@ -22195,7 +22195,7 @@ const IEC_INDUSTRIAL_DEFS = `<defs id="industrial-lib">
     <rect x="8" y="14" width="14" height="18" fill="none" stroke="currentColor" stroke-width="1.4"/>
     <line x1="12" y1="14" x2="12" y2="10" stroke="currentColor" stroke-width="1.4"/>
     <line x1="18" y1="14" x2="18" y2="10" stroke="currentColor" stroke-width="1.4"/>
-    <text x="15" y="-5" text-anchor="middle" font-size="7" font-weight="bold" font-family="Arial,sans-serif" fill="currentColor">SAI</text>
+    <text x="15" y="-5" text-anchor="middle" font-size="7" font-family="Arial,sans-serif" fill="currentColor">SAI</text>
   </symbol>
   <!-- CRAC/CRAH - Climatizacion de precision sala tecnica (vista planta con rejilla de flujo, 30x30) -->
   <symbol id="sym-crac" viewBox="0 0 30 30" overflow="visible">
@@ -22384,6 +22384,7 @@ REQUISITOS TECNICOS:
 - Cables de control/maniobra: stroke-width="1.2" stroke="#333333", lineas ortogonales
 - Nodos de conexion (empalmes): circle r="4" fill=color-fase (SOLO donde hay derivacion real)
 - COLORES DE FASE (OBLIGATORIO): L1=#cc0000  L2=#cc6600  L3=#000099  N=#0066cc  PE=#006600
+- REGLA DE TIPOGRAFIA (OBLIGATORIO): NUNCA uses font-weight="bold" en etiquetas de referencia, calibres, potencias o cualquier texto tecnico de tamano pequeno (font-size <= 11). Usa siempre peso normal (no incluyas el atributo font-weight). Reserva la negrita EXCLUSIVAMENTE para el bloque de titulo/cajetin (texto sobre fondo de color solido). El texto en negrita a tamano pequeno se ve tosco e ilegible — evitalo siempre.
 
 SIMBOLOS IEC 60617 — USO OBLIGATORIO:
 NO definas <defs> ni <symbol> propios. El renderizador inyecta la libreria IEC 60617 automaticamente.
@@ -22420,9 +22421,9 @@ ESTRUCTURA DEL ESQUEMA:
 - Circuito de motor: Q+ID → KM (contactor) → FR (termico) → M3~ + tierra PE al motor
 - Maniobra motor (si procede): pulsador NC paro → pulsador NA marcha → bobina KM + contacto NA KM (autoretencion)
 - Bornes de conexion: rect 14x14 fill="white" stroke="#333" rx="1" + numero font-size="8" centrado
-- Etiquetas de referencia junto a cada simbolo: font-family="Arial,sans-serif" font-size="11" font-weight="bold" fill="#222"
-- Calibres y caracteristicas junto a protecciones: font-size="9" fill="#555" (ej. "16A / 10kA", "30mA")
-- Potencias junto a motores: font-size="9" fill="#555" (ej. "7.5 kW / 400V")
+- Etiquetas de referencia junto a cada simbolo: font-family="Arial,sans-serif" font-size="11" fill="#222"
+- Calibres y caracteristicas junto a protecciones: font-size="9" fill="#3d3d3d" (ej. "16A / 10kA", "30mA")
+- Potencias junto a motores: font-size="9" fill="#3d3d3d" (ej. "7.5 kW / 400V")
 - Bloque de titulo estandar en esquina inferior derecha (empresa, titulo, ref-plano, escala, fecha, rev)
 - Leyenda de colores de fase + lista de materiales simplificada en esquina inferior izquierda
 - Agrupa por circuito: <g id="circuito-X" class="circuito">
@@ -22481,21 +22482,22 @@ REQUISITOS TECNICOS:
 - Cuadricula tenue de referencia (lineas cada 50px, stroke="#eeeeee" stroke-width="0.3")
 - Nave: contorno exterior stroke="#1a1a1a" stroke-width="5" fill="none", muros perimetrales fill="#d8d8d0" ancho 8px
 - Ejes estructurales: lineas discontinuas largas stroke="#999999" stroke-width="0.7" stroke-dasharray="20,6,3,6"
-- Referencias de ejes alfanumericas: columnas A,B,C... filas 1,2,3... font-size="11" fill="#888888"
+- Referencias de ejes alfanumericas: columnas A,B,C... filas 1,2,3... font-size="11" fill="#555555"
+- REGLA DE TIPOGRAFIA (OBLIGATORIO): NUNCA uses font-weight="bold" en etiquetas de bandeja, cotas, referencias de cuadro o cualquier texto tecnico de tamano pequeno (font-size <= 11). Usa siempre peso normal (no incluyas el atributo font-weight). Reserva la negrita EXCLUSIVAMENTE para: las etiquetas de zona (font-size="13", ver mas abajo), el titulo "LEYENDA" y el bloque de titulo/cajetin (texto sobre fondo de color solido). El texto en negrita a tamano pequeno se ve tosco e ilegible — evitalo siempre.
 
 CONVENCIONES DE BANDEJAS (siempre recorrido ORTOGONAL — horizontal o vertical):
 - Bandeja principal (BAN 200x100 o mayor):
     Dibujar como DOS lineas paralelas separadas 16px, stroke="#0a0a5a" stroke-width="2.5"
     Refuerzos transversales cada 80px: line stroke="#0a0a5a" stroke-width="0.8" opacity="0.5"
-    Etiqueta centrada sobre el tramo: font-size="9" font-weight="bold" fill="#0a0a5a" (ej. "BAN 200x100")
+    Etiqueta centrada sobre el tramo: font-size="9" fill="#0a0a5a" (ej. "BAN 200x100")
     Altura de montaje junto al tramo: font-size="8" fill="#0a0a5a" (ej. "h=+4,50 m")
 - Bandeja secundaria (BAN 100x60):
     DOS lineas paralelas separadas 10px, stroke="#003399" stroke-width="2"
     Etiqueta: font-size="8" fill="#003399" (ej. "BAN 100x60 h=+3,00 m")
 - Bandeja de derivacion local (BAN 60x60 o menor):
-    DOS lineas paralelas separadas 6px, stroke="#0055cc" stroke-width="1.5"
-    Etiqueta: font-size="7" fill="#0055cc"
-- Tubo / conduit libre: linea discontinua unica stroke="#888888" stroke-width="1.5" stroke-dasharray="6,3"
+    DOS lineas paralelas separadas 6px, stroke="#0047b3" stroke-width="1.5"
+    Etiqueta: font-size="7" fill="#0047b3"
+- Tubo / conduit libre: linea discontinua unica stroke="#666666" stroke-width="1.5" stroke-dasharray="6,3"
 
 SIMBOLOS — NO definas <defs> ni <symbol> propios. El renderizador inyecta automaticamente la libreria de simbolos. Solo usa <use href="#sym-X"/> con estos IDs:
   #sym-cgp              width="40" height="50" → Caja General de Proteccion
@@ -22511,9 +22513,9 @@ SIMBOLOS — NO definas <defs> ni <symbol> propios. El renderizador inyecta auto
   #sym-bandeja-reduccion width="30" height="20" → Reduccion de seccion de bandeja
 
 Atributo color="" en el <use> define el color del simbolo (hereda via currentColor):
-  CGP: color="#8B0000"  CS: color="#003399"  SCSS: color="#0055cc"
+  CGP: color="#8B0000"  CS: color="#003399"  SCSS: color="#0047b3"
   Columnas metalicas: color="#444444"  Columnas hormigon: color="#666666"
-  Bajantes: color="#cc6600"  Tomas: color="#006633"  Luminarias: color="#cc9900"
+  Bajantes: color="#a35300"  Tomas: color="#006633"  Luminarias: color="#8a6a00"
   Codos/tes/reducciones: igual que el tipo de bandeja a que pertenecen
 
 COTAS Y REFERENCIAS:
@@ -22563,6 +22565,7 @@ REQUISITOS TECNICOS:
 - Fondo blanco fill="#ffffff"
 - Representacion UNIFILAR: cada tramo es UNA SOLA LINEA (no 3 lineas de fase separadas) que representa el conjunto de conductores del circuito. stroke="#1a1a1a" stroke-width="2.5" para tramos principales, stroke-width="1.8" para derivaciones a sub-cuadros
 - Topologia SIEMPRE de arriba hacia abajo o de izquierda a derecha: Acometida -> CGP -> Cuadro General (CGMP) -> Sub-cuadros -> (opcional) cuadros terciarios
+- REGLA DE TIPOGRAFIA (OBLIGATORIO): NUNCA uses font-weight="bold" en las etiquetas de tramo (referencia de proteccion, designacion de cable, metodo de instalacion, longitud, potencia, caida de tension) ni en los nombres/referencias de cuadro. Usa siempre peso normal (no incluyas el atributo font-weight). Reserva la negrita EXCLUSIVAMENTE para el bloque de titulo/cajetin (texto sobre fondo de color solido) y el titulo "LEYENDA". El texto en negrita a tamano pequeno (8-9px) se ve tosco e ilegible — evitalo siempre, incluso si te parece que "resalta mejor".
 - Cada cuadro se dibuja como un rectangulo (usa los simbolos indicados abajo) con su nombre/referencia debajo (ej. "CS-1 Planta Baja", "SCSS Taller")
 
 SIMBOLOS — NO definas <defs> ni <symbol> propios. El renderizador inyecta automaticamente las librerias de simbolos. Solo usa <use href="#sym-X"/> con estos IDs:
@@ -22600,7 +22603,8 @@ REQUISITOS TECNICOS:
 - Fondo blanco fill="#ffffff"
 - Paredes/estancias: stroke="#1a1a1a" stroke-width="5" fill="#f2f2ec" (mismo estilo que un plano de planta arquitectonico), etiqueta de cada estancia font-size="11" font-weight="bold" fill="#222" (ej. "SALON", "COCINA", "DORMITORIO 1")
 - Puertas: arco de 90 grados (quarter-circle path) en el vano de la pared
-- Canalizaciones (recorrido de circuitos): SOLO lineas ortogonales (horizontal/vertical), stroke="#cc6600" stroke-width="1.4" stroke-dasharray="4,2" (tubo empotrado en tabique/techo). Cada circuito de un color distinto opcionalmente para diferenciarlos, indicado en leyenda
+- Canalizaciones (recorrido de circuitos): SOLO lineas ortogonales (horizontal/vertical), stroke="#a35300" stroke-width="1.4" stroke-dasharray="4,2" (tubo empotrado en tabique/techo). Cada circuito de un color distinto opcionalmente para diferenciarlos, indicado en leyenda
+- REGLA DE TIPOGRAFIA (OBLIGATORIO): NUNCA uses font-weight="bold" en referencias de circuito, cotas o numeros de circuito junto a simbolos. Usa siempre peso normal (no incluyas el atributo font-weight). Reserva la negrita EXCLUSIVAMENTE para: la etiqueta de estancia (font-size="11", ver arriba), el titulo "LEYENDA" y el bloque de titulo/cajetin (texto sobre fondo de color solido). El texto en negrita a tamano pequeno se ve tosco e ilegible — evitalo siempre.
 
 SIMBOLOS — NO definas <defs> ni <symbol> propios. El renderizador inyecta automaticamente las librerias de simbolos. Solo usa <use href="#sym-X"/> con estos IDs:
   #sym-cgmp             width="28" height="36" — Cuadro General de Mando y Proteccion (ubicacion del cuadro en planta)
@@ -22641,7 +22645,8 @@ REQUISITOS TECNICOS:
 - Fondo blanco fill="#ffffff", cuadricula tenue de referencia (lineas cada 50px, stroke="#eeeeee" stroke-width="0.3")
 - Nave/edificio: contorno exterior stroke="#1a1a1a" stroke-width="5" fill="none", muros perimetrales fill="#d8d8d0" ancho 8px, ejes estructurales discontinuos stroke="#999999" stroke-dasharray="20,6,3,6" cada 6-12m acotados
 - Canalizacion de potencia: SOLO bandejas (recorrido ortogonal, dos lineas paralelas separadas 16px stroke="#0a0a5a" stroke-width="2.5", igual convencion que un plano de bandejas), NUNCA tubo empotrado tipo vivienda
-- Doble ruta A/B (si aplica a CPD): ruta A en azul stroke="#0033cc", ruta B en un color distinto stroke="#cc6600", ambas SIEMPRE fisicamente separadas (nunca comparten bandeja) y etiquetadas "RUTA A" / "RUTA B" en la leyenda
+- Doble ruta A/B (si aplica a CPD): ruta A en azul stroke="#0033cc", ruta B en un color distinto stroke="#a35300", ambas SIEMPRE fisicamente separadas (nunca comparten bandeja) y etiquetadas "RUTA A" / "RUTA B" en la leyenda
+- REGLA DE TIPOGRAFIA (OBLIGATORIO): NUNCA uses font-weight="bold" en etiquetas de cuadro/CT/CGBT, tramos de bandeja, SAI/generador, filas/numeros de rack o cotas. Usa siempre peso normal (no incluyas el atributo font-weight). Reserva la negrita EXCLUSIVAMENTE para el bloque de titulo/cajetin (texto sobre fondo de color solido) y el titulo "LEYENDA". El texto en negrita a tamano pequeno se ve tosco e ilegible — evitalo siempre.
 
 SIMBOLOS — NO definas <defs> ni <symbol> propios. El renderizador inyecta automaticamente las librerias de simbolos. Solo usa <use href="#sym-X"/> con estos IDs (combina las 3 librerias segun necesites):
   #sym-ct               width="46" height="56" — Centro de Transformacion
