@@ -20,6 +20,27 @@ de version confirmado. `worker.js` no se toco en esta fase (los endpoints ya exi
 de la migracion anterior). Ver seccion nueva "RESUMEN SESION 08/07/2026 (continuacion 3
 -- Fase UI planos editables: panel.html + app movil)" mas abajo.
 
+**Fix adicional tras probar en vivo (misma sesion, v7.76):** al probar `screenPlanoDetalle`
+en la app movil con planos reales de produccion, el dibujo SVG se veia practicamente en
+blanco (solo la rejilla de fondo) en varios planos. Diagnostico: `#planoDetSvgWrap` no
+fijaba `color`, y el tema oscuro de la app movil hereda `color: rgb(229,231,235)` (gris
+claro) en el `<body>`; como los trazos del SVG usan `stroke="currentColor"`, heredaban ese
+gris claro casi invisible sobre el fondo claro (`#f8fafc`) del visor. Fix: `color:#0f172a`
+anadido al estilo inline de `#planoDetSvgWrap` (index.html linea ~1361). Confirmado en vivo
+que soluciona el problema (probado con plano id 4 "Cuadro Secundario Taller Soldadura",
+zoom +/- y boton Volver, todo correcto). **Bug distinto encontrado y NO corregido en esta
+sesion** (fuera de alcance de la fase UI, es un problema de generacion de datos en el
+backend, no de esta UI): al auditar los SVG de los 12 planos reales via
+`GET /planos/:id/svg`, 6 de ellos (ids 5,6,7,8,9,10 -- varios "bandejas" de pruebas
+anteriores y el electrico "Cuadro General Nave Industrial") tienen simbolos definidos en
+`<defs><symbol>` pero **cero elementos `<use>`** que los referencien, por lo que el dibujo
+real (interruptores, motores, etiquetas) nunca se renderiza -- solo se ve la rejilla de
+fondo. Los planos id 4 y 20 si tienen `<use>` y se ven perfectos. Pendiente investigar en
+`worker.js` que condicion causa que el generador de SVG a veces omita los `<use>` (parece
+ligado a una version anterior de la logica de generacion, antes de la migracion al worker
+raiz). No se ha tocado produccion ni intentado regenerar esos SVG sin confirmacion de
+Adrian.
+
 **Sesion anterior (mismo dia, antes de esta):** 08/07/2026 (continuacion 2) -- migracion de la logica canonica de
 generacion/edicion de planos (`generar_plano`/`editar_plano`) al worker web raiz
 (`alejandra-app-api`), a peticion explicita de Adrian ("teniamos que haber creado las

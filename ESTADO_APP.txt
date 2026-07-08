@@ -5,11 +5,30 @@
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 08/07/2026
-VERSIÓN ACTUAL APP NUEVA: v7.75
+VERSIÓN ACTUAL APP NUEVA: v7.76
 WORKER API: 3575baf3-7645-4214-bf35-c47f0682778f (planos/generar + planos/:id/circuitos migrados aqui, ver historial) · WORKER AGENTE: f742e9e8-8d12-4fe2-9c0c-3b26c7672772 (cliente HTTP puro via Service Binding; previo: f2df41f2-329a-4c93-8b74-924be72a2ea3 sobre commit d9b009e)
 VERSIÓN ACTUAL APP VIEJA: v4.19 (⛔ CONGELADA DEFINITIVAMENTE — no recibe más cambios)
 
 HISTORIAL DE VERSIONES (resumen reciente):
+  v7.76        |  08/07/2026  [Fix contraste SVG planos en app movil + hallazgo bug backend]
+                       Probando en vivo screenPlanoDetalle (app movil) tras integrar la
+                       fase UI v7.75: el SVG se veia casi en blanco en varios planos
+                       reales. Causa: #planoDetSvgWrap no fijaba "color", y el tema
+                       oscuro de la app hereda color gris claro (rgb(229,231,235)) en el
+                       body; los trazos SVG usan stroke="currentColor" y heredaban ese
+                       gris casi invisible sobre el fondo claro del visor (#f8fafc). Fix:
+                       color:#0f172a anadido al estilo inline de #planoDetSvgWrap
+                       (index.html ~linea 1361). Confirmado en vivo con plano real (id 4,
+                       "Cuadro Secundario Taller Soldadura"): dibujo, zoom +/- y volver
+                       funcionan correctamente. HALLAZGO SEPARADO (no corregido, fuera de
+                       alcance): al auditar GET /planos/:id/svg de los 12 planos reales,
+                       6 (ids 5,6,7,8,9,10) tienen <symbol> en <defs> pero CERO <use> que
+                       los referencien -> el dibujo real nunca se pinta, solo la rejilla
+                       de fondo. Ids 4 y 20 si tienen <use> y se ven bien. Parece un bug
+                       de una version anterior del generador de SVG (antes de la
+                       migracion al worker raiz). Pendiente de investigar en worker.js,
+                       requiere su propio plan/confirmacion de Adrian. Ver SESION.md.
+
   v7.75        |  08/07/2026  [Fase UI planos editables: panel.html + app movil]
                        Fase UI de planos editables (tarea pendiente #13), a peticion
                        explicita de Adrian ("Panel + app movil a la vez" / "dos agentes
