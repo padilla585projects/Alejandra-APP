@@ -1,7 +1,16 @@
 ## ESTADO ACTUAL
 
 **Sesion:** LIBRE
-**Ultima sesion:** 07/07/2026 -- fix bug generar_plano (tool_use perdido en fase de cierre,
+**Ultima sesion:** 08/07/2026 -- fix bug fuga de tool-call cruda como texto (parser de
+recuperacion anclado al token de control en vez de al primer `{` del texto completo) +
+fallback de vision con Gemini (solo cascada de imagen, antes de OpenRouter gratis) +
+indicador de estado en una sola linea en el chat movil (routing/tool_start/tool_end) +
+fix bug adjuntar imagen/archivo en el chat de Alejandra ("Inicia sesion" con sesion valida
+por codigo de obra, sin `usuario_id` individual). Ver seccion nueva "RESUMEN SESION
+08/07/2026 (fix tool-call fugado + Gemini vision + indicador de estado + fix adjuntos)"
+mas abajo.
+
+**Sesion anterior:** 07/07/2026 -- fix bug generar_plano (tool_use perdido en fase de cierre,
 experto ingenieria en canal web/panel) + auditoria de coste con migracion a modelos gratis
 (destilacion, compactacion, experto "simple") + mecanismo de auto-actualizacion de la cascada
 de modelos gratis via KV (solo alejandra-agente, commit 5067b5b, Worker agente Version ID
@@ -53,6 +62,83 @@ CROSS-EMPRESA EN 5 FAMILIAS MAS" anadida en el commit ff52aea (continuacion 19 e
 ese archivo), y subseccion "IDOR EN subir_archivo/enviar_notificacion + authOk
 FAIL-CLOSED" anadida en el commit 2a18d5b (continuacion 20 en ese archivo). Ver
 seccion de abajo.
+
+---
+
+## RESUMEN SESION 08/07/2026 (fix tool-call fugado + Gemini vision + indicador de estado + fix adjuntos)
+
+### 1) Fix bug tool-call fugada como texto plano (alejandra-agente/worker.js)
+`_intentarRecuperarToolCallDeTexto` usaba `texto.indexOf('{')` sobre el TEXTO COMPLETO en vez
+de anclarse cerca del token de control (`<|tool_calls_section_end|>`) -- fallaba al parsear
+cuando una respuesta tecnica larga tenia llaves `{` sueltas antes del tool-call real. Fix de
+doble capa: (a) `_intentarRecuperarToolCallDeTexto` ahora busca el token de control primero y
+escanea hacia atras SOLO en el texto anterior a ese token, probando cada `{` de atras hacia
+adelante hasta encontrar un JSON valido que encaje con el `input_schema.required` de alguna
+tool; (b) `_limpiarTextoTokenFugado` (defensa en profundidad) recorta cualquier resto de texto
+tecnico/JSON fugado que quede antes del token de control, incluso si no se pudo recuperar
+como tool_use real. Ambos aplicados en `_openAIToolCallsToAnthropicContent`, el punto unico de
+union de las 2 rutas de fallback (`llamarAnthropic` no-streaming y `llamarAnthropicStream`
+fase de cierre). Desplegado -- Worker agente Version ID 9dfad2d8-55e5-4cf9-a7d3-8f4edb751e79.
+
+### 2) Fallback de vision con Gemini (alejandra-agente/worker.js)
+Peticion de Adrian: usar modelos gratis de Google/OpenAI (mas rapidos/fiables que la cascada
+compartida de OpenRouter, que sufre 429 por ser un pool compartido entre todos los usuarios de
+OpenRouter). Decision (confirmada via AskUserQuestion, "Solo en la cascada de VISION"): anadir
+Gemini como primer intento SOLO cuando el mensaje incluye imagenes y falla Anthropic, antes de
+caer a OpenRouter gratis -- no se toco el fallback general de texto. Nuevas funciones:
+`_anthropicMsgsToGemini` (traduce mensajes Anthropic a formato Gemini `contents`),
+`_schemaParaGemini` (convierte `input_schema` a mayusculas, requisito de Gemini function-calling),
+`_anthropicToolsToGemini`, `_geminiPartsToAnthropicContent`, `_intentarGeminiVisionFallback`
+(prueba `gemini-2.5-flash` -> `gemini-flash-latest` -> `gemini-2.5-flash-lite` con rotacion de
+las 3 keys ya existentes `GEMINI_API_KEY`/`_2`/`_3`). Enganchado como "0er intento" dentro de
+`llamarGPT4oFallback`, solo si `messages` contiene algun bloque `image`. Desplegado -- Worker
+agente Version ID e780e454-a3cf-451d-8fbf-3e8a33340101.
+**Pendiente:** no se ha podido probar en vivo esta sesion por falta de una imagen de prueba
+(las herramientas de subida de imagen disponibles fallaron); queda para una proxima sesion o
+en cuanto Adrian comparta una imagen.
+
+### 3) Indicador de estado en una sola linea (index.html, solo app movil)
+Peticion de Adrian: ver en todo momento que esta haciendo Alejandra (como las tool-calls
+visibles de Claude Code) pero SIN llenar el chat -- una sola linea que se actualiza in-place.
+Alcance confirmado via AskUserQuestion: solo `index.html` (app movil), no `panel.html` por
+ahora. Nuevas funciones `_iaExpertoFriendly(experto)` (traduce el experto de routing a un
+texto amigable: "🧠 Analizando tu peticion", "🔧 Consultando lo tecnico", etc.) y
+`_iaSetEstado(el, texto, ok)` (actualiza el mismo elemento `typing` in-place, con spinner ⏳ o
+check ✓). El switch de eventos SSE de `window.iaSend` ahora usa `_iaSetEstado` en los casos
+`routing`/`tool_start`/`tool_end` en vez de crear una burbuja nueva por cada herramienta; el
+caso `token`/`text` (sin cambios) sigue eliminando el indicador (`typing.remove()`) en cuanto
+llega texto real.
+
+### 4) Fix bug "Inicia sesion" al adjuntar imagen/archivo en el chat de Alejandra
+Reportado por Adrian: "si intento mandar una imagen al chat de alejandra me da error y me
+dice inicia sesion". Diagnostico: `iaSubirAdjuntos` (index.html) exigia `s?.usuario_id`
+estricto -- pero las sesiones autenticadas por CODIGO DE OBRA (operario, encargado) tienen
+`usuario_id: null` (no tienen cuenta individual en la BD, solo `nombre`), a diferencia del
+resto de la app que ya usaba el patron permisivo `s.usuario_id || s.nombre` (ej. al enviar un
+mensaje de texto normal). Confirmado ademas que el backend (`/upload` en
+alejandra-agente/worker.js linea ~3051) ya toleraba perfectamente la ausencia de `usuario_id`
+(`formData.get('usuario_id') || 'anon'`, normalizado despues) -- el corte era 100% del
+frontend. Fix (mismo patron en las 2 funciones gemelas `iaSubirAdjuntos` y
+`alejandraSubirAdjuntos`, esta ultima del panel de devtools): comprobacion cambiada a
+`!s || !(s.usuario_id || s.nombre)`, y el `FormData.append('usuario_id', ...)` ahora envia
+`s.usuario_id || s.nombre`.
+
+### Verificacion
+- `node --check` limpio en worker.js (cambios 1 y 2) antes de cada `wrangler deploy`.
+- Grep de corrupcion de encoding (`Ã|Â|â€|ï»¿`) limpio en worker.js e index.html antes de cada
+  cambio.
+- index.html: los 3 bloques `<script>` embebidos compilan sin error (`new Function(...)` sobre
+  cada bloque extraido por regex) tras los 2 cambios (indicador de estado + fix adjuntos).
+- Version sincronizada: `version.json`/`sw.js`/`index.html` (`APP_VERSION`) subidos juntos de
+  7.73 a 7.74.
+- **No verificado en vivo todavia**: el indicador de estado y el fix de adjuntos requieren
+  `git push` (GitHub Pages) para poder probarse en la app real -- pendiente de push en esta
+  misma sesion.
+
+### Deploy
+- alejandra-agente: 2 deploys via `npx wrangler deploy` (Version ID
+  9dfad2d8-55e5-4cf9-a7d3-8f4edb751e79 y luego e780e454-a3cf-451d-8fbf-3e8a33340101).
+- index.html/sw.js/version.json: pendiente de commit + push (ver seccion de arriba).
 
 ---
 

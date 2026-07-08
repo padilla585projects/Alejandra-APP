@@ -4,12 +4,29 @@
   Ruta local: C:\Users\Adrian\Downloads\Proyecto GestiBobina\Alejandra APP
 ================================================================================
 
-ÚLTIMA ACTUALIZACIÓN: 07/07/2026
-VERSIÓN ACTUAL APP NUEVA: v7.72 (sin bump de PWA — este cambio es solo alejandra-agente/worker.js)
-WORKER API: cd7c8c68 · WORKER AGENTE: ae0ae5da (commit 5067b5b)
+ÚLTIMA ACTUALIZACIÓN: 08/07/2026
+VERSIÓN ACTUAL APP NUEVA: v7.74
+WORKER API: cd7c8c68 · WORKER AGENTE: e780e454-a3cf-451d-8fbf-3e8a33340101 (previo: 9dfad2d8, ambos sobre commit 5067b5b)
 VERSIÓN ACTUAL APP VIEJA: v4.19 (⛔ CONGELADA DEFINITIVAMENTE — no recibe más cambios)
 
 HISTORIAL DE VERSIONES (resumen reciente):
+  v7.74 — 08/07/2026 — fix bug fuga de tool-call cruda como texto (parser de recuperacion
+                       anclado al token de control en vez del primer "{" del texto completo,
+                       + limpieza defensiva de texto tecnico fugado) — Worker agente Version
+                       ID 9dfad2d8-55e5-4cf9-a7d3-8f4edb751e79; fallback de vision con Gemini
+                       (gemini-2.5-flash → gemini-flash-latest → gemini-2.5-flash-lite, 3
+                       keys rotando) SOLO en la cascada de imagen, antes de OpenRouter gratis
+                       — Worker agente Version ID e780e454-a3cf-451d-8fbf-3e8a33340101
+                       (pendiente de probar en vivo, falta imagen de prueba); indicador de
+                       estado en una sola linea en el chat movil (index.html — routing/
+                       tool_start/tool_end actualizan el mismo elemento in-place, sin llenar
+                       el chat de burbujas); fix bug "Inicia sesion" al adjuntar imagen o
+                       archivo en el chat de Alejandra con sesion valida por codigo de obra
+                       (usuario_id null, solo nombre) — mismo patron permisivo
+                       `s.usuario_id || s.nombre` ya usado en el resto de la app, aplicado en
+                       iaSubirAdjuntos y su gemela alejandraSubirAdjuntos (panel devtools).
+                       Ver SESION.md, seccion "RESUMEN SESION 08/07/2026" para el detalle
+                       completo.
   (agente, sin bump PWA) — 07/07/2026 — fix bug generar_plano (tool_use perdido en
                        fase de cierre) + auditoria de coste (modelos gratis) + cascada
                        de modelos gratis auto-actualizable (commit 5067b5b, Worker

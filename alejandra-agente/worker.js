@@ -8692,22 +8692,54 @@ function _anthropicToolsToOpenAI(tools) {
 const _TOKEN_CONTROL_FUGADO = /<\|[a-z_]+\|>/i;
 function _intentarRecuperarToolCallDeTexto(texto, tools) {
   if (!texto || !Array.isArray(tools) || !tools.length) return null;
-  if (!_TOKEN_CONTROL_FUGADO.test(texto)) return null;
-  const iniJson = texto.indexOf('{');
-  if (iniJson === -1) return null;
-  // Cortar en el primer token de control tras el JSON (o al final del texto)
-  const limpio = texto.slice(iniJson).replace(/<\|[a-z_]+\|>[\s\S]*$/i, '').trim();
-  let args;
-  try { args = JSON.parse(limpio); } catch (_) { return null; }
-  if (!args || typeof args !== 'object' || Array.isArray(args)) return null;
-  // ¿Qué tool encaja? todas sus propiedades "required" están presentes en el JSON recuperado.
-  const encaja = tools.find(t => {
-    const req = t.input_schema?.required || [];
-    return req.length > 0 && req.every(k => Object.prototype.hasOwnProperty.call(args, k));
-  });
-  if (!encaja) return null;
-  console.log(`[Fallback] Recuperado tool_call fugado en texto plano → ${encaja.name}`);
-  return { type: 'tool_use', id: `fallback_recuperado_${Date.now()}`, name: encaja.name, input: args };
+  const m = _TOKEN_CONTROL_FUGADO.exec(texto);
+  if (!m) return null;
+  // BUG (visto en producción, experto "ingenieria"): buscar solo la PRIMERA '{'
+  // de todo el texto fallaba cuando la respuesta traía una explicación técnica
+  // larga antes del intento de tool-call (fórmulas, referencias de norma, etc.
+  // con sus propias llaves) — el recorte empezaba en el sitio equivocado, el
+  // JSON.parse fallaba y el texto crudo (+ token de control) se colaba al
+  // usuario. Ahora probamos cada '{' anterior al token de control, empezando
+  // por la ÚLTIMA (el intento de tool-call es casi siempre el bloque más
+  // cercano al token) y retrocediendo, hasta que una parsee como JSON válido
+  // y encaje con los campos "required" de alguna tool.
+  const antesToken = texto.slice(0, m.index);
+  const indices = [];
+  let idx = antesToken.indexOf('{');
+  while (idx !== -1) { indices.push(idx); idx = antesToken.indexOf('{', idx + 1); }
+  for (let i = indices.length - 1; i >= 0; i--) {
+    let args;
+    try { args = JSON.parse(antesToken.slice(indices[i]).trim()); } catch (_) { continue; }
+    if (!args || typeof args !== 'object' || Array.isArray(args)) continue;
+    // ¿Qué tool encaja? todas sus propiedades "required" están presentes en el JSON recuperado.
+    const encaja = tools.find(t => {
+      const req = t.input_schema?.required || [];
+      return req.length > 0 && req.every(k => Object.prototype.hasOwnProperty.call(args, k));
+    });
+    if (encaja) {
+      console.log(`[Fallback] Recuperado tool_call fugado en texto plano → ${encaja.name}`);
+      return { type: 'tool_use', id: `fallback_recuperado_${Date.now()}`, name: encaja.name, input: args };
+    }
+  }
+  return null;
+}
+
+// Red de seguridad final: si el texto trae un token de control fugado (formato
+// Harmony, ej. "<|tool_calls_section_end|>") y _intentarRecuperarToolCallDeTexto
+// no consiguió recuperar un tool_use válido, NUNCA debe mostrarse ese texto en
+// crudo al usuario (JSON a medias + tokens de entrenamiento). Recortamos desde
+// el bloque roto (la última '{' antes del token, o si no hay ninguna, desde el
+// propio token) y nos quedamos solo con el texto/explicación previa, que suele
+// ser válida y completa.
+function _limpiarTextoTokenFugado(texto) {
+  if (!texto) return texto;
+  const m = _TOKEN_CONTROL_FUGADO.exec(texto);
+  if (!m) return texto;
+  const antes = texto.slice(0, m.index);
+  const iniJson = antes.lastIndexOf('{');
+  const corte = iniJson !== -1 ? iniJson : m.index;
+  const limpio = texto.slice(0, corte).trim();
+  return limpio || 'No he podido completar esa acción del todo — ¿puedes reformular la petición?';
 }
 
 function _openAIToolCallsToAnthropicContent(message, tools) {
@@ -8718,7 +8750,7 @@ function _openAIToolCallsToAnthropicContent(message, tools) {
     const recuperado = _intentarRecuperarToolCallDeTexto(texto, tools);
     if (recuperado) { content.push(recuperado); return content; }
   }
-  if (texto) content.push({ type: 'text', text: texto });
+  if (texto) content.push({ type: 'text', text: _limpiarTextoTokenFugado(texto) });
   for (const tc of toolCalls) {
     if (tc.type !== 'function' || !tc.function) continue;
     let input = {};
@@ -8748,6 +8780,35 @@ const MODELOS_GRATIS_VISION_FALLBACK = [
   'nvidia/nemotron-3-ultra-550b-a55b:free', 'openai/gpt-oss-120b:free'
 ];
 const KV_KEY_CASCADA_GRATIS = 'cascada_modelos_gratis_v1';
+
+// ── Cortacircuitos en memoria para modelos gratis rate-limited (08/07/2026) ──
+// Hallazgo en pruebas en vivo con Adrián: el modelo top-1 de la cascada puede
+// quedar rate-limited (429) en el pool compartido de OpenRouter durante varios
+// minutos seguidos. Sin esto, CADA mensaje (y cada iteración del bucle de tools
+// dentro del mismo turno) pagaba el peaje de un intento fallido antes de caer
+// al siguiente candidato — se notó como latencia extra perceptible en el chat.
+// Se guarda en memoria del isolate (no en KV: no merece la pena la latencia de
+// un KV read/write extra en el camino feliz) con una ventana corta — si el
+// isolate se recicla, simplemente se vuelve a probar el modelo una vez, sin más
+// coste que el de siempre.
+const _cooldownModelosGratis = new Map(); // model -> timestamp (ms) hasta el que evitarlo
+const COOLDOWN_MODELO_GRATIS_MS = 5 * 60 * 1000; // 5 minutos
+
+function _modeloEnCooldown(model) {
+  const hasta = _cooldownModelosGratis.get(model);
+  return typeof hasta === 'number' && hasta > Date.now();
+}
+function _marcarCooldownModelo(model) {
+  _cooldownModelosGratis.set(model, Date.now() + COOLDOWN_MODELO_GRATIS_MS);
+}
+// Reordena poniendo al final (no elimina) los modelos en cooldown: si TODOS
+// estuvieran en cooldown seguimos teniendo una lista completa que probar
+// (mejor esfuerzo) en vez de devolver null directamente.
+function _ordenarEvitandoCooldown(modelos) {
+  const libres = modelos.filter(m => !_modeloEnCooldown(m));
+  const enCooldown = modelos.filter(m => _modeloEnCooldown(m));
+  return [...libres, ...enCooldown];
+}
 
 // ── Auto-actualización de la cascada de modelos gratis (petición de Adrián,
 // 07/2026): "cada vez que salga un modelo gratuito mejor lo implementemos...
@@ -8827,7 +8888,7 @@ async function llamarTextoGratisConFallbackHaiku(env, systemPrompt, userText, ma
   const _orKey = env.OPENROUTER_API_KEY ? String(env.OPENROUTER_API_KEY).replace(new RegExp('^' + String.fromCharCode(0xFEFF)), '').trim() : '';
   if (_orKey) {
     const cascada = await obtenerCascadaModelosGratis(env);
-    for (const model of cascada.texto) {
+    for (const model of _ordenarEvitandoCooldown(cascada.texto)) {
       try {
         const resp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
           method: 'POST',
@@ -8842,9 +8903,15 @@ async function llamarTextoGratisConFallbackHaiku(env, systemPrompt, userText, ma
             messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: userText }]
           })
         });
-        if (!resp.ok) { console.log(`[GratisTexto] FALLO ${model}: HTTP ${resp.status}`); continue; }
+        if (!resp.ok) {
+          if (resp.status === 429) _marcarCooldownModelo(model);
+          console.log(`[GratisTexto] FALLO ${model}: HTTP ${resp.status}`); continue;
+        }
         const data = await resp.json();
-        if (data.error) { console.log(`[GratisTexto] FALLO ${model}: ${JSON.stringify(data.error).slice(0, 150)}`); continue; }
+        if (data.error) {
+          if (data.error.code === 429) _marcarCooldownModelo(model);
+          console.log(`[GratisTexto] FALLO ${model}: ${JSON.stringify(data.error).slice(0, 150)}`); continue;
+        }
         const texto = data.choices?.[0]?.message?.content?.trim();
         if (!texto) continue;
         if (data.usage) registrarTokenUso(env, data.model || model, tipoUso, data.usage.prompt_tokens || 0, data.usage.completion_tokens || 0, usuario_id);
@@ -8904,8 +8971,10 @@ async function _intentarCascadaOpenRouterGratis(env, messages, systemPrompt, max
   // Cascada dinámica (KV, refrescada a diario desde el catálogo de OpenRouter) con
   // los arrays fijos como respaldo — ver refrescarCascadaModelosGratis más arriba.
   const cascada = await obtenerCascadaModelosGratis(env);
-  // Modelos con visión primero si hay imágenes; si no, potencia de razonamiento primero
-  const modelos = tieneImagenes ? cascada.vision : cascada.texto;
+  // Modelos con visión primero si hay imágenes; si no, potencia de razonamiento primero.
+  // _ordenarEvitandoCooldown pospone (no elimina) los que fallaron con 429 hace poco —
+  // ver comentario junto a _cooldownModelosGratis más arriba.
+  const modelos = _ordenarEvitandoCooldown(tieneImagenes ? cascada.vision : cascada.texto);
   const modelosVisionSet = new Set(cascada.vision);
 
   for (const model of modelos) {
@@ -8926,11 +8995,13 @@ async function _intentarCascadaOpenRouterGratis(env, messages, systemPrompt, max
         })
       });
       if (!resp.ok) {
+        if (resp.status === 429) _marcarCooldownModelo(model);
         console.log(`[Fallback] OpenRouter FALLO ${model}: HTTP ${resp.status} ${(await resp.text()).slice(0, 200)}`);
         continue;
       }
       const data = await resp.json();
       if (data.error) {
+        if (data.error.code === 429) _marcarCooldownModelo(model);
         console.log(`[Fallback] OpenRouter FALLO ${model}: ${JSON.stringify(data.error).slice(0, 200)}`);
         continue;
       }
@@ -8952,7 +9023,135 @@ async function _intentarCascadaOpenRouterGratis(env, messages, systemPrompt, max
   return null;
 }
 
+// ── Fallback de VISIÓN con Gemini (petición de Adrián, 08/07/2026) ──────────
+// Cuando el chat en vivo trae una imagen y Anthropic está caído/saturado, antes
+// de recurrir a los modelos de visión gratis de OpenRouter (pool COMPARTIDO
+// entre todos los usuarios de OpenRouter — de ahí los 429 vistos en pruebas)
+// probamos Gemini directamente: ya tenemos claves propias configuradas (con
+// rotación) para las tools de análisis de imagen, y la cuota gratuita de
+// Gemini es de Google para nuestra cuenta (no compartida), así que en la
+// práctica responde más rápido y con menos rate-limit.
+function _anthropicMsgsToGemini(messages) {
+  const contents = [];
+  for (const m of messages) {
+    const role = m.role === 'assistant' ? 'model' : 'user';
+    const parts = [];
+    const blocks = Array.isArray(m.content) ? m.content : [{ type: 'text', text: String(m.content || '') }];
+    for (const b of blocks) {
+      if (b.type === 'text') {
+        parts.push({ text: b.text });
+      } else if (b.type === 'image' && b.source?.data) {
+        parts.push({ inline_data: { mime_type: b.source.media_type || 'image/jpeg', data: b.source.data } });
+      } else if (b.type === 'tool_use') {
+        parts.push({ functionCall: { name: b.name, args: b.input || {} } });
+      } else if (b.type === 'tool_result') {
+        const texto = Array.isArray(b.content)
+          ? b.content.filter(c => c.type === 'text').map(c => c.text).join('\n')
+          : String(b.content || '');
+        parts.push({ functionResponse: { name: 'tool_result', response: { content: texto.slice(0, 4000) } } });
+      }
+    }
+    if (parts.length) contents.push({ role, parts });
+  }
+  return contents;
+}
+// Gemini exige los "type" del schema en MAYÚSCULAS (OBJECT, STRING...) — a
+// diferencia del input_schema estilo JSON-Schema (lowercase) que usamos para
+// Anthropic/OpenAI. Sin esto, Gemini rechaza la declaración de tools entera.
+function _schemaParaGemini(schema) {
+  if (!schema || typeof schema !== 'object') return schema;
+  const out = {};
+  for (const [k, v] of Object.entries(schema)) {
+    if (k === 'type' && typeof v === 'string') { out[k] = v.toUpperCase(); continue; }
+    if (k === 'properties' && v && typeof v === 'object') {
+      out[k] = {};
+      for (const [pk, pv] of Object.entries(v)) out[k][pk] = _schemaParaGemini(pv);
+      continue;
+    }
+    if (k === 'items') { out[k] = _schemaParaGemini(v); continue; }
+    out[k] = v;
+  }
+  return out;
+}
+function _anthropicToolsToGemini(tools) {
+  if (!Array.isArray(tools) || !tools.length) return undefined;
+  return [{
+    function_declarations: tools.map(t => ({
+      name: t.name,
+      description: t.description || '',
+      parameters: _schemaParaGemini(t.input_schema || { type: 'object', properties: {} })
+    }))
+  }];
+}
+function _geminiPartsToAnthropicContent(parts) {
+  const content = [];
+  for (const p of (parts || [])) {
+    if (p.text) content.push({ type: 'text', text: p.text });
+    if (p.functionCall) {
+      content.push({
+        type: 'tool_use',
+        id: `gemini_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        name: p.functionCall.name,
+        input: p.functionCall.args || {}
+      });
+    }
+  }
+  return content;
+}
+async function _intentarGeminiVisionFallback(env, messages, systemPrompt, maxTokens, tools) {
+  const cleanKey = k => k ? String(k).replace(/[﻿​\r\n\t ]+/g, '').trim() : k;
+  const keys = [cleanKey(env.GEMINI_API_KEY), cleanKey(env.GEMINI_API_KEY_2), cleanKey(env.GEMINI_API_KEY_3)].filter(Boolean);
+  if (!keys.length) return null;
+  const models = ['gemini-2.5-flash', 'gemini-flash-latest', 'gemini-2.5-flash-lite'];
+  const contents = _anthropicMsgsToGemini(messages);
+  if (!contents.length) return null;
+  const geminiTools = _anthropicToolsToGemini(tools);
+  const systemText = Array.isArray(systemPrompt) ? systemPrompt.map(b => b.text).join('\n') : systemPrompt;
+  const body = {
+    contents,
+    ...(systemText ? { system_instruction: { parts: [{ text: systemText }] } } : {}),
+    ...(geminiTools ? { tools: geminiTools } : {}),
+    generationConfig: { maxOutputTokens: maxTokens || 1024 }
+  };
+  for (const key of keys) {
+    for (const model of models) {
+      try {
+        const resp = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`,
+          { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }
+        );
+        const data = await resp.json();
+        if (!resp.ok) {
+          console.log(`[Fallback] Gemini FALLO ${model}: HTTP ${resp.status} ${JSON.stringify(data).slice(0, 200)}`);
+          continue;
+        }
+        const parts = data.candidates?.[0]?.content?.parts;
+        if (!parts || !parts.length) { console.log(`[Fallback] Gemini ${model}: sin contenido`); continue; }
+        const content = _geminiPartsToAnthropicContent(parts);
+        if (!content.length) continue;
+        const esToolUse = content.some(b => b.type === 'tool_use');
+        console.log(`[Fallback] Gemini OK: ${model} (vision)${esToolUse ? ' (tool_use)' : ''}`);
+        return {
+          content,
+          stop_reason: esToolUse ? 'tool_use' : 'end_turn',
+          usage: data.usageMetadata ? { input_tokens: data.usageMetadata.promptTokenCount || 0, output_tokens: data.usageMetadata.candidatesTokenCount || 0 } : {},
+          modelo_real: model,
+          proveedor_real: 'gemini'
+        };
+      } catch (e) { console.log(`[Fallback] Gemini EXCEPCION ${model}: ${e.message}`); }
+    }
+  }
+  return null;
+}
+
 async function llamarGPT4oFallback(env, messages, systemPrompt, maxTokens, tools) {
+  // ── 0º INTENTO (solo si hay imágenes): Gemini ───────────────────────────────
+  const tieneImagenesFallback = messages.some(m => Array.isArray(m.content) && m.content.some(b => b.type === 'image'));
+  if (tieneImagenesFallback && env.GEMINI_API_KEY) {
+    const gemini = await _intentarGeminiVisionFallback(env, messages, systemPrompt, maxTokens, tools);
+    if (gemini) return gemini;
+  }
+
   // ── 1º INTENTO: cascada OpenRouter (modelos gratuitos) ──────────────────────
   const gratis = await _intentarCascadaOpenRouterGratis(env, messages, systemPrompt, maxTokens, tools);
   if (gratis) return gratis;

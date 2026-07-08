@@ -11841,7 +11841,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '7.73';
+const APP_VERSION = '7.74';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -18420,7 +18420,7 @@ window.turnoToggle   = turnoToggle;
     const files = Array.from(ev.target.files || []);
     ev.target.value = '';
     const s = getSession ? getSession() : null;
-    if (!s?.usuario_id) { toast('❌ Inicia sesión', 'err'); return; }
+    if (!s || !(s.usuario_id || s.nombre)) { toast('❌ Inicia sesión', 'err'); return; }
     const cont = document.getElementById('iaAdjuntos');
     for (const f of files) {
       if (f.size > 20*1024*1024) { toast('❌ ' + f.name + ' supera 20MB', 'err'); continue; }
@@ -18458,7 +18458,7 @@ window.turnoToggle   = turnoToggle;
       try {
         const fd = new FormData();
         fd.append('file', fileToUpload);
-        fd.append('usuario_id', s.usuario_id);
+        fd.append('usuario_id', s.usuario_id || s.nombre);
         const r = await fetch('https://alejandra-agente.alejandra-app.workers.dev/upload', { method:'POST', body:fd });
         const j = await r.json();
         if (!j.ok) throw new Error(j.error || 'fail');
@@ -18537,6 +18537,27 @@ window.turnoToggle   = turnoToggle;
         };
         return map[nombre] || ('⚡ ' + nombre.replace(/_/g, ' '));
       }
+      function _iaExpertoFriendly(experto) {
+        const map = {
+          simple: '💬 Respondiendo', app: '🧠 Analizando tu petición',
+          tecnico: '🔧 Consultando lo técnico', web: '🌐 Preparando búsqueda',
+          reflexion: '🧠 Reflexionando', completo: '🧠 Pensando',
+          ingenieria: '📐 Preparando cálculo de ingeniería'
+        };
+        return map[experto] || '🧠 Pensando';
+      }
+      // Indicador de estado ÚNICO (no crea burbujas nuevas por cada evento):
+      // reutiliza la burbuja de "escribiendo…" y le va cambiando el texto según
+      // routing/tool_start/tool_end, para que el usuario sepa en todo momento
+      // qué está haciendo Alejandra sin llenar el historial de chat.
+      function _iaSetEstado(el, texto, ok) {
+        if (!el || !el.isConnected) return;
+        el.className = 'ia-bubble bot-info';
+        el.style.cssText = 'font-size:13px;opacity:0.85;display:flex;align-items:center;gap:6px';
+        el.innerHTML = _escHtml(texto) + (ok ? ' <span style="color:#22c55e">✓</span>' : ' <span class="ia-tool-spin">⏳</span>');
+        const box = document.getElementById('iaMessages');
+        box.scrollTop = box.scrollHeight;
+      }
 
       try {
         const res = await fetch(ALEJANDRA_STREAM_API, {
@@ -18574,31 +18595,14 @@ window.turnoToggle   = turnoToggle;
 
             switch (ev.type) {
               case 'routing':
-                // No mostrar routing — quitar typing cuando llega algo
+                _iaSetEstado(typing, _iaExpertoFriendly(ev.experto));
                 break;
-              case 'tool_start': {
-                typing.remove();
-                const desc = _iaToolFriendly(ev.nombre);
-                const chip = document.createElement('div');
-                chip.className = 'ia-bubble bot-info';
-                chip.id = 'ia-tool-' + ev.nombre + '-' + Date.now();
-                chip.style.cssText = 'font-size:13px;opacity:0.85;display:flex;align-items:center;gap:6px';
-                chip.innerHTML = _escHtml(desc) + ' <span class="ia-tool-spin">⏳</span>';
-                const box = document.getElementById('iaMessages');
-                box.appendChild(chip);
-                box.scrollTop = box.scrollHeight;
+              case 'tool_start':
+                _iaSetEstado(typing, _iaToolFriendly(ev.nombre));
                 break;
-              }
-              case 'tool_end': {
-                const box = document.getElementById('iaMessages');
-                const chips = box.querySelectorAll('[id^="ia-tool-' + ev.nombre + '"]');
-                const target = chips.length ? chips[chips.length - 1] : null;
-                if (target) {
-                  const spin = target.querySelector('.ia-tool-spin');
-                  if (spin) { spin.textContent = '✓'; spin.style.color = '#22c55e'; }
-                }
+              case 'tool_end':
+                _iaSetEstado(typing, _iaToolFriendly(ev.nombre), true);
                 break;
-              }
               case 'token':
               case 'text':
                 typing.remove();
@@ -18887,7 +18891,7 @@ async function alejandraSubirAdjuntos(ev) {
   const files = Array.from(ev.target.files || []);
   ev.target.value = '';
   const s = getSession();
-  if (!s?.usuario_id) { toast('❌ Inicia sesión', 'err'); return; }
+  if (!s || !(s.usuario_id || s.nombre)) { toast('❌ Inicia sesión', 'err'); return; }
   const cont = document.getElementById('alejandraAdjuntos');
   for (const f of files) {
     if (f.size > 20*1024*1024) { toast(`❌ ${f.name} supera 20MB`, 'err'); continue; }
@@ -18898,7 +18902,7 @@ async function alejandraSubirAdjuntos(ev) {
     try {
       const fd = new FormData();
       fd.append('file', f);
-      fd.append('usuario_id', s.usuario_id);
+      fd.append('usuario_id', s.usuario_id || s.nombre);
       const r = await fetch('https://alejandra-agente.alejandra-app.workers.dev/upload', { method:'POST', body:fd });
       const j = await r.json();
       if (!j.ok) throw new Error(j.error || 'fail');
