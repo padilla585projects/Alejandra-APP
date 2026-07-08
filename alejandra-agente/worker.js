@@ -415,7 +415,8 @@ Herramientas disponibles:
 Cuando te pidan un cálculo, MUESTRA siempre: datos de entrada, fórmulas aplicadas, resultado, norma de referencia.
 Cuando analices una foto, describe: elementos visibles, estado, posibles problemas, recomendaciones.
 Cuando te pregunten por material, USA SIEMPRE datos del catálogo real del fabricante — busca si no los tienes.
-- generar_plano: Genera planos SVG profesionales con IA (Gemini/Claude). SIEMPRE usar cuando pidan un plano de bandejas, soportacion, plano de planta, esquema, o diagrama. Llama a esta tool con tipo, titulo y descripcion DETALLADA incluyendo medidas, marcas, modelos, alturas, zonas. NO generes texto markdown — genera el plano real con esta tool.`,
+- generar_plano: Genera planos SVG profesionales con IA (Gemini/Claude). SIEMPRE usar cuando pidan un plano de bandejas, soportacion, plano de planta, esquema, o diagrama. Llama a esta tool con tipo, titulo y descripcion DETALLADA incluyendo medidas, marcas, modelos, alturas, zonas. NO generes texto markdown — genera el plano real con esta tool. Para unifilar/electrico acepta ademas un parametro "circuitos" (lista de automaticos con sus datos reales) — usalo siempre que el usuario te de datos reales de un cuadro (por ejemplo, de una foto), asi el resultado queda editable despues.
+- editar_plano: modifica circuitos/automaticos de un plano ya generado (nombre, proteccion, cable, amperaje) y regenera el SVG sin describir todo de nuevo. Usalo cuando el usuario pida cambiar un dato de un plano existente en vez de crear uno nuevo.`,
 
   capacidades_avanzadas: `CAPACIDADES AVANZADAS — Herramientas nuevas disponibles:
 
@@ -1249,7 +1250,7 @@ const TOOL_GENERAR_PLANO = {
 - planta: Plano de planta/obra generico (distribuccion espacios, estructura, cotas) SIN instalacion electrica -- por defecto orientado a nave industrial/obra grande salvo que se pida vivienda.
 - mecanico: Plano mecanico industrial (vistas, cotas, materiales).
 - gantt: Diagrama de Gantt de fases de obra.
-El SVG generado se guarda en la BD y es visible en el panel web (seccion Planos).`,
+El SVG generado se guarda en la BD y es visible en el panel web (seccion Planos). Para tipo unifilar/electrico se puede (y se debe, si el usuario da datos reales) pasar tambien "circuitos" para que el resultado quede editable despues sin tener que regenerar el plano entero.`,
   input_schema: {
     type: 'object',
     properties: {
@@ -1257,9 +1258,55 @@ El SVG generado se guarda en la BD y es visible en el panel web (seccion Planos)
       titulo:      { type: 'string', description: 'Titulo del plano (ej: "Soportacion Rejiband 300 CPD Getafe")' },
       descripcion: { type: 'string', description: 'Descripcion DETALLADA de lo que debe incluir el plano: medidas, marcas, modelos, zonas, soportes, alturas, referencias de cuadros, etc. Cuanta mas informacion, mas preciso el resultado.' },
       empresa_id:  { type: 'integer', description: 'ID de empresa (si no se conoce, usar 1)' },
-      usuario_id:  { type: 'integer', description: 'ID del usuario (opcional)' }
+      usuario_id:  { type: 'integer', description: 'ID del usuario (opcional)' },
+      circuitos:   {
+        type: 'array',
+        description: 'Lista OPCIONAL de circuitos/tramos con datos EXACTOS y reales (por ejemplo cuando el usuario te pasa una foto de un esquema unifilar real y te dice los valores de cada automatico). Si se proporciona, para tipo "unifilar" o "electrico" se usan estos valores literalmente en el SVG generado (no inventes otros numeros) y se guardan para poder editarlos despues con la tool editar_plano sin tener que regenerar el plano entero adivinando los datos de nuevo.',
+        items: {
+          type: 'object',
+          properties: {
+            id:             { type: 'string', description: 'Identificador del circuito/automatico (ej: "QA9")' },
+            nombre:         { type: 'string', description: 'Nombre o uso del circuito (ej: "Transformador aislamiento")' },
+            proteccion:     { type: 'string', description: 'Tipo de proteccion (ej: "1.Autom.III")' },
+            in_a:           { type: 'string', description: 'Intensidad nominal en amperios (ej: "630")' },
+            ireg_a:         { type: 'string', description: 'Intensidad regulada en amperios (ej: "400")' },
+            seccion_cable:  { type: 'string', description: 'Seccion del cable (ej: "3x240+TTx120mm2Cu")' },
+            tipo_cable:     { type: 'string', description: 'Tipo/referencia del cable (ej: "RZ1-K(AS) Cca-s1b,d1,a1")' },
+            instalacion:    { type: 'string', description: 'Modo de instalacion (ej: "Unip.Bandeja Perf.")' },
+            notas:          { type: 'string', description: 'Notas adicionales del circuito' }
+          },
+          required: ['id']
+        }
+      }
     },
     required: ['tipo', 'titulo', 'descripcion']
+  }
+};
+
+const TOOL_EDITAR_PLANO = {
+  name: 'editar_plano',
+  description: 'Edita uno o varios circuitos/automaticos de un plano YA GENERADO (tipo unifilar o electrico) y regenera el SVG con los cambios, manteniendo el mismo titulo y estilo. Usa esto cuando el usuario pida cambiar el nombre, proteccion, cable, amperaje o cualquier dato de un circuito de un plano existente (ej: "en el plano del POD cambia QA9 a Bomba circuito 2", "el automatico QA14 ahora es de 200A"). Si no conoces el plano_id, pasa "busqueda" con parte del titulo (ej: "POD", "unifilar Getafe") para que se localice automaticamente; si hay varios planos que coinciden, la tool te devolvera la lista para que preguntes al usuario cual es.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      plano_id: { type: 'integer', description: 'ID del plano a editar, si se conoce' },
+      busqueda: { type: 'string', description: 'Texto para buscar el plano por titulo si no se conoce el ID' },
+      empresa_id: { type: 'integer', description: 'ID de empresa (opcional, ayuda a acotar la busqueda)' },
+      cambios: {
+        type: 'array',
+        description: 'Lista de cambios a aplicar a circuitos concretos del plano',
+        items: {
+          type: 'object',
+          properties: {
+            circuito_id: { type: 'string', description: 'Identificador del circuito a modificar, ej "QA9". Si no existe en el plano, se crea nuevo.' },
+            campo: { type: 'string', enum: ['nombre', 'proteccion', 'in_a', 'ireg_a', 'seccion_cable', 'tipo_cable', 'instalacion', 'notas'] },
+            valor: { type: 'string', description: 'Nuevo valor para ese campo' }
+          },
+          required: ['circuito_id', 'campo', 'valor']
+        }
+      }
+    },
+    required: ['cambios']
   }
 };
 
@@ -1906,12 +1953,12 @@ const TOOL_EXPORTAR_DATOS = {
 
 const TOOLS_POR_EXPERTO = {
   simple:     [TOOL_MEMORY_READ, TOOL_CONSULTAR_BD, TOOL_ENVIAR_PUSH],
-  app:        [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_CONTROLAR_APP, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_GENERAR_PLANO, TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_ANALIZAR_FOTO, TOOL_ESTADO_OBRA, TOOL_GESTIONAR_TAREA, TOOL_GESTIONAR_RFI, TOOL_GESTIONAR_OC, TOOL_GESTIONAR_ACTA, TOOL_GESTIONAR_CALIDAD],
+  app:        [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_CONTROLAR_APP, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_GENERAR_PLANO, TOOL_EDITAR_PLANO, TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_ANALIZAR_FOTO, TOOL_ESTADO_OBRA, TOOL_GESTIONAR_TAREA, TOOL_GESTIONAR_RFI, TOOL_GESTIONAR_OC, TOOL_GESTIONAR_ACTA, TOOL_GESTIONAR_CALIDAD],
   tecnico:    [TOOL_LEER_ESTADO, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_BUSCAR_WEB, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_NEXUS_MANAGE, TOOL_CONTROLAR_APP, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_BUSCAR_PRECIOS, TOOL_MARCAR_PLANO, TOOL_GENERAR_DOCUMENTO, TOOL_BUSCAR_NORMATIVA, TOOL_HISTORICO_MATERIALES, TOOL_CONFIGURAR_ALERTA, TOOL_EXPORTAR_DATOS],
   web:        [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE],
   reflexion:  [TOOL_MEMORY_SAVE, TOOL_MEMORY_READ, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_PROPOSE_MEJORA, TOOL_BUSCAR_WEB, TOOL_TOMAR_DECISION, TOOL_LEER_ESTADO, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_CONTROLAR_APP, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO],
-  completo:   [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_LEER_ESTADO, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_CONTROLAR_APP, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_GENERAR_PLANO, TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_ANALIZAR_FOTO, TOOL_ESTADO_OBRA, TOOL_GESTIONAR_TAREA, TOOL_GESTIONAR_RFI, TOOL_GESTIONAR_OC, TOOL_GESTIONAR_ACTA, TOOL_GESTIONAR_CALIDAD, TOOL_BUSCAR_PRECIOS, TOOL_MARCAR_PLANO, TOOL_GENERAR_DOCUMENTO, TOOL_BUSCAR_NORMATIVA, TOOL_HISTORICO_MATERIALES, TOOL_CONFIGURAR_ALERTA, TOOL_EXPORTAR_DATOS],
-  ingenieria: [TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_GENERAR_PLANO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_ANALIZAR_FOTO, TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME, TOOL_BUSCAR_PRECIOS, TOOL_MARCAR_PLANO, TOOL_GENERAR_DOCUMENTO, TOOL_BUSCAR_NORMATIVA, TOOL_HISTORICO_MATERIALES, TOOL_CONFIGURAR_ALERTA, TOOL_EXPORTAR_DATOS]
+  completo:   [TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_LEER_ESTADO, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_CONTROLAR_APP, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_GREP_CODIGO, TOOL_PATCH_CODIGO, TOOL_DEPLOY, TOOL_VERIFICAR_DEPLOY, TOOL_TEST_ENDPOINT, TOOL_ROLLBACK, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_GENERAR_PLANO, TOOL_EDITAR_PLANO, TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_ANALIZAR_FOTO, TOOL_ESTADO_OBRA, TOOL_GESTIONAR_TAREA, TOOL_GESTIONAR_RFI, TOOL_GESTIONAR_OC, TOOL_GESTIONAR_ACTA, TOOL_GESTIONAR_CALIDAD, TOOL_BUSCAR_PRECIOS, TOOL_MARCAR_PLANO, TOOL_GENERAR_DOCUMENTO, TOOL_BUSCAR_NORMATIVA, TOOL_HISTORICO_MATERIALES, TOOL_CONFIGURAR_ALERTA, TOOL_EXPORTAR_DATOS],
+  ingenieria: [TOOL_CALCULAR_CABLE, TOOL_CALCULAR_BANDEJA, TOOL_CALCULAR_PROTECCION, TOOL_GENERAR_ESQUEMA, TOOL_LISTAR_ESQUEMAS, TOOL_BORRAR_ESQUEMA, TOOL_GENERAR_PLANO, TOOL_EDITAR_PLANO, TOOL_CONSULTAR_BD, TOOL_ESCRIBIR_BD, TOOL_LISTAR_ARCHIVOS, TOOL_VER_ARCHIVO, TOOL_SUBIR_ARCHIVO, TOOL_GITHUB_LISTAR, TOOL_GITHUB_LEER, TOOL_GITHUB_ESCRIBIR, TOOL_GITHUB_BUSCAR, TOOL_ANALIZAR_FOTO, TOOL_BUSCAR_WEB, TOOL_MEMORY_READ, TOOL_MEMORY_SAVE, TOOL_RAM_SAVE, TOOL_RAM_READ, TOOL_RAM_CLEAR, TOOL_ENVIAR_PUSH, TOOL_INICIAR_CONVERSACION, TOOL_PENSAR, TOOL_PLANIFICAR, TOOL_DESCUBRIR_HERRAMIENTAS, TOOL_RECUPERAR_CONVERSACION, TOOL_CONSULTAR_CONOCIMIENTO, TOOL_GENERAR_INFORME, TOOL_ENVIAR_EMAIL, TOOL_ENVIAR_TELEGRAM_INFORME, TOOL_BUSCAR_PRECIOS, TOOL_MARCAR_PLANO, TOOL_GENERAR_DOCUMENTO, TOOL_BUSCAR_NORMATIVA, TOOL_HISTORICO_MATERIALES, TOOL_CONFIGURAR_ALERTA, TOOL_EXPORTAR_DATOS]
 };
 
 // ── Gating de tools peligrosas por identidad VERIFICADA ──────────────────────
@@ -6563,7 +6610,7 @@ ${descripcion ? `<div class="info-bar"><span class="badge">${tipo}</span>${descr
 
     case 'generar_plano': {
       try {
-        const { tipo, titulo, descripcion, empresa_id: eid_plano, usuario_id: uid_input } = input;
+        const { tipo, titulo, descripcion, empresa_id: eid_plano, usuario_id: uid_input, circuitos } = input;
         if (!tipo || !titulo || !descripcion) return JSON.stringify({ error: 'tipo, titulo y descripcion son obligatorios' });
         const tiposValidos = ['planta', 'electrico', 'bandejas', 'mecanico', 'gantt', 'unifilar', 'planta_electrica', 'planta_industrial'];
         if (!tiposValidos.includes(tipo)) return JSON.stringify({ error: 'tipo invalido' });
@@ -6575,13 +6622,34 @@ ${descripcion ? `<div class="info-bar"><span class="badge">${tipo}</span>${descr
         }
         let result;
         try {
-          result = await _generarPlanoAgente(env, { tipo, titulo, descripcion, empresa_id: eid_plano || empresa_id || 1, usuario_id: uid_input || usuario_id || null });
+          result = await _generarPlanoAgente(env, { tipo, titulo, descripcion, empresa_id: eid_plano || empresa_id || 1, usuario_id: uid_input || usuario_id || null, circuitos: circuitos || [] });
         } finally {
           if (_hbTimer) clearInterval(_hbTimer);
         }
         return JSON.stringify(result);
       } catch (e) {
         return JSON.stringify({ error: 'Error generando plano: ' + e.message });
+      }
+    }
+
+    case 'editar_plano': {
+      try {
+        const { plano_id, busqueda, empresa_id: eid_plano, cambios } = input;
+        if (!cambios || !Array.isArray(cambios) || cambios.length === 0) return JSON.stringify({ error: 'cambios es obligatorio y debe ser un array no vacio' });
+        let _hbTimer = null;
+        if (sendSSE) {
+          let _hbN = 0;
+          _hbTimer = setInterval(() => { _hbN++; sendSSE({ type: 'progreso', mensaje: `Editando plano... (${_hbN * 5}s)` }).catch(() => {}); }, 5000);
+        }
+        let result;
+        try {
+          result = await _editarPlanoAgente(env, { plano_id, busqueda, empresa_id: eid_plano || empresa_id || 1, cambios, usuario_id });
+        } finally {
+          if (_hbTimer) clearInterval(_hbTimer);
+        }
+        return JSON.stringify(result);
+      } catch (e) {
+        return JSON.stringify({ error: 'Error editando plano: ' + e.message });
       }
     }
 
@@ -9998,6 +10066,7 @@ async function _ensurePlanosTableAgente(env) {
       actualizado_en TEXT    DEFAULT (datetime('now'))
     )
   `).run().catch(() => {}); // tabla ya existe en prod — ignorar error
+  await env.DB.prepare(`ALTER TABLE planos ADD COLUMN circuitos_json TEXT`).run().catch(() => {});
 }
 
 // Sanea un SVG que la IA puede haber cortado a medias por limite de max_tokens.
@@ -10052,7 +10121,7 @@ function _sanearSvgTruncado(svgRaw) {
   return body;
 }
 
-async function _generarPlanoAgente(env, { tipo, titulo, descripcion, empresa_id, usuario_id }) {
+async function _generarPlanoAgente(env, { tipo, titulo, descripcion, empresa_id, usuario_id, circuitos = [] }) {
   await _ensurePlanosTableAgente(env);
   const systemPrompt = _PLANO_PROMPTS[tipo] || _PLANO_PROMPTS.planta;
 
@@ -10084,13 +10153,39 @@ async function _generarPlanoAgente(env, { tipo, titulo, descripcion, empresa_id,
     } catch (_) {}
   }
 
+  // Para unifilar/electrico, si el usuario ha aportado una lista estructurada
+  // de circuitos reales (p.ej. leidos de una foto de un cuadro), se formatean
+  // y se inyectan LITERALMENTE en el prompt para que la IA no invente datos.
+  let circuitosSection = '';
+  if ((tipo === 'unifilar' || tipo === 'electrico') && Array.isArray(circuitos) && circuitos.length > 0) {
+    const lineas = circuitos.map(c => {
+      const partes = [];
+      if (c.nombre) partes.push(c.nombre);
+      const cabecera = `- ${c.id}${partes.length ? ': ' + partes.join(' ') : ''}`;
+      const detalles = [];
+      if (c.proteccion) detalles.push(`protección ${c.proteccion}`);
+      if (c.in_a) detalles.push(`In=${c.in_a}A`);
+      if (c.ireg_a) detalles.push(`Ireg=${c.ireg_a}A`);
+      let linea = cabecera;
+      if (detalles.length) linea += ` | ${detalles.join(' ')}`;
+      const cable = [];
+      if (c.seccion_cable) cable.push(c.seccion_cable);
+      if (c.tipo_cable) cable.push(c.tipo_cable);
+      if (cable.length) linea += ` | cable ${cable.join(' ')}`;
+      if (c.instalacion) linea += ` | instalación: ${c.instalacion}`;
+      if (c.notas) linea += ` | notas: ${c.notas}`;
+      return linea;
+    });
+    circuitosSection = `\n\nCIRCUITOS EXACTOS A REPRESENTAR (usa estos datos LITERALMENTE en las etiquetas del SVG, no inventes ni cambies ningún valor, no añadas circuitos que no estén en esta lista salvo que la descripción indique más):\n${lineas.join('\n')}`;
+  }
+
   const userMsg = `Genera el SVG para el siguiente plano tecnico:
 
 TITULO: ${titulo}
 TIPO: ${tipo}
 
 DESCRIPCION Y CONTENIDO REQUERIDO:
-${descripcion}${catalogoSection}
+${descripcion}${catalogoSection}${circuitosSection}
 
 INSTRUCCIONES FINALES:
 - Genera el SVG completo y listo para usar directamente en un navegador
@@ -10152,12 +10247,113 @@ let _proveedor = 'anthropic';
   }
 
   const metadatos = JSON.stringify({ tipo, tokens: Math.round(svgRaw.length / 4), modelo: _modelo, proveedor: _proveedor });
+  const circuitosJson = (Array.isArray(circuitos) && circuitos.length > 0) ? JSON.stringify(circuitos) : null;
   const res = await env.DB.prepare(
-    'INSERT INTO planos (empresa_id, usuario_id, tipo, titulo, descripcion, svg_data, metadatos) VALUES (?, ?, ?, ?, ?, ?, ?)'
-  ).bind(empresa_id || 1, usuario_id || null, tipo, titulo, descripcion, svgRaw, metadatos).run();
+    'INSERT INTO planos (empresa_id, usuario_id, tipo, titulo, descripcion, svg_data, metadatos, circuitos_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+  ).bind(empresa_id || 1, usuario_id || null, tipo, titulo, descripcion, svgRaw, metadatos, circuitosJson).run();
 
   const id = res.meta?.last_row_id;
   return { ok: true, id, tipo, titulo, proveedor: _proveedor, modelo: _modelo, mensaje: `Plano "${titulo}" (${tipo}) generado con ID ${id} usando ${_proveedor}/${_modelo}. Disponible en el panel -> Planos, o directamente en /planos/${id}/svg` };
+}
+
+async function _editarPlanoAgente(env, { plano_id, busqueda, empresa_id, cambios, usuario_id }) {
+  await _ensurePlanosTableAgente(env);
+
+  // 1. Localizar el plano
+  let row = null;
+  if (plano_id) {
+    row = await env.DB.prepare('SELECT * FROM planos WHERE id=?').bind(plano_id).first();
+    if (!row) throw new Error(`No se encontro ningun plano con ID ${plano_id}`);
+  } else if (busqueda) {
+    const q = await env.DB.prepare(
+      `SELECT id, tipo, titulo, empresa_id, creado_en FROM planos WHERE titulo LIKE ? ${empresa_id ? 'AND empresa_id=?' : ''} ORDER BY creado_en DESC LIMIT 5`
+    ).bind(...(empresa_id ? [`%${busqueda}%`, empresa_id] : [`%${busqueda}%`])).all();
+    const results = q.results || [];
+    if (results.length === 0) throw new Error(`No se encontro ningun plano cuyo titulo contenga "${busqueda}"`);
+    if (results.length > 1) {
+      const lista = results.map(r => `#${r.id} "${r.titulo}" (${r.tipo}, ${r.creado_en})`).join('\n');
+      return { ok: false, ambiguo: true, candidatos: results, mensaje: `Hay varios planos que coinciden con "${busqueda}", especifica el plano_id:\n${lista}` };
+    }
+    row = await env.DB.prepare('SELECT * FROM planos WHERE id=?').bind(results[0].id).first();
+  } else {
+    throw new Error('Debes indicar plano_id o busqueda para localizar el plano a editar');
+  }
+
+  // 2. Aplicar cambios sobre circuitos_json
+  let circuitos = [];
+  try { circuitos = row.circuitos_json ? JSON.parse(row.circuitos_json) : []; } catch (_) { circuitos = []; }
+  const idsModificados = [];
+  for (const cambio of (cambios || [])) {
+    if (!cambio || !cambio.circuito_id || !cambio.campo) continue;
+    let circ = circuitos.find(c => String(c.id).toLowerCase() === String(cambio.circuito_id).toLowerCase());
+    if (!circ) { circ = { id: cambio.circuito_id }; circuitos.push(circ); }
+    circ[cambio.campo] = cambio.valor;
+    idsModificados.push(cambio.circuito_id);
+  }
+  if (idsModificados.length === 0) throw new Error('No se aplico ningun cambio valido (revisa circuito_id/campo/valor)');
+
+  // 3. Regenerar el SVG con los datos actualizados (mismo patron que _generarPlanoAgente)
+  const systemPrompt = _PLANO_PROMPTS[row.tipo] || _PLANO_PROMPTS.planta;
+  const bloqueCircuitos = circuitos.map(c => {
+    const partes = [];
+    if (c.nombre) partes.push(c.nombre);
+    if (c.proteccion) partes.push(`proteccion ${c.proteccion}`);
+    if (c.in_a) partes.push(`In=${c.in_a}A`);
+    if (c.ireg_a) partes.push(`Ireg=${c.ireg_a}A`);
+    if (c.seccion_cable || c.tipo_cable) partes.push(`cable ${[c.seccion_cable, c.tipo_cable].filter(Boolean).join(' ')}`);
+    if (c.instalacion) partes.push(`instalacion: ${c.instalacion}`);
+    if (c.notas) partes.push(c.notas);
+    return `- ${c.id}: ${partes.join(' | ')}`;
+  }).join('\n');
+
+  const userMsg = `Este es un plano YA EXISTENTE que hay que REGENERAR con datos actualizados. Mantén el mismo titulo, estilo y layout general que tendria un plano de este tipo.
+
+TITULO: ${row.titulo}
+TIPO: ${row.tipo}
+
+DESCRIPCION ORIGINAL:
+${row.descripcion || '(sin descripcion previa)'}
+
+CIRCUITOS ACTUALIZADOS (usa estos datos LITERALMENTE, son la version editada y correcta, no inventes otros valores):
+${bloqueCircuitos}
+
+INSTRUCCIONES FINALES:
+- Genera el SVG completo y listo para usar directamente en un navegador
+- Incluye SOLO el codigo SVG (desde <svg hasta </svg>), sin explicaciones ni markdown
+- Todos los textos en espanol
+- Fecha actual: ${new Date().toLocaleDateString('es-ES')}`;
+
+  const _maxTokensPlano = (row.tipo === 'planta_industrial') ? 28000 : (row.tipo === 'bandejas') ? 24000 : 16000;
+  let svgRaw = await llamarAnthropicStream(
+    env,
+    [{ role: 'user', content: userMsg }],
+    'claude-sonnet-4-6',
+    _maxTokensPlano,
+    systemPrompt,
+    () => {},
+    usuario_id ? String(usuario_id) : 'system'
+  );
+  const svgMatch = svgRaw.match(/<svg[\s\S]*<\/svg>/i);
+  if (svgMatch) { svgRaw = svgMatch[0]; }
+  else {
+    const svgStart = /<svg[\s\S]*/i.exec(svgRaw);
+    if (svgStart) { svgRaw = svgStart[0]; if (!svgRaw.trimEnd().endsWith('</svg>')) svgRaw += '\n</svg>'; }
+  }
+  if (!svgRaw.includes('<svg')) throw new Error('La IA no genero un SVG valido al editar el plano');
+  svgRaw = _sanearSvgTruncado(svgRaw);
+
+  if (row.tipo === 'electrico') svgRaw = svgRaw.replace(/(<svg[^>]*>)/i, `$1\n${IEC_SYMBOLS_DEFS}`);
+  if (row.tipo === 'bandejas') svgRaw = svgRaw.replace(/(<svg[^>]*>)/i, `$1\n${IEC_BANDEJA_DEFS}`);
+  if (row.tipo === 'unifilar') svgRaw = svgRaw.replace(/(<svg[^>]*>)/i, `$1\n${IEC_SYMBOLS_DEFS}\n${IEC_BANDEJA_DEFS}`);
+  if (row.tipo === 'planta_electrica') svgRaw = svgRaw.replace(/(<svg[^>]*>)/i, `$1\n${IEC_BANDEJA_DEFS}\n${IEC_INSTALACION_DEFS}`);
+  if (row.tipo === 'planta_industrial') svgRaw = svgRaw.replace(/(<svg[^>]*>)/i, `$1\n${IEC_BANDEJA_DEFS}\n${IEC_INSTALACION_DEFS}\n${IEC_INDUSTRIAL_DEFS}`);
+
+  const metadatos = JSON.stringify({ tipo: row.tipo, tokens: Math.round(svgRaw.length / 4), modelo: 'claude-sonnet-4-6', proveedor: 'anthropic', editado: true });
+  await env.DB.prepare(
+    'UPDATE planos SET svg_data=?, circuitos_json=?, metadatos=?, actualizado_en=datetime(\'now\') WHERE id=?'
+  ).bind(svgRaw, JSON.stringify(circuitos), metadatos, row.id).run();
+
+  return { ok: true, id: row.id, tipo: row.tipo, titulo: row.titulo, circuitos_modificados: idsModificados, mensaje: `Plano "${row.titulo}" actualizado (circuitos: ${idsModificados.join(', ')}). Disponible en el panel -> Planos, o directamente en /planos/${row.id}/svg` };
 }
 
 // ── Contexto y mensajes ───────────────────────────────────────────────────────
