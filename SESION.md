@@ -1,7 +1,26 @@
 ## ESTADO ACTUAL
 
 **Sesion:** LIBRE
-**Ultima sesion:** 08/07/2026 (continuacion 2) -- migracion de la logica canonica de
+**Ultima sesion:** 08/07/2026 (continuacion 3) -- Fase UI de planos editables
+(panel.html + app movil), a peticion explicita de Adrian ("Panel + app movil a la vez"
+/ "dos agentes a la vez"). 2 agentes en paralelo (worktrees aislados, sin solapamiento de
+archivos): **Agente A** (`panel.html`) anadio tipo `unifilar` a los selects de tipo,
+bloque opcional "Circuitos" en el modal de generar plano (filas dinamicas con los 9
+campos del contrato `circuitos_json`), pestanas "Plano"/"Circuitos" en el visor con
+tabla editable de circuitos y boton "Guardar cambios de circuitos" (`PUT
+/planos/:id/circuitos`, con aviso de que quitar una fila no borra el circuito en
+backend). **Agente B** (`index.html` + `sw.js` + `version.json`) anadio pantalla
+`screenPlanos` (lista con filtros dinamicos por tipo) y `screenPlanoDetalle` (solo
+lectura: SVG con zoom +/-, metadatos, circuitos si existen) + tarjeta "Planos" en el
+menu principal (visible a todos los departamentos); version subida a 7.75 (sincronizada
+en los 3 archivos). Integracion manual verificada por mi (no solo el self-report de los
+agentes): diffs revisados linea a linea, `node -e` compilando los bloques `<script>`
+extraidos de ambos HTML (0 errores), grep de encoding en el diff completo (limpio), sync
+de version confirmado. `worker.js` no se toco en esta fase (los endpoints ya existian
+de la migracion anterior). Ver seccion nueva "RESUMEN SESION 08/07/2026 (continuacion 3
+-- Fase UI planos editables: panel.html + app movil)" mas abajo.
+
+**Sesion anterior (mismo dia, antes de esta):** 08/07/2026 (continuacion 2) -- migracion de la logica canonica de
 generacion/edicion de planos (`generar_plano`/`editar_plano`) al worker web raiz
 (`alejandra-app-api`), a peticion explicita de Adrian ("teniamos que haber creado las
 tools en el worker de la web que es donde ya existen las otras tools... y que alejandra
@@ -109,6 +128,79 @@ CROSS-EMPRESA EN 5 FAMILIAS MAS" anadida en el commit ff52aea (continuacion 19 e
 ese archivo), y subseccion "IDOR EN subir_archivo/enviar_notificacion + authOk
 FAIL-CLOSED" anadida en el commit 2a18d5b (continuacion 20 en ese archivo). Ver
 seccion de abajo.
+
+---
+
+## RESUMEN SESION 08/07/2026 (continuacion 3 -- Fase UI planos editables: panel.html + app movil)
+
+### Peticion de Adrian
+Con la migracion de logica al worker raiz ya probada end-to-end, Adrian confirmo seguir
+con la Fase UI de planos editables (tarea pendiente #13) y pidio explicitamente hacer
+`panel.html` y la app movil (`index.html`) a la vez, usando "dos agentes a la vez"
+(mismo patron que la sesion anterior de circuitos_json).
+
+### Metodologia
+2 agentes en paralelo via `Agent` tool con `isolation: "worktree"`, cada uno restringido
+a un conjunto de archivos sin solapamiento, auto-verificados (compilar bloques `<script>`
+con `new Function()`, grep de encoding) sin comitear ni desplegar. Integracion y
+verificacion final reservadas para la sesion orquestadora (yo).
+
+### Agente A -- `panel.html` (circuitos en generar + visor)
+- Nuevo tipo `unifilar` en los selects de filtro y de generar plano (ya existia en
+  backend, faltaba en el desplegable del panel).
+- Nuevo bloque opcional `#genPlanoCircuitosBlock` en el modal de generar plano: filas
+  dinamicas con los 9 campos del contrato `circuitos_json` (id, nombre, proteccion,
+  in_a, ireg_a, seccion_cable, tipo_cable, instalacion, notas). Solo visible para tipo
+  `unifilar`/`electrico`. Se envian en `POST /planos/generar` como `circuitos` si hay
+  filas con `id`.
+- Nuevas pestanas `#visorPlanoTabs` ("Plano" / "Circuitos") en el visor de planos
+  (`#modalVisorPlano`). La pestana Circuitos hace `GET /planos/:id`, parsea
+  `circuitos_json`, muestra una fila editable por circuito + boton "Anadir circuito",
+  con aviso explicito de que quitar una fila **no borra** el circuito en el backend (el
+  endpoint `PUT /planos/:id/circuitos` solo anade/edita, nunca elimina -- confirmado por
+  lectura directa de `editarPlanoCircuitosREST` en `worker.js`).
+- Nueva funcion `guardarCircuitosPlano()`: construye `cambios` a partir de las filas
+  rellenas, llama `PUT /planos/:id/circuitos`, muestra estado de carga (puede tardar
+  varios minutos porque regenera el SVG entero via Claude), y al terminar refresca el
+  SVG (`GET /planos/:id/svg`) sin cerrar el visor.
+- Funciones auxiliares compartidas: `_circuitoFilaHtml()`, `_anadirFilaCircuito()`,
+  `_leerCircuitosDeContenedor()` (usadas tanto en el modal de generar como en el visor).
+- No se toco `descargarDxfPlano()` (ya funcionaba, no estaba roto).
+
+### Agente B -- `index.html` + `sw.js` + `version.json` (pantalla movil solo lectura)
+- Nueva pantalla `screenPlanos`: lista de planos con filtros dinamicos generados segun
+  los tipos realmente presentes en los datos (`planoRenderFiltros`/`planoSetFiltro`),
+  tarjetas estilo Incidencias (`renderPlanos`).
+- Nueva pantalla `screenPlanoDetalle`: solo lectura -- SVG con zoom +/- (transform CSS),
+  metadatos (tipo, descripcion, fecha), tabla de circuitos si `circuitos_json` no esta
+  vacio (aporta contexto, no editable desde movil).
+- Nueva tarjeta `cardPlanos` (📐) en el menu principal, visible a todos los
+  departamentos incluida seguridad (`setupHomeModules()` actualizado en ambas ramas).
+- Integrado en `navTo()` (`target === 'planos'`) y `_applyScreen()` (carga datos al
+  entrar). Reutiliza `apiCall`/`apiCallRaw`/`esc`/`showScreen` ya existentes, sin
+  helpers nuevos fuera de este bloque.
+- Version subida a **7.75** en los 3 archivos (`version.json`, `sw.js`,
+  `index.html` `APP_VERSION`), confirmada sincronizada.
+
+### Verificacion propia (no solo el self-report de los agentes)
+- Diffs de ambos worktrees revisados linea a linea antes de integrar (sin confiar en el
+  resumen de los agentes).
+- Los 2 diffs (`panel.html` por un lado, `index.html`+`sw.js`+`version.json` por otro)
+  no se solapan en ningun archivo -- aplicados ambos con `git apply` sin conflicto.
+- Verificacion de sintaxis propia: script Node que extrae todos los bloques `<script>`
+  (sin `src`) de `index.html` y `panel.html` y los compila con `new Function(...)` ->
+  **0 errores** en ambos archivos (3 bloques cada uno).
+- Grep de encoding (`Ã|Â|â€|ï»¿`) sobre el diff completo de los 4 archivos -> limpio.
+- Sync de version confirmado: `version.json` = `sw.js` = `index.html.APP_VERSION` =
+  `7.75`.
+- `worker.js` no se toco en esta fase (los endpoints `/planos/generar` y
+  `/planos/:id/circuitos` ya existian de la migracion de la sesion anterior).
+
+### Despliegue
+`panel.html` e `index.html`/`sw.js`/`version.json` se sirven ambos via GitHub Pages
+(workflow `.github/workflows/pages.yml`, dispara en `push` a `main`, copia ambos HTML a
+`_site/` y regenera `version.json` desde `APP_VERSION` de `index.html`) -- **no requiere
+`wrangler deploy`** en esta fase porque no se toco `worker.js`. Despliegue = `git push`.
 
 ---
 

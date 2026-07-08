@@ -8886,6 +8886,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
             <option value="">📐 Todos los tipos</option>
             <option value="planta">🏗 Plano de planta/obra</option>
             <option value="electrico">⚡ Esquema eléctrico</option>
+            <option value="unifilar">🔌 Esquema unifilar</option>
             <option value="bandejas">🚧 Bandejas eléctricas</option>
             <option value="mecanico">⚙️ Plano mecánico</option>
             <option value="gantt">📅 Diagrama de Gantt</option>
@@ -8921,6 +8922,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
                         style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;background:var(--surface2);color:var(--text)">
                   <option value="planta">🏗 Plano de planta / obra</option>
                   <option value="electrico">⚡ Esquema eléctrico</option>
+                  <option value="unifilar">🔌 Esquema unifilar</option>
                   <option value="bandejas">🚧 Instalación de bandejas eléctricas</option>
                   <option value="mecanico">⚙️ Plano mecánico / industrial</option>
                   <option value="gantt">📅 Diagrama de Gantt / fases</option>
@@ -8938,6 +8940,13 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
                 <div id="genPlanoEjemplo" style="font-size:11px;color:var(--muted);background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;margin-bottom:6px;line-height:1.5"></div>
                 <textarea id="genPlanoDesc" rows="6" placeholder="Describe el contenido del plano..."
                           style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;background:var(--surface2);color:var(--text);resize:vertical;box-sizing:border-box;font-family:inherit"></textarea>
+              </div>
+
+              <div id="genPlanoCircuitosBlock" style="display:none;border-top:1px solid var(--border);padding-top:12px">
+                <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px">Circuitos (opcional)</label>
+                <div style="font-size:11px;color:var(--muted);margin-bottom:8px;line-height:1.5">Añade los circuitos/automáticos del cuadro (ID, protección, sección de cable...). Es opcional: si no añades ninguno, el plano se genera igualmente a partir de la descripción.</div>
+                <div id="genPlanoCircuitosFilas"></div>
+                <button type="button" class="btn btn-secondary btn-sm" onclick="_anadirFilaCircuito('genPlanoCircuitosFilas')">+ Añadir circuito</button>
               </div>
 
               <div id="genPlanoStatus" style="display:none;text-align:center;padding:16px">
@@ -8975,6 +8984,11 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
                 <button class="modal-close" onclick="cerrarVisorPlano()">✕</button>
               </div>
             </div>
+            <!-- Pestañas Plano / Circuitos (solo si el plano soporta circuitos estructurados) -->
+            <div id="visorPlanoTabs" style="display:none;flex-shrink:0;background:#0f1729;border-bottom:1px solid var(--border);padding:8px 14px;gap:6px">
+              <button id="tabPlanoBtn" class="btn btn-primary btn-sm" onclick="_visorSetTab('plano')">📐 Plano</button>
+              <button id="tabCircuitosBtn" class="btn btn-secondary btn-sm" onclick="_visorSetTab('circuitos')">🔌 Circuitos</button>
+            </div>
             <!-- Toolbar editor (oculta por defecto) -->
             <div id="editorToolbar" style="display:none;flex-shrink:0;background:#0f1729;border-bottom:1px solid var(--border);padding:8px 14px;gap:6px;flex-wrap:wrap;align-items:center">
               <span style="font-size:11px;color:var(--muted);font-weight:600;margin-right:4px">HERRAMIENTA:</span>
@@ -9003,6 +9017,10 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
             <!-- Contenido SVG -->
             <div id="visorPlanoContenido" style="flex:1;overflow:auto;padding:12px;background:#1a1a2e;display:flex;align-items:flex-start;justify-content:center">
               <!-- SVG se inyecta aquí -->
+            </div>
+            <!-- Contenido pestaña Circuitos (oculto por defecto) -->
+            <div id="visorCircuitosContenido" style="display:none;flex:1;overflow:auto;padding:16px;background:#1a1a2e">
+              <!-- Circuitos se inyectan aquí -->
             </div>
           </div>
         </div>
@@ -31750,6 +31768,7 @@ let _visorSvgData = '';
 const _PLANO_TIPO_META = {
   planta:    { emoji:'🏗', label:'Plano de planta', color:'#1e88e5' },
   electrico: { emoji:'⚡', label:'Esquema eléctrico', color:'#e53935' },
+  unifilar:  { emoji:'🔌', label:'Esquema unifilar', color:'#f59e0b' },
   bandejas:  { emoji:'🚧', label:'Bandejas eléctricas', color:'#0a0a5a' },
   mecanico:  { emoji:'⚙️', label:'Plano mecánico', color:'#43a047' },
   gantt:     { emoji:'📅', label:'Diagrama Gantt', color:'#8e24aa' },
@@ -31758,10 +31777,63 @@ const _PLANO_TIPO_META = {
 const _PLANO_EJEMPLOS = {
   planta: 'Ejemplo: "Nave industrial de 40x20m con zona de recepción (5x10), taller principal (25x20), almacén (10x20), vestuarios (5x5) y oficina (5x5). Dos puertas de acceso de 4m. Pilares cada 5m. Escala 1:200."',
   electrico: 'Ejemplo: "Cuadro general nave: acometida trifásica 400V, IGA 125A, 3 circuitos: motor compresor 15kW (Q1+F1+K1+M1), alumbrado nave 2x18kW (Q2+F2), enchufes trifásicos (Q3+F3). Tierra PE. Leyenda de componentes."',
+  unifilar: 'Ejemplo: "Esquema unifilar cuadro general CGBT: acometida trifásica 400V, IGA 250A. Circuitos: QA1 Alumbrado general, QA2 Fuerza talleres, QA3 Climatización. Añade los circuitos abajo con su protección, intensidad y sección de cable."',
   bandejas: 'Ejemplo: "Nave taller metálico 60x25m, estructura HEB metálica, pilares cada 6m. CGP en fachada norte. CS principal zona centro. Bandeja principal BAN 200x100 a +4,5m recorrido perimetral. Bandeja secundaria BAN 100x60 a +3m hacia zonas de máquinas. Derivaciones BAN 60x60 a cada puesto. 3 subcuadros SCSS para zona soldadura, zona fresado y zona prensa. Luminarias LED en bandeja principal."',
   mecanico: 'Ejemplo: "Soporte de rodamiento: vistas alzado frontal, planta y perfil derecho. Cuerpo rectangular 120x80x60mm, taladro pasante Ø40 en centro, 4 agujeros M8 esquinas. Material: acero F-114. Tolerancia general ±0.1."',
   gantt: 'Ejemplo: "Obra Nave Industrial - 12 semanas: Fase 1 Cimentación (sem 1-3, 100%), Fase 2 Estructura (sem 2-6, 60%), Fase 3 Cubierta (sem 5-8, 0%), Fase 4 Instalaciones (sem 7-11, 0%), Fase 5 Acabados (sem 10-12, 0%). Hito: Acta de recepción sem 12."'
 };
+
+// ── Circuitos estructurados (unifilar / eléctrico) ────────────────────────
+const _CIRCUITO_CAMPOS = [
+  { key:'id',            label:'ID *',          placeholder:'Ej: QA9' },
+  { key:'nombre',        label:'Nombre',        placeholder:'Ej: Bomba circuito 2' },
+  { key:'proteccion',    label:'Protección',    placeholder:'Ej: Magnetotérmico III 32A' },
+  { key:'in_a',          label:'In (A)',        placeholder:'32' },
+  { key:'ireg_a',        label:'Ireg (A)',      placeholder:'25' },
+  { key:'seccion_cable', label:'Sección cable', placeholder:'3x2.5mm²' },
+  { key:'tipo_cable',    label:'Tipo cable',    placeholder:'RZ1-K' },
+  { key:'instalacion',   label:'Instalación',   placeholder:'Unip.Bandeja Perf.' },
+  { key:'notas',         label:'Notas',         placeholder:'' },
+];
+
+function _circuitoFilaHtml(data) {
+  data = data || {};
+  const campos = _CIRCUITO_CAMPOS.map(c => `
+      <div>
+        <label style="font-size:10px;color:var(--muted);display:block;margin-bottom:2px">${c.label}</label>
+        <input type="text" class="circ-campo" data-campo="${c.key}" value="${escHtml(data[c.key]||'')}" placeholder="${escHtml(c.placeholder)}"
+               style="width:100%;padding:5px 7px;border:1px solid var(--border);border-radius:5px;font-size:12px;background:var(--surface);color:var(--text);box-sizing:border-box">
+      </div>`).join('');
+  return `
+    <div class="circuito-row" style="position:relative;border:1px solid var(--border);border-radius:8px;padding:10px 30px 10px 10px;margin-bottom:8px;background:var(--surface2)">
+      <button type="button" title="Quitar fila" onclick="this.closest('.circuito-row').remove()"
+              style="position:absolute;top:6px;right:6px;background:none;border:none;color:#f87171;cursor:pointer;font-size:14px;padding:2px 4px">🗑</button>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:8px">
+        ${campos}
+      </div>
+    </div>`;
+}
+
+function _anadirFilaCircuito(containerId, data) {
+  const cont = document.getElementById(containerId);
+  if (!cont) return;
+  cont.insertAdjacentHTML('beforeend', _circuitoFilaHtml(data));
+}
+
+function _leerCircuitosDeContenedor(containerId) {
+  const cont = document.getElementById(containerId);
+  if (!cont) return [];
+  const circuitos = [];
+  cont.querySelectorAll('.circuito-row').forEach(fila => {
+    const obj = {};
+    fila.querySelectorAll('.circ-campo').forEach(inp => {
+      const val = inp.value.trim();
+      if (val) obj[inp.dataset.campo] = val;
+    });
+    if (obj.id) circuitos.push(obj);
+  });
+  return circuitos;
+}
 
 async function cargarPlanos() {
   const grid  = document.getElementById('planosIAGrid');
@@ -31837,18 +31909,24 @@ function abrirModalGenerarPlano() {
   document.getElementById('genPlanoResult').style.display = 'none';
   document.getElementById('genPlanoActions').style.display = 'flex';
   document.getElementById('btnGenerar').disabled = false;
+  const circFilas = document.getElementById('genPlanoCircuitosFilas');
+  if (circFilas) circFilas.innerHTML = '';
   actualizarEjemploPlano();
   document.getElementById('modalGenerarPlano').style.display = 'flex';
 }
 
 function cerrarModalGenerarPlano() {
   document.getElementById('modalGenerarPlano').style.display = 'none';
+  const circFilas = document.getElementById('genPlanoCircuitosFilas');
+  if (circFilas) circFilas.innerHTML = '';
 }
 
 function actualizarEjemploPlano() {
   const tipo = document.getElementById('genPlanoTipo')?.value || 'planta';
   const ej   = document.getElementById('genPlanoEjemplo');
   if (ej) ej.textContent = _PLANO_EJEMPLOS[tipo] || '';
+  const circBlock = document.getElementById('genPlanoCircuitosBlock');
+  if (circBlock) circBlock.style.display = (tipo === 'unifilar' || tipo === 'electrico') ? 'block' : 'none';
 }
 
 async function ejecutarGenerarPlano() {
@@ -31863,10 +31941,15 @@ async function ejecutarGenerarPlano() {
   document.getElementById('genPlanoActions').style.display = 'none';
 
   try {
+    const body = { tipo, titulo, descripcion: desc };
+    if (tipo === 'unifilar' || tipo === 'electrico') {
+      const circuitos = _leerCircuitosDeContenedor('genPlanoCircuitosFilas');
+      if (circuitos.length) body.circuitos = circuitos;
+    }
     const res = await apiRaw('/planos/generar', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ tipo, titulo, descripcion: desc })
+      body: JSON.stringify(body)
     });
     const d = await res.json();
     document.getElementById('genPlanoStatus').style.display = 'none';
@@ -31919,6 +32002,8 @@ async function verPlano(id) {
   cont.innerHTML = '<div style="color:var(--muted);padding:40px;font-size:14px">Cargando SVG...</div>';
   _visorPlanoId = id;
   _visorSvgData = '';
+  document.getElementById('visorPlanoTabs').style.display = 'none';
+  _visorSetTab('plano');
   cancelarEdicionPlano(true);
   try {
     const res = await apiRaw('/planos/' + id + '/svg');
@@ -31930,6 +32015,119 @@ async function verPlano(id) {
     _inyectarSvgEnVisor(svg);
   } catch(e) {
     cont.innerHTML = '<div style="color:#f87171;padding:40px;font-size:13px">Error: ' + e.message + '</div>';
+    return;
+  }
+  _cargarCircuitosVisor(id);
+}
+
+// ── Pestañas Plano / Circuitos dentro del visor ───────────────────────────
+function _visorSetTab(tab) {
+  const svgVisible = tab !== 'circuitos';
+  const contSvg  = document.getElementById('visorPlanoContenido');
+  const contCirc = document.getElementById('visorCircuitosContenido');
+  const toolbar  = document.getElementById('editorToolbar');
+  if (contSvg)  contSvg.style.display  = svgVisible ? 'flex' : 'none';
+  if (contCirc) contCirc.style.display = svgVisible ? 'none' : 'block';
+  if (toolbar)  toolbar.style.display  = (svgVisible && _editorActivo) ? 'flex' : 'none';
+  const btnPlano = document.getElementById('tabPlanoBtn');
+  const btnCirc  = document.getElementById('tabCircuitosBtn');
+  if (btnPlano) { btnPlano.classList.toggle('btn-primary', svgVisible); btnPlano.classList.toggle('btn-secondary', !svgVisible); }
+  if (btnCirc)  { btnCirc.classList.toggle('btn-primary', !svgVisible); btnCirc.classList.toggle('btn-secondary', svgVisible); }
+}
+
+// ── Carga la pestaña de circuitos (GET /planos/:id, no el SVG) ───────────
+async function _cargarCircuitosVisor(id) {
+  const tabs     = document.getElementById('visorPlanoTabs');
+  const contCirc = document.getElementById('visorCircuitosContenido');
+  const p = _planosIAData.find(x => x.id === id);
+  let tipo = p ? p.tipo : null;
+  let circuitos = [];
+  try {
+    const res = await apiRaw('/planos/' + id);
+    const d   = await res.json();
+    if (res.ok && d.ok && d.plano) {
+      tipo = d.plano.tipo || tipo;
+      try { circuitos = JSON.parse(d.plano.circuitos_json || '[]') || []; } catch(e2) { circuitos = []; }
+    }
+  } catch(e) { /* sin conexión: simplemente no se ofrece edición de circuitos */ }
+
+  const aplica = tipo === 'unifilar' || tipo === 'electrico' || (Array.isArray(circuitos) && circuitos.length > 0);
+  if (!aplica) { tabs.style.display = 'none'; return; }
+
+  tabs.style.display = 'flex';
+  contCirc.innerHTML = `
+    <div style="font-size:12px;color:var(--muted);background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;margin-bottom:12px;line-height:1.5">
+      ℹ️ Quitar una fila aquí <b>no borra</b> el circuito del plano — solo dejas de editarlo en este guardado (el backend de circuitos añade/edita, no elimina).
+    </div>
+    <div id="visorCircuitosFilas"></div>
+    <div style="display:flex;gap:8px;margin:10px 0">
+      <button type="button" class="btn btn-secondary btn-sm" onclick="_anadirFilaCircuito('visorCircuitosFilas')">+ Añadir circuito</button>
+    </div>
+    <div id="visorCircuitosStatus" style="display:none;text-align:center;padding:16px">
+      <div style="font-size:24px;margin-bottom:8px">⚙️</div>
+      <div style="font-size:13px;color:var(--text);font-weight:600">Regenerando plano con los circuitos actualizados...</div>
+      <div style="font-size:11px;color:var(--muted);margin-top:6px">Puede tardar hasta varios minutos, no cierres esta ventana</div>
+      <div class="spinner" style="margin:12px auto;width:28px;height:28px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin 1s linear infinite"></div>
+    </div>
+    <div id="visorCircuitosMsg" style="display:none;font-size:13px;padding:10px 12px;border-radius:6px;margin-top:10px"></div>
+    <div style="display:flex;justify-content:flex-end;margin-top:12px">
+      <button class="btn btn-primary" id="btnGuardarCircuitos" onclick="guardarCircuitosPlano()">💾 Guardar cambios de circuitos</button>
+    </div>`;
+  circuitos.forEach(c => _anadirFilaCircuito('visorCircuitosFilas', c));
+  if (!circuitos.length) _anadirFilaCircuito('visorCircuitosFilas');
+}
+
+// ── Guarda los circuitos editados (PUT /planos/:id/circuitos) ────────────
+async function guardarCircuitosPlano() {
+  if (!_visorPlanoId) return;
+  const filas = _leerCircuitosDeContenedor('visorCircuitosFilas');
+  if (!filas.length) { toast('Añade al menos un circuito con ID para guardar', 'error'); return; }
+
+  const CAMPOS_EDITABLES = ['nombre','proteccion','in_a','ireg_a','seccion_cable','tipo_cable','instalacion','notas'];
+  const cambios = [];
+  filas.forEach(c => {
+    CAMPOS_EDITABLES.forEach(campo => {
+      if (c[campo]) cambios.push({ circuito_id: c.id, campo, valor: c[campo] });
+    });
+  });
+  if (!cambios.length) { toast('No hay campos rellenos para guardar (aparte del ID)', 'error'); return; }
+
+  const btn    = document.getElementById('btnGuardarCircuitos');
+  const status = document.getElementById('visorCircuitosStatus');
+  const msg    = document.getElementById('visorCircuitosMsg');
+  btn.disabled = true;
+  status.style.display = 'block';
+  msg.style.display = 'none';
+  try {
+    const res = await apiRaw('/planos/' + _visorPlanoId + '/circuitos', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cambios })
+    });
+    const d = await res.json();
+    status.style.display = 'none';
+    btn.disabled = false;
+    if (!res.ok || !d.ok) throw new Error(d.error || 'Error guardando circuitos');
+
+    msg.style.display = 'block';
+    msg.style.background = '#0f2a1a'; msg.style.border = '1px solid #1d6a3a'; msg.style.color = '#4ade80';
+    msg.textContent = '✅ ' + (d.mensaje || 'Circuitos guardados y plano regenerado');
+
+    try {
+      const resSvg = await apiRaw('/planos/' + _visorPlanoId + '/svg');
+      if (resSvg.ok) {
+        const svg = await resSvg.text();
+        _visorSvgData = svg;
+        _inyectarSvgEnVisor(svg);
+      }
+    } catch(e) { /* si falla el refresco del SVG, el guardado ya se completó */ }
+    cargarPlanos();
+  } catch(e) {
+    status.style.display = 'none';
+    btn.disabled = false;
+    msg.style.display = 'block';
+    msg.style.background = '#2a0f0f'; msg.style.border = '1px solid #7f1d1d'; msg.style.color = '#f87171';
+    msg.textContent = '❌ Error: ' + e.message;
   }
 }
 
@@ -31968,6 +32166,8 @@ function cerrarVisorPlano() {
   document.getElementById('modalVisorPlano').style.display = 'none';
   _visorPlanoId = null;
   _visorSvgData = '';
+  document.getElementById('visorPlanoTabs').style.display = 'none';
+  _visorSetTab('plano');
 }
 
 // ── Descarga SVG ─────────────────────────────────────────────────────────
@@ -32070,6 +32270,7 @@ async function verImprimirPlanoId(id) {
 // ── Editor SVG ────────────────────────────────────────────────────────────
 function activarEditorPlano() {
   if (!_visorPlanoId) return;
+  _visorSetTab('plano');
   _editorActivo = true;
   _editorUndo   = [_getSvgActual()];
   _editorRedo   = [];

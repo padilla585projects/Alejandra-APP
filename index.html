@@ -1022,6 +1022,14 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
         </div>
         <span class="drag-handle">⠿</span><svg class="module-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
       </div>
+      <div class="module-card" id="cardPlanos" onclick="navTo('planos')" style="display:none;border-left:3px solid #0ea5e9">
+        <div class="module-emoji">📐</div>
+        <div class="module-info">
+          <div class="module-name">Planos</div>
+          <div class="module-desc">Planos técnicos de la obra</div>
+        </div>
+        <span class="drag-handle">⠿</span><svg class="module-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
+      </div>
       <div class="module-card" id="cardChat" onclick="chatAbrir()" style="display:none;pointer-events:none;height:0;padding:0;margin:0;overflow:hidden">
         <div class="module-emoji">💬</div>
         <div class="module-info">
@@ -1322,6 +1330,36 @@ header{background:var(--surface);border-bottom:2px solid var(--accent);padding:6
         <button id="btnGuardarIncidencia" class="btn-primary" style="flex:1" onclick="guardarIncidencia()">💾 Guardar</button>
         <button class="btn-primary btn-secondary" style="flex:0 0 100px;margin-top:0" onclick="cerrarFormIncidencia()">Cancelar</button>
       </div>
+    </div>
+  </div>
+
+  <!-- PLANOS TECNICOS (solo lectura) -->
+  <div id="screenPlanos" class="screen" style="padding:0;display:none;flex-direction:column">
+    <div style="padding:10px 14px 8px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;align-items:center;gap:8px">
+      <div style="font-family:'Montserrat',sans-serif;font-weight:900;font-size:17px;color:var(--text);flex:1">📐 Planos</div>
+      <button onclick="cargarPlanos()" style="background:none;border:none;color:var(--muted);font-size:18px;cursor:pointer;padding:4px" title="Actualizar">↻</button>
+    </div>
+    <!-- Filtros por tipo (generados dinámicamente según los planos existentes) -->
+    <div style="display:flex;gap:6px;padding:8px 14px;border-bottom:1px solid var(--border);overflow-x:auto;flex-shrink:0" id="planoFiltroBar"></div>
+    <div id="planoList" style="padding:10px 14px 80px;overflow-y:auto;flex:1">
+      <div class="empty-state">Cargando…</div>
+    </div>
+  </div>
+
+  <!-- DETALLE DE PLANO (solo lectura) -->
+  <div id="screenPlanoDetalle" class="screen" style="padding:0;display:none;flex-direction:column">
+    <div style="padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;background:var(--surface);flex-shrink:0">
+      <button onclick="navTo('planos')" style="background:none;border:none;color:var(--muted);font-size:14px;cursor:pointer;font-family:'Montserrat',sans-serif;font-weight:700;padding:0;white-space:nowrap">← Volver</button>
+      <div style="flex:1;min-width:0;font-family:'Montserrat',sans-serif;font-weight:900;font-size:15px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis" id="planoDetTitulo">—</div>
+      <button onclick="planoZoom(0.2)" title="Acercar" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;width:30px;height:30px;font-size:16px;cursor:pointer;color:var(--text);flex-shrink:0">+</button>
+      <button onclick="planoZoom(-0.2)" title="Alejar" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;width:30px;height:30px;font-size:16px;cursor:pointer;color:var(--text);flex-shrink:0">−</button>
+    </div>
+    <div style="padding:8px 16px;border-bottom:1px solid var(--border);flex-shrink:0">
+      <div style="font-size:11px;color:var(--muted)" id="planoDetSub">—</div>
+      <div id="planoDetCircuitos" style="margin-top:4px"></div>
+    </div>
+    <div id="planoDetSvgWrap" style="flex:1;overflow:auto;background:#f8fafc;padding:12px">
+      <div class="empty-state">Cargando plano…</div>
     </div>
   </div>
 
@@ -5522,6 +5560,7 @@ function setupHomeModules() {
   const cardReu     = document.getElementById('cardReuniones');
   const cardCal2    = document.getElementById('cardCalidad');
   const cardSubc    = document.getElementById('cardSubcontratas');
+  const cardPlanos  = document.getElementById('cardPlanos');
   // Seguridad: sin tarjetas de inventario, pero sí Pedidos, Docs, Dashboard, Incidencias y Galería
   if (dept === 'seguridad') {
     if (cardB) cardB.style.display = 'none';
@@ -5537,6 +5576,7 @@ function setupHomeModules() {
     if (cardReu)  cardReu.style.display  = 'flex';
     if (cardCal2) cardCal2.style.display = 'flex';
     if (cardSubc) cardSubc.style.display = 'flex';
+    if (cardPlanos) cardPlanos.style.display = 'flex';
     if (cardPartes) cardPartes.style.display = 'none';
     const cardHerrSeg = document.getElementById('cardHerramientas');
     if (cardHerrSeg) cardHerrSeg.style.display = 'flex';
@@ -5564,6 +5604,7 @@ function setupHomeModules() {
   if (cardReu)    cardReu.style.display    = 'flex';
   if (cardCal2)   cardCal2.style.display   = 'flex';
   if (cardSubc)   cardSubc.style.display   = 'flex';
+  if (cardPlanos) cardPlanos.style.display = 'flex';
   // Nuevos módulos PRL/calidad: visible a encargado y superiores (no operario)
   const s4 = getSession();
   const esEncargadoPlus = s4 && s4.rol !== 'operario';
@@ -6423,6 +6464,7 @@ function _applyScreen(name) {
   if (name === 'docs')         { docsCargar('screenDocsPanel'); }
   if (name === 'obraDashboard')  { cargarObraDashboard(); }
   if (name === 'incidencias')    { cargarIncidencias(); }
+  if (name === 'planos')         { cargarPlanos(); }
   if (name === 'partes')         { partesCargar(); }
   if (name === 'partesForm')     { parteIniciarFirma('parteCanvasCli'); parteIniciarFirma('parteCanvasResp'); }
   if (name === 'calendario')     { calCargar(); }
@@ -6531,6 +6573,10 @@ function navTo(target) {
   }
   if (target === 'incidencias') {
     showScreen('incidencias');
+    return;
+  }
+  if (target === 'planos') {
+    showScreen('planos');
     return;
   }
   if (target === 'reuniones') {
@@ -11841,7 +11887,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '7.74';
+const APP_VERSION = '7.75';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -13654,6 +13700,157 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
   window.triggerIncFoto        = triggerIncFoto;
   window.procesarFotosIncidencia = procesarFotosIncidencia;
   window.borrarFotoInc         = borrarFotoInc;
+
+  // PLANOS (solo lectura, NEW-31)
+  // ══════════════════════════════════════════════════════
+  window._planosCache = [];
+  window._planoFiltro = 'todos';
+  let _planoZoomVal = 1;
+
+  const PLANO_TIPO_LABELS = {
+    planta:             '🏗️ Planta',
+    electrico:          '⚡ Eléctrico',
+    mecanico:           '🔧 Mecánico',
+    gantt:              '📅 Gantt',
+    bandejas:           '🗂️ Bandejas',
+    unifilar:           '📐 Unifilar',
+    planta_electrica:   '⚡ Planta eléctrica',
+    planta_industrial:  '🏭 Planta industrial',
+  };
+
+  function planoRenderFiltros() {
+    const bar = document.getElementById('planoFiltroBar');
+    if (!bar) return;
+    const tipos = [...new Set(window._planosCache.map(p => p.tipo).filter(Boolean))];
+    const activo = window._planoFiltro || 'todos';
+    let html = `<button onclick="planoSetFiltro('todos')" class="filter-chip${activo === 'todos' ? ' active' : ''}">Todos</button>`;
+    tipos.forEach(t => {
+      html += `<button onclick="planoSetFiltro('${t}')" class="filter-chip${activo === t ? ' active' : ''}">${esc(PLANO_TIPO_LABELS[t] || t)}</button>`;
+    });
+    bar.innerHTML = html;
+  }
+
+  function planoSetFiltro(tipo) {
+    window._planoFiltro = tipo;
+    planoRenderFiltros();
+    renderPlanos(window._planosCache);
+  }
+
+  function renderPlanos(lista) {
+    const c = document.getElementById('planoList');
+    if (!c) return;
+    const filtro = window._planoFiltro || 'todos';
+    const items = filtro === 'todos' ? lista : lista.filter(p => p.tipo === filtro);
+    if (!items.length) {
+      c.innerHTML = `<div class="empty-state">Sin planos${filtro !== 'todos' ? ' de este tipo' : ''}</div>`;
+      return;
+    }
+    c.innerHTML = items.map(p => {
+      const label = PLANO_TIPO_LABELS[p.tipo] || ('📐 ' + (p.tipo || ''));
+      return `<div onclick="verPlano(${p.id})" style="background:var(--surface);border:1px solid var(--border);border-left:3px solid #0ea5e9;border-radius:12px;padding:12px;margin-bottom:10px;cursor:pointer">
+        <div style="display:flex;align-items:flex-start;gap:8px">
+          <span style="font-size:22px;line-height:1.2">📐</span>
+          <div style="flex:1;min-width:0">
+            <div style="font-weight:700;font-size:14px;color:var(--text);margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(p.titulo)}</div>
+            ${p.descripcion ? `<div style="font-size:11px;color:var(--muted);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(p.descripcion)}</div>` : ''}
+            <div style="font-size:10px;color:var(--muted);margin-top:4px">${esc((p.creado_en || '').slice(0, 10))}</div>
+          </div>
+          <span style="font-size:11px;font-weight:700;color:#0ea5e9;white-space:nowrap;padding:3px 8px;border-radius:20px;border:1px solid #0ea5e940;background:#0ea5e915">${esc(label)}</span>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  async function cargarPlanos() {
+    const c = document.getElementById('planoList');
+    if (!c) return;
+    c.innerHTML = '<div class="empty-state">Cargando…</div>';
+    try {
+      const res = await apiCall('/planos');
+      if (!res.ok) { c.innerHTML = '<div class="empty-state">Error al cargar</div>'; return; }
+      const data = await res.json().catch(() => ({}));
+      window._planosCache = data.planos || [];
+      planoRenderFiltros();
+      renderPlanos(window._planosCache);
+    } catch { c.innerHTML = '<div class="empty-state">Error de red</div>'; }
+  }
+
+  async function verPlano(id) {
+    _planoZoomVal = 1;
+    showScreen('planoDetalle');
+    const titEl  = document.getElementById('planoDetTitulo');
+    const subEl  = document.getElementById('planoDetSub');
+    const circEl = document.getElementById('planoDetCircuitos');
+    const wrap   = document.getElementById('planoDetSvgWrap');
+    if (titEl)  titEl.textContent  = 'Cargando…';
+    if (subEl)  subEl.textContent  = '';
+    if (circEl) circEl.innerHTML   = '';
+    if (wrap)   wrap.innerHTML     = '<div class="empty-state">Cargando plano…</div>';
+    let plano;
+    try {
+      const res = await apiCall(`/planos/${id}`);
+      if (!res.ok) {
+        if (titEl) titEl.textContent = 'Error';
+        if (wrap)  wrap.innerHTML = '<div class="empty-state">No se pudo cargar el plano</div>';
+        return;
+      }
+      const data = await res.json().catch(() => ({}));
+      plano = data.plano || {};
+    } catch {
+      if (titEl) titEl.textContent = 'Error';
+      if (wrap)  wrap.innerHTML = '<div class="empty-state">Error de red</div>';
+      return;
+    }
+    const label = PLANO_TIPO_LABELS[plano.tipo] || plano.tipo || '';
+    if (titEl) titEl.textContent = plano.titulo || 'Plano';
+    if (subEl) {
+      subEl.innerHTML = `<span style="font-weight:700;color:#0ea5e9">${esc(label)}</span>`
+        + (plano.descripcion ? ' · ' + esc(plano.descripcion) : '')
+        + (plano.creado_en ? ' · ' + esc(String(plano.creado_en).slice(0, 10)) : '');
+    }
+    // Circuitos estructurados (solo lectura, opcional — solo aporta contexto extra)
+    if (circEl) {
+      let circuitos = [];
+      try { circuitos = plano.circuitos_json ? JSON.parse(plano.circuitos_json) : []; } catch { circuitos = []; }
+      if (Array.isArray(circuitos) && circuitos.length) {
+        circEl.innerHTML = `<div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-top:6px;margin-bottom:2px">Circuitos</div>`
+          + circuitos.map(c => {
+              const partes = [];
+              if (c.proteccion) partes.push(esc(c.proteccion));
+              if (c.in_a) partes.push('In=' + esc(c.in_a) + 'A');
+              if (c.ireg_a) partes.push('Ireg=' + esc(c.ireg_a) + 'A');
+              if (c.seccion_cable || c.tipo_cable) partes.push(esc([c.seccion_cable, c.tipo_cable].filter(Boolean).join(' ')));
+              return `<div style="font-size:11px;color:var(--text);border-top:1px solid var(--border);padding:4px 0">
+                <b>${esc(c.nombre || c.id || '—')}</b>${partes.length ? ' · ' + partes.join(' · ') : ''}
+              </div>`;
+            }).join('');
+      } else {
+        circEl.innerHTML = '';
+      }
+    }
+    // Dibujo SVG
+    try {
+      const svgRes = await apiCallRaw(`/planos/${id}/svg`);
+      if (!svgRes.ok) { if (wrap) wrap.innerHTML = '<div class="empty-state">No se pudo cargar el dibujo</div>'; return; }
+      const svgText = await svgRes.text();
+      if (wrap) {
+        wrap.innerHTML = svgText;
+        const svgEl = wrap.querySelector('svg');
+        if (svgEl) { svgEl.style.transformOrigin = 'top left'; svgEl.style.maxWidth = 'none'; }
+      }
+    } catch { if (wrap) wrap.innerHTML = '<div class="empty-state">Error de red al cargar el dibujo</div>'; }
+  }
+
+  function planoZoom(delta) {
+    _planoZoomVal = Math.min(3, Math.max(0.2, +(_planoZoomVal + delta).toFixed(2)));
+    const svg = document.querySelector('#planoDetSvgWrap svg');
+    if (svg) svg.style.transform = `scale(${_planoZoomVal})`;
+  }
+
+  window.cargarPlanos    = cargarPlanos;
+  window.planoSetFiltro  = planoSetFiltro;
+  window.verPlano        = verPlano;
+  window.planoZoom       = planoZoom;
 
   // ══════════════════════════════════════════════════════
   // OBRA DASHBOARD (NEW-27)

@@ -5,11 +5,34 @@
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 08/07/2026
-VERSIÓN ACTUAL APP NUEVA: v7.74
+VERSIÓN ACTUAL APP NUEVA: v7.75
 WORKER API: 3575baf3-7645-4214-bf35-c47f0682778f (planos/generar + planos/:id/circuitos migrados aqui, ver historial) · WORKER AGENTE: f742e9e8-8d12-4fe2-9c0c-3b26c7672772 (cliente HTTP puro via Service Binding; previo: f2df41f2-329a-4c93-8b74-924be72a2ea3 sobre commit d9b009e)
 VERSIÓN ACTUAL APP VIEJA: v4.19 (⛔ CONGELADA DEFINITIVAMENTE — no recibe más cambios)
 
 HISTORIAL DE VERSIONES (resumen reciente):
+  v7.75        |  08/07/2026  [Fase UI planos editables: panel.html + app movil]
+                       Fase UI de planos editables (tarea pendiente #13), a peticion
+                       explicita de Adrian ("Panel + app movil a la vez" / "dos agentes
+                       a la vez"). 2 agentes en paralelo (worktrees aislados, sin
+                       solapamiento de archivos), integrados manualmente tras revision
+                       propia de los diffs (no solo el self-report de los agentes).
+                       panel.html: tipo unifilar anadido a los selects; bloque opcional
+                       "Circuitos" en el modal de generar plano (filas dinamicas, 9
+                       campos del contrato circuitos_json); pestanas "Plano"/"Circuitos"
+                       en el visor con tabla editable y guardado via PUT
+                       /planos/:id/circuitos (aviso de que quitar fila no borra en
+                       backend). index.html + sw.js + version.json: nueva pantalla
+                       screenPlanos (lista con filtros dinamicos por tipo) y
+                       screenPlanoDetalle (solo lectura: SVG con zoom, metadatos,
+                       circuitos si existen) + tarjeta "Planos" en el menu principal.
+                       Verificacion propia: node -e compilando bloques <script>
+                       extraidos de ambos HTML (0 errores), grep de encoding limpio,
+                       sync de version 7.75 confirmado en los 3 archivos. worker.js NO
+                       se toco (endpoints ya existian de la migracion anterior).
+                       Despliegue via GitHub Pages (git push), sin wrangler deploy. Ver
+                       SESION.md seccion "RESUMEN SESION 08/07/2026 (continuacion 3 --
+                       Fase UI planos editables: panel.html + app movil)".
+
   (worker raiz + agente, sin bump PWA) — 08/07/2026 — migracion de la logica canonica de
                        generar_plano/editar_plano al worker web raiz (alejandra-app-api),
                        a peticion explicita de Adrian ("teniamos que haber creado las
