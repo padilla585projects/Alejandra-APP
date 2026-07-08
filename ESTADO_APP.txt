@@ -6,7 +6,7 @@
 
 ÚLTIMA ACTUALIZACIÓN: 08/07/2026
 VERSIÓN ACTUAL APP NUEVA: v7.74
-WORKER API: cd7c8c68 · WORKER AGENTE: 75b99b3b-2501-4302-a716-97baf8701bc3 (commit d9b009e; previo: e780e454/9dfad2d8 sobre commit 5067b5b)
+WORKER API: cd7c8c68 · WORKER AGENTE: f2df41f2-329a-4c93-8b74-924be72a2ea3 (fix experto tecnico sin plano tools; previo: 75b99b3b sobre commit d9b009e)
 VERSIÓN ACTUAL APP VIEJA: v4.19 (⛔ CONGELADA DEFINITIVAMENTE — no recibe más cambios)
 
 HISTORIAL DE VERSIONES (resumen reciente):
@@ -44,13 +44,18 @@ HISTORIAL DE VERSIONES (resumen reciente):
                        asi que ante una peticion de edicion clasificada a ese experto,
                        Alejandra improviso un UPDATE por SQL crudo (consultar_bd/escribir_bd)
                        que actualizo circuitos_json PERO NO regenero el SVG -> plano
-                       desincronizado (el dibujo impreso no reflejaria el cambio). Arreglo
-                       propuesto: anadir TOOL_GENERAR_PLANO y TOOL_EDITAR_PLANO al array
-                       `tecnico` (worker.js ~linea 1957). NO aplicado aun -- Adrian pidio
-                       dejarlo para otra sesion ("lo dejamos para luego"). Artefactos de la
-                       prueba ya limpiados (plano de prueba y sesion temporal borrados de D1).
-                       PENDIENTE: aplicar el arreglo del experto `tecnico` + re-test; fases de
-                       UI en panel.html/app movil, aun no iniciadas.
+                       desincronizado (el dibujo impreso no reflejaria el cambio).
+                       FIX APLICADO Y VERIFICADO (misma sesion, retomada tras cierre a
+                       peticion de Adrian): anadidas TOOL_GENERAR_PLANO y TOOL_EDITAR_PLANO
+                       al array `tecnico` (worker.js ~linea 1957) — Worker agente Version ID
+                       f2df41f2-329a-4c93-8b74-924be72a2ea3. Re-test en vivo repitiendo el
+                       mismo mensaje que antes causaba el bypass: se clasifico otra vez a
+                       `tecnico`, pero ahora usa la tool `editar_plano` (SVG regenerado,
+                       circuitos_json correcto, sin SQL crudo). Bug cerrado. Artefactos de
+                       ambas pruebas ya limpiados (planos de prueba y sesiones temporales
+                       borrados de D1).
+                       PENDIENTE: solo quedan las fases de UI en panel.html/app movil, aun no
+                       iniciadas (requieren aprobacion explicita).
   v7.74 — 08/07/2026 — fix bug fuga de tool-call cruda como texto (parser de recuperacion
                        anclado al token de control en vez del primer "{" del texto completo,
                        + limpieza defensiva de texto tecnico fugado) — Worker agente Version

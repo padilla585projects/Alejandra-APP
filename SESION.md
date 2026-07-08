@@ -14,11 +14,14 @@ Center, Levitec/Merlin, Getafe Madrid) fotografiado por Adrian, circuitos QA3-QA
 Backend + chat construidos primero (decision de Adrian via AskUserQuestion); panel.html
 (Alejandra Office) y app movil quedan para una fase posterior. Probado en vivo contra
 produccion con los datos reales del POD: `generar_plano` con `circuitos` OK; `editar_plano`
-revelo un bug de enrutado (experto `tecnico` sin las tools de plano -> Alejandra bypasea
-por SQL crudo y el SVG queda desincronizado) -- arreglo propuesto (anadir las 2 tools a
-`tecnico`) queda PENDIENTE, Adrian pidio dejarlo para otra sesion. Ver seccion nueva
-"RESUMEN SESION 08/07/2026 (planos editables -- circuitos_json + editar_plano)" mas abajo,
-apartado "Prueba en vivo realizada" + "Pendiente".
+revelo un bug de enrutado (experto `tecnico` sin las tools de plano -> Alejandra bypaseaba
+por SQL crudo y el SVG quedaba desincronizado). **FIX YA APLICADO Y VERIFICADO** (misma
+sesion, retomada tras cierre): anadidas `TOOL_GENERAR_PLANO`/`TOOL_EDITAR_PLANO` al array
+`tecnico`, desplegado (Worker agente Version ID f2df41f2-329a-4c93-8b74-924be72a2ea3) y
+re-testeado en vivo con el mismo mensaje que antes causaba el bypass: ahora el experto
+`tecnico` usa `editar_plano` correctamente (SVG regenerado, `circuitos_json` correcto, sin
+SQL crudo). Ver seccion nueva "RESUMEN SESION 08/07/2026 (planos editables -- circuitos_json
++ editar_plano)" mas abajo, apartado "Prueba en vivo realizada" + "Fix aplicado y verificado".
 
 **Sesion anterior (mismo dia, antes de esta):** 08/07/2026 -- fix bug fuga de tool-call
 cruda como texto (parser de recuperacion anclado al token de control en vez de al primer
@@ -197,14 +200,27 @@ via segura sin importar a que experto la clasifique el router. Artefactos de la 
 (plano de prueba id 21, fila de sesion temporal, ficheros `_test_chat_payload*.json`) ya
 limpiados.
 
+### Fix aplicado y verificado (retomado tras cierre de sesion, mismo dia)
+Adrian pidio "seguimos" tras cerrar sesion -> confirmado via AskUserQuestion que se retomaba
+la tarea pendiente. Cambio: `worker.js` linea 1957, array `tecnico` en `TOOLS_POR_EXPERTO`
+-- anadidas `TOOL_GENERAR_PLANO, TOOL_EDITAR_PLANO` justo despues de `TOOL_MARCAR_PLANO`.
+Verificado `node --check` + grep de encoding limpio antes de desplegar.
+- Deploy: `npx wrangler deploy` desde `alejandra-agente/` -- Worker agente Version ID
+  `f2df41f2-329a-4c93-8b74-924be72a2ea3`.
+- Re-test en vivo: se genero un plano de prueba nuevo (QA3 630A/400A + QA14 160A/160A) y se
+  repitio EXACTAMENTE el mismo mensaje de edicion que antes causaba el bypass ("cambia el
+  nombre de QA3 y los amperios de QA14"). Resultado: se clasifico de nuevo al experto
+  `tecnico` (mismo enrutado que antes), pero esta vez el `tool_use` fue `editar_plano`
+  (no `consultar_bd`/`escribir_bd`). Confirmado en D1: `circuitos_json` actualizado
+  correctamente (QA3 nombre nuevo, QA14 amperajes nuevos, resto intacto), `svg_data`
+  regenerado (columna `actualizado_en` con timestamp real, contenido del SVG con el nombre
+  nuevo). Sin bypass por SQL crudo. Bug cerrado.
+- Artefactos de la prueba (plano de prueba, sesion temporal) limpiados en D1 al terminar.
+
 ### Pendiente
-1. Aplicar el arreglo del experto `tecnico` de arriba (aprobado el diseno, pendiente
-   ejecutarlo -- Adrian pidio dejarlo para otra sesion).
-2. Repetir la prueba de `editar_plano` tras el arreglo para confirmar que ya no hay bypass
-   por SQL crudo y que el SVG se regenera correctamente.
-3. Fases posteriores (no iniciadas, requieren aprobacion explicita antes de empezar):
-   editor de circuitos en panel.html (Alejandra Office) y visor/editor de planos en la app
-   movil (index.html), que hoy no tiene ninguna vista de la tabla `planos`.
+Fases posteriores (no iniciadas, requieren aprobacion explicita antes de empezar): editor
+de circuitos en panel.html (Alejandra Office) y visor/editor de planos en la app movil
+(index.html), que hoy no tiene ninguna vista de la tabla `planos`.
 
 ---
 
