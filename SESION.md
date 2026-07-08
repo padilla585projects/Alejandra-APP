@@ -12,8 +12,13 @@ explicita de Adrian ("lanza agentes para que lo hagan mas rapido y a la vez"), i
 manualmente despues. Caso de uso real que origino la feature: cuadro de obra "POD" (Data
 Center, Levitec/Merlin, Getafe Madrid) fotografiado por Adrian, circuitos QA3-QA18.
 Backend + chat construidos primero (decision de Adrian via AskUserQuestion); panel.html
-(Alejandra Office) y app movil quedan para una fase posterior. Ver seccion nueva "RESUMEN
-SESION 08/07/2026 (planos editables -- circuitos_json + editar_plano)" mas abajo.
+(Alejandra Office) y app movil quedan para una fase posterior. Probado en vivo contra
+produccion con los datos reales del POD: `generar_plano` con `circuitos` OK; `editar_plano`
+revelo un bug de enrutado (experto `tecnico` sin las tools de plano -> Alejandra bypasea
+por SQL crudo y el SVG queda desincronizado) -- arreglo propuesto (anadir las 2 tools a
+`tecnico`) queda PENDIENTE, Adrian pidio dejarlo para otra sesion. Ver seccion nueva
+"RESUMEN SESION 08/07/2026 (planos editables -- circuitos_json + editar_plano)" mas abajo,
+apartado "Prueba en vivo realizada" + "Pendiente".
 
 **Sesion anterior (mismo dia, antes de esta):** 08/07/2026 -- fix bug fuga de tool-call
 cruda como texto (parser de recuperacion anclado al token de control en vez de al primer
@@ -163,16 +168,43 @@ resto de la lista de herramientas por un parrafo suelto.
   estructurados". Push limpio. CI en verde: "Deploy Alejandra Agente Worker" y "Deploy to
   GitHub Pages".
 
-### Pendiente (siguiente paso de esta misma feature)
-Transcribir los datos reales de los circuitos QA3-QA18 del plano POD (foto compartida por
-Adrian) a formato `circuitos_json`, y usarlos para probar en vivo por chat tanto
-`generar_plano` (con `circuitos`) como `editar_plano` -- caso de prueba real elegido por
-Adrian. Aviso pendiente para Adrian: la lectura de la foto es una transcripcion manual y
-puede tener errores en datos tecnicos (amperajes/protecciones), a verificar/corregir por
-el mismo (lo cual sirve ademas como primera prueba real de `editar_plano`). Fases
-posteriores (no iniciadas, requieren aprobacion explicita antes de empezar): editor de
-circuitos en panel.html (Alejandra Office) y visor/editor de planos en la app movil
-(index.html), que hoy no tiene ninguna vista de la tabla `planos`.
+### Prueba en vivo realizada (mismo dia, continuacion)
+Transcritos con Adrian (varias fotos, varias correcciones suyas) los 16 circuitos QA3-QA18
+del POD real: acometida general transformador 800/1120kVA AN/AF + interruptor 2000A/IV
+polos/PdC 35kA/Imag 10xIn + autovalvula 20kA-C, QA3-QA13 a 630A/400A (QA7/QA8/QA12/QA13 en
+reserva sin cable), QA14 a 160A/160A, QA15-QA18 a 250A/250A (grupo "POD Internal CRAH").
+
+Prueba end-to-end contra produccion (token de sesion temporal creado y borrado despues,
+usuario real Adrian id 3/empresa 1, sin tocar credenciales de nadie):
+- **`generar_plano` con `circuitos`: OK.** Mensaje de chat real -> experto `ingenieria` ->
+  tool call con los 16 circuitos EXACTOS pedidos -> plano creado (id de prueba, borrado al
+  terminar) con SVG (53 KB) y `circuitos_json` (16 circuitos) persistidos correctamente.
+- **`editar_plano`: BUG DE ENRUTADO DESCUBIERTO.** El mismo tipo de peticion en lenguaje
+  natural ("cambia el nombre de QA3 y los amperios de QA14 en el plano...") se clasifico
+  al experto `tecnico`, que **nunca tuvo `generar_plano` ni `editar_plano` en su lista de
+  tools** (gap preexistente, no introducido por esta feature -- `tecnico` solo tenia
+  `TOOL_MARCAR_PLANO`). Al no tener la tool, Alejandra improviso: uso `consultar_bd` +
+  `escribir_bd` para hacer un `UPDATE planos SET circuitos_json=...` directo por SQL,
+  **sin regenerar el SVG** -- justo el riesgo que `editar_plano` se diseño para evitar (el
+  dibujo impreso se queda desincronizado del dato estructurado). Confirmado en D1: el
+  plano de prueba quedo con `circuitos_json` actualizado pero `svg_data` con los valores
+  viejos.
+
+**Arreglo propuesto (no aplicado, decision de Adrian: "lo dejamos para luego"):** anadir
+`TOOL_GENERAR_PLANO` y `TOOL_EDITAR_PLANO` al array de tools del experto `tecnico`
+(worker.js linea ~1957), para que cualquier frase sobre planos se resuelva siempre por la
+via segura sin importar a que experto la clasifique el router. Artefactos de la prueba
+(plano de prueba id 21, fila de sesion temporal, ficheros `_test_chat_payload*.json`) ya
+limpiados.
+
+### Pendiente
+1. Aplicar el arreglo del experto `tecnico` de arriba (aprobado el diseno, pendiente
+   ejecutarlo -- Adrian pidio dejarlo para otra sesion).
+2. Repetir la prueba de `editar_plano` tras el arreglo para confirmar que ya no hay bypass
+   por SQL crudo y que el SVG se regenera correctamente.
+3. Fases posteriores (no iniciadas, requieren aprobacion explicita antes de empezar):
+   editor de circuitos en panel.html (Alejandra Office) y visor/editor de planos en la app
+   movil (index.html), que hoy no tiene ninguna vista de la tabla `planos`.
 
 ---
 

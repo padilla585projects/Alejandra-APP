@@ -36,9 +36,21 @@ HISTORIAL DE VERSIONES (resumen reciente):
                          reconciliacion manual por desplazamiento de lineas).
                        Ver SESION.md, seccion "RESUMEN SESION 08/07/2026 (planos editables
                        -- circuitos_json + editar_plano)" para el detalle completo.
-                       PENDIENTE: transcribir los circuitos reales del plano POD desde la
-                       foto y probarlo en vivo por chat (generar_plano + editar_plano);
-                       fases de UI en panel.html/app movil, aun no iniciadas.
+                       PROBADO EN VIVO contra produccion con los 16 circuitos reales del POD
+                       (QA3-QA18, protecciones confirmadas por Adrian): generar_plano con
+                       circuitos -> OK (SVG + circuitos_json persistidos correctamente).
+                       editar_plano -> revelo BUG DE ENRUTADO preexistente: el experto
+                       `tecnico` nunca tuvo generar_plano/editar_plano en su lista de tools,
+                       asi que ante una peticion de edicion clasificada a ese experto,
+                       Alejandra improviso un UPDATE por SQL crudo (consultar_bd/escribir_bd)
+                       que actualizo circuitos_json PERO NO regenero el SVG -> plano
+                       desincronizado (el dibujo impreso no reflejaria el cambio). Arreglo
+                       propuesto: anadir TOOL_GENERAR_PLANO y TOOL_EDITAR_PLANO al array
+                       `tecnico` (worker.js ~linea 1957). NO aplicado aun -- Adrian pidio
+                       dejarlo para otra sesion ("lo dejamos para luego"). Artefactos de la
+                       prueba ya limpiados (plano de prueba y sesion temporal borrados de D1).
+                       PENDIENTE: aplicar el arreglo del experto `tecnico` + re-test; fases de
+                       UI en panel.html/app movil, aun no iniciadas.
   v7.74 — 08/07/2026 — fix bug fuga de tool-call cruda como texto (parser de recuperacion
                        anclado al token de control en vez del primer "{" del texto completo,
                        + limpieza defensiva de texto tecnico fugado) — Worker agente Version
