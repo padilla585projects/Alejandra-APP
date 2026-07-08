@@ -6,10 +6,39 @@
 
 ÚLTIMA ACTUALIZACIÓN: 08/07/2026
 VERSIÓN ACTUAL APP NUEVA: v7.74
-WORKER API: cd7c8c68 · WORKER AGENTE: e780e454-a3cf-451d-8fbf-3e8a33340101 (previo: 9dfad2d8, ambos sobre commit 5067b5b)
+WORKER API: cd7c8c68 · WORKER AGENTE: 75b99b3b-2501-4302-a716-97baf8701bc3 (commit d9b009e; previo: e780e454/9dfad2d8 sobre commit 5067b5b)
 VERSIÓN ACTUAL APP VIEJA: v4.19 (⛔ CONGELADA DEFINITIVAMENTE — no recibe más cambios)
 
 HISTORIAL DE VERSIONES (resumen reciente):
+  (agente, sin bump PWA) — 08/07/2026 — planos unifilar/electrico editables por chat con
+                       datos tecnicos reales (commit d9b009e, Worker agente Version ID
+                       75b99b3b-2501-4302-a716-97baf8701bc3). Peticion de Adrian a raiz de
+                       una foto real de un cuadro de obra ("POD", Data Center Getafe,
+                       circuitos QA3-QA18): poder cambiar nombres Y valores tecnicos
+                       (amperaje/proteccion/cable) de los automaticos de un esquema ya
+                       generado, regenerar el SVG e imprimir, desde chat/panel/app.
+                       Alcance de esta sesion (decidido con Adrian via AskUserQuestion):
+                       backend + chat primero, UI de panel/app en fase posterior.
+                       - `generar_plano` acepta nuevo parametro opcional `circuitos`
+                         (array de automaticos: id/nombre/proteccion/in_a/ireg_a/
+                         seccion_cable/tipo_cable/instalacion/notas), persistido en
+                         columna nueva `planos.circuitos_json`.
+                       - Nueva tool `editar_plano`: localiza el plano por id o busqueda de
+                         titulo (si hay varios candidatos, pregunta en vez de adivinar),
+                         aplica cambios a circuitos concretos (los crea si no existen) y
+                         regenera el SVG completo reusando el mismo pipeline/prompts que
+                         generar_plano, terminando en UPDATE (mismo plano, mismo ID).
+                       - migrate_008_plano_circuitos.sql aplicada en produccion.
+                       - Metodologia: 2 agentes en paralelo en worktrees git aislados
+                         (peticion explicita de Adrian, "lanza agentes para que lo hagan
+                         mas rapido y a la vez"), contrato de responsabilidades sin
+                         solape, integracion manual posterior (1 patch limpio + 1
+                         reconciliacion manual por desplazamiento de lineas).
+                       Ver SESION.md, seccion "RESUMEN SESION 08/07/2026 (planos editables
+                       -- circuitos_json + editar_plano)" para el detalle completo.
+                       PENDIENTE: transcribir los circuitos reales del plano POD desde la
+                       foto y probarlo en vivo por chat (generar_plano + editar_plano);
+                       fases de UI en panel.html/app movil, aun no iniciadas.
   v7.74 — 08/07/2026 — fix bug fuga de tool-call cruda como texto (parser de recuperacion
                        anclado al token de control en vez del primer "{" del texto completo,
                        + limpieza defensiva de texto tecnico fugado) — Worker agente Version

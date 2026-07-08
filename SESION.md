@@ -1,16 +1,30 @@
 ## ESTADO ACTUAL
 
 **Sesion:** LIBRE
-**Ultima sesion:** 08/07/2026 -- fix bug fuga de tool-call cruda como texto (parser de
-recuperacion anclado al token de control en vez de al primer `{` del texto completo) +
-fallback de vision con Gemini (solo cascada de imagen, antes de OpenRouter gratis) +
-indicador de estado en una sola linea en el chat movil (routing/tool_start/tool_end) +
-fix bug adjuntar imagen/archivo en el chat de Alejandra ("Inicia sesion" con sesion valida
-por codigo de obra, sin `usuario_id` individual). Ver seccion nueva "RESUMEN SESION
-08/07/2026 (fix tool-call fugado + Gemini vision + indicador de estado + fix adjuntos)"
-mas abajo.
+**Ultima sesion:** 08/07/2026 (continuacion) -- nueva feature: planos unifilar/electrico
+editables por chat con datos tecnicos reales. `generar_plano` acepta ahora un parametro
+opcional `circuitos` (lista de automaticos con id/nombre/proteccion/amperajes/cable/
+instalacion), guardado en columna nueva `planos.circuitos_json`. Nueva tool `editar_plano`:
+localiza un plano por id o busqueda de titulo y aplica cambios a circuitos concretos
+(crea el circuito si no existe), regenerando el SVG sin tener que redescribir el plano
+entero. Trabajo repartido en 2 agentes en paralelo (worktrees aislados) por peticion
+explicita de Adrian ("lanza agentes para que lo hagan mas rapido y a la vez"), integrados
+manualmente despues. Caso de uso real que origino la feature: cuadro de obra "POD" (Data
+Center, Levitec/Merlin, Getafe Madrid) fotografiado por Adrian, circuitos QA3-QA18.
+Backend + chat construidos primero (decision de Adrian via AskUserQuestion); panel.html
+(Alejandra Office) y app movil quedan para una fase posterior. Ver seccion nueva "RESUMEN
+SESION 08/07/2026 (planos editables -- circuitos_json + editar_plano)" mas abajo.
 
-**Sesion anterior:** 07/07/2026 -- fix bug generar_plano (tool_use perdido en fase de cierre,
+**Sesion anterior (mismo dia, antes de esta):** 08/07/2026 -- fix bug fuga de tool-call
+cruda como texto (parser de recuperacion anclado al token de control en vez de al primer
+`{` del texto completo) + fallback de vision con Gemini (solo cascada de imagen, antes de
+OpenRouter gratis) + indicador de estado en una sola linea en el chat movil
+(routing/tool_start/tool_end) + fix bug adjuntar imagen/archivo en el chat de Alejandra
+("Inicia sesion" con sesion valida por codigo de obra, sin `usuario_id` individual). Ver
+seccion "RESUMEN SESION 08/07/2026 (fix tool-call fugado + Gemini vision + indicador de
+estado + fix adjuntos)" mas abajo.
+
+**Sesion anterior a esa:** 07/07/2026 -- fix bug generar_plano (tool_use perdido en fase de cierre,
 experto ingenieria en canal web/panel) + auditoria de coste con migracion a modelos gratis
 (destilacion, compactacion, experto "simple") + mecanismo de auto-actualizacion de la cascada
 de modelos gratis via KV (solo alejandra-agente, commit 5067b5b, Worker agente Version ID
@@ -62,6 +76,103 @@ CROSS-EMPRESA EN 5 FAMILIAS MAS" anadida en el commit ff52aea (continuacion 19 e
 ese archivo), y subseccion "IDOR EN subir_archivo/enviar_notificacion + authOk
 FAIL-CLOSED" anadida en el commit 2a18d5b (continuacion 20 en ese archivo). Ver
 seccion de abajo.
+
+---
+
+## RESUMEN SESION 08/07/2026 (planos editables -- circuitos_json + editar_plano)
+
+### Peticion de Adrian
+Adrian fotografio un esquema unifilar real de obra (cuadro "POD", proyecto Data Center
+calle Fundidores nº40, Getafe Madrid, fabricante Levitec/Merlin, circuitos QA3-QA18 con
+sus protecciones/amperajes/cables) y pidio (verbatim): *"esto es un esquema unifilar de un
+cuadro de obra llamado POD. quiero poder cambiar los nombres de los automaticos y luego
+poder generar uno nuevo, vamos poder editarlo y luego generar uno nuevo y poder imprimr...
+quiero hacerlo desde Alejandra Office y desde la app, pero tambien desde el chat. que yo la
+diga lo que quiero y ella me lo ejecute."* Es decir: editar datos de circuitos de un plano
+ya generado (no solo texto libre/descripcion), regenerar el SVG, e imprimir -- accesible
+desde panel.html, la app movil y el chat en lenguaje natural.
+
+Antes de tocar codigo se investigo la infraestructura existente (`TOOL_GENERAR_PLANO`,
+`_generarPlanoAgente`, tabla `planos`, editor SVG ya existente en panel.html con
+impresion A3) y se confirmo el alcance con Adrian via AskUserQuestion: (1) **Backend + chat
+primero**, UI de panel.html/app movil para una fase posterior; (2) el MVP debe permitir
+**renombrar + cambiar valores tecnicos** (amperaje, cable, proteccion), no solo el nombre;
+(3) usar como caso de prueba **el plano real del POD** (no un ejemplo generico).
+
+### Diseno
+Se definio un contrato de datos `circuitos_json` (array de objetos por automatico: `id`,
+`nombre`, `proteccion`, `in_a`, `ireg_a`, `seccion_cable`, `tipo_cable`, `instalacion`,
+`notas`), persistido junto al `svg_data` ya existente en la tabla `planos`, para que un
+comando de chat pueda localizar y modificar campos concretos de un circuito sin tener que
+regenerar el plano entero adivinando de nuevo todos los datos.
+
+### Cambios (commit d9b009e, solo alejandra-agente/worker.js)
+- `TOOL_GENERAR_PLANO`: nuevo parametro opcional `circuitos` (array, cada item con `id`
+  obligatorio y el resto de campos del contrato opcionales). Cuando se proporciona, para
+  tipo `unifilar`/`electrico` los valores se usan LITERALMENTE en el SVG (no se inventan
+  numeros) y se guardan en `circuitos_json` para poder editarlos despues.
+- `_generarPlanoAgente`: construye un bloque de texto con los circuitos exactos y lo
+  inyecta en el prompt de usuario; al insertar en `planos` guarda tambien `circuitos_json`
+  (`null` si no se paso ningun circuito).
+- Nueva tool **`editar_plano`**: recibe `plano_id` (si se conoce) o `busqueda` (texto
+  parcial del titulo, ej. "POD") + una lista de `cambios` (`circuito_id`, `campo`, `valor`).
+  Si la busqueda por titulo devuelve varios planos, no adivina -- devuelve la lista de
+  candidatos para que se le pregunte a Adrian cual es. Si el `circuito_id` no existe en el
+  plano, lo crea nuevo (permite anadir automaticos, no solo editar los existentes).
+- Nueva funcion `_editarPlanoAgente`: localiza el plano, parchea el array `circuitos_json`
+  en memoria, reconstruye el prompt (descripcion original + circuitos actualizados) y
+  regenera el SVG completo con el mismo `_PLANO_PROMPTS[tipo]` y el mismo pipeline de
+  saneado/inyeccion de simbolos IEC que `_generarPlanoAgente`, pero termina con
+  `UPDATE planos SET svg_data=?, circuitos_json=?, metadatos=?, actualizado_en=...` (no
+  INSERT) -- mismo plano, mismo ID, datos y dibujo actualizados.
+- `editar_plano` registrada en los 3 expertos que ya tenian `generar_plano`: `app`,
+  `completo`, `ingenieria`.
+- `migrate_008_plano_circuitos.sql`: `ALTER TABLE planos ADD COLUMN circuitos_json TEXT`
+  (ademas, `_ensurePlanosTableAgente` ya lo aplica de forma idempotente/self-healing en
+  cada arranque via `.catch(()=>{})`, mismo patron usado en todo el archivo).
+
+### Metodologia: 2 agentes en paralelo (peticion explicita de Adrian)
+Adrian pidio expresamente *"lanza agentes para que lo hagan mas rapido y a la vez"*. Se
+disenio un contrato de responsabilidades sin solape (yo mismo lei/grep el codigo real
+antes de repartir el trabajo, nunca delegando el analisis): Agente 1 -- extender
+`generar_plano`/`_generarPlanoAgente` con `circuitos` + la migracion; Agente 2 -- la tool
+nueva `editar_plano` completa (constante, funcion, case, registro en los 3 expertos), sin
+tocar el codigo de Agente 1. Cada agente trabajo en su propio worktree git aislado
+(`.claude/worktrees/agent-*`), se auto-verifico con `node --check` + grep de encoding, y no
+desplego ni commiteo (eso quedo para el final). Integracion manual posterior: el diff de
+Agente 1 se aplico limpio via `git apply`; el de Agente 2 se reconcilio a mano (`Read`+
+`Edit`) porque el desplazamiento de lineas causado por el primer patch invalidaba el
+contexto del segundo diff para una aplicacion automatica. Se aprovecho la integracion para
+limpiar tambien una inconsistencia preexistente (no introducida por los agentes) en el
+prompt del experto `ingenieria`, donde la vineta de `generar_plano` quedaba separada del
+resto de la lista de herramientas por un parrafo suelto.
+
+### Verificacion
+- `node --check` limpio tras cada paso de la integracion manual.
+- Grep de corrupcion de encoding (`Ã|Â|â€|ï»¿`) limpio en el diff completo.
+- Confirmado sin duplicados tras la integracion (`TOOL_EDITAR_PLANO`,
+  `_editarPlanoAgente`, `case 'editar_plano'` y el `ALTER TABLE circuitos_json`
+  aparecen exactamente 1 vez cada uno en el archivo final).
+
+### Deploy
+- `npx wrangler deploy` desde `alejandra-agente/` -- Version ID
+  `75b99b3b-2501-4302-a716-97baf8701bc3`.
+- Migracion 008 aplicada explicitamente en produccion (`wrangler d1 execute --remote`),
+  columna `circuitos_json` confirmada en `PRAGMA table_info(planos)`.
+- Commit `d9b009e`: "feat(agente): planos unifilar/electrico editables con circuitos
+  estructurados". Push limpio. CI en verde: "Deploy Alejandra Agente Worker" y "Deploy to
+  GitHub Pages".
+
+### Pendiente (siguiente paso de esta misma feature)
+Transcribir los datos reales de los circuitos QA3-QA18 del plano POD (foto compartida por
+Adrian) a formato `circuitos_json`, y usarlos para probar en vivo por chat tanto
+`generar_plano` (con `circuitos`) como `editar_plano` -- caso de prueba real elegido por
+Adrian. Aviso pendiente para Adrian: la lectura de la foto es una transcripcion manual y
+puede tener errores en datos tecnicos (amperajes/protecciones), a verificar/corregir por
+el mismo (lo cual sirve ademas como primera prueba real de `editar_plano`). Fases
+posteriores (no iniciadas, requieren aprobacion explicita antes de empezar): editor de
+circuitos en panel.html (Alejandra Office) y visor/editor de planos en la app movil
+(index.html), que hoy no tiene ninguna vista de la tabla `planos`.
 
 ---
 
