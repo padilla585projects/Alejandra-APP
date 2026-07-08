@@ -6,10 +6,40 @@
 
 ÚLTIMA ACTUALIZACIÓN: 08/07/2026
 VERSIÓN ACTUAL APP NUEVA: v7.74
-WORKER API: cd7c8c68 · WORKER AGENTE: f2df41f2-329a-4c93-8b74-924be72a2ea3 (fix experto tecnico sin plano tools; previo: 75b99b3b sobre commit d9b009e)
+WORKER API: 3575baf3-7645-4214-bf35-c47f0682778f (planos/generar + planos/:id/circuitos migrados aqui, ver historial) · WORKER AGENTE: f742e9e8-8d12-4fe2-9c0c-3b26c7672772 (cliente HTTP puro via Service Binding; previo: f2df41f2-329a-4c93-8b74-924be72a2ea3 sobre commit d9b009e)
 VERSIÓN ACTUAL APP VIEJA: v4.19 (⛔ CONGELADA DEFINITIVAMENTE — no recibe más cambios)
 
 HISTORIAL DE VERSIONES (resumen reciente):
+  (worker raiz + agente, sin bump PWA) — 08/07/2026 — migracion de la logica canonica de
+                       generar_plano/editar_plano al worker web raiz (alejandra-app-api),
+                       a peticion explicita de Adrian ("teniamos que haber creado las
+                       tools en el worker de la web... y que alejandra Agente supiera
+                       trabajar en ello pero sin hacer nada en el worker del agente").
+                       Nuevos endpoints REST en worker.js: POST /planos/generar, PUT
+                       /planos/:id/circuitos (auth dual: sesion X-Token o secreto interno
+                       X-Internal-Secret para el agente). alejandra-agente ahora es
+                       cliente HTTP puro de esos 2 endpoints, sin logica de SVG propia.
+                       2 BUGS REALES encontrados y corregidos durante el "probar todo"
+                       pedido por Adrian:
+                       (1) Cloudflare Error 1042 ("Worker tried to fetch from another
+                           Worker on the same zone") bloqueaba TODO fetch() agente->raiz
+                           (misma zona workers.dev) — fix: Service Binding (env.API_WEB,
+                           wrangler.toml del agente) en vez de fetch() a la URL publica.
+                       (2) empresa_id de contexto en el agente puede ser el string
+                           literal 'default' (sentinela de sesion sin empresa asignada) —
+                           al ser truthy rompia el patron "x || empresa_id || 1", el
+                           worker raiz recibia 'default' en vez de un ID numerico real y
+                           no encontraba el plano al editar — fix: helper resolverEid()
+                           (parseInt + validacion entero positivo) en el agente, mas
+                           defensa en profundidad equivalente en _getAuthPlano (raiz).
+                       Verificado end-to-end en produccion real via chat: generar_plano y
+                       editar_plano OK, confirmado en D1 tras el fix (circuitos_json con
+                       el valor nuevo). Datos de prueba (planos 21-24, sesion 133, tabla
+                       temporal debug_log) limpiados de D1 produccion.
+                       Worker raiz Version ID 3575baf3-7645-4214-bf35-c47f0682778f ·
+                       Worker agente Version ID f742e9e8-8d12-4fe2-9c0c-3b26c7672772.
+                       Ver SESION.md, seccion "RESUMEN SESION 08/07/2026 (migracion planos
+                       a worker raiz -- Service Binding + fix empresa_id 'default')".
   (agente, sin bump PWA) — 08/07/2026 — planos unifilar/electrico editables por chat con
                        datos tecnicos reales (commit d9b009e, Worker agente Version ID
                        75b99b3b-2501-4302-a716-97baf8701bc3). Peticion de Adrian a raiz de

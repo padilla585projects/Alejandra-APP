@@ -1,7 +1,32 @@
 ## ESTADO ACTUAL
 
 **Sesion:** LIBRE
-**Ultima sesion:** 08/07/2026 (continuacion) -- nueva feature: planos unifilar/electrico
+**Ultima sesion:** 08/07/2026 (continuacion 2) -- migracion de la logica canonica de
+generacion/edicion de planos (`generar_plano`/`editar_plano`) al worker web raiz
+(`alejandra-app-api`), a peticion explicita de Adrian ("teniamos que haber creado las
+tools en el worker de la web que es donde ya existen las otras tools... y que alejandra
+Agente supiera trabajar en ello pero sin hacer nada en el worker del agente"). El agente
+(`alejandra-agente`) ahora es un cliente HTTP puro de esos 2 endpoints (`POST
+/planos/generar`, `PUT /planos/:id/circuitos`), autenticado con secreto interno
+(`X-Internal-Secret`/`AGENT_INTERNAL_SECRET`) -- ya no duplica la logica de generacion
+SVG. **2 bugs reales encontrados y corregidos durante el "probar todo" pedido por
+Adrian** ("hazlo bien... despues debemos probar todo"): (1) Cloudflare **Error 1042**
+("Worker tried to fetch from another Worker on the same zone") bloqueaba TODAS las
+llamadas agente->raiz via `fetch()` global (ambos workers comparten zona `workers.dev`)
+-- fix: **Service Binding** (`env.API_WEB`, `wrangler.toml` del agente) en vez de
+`fetch()` a la URL publica; (2) el `empresa_id` de contexto en el agente puede ser el
+string literal `'default'` (sentinela de sesion sin empresa asignada, usado en otras
+partes del worker) -- al ser *truthy* rompia el patron `eid_input || empresa_id || 1`,
+enviando `'default'` en vez de un ID numerico real al worker raiz, que entonces no
+encontraba el plano al editar (`WHERE empresa_id=?` nunca casaba). Fix: helper
+`resolverEid()` (parseInt + validacion de entero positivo) en ambos case del agente, mas
+defensa en profundidad equivalente en `_getAuthPlano` del worker raiz. Verificado
+end-to-end en produccion real via chat (`generar_plano` y `editar_plano`, plano de
+prueba editado 2 veces con exito, valores confirmados en D1). Ver seccion nueva
+"RESUMEN SESION 08/07/2026 (migracion planos a worker raiz -- Service Binding + fix
+empresa_id 'default')" mas abajo.
+
+**Sesion anterior (mismo dia, antes de esta):** 08/07/2026 (continuacion) -- nueva feature: planos unifilar/electrico
 editables por chat con datos tecnicos reales. `generar_plano` acepta ahora un parametro
 opcional `circuitos` (lista de automaticos con id/nombre/proteccion/amperajes/cable/
 instalacion), guardado en columna nueva `planos.circuitos_json`. Nueva tool `editar_plano`:
@@ -84,6 +109,100 @@ CROSS-EMPRESA EN 5 FAMILIAS MAS" anadida en el commit ff52aea (continuacion 19 e
 ese archivo), y subseccion "IDOR EN subir_archivo/enviar_notificacion + authOk
 FAIL-CLOSED" anadida en el commit 2a18d5b (continuacion 20 en ese archivo). Ver
 seccion de abajo.
+
+---
+
+## RESUMEN SESION 08/07/2026 (migracion planos a worker raiz -- Service Binding + fix empresa_id 'default')
+
+### Peticion de Adrian
+Tras revisar la feature de la sesion anterior (circuitos_json + editar_plano, ver seccion
+de abajo), Adrian senalo un error de diseño (verbatim): *"teneiamos que haber creado las
+tools en el worker de la web que es donde ya existen las otras tools y es donde los
+usuarios haran las cosas porque sera mas comodo y porque tienen feedback visual. y que
+alejandra Agente supiera trabajar en ello pero sin hacer nada en el worker del agente."*
+Es decir: la logica canonica de generacion/edicion de planos SVG debia vivir SIEMPRE en
+`worker.js` (raiz, `alejandra-app-api`) -- el mismo sitio donde ya viven el resto de
+tools con feedback visual en `panel.html` -- y `alejandra-agente` debia limitarse a
+invocarla via HTTP, sin duplicar logica. Confirmado explicitamente por Adrian antes de
+tocar codigo: *"si,hazlo.pero hazlo bien.utiliza agentes para una migracion exitosa.
+despues debemos probar todo. lo he querido hacer asi porque seguiremos metiendo mas
+tools y asi esta mejor organizado todo."*
+
+### Migracion realizada
+- Portada a `worker.js` (raiz) la logica completa de `_generarPlanoAgente`/
+  `_editarPlanoAgente` (incluye los tipos `planta_electrica`/`planta_industrial`, antes
+  solo en el agente) como endpoints REST: `POST /planos/generar`, `PUT
+  /planos/:id/circuitos`, con autenticacion dual (`_getAuthPlano`: sesion normal via
+  `X-Token` para panel.html, O secreto interno `X-Internal-Secret` para llamadas
+  servidor-a-servidor del agente).
+- `alejandra-agente/worker.js`: los case `generar_plano`/`editar_plano` de
+  `ejecutarTool()` reescritos como clientes HTTP puros de esos 2 endpoints -- ya no
+  contienen logica de generacion de SVG.
+- Secreto `AGENT_INTERNAL_SECRET` configurado en ambos workers (`wrangler secret put`).
+
+### Bug 1: Cloudflare Error 1042 (fetch entre Workers de la misma zona)
+Al probar en vivo, `generar_plano`/`editar_plano` via chat devolvian error generico
+("plano no existe" o similar) pese a que el endpoint funcionaba perfectamente al
+llamarlo por curl directo. Diagnostico (D1 debug logging temporal, ver mas abajo, porque
+`wrangler tail` fallaba intermitentemente mostrando cero logs pese a peticiones
+confirmadas): el `fetch()` global desde `alejandra-agente` hacia
+`alejandra-app-api.alejandra-app.workers.dev` devolvia HTTP 404 con body **"error code:
+1042"** -- confirmado contra la documentacion oficial de Cloudflare: un Worker no puede
+hacer `fetch()` normal a otro Worker en la MISMA zona (`workers.dev` cuenta como zona
+compartida entre todos los workers de la cuenta); la unica via soportada es un **Service
+Binding**.
+**Fix:** nuevo bloque `[[services]]` en `alejandra-agente/wrangler.toml` (`binding =
+"API_WEB"`, `service = "alejandra-app-api"`); las 2 llamadas cambiadas de `fetch(url,
+...)` a `env.API_WEB.fetch(url, ...)`. Ademas de arreglar el bug, evita el salto por red
+publica (mas rapido).
+
+### Bug 2: empresa_id resuelto como el string 'default'
+Tras el fix del Error 1042, `generar_plano` funciono en la primera prueba en vivo, pero
+`editar_plano` seguia fallando ("plano no existe en BD") pese a que el mismo plano
+editado por curl directo si funcionaba. Diagnostico (mismo mecanismo de D1 debug
+logging): el body enviado al worker raiz llevaba `empresa=default` en vez del ID
+numerico real (`1`) del plano de prueba. Causa raiz: el patron `_eidPlano = eid_plano ||
+empresa_id || 1` no contempla que la variable de contexto `empresa_id` puede ser el
+string literal `'default'` (sentinela ya usado en otras partes de este worker para
+"sesion sin empresa asignada resuelta") -- ese string es *truthy* en JS, asi que el
+`|| 1` de fallback nunca se alcanzaba, y `'default'` viajaba tal cual hasta el `WHERE
+id=? AND empresa_id=?` del worker raiz, que nunca casaba con la fila real
+(`empresa_id=1`, entero).
+**Fix:** nuevo helper `resolverEid(v)` en `alejandra-agente/worker.js`
+(`ejecutarTool()`): `parseInt` + validacion de entero positivo, `null` en cualquier otro
+caso (incluido `'default'`). Aplicado en `generar_plano` y `editar_plano`. Defensa en
+profundidad equivalente anadida en `_getAuthPlano` (worker raiz, el limite de seguridad
+real del multi-tenant): `parseInt(body.empresa_id)` con fallback a `1` si no es un
+entero positivo, en vez de confiar ciegamente en `body.empresa_id || 1`.
+
+### Verificacion
+- `node --check` limpio en ambos workers tras cada cambio.
+- Grep de corrupcion de encoding (`Ã|Â|â€|ï»¿`) limpio en el diff completo de ambos
+  workers antes de cada deploy.
+- Test en vivo end-to-end contra produccion real (chat real, no simulado): `generar_plano`
+  OK (plano de prueba creado con SVG); `editar_plano` fallo 2 veces con el bug 2 sin
+  corregir (confirmado por D1 debug logging: `empresa=default`, HTTP 404 "Plano no
+  encontrado"); tras el fix, mismo test exacto repetido -> **OK**, confirmado ademas
+  directamente en D1 (`circuitos_json` con el valor nuevo, `40` amperios).
+- Tecnica de diagnostico: tabla D1 temporal `debug_log` (mas fiable que `wrangler tail`,
+  que fallo mostrando cero logs varias veces pese a peticiones confirmadas) -- creada,
+  usada, y **borrada** (`DROP TABLE`) al terminar.
+
+### Limpieza
+Datos de prueba borrados de D1 produccion: planos de prueba id 21, 22, 23, 24; sesion de
+prueba id 133 (token `test_migracion_planos_1`); tabla temporal `debug_log`. Confirmado
+vacio tras el borrado.
+
+### Deploy
+- Worker raiz (`alejandra-app-api`): Version ID `3575baf3-7645-4214-bf35-c47f0682778f`.
+- Worker agente (`alejandra-agente`): Version ID `f742e9e8-8d12-4fe2-9c0c-3b26c7672772`.
+- Ambos via `npx wrangler deploy` desde su carpeta respectiva (raiz del repo para
+  `alejandra-app-api`, `alejandra-agente/` para `alejandra-agente`).
+
+### Pendiente
+Fases de UI en `panel.html`/app movil para planos editables (ver seccion anterior,
+pendiente de aprobacion explicita, sin iniciar). Commit + push de esta migracion
+pendiente inmediatamente despues de esta entrada.
 
 ---
 

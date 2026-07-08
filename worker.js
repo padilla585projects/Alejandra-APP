@@ -5388,6 +5388,7 @@ export default {
       if (path === '/planos/generar'               && method === 'POST')   return await generarPlanoREST(request, env);
       if (/^\/planos\/\d+$/.test(path)            && method === 'GET')    return await getPlano(request, env, path);
       if (/^\/planos\/\d+\/svg$/.test(path)       && method === 'GET')    return await getPlanoSvg(request, env, path);
+      if (/^\/planos\/\d+\/circuitos$/.test(path) && method === 'PUT')    return await editarPlanoCircuitosREST(request, env, path);
       if (/^\/planos\/\d+$/.test(path)            && method === 'PUT')    return await actualizarPlanoSvg(request, env, path);
       if (/^\/planos\/\d+$/.test(path)            && method === 'DELETE') return await eliminarPlano(request, env, path);
 
@@ -21818,6 +21819,30 @@ async function _ensurePlanosTable(env) {
       actualizado_en TEXT    DEFAULT (datetime('now'))
     )
   `).run();
+  await env.DB.prepare(`ALTER TABLE planos ADD COLUMN circuitos_json TEXT`).run().catch(() => {});
+}
+
+// Autenticacion dual para endpoints de planos: sesion normal (X-Token) para
+// llamadas desde panel.html, O secreto interno (X-Internal-Secret) para
+// llamadas servidor-a-servidor desde el worker alejandra-agente (el chat IA
+// usa este mismo endpoint para generar/editar planos, en vez de duplicar la
+// logica de generacion de SVG en su propio worker).
+async function _getAuthPlano(request, env, body) {
+  const secreto = request.headers.get('X-Internal-Secret');
+  if (secreto && env.AGENT_INTERNAL_SECRET && secreto === env.AGENT_INTERNAL_SECRET) {
+    // Defensa en profundidad: normalizar a entero positivo. El worker agente
+    // maneja internamente el sentinela de string 'default' (sesion sin
+    // empresa asignada) para otras tools -- si por lo que sea llegara sin
+    // filtrar hasta aqui, un "|| 1" simple lo dejaria pasar tal cual (string
+    // truthy) en vez de caer al valor por defecto. parseInt lo evita.
+    const eidNum = parseInt(body && body.empresa_id, 10);
+    return {
+      empresa_id: (Number.isInteger(eidNum) && eidNum > 0) ? eidNum : 1,
+      usuario_id: (body && body.usuario_id) || null,
+      rol: (body && body.rol) || 'agente_ia'
+    };
+  }
+  return await getAuth(request, env);
 }
 
 // ── Biblioteca de símbolos IEC 60617 — inyectada en cada SVG eléctrico ─────────────────
@@ -22058,6 +22083,125 @@ const IEC_BANDEJA_DEFS = `<defs id="bandeja-lib">
     <line x1="14" y1="5" x2="30" y2="5" stroke="currentColor" stroke-width="2.5"/>
     <line x1="14" y1="9" x2="30" y2="9" stroke="currentColor" stroke-width="2.5"/>
     <line x1="14" y1="5" x2="14" y2="9" stroke="currentColor" stroke-width="1.5"/>
+  </symbol>
+</defs>`;
+
+// ── Biblioteca de simbolos para planos de planta de instalacion electrica
+// (vivienda/oficina/local): punto de luz, aplique, toma de corriente,
+// interruptores, caja de derivacion, CGMP. Mismo estilo currentColor que
+// IEC_BANDEJA_DEFS para que combinen visualmente en el mismo plano.
+const IEC_INSTALACION_DEFS = `<defs id="instalacion-lib">
+  <!-- Punto de luz de techo (circulo con cruz, 20x20) -->
+  <symbol id="sym-punto-luz" viewBox="0 0 20 20" overflow="visible">
+    <circle cx="10" cy="10" r="8" fill="white" stroke="currentColor" stroke-width="1.6"/>
+    <line x1="10" y1="2" x2="10" y2="18" stroke="currentColor" stroke-width="1.2"/>
+    <line x1="2" y1="10" x2="18" y2="10" stroke="currentColor" stroke-width="1.2"/>
+  </symbol>
+  <!-- Aplique de pared (semicirculo, 16x10) -->
+  <symbol id="sym-aplique" viewBox="0 0 16 10" overflow="visible">
+    <path d="M0,10 A8,8 0 0 1 16,10" fill="white" stroke="currentColor" stroke-width="1.5"/>
+    <line x1="4" y1="10" x2="12" y2="10" stroke="currentColor" stroke-width="1.2"/>
+  </symbol>
+  <!-- Toma de corriente / base de enchufe Schuko (circulo + medio arco tierra, 18x18) -->
+  <symbol id="sym-toma-corriente" viewBox="0 0 18 18" overflow="visible">
+    <circle cx="9" cy="9" r="7" fill="white" stroke="currentColor" stroke-width="1.5"/>
+    <path d="M4,9 A5,5 0 0 1 14,9" fill="none" stroke="currentColor" stroke-width="1.4"/>
+  </symbol>
+  <!-- Interruptor simple (letra "a" + trazo diagonal de mando, 16x16) -->
+  <symbol id="sym-interruptor-simple" viewBox="0 0 16 16" overflow="visible">
+    <line x1="2" y1="14" x2="12" y2="4" stroke="currentColor" stroke-width="1.6"/>
+    <text x="13" y="7" font-size="9" font-family="Arial,sans-serif" fill="currentColor">a</text>
+  </symbol>
+  <!-- Interruptor conmutado / de cruce (letra "a2" + doble trazo, 18x16) -->
+  <symbol id="sym-interruptor-conmutado" viewBox="0 0 18 16" overflow="visible">
+    <line x1="2" y1="14" x2="12" y2="4" stroke="currentColor" stroke-width="1.6"/>
+    <line x1="5" y1="14" x2="15" y2="4" stroke="currentColor" stroke-width="1.6"/>
+    <text x="14" y="7" font-size="7" font-family="Arial,sans-serif" fill="currentColor">a2</text>
+  </symbol>
+  <!-- Caja de derivacion/registro (cuadrado con diagonales, 14x14) -->
+  <symbol id="sym-caja-derivacion" viewBox="0 0 14 14" overflow="visible">
+    <rect x="0" y="0" width="14" height="14" fill="white" stroke="currentColor" stroke-width="1.4"/>
+    <line x1="1" y1="1" x2="13" y2="13" stroke="currentColor" stroke-width="1"/>
+    <line x1="13" y1="1" x2="1" y2="13" stroke="currentColor" stroke-width="1"/>
+  </symbol>
+  <!-- Cuadro general de mando y proteccion CGMP (vista planta, 28x36) -->
+  <symbol id="sym-cgmp" viewBox="0 0 28 36" overflow="visible">
+    <rect x="0" y="0" width="28" height="36" fill="white" stroke="currentColor" stroke-width="2" rx="1"/>
+    <line x1="2" y1="2" x2="26" y2="34" stroke="currentColor" stroke-width="1.2"/>
+    <line x1="26" y1="2" x2="2" y2="34" stroke="currentColor" stroke-width="1.2"/>
+    <rect x="0" y="0" width="28" height="36" fill="none" stroke="currentColor" stroke-width="2" rx="1"/>
+    <text x="14" y="-5" text-anchor="middle" font-size="7" font-weight="bold" font-family="Arial,sans-serif" fill="currentColor">CGMP</text>
+  </symbol>
+</defs>`;
+
+// ── Biblioteca de simbolos para naves industriales / CPD (datacenter) / obras
+// de gran envergadura. Referencia: REBT ITC-BT-12 (centros de transformacion),
+// ITC-BT-18 (puestas a tierra), UNE-EN 50600 (infraestructura de CPD). Todos
+// usan currentColor, mismo estilo "caja en planta" que IEC_BANDEJA_DEFS/
+// IEC_INSTALACION_DEFS para que combinen visualmente en el mismo plano.
+const IEC_INDUSTRIAL_DEFS = `<defs id="industrial-lib">
+  <!-- CT - Centro de Transformacion (vista planta, 46x56) -->
+  <symbol id="sym-ct" viewBox="0 0 46 56" overflow="visible">
+    <rect x="0" y="0" width="46" height="56" fill="white" stroke="currentColor" stroke-width="2.5" rx="2"/>
+    <line x1="3" y1="3" x2="43" y2="53" stroke="currentColor" stroke-width="1.5"/>
+    <line x1="43" y1="3" x2="3" y2="53" stroke="currentColor" stroke-width="1.5"/>
+    <text x="23" y="-6" text-anchor="middle" font-size="9" font-weight="bold" font-family="Arial,sans-serif" fill="currentColor">CT</text>
+  </symbol>
+  <!-- GE - Grupo electrogeno / generador de respaldo (vista planta con skid, 60x60) -->
+  <symbol id="sym-generador" viewBox="0 0 60 60" overflow="visible">
+    <rect x="0" y="0" width="60" height="60" fill="white" stroke="currentColor" stroke-width="2.5" rx="4"/>
+    <circle cx="30" cy="26" r="15" fill="none" stroke="currentColor" stroke-width="2"/>
+    <text x="30" y="31" text-anchor="middle" font-size="14" font-weight="bold" font-family="Arial,sans-serif" fill="currentColor">G</text>
+    <text x="30" y="50" text-anchor="middle" font-size="7.5" font-family="Arial,sans-serif" fill="currentColor">GE</text>
+  </symbol>
+  <!-- ATS - Conmutador automatico de transferencia (doble ruta A/B, 34x44) -->
+  <symbol id="sym-ats" viewBox="0 0 34 44" overflow="visible">
+    <rect x="0" y="0" width="34" height="44" fill="white" stroke="currentColor" stroke-width="2" rx="1"/>
+    <circle cx="8" cy="30" r="2" fill="currentColor"/>
+    <circle cx="26" cy="30" r="2" fill="currentColor"/>
+    <path d="M8,30 L17,14 L26,30" fill="none" stroke="currentColor" stroke-width="1.6"/>
+    <line x1="17" y1="14" x2="17" y2="6" stroke="currentColor" stroke-width="1.6"/>
+    <text x="17" y="-5" text-anchor="middle" font-size="7" font-weight="bold" font-family="Arial,sans-serif" fill="currentColor">ATS</text>
+  </symbol>
+  <!-- CGBT - Cuadro General de Baja Tension (vista planta, 36x46) -->
+  <symbol id="sym-cgbt" viewBox="0 0 36 46" overflow="visible">
+    <rect x="0" y="0" width="36" height="46" fill="white" stroke="currentColor" stroke-width="2.2" rx="1"/>
+    <line x1="3" y1="3" x2="33" y2="43" stroke="currentColor" stroke-width="1.3"/>
+    <line x1="33" y1="3" x2="3" y2="43" stroke="currentColor" stroke-width="1.3"/>
+    <text x="18" y="-5" text-anchor="middle" font-size="7.5" font-weight="bold" font-family="Arial,sans-serif" fill="currentColor">CGBT</text>
+  </symbol>
+  <!-- RACK - Armario de servidores/comunicaciones en planta (huella 600x1200, 20x36), triangulo indica frente (pasillo frio) -->
+  <symbol id="sym-rack" viewBox="0 0 20 36" overflow="visible">
+    <rect x="0" y="0" width="20" height="36" fill="white" stroke="currentColor" stroke-width="1.6"/>
+    <line x1="0" y1="6" x2="20" y2="6" stroke="currentColor" stroke-width="0.8"/>
+    <line x1="0" y1="12" x2="20" y2="12" stroke="currentColor" stroke-width="0.8"/>
+    <line x1="0" y1="18" x2="20" y2="18" stroke="currentColor" stroke-width="0.8"/>
+    <line x1="0" y1="24" x2="20" y2="24" stroke="currentColor" stroke-width="0.8"/>
+    <line x1="0" y1="30" x2="20" y2="30" stroke="currentColor" stroke-width="0.8"/>
+    <polygon points="10,-7 5,0 15,0" fill="currentColor"/>
+  </symbol>
+  <!-- PDU - Regleta/Power Distribution Unit vertical 0U de rack (8x36) -->
+  <symbol id="sym-pdu" viewBox="0 0 8 36" overflow="visible">
+    <rect x="0" y="0" width="8" height="36" fill="white" stroke="currentColor" stroke-width="1.3"/>
+    <circle cx="4" cy="5" r="1.2" fill="currentColor"/>
+    <circle cx="4" cy="12" r="1.2" fill="currentColor"/>
+    <circle cx="4" cy="19" r="1.2" fill="currentColor"/>
+    <circle cx="4" cy="26" r="1.2" fill="currentColor"/>
+    <circle cx="4" cy="33" r="1.2" fill="currentColor"/>
+  </symbol>
+  <!-- SAI/UPS - Sistema de Alimentacion Ininterrumpida (vista planta con bateria, 30x40) -->
+  <symbol id="sym-ups" viewBox="0 0 30 40" overflow="visible">
+    <rect x="0" y="0" width="30" height="40" fill="white" stroke="currentColor" stroke-width="2" rx="1"/>
+    <rect x="8" y="14" width="14" height="18" fill="none" stroke="currentColor" stroke-width="1.4"/>
+    <line x1="12" y1="14" x2="12" y2="10" stroke="currentColor" stroke-width="1.4"/>
+    <line x1="18" y1="14" x2="18" y2="10" stroke="currentColor" stroke-width="1.4"/>
+    <text x="15" y="-5" text-anchor="middle" font-size="7" font-weight="bold" font-family="Arial,sans-serif" fill="currentColor">SAI</text>
+  </symbol>
+  <!-- CRAC/CRAH - Climatizacion de precision sala tecnica (vista planta con rejilla de flujo, 30x30) -->
+  <symbol id="sym-crac" viewBox="0 0 30 30" overflow="visible">
+    <rect x="0" y="0" width="30" height="30" fill="white" stroke="currentColor" stroke-width="2" rx="2"/>
+    <circle cx="15" cy="15" r="9" fill="none" stroke="currentColor" stroke-width="1.4"/>
+    <path d="M15,6 L15,24 M6,15 L24,15 M8.5,8.5 L21.5,21.5 M21.5,8.5 L8.5,21.5" stroke="currentColor" stroke-width="1"/>
   </symbol>
 </defs>`;
 
@@ -22410,10 +22554,180 @@ NOTAS TECNICAS (zona inferior, fuera del bloque de titulo):
 AGRUPA por zona: <g id="zona-taller">, <g id="zona-almacen">, etc.
 AGRUPA bandejas: <g id="bandejas-principales">, <g id="bandejas-secundarias">
 
-DEVUELVE: solo el codigo SVG valido completo (desde <svg hasta </svg>), sin texto adicional ni markdown.`
+DEVUELVE: solo el codigo SVG valido completo (desde <svg hasta </svg>), sin texto adicional ni markdown.`,
+
+  unifilar: `Eres un ingeniero electrico experto en instalaciones de baja tension segun REBT (ITC-BT-17) y normas IEC 60617. Tu tarea es generar un ESQUEMA UNIFILAR profesional en formato SVG. Este esquema NO es el detalle interno de un cuadro (eso es "electrico") — es el esquema de INTERCONEXION ENTRE CUADROS: como la acometida alimenta la Caja General de Proteccion, esta al Cuadro General de Distribucion, y este a los distintos sub-cuadros/cuadros secundarios del edificio o instalacion, mostrando cada tramo de linea con su seccion, tipo de cable y proteccion de cabecera. Es un DOCUMENTO DE OBRA que usan instaladores y la propia empresa distribuidora para verificar la instalacion. Cuando el usuario proporcione datos reales (cuadros, potencias, secciones), usa SIEMPRE esas referencias exactas.
+
+REQUISITOS TECNICOS:
+- viewBox="0 0 1300 850", xmlns="http://www.w3.org/2000/svg", id="plano-principal"
+- Fondo blanco fill="#ffffff"
+- Representacion UNIFILAR: cada tramo es UNA SOLA LINEA (no 3 lineas de fase separadas) que representa el conjunto de conductores del circuito. stroke="#1a1a1a" stroke-width="2.5" para tramos principales, stroke-width="1.8" para derivaciones a sub-cuadros
+- Topologia SIEMPRE de arriba hacia abajo o de izquierda a derecha: Acometida -> CGP -> Cuadro General (CGMP) -> Sub-cuadros -> (opcional) cuadros terciarios
+- Cada cuadro se dibuja como un rectangulo (usa los simbolos indicados abajo) con su nombre/referencia debajo (ej. "CS-1 Planta Baja", "SCSS Taller")
+
+SIMBOLOS — NO definas <defs> ni <symbol> propios. El renderizador inyecta automaticamente las librerias de simbolos. Solo usa <use href="#sym-X"/> con estos IDs:
+  #sym-cgp              width="40" height="50" — Caja General de Proteccion (color="#8B0000")
+  #sym-cs               width="30" height="40" — Cuadro Secundario / Cuadro General de Distribucion (color="#8B0000")
+  #sym-scss             width="22" height="30" — Sub-cuadro local (color="#8B0000")
+  #sym-magnetotermico   width="30" height="100" — IGA/PIA magnetotermico de cabecera de cada tramo (Q1, Q2...)
+  #sym-diferencial      width="30" height="100" — Interruptor diferencial/RCD de cabecera de cada tramo (ID1...)
+  #sym-tierra           width="36" height="24"  — Puesta a tierra (color="#006600" siempre)
+
+ETIQUETADO DE CADA TRAMO (OBLIGATORIO, junto a la linea, font-size="8.5" fill="#1a1a1a") -- usa el mismo nivel de detalle que un esquema unifilar real de ingenieria de obra, no lo simplifiques:
+- Referencia de proteccion de cabecera: ej. "Q2 40A Curva C" y si aplica diferencial "ID2 40A/30mA"
+- DESIGNACION COMPLETA DEL CABLE segun UNE-EN 50575 (tipo + n conductores x seccion + clase de reaccion al fuego cuando el circuito sea critico/CPD/generador/zona de riesgo): formato "TIPO n x SECCIONmm2 Cu -- CLASE", ej. "RZ1-K(AS) 4x16+TTx16mm2 Cu -- Cca-s1b,d1,a1". Para circuitos normales de vivienda/oficina basta "RV-K 4x25+TTx16mm2 Cu" sin la clase de reaccion al fuego.
+- Metodo de instalacion del tramo: ej. "Bandeja perforada 75x60mm" o "Tubo empotrado M32"
+- Longitud del tramo: ej. "L=35m"
+- Potencia/carga prevista del tramo: ej. "P=15kW" o "12.000W"
+- CAIDA DE TENSION calculada del tramo: ej. "ΔU=2,7%" -- debe ser numericamente coherente con longitud, seccion y potencia (mayor longitud/potencia o menor seccion = mayor caida), y quedar por debajo del limite REBT acumulado (3% alumbrado, 5% fuerza desde origen de instalacion)
+
+ACABADO VISUAL: aunque el esquema es deliberadamente esquematico/minimalista (no decorativo), cuida el acabado: cabecera superior con banda de color solida y titulo, separadores finos entre bloques de datos, iconos de cuadro con un sutil relieve/sombra (ej. un segundo rectangulo desplazado 1-2px con opacity baja detras de cada cuadro), y paleta de color coherente (azul oscuro #1a3a6b para cabecera/cajetin, rojo #8B0000 para cuadros/protecciones, verde #006600 para tierra) -- que se vea cuidado, no un dibujo tecnico plano.
+
+COTAS Y NOTAS: no requiere cotas de obra civil. Incluir nota tecnica: "Esquema unifilar segun REBT ITC-BT-17. Secciones calculadas para caida de tension y calentamiento segun normativa vigente."
+
+LEYENDA (esquina inferior izquierda): titulo "LEYENDA" + simbolos usados + significado de colores.
+
+BLOQUE DE TITULO (esquina inferior derecha, estilo cajetin de ingenieria real): incluye Cliente, Proyecto (nombre + ubicacion), Denominacion del plano, Plano N°, Hoja X de Y, Escala, Fecha, y una fila con "Diseñado / Comprobado / Dibujado" mostrando nombre y fecha en cada campo (usa "Alejandra IA" como Diseñado/Dibujado si no hay otro dato). Fondo rect fill="#1a3a6b" para la franja de titulo, tabla de datos con fondo claro debajo.
+
+AGRUPA: <g id="acometida">, <g id="cuadro-general">, <g id="subcuadros">
+
+DEVUELVE: solo el codigo SVG valido completo (desde <svg hasta </svg>), sin texto adicional ni markdown.`,
+
+  planta_electrica: `Eres un instalador electricista jefe y delineante tecnico experto en instalaciones electricas de vivienda/oficina/local segun REBT (ITC-BT-19, ITC-BT-25 y ss.). Tu tarea es generar un PLANO DE PLANTA DE INSTALACION ELECTRICA en formato SVG profesional. Este plano muestra la distribucion en planta de: canalizaciones (recorrido de tubo empotrado o superficie), ubicacion del cuadro electrico, cajas de derivacion, puntos de luz, tomas de corriente e interruptores con su conexionado a los puntos de luz que gobiernan. Es un DOCUMENTO DE OBRA que usan los instaladores en campo. Cuando el usuario proporcione datos reales (estancias, cuadro, circuitos), usa SIEMPRE esas referencias exactas.
+
+REQUISITOS TECNICOS:
+- viewBox="0 0 1300 850", xmlns="http://www.w3.org/2000/svg", id="plano-principal"
+- Fondo blanco fill="#ffffff"
+- Paredes/estancias: stroke="#1a1a1a" stroke-width="5" fill="#f2f2ec" (mismo estilo que un plano de planta arquitectonico), etiqueta de cada estancia font-size="11" font-weight="bold" fill="#222" (ej. "SALON", "COCINA", "DORMITORIO 1")
+- Puertas: arco de 90 grados (quarter-circle path) en el vano de la pared
+- Canalizaciones (recorrido de circuitos): SOLO lineas ortogonales (horizontal/vertical), stroke="#cc6600" stroke-width="1.4" stroke-dasharray="4,2" (tubo empotrado en tabique/techo). Cada circuito de un color distinto opcionalmente para diferenciarlos, indicado en leyenda
+
+SIMBOLOS — NO definas <defs> ni <symbol> propios. El renderizador inyecta automaticamente las librerias de simbolos. Solo usa <use href="#sym-X"/> con estos IDs:
+  #sym-cgmp             width="28" height="36" — Cuadro General de Mando y Proteccion (ubicacion del cuadro en planta)
+  #sym-cs               width="30" height="40" — Cuadro secundario si lo hay
+  #sym-caja-derivacion  width="14" height="14" — Caja de derivacion/registro
+  #sym-punto-luz        width="20" height="20" — Punto de luz de techo
+  #sym-aplique          width="16" height="10" — Aplique de pared
+  #sym-toma-corriente   width="18" height="18" — Toma de corriente / base de enchufe
+  #sym-interruptor-simple    width="16" height="16" — Interruptor simple de una via
+  #sym-interruptor-conmutado width="18" height="16" — Interruptor conmutado/de cruce
+
+CONEXIONADO INTERRUPTOR -> LUZ (OBLIGATORIO): cada interruptor debe unirse mediante una linea curva o discontinua fina (stroke="#666666" stroke-width="0.8" stroke-dasharray="3,2", fill="none", path curvo tipo arco) al/los punto(s) de luz que gobierna, para que se vea claramente la relacion mando-carga sin confundirse con la canalizacion de potencia.
+
+ETIQUETADO: cada circuito con su referencia (ej. "C1 Alumbrado Planta Baja", "C3 Tomas Cocina") junto al cuadro. Cada punto de luz/toma puede llevar numero de circuito pequeño junto al simbolo (font-size="7").
+
+COTAS: cotas generales del perimetro exterior, stroke="#0066cc" stroke-width="1", flechas terminales, font-size="9" (igual que un plano de planta estandar).
+
+LEYENDA (esquina inferior izquierda): titulo "LEYENDA" + cada simbolo usado con su nombre + colores de circuito si se diferenciaron.
+
+NORTE: flecha norte en esquina superior derecha.
+
+BLOQUE DE TITULO (esquina inferior derecha, rect fill="#1a3a6b"): empresa/proyecto, titulo "PLANTA INSTALACION ELECTRICA", escala, fecha, hoja.
+
+NOTAS TECNICAS: "Instalacion segun REBT ITC-BT-19 / ITC-BT-25. Circuitos independientes segun grado de electrificacion."
+
+AGRUPA: <g id="estancias">, <g id="canalizaciones">, <g id="puntos-luz">, <g id="tomas">, <g id="interruptores">
+
+DEVUELVE: solo el codigo SVG valido completo (desde <svg hasta </svg>), sin texto adicional ni markdown.`,
+
+  planta_industrial: `Eres un ingeniero de instalaciones senior y delineante proyectista experto en electricidad industrial de alta y baja tension para naves industriales, CPD/datacenters y obras de gran envergadura, con el mismo nivel de precision que un delineante de AutoCAD/Revit MEP profesional. Tu tarea es generar un PLANO DE PLANTA DE INSTALACION ELECTRICA INDUSTRIAL en formato SVG. Es un DOCUMENTO DE OBRA/proyecto real que usaran ingenieros e instaladores en campo, asi que la precision tecnica y la legibilidad importan mas que la decoracion. Cuando el usuario proporcione datos reales (superficie, potencia contratada, numero de cuadros, racks, TIER de CPD, etc.), usa SIEMPRE esas referencias exactas; si no los da, propon valores tecnicamente coherentes y razonables para el tipo de instalacion descrita.
+
+DOS CONTEXTOS POSIBLES (usa el que corresponda segun lo que describa el usuario, o combina ambos si describe un CPD dentro de una nave):
+1) NAVE INDUSTRIAL: acometida en alta tension -> Centro de Transformacion (CT) propio o abonado -> Cuadro General de Baja Tension (CGBT) -> sub-cuadros de planta/proceso -> canalizacion por BANDEJAS PORTACABLES (nunca tubo empotrado en una nave) hasta maquinas, tomas de fuerza trifasicas y luminaria industrial. Suele incluir generador de respaldo (GE) con conmutador automatico de transferencia (ATS) para cargas criticas.
+2) CPD / DATACENTER / SALA TECNICA: doble ruta de alimentacion A/B redundante desde el CGBT (o desde dos CT distintos en TIER III/IV), pasando cada una por su propio SAI/UPS y ATS, hasta las PDU de cada fila de racks. Racks organizados en filas con pasillo frio/pasillo caliente (orientacion de racks enfrentada). Climatizacion de precision con unidades CRAC/CRAH perimetrales o en fila. Suelo tecnico (falso suelo) para paso de canalizacion electrica y de climatizacion.
+
+REQUISITOS TECNICOS:
+- viewBox="0 0 1400 900", xmlns="http://www.w3.org/2000/svg", id="plano-principal"
+- Fondo blanco fill="#ffffff", cuadricula tenue de referencia (lineas cada 50px, stroke="#eeeeee" stroke-width="0.3")
+- Nave/edificio: contorno exterior stroke="#1a1a1a" stroke-width="5" fill="none", muros perimetrales fill="#d8d8d0" ancho 8px, ejes estructurales discontinuos stroke="#999999" stroke-dasharray="20,6,3,6" cada 6-12m acotados
+- Canalizacion de potencia: SOLO bandejas (recorrido ortogonal, dos lineas paralelas separadas 16px stroke="#0a0a5a" stroke-width="2.5", igual convencion que un plano de bandejas), NUNCA tubo empotrado tipo vivienda
+- Doble ruta A/B (si aplica a CPD): ruta A en azul stroke="#0033cc", ruta B en un color distinto stroke="#cc6600", ambas SIEMPRE fisicamente separadas (nunca comparten bandeja) y etiquetadas "RUTA A" / "RUTA B" en la leyenda
+
+SIMBOLOS — NO definas <defs> ni <symbol> propios. El renderizador inyecta automaticamente las librerias de simbolos. Solo usa <use href="#sym-X"/> con estos IDs (combina las 3 librerias segun necesites):
+  #sym-ct               width="46" height="56" — Centro de Transformacion
+  #sym-generador        width="60" height="60" — Grupo electrogeno / generador de respaldo
+  #sym-ats              width="34" height="44" — Conmutador automatico de transferencia (doble ruta A/B)
+  #sym-cgbt             width="36" height="46" — Cuadro General de Baja Tension
+  #sym-cs               width="30" height="40" — Cuadro secundario / de planta (de IEC_BANDEJA_DEFS)
+  #sym-scss             width="22" height="30" — Sub-cuadro local (de IEC_BANDEJA_DEFS)
+  #sym-rack             width="20" height="36" — Rack de servidores/comunicaciones (rotar segun orientacion de fila; el triangulo indica el frente/pasillo frio)
+  #sym-pdu              width="8"  height="36" — PDU vertical 0U de rack
+  #sym-ups              width="30" height="40" — SAI/UPS
+  #sym-crac             width="30" height="30" — Unidad de climatizacion de precision CRAC/CRAH
+  #sym-toma             width="16" height="16" — Toma de fuerza / maquina / carga final (de IEC_BANDEJA_DEFS)
+  #sym-luminaria        width="20" height="8"  — Luminaria industrial (de IEC_BANDEJA_DEFS)
+  #sym-columna-h        width="16" height="16" — Columna metalica HEB/IPE
+  #sym-caja-derivacion  width="14" height="14" — Caja de derivacion/registro
+
+DISPOSICION DE RACKS (si aplica a CPD): filas de racks (usa <use href="#sym-rack"/> repetido) con pasillo frio entre dos filas enfrentadas y pasillo caliente en la parte trasera opuesta; etiqueta cada fila (ej. "FILA A1-A8") y cada rack individual con numero pequeño (font-size="7"). PDU pegada a cada rack en la parte trasera.
+
+ETIQUETADO (OBLIGATORIO, font-size="8.5" fill="#1a1a1a" junto a cada elemento):
+- Cada cuadro/CT/CGBT: referencia y potencia (ej. "CGBT-1 630A", "CT 1x630kVA")
+- Cada tramo de bandeja: tipo/dimension y numero de circuitos que lleva
+- SAI/UPS: potencia y autonomia si se conoce (ej. "SAI 100kVA / 10min")
+- Generador: potencia (ej. "GE 500kVA")
+
+COTAS: cotas generales del perimetro exterior y de la trama estructural, stroke="#0066cc" stroke-width="1", flechas terminales, font-size="9-10"
+
+LEYENDA (esquina inferior izquierda): titulo "LEYENDA" + cada simbolo usado con su nombre + significado de colores de ruta A/B si aplica.
+
+NORTE: flecha norte en esquina superior derecha.
+
+BLOQUE DE TITULO (esquina inferior derecha, rect fill="#1a3a6b"): empresa/proyecto, titulo "PLANTA INSTALACION ELECTRICA INDUSTRIAL" (o "... CPD" si aplica), escala, fecha, hoja, revision.
+
+NOTAS TECNICAS (incluir las que apliquen): "Instalacion segun REBT ITC-BT-12 (centros de transformacion) e ITC-BT-18 (puestas a tierra)." + "Canalizacion segun IEC 61537 / UNE-EN 61537." + si es CPD: "Infraestructura segun UNE-EN 50600. Redundancia electrica clasificacion TIER [I-IV] segun Uptime Institute." + "Climatizacion de precision segun UNE 100156."
+
+AGRUPA: <g id="acometida-ct">, <g id="cgbt">, <g id="bandejas">, <g id="subcuadros">, <g id="racks"> (si aplica), <g id="climatizacion"> (si aplica)
+
+DEVUELVE: solo el codigo SVG valido completo (desde <svg hasta </svg>), sin texto adicional ni markdown.`,
 };
 
-async function _generarPlanoInterno(env, { tipo, titulo, descripcion, empresa_id, usuario_id }) {
+async function _llamarAnthropicPlanoStream(env, userMsg, systemPrompt, maxTokens) {
+  const resp = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'x-api-key': env.ANTHROPIC_API_KEY,
+      'anthropic-version': '2023-06-01',
+      'content-type': 'application/json'
+    },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-6',
+      max_tokens: maxTokens,
+      stream: true,
+      system: systemPrompt,
+      messages: [{ role: 'user', content: userMsg }]
+    })
+  });
+  if (!resp.ok) {
+    const errText = await resp.text().catch(() => resp.statusText);
+    throw new Error(`Anthropic stream ${resp.status}: ${errText.substring(0, 200)}`);
+  }
+  let acumulado = '';
+  const reader = resp.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split('\n');
+    buffer = lines.pop() || '';
+    for (const line of lines) {
+      if (!line.startsWith('data: ')) continue;
+      const chunk = line.slice(6).trim();
+      if (chunk === '[DONE]') continue;
+      try {
+        const evt = JSON.parse(chunk);
+        if (evt.type === 'content_block_delta' && evt.delta?.type === 'text_delta') {
+          acumulado += evt.delta.text || '';
+        }
+      } catch (_) {}
+    }
+  }
+  return acumulado.trim();
+}
+
+async function _generarPlanoInterno(env, { tipo, titulo, descripcion, empresa_id, usuario_id, circuitos = [] }) {
   await _ensurePlanosTable(env);
 
   const systemPrompt = _PLANO_PROMPTS[tipo] || _PLANO_PROMPTS.planta;
@@ -22454,6 +22768,32 @@ IMPORTANTE: Usa SIEMPRE estos productos reales en el plano. Referencia marca, mo
     } catch (_) { /* continuar sin catalogo si falla la query */ }
   }
 
+  // Para unifilar/electrico: si se aportan datos reales de circuitos (p.ej.
+  // leidos de una foto de un cuadro), se inyectan LITERALMENTE en el prompt
+  // para que la IA no invente valores tecnicos.
+  let circuitosSection = '';
+  if ((tipo === 'unifilar' || tipo === 'electrico') && Array.isArray(circuitos) && circuitos.length > 0) {
+    const lineas = circuitos.map(c => {
+      const partes = [];
+      if (c.nombre) partes.push(c.nombre);
+      const cabecera = `- ${c.id}${partes.length ? ': ' + partes.join(' ') : ''}`;
+      const detalles = [];
+      if (c.proteccion) detalles.push(`proteccion ${c.proteccion}`);
+      if (c.in_a) detalles.push(`In=${c.in_a}A`);
+      if (c.ireg_a) detalles.push(`Ireg=${c.ireg_a}A`);
+      let linea = cabecera;
+      if (detalles.length) linea += ` | ${detalles.join(' ')}`;
+      const cable = [];
+      if (c.seccion_cable) cable.push(c.seccion_cable);
+      if (c.tipo_cable) cable.push(c.tipo_cable);
+      if (cable.length) linea += ` | cable ${cable.join(' ')}`;
+      if (c.instalacion) linea += ` | instalacion: ${c.instalacion}`;
+      if (c.notas) linea += ` | notas: ${c.notas}`;
+      return linea;
+    });
+    circuitosSection = `\n\nCIRCUITOS EXACTOS A REPRESENTAR (usa estos datos LITERALMENTE en las etiquetas del SVG, no inventes ni cambies ningun valor, no anadas circuitos que no esten en esta lista salvo que la descripcion indique mas):\n${lineas.join('\n')}`;
+  }
+
   const userMsg = `Genera el SVG para el siguiente plano tecnico:
 
 TITULO: ${titulo}
@@ -22461,7 +22801,7 @@ TITULO: ${titulo}
 TIPO: ${tipo}
 
 DESCRIPCION Y CONTENIDO REQUERIDO:
-${descripcion}${catalogoSection}
+${descripcion}${catalogoSection}${circuitosSection}
 
 INSTRUCCIONES FINALES:
 - Genera el SVG completo y listo para usar directamente en un navegador
@@ -22477,11 +22817,37 @@ INSTRUCCIONES FINALES:
   let _planoProveedor = 'anthropic';
   let _planoModelo = 'claude-sonnet-4-6';
 
+  // planta_industrial combina muchos mas elementos (CT+GE+ATS+CGBT+racks+
+  // CRAC+doble ruta+leyenda+cajetin) que el resto de tipos -- con 16000
+  // tokens el SVG se corta sistematicamente antes de la leyenda/cajetin
+  // final. bandejas tambien necesita algo mas de margen. Le damos mas
+  // presupuesto de salida a ambos en los 3 puntos donde se llama a la IA.
+  const _maxTokensPlano = (tipo === 'planta_industrial') ? 28000
+    : (tipo === 'bandejas') ? 24000
+    : 16000;
+
+  // Si el usuario aporto circuitos reales, usamos SIEMPRE Anthropic en
+  // streaming directamente (nos saltamos la cascada Gemini/OpenRouter): son
+  // modelos mas rapidos/baratos pero con mas riesgo de alterar cifras reales
+  // de amperaje/proteccion/cable, y aqui la precision del dato tecnico es lo
+  // que importa. El streaming ademas evita el timeout 524 de Cloudflare en
+  // respuestas largas.
+  if (Array.isArray(circuitos) && circuitos.length > 0) {
+    try {
+      const streamText = await _llamarAnthropicPlanoStream(env, userMsg, systemPrompt, _maxTokensPlano);
+      if (streamText && streamText.includes('<svg')) {
+        data = { content: [{ type: 'text', text: streamText }], usage: { input_tokens: 0, output_tokens: Math.round(streamText.length / 4) } };
+        _planoProveedor = 'anthropic';
+        _planoModelo = 'claude-sonnet-4-6';
+      }
+    } catch (_) { /* si falla, cae a la cascada normal como red de seguridad */ }
+  }
+
   // 1º Gemini (gratis) — 2.0-flash-lite primero (sin thinking, rapido, SVGs completos de 8-12K chars)
   //                    — 2.5-flash segundo (thinking mode: a veces 480 tokens SVG, a veces 7K)
   // Minimo 3000 chars SVG para descartar respuestas truncadas por thinking budget agotado.
   const _SVG_MIN_CHARS = 3000;
-  if (env.GEMINI_API_KEY) {
+  if (env.GEMINI_API_KEY && !data) {
     const _cleanGKey = k => k ? k.replace(/[ï»¿​\r\n\t ]+/g, '').trim() : k;
     const _gemKeys = [
       _cleanGKey(env.GEMINI_API_KEY),
@@ -22501,7 +22867,7 @@ INSTRUCCIONES FINALES:
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 contents: [{ parts: [{ text: systemPrompt + '\n\n' + userMsg }] }],
-                generationConfig: { temperature: 0.2, maxOutputTokens: 16000 }
+                generationConfig: { temperature: 0.2, maxOutputTokens: _maxTokensPlano }
               })
             }
           );
@@ -22578,7 +22944,7 @@ INSTRUCCIONES FINALES:
       },
       body: JSON.stringify({
         model: 'claude-sonnet-4-6',
-        max_tokens: 16000,
+        max_tokens: _maxTokensPlano,
         system: systemPrompt,
         messages: _planoMsgs
       })
@@ -22620,6 +22986,18 @@ INSTRUCCIONES FINALES:
   if (tipo === 'bandejas') {
     svgRaw = svgRaw.replace(/(<svg[^>]*>)/i, `$1\n${IEC_BANDEJA_DEFS}`);
   }
+  // Para unifilar: combina simbolos IEC 60617 (magnetotermico/diferencial/tierra) + IEC 61537 (cgp/cs/scss)
+  if (tipo === 'unifilar') {
+    svgRaw = svgRaw.replace(/(<svg[^>]*>)/i, `$1\n${IEC_SYMBOLS_DEFS}\n${IEC_BANDEJA_DEFS}`);
+  }
+  // Para planta de instalacion electrica de vivienda/oficina: simbolos de instalacion + cuadros
+  if (tipo === 'planta_electrica') {
+    svgRaw = svgRaw.replace(/(<svg[^>]*>)/i, `$1\n${IEC_BANDEJA_DEFS}\n${IEC_INSTALACION_DEFS}`);
+  }
+  // Para planta industrial/CPD: combina cuadros+instalacion+simbolos industriales (CT, GE, ATS, racks, SAI, CRAC)
+  if (tipo === 'planta_industrial') {
+    svgRaw = svgRaw.replace(/(<svg[^>]*>)/i, `$1\n${IEC_BANDEJA_DEFS}\n${IEC_INSTALACION_DEFS}\n${IEC_INDUSTRIAL_DEFS}`);
+  }
 
   // Registrar uso de IA (proveedor y modelo reales)
   logAIUsage(env, {
@@ -22638,9 +23016,10 @@ INSTRUCCIONES FINALES:
     proveedor: _planoProveedor
   });
 
+  const circuitosJson = (Array.isArray(circuitos) && circuitos.length > 0) ? JSON.stringify(circuitos) : null;
   const res = await env.DB.prepare(
-    'INSERT INTO planos (empresa_id, usuario_id, tipo, titulo, descripcion, svg_data, metadatos) VALUES (?, ?, ?, ?, ?, ?, ?)'
-  ).bind(empresa_id, usuario_id || null, tipo, titulo, descripcion, svgRaw, metadatos).run();
+    'INSERT INTO planos (empresa_id, usuario_id, tipo, titulo, descripcion, svg_data, metadatos, circuitos_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+  ).bind(empresa_id, usuario_id || null, tipo, titulo, descripcion, svgRaw, metadatos, circuitosJson).run();
 
   const id = res.meta?.last_row_id;
   return {
@@ -22658,7 +23037,7 @@ async function listarPlanosREST(request, env) {
   await _ensurePlanosTable(env);
   const url = new URL(request.url);
   const tipo = url.searchParams.get('tipo');
-  let q = 'SELECT id, tipo, titulo, descripcion, creado_en, usuario_id FROM planos WHERE empresa_id=?';
+  let q = 'SELECT id, tipo, titulo, descripcion, creado_en, usuario_id, circuitos_json FROM planos WHERE empresa_id=?';
   const params = [empresa_id];
   if (tipo) { q += ' AND tipo=?'; params.push(tipo); }
   q += ' ORDER BY creado_en DESC LIMIT 100';
@@ -22667,16 +23046,16 @@ async function listarPlanosREST(request, env) {
 }
 
 async function generarPlanoREST(request, env) {
-  const { empresa_id, usuario_id, rol } = await getAuth(request, env);
+  const body = await request.json().catch(() => ({}));
+  const { empresa_id, usuario_id, rol } = await _getAuthPlano(request, env, body);
   if (!empresa_id) return err('No autorizado', 401);
   if (rol === 'operario') return err('Sin permisos', 403);
-  const body = await request.json().catch(() => ({}));
-  const { tipo, titulo, descripcion } = body;
+  const { tipo, titulo, descripcion, circuitos } = body;
   if (!tipo || !titulo || !descripcion) return err('tipo, titulo y descripcion son obligatorios', 400);
-  const tiposValidos = ['planta', 'electrico', 'bandejas', 'mecanico', 'gantt'];
+  const tiposValidos = ['planta', 'electrico', 'bandejas', 'mecanico', 'gantt', 'unifilar', 'planta_electrica', 'planta_industrial'];
   if (!tiposValidos.includes(tipo)) return err('tipo invalido. Valores permitidos: ' + tiposValidos.join(', '), 400);
   try {
-    const result = await _generarPlanoInterno(env, { tipo, titulo, descripcion, empresa_id, usuario_id });
+    const result = await _generarPlanoInterno(env, { tipo, titulo, descripcion, empresa_id, usuario_id, circuitos: circuitos || [] });
     return json(result);
   } catch (e) {
     return err('Error generando plano: ' + e.message, 500);
@@ -22690,10 +23069,103 @@ async function getPlano(request, env, path) {
   if (!id) return err('ID invalido', 400);
   await _ensurePlanosTable(env);
   const row = await env.DB.prepare(
-    'SELECT id, tipo, titulo, descripcion, metadatos, creado_en, usuario_id FROM planos WHERE id=? AND empresa_id=?'
+    'SELECT id, tipo, titulo, descripcion, metadatos, creado_en, usuario_id, circuitos_json FROM planos WHERE id=? AND empresa_id=?'
   ).bind(id, empresa_id).first();
   if (!row) return err('Plano no encontrado', 404);
   return json({ ok: true, plano: row });
+}
+
+async function editarPlanoCircuitosREST(request, env, path) {
+  const id = parseInt(path.split('/')[2]);
+  if (!id) return err('ID invalido', 400);
+  const body = await request.json().catch(() => ({}));
+  const { empresa_id, rol } = await _getAuthPlano(request, env, body);
+  if (!empresa_id) return err('No autorizado', 401);
+  if (rol === 'operario') return err('Sin permisos', 403);
+  const { cambios } = body;
+  if (!cambios || !Array.isArray(cambios) || cambios.length === 0) return err('cambios es obligatorio y debe ser un array no vacio', 400);
+  await _ensurePlanosTable(env);
+  const row = await env.DB.prepare('SELECT * FROM planos WHERE id=? AND empresa_id=?').bind(id, empresa_id).first();
+  if (!row) return err('Plano no encontrado', 404);
+
+  let circuitos = [];
+  try { circuitos = row.circuitos_json ? JSON.parse(row.circuitos_json) : []; } catch (_) { circuitos = []; }
+  const idsModificados = [];
+  for (const cambio of cambios) {
+    if (!cambio || !cambio.circuito_id || !cambio.campo) continue;
+    let circ = circuitos.find(c => String(c.id).toLowerCase() === String(cambio.circuito_id).toLowerCase());
+    if (!circ) { circ = { id: cambio.circuito_id }; circuitos.push(circ); }
+    circ[cambio.campo] = cambio.valor;
+    idsModificados.push(cambio.circuito_id);
+  }
+  if (idsModificados.length === 0) return err('No se aplico ningun cambio valido (revisa circuito_id/campo/valor)', 400);
+
+  const systemPrompt = _PLANO_PROMPTS[row.tipo] || _PLANO_PROMPTS.planta;
+  const bloqueCircuitos = circuitos.map(c => {
+    const partes = [];
+    if (c.nombre) partes.push(c.nombre);
+    if (c.proteccion) partes.push(`proteccion ${c.proteccion}`);
+    if (c.in_a) partes.push(`In=${c.in_a}A`);
+    if (c.ireg_a) partes.push(`Ireg=${c.ireg_a}A`);
+    if (c.seccion_cable || c.tipo_cable) partes.push(`cable ${[c.seccion_cable, c.tipo_cable].filter(Boolean).join(' ')}`);
+    if (c.instalacion) partes.push(`instalacion: ${c.instalacion}`);
+    if (c.notas) partes.push(c.notas);
+    return `- ${c.id}: ${partes.join(' | ')}`;
+  }).join('\n');
+
+  const userMsg = `Este es un plano YA EXISTENTE que hay que REGENERAR con datos actualizados. Manten el mismo titulo, estilo y layout general que tendria un plano de este tipo.
+
+TITULO: ${row.titulo}
+TIPO: ${row.tipo}
+
+DESCRIPCION ORIGINAL:
+${row.descripcion || '(sin descripcion previa)'}
+
+CIRCUITOS ACTUALIZADOS (usa estos datos LITERALMENTE, son la version editada y correcta, no inventes otros valores):
+${bloqueCircuitos}
+
+INSTRUCCIONES FINALES:
+- Genera el SVG completo y listo para usar directamente en un navegador
+- Incluye SOLO el codigo SVG (desde <svg hasta </svg>), sin explicaciones ni markdown
+- Todos los textos en espanol
+- Fecha actual: ${new Date().toLocaleDateString('es-ES')}`;
+
+  const _maxTokensEdicion = (row.tipo === 'planta_industrial') ? 28000
+    : (row.tipo === 'bandejas') ? 24000
+    : 16000;
+  let svgRaw;
+  try {
+    svgRaw = await _llamarAnthropicPlanoStream(env, userMsg, systemPrompt, _maxTokensEdicion);
+  } catch (e) {
+    return err('Error editando plano: ' + e.message, 500);
+  }
+  const svgMatch = svgRaw.match(/<svg[\s\S]*<\/svg>/i);
+  if (svgMatch) { svgRaw = svgMatch[0]; }
+  else {
+    const svgStart = /<svg[\s\S]*/i.exec(svgRaw);
+    if (svgStart) { svgRaw = svgStart[0]; if (!svgRaw.trimEnd().endsWith('</svg>')) svgRaw += '\n</svg>'; }
+  }
+  if (!svgRaw.includes('<svg')) return err('La IA no genero un SVG valido al editar el plano', 500);
+
+  if (row.tipo === 'electrico') svgRaw = svgRaw.replace(/(<svg[^>]*>)/i, `$1\n${IEC_SYMBOLS_DEFS}`);
+  if (row.tipo === 'bandejas') svgRaw = svgRaw.replace(/(<svg[^>]*>)/i, `$1\n${IEC_BANDEJA_DEFS}`);
+  if (row.tipo === 'unifilar') svgRaw = svgRaw.replace(/(<svg[^>]*>)/i, `$1\n${IEC_SYMBOLS_DEFS}\n${IEC_BANDEJA_DEFS}`);
+  if (row.tipo === 'planta_electrica') svgRaw = svgRaw.replace(/(<svg[^>]*>)/i, `$1\n${IEC_BANDEJA_DEFS}\n${IEC_INSTALACION_DEFS}`);
+  if (row.tipo === 'planta_industrial') svgRaw = svgRaw.replace(/(<svg[^>]*>)/i, `$1\n${IEC_BANDEJA_DEFS}\n${IEC_INSTALACION_DEFS}\n${IEC_INDUSTRIAL_DEFS}`);
+
+  const metadatos = JSON.stringify({ tipo: row.tipo, tokens: Math.round(svgRaw.length / 4), modelo: 'claude-sonnet-4-6', proveedor: 'anthropic', editado: true });
+  await env.DB.prepare(
+    "UPDATE planos SET svg_data=?, circuitos_json=?, metadatos=?, actualizado_en=datetime('now') WHERE id=? AND empresa_id=?"
+  ).bind(svgRaw, JSON.stringify(circuitos), metadatos, id, empresa_id).run();
+
+  return json({
+    ok: true,
+    id,
+    tipo: row.tipo,
+    titulo: row.titulo,
+    circuitos_modificados: idsModificados,
+    mensaje: `Plano "${row.titulo}" actualizado (circuitos: ${idsModificados.join(', ')}). Disponible en el panel -> Planos, o directamente en /planos/${id}/svg`
+  });
 }
 
 async function getPlanoSvg(request, env, path) {

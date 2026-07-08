@@ -13,6 +13,17 @@ database_id = "0c9eccde-78f1-476d-ac68-bf452bec0c62"
 binding = "FILES"
 bucket_name = "alejandra-app-files"
 
+# Service Binding al worker web raiz (alejandra-app-api): ahi vive la logica
+# canonica de generacion/edicion de planos SVG (y el resto de tools con feedback
+# visual en panel.html). Un Worker NO puede hacer fetch() normal a otro Worker
+# en la misma zona (workers.dev cuenta como una zona compartida) sin Service
+# Binding -- lo intentamos primero via fetch() a la URL publica y Cloudflare lo
+# bloqueaba con Error 1042 ("Worker tried to fetch from another Worker on the
+# same zone"). El Service Binding evita ademas el salto por la red publica.
+[[services]]
+binding = "API_WEB"
+service = "alejandra-app-api"
+
 # KV para rate limiting (ventana deslizante por identidad) y caché del tope
 # de gasto diario global — ver validarRateLimit()/validarTopeGasto() en worker.js
 [[kv_namespaces]]
