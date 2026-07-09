@@ -5,11 +5,46 @@
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 09/07/2026
-VERSIÓN ACTUAL APP NUEVA: v7.77
-WORKER API: f3116b63-46e9-4bd9-8c82-27a363692742 (seleccion inteligente de tipo + colores REBT + anti-solape + prompts dinamicos, ver historial) · WORKER AGENTE: f742e9e8-8d12-4fe2-9c0c-3b26c7672772 (cliente HTTP puro via Service Binding; previo: f2df41f2-329a-4c93-8b74-924be72a2ea3 sobre commit d9b009e)
+VERSIÓN ACTUAL APP NUEVA: v7.78
+WORKER API: 186b7fa6-a908-4483-a809-d35101a3d498 (seguridad departamentos/documentos, ver historial) · WORKER AGENTE: f742e9e8-8d12-4fe2-9c0c-3b26c7672772 (cliente HTTP puro via Service Binding; previo: f2df41f2-329a-4c93-8b74-924be72a2ea3 sobre commit d9b009e)
 VERSIÓN ACTUAL APP VIEJA: v4.19 (⛔ CONGELADA DEFINITIVAMENTE — no recibe más cambios)
 
 HISTORIAL DE VERSIONES (resumen reciente):
+  (worker.js/index.html) |  09/07/2026  [v7.78 — Fix seguridad departamentos: header X-Departamento, whitelist incompleta, IDOR en documentos, modulos de oficina tecnica]
+                       A peticion explicita de Adrian ("en el departamento oficina tecnica no
+                       deberia de haber pemp,bobinas,carretillas etc... y que no haya filttrado
+                       de documentos entre departamentos y revisar roles... y que no haya
+                       filtrado de documentaciones entre empresas"), aprobado con "dale
+                       machote". (1) getAuth ya no confia en el header X-Departamento del
+                       cliente para sesiones con token D1 (SEC-14, mismo patron que SEC-13
+                       para X-Rol) — antes cualquier usuario autenticado podia suplantar su
+                       departamento activo cambiando una cabecera HTTP. (2) Corolario
+                       descubierto durante la implementacion: actualizarSesionDepartamento
+                       solo aceptaba 4 de los 11 departamentos reales — cambiar a "oficina" (u
+                       otros 6) fallaba en silencio y dejaba la sesion desincronizada en D1;
+                       whitelist ampliada a los 11 departamentos de _DEPTS_CATALOG. (3) 13
+                       funciones de documentos/carpetas/notas (listarCarpetas, crearCarpeta,
+                       borrarCarpeta, listarDocsDept, subirDocDept, descargarDocDept,
+                       borrarDocDept, editarDocDept, renombrarCarpeta, listarNotas, crearNota,
+                       editarNota, borrarNota) solo comprobaban empresa_id, nunca
+                       departamento — permitian IDOR entre departamentos de la misma empresa;
+                       ahora fuerzan el departamento de sesion para no-admin y validan
+                       pertenencia de departamento en accesos a registros existentes. (4)
+                       setupHomeModules(): PEMP y Carretillas ya no se muestran en oficina
+                       tecnica (antes visibles en todos los departamentos no-seguridad). De
+                       paso, fix del bug arrastrado ejecutarGenerarPlanoMovil is not defined
+                       (causa raiz: async function en Annex B no se auto-eleva a scope global
+                       sin export explicito — confirmado con AST real via acorn). Verificado:
+                       node --check limpio en los 3 scripts embebidos + worker.js, grep de
+                       encoding sin corrupcion nueva (se detecto y corrigio ademas corrupcion
+                       propia introducida por error en 2 comentarios nuevos, antes del commit),
+                       version sincronizada 7.78, wrangler deploy con bindings DB/FILES
+                       confirmados, verificacion en vivo de la whitelist de departamentos
+                       (PUT /sesion/departamento con "oficina" -> ok:true). Commit 05fb5f1.
+                       PENDIENTE: verificacion visual en vivo como usuario real de oficina
+                       tecnica; auditoria equivalente de incidencias/personal. Ver SESION.md
+                       para el detalle completo.
+
   (index.html/panel.html) |  09/07/2026  [v7.77 — Apartado de generacion de planos IA en la app movil + tipos faltantes en filtro web]
                        Continuacion de la sesion de seleccion inteligente de tipo. Parte 1:
                        repetidos 3 tests reales via chat (2x electrico correcto incluyendo la

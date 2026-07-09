@@ -1,7 +1,37 @@
 ## ESTADO ACTUAL
 
 **Sesion:** LIBRE
-**Ultima sesion:** 09/07/2026 -- Continuacion de la sesion de seleccion inteligente de tipo:
+**Ultima sesion:** 09/07/2026 -- Auditoria y fix de seguridad multi-departamento/multi-empresa,
+a peticion explicita de Adrian (verbatim): *"otra cosa que me di cuenta esque en el
+departamento oficina tecnica no deberia de haber pemp,bobinas,carretillas etc.ahi que
+revisar departamentos y ver que cada uno haya lo que tiene que tener....me entiedes?.y que
+no haya filttrado de documentos entre departamentos y revisar roles que esten bien y por
+supuesto que no haya filtrado de documentciones entre empresas"*, aprobado para implementar
+con *"dale machote"*. Fixes aplicados: (1) `getAuth` ya no confia en el header
+`X-Departamento` enviado por el cliente (vulnerabilidad: cualquier usuario autenticado podia
+suplantar el departamento activo de su sesion con solo cambiar una cabecera HTTP); (2)
+`actualizarSesionDepartamento` tenia una lista `validos` incompleta (4 de 11 departamentos
+reales) -- cambiar a "oficina" (y a otros 6 departamentos) fallaba en silencio y dejaba la
+sesion desactualizada en D1, lo que explicaba por que la app "funcionaba" para oficina
+tecnica solo gracias al header inseguro que se acaba de corregir; (3) 13 funciones de
+documentos/carpetas/notas en worker.js (`listarCarpetas`, `crearCarpeta`, `borrarCarpeta`,
+`listarDocsDept`, `subirDocDept`, `descargarDocDept`, `borrarDocDept`, `editarDocDept`,
+`renombrarCarpeta`, `listarNotas`, `crearNota`, `editarNota`, `borrarNota`) solo comprobaban
+`empresa_id`, nunca departamento -- permitian a cualquier usuario no-admin ver/editar/borrar
+documentos de OTROS departamentos de su misma empresa conociendo o adivinando el ID (IDOR);
+ahora fuerzan el departamento de sesion para roles no-admin y validan pertenencia de
+departamento en operaciones sobre registros existentes; (4) `setupHomeModules()` en
+`index.html` mostraba PEMP y Carretillas en TODOS los departamentos no-seguridad, incluida
+oficina tecnica -- ahora se ocultan explicitamente en oficina tecnica. De paso se corrigio
+tambien el bug arrastrado de la sesion anterior: `ejecutarGenerarPlanoMovil is not defined`
+(causa raiz confirmada con AST real via `acorn`: es una `async function` declarada dentro de
+un bloque `if{}`, y las semanticas legacy Annex B NO auto-elevan funciones `async` a scope
+global como si hacen con las sincronas -- fix: export explicito
+`window.ejecutarGenerarPlanoMovil`). Ver seccion nueva "RESUMEN SESION 09/07/2026
+(continuacion: seguridad departamentos/documentos + fix export plano movil)" mas abajo.
+**Version:** 7.77 -> 7.78.
+
+**Sesion anterior a esta:** 09/07/2026 -- Continuacion de la sesion de seleccion inteligente de tipo:
 (1) repetidos 3 tests en vivo mas via chat del panel para confirmar fiabilidad del fix
 (2/2 `electrico` correcto incluyendo la repeticion EXACTA de la descripcion que antes fallaba
 como `unifilar`, y 1/1 `unifilar` correcto para un caso de vision general de instalacion --
@@ -308,6 +338,139 @@ CROSS-EMPRESA EN 5 FAMILIAS MAS" anadida en el commit ff52aea (continuacion 19 e
 ese archivo), y subseccion "IDOR EN subir_archivo/enviar_notificacion + authOk
 FAIL-CLOSED" anadida en el commit 2a18d5b (continuacion 20 en ese archivo). Ver
 seccion de abajo.
+
+---
+
+## RESUMEN SESION 09/07/2026 (continuacion: seguridad departamentos/documentos + fix export plano movil)
+
+### Peticion de Adrian (verbatim)
+*"otra cosa que me di cuenta esque en el departamento oficina tecnica no deberia de haber
+pemp,bobinas,carretillas etc.ahi que revisar departamentos y ver que cada uno haya lo que
+tiene que tener....me entiedes?.y que no haya filttrado de documentos entre departamentos y
+revisar roles que esten bien y por supuesto que no haya filtrado de documentciones entre
+empresas"*. Tras presentar el diagnostico completo y el plan de fix, Adrian aprobo todo con
+*"dale machote"*.
+
+### 0) Bug arrastrado de la sesion anterior: `ejecutarGenerarPlanoMovil is not defined`
+Diagnosticado con AST real (paquete `acorn`, instalado temporalmente con `npm install
+--no-save`, `package.json`/`node_modules` estan en `.gitignore` asi que no afecta al repo):
+`ejecutarGenerarPlanoMovil` (y el resto del bloque de Planos) esta declarado como `async
+function` dentro de un `if{}` (no en el nivel superior real del script). Las semanticas
+legacy "Annex B" de JS auto-elevan funciones NO-async declaradas en un bloque al scope
+superior en modo sloppy, pero excluyen explicitamente a `async function`/generadoras -- por
+eso `cargarPlanos`/`verPlano` (async, con `window.X = X` explicito) funcionaban y
+`ejecutarGenerarPlanoMovil` (async, sin ese export) no. **Fix:** anadida la linea
+`window.ejecutarGenerarPlanoMovil = ejecutarGenerarPlanoMovil;` junto a los demas exports
+del bloque de planos.
+
+### 1) `getAuth` confiaba en el header `X-Departamento` del cliente
+`worker.js`, rama de sesion por token D1: `const departamento = deptHeader ||
+sesion.departamento || 'electrico';` -- el header `X-Departamento` (que la app movil envia
+en CADA peticion, leido de `localStorage`, editable por el cliente) tenia prioridad sobre el
+departamento real guardado en la sesion de D1. Cualquier usuario autenticado (incluido
+`operario`) podia enviar `X-Departamento: seguridad` (o cualquier otro) y el backend le
+trataba como si estuviera en ese departamento, sin ninguna verificacion. Mismo patron de
+vulnerabilidad que el ya documentado "SEC-13" para `X-Rol` (que si estaba corregido). **Fix
+(SEC-14):** eliminada la lectura del header; ahora `departamento` sale exclusivamente de
+`sesion.departamento` (la unica via legitima de cambio es `PUT /sesion/departamento`, que
+persiste en D1).
+
+### 2) Corolario descubierto durante la implementacion: whitelist incompleta en `actualizarSesionDepartamento`
+Al preparar el fix anterior se detecto que `PUT /sesion/departamento` (el endpoint legitimo
+para cambiar de departamento) validaba contra `const validos = ['electrico', 'mecanicas',
+'seguridad', 'personal']` -- solo 4 de los 11 departamentos reales del catalogo
+(`_DEPTS_CATALOG` en index.html: `electrico, mecanicas, seguridad, personal, obra_civil,
+albanileria, pintura, carpinteria, telecom, almacen, oficina`). Cambiar a "oficina" (el caso
+exacto que reporto Adrian) o a otros 6 departamentos fallaba en silencio (el frontend ignora
+el error con `.catch(()=>{})`), dejando `sesiones.departamento` desactualizado en D1 -- **por
+eso la app "funcionaba" para oficina tecnica hasta ahora: dependia del header inseguro que se
+acaba de corregir en el punto 1**. Arreglar solo el punto 1 sin este fix habria roto oficina
+tecnica y 6 departamentos mas como regresion. **Fix:** `validos` ampliada a los 11
+departamentos reales. Verificado en produccion tras el deploy: `PUT /sesion/departamento`
+con `{"departamento":"oficina"}` devuelve `{"ok":true}` (antes del fix devolvia 400
+"Departamento invalido").
+
+### 3) IDOR en documentos/carpetas/notas entre departamentos
+Auditoria completa (delegada a un sub-agente y despues re-verificada por mi leyendo el
+codigo fuente directamente, no solo confiando en su resumen) de las 13 funciones del modulo
+de documentos en `worker.js`. Encontrados 2 patrones de fallo:
+- **Listar/crear sin filtro real de departamento:** `listarCarpetas`, `crearCarpeta`,
+  `listarDocsDept`, `subirDocDept` (rama sin `carpeta_id`), `listarNotas`, `crearNota`
+  confiaban en el `departamento` que enviaba el cliente (query string o body JSON) sin
+  contrastarlo con la sesion.
+- **IDOR en accesores de un solo registro:** `borrarCarpeta`, `descargarDocDept`,
+  `borrarDocDept`, `editarDocDept`, `renombrarCarpeta`, `editarNota`, `borrarNota` solo
+  comprobaban `empresa_id` en el `WHERE`, nunca el departamento -- un usuario no-admin de
+  `electrico`, conociendo o adivinando el ID de un documento/carpeta/nota de `seguridad` (o
+  cualquier otro departamento de su misma empresa), podia verlo, editarlo, descargarlo o
+  borrarlo.
+
+**Fix aplicado (mismo patron ya usado en `getBobinas` y otras funciones de inventario, ahora
+extendido a documentos):** en las 13 funciones se calcula `isAdminRole = isSuperadmin ||
+isEmpresaAdmin || isJefeObra`; los roles no-admin siempre usan el departamento de su sesion
+(ignorando cualquier valor que envie el cliente), los admin-tier pueden seguir pasando un
+departamento explicito para ver otros. En los accesores de un registro existente
+(borrar/editar/descargar/renombrar) se anadio ademas la comprobacion `if (!isAdminRole &&
+registro.departamento !== departamento) return err('Sin permisos sobre este departamento',
+403);` tras el `SELECT` inicial. En `crearCarpeta`/`subirDocDept`/`crearNota`, si se
+referencia una carpeta padre/destino existente, tambien se valida que esa carpeta pertenezca
+al departamento resultante antes de aceptar la operacion (evita crear jerarquias cruzadas
+entre departamentos).
+
+### 4) Modulos indebidos en oficina tecnica (`setupHomeModules()`, index.html)
+La rama generica de `setupHomeModules()` mostraba PEMP y Carretillas (`cardP`/`cardC`) con
+`style.display = 'flex'` sin condicion para CUALQUIER departamento que no fuera `seguridad`
+(que tiene su propia rama especial) -- incluida oficina tecnica, que no deberia gestionar
+bobinas/PEMP/carretillas. **Fix:** nueva constante `esOficinaTecnica = dept === 'oficina'`;
+`cardP`/`cardC` ahora se ocultan explicitamente cuando `esOficinaTecnica` es verdadero.
+Confirmado por lectura de `applyModulosConfig()` (que se ejecuta despues) que esta funcion
+solo puede OCULTAR tarjetas adicionales via config de admin guardada, nunca las vuelve a
+mostrar por encima de lo que `setupHomeModules()` ya puso en `'none'` -- el fix es seguro
+frente a esa funcion.
+
+### Encoding -- incidente propio detectado y corregido en la misma sesion
+Al verificar bytes reales del archivo (no solo el render del Read tool) se confirmo que
+`worker.js` ya tenia corrupcion de doble-codificacion UTF-8 preexistente en varias cadenas
+de texto (ej. `parÃ¡metros` en vez de `parámetros`, bytes `c3 83 c2 a1` = UTF-8 de "Ã¡" en
+vez de UTF-8 de "á" directamente) -- **no introducida en esta sesion**, se dejo intacta sin
+intentar "arreglarla" (regla de CLAUDE.md: nunca arreglar encoding in-place, solo restaurar
+desde fuente limpia si hiciera falta, y eso esta fuera de alcance de este cambio). Sin
+embargo, **se detecto que 2 comentarios nuevos escritos por mi en esta misma sesion (los
+bloques SEC-14 en `getAuth` y `actualizarSesionDepartamento`) habian introducido esa MISMA
+corrupcion por error** ("sesiÃ³n" en vez de "sesión", "vÃ¡lidos" en vez de "válidos", etc.).
+Corregido de inmediato antes de continuar (verificado con lectura de bytes crudos, no solo
+visual). El grep final de corrupcion (`Ã|Â|â€|ï»¿`) sobre el diff completo solo encontro
+UNA coincidencia, y es la reubicacion literal (sin modificar el contenido) de una cadena de
+error YA corrupta preexistente (`'Faltan parÃ¡metros'`) que se movio de sitio al renombrar
+una variable -- no es corrupcion nueva.
+
+### Verificacion
+- `node --check worker.js` sin errores.
+- Los 3 bloques `<script>` de `index.html` extraidos y verificados con `node --check`
+  individualmente -- sin errores.
+- Grep de corrupcion de encoding sobre el diff completo (`git diff -- worker.js
+  index.html`): 1 coincidencia, pre-existente reubicada (ver parrafo anterior), 0
+  coincidencias nuevas en `index.html`.
+- Sync de version confirmado por script: `version.json` = `sw.js` = `index.html.APP_VERSION`
+  = `7.78`.
+- `npx wrangler deploy` exitoso (bindings `env.DB`/`env.FILES` confirmados, Version ID
+  `186b7fa6-a908-4483-a809-d35101a3d498`).
+- **Verificacion en vivo tras el deploy:** `PUT /sesion/departamento` con
+  `{"departamento":"oficina"}` (token invalido de prueba, solo para probar la validacion de
+  la whitelist, no una sesion real) devuelve `{"ok":true}` -- confirma que el fix del punto
+  2 esta activo en produccion. Verificacion visual completa como usuario real de oficina
+  tecnica (UI en el navegador) queda pendiente para cuando se disponga de credenciales de
+  prueba de ese departamento o acceso al navegador del usuario.
+- Commit `05fb5f1`, push a `origin/main` correcto.
+
+### Pendiente / fuera de alcance de esta sesion
+- Revisar `incidencias`/`personal` con el mismo patron de auditoria (no se encontraron
+  problemas evidentes en la revision rapida, pero no se audito exhaustivamente).
+- 2 patrones mas debiles detectados pero no investigados a fondo: worker.js entorno de las
+  lineas ~6973-6981 (sin `isAdminRole`, revisar) y ~7448 (sin override de admin).
+- Verificacion visual en vivo (navegador) como usuario real de oficina tecnica, confirmando
+  que PEMP/Bobinas/Carretillas no aparecen y que el cambio de departamento persiste
+  correctamente.
 
 ---
 
