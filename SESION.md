@@ -1,7 +1,17 @@
 ## ESTADO ACTUAL
 
 **Sesion:** LIBRE
-**Ultima sesion:** 09/07/2026 -- Fix bug `<use>` sin atributo `color` en planos generados
+**Ultima sesion:** 09/07/2026 -- Seleccion inteligente de tipo de plano (sin exponer
+nombres de tools al usuario) + colores de fase REBT en `electrico` + regla anti-solape en
+5 prompts + prompts dinamicos de simbolos (fix real de los 524 de Cloudflare). Peticion
+explicita de Adrian, verbatim: *"tenemos que hacer que no haga falta decirle a alejandra
+que tool usar... alejandra es inteligente para saber que usar segun lo pidas... tendra que
+hacer preguntas si la faltan datos... en españa se usan los colores para las fases:Marron,
+negro y gris.Azul y verde/amarillo para tierra.en el plano generado se solapan los
+datos.eso no vale asi."* Ver seccion nueva "RESUMEN SESION 09/07/2026 (seleccion
+inteligente de tipo + colores REBT + anti-solape + prompts dinamicos)" mas abajo.
+
+**Sesion anterior a esta:** 09/07/2026 -- Fix bug `<use>` sin atributo `color` en planos generados
 (worker.js), tarea delegada via `spawn_task` desde la sesion anterior (ver entrada de abajo,
 "Bug distinto encontrado... delegado"). Sesion detectada en curso al arrancar con cambios sin
 commitear de OTRA sesion concurrente (reglas de disposicion en los 5 prompts de planos, cambio
@@ -283,6 +293,113 @@ CROSS-EMPRESA EN 5 FAMILIAS MAS" anadida en el commit ff52aea (continuacion 19 e
 ese archivo), y subseccion "IDOR EN subir_archivo/enviar_notificacion + authOk
 FAIL-CLOSED" anadida en el commit 2a18d5b (continuacion 20 en ese archivo). Ver
 seccion de abajo.
+
+---
+
+## RESUMEN SESION 09/07/2026 (seleccion inteligente de tipo + colores REBT + anti-solape + prompts dinamicos)
+
+### Peticion de Adrian (verbatim, 3 partes)
+*"tenemos que hacer que no haga falta decirle a alejandra que tool usar.porque los usuarios
+no deben de saber eso.para eso alejandra es inteligente para saber que usar segun lo
+pidas.y por supuesto las instrucciones no van a ser como lo as echo tu.seran mas normales y
+menos tecnicas.tendra que hacer preguntas si la faltan datos o si necesita saber algo
+mas\nen españa se usan los colores para las fases:Marron,negro y gris.Azul y verde/amarillo
+para tierra.en el plano generado se solapan los datos.eso no vale asi"* Tres pedidos: (1)
+inferencia de tipo de plano en lenguaje natural, sin que el usuario tenga que saber nombres
+de tools/tipos internos, preguntando si faltan datos; (2) colores de fase normativos
+espanoles REBT (marron/negro/gris fases, azul neutro, verde/amarillo tierra); (3) arreglar
+etiquetas solapadas en los planos generados.
+
+### 1) Seleccion inteligente de tipo (`AI_TOOLS`, tool `generar_plano`)
+Se reescribio la descripcion de la tool y de su parametro `tipo` para que el modelo infiera
+el tipo de plano correcto a partir de lo que el usuario describe en lenguaje llano (ej.
+"cableado interno de un cuadro" -> `electrico`; "topologia entre cuadros/CGP/derivaciones"
+-> `unifilar`; etc.), con instruccion explicita de preguntar al usuario en espanol corriente
+si la peticion es ambigua o le faltan datos, en vez de adivinar o mencionar nombres internos
+de tipos/tools. Se completo ademas la lista de tipos reales soportados (antes incompleta):
+`planta`, `electrico`, `bandejas`, `mecanico`, `gantt`, `unifilar`, `planta_electrica`,
+`planta_industrial`.
+
+### 2) Colores de fase REBT (`_PLANO_PROMPTS.electrico`)
+Nuevo esquema de colores normativos IEC 60446 / REBT espanol: L1 `#5c3a1e` (marron), L2
+`#1a1a1a` (negro), L3 `#737373` (gris), N `#1e3a8a` (azul), PE bicolor verde/amarillo
+simulado con 2 lineas SVG superpuestas (solida `#1a7a1a` + discontinua `#ffd400`), ya que
+SVG no soporta un trazo bicolor nativo en una sola linea.
+
+### 3) Regla anti-solape (5 prompts: `electrico`, `unifilar`, `bandejas`,
+`planta_electrica`, `planta_industrial`)
+Nueva "REGLA DE DISPOSICION (OBLIGATORIO)": margenes de 4-6px alrededor de todo texto y
+prohibicion explicita de que las etiquetas se solapen entre si o con lineas/simbolos.
+
+### 4) Prompts dinamicos de tabla de simbolos (fix real de los 524 de Cloudflare)
+**Verificacion en vivo de los 3 fixes anteriores revelo un problema real de produccion**:
+generar un plano `electrico`/`unifilar` con los prompts ya ampliados (REBT + anti-solape)
+provoco 2 timeouts **524** (gateway de Cloudflare) consecutivos -- confirmado por consulta
+directa a D1 (`SELECT id FROM planos ORDER BY id DESC`) que ningun plano nuevo se creaba
+pese a que la UI mostraba el tool_use como "completado". Hipotesis (peticion de Adrian:
+*"tienes que hacer promp dinamicos segun hagan falta"*): la cascada de proveedores de
+`_generarPlanoInterno` (Gemini 2.0/2.5, hasta 6 intentos de 55s cada uno -> OpenRouter 10s
+-> Anthropic sin timeout explicito) puede acumular tiempo suficiente para superar el limite
+de gateway de Cloudflare, y los prompts mas largos (por las 2 reglas nuevas) empeoran el
+riesgo en peticiones limite.
+
+**Fix implementado:** en vez de enviar SIEMPRE la tabla completa de simbolos (14-15 lineas)
+de 4 de los 5 tipos afectados (`electrico`, `unifilar`, `planta_electrica`,
+`planta_industrial` -- `bandejas` queda fuera a proposito, ver mas abajo), el prompt ahora
+lleva un placeholder `{{SIMBOLOS}}` que se resuelve dinamicamente segun lo que realmente
+pide la peticion:
+- `_PLANO_SYMBOLS`: tabla de `{id, line}` por tipo (contenido identico al texto estatico
+  original, sin cambios de comportamiento -- solo recortable).
+- `_PLANO_SIMBOLOS_CORE`: simbolos que se incluyen SIEMPRE por tipo (ej. `electrico`:
+  magnetotermico + diferencial + tierra), para no depender solo de coincidencias de texto
+  en los casos mas basicos.
+- `_keywordsDeSimbolo`: en vez de escribir a mano ~40 listas de palabras clave, se derivan
+  automaticamente de la propia descripcion de cada simbolo (texto tras `→`/`—`) mas su id.
+- `_bloqueSimbolosDinamico`: incluye el core + cualquier simbolo cuyas keywords aparezcan
+  en el texto de la peticion (titulo+descripcion+circuitos); **red de seguridad**: si la
+  seleccion resultante tiene menos de 2 simbolos o cubre el 70% o mas de la lista completa
+  de todas formas, se usa la lista COMPLETA (nunca se arriesga a dejar al modelo sin
+  informacion en peticiones amplias o genericas).
+- `_prepararPlanoPrompt(tipo, textoContexto)`: punto de entrada unico, sustituye
+  `{{SIMBOLOS}}` si existe en el prompt del tipo; no-op seguro para los tipos que no lo
+  llevan (`planta`, `mecanico`, `gantt`, `bandejas`).
+- Conectado en los 2 puntos reales de generacion: `_generarPlanoInterno` y
+  `editarPlanoCircuitosREST` (antes indexaban `_PLANO_PROMPTS[tipo]` directamente).
+
+**`bandejas` excluido a proposito** (decision de alcance comunicada a Adrian antes de
+implementar): su prompt tiene un segundo bloque de "color por simbolo" acoplado 1:1 a la
+lista de simbolos; recortar solo la lista sin tocar el bloque de color en el mismo cambio
+arriesgaba dejarlos inconsistentes entre si. Se deja para una iteracion futura si hace
+falta.
+
+### Verificacion
+- `node --check worker.js` limpio.
+- Grep de corrupcion de encoding (`Ã|Â|â€|ï»¿`) sobre el diff -> limpio.
+- `npx wrangler deploy` exitoso (bindings `env.DB`/`env.FILES` confirmados, Version ID
+  `f3116b63-46e9-4bd9-8c82-27a363692742`).
+- **Verificacion en vivo tras el deploy** (chat real dentro de `panel.html` autenticado,
+  no simulado): peticion en lenguaje natural describiendo "cableado interno del cuadro
+  general del taller... colores normativos de fase (marron, negro, gris), neutro azul y
+  tierra verde/amarillo" -> generado plano id 26 en **~3.5 min sin error 524** (frente a 2
+  fallos consecutivos antes del fix), tipo inferido correctamente como **Eléctrico** (no
+  `unifilar`, que era el tipo mal elegido en el intento fallido anterior a este cambio).
+  SVG inspeccionado directamente desde D1 (`svg_data`): 79 de 98 trazos con color usan
+  exactamente la paleta REBT documentada (`#5c3a1e`/`#1a1a1a`/`#737373`/`#1e3a8a`/
+  `#1a7a1a`); analisis programatico de posiciones de todos los `<text>` (90 elementos) no
+  encontro solapes reales -- las 8 coincidencias que marco un primer chequeo automatico
+  eran falsos positivos (texto dentro de `<symbol>` de la libreria estatica compartida,
+  que nunca se renderizan a la vez por estar en `<defs>` independientes, o etiquetas de
+  terminales numerados adyacentes con separacion visual adecuada).
+- Limpieza: plano de prueba id 26 borrado de D1 produccion (`DELETE FROM planos WHERE
+  id=26`, `changes:1`).
+
+### Nota pendiente (no en alcance de esta sesion, no actuada)
+Antes del fix de prompts dinamicos se detecto tambien un caso de tipo mal elegido
+(`unifilar` en vez de `electrico` para "cableado interno del cuadro") en un intento previo
+que fallo por 524 antes de llegar a completarse -- no se puede confirmar si era un fallo de
+inferencia real o un efecto secundario del timeout. El re-test posterior al fix ya eligio
+`electrico` correctamente, asi que no se ha vuelto a reproducir. Si reaparece, revisar de
+nuevo la descripcion de `tipo` en `AI_TOOLS`.
 
 ---
 

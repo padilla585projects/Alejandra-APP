@@ -6,10 +6,42 @@
 
 ÚLTIMA ACTUALIZACIÓN: 09/07/2026
 VERSIÓN ACTUAL APP NUEVA: v7.76
-WORKER API: bfbd39d3-b7b6-4815-8c5f-e9e80c2828d0 (fix <use> sin color en planos, ver historial) · WORKER AGENTE: f742e9e8-8d12-4fe2-9c0c-3b26c7672772 (cliente HTTP puro via Service Binding; previo: f2df41f2-329a-4c93-8b74-924be72a2ea3 sobre commit d9b009e)
+WORKER API: f3116b63-46e9-4bd9-8c82-27a363692742 (seleccion inteligente de tipo + colores REBT + anti-solape + prompts dinamicos, ver historial) · WORKER AGENTE: f742e9e8-8d12-4fe2-9c0c-3b26c7672772 (cliente HTTP puro via Service Binding; previo: f2df41f2-329a-4c93-8b74-924be72a2ea3 sobre commit d9b009e)
 VERSIÓN ACTUAL APP VIEJA: v4.19 (⛔ CONGELADA DEFINITIVAMENTE — no recibe más cambios)
 
 HISTORIAL DE VERSIONES (resumen reciente):
+  (worker.js) |  09/07/2026  [Seleccion inteligente de tipo de plano + colores REBT + anti-solape + prompts dinamicos]
+                       Peticion explicita de Adrian: que Alejandra infiera el tipo de plano
+                       en lenguaje natural (sin exponer nombres de tools/tipos al usuario,
+                       preguntando si faltan datos), colores de fase normativos espanoles
+                       REBT (L1 marron #5c3a1e, L2 negro #1a1a1a, L3 gris #737373, N azul
+                       #1e3a8a, PE verde/amarillo bicolor), y arreglar etiquetas solapadas
+                       en los planos generados. Fix aplicado: (1) descripcion de la tool
+                       generar_plano y su parametro tipo reescrita para inferencia natural +
+                       lista completa de los 8 tipos reales; (2) paleta REBT en el prompt de
+                       electrico; (3) regla anti-solape (margenes 4-6px, prohibido solapar
+                       etiquetas) en 5 prompts (electrico/unifilar/bandejas/
+                       planta_electrica/planta_industrial). Verificacion en vivo de estos 3
+                       cambios revelo 2 timeouts 524 de Cloudflare consecutivos (confirmado
+                       por D1: ningun plano nuevo se creaba). Fix adicional pedido por
+                       Adrian ("prompts dinamicos"): en 4 de los 5 tipos (bandejas excluido
+                       a proposito, tiene un bloque de color acoplado 1:1 a su lista de
+                       simbolos), la tabla de simbolos ya no se envia siempre completa --
+                       placeholder {{SIMBOLOS}} resuelto en tiempo real segun keywords
+                       derivadas automaticamente de cada simbolo + un set "core" siempre
+                       incluido + red de seguridad que usa la lista completa si la seleccion
+                       queda demasiado corta o cubre casi toda la lista de todas formas.
+                       Conectado en _generarPlanoInterno y editarPlanoCircuitosREST.
+                       Verificado: node --check limpio, grep de encoding limpio, npx
+                       wrangler deploy exitoso (bindings DB/FILES OK, Version ID
+                       f3116b63-46e9-4bd9-8c82-27a363692742). Verificacion en vivo tras el
+                       deploy: peticion real en el chat de panel.html generando un plano
+                       "electrico" (cableado interno de cuadro) -> generado en ~3.5 min SIN
+                       524 (id 26, borrado tras verificar), tipo inferido correctamente
+                       (electrico, no unifilar), 79/98 trazos con la paleta REBT exacta,
+                       sin solapes reales de texto (analisis programatico de las 90
+                       etiquetas del SVG). Ver SESION.md para el detalle completo.
+
   (worker.js) |  09/07/2026  [Fix bug: <use href="#sym-X"> sin atributo color en planos generados]
                        Tarea delegada via spawn_task desde la sesion anterior (hallazgo
                        reportado en la entrada de abajo). Causa raiz: el modelo omitia de

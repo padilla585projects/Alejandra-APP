@@ -22395,21 +22395,7 @@ Sintaxis OBLIGATORIA (los 5 atributos son necesarios en TODOS los <use>, sin exc
 El atributo color="" es OBLIGATORIO y define el color del simbolo (hereda via currentColor). NUNCA generes un <use> sin color="" -- un simbolo sin color se renderiza en negro/gris y se considera un error de generacion.
 
 Simbolos disponibles y sus dimensiones estandar:
-  #sym-magnetotermico  width="30" height="100"  → IGA/PIA magnetotermico (Q1, Q2...)
-  #sym-diferencial     width="30" height="100"  → Interruptor diferencial/RCD (ID1...)
-  #sym-fusible         width="30" height="100"  → Fusible (F1, F2...)
-  #sym-contactor       width="30" height="100"  → Contactor potencia NA (KM1, KM2...)
-  #sym-bobina          width="30" height="100"  → Bobina contactor/rele (A1-A2)
-  #sym-termico         width="30" height="100"  → Rele termico sobrecarga (FR1...)
-  #sym-motor-3f        width="70" height="70"   → Motor trifasico 3~ (M1, M2...)
-  #sym-motor-1f        width="70" height="70"   → Motor monofasico 1~ (M1...)
-  #sym-transformador   width="50" height="100"  → Transformador (TR1...)
-  #sym-tierra          width="36" height="24"   → Tierra PE (color="#1a7a1a" siempre; el conductor que llega hasta el se dibuja a rayas verde-amarillo, ver regla de arriba)
-  #sym-lampara         width="26" height="26"   → Lampara/piloto (H1, H2...)
-  #sym-contacto-na     width="30" height="60"   → Contacto auxiliar NA (13-14)
-  #sym-contacto-nc     width="30" height="60"   → Contacto auxiliar NC (21-22)
-  #sym-pulsador-na     width="30" height="70"   → Pulsador NA/marcha (S1, START)
-  #sym-pulsador-nc     width="30" height="70"   → Pulsador NC/paro (S2, STOP)
+{{SIMBOLOS}}
 
 Nota: el terminal TOP del simbolo es (x+15, y) y el BOTTOM es (x+15, y+height).
 Conecta cables a estos puntos exactos con lineas ortogonales.
@@ -22574,12 +22560,7 @@ REQUISITOS TECNICOS:
 
 SIMBOLOS — NO definas <defs> ni <symbol> propios. El renderizador inyecta automaticamente las librerias de simbolos. Solo usa <use href="#sym-X"/> con estos IDs:
 Sintaxis OBLIGATORIA (los 5 atributos son necesarios en TODOS los <use>, sin excepcion): <use href="#sym-X" x="X" y="Y" width="W" height="H" color="COLOR"/>
-  #sym-cgp              width="40" height="50" — Caja General de Proteccion (color="#8B0000")
-  #sym-cs               width="30" height="40" — Cuadro Secundario / Cuadro General de Distribucion (color="#8B0000")
-  #sym-scss             width="22" height="30" — Sub-cuadro local (color="#8B0000")
-  #sym-magnetotermico   width="30" height="100" — IGA/PIA magnetotermico de cabecera de cada tramo (Q1, Q2...) (color="#1a1a1a")
-  #sym-diferencial      width="30" height="100" — Interruptor diferencial/RCD de cabecera de cada tramo (ID1...) (color="#1a1a1a")
-  #sym-tierra           width="36" height="24"  — Puesta a tierra (color="#1a7a1a" siempre)
+{{SIMBOLOS}}
 El atributo color="" es OBLIGATORIO en TODOS los <use> sin excepcion -- NUNCA lo omitas. Un simbolo sin color se renderiza en negro/gris y se considera un error de generacion.
 
 ETIQUETADO DE CADA TRAMO (OBLIGATORIO, junto a la linea, font-size="8.5" fill="#1a1a1a") -- usa el mismo nivel de detalle que un esquema unifilar real de ingenieria de obra, no lo simplifiques:
@@ -22614,14 +22595,7 @@ REQUISITOS TECNICOS:
 - REGLA DE DISPOSICION (OBLIGATORIO): antes de fijar la posicion de cada etiqueta (estancia, circuito, cota, numero junto a simbolo), comprueba que su caja de texto no se solape con paredes, simbolos, canalizaciones u otras etiquetas cercanas. Deja siempre 4-6px libres alrededor de cada texto; si dos etiquetas quedarian demasiado juntas, separalas. Nunca coloques dos textos en las mismas coordenadas ni parcialmente superpuestos.
 
 SIMBOLOS — NO definas <defs> ni <symbol> propios. El renderizador inyecta automaticamente las librerias de simbolos. Solo usa <use href="#sym-X"/> con estos IDs:
-  #sym-cgmp             width="28" height="36" — Cuadro General de Mando y Proteccion (ubicacion del cuadro en planta)
-  #sym-cs               width="30" height="40" — Cuadro secundario si lo hay
-  #sym-caja-derivacion  width="14" height="14" — Caja de derivacion/registro
-  #sym-punto-luz        width="20" height="20" — Punto de luz de techo
-  #sym-aplique          width="16" height="10" — Aplique de pared
-  #sym-toma-corriente   width="18" height="18" — Toma de corriente / base de enchufe
-  #sym-interruptor-simple    width="16" height="16" — Interruptor simple de una via
-  #sym-interruptor-conmutado width="18" height="16" — Interruptor conmutado/de cruce
+{{SIMBOLOS}}
 
 CONEXIONADO INTERRUPTOR -> LUZ (OBLIGATORIO): cada interruptor debe unirse mediante una linea curva o discontinua fina (stroke="#666666" stroke-width="0.8" stroke-dasharray="3,2", fill="none", path curvo tipo arco) al/los punto(s) de luz que gobierna, para que se vea claramente la relacion mando-carga sin confundirse con la canalizacion de potencia.
 
@@ -22657,20 +22631,7 @@ REQUISITOS TECNICOS:
 - REGLA DE DISPOSICION (OBLIGATORIO): antes de fijar la posicion de cada etiqueta (cuadro, CT/CGBT, bandeja, SAI/generador, rack, cota), comprueba que su caja de texto no se solape con muros, equipos, bandejas u otras etiquetas cercanas. Deja siempre 4-6px libres alrededor de cada texto; en zonas densas (filas de racks, salas tecnicas) prioriza claridad sobre densidad. Nunca coloques dos textos en las mismas coordenadas ni parcialmente superpuestos.
 
 SIMBOLOS — NO definas <defs> ni <symbol> propios. El renderizador inyecta automaticamente las librerias de simbolos. Solo usa <use href="#sym-X"/> con estos IDs (combina las 3 librerias segun necesites):
-  #sym-ct               width="46" height="56" — Centro de Transformacion
-  #sym-generador        width="60" height="60" — Grupo electrogeno / generador de respaldo
-  #sym-ats              width="34" height="44" — Conmutador automatico de transferencia (doble ruta A/B)
-  #sym-cgbt             width="36" height="46" — Cuadro General de Baja Tension
-  #sym-cs               width="30" height="40" — Cuadro secundario / de planta (de IEC_BANDEJA_DEFS)
-  #sym-scss             width="22" height="30" — Sub-cuadro local (de IEC_BANDEJA_DEFS)
-  #sym-rack             width="20" height="36" — Rack de servidores/comunicaciones (rotar segun orientacion de fila; el triangulo indica el frente/pasillo frio)
-  #sym-pdu              width="8"  height="36" — PDU vertical 0U de rack
-  #sym-ups              width="30" height="40" — SAI/UPS
-  #sym-crac             width="30" height="30" — Unidad de climatizacion de precision CRAC/CRAH
-  #sym-toma             width="16" height="16" — Toma de fuerza / maquina / carga final (de IEC_BANDEJA_DEFS)
-  #sym-luminaria        width="20" height="8"  — Luminaria industrial (de IEC_BANDEJA_DEFS)
-  #sym-columna-h        width="16" height="16" — Columna metalica HEB/IPE
-  #sym-caja-derivacion  width="14" height="14" — Caja de derivacion/registro
+{{SIMBOLOS}}
 
 DISPOSICION DE RACKS (si aplica a CPD): filas de racks (usa <use href="#sym-rack"/> repetido) con pasillo frio entre dos filas enfrentadas y pasillo caliente en la parte trasera opuesta; etiqueta cada fila (ej. "FILA A1-A8") y cada rack individual con numero pequeño (font-size="7"). PDU pegada a cada rack en la parte trasera.
 
@@ -22694,6 +22655,122 @@ AGRUPA: <g id="acometida-ct">, <g id="cgbt">, <g id="bandejas">, <g id="subcuadr
 
 DEVUELVE: solo el codigo SVG valido completo (desde <svg hasta </svg>), sin texto adicional ni markdown.`,
 };
+
+// ── Prompts dinamicos: tabla de simbolos por tipo, recortada segun lo que ──
+// realmente pida cada peticion (en vez de mandar SIEMPRE los 14-15 simbolos
+// completos aunque el usuario solo necesite 3 o 4). Menos texto de entrada
+// = generacion mas rapida = menos riesgo de 524 (timeout de gateway) en la
+// cascada Gemini/OpenRouter. bandejas queda fuera de este recorte porque su
+// prompt tiene un segundo bloque de colores por simbolo acoplado 1:1 a esta
+// lista; recortar solo una mitad podria dejarlos inconsistentes.
+const _PLANO_SYMBOLS = {
+  electrico: [
+    { id: 'sym-magnetotermico', line: '  #sym-magnetotermico  width="30" height="100"  → IGA/PIA magnetotermico (Q1, Q2...)' },
+    { id: 'sym-diferencial',    line: '  #sym-diferencial     width="30" height="100"  → Interruptor diferencial/RCD (ID1...)' },
+    { id: 'sym-fusible',        line: '  #sym-fusible         width="30" height="100"  → Fusible (F1, F2...)' },
+    { id: 'sym-contactor',      line: '  #sym-contactor       width="30" height="100"  → Contactor potencia NA (KM1, KM2...)' },
+    { id: 'sym-bobina',         line: '  #sym-bobina          width="30" height="100"  → Bobina contactor/rele (A1-A2)' },
+    { id: 'sym-termico',        line: '  #sym-termico         width="30" height="100"  → Rele termico sobrecarga (FR1...)' },
+    { id: 'sym-motor-3f',       line: '  #sym-motor-3f        width="70" height="70"   → Motor trifasico 3~ (M1, M2...)' },
+    { id: 'sym-motor-1f',       line: '  #sym-motor-1f        width="70" height="70"   → Motor monofasico 1~ (M1...)' },
+    { id: 'sym-transformador',  line: '  #sym-transformador   width="50" height="100"  → Transformador (TR1...)' },
+    { id: 'sym-tierra',         line: '  #sym-tierra          width="36" height="24"   → Tierra PE (color="#1a7a1a" siempre; el conductor que llega hasta el se dibuja a rayas verde-amarillo, ver regla de arriba)' },
+    { id: 'sym-lampara',        line: '  #sym-lampara         width="26" height="26"   → Lampara/piloto (H1, H2...)' },
+    { id: 'sym-contacto-na',    line: '  #sym-contacto-na     width="30" height="60"   → Contacto auxiliar NA (13-14)' },
+    { id: 'sym-contacto-nc',    line: '  #sym-contacto-nc     width="30" height="60"   → Contacto auxiliar NC (21-22)' },
+    { id: 'sym-pulsador-na',    line: '  #sym-pulsador-na     width="30" height="70"   → Pulsador NA/marcha (S1, START)' },
+    { id: 'sym-pulsador-nc',    line: '  #sym-pulsador-nc     width="30" height="70"   → Pulsador NC/paro (S2, STOP)' }
+  ],
+  unifilar: [
+    { id: 'sym-cgp',             line: '  #sym-cgp              width="40" height="50" — Caja General de Proteccion (color="#8B0000")' },
+    { id: 'sym-cs',              line: '  #sym-cs               width="30" height="40" — Cuadro Secundario / Cuadro General de Distribucion (color="#8B0000")' },
+    { id: 'sym-scss',            line: '  #sym-scss             width="22" height="30" — Sub-cuadro local (color="#8B0000")' },
+    { id: 'sym-magnetotermico',  line: '  #sym-magnetotermico   width="30" height="100" — IGA/PIA magnetotermico de cabecera de cada tramo (Q1, Q2...) (color="#1a1a1a")' },
+    { id: 'sym-diferencial',     line: '  #sym-diferencial      width="30" height="100" — Interruptor diferencial/RCD de cabecera de cada tramo (ID1...) (color="#1a1a1a")' },
+    { id: 'sym-tierra',          line: '  #sym-tierra           width="36" height="24"  — Puesta a tierra (color="#1a7a1a" siempre)' }
+  ],
+  planta_electrica: [
+    { id: 'sym-cgmp',                     line: '  #sym-cgmp             width="28" height="36" — Cuadro General de Mando y Proteccion (ubicacion del cuadro en planta)' },
+    { id: 'sym-cs',                       line: '  #sym-cs               width="30" height="40" — Cuadro secundario si lo hay' },
+    { id: 'sym-caja-derivacion',          line: '  #sym-caja-derivacion  width="14" height="14" — Caja de derivacion/registro' },
+    { id: 'sym-punto-luz',                line: '  #sym-punto-luz        width="20" height="20" — Punto de luz de techo' },
+    { id: 'sym-aplique',                  line: '  #sym-aplique          width="16" height="10" — Aplique de pared' },
+    { id: 'sym-toma-corriente',           line: '  #sym-toma-corriente   width="18" height="18" — Toma de corriente / base de enchufe' },
+    { id: 'sym-interruptor-simple',       line: '  #sym-interruptor-simple    width="16" height="16" — Interruptor simple de una via' },
+    { id: 'sym-interruptor-conmutado',    line: '  #sym-interruptor-conmutado width="18" height="16" — Interruptor conmutado/de cruce' }
+  ],
+  planta_industrial: [
+    { id: 'sym-ct',              line: '  #sym-ct               width="46" height="56" — Centro de Transformacion' },
+    { id: 'sym-generador',       line: '  #sym-generador        width="60" height="60" — Grupo electrogeno / generador de respaldo' },
+    { id: 'sym-ats',             line: '  #sym-ats              width="34" height="44" — Conmutador automatico de transferencia (doble ruta A/B)' },
+    { id: 'sym-cgbt',            line: '  #sym-cgbt             width="36" height="46" — Cuadro General de Baja Tension' },
+    { id: 'sym-cs',              line: '  #sym-cs               width="30" height="40" — Cuadro secundario / de planta (de IEC_BANDEJA_DEFS)' },
+    { id: 'sym-scss',            line: '  #sym-scss             width="22" height="30" — Sub-cuadro local (de IEC_BANDEJA_DEFS)' },
+    { id: 'sym-rack',            line: '  #sym-rack             width="20" height="36" — Rack de servidores/comunicaciones (rotar segun orientacion de fila; el triangulo indica el frente/pasillo frio)' },
+    { id: 'sym-pdu',             line: '  #sym-pdu              width="8"  height="36" — PDU vertical 0U de rack' },
+    { id: 'sym-ups',             line: '  #sym-ups              width="30" height="40" — SAI/UPS' },
+    { id: 'sym-crac',            line: '  #sym-crac             width="30" height="30" — Unidad de climatizacion de precision CRAC/CRAH' },
+    { id: 'sym-toma',            line: '  #sym-toma             width="16" height="16" — Toma de fuerza / maquina / carga final (de IEC_BANDEJA_DEFS)' },
+    { id: 'sym-luminaria',       line: '  #sym-luminaria        width="20" height="8"  — Luminaria industrial (de IEC_BANDEJA_DEFS)' },
+    { id: 'sym-columna-h',       line: '  #sym-columna-h        width="16" height="16" — Columna metalica HEB/IPE' },
+    { id: 'sym-caja-derivacion', line: '  #sym-caja-derivacion  width="14" height="14" — Caja de derivacion/registro' }
+  ]
+};
+
+// Simbolos que casi siempre hacen falta en ese tipo de plano aunque el
+// usuario no los mencione literalmente (proteccion de cabecera, tierra...).
+// Se incluyen siempre, ademas de los que coincidan por palabras clave.
+const _PLANO_SIMBOLOS_CORE = {
+  electrico: ['sym-magnetotermico', 'sym-diferencial', 'sym-tierra'],
+  unifilar: ['sym-cgp', 'sym-cs', 'sym-magnetotermico', 'sym-tierra'],
+  planta_electrica: ['sym-cgmp', 'sym-punto-luz', 'sym-toma-corriente', 'sym-interruptor-simple'],
+  planta_industrial: ['sym-cgbt']
+};
+
+const _STOPWORDS_SIMBOLOS = new Set(['de','del','la','el','los','las','con','para','segun','una','uno','unos','unas','sus','esta','este','estos','estas','color','width','height','siempre','cada','cuando','desde','hasta','plano']);
+
+function _normalizarTextoPlano(s) {
+  return (s || '').toString().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+}
+
+// Deriva palabras clave de la propia descripcion del simbolo (todo lo que va
+// despues de la flecha) y de su id, para no tener que mantener a mano una
+// lista de sinonimos separada por cada uno de los ~40 simbolos.
+function _keywordsDeSimbolo(sym) {
+  const desc = sym.line.split(/[→—]/).slice(1).join(' ');
+  const raw = _normalizarTextoPlano(desc + ' ' + sym.id.replace('sym-', '').replace(/-/g, ' '));
+  const palabras = raw.match(/[a-z0-9]{4,}/g) || [];
+  return [...new Set(palabras.filter(w => !_STOPWORDS_SIMBOLOS.has(w)))];
+}
+
+// Construye el bloque de simbolos a incluir en el prompt, recortado segun el
+// texto real de la peticion (titulo+descripcion+circuitos). Si el recorte
+// deja muy pocos simbolos (posible peticion generica o palabras no
+// reconocidas) o si de todas formas coincide la mayoria, se usa la lista
+// completa como red de seguridad -- nunca generamos con menos informacion
+// de la necesaria, solo evitamos el exceso en el caso comun.
+function _bloqueSimbolosDinamico(tipo, textoContexto) {
+  const lista = _PLANO_SYMBOLS[tipo];
+  if (!lista) return '';
+  const texto = _normalizarTextoPlano(textoContexto);
+  const core = new Set(_PLANO_SIMBOLOS_CORE[tipo] || []);
+  const seleccionados = lista.filter(sym => {
+    if (core.has(sym.id)) return true;
+    return _keywordsDeSimbolo(sym).some(kw => texto.includes(kw));
+  });
+  const usar = (seleccionados.length < 2 || seleccionados.length >= lista.length * 0.7) ? lista : seleccionados;
+  return usar.map(s => s.line).join('\n');
+}
+
+// Sustituye el placeholder {{SIMBOLOS}} del prompt del tipo por el bloque
+// recortado. Los tipos sin entrada en _PLANO_SYMBOLS (planta, mecanico,
+// gantt, bandejas) no tienen placeholder en su texto, asi que el replace
+// no hace nada y el prompt se devuelve tal cual.
+function _prepararPlanoPrompt(tipo, textoContexto) {
+  const base = _PLANO_PROMPTS[tipo] || _PLANO_PROMPTS.planta;
+  if (!base.includes('{{SIMBOLOS}}')) return base;
+  return base.replace('{{SIMBOLOS}}', _bloqueSimbolosDinamico(tipo, textoContexto));
+}
 
 // ── Red de seguridad: color por defecto en <use> sin atributo color ────────
 // Bug detectado 09/07/2026: de forma no determinista el modelo a veces omite
@@ -22788,7 +22865,7 @@ async function _llamarAnthropicPlanoStream(env, userMsg, systemPrompt, maxTokens
 async function _generarPlanoInterno(env, { tipo, titulo, descripcion, empresa_id, usuario_id, circuitos = [] }) {
   await _ensurePlanosTable(env);
 
-  const systemPrompt = _PLANO_PROMPTS[tipo] || _PLANO_PROMPTS.planta;
+  const systemPrompt = _prepararPlanoPrompt(tipo, `${titulo || ''} ${descripcion || ''} ${JSON.stringify(circuitos || [])}`);
 
   // ── Para planos de bandejas: enriquecer con catálogo real de la empresa ─────
   // Consulta alejandra_memoria y alejandra_conocimiento buscando entradas de
@@ -23171,7 +23248,7 @@ async function editarPlanoCircuitosREST(request, env, path) {
   }
   if (idsModificados.length === 0) return err('No se aplico ningun cambio valido (revisa circuito_id/campo/valor)', 400);
 
-  const systemPrompt = _PLANO_PROMPTS[row.tipo] || _PLANO_PROMPTS.planta;
+  const systemPrompt = _prepararPlanoPrompt(row.tipo, `${row.titulo || ''} ${row.descripcion || ''} ${JSON.stringify(circuitos || [])}`);
   const bloqueCircuitos = circuitos.map(c => {
     const partes = [];
     if (c.nombre) partes.push(c.nombre);
