@@ -682,13 +682,13 @@ const AI_TOOLS = [
   },
   {
     name: 'generar_plano',
-    description: 'Genera un plano tecnico profesional en formato SVG editable. Puede crear planos de planta/obra, esquemas electricos, planos mecanicos/industriales y diagramas de Gantt/fases. El SVG generado se guarda en la base de datos y es descargable y editable desde el panel.',
+    description: 'Genera un plano tecnico profesional en formato SVG editable, listo para descargar y editar desde el panel. El usuario NUNCA tiene por que conocer los tipos internos ni pedirlos por su nombre tecnico: a partir de lo que describa en lenguaje normal (que tipo de instalacion es, que quiere ver reflejado, para que sirve), elige tu mismo el "tipo" que mejor encaja usando las pistas de la lista de abajo. Si lo que pide es ambiguo entre dos tipos, o si faltan datos importantes para poder generarlo bien (por ejemplo: no se sabe la ubicacion/nave, cuantos circuitos o cuadros hay, las potencias, si hay generador/SAI, cuantas plantas, etc.), NO inventes esos datos ni generes el plano a medias: pregunta primero al usuario con palabras sencillas y cotidianas (nunca menciones nombres de tipos, tools ni parametros internos), y genera el plano solo cuando tengas lo necesario.',
     input_schema: {
       type: 'object',
       properties: {
-        tipo: { type: 'string', enum: ['planta', 'electrico', 'bandejas', 'mecanico', 'gantt'], description: 'Tipo de plano: planta (plano de planta/obra), electrico (esquema electrico), bandejas (instalacion de bandejas electricas en nave), mecanico (plano mecanico/industrial), gantt (diagrama de Gantt/fases)' },
+        tipo: { type: 'string', enum: ['planta', 'electrico', 'bandejas', 'mecanico', 'gantt', 'unifilar', 'planta_electrica', 'planta_industrial'], description: 'Elige segun lo que el usuario describa, no segun palabras literales que use:\n- planta: plano general de una obra/edificio/nave (distribucion de espacios, zonas, cotas generales). Pistas: "plano de la obra", "distribucion de la nave", "planta del edificio".\n- electrico: esquema electrico de un cuadro con su simbologia (interruptores, protecciones, contactores, motores). Pistas: "esquema del cuadro", "como esta cableado el cuadro", "protecciones del cuadro X".\n- unifilar: diagrama general de arriba a abajo de toda la instalacion electrica, desde la acometida hasta los cuadros, en forma resumida (una linea por circuito). Pistas: "esquema unifilar", "vision general de la instalacion electrica", "de donde viene la luz hasta cada cuadro".\n- bandejas: recorrido y disposicion de las bandejas/canalizaciones electricas por una nave o edificio. Pistas: "por donde van las bandejas", "trazado de bandejas", "canalizaciones de la nave".\n- planta_electrica: plano de planta de una vivienda/oficina con la instalacion electrica interior (tomas, luces, circuitos por estancia). Pistas: "instalacion electrica de la oficina/vivienda", "circuitos por habitacion", "donde van los enchufes y luces".\n- planta_industrial: plano de planta de una instalacion industrial o CPD/datacenter (centros de transformacion, cuadros generales, generadores, SAI, racks). Pistas: "CPD", "datacenter", "centro de transformacion", "sala de racks/servidores", "instalacion industrial grande".\n- mecanico: plano mecanico/industrial de piezas o maquinaria (no electrico). Pistas: "plano de la pieza/maquina", "despiece mecanico".\n- gantt: diagrama de fases/cronograma de un proyecto u obra. Pistas: "cronograma", "fases de la obra", "diagrama de Gantt", "planificacion temporal".' },
         titulo: { type: 'string', description: 'Titulo del plano (ej: "Plano Planta Baja Nave A", "Esquema Electrico Cuadro Principal", "Gantt Fase 2")' },
-        descripcion: { type: 'string', description: 'Descripcion detallada de lo que debe incluir el plano: zonas, componentes, fases, medidas, leyenda, etc.' },
+        descripcion: { type: 'string', description: 'Descripcion detallada de lo que debe incluir el plano: zonas, componentes, fases, medidas, leyenda, etc. Redactala tu (la IA) a partir de la conversacion con el usuario, no le pidas que la escriba el en formato tecnico.' },
         empresa_id: { type: 'integer', description: 'ID de la empresa a la que pertenece el plano' },
         usuario_id: { type: 'integer', description: 'ID del usuario que solicita el plano (opcional)' }
       },
@@ -702,7 +702,7 @@ const AI_TOOLS = [
       type: 'object',
       properties: {
         empresa_id: { type: 'integer', description: 'ID de la empresa' },
-        tipo: { type: 'string', enum: ['planta', 'electrico', 'bandejas', 'mecanico', 'gantt'], description: 'Filtrar por tipo (opcional)' }
+        tipo: { type: 'string', enum: ['planta', 'electrico', 'bandejas', 'mecanico', 'gantt', 'unifilar', 'planta_electrica', 'planta_industrial'], description: 'Filtrar por tipo (opcional)' }
       },
       required: ['empresa_id']
     }
@@ -22383,14 +22383,16 @@ REQUISITOS TECNICOS:
 - Cables de potencia: SOLO lineas ortogonales (horizontal/vertical). stroke-width="2.5", color segun fase
 - Cables de control/maniobra: stroke-width="1.2" stroke="#333333", lineas ortogonales
 - Nodos de conexion (empalmes): circle r="4" fill=color-fase (SOLO donde hay derivacion real)
-- COLORES DE FASE (OBLIGATORIO): L1=#cc0000  L2=#cc6600  L3=#000099  N=#0066cc  PE=#006600
+- COLORES DE FASE Y CONDUCTORES (OBLIGATORIO, colores reales usados en Espana segun REBT): L1=#5c3a1e (marron)  L2=#1a1a1a (negro)  L3=#737373 (gris)  N=#1e3a8a (azul; distinto del azul de las cotas #0066cc para no confundirlos). NUNCA uses rojo, naranja ni azul intenso para una fase, no es el color real del cable en Espana.
+- CONDUCTOR DE TIERRA/PE (OBLIGATORIO): el cable de tierra real es bicolor verde-amarillo a rayas, no verde liso. Dibujalo SIEMPRE como DOS lineas superpuestas en las mismas coordenadas y mismo stroke-width: 1) linea base continua stroke="#1a7a1a" (verde); 2) encima, una segunda linea stroke="#ffd400" (amarillo) stroke-dasharray="8,8" para simular las rayas. Aplica esto a cualquier tramo de conductor PE; el simbolo #sym-tierra en si mismo se queda en verde solido (ver mas abajo).
 - REGLA DE TIPOGRAFIA (OBLIGATORIO): NUNCA uses font-weight="bold" en etiquetas de referencia, calibres, potencias o cualquier texto tecnico de tamano pequeno (font-size <= 11). Usa siempre peso normal (no incluyas el atributo font-weight). Reserva la negrita EXCLUSIVAMENTE para el bloque de titulo/cajetin (texto sobre fondo de color solido). El texto en negrita a tamano pequeno se ve tosco e ilegible — evitalo siempre.
+- REGLA DE DISPOSICION (OBLIGATORIO): antes de fijar la posicion de cada etiqueta, comprueba mentalmente que su caja de texto (segun longitud del texto y font-size) no se solapa con ningun simbolo, linea u otra etiqueta cercana. Deja siempre un margen minimo de 4-6px libre alrededor de cada texto. Si dos etiquetas quedarian demasiado juntas o superpuestas, separalas (desplaza una, o usa una linea guia corta hacia el elemento). Nunca coloques dos textos en las mismas coordenadas ni parcialmente superpuestos entre si o sobre simbolos/lineas.
 
 SIMBOLOS IEC 60617 — USO OBLIGATORIO:
 NO definas <defs> ni <symbol> propios. El renderizador inyecta la libreria IEC 60617 automaticamente.
 DEBES usar <use href="#sym-X"/> para TODOS los componentes. NO dibujes shapes ad-hoc.
-Sintaxis: <use href="#sym-X" x="X" y="Y" width="W" height="H" color="COLOR"/>
-El atributo color="" define el color del simbolo (hereda via currentColor).
+Sintaxis OBLIGATORIA (los 5 atributos son necesarios en TODOS los <use>, sin excepcion): <use href="#sym-X" x="X" y="Y" width="W" height="H" color="COLOR"/>
+El atributo color="" es OBLIGATORIO y define el color del simbolo (hereda via currentColor). NUNCA generes un <use> sin color="" -- un simbolo sin color se renderiza en negro/gris y se considera un error de generacion.
 
 Simbolos disponibles y sus dimensiones estandar:
   #sym-magnetotermico  width="30" height="100"  → IGA/PIA magnetotermico (Q1, Q2...)
@@ -22402,7 +22404,7 @@ Simbolos disponibles y sus dimensiones estandar:
   #sym-motor-3f        width="70" height="70"   → Motor trifasico 3~ (M1, M2...)
   #sym-motor-1f        width="70" height="70"   → Motor monofasico 1~ (M1...)
   #sym-transformador   width="50" height="100"  → Transformador (TR1...)
-  #sym-tierra          width="36" height="24"   → Tierra PE (color="#006600" siempre)
+  #sym-tierra          width="36" height="24"   → Tierra PE (color="#1a7a1a" siempre; el conductor que llega hasta el se dibuja a rayas verde-amarillo, ver regla de arriba)
   #sym-lampara         width="26" height="26"   → Lampara/piloto (H1, H2...)
   #sym-contacto-na     width="30" height="60"   → Contacto auxiliar NA (13-14)
   #sym-contacto-nc     width="30" height="60"   → Contacto auxiliar NC (21-22)
@@ -22484,6 +22486,7 @@ REQUISITOS TECNICOS:
 - Ejes estructurales: lineas discontinuas largas stroke="#999999" stroke-width="0.7" stroke-dasharray="20,6,3,6"
 - Referencias de ejes alfanumericas: columnas A,B,C... filas 1,2,3... font-size="11" fill="#555555"
 - REGLA DE TIPOGRAFIA (OBLIGATORIO): NUNCA uses font-weight="bold" en etiquetas de bandeja, cotas, referencias de cuadro o cualquier texto tecnico de tamano pequeno (font-size <= 11). Usa siempre peso normal (no incluyas el atributo font-weight). Reserva la negrita EXCLUSIVAMENTE para: las etiquetas de zona (font-size="13", ver mas abajo), el titulo "LEYENDA" y el bloque de titulo/cajetin (texto sobre fondo de color solido). El texto en negrita a tamano pequeno se ve tosco e ilegible — evitalo siempre.
+- REGLA DE DISPOSICION (OBLIGATORIO): antes de fijar la posicion de cada etiqueta (bandeja, cota, referencia de cuadro, eje), comprueba que su caja de texto no se solape con ninguna bandeja, simbolo u otra etiqueta cercana. Deja siempre 4-6px libres alrededor de cada texto; si dos etiquetas quedarian demasiado juntas, separalas. Nunca coloques dos textos en las mismas coordenadas ni parcialmente superpuestos.
 
 CONVENCIONES DE BANDEJAS (siempre recorrido ORTOGONAL — horizontal o vertical):
 - Bandeja principal (BAN 200x100 o mayor):
@@ -22512,7 +22515,7 @@ SIMBOLOS — NO definas <defs> ni <symbol> propios. El renderizador inyecta auto
   #sym-bandeja-te       width="40" height="30" → Derivacion en T horizontal
   #sym-bandeja-reduccion width="30" height="20" → Reduccion de seccion de bandeja
 
-Atributo color="" en el <use> define el color del simbolo (hereda via currentColor):
+Atributo color="" en el <use> define el color del simbolo (hereda via currentColor). OBLIGATORIO en TODOS los <use> sin excepcion -- NUNCA lo omitas, un simbolo sin color se renderiza en negro/gris y se considera un error de generacion:
   CGP: color="#8B0000"  CS: color="#003399"  SCSS: color="#0047b3"
   Columnas metalicas: color="#444444"  Columnas hormigon: color="#666666"
   Bajantes: color="#a35300"  Tomas: color="#006633"  Luminarias: color="#8a6a00"
@@ -22566,15 +22569,18 @@ REQUISITOS TECNICOS:
 - Representacion UNIFILAR: cada tramo es UNA SOLA LINEA (no 3 lineas de fase separadas) que representa el conjunto de conductores del circuito. stroke="#1a1a1a" stroke-width="2.5" para tramos principales, stroke-width="1.8" para derivaciones a sub-cuadros
 - Topologia SIEMPRE de arriba hacia abajo o de izquierda a derecha: Acometida -> CGP -> Cuadro General (CGMP) -> Sub-cuadros -> (opcional) cuadros terciarios
 - REGLA DE TIPOGRAFIA (OBLIGATORIO): NUNCA uses font-weight="bold" en las etiquetas de tramo (referencia de proteccion, designacion de cable, metodo de instalacion, longitud, potencia, caida de tension) ni en los nombres/referencias de cuadro. Usa siempre peso normal (no incluyas el atributo font-weight). Reserva la negrita EXCLUSIVAMENTE para el bloque de titulo/cajetin (texto sobre fondo de color solido) y el titulo "LEYENDA". El texto en negrita a tamano pequeno (8-9px) se ve tosco e ilegible — evitalo siempre, incluso si te parece que "resalta mejor".
+- REGLA DE DISPOSICION (OBLIGATORIO): cada tramo lleva varias etiquetas (proteccion, cable, instalacion, longitud, potencia, caida de tension) — apilalas en columna con separacion vertical suficiente (linea de texto propia, sin solapar entre ellas ni con el rectangulo del cuadro, el simbolo de proteccion o la linea del tramo siguiente). Deja siempre 4-6px libres alrededor de cada texto. Nunca coloques dos etiquetas en las mismas coordenadas ni parcialmente superpuestas.
 - Cada cuadro se dibuja como un rectangulo (usa los simbolos indicados abajo) con su nombre/referencia debajo (ej. "CS-1 Planta Baja", "SCSS Taller")
 
 SIMBOLOS — NO definas <defs> ni <symbol> propios. El renderizador inyecta automaticamente las librerias de simbolos. Solo usa <use href="#sym-X"/> con estos IDs:
+Sintaxis OBLIGATORIA (los 5 atributos son necesarios en TODOS los <use>, sin excepcion): <use href="#sym-X" x="X" y="Y" width="W" height="H" color="COLOR"/>
   #sym-cgp              width="40" height="50" — Caja General de Proteccion (color="#8B0000")
   #sym-cs               width="30" height="40" — Cuadro Secundario / Cuadro General de Distribucion (color="#8B0000")
   #sym-scss             width="22" height="30" — Sub-cuadro local (color="#8B0000")
-  #sym-magnetotermico   width="30" height="100" — IGA/PIA magnetotermico de cabecera de cada tramo (Q1, Q2...)
-  #sym-diferencial      width="30" height="100" — Interruptor diferencial/RCD de cabecera de cada tramo (ID1...)
-  #sym-tierra           width="36" height="24"  — Puesta a tierra (color="#006600" siempre)
+  #sym-magnetotermico   width="30" height="100" — IGA/PIA magnetotermico de cabecera de cada tramo (Q1, Q2...) (color="#1a1a1a")
+  #sym-diferencial      width="30" height="100" — Interruptor diferencial/RCD de cabecera de cada tramo (ID1...) (color="#1a1a1a")
+  #sym-tierra           width="36" height="24"  — Puesta a tierra (color="#1a7a1a" siempre)
+El atributo color="" es OBLIGATORIO en TODOS los <use> sin excepcion -- NUNCA lo omitas. Un simbolo sin color se renderiza en negro/gris y se considera un error de generacion.
 
 ETIQUETADO DE CADA TRAMO (OBLIGATORIO, junto a la linea, font-size="8.5" fill="#1a1a1a") -- usa el mismo nivel de detalle que un esquema unifilar real de ingenieria de obra, no lo simplifiques:
 - Referencia de proteccion de cabecera: ej. "Q2 40A Curva C" y si aplica diferencial "ID2 40A/30mA"
@@ -22584,7 +22590,7 @@ ETIQUETADO DE CADA TRAMO (OBLIGATORIO, junto a la linea, font-size="8.5" fill="#
 - Potencia/carga prevista del tramo: ej. "P=15kW" o "12.000W"
 - CAIDA DE TENSION calculada del tramo: ej. "ΔU=2,7%" -- debe ser numericamente coherente con longitud, seccion y potencia (mayor longitud/potencia o menor seccion = mayor caida), y quedar por debajo del limite REBT acumulado (3% alumbrado, 5% fuerza desde origen de instalacion)
 
-ACABADO VISUAL: aunque el esquema es deliberadamente esquematico/minimalista (no decorativo), cuida el acabado: cabecera superior con banda de color solida y titulo, separadores finos entre bloques de datos, iconos de cuadro con un sutil relieve/sombra (ej. un segundo rectangulo desplazado 1-2px con opacity baja detras de cada cuadro), y paleta de color coherente (azul oscuro #1a3a6b para cabecera/cajetin, rojo #8B0000 para cuadros/protecciones, verde #006600 para tierra) -- que se vea cuidado, no un dibujo tecnico plano.
+ACABADO VISUAL: aunque el esquema es deliberadamente esquematico/minimalista (no decorativo), cuida el acabado: cabecera superior con banda de color solida y titulo, separadores finos entre bloques de datos, iconos de cuadro con un sutil relieve/sombra (ej. un segundo rectangulo desplazado 1-2px con opacity baja detras de cada cuadro), y paleta de color coherente (azul oscuro #1a3a6b para cabecera/cajetin, rojo #8B0000 para cuadros/protecciones, verde #1a7a1a para tierra) -- que se vea cuidado, no un dibujo tecnico plano.
 
 COTAS Y NOTAS: no requiere cotas de obra civil. Incluir nota tecnica: "Esquema unifilar segun REBT ITC-BT-17. Secciones calculadas para caida de tension y calentamiento segun normativa vigente."
 
@@ -22605,6 +22611,7 @@ REQUISITOS TECNICOS:
 - Puertas: arco de 90 grados (quarter-circle path) en el vano de la pared
 - Canalizaciones (recorrido de circuitos): SOLO lineas ortogonales (horizontal/vertical), stroke="#a35300" stroke-width="1.4" stroke-dasharray="4,2" (tubo empotrado en tabique/techo). Cada circuito de un color distinto opcionalmente para diferenciarlos, indicado en leyenda
 - REGLA DE TIPOGRAFIA (OBLIGATORIO): NUNCA uses font-weight="bold" en referencias de circuito, cotas o numeros de circuito junto a simbolos. Usa siempre peso normal (no incluyas el atributo font-weight). Reserva la negrita EXCLUSIVAMENTE para: la etiqueta de estancia (font-size="11", ver arriba), el titulo "LEYENDA" y el bloque de titulo/cajetin (texto sobre fondo de color solido). El texto en negrita a tamano pequeno se ve tosco e ilegible — evitalo siempre.
+- REGLA DE DISPOSICION (OBLIGATORIO): antes de fijar la posicion de cada etiqueta (estancia, circuito, cota, numero junto a simbolo), comprueba que su caja de texto no se solape con paredes, simbolos, canalizaciones u otras etiquetas cercanas. Deja siempre 4-6px libres alrededor de cada texto; si dos etiquetas quedarian demasiado juntas, separalas. Nunca coloques dos textos en las mismas coordenadas ni parcialmente superpuestos.
 
 SIMBOLOS — NO definas <defs> ni <symbol> propios. El renderizador inyecta automaticamente las librerias de simbolos. Solo usa <use href="#sym-X"/> con estos IDs:
   #sym-cgmp             width="28" height="36" — Cuadro General de Mando y Proteccion (ubicacion del cuadro en planta)
@@ -22647,6 +22654,7 @@ REQUISITOS TECNICOS:
 - Canalizacion de potencia: SOLO bandejas (recorrido ortogonal, dos lineas paralelas separadas 16px stroke="#0a0a5a" stroke-width="2.5", igual convencion que un plano de bandejas), NUNCA tubo empotrado tipo vivienda
 - Doble ruta A/B (si aplica a CPD): ruta A en azul stroke="#0033cc", ruta B en un color distinto stroke="#a35300", ambas SIEMPRE fisicamente separadas (nunca comparten bandeja) y etiquetadas "RUTA A" / "RUTA B" en la leyenda
 - REGLA DE TIPOGRAFIA (OBLIGATORIO): NUNCA uses font-weight="bold" en etiquetas de cuadro/CT/CGBT, tramos de bandeja, SAI/generador, filas/numeros de rack o cotas. Usa siempre peso normal (no incluyas el atributo font-weight). Reserva la negrita EXCLUSIVAMENTE para el bloque de titulo/cajetin (texto sobre fondo de color solido) y el titulo "LEYENDA". El texto en negrita a tamano pequeno se ve tosco e ilegible — evitalo siempre.
+- REGLA DE DISPOSICION (OBLIGATORIO): antes de fijar la posicion de cada etiqueta (cuadro, CT/CGBT, bandeja, SAI/generador, rack, cota), comprueba que su caja de texto no se solape con muros, equipos, bandejas u otras etiquetas cercanas. Deja siempre 4-6px libres alrededor de cada texto; en zonas densas (filas de racks, salas tecnicas) prioriza claridad sobre densidad. Nunca coloques dos textos en las mismas coordenadas ni parcialmente superpuestos.
 
 SIMBOLOS — NO definas <defs> ni <symbol> propios. El renderizador inyecta automaticamente las librerias de simbolos. Solo usa <use href="#sym-X"/> con estos IDs (combina las 3 librerias segun necesites):
   #sym-ct               width="46" height="56" — Centro de Transformacion
@@ -22686,6 +22694,51 @@ AGRUPA: <g id="acometida-ct">, <g id="cgbt">, <g id="bandejas">, <g id="subcuadr
 
 DEVUELVE: solo el codigo SVG valido completo (desde <svg hasta </svg>), sin texto adicional ni markdown.`,
 };
+
+// ── Red de seguridad: color por defecto en <use> sin atributo color ────────
+// Bug detectado 09/07/2026: de forma no determinista el modelo a veces omite
+// el atributo color="" en TODOS los <use> de un plano (confirmado comparando
+// 2 generaciones consecutivas de la misma peticion: id 22 lo incluia bien,
+// id 23 lo omitia en todos). Como currentColor sin color="" hereda el color
+// de texto por defecto (negro), el simbolo IEC sale sin colorear en vez del
+// color de fase/tipo correcto. Los prompts ya piden el atributo como
+// obligatorio, pero al ser un modelo de lenguaje no es 100% fiable -- esta
+// funcion es la garantia real: normaliza CUALQUIER <use> sin color="" antes
+// de guardar el SVG en D1, asignandole el mismo color por defecto que ya
+// documentan los prompts para cada simbolo/tipo de plano.
+const _PLANO_COLOR_DEFAULTS = {
+  unifilar: {
+    'sym-cgp': '#8B0000', 'sym-cs': '#8B0000', 'sym-scss': '#8B0000',
+    'sym-magnetotermico': '#1a1a1a', 'sym-diferencial': '#1a1a1a',
+    'sym-tierra': '#1a7a1a'
+  },
+  electrico: {
+    'sym-tierra': '#1a7a1a'
+  },
+  bandejas: {
+    'sym-cgp': '#8B0000', 'sym-cs': '#003399', 'sym-scss': '#0047b3',
+    'sym-columna-h': '#444444', 'sym-columna-c': '#666666',
+    'sym-bajante': '#a35300', 'sym-toma': '#006633', 'sym-luminaria': '#8a6a00',
+    'sym-bandeja-codo': '#0a0a5a', 'sym-bandeja-te': '#0a0a5a', 'sym-bandeja-reduccion': '#0a0a5a'
+  },
+  planta_electrica: {},
+  planta_industrial: {}
+};
+// Color de reserva cuando el simbolo no tiene un color documentado para ese
+// tipo de plano (coincide con el stroke oscuro neutro que ya usan estos
+// planos para lineas/texto tecnico, asi que no desentona visualmente).
+const _PLANO_COLOR_FALLBACK = '#1a1a1a';
+
+function _normalizarColoresUseSvg(svgRaw, tipo) {
+  const defaults = _PLANO_COLOR_DEFAULTS[tipo] || {};
+  return svgRaw.replace(/<use\b([^>]*?)(\/?)>/gi, (match, attrs, selfClose) => {
+    if (/\bcolor\s*=/i.test(attrs)) return match; // ya trae color, no tocar
+    const hrefMatch = attrs.match(/(?:^|\s)(?:href|xlink:href)\s*=\s*["']#([^"']+)["']/i);
+    const symId = hrefMatch ? hrefMatch[1] : null;
+    const color = (symId && defaults[symId]) || _PLANO_COLOR_FALLBACK;
+    return `<use${attrs} color="${color}"${selfClose}>`;
+  });
+}
 
 async function _llamarAnthropicPlanoStream(env, userMsg, systemPrompt, maxTokens) {
   const resp = await fetch('https://api.anthropic.com/v1/messages', {
@@ -23010,6 +23063,13 @@ INSTRUCCIONES FINALES:
     svgRaw = svgRaw.replace(/(<svg[^>]*>)/i, `$1\n${IEC_BANDEJA_DEFS}\n${IEC_INSTALACION_DEFS}\n${IEC_INDUSTRIAL_DEFS}`);
   }
 
+  // Red de seguridad: rellena color="" en cualquier <use> que el modelo haya
+  // omitido (ver _normalizarColoresUseSvg). Se aplica a todos los tipos que
+  // usan la libreria de simbolos compartida.
+  if (['electrico', 'bandejas', 'unifilar', 'planta_electrica', 'planta_industrial'].includes(tipo)) {
+    svgRaw = _normalizarColoresUseSvg(svgRaw, tipo);
+  }
+
   // Registrar uso de IA (proveedor y modelo reales)
   logAIUsage(env, {
     empresa_id,
@@ -23163,6 +23223,12 @@ INSTRUCCIONES FINALES:
   if (row.tipo === 'unifilar') svgRaw = svgRaw.replace(/(<svg[^>]*>)/i, `$1\n${IEC_SYMBOLS_DEFS}\n${IEC_BANDEJA_DEFS}`);
   if (row.tipo === 'planta_electrica') svgRaw = svgRaw.replace(/(<svg[^>]*>)/i, `$1\n${IEC_BANDEJA_DEFS}\n${IEC_INSTALACION_DEFS}`);
   if (row.tipo === 'planta_industrial') svgRaw = svgRaw.replace(/(<svg[^>]*>)/i, `$1\n${IEC_BANDEJA_DEFS}\n${IEC_INSTALACION_DEFS}\n${IEC_INDUSTRIAL_DEFS}`);
+
+  // Red de seguridad: rellena color="" en cualquier <use> que el modelo haya
+  // omitido al regenerar el SVG (ver _normalizarColoresUseSvg).
+  if (['electrico', 'bandejas', 'unifilar', 'planta_electrica', 'planta_industrial'].includes(row.tipo)) {
+    svgRaw = _normalizarColoresUseSvg(svgRaw, row.tipo);
+  }
 
   const metadatos = JSON.stringify({ tipo: row.tipo, tokens: Math.round(svgRaw.length / 4), modelo: 'claude-sonnet-4-6', proveedor: 'anthropic', editado: true });
   await env.DB.prepare(

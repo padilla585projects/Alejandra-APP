@@ -1,7 +1,65 @@
 ## ESTADO ACTUAL
 
 **Sesion:** LIBRE
-**Ultima sesion:** 09/07/2026 -- Fix legibilidad de planos (negrita + contraste), a peticion
+**Ultima sesion:** 09/07/2026 -- Fix bug `<use>` sin atributo `color` en planos generados
+(worker.js), tarea delegada via `spawn_task` desde la sesion anterior (ver entrada de abajo,
+"Bug distinto encontrado... delegado"). Sesion detectada en curso al arrancar con cambios sin
+commitear de OTRA sesion concurrente (reglas de disposicion en los 5 prompts de planos, cambio
+de color de tierra `#006600`->`#1a7a1a` en `electrico`/`unifilar`, nuevo esquema de colores de
+fase REBT en `electrico`, descripciones ampliadas de `AI_TOOLS`) mientras `SESION.md` decia
+LIBRE (inconsistencia detectada y comunicada a Adrian). Tras confirmar que el archivo se
+habia estabilizado (sin cambios nuevos en 2 comprobaciones consecutivas), se construyo el fix
+de color ENCIMA de esos cambios sin tocarlos ni revertirlos, respetando sus convenciones (se
+uso `#1a7a1a` para tierra, no el valor original).
+
+**Causa raiz:** el modelo de IA omitia de forma no determinista el atributo `color=""` en
+TODOS los `<use>` de un plano (confirmado comparando 2 generaciones consecutivas de la misma
+peticion en la sesion anterior: id 22 lo incluia bien, id 23 lo omitia en todos). Como
+`currentColor` sin `color=""` hereda el color de texto por defecto (negro), el simbolo salia
+sin colorear en vez del color de fase/tipo correcto.
+
+**Fix aplicado (doble capa, defensa en profundidad):**
+1. *Prompts* (`_PLANO_PROMPTS.unifilar` y `.electrico`): sintaxis del `<use>` marcada como
+   "OBLIGATORIA (los 5 atributos son necesarios en TODOS los `<use>`, sin excepcion)", con
+   frase de penalizacion explicita ("un simbolo sin color se renderiza en negro/gris y se
+   considera un error de generacion"). En `unifilar` ademas se documentaron por primera vez
+   los colores por defecto de `sym-magnetotermico`/`sym-diferencial` (`#1a1a1a`), que antes no
+   tenian color especificado en el prompt. Mismo refuerzo añadido a `bandejas`.
+2. *Backend* (garantia real, no depende de que el modelo obedezca): nueva funcion
+   `_normalizarColoresUseSvg(svgRaw, tipo)` + tabla `_PLANO_COLOR_DEFAULTS` (por tipo de plano
+   y por `sym-X`) + fallback `#1a1a1a`. Recorre con regex todos los `<use>` del SVG generado y
+   rellena `color=""` en los que falten, usando el `href` para elegir el color correcto segun
+   el simbolo. Se invoca en `_generarPlanoInterno` (justo antes de `logAIUsage`, tras la
+   inyeccion de los `IEC_*_DEFS`) y en `editarPlanoCircuitosREST` (tras la inyeccion de defs,
+   antes de guardar `metadatos`), para los 5 tipos que comparten libreria de simbolos
+   (`electrico`, `bandejas`, `unifilar`, `planta_electrica`, `planta_industrial`). Verificado
+   que ningun `<use>` literal existe dentro de los bloques `IEC_*_DEFS` inyectados (los 22
+   `<use>` del archivo son solo texto de prompts, la funcion nueva, o codigo de validacion
+   preexistente) -- la regex nunca puede tocar la libreria de simbolos, solo el cuerpo del
+   plano generado por IA.
+
+**Verificado:** `node --check worker.js` sin errores, grep de encoding en el diff limpio,
+test unitario aislado de la regex de `_normalizarColoresUseSvg` contra 5 casos representativos
+(sin color + simbolo conocido, ya con color, `xlink:href`, simbolo desconocido -> fallback,
+`<use>...</use>` no autocerrado) todos correctos. `npx wrangler deploy` exitoso (bindings DB y
+FILES confirmados, Version ID `bfbd39d3-b7b6-4815-8c5f-e9e80c2828d0`).
+
+**Verificacion en vivo del fix (a peticion explicita de Adrian):** se creo una sesion temporal
+en D1 (usuario real Adrian id 3, superadmin, empresa 1, token temporal con expiracion 1h) y se
+genero un plano `unifilar` real via `POST /planos/generar` (id 25, "3 circuitos: alumbrado,
+fuerza y climatizacion con magnetotermico+diferencial de cabecera + tierra general"). Se
+inspecciono el `svg_data` guardado en D1: **14 elementos `<use>`, 0 sin `color=""`** -- CGP/CS
+en `#8B0000`, tierra en `#1a7a1a`, magnetotermicos/diferenciales en `#1a1a1a`, todos coherentes
+con los valores documentados. **Limpieza:** se borraron de D1 produccion el plano de prueba id
+25 (`DELETE FROM planos WHERE id = 25`, changes:1) y la sesion temporal (`DELETE FROM sesiones
+WHERE token = 'test_color_verif_...'`, changes:1); confirmado con `SELECT COUNT(*)` = 0 en
+ambos casos tras el borrado.
+
+**Commit:** worker.js incluye tanto este fix como los cambios de la sesion concurrente
+mencionada arriba (no se pudieron separar por compartir el mismo archivo sin commitear); Adrian
+aprobo explicitamente "Commit y deploy juntos" via AskUserQuestion.
+
+**Sesion anterior a esta:** 09/07/2026 -- Fix legibilidad de planos (negrita + contraste), a peticion
 explicita de Adrian tras quejarse de que los planos generados por la IA salian con
 "negritas que no se ven bien" y colores poco visibles. Aprobado por Adrian via
 AskUserQuestion con 2 decisiones fijadas: (1) alcance = aplicar el fix a TODOS los tipos de

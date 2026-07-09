@@ -6,10 +6,40 @@
 
 ÚLTIMA ACTUALIZACIÓN: 09/07/2026
 VERSIÓN ACTUAL APP NUEVA: v7.76
-WORKER API: f7ee0b49-8c96-4529-8528-46c49481103d (fix legibilidad planos: negrita+contraste, ver historial) · WORKER AGENTE: f742e9e8-8d12-4fe2-9c0c-3b26c7672772 (cliente HTTP puro via Service Binding; previo: f2df41f2-329a-4c93-8b74-924be72a2ea3 sobre commit d9b009e)
+WORKER API: bfbd39d3-b7b6-4815-8c5f-e9e80c2828d0 (fix <use> sin color en planos, ver historial) · WORKER AGENTE: f742e9e8-8d12-4fe2-9c0c-3b26c7672772 (cliente HTTP puro via Service Binding; previo: f2df41f2-329a-4c93-8b74-924be72a2ea3 sobre commit d9b009e)
 VERSIÓN ACTUAL APP VIEJA: v4.19 (⛔ CONGELADA DEFINITIVAMENTE — no recibe más cambios)
 
 HISTORIAL DE VERSIONES (resumen reciente):
+  (worker.js) |  09/07/2026  [Fix bug: <use href="#sym-X"> sin atributo color en planos generados]
+                       Tarea delegada via spawn_task desde la sesion anterior (hallazgo
+                       reportado en la entrada de abajo). Causa raiz: el modelo omitia de
+                       forma no determinista color="" en TODOS los <use> de un plano
+                       (comparando 2 generaciones id 22 vs 23: una lo tenia bien, la otra no
+                       en ninguno). Sin color="", currentColor hereda negro en vez del color
+                       de fase/tipo correcto. Fix de doble capa: (1) prompts de unifilar,
+                       electrico y bandejas marcan los 5 atributos del <use> como
+                       obligatorios sin excepcion, con penalizacion explicita si falta color,
+                       y unifilar documenta por primera vez los colores de
+                       magnetotermico/diferencial (#1a1a1a); (2) nueva funcion backend
+                       _normalizarColoresUseSvg() + tabla _PLANO_COLOR_DEFAULTS que rellena
+                       color="" por regex en cualquier <use> que lo omita, segun su href,
+                       antes de guardar el SVG en D1 (garantia real independiente del
+                       modelo) -- aplicada en _generarPlanoInterno y en
+                       editarPlanoCircuitosREST, para los 5 tipos que comparten libreria de
+                       simbolos. Verificado: node --check sin errores, grep de encoding
+                       limpio, test unitario de la regex con 5 casos, npx wrangler deploy
+                       exitoso (bindings DB/FILES OK, Version ID
+                       bfbd39d3-b7b6-4815-8c5f-e9e80c2828d0). Verificacion en vivo: sesion
+                       temporal de prueba (usuario real Adrian id 3) + plano unifilar real
+                       generado via POST /planos/generar (id 25) -> 14 <use>, 0 sin color="".
+                       Limpieza: DELETE del plano id 25 y de la sesion temporal en D1,
+                       confirmado con SELECT COUNT(*)=0. worker.js incluye ademas cambios de
+                       una sesion concurrente (reglas de disposicion, color de tierra
+                       #1a7a1a, paleta REBT en electrico, descripciones de AI_TOOLS) que se
+                       commitearon juntos por compartir el mismo archivo sin commitear
+                       (aprobado explicitamente por Adrian). Ver SESION.md para el detalle
+                       completo.
+
   (worker.js) |  09/07/2026  [Fix legibilidad planos: negrita en etiquetas pequeñas + contraste de color]
                        A peticion explicita de Adrian, que se quejo de que los planos
                        generados por la IA salian con negritas que no se ven bien y colores
