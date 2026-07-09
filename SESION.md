@@ -1,14 +1,29 @@
 ## ESTADO ACTUAL
 
 **Sesion:** LIBRE
-**Ultima sesion:** 09/07/2026 -- Seleccion inteligente de tipo de plano (sin exponer
+**Ultima sesion:** 09/07/2026 -- Continuacion de la sesion de seleccion inteligente de tipo:
+(1) repetidos 3 tests en vivo mas via chat del panel para confirmar fiabilidad del fix
+(2/2 `electrico` correcto incluyendo la repeticion EXACTA de la descripcion que antes fallaba
+como `unifilar`, y 1/1 `unifilar` correcto para un caso de vision general de instalacion --
+3/3 correctos, filas D1 de prueba borradas tras cada test); (2) a peticion explicita de Adrian
+("pues tienes que repetir hasta que salga bien no? y tiene que poderse hacer desde la web y la
+app,asique ahi que hacer un apartado para planos generados por IA") se investigo si ya existia
+un apartado dedicado a planos IA en panel.html y en la app -- SI existia en ambos (`pagePlanos`
+"Planos Tecnicos IA" en panel.html, `screenPlanos`/`screenPlanoDetalle` en index.html), pero
+la app movil era SOLO LECTURA (no se podia generar, solo ver) y al filtro de tipos del panel
+le faltaban `planta_electrica`/`planta_industrial`. Adrian confirmo: *"si añadelo en el filtro
+de la web y actualiza la funcion en la app para generar planos"*. Ver seccion nueva "RESUMEN
+SESION 09/07/2026 (continuacion: verificacion + apartado de generacion en la app movil)"
+mas abajo. **Version:** 7.76 -> 7.77.
+
+**Sesion anterior a esta:** 09/07/2026 -- Seleccion inteligente de tipo de plano (sin exponer
 nombres de tools al usuario) + colores de fase REBT en `electrico` + regla anti-solape en
 5 prompts + prompts dinamicos de simbolos (fix real de los 524 de Cloudflare). Peticion
 explicita de Adrian, verbatim: *"tenemos que hacer que no haga falta decirle a alejandra
 que tool usar... alejandra es inteligente para saber que usar segun lo pidas... tendra que
 hacer preguntas si la faltan datos... en españa se usan los colores para las fases:Marron,
 negro y gris.Azul y verde/amarillo para tierra.en el plano generado se solapan los
-datos.eso no vale asi."* Ver seccion nueva "RESUMEN SESION 09/07/2026 (seleccion
+datos.eso no vale asi."* Ver seccion "RESUMEN SESION 09/07/2026 (seleccion
 inteligente de tipo + colores REBT + anti-solape + prompts dinamicos)" mas abajo.
 
 **Sesion anterior a esta:** 09/07/2026 -- Fix bug `<use>` sin atributo `color` en planos generados
@@ -293,6 +308,75 @@ CROSS-EMPRESA EN 5 FAMILIAS MAS" anadida en el commit ff52aea (continuacion 19 e
 ese archivo), y subseccion "IDOR EN subir_archivo/enviar_notificacion + authOk
 FAIL-CLOSED" anadida en el commit 2a18d5b (continuacion 20 en ese archivo). Ver
 seccion de abajo.
+
+---
+
+## RESUMEN SESION 09/07/2026 (continuacion: verificacion + apartado de generacion en la app movil)
+
+### Peticion de Adrian (verbatim)
+Tras preguntarle "porque no puedes repetir?" sobre el fix de seleccion de tipo (solo se habia
+probado 1 vez), Adrian pidio: *"pues tienes que repetir hasta que salga bien no? y tiene que
+poderse hacer desde la web y la app,asique ahi que hacer un apartado para planos generados por
+IA"*. Tras investigar y reportar que ya existia apartado en ambos sitios pero con 2 huecos
+reales (filtro web incompleto + app movil solo lectura), Adrian confirmo: *"si añadelo en el
+filtro de la web y actualiza la funcion en la app para generar planos"*.
+
+### 1. Repeticion de tests de seleccion de tipo (electrico vs unifilar)
+Se lanzaron 3 tests reales via el chat de Alejandra IA en panel.html (empresa Levitec),
+comprobando el `tipo` resultante directamente en D1 tras cada uno y borrando la fila de
+prueba despues:
+- Test 1 (cuadro secundario taller pintura, 2 circuitos con magnetotermico+diferencial
+  propio) -> **`electrico`** correcto.
+- Test 2 (vision general acometida -> CGP -> cuadro general -> 2 cuadros secundarios) ->
+  **`unifilar`** correcto (confirma que el fix no sobre-corrige siempre hacia `electrico`).
+- Test 3 (repeticion EXACTA de la descripcion que en el test original, antes del fix,
+  habia elegido mal `unifilar`) -> **`electrico`** correcto esta vez.
+
+3/3 correctos. Se considera el fix de seleccion de tipo verificado con confianza razonable
+(no 100% garantizado por la no-determinismo de la IA, pero ya no es un caso aislado).
+De paso se encontro y borro una fila de prueba antigua sin limpiar de una sesion anterior
+(id 24, "TEST_VERIFICACION_COLOR_09072026", tipo `unifilar` -- el caso que origino la duda).
+
+### 2. Investigacion del "apartado de planos IA" en web y app
+Verificado en vivo (Chrome, panel.html) que **ya existia** una pagina dedicada "📐 Planos
+Tecnicos IA" (`pagePlanos`, `data-page="planos"`) separada de "📐 Planos de Obra"
+(`pagePlanosObra`, que es para subir documentos, no para los generados por IA) -- con boton
+"✨ Generar plano", filtro por tipo, buscador y grid. Confirmado tambien que index.html
+(app movil) ya tenia `screenPlanos`/`screenPlanoDetalle`, pero **explicitamente solo
+lectura** (sin ningun boton ni formulario para generar, solo para ver lo ya generado desde
+el panel). Se detectaron 2 huecos reales:
+1. El filtro `planosFiltroTipo` del panel y el desplegable `genPlanoTipo` del modal
+   "Generar Plano" solo listaban 6 de los 8 tipos validos del worker (faltaban
+   `planta_electrica` y `planta_industrial`).
+2. La app movil no permitia generar planos en absoluto, solo verlos.
+
+### 3. Fix aplicado (solo frontend, sin cambios en worker.js)
+- **panel.html**: anadidas las opciones `planta_electrica` (💡 Instalacion electrica
+  interior) y `planta_industrial` (🏭 Planta industrial / CPD) tanto al filtro
+  `planosFiltroTipo` como al desplegable `genPlanoTipo` del modal de generacion, mas sus
+  ejemplos correspondientes en `_PLANO_EJEMPLOS`.
+- **index.html**: nuevo boton "✨ Generar" en la cabecera de `screenPlanos` + modal
+  `modalGenerarPlanoMovil` (tipo con los 8 valores, titulo, descripcion) + funciones
+  `abrirModalGenerarPlanoMovil()` / `cerrarModalGenerarPlanoMovil()` /
+  `ejecutarGenerarPlanoMovil()`. Reutiliza el mismo endpoint que el panel
+  (`POST /planos/generar`, autenticado por sesion via `apiCall`), sin tocar el worker --
+  el backend ya soportaba esta llamada desde cualquier cliente autenticado. No se incluyo
+  el editor de circuitos estructurado (exclusivo del panel web) para mantener el formulario
+  movil simple; el campo de descripcion libre es suficiente para que la IA infiera el
+  contenido.
+- **Version:** 7.76 -> 7.77 en `version.json`, `sw.js` e `index.html` (sincronizadas,
+  verificado con script antes del push).
+
+**Verificado:** `node --check worker.js` limpio (sin cambios), JS embebido de `index.html`
+y `panel.html` extraido y verificado con `node --check` sin errores de sintaxis, grep de
+encoding en el diff limpio. Commit `3fabcb4`, push a `origin/main` correcto.
+
+**Pendiente:** verificacion visual en vivo del nuevo boton/modal en la app movil -- la
+extension de Chrome se desconecto (`Claude in Chrome` no disponible) justo al intentar
+probarlo tras el push, no se pudo completar en esta sesion. Revisar en cuanto la extension
+vuelva a conectar: abrir `https://padilla585projects.github.io/Alejandra-APP/`, entrar a
+"Planos", pulsar "✨ Generar", generar un plano de prueba y confirmar que aparece en el
+listado y se puede ver el SVG.
 
 ---
 

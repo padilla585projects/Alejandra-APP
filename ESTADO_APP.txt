@@ -5,11 +5,38 @@
 ================================================================================
 
 ÚLTIMA ACTUALIZACIÓN: 09/07/2026
-VERSIÓN ACTUAL APP NUEVA: v7.76
+VERSIÓN ACTUAL APP NUEVA: v7.77
 WORKER API: f3116b63-46e9-4bd9-8c82-27a363692742 (seleccion inteligente de tipo + colores REBT + anti-solape + prompts dinamicos, ver historial) · WORKER AGENTE: f742e9e8-8d12-4fe2-9c0c-3b26c7672772 (cliente HTTP puro via Service Binding; previo: f2df41f2-329a-4c93-8b74-924be72a2ea3 sobre commit d9b009e)
 VERSIÓN ACTUAL APP VIEJA: v4.19 (⛔ CONGELADA DEFINITIVAMENTE — no recibe más cambios)
 
 HISTORIAL DE VERSIONES (resumen reciente):
+  (index.html/panel.html) |  09/07/2026  [v7.77 — Apartado de generacion de planos IA en la app movil + tipos faltantes en filtro web]
+                       Continuacion de la sesion de seleccion inteligente de tipo. Parte 1:
+                       repetidos 3 tests reales via chat (2x electrico correcto incluyendo la
+                       repeticion EXACTA del caso que antes fallaba, 1x unifilar correcto) —
+                       3/3, fix de tipo considerado verificado con confianza razonable.
+                       Parte 2, a peticion explicita de Adrian ("tiene que poderse hacer desde
+                       la web y la app, asique hay que hacer un apartado para planos generados
+                       por IA"): investigado que YA existia apartado dedicado en ambos sitios
+                       (pagePlanos/"Planos Tecnicos IA" en panel.html, screenPlanos/
+                       screenPlanoDetalle en index.html), pero con 2 huecos reales: (1) filtro
+                       web y modal de generacion solo listaban 6 de los 8 tipos validos
+                       (faltaban planta_electrica/planta_industrial); (2) la app movil era
+                       SOLO LECTURA, sin forma de generar planos, solo de verlos. Adrian
+                       confirmo arreglar ambos. Fix: panel.html — anadidas las 2 opciones
+                       faltantes al filtro y al modal "Generar Plano" + sus ejemplos en
+                       _PLANO_EJEMPLOS; index.html — nuevo boton "✨ Generar" + modal
+                       modalGenerarPlanoMovil (tipo/titulo/descripcion) que llama al mismo
+                       endpoint POST /planos/generar que usa el panel (autenticado por sesion,
+                       sin cambios en worker.js — el backend ya lo soportaba desde cualquier
+                       cliente). No incluye editor de circuitos estructurado (exclusivo del
+                       panel web), solo descripcion libre. Verificado: node --check limpio
+                       (worker.js sin cambios), JS embebido de ambos HTML extraido y validado
+                       con node --check sin errores, grep de encoding limpio. Commit 3fabcb4.
+                       PENDIENTE: verificacion visual en vivo del boton/modal movil — la
+                       extension Claude in Chrome se desconecto justo tras el push, no se pudo
+                       completar en esta sesion. Ver SESION.md para el detalle completo.
+
   (worker.js) |  09/07/2026  [Seleccion inteligente de tipo de plano + colores REBT + anti-solape + prompts dinamicos]
                        Peticion explicita de Adrian: que Alejandra infiera el tipo de plano
                        en lenguaje natural (sin exponer nombres de tools/tipos al usuario,
