@@ -5629,9 +5629,10 @@ function setupHomeModules() {
   }
   // El departamento elegido manda — electrico ve bobinas, mecánicas no
   const mostrarBobinas = dept === 'electrico';
+  const esOficinaTecnica = dept === 'oficina';
   if (cardB) cardB.style.display = mostrarBobinas ? 'flex' : 'none';
-  if (cardP) cardP.style.display = 'flex';
-  if (cardC) cardC.style.display = 'flex';
+  if (cardP) cardP.style.display = esOficinaTecnica ? 'none' : 'flex';
+  if (cardC) cardC.style.display = esOficinaTecnica ? 'none' : 'flex';
   // Pedidos: visible para todos excepto seguridad
   if (cardPed) cardPed.style.display = 'flex';
   if (btnNuevo) btnNuevo.style.display = 'flex';
@@ -11931,7 +11932,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '7.77';
+const APP_VERSION = '7.78';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
@@ -13949,10 +13950,11 @@ ${(p.descripcion||'').split('\n').map(l=>`<div class="desc-box">${l}</div>`).joi
     if (svg) svg.style.transform = `scale(${_planoZoomVal})`;
   }
 
-  window.cargarPlanos    = cargarPlanos;
-  window.planoSetFiltro  = planoSetFiltro;
-  window.verPlano        = verPlano;
-  window.planoZoom       = planoZoom;
+  window.cargarPlanos             = cargarPlanos;
+  window.planoSetFiltro           = planoSetFiltro;
+  window.verPlano                 = verPlano;
+  window.planoZoom                = planoZoom;
+  window.ejecutarGenerarPlanoMovil = ejecutarGenerarPlanoMovil;
 
   // ══════════════════════════════════════════════════════
   // OBRA DASHBOARD (NEW-27)

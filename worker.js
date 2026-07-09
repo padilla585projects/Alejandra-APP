@@ -87,8 +87,11 @@ async function getAuth(request, env) {
         const isSuperadmin   = sesion.es_admin === 1 || roles.includes('superadmin') || roles.includes('desarrollador');
         const isEmpresaAdmin = roles.includes('empresa_admin') || roles.includes('desarrollador');
         const isDesarrollador = roles.includes('desarrollador');
-        const deptHeader = request.headers.get('X-Departamento');
-        const departamento = deptHeader || sesion.departamento || 'electrico';
+        // SEC-14: X-Departamento NUNCA se acepta desde el cliente para sesiones con token D1.
+        // El departamento activo vive en la sesión (tabla `sesiones`, actualizada solo vía
+        // PUT /sesion/departamento). Confiar en el header permitía a cualquier usuario
+        // autenticado suplantar el departamento de otro con solo cambiar una cabecera.
+        const departamento = sesion.departamento || 'electrico';
         return {
           isAdmin: sesion.es_admin === 1,
           isSuperadmin,
@@ -5738,7 +5741,10 @@ async function actualizarSesionDepartamento(request, env) {
   const xToken = request.headers.get('X-Token');
   if (!xToken) return err('No autorizado', 403);
   const { departamento } = await request.json().catch(() => ({}));
-  const validos = ['electrico', 'mecanicas', 'seguridad', 'personal'];
+  // SEC-14: lista completa de departamentos válidos (debe reflejar _DEPTS_CATALOG en index.html).
+  // Antes solo tenía 4 de 11 — cambiar a "oficina" (u otros 6) fallaba en silencio aquí y
+  // dejaba el departamento de la sesión desactualizado en D1.
+  const validos = ['electrico', 'mecanicas', 'seguridad', 'personal', 'obra_civil', 'albanileria', 'pintura', 'carpinteria', 'telecom', 'almacen', 'oficina'];
   if (!departamento || !validos.includes(departamento)) return err('Departamento invÃ¡lido', 400);
   await env.DB.prepare('UPDATE sesiones SET departamento = ? WHERE token = ?').bind(departamento, xToken).run();
   return json({ ok: true });
@@ -11166,77 +11172,96 @@ async function borrarAlbaran(id, request, env) {
 // Ã¢"â‚¬Ã¢"â‚¬ DocumentaciÃ³n departamentos Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬
 
 async function listarCarpetas(request, env) {
-  const { empresa_id } = await getAuth(request, env);
+  const { empresa_id, departamento, isSuperadmin, isEmpresaAdmin, isJefeObra } = await getAuth(request, env);
   if (!empresa_id) return err('No autorizado', 403);
+  // SEC-15: no-admins solo pueden listar carpetas de su propio departamento de sesion,
+  // ignorando cualquier ?departamento= que envie el cliente.
+  const isAdminRole = isSuperadmin || isEmpresaAdmin || isJefeObra;
   const url = new URL(request.url);
-  const obra_id     = url.searchParams.get('obra_id');
-  const departamento = url.searchParams.get('departamento');
-  if (!obra_id || !departamento) return err('Faltan parÃ¡metros', 400);
+  const obra_id   = url.searchParams.get('obra_id');
+  const deptParam = url.searchParams.get('departamento');
+  const deptFinal = !isAdminRole ? departamento : (deptParam || departamento);
+  if (!obra_id || !deptFinal) return err('Faltan parÃ¡metros', 400);
   const parent_id = url.searchParams.get('parent_id');
   let q, params;
   if (parent_id !== null && parent_id !== '') {
     q = 'SELECT * FROM carpetas WHERE empresa_id = ? AND obra_id = ? AND departamento = ? AND parent_id = ? ORDER BY nombre COLLATE NOCASE';
-    params = [empresa_id, parseInt(obra_id), departamento, parseInt(parent_id)];
+    params = [empresa_id, parseInt(obra_id), deptFinal, parseInt(parent_id)];
   } else {
     q = 'SELECT * FROM carpetas WHERE empresa_id = ? AND obra_id = ? AND departamento = ? AND (parent_id IS NULL OR parent_id = 0) ORDER BY nombre COLLATE NOCASE';
-    params = [empresa_id, parseInt(obra_id), departamento];
+    params = [empresa_id, parseInt(obra_id), deptFinal];
   }
   const { results } = await env.DB.prepare(q).bind(...params).all();
   return json(results);
 }
 
 async function crearCarpeta(request, env) {
-  const { empresa_id, rol, nombre: userNombre } = await getAuth(request, env);
+  const { empresa_id, rol, nombre: userNombre, departamento, isSuperadmin, isEmpresaAdmin, isJefeObra } = await getAuth(request, env);
   if (!empresa_id) return err('No autorizado', 403);
   if (rol === 'operario') return err('Sin permisos', 403);
-  const { obra_id, departamento, nombre, parent_id } = await request.json().catch(() => ({}));
-  if (!obra_id || !departamento || !nombre?.trim()) return err('Faltan datos', 400);
+  const isAdminRole = isSuperadmin || isEmpresaAdmin || isJefeObra;
+  const { obra_id, departamento: deptBody, nombre, parent_id } = await request.json().catch(() => ({}));
+  const deptFinal = !isAdminRole ? departamento : (deptBody || departamento);
+  if (!obra_id || !deptFinal || !nombre?.trim()) return err('Faltan datos', 400);
+  if (parent_id) {
+    const parent = await env.DB.prepare('SELECT departamento FROM carpetas WHERE id = ? AND empresa_id = ?').bind(parseInt(parent_id), empresa_id).first();
+    if (!parent) return err('Carpeta padre no encontrada', 404);
+    if (!isAdminRole && parent.departamento !== deptFinal) return err('Sin permisos sobre este departamento', 403);
+  }
   const existe = await env.DB.prepare(
     'SELECT id FROM carpetas WHERE empresa_id = ? AND obra_id = ? AND departamento = ? AND UPPER(nombre) = UPPER(?) AND (parent_id IS NULL OR parent_id = 0)'
-  ).bind(empresa_id, parseInt(obra_id), departamento, nombre.trim()).first();
+  ).bind(empresa_id, parseInt(obra_id), deptFinal, nombre.trim()).first();
   if (existe) return err('Ya existe una carpeta con ese nombre', 409);
   const r = await env.DB.prepare(
     'INSERT INTO carpetas (empresa_id, obra_id, departamento, nombre, creado_por, parent_id) VALUES (?,?,?,?,?,?)'
-  ).bind(empresa_id, parseInt(obra_id), departamento, nombre.trim(), userNombre || rol, parent_id ? parseInt(parent_id) : null).run();
+  ).bind(empresa_id, parseInt(obra_id), deptFinal, nombre.trim(), userNombre || rol, parent_id ? parseInt(parent_id) : null).run();
   return json({ ok: true, id: r.meta.last_row_id, nombre: nombre.trim() }, 201);
 }
 
 async function borrarCarpeta(id, request, env) {
-  const { empresa_id, rol } = await getAuth(request, env);
+  const { empresa_id, rol, departamento, isSuperadmin, isEmpresaAdmin, isJefeObra } = await getAuth(request, env);
   if (!empresa_id) return err('No autorizado', 403);
   if (rol === 'operario') return err('Sin permisos', 403);
+  const isAdminRole = isSuperadmin || isEmpresaAdmin || isJefeObra;
   const carpeta = await env.DB.prepare('SELECT * FROM carpetas WHERE id = ? AND empresa_id = ?').bind(id, empresa_id).first();
   if (!carpeta) return err('Carpeta no encontrada', 404);
+  if (!isAdminRole && carpeta.departamento !== departamento) return err('Sin permisos sobre este departamento', 403);
   await borrarCarpetaRecursive(id, empresa_id, env);
   return json({ ok: true });
 }
 
 async function listarDocsDept(request, env) {
-  const { empresa_id } = await getAuth(request, env);
+  const { empresa_id, departamento, isSuperadmin, isEmpresaAdmin, isJefeObra } = await getAuth(request, env);
   if (!empresa_id) return err('No autorizado', 403);
+  const isAdminRole = isSuperadmin || isEmpresaAdmin || isJefeObra;
   const url = new URL(request.url);
   const carpeta_id  = url.searchParams.get('carpeta_id');
   const obra_id_p   = url.searchParams.get('obra_id');
-  const dept_p      = url.searchParams.get('departamento');
+  const deptParam   = url.searchParams.get('departamento');
   if (carpeta_id) {
+    const carpeta = await env.DB.prepare('SELECT departamento FROM carpetas WHERE id = ? AND empresa_id = ?').bind(parseInt(carpeta_id), empresa_id).first();
+    if (!carpeta) return err('Carpeta no encontrada', 404);
+    if (!isAdminRole && carpeta.departamento !== departamento) return err('Sin permisos sobre este departamento', 403);
     const { results } = await env.DB.prepare(
       'SELECT * FROM docs_dept WHERE carpeta_id = ? AND empresa_id = ? ORDER BY created_at DESC'
     ).bind(parseInt(carpeta_id), empresa_id).all();
     return json(results);
   }
-  if (obra_id_p && dept_p) {
+  const deptFinal = !isAdminRole ? departamento : (deptParam || departamento);
+  if (obra_id_p && deptFinal) {
     const { results } = await env.DB.prepare(
       'SELECT * FROM docs_dept WHERE obra_id = ? AND departamento = ? AND carpeta_id IS NULL AND empresa_id = ? ORDER BY created_at DESC'
-    ).bind(parseInt(obra_id_p), dept_p, empresa_id).all();
+    ).bind(parseInt(obra_id_p), deptFinal, empresa_id).all();
     return json(results);
   }
   return err('Falta carpeta_id o (obra_id + departamento)', 400);
 }
 
 async function subirDocDept(request, env) {
-  const { empresa_id, rol, nombre: userNombre } = await getAuth(request, env);
+  const { empresa_id, rol, nombre: userNombre, departamento, isSuperadmin, isEmpresaAdmin, isJefeObra } = await getAuth(request, env);
   if (!empresa_id) return err('No autorizado', 403);
   if (rol === 'operario') return err('Sin permisos', 403);
+  const isAdminRole = isSuperadmin || isEmpresaAdmin || isJefeObra;
   const form = await request.formData().catch(() => null);
   if (!form) return err('Falta el formulario', 400);
   const file        = form.get('file');
@@ -11250,10 +11275,12 @@ async function subirDocDept(request, env) {
   if (carpeta_id) {
     const carpeta = await env.DB.prepare('SELECT * FROM carpetas WHERE id = ? AND empresa_id = ?').bind(parseInt(carpeta_id), empresa_id).first();
     if (!carpeta) return err('Carpeta no encontrada', 404);
+    if (!isAdminRole && carpeta.departamento !== departamento) return err('Sin permisos sobre este departamento', 403);
     obraId = carpeta.obra_id; deptName = carpeta.departamento;
   } else {
-    if (!obra_id_f || !dept_f) return err('Falta carpeta_id o (obra_id + departamento)', 400);
-    obraId = parseInt(obra_id_f); deptName = dept_f;
+    const deptFinal = !isAdminRole ? departamento : (dept_f || departamento);
+    if (!obra_id_f || !deptFinal) return err('Falta carpeta_id o (obra_id + departamento)', 400);
+    obraId = parseInt(obra_id_f); deptName = deptFinal;
   }
   const ts       = Date.now();
   const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
@@ -11267,10 +11294,12 @@ async function subirDocDept(request, env) {
 }
 
 async function descargarDocDept(id, request, env) {
-  const { empresa_id } = await getAuth(request, env);
+  const { empresa_id, departamento, isSuperadmin, isEmpresaAdmin, isJefeObra } = await getAuth(request, env);
   if (!empresa_id) return err('No autorizado', 403);
+  const isAdminRole = isSuperadmin || isEmpresaAdmin || isJefeObra;
   const meta = await env.DB.prepare('SELECT * FROM docs_dept WHERE id = ? AND empresa_id = ?').bind(id, empresa_id).first();
   if (!meta) return err('Documento no encontrado', 404);
+  if (!isAdminRole && meta.departamento !== departamento) return err('Sin permisos sobre este departamento', 403);
   const obj = await env.FILES.get(meta.r2_key);
   if (!obj) return err('Archivo no disponible en almacenamiento', 404);
   const mime = meta.mime || 'application/octet-stream';
@@ -11289,23 +11318,27 @@ async function descargarDocDept(id, request, env) {
 }
 
 async function borrarDocDept(id, request, env) {
-  const { empresa_id, rol } = await getAuth(request, env);
+  const { empresa_id, rol, departamento, isSuperadmin, isEmpresaAdmin, isJefeObra } = await getAuth(request, env);
   if (!empresa_id) return err('No autorizado', 403);
   if (rol === 'operario') return err('Sin permisos', 403);
+  const isAdminRole = isSuperadmin || isEmpresaAdmin || isJefeObra;
   const meta = await env.DB.prepare('SELECT * FROM docs_dept WHERE id = ? AND empresa_id = ?').bind(id, empresa_id).first();
   if (!meta) return err('Documento no encontrado', 404);
+  if (!isAdminRole && meta.departamento !== departamento) return err('Sin permisos sobre este departamento', 403);
   await env.FILES.delete(meta.r2_key);
   await env.DB.prepare('DELETE FROM docs_dept WHERE id = ? AND empresa_id = ?').bind(id, empresa_id).run();
   return json({ ok: true });
 }
 
 async function editarDocDept(id, request, env) {
-  const { empresa_id, rol } = await getAuth(request, env);
+  const { empresa_id, rol, departamento, isSuperadmin, isEmpresaAdmin, isJefeObra } = await getAuth(request, env);
   if (!empresa_id) return err('No autorizado', 403);
   if (rol === 'operario') return err('Sin permisos', 403);
+  const isAdminRole = isSuperadmin || isEmpresaAdmin || isJefeObra;
   const body = await request.json().catch(() => ({}));
-  const meta = await env.DB.prepare('SELECT id FROM docs_dept WHERE id = ? AND empresa_id = ?').bind(id, empresa_id).first();
+  const meta = await env.DB.prepare('SELECT * FROM docs_dept WHERE id = ? AND empresa_id = ?').bind(id, empresa_id).first();
   if (!meta) return err('Documento no encontrado', 404);
+  if (!isAdminRole && meta.departamento !== departamento) return err('Sin permisos sobre este departamento', 403);
 
   const sets = [], params = [];
 
@@ -11318,8 +11351,9 @@ async function editarDocDept(id, request, env) {
   if (body.carpeta_id !== undefined) {
     const nuevaId = body.carpeta_id ? parseInt(body.carpeta_id) : null;
     if (nuevaId) {
-      const dest = await env.DB.prepare('SELECT id FROM carpetas WHERE id = ? AND empresa_id = ?').bind(nuevaId, empresa_id).first();
+      const dest = await env.DB.prepare('SELECT id, departamento FROM carpetas WHERE id = ? AND empresa_id = ?').bind(nuevaId, empresa_id).first();
       if (!dest) return err('Carpeta destino no encontrada', 404);
+      if (!isAdminRole && dest.departamento !== departamento) return err('Sin permisos sobre este departamento', 403);
     }
     sets.push('carpeta_id = ?');
     params.push(nuevaId);
@@ -11334,13 +11368,15 @@ async function editarDocDept(id, request, env) {
 
 // Ã¢"â‚¬Ã¢"â‚¬ Renombrar carpeta Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬
 async function renombrarCarpeta(id, request, env) {
-  const { empresa_id, rol } = await getAuth(request, env);
+  const { empresa_id, rol, departamento, isSuperadmin, isEmpresaAdmin, isJefeObra } = await getAuth(request, env);
   if (!empresa_id) return err('No autorizado', 403);
   if (rol === 'operario') return err('Sin permisos', 403);
+  const isAdminRole = isSuperadmin || isEmpresaAdmin || isJefeObra;
   const { nombre } = await request.json().catch(() => ({}));
   if (!nombre?.trim()) return err('El nombre es obligatorio', 400);
-  const carpeta = await env.DB.prepare('SELECT id FROM carpetas WHERE id = ? AND empresa_id = ?').bind(id, empresa_id).first();
+  const carpeta = await env.DB.prepare('SELECT * FROM carpetas WHERE id = ? AND empresa_id = ?').bind(id, empresa_id).first();
   if (!carpeta) return err('Carpeta no encontrada', 404);
+  if (!isAdminRole && carpeta.departamento !== departamento) return err('Sin permisos sobre este departamento', 403);
   await env.DB.prepare('UPDATE carpetas SET nombre = ? WHERE id = ? AND empresa_id = ?').bind(nombre.trim(), id, empresa_id).run();
   return json({ ok: true });
 }
@@ -11358,38 +11394,47 @@ async function borrarCarpetaRecursive(id, empresa_id, env) {
 
 // Ã¢"â‚¬Ã¢"â‚¬ Notas de texto (docs_notas) Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬Ã¢"â‚¬
 async function listarNotas(request, env) {
-  const { empresa_id } = await getAuth(request, env);
+  const { empresa_id, departamento, isSuperadmin, isEmpresaAdmin, isJefeObra } = await getAuth(request, env);
   if (!empresa_id) return err('No autorizado', 403);
+  const isAdminRole = isSuperadmin || isEmpresaAdmin || isJefeObra;
   const url        = new URL(request.url);
   const carpeta_id = url.searchParams.get('carpeta_id');
   const obra_id_p  = url.searchParams.get('obra_id');
-  const dept_p     = url.searchParams.get('departamento');
+  const deptParam  = url.searchParams.get('departamento');
   if (carpeta_id) {
+    const carpeta = await env.DB.prepare('SELECT departamento FROM carpetas WHERE id = ? AND empresa_id = ?').bind(parseInt(carpeta_id), empresa_id).first();
+    if (!carpeta) return err('Carpeta no encontrada', 404);
+    if (!isAdminRole && carpeta.departamento !== departamento) return err('Sin permisos sobre este departamento', 403);
     const { results } = await env.DB.prepare(
       'SELECT * FROM docs_notas WHERE carpeta_id = ? AND empresa_id = ? ORDER BY created_at DESC'
     ).bind(parseInt(carpeta_id), empresa_id).all();
     return json(results);
   }
-  if (obra_id_p && dept_p) {
+  const deptFinal = !isAdminRole ? departamento : (deptParam || departamento);
+  if (obra_id_p && deptFinal) {
     const { results } = await env.DB.prepare(
       'SELECT * FROM docs_notas WHERE obra_id = ? AND departamento = ? AND carpeta_id IS NULL AND empresa_id = ? ORDER BY created_at DESC'
-    ).bind(parseInt(obra_id_p), dept_p, empresa_id).all();
+    ).bind(parseInt(obra_id_p), deptFinal, empresa_id).all();
     return json(results);
   }
   return err('Faltan parÃ¡metros', 400);
 }
 
 async function crearNota(request, env) {
-  const { empresa_id, rol, obraId, departamento, nombre: userNombre } = await getAuth(request, env);
+  const { empresa_id, rol, obraId, departamento, isSuperadmin, isEmpresaAdmin, isJefeObra, nombre: userNombre } = await getAuth(request, env);
   if (!empresa_id) return err('No autorizado', 403);
   if (rol === 'operario') return err('Sin permisos', 403);
+  const isAdminRole = isSuperadmin || isEmpresaAdmin || isJefeObra;
   const { titulo, contenido, carpeta_id, obra_id, departamento: dept_param } = await request.json().catch(() => ({}));
   if (!titulo?.trim()) return err('El tÃ­tulo es obligatorio', 400);
   let obraIdFinal = parseInt(obra_id || obraId || 0) || null;
-  let deptFinal   = dept_param || departamento || null;
+  let deptFinal   = !isAdminRole ? departamento : (dept_param || departamento || null);
   if (carpeta_id) {
     const cp = await env.DB.prepare('SELECT obra_id, departamento FROM carpetas WHERE id = ? AND empresa_id = ?').bind(parseInt(carpeta_id), empresa_id).first();
-    if (cp) { obraIdFinal = cp.obra_id; deptFinal = cp.departamento; }
+    if (cp) {
+      if (!isAdminRole && cp.departamento !== departamento) return err('Sin permisos sobre este departamento', 403);
+      obraIdFinal = cp.obra_id; deptFinal = cp.departamento;
+    }
   }
   const r = await env.DB.prepare(
     'INSERT INTO docs_notas (empresa_id, obra_id, departamento, carpeta_id, titulo, contenido, creado_por, updated_at) VALUES (?,?,?,?,?,?,?,?)'
@@ -11399,22 +11444,28 @@ async function crearNota(request, env) {
 }
 
 async function editarNota(id, request, env) {
-  const { empresa_id, rol } = await getAuth(request, env);
+  const { empresa_id, rol, departamento, isSuperadmin, isEmpresaAdmin, isJefeObra } = await getAuth(request, env);
   if (!empresa_id) return err('No autorizado', 403);
   if (rol === 'operario') return err('Sin permisos', 403);
+  const isAdminRole = isSuperadmin || isEmpresaAdmin || isJefeObra;
   const { titulo, contenido } = await request.json().catch(() => ({}));
   if (!titulo?.trim()) return err('El tÃ­tulo es obligatorio', 400);
-  const nota = await env.DB.prepare('SELECT id FROM docs_notas WHERE id = ? AND empresa_id = ?').bind(id, empresa_id).first();
+  const nota = await env.DB.prepare('SELECT * FROM docs_notas WHERE id = ? AND empresa_id = ?').bind(id, empresa_id).first();
   if (!nota) return err('Nota no encontrada', 404);
+  if (!isAdminRole && nota.departamento !== departamento) return err('Sin permisos sobre este departamento', 403);
   await env.DB.prepare('UPDATE docs_notas SET titulo = ?, contenido = ?, updated_at = ? WHERE id = ? AND empresa_id = ?')
     .bind(titulo.trim(), contenido || '', AHORA(), id, empresa_id).run();
   return json({ ok: true });
 }
 
 async function borrarNota(id, request, env) {
-  const { empresa_id, rol } = await getAuth(request, env);
+  const { empresa_id, rol, departamento, isSuperadmin, isEmpresaAdmin, isJefeObra } = await getAuth(request, env);
   if (!empresa_id) return err('No autorizado', 403);
   if (rol === 'operario') return err('Sin permisos', 403);
+  const isAdminRole = isSuperadmin || isEmpresaAdmin || isJefeObra;
+  const nota = await env.DB.prepare('SELECT departamento FROM docs_notas WHERE id = ? AND empresa_id = ?').bind(id, empresa_id).first();
+  if (!nota) return err('Nota no encontrada', 404);
+  if (!isAdminRole && nota.departamento !== departamento) return err('Sin permisos sobre este departamento', 403);
   await env.DB.prepare('DELETE FROM docs_notas WHERE id = ? AND empresa_id = ?').bind(id, empresa_id).run();
   return json({ ok: true });
 }
