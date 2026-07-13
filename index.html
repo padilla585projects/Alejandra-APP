@@ -4830,6 +4830,20 @@ async function _registrarPushAlejandra(sessionData) {
   }
 }
 
+// Limpia el chat local de Alejandra (historial visual + caché de respuestas).
+// CRÍTICO en dispositivos compartidos (tablet de obra, etc.): estas dos claves
+// viven en localStorage del NAVEGADOR, no del usuario. Si no se limpian al
+// cerrar sesión, el siguiente usuario que inicie sesión en el mismo
+// dispositivo hereda el historial/caché de la persona anterior (incl. su
+// nombre real en los mensajes) hasta que el servidor confirme su propio
+// historial — y si es un usuario nuevo sin historial en servidor, nunca
+// llega a sustituirlo. Ver bug reportado 13/07/2026.
+function _limpiarChatAlejandraLocal() {
+  try { localStorage.removeItem('alejandra_panel_history'); } catch {}
+  try { localStorage.removeItem('ale_response_cache'); } catch {}
+  try { if (typeof _alejandraPanelHist !== 'undefined') _alejandraPanelHist = []; } catch {}
+}
+
 function cerrarSesion() {
   const s = getSession();
   if (s && s.token) {
@@ -4840,6 +4854,7 @@ function cerrarSesion() {
     }).catch(() => {});
   }
   localStorage.removeItem('alejandra_session');
+  _limpiarChatAlejandraLocal();
   if (window._connInterval)       { clearInterval(window._connInterval);       window._connInterval       = null; }
   if (window._notifInterval)      { clearInterval(window._notifInterval);      window._notifInterval      = null; }
   if (window._chatBadgeInterval)  { clearInterval(window._chatBadgeInterval);  window._chatBadgeInterval  = null; }
@@ -4875,6 +4890,7 @@ async function apiCall(path, options = {}) {
   const res = await fetch(base + path, { ...options, headers });
   if (res.status === 401 && getSession()) {
     localStorage.removeItem('alejandra_session');
+    _limpiarChatAlejandraLocal();
     alert('Tu sesión ha caducado. Vuelve a iniciar sesión.');
     location.reload();
   }
@@ -4897,6 +4913,7 @@ async function apiCallRaw(path, options = {}) {
   const res = await fetch(base + path, { ...options, headers });
   if (res.status === 401 && getSession()) {
     localStorage.removeItem('alejandra_session');
+    _limpiarChatAlejandraLocal();
     alert('Tu sesión ha caducado. Vuelve a iniciar sesión.');
     location.reload();
   }
@@ -11932,7 +11949,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '7.78';
+const APP_VERSION = '7.79';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
