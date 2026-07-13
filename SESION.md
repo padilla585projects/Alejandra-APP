@@ -1,7 +1,37 @@
 ## ESTADO ACTUAL
 
 **Sesion:** LIBRE
-**Ultima sesion:** 09/07/2026 -- Auditoria y fix de seguridad multi-departamento/multi-empresa,
+**Ultima sesion:** 13/07/2026 -- Fix bug reportado por Adrian (verbatim): *"vale tenemos otro
+problema,he descubierto que todos los usuarios que usan la app al preguntar a Alejendra
+siemrpe dice mi nombre,no el nombre del usuario.mal"*, aclarado despues con: *"cada usuario
+debe de tener su propio historial por supuesto.y alejandra no debe de decir nada de unos a
+otros. el desarrolador de la app(yo) a mi si me puede decir lo que se alejandra si yo le
+pregunto.entiendes?"*. Diagnostico: se investigo primero el worker `alejandra-agente` (backend
+real del chat de Alejandra para todos los usuarios) -- `normalizarUsuarioId`/
+`resolverNombreUsuario`/`obtenerContextoChat` resuelven y escopan el historial correctamente
+por `usuario_id`, confirmado con un test en vivo real contra produccion (usuario no-admin
+"Cristina", sin `usuario_nombre` ni Authorization, igual que envia la app) que devolvio
+correctamente "Cristina", no "Adrian" -- el backend quedo exonerado. **Causa raiz real:
+100% cliente (`index.html`)**: `cerrarSesion()` (logout) solo borraba `alejandra_session` de
+`localStorage`, dejando intactas 2 claves de dispositivo compartido: `alejandra_panel_history`
+(historial visual del chat) y `ale_response_cache` (cache local de preguntas/respuestas). En
+un dispositivo reutilizado por varios usuarios (tablet de obra, o el propio dispositivo de
+pruebas de Adrian pasado despues a un usuario real), un usuario nuevo sin historial aun en el
+servidor caia en el fallback de `_alejandraRestaurarChat()` y heredaba silenciosamente el
+chat/cache del usuario ANTERIOR de ese dispositivo -- de ahi que "siempre" pareciera decir el
+mismo nombre (el de quien uso el dispositivo antes). **Fix:** nueva funcion
+`_limpiarChatAlejandraLocal()` que borra ambas claves y vacia `_alejandraPanelHist`, invocada
+en `cerrarSesion()` y en los 2 manejadores de expiracion de sesion (401) de `apiCall`/
+`apiCallRaw`. No afecta al acceso de desarrollador de Adrian (rol `desarrollador`/superadmin
+sigue pudiendo preguntar a Alejandra con normalidad; el fix es puramente de limpieza de estado
+local por dispositivo, no restringe ninguna capacidad). Verificado: sync de version por script
+(`version.json`=`sw.js`=`index.html.APP_VERSION`=7.79), grep de encoding en el diff limpio (sin
+coincidencias). Solo frontend -- no requiere `wrangler deploy`, solo push (GitHub Pages
+autodespliega). Commit `9b93bbd`. **Version:** 7.78 -> 7.79.
+PENDIENTE: verificacion visual en vivo en un dispositivo/navegador real simulando 2 usuarios
+distintos (login A -> chat -> logout -> login B -> confirmar que B no ve nada de A).
+
+**Sesion anterior a esta:** 09/07/2026 -- Auditoria y fix de seguridad multi-departamento/multi-empresa,
 a peticion explicita de Adrian (verbatim): *"otra cosa que me di cuenta esque en el
 departamento oficina tecnica no deberia de haber pemp,bobinas,carretillas etc.ahi que
 revisar departamentos y ver que cada uno haya lo que tiene que tener....me entiedes?.y que

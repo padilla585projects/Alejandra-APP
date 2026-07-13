@@ -4,12 +4,33 @@
   Ruta local: C:\Users\Adrian\Downloads\Proyecto GestiBobina\Alejandra APP
 ================================================================================
 
-ÚLTIMA ACTUALIZACIÓN: 09/07/2026
-VERSIÓN ACTUAL APP NUEVA: v7.78
+ÚLTIMA ACTUALIZACIÓN: 13/07/2026
+VERSIÓN ACTUAL APP NUEVA: v7.79
 WORKER API: 186b7fa6-a908-4483-a809-d35101a3d498 (seguridad departamentos/documentos, ver historial) · WORKER AGENTE: f742e9e8-8d12-4fe2-9c0c-3b26c7672772 (cliente HTTP puro via Service Binding; previo: f2df41f2-329a-4c93-8b74-924be72a2ea3 sobre commit d9b009e)
 VERSIÓN ACTUAL APP VIEJA: v4.19 (⛔ CONGELADA DEFINITIVAMENTE — no recibe más cambios)
 
 HISTORIAL DE VERSIONES (resumen reciente):
+  (index.html) |  13/07/2026  [v7.79 — Fix chat de Alejandra heredado entre usuarios en dispositivos compartidos]
+                       Bug reportado por Adrian: "todos los usuarios que usan la app al
+                       preguntar a Alejandra siempre dice mi nombre, no el nombre del usuario".
+                       Aclaracion posterior: "cada usuario debe de tener su propio historial...
+                       y alejandra no debe de decir nada de unos a otros. el desarrollador de
+                       la app (yo) a mi si me puede decir lo que sabe alejandra si yo le
+                       pregunto". El backend (alejandra-agente) se investigo y quedo exonerado
+                       (test en vivo con usuario real "Cristina" confirmo resolucion correcta
+                       de nombre/historial por usuario_id). Causa raiz real: cliente
+                       (index.html) — cerrarSesion() no limpiaba 2 claves de localStorage
+                       ligadas al DISPOSITIVO, no al usuario (alejandra_panel_history,
+                       ale_response_cache); en dispositivos compartidos, un usuario nuevo sin
+                       historial en servidor heredaba el chat/cache del usuario anterior de ese
+                       dispositivo. Fix: nueva funcion _limpiarChatAlejandraLocal(), invocada en
+                       cerrarSesion() y en los 2 manejadores de expiracion de sesion (401) de
+                       apiCall/apiCallRaw. No restringe el acceso de desarrollador de Adrian.
+                       Verificado: sync de version por script (7.79 en los 3 archivos), grep de
+                       encoding limpio. Solo frontend, sin wrangler deploy. Commit 9b93bbd.
+                       PENDIENTE: verificacion visual en vivo con 2 usuarios reales en el mismo
+                       dispositivo/navegador (login A -> chat -> logout -> login B).
+
   (worker.js/index.html) |  09/07/2026  [v7.78 — Fix seguridad departamentos: header X-Departamento, whitelist incompleta, IDOR en documentos, modulos de oficina tecnica]
                        A peticion explicita de Adrian ("en el departamento oficina tecnica no
                        deberia de haber pemp,bobinas,carretillas etc... y que no haya filttrado
