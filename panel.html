@@ -9164,11 +9164,24 @@ function toast(msg, tipo = 'info') {
   setTimeout(() => el.remove(), 3500);
 }
 
+// Sesión caducada/inválida (401 del servidor): limpiar sesión local del panel y
+// forzar vuelta al login, igual que hace la app móvil en index.html. Antes el panel
+// no comprobaba nunca el 401 — un token caducado se quedaba fallando en silencio
+// en cualquier pantalla, para cualquier rol de oficina.
+function _panelSesionCaducada() {
+  TOKEN = ''; SESSION = null;
+  localStorage.removeItem('panel_token');
+  localStorage.removeItem('panel_session');
+  alert('Tu sesión ha caducado. Vuelve a iniciar sesión.');
+  location.reload();
+}
+
 function api(path, opts = {}) {
   const headers = { 'Content-Type': 'application/json', ...(opts.headers || {}) };
   if (TOKEN) headers['X-Token'] = TOKEN;
   return fetch(API + path, { ...opts, headers })
     .then(async r => {
+      if (r.status === 401 && TOKEN) { _panelSesionCaducada(); return { ok: false, error: 'Sesión caducada' }; }
       const data = await r.json();
       if (!r.ok && r.status >= 500) {
         panelLog('error', `API ${opts.method || 'GET'} ${path} → ${r.status}`, data.error || '');
@@ -9184,7 +9197,10 @@ function api(path, opts = {}) {
 function apiRaw(path, opts = {}) {
   const headers = { ...(opts.headers || {}) };
   if (TOKEN) headers['X-Token'] = TOKEN;
-  return fetch(API + path, { ...opts, headers });
+  return fetch(API + path, { ...opts, headers }).then(r => {
+    if (r.status === 401 && TOKEN) _panelSesionCaducada();
+    return r;
+  });
 }
 const apiFetch = apiRaw; // alias — varios módulos usan este nombre
 

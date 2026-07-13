@@ -4142,7 +4142,28 @@ export default {
           'Cache-Control': 'no-store',
         }});
       }
-      // â”€â”€ Fin OTA â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      // -- Fin OTA --
+
+      // SEC-15: X-Token invalido/caducado -> 401 uniforme para TODAS las rutas protegidas.
+      // Antes, un X-Token que ya no existia (o habia caducado) en la tabla `sesiones` caia
+      // silenciosamente al fallback anonimo/legacy dentro de getAuth(), y cada endpoint
+      // devolvia su propio error (normalmente 403 "Sin permisos") de forma inconsistente.
+      // El cliente (index.html / panel.html) solo sabe reaccionar de forma automatica
+      // (cerrar sesion local y pedir volver a entrar) ante un 401 -- cualquier otro codigo
+      // dejaba al usuario atascado sin salida en cualquier pantalla, con cualquier rol.
+      // Los flujos de login (/verificar, /acceso, /recuperar-pass, /resetear-pass,
+      // /auth/google/*) se llaman siempre con fetch() directo, sin X-Token, asi que nunca
+      // se bloquean a si mismos con este corte.
+      {
+        const xTokenCheck = request.headers.get('X-Token');
+        if (xTokenCheck) {
+          const sesionValida = await env.DB.prepare(
+            "SELECT 1 FROM sesiones WHERE token = ? AND (expires_at IS NULL OR expires_at > datetime('now'))"
+          ).bind(xTokenCheck).first().catch(() => undefined);
+          if (!sesionValida) return err('Sesion caducada o invalida. Vuelve a iniciar sesion.', 401);
+        }
+      }
+
       if (path === '/scan'        && method === 'POST') return await handleScan(request, env);
       if (path === '/ocr'         && method === 'POST') return await handleOCR(request, env);
       if (path === '/log'         && method === 'POST') return await guardarLog(request, env);
