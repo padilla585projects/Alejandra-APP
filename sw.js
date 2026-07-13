@@ -1,5 +1,5 @@
 // Cambia este número cada vez que actualices la app
-const CACHE = 'alejandra-v7.79';
+const CACHE = 'alejandra-v7.80';
 
 self.addEventListener('install', e => {
   self.skipWaiting();
@@ -65,8 +65,10 @@ self.addEventListener('fetch', e => {
     e.respondWith(
       fetch(e.request, { cache: 'no-store' })
         .then(res => {
-          // Solo cachear GET (Cache API no soporta HEAD ni POST)
-          if (e.request.method === 'GET') {
+          // Solo cachear GET con respuesta OK (Cache API no soporta HEAD ni POST).
+          // Nunca cachear errores (4xx/5xx): si no, un fallo puntual de red queda
+          // "grabado a fuego" y se re-sirve luego aunque el servidor ya funcione bien.
+          if (e.request.method === 'GET' && res.ok) {
             const copy = res.clone();
             caches.open(CACHE).then(c => c.put(e.request, copy));
           }
@@ -79,8 +81,8 @@ self.addEventListener('fetch', e => {
   e.respondWith(
     fetch(e.request)
       .then(res => {
-        // Solo cachear GET (Cache API no soporta HEAD ni POST)
-        if (e.request.method === 'GET') {
+        // Solo cachear GET con respuesta OK — ver comentario arriba.
+        if (e.request.method === 'GET' && res.ok) {
           const copy = res.clone();
           caches.open(CACHE).then(c => c.put(e.request, copy));
         }

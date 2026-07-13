@@ -6414,7 +6414,22 @@ async function cargarEmpresasAdmin() {
   grid.innerHTML = '<div class="empty-state">Cargando empresas...</div>';
   try {
     const res = await apiCall('/empresas');
-    if (!res.ok) { grid.innerHTML = '<div class="empty-state">❌ Error al cargar empresas</div>'; return; }
+    if (res.status === 401) return; // apiCall ya gestiona logout + reload
+    if (res.status === 403) {
+      // Esta pantalla solo se muestra si la sesión local cree ser superadmin.
+      // Un 403 aquí significa que el token ya no es válido en el servidor
+      // (caducado/borrado) aunque la sesión local siga marcada como superadmin.
+      // Forzamos logout para no dejar al usuario atascado sin salida.
+      localStorage.removeItem('alejandra_session');
+      _limpiarChatAlejandraLocal();
+      alert('Tu sesión ya no es válida. Vuelve a iniciar sesión.');
+      location.reload();
+      return;
+    }
+    if (!res.ok) {
+      grid.innerHTML = `<div class="empty-state">❌ Error al cargar empresas (${res.status})<br><button class="btn-sm" style="margin-top:10px" onclick="cargarEmpresasAdmin()">↻ Reintentar</button></div>`;
+      return;
+    }
     const lista = await res.json();
     if (!lista.length) { grid.innerHTML = '<div class="empty-state">No hay empresas registradas</div>'; return; }
     grid.innerHTML = lista.map(e => `
@@ -6426,7 +6441,9 @@ async function cargarEmpresasAdmin() {
         </div>
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="color:var(--muted)"><path d="m9 18 6-6-6-6"/></svg>
       </div>`).join('');
-  } catch { grid.innerHTML = '<div class="empty-state">Error de conexión</div>'; }
+  } catch {
+    grid.innerHTML = '<div class="empty-state">Error de conexión<br><button class="btn-sm" style="margin-top:10px" onclick="cargarEmpresasAdmin()">↻ Reintentar</button></div>';
+  }
 }
 
 async function seleccionarEmpresaAdmin(empresa_id, empresa_nombre) {
@@ -11949,7 +11966,7 @@ async function activarPushDevApp() {
 // ── Chequeo de versión automático ────────────────────────────────────────────
 // Compara version.json (siempre fresco) con la versión embebida.
 // Si difieren → limpia caché y recarga sin interacción del usuario.
-const APP_VERSION = '7.79';
+const APP_VERSION = '7.80';
 let _actualizando = false;
 
 // Muestra la versión correcta en badge y ajustes
